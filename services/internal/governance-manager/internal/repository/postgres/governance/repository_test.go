@@ -174,6 +174,45 @@ func TestRepositoryIntegrationGovernanceStateAndOutbox(t *testing.T) {
 	if len(factors) != 1 || factors[0].RiskClass != enum.RiskClassR2 {
 		t.Fatalf("factors = %+v, want one R2 factor", factors)
 	}
+	assessment.Version = 2
+	assessment.UpdatedAt = now.Add(time.Minute)
+	assessment.RiskProfileID = &profile.ID
+	assessment.RiskProfileVersion = &activeVersion
+	assessment.EvaluationSummary = value.RiskEvaluationSummary{
+		ChangedFilesSummaryRef: "provider-summary:pr-1-files",
+		Summary:                "bounded release summary",
+		Factors: []value.RiskEvaluationFactor{{
+			SourceType: string(enum.RiskFactorSourceTypeSecret),
+			Ref:        "secret-scope:release-token",
+			Summary:    "release secret scope changed",
+			Tags:       []string{"auth"},
+		}},
+	}
+	assessment.EvidenceRefs = []value.EvidenceRef{{Kind: "summary", Ref: "evidence:release-summary", Summary: "bounded evidence"}}
+	assessment.EffectiveRiskClass = enum.RiskClassR3
+	assessment.Explanation = "risk_class=R3 factors=1 required_gates=1"
+	assessment.RequiredGates = []entity.RequiredGate{{GatePolicyID: gatePolicyID, GateKind: enum.GateKindRelease, MinRiskClass: enum.RiskClassR2, Reason: "DB migration needs release gate"}}
+	updatedFactor := entity.RiskFactor{ID: uuid.New(), RiskAssessmentID: assessment.ID, SourceType: enum.RiskFactorSourceTypeSecret, SourceRef: "secret-scope:release-token", RiskClass: enum.RiskClassR3, Summary: "release secret scope changed", CreatedAt: now.Add(time.Minute)}
+	if err := repository.UpdateRiskAssessment(ctx, assessment, []entity.RiskFactor{updatedFactor}, 1, testCommandResult(uuid.New(), operationUpdateRiskAssessment, "risk_assessment", assessment.ID, now), []entity.OutboxEvent{testEvent("governance.risk_assessment.changed", "risk_assessment", assessment.ID, now)}); err != nil {
+		t.Fatalf("update assessment: %v", err)
+	}
+	storedAssessment, err := repository.GetRiskAssessment(ctx, assessment.ID)
+	if err != nil {
+		t.Fatalf("get updated assessment: %v", err)
+	}
+	if storedAssessment.Version != 2 || storedAssessment.RiskProfileID == nil || *storedAssessment.RiskProfileID != profile.ID || storedAssessment.RiskProfileVersion == nil || *storedAssessment.RiskProfileVersion != activeVersion {
+		t.Fatalf("stored assessment profile/version = %+v/%+v version=%d", storedAssessment.RiskProfileID, storedAssessment.RiskProfileVersion, storedAssessment.Version)
+	}
+	if storedAssessment.EvaluationSummary.ChangedFilesSummaryRef != "provider-summary:pr-1-files" || len(storedAssessment.EvidenceRefs) != 1 {
+		t.Fatalf("stored evaluation/evidence = %+v/%+v", storedAssessment.EvaluationSummary, storedAssessment.EvidenceRefs)
+	}
+	factors, _, err = repository.ListRiskFactors(ctx, query.RiskFactorFilter{RiskAssessmentID: assessment.ID})
+	if err != nil {
+		t.Fatalf("list updated factors: %v", err)
+	}
+	if len(factors) != 1 || factors[0].SourceType != enum.RiskFactorSourceTypeSecret || factors[0].RiskClass != enum.RiskClassR3 {
+		t.Fatalf("updated factors = %+v, want one R3 secret factor", factors)
+	}
 
 	signal := entity.ReviewSignal{ID: uuid.New(), RiskAssessmentID: &assessment.ID, Target: assessment.Target, RoleKind: enum.ReviewRoleKindOwner, AuthorRef: "user:owner", Outcome: enum.ReviewSignalOutcomePass, Severity: enum.SignalSeverityInfo, Confidence: enum.ConfidenceHigh, Summary: "approved", CreatedAt: now}
 	if err := repository.RecordReviewSignal(ctx, signal, testCommandResult(uuid.New(), operationRecordReviewSignal, "review_signal", signal.ID, now), testEvent("governance.review_signal.recorded", "review_signal", signal.ID, now)); err != nil {

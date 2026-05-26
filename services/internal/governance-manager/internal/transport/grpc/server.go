@@ -35,7 +35,8 @@ type governanceService interface {
 	ListRiskRules(context.Context, governanceservice.ListRiskRulesInput) ([]entity.RiskRule, query.PageResult, error)
 	ListGatePolicies(context.Context, governanceservice.ListGatePoliciesInput) ([]entity.GatePolicy, query.PageResult, error)
 	EvaluateRisk(context.Context, governanceservice.EvaluateRiskInput) (entity.RiskAssessment, error)
-	GetRiskAssessment(context.Context, uuid.UUID) (entity.RiskAssessment, error)
+	ReevaluateRisk(context.Context, governanceservice.ReevaluateRiskInput) (entity.RiskAssessment, error)
+	GetRiskAssessment(context.Context, governanceservice.GetRiskAssessmentInput) (entity.RiskAssessment, error)
 	ListRiskAssessments(context.Context, governanceservice.ListRiskAssessmentsInput) ([]entity.RiskAssessment, query.PageResult, error)
 	ListRiskFactors(context.Context, governanceservice.ListRiskFactorsInput) ([]entity.RiskFactor, query.PageResult, error)
 	RecordReviewSignal(context.Context, governanceservice.RecordReviewSignalInput) (entity.ReviewSignal, error)
@@ -304,7 +305,7 @@ func (server *Server) ListGatePolicies(ctx context.Context, req *governancev1.Li
 	return &governancev1.ListGatePoliciesResponse{GatePolicies: toGatePolicies(items), Page: pageResponse(page)}, nil
 }
 
-// EvaluateRisk stores a minimal assessment record for GOV-3.
+// EvaluateRisk stores a deterministic assessment produced from safe summaries and refs.
 func (server *Server) EvaluateRisk(ctx context.Context, req *governancev1.EvaluateRiskRequest) (*governancev1.RiskAssessmentResponse, error) {
 	meta, err := commandMeta(req.GetMeta())
 	if err != nil {
@@ -323,14 +324,15 @@ func (server *Server) EvaluateRisk(ctx context.Context, req *governancev1.Evalua
 		return nil, err
 	}
 	assessment, err := server.service.EvaluateRisk(ctx, governanceservice.EvaluateRiskInput{
-		Target:          targetRef(req.GetTarget()),
-		ProjectContext:  projectContext(req.GetProjectContext()),
-		ProviderContext: providerContext,
-		AgentContext:    agentContext,
-		RuntimeContext:  runtimeContext,
-		EvidenceRefs:    evidenceRefs(req.GetEvidenceRefs()),
-		RiskProfileRef:  req.GetRiskProfileRef(),
-		Meta:            meta,
+		Target:            targetRef(req.GetTarget()),
+		ProjectContext:    projectContext(req.GetProjectContext()),
+		ProviderContext:   providerContext,
+		AgentContext:      agentContext,
+		RuntimeContext:    runtimeContext,
+		EvidenceRefs:      evidenceRefs(req.GetEvidenceRefs()),
+		RiskProfileRef:    req.GetRiskProfileRef(),
+		EvaluationSummary: riskEvaluationSummary(req.GetEvaluationSummary()),
+		Meta:              meta,
 	})
 	if err != nil {
 		return nil, err
@@ -338,18 +340,45 @@ func (server *Server) EvaluateRisk(ctx context.Context, req *governancev1.Evalua
 	return &governancev1.RiskAssessmentResponse{RiskAssessment: toRiskAssessment(assessment)}, nil
 }
 
-// ReevaluateRisk is a stable contract handler reserved for GOV-4 risk classification.
-func (server *Server) ReevaluateRisk(ctx context.Context, _ *governancev1.ReevaluateRiskRequest) (*governancev1.RiskAssessmentResponse, error) {
-	return nil, server.backlog(ctx, enum.OperationReevaluateRisk)
+// ReevaluateRisk recalculates a stored assessment with optimistic concurrency.
+func (server *Server) ReevaluateRisk(ctx context.Context, req *governancev1.ReevaluateRiskRequest) (*governancev1.RiskAssessmentResponse, error) {
+	meta, err := commandMeta(req.GetMeta())
+	if err != nil {
+		return nil, err
+	}
+	assessmentID, err := requiredUUID(req.GetRiskAssessmentId())
+	if err != nil {
+		return nil, err
+	}
+	assessment, err := server.service.ReevaluateRisk(ctx, governanceservice.ReevaluateRiskInput{
+		RiskAssessmentID:  assessmentID,
+		NewEvidenceRefs:   evidenceRefs(req.GetNewEvidenceRefs()),
+		Reason:            req.GetReevaluationReason(),
+		EvaluationSummary: riskEvaluationSummary(req.GetEvaluationSummary()),
+		RiskProfileRef:    req.GetRiskProfileRef(),
+		Meta:              meta,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &governancev1.RiskAssessmentResponse{RiskAssessment: toRiskAssessment(assessment)}, nil
 }
 
 // GetRiskAssessment returns one assessment.
 func (server *Server) GetRiskAssessment(ctx context.Context, req *governancev1.GetRiskAssessmentRequest) (*governancev1.RiskAssessmentResponse, error) {
-	id, err := requiredUUID(req.GetRiskAssessmentId())
+	return server.riskAssessmentByIDResponse(ctx, req.GetRiskAssessmentId(), req.GetMeta())
+}
+
+func (server *Server) riskAssessmentByIDResponse(ctx context.Context, riskAssessmentID string, metaValue *governancev1.QueryMeta) (*governancev1.RiskAssessmentResponse, error) {
+	meta, err := queryMeta(metaValue)
 	if err != nil {
 		return nil, err
 	}
-	assessment, err := server.service.GetRiskAssessment(ctx, id)
+	id, err := requiredUUID(riskAssessmentID)
+	if err != nil {
+		return nil, err
+	}
+	assessment, err := server.service.GetRiskAssessment(ctx, governanceservice.GetRiskAssessmentInput{RiskAssessmentID: id, Meta: meta})
 	if err != nil {
 		return nil, err
 	}
@@ -358,6 +387,10 @@ func (server *Server) GetRiskAssessment(ctx context.Context, req *governancev1.G
 
 // ListRiskAssessments returns assessments by target, project, risk class or status.
 func (server *Server) ListRiskAssessments(ctx context.Context, req *governancev1.ListRiskAssessmentsRequest) (*governancev1.ListRiskAssessmentsResponse, error) {
+	meta, err := queryMeta(req.GetMeta())
+	if err != nil {
+		return nil, err
+	}
 	items, page, err := server.service.ListRiskAssessments(ctx, governanceservice.ListRiskAssessmentsInput{
 		Filter: query.RiskAssessmentFilter{
 			Target:             targetRef(req.GetTarget()),
@@ -366,6 +399,7 @@ func (server *Server) ListRiskAssessments(ctx context.Context, req *governancev1
 			Status:             riskAssessmentStatus(req.GetStatus()),
 			Page:               pageRequest(req.GetPage()),
 		},
+		Meta: meta,
 	})
 	if err != nil {
 		return nil, err
@@ -379,6 +413,10 @@ func (server *Server) ListRiskAssessments(ctx context.Context, req *governancev1
 
 // ListRiskFactors returns factors recorded for an assessment.
 func (server *Server) ListRiskFactors(ctx context.Context, req *governancev1.ListRiskFactorsRequest) (*governancev1.ListRiskFactorsResponse, error) {
+	meta, err := queryMeta(req.GetMeta())
+	if err != nil {
+		return nil, err
+	}
 	assessmentID, err := requiredUUID(req.GetRiskAssessmentId())
 	if err != nil {
 		return nil, err
@@ -389,6 +427,7 @@ func (server *Server) ListRiskFactors(ctx context.Context, req *governancev1.Lis
 			SourceType:       riskFactorSourceType(req.GetSourceType()),
 			Page:             pageRequest(req.GetPage()),
 		},
+		Meta: meta,
 	})
 	if err != nil {
 		return nil, err

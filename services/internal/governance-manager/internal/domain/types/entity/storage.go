@@ -86,6 +86,10 @@ type RiskAssessment struct {
 	ProviderContext    []byte
 	AgentContext       []byte
 	RuntimeContext     []byte
+	RiskProfileID      *uuid.UUID
+	RiskProfileVersion *int64
+	EvaluationSummary  value.RiskEvaluationSummary
+	EvidenceRefs       []value.EvidenceRef
 	InitialRiskClass   enum.RiskClass
 	EffectiveRiskClass enum.RiskClass
 	Status             enum.RiskAssessmentStatus

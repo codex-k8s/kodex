@@ -93,12 +93,22 @@ func riskAssessmentArgs(assessment entity.RiskAssessment) pgx.NamedArgs {
 		"provider_context":     jsonObjectPayload(assessment.ProviderContext),
 		"agent_context":        jsonObjectPayload(assessment.AgentContext),
 		"runtime_context":      jsonObjectPayload(assessment.RuntimeContext),
+		"risk_profile_id":      postgreslib.NullableUUID(assessment.RiskProfileID),
+		"risk_profile_version": nullableInt64(assessment.RiskProfileVersion),
+		"evaluation_summary":   jsonObjectPayload(mustJSON(assessment.EvaluationSummary)),
+		"evidence_refs":        jsonArrayPayload(assessment.EvidenceRefs),
 		"initial_risk_class":   string(assessment.InitialRiskClass),
 		"effective_risk_class": string(assessment.EffectiveRiskClass),
 		"status":               string(assessment.Status),
 		"explanation":          assessment.Explanation,
 		"required_gates":       jsonArrayPayload(assessment.RequiredGates),
 	}, assessment.ID, assessment.Version, assessment.CreatedAt, assessment.UpdatedAt)
+}
+
+func riskAssessmentUpdateArgs(assessment entity.RiskAssessment, previousVersion int64) pgx.NamedArgs {
+	args := riskAssessmentArgs(assessment)
+	args["previous_version"] = previousVersion
+	return args
 }
 
 func riskFactorArgs(factor entity.RiskFactor) pgx.NamedArgs {

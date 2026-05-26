@@ -24,6 +24,7 @@ type Repository interface {
 	ListRiskRules(ctx context.Context, filter query.RuleFilter) ([]entity.RiskRule, query.PageResult, error)
 	ListGatePolicies(ctx context.Context, filter query.GatePolicyFilter) ([]entity.GatePolicy, query.PageResult, error)
 	CreateRiskAssessment(ctx context.Context, assessment entity.RiskAssessment, factors []entity.RiskFactor, result entity.CommandResult, events []entity.OutboxEvent) error
+	UpdateRiskAssessment(ctx context.Context, assessment entity.RiskAssessment, factors []entity.RiskFactor, previousVersion int64, result entity.CommandResult, events []entity.OutboxEvent) error
 	GetRiskAssessment(ctx context.Context, id uuid.UUID) (entity.RiskAssessment, error)
 	ListRiskAssessments(ctx context.Context, filter query.RiskAssessmentFilter) ([]entity.RiskAssessment, query.PageResult, error)
 	ListRiskFactors(ctx context.Context, filter query.RiskFactorFilter) ([]entity.RiskFactor, query.PageResult, error)

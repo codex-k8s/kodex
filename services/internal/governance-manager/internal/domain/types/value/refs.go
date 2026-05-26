@@ -53,3 +53,18 @@ type EvidenceRef struct {
 	Digest         string `json:"digest,omitempty"`
 	RetentionClass string `json:"retention_class,omitempty"`
 }
+
+// RiskEvaluationSummary carries bounded classifier inputs without raw payloads.
+type RiskEvaluationSummary struct {
+	ChangedFilesSummaryRef string                 `json:"changed_files_summary_ref,omitempty"`
+	Summary                string                 `json:"summary,omitempty"`
+	Factors                []RiskEvaluationFactor `json:"factors,omitempty"`
+}
+
+// RiskEvaluationFactor is one safe input fact for the risk classifier.
+type RiskEvaluationFactor struct {
+	SourceType string   `json:"source_type"`
+	Ref        string   `json:"ref"`
+	Summary    string   `json:"summary"`
+	Tags       []string `json:"tags,omitempty"`
+}

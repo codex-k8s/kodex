@@ -127,8 +127,10 @@ func scanGatePolicy(row postgreslib.RowScanner) (entity.GatePolicy, error) {
 
 func scanRiskAssessment(row postgreslib.RowScanner) (entity.RiskAssessment, error) {
 	var assessment entity.RiskAssessment
+	var riskProfileID pgtype.UUID
+	var riskProfileVersion pgtype.Int8
 	var initialRisk, effectiveRisk, status string
-	var providerContext, agentContext, runtimeContext, requiredGates []byte
+	var providerContext, agentContext, runtimeContext, evaluationSummary, evidenceRefs, requiredGates []byte
 	err := row.Scan(
 		&assessment.ID,
 		&assessment.Target.Type,
@@ -142,6 +144,10 @@ func scanRiskAssessment(row postgreslib.RowScanner) (entity.RiskAssessment, erro
 		&providerContext,
 		&agentContext,
 		&runtimeContext,
+		&riskProfileID,
+		&riskProfileVersion,
+		&evaluationSummary,
+		&evidenceRefs,
 		&initialRisk,
 		&effectiveRisk,
 		&status,
@@ -154,6 +160,11 @@ func scanRiskAssessment(row postgreslib.RowScanner) (entity.RiskAssessment, erro
 	assessment.ProviderContext = append(assessment.ProviderContext[:0], providerContext...)
 	assessment.AgentContext = append(assessment.AgentContext[:0], agentContext...)
 	assessment.RuntimeContext = append(assessment.RuntimeContext[:0], runtimeContext...)
+	assessment.RiskProfileID = postgreslib.UUIDPtrFromPG(riskProfileID)
+	if riskProfileVersion.Valid {
+		version := riskProfileVersion.Int64
+		assessment.RiskProfileVersion = &version
+	}
 	assessment.InitialRiskClass = enum.RiskClass(initialRisk)
 	assessment.EffectiveRiskClass = enum.RiskClass(effectiveRisk)
 	assessment.Status = enum.RiskAssessmentStatus(status)
@@ -162,6 +173,12 @@ func scanRiskAssessment(row postgreslib.RowScanner) (entity.RiskAssessment, erro
 	}
 	if err := unmarshalJSON(requiredGates, &assessment.RequiredGates); err != nil {
 		return assessment, fmt.Errorf("scan risk assessment required gates: %w", err)
+	}
+	if err := unmarshalJSON(evaluationSummary, &assessment.EvaluationSummary); err != nil {
+		return assessment, fmt.Errorf("scan risk assessment evaluation summary: %w", err)
+	}
+	if err := unmarshalJSON(evidenceRefs, &assessment.EvidenceRefs); err != nil {
+		return assessment, fmt.Errorf("scan risk assessment evidence refs: %w", err)
 	}
 	return assessment, nil
 }

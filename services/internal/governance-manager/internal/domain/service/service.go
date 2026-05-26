@@ -280,75 +280,34 @@ func (s *Service) ListGatePolicies(ctx context.Context, input ListGatePoliciesIn
 	return s.repository.ListGatePolicies(ctx, input.Filter)
 }
 
-// EvaluateRisk stores a minimal assessment record without running the full classifier.
+// EvaluateRisk stores a deterministic risk assessment produced by the local classifier.
 func (s *Service) EvaluateRisk(ctx context.Context, input EvaluateRiskInput) (entity.RiskAssessment, error) {
-	result, replayed, err := s.replayCommand(ctx, input.Meta, enum.OperationEvaluateRisk.String(), governanceevents.AggregateRiskAssessment)
-	if err != nil {
-		return entity.RiskAssessment{}, err
-	}
-	if replayed {
-		assessment, err := s.repository.GetRiskAssessment(ctx, result.AggregateID)
-		if err != nil {
-			return entity.RiskAssessment{}, err
-		}
-		if !sameExternalRef(assessment.Target, input.Target) {
-			return entity.RiskAssessment{}, errs.ErrConflict
-		}
-		return assessment, nil
-	}
-	if input.Target.Type == "" || input.Target.Ref == "" {
-		return entity.RiskAssessment{}, errs.ErrInvalidArgument
-	}
-	now := s.clock.Now()
-	explanation := strings.TrimSpace(input.Meta.Reason)
-	if explanation == "" {
-		explanation = "storage-only assessment; classifier pending GOV-4"
-	}
-	assessment := entity.RiskAssessment{
-		VersionedBase:      entity.VersionedBase{ID: s.idGenerator.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
-		Target:             input.Target,
-		ProjectContext:     input.ProjectContext,
-		ProviderContext:    input.ProviderContext,
-		AgentContext:       input.AgentContext,
-		RuntimeContext:     input.RuntimeContext,
-		InitialRiskClass:   enum.RiskClassR0,
-		EffectiveRiskClass: enum.RiskClassR0,
-		Status:             enum.RiskAssessmentStatusActive,
-		Explanation:        explanation,
-	}
-	result = commandResult(input.Meta, enum.OperationEvaluateRisk.String(), governanceevents.AggregateRiskAssessment, assessment.ID, now)
-	events := []entity.OutboxEvent{
-		outboxEvent(s.idGenerator.New(), governanceevents.EventRiskAssessmentRequested, governanceevents.AggregateRiskAssessment, assessment.ID, now, governanceevents.Payload{
-			RiskAssessmentID: assessment.ID.String(),
-			ProjectRef:       assessment.ProjectContext.ProjectRef,
-			Status:           string(assessment.Status),
-			Version:          assessment.Version,
-		}),
-		outboxEvent(s.idGenerator.New(), governanceevents.EventRiskAssessmentCompleted, governanceevents.AggregateRiskAssessment, assessment.ID, now, governanceevents.Payload{
-			RiskAssessmentID:   assessment.ID.String(),
-			InitialRiskClass:   string(assessment.InitialRiskClass),
-			EffectiveRiskClass: string(assessment.EffectiveRiskClass),
-			RiskFactorCount:    0,
-			RequiredGateCount:  0,
-			Status:             string(assessment.Status),
-			Version:            assessment.Version,
-		}),
-	}
-	if err := s.repository.CreateRiskAssessment(ctx, assessment, nil, result, events); err != nil {
-		return entity.RiskAssessment{}, err
-	}
-	return assessment, nil
+	return s.evaluateRisk(ctx, input)
 }
 
-func (s *Service) GetRiskAssessment(ctx context.Context, id uuid.UUID) (entity.RiskAssessment, error) {
-	return s.repository.GetRiskAssessment(ctx, id)
+// ReevaluateRisk recalculates an existing assessment with optimistic concurrency.
+func (s *Service) ReevaluateRisk(ctx context.Context, input ReevaluateRiskInput) (entity.RiskAssessment, error) {
+	return s.reevaluateRisk(ctx, input)
+}
+
+func (s *Service) GetRiskAssessment(ctx context.Context, input GetRiskAssessmentInput) (entity.RiskAssessment, error) {
+	return readByID(ctx, input.RiskAssessmentID, input.Meta, s.authorizeRiskAssessmentRead, s.repository.GetRiskAssessment)
 }
 
 func (s *Service) ListRiskAssessments(ctx context.Context, input ListRiskAssessmentsInput) ([]entity.RiskAssessment, query.PageResult, error) {
+	if err := s.authorizeRiskAssessmentList(ctx, input.Meta, input.Filter); err != nil {
+		return nil, query.PageResult{}, err
+	}
 	return s.repository.ListRiskAssessments(ctx, input.Filter)
 }
 
 func (s *Service) ListRiskFactors(ctx context.Context, input ListRiskFactorsInput) ([]entity.RiskFactor, query.PageResult, error) {
+	if input.Filter.RiskAssessmentID == uuid.Nil {
+		return nil, query.PageResult{}, errs.ErrInvalidArgument
+	}
+	if err := s.authorizeRiskAssessmentRead(ctx, input.Meta, input.Filter.RiskAssessmentID); err != nil {
+		return nil, query.PageResult{}, err
+	}
 	return s.repository.ListRiskFactors(ctx, input.Filter)
 }
 
@@ -559,13 +518,7 @@ func (s *Service) ExpireGate(ctx context.Context, input ExpireGateInput) (entity
 }
 
 func (s *Service) GetGateRequest(ctx context.Context, input GetGateRequestInput) (entity.GateRequest, error) {
-	if input.GateRequestID == uuid.Nil {
-		return entity.GateRequest{}, errs.ErrInvalidArgument
-	}
-	if err := s.authorizeGateRead(ctx, input.Meta, input.GateRequestID); err != nil {
-		return entity.GateRequest{}, err
-	}
-	return s.repository.GetGateRequest(ctx, input.GateRequestID)
+	return readByID(ctx, input.GateRequestID, input.Meta, s.authorizeGateRead, s.repository.GetGateRequest)
 }
 
 func (s *Service) GetGateDecision(ctx context.Context, input GetGateDecisionInput) (entity.GateDecision, error) {
@@ -749,6 +702,26 @@ func (s *Service) authorizeRiskAssessmentRead(ctx context.Context, meta QueryMet
 	return s.authorizeQuery(ctx, meta, actionRiskRead, riskAssessmentResource(riskAssessmentID))
 }
 
+func (s *Service) authorizeRiskAssessmentList(ctx context.Context, meta QueryMeta, filter query.RiskAssessmentFilter) error {
+	if externalRefProvided(filter.Target) {
+		if strings.TrimSpace(filter.Target.Type) == "" || strings.TrimSpace(filter.Target.Ref) == "" {
+			return errs.ErrInvalidArgument
+		}
+		return s.authorizeQuery(ctx, meta, actionRiskRead, riskTargetResource(filter.Target))
+	}
+	if resourceID := firstNonEmpty(
+		filter.ProjectContext.ProjectRef,
+		filter.ProjectContext.RepositoryRef,
+		filter.ProjectContext.ServiceRef,
+		filter.ProjectContext.BranchRulesRef,
+		filter.ProjectContext.ReleasePolicyRef,
+		filter.ProjectContext.ReleaseLineRef,
+	); resourceID != "" {
+		return s.authorizeQuery(ctx, meta, actionRiskRead, riskContextResource(resourceID))
+	}
+	return errs.ErrInvalidArgument
+}
+
 func (s *Service) authorizeGateRequestList(ctx context.Context, meta QueryMeta, filter query.GateRequestFilter) error {
 	if externalRefProvided(filter.Target) {
 		return s.authorizeGateTargetRead(ctx, meta, filter.Target)
@@ -767,6 +740,23 @@ func (s *Service) authorizeGateDecisionList(ctx context.Context, meta QueryMeta,
 		return s.authorizeGateTargetRead(ctx, meta, filter.Target)
 	}
 	return errs.ErrInvalidArgument
+}
+
+func readByID[T any](
+	ctx context.Context,
+	id uuid.UUID,
+	meta QueryMeta,
+	authorize func(context.Context, QueryMeta, uuid.UUID) error,
+	get func(context.Context, uuid.UUID) (T, error),
+) (T, error) {
+	var zero T
+	if id == uuid.Nil {
+		return zero, errs.ErrInvalidArgument
+	}
+	if err := authorize(ctx, meta, id); err != nil {
+		return zero, err
+	}
+	return get(ctx, id)
 }
 
 func externalRefProvided(ref value.ExternalRef) bool {

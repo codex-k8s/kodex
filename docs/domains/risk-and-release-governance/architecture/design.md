@@ -5,8 +5,8 @@ title: kodex — дизайн домена рисков и релизов
 status: active
 owner_role: SA
 created_at: 2026-05-22
-updated_at: 2026-05-22
-related_issues: [322, 769]
+updated_at: 2026-05-26
+related_issues: [322, 769, 827]
 related_prs: []
 related_adrs: []
 approvals:
@@ -31,11 +31,11 @@ approvals:
 - Описать классификацию риска по diff, сервису, API, БД, секретам, runtime action и release context.
 - Описать role-driven review gates и policy-based approvals без подмены Human gate агентным комментарием.
 - Отделить decision state от доставки через `interaction-hub`.
-- Поддерживать контрактный срез без сервисной бизнес-реализации, storage, evaluator, UI или gateway.
+- Поддерживать поэтапную реализацию: contracts, storage, локальный risk evaluator, затем release engine, integrations, UI/gateway отдельными срезами.
 
 ## Не-цели
 
-- Не реализовывать сервисный процесс, handlers, БД, миграции, evaluator, UI или gateway.
+- Не смешивать текущий локальный risk evaluator с release decision engine, delivery/callback, provider write pipeline, deploy orchestration, UI или gateway.
 - Не менять `project-catalog`, `agent-manager`, `provider-hub`, `runtime-manager` или `interaction-hub` кодом.
 - Не переносить проектную policy, branch rules или release policy из `project-catalog`.
 - Не делать gateway или web-console экраны.
@@ -59,8 +59,8 @@ approvals:
 |---|---|
 | `governance-manager` | Сервис-владелец домена risk/release governance. |
 | БД `governance-manager` | Risk policy, assessments, signals, gate/release decisions, safety-loop state, command results и outbox. |
-| Policy evaluator | Читает governance policy, project/release refs и возвращает required checks/gates. |
-| Risk classifier | Рассчитывает initial и effective risk class по факторам diff, target, policy и signals. |
+| Policy evaluator | Читает локальные governance risk profiles/rules и входные project/release refs; прямые межсервисные чтения выносятся в integration-срез. |
+| Risk classifier | Рассчитывает initial и effective risk class по safe summaries/refs, typed factors, policy rules и review signals без raw diff/provider payload/logs. |
 | Review signal intake | Принимает signals от agent roles, людей, provider review и runtime/postdeploy checks. |
 | Gate decision engine | Создаёт gate requests, собирает evidence package и фиксирует outcome. |
 | Release decision package builder | Собирает release context: linked issues/PRs, release line, rollout strategy, checks, signals и known limitations. |
@@ -77,14 +77,14 @@ sequenceDiagram
   participant GOV as governance-manager
   participant PC as project-catalog
   participant PH as provider-hub
-  AM->>GOV: EvaluateRisk(transition, provider refs, run refs)
-  GOV->>PC: Get project, services policy, branch rules, release policy
-  GOV->>PH: Get PR/MR projection and changed file summary
+  PC-->>AM: project/repository/release refs
+  PH-->>AM: provider refs and changed-file summary ref
+  AM->>GOV: EvaluateRisk(transition, refs, safe summary, typed factors)
   GOV->>GOV: classify risk + required gates
   GOV-->>AM: RiskAssessment + required gates + explanation
 ```
 
-Оценка не требует полного построчного чтения кода. Для initial classification достаточно проверенной project policy, changed files summary, service mapping, API/DB/secret markers, release context и уже известных signals. Более сильная роль может позже повысить риск.
+Оценка не требует полного построчного чтения кода. Текущий evaluator не читает `project-catalog`, `provider-hub`, GitHub/GitLab или runtime projections напрямую: project/repository/release refs, changed files summary ref, service/path/API/DB/secret/release/runtime factors и evidence refs приходят в запросе. Для initial classification достаточно проверенных refs, safe summary, API/DB/secret markers, release context и локальных risk rules. Более сильная роль может позже повысить риск через review signal и `ReevaluateRisk`.
 
 ### Review signals от ролей
 

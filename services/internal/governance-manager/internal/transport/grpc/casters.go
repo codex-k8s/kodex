@@ -154,6 +154,33 @@ func evidenceRefs(items []*governancev1.EvidenceRef) []value.EvidenceRef {
 	return result
 }
 
+func riskEvaluationSummary(item *governancev1.RiskEvaluationSummary) value.RiskEvaluationSummary {
+	if item == nil {
+		return value.RiskEvaluationSummary{}
+	}
+	return value.RiskEvaluationSummary{
+		ChangedFilesSummaryRef: item.GetChangedFilesSummaryRef(),
+		Summary:                item.GetSummary(),
+		Factors:                riskEvaluationFactors(item.GetFactors()),
+	}
+}
+
+func riskEvaluationFactors(items []*governancev1.RiskEvaluationFactor) []value.RiskEvaluationFactor {
+	result := make([]value.RiskEvaluationFactor, 0, len(items))
+	for _, item := range items {
+		if item == nil {
+			continue
+		}
+		result = append(result, value.RiskEvaluationFactor{
+			SourceType: string(riskFactorSourceType(item.GetSourceType())),
+			Ref:        item.GetRef(),
+			Summary:    item.GetSummary(),
+			Tags:       item.GetTags(),
+		})
+	}
+	return result
+}
+
 func riskRuleDrafts(profileID uuid.UUID, profileVersion int64, items []*governancev1.RiskRuleDraft) ([]entity.RiskRule, error) {
 	result := make([]entity.RiskRule, 0, len(items))
 	for _, item := range items {
@@ -323,7 +350,7 @@ func toGatePolicies(items []entity.GatePolicy) []*governancev1.GatePolicy {
 }
 
 func toRiskAssessment(item entity.RiskAssessment) *governancev1.RiskAssessment {
-	return &governancev1.RiskAssessment{
+	result := &governancev1.RiskAssessment{
 		Id:                 item.ID.String(),
 		Target:             toTargetRef(item.Target),
 		ProjectContext:     toProjectContext(item.ProjectContext),
@@ -336,9 +363,18 @@ func toRiskAssessment(item entity.RiskAssessment) *governancev1.RiskAssessment {
 		Explanation:        item.Explanation,
 		RequiredGates:      toRequiredGates(item.RequiredGates),
 		Version:            item.Version,
+		EvaluationSummary:  toRiskEvaluationSummary(item.EvaluationSummary),
+		EvidenceRefs:       toEvidenceRefs(item.EvidenceRefs),
 		CreatedAt:          formatTime(item.CreatedAt),
 		UpdatedAt:          formatTime(item.UpdatedAt),
 	}
+	if item.RiskProfileID != nil {
+		result.RiskProfileId = ptrString(item.RiskProfileID.String())
+	}
+	if item.RiskProfileVersion != nil {
+		result.RiskProfileVersion = item.RiskProfileVersion
+	}
+	return result
 }
 
 func toRiskFactors(items []entity.RiskFactor) []*governancev1.RiskFactor {
@@ -519,6 +555,27 @@ func toEvidenceRefs(items []value.EvidenceRef) []*governancev1.EvidenceRef {
 			Summary:        item.Summary,
 			Digest:         ptrStringNonEmpty(item.Digest),
 			RetentionClass: ptrStringNonEmpty(item.RetentionClass),
+		})
+	}
+	return result
+}
+
+func toRiskEvaluationSummary(item value.RiskEvaluationSummary) *governancev1.RiskEvaluationSummary {
+	return &governancev1.RiskEvaluationSummary{
+		ChangedFilesSummaryRef: ptrStringNonEmpty(item.ChangedFilesSummaryRef),
+		Summary:                item.Summary,
+		Factors:                toRiskEvaluationFactors(item.Factors),
+	}
+}
+
+func toRiskEvaluationFactors(items []value.RiskEvaluationFactor) []*governancev1.RiskEvaluationFactor {
+	result := make([]*governancev1.RiskEvaluationFactor, 0, len(items))
+	for _, item := range items {
+		result = append(result, &governancev1.RiskEvaluationFactor{
+			SourceType: toRiskFactorSourceType(enum.RiskFactorSourceType(item.SourceType)),
+			Ref:        item.Ref,
+			Summary:    item.Summary,
+			Tags:       item.Tags,
 		})
 	}
 	return result

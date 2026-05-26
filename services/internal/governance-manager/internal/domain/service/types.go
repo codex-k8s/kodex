@@ -72,14 +72,24 @@ type ArchiveRiskProfileInput struct {
 }
 
 type EvaluateRiskInput struct {
-	Target          value.ExternalRef
-	ProjectContext  value.ProjectContextRef
-	ProviderContext []byte
-	AgentContext    []byte
-	RuntimeContext  []byte
-	EvidenceRefs    []value.EvidenceRef
-	RiskProfileRef  string
-	Meta            CommandMeta
+	Target            value.ExternalRef
+	ProjectContext    value.ProjectContextRef
+	ProviderContext   []byte
+	AgentContext      []byte
+	RuntimeContext    []byte
+	EvidenceRefs      []value.EvidenceRef
+	RiskProfileRef    string
+	EvaluationSummary value.RiskEvaluationSummary
+	Meta              CommandMeta
+}
+
+type ReevaluateRiskInput struct {
+	RiskAssessmentID  uuid.UUID
+	NewEvidenceRefs   []value.EvidenceRef
+	Reason            string
+	RiskProfileRef    string
+	EvaluationSummary value.RiskEvaluationSummary
+	Meta              CommandMeta
 }
 
 type RecordReviewSignalInput struct {
@@ -157,12 +167,19 @@ type ListGatePoliciesInput struct {
 	Filter query.GatePolicyFilter
 }
 
+type GetRiskAssessmentInput struct {
+	RiskAssessmentID uuid.UUID
+	Meta             QueryMeta
+}
+
 type ListRiskAssessmentsInput struct {
 	Filter query.RiskAssessmentFilter
+	Meta   QueryMeta
 }
 
 type ListRiskFactorsInput struct {
 	Filter query.RiskFactorFilter
+	Meta   QueryMeta
 }
 
 type ListReviewSignalsInput struct {
