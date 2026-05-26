@@ -54,6 +54,38 @@ func (r *Repository) ListConversationMessages(context.Context, query.Conversatio
 	return nil, value.PageResult{}, errs.ErrNotImplemented
 }
 
+func (r *Repository) CreateInteractionRequestWithResult(context.Context, entity.InteractionRequest, entity.CommandResult, entity.OutboxEvent) error {
+	return errs.ErrNotImplemented
+}
+
+func (r *Repository) UpdateInteractionRequestWithResult(context.Context, entity.InteractionRequest, int64, entity.CommandResult, entity.OutboxEvent) error {
+	return errs.ErrNotImplemented
+}
+
+func (r *Repository) UpdateInteractionRequestsWithResult(context.Context, []entity.InteractionRequest, map[uuid.UUID]int64, entity.CommandResult, []entity.OutboxEvent) error {
+	return errs.ErrNotImplemented
+}
+
+func (r *Repository) CreateInteractionResponseWithResult(context.Context, entity.InteractionResponse, entity.InteractionRequest, int64, entity.CommandResult, entity.OutboxEvent) error {
+	return errs.ErrNotImplemented
+}
+
+func (r *Repository) GetInteractionRequest(context.Context, uuid.UUID) (entity.InteractionRequest, error) {
+	return entity.InteractionRequest{}, errs.ErrNotFound
+}
+
+func (r *Repository) GetInteractionResponse(context.Context, uuid.UUID) (entity.InteractionResponse, error) {
+	return entity.InteractionResponse{}, errs.ErrNotFound
+}
+
+func (r *Repository) ListInteractionRequests(context.Context, query.InteractionRequestFilter) ([]entity.InteractionRequest, value.PageResult, error) {
+	return nil, value.PageResult{}, errs.ErrNotImplemented
+}
+
+func (r *Repository) ListExpirableInteractionRequests(context.Context, value.ScopeRef, time.Time, int32) ([]entity.InteractionRequest, error) {
+	return nil, errs.ErrNotImplemented
+}
+
 func (r *Repository) GetCommandResult(context.Context, query.CommandIdentity) (entity.CommandResult, error) {
 	return entity.CommandResult{}, errs.ErrNotFound
 }

@@ -24,12 +24,18 @@ func CommandMeta(input *interactionsv1.CommandMeta) (value.CommandMeta, error) {
 		}
 		commandID = id
 	}
+	var expectedVersion *int64
+	if input.ExpectedVersion != nil {
+		value := input.GetExpectedVersion()
+		expectedVersion = &value
+	}
 	return value.CommandMeta{
-		CommandID:      commandID,
-		IdempotencyKey: strings.TrimSpace(input.GetIdempotencyKey()),
-		Actor:          Actor(input.GetActor()),
-		Reason:         strings.TrimSpace(input.GetReason()),
-		RequestID:      strings.TrimSpace(input.GetRequestId()),
+		CommandID:       commandID,
+		IdempotencyKey:  strings.TrimSpace(input.GetIdempotencyKey()),
+		ExpectedVersion: expectedVersion,
+		Actor:           Actor(input.GetActor()),
+		Reason:          strings.TrimSpace(input.GetReason()),
+		RequestID:       strings.TrimSpace(input.GetRequestId()),
 	}, nil
 }
 

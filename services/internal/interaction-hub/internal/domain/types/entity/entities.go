@@ -40,6 +40,42 @@ type ConversationMessage struct {
 	CreatedAt    time.Time
 }
 
+type InteractionRequest struct {
+	ID                uuid.UUID
+	RequestKind       enum.InteractionRequestKind
+	Scope             value.ScopeRef
+	ThreadID          *uuid.UUID
+	SourceOwner       value.SourceOwnerRef
+	Ingress           value.IngressRef
+	DecisionOwner     value.DecisionOwnerRef
+	TargetRefs        []value.ActorRef
+	ContextRefs       []value.ExternalRef
+	PromptSummary     string
+	PromptObject      value.ObjectRef
+	AllowedActions    []value.InteractionAction
+	RiskClass         enum.InteractionRiskClass
+	Status            enum.InteractionRequestStatus
+	DeadlineAt        *time.Time
+	ReminderPolicyRef string
+	Version           int64
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	ResolvedAt        *time.Time
+}
+
+type InteractionResponse struct {
+	ID                  uuid.UUID
+	RequestID           uuid.UUID
+	ResponseAction      enum.InteractionResponseAction
+	RespondedByActorRef string
+	ResponseSummary     string
+	ResponseObject      value.ObjectRef
+	SourceKind          enum.InteractionResponseSourceKind
+	SourceRef           string
+	OwnerDecisionRef    string
+	CreatedAt           time.Time
+}
+
 type CommandResult struct {
 	Key                string
 	CommandID          uuid.UUID

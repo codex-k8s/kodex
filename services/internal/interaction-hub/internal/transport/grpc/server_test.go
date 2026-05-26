@@ -45,35 +45,42 @@ func TestServerRoutesAllStableRPCsToDomainUseCases(t *testing.T) {
 			return err
 		}},
 		{name: "RequestFeedback", want: enum.OperationRequestFeedback, call: func(ctx context.Context, s *Server) error {
-			_, err := s.RequestFeedback(ctx, &interactionsv1.RequestFeedbackRequest{})
+			_, err := s.RequestFeedback(ctx, validRequestFeedbackRequest())
 			return err
 		}},
 		{name: "RequestApproval", want: enum.OperationRequestApproval, call: func(ctx context.Context, s *Server) error {
-			_, err := s.RequestApproval(ctx, &interactionsv1.RequestApprovalRequest{})
+			_, err := s.RequestApproval(ctx, validRequestApprovalRequest())
 			return err
 		}},
 		{name: "RequestHumanGate", want: enum.OperationRequestHumanGate, call: func(ctx context.Context, s *Server) error {
-			_, err := s.RequestHumanGate(ctx, &interactionsv1.RequestHumanGateRequest{})
+			_, err := s.RequestHumanGate(ctx, validRequestHumanGateRequest())
 			return err
 		}},
 		{name: "RecordInteractionResponse", want: enum.OperationRecordInteractionResponse, call: func(ctx context.Context, s *Server) error {
-			_, err := s.RecordInteractionResponse(ctx, &interactionsv1.RecordInteractionResponseRequest{})
+			_, err := s.RecordInteractionResponse(ctx, validRecordInteractionResponseRequest(uuid.New()))
 			return err
 		}},
 		{name: "CancelInteractionRequest", want: enum.OperationCancelInteractionRequest, call: func(ctx context.Context, s *Server) error {
-			_, err := s.CancelInteractionRequest(ctx, &interactionsv1.CancelInteractionRequestRequest{})
+			_, err := s.CancelInteractionRequest(ctx, &interactionsv1.CancelInteractionRequestRequest{Meta: commandMetaWithExpected(1), RequestId: uuid.NewString()})
 			return err
 		}},
 		{name: "ExpireInteractionRequests", want: enum.OperationExpireInteractionRequests, call: func(ctx context.Context, s *Server) error {
-			_, err := s.ExpireInteractionRequests(ctx, &interactionsv1.ExpireInteractionRequestsRequest{})
+			_, err := s.ExpireInteractionRequests(ctx, &interactionsv1.ExpireInteractionRequestsRequest{
+				Meta:  commandMeta(),
+				Scope: &interactionsv1.ScopeRef{Type: interactionsv1.InteractionScopeType_INTERACTION_SCOPE_TYPE_SERVICE, Ref: "agent-manager"},
+				Limit: 10,
+			})
 			return err
 		}},
 		{name: "GetInteractionRequest", want: enum.OperationGetInteractionRequest, call: func(ctx context.Context, s *Server) error {
-			_, err := s.GetInteractionRequest(ctx, &interactionsv1.GetInteractionRequestRequest{})
+			_, err := s.GetInteractionRequest(ctx, &interactionsv1.GetInteractionRequestRequest{RequestId: uuid.NewString()})
 			return err
 		}},
 		{name: "ListInteractionRequests", want: enum.OperationListInteractionRequests, call: func(ctx context.Context, s *Server) error {
-			_, err := s.ListInteractionRequests(ctx, &interactionsv1.ListInteractionRequestsRequest{})
+			_, err := s.ListInteractionRequests(ctx, &interactionsv1.ListInteractionRequestsRequest{
+				Scope: &interactionsv1.ScopeRef{Type: interactionsv1.InteractionScopeType_INTERACTION_SCOPE_TYPE_SERVICE, Ref: "agent-manager"},
+				Page:  &interactionsv1.PageRequest{PageSize: 10},
+			})
 			return err
 		}},
 		{name: "RequestNotification", want: enum.OperationRequestNotification, call: func(ctx context.Context, s *Server) error {
@@ -222,36 +229,85 @@ func (f *fakeInteractionService) ListConversationMessages(_ context.Context, inp
 	}}, value.PageResult{}, nil
 }
 
-func (f *fakeInteractionService) RequestFeedback(context.Context) error {
-	return f.record(enum.OperationRequestFeedback)
+func (f *fakeInteractionService) RequestFeedback(_ context.Context, input interactionservice.RequestFeedbackInput) (entity.InteractionRequest, error) {
+	if err := f.record(enum.OperationRequestFeedback); err != nil {
+		return entity.InteractionRequest{}, err
+	}
+	return fakeRequest(input.Request, enum.InteractionRequestKindFeedback), nil
 }
 
-func (f *fakeInteractionService) RequestApproval(context.Context) error {
-	return f.record(enum.OperationRequestApproval)
+func (f *fakeInteractionService) RequestApproval(_ context.Context, input interactionservice.RequestApprovalInput) (entity.InteractionRequest, error) {
+	if err := f.record(enum.OperationRequestApproval); err != nil {
+		return entity.InteractionRequest{}, err
+	}
+	return fakeRequest(input.Request, enum.InteractionRequestKindApproval), nil
 }
 
-func (f *fakeInteractionService) RequestHumanGate(context.Context) error {
-	return f.record(enum.OperationRequestHumanGate)
+func (f *fakeInteractionService) RequestHumanGate(_ context.Context, input interactionservice.RequestHumanGateInput) (entity.InteractionRequest, error) {
+	if err := f.record(enum.OperationRequestHumanGate); err != nil {
+		return entity.InteractionRequest{}, err
+	}
+	return fakeRequest(input.Request, enum.InteractionRequestKindHumanGate), nil
 }
 
-func (f *fakeInteractionService) RecordInteractionResponse(context.Context) error {
-	return f.record(enum.OperationRecordInteractionResponse)
+func (f *fakeInteractionService) RecordInteractionResponse(_ context.Context, input interactionservice.RecordInteractionResponseInput) (entity.InteractionRequest, entity.InteractionResponse, error) {
+	if err := f.record(enum.OperationRecordInteractionResponse); err != nil {
+		return entity.InteractionRequest{}, entity.InteractionResponse{}, err
+	}
+	now := time.Date(2026, 5, 26, 12, 2, 0, 0, time.UTC)
+	request := fakeRequest(validInteractionRequestDraftInput(), enum.InteractionRequestKindApproval)
+	request.ID = input.RequestID
+	request.Status = enum.InteractionRequestStatusAnswered
+	request.Version = 2
+	request.UpdatedAt = now
+	request.ResolvedAt = &now
+	response := entity.InteractionResponse{
+		ID:                  uuid.New(),
+		RequestID:           input.RequestID,
+		ResponseAction:      input.ResponseAction,
+		RespondedByActorRef: input.RespondedByActorRef,
+		ResponseSummary:     input.ResponseSummary,
+		ResponseObject:      input.ResponseObject,
+		SourceKind:          input.SourceKind,
+		SourceRef:           input.SourceRef,
+		OwnerDecisionRef:    input.OwnerDecisionRef,
+		CreatedAt:           now,
+	}
+	return request, response, nil
 }
 
-func (f *fakeInteractionService) CancelInteractionRequest(context.Context) error {
-	return f.record(enum.OperationCancelInteractionRequest)
+func (f *fakeInteractionService) CancelInteractionRequest(_ context.Context, input interactionservice.CancelInteractionRequestInput) (entity.InteractionRequest, error) {
+	if err := f.record(enum.OperationCancelInteractionRequest); err != nil {
+		return entity.InteractionRequest{}, err
+	}
+	request := fakeRequest(validInteractionRequestDraftInput(), enum.InteractionRequestKindApproval)
+	request.ID = input.RequestID
+	request.Status = enum.InteractionRequestStatusCancelled
+	request.Version = 2
+	return request, nil
 }
 
-func (f *fakeInteractionService) ExpireInteractionRequests(context.Context) error {
-	return f.record(enum.OperationExpireInteractionRequests)
+func (f *fakeInteractionService) ExpireInteractionRequests(context.Context, interactionservice.ExpireInteractionRequestsInput) (interactionservice.ExpireInteractionRequestsResult, error) {
+	if err := f.record(enum.OperationExpireInteractionRequests); err != nil {
+		return interactionservice.ExpireInteractionRequestsResult{}, err
+	}
+	return interactionservice.ExpireInteractionRequestsResult{ExpiredRequestIDs: []uuid.UUID{uuid.New()}}, nil
 }
 
-func (f *fakeInteractionService) GetInteractionRequest(context.Context) error {
-	return f.record(enum.OperationGetInteractionRequest)
+func (f *fakeInteractionService) GetInteractionRequest(_ context.Context, input interactionservice.GetInteractionRequestInput) (entity.InteractionRequest, error) {
+	if err := f.record(enum.OperationGetInteractionRequest); err != nil {
+		return entity.InteractionRequest{}, err
+	}
+	request := fakeRequest(validInteractionRequestDraftInput(), enum.InteractionRequestKindApproval)
+	request.ID = input.RequestID
+	return request, nil
 }
 
-func (f *fakeInteractionService) ListInteractionRequests(context.Context) error {
-	return f.record(enum.OperationListInteractionRequests)
+func (f *fakeInteractionService) ListInteractionRequests(context.Context, interactionservice.ListInteractionRequestsInput) ([]entity.InteractionRequest, value.PageResult, error) {
+	if err := f.record(enum.OperationListInteractionRequests); err != nil {
+		return nil, value.PageResult{}, err
+	}
+	return []entity.InteractionRequest{fakeRequest(validInteractionRequestDraftInput(), enum.InteractionRequestKindApproval)}, value.PageResult{}, nil
 }
 
 func (f *fakeInteractionService) RequestNotification(context.Context) error {
@@ -292,7 +348,7 @@ func TestServerReturnsDomainError(t *testing.T) {
 	t.Parallel()
 
 	service := &fakeInteractionService{err: errs.ErrNotImplemented}
-	_, err := NewServer(service).RequestFeedback(context.Background(), &interactionsv1.RequestFeedbackRequest{})
+	_, err := NewServer(service).RequestFeedback(context.Background(), validRequestFeedbackRequest())
 	if !errors.Is(err, errs.ErrNotImplemented) {
 		t.Fatalf("RequestFeedback() err = %v, want ErrNotImplemented", err)
 	}
@@ -333,6 +389,114 @@ func validRecordMessageRequest(threadID uuid.UUID) *interactionsv1.RecordConvers
 	}
 }
 
+func validRequestFeedbackRequest() *interactionsv1.RequestFeedbackRequest {
+	return &interactionsv1.RequestFeedbackRequest{Meta: commandMeta(), Request: validInteractionRequestDraft()}
+}
+
+func validRequestApprovalRequest() *interactionsv1.RequestApprovalRequest {
+	return &interactionsv1.RequestApprovalRequest{Meta: commandMeta(), Request: validInteractionRequestDraft()}
+}
+
+func validRequestHumanGateRequest() *interactionsv1.RequestHumanGateRequest {
+	return &interactionsv1.RequestHumanGateRequest{Meta: commandMeta(), Request: validInteractionRequestDraft()}
+}
+
+func validRecordInteractionResponseRequest(requestID uuid.UUID) *interactionsv1.RecordInteractionResponseRequest {
+	return &interactionsv1.RecordInteractionResponseRequest{
+		Meta:                commandMetaWithExpected(1),
+		RequestId:           requestID.String(),
+		ResponseAction:      interactionsv1.InteractionResponseAction_INTERACTION_RESPONSE_ACTION_APPROVE,
+		RespondedByActorRef: "user:approver-1",
+		ResponseSummary:     ptr("approved"),
+		SourceKind:          interactionsv1.InteractionResponseSourceKind_INTERACTION_RESPONSE_SOURCE_KIND_MCP,
+		SourceRef:           ptr("mcp:command-1"),
+		OwnerDecisionRef:    ptr("decision:1"),
+	}
+}
+
+func validInteractionRequestDraft() *interactionsv1.InteractionRequestDraft {
+	deadline := time.Date(2026, 5, 26, 13, 0, 0, 0, time.UTC).Format(time.RFC3339Nano)
+	policy := "policy:standard"
+	return &interactionsv1.InteractionRequestDraft{
+		Scope: &interactionsv1.ScopeRef{
+			Type: interactionsv1.InteractionScopeType_INTERACTION_SCOPE_TYPE_SERVICE,
+			Ref:  "agent-manager",
+		},
+		SourceOwner: &interactionsv1.SourceOwnerRef{
+			Kind: interactionsv1.SourceOwnerKind_SOURCE_OWNER_KIND_AGENT_MANAGER,
+			Ref:  ptr("run:123"),
+		},
+		Ingress: &interactionsv1.IngressRef{
+			Kind: interactionsv1.IngressKind_INGRESS_KIND_DIRECT_GRPC,
+			Ref:  ptr("grpc:command-1"),
+		},
+		DecisionOwner: &interactionsv1.DecisionOwnerRef{
+			OwnerKind:       interactionsv1.DecisionOwnerKind_DECISION_OWNER_KIND_GOVERNANCE_MANAGER,
+			OwnerRequestRef: "gate:req-1",
+		},
+		TargetRefs: []*interactionsv1.ActorRef{
+			{RefKind: "user", Ref: "approver-1"},
+		},
+		ContextRefs: []*interactionsv1.ExternalRef{
+			{RefKind: "agent_run", Ref: "run:123"},
+		},
+		PromptSummary: "safe prompt",
+		AllowedActions: []*interactionsv1.InteractionAction{
+			{ActionKey: "approve", LabelTemplateRef: ptr("interaction.actions.approve"), IsTerminal: true},
+		},
+		RiskClass:         interactionsv1.InteractionRiskClass_INTERACTION_RISK_CLASS_HIGH,
+		DeadlineAt:        &deadline,
+		ReminderPolicyRef: &policy,
+	}
+}
+
+func validInteractionRequestDraftInput() interactionservice.InteractionRequestDraftInput {
+	deadline := time.Date(2026, 5, 26, 13, 0, 0, 0, time.UTC)
+	return interactionservice.InteractionRequestDraftInput{
+		Scope:         value.ScopeRef{Type: enum.ScopeTypeService, Ref: "agent-manager"},
+		SourceOwner:   value.SourceOwnerRef{Kind: enum.SourceOwnerKindAgentManager, Ref: "run:123"},
+		Ingress:       value.IngressRef{Kind: enum.IngressKindDirectGRPC, Ref: "grpc:command-1"},
+		DecisionOwner: value.DecisionOwnerRef{Kind: enum.DecisionOwnerKindGovernanceManager, OwnerRequestRef: "gate:req-1"},
+		TargetRefs: []value.ActorRef{
+			{Kind: "user", Ref: "approver-1"},
+		},
+		ContextRefs: []value.ExternalRef{
+			{Kind: "agent_run", Ref: "run:123"},
+		},
+		PromptSummary: "safe prompt",
+		AllowedActions: []value.InteractionAction{
+			{ActionKey: "approve", LabelTemplateRef: "interaction.actions.approve", Terminal: true},
+		},
+		RiskClass:         enum.InteractionRiskClassHigh,
+		DeadlineAt:        &deadline,
+		ReminderPolicyRef: "policy:standard",
+	}
+}
+
+func fakeRequest(input interactionservice.InteractionRequestDraftInput, kind enum.InteractionRequestKind) entity.InteractionRequest {
+	now := time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC)
+	return entity.InteractionRequest{
+		ID:                uuid.New(),
+		RequestKind:       kind,
+		Scope:             input.Scope,
+		SourceOwner:       input.SourceOwner,
+		Ingress:           input.Ingress,
+		DecisionOwner:     input.DecisionOwner,
+		TargetRefs:        input.TargetRefs,
+		ContextRefs:       input.ContextRefs,
+		PromptSummary:     input.PromptSummary,
+		PromptObject:      input.PromptObject,
+		AllowedActions:    input.AllowedActions,
+		RiskClass:         input.RiskClass,
+		Status:            enum.InteractionRequestStatusWaiting,
+		DeadlineAt:        input.DeadlineAt,
+		ReminderPolicyRef: input.ReminderPolicyRef,
+		Version:           1,
+		CreatedAt:         now,
+		UpdatedAt:         now,
+	}
+}
+
 func commandMeta() *interactionsv1.CommandMeta {
 	commandID := uuid.NewString()
 	return &interactionsv1.CommandMeta{
@@ -341,6 +505,12 @@ func commandMeta() *interactionsv1.CommandMeta {
 		Reason:    "test",
 		RequestId: "request-1",
 	}
+}
+
+func commandMetaWithExpected(version int64) *interactionsv1.CommandMeta {
+	meta := commandMeta()
+	meta.ExpectedVersion = &version
+	return meta
 }
 
 func ptr(value string) *string {

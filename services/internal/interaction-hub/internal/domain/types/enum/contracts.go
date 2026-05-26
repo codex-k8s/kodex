@@ -89,3 +89,167 @@ func (v ConversationMessageKind) Valid() bool {
 		return false
 	}
 }
+
+type SourceOwnerKind string
+
+const (
+	SourceOwnerKindAgentManager      SourceOwnerKind = "agent_manager"
+	SourceOwnerKindSlotAgent         SourceOwnerKind = "slot_agent"
+	SourceOwnerKindGovernanceManager SourceOwnerKind = "governance_manager"
+	SourceOwnerKindProviderHub       SourceOwnerKind = "provider_hub"
+	SourceOwnerKindOperationsHub     SourceOwnerKind = "operations_hub"
+	SourceOwnerKindUser              SourceOwnerKind = "user"
+	SourceOwnerKindSystem            SourceOwnerKind = "system"
+)
+
+func (v SourceOwnerKind) Valid() bool {
+	switch v {
+	case SourceOwnerKindAgentManager, SourceOwnerKindSlotAgent, SourceOwnerKindGovernanceManager, SourceOwnerKindProviderHub, SourceOwnerKindOperationsHub, SourceOwnerKindUser, SourceOwnerKindSystem:
+		return true
+	default:
+		return false
+	}
+}
+
+type DecisionOwnerKind string
+
+const (
+	DecisionOwnerKindAgentManager      DecisionOwnerKind = "agent_manager"
+	DecisionOwnerKindGovernanceManager DecisionOwnerKind = "governance_manager"
+	DecisionOwnerKindProviderHub       DecisionOwnerKind = "provider_hub"
+	DecisionOwnerKindOperationsHub     DecisionOwnerKind = "operations_hub"
+	DecisionOwnerKindSystem            DecisionOwnerKind = "system"
+)
+
+func (v DecisionOwnerKind) Valid() bool {
+	switch v {
+	case DecisionOwnerKindAgentManager, DecisionOwnerKindGovernanceManager, DecisionOwnerKindProviderHub, DecisionOwnerKindOperationsHub, DecisionOwnerKindSystem:
+		return true
+	default:
+		return false
+	}
+}
+
+type IngressKind string
+
+const (
+	IngressKindDirectGRPC IngressKind = "direct_grpc"
+	IngressKindMCP        IngressKind = "mcp"
+	IngressKindCodexHook  IngressKind = "codex_hook"
+	IngressKindGateway    IngressKind = "gateway"
+	IngressKindSystem     IngressKind = "system"
+	IngressKindService    IngressKind = "service"
+)
+
+func (v IngressKind) Valid() bool {
+	switch v {
+	case IngressKindDirectGRPC, IngressKindMCP, IngressKindCodexHook, IngressKindGateway, IngressKindSystem, IngressKindService:
+		return true
+	default:
+		return false
+	}
+}
+
+type InteractionRequestKind string
+
+const (
+	InteractionRequestKindFeedback  InteractionRequestKind = "feedback"
+	InteractionRequestKindApproval  InteractionRequestKind = "approval"
+	InteractionRequestKindHumanGate InteractionRequestKind = "human_gate"
+)
+
+func (v InteractionRequestKind) Valid() bool {
+	switch v {
+	case InteractionRequestKindFeedback, InteractionRequestKindApproval, InteractionRequestKindHumanGate:
+		return true
+	default:
+		return false
+	}
+}
+
+type InteractionRiskClass string
+
+const (
+	InteractionRiskClassLow      InteractionRiskClass = "low"
+	InteractionRiskClassMedium   InteractionRiskClass = "medium"
+	InteractionRiskClassHigh     InteractionRiskClass = "high"
+	InteractionRiskClassCritical InteractionRiskClass = "critical"
+)
+
+func (v InteractionRiskClass) Valid() bool {
+	switch v {
+	case InteractionRiskClassLow, InteractionRiskClassMedium, InteractionRiskClassHigh, InteractionRiskClassCritical:
+		return true
+	default:
+		return false
+	}
+}
+
+type InteractionRequestStatus string
+
+const (
+	InteractionRequestStatusCreated   InteractionRequestStatus = "created"
+	InteractionRequestStatusRouted    InteractionRequestStatus = "routed"
+	InteractionRequestStatusWaiting   InteractionRequestStatus = "waiting"
+	InteractionRequestStatusAnswered  InteractionRequestStatus = "answered"
+	InteractionRequestStatusExpired   InteractionRequestStatus = "expired"
+	InteractionRequestStatusCancelled InteractionRequestStatus = "cancelled"
+	InteractionRequestStatusFailed    InteractionRequestStatus = "failed"
+)
+
+func (v InteractionRequestStatus) Valid() bool {
+	switch v {
+	case InteractionRequestStatusCreated, InteractionRequestStatusRouted, InteractionRequestStatusWaiting, InteractionRequestStatusAnswered, InteractionRequestStatusExpired, InteractionRequestStatusCancelled, InteractionRequestStatusFailed:
+		return true
+	default:
+		return false
+	}
+}
+
+func (v InteractionRequestStatus) Terminal() bool {
+	switch v {
+	case InteractionRequestStatusAnswered, InteractionRequestStatusExpired, InteractionRequestStatusCancelled, InteractionRequestStatusFailed:
+		return true
+	default:
+		return false
+	}
+}
+
+type InteractionResponseAction string
+
+const (
+	InteractionResponseActionAnswer      InteractionResponseAction = "answer"
+	InteractionResponseActionApprove     InteractionResponseAction = "approve"
+	InteractionResponseActionReject      InteractionResponseAction = "reject"
+	InteractionResponseActionDefer       InteractionResponseAction = "defer"
+	InteractionResponseActionAcknowledge InteractionResponseAction = "acknowledge"
+	InteractionResponseActionCustom      InteractionResponseAction = "custom"
+)
+
+func (v InteractionResponseAction) Valid() bool {
+	switch v {
+	case InteractionResponseActionAnswer, InteractionResponseActionApprove, InteractionResponseActionReject, InteractionResponseActionDefer, InteractionResponseActionAcknowledge, InteractionResponseActionCustom:
+		return true
+	default:
+		return false
+	}
+}
+
+type InteractionResponseSourceKind string
+
+const (
+	InteractionResponseSourceKindWebConsole      InteractionResponseSourceKind = "web_console"
+	InteractionResponseSourceKindMCP             InteractionResponseSourceKind = "mcp"
+	InteractionResponseSourceKindChannelCallback InteractionResponseSourceKind = "channel_callback"
+	InteractionResponseSourceKindSystem          InteractionResponseSourceKind = "system"
+	InteractionResponseSourceKindService         InteractionResponseSourceKind = "service"
+)
+
+func (v InteractionResponseSourceKind) Valid() bool {
+	switch v {
+	case InteractionResponseSourceKindWebConsole, InteractionResponseSourceKindMCP, InteractionResponseSourceKindChannelCallback, InteractionResponseSourceKindSystem, InteractionResponseSourceKindService:
+		return true
+	default:
+		return false
+	}
+}
