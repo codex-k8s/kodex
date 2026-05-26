@@ -254,6 +254,28 @@ message EvidenceRef {
   optional string retention_class = 5;
 }
 
+// RiskEvaluationSummary carries bounded classifier inputs without raw diff, provider payload, logs or secrets.
+message RiskEvaluationSummary {
+  // changed_files_summary_ref points to provider-hub or agent-produced changed-file summary.
+  optional string changed_files_summary_ref = 1;
+  // summary is a short safe classifier summary, not raw diff or logs.
+  string summary = 2;
+  // factors are explicit safe factors used by the local evaluator.
+  repeated RiskEvaluationFactor factors = 3;
+}
+
+// RiskEvaluationFactor is one safe input fact for the risk classifier.
+message RiskEvaluationFactor {
+  // source_type classifies the factor source.
+  RiskFactorSourceType source_type = 1;
+  // ref is a safe reference such as path/service/api/db/runtime/release ref.
+  string ref = 2;
+  // summary is a bounded safe explanation without raw payload.
+  string summary = 3;
+  // tags are bounded classifier tags such as auth, production, destructive or migration.
+  repeated string tags = 4;
+}
+
 // RequiredGate describes a gate required by a risk assessment.
 message RequiredGate {
   // gate_policy_id identifies the policy that requires the gate.
@@ -388,6 +410,14 @@ message RiskAssessment {
   string created_at = 13;
   // updated_at is an RFC3339 timestamp.
   string updated_at = 14;
+  // risk_profile_id identifies the policy profile used by the evaluator when present.
+  optional string risk_profile_id = 15;
+  // risk_profile_version identifies the immutable policy version used by the evaluator.
+  optional int64 risk_profile_version = 16;
+  // evaluation_summary stores the safe classifier input snapshot.
+  RiskEvaluationSummary evaluation_summary = 17;
+  // evidence_refs are bounded refs used for this deterministic assessment.
+  repeated EvidenceRef evidence_refs = 18;
 }
 
 // RiskFactor explains one reason for a risk class.
@@ -680,8 +710,11 @@ message EvaluateRiskRequest {
   AgentContextRef agent_context = 4;
   RuntimeContextRef runtime_context = 5;
   repeated EvidenceRef evidence_refs = 6;
+  // risk_profile_ref points to governance risk profile id or ref supplied by project-catalog policy.
   optional string risk_profile_ref = 7;
   CommandMeta meta = 8;
+  // evaluation_summary contains bounded safe factors used by the local classifier.
+  RiskEvaluationSummary evaluation_summary = 9;
 }
 
 message ReevaluateRiskRequest {
@@ -689,6 +722,10 @@ message ReevaluateRiskRequest {
   repeated EvidenceRef new_evidence_refs = 2;
   string reevaluation_reason = 3;
   CommandMeta meta = 4;
+  // evaluation_summary replaces the stored safe classifier input when present.
+  RiskEvaluationSummary evaluation_summary = 5;
+  // risk_profile_ref optionally switches to a newer governance risk profile for this recalculation.
+  optional string risk_profile_ref = 6;
 }
 
 message GetRiskAssessmentRequest {

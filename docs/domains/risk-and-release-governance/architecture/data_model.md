@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-22
 updated_at: 2026-05-26
-related_issues: [322, 769, 815]
+related_issues: [322, 769, 815, 827]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -89,10 +89,16 @@ approvals:
 | `project_ref` | text | да | Проект, если применимо. |
 | `repository_ref` | text | да | Репозиторий, если применимо. |
 | `agent_run_ref` | text | да | Agent run, если оценка связана с flow. |
+| `risk_profile_id` | uuid | да | Локальный risk profile, использованный evaluator. |
+| `risk_profile_version` | bigint | да | Immutable-версия risk profile, использованная evaluator. |
+| `evaluation_summary` | jsonb | нет | Снимок входного safe classifier summary: changed-file summary ref, typed factors и bounded summaries без raw diff/provider payload/логов/секретов. |
+| `evidence_refs` | jsonb | нет | Safe refs на evidence, digest и retention metadata без встраивания больших отчётов. |
 | `initial_risk_class` | enum | нет | Автоматически рассчитанный риск. |
 | `effective_risk_class` | enum | нет | Текущий риск с учётом факторов, signals и decisions. |
 | `status` | enum | нет | `draft`, `active`, `superseded`, `closed`. |
-| `explanation` | jsonb | нет | Короткое объяснение для UI/API без секретов. |
+| `explanation` | text | нет | Короткое deterministic explanation для UI/API без секретов. |
+| `required_gates` | jsonb | нет | Gate requirements, выведенные из profile rules/gate policies и итогового risk class. |
+| `version` | bigint | нет | Оптимистичная конкуренция при пересчёте. |
 | `created_at`, `updated_at` | timestamptz | нет | Технические временные метки. |
 
 ### RiskFactor

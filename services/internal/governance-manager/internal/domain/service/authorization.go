@@ -12,10 +12,11 @@ import (
 )
 
 const (
-	actionGateRequest = accesscatalog.ActionGovernanceGateRequest
-	actionGateRead    = accesscatalog.ActionGovernanceGateRead
-	actionGateDecide  = accesscatalog.ActionGovernanceGateDecide
-	actionRiskRead    = accesscatalog.ActionGovernanceRiskRead
+	actionGateRequest  = accesscatalog.ActionGovernanceGateRequest
+	actionGateRead     = accesscatalog.ActionGovernanceGateRead
+	actionGateDecide   = accesscatalog.ActionGovernanceGateDecide
+	actionRiskEvaluate = accesscatalog.ActionGovernanceRiskEvaluate
+	actionRiskRead     = accesscatalog.ActionGovernanceRiskRead
 )
 
 // Authorizer checks whether the caller may access governance-manager state.
@@ -108,4 +109,16 @@ func riskAssessmentResource(id uuid.UUID) resourceRef {
 		resourceID = id.String()
 	}
 	return resourceRef{Type: accesscatalog.ResourceGovernanceRiskAssessment, ID: resourceID, ScopeType: accesscatalog.ScopeGlobal}
+}
+
+func riskTargetResource(target value.ExternalRef) resourceRef {
+	resource := riskAssessmentResource(uuid.Nil)
+	resource.ID = strings.TrimSpace(target.Ref)
+	return resource
+}
+
+func riskContextResource(ref string) resourceRef {
+	resource := riskAssessmentResource(uuid.Nil)
+	resource.ID = strings.TrimSpace(ref)
+	return resource
 }

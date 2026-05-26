@@ -84,6 +84,342 @@ func TestEvaluateRiskStoresAssessmentAndOutboxEvents(t *testing.T) {
 	}
 }
 
+func TestEvaluateRiskClassifiesSafeFactorsAndPolicyRules(t *testing.T) {
+	t.Parallel()
+
+	commandID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
+	profileID := uuid.MustParse("bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb")
+	gatePolicyID := uuid.MustParse("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
+	activeVersion := int64(1)
+	repository := &fakeRepository{
+		ready: true,
+		profile: entity.RiskProfile{
+			VersionedBase: entity.VersionedBase{ID: profileID, Version: 2},
+			Status:        enum.RiskProfileStatusActive,
+			ActiveVersion: &activeVersion,
+		},
+		profileVersion: entity.RiskProfileVersion{
+			RiskProfileID:  profileID,
+			ProfileVersion: activeVersion,
+			Status:         enum.RiskProfileVersionStatusActive,
+			GatePolicies: []entity.GatePolicy{{
+				ID:           gatePolicyID,
+				GateKind:     enum.GateKindRelease,
+				MinRiskClass: enum.RiskClassR2,
+				Status:       enum.RuleStatusActive,
+			}},
+			Rules: []entity.RiskRule{{
+				ID:                   uuid.MustParse("dddddddd-dddd-4ddd-8ddd-dddddddddddd"),
+				RiskProfileID:        profileID,
+				ProfileVersion:       activeVersion,
+				RuleKind:             enum.RiskRuleKindDatabase,
+				MatcherJSON:          []byte(`{"path_glob":"services/api/*.sql","factor_tag":"migration"}`),
+				MinRiskClass:         enum.RiskClassR2,
+				RequiredGatePolicyID: &gatePolicyID,
+				ReasonTemplate:       []value.LocalizedText{{Locale: "ru", Text: "DB migration needs release gate"}},
+				Status:               enum.RuleStatusActive,
+			}},
+		},
+	}
+	service := newTestService(repository)
+
+	assessment, err := service.EvaluateRisk(context.Background(), EvaluateRiskInput{
+		Target: value.ExternalRef{Type: "provider_native.pr", Ref: "github://codex-k8s/kodex/pull/827"},
+		ProjectContext: value.ProjectContextRef{
+			ProjectRef:     "project:core",
+			RepositoryRef:  "repo:kodex",
+			ReleaseLineRef: "stable",
+		},
+		EvaluationSummary: value.RiskEvaluationSummary{
+			ChangedFilesSummaryRef: "provider-summary:pr-827-files",
+			Summary:                "bounded summary",
+			Factors: []value.RiskEvaluationFactor{{
+				SourceType: string(enum.RiskFactorSourceTypeDatabase),
+				Ref:        "services/api/schema.sql",
+				Summary:    "schema migration",
+				Tags:       []string{"migration"},
+			}, {
+				SourceType: string(enum.RiskFactorSourceTypeSecret),
+				Ref:        "secret-scope:runtime-token",
+				Summary:    "secret scope changed",
+				Tags:       []string{"auth"},
+			}},
+		},
+		RiskProfileRef: profileID.String(),
+		Meta:           CommandMeta{CommandID: &commandID, Actor: value.Actor{Type: "service", ID: "provider-hub"}},
+	})
+	if err != nil {
+		t.Fatalf("EvaluateRisk(): %v", err)
+	}
+	if assessment.EffectiveRiskClass != enum.RiskClassR3 {
+		t.Fatalf("effective risk = %s, want R3", assessment.EffectiveRiskClass)
+	}
+	if len(assessment.RequiredGates) != 1 || assessment.RequiredGates[0].GatePolicyID != gatePolicyID {
+		t.Fatalf("required gates = %+v, want gate policy %s", assessment.RequiredGates, gatePolicyID)
+	}
+	if assessment.RiskProfileID == nil || *assessment.RiskProfileID != profileID || assessment.RiskProfileVersion == nil || *assessment.RiskProfileVersion != activeVersion {
+		t.Fatalf("assessment profile refs = %v/%v, want %s/%d", assessment.RiskProfileID, assessment.RiskProfileVersion, profileID, activeVersion)
+	}
+	if len(repository.riskFactors) < 3 {
+		t.Fatalf("risk factors = %+v, want input and policy factors", repository.riskFactors)
+	}
+	for _, event := range repository.events {
+		payload := string(event.Payload)
+		if strings.Contains(payload, "schema.sql") || strings.Contains(payload, "runtime-token") || strings.Contains(payload, "raw_diff") {
+			t.Fatalf("outbox payload leaked unsafe evaluation detail: %s", payload)
+		}
+	}
+}
+
+func TestEvaluateRiskRejectsUnsafeSummary(t *testing.T) {
+	t.Parallel()
+
+	commandID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
+	repository := &fakeRepository{ready: true}
+	service := newTestService(repository)
+
+	_, err := service.EvaluateRisk(context.Background(), EvaluateRiskInput{
+		Target:            value.ExternalRef{Type: "provider_native.pr", Ref: "github://codex-k8s/kodex/pull/827"},
+		EvaluationSummary: value.RiskEvaluationSummary{Summary: "raw_diff: full provider diff"},
+		Meta:              CommandMeta{CommandID: &commandID, Actor: value.Actor{Type: "service", ID: "provider-hub"}},
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("EvaluateRisk() error = %v, want ErrInvalidArgument", err)
+	}
+	if repository.mutationCalls != 0 {
+		t.Fatalf("mutation calls = %d, want 0", repository.mutationCalls)
+	}
+}
+
+func TestEvaluateRiskAccessDenied(t *testing.T) {
+	t.Parallel()
+
+	commandID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
+	repository := &fakeRepository{ready: true}
+	service := NewWithConfig(Config{
+		Repository: repository,
+		Authorizer: authorizerFunc(func(context.Context, AuthorizationRequest) error {
+			return errs.ErrForbidden
+		}),
+	})
+
+	_, err := service.EvaluateRisk(context.Background(), EvaluateRiskInput{
+		Target: value.ExternalRef{Type: "provider_native.pr", Ref: "github://codex-k8s/kodex/pull/827"},
+		Meta:   CommandMeta{CommandID: &commandID, Actor: value.Actor{Type: "service", ID: "provider-hub"}},
+	})
+	if !errors.Is(err, errs.ErrForbidden) {
+		t.Fatalf("EvaluateRisk() error = %v, want ErrForbidden", err)
+	}
+	if repository.mutationCalls != 0 {
+		t.Fatalf("mutation calls = %d, want 0", repository.mutationCalls)
+	}
+}
+
+func TestRiskReadAccessDeniedBeforeRepositoryRead(t *testing.T) {
+	t.Parallel()
+
+	assessmentID := uuid.MustParse("bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb")
+	meta := QueryMeta{Actor: value.Actor{Type: "service", ID: "provider-hub"}}
+	repository := &fakeRepository{ready: true}
+	service := NewWithConfig(Config{
+		Repository: repository,
+		Authorizer: authorizerFunc(func(context.Context, AuthorizationRequest) error {
+			return errs.ErrForbidden
+		}),
+	})
+
+	if _, err := service.GetRiskAssessment(context.Background(), GetRiskAssessmentInput{RiskAssessmentID: assessmentID, Meta: meta}); !errors.Is(err, errs.ErrForbidden) {
+		t.Fatalf("GetRiskAssessment() error = %v, want ErrForbidden", err)
+	}
+	if _, _, err := service.ListRiskFactors(context.Background(), ListRiskFactorsInput{
+		Filter: query.RiskFactorFilter{RiskAssessmentID: assessmentID},
+		Meta:   meta,
+	}); !errors.Is(err, errs.ErrForbidden) {
+		t.Fatalf("ListRiskFactors() error = %v, want ErrForbidden", err)
+	}
+	if _, _, err := service.ListReviewSignals(context.Background(), ListReviewSignalsInput{
+		Filter: query.ReviewSignalFilter{RiskAssessmentID: &assessmentID},
+		Meta:   meta,
+	}); !errors.Is(err, errs.ErrForbidden) {
+		t.Fatalf("ListReviewSignals() error = %v, want ErrForbidden", err)
+	}
+	if _, _, err := service.ListRiskAssessments(context.Background(), ListRiskAssessmentsInput{
+		Filter: query.RiskAssessmentFilter{Target: value.ExternalRef{Type: "provider_native.pr", Ref: "github://codex-k8s/kodex/pull/827"}},
+		Meta:   meta,
+	}); !errors.Is(err, errs.ErrForbidden) {
+		t.Fatalf("ListRiskAssessments() error = %v, want ErrForbidden", err)
+	}
+	if repository.assessmentReads != 0 || repository.riskAssessmentListCalls != 0 || repository.riskFactorListCalls != 0 || repository.reviewSignalListCalls != 0 {
+		t.Fatalf("risk reads = assessment:%d list:%d factors:%d signals:%d, want 0 before access allow", repository.assessmentReads, repository.riskAssessmentListCalls, repository.riskFactorListCalls, repository.reviewSignalListCalls)
+	}
+}
+
+func TestListRiskAssessmentsRejectsContextRefsNotAppliedBySQL(t *testing.T) {
+	t.Parallel()
+
+	repository := &fakeRepository{ready: true}
+	service := newTestService(repository)
+
+	_, _, err := service.ListRiskAssessments(context.Background(), ListRiskAssessmentsInput{
+		Filter: query.RiskAssessmentFilter{
+			ProjectContext:     value.ProjectContextRef{ServiceRef: "service:api"},
+			EffectiveRiskClass: enum.RiskClassR2,
+		},
+		Meta: QueryMeta{Actor: value.Actor{Type: "service", ID: "provider-hub"}},
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("ListRiskAssessments() error = %v, want ErrInvalidArgument", err)
+	}
+	if repository.riskAssessmentListCalls != 0 {
+		t.Fatalf("risk assessment list calls = %d, want 0", repository.riskAssessmentListCalls)
+	}
+}
+
+func TestListReviewSignalsRejectsOutcomeOnlyFilter(t *testing.T) {
+	t.Parallel()
+
+	repository := &fakeRepository{ready: true}
+	service := newTestService(repository)
+
+	_, _, err := service.ListReviewSignals(context.Background(), ListReviewSignalsInput{
+		Filter: query.ReviewSignalFilter{Outcome: enum.ReviewSignalOutcomePass},
+		Meta:   QueryMeta{Actor: value.Actor{Type: "service", ID: "provider-hub"}},
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("ListReviewSignals() error = %v, want ErrInvalidArgument", err)
+	}
+	if repository.reviewSignalListCalls != 0 {
+		t.Fatalf("review signal list calls = %d, want 0", repository.reviewSignalListCalls)
+	}
+}
+
+func TestReevaluateRiskUsesExpectedVersionAndReviewSignals(t *testing.T) {
+	t.Parallel()
+
+	commandID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
+	assessmentID := uuid.MustParse("bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb")
+	expectedVersion := int64(3)
+	repository := &fakeRepository{
+		ready: true,
+		assessment: entity.RiskAssessment{
+			VersionedBase:      entity.VersionedBase{ID: assessmentID, Version: expectedVersion},
+			Target:             value.ExternalRef{Type: "provider_native.pr", Ref: "github://codex-k8s/kodex/pull/827"},
+			EvaluationSummary:  value.RiskEvaluationSummary{Summary: "stored safe summary"},
+			InitialRiskClass:   enum.RiskClassR1,
+			EffectiveRiskClass: enum.RiskClassR1,
+			Status:             enum.RiskAssessmentStatusActive,
+		},
+		reviewSignals: []entity.ReviewSignal{{
+			ID:               uuid.MustParse("cccccccc-cccc-4ccc-8ccc-cccccccccccc"),
+			RiskAssessmentID: &assessmentID,
+			Outcome:          enum.ReviewSignalOutcomeBlock,
+			Severity:         enum.SignalSeverityCritical,
+			Summary:          "critical owner block",
+		}},
+	}
+	service := newTestService(repository)
+
+	assessment, err := service.ReevaluateRisk(context.Background(), ReevaluateRiskInput{
+		RiskAssessmentID: assessmentID,
+		Meta: CommandMeta{
+			CommandID:       &commandID,
+			ExpectedVersion: &expectedVersion,
+			Actor:           value.Actor{Type: "service", ID: "provider-hub"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("ReevaluateRisk(): %v", err)
+	}
+	if assessment.Version != expectedVersion+1 || assessment.EffectiveRiskClass != enum.RiskClassR3 {
+		t.Fatalf("assessment version/risk = %d/%s, want %d/R3", assessment.Version, assessment.EffectiveRiskClass, expectedVersion+1)
+	}
+	if repository.assessmentUpdateCalls != 1 {
+		t.Fatalf("assessment update calls = %d, want 1", repository.assessmentUpdateCalls)
+	}
+	if len(repository.events) != 2 || repository.events[1].EventType != governanceevents.EventRiskAssessmentChanged {
+		t.Fatalf("events = %+v, want completed and changed", repository.events)
+	}
+}
+
+func TestReevaluateRiskPublishesChangedWhenFactorSignatureChanges(t *testing.T) {
+	t.Parallel()
+
+	commandID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
+	assessmentID := uuid.MustParse("bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb")
+	expectedVersion := int64(1)
+	repository := &fakeRepository{
+		ready: true,
+		assessment: entity.RiskAssessment{
+			VersionedBase: entity.VersionedBase{ID: assessmentID, Version: expectedVersion},
+			Target:        value.ExternalRef{Type: "provider_native.pr", Ref: "github://codex-k8s/kodex/pull/827"},
+			EvaluationSummary: value.RiskEvaluationSummary{Factors: []value.RiskEvaluationFactor{{
+				SourceType: string(enum.RiskFactorSourceTypeDatabase),
+				Ref:        "db:migration",
+				Summary:    "new migration summary",
+				Tags:       []string{"migration"},
+			}}},
+			InitialRiskClass:   enum.RiskClassR2,
+			EffectiveRiskClass: enum.RiskClassR2,
+			Status:             enum.RiskAssessmentStatusActive,
+		},
+		riskFactors: []entity.RiskFactor{{
+			ID:               uuid.MustParse("cccccccc-cccc-4ccc-8ccc-cccccccccccc"),
+			RiskAssessmentID: assessmentID,
+			SourceType:       enum.RiskFactorSourceTypeDatabase,
+			SourceRef:        "db:migration",
+			RiskClass:        enum.RiskClassR2,
+			Summary:          "old migration summary",
+		}},
+	}
+	service := newTestService(repository)
+
+	assessment, err := service.ReevaluateRisk(context.Background(), ReevaluateRiskInput{
+		RiskAssessmentID: assessmentID,
+		Meta: CommandMeta{
+			CommandID:       &commandID,
+			ExpectedVersion: &expectedVersion,
+			Actor:           value.Actor{Type: "service", ID: "provider-hub"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("ReevaluateRisk(): %v", err)
+	}
+	if assessment.EffectiveRiskClass != enum.RiskClassR2 || len(assessment.RequiredGates) != 0 {
+		t.Fatalf("assessment risk/gates = %s/%d, want same R2/0", assessment.EffectiveRiskClass, len(assessment.RequiredGates))
+	}
+	if len(repository.events) != 2 || repository.events[1].EventType != governanceevents.EventRiskAssessmentChanged {
+		t.Fatalf("events = %+v, want changed event for factor signature change", repository.events)
+	}
+}
+
+func TestReevaluateRiskRejectsStaleExpectedVersion(t *testing.T) {
+	t.Parallel()
+
+	commandID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
+	assessmentID := uuid.MustParse("bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb")
+	expectedVersion := int64(2)
+	repository := &fakeRepository{
+		ready:      true,
+		assessment: entity.RiskAssessment{VersionedBase: entity.VersionedBase{ID: assessmentID, Version: 3}},
+	}
+	service := newTestService(repository)
+
+	_, err := service.ReevaluateRisk(context.Background(), ReevaluateRiskInput{
+		RiskAssessmentID: assessmentID,
+		Meta: CommandMeta{
+			CommandID:       &commandID,
+			ExpectedVersion: &expectedVersion,
+			Actor:           value.Actor{Type: "service", ID: "provider-hub"},
+		},
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("ReevaluateRisk() error = %v, want ErrConflict", err)
+	}
+	if repository.assessmentUpdateCalls != 0 {
+		t.Fatalf("assessment update calls = %d, want 0", repository.assessmentUpdateCalls)
+	}
+}
+
 func TestMutatingUseCasesReplayStoredCommandResults(t *testing.T) {
 	t.Parallel()
 
@@ -705,25 +1041,32 @@ func TestCancelGateReturnsNotFound(t *testing.T) {
 
 type fakeRepository struct {
 	governancerepo.Repository
-	ready                 bool
-	hasCommandResult      bool
-	commandResult         entity.CommandResult
-	profile               entity.RiskProfile
-	profileVersion        entity.RiskProfileVersion
-	assessment            entity.RiskAssessment
-	reviewSignal          entity.ReviewSignal
-	gateRequest           entity.GateRequest
-	gateRequestErr        error
-	gateRequestReads      int
-	gateRequestListCalls  int
-	gateDecision          entity.GateDecision
-	gateDecisionErr       error
-	gateDecisionReads     int
-	gateDecisionListCalls int
-	releasePackage        entity.ReleaseDecisionPackage
-	result                entity.CommandResult
-	events                []entity.OutboxEvent
-	mutationCalls         int
+	ready                   bool
+	hasCommandResult        bool
+	commandResult           entity.CommandResult
+	profile                 entity.RiskProfile
+	profileVersion          entity.RiskProfileVersion
+	assessment              entity.RiskAssessment
+	assessmentReads         int
+	riskFactors             []entity.RiskFactor
+	riskAssessmentListCalls int
+	riskFactorListCalls     int
+	assessmentUpdateCalls   int
+	reviewSignal            entity.ReviewSignal
+	reviewSignals           []entity.ReviewSignal
+	reviewSignalListCalls   int
+	gateRequest             entity.GateRequest
+	gateRequestErr          error
+	gateRequestReads        int
+	gateRequestListCalls    int
+	gateDecision            entity.GateDecision
+	gateDecisionErr         error
+	gateDecisionReads       int
+	gateDecisionListCalls   int
+	releasePackage          entity.ReleaseDecisionPackage
+	result                  entity.CommandResult
+	events                  []entity.OutboxEvent
+	mutationCalls           int
 }
 
 func newTestService(repository *fakeRepository) *Service {
@@ -784,16 +1127,38 @@ func (repository *fakeRepository) GetRiskProfileVersion(_ context.Context, _ uui
 	return repository.profileVersion, nil
 }
 
-func (repository *fakeRepository) CreateRiskAssessment(_ context.Context, assessment entity.RiskAssessment, _ []entity.RiskFactor, result entity.CommandResult, events []entity.OutboxEvent) error {
+func (repository *fakeRepository) CreateRiskAssessment(_ context.Context, assessment entity.RiskAssessment, factors []entity.RiskFactor, result entity.CommandResult, events []entity.OutboxEvent) error {
 	repository.mutationCalls++
 	repository.assessment = assessment
+	repository.riskFactors = factors
+	repository.result = result
+	repository.events = events
+	return nil
+}
+
+func (repository *fakeRepository) UpdateRiskAssessment(_ context.Context, assessment entity.RiskAssessment, factors []entity.RiskFactor, _ int64, result entity.CommandResult, events []entity.OutboxEvent) error {
+	repository.mutationCalls++
+	repository.assessmentUpdateCalls++
+	repository.assessment = assessment
+	repository.riskFactors = factors
 	repository.result = result
 	repository.events = events
 	return nil
 }
 
 func (repository *fakeRepository) GetRiskAssessment(_ context.Context, _ uuid.UUID) (entity.RiskAssessment, error) {
+	repository.assessmentReads++
 	return repository.assessment, nil
+}
+
+func (repository *fakeRepository) ListRiskAssessments(_ context.Context, _ query.RiskAssessmentFilter) ([]entity.RiskAssessment, query.PageResult, error) {
+	repository.riskAssessmentListCalls++
+	return nil, query.PageResult{}, nil
+}
+
+func (repository *fakeRepository) ListRiskFactors(_ context.Context, _ query.RiskFactorFilter) ([]entity.RiskFactor, query.PageResult, error) {
+	repository.riskFactorListCalls++
+	return repository.riskFactors, query.PageResult{}, nil
 }
 
 func (repository *fakeRepository) RecordReviewSignal(_ context.Context, signal entity.ReviewSignal, result entity.CommandResult, event entity.OutboxEvent) error {
@@ -806,6 +1171,11 @@ func (repository *fakeRepository) RecordReviewSignal(_ context.Context, signal e
 
 func (repository *fakeRepository) GetReviewSignal(_ context.Context, _ uuid.UUID) (entity.ReviewSignal, error) {
 	return repository.reviewSignal, nil
+}
+
+func (repository *fakeRepository) ListReviewSignals(_ context.Context, _ query.ReviewSignalFilter) ([]entity.ReviewSignal, query.PageResult, error) {
+	repository.reviewSignalListCalls++
+	return repository.reviewSignals, query.PageResult{}, nil
 }
 
 func (repository *fakeRepository) CreateGateRequest(_ context.Context, request entity.GateRequest, result entity.CommandResult, event entity.OutboxEvent) error {

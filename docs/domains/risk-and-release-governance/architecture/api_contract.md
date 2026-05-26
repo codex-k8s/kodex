@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-22
 updated_at: 2026-05-26
-related_issues: [322, 769, 790, 815]
+related_issues: [322, 769, 790, 815, 827]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -34,6 +34,8 @@ approvals:
 
 Этот документ является обзором целевого API. Машинные спецификации являются источником правды транспорта, а документ должен обновляться синхронно с изменением транспортной спецификации.
 
+`EvaluateRisk` и `ReevaluateRisk` не принимают raw diff, provider payload, runtime logs или секреты. Классификатор работает по `ProjectContextRef`, provider/agent/runtime refs, `RiskEvaluationSummary`, typed factors, evidence refs и локально сохранённым risk profiles/rules. Project/repository refs и release policy refs подготавливаются соседними сервисами и передаются в запросе; прямое чтение `project-catalog`, `provider-hub`, GitHub/GitLab или runtime projections не входит в текущий evaluator contract.
+
 ## Операции
 
 | Операция | Вид | Доступ | Идемпотентность | Примечание |
@@ -47,8 +49,8 @@ approvals:
 | `ListRiskProfiles` | gRPC query | `governance.policy.read` | нет | Читает профили по scope/status. |
 | `ListRiskRules` | gRPC query | `governance.policy.read` | нет | Читает risk rules конкретной версии профиля. |
 | `ListGatePolicies` | gRPC query | `governance.policy.read` | нет | Читает gate policies конкретной версии профиля. |
-| `EvaluateRisk` | gRPC command | `governance.risk.evaluate` | `command_id` | Создаёт или обновляет assessment для transition, PR/MR, release candidate, job или policy change. |
-| `ReevaluateRisk` | gRPC command | `governance.risk.evaluate` | `command_id` + expected version | Пересчитывает assessment после новых signals или policy version. |
+| `EvaluateRisk` | gRPC command | `governance.risk.evaluate` | `command_id` | Создаёт assessment для transition, PR/MR, release candidate, job или policy change по входным safe summaries/refs и локальным risk profile/rules. |
+| `ReevaluateRisk` | gRPC command | `governance.risk.evaluate` | `command_id` + expected version | Пересчитывает assessment после новых safe summaries, signals или policy version. |
 | `GetRiskAssessment` | gRPC query | `governance.risk.read` | нет | Читает assessment, factors и required gates. |
 | `ListRiskAssessments` | gRPC query | `governance.risk.read` | нет | Читает assessments по project/repository/target/risk class/status. |
 | `ListRiskFactors` | gRPC query | `governance.risk.read` | нет | Читает факторы риска assessment без полного diff или логов. |
@@ -146,7 +148,8 @@ MCP-инструменты не должны принимать свободны
 | Access actions | Добавлены в общий каталог для policy, risk, signal, gate и release операций. |
 | Сервисный процесс `governance-manager` | Каркас подготовлен: process, env, health/readiness/metrics, gRPC registration и bounded handlers. |
 | Storage, migrations и outbox publisher | MVP-основа готова: PostgreSQL repository, service-local outbox и handlers для поддержанных storage-операций. |
-| Rule evaluator, release engine и safety-loop | Не реализованы; остаются следующими срезами после persistency-основы. |
+| Risk classifier и policy evaluator | Готовы для локальных risk profiles/rules, safe summaries/refs, идемпотентного replay, optimistic concurrency и safe outbox events. |
+| Release decision engine и safety-loop | Не реализованы; остаются следующими срезами после risk evaluator. |
 | Интеграции с project/agent/provider/runtime/interaction | Зафиксированы в refs и границах контрактов; реализация идёт отдельными срезами. |
 
 ## Совместимость

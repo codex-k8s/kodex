@@ -77,6 +77,7 @@ const (
 	operationRecordReviewSignal          = "domain.Repository.RecordReviewSignal"
 	operationSubmitGateDecision          = "domain.Repository.UpdateGateRequestWithDecision"
 	operationUpdateGateRequestStatus     = "domain.Repository.UpdateGateRequestStatus"
+	operationUpdateRiskAssessment        = "domain.Repository.UpdateRiskAssessment"
 )
 
 // NewRepository creates a PostgreSQL repository.
@@ -193,6 +194,26 @@ func (r *Repository) CreateRiskAssessment(ctx context.Context, assessment entity
 		return queueOutboxEvents(ctx, tx, events)
 	})
 	return wrapError(operationCreateRiskAssessment, err)
+}
+
+// UpdateRiskAssessment replaces the current assessment outcome and factors.
+func (r *Repository) UpdateRiskAssessment(ctx context.Context, assessment entity.RiskAssessment, factors []entity.RiskFactor, previousVersion int64, result entity.CommandResult, events []entity.OutboxEvent) error {
+	err := postgreslib.WithTx(ctx, r.db, func(tx pgx.Tx) error {
+		if err := runMutation(ctx, tx, queryRiskAssessmentUpdate, riskAssessmentUpdateArgs(assessment, previousVersion), true); err != nil {
+			return err
+		}
+		if err := runMutation(ctx, tx, queryRiskFactorDeleteByAssessment, pgx.NamedArgs{"risk_assessment_id": assessment.ID}, false); err != nil {
+			return err
+		}
+		if err := queueRiskFactors(ctx, tx, factors); err != nil {
+			return err
+		}
+		if err := runCommandResult(ctx, tx, result); err != nil {
+			return err
+		}
+		return queueOutboxEvents(ctx, tx, events)
+	})
+	return wrapError(operationUpdateRiskAssessment, err)
 }
 
 // GetRiskAssessment returns one assessment.
