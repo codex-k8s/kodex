@@ -12,7 +12,6 @@ func TestLoadConfigAllowsMissingConditionalEnvWhenAuthDisabled(t *testing.T) {
 	t.Setenv("KODEX_AGENT_MANAGER_GRPC_AUTH_REQUIRED", "false")
 	t.Setenv("KODEX_AGENT_MANAGER_GRPC_AUTH_TOKEN", "")
 	t.Setenv("KODEX_AGENT_MANAGER_PACKAGE_HUB_ENABLED", "false")
-	t.Setenv("KODEX_AGENT_MANAGER_RUNTIME_PREPARATION_ENABLED", "false")
 
 	cfg, err := LoadConfig()
 	if err != nil {
@@ -20,6 +19,22 @@ func TestLoadConfigAllowsMissingConditionalEnvWhenAuthDisabled(t *testing.T) {
 	}
 	if cfg.GRPCAuthRequired {
 		t.Fatal("GRPCAuthRequired = true, want false")
+	}
+}
+
+func TestLoadConfigDefaultsRuntimePreparationDisabledUntilDeployWired(t *testing.T) {
+	t.Setenv("KODEX_AGENT_MANAGER_DATABASE_DSN", "postgres://agent-manager")
+	t.Setenv("KODEX_AGENT_MANAGER_OUTBOX_DISPATCH_ENABLED", "false")
+	t.Setenv("KODEX_AGENT_MANAGER_OUTBOX_PUBLISHER_KIND", "disabled")
+	t.Setenv("KODEX_AGENT_MANAGER_GRPC_AUTH_TOKEN", "agent-token")
+	t.Setenv("KODEX_AGENT_MANAGER_PACKAGE_HUB_GRPC_AUTH_TOKEN", "package-token")
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig(): %v", err)
+	}
+	if cfg.RuntimePreparationEnabled {
+		t.Fatal("RuntimePreparationEnabled = true, want default false")
 	}
 }
 
@@ -42,6 +57,22 @@ func TestValidateRequiresEventLogDSNWhenPostgresPublisherEnabled(t *testing.T) {
 	cfg.EventLogDatabaseDSN = ""
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("Validate() err = nil, want event-log database dsn error")
+	}
+}
+
+func TestValidateRequiresRuntimeClientTokensWhenPreparationEnabled(t *testing.T) {
+	t.Parallel()
+
+	cfg := validConfig()
+	cfg.ProjectCatalogGRPCAuthToken = ""
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() err = nil, want project-catalog auth token error")
+	}
+
+	cfg = validConfig()
+	cfg.RuntimeManagerGRPCAuthToken = ""
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() err = nil, want runtime-manager auth token error")
 	}
 }
 

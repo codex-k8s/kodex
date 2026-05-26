@@ -49,7 +49,7 @@ approvals:
 | AGO-4 | #759 | Сессии и agent `Run`: создание, чтение, статусы, снимки состояния, идемпотентность, защита активной session от дублей, stage-bound проверка роли и AsyncAPI-совместимые события готовы. |
 | AGO-5 | #772 | Интеграция с `package-hub` для guidance packages готова: `agent-manager` выбирает установки, проверяет manifest/version metadata и фиксирует refs/summary в `Run` без checkout/mount. |
 | AGO-6 | #782 | Контекст руководящих пакетов в workspace готов: зафиксирован MVP-путь передачи замороженных `guidance_refs` в `runtime-manager` как источников `guidance_package`, локальные пути `.kodex/guidance/<safe_local_name>`, проверка идентичности источника через `package-hub` и граница без checkout из `agent-manager`. |
-| AGO-7 | #795 | Интеграция `StartAgentRun` с `project-catalog.GetWorkspacePolicy` и `runtime-manager.PrepareRuntime` готова: workspace request собирается из project/source refs, role/run context и `guidance_refs`; `Run` фиксирует только runtime refs, fingerprint/summary и безопасную классификацию ошибок. |
+| AGO-7 | #795 | Интеграция `StartAgentRun` с `project-catalog.GetWorkspacePolicy` и `runtime-manager.PrepareRuntime` готова: workspace request собирается из project/source refs, role/run context и `guidance_refs`; `Run` фиксирует только runtime refs, fingerprint/summary и безопасную классификацию ошибок. До появления deploy wiring для `agent-manager` подготовка runtime включается явно через `KODEX_AGENT_MANAGER_RUNTIME_PREPARATION_ENABLED=true`. |
 | AGO-8 | не назначено | Машина приёмки: проверка provider-native артефактов, watermark, ролей и policy готова. |
 | AGO-9 | не назначено | Follow-up задачи через `provider-hub`; ожидание Human gate идёт через `governance-manager`, delivery — через `interaction-hub`. |
 | AGO-10 | не назначено | Эксплуатационный контур `agent-manager`: deploy manifests, migration job, smoke-проверки и runbook готовы. |
@@ -64,7 +64,7 @@ approvals:
 | `GetPromptTemplate` / `ListPromptTemplates` | storage/use-case слой и gRPC handlers готовы; `GetPromptTemplate` возвращает активную версию при наличии `active_version_id` | AGO-3, AGO-3b |
 | `CreatePromptTemplateVersion` / `ActivatePromptTemplateVersion` / `GetPromptTemplateVersion` / `ListPromptTemplateVersions` | storage/use-case слой и gRPC handlers готовы | AGO-3, AGO-3b |
 | `StartAgentSession` | Слой хранения, use-case и gRPC handlers готовы; создаёт авторитетную сессию, а при непустом provider target продолжает активную `open`/`waiting` session без нового события создания | AGO-4 |
-| `StartAgentRun` | Слой хранения, use-case и gRPC handlers готовы; создаёт `Run`, фиксирует версии роли и prompt, проверяет stage-bound связку flow/stage/role, разрешает guidance hints через `package-hub`, читает workspace policy у `project-catalog`, вызывает `runtime-manager.PrepareRuntime` и сохраняет только runtime refs, fingerprint/diagnostic summary и безопасный статус подготовки | AGO-4, AGO-5, AGO-6, AGO-7 |
+| `StartAgentRun` | Слой хранения, use-case и gRPC handlers готовы; создаёт `Run`, фиксирует версии роли и prompt, проверяет stage-bound связку flow/stage/role, разрешает guidance hints через `package-hub`; при включённом `KODEX_AGENT_MANAGER_RUNTIME_PREPARATION_ENABLED` читает workspace policy у `project-catalog`, вызывает `runtime-manager.PrepareRuntime` и сохраняет только runtime refs, fingerprint/diagnostic summary и безопасный статус подготовки | AGO-4, AGO-5, AGO-6, AGO-7 |
 | `RecordRunState` | Слой хранения, use-case и gRPC handlers готовы; требует ожидаемую версию, проверяет state machine, пишет результат команды и публикует lifecycle event только с обязательными полями AsyncAPI | AGO-4, AGO-6 |
 | `RecordSessionStateSnapshot` | Слой хранения, use-case и gRPC handlers готовы; пишет метаданные снимка и обновляет указатель сессии через ожидаемую версию | AGO-4, AGO-6 |
 | `RequestAcceptance` / `RecordAcceptanceResult` / `GetAcceptanceResult` / `ListAcceptanceResults` | зарегистрировано в gRPC-каркасе; бизнес-реализация запланирована | AGO-8 |
@@ -77,7 +77,7 @@ approvals:
 | Домен | Когда синхронизироваться | Причина |
 |---|---|---|
 | `package-hub` | Готово для AGO-5 | Используются чтения установок, package/version metadata и manifest validation state; `agent-manager` не хранит manifest payload и не меняет установки. |
-| `runtime-manager` | Готово для AGO-7 | `agent-manager` вызывает `PrepareRuntime(agent_run_id, workspace policy, runtime profile, placement constraints)` и не материализует workspace сам. |
+| `runtime-manager` | Готово для AGO-7 | `agent-manager` вызывает `PrepareRuntime(agent_run_id, workspace policy, runtime profile, placement constraints)` при явно включённой runtime preparation и не материализует workspace сам. |
 | `provider-hub` | Перед AGO-8 и AGO-9 | Нужны проекции `Issue/PR/MR`, ускоряющие сигналы сверки и типизированные provider-операции. |
 | `risk-and-release-governance` | Перед AGO-8 и AGO-9 | Нужны контракты risk assessment, review signals, gate request и gate decision refs. |
 | `interaction-hub` | Перед AGO-9 | Нужен delivery/callback контракт для Human gate и запросов обратной связи без владения decision state. |

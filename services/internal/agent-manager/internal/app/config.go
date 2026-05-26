@@ -45,7 +45,7 @@ type Config struct {
 	PackageHubGRPCAddr           string        `env:"KODEX_AGENT_MANAGER_PACKAGE_HUB_GRPC_ADDR" envDefault:"package-hub:9090"`
 	PackageHubGRPCAuthToken      string        `env:"KODEX_AGENT_MANAGER_PACKAGE_HUB_GRPC_AUTH_TOKEN"`
 	PackageHubReadTimeout        time.Duration `env:"KODEX_AGENT_MANAGER_PACKAGE_HUB_READ_TIMEOUT" envDefault:"3s"`
-	RuntimePreparationEnabled    bool          `env:"KODEX_AGENT_MANAGER_RUNTIME_PREPARATION_ENABLED" envDefault:"true"`
+	RuntimePreparationEnabled    bool          `env:"KODEX_AGENT_MANAGER_RUNTIME_PREPARATION_ENABLED" envDefault:"false"`
 	ProjectCatalogGRPCAddr       string        `env:"KODEX_AGENT_MANAGER_PROJECT_CATALOG_GRPC_ADDR" envDefault:"project-catalog:9090"`
 	ProjectCatalogGRPCAuthToken  string        `env:"KODEX_AGENT_MANAGER_PROJECT_CATALOG_GRPC_AUTH_TOKEN"`
 	ProjectCatalogReadTimeout    time.Duration `env:"KODEX_AGENT_MANAGER_PROJECT_CATALOG_READ_TIMEOUT" envDefault:"3s"`

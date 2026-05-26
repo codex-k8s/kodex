@@ -42,7 +42,7 @@
 | AGO-4 | готово | Временное переключение: авторитетная модель session/run, слой хранения, use-case, gRPC handlers, результат команды, ожидаемая версия, защита активной session от дублей, stage-bound проверка роли и service-local outbox события для session/run готовы; руководящие пакеты, runtime и приёмка остаются следующими срезами. |
 | AGO-5 | готово | Временное переключение: `agent-manager` читает активные guidance installations и manifest/version metadata через `package-hub`, фиксирует refs/digests/policy-safe summary в `AgentRun` и не сохраняет тексты пакетов, scripts, assets, package source или manifest payload. |
 | AGO-6 | готово | Временное переключение: контекст руководящих пакетов в workspace зафиксирован; `AgentRun.guidance_refs` превращаются в `runtime.WorkspaceSource.kind=guidance_package`, runtime готовит путь `.kodex/guidance/<safe_local_name>` только для чтения, сгенерированный контекст живёт в `.kodex/context/agent-run.json`, а прямой checkout из `agent-manager` запрещён. |
-| AGO-7 | готово | Временное переключение: `StartAgentRun` читает workspace policy у `project-catalog`, собирает runtime request с project/source refs, role/run context и замороженными `guidance_refs`, вызывает `runtime-manager.PrepareRuntime` и фиксирует в `Run` только runtime refs, fingerprint/diagnostic summary и безопасный статус ошибки. |
+| AGO-7 | готово | Временное переключение: при явно включённом `KODEX_AGENT_MANAGER_RUNTIME_PREPARATION_ENABLED` `StartAgentRun` читает workspace policy у `project-catalog`, собирает runtime request с project/source refs, role/run context и замороженными `guidance_refs`, вызывает `runtime-manager.PrepareRuntime` и фиксирует в `Run` только runtime refs, fingerprint/diagnostic summary и безопасный статус ошибки. До deploy wiring `agent-manager` подготовка runtime остаётся opt-in. |
 
 ## Текущий бэклог
 
@@ -67,4 +67,4 @@
 
 ## Временное переключение
 
-Агент #3 временно выполняет AGO-0..AGO-7 в домене `agent-orchestration`, чтобы зафиксировать стартовые границы `agent-manager`, его transport-контракты, сервисный каркас, модель хранения flow/role/prompt/session/run, gRPC-доступ к этим операциям, защиту session/run инвариантов, зависимость от `package-hub` для чтения установленных руководящих пакетов, границу передачи guidance refs в runtime workspace и прямой вызов `runtime-manager.PrepareRuntime` без checkout из `agent-manager`. Код `package-hub` в этих срезах не меняется.
+Агент #3 временно выполняет AGO-0..AGO-7 в домене `agent-orchestration`, чтобы зафиксировать стартовые границы `agent-manager`, его transport-контракты, сервисный каркас, модель хранения flow/role/prompt/session/run, gRPC-доступ к этим операциям, защиту session/run инвариантов, зависимость от `package-hub` для чтения установленных руководящих пакетов, границу передачи guidance refs в runtime workspace и opt-in вызов `runtime-manager.PrepareRuntime` без checkout из `agent-manager`. Код `package-hub` в этих срезах не меняется.
