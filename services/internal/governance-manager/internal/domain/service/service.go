@@ -51,11 +51,7 @@ func New(repository governancerepo.Repository) *Service {
 
 // NewWithConfig creates a governance-manager service with explicit dependencies.
 func NewWithConfig(cfg Config) *Service {
-	authorizer := cfg.Authorizer
-	if authorizer == nil {
-		authorizer = AllowAllAuthorizer{}
-	}
-	return &Service{repository: cfg.Repository, clock: cfg.Clock, idGenerator: cfg.IDGenerator, authorizer: authorizer}
+	return &Service{repository: cfg.Repository, clock: cfg.Clock, idGenerator: cfg.IDGenerator, authorizer: cfg.Authorizer}
 }
 
 // Ready reports whether the minimal service dependencies are composed.
@@ -566,26 +562,25 @@ func (s *Service) GetGateRequest(ctx context.Context, input GetGateRequestInput)
 	if input.GateRequestID == uuid.Nil {
 		return entity.GateRequest{}, errs.ErrInvalidArgument
 	}
-	request, err := s.repository.GetGateRequest(ctx, input.GateRequestID)
-	if err == nil {
-		err = s.authorizeGateRead(ctx, input.Meta, input.GateRequestID)
-	}
-	if err != nil {
+	if err := s.authorizeGateRead(ctx, input.Meta, input.GateRequestID); err != nil {
 		return entity.GateRequest{}, err
 	}
-	return request, nil
+	return s.repository.GetGateRequest(ctx, input.GateRequestID)
 }
 
 func (s *Service) GetGateDecision(ctx context.Context, input GetGateDecisionInput) (entity.GateDecision, error) {
-	if input.GateDecisionID == uuid.Nil {
+	if input.GateDecisionID == uuid.Nil || input.GateRequestID == uuid.Nil {
 		return entity.GateDecision{}, errs.ErrInvalidArgument
+	}
+	if err := s.authorizeGateRead(ctx, input.Meta, input.GateRequestID); err != nil {
+		return entity.GateDecision{}, err
 	}
 	decision, err := s.repository.GetGateDecision(ctx, input.GateDecisionID)
 	if err != nil {
 		return entity.GateDecision{}, err
 	}
-	if err := s.authorizeGateRead(ctx, input.Meta, decision.GateRequestID); err != nil {
-		return entity.GateDecision{}, err
+	if decision.GateRequestID != input.GateRequestID {
+		return entity.GateDecision{}, errs.ErrNotFound
 	}
 	return decision, nil
 }

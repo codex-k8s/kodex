@@ -777,6 +777,8 @@ message ExpireGateRequest {
 message GetGateDecisionRequest {
   string gate_decision_id = 1;
   QueryMeta meta = 2;
+  // gate_request_id is required for fail-closed authorization before reading the decision row.
+  string gate_request_id = 3;
 }
 
 message ListGateDecisionsRequest {

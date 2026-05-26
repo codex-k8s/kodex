@@ -58,7 +58,7 @@ approvals:
 | `SubmitGateDecision` | gRPC command | `governance.gate.decide` | `command_id` + expected version | Фиксирует решение из UI/provider/external callback после проверки actor policy. |
 | `CancelGate` | gRPC command | `governance.gate.decide` | `command_id` + expected version | Переводит открытый gate request в `cancelled`; доставка и callback остаются у `interaction-hub`. |
 | `ExpireGate` | gRPC command | `governance.gate.decide` | `command_id` + expected version | Переводит открытый gate request в `expired` после timeout policy или delivery expiry. |
-| `GetGateDecision` | gRPC query | `governance.gate.read` | нет | Читает одно final gate decision. |
+| `GetGateDecision` | gRPC query | `governance.gate.read` | `gate_request_id` | Читает одно final gate decision после fail-closed проверки доступа по gate request. |
 | `ListGateDecisions` | gRPC query | `governance.gate.read` | нет | Читает final gate decisions по gate request, target или outcome. |
 | `GetGateRequest` | gRPC query | `governance.gate.read` | нет | Читает gate request, evidence и decision status. |
 | `ListGateRequests` | gRPC query | `governance.gate.read` | нет | Читает ожидающие, resolved или просроченные gates. |

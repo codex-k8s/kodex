@@ -526,7 +526,11 @@ func (server *Server) GetGateDecision(ctx context.Context, req *governancev1.Get
 	if err != nil {
 		return nil, err
 	}
-	decision, err := server.service.GetGateDecision(ctx, governanceservice.GetGateDecisionInput{GateDecisionID: id, Meta: meta})
+	gateRequestID, err := requiredUUID(req.GetGateRequestId())
+	if err != nil {
+		return nil, err
+	}
+	decision, err := server.service.GetGateDecision(ctx, governanceservice.GetGateDecisionInput{GateDecisionID: id, GateRequestID: gateRequestID, Meta: meta})
 	if err != nil {
 		return nil, err
 	}

@@ -331,7 +331,7 @@ components:
       allOf:
         - $ref: '#/components/schemas/GovernanceEventPayload'
         - type: object
-          required: [gate_request_id, risk_assessment_id, status, version]
+          required: [gate_request_id, status, version]
     GateResolvedPayload:
       allOf:
         - $ref: '#/components/schemas/GovernanceEventPayload'

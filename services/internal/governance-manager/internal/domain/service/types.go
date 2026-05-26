@@ -186,6 +186,7 @@ type GetGateRequestInput struct {
 
 type GetGateDecisionInput struct {
 	GateDecisionID uuid.UUID
+	GateRequestID  uuid.UUID
 	Meta           QueryMeta
 }
 

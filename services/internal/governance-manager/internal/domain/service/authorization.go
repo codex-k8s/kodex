@@ -61,16 +61,27 @@ func (s *Service) authorize(ctx context.Context, actor value.Actor, actionKey st
 	if strings.TrimSpace(actor.Type) == "" || strings.TrimSpace(actor.ID) == "" {
 		return errs.ErrInvalidArgument
 	}
-	if strings.TrimSpace(actionKey) == "" || strings.TrimSpace(resource.Type) == "" {
+	if s.authorizer == nil {
+		return errs.ErrDependencyUnavailable
+	}
+	actionKey = strings.TrimSpace(actionKey)
+	resource.Type = strings.TrimSpace(resource.Type)
+	resource.ID = strings.TrimSpace(resource.ID)
+	resource.ScopeType = strings.TrimSpace(resource.ScopeType)
+	resource.ScopeID = strings.TrimSpace(resource.ScopeID)
+	if actionKey == "" || resource.Type == "" || resource.ID == "" || resource.ScopeType == "" {
+		return errs.ErrInvalidArgument
+	}
+	if resource.ScopeType != accesscatalog.ScopeGlobal && resource.ScopeID == "" {
 		return errs.ErrInvalidArgument
 	}
 	return s.authorizer.Authorize(ctx, AuthorizationRequest{
 		Subject:        actor,
-		ActionKey:      strings.TrimSpace(actionKey),
-		ResourceType:   strings.TrimSpace(resource.Type),
-		ResourceID:     strings.TrimSpace(resource.ID),
-		ScopeType:      strings.TrimSpace(resource.ScopeType),
-		ScopeID:        strings.TrimSpace(resource.ScopeID),
+		ActionKey:      actionKey,
+		ResourceType:   resource.Type,
+		ResourceID:     resource.ID,
+		ScopeType:      resource.ScopeType,
+		ScopeID:        resource.ScopeID,
 		RequestID:      strings.TrimSpace(requestID),
 		RequestContext: requestContext,
 	})

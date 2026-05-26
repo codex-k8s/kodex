@@ -305,7 +305,7 @@ approvals:
 | Signals по target | `(target_type, target_ref, created_at)` |
 | Blocking signals | `(status, severity, created_at)` |
 | Ожидающие gates | `(status, updated_at)` where status in `requested`, `delivering`, `awaiting_decision` |
-| Gate по assessment | `(risk_assessment_id, status)` |
+| Gate по assessment | `(risk_assessment_id, updated_at, id)` where `risk_assessment_id is not null` |
 | Release package по candidate | `(release_candidate_ref, status)` |
 | Safety state по release package | `(release_decision_package_id, current_state)` |
 | Непубликованные события | `(published_at, occurred_at)` where `published_at is null` |

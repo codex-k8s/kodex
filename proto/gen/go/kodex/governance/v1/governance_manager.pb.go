@@ -5988,8 +5988,10 @@ type GetGateDecisionRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	GateDecisionId string                 `protobuf:"bytes,1,opt,name=gate_decision_id,json=gateDecisionId,proto3" json:"gate_decision_id,omitempty"`
 	Meta           *QueryMeta             `protobuf:"bytes,2,opt,name=meta,proto3" json:"meta,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// gate_request_id is required for fail-closed authorization before reading the decision row.
+	GateRequestId string `protobuf:"bytes,3,opt,name=gate_request_id,json=gateRequestId,proto3" json:"gate_request_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GetGateDecisionRequest) Reset() {
@@ -6034,6 +6036,13 @@ func (x *GetGateDecisionRequest) GetMeta() *QueryMeta {
 		return x.Meta
 	}
 	return nil
+}
+
+func (x *GetGateDecisionRequest) GetGateRequestId() string {
+	if x != nil {
+		return x.GateRequestId
+	}
+	return ""
 }
 
 type ListGateDecisionsRequest struct {
@@ -8701,10 +8710,11 @@ const file_kodex_governance_v1_governance_manager_proto_rawDesc = "" +
 	"\x0fgate_request_id\x18\x01 \x01(\tR\rgateRequestId\x12\x16\n" +
 	"\x06reason\x18\x02 \x01(\tR\x06reason\x12e\n" +
 	"\x18interaction_delivery_ref\x18\x03 \x01(\v2+.kodex.governance.v1.InteractionDeliveryRefR\x16interactionDeliveryRef\x124\n" +
-	"\x04meta\x18\x04 \x01(\v2 .kodex.governance.v1.CommandMetaR\x04meta\"v\n" +
+	"\x04meta\x18\x04 \x01(\v2 .kodex.governance.v1.CommandMetaR\x04meta\"\x9e\x01\n" +
 	"\x16GetGateDecisionRequest\x12(\n" +
 	"\x10gate_decision_id\x18\x01 \x01(\tR\x0egateDecisionId\x122\n" +
-	"\x04meta\x18\x02 \x01(\v2\x1e.kodex.governance.v1.QueryMetaR\x04meta\"\xca\x02\n" +
+	"\x04meta\x18\x02 \x01(\v2\x1e.kodex.governance.v1.QueryMetaR\x04meta\x12&\n" +
+	"\x0fgate_request_id\x18\x03 \x01(\tR\rgateRequestId\"\xca\x02\n" +
 	"\x18ListGateDecisionsRequest\x12+\n" +
 	"\x0fgate_request_id\x18\x01 \x01(\tH\x00R\rgateRequestId\x88\x01\x01\x126\n" +
 	"\x06target\x18\x02 \x01(\v2\x1e.kodex.governance.v1.TargetRefR\x06target\x12?\n" +

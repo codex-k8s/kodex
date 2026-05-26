@@ -21,7 +21,7 @@ import (
 func TestBacklogOperationReturnsNotImplemented(t *testing.T) {
 	t.Parallel()
 
-	service := New(&fakeRepository{ready: true})
+	service := newTestService(&fakeRepository{ready: true})
 	err := service.BacklogOperation(context.Background(), BacklogOperationInput{Operation: enum.OperationReevaluateRisk})
 	if !errors.Is(err, errs.ErrNotImplemented) {
 		t.Fatalf("BacklogOperation() error = %v, want ErrNotImplemented", err)
@@ -34,8 +34,11 @@ func TestReadyRequiresRepository(t *testing.T) {
 	if New(nil).Ready() {
 		t.Fatal("Ready() = true for missing repository, want false")
 	}
-	if !New(&fakeRepository{ready: true}).Ready() {
-		t.Fatal("Ready() = false for ready repository, want true")
+	if New(&fakeRepository{ready: true}).Ready() {
+		t.Fatal("Ready() = true for missing authorizer, want false")
+	}
+	if !newTestService(&fakeRepository{ready: true}).Ready() {
+		t.Fatal("Ready() = false for ready repository and explicit authorizer, want true")
 	}
 }
 
@@ -52,6 +55,7 @@ func TestEvaluateRiskStoresAssessmentAndOutboxEvents(t *testing.T) {
 		Repository:  repository,
 		Clock:       fixedClock{now: now},
 		IDGenerator: &fixedIDs{ids: []uuid.UUID{assessmentID, eventOneID, eventTwoID}},
+		Authorizer:  AllowAllAuthorizer{},
 	})
 
 	assessment, err := service.EvaluateRisk(context.Background(), EvaluateRiskInput{
@@ -306,6 +310,7 @@ func TestMutatingUseCasesReplayStoredCommandResults(t *testing.T) {
 				Repository:  repository,
 				Clock:       fixedClock{now: now},
 				IDGenerator: &fixedIDs{},
+				Authorizer:  AllowAllAuthorizer{},
 			})
 
 			tt.run(t, service)
@@ -371,7 +376,7 @@ func TestExistingAggregateMutationsRequireExpectedVersion(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			err := tt.run(New(&fakeRepository{ready: true}))
+			err := tt.run(newTestService(&fakeRepository{ready: true}))
 			if !errors.Is(err, errs.ErrInvalidArgument) {
 				t.Fatalf("%s error = %v, want ErrInvalidArgument", tt.name, err)
 			}
@@ -454,7 +459,7 @@ func TestExistingAggregateMutationsRejectStaleExpectedVersion(t *testing.T) {
 
 			repository := &fakeRepository{ready: true}
 			tt.configure(repository)
-			err := tt.run(New(repository))
+			err := tt.run(newTestService(repository))
 			if !errors.Is(err, errs.ErrConflict) {
 				t.Fatalf("%s error = %v, want ErrConflict", tt.name, err)
 			}
@@ -481,7 +486,7 @@ func TestCancelGateStoresTerminalStateAndSafeOutbox(t *testing.T) {
 			Status:        enum.GateRequestStatusRequested,
 		},
 	}
-	service := NewWithConfig(Config{Repository: repository, Clock: fixedClock{now: now}, IDGenerator: &fixedIDs{ids: []uuid.UUID{eventID}}})
+	service := NewWithConfig(Config{Repository: repository, Clock: fixedClock{now: now}, IDGenerator: &fixedIDs{ids: []uuid.UUID{eventID}}, Authorizer: AllowAllAuthorizer{}})
 
 	request, err := service.CancelGate(context.Background(), CancelGateInput{
 		GateRequestID: gateRequestID,
@@ -519,7 +524,7 @@ func TestExpireGateRejectsClosedGate(t *testing.T) {
 	commandID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
 	gateRequestID := uuid.MustParse("cccccccc-cccc-4ccc-cccc-cccccccccccc")
 	expectedVersion := int64(1)
-	service := New(&fakeRepository{
+	service := newTestService(&fakeRepository{
 		ready: true,
 		gateRequest: entity.GateRequest{
 			VersionedBase: entity.VersionedBase{ID: gateRequestID, Version: 1},
@@ -561,8 +566,81 @@ func TestGateLifecycleAccessDenied(t *testing.T) {
 	if _, err := service.GetGateRequest(context.Background(), GetGateRequestInput{GateRequestID: gateRequestID, Meta: queryMeta}); !errors.Is(err, errs.ErrForbidden) {
 		t.Fatalf("GetGateRequest() error = %v, want ErrForbidden", err)
 	}
+	if _, err := service.GetGateDecision(context.Background(), GetGateDecisionInput{GateDecisionID: uuid.MustParse("dddddddd-dddd-4ddd-8ddd-dddddddddddd"), GateRequestID: gateRequestID, Meta: queryMeta}); !errors.Is(err, errs.ErrForbidden) {
+		t.Fatalf("GetGateDecision() error = %v, want ErrForbidden", err)
+	}
 	if repository.mutationCalls != 0 {
 		t.Fatalf("mutation calls = %d, want 0 when access denied", repository.mutationCalls)
+	}
+	if repository.gateRequestReads != 0 || repository.gateDecisionReads != 0 {
+		t.Fatalf("gate reads = request:%d decision:%d, want 0 before access allow", repository.gateRequestReads, repository.gateDecisionReads)
+	}
+}
+
+func TestGateLifecycleRequiresExplicitAuthorizer(t *testing.T) {
+	t.Parallel()
+
+	commandID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
+	service := NewWithConfig(Config{Repository: &fakeRepository{ready: true}, Clock: systemClock{}, IDGenerator: uuidGenerator{}})
+
+	_, err := service.RequestGate(context.Background(), RequestGateInput{
+		Target: value.ExternalRef{Type: "pull_request", Ref: "provider:pr:1"},
+		Meta:   CommandMeta{CommandID: &commandID, Actor: value.Actor{Type: "service", ID: "agent-manager"}},
+	})
+	if !errors.Is(err, errs.ErrDependencyUnavailable) {
+		t.Fatalf("RequestGate() error = %v, want ErrDependencyUnavailable", err)
+	}
+}
+
+func TestGateLifecycleRejectsMissingAccessResource(t *testing.T) {
+	t.Parallel()
+
+	service := newTestService(&fakeRepository{ready: true})
+	meta := QueryMeta{Actor: value.Actor{Type: "service", ID: "agent-manager"}}
+
+	_, _, err := service.ListGateRequests(context.Background(), ListGateRequestsInput{Meta: meta})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("ListGateRequests() error = %v, want ErrInvalidArgument", err)
+	}
+	_, _, err = service.ListGateDecisions(context.Background(), ListGateDecisionsInput{Meta: meta})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("ListGateDecisions() error = %v, want ErrInvalidArgument", err)
+	}
+}
+
+func TestGetGateDecisionRequiresGateRequestForAuthorization(t *testing.T) {
+	t.Parallel()
+
+	decisionID := uuid.MustParse("dddddddd-dddd-4ddd-8ddd-dddddddddddd")
+	service := newTestService(&fakeRepository{ready: true})
+
+	_, err := service.GetGateDecision(context.Background(), GetGateDecisionInput{
+		GateDecisionID: decisionID,
+		Meta:           QueryMeta{Actor: value.Actor{Type: "service", ID: "agent-manager"}},
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("GetGateDecision() error = %v, want ErrInvalidArgument", err)
+	}
+}
+
+func TestGetGateDecisionRejectsMismatchedGateRequest(t *testing.T) {
+	t.Parallel()
+
+	decisionID := uuid.MustParse("dddddddd-dddd-4ddd-8ddd-dddddddddddd")
+	gateRequestID := uuid.MustParse("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
+	otherGateRequestID := uuid.MustParse("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee")
+	service := newTestService(&fakeRepository{
+		ready:        true,
+		gateDecision: entity.GateDecision{ID: decisionID, GateRequestID: otherGateRequestID, DecisionActorRef: "user:owner"},
+	})
+
+	_, err := service.GetGateDecision(context.Background(), GetGateDecisionInput{
+		GateDecisionID: decisionID,
+		GateRequestID:  gateRequestID,
+		Meta:           QueryMeta{Actor: value.Actor{Type: "service", ID: "agent-manager"}},
+	})
+	if !errors.Is(err, errs.ErrNotFound) {
+		t.Fatalf("GetGateDecision() error = %v, want ErrNotFound", err)
 	}
 }
 
@@ -572,7 +650,7 @@ func TestCancelGateReturnsNotFound(t *testing.T) {
 	commandID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
 	gateRequestID := uuid.MustParse("cccccccc-cccc-4ccc-cccc-cccccccccccc")
 	expectedVersion := int64(1)
-	service := New(&fakeRepository{ready: true, gateRequestErr: errs.ErrNotFound})
+	service := newTestService(&fakeRepository{ready: true, gateRequestErr: errs.ErrNotFound})
 
 	_, err := service.CancelGate(context.Background(), CancelGateInput{
 		GateRequestID: gateRequestID,
@@ -589,20 +667,32 @@ func TestCancelGateReturnsNotFound(t *testing.T) {
 
 type fakeRepository struct {
 	governancerepo.Repository
-	ready            bool
-	hasCommandResult bool
-	commandResult    entity.CommandResult
-	profile          entity.RiskProfile
-	profileVersion   entity.RiskProfileVersion
-	assessment       entity.RiskAssessment
-	reviewSignal     entity.ReviewSignal
-	gateRequest      entity.GateRequest
-	gateRequestErr   error
-	gateDecision     entity.GateDecision
-	releasePackage   entity.ReleaseDecisionPackage
-	result           entity.CommandResult
-	events           []entity.OutboxEvent
-	mutationCalls    int
+	ready             bool
+	hasCommandResult  bool
+	commandResult     entity.CommandResult
+	profile           entity.RiskProfile
+	profileVersion    entity.RiskProfileVersion
+	assessment        entity.RiskAssessment
+	reviewSignal      entity.ReviewSignal
+	gateRequest       entity.GateRequest
+	gateRequestErr    error
+	gateRequestReads  int
+	gateDecision      entity.GateDecision
+	gateDecisionErr   error
+	gateDecisionReads int
+	releasePackage    entity.ReleaseDecisionPackage
+	result            entity.CommandResult
+	events            []entity.OutboxEvent
+	mutationCalls     int
+}
+
+func newTestService(repository *fakeRepository) *Service {
+	return NewWithConfig(Config{
+		Repository:  repository,
+		Clock:       systemClock{},
+		IDGenerator: uuidGenerator{},
+		Authorizer:  AllowAllAuthorizer{},
+	})
 }
 
 func (repository *fakeRepository) Ready() bool {
@@ -704,6 +794,7 @@ func (repository *fakeRepository) UpdateGateRequestWithDecision(_ context.Contex
 }
 
 func (repository *fakeRepository) GetGateRequest(_ context.Context, _ uuid.UUID) (entity.GateRequest, error) {
+	repository.gateRequestReads++
 	if repository.gateRequestErr != nil {
 		return entity.GateRequest{}, repository.gateRequestErr
 	}
@@ -711,6 +802,10 @@ func (repository *fakeRepository) GetGateRequest(_ context.Context, _ uuid.UUID)
 }
 
 func (repository *fakeRepository) GetGateDecision(_ context.Context, _ uuid.UUID) (entity.GateDecision, error) {
+	repository.gateDecisionReads++
+	if repository.gateDecisionErr != nil {
+		return entity.GateDecision{}, repository.gateDecisionErr
+	}
 	return repository.gateDecision, nil
 }
 
