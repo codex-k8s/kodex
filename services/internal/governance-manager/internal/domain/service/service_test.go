@@ -237,14 +237,59 @@ func TestRiskReadAccessDeniedBeforeRepositoryRead(t *testing.T) {
 	}); !errors.Is(err, errs.ErrForbidden) {
 		t.Fatalf("ListRiskFactors() error = %v, want ErrForbidden", err)
 	}
+	if _, _, err := service.ListReviewSignals(context.Background(), ListReviewSignalsInput{
+		Filter: query.ReviewSignalFilter{RiskAssessmentID: &assessmentID},
+		Meta:   meta,
+	}); !errors.Is(err, errs.ErrForbidden) {
+		t.Fatalf("ListReviewSignals() error = %v, want ErrForbidden", err)
+	}
 	if _, _, err := service.ListRiskAssessments(context.Background(), ListRiskAssessmentsInput{
 		Filter: query.RiskAssessmentFilter{Target: value.ExternalRef{Type: "provider_native.pr", Ref: "github://codex-k8s/kodex/pull/827"}},
 		Meta:   meta,
 	}); !errors.Is(err, errs.ErrForbidden) {
 		t.Fatalf("ListRiskAssessments() error = %v, want ErrForbidden", err)
 	}
-	if repository.assessmentReads != 0 || repository.riskAssessmentListCalls != 0 || repository.riskFactorListCalls != 0 {
-		t.Fatalf("risk reads = assessment:%d list:%d factors:%d, want 0 before access allow", repository.assessmentReads, repository.riskAssessmentListCalls, repository.riskFactorListCalls)
+	if repository.assessmentReads != 0 || repository.riskAssessmentListCalls != 0 || repository.riskFactorListCalls != 0 || repository.reviewSignalListCalls != 0 {
+		t.Fatalf("risk reads = assessment:%d list:%d factors:%d signals:%d, want 0 before access allow", repository.assessmentReads, repository.riskAssessmentListCalls, repository.riskFactorListCalls, repository.reviewSignalListCalls)
+	}
+}
+
+func TestListRiskAssessmentsRejectsContextRefsNotAppliedBySQL(t *testing.T) {
+	t.Parallel()
+
+	repository := &fakeRepository{ready: true}
+	service := newTestService(repository)
+
+	_, _, err := service.ListRiskAssessments(context.Background(), ListRiskAssessmentsInput{
+		Filter: query.RiskAssessmentFilter{
+			ProjectContext:     value.ProjectContextRef{ServiceRef: "service:api"},
+			EffectiveRiskClass: enum.RiskClassR2,
+		},
+		Meta: QueryMeta{Actor: value.Actor{Type: "service", ID: "provider-hub"}},
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("ListRiskAssessments() error = %v, want ErrInvalidArgument", err)
+	}
+	if repository.riskAssessmentListCalls != 0 {
+		t.Fatalf("risk assessment list calls = %d, want 0", repository.riskAssessmentListCalls)
+	}
+}
+
+func TestListReviewSignalsRejectsOutcomeOnlyFilter(t *testing.T) {
+	t.Parallel()
+
+	repository := &fakeRepository{ready: true}
+	service := newTestService(repository)
+
+	_, _, err := service.ListReviewSignals(context.Background(), ListReviewSignalsInput{
+		Filter: query.ReviewSignalFilter{Outcome: enum.ReviewSignalOutcomePass},
+		Meta:   QueryMeta{Actor: value.Actor{Type: "service", ID: "provider-hub"}},
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("ListReviewSignals() error = %v, want ErrInvalidArgument", err)
+	}
+	if repository.reviewSignalListCalls != 0 {
+		t.Fatalf("review signal list calls = %d, want 0", repository.reviewSignalListCalls)
 	}
 }
 
@@ -293,6 +338,57 @@ func TestReevaluateRiskUsesExpectedVersionAndReviewSignals(t *testing.T) {
 	}
 	if len(repository.events) != 2 || repository.events[1].EventType != governanceevents.EventRiskAssessmentChanged {
 		t.Fatalf("events = %+v, want completed and changed", repository.events)
+	}
+}
+
+func TestReevaluateRiskPublishesChangedWhenFactorSignatureChanges(t *testing.T) {
+	t.Parallel()
+
+	commandID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
+	assessmentID := uuid.MustParse("bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb")
+	expectedVersion := int64(1)
+	repository := &fakeRepository{
+		ready: true,
+		assessment: entity.RiskAssessment{
+			VersionedBase: entity.VersionedBase{ID: assessmentID, Version: expectedVersion},
+			Target:        value.ExternalRef{Type: "provider_native.pr", Ref: "github://codex-k8s/kodex/pull/827"},
+			EvaluationSummary: value.RiskEvaluationSummary{Factors: []value.RiskEvaluationFactor{{
+				SourceType: string(enum.RiskFactorSourceTypeDatabase),
+				Ref:        "db:migration",
+				Summary:    "new migration summary",
+				Tags:       []string{"migration"},
+			}}},
+			InitialRiskClass:   enum.RiskClassR2,
+			EffectiveRiskClass: enum.RiskClassR2,
+			Status:             enum.RiskAssessmentStatusActive,
+		},
+		riskFactors: []entity.RiskFactor{{
+			ID:               uuid.MustParse("cccccccc-cccc-4ccc-8ccc-cccccccccccc"),
+			RiskAssessmentID: assessmentID,
+			SourceType:       enum.RiskFactorSourceTypeDatabase,
+			SourceRef:        "db:migration",
+			RiskClass:        enum.RiskClassR2,
+			Summary:          "old migration summary",
+		}},
+	}
+	service := newTestService(repository)
+
+	assessment, err := service.ReevaluateRisk(context.Background(), ReevaluateRiskInput{
+		RiskAssessmentID: assessmentID,
+		Meta: CommandMeta{
+			CommandID:       &commandID,
+			ExpectedVersion: &expectedVersion,
+			Actor:           value.Actor{Type: "service", ID: "provider-hub"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("ReevaluateRisk(): %v", err)
+	}
+	if assessment.EffectiveRiskClass != enum.RiskClassR2 || len(assessment.RequiredGates) != 0 {
+		t.Fatalf("assessment risk/gates = %s/%d, want same R2/0", assessment.EffectiveRiskClass, len(assessment.RequiredGates))
+	}
+	if len(repository.events) != 2 || repository.events[1].EventType != governanceevents.EventRiskAssessmentChanged {
+		t.Fatalf("events = %+v, want changed event for factor signature change", repository.events)
 	}
 }
 
@@ -958,6 +1054,7 @@ type fakeRepository struct {
 	assessmentUpdateCalls   int
 	reviewSignal            entity.ReviewSignal
 	reviewSignals           []entity.ReviewSignal
+	reviewSignalListCalls   int
 	gateRequest             entity.GateRequest
 	gateRequestErr          error
 	gateRequestReads        int
@@ -1077,6 +1174,7 @@ func (repository *fakeRepository) GetReviewSignal(_ context.Context, _ uuid.UUID
 }
 
 func (repository *fakeRepository) ListReviewSignals(_ context.Context, _ query.ReviewSignalFilter) ([]entity.ReviewSignal, query.PageResult, error) {
+	repository.reviewSignalListCalls++
 	return repository.reviewSignals, query.PageResult{}, nil
 }
 

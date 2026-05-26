@@ -366,10 +366,10 @@ func (server *Server) ReevaluateRisk(ctx context.Context, req *governancev1.Reev
 
 // GetRiskAssessment returns one assessment.
 func (server *Server) GetRiskAssessment(ctx context.Context, req *governancev1.GetRiskAssessmentRequest) (*governancev1.RiskAssessmentResponse, error) {
-	return server.riskAssessmentByIDResponse(ctx, req.GetRiskAssessmentId(), req.GetMeta())
+	return server.riskAssessmentByIDResponse(ctx, req.GetRiskAssessmentId(), req.GetMeta(), req.GetIncludeFactors(), req.GetIncludeReviewSignals())
 }
 
-func (server *Server) riskAssessmentByIDResponse(ctx context.Context, riskAssessmentID string, metaValue *governancev1.QueryMeta) (*governancev1.RiskAssessmentResponse, error) {
+func (server *Server) riskAssessmentByIDResponse(ctx context.Context, riskAssessmentID string, metaValue *governancev1.QueryMeta, includeFactors bool, includeReviewSignals bool) (*governancev1.RiskAssessmentResponse, error) {
 	meta, err := queryMeta(metaValue)
 	if err != nil {
 		return nil, err
@@ -382,7 +382,28 @@ func (server *Server) riskAssessmentByIDResponse(ctx context.Context, riskAssess
 	if err != nil {
 		return nil, err
 	}
-	return &governancev1.RiskAssessmentResponse{RiskAssessment: toRiskAssessment(assessment)}, nil
+	response := &governancev1.RiskAssessmentResponse{RiskAssessment: toRiskAssessment(assessment)}
+	if includeFactors {
+		factors, _, err := server.service.ListRiskFactors(ctx, governanceservice.ListRiskFactorsInput{
+			Filter: query.RiskFactorFilter{RiskAssessmentID: id},
+			Meta:   meta,
+		})
+		if err != nil {
+			return nil, err
+		}
+		response.RiskFactors = toRiskFactors(factors)
+	}
+	if includeReviewSignals {
+		signals, _, err := server.service.ListReviewSignals(ctx, governanceservice.ListReviewSignalsInput{
+			Filter: query.ReviewSignalFilter{RiskAssessmentID: &id},
+			Meta:   meta,
+		})
+		if err != nil {
+			return nil, err
+		}
+		response.ReviewSignals = toReviewSignals(signals)
+	}
+	return response, nil
 }
 
 // ListRiskAssessments returns assessments by target, project, risk class or status.
@@ -469,6 +490,10 @@ func (server *Server) RecordReviewSignal(ctx context.Context, req *governancev1.
 
 // ListReviewSignals returns review signals by target, assessment, role or outcome.
 func (server *Server) ListReviewSignals(ctx context.Context, req *governancev1.ListReviewSignalsRequest) (*governancev1.ListReviewSignalsResponse, error) {
+	meta, err := queryMeta(req.GetMeta())
+	if err != nil {
+		return nil, err
+	}
 	riskAssessmentID, err := optionalUUID(req.GetRiskAssessmentId())
 	if err != nil {
 		return nil, err
@@ -481,6 +506,7 @@ func (server *Server) ListReviewSignals(ctx context.Context, req *governancev1.L
 			Outcome:          reviewSignalOutcome(req.GetOutcome()),
 			Page:             pageRequest(req.GetPage()),
 		},
+		Meta: meta,
 	})
 	if err != nil {
 		return nil, err

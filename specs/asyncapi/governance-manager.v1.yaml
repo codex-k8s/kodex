@@ -301,7 +301,7 @@ components:
       allOf:
         - $ref: '#/components/schemas/GovernanceEventPayload'
         - type: object
-          required: [risk_assessment_id, project_ref, status, version]
+          required: [risk_assessment_id, status, version]
     RiskAssessmentCompletedPayload:
       allOf:
         - $ref: '#/components/schemas/GovernanceEventPayload'

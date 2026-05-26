@@ -184,6 +184,7 @@ type ListRiskFactorsInput struct {
 
 type ListReviewSignalsInput struct {
 	Filter query.ReviewSignalFilter
+	Meta   QueryMeta
 }
 
 type ListGateRequestsInput struct {

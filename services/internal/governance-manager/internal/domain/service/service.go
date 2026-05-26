@@ -357,7 +357,15 @@ func (s *Service) RecordReviewSignal(ctx context.Context, input RecordReviewSign
 }
 
 func (s *Service) ListReviewSignals(ctx context.Context, input ListReviewSignalsInput) ([]entity.ReviewSignal, query.PageResult, error) {
-	return s.repository.ListReviewSignals(ctx, input.Filter)
+	filter := input.Filter
+	if err := s.authorizeReviewSignalList(ctx, input.Meta, filter); err != nil {
+		return nil, query.PageResult{}, err
+	}
+	items, page, err := s.repository.ListReviewSignals(ctx, filter)
+	if err != nil {
+		return nil, query.PageResult{}, err
+	}
+	return items, page, nil
 }
 
 // RequestGate stores a gate request without owning delivery retries.
@@ -709,14 +717,7 @@ func (s *Service) authorizeRiskAssessmentList(ctx context.Context, meta QueryMet
 		}
 		return s.authorizeQuery(ctx, meta, actionRiskRead, riskTargetResource(filter.Target))
 	}
-	if resourceID := firstNonEmpty(
-		filter.ProjectContext.ProjectRef,
-		filter.ProjectContext.RepositoryRef,
-		filter.ProjectContext.ServiceRef,
-		filter.ProjectContext.BranchRulesRef,
-		filter.ProjectContext.ReleasePolicyRef,
-		filter.ProjectContext.ReleaseLineRef,
-	); resourceID != "" {
+	if resourceID := firstNonEmpty(filter.ProjectContext.ProjectRef, filter.ProjectContext.RepositoryRef); resourceID != "" {
 		return s.authorizeQuery(ctx, meta, actionRiskRead, riskContextResource(resourceID))
 	}
 	return errs.ErrInvalidArgument
@@ -728,6 +729,19 @@ func (s *Service) authorizeGateRequestList(ctx context.Context, meta QueryMeta, 
 	}
 	if filter.RiskAssessmentID != nil {
 		return s.authorizeRiskAssessmentRead(ctx, meta, *filter.RiskAssessmentID)
+	}
+	return errs.ErrInvalidArgument
+}
+
+func (s *Service) authorizeReviewSignalList(ctx context.Context, meta QueryMeta, filter query.ReviewSignalFilter) error {
+	if filter.RiskAssessmentID != nil {
+		return s.authorizeRiskAssessmentRead(ctx, meta, *filter.RiskAssessmentID)
+	}
+	if externalRefProvided(filter.Target) {
+		if strings.TrimSpace(filter.Target.Type) == "" || strings.TrimSpace(filter.Target.Ref) == "" {
+			return errs.ErrInvalidArgument
+		}
+		return s.authorizeQuery(ctx, meta, actionRiskRead, riskTargetResource(filter.Target))
 	}
 	return errs.ErrInvalidArgument
 }

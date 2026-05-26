@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"path"
@@ -215,6 +216,11 @@ func (s *Service) reevaluateRisk(ctx context.Context, input ReevaluateRiskInput)
 	if assessment.Version != previousVersion {
 		return entity.RiskAssessment{}, errs.ErrConflict
 	}
+	previousFactors, _, err := s.repository.ListRiskFactors(ctx, query.RiskFactorFilter{RiskAssessmentID: assessment.ID})
+	if err != nil {
+		return entity.RiskAssessment{}, err
+	}
+	previousOutcomeSignature := riskAssessmentOutcomeSignature(previousFactors, assessment.RequiredGates, assessment.EvidenceRefs)
 	summary := assessment.EvaluationSummary
 	if riskEvaluationSummaryProvided(input.EvaluationSummary) {
 		summary, err = normalizeRiskEvaluationSummary(input.EvaluationSummary)
@@ -266,7 +272,8 @@ func (s *Service) reevaluateRisk(ctx context.Context, input ReevaluateRiskInput)
 	events := []entity.OutboxEvent{
 		outboxEvent(s.idGenerator.New(), governanceevents.EventRiskAssessmentCompleted, governanceevents.AggregateRiskAssessment, assessment.ID, now, riskAssessmentCompletedPayload(assessment, len(factors))),
 	}
-	if previousEffectiveRiskClass != assessment.EffectiveRiskClass || previousRequiredGateCount != len(assessment.RequiredGates) {
+	currentOutcomeSignature := riskAssessmentOutcomeSignature(factors, assessment.RequiredGates, assessment.EvidenceRefs)
+	if previousEffectiveRiskClass != assessment.EffectiveRiskClass || previousRequiredGateCount != len(assessment.RequiredGates) || previousOutcomeSignature != currentOutcomeSignature {
 		events = append(events, outboxEvent(s.idGenerator.New(), governanceevents.EventRiskAssessmentChanged, governanceevents.AggregateRiskAssessment, assessment.ID, now, governanceevents.Payload{
 			RiskAssessmentID:           assessment.ID.String(),
 			PreviousEffectiveRiskClass: string(previousEffectiveRiskClass),
@@ -293,6 +300,90 @@ func riskAssessmentCompletedPayload(assessment entity.RiskAssessment, factorCoun
 		Status:             string(assessment.Status),
 		Version:            assessment.Version,
 	}
+}
+
+func riskAssessmentOutcomeSignature(factors []entity.RiskFactor, gates []entity.RequiredGate, evidenceRefs []value.EvidenceRef) string {
+	factorItems := make([]riskFactorSignature, 0, len(factors))
+	for _, factor := range factors {
+		factorItems = append(factorItems, riskFactorSignature{
+			SourceType: string(factor.SourceType),
+			SourceRef:  strings.TrimSpace(factor.SourceRef),
+			RiskClass:  string(factor.RiskClass),
+			Summary:    strings.TrimSpace(factor.Summary),
+		})
+	}
+	slices.SortFunc(factorItems, func(left, right riskFactorSignature) int {
+		return strings.Compare(left.key(), right.key())
+	})
+
+	gateItems := make([]requiredGateSignature, 0, len(gates))
+	for _, gate := range gates {
+		gateItems = append(gateItems, requiredGateSignature{
+			GatePolicyID: gate.GatePolicyID.String(),
+			GateKind:     string(gate.GateKind),
+			MinRiskClass: string(gate.MinRiskClass),
+			Reason:       strings.TrimSpace(gate.Reason),
+		})
+	}
+	slices.SortFunc(gateItems, func(left, right requiredGateSignature) int {
+		return strings.Compare(left.key(), right.key())
+	})
+
+	evidenceItems := make([]evidenceRefSignature, 0, len(evidenceRefs))
+	for _, ref := range evidenceRefs {
+		evidenceItems = append(evidenceItems, evidenceRefSignature{
+			Kind:           strings.TrimSpace(ref.Kind),
+			Ref:            strings.TrimSpace(ref.Ref),
+			Summary:        strings.TrimSpace(ref.Summary),
+			Digest:         strings.TrimSpace(ref.Digest),
+			RetentionClass: strings.TrimSpace(ref.RetentionClass),
+		})
+	}
+	slices.SortFunc(evidenceItems, func(left, right evidenceRefSignature) int {
+		return strings.Compare(left.key(), right.key())
+	})
+
+	payload, _ := json.Marshal(struct {
+		Factors  []riskFactorSignature   `json:"factors"`
+		Gates    []requiredGateSignature `json:"gates"`
+		Evidence []evidenceRefSignature  `json:"evidence"`
+	}{Factors: factorItems, Gates: gateItems, Evidence: evidenceItems})
+	sum := sha256.Sum256(payload)
+	return fmt.Sprintf("sha256:%x", sum[:])
+}
+
+type riskFactorSignature struct {
+	SourceType string `json:"source_type"`
+	SourceRef  string `json:"source_ref"`
+	RiskClass  string `json:"risk_class"`
+	Summary    string `json:"summary"`
+}
+
+func (item riskFactorSignature) key() string {
+	return item.SourceType + "\x00" + item.SourceRef + "\x00" + item.RiskClass + "\x00" + item.Summary
+}
+
+type requiredGateSignature struct {
+	GatePolicyID string `json:"gate_policy_id"`
+	GateKind     string `json:"gate_kind"`
+	MinRiskClass string `json:"min_risk_class"`
+	Reason       string `json:"reason"`
+}
+
+func (item requiredGateSignature) key() string {
+	return item.GatePolicyID + "\x00" + item.GateKind + "\x00" + item.MinRiskClass + "\x00" + item.Reason
+}
+
+type evidenceRefSignature struct {
+	Kind           string `json:"kind"`
+	Ref            string `json:"ref"`
+	Summary        string `json:"summary"`
+	Digest         string `json:"digest"`
+	RetentionClass string `json:"retention_class"`
+}
+
+func (item evidenceRefSignature) key() string {
+	return item.Kind + "\x00" + item.Ref + "\x00" + item.Summary + "\x00" + item.Digest + "\x00" + item.RetentionClass
 }
 
 type evaluationInput struct {
