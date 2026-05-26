@@ -345,6 +345,44 @@ func TestServiceCancelsAndExpiresInteractionRequests(t *testing.T) {
 	}
 }
 
+func TestServiceReplaysExpireInteractionRequestsWithoutDeadline(t *testing.T) {
+	t.Parallel()
+
+	repository := newFakeRepository()
+	now := time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC)
+	expireID := uuid.New()
+	seedInteractionRequest(repository, expireID, now, enum.InteractionRequestStatusWaiting)
+	pastDeadline := now.Add(-time.Minute)
+	expiring := repository.requests[expireID]
+	expiring.DeadlineAt = &pastDeadline
+	repository.requests[expireID] = expiring
+	input := ExpireInteractionRequestsInput{
+		Meta:  validCommandMeta(),
+		Scope: value.ScopeRef{Type: enum.ScopeTypeService, Ref: "agent-manager"},
+		Limit: 10,
+	}
+	firstService := NewWithConfig(repository, Config{Clock: fixedClock{now: now}, UUIDGenerator: &sequenceIDs{ids: []uuid.UUID{uuid.New()}}})
+	first, err := firstService.ExpireInteractionRequests(context.Background(), input)
+	if err != nil {
+		t.Fatalf("ExpireInteractionRequests(): %v", err)
+	}
+	if len(first.ExpiredRequestIDs) != 1 || first.ExpiredRequestIDs[0] != expireID {
+		t.Fatalf("first expired = %+v, want %s", first, expireID)
+	}
+
+	replayService := NewWithConfig(repository, Config{Clock: fixedClock{now: now.Add(time.Hour)}, UUIDGenerator: &sequenceIDs{ids: []uuid.UUID{uuid.New()}}})
+	replayed, err := replayService.ExpireInteractionRequests(context.Background(), input)
+	if err != nil {
+		t.Fatalf("ExpireInteractionRequests() replay: %v", err)
+	}
+	if len(replayed.ExpiredRequestIDs) != 1 || replayed.ExpiredRequestIDs[0] != expireID {
+		t.Fatalf("replayed expired = %+v, want same request id", replayed)
+	}
+	if len(repository.results) != 1 || len(repository.events) != 1 {
+		t.Fatalf("results=%d events=%d, want replay without additional writes", len(repository.results), len(repository.events))
+	}
+}
+
 func TestServiceRejectsUnsafeInteractionLifecycleInput(t *testing.T) {
 	t.Parallel()
 

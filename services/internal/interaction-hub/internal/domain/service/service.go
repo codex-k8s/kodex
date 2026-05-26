@@ -335,7 +335,7 @@ func (s *Service) ExpireInteractionRequests(ctx context.Context, input ExpireInt
 	if err := validateCommandMeta(input.Meta); err != nil {
 		return ExpireInteractionRequestsResult{}, err
 	}
-	input, err := normalizeExpireInteractionRequestsInput(input, s.clock.Now())
+	input, err := normalizeExpireInteractionRequestsInput(input)
 	if err != nil {
 		return ExpireInteractionRequestsResult{}, err
 	}
@@ -347,7 +347,11 @@ func (s *Service) ExpireInteractionRequests(ctx context.Context, input ExpireInt
 		return result, err
 	}
 
-	candidates, err := s.repository.ListExpirableInteractionRequests(ctx, input.Scope, *input.DeadlineBefore, input.Limit)
+	deadlineBefore := s.clock.Now().UTC()
+	if input.DeadlineBefore != nil {
+		deadlineBefore = *input.DeadlineBefore
+	}
+	candidates, err := s.repository.ListExpirableInteractionRequests(ctx, input.Scope, deadlineBefore, input.Limit)
 	if err != nil {
 		return ExpireInteractionRequestsResult{}, err
 	}
@@ -698,14 +702,11 @@ func normalizeRecordInteractionResponseInput(input RecordInteractionResponseInpu
 	return input, nil
 }
 
-func normalizeExpireInteractionRequestsInput(input ExpireInteractionRequestsInput, now time.Time) (ExpireInteractionRequestsInput, error) {
+func normalizeExpireInteractionRequestsInput(input ExpireInteractionRequestsInput) (ExpireInteractionRequestsInput, error) {
 	if err := validateScope(input.Scope); err != nil {
 		return ExpireInteractionRequestsInput{}, err
 	}
-	if input.DeadlineBefore == nil {
-		deadline := now.UTC()
-		input.DeadlineBefore = &deadline
-	} else {
+	if input.DeadlineBefore != nil {
 		deadline := input.DeadlineBefore.UTC()
 		input.DeadlineBefore = &deadline
 	}
