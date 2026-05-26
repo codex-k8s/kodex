@@ -27,6 +27,9 @@ WHERE (@session_id::uuid IS NULL OR session_id = @session_id::uuid)
   AND (@run_id::uuid IS NULL OR run_id = @run_id::uuid)
   AND (@activity_kind::text IS NULL OR activity_kind = @activity_kind::text)
   AND (@activity_status::text IS NULL OR status = @activity_status::text)
+  AND (
+    @cursor_started_at::timestamptz IS NULL
+    OR (started_at, id) < (@cursor_started_at::timestamptz, @cursor_id::uuid)
+  )
 ORDER BY started_at DESC, id DESC
 LIMIT @limit::int
-OFFSET @offset::int;

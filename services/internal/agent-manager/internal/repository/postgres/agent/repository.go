@@ -288,7 +288,16 @@ func (r *Repository) GetAgentActivity(ctx context.Context, id uuid.UUID) (entity
 }
 
 func (r *Repository) ListAgentActivities(ctx context.Context, filter query.AgentActivityFilter) ([]entity.AgentActivity, value.PageResult, error) {
-	return queryPage(ctx, r.db, operationListActivities, queryAgentActivityList, agentActivityFilterArgs(filter), scanAgentActivity)
+	page, err := agentActivityFilterArgs(filter)
+	if err != nil {
+		return nil, value.PageResult{}, err
+	}
+	items, err := queryMany(ctx, r.db, operationListActivities, queryAgentActivityList, page.NamedArgs, scanAgentActivity)
+	if err != nil {
+		return nil, value.PageResult{}, err
+	}
+	trimmed, result := activityPageResult(items, page)
+	return trimmed, result, nil
 }
 
 func (r *Repository) GetCommandResult(ctx context.Context, identity query.CommandIdentity) (entity.CommandResult, error) {
