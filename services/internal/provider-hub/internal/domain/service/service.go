@@ -148,7 +148,7 @@ func (s *Service) IngestWebhookEvent(ctx context.Context, input IngestWebhookEve
 		PayloadJSON:          payload,
 		RetainUntil:          input.ReceivedAt.UTC().Add(webhookPayloadRetention),
 	}
-	normalization, err := s.normalizeWebhook(webhook)
+	normalization, err := s.normalizeWebhook(ctx, webhook)
 	if err != nil {
 		return entity.WebhookEvent{}, err
 	}
@@ -209,7 +209,7 @@ func (s *Service) RetryWebhookEventProcessing(ctx context.Context, input RetryWe
 	default:
 		return entity.WebhookEvent{}, errs.ErrInvalidArgument
 	}
-	normalization, err := s.normalizeWebhook(webhook)
+	normalization, err := s.normalizeWebhook(ctx, webhook)
 	if err != nil {
 		return entity.WebhookEvent{}, err
 	}

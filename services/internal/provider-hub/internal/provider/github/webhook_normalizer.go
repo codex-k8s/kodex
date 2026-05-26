@@ -23,6 +23,11 @@ type webhookRepositoryPayload struct {
 	FullName string      `json:"full_name"`
 }
 
+type webhookRepositoryRefPayload struct {
+	Ref string `json:"ref"`
+	SHA string `json:"sha"`
+}
+
 type webhookLabelPayload struct {
 	Name string `json:"name"`
 }
@@ -53,17 +58,22 @@ type issueWebhookPayload struct {
 }
 
 type pullRequestWebhookPayload struct {
-	ID        json.Number              `json:"id"`
-	Number    int64                    `json:"number"`
-	HTMLURL   string                   `json:"html_url"`
-	Title     string                   `json:"title"`
-	State     string                   `json:"state"`
-	Body      string                   `json:"body"`
-	Labels    []webhookLabelPayload    `json:"labels"`
-	Assignees []webhookUserPayload     `json:"assignees"`
-	Milestone *webhookMilestonePayload `json:"milestone"`
-	Merged    bool                     `json:"merged"`
-	UpdatedAt string                   `json:"updated_at"`
+	ID             json.Number                 `json:"id"`
+	Number         int64                       `json:"number"`
+	HTMLURL        string                      `json:"html_url"`
+	Title          string                      `json:"title"`
+	State          string                      `json:"state"`
+	Body           string                      `json:"body"`
+	Labels         []webhookLabelPayload       `json:"labels"`
+	Assignees      []webhookUserPayload        `json:"assignees"`
+	Milestone      *webhookMilestonePayload    `json:"milestone"`
+	Merged         bool                        `json:"merged"`
+	MergeCommitSHA string                      `json:"merge_commit_sha"`
+	Base           webhookRepositoryRefPayload `json:"base"`
+	Head           webhookRepositoryRefPayload `json:"head"`
+	MergedAt       string                      `json:"merged_at"`
+	ClosedAt       string                      `json:"closed_at"`
+	UpdatedAt      string                      `json:"updated_at"`
 }
 
 type commentWebhookPayload struct {
@@ -89,6 +99,7 @@ type issuesWebhookEnvelope struct {
 }
 
 type pullRequestWebhookEnvelope struct {
+	Action      string                    `json:"action"`
 	Repository  webhookRepositoryPayload  `json:"repository"`
 	PullRequest pullRequestWebhookPayload `json:"pull_request"`
 }
@@ -144,7 +155,7 @@ func normalizeWebhookPayload(eventName string, payload []byte, receivedAt time.T
 	case "issues":
 		return normalizeWorkItemWebhook[issuesWebhookEnvelope](payload, receivedAt, issueSource)
 	case "pull_request":
-		return normalizeWorkItemWebhook[pullRequestWebhookEnvelope](payload, receivedAt, pullRequestSource)
+		return normalizePullRequestWebhook(payload, receivedAt)
 	case "issue_comment":
 		var envelope issueCommentWebhookEnvelope
 		if err := decodeProviderPayload(payload, &envelope); err != nil {
@@ -195,6 +206,22 @@ func normalizeWorkItemWebhook[T any](payload []byte, receivedAt time.Time, sourc
 	}
 	item := source(envelope)
 	return workItemFactsFromPayload(item.repository, item.item, item.kind, receivedAt, item.missingMessage)
+}
+
+func normalizePullRequestWebhook(payload []byte, receivedAt time.Time) (value.ProviderWebhookFacts, bool, error) {
+	var envelope pullRequestWebhookEnvelope
+	if err := decodeProviderPayload(payload, &envelope); err != nil {
+		return webhookFacts{}, true, err
+	}
+	item := pullRequestSource(envelope)
+	facts, ok, err := workItemFactsFromPayload(item.repository, item.item, item.kind, receivedAt, item.missingMessage)
+	if err != nil || !ok {
+		return facts, ok, err
+	}
+	if pullRequestMerged(envelope) {
+		facts.MergeSignal = pullRequestMergeSignal(envelope.PullRequest, receivedAt)
+	}
+	return facts, true, nil
 }
 
 func issueSource(envelope issuesWebhookEnvelope) workItemSource {
@@ -302,6 +329,26 @@ func pullRequestWorkItem(pullRequest pullRequestWebhookPayload) providerWorkItem
 		assignees: pullRequest.Assignees,
 		milestone: pullRequest.Milestone,
 		updatedAt: pullRequest.UpdatedAt,
+	}
+}
+
+func pullRequestMerged(envelope pullRequestWebhookEnvelope) bool {
+	return strings.EqualFold(strings.TrimSpace(envelope.Action), "closed") && envelope.PullRequest.Merged
+}
+
+func pullRequestMergeSignal(pullRequest pullRequestWebhookPayload, fallback time.Time) *value.ProviderRepositoryMergeSignalSnapshot {
+	mergedAt := timeValue(pullRequest.MergedAt, fallback)
+	if strings.TrimSpace(pullRequest.MergedAt) == "" {
+		mergedAt = timeValue(pullRequest.ClosedAt, fallback)
+	}
+	return &value.ProviderRepositoryMergeSignalSnapshot{
+		PullRequestProviderID: numberString(pullRequest.ID),
+		PullRequestURL:        strings.TrimSpace(pullRequest.HTMLURL),
+		BaseBranch:            strings.TrimSpace(pullRequest.Base.Ref),
+		HeadBranch:            strings.TrimSpace(pullRequest.Head.Ref),
+		MergeCommitSHA:        strings.TrimSpace(pullRequest.MergeCommitSHA),
+		SourceRef:             strings.TrimSpace(pullRequest.Head.Ref),
+		MergedAt:              mergedAt,
 	}
 }
 

@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-06
 updated_at: 2026-05-26
-related_issues: [281, 282, 711, 719, 725, 729, 737, 761, 770, 781, 818]
+related_issues: [281, 282, 711, 719, 725, 729, 737, 761, 770, 781, 818, 840]
 related_prs: []
 related_adrs: []
 approvals:
@@ -191,7 +191,7 @@ sequenceDiagram
 
 Bootstrap-команда не создаёт сам репозиторий у провайдера, не создаёт начальный base ref, не генерирует `services.yaml`, не выбирает шаблоны и не сканирует содержимое репозитория. Она отклоняется, если `base_branch` и `bootstrap_branch` совпадают, либо если дерево `base_branch` содержит что-либо кроме безопасного `README.md`, созданного провайдером при `auto_init`. Если bootstrap branch уже существует после неудачной или повторной попытки, новый commit строится от текущей головы bootstrap branch, но дерево commit собирается из пустого дерева или дерева только с `README.md` и подготовленного набора файлов, чтобы не протащить старые файлы. После успешной записи сервис обновляет локальную проекцию bootstrap `PR/MR`, проставляет `project_id` и `repository_id`, создаёт provider relationship `project_repository_binding` и публикует `provider.repository.bootstrap_completed`. Содержимое подготовленных файлов остаётся только входом provider-вызова и не сохраняется в журнале операций, outbox, событиях, логах, ошибках или трассировке.
 
-После merge bootstrap `PR/MR` provider-side контур отвечает за факт provider-native изменения: webhook inbox, нормализацию, PR/MR projection и безопасные refs. Проверенная проекция `services.yaml` импортируется не в `provider-hub`, а в `project-catalog` через внутреннюю команду `ImportBootstrapServicesPolicy`. В этот вызов не передаются raw webhook body, полный provider response или содержимое provider payload; только безопасные ссылки, source ref, commit, `content_hash`, watermark и нормализованный checked payload, подготовленный вызывающим контуром.
+После merge bootstrap `PR/MR` provider-side контур отвечает за факт provider-native изменения: webhook inbox, нормализацию, PR/MR projection и безопасные refs. Для GitHub закрытый и смёрженный `pull_request` создаёт `RepositoryMergeSignal` kind `bootstrap` с project/repository refs, PR number/id/url, base/head branch, merge commit sha, source ref, related provider operation ref, watermark digest, timestamps, status и version. Проверенная проекция `services.yaml` импортируется не в `provider-hub`, а в `project-catalog` через внутреннюю команду `ImportBootstrapServicesPolicy`. В этот вызов не передаются raw webhook body, полный provider response или содержимое provider payload; только безопасные ссылки, source ref, commit, `content_hash`, watermark и нормализованный checked payload, подготовленный вызывающим контуром.
 
 ### Подключение существующего репозитория через adoption PR
 
@@ -217,6 +217,8 @@ sequenceDiagram
 ```
 
 Adoption-команда не создаёт репозиторий, не выполняет scan, не генерирует `services.yaml`, не выбирает шаблон и не меняет branch protection. В отличие от bootstrap, она допускает непустой `base_branch`, потому что работает с существующим репозиторием. Если adoption branch уже существует, новая команда строит commit от текущей головы adoption branch, но дерево commit собирается из текущего дерева base branch и подготовленного набора файлов. После успешной записи сервис обновляет локальную проекцию adoption `PR/MR`, проставляет `project_id` и `repository_id`, создаёт provider relationship `project_repository_binding` и публикует `provider.repository.adoption_pr_created`. Содержимое подготовленных файлов не сохраняется в журнале операций, outbox, событиях, логах, ошибках или трассировке.
+
+После merge adoption `PR/MR` provider-side контур фиксирует `RepositoryMergeSignal` kind `adoption` по тем же правилам, что bootstrap: только безопасные refs, digest, timestamps и статус. Повтор того же provider PR merge не создаёт второй сигнал или outbox event, а конфликтующий commit/source ref отклоняется как конфликт. Adoption scan, отчёт, проверка `services.yaml`, выбор шаблона и активация project binding остаются у соседних доменов.
 
 ### Сигнал от slot-агента
 
@@ -264,7 +266,9 @@ sequenceDiagram
 - `provider.repository.bootstrap_required`;
 - `provider.repository.adoption_required`;
 - `provider.repository.bootstrap_completed`;
-- `provider.repository.adoption_pr_created`.
+- `provider.repository.adoption_pr_created`;
+- `provider.repository.bootstrap_merged`;
+- `provider.repository.adoption_merged`.
 
 ## Правила хранения
 

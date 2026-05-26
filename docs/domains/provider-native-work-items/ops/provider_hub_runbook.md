@@ -5,8 +5,8 @@ title: "provider-hub — runbook: развёртывание и smoke-прове
 status: active
 owner_role: SRE
 created_at: 2026-05-14
-updated_at: 2026-05-14
-related_issues: [754, 770]
+updated_at: 2026-05-26
+related_issues: [754, 770, 840]
 related_alerts: []
 approvals:
   required: ["Owner"]
@@ -28,7 +28,7 @@ approvals:
 
 - После сборки и публикации образов `provider-hub` и `provider-hub-migrations`.
 - После изменения миграций, deploy-манифестов, runtime env или shared Go-библиотек.
-- При сбоях webhook inbox, пакетной сверки, provider write pipeline, bootstrap PR, outbox-доставки или gRPC auth boundary.
+- При сбоях webhook inbox, пакетной сверки, provider write pipeline, bootstrap/adoption PR, safe merge signal, outbox-доставки или gRPC auth boundary.
 
 ## Предпосылки и доступы
 
@@ -141,6 +141,7 @@ Readiness должна видеть:
 | `reauthorization_required` | Provider-токен недействителен или отозван | состояние внешнего аккаунта и ссылку на секрет без значения |
 | rate limit или abuse limit | Исчерпан лимит GitHub/GitLab | лимитный budget, retry-after, число фоновых курсоров |
 | webhook backlog растёт | Не успевает нормализация или повторная обработка | статусы inbox, oldest pending/failed, ошибки нормализации |
+| merge signal conflict | Повтор bootstrap/adoption PR merge пришёл с тем же signal key, но другим commit/source ref | provider target, PR number/url, safe signal key, merge commit sha; raw payload не выгружать |
 | reconciliation errors | Ошибка provider API, secret resolver или конфликт курсора | sync cursor, lease, last_error code, rate budget |
 | bootstrap PR error | Непустой base branch, совпадающие base/bootstrap refs, нет прав на branch/PR | короткий код операции, refs, права внешнего аккаунта |
 | adoption PR error | Совпадающие base/adoption refs, нет прав на branch/PR, конфликт provider validation | короткий код операции, refs, права внешнего аккаунта |

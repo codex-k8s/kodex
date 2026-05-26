@@ -5,8 +5,8 @@ title: "provider-hub — наблюдаемость"
 status: active
 owner_role: SRE
 created_at: 2026-05-14
-updated_at: 2026-05-14
-related_issues: [754, 770]
+updated_at: 2026-05-26
+related_issues: [754, 770, 840]
 approvals:
   required: ["Owner"]
   status: approved
@@ -19,10 +19,10 @@ approvals:
 
 ## TL;DR
 
-- Дашборды: readiness, gRPC, PostgreSQL, outbox, webhook inbox, reconciliation cursors, provider operations, лимиты, bootstrap PR и adoption PR.
+- Дашборды: readiness, gRPC, PostgreSQL, outbox, webhook inbox, reconciliation cursors, provider operations, лимиты, bootstrap/adoption PR и safe merge signals.
 - Метрики: ошибки доступа, ошибки secret resolver, rate limit, backlog webhook/outbox/reconciliation, latency provider API и частота retryable ошибок.
 - Логи: только безопасные идентификаторы `request_id`, `provider_slug`, `external_account_id`, `work_item_id`, `operation_id`, `sync_cursor_id`.
-- Алерты: недоступность readiness, падение migration job, outbox backlog, рост webhook backlog, stuck cursors, auth failure, rate limit exhaustion, bootstrap PR failures и adoption PR failures.
+- Алерты: недоступность readiness, падение migration job, outbox backlog, рост webhook backlog, stuck cursors, auth failure, rate limit exhaustion, bootstrap/adoption PR failures и конфликтующие merge signals.
 
 ## Источники данных
 
@@ -58,6 +58,7 @@ approvals:
 - Возраст самого старого cursor без успешной сверки.
 - Количество `ProviderOperation` по типу операции и статусу.
 - Частота `provider.operation.completed` и `provider.operation.failed`.
+- Частота `provider.repository.bootstrap_merged` и `provider.repository.adoption_merged`, а также конфликтов merge signal по signal key.
 - Количество внешних аккаунтов в состояниях `healthy`, `rate_limited`, `reauthorization_required`, `disabled`.
 - Доля bootstrap/adoption PR операций с отказом по причине пустоты base branch для bootstrap, конфликтов refs, отсутствия прав или provider validation.
 
@@ -76,6 +77,7 @@ approvals:
 - provider token, Vault token, gRPC token, DSN;
 - `secret_store_ref`, если он раскрывает путь к чувствительному хранилищу;
 - raw webhook payload, raw provider response и тело файлов bootstrap/adoption PR;
+- подписи webhook, merge signal source refs вместе с raw body или содержимое `services.yaml`;
 - email, имена пользователей, приватные домены и адреса серверов из локального bootstrap-профиля.
 
 ## Проверки и рутинные health checks
@@ -98,6 +100,7 @@ approvals:
 - Rate limit budget ниже порога, а очередь hot cursors продолжает расти.
 - Доля transient provider errors выше baseline.
 - Bootstrap PR операции повторно падают с одинаковым error code.
+- Conflict rate по safe merge signal растёт для одного provider target.
 - `access-manager` недоступен для `ResolveExternalAccountUsage`.
 - Secret resolver возвращает repeated not found/permission errors.
 

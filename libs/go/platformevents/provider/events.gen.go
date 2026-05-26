@@ -21,19 +21,22 @@ const (
 	EventRepositoryCreated            = "provider.repository.created"
 	EventRepositoryBootstrapCompleted = "provider.repository.bootstrap_completed"
 	EventRepositoryAdoptionPRCreated  = "provider.repository.adoption_pr_created"
+	EventRepositoryBootstrapMerged    = "provider.repository.bootstrap_merged"
+	EventRepositoryAdoptionMerged     = "provider.repository.adoption_merged"
 )
 
 const (
-	AggregateAccountRuntimeState = "account_runtime_state"
-	AggregateComment             = "comment"
-	AggregateLimitSnapshot       = "limit_snapshot"
-	AggregateProviderEvent       = "provider_event"
-	AggregateProviderOperation   = "provider_operation"
-	AggregateRelationship        = "relationship"
-	AggregateRepository          = "repository"
-	AggregateSyncCursor          = "sync_cursor"
-	AggregateWebhookEvent        = "webhook_event"
-	AggregateWorkItem            = "work_item"
+	AggregateAccountRuntimeState   = "account_runtime_state"
+	AggregateComment               = "comment"
+	AggregateLimitSnapshot         = "limit_snapshot"
+	AggregateProviderEvent         = "provider_event"
+	AggregateProviderOperation     = "provider_operation"
+	AggregateRelationship          = "relationship"
+	AggregateRepository            = "repository"
+	AggregateRepositoryMergeSignal = "repository_merge_signal"
+	AggregateSyncCursor            = "sync_cursor"
+	AggregateWebhookEvent          = "webhook_event"
+	AggregateWorkItem              = "work_item"
 )
 
 // Payload is the generated common payload envelope for domain events.
@@ -47,10 +50,14 @@ type Payload struct {
 	ErrorCode                     string `json:"error_code,omitempty"`
 	EventName                     string `json:"event_name,omitempty"`
 	ExternalAccountID             string `json:"external_account_id,omitempty"`
+	HeadBranch                    string `json:"head_branch,omitempty"`
 	Kind                          string `json:"kind,omitempty"`
 	LimitClass                    string `json:"limit_class,omitempty"`
 	LimitSnapshotID               string `json:"limit_snapshot_id,omitempty"`
+	MergeCommitSHA                string `json:"merge_commit_sha,omitempty"`
+	MergedAt                      string `json:"merged_at,omitempty"`
 	Number                        int64  `json:"number,omitempty"`
+	ObservedAt                    string `json:"observed_at,omitempty"`
 	OperationType                 string `json:"operation_type,omitempty"`
 	ProjectID                     string `json:"project_id,omitempty"`
 	ProviderAccountRuntimeStateID string `json:"provider_account_runtime_state_id,omitempty"`
@@ -60,18 +67,26 @@ type Payload struct {
 	ProviderRepositoryID          string `json:"provider_repository_id,omitempty"`
 	ProviderSlug                  string `json:"provider_slug,omitempty"`
 	ProviderWorkItemID            string `json:"provider_work_item_id,omitempty"`
+	PullRequestProviderID         string `json:"pull_request_provider_id,omitempty"`
+	PullRequestURL                string `json:"pull_request_url,omitempty"`
+	RelatedProviderOperationRef   string `json:"related_provider_operation_ref,omitempty"`
 	RelationshipID                string `json:"relationship_id,omitempty"`
 	RelationshipType              string `json:"relationship_type,omitempty"`
 	RepositoryFullName            string `json:"repository_full_name,omitempty"`
 	RepositoryID                  string `json:"repository_id,omitempty"`
+	RepositoryMergeSignalID       string `json:"repository_merge_signal_id,omitempty"`
 	ResultRef                     string `json:"result_ref,omitempty"`
 	ReviewState                   string `json:"review_state,omitempty"`
 	ScopeRef                      string `json:"scope_ref,omitempty"`
 	ScopeType                     string `json:"scope_type,omitempty"`
+	SignalKey                     string `json:"signal_key,omitempty"`
+	SignalKind                    string `json:"signal_kind,omitempty"`
 	Source                        string `json:"source,omitempty"`
+	SourceRef                     string `json:"source_ref,omitempty"`
 	Status                        string `json:"status,omitempty"`
 	SyncCursorID                  string `json:"sync_cursor_id,omitempty"`
 	Version                       int64  `json:"version,omitempty"`
+	WatermarkDigest               string `json:"watermark_digest,omitempty"`
 	WatermarkStatus               string `json:"watermark_status,omitempty"`
 	WebhookEventID                string `json:"webhook_event_id,omitempty"`
 	WorkItemProjectionID          string `json:"work_item_projection_id,omitempty"`

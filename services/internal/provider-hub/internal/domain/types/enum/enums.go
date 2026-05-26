@@ -186,6 +186,21 @@ const (
 	ProviderOperationStatusDenied          ProviderOperationStatus = "denied"
 )
 
+// RepositoryMergeSignalKind classifies provider-side onboarding merge signals.
+type RepositoryMergeSignalKind string
+
+const (
+	RepositoryMergeSignalKindBootstrap RepositoryMergeSignalKind = "bootstrap"
+	RepositoryMergeSignalKindAdoption  RepositoryMergeSignalKind = "adoption"
+)
+
+// RepositoryMergeSignalStatus describes the merge signal lifecycle at provider edge.
+type RepositoryMergeSignalStatus string
+
+const (
+	RepositoryMergeSignalStatusMerged RepositoryMergeSignalStatus = "merged"
+)
+
 // ReviewSignalKind classifies provider-native review actions requested by the platform.
 type ReviewSignalKind string
 

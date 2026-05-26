@@ -261,6 +261,36 @@ func providerArtifactSignalIdentityArgs(signal entity.ProviderArtifactSignal) pg
 	return pgx.NamedArgs{"identity_key": signal.IdentityKey}
 }
 
+func repositoryMergeSignalArgs(signal entity.RepositoryMergeSignal) pgx.NamedArgs {
+	return withBaseArgs(signal.Base, pgx.NamedArgs{
+		"signal_key":                     signal.SignalKey,
+		"kind":                           string(signal.Kind),
+		"provider_slug":                  string(signal.ProviderSlug),
+		"project_id":                     postgreslib.NullableUUID(signal.ProjectID),
+		"repository_id":                  postgreslib.NullableUUID(signal.RepositoryID),
+		"repository_full_name":           signal.RepositoryFullName,
+		"provider_repository_id":         signal.ProviderRepositoryID,
+		"work_item_projection_id":        signal.WorkItemProjectionID,
+		"provider_work_item_id":          signal.ProviderWorkItemID,
+		"pull_request_number":            signal.PullRequestNumber,
+		"pull_request_provider_id":       signal.PullRequestProviderID,
+		"pull_request_url":               signal.PullRequestURL,
+		"base_branch":                    signal.BaseBranch,
+		"head_branch":                    signal.HeadBranch,
+		"merge_commit_sha":               signal.MergeCommitSHA,
+		"source_ref":                     signal.SourceRef,
+		"related_provider_operation_ref": signal.RelatedProviderOperationRef,
+		"watermark_digest":               signal.WatermarkDigest,
+		"observed_at":                    signal.ObservedAt.UTC().Round(time.Microsecond),
+		"merged_at":                      signal.MergedAt.UTC().Round(time.Microsecond),
+		"status":                         string(signal.Status),
+	})
+}
+
+func repositoryMergeSignalIdentityArgs(signal entity.RepositoryMergeSignal) pgx.NamedArgs {
+	return pgx.NamedArgs{"signal_key": signal.SignalKey}
+}
+
 func reconciliationRequestArgs(request entity.ReconciliationRequest) pgx.NamedArgs {
 	return pgx.NamedArgs{
 		"id":                  request.ID,

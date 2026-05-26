@@ -5,8 +5,8 @@ title: kodex — поставка provider-hub
 status: active
 owner_role: EM
 created_at: 2026-05-06
-updated_at: 2026-05-25
-related_issues: [281, 282, 711, 719, 725, 729, 737, 754, 761, 770, 781]
+updated_at: 2026-05-26
+related_issues: [281, 282, 711, 719, 725, 729, 737, 754, 761, 770, 781, 840]
 related_prs: []
 related_docsets:
   - docs/domains/provider-native-work-items/product/requirements.md
@@ -61,6 +61,7 @@ approvals:
 | PRV-8a | Provider-часть bootstrap для уже созданного пустого репозитория: запись подготовленных файлов в bootstrap branch, создание или обновление bootstrap PR, provider relationships и локальные проекции без adoption scan. |
 | PRV-8b | Provider-side создание GitHub-репозитория с начальным default branch через `auto_init` готово. |
 | PRV-8c | Provider-часть adoption существующего репозитория; содержательное сканирование и отчёт остаются агентной работой через workspace. |
+| PRV-8d | Provider-side merge signal для bootstrap/adoption PR: GitHub `pull_request closed + merged` фиксируется безопасно и публикуется как `provider.repository.*_merged`. |
 | PRV-9 | Kubernetes-манифесты, БД, migration job, smoke-путь, runbook и документы наблюдаемости готовы. |
 
 ## Таблица реализации
@@ -76,6 +77,7 @@ approvals:
 | Операционное состояние аккаунта и лимиты | Готово: состояние аккаунта у провайдера, снимки лимитов и журнал операций. | Реализовано в PRV-3: доменная логика, PostgreSQL-репозиторий, gRPC-чтение/запись снимков лимитов, базовый GitHub-адаптер для проверки лимитов. Фильтры по проекту и организации в списке операционных состояний остаются контрактным заделом до подключения разрешения внешних аккаунтов через `access-manager`. |
 | Первичная инициализация пустого репозитория | Готово: `CreateRepository` создаёт GitHub-репозиторий и provider default branch, `CreateBootstrapPullRequest` принимает подготовленные файлы и refs, создаёт или обновляет bootstrap branch/PR. | PRV-8b реализует создание репозитория на стороне провайдера через общий pipeline и GitHub-адаптер с `auto_init=true`, фиксирует `base_branch` и событие `provider.repository.created`. PRV-8a реализует provider-side запись bootstrap branch/PR, обновляет проекцию `PR`, provider relationship к project/repository binding и событие `provider.repository.bootstrap_completed`. End-to-end вызов из проектного или агентного контура остаётся отдельным срезом. |
 | Подключение существующего репозитория | Готово: `CreateAdoptionPullRequest` принимает подготовленные файлы и refs, создаёт или обновляет adoption branch/PR, фиксирует проекцию, связь и событие `provider.repository.adoption_pr_created`. | Реализовано в PRV-8c: provider-side запись adoption branch/PR без scan, генерации `services.yaml`, выбора шаблонов и project policy decision. End-to-end вызов из агентного или проектного контура остаётся отдельным срезом. |
+| Merge bootstrap/adoption PR | Готово: безопасный provider-side merge signal и AsyncAPI события `provider.repository.bootstrap_merged` / `provider.repository.adoption_merged`. | Реализовано в PRV-8d: GitHub `pull_request closed + merged` связывается с уже известной bootstrap/adoption PR-проекцией, сохраняет только safe refs/digest/timestamps, дедуплицируется по signal key и конфликтует при другом commit/source ref. `provider-hub` не вызывает `project-catalog ImportBootstrapServicesPolicy` напрямую. |
 | Эксплуатационный контур | Готово: Dockerfile, Kubernetes-манифесты, bootstrap БД, migration job, smoke-путь, runbook и monitoring docs. | PRV-9 добавил `deploy/base/provider-hub/**`, подключение `kodex_provider_hub` к PostgreSQL bootstrap/runtime secrets, build/smoke scripts и эксплуатационные документы. Реальная проверка на кластере выполняется отдельным операторским запуском smoke-скрипта с нормализованным bootstrap env. |
 
 ## Текущее состояние реализации
@@ -135,6 +137,8 @@ approvals:
 - успешный bootstrap PR сразу создаёт локальную PR-проекцию с `project_id` и `repository_id`, provider relationship `project_repository_binding` и событие `provider.repository.bootstrap_completed`; `ProviderOperation` и outbox не содержат файловый payload, секрет или raw provider response.
 - `CreateAdoptionPullRequest` создаёт или обновляет adoption branch и reviewable adoption PR для существующего GitHub-репозитория: вызывающий контур передаёт уже подготовленные файлы, base branch, adoption branch, title/body и watermark, а `provider-hub` не сканирует репозиторий, не генерирует `services.yaml`, не выбирает шаблон и не принимает проектное решение. Команда требует существующий base branch, допускает непустое дерево base branch, запрещает совпадение base/adoption branch и не хранит файловый payload.
 - успешный adoption PR сразу создаёт локальную PR-проекцию с `project_id` и `repository_id`, provider relationship `project_repository_binding` и событие `provider.repository.adoption_pr_created`; `ProviderOperation` и outbox не содержат файловый payload, секрет или raw provider response.
+- merge bootstrap/adoption PR фиксируется provider-side как `RepositoryMergeSignal`: GitHub `pull_request closed + merged` использует уже известную PR-проекцию, project/repository refs, base/head branch, merge commit sha, source ref, related operation ref и watermark digest; raw webhook payload, body PR, содержимое файлов, provider response и секреты в signal/outbox не попадают.
+- повтор merge signal с тем же signal key не создаёт второй доменный outbox event, а конфликтующий сигнал с другим commit/source ref безопасно отклоняется; импорт проверенной `services.yaml` и активация binding остаются в `project-catalog`.
 - эксплуатационный контур `provider-hub`: Dockerfile, `deploy/base/provider-hub/**`, создание БД `kodex_provider_hub` в PostgreSQL bootstrap, runtime Secret refs без значений секретов, migration job, Service/Deployment с HTTP/gRPC ports, readiness/liveness/metrics, requests/limits, build/smoke scripts и runbook/monitoring документы.
 
 Миграция `external_account_id` для очереди сверки явно очищает строки `provider_hub_sync_cursors` и `provider_hub_reconciliation_requests`, созданные предыдущим срезом без знания внешнего аккаунта. Эти строки являются эфемерным состоянием планировщика и пересоздаются повторной постановкой сверки; так тестовые кластеры с уже развёрнутым PRV-6.1 не упираются в `ADD COLUMN ... NOT NULL`.
@@ -156,7 +160,7 @@ approvals:
 
 ## Связь с задачами подключения репозиториев
 
-Задачи #281 и #282 остаются открытыми до полного end-to-end bootstrap/adoption. PRV-8a, PRV-8b и PRV-8c закрывают только provider-side часть создания репозитория, bootstrap PR и adoption PR.
+Задачи #281 и #282 остаются открытыми до полного end-to-end bootstrap/adoption. PRV-8a, PRV-8b, PRV-8c и PRV-8d закрывают только provider-side часть создания репозитория, bootstrap/adoption PR и безопасного merge signal.
 
 Решение:
 
@@ -167,6 +171,7 @@ approvals:
 - в PRV-8b `provider-hub` создаёт GitHub-репозиторий с provider-side default branch, но не генерирует `services.yaml`, не выбирает шаблон и не выполняет adoption scan;
 - в PRV-8a `provider-hub` принимает подготовленный набор файлов и refs, создаёт или обновляет bootstrap branch/PR и фиксирует связи, но не генерирует `services.yaml` и не выполняет adoption scan;
 - в PRV-8c `provider-hub` принимает подготовленный набор файлов и refs, создаёт или обновляет adoption branch/PR и фиксирует связи, но не выполняет scan, не генерирует `services.yaml` и не выбирает шаблон;
+- в PRV-8d `provider-hub` фиксирует факт merge bootstrap/adoption PR и публикует безопасный сигнал, но не проверяет содержимое `services.yaml`, не импортирует project policy и не активирует repository binding;
 - existing repository adoption end-to-end остаётся проектно-агентным сценарием: scan, отчёт, выбор шаблона, approval и импорт политики выполняют соседние домены.
 
 ## Definition of Done для каждого PR

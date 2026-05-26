@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"sync"
@@ -152,6 +153,126 @@ func TestIngestWebhookEventStoresProcessedGitHubIssueWebhook(t *testing.T) {
 	}
 	if len(repository.recordedOutboxEvents) != 2 {
 		t.Fatalf("outbox events = %d, want received and normalized", len(repository.recordedOutboxEvents))
+	}
+}
+
+func TestIngestWebhookEventRecordsRepositoryBootstrapMergeSignal(t *testing.T) {
+	t.Parallel()
+
+	webhookID := uuid.New()
+	receivedEventID := uuid.New()
+	providerEventID := uuid.New()
+	normalizedEventID := uuid.New()
+	workItemOutboxID := uuid.New()
+	mergeSignalOutboxID := uuid.New()
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	workItemID := stableUUID("work-item", string(enum.ProviderSlugGitHub), "github:codex-k8s/kodex:pull_request:88")
+	now := time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC)
+	mergedAt := now.Add(-time.Minute)
+	repository := &fakeRepository{
+		workItemProjection: entity.ProviderWorkItemProjection{
+			Base:               entity.Base{ID: workItemID, Version: 2, CreatedAt: now.Add(-time.Hour), UpdatedAt: now.Add(-time.Hour)},
+			ProviderSlug:       enum.ProviderSlugGitHub,
+			ProviderWorkItemID: "github:codex-k8s/kodex:pull_request:88",
+			ProjectID:          &projectID,
+			RepositoryID:       &repositoryID,
+			RepositoryFullName: "codex-k8s/kodex",
+			Kind:               enum.WorkItemKindPullRequest,
+			Number:             88,
+			URL:                "https://github.com/codex-k8s/kodex/pull/88",
+			State:              "open",
+			WorkItemType:       "bootstrap",
+			WatermarkStatus:    enum.WorkItemWatermarkStatusMissing,
+			WatermarkJSON:      []byte(`{}`),
+			SyncedAt:           now.Add(-time.Hour),
+			DriftStatus:        enum.WorkItemDriftStatusFresh,
+		},
+	}
+	service := NewWithRuntime(
+		repository,
+		fixedClock{now: now},
+		&sequenceIDs{ids: []uuid.UUID{webhookID, receivedEventID, providerEventID, normalizedEventID, workItemOutboxID, mergeSignalOutboxID}},
+		fakeWebhookNormalizer{facts: value.ProviderWebhookFacts{
+			FactKind:             value.ProviderWebhookFactKindWorkItem,
+			ProviderWorkItemID:   "github:codex-k8s/kodex:pull_request:88",
+			Kind:                 string(enum.WorkItemKindPullRequest),
+			Number:               88,
+			RepositoryFullName:   "codex-k8s/kodex",
+			RepositoryProviderID: "101",
+			OccurredAt:           mergedAt,
+			WorkItem: &value.ProviderWorkItemSnapshot{
+				ProviderSlug:       string(enum.ProviderSlugGitHub),
+				ProviderWorkItemID: "github:codex-k8s/kodex:pull_request:88",
+				RepositoryFullName: "codex-k8s/kodex",
+				Kind:               string(enum.WorkItemKindPullRequest),
+				Number:             88,
+				URL:                "https://github.com/codex-k8s/kodex/pull/88",
+				Title:              "Bootstrap platform",
+				State:              "merged",
+				ProviderUpdatedAt:  now,
+			},
+			MergeSignal: &value.ProviderRepositoryMergeSignalSnapshot{
+				PullRequestProviderID: "8801",
+				PullRequestURL:        "https://github.com/codex-k8s/kodex/pull/88",
+				BaseBranch:            "main",
+				HeadBranch:            "kodex/bootstrap",
+				MergeCommitSHA:        "abc123",
+				SourceRef:             "kodex/bootstrap",
+				MergedAt:              mergedAt,
+			},
+		}, ok: true},
+	)
+
+	_, err := service.IngestWebhookEvent(context.Background(), IngestWebhookEventInput{
+		ProviderSlug:         enum.ProviderSlugGitHub,
+		DeliveryID:           "delivery-bootstrap-merged",
+		EventName:            "pull_request",
+		RepositoryProviderID: "101",
+		ReceivedAt:           now,
+		PayloadJSON:          []byte(`{"action":"closed","repository":{"id":101,"full_name":"codex-k8s/kodex"},"pull_request":{"id":8801,"number":88}}`),
+		Meta:                 value.CommandMeta{CommandID: uuid.New()},
+	})
+	if err != nil {
+		t.Fatalf("IngestWebhookEvent(): %v", err)
+	}
+	if repository.lastWorkItemLookup.ProviderObjectID != "github:codex-k8s/kodex:pull_request:88" {
+		t.Fatalf("last work item lookup = %+v, want provider PR projection lookup", repository.lastWorkItemLookup)
+	}
+	signal := repository.recordedProjection.MergeSignal
+	if signal == nil {
+		t.Fatal("merge signal is nil, want recorded bootstrap merge signal")
+	}
+	if signal.Kind != enum.RepositoryMergeSignalKindBootstrap ||
+		signal.ProviderSlug != enum.ProviderSlugGitHub ||
+		signal.ProjectID == nil ||
+		*signal.ProjectID != projectID ||
+		signal.RepositoryID == nil ||
+		*signal.RepositoryID != repositoryID ||
+		signal.PullRequestNumber != 88 ||
+		signal.MergeCommitSHA != "abc123" ||
+		signal.SourceRef != "kodex/bootstrap" ||
+		signal.RelatedProviderOperationRef != "provider-hub:create_bootstrap_pull_request:github:codex-k8s/kodex:pull_request:88" {
+		t.Fatalf("merge signal = %+v, want safe bootstrap refs", signal)
+	}
+	if len(repository.recordedOutboxEvents) != 4 ||
+		repository.recordedOutboxEvents[3].ID != mergeSignalOutboxID ||
+		repository.recordedOutboxEvents[3].EventType != providerEventRepositoryBootstrapMerged ||
+		repository.recordedOutboxEvents[3].AggregateType != providerAggregateRepositoryMergeSignal ||
+		repository.recordedOutboxEvents[3].AggregateID != signal.ID {
+		t.Fatalf("outbox events = %+v, want bootstrap merge outbox event", repository.recordedOutboxEvents)
+	}
+	var payload value.ProviderEventPayload
+	if err := json.Unmarshal(repository.recordedOutboxEvents[3].Payload, &payload); err != nil {
+		t.Fatalf("unmarshal merge payload: %v", err)
+	}
+	if payload.RepositoryMergeSignalID != signal.ID.String() ||
+		payload.SignalKind != string(enum.RepositoryMergeSignalKindBootstrap) ||
+		payload.ProjectID != projectID.String() ||
+		payload.RepositoryID != repositoryID.String() ||
+		payload.MergeCommitSHA != "abc123" ||
+		payload.PullRequestURL != "https://github.com/codex-k8s/kodex/pull/88" {
+		t.Fatalf("payload = %+v, want safe merge signal fields", payload)
 	}
 }
 

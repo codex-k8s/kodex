@@ -1,9 +1,11 @@
 package service
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -11,9 +13,11 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/errs"
 	providerrepo "github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/repository/provider"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/enum"
+	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/value"
 )
 
@@ -24,6 +28,7 @@ const (
 	relationshipParent                   = "parent"
 	relationshipNext                     = "next"
 	relationshipProjectRepositoryBinding = "project_repository_binding"
+	onboardingMergeSignalStatus          = "merged"
 	projectionSummarySize                = 320
 )
 
@@ -34,7 +39,7 @@ type watermarkParseResult struct {
 	fields map[string]string
 }
 
-func (s *Service) projectionUpdateFromFacts(webhook entity.WebhookEvent, facts value.ProviderWebhookFacts) (providerrepo.ProjectionUpdate, []entity.OutboxEvent, error) {
+func (s *Service) projectionUpdateFromFacts(ctx context.Context, webhook entity.WebhookEvent, facts value.ProviderWebhookFacts) (providerrepo.ProjectionUpdate, []entity.OutboxEvent, error) {
 	now := s.clock.Now().UTC()
 	var update providerrepo.ProjectionUpdate
 	var events []entity.OutboxEvent
@@ -43,6 +48,13 @@ func (s *Service) projectionUpdateFromFacts(webhook entity.WebhookEvent, facts v
 		if err != nil {
 			return providerrepo.ProjectionUpdate{}, nil, err
 		}
+		if facts.MergeSignal != nil {
+			enriched, err := s.enrichOnboardingMergeProjection(ctx, workItem)
+			if err != nil {
+				return providerrepo.ProjectionUpdate{}, nil, err
+			}
+			workItem = enriched
+		}
 		update.WorkItem = &workItem
 		update.Relationships = append(update.Relationships, relationships...)
 		event, err := s.workItemSyncedOutbox(webhook, workItem)
@@ -50,6 +62,20 @@ func (s *Service) projectionUpdateFromFacts(webhook entity.WebhookEvent, facts v
 			return providerrepo.ProjectionUpdate{}, nil, err
 		}
 		events = append(events, event)
+		if facts.MergeSignal != nil {
+			mergeSignal, ok, err := s.repositoryMergeSignalFromFacts(webhook, facts, workItem)
+			if err != nil {
+				return providerrepo.ProjectionUpdate{}, nil, err
+			}
+			if ok {
+				update.MergeSignal = &mergeSignal
+				event, err := s.repositoryMergedOutbox(webhook, mergeSignal)
+				if err != nil {
+					return providerrepo.ProjectionUpdate{}, nil, err
+				}
+				events = append(events, event)
+			}
+		}
 	}
 	if facts.Comment != nil && update.WorkItem != nil {
 		comment := commentProjectionFromSnapshot(*facts.Comment, now)
@@ -155,6 +181,150 @@ func projectRepositoryBindingRelationships(workItemID uuid.UUID, projectID *uuid
 		Confidence:        enum.RelationshipConfidenceConfirmed,
 		CreatedAt:         now,
 	}}
+}
+
+func (s *Service) enrichOnboardingMergeProjection(ctx context.Context, workItem entity.ProviderWorkItemProjection) (entity.ProviderWorkItemProjection, error) {
+	existing, err := s.repository.GetWorkItemProjection(ctx, query.ProviderTargetLookup{
+		ProviderSlug:     workItem.ProviderSlug,
+		ProviderObjectID: workItem.ProviderWorkItemID,
+	})
+	if errors.Is(err, errs.ErrNotFound) {
+		return workItem, nil
+	}
+	if err != nil {
+		return entity.ProviderWorkItemProjection{}, err
+	}
+	if workItem.ProjectID == nil {
+		workItem.ProjectID = existing.ProjectID
+	}
+	if workItem.RepositoryID == nil {
+		workItem.RepositoryID = existing.RepositoryID
+	}
+	if strings.TrimSpace(workItem.WorkItemType) == "" {
+		workItem.WorkItemType = existing.WorkItemType
+	}
+	if workItem.WatermarkStatus == enum.WorkItemWatermarkStatusMissing && len(existing.WatermarkJSON) > 0 {
+		workItem.WatermarkStatus = existing.WatermarkStatus
+		workItem.WatermarkJSON = append(workItem.WatermarkJSON[:0], existing.WatermarkJSON...)
+	}
+	return workItem, nil
+}
+
+func (s *Service) repositoryMergeSignalFromFacts(webhook entity.WebhookEvent, facts value.ProviderWebhookFacts, workItem entity.ProviderWorkItemProjection) (entity.RepositoryMergeSignal, bool, error) {
+	if facts.MergeSignal == nil || workItem.Kind != enum.WorkItemKindPullRequest || strings.TrimSpace(workItem.State) != onboardingMergeSignalStatus {
+		return entity.RepositoryMergeSignal{}, false, nil
+	}
+	if workItem.ProjectID == nil || workItem.RepositoryID == nil {
+		return entity.RepositoryMergeSignal{}, false, nil
+	}
+	kind, ok := onboardingMergeSignalKind(workItem, *facts.MergeSignal)
+	if !ok {
+		return entity.RepositoryMergeSignal{}, false, nil
+	}
+	if strings.TrimSpace(facts.MergeSignal.MergeCommitSHA) == "" ||
+		strings.TrimSpace(facts.MergeSignal.BaseBranch) == "" ||
+		strings.TrimSpace(facts.MergeSignal.HeadBranch) == "" {
+		return entity.RepositoryMergeSignal{}, false, errs.ErrInvalidArgument
+	}
+	now := s.clock.Now().UTC()
+	mergedAt := facts.MergeSignal.MergedAt.UTC()
+	if mergedAt.IsZero() {
+		mergedAt = facts.OccurredAt.UTC()
+	}
+	if mergedAt.IsZero() {
+		mergedAt = webhook.ReceivedAt.UTC()
+	}
+	sourceRef := onboardingMergeSourceRef(workItem, *facts.MergeSignal)
+	operationRef := onboardingMergeOperationRef(kind, workItem, *facts.MergeSignal)
+	signalKey := repositoryMergeSignalKey(workItem.ProviderSlug, kind, workItem.ProviderWorkItemID)
+	signal := entity.RepositoryMergeSignal{
+		Base: entity.Base{
+			ID:        stableUUID("repository-merge-signal", signalKey),
+			Version:   1,
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		SignalKey:                   signalKey,
+		Kind:                        kind,
+		ProviderSlug:                workItem.ProviderSlug,
+		ProjectID:                   workItem.ProjectID,
+		RepositoryID:                workItem.RepositoryID,
+		RepositoryFullName:          workItem.RepositoryFullName,
+		ProviderRepositoryID:        strings.TrimSpace(facts.RepositoryProviderID),
+		WorkItemProjectionID:        workItem.ID,
+		ProviderWorkItemID:          workItem.ProviderWorkItemID,
+		PullRequestNumber:           workItem.Number,
+		PullRequestProviderID:       strings.TrimSpace(facts.MergeSignal.PullRequestProviderID),
+		PullRequestURL:              strings.TrimSpace(facts.MergeSignal.PullRequestURL),
+		BaseBranch:                  strings.TrimSpace(facts.MergeSignal.BaseBranch),
+		HeadBranch:                  strings.TrimSpace(facts.MergeSignal.HeadBranch),
+		MergeCommitSHA:              strings.TrimSpace(facts.MergeSignal.MergeCommitSHA),
+		SourceRef:                   sourceRef,
+		RelatedProviderOperationRef: operationRef,
+		WatermarkDigest:             bodyDigest(string(workItem.WatermarkJSON)),
+		ObservedAt:                  webhook.ReceivedAt.UTC(),
+		MergedAt:                    mergedAt,
+		Status:                      enum.RepositoryMergeSignalStatusMerged,
+	}
+	return signal, true, nil
+}
+
+func onboardingMergeSignalKind(workItem entity.ProviderWorkItemProjection, signal value.ProviderRepositoryMergeSignalSnapshot) (enum.RepositoryMergeSignalKind, bool) {
+	candidates := []string{workItem.WorkItemType, signal.HeadBranch, signal.SourceRef}
+	watermarkFields := map[string]string{}
+	if len(workItem.WatermarkJSON) > 0 {
+		_ = json.Unmarshal(workItem.WatermarkJSON, &watermarkFields)
+	}
+	candidates = append(candidates, watermarkFields["work_type"], watermarkFields["kind"], watermarkFields["source_ref"])
+	for _, candidate := range candidates {
+		normalized := strings.ToLower(strings.TrimSpace(candidate))
+		switch {
+		case strings.Contains(normalized, "bootstrap"):
+			return enum.RepositoryMergeSignalKindBootstrap, true
+		case strings.Contains(normalized, "adoption"):
+			return enum.RepositoryMergeSignalKindAdoption, true
+		}
+	}
+	return "", false
+}
+
+func onboardingMergeSourceRef(workItem entity.ProviderWorkItemProjection, signal value.ProviderRepositoryMergeSignalSnapshot) string {
+	watermarkFields := map[string]string{}
+	if len(workItem.WatermarkJSON) > 0 {
+		_ = json.Unmarshal(workItem.WatermarkJSON, &watermarkFields)
+	}
+	if sourceRef := strings.TrimSpace(watermarkFields["source_ref"]); sourceRef != "" {
+		return sourceRef
+	}
+	if sourceRef := strings.TrimSpace(signal.SourceRef); sourceRef != "" {
+		return sourceRef
+	}
+	return strings.TrimSpace(signal.HeadBranch)
+}
+
+func onboardingMergeOperationRef(kind enum.RepositoryMergeSignalKind, workItem entity.ProviderWorkItemProjection, signal value.ProviderRepositoryMergeSignalSnapshot) string {
+	watermarkFields := map[string]string{}
+	if len(workItem.WatermarkJSON) > 0 {
+		_ = json.Unmarshal(workItem.WatermarkJSON, &watermarkFields)
+	}
+	for _, field := range []string{"provider_operation_ref", "operation_ref"} {
+		if operationRef := strings.TrimSpace(watermarkFields[field]); operationRef != "" {
+			return operationRef
+		}
+	}
+	operationType := enum.ProviderOperationCreateBootstrapPullRequest
+	if kind == enum.RepositoryMergeSignalKindAdoption {
+		operationType = enum.ProviderOperationCreateAdoptionPullRequest
+	}
+	providerWorkItemID := strings.TrimSpace(workItem.ProviderWorkItemID)
+	if providerWorkItemID == "" {
+		providerWorkItemID = strings.TrimSpace(signal.PullRequestURL)
+	}
+	return "provider-hub:" + string(operationType) + ":" + providerWorkItemID
+}
+
+func repositoryMergeSignalKey(providerSlug enum.ProviderSlug, kind enum.RepositoryMergeSignalKind, providerWorkItemID string) string {
+	return "provider:" + string(providerSlug) + ":repository_merge:" + string(kind) + ":" + strings.TrimSpace(providerWorkItemID)
 }
 
 func commentProjectionFromSnapshot(snapshot value.ProviderCommentSnapshot, now time.Time) entity.ProviderCommentProjection {
@@ -314,6 +484,53 @@ func (s *Service) relationshipSyncedOutbox(webhook entity.WebhookEvent, relation
 		return entity.OutboxEvent{}, err
 	}
 	return outboxEventRecord(s.ids.New(), providerEventRelationshipSynced, providerAggregateRelationship, relationship.ID, payload, relationship.CreatedAt), nil
+}
+
+func (s *Service) repositoryMergedOutbox(webhook entity.WebhookEvent, signal entity.RepositoryMergeSignal) (entity.OutboxEvent, error) {
+	eventType := providerEventRepositoryBootstrapMerged
+	if signal.Kind == enum.RepositoryMergeSignalKindAdoption {
+		eventType = providerEventRepositoryAdoptionMerged
+	}
+	projectID := ""
+	if signal.ProjectID != nil {
+		projectID = signal.ProjectID.String()
+	}
+	repositoryID := ""
+	if signal.RepositoryID != nil {
+		repositoryID = signal.RepositoryID.String()
+	}
+	payload, err := marshalProviderEventPayload(value.ProviderEventPayload{
+		ProviderSlug:                string(signal.ProviderSlug),
+		WebhookEventID:              webhook.ID.String(),
+		DeliveryID:                  webhook.DeliveryID,
+		EventName:                   webhook.EventName,
+		RepositoryMergeSignalID:     signal.ID.String(),
+		SignalKey:                   signal.SignalKey,
+		SignalKind:                  string(signal.Kind),
+		ProjectID:                   projectID,
+		RepositoryID:                repositoryID,
+		RepositoryFullName:          signal.RepositoryFullName,
+		ProviderRepositoryID:        signal.ProviderRepositoryID,
+		ProviderWorkItemID:          signal.ProviderWorkItemID,
+		WorkItemProjectionID:        signal.WorkItemProjectionID.String(),
+		Number:                      signal.PullRequestNumber,
+		PullRequestProviderID:       signal.PullRequestProviderID,
+		PullRequestURL:              signal.PullRequestURL,
+		BaseBranch:                  signal.BaseBranch,
+		HeadBranch:                  signal.HeadBranch,
+		MergeCommitSHA:              signal.MergeCommitSHA,
+		SourceRef:                   signal.SourceRef,
+		RelatedProviderOperationRef: signal.RelatedProviderOperationRef,
+		WatermarkDigest:             signal.WatermarkDigest,
+		ObservedAt:                  signal.ObservedAt.Format(time.RFC3339Nano),
+		MergedAt:                    signal.MergedAt.Format(time.RFC3339Nano),
+		Status:                      string(signal.Status),
+		Version:                     signal.Version,
+	})
+	if err != nil {
+		return entity.OutboxEvent{}, err
+	}
+	return outboxEventRecord(s.ids.New(), eventType, providerAggregateRepositoryMergeSignal, signal.ID, payload, signal.MergedAt), nil
 }
 
 func stableUUID(parts ...string) uuid.UUID {

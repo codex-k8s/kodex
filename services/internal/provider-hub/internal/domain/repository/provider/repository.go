@@ -55,6 +55,7 @@ type ProjectionUpdate struct {
 	WorkItem      *entity.ProviderWorkItemProjection
 	Comments      []entity.ProviderCommentProjection
 	Relationships []entity.ProviderRelationship
+	MergeSignal   *entity.RepositoryMergeSignal
 }
 
 // SyncCursorClaim identifies one cursor lease attempt for a reconciliation worker.

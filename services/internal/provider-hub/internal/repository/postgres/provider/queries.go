@@ -24,6 +24,8 @@ var (
 	queryRelationshipUpsert                    = mustLoadQuery("relationship__upsert")
 	queryProviderArtifactSignalGetByIdentity   = mustLoadQuery("artifact_signal__get_by_identity")
 	queryProviderArtifactSignalInsert          = mustLoadQuery("artifact_signal__insert")
+	queryRepositoryMergeSignalGetByKey         = mustLoadQuery("repository_merge_signal__get_by_key")
+	queryRepositoryMergeSignalInsert           = mustLoadQuery("repository_merge_signal__insert")
 	queryReconciliationRequestGetByIdentity    = mustLoadQuery("reconciliation_request__get_by_identity")
 	queryReconciliationRequestInsert           = mustLoadQuery("reconciliation_request__insert")
 	querySyncCursorClaim                       = mustLoadQuery("sync_cursor__claim")

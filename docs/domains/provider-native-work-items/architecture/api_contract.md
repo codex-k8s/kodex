@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-06
 updated_at: 2026-05-26
-related_issues: [281, 282, 711, 719, 725, 729, 737, 761, 770, 781, 794, 818]
+related_issues: [281, 282, 711, 719, 725, 729, 737, 761, 770, 781, 794, 818, 840]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -154,7 +154,7 @@ approvals:
 
 Когда bootstrap запускается через `project-catalog`, именно `project-catalog` владеет project/repository binding, проектной `base_branch` policy, связью prepared files с проверенной проекцией `services.yaml`, watermark и безопасным `operation_policy_context`. `provider-hub` остаётся владельцем provider-native записи, журнала `ProviderOperation`, локальной PR/MR-проекции и событий `provider.*`; он не принимает решение о проектной политике и не превращается в генератор шаблонов репозитория.
 
-После merge bootstrap PR/MR `provider-hub` и webhook/reconciliation контур остаются владельцами provider-native факта merge и provider projection. `project-catalog` не читает GitHub/GitLab напрямую: внутренний контур передаёт в `project-catalog ImportBootstrapServicesPolicy` только проверенный сигнал с безопасным provider target, source ref, commit, `content_hash`, watermark и нормализованным `services.yaml`. Provider-native raw payload, webhook body и полный provider response не переходят в `project-catalog`.
+После merge bootstrap PR/MR `provider-hub` и webhook/reconciliation контур остаются владельцами provider-native факта merge и provider projection. Для GitHub `pull_request closed + merged` фиксируется отдельный safe merge signal с kind `bootstrap` или `adoption`, provider slug, project/repository refs, PR target ref/number/id/url, base/head branch, merge commit sha, source ref, related provider operation ref, watermark digest, timestamps, status и version. Повтор того же сигнала идемпотентен, а повтор с тем же signal key и другим commit/source ref считается конфликтом. `project-catalog` не читает GitHub/GitLab напрямую: внутренний контур передаёт в `project-catalog ImportBootstrapServicesPolicy` только проверенный сигнал с безопасным provider target, source ref, commit, `content_hash`, watermark и нормализованным `services.yaml`. Provider-native raw payload, webhook body и полный provider response не переходят в `project-catalog`.
 
 `CreateAdoptionPullRequest` является provider-side командой модели C для существующего репозитория: проектный или агентный контур заранее выполняет scan, готовит отчёт, принимает проектное решение и передаёт в `provider-hub` только готовые файлы, refs, title/body и watermark. `provider-hub` проверяет существование `base_branch`, создаёт или обновляет adoption branch и reviewable `PR/MR`, но не требует пустого дерева base branch, не сканирует репозиторий, не генерирует `services.yaml`, не выбирает шаблон и не хранит содержимое файлов в БД, событиях или логах.
 
@@ -200,8 +200,10 @@ approvals:
 | `provider.repository.created` | Репозиторий создан у провайдера, начальный default branch известен. |
 | `provider.repository.bootstrap_required` | Provider-состояние показывает, что репозиторий пустой и требует решения о первичной инициализации. |
 | `provider.repository.adoption_required` | Provider-состояние показывает, что существующий репозиторий требует агентного сканирования, отчёта и adoption через reviewable PR. |
-| `provider.repository.bootstrap_completed` | Bootstrap пустого репозитория завершён. |
+| `provider.repository.bootstrap_completed` | Provider-side bootstrap branch/PR создан или обновлён. |
 | `provider.repository.adoption_pr_created` | Создан reviewable PR для adoption. |
+| `provider.repository.bootstrap_merged` | GitHub bootstrap PR принят владельцем через merge; payload содержит только безопасные refs, digest и timestamps. |
+| `provider.repository.adoption_merged` | GitHub adoption PR принят владельцем через merge; payload содержит только безопасные refs, digest и timestamps. |
 
 ## Совместимость
 

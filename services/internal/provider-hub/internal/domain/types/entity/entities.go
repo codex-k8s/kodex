@@ -158,6 +158,32 @@ type ProviderArtifactSignal struct {
 	CreatedAt         time.Time
 }
 
+// RepositoryMergeSignal stores a safe provider-side fact that an onboarding PR was merged.
+type RepositoryMergeSignal struct {
+	Base
+	SignalKey                   string
+	Kind                        enum.RepositoryMergeSignalKind
+	ProviderSlug                enum.ProviderSlug
+	ProjectID                   *uuid.UUID
+	RepositoryID                *uuid.UUID
+	RepositoryFullName          string
+	ProviderRepositoryID        string
+	WorkItemProjectionID        uuid.UUID
+	ProviderWorkItemID          string
+	PullRequestNumber           int64
+	PullRequestProviderID       string
+	PullRequestURL              string
+	BaseBranch                  string
+	HeadBranch                  string
+	MergeCommitSHA              string
+	SourceRef                   string
+	RelatedProviderOperationRef string
+	WatermarkDigest             string
+	ObservedAt                  time.Time
+	MergedAt                    time.Time
+	Status                      enum.RepositoryMergeSignalStatus
+}
+
 // ProviderLimitSnapshot stores one observed provider rate or quota snapshot.
 type ProviderLimitSnapshot struct {
 	ID                uuid.UUID
