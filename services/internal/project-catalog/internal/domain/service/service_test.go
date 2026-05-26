@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"testing"
@@ -651,7 +653,7 @@ func TestCreateRepositoryBootstrapPullRequestDelegatesProviderWrite(t *testing.T
 		Title:           "Bootstrap repository",
 		Files: []RepositoryBootstrapFile{{
 			Path:    "services.yaml",
-			Content: "services:\n",
+			Content: bootstrapServicesPolicyFileContent,
 		}},
 		WatermarkJSON:     []byte(`{"kind":"provider_pr","managed_by":"kodex","work_type":"repository_bootstrap","source_ref":"services.yaml"}`),
 		ServicesPolicy:    bootstrapServicesPolicy(),
@@ -716,6 +718,68 @@ func TestCreateRepositoryBootstrapPullRequestValidatesProjectPolicyLink(t *testi
 	}
 	if provider.calls != 0 {
 		t.Fatalf("provider calls = %d, want validation to stop before provider", provider.calls)
+	}
+}
+
+func TestCreateRepositoryBootstrapPullRequestRejectsPolicyContentDrift(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = entity.RepositoryBinding{
+		Base:          entity.Base{ID: repositoryID, Version: 1},
+		ProjectID:     projectID,
+		Provider:      enum.RepositoryProviderGitHub,
+		ProviderOwner: "codex-k8s",
+		ProviderName:  "kodex",
+		DefaultBranch: "main",
+		Status:        enum.RepositoryStatusPending,
+	}
+
+	for _, tc := range []struct {
+		name     string
+		content  string
+		policy   RepositoryBootstrapServicesPolicy
+		provider *spyBootstrapProvider
+	}{
+		{
+			name:     "hash mismatch",
+			content:  "spec:\n  services:\n    - key: api\n      rootPath: services/other\n      kind: backend\n",
+			policy:   bootstrapServicesPolicy(),
+			provider: &spyBootstrapProvider{},
+		},
+		{
+			name:    "payload mismatch",
+			content: "spec:\n  services:\n    - key: api\n      rootPath: services/other\n      kind: backend\n",
+			policy: bootstrapServicesPolicyForContent(
+				"spec:\n  services:\n    - key: api\n      rootPath: services/other\n      kind: backend\n",
+				[]byte(bootstrapServicesPolicyPayload),
+			),
+			provider: &spyBootstrapProvider{},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			svc := NewWithConfig(store, fixedClock{}, &sequenceIDs{}, Config{BootstrapProvider: tc.provider})
+			_, err := svc.CreateRepositoryBootstrapPullRequest(ctx, CreateRepositoryBootstrapPullRequestInput{
+				ProjectID:         projectID,
+				RepositoryID:      repositoryID,
+				BaseBranch:        "main",
+				BootstrapBranch:   "kodex/bootstrap",
+				CommitMessage:     "Bootstrap repository",
+				Title:             "Bootstrap repository",
+				Files:             []RepositoryBootstrapFile{{Path: "services.yaml", Content: tc.content}},
+				WatermarkJSON:     []byte(`{"kind":"provider_pr","managed_by":"kodex","work_type":"repository_bootstrap","source_ref":"services.yaml"}`),
+				ServicesPolicy:    tc.policy,
+				ExternalAccountID: uuid.New(),
+				Meta:              commandMeta(uuid.New()),
+			})
+			if !errors.Is(err, errs.ErrInvalidArgument) {
+				t.Fatalf("CreateRepositoryBootstrapPullRequest() err = %v, want invalid argument", err)
+			}
+			if tc.provider.calls != 0 {
+				t.Fatalf("provider calls = %d, want validation to stop before provider", tc.provider.calls)
+			}
+		})
 	}
 }
 
@@ -867,12 +931,25 @@ func servicesPolicyPayload(key string, rootPath string, kind string) string {
 	return `{"spec":{"services":[{"key":"` + key + `","rootPath":"` + rootPath + `","kind":"` + kind + `"}]}}`
 }
 
+const bootstrapServicesPolicyFileContent = "spec:\n  services:\n    - key: api\n      rootPath: services/api\n      kind: backend\n"
+
+const bootstrapServicesPolicyPayload = `{"spec":{"services":[{"key":"api","rootPath":"services/api","kind":"backend"}]}}`
+
 func bootstrapServicesPolicy() RepositoryBootstrapServicesPolicy {
+	return bootstrapServicesPolicyForContent(bootstrapServicesPolicyFileContent, []byte(bootstrapServicesPolicyPayload))
+}
+
+func bootstrapServicesPolicyForContent(content string, payload []byte) RepositoryBootstrapServicesPolicy {
 	return RepositoryBootstrapServicesPolicy{
 		SourcePath:       "services.yaml",
-		ContentHash:      "sha256:policy",
-		ValidatedPayload: []byte(servicesPolicyPayload("api", "services/api", "backend")),
+		ContentHash:      bootstrapContentHash(content),
+		ValidatedPayload: payload,
 	}
+}
+
+func bootstrapContentHash(content string) string {
+	sum := sha256.Sum256([]byte(content))
+	return "sha256:" + hex.EncodeToString(sum[:])
 }
 
 type memoryRepository struct {
