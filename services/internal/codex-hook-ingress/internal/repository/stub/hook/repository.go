@@ -31,6 +31,21 @@ func (r *Repository) Ready() bool {
 	return r != nil && r.events != nil
 }
 
+// FindAcceptedEvent returns an existing event idempotency record without changing state.
+func (r *Repository) FindAcceptedEvent(_ context.Context, eventID uuid.UUID) (entity.AcceptedEvent, bool, error) {
+	if r == nil {
+		return entity.AcceptedEvent{}, false, nil
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	existing, ok := r.events[eventID]
+	if !ok {
+		return entity.AcceptedEvent{}, false, nil
+	}
+	existing.RouteDiagnostics = cloneRouteDiagnostics(existing.RouteDiagnostics)
+	return existing, true, nil
+}
+
 // RegisterAcceptedEvent atomically stores or returns the existing event idempotency record.
 func (r *Repository) RegisterAcceptedEvent(_ context.Context, event entity.AcceptedEvent) (entity.AcceptedEvent, bool, error) {
 	if r == nil {

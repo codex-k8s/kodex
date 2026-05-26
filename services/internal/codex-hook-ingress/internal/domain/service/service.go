@@ -109,6 +109,26 @@ func (s *Service) SubmitHookEvent(ctx context.Context, input SubmitHookEventInpu
 		s.recordRejectedOpsDiagnostic(ctx, envelope, sanitizerDecision.EnvelopeBytes, startedAt, hookerrs.ErrInvalidBinding)
 		return SubmitHookEventResult{}, hookerrs.ErrInvalidBinding
 	}
+	result := s.handlerResult(envelope)
+	record := entity.AcceptedEvent{
+		EventID:        envelope.EventID,
+		PayloadDigest:  envelope.PayloadDigest,
+		HookEventName:  envelope.HookEventName,
+		CorrelationID:  envelope.CorrelationID,
+		RetentionClass: envelope.RetentionClass,
+		Result:         result,
+		RecordedAt:     s.clock.Now(),
+	}
+	existing, exists, err := s.repository.FindAcceptedEvent(ctx, envelope.EventID)
+	if err != nil {
+		return SubmitHookEventResult{}, fmt.Errorf("%w: read hook idempotency record: %v", hookerrs.ErrDependencyUnavailable, err)
+	}
+	if exists {
+		if existing.PayloadDigest != envelope.PayloadDigest {
+			return SubmitHookEventResult{}, hookerrs.ErrDuplicateConflict
+		}
+		return s.handleDuplicateAcceptedEvent(ctx, envelope, existing, sanitizerDecision, startedAt)
+	}
 	rateDecision, err := s.rateLimiter.Allow(ctx, RateLimitCheck{
 		SourceRef:      envelope.SourceContext.SourceRef,
 		RunID:          envelope.RunContext.RunID.String(),
@@ -123,16 +143,6 @@ func (s *Service) SubmitHookEvent(ctx context.Context, input SubmitHookEventInpu
 		s.recordDroppedOpsDiagnostic(ctx, envelope, sanitizerDecision.EnvelopeBytes, startedAt, hookerrs.ErrRateLimited)
 		return SubmitHookEventResult{}, hookerrs.ErrRateLimited
 	}
-	result := s.handlerResult(envelope)
-	record := entity.AcceptedEvent{
-		EventID:        envelope.EventID,
-		PayloadDigest:  envelope.PayloadDigest,
-		HookEventName:  envelope.HookEventName,
-		CorrelationID:  envelope.CorrelationID,
-		RetentionClass: envelope.RetentionClass,
-		Result:         result,
-		RecordedAt:     s.clock.Now(),
-	}
 	accepted, duplicate, err := s.repository.RegisterAcceptedEvent(ctx, record)
 	if err != nil {
 		if errors.Is(err, hookerrs.ErrDuplicateConflict) {
@@ -141,31 +151,41 @@ func (s *Service) SubmitHookEvent(ctx context.Context, input SubmitHookEventInpu
 		return SubmitHookEventResult{}, fmt.Errorf("%w: store hook idempotency record: %v", hookerrs.ErrDependencyUnavailable, err)
 	}
 	if duplicate {
-		if !accepted.DeliveryCompleted {
-			reservation, err := s.admitOpsFeed(ctx, envelope, sanitizerDecision, startedAt)
-			if err != nil {
-				return SubmitHookEventResult{}, err
-			}
-			retried, err := s.dispatchAndRecordRoutes(ctx, envelope, accepted.Result, reservation, sanitizerDecision, startedAt)
-			if err != nil {
-				return SubmitHookEventResult{}, err
-			}
-			retried.Duplicate = true
-			return retried, nil
-		}
-		routeDiagnostics := cloneRouteDeliveryResults(accepted.RouteDiagnostics)
-		return SubmitHookEventResult{
-			HandlerResult:    accepted.Result,
-			Duplicate:        true,
-			RoutesAccepted:   countDeliveredRoutes(routeDiagnostics),
-			RouteDiagnostics: routeDiagnostics,
-		}, nil
+		return s.handleDuplicateAcceptedEvent(ctx, envelope, accepted, sanitizerDecision, startedAt)
 	}
 	reservation, err := s.admitOpsFeed(ctx, envelope, sanitizerDecision, startedAt)
 	if err != nil {
 		return SubmitHookEventResult{}, err
 	}
 	return s.dispatchAndRecordRoutes(ctx, envelope, result, reservation, sanitizerDecision, startedAt)
+}
+
+func (s *Service) handleDuplicateAcceptedEvent(
+	ctx context.Context,
+	envelope value.HookEnvelope,
+	accepted entity.AcceptedEvent,
+	sanitizerDecision SanitizerDecision,
+	startedAt time.Time,
+) (SubmitHookEventResult, error) {
+	if !accepted.DeliveryCompleted {
+		reservation, err := s.admitOpsFeed(ctx, envelope, sanitizerDecision, startedAt)
+		if err != nil {
+			return SubmitHookEventResult{}, err
+		}
+		retried, err := s.dispatchAndRecordRoutes(ctx, envelope, accepted.Result, reservation, sanitizerDecision, startedAt)
+		if err != nil {
+			return SubmitHookEventResult{}, err
+		}
+		retried.Duplicate = true
+		return retried, nil
+	}
+	routeDiagnostics := cloneRouteDeliveryResults(accepted.RouteDiagnostics)
+	return SubmitHookEventResult{
+		HandlerResult:    accepted.Result,
+		Duplicate:        true,
+		RoutesAccepted:   countDeliveredRoutes(routeDiagnostics),
+		RouteDiagnostics: routeDiagnostics,
+	}, nil
 }
 
 func (s *Service) dispatchAndRecordRoutes(

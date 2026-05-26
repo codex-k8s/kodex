@@ -93,6 +93,9 @@ func (s *Service) recordOpsDiagnostic(
 	err error,
 ) {
 	entry := s.buildOpsFeedEntry(envelope, envelopeBytes, nil, status, errorReasonCode(err), startedAt)
+	if status == hookenum.OpsFeedStatusRejected {
+		entry.SafeSummary = ""
+	}
 	_ = s.opsFeed.RecordDiagnostic(ctx, entry)
 }
 

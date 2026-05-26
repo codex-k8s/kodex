@@ -33,6 +33,7 @@ type Repository struct {
 	capacity  int
 	retention time.Duration
 	entries   []value.OpsFeedEntry
+	reserved  map[uuid.UUID]struct{}
 	metrics   value.OpsDiagnosticsSnapshot
 }
 
@@ -48,6 +49,7 @@ func NewRepository(cfg Config) *Repository {
 		capacity:  cfg.Capacity,
 		retention: cfg.Retention,
 		entries:   make([]value.OpsFeedEntry, 0, cfg.Capacity),
+		reserved:  make(map[uuid.UUID]struct{}),
 		metrics: value.OpsDiagnosticsSnapshot{
 			FeedCapacity: cfg.Capacity,
 		},
@@ -56,7 +58,7 @@ func NewRepository(cfg Config) *Repository {
 
 // Ready reports whether the bounded feed is initialized.
 func (r *Repository) Ready() bool {
-	return r != nil && r.capacity > 0 && r.retention > 0
+	return r != nil && r.capacity > 0 && r.retention > 0 && r.reserved != nil
 }
 
 // Admit reserves a bounded feed slot before downstream dispatch.
@@ -74,6 +76,7 @@ func (r *Repository) Admit(_ context.Context, entry value.OpsFeedEntry) (value.O
 		return value.OpsFeedReservation{}, hookerrs.ErrBackpressure
 	}
 	r.entries = append(r.entries, cloneOpsFeedEntry(entry))
+	r.reserved[entry.EntryID] = struct{}{}
 	r.metrics.FeedDepth = len(r.entries)
 	return value.OpsFeedReservation{EntryID: entry.EntryID}, nil
 }
@@ -91,6 +94,7 @@ func (r *Repository) Complete(_ context.Context, reservation value.OpsFeedReserv
 	for idx := range r.entries {
 		if r.entries[idx].EntryID == reservation.EntryID {
 			r.entries[idx] = cloneOpsFeedEntry(entry)
+			delete(r.reserved, reservation.EntryID)
 			r.applyMetricsLocked(entry)
 			r.metrics.FeedDepth = len(r.entries)
 			return nil
@@ -110,12 +114,13 @@ func (r *Repository) RecordDiagnostic(_ context.Context, entry value.OpsFeedEntr
 	entry = r.normalizeEntry(entry)
 	r.purgeExpiredLocked(entry.ObservedAt)
 	if len(r.entries) >= r.capacity {
-		copy(r.entries[0:], r.entries[1:])
-		r.entries[len(r.entries)-1] = cloneOpsFeedEntry(entry)
 		r.metrics.Dropped++
-	} else {
-		r.entries = append(r.entries, cloneOpsFeedEntry(entry))
+		if !r.dropOldestCompletedLocked() {
+			r.metrics.FeedDepth = len(r.entries)
+			return nil
+		}
 	}
+	r.entries = append(r.entries, cloneOpsFeedEntry(entry))
 	r.applyMetricsLocked(entry)
 	r.metrics.FeedDepth = len(r.entries)
 	return nil
@@ -174,7 +179,8 @@ func (r *Repository) purgeExpiredLocked(now time.Time) {
 	}
 	kept := r.entries[:0]
 	for _, entry := range r.entries {
-		if entry.ExpiresAt.IsZero() || entry.ExpiresAt.After(now) {
+		_, inFlight := r.reserved[entry.EntryID]
+		if inFlight || entry.ExpiresAt.IsZero() || entry.ExpiresAt.After(now) {
 			kept = append(kept, entry)
 		}
 	}
@@ -183,6 +189,20 @@ func (r *Repository) purgeExpiredLocked(now time.Time) {
 	}
 	r.entries = kept
 	r.metrics.FeedDepth = len(r.entries)
+}
+
+func (r *Repository) dropOldestCompletedLocked() bool {
+	for idx, entry := range r.entries {
+		if _, inFlight := r.reserved[entry.EntryID]; inFlight {
+			continue
+		}
+		copy(r.entries[idx:], r.entries[idx+1:])
+		last := len(r.entries) - 1
+		r.entries[last] = value.OpsFeedEntry{}
+		r.entries = r.entries[:last]
+		return true
+	}
+	return false
 }
 
 func (r *Repository) applyMetricsLocked(entry value.OpsFeedEntry) {
