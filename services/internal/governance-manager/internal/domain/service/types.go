@@ -1,8 +1,160 @@
 package service
 
-import "github.com/codex-k8s/kodex/services/internal/governance-manager/internal/domain/types/enum"
+import (
+	"time"
 
-// BacklogOperationInput identifies a contract operation that reached the skeleton.
+	"github.com/google/uuid"
+
+	"github.com/codex-k8s/kodex/services/internal/governance-manager/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/governance-manager/internal/domain/types/enum"
+	"github.com/codex-k8s/kodex/services/internal/governance-manager/internal/domain/types/query"
+	"github.com/codex-k8s/kodex/services/internal/governance-manager/internal/domain/types/value"
+)
+
+// BacklogOperationInput identifies a contract operation that is outside the current slice.
 type BacklogOperationInput struct {
 	Operation enum.Operation
+}
+
+// CommandMeta carries idempotency and audit metadata for mutating use-cases.
+type CommandMeta struct {
+	CommandID       *uuid.UUID
+	IdempotencyKey  string
+	ExpectedVersion *int64
+	Actor           value.Actor
+	Reason          string
+	RequestID       string
+}
+
+// Clock supplies deterministic time to use-cases.
+type Clock interface {
+	Now() time.Time
+}
+
+// IDGenerator supplies deterministic identifiers to use-cases.
+type IDGenerator interface {
+	New() uuid.UUID
+}
+
+type CreateRiskProfileInput struct {
+	Scope       value.ExternalRef
+	Slug        string
+	DisplayName []value.LocalizedText
+	Description []value.LocalizedText
+	Meta        CommandMeta
+}
+
+type CreateRiskProfileVersionInput struct {
+	RiskProfileID uuid.UUID
+	Rules         []entity.RiskRule
+	GatePolicies  []entity.GatePolicy
+	ContentDigest string
+	Meta          CommandMeta
+}
+
+type ActivateRiskProfileVersionInput struct {
+	RiskProfileID  uuid.UUID
+	ProfileVersion int64
+	Meta           CommandMeta
+}
+
+type ArchiveRiskProfileInput struct {
+	RiskProfileID uuid.UUID
+	Meta          CommandMeta
+}
+
+type EvaluateRiskInput struct {
+	Target          value.ExternalRef
+	ProjectContext  value.ProjectContextRef
+	ProviderContext []byte
+	AgentContext    []byte
+	RuntimeContext  []byte
+	EvidenceRefs    []value.EvidenceRef
+	RiskProfileRef  string
+	Meta            CommandMeta
+}
+
+type RecordReviewSignalInput struct {
+	RiskAssessmentID *uuid.UUID
+	Target           value.ExternalRef
+	RoleKind         enum.ReviewRoleKind
+	AuthorRef        string
+	Outcome          enum.ReviewSignalOutcome
+	Severity         enum.SignalSeverity
+	Confidence       enum.Confidence
+	EvidenceRefs     []value.EvidenceRef
+	Summary          string
+	Meta             CommandMeta
+}
+
+type RequestGateInput struct {
+	RiskAssessmentID       *uuid.UUID
+	GatePolicyID           *uuid.UUID
+	Target                 value.ExternalRef
+	InteractionDeliveryRef value.InteractionDeliveryRef
+	EvidenceRefs           []value.EvidenceRef
+	EvidenceSummary        string
+	Meta                   CommandMeta
+}
+
+type SubmitGateDecisionInput struct {
+	GateRequestID          uuid.UUID
+	DecisionActorRef       string
+	DecisionPolicyRef      string
+	Outcome                enum.GateOutcome
+	Reason                 string
+	ConditionsSummary      string
+	InteractionDeliveryRef value.InteractionDeliveryRef
+	SourceRef              string
+	Meta                   CommandMeta
+}
+
+type BuildReleaseDecisionPackageInput struct {
+	ReleaseCandidateRef     string
+	ProjectContext          value.ProjectContextRef
+	RepositoryRefs          []string
+	RiskAssessmentID        *uuid.UUID
+	ProviderRefs            []byte
+	RuntimeRefs             []byte
+	AgentContext            []byte
+	ReviewSignalIDs         []uuid.UUID
+	EvidenceRefs            []value.EvidenceRef
+	KnownLimitationsSummary string
+	Meta                    CommandMeta
+}
+
+type ListRiskProfilesInput struct {
+	Filter query.RiskProfileFilter
+}
+
+type ListRiskRulesInput struct {
+	Filter query.RuleFilter
+}
+
+type ListGatePoliciesInput struct {
+	Filter query.GatePolicyFilter
+}
+
+type ListRiskAssessmentsInput struct {
+	Filter query.RiskAssessmentFilter
+}
+
+type ListRiskFactorsInput struct {
+	Filter query.RiskFactorFilter
+}
+
+type ListReviewSignalsInput struct {
+	Filter query.ReviewSignalFilter
+}
+
+type ListGateRequestsInput struct {
+	Filter query.GateRequestFilter
+}
+
+type ListGateDecisionsInput struct {
+	Filter query.GateDecisionFilter
+}
+
+type ListReleaseDecisionPackagesInput struct {
+	Filter query.ReleaseDecisionPackageFilter
 }

@@ -20,11 +20,16 @@
 - Результат среза: gRPC/AsyncAPI контракты `governance-manager`, generated Go contracts событий и protobuf, действия доступа и обновлённая карта поставки.
 - Сервисный процесс, handlers, БД, миграции, evaluator, UI/gateway и межсервисные интеграции не входят в GOV-1.
 
-## Текущий сервисный срез
+## Завершённый сервисный срез
 
 - Issue: #790.
 - Результат среза: runnable skeleton `services/internal/governance-manager` с process/config, health/readiness/metrics, gRPC registration, доменным backlog-use-case и repository stub.
-- PostgreSQL storage, миграции, rule evaluator, outbox publisher, access checks, UI/gateway и интеграции с соседними сервисами остаются следующими срезами.
+
+## Текущий storage-срез
+
+- Issue: #802.
+- Результат среза: PostgreSQL-модель MVP-сущностей, real repository, service-local outbox и gRPC handlers для поддержанных storage-операций `governance-manager`.
+- Полный rule evaluator, release decision engine, access checks, UI/gateway, deploy manifests и интеграции с соседними сервисами остаются следующими срезами.
 
 ## Ближайшие зависимости
 

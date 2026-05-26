@@ -42,7 +42,7 @@ approvals:
 | GOV-0 | #322 | Доменная документация, решение об отдельном `governance-manager`, сквозные границы, README и карта Issue готовы. |
 | GOV-1 | #769 | gRPC и AsyncAPI контракты `governance-manager`, события `governance.*`, generated Go contracts и действия доступа готовы; сервисная реализация не входит в срез. |
 | GOV-2 | #790 | Сервисный каркас: process, env, health, readiness, metrics, gRPC registration, repository stub и безопасные backlog/`Unimplemented` handlers. |
-| GOV-3 | не назначено | PostgreSQL-модель risk profiles, rules, assessments, factors, command result и outbox готова. |
+| GOV-3 | #802 | PostgreSQL-модель MVP-сущностей, repository слой, service-local outbox и gRPC handlers для поддержанных storage-операций готовы. |
 | GOV-4 | не назначено | Risk classifier и policy evaluator работают по project/provider summaries, changed files, service/path/API/DB/secret/release/runtime factors. |
 | GOV-5 | не назначено | Review signals и gate lifecycle готовы: record signals, request gate, submit decision, evidence package, события и audit. |
 | GOV-6 | не назначено | Release decision package, release decision и release safety-loop state готовы без UI/gateway. |
@@ -68,9 +68,10 @@ approvals:
 | Go-контракт событий `libs/go/platformevents/governance/events.gen.go` | Сгенерирован из AsyncAPI; вручную не правится. | GOV-1 |
 | Access actions | Добавлены в общий каталог для policy, risk, signal, gate и release операций. | GOV-1 |
 | Сервисный процесс, env, health/readiness/metrics и gRPC registration | Готовы как runnable skeleton без deploy-manifests. | GOV-2 |
-| gRPC handlers | Подключены к доменному backlog-use-case и безопасно возвращают `Unimplemented`, пока storage/evaluator не готовы. | GOV-2 |
-| Repository interfaces/stubs и MVP storage shapes | Готовы как неперсистентная граница для policy snapshot, evaluation record и decision audit refs; PostgreSQL-реализация и миграции не входят. | GOV-2 |
-| Storage, migrations, evaluator и outbox publisher | Не реализованы. | GOV-3+ |
+| gRPC handlers | Поддержанные storage-операции используют доменный сервис и repository; будущие evaluator/release/safety-loop операции явно возвращают `Unimplemented`. | GOV-3 |
+| Repository interfaces/stubs и MVP storage shapes | Stub заменён PostgreSQL repository для risk profile/version, assessment/factors, review signals, gate request/decision, release decision package, command result и outbox. | GOV-3 |
+| Storage, migrations и outbox publisher | MVP-миграции и service-local outbox готовы; event-log dispatch подключается через shared outbox runtime. | GOV-3 |
+| Rule evaluator, release decision engine и safety-loop | Не реализованы. | GOV-4+ |
 | Интеграции с `agent-manager`, `provider-hub`, `interaction-hub`, `runtime-manager` и `project-catalog` | Не реализованы; в GOV-1 зафиксированы typed refs и границы. | GOV-7 |
 
 ## Синхронизация с соседними доменами

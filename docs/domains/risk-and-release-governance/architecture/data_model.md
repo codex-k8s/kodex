@@ -328,4 +328,4 @@ approvals:
 
 - request_id: `owner-2026-05-22-risk-governance-kickoff`
 - Решение: pending
-- Комментарий: модель данных описывает целевой контур `governance-manager` до создания миграций, storage и сервисной реализации.
+- Комментарий: модель данных описывает целевой контур `governance-manager`; MVP-миграции и storage-основа покрывают только persistency-срез без полного evaluator и release engine.

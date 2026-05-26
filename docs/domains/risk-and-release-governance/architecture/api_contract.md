@@ -138,8 +138,9 @@ MCP-инструменты не должны принимать свободны
 | gRPC proto `GovernanceManagerService` | Подготовлен как контрактный срез `GOV-1`; покрывает risk profiles/rules, assessments/factors, review signals, gates, release packages/decisions, blocking signals и safety-loop. |
 | AsyncAPI `governance.*` | Подготовлен как контрактный срез `GOV-1`; Go-константы событий сгенерированы в `libs/go/platformevents/governance`. |
 | Access actions | Добавлены в общий каталог для policy, risk, signal, gate и release операций. |
-| Сервисный процесс `governance-manager` | Каркас подготовлен: process, env, health/readiness/metrics, gRPC registration и безопасные backlog-handlers. |
-| Storage, migrations, evaluator, outbox publisher | Не реализованы; остаются следующими срезами после runnable skeleton. |
+| Сервисный процесс `governance-manager` | Каркас подготовлен: process, env, health/readiness/metrics, gRPC registration и bounded handlers. |
+| Storage, migrations и outbox publisher | MVP-основа готова: PostgreSQL repository, service-local outbox и handlers для поддержанных storage-операций. |
+| Rule evaluator, release engine и safety-loop | Не реализованы; остаются следующими срезами после persistency-основы. |
 | Интеграции с project/agent/provider/runtime/interaction | Зафиксированы в refs и границах контрактов; реализация идёт отдельными срезами. |
 
 ## Совместимость

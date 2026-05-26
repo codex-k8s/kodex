@@ -32,29 +32,29 @@ func TestNewServerRequiresService(t *testing.T) {
 	_ = NewServer(nil)
 }
 
-func TestEvaluateRiskRoutesToDomainBacklog(t *testing.T) {
+func TestReevaluateRiskRoutesToDomainBacklog(t *testing.T) {
 	t.Parallel()
 
 	service := &fakeBacklogService{}
-	_, err := NewServer(service).EvaluateRisk(context.Background(), &governancev1.EvaluateRiskRequest{})
+	_, err := NewServer(service).ReevaluateRisk(context.Background(), &governancev1.ReevaluateRiskRequest{})
 	if !errors.Is(err, errs.ErrNotImplemented) {
-		t.Fatalf("EvaluateRisk() error = %v, want ErrNotImplemented", err)
+		t.Fatalf("ReevaluateRisk() error = %v, want ErrNotImplemented", err)
 	}
-	if service.operation != enum.OperationEvaluateRisk {
-		t.Fatalf("operation = %q, want %q", service.operation, enum.OperationEvaluateRisk)
+	if service.operation != enum.OperationReevaluateRisk {
+		t.Fatalf("operation = %q, want %q", service.operation, enum.OperationReevaluateRisk)
 	}
 }
 
-func TestSubmitGateDecisionRoutesToDomainBacklog(t *testing.T) {
+func TestRequestReleaseDecisionRoutesToDomainBacklog(t *testing.T) {
 	t.Parallel()
 
 	service := &fakeBacklogService{}
-	_, err := NewServer(service).SubmitGateDecision(context.Background(), &governancev1.SubmitGateDecisionRequest{})
+	_, err := NewServer(service).RequestReleaseDecision(context.Background(), &governancev1.RequestReleaseDecisionRequest{})
 	if !errors.Is(err, errs.ErrNotImplemented) {
-		t.Fatalf("SubmitGateDecision() error = %v, want ErrNotImplemented", err)
+		t.Fatalf("RequestReleaseDecision() error = %v, want ErrNotImplemented", err)
 	}
-	if service.operation != enum.OperationSubmitGateDecision {
-		t.Fatalf("operation = %q, want %q", service.operation, enum.OperationSubmitGateDecision)
+	if service.operation != enum.OperationRequestReleaseDecision {
+		t.Fatalf("operation = %q, want %q", service.operation, enum.OperationRequestReleaseDecision)
 	}
 }
 
@@ -70,7 +70,38 @@ func TestUnaryErrorInterceptorMapsBacklogToUnimplemented(t *testing.T) {
 	}
 }
 
+func TestUnaryErrorInterceptorMapsRepositoryDomainErrors(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		err  error
+		want codes.Code
+	}{
+		{name: "not found", err: errs.ErrNotFound, want: codes.NotFound},
+		{name: "already exists", err: errs.ErrAlreadyExists, want: codes.AlreadyExists},
+		{name: "conflict", err: errs.ErrConflict, want: codes.Aborted},
+		{name: "precondition failed", err: errs.ErrPreconditionFailed, want: codes.FailedPrecondition},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			interceptor := UnaryErrorInterceptor(nil)
+			_, err := interceptor(context.Background(), nil, &grpcruntime.UnaryServerInfo{FullMethod: "/test"}, func(context.Context, any) (any, error) {
+				return nil, tt.err
+			})
+			if status.Code(err) != tt.want {
+				t.Fatalf("status code = %s, want %s", status.Code(err), tt.want)
+			}
+		})
+	}
+}
+
 type fakeBacklogService struct {
+	governanceService
 	operation enum.Operation
 }
 

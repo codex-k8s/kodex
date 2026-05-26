@@ -39,6 +39,19 @@ func TestConfigValidateRejectsInvalidGRPCLimit(t *testing.T) {
 
 func validConfig() Config {
 	return Config{
+		DatabaseDSN:              "postgres://kodex:kodex@localhost:5432/kodex?sslmode=disable",
+		DatabaseMaxConns:         8,
+		DatabaseMinConns:         1,
+		DatabaseMaxConnLifetime:  time.Hour,
+		DatabaseMaxConnIdleTime:  15 * time.Minute,
+		DatabaseHealthPeriod:     30 * time.Second,
+		DatabasePingTimeout:      5 * time.Second,
+		DatabaseRetryAttempts:    6,
+		DatabaseRetryInitial:     500 * time.Millisecond,
+		DatabaseRetryMax:         5 * time.Second,
+		DatabaseRetryJitterRatio: 0.2,
+		EventLogDatabaseMaxConns: 4,
+		EventLogDatabaseMinConns: 0,
 		HTTPAddr:                 ":8080",
 		GRPCAddr:                 ":9090",
 		GRPCAuthRequired:         true,
@@ -51,5 +64,16 @@ func validConfig() Config {
 		GRPCKeepaliveTime:        2 * time.Minute,
 		GRPCKeepaliveTimeout:     20 * time.Second,
 		GRPCUnaryTimeout:         30 * time.Second,
+		OutboxDispatchEnabled:    false,
+		OutboxPublisherKind:      "disabled",
+		OutboxEventLogSource:     "governance-manager",
+		OutboxBatchSize:          100,
+		OutboxPollInterval:       time.Second,
+		OutboxLockTTL:            30 * time.Second,
+		OutboxPublishTimeout:     10 * time.Second,
+		OutboxLeaseSafetyMargin:  5 * time.Second,
+		OutboxRetryInitialDelay:  time.Second,
+		OutboxRetryMaxDelay:      time.Minute,
+		OutboxFailureLimit:       512,
 	}
 }
