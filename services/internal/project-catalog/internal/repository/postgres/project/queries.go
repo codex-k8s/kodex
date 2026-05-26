@@ -52,6 +52,7 @@ var (
 	queryServiceDescriptorMarkProjectStale            = mustLoadQuery("service_descriptor__mark_project_stale")
 	queryServicesPolicyGetActive                      = mustLoadQuery("services_policy__get_active")
 	queryServicesPolicyGetByID                        = mustLoadQuery("services_policy__get_by_id")
+	queryServicesPolicyGetBySource                    = mustLoadQuery("services_policy__get_by_source")
 	queryServicesPolicyInsert                         = mustLoadQuery("services_policy__insert")
 	queryServicesPolicyNextVersion                    = mustLoadQuery("services_policy__next_version")
 	queryWorkspaceCodeSourceList                      = mustLoadQuery("workspace_code_source__list")

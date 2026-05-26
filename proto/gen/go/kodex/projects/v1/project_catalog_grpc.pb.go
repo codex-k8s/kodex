@@ -31,6 +31,7 @@ const (
 	ProjectCatalogService_GetRepository_FullMethodName                        = "/kodex.projects.v1.ProjectCatalogService/GetRepository"
 	ProjectCatalogService_ListRepositories_FullMethodName                     = "/kodex.projects.v1.ProjectCatalogService/ListRepositories"
 	ProjectCatalogService_ImportServicesPolicy_FullMethodName                 = "/kodex.projects.v1.ProjectCatalogService/ImportServicesPolicy"
+	ProjectCatalogService_ImportBootstrapServicesPolicy_FullMethodName        = "/kodex.projects.v1.ProjectCatalogService/ImportBootstrapServicesPolicy"
 	ProjectCatalogService_GetServicesPolicy_FullMethodName                    = "/kodex.projects.v1.ProjectCatalogService/GetServicesPolicy"
 	ProjectCatalogService_ListServiceDescriptors_FullMethodName               = "/kodex.projects.v1.ProjectCatalogService/ListServiceDescriptors"
 	ProjectCatalogService_CreatePolicyEditProposal_FullMethodName             = "/kodex.projects.v1.ProjectCatalogService/CreatePolicyEditProposal"
@@ -87,6 +88,8 @@ type ProjectCatalogServiceClient interface {
 	ListRepositories(ctx context.Context, in *ListRepositoriesRequest, opts ...grpc.CallOption) (*ListRepositoriesResponse, error)
 	// ImportServicesPolicy stores a checked services.yaml projection.
 	ImportServicesPolicy(ctx context.Context, in *ImportServicesPolicyRequest, opts ...grpc.CallOption) (*ServicesPolicyResponse, error)
+	// ImportBootstrapServicesPolicy imports checked services.yaml after a merged bootstrap PR and activates the repository binding.
+	ImportBootstrapServicesPolicy(ctx context.Context, in *ImportBootstrapServicesPolicyRequest, opts ...grpc.CallOption) (*BootstrapServicesPolicyImportResponse, error)
 	// GetServicesPolicy returns a checked services.yaml projection.
 	GetServicesPolicy(ctx context.Context, in *GetServicesPolicyRequest, opts ...grpc.CallOption) (*ServicesPolicyResponse, error)
 	// ListServiceDescriptors returns typed service descriptors from active policy.
@@ -255,6 +258,16 @@ func (c *projectCatalogServiceClient) ImportServicesPolicy(ctx context.Context, 
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ServicesPolicyResponse)
 	err := c.cc.Invoke(ctx, ProjectCatalogService_ImportServicesPolicy_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectCatalogServiceClient) ImportBootstrapServicesPolicy(ctx context.Context, in *ImportBootstrapServicesPolicyRequest, opts ...grpc.CallOption) (*BootstrapServicesPolicyImportResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BootstrapServicesPolicyImportResponse)
+	err := c.cc.Invoke(ctx, ProjectCatalogService_ImportBootstrapServicesPolicy_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -513,6 +526,8 @@ type ProjectCatalogServiceServer interface {
 	ListRepositories(context.Context, *ListRepositoriesRequest) (*ListRepositoriesResponse, error)
 	// ImportServicesPolicy stores a checked services.yaml projection.
 	ImportServicesPolicy(context.Context, *ImportServicesPolicyRequest) (*ServicesPolicyResponse, error)
+	// ImportBootstrapServicesPolicy imports checked services.yaml after a merged bootstrap PR and activates the repository binding.
+	ImportBootstrapServicesPolicy(context.Context, *ImportBootstrapServicesPolicyRequest) (*BootstrapServicesPolicyImportResponse, error)
 	// GetServicesPolicy returns a checked services.yaml projection.
 	GetServicesPolicy(context.Context, *GetServicesPolicyRequest) (*ServicesPolicyResponse, error)
 	// ListServiceDescriptors returns typed service descriptors from active policy.
@@ -602,6 +617,9 @@ func (UnimplementedProjectCatalogServiceServer) ListRepositories(context.Context
 }
 func (UnimplementedProjectCatalogServiceServer) ImportServicesPolicy(context.Context, *ImportServicesPolicyRequest) (*ServicesPolicyResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ImportServicesPolicy not implemented")
+}
+func (UnimplementedProjectCatalogServiceServer) ImportBootstrapServicesPolicy(context.Context, *ImportBootstrapServicesPolicyRequest) (*BootstrapServicesPolicyImportResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ImportBootstrapServicesPolicy not implemented")
 }
 func (UnimplementedProjectCatalogServiceServer) GetServicesPolicy(context.Context, *GetServicesPolicyRequest) (*ServicesPolicyResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetServicesPolicy not implemented")
@@ -902,6 +920,24 @@ func _ProjectCatalogService_ImportServicesPolicy_Handler(srv interface{}, ctx co
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ProjectCatalogServiceServer).ImportServicesPolicy(ctx, req.(*ImportServicesPolicyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProjectCatalogService_ImportBootstrapServicesPolicy_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ImportBootstrapServicesPolicyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectCatalogServiceServer).ImportBootstrapServicesPolicy(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectCatalogService_ImportBootstrapServicesPolicy_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectCatalogServiceServer).ImportBootstrapServicesPolicy(ctx, req.(*ImportBootstrapServicesPolicyRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1356,6 +1392,10 @@ var ProjectCatalogService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ImportServicesPolicy",
 			Handler:    _ProjectCatalogService_ImportServicesPolicy_Handler,
+		},
+		{
+			MethodName: "ImportBootstrapServicesPolicy",
+			Handler:    _ProjectCatalogService_ImportBootstrapServicesPolicy_Handler,
 		},
 		{
 			MethodName: "GetServicesPolicy",

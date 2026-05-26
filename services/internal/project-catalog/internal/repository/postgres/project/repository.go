@@ -66,6 +66,8 @@ const (
 	operationGetRepository                    = "domain.Repository.GetRepository"
 	operationGetRepositoryByProviderRef       = "domain.Repository.GetRepositoryByProviderRef"
 	operationGetServicesPolicy                = "domain.Repository.GetServicesPolicy"
+	operationGetServicesPolicyBySource        = "domain.Repository.GetServicesPolicyBySource"
+	operationImportBootstrapServicesPolicy    = "domain.Repository.ImportBootstrapServicesPolicy"
 	operationGetWorkspacePolicy               = "domain.Repository.GetWorkspacePolicy"
 	operationImportServicesPolicy             = "domain.Repository.ImportServicesPolicy"
 	operationListBranchRules                  = "domain.Repository.ListBranchRules"
@@ -162,19 +164,8 @@ func (r *Repository) ImportServicesPolicy(ctx context.Context, policy entity.Ser
 		if _, err := tx.Exec(ctx, queryServicesPolicyInsert, servicesPolicyArgs(policy)); err != nil {
 			return err
 		}
-		if isActiveServicesPolicy(policy) {
-			if _, err := tx.Exec(ctx, queryServiceDescriptorMarkProjectStale, pgx.NamedArgs{"project_id": policy.ProjectID, "updated_at": policy.UpdatedAt}); err != nil {
-				return err
-			}
-			if err := insertServiceDescriptors(ctx, tx, descriptors); err != nil {
-				return err
-			}
-			if _, err := tx.Exec(ctx, queryDocumentationSourceMarkPolicyManagedDisabled, pgx.NamedArgs{"project_id": policy.ProjectID, "updated_at": policy.UpdatedAt}); err != nil {
-				return err
-			}
-			if err := upsertPolicyDocumentationSources(ctx, tx, documentationSources); err != nil {
-				return err
-			}
+		if err := applyActiveServicesPolicyProjection(ctx, tx, policy, descriptors, documentationSources); err != nil {
+			return err
 		}
 		if err := insertOutboxEvent(ctx, tx, event); err != nil {
 			return err
@@ -189,6 +180,74 @@ func (r *Repository) ImportServicesPolicy(ctx context.Context, policy entity.Ser
 		return entity.ServicesPolicy{}, err
 	}
 	return imported, nil
+}
+
+func (r *Repository) ImportBootstrapServicesPolicy(
+	ctx context.Context,
+	repository entity.RepositoryBinding,
+	previousVersion int64,
+	policy entity.ServicesPolicy,
+	descriptors []entity.ServiceDescriptor,
+	documentationSources []entity.DocumentationSource,
+	repositoryEvent entity.OutboxEvent,
+	result entity.CommandResult,
+	buildPolicyEvent projectrepo.ServicesPolicyEventBuilder,
+) (entity.ServicesPolicy, entity.RepositoryBinding, error) {
+	if buildPolicyEvent == nil {
+		return entity.ServicesPolicy{}, entity.RepositoryBinding{}, errs.ErrInvalidArgument
+	}
+	var imported entity.ServicesPolicy
+	err := r.withTx(ctx, operationImportBootstrapServicesPolicy, func(tx pgx.Tx) error {
+		policyVersion, err := nextServicesPolicyVersion(ctx, tx, policy.ProjectID)
+		if err != nil {
+			return err
+		}
+		policy.PolicyVersion = policyVersion
+		policyEvent, err := buildPolicyEvent(policy)
+		if err != nil {
+			return err
+		}
+		if err := postgreslib.RunMutation(ctx, tx, errs.ErrConflict, repositoryUpdateMutation(repository, previousVersion)); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, queryServicesPolicyInsert, servicesPolicyArgs(policy)); err != nil {
+			return err
+		}
+		if err := applyActiveServicesPolicyProjection(ctx, tx, policy, descriptors, documentationSources); err != nil {
+			return err
+		}
+		if err := insertOutboxEvent(ctx, tx, repositoryEvent); err != nil {
+			return err
+		}
+		if err := insertOutboxEvent(ctx, tx, policyEvent); err != nil {
+			return err
+		}
+		if err := postgreslib.RunMutation(ctx, tx, errs.ErrConflict, commandResultMutation(result)); err != nil {
+			return err
+		}
+		imported = policy
+		return nil
+	})
+	if err != nil {
+		return entity.ServicesPolicy{}, entity.RepositoryBinding{}, err
+	}
+	return imported, repository, nil
+}
+
+func applyActiveServicesPolicyProjection(ctx context.Context, tx pgx.Tx, policy entity.ServicesPolicy, descriptors []entity.ServiceDescriptor, documentationSources []entity.DocumentationSource) error {
+	if !isActiveServicesPolicy(policy) {
+		return nil
+	}
+	if _, err := tx.Exec(ctx, queryServiceDescriptorMarkProjectStale, pgx.NamedArgs{"project_id": policy.ProjectID, "updated_at": policy.UpdatedAt}); err != nil {
+		return err
+	}
+	if err := insertServiceDescriptors(ctx, tx, descriptors); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, queryDocumentationSourceMarkPolicyManagedDisabled, pgx.NamedArgs{"project_id": policy.ProjectID, "updated_at": policy.UpdatedAt}); err != nil {
+		return err
+	}
+	return upsertPolicyDocumentationSources(ctx, tx, documentationSources)
 }
 
 func nextServicesPolicyVersion(ctx context.Context, tx pgx.Tx, projectID uuid.UUID) (int64, error) {
@@ -248,6 +307,15 @@ func (r *Repository) GetServicesPolicy(ctx context.Context, projectID uuid.UUID,
 		return queryOne(ctx, r.db, operationGetServicesPolicy, queryServicesPolicyGetByID, args, scanServicesPolicy)
 	}
 	return queryOne(ctx, r.db, operationGetServicesPolicy, queryServicesPolicyGetActive, args, scanServicesPolicy)
+}
+
+func (r *Repository) GetServicesPolicyBySource(ctx context.Context, projectID uuid.UUID, sourceRepositoryID uuid.UUID, sourcePath string, sourceCommitSHA string) (entity.ServicesPolicy, error) {
+	return queryOne(ctx, r.db, operationGetServicesPolicyBySource, queryServicesPolicyGetBySource, pgx.NamedArgs{
+		"project_id":           projectID,
+		"source_repository_id": sourceRepositoryID,
+		"source_path":          sourcePath,
+		"source_commit_sha":    sourceCommitSHA,
+	}, scanServicesPolicy)
 }
 
 func (r *Repository) ListServiceDescriptors(ctx context.Context, filter query.ServiceDescriptorFilter) ([]entity.ServiceDescriptor, query.PageResult, error) {

@@ -32,6 +32,8 @@ service ProjectCatalogService {
   rpc ListRepositories(ListRepositoriesRequest) returns (ListRepositoriesResponse);
   // ImportServicesPolicy stores a checked services.yaml projection.
   rpc ImportServicesPolicy(ImportServicesPolicyRequest) returns (ServicesPolicyResponse);
+  // ImportBootstrapServicesPolicy imports checked services.yaml after a merged bootstrap PR and activates the repository binding.
+  rpc ImportBootstrapServicesPolicy(ImportBootstrapServicesPolicyRequest) returns (BootstrapServicesPolicyImportResponse);
   // GetServicesPolicy returns a checked services.yaml projection.
   rpc GetServicesPolicy(GetServicesPolicyRequest) returns (ServicesPolicyResponse);
   // ListServiceDescriptors returns typed service descriptors from active policy.
@@ -898,6 +900,56 @@ message ImportServicesPolicyRequest {
   ServicesPolicyValidationStatus validation_status = 10;
   // meta carries idempotency and audit context.
   CommandMeta meta = 11;
+}
+
+// ImportBootstrapServicesPolicyRequest imports a checked services.yaml projection after provider bootstrap PR merge.
+message ImportBootstrapServicesPolicyRequest {
+  // project_id is the project that owns the repository binding.
+  string project_id = 1;
+  // repository_id is the project-catalog repository binding id.
+  string repository_id = 2;
+  // provider_target is the safe provider repository target from provider projection.
+  RepositoryBootstrapProviderTarget provider_target = 3;
+  // base_branch is the repository binding base branch that received the merge.
+  string base_branch = 4;
+  // source_ref is the branch, tag or provider ref used for checked import.
+  string source_ref = 5;
+  // source_commit_sha is the merge commit used for checked projection.
+  string source_commit_sha = 6;
+  // source_blob_sha is the provider file object hash when available.
+  optional string source_blob_sha = 7;
+  // source_path is the services.yaml path in the merged commit.
+  string source_path = 8;
+  // content_hash is the normalized source content hash.
+  string content_hash = 9;
+  // validated_payload_json is normalized services.yaml payload already checked by the caller contour.
+  string validated_payload_json = 10;
+  // watermark_json is the parsed platform watermark payload from the merged provider work item.
+  string watermark_json = 11;
+  // provider_work_item_projection_id is the safe provider-hub PR/MR projection id when known.
+  optional string provider_work_item_projection_id = 12;
+  // provider_web_url is the safe provider PR/MR URL when known.
+  optional string provider_web_url = 13;
+  // provider_object_id is the provider-native PR/MR object id when known.
+  optional string provider_object_id = 14;
+  // merge_observed_at is the provider merge observation time in RFC3339 format when known.
+  optional string merge_observed_at = 15;
+  // meta carries idempotency, expected repository version and audit context.
+  CommandMeta meta = 16;
+}
+
+// BootstrapServicesPolicyImportResponse returns imported policy and activated repository binding state.
+message BootstrapServicesPolicyImportResponse {
+  // repository is the active repository binding after bootstrap import.
+  Repository repository = 1;
+  // services_policy is the checked services.yaml projection.
+  ServicesPolicy services_policy = 2;
+  // source_ref is the accepted provider source ref.
+  string source_ref = 3;
+  // source_commit_sha is the accepted merge commit.
+  string source_commit_sha = 4;
+  // summary is a short safe import summary for logs, events and UI.
+  string summary = 5;
 }
 
 // ServicesPolicyResponse returns services policy state.

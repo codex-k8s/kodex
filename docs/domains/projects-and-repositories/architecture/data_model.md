@@ -5,8 +5,8 @@ title: kodex — модель данных домена проектов и ре
 status: active
 owner_role: SA
 created_at: 2026-05-05
-updated_at: 2026-05-06
-related_issues: [628, 629, 630, 631, 632, 633]
+updated_at: 2026-05-26
+related_issues: [628, 629, 630, 631, 632, 633, 818]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -56,11 +56,14 @@ approvals:
 | `provider` | text | нет | `github`, позже `gitlab`. |
 | `provider_owner` | text | нет | Владелец или группа у провайдера. |
 | `provider_name` | text | нет | Имя репозитория у провайдера. |
+| `web_url` | text | да | Безопасная ссылка на репозиторий у провайдера. |
 | `default_branch` | text | нет | Ветка по умолчанию по данным провайдера или политики. |
 | `status` | enum | нет | `active`, `pending`, `blocked`, `archived`. |
 | `provider_repository_id` | text | да | Внешний идентификатор провайдера, если доступен. |
 | `icon_object_uri` | text | да | Ссылка на объект изображения в бакете, например иконка репозитория; бинарные данные не хранятся в БД. |
 | `version` | bigint | нет | Оптимистичная конкуренция. |
+
+`pending` используется для bootstrap до появления проверенной политики: binding уже содержит project-owned `repository_id`, provider refs и `base_branch`, но ещё не входит в активный рабочий контур. После импорта проверенной `services.yaml` из merge commit команда bootstrap-import переводит binding в `active` в той же транзакции, где создаётся `ServicesPolicy`.
 
 ### ServicesPolicy
 
@@ -243,6 +246,7 @@ approvals:
 - `Project` владеет `RepositoryBinding`, `ServicesPolicy`, `ServiceDescriptor`, `DocumentationSource`, `BranchRules`, `ReleasePolicy`, `ReleaseLine`, `PlacementPolicy`, `PolicyOverride`.
 - `ServicesPolicy` владеет набором `ServiceDescriptor`, полученным из проверенной версии `services.yaml`.
 - `validated_payload` хранится как нормализованный JSON по модели политики `services.yaml`; сырой YAML остаётся в Git у провайдера.
+- Для bootstrap-import повтор одного и того же `source_repository_id + source_path + source_commit_sha + content_hash` считается идемпотентным повтором проверенной проекции; другой commit/ref после активации binding не переписывает результат bootstrap.
 - `ServiceDescriptor` считается активным только внутри последней политики `valid + synced/overridden`. Импорт невалидной или неуспешной проекции не переводит предыдущие descriptors в `stale`.
 - `DocumentationSource` может быть создан вручную или синхронизирован из `services.yaml`; источники, управляемые политикой, отключаются и пересобираются при каждом успешном импорте активной политики, ручные источники импортом не отключаются.
 - `WorkspacePolicy` строится из активных `ServiceDescriptor`, активных `DocumentationSource`, ссылок `guidance_ref` и активных `PolicyOverride`; он не хранится как отдельная таблица и не выполняет checkout.
@@ -259,6 +263,7 @@ approvals:
 | Сервисы проекта | `(project_id, status, service_key)` unique для активного сервиса |
 | Сервисы репозитория | `(repository_id, status, service_key)` |
 | Актуальная проекция `services.yaml` | `(project_id, projection_status, policy_version)` |
+| Идемпотентный source replay политики | lookup `(project_id, source_repository_id, source_path, source_commit_sha, imported_at DESC)` для активных проверенных проекций; решение о replay/conflict принимает `project-catalog` use-case |
 | Сверка политики по источнику | `(source_repository_id, source_path, source_commit_sha, content_hash)` |
 | Источники документации для рабочего контура | unique `(project_id, scope_type, scope_id, local_path)`, чтение `(project_id, scope_type, scope_id, status)` |
 | Активные правила веток | `(project_id, repository_id, status)` |

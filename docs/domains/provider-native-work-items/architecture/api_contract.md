@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-06
 updated_at: 2026-05-26
-related_issues: [281, 282, 711, 719, 725, 729, 737, 761, 770, 781, 794]
+related_issues: [281, 282, 711, 719, 725, 729, 737, 761, 770, 781, 794, 818]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -153,6 +153,8 @@ approvals:
 `CreateBootstrapPullRequest` является provider-side командой модели C: проектный или агентный контур готовит payload и refs заранее, а `provider-hub` только пишет их в уже созданный репозиторий через provider API, создаёт или обновляет bootstrap branch/PR, обновляет проекцию и фиксирует безопасный журнал операции. `base_branch` должен существовать, отличаться от `bootstrap_branch` и иметь пустое дерево или только безопасный `README.md`, созданный инициализацией на стороне провайдера. Если bootstrap branch уже существует, новая команда строит commit от текущей головы bootstrap branch, но дерево commit собирается из пустого дерева или дерева только с `README.md` и подготовленного набора файлов, чтобы не наследовать старые файлы. Содержимое файлов не хранится в `ProviderOperation`, outbox, событиях, audit payload и логах.
 
 Когда bootstrap запускается через `project-catalog`, именно `project-catalog` владеет project/repository binding, проектной `base_branch` policy, связью prepared files с проверенной проекцией `services.yaml`, watermark и безопасным `operation_policy_context`. `provider-hub` остаётся владельцем provider-native записи, журнала `ProviderOperation`, локальной PR/MR-проекции и событий `provider.*`; он не принимает решение о проектной политике и не превращается в генератор шаблонов репозитория.
+
+После merge bootstrap PR/MR `provider-hub` и webhook/reconciliation контур остаются владельцами provider-native факта merge и provider projection. `project-catalog` не читает GitHub/GitLab напрямую: внутренний контур передаёт в `project-catalog ImportBootstrapServicesPolicy` только проверенный сигнал с безопасным provider target, source ref, commit, `content_hash`, watermark и нормализованным `services.yaml`. Provider-native raw payload, webhook body и полный provider response не переходят в `project-catalog`.
 
 `CreateAdoptionPullRequest` является provider-side командой модели C для существующего репозитория: проектный или агентный контур заранее выполняет scan, готовит отчёт, принимает проектное решение и передаёт в `provider-hub` только готовые файлы, refs, title/body и watermark. `provider-hub` проверяет существование `base_branch`, создаёт или обновляет adoption branch и reviewable `PR/MR`, но не требует пустого дерева base branch, не сканирует репозиторий, не генерирует `services.yaml`, не выбирает шаблон и не хранит содержимое файлов в БД, событиях или логах.
 

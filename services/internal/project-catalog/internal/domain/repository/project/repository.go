@@ -41,8 +41,12 @@ type Repository interface {
 	ListRepositories(ctx context.Context, filter query.RepositoryFilter) ([]entity.RepositoryBinding, query.PageResult, error)
 	// ImportServicesPolicy stores checked policy, descriptors, documentation sources, outbox event and command result atomically.
 	ImportServicesPolicy(ctx context.Context, policy entity.ServicesPolicy, descriptors []entity.ServiceDescriptor, documentationSources []entity.DocumentationSource, result entity.CommandResult, buildEvent ServicesPolicyEventBuilder) (entity.ServicesPolicy, error)
+	// ImportBootstrapServicesPolicy stores checked policy and activates a bootstrap repository binding atomically.
+	ImportBootstrapServicesPolicy(ctx context.Context, repository entity.RepositoryBinding, previousVersion int64, policy entity.ServicesPolicy, descriptors []entity.ServiceDescriptor, documentationSources []entity.DocumentationSource, repositoryEvent entity.OutboxEvent, result entity.CommandResult, buildPolicyEvent ServicesPolicyEventBuilder) (entity.ServicesPolicy, entity.RepositoryBinding, error)
 	// GetServicesPolicy returns active or concrete checked services policy.
 	GetServicesPolicy(ctx context.Context, projectID uuid.UUID, policyID *uuid.UUID) (entity.ServicesPolicy, error)
+	// GetServicesPolicyBySource returns checked policy imported from a concrete source commit.
+	GetServicesPolicyBySource(ctx context.Context, projectID uuid.UUID, sourceRepositoryID uuid.UUID, sourcePath string, sourceCommitSHA string) (entity.ServicesPolicy, error)
 	// ListServiceDescriptors returns typed descriptors matching filter.
 	ListServiceDescriptors(ctx context.Context, filter query.ServiceDescriptorFilter) ([]entity.ServiceDescriptor, query.PageResult, error)
 	// CreatePolicyEditProposal stores a request to change services.yaml through provider PR.
