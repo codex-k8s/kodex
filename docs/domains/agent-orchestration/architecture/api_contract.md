@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-12
 updated_at: 2026-05-26
-related_issues: [733, 739, 744, 753, 755, 698, 759, 772, 322, 782, 795, 809]
+related_issues: [733, 739, 744, 753, 755, 698, 759, 772, 322, 782, 795, 809, 820]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -65,7 +65,7 @@ approvals:
 | `RecordAcceptanceResult` | gRPC command | `agent.acceptance.update` | `command_id` + expected version | Фиксирует безопасный результат проверки и меняет статус через optimistic concurrency; `target_ref` и `details_json` проходят safe-storage guard, а `human_gate` может быть записан только как `waiting` с gate/risk/governance ref. |
 | `GetAcceptanceResult` | gRPC query | `agent.acceptance.read` | нет | Читает один результат приёмки. |
 | `ListAcceptanceResults` | gRPC query | `agent.acceptance.read` | нет | Список результатов приёмки по session/run/stage/status. |
-| `CreateFollowUpIntent` | gRPC command | `agent.follow_up.create` | `command_id` | Формирует намерение следующей provider-native задачи. |
+| `CreateFollowUpIntent` | gRPC command | `agent.follow_up.create` | `command_id` или `idempotency_key` | Формирует авторитетное намерение следующей provider-native задачи по session/run/stage/acceptance refs. Команда сохраняет только safe provider target refs, тип следующего work item, bounded title/summary/hints, digest и статус; provider write не выполняется. |
 | `RequestHumanGate` | gRPC command | `agent.human_gate.request` | `command_id` | Фиксирует ожидание flow и запрашивает gate у `governance-manager`; gate request/decision хранится в governance, delivery идёт через `interaction-hub`. |
 | `GetAgentSession` | gRPC query | `agent.session.read` | нет | Читает сессию. |
 | `ListAgentRuns` | gRPC query | `agent.run.read` | нет | Читает запуски по session/status/provider target. |
@@ -119,11 +119,11 @@ Codex hooks не являются MCP-инструментами. `agent-manager
 
 | Ошибка | Когда возвращается |
 |---|---|
-| `invalid_argument` | Невалидный flow, stage, role, prompt, transition, provider target, request context, acceptance batch-запрос, небезопасный `target_ref` или небезопасный `details_json`. |
+| `invalid_argument` | Невалидный flow, stage, role, prompt, transition, provider target, request context, acceptance batch-запрос, небезопасный `target_ref`, небезопасный `details_json` или небезопасный follow-up payload. |
 | `permission_denied` | `access-manager` запретил действие или роль не имеет нужного MCP-инструмента. |
 | `not_found` | Flow, роль, prompt, session, run или acceptance result не найдены. |
 | `already_exists` | Дубликат slug или повтор создания активной сущности в scope. |
-| `failed_precondition` | Нельзя запустить роль без prompt, workspace policy, provider target или обязательного решения; `human_gate` acceptance пытаются закрыть финальным статусом вместо ожидания owner decision. |
+| `failed_precondition` | Нельзя запустить роль без prompt, workspace policy, provider target или обязательного решения; `human_gate` acceptance пытаются закрыть финальным статусом вместо ожидания owner decision; follow-up создаётся из незавершённого run или неположительного acceptance. |
 | `aborted` | Конфликт expected version или устаревший `Run` state. |
 | `unavailable` | Временная ошибка package, runtime, provider, interaction или event log. |
 
@@ -142,7 +142,7 @@ Codex hooks не являются MCP-инструментами. `agent-manager
 | `agent.acceptance.requested` | Запрошена машинная приёмка. |
 | `agent.acceptance.completed` | Приёмка завершилась статусом `passed` или `skipped`. |
 | `agent.acceptance.failed` | Приёмка завершилась статусом `failed` и содержит машинный `reason_code`. |
-| `agent.follow_up.requested` | Нужно создать или обновить follow-up `Issue`. |
+| `agent.follow_up.requested` | Зафиксирован follow-up intent с safe refs/status/summary; создание или обновление provider-native `Issue` остаётся за `provider-hub`. |
 | `agent.follow_up.created` | Follow-up provider-native задача создана или подтверждена. |
 | `agent.human_gate.requested` | Flow ожидает governance gate, требующий решения человека. |
 | `agent.human_gate.resolved` | `agent-manager` получил ссылку на resolved governance decision и может продолжить flow. |
@@ -157,7 +157,7 @@ Codex hooks не являются MCP-инструментами. `agent-manager
 | Доменная документация | Подготовлена как стартовый срез. |
 | gRPC proto | Подготовлен как контрактный срез `AGO-1`. |
 | AsyncAPI `agent.*` | Подготовлен как контрактный срез `AGO-1`. |
-| Go-реализация `agent-manager` | Сервисный каркас готов. Операции flow, role, prompt, session, run и machine acceptance подключены к слою хранения и use-case через gRPC handlers. `StartAgentSession` защищает активную session от дублей по provider target, `StartAgentRun` фиксирует версии роли/prompt, проверяет stage-bound связку flow/stage/role, замораживает безопасные guidance refs из `package-hub`, читает workspace policy у `project-catalog` и вызывает `runtime-manager.PrepareRuntime`. В `Run` сохраняются только runtime refs, fingerprint/diagnostic summary и безопасная классификация ошибки подготовки; workspace paths, файлы, prompt text, flow files и package payload остаются вне БД `agent-manager`. `RecordRunState` применяет state machine и публикует только AsyncAPI-совместимые lifecycle-события. `RequestAcceptance`/`RecordAcceptanceResult`/`GetAcceptanceResult`/`ListAcceptanceResults` реализуют базовый lifecycle результата приёмки с idempotency, expected version, безопасными `target_ref`/`details_json`, `human_gate` waiting-only guard и outbox events. Follow-up, Human gate decision, QA runner и provider write pipeline остаются следующими срезами. |
+| Go-реализация `agent-manager` | Сервисный каркас готов. Операции flow, role, prompt, session, run, machine acceptance и follow-up intent подключены к слою хранения и use-case через gRPC handlers. `StartAgentSession` защищает активную session от дублей по provider target, `StartAgentRun` фиксирует версии роли/prompt, проверяет stage-bound связку flow/stage/role, замораживает безопасные guidance refs из `package-hub`, читает workspace policy у `project-catalog` и вызывает `runtime-manager.PrepareRuntime`. В `Run` сохраняются только runtime refs, fingerprint/diagnostic summary и безопасная классификация ошибки подготовки; workspace paths, файлы, prompt text, flow files и package payload остаются вне БД `agent-manager`. `RecordRunState` применяет state machine и публикует только AsyncAPI-совместимые lifecycle-события. `RequestAcceptance`/`RecordAcceptanceResult`/`GetAcceptanceResult`/`ListAcceptanceResults` реализуют базовый lifecycle результата приёмки с idempotency, expected version, безопасными `target_ref`/`details_json`, `human_gate` waiting-only guard и outbox events. `CreateFollowUpIntent` создаёт intent-only состояние с idempotency, проверкой session/run/stage/acceptance связей, safe title/summary/provider refs и событием `agent.follow_up.requested`. Human gate decision, QA runner и provider write pipeline остаются следующими срезами. |
 | Интеграция с `package-hub` | Реализована как чтение guidance installations, package/version metadata и manifest validation state; сырое содержимое manifest и package source в `agent-manager` не сохраняются. |
 | Интеграция с runtime | Реализован прямой вызов `PrepareRuntime` для старта `AgentRun`; executor и выполнение slot-agent не входят в текущий контур. |
 | Интеграция с provider/interaction/hooks | Зафиксирована как междоменная граница без реализации. |

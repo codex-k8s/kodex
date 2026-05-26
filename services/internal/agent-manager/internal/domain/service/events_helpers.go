@@ -189,6 +189,31 @@ func acceptanceEvent(id uuid.UUID, eventType string, reasonCode string, acceptan
 	return outboxEvent(id, eventType, agentevents.AggregateAcceptance, acceptance.ID, payload, occurredAt), nil
 }
 
+func followUpRequestedEvent(id uuid.UUID, intent entity.FollowUpIntent, occurredAt time.Time) (entity.OutboxEvent, error) {
+	payload, err := json.Marshal(agentevents.Payload{
+		SessionID:               intent.SessionID.String(),
+		RunID:                   optionalUUIDValue(intent.RunID),
+		FromStageID:             optionalUUIDValue(intent.FromStageID),
+		ToStageID:               optionalUUIDValue(intent.ToStageID),
+		StageID:                 optionalUUIDValue(intent.ToStageID),
+		AcceptanceResultID:      optionalUUIDValue(intent.AcceptanceResultID),
+		FollowUpIntentID:        intent.ID.String(),
+		ProviderWorkItemRef:     intent.ProviderTarget.WorkItemRef,
+		ProviderPullRequestRef:  intent.ProviderTarget.PullRequestRef,
+		ProviderCommentRef:      intent.ProviderTarget.CommentRef,
+		ProviderReviewSignalRef: intent.ProviderTarget.ReviewSignalRef,
+		ProviderWorkItemType:    intent.ProviderWorkItemType,
+		ProviderOperationRef:    intent.ProviderOperationRef,
+		Status:                  string(intent.Status),
+		Summary:                 intent.SafeSummary,
+		Version:                 intent.Version,
+	})
+	if err != nil {
+		return entity.OutboxEvent{}, err
+	}
+	return outboxEvent(id, agentevents.EventFollowUpRequested, agentevents.AggregateFollowUp, intent.ID, payload, occurredAt), nil
+}
+
 func optionalUUIDValue(id *uuid.UUID) string {
 	if id == nil {
 		return ""

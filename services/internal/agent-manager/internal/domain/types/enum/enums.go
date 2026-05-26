@@ -142,6 +142,16 @@ const (
 	AcceptanceStatusSkipped AcceptanceStatus = "skipped"
 )
 
+type FollowUpIntentStatus string
+
+const (
+	FollowUpIntentStatusPlanned   FollowUpIntentStatus = "planned"
+	FollowUpIntentStatusRequested FollowUpIntentStatus = "requested"
+	FollowUpIntentStatusCreated   FollowUpIntentStatus = "created"
+	FollowUpIntentStatusFailed    FollowUpIntentStatus = "failed"
+	FollowUpIntentStatusCancelled FollowUpIntentStatus = "cancelled"
+)
+
 type CommandAggregateType string
 
 const (
@@ -154,4 +164,5 @@ const (
 	CommandAggregateTypeRun                   CommandAggregateType = "run"
 	CommandAggregateTypeSessionStateSnapshot  CommandAggregateType = "session_state_snapshot"
 	CommandAggregateTypeAcceptance            CommandAggregateType = "acceptance"
+	CommandAggregateTypeFollowUp              CommandAggregateType = "follow_up"
 )

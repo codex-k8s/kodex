@@ -161,6 +161,25 @@ type AcceptanceResult struct {
 	DetailsJSON []byte
 }
 
+type FollowUpIntent struct {
+	VersionedBase
+	SessionID             uuid.UUID
+	RunID                 *uuid.UUID
+	FromStageID           *uuid.UUID
+	ToStageID             *uuid.UUID
+	AcceptanceResultID    *uuid.UUID
+	ProviderTarget        value.ProviderTargetRef
+	ProviderWorkItemType  string
+	ProviderOperationRef  string
+	InstructionBodyDigest string
+	SafeTitle             string
+	SafeSummary           string
+	RoleHint              string
+	StageHint             string
+	IdempotencyKey        string
+	Status                enum.FollowUpIntentStatus
+}
+
 type CommandResult struct {
 	Key            string
 	CommandID      *uuid.UUID

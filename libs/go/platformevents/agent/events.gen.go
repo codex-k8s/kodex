@@ -44,14 +44,19 @@ type Payload struct {
 	FlowID                  string `json:"flow_id,omitempty"`
 	FlowVersionID           string `json:"flow_version_id,omitempty"`
 	FollowUpIntentID        string `json:"follow_up_intent_id,omitempty"`
+	FromStageID             string `json:"from_stage_id,omitempty"`
 	GuidanceRefCount        int64  `json:"guidance_ref_count,omitempty"`
 	HumanGateRequestID      string `json:"human_gate_request_id,omitempty"`
 	InteractionRef          string `json:"interaction_ref,omitempty"`
 	PreviousStatus          string `json:"previous_status,omitempty"`
 	PromptTemplateDigest    string `json:"prompt_template_digest,omitempty"`
 	PromptTemplateVersionID string `json:"prompt_template_version_id,omitempty"`
+	ProviderCommentRef      string `json:"provider_comment_ref,omitempty"`
+	ProviderOperationRef    string `json:"provider_operation_ref,omitempty"`
 	ProviderPullRequestRef  string `json:"provider_pull_request_ref,omitempty"`
+	ProviderReviewSignalRef string `json:"provider_review_signal_ref,omitempty"`
 	ProviderWorkItemRef     string `json:"provider_work_item_ref,omitempty"`
+	ProviderWorkItemType    string `json:"provider_work_item_type,omitempty"`
 	ReasonCode              string `json:"reason_code,omitempty"`
 	RoleProfileDigest       string `json:"role_profile_digest,omitempty"`
 	RoleProfileID           string `json:"role_profile_id,omitempty"`
@@ -64,5 +69,7 @@ type Payload struct {
 	StateSnapshotDigest     string `json:"state_snapshot_digest,omitempty"`
 	StateSnapshotID         string `json:"state_snapshot_id,omitempty"`
 	Status                  string `json:"status,omitempty"`
+	Summary                 string `json:"summary,omitempty"`
+	ToStageID               string `json:"to_stage_id,omitempty"`
 	Version                 int64  `json:"version,omitempty"`
 }

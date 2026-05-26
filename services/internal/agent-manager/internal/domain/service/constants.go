@@ -16,4 +16,5 @@ const (
 	operationRecordSessionSnapshot       = "domain.Service.RecordSessionStateSnapshot"
 	operationRequestAcceptance           = "domain.Service.RequestAcceptance"
 	operationRecordAcceptanceResult      = "domain.Service.RecordAcceptanceResult"
+	operationCreateFollowUpIntent        = "domain.Service.CreateFollowUpIntent"
 )

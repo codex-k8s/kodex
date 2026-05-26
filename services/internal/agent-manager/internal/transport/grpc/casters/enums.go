@@ -97,6 +97,14 @@ var acceptanceStatusesFromProto = enumMap(
 	enumPair(agentsv1.AcceptanceStatus_ACCEPTANCE_STATUS_SKIPPED, enum.AcceptanceStatusSkipped),
 )
 
+var followUpIntentStatusesToProto = enumMap(
+	enumPair(enum.FollowUpIntentStatusPlanned, agentsv1.FollowUpIntentStatus_FOLLOW_UP_INTENT_STATUS_PLANNED),
+	enumPair(enum.FollowUpIntentStatusRequested, agentsv1.FollowUpIntentStatus_FOLLOW_UP_INTENT_STATUS_REQUESTED),
+	enumPair(enum.FollowUpIntentStatusCreated, agentsv1.FollowUpIntentStatus_FOLLOW_UP_INTENT_STATUS_CREATED),
+	enumPair(enum.FollowUpIntentStatusFailed, agentsv1.FollowUpIntentStatus_FOLLOW_UP_INTENT_STATUS_FAILED),
+	enumPair(enum.FollowUpIntentStatusCancelled, agentsv1.FollowUpIntentStatus_FOLLOW_UP_INTENT_STATUS_CANCELLED),
+)
+
 var (
 	scopeTypesToProto                = reverseEnumMap(scopeTypesFromProto)
 	flowStatusesToProto              = reverseEnumMap(flowStatusesFromProto)
@@ -249,6 +257,10 @@ func OptionalAcceptanceStatusFromProto(value *agentsv1.AcceptanceStatus) (*enum.
 
 func AcceptanceStatusToProto(value enum.AcceptanceStatus) agentsv1.AcceptanceStatus {
 	return enumToProto(value, acceptanceStatusesToProto, agentsv1.AcceptanceStatus_ACCEPTANCE_STATUS_UNSPECIFIED)
+}
+
+func FollowUpIntentStatusToProto(value enum.FollowUpIntentStatus) agentsv1.FollowUpIntentStatus {
+	return enumToProto(value, followUpIntentStatusesToProto, agentsv1.FollowUpIntentStatus_FOLLOW_UP_INTENT_STATUS_UNSPECIFIED)
 }
 
 func enumFromProto[Proto comparable, Domain comparable](value Proto, values map[Proto]Domain) (Domain, error) {

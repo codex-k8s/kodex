@@ -3431,8 +3431,24 @@ type FollowUpIntent struct {
 	Version               int64                  `protobuf:"varint,9,opt,name=version,proto3" json:"version,omitempty"`
 	CreatedAt             string                 `protobuf:"bytes,10,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	UpdatedAt             string                 `protobuf:"bytes,11,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	unknownFields         protoimpl.UnknownFields
-	sizeCache             protoimpl.SizeCache
+	// run_id points to the run that produced the follow-up evidence.
+	RunId *string `protobuf:"bytes,12,opt,name=run_id,json=runId,proto3,oneof" json:"run_id,omitempty"`
+	// acceptance_result_id points to the positive machine acceptance result when one exists.
+	AcceptanceResultId *string `protobuf:"bytes,13,opt,name=acceptance_result_id,json=acceptanceResultId,proto3,oneof" json:"acceptance_result_id,omitempty"`
+	// provider_target contains safe refs to provider-native artifacts.
+	ProviderTarget *ProviderTargetRef `protobuf:"bytes,14,opt,name=provider_target,json=providerTarget,proto3" json:"provider_target,omitempty"`
+	// safe_title is a bounded title for the next provider-native work item.
+	SafeTitle *string `protobuf:"bytes,15,opt,name=safe_title,json=safeTitle,proto3,oneof" json:"safe_title,omitempty"`
+	// safe_summary is a bounded summary for the next provider-native work item.
+	SafeSummary *string `protobuf:"bytes,16,opt,name=safe_summary,json=safeSummary,proto3,oneof" json:"safe_summary,omitempty"`
+	// role_hint is a bounded role hint for the next flow step.
+	RoleHint *string `protobuf:"bytes,17,opt,name=role_hint,json=roleHint,proto3,oneof" json:"role_hint,omitempty"`
+	// stage_hint is a bounded stage hint for the next flow step.
+	StageHint *string `protobuf:"bytes,18,opt,name=stage_hint,json=stageHint,proto3,oneof" json:"stage_hint,omitempty"`
+	// idempotency_key is the command idempotency key stored with this intent.
+	IdempotencyKey string `protobuf:"bytes,19,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *FollowUpIntent) Reset() {
@@ -3538,6 +3554,62 @@ func (x *FollowUpIntent) GetCreatedAt() string {
 func (x *FollowUpIntent) GetUpdatedAt() string {
 	if x != nil {
 		return x.UpdatedAt
+	}
+	return ""
+}
+
+func (x *FollowUpIntent) GetRunId() string {
+	if x != nil && x.RunId != nil {
+		return *x.RunId
+	}
+	return ""
+}
+
+func (x *FollowUpIntent) GetAcceptanceResultId() string {
+	if x != nil && x.AcceptanceResultId != nil {
+		return *x.AcceptanceResultId
+	}
+	return ""
+}
+
+func (x *FollowUpIntent) GetProviderTarget() *ProviderTargetRef {
+	if x != nil {
+		return x.ProviderTarget
+	}
+	return nil
+}
+
+func (x *FollowUpIntent) GetSafeTitle() string {
+	if x != nil && x.SafeTitle != nil {
+		return *x.SafeTitle
+	}
+	return ""
+}
+
+func (x *FollowUpIntent) GetSafeSummary() string {
+	if x != nil && x.SafeSummary != nil {
+		return *x.SafeSummary
+	}
+	return ""
+}
+
+func (x *FollowUpIntent) GetRoleHint() string {
+	if x != nil && x.RoleHint != nil {
+		return *x.RoleHint
+	}
+	return ""
+}
+
+func (x *FollowUpIntent) GetStageHint() string {
+	if x != nil && x.StageHint != nil {
+		return *x.StageHint
+	}
+	return ""
+}
+
+func (x *FollowUpIntent) GetIdempotencyKey() string {
+	if x != nil {
+		return x.IdempotencyKey
 	}
 	return ""
 }
@@ -6249,6 +6321,13 @@ type CreateFollowUpIntentRequest struct {
 	ProviderWorkItemType  string                 `protobuf:"bytes,5,opt,name=provider_work_item_type,json=providerWorkItemType,proto3" json:"provider_work_item_type,omitempty"`
 	ProviderOperationRef  *string                `protobuf:"bytes,6,opt,name=provider_operation_ref,json=providerOperationRef,proto3,oneof" json:"provider_operation_ref,omitempty"`
 	InstructionBodyDigest *string                `protobuf:"bytes,7,opt,name=instruction_body_digest,json=instructionBodyDigest,proto3,oneof" json:"instruction_body_digest,omitempty"`
+	RunId                 *string                `protobuf:"bytes,8,opt,name=run_id,json=runId,proto3,oneof" json:"run_id,omitempty"`
+	AcceptanceResultId    *string                `protobuf:"bytes,9,opt,name=acceptance_result_id,json=acceptanceResultId,proto3,oneof" json:"acceptance_result_id,omitempty"`
+	ProviderTarget        *ProviderTargetRef     `protobuf:"bytes,10,opt,name=provider_target,json=providerTarget,proto3" json:"provider_target,omitempty"`
+	SafeTitle             *string                `protobuf:"bytes,11,opt,name=safe_title,json=safeTitle,proto3,oneof" json:"safe_title,omitempty"`
+	SafeSummary           *string                `protobuf:"bytes,12,opt,name=safe_summary,json=safeSummary,proto3,oneof" json:"safe_summary,omitempty"`
+	RoleHint              *string                `protobuf:"bytes,13,opt,name=role_hint,json=roleHint,proto3,oneof" json:"role_hint,omitempty"`
+	StageHint             *string                `protobuf:"bytes,14,opt,name=stage_hint,json=stageHint,proto3,oneof" json:"stage_hint,omitempty"`
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
@@ -6328,6 +6407,55 @@ func (x *CreateFollowUpIntentRequest) GetProviderOperationRef() string {
 func (x *CreateFollowUpIntentRequest) GetInstructionBodyDigest() string {
 	if x != nil && x.InstructionBodyDigest != nil {
 		return *x.InstructionBodyDigest
+	}
+	return ""
+}
+
+func (x *CreateFollowUpIntentRequest) GetRunId() string {
+	if x != nil && x.RunId != nil {
+		return *x.RunId
+	}
+	return ""
+}
+
+func (x *CreateFollowUpIntentRequest) GetAcceptanceResultId() string {
+	if x != nil && x.AcceptanceResultId != nil {
+		return *x.AcceptanceResultId
+	}
+	return ""
+}
+
+func (x *CreateFollowUpIntentRequest) GetProviderTarget() *ProviderTargetRef {
+	if x != nil {
+		return x.ProviderTarget
+	}
+	return nil
+}
+
+func (x *CreateFollowUpIntentRequest) GetSafeTitle() string {
+	if x != nil && x.SafeTitle != nil {
+		return *x.SafeTitle
+	}
+	return ""
+}
+
+func (x *CreateFollowUpIntentRequest) GetSafeSummary() string {
+	if x != nil && x.SafeSummary != nil {
+		return *x.SafeSummary
+	}
+	return ""
+}
+
+func (x *CreateFollowUpIntentRequest) GetRoleHint() string {
+	if x != nil && x.RoleHint != nil {
+		return *x.RoleHint
+	}
+	return ""
+}
+
+func (x *CreateFollowUpIntentRequest) GetStageHint() string {
+	if x != nil && x.StageHint != nil {
+		return *x.StageHint
 	}
 	return ""
 }
@@ -7245,7 +7373,7 @@ const file_kodex_agents_v1_agent_manager_proto_rawDesc = "" +
 	"updated_at\x18\v \x01(\tR\tupdatedAtB\t\n" +
 	"\a_run_idB\v\n" +
 	"\t_stage_idB\r\n" +
-	"\v_target_ref\"\xac\x04\n" +
+	"\v_target_ref\"\xe8\a\n" +
 	"\x0eFollowUpIntent\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
@@ -7261,11 +7389,28 @@ const file_kodex_agents_v1_agent_manager_proto_rawDesc = "" +
 	"created_at\x18\n" +
 	" \x01(\tR\tcreatedAt\x12\x1d\n" +
 	"\n" +
-	"updated_at\x18\v \x01(\tR\tupdatedAtB\x10\n" +
+	"updated_at\x18\v \x01(\tR\tupdatedAt\x12\x1a\n" +
+	"\x06run_id\x18\f \x01(\tH\x04R\x05runId\x88\x01\x01\x125\n" +
+	"\x14acceptance_result_id\x18\r \x01(\tH\x05R\x12acceptanceResultId\x88\x01\x01\x12K\n" +
+	"\x0fprovider_target\x18\x0e \x01(\v2\".kodex.agents.v1.ProviderTargetRefR\x0eproviderTarget\x12\"\n" +
+	"\n" +
+	"safe_title\x18\x0f \x01(\tH\x06R\tsafeTitle\x88\x01\x01\x12&\n" +
+	"\fsafe_summary\x18\x10 \x01(\tH\aR\vsafeSummary\x88\x01\x01\x12 \n" +
+	"\trole_hint\x18\x11 \x01(\tH\bR\broleHint\x88\x01\x01\x12\"\n" +
+	"\n" +
+	"stage_hint\x18\x12 \x01(\tH\tR\tstageHint\x88\x01\x01\x12'\n" +
+	"\x0fidempotency_key\x18\x13 \x01(\tR\x0eidempotencyKeyB\x10\n" +
 	"\x0e_from_stage_idB\x0e\n" +
 	"\f_to_stage_idB\x19\n" +
 	"\x17_provider_operation_refB\x1a\n" +
-	"\x18_instruction_body_digest\"\xad\x03\n" +
+	"\x18_instruction_body_digestB\t\n" +
+	"\a_run_idB\x17\n" +
+	"\x15_acceptance_result_idB\r\n" +
+	"\v_safe_titleB\x0f\n" +
+	"\r_safe_summaryB\f\n" +
+	"\n" +
+	"_role_hintB\r\n" +
+	"\v_stage_hint\"\xad\x03\n" +
 	"\x10HumanGateRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
@@ -7546,7 +7691,7 @@ const file_kodex_agents_v1_agent_manager_proto_rawDesc = "" +
 	"\v_session_idB\t\n" +
 	"\a_run_idB\v\n" +
 	"\t_stage_idB\t\n" +
-	"\a_status\"\xc4\x03\n" +
+	"\a_status\"\xd7\x06\n" +
 	"\x1bCreateFollowUpIntentRequest\x120\n" +
 	"\x04meta\x18\x01 \x01(\v2\x1c.kodex.agents.v1.CommandMetaR\x04meta\x12\x1d\n" +
 	"\n" +
@@ -7555,11 +7700,28 @@ const file_kodex_agents_v1_agent_manager_proto_rawDesc = "" +
 	"\vto_stage_id\x18\x04 \x01(\tH\x01R\ttoStageId\x88\x01\x01\x125\n" +
 	"\x17provider_work_item_type\x18\x05 \x01(\tR\x14providerWorkItemType\x129\n" +
 	"\x16provider_operation_ref\x18\x06 \x01(\tH\x02R\x14providerOperationRef\x88\x01\x01\x12;\n" +
-	"\x17instruction_body_digest\x18\a \x01(\tH\x03R\x15instructionBodyDigest\x88\x01\x01B\x10\n" +
+	"\x17instruction_body_digest\x18\a \x01(\tH\x03R\x15instructionBodyDigest\x88\x01\x01\x12\x1a\n" +
+	"\x06run_id\x18\b \x01(\tH\x04R\x05runId\x88\x01\x01\x125\n" +
+	"\x14acceptance_result_id\x18\t \x01(\tH\x05R\x12acceptanceResultId\x88\x01\x01\x12K\n" +
+	"\x0fprovider_target\x18\n" +
+	" \x01(\v2\".kodex.agents.v1.ProviderTargetRefR\x0eproviderTarget\x12\"\n" +
+	"\n" +
+	"safe_title\x18\v \x01(\tH\x06R\tsafeTitle\x88\x01\x01\x12&\n" +
+	"\fsafe_summary\x18\f \x01(\tH\aR\vsafeSummary\x88\x01\x01\x12 \n" +
+	"\trole_hint\x18\r \x01(\tH\bR\broleHint\x88\x01\x01\x12\"\n" +
+	"\n" +
+	"stage_hint\x18\x0e \x01(\tH\tR\tstageHint\x88\x01\x01B\x10\n" +
 	"\x0e_from_stage_idB\x0e\n" +
 	"\f_to_stage_idB\x19\n" +
 	"\x17_provider_operation_refB\x1a\n" +
-	"\x18_instruction_body_digest\"\xc4\x02\n" +
+	"\x18_instruction_body_digestB\t\n" +
+	"\a_run_idB\x17\n" +
+	"\x15_acceptance_result_idB\r\n" +
+	"\v_safe_titleB\x0f\n" +
+	"\r_safe_summaryB\f\n" +
+	"\n" +
+	"_role_hintB\r\n" +
+	"\v_stage_hint\"\xc4\x02\n" +
 	"\x17RequestHumanGateRequest\x120\n" +
 	"\x04meta\x18\x01 \x01(\v2\x1c.kodex.agents.v1.CommandMetaR\x04meta\x12\x1d\n" +
 	"\n" +
@@ -7916,170 +8078,172 @@ var file_kodex_agents_v1_agent_manager_proto_depIdxs = []int32{
 	12,  // 32: kodex.agents.v1.AcceptanceResult.check_kind:type_name -> kodex.agents.v1.AcceptanceCheckKind
 	13,  // 33: kodex.agents.v1.AcceptanceResult.status:type_name -> kodex.agents.v1.AcceptanceStatus
 	14,  // 34: kodex.agents.v1.FollowUpIntent.status:type_name -> kodex.agents.v1.FollowUpIntentStatus
-	15,  // 35: kodex.agents.v1.HumanGateRequest.status:type_name -> kodex.agents.v1.HumanGateStatus
-	46,  // 36: kodex.agents.v1.FlowDefinitionInput.stages:type_name -> kodex.agents.v1.StageInput
-	47,  // 37: kodex.agents.v1.FlowDefinitionInput.transitions:type_name -> kodex.agents.v1.StageTransitionInput
-	48,  // 38: kodex.agents.v1.FlowDefinitionInput.stage_role_bindings:type_name -> kodex.agents.v1.StageRoleBindingInput
-	3,   // 39: kodex.agents.v1.StageInput.stage_type:type_name -> kodex.agents.v1.StageType
-	24,  // 40: kodex.agents.v1.StageInput.display_name:type_name -> kodex.agents.v1.LocalizedText
-	8,   // 41: kodex.agents.v1.StageRoleBindingInput.binding_kind:type_name -> kodex.agents.v1.StageRoleBindingKind
-	18,  // 42: kodex.agents.v1.CreateFlowRequest.meta:type_name -> kodex.agents.v1.CommandMeta
-	25,  // 43: kodex.agents.v1.CreateFlowRequest.scope:type_name -> kodex.agents.v1.ScopeRef
-	24,  // 44: kodex.agents.v1.CreateFlowRequest.display_name:type_name -> kodex.agents.v1.LocalizedText
-	24,  // 45: kodex.agents.v1.CreateFlowRequest.description:type_name -> kodex.agents.v1.LocalizedText
-	18,  // 46: kodex.agents.v1.UpdateFlowRequest.meta:type_name -> kodex.agents.v1.CommandMeta
-	24,  // 47: kodex.agents.v1.UpdateFlowRequest.display_name:type_name -> kodex.agents.v1.LocalizedText
-	24,  // 48: kodex.agents.v1.UpdateFlowRequest.description:type_name -> kodex.agents.v1.LocalizedText
-	1,   // 49: kodex.agents.v1.UpdateFlowRequest.status:type_name -> kodex.agents.v1.FlowStatus
-	18,  // 50: kodex.agents.v1.CreateFlowVersionRequest.meta:type_name -> kodex.agents.v1.CommandMeta
-	45,  // 51: kodex.agents.v1.CreateFlowVersionRequest.definition:type_name -> kodex.agents.v1.FlowDefinitionInput
-	18,  // 52: kodex.agents.v1.ActivateFlowVersionRequest.meta:type_name -> kodex.agents.v1.CommandMeta
-	19,  // 53: kodex.agents.v1.GetFlowRequest.meta:type_name -> kodex.agents.v1.QueryMeta
-	19,  // 54: kodex.agents.v1.ListFlowsRequest.meta:type_name -> kodex.agents.v1.QueryMeta
-	25,  // 55: kodex.agents.v1.ListFlowsRequest.scope:type_name -> kodex.agents.v1.ScopeRef
-	1,   // 56: kodex.agents.v1.ListFlowsRequest.status:type_name -> kodex.agents.v1.FlowStatus
-	22,  // 57: kodex.agents.v1.ListFlowsRequest.page:type_name -> kodex.agents.v1.PageRequest
-	31,  // 58: kodex.agents.v1.FlowResponse.flow:type_name -> kodex.agents.v1.Flow
-	32,  // 59: kodex.agents.v1.FlowResponse.active_version:type_name -> kodex.agents.v1.FlowVersion
-	32,  // 60: kodex.agents.v1.FlowVersionResponse.flow_version:type_name -> kodex.agents.v1.FlowVersion
-	31,  // 61: kodex.agents.v1.ListFlowsResponse.flows:type_name -> kodex.agents.v1.Flow
-	23,  // 62: kodex.agents.v1.ListFlowsResponse.page:type_name -> kodex.agents.v1.PageResponse
-	18,  // 63: kodex.agents.v1.CreateRoleProfileRequest.meta:type_name -> kodex.agents.v1.CommandMeta
-	25,  // 64: kodex.agents.v1.CreateRoleProfileRequest.scope:type_name -> kodex.agents.v1.ScopeRef
-	24,  // 65: kodex.agents.v1.CreateRoleProfileRequest.display_name:type_name -> kodex.agents.v1.LocalizedText
-	4,   // 66: kodex.agents.v1.CreateRoleProfileRequest.role_kind:type_name -> kodex.agents.v1.RoleKind
-	18,  // 67: kodex.agents.v1.UpdateRoleProfileRequest.meta:type_name -> kodex.agents.v1.CommandMeta
-	24,  // 68: kodex.agents.v1.UpdateRoleProfileRequest.display_name:type_name -> kodex.agents.v1.LocalizedText
-	4,   // 69: kodex.agents.v1.UpdateRoleProfileRequest.role_kind:type_name -> kodex.agents.v1.RoleKind
-	5,   // 70: kodex.agents.v1.UpdateRoleProfileRequest.status:type_name -> kodex.agents.v1.RoleStatus
-	19,  // 71: kodex.agents.v1.GetRoleProfileRequest.meta:type_name -> kodex.agents.v1.QueryMeta
-	19,  // 72: kodex.agents.v1.ListRoleProfilesRequest.meta:type_name -> kodex.agents.v1.QueryMeta
-	25,  // 73: kodex.agents.v1.ListRoleProfilesRequest.scope:type_name -> kodex.agents.v1.ScopeRef
-	4,   // 74: kodex.agents.v1.ListRoleProfilesRequest.role_kind:type_name -> kodex.agents.v1.RoleKind
-	5,   // 75: kodex.agents.v1.ListRoleProfilesRequest.status:type_name -> kodex.agents.v1.RoleStatus
-	22,  // 76: kodex.agents.v1.ListRoleProfilesRequest.page:type_name -> kodex.agents.v1.PageRequest
-	35,  // 77: kodex.agents.v1.RoleProfileResponse.role_profile:type_name -> kodex.agents.v1.RoleProfile
-	35,  // 78: kodex.agents.v1.ListRoleProfilesResponse.role_profiles:type_name -> kodex.agents.v1.RoleProfile
-	23,  // 79: kodex.agents.v1.ListRoleProfilesResponse.page:type_name -> kodex.agents.v1.PageResponse
-	19,  // 80: kodex.agents.v1.GetPromptTemplateRequest.meta:type_name -> kodex.agents.v1.QueryMeta
-	19,  // 81: kodex.agents.v1.ListPromptTemplatesRequest.meta:type_name -> kodex.agents.v1.QueryMeta
-	6,   // 82: kodex.agents.v1.ListPromptTemplatesRequest.prompt_kind:type_name -> kodex.agents.v1.PromptKind
-	22,  // 83: kodex.agents.v1.ListPromptTemplatesRequest.page:type_name -> kodex.agents.v1.PageRequest
-	36,  // 84: kodex.agents.v1.PromptTemplateResponse.prompt_template:type_name -> kodex.agents.v1.PromptTemplate
-	37,  // 85: kodex.agents.v1.PromptTemplateResponse.active_version:type_name -> kodex.agents.v1.PromptTemplateVersion
-	36,  // 86: kodex.agents.v1.ListPromptTemplatesResponse.prompt_templates:type_name -> kodex.agents.v1.PromptTemplate
-	23,  // 87: kodex.agents.v1.ListPromptTemplatesResponse.page:type_name -> kodex.agents.v1.PageResponse
-	18,  // 88: kodex.agents.v1.CreatePromptTemplateVersionRequest.meta:type_name -> kodex.agents.v1.CommandMeta
-	6,   // 89: kodex.agents.v1.CreatePromptTemplateVersionRequest.prompt_kind:type_name -> kodex.agents.v1.PromptKind
-	30,  // 90: kodex.agents.v1.CreatePromptTemplateVersionRequest.template_object:type_name -> kodex.agents.v1.ObjectRef
-	18,  // 91: kodex.agents.v1.ActivatePromptTemplateVersionRequest.meta:type_name -> kodex.agents.v1.CommandMeta
-	19,  // 92: kodex.agents.v1.GetPromptTemplateVersionRequest.meta:type_name -> kodex.agents.v1.QueryMeta
-	19,  // 93: kodex.agents.v1.ListPromptTemplateVersionsRequest.meta:type_name -> kodex.agents.v1.QueryMeta
-	6,   // 94: kodex.agents.v1.ListPromptTemplateVersionsRequest.prompt_kind:type_name -> kodex.agents.v1.PromptKind
-	7,   // 95: kodex.agents.v1.ListPromptTemplateVersionsRequest.status:type_name -> kodex.agents.v1.PromptVersionStatus
-	22,  // 96: kodex.agents.v1.ListPromptTemplateVersionsRequest.page:type_name -> kodex.agents.v1.PageRequest
-	37,  // 97: kodex.agents.v1.PromptTemplateVersionResponse.prompt_template_version:type_name -> kodex.agents.v1.PromptTemplateVersion
-	37,  // 98: kodex.agents.v1.ListPromptTemplateVersionsResponse.prompt_template_versions:type_name -> kodex.agents.v1.PromptTemplateVersion
-	23,  // 99: kodex.agents.v1.ListPromptTemplateVersionsResponse.page:type_name -> kodex.agents.v1.PageResponse
-	18,  // 100: kodex.agents.v1.StartAgentSessionRequest.meta:type_name -> kodex.agents.v1.CommandMeta
-	25,  // 101: kodex.agents.v1.StartAgentSessionRequest.scope:type_name -> kodex.agents.v1.ScopeRef
-	18,  // 102: kodex.agents.v1.StartAgentRunRequest.meta:type_name -> kodex.agents.v1.CommandMeta
-	26,  // 103: kodex.agents.v1.StartAgentRunRequest.provider_target:type_name -> kodex.agents.v1.ProviderTargetRef
-	29,  // 104: kodex.agents.v1.StartAgentRunRequest.guidance_selection_hints:type_name -> kodex.agents.v1.GuidanceSelectionHint
-	18,  // 105: kodex.agents.v1.RecordRunStateRequest.meta:type_name -> kodex.agents.v1.CommandMeta
-	10,  // 106: kodex.agents.v1.RecordRunStateRequest.status:type_name -> kodex.agents.v1.AgentRunStatus
-	27,  // 107: kodex.agents.v1.RecordRunStateRequest.runtime_context:type_name -> kodex.agents.v1.RuntimeContextRef
-	26,  // 108: kodex.agents.v1.RecordRunStateRequest.provider_target:type_name -> kodex.agents.v1.ProviderTargetRef
-	18,  // 109: kodex.agents.v1.RecordSessionStateSnapshotRequest.meta:type_name -> kodex.agents.v1.CommandMeta
-	11,  // 110: kodex.agents.v1.RecordSessionStateSnapshotRequest.snapshot_kind:type_name -> kodex.agents.v1.AgentSessionSnapshotKind
-	30,  // 111: kodex.agents.v1.RecordSessionStateSnapshotRequest.object:type_name -> kodex.agents.v1.ObjectRef
-	18,  // 112: kodex.agents.v1.RequestAcceptanceRequest.meta:type_name -> kodex.agents.v1.CommandMeta
-	12,  // 113: kodex.agents.v1.RequestAcceptanceRequest.check_kinds:type_name -> kodex.agents.v1.AcceptanceCheckKind
-	18,  // 114: kodex.agents.v1.RecordAcceptanceResultRequest.meta:type_name -> kodex.agents.v1.CommandMeta
-	13,  // 115: kodex.agents.v1.RecordAcceptanceResultRequest.status:type_name -> kodex.agents.v1.AcceptanceStatus
-	19,  // 116: kodex.agents.v1.GetAcceptanceResultRequest.meta:type_name -> kodex.agents.v1.QueryMeta
-	19,  // 117: kodex.agents.v1.ListAcceptanceResultsRequest.meta:type_name -> kodex.agents.v1.QueryMeta
-	13,  // 118: kodex.agents.v1.ListAcceptanceResultsRequest.status:type_name -> kodex.agents.v1.AcceptanceStatus
-	22,  // 119: kodex.agents.v1.ListAcceptanceResultsRequest.page:type_name -> kodex.agents.v1.PageRequest
-	18,  // 120: kodex.agents.v1.CreateFollowUpIntentRequest.meta:type_name -> kodex.agents.v1.CommandMeta
-	18,  // 121: kodex.agents.v1.RequestHumanGateRequest.meta:type_name -> kodex.agents.v1.CommandMeta
-	19,  // 122: kodex.agents.v1.GetAgentSessionRequest.meta:type_name -> kodex.agents.v1.QueryMeta
-	19,  // 123: kodex.agents.v1.ListAgentRunsRequest.meta:type_name -> kodex.agents.v1.QueryMeta
-	10,  // 124: kodex.agents.v1.ListAgentRunsRequest.status:type_name -> kodex.agents.v1.AgentRunStatus
-	22,  // 125: kodex.agents.v1.ListAgentRunsRequest.page:type_name -> kodex.agents.v1.PageRequest
-	39,  // 126: kodex.agents.v1.AgentSessionResponse.session:type_name -> kodex.agents.v1.AgentSession
-	41,  // 127: kodex.agents.v1.AgentSessionResponse.latest_state_snapshot:type_name -> kodex.agents.v1.AgentSessionStateSnapshot
-	40,  // 128: kodex.agents.v1.AgentRunResponse.run:type_name -> kodex.agents.v1.AgentRun
-	41,  // 129: kodex.agents.v1.AgentSessionStateSnapshotResponse.snapshot:type_name -> kodex.agents.v1.AgentSessionStateSnapshot
-	39,  // 130: kodex.agents.v1.AgentSessionStateSnapshotResponse.session:type_name -> kodex.agents.v1.AgentSession
-	42,  // 131: kodex.agents.v1.AcceptanceResultResponse.acceptance_result:type_name -> kodex.agents.v1.AcceptanceResult
-	42,  // 132: kodex.agents.v1.ListAcceptanceResultsResponse.acceptance_results:type_name -> kodex.agents.v1.AcceptanceResult
-	23,  // 133: kodex.agents.v1.ListAcceptanceResultsResponse.page:type_name -> kodex.agents.v1.PageResponse
-	43,  // 134: kodex.agents.v1.FollowUpIntentResponse.follow_up_intent:type_name -> kodex.agents.v1.FollowUpIntent
-	44,  // 135: kodex.agents.v1.HumanGateRequestResponse.human_gate_request:type_name -> kodex.agents.v1.HumanGateRequest
-	40,  // 136: kodex.agents.v1.ListAgentRunsResponse.runs:type_name -> kodex.agents.v1.AgentRun
-	23,  // 137: kodex.agents.v1.ListAgentRunsResponse.page:type_name -> kodex.agents.v1.PageResponse
-	49,  // 138: kodex.agents.v1.AgentManagerService.CreateFlow:input_type -> kodex.agents.v1.CreateFlowRequest
-	50,  // 139: kodex.agents.v1.AgentManagerService.UpdateFlow:input_type -> kodex.agents.v1.UpdateFlowRequest
-	51,  // 140: kodex.agents.v1.AgentManagerService.CreateFlowVersion:input_type -> kodex.agents.v1.CreateFlowVersionRequest
-	52,  // 141: kodex.agents.v1.AgentManagerService.ActivateFlowVersion:input_type -> kodex.agents.v1.ActivateFlowVersionRequest
-	53,  // 142: kodex.agents.v1.AgentManagerService.GetFlow:input_type -> kodex.agents.v1.GetFlowRequest
-	54,  // 143: kodex.agents.v1.AgentManagerService.ListFlows:input_type -> kodex.agents.v1.ListFlowsRequest
-	58,  // 144: kodex.agents.v1.AgentManagerService.CreateRoleProfile:input_type -> kodex.agents.v1.CreateRoleProfileRequest
-	59,  // 145: kodex.agents.v1.AgentManagerService.UpdateRoleProfile:input_type -> kodex.agents.v1.UpdateRoleProfileRequest
-	60,  // 146: kodex.agents.v1.AgentManagerService.GetRoleProfile:input_type -> kodex.agents.v1.GetRoleProfileRequest
-	61,  // 147: kodex.agents.v1.AgentManagerService.ListRoleProfiles:input_type -> kodex.agents.v1.ListRoleProfilesRequest
-	64,  // 148: kodex.agents.v1.AgentManagerService.GetPromptTemplate:input_type -> kodex.agents.v1.GetPromptTemplateRequest
-	65,  // 149: kodex.agents.v1.AgentManagerService.ListPromptTemplates:input_type -> kodex.agents.v1.ListPromptTemplatesRequest
-	68,  // 150: kodex.agents.v1.AgentManagerService.CreatePromptTemplateVersion:input_type -> kodex.agents.v1.CreatePromptTemplateVersionRequest
-	69,  // 151: kodex.agents.v1.AgentManagerService.ActivatePromptTemplateVersion:input_type -> kodex.agents.v1.ActivatePromptTemplateVersionRequest
-	70,  // 152: kodex.agents.v1.AgentManagerService.GetPromptTemplateVersion:input_type -> kodex.agents.v1.GetPromptTemplateVersionRequest
-	71,  // 153: kodex.agents.v1.AgentManagerService.ListPromptTemplateVersions:input_type -> kodex.agents.v1.ListPromptTemplateVersionsRequest
-	74,  // 154: kodex.agents.v1.AgentManagerService.StartAgentSession:input_type -> kodex.agents.v1.StartAgentSessionRequest
-	75,  // 155: kodex.agents.v1.AgentManagerService.StartAgentRun:input_type -> kodex.agents.v1.StartAgentRunRequest
-	76,  // 156: kodex.agents.v1.AgentManagerService.RecordRunState:input_type -> kodex.agents.v1.RecordRunStateRequest
-	77,  // 157: kodex.agents.v1.AgentManagerService.RecordSessionStateSnapshot:input_type -> kodex.agents.v1.RecordSessionStateSnapshotRequest
-	78,  // 158: kodex.agents.v1.AgentManagerService.RequestAcceptance:input_type -> kodex.agents.v1.RequestAcceptanceRequest
-	79,  // 159: kodex.agents.v1.AgentManagerService.RecordAcceptanceResult:input_type -> kodex.agents.v1.RecordAcceptanceResultRequest
-	80,  // 160: kodex.agents.v1.AgentManagerService.GetAcceptanceResult:input_type -> kodex.agents.v1.GetAcceptanceResultRequest
-	81,  // 161: kodex.agents.v1.AgentManagerService.ListAcceptanceResults:input_type -> kodex.agents.v1.ListAcceptanceResultsRequest
-	82,  // 162: kodex.agents.v1.AgentManagerService.CreateFollowUpIntent:input_type -> kodex.agents.v1.CreateFollowUpIntentRequest
-	83,  // 163: kodex.agents.v1.AgentManagerService.RequestHumanGate:input_type -> kodex.agents.v1.RequestHumanGateRequest
-	84,  // 164: kodex.agents.v1.AgentManagerService.GetAgentSession:input_type -> kodex.agents.v1.GetAgentSessionRequest
-	85,  // 165: kodex.agents.v1.AgentManagerService.ListAgentRuns:input_type -> kodex.agents.v1.ListAgentRunsRequest
-	55,  // 166: kodex.agents.v1.AgentManagerService.CreateFlow:output_type -> kodex.agents.v1.FlowResponse
-	55,  // 167: kodex.agents.v1.AgentManagerService.UpdateFlow:output_type -> kodex.agents.v1.FlowResponse
-	56,  // 168: kodex.agents.v1.AgentManagerService.CreateFlowVersion:output_type -> kodex.agents.v1.FlowVersionResponse
-	56,  // 169: kodex.agents.v1.AgentManagerService.ActivateFlowVersion:output_type -> kodex.agents.v1.FlowVersionResponse
-	55,  // 170: kodex.agents.v1.AgentManagerService.GetFlow:output_type -> kodex.agents.v1.FlowResponse
-	57,  // 171: kodex.agents.v1.AgentManagerService.ListFlows:output_type -> kodex.agents.v1.ListFlowsResponse
-	62,  // 172: kodex.agents.v1.AgentManagerService.CreateRoleProfile:output_type -> kodex.agents.v1.RoleProfileResponse
-	62,  // 173: kodex.agents.v1.AgentManagerService.UpdateRoleProfile:output_type -> kodex.agents.v1.RoleProfileResponse
-	62,  // 174: kodex.agents.v1.AgentManagerService.GetRoleProfile:output_type -> kodex.agents.v1.RoleProfileResponse
-	63,  // 175: kodex.agents.v1.AgentManagerService.ListRoleProfiles:output_type -> kodex.agents.v1.ListRoleProfilesResponse
-	66,  // 176: kodex.agents.v1.AgentManagerService.GetPromptTemplate:output_type -> kodex.agents.v1.PromptTemplateResponse
-	67,  // 177: kodex.agents.v1.AgentManagerService.ListPromptTemplates:output_type -> kodex.agents.v1.ListPromptTemplatesResponse
-	72,  // 178: kodex.agents.v1.AgentManagerService.CreatePromptTemplateVersion:output_type -> kodex.agents.v1.PromptTemplateVersionResponse
-	72,  // 179: kodex.agents.v1.AgentManagerService.ActivatePromptTemplateVersion:output_type -> kodex.agents.v1.PromptTemplateVersionResponse
-	72,  // 180: kodex.agents.v1.AgentManagerService.GetPromptTemplateVersion:output_type -> kodex.agents.v1.PromptTemplateVersionResponse
-	73,  // 181: kodex.agents.v1.AgentManagerService.ListPromptTemplateVersions:output_type -> kodex.agents.v1.ListPromptTemplateVersionsResponse
-	86,  // 182: kodex.agents.v1.AgentManagerService.StartAgentSession:output_type -> kodex.agents.v1.AgentSessionResponse
-	87,  // 183: kodex.agents.v1.AgentManagerService.StartAgentRun:output_type -> kodex.agents.v1.AgentRunResponse
-	87,  // 184: kodex.agents.v1.AgentManagerService.RecordRunState:output_type -> kodex.agents.v1.AgentRunResponse
-	88,  // 185: kodex.agents.v1.AgentManagerService.RecordSessionStateSnapshot:output_type -> kodex.agents.v1.AgentSessionStateSnapshotResponse
-	89,  // 186: kodex.agents.v1.AgentManagerService.RequestAcceptance:output_type -> kodex.agents.v1.AcceptanceResultResponse
-	89,  // 187: kodex.agents.v1.AgentManagerService.RecordAcceptanceResult:output_type -> kodex.agents.v1.AcceptanceResultResponse
-	89,  // 188: kodex.agents.v1.AgentManagerService.GetAcceptanceResult:output_type -> kodex.agents.v1.AcceptanceResultResponse
-	90,  // 189: kodex.agents.v1.AgentManagerService.ListAcceptanceResults:output_type -> kodex.agents.v1.ListAcceptanceResultsResponse
-	91,  // 190: kodex.agents.v1.AgentManagerService.CreateFollowUpIntent:output_type -> kodex.agents.v1.FollowUpIntentResponse
-	92,  // 191: kodex.agents.v1.AgentManagerService.RequestHumanGate:output_type -> kodex.agents.v1.HumanGateRequestResponse
-	86,  // 192: kodex.agents.v1.AgentManagerService.GetAgentSession:output_type -> kodex.agents.v1.AgentSessionResponse
-	93,  // 193: kodex.agents.v1.AgentManagerService.ListAgentRuns:output_type -> kodex.agents.v1.ListAgentRunsResponse
-	166, // [166:194] is the sub-list for method output_type
-	138, // [138:166] is the sub-list for method input_type
-	138, // [138:138] is the sub-list for extension type_name
-	138, // [138:138] is the sub-list for extension extendee
-	0,   // [0:138] is the sub-list for field type_name
+	26,  // 35: kodex.agents.v1.FollowUpIntent.provider_target:type_name -> kodex.agents.v1.ProviderTargetRef
+	15,  // 36: kodex.agents.v1.HumanGateRequest.status:type_name -> kodex.agents.v1.HumanGateStatus
+	46,  // 37: kodex.agents.v1.FlowDefinitionInput.stages:type_name -> kodex.agents.v1.StageInput
+	47,  // 38: kodex.agents.v1.FlowDefinitionInput.transitions:type_name -> kodex.agents.v1.StageTransitionInput
+	48,  // 39: kodex.agents.v1.FlowDefinitionInput.stage_role_bindings:type_name -> kodex.agents.v1.StageRoleBindingInput
+	3,   // 40: kodex.agents.v1.StageInput.stage_type:type_name -> kodex.agents.v1.StageType
+	24,  // 41: kodex.agents.v1.StageInput.display_name:type_name -> kodex.agents.v1.LocalizedText
+	8,   // 42: kodex.agents.v1.StageRoleBindingInput.binding_kind:type_name -> kodex.agents.v1.StageRoleBindingKind
+	18,  // 43: kodex.agents.v1.CreateFlowRequest.meta:type_name -> kodex.agents.v1.CommandMeta
+	25,  // 44: kodex.agents.v1.CreateFlowRequest.scope:type_name -> kodex.agents.v1.ScopeRef
+	24,  // 45: kodex.agents.v1.CreateFlowRequest.display_name:type_name -> kodex.agents.v1.LocalizedText
+	24,  // 46: kodex.agents.v1.CreateFlowRequest.description:type_name -> kodex.agents.v1.LocalizedText
+	18,  // 47: kodex.agents.v1.UpdateFlowRequest.meta:type_name -> kodex.agents.v1.CommandMeta
+	24,  // 48: kodex.agents.v1.UpdateFlowRequest.display_name:type_name -> kodex.agents.v1.LocalizedText
+	24,  // 49: kodex.agents.v1.UpdateFlowRequest.description:type_name -> kodex.agents.v1.LocalizedText
+	1,   // 50: kodex.agents.v1.UpdateFlowRequest.status:type_name -> kodex.agents.v1.FlowStatus
+	18,  // 51: kodex.agents.v1.CreateFlowVersionRequest.meta:type_name -> kodex.agents.v1.CommandMeta
+	45,  // 52: kodex.agents.v1.CreateFlowVersionRequest.definition:type_name -> kodex.agents.v1.FlowDefinitionInput
+	18,  // 53: kodex.agents.v1.ActivateFlowVersionRequest.meta:type_name -> kodex.agents.v1.CommandMeta
+	19,  // 54: kodex.agents.v1.GetFlowRequest.meta:type_name -> kodex.agents.v1.QueryMeta
+	19,  // 55: kodex.agents.v1.ListFlowsRequest.meta:type_name -> kodex.agents.v1.QueryMeta
+	25,  // 56: kodex.agents.v1.ListFlowsRequest.scope:type_name -> kodex.agents.v1.ScopeRef
+	1,   // 57: kodex.agents.v1.ListFlowsRequest.status:type_name -> kodex.agents.v1.FlowStatus
+	22,  // 58: kodex.agents.v1.ListFlowsRequest.page:type_name -> kodex.agents.v1.PageRequest
+	31,  // 59: kodex.agents.v1.FlowResponse.flow:type_name -> kodex.agents.v1.Flow
+	32,  // 60: kodex.agents.v1.FlowResponse.active_version:type_name -> kodex.agents.v1.FlowVersion
+	32,  // 61: kodex.agents.v1.FlowVersionResponse.flow_version:type_name -> kodex.agents.v1.FlowVersion
+	31,  // 62: kodex.agents.v1.ListFlowsResponse.flows:type_name -> kodex.agents.v1.Flow
+	23,  // 63: kodex.agents.v1.ListFlowsResponse.page:type_name -> kodex.agents.v1.PageResponse
+	18,  // 64: kodex.agents.v1.CreateRoleProfileRequest.meta:type_name -> kodex.agents.v1.CommandMeta
+	25,  // 65: kodex.agents.v1.CreateRoleProfileRequest.scope:type_name -> kodex.agents.v1.ScopeRef
+	24,  // 66: kodex.agents.v1.CreateRoleProfileRequest.display_name:type_name -> kodex.agents.v1.LocalizedText
+	4,   // 67: kodex.agents.v1.CreateRoleProfileRequest.role_kind:type_name -> kodex.agents.v1.RoleKind
+	18,  // 68: kodex.agents.v1.UpdateRoleProfileRequest.meta:type_name -> kodex.agents.v1.CommandMeta
+	24,  // 69: kodex.agents.v1.UpdateRoleProfileRequest.display_name:type_name -> kodex.agents.v1.LocalizedText
+	4,   // 70: kodex.agents.v1.UpdateRoleProfileRequest.role_kind:type_name -> kodex.agents.v1.RoleKind
+	5,   // 71: kodex.agents.v1.UpdateRoleProfileRequest.status:type_name -> kodex.agents.v1.RoleStatus
+	19,  // 72: kodex.agents.v1.GetRoleProfileRequest.meta:type_name -> kodex.agents.v1.QueryMeta
+	19,  // 73: kodex.agents.v1.ListRoleProfilesRequest.meta:type_name -> kodex.agents.v1.QueryMeta
+	25,  // 74: kodex.agents.v1.ListRoleProfilesRequest.scope:type_name -> kodex.agents.v1.ScopeRef
+	4,   // 75: kodex.agents.v1.ListRoleProfilesRequest.role_kind:type_name -> kodex.agents.v1.RoleKind
+	5,   // 76: kodex.agents.v1.ListRoleProfilesRequest.status:type_name -> kodex.agents.v1.RoleStatus
+	22,  // 77: kodex.agents.v1.ListRoleProfilesRequest.page:type_name -> kodex.agents.v1.PageRequest
+	35,  // 78: kodex.agents.v1.RoleProfileResponse.role_profile:type_name -> kodex.agents.v1.RoleProfile
+	35,  // 79: kodex.agents.v1.ListRoleProfilesResponse.role_profiles:type_name -> kodex.agents.v1.RoleProfile
+	23,  // 80: kodex.agents.v1.ListRoleProfilesResponse.page:type_name -> kodex.agents.v1.PageResponse
+	19,  // 81: kodex.agents.v1.GetPromptTemplateRequest.meta:type_name -> kodex.agents.v1.QueryMeta
+	19,  // 82: kodex.agents.v1.ListPromptTemplatesRequest.meta:type_name -> kodex.agents.v1.QueryMeta
+	6,   // 83: kodex.agents.v1.ListPromptTemplatesRequest.prompt_kind:type_name -> kodex.agents.v1.PromptKind
+	22,  // 84: kodex.agents.v1.ListPromptTemplatesRequest.page:type_name -> kodex.agents.v1.PageRequest
+	36,  // 85: kodex.agents.v1.PromptTemplateResponse.prompt_template:type_name -> kodex.agents.v1.PromptTemplate
+	37,  // 86: kodex.agents.v1.PromptTemplateResponse.active_version:type_name -> kodex.agents.v1.PromptTemplateVersion
+	36,  // 87: kodex.agents.v1.ListPromptTemplatesResponse.prompt_templates:type_name -> kodex.agents.v1.PromptTemplate
+	23,  // 88: kodex.agents.v1.ListPromptTemplatesResponse.page:type_name -> kodex.agents.v1.PageResponse
+	18,  // 89: kodex.agents.v1.CreatePromptTemplateVersionRequest.meta:type_name -> kodex.agents.v1.CommandMeta
+	6,   // 90: kodex.agents.v1.CreatePromptTemplateVersionRequest.prompt_kind:type_name -> kodex.agents.v1.PromptKind
+	30,  // 91: kodex.agents.v1.CreatePromptTemplateVersionRequest.template_object:type_name -> kodex.agents.v1.ObjectRef
+	18,  // 92: kodex.agents.v1.ActivatePromptTemplateVersionRequest.meta:type_name -> kodex.agents.v1.CommandMeta
+	19,  // 93: kodex.agents.v1.GetPromptTemplateVersionRequest.meta:type_name -> kodex.agents.v1.QueryMeta
+	19,  // 94: kodex.agents.v1.ListPromptTemplateVersionsRequest.meta:type_name -> kodex.agents.v1.QueryMeta
+	6,   // 95: kodex.agents.v1.ListPromptTemplateVersionsRequest.prompt_kind:type_name -> kodex.agents.v1.PromptKind
+	7,   // 96: kodex.agents.v1.ListPromptTemplateVersionsRequest.status:type_name -> kodex.agents.v1.PromptVersionStatus
+	22,  // 97: kodex.agents.v1.ListPromptTemplateVersionsRequest.page:type_name -> kodex.agents.v1.PageRequest
+	37,  // 98: kodex.agents.v1.PromptTemplateVersionResponse.prompt_template_version:type_name -> kodex.agents.v1.PromptTemplateVersion
+	37,  // 99: kodex.agents.v1.ListPromptTemplateVersionsResponse.prompt_template_versions:type_name -> kodex.agents.v1.PromptTemplateVersion
+	23,  // 100: kodex.agents.v1.ListPromptTemplateVersionsResponse.page:type_name -> kodex.agents.v1.PageResponse
+	18,  // 101: kodex.agents.v1.StartAgentSessionRequest.meta:type_name -> kodex.agents.v1.CommandMeta
+	25,  // 102: kodex.agents.v1.StartAgentSessionRequest.scope:type_name -> kodex.agents.v1.ScopeRef
+	18,  // 103: kodex.agents.v1.StartAgentRunRequest.meta:type_name -> kodex.agents.v1.CommandMeta
+	26,  // 104: kodex.agents.v1.StartAgentRunRequest.provider_target:type_name -> kodex.agents.v1.ProviderTargetRef
+	29,  // 105: kodex.agents.v1.StartAgentRunRequest.guidance_selection_hints:type_name -> kodex.agents.v1.GuidanceSelectionHint
+	18,  // 106: kodex.agents.v1.RecordRunStateRequest.meta:type_name -> kodex.agents.v1.CommandMeta
+	10,  // 107: kodex.agents.v1.RecordRunStateRequest.status:type_name -> kodex.agents.v1.AgentRunStatus
+	27,  // 108: kodex.agents.v1.RecordRunStateRequest.runtime_context:type_name -> kodex.agents.v1.RuntimeContextRef
+	26,  // 109: kodex.agents.v1.RecordRunStateRequest.provider_target:type_name -> kodex.agents.v1.ProviderTargetRef
+	18,  // 110: kodex.agents.v1.RecordSessionStateSnapshotRequest.meta:type_name -> kodex.agents.v1.CommandMeta
+	11,  // 111: kodex.agents.v1.RecordSessionStateSnapshotRequest.snapshot_kind:type_name -> kodex.agents.v1.AgentSessionSnapshotKind
+	30,  // 112: kodex.agents.v1.RecordSessionStateSnapshotRequest.object:type_name -> kodex.agents.v1.ObjectRef
+	18,  // 113: kodex.agents.v1.RequestAcceptanceRequest.meta:type_name -> kodex.agents.v1.CommandMeta
+	12,  // 114: kodex.agents.v1.RequestAcceptanceRequest.check_kinds:type_name -> kodex.agents.v1.AcceptanceCheckKind
+	18,  // 115: kodex.agents.v1.RecordAcceptanceResultRequest.meta:type_name -> kodex.agents.v1.CommandMeta
+	13,  // 116: kodex.agents.v1.RecordAcceptanceResultRequest.status:type_name -> kodex.agents.v1.AcceptanceStatus
+	19,  // 117: kodex.agents.v1.GetAcceptanceResultRequest.meta:type_name -> kodex.agents.v1.QueryMeta
+	19,  // 118: kodex.agents.v1.ListAcceptanceResultsRequest.meta:type_name -> kodex.agents.v1.QueryMeta
+	13,  // 119: kodex.agents.v1.ListAcceptanceResultsRequest.status:type_name -> kodex.agents.v1.AcceptanceStatus
+	22,  // 120: kodex.agents.v1.ListAcceptanceResultsRequest.page:type_name -> kodex.agents.v1.PageRequest
+	18,  // 121: kodex.agents.v1.CreateFollowUpIntentRequest.meta:type_name -> kodex.agents.v1.CommandMeta
+	26,  // 122: kodex.agents.v1.CreateFollowUpIntentRequest.provider_target:type_name -> kodex.agents.v1.ProviderTargetRef
+	18,  // 123: kodex.agents.v1.RequestHumanGateRequest.meta:type_name -> kodex.agents.v1.CommandMeta
+	19,  // 124: kodex.agents.v1.GetAgentSessionRequest.meta:type_name -> kodex.agents.v1.QueryMeta
+	19,  // 125: kodex.agents.v1.ListAgentRunsRequest.meta:type_name -> kodex.agents.v1.QueryMeta
+	10,  // 126: kodex.agents.v1.ListAgentRunsRequest.status:type_name -> kodex.agents.v1.AgentRunStatus
+	22,  // 127: kodex.agents.v1.ListAgentRunsRequest.page:type_name -> kodex.agents.v1.PageRequest
+	39,  // 128: kodex.agents.v1.AgentSessionResponse.session:type_name -> kodex.agents.v1.AgentSession
+	41,  // 129: kodex.agents.v1.AgentSessionResponse.latest_state_snapshot:type_name -> kodex.agents.v1.AgentSessionStateSnapshot
+	40,  // 130: kodex.agents.v1.AgentRunResponse.run:type_name -> kodex.agents.v1.AgentRun
+	41,  // 131: kodex.agents.v1.AgentSessionStateSnapshotResponse.snapshot:type_name -> kodex.agents.v1.AgentSessionStateSnapshot
+	39,  // 132: kodex.agents.v1.AgentSessionStateSnapshotResponse.session:type_name -> kodex.agents.v1.AgentSession
+	42,  // 133: kodex.agents.v1.AcceptanceResultResponse.acceptance_result:type_name -> kodex.agents.v1.AcceptanceResult
+	42,  // 134: kodex.agents.v1.ListAcceptanceResultsResponse.acceptance_results:type_name -> kodex.agents.v1.AcceptanceResult
+	23,  // 135: kodex.agents.v1.ListAcceptanceResultsResponse.page:type_name -> kodex.agents.v1.PageResponse
+	43,  // 136: kodex.agents.v1.FollowUpIntentResponse.follow_up_intent:type_name -> kodex.agents.v1.FollowUpIntent
+	44,  // 137: kodex.agents.v1.HumanGateRequestResponse.human_gate_request:type_name -> kodex.agents.v1.HumanGateRequest
+	40,  // 138: kodex.agents.v1.ListAgentRunsResponse.runs:type_name -> kodex.agents.v1.AgentRun
+	23,  // 139: kodex.agents.v1.ListAgentRunsResponse.page:type_name -> kodex.agents.v1.PageResponse
+	49,  // 140: kodex.agents.v1.AgentManagerService.CreateFlow:input_type -> kodex.agents.v1.CreateFlowRequest
+	50,  // 141: kodex.agents.v1.AgentManagerService.UpdateFlow:input_type -> kodex.agents.v1.UpdateFlowRequest
+	51,  // 142: kodex.agents.v1.AgentManagerService.CreateFlowVersion:input_type -> kodex.agents.v1.CreateFlowVersionRequest
+	52,  // 143: kodex.agents.v1.AgentManagerService.ActivateFlowVersion:input_type -> kodex.agents.v1.ActivateFlowVersionRequest
+	53,  // 144: kodex.agents.v1.AgentManagerService.GetFlow:input_type -> kodex.agents.v1.GetFlowRequest
+	54,  // 145: kodex.agents.v1.AgentManagerService.ListFlows:input_type -> kodex.agents.v1.ListFlowsRequest
+	58,  // 146: kodex.agents.v1.AgentManagerService.CreateRoleProfile:input_type -> kodex.agents.v1.CreateRoleProfileRequest
+	59,  // 147: kodex.agents.v1.AgentManagerService.UpdateRoleProfile:input_type -> kodex.agents.v1.UpdateRoleProfileRequest
+	60,  // 148: kodex.agents.v1.AgentManagerService.GetRoleProfile:input_type -> kodex.agents.v1.GetRoleProfileRequest
+	61,  // 149: kodex.agents.v1.AgentManagerService.ListRoleProfiles:input_type -> kodex.agents.v1.ListRoleProfilesRequest
+	64,  // 150: kodex.agents.v1.AgentManagerService.GetPromptTemplate:input_type -> kodex.agents.v1.GetPromptTemplateRequest
+	65,  // 151: kodex.agents.v1.AgentManagerService.ListPromptTemplates:input_type -> kodex.agents.v1.ListPromptTemplatesRequest
+	68,  // 152: kodex.agents.v1.AgentManagerService.CreatePromptTemplateVersion:input_type -> kodex.agents.v1.CreatePromptTemplateVersionRequest
+	69,  // 153: kodex.agents.v1.AgentManagerService.ActivatePromptTemplateVersion:input_type -> kodex.agents.v1.ActivatePromptTemplateVersionRequest
+	70,  // 154: kodex.agents.v1.AgentManagerService.GetPromptTemplateVersion:input_type -> kodex.agents.v1.GetPromptTemplateVersionRequest
+	71,  // 155: kodex.agents.v1.AgentManagerService.ListPromptTemplateVersions:input_type -> kodex.agents.v1.ListPromptTemplateVersionsRequest
+	74,  // 156: kodex.agents.v1.AgentManagerService.StartAgentSession:input_type -> kodex.agents.v1.StartAgentSessionRequest
+	75,  // 157: kodex.agents.v1.AgentManagerService.StartAgentRun:input_type -> kodex.agents.v1.StartAgentRunRequest
+	76,  // 158: kodex.agents.v1.AgentManagerService.RecordRunState:input_type -> kodex.agents.v1.RecordRunStateRequest
+	77,  // 159: kodex.agents.v1.AgentManagerService.RecordSessionStateSnapshot:input_type -> kodex.agents.v1.RecordSessionStateSnapshotRequest
+	78,  // 160: kodex.agents.v1.AgentManagerService.RequestAcceptance:input_type -> kodex.agents.v1.RequestAcceptanceRequest
+	79,  // 161: kodex.agents.v1.AgentManagerService.RecordAcceptanceResult:input_type -> kodex.agents.v1.RecordAcceptanceResultRequest
+	80,  // 162: kodex.agents.v1.AgentManagerService.GetAcceptanceResult:input_type -> kodex.agents.v1.GetAcceptanceResultRequest
+	81,  // 163: kodex.agents.v1.AgentManagerService.ListAcceptanceResults:input_type -> kodex.agents.v1.ListAcceptanceResultsRequest
+	82,  // 164: kodex.agents.v1.AgentManagerService.CreateFollowUpIntent:input_type -> kodex.agents.v1.CreateFollowUpIntentRequest
+	83,  // 165: kodex.agents.v1.AgentManagerService.RequestHumanGate:input_type -> kodex.agents.v1.RequestHumanGateRequest
+	84,  // 166: kodex.agents.v1.AgentManagerService.GetAgentSession:input_type -> kodex.agents.v1.GetAgentSessionRequest
+	85,  // 167: kodex.agents.v1.AgentManagerService.ListAgentRuns:input_type -> kodex.agents.v1.ListAgentRunsRequest
+	55,  // 168: kodex.agents.v1.AgentManagerService.CreateFlow:output_type -> kodex.agents.v1.FlowResponse
+	55,  // 169: kodex.agents.v1.AgentManagerService.UpdateFlow:output_type -> kodex.agents.v1.FlowResponse
+	56,  // 170: kodex.agents.v1.AgentManagerService.CreateFlowVersion:output_type -> kodex.agents.v1.FlowVersionResponse
+	56,  // 171: kodex.agents.v1.AgentManagerService.ActivateFlowVersion:output_type -> kodex.agents.v1.FlowVersionResponse
+	55,  // 172: kodex.agents.v1.AgentManagerService.GetFlow:output_type -> kodex.agents.v1.FlowResponse
+	57,  // 173: kodex.agents.v1.AgentManagerService.ListFlows:output_type -> kodex.agents.v1.ListFlowsResponse
+	62,  // 174: kodex.agents.v1.AgentManagerService.CreateRoleProfile:output_type -> kodex.agents.v1.RoleProfileResponse
+	62,  // 175: kodex.agents.v1.AgentManagerService.UpdateRoleProfile:output_type -> kodex.agents.v1.RoleProfileResponse
+	62,  // 176: kodex.agents.v1.AgentManagerService.GetRoleProfile:output_type -> kodex.agents.v1.RoleProfileResponse
+	63,  // 177: kodex.agents.v1.AgentManagerService.ListRoleProfiles:output_type -> kodex.agents.v1.ListRoleProfilesResponse
+	66,  // 178: kodex.agents.v1.AgentManagerService.GetPromptTemplate:output_type -> kodex.agents.v1.PromptTemplateResponse
+	67,  // 179: kodex.agents.v1.AgentManagerService.ListPromptTemplates:output_type -> kodex.agents.v1.ListPromptTemplatesResponse
+	72,  // 180: kodex.agents.v1.AgentManagerService.CreatePromptTemplateVersion:output_type -> kodex.agents.v1.PromptTemplateVersionResponse
+	72,  // 181: kodex.agents.v1.AgentManagerService.ActivatePromptTemplateVersion:output_type -> kodex.agents.v1.PromptTemplateVersionResponse
+	72,  // 182: kodex.agents.v1.AgentManagerService.GetPromptTemplateVersion:output_type -> kodex.agents.v1.PromptTemplateVersionResponse
+	73,  // 183: kodex.agents.v1.AgentManagerService.ListPromptTemplateVersions:output_type -> kodex.agents.v1.ListPromptTemplateVersionsResponse
+	86,  // 184: kodex.agents.v1.AgentManagerService.StartAgentSession:output_type -> kodex.agents.v1.AgentSessionResponse
+	87,  // 185: kodex.agents.v1.AgentManagerService.StartAgentRun:output_type -> kodex.agents.v1.AgentRunResponse
+	87,  // 186: kodex.agents.v1.AgentManagerService.RecordRunState:output_type -> kodex.agents.v1.AgentRunResponse
+	88,  // 187: kodex.agents.v1.AgentManagerService.RecordSessionStateSnapshot:output_type -> kodex.agents.v1.AgentSessionStateSnapshotResponse
+	89,  // 188: kodex.agents.v1.AgentManagerService.RequestAcceptance:output_type -> kodex.agents.v1.AcceptanceResultResponse
+	89,  // 189: kodex.agents.v1.AgentManagerService.RecordAcceptanceResult:output_type -> kodex.agents.v1.AcceptanceResultResponse
+	89,  // 190: kodex.agents.v1.AgentManagerService.GetAcceptanceResult:output_type -> kodex.agents.v1.AcceptanceResultResponse
+	90,  // 191: kodex.agents.v1.AgentManagerService.ListAcceptanceResults:output_type -> kodex.agents.v1.ListAcceptanceResultsResponse
+	91,  // 192: kodex.agents.v1.AgentManagerService.CreateFollowUpIntent:output_type -> kodex.agents.v1.FollowUpIntentResponse
+	92,  // 193: kodex.agents.v1.AgentManagerService.RequestHumanGate:output_type -> kodex.agents.v1.HumanGateRequestResponse
+	86,  // 194: kodex.agents.v1.AgentManagerService.GetAgentSession:output_type -> kodex.agents.v1.AgentSessionResponse
+	93,  // 195: kodex.agents.v1.AgentManagerService.ListAgentRuns:output_type -> kodex.agents.v1.ListAgentRunsResponse
+	168, // [168:196] is the sub-list for method output_type
+	140, // [140:168] is the sub-list for method input_type
+	140, // [140:140] is the sub-list for extension type_name
+	140, // [140:140] is the sub-list for extension extendee
+	0,   // [0:140] is the sub-list for field type_name
 }
 
 func init() { file_kodex_agents_v1_agent_manager_proto_init() }

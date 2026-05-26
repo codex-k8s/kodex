@@ -1586,6 +1586,244 @@ func TestRecordAcceptanceResultHumanGateOnlyWaitsForOwnerDecision(t *testing.T) 
 	})
 }
 
+func TestCreateFollowUpIntentStoresSafeIntentAndOutbox(t *testing.T) {
+	t.Parallel()
+
+	sessionID := uuid.MustParse("81818181-1111-2222-3333-444444444444")
+	runID := uuid.MustParse("81818181-2222-3333-4444-555555555555")
+	fromStageID := uuid.MustParse("81818181-3333-4444-5555-666666666666")
+	toStageID := uuid.MustParse("81818181-4444-5555-6666-777777777777")
+	flowVersionID := uuid.MustParse("81818181-5555-6666-7777-888888888888")
+	acceptanceID := uuid.MustParse("81818181-6666-7777-8888-999999999999")
+	intentID := uuid.MustParse("81818181-7777-8888-9999-aaaaaaaaaaaa")
+	eventID := uuid.MustParse("81818181-8888-9999-aaaa-bbbbbbbbbbbb")
+	digest := "sha256:" + strings.Repeat("a", 64)
+	repository := &fakeRepository{
+		sessionByID: map[uuid.UUID]entity.AgentSession{
+			sessionID: {
+				VersionedBase:       entity.VersionedBase{ID: sessionID, Version: 2},
+				ProviderWorkItemRef: "issue:123",
+				FlowVersionID:       &flowVersionID,
+				Status:              enum.AgentSessionStatusOpen,
+			},
+		},
+		runByID: map[uuid.UUID]entity.AgentRun{
+			runID: {
+				VersionedBase: entity.VersionedBase{ID: runID, Version: 4},
+				SessionID:     sessionID,
+				FlowVersionID: &flowVersionID,
+				StageID:       &fromStageID,
+				ProviderTarget: value.ProviderTargetRef{
+					PullRequestRef: "pr:456",
+				},
+				Status: enum.AgentRunStatusCompleted,
+			},
+		},
+		acceptanceByID: map[uuid.UUID]entity.AcceptanceResult{
+			acceptanceID: {
+				VersionedBase: entity.VersionedBase{ID: acceptanceID, Version: 3},
+				SessionID:     sessionID,
+				RunID:         &runID,
+				StageID:       &fromStageID,
+				CheckKind:     enum.AcceptanceCheckKindFollowUp,
+				Status:        enum.AcceptanceStatusPassed,
+				DetailsJSON:   []byte(`{"summary":"ok"}`),
+			},
+		},
+		flowVersionByID: map[uuid.UUID]entity.FlowVersion{
+			flowVersionID: {
+				ID: flowVersionID,
+				Stages: []entity.Stage{
+					{ID: fromStageID, FlowVersionID: flowVersionID, Slug: "review", StageType: enum.StageTypeReview},
+					{ID: toStageID, FlowVersionID: flowVersionID, Slug: "follow-up", StageType: enum.StageTypeWork},
+				},
+				Transitions: []entity.StageTransition{{
+					ID:            uuid.MustParse("81818181-9999-aaaa-bbbb-cccccccccccc"),
+					FlowVersionID: flowVersionID,
+					FromStageID:   &fromStageID,
+					ToStageID:     toStageID,
+					FollowUpType:  "task",
+				}},
+			},
+		},
+	}
+	service := New(Config{
+		Repository:  repository,
+		Clock:       fixedClock{now: time.Date(2026, 5, 26, 18, 0, 0, 0, time.UTC)},
+		IDGenerator: &sequenceIDGenerator{ids: []uuid.UUID{intentID, eventID}},
+	})
+
+	intent, err := service.CreateFollowUpIntent(context.Background(), CreateFollowUpIntentInput{
+		Meta:                  value.CommandMeta{IdempotencyKey: "follow-up-1", Actor: testActor()},
+		SessionID:             sessionID,
+		RunID:                 &runID,
+		ToStageID:             &toStageID,
+		AcceptanceResultID:    &acceptanceID,
+		ProviderTarget:        value.ProviderTargetRef{CommentRef: "comment:789"},
+		ProviderWorkItemType:  "task",
+		ProviderOperationRef:  "operation:planned",
+		InstructionBodyDigest: digest,
+		SafeTitle:             "Prepare follow-up task",
+		SafeSummary:           "Create the next bounded provider-native task.",
+		RoleHint:              "worker",
+		StageHint:             "follow-up",
+	})
+	if err != nil {
+		t.Fatalf("CreateFollowUpIntent() err = %v", err)
+	}
+	if intent.ID != intentID || intent.Status != enum.FollowUpIntentStatusRequested || intent.Version != 1 {
+		t.Fatalf("intent = %+v", intent)
+	}
+	if intent.FromStageID == nil || *intent.FromStageID != fromStageID || intent.ToStageID == nil || *intent.ToStageID != toStageID {
+		t.Fatalf("stage refs = from:%v to:%v", intent.FromStageID, intent.ToStageID)
+	}
+	if intent.ProviderTarget.WorkItemRef != "issue:123" || intent.ProviderTarget.PullRequestRef != "pr:456" || intent.ProviderTarget.CommentRef != "comment:789" {
+		t.Fatalf("provider target = %+v", intent.ProviderTarget)
+	}
+	if intent.IdempotencyKey != operationCreateFollowUpIntent+":user:owner:follow-up-1" {
+		t.Fatalf("idempotency key = %q", intent.IdempotencyKey)
+	}
+	if repository.followUpResult.AggregateType != enum.CommandAggregateTypeFollowUp || repository.followUpEvent.EventType != agentevents.EventFollowUpRequested {
+		t.Fatalf("result/event = %s/%s", repository.followUpResult.AggregateType, repository.followUpEvent.EventType)
+	}
+	payload := decodeAgentPayload(t, repository.followUpEvent)
+	if payload.FollowUpIntentID != intentID.String() || payload.SessionID != sessionID.String() || payload.RunID != runID.String() || payload.AcceptanceResultID != acceptanceID.String() {
+		t.Fatalf("event payload = %+v", payload)
+	}
+	if payload.ProviderWorkItemRef != "issue:123" || payload.ProviderPullRequestRef != "pr:456" || payload.ProviderCommentRef != "comment:789" || payload.Summary != intent.SafeSummary {
+		t.Fatalf("event payload target = %+v", payload)
+	}
+}
+
+func TestCreateFollowUpIntentReplaysAndRejectsConflictingPayload(t *testing.T) {
+	t.Parallel()
+
+	sessionID := uuid.MustParse("82828282-1111-2222-3333-444444444444")
+	runID := uuid.MustParse("82828282-2222-3333-4444-555555555555")
+	intent := entity.FollowUpIntent{
+		VersionedBase:        entity.VersionedBase{ID: uuid.MustParse("82828282-3333-4444-5555-666666666666"), Version: 1},
+		SessionID:            sessionID,
+		RunID:                &runID,
+		ProviderTarget:       value.ProviderTargetRef{WorkItemRef: "issue:123"},
+		ProviderWorkItemType: "task",
+		SafeTitle:            "Same title",
+		IdempotencyKey:       operationCreateFollowUpIntent + ":user:owner:follow-up-replay",
+		Status:               enum.FollowUpIntentStatusRequested,
+	}
+	payload, err := marshalCommandPayload(followUpIntentCommandPayload{FollowUpIntent: intent})
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	repository := &fakeRepository{
+		replay: &entity.CommandResult{
+			IdempotencyKey: "follow-up-replay",
+			Actor:          testActor(),
+			Operation:      operationCreateFollowUpIntent,
+			AggregateType:  enum.CommandAggregateTypeFollowUp,
+			AggregateID:    intent.ID,
+			ResultPayload:  payload,
+		},
+		sessionByID: map[uuid.UUID]entity.AgentSession{
+			sessionID: {VersionedBase: entity.VersionedBase{ID: sessionID, Version: 1}, Status: enum.AgentSessionStatusOpen},
+		},
+		runByID: map[uuid.UUID]entity.AgentRun{
+			runID: {VersionedBase: entity.VersionedBase{ID: runID, Version: 1}, SessionID: sessionID, Status: enum.AgentRunStatusCompleted},
+		},
+		followUpByID: map[uuid.UUID]entity.FollowUpIntent{intent.ID: intent},
+	}
+	service := New(Config{Repository: repository})
+
+	replay, err := service.CreateFollowUpIntent(context.Background(), CreateFollowUpIntentInput{
+		Meta:                 value.CommandMeta{IdempotencyKey: "follow-up-replay", Actor: testActor()},
+		SessionID:            sessionID,
+		RunID:                &runID,
+		ProviderTarget:       value.ProviderTargetRef{WorkItemRef: "issue:123"},
+		ProviderWorkItemType: "task",
+		SafeTitle:            "Same title",
+	})
+	if err != nil {
+		t.Fatalf("CreateFollowUpIntent() err = %v", err)
+	}
+	if replay.ID != intent.ID {
+		t.Fatalf("replay id = %s, want %s", replay.ID, intent.ID)
+	}
+	if repository.createFollowUpCalled {
+		t.Fatal("CreateFollowUpIntentWithResult called during replay")
+	}
+
+	_, err = service.CreateFollowUpIntent(context.Background(), CreateFollowUpIntentInput{
+		Meta:                 value.CommandMeta{IdempotencyKey: "follow-up-replay", Actor: testActor()},
+		SessionID:            sessionID,
+		RunID:                &runID,
+		ProviderTarget:       value.ProviderTargetRef{WorkItemRef: "issue:123"},
+		ProviderWorkItemType: "task",
+		SafeTitle:            "Different title",
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("CreateFollowUpIntent() err = %v, want %v", err, errs.ErrConflict)
+	}
+}
+
+func TestCreateFollowUpIntentRejectsInvalidStateAndUnsafePayload(t *testing.T) {
+	t.Parallel()
+
+	t.Run("failed acceptance cannot create follow-up", func(t *testing.T) {
+		t.Parallel()
+
+		sessionID := uuid.MustParse("83838383-1111-2222-3333-444444444444")
+		acceptanceID := uuid.MustParse("83838383-2222-3333-4444-555555555555")
+		repository := &fakeRepository{
+			sessionByID: map[uuid.UUID]entity.AgentSession{
+				sessionID: {VersionedBase: entity.VersionedBase{ID: sessionID, Version: 1}, ProviderWorkItemRef: "issue:123", Status: enum.AgentSessionStatusOpen},
+			},
+			acceptanceByID: map[uuid.UUID]entity.AcceptanceResult{
+				acceptanceID: {VersionedBase: entity.VersionedBase{ID: acceptanceID, Version: 1}, SessionID: sessionID, Status: enum.AcceptanceStatusFailed},
+			},
+		}
+		service := New(Config{Repository: repository})
+
+		_, err := service.CreateFollowUpIntent(context.Background(), CreateFollowUpIntentInput{
+			Meta:                 value.CommandMeta{CommandID: uuid.New(), Actor: testActor()},
+			SessionID:            sessionID,
+			AcceptanceResultID:   &acceptanceID,
+			ProviderWorkItemType: "task",
+			SafeTitle:            "Follow-up",
+		})
+		if !errors.Is(err, errs.ErrPreconditionFailed) {
+			t.Fatalf("CreateFollowUpIntent() err = %v, want %v", err, errs.ErrPreconditionFailed)
+		}
+		if repository.createFollowUpCalled {
+			t.Fatal("invalid acceptance produced follow-up")
+		}
+	})
+
+	t.Run("unsafe text and refs are rejected", func(t *testing.T) {
+		t.Parallel()
+
+		sessionID := uuid.MustParse("83838383-3333-4444-5555-666666666666")
+		repository := &fakeRepository{
+			sessionByID: map[uuid.UUID]entity.AgentSession{
+				sessionID: {VersionedBase: entity.VersionedBase{ID: sessionID, Version: 1}, Status: enum.AgentSessionStatusOpen},
+			},
+		}
+		service := New(Config{Repository: repository})
+
+		_, err := service.CreateFollowUpIntent(context.Background(), CreateFollowUpIntentInput{
+			Meta:                 value.CommandMeta{CommandID: uuid.New(), Actor: testActor()},
+			SessionID:            sessionID,
+			ProviderTarget:       value.ProviderTargetRef{WorkItemRef: "logs:stdout"},
+			ProviderWorkItemType: "task",
+			SafeTitle:            "raw_provider_payload dump",
+		})
+		if !errors.Is(err, errs.ErrInvalidArgument) {
+			t.Fatalf("CreateFollowUpIntent() err = %v, want %v", err, errs.ErrInvalidArgument)
+		}
+		if repository.createFollowUpCalled {
+			t.Fatal("unsafe payload was persisted")
+		}
+	})
+}
+
 func decodeAgentPayload(t *testing.T, event entity.OutboxEvent) agentevents.Payload {
 	t.Helper()
 
@@ -1606,6 +1844,7 @@ type fakeRepository struct {
 	runByID                map[uuid.UUID]entity.AgentRun
 	acceptanceByID         map[uuid.UUID]entity.AcceptanceResult
 	acceptanceGetErr       error
+	followUpByID           map[uuid.UUID]entity.FollowUpIntent
 	roleByID               map[uuid.UUID]entity.RoleProfile
 	promptVersionByID      map[uuid.UUID]entity.PromptTemplateVersion
 	activeSession          entity.AgentSession
@@ -1630,10 +1869,14 @@ type fakeRepository struct {
 	updatedAcceptance      entity.AcceptanceResult
 	updateAcceptanceResult entity.CommandResult
 	updateAcceptanceEvent  *entity.OutboxEvent
+	createdFollowUp        entity.FollowUpIntent
+	followUpResult         entity.CommandResult
+	followUpEvent          entity.OutboxEvent
 	createFlowCalled       bool
 	createSessionCalled    bool
 	createRunCalled        bool
 	createAcceptanceCalled bool
+	createFollowUpCalled   bool
 }
 
 func (f *fakeRepository) CreateFlowWithResult(_ context.Context, flow entity.Flow, result entity.CommandResult) error {
@@ -1864,6 +2107,24 @@ func (f *fakeRepository) GetAcceptanceResult(_ context.Context, id uuid.UUID) (e
 
 func (f *fakeRepository) ListAcceptanceResults(context.Context, query.AcceptanceResultFilter) ([]entity.AcceptanceResult, value.PageResult, error) {
 	return nil, value.PageResult{}, errors.ErrUnsupported
+}
+
+func (f *fakeRepository) CreateFollowUpIntentWithResult(_ context.Context, intent entity.FollowUpIntent, result entity.CommandResult, event entity.OutboxEvent) error {
+	f.createFollowUpCalled = true
+	f.createdFollowUp = intent
+	f.followUpResult = result
+	f.followUpEvent = event
+	return nil
+}
+
+func (f *fakeRepository) GetFollowUpIntent(_ context.Context, id uuid.UUID) (entity.FollowUpIntent, error) {
+	if f.followUpByID != nil {
+		intent, ok := f.followUpByID[id]
+		if ok {
+			return intent, nil
+		}
+	}
+	return entity.FollowUpIntent{}, errors.ErrUnsupported
 }
 
 func (f *fakeRepository) ClaimOutboxEvents(context.Context, int, time.Time, time.Time) ([]entity.OutboxEvent, error) {

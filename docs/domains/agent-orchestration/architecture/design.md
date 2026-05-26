@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-12
 updated_at: 2026-05-26
-related_issues: [733, 753, 698, 322, 782, 795]
+related_issues: [733, 753, 698, 322, 782, 795, 820]
 related_prs: []
 related_adrs: []
 approvals:
@@ -62,7 +62,7 @@ approvals:
 | Рендер prompt | Собирает prompt из версии роли, задачи, stage, policy, руководящих пакетов и рабочего контекста. |
 | Запись снимков сессии | Фиксирует метаданные Codex session state после turn/checkpoint и обновляет указатель на актуальный снимок. |
 | Движок приёмки | Проверяет артефакты, watermark, статусы provider-native сущностей и условия перехода. |
-| Планировщик follow-up | Формирует намерение следующей задачи и вызывает provider-контур для создания или обновления `Issue`. |
+| Планировщик follow-up | Формирует авторитетное намерение следующей задачи с safe refs/status/summary; provider-контур создаёт или обновляет `Issue` отдельной интеграционной командой. |
 | Outbox-доставщик | Публикует `agent.*` события через `platform-event-log`. |
 
 ## Основные потоки
@@ -133,11 +133,12 @@ sequenceDiagram
     AM->>GOV: RequestGate(acceptance refs, flow transition)
     GOV->>IH: deliver gate request
   else готово к следующему этапу
-    AM->>PH: CreateIssue or UpdateIssue for follow-up
+    AM->>AM: CreateFollowUpIntent(safe refs, title, summary)
+    AM-->>PH: future typed provider command
   end
 ```
 
-Приёмка не считает локальный ответ агента источником истины. Она сверяется с provider-native артефактами и platform watermark, а затем создаёт follow-up через provider-контур.
+Приёмка не считает локальный ответ агента источником истины. Она сверяется с provider-native артефактами и platform watermark, а затем фиксирует follow-up intent. Реальный provider write выполняется только через `provider-hub`, когда будет подключён согласованный provider-контракт.
 
 ## Интеграции
 

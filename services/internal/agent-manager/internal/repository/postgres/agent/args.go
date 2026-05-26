@@ -226,6 +226,29 @@ func acceptanceResultUpdateArgs(acceptance entity.AcceptanceResult, previousVers
 	return args
 }
 
+func followUpIntentArgs(intent entity.FollowUpIntent) pgx.NamedArgs {
+	return postgreslib.AddBaseArgs(pgx.NamedArgs{
+		"session_id":                 intent.SessionID,
+		"run_id":                     postgreslib.NullableUUID(intent.RunID),
+		"from_stage_id":              postgreslib.NullableUUID(intent.FromStageID),
+		"to_stage_id":                postgreslib.NullableUUID(intent.ToStageID),
+		"acceptance_result_id":       postgreslib.NullableUUID(intent.AcceptanceResultID),
+		"provider_work_item_ref":     intent.ProviderTarget.WorkItemRef,
+		"provider_pull_request_ref":  intent.ProviderTarget.PullRequestRef,
+		"provider_comment_ref":       intent.ProviderTarget.CommentRef,
+		"provider_review_signal_ref": intent.ProviderTarget.ReviewSignalRef,
+		"provider_work_item_type":    intent.ProviderWorkItemType,
+		"provider_operation_ref":     intent.ProviderOperationRef,
+		"instruction_body_digest":    intent.InstructionBodyDigest,
+		"safe_title":                 intent.SafeTitle,
+		"safe_summary":               intent.SafeSummary,
+		"role_hint":                  intent.RoleHint,
+		"stage_hint":                 intent.StageHint,
+		"idempotency_key":            intent.IdempotencyKey,
+		"status":                     string(intent.Status),
+	}, intent.ID, intent.Version, intent.CreatedAt, intent.UpdatedAt)
+}
+
 func commandResultArgs(result entity.CommandResult) pgx.NamedArgs {
 	args := pgx.NamedArgs{"key": result.Key}
 	args["command_id"] = postgreslib.NullableUUID(result.CommandID)

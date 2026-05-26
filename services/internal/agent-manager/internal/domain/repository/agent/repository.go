@@ -46,6 +46,8 @@ type Repository interface {
 	UpdateAcceptanceResultWithResult(ctx context.Context, acceptance entity.AcceptanceResult, previousVersion int64, result entity.CommandResult, event *entity.OutboxEvent) error
 	GetAcceptanceResult(ctx context.Context, id uuid.UUID) (entity.AcceptanceResult, error)
 	ListAcceptanceResults(ctx context.Context, filter query.AcceptanceResultFilter) ([]entity.AcceptanceResult, value.PageResult, error)
+	CreateFollowUpIntentWithResult(ctx context.Context, intent entity.FollowUpIntent, result entity.CommandResult, event entity.OutboxEvent) error
+	GetFollowUpIntent(ctx context.Context, id uuid.UUID) (entity.FollowUpIntent, error)
 	GetCommandResult(ctx context.Context, identity query.CommandIdentity) (entity.CommandResult, error)
 	RecordCommandResult(ctx context.Context, result entity.CommandResult) error
 	ClaimOutboxEvents(ctx context.Context, limit int, now time.Time, lockedUntil time.Time) ([]entity.OutboxEvent, error)

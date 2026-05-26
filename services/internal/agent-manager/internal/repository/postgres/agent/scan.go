@@ -343,6 +343,42 @@ func scanAcceptanceResult(row postgreslib.RowScanner) (entity.AcceptanceResult, 
 	return acceptance, err
 }
 
+func scanFollowUpIntent(row postgreslib.RowScanner) (entity.FollowUpIntent, error) {
+	var intent entity.FollowUpIntent
+	var runID, fromStageID, toStageID, acceptanceResultID pgtype.UUID
+	var status string
+	err := row.Scan(
+		&intent.ID,
+		&intent.SessionID,
+		&runID,
+		&fromStageID,
+		&toStageID,
+		&acceptanceResultID,
+		&intent.ProviderTarget.WorkItemRef,
+		&intent.ProviderTarget.PullRequestRef,
+		&intent.ProviderTarget.CommentRef,
+		&intent.ProviderTarget.ReviewSignalRef,
+		&intent.ProviderWorkItemType,
+		&intent.ProviderOperationRef,
+		&intent.InstructionBodyDigest,
+		&intent.SafeTitle,
+		&intent.SafeSummary,
+		&intent.RoleHint,
+		&intent.StageHint,
+		&intent.IdempotencyKey,
+		&status,
+		&intent.Version,
+		&intent.CreatedAt,
+		&intent.UpdatedAt,
+	)
+	intent.RunID = postgreslib.UUIDPtrFromPG(runID)
+	intent.FromStageID = postgreslib.UUIDPtrFromPG(fromStageID)
+	intent.ToStageID = postgreslib.UUIDPtrFromPG(toStageID)
+	intent.AcceptanceResultID = postgreslib.UUIDPtrFromPG(acceptanceResultID)
+	intent.Status = enum.FollowUpIntentStatus(status)
+	return intent, err
+}
+
 func scanCommandResult(row postgreslib.RowScanner) (entity.CommandResult, error) {
 	var raw commandResultRow
 	if err := raw.scan(row); err != nil {

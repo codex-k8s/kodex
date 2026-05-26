@@ -580,6 +580,22 @@ message FollowUpIntent {
   int64 version = 9;
   string created_at = 10;
   string updated_at = 11;
+  // run_id points to the run that produced the follow-up evidence.
+  optional string run_id = 12;
+  // acceptance_result_id points to the positive machine acceptance result when one exists.
+  optional string acceptance_result_id = 13;
+  // provider_target contains safe refs to provider-native artifacts.
+  ProviderTargetRef provider_target = 14;
+  // safe_title is a bounded title for the next provider-native work item.
+  optional string safe_title = 15;
+  // safe_summary is a bounded summary for the next provider-native work item.
+  optional string safe_summary = 16;
+  // role_hint is a bounded role hint for the next flow step.
+  optional string role_hint = 17;
+  // stage_hint is a bounded stage hint for the next flow step.
+  optional string stage_hint = 18;
+  // idempotency_key is the command idempotency key stored with this intent.
+  string idempotency_key = 19;
 }
 
 // HumanGateRequest is a reference to an interaction-hub human decision request.
@@ -872,6 +888,13 @@ message CreateFollowUpIntentRequest {
   string provider_work_item_type = 5;
   optional string provider_operation_ref = 6;
   optional string instruction_body_digest = 7;
+  optional string run_id = 8;
+  optional string acceptance_result_id = 9;
+  ProviderTargetRef provider_target = 10;
+  optional string safe_title = 11;
+  optional string safe_summary = 12;
+  optional string role_hint = 13;
+  optional string stage_hint = 14;
 }
 
 message RequestHumanGateRequest {

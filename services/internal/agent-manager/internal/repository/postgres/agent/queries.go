@@ -9,6 +9,8 @@ var (
 	queryAcceptanceResultGet               = mustLoadQuery("acceptance_result__get")
 	queryAcceptanceResultList              = mustLoadQuery("acceptance_result__list")
 	queryAcceptanceResultUpdate            = mustLoadQuery("acceptance_result__update")
+	queryFollowUpIntentCreate              = mustLoadQuery("follow_up_intent__create")
+	queryFollowUpIntentGet                 = mustLoadQuery("follow_up_intent__get")
 	queryFlowCreate                        = mustLoadQuery("flow__create")
 	queryFlowGet                           = mustLoadQuery("flow__get")
 	queryFlowList                          = mustLoadQuery("flow__list")

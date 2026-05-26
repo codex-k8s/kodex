@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-12
 updated_at: 2026-05-26
-related_issues: [733, 749, 759, 772, 322, 782, 795, 809]
+related_issues: [733, 749, 759, 772, 322, 782, 795, 809, 820]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -246,19 +246,29 @@ approvals:
 
 ### FollowUpIntent
 
-`FollowUpIntent` описывает намерение создать или обновить provider-native задачу следующего этапа.
+`FollowUpIntent` описывает намерение создать или обновить provider-native задачу следующего этапа. В `agent-manager` это авторитетное состояние intent, а не результат provider write: создание `Issue`, комментария или `PR/MR` выполняет `provider-hub` отдельной командой в следующем интеграционном срезе.
 
 | Поле | Тип | Может быть пустым | Примечание |
 |---|---|---:|---|
 | `id` | uuid | нет | Идентификатор намерения. |
 | `session_id` | uuid | нет | Сессия. |
+| `run_id` | uuid | да | `Run`, результат которого породил follow-up. Если указан `AcceptanceResult`, связь с `Run` должна совпадать. |
 | `from_stage_id` | uuid | да | Исходный этап. |
 | `to_stage_id` | uuid | да | Следующий этап. |
-| `provider_work_item_type` | text | нет | Тип `Issue`, например `prd`, `dev`, `qa`, `release`. |
-| `provider_operation_ref` | text | да | Ссылка на операцию `provider-hub`. |
+| `acceptance_result_id` | uuid | да | Положительный результат machine acceptance, если follow-up создаётся по итогам приёмки. Pending/failed/waiting acceptance не может породить intent. |
+| `provider_work_item_ref`, `provider_pull_request_ref`, `provider_comment_ref`, `provider_review_signal_ref` | text | да | Безопасные provider refs. Хотя бы один target ref обязателен; значения имеют safe-ref формат `kind:value`, ограничены по длине и не содержат raw/log/secret markers. |
+| `provider_work_item_type` | text | нет | Тип следующего provider-native work item, например `task`, `bug`, `qa`, `release`; может сверяться с `StageTransition.follow_up_type`. |
+| `provider_operation_ref` | text | да | Ссылка на будущую или уже известную операцию `provider-hub`; сам provider payload не хранится. |
 | `status` | enum | нет | `planned`, `requested`, `created`, `failed`, `cancelled`. |
-| `instruction_body_digest` | text | да | Digest открытых инструкций follow-up. |
+| `instruction_body_digest` | text | да | Digest открытых инструкций follow-up без сохранения body. |
+| `safe_title` | text | нет | Bounded title для следующей provider-native задачи; не содержит transcript, prompt text, raw provider payload, stdout/stderr/logs или секреты. |
+| `safe_summary` | text | да | Bounded summary для события и UI, без больших отчётов и raw payload. |
+| `role_hint`, `stage_hint` | text | да | Короткие безопасные подсказки для следующей роли или этапа. |
+| `idempotency_key` | text | нет | Сохранённый command idempotency trace: явный `idempotency_key` или command-derived key. |
+| `version` | bigint | нет | Версия intent для будущих lifecycle-переходов. |
 | `created_at`, `updated_at` | timestamptz | нет | Технические временные метки. |
+
+`FollowUpIntent` не хранит raw prompt, transcript, файлы workspace, большие отчёты, provider response, body будущего `Issue`, тексты руководящих документов, prompt templates или flow files. Повтор команды с тем же ключом возвращает тот же intent только при совпадении нормализованного payload; отличающийся payload получает безопасный conflict.
 
 ### AutomationBinding
 
