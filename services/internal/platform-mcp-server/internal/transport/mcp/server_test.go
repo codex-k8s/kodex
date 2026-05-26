@@ -116,6 +116,30 @@ func TestToolsListSnapshot(t *testing.T) {
     "has_output_schema": true
   },
   {
+    "name": "governance.risk.evaluate",
+    "description": "Evaluate risk through governance-manager from safe refs and summaries.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
+  {
+    "name": "governance.risk.get",
+    "description": "Read a safe risk assessment summary through governance-manager.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
+  {
+    "name": "governance.risk.list",
+    "description": "List safe risk assessment summaries through governance-manager.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
+  {
+    "name": "governance.risk.reevaluate",
+    "description": "Reevaluate an existing risk assessment through governance-manager.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
+  {
     "name": "provider.artifact_signal.register",
     "description": "Register a provider-native artifact signal through provider-hub without raw payload input.",
     "has_input_schema": true,
@@ -616,6 +640,254 @@ func TestProviderToolOwnerErrorIsSafe(t *testing.T) {
 				"work_item_kind":       "issue",
 				"number":               780,
 			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool(): %v", err)
+	}
+	if !result.IsError {
+		t.Fatalf("CallTool() IsError = false, want true")
+	}
+	data, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("Marshal(): %v", err)
+	}
+	if strings.Contains(string(data), "secret-token") {
+		t.Fatalf("tool error exposes owner detail: %s", data)
+	}
+	if !strings.Contains(string(data), "owner returned Internal") {
+		t.Fatalf("tool error does not include safe owner code: %s", data)
+	}
+}
+
+func TestGovernanceRiskEvaluateRoutesToOwner(t *testing.T) {
+	t.Parallel()
+
+	governance := newFakeGovernanceManagerClient()
+	server := newTestServerWithGovernance(t, governance)
+	session, cleanup := connectClient(t, server)
+	defer cleanup()
+
+	result, err := session.CallTool(context.Background(), &mcpsdk.CallToolParams{
+		Name: ToolGovernanceRiskEvaluate,
+		Arguments: map[string]any{
+			"meta":   validGovernanceCommandMetaArgs("evaluate_risk", nil),
+			"target": map[string]any{"type": "pull_request", "ref": "provider:pr:1"},
+			"project_context": map[string]any{
+				"project_ref":    "project:core",
+				"repository_ref": "repository:kodex",
+			},
+			"provider_context": map[string]any{
+				"pull_request_ref":          "provider:pr:1",
+				"changed_files_summary_ref": "changed-files-summary-1",
+			},
+			"agent_context": map[string]any{
+				"session_ref": "session-1",
+				"run_ref":     "run-1",
+			},
+			"runtime_context": map[string]any{
+				"slot_ref": "slot-1",
+				"job_ref":  "job-1",
+			},
+			"evidence_refs": []any{
+				map[string]any{
+					"kind":    "provider_review",
+					"ref":     "provider-review-1",
+					"summary": "review requested by policy",
+				},
+			},
+			"risk_profile_ref": "risk-profile-1",
+			"evaluation_summary": map[string]any{
+				"changed_files_summary_ref": "changed-files-summary-1",
+				"summary":                   "bounded classifier summary",
+				"factors": []any{
+					map[string]any{
+						"source_type": "changed_file",
+						"ref":         "path:services/internal/platform-mcp-server",
+						"summary":     "MCP surface changed",
+						"tags":        []any{"mcp", "governance"},
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool(): %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("CallTool() returned tool error: %+v", result.Content)
+	}
+	if governance.evaluateRiskCalls != 1 {
+		t.Fatalf("evaluateRiskCalls = %d, want 1", governance.evaluateRiskCalls)
+	}
+	data, err := json.Marshal(result.StructuredContent)
+	if err != nil {
+		t.Fatalf("Marshal(): %v", err)
+	}
+	if !strings.Contains(string(data), "risk-assessment-1") || !strings.Contains(string(data), "gate-policy-1") {
+		t.Fatalf("structured content does not include safe risk summary: %s", data)
+	}
+	if strings.Contains(string(data), "raw_provider_payload") || strings.Contains(string(data), "secret-token") {
+		t.Fatalf("structured content exposes unsafe data: %s", data)
+	}
+}
+
+func TestGovernanceRiskReevaluateRoutesToOwnerWithExpectedVersion(t *testing.T) {
+	t.Parallel()
+
+	governance := newFakeGovernanceManagerClient()
+	server := newTestServerWithGovernance(t, governance)
+	session, cleanup := connectClient(t, server)
+	defer cleanup()
+
+	expectedVersion := int64(5)
+	result, err := session.CallTool(context.Background(), &mcpsdk.CallToolParams{
+		Name: ToolGovernanceRiskReevaluate,
+		Arguments: map[string]any{
+			"meta":                validGovernanceCommandMetaArgs("reevaluate_risk", &expectedVersion),
+			"risk_assessment_id":  "risk-assessment-1",
+			"reevaluation_reason": "new bounded evidence",
+			"new_evidence_refs": []any{
+				map[string]any{
+					"kind":    "runtime_summary",
+					"ref":     "runtime-summary-1",
+					"summary": "post-test runtime summary",
+				},
+			},
+			"evaluation_summary": map[string]any{
+				"summary": "updated bounded classifier summary",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool(): %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("CallTool() returned tool error: %+v", result.Content)
+	}
+	if governance.reevaluateRiskCalls != 1 {
+		t.Fatalf("reevaluateRiskCalls = %d, want 1", governance.reevaluateRiskCalls)
+	}
+	if governance.lastExpectedVersion == nil || *governance.lastExpectedVersion != expectedVersion {
+		t.Fatalf("lastExpectedVersion = %v, want %d", governance.lastExpectedVersion, expectedVersion)
+	}
+}
+
+func TestGovernanceRiskGetRoutesToOwnerWithBoundedFactors(t *testing.T) {
+	t.Parallel()
+
+	governance := newFakeGovernanceManagerClient()
+	server := newTestServerWithGovernance(t, governance)
+	session, cleanup := connectClient(t, server)
+	defer cleanup()
+
+	result, err := session.CallTool(context.Background(), &mcpsdk.CallToolParams{
+		Name: ToolGovernanceRiskGet,
+		Arguments: map[string]any{
+			"meta":                   validGovernanceQueryMetaArgs(),
+			"risk_assessment_id":     "risk-assessment-1",
+			"include_factors":        true,
+			"include_review_signals": true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool(): %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("CallTool() returned tool error: %+v", result.Content)
+	}
+	if governance.getRiskAssessmentCalls != 1 {
+		t.Fatalf("getRiskAssessmentCalls = %d, want 1", governance.getRiskAssessmentCalls)
+	}
+	data, err := json.Marshal(result.StructuredContent)
+	if err != nil {
+		t.Fatalf("Marshal(): %v", err)
+	}
+	if !strings.Contains(string(data), "matched_rule_refs") || !strings.Contains(string(data), "rule:path-sensitive") {
+		t.Fatalf("structured content does not include bounded factor refs: %s", data)
+	}
+	if strings.Contains(string(data), "transcript") || strings.Contains(string(data), "stdout") {
+		t.Fatalf("structured content exposes disallowed large text marker: %s", data)
+	}
+}
+
+func TestGovernanceRiskListRequiresTargetOrProjectScope(t *testing.T) {
+	t.Parallel()
+
+	governance := newFakeGovernanceManagerClient()
+	server := newTestServerWithGovernance(t, governance)
+	session, cleanup := connectClient(t, server)
+	defer cleanup()
+
+	result, err := session.CallTool(context.Background(), &mcpsdk.CallToolParams{
+		Name: ToolGovernanceRiskList,
+		Arguments: map[string]any{
+			"meta":                 validGovernanceQueryMetaArgs(),
+			"effective_risk_class": "r2",
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool(): %v", err)
+	}
+	if !result.IsError {
+		t.Fatalf("CallTool() IsError = false, want true")
+	}
+	if governance.listRiskAssessmentsCalls != 0 {
+		t.Fatalf("listRiskAssessmentsCalls = %d, want 0", governance.listRiskAssessmentsCalls)
+	}
+}
+
+func TestGovernanceRiskListRoutesToOwnerWithProjectScope(t *testing.T) {
+	t.Parallel()
+
+	governance := newFakeGovernanceManagerClient()
+	server := newTestServerWithGovernance(t, governance)
+	session, cleanup := connectClient(t, server)
+	defer cleanup()
+
+	result, err := session.CallTool(context.Background(), &mcpsdk.CallToolParams{
+		Name: ToolGovernanceRiskList,
+		Arguments: map[string]any{
+			"meta": validGovernanceQueryMetaArgs(),
+			"project_context": map[string]any{
+				"project_ref": "project:core",
+			},
+			"effective_risk_class": "r2",
+			"status":               "active",
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool(): %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("CallTool() returned tool error: %+v", result.Content)
+	}
+	if governance.listRiskAssessmentsCalls != 1 {
+		t.Fatalf("listRiskAssessmentsCalls = %d, want 1", governance.listRiskAssessmentsCalls)
+	}
+	data, err := json.Marshal(result.StructuredContent)
+	if err != nil {
+		t.Fatalf("Marshal(): %v", err)
+	}
+	if !strings.Contains(string(data), "risk-assessment-1") {
+		t.Fatalf("structured content does not include risk assessment summary: %s", data)
+	}
+}
+
+func TestGovernanceRiskOwnerErrorIsSafe(t *testing.T) {
+	t.Parallel()
+
+	governance := newFakeGovernanceManagerClient()
+	governance.err = fakeOwnerError()
+	server := newTestServerWithGovernance(t, governance)
+	session, cleanup := connectClient(t, server)
+	defer cleanup()
+
+	result, err := session.CallTool(context.Background(), &mcpsdk.CallToolParams{
+		Name: ToolGovernanceRiskGet,
+		Arguments: map[string]any{
+			"meta":               validGovernanceQueryMetaArgs(),
+			"risk_assessment_id": "risk-assessment-1",
 		},
 	})
 	if err != nil {
@@ -1382,18 +1654,68 @@ func (f *fakeProviderHubClient) CreateAdoptionPullRequest(_ context.Context, req
 }
 
 type fakeGovernanceManagerClient struct {
-	requestGateCalls      int
-	getGateRequestCalls   int
-	listGateRequestsCalls int
-	submitDecisionCalls   int
-	cancelGateCalls       int
-	expireGateCalls       int
-	lastExpectedVersion   *int64
-	err                   error
+	evaluateRiskCalls        int
+	reevaluateRiskCalls      int
+	getRiskAssessmentCalls   int
+	listRiskAssessmentsCalls int
+	requestGateCalls         int
+	getGateRequestCalls      int
+	listGateRequestsCalls    int
+	submitDecisionCalls      int
+	cancelGateCalls          int
+	expireGateCalls          int
+	lastExpectedVersion      *int64
+	err                      error
 }
 
 func newFakeGovernanceManagerClient() *fakeGovernanceManagerClient {
 	return &fakeGovernanceManagerClient{}
+}
+
+func (f *fakeGovernanceManagerClient) EvaluateRisk(_ context.Context, request *governancev1.EvaluateRiskRequest) (*governancev1.RiskAssessmentResponse, error) {
+	f.evaluateRiskCalls++
+	f.lastExpectedVersion = request.GetMeta().ExpectedVersion
+	if f.err != nil {
+		return nil, f.err
+	}
+	return fakeRiskAssessmentResponse(request.GetTarget()), nil
+}
+
+func (f *fakeGovernanceManagerClient) ReevaluateRisk(_ context.Context, request *governancev1.ReevaluateRiskRequest) (*governancev1.RiskAssessmentResponse, error) {
+	f.reevaluateRiskCalls++
+	f.lastExpectedVersion = request.GetMeta().ExpectedVersion
+	if f.err != nil {
+		return nil, f.err
+	}
+	return fakeRiskAssessmentResponse(&governancev1.TargetRef{
+		Type: governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_PULL_REQUEST,
+		Ref:  "provider:pr:1",
+	}), nil
+}
+
+func (f *fakeGovernanceManagerClient) GetRiskAssessment(_ context.Context, _ *governancev1.GetRiskAssessmentRequest) (*governancev1.RiskAssessmentResponse, error) {
+	f.getRiskAssessmentCalls++
+	if f.err != nil {
+		return nil, f.err
+	}
+	return fakeRiskAssessmentResponse(&governancev1.TargetRef{
+		Type: governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_PULL_REQUEST,
+		Ref:  "provider:pr:1",
+	}), nil
+}
+
+func (f *fakeGovernanceManagerClient) ListRiskAssessments(_ context.Context, _ *governancev1.ListRiskAssessmentsRequest) (*governancev1.ListRiskAssessmentsResponse, error) {
+	f.listRiskAssessmentsCalls++
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &governancev1.ListRiskAssessmentsResponse{
+		RiskAssessments: []*governancev1.RiskAssessment{fakeRiskAssessment(&governancev1.TargetRef{
+			Type: governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_PULL_REQUEST,
+			Ref:  "provider:pr:1",
+		})},
+		Page: &governancev1.PageResponse{},
+	}, nil
 }
 
 func (f *fakeGovernanceManagerClient) RequestGate(_ context.Context, request *governancev1.RequestGateRequest) (*governancev1.GateRequestResponse, error) {
@@ -1472,6 +1794,77 @@ func (f *fakeGovernanceManagerClient) ExpireGate(_ context.Context, request *gov
 	})
 	gate.Status = governancev1.GateRequestStatus_GATE_REQUEST_STATUS_EXPIRED
 	return &governancev1.GateRequestResponse{GateRequest: gate}, nil
+}
+
+func fakeRiskAssessmentResponse(target *governancev1.TargetRef) *governancev1.RiskAssessmentResponse {
+	return &governancev1.RiskAssessmentResponse{
+		RiskAssessment: fakeRiskAssessment(target),
+		RiskFactors: []*governancev1.RiskFactor{
+			{
+				Id:               "risk-factor-1",
+				RiskAssessmentId: "risk-assessment-1",
+				SourceType:       governancev1.RiskFactorSourceType_RISK_FACTOR_SOURCE_TYPE_POLICY,
+				SourceRef:        stringPtr("rule:path-sensitive"),
+				RiskClass:        governancev1.RiskClass_RISK_CLASS_R2,
+				Summary:          "path requires careful review",
+				CreatedAt:        "2026-05-25T00:00:00Z",
+			},
+		},
+		ReviewSignals: []*governancev1.ReviewSignal{{Id: "review-signal-1"}},
+	}
+}
+
+func fakeRiskAssessment(target *governancev1.TargetRef) *governancev1.RiskAssessment {
+	return &governancev1.RiskAssessment{
+		Id:     "risk-assessment-1",
+		Target: target,
+		ProjectContext: &governancev1.ProjectContextRef{
+			ProjectRef:    stringPtr("project:core"),
+			RepositoryRef: stringPtr("repository:kodex"),
+		},
+		ProviderContext: &governancev1.ProviderContextRef{
+			PullRequestRef:         stringPtr("provider:pr:1"),
+			ChangedFilesSummaryRef: stringPtr("changed-files-summary-1"),
+		},
+		AgentContext: &governancev1.AgentContextRef{
+			SessionRef: stringPtr("session-1"),
+			RunRef:     stringPtr("run-1"),
+		},
+		RuntimeContext: &governancev1.RuntimeContextRef{
+			SlotRef: stringPtr("slot-1"),
+			JobRef:  stringPtr("job-1"),
+		},
+		InitialRiskClass:   governancev1.RiskClass_RISK_CLASS_R1,
+		EffectiveRiskClass: governancev1.RiskClass_RISK_CLASS_R2,
+		Status:             governancev1.RiskAssessmentStatus_RISK_ASSESSMENT_STATUS_ACTIVE,
+		Explanation:        "bounded risk summary",
+		RequiredGates: []*governancev1.RequiredGate{{
+			GatePolicyId: "gate-policy-1",
+			GateKind:     governancev1.GateKind_GATE_KIND_QA,
+			MinRiskClass: governancev1.RiskClass_RISK_CLASS_R2,
+			Reason:       "qa gate required",
+		}},
+		Version:            2,
+		CreatedAt:          "2026-05-25T00:00:00Z",
+		UpdatedAt:          "2026-05-25T00:01:00Z",
+		RiskProfileId:      stringPtr("risk-profile-1"),
+		RiskProfileVersion: int64Ptr(3),
+		EvaluationSummary: &governancev1.RiskEvaluationSummary{
+			ChangedFilesSummaryRef: stringPtr("changed-files-summary-1"),
+			Summary:                "bounded classifier summary",
+			Factors: []*governancev1.RiskEvaluationFactor{{
+				SourceType: governancev1.RiskFactorSourceType_RISK_FACTOR_SOURCE_TYPE_CHANGED_FILE,
+				Ref:        "path:services/internal/platform-mcp-server",
+				Summary:    "MCP surface changed",
+				Tags:       []string{"mcp", "governance"},
+			}},
+		},
+		EvidenceRefs: []*governancev1.EvidenceRef{{
+			Kind:    governancev1.EvidenceKind_EVIDENCE_KIND_PROVIDER_REVIEW,
+			Ref:     "provider-review-1",
+			Summary: "review requested by policy",
+		}},
+	}
 }
 
 func fakeGateRequest(target *governancev1.TargetRef) *governancev1.GateRequest {
