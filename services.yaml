@@ -177,6 +177,16 @@ spec:
         - libs/go/serviceprocess
         - libs/go/servicemain
         - proto/kodex/agents/v1
+        - proto/kodex/providers/v1
+    interaction-hub:
+      value: "0.1.0"
+      bumpOn:
+        - services/internal/interaction-hub
+        - libs/go/grpcserver
+        - libs/go/serviceprocess
+        - libs/go/servicemain
+        - proto/kodex/interactions/v1
+        - specs/asyncapi/interaction-hub.v1.yaml
     platform-event-log:
       value: "0.1.0"
       bumpOn:
@@ -548,6 +558,30 @@ spec:
         - runtime-manager
         - interaction-hub
         - platform-event-log
+      deploy:
+        health:
+          livez: /health/livez
+          readyz: /health/readyz
+          metrics: /metrics
+    - name: interaction-hub
+      status: scaffold
+      zone: internal
+      path: services/internal/interaction-hub
+      ownerDomain: interaction-hub
+      apiContracts:
+        grpc: proto/kodex/interactions/v1/interaction_hub.proto
+        asyncapi: specs/asyncapi/interaction-hub.v1.yaml
+      dependencies:
+        - access-manager
+        - package-hub
+        - runtime-manager
+        - fleet-manager
+        - platform-event-log
+      implementation:
+        businessOperations: unimplemented
+        database: planned
+        migrations: planned
+        channelAdapters: planned
       deploy:
         health:
           livez: /health/livez

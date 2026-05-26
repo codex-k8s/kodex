@@ -74,5 +74,10 @@ func validConfig() Config {
 			AuthToken: "agent-manager-token",
 			Timeout:   3 * time.Second,
 		},
+		ProviderHub: OwnerServiceConfig{
+			Enabled:   true,
+			AuthToken: "provider-hub-token",
+			Timeout:   3 * time.Second,
+		},
 	}
 }

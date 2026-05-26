@@ -99,6 +99,7 @@
 | MCP-1 | #753 | готово | Стратегия контрактов: MCP-инструменты описываются через MCP SDK, JSON Schema и snapshot-проверки `tools/list`; Codex hooks вынесены в `codex-hook-ingress`; YAML-каталог не является каноникой. Код, proto и AsyncAPI не входят. |
 | MCP-2 | #760 | готово | Сервисный каркас: процесс, конфигурация через env, health/readiness/metrics, MCP Streamable HTTP, проверка bearer-токена, `diagnostics.mcp_status.read`, каталог маршрутов к сервисам-владельцам и snapshot-проверка `tools/list`. Бизнес-маршруты, входной контур hooks, хранилище skills и манифесты выкладки не входят. |
 | MCP-3 | #771 | готово | Подключены первые инструменты `agent-manager` к готовой поверхности владельца: старт сессии, старт `Run`, запись состояния `Run`, запись session snapshot и безопасная диагностика run context. Acceptance, follow-up и Human gate не регистрируются до реализации владельца. |
+| MCP-4 | #780 | готово | Подключены инструменты чтения и записи provider-данных к реализованной поверхности `provider-hub`: проекции, комментарии, связи, artifact signal, операции Issue/PR/comment/review, создание репозитория и bootstrap/adoption PR. MCP не ходит напрямую в GitHub/GitLab, не хранит provider-состояние и не возвращает сырой provider payload. |
 
 ## Текущий бэклог агента #1
 
@@ -112,7 +113,7 @@
 | Реальный исполнитель platform jobs | запланировано позже | `runtime-manager` хранит и выдаёт jobs; конкретный исполнитель на Kubernetes или агентный исполнитель нужен отдельным срезом после согласования с `agent-manager`/ops-контуром. |
 | Интеграция `runtime-manager` с fleet placement | готово: #735 | RTM-FLEET-1 перевёл `PrepareRuntime`, `ReserveSlot` и `CreateJob` без slot на `fleet-manager.ResolvePlacement`; runtime сохраняет только `fleet_scope_id` и `cluster_id`. |
 | Deploy-контур `fleet-manager` | готово: #738 | FLEET-6 добавил Dockerfile, manifests, PostgreSQL bootstrap, migration job, smoke, runbook и monitoring без изменения registry/health/placement бизнес-логики. |
-| `platform-mcp-server` | готово: #747, #753, #760, #771 | MCP-0 фиксирует границы, группы инструментов, безопасность и план поставки; MCP-1 фиксирует стратегию контрактов через MCP SDK, JSON Schema и snapshot-проверки `tools/list`, а также отделяет Codex hooks в `codex-hook-ingress`; MCP-2 добавляет сервисный каркас; MCP-3 подключает первые маршруты к `agent-manager` без хранения бизнес-состояния в MCP. |
+| `platform-mcp-server` | готово: #747, #753, #760, #771, #780 | MCP-0 фиксирует границы, группы инструментов, безопасность и план поставки; MCP-1 фиксирует стратегию контрактов через MCP SDK, JSON Schema и snapshot-проверки `tools/list`, а также отделяет Codex hooks в `codex-hook-ingress`; MCP-2 добавляет сервисный каркас; MCP-3 подключает первые маршруты к `agent-manager`; MCP-4 подключает маршруты чтения и записи provider-данных к `provider-hub` без хранения бизнес-состояния в MCP. |
 
 ## Блокировки от `access-manager`
 
@@ -180,12 +181,12 @@
 - `runtime-manager` зависит от `fleet-manager` для целевого `ResolvePlacement`; RTM-FLEET-1 убрал локальный выбор кластера из `PrepareRuntime`, `ReserveSlot` и `CreateJob` без slot.
 - `agent-manager` зависит от `platform-mcp-server` для будущих MCP-инструментов run/session/gate; MCP не владеет flow/role/prompt и не конфликтует с AGO-3.
 - `agent-manager`, `runtime-manager`, `provider-hub`, `governance-manager` и `interaction-hub` зависят от `codex-hook-ingress` для будущего приёма Codex hook events; домен ведёт агент #5, а #1 сохраняет только историческую связь через разделение MCP и hooks.
-- `provider-hub` зависит от `platform-mcp-server` только как от внешней инструментальной поверхности; provider write pipeline остаётся у `provider-hub`, а bootstrap/adoption PRV-8a не переносится в MCP.
+- `provider-hub` зависит от `platform-mcp-server` только как от внешней инструментальной поверхности; provider write pipeline остаётся у `provider-hub`, а MCP-4 только маршрутизирует реализованные операции и не переносит bootstrap/adoption бизнес-логику в MCP.
 - `operations-hub` и будущий `staff-gateway` зависят от чтений `project-catalog` и `runtime-manager` для операторских экранов.
 
 ## Рекомендуемый следующий шаг
 
-Для агента #1 нет незавершённого локального Wave 8, RTM или FLEET среза, который нужно закрыть до соседних доменов. После MCP-2 рационально идти в один из трёх вариантов:
+Для агента #1 нет незавершённого локального Wave 8, RTM или FLEET среза, который нужно закрыть до соседних доменов. После MCP-4 рационально идти в один из трёх вариантов:
 
 - выполнить MCP-3g после готовности контрактов `governance-manager`, чтобы маршрутизировать risk/gate/release инструменты без хранения decision state в MCP;
 - дождаться `provider-hub` bootstrap/adoption контракта и закрывать #281/#282;

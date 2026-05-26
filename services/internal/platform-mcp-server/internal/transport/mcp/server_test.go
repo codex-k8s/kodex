@@ -10,6 +10,7 @@ import (
 	"time"
 
 	agentsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/agents/v1"
+	providersv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/providers/v1"
 	ownerclients "github.com/codex-k8s/kodex/services/internal/platform-mcp-server/internal/clients/owners"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"google.golang.org/grpc/codes"
@@ -74,6 +75,108 @@ func TestToolsListSnapshot(t *testing.T) {
   {
     "name": "diagnostics.run_context.read",
     "description": "Прочитать безопасную сводку сессии и агентных запусков через agent-manager без бизнес-состояния в MCP.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
+  {
+    "name": "provider.artifact_signal.register",
+    "description": "Register a provider-native artifact signal through provider-hub without raw payload input.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
+  {
+    "name": "provider.comment.create",
+    "description": "Create a provider-native comment through provider-hub.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
+  {
+    "name": "provider.comment.update",
+    "description": "Update a platform-owned provider-native comment through provider-hub.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
+  {
+    "name": "provider.comments.list",
+    "description": "List safe comment, mention, and review-signal summaries through provider-hub.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
+  {
+    "name": "provider.issue.create",
+    "description": "Create a provider-native Issue through provider-hub.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
+  {
+    "name": "provider.issue.update",
+    "description": "Update allowed provider-native Issue fields through provider-hub.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
+  {
+    "name": "provider.projection.find",
+    "description": "Find a safe Issue or PR/MR projection by provider-native reference through provider-hub.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
+  {
+    "name": "provider.projection.get",
+    "description": "Read a safe Issue or PR/MR projection through provider-hub.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
+  {
+    "name": "provider.projections.list",
+    "description": "List safe Issue and PR/MR projections through provider-hub.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
+  {
+    "name": "provider.pull_request.create",
+    "description": "Create a provider-native PR/MR through provider-hub.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
+  {
+    "name": "provider.pull_request.update",
+    "description": "Update allowed provider-native PR/MR fields through provider-hub.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
+  {
+    "name": "provider.relationship.update",
+    "description": "Save or update a provider-native relationship through provider-hub.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
+  {
+    "name": "provider.relationships.list",
+    "description": "List provider-native work item relationships through provider-hub.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
+  {
+    "name": "provider.repository.adoption_pull_request.create",
+    "description": "Create or update an adoption branch and PR/MR through provider-hub.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
+  {
+    "name": "provider.repository.bootstrap_pull_request.create",
+    "description": "Create or update a bootstrap branch and PR/MR through provider-hub.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
+  {
+    "name": "provider.repository.create",
+    "description": "Create a provider-native repository through provider-hub.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
+  {
+    "name": "provider.review_signal.create",
+    "description": "Create a review signal, approval, or changes-request through provider-hub.",
     "has_input_schema": true,
     "has_output_schema": true
   }
@@ -243,6 +346,259 @@ func TestAgentToolOwnerErrorIsSafe(t *testing.T) {
 	}
 }
 
+func TestProviderProjectionFindRoutesToOwner(t *testing.T) {
+	t.Parallel()
+
+	provider := newFakeProviderHubClient()
+	server := newTestServerWithProvider(t, provider)
+	session, cleanup := connectClient(t, server)
+	defer cleanup()
+
+	result, err := session.CallTool(context.Background(), &mcpsdk.CallToolParams{
+		Name: ToolProviderProjectionFind,
+		Arguments: map[string]any{
+			"meta": validProviderQueryMetaArgs(),
+			"target": map[string]any{
+				"provider_slug":        "github",
+				"repository_full_name": "codex-k8s/kodex",
+				"work_item_kind":       "issue",
+				"number":               780,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool(): %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("CallTool() returned tool error: %+v", result.Content)
+	}
+	if provider.findProjectionCalls != 1 {
+		t.Fatalf("findProjectionCalls = %d, want 1", provider.findProjectionCalls)
+	}
+	data, err := json.Marshal(result.StructuredContent)
+	if err != nil {
+		t.Fatalf("Marshal(): %v", err)
+	}
+	if !strings.Contains(string(data), "projection-1") || strings.Contains(string(data), "raw provider payload") {
+		t.Fatalf("structured content is not safe projection summary: %s", data)
+	}
+}
+
+func TestProviderIssueCreateRoutesToOwnerWithIdempotency(t *testing.T) {
+	t.Parallel()
+
+	provider := newFakeProviderHubClient()
+	server := newTestServerWithProvider(t, provider)
+	session, cleanup := connectClient(t, server)
+	defer cleanup()
+
+	result, err := session.CallTool(context.Background(), &mcpsdk.CallToolParams{
+		Name: ToolProviderIssueCreate,
+		Arguments: map[string]any{
+			"meta":                validProviderCommandMetaArgs("create_issue"),
+			"project_id":          "project-1",
+			"repository_id":       "repository-1",
+			"provider_slug":       "github",
+			"title":               "Проверить MCP provider tools",
+			"body":                "Безопасное тело issue",
+			"labels":              []any{"mcp"},
+			"external_account_id": "external-account-1",
+			"repository_target": map[string]any{
+				"provider_slug":        "github",
+				"repository_full_name": "codex-k8s/kodex",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool(): %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("CallTool() returned tool error: %+v", result.Content)
+	}
+	if provider.createIssueCalls != 1 {
+		t.Fatalf("createIssueCalls = %d, want 1", provider.createIssueCalls)
+	}
+	if provider.lastCommandID != "command-1" {
+		t.Fatalf("lastCommandID = %q, want command-1", provider.lastCommandID)
+	}
+	data, err := json.Marshal(result.StructuredContent)
+	if err != nil {
+		t.Fatalf("Marshal(): %v", err)
+	}
+	if !strings.Contains(string(data), "operation-1") {
+		t.Fatalf("structured content does not contain provider operation: %s", data)
+	}
+	if strings.Contains(string(data), "Безопасное тело issue") {
+		t.Fatalf("structured content exposes submitted body: %s", data)
+	}
+}
+
+func TestProviderArtifactSignalDoesNotExposeRawPayloadInput(t *testing.T) {
+	t.Parallel()
+
+	provider := newFakeProviderHubClient()
+	server := newTestServerWithProvider(t, provider)
+	session, cleanup := connectClient(t, server)
+	defer cleanup()
+
+	tools, err := session.ListTools(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("ListTools(): %v", err)
+	}
+	foundTool := false
+	for _, tool := range tools.Tools {
+		if tool.Name != ToolProviderArtifactSignalRegister {
+			continue
+		}
+		foundTool = true
+		schema, err := json.Marshal(tool.InputSchema)
+		if err != nil {
+			t.Fatalf("Marshal(input schema): %v", err)
+		}
+		if strings.Contains(string(schema), "payload_json") {
+			t.Fatalf("artifact signal input schema exposes raw payload_json: %s", schema)
+		}
+		break
+	}
+	if !foundTool {
+		t.Fatalf("%s tool is not registered", ToolProviderArtifactSignalRegister)
+	}
+
+	result, err := session.CallTool(context.Background(), &mcpsdk.CallToolParams{
+		Name: ToolProviderArtifactSignalRegister,
+		Arguments: map[string]any{
+			"meta":      validProviderCommandMetaArgs("update_issue"),
+			"signal_id": "signal-1",
+			"target": map[string]any{
+				"provider_slug":        "github",
+				"repository_full_name": "codex-k8s/kodex",
+				"work_item_kind":       "issue",
+				"number":               780,
+			},
+			"source":              "agent_manager",
+			"observed_at":         "2026-05-25T00:00:00Z",
+			"payload_json":        `{"raw_provider_payload":"must not be forwarded"}`,
+			"external_account_id": "external-account-1",
+		},
+	})
+	if err == nil {
+		t.Fatalf("CallTool() err = nil, want schema validation error; result = %+v", result)
+	}
+	if provider.registerSignalCalls != 0 {
+		t.Fatalf("registerSignalCalls = %d, want 0 after invalid raw payload input", provider.registerSignalCalls)
+	}
+
+	result, err = session.CallTool(context.Background(), &mcpsdk.CallToolParams{
+		Name: ToolProviderArtifactSignalRegister,
+		Arguments: map[string]any{
+			"meta":      validProviderCommandMetaArgs("update_issue"),
+			"signal_id": "signal-1",
+			"target": map[string]any{
+				"provider_slug":        "github",
+				"repository_full_name": "codex-k8s/kodex",
+				"work_item_kind":       "issue",
+				"number":               780,
+			},
+			"source":              "agent_manager",
+			"observed_at":         "2026-05-25T00:00:00Z",
+			"external_account_id": "external-account-1",
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool() without raw payload: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("CallTool() returned tool error: %+v", result.Content)
+	}
+	if provider.registerSignalCalls != 1 {
+		t.Fatalf("registerSignalCalls = %d, want 1", provider.registerSignalCalls)
+	}
+	if provider.lastArtifactPayload != "" {
+		t.Fatalf("artifact signal forwarded raw payload = %q, want empty", provider.lastArtifactPayload)
+	}
+	data, err := json.Marshal(result.StructuredContent)
+	if err != nil {
+		t.Fatalf("Marshal(): %v", err)
+	}
+	if strings.Contains(string(data), "raw_provider_payload") {
+		t.Fatalf("structured content exposes raw payload: %s", data)
+	}
+}
+
+func TestProviderToolValidationErrorIsToolError(t *testing.T) {
+	t.Parallel()
+
+	provider := newFakeProviderHubClient()
+	server := newTestServerWithProvider(t, provider)
+	session, cleanup := connectClient(t, server)
+	defer cleanup()
+
+	result, err := session.CallTool(context.Background(), &mcpsdk.CallToolParams{
+		Name: ToolProviderIssueCreate,
+		Arguments: map[string]any{
+			"meta":                validProviderCommandMetaArgs("not-a-provider-operation"),
+			"project_id":          "project-1",
+			"repository_id":       "repository-1",
+			"provider_slug":       "github",
+			"title":               "invalid",
+			"body":                "valid body",
+			"external_account_id": "external-account-1",
+			"repository_target": map[string]any{
+				"provider_slug":        "github",
+				"repository_full_name": "codex-k8s/kodex",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool(): %v", err)
+	}
+	if !result.IsError {
+		t.Fatalf("CallTool() IsError = false, want true")
+	}
+	if provider.createIssueCalls != 0 {
+		t.Fatalf("createIssueCalls = %d, want 0", provider.createIssueCalls)
+	}
+}
+
+func TestProviderToolOwnerErrorIsSafe(t *testing.T) {
+	t.Parallel()
+
+	provider := newFakeProviderHubClient()
+	provider.err = fakeOwnerError()
+	server := newTestServerWithProvider(t, provider)
+	session, cleanup := connectClient(t, server)
+	defer cleanup()
+
+	result, err := session.CallTool(context.Background(), &mcpsdk.CallToolParams{
+		Name: ToolProviderProjectionFind,
+		Arguments: map[string]any{
+			"meta": validProviderQueryMetaArgs(),
+			"target": map[string]any{
+				"provider_slug":        "github",
+				"repository_full_name": "codex-k8s/kodex",
+				"work_item_kind":       "issue",
+				"number":               780,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool(): %v", err)
+	}
+	if !result.IsError {
+		t.Fatalf("CallTool() IsError = false, want true")
+	}
+	data, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("Marshal(): %v", err)
+	}
+	if strings.Contains(string(data), "secret-token") {
+		t.Fatalf("tool error exposes owner detail: %s", data)
+	}
+	if !strings.Contains(string(data), "owner returned Internal") {
+		t.Fatalf("tool error does not include safe owner code: %s", data)
+	}
+}
+
 func TestHTTPHandlerRequiresBearerToken(t *testing.T) {
 	t.Parallel()
 
@@ -289,16 +645,35 @@ type toolSnapshot struct {
 func newTestServer(t *testing.T) *Server {
 	t.Helper()
 
-	return newTestServerWithAgent(t, newFakeAgentManagerClient())
+	return newTestServerWithOwners(t, newFakeAgentManagerClient(), newFakeProviderHubClient())
 }
 
 func newTestServerWithAgent(t *testing.T, agentManager AgentManagerClient) *Server {
+	t.Helper()
+
+	return newTestServerWithOwners(t, agentManager, newFakeProviderHubClient())
+}
+
+func newTestServerWithProvider(t *testing.T, provider ProviderHubClient) *Server {
+	t.Helper()
+
+	return newTestServerWithOwners(t, newFakeAgentManagerClient(), provider)
+}
+
+func newTestServerWithOwners(t *testing.T, agentManager AgentManagerClient, provider ProviderHubClient) *Server {
 	t.Helper()
 
 	routes, err := ownerclients.NewCatalog([]ownerclients.RouteConfig{
 		{
 			Service:   ownerclients.ServiceAgentManager,
 			GRPCAddr:  "agent-manager:9090",
+			AuthToken: "secret-token",
+			Timeout:   3 * time.Second,
+			Enabled:   true,
+		},
+		{
+			Service:   ownerclients.ServiceProviderHub,
+			GRPCAddr:  "provider-hub:9090",
 			AuthToken: "secret-token",
 			Timeout:   3 * time.Second,
 			Enabled:   true,
@@ -322,6 +697,7 @@ func newTestServerWithAgent(t *testing.T, agentManager AgentManagerClient) *Serv
 		SessionTimeout:  time.Minute,
 		OwnerRoutes:     routes,
 		AgentManager:    agentManager,
+		ProviderHub:     provider,
 		AuthRequired:    false,
 	}, nil)
 	if err != nil {
@@ -358,6 +734,24 @@ func validQueryMetaArgs() map[string]any {
 	}
 }
 
+func validProviderCommandMetaArgs(operationType string) map[string]any {
+	meta := validCommandMetaArgs()
+	meta["operation_policy_context"] = map[string]any{
+		"project_id":     "project-1",
+		"repository_id":  "repository-1",
+		"operation_type": operationType,
+		"target_ref":     "github/codex-k8s/kodex#780",
+		"changed_fields": []any{"title"},
+		"risk_level":     "low",
+		"policy_version": "risk-policy-1",
+	}
+	return meta
+}
+
+func validProviderQueryMetaArgs() map[string]any {
+	return validQueryMetaArgs()
+}
+
 func newTestServerWithAuth(t *testing.T) *Server {
 	t.Helper()
 
@@ -374,6 +768,12 @@ func newTestServerWithAuth(t *testing.T) *Server {
 			Timeout:  3 * time.Second,
 			Enabled:  true,
 		},
+		{
+			Service:  ownerclients.ServiceProviderHub,
+			GRPCAddr: "provider-hub:9090",
+			Timeout:  3 * time.Second,
+			Enabled:  true,
+		},
 	})
 	if err != nil {
 		t.Fatalf("NewCatalog(): %v", err)
@@ -386,6 +786,7 @@ func newTestServerWithAuth(t *testing.T) *Server {
 		SessionTimeout:  time.Minute,
 		OwnerRoutes:     routes,
 		AgentManager:    newFakeAgentManagerClient(),
+		ProviderHub:     newFakeProviderHubClient(),
 		AuthRequired:    true,
 		AuthToken:       "test-token",
 		AuthScope:       "kodex.mcp",
@@ -559,6 +960,297 @@ func (f *fakeAgentManagerClient) ListAgentRuns(_ context.Context, _ *agentsv1.Li
 		}},
 		Page: &agentsv1.PageResponse{},
 	}, nil
+}
+
+type fakeProviderHubClient struct {
+	getProjectionCalls      int
+	findProjectionCalls     int
+	listProjectionsCalls    int
+	listCommentsCalls       int
+	listRelationshipsCalls  int
+	registerSignalCalls     int
+	createIssueCalls        int
+	updateIssueCalls        int
+	createCommentCalls      int
+	updateCommentCalls      int
+	createPullRequestCalls  int
+	updatePullRequestCalls  int
+	createReviewSignalCalls int
+	updateRelationshipCalls int
+	createRepositoryCalls   int
+	createBootstrapPRCalls  int
+	createAdoptionPRCalls   int
+	lastCommandID           string
+	lastArtifactPayload     string
+	err                     error
+}
+
+func newFakeProviderHubClient() *fakeProviderHubClient {
+	return &fakeProviderHubClient{}
+}
+
+func (f *fakeProviderHubClient) GetWorkItemProjection(_ context.Context, _ *providersv1.GetWorkItemProjectionRequest) (*providersv1.WorkItemProjectionResponse, error) {
+	f.getProjectionCalls++
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &providersv1.WorkItemProjectionResponse{WorkItemProjection: fakeWorkItemProjection()}, nil
+}
+
+func (f *fakeProviderHubClient) FindWorkItemByProviderRef(_ context.Context, _ *providersv1.FindWorkItemByProviderRefRequest) (*providersv1.WorkItemProjectionResponse, error) {
+	f.findProjectionCalls++
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &providersv1.WorkItemProjectionResponse{WorkItemProjection: fakeWorkItemProjection()}, nil
+}
+
+func (f *fakeProviderHubClient) ListWorkItemProjections(_ context.Context, _ *providersv1.ListWorkItemProjectionsRequest) (*providersv1.ListWorkItemProjectionsResponse, error) {
+	f.listProjectionsCalls++
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &providersv1.ListWorkItemProjectionsResponse{
+		WorkItemProjections: []*providersv1.WorkItemProjection{fakeWorkItemProjection()},
+		Page:                &providersv1.PageResponse{},
+	}, nil
+}
+
+func (f *fakeProviderHubClient) ListComments(_ context.Context, _ *providersv1.ListCommentsRequest) (*providersv1.ListCommentsResponse, error) {
+	f.listCommentsCalls++
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &providersv1.ListCommentsResponse{
+		Comments: []*providersv1.CommentProjection{fakeCommentProjection()},
+		Page:     &providersv1.PageResponse{},
+	}, nil
+}
+
+func (f *fakeProviderHubClient) ListRelationships(_ context.Context, _ *providersv1.ListRelationshipsRequest) (*providersv1.ListRelationshipsResponse, error) {
+	f.listRelationshipsCalls++
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &providersv1.ListRelationshipsResponse{
+		Relationships: []*providersv1.ProviderRelationship{fakeProviderRelationship()},
+		Page:          &providersv1.PageResponse{},
+	}, nil
+}
+
+func (f *fakeProviderHubClient) RegisterProviderArtifactSignal(_ context.Context, request *providersv1.RegisterProviderArtifactSignalRequest) (*providersv1.ProviderArtifactSignalResponse, error) {
+	f.registerSignalCalls++
+	f.lastCommandID = request.GetMeta().GetCommandId()
+	f.lastArtifactPayload = request.GetPayloadJson()
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &providersv1.ProviderArtifactSignalResponse{
+		SignalId: request.GetSignalId(),
+		Status:   "accepted",
+		Target:   request.GetTarget(),
+	}, nil
+}
+
+func (f *fakeProviderHubClient) CreateIssue(_ context.Context, request *providersv1.CreateIssueRequest) (*providersv1.ProviderOperationResponse, error) {
+	f.createIssueCalls++
+	f.lastCommandID = request.GetMeta().GetCommandId()
+	if f.err != nil {
+		return nil, f.err
+	}
+	return fakeProviderOperationResponse(providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_ISSUE), nil
+}
+
+func (f *fakeProviderHubClient) UpdateIssue(_ context.Context, request *providersv1.UpdateIssueRequest) (*providersv1.ProviderOperationResponse, error) {
+	f.updateIssueCalls++
+	f.lastCommandID = request.GetMeta().GetCommandId()
+	if f.err != nil {
+		return nil, f.err
+	}
+	return fakeProviderOperationResponse(providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_UPDATE_ISSUE), nil
+}
+
+func (f *fakeProviderHubClient) CreateComment(_ context.Context, request *providersv1.CreateCommentRequest) (*providersv1.ProviderOperationResponse, error) {
+	f.createCommentCalls++
+	f.lastCommandID = request.GetMeta().GetCommandId()
+	if f.err != nil {
+		return nil, f.err
+	}
+	response := fakeProviderOperationResponse(providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_COMMENT)
+	response.CommentProjection = fakeCommentProjection()
+	return response, nil
+}
+
+func (f *fakeProviderHubClient) UpdateComment(_ context.Context, request *providersv1.UpdateCommentRequest) (*providersv1.ProviderOperationResponse, error) {
+	f.updateCommentCalls++
+	f.lastCommandID = request.GetMeta().GetCommandId()
+	if f.err != nil {
+		return nil, f.err
+	}
+	response := fakeProviderOperationResponse(providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_UPDATE_COMMENT)
+	response.CommentProjection = fakeCommentProjection()
+	return response, nil
+}
+
+func (f *fakeProviderHubClient) CreatePullRequest(_ context.Context, request *providersv1.CreatePullRequestRequest) (*providersv1.ProviderOperationResponse, error) {
+	f.createPullRequestCalls++
+	f.lastCommandID = request.GetMeta().GetCommandId()
+	if f.err != nil {
+		return nil, f.err
+	}
+	return fakeProviderOperationResponse(providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_PULL_REQUEST), nil
+}
+
+func (f *fakeProviderHubClient) UpdatePullRequest(_ context.Context, request *providersv1.UpdatePullRequestRequest) (*providersv1.ProviderOperationResponse, error) {
+	f.updatePullRequestCalls++
+	f.lastCommandID = request.GetMeta().GetCommandId()
+	if f.err != nil {
+		return nil, f.err
+	}
+	return fakeProviderOperationResponse(providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_UPDATE_PULL_REQUEST), nil
+}
+
+func (f *fakeProviderHubClient) CreateReviewSignal(_ context.Context, request *providersv1.CreateReviewSignalRequest) (*providersv1.ProviderOperationResponse, error) {
+	f.createReviewSignalCalls++
+	f.lastCommandID = request.GetMeta().GetCommandId()
+	if f.err != nil {
+		return nil, f.err
+	}
+	return fakeProviderOperationResponse(providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_REVIEW_SIGNAL), nil
+}
+
+func (f *fakeProviderHubClient) UpdateRelationship(_ context.Context, request *providersv1.UpdateRelationshipRequest) (*providersv1.ProviderOperationResponse, error) {
+	f.updateRelationshipCalls++
+	f.lastCommandID = request.GetMeta().GetCommandId()
+	if f.err != nil {
+		return nil, f.err
+	}
+	response := fakeProviderOperationResponse(providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_UPDATE_RELATIONSHIP)
+	response.Relationship = fakeProviderRelationship()
+	return response, nil
+}
+
+func (f *fakeProviderHubClient) CreateRepository(_ context.Context, request *providersv1.CreateRepositoryRequest) (*providersv1.ProviderOperationResponse, error) {
+	f.createRepositoryCalls++
+	f.lastCommandID = request.GetMeta().GetCommandId()
+	if f.err != nil {
+		return nil, f.err
+	}
+	return fakeProviderOperationResponse(providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_REPOSITORY), nil
+}
+
+func (f *fakeProviderHubClient) CreateBootstrapPullRequest(_ context.Context, request *providersv1.CreateBootstrapPullRequestRequest) (*providersv1.ProviderOperationResponse, error) {
+	f.createBootstrapPRCalls++
+	f.lastCommandID = request.GetMeta().GetCommandId()
+	if f.err != nil {
+		return nil, f.err
+	}
+	return fakeProviderOperationResponse(providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_BOOTSTRAP_PULL_REQUEST), nil
+}
+
+func (f *fakeProviderHubClient) CreateAdoptionPullRequest(_ context.Context, request *providersv1.CreateAdoptionPullRequestRequest) (*providersv1.ProviderOperationResponse, error) {
+	f.createAdoptionPRCalls++
+	f.lastCommandID = request.GetMeta().GetCommandId()
+	if f.err != nil {
+		return nil, f.err
+	}
+	return fakeProviderOperationResponse(providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_ADOPTION_PULL_REQUEST), nil
+}
+
+func fakeWorkItemProjection() *providersv1.WorkItemProjection {
+	return &providersv1.WorkItemProjection{
+		WorkItemProjectionId: "projection-1",
+		ProviderSlug:         "github",
+		ProviderWorkItemId:   "provider-work-item-1",
+		ProjectId:            stringPtr("project-1"),
+		RepositoryId:         stringPtr("repository-1"),
+		RepositoryFullName:   "codex-k8s/kodex",
+		Kind:                 providersv1.WorkItemKind_WORK_ITEM_KIND_ISSUE,
+		Number:               780,
+		WebUrl:               "https://github.com/codex-k8s/kodex/issues/780",
+		Title:                "MCP-4",
+		State:                "open",
+		WorkItemType:         stringPtr("task"),
+		Labels:               []string{"mcp"},
+		WatermarkStatus:      providersv1.WorkItemWatermarkStatus_WORK_ITEM_WATERMARK_STATUS_VALID,
+		BodyDigest:           "sha256:body",
+		SyncedAt:             "2026-05-25T00:00:00Z",
+		DriftStatus:          providersv1.WorkItemDriftStatus_WORK_ITEM_DRIFT_STATUS_FRESH,
+		Version:              1,
+	}
+}
+
+func fakeCommentProjection() *providersv1.CommentProjection {
+	return &providersv1.CommentProjection{
+		CommentProjectionId:  "comment-projection-1",
+		WorkItemProjectionId: "projection-1",
+		ProviderCommentId:    "provider-comment-1",
+		Kind:                 providersv1.CommentKind_COMMENT_KIND_COMMENT,
+		AuthorProviderLogin:  "kodex-agent",
+		BodyDigest:           "sha256:comment",
+		Summary:              "Короткая безопасная сводка",
+		ProviderCreatedAt:    stringPtr("2026-05-25T00:00:00Z"),
+		ProviderUpdatedAt:    stringPtr("2026-05-25T00:00:00Z"),
+		ReviewState:          providersv1.ReviewState_REVIEW_STATE_COMMENTED,
+	}
+}
+
+func fakeProviderRelationship() *providersv1.ProviderRelationship {
+	return &providersv1.ProviderRelationship{
+		RelationshipId:             "relationship-1",
+		SourceWorkItemProjectionId: "projection-1",
+		TargetProviderRef:          stringPtr("https://github.com/codex-k8s/kodex/pull/1"),
+		RelationshipType:           "tracks",
+		Source:                     providersv1.RelationshipSource_RELATIONSHIP_SOURCE_MANUAL,
+		Confidence:                 providersv1.RelationshipConfidence_RELATIONSHIP_CONFIDENCE_CONFIRMED,
+		CreatedAt:                  "2026-05-25T00:00:00Z",
+		Version:                    1,
+	}
+}
+
+func fakeProviderOperationResponse(operationType providersv1.ProviderOperationType) *providersv1.ProviderOperationResponse {
+	return &providersv1.ProviderOperationResponse{
+		ProviderOperation: &providersv1.ProviderOperation{
+			ProviderOperationId: "operation-1",
+			CommandId:           "command-1",
+			ActorId:             stringPtr("user-1"),
+			ExternalAccountId:   "external-account-1",
+			ProviderSlug:        "github",
+			OperationType:       operationType,
+			TargetRef:           "github/codex-k8s/kodex#780",
+			Status:              providersv1.ProviderOperationStatus_PROVIDER_OPERATION_STATUS_SUCCEEDED,
+			ResultRef:           stringPtr("https://github.com/codex-k8s/kodex/issues/780"),
+			StartedAt:           "2026-05-25T00:00:00Z",
+			FinishedAt:          stringPtr("2026-05-25T00:00:01Z"),
+		},
+		WorkItemProjection: fakeWorkItemProjection(),
+		Result: &providersv1.ProviderOperationCommandResult{
+			Target: &providersv1.ProviderTarget{
+				ProviderSlug:       "github",
+				RepositoryFullName: stringPtr("codex-k8s/kodex"),
+				WorkItemKind:       workItemKindPtr(providersv1.WorkItemKind_WORK_ITEM_KIND_ISSUE),
+				Number:             int64Ptr(780),
+				WebUrl:             stringPtr("https://github.com/codex-k8s/kodex/issues/780"),
+			},
+			ResultRef:              stringPtr("https://github.com/codex-k8s/kodex/issues/780"),
+			ProviderObjectId:       stringPtr("provider-work-item-1"),
+			ProviderVersion:        stringPtr("provider-version-1"),
+			ReconciliationEnqueued: true,
+			EmittedEventTypes:      []string{"provider.work_item.created"},
+		},
+	}
+}
+
+func stringPtr(value string) *string {
+	return &value
+}
+
+func int64Ptr(value int64) *int64 {
+	return &value
+}
+
+func workItemKindPtr(value providersv1.WorkItemKind) *providersv1.WorkItemKind {
+	return &value
 }
 
 func fakeOwnerError() error {
