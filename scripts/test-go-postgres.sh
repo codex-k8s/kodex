@@ -162,17 +162,15 @@ run_docker_postgres_tests() {
 
 mode="${KODEX_TEST_POSTGRES_MODE:-auto}"
 
-if all_external_dsns_provided; then
-	run_external_postgres_tests
-	exit 0
-fi
-
-if any_external_dsn_provided; then
-	require_all_external_dsns
-fi
-
 case "${mode}" in
 	auto | "")
+		if all_external_dsns_provided; then
+			run_external_postgres_tests
+			exit 0
+		fi
+		if any_external_dsn_provided; then
+			require_all_external_dsns
+		fi
 		if kubernetes_runner_available; then
 			run_kubernetes_postgres_tests
 		else
