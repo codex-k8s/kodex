@@ -15,6 +15,12 @@ Codex hooks являются command-обработчиками Codex: hook emit
 - Короткая операционная лента для realtime UI и метрики срабатываний hooks.
 - Передача только ссылок на выбранный capability context и skill refs, если они уже выбраны `agent-manager` и материализованы `runtime-manager`.
 
+## Состояние реализации
+
+Сервисный каркас расположен в `services/internal/codex-hook-ingress`.
+
+Текущий срез реализует process, config, graceful shutdown, `/health/livez`, `/health/readyz`, `/metrics`, in-process logical boundary `SubmitHookEvent`, source binding placeholder, schema validation hook, sanitizer boundary и idempotency repository stub. Физический transport для `SubmitHookEvent` не выбран и не реализован; маршруты к соседним доменам остаются следующим срезом.
+
 ## Что не входит
 
 - MCP tools, `tools/list`, `tools/call` и MCP transport — зона `platform-mcp-server`.

@@ -5,8 +5,8 @@ title: kodex - поставка codex-hook-ingress
 status: active
 owner_role: EM
 created_at: 2026-05-22
-updated_at: 2026-05-25
-related_issues: [698, 753, 778, 786, 322]
+updated_at: 2026-05-26
+related_issues: [698, 753, 778, 786, 793, 322]
 related_prs: []
 related_docsets:
   - docs/domains/codex-hook-ingress/product/requirements.md
@@ -24,7 +24,7 @@ approvals:
 
 ## TL;DR
 
-`codex-hook-ingress` поставляется малыми срезами: сначала доменный пакет документации, затем machine-readable схемы normalized envelope и sanitizer contract, hook emitter/sidecar, сервисный каркас ingress, маршрутизация владельцам, permission bridge, realtime/metrics и только потом расширение вокруг skills capability context. Код, proto и AsyncAPI не входят в текущий docs-first срез.
+`codex-hook-ingress` поставляется малыми срезами: сначала доменный пакет документации, затем machine-readable схемы normalized envelope и sanitizer contract, hook emitter/sidecar runtime contract, сервисный каркас ingress, маршрутизация владельцам, permission bridge, realtime/metrics и только потом расширение вокруг skills capability context. Сервисный каркас допускает in-process logical boundary, но proto, OpenAPI, AsyncAPI и physical transport остаются отдельным решением.
 
 ## Входные артефакты
 
@@ -47,7 +47,7 @@ approvals:
 | CHI-0 | #698 | Доменная документация `codex-hook-ingress`: требования, дизайн, модель состояния, API overview, delivery-план и карта Issue. Код, proto, OpenAPI и AsyncAPI не входят. |
 | CHI-1 | #778 | JSON Schema `normalized-hook-envelope.v1` и `sanitizer-contract.v1`, safe examples, validation command и явное разделение hook envelope, MCP tools и business commands. |
 | CHI-2 | #786 | Контракт hook emitter/local sidecar: runtime role, чтение Codex hook JSON из `stdin`, sanitizer до buffer/send, logical `SubmitHookEvent`, auth, idempotency, ordering, retry, bounded buffer, backpressure и failure policy без выбора physical transport. |
-| CHI-3 | не назначено | Сервисный каркас `codex-hook-ingress`: process, config, health/readiness, metrics, source verifier, sanitizer, idempotency. |
+| CHI-3 | #793 | Сервисный каркас `codex-hook-ingress`: process, config, graceful shutdown, health/readiness/metrics, in-process logical `SubmitHookEvent`, source verifier placeholder, schema validation hook, sanitizer boundary, idempotency repository stub без raw payload storage. |
 | CHI-4 | не назначено | Routes к `agent-manager`, `runtime-manager`, `provider-hub`, `governance-manager`, `interaction-hub` для safe events без бизнес-состояния в ingress. |
 | CHI-5 | не назначено | `PermissionRequest` и policy-controlled `PreToolUse` bridge к gate/decision у `governance-manager`, ожиданию flow у `agent-manager` и delivery через `interaction-hub`. |
 | CHI-6 | не назначено | Realtime/ops feed, retention, sanitizer metrics, rate limits, backpressure и operator diagnostics. |
@@ -71,7 +71,7 @@ approvals:
 
 - CHI-0 принят как доменный docs-first пакет.
 - Для каждого кодового среза есть отдельный GitHub Issue.
-- Выбран и согласован транспорт `SubmitHookEvent`.
+- Для физической business-поверхности выбран и согласован транспорт `SubmitHookEvent`; сервисный каркас CHI-3 допускает только in-process logical boundary без HTTP/gRPC handler, proto, OpenAPI и AsyncAPI.
 - JSON Schema normalized envelope согласована отдельно от MCP tools и transport contract.
 - Для sanitizer есть machine-readable contract со списком forbidden fields, size limits, redaction, digest/preview правилами и safe examples без секретов.
 - Для emitter/sidecar есть machine-readable runtime config с supported events, delivery, auth, idempotency, ordering, retry, buffer, backpressure и failure policy.
