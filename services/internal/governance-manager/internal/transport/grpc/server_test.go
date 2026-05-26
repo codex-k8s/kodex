@@ -70,6 +70,36 @@ func TestUnaryErrorInterceptorMapsBacklogToUnimplemented(t *testing.T) {
 	}
 }
 
+func TestUnaryErrorInterceptorMapsRepositoryDomainErrors(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		err  error
+		want codes.Code
+	}{
+		{name: "not found", err: errs.ErrNotFound, want: codes.NotFound},
+		{name: "already exists", err: errs.ErrAlreadyExists, want: codes.AlreadyExists},
+		{name: "conflict", err: errs.ErrConflict, want: codes.Aborted},
+		{name: "precondition failed", err: errs.ErrPreconditionFailed, want: codes.FailedPrecondition},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			interceptor := UnaryErrorInterceptor(nil)
+			_, err := interceptor(context.Background(), nil, &grpcruntime.UnaryServerInfo{FullMethod: "/test"}, func(context.Context, any) (any, error) {
+				return nil, tt.err
+			})
+			if status.Code(err) != tt.want {
+				t.Fatalf("status code = %s, want %s", status.Code(err), tt.want)
+			}
+		})
+	}
+}
+
 type fakeBacklogService struct {
 	governanceService
 	operation enum.Operation

@@ -28,6 +28,7 @@ type Repository interface {
 	ListRiskAssessments(ctx context.Context, filter query.RiskAssessmentFilter) ([]entity.RiskAssessment, query.PageResult, error)
 	ListRiskFactors(ctx context.Context, filter query.RiskFactorFilter) ([]entity.RiskFactor, query.PageResult, error)
 	RecordReviewSignal(ctx context.Context, signal entity.ReviewSignal, result entity.CommandResult, event entity.OutboxEvent) error
+	GetReviewSignal(ctx context.Context, id uuid.UUID) (entity.ReviewSignal, error)
 	ListReviewSignals(ctx context.Context, filter query.ReviewSignalFilter) ([]entity.ReviewSignal, query.PageResult, error)
 	CreateGateRequest(ctx context.Context, request entity.GateRequest, result entity.CommandResult, event entity.OutboxEvent) error
 	UpdateGateRequestWithDecision(ctx context.Context, request entity.GateRequest, previousVersion int64, decision entity.GateDecision, result entity.CommandResult, event entity.OutboxEvent) error

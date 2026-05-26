@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -18,6 +19,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/governance-manager/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/governance-manager/internal/domain/types/enum"
 	"github.com/codex-k8s/kodex/services/internal/governance-manager/internal/domain/types/query"
+	"github.com/codex-k8s/kodex/services/internal/governance-manager/internal/domain/types/value"
 )
 
 // Service is the governance-manager application service boundary.
@@ -33,6 +35,11 @@ type Config struct {
 	Clock       Clock
 	IDGenerator IDGenerator
 }
+
+const (
+	aggregateGateDecision       = "gate_decision"
+	aggregateRiskProfileVersion = "risk_profile_version"
+)
 
 // New creates a governance-manager service with default clock and ids.
 func New(repository governancerepo.Repository) *Service {
@@ -62,8 +69,19 @@ func (s *Service) BacklogOperation(_ context.Context, input BacklogOperationInpu
 
 // CreateRiskProfile creates risk profile metadata.
 func (s *Service) CreateRiskProfile(ctx context.Context, input CreateRiskProfileInput) (entity.RiskProfile, error) {
-	if err := requireCommand(input.Meta, enum.OperationCreateRiskProfile.String()); err != nil {
+	result, replayed, err := s.replayCommand(ctx, input.Meta, enum.OperationCreateRiskProfile.String(), governanceevents.AggregateRiskProfile)
+	if err != nil {
 		return entity.RiskProfile{}, err
+	}
+	if replayed {
+		profile, err := s.repository.GetRiskProfile(ctx, result.AggregateID)
+		if err != nil {
+			return entity.RiskProfile{}, err
+		}
+		if !sameExternalRef(profile.Scope, input.Scope) || profile.Slug != strings.TrimSpace(input.Slug) {
+			return entity.RiskProfile{}, errs.ErrConflict
+		}
+		return profile, nil
 	}
 	now := s.clock.Now()
 	profile := entity.RiskProfile{
@@ -77,7 +95,7 @@ func (s *Service) CreateRiskProfile(ctx context.Context, input CreateRiskProfile
 	if profile.Scope.Type == "" || profile.Scope.Ref == "" || profile.Slug == "" {
 		return entity.RiskProfile{}, errs.ErrInvalidArgument
 	}
-	result := commandResult(input.Meta, enum.OperationCreateRiskProfile.String(), governanceevents.AggregateRiskProfile, profile.ID, now)
+	result = commandResult(input.Meta, enum.OperationCreateRiskProfile.String(), governanceevents.AggregateRiskProfile, profile.ID, now)
 	if err := s.repository.CreateRiskProfile(ctx, profile, result); err != nil {
 		return entity.RiskProfile{}, err
 	}
@@ -86,11 +104,22 @@ func (s *Service) CreateRiskProfile(ctx context.Context, input CreateRiskProfile
 
 // CreateRiskProfileVersion creates an immutable policy version.
 func (s *Service) CreateRiskProfileVersion(ctx context.Context, input CreateRiskProfileVersionInput) (entity.RiskProfileVersion, error) {
-	if err := requireCommand(input.Meta, enum.OperationCreateRiskProfileVersion.String()); err != nil {
-		return entity.RiskProfileVersion{}, err
-	}
 	if input.RiskProfileID == uuid.Nil {
 		return entity.RiskProfileVersion{}, errs.ErrInvalidArgument
+	}
+	result, replayed, err := s.replayCommand(ctx, input.Meta, enum.OperationCreateRiskProfileVersion.String(), aggregateRiskProfileVersion)
+	if err != nil {
+		return entity.RiskProfileVersion{}, err
+	}
+	if replayed {
+		if result.AggregateID != input.RiskProfileID {
+			return entity.RiskProfileVersion{}, errs.ErrConflict
+		}
+		profileVersion, err := profileVersionFromCommandResult(result)
+		if err != nil {
+			return entity.RiskProfileVersion{}, err
+		}
+		return s.repository.GetRiskProfileVersion(ctx, input.RiskProfileID, profileVersion)
 	}
 	now := s.clock.Now()
 	contentDigest := strings.TrimSpace(input.ContentDigest)
@@ -128,7 +157,9 @@ func (s *Service) CreateRiskProfileVersion(ctx context.Context, input CreateRisk
 			version.Rules[index].Status = enum.RuleStatusActive
 		}
 	}
-	result := commandResult(input.Meta, enum.OperationCreateRiskProfileVersion.String(), "risk_profile_version", input.RiskProfileID, now)
+	result = commandResultWithPayload(input.Meta, enum.OperationCreateRiskProfileVersion.String(), aggregateRiskProfileVersion, input.RiskProfileID, now, map[string]any{
+		"profile_version": version.ProfileVersion,
+	})
 	if err := s.repository.CreateRiskProfileVersion(ctx, version, result); err != nil {
 		return entity.RiskProfileVersion{}, err
 	}
@@ -137,12 +168,33 @@ func (s *Service) CreateRiskProfileVersion(ctx context.Context, input CreateRisk
 
 // ActivateRiskProfileVersion activates one profile version for future assessments.
 func (s *Service) ActivateRiskProfileVersion(ctx context.Context, input ActivateRiskProfileVersionInput) (entity.RiskProfileVersion, error) {
-	if err := requireCommand(input.Meta, enum.OperationActivateRiskProfileVersion.String()); err != nil {
+	result, replayed, err := s.replayCommand(ctx, input.Meta, enum.OperationActivateRiskProfileVersion.String(), governanceevents.AggregateRiskProfile)
+	if err != nil {
+		return entity.RiskProfileVersion{}, err
+	}
+	if replayed {
+		if result.AggregateID != input.RiskProfileID {
+			return entity.RiskProfileVersion{}, errs.ErrConflict
+		}
+		profileVersion, err := profileVersionFromCommandResult(result)
+		if err != nil {
+			return entity.RiskProfileVersion{}, err
+		}
+		if profileVersion != input.ProfileVersion {
+			return entity.RiskProfileVersion{}, errs.ErrConflict
+		}
+		return s.repository.GetRiskProfileVersion(ctx, input.RiskProfileID, profileVersion)
+	}
+	previousVersion, err := requireExpectedVersion(input.Meta)
+	if err != nil {
 		return entity.RiskProfileVersion{}, err
 	}
 	profile, err := s.repository.GetRiskProfile(ctx, input.RiskProfileID)
 	if err != nil {
 		return entity.RiskProfileVersion{}, err
+	}
+	if profile.Version != previousVersion {
+		return entity.RiskProfileVersion{}, errs.ErrConflict
 	}
 	version, err := s.repository.GetRiskProfileVersion(ctx, input.RiskProfileID, input.ProfileVersion)
 	if err != nil {
@@ -150,14 +202,15 @@ func (s *Service) ActivateRiskProfileVersion(ctx context.Context, input Activate
 	}
 	now := s.clock.Now()
 	activeVersion := input.ProfileVersion
-	previousVersion := profile.Version
 	profile.ActiveVersion = &activeVersion
 	profile.Status = enum.RiskProfileStatusActive
-	profile.Version++
+	profile.Version = previousVersion + 1
 	profile.UpdatedAt = now
 	version.Status = enum.RiskProfileVersionStatusActive
 	version.ActivatedAt = &now
-	result := commandResult(input.Meta, enum.OperationActivateRiskProfileVersion.String(), governanceevents.AggregateRiskProfile, profile.ID, now)
+	result = commandResultWithPayload(input.Meta, enum.OperationActivateRiskProfileVersion.String(), governanceevents.AggregateRiskProfile, profile.ID, now, map[string]any{
+		"profile_version": version.ProfileVersion,
+	})
 	event := outboxEvent(s.idGenerator.New(), governanceevents.EventPolicyVersionActivated, governanceevents.AggregateRiskProfile, profile.ID, now, governanceevents.Payload{
 		RiskProfileID:   profile.ID.String(),
 		ProfileVersion:  version.ProfileVersion,
@@ -173,18 +226,31 @@ func (s *Service) ActivateRiskProfileVersion(ctx context.Context, input Activate
 
 // ArchiveRiskProfile archives profile metadata.
 func (s *Service) ArchiveRiskProfile(ctx context.Context, input ArchiveRiskProfileInput) (entity.RiskProfile, error) {
-	if err := requireCommand(input.Meta, enum.OperationArchiveRiskProfile.String()); err != nil {
+	result, replayed, err := s.replayCommand(ctx, input.Meta, enum.OperationArchiveRiskProfile.String(), governanceevents.AggregateRiskProfile)
+	if err != nil {
+		return entity.RiskProfile{}, err
+	}
+	if replayed {
+		if result.AggregateID != input.RiskProfileID {
+			return entity.RiskProfile{}, errs.ErrConflict
+		}
+		return s.repository.GetRiskProfile(ctx, result.AggregateID)
+	}
+	previousVersion, err := requireExpectedVersion(input.Meta)
+	if err != nil {
 		return entity.RiskProfile{}, err
 	}
 	profile, err := s.repository.GetRiskProfile(ctx, input.RiskProfileID)
 	if err != nil {
 		return entity.RiskProfile{}, err
 	}
-	previousVersion := profile.Version
+	if profile.Version != previousVersion {
+		return entity.RiskProfile{}, errs.ErrConflict
+	}
 	profile.Status = enum.RiskProfileStatusArchived
-	profile.Version++
+	profile.Version = previousVersion + 1
 	profile.UpdatedAt = s.clock.Now()
-	result := commandResult(input.Meta, enum.OperationArchiveRiskProfile.String(), governanceevents.AggregateRiskProfile, profile.ID, profile.UpdatedAt)
+	result = commandResult(input.Meta, enum.OperationArchiveRiskProfile.String(), governanceevents.AggregateRiskProfile, profile.ID, profile.UpdatedAt)
 	if err := s.repository.ArchiveRiskProfile(ctx, profile, previousVersion, result); err != nil {
 		return entity.RiskProfile{}, err
 	}
@@ -213,8 +279,19 @@ func (s *Service) ListGatePolicies(ctx context.Context, input ListGatePoliciesIn
 
 // EvaluateRisk stores a minimal assessment record without running the full classifier.
 func (s *Service) EvaluateRisk(ctx context.Context, input EvaluateRiskInput) (entity.RiskAssessment, error) {
-	if err := requireCommand(input.Meta, enum.OperationEvaluateRisk.String()); err != nil {
+	result, replayed, err := s.replayCommand(ctx, input.Meta, enum.OperationEvaluateRisk.String(), governanceevents.AggregateRiskAssessment)
+	if err != nil {
 		return entity.RiskAssessment{}, err
+	}
+	if replayed {
+		assessment, err := s.repository.GetRiskAssessment(ctx, result.AggregateID)
+		if err != nil {
+			return entity.RiskAssessment{}, err
+		}
+		if !sameExternalRef(assessment.Target, input.Target) {
+			return entity.RiskAssessment{}, errs.ErrConflict
+		}
+		return assessment, nil
 	}
 	if input.Target.Type == "" || input.Target.Ref == "" {
 		return entity.RiskAssessment{}, errs.ErrInvalidArgument
@@ -236,7 +313,7 @@ func (s *Service) EvaluateRisk(ctx context.Context, input EvaluateRiskInput) (en
 		Status:             enum.RiskAssessmentStatusActive,
 		Explanation:        explanation,
 	}
-	result := commandResult(input.Meta, enum.OperationEvaluateRisk.String(), governanceevents.AggregateRiskAssessment, assessment.ID, now)
+	result = commandResult(input.Meta, enum.OperationEvaluateRisk.String(), governanceevents.AggregateRiskAssessment, assessment.ID, now)
 	events := []entity.OutboxEvent{
 		outboxEvent(s.idGenerator.New(), governanceevents.EventRiskAssessmentRequested, governanceevents.AggregateRiskAssessment, assessment.ID, now, governanceevents.Payload{
 			RiskAssessmentID: assessment.ID.String(),
@@ -274,8 +351,19 @@ func (s *Service) ListRiskFactors(ctx context.Context, input ListRiskFactorsInpu
 
 // RecordReviewSignal stores a bounded review signal reference.
 func (s *Service) RecordReviewSignal(ctx context.Context, input RecordReviewSignalInput) (entity.ReviewSignal, error) {
-	if err := requireCommand(input.Meta, enum.OperationRecordReviewSignal.String()); err != nil {
+	result, replayed, err := s.replayCommand(ctx, input.Meta, enum.OperationRecordReviewSignal.String(), governanceevents.AggregateReviewSignal)
+	if err != nil {
 		return entity.ReviewSignal{}, err
+	}
+	if replayed {
+		signal, err := s.repository.GetReviewSignal(ctx, result.AggregateID)
+		if err != nil {
+			return entity.ReviewSignal{}, err
+		}
+		if !sameExternalRef(signal.Target, input.Target) || signal.AuthorRef != strings.TrimSpace(input.AuthorRef) {
+			return entity.ReviewSignal{}, errs.ErrConflict
+		}
+		return signal, nil
 	}
 	if input.Target.Type == "" || input.Target.Ref == "" || strings.TrimSpace(input.AuthorRef) == "" {
 		return entity.ReviewSignal{}, errs.ErrInvalidArgument
@@ -294,7 +382,7 @@ func (s *Service) RecordReviewSignal(ctx context.Context, input RecordReviewSign
 		Summary:          input.Summary,
 		CreatedAt:        now,
 	}
-	result := commandResult(input.Meta, enum.OperationRecordReviewSignal.String(), governanceevents.AggregateReviewSignal, signal.ID, now)
+	result = commandResult(input.Meta, enum.OperationRecordReviewSignal.String(), governanceevents.AggregateReviewSignal, signal.ID, now)
 	event := outboxEvent(s.idGenerator.New(), governanceevents.EventReviewSignalRecorded, governanceevents.AggregateReviewSignal, signal.ID, now, governanceevents.Payload{
 		ReviewSignalID: signal.ID.String(),
 		Outcome:        string(signal.Outcome),
@@ -312,8 +400,19 @@ func (s *Service) ListReviewSignals(ctx context.Context, input ListReviewSignals
 
 // RequestGate stores a gate request without owning delivery retries.
 func (s *Service) RequestGate(ctx context.Context, input RequestGateInput) (entity.GateRequest, error) {
-	if err := requireCommand(input.Meta, enum.OperationRequestGate.String()); err != nil {
+	result, replayed, err := s.replayCommand(ctx, input.Meta, enum.OperationRequestGate.String(), governanceevents.AggregateGate)
+	if err != nil {
 		return entity.GateRequest{}, err
+	}
+	if replayed {
+		request, err := s.repository.GetGateRequest(ctx, result.AggregateID)
+		if err != nil {
+			return entity.GateRequest{}, err
+		}
+		if !sameExternalRef(request.Target, input.Target) {
+			return entity.GateRequest{}, errs.ErrConflict
+		}
+		return request, nil
 	}
 	if input.Target.Type == "" || input.Target.Ref == "" {
 		return entity.GateRequest{}, errs.ErrInvalidArgument
@@ -329,7 +428,7 @@ func (s *Service) RequestGate(ctx context.Context, input RequestGateInput) (enti
 		EvidenceSummary:        input.EvidenceSummary,
 		Status:                 enum.GateRequestStatusRequested,
 	}
-	result := commandResult(input.Meta, enum.OperationRequestGate.String(), governanceevents.AggregateGate, request.ID, now)
+	result = commandResult(input.Meta, enum.OperationRequestGate.String(), governanceevents.AggregateGate, request.ID, now)
 	event := outboxEvent(s.idGenerator.New(), governanceevents.EventGateRequested, governanceevents.AggregateGate, request.ID, now, governanceevents.Payload{
 		GateRequestID:    request.ID.String(),
 		RiskAssessmentID: optionalUUIDString(request.RiskAssessmentID),
@@ -344,7 +443,26 @@ func (s *Service) RequestGate(ctx context.Context, input RequestGateInput) (enti
 
 // SubmitGateDecision stores a final gate decision and resolves the gate request.
 func (s *Service) SubmitGateDecision(ctx context.Context, input SubmitGateDecisionInput) (entity.GateDecision, entity.GateRequest, error) {
-	if err := requireCommand(input.Meta, enum.OperationSubmitGateDecision.String()); err != nil {
+	result, replayed, err := s.replayCommand(ctx, input.Meta, enum.OperationSubmitGateDecision.String(), aggregateGateDecision)
+	if err != nil {
+		return entity.GateDecision{}, entity.GateRequest{}, err
+	}
+	if replayed {
+		decision, err := s.repository.GetGateDecision(ctx, result.AggregateID)
+		if err != nil {
+			return entity.GateDecision{}, entity.GateRequest{}, err
+		}
+		if decision.GateRequestID != input.GateRequestID {
+			return entity.GateDecision{}, entity.GateRequest{}, errs.ErrConflict
+		}
+		request, err := s.repository.GetGateRequest(ctx, decision.GateRequestID)
+		if err != nil {
+			return entity.GateDecision{}, entity.GateRequest{}, err
+		}
+		return decision, request, nil
+	}
+	previousVersion, err := requireExpectedVersion(input.Meta)
+	if err != nil {
 		return entity.GateDecision{}, entity.GateRequest{}, err
 	}
 	request, err := s.repository.GetGateRequest(ctx, input.GateRequestID)
@@ -352,8 +470,10 @@ func (s *Service) SubmitGateDecision(ctx context.Context, input SubmitGateDecisi
 		return entity.GateDecision{}, entity.GateRequest{}, err
 	}
 	now := s.clock.Now()
-	previousVersion := request.Version
-	request.Version++
+	if request.Version != previousVersion {
+		return entity.GateDecision{}, entity.GateRequest{}, errs.ErrConflict
+	}
+	request.Version = previousVersion + 1
 	request.Status = enum.GateRequestStatusResolved
 	request.UpdatedAt = now
 	request.InteractionDeliveryRef = input.InteractionDeliveryRef
@@ -371,7 +491,9 @@ func (s *Service) SubmitGateDecision(ctx context.Context, input SubmitGateDecisi
 	if decision.DecisionActorRef == "" {
 		return entity.GateDecision{}, entity.GateRequest{}, errs.ErrInvalidArgument
 	}
-	result := commandResult(input.Meta, enum.OperationSubmitGateDecision.String(), "gate_decision", decision.ID, now)
+	result = commandResultWithPayload(input.Meta, enum.OperationSubmitGateDecision.String(), aggregateGateDecision, decision.ID, now, map[string]any{
+		"gate_request_id": request.ID.String(),
+	})
 	event := outboxEvent(s.idGenerator.New(), governanceevents.EventGateResolved, governanceevents.AggregateGate, request.ID, now, governanceevents.Payload{
 		GateRequestID:    request.ID.String(),
 		GateDecisionID:   decision.ID.String(),
@@ -404,8 +526,19 @@ func (s *Service) ListGateDecisions(ctx context.Context, input ListGateDecisions
 
 // BuildReleaseDecisionPackage stores bounded release evidence refs.
 func (s *Service) BuildReleaseDecisionPackage(ctx context.Context, input BuildReleaseDecisionPackageInput) (entity.ReleaseDecisionPackage, error) {
-	if err := requireCommand(input.Meta, enum.OperationBuildReleaseDecisionPackage.String()); err != nil {
+	result, replayed, err := s.replayCommand(ctx, input.Meta, enum.OperationBuildReleaseDecisionPackage.String(), governanceevents.AggregateReleaseDecisionPackage)
+	if err != nil {
 		return entity.ReleaseDecisionPackage{}, err
+	}
+	if replayed {
+		item, err := s.repository.GetReleaseDecisionPackage(ctx, result.AggregateID)
+		if err != nil {
+			return entity.ReleaseDecisionPackage{}, err
+		}
+		if item.ReleaseCandidateRef != strings.TrimSpace(input.ReleaseCandidateRef) || item.ProjectContext.ProjectRef != strings.TrimSpace(input.ProjectContext.ProjectRef) {
+			return entity.ReleaseDecisionPackage{}, errs.ErrConflict
+		}
+		return item, nil
 	}
 	if strings.TrimSpace(input.ReleaseCandidateRef) == "" || strings.TrimSpace(input.ProjectContext.ProjectRef) == "" {
 		return entity.ReleaseDecisionPackage{}, errs.ErrInvalidArgument
@@ -425,7 +558,7 @@ func (s *Service) BuildReleaseDecisionPackage(ctx context.Context, input BuildRe
 		KnownLimitationsSummary: input.KnownLimitationsSummary,
 		Status:                  enum.ReleaseDecisionPackageStatusReady,
 	}
-	result := commandResult(input.Meta, enum.OperationBuildReleaseDecisionPackage.String(), governanceevents.AggregateReleaseDecisionPackage, item.ID, now)
+	result = commandResult(input.Meta, enum.OperationBuildReleaseDecisionPackage.String(), governanceevents.AggregateReleaseDecisionPackage, item.ID, now)
 	event := outboxEvent(s.idGenerator.New(), governanceevents.EventReleaseDecisionPackageBuilt, governanceevents.AggregateReleaseDecisionPackage, item.ID, now, governanceevents.Payload{
 		ReleaseDecisionPackageID: item.ID.String(),
 		ReleaseCandidateRef:      item.ReleaseCandidateRef,
@@ -457,8 +590,64 @@ func requireCommand(meta CommandMeta, operation string) error {
 	return nil
 }
 
+func requireExpectedVersion(meta CommandMeta) (int64, error) {
+	if meta.ExpectedVersion == nil || *meta.ExpectedVersion <= 0 {
+		return 0, errs.ErrInvalidArgument
+	}
+	return *meta.ExpectedVersion, nil
+}
+
+func (s *Service) replayCommand(ctx context.Context, meta CommandMeta, operation string, aggregateType string) (entity.CommandResult, bool, error) {
+	if err := requireCommand(meta, operation); err != nil {
+		return entity.CommandResult{}, false, err
+	}
+	result, err := s.repository.GetCommandResult(ctx, query.CommandIdentity{
+		CommandID:      meta.CommandID,
+		IdempotencyKey: strings.TrimSpace(meta.IdempotencyKey),
+		Operation:      operation,
+		Actor:          meta.Actor,
+	})
+	if errors.Is(err, errs.ErrNotFound) {
+		return entity.CommandResult{}, false, nil
+	}
+	if err != nil {
+		return entity.CommandResult{}, false, err
+	}
+	if err := validateCommandReplay(result, meta, operation, aggregateType); err != nil {
+		return entity.CommandResult{}, true, err
+	}
+	return result, true, nil
+}
+
+func validateCommandReplay(result entity.CommandResult, meta CommandMeta, operation string, aggregateType string) error {
+	if result.Operation != operation || result.AggregateType != aggregateType || result.AggregateID == uuid.Nil {
+		return errs.ErrConflict
+	}
+	if result.Actor.Type != meta.Actor.Type || result.Actor.ID != meta.Actor.ID {
+		return errs.ErrConflict
+	}
+	if meta.CommandID != nil && *meta.CommandID != uuid.Nil {
+		if result.CommandID == nil || *result.CommandID != *meta.CommandID {
+			return errs.ErrConflict
+		}
+		return nil
+	}
+	if strings.TrimSpace(result.IdempotencyKey) != strings.TrimSpace(meta.IdempotencyKey) {
+		return errs.ErrConflict
+	}
+	return nil
+}
+
 func commandResult(meta CommandMeta, operation string, aggregateType string, aggregateID uuid.UUID, now time.Time) entity.CommandResult {
-	resultPayload, _ := json.Marshal(map[string]string{"aggregate_id": aggregateID.String()})
+	return commandResultWithPayload(meta, operation, aggregateType, aggregateID, now, nil)
+}
+
+func commandResultWithPayload(meta CommandMeta, operation string, aggregateType string, aggregateID uuid.UUID, now time.Time, payload map[string]any) entity.CommandResult {
+	if payload == nil {
+		payload = map[string]any{}
+	}
+	payload["aggregate_id"] = aggregateID.String()
+	resultPayload, _ := json.Marshal(payload)
 	return entity.CommandResult{
 		Key:            commandResultKey(meta, operation),
 		CommandID:      meta.CommandID,
@@ -470,6 +659,19 @@ func commandResult(meta CommandMeta, operation string, aggregateType string, agg
 		ResultPayload:  resultPayload,
 		CreatedAt:      now,
 	}
+}
+
+func profileVersionFromCommandResult(result entity.CommandResult) (int64, error) {
+	var payload struct {
+		ProfileVersion int64 `json:"profile_version"`
+	}
+	if err := json.Unmarshal(result.ResultPayload, &payload); err != nil {
+		return 0, fmt.Errorf("%w: invalid command result payload", errs.ErrConflict)
+	}
+	if payload.ProfileVersion <= 0 {
+		return 0, errs.ErrConflict
+	}
+	return payload.ProfileVersion, nil
 }
 
 func commandResultKey(meta CommandMeta, operation string) string {
@@ -501,6 +703,10 @@ func optionalUUIDString(id *uuid.UUID) string {
 		return ""
 	}
 	return id.String()
+}
+
+func sameExternalRef(left value.ExternalRef, right value.ExternalRef) bool {
+	return strings.TrimSpace(left.Type) == strings.TrimSpace(right.Type) && strings.TrimSpace(left.Ref) == strings.TrimSpace(right.Ref)
 }
 
 func versionContentDigest(rules []entity.RiskRule, gatePolicies []entity.GatePolicy) string {

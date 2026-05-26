@@ -56,6 +56,7 @@ const (
 	operationGetGateDecision             = "domain.Repository.GetGateDecision"
 	operationGetGateRequest              = "domain.Repository.GetGateRequest"
 	operationGetReleaseDecisionPackage   = "domain.Repository.GetReleaseDecisionPackage"
+	operationGetReviewSignal             = "domain.Repository.GetReviewSignal"
 	operationGetRiskAssessment           = "domain.Repository.GetRiskAssessment"
 	operationGetRiskProfile              = "domain.Repository.GetRiskProfile"
 	operationGetRiskProfileVersion       = "domain.Repository.GetRiskProfileVersion"
@@ -211,6 +212,11 @@ func (r *Repository) ListRiskFactors(ctx context.Context, filter query.RiskFacto
 // RecordReviewSignal stores a review signal and outbox event.
 func (r *Repository) RecordReviewSignal(ctx context.Context, signal entity.ReviewSignal, result entity.CommandResult, event entity.OutboxEvent) error {
 	return r.mutateWithResult(ctx, operationRecordReviewSignal, queryReviewSignalCreate, reviewSignalArgs(signal), result, &event)
+}
+
+// GetReviewSignal returns a review signal by id.
+func (r *Repository) GetReviewSignal(ctx context.Context, id uuid.UUID) (entity.ReviewSignal, error) {
+	return queryOne(ctx, r.db, operationGetReviewSignal, queryReviewSignalGet, pgx.NamedArgs{"id": id}, scanReviewSignal)
 }
 
 // ListReviewSignals returns review signals by target or assessment.

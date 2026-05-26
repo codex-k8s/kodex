@@ -23,6 +23,7 @@ var (
 	queryReleaseDecisionPackageGet    = mustLoadQuery("release_decision_package__get")
 	queryReleaseDecisionPackageList   = mustLoadQuery("release_decision_package__list")
 	queryReviewSignalCreate           = mustLoadQuery("review_signal__create")
+	queryReviewSignalGet              = mustLoadQuery("review_signal__get")
 	queryReviewSignalList             = mustLoadQuery("review_signal__list")
 	queryRiskAssessmentCreate         = mustLoadQuery("risk_assessment__create")
 	queryRiskAssessmentGet            = mustLoadQuery("risk_assessment__get")
