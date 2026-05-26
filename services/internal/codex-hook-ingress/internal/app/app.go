@@ -28,20 +28,28 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
+	preToolUseRiskClasses, err := cfg.PreToolUseRiskClasses()
+	if err != nil {
+		return err
+	}
 	repository := hookstub.NewRepository()
 	domainService := hookservice.New(
 		repository,
 		hookservice.Config{
-			SchemaVersion:        cfg.SchemaVersion,
-			MaxEnvelopeBytes:     cfg.MaxEnvelopeBytes,
-			MaxTextPreviewBytes:  cfg.MaxTextPreviewBytes,
-			MaxBoundedErrorBytes: cfg.MaxBoundedErrorBytes,
-			SupportedEvents:      events,
-			DisabledRoutes:       disabledRoutes,
-			RouteFailurePolicy:   cfg.RouteFailureMode(),
-			OpsFeedRetention:     cfg.OpsFeedRetention,
-			RateLimitWindow:      cfg.RateLimitWindow,
-			RateLimitBurst:       cfg.RateLimitBurst,
+			SchemaVersion:                   cfg.SchemaVersion,
+			MaxEnvelopeBytes:                cfg.MaxEnvelopeBytes,
+			MaxTextPreviewBytes:             cfg.MaxTextPreviewBytes,
+			MaxBoundedErrorBytes:            cfg.MaxBoundedErrorBytes,
+			SupportedEvents:                 events,
+			DisabledRoutes:                  disabledRoutes,
+			RouteFailurePolicy:              cfg.RouteFailureMode(),
+			OpsFeedRetention:                cfg.OpsFeedRetention,
+			RateLimitWindow:                 cfg.RateLimitWindow,
+			RateLimitBurst:                  cfg.RateLimitBurst,
+			DecisionBridgeTimeout:           cfg.DecisionBridgeTimeout,
+			PreToolUseDecisionRiskClasses:   preToolUseRiskClasses,
+			PermissionDecisionFailurePolicy: cfg.PermissionDecisionFailureMode(),
+			PreToolUseDecisionFailurePolicy: cfg.PreToolUseDecisionFailureMode(),
 		},
 		hookservice.Dependencies{
 			Clock:          systemClock{},
@@ -49,6 +57,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 			SourceVerifier: hookservice.StaticSourceVerifier{},
 			Sanitizer:      hookservice.DefaultSanitizer{},
 			RouteRegistry:  hookservice.NewDefaultRouteRegistry(),
+			DecisionBridge: hookservice.NewOwnerDecisionBridge(hookservice.NewDefaultDecisionOwnerPorts()),
 			OpsFeed: opsstub.NewRepository(opsstub.Config{
 				Capacity:  cfg.OpsFeedCapacity,
 				Retention: cfg.OpsFeedRetention,

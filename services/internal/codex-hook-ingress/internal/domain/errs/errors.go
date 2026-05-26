@@ -12,7 +12,7 @@ func (code Code) Error() string {
 const (
 	// ErrDependencyUnavailable means a required skeleton dependency is not composed.
 	ErrDependencyUnavailable Code = "hook.dependency_unavailable"
-	// ErrDuplicateConflict means the same event id was retried with another payload digest.
+	// ErrDuplicateConflict means the same event id was retried with another hook fingerprint.
 	ErrDuplicateConflict Code = "hook.duplicate_conflict"
 	// ErrInvalidArgument means a normalized hook envelope violates domain invariants.
 	ErrInvalidArgument Code = "hook.invalid_argument"
@@ -26,6 +26,10 @@ const (
 	ErrPayloadTooLarge Code = "hook.payload_too_large"
 	// ErrRateLimited means source/run/event class exceeded the logical SubmitHookEvent admission limit.
 	ErrRateLimited Code = "hook.rate_limited"
+	// ErrDecisionTimeout means an owner decision bridge exceeded its bounded wait.
+	ErrDecisionTimeout Code = "hook.decision_timeout"
+	// ErrOwnerUnavailable means a decision owner port could not accept the safe request.
+	ErrOwnerUnavailable Code = "hook.owner_unavailable"
 	// ErrUnsupportedEvent means the hook event is outside the MVP set.
 	ErrUnsupportedEvent Code = "hook.unsupported_event"
 )

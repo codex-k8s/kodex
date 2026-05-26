@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-22
 updated_at: 2026-05-26
-related_issues: [698, 753, 778, 786, 793, 808, 823, 322]
+related_issues: [698, 753, 778, 786, 793, 808, 823, 836, 322]
 related_prs: []
 related_adrs: []
 approvals:
@@ -74,7 +74,7 @@ approvals:
 | Sanitizer | Проверяет размер, типы полей, forbidden keys, secret-like patterns, binary payload, stdout/stderr и session/transcript references. |
 | Event classifier | Приводит событие к одному из MVP event types и вычисляет safe category: lifecycle, prompt, pre-tool, permission, post-tool, stop. |
 | Route planner/registry | Формирует набор downstream-владельцев, проверяет включение route config и проецирует только разрешённые `safe_parts` для каждого owner port. |
-| Decision bridge | Для `PermissionRequest` и отдельных `PreToolUse` ждёт решение `governance-manager` и delivery/callback через `interaction-hub` в пределах timeout; `agent-manager` получает только ожидание flow и refs. |
+| Decision bridge | Для `PermissionRequest` и policy-controlled `PreToolUse` строит safe request context, вызывает owner decision ports/stubs и возвращает explicit result; `agent-manager` получает только ожидание flow, refs и future timeline context. |
 | Operational feed | Пишет bounded короткую ленту для realtime UI и диагностики с retention: safe summary, event kind, route result, owner target, digest, size bucket, status, reject reason и timestamps. |
 | Audit/metrics emitter | Фиксирует решения, отказы, sanitizer events, route latency, duplicates, rate limits и owner timeouts. |
 
@@ -173,13 +173,13 @@ Machine-readable sanitizer contract живёт в `specs/jsonschema/codex-hook-i
 
 1. Ingress принимает normalized event.
 2. Source verifier подтверждает actor/run/session/slot/scope.
-3. Ingress создаёт safe request context и вызывает `governance-manager`.
-4. `governance-manager` создаёт или находит gate/decision; `agent-manager` фиксирует ожидание flow только если действие связано с агентным переходом.
-5. `interaction-hub` доставляет запрос человеку и возвращает callback/result в governance-контур.
-6. Ingress ждёт решение в пределах timeout, возвращает allow/deny, `no_decision` или безопасный отказ hook emitter.
+3. Ingress создаёт safe request context и вызывает owner ports/stubs для `governance-manager`, `agent-manager` и `interaction-hub`.
+4. `governance-manager` создаёт или находит gate/decision; `agent-manager` фиксирует ожидание flow и persistent tool/activity timeline в своём контуре.
+5. `interaction-hub` доставляет owner feedback или Human gate request и возвращает callback/result в governance-контур.
+6. Ingress ждёт решение в пределах timeout, возвращает `allow`, `deny`, `no_decision`, `timeout`, `fail_closed` или `retryable_error` hook emitter.
 7. Все решения, timeouts и отказы идут в audit/metrics без raw payload.
 
-Если owner decision не пришёл вовремя, поведение должно быть fail-closed для рискованных действий. Для нерискованных событий ingress может вернуть retryable error или safe continue только по policy владельца.
+Если owner decision не пришёл вовремя, поведение должно быть fail-closed для `PermissionRequest` и policy-controlled для `PreToolUse`. Для нерискованных `PreToolUse` ingress не блокирует без отдельной policy. Неподдержанный owner port, disabled route или downstream unavailable не считаются успешной доставкой и отображаются только safe diagnostics.
 
 ## Skills как capability layer
 

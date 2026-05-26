@@ -182,17 +182,42 @@ func IsRouteFailurePolicy(policy RouteFailurePolicy) bool {
 	return policy == RouteFailurePolicyDiagnostic || policy == RouteFailurePolicyFailClosed
 }
 
+// DecisionFailurePolicy describes safe fallback behavior for decision bridge failures.
+type DecisionFailurePolicy string
+
+const (
+	DecisionFailurePolicyFailClosed     DecisionFailurePolicy = "fail_closed"
+	DecisionFailurePolicyNoDecision     DecisionFailurePolicy = "no_decision"
+	DecisionFailurePolicyTimeout        DecisionFailurePolicy = "timeout"
+	DecisionFailurePolicyRetryableError DecisionFailurePolicy = "retryable_error"
+)
+
+// IsDecisionFailurePolicy reports whether policy is supported by CHI-5.
+func IsDecisionFailurePolicy(policy DecisionFailurePolicy) bool {
+	switch policy {
+	case DecisionFailurePolicyFailClosed,
+		DecisionFailurePolicyNoDecision,
+		DecisionFailurePolicyTimeout,
+		DecisionFailurePolicyRetryableError:
+		return true
+	default:
+		return false
+	}
+}
+
 // HandlerResult is the normalized hook handler outcome returned to an emitter.
 type HandlerResult string
 
 const (
-	HandlerResultContinue   HandlerResult = "continue"
-	HandlerResultAllow      HandlerResult = "allow"
-	HandlerResultDeny       HandlerResult = "deny"
-	HandlerResultNoDecision HandlerResult = "no_decision"
-	HandlerResultRetry      HandlerResult = "retry"
-	HandlerResultFailClosed HandlerResult = "fail_closed"
-	HandlerResultIgnored    HandlerResult = "ignored"
+	HandlerResultContinue       HandlerResult = "continue"
+	HandlerResultAllow          HandlerResult = "allow"
+	HandlerResultDeny           HandlerResult = "deny"
+	HandlerResultNoDecision     HandlerResult = "no_decision"
+	HandlerResultTimeout        HandlerResult = "timeout"
+	HandlerResultRetry          HandlerResult = "retry"
+	HandlerResultRetryableError HandlerResult = "retryable_error"
+	HandlerResultFailClosed     HandlerResult = "fail_closed"
+	HandlerResultIgnored        HandlerResult = "ignored"
 )
 
 // SanitizerResult describes the result of the pre-ingress sanitizer.

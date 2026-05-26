@@ -106,6 +106,30 @@ func TestConfigValidateRejectsInvalidOpsFeedAndRateLimitPolicy(t *testing.T) {
 				cfg.RateLimitBurst = 0
 			},
 		},
+		{
+			name: "decision bridge timeout",
+			mutate: func(cfg *Config) {
+				cfg.DecisionBridgeTimeout = 0
+			},
+		},
+		{
+			name: "permission decision failure policy",
+			mutate: func(cfg *Config) {
+				cfg.PermissionDecisionFailurePolicy = "ask"
+			},
+		},
+		{
+			name: "pre tool use decision failure policy",
+			mutate: func(cfg *Config) {
+				cfg.PreToolUseDecisionFailurePolicy = "ask"
+			},
+		},
+		{
+			name: "pre tool use risk class",
+			mutate: func(cfg *Config) {
+				cfg.PreToolUseDecisionRiskClasses = "critical"
+			},
+		},
 	}
 	for _, tc := range cases {
 		tc := tc
@@ -123,20 +147,24 @@ func TestConfigValidateRejectsInvalidOpsFeedAndRateLimitPolicy(t *testing.T) {
 
 func validConfig() Config {
 	return Config{
-		HTTPAddr:                 ":8080",
-		ReadinessTimeout:         1,
-		ShutdownTimeout:          1,
-		SchemaVersion:            defaultSchemaVersion,
-		SanitizerContractID:      defaultSanitizerContractID,
-		SupportedHookEvents:      defaultSupportedEvents,
-		MaxEnvelopeBytes:         65536,
-		MaxTextPreviewBytes:      4096,
-		MaxBoundedErrorBytes:     8192,
-		RouteFailurePolicy:       defaultRouteFailurePolicy,
-		OpsFeedCapacity:          1024,
-		OpsFeedRetention:         1,
-		RateLimitWindow:          1,
-		RateLimitBurst:           300,
-		LogicalTransportReadOnly: true,
+		HTTPAddr:                        ":8080",
+		ReadinessTimeout:                1,
+		ShutdownTimeout:                 1,
+		SchemaVersion:                   defaultSchemaVersion,
+		SanitizerContractID:             defaultSanitizerContractID,
+		SupportedHookEvents:             defaultSupportedEvents,
+		MaxEnvelopeBytes:                65536,
+		MaxTextPreviewBytes:             4096,
+		MaxBoundedErrorBytes:            8192,
+		RouteFailurePolicy:              defaultRouteFailurePolicy,
+		OpsFeedCapacity:                 1024,
+		OpsFeedRetention:                1,
+		RateLimitWindow:                 1,
+		RateLimitBurst:                  300,
+		DecisionBridgeTimeout:           1,
+		PermissionDecisionFailurePolicy: defaultPermissionDecisionFailurePolicy,
+		PreToolUseDecisionFailurePolicy: defaultPreToolUseDecisionFailurePolicy,
+		PreToolUseDecisionRiskClasses:   defaultPreToolUseDecisionRiskClasses,
+		LogicalTransportReadOnly:        true,
 	}
 }

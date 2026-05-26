@@ -44,10 +44,18 @@ func (registry *RouteRegistry) Ready() bool {
 
 // DispatchRoutes sends canonical safe event projections to enabled owner route ports.
 func (registry *RouteRegistry) DispatchRoutes(ctx context.Context, cfg Config, envelope value.HookEnvelope) []value.RouteDeliveryResult {
+	return registry.DispatchRoutesExcluding(ctx, cfg, envelope, nil)
+}
+
+// DispatchRoutesExcluding sends safe event projections except owners handled by a specialized bridge.
+func (registry *RouteRegistry) DispatchRoutesExcluding(ctx context.Context, cfg Config, envelope value.HookEnvelope, excluded map[hookenum.DownstreamOwner]struct{}) []value.RouteDeliveryResult {
 	plan := canonicalRoutePlan(envelope.HookEventName)
 	results := make([]value.RouteDeliveryResult, 0, len(plan)+len(envelope.DownstreamRoutes))
 	results = append(results, unexpectedRouteDiagnostics(envelope, plan)...)
 	for _, route := range plan {
+		if _, skip := excluded[route.Owner]; skip {
+			continue
+		}
 		result := value.RouteDeliveryResult{
 			Owner:        route.Owner,
 			DeliveryMode: route.DeliveryMode,
@@ -82,6 +90,17 @@ func (registry *RouteRegistry) DispatchRoutes(ctx context.Context, cfg Config, e
 		results = append(results, result)
 	}
 	return results
+}
+
+func ownerSet(owners []hookenum.DownstreamOwner) map[hookenum.DownstreamOwner]struct{} {
+	if len(owners) == 0 {
+		return nil
+	}
+	set := make(map[hookenum.DownstreamOwner]struct{}, len(owners))
+	for _, owner := range owners {
+		set[owner] = struct{}{}
+	}
+	return set
 }
 
 func unexpectedRouteDiagnostics(envelope value.HookEnvelope, plan []value.DownstreamRoute) []value.RouteDeliveryResult {

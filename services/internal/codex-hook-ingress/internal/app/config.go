@@ -12,30 +12,37 @@ import (
 )
 
 const (
-	defaultSchemaVersion       = "codex-hook-ingress.normalized-hook-envelope.v1"
-	defaultSanitizerContractID = "codex-hook-ingress.sanitizer.v1"
-	defaultSupportedEvents     = "SessionStart,UserPromptSubmit,PreToolUse,PermissionRequest,PostToolUse,Stop"
-	defaultRouteFailurePolicy  = "diagnostic"
+	defaultSchemaVersion                   = "codex-hook-ingress.normalized-hook-envelope.v1"
+	defaultSanitizerContractID             = "codex-hook-ingress.sanitizer.v1"
+	defaultSupportedEvents                 = "SessionStart,UserPromptSubmit,PreToolUse,PermissionRequest,PostToolUse,Stop"
+	defaultRouteFailurePolicy              = "diagnostic"
+	defaultPermissionDecisionFailurePolicy = "fail_closed"
+	defaultPreToolUseDecisionFailurePolicy = "no_decision"
+	defaultPreToolUseDecisionRiskClasses   = "medium,high,unknown"
 )
 
 // Config contains process-level codex-hook-ingress configuration.
 type Config struct {
-	HTTPAddr                 string        `env:"KODEX_CODEX_HOOK_INGRESS_HTTP_ADDR" envDefault:":8080"`
-	ReadinessTimeout         time.Duration `env:"KODEX_CODEX_HOOK_INGRESS_READINESS_TIMEOUT" envDefault:"2s"`
-	ShutdownTimeout          time.Duration `env:"KODEX_CODEX_HOOK_INGRESS_SHUTDOWN_TIMEOUT" envDefault:"10s"`
-	SchemaVersion            string        `env:"KODEX_CODEX_HOOK_INGRESS_SCHEMA_VERSION" envDefault:"codex-hook-ingress.normalized-hook-envelope.v1"`
-	SanitizerContractID      string        `env:"KODEX_CODEX_HOOK_INGRESS_SANITIZER_CONTRACT_ID" envDefault:"codex-hook-ingress.sanitizer.v1"`
-	SupportedHookEvents      string        `env:"KODEX_CODEX_HOOK_INGRESS_SUPPORTED_HOOK_EVENTS" envDefault:"SessionStart,UserPromptSubmit,PreToolUse,PermissionRequest,PostToolUse,Stop"`
-	MaxEnvelopeBytes         int           `env:"KODEX_CODEX_HOOK_INGRESS_MAX_ENVELOPE_BYTES" envDefault:"65536"`
-	MaxTextPreviewBytes      int           `env:"KODEX_CODEX_HOOK_INGRESS_MAX_TEXT_PREVIEW_BYTES" envDefault:"4096"`
-	MaxBoundedErrorBytes     int           `env:"KODEX_CODEX_HOOK_INGRESS_MAX_BOUNDED_ERROR_BYTES" envDefault:"8192"`
-	DisabledRoutes           string        `env:"KODEX_CODEX_HOOK_INGRESS_DISABLED_ROUTES" envDefault:""`
-	RouteFailurePolicy       string        `env:"KODEX_CODEX_HOOK_INGRESS_ROUTE_FAILURE_POLICY" envDefault:"diagnostic"`
-	OpsFeedCapacity          int           `env:"KODEX_CODEX_HOOK_INGRESS_OPS_FEED_CAPACITY" envDefault:"1024"`
-	OpsFeedRetention         time.Duration `env:"KODEX_CODEX_HOOK_INGRESS_OPS_FEED_RETENTION" envDefault:"15m"`
-	RateLimitWindow          time.Duration `env:"KODEX_CODEX_HOOK_INGRESS_RATE_LIMIT_WINDOW" envDefault:"1m"`
-	RateLimitBurst           int           `env:"KODEX_CODEX_HOOK_INGRESS_RATE_LIMIT_BURST" envDefault:"300"`
-	LogicalTransportReadOnly bool          `env:"KODEX_CODEX_HOOK_INGRESS_LOGICAL_TRANSPORT_READ_ONLY" envDefault:"true"`
+	HTTPAddr                        string        `env:"KODEX_CODEX_HOOK_INGRESS_HTTP_ADDR" envDefault:":8080"`
+	ReadinessTimeout                time.Duration `env:"KODEX_CODEX_HOOK_INGRESS_READINESS_TIMEOUT" envDefault:"2s"`
+	ShutdownTimeout                 time.Duration `env:"KODEX_CODEX_HOOK_INGRESS_SHUTDOWN_TIMEOUT" envDefault:"10s"`
+	SchemaVersion                   string        `env:"KODEX_CODEX_HOOK_INGRESS_SCHEMA_VERSION" envDefault:"codex-hook-ingress.normalized-hook-envelope.v1"`
+	SanitizerContractID             string        `env:"KODEX_CODEX_HOOK_INGRESS_SANITIZER_CONTRACT_ID" envDefault:"codex-hook-ingress.sanitizer.v1"`
+	SupportedHookEvents             string        `env:"KODEX_CODEX_HOOK_INGRESS_SUPPORTED_HOOK_EVENTS" envDefault:"SessionStart,UserPromptSubmit,PreToolUse,PermissionRequest,PostToolUse,Stop"`
+	MaxEnvelopeBytes                int           `env:"KODEX_CODEX_HOOK_INGRESS_MAX_ENVELOPE_BYTES" envDefault:"65536"`
+	MaxTextPreviewBytes             int           `env:"KODEX_CODEX_HOOK_INGRESS_MAX_TEXT_PREVIEW_BYTES" envDefault:"4096"`
+	MaxBoundedErrorBytes            int           `env:"KODEX_CODEX_HOOK_INGRESS_MAX_BOUNDED_ERROR_BYTES" envDefault:"8192"`
+	DisabledRoutes                  string        `env:"KODEX_CODEX_HOOK_INGRESS_DISABLED_ROUTES" envDefault:""`
+	RouteFailurePolicy              string        `env:"KODEX_CODEX_HOOK_INGRESS_ROUTE_FAILURE_POLICY" envDefault:"diagnostic"`
+	OpsFeedCapacity                 int           `env:"KODEX_CODEX_HOOK_INGRESS_OPS_FEED_CAPACITY" envDefault:"1024"`
+	OpsFeedRetention                time.Duration `env:"KODEX_CODEX_HOOK_INGRESS_OPS_FEED_RETENTION" envDefault:"15m"`
+	RateLimitWindow                 time.Duration `env:"KODEX_CODEX_HOOK_INGRESS_RATE_LIMIT_WINDOW" envDefault:"1m"`
+	RateLimitBurst                  int           `env:"KODEX_CODEX_HOOK_INGRESS_RATE_LIMIT_BURST" envDefault:"300"`
+	DecisionBridgeTimeout           time.Duration `env:"KODEX_CODEX_HOOK_INGRESS_DECISION_BRIDGE_TIMEOUT" envDefault:"30s"`
+	PermissionDecisionFailurePolicy string        `env:"KODEX_CODEX_HOOK_INGRESS_PERMISSION_DECISION_FAILURE_POLICY" envDefault:"fail_closed"`
+	PreToolUseDecisionFailurePolicy string        `env:"KODEX_CODEX_HOOK_INGRESS_PRE_TOOL_USE_DECISION_FAILURE_POLICY" envDefault:"no_decision"`
+	PreToolUseDecisionRiskClasses   string        `env:"KODEX_CODEX_HOOK_INGRESS_PRE_TOOL_USE_DECISION_RISK_CLASSES" envDefault:"medium,high,unknown"`
+	LogicalTransportReadOnly        bool          `env:"KODEX_CODEX_HOOK_INGRESS_LOGICAL_TRANSPORT_READ_ONLY" envDefault:"true"`
 }
 
 // LoadConfig reads process configuration from environment variables.
@@ -101,6 +108,18 @@ func (cfg Config) Validate() error {
 	if cfg.RateLimitBurst <= 0 {
 		return fmt.Errorf("KODEX_CODEX_HOOK_INGRESS_RATE_LIMIT_BURST must be positive")
 	}
+	if cfg.DecisionBridgeTimeout <= 0 {
+		return fmt.Errorf("KODEX_CODEX_HOOK_INGRESS_DECISION_BRIDGE_TIMEOUT must be positive")
+	}
+	if !hookenum.IsDecisionFailurePolicy(cfg.PermissionDecisionFailureMode()) {
+		return fmt.Errorf("unsupported KODEX_CODEX_HOOK_INGRESS_PERMISSION_DECISION_FAILURE_POLICY %q", cfg.PermissionDecisionFailurePolicy)
+	}
+	if !hookenum.IsDecisionFailurePolicy(cfg.PreToolUseDecisionFailureMode()) {
+		return fmt.Errorf("unsupported KODEX_CODEX_HOOK_INGRESS_PRE_TOOL_USE_DECISION_FAILURE_POLICY %q", cfg.PreToolUseDecisionFailurePolicy)
+	}
+	if _, err := cfg.PreToolUseRiskClasses(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -161,4 +180,59 @@ func (cfg Config) RouteFailureMode() hookenum.RouteFailurePolicy {
 		policy = defaultRouteFailurePolicy
 	}
 	return hookenum.RouteFailurePolicy(policy)
+}
+
+// PermissionDecisionFailureMode returns safe fallback behavior for PermissionRequest bridge failures.
+func (cfg Config) PermissionDecisionFailureMode() hookenum.DecisionFailurePolicy {
+	policy := strings.TrimSpace(cfg.PermissionDecisionFailurePolicy)
+	if policy == "" {
+		policy = defaultPermissionDecisionFailurePolicy
+	}
+	return hookenum.DecisionFailurePolicy(policy)
+}
+
+// PreToolUseDecisionFailureMode returns safe fallback behavior for policy-controlled PreToolUse.
+func (cfg Config) PreToolUseDecisionFailureMode() hookenum.DecisionFailurePolicy {
+	policy := strings.TrimSpace(cfg.PreToolUseDecisionFailurePolicy)
+	if policy == "" {
+		policy = defaultPreToolUseDecisionFailurePolicy
+	}
+	return hookenum.DecisionFailurePolicy(policy)
+}
+
+// PreToolUseRiskClasses returns risk classes that require the governance decision bridge.
+func (cfg Config) PreToolUseRiskClasses() ([]string, error) {
+	seen := map[string]struct{}{}
+	var classes []string
+	rawClasses := cfg.PreToolUseDecisionRiskClasses
+	if strings.TrimSpace(rawClasses) == "" {
+		rawClasses = defaultPreToolUseDecisionRiskClasses
+	}
+	for _, raw := range strings.Split(rawClasses, ",") {
+		class := strings.TrimSpace(raw)
+		if class == "" {
+			continue
+		}
+		if !knownRiskClass(class) {
+			return nil, fmt.Errorf("unsupported KODEX_CODEX_HOOK_INGRESS_PRE_TOOL_USE_DECISION_RISK_CLASSES value %q", class)
+		}
+		if _, ok := seen[class]; ok {
+			return nil, fmt.Errorf("duplicate KODEX_CODEX_HOOK_INGRESS_PRE_TOOL_USE_DECISION_RISK_CLASSES value %q", class)
+		}
+		seen[class] = struct{}{}
+		classes = append(classes, class)
+	}
+	if len(classes) == 0 {
+		return nil, fmt.Errorf("KODEX_CODEX_HOOK_INGRESS_PRE_TOOL_USE_DECISION_RISK_CLASSES must not be empty")
+	}
+	return classes, nil
+}
+
+func knownRiskClass(class string) bool {
+	switch class {
+	case "low", "medium", "high", "unknown":
+		return true
+	default:
+		return false
+	}
 }
