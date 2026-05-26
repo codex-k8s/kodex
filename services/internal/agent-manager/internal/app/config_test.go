@@ -22,6 +22,22 @@ func TestLoadConfigAllowsMissingConditionalEnvWhenAuthDisabled(t *testing.T) {
 	}
 }
 
+func TestLoadConfigDefaultsRuntimePreparationDisabledUntilDeployWired(t *testing.T) {
+	t.Setenv("KODEX_AGENT_MANAGER_DATABASE_DSN", "postgres://agent-manager")
+	t.Setenv("KODEX_AGENT_MANAGER_OUTBOX_DISPATCH_ENABLED", "false")
+	t.Setenv("KODEX_AGENT_MANAGER_OUTBOX_PUBLISHER_KIND", "disabled")
+	t.Setenv("KODEX_AGENT_MANAGER_GRPC_AUTH_TOKEN", "agent-token")
+	t.Setenv("KODEX_AGENT_MANAGER_PACKAGE_HUB_GRPC_AUTH_TOKEN", "package-token")
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig(): %v", err)
+	}
+	if cfg.RuntimePreparationEnabled {
+		t.Fatal("RuntimePreparationEnabled = true, want default false")
+	}
+}
+
 func TestValidateRequiresGRPCAuthTokenWhenAuthEnabled(t *testing.T) {
 	t.Parallel()
 
@@ -44,6 +60,22 @@ func TestValidateRequiresEventLogDSNWhenPostgresPublisherEnabled(t *testing.T) {
 	}
 }
 
+func TestValidateRequiresRuntimeClientTokensWhenPreparationEnabled(t *testing.T) {
+	t.Parallel()
+
+	cfg := validConfig()
+	cfg.ProjectCatalogGRPCAuthToken = ""
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() err = nil, want project-catalog auth token error")
+	}
+
+	cfg = validConfig()
+	cfg.RuntimeManagerGRPCAuthToken = ""
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() err = nil, want runtime-manager auth token error")
+	}
+}
+
 func TestGRPCServerConfigMapsRuntimeLimits(t *testing.T) {
 	t.Parallel()
 
@@ -62,43 +94,50 @@ func TestGRPCServerConfigMapsRuntimeLimits(t *testing.T) {
 
 func validConfig() Config {
 	return Config{
-		HTTPAddr:                 ":8080",
-		DatabaseDSN:              "postgres://agent-manager",
-		DatabaseMaxConns:         8,
-		DatabaseMinConns:         1,
-		DatabaseMaxConnLifetime:  time.Hour,
-		DatabaseMaxConnIdleTime:  15 * time.Minute,
-		DatabaseHealthPeriod:     30 * time.Second,
-		DatabasePingTimeout:      5 * time.Second,
-		DatabaseRetryAttempts:    6,
-		DatabaseRetryInitial:     500 * time.Millisecond,
-		DatabaseRetryMax:         5 * time.Second,
-		DatabaseRetryJitterRatio: 0.2,
-		EventLogDatabaseMaxConns: 4,
-		GRPCAddr:                 ":9090",
-		GRPCAuthRequired:         true,
-		GRPCAuthToken:            "test-token",
-		GRPCMaxInFlight:          128,
-		GRPCMaxConcurrentStreams: 128,
-		GRPCUnaryTimeout:         30 * time.Second,
-		GRPCKeepaliveTime:        2 * time.Minute,
-		GRPCKeepaliveTimeout:     20 * time.Second,
-		GRPCKeepaliveMinTime:     30 * time.Second,
-		GRPCMaxRecvMessageBytes:  4 * 1024 * 1024,
-		GRPCMaxSendMessageBytes:  4 * 1024 * 1024,
-		PackageHubEnabled:        true,
-		PackageHubGRPCAddr:       "package-hub:9090",
-		PackageHubGRPCAuthToken:  "package-token",
-		PackageHubReadTimeout:    3 * time.Second,
-		OutboxDispatchEnabled:    false,
-		OutboxPublisherKind:      "disabled",
-		OutboxBatchSize:          100,
-		OutboxPollInterval:       time.Second,
-		OutboxLockTTL:            30 * time.Second,
-		OutboxPublishTimeout:     10 * time.Second,
-		OutboxLeaseSafetyMargin:  5 * time.Second,
-		OutboxRetryInitialDelay:  time.Second,
-		OutboxRetryMaxDelay:      time.Minute,
-		OutboxFailureLimit:       512,
+		HTTPAddr:                     ":8080",
+		DatabaseDSN:                  "postgres://agent-manager",
+		DatabaseMaxConns:             8,
+		DatabaseMinConns:             1,
+		DatabaseMaxConnLifetime:      time.Hour,
+		DatabaseMaxConnIdleTime:      15 * time.Minute,
+		DatabaseHealthPeriod:         30 * time.Second,
+		DatabasePingTimeout:          5 * time.Second,
+		DatabaseRetryAttempts:        6,
+		DatabaseRetryInitial:         500 * time.Millisecond,
+		DatabaseRetryMax:             5 * time.Second,
+		DatabaseRetryJitterRatio:     0.2,
+		EventLogDatabaseMaxConns:     4,
+		GRPCAddr:                     ":9090",
+		GRPCAuthRequired:             true,
+		GRPCAuthToken:                "test-token",
+		GRPCMaxInFlight:              128,
+		GRPCMaxConcurrentStreams:     128,
+		GRPCUnaryTimeout:             30 * time.Second,
+		GRPCKeepaliveTime:            2 * time.Minute,
+		GRPCKeepaliveTimeout:         20 * time.Second,
+		GRPCKeepaliveMinTime:         30 * time.Second,
+		GRPCMaxRecvMessageBytes:      4 * 1024 * 1024,
+		GRPCMaxSendMessageBytes:      4 * 1024 * 1024,
+		PackageHubEnabled:            true,
+		PackageHubGRPCAddr:           "package-hub:9090",
+		PackageHubGRPCAuthToken:      "package-token",
+		PackageHubReadTimeout:        3 * time.Second,
+		RuntimePreparationEnabled:    true,
+		ProjectCatalogGRPCAddr:       "project-catalog:9090",
+		ProjectCatalogGRPCAuthToken:  "project-token",
+		ProjectCatalogReadTimeout:    3 * time.Second,
+		RuntimeManagerGRPCAddr:       "runtime-manager:9090",
+		RuntimeManagerGRPCAuthToken:  "runtime-token",
+		RuntimeManagerPrepareTimeout: 10 * time.Second,
+		OutboxDispatchEnabled:        false,
+		OutboxPublisherKind:          "disabled",
+		OutboxBatchSize:              100,
+		OutboxPollInterval:           time.Second,
+		OutboxLockTTL:                30 * time.Second,
+		OutboxPublishTimeout:         10 * time.Second,
+		OutboxLeaseSafetyMargin:      5 * time.Second,
+		OutboxRetryInitialDelay:      time.Second,
+		OutboxRetryMaxDelay:          time.Minute,
+		OutboxFailureLimit:           512,
 	}
 }

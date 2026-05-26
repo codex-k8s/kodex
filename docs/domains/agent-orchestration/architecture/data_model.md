@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-12
 updated_at: 2026-05-26
-related_issues: [733, 749, 759, 772, 322, 782]
+related_issues: [733, 749, 759, 772, 322, 782, 795]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -192,19 +192,19 @@ approvals:
 | `role_profile_digest` | text | нет | Digest нормализованного профиля роли на момент запуска. |
 | `prompt_template_version_id` | uuid | нет | Версия prompt. |
 | `prompt_template_digest` | text | нет | Digest prompt version, использованной при запуске. |
-| `runtime_ref` | text | да | Ссылка на slot/runtime context. |
+| `runtime_ref` | text/json | да | Безопасные refs runtime: slot/workspace/context или fingerprint подготовки без локальных workspace paths. |
 | `provider_target_ref` | text | да | Основная provider-native цель. |
 | `guidance_refs` | jsonb | нет | Замороженные безопасные refs руководящих пакетов: installation ref, package/version ref, manifest digest, строковый source ref как подсказка, package slug/version label, capability ref и bounded policy summary без manifest payload. |
 | `status` | enum | нет | `requested`, `starting`, `running`, `waiting`, `completed`, `failed`, `cancelled`. |
-| `result_summary` | text | да | Короткая безопасная сводка. |
-| `failure_code` | text | да | Короткий код ошибки без секретов и PII. |
+| `result_summary` | text | да | Короткая безопасная сводка, включая diagnostic summary подготовки runtime без payload текстов. |
+| `failure_code` | text | да | Короткий код ошибки без секретов и PII; для permanent workspace preparation failure используется машинный код подготовки. |
 | `version` | bigint | нет | Оптимистичная конкуренция. |
 | `started_at`, `finished_at` | timestamptz | да | Временные метки выполнения. |
-
-`AgentRun.status` меняется только по доменной state machine: terminal-статусы `completed`, `failed` и `cancelled` не возвращаются в работу, `running` не откатывается в `starting`, а повтор текущего non-terminal статуса допускается только как безопасная идемпотентная фиксация без нового lifecycle event.
 | `created_at`, `updated_at` | timestamptz | нет | Технические временные метки. |
 
-`guidance_refs` не является manifest cache. В этом поле нельзя хранить `payload_json`, `SKILL.md`, prompt templates, flow files, scripts, assets, package source или расширенный снимок `PackageSource`. Локальные пути workspace также не являются частью модели `AgentRun`: они вычисляются при подготовке runtime policy, строятся через безопасный `safe_local_name` и фиксируются в `runtime-manager` как `WorkspaceSource.local_path`. Тип source ref, commit SHA и идентичность источника runtime получает из `package-hub` по `package_version_ref` перед materialization.
+`AgentRun.status` меняется только по доменной state machine: terminal-статусы `completed`, `failed` и `cancelled` не возвращаются в работу, `running` не откатывается в `starting`, а повтор текущего non-terminal статуса допускается только как безопасная идемпотентная фиксация без нового lifecycle event.
+
+`guidance_refs` не является manifest cache. В этом поле нельзя хранить `payload_json`, `SKILL.md`, prompt templates, flow files, scripts, assets, package source или расширенный снимок `PackageSource`. Локальные пути workspace также не являются частью модели `AgentRun`: runtime request передаёт их как часть `WorkspaceSource`, а авторитетное состояние workspace, нормализация путей и materialization остаются в `runtime-manager`. Тип source ref, commit SHA и идентичность источника runtime получает из `package-hub` по `package_version_ref` перед materialization.
 
 ### AgentSessionStateSnapshot
 

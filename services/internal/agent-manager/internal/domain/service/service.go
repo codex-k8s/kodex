@@ -13,21 +13,27 @@ import (
 
 // Config contains dependencies required by the agent-manager service.
 type Config struct {
-	Repository       agentrepo.Repository
-	Clock            agentrepo.Clock
-	IDGenerator      agentrepo.IDGenerator
-	GuidanceResolver GuidanceResolver
+	Repository                agentrepo.Repository
+	Clock                     agentrepo.Clock
+	IDGenerator               agentrepo.IDGenerator
+	GuidanceResolver          GuidanceResolver
+	WorkspacePolicyResolver   WorkspacePolicyResolver
+	RuntimePreparer           RuntimePreparer
+	RuntimePreparationEnabled bool
 	// EventPublisher is a future outbox-backed publisher for agent domain events.
 	EventPublisher EventPublisher
 }
 
 // Service is the agent-manager domain entry point.
 type Service struct {
-	repository       agentrepo.Repository
-	clock            agentrepo.Clock
-	idGenerator      agentrepo.IDGenerator
-	guidanceResolver GuidanceResolver
-	eventPublisher   EventPublisher
+	repository                agentrepo.Repository
+	clock                     agentrepo.Clock
+	idGenerator               agentrepo.IDGenerator
+	guidanceResolver          GuidanceResolver
+	workspacePolicyResolver   WorkspacePolicyResolver
+	runtimePreparer           RuntimePreparer
+	runtimePreparationEnabled bool
+	eventPublisher            EventPublisher
 }
 
 // GuidanceResolver resolves guidance package selections into safe frozen refs.
@@ -42,6 +48,25 @@ type GuidanceResolutionInput struct {
 	Hints []value.GuidanceSelectionHint
 }
 
+// WorkspacePolicyResolver reads checked project-catalog workspace policy snapshots.
+type WorkspacePolicyResolver interface {
+	ResolveWorkspacePolicy(context.Context, WorkspacePolicyResolutionInput) (WorkspacePolicySnapshot, error)
+}
+
+// WorkspacePolicyResolutionInput selects one checked project workspace policy.
+type WorkspacePolicyResolutionInput struct {
+	Meta                    value.CommandMeta
+	ProjectID               uuid.UUID
+	RepositoryIDs           []uuid.UUID
+	ServiceKeys             []string
+	IncludeGuidancePackages bool
+}
+
+// RuntimePreparer calls runtime-manager to reserve a slot and start workspace preparation.
+type RuntimePreparer interface {
+	PrepareRuntime(context.Context, RuntimePreparationInput) (RuntimePreparationResult, error)
+}
+
 // DisabledGuidanceResolver keeps agent-manager runnable before package-hub is wired.
 type DisabledGuidanceResolver struct{}
 
@@ -53,6 +78,22 @@ func (DisabledGuidanceResolver) ResolveGuidanceRefs(_ context.Context, input Gui
 	return nil, nil
 }
 
+// DisabledWorkspacePolicyResolver keeps runtime preparation opt-in at composition time.
+type DisabledWorkspacePolicyResolver struct{}
+
+// ResolveWorkspacePolicy reports that workspace policy reads are unavailable.
+func (DisabledWorkspacePolicyResolver) ResolveWorkspacePolicy(context.Context, WorkspacePolicyResolutionInput) (WorkspacePolicySnapshot, error) {
+	return WorkspacePolicySnapshot{}, errs.ErrDependencyUnavailable
+}
+
+// DisabledRuntimePreparer keeps agent-manager runnable before runtime-manager is wired.
+type DisabledRuntimePreparer struct{}
+
+// PrepareRuntime reports that runtime preparation is unavailable.
+func (DisabledRuntimePreparer) PrepareRuntime(context.Context, RuntimePreparationInput) (RuntimePreparationResult, error) {
+	return RuntimePreparationResult{}, errs.ErrDependencyUnavailable
+}
+
 // New creates an agent-manager service scaffold.
 func New(cfg Config) *Service {
 	if cfg.EventPublisher == nil {
@@ -61,6 +102,12 @@ func New(cfg Config) *Service {
 	if cfg.GuidanceResolver == nil {
 		cfg.GuidanceResolver = DisabledGuidanceResolver{}
 	}
+	if cfg.WorkspacePolicyResolver == nil {
+		cfg.WorkspacePolicyResolver = DisabledWorkspacePolicyResolver{}
+	}
+	if cfg.RuntimePreparer == nil {
+		cfg.RuntimePreparer = DisabledRuntimePreparer{}
+	}
 	if cfg.Clock == nil {
 		cfg.Clock = systemClock{}
 	}
@@ -68,11 +115,14 @@ func New(cfg Config) *Service {
 		cfg.IDGenerator = zeroIDGenerator{}
 	}
 	return &Service{
-		repository:       cfg.Repository,
-		clock:            cfg.Clock,
-		idGenerator:      cfg.IDGenerator,
-		guidanceResolver: cfg.GuidanceResolver,
-		eventPublisher:   cfg.EventPublisher,
+		repository:                cfg.Repository,
+		clock:                     cfg.Clock,
+		idGenerator:               cfg.IDGenerator,
+		guidanceResolver:          cfg.GuidanceResolver,
+		workspacePolicyResolver:   cfg.WorkspacePolicyResolver,
+		runtimePreparer:           cfg.RuntimePreparer,
+		runtimePreparationEnabled: cfg.RuntimePreparationEnabled,
+		eventPublisher:            cfg.EventPublisher,
 	}
 }
 

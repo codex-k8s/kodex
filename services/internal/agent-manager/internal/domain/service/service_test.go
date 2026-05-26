@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -563,6 +564,158 @@ func TestStartAgentRunReplayKeepsFrozenGuidanceRefs(t *testing.T) {
 	}
 	if replay.GuidanceRefs[0].PackageSlug != "frozen-guidelines" {
 		t.Fatalf("replayed guidance refs = %+v", replay.GuidanceRefs)
+	}
+}
+
+func TestStartAgentRunPreparesRuntimeWorkspace(t *testing.T) {
+	t.Parallel()
+
+	fixture := newRuntimePreparationFixture()
+	runtimePreparer := &fakeRuntimePreparer{result: RuntimePreparationResult{
+		SlotRef:                    "slot-123",
+		WorkspaceRef:               "workspace-456",
+		MaterializationFingerprint: "sha256:workspace",
+		DiagnosticSummary:          "workspace_status=running",
+	}}
+	service := New(Config{
+		Repository:                fixture.repository,
+		Clock:                     fixedClock{now: fixture.now},
+		IDGenerator:               &sequenceIDGenerator{ids: fixture.ids},
+		GuidanceResolver:          fixture.guidanceResolver,
+		WorkspacePolicyResolver:   fixture.policyResolver,
+		RuntimePreparer:           runtimePreparer,
+		RuntimePreparationEnabled: true,
+	})
+
+	run, err := service.StartAgentRun(context.Background(), fixture.input)
+	if err != nil {
+		t.Fatalf("StartAgentRun() err = %v", err)
+	}
+	if run.Status != enum.AgentRunStatusStarting || run.RuntimeContext.SlotRef != "slot-123" || run.RuntimeContext.WorkspaceRef != "workspace-456" {
+		t.Fatalf("run runtime state = %s/%+v", run.Status, run.RuntimeContext)
+	}
+	if run.ResultSummary == "" || !strings.Contains(run.ResultSummary, "fingerprint=sha256:workspace") {
+		t.Fatalf("result summary = %q", run.ResultSummary)
+	}
+	if fixture.policyResolver.calls != 1 || runtimePreparer.calls != 1 {
+		t.Fatalf("resolver/preparer calls = %d/%d", fixture.policyResolver.calls, runtimePreparer.calls)
+	}
+	if runtimePreparer.last.AgentRunID != run.ID || runtimePreparer.last.RuntimeProfile != "go-full" {
+		t.Fatalf("runtime input = %+v", runtimePreparer.last)
+	}
+	kinds := make(map[string]int)
+	for _, source := range runtimePreparer.last.WorkspacePolicy.Sources {
+		kinds[source.Kind]++
+	}
+	if kinds[WorkspaceSourceKindCode] != 1 || kinds[WorkspaceSourceKindDocumentation] != 1 ||
+		kinds[WorkspaceSourceKindGuidancePackage] != 1 || kinds[WorkspaceSourceKindGeneratedContext] != 1 {
+		t.Fatalf("workspace source kinds = %+v", kinds)
+	}
+	if runtimePreparer.last.WorkspacePolicy.PolicyDigest == "" {
+		t.Fatal("workspace policy digest is empty")
+	}
+	if fixture.repository.updatedRun.Status != enum.AgentRunStatusStarting || fixture.repository.updateRunEvent == nil ||
+		fixture.repository.updateRunEvent.EventType != agentevents.EventRunStarted {
+		t.Fatalf("updated run/event = %+v/%+v", fixture.repository.updatedRun, fixture.repository.updateRunEvent)
+	}
+}
+
+func TestStartAgentRunStoresRetryableRuntimePreparationFailureAsWaiting(t *testing.T) {
+	t.Parallel()
+
+	fixture := newRuntimePreparationFixture()
+	runtimePreparer := &fakeRuntimePreparer{err: NewRuntimePreparationError(true, "dependency_unavailable", "runtime-manager unavailable")}
+	service := New(Config{
+		Repository:                fixture.repository,
+		Clock:                     fixedClock{now: fixture.now},
+		IDGenerator:               &sequenceIDGenerator{ids: fixture.ids},
+		GuidanceResolver:          fixture.guidanceResolver,
+		WorkspacePolicyResolver:   fixture.policyResolver,
+		RuntimePreparer:           runtimePreparer,
+		RuntimePreparationEnabled: true,
+	})
+
+	run, err := service.StartAgentRun(context.Background(), fixture.input)
+	if err != nil {
+		t.Fatalf("StartAgentRun() err = %v", err)
+	}
+	if run.Status != enum.AgentRunStatusWaiting || run.FailureCode != "" {
+		t.Fatalf("run status/failure = %s/%q", run.Status, run.FailureCode)
+	}
+	if !strings.Contains(run.ResultSummary, "runtime prepare retryable") {
+		t.Fatalf("result summary = %q", run.ResultSummary)
+	}
+	payload := decodeAgentPayload(t, *fixture.repository.updateRunEvent)
+	if payload.ReasonCode != runtimePrepareReasonRetryable {
+		t.Fatalf("reason code = %q, want %q", payload.ReasonCode, runtimePrepareReasonRetryable)
+	}
+}
+
+func TestStartAgentRunStoresPermanentRuntimePreparationFailureAsFailed(t *testing.T) {
+	t.Parallel()
+
+	fixture := newRuntimePreparationFixture()
+	runtimePreparer := &fakeRuntimePreparer{err: NewRuntimePreparationError(false, "failed_precondition", "workspace policy invalid")}
+	service := New(Config{
+		Repository:                fixture.repository,
+		Clock:                     fixedClock{now: fixture.now},
+		IDGenerator:               &sequenceIDGenerator{ids: fixture.ids},
+		GuidanceResolver:          fixture.guidanceResolver,
+		WorkspacePolicyResolver:   fixture.policyResolver,
+		RuntimePreparer:           runtimePreparer,
+		RuntimePreparationEnabled: true,
+	})
+
+	run, err := service.StartAgentRun(context.Background(), fixture.input)
+	if err != nil {
+		t.Fatalf("StartAgentRun() err = %v", err)
+	}
+	if run.Status != enum.AgentRunStatusFailed || run.FailureCode != runtimePrepareFailureCode || run.FinishedAt == nil {
+		t.Fatalf("run failed state = %s/%q/%v", run.Status, run.FailureCode, run.FinishedAt)
+	}
+	if !strings.Contains(run.ResultSummary, "runtime prepare permanent") {
+		t.Fatalf("result summary = %q", run.ResultSummary)
+	}
+	if fixture.repository.updateRunEvent == nil || fixture.repository.updateRunEvent.EventType != agentevents.EventRunFailed {
+		t.Fatalf("event = %+v", fixture.repository.updateRunEvent)
+	}
+}
+
+func TestStartAgentRunRuntimeRequestDoesNotCarryTextPayloads(t *testing.T) {
+	t.Parallel()
+
+	fixture := newRuntimePreparationFixture()
+	fixture.repository.promptVersionByID[fixture.promptVersionID] = entity.PromptTemplateVersion{
+		ID:             fixture.promptVersionID,
+		RoleProfileID:  fixture.roleID,
+		PromptKind:     enum.PromptKindWork,
+		TemplateObject: value.ObjectRef{ObjectURI: "s3://prompt-template-text/payload"},
+		TemplateDigest: "sha256:prompt",
+		Status:         enum.PromptVersionStatusActive,
+	}
+	fixture.guidanceResolver.refs[0].PolicySummaryJSON = `{"payload_json":"SKILL.md prompt template flow file"}`
+	runtimePreparer := &fakeRuntimePreparer{result: RuntimePreparationResult{SlotRef: "slot-123", WorkspaceRef: "workspace-456", MaterializationFingerprint: "sha256:workspace"}}
+	service := New(Config{
+		Repository:                fixture.repository,
+		Clock:                     fixedClock{now: fixture.now},
+		IDGenerator:               &sequenceIDGenerator{ids: fixture.ids},
+		GuidanceResolver:          fixture.guidanceResolver,
+		WorkspacePolicyResolver:   fixture.policyResolver,
+		RuntimePreparer:           runtimePreparer,
+		RuntimePreparationEnabled: true,
+	})
+
+	if _, err := service.StartAgentRun(context.Background(), fixture.input); err != nil {
+		t.Fatalf("StartAgentRun() err = %v", err)
+	}
+	requestPayload, err := json.Marshal(runtimePreparer.last)
+	if err != nil {
+		t.Fatalf("marshal runtime request: %v", err)
+	}
+	for _, forbidden := range []string{"SKILL.md", "prompt-template-text", "flow file", "payload_json"} {
+		if strings.Contains(string(requestPayload), forbidden) {
+			t.Fatalf("runtime request contains forbidden payload marker %q: %s", forbidden, requestPayload)
+		}
 	}
 }
 
@@ -1283,4 +1436,149 @@ func (f *fakeGuidanceResolver) ResolveGuidanceRefs(_ context.Context, input Guid
 		return nil, f.err
 	}
 	return append([]value.GuidanceRef(nil), f.refs...), nil
+}
+
+type runtimePreparationFixture struct {
+	now              time.Time
+	projectID        uuid.UUID
+	repositoryID     uuid.UUID
+	documentationID  uuid.UUID
+	sessionID        uuid.UUID
+	roleID           uuid.UUID
+	promptVersionID  uuid.UUID
+	runID            uuid.UUID
+	input            StartAgentRunInput
+	ids              []uuid.UUID
+	repository       *fakeRepository
+	guidanceResolver *fakeGuidanceResolver
+	policyResolver   *fakeWorkspacePolicyResolver
+}
+
+func newRuntimePreparationFixture() runtimePreparationFixture {
+	projectID := uuid.MustParse("10101010-1111-2222-3333-444444444444")
+	repositoryID := uuid.MustParse("10101010-2222-3333-4444-555555555555")
+	documentationID := uuid.MustParse("10101010-3333-4444-5555-666666666666")
+	sessionID := uuid.MustParse("10101010-4444-5555-6666-777777777777")
+	roleID := uuid.MustParse("10101010-5555-6666-7777-888888888888")
+	promptVersionID := uuid.MustParse("10101010-6666-7777-8888-999999999999")
+	runID := uuid.MustParse("10101010-7777-8888-9999-aaaaaaaaaaaa")
+	now := time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC)
+	repository := &fakeRepository{
+		sessionByID: map[uuid.UUID]entity.AgentSession{
+			sessionID: {
+				VersionedBase:       entity.VersionedBase{ID: sessionID, Version: 1},
+				Scope:               value.ScopeRef{Type: string(enum.AgentScopeTypeProject), Ref: projectID.String()},
+				ProviderWorkItemRef: "github:issue:42",
+				Status:              enum.AgentSessionStatusOpen,
+			},
+		},
+		roleByID: map[uuid.UUID]entity.RoleProfile{
+			roleID: {
+				VersionedBase:   entity.VersionedBase{ID: roleID, Version: 2},
+				RoleKind:        enum.RoleKindWorker,
+				RuntimeProfile:  "go-full",
+				AllowedMCPTools: []string{"github.create_pr", "runtime.get_workspace"},
+				Status:          enum.RoleStatusActive,
+			},
+		},
+		promptVersionByID: map[uuid.UUID]entity.PromptTemplateVersion{
+			promptVersionID: {
+				ID:             promptVersionID,
+				RoleProfileID:  roleID,
+				PromptKind:     enum.PromptKindWork,
+				TemplateDigest: "sha256:prompt",
+				Status:         enum.PromptVersionStatusActive,
+			},
+		},
+	}
+	guidanceResolver := &fakeGuidanceResolver{refs: []value.GuidanceRef{{
+		PackageInstallationRef: "installation-go",
+		PackageVersionRef:      "version-go",
+		ManifestDigest:         "sha256:guidance",
+		SourceRef:              "PACKAGE_VERSION_SOURCE_REF_KIND_GIT_TAG:v1.0.0:abc123",
+		CapabilityRef:          "guidance:installation-go",
+		CapabilityKind:         "guidance",
+		PackageRef:             "package-go",
+		PackageSlug:            "go-guidelines",
+		PackageVersionLabel:    "v1.0.0",
+		PolicySummaryJSON:      `{"status":"safe"}`,
+	}}}
+	policyResolver := &fakeWorkspacePolicyResolver{policy: WorkspacePolicySnapshot{
+		ProjectID: projectID,
+		CodeSources: []WorkspaceCodeSource{{
+			RepositoryID:  repositoryID,
+			Provider:      "github",
+			ProviderOwner: "codex-k8s",
+			ProviderName:  "example-api",
+			DefaultBranch: "main",
+			LocalPath:     "src/example-api",
+			AccessMode:    WorkspaceSourceAccessWrite,
+		}},
+		DocumentationSources: []WorkspaceDocumentationSource{{
+			DocumentationSourceID: documentationID,
+			RepositoryID:          &repositoryID,
+			ScopeType:             "DOCUMENTATION_SCOPE_TYPE_PROJECT",
+			LocalPath:             "docs/project",
+			AccessMode:            WorkspaceSourceAccessRead,
+		}},
+		GuidancePackageRefs: []string{"installation-go"},
+		PolicyVersion:       7,
+	}}
+	return runtimePreparationFixture{
+		now:             now,
+		projectID:       projectID,
+		repositoryID:    repositoryID,
+		documentationID: documentationID,
+		sessionID:       sessionID,
+		roleID:          roleID,
+		promptVersionID: promptVersionID,
+		runID:           runID,
+		input: StartAgentRunInput{
+			Meta:                    value.CommandMeta{CommandID: uuid.MustParse("10101010-8888-9999-aaaa-bbbbbbbbbbbb"), Actor: testActor()},
+			SessionID:               sessionID,
+			RoleProfileID:           roleID,
+			PromptTemplateVersionID: promptVersionID,
+			GuidanceSelectionHints:  []value.GuidanceSelectionHint{{PackageSlug: "go-guidelines"}},
+		},
+		ids: []uuid.UUID{
+			runID,
+			uuid.MustParse("10101010-9999-aaaa-bbbb-cccccccccccc"),
+			uuid.MustParse("10101010-aaaa-bbbb-cccc-dddddddddddd"),
+		},
+		repository:       repository,
+		guidanceResolver: guidanceResolver,
+		policyResolver:   policyResolver,
+	}
+}
+
+type fakeWorkspacePolicyResolver struct {
+	policy WorkspacePolicySnapshot
+	err    error
+	calls  int
+	last   WorkspacePolicyResolutionInput
+}
+
+func (f *fakeWorkspacePolicyResolver) ResolveWorkspacePolicy(_ context.Context, input WorkspacePolicyResolutionInput) (WorkspacePolicySnapshot, error) {
+	f.calls++
+	f.last = input
+	if f.err != nil {
+		return WorkspacePolicySnapshot{}, f.err
+	}
+	return f.policy, nil
+}
+
+type fakeRuntimePreparer struct {
+	result RuntimePreparationResult
+	err    error
+	calls  int
+	last   RuntimePreparationInput
+}
+
+func (f *fakeRuntimePreparer) PrepareRuntime(_ context.Context, input RuntimePreparationInput) (RuntimePreparationResult, error) {
+	f.calls++
+	f.last = input
+	if f.err != nil {
+		return RuntimePreparationResult{}, f.err
+	}
+	return f.result, nil
 }

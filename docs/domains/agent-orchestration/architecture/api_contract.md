@@ -5,8 +5,8 @@ title: kodex — API-обзор agent-manager
 status: active
 owner_role: SA
 created_at: 2026-05-12
-updated_at: 2026-05-25
-related_issues: [733, 739, 744, 753, 755, 698, 759, 772, 322, 782]
+updated_at: 2026-05-26
+related_issues: [733, 739, 744, 753, 755, 698, 759, 772, 322, 782, 795]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -157,9 +157,10 @@ Codex hooks не являются MCP-инструментами. `agent-manager
 | Доменная документация | Подготовлена как стартовый срез. |
 | gRPC proto | Подготовлен как контрактный срез `AGO-1`. |
 | AsyncAPI `agent.*` | Подготовлен как контрактный срез `AGO-1`. |
-| Go-реализация `agent-manager` | Сервисный каркас готов. Операции flow, role, prompt, session и run подключены к слою хранения и use-case через gRPC handlers. `StartAgentSession` защищает активную session от дублей по provider target, `StartAgentRun` фиксирует версии роли/prompt, проверяет stage-bound связку flow/stage/role и замораживает безопасные guidance refs из `package-hub`, `RecordRunState` применяет state machine и публикует только AsyncAPI-совместимые lifecycle-события. Контракт руководящих пакетов в workspace зафиксирован: runtime получает источники `guidance_package` и сгенерированный контекст, но прямой вызов `PrepareRuntime` из `agent-manager` ждёт проверенную workspace policy от `project-catalog`. Приёмка, follow-up и human gate остаются следующими срезами. |
+| Go-реализация `agent-manager` | Сервисный каркас готов. Операции flow, role, prompt, session и run подключены к слою хранения и use-case через gRPC handlers. `StartAgentSession` защищает активную session от дублей по provider target, `StartAgentRun` фиксирует версии роли/prompt, проверяет stage-bound связку flow/stage/role, замораживает безопасные guidance refs из `package-hub`, читает workspace policy у `project-catalog` и вызывает `runtime-manager.PrepareRuntime`. В `Run` сохраняются только runtime refs, fingerprint/diagnostic summary и безопасная классификация ошибки подготовки; workspace paths, файлы, prompt text, flow files и package payload остаются вне БД `agent-manager`. `RecordRunState` применяет state machine и публикует только AsyncAPI-совместимые lifecycle-события. Приёмка, follow-up и human gate остаются следующими срезами. |
 | Интеграция с `package-hub` | Реализована как чтение guidance installations, package/version metadata и manifest validation state; сырое содержимое manifest и package source в `agent-manager` не сохраняются. |
-| Интеграция с runtime/provider/interaction/hooks | Зафиксирована как междоменная граница без реализации. |
+| Интеграция с runtime | Реализован прямой вызов `PrepareRuntime` для старта `AgentRun`; executor и выполнение slot-agent не входят в текущий контур. |
+| Интеграция с provider/interaction/hooks | Зафиксирована как междоменная граница без реализации. |
 
 ## Совместимость
 
