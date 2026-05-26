@@ -5,7 +5,7 @@ title: kodex — поставка agent-manager
 status: active
 owner_role: EM
 created_at: 2026-05-12
-updated_at: 2026-05-25
+updated_at: 2026-05-26
 related_issues: [733, 739, 744, 749, 755, 759, 772, 322, 782]
 related_prs: []
 related_docsets:
@@ -48,7 +48,7 @@ approvals:
 | AGO-3b | #755 | gRPC handlers, casters и безопасное отображение ошибок для flow, role и prompt подключены к готовому storage/use-case слою; session/run не входят в срез. |
 | AGO-4 | #759 | Сессии и agent `Run`: создание, чтение, статусы, снимки состояния, идемпотентность, защита активной session от дублей, stage-bound проверка роли и AsyncAPI-совместимые события готовы. |
 | AGO-5 | #772 | Интеграция с `package-hub` для guidance packages готова: `agent-manager` выбирает установки, проверяет manifest/version metadata и фиксирует refs/summary в `Run` без checkout/mount. |
-| AGO-6 | #782 | Контекст руководящих пакетов в workspace готов: зафиксирован MVP-путь передачи замороженных `guidance_refs` в `runtime-manager` как источников `guidance_package`, локальные пути `.kodex/guidance/<package_slug>` и граница без checkout из `agent-manager`; прямой вызов `PrepareRuntime` остаётся следующим кодовым срезом после готовой workspace policy. |
+| AGO-6 | #782 | Контекст руководящих пакетов в workspace готов: зафиксирован MVP-путь передачи замороженных `guidance_refs` в `runtime-manager` как источников `guidance_package`, локальные пути `.kodex/guidance/<safe_local_name>`, проверка идентичности источника через `package-hub` и граница без checkout из `agent-manager`; прямой вызов `PrepareRuntime` остаётся следующим кодовым срезом после готовой workspace policy. |
 | AGO-7 | не назначено | Машина приёмки: проверка provider-native артефактов, watermark, ролей и policy готова. |
 | AGO-8 | не назначено | Follow-up задачи через `provider-hub`; ожидание Human gate идёт через `governance-manager`, delivery — через `interaction-hub`. |
 | AGO-9 | не назначено | Эксплуатационный контур `agent-manager`: deploy manifests, migration job, smoke-проверки и runbook готовы. |

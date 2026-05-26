@@ -5,7 +5,7 @@ title: kodex — дизайн домена runtime и fleet
 status: active
 owner_role: SA
 created_at: 2026-05-07
-updated_at: 2026-05-25
+updated_at: 2026-05-26
 related_issues: [655, 656, 657, 658, 659, 660, 661, 662, 782]
 related_prs: []
 related_adrs: []
@@ -90,7 +90,7 @@ sequenceDiagram
 
 `agent-manager` остаётся владельцем `Run`. `runtime-manager` не выбирает flow, роль, prompt или следующий этап.
 
-Руководящие пакеты приходят в `workspace policy` как `WorkspaceSource.kind=guidance_package`. Механизм materialization получает только безопасные refs: package installation, package version, source ref, manifest digest, package slug и capability refs. Он готовит checkout/mount только для чтения в `.kodex/guidance/<package_slug>` и сгенерированный контекст `.kodex/context/agent-run.json`. Runtime не меняет пакетную истину и не записывает manifest payload обратно в `agent-manager`.
+Руководящие пакеты приходят в `workspace policy` как `WorkspaceSource.kind=guidance_package`. Механизм materialization получает только безопасные refs: package installation, package version, тип source ref, значение source ref, commit SHA при наличии, manifest digest, package slug, `safe_local_name` и capability refs. Он проверяет идентичность источника через `package-hub`, готовит checkout/mount только для чтения в `.kodex/guidance/<safe_local_name>` и сгенерированный контекст `.kodex/context/agent-run.json`. Runtime не меняет пакетную истину и не записывает manifest payload обратно в `agent-manager`.
 
 ### Выполнение platform job
 
@@ -158,6 +158,7 @@ sequenceDiagram
 - writable/read-only mode;
 - local path внутри slot;
 - source commit/ref/digest;
+- тип и идентичность источника для руководящих пакетов;
 - materialization fingerprint;
 - ошибки доступа или checkout.
 
@@ -185,7 +186,7 @@ Prewarm slot не привязан к конкретной задаче. Он с
 | `access-manager` | Проверка прав вызывающего сервиса и реакция на блокировку организации или пользователя. |
 | `project-catalog` | Workspace policy, release policy, placement policy и проектные источники. |
 | `provider-hub` | Provider refs для `Issue/PR/MR`, ускоряющие сигналы и ссылки на артефакты. |
-| `package-hub` | Runtime requirements плагинов и refs руководящих пакетов. |
+| `package-hub` | Runtime requirements плагинов, refs руководящих пакетов и авторитетная проверка идентичности источника перед materialization. |
 | `agent-manager` | Владеет `Run` и сессией, запрашивает runtime и получает slot/job refs. |
 | `fleet-manager` | Выбирает и проверяет серверный или кластерный контур. |
 | `worker` | Исполняет технические операции по поручению runtime. |

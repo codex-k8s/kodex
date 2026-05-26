@@ -5,7 +5,7 @@ title: kodex — контекст руководящих пакетов в works
 status: active
 owner_role: SA
 created_at: 2026-05-25
-updated_at: 2026-05-25
+updated_at: 2026-05-26
 related_issues: [782]
 related_prs: []
 related_docsets:
@@ -27,6 +27,7 @@ approvals:
 - `agent-manager` выбирает руководящие пакеты через `package-hub` и фиксирует в `AgentRun` только безопасные ссылки, версии, digest и краткую policy summary.
 - `agent-manager` не делает checkout, mount или чтение файлов руководящего пакета.
 - `runtime-manager` получает `WorkspaceSource` с видом `guidance_package` и материализует пакет в workspace/PVC.
+- Локальный путь руководящего пакета строится не из сырого `package_slug`, а из проверенного `safe_local_name`.
 - Тексты руководств, `SKILL.md`, шаблоны prompt, flow-файлы, scripts, assets и полный manifest не пишутся в БД `agent-manager`.
 - Slot-агент видит руководящие документы по стабильным локальным путям внутри workspace.
 
@@ -72,8 +73,9 @@ sequenceDiagram
 | `package_installation_ref` | да | может дублироваться в manifest контекста |
 | `package_version_ref` | да | может дублироваться в manifest контекста |
 | `manifest_digest` | да | используется runtime для проверки входного источника |
-| `source_ref` | да | используется runtime для checkout фиксированной версии |
-| `package_slug`, `package_version_label` | да | используется для понятного локального пути и диагностики |
+| `source_ref.kind`, `source_ref.ref`, `source_ref.commit_sha` | да | используется runtime для проверки фиксированной версии перед checkout |
+| `package_slug`, `package_version_label` | да | используется только для диагностики и человекочитаемого контекста |
+| `safe_local_name` | нет | runtime-контур вычисляет при построении `WorkspaceSource`; может дублироваться в manifest контекста |
 | `policy_summary_json` | да, только ограниченная summary без payload | может дублироваться в сгенерированном контексте |
 | `payload_json` manifest | нет | runtime может получить от package/source контура при materialization, но не возвращает в `agent-manager` |
 | `SKILL.md`, руководства, шаблоны, scripts, assets | нет | да, как файлы источника только для чтения |
@@ -88,13 +90,24 @@ sequenceDiagram
 |---|---|
 | `source_id` | `guidance:<package_installation_ref>` |
 | `kind` | `guidance_package` |
-| `source_ref` | `GuidanceRef.source_ref` из `package-hub` |
+| `source_ref` | `PackageVersion.source_ref.ref` из `package-hub` |
+| `commit_sha` | `PackageVersion.source_ref.commit_sha`, если известен |
 | `digest` | `GuidanceRef.manifest_digest` |
-| `local_path` | `.kodex/guidance/<package_slug>`; если slug конфликтует в выбранном наборе, подготовка runtime должна завершиться `failed_precondition` до checkout |
+| `local_path` | `.kodex/guidance/<safe_local_name>`; если имена конфликтуют в выбранном наборе, подготовка runtime должна завершиться `failed_precondition` до checkout |
 | `access_mode` | `read` |
-| `metadata_json` | безопасные поля: `package_installation_ref`, `package_version_ref`, `package_ref`, `package_slug`, `package_version_label`, `capability_ref`, `capability_kind`, `manifest_digest` |
+| `metadata_json` | безопасные поля: `package_installation_ref`, `package_version_ref`, `package_ref`, `package_slug`, `package_version_label`, `safe_local_name`, `source_ref_kind`, `source_commit_sha`, `package_source_id`, `package_source_kind`, `package_source_repository_ref`, `package_source_catalog_endpoint_ref`, `capability_ref`, `capability_kind`, `manifest_digest` |
 
 `local_path` является runtime-контрактом, а не полем `AgentRun`. Он вычисляется из замороженных refs при подготовке workspace. Так старый `Run` не меняется при будущей смене правил layout, а runtime materialization всегда имеет собственный fingerprint.
+
+`package_slug` нельзя напрямую конкатенировать в путь. `safe_local_name` является единственным разрешённым сегментом локального пути для руководящего пакета. Правила:
+
+- сегмент должен быть ASCII lowercase и соответствовать `^[a-z0-9][a-z0-9_-]{0,62}$`;
+- сегмент не может содержать `/`, `\`, управляющие символы, Unicode-варианты, `.` или `..`;
+- если `package_slug` уже соответствует формату, он может использоваться как `safe_local_name`;
+- если `package_slug` не соответствует формату, `safe_local_name` строится детерминированно из `package_ref`, `package_version_ref` и `sha256(package_slug)` в виде безопасного ASCII-имени;
+- конфликт двух `safe_local_name` внутри одного workspace считается ошибкой входной политики и отклоняется до checkout.
+
+Перед materialization runtime-контур не должен доверять только строковому `source_ref`. Он выполняет авторитетное чтение `package_version_ref`, `package_ref` и `package_source_id` из `package-hub` либо получает от оркестрационного контура уже проверенный снимок этих данных и сверяет его с `WorkspaceSource.metadata_json`. Для checkout используются тип источника `source_ref_kind`, значение `source_ref`, `source_commit_sha`, идентичность `PackageSource` и `manifest_digest`; если хотя бы одно значение расходится с замороженными refs `Run`, подготовка завершается `failed_precondition` до обращения к внешнему источнику.
 
 ## Сгенерированный контекст
 
@@ -123,6 +136,7 @@ sequenceDiagram
 - Если `package-hub` больше не отдаёт установку или manifest после создания `Run`, уже замороженный `Run` остаётся исторически валидным, но новый runtime start должен завершиться безопасной ошибкой зависимости.
 - `package-hub` не создаёт локальные пути и не подготавливает workspace.
 - `runtime-manager` не выбирает flow, stage, role, prompt или guidance packages самостоятельно.
+- `runtime-manager` не выводит способ получения пакета из произвольной строки `source_ref`: тип источника, commit и идентичность источника приходят из `package-hub` и проверяются до checkout.
 - `platform-mcp-server` может инициировать подготовку runtime как инструментальная поверхность, но не становится владельцем `Run` или workspace policy.
 
 ## Бэклог реализации
@@ -130,7 +144,7 @@ sequenceDiagram
 - Подключить прямой вызов `runtime-manager.PrepareRuntime` из оркестрационного контура после того, как `project-catalog` отдаст проверенную workspace policy для конкретного run context.
 - Добавить механизм materialization, который умеет получать guidance package source по `WorkspaceSource.kind=guidance_package`.
 - Добавить writer сгенерированного контекста в runtime/workspace слой.
-- Добавить проверку конфликтов `package_slug` в selected guidance set до подготовки runtime.
+- Добавить проверку формата и конфликтов `safe_local_name` в selected guidance set до подготовки runtime.
 
 ## Апрув
 
