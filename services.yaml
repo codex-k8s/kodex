@@ -165,6 +165,11 @@ spec:
       bumpOn:
         - services/internal/governance-manager
         - libs/go/grpcserver
+        - libs/go/postgres
+        - libs/go/eventlog
+        - libs/go/migrationtest
+        - libs/go/outbox
+        - libs/go/platformevents/governance
         - libs/go/serviceprocess
         - libs/go/servicemain
         - proto/kodex/governance/v1
@@ -558,6 +563,11 @@ spec:
         - runtime-manager
         - interaction-hub
         - platform-event-log
+      implementation:
+        database: services/internal/governance-manager/cmd/cli/migrations
+        repository: postgres
+        outbox: service-local-governance-events
+        evaluator: planned
       deploy:
         health:
           livez: /health/livez

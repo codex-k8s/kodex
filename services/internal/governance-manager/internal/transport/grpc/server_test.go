@@ -32,29 +32,29 @@ func TestNewServerRequiresService(t *testing.T) {
 	_ = NewServer(nil)
 }
 
-func TestEvaluateRiskRoutesToDomainBacklog(t *testing.T) {
+func TestReevaluateRiskRoutesToDomainBacklog(t *testing.T) {
 	t.Parallel()
 
 	service := &fakeBacklogService{}
-	_, err := NewServer(service).EvaluateRisk(context.Background(), &governancev1.EvaluateRiskRequest{})
+	_, err := NewServer(service).ReevaluateRisk(context.Background(), &governancev1.ReevaluateRiskRequest{})
 	if !errors.Is(err, errs.ErrNotImplemented) {
-		t.Fatalf("EvaluateRisk() error = %v, want ErrNotImplemented", err)
+		t.Fatalf("ReevaluateRisk() error = %v, want ErrNotImplemented", err)
 	}
-	if service.operation != enum.OperationEvaluateRisk {
-		t.Fatalf("operation = %q, want %q", service.operation, enum.OperationEvaluateRisk)
+	if service.operation != enum.OperationReevaluateRisk {
+		t.Fatalf("operation = %q, want %q", service.operation, enum.OperationReevaluateRisk)
 	}
 }
 
-func TestSubmitGateDecisionRoutesToDomainBacklog(t *testing.T) {
+func TestRequestReleaseDecisionRoutesToDomainBacklog(t *testing.T) {
 	t.Parallel()
 
 	service := &fakeBacklogService{}
-	_, err := NewServer(service).SubmitGateDecision(context.Background(), &governancev1.SubmitGateDecisionRequest{})
+	_, err := NewServer(service).RequestReleaseDecision(context.Background(), &governancev1.RequestReleaseDecisionRequest{})
 	if !errors.Is(err, errs.ErrNotImplemented) {
-		t.Fatalf("SubmitGateDecision() error = %v, want ErrNotImplemented", err)
+		t.Fatalf("RequestReleaseDecision() error = %v, want ErrNotImplemented", err)
 	}
-	if service.operation != enum.OperationSubmitGateDecision {
-		t.Fatalf("operation = %q, want %q", service.operation, enum.OperationSubmitGateDecision)
+	if service.operation != enum.OperationRequestReleaseDecision {
+		t.Fatalf("operation = %q, want %q", service.operation, enum.OperationRequestReleaseDecision)
 	}
 }
 
@@ -71,6 +71,7 @@ func TestUnaryErrorInterceptorMapsBacklogToUnimplemented(t *testing.T) {
 }
 
 type fakeBacklogService struct {
+	governanceService
 	operation enum.Operation
 }
 

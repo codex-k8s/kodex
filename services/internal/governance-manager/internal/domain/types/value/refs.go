@@ -7,10 +7,41 @@ type ExternalRef struct {
 	Ref  string
 }
 
+// Actor identifies a user, service, agent or external account.
+type Actor struct {
+	Type string
+	ID   string
+}
+
+// LocalizedText carries text for one locale.
+type LocalizedText struct {
+	Locale string `json:"locale"`
+	Text   string `json:"text"`
+}
+
+// ProjectContextRef carries project-catalog refs used by governance.
+type ProjectContextRef struct {
+	ProjectRef       string `json:"project_ref,omitempty"`
+	RepositoryRef    string `json:"repository_ref,omitempty"`
+	ServiceRef       string `json:"service_ref,omitempty"`
+	BranchRulesRef   string `json:"branch_rules_ref,omitempty"`
+	ReleasePolicyRef string `json:"release_policy_ref,omitempty"`
+	ReleaseLineRef   string `json:"release_line_ref,omitempty"`
+}
+
+// InteractionDeliveryRef points to interaction-hub delivery and callback facts.
+type InteractionDeliveryRef struct {
+	RequestRef  string `json:"request_ref,omitempty"`
+	DeliveryRef string `json:"delivery_ref,omitempty"`
+	CallbackRef string `json:"callback_ref,omitempty"`
+	DecisionRef string `json:"decision_ref,omitempty"`
+}
+
 // EvidenceRef points to bounded evidence without embedding provider payloads, secrets or full logs.
 type EvidenceRef struct {
-	Kind    string
-	Ref     string
-	Summary string
-	Digest  string
+	Kind           string `json:"kind"`
+	Ref            string `json:"ref"`
+	Summary        string `json:"summary"`
+	Digest         string `json:"digest,omitempty"`
+	RetentionClass string `json:"retention_class,omitempty"`
 }

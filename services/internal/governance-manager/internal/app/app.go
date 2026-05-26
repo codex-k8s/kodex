@@ -6,10 +6,13 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
+
 	grpcserver "github.com/codex-k8s/kodex/libs/go/grpcserver"
+	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
 	serviceprocess "github.com/codex-k8s/kodex/libs/go/serviceprocess"
 	governanceservice "github.com/codex-k8s/kodex/services/internal/governance-manager/internal/domain/service"
-	governancestub "github.com/codex-k8s/kodex/services/internal/governance-manager/internal/repository/stub/governance"
+	governancepostgres "github.com/codex-k8s/kodex/services/internal/governance-manager/internal/repository/postgres/governance"
 	governancegrpc "github.com/codex-k8s/kodex/services/internal/governance-manager/internal/transport/grpc"
 )
 
@@ -20,11 +23,28 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	if err := cfg.Validate(); err != nil {
 		return err
 	}
-	governanceRepository := governancestub.NewRepository()
-	governanceService := governanceservice.New(governanceRepository)
+	dbPool, err := postgreslib.OpenPool(ctx, cfg.DatabasePoolSettings())
+	if err != nil {
+		return err
+	}
+	defer dbPool.Close()
+	eventLogPool, err := serviceprocess.OpenEventLogPool(ctx, cfg.needsEventLogDatabase(), cfg.EventLogDatabasePoolSettings())
+	if err != nil {
+		return err
+	}
+	if eventLogPool != nil {
+		defer eventLogPool.Close()
+	}
+
+	governanceRepository := governancepostgres.NewRepository(dbPool)
+	governanceService := governanceservice.NewWithConfig(governanceservice.Config{
+		Repository:  governanceRepository,
+		Clock:       systemClock{},
+		IDGenerator: uuidGenerator{},
+	})
 	httpServer := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           serviceprocess.NewHealthMux(readinessChecks(governanceService), 2*time.Second),
+		Handler:           serviceprocess.NewHealthMux(readinessChecks(governanceService, dbPool, eventLogPool), 2*time.Second),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	grpcMetrics, err := grpcserver.NewMetrics(nil, grpcserver.MetricsConfig{
@@ -47,9 +67,28 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	}
 	governancegrpc.RegisterGovernanceManagerService(grpcServer, governanceService)
 
-	errCh := make(chan error, 2)
+	errCh := make(chan error, 3)
 	go serviceprocess.StartHTTPServer(httpServer, serviceName, logger, errCh)
 	go serviceprocess.StartGRPCServer(grpcServer, serviceName, cfg.GRPCAddr, logger, errCh)
+	err = serviceprocess.StartOutboxDispatcher(
+		ctx,
+		serviceName,
+		governanceRepository,
+		outboxEvent,
+		serviceprocess.OutboxRuntimeConfig{
+			DispatchEnabled:     cfg.OutboxDispatchEnabled,
+			PublisherKind:       cfg.OutboxPublisherKind,
+			AllowLossyPublisher: cfg.OutboxAllowLossy,
+			EventLogSource:      cfg.OutboxEventLogSource,
+			Dispatcher:          cfg.OutboxDispatcherConfig(),
+		},
+		serviceprocess.EventLogAppender(eventLogPool),
+		logger,
+		errCh,
+	)
+	if err != nil {
+		return err
+	}
 
 	select {
 	case <-ctx.Done():
@@ -61,8 +100,28 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	}
 }
 
-func readinessChecks(governanceService *governanceservice.Service) []serviceprocess.ReadinessCheck {
-	return []serviceprocess.ReadinessCheck{
-		serviceprocess.StaticReadinessCheck("governance service", governanceService != nil && governanceService.Ready()),
-	}
+type readyService interface {
+	Ready() bool
+}
+
+func readinessChecks(governanceService readyService, governanceDB serviceprocess.PingStore, eventLogDB serviceprocess.PingStore) []serviceprocess.ReadinessCheck {
+	return serviceprocess.ServiceDatabaseReadinessChecks(
+		"governance service",
+		governanceService != nil && governanceService.Ready(),
+		"governance database",
+		governanceDB,
+		eventLogDB,
+	)
+}
+
+type systemClock struct{}
+
+func (systemClock) Now() time.Time {
+	return time.Now().UTC()
+}
+
+type uuidGenerator struct{}
+
+func (uuidGenerator) New() uuid.UUID {
+	return uuid.New()
 }
