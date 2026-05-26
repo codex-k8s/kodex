@@ -562,18 +562,299 @@ func TestServiceRejectsUnsafeInteractionLifecycleInput(t *testing.T) {
 	}
 }
 
-func TestServiceBacklogOperationsReturnUnimplemented(t *testing.T) {
+func TestServicePlansDeliveryWithSafeOutboxAndIdempotentReplay(t *testing.T) {
 	t.Parallel()
 
 	repository := newFakeRepository()
-	svc := New(repository)
+	now := time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC)
+	requestID := uuid.New()
+	routeID := uuid.New()
+	seedInteractionRequest(repository, requestID, now, enum.InteractionRequestStatusWaiting)
+	seedDeliveryRoute(repository, routeID, now)
+	svc := NewWithConfig(repository, Config{Clock: fixedClock{now: now.Add(time.Minute)}, UUIDGenerator: &sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New(), uuid.New()}}})
 
-	err := svc.PlanDelivery(context.Background())
-	if !errors.Is(err, errs.ErrNotImplemented) {
-		t.Fatalf("PlanDelivery() err = %v, want ErrNotImplemented", err)
+	input := validPlanDeliveryInput(requestID, routeID)
+	attempt, err := svc.PlanDelivery(context.Background(), input)
+	if err != nil {
+		t.Fatalf("PlanDelivery(): %v", err)
 	}
-	if len(repository.operations) != 1 || repository.operations[0] != enum.OperationPlanDelivery {
-		t.Fatalf("operations = %v, want PlanDelivery", repository.operations)
+	if attempt.Target.ID != requestID || attempt.RouteID != routeID || attempt.Status != enum.DeliveryAttemptStatusQueued || attempt.AttemptNumber != 1 {
+		t.Fatalf("attempt = %+v, want queued delivery for request", attempt)
+	}
+	if !strings.HasPrefix(attempt.PayloadDigest, "sha256:") {
+		t.Fatalf("payload digest = %q, want sha256 digest", attempt.PayloadDigest)
+	}
+	if len(repository.events) != 1 {
+		t.Fatalf("events = %d, want 1", len(repository.events))
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(repository.events[0].Payload, &payload); err != nil {
+		t.Fatalf("unmarshal delivery event: %v", err)
+	}
+	if payload["delivery_attempt_id"] != attempt.ID.String() || payload["route_id"] != routeID.String() || payload["status"] != "queued" {
+		t.Fatalf("payload = %+v, want safe delivery refs", payload)
+	}
+	if _, ok := payload["prompt_summary"]; ok {
+		t.Fatalf("outbox payload contains prompt_summary: %+v", payload)
+	}
+
+	replayed, err := svc.PlanDelivery(context.Background(), input)
+	if err != nil {
+		t.Fatalf("PlanDelivery() replay: %v", err)
+	}
+	if replayed.ID != attempt.ID || len(repository.events) != 1 {
+		t.Fatalf("replay attempt = %+v events=%d, want original attempt and no extra event", replayed, len(repository.events))
+	}
+}
+
+func TestServiceRecordsDeliveryResultAndBlocksTerminalRollback(t *testing.T) {
+	t.Parallel()
+
+	repository := newFakeRepository()
+	now := time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC)
+	requestID := uuid.New()
+	routeID := uuid.New()
+	seedInteractionRequest(repository, requestID, now, enum.InteractionRequestStatusWaiting)
+	seedDeliveryRoute(repository, routeID, now)
+	svc := NewWithConfig(repository, Config{Clock: fixedClock{now: now.Add(time.Minute)}, UUIDGenerator: &sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New(), uuid.New(), uuid.New()}}})
+	planned, err := svc.PlanDelivery(context.Background(), validPlanDeliveryInput(requestID, routeID))
+	if err != nil {
+		t.Fatalf("PlanDelivery(): %v", err)
+	}
+	input := RecordDeliveryResultInput{
+		Meta: validCommandMeta(),
+		Result: value.ChannelDeliveryResult{
+			ContractVersion:   "interaction.channel.v1",
+			DeliveryID:        planned.DeliveryID,
+			ResultStatus:      enum.ChannelDeliveryResultStatusAccepted,
+			ChannelMessageRef: "channel:message-1",
+			OccurredAt:        now.Add(2 * time.Minute),
+		},
+	}
+	accepted, err := svc.RecordDeliveryResult(context.Background(), input)
+	if err != nil {
+		t.Fatalf("RecordDeliveryResult(): %v", err)
+	}
+	if accepted.Status != enum.DeliveryAttemptStatusAccepted || accepted.ChannelMessageRef != "channel:message-1" || accepted.SentAt == nil {
+		t.Fatalf("accepted = %+v, want accepted with channel ref", accepted)
+	}
+	if len(repository.events) != 2 {
+		t.Fatalf("events = %d, want requested and accepted", len(repository.events))
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(repository.events[1].Payload, &payload); err != nil {
+		t.Fatalf("unmarshal accepted event: %v", err)
+	}
+	if payload["channel_message_ref"] != "channel:message-1" || payload["delivery_id"] != planned.DeliveryID {
+		t.Fatalf("accepted payload = %+v, want safe delivery result refs", payload)
+	}
+
+	replayed, err := svc.RecordDeliveryResult(context.Background(), input)
+	if err != nil {
+		t.Fatalf("RecordDeliveryResult() replay: %v", err)
+	}
+	if replayed.ID != planned.ID || len(repository.events) != 2 {
+		t.Fatalf("replayed = %+v events=%d, want original accepted attempt and no extra event", replayed, len(repository.events))
+	}
+
+	retryWithNewMeta := input
+	retryWithNewMeta.Meta = validCommandMeta()
+	replayed, err = svc.RecordDeliveryResult(context.Background(), retryWithNewMeta)
+	if err != nil {
+		t.Fatalf("RecordDeliveryResult() delivery_id replay: %v", err)
+	}
+	if replayed.ID != planned.ID || len(repository.events) != 2 {
+		t.Fatalf("delivery_id replay = %+v events=%d, want original accepted attempt and no extra event", replayed, len(repository.events))
+	}
+
+	stored := repository.deliveries[planned.ID]
+	stored.Status = enum.DeliveryAttemptStatusFailed
+	repository.deliveries[planned.ID] = stored
+	retry := input
+	retry.Meta = validCommandMeta()
+	retry.Result.ResultStatus = enum.ChannelDeliveryResultStatusAccepted
+	retry.Result.ChannelMessageRef = "channel:message-2"
+	if _, err := svc.RecordDeliveryResult(context.Background(), retry); !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("RecordDeliveryResult() terminal err = %v, want ErrConflict", err)
+	}
+}
+
+func TestServiceRecordsTerminalDeliveryResultIdempotentlyByDeliveryID(t *testing.T) {
+	t.Parallel()
+
+	repository := newFakeRepository()
+	now := time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC)
+	requestID := uuid.New()
+	routeID := uuid.New()
+	seedInteractionRequest(repository, requestID, now, enum.InteractionRequestStatusWaiting)
+	seedDeliveryRoute(repository, routeID, now)
+	svc := NewWithConfig(repository, Config{Clock: fixedClock{now: now.Add(time.Minute)}, UUIDGenerator: &sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New(), uuid.New(), uuid.New()}}})
+	planned, err := svc.PlanDelivery(context.Background(), validPlanDeliveryInput(requestID, routeID))
+	if err != nil {
+		t.Fatalf("PlanDelivery(): %v", err)
+	}
+	input := RecordDeliveryResultInput{
+		Meta: validCommandMeta(),
+		Result: value.ChannelDeliveryResult{
+			ContractVersion: "interaction.channel.v1",
+			DeliveryID:      planned.DeliveryID,
+			ResultStatus:    enum.ChannelDeliveryResultStatusFailed,
+			ErrorCode:       "CHANNEL_UNAVAILABLE",
+			ErrorClass:      enum.DeliveryErrorClassTemporary,
+			RetryAfter:      ptrTime(now.Add(5 * time.Minute)),
+			OccurredAt:      now.Add(2 * time.Minute),
+		},
+	}
+	failed, err := svc.RecordDeliveryResult(context.Background(), input)
+	if err != nil {
+		t.Fatalf("RecordDeliveryResult(): %v", err)
+	}
+	if failed.Status != enum.DeliveryAttemptStatusFailed || failed.ResultFingerprint == "" {
+		t.Fatalf("failed = %+v, want terminal failed with result fingerprint", failed)
+	}
+
+	retry := input
+	retry.Meta = validCommandMeta()
+	replayed, err := svc.RecordDeliveryResult(context.Background(), retry)
+	if err != nil {
+		t.Fatalf("RecordDeliveryResult() terminal replay: %v", err)
+	}
+	if replayed.ID != planned.ID || len(repository.events) != 2 {
+		t.Fatalf("terminal replay = %+v events=%d, want stored result without extra event", replayed, len(repository.events))
+	}
+
+	changed := input
+	changed.Meta = validCommandMeta()
+	changed.Result.ErrorCode = "DIFFERENT"
+	if _, err := svc.RecordDeliveryResult(context.Background(), changed); !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("RecordDeliveryResult() changed terminal result err = %v, want ErrConflict", err)
+	}
+}
+
+func TestServiceReplaysDeliveryResultAfterAtomicClaimConflict(t *testing.T) {
+	t.Parallel()
+
+	repository := newFakeRepository()
+	now := time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC)
+	requestID := uuid.New()
+	routeID := uuid.New()
+	seedInteractionRequest(repository, requestID, now, enum.InteractionRequestStatusWaiting)
+	seedDeliveryRoute(repository, routeID, now)
+	svc := NewWithConfig(repository, Config{Clock: fixedClock{now: now.Add(time.Minute)}, UUIDGenerator: &sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New(), uuid.New(), uuid.New()}}})
+	planned, err := svc.PlanDelivery(context.Background(), validPlanDeliveryInput(requestID, routeID))
+	if err != nil {
+		t.Fatalf("PlanDelivery(): %v", err)
+	}
+	input := RecordDeliveryResultInput{
+		Meta: validCommandMeta(),
+		Result: value.ChannelDeliveryResult{
+			ContractVersion:   "interaction.channel.v1",
+			DeliveryID:        planned.DeliveryID,
+			ResultStatus:      enum.ChannelDeliveryResultStatusAccepted,
+			ChannelMessageRef: "channel:message-race",
+			OccurredAt:        now.Add(2 * time.Minute),
+		},
+	}
+	resultFingerprint, err := deliveryResultFingerprint(input.Result)
+	if err != nil {
+		t.Fatalf("deliveryResultFingerprint(): %v", err)
+	}
+	repository.beforeDeliveryUpdate = func(r *fakeRepository) {
+		claimed := r.deliveries[planned.ID]
+		claimed.Status = enum.DeliveryAttemptStatusAccepted
+		claimed.ChannelMessageRef = input.Result.ChannelMessageRef
+		claimed.ResultFingerprint = resultFingerprint
+		claimed.SentAt = &input.Result.OccurredAt
+		claimed.UpdatedAt = now.Add(2 * time.Minute)
+		r.deliveries[planned.ID] = claimed
+	}
+
+	replayed, err := svc.RecordDeliveryResult(context.Background(), input)
+	if err != nil {
+		t.Fatalf("RecordDeliveryResult() concurrent replay: %v", err)
+	}
+	if replayed.ID != planned.ID || replayed.ResultFingerprint != resultFingerprint || len(repository.events) != 1 {
+		t.Fatalf("concurrent replay = %+v events=%d, want claimed attempt without extra event", replayed, len(repository.events))
+	}
+}
+
+func TestServiceConflictsDeliveryResultAfterAtomicClaimConflict(t *testing.T) {
+	t.Parallel()
+
+	repository := newFakeRepository()
+	now := time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC)
+	requestID := uuid.New()
+	routeID := uuid.New()
+	seedInteractionRequest(repository, requestID, now, enum.InteractionRequestStatusWaiting)
+	seedDeliveryRoute(repository, routeID, now)
+	svc := NewWithConfig(repository, Config{Clock: fixedClock{now: now.Add(time.Minute)}, UUIDGenerator: &sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New(), uuid.New(), uuid.New()}}})
+	planned, err := svc.PlanDelivery(context.Background(), validPlanDeliveryInput(requestID, routeID))
+	if err != nil {
+		t.Fatalf("PlanDelivery(): %v", err)
+	}
+	input := RecordDeliveryResultInput{
+		Meta: validCommandMeta(),
+		Result: value.ChannelDeliveryResult{
+			ContractVersion:   "interaction.channel.v1",
+			DeliveryID:        planned.DeliveryID,
+			ResultStatus:      enum.ChannelDeliveryResultStatusAccepted,
+			ChannelMessageRef: "channel:message-loser",
+			OccurredAt:        now.Add(2 * time.Minute),
+		},
+	}
+	winning := input.Result
+	winning.ChannelMessageRef = "channel:message-winner"
+	winningFingerprint, err := deliveryResultFingerprint(winning)
+	if err != nil {
+		t.Fatalf("deliveryResultFingerprint(): %v", err)
+	}
+	repository.beforeDeliveryUpdate = func(r *fakeRepository) {
+		claimed := r.deliveries[planned.ID]
+		claimed.Status = enum.DeliveryAttemptStatusAccepted
+		claimed.ChannelMessageRef = winning.ChannelMessageRef
+		claimed.ResultFingerprint = winningFingerprint
+		claimed.SentAt = &winning.OccurredAt
+		claimed.UpdatedAt = now.Add(2 * time.Minute)
+		r.deliveries[planned.ID] = claimed
+	}
+
+	if _, err := svc.RecordDeliveryResult(context.Background(), input); !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("RecordDeliveryResult() concurrent conflict err = %v, want ErrConflict", err)
+	}
+	if len(repository.events) != 1 {
+		t.Fatalf("events=%d, want no extra event after conflict", len(repository.events))
+	}
+}
+
+func TestServiceGetsDeliveryStatusByDeliveryID(t *testing.T) {
+	t.Parallel()
+
+	repository := newFakeRepository()
+	now := time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC)
+	notificationID := uuid.New()
+	routeID := uuid.New()
+	notification := validNotificationInput(now.Add(time.Hour))
+	notification.Meta = validCommandMeta()
+	createdNotification, err := NewWithConfig(repository, Config{Clock: fixedClock{now: now}, UUIDGenerator: &sequenceIDs{ids: []uuid.UUID{notificationID, uuid.New()}}}).RequestNotification(context.Background(), notification)
+	if err != nil {
+		t.Fatalf("RequestNotification(): %v", err)
+	}
+	seedDeliveryRoute(repository, routeID, now)
+	svc := NewWithConfig(repository, Config{Clock: fixedClock{now: now.Add(time.Minute)}, UUIDGenerator: &sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New()}}})
+	planned, err := svc.PlanDelivery(context.Background(), PlanDeliveryInput{
+		Meta:    validCommandMeta(),
+		Target:  value.DeliveryTarget{Kind: value.DeliveryTargetKindNotification, ID: createdNotification.ID},
+		RouteID: routeID,
+	})
+	if err != nil {
+		t.Fatalf("PlanDelivery(): %v", err)
+	}
+	status, err := svc.GetDeliveryStatus(context.Background(), GetDeliveryStatusInput{DeliveryID: planned.DeliveryID})
+	if err != nil {
+		t.Fatalf("GetDeliveryStatus(): %v", err)
+	}
+	if status.Notification == nil || status.Notification.ID != createdNotification.ID || len(status.DeliveryAttempts) != 1 || status.DeliveryAttempts[0].ID != planned.ID {
+		t.Fatalf("status = %+v, want notification and planned attempt", status)
 	}
 }
 
@@ -591,23 +872,26 @@ func TestServiceReadinessDependsOnRepository(t *testing.T) {
 func TestServiceBacklogRequiresReadyRepository(t *testing.T) {
 	t.Parallel()
 
-	err := New(&fakeRepository{}).PlanDelivery(context.Background())
+	err := New(&fakeRepository{}).RecordChannelCallback(context.Background())
 	if !errors.Is(err, errs.ErrUnavailable) {
-		t.Fatalf("PlanDelivery() err = %v, want ErrUnavailable", err)
+		t.Fatalf("RecordChannelCallback() err = %v, want ErrUnavailable", err)
 	}
 }
 
 type fakeRepository struct {
-	ready         bool
-	operations    []enum.Operation
-	threads       map[uuid.UUID]entity.ConversationThread
-	messages      map[uuid.UUID]entity.ConversationMessage
-	requests      map[uuid.UUID]entity.InteractionRequest
-	responses     map[uuid.UUID]entity.InteractionResponse
-	notifications map[uuid.UUID]entity.Notification
-	subscriptions map[uuid.UUID]entity.Subscription
-	results       map[string]entity.CommandResult
-	events        []entity.OutboxEvent
+	ready                bool
+	operations           []enum.Operation
+	threads              map[uuid.UUID]entity.ConversationThread
+	messages             map[uuid.UUID]entity.ConversationMessage
+	requests             map[uuid.UUID]entity.InteractionRequest
+	responses            map[uuid.UUID]entity.InteractionResponse
+	notifications        map[uuid.UUID]entity.Notification
+	subscriptions        map[uuid.UUID]entity.Subscription
+	routes               map[uuid.UUID]entity.DeliveryRoute
+	deliveries           map[uuid.UUID]entity.DeliveryAttempt
+	results              map[string]entity.CommandResult
+	events               []entity.OutboxEvent
+	beforeDeliveryUpdate func(*fakeRepository)
 }
 
 func newFakeRepository() *fakeRepository {
@@ -619,6 +903,8 @@ func newFakeRepository() *fakeRepository {
 		responses:     map[uuid.UUID]entity.InteractionResponse{},
 		notifications: map[uuid.UUID]entity.Notification{},
 		subscriptions: map[uuid.UUID]entity.Subscription{},
+		routes:        map[uuid.UUID]entity.DeliveryRoute{},
+		deliveries:    map[uuid.UUID]entity.DeliveryAttempt{},
 		results:       map[string]entity.CommandResult{},
 	}
 }
@@ -739,6 +1025,19 @@ func validSubscriptionInput() UpsertSubscriptionInput {
 	}
 }
 
+func validPlanDeliveryInput(requestID uuid.UUID, routeID uuid.UUID) PlanDeliveryInput {
+	return PlanDeliveryInput{
+		Meta:          validCommandMeta(),
+		Target:        value.DeliveryTarget{Kind: value.DeliveryTargetKindRequest, ID: requestID},
+		RouteID:       routeID,
+		CorrelationID: "trace-delivery",
+	}
+}
+
+func ptrTime(value time.Time) *time.Time {
+	return &value
+}
+
 func seedInteractionRequest(repository *fakeRepository, requestID uuid.UUID, now time.Time, status enum.InteractionRequestStatus) {
 	deadline := now.Add(time.Hour)
 	repository.requests[requestID] = entity.InteractionRequest{
@@ -764,6 +1063,20 @@ func seedInteractionRequest(repository *fakeRepository, requestID uuid.UUID, now
 		Version:    1,
 		CreatedAt:  now,
 		UpdatedAt:  now,
+	}
+}
+
+func seedDeliveryRoute(repository *fakeRepository, routeID uuid.UUID, now time.Time) {
+	repository.routes[routeID] = entity.DeliveryRoute{
+		ID:                     routeID,
+		Scope:                  value.ScopeRef{Type: enum.ScopeTypeService, Ref: "agent-manager"},
+		SurfaceKind:            enum.DeliverySurfaceKindWebConsole,
+		ChannelCapabilityRef:   "capability:web-console",
+		PackageInstallationRef: "package:interaction-core",
+		RoutingPolicyRef:       "policy:route-standard",
+		Status:                 enum.DeliveryRouteStatusActive,
+		CreatedAt:              now,
+		UpdatedAt:              now,
 	}
 }
 
@@ -1001,6 +1314,90 @@ func (r *fakeRepository) ListSubscriptions(_ context.Context, filter query.Subsc
 		subscriptions = append(subscriptions, subscription)
 	}
 	return subscriptions, value.PageResult{}, nil
+}
+
+func (r *fakeRepository) CreateDeliveryAttemptWithResult(_ context.Context, attempt entity.DeliveryAttempt, result entity.CommandResult, event entity.OutboxEvent) error {
+	if _, ok := r.deliveries[attempt.ID]; ok {
+		return errs.ErrAlreadyExists
+	}
+	for _, existing := range r.deliveries {
+		if existing.DeliveryID == attempt.DeliveryID {
+			return errs.ErrAlreadyExists
+		}
+	}
+	r.deliveries[attempt.ID] = attempt
+	r.results[result.Key] = result
+	r.events = append(r.events, event)
+	return nil
+}
+
+func (r *fakeRepository) UpdateDeliveryAttemptWithResult(_ context.Context, attempt entity.DeliveryAttempt, result entity.CommandResult, event entity.OutboxEvent) error {
+	if r.beforeDeliveryUpdate != nil {
+		r.beforeDeliveryUpdate(r)
+		r.beforeDeliveryUpdate = nil
+	}
+	stored, ok := r.deliveries[attempt.ID]
+	if !ok {
+		return errs.ErrNotFound
+	}
+	if stored.Status.Terminal() || stored.ResultFingerprint != "" {
+		return errs.ErrConflict
+	}
+	r.deliveries[attempt.ID] = attempt
+	r.results[result.Key] = result
+	r.events = append(r.events, event)
+	return nil
+}
+
+func (r *fakeRepository) GetDeliveryRoute(_ context.Context, id uuid.UUID) (entity.DeliveryRoute, error) {
+	route, ok := r.routes[id]
+	if !ok {
+		return entity.DeliveryRoute{}, errs.ErrNotFound
+	}
+	return route, nil
+}
+
+func (r *fakeRepository) FindActiveDeliveryRoute(_ context.Context, scope value.ScopeRef) (entity.DeliveryRoute, error) {
+	for _, route := range r.routes {
+		if route.Scope == scope && route.Status == enum.DeliveryRouteStatusActive {
+			return route, nil
+		}
+	}
+	return entity.DeliveryRoute{}, errs.ErrNotFound
+}
+
+func (r *fakeRepository) GetDeliveryAttempt(_ context.Context, id uuid.UUID) (entity.DeliveryAttempt, error) {
+	attempt, ok := r.deliveries[id]
+	if !ok {
+		return entity.DeliveryAttempt{}, errs.ErrNotFound
+	}
+	return attempt, nil
+}
+
+func (r *fakeRepository) GetDeliveryAttemptByDeliveryID(_ context.Context, deliveryID string) (entity.DeliveryAttempt, error) {
+	for _, attempt := range r.deliveries {
+		if attempt.DeliveryID == deliveryID {
+			return attempt, nil
+		}
+	}
+	return entity.DeliveryAttempt{}, errs.ErrNotFound
+}
+
+func (r *fakeRepository) ListDeliveryAttempts(_ context.Context, filter query.DeliveryAttemptFilter) ([]entity.DeliveryAttempt, error) {
+	deliveries := make([]entity.DeliveryAttempt, 0, len(r.deliveries))
+	for _, attempt := range r.deliveries {
+		if filter.Target.Valid() && attempt.Target != filter.Target {
+			continue
+		}
+		if filter.DeliveryID != "" && attempt.DeliveryID != filter.DeliveryID {
+			continue
+		}
+		deliveries = append(deliveries, attempt)
+		if filter.Limit > 0 && int32(len(deliveries)) >= filter.Limit {
+			break
+		}
+	}
+	return deliveries, nil
 }
 
 func (r *fakeRepository) GetCommandResult(_ context.Context, identity query.CommandIdentity) (entity.CommandResult, error) {

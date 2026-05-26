@@ -6,7 +6,7 @@ status: active
 owner_role: EM
 created_at: 2026-05-22
 updated_at: 2026-05-26
-related_issues: [582, 768, 781, 783, 800, 806, 821]
+related_issues: [582, 768, 781, 783, 800, 806, 821, 835]
 related_prs: []
 related_docsets:
   - docs/domains/interaction-hub/product/requirements.md
@@ -49,8 +49,8 @@ approvals:
 | IH-3 | #800 | PostgreSQL-модель thread, message, request, response, notification, subscription, route, delivery attempt, callback, command result и service-local outbox готова; thread/message MVP lifecycle работает через repository. |
 | IH-4 | #806 | Lifecycle feedback, approval и Human gate requests готов: создать, прочитать, записать ответ, отменить, истечь, идемпотентность и безопасные события без внешних channel adapters. |
 | IH-5a | #821 | Notification и subscription lifecycle готовы без delivery attempts и без конкретных внешних каналов: `RequestNotification`, `UpsertSubscription`, `DisableSubscription`, `ListSubscriptions`, idempotency, optimistic concurrency, safe refs/status/policy refs и outbox events. |
-| IH-5b | не назначено | Delivery attempts и безопасные статусы доставки готовы без конкретных внешних каналов: `PlanDelivery`, `RecordDeliveryResult`, `GetDeliveryStatus`, retry/reminder refs и delivery attempt state machine. |
-| IH-6 | не назначено | Channel contract integration готова: чтение channel package capability из `package-hub`, delivery command в package-owned runtime boundary, callback envelope и delivery result без vendor-specific канала. |
+| IH-5b | #835 | Delivery attempts и безопасные статусы доставки готовы без конкретных внешних каналов: `PlanDelivery`, `RecordDeliveryResult`, `GetDeliveryStatus`, retry/reminder refs и delivery attempt state machine. |
+| IH-6 | не назначено | Channel contract integration готова: чтение channel package capability из `package-hub`, delivery command в package-owned runtime boundary, callback envelope и package runtime boundary без vendor-specific канала. |
 | IH-7 | не назначено | MCP-интеграция готова: `platform-mcp-server` маршрутизирует `interaction.feedback.request`, `interaction.approval.request`, `interaction.human_gate.request`, status reads. |
 | IH-8 | не назначено | Связка с `agent-manager`, `codex-hook-ingress`, `governance-manager` и `provider-hub` готова для PermissionRequest, owner feedback, owner decision refs и событий ответа. |
 | IH-9 | не назначено | Проекции для `operations-hub`, operator visibility, dual-surface inbox status и диагностика delivery failures готовы. |
@@ -110,10 +110,10 @@ IH-2 не должен:
 | `GetInteractionRequest` / `ListInteractionRequests` | Реализованы PostgreSQL-чтения по request id и scope/status/kind/source owner/deadline | IH-4 |
 | `RequestNotification` | Реализовано: one-way notification/reminder intent, safe title/summary/body preview, source owner refs, channel hints, policy ref, idempotency и `interaction.notification.requested` event | IH-5a |
 | `UpsertSubscription` / `DisableSubscription` / `ListSubscriptions` | Реализовано: create/update/disable/list, optimistic concurrency, command idempotency, source owner/channel hints/policy refs и `interaction.subscription.updated` event | IH-5a |
-| `PlanDelivery` | scaffold готов, возвращает `Unimplemented` | IH-5b |
-| `RecordDeliveryResult` | scaffold готов, возвращает `Unimplemented` | IH-5b, IH-6 |
+| `PlanDelivery` | Реализовано: создаёт delivery attempt для request/notification target, выбирает active route по scope или принимает route ref, пишет safe `interaction.delivery.requested` event и command idempotency | IH-5b |
+| `RecordDeliveryResult` | Реализовано: фиксирует safe channel/runtime result по `delivery_id`, переводит attempt в `accepted` или `failed`, сохраняет bounded diagnostics/retry metadata и публикует safe delivery event | IH-5b |
 | `RecordChannelCallback` | scaffold готов, возвращает `Unimplemented` | IH-6 |
-| `GetDeliveryStatus` | scaffold готов, возвращает `Unimplemented` | IH-5b |
+| `GetDeliveryStatus` | Реализовано: возвращает request/notification context и текущие delivery attempts/status по target или `delivery_id` без raw channel payload | IH-5b |
 
 ## Синхронизация с параллельными доменами
 

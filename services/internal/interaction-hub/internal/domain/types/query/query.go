@@ -31,6 +31,12 @@ type SubscriptionFilter struct {
 	Page          value.PageRequest
 }
 
+type DeliveryAttemptFilter struct {
+	Target     value.DeliveryTarget
+	DeliveryID string
+	Limit      int32
+}
+
 type CommandIdentity struct {
 	CommandID      uuid.UUID
 	IdempotencyKey string

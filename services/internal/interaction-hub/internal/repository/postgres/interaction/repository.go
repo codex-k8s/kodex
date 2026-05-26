@@ -52,14 +52,21 @@ const (
 	operationCreateInteractionResponse = "domain.Repository.CreateInteractionResponseWithResult"
 	operationCreateNotification        = "domain.Repository.CreateNotificationWithResult"
 	operationCreateSubscription        = "domain.Repository.CreateSubscriptionWithResult"
+	operationCreateDeliveryAttempt     = "domain.Repository.CreateDeliveryAttemptWithResult"
+	operationUpdateDeliveryAttempt     = "domain.Repository.UpdateDeliveryAttemptWithResult"
 	operationUpdateSubscription        = "domain.Repository.UpdateSubscriptionWithResult"
 	operationGetCommandResult          = "domain.Repository.GetCommandResult"
 	operationGetConversationMessage    = "domain.Repository.GetConversationMessage"
 	operationGetConversationThread     = "domain.Repository.GetConversationThread"
+	operationGetDeliveryAttempt        = "domain.Repository.GetDeliveryAttempt"
+	operationGetDeliveryByDeliveryID   = "domain.Repository.GetDeliveryAttemptByDeliveryID"
+	operationGetDeliveryRoute          = "domain.Repository.GetDeliveryRoute"
 	operationGetInteractionRequest     = "domain.Repository.GetInteractionRequest"
 	operationGetInteractionResponse    = "domain.Repository.GetInteractionResponse"
 	operationGetNotification           = "domain.Repository.GetNotification"
 	operationGetSubscription           = "domain.Repository.GetSubscription"
+	operationFindActiveDeliveryRoute   = "domain.Repository.FindActiveDeliveryRoute"
+	operationListDeliveryAttempts      = "domain.Repository.ListDeliveryAttempts"
 	operationListConversationMessages  = "domain.Repository.ListConversationMessages"
 	operationListInteractionRequests   = "domain.Repository.ListInteractionRequests"
 	operationListExpirableRequests     = "domain.Repository.ListExpirableInteractionRequests"
@@ -226,6 +233,45 @@ func (r *Repository) ListSubscriptions(ctx context.Context, filter query.Subscri
 	}
 	pageItems, page := pageFromItems(items, args)
 	return pageItems, page, nil
+}
+
+func (r *Repository) CreateDeliveryAttemptWithResult(ctx context.Context, attempt entity.DeliveryAttempt, result entity.CommandResult, event entity.OutboxEvent) error {
+	return r.mutate(ctx, operationCreateDeliveryAttempt,
+		affectedMutation(queryDeliveryAttemptCreate, deliveryAttemptArgs(attempt)),
+		commandResultMutation(result),
+		outboxEventMutation(event),
+	)
+}
+
+func (r *Repository) UpdateDeliveryAttemptWithResult(ctx context.Context, attempt entity.DeliveryAttempt, result entity.CommandResult, event entity.OutboxEvent) error {
+	return r.mutate(ctx, operationUpdateDeliveryAttempt,
+		affectedMutation(queryDeliveryAttemptUpdate, deliveryAttemptArgs(attempt)),
+		commandResultMutation(result),
+		outboxEventMutation(event),
+	)
+}
+
+func (r *Repository) GetDeliveryRoute(ctx context.Context, id uuid.UUID) (entity.DeliveryRoute, error) {
+	return queryOne(ctx, r.db, operationGetDeliveryRoute, queryDeliveryRouteGet, pgx.NamedArgs{"id": id}, scanDeliveryRoute)
+}
+
+func (r *Repository) FindActiveDeliveryRoute(ctx context.Context, scope value.ScopeRef) (entity.DeliveryRoute, error) {
+	return queryOne(ctx, r.db, operationFindActiveDeliveryRoute, queryDeliveryRouteFindActive, pgx.NamedArgs{
+		"scope_type": string(scope.Type),
+		"scope_ref":  scope.Ref,
+	}, scanDeliveryRoute)
+}
+
+func (r *Repository) GetDeliveryAttempt(ctx context.Context, id uuid.UUID) (entity.DeliveryAttempt, error) {
+	return queryOne(ctx, r.db, operationGetDeliveryAttempt, queryDeliveryAttemptGet, pgx.NamedArgs{"id": id}, scanDeliveryAttempt)
+}
+
+func (r *Repository) GetDeliveryAttemptByDeliveryID(ctx context.Context, deliveryID string) (entity.DeliveryAttempt, error) {
+	return queryOne(ctx, r.db, operationGetDeliveryByDeliveryID, queryDeliveryAttemptGetByID, pgx.NamedArgs{"delivery_id": deliveryID}, scanDeliveryAttempt)
+}
+
+func (r *Repository) ListDeliveryAttempts(ctx context.Context, filter query.DeliveryAttemptFilter) ([]entity.DeliveryAttempt, error) {
+	return queryAll(ctx, r.db, operationListDeliveryAttempts, queryDeliveryAttemptList, deliveryAttemptFilterArgs(filter), scanDeliveryAttempt)
 }
 
 func (r *Repository) GetCommandResult(ctx context.Context, identity query.CommandIdentity) (entity.CommandResult, error) {

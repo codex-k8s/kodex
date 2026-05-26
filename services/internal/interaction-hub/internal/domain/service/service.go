@@ -34,6 +34,7 @@ const (
 	maxPolicyJSONDepth         = 8
 	defaultExpireLimit         = int32(100)
 	maxExpireLimit             = int32(500)
+	maxDeliveryStatusAttempts  = int32(100)
 	aggregateResponse          = "response"
 )
 
@@ -626,20 +627,165 @@ func (s *Service) ListSubscriptions(ctx context.Context, input ListSubscriptions
 	})
 }
 
-func (s *Service) PlanDelivery(ctx context.Context) error {
-	return s.backlog(ctx, enum.OperationPlanDelivery)
+func (s *Service) PlanDelivery(ctx context.Context, input PlanDeliveryInput) (entity.DeliveryAttempt, error) {
+	if err := s.ensureReady(); err != nil {
+		return entity.DeliveryAttempt{}, err
+	}
+	if err := validateCommandMeta(input.Meta); err != nil {
+		return entity.DeliveryAttempt{}, err
+	}
+	input, targetContext, err := s.normalizePlanDeliveryInput(ctx, input)
+	if err != nil {
+		return entity.DeliveryAttempt{}, err
+	}
+	fingerprint, err := fingerprintInput(input)
+	if err != nil {
+		return entity.DeliveryAttempt{}, err
+	}
+	if attempt, ok, err := replayAggregate(ctx, s, input.Meta, enum.OperationPlanDelivery, fingerprint, s.repository.GetDeliveryAttempt); err != nil || ok {
+		return attempt, err
+	}
+
+	route, err := s.deliveryRoute(ctx, input.RouteID, targetContext.Scope)
+	if err != nil {
+		return entity.DeliveryAttempt{}, err
+	}
+	existing, err := s.repository.ListDeliveryAttempts(ctx, query.DeliveryAttemptFilter{Target: input.Target, Limit: maxDeliveryStatusAttempts})
+	if err != nil {
+		return entity.DeliveryAttempt{}, err
+	}
+
+	now := s.clock.Now()
+	attemptID := s.ids.New()
+	attemptNumber := nextAttemptNumber(existing)
+	attempt := entity.DeliveryAttempt{
+		ID:            attemptID,
+		Target:        input.Target,
+		RouteID:       route.ID,
+		DeliveryID:    attemptID.String(),
+		DeliveryKind:  targetContext.DeliveryKind,
+		Status:        enum.DeliveryAttemptStatusQueued,
+		AttemptNumber: attemptNumber,
+		PayloadDigest: deliveryPayloadDigest(targetContext, route, input.CorrelationID, attemptNumber),
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+	result := commandResult(input.Meta, enum.OperationPlanDelivery, interactionevents.AggregateDelivery, attempt.ID, fingerprint, now)
+	event, err := s.outboxEvent(interactionevents.EventDeliveryRequested, interactionevents.AggregateDelivery, attempt.ID, deliveryRequestedPayload(attempt, targetContext, input.CorrelationID), now)
+	if err != nil {
+		return entity.DeliveryAttempt{}, err
+	}
+	if err := s.repository.CreateDeliveryAttemptWithResult(ctx, attempt, result, event); err != nil {
+		return entity.DeliveryAttempt{}, err
+	}
+	return attempt, nil
 }
 
-func (s *Service) RecordDeliveryResult(ctx context.Context) error {
-	return s.backlog(ctx, enum.OperationRecordDeliveryResult)
+func (s *Service) RecordDeliveryResult(ctx context.Context, input RecordDeliveryResultInput) (entity.DeliveryAttempt, error) {
+	if err := s.ensureReady(); err != nil {
+		return entity.DeliveryAttempt{}, err
+	}
+	if err := validateCommandMeta(input.Meta); err != nil {
+		return entity.DeliveryAttempt{}, err
+	}
+	input, err := normalizeRecordDeliveryResultInput(input)
+	if err != nil {
+		return entity.DeliveryAttempt{}, err
+	}
+	fingerprint, err := fingerprintInput(input)
+	if err != nil {
+		return entity.DeliveryAttempt{}, err
+	}
+	if attempt, ok, err := replayAggregate(ctx, s, input.Meta, enum.OperationRecordDeliveryResult, fingerprint, s.repository.GetDeliveryAttempt); err != nil || ok {
+		return attempt, err
+	}
+	resultFingerprint, err := deliveryResultFingerprint(input.Result)
+	if err != nil {
+		return entity.DeliveryAttempt{}, err
+	}
+
+	attempt, err := s.repository.GetDeliveryAttemptByDeliveryID(ctx, input.Result.DeliveryID)
+	if err != nil {
+		return entity.DeliveryAttempt{}, err
+	}
+	if replayed, ok, err := replayDeliveryResultByFingerprint(attempt, resultFingerprint); err != nil || ok {
+		return replayed, err
+	}
+	if attempt.Status.Terminal() {
+		return entity.DeliveryAttempt{}, errs.ErrConflict
+	}
+	now := s.clock.Now()
+	updated, eventType, err := deliveryAttemptWithResult(attempt, input.Result, now)
+	if err != nil {
+		return entity.DeliveryAttempt{}, err
+	}
+	updated.ResultFingerprint = resultFingerprint
+	result := commandResult(input.Meta, enum.OperationRecordDeliveryResult, interactionevents.AggregateDelivery, updated.ID, fingerprint, now)
+	event, err := s.outboxEvent(eventType, interactionevents.AggregateDelivery, updated.ID, deliveryResultPayload(updated), now)
+	if err != nil {
+		return entity.DeliveryAttempt{}, err
+	}
+	if err := s.repository.UpdateDeliveryAttemptWithResult(ctx, updated, result, event); err != nil {
+		if errors.Is(err, errs.ErrConflict) {
+			return s.replayDeliveryResultConflict(ctx, input.Result.DeliveryID, resultFingerprint)
+		}
+		return entity.DeliveryAttempt{}, err
+	}
+	return updated, nil
 }
 
 func (s *Service) RecordChannelCallback(ctx context.Context) error {
 	return s.backlog(ctx, enum.OperationRecordChannelCallback)
 }
 
-func (s *Service) GetDeliveryStatus(ctx context.Context) error {
-	return s.backlog(ctx, enum.OperationGetDeliveryStatus)
+func (s *Service) GetDeliveryStatus(ctx context.Context, input GetDeliveryStatusInput) (DeliveryStatusResult, error) {
+	if err := s.ensureReady(); err != nil {
+		return DeliveryStatusResult{}, err
+	}
+	input.DeliveryID = strings.TrimSpace(input.DeliveryID)
+	if input.Target.ID == uuid.Nil && input.DeliveryID == "" {
+		return DeliveryStatusResult{}, errs.ErrInvalidArgument
+	}
+	var attempts []entity.DeliveryAttempt
+	if input.DeliveryID != "" {
+		attempt, err := s.repository.GetDeliveryAttemptByDeliveryID(ctx, input.DeliveryID)
+		if err != nil {
+			return DeliveryStatusResult{}, err
+		}
+		if input.Target.Valid() && input.Target != attempt.Target {
+			return DeliveryStatusResult{}, errs.ErrConflict
+		}
+		input.Target = attempt.Target
+		attempts = []entity.DeliveryAttempt{attempt}
+	} else {
+		if !input.Target.Valid() {
+			return DeliveryStatusResult{}, errs.ErrInvalidArgument
+		}
+		var err error
+		attempts, err = s.repository.ListDeliveryAttempts(ctx, query.DeliveryAttemptFilter{Target: input.Target, Limit: maxDeliveryStatusAttempts})
+		if err != nil {
+			return DeliveryStatusResult{}, err
+		}
+	}
+
+	result := DeliveryStatusResult{DeliveryAttempts: attempts}
+	switch input.Target.Kind {
+	case value.DeliveryTargetKindRequest:
+		request, err := s.repository.GetInteractionRequest(ctx, input.Target.ID)
+		if err != nil {
+			return DeliveryStatusResult{}, err
+		}
+		result.Request = &request
+	case value.DeliveryTargetKindNotification:
+		notification, err := s.repository.GetNotification(ctx, input.Target.ID)
+		if err != nil {
+			return DeliveryStatusResult{}, err
+		}
+		result.Notification = &notification
+	default:
+		return DeliveryStatusResult{}, errs.ErrInvalidArgument
+	}
+	return result, nil
 }
 
 func (s *Service) backlog(ctx context.Context, operation enum.Operation) error {
@@ -1009,6 +1155,250 @@ func normalizeUpsertSubscriptionInput(input UpsertSubscriptionInput) (UpsertSubs
 	return input, nil
 }
 
+type deliveryTargetContext struct {
+	Target                value.DeliveryTarget
+	Scope                 value.ScopeRef
+	DeliveryKind          enum.DeliveryKind
+	RequestID             string
+	NotificationID        string
+	SubscriptionID        string
+	DeadlineAt            *time.Time
+	ReminderPolicyRef     string
+	NotificationPolicyRef string
+}
+
+func (s *Service) normalizePlanDeliveryInput(ctx context.Context, input PlanDeliveryInput) (PlanDeliveryInput, deliveryTargetContext, error) {
+	if !input.Target.Valid() {
+		return PlanDeliveryInput{}, deliveryTargetContext{}, errs.ErrInvalidArgument
+	}
+	input.CorrelationID = strings.TrimSpace(input.CorrelationID)
+	if len(input.CorrelationID) > maxInteractionRefBytes {
+		return PlanDeliveryInput{}, deliveryTargetContext{}, errs.ErrInvalidArgument
+	}
+	switch input.Target.Kind {
+	case value.DeliveryTargetKindRequest:
+		request, err := s.repository.GetInteractionRequest(ctx, input.Target.ID)
+		if err != nil {
+			return PlanDeliveryInput{}, deliveryTargetContext{}, err
+		}
+		if request.Status.Terminal() {
+			return PlanDeliveryInput{}, deliveryTargetContext{}, errs.ErrConflict
+		}
+		return input, deliveryTargetContext{
+			Target:            input.Target,
+			Scope:             request.Scope,
+			DeliveryKind:      deliveryKindForRequest(request.RequestKind),
+			RequestID:         request.ID.String(),
+			DeadlineAt:        request.DeadlineAt,
+			ReminderPolicyRef: request.ReminderPolicyRef,
+		}, nil
+	case value.DeliveryTargetKindNotification:
+		notification, err := s.repository.GetNotification(ctx, input.Target.ID)
+		if err != nil {
+			return PlanDeliveryInput{}, deliveryTargetContext{}, err
+		}
+		if notification.Status == enum.NotificationStatusExpired || notification.Status == enum.NotificationStatusFailed {
+			return PlanDeliveryInput{}, deliveryTargetContext{}, errs.ErrConflict
+		}
+		return input, deliveryTargetContext{
+			Target:                input.Target,
+			Scope:                 notification.Scope,
+			DeliveryKind:          enum.DeliveryKindNotification,
+			RequestID:             uuidProto(notification.RequestID),
+			NotificationID:        notification.ID.String(),
+			SubscriptionID:        uuidProto(notification.SubscriptionID),
+			DeadlineAt:            notification.ExpiresAt,
+			NotificationPolicyRef: notification.NotificationPolicyRef,
+		}, nil
+	default:
+		return PlanDeliveryInput{}, deliveryTargetContext{}, errs.ErrInvalidArgument
+	}
+}
+
+func deliveryKindForRequest(kind enum.InteractionRequestKind) enum.DeliveryKind {
+	switch kind {
+	case enum.InteractionRequestKindFeedback:
+		return enum.DeliveryKindFeedback
+	case enum.InteractionRequestKindApproval:
+		return enum.DeliveryKindApproval
+	case enum.InteractionRequestKindHumanGate:
+		return enum.DeliveryKindHumanGate
+	default:
+		return ""
+	}
+}
+
+func (s *Service) deliveryRoute(ctx context.Context, routeID uuid.UUID, scope value.ScopeRef) (entity.DeliveryRoute, error) {
+	var route entity.DeliveryRoute
+	var err error
+	if routeID != uuid.Nil {
+		route, err = s.repository.GetDeliveryRoute(ctx, routeID)
+	} else {
+		route, err = s.repository.FindActiveDeliveryRoute(ctx, scope)
+	}
+	if err != nil {
+		return entity.DeliveryRoute{}, err
+	}
+	if route.Status != enum.DeliveryRouteStatusActive || route.Scope != scope {
+		return entity.DeliveryRoute{}, errs.ErrConflict
+	}
+	return route, nil
+}
+
+func normalizeRecordDeliveryResultInput(input RecordDeliveryResultInput) (RecordDeliveryResultInput, error) {
+	result := input.Result
+	result.ContractVersion = strings.TrimSpace(result.ContractVersion)
+	result.DeliveryID = strings.TrimSpace(result.DeliveryID)
+	result.ChannelMessageRef = strings.TrimSpace(result.ChannelMessageRef)
+	result.ErrorCode = strings.TrimSpace(result.ErrorCode)
+	if blank(result.ContractVersion) ||
+		blank(result.DeliveryID) ||
+		len(result.ContractVersion) > maxInteractionRefBytes ||
+		len(result.DeliveryID) > maxInteractionRefBytes ||
+		len(result.ChannelMessageRef) > maxInteractionRefBytes ||
+		len(result.ErrorCode) > maxInteractionRefBytes ||
+		!result.ResultStatus.Valid() ||
+		result.OccurredAt.IsZero() {
+		return RecordDeliveryResultInput{}, errs.ErrInvalidArgument
+	}
+	result.OccurredAt = result.OccurredAt.UTC()
+	if result.RetryAfter != nil {
+		retryAfter := result.RetryAfter.UTC()
+		if retryAfter.Before(result.OccurredAt) {
+			return RecordDeliveryResultInput{}, errs.ErrInvalidArgument
+		}
+		result.RetryAfter = &retryAfter
+	}
+	if result.ErrorCode != "" && sensitiveMetadataKey(result.ErrorCode) {
+		return RecordDeliveryResultInput{}, errs.ErrInvalidArgument
+	}
+	if result.ErrorClass != "" && !result.ErrorClass.Valid() {
+		return RecordDeliveryResultInput{}, errs.ErrInvalidArgument
+	}
+	input.Result = result
+	return input, nil
+}
+
+func deliveryAttemptWithResult(attempt entity.DeliveryAttempt, result value.ChannelDeliveryResult, now time.Time) (entity.DeliveryAttempt, string, error) {
+	attempt.UpdatedAt = now
+	occurredAt := result.OccurredAt
+	attempt.SentAt = &occurredAt
+	attempt.ChannelMessageRef = result.ChannelMessageRef
+
+	switch result.ResultStatus {
+	case enum.ChannelDeliveryResultStatusAccepted:
+		attempt.Status = enum.DeliveryAttemptStatusAccepted
+		attempt.NextRetryAt = nil
+		attempt.ErrorCode = ""
+		attempt.ErrorClass = ""
+		return attempt, interactionevents.EventDeliveryAccepted, nil
+	case enum.ChannelDeliveryResultStatusDeferred:
+		if result.RetryAfter == nil {
+			return entity.DeliveryAttempt{}, "", errs.ErrInvalidArgument
+		}
+		attempt.Status = enum.DeliveryAttemptStatusFailed
+		attempt.NextRetryAt = result.RetryAfter
+		attempt.ErrorClass = result.ErrorClass
+		if attempt.ErrorClass == "" {
+			attempt.ErrorClass = enum.DeliveryErrorClassTemporary
+		}
+		attempt.ErrorCode = result.ErrorCode
+		if attempt.ErrorCode == "" {
+			attempt.ErrorCode = "DELIVERY_DEFERRED"
+		}
+		return attempt, interactionevents.EventDeliveryFailed, nil
+	case enum.ChannelDeliveryResultStatusRejected:
+		attempt.Status = enum.DeliveryAttemptStatusFailed
+		attempt.NextRetryAt = nil
+		attempt.ErrorClass = result.ErrorClass
+		if attempt.ErrorClass == "" {
+			attempt.ErrorClass = enum.DeliveryErrorClassPolicy
+		}
+		attempt.ErrorCode = result.ErrorCode
+		if attempt.ErrorCode == "" {
+			attempt.ErrorCode = "DELIVERY_REJECTED"
+		}
+		return attempt, interactionevents.EventDeliveryFailed, nil
+	case enum.ChannelDeliveryResultStatusFailed:
+		if result.ErrorClass == "" || result.ErrorCode == "" {
+			return entity.DeliveryAttempt{}, "", errs.ErrInvalidArgument
+		}
+		attempt.Status = enum.DeliveryAttemptStatusFailed
+		attempt.NextRetryAt = result.RetryAfter
+		attempt.ErrorClass = result.ErrorClass
+		attempt.ErrorCode = result.ErrorCode
+		return attempt, interactionevents.EventDeliveryFailed, nil
+	default:
+		return entity.DeliveryAttempt{}, "", errs.ErrInvalidArgument
+	}
+}
+
+func replayDeliveryResultByFingerprint(attempt entity.DeliveryAttempt, resultFingerprint string) (entity.DeliveryAttempt, bool, error) {
+	if resultFingerprint == "" {
+		return entity.DeliveryAttempt{}, false, errs.ErrInvalidArgument
+	}
+	if attempt.ResultFingerprint == "" {
+		return entity.DeliveryAttempt{}, false, nil
+	}
+	if attempt.ResultFingerprint != resultFingerprint {
+		return entity.DeliveryAttempt{}, true, errs.ErrConflict
+	}
+	return attempt, true, nil
+}
+
+func (s *Service) replayDeliveryResultConflict(ctx context.Context, deliveryID string, resultFingerprint string) (entity.DeliveryAttempt, error) {
+	current, err := s.repository.GetDeliveryAttemptByDeliveryID(ctx, deliveryID)
+	if err != nil {
+		return entity.DeliveryAttempt{}, err
+	}
+	replayed, ok, err := replayDeliveryResultByFingerprint(current, resultFingerprint)
+	if err != nil {
+		return entity.DeliveryAttempt{}, err
+	}
+	if !ok {
+		return entity.DeliveryAttempt{}, errs.ErrConflict
+	}
+	return replayed, nil
+}
+
+type deliveryResultFingerprintInput struct {
+	ContractVersion   string                           `json:"contract_version"`
+	DeliveryID        string                           `json:"delivery_id"`
+	ResultStatus      enum.ChannelDeliveryResultStatus `json:"result_status"`
+	ChannelMessageRef string                           `json:"channel_message_ref,omitempty"`
+	ErrorCode         string                           `json:"error_code,omitempty"`
+	ErrorClass        enum.DeliveryErrorClass          `json:"error_class,omitempty"`
+	RetryAfter        string                           `json:"retry_after,omitempty"`
+	OccurredAt        string                           `json:"occurred_at"`
+}
+
+func deliveryResultFingerprint(result value.ChannelDeliveryResult) (string, error) {
+	fingerprint, err := fingerprintInput(deliveryResultFingerprintInput{
+		ContractVersion:   result.ContractVersion,
+		DeliveryID:        result.DeliveryID,
+		ResultStatus:      result.ResultStatus,
+		ChannelMessageRef: result.ChannelMessageRef,
+		ErrorCode:         result.ErrorCode,
+		ErrorClass:        result.ErrorClass,
+		RetryAfter:        timeProto(result.RetryAfter),
+		OccurredAt:        timeProto(&result.OccurredAt),
+	})
+	if err != nil {
+		return "", err
+	}
+	return "sha256:" + fingerprint, nil
+}
+
+func nextAttemptNumber(attempts []entity.DeliveryAttempt) int32 {
+	var max int32
+	for _, attempt := range attempts {
+		if attempt.AttemptNumber > max {
+			max = attempt.AttemptNumber
+		}
+	}
+	return max + 1
+}
+
 func normalizeActorRefs(input []value.ActorRef) ([]value.ActorRef, error) {
 	if len(input) == 0 || len(input) > maxInteractionRefs {
 		return nil, errs.ErrInvalidArgument
@@ -1315,6 +1705,103 @@ func subscriptionEventPayload(subscription entity.Subscription) interactionevent
 		Status:          string(subscription.Status),
 		Version:         subscription.Version,
 	}
+}
+
+func deliveryRequestedPayload(attempt entity.DeliveryAttempt, target deliveryTargetContext, correlationID string) interactionevents.Payload {
+	return interactionevents.Payload{
+		DeliveryAttemptID: attempt.ID.String(),
+		DeliveryID:        attempt.DeliveryID,
+		RequestID:         target.RequestID,
+		NotificationID:    target.NotificationID,
+		SubscriptionID:    target.SubscriptionID,
+		RouteID:           attempt.RouteID.String(),
+		AttemptNumber:     int64(attempt.AttemptNumber),
+		ScopeType:         string(target.Scope.Type),
+		ScopeRef:          target.Scope.Ref,
+		RequestKind:       string(kindFromDeliveryKind(target.DeliveryKind)),
+		Status:            string(attempt.Status),
+		CorrelationID:     correlationID,
+		DeadlineAt:        timeProto(target.DeadlineAt),
+	}
+}
+
+func deliveryResultPayload(attempt entity.DeliveryAttempt) interactionevents.Payload {
+	return interactionevents.Payload{
+		DeliveryAttemptID: attempt.ID.String(),
+		DeliveryID:        attempt.DeliveryID,
+		RequestID:         deliveryTargetRequestID(attempt.Target),
+		NotificationID:    deliveryTargetNotificationID(attempt.Target),
+		RouteID:           attempt.RouteID.String(),
+		AttemptNumber:     int64(attempt.AttemptNumber),
+		ChannelMessageRef: attempt.ChannelMessageRef,
+		ErrorCode:         attempt.ErrorCode,
+		ErrorClass:        string(attempt.ErrorClass),
+		NextRetryAt:       timeProto(attempt.NextRetryAt),
+		Status:            string(attempt.Status),
+	}
+}
+
+func deliveryTargetRequestID(target value.DeliveryTarget) string {
+	if target.Kind != value.DeliveryTargetKindRequest {
+		return ""
+	}
+	return target.ID.String()
+}
+
+func deliveryTargetNotificationID(target value.DeliveryTarget) string {
+	if target.Kind != value.DeliveryTargetKindNotification {
+		return ""
+	}
+	return target.ID.String()
+}
+
+func kindFromDeliveryKind(kind enum.DeliveryKind) enum.InteractionRequestKind {
+	switch kind {
+	case enum.DeliveryKindFeedback:
+		return enum.InteractionRequestKindFeedback
+	case enum.DeliveryKindApproval:
+		return enum.InteractionRequestKindApproval
+	case enum.DeliveryKindHumanGate:
+		return enum.InteractionRequestKindHumanGate
+	default:
+		return ""
+	}
+}
+
+type deliveryDigestInput struct {
+	TargetKind            value.DeliveryTargetKind `json:"target_kind"`
+	TargetID              string                   `json:"target_id"`
+	DeliveryKind          enum.DeliveryKind        `json:"delivery_kind"`
+	RouteID               string                   `json:"route_id"`
+	ScopeType             enum.ScopeType           `json:"scope_type"`
+	ScopeRef              string                   `json:"scope_ref"`
+	CorrelationID         string                   `json:"correlation_id,omitempty"`
+	DeadlineAt            string                   `json:"deadline_at,omitempty"`
+	ReminderPolicyRef     string                   `json:"reminder_policy_ref,omitempty"`
+	NotificationPolicyRef string                   `json:"notification_policy_ref,omitempty"`
+	RoutingPolicyRef      string                   `json:"routing_policy_ref,omitempty"`
+	AttemptNumber         int32                    `json:"attempt_number"`
+}
+
+func deliveryPayloadDigest(target deliveryTargetContext, route entity.DeliveryRoute, correlationID string, attemptNumber int32) string {
+	fingerprint, err := fingerprintInput(deliveryDigestInput{
+		TargetKind:            target.Target.Kind,
+		TargetID:              target.Target.ID.String(),
+		DeliveryKind:          target.DeliveryKind,
+		RouteID:               route.ID.String(),
+		ScopeType:             target.Scope.Type,
+		ScopeRef:              target.Scope.Ref,
+		CorrelationID:         correlationID,
+		DeadlineAt:            timeProto(target.DeadlineAt),
+		ReminderPolicyRef:     target.ReminderPolicyRef,
+		NotificationPolicyRef: target.NotificationPolicyRef,
+		RoutingPolicyRef:      route.RoutingPolicyRef,
+		AttemptNumber:         attemptNumber,
+	})
+	if err != nil {
+		return ""
+	}
+	return "sha256:" + fingerprint
 }
 
 func contextRef(refs []value.ExternalRef, kind string) string {

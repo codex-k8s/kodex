@@ -5,6 +5,13 @@ import "fmt"
 var (
 	queryCommandResultCreate       = mustLoadQuery("command_result__create")
 	queryCommandResultGet          = mustLoadQuery("command_result__get")
+	queryDeliveryAttemptCreate     = mustLoadQuery("delivery_attempt__create")
+	queryDeliveryAttemptGet        = mustLoadQuery("delivery_attempt__get")
+	queryDeliveryAttemptGetByID    = mustLoadQuery("delivery_attempt__get_by_delivery_id")
+	queryDeliveryAttemptList       = mustLoadQuery("delivery_attempt__list")
+	queryDeliveryAttemptUpdate     = mustLoadQuery("delivery_attempt__update")
+	queryDeliveryRouteFindActive   = mustLoadQuery("delivery_route__find_active")
+	queryDeliveryRouteGet          = mustLoadQuery("delivery_route__get")
 	queryMessageCreate             = mustLoadQuery("message__create")
 	queryMessageGet                = mustLoadQuery("message__get")
 	queryMessageList               = mustLoadQuery("message__list")

@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-22
 updated_at: 2026-05-26
-related_issues: [582, 768, 800, 821]
+related_issues: [582, 768, 800, 821, 835]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -214,6 +214,8 @@ One-way уведомления и reminders не создают `InteractionRequ
 
 `DeliveryAttempt` описывает одну попытку доставки request или notification.
 
+Подписочный контекст проходит через связанное уведомление: `notification_id` указывает на `Notification`, а `Notification.subscription_id` хранит safe ref подписки. Прямая delivery attempt цель по subscription не вводится в текущем proto-контракте.
+
 | Поле | Тип | Может быть пустым | Примечание |
 |---|---|---:|---|
 | `id` | uuid | нет | Идентификатор попытки. |
@@ -228,6 +230,7 @@ One-way уведомления и reminders не создают `InteractionRequ
 | `error_code` | text | да | Короткий безопасный код ошибки. |
 | `error_class` | enum | да | `temporary`, `permanent`, `auth`, `rate_limited`, `policy`. |
 | `payload_digest` | text | нет | Digest нормализованного delivery command. |
+| `result_fingerprint` | text | да | Digest нормализованного safe delivery result; используется для идемпотентного replay по `delivery_id` без повторного outbox event. |
 | `created_at`, `updated_at`, `sent_at` | timestamptz | да | Временные метки. |
 
 Ровно одно из полей `request_id` или `notification_id` должно быть заполнено. Статус request не выводится из статуса one-way notification; request завершает только `InteractionResponse` или доменная команда истечения/отмены.

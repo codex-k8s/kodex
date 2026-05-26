@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-22
 updated_at: 2026-05-26
-related_issues: [582, 768, 781, 800, 821]
+related_issues: [582, 768, 781, 800, 821, 835]
 related_prs: []
 related_adrs: []
 approvals:
@@ -76,7 +76,7 @@ approvals:
 | Subscription engine | Правила подписки на события и области, создание notification intent и reminders. |
 | Outbox-доставщик | Публикация `interaction.*` событий через `platform-event-log`. |
 
-Текущая сервисная основа реализует authoritative lifecycle `Notification` и `Subscription`: создание notification intent, создание/изменение/отключение/чтение подписок, command idempotency, optimistic concurrency и safe `interaction.*` outbox events. Планирование доставки, delivery attempts, callback routes и channel package runtime остаются отдельным delivery/callback контуром.
+Текущая сервисная основа реализует authoritative lifecycle `Notification`, `Subscription` и delivery attempts: создание notification intent, создание/изменение/отключение/чтение подписок, `PlanDelivery`, `RecordDeliveryResult`, `GetDeliveryStatus`, command idempotency, optimistic concurrency для subscription и safe `interaction.*` outbox events. Callback routes, channel contract integration и channel package runtime остаются отдельным delivery/callback контуром.
 
 ## Основные потоки
 
@@ -239,9 +239,9 @@ sequenceDiagram
 - `interaction.human_gate.requested`;
 - `interaction.notification.requested`;
 - `interaction.subscription.updated`;
-- `interaction.delivery.requested`;
-- `interaction.delivery.accepted`;
-- `interaction.delivery.failed`;
+- `interaction.delivery.requested` с safe refs попытки, route и request/notification target;
+- `interaction.delivery.accepted` с safe channel message ref;
+- `interaction.delivery.failed` с bounded diagnostics и retry metadata;
 - `interaction.callback.received`;
 - `interaction.request.response_recorded`;
 - `interaction.request.expired`;

@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-22
 updated_at: 2026-05-26
-related_issues: [582, 768, 781, 783, 800, 806, 821]
+related_issues: [582, 768, 781, 783, 800, 806, 821, 835]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -57,7 +57,7 @@ approvals:
 | `DisableSubscription` | gRPC command | `interaction.subscription.manage` | `command_id` + expected version | Отключает подписку. |
 | `ListSubscriptions` | gRPC query | `interaction.subscription.read` | нет | Читает подписки по scope или subscriber. |
 | `PlanDelivery` | gRPC command | `interaction.delivery.plan` | `command_id` | Выбирает route и создаёт delivery attempt. |
-| `RecordDeliveryResult` | gRPC command | `interaction.delivery.update` | `delivery_id` | Фиксирует ответ package workload через согласованный runtime boundary. |
+| `RecordDeliveryResult` | gRPC command | `interaction.delivery.update` | `delivery_id` + safe result fingerprint | Фиксирует ответ package workload через согласованный runtime boundary; replay того же `delivery_id/result` возвращает сохранённое состояние без нового event. |
 | `RecordChannelCallback` | gRPC command | `interaction.callback.record` | `callback_id` | Принимает безопасный callback envelope от gateway. |
 | `GetDeliveryStatus` | gRPC query | `interaction.delivery.read` | нет | Читает состояние request/notification и delivery attempts. |
 
@@ -163,9 +163,9 @@ Delivery-specific safe error codes:
 | `interaction.human_gate.requested` | request | `request_id`, `scope`, `agent_run_ref`, `deadline_at` |
 | `interaction.notification.requested` | notification | `notification_id`, `scope`, `notification_kind`, `priority`, `source_owner_kind`, `status` |
 | `interaction.subscription.updated` | subscription | `subscription_id`, `scope`, `subscriber_ref`, `source_owner_kind`, `status`, `version` |
-| `interaction.delivery.requested` | delivery | `delivery_attempt_id`, `request_id`, `route_id`, `attempt_number` |
-| `interaction.delivery.accepted` | delivery | `delivery_attempt_id`, `channel_message_ref` |
-| `interaction.delivery.failed` | delivery | `delivery_attempt_id`, `error_code`, `error_class`, `next_retry_at` |
+| `interaction.delivery.requested` | delivery | `delivery_attempt_id`, `delivery_id`, `request_id` или `notification_id`, `route_id`, `attempt_number`, `status` |
+| `interaction.delivery.accepted` | delivery | `delivery_attempt_id`, `delivery_id`, `channel_message_ref`, `status` |
+| `interaction.delivery.failed` | delivery | `delivery_attempt_id`, `delivery_id`, `error_code`, `error_class`, `next_retry_at`, `status` |
 | `interaction.callback.received` | callback | `callback_id`, `delivery_attempt_id`, `processing_status` |
 | `interaction.request.response_recorded` | request | `request_id`, `response_id`, `response_action`, `actor_ref`, `owner_request_ref`, `owner_decision_ref` |
 | `interaction.request.expired` | request | `request_id`, `deadline_at` |
@@ -180,7 +180,7 @@ Delivery-specific safe error codes:
 | AsyncAPI `interaction.*` | Подготовлен как контрактный срез `IH-1`. |
 | Go-контракты transport/events | Сгенерированы из proto и AsyncAPI. |
 | Действия доступа | Добавлены в общий каталог системных действий. |
-| Go-реализация `interaction-hub` | Готовы process config, health/readiness/metrics, gRPC registration, PostgreSQL repository, service-local outbox, thread/message MVP lifecycle, feedback/approval/Human gate request lifecycle и lifecycle уведомлений/подписок. Delivery attempt и callback операции остаются будущими срезами и возвращают `Unimplemented`. |
+| Go-реализация `interaction-hub` | Готовы process config, health/readiness/metrics, gRPC registration, PostgreSQL repository, service-local outbox, thread/message MVP lifecycle, feedback/approval/Human gate request lifecycle, lifecycle уведомлений/подписок и delivery attempt lifecycle. Callback операции остаются будущим срезом и возвращают `Unimplemented`. |
 | MCP-инструменты | Зафиксированы как контрактный задел `platform-mcp-server`; реализация зависит от готовности доменного контракта. |
 | Channel package integration | Зафиксирована как гибрид package-owned runtime + channel contract; конкретные каналы не проектируются. |
 | Gateway callback OpenAPI | Каркас закреплён в `specs/openapi/integration-gateway.v1.yaml`; активация маршрута требует owner-среза `interaction-hub`. |

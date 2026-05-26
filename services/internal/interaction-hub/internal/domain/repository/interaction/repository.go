@@ -35,6 +35,13 @@ type Repository interface {
 	UpdateSubscriptionWithResult(context.Context, entity.Subscription, int64, entity.CommandResult, entity.OutboxEvent) error
 	GetSubscription(context.Context, uuid.UUID) (entity.Subscription, error)
 	ListSubscriptions(context.Context, query.SubscriptionFilter) ([]entity.Subscription, value.PageResult, error)
+	CreateDeliveryAttemptWithResult(context.Context, entity.DeliveryAttempt, entity.CommandResult, entity.OutboxEvent) error
+	UpdateDeliveryAttemptWithResult(context.Context, entity.DeliveryAttempt, entity.CommandResult, entity.OutboxEvent) error
+	GetDeliveryRoute(context.Context, uuid.UUID) (entity.DeliveryRoute, error)
+	FindActiveDeliveryRoute(context.Context, value.ScopeRef) (entity.DeliveryRoute, error)
+	GetDeliveryAttempt(context.Context, uuid.UUID) (entity.DeliveryAttempt, error)
+	GetDeliveryAttemptByDeliveryID(context.Context, string) (entity.DeliveryAttempt, error)
+	ListDeliveryAttempts(context.Context, query.DeliveryAttemptFilter) ([]entity.DeliveryAttempt, error)
 	GetCommandResult(context.Context, query.CommandIdentity) (entity.CommandResult, error)
 	ClaimOutboxEvents(ctx context.Context, limit int, now time.Time, lockedUntil time.Time) ([]entity.OutboxEvent, error)
 	MarkOutboxEventPublished(ctx context.Context, id uuid.UUID, attemptCount int, publishedAt time.Time) error

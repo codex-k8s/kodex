@@ -328,3 +328,124 @@ func (v SubscriptionStatus) Valid() bool {
 		return false
 	}
 }
+
+type DeliverySurfaceKind string
+
+const (
+	DeliverySurfaceKindWebConsole      DeliverySurfaceKind = "web_console"
+	DeliverySurfaceKindVoice           DeliverySurfaceKind = "voice"
+	DeliverySurfaceKindProviderSurface DeliverySurfaceKind = "provider_surface"
+	DeliverySurfaceKindChannelPackage  DeliverySurfaceKind = "channel_package"
+	DeliverySurfaceKindSystem          DeliverySurfaceKind = "system"
+)
+
+func (v DeliverySurfaceKind) Valid() bool {
+	switch v {
+	case DeliverySurfaceKindWebConsole, DeliverySurfaceKindVoice, DeliverySurfaceKindProviderSurface, DeliverySurfaceKindChannelPackage, DeliverySurfaceKindSystem:
+		return true
+	default:
+		return false
+	}
+}
+
+type DeliveryRouteStatus string
+
+const (
+	DeliveryRouteStatusActive   DeliveryRouteStatus = "active"
+	DeliveryRouteStatusPaused   DeliveryRouteStatus = "paused"
+	DeliveryRouteStatusDisabled DeliveryRouteStatus = "disabled"
+)
+
+func (v DeliveryRouteStatus) Valid() bool {
+	switch v {
+	case DeliveryRouteStatusActive, DeliveryRouteStatusPaused, DeliveryRouteStatusDisabled:
+		return true
+	default:
+		return false
+	}
+}
+
+type DeliveryKind string
+
+const (
+	DeliveryKindFeedback     DeliveryKind = "feedback"
+	DeliveryKindApproval     DeliveryKind = "approval"
+	DeliveryKindHumanGate    DeliveryKind = "human_gate"
+	DeliveryKindNotification DeliveryKind = "notification"
+)
+
+func (v DeliveryKind) Valid() bool {
+	switch v {
+	case DeliveryKindFeedback, DeliveryKindApproval, DeliveryKindHumanGate, DeliveryKindNotification:
+		return true
+	default:
+		return false
+	}
+}
+
+type DeliveryAttemptStatus string
+
+const (
+	DeliveryAttemptStatusQueued    DeliveryAttemptStatus = "queued"
+	DeliveryAttemptStatusSent      DeliveryAttemptStatus = "sent"
+	DeliveryAttemptStatusAccepted  DeliveryAttemptStatus = "accepted"
+	DeliveryAttemptStatusDelivered DeliveryAttemptStatus = "delivered"
+	DeliveryAttemptStatusFailed    DeliveryAttemptStatus = "failed"
+	DeliveryAttemptStatusCancelled DeliveryAttemptStatus = "cancelled"
+	DeliveryAttemptStatusExpired   DeliveryAttemptStatus = "expired"
+)
+
+func (v DeliveryAttemptStatus) Valid() bool {
+	switch v {
+	case DeliveryAttemptStatusQueued, DeliveryAttemptStatusSent, DeliveryAttemptStatusAccepted, DeliveryAttemptStatusDelivered, DeliveryAttemptStatusFailed, DeliveryAttemptStatusCancelled, DeliveryAttemptStatusExpired:
+		return true
+	default:
+		return false
+	}
+}
+
+func (v DeliveryAttemptStatus) Terminal() bool {
+	switch v {
+	case DeliveryAttemptStatusDelivered, DeliveryAttemptStatusFailed, DeliveryAttemptStatusCancelled, DeliveryAttemptStatusExpired:
+		return true
+	default:
+		return false
+	}
+}
+
+type DeliveryErrorClass string
+
+const (
+	DeliveryErrorClassTemporary   DeliveryErrorClass = "temporary"
+	DeliveryErrorClassPermanent   DeliveryErrorClass = "permanent"
+	DeliveryErrorClassAuth        DeliveryErrorClass = "auth"
+	DeliveryErrorClassRateLimited DeliveryErrorClass = "rate_limited"
+	DeliveryErrorClassPolicy      DeliveryErrorClass = "policy"
+)
+
+func (v DeliveryErrorClass) Valid() bool {
+	switch v {
+	case DeliveryErrorClassTemporary, DeliveryErrorClassPermanent, DeliveryErrorClassAuth, DeliveryErrorClassRateLimited, DeliveryErrorClassPolicy:
+		return true
+	default:
+		return false
+	}
+}
+
+type ChannelDeliveryResultStatus string
+
+const (
+	ChannelDeliveryResultStatusAccepted ChannelDeliveryResultStatus = "accepted"
+	ChannelDeliveryResultStatusDeferred ChannelDeliveryResultStatus = "deferred"
+	ChannelDeliveryResultStatusRejected ChannelDeliveryResultStatus = "rejected"
+	ChannelDeliveryResultStatusFailed   ChannelDeliveryResultStatus = "failed"
+)
+
+func (v ChannelDeliveryResultStatus) Valid() bool {
+	switch v {
+	case ChannelDeliveryResultStatusAccepted, ChannelDeliveryResultStatusDeferred, ChannelDeliveryResultStatusRejected, ChannelDeliveryResultStatusFailed:
+		return true
+	default:
+		return false
+	}
+}

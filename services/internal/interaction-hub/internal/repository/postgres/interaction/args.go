@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
@@ -209,6 +210,45 @@ func subscriptionFilterArgs(filter query.SubscriptionFilter) pageQueryArgs {
 		"subscriber_ref": filter.SubscriberRef,
 		"status":         string(filter.Status),
 	})
+}
+
+func deliveryAttemptArgs(attempt entity.DeliveryAttempt) pgx.NamedArgs {
+	return pgx.NamedArgs{
+		"id":                  attempt.ID,
+		"request_id":          postgreslib.NullableUUID(deliveryTargetID(attempt.Target, value.DeliveryTargetKindRequest)),
+		"notification_id":     postgreslib.NullableUUID(deliveryTargetID(attempt.Target, value.DeliveryTargetKindNotification)),
+		"route_id":            attempt.RouteID,
+		"delivery_id":         attempt.DeliveryID,
+		"delivery_kind":       string(attempt.DeliveryKind),
+		"status":              string(attempt.Status),
+		"channel_message_ref": attempt.ChannelMessageRef,
+		"attempt_number":      attempt.AttemptNumber,
+		"next_retry_at":       postgreslib.NullableTime(attempt.NextRetryAt),
+		"error_code":          attempt.ErrorCode,
+		"error_class":         string(attempt.ErrorClass),
+		"payload_digest":      attempt.PayloadDigest,
+		"result_fingerprint":  attempt.ResultFingerprint,
+		"created_at":          attempt.CreatedAt,
+		"updated_at":          attempt.UpdatedAt,
+		"sent_at":             postgreslib.NullableTime(attempt.SentAt),
+	}
+}
+
+func deliveryTargetID(target value.DeliveryTarget, kind value.DeliveryTargetKind) *uuid.UUID {
+	if target.Kind != kind || target.ID == uuid.Nil {
+		return nil
+	}
+	id := target.ID
+	return &id
+}
+
+func deliveryAttemptFilterArgs(filter query.DeliveryAttemptFilter) pgx.NamedArgs {
+	return pgx.NamedArgs{
+		"request_id":      postgreslib.NullableUUID(deliveryTargetID(filter.Target, value.DeliveryTargetKindRequest)),
+		"notification_id": postgreslib.NullableUUID(deliveryTargetID(filter.Target, value.DeliveryTargetKindNotification)),
+		"delivery_id":     filter.DeliveryID,
+		"limit":           filter.Limit,
+	}
 }
 
 func commandResultArgs(result entity.CommandResult) pgx.NamedArgs {

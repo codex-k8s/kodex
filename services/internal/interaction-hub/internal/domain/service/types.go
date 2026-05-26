@@ -5,6 +5,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/codex-k8s/kodex/services/internal/interaction-hub/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/interaction-hub/internal/domain/types/enum"
 	"github.com/codex-k8s/kodex/services/internal/interaction-hub/internal/domain/types/value"
 )
@@ -167,4 +168,28 @@ type ListSubscriptionsInput struct {
 	SubscriberRef string
 	Status        enum.SubscriptionStatus
 	Page          value.PageRequest
+}
+
+type PlanDeliveryInput struct {
+	Meta          value.CommandMeta
+	Target        value.DeliveryTarget
+	RouteID       uuid.UUID
+	CorrelationID string
+}
+
+type RecordDeliveryResultInput struct {
+	Meta   value.CommandMeta
+	Result value.ChannelDeliveryResult
+}
+
+type GetDeliveryStatusInput struct {
+	Meta       value.QueryMeta
+	Target     value.DeliveryTarget
+	DeliveryID string
+}
+
+type DeliveryStatusResult struct {
+	Request          *entity.InteractionRequest
+	Notification     *entity.Notification
+	DeliveryAttempts []entity.DeliveryAttempt
 }

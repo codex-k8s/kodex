@@ -357,6 +357,79 @@ func TestRepositoryIntegrationNotificationSubscriptionLifecycle(t *testing.T) {
 	}
 }
 
+func TestRepositoryIntegrationDeliveryAttemptLifecycle(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openIntegrationPool(t, ctx)
+	repository := NewRepository(pool)
+	now := time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC)
+
+	request := testInteractionRequest(now)
+	createResult := testCommandResult(uuid.New(), "request-delivery", enum.OperationRequestApproval, interactionevents.AggregateRequest, request.ID, "request-delivery-fingerprint", now)
+	createEvent := testOutboxEvent(interactionevents.EventApprovalRequested, interactionevents.AggregateRequest, request.ID, now)
+	if err := repository.CreateInteractionRequestWithResult(ctx, request, createResult, createEvent); err != nil {
+		t.Fatalf("create request: %v", err)
+	}
+	route := testDeliveryRoute(now)
+	insertDeliveryRoute(t, ctx, pool, route)
+	storedRoute, err := repository.GetDeliveryRoute(ctx, route.ID)
+	if err != nil {
+		t.Fatalf("get route: %v", err)
+	}
+	if storedRoute.Scope != route.Scope || storedRoute.RoutingPolicyRef != "policy:route-standard" {
+		t.Fatalf("route = %+v, want stored route", storedRoute)
+	}
+	activeRoute, err := repository.FindActiveDeliveryRoute(ctx, route.Scope)
+	if err != nil {
+		t.Fatalf("find active route: %v", err)
+	}
+	if activeRoute.ID != route.ID {
+		t.Fatalf("active route = %+v, want %s", activeRoute, route.ID)
+	}
+
+	attempt := testDeliveryAttempt(request.ID, route.ID, now.Add(time.Minute))
+	attemptResult := testCommandResult(uuid.New(), "delivery-plan", enum.OperationPlanDelivery, interactionevents.AggregateDelivery, attempt.ID, "delivery-plan-fingerprint", attempt.CreatedAt)
+	attemptEvent := testOutboxEvent(interactionevents.EventDeliveryRequested, interactionevents.AggregateDelivery, attempt.ID, attempt.CreatedAt)
+	if err := repository.CreateDeliveryAttemptWithResult(ctx, attempt, attemptResult, attemptEvent); err != nil {
+		t.Fatalf("create delivery attempt: %v", err)
+	}
+	storedAttempt, err := repository.GetDeliveryAttemptByDeliveryID(ctx, attempt.DeliveryID)
+	if err != nil {
+		t.Fatalf("get attempt by delivery id: %v", err)
+	}
+	if storedAttempt.Target.ID != request.ID || storedAttempt.Status != enum.DeliveryAttemptStatusQueued || storedAttempt.PayloadDigest != attempt.PayloadDigest {
+		t.Fatalf("stored attempt = %+v, want queued request attempt", storedAttempt)
+	}
+	listedAttempts, err := repository.ListDeliveryAttempts(ctx, query.DeliveryAttemptFilter{Target: attempt.Target, Limit: 10})
+	if err != nil {
+		t.Fatalf("list attempts: %v", err)
+	}
+	if len(listedAttempts) != 1 || listedAttempts[0].ID != attempt.ID {
+		t.Fatalf("listed attempts = %+v, want created attempt", listedAttempts)
+	}
+
+	accepted := storedAttempt
+	sentAt := now.Add(2 * time.Minute)
+	accepted.Status = enum.DeliveryAttemptStatusAccepted
+	accepted.ChannelMessageRef = "channel:message-1"
+	accepted.ResultFingerprint = "sha256:" + strings.Repeat("f", 64)
+	accepted.SentAt = &sentAt
+	accepted.UpdatedAt = sentAt
+	acceptedResult := testCommandResult(uuid.New(), "delivery-result", enum.OperationRecordDeliveryResult, interactionevents.AggregateDelivery, accepted.ID, "delivery-result-fingerprint", sentAt)
+	acceptedEvent := testOutboxEvent(interactionevents.EventDeliveryAccepted, interactionevents.AggregateDelivery, accepted.ID, sentAt)
+	if err := repository.UpdateDeliveryAttemptWithResult(ctx, accepted, acceptedResult, acceptedEvent); err != nil {
+		t.Fatalf("update delivery attempt: %v", err)
+	}
+	storedAccepted, err := repository.GetDeliveryAttempt(ctx, accepted.ID)
+	if err != nil {
+		t.Fatalf("get accepted attempt: %v", err)
+	}
+	if storedAccepted.Status != enum.DeliveryAttemptStatusAccepted || storedAccepted.ChannelMessageRef != "channel:message-1" || storedAccepted.ResultFingerprint != accepted.ResultFingerprint || storedAccepted.SentAt == nil {
+		t.Fatalf("accepted attempt = %+v, want accepted with channel ref", storedAccepted)
+	}
+}
+
 func testThread(now time.Time) entity.ConversationThread {
 	return entity.ConversationThread{
 		ID:              uuid.New(),
@@ -494,6 +567,57 @@ func testSubscription(now time.Time) entity.Subscription {
 		SubscriptionPolicyRef: "policy:ops-notifications",
 		CreatedAt:             now,
 		UpdatedAt:             now,
+	}
+}
+
+func testDeliveryRoute(now time.Time) entity.DeliveryRoute {
+	return entity.DeliveryRoute{
+		ID:                     uuid.New(),
+		Scope:                  value.ScopeRef{Type: enum.ScopeTypeService, Ref: "agent-manager"},
+		SurfaceKind:            enum.DeliverySurfaceKindWebConsole,
+		ChannelCapabilityRef:   "capability:web-console",
+		PackageInstallationRef: "package:interaction-core",
+		RoutingPolicyRef:       "policy:route-standard",
+		Status:                 enum.DeliveryRouteStatusActive,
+		CreatedAt:              now,
+		UpdatedAt:              now,
+	}
+}
+
+func testDeliveryAttempt(requestID uuid.UUID, routeID uuid.UUID, now time.Time) entity.DeliveryAttempt {
+	return entity.DeliveryAttempt{
+		ID:            uuid.New(),
+		Target:        value.DeliveryTarget{Kind: value.DeliveryTargetKindRequest, ID: requestID},
+		RouteID:       routeID,
+		DeliveryID:    "delivery-" + uuid.NewString(),
+		DeliveryKind:  enum.DeliveryKindApproval,
+		Status:        enum.DeliveryAttemptStatusQueued,
+		AttemptNumber: 1,
+		PayloadDigest: "sha256:" + strings.Repeat("e", 64),
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+}
+
+func insertDeliveryRoute(t *testing.T, ctx context.Context, pool *pgxpool.Pool, route entity.DeliveryRoute) {
+	t.Helper()
+
+	_, err := pool.Exec(ctx, `
+INSERT INTO interaction_hub_delivery_routes (
+    id,
+    scope_type,
+    scope_ref,
+    surface_kind,
+    channel_capability_ref,
+    package_installation_ref,
+    routing_policy_ref,
+    status,
+    created_at,
+    updated_at
+) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+`, route.ID, string(route.Scope.Type), route.Scope.Ref, string(route.SurfaceKind), route.ChannelCapabilityRef, route.PackageInstallationRef, route.RoutingPolicyRef, string(route.Status), route.CreatedAt, route.UpdatedAt)
+	if err != nil {
+		t.Fatalf("insert delivery route: %v", err)
 	}
 }
 
