@@ -9,6 +9,7 @@ import (
 	serviceprocess "github.com/codex-k8s/kodex/libs/go/serviceprocess"
 	hookservice "github.com/codex-k8s/kodex/services/internal/codex-hook-ingress/internal/domain/service"
 	hookstub "github.com/codex-k8s/kodex/services/internal/codex-hook-ingress/internal/repository/stub/hook"
+	opsstub "github.com/codex-k8s/kodex/services/internal/codex-hook-ingress/internal/repository/stub/ops"
 	commandtransport "github.com/codex-k8s/kodex/services/internal/codex-hook-ingress/internal/transport/command"
 )
 
@@ -38,6 +39,9 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 			SupportedEvents:      events,
 			DisabledRoutes:       disabledRoutes,
 			RouteFailurePolicy:   cfg.RouteFailureMode(),
+			OpsFeedRetention:     cfg.OpsFeedRetention,
+			RateLimitWindow:      cfg.RateLimitWindow,
+			RateLimitBurst:       cfg.RateLimitBurst,
 		},
 		hookservice.Dependencies{
 			Clock:          systemClock{},
@@ -45,6 +49,14 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 			SourceVerifier: hookservice.StaticSourceVerifier{},
 			Sanitizer:      hookservice.DefaultSanitizer{},
 			RouteRegistry:  hookservice.NewDefaultRouteRegistry(),
+			OpsFeed: opsstub.NewRepository(opsstub.Config{
+				Capacity:  cfg.OpsFeedCapacity,
+				Retention: cfg.OpsFeedRetention,
+			}),
+			RateLimiter: hookservice.NewFixedWindowRateLimiter(hookservice.RateLimitConfig{
+				Window: cfg.RateLimitWindow,
+				Burst:  cfg.RateLimitBurst,
+			}),
 		},
 	)
 	logicalHandler := commandtransport.NewHandler(domainService)

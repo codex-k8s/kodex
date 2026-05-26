@@ -6,7 +6,7 @@ status: active
 owner_role: EM
 created_at: 2026-05-22
 updated_at: 2026-05-26
-related_issues: [698, 753, 778, 786, 793, 808, 322]
+related_issues: [698, 753, 778, 786, 793, 808, 823, 322]
 related_prs: []
 related_docsets:
   - docs/domains/codex-hook-ingress/product/requirements.md
@@ -50,7 +50,8 @@ approvals:
 | CHI-3 | #793 | Сервисный каркас `codex-hook-ingress`: process, config, graceful shutdown, health/readiness/metrics, in-process logical `SubmitHookEvent`, source verifier placeholder, schema validation hook, sanitizer boundary, idempotency repository stub без raw payload storage. |
 | CHI-4 | #808 | Route registry и dispatch безопасных частей events через owner ports/stubs к `agent-manager`, `runtime-manager`, `provider-hub`, `governance-manager`, `interaction-hub` и operations/realtime placeholder без бизнес-состояния в ingress. |
 | CHI-5 | не назначено | `PermissionRequest` и policy-controlled `PreToolUse` bridge к gate/decision у `governance-manager`, ожиданию flow у `agent-manager` и delivery через `interaction-hub`. |
-| CHI-6 | не назначено | Realtime/ops feed, retention, sanitizer metrics, rate limits, backpressure и operator diagnostics. |
+| CHI-6a | #823 | Bounded in-memory realtime/ops feed, retention TTL/capacity, sanitizer metrics, route diagnostics, fixed-window rate limits, safe backpressure и operator diagnostics без служебной БД. |
+| CHI-6b | не назначено | Persistent ops feed или integration с operations-hub, если требуется восстановление ленты после рестарта, отдельные retention jobs и SRE runbook. |
 | CHI-7 | не назначено | Capability context refs для skills: связь с `package-hub`, выбором `agent-manager` и materialization `runtime-manager`; без skill catalog в ingress. |
 | CHI-8 | не назначено | Deploy-контур: Dockerfile, Kubernetes manifests, migration job только если нужна служебная БД, smoke, runbook и monitoring. |
 

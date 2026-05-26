@@ -75,6 +75,52 @@ func TestConfigValidateRejectsUnknownRouteFailurePolicy(t *testing.T) {
 	}
 }
 
+func TestConfigValidateRejectsInvalidOpsFeedAndRateLimitPolicy(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name   string
+		mutate func(*Config)
+	}{
+		{
+			name: "ops feed capacity",
+			mutate: func(cfg *Config) {
+				cfg.OpsFeedCapacity = 0
+			},
+		},
+		{
+			name: "ops feed retention",
+			mutate: func(cfg *Config) {
+				cfg.OpsFeedRetention = 0
+			},
+		},
+		{
+			name: "rate limit window",
+			mutate: func(cfg *Config) {
+				cfg.RateLimitWindow = 0
+			},
+		},
+		{
+			name: "rate limit burst",
+			mutate: func(cfg *Config) {
+				cfg.RateLimitBurst = 0
+			},
+		},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := validConfig()
+			tc.mutate(&cfg)
+			if err := cfg.Validate(); err == nil {
+				t.Fatal("Validate() error is nil, want policy validation error")
+			}
+		})
+	}
+}
+
 func validConfig() Config {
 	return Config{
 		HTTPAddr:                 ":8080",
@@ -87,6 +133,10 @@ func validConfig() Config {
 		MaxTextPreviewBytes:      4096,
 		MaxBoundedErrorBytes:     8192,
 		RouteFailurePolicy:       defaultRouteFailurePolicy,
+		OpsFeedCapacity:          1024,
+		OpsFeedRetention:         1,
+		RateLimitWindow:          1,
+		RateLimitBurst:           300,
 		LogicalTransportReadOnly: true,
 	}
 }

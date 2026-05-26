@@ -33,13 +33,14 @@
 | CHI-2 | #786 | готово | Контракт hook emitter/local sidecar, runtime config JSON Schema, logical `SubmitHookEvent`, sanitizer до buffer/send, auth, idempotency, ordering, retry, bounded buffer, backpressure и failure policy без выбора physical transport. |
 | CHI-3 | #793 | готово | Сервисный каркас `services/internal/codex-hook-ingress`: process, config, graceful shutdown, health/readiness/metrics, in-process logical `SubmitHookEvent`, source binding placeholder, schema validation hook, sanitizer boundary, idempotency repository stub без raw payload storage. |
 | CHI-4 | #808 | готово | Route registry и dispatch безопасных частей hook events через owner ports/stubs к `agent-manager`, `runtime-manager`, `provider-hub`, `governance-manager`, `interaction-hub` и operations/realtime placeholder; unsupported/disabled/downstream-failed routes дают safe diagnostics и не считаются успешной доставкой. |
+| CHI-6a | #823 | готово | Bounded in-memory ops/realtime feed, TTL/capacity retention, sanitizer metrics, route diagnostics, fixed-window rate limits, safe backpressure и operator diagnostics поверх CHI-4 registry без служебной БД. |
 
 ## Текущий бэклог агента #5
 
 | Срез | Что осталось |
 |---|---|
 | CHI-5 | `PermissionRequest` и policy-controlled `PreToolUse` bridge через `governance-manager`, ожидание flow у `agent-manager` и delivery через `interaction-hub`. |
-| CHI-6 | Realtime/ops feed, retention, sanitizer metrics, rate limits, backpressure и operator diagnostics. |
+| CHI-6b | Persistent ops feed или integration с operations-hub, если понадобится восстановление ленты после рестарта и отдельные retention jobs. |
 | CHI-7 | Capability context refs для Codex skills без skill catalog в ingress. |
 | CHI-8 | Deploy-контур: Dockerfile, manifests, migration job только если нужна служебная БД, smoke, runbook и monitoring. |
 

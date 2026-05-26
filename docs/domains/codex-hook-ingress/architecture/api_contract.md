@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-22
 updated_at: 2026-05-26
-related_issues: [698, 753, 778, 786, 793, 808, 322]
+related_issues: [698, 753, 778, 786, 793, 808, 823, 322]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -46,14 +46,14 @@ approvals:
 |---|---|---|---|---|
 | `SubmitHookEvent` | internal command, transport TBD | Source binding + run/session/slot/scope | `event_id` + `payload_digest` | Принимает normalized envelope и возвращает hook handler result для Codex command hook. |
 | `GetHookIngressStatus` | internal read | Service/operator auth | нет | Readiness, версия схемы, включённые events, лимиты и dependency status без секретов. |
-| `ListRecentHookOperationalEvents` | internal read | Ops/UI route auth | cursor | Короткая безопасная лента по run/session/slot. Может быть реализована через operations/interaction контур. |
+| `ListRecentHookOperationalEvents` | internal read | Ops/UI route auth | cursor | Короткая безопасная лента по run/session/slot. В сервисном MVP существует только in-process read boundary поверх bounded in-memory feed; физический endpoint не выбран. |
 | `AckHookDelivery` | internal callback, optional | Downstream service auth | `event_id` + route | Подтверждает доставку, если выбран asynchronous route. |
 
 `SubmitHookEvent` является единственной обязательной MVP-операцией. Остальные операции могут быть реализованы соседними контурами или отложены, если будут лишними для MVP.
 
 Logical response CHI-4 также содержит route delivery diagnostics. Unsupported, disabled или failed route не считается успешной доставкой. Diagnostic text должен быть safe: без raw downstream error, prompt, tool input/output, stdout/stderr, provider payload, kubeconfig и secret values.
 
-## Состояние реализации CHI-3/CHI-4
+## Состояние реализации CHI-3/CHI-4/CHI-6a
 
 Кодовый каркас `services/internal/codex-hook-ingress` реализует `SubmitHookEvent` только как in-process logical boundary в `internal/transport/command`. Он нужен для проверки доменного use-case, idempotency и sanitizer boundary без фиксации physical transport.
 
@@ -63,7 +63,9 @@ Process config CHI-4 добавляет `KODEX_CODEX_HOOK_INGRESS_DISABLED_ROUTE
 
 Idempotency record имеет состояние завершённости delivery. Повтор после уже завершённого delivery возвращает cached diagnostics; повтор после incomplete delivery не считается успешным cached replay и пытается дозавершить canonical dispatch.
 
-В CHI-3/CHI-4 не создаются proto, OpenAPI, AsyncAPI, HTTP/gRPC handler для `SubmitHookEvent` и network client emitter/sidecar. Служебный HTTP-процесс отдаёт только `/health/livez`, `/health/readyz` и `/metrics`.
+CHI-6a добавляет bounded in-memory ops/realtime feed, безопасный snapshot diagnostics, sanitizer/route counters, payload/latency buckets, fixed-window logical rate limit и backpressure перед downstream dispatch. Ops entry содержит только safe summary, event kind, route result, owner target, digest, size bucket, status, reject reason и timestamps. Перегрузка возвращает `hook.rate_limited` или `hook.backpressure` и не считается успешной доставкой.
+
+В CHI-3/CHI-4/CHI-6a не создаются proto, OpenAPI, AsyncAPI, HTTP/gRPC handler для `SubmitHookEvent` и network client emitter/sidecar. Служебный HTTP-процесс отдаёт только `/health/livez`, `/health/readyz` и `/metrics`.
 
 ## Логический контракт hook emitter/local sidecar
 
@@ -240,6 +242,7 @@ Routes:
 | `hook.payload_rejected` | Forbidden field, binary data, raw transcript/session dump или secret-like content. |
 | `hook.duplicate_conflict` | Повторный `event_id` пришёл с другим digest. |
 | `hook.rate_limited` | Превышен лимит source/run/event class. |
+| `hook.backpressure` | Bounded ops/feed admission не может безопасно принять событие перед dispatch. |
 | `hook.owner_unavailable` | Downstream-владелец недоступен. |
 | `hook.decision_timeout` | Для permission/pre-tool bridge не получено решение от governance/interaction контуров до timeout. |
 | `hook.route_rejected` | Сервис-владелец отклонил safe event по доменным правилам. |
@@ -253,11 +256,13 @@ Routes:
 | Envelope size | 64 KiB. |
 | Preview per text field | 4 KiB. |
 | Bounded error | 8 KiB. |
-| High-frequency realtime events | Лимит по source/run/event class, с деградацией до sampling. |
+| Ops feed capacity | Bounded in-memory feed, стартовое значение `1024` entries через `KODEX_CODEX_HOOK_INGRESS_OPS_FEED_CAPACITY`. |
+| Ops feed retention | Стартовое значение `15m` через `KODEX_CODEX_HOOK_INGRESS_OPS_FEED_RETENTION`; записи удаляются из памяти без persistent storage. |
+| High-frequency realtime events | Fixed-window limit по source/run/event class, стартово `300` событий за `1m` через `KODEX_CODEX_HOOK_INGRESS_RATE_LIMIT_BURST` и `KODEX_CODEX_HOOK_INGRESS_RATE_LIMIT_WINDOW`. |
 | Audit-critical events | Не дропать молча; при перегрузке возвращать fail-closed или retryable error. |
 | Decision bridge timeout | Определяется `governance-manager` policy; risky requests fail-closed. |
 
-Конкретные значения должны стать typed platform settings или transport config с audit trail.
+Текущие значения являются service config для MVP. Если они должны меняться на лету, следующий срез переводит их в typed platform settings с audit trail.
 
 ## Совместимость
 

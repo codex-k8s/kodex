@@ -18,10 +18,14 @@ const (
 	ErrInvalidArgument Code = "hook.invalid_argument"
 	// ErrInvalidBinding means source/run/session/slot binding is not accepted.
 	ErrInvalidBinding Code = "hook.invalid_binding"
+	// ErrBackpressure means the ingress-side bounded diagnostics buffer cannot admit more events.
+	ErrBackpressure Code = "hook.backpressure"
 	// ErrPayloadRejected means sanitizer boundary rejected safe payload metadata.
 	ErrPayloadRejected Code = "hook.payload_rejected"
 	// ErrPayloadTooLarge means the normalized envelope exceeds configured schema limits.
 	ErrPayloadTooLarge Code = "hook.payload_too_large"
+	// ErrRateLimited means source/run/event class exceeded the logical SubmitHookEvent admission limit.
+	ErrRateLimited Code = "hook.rate_limited"
 	// ErrUnsupportedEvent means the hook event is outside the MVP set.
 	ErrUnsupportedEvent Code = "hook.unsupported_event"
 )
