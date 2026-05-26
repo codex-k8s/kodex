@@ -168,6 +168,7 @@ spec:
         - libs/go/serviceprocess
         - libs/go/servicemain
         - proto/kodex/agents/v1
+        - proto/kodex/providers/v1
     interaction-hub:
       value: "0.1.0"
       bumpOn:

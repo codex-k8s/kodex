@@ -84,22 +84,22 @@ func NewAgentToolsHandler(client AgentManagerClient) *AgentToolsHandler {
 
 // StartSession routes agent.session.start to agent-manager.
 func (handler *AgentToolsHandler) StartSession(ctx context.Context, _ *mcpsdk.CallToolRequest, input StartAgentSessionInput) (*mcpsdk.CallToolResult, AgentSessionToolOutput, error) {
-	return routeAgentTool(ctx, input, startAgentSessionRequest, handler.client.StartAgentSession, agentSessionToolOutput, ToolAgentSessionStart)
+	return routeOwnerTool(ctx, input, startAgentSessionRequest, handler.client.StartAgentSession, agentSessionToolOutput, ToolAgentSessionStart)
 }
 
 // StartRun routes agent.run.start to agent-manager.
 func (handler *AgentToolsHandler) StartRun(ctx context.Context, _ *mcpsdk.CallToolRequest, input StartAgentRunInput) (*mcpsdk.CallToolResult, AgentRunToolOutput, error) {
-	return routeAgentTool(ctx, input, startAgentRunRequest, handler.client.StartAgentRun, agentRunToolOutput, ToolAgentRunStart)
+	return routeOwnerTool(ctx, input, startAgentRunRequest, handler.client.StartAgentRun, agentRunToolOutput, ToolAgentRunStart)
 }
 
 // RecordRunState routes agent.run.record_state to agent-manager.
 func (handler *AgentToolsHandler) RecordRunState(ctx context.Context, _ *mcpsdk.CallToolRequest, input RecordRunStateInput) (*mcpsdk.CallToolResult, AgentRunToolOutput, error) {
-	return routeAgentTool(ctx, input, recordRunStateRequest, handler.client.RecordRunState, agentRunToolOutput, ToolAgentRunRecordState)
+	return routeOwnerTool(ctx, input, recordRunStateRequest, handler.client.RecordRunState, agentRunToolOutput, ToolAgentRunRecordState)
 }
 
 // RecordSessionSnapshot routes agent.session.record_snapshot to agent-manager.
 func (handler *AgentToolsHandler) RecordSessionSnapshot(ctx context.Context, _ *mcpsdk.CallToolRequest, input RecordSessionSnapshotInput) (*mcpsdk.CallToolResult, AgentSnapshotToolOutput, error) {
-	return routeAgentTool(ctx, input, recordSessionSnapshotRequest, handler.client.RecordSessionStateSnapshot, agentSnapshotToolOutput, ToolAgentSessionRecordSnapshot)
+	return routeOwnerTool(ctx, input, recordSessionSnapshotRequest, handler.client.RecordSessionStateSnapshot, agentSnapshotToolOutput, ToolAgentSessionRecordSnapshot)
 }
 
 // ReadRunContext returns a bounded diagnostic view of session and run state.
@@ -127,26 +127,6 @@ func (handler *AgentToolsHandler) ReadRunContext(ctx context.Context, _ *mcpsdk.
 	output.Runs = agentRunSummaries(listResponse.GetRuns())
 	output.Page = pageSummary(listResponse.GetPage())
 	return nil, output, nil
-}
-
-func routeAgentTool[Input any, Request any, Response any, Output any](
-	ctx context.Context,
-	input Input,
-	build func(Input) (Request, error),
-	call func(context.Context, Request) (Response, error),
-	cast func(Response) Output,
-	tool string,
-) (*mcpsdk.CallToolResult, Output, error) {
-	var empty Output
-	request, err := build(input)
-	if err != nil {
-		return nil, empty, err
-	}
-	response, err := call(ctx, request)
-	if err != nil {
-		return nil, empty, ownerToolError(tool, err)
-	}
-	return nil, cast(response), nil
 }
 
 func agentSessionToolOutput(response *agentsv1.AgentSessionResponse) AgentSessionToolOutput {
@@ -343,21 +323,20 @@ func queryMeta(input AgentQueryMetaInput) (*agentsv1.QueryMeta, error) {
 }
 
 func actor(input AgentActorInput) (*agentsv1.Actor, error) {
-	if strings.TrimSpace(input.Type) == "" {
-		return nil, invalidInput("actor.type is required")
+	actorType, actorID, err := actorFields(input.Type, input.ID)
+	if err != nil {
+		return nil, err
 	}
-	if strings.TrimSpace(input.ID) == "" {
-		return nil, invalidInput("actor.id is required")
-	}
-	return &agentsv1.Actor{Type: strings.TrimSpace(input.Type), Id: strings.TrimSpace(input.ID)}, nil
+	return &agentsv1.Actor{Type: actorType, Id: actorID}, nil
 }
 
 func requestContext(input AgentRequestContextInput) (*agentsv1.RequestContext, error) {
-	if strings.TrimSpace(input.Source) == "" {
-		return nil, invalidInput("request_context.source is required")
+	source, err := safeRequestSource(input.Source)
+	if err != nil {
+		return nil, err
 	}
 	return &agentsv1.RequestContext{
-		Source:       strings.TrimSpace(input.Source),
+		Source:       source,
 		TraceId:      optionalString(input.TraceID),
 		SessionId:    optionalString(input.SessionID),
 		ClientIpHash: optionalString(input.ClientIPHash),
@@ -478,14 +457,7 @@ func agentRunSummary(run *agentsv1.AgentRun) AgentRunSummary {
 }
 
 func agentRunSummaries(runs []*agentsv1.AgentRun) []AgentRunSummary {
-	if len(runs) == 0 {
-		return nil
-	}
-	result := make([]AgentRunSummary, 0, len(runs))
-	for _, run := range runs {
-		result = append(result, agentRunSummary(run))
-	}
-	return result
+	return summarizeItems(runs, agentRunSummary)
 }
 
 func agentSessionSnapshotSummary(snapshot *agentsv1.AgentSessionStateSnapshot) AgentSessionSnapshotSummary {

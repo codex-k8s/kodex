@@ -17,6 +17,7 @@ type Config struct {
 	SessionTimeout  time.Duration
 	OwnerRoutes     ownerclients.Catalog
 	AgentManager    AgentManagerClient
+	ProviderHub     ProviderHubClient
 	AuthRequired    bool
 	AuthToken       string
 	AuthScope       string

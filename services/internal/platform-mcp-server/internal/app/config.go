@@ -10,6 +10,7 @@ import (
 
 	agentmanagerclient "github.com/codex-k8s/kodex/services/internal/platform-mcp-server/internal/clients/agentmanager"
 	ownerclients "github.com/codex-k8s/kodex/services/internal/platform-mcp-server/internal/clients/owners"
+	providerhubclient "github.com/codex-k8s/kodex/services/internal/platform-mcp-server/internal/clients/providerhub"
 	mcptransport "github.com/codex-k8s/kodex/services/internal/platform-mcp-server/internal/transport/mcp"
 )
 
@@ -32,7 +33,7 @@ type Config struct {
 // MCPConfig contains MCP HTTP transport and registry settings.
 type MCPConfig struct {
 	Path            string        `env:"PATH" envDefault:"/mcp"`
-	RegistryVersion string        `env:"REGISTRY_VERSION" envDefault:"mcp-2"`
+	RegistryVersion string        `env:"REGISTRY_VERSION" envDefault:"mcp-4"`
 	ToolsPageSize   int           `env:"TOOLS_PAGE_SIZE" envDefault:"100"`
 	JSONResponse    bool          `env:"JSON_RESPONSE" envDefault:"true"`
 	SessionTimeout  time.Duration `env:"SESSION_TIMEOUT" envDefault:"30m"`
@@ -98,6 +99,12 @@ func (cfg Config) Validate() error {
 	if strings.TrimSpace(cfg.AgentManager.AuthToken) == "" {
 		return fmt.Errorf("KODEX_PLATFORM_MCP_SERVER_AGENT_MANAGER_GRPC_AUTH_TOKEN is required")
 	}
+	if !cfg.ProviderHub.Enabled {
+		return fmt.Errorf("KODEX_PLATFORM_MCP_SERVER_PROVIDER_HUB_ENABLED must stay enabled for provider tools")
+	}
+	if strings.TrimSpace(cfg.ProviderHub.AuthToken) == "" {
+		return fmt.Errorf("KODEX_PLATFORM_MCP_SERVER_PROVIDER_HUB_GRPC_AUTH_TOKEN is required")
+	}
 	_, err := cfg.OwnerRouteCatalog()
 	return err
 }
@@ -117,7 +124,7 @@ func (cfg Config) OwnerRouteCatalog() (ownerclients.Catalog, error) {
 }
 
 // MCPTransportConfig converts process config to the MCP transport runtime contract.
-func (cfg Config) MCPTransportConfig(routes ownerclients.Catalog, agentManager mcptransport.AgentManagerClient) mcptransport.Config {
+func (cfg Config) MCPTransportConfig(routes ownerclients.Catalog, agentManager mcptransport.AgentManagerClient, providerHub mcptransport.ProviderHubClient) mcptransport.Config {
 	return mcptransport.Config{
 		ServiceName:     serviceName,
 		RegistryVersion: strings.TrimSpace(cfg.MCP.RegistryVersion),
@@ -126,6 +133,7 @@ func (cfg Config) MCPTransportConfig(routes ownerclients.Catalog, agentManager m
 		SessionTimeout:  cfg.MCP.SessionTimeout,
 		OwnerRoutes:     routes,
 		AgentManager:    agentManager,
+		ProviderHub:     providerHub,
 		AuthRequired:    cfg.MCP.AuthRequired,
 		AuthToken:       strings.TrimSpace(cfg.MCP.AuthToken),
 		AuthScope:       strings.TrimSpace(cfg.MCP.AuthScope),
@@ -137,6 +145,16 @@ func (cfg Config) MCPTransportConfig(routes ownerclients.Catalog, agentManager m
 func (cfg Config) AgentManagerClientConfig() agentmanagerclient.Config {
 	route := cfg.AgentManager.route(ownerclients.ServiceAgentManager, "agent-manager:9090")
 	return agentmanagerclient.Config{
+		Addr:      route.GRPCAddr,
+		AuthToken: route.AuthToken,
+		Timeout:   route.Timeout,
+	}
+}
+
+// ProviderHubClientConfig returns the owner client settings for provider-hub.
+func (cfg Config) ProviderHubClientConfig() providerhubclient.Config {
+	route := cfg.ProviderHub.route(ownerclients.ServiceProviderHub, "provider-hub:9090")
+	return providerhubclient.Config{
 		Addr:      route.GRPCAddr,
 		AuthToken: route.AuthToken,
 		Timeout:   route.Timeout,
