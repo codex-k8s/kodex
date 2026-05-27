@@ -861,6 +861,8 @@ const (
 	FollowUpIntentStatus_FOLLOW_UP_INTENT_STATUS_CREATED     FollowUpIntentStatus = 3
 	FollowUpIntentStatus_FOLLOW_UP_INTENT_STATUS_FAILED      FollowUpIntentStatus = 4
 	FollowUpIntentStatus_FOLLOW_UP_INTENT_STATUS_CANCELLED   FollowUpIntentStatus = 5
+	FollowUpIntentStatus_FOLLOW_UP_INTENT_STATUS_UPDATED     FollowUpIntentStatus = 6
+	FollowUpIntentStatus_FOLLOW_UP_INTENT_STATUS_COMMENTED   FollowUpIntentStatus = 7
 )
 
 // Enum value maps for FollowUpIntentStatus.
@@ -872,6 +874,8 @@ var (
 		3: "FOLLOW_UP_INTENT_STATUS_CREATED",
 		4: "FOLLOW_UP_INTENT_STATUS_FAILED",
 		5: "FOLLOW_UP_INTENT_STATUS_CANCELLED",
+		6: "FOLLOW_UP_INTENT_STATUS_UPDATED",
+		7: "FOLLOW_UP_INTENT_STATUS_COMMENTED",
 	}
 	FollowUpIntentStatus_value = map[string]int32{
 		"FOLLOW_UP_INTENT_STATUS_UNSPECIFIED": 0,
@@ -880,6 +884,8 @@ var (
 		"FOLLOW_UP_INTENT_STATUS_CREATED":     3,
 		"FOLLOW_UP_INTENT_STATUS_FAILED":      4,
 		"FOLLOW_UP_INTENT_STATUS_CANCELLED":   5,
+		"FOLLOW_UP_INTENT_STATUS_UPDATED":     6,
+		"FOLLOW_UP_INTENT_STATUS_COMMENTED":   7,
 	}
 )
 
@@ -908,6 +914,62 @@ func (x FollowUpIntentStatus) Number() protoreflect.EnumNumber {
 // Deprecated: Use FollowUpIntentStatus.Descriptor instead.
 func (FollowUpIntentStatus) EnumDescriptor() ([]byte, []int) {
 	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{14}
+}
+
+// FollowUpDispatchKind selects the typed provider command for a follow-up intent.
+type FollowUpDispatchKind int32
+
+const (
+	FollowUpDispatchKind_FOLLOW_UP_DISPATCH_KIND_UNSPECIFIED    FollowUpDispatchKind = 0
+	FollowUpDispatchKind_FOLLOW_UP_DISPATCH_KIND_CREATE_ISSUE   FollowUpDispatchKind = 1
+	FollowUpDispatchKind_FOLLOW_UP_DISPATCH_KIND_UPDATE_ISSUE   FollowUpDispatchKind = 2
+	FollowUpDispatchKind_FOLLOW_UP_DISPATCH_KIND_CREATE_COMMENT FollowUpDispatchKind = 3
+	FollowUpDispatchKind_FOLLOW_UP_DISPATCH_KIND_UPDATE_COMMENT FollowUpDispatchKind = 4
+)
+
+// Enum value maps for FollowUpDispatchKind.
+var (
+	FollowUpDispatchKind_name = map[int32]string{
+		0: "FOLLOW_UP_DISPATCH_KIND_UNSPECIFIED",
+		1: "FOLLOW_UP_DISPATCH_KIND_CREATE_ISSUE",
+		2: "FOLLOW_UP_DISPATCH_KIND_UPDATE_ISSUE",
+		3: "FOLLOW_UP_DISPATCH_KIND_CREATE_COMMENT",
+		4: "FOLLOW_UP_DISPATCH_KIND_UPDATE_COMMENT",
+	}
+	FollowUpDispatchKind_value = map[string]int32{
+		"FOLLOW_UP_DISPATCH_KIND_UNSPECIFIED":    0,
+		"FOLLOW_UP_DISPATCH_KIND_CREATE_ISSUE":   1,
+		"FOLLOW_UP_DISPATCH_KIND_UPDATE_ISSUE":   2,
+		"FOLLOW_UP_DISPATCH_KIND_CREATE_COMMENT": 3,
+		"FOLLOW_UP_DISPATCH_KIND_UPDATE_COMMENT": 4,
+	}
+)
+
+func (x FollowUpDispatchKind) Enum() *FollowUpDispatchKind {
+	p := new(FollowUpDispatchKind)
+	*p = x
+	return p
+}
+
+func (x FollowUpDispatchKind) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (FollowUpDispatchKind) Descriptor() protoreflect.EnumDescriptor {
+	return file_kodex_agents_v1_agent_manager_proto_enumTypes[15].Descriptor()
+}
+
+func (FollowUpDispatchKind) Type() protoreflect.EnumType {
+	return &file_kodex_agents_v1_agent_manager_proto_enumTypes[15]
+}
+
+func (x FollowUpDispatchKind) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use FollowUpDispatchKind.Descriptor instead.
+func (FollowUpDispatchKind) EnumDescriptor() ([]byte, []int) {
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{15}
 }
 
 // AgentActivityKind classifies a safe timeline entry.
@@ -962,11 +1024,11 @@ func (x AgentActivityKind) String() string {
 }
 
 func (AgentActivityKind) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_agents_v1_agent_manager_proto_enumTypes[15].Descriptor()
+	return file_kodex_agents_v1_agent_manager_proto_enumTypes[16].Descriptor()
 }
 
 func (AgentActivityKind) Type() protoreflect.EnumType {
-	return &file_kodex_agents_v1_agent_manager_proto_enumTypes[15]
+	return &file_kodex_agents_v1_agent_manager_proto_enumTypes[16]
 }
 
 func (x AgentActivityKind) Number() protoreflect.EnumNumber {
@@ -975,7 +1037,7 @@ func (x AgentActivityKind) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use AgentActivityKind.Descriptor instead.
 func (AgentActivityKind) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{15}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{16}
 }
 
 // AgentActivityStatus is the lifecycle status of one timeline entry.
@@ -1030,11 +1092,11 @@ func (x AgentActivityStatus) String() string {
 }
 
 func (AgentActivityStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_agents_v1_agent_manager_proto_enumTypes[16].Descriptor()
+	return file_kodex_agents_v1_agent_manager_proto_enumTypes[17].Descriptor()
 }
 
 func (AgentActivityStatus) Type() protoreflect.EnumType {
-	return &file_kodex_agents_v1_agent_manager_proto_enumTypes[16]
+	return &file_kodex_agents_v1_agent_manager_proto_enumTypes[17]
 }
 
 func (x AgentActivityStatus) Number() protoreflect.EnumNumber {
@@ -1043,7 +1105,7 @@ func (x AgentActivityStatus) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use AgentActivityStatus.Descriptor instead.
 func (AgentActivityStatus) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{16}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{17}
 }
 
 // HumanGateStatus is the lifecycle status of a human gate request.
@@ -1089,11 +1151,11 @@ func (x HumanGateStatus) String() string {
 }
 
 func (HumanGateStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_agents_v1_agent_manager_proto_enumTypes[17].Descriptor()
+	return file_kodex_agents_v1_agent_manager_proto_enumTypes[18].Descriptor()
 }
 
 func (HumanGateStatus) Type() protoreflect.EnumType {
-	return &file_kodex_agents_v1_agent_manager_proto_enumTypes[17]
+	return &file_kodex_agents_v1_agent_manager_proto_enumTypes[18]
 }
 
 func (x HumanGateStatus) Number() protoreflect.EnumNumber {
@@ -1102,7 +1164,7 @@ func (x HumanGateStatus) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use HumanGateStatus.Descriptor instead.
 func (HumanGateStatus) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{17}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{18}
 }
 
 // AutomationTriggerKind classifies automation input.
@@ -1148,11 +1210,11 @@ func (x AutomationTriggerKind) String() string {
 }
 
 func (AutomationTriggerKind) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_agents_v1_agent_manager_proto_enumTypes[18].Descriptor()
+	return file_kodex_agents_v1_agent_manager_proto_enumTypes[19].Descriptor()
 }
 
 func (AutomationTriggerKind) Type() protoreflect.EnumType {
-	return &file_kodex_agents_v1_agent_manager_proto_enumTypes[18]
+	return &file_kodex_agents_v1_agent_manager_proto_enumTypes[19]
 }
 
 func (x AutomationTriggerKind) Number() protoreflect.EnumNumber {
@@ -1161,7 +1223,7 @@ func (x AutomationTriggerKind) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use AutomationTriggerKind.Descriptor instead.
 func (AutomationTriggerKind) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{18}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{19}
 }
 
 // AutomationStatus is the automation binding lifecycle status.
@@ -1201,11 +1263,11 @@ func (x AutomationStatus) String() string {
 }
 
 func (AutomationStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_agents_v1_agent_manager_proto_enumTypes[19].Descriptor()
+	return file_kodex_agents_v1_agent_manager_proto_enumTypes[20].Descriptor()
 }
 
 func (AutomationStatus) Type() protoreflect.EnumType {
-	return &file_kodex_agents_v1_agent_manager_proto_enumTypes[19]
+	return &file_kodex_agents_v1_agent_manager_proto_enumTypes[20]
 }
 
 func (x AutomationStatus) Number() protoreflect.EnumNumber {
@@ -1214,7 +1276,7 @@ func (x AutomationStatus) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use AutomationStatus.Descriptor instead.
 func (AutomationStatus) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{19}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{20}
 }
 
 // CommandMeta is required for every mutating command.
@@ -6816,20 +6878,18 @@ type DispatchFollowUpIntentRequest struct {
 	state                  protoimpl.MessageState             `protogen:"open.v1"`
 	Meta                   *CommandMeta                       `protobuf:"bytes,1,opt,name=meta,proto3" json:"meta,omitempty"`
 	FollowUpIntentId       string                             `protobuf:"bytes,2,opt,name=follow_up_intent_id,json=followUpIntentId,proto3" json:"follow_up_intent_id,omitempty"`
-	ProjectId              string                             `protobuf:"bytes,3,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
-	RepositoryId           string                             `protobuf:"bytes,4,opt,name=repository_id,json=repositoryId,proto3" json:"repository_id,omitempty"`
-	ProviderSlug           string                             `protobuf:"bytes,5,opt,name=provider_slug,json=providerSlug,proto3" json:"provider_slug,omitempty"`
-	ExternalAccountId      string                             `protobuf:"bytes,6,opt,name=external_account_id,json=externalAccountId,proto3" json:"external_account_id,omitempty"`
-	RepositoryTarget       *v1.ProviderTarget                 `protobuf:"bytes,7,opt,name=repository_target,json=repositoryTarget,proto3" json:"repository_target,omitempty"`
-	Labels                 []string                           `protobuf:"bytes,8,rep,name=labels,proto3" json:"labels,omitempty"`
-	AssigneeProviderLogins []string                           `protobuf:"bytes,9,rep,name=assignee_provider_logins,json=assigneeProviderLogins,proto3" json:"assignee_provider_logins,omitempty"`
-	Milestone              *string                            `protobuf:"bytes,10,opt,name=milestone,proto3,oneof" json:"milestone,omitempty"`
-	WatermarkJson          *string                            `protobuf:"bytes,11,opt,name=watermark_json,json=watermarkJson,proto3,oneof" json:"watermark_json,omitempty"`
-	OperationPolicyContext *v1.ProviderOperationPolicyContext `protobuf:"bytes,12,opt,name=operation_policy_context,json=operationPolicyContext,proto3" json:"operation_policy_context,omitempty"`
-	ApprovalGateRef        *v1.ApprovalGateReference          `protobuf:"bytes,13,opt,name=approval_gate_ref,json=approvalGateRef,proto3" json:"approval_gate_ref,omitempty"`
-	SafeBodyHint           *string                            `protobuf:"bytes,14,opt,name=safe_body_hint,json=safeBodyHint,proto3,oneof" json:"safe_body_hint,omitempty"`
-	unknownFields          protoimpl.UnknownFields
-	sizeCache              protoimpl.SizeCache
+	DispatchKind           FollowUpDispatchKind               `protobuf:"varint,3,opt,name=dispatch_kind,json=dispatchKind,proto3,enum=kodex.agents.v1.FollowUpDispatchKind" json:"dispatch_kind,omitempty"`
+	OperationPolicyContext *v1.ProviderOperationPolicyContext `protobuf:"bytes,4,opt,name=operation_policy_context,json=operationPolicyContext,proto3" json:"operation_policy_context,omitempty"`
+	ApprovalGateRef        *v1.ApprovalGateReference          `protobuf:"bytes,5,opt,name=approval_gate_ref,json=approvalGateRef,proto3" json:"approval_gate_ref,omitempty"`
+	// Types that are valid to be assigned to Command:
+	//
+	//	*DispatchFollowUpIntentRequest_CreateIssue
+	//	*DispatchFollowUpIntentRequest_UpdateIssue
+	//	*DispatchFollowUpIntentRequest_CreateComment
+	//	*DispatchFollowUpIntentRequest_UpdateComment
+	Command       isDispatchFollowUpIntentRequest_Command `protobuf_oneof:"command"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *DispatchFollowUpIntentRequest) Reset() {
@@ -6876,67 +6936,11 @@ func (x *DispatchFollowUpIntentRequest) GetFollowUpIntentId() string {
 	return ""
 }
 
-func (x *DispatchFollowUpIntentRequest) GetProjectId() string {
+func (x *DispatchFollowUpIntentRequest) GetDispatchKind() FollowUpDispatchKind {
 	if x != nil {
-		return x.ProjectId
+		return x.DispatchKind
 	}
-	return ""
-}
-
-func (x *DispatchFollowUpIntentRequest) GetRepositoryId() string {
-	if x != nil {
-		return x.RepositoryId
-	}
-	return ""
-}
-
-func (x *DispatchFollowUpIntentRequest) GetProviderSlug() string {
-	if x != nil {
-		return x.ProviderSlug
-	}
-	return ""
-}
-
-func (x *DispatchFollowUpIntentRequest) GetExternalAccountId() string {
-	if x != nil {
-		return x.ExternalAccountId
-	}
-	return ""
-}
-
-func (x *DispatchFollowUpIntentRequest) GetRepositoryTarget() *v1.ProviderTarget {
-	if x != nil {
-		return x.RepositoryTarget
-	}
-	return nil
-}
-
-func (x *DispatchFollowUpIntentRequest) GetLabels() []string {
-	if x != nil {
-		return x.Labels
-	}
-	return nil
-}
-
-func (x *DispatchFollowUpIntentRequest) GetAssigneeProviderLogins() []string {
-	if x != nil {
-		return x.AssigneeProviderLogins
-	}
-	return nil
-}
-
-func (x *DispatchFollowUpIntentRequest) GetMilestone() string {
-	if x != nil && x.Milestone != nil {
-		return *x.Milestone
-	}
-	return ""
-}
-
-func (x *DispatchFollowUpIntentRequest) GetWatermarkJson() string {
-	if x != nil && x.WatermarkJson != nil {
-		return *x.WatermarkJson
-	}
-	return ""
+	return FollowUpDispatchKind_FOLLOW_UP_DISPATCH_KIND_UNSPECIFIED
 }
 
 func (x *DispatchFollowUpIntentRequest) GetOperationPolicyContext() *v1.ProviderOperationPolicyContext {
@@ -6953,9 +6957,449 @@ func (x *DispatchFollowUpIntentRequest) GetApprovalGateRef() *v1.ApprovalGateRef
 	return nil
 }
 
-func (x *DispatchFollowUpIntentRequest) GetSafeBodyHint() string {
+func (x *DispatchFollowUpIntentRequest) GetCommand() isDispatchFollowUpIntentRequest_Command {
+	if x != nil {
+		return x.Command
+	}
+	return nil
+}
+
+func (x *DispatchFollowUpIntentRequest) GetCreateIssue() *FollowUpCreateIssueCommand {
+	if x != nil {
+		if x, ok := x.Command.(*DispatchFollowUpIntentRequest_CreateIssue); ok {
+			return x.CreateIssue
+		}
+	}
+	return nil
+}
+
+func (x *DispatchFollowUpIntentRequest) GetUpdateIssue() *FollowUpUpdateIssueCommand {
+	if x != nil {
+		if x, ok := x.Command.(*DispatchFollowUpIntentRequest_UpdateIssue); ok {
+			return x.UpdateIssue
+		}
+	}
+	return nil
+}
+
+func (x *DispatchFollowUpIntentRequest) GetCreateComment() *FollowUpCreateCommentCommand {
+	if x != nil {
+		if x, ok := x.Command.(*DispatchFollowUpIntentRequest_CreateComment); ok {
+			return x.CreateComment
+		}
+	}
+	return nil
+}
+
+func (x *DispatchFollowUpIntentRequest) GetUpdateComment() *FollowUpUpdateCommentCommand {
+	if x != nil {
+		if x, ok := x.Command.(*DispatchFollowUpIntentRequest_UpdateComment); ok {
+			return x.UpdateComment
+		}
+	}
+	return nil
+}
+
+type isDispatchFollowUpIntentRequest_Command interface {
+	isDispatchFollowUpIntentRequest_Command()
+}
+
+type DispatchFollowUpIntentRequest_CreateIssue struct {
+	CreateIssue *FollowUpCreateIssueCommand `protobuf:"bytes,10,opt,name=create_issue,json=createIssue,proto3,oneof"`
+}
+
+type DispatchFollowUpIntentRequest_UpdateIssue struct {
+	UpdateIssue *FollowUpUpdateIssueCommand `protobuf:"bytes,11,opt,name=update_issue,json=updateIssue,proto3,oneof"`
+}
+
+type DispatchFollowUpIntentRequest_CreateComment struct {
+	CreateComment *FollowUpCreateCommentCommand `protobuf:"bytes,12,opt,name=create_comment,json=createComment,proto3,oneof"`
+}
+
+type DispatchFollowUpIntentRequest_UpdateComment struct {
+	UpdateComment *FollowUpUpdateCommentCommand `protobuf:"bytes,13,opt,name=update_comment,json=updateComment,proto3,oneof"`
+}
+
+func (*DispatchFollowUpIntentRequest_CreateIssue) isDispatchFollowUpIntentRequest_Command() {}
+
+func (*DispatchFollowUpIntentRequest_UpdateIssue) isDispatchFollowUpIntentRequest_Command() {}
+
+func (*DispatchFollowUpIntentRequest_CreateComment) isDispatchFollowUpIntentRequest_Command() {}
+
+func (*DispatchFollowUpIntentRequest_UpdateComment) isDispatchFollowUpIntentRequest_Command() {}
+
+type FollowUpCreateIssueCommand struct {
+	state                  protoimpl.MessageState `protogen:"open.v1"`
+	ProjectId              string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	RepositoryId           string                 `protobuf:"bytes,2,opt,name=repository_id,json=repositoryId,proto3" json:"repository_id,omitempty"`
+	ProviderSlug           string                 `protobuf:"bytes,3,opt,name=provider_slug,json=providerSlug,proto3" json:"provider_slug,omitempty"`
+	ExternalAccountId      string                 `protobuf:"bytes,4,opt,name=external_account_id,json=externalAccountId,proto3" json:"external_account_id,omitempty"`
+	RepositoryTarget       *v1.ProviderTarget     `protobuf:"bytes,5,opt,name=repository_target,json=repositoryTarget,proto3" json:"repository_target,omitempty"`
+	SafeBodyHint           *string                `protobuf:"bytes,6,opt,name=safe_body_hint,json=safeBodyHint,proto3,oneof" json:"safe_body_hint,omitempty"`
+	Labels                 []string               `protobuf:"bytes,7,rep,name=labels,proto3" json:"labels,omitempty"`
+	AssigneeProviderLogins []string               `protobuf:"bytes,8,rep,name=assignee_provider_logins,json=assigneeProviderLogins,proto3" json:"assignee_provider_logins,omitempty"`
+	Milestone              *string                `protobuf:"bytes,9,opt,name=milestone,proto3,oneof" json:"milestone,omitempty"`
+	WatermarkJson          *string                `protobuf:"bytes,10,opt,name=watermark_json,json=watermarkJson,proto3,oneof" json:"watermark_json,omitempty"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
+}
+
+func (x *FollowUpCreateIssueCommand) Reset() {
+	*x = FollowUpCreateIssueCommand{}
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[67]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FollowUpCreateIssueCommand) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FollowUpCreateIssueCommand) ProtoMessage() {}
+
+func (x *FollowUpCreateIssueCommand) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[67]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FollowUpCreateIssueCommand.ProtoReflect.Descriptor instead.
+func (*FollowUpCreateIssueCommand) Descriptor() ([]byte, []int) {
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{67}
+}
+
+func (x *FollowUpCreateIssueCommand) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *FollowUpCreateIssueCommand) GetRepositoryId() string {
+	if x != nil {
+		return x.RepositoryId
+	}
+	return ""
+}
+
+func (x *FollowUpCreateIssueCommand) GetProviderSlug() string {
+	if x != nil {
+		return x.ProviderSlug
+	}
+	return ""
+}
+
+func (x *FollowUpCreateIssueCommand) GetExternalAccountId() string {
+	if x != nil {
+		return x.ExternalAccountId
+	}
+	return ""
+}
+
+func (x *FollowUpCreateIssueCommand) GetRepositoryTarget() *v1.ProviderTarget {
+	if x != nil {
+		return x.RepositoryTarget
+	}
+	return nil
+}
+
+func (x *FollowUpCreateIssueCommand) GetSafeBodyHint() string {
 	if x != nil && x.SafeBodyHint != nil {
 		return *x.SafeBodyHint
+	}
+	return ""
+}
+
+func (x *FollowUpCreateIssueCommand) GetLabels() []string {
+	if x != nil {
+		return x.Labels
+	}
+	return nil
+}
+
+func (x *FollowUpCreateIssueCommand) GetAssigneeProviderLogins() []string {
+	if x != nil {
+		return x.AssigneeProviderLogins
+	}
+	return nil
+}
+
+func (x *FollowUpCreateIssueCommand) GetMilestone() string {
+	if x != nil && x.Milestone != nil {
+		return *x.Milestone
+	}
+	return ""
+}
+
+func (x *FollowUpCreateIssueCommand) GetWatermarkJson() string {
+	if x != nil && x.WatermarkJson != nil {
+		return *x.WatermarkJson
+	}
+	return ""
+}
+
+type FollowUpUpdateIssueCommand struct {
+	state                   protoimpl.MessageState `protogen:"open.v1"`
+	ExternalAccountId       string                 `protobuf:"bytes,1,opt,name=external_account_id,json=externalAccountId,proto3" json:"external_account_id,omitempty"`
+	Target                  *v1.ProviderTarget     `protobuf:"bytes,2,opt,name=target,proto3" json:"target,omitempty"`
+	SafeTitle               *string                `protobuf:"bytes,3,opt,name=safe_title,json=safeTitle,proto3,oneof" json:"safe_title,omitempty"`
+	SafeBodyHint            *string                `protobuf:"bytes,4,opt,name=safe_body_hint,json=safeBodyHint,proto3,oneof" json:"safe_body_hint,omitempty"`
+	Labels                  *v1.StringListPatch    `protobuf:"bytes,5,opt,name=labels,proto3" json:"labels,omitempty"`
+	AssigneeProviderLogins  *v1.StringListPatch    `protobuf:"bytes,6,opt,name=assignee_provider_logins,json=assigneeProviderLogins,proto3" json:"assignee_provider_logins,omitempty"`
+	Milestone               *string                `protobuf:"bytes,7,opt,name=milestone,proto3,oneof" json:"milestone,omitempty"`
+	State                   *string                `protobuf:"bytes,8,opt,name=state,proto3,oneof" json:"state,omitempty"`
+	ProviderWorkItemType    *string                `protobuf:"bytes,9,opt,name=provider_work_item_type,json=providerWorkItemType,proto3,oneof" json:"provider_work_item_type,omitempty"`
+	WatermarkJson           *string                `protobuf:"bytes,10,opt,name=watermark_json,json=watermarkJson,proto3,oneof" json:"watermark_json,omitempty"`
+	ExpectedProviderVersion *string                `protobuf:"bytes,11,opt,name=expected_provider_version,json=expectedProviderVersion,proto3,oneof" json:"expected_provider_version,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
+}
+
+func (x *FollowUpUpdateIssueCommand) Reset() {
+	*x = FollowUpUpdateIssueCommand{}
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[68]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FollowUpUpdateIssueCommand) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FollowUpUpdateIssueCommand) ProtoMessage() {}
+
+func (x *FollowUpUpdateIssueCommand) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[68]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FollowUpUpdateIssueCommand.ProtoReflect.Descriptor instead.
+func (*FollowUpUpdateIssueCommand) Descriptor() ([]byte, []int) {
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{68}
+}
+
+func (x *FollowUpUpdateIssueCommand) GetExternalAccountId() string {
+	if x != nil {
+		return x.ExternalAccountId
+	}
+	return ""
+}
+
+func (x *FollowUpUpdateIssueCommand) GetTarget() *v1.ProviderTarget {
+	if x != nil {
+		return x.Target
+	}
+	return nil
+}
+
+func (x *FollowUpUpdateIssueCommand) GetSafeTitle() string {
+	if x != nil && x.SafeTitle != nil {
+		return *x.SafeTitle
+	}
+	return ""
+}
+
+func (x *FollowUpUpdateIssueCommand) GetSafeBodyHint() string {
+	if x != nil && x.SafeBodyHint != nil {
+		return *x.SafeBodyHint
+	}
+	return ""
+}
+
+func (x *FollowUpUpdateIssueCommand) GetLabels() *v1.StringListPatch {
+	if x != nil {
+		return x.Labels
+	}
+	return nil
+}
+
+func (x *FollowUpUpdateIssueCommand) GetAssigneeProviderLogins() *v1.StringListPatch {
+	if x != nil {
+		return x.AssigneeProviderLogins
+	}
+	return nil
+}
+
+func (x *FollowUpUpdateIssueCommand) GetMilestone() string {
+	if x != nil && x.Milestone != nil {
+		return *x.Milestone
+	}
+	return ""
+}
+
+func (x *FollowUpUpdateIssueCommand) GetState() string {
+	if x != nil && x.State != nil {
+		return *x.State
+	}
+	return ""
+}
+
+func (x *FollowUpUpdateIssueCommand) GetProviderWorkItemType() string {
+	if x != nil && x.ProviderWorkItemType != nil {
+		return *x.ProviderWorkItemType
+	}
+	return ""
+}
+
+func (x *FollowUpUpdateIssueCommand) GetWatermarkJson() string {
+	if x != nil && x.WatermarkJson != nil {
+		return *x.WatermarkJson
+	}
+	return ""
+}
+
+func (x *FollowUpUpdateIssueCommand) GetExpectedProviderVersion() string {
+	if x != nil && x.ExpectedProviderVersion != nil {
+		return *x.ExpectedProviderVersion
+	}
+	return ""
+}
+
+type FollowUpCreateCommentCommand struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	ExternalAccountId string                 `protobuf:"bytes,1,opt,name=external_account_id,json=externalAccountId,proto3" json:"external_account_id,omitempty"`
+	Target            *v1.ProviderTarget     `protobuf:"bytes,2,opt,name=target,proto3" json:"target,omitempty"`
+	SafeBodyHint      string                 `protobuf:"bytes,3,opt,name=safe_body_hint,json=safeBodyHint,proto3" json:"safe_body_hint,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *FollowUpCreateCommentCommand) Reset() {
+	*x = FollowUpCreateCommentCommand{}
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[69]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FollowUpCreateCommentCommand) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FollowUpCreateCommentCommand) ProtoMessage() {}
+
+func (x *FollowUpCreateCommentCommand) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[69]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FollowUpCreateCommentCommand.ProtoReflect.Descriptor instead.
+func (*FollowUpCreateCommentCommand) Descriptor() ([]byte, []int) {
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{69}
+}
+
+func (x *FollowUpCreateCommentCommand) GetExternalAccountId() string {
+	if x != nil {
+		return x.ExternalAccountId
+	}
+	return ""
+}
+
+func (x *FollowUpCreateCommentCommand) GetTarget() *v1.ProviderTarget {
+	if x != nil {
+		return x.Target
+	}
+	return nil
+}
+
+func (x *FollowUpCreateCommentCommand) GetSafeBodyHint() string {
+	if x != nil {
+		return x.SafeBodyHint
+	}
+	return ""
+}
+
+type FollowUpUpdateCommentCommand struct {
+	state                   protoimpl.MessageState `protogen:"open.v1"`
+	ExternalAccountId       string                 `protobuf:"bytes,1,opt,name=external_account_id,json=externalAccountId,proto3" json:"external_account_id,omitempty"`
+	Target                  *v1.ProviderTarget     `protobuf:"bytes,2,opt,name=target,proto3" json:"target,omitempty"`
+	ProviderCommentId       string                 `protobuf:"bytes,3,opt,name=provider_comment_id,json=providerCommentId,proto3" json:"provider_comment_id,omitempty"`
+	SafeBodyHint            string                 `protobuf:"bytes,4,opt,name=safe_body_hint,json=safeBodyHint,proto3" json:"safe_body_hint,omitempty"`
+	ExpectedProviderVersion *string                `protobuf:"bytes,5,opt,name=expected_provider_version,json=expectedProviderVersion,proto3,oneof" json:"expected_provider_version,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
+}
+
+func (x *FollowUpUpdateCommentCommand) Reset() {
+	*x = FollowUpUpdateCommentCommand{}
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[70]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FollowUpUpdateCommentCommand) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FollowUpUpdateCommentCommand) ProtoMessage() {}
+
+func (x *FollowUpUpdateCommentCommand) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[70]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FollowUpUpdateCommentCommand.ProtoReflect.Descriptor instead.
+func (*FollowUpUpdateCommentCommand) Descriptor() ([]byte, []int) {
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{70}
+}
+
+func (x *FollowUpUpdateCommentCommand) GetExternalAccountId() string {
+	if x != nil {
+		return x.ExternalAccountId
+	}
+	return ""
+}
+
+func (x *FollowUpUpdateCommentCommand) GetTarget() *v1.ProviderTarget {
+	if x != nil {
+		return x.Target
+	}
+	return nil
+}
+
+func (x *FollowUpUpdateCommentCommand) GetProviderCommentId() string {
+	if x != nil {
+		return x.ProviderCommentId
+	}
+	return ""
+}
+
+func (x *FollowUpUpdateCommentCommand) GetSafeBodyHint() string {
+	if x != nil {
+		return x.SafeBodyHint
+	}
+	return ""
+}
+
+func (x *FollowUpUpdateCommentCommand) GetExpectedProviderVersion() string {
+	if x != nil && x.ExpectedProviderVersion != nil {
+		return *x.ExpectedProviderVersion
 	}
 	return ""
 }
@@ -6986,7 +7430,7 @@ type RecordAgentActivityRequest struct {
 
 func (x *RecordAgentActivityRequest) Reset() {
 	*x = RecordAgentActivityRequest{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[67]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[71]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6998,7 +7442,7 @@ func (x *RecordAgentActivityRequest) String() string {
 func (*RecordAgentActivityRequest) ProtoMessage() {}
 
 func (x *RecordAgentActivityRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[67]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[71]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7011,7 +7455,7 @@ func (x *RecordAgentActivityRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecordAgentActivityRequest.ProtoReflect.Descriptor instead.
 func (*RecordAgentActivityRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{67}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{71}
 }
 
 func (x *RecordAgentActivityRequest) GetMeta() *CommandMeta {
@@ -7154,7 +7598,7 @@ type ListAgentActivitiesRequest struct {
 
 func (x *ListAgentActivitiesRequest) Reset() {
 	*x = ListAgentActivitiesRequest{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[68]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[72]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7166,7 +7610,7 @@ func (x *ListAgentActivitiesRequest) String() string {
 func (*ListAgentActivitiesRequest) ProtoMessage() {}
 
 func (x *ListAgentActivitiesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[68]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[72]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7179,7 +7623,7 @@ func (x *ListAgentActivitiesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAgentActivitiesRequest.ProtoReflect.Descriptor instead.
 func (*ListAgentActivitiesRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{68}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{72}
 }
 
 func (x *ListAgentActivitiesRequest) GetMeta() *QueryMeta {
@@ -7239,7 +7683,7 @@ type RequestHumanGateRequest struct {
 
 func (x *RequestHumanGateRequest) Reset() {
 	*x = RequestHumanGateRequest{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[69]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[73]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7251,7 +7695,7 @@ func (x *RequestHumanGateRequest) String() string {
 func (*RequestHumanGateRequest) ProtoMessage() {}
 
 func (x *RequestHumanGateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[69]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[73]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7264,7 +7708,7 @@ func (x *RequestHumanGateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RequestHumanGateRequest.ProtoReflect.Descriptor instead.
 func (*RequestHumanGateRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{69}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{73}
 }
 
 func (x *RequestHumanGateRequest) GetMeta() *CommandMeta {
@@ -7326,7 +7770,7 @@ type GetAgentSessionRequest struct {
 
 func (x *GetAgentSessionRequest) Reset() {
 	*x = GetAgentSessionRequest{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[70]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[74]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7338,7 +7782,7 @@ func (x *GetAgentSessionRequest) String() string {
 func (*GetAgentSessionRequest) ProtoMessage() {}
 
 func (x *GetAgentSessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[70]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[74]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7351,7 +7795,7 @@ func (x *GetAgentSessionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAgentSessionRequest.ProtoReflect.Descriptor instead.
 func (*GetAgentSessionRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{70}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{74}
 }
 
 func (x *GetAgentSessionRequest) GetMeta() *QueryMeta {
@@ -7382,7 +7826,7 @@ type ListAgentRunsRequest struct {
 
 func (x *ListAgentRunsRequest) Reset() {
 	*x = ListAgentRunsRequest{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[71]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[75]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7394,7 +7838,7 @@ func (x *ListAgentRunsRequest) String() string {
 func (*ListAgentRunsRequest) ProtoMessage() {}
 
 func (x *ListAgentRunsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[71]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[75]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7407,7 +7851,7 @@ func (x *ListAgentRunsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAgentRunsRequest.ProtoReflect.Descriptor instead.
 func (*ListAgentRunsRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{71}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{75}
 }
 
 func (x *ListAgentRunsRequest) GetMeta() *QueryMeta {
@@ -7462,7 +7906,7 @@ type AgentSessionResponse struct {
 
 func (x *AgentSessionResponse) Reset() {
 	*x = AgentSessionResponse{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[72]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[76]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7474,7 +7918,7 @@ func (x *AgentSessionResponse) String() string {
 func (*AgentSessionResponse) ProtoMessage() {}
 
 func (x *AgentSessionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[72]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[76]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7487,7 +7931,7 @@ func (x *AgentSessionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentSessionResponse.ProtoReflect.Descriptor instead.
 func (*AgentSessionResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{72}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{76}
 }
 
 func (x *AgentSessionResponse) GetSession() *AgentSession {
@@ -7513,7 +7957,7 @@ type AgentRunResponse struct {
 
 func (x *AgentRunResponse) Reset() {
 	*x = AgentRunResponse{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[73]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[77]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7525,7 +7969,7 @@ func (x *AgentRunResponse) String() string {
 func (*AgentRunResponse) ProtoMessage() {}
 
 func (x *AgentRunResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[73]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[77]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7538,7 +7982,7 @@ func (x *AgentRunResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentRunResponse.ProtoReflect.Descriptor instead.
 func (*AgentRunResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{73}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{77}
 }
 
 func (x *AgentRunResponse) GetRun() *AgentRun {
@@ -7558,7 +8002,7 @@ type AgentSessionStateSnapshotResponse struct {
 
 func (x *AgentSessionStateSnapshotResponse) Reset() {
 	*x = AgentSessionStateSnapshotResponse{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[74]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[78]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7570,7 +8014,7 @@ func (x *AgentSessionStateSnapshotResponse) String() string {
 func (*AgentSessionStateSnapshotResponse) ProtoMessage() {}
 
 func (x *AgentSessionStateSnapshotResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[74]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[78]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7583,7 +8027,7 @@ func (x *AgentSessionStateSnapshotResponse) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use AgentSessionStateSnapshotResponse.ProtoReflect.Descriptor instead.
 func (*AgentSessionStateSnapshotResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{74}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{78}
 }
 
 func (x *AgentSessionStateSnapshotResponse) GetSnapshot() *AgentSessionStateSnapshot {
@@ -7609,7 +8053,7 @@ type AcceptanceResultResponse struct {
 
 func (x *AcceptanceResultResponse) Reset() {
 	*x = AcceptanceResultResponse{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[75]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[79]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7621,7 +8065,7 @@ func (x *AcceptanceResultResponse) String() string {
 func (*AcceptanceResultResponse) ProtoMessage() {}
 
 func (x *AcceptanceResultResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[75]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[79]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7634,7 +8078,7 @@ func (x *AcceptanceResultResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AcceptanceResultResponse.ProtoReflect.Descriptor instead.
 func (*AcceptanceResultResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{75}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{79}
 }
 
 func (x *AcceptanceResultResponse) GetAcceptanceResult() *AcceptanceResult {
@@ -7654,7 +8098,7 @@ type ListAcceptanceResultsResponse struct {
 
 func (x *ListAcceptanceResultsResponse) Reset() {
 	*x = ListAcceptanceResultsResponse{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[76]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[80]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7666,7 +8110,7 @@ func (x *ListAcceptanceResultsResponse) String() string {
 func (*ListAcceptanceResultsResponse) ProtoMessage() {}
 
 func (x *ListAcceptanceResultsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[76]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[80]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7679,7 +8123,7 @@ func (x *ListAcceptanceResultsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAcceptanceResultsResponse.ProtoReflect.Descriptor instead.
 func (*ListAcceptanceResultsResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{76}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{80}
 }
 
 func (x *ListAcceptanceResultsResponse) GetAcceptanceResults() []*AcceptanceResult {
@@ -7705,7 +8149,7 @@ type FollowUpIntentResponse struct {
 
 func (x *FollowUpIntentResponse) Reset() {
 	*x = FollowUpIntentResponse{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[77]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[81]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7717,7 +8161,7 @@ func (x *FollowUpIntentResponse) String() string {
 func (*FollowUpIntentResponse) ProtoMessage() {}
 
 func (x *FollowUpIntentResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[77]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[81]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7730,7 +8174,7 @@ func (x *FollowUpIntentResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FollowUpIntentResponse.ProtoReflect.Descriptor instead.
 func (*FollowUpIntentResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{77}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{81}
 }
 
 func (x *FollowUpIntentResponse) GetFollowUpIntent() *FollowUpIntent {
@@ -7749,7 +8193,7 @@ type AgentActivityResponse struct {
 
 func (x *AgentActivityResponse) Reset() {
 	*x = AgentActivityResponse{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[78]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[82]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7761,7 +8205,7 @@ func (x *AgentActivityResponse) String() string {
 func (*AgentActivityResponse) ProtoMessage() {}
 
 func (x *AgentActivityResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[78]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[82]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7774,7 +8218,7 @@ func (x *AgentActivityResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentActivityResponse.ProtoReflect.Descriptor instead.
 func (*AgentActivityResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{78}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{82}
 }
 
 func (x *AgentActivityResponse) GetActivity() *AgentActivity {
@@ -7794,7 +8238,7 @@ type ListAgentActivitiesResponse struct {
 
 func (x *ListAgentActivitiesResponse) Reset() {
 	*x = ListAgentActivitiesResponse{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[79]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[83]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7806,7 +8250,7 @@ func (x *ListAgentActivitiesResponse) String() string {
 func (*ListAgentActivitiesResponse) ProtoMessage() {}
 
 func (x *ListAgentActivitiesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[79]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[83]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7819,7 +8263,7 @@ func (x *ListAgentActivitiesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAgentActivitiesResponse.ProtoReflect.Descriptor instead.
 func (*ListAgentActivitiesResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{79}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{83}
 }
 
 func (x *ListAgentActivitiesResponse) GetActivities() []*AgentActivity {
@@ -7845,7 +8289,7 @@ type HumanGateRequestResponse struct {
 
 func (x *HumanGateRequestResponse) Reset() {
 	*x = HumanGateRequestResponse{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[80]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[84]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7857,7 +8301,7 @@ func (x *HumanGateRequestResponse) String() string {
 func (*HumanGateRequestResponse) ProtoMessage() {}
 
 func (x *HumanGateRequestResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[80]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[84]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7870,7 +8314,7 @@ func (x *HumanGateRequestResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HumanGateRequestResponse.ProtoReflect.Descriptor instead.
 func (*HumanGateRequestResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{80}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{84}
 }
 
 func (x *HumanGateRequestResponse) GetHumanGateRequest() *HumanGateRequest {
@@ -7890,7 +8334,7 @@ type ListAgentRunsResponse struct {
 
 func (x *ListAgentRunsResponse) Reset() {
 	*x = ListAgentRunsResponse{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[81]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[85]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7902,7 +8346,7 @@ func (x *ListAgentRunsResponse) String() string {
 func (*ListAgentRunsResponse) ProtoMessage() {}
 
 func (x *ListAgentRunsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[81]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[85]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7915,7 +8359,7 @@ func (x *ListAgentRunsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAgentRunsResponse.ProtoReflect.Descriptor instead.
 func (*ListAgentRunsResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{81}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{85}
 }
 
 func (x *ListAgentRunsResponse) GetRuns() []*AgentRun {
@@ -8626,28 +9070,69 @@ const file_kodex_agents_v1_agent_manager_proto_rawDesc = "" +
 	"\r_safe_summaryB\f\n" +
 	"\n" +
 	"_role_hintB\r\n" +
-	"\v_stage_hint\"\xaf\x06\n" +
+	"\v_stage_hint\"\xf0\x05\n" +
 	"\x1dDispatchFollowUpIntentRequest\x120\n" +
 	"\x04meta\x18\x01 \x01(\v2\x1c.kodex.agents.v1.CommandMetaR\x04meta\x12-\n" +
-	"\x13follow_up_intent_id\x18\x02 \x01(\tR\x10followUpIntentId\x12\x1d\n" +
+	"\x13follow_up_intent_id\x18\x02 \x01(\tR\x10followUpIntentId\x12J\n" +
+	"\rdispatch_kind\x18\x03 \x01(\x0e2%.kodex.agents.v1.FollowUpDispatchKindR\fdispatchKind\x12l\n" +
+	"\x18operation_policy_context\x18\x04 \x01(\v22.kodex.providers.v1.ProviderOperationPolicyContextR\x16operationPolicyContext\x12U\n" +
+	"\x11approval_gate_ref\x18\x05 \x01(\v2).kodex.providers.v1.ApprovalGateReferenceR\x0fapprovalGateRef\x12P\n" +
+	"\fcreate_issue\x18\n" +
+	" \x01(\v2+.kodex.agents.v1.FollowUpCreateIssueCommandH\x00R\vcreateIssue\x12P\n" +
+	"\fupdate_issue\x18\v \x01(\v2+.kodex.agents.v1.FollowUpUpdateIssueCommandH\x00R\vupdateIssue\x12V\n" +
+	"\x0ecreate_comment\x18\f \x01(\v2-.kodex.agents.v1.FollowUpCreateCommentCommandH\x00R\rcreateComment\x12V\n" +
+	"\x0eupdate_comment\x18\r \x01(\v2-.kodex.agents.v1.FollowUpUpdateCommentCommandH\x00R\rupdateCommentB\t\n" +
+	"\acommand\"\x86\x04\n" +
+	"\x1aFollowUpCreateIssueCommand\x12\x1d\n" +
 	"\n" +
-	"project_id\x18\x03 \x01(\tR\tprojectId\x12#\n" +
-	"\rrepository_id\x18\x04 \x01(\tR\frepositoryId\x12#\n" +
-	"\rprovider_slug\x18\x05 \x01(\tR\fproviderSlug\x12.\n" +
-	"\x13external_account_id\x18\x06 \x01(\tR\x11externalAccountId\x12O\n" +
-	"\x11repository_target\x18\a \x01(\v2\".kodex.providers.v1.ProviderTargetR\x10repositoryTarget\x12\x16\n" +
-	"\x06labels\x18\b \x03(\tR\x06labels\x128\n" +
-	"\x18assignee_provider_logins\x18\t \x03(\tR\x16assigneeProviderLogins\x12!\n" +
-	"\tmilestone\x18\n" +
-	" \x01(\tH\x00R\tmilestone\x88\x01\x01\x12*\n" +
-	"\x0ewatermark_json\x18\v \x01(\tH\x01R\rwatermarkJson\x88\x01\x01\x12l\n" +
-	"\x18operation_policy_context\x18\f \x01(\v22.kodex.providers.v1.ProviderOperationPolicyContextR\x16operationPolicyContext\x12U\n" +
-	"\x11approval_gate_ref\x18\r \x01(\v2).kodex.providers.v1.ApprovalGateReferenceR\x0fapprovalGateRef\x12)\n" +
-	"\x0esafe_body_hint\x18\x0e \x01(\tH\x02R\fsafeBodyHint\x88\x01\x01B\f\n" +
+	"project_id\x18\x01 \x01(\tR\tprojectId\x12#\n" +
+	"\rrepository_id\x18\x02 \x01(\tR\frepositoryId\x12#\n" +
+	"\rprovider_slug\x18\x03 \x01(\tR\fproviderSlug\x12.\n" +
+	"\x13external_account_id\x18\x04 \x01(\tR\x11externalAccountId\x12O\n" +
+	"\x11repository_target\x18\x05 \x01(\v2\".kodex.providers.v1.ProviderTargetR\x10repositoryTarget\x12)\n" +
+	"\x0esafe_body_hint\x18\x06 \x01(\tH\x00R\fsafeBodyHint\x88\x01\x01\x12\x16\n" +
+	"\x06labels\x18\a \x03(\tR\x06labels\x128\n" +
+	"\x18assignee_provider_logins\x18\b \x03(\tR\x16assigneeProviderLogins\x12!\n" +
+	"\tmilestone\x18\t \x01(\tH\x01R\tmilestone\x88\x01\x01\x12*\n" +
+	"\x0ewatermark_json\x18\n" +
+	" \x01(\tH\x02R\rwatermarkJson\x88\x01\x01B\x11\n" +
+	"\x0f_safe_body_hintB\f\n" +
 	"\n" +
 	"_milestoneB\x11\n" +
-	"\x0f_watermark_jsonB\x11\n" +
-	"\x0f_safe_body_hint\"\xca\a\n" +
+	"\x0f_watermark_json\"\xe1\x05\n" +
+	"\x1aFollowUpUpdateIssueCommand\x12.\n" +
+	"\x13external_account_id\x18\x01 \x01(\tR\x11externalAccountId\x12:\n" +
+	"\x06target\x18\x02 \x01(\v2\".kodex.providers.v1.ProviderTargetR\x06target\x12\"\n" +
+	"\n" +
+	"safe_title\x18\x03 \x01(\tH\x00R\tsafeTitle\x88\x01\x01\x12)\n" +
+	"\x0esafe_body_hint\x18\x04 \x01(\tH\x01R\fsafeBodyHint\x88\x01\x01\x12;\n" +
+	"\x06labels\x18\x05 \x01(\v2#.kodex.providers.v1.StringListPatchR\x06labels\x12]\n" +
+	"\x18assignee_provider_logins\x18\x06 \x01(\v2#.kodex.providers.v1.StringListPatchR\x16assigneeProviderLogins\x12!\n" +
+	"\tmilestone\x18\a \x01(\tH\x02R\tmilestone\x88\x01\x01\x12\x19\n" +
+	"\x05state\x18\b \x01(\tH\x03R\x05state\x88\x01\x01\x12:\n" +
+	"\x17provider_work_item_type\x18\t \x01(\tH\x04R\x14providerWorkItemType\x88\x01\x01\x12*\n" +
+	"\x0ewatermark_json\x18\n" +
+	" \x01(\tH\x05R\rwatermarkJson\x88\x01\x01\x12?\n" +
+	"\x19expected_provider_version\x18\v \x01(\tH\x06R\x17expectedProviderVersion\x88\x01\x01B\r\n" +
+	"\v_safe_titleB\x11\n" +
+	"\x0f_safe_body_hintB\f\n" +
+	"\n" +
+	"_milestoneB\b\n" +
+	"\x06_stateB\x1a\n" +
+	"\x18_provider_work_item_typeB\x11\n" +
+	"\x0f_watermark_jsonB\x1c\n" +
+	"\x1a_expected_provider_version\"\xb0\x01\n" +
+	"\x1cFollowUpCreateCommentCommand\x12.\n" +
+	"\x13external_account_id\x18\x01 \x01(\tR\x11externalAccountId\x12:\n" +
+	"\x06target\x18\x02 \x01(\v2\".kodex.providers.v1.ProviderTargetR\x06target\x12$\n" +
+	"\x0esafe_body_hint\x18\x03 \x01(\tR\fsafeBodyHint\"\xbf\x02\n" +
+	"\x1cFollowUpUpdateCommentCommand\x12.\n" +
+	"\x13external_account_id\x18\x01 \x01(\tR\x11externalAccountId\x12:\n" +
+	"\x06target\x18\x02 \x01(\v2\".kodex.providers.v1.ProviderTargetR\x06target\x12.\n" +
+	"\x13provider_comment_id\x18\x03 \x01(\tR\x11providerCommentId\x12$\n" +
+	"\x0esafe_body_hint\x18\x04 \x01(\tR\fsafeBodyHint\x12?\n" +
+	"\x19expected_provider_version\x18\x05 \x01(\tH\x00R\x17expectedProviderVersion\x88\x01\x01B\x1c\n" +
+	"\x1a_expected_provider_version\"\xca\a\n" +
 	"\x1aRecordAgentActivityRequest\x120\n" +
 	"\x04meta\x18\x01 \x01(\v2\x1c.kodex.agents.v1.CommandMetaR\x04meta\x12\x1d\n" +
 	"\n" +
@@ -8857,14 +9342,22 @@ const file_kodex_agents_v1_agent_manager_proto_rawDesc = "" +
 	"\x18ACCEPTANCE_STATUS_PASSED\x10\x02\x12\x1c\n" +
 	"\x18ACCEPTANCE_STATUS_FAILED\x10\x03\x12\x1d\n" +
 	"\x19ACCEPTANCE_STATUS_WAITING\x10\x04\x12\x1d\n" +
-	"\x19ACCEPTANCE_STATUS_SKIPPED\x10\x05*\xfb\x01\n" +
+	"\x19ACCEPTANCE_STATUS_SKIPPED\x10\x05*\xc7\x02\n" +
 	"\x14FollowUpIntentStatus\x12'\n" +
 	"#FOLLOW_UP_INTENT_STATUS_UNSPECIFIED\x10\x00\x12#\n" +
 	"\x1fFOLLOW_UP_INTENT_STATUS_PLANNED\x10\x01\x12%\n" +
 	"!FOLLOW_UP_INTENT_STATUS_REQUESTED\x10\x02\x12#\n" +
 	"\x1fFOLLOW_UP_INTENT_STATUS_CREATED\x10\x03\x12\"\n" +
 	"\x1eFOLLOW_UP_INTENT_STATUS_FAILED\x10\x04\x12%\n" +
-	"!FOLLOW_UP_INTENT_STATUS_CANCELLED\x10\x05*\xda\x02\n" +
+	"!FOLLOW_UP_INTENT_STATUS_CANCELLED\x10\x05\x12#\n" +
+	"\x1fFOLLOW_UP_INTENT_STATUS_UPDATED\x10\x06\x12%\n" +
+	"!FOLLOW_UP_INTENT_STATUS_COMMENTED\x10\a*\xeb\x01\n" +
+	"\x14FollowUpDispatchKind\x12'\n" +
+	"#FOLLOW_UP_DISPATCH_KIND_UNSPECIFIED\x10\x00\x12(\n" +
+	"$FOLLOW_UP_DISPATCH_KIND_CREATE_ISSUE\x10\x01\x12(\n" +
+	"$FOLLOW_UP_DISPATCH_KIND_UPDATE_ISSUE\x10\x02\x12*\n" +
+	"&FOLLOW_UP_DISPATCH_KIND_CREATE_COMMENT\x10\x03\x12*\n" +
+	"&FOLLOW_UP_DISPATCH_KIND_UPDATE_COMMENT\x10\x04*\xda\x02\n" +
 	"\x11AgentActivityKind\x12#\n" +
 	"\x1fAGENT_ACTIVITY_KIND_UNSPECIFIED\x10\x00\x12!\n" +
 	"\x1dAGENT_ACTIVITY_KIND_LIFECYCLE\x10\x01\x12 \n" +
@@ -8951,8 +9444,8 @@ func file_kodex_agents_v1_agent_manager_proto_rawDescGZIP() []byte {
 	return file_kodex_agents_v1_agent_manager_proto_rawDescData
 }
 
-var file_kodex_agents_v1_agent_manager_proto_enumTypes = make([]protoimpl.EnumInfo, 20)
-var file_kodex_agents_v1_agent_manager_proto_msgTypes = make([]protoimpl.MessageInfo, 82)
+var file_kodex_agents_v1_agent_manager_proto_enumTypes = make([]protoimpl.EnumInfo, 21)
+var file_kodex_agents_v1_agent_manager_proto_msgTypes = make([]protoimpl.MessageInfo, 86)
 var file_kodex_agents_v1_agent_manager_proto_goTypes = []any{
 	(AgentScopeType)(0),                          // 0: kodex.agents.v1.AgentScopeType
 	(FlowStatus)(0),                              // 1: kodex.agents.v1.FlowStatus
@@ -8969,321 +9462,337 @@ var file_kodex_agents_v1_agent_manager_proto_goTypes = []any{
 	(AcceptanceCheckKind)(0),                     // 12: kodex.agents.v1.AcceptanceCheckKind
 	(AcceptanceStatus)(0),                        // 13: kodex.agents.v1.AcceptanceStatus
 	(FollowUpIntentStatus)(0),                    // 14: kodex.agents.v1.FollowUpIntentStatus
-	(AgentActivityKind)(0),                       // 15: kodex.agents.v1.AgentActivityKind
-	(AgentActivityStatus)(0),                     // 16: kodex.agents.v1.AgentActivityStatus
-	(HumanGateStatus)(0),                         // 17: kodex.agents.v1.HumanGateStatus
-	(AutomationTriggerKind)(0),                   // 18: kodex.agents.v1.AutomationTriggerKind
-	(AutomationStatus)(0),                        // 19: kodex.agents.v1.AutomationStatus
-	(*CommandMeta)(nil),                          // 20: kodex.agents.v1.CommandMeta
-	(*QueryMeta)(nil),                            // 21: kodex.agents.v1.QueryMeta
-	(*RequestContext)(nil),                       // 22: kodex.agents.v1.RequestContext
-	(*Actor)(nil),                                // 23: kodex.agents.v1.Actor
-	(*PageRequest)(nil),                          // 24: kodex.agents.v1.PageRequest
-	(*PageResponse)(nil),                         // 25: kodex.agents.v1.PageResponse
-	(*LocalizedText)(nil),                        // 26: kodex.agents.v1.LocalizedText
-	(*ScopeRef)(nil),                             // 27: kodex.agents.v1.ScopeRef
-	(*ProviderTargetRef)(nil),                    // 28: kodex.agents.v1.ProviderTargetRef
-	(*RuntimeContextRef)(nil),                    // 29: kodex.agents.v1.RuntimeContextRef
-	(*GuidanceRef)(nil),                          // 30: kodex.agents.v1.GuidanceRef
-	(*GuidanceSelectionHint)(nil),                // 31: kodex.agents.v1.GuidanceSelectionHint
-	(*ObjectRef)(nil),                            // 32: kodex.agents.v1.ObjectRef
-	(*Flow)(nil),                                 // 33: kodex.agents.v1.Flow
-	(*FlowVersion)(nil),                          // 34: kodex.agents.v1.FlowVersion
-	(*Stage)(nil),                                // 35: kodex.agents.v1.Stage
-	(*StageTransition)(nil),                      // 36: kodex.agents.v1.StageTransition
-	(*RoleProfile)(nil),                          // 37: kodex.agents.v1.RoleProfile
-	(*PromptTemplate)(nil),                       // 38: kodex.agents.v1.PromptTemplate
-	(*PromptTemplateVersion)(nil),                // 39: kodex.agents.v1.PromptTemplateVersion
-	(*StageRoleBinding)(nil),                     // 40: kodex.agents.v1.StageRoleBinding
-	(*AgentSession)(nil),                         // 41: kodex.agents.v1.AgentSession
-	(*AgentRun)(nil),                             // 42: kodex.agents.v1.AgentRun
-	(*AgentSessionStateSnapshot)(nil),            // 43: kodex.agents.v1.AgentSessionStateSnapshot
-	(*AcceptanceResult)(nil),                     // 44: kodex.agents.v1.AcceptanceResult
-	(*FollowUpIntent)(nil),                       // 45: kodex.agents.v1.FollowUpIntent
-	(*AgentActivity)(nil),                        // 46: kodex.agents.v1.AgentActivity
-	(*HumanGateRequest)(nil),                     // 47: kodex.agents.v1.HumanGateRequest
-	(*FlowDefinitionInput)(nil),                  // 48: kodex.agents.v1.FlowDefinitionInput
-	(*StageInput)(nil),                           // 49: kodex.agents.v1.StageInput
-	(*StageTransitionInput)(nil),                 // 50: kodex.agents.v1.StageTransitionInput
-	(*StageRoleBindingInput)(nil),                // 51: kodex.agents.v1.StageRoleBindingInput
-	(*CreateFlowRequest)(nil),                    // 52: kodex.agents.v1.CreateFlowRequest
-	(*UpdateFlowRequest)(nil),                    // 53: kodex.agents.v1.UpdateFlowRequest
-	(*CreateFlowVersionRequest)(nil),             // 54: kodex.agents.v1.CreateFlowVersionRequest
-	(*ActivateFlowVersionRequest)(nil),           // 55: kodex.agents.v1.ActivateFlowVersionRequest
-	(*GetFlowRequest)(nil),                       // 56: kodex.agents.v1.GetFlowRequest
-	(*ListFlowsRequest)(nil),                     // 57: kodex.agents.v1.ListFlowsRequest
-	(*FlowResponse)(nil),                         // 58: kodex.agents.v1.FlowResponse
-	(*FlowVersionResponse)(nil),                  // 59: kodex.agents.v1.FlowVersionResponse
-	(*ListFlowsResponse)(nil),                    // 60: kodex.agents.v1.ListFlowsResponse
-	(*CreateRoleProfileRequest)(nil),             // 61: kodex.agents.v1.CreateRoleProfileRequest
-	(*UpdateRoleProfileRequest)(nil),             // 62: kodex.agents.v1.UpdateRoleProfileRequest
-	(*GetRoleProfileRequest)(nil),                // 63: kodex.agents.v1.GetRoleProfileRequest
-	(*ListRoleProfilesRequest)(nil),              // 64: kodex.agents.v1.ListRoleProfilesRequest
-	(*RoleProfileResponse)(nil),                  // 65: kodex.agents.v1.RoleProfileResponse
-	(*ListRoleProfilesResponse)(nil),             // 66: kodex.agents.v1.ListRoleProfilesResponse
-	(*GetPromptTemplateRequest)(nil),             // 67: kodex.agents.v1.GetPromptTemplateRequest
-	(*ListPromptTemplatesRequest)(nil),           // 68: kodex.agents.v1.ListPromptTemplatesRequest
-	(*PromptTemplateResponse)(nil),               // 69: kodex.agents.v1.PromptTemplateResponse
-	(*ListPromptTemplatesResponse)(nil),          // 70: kodex.agents.v1.ListPromptTemplatesResponse
-	(*CreatePromptTemplateVersionRequest)(nil),   // 71: kodex.agents.v1.CreatePromptTemplateVersionRequest
-	(*ActivatePromptTemplateVersionRequest)(nil), // 72: kodex.agents.v1.ActivatePromptTemplateVersionRequest
-	(*GetPromptTemplateVersionRequest)(nil),      // 73: kodex.agents.v1.GetPromptTemplateVersionRequest
-	(*ListPromptTemplateVersionsRequest)(nil),    // 74: kodex.agents.v1.ListPromptTemplateVersionsRequest
-	(*PromptTemplateVersionResponse)(nil),        // 75: kodex.agents.v1.PromptTemplateVersionResponse
-	(*ListPromptTemplateVersionsResponse)(nil),   // 76: kodex.agents.v1.ListPromptTemplateVersionsResponse
-	(*StartAgentSessionRequest)(nil),             // 77: kodex.agents.v1.StartAgentSessionRequest
-	(*StartAgentRunRequest)(nil),                 // 78: kodex.agents.v1.StartAgentRunRequest
-	(*RecordRunStateRequest)(nil),                // 79: kodex.agents.v1.RecordRunStateRequest
-	(*RecordSessionStateSnapshotRequest)(nil),    // 80: kodex.agents.v1.RecordSessionStateSnapshotRequest
-	(*RequestAcceptanceRequest)(nil),             // 81: kodex.agents.v1.RequestAcceptanceRequest
-	(*RecordAcceptanceResultRequest)(nil),        // 82: kodex.agents.v1.RecordAcceptanceResultRequest
-	(*GetAcceptanceResultRequest)(nil),           // 83: kodex.agents.v1.GetAcceptanceResultRequest
-	(*ListAcceptanceResultsRequest)(nil),         // 84: kodex.agents.v1.ListAcceptanceResultsRequest
-	(*CreateFollowUpIntentRequest)(nil),          // 85: kodex.agents.v1.CreateFollowUpIntentRequest
-	(*DispatchFollowUpIntentRequest)(nil),        // 86: kodex.agents.v1.DispatchFollowUpIntentRequest
-	(*RecordAgentActivityRequest)(nil),           // 87: kodex.agents.v1.RecordAgentActivityRequest
-	(*ListAgentActivitiesRequest)(nil),           // 88: kodex.agents.v1.ListAgentActivitiesRequest
-	(*RequestHumanGateRequest)(nil),              // 89: kodex.agents.v1.RequestHumanGateRequest
-	(*GetAgentSessionRequest)(nil),               // 90: kodex.agents.v1.GetAgentSessionRequest
-	(*ListAgentRunsRequest)(nil),                 // 91: kodex.agents.v1.ListAgentRunsRequest
-	(*AgentSessionResponse)(nil),                 // 92: kodex.agents.v1.AgentSessionResponse
-	(*AgentRunResponse)(nil),                     // 93: kodex.agents.v1.AgentRunResponse
-	(*AgentSessionStateSnapshotResponse)(nil),    // 94: kodex.agents.v1.AgentSessionStateSnapshotResponse
-	(*AcceptanceResultResponse)(nil),             // 95: kodex.agents.v1.AcceptanceResultResponse
-	(*ListAcceptanceResultsResponse)(nil),        // 96: kodex.agents.v1.ListAcceptanceResultsResponse
-	(*FollowUpIntentResponse)(nil),               // 97: kodex.agents.v1.FollowUpIntentResponse
-	(*AgentActivityResponse)(nil),                // 98: kodex.agents.v1.AgentActivityResponse
-	(*ListAgentActivitiesResponse)(nil),          // 99: kodex.agents.v1.ListAgentActivitiesResponse
-	(*HumanGateRequestResponse)(nil),             // 100: kodex.agents.v1.HumanGateRequestResponse
-	(*ListAgentRunsResponse)(nil),                // 101: kodex.agents.v1.ListAgentRunsResponse
-	(*v1.ProviderTarget)(nil),                    // 102: kodex.providers.v1.ProviderTarget
-	(*v1.ProviderOperationPolicyContext)(nil),    // 103: kodex.providers.v1.ProviderOperationPolicyContext
-	(*v1.ApprovalGateReference)(nil),             // 104: kodex.providers.v1.ApprovalGateReference
+	(FollowUpDispatchKind)(0),                    // 15: kodex.agents.v1.FollowUpDispatchKind
+	(AgentActivityKind)(0),                       // 16: kodex.agents.v1.AgentActivityKind
+	(AgentActivityStatus)(0),                     // 17: kodex.agents.v1.AgentActivityStatus
+	(HumanGateStatus)(0),                         // 18: kodex.agents.v1.HumanGateStatus
+	(AutomationTriggerKind)(0),                   // 19: kodex.agents.v1.AutomationTriggerKind
+	(AutomationStatus)(0),                        // 20: kodex.agents.v1.AutomationStatus
+	(*CommandMeta)(nil),                          // 21: kodex.agents.v1.CommandMeta
+	(*QueryMeta)(nil),                            // 22: kodex.agents.v1.QueryMeta
+	(*RequestContext)(nil),                       // 23: kodex.agents.v1.RequestContext
+	(*Actor)(nil),                                // 24: kodex.agents.v1.Actor
+	(*PageRequest)(nil),                          // 25: kodex.agents.v1.PageRequest
+	(*PageResponse)(nil),                         // 26: kodex.agents.v1.PageResponse
+	(*LocalizedText)(nil),                        // 27: kodex.agents.v1.LocalizedText
+	(*ScopeRef)(nil),                             // 28: kodex.agents.v1.ScopeRef
+	(*ProviderTargetRef)(nil),                    // 29: kodex.agents.v1.ProviderTargetRef
+	(*RuntimeContextRef)(nil),                    // 30: kodex.agents.v1.RuntimeContextRef
+	(*GuidanceRef)(nil),                          // 31: kodex.agents.v1.GuidanceRef
+	(*GuidanceSelectionHint)(nil),                // 32: kodex.agents.v1.GuidanceSelectionHint
+	(*ObjectRef)(nil),                            // 33: kodex.agents.v1.ObjectRef
+	(*Flow)(nil),                                 // 34: kodex.agents.v1.Flow
+	(*FlowVersion)(nil),                          // 35: kodex.agents.v1.FlowVersion
+	(*Stage)(nil),                                // 36: kodex.agents.v1.Stage
+	(*StageTransition)(nil),                      // 37: kodex.agents.v1.StageTransition
+	(*RoleProfile)(nil),                          // 38: kodex.agents.v1.RoleProfile
+	(*PromptTemplate)(nil),                       // 39: kodex.agents.v1.PromptTemplate
+	(*PromptTemplateVersion)(nil),                // 40: kodex.agents.v1.PromptTemplateVersion
+	(*StageRoleBinding)(nil),                     // 41: kodex.agents.v1.StageRoleBinding
+	(*AgentSession)(nil),                         // 42: kodex.agents.v1.AgentSession
+	(*AgentRun)(nil),                             // 43: kodex.agents.v1.AgentRun
+	(*AgentSessionStateSnapshot)(nil),            // 44: kodex.agents.v1.AgentSessionStateSnapshot
+	(*AcceptanceResult)(nil),                     // 45: kodex.agents.v1.AcceptanceResult
+	(*FollowUpIntent)(nil),                       // 46: kodex.agents.v1.FollowUpIntent
+	(*AgentActivity)(nil),                        // 47: kodex.agents.v1.AgentActivity
+	(*HumanGateRequest)(nil),                     // 48: kodex.agents.v1.HumanGateRequest
+	(*FlowDefinitionInput)(nil),                  // 49: kodex.agents.v1.FlowDefinitionInput
+	(*StageInput)(nil),                           // 50: kodex.agents.v1.StageInput
+	(*StageTransitionInput)(nil),                 // 51: kodex.agents.v1.StageTransitionInput
+	(*StageRoleBindingInput)(nil),                // 52: kodex.agents.v1.StageRoleBindingInput
+	(*CreateFlowRequest)(nil),                    // 53: kodex.agents.v1.CreateFlowRequest
+	(*UpdateFlowRequest)(nil),                    // 54: kodex.agents.v1.UpdateFlowRequest
+	(*CreateFlowVersionRequest)(nil),             // 55: kodex.agents.v1.CreateFlowVersionRequest
+	(*ActivateFlowVersionRequest)(nil),           // 56: kodex.agents.v1.ActivateFlowVersionRequest
+	(*GetFlowRequest)(nil),                       // 57: kodex.agents.v1.GetFlowRequest
+	(*ListFlowsRequest)(nil),                     // 58: kodex.agents.v1.ListFlowsRequest
+	(*FlowResponse)(nil),                         // 59: kodex.agents.v1.FlowResponse
+	(*FlowVersionResponse)(nil),                  // 60: kodex.agents.v1.FlowVersionResponse
+	(*ListFlowsResponse)(nil),                    // 61: kodex.agents.v1.ListFlowsResponse
+	(*CreateRoleProfileRequest)(nil),             // 62: kodex.agents.v1.CreateRoleProfileRequest
+	(*UpdateRoleProfileRequest)(nil),             // 63: kodex.agents.v1.UpdateRoleProfileRequest
+	(*GetRoleProfileRequest)(nil),                // 64: kodex.agents.v1.GetRoleProfileRequest
+	(*ListRoleProfilesRequest)(nil),              // 65: kodex.agents.v1.ListRoleProfilesRequest
+	(*RoleProfileResponse)(nil),                  // 66: kodex.agents.v1.RoleProfileResponse
+	(*ListRoleProfilesResponse)(nil),             // 67: kodex.agents.v1.ListRoleProfilesResponse
+	(*GetPromptTemplateRequest)(nil),             // 68: kodex.agents.v1.GetPromptTemplateRequest
+	(*ListPromptTemplatesRequest)(nil),           // 69: kodex.agents.v1.ListPromptTemplatesRequest
+	(*PromptTemplateResponse)(nil),               // 70: kodex.agents.v1.PromptTemplateResponse
+	(*ListPromptTemplatesResponse)(nil),          // 71: kodex.agents.v1.ListPromptTemplatesResponse
+	(*CreatePromptTemplateVersionRequest)(nil),   // 72: kodex.agents.v1.CreatePromptTemplateVersionRequest
+	(*ActivatePromptTemplateVersionRequest)(nil), // 73: kodex.agents.v1.ActivatePromptTemplateVersionRequest
+	(*GetPromptTemplateVersionRequest)(nil),      // 74: kodex.agents.v1.GetPromptTemplateVersionRequest
+	(*ListPromptTemplateVersionsRequest)(nil),    // 75: kodex.agents.v1.ListPromptTemplateVersionsRequest
+	(*PromptTemplateVersionResponse)(nil),        // 76: kodex.agents.v1.PromptTemplateVersionResponse
+	(*ListPromptTemplateVersionsResponse)(nil),   // 77: kodex.agents.v1.ListPromptTemplateVersionsResponse
+	(*StartAgentSessionRequest)(nil),             // 78: kodex.agents.v1.StartAgentSessionRequest
+	(*StartAgentRunRequest)(nil),                 // 79: kodex.agents.v1.StartAgentRunRequest
+	(*RecordRunStateRequest)(nil),                // 80: kodex.agents.v1.RecordRunStateRequest
+	(*RecordSessionStateSnapshotRequest)(nil),    // 81: kodex.agents.v1.RecordSessionStateSnapshotRequest
+	(*RequestAcceptanceRequest)(nil),             // 82: kodex.agents.v1.RequestAcceptanceRequest
+	(*RecordAcceptanceResultRequest)(nil),        // 83: kodex.agents.v1.RecordAcceptanceResultRequest
+	(*GetAcceptanceResultRequest)(nil),           // 84: kodex.agents.v1.GetAcceptanceResultRequest
+	(*ListAcceptanceResultsRequest)(nil),         // 85: kodex.agents.v1.ListAcceptanceResultsRequest
+	(*CreateFollowUpIntentRequest)(nil),          // 86: kodex.agents.v1.CreateFollowUpIntentRequest
+	(*DispatchFollowUpIntentRequest)(nil),        // 87: kodex.agents.v1.DispatchFollowUpIntentRequest
+	(*FollowUpCreateIssueCommand)(nil),           // 88: kodex.agents.v1.FollowUpCreateIssueCommand
+	(*FollowUpUpdateIssueCommand)(nil),           // 89: kodex.agents.v1.FollowUpUpdateIssueCommand
+	(*FollowUpCreateCommentCommand)(nil),         // 90: kodex.agents.v1.FollowUpCreateCommentCommand
+	(*FollowUpUpdateCommentCommand)(nil),         // 91: kodex.agents.v1.FollowUpUpdateCommentCommand
+	(*RecordAgentActivityRequest)(nil),           // 92: kodex.agents.v1.RecordAgentActivityRequest
+	(*ListAgentActivitiesRequest)(nil),           // 93: kodex.agents.v1.ListAgentActivitiesRequest
+	(*RequestHumanGateRequest)(nil),              // 94: kodex.agents.v1.RequestHumanGateRequest
+	(*GetAgentSessionRequest)(nil),               // 95: kodex.agents.v1.GetAgentSessionRequest
+	(*ListAgentRunsRequest)(nil),                 // 96: kodex.agents.v1.ListAgentRunsRequest
+	(*AgentSessionResponse)(nil),                 // 97: kodex.agents.v1.AgentSessionResponse
+	(*AgentRunResponse)(nil),                     // 98: kodex.agents.v1.AgentRunResponse
+	(*AgentSessionStateSnapshotResponse)(nil),    // 99: kodex.agents.v1.AgentSessionStateSnapshotResponse
+	(*AcceptanceResultResponse)(nil),             // 100: kodex.agents.v1.AcceptanceResultResponse
+	(*ListAcceptanceResultsResponse)(nil),        // 101: kodex.agents.v1.ListAcceptanceResultsResponse
+	(*FollowUpIntentResponse)(nil),               // 102: kodex.agents.v1.FollowUpIntentResponse
+	(*AgentActivityResponse)(nil),                // 103: kodex.agents.v1.AgentActivityResponse
+	(*ListAgentActivitiesResponse)(nil),          // 104: kodex.agents.v1.ListAgentActivitiesResponse
+	(*HumanGateRequestResponse)(nil),             // 105: kodex.agents.v1.HumanGateRequestResponse
+	(*ListAgentRunsResponse)(nil),                // 106: kodex.agents.v1.ListAgentRunsResponse
+	(*v1.ProviderOperationPolicyContext)(nil),    // 107: kodex.providers.v1.ProviderOperationPolicyContext
+	(*v1.ApprovalGateReference)(nil),             // 108: kodex.providers.v1.ApprovalGateReference
+	(*v1.ProviderTarget)(nil),                    // 109: kodex.providers.v1.ProviderTarget
+	(*v1.StringListPatch)(nil),                   // 110: kodex.providers.v1.StringListPatch
 }
 var file_kodex_agents_v1_agent_manager_proto_depIdxs = []int32{
-	23,  // 0: kodex.agents.v1.CommandMeta.actor:type_name -> kodex.agents.v1.Actor
-	22,  // 1: kodex.agents.v1.CommandMeta.request_context:type_name -> kodex.agents.v1.RequestContext
-	23,  // 2: kodex.agents.v1.QueryMeta.actor:type_name -> kodex.agents.v1.Actor
-	22,  // 3: kodex.agents.v1.QueryMeta.request_context:type_name -> kodex.agents.v1.RequestContext
+	24,  // 0: kodex.agents.v1.CommandMeta.actor:type_name -> kodex.agents.v1.Actor
+	23,  // 1: kodex.agents.v1.CommandMeta.request_context:type_name -> kodex.agents.v1.RequestContext
+	24,  // 2: kodex.agents.v1.QueryMeta.actor:type_name -> kodex.agents.v1.Actor
+	23,  // 3: kodex.agents.v1.QueryMeta.request_context:type_name -> kodex.agents.v1.RequestContext
 	0,   // 4: kodex.agents.v1.ScopeRef.type:type_name -> kodex.agents.v1.AgentScopeType
-	27,  // 5: kodex.agents.v1.Flow.scope:type_name -> kodex.agents.v1.ScopeRef
-	26,  // 6: kodex.agents.v1.Flow.display_name:type_name -> kodex.agents.v1.LocalizedText
-	26,  // 7: kodex.agents.v1.Flow.description:type_name -> kodex.agents.v1.LocalizedText
+	28,  // 5: kodex.agents.v1.Flow.scope:type_name -> kodex.agents.v1.ScopeRef
+	27,  // 6: kodex.agents.v1.Flow.display_name:type_name -> kodex.agents.v1.LocalizedText
+	27,  // 7: kodex.agents.v1.Flow.description:type_name -> kodex.agents.v1.LocalizedText
 	1,   // 8: kodex.agents.v1.Flow.status:type_name -> kodex.agents.v1.FlowStatus
 	2,   // 9: kodex.agents.v1.FlowVersion.status:type_name -> kodex.agents.v1.FlowVersionStatus
-	35,  // 10: kodex.agents.v1.FlowVersion.stages:type_name -> kodex.agents.v1.Stage
-	36,  // 11: kodex.agents.v1.FlowVersion.transitions:type_name -> kodex.agents.v1.StageTransition
-	40,  // 12: kodex.agents.v1.FlowVersion.stage_role_bindings:type_name -> kodex.agents.v1.StageRoleBinding
+	36,  // 10: kodex.agents.v1.FlowVersion.stages:type_name -> kodex.agents.v1.Stage
+	37,  // 11: kodex.agents.v1.FlowVersion.transitions:type_name -> kodex.agents.v1.StageTransition
+	41,  // 12: kodex.agents.v1.FlowVersion.stage_role_bindings:type_name -> kodex.agents.v1.StageRoleBinding
 	3,   // 13: kodex.agents.v1.Stage.stage_type:type_name -> kodex.agents.v1.StageType
-	26,  // 14: kodex.agents.v1.Stage.display_name:type_name -> kodex.agents.v1.LocalizedText
-	27,  // 15: kodex.agents.v1.RoleProfile.scope:type_name -> kodex.agents.v1.ScopeRef
-	26,  // 16: kodex.agents.v1.RoleProfile.display_name:type_name -> kodex.agents.v1.LocalizedText
+	27,  // 14: kodex.agents.v1.Stage.display_name:type_name -> kodex.agents.v1.LocalizedText
+	28,  // 15: kodex.agents.v1.RoleProfile.scope:type_name -> kodex.agents.v1.ScopeRef
+	27,  // 16: kodex.agents.v1.RoleProfile.display_name:type_name -> kodex.agents.v1.LocalizedText
 	4,   // 17: kodex.agents.v1.RoleProfile.role_kind:type_name -> kodex.agents.v1.RoleKind
 	5,   // 18: kodex.agents.v1.RoleProfile.status:type_name -> kodex.agents.v1.RoleStatus
 	6,   // 19: kodex.agents.v1.PromptTemplate.prompt_kind:type_name -> kodex.agents.v1.PromptKind
 	6,   // 20: kodex.agents.v1.PromptTemplateVersion.prompt_kind:type_name -> kodex.agents.v1.PromptKind
-	32,  // 21: kodex.agents.v1.PromptTemplateVersion.template_object:type_name -> kodex.agents.v1.ObjectRef
+	33,  // 21: kodex.agents.v1.PromptTemplateVersion.template_object:type_name -> kodex.agents.v1.ObjectRef
 	7,   // 22: kodex.agents.v1.PromptTemplateVersion.status:type_name -> kodex.agents.v1.PromptVersionStatus
 	8,   // 23: kodex.agents.v1.StageRoleBinding.binding_kind:type_name -> kodex.agents.v1.StageRoleBindingKind
-	27,  // 24: kodex.agents.v1.AgentSession.scope:type_name -> kodex.agents.v1.ScopeRef
+	28,  // 24: kodex.agents.v1.AgentSession.scope:type_name -> kodex.agents.v1.ScopeRef
 	9,   // 25: kodex.agents.v1.AgentSession.status:type_name -> kodex.agents.v1.AgentSessionStatus
-	29,  // 26: kodex.agents.v1.AgentRun.runtime_context:type_name -> kodex.agents.v1.RuntimeContextRef
-	28,  // 27: kodex.agents.v1.AgentRun.provider_target:type_name -> kodex.agents.v1.ProviderTargetRef
-	30,  // 28: kodex.agents.v1.AgentRun.guidance_refs:type_name -> kodex.agents.v1.GuidanceRef
+	30,  // 26: kodex.agents.v1.AgentRun.runtime_context:type_name -> kodex.agents.v1.RuntimeContextRef
+	29,  // 27: kodex.agents.v1.AgentRun.provider_target:type_name -> kodex.agents.v1.ProviderTargetRef
+	31,  // 28: kodex.agents.v1.AgentRun.guidance_refs:type_name -> kodex.agents.v1.GuidanceRef
 	10,  // 29: kodex.agents.v1.AgentRun.status:type_name -> kodex.agents.v1.AgentRunStatus
 	11,  // 30: kodex.agents.v1.AgentSessionStateSnapshot.snapshot_kind:type_name -> kodex.agents.v1.AgentSessionSnapshotKind
-	32,  // 31: kodex.agents.v1.AgentSessionStateSnapshot.object:type_name -> kodex.agents.v1.ObjectRef
+	33,  // 31: kodex.agents.v1.AgentSessionStateSnapshot.object:type_name -> kodex.agents.v1.ObjectRef
 	12,  // 32: kodex.agents.v1.AcceptanceResult.check_kind:type_name -> kodex.agents.v1.AcceptanceCheckKind
 	13,  // 33: kodex.agents.v1.AcceptanceResult.status:type_name -> kodex.agents.v1.AcceptanceStatus
 	14,  // 34: kodex.agents.v1.FollowUpIntent.status:type_name -> kodex.agents.v1.FollowUpIntentStatus
-	28,  // 35: kodex.agents.v1.FollowUpIntent.provider_target:type_name -> kodex.agents.v1.ProviderTargetRef
-	15,  // 36: kodex.agents.v1.AgentActivity.activity_kind:type_name -> kodex.agents.v1.AgentActivityKind
-	16,  // 37: kodex.agents.v1.AgentActivity.status:type_name -> kodex.agents.v1.AgentActivityStatus
-	17,  // 38: kodex.agents.v1.HumanGateRequest.status:type_name -> kodex.agents.v1.HumanGateStatus
-	49,  // 39: kodex.agents.v1.FlowDefinitionInput.stages:type_name -> kodex.agents.v1.StageInput
-	50,  // 40: kodex.agents.v1.FlowDefinitionInput.transitions:type_name -> kodex.agents.v1.StageTransitionInput
-	51,  // 41: kodex.agents.v1.FlowDefinitionInput.stage_role_bindings:type_name -> kodex.agents.v1.StageRoleBindingInput
+	29,  // 35: kodex.agents.v1.FollowUpIntent.provider_target:type_name -> kodex.agents.v1.ProviderTargetRef
+	16,  // 36: kodex.agents.v1.AgentActivity.activity_kind:type_name -> kodex.agents.v1.AgentActivityKind
+	17,  // 37: kodex.agents.v1.AgentActivity.status:type_name -> kodex.agents.v1.AgentActivityStatus
+	18,  // 38: kodex.agents.v1.HumanGateRequest.status:type_name -> kodex.agents.v1.HumanGateStatus
+	50,  // 39: kodex.agents.v1.FlowDefinitionInput.stages:type_name -> kodex.agents.v1.StageInput
+	51,  // 40: kodex.agents.v1.FlowDefinitionInput.transitions:type_name -> kodex.agents.v1.StageTransitionInput
+	52,  // 41: kodex.agents.v1.FlowDefinitionInput.stage_role_bindings:type_name -> kodex.agents.v1.StageRoleBindingInput
 	3,   // 42: kodex.agents.v1.StageInput.stage_type:type_name -> kodex.agents.v1.StageType
-	26,  // 43: kodex.agents.v1.StageInput.display_name:type_name -> kodex.agents.v1.LocalizedText
+	27,  // 43: kodex.agents.v1.StageInput.display_name:type_name -> kodex.agents.v1.LocalizedText
 	8,   // 44: kodex.agents.v1.StageRoleBindingInput.binding_kind:type_name -> kodex.agents.v1.StageRoleBindingKind
-	20,  // 45: kodex.agents.v1.CreateFlowRequest.meta:type_name -> kodex.agents.v1.CommandMeta
-	27,  // 46: kodex.agents.v1.CreateFlowRequest.scope:type_name -> kodex.agents.v1.ScopeRef
-	26,  // 47: kodex.agents.v1.CreateFlowRequest.display_name:type_name -> kodex.agents.v1.LocalizedText
-	26,  // 48: kodex.agents.v1.CreateFlowRequest.description:type_name -> kodex.agents.v1.LocalizedText
-	20,  // 49: kodex.agents.v1.UpdateFlowRequest.meta:type_name -> kodex.agents.v1.CommandMeta
-	26,  // 50: kodex.agents.v1.UpdateFlowRequest.display_name:type_name -> kodex.agents.v1.LocalizedText
-	26,  // 51: kodex.agents.v1.UpdateFlowRequest.description:type_name -> kodex.agents.v1.LocalizedText
+	21,  // 45: kodex.agents.v1.CreateFlowRequest.meta:type_name -> kodex.agents.v1.CommandMeta
+	28,  // 46: kodex.agents.v1.CreateFlowRequest.scope:type_name -> kodex.agents.v1.ScopeRef
+	27,  // 47: kodex.agents.v1.CreateFlowRequest.display_name:type_name -> kodex.agents.v1.LocalizedText
+	27,  // 48: kodex.agents.v1.CreateFlowRequest.description:type_name -> kodex.agents.v1.LocalizedText
+	21,  // 49: kodex.agents.v1.UpdateFlowRequest.meta:type_name -> kodex.agents.v1.CommandMeta
+	27,  // 50: kodex.agents.v1.UpdateFlowRequest.display_name:type_name -> kodex.agents.v1.LocalizedText
+	27,  // 51: kodex.agents.v1.UpdateFlowRequest.description:type_name -> kodex.agents.v1.LocalizedText
 	1,   // 52: kodex.agents.v1.UpdateFlowRequest.status:type_name -> kodex.agents.v1.FlowStatus
-	20,  // 53: kodex.agents.v1.CreateFlowVersionRequest.meta:type_name -> kodex.agents.v1.CommandMeta
-	48,  // 54: kodex.agents.v1.CreateFlowVersionRequest.definition:type_name -> kodex.agents.v1.FlowDefinitionInput
-	20,  // 55: kodex.agents.v1.ActivateFlowVersionRequest.meta:type_name -> kodex.agents.v1.CommandMeta
-	21,  // 56: kodex.agents.v1.GetFlowRequest.meta:type_name -> kodex.agents.v1.QueryMeta
-	21,  // 57: kodex.agents.v1.ListFlowsRequest.meta:type_name -> kodex.agents.v1.QueryMeta
-	27,  // 58: kodex.agents.v1.ListFlowsRequest.scope:type_name -> kodex.agents.v1.ScopeRef
+	21,  // 53: kodex.agents.v1.CreateFlowVersionRequest.meta:type_name -> kodex.agents.v1.CommandMeta
+	49,  // 54: kodex.agents.v1.CreateFlowVersionRequest.definition:type_name -> kodex.agents.v1.FlowDefinitionInput
+	21,  // 55: kodex.agents.v1.ActivateFlowVersionRequest.meta:type_name -> kodex.agents.v1.CommandMeta
+	22,  // 56: kodex.agents.v1.GetFlowRequest.meta:type_name -> kodex.agents.v1.QueryMeta
+	22,  // 57: kodex.agents.v1.ListFlowsRequest.meta:type_name -> kodex.agents.v1.QueryMeta
+	28,  // 58: kodex.agents.v1.ListFlowsRequest.scope:type_name -> kodex.agents.v1.ScopeRef
 	1,   // 59: kodex.agents.v1.ListFlowsRequest.status:type_name -> kodex.agents.v1.FlowStatus
-	24,  // 60: kodex.agents.v1.ListFlowsRequest.page:type_name -> kodex.agents.v1.PageRequest
-	33,  // 61: kodex.agents.v1.FlowResponse.flow:type_name -> kodex.agents.v1.Flow
-	34,  // 62: kodex.agents.v1.FlowResponse.active_version:type_name -> kodex.agents.v1.FlowVersion
-	34,  // 63: kodex.agents.v1.FlowVersionResponse.flow_version:type_name -> kodex.agents.v1.FlowVersion
-	33,  // 64: kodex.agents.v1.ListFlowsResponse.flows:type_name -> kodex.agents.v1.Flow
-	25,  // 65: kodex.agents.v1.ListFlowsResponse.page:type_name -> kodex.agents.v1.PageResponse
-	20,  // 66: kodex.agents.v1.CreateRoleProfileRequest.meta:type_name -> kodex.agents.v1.CommandMeta
-	27,  // 67: kodex.agents.v1.CreateRoleProfileRequest.scope:type_name -> kodex.agents.v1.ScopeRef
-	26,  // 68: kodex.agents.v1.CreateRoleProfileRequest.display_name:type_name -> kodex.agents.v1.LocalizedText
+	25,  // 60: kodex.agents.v1.ListFlowsRequest.page:type_name -> kodex.agents.v1.PageRequest
+	34,  // 61: kodex.agents.v1.FlowResponse.flow:type_name -> kodex.agents.v1.Flow
+	35,  // 62: kodex.agents.v1.FlowResponse.active_version:type_name -> kodex.agents.v1.FlowVersion
+	35,  // 63: kodex.agents.v1.FlowVersionResponse.flow_version:type_name -> kodex.agents.v1.FlowVersion
+	34,  // 64: kodex.agents.v1.ListFlowsResponse.flows:type_name -> kodex.agents.v1.Flow
+	26,  // 65: kodex.agents.v1.ListFlowsResponse.page:type_name -> kodex.agents.v1.PageResponse
+	21,  // 66: kodex.agents.v1.CreateRoleProfileRequest.meta:type_name -> kodex.agents.v1.CommandMeta
+	28,  // 67: kodex.agents.v1.CreateRoleProfileRequest.scope:type_name -> kodex.agents.v1.ScopeRef
+	27,  // 68: kodex.agents.v1.CreateRoleProfileRequest.display_name:type_name -> kodex.agents.v1.LocalizedText
 	4,   // 69: kodex.agents.v1.CreateRoleProfileRequest.role_kind:type_name -> kodex.agents.v1.RoleKind
-	20,  // 70: kodex.agents.v1.UpdateRoleProfileRequest.meta:type_name -> kodex.agents.v1.CommandMeta
-	26,  // 71: kodex.agents.v1.UpdateRoleProfileRequest.display_name:type_name -> kodex.agents.v1.LocalizedText
+	21,  // 70: kodex.agents.v1.UpdateRoleProfileRequest.meta:type_name -> kodex.agents.v1.CommandMeta
+	27,  // 71: kodex.agents.v1.UpdateRoleProfileRequest.display_name:type_name -> kodex.agents.v1.LocalizedText
 	4,   // 72: kodex.agents.v1.UpdateRoleProfileRequest.role_kind:type_name -> kodex.agents.v1.RoleKind
 	5,   // 73: kodex.agents.v1.UpdateRoleProfileRequest.status:type_name -> kodex.agents.v1.RoleStatus
-	21,  // 74: kodex.agents.v1.GetRoleProfileRequest.meta:type_name -> kodex.agents.v1.QueryMeta
-	21,  // 75: kodex.agents.v1.ListRoleProfilesRequest.meta:type_name -> kodex.agents.v1.QueryMeta
-	27,  // 76: kodex.agents.v1.ListRoleProfilesRequest.scope:type_name -> kodex.agents.v1.ScopeRef
+	22,  // 74: kodex.agents.v1.GetRoleProfileRequest.meta:type_name -> kodex.agents.v1.QueryMeta
+	22,  // 75: kodex.agents.v1.ListRoleProfilesRequest.meta:type_name -> kodex.agents.v1.QueryMeta
+	28,  // 76: kodex.agents.v1.ListRoleProfilesRequest.scope:type_name -> kodex.agents.v1.ScopeRef
 	4,   // 77: kodex.agents.v1.ListRoleProfilesRequest.role_kind:type_name -> kodex.agents.v1.RoleKind
 	5,   // 78: kodex.agents.v1.ListRoleProfilesRequest.status:type_name -> kodex.agents.v1.RoleStatus
-	24,  // 79: kodex.agents.v1.ListRoleProfilesRequest.page:type_name -> kodex.agents.v1.PageRequest
-	37,  // 80: kodex.agents.v1.RoleProfileResponse.role_profile:type_name -> kodex.agents.v1.RoleProfile
-	37,  // 81: kodex.agents.v1.ListRoleProfilesResponse.role_profiles:type_name -> kodex.agents.v1.RoleProfile
-	25,  // 82: kodex.agents.v1.ListRoleProfilesResponse.page:type_name -> kodex.agents.v1.PageResponse
-	21,  // 83: kodex.agents.v1.GetPromptTemplateRequest.meta:type_name -> kodex.agents.v1.QueryMeta
-	21,  // 84: kodex.agents.v1.ListPromptTemplatesRequest.meta:type_name -> kodex.agents.v1.QueryMeta
+	25,  // 79: kodex.agents.v1.ListRoleProfilesRequest.page:type_name -> kodex.agents.v1.PageRequest
+	38,  // 80: kodex.agents.v1.RoleProfileResponse.role_profile:type_name -> kodex.agents.v1.RoleProfile
+	38,  // 81: kodex.agents.v1.ListRoleProfilesResponse.role_profiles:type_name -> kodex.agents.v1.RoleProfile
+	26,  // 82: kodex.agents.v1.ListRoleProfilesResponse.page:type_name -> kodex.agents.v1.PageResponse
+	22,  // 83: kodex.agents.v1.GetPromptTemplateRequest.meta:type_name -> kodex.agents.v1.QueryMeta
+	22,  // 84: kodex.agents.v1.ListPromptTemplatesRequest.meta:type_name -> kodex.agents.v1.QueryMeta
 	6,   // 85: kodex.agents.v1.ListPromptTemplatesRequest.prompt_kind:type_name -> kodex.agents.v1.PromptKind
-	24,  // 86: kodex.agents.v1.ListPromptTemplatesRequest.page:type_name -> kodex.agents.v1.PageRequest
-	38,  // 87: kodex.agents.v1.PromptTemplateResponse.prompt_template:type_name -> kodex.agents.v1.PromptTemplate
-	39,  // 88: kodex.agents.v1.PromptTemplateResponse.active_version:type_name -> kodex.agents.v1.PromptTemplateVersion
-	38,  // 89: kodex.agents.v1.ListPromptTemplatesResponse.prompt_templates:type_name -> kodex.agents.v1.PromptTemplate
-	25,  // 90: kodex.agents.v1.ListPromptTemplatesResponse.page:type_name -> kodex.agents.v1.PageResponse
-	20,  // 91: kodex.agents.v1.CreatePromptTemplateVersionRequest.meta:type_name -> kodex.agents.v1.CommandMeta
+	25,  // 86: kodex.agents.v1.ListPromptTemplatesRequest.page:type_name -> kodex.agents.v1.PageRequest
+	39,  // 87: kodex.agents.v1.PromptTemplateResponse.prompt_template:type_name -> kodex.agents.v1.PromptTemplate
+	40,  // 88: kodex.agents.v1.PromptTemplateResponse.active_version:type_name -> kodex.agents.v1.PromptTemplateVersion
+	39,  // 89: kodex.agents.v1.ListPromptTemplatesResponse.prompt_templates:type_name -> kodex.agents.v1.PromptTemplate
+	26,  // 90: kodex.agents.v1.ListPromptTemplatesResponse.page:type_name -> kodex.agents.v1.PageResponse
+	21,  // 91: kodex.agents.v1.CreatePromptTemplateVersionRequest.meta:type_name -> kodex.agents.v1.CommandMeta
 	6,   // 92: kodex.agents.v1.CreatePromptTemplateVersionRequest.prompt_kind:type_name -> kodex.agents.v1.PromptKind
-	32,  // 93: kodex.agents.v1.CreatePromptTemplateVersionRequest.template_object:type_name -> kodex.agents.v1.ObjectRef
-	20,  // 94: kodex.agents.v1.ActivatePromptTemplateVersionRequest.meta:type_name -> kodex.agents.v1.CommandMeta
-	21,  // 95: kodex.agents.v1.GetPromptTemplateVersionRequest.meta:type_name -> kodex.agents.v1.QueryMeta
-	21,  // 96: kodex.agents.v1.ListPromptTemplateVersionsRequest.meta:type_name -> kodex.agents.v1.QueryMeta
+	33,  // 93: kodex.agents.v1.CreatePromptTemplateVersionRequest.template_object:type_name -> kodex.agents.v1.ObjectRef
+	21,  // 94: kodex.agents.v1.ActivatePromptTemplateVersionRequest.meta:type_name -> kodex.agents.v1.CommandMeta
+	22,  // 95: kodex.agents.v1.GetPromptTemplateVersionRequest.meta:type_name -> kodex.agents.v1.QueryMeta
+	22,  // 96: kodex.agents.v1.ListPromptTemplateVersionsRequest.meta:type_name -> kodex.agents.v1.QueryMeta
 	6,   // 97: kodex.agents.v1.ListPromptTemplateVersionsRequest.prompt_kind:type_name -> kodex.agents.v1.PromptKind
 	7,   // 98: kodex.agents.v1.ListPromptTemplateVersionsRequest.status:type_name -> kodex.agents.v1.PromptVersionStatus
-	24,  // 99: kodex.agents.v1.ListPromptTemplateVersionsRequest.page:type_name -> kodex.agents.v1.PageRequest
-	39,  // 100: kodex.agents.v1.PromptTemplateVersionResponse.prompt_template_version:type_name -> kodex.agents.v1.PromptTemplateVersion
-	39,  // 101: kodex.agents.v1.ListPromptTemplateVersionsResponse.prompt_template_versions:type_name -> kodex.agents.v1.PromptTemplateVersion
-	25,  // 102: kodex.agents.v1.ListPromptTemplateVersionsResponse.page:type_name -> kodex.agents.v1.PageResponse
-	20,  // 103: kodex.agents.v1.StartAgentSessionRequest.meta:type_name -> kodex.agents.v1.CommandMeta
-	27,  // 104: kodex.agents.v1.StartAgentSessionRequest.scope:type_name -> kodex.agents.v1.ScopeRef
-	20,  // 105: kodex.agents.v1.StartAgentRunRequest.meta:type_name -> kodex.agents.v1.CommandMeta
-	28,  // 106: kodex.agents.v1.StartAgentRunRequest.provider_target:type_name -> kodex.agents.v1.ProviderTargetRef
-	31,  // 107: kodex.agents.v1.StartAgentRunRequest.guidance_selection_hints:type_name -> kodex.agents.v1.GuidanceSelectionHint
-	20,  // 108: kodex.agents.v1.RecordRunStateRequest.meta:type_name -> kodex.agents.v1.CommandMeta
+	25,  // 99: kodex.agents.v1.ListPromptTemplateVersionsRequest.page:type_name -> kodex.agents.v1.PageRequest
+	40,  // 100: kodex.agents.v1.PromptTemplateVersionResponse.prompt_template_version:type_name -> kodex.agents.v1.PromptTemplateVersion
+	40,  // 101: kodex.agents.v1.ListPromptTemplateVersionsResponse.prompt_template_versions:type_name -> kodex.agents.v1.PromptTemplateVersion
+	26,  // 102: kodex.agents.v1.ListPromptTemplateVersionsResponse.page:type_name -> kodex.agents.v1.PageResponse
+	21,  // 103: kodex.agents.v1.StartAgentSessionRequest.meta:type_name -> kodex.agents.v1.CommandMeta
+	28,  // 104: kodex.agents.v1.StartAgentSessionRequest.scope:type_name -> kodex.agents.v1.ScopeRef
+	21,  // 105: kodex.agents.v1.StartAgentRunRequest.meta:type_name -> kodex.agents.v1.CommandMeta
+	29,  // 106: kodex.agents.v1.StartAgentRunRequest.provider_target:type_name -> kodex.agents.v1.ProviderTargetRef
+	32,  // 107: kodex.agents.v1.StartAgentRunRequest.guidance_selection_hints:type_name -> kodex.agents.v1.GuidanceSelectionHint
+	21,  // 108: kodex.agents.v1.RecordRunStateRequest.meta:type_name -> kodex.agents.v1.CommandMeta
 	10,  // 109: kodex.agents.v1.RecordRunStateRequest.status:type_name -> kodex.agents.v1.AgentRunStatus
-	29,  // 110: kodex.agents.v1.RecordRunStateRequest.runtime_context:type_name -> kodex.agents.v1.RuntimeContextRef
-	28,  // 111: kodex.agents.v1.RecordRunStateRequest.provider_target:type_name -> kodex.agents.v1.ProviderTargetRef
-	20,  // 112: kodex.agents.v1.RecordSessionStateSnapshotRequest.meta:type_name -> kodex.agents.v1.CommandMeta
+	30,  // 110: kodex.agents.v1.RecordRunStateRequest.runtime_context:type_name -> kodex.agents.v1.RuntimeContextRef
+	29,  // 111: kodex.agents.v1.RecordRunStateRequest.provider_target:type_name -> kodex.agents.v1.ProviderTargetRef
+	21,  // 112: kodex.agents.v1.RecordSessionStateSnapshotRequest.meta:type_name -> kodex.agents.v1.CommandMeta
 	11,  // 113: kodex.agents.v1.RecordSessionStateSnapshotRequest.snapshot_kind:type_name -> kodex.agents.v1.AgentSessionSnapshotKind
-	32,  // 114: kodex.agents.v1.RecordSessionStateSnapshotRequest.object:type_name -> kodex.agents.v1.ObjectRef
-	20,  // 115: kodex.agents.v1.RequestAcceptanceRequest.meta:type_name -> kodex.agents.v1.CommandMeta
+	33,  // 114: kodex.agents.v1.RecordSessionStateSnapshotRequest.object:type_name -> kodex.agents.v1.ObjectRef
+	21,  // 115: kodex.agents.v1.RequestAcceptanceRequest.meta:type_name -> kodex.agents.v1.CommandMeta
 	12,  // 116: kodex.agents.v1.RequestAcceptanceRequest.check_kinds:type_name -> kodex.agents.v1.AcceptanceCheckKind
-	20,  // 117: kodex.agents.v1.RecordAcceptanceResultRequest.meta:type_name -> kodex.agents.v1.CommandMeta
+	21,  // 117: kodex.agents.v1.RecordAcceptanceResultRequest.meta:type_name -> kodex.agents.v1.CommandMeta
 	13,  // 118: kodex.agents.v1.RecordAcceptanceResultRequest.status:type_name -> kodex.agents.v1.AcceptanceStatus
-	21,  // 119: kodex.agents.v1.GetAcceptanceResultRequest.meta:type_name -> kodex.agents.v1.QueryMeta
-	21,  // 120: kodex.agents.v1.ListAcceptanceResultsRequest.meta:type_name -> kodex.agents.v1.QueryMeta
+	22,  // 119: kodex.agents.v1.GetAcceptanceResultRequest.meta:type_name -> kodex.agents.v1.QueryMeta
+	22,  // 120: kodex.agents.v1.ListAcceptanceResultsRequest.meta:type_name -> kodex.agents.v1.QueryMeta
 	13,  // 121: kodex.agents.v1.ListAcceptanceResultsRequest.status:type_name -> kodex.agents.v1.AcceptanceStatus
-	24,  // 122: kodex.agents.v1.ListAcceptanceResultsRequest.page:type_name -> kodex.agents.v1.PageRequest
-	20,  // 123: kodex.agents.v1.CreateFollowUpIntentRequest.meta:type_name -> kodex.agents.v1.CommandMeta
-	28,  // 124: kodex.agents.v1.CreateFollowUpIntentRequest.provider_target:type_name -> kodex.agents.v1.ProviderTargetRef
-	20,  // 125: kodex.agents.v1.DispatchFollowUpIntentRequest.meta:type_name -> kodex.agents.v1.CommandMeta
-	102, // 126: kodex.agents.v1.DispatchFollowUpIntentRequest.repository_target:type_name -> kodex.providers.v1.ProviderTarget
-	103, // 127: kodex.agents.v1.DispatchFollowUpIntentRequest.operation_policy_context:type_name -> kodex.providers.v1.ProviderOperationPolicyContext
-	104, // 128: kodex.agents.v1.DispatchFollowUpIntentRequest.approval_gate_ref:type_name -> kodex.providers.v1.ApprovalGateReference
-	20,  // 129: kodex.agents.v1.RecordAgentActivityRequest.meta:type_name -> kodex.agents.v1.CommandMeta
-	15,  // 130: kodex.agents.v1.RecordAgentActivityRequest.activity_kind:type_name -> kodex.agents.v1.AgentActivityKind
-	16,  // 131: kodex.agents.v1.RecordAgentActivityRequest.status:type_name -> kodex.agents.v1.AgentActivityStatus
-	21,  // 132: kodex.agents.v1.ListAgentActivitiesRequest.meta:type_name -> kodex.agents.v1.QueryMeta
-	15,  // 133: kodex.agents.v1.ListAgentActivitiesRequest.activity_kind:type_name -> kodex.agents.v1.AgentActivityKind
-	16,  // 134: kodex.agents.v1.ListAgentActivitiesRequest.status:type_name -> kodex.agents.v1.AgentActivityStatus
-	24,  // 135: kodex.agents.v1.ListAgentActivitiesRequest.page:type_name -> kodex.agents.v1.PageRequest
-	20,  // 136: kodex.agents.v1.RequestHumanGateRequest.meta:type_name -> kodex.agents.v1.CommandMeta
-	21,  // 137: kodex.agents.v1.GetAgentSessionRequest.meta:type_name -> kodex.agents.v1.QueryMeta
-	21,  // 138: kodex.agents.v1.ListAgentRunsRequest.meta:type_name -> kodex.agents.v1.QueryMeta
-	10,  // 139: kodex.agents.v1.ListAgentRunsRequest.status:type_name -> kodex.agents.v1.AgentRunStatus
-	24,  // 140: kodex.agents.v1.ListAgentRunsRequest.page:type_name -> kodex.agents.v1.PageRequest
-	41,  // 141: kodex.agents.v1.AgentSessionResponse.session:type_name -> kodex.agents.v1.AgentSession
-	43,  // 142: kodex.agents.v1.AgentSessionResponse.latest_state_snapshot:type_name -> kodex.agents.v1.AgentSessionStateSnapshot
-	42,  // 143: kodex.agents.v1.AgentRunResponse.run:type_name -> kodex.agents.v1.AgentRun
-	43,  // 144: kodex.agents.v1.AgentSessionStateSnapshotResponse.snapshot:type_name -> kodex.agents.v1.AgentSessionStateSnapshot
-	41,  // 145: kodex.agents.v1.AgentSessionStateSnapshotResponse.session:type_name -> kodex.agents.v1.AgentSession
-	44,  // 146: kodex.agents.v1.AcceptanceResultResponse.acceptance_result:type_name -> kodex.agents.v1.AcceptanceResult
-	44,  // 147: kodex.agents.v1.ListAcceptanceResultsResponse.acceptance_results:type_name -> kodex.agents.v1.AcceptanceResult
-	25,  // 148: kodex.agents.v1.ListAcceptanceResultsResponse.page:type_name -> kodex.agents.v1.PageResponse
-	45,  // 149: kodex.agents.v1.FollowUpIntentResponse.follow_up_intent:type_name -> kodex.agents.v1.FollowUpIntent
-	46,  // 150: kodex.agents.v1.AgentActivityResponse.activity:type_name -> kodex.agents.v1.AgentActivity
-	46,  // 151: kodex.agents.v1.ListAgentActivitiesResponse.activities:type_name -> kodex.agents.v1.AgentActivity
-	25,  // 152: kodex.agents.v1.ListAgentActivitiesResponse.page:type_name -> kodex.agents.v1.PageResponse
-	47,  // 153: kodex.agents.v1.HumanGateRequestResponse.human_gate_request:type_name -> kodex.agents.v1.HumanGateRequest
-	42,  // 154: kodex.agents.v1.ListAgentRunsResponse.runs:type_name -> kodex.agents.v1.AgentRun
-	25,  // 155: kodex.agents.v1.ListAgentRunsResponse.page:type_name -> kodex.agents.v1.PageResponse
-	52,  // 156: kodex.agents.v1.AgentManagerService.CreateFlow:input_type -> kodex.agents.v1.CreateFlowRequest
-	53,  // 157: kodex.agents.v1.AgentManagerService.UpdateFlow:input_type -> kodex.agents.v1.UpdateFlowRequest
-	54,  // 158: kodex.agents.v1.AgentManagerService.CreateFlowVersion:input_type -> kodex.agents.v1.CreateFlowVersionRequest
-	55,  // 159: kodex.agents.v1.AgentManagerService.ActivateFlowVersion:input_type -> kodex.agents.v1.ActivateFlowVersionRequest
-	56,  // 160: kodex.agents.v1.AgentManagerService.GetFlow:input_type -> kodex.agents.v1.GetFlowRequest
-	57,  // 161: kodex.agents.v1.AgentManagerService.ListFlows:input_type -> kodex.agents.v1.ListFlowsRequest
-	61,  // 162: kodex.agents.v1.AgentManagerService.CreateRoleProfile:input_type -> kodex.agents.v1.CreateRoleProfileRequest
-	62,  // 163: kodex.agents.v1.AgentManagerService.UpdateRoleProfile:input_type -> kodex.agents.v1.UpdateRoleProfileRequest
-	63,  // 164: kodex.agents.v1.AgentManagerService.GetRoleProfile:input_type -> kodex.agents.v1.GetRoleProfileRequest
-	64,  // 165: kodex.agents.v1.AgentManagerService.ListRoleProfiles:input_type -> kodex.agents.v1.ListRoleProfilesRequest
-	67,  // 166: kodex.agents.v1.AgentManagerService.GetPromptTemplate:input_type -> kodex.agents.v1.GetPromptTemplateRequest
-	68,  // 167: kodex.agents.v1.AgentManagerService.ListPromptTemplates:input_type -> kodex.agents.v1.ListPromptTemplatesRequest
-	71,  // 168: kodex.agents.v1.AgentManagerService.CreatePromptTemplateVersion:input_type -> kodex.agents.v1.CreatePromptTemplateVersionRequest
-	72,  // 169: kodex.agents.v1.AgentManagerService.ActivatePromptTemplateVersion:input_type -> kodex.agents.v1.ActivatePromptTemplateVersionRequest
-	73,  // 170: kodex.agents.v1.AgentManagerService.GetPromptTemplateVersion:input_type -> kodex.agents.v1.GetPromptTemplateVersionRequest
-	74,  // 171: kodex.agents.v1.AgentManagerService.ListPromptTemplateVersions:input_type -> kodex.agents.v1.ListPromptTemplateVersionsRequest
-	77,  // 172: kodex.agents.v1.AgentManagerService.StartAgentSession:input_type -> kodex.agents.v1.StartAgentSessionRequest
-	78,  // 173: kodex.agents.v1.AgentManagerService.StartAgentRun:input_type -> kodex.agents.v1.StartAgentRunRequest
-	79,  // 174: kodex.agents.v1.AgentManagerService.RecordRunState:input_type -> kodex.agents.v1.RecordRunStateRequest
-	80,  // 175: kodex.agents.v1.AgentManagerService.RecordSessionStateSnapshot:input_type -> kodex.agents.v1.RecordSessionStateSnapshotRequest
-	81,  // 176: kodex.agents.v1.AgentManagerService.RequestAcceptance:input_type -> kodex.agents.v1.RequestAcceptanceRequest
-	82,  // 177: kodex.agents.v1.AgentManagerService.RecordAcceptanceResult:input_type -> kodex.agents.v1.RecordAcceptanceResultRequest
-	83,  // 178: kodex.agents.v1.AgentManagerService.GetAcceptanceResult:input_type -> kodex.agents.v1.GetAcceptanceResultRequest
-	84,  // 179: kodex.agents.v1.AgentManagerService.ListAcceptanceResults:input_type -> kodex.agents.v1.ListAcceptanceResultsRequest
-	85,  // 180: kodex.agents.v1.AgentManagerService.CreateFollowUpIntent:input_type -> kodex.agents.v1.CreateFollowUpIntentRequest
-	86,  // 181: kodex.agents.v1.AgentManagerService.DispatchFollowUpIntent:input_type -> kodex.agents.v1.DispatchFollowUpIntentRequest
-	87,  // 182: kodex.agents.v1.AgentManagerService.RecordAgentActivity:input_type -> kodex.agents.v1.RecordAgentActivityRequest
-	88,  // 183: kodex.agents.v1.AgentManagerService.ListAgentActivities:input_type -> kodex.agents.v1.ListAgentActivitiesRequest
-	89,  // 184: kodex.agents.v1.AgentManagerService.RequestHumanGate:input_type -> kodex.agents.v1.RequestHumanGateRequest
-	90,  // 185: kodex.agents.v1.AgentManagerService.GetAgentSession:input_type -> kodex.agents.v1.GetAgentSessionRequest
-	91,  // 186: kodex.agents.v1.AgentManagerService.ListAgentRuns:input_type -> kodex.agents.v1.ListAgentRunsRequest
-	58,  // 187: kodex.agents.v1.AgentManagerService.CreateFlow:output_type -> kodex.agents.v1.FlowResponse
-	58,  // 188: kodex.agents.v1.AgentManagerService.UpdateFlow:output_type -> kodex.agents.v1.FlowResponse
-	59,  // 189: kodex.agents.v1.AgentManagerService.CreateFlowVersion:output_type -> kodex.agents.v1.FlowVersionResponse
-	59,  // 190: kodex.agents.v1.AgentManagerService.ActivateFlowVersion:output_type -> kodex.agents.v1.FlowVersionResponse
-	58,  // 191: kodex.agents.v1.AgentManagerService.GetFlow:output_type -> kodex.agents.v1.FlowResponse
-	60,  // 192: kodex.agents.v1.AgentManagerService.ListFlows:output_type -> kodex.agents.v1.ListFlowsResponse
-	65,  // 193: kodex.agents.v1.AgentManagerService.CreateRoleProfile:output_type -> kodex.agents.v1.RoleProfileResponse
-	65,  // 194: kodex.agents.v1.AgentManagerService.UpdateRoleProfile:output_type -> kodex.agents.v1.RoleProfileResponse
-	65,  // 195: kodex.agents.v1.AgentManagerService.GetRoleProfile:output_type -> kodex.agents.v1.RoleProfileResponse
-	66,  // 196: kodex.agents.v1.AgentManagerService.ListRoleProfiles:output_type -> kodex.agents.v1.ListRoleProfilesResponse
-	69,  // 197: kodex.agents.v1.AgentManagerService.GetPromptTemplate:output_type -> kodex.agents.v1.PromptTemplateResponse
-	70,  // 198: kodex.agents.v1.AgentManagerService.ListPromptTemplates:output_type -> kodex.agents.v1.ListPromptTemplatesResponse
-	75,  // 199: kodex.agents.v1.AgentManagerService.CreatePromptTemplateVersion:output_type -> kodex.agents.v1.PromptTemplateVersionResponse
-	75,  // 200: kodex.agents.v1.AgentManagerService.ActivatePromptTemplateVersion:output_type -> kodex.agents.v1.PromptTemplateVersionResponse
-	75,  // 201: kodex.agents.v1.AgentManagerService.GetPromptTemplateVersion:output_type -> kodex.agents.v1.PromptTemplateVersionResponse
-	76,  // 202: kodex.agents.v1.AgentManagerService.ListPromptTemplateVersions:output_type -> kodex.agents.v1.ListPromptTemplateVersionsResponse
-	92,  // 203: kodex.agents.v1.AgentManagerService.StartAgentSession:output_type -> kodex.agents.v1.AgentSessionResponse
-	93,  // 204: kodex.agents.v1.AgentManagerService.StartAgentRun:output_type -> kodex.agents.v1.AgentRunResponse
-	93,  // 205: kodex.agents.v1.AgentManagerService.RecordRunState:output_type -> kodex.agents.v1.AgentRunResponse
-	94,  // 206: kodex.agents.v1.AgentManagerService.RecordSessionStateSnapshot:output_type -> kodex.agents.v1.AgentSessionStateSnapshotResponse
-	95,  // 207: kodex.agents.v1.AgentManagerService.RequestAcceptance:output_type -> kodex.agents.v1.AcceptanceResultResponse
-	95,  // 208: kodex.agents.v1.AgentManagerService.RecordAcceptanceResult:output_type -> kodex.agents.v1.AcceptanceResultResponse
-	95,  // 209: kodex.agents.v1.AgentManagerService.GetAcceptanceResult:output_type -> kodex.agents.v1.AcceptanceResultResponse
-	96,  // 210: kodex.agents.v1.AgentManagerService.ListAcceptanceResults:output_type -> kodex.agents.v1.ListAcceptanceResultsResponse
-	97,  // 211: kodex.agents.v1.AgentManagerService.CreateFollowUpIntent:output_type -> kodex.agents.v1.FollowUpIntentResponse
-	97,  // 212: kodex.agents.v1.AgentManagerService.DispatchFollowUpIntent:output_type -> kodex.agents.v1.FollowUpIntentResponse
-	98,  // 213: kodex.agents.v1.AgentManagerService.RecordAgentActivity:output_type -> kodex.agents.v1.AgentActivityResponse
-	99,  // 214: kodex.agents.v1.AgentManagerService.ListAgentActivities:output_type -> kodex.agents.v1.ListAgentActivitiesResponse
-	100, // 215: kodex.agents.v1.AgentManagerService.RequestHumanGate:output_type -> kodex.agents.v1.HumanGateRequestResponse
-	92,  // 216: kodex.agents.v1.AgentManagerService.GetAgentSession:output_type -> kodex.agents.v1.AgentSessionResponse
-	101, // 217: kodex.agents.v1.AgentManagerService.ListAgentRuns:output_type -> kodex.agents.v1.ListAgentRunsResponse
-	187, // [187:218] is the sub-list for method output_type
-	156, // [156:187] is the sub-list for method input_type
-	156, // [156:156] is the sub-list for extension type_name
-	156, // [156:156] is the sub-list for extension extendee
-	0,   // [0:156] is the sub-list for field type_name
+	25,  // 122: kodex.agents.v1.ListAcceptanceResultsRequest.page:type_name -> kodex.agents.v1.PageRequest
+	21,  // 123: kodex.agents.v1.CreateFollowUpIntentRequest.meta:type_name -> kodex.agents.v1.CommandMeta
+	29,  // 124: kodex.agents.v1.CreateFollowUpIntentRequest.provider_target:type_name -> kodex.agents.v1.ProviderTargetRef
+	21,  // 125: kodex.agents.v1.DispatchFollowUpIntentRequest.meta:type_name -> kodex.agents.v1.CommandMeta
+	15,  // 126: kodex.agents.v1.DispatchFollowUpIntentRequest.dispatch_kind:type_name -> kodex.agents.v1.FollowUpDispatchKind
+	107, // 127: kodex.agents.v1.DispatchFollowUpIntentRequest.operation_policy_context:type_name -> kodex.providers.v1.ProviderOperationPolicyContext
+	108, // 128: kodex.agents.v1.DispatchFollowUpIntentRequest.approval_gate_ref:type_name -> kodex.providers.v1.ApprovalGateReference
+	88,  // 129: kodex.agents.v1.DispatchFollowUpIntentRequest.create_issue:type_name -> kodex.agents.v1.FollowUpCreateIssueCommand
+	89,  // 130: kodex.agents.v1.DispatchFollowUpIntentRequest.update_issue:type_name -> kodex.agents.v1.FollowUpUpdateIssueCommand
+	90,  // 131: kodex.agents.v1.DispatchFollowUpIntentRequest.create_comment:type_name -> kodex.agents.v1.FollowUpCreateCommentCommand
+	91,  // 132: kodex.agents.v1.DispatchFollowUpIntentRequest.update_comment:type_name -> kodex.agents.v1.FollowUpUpdateCommentCommand
+	109, // 133: kodex.agents.v1.FollowUpCreateIssueCommand.repository_target:type_name -> kodex.providers.v1.ProviderTarget
+	109, // 134: kodex.agents.v1.FollowUpUpdateIssueCommand.target:type_name -> kodex.providers.v1.ProviderTarget
+	110, // 135: kodex.agents.v1.FollowUpUpdateIssueCommand.labels:type_name -> kodex.providers.v1.StringListPatch
+	110, // 136: kodex.agents.v1.FollowUpUpdateIssueCommand.assignee_provider_logins:type_name -> kodex.providers.v1.StringListPatch
+	109, // 137: kodex.agents.v1.FollowUpCreateCommentCommand.target:type_name -> kodex.providers.v1.ProviderTarget
+	109, // 138: kodex.agents.v1.FollowUpUpdateCommentCommand.target:type_name -> kodex.providers.v1.ProviderTarget
+	21,  // 139: kodex.agents.v1.RecordAgentActivityRequest.meta:type_name -> kodex.agents.v1.CommandMeta
+	16,  // 140: kodex.agents.v1.RecordAgentActivityRequest.activity_kind:type_name -> kodex.agents.v1.AgentActivityKind
+	17,  // 141: kodex.agents.v1.RecordAgentActivityRequest.status:type_name -> kodex.agents.v1.AgentActivityStatus
+	22,  // 142: kodex.agents.v1.ListAgentActivitiesRequest.meta:type_name -> kodex.agents.v1.QueryMeta
+	16,  // 143: kodex.agents.v1.ListAgentActivitiesRequest.activity_kind:type_name -> kodex.agents.v1.AgentActivityKind
+	17,  // 144: kodex.agents.v1.ListAgentActivitiesRequest.status:type_name -> kodex.agents.v1.AgentActivityStatus
+	25,  // 145: kodex.agents.v1.ListAgentActivitiesRequest.page:type_name -> kodex.agents.v1.PageRequest
+	21,  // 146: kodex.agents.v1.RequestHumanGateRequest.meta:type_name -> kodex.agents.v1.CommandMeta
+	22,  // 147: kodex.agents.v1.GetAgentSessionRequest.meta:type_name -> kodex.agents.v1.QueryMeta
+	22,  // 148: kodex.agents.v1.ListAgentRunsRequest.meta:type_name -> kodex.agents.v1.QueryMeta
+	10,  // 149: kodex.agents.v1.ListAgentRunsRequest.status:type_name -> kodex.agents.v1.AgentRunStatus
+	25,  // 150: kodex.agents.v1.ListAgentRunsRequest.page:type_name -> kodex.agents.v1.PageRequest
+	42,  // 151: kodex.agents.v1.AgentSessionResponse.session:type_name -> kodex.agents.v1.AgentSession
+	44,  // 152: kodex.agents.v1.AgentSessionResponse.latest_state_snapshot:type_name -> kodex.agents.v1.AgentSessionStateSnapshot
+	43,  // 153: kodex.agents.v1.AgentRunResponse.run:type_name -> kodex.agents.v1.AgentRun
+	44,  // 154: kodex.agents.v1.AgentSessionStateSnapshotResponse.snapshot:type_name -> kodex.agents.v1.AgentSessionStateSnapshot
+	42,  // 155: kodex.agents.v1.AgentSessionStateSnapshotResponse.session:type_name -> kodex.agents.v1.AgentSession
+	45,  // 156: kodex.agents.v1.AcceptanceResultResponse.acceptance_result:type_name -> kodex.agents.v1.AcceptanceResult
+	45,  // 157: kodex.agents.v1.ListAcceptanceResultsResponse.acceptance_results:type_name -> kodex.agents.v1.AcceptanceResult
+	26,  // 158: kodex.agents.v1.ListAcceptanceResultsResponse.page:type_name -> kodex.agents.v1.PageResponse
+	46,  // 159: kodex.agents.v1.FollowUpIntentResponse.follow_up_intent:type_name -> kodex.agents.v1.FollowUpIntent
+	47,  // 160: kodex.agents.v1.AgentActivityResponse.activity:type_name -> kodex.agents.v1.AgentActivity
+	47,  // 161: kodex.agents.v1.ListAgentActivitiesResponse.activities:type_name -> kodex.agents.v1.AgentActivity
+	26,  // 162: kodex.agents.v1.ListAgentActivitiesResponse.page:type_name -> kodex.agents.v1.PageResponse
+	48,  // 163: kodex.agents.v1.HumanGateRequestResponse.human_gate_request:type_name -> kodex.agents.v1.HumanGateRequest
+	43,  // 164: kodex.agents.v1.ListAgentRunsResponse.runs:type_name -> kodex.agents.v1.AgentRun
+	26,  // 165: kodex.agents.v1.ListAgentRunsResponse.page:type_name -> kodex.agents.v1.PageResponse
+	53,  // 166: kodex.agents.v1.AgentManagerService.CreateFlow:input_type -> kodex.agents.v1.CreateFlowRequest
+	54,  // 167: kodex.agents.v1.AgentManagerService.UpdateFlow:input_type -> kodex.agents.v1.UpdateFlowRequest
+	55,  // 168: kodex.agents.v1.AgentManagerService.CreateFlowVersion:input_type -> kodex.agents.v1.CreateFlowVersionRequest
+	56,  // 169: kodex.agents.v1.AgentManagerService.ActivateFlowVersion:input_type -> kodex.agents.v1.ActivateFlowVersionRequest
+	57,  // 170: kodex.agents.v1.AgentManagerService.GetFlow:input_type -> kodex.agents.v1.GetFlowRequest
+	58,  // 171: kodex.agents.v1.AgentManagerService.ListFlows:input_type -> kodex.agents.v1.ListFlowsRequest
+	62,  // 172: kodex.agents.v1.AgentManagerService.CreateRoleProfile:input_type -> kodex.agents.v1.CreateRoleProfileRequest
+	63,  // 173: kodex.agents.v1.AgentManagerService.UpdateRoleProfile:input_type -> kodex.agents.v1.UpdateRoleProfileRequest
+	64,  // 174: kodex.agents.v1.AgentManagerService.GetRoleProfile:input_type -> kodex.agents.v1.GetRoleProfileRequest
+	65,  // 175: kodex.agents.v1.AgentManagerService.ListRoleProfiles:input_type -> kodex.agents.v1.ListRoleProfilesRequest
+	68,  // 176: kodex.agents.v1.AgentManagerService.GetPromptTemplate:input_type -> kodex.agents.v1.GetPromptTemplateRequest
+	69,  // 177: kodex.agents.v1.AgentManagerService.ListPromptTemplates:input_type -> kodex.agents.v1.ListPromptTemplatesRequest
+	72,  // 178: kodex.agents.v1.AgentManagerService.CreatePromptTemplateVersion:input_type -> kodex.agents.v1.CreatePromptTemplateVersionRequest
+	73,  // 179: kodex.agents.v1.AgentManagerService.ActivatePromptTemplateVersion:input_type -> kodex.agents.v1.ActivatePromptTemplateVersionRequest
+	74,  // 180: kodex.agents.v1.AgentManagerService.GetPromptTemplateVersion:input_type -> kodex.agents.v1.GetPromptTemplateVersionRequest
+	75,  // 181: kodex.agents.v1.AgentManagerService.ListPromptTemplateVersions:input_type -> kodex.agents.v1.ListPromptTemplateVersionsRequest
+	78,  // 182: kodex.agents.v1.AgentManagerService.StartAgentSession:input_type -> kodex.agents.v1.StartAgentSessionRequest
+	79,  // 183: kodex.agents.v1.AgentManagerService.StartAgentRun:input_type -> kodex.agents.v1.StartAgentRunRequest
+	80,  // 184: kodex.agents.v1.AgentManagerService.RecordRunState:input_type -> kodex.agents.v1.RecordRunStateRequest
+	81,  // 185: kodex.agents.v1.AgentManagerService.RecordSessionStateSnapshot:input_type -> kodex.agents.v1.RecordSessionStateSnapshotRequest
+	82,  // 186: kodex.agents.v1.AgentManagerService.RequestAcceptance:input_type -> kodex.agents.v1.RequestAcceptanceRequest
+	83,  // 187: kodex.agents.v1.AgentManagerService.RecordAcceptanceResult:input_type -> kodex.agents.v1.RecordAcceptanceResultRequest
+	84,  // 188: kodex.agents.v1.AgentManagerService.GetAcceptanceResult:input_type -> kodex.agents.v1.GetAcceptanceResultRequest
+	85,  // 189: kodex.agents.v1.AgentManagerService.ListAcceptanceResults:input_type -> kodex.agents.v1.ListAcceptanceResultsRequest
+	86,  // 190: kodex.agents.v1.AgentManagerService.CreateFollowUpIntent:input_type -> kodex.agents.v1.CreateFollowUpIntentRequest
+	87,  // 191: kodex.agents.v1.AgentManagerService.DispatchFollowUpIntent:input_type -> kodex.agents.v1.DispatchFollowUpIntentRequest
+	92,  // 192: kodex.agents.v1.AgentManagerService.RecordAgentActivity:input_type -> kodex.agents.v1.RecordAgentActivityRequest
+	93,  // 193: kodex.agents.v1.AgentManagerService.ListAgentActivities:input_type -> kodex.agents.v1.ListAgentActivitiesRequest
+	94,  // 194: kodex.agents.v1.AgentManagerService.RequestHumanGate:input_type -> kodex.agents.v1.RequestHumanGateRequest
+	95,  // 195: kodex.agents.v1.AgentManagerService.GetAgentSession:input_type -> kodex.agents.v1.GetAgentSessionRequest
+	96,  // 196: kodex.agents.v1.AgentManagerService.ListAgentRuns:input_type -> kodex.agents.v1.ListAgentRunsRequest
+	59,  // 197: kodex.agents.v1.AgentManagerService.CreateFlow:output_type -> kodex.agents.v1.FlowResponse
+	59,  // 198: kodex.agents.v1.AgentManagerService.UpdateFlow:output_type -> kodex.agents.v1.FlowResponse
+	60,  // 199: kodex.agents.v1.AgentManagerService.CreateFlowVersion:output_type -> kodex.agents.v1.FlowVersionResponse
+	60,  // 200: kodex.agents.v1.AgentManagerService.ActivateFlowVersion:output_type -> kodex.agents.v1.FlowVersionResponse
+	59,  // 201: kodex.agents.v1.AgentManagerService.GetFlow:output_type -> kodex.agents.v1.FlowResponse
+	61,  // 202: kodex.agents.v1.AgentManagerService.ListFlows:output_type -> kodex.agents.v1.ListFlowsResponse
+	66,  // 203: kodex.agents.v1.AgentManagerService.CreateRoleProfile:output_type -> kodex.agents.v1.RoleProfileResponse
+	66,  // 204: kodex.agents.v1.AgentManagerService.UpdateRoleProfile:output_type -> kodex.agents.v1.RoleProfileResponse
+	66,  // 205: kodex.agents.v1.AgentManagerService.GetRoleProfile:output_type -> kodex.agents.v1.RoleProfileResponse
+	67,  // 206: kodex.agents.v1.AgentManagerService.ListRoleProfiles:output_type -> kodex.agents.v1.ListRoleProfilesResponse
+	70,  // 207: kodex.agents.v1.AgentManagerService.GetPromptTemplate:output_type -> kodex.agents.v1.PromptTemplateResponse
+	71,  // 208: kodex.agents.v1.AgentManagerService.ListPromptTemplates:output_type -> kodex.agents.v1.ListPromptTemplatesResponse
+	76,  // 209: kodex.agents.v1.AgentManagerService.CreatePromptTemplateVersion:output_type -> kodex.agents.v1.PromptTemplateVersionResponse
+	76,  // 210: kodex.agents.v1.AgentManagerService.ActivatePromptTemplateVersion:output_type -> kodex.agents.v1.PromptTemplateVersionResponse
+	76,  // 211: kodex.agents.v1.AgentManagerService.GetPromptTemplateVersion:output_type -> kodex.agents.v1.PromptTemplateVersionResponse
+	77,  // 212: kodex.agents.v1.AgentManagerService.ListPromptTemplateVersions:output_type -> kodex.agents.v1.ListPromptTemplateVersionsResponse
+	97,  // 213: kodex.agents.v1.AgentManagerService.StartAgentSession:output_type -> kodex.agents.v1.AgentSessionResponse
+	98,  // 214: kodex.agents.v1.AgentManagerService.StartAgentRun:output_type -> kodex.agents.v1.AgentRunResponse
+	98,  // 215: kodex.agents.v1.AgentManagerService.RecordRunState:output_type -> kodex.agents.v1.AgentRunResponse
+	99,  // 216: kodex.agents.v1.AgentManagerService.RecordSessionStateSnapshot:output_type -> kodex.agents.v1.AgentSessionStateSnapshotResponse
+	100, // 217: kodex.agents.v1.AgentManagerService.RequestAcceptance:output_type -> kodex.agents.v1.AcceptanceResultResponse
+	100, // 218: kodex.agents.v1.AgentManagerService.RecordAcceptanceResult:output_type -> kodex.agents.v1.AcceptanceResultResponse
+	100, // 219: kodex.agents.v1.AgentManagerService.GetAcceptanceResult:output_type -> kodex.agents.v1.AcceptanceResultResponse
+	101, // 220: kodex.agents.v1.AgentManagerService.ListAcceptanceResults:output_type -> kodex.agents.v1.ListAcceptanceResultsResponse
+	102, // 221: kodex.agents.v1.AgentManagerService.CreateFollowUpIntent:output_type -> kodex.agents.v1.FollowUpIntentResponse
+	102, // 222: kodex.agents.v1.AgentManagerService.DispatchFollowUpIntent:output_type -> kodex.agents.v1.FollowUpIntentResponse
+	103, // 223: kodex.agents.v1.AgentManagerService.RecordAgentActivity:output_type -> kodex.agents.v1.AgentActivityResponse
+	104, // 224: kodex.agents.v1.AgentManagerService.ListAgentActivities:output_type -> kodex.agents.v1.ListAgentActivitiesResponse
+	105, // 225: kodex.agents.v1.AgentManagerService.RequestHumanGate:output_type -> kodex.agents.v1.HumanGateRequestResponse
+	97,  // 226: kodex.agents.v1.AgentManagerService.GetAgentSession:output_type -> kodex.agents.v1.AgentSessionResponse
+	106, // 227: kodex.agents.v1.AgentManagerService.ListAgentRuns:output_type -> kodex.agents.v1.ListAgentRunsResponse
+	197, // [197:228] is the sub-list for method output_type
+	166, // [166:197] is the sub-list for method input_type
+	166, // [166:166] is the sub-list for extension type_name
+	166, // [166:166] is the sub-list for extension extendee
+	0,   // [0:166] is the sub-list for field type_name
 }
 
 func init() { file_kodex_agents_v1_agent_manager_proto_init() }
@@ -9336,19 +9845,27 @@ func file_kodex_agents_v1_agent_manager_proto_init() {
 	file_kodex_agents_v1_agent_manager_proto_msgTypes[62].OneofWrappers = []any{}
 	file_kodex_agents_v1_agent_manager_proto_msgTypes[64].OneofWrappers = []any{}
 	file_kodex_agents_v1_agent_manager_proto_msgTypes[65].OneofWrappers = []any{}
-	file_kodex_agents_v1_agent_manager_proto_msgTypes[66].OneofWrappers = []any{}
+	file_kodex_agents_v1_agent_manager_proto_msgTypes[66].OneofWrappers = []any{
+		(*DispatchFollowUpIntentRequest_CreateIssue)(nil),
+		(*DispatchFollowUpIntentRequest_UpdateIssue)(nil),
+		(*DispatchFollowUpIntentRequest_CreateComment)(nil),
+		(*DispatchFollowUpIntentRequest_UpdateComment)(nil),
+	}
 	file_kodex_agents_v1_agent_manager_proto_msgTypes[67].OneofWrappers = []any{}
 	file_kodex_agents_v1_agent_manager_proto_msgTypes[68].OneofWrappers = []any{}
-	file_kodex_agents_v1_agent_manager_proto_msgTypes[69].OneofWrappers = []any{}
+	file_kodex_agents_v1_agent_manager_proto_msgTypes[70].OneofWrappers = []any{}
 	file_kodex_agents_v1_agent_manager_proto_msgTypes[71].OneofWrappers = []any{}
 	file_kodex_agents_v1_agent_manager_proto_msgTypes[72].OneofWrappers = []any{}
+	file_kodex_agents_v1_agent_manager_proto_msgTypes[73].OneofWrappers = []any{}
+	file_kodex_agents_v1_agent_manager_proto_msgTypes[75].OneofWrappers = []any{}
+	file_kodex_agents_v1_agent_manager_proto_msgTypes[76].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_kodex_agents_v1_agent_manager_proto_rawDesc), len(file_kodex_agents_v1_agent_manager_proto_rawDesc)),
-			NumEnums:      20,
-			NumMessages:   82,
+			NumEnums:      21,
+			NumMessages:   86,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

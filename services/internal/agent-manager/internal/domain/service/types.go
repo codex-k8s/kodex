@@ -248,12 +248,24 @@ const (
 	ProviderOperationStatusInProgress      ProviderOperationStatus = "in_progress"
 )
 
+type FollowUpDispatchKind string
+
 const (
-	ProviderOperationTypeCreateIssue = "create_issue"
-	ProviderRiskLevelLow             = "low"
-	ProviderRiskLevelMedium          = "medium"
-	ProviderRiskLevelHigh            = "high"
-	ProviderRiskLevelCritical        = "critical"
+	FollowUpDispatchKindCreateIssue   FollowUpDispatchKind = "create_issue"
+	FollowUpDispatchKindUpdateIssue   FollowUpDispatchKind = "update_issue"
+	FollowUpDispatchKindCreateComment FollowUpDispatchKind = "create_comment"
+	FollowUpDispatchKindUpdateComment FollowUpDispatchKind = "update_comment"
+)
+
+const (
+	ProviderOperationTypeCreateIssue   = "create_issue"
+	ProviderOperationTypeUpdateIssue   = "update_issue"
+	ProviderOperationTypeCreateComment = "create_comment"
+	ProviderOperationTypeUpdateComment = "update_comment"
+	ProviderRiskLevelLow               = "low"
+	ProviderRiskLevelMedium            = "medium"
+	ProviderRiskLevelHigh              = "high"
+	ProviderRiskLevelCritical          = "critical"
 )
 
 type ProviderCommandTarget struct {
@@ -295,18 +307,58 @@ type ProviderApprovalGateReference struct {
 type DispatchFollowUpIntentInput struct {
 	Meta                   value.CommandMeta
 	FollowUpIntentID       uuid.UUID
+	DispatchKind           FollowUpDispatchKind
+	OperationPolicyContext ProviderOperationPolicyContext
+	ApprovalGateRef        ProviderApprovalGateReference
+	CreateIssue            *FollowUpCreateIssueCommand
+	UpdateIssue            *FollowUpUpdateIssueCommand
+	CreateComment          *FollowUpCreateCommentCommand
+	UpdateComment          *FollowUpUpdateCommentCommand
+}
+
+type FollowUpCreateIssueCommand struct {
 	ProjectID              uuid.UUID
 	RepositoryID           uuid.UUID
 	ProviderSlug           string
 	ExternalAccountID      uuid.UUID
 	RepositoryTarget       ProviderCommandTarget
+	SafeBodyHint           string
 	Labels                 []string
 	AssigneeProviderLogins []string
 	Milestone              string
 	WatermarkJSON          []byte
-	OperationPolicyContext ProviderOperationPolicyContext
-	ApprovalGateRef        ProviderApprovalGateReference
-	SafeBodyHint           string
+}
+
+type FollowUpUpdateIssueCommand struct {
+	ExternalAccountID       uuid.UUID
+	Target                  ProviderCommandTarget
+	SafeTitle               *string
+	SafeBodyHint            *string
+	Labels                  *ProviderStringListPatch
+	AssigneeProviderLogins  *ProviderStringListPatch
+	Milestone               *string
+	State                   *string
+	ProviderWorkItemType    *string
+	WatermarkJSON           *[]byte
+	ExpectedProviderVersion string
+}
+
+type FollowUpCreateCommentCommand struct {
+	ExternalAccountID uuid.UUID
+	Target            ProviderCommandTarget
+	SafeBodyHint      string
+}
+
+type FollowUpUpdateCommentCommand struct {
+	ExternalAccountID       uuid.UUID
+	Target                  ProviderCommandTarget
+	ProviderCommentID       string
+	SafeBodyHint            string
+	ExpectedProviderVersion string
+}
+
+type ProviderStringListPatch struct {
+	Values []string
 }
 
 type ProviderCreateIssueInput struct {
@@ -327,7 +379,44 @@ type ProviderCreateIssueInput struct {
 	ExternalAccountID      uuid.UUID
 }
 
-type ProviderIssueCommandResult struct {
+type ProviderUpdateIssueInput struct {
+	Meta                    value.CommandMeta
+	Target                  ProviderCommandTarget
+	Title                   *string
+	Body                    *string
+	Labels                  *ProviderStringListPatch
+	AssigneeProviderLogins  *ProviderStringListPatch
+	Milestone               *string
+	State                   *string
+	WorkItemType            *string
+	WatermarkJSON           *[]byte
+	ExpectedProviderVersion string
+	OperationPolicyContext  ProviderOperationPolicyContext
+	ApprovalGateRef         ProviderApprovalGateReference
+	ExternalAccountID       uuid.UUID
+}
+
+type ProviderCreateCommentInput struct {
+	Meta                   value.CommandMeta
+	Target                 ProviderCommandTarget
+	Body                   string
+	OperationPolicyContext ProviderOperationPolicyContext
+	ApprovalGateRef        ProviderApprovalGateReference
+	ExternalAccountID      uuid.UUID
+}
+
+type ProviderUpdateCommentInput struct {
+	Meta                    value.CommandMeta
+	Target                  ProviderCommandTarget
+	ProviderCommentID       string
+	Body                    string
+	ExpectedProviderVersion string
+	OperationPolicyContext  ProviderOperationPolicyContext
+	ApprovalGateRef         ProviderApprovalGateReference
+	ExternalAccountID       uuid.UUID
+}
+
+type ProviderCommandResult struct {
 	ProviderOperationRef string
 	ResultRef            string
 	ProviderObjectID     string

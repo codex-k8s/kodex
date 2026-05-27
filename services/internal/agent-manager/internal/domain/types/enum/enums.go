@@ -150,6 +150,8 @@ const (
 	FollowUpIntentStatusCreated   FollowUpIntentStatus = "created"
 	FollowUpIntentStatusFailed    FollowUpIntentStatus = "failed"
 	FollowUpIntentStatusCancelled FollowUpIntentStatus = "cancelled"
+	FollowUpIntentStatusUpdated   FollowUpIntentStatus = "updated"
+	FollowUpIntentStatusCommented FollowUpIntentStatus = "commented"
 )
 
 type AgentActivityKind string

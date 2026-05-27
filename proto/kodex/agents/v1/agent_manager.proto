@@ -60,7 +60,7 @@ service AgentManagerService {
   rpc ListAcceptanceResults(ListAcceptanceResultsRequest) returns (ListAcceptanceResultsResponse);
   // CreateFollowUpIntent records an intent for the next provider-native work item.
   rpc CreateFollowUpIntent(CreateFollowUpIntentRequest) returns (FollowUpIntentResponse);
-  // DispatchFollowUpIntent sends a requested follow-up intent to provider-hub as a typed Issue command.
+  // DispatchFollowUpIntent sends a requested follow-up intent to provider-hub as a typed provider command.
   rpc DispatchFollowUpIntent(DispatchFollowUpIntentRequest) returns (FollowUpIntentResponse);
   // RecordAgentActivity records one safe timeline entry for a session or run.
   rpc RecordAgentActivity(RecordAgentActivityRequest) returns (AgentActivityResponse);
@@ -368,6 +368,17 @@ enum FollowUpIntentStatus {
   FOLLOW_UP_INTENT_STATUS_CREATED = 3;
   FOLLOW_UP_INTENT_STATUS_FAILED = 4;
   FOLLOW_UP_INTENT_STATUS_CANCELLED = 5;
+  FOLLOW_UP_INTENT_STATUS_UPDATED = 6;
+  FOLLOW_UP_INTENT_STATUS_COMMENTED = 7;
+}
+
+// FollowUpDispatchKind selects the typed provider command for a follow-up intent.
+enum FollowUpDispatchKind {
+  FOLLOW_UP_DISPATCH_KIND_UNSPECIFIED = 0;
+  FOLLOW_UP_DISPATCH_KIND_CREATE_ISSUE = 1;
+  FOLLOW_UP_DISPATCH_KIND_UPDATE_ISSUE = 2;
+  FOLLOW_UP_DISPATCH_KIND_CREATE_COMMENT = 3;
+  FOLLOW_UP_DISPATCH_KIND_UPDATE_COMMENT = 4;
 }
 
 // AgentActivityKind classifies a safe timeline entry.
@@ -962,18 +973,56 @@ message CreateFollowUpIntentRequest {
 message DispatchFollowUpIntentRequest {
   CommandMeta meta = 1;
   string follow_up_intent_id = 2;
-  string project_id = 3;
-  string repository_id = 4;
-  string provider_slug = 5;
-  string external_account_id = 6;
-  kodex.providers.v1.ProviderTarget repository_target = 7;
-  repeated string labels = 8;
-  repeated string assignee_provider_logins = 9;
-  optional string milestone = 10;
-  optional string watermark_json = 11;
-  kodex.providers.v1.ProviderOperationPolicyContext operation_policy_context = 12;
-  kodex.providers.v1.ApprovalGateReference approval_gate_ref = 13;
-  optional string safe_body_hint = 14;
+  FollowUpDispatchKind dispatch_kind = 3;
+  kodex.providers.v1.ProviderOperationPolicyContext operation_policy_context = 4;
+  kodex.providers.v1.ApprovalGateReference approval_gate_ref = 5;
+  oneof command {
+    FollowUpCreateIssueCommand create_issue = 10;
+    FollowUpUpdateIssueCommand update_issue = 11;
+    FollowUpCreateCommentCommand create_comment = 12;
+    FollowUpUpdateCommentCommand update_comment = 13;
+  }
+}
+
+message FollowUpCreateIssueCommand {
+  string project_id = 1;
+  string repository_id = 2;
+  string provider_slug = 3;
+  string external_account_id = 4;
+  kodex.providers.v1.ProviderTarget repository_target = 5;
+  optional string safe_body_hint = 6;
+  repeated string labels = 7;
+  repeated string assignee_provider_logins = 8;
+  optional string milestone = 9;
+  optional string watermark_json = 10;
+}
+
+message FollowUpUpdateIssueCommand {
+  string external_account_id = 1;
+  kodex.providers.v1.ProviderTarget target = 2;
+  optional string safe_title = 3;
+  optional string safe_body_hint = 4;
+  kodex.providers.v1.StringListPatch labels = 5;
+  kodex.providers.v1.StringListPatch assignee_provider_logins = 6;
+  optional string milestone = 7;
+  optional string state = 8;
+  optional string provider_work_item_type = 9;
+  optional string watermark_json = 10;
+  optional string expected_provider_version = 11;
+}
+
+message FollowUpCreateCommentCommand {
+  string external_account_id = 1;
+  kodex.providers.v1.ProviderTarget target = 2;
+  string safe_body_hint = 3;
+}
+
+message FollowUpUpdateCommentCommand {
+  string external_account_id = 1;
+  kodex.providers.v1.ProviderTarget target = 2;
+  string provider_comment_id = 3;
+  string safe_body_hint = 4;
+  optional string expected_provider_version = 5;
 }
 
 message RecordAgentActivityRequest {

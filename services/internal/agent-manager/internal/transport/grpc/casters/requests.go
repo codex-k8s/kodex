@@ -500,15 +500,7 @@ func DispatchFollowUpIntentInput(request *agentsv1.DispatchFollowUpIntentRequest
 	if err != nil {
 		return service.DispatchFollowUpIntentInput{}, err
 	}
-	projectID, err := requiredUUID(request.GetProjectId())
-	if err != nil {
-		return service.DispatchFollowUpIntentInput{}, err
-	}
-	repositoryID, err := requiredUUID(request.GetRepositoryId())
-	if err != nil {
-		return service.DispatchFollowUpIntentInput{}, err
-	}
-	externalAccountID, err := requiredUUID(request.GetExternalAccountId())
+	kind, err := followUpDispatchKindFromProto(request.GetDispatchKind())
 	if err != nil {
 		return service.DispatchFollowUpIntentInput{}, err
 	}
@@ -520,21 +512,138 @@ func DispatchFollowUpIntentInput(request *agentsv1.DispatchFollowUpIntentRequest
 	if err != nil {
 		return service.DispatchFollowUpIntentInput{}, err
 	}
-	return service.DispatchFollowUpIntentInput{
+	input := service.DispatchFollowUpIntentInput{
 		Meta:                   meta,
 		FollowUpIntentID:       intentID,
-		ProjectID:              projectID,
-		RepositoryID:           repositoryID,
-		ProviderSlug:           strings.TrimSpace(request.GetProviderSlug()),
-		ExternalAccountID:      externalAccountID,
-		RepositoryTarget:       providerCommandTargetFromProto(request.GetRepositoryTarget()),
-		Labels:                 trimProtoStrings(request.GetLabels()),
-		AssigneeProviderLogins: trimProtoStrings(request.GetAssigneeProviderLogins()),
-		Milestone:              strings.TrimSpace(request.GetMilestone()),
-		WatermarkJSON:          optionalBytes(request.WatermarkJson),
+		DispatchKind:           kind,
 		OperationPolicyContext: policy,
 		ApprovalGateRef:        approval,
-		SafeBodyHint:           strings.TrimSpace(request.GetSafeBodyHint()),
+	}
+	switch kind {
+	case service.FollowUpDispatchKindCreateIssue:
+		command := request.GetCreateIssue()
+		if command == nil {
+			return service.DispatchFollowUpIntentInput{}, errs.ErrInvalidArgument
+		}
+		createIssue, err := followUpCreateIssueCommandFromProto(command)
+		if err != nil {
+			return service.DispatchFollowUpIntentInput{}, err
+		}
+		input.CreateIssue = &createIssue
+	case service.FollowUpDispatchKindUpdateIssue:
+		command := request.GetUpdateIssue()
+		if command == nil {
+			return service.DispatchFollowUpIntentInput{}, errs.ErrInvalidArgument
+		}
+		updateIssue, err := followUpUpdateIssueCommandFromProto(command)
+		if err != nil {
+			return service.DispatchFollowUpIntentInput{}, err
+		}
+		input.UpdateIssue = &updateIssue
+	case service.FollowUpDispatchKindCreateComment:
+		command := request.GetCreateComment()
+		if command == nil {
+			return service.DispatchFollowUpIntentInput{}, errs.ErrInvalidArgument
+		}
+		createComment, err := followUpCreateCommentCommandFromProto(command)
+		if err != nil {
+			return service.DispatchFollowUpIntentInput{}, err
+		}
+		input.CreateComment = &createComment
+	case service.FollowUpDispatchKindUpdateComment:
+		command := request.GetUpdateComment()
+		if command == nil {
+			return service.DispatchFollowUpIntentInput{}, errs.ErrInvalidArgument
+		}
+		updateComment, err := followUpUpdateCommentCommandFromProto(command)
+		if err != nil {
+			return service.DispatchFollowUpIntentInput{}, err
+		}
+		input.UpdateComment = &updateComment
+	default:
+		return service.DispatchFollowUpIntentInput{}, errs.ErrInvalidArgument
+	}
+	return input, nil
+}
+
+func followUpCreateIssueCommandFromProto(command *agentsv1.FollowUpCreateIssueCommand) (service.FollowUpCreateIssueCommand, error) {
+	projectID, err := requiredUUID(command.GetProjectId())
+	if err != nil {
+		return service.FollowUpCreateIssueCommand{}, err
+	}
+	repositoryID, err := requiredUUID(command.GetRepositoryId())
+	if err != nil {
+		return service.FollowUpCreateIssueCommand{}, err
+	}
+	externalAccountID, err := requiredUUID(command.GetExternalAccountId())
+	if err != nil {
+		return service.FollowUpCreateIssueCommand{}, err
+	}
+	return service.FollowUpCreateIssueCommand{
+		ProjectID:              projectID,
+		RepositoryID:           repositoryID,
+		ProviderSlug:           strings.TrimSpace(command.GetProviderSlug()),
+		ExternalAccountID:      externalAccountID,
+		RepositoryTarget:       providerCommandTargetFromProto(command.GetRepositoryTarget()),
+		SafeBodyHint:           strings.TrimSpace(command.GetSafeBodyHint()),
+		Labels:                 trimProtoStrings(command.GetLabels()),
+		AssigneeProviderLogins: trimProtoStrings(command.GetAssigneeProviderLogins()),
+		Milestone:              strings.TrimSpace(command.GetMilestone()),
+		WatermarkJSON:          optionalBytes(command.WatermarkJson),
+	}, nil
+}
+
+func followUpUpdateIssueCommandFromProto(command *agentsv1.FollowUpUpdateIssueCommand) (service.FollowUpUpdateIssueCommand, error) {
+	externalAccountID, err := requiredUUID(command.GetExternalAccountId())
+	if err != nil {
+		return service.FollowUpUpdateIssueCommand{}, err
+	}
+	labels, err := providerStringListPatchFromProto(command.GetLabels())
+	if err != nil {
+		return service.FollowUpUpdateIssueCommand{}, err
+	}
+	assignees, err := providerStringListPatchFromProto(command.GetAssigneeProviderLogins())
+	if err != nil {
+		return service.FollowUpUpdateIssueCommand{}, err
+	}
+	return service.FollowUpUpdateIssueCommand{
+		ExternalAccountID:       externalAccountID,
+		Target:                  providerCommandTargetFromProto(command.GetTarget()),
+		SafeTitle:               optionalTrimmedString(command.SafeTitle),
+		SafeBodyHint:            optionalTrimmedString(command.SafeBodyHint),
+		Labels:                  labels,
+		AssigneeProviderLogins:  assignees,
+		Milestone:               optionalTrimmedString(command.Milestone),
+		State:                   optionalTrimmedString(command.State),
+		ProviderWorkItemType:    optionalTrimmedString(command.ProviderWorkItemType),
+		WatermarkJSON:           optionalBytesPtr(command.WatermarkJson),
+		ExpectedProviderVersion: strings.TrimSpace(command.GetExpectedProviderVersion()),
+	}, nil
+}
+
+func followUpCreateCommentCommandFromProto(command *agentsv1.FollowUpCreateCommentCommand) (service.FollowUpCreateCommentCommand, error) {
+	externalAccountID, err := requiredUUID(command.GetExternalAccountId())
+	if err != nil {
+		return service.FollowUpCreateCommentCommand{}, err
+	}
+	return service.FollowUpCreateCommentCommand{
+		ExternalAccountID: externalAccountID,
+		Target:            providerCommandTargetFromProto(command.GetTarget()),
+		SafeBodyHint:      strings.TrimSpace(command.GetSafeBodyHint()),
+	}, nil
+}
+
+func followUpUpdateCommentCommandFromProto(command *agentsv1.FollowUpUpdateCommentCommand) (service.FollowUpUpdateCommentCommand, error) {
+	externalAccountID, err := requiredUUID(command.GetExternalAccountId())
+	if err != nil {
+		return service.FollowUpUpdateCommentCommand{}, err
+	}
+	return service.FollowUpUpdateCommentCommand{
+		ExternalAccountID:       externalAccountID,
+		Target:                  providerCommandTargetFromProto(command.GetTarget()),
+		ProviderCommentID:       strings.TrimSpace(command.GetProviderCommentId()),
+		SafeBodyHint:            strings.TrimSpace(command.GetSafeBodyHint()),
+		ExpectedProviderVersion: strings.TrimSpace(command.GetExpectedProviderVersion()),
 	}, nil
 }
 
@@ -964,9 +1073,28 @@ func providerOperationTypeFromProto(operationType providersv1.ProviderOperationT
 	case providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_UNSPECIFIED,
 		providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_ISSUE:
 		return service.ProviderOperationTypeCreateIssue, nil
+	case providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_UPDATE_ISSUE:
+		return service.ProviderOperationTypeUpdateIssue, nil
+	case providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_COMMENT:
+		return service.ProviderOperationTypeCreateComment, nil
+	case providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_UPDATE_COMMENT:
+		return service.ProviderOperationTypeUpdateComment, nil
 	default:
 		return "", errs.ErrInvalidArgument
 	}
+}
+
+func followUpDispatchKindFromProto(kind agentsv1.FollowUpDispatchKind) (service.FollowUpDispatchKind, error) {
+	kinds := map[agentsv1.FollowUpDispatchKind]service.FollowUpDispatchKind{
+		agentsv1.FollowUpDispatchKind_FOLLOW_UP_DISPATCH_KIND_CREATE_ISSUE:   service.FollowUpDispatchKindCreateIssue,
+		agentsv1.FollowUpDispatchKind_FOLLOW_UP_DISPATCH_KIND_UPDATE_ISSUE:   service.FollowUpDispatchKindUpdateIssue,
+		agentsv1.FollowUpDispatchKind_FOLLOW_UP_DISPATCH_KIND_CREATE_COMMENT: service.FollowUpDispatchKindCreateComment,
+		agentsv1.FollowUpDispatchKind_FOLLOW_UP_DISPATCH_KIND_UPDATE_COMMENT: service.FollowUpDispatchKindUpdateComment,
+	}
+	if mapped, ok := kinds[kind]; ok {
+		return mapped, nil
+	}
+	return "", errs.ErrInvalidArgument
 }
 
 func providerRiskLevelFromProto(riskLevel providersv1.ProviderOperationRiskLevel) (string, error) {
@@ -1003,4 +1131,28 @@ func optionalBytes(value *string) []byte {
 		return nil
 	}
 	return []byte(trimmed)
+}
+
+func optionalBytesPtr(value *string) *[]byte {
+	if value == nil {
+		return nil
+	}
+	trimmed := strings.TrimSpace(*value)
+	bytes := []byte(trimmed)
+	return &bytes
+}
+
+func optionalTrimmedString(value *string) *string {
+	if value == nil {
+		return nil
+	}
+	trimmed := strings.TrimSpace(*value)
+	return &trimmed
+}
+
+func providerStringListPatchFromProto(patch *providersv1.StringListPatch) (*service.ProviderStringListPatch, error) {
+	if patch == nil {
+		return nil, nil
+	}
+	return &service.ProviderStringListPatch{Values: trimProtoStrings(patch.GetValues())}, nil
 }

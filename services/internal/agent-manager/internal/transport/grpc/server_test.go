@@ -752,17 +752,20 @@ func TestDispatchFollowUpIntentHandlerMapsRequest(t *testing.T) {
 	expectedVersion := int64(4)
 	service := &fakeAgentService{
 		dispatchFollowUpIntent: func(_ context.Context, input agentservice.DispatchFollowUpIntentInput) (entity.FollowUpIntent, error) {
-			if input.FollowUpIntentID != intentID || input.ProjectID != projectID || input.RepositoryID != repositoryID || input.ExternalAccountID != accountID {
+			if input.FollowUpIntentID != intentID || input.DispatchKind != agentservice.FollowUpDispatchKindCreateIssue || input.CreateIssue == nil {
 				t.Fatalf("refs input = %+v", input)
 			}
-			if input.ProviderSlug != "github" || input.RepositoryTarget.RepositoryFullName != "codex-k8s/kodex" {
-				t.Fatalf("provider target = %+v", input.RepositoryTarget)
+			if input.CreateIssue.ProjectID != projectID || input.CreateIssue.RepositoryID != repositoryID || input.CreateIssue.ExternalAccountID != accountID {
+				t.Fatalf("create issue refs = %+v", input.CreateIssue)
+			}
+			if input.CreateIssue.ProviderSlug != "github" || input.CreateIssue.RepositoryTarget.RepositoryFullName != "codex-k8s/kodex" {
+				t.Fatalf("provider target = %+v", input.CreateIssue.RepositoryTarget)
 			}
 			if input.OperationPolicyContext.RiskLevel != agentservice.ProviderRiskLevelLow || input.OperationPolicyContext.OperationType != agentservice.ProviderOperationTypeCreateIssue {
 				t.Fatalf("policy = %+v", input.OperationPolicyContext)
 			}
-			if input.ApprovalGateRef.ApprovalID != "gate:123" || input.SafeBodyHint != "Follow-up body" {
-				t.Fatalf("approval/body = %+v/%q", input.ApprovalGateRef, input.SafeBodyHint)
+			if input.ApprovalGateRef.ApprovalID != "gate:123" || input.CreateIssue.SafeBodyHint != "Follow-up body" {
+				t.Fatalf("approval/body = %+v/%q", input.ApprovalGateRef, input.CreateIssue.SafeBodyHint)
 			}
 			now := sampleTime()
 			return entity.FollowUpIntent{
@@ -777,19 +780,22 @@ func TestDispatchFollowUpIntentHandlerMapsRequest(t *testing.T) {
 		},
 	}
 	response, err := NewServer(service).DispatchFollowUpIntent(context.Background(), &agentsv1.DispatchFollowUpIntentRequest{
-		Meta:              commandMeta("85858585-cccc-dddd-eeee-ffffffffffff", "", &expectedVersion),
-		FollowUpIntentId:  intentID.String(),
-		ProjectId:         projectID.String(),
-		RepositoryId:      repositoryID.String(),
-		ProviderSlug:      "github",
-		ExternalAccountId: accountID.String(),
-		RepositoryTarget: &providersv1.ProviderTarget{
-			ProviderSlug:       "github",
-			RepositoryFullName: ptr("codex-k8s/kodex"),
-		},
-		Labels:                 []string{"agent", "next-stage"},
-		AssigneeProviderLogins: []string{"kodex-agent"},
-		SafeBodyHint:           ptr("Follow-up body"),
+		Meta:             commandMeta("85858585-cccc-dddd-eeee-ffffffffffff", "", &expectedVersion),
+		FollowUpIntentId: intentID.String(),
+		DispatchKind:     agentsv1.FollowUpDispatchKind_FOLLOW_UP_DISPATCH_KIND_CREATE_ISSUE,
+		Command: &agentsv1.DispatchFollowUpIntentRequest_CreateIssue{CreateIssue: &agentsv1.FollowUpCreateIssueCommand{
+			ProjectId:         projectID.String(),
+			RepositoryId:      repositoryID.String(),
+			ProviderSlug:      "github",
+			ExternalAccountId: accountID.String(),
+			RepositoryTarget: &providersv1.ProviderTarget{
+				ProviderSlug:       "github",
+				RepositoryFullName: ptr("codex-k8s/kodex"),
+			},
+			Labels:                 []string{"agent", "next-stage"},
+			AssigneeProviderLogins: []string{"kodex-agent"},
+			SafeBodyHint:           ptr("Follow-up body"),
+		}},
 		OperationPolicyContext: &providersv1.ProviderOperationPolicyContext{
 			OperationType: providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_ISSUE,
 			RiskLevel:     providersv1.ProviderOperationRiskLevel_PROVIDER_OPERATION_RISK_LEVEL_LOW,

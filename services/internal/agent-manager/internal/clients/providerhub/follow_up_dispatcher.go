@@ -8,13 +8,13 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"google.golang.org/grpc"
 
 	providersv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/providers/v1"
 	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/clients/grpcclient"
 	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/errs"
 	agentservice "github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/service"
 	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/types/value"
-	"google.golang.org/grpc"
 )
 
 const (
@@ -31,65 +31,116 @@ type Config struct {
 
 type providerHubClient interface {
 	CreateIssue(context.Context, *providersv1.CreateIssueRequest, ...grpc.CallOption) (*providersv1.ProviderOperationResponse, error)
+	UpdateIssue(context.Context, *providersv1.UpdateIssueRequest, ...grpc.CallOption) (*providersv1.ProviderOperationResponse, error)
+	CreateComment(context.Context, *providersv1.CreateCommentRequest, ...grpc.CallOption) (*providersv1.ProviderOperationResponse, error)
+	UpdateComment(context.Context, *providersv1.UpdateCommentRequest, ...grpc.CallOption) (*providersv1.ProviderOperationResponse, error)
 }
 
-// IssueCreator calls provider-hub CreateIssue.
-type IssueCreator struct {
+type providerFollowUpCommand int
+
+const (
+	providerFollowUpCreateIssue providerFollowUpCommand = iota + 1
+	providerFollowUpUpdateIssue
+	providerFollowUpCreateComment
+	providerFollowUpUpdateComment
+)
+
+var providerOperationTypeByName = map[string]providersv1.ProviderOperationType{
+	agentservice.ProviderOperationTypeCreateIssue:   providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_ISSUE,
+	agentservice.ProviderOperationTypeUpdateIssue:   providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_UPDATE_ISSUE,
+	agentservice.ProviderOperationTypeCreateComment: providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_COMMENT,
+	agentservice.ProviderOperationTypeUpdateComment: providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_UPDATE_COMMENT,
+}
+
+// FollowUpDispatcher calls provider-hub typed write commands.
+type FollowUpDispatcher struct {
 	client    providerHubClient
 	authToken string
 	timeout   time.Duration
 }
 
-var _ agentservice.ProviderIssueCreator = (*IssueCreator)(nil)
+var _ agentservice.ProviderFollowUpDispatcher = (*FollowUpDispatcher)(nil)
 
 // NewConnection creates a gRPC connection to provider-hub.
 func NewConnection(cfg Config) (*grpc.ClientConn, error) {
 	return grpcclient.NewConnection(cfg.Addr, "provider-hub")
 }
 
-// NewIssueCreator creates a provider-hub issue write client.
-func NewIssueCreator(client providersv1.ProviderHubServiceClient, cfg Config) (*IssueCreator, error) {
-	return newIssueCreator(client, cfg)
+// NewFollowUpDispatcher creates a provider-hub follow-up write client.
+func NewFollowUpDispatcher(client providersv1.ProviderHubServiceClient, cfg Config) (*FollowUpDispatcher, error) {
+	return newFollowUpDispatcher(client, cfg)
 }
 
-func newIssueCreator(client providerHubClient, cfg Config) (*IssueCreator, error) {
+func newFollowUpDispatcher(client providerHubClient, cfg Config) (*FollowUpDispatcher, error) {
 	settings, err := grpcclient.RequiredClientSettings(client, cfg.AuthToken, cfg.Timeout, defaultWriteTimeout, "provider-hub")
 	if err != nil {
 		return nil, err
 	}
-	creator := &IssueCreator{client: client}
-	creator.authToken = settings.AuthToken
-	creator.timeout = settings.Timeout
-	return creator, nil
+	dispatcher := &FollowUpDispatcher{client: client}
+	dispatcher.authToken = settings.AuthToken
+	dispatcher.timeout = settings.Timeout
+	return dispatcher, nil
 }
 
 // CreateIssue sends a typed create Issue command through provider-hub.
-func (creator *IssueCreator) CreateIssue(ctx context.Context, input agentservice.ProviderCreateIssueInput) (agentservice.ProviderIssueCommandResult, error) {
-	if err := creator.requireReady(); err != nil {
-		return agentservice.ProviderIssueCommandResult{}, err
-	}
-	request := createIssueRequest(input)
-	callCtx, cancel := context.WithTimeout(creator.outgoingContext(ctx), creator.timeout)
-	defer cancel()
-	response, err := creator.client.CreateIssue(callCtx, request)
-	if err != nil {
-		return agentservice.ProviderIssueCommandResult{}, mapProviderHubWriteError(err)
-	}
-	return providerIssueCommandResult(response)
+func (dispatcher *FollowUpDispatcher) CreateIssue(ctx context.Context, input agentservice.ProviderCreateIssueInput) (agentservice.ProviderCommandResult, error) {
+	return dispatcher.dispatchProviderCommand(ctx, providerFollowUpCreateIssue, createIssueRequest(input))
 }
 
-func (creator *IssueCreator) requireReady() error {
-	if creator == nil {
-		return errs.ErrDependencyUnavailable
+// UpdateIssue sends a typed update Issue command through provider-hub.
+func (dispatcher *FollowUpDispatcher) UpdateIssue(ctx context.Context, input agentservice.ProviderUpdateIssueInput) (agentservice.ProviderCommandResult, error) {
+	return dispatcher.dispatchProviderCommand(ctx, providerFollowUpUpdateIssue, updateIssueRequest(input))
+}
+
+// CreateComment sends a typed create comment command through provider-hub.
+func (dispatcher *FollowUpDispatcher) CreateComment(ctx context.Context, input agentservice.ProviderCreateCommentInput) (agentservice.ProviderCommandResult, error) {
+	return dispatcher.dispatchProviderCommand(ctx, providerFollowUpCreateComment, createCommentRequest(input))
+}
+
+// UpdateComment sends a typed update comment command through provider-hub.
+func (dispatcher *FollowUpDispatcher) UpdateComment(ctx context.Context, input agentservice.ProviderUpdateCommentInput) (agentservice.ProviderCommandResult, error) {
+	return dispatcher.dispatchProviderCommand(ctx, providerFollowUpUpdateComment, updateCommentRequest(input))
+}
+
+func (dispatcher *FollowUpDispatcher) dispatchProviderCommand(ctx context.Context, command providerFollowUpCommand, request any) (agentservice.ProviderCommandResult, error) {
+	return dispatcher.dispatch(ctx, func(callCtx context.Context) (*providersv1.ProviderOperationResponse, error) {
+		switch command {
+		case providerFollowUpCreateIssue:
+			return dispatcher.client.CreateIssue(callCtx, request.(*providersv1.CreateIssueRequest))
+		case providerFollowUpUpdateIssue:
+			return dispatcher.client.UpdateIssue(callCtx, request.(*providersv1.UpdateIssueRequest))
+		case providerFollowUpCreateComment:
+			return dispatcher.client.CreateComment(callCtx, request.(*providersv1.CreateCommentRequest))
+		case providerFollowUpUpdateComment:
+			return dispatcher.client.UpdateComment(callCtx, request.(*providersv1.UpdateCommentRequest))
+		default:
+			return nil, errs.ErrInvalidArgument
+		}
+	})
+}
+
+func (dispatcher *FollowUpDispatcher) dispatch(ctx context.Context, call func(context.Context) (*providersv1.ProviderOperationResponse, error)) (agentservice.ProviderCommandResult, error) {
+	if err := dispatcher.requireReady(); err != nil {
+		return agentservice.ProviderCommandResult{}, err
 	}
-	if creator.client == nil {
+	callCtx, cancel := context.WithTimeout(dispatcher.outgoingContext(ctx), dispatcher.timeout)
+	defer cancel()
+	response, err := call(callCtx)
+	if err != nil {
+		return agentservice.ProviderCommandResult{}, mapProviderHubWriteError(err)
+	}
+	return providerCommandResult(response)
+}
+
+func (dispatcher *FollowUpDispatcher) requireReady() error {
+	if dispatcher == nil || dispatcher.client == nil {
 		return errs.ErrDependencyUnavailable
 	}
 	return nil
 }
 
-func (creator *IssueCreator) outgoingContext(ctx context.Context) context.Context {
-	return grpcclient.OutgoingContext(ctx, creator.authToken, callerID)
+func (dispatcher *FollowUpDispatcher) outgoingContext(ctx context.Context) context.Context {
+	return grpcclient.OutgoingContext(ctx, dispatcher.authToken, callerID)
 }
 
 func createIssueRequest(input agentservice.ProviderCreateIssueInput) *providersv1.CreateIssueRequest {
@@ -107,6 +158,43 @@ func createIssueRequest(input agentservice.ProviderCreateIssueInput) *providersv
 		Meta:                   commandMeta(input.Meta, input.OperationPolicyContext, input.ApprovalGateRef),
 		ExternalAccountId:      input.ExternalAccountID.String(),
 		RepositoryTarget:       providerTarget(input.RepositoryTarget),
+	}
+}
+
+func updateIssueRequest(input agentservice.ProviderUpdateIssueInput) *providersv1.UpdateIssueRequest {
+	return &providersv1.UpdateIssueRequest{
+		Target:                  providerTarget(input.Target),
+		Title:                   optionalStringPointer(input.Title),
+		Body:                    optionalStringPointer(input.Body),
+		Labels:                  stringListPatch(input.Labels),
+		AssigneeProviderLogins:  stringListPatch(input.AssigneeProviderLogins),
+		Milestone:               optionalStringPointer(input.Milestone),
+		State:                   optionalStringPointer(input.State),
+		WorkItemType:            optionalStringPointer(input.WorkItemType),
+		WatermarkJson:           optionalBytesPointer(input.WatermarkJSON),
+		ExpectedProviderVersion: optionalString(strings.TrimSpace(input.ExpectedProviderVersion)),
+		Meta:                    commandMeta(input.Meta, input.OperationPolicyContext, input.ApprovalGateRef),
+		ExternalAccountId:       input.ExternalAccountID.String(),
+	}
+}
+
+func createCommentRequest(input agentservice.ProviderCreateCommentInput) *providersv1.CreateCommentRequest {
+	return &providersv1.CreateCommentRequest{
+		Target:            providerTarget(input.Target),
+		Body:              strings.TrimSpace(input.Body),
+		Meta:              commandMeta(input.Meta, input.OperationPolicyContext, input.ApprovalGateRef),
+		ExternalAccountId: input.ExternalAccountID.String(),
+	}
+}
+
+func updateCommentRequest(input agentservice.ProviderUpdateCommentInput) *providersv1.UpdateCommentRequest {
+	return &providersv1.UpdateCommentRequest{
+		Target:                  providerTarget(input.Target),
+		ProviderCommentId:       strings.TrimSpace(input.ProviderCommentID),
+		Body:                    strings.TrimSpace(input.Body),
+		ExpectedProviderVersion: optionalString(strings.TrimSpace(input.ExpectedProviderVersion)),
+		Meta:                    commandMeta(input.Meta, input.OperationPolicyContext, input.ApprovalGateRef),
+		ExternalAccountId:       input.ExternalAccountID.String(),
 	}
 }
 
@@ -175,13 +263,13 @@ func approvalGateRef(gate agentservice.ProviderApprovalGateReference) *providers
 	}
 }
 
-func providerIssueCommandResult(response *providersv1.ProviderOperationResponse) (agentservice.ProviderIssueCommandResult, error) {
+func providerCommandResult(response *providersv1.ProviderOperationResponse) (agentservice.ProviderCommandResult, error) {
 	if response == nil || response.GetProviderOperation() == nil {
-		return agentservice.ProviderIssueCommandResult{}, errs.ErrDependencyUnavailable
+		return agentservice.ProviderCommandResult{}, errs.ErrDependencyUnavailable
 	}
 	operation := response.GetProviderOperation()
 	result := response.GetResult()
-	commandResult := agentservice.ProviderIssueCommandResult{
+	commandResult := agentservice.ProviderCommandResult{
 		ProviderOperationRef: providerOperationRef(operation.GetProviderOperationId()),
 		Status:               operationStatus(operation.GetStatus()),
 		ResultRef:            firstNonEmpty(result.GetResultRef(), operation.GetResultRef()),
@@ -194,9 +282,11 @@ func providerIssueCommandResult(response *providersv1.ProviderOperationResponse)
 		commandResult.Target = providerTargetFromProto(target)
 	} else if projection := response.GetWorkItemProjection(); projection != nil {
 		commandResult.Target = providerTargetFromProjection(projection)
+	} else if comment := response.GetCommentProjection(); comment != nil {
+		commandResult.Target = providerTargetFromCommentProjection(comment)
 	}
 	if commandResult.Status == "" {
-		return agentservice.ProviderIssueCommandResult{}, errs.ErrDependencyUnavailable
+		return agentservice.ProviderCommandResult{}, errs.ErrDependencyUnavailable
 	}
 	return commandResult, nil
 }
@@ -223,6 +313,10 @@ func providerTargetFromProjection(projection *providersv1.WorkItemProjection) ag
 		projection.GetProviderWorkItemId(),
 		projection.GetWebUrl(),
 	)
+}
+
+func providerTargetFromCommentProjection(projection *providersv1.CommentProjection) agentservice.ProviderCommandTarget {
+	return providerTargetFromValues("", "", "", providersv1.WorkItemKind_WORK_ITEM_KIND_UNSPECIFIED, 0, projection.GetProviderCommentId(), "")
 }
 
 func providerTargetFromValues(slug, fullName, repositoryID string, kind providersv1.WorkItemKind, number int64, objectID, webURL string) agentservice.ProviderCommandTarget {
@@ -263,6 +357,22 @@ func optionalString(value string) *string {
 	return &trimmed
 }
 
+func optionalStringPointer(value *string) *string {
+	if value == nil {
+		return nil
+	}
+	trimmed := strings.TrimSpace(*value)
+	return &trimmed
+}
+
+func optionalBytesPointer(value *[]byte) *string {
+	if value == nil {
+		return nil
+	}
+	trimmed := strings.TrimSpace(string(*value))
+	return &trimmed
+}
+
 func optionalStringValue(value *string) string {
 	if value == nil {
 		return ""
@@ -293,6 +403,13 @@ func optionalWorkItemKind(kind string) *providersv1.WorkItemKind {
 	return &mapped
 }
 
+func stringListPatch(patch *agentservice.ProviderStringListPatch) *providersv1.StringListPatch {
+	if patch == nil {
+		return nil
+	}
+	return &providersv1.StringListPatch{Values: append([]string(nil), patch.Values...)}
+}
+
 func workItemKindToProto(kind string) providersv1.WorkItemKind {
 	switch strings.TrimSpace(kind) {
 	case "issue":
@@ -320,12 +437,10 @@ func workItemKind(kind providersv1.WorkItemKind) string {
 }
 
 func operationType(operationType string) providersv1.ProviderOperationType {
-	switch strings.TrimSpace(operationType) {
-	case agentservice.ProviderOperationTypeCreateIssue:
-		return providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_ISSUE
-	default:
-		return providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_UNSPECIFIED
+	if mapped, ok := providerOperationTypeByName[strings.TrimSpace(operationType)]; ok {
+		return mapped
 	}
+	return providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_UNSPECIFIED
 }
 
 func riskLevel(level string) providersv1.ProviderOperationRiskLevel {
