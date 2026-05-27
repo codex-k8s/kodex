@@ -321,6 +321,20 @@ components:
           type: string
         watermark_digest:
           type: string
+        checked_artifact_ref:
+          type: string
+        checked_artifact_digest:
+          type: string
+        checked_artifact_version:
+          type: string
+        checked_source_path:
+          type: string
+        checked_content_hash:
+          type: string
+        checked_validated_payload_json:
+          type: string
+        checked_watermark_json:
+          type: string
         observed_at:
           type: string
           format: date-time

@@ -362,6 +362,7 @@ var initialisms = map[string]string{
 	"grpc": "GRPC",
 	"http": "HTTP",
 	"id":   "ID",
+	"json": "JSON",
 	"mr":   "MR",
 	"pr":   "PR",
 	"sha":  "SHA",
