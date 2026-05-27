@@ -370,6 +370,7 @@ enum FollowUpIntentStatus {
   FOLLOW_UP_INTENT_STATUS_CANCELLED = 5;
   FOLLOW_UP_INTENT_STATUS_UPDATED = 6;
   FOLLOW_UP_INTENT_STATUS_COMMENTED = 7;
+  FOLLOW_UP_INTENT_STATUS_REVIEW_SIGNALED = 8;
 }
 
 // FollowUpDispatchKind selects the typed provider command for a follow-up intent.
@@ -379,6 +380,8 @@ enum FollowUpDispatchKind {
   FOLLOW_UP_DISPATCH_KIND_UPDATE_ISSUE = 2;
   FOLLOW_UP_DISPATCH_KIND_CREATE_COMMENT = 3;
   FOLLOW_UP_DISPATCH_KIND_UPDATE_COMMENT = 4;
+  FOLLOW_UP_DISPATCH_KIND_UPDATE_PULL_REQUEST = 5;
+  FOLLOW_UP_DISPATCH_KIND_CREATE_REVIEW_SIGNAL = 6;
 }
 
 // AgentActivityKind classifies a safe timeline entry.
@@ -981,6 +984,8 @@ message DispatchFollowUpIntentRequest {
     FollowUpUpdateIssueCommand update_issue = 11;
     FollowUpCreateCommentCommand create_comment = 12;
     FollowUpUpdateCommentCommand update_comment = 13;
+    FollowUpUpdatePullRequestCommand update_pull_request = 14;
+    FollowUpCreateReviewSignalCommand create_review_signal = 15;
   }
 }
 
@@ -1023,6 +1028,29 @@ message FollowUpUpdateCommentCommand {
   string provider_comment_id = 3;
   string safe_body_hint = 4;
   optional string expected_provider_version = 5;
+}
+
+message FollowUpUpdatePullRequestCommand {
+  string external_account_id = 1;
+  kodex.providers.v1.ProviderTarget target = 2;
+  optional string safe_title = 3;
+  optional string safe_body_hint = 4;
+  kodex.providers.v1.StringListPatch labels = 5;
+  kodex.providers.v1.StringListPatch assignee_provider_logins = 6;
+  optional string milestone = 7;
+  optional string state = 8;
+  optional string base_branch = 9;
+  optional bool maintainer_can_modify = 10;
+  optional string watermark_json = 11;
+  string expected_provider_version = 12;
+}
+
+message FollowUpCreateReviewSignalCommand {
+  string external_account_id = 1;
+  kodex.providers.v1.ProviderTarget target = 2;
+  kodex.providers.v1.ReviewSignalKind kind = 3;
+  optional string safe_body_hint = 4;
+  repeated kodex.providers.v1.ReviewInlineComment inline_comments = 5;
 }
 
 message RecordAgentActivityRequest {

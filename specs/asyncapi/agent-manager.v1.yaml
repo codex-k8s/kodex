@@ -42,6 +42,7 @@ components:
         - $ref: '#/components/schemas/FollowUpCreatedEvent'
         - $ref: '#/components/schemas/FollowUpUpdatedEvent'
         - $ref: '#/components/schemas/FollowUpCommentedEvent'
+        - $ref: '#/components/schemas/FollowUpReviewSignaledEvent'
         - $ref: '#/components/schemas/FollowUpFailedEvent'
         - $ref: '#/components/schemas/HumanGateRequestedEvent'
         - $ref: '#/components/schemas/HumanGateResolvedEvent'
@@ -195,6 +196,14 @@ components:
       type: object
       properties: {event_type: {type: string, const: agent.follow_up.commented}, aggregate_type: {type: string, const: follow_up}, payload: {$ref: '#/components/schemas/FollowUpCommentedPayload'}}
       required: [event_type, aggregate_type, payload]
+    FollowUpReviewSignaledEvent:
+      allOf:
+        - $ref: '#/components/schemas/AgentEventEnvelopeBase'
+        - $ref: '#/components/schemas/FollowUpReviewSignaledEventKind'
+    FollowUpReviewSignaledEventKind:
+      type: object
+      properties: {event_type: {type: string, const: agent.follow_up.review_signaled}, aggregate_type: {type: string, const: follow_up}, payload: {$ref: '#/components/schemas/FollowUpReviewSignaledPayload'}}
+      required: [event_type, aggregate_type, payload]
     FollowUpFailedEvent:
       allOf:
         - $ref: '#/components/schemas/AgentEventEnvelopeBase'
@@ -264,6 +273,7 @@ components:
         - agent.follow_up.created
         - agent.follow_up.updated
         - agent.follow_up.commented
+        - agent.follow_up.review_signaled
         - agent.follow_up.failed
         - agent.human_gate.requested
         - agent.human_gate.resolved
@@ -424,12 +434,17 @@ components:
       allOf:
         - $ref: '#/components/schemas/AgentEventPayload'
         - type: object
-          required: [session_id, follow_up_intent_id, provider_work_item_ref, status, version]
+          required: [session_id, follow_up_intent_id, status, version]
     FollowUpCommentedPayload:
       allOf:
         - $ref: '#/components/schemas/AgentEventPayload'
         - type: object
           required: [session_id, follow_up_intent_id, provider_comment_ref, status, version]
+    FollowUpReviewSignaledPayload:
+      allOf:
+        - $ref: '#/components/schemas/AgentEventPayload'
+        - type: object
+          required: [session_id, follow_up_intent_id, provider_review_signal_ref, status, version]
     FollowUpFailedPayload:
       allOf:
         - $ref: '#/components/schemas/AgentEventPayload'
