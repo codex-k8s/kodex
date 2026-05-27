@@ -5,8 +5,8 @@ title: kodex — дизайн integration-gateway
 status: active
 owner_role: SA
 created_at: 2026-05-25
-updated_at: 2026-05-26
-related_issues: [781, 792, 807, 770, 829]
+updated_at: 2026-05-27
+related_issues: [781, 792, 807, 770, 829, 853]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -28,7 +28,7 @@ approvals:
 ## Цели
 
 - Зафиксировать границу `integration-gateway` до сервисного кода.
-- Описать первый MVP-маршрут: provider webhook -> проверенный internal gRPC вызов `provider-hub.IngestWebhookEvent`.
+- Описать первые MVP-маршруты: provider webhook -> проверенный internal gRPC вызов `provider-hub.IngestWebhookEvent` и generic channel callback -> `interaction-hub.RecordChannelCallback`.
 - Отделить edge-проверки от provider business normalization.
 - Подготовить единый HTTP-контур для будущих callback событий внешних каналов и пакетов без смешивания с `staff-gateway` или `user-gateway`.
 - Зафиксировать требования к безопасности, retry, идемпотентности, backpressure и очистке данных.
@@ -55,7 +55,7 @@ approvals:
 | Сервис | Ответственность | Роль gateway |
 |---|---|---|
 | `provider-hub` | Webhook inbox, дедупликация, нормализация provider events, provider projections, reconciliation, лимиты и provider operations. | Получает от gateway проверенный `IngestWebhookEvent` и сам решает бизнес-обработку. |
-| `interaction-hub` | Диалоги, доставка запросов, внешние каналы, delivery attempts и callback lifecycle. | Получает будущие проверенные callback события внешних каналов. |
+| `interaction-hub` | Диалоги, доставка запросов, внешние каналы, delivery attempts и callback lifecycle. | Получает проверенный generic callback envelope через `RecordChannelCallback`; gateway не меняет request/decision state. |
 | `package-hub` | Пакеты, manifest, установки и package-owned runtime metadata. | Получает будущие проверенные callback события пакетов, если пакетный контракт это требует. |
 | `codex-hook-ingress` | Нормализованные Codex hook events от hook emitter или sidecar. | Не использует `integration-gateway`; это отдельный внутренний входной контур. |
 | `platform-mcp-server` | MCP tools для агентов и manager-контуров. | Не принимает внешние webhooks и callbacks. |
@@ -68,7 +68,7 @@ approvals:
 | HTTP router | Принимает публичные webhook/callback запросы по OpenAPI gateway-поверхности. |
 | OpenAPI validation | Загружает `specs/openapi/integration-gateway.v1.yaml` на старте и валидирует входящие HTTP requests по контракту. |
 | Source registry | Сопоставляет входящий route, provider/channel slug и ожидаемый способ проверки. В MVP допускается статическая конфигурация deployment; динамический registry добавляется отдельным срезом. |
-| Signature verifier | Проверяет GitHub `X-Hub-Signature-256` через HMAC SHA-256 по ссылке на секрет; будущие provider/callback verifier добавляются отдельными срезами. Значение секрета держится только в памяти процесса. |
+| Signature verifier | Проверяет GitHub `X-Hub-Signature-256` и generic callback `X-Kodex-External-Signature` через HMAC SHA-256 по ссылке на секрет; будущие provider/callback verifier добавляются отдельными срезами. Значение секрета держится только в памяти процесса. |
 | Payload guard | Отклоняет слишком большие payload и неподдерживаемые content type до gRPC-вызова владельца. |
 | Redactor | Удаляет секретоподобные заголовки и небезопасные диагностические поля из логов, ошибок, метрик и audit summary. |
 | Backpressure guard | Ограничивает входящий поток по source, provider, route и downstream-сервису. |
@@ -102,23 +102,23 @@ sequenceDiagram
 
 Если provider не даёт устойчивый delivery id, gateway отклоняет запрос или строит idempotency key только по заранее согласованному правилу source registry. Само доменное дублирование webhook остаётся в `provider-hub`.
 
-## Будущие callback потоки
+## Callback поток внешнего канала
 
-Для внешних каналов и пакетов gateway выполняет тот же edge-контур:
+Для внешних каналов и пакетов gateway выполняет тот же edge-контур и передаёт владельцу только generic safe envelope:
 
 ```mermaid
 sequenceDiagram
   participant C as Внешний канал или пакет
   participant IGW as integration-gateway
-  participant Owner as interaction-hub или package-hub
+  participant IH as interaction-hub
   C->>IGW: HTTP callback + signature
   IGW->>IGW: source check + signature + limits + redaction
-  IGW->>Owner: typed internal callback command
-  Owner-->>IGW: safe callback result
+  IGW->>IH: RecordChannelCallback(safe envelope)
+  IH-->>IGW: safe callback result
   IGW-->>C: 202 Accepted
 ```
 
-Конкретный owner-service и gRPC-контракт callback фиксируются в доменном пакете владельца. Gateway не хранит состояние доставки или решения.
+Первый активный callback owner — `interaction-hub`. Route generic: `callback_source` выбирается по статической конфигурации deployment, подпись проверяется через `X-Kodex-External-Signature`, а тело должно быть safe callback envelope с `callback_id`, `contract_version`, `action` и `delivery_id` или `request_ref`. Gateway не знает Telegram/WhatsApp/Slack semantics, не создаёт Human gate/approval, не меняет request state и не хранит состояние доставки или решения.
 
 ## Безопасность
 
@@ -174,7 +174,7 @@ Safe audit summary gateway пишет только redaction-safe поля: requ
 - образ собирается из `services/external/integration-gateway/Dockerfile` и включает бинарник gateway и OpenAPI spec;
 - Kubernetes base живёт в `deploy/base/integration-gateway/**` и содержит `ServiceAccount`, `ConfigMap`, `Service`, `Deployment`, health probes и metrics endpoint;
 - route guard задаётся env-конфигурацией deployment: `max_in_flight`, `rate_limit_burst`, `rate_limit_window`, `retry_after`;
-- GitHub webhook secret и provider-hub gRPC token подключаются только через Kubernetes Secret refs, без значений в manifests и документации;
+- GitHub webhook secret, external callback secret, provider-hub token и interaction-hub token подключаются только через Kubernetes Secret refs, без значений в manifests и документации;
 - smoke проверяет health/readiness/OpenAPI и safe negative responses для GitHub route без реального webhook secret;
 - rollback выполняется через предыдущий image tag или `kubectl rollout undo`, без отката `provider-hub` БД, inbox или projections.
 

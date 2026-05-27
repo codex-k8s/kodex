@@ -135,6 +135,7 @@ spec:
         - scripts/smoke-integration-gateway.sh
         - specs/openapi/integration-gateway.v1.yaml
         - proto/kodex/providers/v1
+        - proto/kodex/interactions/v1
         - tools/codegen/openapi/integration-gateway.oapi-codegen.yaml
         - libs/go/servicemain
         - libs/go/serviceprocess
@@ -477,17 +478,24 @@ spec:
       apiContracts:
         openapi: specs/openapi/integration-gateway.v1.yaml
         ownerGrpcClient: proto/kodex/providers/v1/provider_hub.proto
+        callbackOwnerGrpcClient: proto/kodex/interactions/v1/interaction_hub.proto
       dependencies:
         - provider-hub
+        - interaction-hub
       implementation:
         businessState: none
         providerWebhookRoute: github-hmac-sha256-to-provider-hub
+        channelCallbackRoute: generic-hmac-sha256-to-interaction-hub
         signatureVerification: github-x-hub-signature-256
         routeProtection:
           maxInFlightEnv: KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_MAX_IN_FLIGHT
           rateLimitBurstEnv: KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_RATE_LIMIT_BURST
           rateLimitWindowEnv: KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_RATE_LIMIT_WINDOW
           retryAfterEnv: KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_RETRY_AFTER
+          externalCallbackMaxInFlightEnv: KODEX_INTEGRATION_GATEWAY_EXTERNAL_CALLBACK_MAX_IN_FLIGHT
+          externalCallbackRateLimitBurstEnv: KODEX_INTEGRATION_GATEWAY_EXTERNAL_CALLBACK_RATE_LIMIT_BURST
+          externalCallbackRateLimitWindowEnv: KODEX_INTEGRATION_GATEWAY_EXTERNAL_CALLBACK_RATE_LIMIT_WINDOW
+          externalCallbackRetryAfterEnv: KODEX_INTEGRATION_GATEWAY_EXTERNAL_CALLBACK_RETRY_AFTER
           state: in-memory-operational-only
         safeDiagnostics:
           labels:
@@ -513,7 +521,19 @@ spec:
           grpcAuthTokenSecret:
             name: kodex-platform-runtime
             key: KODEX_PROVIDER_HUB_GRPC_AUTH_TOKEN
-        callbackRoutes: reserved-only
+        externalCallbackSecretRefs:
+          storeTypeEnv: KODEX_INTEGRATION_GATEWAY_EXTERNAL_CALLBACK_SECRET_STORE_TYPE
+          storeRefEnv: KODEX_INTEGRATION_GATEWAY_EXTERNAL_CALLBACK_SECRET_STORE_REF
+          valueEnvRef: KODEX_EXTERNAL_CALLBACK_SECRET
+          kubernetesSecretRef:
+            name: kodex-platform-runtime
+            key: KODEX_EXTERNAL_CALLBACK_SECRET
+        interactionHubRefs:
+          grpcAddrEnv: KODEX_INTEGRATION_GATEWAY_INTERACTION_HUB_GRPC_ADDR
+          grpcAuthTokenSecret:
+            name: kodex-platform-runtime
+            key: KODEX_INTERACTION_HUB_GRPC_AUTH_TOKEN
+        callbackRoutes: generic-channel-package-to-interaction-hub
       deploy:
         serviceManifest: deploy/base/integration-gateway/integration-gateway.yaml.tpl
         kustomization: deploy/base/integration-gateway/kustomization.yaml.tpl

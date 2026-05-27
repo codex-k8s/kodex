@@ -5,8 +5,8 @@ title: kodex — поставка interaction-hub
 status: active
 owner_role: EM
 created_at: 2026-05-22
-updated_at: 2026-05-26
-related_issues: [582, 768, 781, 783, 800, 806, 821, 835, 843]
+updated_at: 2026-05-27
+related_issues: [582, 768, 781, 783, 800, 806, 821, 835, 843, 853]
 related_prs: []
 related_docsets:
   - docs/domains/interaction-hub/product/requirements.md
@@ -126,7 +126,7 @@ IH-2 не должен:
 | `package-hub` | Согласовано для IH-6 | Channel package capability, installation refs и manifest requirements хранятся в пакетном домене; `interaction-hub` держит только refs. |
 | `runtime-manager` и `fleet-manager` | Согласовано для IH-6 | Runtime-нагрузку channel package запускает runtime/fleet контур; `interaction-hub` хранит только safe runtime/job refs. |
 | `operations-hub` | Перед IH-9 | Операторские очереди и dual-surface inbox читают проекции и события `interaction.*`. |
-| `integration-gateway` | После IH-6 | Публичный callback transport имеет OpenAPI-каркас в `integration-gateway`; активация внешнего route и signature edge остаётся отдельным gateway-срезом. |
+| `integration-gateway` | После IH-6 | Публичный callback transport активирован как generic route: gateway проверяет source/signature/limits и вызывает `RecordChannelCallback`; lifecycle и storage остаются в `interaction-hub`. |
 
 ## Критерии начала кода
 

@@ -5,7 +5,7 @@ title: kodex — карта Issue домена рабочих сущностей
 status: active
 owner_role: KM
 created_at: 2026-04-25
-updated_at: 2026-05-26
+updated_at: 2026-05-27
 ---
 
 # Карта Issue — рабочие сущности провайдера
@@ -43,4 +43,5 @@ updated_at: 2026-05-26
 | #792 | `services/external/integration-gateway/**`, `services.yaml`, `docs/domains/integration-gateway/**`, `docs/delivery/coordination/agent-2-provider-hub.md`, `docs/delivery/issue-map/domains/integration-gateway.md` | IGW-1 | готово | Смежный сервисный каркас `integration-gateway`: внешний HTTP edge собирается и фиксирует client interface к `provider-hub.IngestWebhookEvent`; provider-hub остаётся владельцем webhook inbox и нормализации. |
 | #807 | `services/external/integration-gateway/**`, `specs/openapi/integration-gateway.v1.yaml`, `services.yaml`, `docs/domains/integration-gateway/**`, `docs/delivery/coordination/agent-2-provider-hub.md`, `docs/delivery/issue-map/domains/integration-gateway.md` | IGW-2 | готово | Смежный GitHub webhook route `integration-gateway`: edge проверяет source/signature/headers/size и передаёт безопасный envelope в `provider-hub.IngestWebhookEvent`; provider-hub остаётся владельцем inbox, дедупликации и нормализации. |
 | #819 | `services/external/integration-gateway/**`, `services.yaml`, `docs/domains/integration-gateway/**`, `docs/delivery/coordination/agent-2-provider-hub.md`, `docs/delivery/issue-map/domains/integration-gateway.md` | IGW-4 | готово | Смежное security hardening `integration-gateway`: edge применяет per-source limits/backpressure и safe audit summary до вызова `provider-hub`, не создавая gateway inbox или business state. |
+| #853 | `services/external/integration-gateway/**`, `specs/openapi/integration-gateway.v1.yaml`, `services.yaml`, `deploy/base/integration-gateway/**`, `docs/domains/integration-gateway/**`, `docs/delivery/coordination/agent-2-provider-hub.md`, `docs/delivery/issue-map/domains/integration-gateway.md` | IGW-6 | готово | Смежный callback route `integration-gateway`: edge принимает generic channel/package callback и маршрутизирует safe envelope в `interaction-hub.RecordChannelCallback`; provider-hub и provider write pipeline не меняются. |
 | #754 | `services/internal/provider-hub/**`, `deploy/base/provider-hub/**`, `deploy/base/postgres/**`, `scripts/build-provider-hub-images.sh`, `scripts/smoke-provider-hub.sh`, `bootstrap/host/config.env.example`, `bootstrap/host/bootstrap_remote_production.sh`, `services.yaml`, `docs/domains/provider-native-work-items/ops/provider_hub_runbook.md`, `docs/domains/provider-native-work-items/ops/provider_hub_monitoring.md`, `docs/domains/provider-native-work-items/delivery/provider_hub_delivery.md` | PRV-9 | done | Эксплуатационный контур `provider-hub`: БД, манифесты, migration job, smoke, runbook и наблюдаемость. |

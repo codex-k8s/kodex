@@ -98,7 +98,7 @@ Gateway-сервисы, `web-console`, `platform-mcp-server` и `codex-hook-ingr
 - `user-gateway` можно сдвинуть на границу MVP или после MVP, пока не подтверждены сценарии внешних пользователей.
 - Общий `api-gateway` не создаётся: каждый gateway-сервис отвечает за своё направление доступа и не становится местом доменной оркестрации.
 
-`integration-gateway` принимает внешние webhook и callback события. Он проверяет source binding, подпись, content type, размер payload, лимиты, redaction и backpressure, после чего вызывает сервис-владелец по gRPC. Первый MVP-маршрут — provider webhook -> `provider-hub.IngestWebhookEvent`. `integration-gateway` не хранит provider projections, cursors, операции провайдера, состояние доставки внешнего канала или business decisions; эти данные остаются у `provider-hub`, `interaction-hub`, `package-hub` или другого владельца.
+`integration-gateway` принимает внешние webhook и callback события. Он проверяет source binding, подпись, content type, размер payload, лимиты, redaction и backpressure, после чего вызывает сервис-владелец по gRPC. Активные MVP-маршруты: provider webhook -> `provider-hub.IngestWebhookEvent` и generic channel callback -> `interaction-hub.RecordChannelCallback`. `integration-gateway` не хранит provider projections, cursors, операции провайдера, состояние доставки внешнего канала или business decisions; эти данные остаются у `provider-hub`, `interaction-hub`, `package-hub` или другого владельца.
 
 Подробный пакет границы: `docs/domains/integration-gateway/**`.
 

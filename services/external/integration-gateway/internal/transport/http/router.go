@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"github.com/labstack/echo/v5"
+
+	interactionhubclient "github.com/codex-k8s/kodex/services/external/integration-gateway/internal/clients/interactionhub"
 )
 
 // Router is the integration-gateway HTTP router and readiness surface.
@@ -19,24 +21,40 @@ type Router struct {
 
 // NewRouter creates the Echo router and wraps it with edge middleware.
 func NewRouter(ctx context.Context, cfg Config, providerHub ProviderHubClient, logger *slog.Logger) (*Router, error) {
-	return NewRouterWithVerifier(ctx, cfg, providerHub, rejectingProviderWebhookVerifier{}, logger)
+	return NewRouterWithClientsAndVerifiers(ctx, cfg, providerHub, interactionhubclient.Disabled{}, rejectingProviderWebhookVerifier{}, rejectingExternalCallbackVerifier{}, logger)
 }
 
 // NewRouterWithVerifier creates the Echo router with an explicit provider webhook verifier.
 func NewRouterWithVerifier(ctx context.Context, cfg Config, providerHub ProviderHubClient, verifier ProviderWebhookVerifier, logger *slog.Logger) (*Router, error) {
+	return NewRouterWithClientsAndVerifiers(ctx, cfg, providerHub, interactionhubclient.Disabled{}, verifier, rejectingExternalCallbackVerifier{}, logger)
+}
+
+// NewRouterWithClientsAndVerifiers creates the Echo router with explicit owner clients and edge verifiers.
+func NewRouterWithClientsAndVerifiers(
+	ctx context.Context,
+	cfg Config,
+	providerHub ProviderHubClient,
+	interactionHub InteractionHubClient,
+	providerVerifier ProviderWebhookVerifier,
+	externalVerifier ExternalCallbackVerifier,
+	logger *slog.Logger,
+) (*Router, error) {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	if verifier == nil {
-		verifier = rejectingProviderWebhookVerifier{}
+	if providerVerifier == nil {
+		providerVerifier = rejectingProviderWebhookVerifier{}
+	}
+	if externalVerifier == nil {
+		externalVerifier = rejectingExternalCallbackVerifier{}
 	}
 	validator, err := NewOpenAPIValidator(ctx, cfg.OpenAPISpecPath)
 	if err != nil {
 		return nil, err
 	}
-	registry := newRouteRegistry(cfg.ProviderWebhookEnabled, cfg.AllowedProviderSlugs)
+	registry := newRouteRegistry(cfg.ProviderWebhookEnabled, cfg.AllowedProviderSlugs, cfg.ExternalCallbackEnabled, cfg.AllowedCallbackSources)
 	guard := newProviderWebhookGuard(cfg)
-	handlers := newHandlers(registry, providerHub, verifier, guard, cfg.OpenAPISpecPath)
+	handlers := newHandlers(registry, providerHub, interactionHub, providerVerifier, externalVerifier, guard, cfg.OpenAPISpecPath)
 	e := echo.New()
 	e.HTTPErrorHandler = ErrorHandler(logger)
 	e.POST("/v1/provider-webhooks/:provider_slug", handlers.providerWebhook)

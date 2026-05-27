@@ -20,7 +20,7 @@ const (
 type providerWebhookGuard struct {
 	mu     sync.Mutex
 	states map[providerWebhookGuardKey]*providerWebhookGuardState
-	cfg    providerWebhookGuardConfig
+	cfgs   map[string]providerWebhookGuardConfig
 	now    func() time.Time
 }
 
@@ -55,11 +55,19 @@ type providerWebhookGuardReleaser interface {
 func newProviderWebhookGuard(cfg Config) *providerWebhookGuard {
 	return &providerWebhookGuard{
 		states: make(map[providerWebhookGuardKey]*providerWebhookGuardState),
-		cfg: providerWebhookGuardConfig{
-			MaxInFlight:     positiveOrDefault(cfg.ProviderWebhookMaxInFlight, defaultProviderWebhookMaxInFlight),
-			RateLimitBurst:  positiveOrDefault(cfg.ProviderWebhookRateLimitBurst, defaultProviderWebhookRateLimitBurst),
-			RateLimitWindow: durationOrDefault(cfg.ProviderWebhookRateLimitWindow, defaultProviderWebhookRateLimitWindow),
-			RetryAfter:      durationOrDefault(cfg.ProviderWebhookRetryAfter, defaultProviderWebhookRetryAfter),
+		cfgs: map[string]providerWebhookGuardConfig{
+			routeIDProviderWebhook: {
+				MaxInFlight:     positiveOrDefault(cfg.ProviderWebhookMaxInFlight, defaultProviderWebhookMaxInFlight),
+				RateLimitBurst:  positiveOrDefault(cfg.ProviderWebhookRateLimitBurst, defaultProviderWebhookRateLimitBurst),
+				RateLimitWindow: durationOrDefault(cfg.ProviderWebhookRateLimitWindow, defaultProviderWebhookRateLimitWindow),
+				RetryAfter:      durationOrDefault(cfg.ProviderWebhookRetryAfter, defaultProviderWebhookRetryAfter),
+			},
+			routeIDExternalCallback: {
+				MaxInFlight:     positiveOrDefault(cfg.ExternalCallbackMaxInFlight, defaultProviderWebhookMaxInFlight),
+				RateLimitBurst:  positiveOrDefault(cfg.ExternalCallbackRateLimitBurst, defaultProviderWebhookRateLimitBurst),
+				RateLimitWindow: durationOrDefault(cfg.ExternalCallbackRateLimitWindow, defaultProviderWebhookRateLimitWindow),
+				RetryAfter:      durationOrDefault(cfg.ExternalCallbackRetryAfter, defaultProviderWebhookRetryAfter),
+			},
 		},
 		now: time.Now,
 	}
@@ -73,6 +81,7 @@ func (g *providerWebhookGuard) acquire(routeID string, source string) (*provider
 		routeID: strings.ToLower(strings.TrimSpace(routeID)),
 		source:  strings.ToLower(strings.TrimSpace(source)),
 	}
+	cfg := g.routeConfig(key.routeID)
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
@@ -81,20 +90,34 @@ func (g *providerWebhookGuard) acquire(routeID string, source string) (*provider
 		state = &providerWebhookGuardState{}
 		g.states[key] = state
 	}
-	if state.inFlight >= g.cfg.MaxInFlight {
-		return nil, NewSafeError(stdhttp.StatusServiceUnavailable, CodeBackpressure, "provider webhook route is under backpressure", true).WithRetryAfter(g.cfg.RetryAfter)
+	if state.inFlight >= cfg.MaxInFlight {
+		return nil, NewSafeError(stdhttp.StatusServiceUnavailable, CodeBackpressure, "edge route is under backpressure", true).WithRetryAfter(cfg.RetryAfter)
 	}
 	now := g.now().UTC()
-	if state.windowStart.IsZero() || now.Sub(state.windowStart) >= g.cfg.RateLimitWindow {
+	if state.windowStart.IsZero() || now.Sub(state.windowStart) >= cfg.RateLimitWindow {
 		state.windowStart = now
 		state.windowCount = 0
 	}
-	if state.windowCount >= g.cfg.RateLimitBurst {
-		return nil, NewSafeError(stdhttp.StatusTooManyRequests, CodeRateLimited, "provider webhook rate limit is active", true).WithRetryAfter(g.cfg.RetryAfter)
+	if state.windowCount >= cfg.RateLimitBurst {
+		return nil, NewSafeError(stdhttp.StatusTooManyRequests, CodeRateLimited, "edge route rate limit is active", true).WithRetryAfter(cfg.RetryAfter)
 	}
 	state.windowCount++
 	state.inFlight++
 	return &providerWebhookLease{guard: g, key: key}, nil
+}
+
+func (g *providerWebhookGuard) routeConfig(routeID string) providerWebhookGuardConfig {
+	if g != nil {
+		if cfg, ok := g.cfgs[strings.ToLower(strings.TrimSpace(routeID))]; ok {
+			return cfg
+		}
+	}
+	return providerWebhookGuardConfig{
+		MaxInFlight:     defaultProviderWebhookMaxInFlight,
+		RateLimitBurst:  defaultProviderWebhookRateLimitBurst,
+		RateLimitWindow: defaultProviderWebhookRateLimitWindow,
+		RetryAfter:      defaultProviderWebhookRetryAfter,
+	}
 }
 
 func (g *providerWebhookGuard) release(key providerWebhookGuardKey) {

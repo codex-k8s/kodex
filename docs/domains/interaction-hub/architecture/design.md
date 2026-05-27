@@ -5,8 +5,8 @@ title: kodex — дизайн домена центра взаимодейств
 status: active
 owner_role: SA
 created_at: 2026-05-22
-updated_at: 2026-05-26
-related_issues: [582, 768, 781, 800, 821, 835, 843]
+updated_at: 2026-05-27
+related_issues: [582, 768, 781, 800, 821, 835, 843, 853]
 related_prs: []
 related_adrs: []
 approvals:
@@ -59,9 +59,9 @@ approvals:
 3. `runtime-manager` и `fleet-manager` исполняют runtime-нагрузку установленного пакета.
 4. `interaction-hub` хранит только channel binding refs, delivery attempts, callback records и lifecycle запроса.
 5. Стабильный `ChannelDeliveryContract` описывает delivery command, delivery result, callback envelope и error model.
-6. `integration-gateway` принимает внешний HTTP callback, проверяет публичную подпись и маршрутизирует безопасный внутренний вызов в `interaction-hub`, когда callback route активирован срезом владельца.
+6. `integration-gateway` принимает внешний HTTP callback, проверяет публичную подпись и маршрутизирует безопасный внутренний вызов в `interaction-hub`.
 
-Эта модель фиксирует lifecycle channel contract как доменную истину. OpenAPI-каркас внешнего callback-входа находится в `integration-gateway`, но активация маршрута требует согласованного callback lifecycle `interaction-hub`.
+Эта модель фиксирует lifecycle channel contract как доменную истину. Внешний callback-вход находится в `integration-gateway`, но lifecycle, дедупликация и callback record остаются в `interaction-hub`.
 
 ## Компоненты
 
@@ -76,7 +76,7 @@ approvals:
 | Subscription engine | Правила подписки на события и области, создание notification intent и reminders. |
 | Outbox-доставщик | Публикация `interaction.*` событий через `platform-event-log`. |
 
-Текущая сервисная основа реализует authoritative lifecycle `Notification`, `Subscription`, delivery attempts и safe callback records: создание notification intent, создание/изменение/отключение/чтение подписок, `PlanDelivery`, `RecordDeliveryResult`, `RecordChannelCallback`, `GetDeliveryStatus`, command idempotency, optimistic concurrency для subscription и safe `interaction.*` outbox events. Внешний `integration-gateway` callback route, конкретные channel packages и runtime worker остаются отдельным контуром.
+Текущая сервисная основа реализует authoritative lifecycle `Notification`, `Subscription`, delivery attempts и safe callback records: создание notification intent, создание/изменение/отключение/чтение подписок, `PlanDelivery`, `RecordDeliveryResult`, `RecordChannelCallback`, `GetDeliveryStatus`, command idempotency, optimistic concurrency для subscription и safe `interaction.*` outbox events. Внешний `integration-gateway` callback route передаёт generic safe envelope в `RecordChannelCallback`; конкретные channel packages и runtime worker остаются отдельным контуром.
 
 ## Основные потоки
 
