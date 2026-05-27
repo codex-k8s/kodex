@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-22
 updated_at: 2026-05-27
-related_issues: [322, 769, 790, 815, 827, 845, 856, 869, 886]
+related_issues: [322, 769, 790, 815, 827, 845, 856, 869, 886, 907]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -124,6 +124,8 @@ MCP-инструменты не должны принимать свободны
 
 ## События
 
+Все события `governance.*` публикуются через service-local outbox и `platform-event-log`. Payload является safe read-model DTO: содержит только ids, owner-domain refs, status/outcome, reason code, bounded `safe_summary`, actor ref, request/correlation refs, version и envelope timestamp. `idempotency_key` в событии является безопасной correlation-ссылкой: для `command_id` передаётся `command:<uuid>`, для caller-supplied idempotency key — digest, а не исходное значение. Сырые provider payload, diff, prompt/transcript, stdout/stderr, runtime logs, секреты, webhook body и большие отчёты в события не попадают.
+
 | Событие | Когда публикуется |
 |---|---|
 | `governance.policy.version_activated` | Активирована версия risk profile или gate policy. |
@@ -142,6 +144,18 @@ MCP-инструменты не должны принимать свободны
 | `governance.release_decision.resolved` | Релизное решение принято. |
 | `governance.release_safety_state.changed` | Изменилось состояние release safety-loop. |
 
+### Event-driven/read-model граница
+
+| Решение или сигнал | Событие для consumers | Основные consumers | Когда нужен gRPC read |
+|---|---|---|---|
+| Risk assessment lifecycle | `governance.risk_assessment.requested`, `completed`, `changed` | `agent-manager`, `provider-hub`, `platform-mcp-server`, будущие operations projections | Когда consumer нужен authoritative detail по assessment/factors и он имеет право `governance.risk.read`. |
+| Review signal refs | `governance.review_signal.recorded` | `agent-manager`, `provider-hub`, release projections | Когда нужно получить список signals по target/assessment или сверить конкретный signal id. |
+| Gate request/decision | `governance.gate.requested`, `resolved`, `cancelled`, `expired` | `agent-manager` resume, `interaction-hub` delivery correlation, provider write policy, operations projections | Когда нужно прочитать gate request/decision с evidence refs или проверить final decision перед mutating command. |
+| Blocking signals | `governance.blocking_signal.recorded`, `resolved` | release decision consumers, runtime/operations projections | Когда нужен список active/historical blockers по target. |
+| Release package/decision/safety-loop | `governance.release_decision_package.built`, `governance.release_decision.requested`, `resolved`, `governance.release_safety_state.changed` | `agent-manager`, `runtime-manager`, provider write policy, operations projections | Когда нужен authoritative release package snapshot, decision detail или current safety state. |
+
+События служат trigger/read-model основой и не заменяют синхронный gRPC для команд, optimistic concurrency, access checks и точечного authoritative lookup. Соседние сервисы не читают БД `governance-manager`: они реагируют на `platform-event-log` и при необходимости вызывают gRPC reads с текущими правами.
+
 ## Состояние реализации
 
 | Область | Статус |
@@ -155,6 +169,7 @@ MCP-инструменты не должны принимать свободны
 | Risk classifier и policy evaluator | Готовы для локальных risk profiles/rules, safe summaries/refs, идемпотентного replay, optimistic concurrency и safe outbox events. |
 | Release decision lifecycle и safety-loop | Готовы для release package build/read/list, decision request/submit/read/list, blocking signals и текущего safety-loop state на safe refs/summaries. |
 | Release integration refs | Поддержаны для release decision package: safe domain/kind/ref/status/summary/digest/timestamp/version, canonical order по `domain/kind/ref`, reject конфликтующих дублей, локальная проверка governance refs и отсутствие raw payload/logs/secrets. |
+| Event-driven/read-model основа | `governance.*` payload расширен safe metadata/refs: actor, request id, idempotency correlation, target/source refs, bounded summary, interaction/agent/runtime refs и policy/decision refs. Соседние сервисы могут строить read models через `platform-event-log` без чтения БД governance. |
 | Интеграции с project/agent/provider/runtime/interaction | Зафиксированы в refs и границах контрактов; межсервисные read-клиенты, delivery callbacks, provider write и deploy orchestration остаются отдельными срезами. |
 
 ## Совместимость

@@ -6,7 +6,7 @@ status: active
 owner_role: EM
 created_at: 2026-05-22
 updated_at: 2026-05-27
-related_issues: [322, 769, 790, 802, 815, 827, 845, 856, 869, 886]
+related_issues: [322, 769, 790, 802, 815, 827, 845, 856, 869, 886, 907]
 related_prs: []
 related_docsets:
   - docs/domains/risk-and-release-governance/product/requirements.md
@@ -53,6 +53,7 @@ approvals:
 | GOV-7c | #886 | Review signal refs intake готов: provider/agent/interaction evidence refs принимаются как safe owner-domain refs, запись проверяет `governance.signal.record`, повтор по source fingerprint не создаёт дубль. |
 | GOV-7 | не назначено | Интеграции с `agent-manager`, `provider-hub`, `interaction-hub`, `runtime-manager`, `project-catalog` и `operations-hub` подключены через согласованные контракты. |
 | GOV-8 | без отдельного Issue | Эксплуатационный контур для первого backend deploy готов: Dockerfile, Kubernetes manifests, migration Job, env/secret inventory, smoke check, runbook и monitoring. Operator projections остаются отдельным operations-срезом. |
+| GOV-9 | #907 | Event-driven/read-model основа готова: `governance.*` decision lifecycle события несут safe metadata/refs/summary/idempotency correlation для consumers через `platform-event-log`, а authoritative lookup остаётся через gRPC. |
 
 ## MVP-порядок
 
@@ -82,6 +83,7 @@ approvals:
 | Release decision lifecycle и safety-loop | Готовы для package build/read/list, decision request/submit/read/list, blocking signals и текущего safety-loop state на safe refs/summaries. | GOV-6 |
 | Release integration refs | Готовы для project/repository/release line, provider Issue/PR/check/review, agent run/acceptance, runtime job/deploy, local risk assessment и gate refs с bounded summaries/status/digest/timestamps/version; локальные governance refs обогащаются из repository, внешние refs получают safe summary diagnostic при отсутствии owner summary. | GOV-7b |
 | Эксплуатационный контур | Готов для первого backend deploy: service/migrations Dockerfile stages, Kubernetes ServiceAccount/Service/Deployment/Job, runtime env/secret inventory, PostgreSQL database bootstrap, smoke-проверка, runbook и monitoring. | GOV-8 |
+| Event-driven/read-model основа | `governance.*` события для risk assessment, review signal, gate, blocking signal, release package/decision и safety-loop публикуют safe ids/refs/status/outcome/reason/safe summary/actor/request/idempotency metadata для consumers через `platform-event-log`. | GOV-9 |
 | Интеграции с `agent-manager`, `provider-hub`, `interaction-hub`, `runtime-manager` и `project-catalog` | Service-client чтения, provider write, delivery callbacks и deploy orchestration не реализованы; governance связывает safe refs без владения чужой доменной истиной. | GOV-7 |
 
 ## Синхронизация с соседними доменами

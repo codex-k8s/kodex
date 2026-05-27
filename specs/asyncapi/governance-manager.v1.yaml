@@ -247,6 +247,9 @@ components:
         gate_request_id:
           type: string
           format: uuid
+        gate_policy_id:
+          type: string
+          format: uuid
         gate_decision_id:
           type: string
           format: uuid
@@ -273,13 +276,33 @@ components:
           type: string
         agent_run_ref:
           type: string
+        agent_stage_ref:
+          type: string
         runtime_job_ref:
           type: string
         interaction_request_ref:
           type: string
         interaction_delivery_ref:
           type: string
+        interaction_decision_ref:
+          type: string
+        target_type:
+          type: string
+        target_ref:
+          type: string
+        source_ref:
+          type: string
+        actor_ref:
+          type: string
         decision_actor_ref:
+          type: string
+        decision_policy_ref:
+          type: string
+        safe_summary:
+          type: string
+        request_id:
+          type: string
+        idempotency_key:
           type: string
         status:
           type: string

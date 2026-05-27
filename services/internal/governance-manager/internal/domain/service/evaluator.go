@@ -169,15 +169,13 @@ func (s *Service) evaluateRisk(ctx context.Context, input EvaluateRiskInput) (en
 	}
 	result = commandResult(input.Meta, enum.OperationEvaluateRisk.String(), governanceevents.AggregateRiskAssessment, assessment.ID, now)
 	events := []entity.OutboxEvent{
-		outboxEvent(s.idGenerator.New(), governanceevents.EventRiskAssessmentRequested, governanceevents.AggregateRiskAssessment, assessment.ID, now, governanceevents.Payload{
-			RiskAssessmentID:       assessment.ID.String(),
-			ProjectRef:             assessment.ProjectContext.ProjectRef,
-			RepositoryRef:          assessment.ProjectContext.RepositoryRef,
-			ProviderPullRequestRef: evaluation.context.provider.PullRequestRef,
-			Status:                 string(assessment.Status),
-			Version:                assessment.Version,
-		}),
-		outboxEvent(s.idGenerator.New(), governanceevents.EventRiskAssessmentCompleted, governanceevents.AggregateRiskAssessment, assessment.ID, now, riskAssessmentCompletedPayload(assessment, len(factors))),
+		outboxCommandEvent(s.idGenerator.New(), governanceevents.EventRiskAssessmentRequested, governanceevents.AggregateRiskAssessment, assessment.ID, now, input.Meta, enum.OperationEvaluateRisk.String(), riskAssessmentEventRefs(governanceevents.Payload{
+			RiskAssessmentID: assessment.ID.String(),
+			SafeSummary:      assessment.Explanation,
+			Status:           string(assessment.Status),
+			Version:          assessment.Version,
+		}, assessment, evaluation.context)),
+		outboxCommandEvent(s.idGenerator.New(), governanceevents.EventRiskAssessmentCompleted, governanceevents.AggregateRiskAssessment, assessment.ID, now, input.Meta, enum.OperationEvaluateRisk.String(), riskAssessmentCompletedPayload(assessment, evaluation.context, len(factors))),
 	}
 	if err := s.repository.CreateRiskAssessment(ctx, assessment, factors, result, events); err != nil {
 		return entity.RiskAssessment{}, err
@@ -270,19 +268,20 @@ func (s *Service) reevaluateRisk(ctx context.Context, input ReevaluateRiskInput)
 	}
 	result = commandResult(input.Meta, enum.OperationReevaluateRisk.String(), governanceevents.AggregateRiskAssessment, assessment.ID, now)
 	events := []entity.OutboxEvent{
-		outboxEvent(s.idGenerator.New(), governanceevents.EventRiskAssessmentCompleted, governanceevents.AggregateRiskAssessment, assessment.ID, now, riskAssessmentCompletedPayload(assessment, len(factors))),
+		outboxCommandEvent(s.idGenerator.New(), governanceevents.EventRiskAssessmentCompleted, governanceevents.AggregateRiskAssessment, assessment.ID, now, input.Meta, enum.OperationReevaluateRisk.String(), riskAssessmentCompletedPayload(assessment, evaluation.context, len(factors))),
 	}
 	currentOutcomeSignature := riskAssessmentOutcomeSignature(factors, assessment.RequiredGates, assessment.EvidenceRefs)
 	if previousEffectiveRiskClass != assessment.EffectiveRiskClass || previousRequiredGateCount != len(assessment.RequiredGates) || previousOutcomeSignature != currentOutcomeSignature {
-		events = append(events, outboxEvent(s.idGenerator.New(), governanceevents.EventRiskAssessmentChanged, governanceevents.AggregateRiskAssessment, assessment.ID, now, governanceevents.Payload{
+		events = append(events, outboxCommandEvent(s.idGenerator.New(), governanceevents.EventRiskAssessmentChanged, governanceevents.AggregateRiskAssessment, assessment.ID, now, input.Meta, enum.OperationReevaluateRisk.String(), riskAssessmentEventRefs(governanceevents.Payload{
 			RiskAssessmentID:           assessment.ID.String(),
 			PreviousEffectiveRiskClass: string(previousEffectiveRiskClass),
 			EffectiveRiskClass:         string(assessment.EffectiveRiskClass),
 			RiskFactorCount:            int64(len(factors)),
 			RequiredGateCount:          int64(len(assessment.RequiredGates)),
+			SafeSummary:                assessment.Explanation,
 			Status:                     string(assessment.Status),
 			Version:                    assessment.Version,
-		}))
+		}, assessment, evaluation.context)))
 	}
 	if err := s.repository.UpdateRiskAssessment(ctx, assessment, factors, previousVersion, result, events); err != nil {
 		return entity.RiskAssessment{}, err
@@ -290,16 +289,29 @@ func (s *Service) reevaluateRisk(ctx context.Context, input ReevaluateRiskInput)
 	return assessment, nil
 }
 
-func riskAssessmentCompletedPayload(assessment entity.RiskAssessment, factorCount int) governanceevents.Payload {
-	return governanceevents.Payload{
+func riskAssessmentCompletedPayload(assessment entity.RiskAssessment, context evaluationContext, factorCount int) governanceevents.Payload {
+	return riskAssessmentEventRefs(governanceevents.Payload{
 		RiskAssessmentID:   assessment.ID.String(),
 		InitialRiskClass:   string(assessment.InitialRiskClass),
 		EffectiveRiskClass: string(assessment.EffectiveRiskClass),
 		RiskFactorCount:    int64(factorCount),
 		RequiredGateCount:  int64(len(assessment.RequiredGates)),
+		SafeSummary:        assessment.Explanation,
 		Status:             string(assessment.Status),
 		Version:            assessment.Version,
-	}
+	}, assessment, context)
+}
+
+func riskAssessmentEventRefs(payload governanceevents.Payload, assessment entity.RiskAssessment, context evaluationContext) governanceevents.Payload {
+	payload = applyTargetRef(payload, assessment.Target)
+	payload = applyProjectContextRefs(payload, assessment.ProjectContext)
+	payload.ProviderWorkItemRef = context.provider.WorkItemRef
+	payload.ProviderPullRequestRef = context.provider.PullRequestRef
+	payload.AgentSessionRef = context.agent.SessionRef
+	payload.AgentRunRef = context.agent.RunRef
+	payload.AgentStageRef = context.agent.StageRef
+	payload.RuntimeJobRef = context.runtime.JobRef
+	return payload
 }
 
 func riskAssessmentOutcomeSignature(factors []entity.RiskFactor, gates []entity.RequiredGate, evidenceRefs []value.EvidenceRef) string {

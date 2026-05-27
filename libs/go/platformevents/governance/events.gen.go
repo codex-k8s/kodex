@@ -35,15 +35,21 @@ const (
 
 // Payload is the generated common payload envelope for domain events.
 type Payload struct {
+	ActorRef                   string `json:"actor_ref,omitempty"`
 	AgentRunRef                string `json:"agent_run_ref,omitempty"`
 	AgentSessionRef            string `json:"agent_session_ref,omitempty"`
+	AgentStageRef              string `json:"agent_stage_ref,omitempty"`
 	BlockingSignalID           string `json:"blocking_signal_id,omitempty"`
 	DecisionActorRef           string `json:"decision_actor_ref,omitempty"`
+	DecisionPolicyRef          string `json:"decision_policy_ref,omitempty"`
 	EffectiveRiskClass         string `json:"effective_risk_class,omitempty"`
 	GateDecisionID             string `json:"gate_decision_id,omitempty"`
 	GatePolicyCount            int64  `json:"gate_policy_count,omitempty"`
+	GatePolicyID               string `json:"gate_policy_id,omitempty"`
 	GateRequestID              string `json:"gate_request_id,omitempty"`
+	IdempotencyKey             string `json:"idempotency_key,omitempty"`
 	InitialRiskClass           string `json:"initial_risk_class,omitempty"`
+	InteractionDecisionRef     string `json:"interaction_decision_ref,omitempty"`
 	InteractionDeliveryRef     string `json:"interaction_delivery_ref,omitempty"`
 	InteractionRequestRef      string `json:"interaction_request_ref,omitempty"`
 	Outcome                    string `json:"outcome,omitempty"`
@@ -59,6 +65,7 @@ type Payload struct {
 	ReleaseDecisionPackageID   string `json:"release_decision_package_id,omitempty"`
 	ReleaseSafetyStateID       string `json:"release_safety_state_id,omitempty"`
 	RepositoryRef              string `json:"repository_ref,omitempty"`
+	RequestID                  string `json:"request_id,omitempty"`
 	RequiredGateCount          int64  `json:"required_gate_count,omitempty"`
 	ReviewSignalID             string `json:"review_signal_id,omitempty"`
 	RiskAssessmentID           string `json:"risk_assessment_id,omitempty"`
@@ -66,6 +73,10 @@ type Payload struct {
 	RiskProfileID              string `json:"risk_profile_id,omitempty"`
 	RiskRuleCount              int64  `json:"risk_rule_count,omitempty"`
 	RuntimeJobRef              string `json:"runtime_job_ref,omitempty"`
+	SafeSummary                string `json:"safe_summary,omitempty"`
+	SourceRef                  string `json:"source_ref,omitempty"`
 	Status                     string `json:"status,omitempty"`
+	TargetRef                  string `json:"target_ref,omitempty"`
+	TargetType                 string `json:"target_type,omitempty"`
 	Version                    int64  `json:"version,omitempty"`
 }

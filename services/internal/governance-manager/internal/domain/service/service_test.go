@@ -65,6 +65,7 @@ func TestEvaluateRiskStoresAssessmentAndOutboxEvents(t *testing.T) {
 			CommandID: &commandID,
 			Actor:     value.Actor{Type: "service", ID: "provider-hub"},
 			Reason:    "provider checks changed",
+			RequestID: "trace-risk-1",
 		},
 	})
 	if err != nil {
@@ -81,6 +82,18 @@ func TestEvaluateRiskStoresAssessmentAndOutboxEvents(t *testing.T) {
 	}
 	if repository.result.CommandID == nil || *repository.result.CommandID != commandID {
 		t.Fatalf("command result command id = %v, want %s", repository.result.CommandID, commandID)
+	}
+	requestedPayload := string(repository.events[0].Payload)
+	for _, want := range []string{
+		`"actor_ref":"service:provider-hub"`,
+		`"idempotency_key":"command:aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"`,
+		`"request_id":"trace-risk-1"`,
+		`"target_type":"provider_native.pr"`,
+		`"target_ref":"github://codex-k8s/kodex/pull/1"`,
+	} {
+		if !strings.Contains(requestedPayload, want) {
+			t.Fatalf("risk requested payload = %s, want %s", requestedPayload, want)
+		}
 	}
 }
 
@@ -1039,8 +1052,11 @@ func TestCancelGateStoresTerminalStateAndSafeOutbox(t *testing.T) {
 		t.Fatalf("events = %+v, want one gate cancelled event", repository.events)
 	}
 	payload := string(repository.events[0].Payload)
-	if strings.Contains(payload, "safe operator cancellation summary") || strings.Contains(payload, "interaction:request:1") {
-		t.Fatalf("outbox payload leaked terminal summary or interaction ref: %s", payload)
+	if !strings.Contains(payload, `"safe_summary":"safe operator cancellation summary"`) || !strings.Contains(payload, `"interaction_request_ref":"interaction:request:1"`) {
+		t.Fatalf("outbox payload = %s, want bounded summary and interaction request ref", payload)
+	}
+	if strings.Contains(payload, "raw_provider_payload") || strings.Contains(payload, "secret") {
+		t.Fatalf("outbox payload leaked unsafe details: %s", payload)
 	}
 }
 
@@ -1297,8 +1313,10 @@ func TestReleaseDecisionLifecycleHappyPath(t *testing.T) {
 	if pkg.Status != enum.ReleaseDecisionPackageStatusClosed || pkg.Version != 3 {
 		t.Fatalf("package = %+v, want closed v3", pkg)
 	}
-	if payload := string(repository.events[0].Payload); strings.Contains(payload, "waiting for rollout") || strings.Contains(payload, "raw_diff") {
-		t.Fatalf("release decision event leaked unsafe text: %s", payload)
+	if payload := string(repository.events[0].Payload); !strings.Contains(payload, `"safe_summary":"waiting for rollout window"`) || !strings.Contains(payload, `"decision_policy_ref":"policy:stable"`) {
+		t.Fatalf("release decision event payload = %s, want bounded decision summary and policy ref", payload)
+	} else if strings.Contains(payload, "raw_diff") || strings.Contains(payload, "provider_response") {
+		t.Fatalf("release decision event leaked unsafe details: %s", payload)
 	}
 }
 
@@ -1759,7 +1777,6 @@ func TestBlockingSignalLifecycleAndSafeEventPayload(t *testing.T) {
 
 	now := time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC)
 	signalID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
-	recordCommandID := uuid.MustParse("bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb")
 	resolveCommandID := uuid.MustParse("cccccccc-cccc-4ccc-cccc-cccccccccccc")
 	recordEventID := uuid.MustParse("dddddddd-dddd-4ddd-dddd-dddddddddddd")
 	resolveEventID := uuid.MustParse("eeeeeeee-eeee-4eee-eeee-eeeeeeeeeeee")
@@ -1778,7 +1795,7 @@ func TestBlockingSignalLifecycleAndSafeEventPayload(t *testing.T) {
 		SourceRef:  "runtime:job:1",
 		Severity:   enum.SignalSeverityCritical,
 		Summary:    "safe bounded summary without logs",
-		Meta:       CommandMeta{CommandID: &recordCommandID, Actor: value.Actor{Type: "service", ID: "runtime-manager"}},
+		Meta:       CommandMeta{IdempotencyKey: "runtime raw idempotency key", Actor: value.Actor{Type: "service", ID: "runtime-manager"}},
 	})
 	if err != nil {
 		t.Fatalf("RecordBlockingSignal(): %v", err)
@@ -1786,8 +1803,10 @@ func TestBlockingSignalLifecycleAndSafeEventPayload(t *testing.T) {
 	if signal.Status != enum.BlockingSignalStatusActive || signal.Version != 1 {
 		t.Fatalf("signal = %+v, want active v1", signal)
 	}
-	if payload := string(repository.events[0].Payload); strings.Contains(payload, "bounded summary") || strings.Contains(payload, "runtime:job:1") {
-		t.Fatalf("blocking signal event leaked signal details: %s", payload)
+	if payload := string(repository.events[0].Payload); !strings.Contains(payload, `"safe_summary":"safe bounded summary without logs"`) || !strings.Contains(payload, `"source_ref":"runtime:job:1"`) || !strings.Contains(payload, `"idempotency_key":"idempotency_sha256:`) {
+		t.Fatalf("blocking signal event payload = %s, want bounded summary and source ref", payload)
+	} else if strings.Contains(payload, "runtime raw idempotency key") || strings.Contains(payload, "stdout") || strings.Contains(payload, "stderr") {
+		t.Fatalf("blocking signal event leaked unsafe details: %s", payload)
 	}
 	signal, err = service.ResolveBlockingSignal(context.Background(), ResolveBlockingSignalInput{
 		BlockingSignalID:  signalID,
