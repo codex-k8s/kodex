@@ -278,32 +278,32 @@ spec:
   images:
     golang-alpine:
       type: external
-      from: 'golang:{{ index .Versions "golang-alpine" }}'
-      local: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/kodex/mirror/golang:{{ index .Versions "golang-alpine" }}'
+      from: 'golang:{{ version "golang-alpine" }}'
+      local: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/kodex/mirror/golang:{{ version "golang-alpine" }}'
     postgres:
       type: external
-      from: 'pgvector/pgvector:{{ index .Versions "pgvector" }}'
-      local: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/kodex/mirror/pgvector:{{ index .Versions "pgvector" }}'
+      from: 'pgvector/pgvector:{{ version "pgvector" }}'
+      local: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/kodex/mirror/pgvector:{{ version "pgvector" }}'
     registry:
       type: external
-      from: 'registry:{{ index .Versions "registry" }}'
-      local: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/kodex/mirror/registry:{{ index .Versions "registry" }}'
+      from: 'registry:{{ version "registry" }}'
+      local: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/kodex/mirror/registry:{{ version "registry" }}'
     kaniko-executor:
       type: external
-      from: 'gcr.io/kaniko-project/executor:{{ index .Versions "kaniko-executor" }}'
-      local: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/kodex/mirror/kaniko-executor:{{ index .Versions "kaniko-executor" }}'
+      from: 'gcr.io/kaniko-project/executor:{{ version "kaniko-executor" }}'
+      local: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/kodex/mirror/kaniko-executor:{{ version "kaniko-executor" }}'
     crane:
       type: external
-      from: 'gcr.io/go-containerregistry/crane:{{ index .Versions "crane" }}'
-      local: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/kodex/mirror/crane:{{ index .Versions "crane" }}'
+      from: 'gcr.io/go-containerregistry/crane:{{ version "crane" }}'
+      local: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/kodex/mirror/crane:{{ version "crane" }}'
     busybox:
       type: external
-      from: 'busybox:{{ index .Versions "busybox" }}'
-      local: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/kodex/mirror/busybox:{{ index .Versions "busybox" }}'
+      from: 'busybox:{{ version "busybox" }}'
+      local: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/kodex/mirror/busybox:{{ version "busybox" }}'
     access-manager:
       type: build
       repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_ACCESS_MANAGER_INTERNAL_IMAGE_REPOSITORY" "kodex/access-manager" }}'
-      tagTemplate: '{{ index .Versions "access-manager" }}'
+      tagTemplate: '{{ version "access-manager" }}'
       dockerfile: services/internal/access-manager/Dockerfile
       target: prod
       context: .
@@ -311,7 +311,7 @@ spec:
     access-manager-migrations:
       type: migration-build
       repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_ACCESS_MANAGER_MIGRATIONS_INTERNAL_IMAGE_REPOSITORY" "kodex/access-manager-migrations" }}'
-      tagTemplate: '{{ index .Versions "access-manager" }}'
+      tagTemplate: '{{ version "access-manager" }}'
       dockerfile: services/internal/access-manager/Dockerfile
       target: migrations
       context: .
@@ -320,7 +320,7 @@ spec:
     project-catalog:
       type: build
       repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_PROJECT_CATALOG_INTERNAL_IMAGE_REPOSITORY" "kodex/project-catalog" }}'
-      tagTemplate: '{{ index .Versions "project-catalog" }}'
+      tagTemplate: '{{ version "project-catalog" }}'
       dockerfile: services/internal/project-catalog/Dockerfile
       target: prod
       context: .
@@ -328,7 +328,7 @@ spec:
     project-catalog-migrations:
       type: migration-build
       repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_PROJECT_CATALOG_MIGRATIONS_INTERNAL_IMAGE_REPOSITORY" "kodex/project-catalog-migrations" }}'
-      tagTemplate: '{{ index .Versions "project-catalog" }}'
+      tagTemplate: '{{ version "project-catalog" }}'
       dockerfile: services/internal/project-catalog/Dockerfile
       target: migrations
       context: .
@@ -337,7 +337,7 @@ spec:
     package-hub:
       type: build
       repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_PACKAGE_HUB_INTERNAL_IMAGE_REPOSITORY" "kodex/package-hub" }}'
-      tagTemplate: '{{ index .Versions "package-hub" }}'
+      tagTemplate: '{{ version "package-hub" }}'
       dockerfile: services/internal/package-hub/Dockerfile
       target: prod
       context: .
@@ -345,7 +345,7 @@ spec:
     package-hub-migrations:
       type: migration-build
       repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_PACKAGE_HUB_MIGRATIONS_INTERNAL_IMAGE_REPOSITORY" "kodex/package-hub-migrations" }}'
-      tagTemplate: '{{ index .Versions "package-hub" }}'
+      tagTemplate: '{{ version "package-hub" }}'
       dockerfile: services/internal/package-hub/Dockerfile
       target: migrations
       context: .
@@ -354,7 +354,7 @@ spec:
     provider-hub:
       type: build
       repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_PROVIDER_HUB_INTERNAL_IMAGE_REPOSITORY" "kodex/provider-hub" }}'
-      tagTemplate: '{{ index .Versions "provider-hub" }}'
+      tagTemplate: '{{ version "provider-hub" }}'
       dockerfile: services/internal/provider-hub/Dockerfile
       target: prod
       context: .
@@ -362,7 +362,7 @@ spec:
     provider-hub-migrations:
       type: migration-build
       repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_PROVIDER_HUB_MIGRATIONS_INTERNAL_IMAGE_REPOSITORY" "kodex/provider-hub-migrations" }}'
-      tagTemplate: '{{ index .Versions "provider-hub" }}'
+      tagTemplate: '{{ version "provider-hub" }}'
       dockerfile: services/internal/provider-hub/Dockerfile
       target: migrations
       context: .
@@ -371,7 +371,7 @@ spec:
     interaction-hub:
       type: build
       repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_INTERACTION_HUB_INTERNAL_IMAGE_REPOSITORY" "kodex/interaction-hub" }}'
-      tagTemplate: '{{ index .Versions "interaction-hub" }}'
+      tagTemplate: '{{ version "interaction-hub" }}'
       dockerfile: services/internal/interaction-hub/Dockerfile
       target: prod
       context: .
@@ -379,7 +379,7 @@ spec:
     interaction-hub-migrations:
       type: migration-build
       repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_INTERACTION_HUB_MIGRATIONS_INTERNAL_IMAGE_REPOSITORY" "kodex/interaction-hub-migrations" }}'
-      tagTemplate: '{{ index .Versions "interaction-hub" }}'
+      tagTemplate: '{{ version "interaction-hub" }}'
       dockerfile: services/internal/interaction-hub/Dockerfile
       target: migrations
       context: .
@@ -388,7 +388,7 @@ spec:
     integration-gateway:
       type: build
       repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_INTEGRATION_GATEWAY_INTERNAL_IMAGE_REPOSITORY" "kodex/integration-gateway" }}'
-      tagTemplate: '{{ index .Versions "integration-gateway" }}'
+      tagTemplate: '{{ version "integration-gateway" }}'
       dockerfile: services/external/integration-gateway/Dockerfile
       target: prod
       context: .
@@ -396,7 +396,7 @@ spec:
     codex-hook-ingress:
       type: build
       repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_CODEX_HOOK_INGRESS_INTERNAL_IMAGE_REPOSITORY" "kodex/codex-hook-ingress" }}'
-      tagTemplate: '{{ index .Versions "codex-hook-ingress" }}'
+      tagTemplate: '{{ version "codex-hook-ingress" }}'
       dockerfile: services/internal/codex-hook-ingress/Dockerfile
       target: prod
       context: .
@@ -404,7 +404,7 @@ spec:
     runtime-manager:
       type: build
       repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_RUNTIME_MANAGER_INTERNAL_IMAGE_REPOSITORY" "kodex/runtime-manager" }}'
-      tagTemplate: '{{ index .Versions "runtime-manager" }}'
+      tagTemplate: '{{ version "runtime-manager" }}'
       dockerfile: services/internal/runtime-manager/Dockerfile
       target: prod
       context: .
@@ -412,7 +412,7 @@ spec:
     runtime-manager-migrations:
       type: migration-build
       repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_RUNTIME_MANAGER_MIGRATIONS_INTERNAL_IMAGE_REPOSITORY" "kodex/runtime-manager-migrations" }}'
-      tagTemplate: '{{ index .Versions "runtime-manager" }}'
+      tagTemplate: '{{ version "runtime-manager" }}'
       dockerfile: services/internal/runtime-manager/Dockerfile
       target: migrations
       context: .
@@ -421,7 +421,7 @@ spec:
     agent-manager:
       type: build
       repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_AGENT_MANAGER_INTERNAL_IMAGE_REPOSITORY" "kodex/agent-manager" }}'
-      tagTemplate: '{{ index .Versions "agent-manager" }}'
+      tagTemplate: '{{ version "agent-manager" }}'
       dockerfile: services/internal/agent-manager/Dockerfile
       target: prod
       context: .
@@ -429,7 +429,7 @@ spec:
     agent-manager-migrations:
       type: migration-build
       repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_AGENT_MANAGER_MIGRATIONS_INTERNAL_IMAGE_REPOSITORY" "kodex/agent-manager-migrations" }}'
-      tagTemplate: '{{ index .Versions "agent-manager" }}'
+      tagTemplate: '{{ version "agent-manager" }}'
       dockerfile: services/internal/agent-manager/Dockerfile
       target: migrations
       context: .
@@ -438,7 +438,7 @@ spec:
     fleet-manager:
       type: build
       repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_FLEET_MANAGER_INTERNAL_IMAGE_REPOSITORY" "kodex/fleet-manager" }}'
-      tagTemplate: '{{ index .Versions "fleet-manager" }}'
+      tagTemplate: '{{ version "fleet-manager" }}'
       dockerfile: services/internal/fleet-manager/Dockerfile
       target: prod
       context: .
@@ -446,7 +446,7 @@ spec:
     fleet-manager-migrations:
       type: migration-build
       repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_FLEET_MANAGER_MIGRATIONS_INTERNAL_IMAGE_REPOSITORY" "kodex/fleet-manager-migrations" }}'
-      tagTemplate: '{{ index .Versions "fleet-manager" }}'
+      tagTemplate: '{{ version "fleet-manager" }}'
       dockerfile: services/internal/fleet-manager/Dockerfile
       target: migrations
       context: .
@@ -455,7 +455,7 @@ spec:
     governance-manager:
       type: build
       repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_GOVERNANCE_MANAGER_INTERNAL_IMAGE_REPOSITORY" "kodex/governance-manager" }}'
-      tagTemplate: '{{ index .Versions "governance-manager" }}'
+      tagTemplate: '{{ version "governance-manager" }}'
       dockerfile: services/internal/governance-manager/Dockerfile
       target: prod
       context: .
@@ -463,7 +463,7 @@ spec:
     governance-manager-migrations:
       type: migration-build
       repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_GOVERNANCE_MANAGER_MIGRATIONS_INTERNAL_IMAGE_REPOSITORY" "kodex/governance-manager-migrations" }}'
-      tagTemplate: '{{ index .Versions "governance-manager" }}'
+      tagTemplate: '{{ version "governance-manager" }}'
       dockerfile: services/internal/governance-manager/Dockerfile
       target: migrations
       context: .
@@ -472,7 +472,7 @@ spec:
     platform-event-log-migrations:
       type: migration-build
       repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_PLATFORM_EVENT_LOG_MIGRATIONS_INTERNAL_IMAGE_REPOSITORY" "kodex/platform-event-log-migrations" }}'
-      tagTemplate: '{{ index .Versions "platform-event-log" }}'
+      tagTemplate: '{{ version "platform-event-log" }}'
       dockerfile: services/internal/platform-event-log/Dockerfile
       target: prod
       context: .

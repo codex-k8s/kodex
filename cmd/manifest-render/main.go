@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"text/template"
@@ -217,6 +218,8 @@ type imageSpec struct {
 	ImageEnv    string `yaml:"imageEnv"`
 }
 
+var inventoryVersionIndexPattern = regexp.MustCompile(`index\s+\.Versions\s+"([^"]+)"`)
+
 func loadServiceStack(path string) (serviceStack, error) {
 	if strings.TrimSpace(path) == "" {
 		return serviceStack{}, nil
@@ -286,9 +289,13 @@ func (stack serviceStack) image(name string) (string, error) {
 }
 
 func (stack serviceStack) renderInventoryTemplate(imageName, fieldName, source string) (string, error) {
+	if err := stack.validateInventoryTemplateVersions(imageName, fieldName, source); err != nil {
+		return "", err
+	}
 	tpl, err := template.New(imageName + "." + fieldName).Funcs(template.FuncMap{
-		"envOr": envOr,
-		"env":   os.Getenv,
+		"envOr":   envOr,
+		"env":     os.Getenv,
+		"version": stack.version,
 	}).Parse(source)
 	if err != nil {
 		return "", fmt.Errorf("parse services.yaml image %s %s template: %w", imageName, fieldName, err)
@@ -302,4 +309,16 @@ func (stack serviceStack) renderInventoryTemplate(imageName, fieldName, source s
 		return "", fmt.Errorf("render services.yaml image %s %s template: %w", imageName, fieldName, err)
 	}
 	return output.String(), nil
+}
+
+func (stack serviceStack) validateInventoryTemplateVersions(imageName, fieldName, source string) error {
+	for _, match := range inventoryVersionIndexPattern.FindAllStringSubmatch(source, -1) {
+		if len(match) < 2 {
+			continue
+		}
+		if _, err := stack.version(match[1]); err != nil {
+			return fmt.Errorf("validate services.yaml image %s %s template: %w", imageName, fieldName, err)
+		}
+	}
+	return nil
 }
