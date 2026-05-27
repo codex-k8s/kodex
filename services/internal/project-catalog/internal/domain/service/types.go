@@ -206,6 +206,7 @@ type ImportBootstrapServicesPolicyInput struct {
 	ProviderWebURL               string
 	ProviderObjectID             string
 	MergeObservedAt              string
+	ReconciliationFingerprint    string
 	Meta                         value.CommandMeta
 }
 

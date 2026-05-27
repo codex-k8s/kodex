@@ -1302,6 +1302,35 @@ func TestReconcileBootstrapMergeSignalReplayDoesNotDuplicateImport(t *testing.T)
 	}
 }
 
+func TestReconcileBootstrapMergeSignalRejectsConflictingReplay(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = pendingBootstrapRepository(projectID, repositoryID)
+	svc := NewWithConfig(
+		store,
+		fixedClock{},
+		&sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New(), uuid.New(), uuid.New()}},
+		Config{},
+	)
+	input := reconcileBootstrapMergeSignalInput(projectID, repositoryID, commandMetaWithVersion(uuid.Nil, 3))
+	if _, err := svc.ReconcileBootstrapMergeSignal(ctx, input); err != nil {
+		t.Fatalf("initial ReconcileBootstrapMergeSignal(): %v", err)
+	}
+
+	conflicting := input
+	conflicting.MergeSignal.MergeCommitSHA = strings.Repeat("a", 40)
+	conflicting.CheckedPolicy.ArtifactVersion = strings.Repeat("a", 40)
+	_, err := svc.ReconcileBootstrapMergeSignal(ctx, conflicting)
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("conflicting ReconcileBootstrapMergeSignal() err = %v, want conflict", err)
+	}
+	if len(store.policies) != 1 || len(store.commandResults) != 1 || len(store.events) != 2 {
+		t.Fatalf("policies=%d commandResults=%d events=%d, want no conflicting replay writes", len(store.policies), len(store.commandResults), len(store.events))
+	}
+}
+
 func TestReconcileBootstrapMergeSignalRejectsStaleArtifact(t *testing.T) {
 	ctx := context.Background()
 	projectID := uuid.New()

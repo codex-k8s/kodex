@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/errs"
+	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/types/value"
 )
 
 const (
@@ -21,17 +22,43 @@ type normalizedBootstrapMergeReconciliation struct {
 	SignalKey                    string
 	ProviderTarget               RepositoryBootstrapProviderTarget
 	BaseBranch                   string
+	ProviderSourceRef            string
 	SourceRef                    string
 	MergeCommitSHA               string
 	SourceBlobSHA                string
+	WatermarkDigest              string
 	WatermarkJSON                []byte
 	ProviderWorkItemProjectionID string
 	ProviderWebURL               string
 	ProviderObjectID             string
 	MergeObservedAt              string
+	ArtifactRef                  string
+	ArtifactDigest               string
+	ArtifactVersion              string
 	SourcePath                   string
 	ContentHash                  string
 	ValidatedPayload             []byte
+}
+
+type bootstrapMergeReconciliationFingerprintPayload struct {
+	SignalKey                    string `json:"signal_key"`
+	SignalKind                   string `json:"signal_kind"`
+	ProviderSlug                 string `json:"provider_slug"`
+	RepositoryFullName           string `json:"repository_full_name"`
+	ProviderRepositoryID         string `json:"provider_repository_id,omitempty"`
+	BaseBranch                   string `json:"base_branch"`
+	ProviderSourceRef            string `json:"provider_source_ref"`
+	ImportSourceRef              string `json:"import_source_ref"`
+	MergeCommitSHA               string `json:"merge_commit_sha"`
+	SourceBlobSHA                string `json:"source_blob_sha,omitempty"`
+	WatermarkDigest              string `json:"watermark_digest"`
+	ProviderWorkItemProjectionID string `json:"provider_work_item_projection_id,omitempty"`
+	ProviderObjectID             string `json:"provider_object_id,omitempty"`
+	ArtifactRef                  string `json:"artifact_ref"`
+	ArtifactDigest               string `json:"artifact_digest"`
+	ArtifactVersion              string `json:"artifact_version"`
+	SourcePath                   string `json:"source_path"`
+	ContentHash                  string `json:"content_hash"`
 }
 
 // ReconcileBootstrapMergeSignal imports checked services.yaml from a safe provider bootstrap merge signal.
@@ -43,6 +70,13 @@ func (s *Service) ReconcileBootstrapMergeSignal(ctx context.Context, input Recon
 	meta := input.Meta
 	if meta.CommandID == uuid.Nil && strings.TrimSpace(meta.IdempotencyKey) == "" {
 		meta.IdempotencyKey = bootstrapMergeIdempotencyPrefix + normalized.SignalKey
+	}
+	fingerprint, err := bootstrapMergeReconciliationFingerprint(normalized)
+	if err != nil {
+		return BootstrapServicesPolicyImportResult{}, err
+	}
+	if replay, ok, err := s.replayBootstrapMergeReconciliation(ctx, input, normalized, meta, fingerprint); ok || err != nil {
+		return replay, err
 	}
 	return s.ImportBootstrapServicesPolicy(ctx, ImportBootstrapServicesPolicyInput{
 		ProjectID:                    input.ProjectID,
@@ -60,8 +94,47 @@ func (s *Service) ReconcileBootstrapMergeSignal(ctx context.Context, input Recon
 		ProviderWebURL:               normalized.ProviderWebURL,
 		ProviderObjectID:             normalized.ProviderObjectID,
 		MergeObservedAt:              normalized.MergeObservedAt,
+		ReconciliationFingerprint:    fingerprint,
 		Meta:                         meta,
 	})
+}
+
+func (s *Service) replayBootstrapMergeReconciliation(
+	ctx context.Context,
+	input ReconcileBootstrapMergeSignalInput,
+	normalized normalizedBootstrapMergeReconciliation,
+	meta value.CommandMeta,
+	fingerprint string,
+) (BootstrapServicesPolicyImportResult, bool, error) {
+	result, ok, err := s.findCommandResult(ctx, meta, projectOperationImportBootstrapPolicy, projectAggregateServicesPolicy)
+	if err != nil || !ok {
+		return BootstrapServicesPolicyImportResult{}, ok, err
+	}
+	policy, err := s.repository.GetServicesPolicy(ctx, input.ProjectID, &result.AggregateID)
+	if err != nil {
+		return BootstrapServicesPolicyImportResult{}, true, err
+	}
+	repository, err := s.repository.GetRepository(ctx, input.RepositoryID)
+	if err != nil {
+		return BootstrapServicesPolicyImportResult{}, true, err
+	}
+	if policy.ProjectID != input.ProjectID || policy.SourceRepositoryID == nil || *policy.SourceRepositoryID != input.RepositoryID || repository.ProjectID != input.ProjectID {
+		return BootstrapServicesPolicyImportResult{}, true, errs.ErrConflict
+	}
+	payload := decodeBootstrapPolicyImportCommandPayload(result.ResultPayload, policy)
+	if payload.ReconciliationFingerprint != fingerprint ||
+		payload.SourceRef != normalized.SourceRef ||
+		payload.SourceCommitSHA != normalized.MergeCommitSHA ||
+		payload.ContentHash != normalized.ContentHash {
+		return BootstrapServicesPolicyImportResult{}, true, errs.ErrConflict
+	}
+	return BootstrapServicesPolicyImportResult{
+		Repository:      repository,
+		ServicesPolicy:  policy,
+		SourceRef:       firstNonEmpty(payload.SourceRef, policy.SourceRef),
+		SourceCommitSHA: policy.SourceCommitSHA,
+		Summary:         firstNonEmpty(payload.Summary, servicesPolicyImportSummary(policy.SourceRef, policy.SourceCommitSHA)),
+	}, true, nil
 }
 
 func normalizeBootstrapMergeReconciliationInput(input ReconcileBootstrapMergeSignalInput) (normalizedBootstrapMergeReconciliation, error) {
@@ -130,18 +203,51 @@ func normalizeBootstrapMergeReconciliationInput(input ReconcileBootstrapMergeSig
 		SignalKey:                    signalKey,
 		ProviderTarget:               signal.ProviderTarget,
 		BaseBranch:                   baseBranch,
+		ProviderSourceRef:            providerSourceRef,
 		SourceRef:                    sourceRef,
 		MergeCommitSHA:               mergeCommitSHA,
 		SourceBlobSHA:                strings.TrimSpace(signal.SourceBlobSHA),
+		WatermarkDigest:              strings.TrimSpace(signal.WatermarkDigest),
 		WatermarkJSON:                watermarkJSON,
 		ProviderWorkItemProjectionID: strings.TrimSpace(signal.ProviderWorkItemProjectionID),
 		ProviderWebURL:               strings.TrimSpace(signal.ProviderWebURL),
 		ProviderObjectID:             strings.TrimSpace(signal.ProviderObjectID),
 		MergeObservedAt:              firstNonEmpty(strings.TrimSpace(signal.MergeObservedAt), strings.TrimSpace(signal.MergedAt)),
+		ArtifactRef:                  strings.TrimSpace(policy.ArtifactRef),
+		ArtifactDigest:               artifactDigest,
+		ArtifactVersion:              strings.ToLower(strings.TrimSpace(policy.ArtifactVersion)),
 		SourcePath:                   sourcePath,
 		ContentHash:                  contentHash,
 		ValidatedPayload:             payload,
 	}, nil
+}
+
+func bootstrapMergeReconciliationFingerprint(input normalizedBootstrapMergeReconciliation) (string, error) {
+	payload, err := json.Marshal(bootstrapMergeReconciliationFingerprintPayload{
+		SignalKey:                    input.SignalKey,
+		SignalKind:                   bootstrapMergeSignalKind,
+		ProviderSlug:                 strings.TrimSpace(input.ProviderTarget.ProviderSlug),
+		RepositoryFullName:           strings.TrimSpace(input.ProviderTarget.RepositoryFullName),
+		ProviderRepositoryID:         strings.TrimSpace(input.ProviderTarget.ProviderRepositoryID),
+		BaseBranch:                   input.BaseBranch,
+		ProviderSourceRef:            input.ProviderSourceRef,
+		ImportSourceRef:              input.SourceRef,
+		MergeCommitSHA:               input.MergeCommitSHA,
+		SourceBlobSHA:                input.SourceBlobSHA,
+		WatermarkDigest:              input.WatermarkDigest,
+		ProviderWorkItemProjectionID: input.ProviderWorkItemProjectionID,
+		ProviderObjectID:             input.ProviderObjectID,
+		ArtifactRef:                  input.ArtifactRef,
+		ArtifactDigest:               input.ArtifactDigest,
+		ArtifactVersion:              input.ArtifactVersion,
+		SourcePath:                   input.SourcePath,
+		ContentHash:                  input.ContentHash,
+	})
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(payload)
+	return "sha256:" + hex.EncodeToString(sum[:]), nil
 }
 
 func validateOptionalSignalID(text string) error {
