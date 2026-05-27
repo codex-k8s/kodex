@@ -154,6 +154,26 @@ func evidenceRefs(items []*governancev1.EvidenceRef) []value.EvidenceRef {
 	return result
 }
 
+func releaseIntegrationRefs(items []*governancev1.ReleaseIntegrationRef) []value.ReleaseIntegrationRef {
+	result := make([]value.ReleaseIntegrationRef, 0, len(items))
+	for _, item := range items {
+		if item == nil {
+			continue
+		}
+		result = append(result, value.ReleaseIntegrationRef{
+			Domain:     item.GetDomain(),
+			Kind:       item.GetKind(),
+			Ref:        item.GetRef(),
+			Status:     item.GetStatus(),
+			Summary:    item.GetSummary(),
+			Digest:     item.GetDigest(),
+			ObservedAt: item.GetObservedAt(),
+			Version:    item.GetVersion(),
+		})
+	}
+	return result
+}
+
 func riskEvaluationSummary(item *governancev1.RiskEvaluationSummary) value.RiskEvaluationSummary {
 	if item == nil {
 		return value.RiskEvaluationSummary{}
@@ -490,6 +510,7 @@ func toReleaseDecisionPackage(item entity.ReleaseDecisionPackage) *governancev1.
 		AgentContext:            agentContextFromJSON(item.AgentContext),
 		ReviewSignalIds:         uuidStrings(item.ReviewSignalIDs),
 		EvidenceRefs:            toEvidenceRefs(item.EvidenceRefs),
+		IntegrationRefs:         toReleaseIntegrationRefs(item.IntegrationRefs),
 		KnownLimitationsSummary: item.KnownLimitationsSummary,
 		Status:                  toReleaseDecisionPackageStatus(item.Status),
 		Version:                 item.Version,
@@ -498,6 +519,24 @@ func toReleaseDecisionPackage(item entity.ReleaseDecisionPackage) *governancev1.
 	}
 	if item.RiskAssessmentID != nil {
 		result.RiskAssessmentId = ptrString(item.RiskAssessmentID.String())
+	}
+	return result
+}
+
+func toReleaseIntegrationRefs(items []value.ReleaseIntegrationRef) []*governancev1.ReleaseIntegrationRef {
+	result := make([]*governancev1.ReleaseIntegrationRef, 0, len(items))
+	for _, item := range items {
+		ref := &governancev1.ReleaseIntegrationRef{
+			Domain: item.Domain,
+			Kind:   item.Kind,
+			Ref:    item.Ref,
+		}
+		ref.Status = ptrStringNonEmpty(item.Status)
+		ref.Summary = ptrStringNonEmpty(item.Summary)
+		ref.Digest = ptrStringNonEmpty(item.Digest)
+		ref.ObservedAt = ptrStringNonEmpty(item.ObservedAt)
+		ref.Version = ptrStringNonEmpty(item.Version)
+		result = append(result, ref)
 	}
 	return result
 }

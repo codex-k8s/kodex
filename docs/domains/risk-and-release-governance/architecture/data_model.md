@@ -5,8 +5,8 @@ title: kodex — модель данных домена рисков и рели
 status: active
 owner_role: SA
 created_at: 2026-05-22
-updated_at: 2026-05-26
-related_issues: [322, 769, 815, 827]
+updated_at: 2026-05-27
+related_issues: [322, 769, 815, 827, 845, 856]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -193,16 +193,24 @@ approvals:
 | `id` | uuid | нет | Идентификатор пакета. |
 | `release_candidate_ref` | text | нет | Кандидат релиза. |
 | `project_ref` | text | нет | Проект. |
+| `repository_ref` | text | да | Основной repository ref из `project-catalog`, если выделен отдельно. |
+| `service_ref` | text | да | Service ref из `project-catalog`, если release package scoped to service. |
+| `branch_rules_ref` | text | да | Branch rules ref из `project-catalog`; содержимое policy не копируется. |
 | `repository_refs` | text[] | нет | Репозитории в релизе. |
 | `release_policy_ref` | text | да | Релизная политика из `project-catalog`. |
 | `release_line_ref` | text | да | Релизная линия из `project-catalog`. |
 | `risk_assessment_id` | uuid | да | Оценка риска релиза. |
-| `provider_refs` | jsonb | нет | Issue/PR/MR/tag/branch refs без копирования provider-истины. |
-| `runtime_refs` | jsonb | нет | Build/deploy/job refs и summaries. |
-| `review_signal_refs` | uuid[] | нет | Signals, включённые в пакет. |
-| `known_limitations` | jsonb | нет | Осознанные ограничения и accepted risk. |
+| `provider_refs` | jsonb | нет | Issue/PR/MR/check/review/tag/branch refs без raw provider payload. |
+| `runtime_refs` | jsonb | нет | Build/deploy/job/postdeploy refs и bounded summaries без logs/stdout/stderr. |
+| `agent_context` | jsonb | нет | Run/session/stage/acceptance refs без prompt, transcript или workspace paths. |
+| `review_signal_ids` | uuid[] | нет | Локальные review signals, включённые в пакет. |
+| `evidence_refs` | jsonb | нет | Safe refs/digests/summaries на evidence, без больших отчётов. |
+| `integration_refs` | jsonb | нет | Явные safe refs соседних доменов: `domain`, `kind`, `ref`, optional `status`, `summary`, `digest`, `observed_at`, `version`. |
+| `known_limitations_summary` | text | нет | Короткая safe summary осознанных ограничений и accepted risk. |
 | `status` | enum | нет | `draft`, `ready`, `decision_requested`, `closed`. |
 | `created_at`, `updated_at` | timestamptz | нет | Технические временные метки. |
+
+`integration_refs` связывают release package с project/repository/release line refs, provider Issue/PR/check/review refs, agent run/acceptance refs, runtime job/deploy refs, local risk assessment refs и gate refs. `governance-manager` валидирует локальные governance refs, но не читает соседние сервисы напрямую и не становится владельцем provider, project, run, deploy или interaction state. Для audit snapshot refs нормализуются в canonical order по `domain/kind/ref`; полностью одинаковые дубли схлопываются, а дубли с разными `status`, `summary`, `digest`, `observed_at` или `version` отклоняются как конфликтующие факты.
 
 ### ReleaseDecision
 

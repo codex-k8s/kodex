@@ -5,8 +5,8 @@ title: kodex — поставка governance-manager
 status: active
 owner_role: EM
 created_at: 2026-05-22
-updated_at: 2026-05-26
-related_issues: [322, 769, 790, 802, 815, 827, 845]
+updated_at: 2026-05-27
+related_issues: [322, 769, 790, 802, 815, 827, 845, 856]
 related_prs: []
 related_docsets:
   - docs/domains/risk-and-release-governance/product/requirements.md
@@ -46,6 +46,7 @@ approvals:
 | GOV-4 | #815 | Gate request/decision lifecycle готов: request/read/list, submit decision, cancel/expire, access checks, optimistic concurrency, idempotency и безопасные события. |
 | GOV-5 | #827 | Risk classifier и policy evaluator работают по входным safe summaries/refs, локальным risk profiles/rules и service/path/API/DB/secret/release/runtime factors без release decision engine. |
 | GOV-6 | #845 | Release decision package, release decision, blocking signal и release safety-loop state готовы без UI/gateway. |
+| GOV-7a | #856 | Release decision package явно хранит safe integration refs/summaries соседних доменов без переноса владения project/provider/agent/runtime/interaction state. |
 | GOV-7 | не назначено | Интеграции с `agent-manager`, `provider-hub`, `interaction-hub`, `runtime-manager`, `project-catalog` и `operations-hub` подключены через согласованные контракты. |
 | GOV-8 | не назначено | Эксплуатационный контур: deploy manifests, migration job, smoke checks, runbook и operator projections. |
 
@@ -62,19 +63,20 @@ approvals:
 | Область | Статус | Срез |
 |---|---|---|
 | Доменная документация | Готова как стартовый пакет домена. | GOV-0 |
-| gRPC-контракт `proto/kodex/governance/v1/governance_manager.proto` | Готов; покрывает risk profiles/rules, assessments/factors, review signals, gate lifecycle, release decision package/decision, blocking signals и safety-loop. | GOV-1 |
+| gRPC-контракт `proto/kodex/governance/v1/governance_manager.proto` | Готов; покрывает risk profiles/rules, assessments/factors, review signals, gate lifecycle, release decision package/decision, blocking signals, safety-loop и explicit release integration refs. | GOV-7a |
 | Go-код protobuf `proto/gen/go/kodex/governance/v1/**` | Сгенерирован из proto; вручную не правится. | GOV-1 |
 | AsyncAPI `specs/asyncapi/governance-manager.v1.yaml` | Готов; фиксирует события `governance.*` через outbox envelope. | GOV-1 |
 | Go-контракт событий `libs/go/platformevents/governance/events.gen.go` | Сгенерирован из AsyncAPI; вручную не правится. | GOV-1 |
 | Access actions | Добавлены в общий каталог для policy, risk, signal, gate и release операций. | GOV-1 |
 | Сервисный процесс, env, health/readiness/metrics и gRPC registration | Готовы как runnable skeleton без deploy-manifests. | GOV-2 |
-| gRPC handlers | Поддержанные storage, gate lifecycle, risk evaluator, release decision и safety-loop операции используют доменный сервис и repository; будущие интеграционные операции остаются следующими срезами. | GOV-6 |
+| gRPC handlers | Поддержанные storage, gate lifecycle, risk evaluator, release decision, safety-loop и release integration refs операции используют доменный сервис и repository; будущие service-client интеграции остаются следующими срезами. | GOV-7a |
 | Repository interfaces/stubs и MVP storage shapes | Stub заменён PostgreSQL repository для risk profile/version, assessment/factors, review signals, gate request/decision, release decision package, command result и outbox. | GOV-3 |
 | Storage, migrations и outbox publisher | MVP-миграции и service-local outbox готовы; event-log dispatch подключается через shared outbox runtime. | GOV-3 |
 | Gate request/decision lifecycle и access checks | Готовы для `request/read/list/decision/cancel/expire`; delivery/callback orchestration остаётся у `interaction-hub`. | GOV-4 |
 | Risk classifier и policy evaluator | Готовы для локальных rules, safe summaries/refs, matched rule refs, required gates, идемпотентного replay, expected version и safe outbox events. | GOV-5 |
 | Release decision lifecycle и safety-loop | Готовы для package build/read/list, decision request/submit/read/list, blocking signals и текущего safety-loop state на safe refs/summaries. | GOV-6 |
-| Интеграции с `agent-manager`, `provider-hub`, `interaction-hub`, `runtime-manager` и `project-catalog` | Не реализованы; typed refs и локальные reads используются без владения чужой доменной истиной. | GOV-7 |
+| Release integration refs | Готовы для project/repository/release line, provider Issue/PR/check/review, agent run/acceptance, runtime job/deploy, local risk assessment и gate refs с bounded summaries/status/digest/timestamps/version. | GOV-7a |
+| Интеграции с `agent-manager`, `provider-hub`, `interaction-hub`, `runtime-manager` и `project-catalog` | Service-client чтения, provider write, delivery callbacks и deploy orchestration не реализованы; governance связывает safe refs без владения чужой доменной истиной. | GOV-7 |
 
 ## Синхронизация с соседними доменами
 

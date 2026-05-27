@@ -1260,6 +1260,144 @@ func TestBuildReleaseDecisionPackageRejectsUnsafeEvidence(t *testing.T) {
 	}
 }
 
+func TestBuildReleaseDecisionPackageStoresIntegrationRefs(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 27, 11, 0, 0, 0, time.UTC)
+	packageID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+	eventID := uuid.MustParse("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+	commandID := uuid.MustParse("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
+	assessmentID := uuid.MustParse("dddddddd-dddd-4ddd-8ddd-dddddddddddd")
+	gateDecisionID := uuid.MustParse("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee")
+	repository := &fakeRepository{
+		ready:        true,
+		assessment:   entity.RiskAssessment{VersionedBase: entity.VersionedBase{ID: assessmentID}},
+		gateDecision: entity.GateDecision{ID: gateDecisionID},
+	}
+	service := NewWithConfig(Config{
+		Repository:  repository,
+		Clock:       fixedClock{now: now},
+		IDGenerator: &fixedIDs{ids: []uuid.UUID{packageID, eventID}},
+		Authorizer:  AllowAllAuthorizer{},
+	})
+
+	item, err := service.BuildReleaseDecisionPackage(context.Background(), BuildReleaseDecisionPackageInput{
+		ReleaseCandidateRef: "release:v1.0.0",
+		ProjectContext:      value.ProjectContextRef{ProjectRef: "project:alpha"},
+		IntegrationRefs: []value.ReleaseIntegrationRef{
+			{
+				Domain:     " PROVIDER ",
+				Kind:       " pull_request ",
+				Ref:        " provider:pr:1 ",
+				Status:     "checks_passed",
+				Summary:    "bounded merge status",
+				Digest:     "sha256:release-pr",
+				ObservedAt: "2026-05-27T11:00:00Z",
+				Version:    "provider-version:1",
+			},
+			{Domain: "governance", Kind: "risk_assessment", Ref: assessmentID.String()},
+			{Domain: "governance", Kind: "gate_decision", Ref: gateDecisionID.String()},
+		},
+		Meta: CommandMeta{
+			CommandID: &commandID,
+			Actor:     value.Actor{Type: "service", ID: "agent-manager"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("BuildReleaseDecisionPackage(): %v", err)
+	}
+	if item.ID != packageID || len(item.IntegrationRefs) != 3 {
+		t.Fatalf("release package = %+v, want package with three integration refs", item)
+	}
+	var providerRef value.ReleaseIntegrationRef
+	for _, ref := range item.IntegrationRefs {
+		if ref.Domain == "provider" && ref.Kind == "pull_request" {
+			providerRef = ref
+		}
+	}
+	if providerRef.Ref != "provider:pr:1" {
+		t.Fatalf("normalized provider ref = %+v", providerRef)
+	}
+	if item.IntegrationRefs[0].Domain != "governance" || item.IntegrationRefs[0].Kind != "gate_decision" {
+		t.Fatalf("first integration ref = %+v, want canonical domain/kind/ref order", item.IntegrationRefs[0])
+	}
+	if repository.assessmentReads != 1 || repository.gateDecisionReads != 1 {
+		t.Fatalf("local governance ref reads = assessment %d gate decision %d, want 1/1", repository.assessmentReads, repository.gateDecisionReads)
+	}
+	if len(repository.releasePackage.IntegrationRefs) != 3 {
+		t.Fatalf("stored integration refs = %+v, want three refs", repository.releasePackage.IntegrationRefs)
+	}
+}
+
+func TestNormalizeReleaseIntegrationRefsCanonicalizesAndRejectsConflicts(t *testing.T) {
+	t.Parallel()
+
+	first := []value.ReleaseIntegrationRef{
+		{Domain: "provider", Kind: "check", Ref: "provider:check:2", Status: "passed", Summary: "checks passed"},
+		{Domain: "project", Kind: "repository", Ref: "repo:alpha", Version: "repository-version:2"},
+		{Domain: "provider", Kind: "check", Ref: "provider:check:2", Status: "passed", Summary: "checks passed"},
+	}
+	second := []value.ReleaseIntegrationRef{
+		{Domain: " PROVIDER ", Kind: " check ", Ref: " provider:check:2 ", Status: "passed", Summary: "checks passed"},
+		{Domain: "PROJECT", Kind: "REPOSITORY", Ref: "repo:alpha", Version: "repository-version:2"},
+	}
+	normalizedFirst, err := normalizeReleaseIntegrationRefs(first)
+	if err != nil {
+		t.Fatalf("normalize first refs: %v", err)
+	}
+	normalizedSecond, err := normalizeReleaseIntegrationRefs(second)
+	if err != nil {
+		t.Fatalf("normalize second refs: %v", err)
+	}
+	if len(normalizedFirst) != len(normalizedSecond) || len(normalizedFirst) != 2 {
+		t.Fatalf("normalized refs = %+v / %+v, want two canonical refs", normalizedFirst, normalizedSecond)
+	}
+	for index := range normalizedFirst {
+		if normalizedFirst[index] != normalizedSecond[index] {
+			t.Fatalf("normalized ref[%d] = %+v, want %+v", index, normalizedSecond[index], normalizedFirst[index])
+		}
+	}
+	if normalizedFirst[0].Domain != "project" || normalizedFirst[1].Domain != "provider" {
+		t.Fatalf("normalized order = %+v, want domain/kind/ref order", normalizedFirst)
+	}
+
+	_, err = normalizeReleaseIntegrationRefs([]value.ReleaseIntegrationRef{
+		{Domain: "provider", Kind: "check", Ref: "provider:check:2", Status: "passed"},
+		{Domain: "provider", Kind: "check", Ref: "provider:check:2", Status: "failed"},
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("conflicting duplicate error = %v, want ErrInvalidArgument", err)
+	}
+}
+
+func TestBuildReleaseDecisionPackageRejectsUnsafeIntegrationRef(t *testing.T) {
+	t.Parallel()
+
+	repository := &fakeRepository{ready: true}
+	service := newTestService(repository)
+
+	_, err := service.BuildReleaseDecisionPackage(context.Background(), BuildReleaseDecisionPackageInput{
+		ReleaseCandidateRef: "release:v1.0.0",
+		ProjectContext:      value.ProjectContextRef{ProjectRef: "project:alpha"},
+		IntegrationRefs: []value.ReleaseIntegrationRef{{
+			Domain:  "runtime",
+			Kind:    "job",
+			Ref:     "runtime:job:1",
+			Summary: "stdout raw logs with token=secret",
+		}},
+		Meta: CommandMeta{
+			CommandID: ptrUUID(uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")),
+			Actor:     value.Actor{Type: "service", ID: "agent-manager"},
+		},
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("BuildReleaseDecisionPackage() error = %v, want ErrInvalidArgument", err)
+	}
+	if repository.mutationCalls != 0 {
+		t.Fatalf("mutation calls = %d, want 0", repository.mutationCalls)
+	}
+}
+
 func TestReleaseReadAccessDeniedBeforeRepositoryRead(t *testing.T) {
 	t.Parallel()
 

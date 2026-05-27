@@ -550,6 +550,8 @@ message ReleaseDecisionPackage {
   string created_at = 14;
   // updated_at is an RFC3339 timestamp.
   string updated_at = 15;
+  // integration_refs explicitly link safe refs/summaries from neighboring owner domains.
+  repeated ReleaseIntegrationRef integration_refs = 16;
 }
 
 // ReleaseDecision records the governance release decision.
@@ -858,6 +860,7 @@ message BuildReleaseDecisionPackageRequest {
   string known_limitations_summary = 9;
   CommandMeta meta = 10;
   optional string risk_assessment_id = 11;
+  repeated ReleaseIntegrationRef integration_refs = 12;
 }
 
 message GetReleaseDecisionPackageRequest {
@@ -1039,6 +1042,26 @@ message ListBlockingSignalsResponse {
 
 message ReleaseSafetyStateResponse {
   ReleaseSafetyState release_safety_state = 1;
+}
+
+// ReleaseIntegrationRef links release governance to a bounded fact owned by another domain.
+message ReleaseIntegrationRef {
+  // domain identifies the owning boundary: project, provider, agent, runtime or governance.
+  string domain = 1;
+  // kind identifies the safe fact type within the owning boundary.
+  string kind = 2;
+  // ref points to the owner-domain object or digest, not an embedded payload.
+  string ref = 3;
+  // status is a bounded status snapshot when supplied by the owner domain.
+  optional string status = 4;
+  // summary is a short safe summary without raw payload, diff, logs or secrets.
+  optional string summary = 5;
+  // digest is an optional content/status digest supplied by the owner domain.
+  optional string digest = 6;
+  // observed_at is an RFC3339 timestamp for the referenced fact.
+  optional string observed_at = 7;
+  // version is an optional owner-domain version or etag.
+  optional string version = 8;
 }
 
 enum GovernanceScopeType {

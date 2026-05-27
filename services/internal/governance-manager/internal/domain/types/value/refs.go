@@ -54,6 +54,18 @@ type EvidenceRef struct {
 	RetentionClass string `json:"retention_class,omitempty"`
 }
 
+// ReleaseIntegrationRef links release governance to a bounded fact owned by another domain.
+type ReleaseIntegrationRef struct {
+	Domain     string `json:"domain"`
+	Kind       string `json:"kind"`
+	Ref        string `json:"ref"`
+	Status     string `json:"status,omitempty"`
+	Summary    string `json:"summary,omitempty"`
+	Digest     string `json:"digest,omitempty"`
+	ObservedAt string `json:"observed_at,omitempty"`
+	Version    string `json:"version,omitempty"`
+}
+
 // RiskEvaluationSummary carries bounded classifier inputs without raw payloads.
 type RiskEvaluationSummary struct {
 	ChangedFilesSummaryRef string                 `json:"changed_files_summary_ref,omitempty"`

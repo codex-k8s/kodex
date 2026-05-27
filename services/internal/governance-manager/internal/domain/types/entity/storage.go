@@ -163,6 +163,7 @@ type ReleaseDecisionPackage struct {
 	AgentContext            []byte
 	ReviewSignalIDs         []uuid.UUID
 	EvidenceRefs            []value.EvidenceRef
+	IntegrationRefs         []value.ReleaseIntegrationRef
 	KnownLimitationsSummary string
 	Status                  enum.ReleaseDecisionPackageStatus
 }
