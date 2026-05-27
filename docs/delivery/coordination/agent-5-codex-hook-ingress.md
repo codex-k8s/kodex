@@ -37,13 +37,13 @@
 | CHI-5 | #836 | готово | `PermissionRequest` bridge и policy-controlled `PreToolUse`: safe request context, owner decision ports/stubs для `governance-manager`, `agent-manager`, `interaction-hub`, explicit handler states, timeout/fail-closed policy и idempotent replay без persistent истории tool/activity в ingress. |
 | CHI-6a | #823 | готово | Bounded in-memory ops/realtime feed, TTL/capacity retention, sanitizer metrics, route diagnostics, fixed-window rate limits, safe backpressure и operator diagnostics поверх CHI-4 registry без служебной БД. |
 | CHI-7 | #854 | готово | Capability context refs для Codex skills проходят через normalized envelope, sanitizer boundary, route registry и `agent-manager.RecordAgentActivity` как refs/digests без skill catalog, manifest payload, package installation state или workspace paths в ingress. |
+| CHI-8 | #868 | готово | Deploy-контур `codex-hook-ingress`: Dockerfile, Kubernetes manifests, service/image/config inventory, smoke, runbook и monitoring без служебной БД, migration job и physical `SubmitHookEvent` transport. |
 
 ## Текущий бэклог агента #5
 
 | Срез | Что осталось |
 |---|---|
 | CHI-6b | Persistent ops feed или integration с operations-hub, если понадобится восстановление ленты после рестарта и отдельные retention jobs. |
-| CHI-8 | Deploy-контур: Dockerfile, manifests, migration job только если нужна служебная БД, smoke, runbook и monitoring. |
 
 ## Синхронизация с соседними доменами
 

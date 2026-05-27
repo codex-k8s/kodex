@@ -20,7 +20,7 @@ Codex hooks являются command-обработчиками Codex: hook emit
 
 Сервисный каркас расположен в `services/internal/codex-hook-ingress`.
 
-Текущий срез реализует process, config, graceful shutdown, `/health/livez`, `/health/readyz`, `/metrics`, in-process logical boundary `SubmitHookEvent`, source binding placeholder, schema validation hook, sanitizer boundary, idempotency repository stub, route registry для dispatch безопасных частей событий через owner ports/stubs, typed route для `agent-manager.RecordAgentActivity` по sanitized `PreToolUse`/`PostToolUse`, decision bridge для `PermissionRequest` и policy-controlled `PreToolUse`, bounded in-memory ops/realtime feed для operator diagnostics, а также безопасную прокладку capability context refs/digests для Codex skills. Физический transport для `SubmitHookEvent` не выбран и не реализован; соседние домены получают только safe projections/context без raw payload, `SKILL.md`, manifest payload, workspace paths и без бизнес-команд.
+Текущий срез реализует process, config, graceful shutdown, `/health/livez`, `/health/readyz`, `/metrics`, in-process logical boundary `SubmitHookEvent`, source binding placeholder, schema validation hook, sanitizer boundary, idempotency repository stub, route registry для dispatch безопасных частей событий через owner ports/stubs, typed route для `agent-manager.RecordAgentActivity` по sanitized `PreToolUse`/`PostToolUse`, decision bridge для `PermissionRequest` и policy-controlled `PreToolUse`, bounded in-memory ops/realtime feed для operator diagnostics, безопасную прокладку capability context refs/digests для Codex skills, а также deploy-контур с Dockerfile, Kubernetes manifests, image/config inventory, smoke, runbook и monitoring. Физический transport для `SubmitHookEvent` не выбран и не реализован; Kubernetes service отдаёт только health/readiness/metrics, а соседние домены получают только safe projections/context без raw payload, `SKILL.md`, manifest payload, workspace paths и без бизнес-команд.
 
 ## Что не входит
 
@@ -55,6 +55,8 @@ Codex hooks являются command-обработчиками Codex: hook emit
 | Модель данных и состояния | `architecture/data_model.md` |
 | API-обзор | `architecture/api_contract.md` |
 | Контракт hook emitter/local sidecar | `architecture/emitter_sidecar_contract.md` |
+| Runbook | `ops/codex_hook_ingress_runbook.md` |
+| Monitoring | `ops/codex_hook_ingress_monitoring.md` |
 | План поставки | `delivery/codex_hook_ingress_delivery.md` |
 | JSON Schema CHI-1/CHI-2 | `../../../specs/jsonschema/codex-hook-ingress.v1/` |
 
@@ -67,6 +69,8 @@ Codex hooks являются command-обработчиками Codex: hook emit
 | Модель данных и состояния `codex-hook-ingress` | `docs/domains/codex-hook-ingress/architecture/data_model.md` |
 | API-обзор `codex-hook-ingress` | `docs/domains/codex-hook-ingress/architecture/api_contract.md` |
 | Контракт hook emitter/local sidecar | `docs/domains/codex-hook-ingress/architecture/emitter_sidecar_contract.md` |
+| Runbook `codex-hook-ingress` | `docs/domains/codex-hook-ingress/ops/codex_hook_ingress_runbook.md` |
+| Наблюдаемость `codex-hook-ingress` | `docs/domains/codex-hook-ingress/ops/codex_hook_ingress_monitoring.md` |
 | Поставка `codex-hook-ingress` | `docs/domains/codex-hook-ingress/delivery/codex_hook_ingress_delivery.md` |
 | Machine-readable schemas CHI-1/CHI-2 | `specs/jsonschema/codex-hook-ingress.v1/` |
 | Стратегия контрактов MCP и Codex hooks | `docs/domains/platform-mcp-server/architecture/contract_strategy.md` |

@@ -206,6 +206,9 @@ spec:
       value: "0.1.0"
       bumpOn:
         - services/internal/codex-hook-ingress
+        - deploy/base/codex-hook-ingress
+        - scripts/build-codex-hook-ingress-images.sh
+        - scripts/smoke-codex-hook-ingress.sh
         - libs/go/serviceprocess
         - libs/go/servicemain
         - proto/kodex/agents/v1
@@ -321,6 +324,14 @@ spec:
       target: prod
       context: .
       imageEnv: KODEX_INTEGRATION_GATEWAY_IMAGE
+    codex-hook-ingress:
+      type: build
+      repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_CODEX_HOOK_INGRESS_INTERNAL_IMAGE_REPOSITORY" "kodex/codex-hook-ingress" }}'
+      tagTemplate: '{{ index .Versions "codex-hook-ingress" }}'
+      dockerfile: services/internal/codex-hook-ingress/Dockerfile
+      target: prod
+      context: .
+      imageEnv: KODEX_CODEX_HOOK_INGRESS_IMAGE
     runtime-manager:
       type: build
       repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_RUNTIME_MANAGER_INTERNAL_IMAGE_REPOSITORY" "kodex/runtime-manager" }}'
@@ -542,6 +553,40 @@ spec:
           readyz: /health/readyz
           metrics: /metrics
           openapi: /openapi/integration-gateway.v1.yaml
+    - name: codex-hook-ingress
+      status: foundation
+      zone: internal
+      path: services/internal/codex-hook-ingress
+      dockerfile: services/internal/codex-hook-ingress/Dockerfile
+      imageEnv: KODEX_CODEX_HOOK_INGRESS_IMAGE
+      internalImageRepositoryEnv: KODEX_CODEX_HOOK_INGRESS_INTERNAL_IMAGE_REPOSITORY
+      ownerDomain: codex-hook-ingress
+      apiContracts:
+        jsonschema: specs/jsonschema/codex-hook-ingress.v1/**
+        logicalCommand: SubmitHookEvent
+        physicalTransport: not-selected
+      dependencies:
+        - agent-manager
+        - runtime-manager
+        - provider-hub
+        - governance-manager
+        - interaction-hub
+      implementation:
+        agentActivityRoute: typed-record-agent-activity-owner-port
+        businessRoutes: route-registry-safe-parts-only
+        database: none-stub-only-no-raw-payload-storage
+        decisionBridge: permission-and-policy-pre-tool-owner-ports-stubbed
+        opsFeed: bounded-in-memory-safe-summary-only
+        rateLimit: fixed-window-logical-boundary
+        routeFailurePolicy: diagnostic-or-fail-closed
+        transport: in-process-logical-boundary-only
+      deploy:
+        serviceManifest: deploy/base/codex-hook-ingress/codex-hook-ingress.yaml.tpl
+        kustomization: deploy/base/codex-hook-ingress/kustomization.yaml.tpl
+        health:
+          livez: /health/livez
+          readyz: /health/readyz
+          metrics: /metrics
     - name: runtime-manager
       status: foundation
       zone: internal
@@ -663,29 +708,6 @@ spec:
           readyz: /health/readyz
           metrics: /metrics
         mcp: /mcp
-    - name: codex-hook-ingress
-      status: scaffold
-      zone: internal
-      path: services/internal/codex-hook-ingress
-      ownerDomain: codex-hook-ingress
-      apiContracts:
-        jsonschema: specs/jsonschema/codex-hook-ingress.v1/**
-        logicalCommand: SubmitHookEvent
-        physicalTransport: not-selected
-      implementation:
-        agentActivityRoute: typed-record-agent-activity-owner-port
-        businessRoutes: route-registry-safe-parts-only
-        database: stub-only-no-raw-payload-storage
-        decisionBridge: permission-and-policy-pre-tool-owner-ports-stubbed
-        opsFeed: bounded-in-memory-safe-summary-only
-        rateLimit: fixed-window-logical-boundary
-        routeFailurePolicy: diagnostic-or-fail-closed
-        transport: in-process-logical-boundary-only
-      deploy:
-        health:
-          livez: /health/livez
-          readyz: /health/readyz
-          metrics: /metrics
     - name: governance-manager
       status: scaffold
       zone: internal
@@ -853,6 +875,14 @@ spec:
         - openapi
       requires:
         - provider-hub
+    - name: codex-hook-ingress
+      path: deploy/base/codex-hook-ingress/codex-hook-ingress.yaml.tpl
+      kustomization: deploy/base/codex-hook-ingress/kustomization.yaml.tpl
+      deploysService: codex-hook-ingress
+      exposes:
+        - http
+        - metrics
+      requires: []
     - name: fleet-manager
       path: deploy/base/fleet-manager/fleet-manager.yaml.tpl
       kustomization: deploy/base/fleet-manager/kustomization.yaml.tpl

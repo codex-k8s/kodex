@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-22
 updated_at: 2026-05-27
-related_issues: [698, 753, 778, 786, 793, 808, 823, 836, 854, 322, 834]
+related_issues: [698, 753, 778, 786, 793, 808, 823, 836, 854, 868, 322, 834]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -265,6 +265,8 @@ approvals:
 Полные transcripts, session JSON/JSONL, raw logs, stdout/stderr и вложения должны храниться только во владельцах, если они вообще нужны, и только как object refs с отдельной retention-политикой.
 
 CHI-6a использует bounded in-memory feed/stub вместо служебной БД: текущий MVP должен дать realtime/ops диагностику в рамках живого процесса, но не требует восстановления ленты после рестарта и не является audit trail. Capacity и TTL задаются config, переполнение возвращает safe backpressure до downstream dispatch, а постоянное хранение остаётся отдельным решением для будущего ops/storage среза.
+
+CHI-8 не добавляет data store и migration job в deploy-контур. Kubernetes `Deployment` запускает только process с health/readiness/metrics; idempotency, route diagnostics и ops feed остаются in-memory/stub boundaries текущего MVP, а persistent activity timeline принадлежит `agent-manager`.
 
 ## Индексы и запросы
 
