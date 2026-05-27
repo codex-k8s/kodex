@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
 
 	governancev1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/governance/v1"
 	"github.com/codex-k8s/kodex/services/internal/governance-manager/internal/domain/errs"
@@ -20,6 +21,36 @@ import (
 )
 
 var protoJSON = protojson.MarshalOptions{UseProtoNames: true}
+
+type protoEnum interface {
+	~int32
+	String() string
+	Descriptor() protoreflect.EnumDescriptor
+}
+
+func protoEnumDomain[D ~string, E protoEnum](item E, prefix string, fallback D) D {
+	return protoEnumDomainWith(item, prefix, fallback, strings.ToLower)
+}
+
+func protoEnumDomainWith[D ~string, E protoEnum](item E, prefix string, fallback D, normalize func(string) string) D {
+	suffix, ok := strings.CutPrefix(item.String(), prefix)
+	if !ok || suffix == "" || suffix == "UNSPECIFIED" {
+		return fallback
+	}
+	return D(normalize(suffix))
+}
+
+func domainProtoEnum[D ~string, E protoEnum](item D, prefix string, unspecified E) E {
+	value := strings.TrimSpace(string(item))
+	if value == "" {
+		return unspecified
+	}
+	descriptor := unspecified.Descriptor().Values().ByName(protoreflect.Name(prefix + strings.ToUpper(value)))
+	if descriptor == nil {
+		return unspecified
+	}
+	return E(descriptor.Number())
+}
 
 func commandMeta(meta *governancev1.CommandMeta) (governanceservice.CommandMeta, error) {
 	if meta == nil {
@@ -118,12 +149,12 @@ func interactionDeliveryRef(item *governancev1.InteractionDeliveryRef) value.Int
 	if item == nil {
 		return value.InteractionDeliveryRef{}
 	}
-	return value.InteractionDeliveryRef{
-		RequestRef:  item.GetRequestRef(),
-		DeliveryRef: item.GetDeliveryRef(),
-		CallbackRef: item.GetCallbackRef(),
-		DecisionRef: item.GetDecisionRef(),
-	}
+	result := value.InteractionDeliveryRef{}
+	result.RequestRef = item.GetRequestRef()
+	result.DeliveryRef = item.GetDeliveryRef()
+	result.CallbackRef = item.GetCallbackRef()
+	result.DecisionRef = item.GetDecisionRef()
+	return result
 }
 
 func localizedTexts(items []*governancev1.LocalizedText) []value.LocalizedText {
@@ -725,28 +756,21 @@ func runtimeContextFromJSON(payload []byte) *governancev1.RuntimeContextRef {
 }
 
 func providerRefsFromJSON(payload []byte) []*governancev1.ProviderContextRef {
-	var raw []json.RawMessage
-	if len(payload) == 0 || json.Unmarshal(payload, &raw) != nil {
-		return nil
-	}
-	result := make([]*governancev1.ProviderContextRef, 0, len(raw))
-	for _, body := range raw {
-		item := &governancev1.ProviderContextRef{}
-		if unmarshalProtoJSON(body, item) {
-			result = append(result, item)
-		}
-	}
-	return result
+	return protoRefsFromJSONArray(payload, func() *governancev1.ProviderContextRef { return &governancev1.ProviderContextRef{} })
 }
 
 func runtimeRefsFromJSON(payload []byte) []*governancev1.RuntimeContextRef {
+	return protoRefsFromJSONArray(payload, func() *governancev1.RuntimeContextRef { return &governancev1.RuntimeContextRef{} })
+}
+
+func protoRefsFromJSONArray[T proto.Message](payload []byte, create func() T) []T {
 	var raw []json.RawMessage
 	if len(payload) == 0 || json.Unmarshal(payload, &raw) != nil {
 		return nil
 	}
-	result := make([]*governancev1.RuntimeContextRef, 0, len(raw))
+	result := make([]T, 0, len(raw))
 	for _, body := range raw {
-		item := &governancev1.RuntimeContextRef{}
+		item := create()
 		if unmarshalProtoJSON(body, item) {
 			result = append(result, item)
 		}
@@ -923,768 +947,165 @@ func toTargetType(item string) governancev1.GovernanceTargetType {
 }
 
 func riskClass(item governancev1.RiskClass) enum.RiskClass {
-	switch item {
-	case governancev1.RiskClass_RISK_CLASS_R0:
-		return enum.RiskClassR0
-	case governancev1.RiskClass_RISK_CLASS_R1:
-		return enum.RiskClassR1
-	case governancev1.RiskClass_RISK_CLASS_R2:
-		return enum.RiskClassR2
-	case governancev1.RiskClass_RISK_CLASS_R3:
-		return enum.RiskClassR3
-	default:
-		return enum.RiskClassUnspecified
-	}
+	return protoEnumDomainWith(item, "RISK_CLASS_", enum.RiskClassUnspecified, strings.ToUpper)
 }
 
 func toRiskClass(item enum.RiskClass) governancev1.RiskClass {
-	switch item {
-	case enum.RiskClassR0:
-		return governancev1.RiskClass_RISK_CLASS_R0
-	case enum.RiskClassR1:
-		return governancev1.RiskClass_RISK_CLASS_R1
-	case enum.RiskClassR2:
-		return governancev1.RiskClass_RISK_CLASS_R2
-	case enum.RiskClassR3:
-		return governancev1.RiskClass_RISK_CLASS_R3
-	default:
-		return governancev1.RiskClass_RISK_CLASS_UNSPECIFIED
-	}
+	return domainProtoEnum(item, "RISK_CLASS_", governancev1.RiskClass_RISK_CLASS_UNSPECIFIED)
 }
 
 func riskProfileStatus(item governancev1.RiskProfileStatus) enum.RiskProfileStatus {
-	switch item {
-	case governancev1.RiskProfileStatus_RISK_PROFILE_STATUS_DRAFT:
-		return enum.RiskProfileStatusDraft
-	case governancev1.RiskProfileStatus_RISK_PROFILE_STATUS_ACTIVE:
-		return enum.RiskProfileStatusActive
-	case governancev1.RiskProfileStatus_RISK_PROFILE_STATUS_DISABLED:
-		return enum.RiskProfileStatusDisabled
-	case governancev1.RiskProfileStatus_RISK_PROFILE_STATUS_ARCHIVED:
-		return enum.RiskProfileStatusArchived
-	default:
-		return ""
-	}
+	return protoEnumDomain(item, "RISK_PROFILE_STATUS_", enum.RiskProfileStatus(""))
 }
 
 func toRiskProfileStatus(item enum.RiskProfileStatus) governancev1.RiskProfileStatus {
-	switch item {
-	case enum.RiskProfileStatusDraft:
-		return governancev1.RiskProfileStatus_RISK_PROFILE_STATUS_DRAFT
-	case enum.RiskProfileStatusActive:
-		return governancev1.RiskProfileStatus_RISK_PROFILE_STATUS_ACTIVE
-	case enum.RiskProfileStatusDisabled:
-		return governancev1.RiskProfileStatus_RISK_PROFILE_STATUS_DISABLED
-	case enum.RiskProfileStatusArchived:
-		return governancev1.RiskProfileStatus_RISK_PROFILE_STATUS_ARCHIVED
-	default:
-		return governancev1.RiskProfileStatus_RISK_PROFILE_STATUS_UNSPECIFIED
-	}
+	return domainProtoEnum(item, "RISK_PROFILE_STATUS_", governancev1.RiskProfileStatus_RISK_PROFILE_STATUS_UNSPECIFIED)
 }
 
 func toRiskProfileVersionStatus(item enum.RiskProfileVersionStatus) governancev1.RiskProfileVersionStatus {
-	switch item {
-	case enum.RiskProfileVersionStatusDraft:
-		return governancev1.RiskProfileVersionStatus_RISK_PROFILE_VERSION_STATUS_DRAFT
-	case enum.RiskProfileVersionStatusActive:
-		return governancev1.RiskProfileVersionStatus_RISK_PROFILE_VERSION_STATUS_ACTIVE
-	case enum.RiskProfileVersionStatusSuperseded:
-		return governancev1.RiskProfileVersionStatus_RISK_PROFILE_VERSION_STATUS_SUPERSEDED
-	case enum.RiskProfileVersionStatusArchived:
-		return governancev1.RiskProfileVersionStatus_RISK_PROFILE_VERSION_STATUS_ARCHIVED
-	default:
-		return governancev1.RiskProfileVersionStatus_RISK_PROFILE_VERSION_STATUS_UNSPECIFIED
-	}
+	return domainProtoEnum(item, "RISK_PROFILE_VERSION_STATUS_", governancev1.RiskProfileVersionStatus_RISK_PROFILE_VERSION_STATUS_UNSPECIFIED)
 }
 
 func riskRuleKind(item governancev1.RiskRuleKind) enum.RiskRuleKind {
-	switch item {
-	case governancev1.RiskRuleKind_RISK_RULE_KIND_PATH:
-		return enum.RiskRuleKindPath
-	case governancev1.RiskRuleKind_RISK_RULE_KIND_SERVICE:
-		return enum.RiskRuleKindService
-	case governancev1.RiskRuleKind_RISK_RULE_KIND_API:
-		return enum.RiskRuleKindAPI
-	case governancev1.RiskRuleKind_RISK_RULE_KIND_DATABASE:
-		return enum.RiskRuleKindDatabase
-	case governancev1.RiskRuleKind_RISK_RULE_KIND_SECRET:
-		return enum.RiskRuleKindSecret
-	case governancev1.RiskRuleKind_RISK_RULE_KIND_AUTH:
-		return enum.RiskRuleKindAuth
-	case governancev1.RiskRuleKind_RISK_RULE_KIND_RUNTIME_ACTION:
-		return enum.RiskRuleKindRuntimeAction
-	case governancev1.RiskRuleKind_RISK_RULE_KIND_RELEASE:
-		return enum.RiskRuleKindRelease
-	case governancev1.RiskRuleKind_RISK_RULE_KIND_AUTOMATION:
-		return enum.RiskRuleKindAutomation
-	case governancev1.RiskRuleKind_RISK_RULE_KIND_DOCUMENT:
-		return enum.RiskRuleKindDocument
-	case governancev1.RiskRuleKind_RISK_RULE_KIND_CUSTOM:
-		return enum.RiskRuleKindCustom
-	default:
-		return ""
-	}
+	return protoEnumDomain(item, "RISK_RULE_KIND_", enum.RiskRuleKind(""))
 }
 
 func toRiskRuleKind(item enum.RiskRuleKind) governancev1.RiskRuleKind {
-	switch item {
-	case enum.RiskRuleKindPath:
-		return governancev1.RiskRuleKind_RISK_RULE_KIND_PATH
-	case enum.RiskRuleKindService:
-		return governancev1.RiskRuleKind_RISK_RULE_KIND_SERVICE
-	case enum.RiskRuleKindAPI:
-		return governancev1.RiskRuleKind_RISK_RULE_KIND_API
-	case enum.RiskRuleKindDatabase:
-		return governancev1.RiskRuleKind_RISK_RULE_KIND_DATABASE
-	case enum.RiskRuleKindSecret:
-		return governancev1.RiskRuleKind_RISK_RULE_KIND_SECRET
-	case enum.RiskRuleKindAuth:
-		return governancev1.RiskRuleKind_RISK_RULE_KIND_AUTH
-	case enum.RiskRuleKindRuntimeAction:
-		return governancev1.RiskRuleKind_RISK_RULE_KIND_RUNTIME_ACTION
-	case enum.RiskRuleKindRelease:
-		return governancev1.RiskRuleKind_RISK_RULE_KIND_RELEASE
-	case enum.RiskRuleKindAutomation:
-		return governancev1.RiskRuleKind_RISK_RULE_KIND_AUTOMATION
-	case enum.RiskRuleKindDocument:
-		return governancev1.RiskRuleKind_RISK_RULE_KIND_DOCUMENT
-	case enum.RiskRuleKindCustom:
-		return governancev1.RiskRuleKind_RISK_RULE_KIND_CUSTOM
-	default:
-		return governancev1.RiskRuleKind_RISK_RULE_KIND_UNSPECIFIED
-	}
+	return domainProtoEnum(item, "RISK_RULE_KIND_", governancev1.RiskRuleKind_RISK_RULE_KIND_UNSPECIFIED)
 }
 
 func ruleStatus(item governancev1.RuleStatus) enum.RuleStatus {
-	switch item {
-	case governancev1.RuleStatus_RULE_STATUS_ACTIVE:
-		return enum.RuleStatusActive
-	case governancev1.RuleStatus_RULE_STATUS_DISABLED:
-		return enum.RuleStatusDisabled
-	default:
-		return ""
-	}
+	return protoEnumDomain(item, "RULE_STATUS_", enum.RuleStatus(""))
 }
 
 func toRuleStatus(item enum.RuleStatus) governancev1.RuleStatus {
-	switch item {
-	case enum.RuleStatusActive:
-		return governancev1.RuleStatus_RULE_STATUS_ACTIVE
-	case enum.RuleStatusDisabled:
-		return governancev1.RuleStatus_RULE_STATUS_DISABLED
-	default:
-		return governancev1.RuleStatus_RULE_STATUS_UNSPECIFIED
-	}
+	return domainProtoEnum(item, "RULE_STATUS_", governancev1.RuleStatus_RULE_STATUS_UNSPECIFIED)
 }
 
 func gateKind(item governancev1.GateKind) enum.GateKind {
-	switch item {
-	case governancev1.GateKind_GATE_KIND_PRODUCT:
-		return enum.GateKindProduct
-	case governancev1.GateKind_GATE_KIND_ARCHITECTURE:
-		return enum.GateKindArchitecture
-	case governancev1.GateKind_GATE_KIND_TECHNICAL:
-		return enum.GateKindTechnical
-	case governancev1.GateKind_GATE_KIND_QA:
-		return enum.GateKindQA
-	case governancev1.GateKind_GATE_KIND_RELEASE:
-		return enum.GateKindRelease
-	case governancev1.GateKind_GATE_KIND_POSTDEPLOY:
-		return enum.GateKindPostdeploy
-	case governancev1.GateKind_GATE_KIND_EMERGENCY:
-		return enum.GateKindEmergency
-	case governancev1.GateKind_GATE_KIND_CUSTOM:
-		return enum.GateKindCustom
-	default:
-		return ""
-	}
+	return protoEnumDomain(item, "GATE_KIND_", enum.GateKind(""))
 }
 
 func toGateKind(item enum.GateKind) governancev1.GateKind {
-	switch item {
-	case enum.GateKindProduct:
-		return governancev1.GateKind_GATE_KIND_PRODUCT
-	case enum.GateKindArchitecture:
-		return governancev1.GateKind_GATE_KIND_ARCHITECTURE
-	case enum.GateKindTechnical:
-		return governancev1.GateKind_GATE_KIND_TECHNICAL
-	case enum.GateKindQA:
-		return governancev1.GateKind_GATE_KIND_QA
-	case enum.GateKindRelease:
-		return governancev1.GateKind_GATE_KIND_RELEASE
-	case enum.GateKindPostdeploy:
-		return governancev1.GateKind_GATE_KIND_POSTDEPLOY
-	case enum.GateKindEmergency:
-		return governancev1.GateKind_GATE_KIND_EMERGENCY
-	case enum.GateKindCustom:
-		return governancev1.GateKind_GATE_KIND_CUSTOM
-	default:
-		return governancev1.GateKind_GATE_KIND_UNSPECIFIED
-	}
+	return domainProtoEnum(item, "GATE_KIND_", governancev1.GateKind_GATE_KIND_UNSPECIFIED)
 }
 
 func riskAssessmentStatus(item governancev1.RiskAssessmentStatus) enum.RiskAssessmentStatus {
-	switch item {
-	case governancev1.RiskAssessmentStatus_RISK_ASSESSMENT_STATUS_DRAFT:
-		return enum.RiskAssessmentStatusDraft
-	case governancev1.RiskAssessmentStatus_RISK_ASSESSMENT_STATUS_ACTIVE:
-		return enum.RiskAssessmentStatusActive
-	case governancev1.RiskAssessmentStatus_RISK_ASSESSMENT_STATUS_SUPERSEDED:
-		return enum.RiskAssessmentStatusSuperseded
-	case governancev1.RiskAssessmentStatus_RISK_ASSESSMENT_STATUS_CLOSED:
-		return enum.RiskAssessmentStatusClosed
-	default:
-		return ""
-	}
+	return protoEnumDomain(item, "RISK_ASSESSMENT_STATUS_", enum.RiskAssessmentStatus(""))
 }
 
 func toRiskAssessmentStatus(item enum.RiskAssessmentStatus) governancev1.RiskAssessmentStatus {
-	switch item {
-	case enum.RiskAssessmentStatusDraft:
-		return governancev1.RiskAssessmentStatus_RISK_ASSESSMENT_STATUS_DRAFT
-	case enum.RiskAssessmentStatusActive:
-		return governancev1.RiskAssessmentStatus_RISK_ASSESSMENT_STATUS_ACTIVE
-	case enum.RiskAssessmentStatusSuperseded:
-		return governancev1.RiskAssessmentStatus_RISK_ASSESSMENT_STATUS_SUPERSEDED
-	case enum.RiskAssessmentStatusClosed:
-		return governancev1.RiskAssessmentStatus_RISK_ASSESSMENT_STATUS_CLOSED
-	default:
-		return governancev1.RiskAssessmentStatus_RISK_ASSESSMENT_STATUS_UNSPECIFIED
-	}
+	return domainProtoEnum(item, "RISK_ASSESSMENT_STATUS_", governancev1.RiskAssessmentStatus_RISK_ASSESSMENT_STATUS_UNSPECIFIED)
 }
 
 func riskFactorSourceType(item governancev1.RiskFactorSourceType) enum.RiskFactorSourceType {
-	switch item {
-	case governancev1.RiskFactorSourceType_RISK_FACTOR_SOURCE_TYPE_POLICY:
-		return enum.RiskFactorSourceTypePolicy
-	case governancev1.RiskFactorSourceType_RISK_FACTOR_SOURCE_TYPE_CHANGED_FILE:
-		return enum.RiskFactorSourceTypeChangedFile
-	case governancev1.RiskFactorSourceType_RISK_FACTOR_SOURCE_TYPE_SERVICE:
-		return enum.RiskFactorSourceTypeService
-	case governancev1.RiskFactorSourceType_RISK_FACTOR_SOURCE_TYPE_API:
-		return enum.RiskFactorSourceTypeAPI
-	case governancev1.RiskFactorSourceType_RISK_FACTOR_SOURCE_TYPE_DATABASE:
-		return enum.RiskFactorSourceTypeDatabase
-	case governancev1.RiskFactorSourceType_RISK_FACTOR_SOURCE_TYPE_SECRET:
-		return enum.RiskFactorSourceTypeSecret
-	case governancev1.RiskFactorSourceType_RISK_FACTOR_SOURCE_TYPE_RELEASE:
-		return enum.RiskFactorSourceTypeRelease
-	case governancev1.RiskFactorSourceType_RISK_FACTOR_SOURCE_TYPE_RUNTIME:
-		return enum.RiskFactorSourceTypeRuntime
-	case governancev1.RiskFactorSourceType_RISK_FACTOR_SOURCE_TYPE_REVIEW_SIGNAL:
-		return enum.RiskFactorSourceTypeReviewSignal
-	case governancev1.RiskFactorSourceType_RISK_FACTOR_SOURCE_TYPE_HUMAN_DECISION:
-		return enum.RiskFactorSourceTypeHumanDecision
-	default:
-		return ""
-	}
+	return protoEnumDomain(item, "RISK_FACTOR_SOURCE_TYPE_", enum.RiskFactorSourceType(""))
 }
 
 func toRiskFactorSourceType(item enum.RiskFactorSourceType) governancev1.RiskFactorSourceType {
-	switch item {
-	case enum.RiskFactorSourceTypePolicy:
-		return governancev1.RiskFactorSourceType_RISK_FACTOR_SOURCE_TYPE_POLICY
-	case enum.RiskFactorSourceTypeChangedFile:
-		return governancev1.RiskFactorSourceType_RISK_FACTOR_SOURCE_TYPE_CHANGED_FILE
-	case enum.RiskFactorSourceTypeService:
-		return governancev1.RiskFactorSourceType_RISK_FACTOR_SOURCE_TYPE_SERVICE
-	case enum.RiskFactorSourceTypeAPI:
-		return governancev1.RiskFactorSourceType_RISK_FACTOR_SOURCE_TYPE_API
-	case enum.RiskFactorSourceTypeDatabase:
-		return governancev1.RiskFactorSourceType_RISK_FACTOR_SOURCE_TYPE_DATABASE
-	case enum.RiskFactorSourceTypeSecret:
-		return governancev1.RiskFactorSourceType_RISK_FACTOR_SOURCE_TYPE_SECRET
-	case enum.RiskFactorSourceTypeRelease:
-		return governancev1.RiskFactorSourceType_RISK_FACTOR_SOURCE_TYPE_RELEASE
-	case enum.RiskFactorSourceTypeRuntime:
-		return governancev1.RiskFactorSourceType_RISK_FACTOR_SOURCE_TYPE_RUNTIME
-	case enum.RiskFactorSourceTypeReviewSignal:
-		return governancev1.RiskFactorSourceType_RISK_FACTOR_SOURCE_TYPE_REVIEW_SIGNAL
-	case enum.RiskFactorSourceTypeHumanDecision:
-		return governancev1.RiskFactorSourceType_RISK_FACTOR_SOURCE_TYPE_HUMAN_DECISION
-	default:
-		return governancev1.RiskFactorSourceType_RISK_FACTOR_SOURCE_TYPE_UNSPECIFIED
-	}
+	return domainProtoEnum(item, "RISK_FACTOR_SOURCE_TYPE_", governancev1.RiskFactorSourceType_RISK_FACTOR_SOURCE_TYPE_UNSPECIFIED)
 }
 
 func reviewRoleKind(item governancev1.ReviewRoleKind) enum.ReviewRoleKind {
-	switch item {
-	case governancev1.ReviewRoleKind_REVIEW_ROLE_KIND_REVIEWER:
-		return enum.ReviewRoleKindReviewer
-	case governancev1.ReviewRoleKind_REVIEW_ROLE_KIND_QA:
-		return enum.ReviewRoleKindQA
-	case governancev1.ReviewRoleKind_REVIEW_ROLE_KIND_LEXICAL_GATEKEEPER:
-		return enum.ReviewRoleKindLexicalGatekeeper
-	case governancev1.ReviewRoleKind_REVIEW_ROLE_KIND_RISK_GATEKEEPER:
-		return enum.ReviewRoleKindRiskGatekeeper
-	case governancev1.ReviewRoleKind_REVIEW_ROLE_KIND_SRE:
-		return enum.ReviewRoleKindSRE
-	case governancev1.ReviewRoleKind_REVIEW_ROLE_KIND_SECURITY:
-		return enum.ReviewRoleKindSecurity
-	case governancev1.ReviewRoleKind_REVIEW_ROLE_KIND_OWNER:
-		return enum.ReviewRoleKindOwner
-	case governancev1.ReviewRoleKind_REVIEW_ROLE_KIND_CUSTOM:
-		return enum.ReviewRoleKindCustom
-	default:
-		return ""
-	}
+	return protoEnumDomain(item, "REVIEW_ROLE_KIND_", enum.ReviewRoleKind(""))
 }
 
 func toReviewRoleKind(item enum.ReviewRoleKind) governancev1.ReviewRoleKind {
-	switch item {
-	case enum.ReviewRoleKindReviewer:
-		return governancev1.ReviewRoleKind_REVIEW_ROLE_KIND_REVIEWER
-	case enum.ReviewRoleKindQA:
-		return governancev1.ReviewRoleKind_REVIEW_ROLE_KIND_QA
-	case enum.ReviewRoleKindLexicalGatekeeper:
-		return governancev1.ReviewRoleKind_REVIEW_ROLE_KIND_LEXICAL_GATEKEEPER
-	case enum.ReviewRoleKindRiskGatekeeper:
-		return governancev1.ReviewRoleKind_REVIEW_ROLE_KIND_RISK_GATEKEEPER
-	case enum.ReviewRoleKindSRE:
-		return governancev1.ReviewRoleKind_REVIEW_ROLE_KIND_SRE
-	case enum.ReviewRoleKindSecurity:
-		return governancev1.ReviewRoleKind_REVIEW_ROLE_KIND_SECURITY
-	case enum.ReviewRoleKindOwner:
-		return governancev1.ReviewRoleKind_REVIEW_ROLE_KIND_OWNER
-	case enum.ReviewRoleKindCustom:
-		return governancev1.ReviewRoleKind_REVIEW_ROLE_KIND_CUSTOM
-	default:
-		return governancev1.ReviewRoleKind_REVIEW_ROLE_KIND_UNSPECIFIED
-	}
+	return domainProtoEnum(item, "REVIEW_ROLE_KIND_", governancev1.ReviewRoleKind_REVIEW_ROLE_KIND_UNSPECIFIED)
 }
 
 func reviewSignalOutcome(item governancev1.ReviewSignalOutcome) enum.ReviewSignalOutcome {
-	switch item {
-	case governancev1.ReviewSignalOutcome_REVIEW_SIGNAL_OUTCOME_PASS:
-		return enum.ReviewSignalOutcomePass
-	case governancev1.ReviewSignalOutcome_REVIEW_SIGNAL_OUTCOME_PASS_WITH_NOTES:
-		return enum.ReviewSignalOutcomePassWithNotes
-	case governancev1.ReviewSignalOutcome_REVIEW_SIGNAL_OUTCOME_BLOCK:
-		return enum.ReviewSignalOutcomeBlock
-	case governancev1.ReviewSignalOutcome_REVIEW_SIGNAL_OUTCOME_REQUEST_CHANGES:
-		return enum.ReviewSignalOutcomeRequestChanges
-	case governancev1.ReviewSignalOutcome_REVIEW_SIGNAL_OUTCOME_RAISE_RISK:
-		return enum.ReviewSignalOutcomeRaiseRisk
-	case governancev1.ReviewSignalOutcome_REVIEW_SIGNAL_OUTCOME_INFORMATIONAL:
-		return enum.ReviewSignalOutcomeInformational
-	default:
-		return ""
-	}
+	return protoEnumDomain(item, "REVIEW_SIGNAL_OUTCOME_", enum.ReviewSignalOutcome(""))
 }
 
 func toReviewSignalOutcome(item enum.ReviewSignalOutcome) governancev1.ReviewSignalOutcome {
-	switch item {
-	case enum.ReviewSignalOutcomePass:
-		return governancev1.ReviewSignalOutcome_REVIEW_SIGNAL_OUTCOME_PASS
-	case enum.ReviewSignalOutcomePassWithNotes:
-		return governancev1.ReviewSignalOutcome_REVIEW_SIGNAL_OUTCOME_PASS_WITH_NOTES
-	case enum.ReviewSignalOutcomeBlock:
-		return governancev1.ReviewSignalOutcome_REVIEW_SIGNAL_OUTCOME_BLOCK
-	case enum.ReviewSignalOutcomeRequestChanges:
-		return governancev1.ReviewSignalOutcome_REVIEW_SIGNAL_OUTCOME_REQUEST_CHANGES
-	case enum.ReviewSignalOutcomeRaiseRisk:
-		return governancev1.ReviewSignalOutcome_REVIEW_SIGNAL_OUTCOME_RAISE_RISK
-	case enum.ReviewSignalOutcomeInformational:
-		return governancev1.ReviewSignalOutcome_REVIEW_SIGNAL_OUTCOME_INFORMATIONAL
-	default:
-		return governancev1.ReviewSignalOutcome_REVIEW_SIGNAL_OUTCOME_UNSPECIFIED
-	}
+	return domainProtoEnum(item, "REVIEW_SIGNAL_OUTCOME_", governancev1.ReviewSignalOutcome_REVIEW_SIGNAL_OUTCOME_UNSPECIFIED)
 }
 
 func signalSeverity(item governancev1.SignalSeverity) enum.SignalSeverity {
-	switch item {
-	case governancev1.SignalSeverity_SIGNAL_SEVERITY_INFO:
-		return enum.SignalSeverityInfo
-	case governancev1.SignalSeverity_SIGNAL_SEVERITY_WARNING:
-		return enum.SignalSeverityWarning
-	case governancev1.SignalSeverity_SIGNAL_SEVERITY_BLOCKING:
-		return enum.SignalSeverityBlocking
-	case governancev1.SignalSeverity_SIGNAL_SEVERITY_CRITICAL:
-		return enum.SignalSeverityCritical
-	default:
-		return ""
-	}
+	return protoEnumDomain(item, "SIGNAL_SEVERITY_", enum.SignalSeverity(""))
 }
 
 func toSignalSeverity(item enum.SignalSeverity) governancev1.SignalSeverity {
-	switch item {
-	case enum.SignalSeverityInfo:
-		return governancev1.SignalSeverity_SIGNAL_SEVERITY_INFO
-	case enum.SignalSeverityWarning:
-		return governancev1.SignalSeverity_SIGNAL_SEVERITY_WARNING
-	case enum.SignalSeverityBlocking:
-		return governancev1.SignalSeverity_SIGNAL_SEVERITY_BLOCKING
-	case enum.SignalSeverityCritical:
-		return governancev1.SignalSeverity_SIGNAL_SEVERITY_CRITICAL
-	default:
-		return governancev1.SignalSeverity_SIGNAL_SEVERITY_UNSPECIFIED
-	}
+	return domainProtoEnum(item, "SIGNAL_SEVERITY_", governancev1.SignalSeverity_SIGNAL_SEVERITY_UNSPECIFIED)
 }
 
 func confidence(item governancev1.Confidence) enum.Confidence {
-	switch item {
-	case governancev1.Confidence_CONFIDENCE_LOW:
-		return enum.ConfidenceLow
-	case governancev1.Confidence_CONFIDENCE_MEDIUM:
-		return enum.ConfidenceMedium
-	case governancev1.Confidence_CONFIDENCE_HIGH:
-		return enum.ConfidenceHigh
-	default:
-		return ""
-	}
+	return protoEnumDomain(item, "CONFIDENCE_", enum.Confidence(""))
 }
 
 func toConfidence(item enum.Confidence) governancev1.Confidence {
-	switch item {
-	case enum.ConfidenceLow:
-		return governancev1.Confidence_CONFIDENCE_LOW
-	case enum.ConfidenceMedium:
-		return governancev1.Confidence_CONFIDENCE_MEDIUM
-	case enum.ConfidenceHigh:
-		return governancev1.Confidence_CONFIDENCE_HIGH
-	default:
-		return governancev1.Confidence_CONFIDENCE_UNSPECIFIED
-	}
+	return domainProtoEnum(item, "CONFIDENCE_", governancev1.Confidence_CONFIDENCE_UNSPECIFIED)
 }
 
 func evidenceKindString(item governancev1.EvidenceKind) string {
-	switch item {
-	case governancev1.EvidenceKind_EVIDENCE_KIND_PROVIDER_COMMENT:
-		return "provider_comment"
-	case governancev1.EvidenceKind_EVIDENCE_KIND_PROVIDER_REVIEW:
-		return "provider_review"
-	case governancev1.EvidenceKind_EVIDENCE_KIND_PROVIDER_CHECK:
-		return "provider_check"
-	case governancev1.EvidenceKind_EVIDENCE_KIND_RUNTIME_SUMMARY:
-		return "runtime_summary"
-	case governancev1.EvidenceKind_EVIDENCE_KIND_DOCUMENT:
-		return "document"
-	case governancev1.EvidenceKind_EVIDENCE_KIND_RISK_FACTOR:
-		return "risk_factor"
-	case governancev1.EvidenceKind_EVIDENCE_KIND_REVIEW_SIGNAL:
-		return "review_signal"
-	case governancev1.EvidenceKind_EVIDENCE_KIND_INTERACTION_CALLBACK:
-		return "interaction_callback"
-	case governancev1.EvidenceKind_EVIDENCE_KIND_OBJECT_REF:
-		return "object_ref"
-	case governancev1.EvidenceKind_EVIDENCE_KIND_CUSTOM:
-		return "custom"
-	default:
-		return ""
-	}
+	return protoEnumDomain(item, "EVIDENCE_KIND_", "")
 }
 
 func toEvidenceKind(item string) governancev1.EvidenceKind {
-	switch item {
-	case "provider_comment":
-		return governancev1.EvidenceKind_EVIDENCE_KIND_PROVIDER_COMMENT
-	case "provider_review":
-		return governancev1.EvidenceKind_EVIDENCE_KIND_PROVIDER_REVIEW
-	case "provider_check":
-		return governancev1.EvidenceKind_EVIDENCE_KIND_PROVIDER_CHECK
-	case "runtime_summary":
-		return governancev1.EvidenceKind_EVIDENCE_KIND_RUNTIME_SUMMARY
-	case "document":
-		return governancev1.EvidenceKind_EVIDENCE_KIND_DOCUMENT
-	case "risk_factor":
-		return governancev1.EvidenceKind_EVIDENCE_KIND_RISK_FACTOR
-	case "review_signal":
-		return governancev1.EvidenceKind_EVIDENCE_KIND_REVIEW_SIGNAL
-	case "interaction_callback":
-		return governancev1.EvidenceKind_EVIDENCE_KIND_INTERACTION_CALLBACK
-	case "object_ref":
-		return governancev1.EvidenceKind_EVIDENCE_KIND_OBJECT_REF
-	case "custom":
-		return governancev1.EvidenceKind_EVIDENCE_KIND_CUSTOM
-	default:
-		return governancev1.EvidenceKind_EVIDENCE_KIND_UNSPECIFIED
-	}
+	return domainProtoEnum(item, "EVIDENCE_KIND_", governancev1.EvidenceKind_EVIDENCE_KIND_UNSPECIFIED)
 }
 
 func gateRequestStatus(item governancev1.GateRequestStatus) enum.GateRequestStatus {
-	switch item {
-	case governancev1.GateRequestStatus_GATE_REQUEST_STATUS_REQUESTED:
-		return enum.GateRequestStatusRequested
-	case governancev1.GateRequestStatus_GATE_REQUEST_STATUS_DELIVERING:
-		return enum.GateRequestStatusDelivering
-	case governancev1.GateRequestStatus_GATE_REQUEST_STATUS_AWAITING_DECISION:
-		return enum.GateRequestStatusAwaitingDecision
-	case governancev1.GateRequestStatus_GATE_REQUEST_STATUS_RESOLVED:
-		return enum.GateRequestStatusResolved
-	case governancev1.GateRequestStatus_GATE_REQUEST_STATUS_EXPIRED:
-		return enum.GateRequestStatusExpired
-	case governancev1.GateRequestStatus_GATE_REQUEST_STATUS_CANCELLED:
-		return enum.GateRequestStatusCancelled
-	default:
-		return ""
-	}
+	return protoEnumDomain(item, "GATE_REQUEST_STATUS_", enum.GateRequestStatus(""))
 }
 
 func toGateRequestStatus(item enum.GateRequestStatus) governancev1.GateRequestStatus {
-	switch item {
-	case enum.GateRequestStatusRequested:
-		return governancev1.GateRequestStatus_GATE_REQUEST_STATUS_REQUESTED
-	case enum.GateRequestStatusDelivering:
-		return governancev1.GateRequestStatus_GATE_REQUEST_STATUS_DELIVERING
-	case enum.GateRequestStatusAwaitingDecision:
-		return governancev1.GateRequestStatus_GATE_REQUEST_STATUS_AWAITING_DECISION
-	case enum.GateRequestStatusResolved:
-		return governancev1.GateRequestStatus_GATE_REQUEST_STATUS_RESOLVED
-	case enum.GateRequestStatusExpired:
-		return governancev1.GateRequestStatus_GATE_REQUEST_STATUS_EXPIRED
-	case enum.GateRequestStatusCancelled:
-		return governancev1.GateRequestStatus_GATE_REQUEST_STATUS_CANCELLED
-	default:
-		return governancev1.GateRequestStatus_GATE_REQUEST_STATUS_UNSPECIFIED
-	}
+	return domainProtoEnum(item, "GATE_REQUEST_STATUS_", governancev1.GateRequestStatus_GATE_REQUEST_STATUS_UNSPECIFIED)
 }
 
 func gateOutcome(item governancev1.GateOutcome) enum.GateOutcome {
-	switch item {
-	case governancev1.GateOutcome_GATE_OUTCOME_APPROVE:
-		return enum.GateOutcomeApprove
-	case governancev1.GateOutcome_GATE_OUTCOME_APPROVE_WITH_CONDITIONS:
-		return enum.GateOutcomeApproveWithConditions
-	case governancev1.GateOutcome_GATE_OUTCOME_REVISE:
-		return enum.GateOutcomeRevise
-	case governancev1.GateOutcome_GATE_OUTCOME_REJECT:
-		return enum.GateOutcomeReject
-	case governancev1.GateOutcome_GATE_OUTCOME_HOLD:
-		return enum.GateOutcomeHold
-	case governancev1.GateOutcome_GATE_OUTCOME_ROLLBACK:
-		return enum.GateOutcomeRollback
-	case governancev1.GateOutcome_GATE_OUTCOME_ESCALATE:
-		return enum.GateOutcomeEscalate
-	default:
-		return ""
-	}
+	return protoEnumDomain(item, "GATE_OUTCOME_", enum.GateOutcome(""))
 }
 
 func toGateOutcome(item enum.GateOutcome) governancev1.GateOutcome {
-	switch item {
-	case enum.GateOutcomeApprove:
-		return governancev1.GateOutcome_GATE_OUTCOME_APPROVE
-	case enum.GateOutcomeApproveWithConditions:
-		return governancev1.GateOutcome_GATE_OUTCOME_APPROVE_WITH_CONDITIONS
-	case enum.GateOutcomeRevise:
-		return governancev1.GateOutcome_GATE_OUTCOME_REVISE
-	case enum.GateOutcomeReject:
-		return governancev1.GateOutcome_GATE_OUTCOME_REJECT
-	case enum.GateOutcomeHold:
-		return governancev1.GateOutcome_GATE_OUTCOME_HOLD
-	case enum.GateOutcomeRollback:
-		return governancev1.GateOutcome_GATE_OUTCOME_ROLLBACK
-	case enum.GateOutcomeEscalate:
-		return governancev1.GateOutcome_GATE_OUTCOME_ESCALATE
-	default:
-		return governancev1.GateOutcome_GATE_OUTCOME_UNSPECIFIED
-	}
+	return domainProtoEnum(item, "GATE_OUTCOME_", governancev1.GateOutcome_GATE_OUTCOME_UNSPECIFIED)
 }
 
 func releaseDecisionPackageStatus(item governancev1.ReleaseDecisionPackageStatus) enum.ReleaseDecisionPackageStatus {
-	switch item {
-	case governancev1.ReleaseDecisionPackageStatus_RELEASE_DECISION_PACKAGE_STATUS_DRAFT:
-		return enum.ReleaseDecisionPackageStatusDraft
-	case governancev1.ReleaseDecisionPackageStatus_RELEASE_DECISION_PACKAGE_STATUS_READY:
-		return enum.ReleaseDecisionPackageStatusReady
-	case governancev1.ReleaseDecisionPackageStatus_RELEASE_DECISION_PACKAGE_STATUS_DECISION_REQUESTED:
-		return enum.ReleaseDecisionPackageStatusDecisionRequested
-	case governancev1.ReleaseDecisionPackageStatus_RELEASE_DECISION_PACKAGE_STATUS_CLOSED:
-		return enum.ReleaseDecisionPackageStatusClosed
-	default:
-		return ""
-	}
+	return protoEnumDomain(item, "RELEASE_DECISION_PACKAGE_STATUS_", enum.ReleaseDecisionPackageStatus(""))
 }
 
 func toReleaseDecisionPackageStatus(item enum.ReleaseDecisionPackageStatus) governancev1.ReleaseDecisionPackageStatus {
-	switch item {
-	case enum.ReleaseDecisionPackageStatusDraft:
-		return governancev1.ReleaseDecisionPackageStatus_RELEASE_DECISION_PACKAGE_STATUS_DRAFT
-	case enum.ReleaseDecisionPackageStatusReady:
-		return governancev1.ReleaseDecisionPackageStatus_RELEASE_DECISION_PACKAGE_STATUS_READY
-	case enum.ReleaseDecisionPackageStatusDecisionRequested:
-		return governancev1.ReleaseDecisionPackageStatus_RELEASE_DECISION_PACKAGE_STATUS_DECISION_REQUESTED
-	case enum.ReleaseDecisionPackageStatusClosed:
-		return governancev1.ReleaseDecisionPackageStatus_RELEASE_DECISION_PACKAGE_STATUS_CLOSED
-	default:
-		return governancev1.ReleaseDecisionPackageStatus_RELEASE_DECISION_PACKAGE_STATUS_UNSPECIFIED
-	}
+	return domainProtoEnum(item, "RELEASE_DECISION_PACKAGE_STATUS_", governancev1.ReleaseDecisionPackageStatus_RELEASE_DECISION_PACKAGE_STATUS_UNSPECIFIED)
 }
 
 func releaseDecisionStatus(item governancev1.ReleaseDecisionStatus) enum.ReleaseDecisionStatus {
-	switch item {
-	case governancev1.ReleaseDecisionStatus_RELEASE_DECISION_STATUS_REQUESTED:
-		return enum.ReleaseDecisionStatusRequested
-	case governancev1.ReleaseDecisionStatus_RELEASE_DECISION_STATUS_RESOLVED:
-		return enum.ReleaseDecisionStatusResolved
-	case governancev1.ReleaseDecisionStatus_RELEASE_DECISION_STATUS_CANCELLED:
-		return enum.ReleaseDecisionStatusCancelled
-	default:
-		return ""
-	}
+	return protoEnumDomain(item, "RELEASE_DECISION_STATUS_", enum.ReleaseDecisionStatus(""))
 }
 
 func toReleaseDecisionStatus(item enum.ReleaseDecisionStatus) governancev1.ReleaseDecisionStatus {
-	switch item {
-	case enum.ReleaseDecisionStatusRequested:
-		return governancev1.ReleaseDecisionStatus_RELEASE_DECISION_STATUS_REQUESTED
-	case enum.ReleaseDecisionStatusResolved:
-		return governancev1.ReleaseDecisionStatus_RELEASE_DECISION_STATUS_RESOLVED
-	case enum.ReleaseDecisionStatusCancelled:
-		return governancev1.ReleaseDecisionStatus_RELEASE_DECISION_STATUS_CANCELLED
-	default:
-		return governancev1.ReleaseDecisionStatus_RELEASE_DECISION_STATUS_UNSPECIFIED
-	}
+	return domainProtoEnum(item, "RELEASE_DECISION_STATUS_", governancev1.ReleaseDecisionStatus_RELEASE_DECISION_STATUS_UNSPECIFIED)
 }
 
 func releaseDecisionOutcome(item governancev1.ReleaseDecisionOutcome) enum.ReleaseDecisionOutcome {
-	switch item {
-	case governancev1.ReleaseDecisionOutcome_RELEASE_DECISION_OUTCOME_GO:
-		return enum.ReleaseDecisionOutcomeGo
-	case governancev1.ReleaseDecisionOutcome_RELEASE_DECISION_OUTCOME_GO_WITH_CONDITIONS:
-		return enum.ReleaseDecisionOutcomeGoWithConditions
-	case governancev1.ReleaseDecisionOutcome_RELEASE_DECISION_OUTCOME_NO_GO:
-		return enum.ReleaseDecisionOutcomeNoGo
-	case governancev1.ReleaseDecisionOutcome_RELEASE_DECISION_OUTCOME_HOLD:
-		return enum.ReleaseDecisionOutcomeHold
-	case governancev1.ReleaseDecisionOutcome_RELEASE_DECISION_OUTCOME_ROLLBACK:
-		return enum.ReleaseDecisionOutcomeRollback
-	case governancev1.ReleaseDecisionOutcome_RELEASE_DECISION_OUTCOME_FOLLOW_UP_REQUIRED:
-		return enum.ReleaseDecisionOutcomeFollowUpRequired
-	default:
-		return ""
-	}
+	return protoEnumDomain(item, "RELEASE_DECISION_OUTCOME_", enum.ReleaseDecisionOutcome(""))
 }
 
 func toReleaseDecisionOutcome(item enum.ReleaseDecisionOutcome) governancev1.ReleaseDecisionOutcome {
-	switch item {
-	case enum.ReleaseDecisionOutcomeGo:
-		return governancev1.ReleaseDecisionOutcome_RELEASE_DECISION_OUTCOME_GO
-	case enum.ReleaseDecisionOutcomeGoWithConditions:
-		return governancev1.ReleaseDecisionOutcome_RELEASE_DECISION_OUTCOME_GO_WITH_CONDITIONS
-	case enum.ReleaseDecisionOutcomeNoGo:
-		return governancev1.ReleaseDecisionOutcome_RELEASE_DECISION_OUTCOME_NO_GO
-	case enum.ReleaseDecisionOutcomeHold:
-		return governancev1.ReleaseDecisionOutcome_RELEASE_DECISION_OUTCOME_HOLD
-	case enum.ReleaseDecisionOutcomeRollback:
-		return governancev1.ReleaseDecisionOutcome_RELEASE_DECISION_OUTCOME_ROLLBACK
-	case enum.ReleaseDecisionOutcomeFollowUpRequired:
-		return governancev1.ReleaseDecisionOutcome_RELEASE_DECISION_OUTCOME_FOLLOW_UP_REQUIRED
-	default:
-		return governancev1.ReleaseDecisionOutcome_RELEASE_DECISION_OUTCOME_UNSPECIFIED
-	}
+	return domainProtoEnum(item, "RELEASE_DECISION_OUTCOME_", governancev1.ReleaseDecisionOutcome_RELEASE_DECISION_OUTCOME_UNSPECIFIED)
 }
 
 func releaseSafetyStateKind(item governancev1.ReleaseSafetyStateKind) enum.ReleaseSafetyStateKind {
-	switch item {
-	case governancev1.ReleaseSafetyStateKind_RELEASE_SAFETY_STATE_KIND_RELEASE_CANDIDATE:
-		return enum.ReleaseSafetyStateKindReleaseCandidate
-	case governancev1.ReleaseSafetyStateKind_RELEASE_SAFETY_STATE_KIND_AWAITING_RELEASE_GATE:
-		return enum.ReleaseSafetyStateKindAwaitingReleaseGate
-	case governancev1.ReleaseSafetyStateKind_RELEASE_SAFETY_STATE_KIND_DEPLOYING:
-		return enum.ReleaseSafetyStateKindDeploying
-	case governancev1.ReleaseSafetyStateKind_RELEASE_SAFETY_STATE_KIND_POSTDEPLOY_OBSERVATION:
-		return enum.ReleaseSafetyStateKindPostdeployObservation
-	case governancev1.ReleaseSafetyStateKind_RELEASE_SAFETY_STATE_KIND_STABLE:
-		return enum.ReleaseSafetyStateKindStable
-	case governancev1.ReleaseSafetyStateKind_RELEASE_SAFETY_STATE_KIND_HOLD:
-		return enum.ReleaseSafetyStateKindHold
-	case governancev1.ReleaseSafetyStateKind_RELEASE_SAFETY_STATE_KIND_ROLLBACK:
-		return enum.ReleaseSafetyStateKindRollback
-	case governancev1.ReleaseSafetyStateKind_RELEASE_SAFETY_STATE_KIND_FOLLOW_UP_REQUIRED:
-		return enum.ReleaseSafetyStateKindFollowUpRequired
-	default:
-		return ""
-	}
+	return protoEnumDomain(item, "RELEASE_SAFETY_STATE_KIND_", enum.ReleaseSafetyStateKind(""))
 }
 
 func toReleaseSafetyStateKind(item enum.ReleaseSafetyStateKind) governancev1.ReleaseSafetyStateKind {
-	switch item {
-	case enum.ReleaseSafetyStateKindReleaseCandidate:
-		return governancev1.ReleaseSafetyStateKind_RELEASE_SAFETY_STATE_KIND_RELEASE_CANDIDATE
-	case enum.ReleaseSafetyStateKindAwaitingReleaseGate:
-		return governancev1.ReleaseSafetyStateKind_RELEASE_SAFETY_STATE_KIND_AWAITING_RELEASE_GATE
-	case enum.ReleaseSafetyStateKindDeploying:
-		return governancev1.ReleaseSafetyStateKind_RELEASE_SAFETY_STATE_KIND_DEPLOYING
-	case enum.ReleaseSafetyStateKindPostdeployObservation:
-		return governancev1.ReleaseSafetyStateKind_RELEASE_SAFETY_STATE_KIND_POSTDEPLOY_OBSERVATION
-	case enum.ReleaseSafetyStateKindStable:
-		return governancev1.ReleaseSafetyStateKind_RELEASE_SAFETY_STATE_KIND_STABLE
-	case enum.ReleaseSafetyStateKindHold:
-		return governancev1.ReleaseSafetyStateKind_RELEASE_SAFETY_STATE_KIND_HOLD
-	case enum.ReleaseSafetyStateKindRollback:
-		return governancev1.ReleaseSafetyStateKind_RELEASE_SAFETY_STATE_KIND_ROLLBACK
-	case enum.ReleaseSafetyStateKindFollowUpRequired:
-		return governancev1.ReleaseSafetyStateKind_RELEASE_SAFETY_STATE_KIND_FOLLOW_UP_REQUIRED
-	default:
-		return governancev1.ReleaseSafetyStateKind_RELEASE_SAFETY_STATE_KIND_UNSPECIFIED
-	}
+	return domainProtoEnum(item, "RELEASE_SAFETY_STATE_KIND_", governancev1.ReleaseSafetyStateKind_RELEASE_SAFETY_STATE_KIND_UNSPECIFIED)
 }
 
 func blockingSignalSourceType(item governancev1.BlockingSignalSourceType) enum.BlockingSignalSourceType {
-	switch item {
-	case governancev1.BlockingSignalSourceType_BLOCKING_SIGNAL_SOURCE_TYPE_ACCEPTANCE:
-		return enum.BlockingSignalSourceTypeAcceptance
-	case governancev1.BlockingSignalSourceType_BLOCKING_SIGNAL_SOURCE_TYPE_REVIEW_SIGNAL:
-		return enum.BlockingSignalSourceTypeReviewSignal
-	case governancev1.BlockingSignalSourceType_BLOCKING_SIGNAL_SOURCE_TYPE_RUNTIME:
-		return enum.BlockingSignalSourceTypeRuntime
-	case governancev1.BlockingSignalSourceType_BLOCKING_SIGNAL_SOURCE_TYPE_PROVIDER:
-		return enum.BlockingSignalSourceTypeProvider
-	case governancev1.BlockingSignalSourceType_BLOCKING_SIGNAL_SOURCE_TYPE_INTERACTION:
-		return enum.BlockingSignalSourceTypeInteraction
-	case governancev1.BlockingSignalSourceType_BLOCKING_SIGNAL_SOURCE_TYPE_HUMAN:
-		return enum.BlockingSignalSourceTypeHuman
-	case governancev1.BlockingSignalSourceType_BLOCKING_SIGNAL_SOURCE_TYPE_MONITORING:
-		return enum.BlockingSignalSourceTypeMonitoring
-	default:
-		return ""
-	}
+	return protoEnumDomain(item, "BLOCKING_SIGNAL_SOURCE_TYPE_", enum.BlockingSignalSourceType(""))
 }
 
 func toBlockingSignalSourceType(item enum.BlockingSignalSourceType) governancev1.BlockingSignalSourceType {
-	switch item {
-	case enum.BlockingSignalSourceTypeAcceptance:
-		return governancev1.BlockingSignalSourceType_BLOCKING_SIGNAL_SOURCE_TYPE_ACCEPTANCE
-	case enum.BlockingSignalSourceTypeReviewSignal:
-		return governancev1.BlockingSignalSourceType_BLOCKING_SIGNAL_SOURCE_TYPE_REVIEW_SIGNAL
-	case enum.BlockingSignalSourceTypeRuntime:
-		return governancev1.BlockingSignalSourceType_BLOCKING_SIGNAL_SOURCE_TYPE_RUNTIME
-	case enum.BlockingSignalSourceTypeProvider:
-		return governancev1.BlockingSignalSourceType_BLOCKING_SIGNAL_SOURCE_TYPE_PROVIDER
-	case enum.BlockingSignalSourceTypeInteraction:
-		return governancev1.BlockingSignalSourceType_BLOCKING_SIGNAL_SOURCE_TYPE_INTERACTION
-	case enum.BlockingSignalSourceTypeHuman:
-		return governancev1.BlockingSignalSourceType_BLOCKING_SIGNAL_SOURCE_TYPE_HUMAN
-	case enum.BlockingSignalSourceTypeMonitoring:
-		return governancev1.BlockingSignalSourceType_BLOCKING_SIGNAL_SOURCE_TYPE_MONITORING
-	default:
-		return governancev1.BlockingSignalSourceType_BLOCKING_SIGNAL_SOURCE_TYPE_UNSPECIFIED
-	}
+	return domainProtoEnum(item, "BLOCKING_SIGNAL_SOURCE_TYPE_", governancev1.BlockingSignalSourceType_BLOCKING_SIGNAL_SOURCE_TYPE_UNSPECIFIED)
 }
 
 func blockingSignalStatus(item governancev1.BlockingSignalStatus) enum.BlockingSignalStatus {
-	switch item {
-	case governancev1.BlockingSignalStatus_BLOCKING_SIGNAL_STATUS_ACTIVE:
-		return enum.BlockingSignalStatusActive
-	case governancev1.BlockingSignalStatus_BLOCKING_SIGNAL_STATUS_RESOLVED:
-		return enum.BlockingSignalStatusResolved
-	case governancev1.BlockingSignalStatus_BLOCKING_SIGNAL_STATUS_DISMISSED:
-		return enum.BlockingSignalStatusDismissed
-	default:
-		return ""
-	}
+	return protoEnumDomain(item, "BLOCKING_SIGNAL_STATUS_", enum.BlockingSignalStatus(""))
 }
 
 func toBlockingSignalStatus(item enum.BlockingSignalStatus) governancev1.BlockingSignalStatus {
-	switch item {
-	case enum.BlockingSignalStatusActive:
-		return governancev1.BlockingSignalStatus_BLOCKING_SIGNAL_STATUS_ACTIVE
-	case enum.BlockingSignalStatusResolved:
-		return governancev1.BlockingSignalStatus_BLOCKING_SIGNAL_STATUS_RESOLVED
-	case enum.BlockingSignalStatusDismissed:
-		return governancev1.BlockingSignalStatus_BLOCKING_SIGNAL_STATUS_DISMISSED
-	default:
-		return governancev1.BlockingSignalStatus_BLOCKING_SIGNAL_STATUS_UNSPECIFIED
-	}
+	return domainProtoEnum(item, "BLOCKING_SIGNAL_STATUS_", governancev1.BlockingSignalStatus_BLOCKING_SIGNAL_STATUS_UNSPECIFIED)
 }

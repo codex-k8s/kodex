@@ -365,19 +365,15 @@ func reviewSignalFilterArgs(filter query.ReviewSignalFilter) pageQueryArgs {
 }
 
 func gateRequestFilterArgs(filter query.GateRequestFilter) pageQueryArgs {
-	return withPage(filter.Page, pgx.NamedArgs{
+	return withGateTargetPage(filter.Page, filter.Target.Type, filter.Target.Ref, pgx.NamedArgs{
 		"risk_assessment_id": postgreslib.NullableUUID(filter.RiskAssessmentID),
-		"target_type":        filter.Target.Type,
-		"target_ref":         filter.Target.Ref,
 		"status":             string(filter.Status),
 	})
 }
 
 func gateDecisionFilterArgs(filter query.GateDecisionFilter) pageQueryArgs {
-	return withPage(filter.Page, pgx.NamedArgs{
+	return withGateTargetPage(filter.Page, filter.Target.Type, filter.Target.Ref, pgx.NamedArgs{
 		"gate_request_id": postgreslib.NullableUUID(filter.GateRequestID),
-		"target_type":     filter.Target.Type,
-		"target_ref":      filter.Target.Ref,
 		"outcome":         string(filter.Outcome),
 	})
 }
@@ -404,6 +400,12 @@ func withPage(page query.PageRequest, args pgx.NamedArgs) pageQueryArgs {
 	args["limit"] = limit + 1
 	args["offset"] = offset
 	return pageQueryArgs{NamedArgs: args, PageSize: limit, Offset: offset}
+}
+
+func withGateTargetPage(page query.PageRequest, targetType string, targetRef string, args pgx.NamedArgs) pageQueryArgs {
+	args["target_type"] = targetType
+	args["target_ref"] = targetRef
+	return withPage(page, args)
 }
 
 func pageResult[T any](items []T, page pageQueryArgs) ([]T, query.PageResult) {

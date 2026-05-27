@@ -85,12 +85,71 @@ type terminalGateCommandInput struct {
 
 type terminalGateHandler func(context.Context, terminalGateCommandInput) (entity.GateRequest, error)
 
-func terminalGateCommand(gateRequestID string, reason string, ref *governancev1.InteractionDeliveryRef, meta *governancev1.CommandMeta) (terminalGateCommandInput, error) {
+func commandMetaAndID(meta *governancev1.CommandMeta, rawID string) (governanceservice.CommandMeta, uuid.UUID, error) {
 	metaValue, err := commandMeta(meta)
+	return requiredMetaID(metaValue, err, rawID)
+}
+
+func queryMetaAndID(meta *governancev1.QueryMeta, rawID string) (governanceservice.QueryMeta, uuid.UUID, error) {
+	metaValue, err := queryMeta(meta)
+	return requiredMetaID(metaValue, err, rawID)
+}
+
+func requiredMetaID[T any](metaValue T, err error, rawID string) (T, uuid.UUID, error) {
 	if err != nil {
-		return terminalGateCommandInput{}, err
+		var zero T
+		return zero, uuid.Nil, err
 	}
-	id, err := requiredUUID(gateRequestID)
+	id, err := requiredUUID(rawID)
+	if err != nil {
+		var zero T
+		return zero, uuid.Nil, err
+	}
+	return metaValue, id, nil
+}
+
+func queryMetaAndOptionalID(meta *governancev1.QueryMeta, rawID string) (governanceservice.QueryMeta, *uuid.UUID, error) {
+	metaValue, err := queryMeta(meta)
+	if err != nil {
+		return governanceservice.QueryMeta{}, nil, err
+	}
+	id, err := optionalUUID(rawID)
+	if err != nil {
+		return governanceservice.QueryMeta{}, nil, err
+	}
+	return metaValue, id, nil
+}
+
+func queryIDResponse[T any, R any](ctx context.Context, metaValue *governancev1.QueryMeta, rawID string, load func(context.Context, governanceservice.QueryMeta, uuid.UUID) (T, error), response func(T) R) (R, error) {
+	meta, id, err := queryMetaAndID(metaValue, rawID)
+	if err != nil {
+		var zero R
+		return zero, err
+	}
+	item, err := load(ctx, meta, id)
+	if err != nil {
+		var zero R
+		return zero, err
+	}
+	return response(item), nil
+}
+
+func listOptionalIDResponse[T any, R any](ctx context.Context, metaValue *governancev1.QueryMeta, rawID string, load func(context.Context, governanceservice.QueryMeta, *uuid.UUID) ([]T, query.PageResult, error), response func([]T, query.PageResult) R) (R, error) {
+	meta, id, err := queryMetaAndOptionalID(metaValue, rawID)
+	if err != nil {
+		var zero R
+		return zero, err
+	}
+	items, page, err := load(ctx, meta, id)
+	if err != nil {
+		var zero R
+		return zero, err
+	}
+	return response(items, page), nil
+}
+
+func terminalGateCommand(gateRequestID string, reason string, ref *governancev1.InteractionDeliveryRef, meta *governancev1.CommandMeta) (terminalGateCommandInput, error) {
+	metaValue, id, err := commandMetaAndID(meta, gateRequestID)
 	if err != nil {
 		return terminalGateCommandInput{}, err
 	}
@@ -165,11 +224,7 @@ func (server *Server) CreateRiskProfile(ctx context.Context, req *governancev1.C
 
 // CreateRiskProfileVersion creates an immutable policy version.
 func (server *Server) CreateRiskProfileVersion(ctx context.Context, req *governancev1.CreateRiskProfileVersionRequest) (*governancev1.RiskProfileVersionResponse, error) {
-	meta, err := commandMeta(req.GetMeta())
-	if err != nil {
-		return nil, err
-	}
-	riskProfileID, err := requiredUUID(req.GetRiskProfileId())
+	meta, riskProfileID, err := commandMetaAndID(req.GetMeta(), req.GetRiskProfileId())
 	if err != nil {
 		return nil, err
 	}
@@ -191,11 +246,7 @@ func (server *Server) CreateRiskProfileVersion(ctx context.Context, req *governa
 
 // ActivateRiskProfileVersion activates one profile version.
 func (server *Server) ActivateRiskProfileVersion(ctx context.Context, req *governancev1.ActivateRiskProfileVersionRequest) (*governancev1.RiskProfileVersionResponse, error) {
-	meta, err := commandMeta(req.GetMeta())
-	if err != nil {
-		return nil, err
-	}
-	riskProfileID, err := requiredUUID(req.GetRiskProfileId())
+	meta, riskProfileID, err := commandMetaAndID(req.GetMeta(), req.GetRiskProfileId())
 	if err != nil {
 		return nil, err
 	}
@@ -212,11 +263,11 @@ func (server *Server) ActivateRiskProfileVersion(ctx context.Context, req *gover
 
 // ArchiveRiskProfile archives profile metadata.
 func (server *Server) ArchiveRiskProfile(ctx context.Context, req *governancev1.ArchiveRiskProfileRequest) (*governancev1.RiskProfileResponse, error) {
-	meta, err := commandMeta(req.GetMeta())
-	if err != nil {
-		return nil, err
-	}
-	riskProfileID, err := requiredUUID(req.GetRiskProfileId())
+	return server.archiveRiskProfileResponse(ctx, req)
+}
+
+func (server *Server) archiveRiskProfileResponse(ctx context.Context, req *governancev1.ArchiveRiskProfileRequest) (*governancev1.RiskProfileResponse, error) {
+	meta, riskProfileID, err := commandMetaAndID(req.GetMeta(), req.GetRiskProfileId())
 	if err != nil {
 		return nil, err
 	}
@@ -295,23 +346,31 @@ func (server *Server) ListRiskRules(ctx context.Context, req *governancev1.ListR
 
 // ListGatePolicies returns gate policies by profile version.
 func (server *Server) ListGatePolicies(ctx context.Context, req *governancev1.ListGatePoliciesRequest) (*governancev1.ListGatePoliciesResponse, error) {
-	id, err := requiredUUID(req.GetRiskProfileId())
+	filter, err := gatePolicyFilter(req)
 	if err != nil {
 		return nil, err
 	}
 	items, page, err := server.service.ListGatePolicies(ctx, governanceservice.ListGatePoliciesInput{
-		Filter: query.GatePolicyFilter{
-			RiskProfileID:  id,
-			ProfileVersion: req.GetProfileVersion(),
-			GateKind:       gateKind(req.GetGateKind()),
-			Status:         ruleStatus(req.GetStatus()),
-			Page:           pageRequest(req.GetPage()),
-		},
+		Filter: filter,
 	})
 	if err != nil {
 		return nil, err
 	}
 	return &governancev1.ListGatePoliciesResponse{GatePolicies: toGatePolicies(items), Page: pageResponse(page)}, nil
+}
+
+func gatePolicyFilter(req *governancev1.ListGatePoliciesRequest) (query.GatePolicyFilter, error) {
+	id, err := requiredUUID(req.GetRiskProfileId())
+	if err != nil {
+		return query.GatePolicyFilter{}, err
+	}
+	return query.GatePolicyFilter{
+		RiskProfileID:  id,
+		ProfileVersion: req.GetProfileVersion(),
+		GateKind:       gateKind(req.GetGateKind()),
+		Status:         ruleStatus(req.GetStatus()),
+		Page:           pageRequest(req.GetPage()),
+	}, nil
 }
 
 // EvaluateRisk stores a deterministic assessment produced from safe summaries and refs.
@@ -499,28 +558,24 @@ func (server *Server) RecordReviewSignal(ctx context.Context, req *governancev1.
 
 // ListReviewSignals returns review signals by target, assessment, role or outcome.
 func (server *Server) ListReviewSignals(ctx context.Context, req *governancev1.ListReviewSignalsRequest) (*governancev1.ListReviewSignalsResponse, error) {
-	meta, err := queryMeta(req.GetMeta())
-	if err != nil {
-		return nil, err
+	filter := query.ReviewSignalFilter{
+		Target:   targetRef(req.GetTarget()),
+		RoleKind: reviewRoleKind(req.GetRoleKind()),
+		Outcome:  reviewSignalOutcome(req.GetOutcome()),
+		Page:     pageRequest(req.GetPage()),
 	}
-	riskAssessmentID, err := optionalUUID(req.GetRiskAssessmentId())
-	if err != nil {
-		return nil, err
-	}
-	items, page, err := server.service.ListReviewSignals(ctx, governanceservice.ListReviewSignalsInput{
-		Filter: query.ReviewSignalFilter{
-			RiskAssessmentID: riskAssessmentID,
-			Target:           targetRef(req.GetTarget()),
-			RoleKind:         reviewRoleKind(req.GetRoleKind()),
-			Outcome:          reviewSignalOutcome(req.GetOutcome()),
-			Page:             pageRequest(req.GetPage()),
+	return listOptionalIDResponse(ctx, req.GetMeta(), req.GetRiskAssessmentId(),
+		func(ctx context.Context, meta governanceservice.QueryMeta, riskAssessmentID *uuid.UUID) ([]entity.ReviewSignal, query.PageResult, error) {
+			filter.RiskAssessmentID = riskAssessmentID
+			return server.service.ListReviewSignals(ctx, governanceservice.ListReviewSignalsInput{
+				Filter: filter,
+				Meta:   meta,
+			})
 		},
-		Meta: meta,
-	})
-	if err != nil {
-		return nil, err
-	}
-	return &governancev1.ListReviewSignalsResponse{ReviewSignals: toReviewSignals(items), Page: pageResponse(page)}, nil
+		func(items []entity.ReviewSignal, page query.PageResult) *governancev1.ListReviewSignalsResponse {
+			return &governancev1.ListReviewSignalsResponse{ReviewSignals: toReviewSignals(items), Page: pageResponse(page)}
+		},
+	)
 }
 
 // RequestGate creates a governance gate request reference.
@@ -613,27 +668,22 @@ func (server *Server) GetGateDecision(ctx context.Context, req *governancev1.Get
 
 // ListGateDecisions returns gate decisions by gate request or target, optionally refined by outcome.
 func (server *Server) ListGateDecisions(ctx context.Context, req *governancev1.ListGateDecisionsRequest) (*governancev1.ListGateDecisionsResponse, error) {
-	meta, err := queryMeta(req.GetMeta())
-	if err != nil {
-		return nil, err
-	}
-	gateRequestID, err := optionalUUID(req.GetGateRequestId())
-	if err != nil {
-		return nil, err
-	}
-	items, page, err := server.service.ListGateDecisions(ctx, governanceservice.ListGateDecisionsInput{
-		Filter: query.GateDecisionFilter{
-			GateRequestID: gateRequestID,
-			Target:        targetRef(req.GetTarget()),
-			Outcome:       gateOutcome(req.GetOutcome()),
-			Page:          pageRequest(req.GetPage()),
+	return listOptionalIDResponse(ctx, req.GetMeta(), req.GetGateRequestId(),
+		func(ctx context.Context, meta governanceservice.QueryMeta, gateRequestID *uuid.UUID) ([]entity.GateDecision, query.PageResult, error) {
+			return server.service.ListGateDecisions(ctx, governanceservice.ListGateDecisionsInput{
+				Filter: query.GateDecisionFilter{
+					GateRequestID: gateRequestID,
+					Target:        targetRef(req.GetTarget()),
+					Outcome:       gateOutcome(req.GetOutcome()),
+					Page:          pageRequest(req.GetPage()),
+				},
+				Meta: meta,
+			})
 		},
-		Meta: meta,
-	})
-	if err != nil {
-		return nil, err
-	}
-	return &governancev1.ListGateDecisionsResponse{GateDecisions: toGateDecisions(items), Page: pageResponse(page)}, nil
+		func(items []entity.GateDecision, page query.PageResult) *governancev1.ListGateDecisionsResponse {
+			return &governancev1.ListGateDecisionsResponse{GateDecisions: toGateDecisions(items), Page: pageResponse(page)}
+		},
+	)
 }
 
 // GetGateRequest returns one gate request.
@@ -665,11 +715,7 @@ func (server *Server) GetGateRequest(ctx context.Context, req *governancev1.GetG
 
 // ListGateRequests returns gate requests by target or assessment, optionally refined by status.
 func (server *Server) ListGateRequests(ctx context.Context, req *governancev1.ListGateRequestsRequest) (*governancev1.ListGateRequestsResponse, error) {
-	meta, err := queryMeta(req.GetMeta())
-	if err != nil {
-		return nil, err
-	}
-	riskAssessmentID, err := optionalUUID(req.GetRiskAssessmentId())
+	meta, riskAssessmentID, err := queryMetaAndOptionalID(req.GetMeta(), req.GetRiskAssessmentId())
 	if err != nil {
 		return nil, err
 	}
@@ -685,7 +731,9 @@ func (server *Server) ListGateRequests(ctx context.Context, req *governancev1.Li
 	if err != nil {
 		return nil, err
 	}
-	return &governancev1.ListGateRequestsResponse{GateRequests: toGateRequests(items), Page: pageResponse(page)}, nil
+	response := &governancev1.ListGateRequestsResponse{Page: pageResponse(page)}
+	response.GateRequests = toGateRequests(items)
+	return response, nil
 }
 
 // BuildReleaseDecisionPackage stores bounded release evidence refs.
@@ -736,19 +784,14 @@ func (server *Server) BuildReleaseDecisionPackage(ctx context.Context, req *gove
 
 // GetReleaseDecisionPackage returns one release decision package.
 func (server *Server) GetReleaseDecisionPackage(ctx context.Context, req *governancev1.GetReleaseDecisionPackageRequest) (*governancev1.ReleaseDecisionPackageResponse, error) {
-	meta, err := queryMeta(req.GetMeta())
-	if err != nil {
-		return nil, err
-	}
-	id, err := requiredUUID(req.GetReleaseDecisionPackageId())
-	if err != nil {
-		return nil, err
-	}
-	item, err := server.service.GetReleaseDecisionPackage(ctx, governanceservice.GetReleaseDecisionPackageInput{ReleaseDecisionPackageID: id, Meta: meta})
-	if err != nil {
-		return nil, err
-	}
-	return &governancev1.ReleaseDecisionPackageResponse{ReleaseDecisionPackage: toReleaseDecisionPackage(item)}, nil
+	return queryIDResponse(ctx, req.GetMeta(), req.GetReleaseDecisionPackageId(),
+		func(ctx context.Context, meta governanceservice.QueryMeta, id uuid.UUID) (entity.ReleaseDecisionPackage, error) {
+			return server.service.GetReleaseDecisionPackage(ctx, governanceservice.GetReleaseDecisionPackageInput{ReleaseDecisionPackageID: id, Meta: meta})
+		},
+		func(item entity.ReleaseDecisionPackage) *governancev1.ReleaseDecisionPackageResponse {
+			return &governancev1.ReleaseDecisionPackageResponse{ReleaseDecisionPackage: toReleaseDecisionPackage(item)}
+		},
+	)
 }
 
 // ListReleaseDecisionPackages returns release packages by project, candidate or status.
@@ -774,11 +817,7 @@ func (server *Server) ListReleaseDecisionPackages(ctx context.Context, req *gove
 
 // RequestReleaseDecision starts release decision lifecycle.
 func (server *Server) RequestReleaseDecision(ctx context.Context, req *governancev1.RequestReleaseDecisionRequest) (*governancev1.ReleaseDecisionResponse, error) {
-	meta, err := commandMeta(req.GetMeta())
-	if err != nil {
-		return nil, err
-	}
-	packageID, err := requiredUUID(req.GetReleaseDecisionPackageId())
+	meta, packageID, err := commandMetaAndID(req.GetMeta(), req.GetReleaseDecisionPackageId())
 	if err != nil {
 		return nil, err
 	}
@@ -825,14 +864,14 @@ func (server *Server) SubmitReleaseDecision(ctx context.Context, req *governance
 
 // GetReleaseDecision returns one release decision.
 func (server *Server) GetReleaseDecision(ctx context.Context, req *governancev1.GetReleaseDecisionRequest) (*governancev1.ReleaseDecisionResponse, error) {
-	meta, err := queryMeta(req.GetMeta())
+	meta, id, err := queryMetaAndID(req.GetMeta(), req.GetReleaseDecisionId())
 	if err != nil {
 		return nil, err
 	}
-	id, err := requiredUUID(req.GetReleaseDecisionId())
-	if err != nil {
-		return nil, err
-	}
+	return server.releaseDecisionResponse(ctx, id, meta)
+}
+
+func (server *Server) releaseDecisionResponse(ctx context.Context, id uuid.UUID, meta governanceservice.QueryMeta) (*governancev1.ReleaseDecisionResponse, error) {
 	decision, err := server.service.GetReleaseDecision(ctx, governanceservice.GetReleaseDecisionInput{ReleaseDecisionID: id, Meta: meta})
 	if err != nil {
 		return nil, err
@@ -842,11 +881,7 @@ func (server *Server) GetReleaseDecision(ctx context.Context, req *governancev1.
 
 // ListReleaseDecisions returns release decisions by package or project context.
 func (server *Server) ListReleaseDecisions(ctx context.Context, req *governancev1.ListReleaseDecisionsRequest) (*governancev1.ListReleaseDecisionsResponse, error) {
-	meta, err := queryMeta(req.GetMeta())
-	if err != nil {
-		return nil, err
-	}
-	packageID, err := optionalUUID(req.GetReleaseDecisionPackageId())
+	meta, packageID, err := queryMetaAndOptionalID(req.GetMeta(), req.GetReleaseDecisionPackageId())
 	if err != nil {
 		return nil, err
 	}
@@ -888,11 +923,7 @@ func (server *Server) RecordBlockingSignal(ctx context.Context, req *governancev
 
 // ResolveBlockingSignal resolves or dismisses a blocking signal.
 func (server *Server) ResolveBlockingSignal(ctx context.Context, req *governancev1.ResolveBlockingSignalRequest) (*governancev1.BlockingSignalResponse, error) {
-	meta, err := commandMeta(req.GetMeta())
-	if err != nil {
-		return nil, err
-	}
-	id, err := requiredUUID(req.GetBlockingSignalId())
+	meta, id, err := commandMetaAndID(req.GetMeta(), req.GetBlockingSignalId())
 	if err != nil {
 		return nil, err
 	}
@@ -931,11 +962,7 @@ func (server *Server) ListBlockingSignals(ctx context.Context, req *governancev1
 
 // RecordReleaseSafetyState records current safety-loop state.
 func (server *Server) RecordReleaseSafetyState(ctx context.Context, req *governancev1.RecordReleaseSafetyStateRequest) (*governancev1.ReleaseSafetyStateResponse, error) {
-	meta, err := commandMeta(req.GetMeta())
-	if err != nil {
-		return nil, err
-	}
-	packageID, err := requiredUUID(req.GetReleaseDecisionPackageId())
+	meta, packageID, err := commandMetaAndID(req.GetMeta(), req.GetReleaseDecisionPackageId())
 	if err != nil {
 		return nil, err
 	}
@@ -954,11 +981,7 @@ func (server *Server) RecordReleaseSafetyState(ctx context.Context, req *governa
 
 // GetReleaseSafetyState returns current safety-loop state.
 func (server *Server) GetReleaseSafetyState(ctx context.Context, req *governancev1.GetReleaseSafetyStateRequest) (*governancev1.ReleaseSafetyStateResponse, error) {
-	meta, err := queryMeta(req.GetMeta())
-	if err != nil {
-		return nil, err
-	}
-	packageID, err := requiredUUID(req.GetReleaseDecisionPackageId())
+	meta, packageID, err := queryMetaAndID(req.GetMeta(), req.GetReleaseDecisionPackageId())
 	if err != nil {
 		return nil, err
 	}
@@ -966,5 +989,7 @@ func (server *Server) GetReleaseSafetyState(ctx context.Context, req *governance
 	if err != nil {
 		return nil, err
 	}
-	return &governancev1.ReleaseSafetyStateResponse{ReleaseSafetyState: toReleaseSafetyState(state)}, nil
+	response := &governancev1.ReleaseSafetyStateResponse{}
+	response.ReleaseSafetyState = toReleaseSafetyState(state)
+	return response, nil
 }

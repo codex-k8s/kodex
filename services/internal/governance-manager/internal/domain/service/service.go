@@ -83,14 +83,9 @@ func (s *Service) CreateRiskProfile(ctx context.Context, input CreateRiskProfile
 		return entity.RiskProfile{}, err
 	}
 	if replayed {
-		profile, err := s.repository.GetRiskProfile(ctx, result.AggregateID)
-		if err != nil {
-			return entity.RiskProfile{}, err
-		}
-		if !sameExternalRef(profile.Scope, input.Scope) || profile.Slug != strings.TrimSpace(input.Slug) {
-			return entity.RiskProfile{}, errs.ErrConflict
-		}
-		return profile, nil
+		return replayedEntity(ctx, result, s.repository.GetRiskProfile, func(profile entity.RiskProfile) bool {
+			return sameExternalRef(profile.Scope, input.Scope) && profile.Slug == strings.TrimSpace(input.Slug)
+		})
 	}
 	now := s.clock.Now()
 	profile := entity.RiskProfile{
@@ -324,14 +319,9 @@ func (s *Service) RecordReviewSignal(ctx context.Context, input RecordReviewSign
 		return entity.ReviewSignal{}, err
 	}
 	if replayed {
-		signal, err := s.repository.GetReviewSignal(ctx, result.AggregateID)
-		if err != nil {
-			return entity.ReviewSignal{}, err
-		}
-		if !sameExternalRef(signal.Target, input.Target) || signal.AuthorRef != strings.TrimSpace(input.AuthorRef) {
-			return entity.ReviewSignal{}, errs.ErrConflict
-		}
-		return signal, nil
+		return replayedEntity(ctx, result, s.repository.GetReviewSignal, func(signal entity.ReviewSignal) bool {
+			return sameExternalRef(signal.Target, input.Target) && signal.AuthorRef == strings.TrimSpace(input.AuthorRef)
+		})
 	}
 	if input.Target.Type == "" || input.Target.Ref == "" || strings.TrimSpace(input.AuthorRef) == "" {
 		return entity.ReviewSignal{}, errs.ErrInvalidArgument
@@ -411,12 +401,9 @@ func (s *Service) RequestGate(ctx context.Context, input RequestGateInput) (enti
 		Status:                 enum.GateRequestStatusRequested,
 	}
 	result = commandResult(input.Meta, enum.OperationRequestGate.String(), aggregateGateRequest, request.ID, now)
-	event := outboxEvent(s.idGenerator.New(), governanceevents.EventGateRequested, governanceevents.AggregateGate, request.ID, now, governanceevents.Payload{
-		GateRequestID:    request.ID.String(),
-		RiskAssessmentID: optionalUUIDString(request.RiskAssessmentID),
-		Status:           string(request.Status),
-		Version:          request.Version,
-	})
+	eventPayload := statusPayload("gate_request", request.ID, string(request.Status), request.Version)
+	eventPayload.RiskAssessmentID = optionalUUIDString(request.RiskAssessmentID)
+	event := outboxEvent(s.idGenerator.New(), governanceevents.EventGateRequested, governanceevents.AggregateGate, request.ID, now, eventPayload)
 	if err := s.repository.CreateGateRequest(ctx, request, result, event); err != nil {
 		return entity.GateRequest{}, err
 	}
@@ -912,12 +899,9 @@ func (s *Service) RecordBlockingSignal(ctx context.Context, input RecordBlocking
 		Status:        enum.BlockingSignalStatusActive,
 	}
 	result = commandResult(input.Meta, enum.OperationRecordBlockingSignal.String(), governanceevents.AggregateBlockingSignal, signal.ID, now)
-	event := outboxEvent(s.idGenerator.New(), governanceevents.EventBlockingSignalRecorded, governanceevents.AggregateBlockingSignal, signal.ID, now, governanceevents.Payload{
-		BlockingSignalID: signal.ID.String(),
-		Status:           string(signal.Status),
-		ReasonCode:       string(signal.SourceType),
-		Version:          signal.Version,
-	})
+	eventPayload := statusPayload("blocking_signal", signal.ID, string(signal.Status), signal.Version)
+	eventPayload.ReasonCode = string(signal.SourceType)
+	event := outboxEvent(s.idGenerator.New(), governanceevents.EventBlockingSignalRecorded, governanceevents.AggregateBlockingSignal, signal.ID, now, eventPayload)
 	if err := s.repository.RecordBlockingSignal(ctx, signal, result, event); err != nil {
 		return entity.BlockingSignal{}, err
 	}
@@ -1861,6 +1845,19 @@ func validateCommandReplay(result entity.CommandResult, meta CommandMeta, operat
 	return nil
 }
 
+func replayedEntity[T any](ctx context.Context, result entity.CommandResult, load func(context.Context, uuid.UUID) (T, error), matches func(T) bool) (T, error) {
+	item, err := load(ctx, result.AggregateID)
+	if err != nil {
+		var zero T
+		return zero, err
+	}
+	if !matches(item) {
+		var zero T
+		return zero, errs.ErrConflict
+	}
+	return item, nil
+}
+
 func commandResult(meta CommandMeta, operation string, aggregateType string, aggregateID uuid.UUID, now time.Time) entity.CommandResult {
 	return commandResultWithPayload(meta, operation, aggregateType, aggregateID, now, nil)
 }
@@ -1919,6 +1916,17 @@ func outboxEvent(id uuid.UUID, eventType string, aggregateType string, aggregate
 		),
 		NextAttemptAt: occurredAt,
 	}
+}
+
+func statusPayload(idKind string, id uuid.UUID, status string, version int64) governanceevents.Payload {
+	payload := governanceevents.Payload{Status: status, Version: version}
+	switch idKind {
+	case "gate_request":
+		payload.GateRequestID = id.String()
+	case "blocking_signal":
+		payload.BlockingSignalID = id.String()
+	}
+	return payload
 }
 
 func optionalUUIDString(id *uuid.UUID) string {
