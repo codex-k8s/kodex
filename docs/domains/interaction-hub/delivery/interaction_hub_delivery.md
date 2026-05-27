@@ -6,7 +6,7 @@ status: active
 owner_role: EM
 created_at: 2026-05-22
 updated_at: 2026-05-27
-related_issues: [582, 768, 781, 783, 800, 806, 821, 835, 843, 853, 855, 867, 882, 894]
+related_issues: [582, 768, 781, 783, 800, 806, 821, 835, 843, 853, 855, 867, 882, 894, 911]
 related_prs: []
 related_docsets:
   - docs/domains/interaction-hub/product/requirements.md
@@ -54,10 +54,11 @@ approvals:
 | IH-6b | #855 | Callback request resolution готов: `RecordChannelCallback` связывает safe callback с delivery/request, идемпотентно создаёт `InteractionResponse` для terminal action и сохраняет diagnostic no-op для terminal/invalid callback без изменения owner decision state. |
 | IH-7 | #867 | Owner inbox read surface готова: `ListOwnerInboxItems` отдаёт pending/active feedback, approval, Human gate и callback diagnostics по собственным interaction-сущностям с safe summary/refs, фильтрами и пагинацией. |
 | IH-7b | #882 | Response boundary refs готовы: `interaction.request.response_recorded` несёт safe request kind, scope, source owner, decision owner и context refs для downstream owner resume без raw response text и без изменения чужого decision state. |
-| IH-8 | не назначено | MCP-интеграция готова: `platform-mcp-server` маршрутизирует `interaction.feedback.request`, `interaction.approval.request`, `interaction.human_gate.request`, status reads. |
-| IH-9 | не назначено | Связка с `agent-manager`, `codex-hook-ingress`, `governance-manager` и `provider-hub` готова для PermissionRequest, owner feedback, owner decision refs и событий ответа. |
-| IH-10 | не назначено | Проекции для `operations-hub`, operator visibility, dual-surface inbox status и диагностика delivery failures готовы. |
+| IH-8 | #911 | Human gate response producer/read surface готова: response event и owner inbox отдают safe request/response refs, owner/context refs, normalized outcome, digest/object refs, timestamps, correlation и idempotency digest для owner resume без raw response/callback payload. |
+| IH-9 | не назначено | MCP-интеграция готова: `platform-mcp-server` маршрутизирует `interaction.feedback.request`, `interaction.approval.request`, `interaction.human_gate.request`, status reads. |
+| IH-10 | не назначено | Связка с `agent-manager`, `codex-hook-ingress`, `governance-manager` и `provider-hub` готова для PermissionRequest, owner feedback, owner decision refs и событий ответа. |
 | IH-11 | #894 | Эксплуатационный контур готов: Dockerfile, deploy manifests, migration job, runtime env inventory, smoke-проверка, runbook и monitoring docs доступны для первого backend deploy. |
+| IH-12 | не назначено | Проекции для `operations-hub`, operator visibility, dual-surface inbox status и диагностика delivery failures готовы. |
 
 ## Минимальный первый кодовый срез IH-1
 
@@ -107,11 +108,11 @@ IH-2 не должен:
 | `RequestFeedback` | Реализовано через PostgreSQL repository, command idempotency и `interaction.feedback.requested` outbox event | IH-4 |
 | `RequestApproval` | Реализовано через PostgreSQL repository, command idempotency и `interaction.approval.requested` outbox event | IH-4 |
 | `RequestHumanGate` | Реализовано через PostgreSQL repository, command idempotency и `interaction.human_gate.requested` outbox event | IH-4 |
-| `RecordInteractionResponse` | Реализовано: безопасная сводка/refs, terminal action, expected version, idempotency и `interaction.request.response_recorded` event с safe request/source/owner/context refs; business decision state остаётся у owner service | IH-4/IH-7b |
+| `RecordInteractionResponse` | Реализовано: безопасная сводка/refs, terminal action, expected version, idempotency и `interaction.request.response_recorded` event с safe request/response/source/owner/context refs, normalized outcome, digest/object refs, timestamps и correlation/idempotency digest; business decision state остаётся у owner service | IH-4/IH-7b/IH-8 |
 | `CancelInteractionRequest` | Реализовано через expected version, terminal status и `interaction.request.cancelled` event | IH-4 |
 | `ExpireInteractionRequests` | Реализовано batch-истечение по scope/deadline с идемпотентным результатом и `interaction.request.expired` events | IH-4 |
 | `GetInteractionRequest` / `ListInteractionRequests` | Реализованы PostgreSQL-чтения по request id и scope/status/kind/source owner/deadline | IH-4 |
-| `ListOwnerInboxItems` | Реализовано: domain read surface для pending/active feedback, approval, Human gate и callback diagnostics; фильтры по scope/kind/status/source owner/assignee/actor/correlation refs, safe delivery/callback/response summaries и deterministic pagination | IH-7 |
+| `ListOwnerInboxItems` | Реализовано: domain read surface для pending/active feedback, approval, Human gate и callback diagnostics; фильтры по scope/kind/status/source owner/assignee/actor/correlation refs, safe delivery/callback/response summaries, response summary digest/object refs и deterministic pagination | IH-7/IH-8 |
 | `RequestNotification` | Реализовано: one-way notification/reminder intent, safe title/summary/body preview, source owner refs, channel hints, policy ref, idempotency и `interaction.notification.requested` event | IH-5a |
 | `UpsertSubscription` / `DisableSubscription` / `ListSubscriptions` | Реализовано: create/update/disable/list, optimistic concurrency, command idempotency, source owner/channel hints/policy refs и `interaction.subscription.updated` event | IH-5a |
 | `PlanDelivery` | Реализовано: создаёт delivery attempt для request/notification target, выбирает active route по scope или принимает route ref, пишет safe `interaction.delivery.requested` event и command idempotency | IH-5b |
@@ -123,9 +124,9 @@ IH-2 не должен:
 
 | Домен или сервис | Когда синхронизироваться | Причина |
 |---|---|---|
-| `agent-manager` | Перед IH-4 и IH-8 | Нужен общий lifecycle Human gate, feedback request и события ответа без владения `Run` в `interaction-hub`. |
+| `agent-manager` | Перед IH-4, IH-8 и cross-domain resume срезами | Нужен общий lifecycle Human gate, feedback request и события ответа без владения `Run` в `interaction-hub`. |
 | `platform-mcp-server` | Перед IH-7 | Нужна MCP-поверхность `interaction.*` и route к `interaction-hub` без реализации доставки в MCP. |
-| `codex-hook-ingress` | Перед IH-8 | PermissionRequest и другие hook events могут создавать Human gate или feedback request. |
+| `codex-hook-ingress` | Перед IH-10 | PermissionRequest и другие hook events могут создавать Human gate или feedback request. |
 | `provider-hub` | Перед IH-4 и IH-8 | Owner decision refs нужны provider write pipeline, но provider write и provider approval остаются вне `interaction-hub`. |
 | `package-hub` | Согласовано для IH-6 | Channel package capability, installation refs и manifest requirements хранятся в пакетном домене; `interaction-hub` держит только refs. |
 | `runtime-manager` и `fleet-manager` | Согласовано для IH-6 | Runtime-нагрузку channel package запускает runtime/fleet контур; `interaction-hub` хранит только safe runtime/job refs. |

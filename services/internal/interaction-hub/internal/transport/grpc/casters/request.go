@@ -316,13 +316,17 @@ func OwnerInboxCallbackSummary(callback entity.ChannelCallback) *interactionsv1.
 
 func OwnerInboxResponseSummary(response entity.InteractionResponse) *interactionsv1.OwnerInboxResponseSummary {
 	return &interactionsv1.OwnerInboxResponseSummary{
-		ResponseId:          response.ID.String(),
-		ResponseAction:      ResponseActionProto(response.ResponseAction),
-		RespondedByActorRef: response.RespondedByActorRef,
-		SourceKind:          ResponseSourceKindProto(response.SourceKind),
-		SourceRef:           OptionalString(response.SourceRef),
-		OwnerDecisionRef:    OptionalString(response.OwnerDecisionRef),
-		CreatedAt:           TimeProto(response.CreatedAt),
+		ResponseId:             response.ID.String(),
+		ResponseAction:         ResponseActionProto(response.ResponseAction),
+		RespondedByActorRef:    response.RespondedByActorRef,
+		SourceKind:             ResponseSourceKindProto(response.SourceKind),
+		SourceRef:              OptionalString(response.SourceRef),
+		OwnerDecisionRef:       OptionalString(response.OwnerDecisionRef),
+		CreatedAt:              TimeProto(response.CreatedAt),
+		ResponseSummary:        OptionalString(response.ResponseSummary),
+		ResponseSummaryDigest:  OptionalString(response.ResponseSummaryDigest),
+		ResponseObject:         ObjectRefProto(response.ResponseObject),
+		InteractionResponseRef: OptionalString(response.ID.String()),
 	}
 }
 

@@ -897,6 +897,14 @@ message OwnerInboxResponseSummary {
   optional string source_ref = 5;
   optional string owner_decision_ref = 6;
   string created_at = 7;
+  // response_summary is a bounded safe summary, not raw callback or transcript payload.
+  optional string response_summary = 8;
+  // response_summary_digest lets consumers compare replayed summaries without copying text.
+  optional string response_summary_digest = 9;
+  // response_object points to sanitized full content when policy stored it outside PostgreSQL.
+  optional ObjectRef response_object = 10;
+  // interaction_response_ref is the stable ref passed to owner services.
+  optional string interaction_response_ref = 11;
 }
 
 message ListOwnerInboxItemsResponse {

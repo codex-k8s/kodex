@@ -430,6 +430,7 @@ func TestRepositoryIntegrationDeliveryAttemptLifecycle(t *testing.T) {
 	}
 
 	callback := testChannelCallback(storedAccepted, request.ID, sentAt.Add(time.Minute))
+	responseObjectSize := int64(128)
 	callbackResult := testCommandResult(uuid.New(), "callback-record", enum.OperationRecordChannelCallback, interactionevents.AggregateCallback, callback.ID, "callback-record-fingerprint", callback.CreatedAt)
 	callbackEvent := testOutboxEvent(interactionevents.EventCallbackReceived, interactionevents.AggregateCallback, callback.ID, callback.CreatedAt)
 	callbackResponse := entity.InteractionResponse{
@@ -438,6 +439,7 @@ func TestRepositoryIntegrationDeliveryAttemptLifecycle(t *testing.T) {
 		ResponseAction:      enum.InteractionResponseActionApprove,
 		RespondedByActorRef: callback.ActorRef,
 		ResponseSummary:     callback.CallbackSummary,
+		ResponseObject:      value.ObjectRef{URI: "s3://kodex-interactions/responses/callback-1", Digest: "sha256:callback-response", SizeBytes: &responseObjectSize},
 		SourceKind:          enum.InteractionResponseSourceKindChannelCallback,
 		SourceRef:           callback.ID.String(),
 		CreatedAt:           callback.CreatedAt,
@@ -501,8 +503,14 @@ func TestRepositoryIntegrationDeliveryAttemptLifecycle(t *testing.T) {
 	if inboxItem.LatestCallback == nil || inboxItem.LatestCallback.ID != callback.ID || inboxItem.LatestResponse == nil || inboxItem.LatestResponse.ID != callbackResponse.ID {
 		t.Fatalf("owner inbox callback=%+v response=%+v, want latest safe refs", inboxItem.LatestCallback, inboxItem.LatestResponse)
 	}
-	if inboxItem.LatestResponse.ResponseSummary != "" || inboxItem.LatestCallback.CallbackSummary != "" {
-		t.Fatalf("owner inbox leaked summary fields: callback=%q response=%q", inboxItem.LatestCallback.CallbackSummary, inboxItem.LatestResponse.ResponseSummary)
+	if inboxItem.LatestResponse.ResponseSummary != callback.CallbackSummary || inboxItem.LatestResponse.ResponseSummaryDigest == "" {
+		t.Fatalf("owner inbox response summary=%q digest=%q, want safe summary and digest", inboxItem.LatestResponse.ResponseSummary, inboxItem.LatestResponse.ResponseSummaryDigest)
+	}
+	if inboxItem.LatestResponse.ResponseObject.Digest != "sha256:callback-response" || inboxItem.LatestResponse.ResponseObject.SizeBytes == nil || *inboxItem.LatestResponse.ResponseObject.SizeBytes != responseObjectSize {
+		t.Fatalf("owner inbox response object = %+v, want safe object ref", inboxItem.LatestResponse.ResponseObject)
+	}
+	if inboxItem.LatestCallback.CallbackSummary != "" {
+		t.Fatalf("owner inbox leaked callback summary: %q", inboxItem.LatestCallback.CallbackSummary)
 	}
 }
 

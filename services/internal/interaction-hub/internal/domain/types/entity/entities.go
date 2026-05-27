@@ -64,16 +64,17 @@ type InteractionRequest struct {
 }
 
 type InteractionResponse struct {
-	ID                  uuid.UUID
-	RequestID           uuid.UUID
-	ResponseAction      enum.InteractionResponseAction
-	RespondedByActorRef string
-	ResponseSummary     string
-	ResponseObject      value.ObjectRef
-	SourceKind          enum.InteractionResponseSourceKind
-	SourceRef           string
-	OwnerDecisionRef    string
-	CreatedAt           time.Time
+	ID                    uuid.UUID
+	RequestID             uuid.UUID
+	ResponseAction        enum.InteractionResponseAction
+	RespondedByActorRef   string
+	ResponseSummary       string
+	ResponseSummaryDigest string
+	ResponseObject        value.ObjectRef
+	SourceKind            enum.InteractionResponseSourceKind
+	SourceRef             string
+	OwnerDecisionRef      string
+	CreatedAt             time.Time
 }
 
 type Notification struct {

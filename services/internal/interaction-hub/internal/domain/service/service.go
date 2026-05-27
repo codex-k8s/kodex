@@ -241,7 +241,10 @@ func (s *Service) RecordInteractionResponse(ctx context.Context, input RecordInt
 	request.ResolvedAt = &now
 
 	result := commandResult(input.Meta, enum.OperationRecordInteractionResponse, aggregateResponse, response.ID, fingerprint, now)
-	event, err := s.outboxEvent(interactionevents.EventRequestResponseRecorded, interactionevents.AggregateRequest, request.ID, requestResponseRecordedPayload(request, response), now)
+	event, err := s.outboxEvent(interactionevents.EventRequestResponseRecorded, interactionevents.AggregateRequest, request.ID, requestResponseRecordedPayload(request, response, responseRecordedPayloadContext{
+		Meta:          input.Meta,
+		CorrelationID: input.Meta.RequestID,
+	}), now)
 	if err != nil {
 		return entity.InteractionRequest{}, entity.InteractionResponse{}, err
 	}
@@ -820,7 +823,13 @@ func (s *Service) RecordChannelCallback(ctx context.Context, input RecordChannel
 		return ChannelCallbackResult{}, err
 	}
 	if response != nil {
-		responseEvent, err := s.outboxEvent(interactionevents.EventRequestResponseRecorded, interactionevents.AggregateRequest, updatedRequest.ID, requestResponseRecordedPayload(updatedRequest, *response), now)
+		responseEvent, err := s.outboxEvent(interactionevents.EventRequestResponseRecorded, interactionevents.AggregateRequest, updatedRequest.ID, requestResponseRecordedPayload(updatedRequest, *response, responseRecordedPayloadContext{
+			Meta:          input.Meta,
+			CorrelationID: callback.CorrelationID,
+			CallbackID:    callback.CallbackID,
+			DeliveryID:    callback.DeliveryID,
+			GatewayRef:    callback.GatewayRef,
+		}), now)
 		if err != nil {
 			return ChannelCallbackResult{}, err
 		}
@@ -1018,16 +1027,17 @@ func newConversationMessage(id uuid.UUID, input RecordConversationMessageInput, 
 
 func newInteractionResponse(id uuid.UUID, requestID uuid.UUID, input RecordInteractionResponseInput, now time.Time) entity.InteractionResponse {
 	return entity.InteractionResponse{
-		ID:                  id,
-		RequestID:           requestID,
-		ResponseAction:      input.ResponseAction,
-		RespondedByActorRef: input.RespondedByActorRef,
-		ResponseSummary:     input.ResponseSummary,
-		ResponseObject:      input.ResponseObject,
-		SourceKind:          input.SourceKind,
-		SourceRef:           input.SourceRef,
-		OwnerDecisionRef:    input.OwnerDecisionRef,
-		CreatedAt:           now,
+		ID:                    id,
+		RequestID:             requestID,
+		ResponseAction:        input.ResponseAction,
+		RespondedByActorRef:   input.RespondedByActorRef,
+		ResponseSummary:       input.ResponseSummary,
+		ResponseSummaryDigest: safeStringDigest(input.ResponseSummary),
+		ResponseObject:        input.ResponseObject,
+		SourceKind:            input.SourceKind,
+		SourceRef:             input.SourceRef,
+		OwnerDecisionRef:      input.OwnerDecisionRef,
+		CreatedAt:             now,
 	}
 }
 
@@ -1593,15 +1603,16 @@ func (s *Service) channelCallbackResponse(callback entity.ChannelCallback, reque
 	}
 
 	response := entity.InteractionResponse{
-		ID:                  s.ids.New(),
-		RequestID:           request.ID,
-		ResponseAction:      responseAction,
-		RespondedByActorRef: callback.ActorRef,
-		ResponseSummary:     callback.CallbackSummary,
-		ResponseObject:      callback.CallbackObject,
-		SourceKind:          enum.InteractionResponseSourceKindChannelCallback,
-		SourceRef:           callbackResponseSourceRef(callback),
-		CreatedAt:           now,
+		ID:                    s.ids.New(),
+		RequestID:             request.ID,
+		ResponseAction:        responseAction,
+		RespondedByActorRef:   callback.ActorRef,
+		ResponseSummary:       callback.CallbackSummary,
+		ResponseSummaryDigest: safeStringDigest(callback.CallbackSummary),
+		ResponseObject:        callback.CallbackObject,
+		SourceKind:            enum.InteractionResponseSourceKindChannelCallback,
+		SourceRef:             callbackResponseSourceRef(callback),
+		CreatedAt:             now,
 	}
 	previousVersion := request.Version
 	request.Status = enum.InteractionRequestStatusAnswered
@@ -2186,28 +2197,64 @@ func requestEventPayload(request entity.InteractionRequest) interactionevents.Pa
 	}
 }
 
-func requestResponseRecordedPayload(request entity.InteractionRequest, response entity.InteractionResponse) interactionevents.Payload {
+type responseRecordedPayloadContext struct {
+	Meta          value.CommandMeta
+	CorrelationID string
+	CallbackID    string
+	DeliveryID    string
+	GatewayRef    string
+}
+
+func requestResponseRecordedPayload(request entity.InteractionRequest, response entity.InteractionResponse, trace responseRecordedPayloadContext) interactionevents.Payload {
 	return interactionevents.Payload{
-		RequestID:            request.ID.String(),
-		RequestKind:          string(request.RequestKind),
-		ResponseID:           response.ID.String(),
-		ResponseAction:       string(response.ResponseAction),
-		ActorRef:             response.RespondedByActorRef,
-		ScopeType:            string(request.Scope.Type),
-		ScopeRef:             request.Scope.Ref,
-		SourceOwnerKind:      string(request.SourceOwner.Kind),
-		SourceOwnerRef:       request.SourceOwner.Ref,
-		IngressKind:          string(request.Ingress.Kind),
-		SourceKind:           string(response.SourceKind),
-		RiskClass:            string(request.RiskClass),
-		ProviderOperationRef: contextRef(request.ContextRefs, "provider_operation"),
-		AgentRunRef:          contextRef(request.ContextRefs, "agent_run"),
-		OwnerService:         string(request.DecisionOwner.Kind),
-		OwnerRequestRef:      request.DecisionOwner.OwnerRequestRef,
-		OwnerDecisionRef:     response.OwnerDecisionRef,
-		Status:               string(request.Status),
-		Version:              request.Version,
+		RequestID:                request.ID.String(),
+		InteractionRequestRef:    request.ID.String(),
+		RequestKind:              string(request.RequestKind),
+		ResponseID:               response.ID.String(),
+		InteractionResponseRef:   response.ID.String(),
+		ResponseAction:           string(response.ResponseAction),
+		ResponseOutcome:          responseOutcome(response.ResponseAction),
+		ResponseSourceRef:        response.SourceRef,
+		ResponseSummaryDigest:    safeStringDigest(response.ResponseSummary),
+		ResponseObjectRef:        response.ResponseObject.URI,
+		ResponseObjectDigest:     response.ResponseObject.Digest,
+		ResponseObjectSizeBytes:  optionalInt64Value(response.ResponseObject.SizeBytes),
+		ActorRef:                 response.RespondedByActorRef,
+		ScopeType:                string(request.Scope.Type),
+		ScopeRef:                 request.Scope.Ref,
+		SourceOwnerKind:          string(request.SourceOwner.Kind),
+		SourceOwnerRef:           request.SourceOwner.Ref,
+		IngressKind:              string(request.Ingress.Kind),
+		SourceKind:               string(response.SourceKind),
+		RiskClass:                string(request.RiskClass),
+		ProviderOperationRef:     contextRef(request.ContextRefs, "provider_operation"),
+		ProviderWorkItemRef:      contextRef(request.ContextRefs, "provider_work_item"),
+		AgentSessionRef:          contextRef(request.ContextRefs, "agent_session"),
+		AgentRunRef:              contextRef(request.ContextRefs, "agent_run"),
+		AgentStageRef:            contextRef(request.ContextRefs, "agent_stage"),
+		GovernanceGateRequestRef: contextRef(request.ContextRefs, "governance_gate_request"),
+		OwnerService:             string(request.DecisionOwner.Kind),
+		DecisionOwnerKind:        string(request.DecisionOwner.Kind),
+		OwnerRequestRef:          request.DecisionOwner.OwnerRequestRef,
+		OwnerDecisionRef:         responseOwnerDecisionRef(request, response),
+		CallbackID:               trace.CallbackID,
+		DeliveryID:               trace.DeliveryID,
+		GatewayRef:               trace.GatewayRef,
+		CorrelationID:            strings.TrimSpace(trace.CorrelationID),
+		CommandID:                uuidString(trace.Meta.CommandID),
+		IdempotencyKeyDigest:     safeStringDigest(trace.Meta.IdempotencyKey),
+		Status:                   string(request.Status),
+		ResponseRecordedAt:       timeProto(&response.CreatedAt),
+		RequestResolvedAt:        timeProto(request.ResolvedAt),
+		Version:                  request.Version,
 	}
+}
+
+func responseOwnerDecisionRef(request entity.InteractionRequest, response entity.InteractionResponse) string {
+	if !blank(response.OwnerDecisionRef) {
+		return response.OwnerDecisionRef
+	}
+	return request.DecisionOwner.OwnerDecisionRef
 }
 
 func notificationEventPayload(notification entity.Notification) interactionevents.Payload {
@@ -2407,6 +2454,42 @@ func contextRef(refs []value.ExternalRef, kind string) string {
 		}
 	}
 	return ""
+}
+
+func responseOutcome(action enum.InteractionResponseAction) string {
+	switch action {
+	case enum.InteractionResponseActionApprove:
+		return "approve"
+	case enum.InteractionResponseActionReject:
+		return "reject"
+	case enum.InteractionResponseActionAnswer:
+		return "answer"
+	default:
+		return string(action)
+	}
+}
+
+func safeStringDigest(input string) string {
+	input = strings.TrimSpace(input)
+	if input == "" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(input))
+	return "sha256:" + hex.EncodeToString(sum[:])
+}
+
+func optionalInt64Value(input *int64) int64 {
+	if input == nil {
+		return 0
+	}
+	return *input
+}
+
+func uuidString(input uuid.UUID) string {
+	if input == uuid.Nil {
+		return ""
+	}
+	return input.String()
 }
 
 func uuidProto(input *uuid.UUID) string {
