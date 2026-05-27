@@ -76,6 +76,13 @@
 - Результат среза: `governance-manager` получил первый backend deploy контур: Dockerfile со стадиями `prod` и `migrations`, Kubernetes manifests для Deployment/Service/ServiceAccount/migration Job, PostgreSQL database bootstrap, runtime env/secret inventory, smoke-проверку `/health/readyz`, runbook и monitoring.
 - Контур зависит от PostgreSQL, `platform-event-log` и `access-manager`; project/provider/agent/runtime/interaction данные остаются explicit safe refs без service-client чтений и без переноса владения.
 
+## Завершённый event-driven/read-model срез
+
+- Issue: #907.
+- Результат среза: `governance.*` события для risk assessment, review signal, gate, blocking signal, release package/decision и safety-loop несут safe metadata/refs: actor ref, request id, idempotency correlation, target/source refs, interaction/agent/runtime refs, status/outcome/reason code, bounded `safe_summary` и version.
+- Соседние consumers реагируют через `platform-event-log` и `libs/go/eventconsumer`; authoritative lookup, access checks, optimistic concurrency и команды остаются через gRPC `GovernanceManagerService`.
+- `governance-manager` не переносит delivery lifecycle, provider write, agent run/session state или bootstrap import внутрь своей БД.
+
 ## Ближайшие зависимости
 
 | Домен | Что нужно согласовать |

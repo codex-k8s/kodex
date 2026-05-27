@@ -215,11 +215,12 @@ func (s *Service) ActivateRiskProfileVersion(ctx context.Context, input Activate
 	result = commandResultWithPayload(input.Meta, enum.OperationActivateRiskProfileVersion.String(), governanceevents.AggregateRiskProfile, profile.ID, now, map[string]any{
 		"profile_version": version.ProfileVersion,
 	})
-	event := outboxEvent(s.idGenerator.New(), governanceevents.EventPolicyVersionActivated, governanceevents.AggregateRiskProfile, profile.ID, now, governanceevents.Payload{
+	event := outboxCommandEvent(s.idGenerator.New(), governanceevents.EventPolicyVersionActivated, governanceevents.AggregateRiskProfile, profile.ID, now, input.Meta, enum.OperationActivateRiskProfileVersion.String(), governanceevents.Payload{
 		RiskProfileID:   profile.ID.String(),
 		ProfileVersion:  version.ProfileVersion,
 		RiskRuleCount:   int64(len(version.Rules)),
 		GatePolicyCount: int64(len(version.GatePolicies)),
+		ReasonCode:      "activated",
 		Version:         profile.Version,
 	})
 	if err := s.repository.ActivateRiskProfileVersion(ctx, profile, previousVersion, version, result, event); err != nil {
@@ -316,7 +317,10 @@ func (s *Service) ListRiskFactors(ctx context.Context, input ListRiskFactorsInpu
 func (s *Service) RecordReviewSignal(ctx context.Context, input RecordReviewSignalInput) (entity.ReviewSignal, error) {
 	target := value.ExternalRef{Type: strings.TrimSpace(input.Target.Type), Ref: strings.TrimSpace(input.Target.Ref)}
 	authorRef := strings.TrimSpace(input.AuthorRef)
-	summary := strings.TrimSpace(input.Summary)
+	summary, err := normalizeEventSafeSummary("review_signal.summary", input.Summary, maxEvaluationFactorSummary)
+	if err != nil {
+		return entity.ReviewSignal{}, err
+	}
 	evidenceRefs, err := normalizeReviewSignalEvidenceRefs(input.EvidenceRefs)
 	if err != nil {
 		return entity.ReviewSignal{}, err
@@ -324,13 +328,13 @@ func (s *Service) RecordReviewSignal(ctx context.Context, input RecordReviewSign
 	if target.Type == "" || target.Ref == "" || authorRef == "" || input.RoleKind == "" || input.Outcome == "" || input.Severity == "" || len(evidenceRefs) == 0 {
 		return entity.ReviewSignal{}, errs.ErrInvalidArgument
 	}
-	if err := validateSafeRef("review_signal.target_ref", target.Ref, true); err != nil {
+	if err := validateEventSafeRef("review_signal.target_type", target.Type, true); err != nil {
 		return entity.ReviewSignal{}, err
 	}
-	if err := validateSafeRef("review_signal.author_ref", authorRef, true); err != nil {
+	if err := validateEventSafeRef("review_signal.target_ref", target.Ref, true); err != nil {
 		return entity.ReviewSignal{}, err
 	}
-	if err := validateSafeText("review_signal.summary", summary, maxEvaluationFactorSummary); err != nil {
+	if err := validateEventSafeRef("review_signal.author_ref", authorRef, true); err != nil {
 		return entity.ReviewSignal{}, err
 	}
 	if err := s.authorizeCommand(ctx, input.Meta, actionSignalRecord, signalTargetResource(target)); err != nil {
@@ -388,11 +392,15 @@ func (s *Service) RecordReviewSignal(ctx context.Context, input RecordReviewSign
 		return entity.ReviewSignal{}, err
 	}
 	result = commandResult(input.Meta, enum.OperationRecordReviewSignal.String(), governanceevents.AggregateReviewSignal, signal.ID, now)
-	event := outboxEvent(s.idGenerator.New(), governanceevents.EventReviewSignalRecorded, governanceevents.AggregateReviewSignal, signal.ID, now, governanceevents.Payload{
-		ReviewSignalID: signal.ID.String(),
-		Outcome:        string(signal.Outcome),
-		Status:         string(signal.Severity),
-	})
+	eventPayload := applyTargetRef(governanceevents.Payload{
+		ReviewSignalID:   signal.ID.String(),
+		RiskAssessmentID: optionalUUIDString(signal.RiskAssessmentID),
+		Outcome:          string(signal.Outcome),
+		Status:           string(signal.Severity),
+		SourceRef:        evidenceSourceRef(signal.EvidenceRefs),
+		SafeSummary:      signal.Summary,
+	}, signal.Target)
+	event := outboxCommandEvent(s.idGenerator.New(), governanceevents.EventReviewSignalRecorded, governanceevents.AggregateReviewSignal, signal.ID, now, input.Meta, enum.OperationRecordReviewSignal.String(), eventPayload)
 	if err := s.repository.RecordReviewSignal(ctx, signal, result, event); err != nil {
 		if errors.Is(err, errs.ErrAlreadyExists) {
 			existing, loadErr := s.repository.GetReviewSignalByFingerprint(ctx, signal.SourceFingerprint)
@@ -423,13 +431,32 @@ func (s *Service) ListReviewSignals(ctx context.Context, input ListReviewSignals
 
 // RequestGate stores a gate request without owning delivery retries.
 func (s *Service) RequestGate(ctx context.Context, input RequestGateInput) (entity.GateRequest, error) {
-	if input.Target.Type == "" || input.Target.Ref == "" {
+	target := value.ExternalRef{Type: strings.TrimSpace(input.Target.Type), Ref: strings.TrimSpace(input.Target.Ref)}
+	if target.Type == "" || target.Ref == "" {
 		return entity.GateRequest{}, errs.ErrInvalidArgument
+	}
+	if err := validateEventSafeRef("gate.target_type", target.Type, true); err != nil {
+		return entity.GateRequest{}, err
+	}
+	if err := validateEventSafeRef("gate.target_ref", target.Ref, true); err != nil {
+		return entity.GateRequest{}, err
+	}
+	evidenceRefs, err := normalizeEventSafeEvidenceRefs(input.EvidenceRefs, "gate.evidence_ref.ref", "gate.evidence_ref.summary")
+	if err != nil {
+		return entity.GateRequest{}, err
+	}
+	evidenceSummary, err := normalizeEventSafeSummary("gate.evidence_summary", input.EvidenceSummary, maxEvaluationFactorSummary)
+	if err != nil {
+		return entity.GateRequest{}, err
+	}
+	interactionDeliveryRef, err := normalizeEventSafeInteractionDeliveryRef(input.InteractionDeliveryRef)
+	if err != nil {
+		return entity.GateRequest{}, err
 	}
 	if err := requireCommand(input.Meta, enum.OperationRequestGate.String()); err != nil {
 		return entity.GateRequest{}, err
 	}
-	if err := s.authorizeCommand(ctx, input.Meta, actionGateRequest, gateTargetResource(input.Target)); err != nil {
+	if err := s.authorizeCommand(ctx, input.Meta, actionGateRequest, gateTargetResource(target)); err != nil {
 		return entity.GateRequest{}, err
 	}
 	result, replayed, err := s.replayCommand(ctx, input.Meta, enum.OperationRequestGate.String(), aggregateGateRequest)
@@ -441,7 +468,7 @@ func (s *Service) RequestGate(ctx context.Context, input RequestGateInput) (enti
 		if err != nil {
 			return entity.GateRequest{}, err
 		}
-		if !sameExternalRef(request.Target, input.Target) {
+		if !sameExternalRef(request.Target, target) {
 			return entity.GateRequest{}, errs.ErrConflict
 		}
 		return request, nil
@@ -451,16 +478,20 @@ func (s *Service) RequestGate(ctx context.Context, input RequestGateInput) (enti
 		VersionedBase:          entity.VersionedBase{ID: s.idGenerator.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
 		RiskAssessmentID:       input.RiskAssessmentID,
 		GatePolicyID:           input.GatePolicyID,
-		Target:                 input.Target,
-		InteractionDeliveryRef: input.InteractionDeliveryRef,
-		EvidenceRefs:           input.EvidenceRefs,
-		EvidenceSummary:        input.EvidenceSummary,
+		Target:                 target,
+		InteractionDeliveryRef: interactionDeliveryRef,
+		EvidenceRefs:           evidenceRefs,
+		EvidenceSummary:        evidenceSummary,
 		Status:                 enum.GateRequestStatusRequested,
 	}
 	result = commandResult(input.Meta, enum.OperationRequestGate.String(), aggregateGateRequest, request.ID, now)
 	eventPayload := statusPayload("gate_request", request.ID, string(request.Status), request.Version)
 	eventPayload.RiskAssessmentID = optionalUUIDString(request.RiskAssessmentID)
-	event := outboxEvent(s.idGenerator.New(), governanceevents.EventGateRequested, governanceevents.AggregateGate, request.ID, now, eventPayload)
+	eventPayload.GatePolicyID = optionalUUIDString(request.GatePolicyID)
+	eventPayload.SafeSummary = request.EvidenceSummary
+	eventPayload = applyTargetRef(eventPayload, request.Target)
+	eventPayload = applyInteractionDeliveryRef(eventPayload, request.InteractionDeliveryRef)
+	event := outboxCommandEvent(s.idGenerator.New(), governanceevents.EventGateRequested, governanceevents.AggregateGate, request.ID, now, input.Meta, enum.OperationRequestGate.String(), eventPayload)
 	if err := s.repository.CreateGateRequest(ctx, request, result, event); err != nil {
 		return entity.GateRequest{}, err
 	}
@@ -473,6 +504,30 @@ func (s *Service) SubmitGateDecision(ctx context.Context, input SubmitGateDecisi
 		return entity.GateDecision{}, entity.GateRequest{}, errs.ErrInvalidArgument
 	}
 	if err := requireCommand(input.Meta, enum.OperationSubmitGateDecision.String()); err != nil {
+		return entity.GateDecision{}, entity.GateRequest{}, err
+	}
+	decisionActorRef, err := normalizeEventSafeRef("gate_decision.actor_ref", input.DecisionActorRef, true)
+	if err != nil {
+		return entity.GateDecision{}, entity.GateRequest{}, err
+	}
+	decisionPolicyRef, err := normalizeEventSafeRef("gate_decision.policy_ref", input.DecisionPolicyRef, false)
+	if err != nil {
+		return entity.GateDecision{}, entity.GateRequest{}, err
+	}
+	reason, err := normalizeEventSafeSummary("gate_decision.reason", input.Reason, maxEvaluationFactorSummary)
+	if err != nil {
+		return entity.GateDecision{}, entity.GateRequest{}, err
+	}
+	conditionsSummary, err := normalizeEventSafeSummary("gate_decision.conditions_summary", input.ConditionsSummary, maxEvaluationSummaryLength)
+	if err != nil {
+		return entity.GateDecision{}, entity.GateRequest{}, err
+	}
+	sourceRef, err := normalizeEventSafeRef("gate_decision.source_ref", input.SourceRef, false)
+	if err != nil {
+		return entity.GateDecision{}, entity.GateRequest{}, err
+	}
+	interactionDeliveryRef, err := normalizeEventSafeInteractionDeliveryRef(input.InteractionDeliveryRef)
+	if err != nil {
 		return entity.GateDecision{}, entity.GateRequest{}, err
 	}
 	if err := s.authorizeCommand(ctx, input.Meta, actionGateDecide, gateResource(input.GateRequestID)); err != nil {
@@ -514,16 +569,16 @@ func (s *Service) SubmitGateDecision(ctx context.Context, input SubmitGateDecisi
 	request.Version = previousVersion + 1
 	request.Status = enum.GateRequestStatusResolved
 	request.UpdatedAt = now
-	request.InteractionDeliveryRef = input.InteractionDeliveryRef
+	request.InteractionDeliveryRef = interactionDeliveryRef
 	decision := entity.GateDecision{
 		ID:                s.idGenerator.New(),
 		GateRequestID:     request.ID,
-		DecisionActorRef:  strings.TrimSpace(input.DecisionActorRef),
-		DecisionPolicyRef: strings.TrimSpace(input.DecisionPolicyRef),
+		DecisionActorRef:  decisionActorRef,
+		DecisionPolicyRef: decisionPolicyRef,
 		Outcome:           input.Outcome,
-		Reason:            input.Reason,
-		ConditionsSummary: input.ConditionsSummary,
-		SourceRef:         input.SourceRef,
+		Reason:            reason,
+		ConditionsSummary: conditionsSummary,
+		SourceRef:         sourceRef,
 		DecidedAt:         now,
 	}
 	if decision.DecisionActorRef == "" {
@@ -532,14 +587,19 @@ func (s *Service) SubmitGateDecision(ctx context.Context, input SubmitGateDecisi
 	result = commandResultWithPayload(input.Meta, enum.OperationSubmitGateDecision.String(), aggregateGateDecision, decision.ID, now, map[string]any{
 		"gate_request_id": request.ID.String(),
 	})
-	event := outboxEvent(s.idGenerator.New(), governanceevents.EventGateResolved, governanceevents.AggregateGate, request.ID, now, governanceevents.Payload{
-		GateRequestID:    request.ID.String(),
-		GateDecisionID:   decision.ID.String(),
-		DecisionActorRef: decision.DecisionActorRef,
-		Outcome:          string(decision.Outcome),
-		Status:           string(request.Status),
-		Version:          request.Version,
-	})
+	eventPayload := applyTargetRef(governanceevents.Payload{
+		GateRequestID:     request.ID.String(),
+		GateDecisionID:    decision.ID.String(),
+		DecisionActorRef:  decision.DecisionActorRef,
+		DecisionPolicyRef: decision.DecisionPolicyRef,
+		Outcome:           string(decision.Outcome),
+		SourceRef:         decision.SourceRef,
+		SafeSummary:       decision.Reason,
+		Status:            string(request.Status),
+		Version:           request.Version,
+	}, request.Target)
+	eventPayload = applyInteractionDeliveryRef(eventPayload, request.InteractionDeliveryRef)
+	event := outboxCommandEvent(s.idGenerator.New(), governanceevents.EventGateResolved, governanceevents.AggregateGate, request.ID, now, input.Meta, enum.OperationSubmitGateDecision.String(), eventPayload)
 	if err := s.repository.UpdateGateRequestWithDecision(ctx, request, previousVersion, decision, result, event); err != nil {
 		return entity.GateDecision{}, entity.GateRequest{}, err
 	}
@@ -709,13 +769,16 @@ func (s *Service) BuildReleaseDecisionPackage(ctx context.Context, input BuildRe
 		Status:                  enum.ReleaseDecisionPackageStatusReady,
 	}
 	result = commandResult(input.Meta, enum.OperationBuildReleaseDecisionPackage.String(), governanceevents.AggregateReleaseDecisionPackage, item.ID, now)
-	event := outboxEvent(s.idGenerator.New(), governanceevents.EventReleaseDecisionPackageBuilt, governanceevents.AggregateReleaseDecisionPackage, item.ID, now, governanceevents.Payload{
+	eventPayload := applyProjectContextRefs(governanceevents.Payload{
 		ReleaseDecisionPackageID: item.ID.String(),
 		ReleaseCandidateRef:      item.ReleaseCandidateRef,
-		ProjectRef:               item.ProjectContext.ProjectRef,
+		RiskAssessmentID:         optionalUUIDString(item.RiskAssessmentID),
+		SafeSummary:              item.KnownLimitationsSummary,
 		Status:                   string(item.Status),
 		Version:                  item.Version,
-	})
+	}, item.ProjectContext)
+	eventPayload = applyReleaseIntegrationEventRefs(eventPayload, item.IntegrationRefs)
+	event := outboxCommandEvent(s.idGenerator.New(), governanceevents.EventReleaseDecisionPackageBuilt, governanceevents.AggregateReleaseDecisionPackage, item.ID, now, input.Meta, enum.OperationBuildReleaseDecisionPackage.String(), eventPayload)
 	if err := s.repository.CreateReleaseDecisionPackage(ctx, item, result, event); err != nil {
 		return entity.ReleaseDecisionPackage{}, err
 	}
@@ -789,14 +852,18 @@ func (s *Service) RequestReleaseDecision(ctx context.Context, input RequestRelea
 	result = commandResultWithPayload(input.Meta, enum.OperationRequestReleaseDecision.String(), governanceevents.AggregateReleaseDecision, decision.ID, now, map[string]any{
 		"release_decision_package_id": pkg.ID.String(),
 	})
-	event := outboxEvent(s.idGenerator.New(), governanceevents.EventReleaseDecisionRequested, governanceevents.AggregateReleaseDecision, decision.ID, now, governanceevents.Payload{
+	eventPayload := applyProjectContextRefs(governanceevents.Payload{
 		ReleaseDecisionID:        decision.ID.String(),
 		ReleaseDecisionPackageID: pkg.ID.String(),
 		ReleaseCandidateRef:      pkg.ReleaseCandidateRef,
-		ProjectRef:               pkg.ProjectContext.ProjectRef,
+		DecisionActorRef:         decision.DecisionActorRef,
+		DecisionPolicyRef:        decision.DecisionPolicyRef,
+		SafeSummary:              decision.Reason,
 		Status:                   string(decision.Status),
 		Version:                  decision.Version,
-	})
+	}, pkg.ProjectContext)
+	eventPayload = applyReleaseIntegrationEventRefs(eventPayload, pkg.IntegrationRefs)
+	event := outboxCommandEvent(s.idGenerator.New(), governanceevents.EventReleaseDecisionRequested, governanceevents.AggregateReleaseDecision, decision.ID, now, input.Meta, enum.OperationRequestReleaseDecision.String(), eventPayload)
 	if err := s.repository.CreateReleaseDecision(ctx, pkg, previousVersion, decision, result, event); err != nil {
 		return entity.ReleaseDecision{}, entity.ReleaseDecisionPackage{}, err
 	}
@@ -884,16 +951,20 @@ func (s *Service) SubmitReleaseDecision(ctx context.Context, input SubmitRelease
 		"release_decision_package_id": pkg.ID.String(),
 		"outcome":                     string(decision.Outcome),
 	})
-	event := outboxEvent(s.idGenerator.New(), governanceevents.EventReleaseDecisionResolved, governanceevents.AggregateReleaseDecision, decision.ID, now, governanceevents.Payload{
+	eventPayload := applyProjectContextRefs(governanceevents.Payload{
 		ReleaseDecisionID:        decision.ID.String(),
 		ReleaseDecisionPackageID: pkg.ID.String(),
 		ReleaseCandidateRef:      pkg.ReleaseCandidateRef,
-		ProjectRef:               pkg.ProjectContext.ProjectRef,
+		GateDecisionID:           optionalUUIDString(decision.GateDecisionID),
 		DecisionActorRef:         decision.DecisionActorRef,
+		DecisionPolicyRef:        decision.DecisionPolicyRef,
 		Outcome:                  string(decision.Outcome),
+		SafeSummary:              decision.Reason,
 		Status:                   string(decision.Status),
 		Version:                  decision.Version,
-	})
+	}, pkg.ProjectContext)
+	eventPayload = applyReleaseIntegrationEventRefs(eventPayload, pkg.IntegrationRefs)
+	event := outboxCommandEvent(s.idGenerator.New(), governanceevents.EventReleaseDecisionResolved, governanceevents.AggregateReleaseDecision, decision.ID, now, input.Meta, enum.OperationSubmitReleaseDecision.String(), eventPayload)
 	if err := s.repository.UpdateReleaseDecision(ctx, pkg, previousPackageVersion, decision, previousDecisionVersion, result, event); err != nil {
 		return entity.ReleaseDecision{}, entity.ReleaseDecisionPackage{}, err
 	}
@@ -958,7 +1029,10 @@ func (s *Service) RecordBlockingSignal(ctx context.Context, input RecordBlocking
 	result = commandResult(input.Meta, enum.OperationRecordBlockingSignal.String(), governanceevents.AggregateBlockingSignal, signal.ID, now)
 	eventPayload := statusPayload("blocking_signal", signal.ID, string(signal.Status), signal.Version)
 	eventPayload.ReasonCode = string(signal.SourceType)
-	event := outboxEvent(s.idGenerator.New(), governanceevents.EventBlockingSignalRecorded, governanceevents.AggregateBlockingSignal, signal.ID, now, eventPayload)
+	eventPayload.SourceRef = signal.SourceRef
+	eventPayload.SafeSummary = signal.Summary
+	eventPayload = applyTargetRef(eventPayload, signal.Target)
+	event := outboxCommandEvent(s.idGenerator.New(), governanceevents.EventBlockingSignalRecorded, governanceevents.AggregateBlockingSignal, signal.ID, now, input.Meta, enum.OperationRecordBlockingSignal.String(), eventPayload)
 	if err := s.repository.RecordBlockingSignal(ctx, signal, result, event); err != nil {
 		return entity.BlockingSignal{}, err
 	}
@@ -1011,13 +1085,16 @@ func (s *Service) ResolveBlockingSignal(ctx context.Context, input ResolveBlocki
 	result = commandResultWithPayload(input.Meta, enum.OperationResolveBlockingSignal.String(), governanceevents.AggregateBlockingSignal, signal.ID, now, map[string]any{
 		"status": string(signal.Status),
 	})
-	event := outboxEvent(s.idGenerator.New(), governanceevents.EventBlockingSignalResolved, governanceevents.AggregateBlockingSignal, signal.ID, now, governanceevents.Payload{
+	eventPayload := applyTargetRef(governanceevents.Payload{
 		BlockingSignalID: signal.ID.String(),
 		PreviousStatus:   string(previousStatus),
 		Status:           string(signal.Status),
 		ReasonCode:       blockingSignalReasonCode(signal.Status),
+		SourceRef:        signal.SourceRef,
+		SafeSummary:      signal.Summary,
 		Version:          signal.Version,
-	})
+	}, signal.Target)
+	event := outboxCommandEvent(s.idGenerator.New(), governanceevents.EventBlockingSignalResolved, governanceevents.AggregateBlockingSignal, signal.ID, now, input.Meta, enum.OperationResolveBlockingSignal.String(), eventPayload)
 	if err := s.repository.UpdateBlockingSignal(ctx, signal, previousVersion, result, event); err != nil {
 		return entity.BlockingSignal{}, err
 	}
@@ -1086,7 +1163,7 @@ func (s *Service) RecordReleaseSafetyState(ctx context.Context, input RecordRele
 			LastStateReason:          lastStateReason,
 		}
 		result = commandResult(input.Meta, enum.OperationRecordReleaseSafetyState.String(), governanceevents.AggregateReleaseSafetyState, state.ID, now)
-		event := releaseSafetyEvent(s.idGenerator.New(), now, state, pkg, releaseSafetyPreviousStatusNone, state.Version)
+		event := releaseSafetyEvent(s.idGenerator.New(), now, input.Meta, enum.OperationRecordReleaseSafetyState.String(), state, pkg, releaseSafetyPreviousStatusNone, state.Version)
 		if err := s.repository.RecordReleaseSafetyState(ctx, state, result, event); err != nil {
 			return entity.ReleaseSafetyState{}, err
 		}
@@ -1110,7 +1187,7 @@ func (s *Service) RecordReleaseSafetyState(ctx context.Context, input RecordRele
 	existing.Version = previousVersion + 1
 	existing.UpdatedAt = now
 	result = commandResult(input.Meta, enum.OperationRecordReleaseSafetyState.String(), governanceevents.AggregateReleaseSafetyState, existing.ID, now)
-	event := releaseSafetyEvent(s.idGenerator.New(), now, existing, pkg, string(previousState), existing.Version)
+	event := releaseSafetyEvent(s.idGenerator.New(), now, input.Meta, enum.OperationRecordReleaseSafetyState.String(), existing, pkg, string(previousState), existing.Version)
 	if err := s.repository.UpdateReleaseSafetyState(ctx, existing, previousVersion, result, event); err != nil {
 		return entity.ReleaseSafetyState{}, err
 	}
@@ -1175,22 +1252,24 @@ func (s *Service) ensureReleaseDecisionAllowed(ctx context.Context, pkg entity.R
 	return nil
 }
 
-func releaseSafetyEvent(id uuid.UUID, now time.Time, state entity.ReleaseSafetyState, pkg entity.ReleaseDecisionPackage, previousStatus string, version int64) entity.OutboxEvent {
+func releaseSafetyEvent(id uuid.UUID, now time.Time, meta CommandMeta, operation string, state entity.ReleaseSafetyState, pkg entity.ReleaseDecisionPackage, previousStatus string, version int64) entity.OutboxEvent {
 	previousStatus = strings.TrimSpace(previousStatus)
 	if previousStatus == "" {
 		previousStatus = releaseSafetyPreviousStatusNone
 	}
-	return outboxEvent(id, governanceevents.EventReleaseSafetyStateChanged, governanceevents.AggregateReleaseSafetyState, state.ID, now, governanceevents.Payload{
+	payload := applyProjectContextRefs(governanceevents.Payload{
 		ReleaseSafetyStateID:     state.ID.String(),
 		ReleaseDecisionPackageID: pkg.ID.String(),
 		ReleaseCandidateRef:      pkg.ReleaseCandidateRef,
-		ProjectRef:               pkg.ProjectContext.ProjectRef,
 		RuntimeJobRef:            state.RuntimeJobRef,
 		PreviousStatus:           previousStatus,
 		Status:                   string(state.CurrentState),
 		ReasonCode:               releaseSafetyReasonCode(previousStatus, state.CurrentState),
+		SafeSummary:              state.LastStateReason,
 		Version:                  version,
-	})
+	}, pkg.ProjectContext)
+	payload = applyReleaseIntegrationEventRefs(payload, pkg.IntegrationRefs)
+	return outboxCommandEvent(id, governanceevents.EventReleaseSafetyStateChanged, governanceevents.AggregateReleaseSafetyState, state.ID, now, meta, operation, payload)
 }
 
 func releaseSafetyReasonCode(previousStatus string, current enum.ReleaseSafetyStateKind) string {
@@ -1586,6 +1665,91 @@ func normalizeReleaseSafeText(name string, value string, maxLength int) (string,
 	return normalized, nil
 }
 
+func normalizeEventSafeSummary(name string, value string, maxLength int) (string, error) {
+	normalized := strings.TrimSpace(value)
+	if err := validateEventSafeText(name, normalized, maxLength); err != nil {
+		return "", err
+	}
+	return normalized, nil
+}
+
+func normalizeEventSafeRef(name string, value string, required bool) (string, error) {
+	normalized := strings.TrimSpace(value)
+	if err := validateEventSafeRef(name, normalized, required); err != nil {
+		return "", err
+	}
+	return normalized, nil
+}
+
+func normalizeEventSafeInteractionDeliveryRef(ref value.InteractionDeliveryRef) (value.InteractionDeliveryRef, error) {
+	normalized := value.InteractionDeliveryRef{
+		RequestRef:  strings.TrimSpace(ref.RequestRef),
+		DeliveryRef: strings.TrimSpace(ref.DeliveryRef),
+		CallbackRef: strings.TrimSpace(ref.CallbackRef),
+		DecisionRef: strings.TrimSpace(ref.DecisionRef),
+	}
+	for _, item := range []struct {
+		name  string
+		value string
+	}{
+		{name: "interaction_delivery.request_ref", value: normalized.RequestRef},
+		{name: "interaction_delivery.delivery_ref", value: normalized.DeliveryRef},
+		{name: "interaction_delivery.callback_ref", value: normalized.CallbackRef},
+		{name: "interaction_delivery.decision_ref", value: normalized.DecisionRef},
+	} {
+		if err := validateEventSafeRef(item.name, item.value, false); err != nil {
+			return value.InteractionDeliveryRef{}, err
+		}
+	}
+	return normalized, nil
+}
+
+func normalizeEventSafeEvidenceRefs(refs []value.EvidenceRef, refName string, summaryName string) ([]value.EvidenceRef, error) {
+	result := make([]value.EvidenceRef, 0, len(refs))
+	seen := make(map[string]struct{}, len(refs))
+	for _, ref := range refs {
+		normalized, err := normalizeEventSafeEvidenceRef(ref, refName, summaryName)
+		if err != nil {
+			return nil, err
+		}
+		key := normalized.Kind + "\x00" + normalized.Ref
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		result = append(result, normalized)
+	}
+	return result, nil
+}
+
+func normalizeEventSafeEvidenceRef(ref value.EvidenceRef, refName string, summaryName string) (value.EvidenceRef, error) {
+	normalized := trimEvidenceRef(ref)
+	if normalized.Kind == "" || normalized.Ref == "" {
+		return value.EvidenceRef{}, errs.ErrInvalidArgument
+	}
+	if err := validateEventSafeRef(refName, normalized.Ref, true); err != nil {
+		return value.EvidenceRef{}, err
+	}
+	if err := validateEventSafeText(summaryName, normalized.Summary, maxEvaluationFactorSummary); err != nil {
+		return value.EvidenceRef{}, err
+	}
+	if err := validateEventSafeRef("evidence_ref.digest", normalized.Digest, false); err != nil {
+		return value.EvidenceRef{}, err
+	}
+	if err := validateEventSafeRef("evidence_ref.retention_class", normalized.RetentionClass, false); err != nil {
+		return value.EvidenceRef{}, err
+	}
+	return normalized, nil
+}
+
+func validateEventSafeRef(name string, value string, required bool) error {
+	return validateReleaseSafeRef(name, value, required)
+}
+
+func validateEventSafeText(name string, value string, maxLength int) error {
+	return validateReleaseSafeText(name, value, maxLength)
+}
+
 func validateReleaseSafeRef(name string, value string, required bool) error {
 	if err := validateSafeRef(name, value, required); err != nil {
 		return err
@@ -1654,6 +1818,14 @@ func (s *Service) closeGateRequest(ctx context.Context, input closeGateRequestIn
 	if err := requireCommand(input.Meta, input.Operation.String()); err != nil {
 		return entity.GateRequest{}, err
 	}
+	reason, err := normalizeEventSafeSummary("gate.terminal_reason", input.Reason, maxEvaluationFactorSummary)
+	if err != nil {
+		return entity.GateRequest{}, err
+	}
+	interactionDeliveryRef, err := normalizeEventSafeInteractionDeliveryRef(input.InteractionDeliveryRef)
+	if err != nil {
+		return entity.GateRequest{}, err
+	}
 	if err := s.authorizeCommand(ctx, input.Meta, actionGateDecide, gateResource(input.GateRequestID)); err != nil {
 		return entity.GateRequest{}, err
 	}
@@ -1687,21 +1859,24 @@ func (s *Service) closeGateRequest(ctx context.Context, input closeGateRequestIn
 	request.Status = input.Status
 	request.UpdatedAt = now
 	request.TerminalActorRef = actorRef(input.Meta.Actor)
-	request.TerminalReason = strings.TrimSpace(input.Reason)
+	request.TerminalReason = reason
 	request.TerminalAt = &now
-	if !emptyInteractionDeliveryRef(input.InteractionDeliveryRef) {
-		request.InteractionDeliveryRef = input.InteractionDeliveryRef
+	if !emptyInteractionDeliveryRef(interactionDeliveryRef) {
+		request.InteractionDeliveryRef = interactionDeliveryRef
 	}
 	result = commandResultWithPayload(input.Meta, input.Operation.String(), aggregateGateRequest, request.ID, now, map[string]any{
 		"status": string(request.Status),
 	})
-	event := outboxEvent(s.idGenerator.New(), input.EventType, governanceevents.AggregateGate, request.ID, now, governanceevents.Payload{
+	eventPayload := applyTargetRef(governanceevents.Payload{
 		GateRequestID:  request.ID.String(),
 		PreviousStatus: string(previousStatus),
 		Status:         string(request.Status),
 		ReasonCode:     input.ReasonCode,
+		SafeSummary:    request.TerminalReason,
 		Version:        request.Version,
-	})
+	}, request.Target)
+	eventPayload = applyInteractionDeliveryRef(eventPayload, request.InteractionDeliveryRef)
+	event := outboxCommandEvent(s.idGenerator.New(), input.EventType, governanceevents.AggregateGate, request.ID, now, input.Meta, input.Operation.String(), eventPayload)
 	if err := s.repository.UpdateGateRequestStatus(ctx, request, previousVersion, result, event); err != nil {
 		return entity.GateRequest{}, err
 	}
@@ -1848,6 +2023,15 @@ func requireCommand(meta CommandMeta, operation string) error {
 	if strings.TrimSpace(operation) == "" || strings.TrimSpace(meta.Actor.Type) == "" || strings.TrimSpace(meta.Actor.ID) == "" {
 		return errs.ErrInvalidArgument
 	}
+	if err := validateEventSafeRef("command.actor_type", meta.Actor.Type, true); err != nil {
+		return err
+	}
+	if err := validateEventSafeRef("command.actor_id", meta.Actor.ID, true); err != nil {
+		return err
+	}
+	if err := validateEventSafeRef("command.request_id", meta.RequestID, false); err != nil {
+		return err
+	}
 	if (meta.CommandID == nil || *meta.CommandID == uuid.Nil) && strings.TrimSpace(meta.IdempotencyKey) == "" {
 		return errs.ErrInvalidArgument
 	}
@@ -1958,6 +2142,88 @@ func commandResultKey(meta CommandMeta, operation string) string {
 	return "idempotency:" + operation + ":" + meta.Actor.Type + ":" + meta.Actor.ID + ":" + strings.TrimSpace(meta.IdempotencyKey)
 }
 
+func outboxCommandEvent(id uuid.UUID, eventType string, aggregateType string, aggregateID uuid.UUID, occurredAt time.Time, meta CommandMeta, operation string, payload governanceevents.Payload) entity.OutboxEvent {
+	return outboxEvent(id, eventType, aggregateType, aggregateID, occurredAt, commandEventPayload(meta, operation, payload))
+}
+
+func commandEventPayload(meta CommandMeta, operation string, payload governanceevents.Payload) governanceevents.Payload {
+	payload.ActorRef = actorRef(meta.Actor)
+	payload.IdempotencyKey = eventIdempotencyKey(meta, operation)
+	payload.RequestID = strings.TrimSpace(meta.RequestID)
+	return payload
+}
+
+func eventIdempotencyKey(meta CommandMeta, operation string) string {
+	if meta.CommandID != nil && *meta.CommandID != uuid.Nil {
+		return "command:" + meta.CommandID.String()
+	}
+	key := strings.TrimSpace(meta.IdempotencyKey)
+	if key == "" {
+		return ""
+	}
+	identity := strings.Join([]string{strings.TrimSpace(operation), strings.TrimSpace(meta.Actor.Type), strings.TrimSpace(meta.Actor.ID), key}, "\x00")
+	sum := sha256.Sum256([]byte(identity))
+	return fmt.Sprintf("idempotency_sha256:%x", sum[:])
+}
+
+func applyTargetRef(payload governanceevents.Payload, target value.ExternalRef) governanceevents.Payload {
+	payload.TargetType = strings.TrimSpace(target.Type)
+	payload.TargetRef = strings.TrimSpace(target.Ref)
+	return payload
+}
+
+func applyProjectContextRefs(payload governanceevents.Payload, project value.ProjectContextRef) governanceevents.Payload {
+	payload.ProjectRef = strings.TrimSpace(project.ProjectRef)
+	payload.RepositoryRef = strings.TrimSpace(project.RepositoryRef)
+	return payload
+}
+
+func applyInteractionDeliveryRef(payload governanceevents.Payload, ref value.InteractionDeliveryRef) governanceevents.Payload {
+	payload.InteractionRequestRef = strings.TrimSpace(ref.RequestRef)
+	payload.InteractionDeliveryRef = strings.TrimSpace(ref.DeliveryRef)
+	payload.InteractionDecisionRef = strings.TrimSpace(ref.DecisionRef)
+	return payload
+}
+
+func applyReleaseIntegrationEventRefs(payload governanceevents.Payload, refs []value.ReleaseIntegrationRef) governanceevents.Payload {
+	for _, ref := range refs {
+		domain := strings.TrimSpace(ref.Domain)
+		kind := strings.TrimSpace(ref.Kind)
+		value := strings.TrimSpace(ref.Ref)
+		if value == "" {
+			continue
+		}
+		switch domain {
+		case "provider":
+			payload.ProviderPullRequestRef = firstMatchingEventRef(payload.ProviderPullRequestRef, kind, value, "pull_request")
+			payload.ProviderWorkItemRef = firstMatchingEventRef(payload.ProviderWorkItemRef, kind, value, "work_item", "issue")
+		case "agent":
+			payload.AgentSessionRef = firstMatchingEventRef(payload.AgentSessionRef, kind, value, "session")
+			payload.AgentRunRef = firstMatchingEventRef(payload.AgentRunRef, kind, value, "run")
+			payload.AgentStageRef = firstMatchingEventRef(payload.AgentStageRef, kind, value, "stage")
+		case "runtime":
+			payload.RuntimeJobRef = firstMatchingEventRef(payload.RuntimeJobRef, kind, value, "job", "deploy")
+		case "interaction":
+			payload.InteractionRequestRef = firstMatchingEventRef(payload.InteractionRequestRef, kind, value, "request")
+			payload.InteractionDeliveryRef = firstMatchingEventRef(payload.InteractionDeliveryRef, kind, value, "delivery")
+			payload.InteractionDecisionRef = firstMatchingEventRef(payload.InteractionDecisionRef, kind, value, "decision")
+		}
+	}
+	return payload
+}
+
+func firstMatchingEventRef(current string, kind string, value string, matches ...string) string {
+	if current != "" {
+		return current
+	}
+	for _, match := range matches {
+		if strings.Contains(kind, match) {
+			return value
+		}
+	}
+	return current
+}
+
 func outboxEvent(id uuid.UUID, eventType string, aggregateType string, aggregateID uuid.UUID, occurredAt time.Time, payload governanceevents.Payload) entity.OutboxEvent {
 	body, _ := json.Marshal(payload)
 	return entity.OutboxEvent{
@@ -1993,11 +2259,18 @@ func optionalUUIDString(id *uuid.UUID) string {
 	return id.String()
 }
 
+func evidenceSourceRef(refs []value.EvidenceRef) string {
+	if len(refs) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(refs[0].Ref)
+}
+
 func normalizeReviewSignalEvidenceRefs(refs []value.EvidenceRef) ([]value.EvidenceRef, error) {
 	result := make([]value.EvidenceRef, 0, len(refs))
 	seen := make(map[string]value.EvidenceRef)
 	for _, ref := range refs {
-		normalized, err := normalizeEvidenceRef(ref, "review_signal.evidence_ref.ref", "review_signal.evidence_ref.summary")
+		normalized, err := normalizeEventSafeEvidenceRef(ref, "review_signal.evidence_ref.ref", "review_signal.evidence_ref.summary")
 		if err != nil {
 			return nil, err
 		}

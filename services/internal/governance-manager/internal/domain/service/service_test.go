@@ -65,6 +65,7 @@ func TestEvaluateRiskStoresAssessmentAndOutboxEvents(t *testing.T) {
 			CommandID: &commandID,
 			Actor:     value.Actor{Type: "service", ID: "provider-hub"},
 			Reason:    "provider checks changed",
+			RequestID: "trace-risk-1",
 		},
 	})
 	if err != nil {
@@ -81,6 +82,18 @@ func TestEvaluateRiskStoresAssessmentAndOutboxEvents(t *testing.T) {
 	}
 	if repository.result.CommandID == nil || *repository.result.CommandID != commandID {
 		t.Fatalf("command result command id = %v, want %s", repository.result.CommandID, commandID)
+	}
+	requestedPayload := string(repository.events[0].Payload)
+	for _, want := range []string{
+		`"actor_ref":"service:provider-hub"`,
+		`"idempotency_key":"command:aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"`,
+		`"request_id":"trace-risk-1"`,
+		`"target_type":"provider_native.pr"`,
+		`"target_ref":"github://codex-k8s/kodex/pull/1"`,
+	} {
+		if !strings.Contains(requestedPayload, want) {
+			t.Fatalf("risk requested payload = %s, want %s", requestedPayload, want)
+		}
 	}
 }
 
@@ -382,6 +395,76 @@ func TestRecordReviewSignalRejectsUnsafeOrMissingRefs(t *testing.T) {
 	})
 	if !errors.Is(err, errs.ErrInvalidArgument) {
 		t.Fatalf("RecordReviewSignal() conflicting evidence metadata error = %v, want ErrInvalidArgument", err)
+	}
+}
+
+func TestRecordReviewSignalRejectsEventUnsafePayload(t *testing.T) {
+	t.Parallel()
+
+	commandID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
+	tests := []struct {
+		name    string
+		input   RecordReviewSignalInput
+		wantErr error
+	}{
+		{
+			name: "summary stdout marker",
+			input: RecordReviewSignalInput{
+				Target:       value.ExternalRef{Type: "pull_request", Ref: "provider-pr:1"},
+				RoleKind:     enum.ReviewRoleKindReviewer,
+				AuthorRef:    "agent-run:reviewer-1",
+				Outcome:      enum.ReviewSignalOutcomePass,
+				Severity:     enum.SignalSeverityInfo,
+				EvidenceRefs: []value.EvidenceRef{{Kind: "provider_review", Ref: "provider-review:1", Summary: "provider review approved"}},
+				Summary:      "stdout contains provider logs",
+				Meta:         CommandMeta{CommandID: &commandID, Actor: value.Actor{Type: "service", ID: "agent-manager"}},
+			},
+			wantErr: errs.ErrInvalidArgument,
+		},
+		{
+			name: "evidence source bearer marker",
+			input: RecordReviewSignalInput{
+				Target:       value.ExternalRef{Type: "pull_request", Ref: "provider-pr:1"},
+				RoleKind:     enum.ReviewRoleKindReviewer,
+				AuthorRef:    "agent-run:reviewer-1",
+				Outcome:      enum.ReviewSignalOutcomePass,
+				Severity:     enum.SignalSeverityInfo,
+				EvidenceRefs: []value.EvidenceRef{{Kind: "provider_review", Ref: "provider-review:1 authorization: bearer abc", Summary: "provider review approved"}},
+				Summary:      "approved",
+				Meta:         CommandMeta{CommandID: &commandID, Actor: value.Actor{Type: "service", ID: "agent-manager"}},
+			},
+			wantErr: errs.ErrInvalidArgument,
+		},
+		{
+			name: "evidence summary workspace path",
+			input: RecordReviewSignalInput{
+				Target:       value.ExternalRef{Type: "pull_request", Ref: "provider-pr:1"},
+				RoleKind:     enum.ReviewRoleKindReviewer,
+				AuthorRef:    "agent-run:reviewer-1",
+				Outcome:      enum.ReviewSignalOutcomePass,
+				Severity:     enum.SignalSeverityInfo,
+				EvidenceRefs: []value.EvidenceRef{{Kind: "provider_review", Ref: "provider-review:1", Summary: "workspace path /home/s/workspace/file"}},
+				Summary:      "approved",
+				Meta:         CommandMeta{CommandID: &commandID, Actor: value.Actor{Type: "service", ID: "agent-manager"}},
+			},
+			wantErr: errs.ErrInvalidArgument,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			repository := &fakeRepository{ready: true}
+			_, err := newTestService(repository).RecordReviewSignal(context.Background(), tt.input)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("RecordReviewSignal() error = %v, want %v", err, tt.wantErr)
+			}
+			if repository.mutationCalls != 0 || len(repository.events) != 0 {
+				t.Fatalf("mutation calls/events = %d/%d, want 0/0 for event-unsafe input", repository.mutationCalls, len(repository.events))
+			}
+		})
 	}
 }
 
@@ -996,6 +1079,136 @@ func TestExistingAggregateMutationsRejectStaleExpectedVersion(t *testing.T) {
 	}
 }
 
+func TestGateLifecycleRejectsEventUnsafePayload(t *testing.T) {
+	t.Parallel()
+
+	commandID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
+	gateRequestID := uuid.MustParse("cccccccc-cccc-4ccc-cccc-cccccccccccc")
+	expectedVersion := int64(1)
+	target := value.ExternalRef{Type: "pull_request", Ref: "provider:pr:1"}
+	meta := CommandMeta{
+		CommandID:       &commandID,
+		ExpectedVersion: &expectedVersion,
+		Actor:           value.Actor{Type: "service", ID: "agent-manager"},
+	}
+	tests := []struct {
+		name      string
+		configure func(*fakeRepository)
+		run       func(*Service) error
+	}{
+		{
+			name: "request gate evidence summary",
+			run: func(service *Service) error {
+				_, err := service.RequestGate(context.Background(), RequestGateInput{
+					Target:          target,
+					EvidenceSummary: "raw provider payload with secret=abc",
+					Meta:            meta,
+				})
+				return err
+			},
+		},
+		{
+			name: "request gate evidence ref",
+			run: func(service *Service) error {
+				_, err := service.RequestGate(context.Background(), RequestGateInput{
+					Target:       target,
+					EvidenceRefs: []value.EvidenceRef{{Kind: "provider_review", Ref: "provider-review:1", Summary: "stderr raw logs"}},
+					Meta:         meta,
+				})
+				return err
+			},
+		},
+		{
+			name: "request gate interaction ref",
+			run: func(service *Service) error {
+				_, err := service.RequestGate(context.Background(), RequestGateInput{
+					Target: target,
+					InteractionDeliveryRef: value.InteractionDeliveryRef{
+						RequestRef: "interaction:request:1 authorization: bearer token",
+					},
+					Meta: meta,
+				})
+				return err
+			},
+		},
+		{
+			name: "request gate request id",
+			run: func(service *Service) error {
+				unsafeMeta := meta
+				unsafeMeta.RequestID = "authorization: bearer raw-request-token"
+				_, err := service.RequestGate(context.Background(), RequestGateInput{
+					Target: target,
+					Meta:   unsafeMeta,
+				})
+				return err
+			},
+		},
+		{
+			name: "submit gate decision reason",
+			configure: func(repository *fakeRepository) {
+				repository.gateRequest = entity.GateRequest{VersionedBase: entity.VersionedBase{ID: gateRequestID, Version: 1}, Target: target, Status: enum.GateRequestStatusRequested}
+			},
+			run: func(service *Service) error {
+				_, _, err := service.SubmitGateDecision(context.Background(), SubmitGateDecisionInput{
+					GateRequestID:    gateRequestID,
+					DecisionActorRef: "user:owner",
+					Reason:           "stdout contains owner prompt transcript",
+					Meta:             meta,
+				})
+				return err
+			},
+		},
+		{
+			name: "submit gate decision source ref",
+			configure: func(repository *fakeRepository) {
+				repository.gateRequest = entity.GateRequest{VersionedBase: entity.VersionedBase{ID: gateRequestID, Version: 1}, Target: target, Status: enum.GateRequestStatusRequested}
+			},
+			run: func(service *Service) error {
+				_, _, err := service.SubmitGateDecision(context.Background(), SubmitGateDecisionInput{
+					GateRequestID:    gateRequestID,
+					DecisionActorRef: "user:owner",
+					SourceRef:        "provider-response authorization: bearer token",
+					Meta:             meta,
+				})
+				return err
+			},
+		},
+		{
+			name: "cancel gate terminal reason",
+			configure: func(repository *fakeRepository) {
+				repository.gateRequest = entity.GateRequest{VersionedBase: entity.VersionedBase{ID: gateRequestID, Version: 1}, Target: target, Status: enum.GateRequestStatusRequested}
+			},
+			run: func(service *Service) error {
+				_, err := service.CancelGate(context.Background(), CancelGateInput{
+					GateRequestID: gateRequestID,
+					Reason:        "kubeconfig contains cluster secret",
+					Meta:          meta,
+				})
+				return err
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			repository := &fakeRepository{ready: true}
+			if tt.configure != nil {
+				tt.configure(repository)
+			}
+			err := tt.run(newTestService(repository))
+			if !errors.Is(err, errs.ErrInvalidArgument) {
+				t.Fatalf("%s error = %v, want ErrInvalidArgument", tt.name, err)
+			}
+			if repository.mutationCalls != 0 || len(repository.events) != 0 {
+				t.Fatalf("mutation calls/events = %d/%d, want 0/0 for event-unsafe input", repository.mutationCalls, len(repository.events))
+			}
+		})
+	}
+}
+
 func TestCancelGateStoresTerminalStateAndSafeOutbox(t *testing.T) {
 	t.Parallel()
 
@@ -1039,8 +1252,11 @@ func TestCancelGateStoresTerminalStateAndSafeOutbox(t *testing.T) {
 		t.Fatalf("events = %+v, want one gate cancelled event", repository.events)
 	}
 	payload := string(repository.events[0].Payload)
-	if strings.Contains(payload, "safe operator cancellation summary") || strings.Contains(payload, "interaction:request:1") {
-		t.Fatalf("outbox payload leaked terminal summary or interaction ref: %s", payload)
+	if !strings.Contains(payload, `"safe_summary":"safe operator cancellation summary"`) || !strings.Contains(payload, `"interaction_request_ref":"interaction:request:1"`) {
+		t.Fatalf("outbox payload = %s, want bounded summary and interaction request ref", payload)
+	}
+	if strings.Contains(payload, "raw_provider_payload") || strings.Contains(payload, "secret") {
+		t.Fatalf("outbox payload leaked unsafe details: %s", payload)
 	}
 }
 
@@ -1297,8 +1513,10 @@ func TestReleaseDecisionLifecycleHappyPath(t *testing.T) {
 	if pkg.Status != enum.ReleaseDecisionPackageStatusClosed || pkg.Version != 3 {
 		t.Fatalf("package = %+v, want closed v3", pkg)
 	}
-	if payload := string(repository.events[0].Payload); strings.Contains(payload, "waiting for rollout") || strings.Contains(payload, "raw_diff") {
-		t.Fatalf("release decision event leaked unsafe text: %s", payload)
+	if payload := string(repository.events[0].Payload); !strings.Contains(payload, `"safe_summary":"waiting for rollout window"`) || !strings.Contains(payload, `"decision_policy_ref":"policy:stable"`) {
+		t.Fatalf("release decision event payload = %s, want bounded decision summary and policy ref", payload)
+	} else if strings.Contains(payload, "raw_diff") || strings.Contains(payload, "provider_response") {
+		t.Fatalf("release decision event leaked unsafe details: %s", payload)
 	}
 }
 
@@ -1759,7 +1977,6 @@ func TestBlockingSignalLifecycleAndSafeEventPayload(t *testing.T) {
 
 	now := time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC)
 	signalID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
-	recordCommandID := uuid.MustParse("bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb")
 	resolveCommandID := uuid.MustParse("cccccccc-cccc-4ccc-cccc-cccccccccccc")
 	recordEventID := uuid.MustParse("dddddddd-dddd-4ddd-dddd-dddddddddddd")
 	resolveEventID := uuid.MustParse("eeeeeeee-eeee-4eee-eeee-eeeeeeeeeeee")
@@ -1778,7 +1995,7 @@ func TestBlockingSignalLifecycleAndSafeEventPayload(t *testing.T) {
 		SourceRef:  "runtime:job:1",
 		Severity:   enum.SignalSeverityCritical,
 		Summary:    "safe bounded summary without logs",
-		Meta:       CommandMeta{CommandID: &recordCommandID, Actor: value.Actor{Type: "service", ID: "runtime-manager"}},
+		Meta:       CommandMeta{IdempotencyKey: "runtime raw idempotency key", Actor: value.Actor{Type: "service", ID: "runtime-manager"}},
 	})
 	if err != nil {
 		t.Fatalf("RecordBlockingSignal(): %v", err)
@@ -1786,8 +2003,10 @@ func TestBlockingSignalLifecycleAndSafeEventPayload(t *testing.T) {
 	if signal.Status != enum.BlockingSignalStatusActive || signal.Version != 1 {
 		t.Fatalf("signal = %+v, want active v1", signal)
 	}
-	if payload := string(repository.events[0].Payload); strings.Contains(payload, "bounded summary") || strings.Contains(payload, "runtime:job:1") {
-		t.Fatalf("blocking signal event leaked signal details: %s", payload)
+	if payload := string(repository.events[0].Payload); !strings.Contains(payload, `"safe_summary":"safe bounded summary without logs"`) || !strings.Contains(payload, `"source_ref":"runtime:job:1"`) || !strings.Contains(payload, `"idempotency_key":"idempotency_sha256:`) {
+		t.Fatalf("blocking signal event payload = %s, want bounded summary and source ref", payload)
+	} else if strings.Contains(payload, "runtime raw idempotency key") || strings.Contains(payload, "stdout") || strings.Contains(payload, "stderr") {
+		t.Fatalf("blocking signal event leaked unsafe details: %s", payload)
 	}
 	signal, err = service.ResolveBlockingSignal(context.Background(), ResolveBlockingSignalInput{
 		BlockingSignalID:  signalID,
