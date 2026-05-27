@@ -65,6 +65,12 @@ type ClaimedBatch struct {
 	LeaseOwner string
 	// LockedUntil is the lease expiry time.
 	LockedUntil time.Time
+	// RetrySequenceID is the event sequence that is currently retrying, if any.
+	RetrySequenceID int64
+	// RetryAttempt is the persisted retry count for RetrySequenceID.
+	RetryAttempt int
+	// LastError is the bounded safe diagnostic from the last retry.
+	LastError string
 	// Events is the ordered leased event batch.
 	Events []StoredEvent
 }
@@ -79,6 +85,12 @@ type CheckpointState struct {
 	LeaseOwner string
 	// LockedUntil is nil when no worker owns the checkpoint.
 	LockedUntil *time.Time
+	// RetrySequenceID is the event sequence currently waiting for retry.
+	RetrySequenceID int64
+	// RetryAttempt is the persisted retry count for RetrySequenceID.
+	RetryAttempt int
+	// LastError is the bounded safe diagnostic from the last retry.
+	LastError string
 	// UpdatedAt is the last checkpoint write time.
 	UpdatedAt time.Time
 }
@@ -101,6 +113,12 @@ type DeferParams struct {
 	ConsumerName string
 	// LeaseOwner must match the worker that claimed the batch.
 	LeaseOwner string
+	// RetrySequenceID is the event sequence that requested retry.
+	RetrySequenceID int64
+	// RetryAttempt is the durable attempt count for RetrySequenceID.
+	RetryAttempt int
+	// LastError is the bounded safe diagnostic from the retry result.
+	LastError string
 	// Now is used to reject stale workers after lease expiry.
 	Now time.Time
 	// LockedUntil is the next shared retry claim time.

@@ -27,9 +27,14 @@ CREATE TABLE platform_event_consumer_checkpoints (
     last_sequence_id bigint NOT NULL DEFAULT 0,
     lease_owner text NOT NULL DEFAULT '',
     locked_until timestamptz,
+    retry_sequence_id bigint NOT NULL DEFAULT 0,
+    retry_attempt integer NOT NULL DEFAULT 0,
+    last_error text NOT NULL DEFAULT '',
     updated_at timestamptz NOT NULL,
     CONSTRAINT platform_event_consumer_name_chk CHECK (consumer_name <> ''),
     CONSTRAINT platform_event_consumer_last_sequence_chk CHECK (last_sequence_id >= 0),
+    CONSTRAINT platform_event_consumer_retry_sequence_chk CHECK (retry_sequence_id >= 0),
+    CONSTRAINT platform_event_consumer_retry_attempt_chk CHECK (retry_attempt >= 0),
     CONSTRAINT platform_event_consumer_lease_consistency_chk
         CHECK ((lease_owner = '' AND locked_until IS NULL) OR (lease_owner <> '' AND locked_until IS NOT NULL))
 );

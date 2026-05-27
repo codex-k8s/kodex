@@ -21,9 +21,6 @@ type Runner struct {
 	cfg      Config
 	logger   *slog.Logger
 	hook     Hook
-
-	mu       sync.Mutex
-	attempts map[string]int
 }
 
 // NewRunner creates a shared platform-event-log consumer runtime.
@@ -43,7 +40,6 @@ func NewRunner(store Store, registry Registry, cfg Config, logger *slog.Logger, 
 		cfg:      cfg,
 		logger:   loggerOrDefault(logger),
 		hook:     hook,
-		attempts: make(map[string]int),
 	}, nil
 }
 
@@ -61,7 +57,7 @@ func (r *Runner) Run(ctx context.Context) error {
 		case <-ticker.C:
 			if err := r.RunOnce(ctx); err != nil && !errors.Is(err, context.Canceled) {
 				r.logRetryable(ctx, err)
-				delay := r.retryDelay(r.maxAttempt())
+				delay := r.retryDelay(1)
 				if err := sleepContext(ctx, delay); err != nil {
 					return nil
 				}
@@ -87,13 +83,13 @@ func (r *Runner) RunOnce(ctx context.Context) error {
 	if len(batch.Events) == 0 {
 		return nil
 	}
-	results := r.handleBatch(ctx, batch.Events)
-	advanceTo, retryEvent, retryResult := r.contiguousAdvance(batch.Events, results)
+	outcomes := r.handleBatch(ctx, batch)
+	advanceTo, retryEvent, retryOutcome := r.contiguousAdvance(batch.Events, outcomes)
 	if retryEvent.SequenceID != 0 {
-		if err := r.deferRetry(ctx, batch, retryEvent); err != nil {
+		if err := r.deferRetry(ctx, batch, retryEvent, retryOutcome); err != nil {
 			return err
 		}
-		return fmt.Errorf("%w: event sequence %d: %s", ErrRetryable, retryEvent.SequenceID, safeSummary(errorText(retryResult), r.cfg.FailureMessageLimit))
+		return fmt.Errorf("%w: event sequence %d: %s", ErrRetryable, retryEvent.SequenceID, safeSummary(errorText(retryOutcome.result), r.cfg.FailureMessageLimit))
 	}
 	if advanceTo > 0 {
 		if err := r.store.Advance(ctx, eventlog.AdvanceParams{
@@ -108,8 +104,9 @@ func (r *Runner) RunOnce(ctx context.Context) error {
 	return nil
 }
 
-func (r *Runner) handleBatch(ctx context.Context, events []eventlog.StoredEvent) []Result {
-	results := make([]Result, len(events))
+func (r *Runner) handleBatch(ctx context.Context, batch eventlog.ClaimedBatch) []eventOutcome {
+	events := batch.Events
+	outcomes := make([]eventOutcome, len(events))
 	workerLimit := r.cfg.ConcurrencyLimit
 	if workerLimit > len(events) {
 		workerLimit = len(events)
@@ -117,24 +114,24 @@ func (r *Runner) handleBatch(ctx context.Context, events []eventlog.StoredEvent)
 	sem := make(chan struct{}, workerLimit)
 	var wg sync.WaitGroup
 	for index, storedEvent := range events {
+		attempt := eventAttempt(batch, storedEvent)
 		if ctx.Err() != nil {
-			results[index] = Retry(ctx.Err())
+			outcomes[index] = eventOutcome{result: Retry(ctx.Err()), attempt: attempt}
 			continue
 		}
 		sem <- struct{}{}
 		wg.Add(1)
-		go func(index int, storedEvent eventlog.StoredEvent) {
+		go func(index int, storedEvent eventlog.StoredEvent, attempt int) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			results[index] = r.handleOne(ctx, storedEvent)
-		}(index, storedEvent)
+			outcomes[index] = eventOutcome{result: r.handleOne(ctx, storedEvent, attempt), attempt: attempt}
+		}(index, storedEvent, attempt)
 	}
 	wg.Wait()
-	return results
+	return outcomes
 }
 
-func (r *Runner) handleOne(ctx context.Context, storedEvent eventlog.StoredEvent) Result {
-	attempt := r.nextAttempt(storedEvent)
+func (r *Runner) handleOne(ctx context.Context, storedEvent eventlog.StoredEvent, attempt int) Result {
 	handler, status := r.registry.lookup(storedEvent)
 	var result Result
 	switch status {
@@ -166,6 +163,11 @@ func (r *Runner) handleOne(ctx context.Context, storedEvent eventlog.StoredEvent
 	return result
 }
 
+type eventOutcome struct {
+	result  Result
+	attempt int
+}
+
 func (r *Runner) callHandler(ctx context.Context, handler Handler, event Event) (result Result) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
@@ -180,7 +182,7 @@ func (r *Runner) callHandler(ctx context.Context, handler Handler, event Event) 
 	return handler.HandleEvent(ctx, event)
 }
 
-func (r *Runner) normalizeResult(storedEvent eventlog.StoredEvent, attempt int, result Result) Result {
+func (r *Runner) normalizeResult(_ eventlog.StoredEvent, attempt int, result Result) Result {
 	if result.Status == "" {
 		result = Retry(errors.New("event handler returned empty status"))
 	}
@@ -189,69 +191,41 @@ func (r *Runner) normalizeResult(storedEvent eventlog.StoredEvent, attempt int, 
 	}
 	result.Code = safeToken(result.Code, string(result.Status))
 	result.Summary = safeSummary(firstNonEmpty(result.Summary, errorText(result)), r.cfg.FailureMessageLimit)
-	if result.Status == ResultAck || result.Status == ResultPoison {
-		r.clearAttempt(storedEvent)
-	}
 	return result
 }
 
-func (r *Runner) contiguousAdvance(events []eventlog.StoredEvent, results []Result) (int64, eventlog.StoredEvent, Result) {
+func (r *Runner) contiguousAdvance(events []eventlog.StoredEvent, outcomes []eventOutcome) (int64, eventlog.StoredEvent, eventOutcome) {
 	var advanceTo int64
-	for index, result := range results {
-		if result.Status == ResultRetry {
-			return advanceTo, events[index], result
+	for index, outcome := range outcomes {
+		if outcome.result.Status == ResultRetry {
+			return advanceTo, events[index], outcome
 		}
 		advanceTo = events[index].SequenceID
 	}
-	return advanceTo, eventlog.StoredEvent{}, Result{}
+	return advanceTo, eventlog.StoredEvent{}, eventOutcome{}
 }
 
-func (r *Runner) deferRetry(ctx context.Context, batch eventlog.ClaimedBatch, storedEvent eventlog.StoredEvent) error {
+func (r *Runner) deferRetry(ctx context.Context, batch eventlog.ClaimedBatch, storedEvent eventlog.StoredEvent, outcome eventOutcome) error {
 	now := time.Now().UTC()
 	if err := r.store.Defer(ctx, eventlog.DeferParams{
-		ConsumerName: batch.ConsumerName,
-		LeaseOwner:   batch.LeaseOwner,
-		Now:          now,
-		LockedUntil:  now.Add(r.retryDelay(r.currentAttempt(storedEvent))),
+		ConsumerName:    batch.ConsumerName,
+		LeaseOwner:      batch.LeaseOwner,
+		RetrySequenceID: storedEvent.SequenceID,
+		RetryAttempt:    outcome.attempt,
+		LastError:       safeSummary(errorText(outcome.result), r.cfg.FailureMessageLimit),
+		Now:             now,
+		LockedUntil:     now.Add(r.retryDelay(outcome.attempt)),
 	}); err != nil {
 		return fmt.Errorf("defer event log checkpoint retry: %w", err)
 	}
 	return nil
 }
 
-func (r *Runner) nextAttempt(storedEvent eventlog.StoredEvent) int {
-	key := storedEvent.ID.String()
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	attempt := r.attempts[key] + 1
-	r.attempts[key] = attempt
-	return attempt
-}
-
-func (r *Runner) currentAttempt(storedEvent eventlog.StoredEvent) int {
-	key := storedEvent.ID.String()
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.attempts[key]
-}
-
-func (r *Runner) clearAttempt(storedEvent eventlog.StoredEvent) {
-	key := storedEvent.ID.String()
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	delete(r.attempts, key)
-}
-
-func (r *Runner) maxAttempt() int {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	maxAttempt := 1
-	for _, attempt := range r.attempts {
-		if attempt > maxAttempt {
-			maxAttempt = attempt
-		}
+func eventAttempt(batch eventlog.ClaimedBatch, storedEvent eventlog.StoredEvent) int {
+	if batch.RetrySequenceID == storedEvent.SequenceID && batch.RetryAttempt > 0 {
+		return batch.RetryAttempt + 1
 	}
-	return maxAttempt
+	return 1
 }
 
 func (r *Runner) retryDelay(attempt int) time.Duration {

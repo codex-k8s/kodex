@@ -69,11 +69,21 @@ func (s *Store) Claim(ctx context.Context, params ClaimParams) (ClaimedBatch, er
 	if err != nil {
 		return ClaimedBatch{}, err
 	}
+	var checkpoint CheckpointState
+	if len(events) > 0 {
+		checkpoint, err = s.GetCheckpointState(ctx, params.ConsumerName)
+		if err != nil {
+			return ClaimedBatch{}, err
+		}
+	}
 	return ClaimedBatch{
-		ConsumerName: params.ConsumerName,
-		LeaseOwner:   params.LeaseOwner,
-		LockedUntil:  params.LockedUntil,
-		Events:       events,
+		ConsumerName:    params.ConsumerName,
+		LeaseOwner:      params.LeaseOwner,
+		LockedUntil:     params.LockedUntil,
+		RetrySequenceID: checkpoint.RetrySequenceID,
+		RetryAttempt:    checkpoint.RetryAttempt,
+		LastError:       checkpoint.LastError,
+		Events:          events,
 	}, nil
 }
 
@@ -210,6 +220,10 @@ func validateDefer(params DeferParams) error {
 		return fmt.Errorf("%w: consumer name is required", ErrInvalidClaim)
 	case strings.TrimSpace(params.LeaseOwner) == "":
 		return fmt.Errorf("%w: lease owner is required", ErrInvalidClaim)
+	case params.RetrySequenceID < 1:
+		return fmt.Errorf("%w: retry sequence id must be positive", ErrInvalidClaim)
+	case params.RetryAttempt < 1:
+		return fmt.Errorf("%w: retry attempt must be positive", ErrInvalidClaim)
 	case params.Now.IsZero():
 		return fmt.Errorf("%w: now is required", ErrInvalidClaim)
 	case !params.LockedUntil.After(params.Now):
@@ -266,6 +280,9 @@ func advanceArgs(params AdvanceParams) pgx.NamedArgs {
 func deferArgs(params DeferParams) pgx.NamedArgs {
 	args := ownedCheckpointArgs(params.ConsumerName, params.LeaseOwner, params.Now)
 	args["locked_until"] = params.LockedUntil
+	args["retry_sequence_id"] = params.RetrySequenceID
+	args["retry_attempt"] = params.RetryAttempt
+	args["last_error"] = strings.TrimSpace(params.LastError)
 	return args
 }
 
@@ -325,11 +342,14 @@ func (row storedEventRow) toStoredEvent() StoredEvent {
 }
 
 type checkpointStateRow struct {
-	ConsumerName   string
-	LastSequenceID int64
-	LeaseOwner     string
-	LockedUntil    pgtype.Timestamptz
-	UpdatedAt      time.Time
+	ConsumerName    string
+	LastSequenceID  int64
+	LeaseOwner      string
+	LockedUntil     pgtype.Timestamptz
+	RetrySequenceID int64
+	RetryAttempt    int
+	LastError       string
+	UpdatedAt       time.Time
 }
 
 func collectCheckpointState(row pgx.CollectableRow) (CheckpointState, error) {
@@ -342,11 +362,14 @@ func collectCheckpointState(row pgx.CollectableRow) (CheckpointState, error) {
 
 func (row checkpointStateRow) toCheckpointState() CheckpointState {
 	return CheckpointState{
-		ConsumerName:   row.ConsumerName,
-		LastSequenceID: row.LastSequenceID,
-		LeaseOwner:     row.LeaseOwner,
-		LockedUntil:    timePtrFromPG(row.LockedUntil),
-		UpdatedAt:      row.UpdatedAt,
+		ConsumerName:    row.ConsumerName,
+		LastSequenceID:  row.LastSequenceID,
+		LeaseOwner:      row.LeaseOwner,
+		LockedUntil:     timePtrFromPG(row.LockedUntil),
+		RetrySequenceID: row.RetrySequenceID,
+		RetryAttempt:    row.RetryAttempt,
+		LastError:       row.LastError,
+		UpdatedAt:       row.UpdatedAt,
 	}
 }
 

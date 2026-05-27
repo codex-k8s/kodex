@@ -192,6 +192,36 @@ func TestRunOnceRetryDeferBlocksOtherLeaseOwner(t *testing.T) {
 	}
 }
 
+func TestRunOnceMaxAttemptsSurvivesNewRunnerLeaseOwner(t *testing.T) {
+	t.Parallel()
+
+	event := eventOf(39, "provider.repository.bootstrap_merged", 1)
+	store := &leaseAwareStore{
+		events: []eventlog.StoredEvent{event},
+	}
+	registry := registryFor(t, "provider.repository.bootstrap_merged", 1, HandlerFunc(func(context.Context, Event) Result {
+		return Retry(errors.New("permanent failure"))
+	}))
+	first := newTestRunnerWithOwner(t, store, registry, "owner-1")
+	first.cfg.MaxAttempts = 2
+	second := newTestRunnerWithOwner(t, store, registry, "owner-2")
+	second.cfg.MaxAttempts = 2
+
+	if err := first.RunOnce(context.Background()); !errors.Is(err, ErrRetryable) {
+		t.Fatalf("first RunOnce() err = %v, want retryable", err)
+	}
+	store.lockedUntil = time.Now().Add(-time.Second)
+	if err := second.RunOnce(context.Background()); err != nil {
+		t.Fatalf("second RunOnce(): %v", err)
+	}
+	if store.lastSequenceID != event.SequenceID {
+		t.Fatalf("last sequence id = %d, want poison advance to %d", store.lastSequenceID, event.SequenceID)
+	}
+	if store.retrySequenceID != 0 || store.retryAttempt != 0 || store.lastError != "" {
+		t.Fatalf("retry state = %d/%d/%q, want reset after poison advance", store.retrySequenceID, store.retryAttempt, store.lastError)
+	}
+}
+
 func TestRunOnceSkipsUnknownAndPoisonsUnsupportedVersion(t *testing.T) {
 	t.Parallel()
 
@@ -313,10 +343,13 @@ func eventOf(sequence int64, eventType string, schemaVersion int) eventlog.Store
 }
 
 type fakeStore struct {
-	claims   []eventlog.ClaimedBatch
-	advances []eventlog.AdvanceParams
-	defers   []eventlog.DeferParams
-	releases []eventlog.ReleaseParams
+	claims          []eventlog.ClaimedBatch
+	advances        []eventlog.AdvanceParams
+	defers          []eventlog.DeferParams
+	releases        []eventlog.ReleaseParams
+	retrySequenceID int64
+	retryAttempt    int
+	lastError       string
 }
 
 func (s *fakeStore) Claim(context.Context, eventlog.ClaimParams) (eventlog.ClaimedBatch, error) {
@@ -325,16 +358,27 @@ func (s *fakeStore) Claim(context.Context, eventlog.ClaimParams) (eventlog.Claim
 	}
 	batch := s.claims[0]
 	s.claims = s.claims[1:]
+	if batch.RetrySequenceID == 0 {
+		batch.RetrySequenceID = s.retrySequenceID
+		batch.RetryAttempt = s.retryAttempt
+		batch.LastError = s.lastError
+	}
 	return batch, nil
 }
 
 func (s *fakeStore) Advance(_ context.Context, params eventlog.AdvanceParams) error {
 	s.advances = append(s.advances, params)
+	s.retrySequenceID = 0
+	s.retryAttempt = 0
+	s.lastError = ""
 	return nil
 }
 
 func (s *fakeStore) Defer(_ context.Context, params eventlog.DeferParams) error {
 	s.defers = append(s.defers, params)
+	s.retrySequenceID = params.RetrySequenceID
+	s.retryAttempt = params.RetryAttempt
+	s.lastError = params.LastError
 	return nil
 }
 
@@ -344,11 +388,14 @@ func (s *fakeStore) Release(_ context.Context, params eventlog.ReleaseParams) er
 }
 
 type leaseAwareStore struct {
-	events         []eventlog.StoredEvent
-	lastSequenceID int64
-	leaseOwner     string
-	lockedUntil    time.Time
-	deferCount     int
+	events          []eventlog.StoredEvent
+	lastSequenceID  int64
+	leaseOwner      string
+	lockedUntil     time.Time
+	deferCount      int
+	retrySequenceID int64
+	retryAttempt    int
+	lastError       string
 }
 
 func (s *leaseAwareStore) Claim(_ context.Context, params eventlog.ClaimParams) (eventlog.ClaimedBatch, error) {
@@ -364,10 +411,13 @@ func (s *leaseAwareStore) Claim(_ context.Context, params eventlog.ClaimParams) 
 		}
 	}
 	return eventlog.ClaimedBatch{
-		ConsumerName: params.ConsumerName,
-		LeaseOwner:   params.LeaseOwner,
-		LockedUntil:  params.LockedUntil,
-		Events:       events,
+		ConsumerName:    params.ConsumerName,
+		LeaseOwner:      params.LeaseOwner,
+		LockedUntil:     params.LockedUntil,
+		RetrySequenceID: s.retrySequenceID,
+		RetryAttempt:    s.retryAttempt,
+		LastError:       s.lastError,
+		Events:          events,
 	}, nil
 }
 
@@ -375,6 +425,9 @@ func (s *leaseAwareStore) Advance(_ context.Context, params eventlog.AdvancePara
 	s.lastSequenceID = params.LastSequenceID
 	s.leaseOwner = ""
 	s.lockedUntil = time.Time{}
+	s.retrySequenceID = 0
+	s.retryAttempt = 0
+	s.lastError = ""
 	return nil
 }
 
@@ -383,6 +436,9 @@ func (s *leaseAwareStore) Defer(_ context.Context, params eventlog.DeferParams) 
 		return eventlog.ErrCheckpointNotOwned
 	}
 	s.lockedUntil = params.LockedUntil
+	s.retrySequenceID = params.RetrySequenceID
+	s.retryAttempt = params.RetryAttempt
+	s.lastError = params.LastError
 	s.deferCount++
 	return nil
 }
