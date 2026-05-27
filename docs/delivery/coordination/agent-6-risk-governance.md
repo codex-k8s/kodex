@@ -70,6 +70,12 @@
 - Повторная передача того же owner-domain evidence ref set возвращает уже записанный signal без нового outbox event; конфликтующий outcome/severity/summary по тому же fingerprint отклоняется.
 - `governance-manager` не читает provider API, не копирует agent run/session state и не становится владельцем interaction delivery/callback фактов.
 
+## Завершённый эксплуатационный срез
+
+- Issue: без отдельного Issue.
+- Результат среза: `governance-manager` получил первый backend deploy контур: Dockerfile со стадиями `prod` и `migrations`, Kubernetes manifests для Deployment/Service/ServiceAccount/migration Job, PostgreSQL database bootstrap, runtime env/secret inventory, smoke-проверку `/health/readyz`, runbook и monitoring.
+- Контур зависит от PostgreSQL, `platform-event-log` и `access-manager`; project/provider/agent/runtime/interaction данные остаются explicit safe refs без service-client чтений и без переноса владения.
+
 ## Ближайшие зависимости
 
 | Домен | Что нужно согласовать |
