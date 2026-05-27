@@ -2188,15 +2188,25 @@ func requestEventPayload(request entity.InteractionRequest) interactionevents.Pa
 
 func requestResponseRecordedPayload(request entity.InteractionRequest, response entity.InteractionResponse) interactionevents.Payload {
 	return interactionevents.Payload{
-		RequestID:        request.ID.String(),
-		ResponseID:       response.ID.String(),
-		ResponseAction:   string(response.ResponseAction),
-		ActorRef:         response.RespondedByActorRef,
-		OwnerService:     string(request.DecisionOwner.Kind),
-		OwnerRequestRef:  request.DecisionOwner.OwnerRequestRef,
-		OwnerDecisionRef: response.OwnerDecisionRef,
-		Status:           string(request.Status),
-		Version:          request.Version,
+		RequestID:            request.ID.String(),
+		RequestKind:          string(request.RequestKind),
+		ResponseID:           response.ID.String(),
+		ResponseAction:       string(response.ResponseAction),
+		ActorRef:             response.RespondedByActorRef,
+		ScopeType:            string(request.Scope.Type),
+		ScopeRef:             request.Scope.Ref,
+		SourceOwnerKind:      string(request.SourceOwner.Kind),
+		SourceOwnerRef:       request.SourceOwner.Ref,
+		IngressKind:          string(request.Ingress.Kind),
+		SourceKind:           string(response.SourceKind),
+		RiskClass:            string(request.RiskClass),
+		ProviderOperationRef: contextRef(request.ContextRefs, "provider_operation"),
+		AgentRunRef:          contextRef(request.ContextRefs, "agent_run"),
+		OwnerService:         string(request.DecisionOwner.Kind),
+		OwnerRequestRef:      request.DecisionOwner.OwnerRequestRef,
+		OwnerDecisionRef:     response.OwnerDecisionRef,
+		Status:               string(request.Status),
+		Version:              request.Version,
 	}
 }
 
