@@ -1,8 +1,11 @@
 package casters
 
 import (
+	"time"
+
 	providersv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/providers/v1"
 	providerservice "github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/service"
+	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/enum"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/value"
 )
@@ -34,6 +37,9 @@ func ProviderOperationResponse(result providerservice.ProviderOperationResult) *
 	if result.Relationship != nil {
 		response.Relationship = RelationshipToProto(*result.Relationship)
 	}
+	if result.AdoptionScan != nil {
+		response.AdoptionScanSnapshot = RepositoryAdoptionScanSnapshotToProto(*result.AdoptionScan)
+	}
 	return response
 }
 
@@ -48,6 +54,46 @@ func ProviderTargetToProto(target providerservice.ProviderTarget) *providersv1.P
 		target.ProviderObjectID,
 		target.WebURL,
 	)
+}
+
+// RepositoryAdoptionScanSnapshotToProto maps a safe adoption scan snapshot to gRPC.
+func RepositoryAdoptionScanSnapshotToProto(snapshot entity.RepositoryAdoptionScanSnapshot) *providersv1.RepositoryAdoptionScanSnapshot {
+	return &providersv1.RepositoryAdoptionScanSnapshot{
+		SnapshotId:           snapshot.ID.String(),
+		ProviderOperationId:  snapshot.ProviderOperationID.String(),
+		ProviderSlug:         string(snapshot.ProviderSlug),
+		ExternalAccountId:    snapshot.ExternalAccountID.String(),
+		RepositoryTarget:     providerTargetMessage(snapshot.ProviderSlug, snapshot.RepositoryFullName, snapshot.ProviderRepositoryID, "", 0, "", snapshot.RepositoryURL),
+		RepositoryFullName:   snapshot.RepositoryFullName,
+		ProviderRepositoryId: snapshot.ProviderRepositoryID,
+		RepositoryUrl:        snapshot.RepositoryURL,
+		DefaultBranch:        snapshot.DefaultBranch,
+		RequestedRef:         snapshot.RequestedRef,
+		ScannedRef:           snapshot.ScannedRef,
+		HeadSha:              snapshot.HeadSHA,
+		Status:               RepositoryAdoptionScanStatusToProto(snapshot.Status),
+		Markers:              RepositoryAdoptionScanMarkersToProto(snapshot.Markers),
+		FileCount:            snapshot.FileCount,
+		VisibleFileCount:     snapshot.VisibleFileCount,
+		TreeTruncated:        snapshot.TreeTruncated,
+		Warnings:             append([]string(nil), snapshot.Warnings...),
+		SnapshotDigest:       snapshot.SnapshotDigest,
+		ObservedAt:           snapshot.ObservedAt.Format(time.RFC3339Nano),
+	}
+}
+
+// RepositoryAdoptionScanMarkersToProto maps safe scan markers to gRPC.
+func RepositoryAdoptionScanMarkersToProto(markers []entity.RepositoryAdoptionScanMarker) []*providersv1.RepositoryAdoptionScanMarker {
+	result := make([]*providersv1.RepositoryAdoptionScanMarker, 0, len(markers))
+	for _, marker := range markers {
+		result = append(result, &providersv1.RepositoryAdoptionScanMarker{
+			Path:         marker.Path,
+			Kind:         RepositoryAdoptionMarkerKindToProto(marker.Kind),
+			ObjectDigest: marker.ObjectDigest,
+			SizeBytes:    marker.SizeBytes,
+		})
+	}
+	return result
 }
 
 // PolicyContextToProto maps safe policy metadata to gRPC.

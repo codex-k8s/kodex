@@ -67,6 +67,8 @@ func (a *Adapter) Execute(ctx context.Context, request providerclient.WriteReque
 		return a.executeCreateBootstrapPullRequest(ctx, client, request.CreateBootstrapPullRequest)
 	case request.CreateAdoptionPullRequest != nil:
 		return a.executeCreateAdoptionPullRequest(ctx, client, request.CreateAdoptionPullRequest)
+	case request.ScanRepositoryForAdoption != nil:
+		return a.executeScanRepositoryForAdoption(ctx, client, request.ScanRepositoryForAdoption)
 	case request.CreateReviewSignal != nil:
 		return a.executeCreateReviewSignal(ctx, client, request.CreateReviewSignal)
 	default:
@@ -1076,6 +1078,9 @@ func countWriteCommands(request providerclient.WriteRequest) int {
 		count++
 	}
 	if request.CreateAdoptionPullRequest != nil {
+		count++
+	}
+	if request.ScanRepositoryForAdoption != nil {
 		count++
 	}
 	if request.CreateReviewSignal != nil {

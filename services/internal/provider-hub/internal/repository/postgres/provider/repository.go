@@ -381,6 +381,11 @@ func (r *Repository) GetProviderOperationByCommand(ctx context.Context, operatio
 	}, scanProviderOperation)
 }
 
+// GetRepositoryAdoptionScanByOperation returns the safe adoption scan snapshot produced by one operation.
+func (r *Repository) GetRepositoryAdoptionScanByOperation(ctx context.Context, providerOperationID uuid.UUID) (entity.RepositoryAdoptionScanSnapshot, error) {
+	return queryOne(ctx, r.db, operationGetRepositoryAdoptionScanByOperation, queryRepositoryAdoptionScanGetByOperation, repositoryAdoptionScanOperationArgs(providerOperationID), scanRepositoryAdoptionScan)
+}
+
 // ClaimOutboxEvents leases unpublished outbox events for delivery.
 func (r *Repository) ClaimOutboxEvents(ctx context.Context, limit int, now time.Time, lockedUntil time.Time) ([]entity.OutboxEvent, error) {
 	events, ok, err := postgreslib.ClaimOutboxRows(ctx, r.db, queryOutboxEventClaim, limit, now, lockedUntil, scanOutboxEvent)
@@ -412,36 +417,37 @@ func (r *Repository) markOutboxEventDeliveryFailure(ctx context.Context, operati
 }
 
 const (
-	operationStoreWebhookEvent                = "domain.Repository.StoreWebhookEvent"
-	operationProcessWebhookEvent              = "domain.Repository.ProcessWebhookEvent"
-	operationGetWebhookEvent                  = "domain.Repository.GetWebhookEvent"
-	operationListWebhookEvents                = "domain.Repository.ListWebhookEvents"
-	operationListProviderEvents               = "domain.Repository.ListProviderEvents"
-	operationGetWorkItemProjection            = "domain.Repository.GetWorkItemProjection"
-	operationGetCommentProjectionByProviderID = "domain.Repository.GetCommentProjectionByProviderID"
-	operationListWorkItemProjections          = "domain.Repository.ListWorkItemProjections"
-	operationListComments                     = "domain.Repository.ListComments"
-	operationGetRelationshipByIdentity        = "domain.Repository.GetRelationshipByIdentity"
-	operationListRelationships                = "domain.Repository.ListRelationships"
-	operationRegisterProviderArtifactSignal   = "domain.Repository.RegisterProviderArtifactSignal"
-	operationEnqueueSyncCursors               = "domain.Repository.EnqueueSyncCursors"
-	operationGetSyncCursor                    = "domain.Repository.GetSyncCursor"
-	operationListSyncCursors                  = "domain.Repository.ListSyncCursors"
-	operationClaimSyncCursor                  = "domain.Repository.ClaimSyncCursor"
-	operationApplyReconciliationBatch         = "domain.Repository.ApplyReconciliationBatch"
-	operationGetAccountRuntimeState           = "domain.Repository.GetAccountRuntimeState"
-	operationListAccountRuntimeStates         = "domain.Repository.ListAccountRuntimeStates"
-	operationUpsertAccountRuntimeState        = "domain.Repository.UpsertAccountRuntimeState"
-	operationRecordLimitSnapshot              = "domain.Repository.RecordLimitSnapshot"
-	operationListLimitSnapshots               = "domain.Repository.ListLimitSnapshots"
-	operationRecordProviderOperation          = "domain.Repository.RecordProviderOperation"
-	operationApplyProviderOperation           = "domain.Repository.ApplyProviderOperation"
-	operationListProviderOperations           = "domain.Repository.ListProviderOperations"
-	operationGetProviderOperationByCommand    = "domain.Repository.GetProviderOperationByCommand"
-	operationClaimOutboxEvents                = "domain.Repository.ClaimOutboxEvents"
-	operationMarkOutboxEventPublished         = "domain.Repository.MarkOutboxEventPublished"
-	operationMarkOutboxEventFailed            = "domain.Repository.MarkOutboxEventFailed"
-	operationMarkOutboxEventPermanentlyFailed = "domain.Repository.MarkOutboxEventPermanentlyFailed"
+	operationStoreWebhookEvent                    = "domain.Repository.StoreWebhookEvent"
+	operationProcessWebhookEvent                  = "domain.Repository.ProcessWebhookEvent"
+	operationGetWebhookEvent                      = "domain.Repository.GetWebhookEvent"
+	operationListWebhookEvents                    = "domain.Repository.ListWebhookEvents"
+	operationListProviderEvents                   = "domain.Repository.ListProviderEvents"
+	operationGetWorkItemProjection                = "domain.Repository.GetWorkItemProjection"
+	operationGetCommentProjectionByProviderID     = "domain.Repository.GetCommentProjectionByProviderID"
+	operationListWorkItemProjections              = "domain.Repository.ListWorkItemProjections"
+	operationListComments                         = "domain.Repository.ListComments"
+	operationGetRelationshipByIdentity            = "domain.Repository.GetRelationshipByIdentity"
+	operationListRelationships                    = "domain.Repository.ListRelationships"
+	operationRegisterProviderArtifactSignal       = "domain.Repository.RegisterProviderArtifactSignal"
+	operationEnqueueSyncCursors                   = "domain.Repository.EnqueueSyncCursors"
+	operationGetSyncCursor                        = "domain.Repository.GetSyncCursor"
+	operationListSyncCursors                      = "domain.Repository.ListSyncCursors"
+	operationClaimSyncCursor                      = "domain.Repository.ClaimSyncCursor"
+	operationApplyReconciliationBatch             = "domain.Repository.ApplyReconciliationBatch"
+	operationGetAccountRuntimeState               = "domain.Repository.GetAccountRuntimeState"
+	operationListAccountRuntimeStates             = "domain.Repository.ListAccountRuntimeStates"
+	operationUpsertAccountRuntimeState            = "domain.Repository.UpsertAccountRuntimeState"
+	operationRecordLimitSnapshot                  = "domain.Repository.RecordLimitSnapshot"
+	operationListLimitSnapshots                   = "domain.Repository.ListLimitSnapshots"
+	operationRecordProviderOperation              = "domain.Repository.RecordProviderOperation"
+	operationApplyProviderOperation               = "domain.Repository.ApplyProviderOperation"
+	operationListProviderOperations               = "domain.Repository.ListProviderOperations"
+	operationGetProviderOperationByCommand        = "domain.Repository.GetProviderOperationByCommand"
+	operationGetRepositoryAdoptionScanByOperation = "domain.Repository.GetRepositoryAdoptionScanByOperation"
+	operationClaimOutboxEvents                    = "domain.Repository.ClaimOutboxEvents"
+	operationMarkOutboxEventPublished             = "domain.Repository.MarkOutboxEventPublished"
+	operationMarkOutboxEventFailed                = "domain.Repository.MarkOutboxEventFailed"
+	operationMarkOutboxEventPermanentlyFailed     = "domain.Repository.MarkOutboxEventPermanentlyFailed"
 )
 
 func recordProviderOperation(ctx context.Context, db queryer, operation string, providerOperation entity.ProviderOperation) (entity.ProviderOperation, bool, error) {
@@ -537,6 +543,24 @@ func storeRepositoryMergeSignal(ctx context.Context, db queryer, operation strin
 	return stored, true, nil
 }
 
+func storeRepositoryAdoptionScan(ctx context.Context, db queryer, operation string, snapshot entity.RepositoryAdoptionScanSnapshot) (entity.RepositoryAdoptionScanSnapshot, bool, error) {
+	stored, err := queryOne(ctx, db, operation, queryRepositoryAdoptionScanInsert, repositoryAdoptionScanArgs(snapshot), scanRepositoryAdoptionScan)
+	if errors.Is(err, errs.ErrNotFound) {
+		stored, err = queryOne(ctx, db, operation, queryRepositoryAdoptionScanGetByOperation, repositoryAdoptionScanOperationArgs(snapshot.ProviderOperationID), scanRepositoryAdoptionScan)
+		if err == nil && !sameRepositoryAdoptionScan(snapshot, stored) {
+			err = errs.ErrConflict
+		}
+		return stored, false, err
+	}
+	if err != nil {
+		return entity.RepositoryAdoptionScanSnapshot{}, false, err
+	}
+	if !sameRepositoryAdoptionScan(snapshot, stored) {
+		return entity.RepositoryAdoptionScanSnapshot{}, false, errs.ErrConflict
+	}
+	return stored, true, nil
+}
+
 func enqueueSyncCursors(ctx context.Context, db queryer, operation string, request entity.ReconciliationRequest, cursors []entity.SyncCursor) ([]entity.SyncCursor, error) {
 	inserted, err := queryOne(ctx, db, operation, queryReconciliationRequestInsert, reconciliationRequestArgs(request), scanReconciliationRequest)
 	if errors.Is(err, errs.ErrNotFound) {
@@ -611,6 +635,27 @@ func sameRepositoryMergeSignal(expected entity.RepositoryMergeSignal, actual ent
 		expected.Status == actual.Status
 }
 
+func sameRepositoryAdoptionScan(expected entity.RepositoryAdoptionScanSnapshot, actual entity.RepositoryAdoptionScanSnapshot) bool {
+	return expected.SnapshotKey == actual.SnapshotKey &&
+		expected.ProviderOperationID == actual.ProviderOperationID &&
+		expected.ExternalAccountID == actual.ExternalAccountID &&
+		expected.ProviderSlug == actual.ProviderSlug &&
+		expected.RepositoryFullName == actual.RepositoryFullName &&
+		expected.ProviderRepositoryID == actual.ProviderRepositoryID &&
+		expected.RepositoryURL == actual.RepositoryURL &&
+		expected.DefaultBranch == actual.DefaultBranch &&
+		expected.RequestedRef == actual.RequestedRef &&
+		expected.ScannedRef == actual.ScannedRef &&
+		expected.HeadSHA == actual.HeadSHA &&
+		expected.Status == actual.Status &&
+		expected.FileCount == actual.FileCount &&
+		expected.VisibleFileCount == actual.VisibleFileCount &&
+		expected.TreeTruncated == actual.TreeTruncated &&
+		expected.SnapshotDigest == actual.SnapshotDigest &&
+		slices.Equal(expected.Warnings, actual.Warnings) &&
+		slices.Equal(expected.Markers, actual.Markers)
+}
+
 func sameOptionalUUID(expected *uuid.UUID, actual *uuid.UUID) bool {
 	if expected == nil || actual == nil {
 		return expected == nil && actual == nil
@@ -629,6 +674,8 @@ type projectionApplyResult struct {
 	workItemProjectionID        uuid.UUID
 	mergeSignalApplied          bool
 	mergeSignalID               uuid.UUID
+	adoptionScanApplied         bool
+	adoptionScanID              uuid.UUID
 	appliedCommentProjectionIDs map[uuid.UUID]struct{}
 	appliedCommentProviderIDs   map[string]struct{}
 	appliedRelationshipIDs      map[uuid.UUID]struct{}
@@ -640,7 +687,7 @@ func applyProjectionUpdate(ctx context.Context, db projectionUpdater, operation 
 		appliedCommentProviderIDs:   make(map[string]struct{}),
 		appliedRelationshipIDs:      make(map[uuid.UUID]struct{}),
 	}
-	result.hasProjection = update.WorkItem != nil || len(update.Comments) > 0 || len(update.Relationships) > 0 || update.MergeSignal != nil
+	result.hasProjection = update.WorkItem != nil || len(update.Comments) > 0 || len(update.Relationships) > 0 || update.MergeSignal != nil || update.AdoptionScan != nil
 	if update.WorkItem != nil {
 		storedWorkItem, workItemApplied, err := upsertFreshWorkItemProjection(ctx, db, operation, *update.WorkItem)
 		if err != nil {
@@ -691,6 +738,14 @@ func applyProjectionUpdate(ctx context.Context, db projectionUpdater, operation 
 	}
 	if err := upsertRelationships(ctx, db, operation, update.Relationships, result.appliedRelationshipIDs); err != nil {
 		return result, err
+	}
+	if update.AdoptionScan != nil {
+		storedSnapshot, applied, err := storeRepositoryAdoptionScan(ctx, db, operation, *update.AdoptionScan)
+		if err != nil {
+			return result, err
+		}
+		result.adoptionScanApplied = applied
+		result.adoptionScanID = storedSnapshot.ID
 	}
 	return result, nil
 }
@@ -841,6 +896,10 @@ func filterOutboxEvents(events []entity.OutboxEvent, providerEvents []entity.Pro
 			}
 		case providerevents.EventRepositoryBootstrapMerged, providerevents.EventRepositoryAdoptionMerged:
 			if result.mergeSignalApplied && event.AggregateID == result.mergeSignalID {
+				filtered = append(filtered, event)
+			}
+		case providerevents.EventRepositoryAdoptionScanCompleted:
+			if result.adoptionScanApplied && event.AggregateID == result.adoptionScanID {
 				filtered = append(filtered, event)
 			}
 		default:

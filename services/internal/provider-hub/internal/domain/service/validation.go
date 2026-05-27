@@ -9,6 +9,19 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/value"
 )
 
+var repositoryAdoptionMarkerKinds = map[enum.RepositoryAdoptionMarkerKind]struct{}{
+	enum.RepositoryAdoptionMarkerServiceDescriptor: {},
+	enum.RepositoryAdoptionMarkerGitmodules:        {},
+	enum.RepositoryAdoptionMarkerReadme:            {},
+	enum.RepositoryAdoptionMarkerAgents:            {},
+	enum.RepositoryAdoptionMarkerDocs:              {},
+	enum.RepositoryAdoptionMarkerWorkflow:          {},
+	enum.RepositoryAdoptionMarkerModule:            {},
+	enum.RepositoryAdoptionMarkerPackage:           {},
+	enum.RepositoryAdoptionMarkerDeploy:            {},
+	enum.RepositoryAdoptionMarkerOther:             {},
+}
+
 func validProviderSlug(slug enum.ProviderSlug) bool {
 	switch slug {
 	case enum.ProviderSlugGitHub, enum.ProviderSlugGitLab:
@@ -206,6 +219,7 @@ func validOperationTypes(types []enum.ProviderOperationType) bool {
 			enum.ProviderOperationUpdatePullRequest,
 			enum.ProviderOperationCreateBootstrapPullRequest,
 			enum.ProviderOperationCreateAdoptionPullRequest,
+			enum.ProviderOperationScanRepositoryForAdoption,
 			enum.ProviderOperationCreateReviewSignal,
 			enum.ProviderOperationUpdateRelationship:
 		default:
@@ -234,6 +248,22 @@ func validRepositoryVisibility(visibility enum.RepositoryVisibility) bool {
 	default:
 		return false
 	}
+}
+
+func validRepositoryAdoptionScanStatus(status enum.RepositoryAdoptionScanStatus) bool {
+	switch status {
+	case enum.RepositoryAdoptionScanStatusCompleted,
+		enum.RepositoryAdoptionScanStatusLimited,
+		enum.RepositoryAdoptionScanStatusNeedsReview:
+		return true
+	default:
+		return false
+	}
+}
+
+func validRepositoryAdoptionMarkerKind(kind enum.RepositoryAdoptionMarkerKind) bool {
+	_, ok := repositoryAdoptionMarkerKinds[kind]
+	return ok
 }
 
 func validOperationStatuses(statuses []enum.ProviderOperationStatus) bool {

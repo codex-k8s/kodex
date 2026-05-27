@@ -41,6 +41,7 @@ type providerService interface {
 	CreateRepository(context.Context, providerservice.CreateRepositoryInput) (providerservice.ProviderOperationResult, error)
 	CreateBootstrapPullRequest(context.Context, providerservice.CreateBootstrapPullRequestInput) (providerservice.ProviderOperationResult, error)
 	CreateAdoptionPullRequest(context.Context, providerservice.CreateAdoptionPullRequestInput) (providerservice.ProviderOperationResult, error)
+	ScanRepositoryForAdoption(context.Context, providerservice.ScanRepositoryForAdoptionInput) (providerservice.ProviderOperationResult, error)
 	UpdatePullRequest(context.Context, providerservice.UpdatePullRequestInput) (providerservice.ProviderOperationResult, error)
 	CreateReviewSignal(context.Context, providerservice.CreateReviewSignalInput) (providerservice.ProviderOperationResult, error)
 	UpdateRelationship(context.Context, providerservice.UpdateRelationshipInput) (providerservice.ProviderOperationResult, error)
@@ -168,6 +169,11 @@ func (s *Server) CreateBootstrapPullRequest(ctx context.Context, request *provid
 // CreateAdoptionPullRequest records an adoption branch/PR command.
 func (s *Server) CreateAdoptionPullRequest(ctx context.Context, request *providersv1.CreateAdoptionPullRequestRequest) (*providersv1.ProviderOperationResponse, error) {
 	return grpcserver.HandleUnary(ctx, request, grpccasters.CreateAdoptionPullRequestInput, s.service.CreateAdoptionPullRequest, grpccasters.ProviderOperationResponse)
+}
+
+// ScanRepositoryForAdoption records a lightweight provider-side repository snapshot.
+func (s *Server) ScanRepositoryForAdoption(ctx context.Context, request *providersv1.ScanRepositoryForAdoptionRequest) (*providersv1.ProviderOperationResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.ScanRepositoryForAdoptionInput, s.service.ScanRepositoryForAdoption, grpccasters.ProviderOperationResponse)
 }
 
 // UpdatePullRequest records a typed provider PR/MR update command.

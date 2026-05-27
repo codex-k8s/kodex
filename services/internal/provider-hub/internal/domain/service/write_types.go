@@ -145,6 +145,24 @@ type CreateAdoptionPullRequestInput struct {
 	Files          []AdoptionFile
 }
 
+// RepositoryAdoptionScanOptions bounds a provider-side repository scan for adoption.
+type RepositoryAdoptionScanOptions struct {
+	RequestedRef       string
+	AllowedRefPrefixes []string
+	MaxTreeEntries     int
+	MaxMarkerPaths     int
+	MarkerPathHints    []string
+}
+
+// ScanRepositoryForAdoptionInput describes a lightweight provider-side adoption scan command.
+type ScanRepositoryForAdoptionInput struct {
+	ProviderSlug      enum.ProviderSlug
+	RepositoryTarget  ProviderTarget
+	Options           RepositoryAdoptionScanOptions
+	Meta              value.CommandMeta
+	ExternalAccountID uuid.UUID
+}
+
 // UpdatePullRequestInput describes one typed PR/MR update command.
 type UpdatePullRequestInput struct {
 	Target                  ProviderTarget
@@ -201,6 +219,7 @@ type ProviderOperationResult struct {
 	WorkItemProjection *entity.ProviderWorkItemProjection
 	CommentProjection  *entity.ProviderCommentProjection
 	Relationship       *entity.ProviderRelationship
+	AdoptionScan       *entity.RepositoryAdoptionScanSnapshot
 	Result             ProviderOperationCommandResult
 }
 

@@ -42,6 +42,7 @@ type Repository interface {
 	ListLimitSnapshots(context.Context, query.LimitSnapshotFilter) ([]entity.ProviderLimitSnapshot, query.PageResult, error)
 	ApplyProviderOperation(context.Context, ProviderOperationCompletion) (entity.ProviderOperation, error)
 	GetProviderOperationByCommand(context.Context, enum.ProviderOperationType, string) (entity.ProviderOperation, error)
+	GetRepositoryAdoptionScanByOperation(context.Context, uuid.UUID) (entity.RepositoryAdoptionScanSnapshot, error)
 	RecordProviderOperation(context.Context, entity.ProviderOperation) (entity.ProviderOperation, bool, error)
 	ListProviderOperations(context.Context, query.ProviderOperationFilter) ([]entity.ProviderOperation, query.PageResult, error)
 	ClaimOutboxEvents(context.Context, int, time.Time, time.Time) ([]entity.OutboxEvent, error)
@@ -56,6 +57,7 @@ type ProjectionUpdate struct {
 	Comments      []entity.ProviderCommentProjection
 	Relationships []entity.ProviderRelationship
 	MergeSignal   *entity.RepositoryMergeSignal
+	AdoptionScan  *entity.RepositoryAdoptionScanSnapshot
 }
 
 // SyncCursorClaim identifies one cursor lease attempt for a reconciliation worker.

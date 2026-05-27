@@ -5,8 +5,8 @@ title: kodex — варианты bootstrap/adoption репозитория
 status: active
 owner_role: SA
 created_at: 2026-05-14
-updated_at: 2026-05-26
-related_issues: [281, 282, 761, 794, 810, 818, 840]
+updated_at: 2026-05-27
+related_issues: [281, 282, 761, 794, 810, 818, 840, 865]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -42,7 +42,7 @@ approvals:
 | Сервис | Ответственность в bootstrap/adoption |
 |---|---|
 | `project-catalog` | Владеет проектом, repository binding, `services.yaml`, проектной политикой и проверенной проекцией. Не является Git-клиентом. |
-| `provider-hub` | Выполняет provider-native операции: читать репозиторий, создать репозиторий, создать или обновить ветку, Issue, PR/MR, комментарий, связь и зеркало. Создание самого репозитория остаётся отдельной командой и не смешивается с генерацией `services.yaml`, выбором шаблона, adoption scan и bootstrap branch/PR. |
+| `provider-hub` | Выполняет provider-native операции: читать репозиторий, снять lightweight scan snapshot без содержимого файлов, создать репозиторий, создать или обновить ветку, Issue, PR/MR, комментарий, связь и зеркало. Создание самого репозитория остаётся отдельной командой и не смешивается с генерацией `services.yaml`, выбором шаблона, deep adoption scan/report и bootstrap branch/PR. |
 | `package-hub` | Владеет пакетами, шаблонами репозиториев, источниками, установками, manifest и состоянием магазина пакетов. Не выполняет checkout файлов пакета. |
 | `agent-manager` | Запускает агентные роли и детерминированные bootstrap/adoption-запуски, которые готовят PR, отчёт подключения, проверки и рекомендации. |
 | `runtime-manager` | Материализует workspace по политике, `source_ref`, шаблонам и установкам пакетов. Не владеет проектной политикой. |
@@ -106,21 +106,22 @@ approvals:
 10. Webhook или сверка провайдера фиксирует merge; `provider-hub` сохраняет safe merge signal для bootstrap/adoption `PR/MR`, связывает merged projection с `project_id` и `repository_id` и публикует `provider.repository.bootstrap_merged` или `provider.repository.adoption_merged`; внутренний контур передаёт в `project-catalog ImportBootstrapServicesPolicy` только проверенный сигнал: provider target, `base_branch`, `source_ref`, commit, `content_hash`, watermark и нормализованный `services.yaml`.
 11. `project-catalog` сверяет сигнал с project/repository binding, проверяет ожидаемую версию pending binding, импортирует проверенную политику штатным контуром и переводит repository binding в `active`. Повтор того же commit/source ref возвращает уже сохранённую проекцию, а другой commit/ref считается конфликтом bootstrap-завершения.
 
-В реализованном project-side контуре пустого репозитория покрыты три шага модели C: создание provider-native репозитория с фиксацией `base_branch` в project-owned binding, создание bootstrap PR по уже подготовленному payload и импорт проверенной `services.yaml` после merge с активацией binding. Provider-side контур уже фиксирует safe merge signal, но выбор и применение шаблона, webhook endpoint/reconciliation executor для полного e2e и adoption существующего репозитория остаются отдельными шагами модели C.
+В реализованном project-side контуре пустого репозитория покрыты три шага модели C: создание provider-native репозитория с фиксацией `base_branch` в project-owned binding, создание bootstrap PR по уже подготовленному payload и импорт проверенной `services.yaml` после merge с активацией binding. Provider-side контур уже фиксирует safe merge signal и lightweight snapshot существующего репозитория, но выбор и применение шаблона, webhook endpoint/reconciliation executor для полного e2e, deep workspace scan/report и adoption decision остаются отдельными шагами модели C.
 
 ### Существующий репозиторий
 
 1. Пользователь или оператор указывает provider ref существующего репозитория.
-2. `provider-hub` проверяет доступ, создаёт или обновляет зеркало репозитория и ставит горячую сверку.
-3. Платформа выполняет первичную техническую проверку: наличие `services.yaml`, конфликт путей, тип репозитория, доступность ветки, базовые языковые признаки и возможность применить шаблон без перезаписи.
-4. Если репозиторий подходит под выбранный шаблон и конфликтов нет, детерминированный исполнитель готовит payload для PR: добавляет или обновляет `services.yaml`, локальные инструкции, скелет документации и ссылки на руководящие пакеты.
-5. Если структура неоднозначна или есть конфликты, `agent-manager` запускает adoption-роль в read-only workspace.
-6. `runtime-manager` материализует исходный репозиторий, выбранные шаблоны и доступные руководящие пакеты без изменения целевого репозитория.
-7. Adoption-роль сканирует структуру, языки, сервисы, документацию, риски, наличие `services.yaml`, веточные правила и возможные конфликты.
-8. Результатом является отчёт подключения и, если нужно, готовый набор файлов, refs, заголовок и тело PR с добавлением или исправлением `services.yaml`, документационных ссылок и минимальных политик.
-9. `provider-hub` создаёт или обновляет adoption branch и reviewable PR/MR по этому готовому payload, не выполняя scan и не принимая проектное решение.
-10. Владелец принимает решение по отчёту и подтверждает переход через merge bootstrap/adoption PR.
-11. После merge `project-catalog` импортирует проверенную проекцию и включает репозиторий в проектный рабочий контур.
+2. Проектный или агентный контур вызывает `provider-hub ScanRepositoryForAdoption` с provider target refs, выбранным внешним аккаунтом, branch/ref policy и bounded scan options.
+3. `provider-hub` читает только provider metadata/ref/tree, фиксирует safe snapshot: default/scanned ref, head sha, marker path refs/digests/counts, bounded warnings и snapshot digest; содержимое файлов, diff/archive и provider response не сохраняются.
+4. `project-catalog` использует snapshot как вход planning: проверяет состояние repository binding, ожидаемый `source_ref`, наличие безопасных маркеров и необходимость deep scan, но не читает provider напрямую.
+5. Если репозиторий подходит под выбранный шаблон и конфликтов нет, детерминированный исполнитель готовит payload для PR: добавляет или обновляет `services.yaml`, локальные инструкции, скелет документации и ссылки на руководящие пакеты.
+6. Если структура неоднозначна или есть конфликты, `agent-manager` запускает adoption-роль в read-only workspace.
+7. `runtime-manager` материализует исходный репозиторий, выбранные шаблоны и доступные руководящие пакеты без изменения целевого репозитория.
+8. Adoption-роль сканирует структуру, языки, сервисы, документацию, риски, наличие `services.yaml`, веточные правила и возможные конфликты.
+9. Результатом является отчёт подключения и, если нужно, готовый набор файлов, refs, заголовок и тело PR с добавлением или исправлением `services.yaml`, документационных ссылок и минимальных политик.
+10. `provider-hub` создаёт или обновляет adoption branch и reviewable PR/MR по этому готовому payload, не выполняя deep scan и не принимая проектное решение.
+11. Владелец принимает решение по отчёту и подтверждает переход через merge bootstrap/adoption PR.
+12. После merge `project-catalog` импортирует проверенную проекцию и включает репозиторий в проектный рабочий контур.
 
 ### Подключение внешней документации и пакетов
 

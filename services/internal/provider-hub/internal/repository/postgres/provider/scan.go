@@ -301,6 +301,73 @@ func scanRepositoryMergeSignal(row postgreslib.RowScanner) (entity.RepositoryMer
 	return signal, err
 }
 
+func scanRepositoryAdoptionScan(row postgreslib.RowScanner) (entity.RepositoryAdoptionScanSnapshot, error) {
+	var snapshot entity.RepositoryAdoptionScanSnapshot
+	var providerSlug, status string
+	var markersJSON, warningsJSON []byte
+	err := row.Scan(
+		&snapshot.ID,
+		&snapshot.SnapshotKey,
+		&snapshot.ProviderOperationID,
+		&snapshot.ExternalAccountID,
+		&providerSlug,
+		&snapshot.RepositoryFullName,
+		&snapshot.ProviderRepositoryID,
+		&snapshot.RepositoryURL,
+		&snapshot.DefaultBranch,
+		&snapshot.RequestedRef,
+		&snapshot.ScannedRef,
+		&snapshot.HeadSHA,
+		&status,
+		&markersJSON,
+		&snapshot.FileCount,
+		&snapshot.VisibleFileCount,
+		&snapshot.TreeTruncated,
+		&warningsJSON,
+		&snapshot.SnapshotDigest,
+		&snapshot.ObservedAt,
+		&snapshot.Version,
+		&snapshot.CreatedAt,
+		&snapshot.UpdatedAt,
+	)
+	snapshot.ProviderSlug = enum.ProviderSlug(providerSlug)
+	snapshot.Status = enum.RepositoryAdoptionScanStatus(status)
+	markers, markerErr := scanRepositoryAdoptionMarkers(markersJSON)
+	if markerErr != nil {
+		return entity.RepositoryAdoptionScanSnapshot{}, markerErr
+	}
+	var warnings []string
+	if len(warningsJSON) == 0 {
+		warningsJSON = []byte("[]")
+	}
+	if warningErr := json.Unmarshal(warningsJSON, &warnings); warningErr != nil {
+		return entity.RepositoryAdoptionScanSnapshot{}, warningErr
+	}
+	snapshot.Markers = markers
+	snapshot.Warnings = warnings
+	return snapshot, err
+}
+
+func scanRepositoryAdoptionMarkers(payload []byte) ([]entity.RepositoryAdoptionScanMarker, error) {
+	if len(payload) == 0 {
+		payload = []byte("[]")
+	}
+	var raw []repositoryAdoptionMarkerJSON
+	if err := json.Unmarshal(payload, &raw); err != nil {
+		return nil, err
+	}
+	result := make([]entity.RepositoryAdoptionScanMarker, 0, len(raw))
+	for _, marker := range raw {
+		result = append(result, entity.RepositoryAdoptionScanMarker{
+			Path:         marker.Path,
+			Kind:         enum.RepositoryAdoptionMarkerKind(marker.Kind),
+			ObjectDigest: marker.ObjectDigest,
+			SizeBytes:    marker.SizeBytes,
+		})
+	}
+	return result, nil
+}
+
 func scanLimitSnapshot(row postgreslib.RowScanner) (entity.ProviderLimitSnapshot, error) {
 	var snapshot entity.ProviderLimitSnapshot
 	var providerSlug, source string

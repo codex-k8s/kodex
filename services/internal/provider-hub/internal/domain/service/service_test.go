@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/codex-k8s/kodex/libs/go/accesscatalog"
 	"github.com/codex-k8s/kodex/libs/go/secretresolver"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/errs"
 	providerrepo "github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/repository/provider"
@@ -2016,6 +2017,193 @@ func TestCreateAdoptionPullRequestRecordsProjectionRelationshipAndEvent(t *testi
 	}
 }
 
+func TestScanRepositoryForAdoptionRecordsSafeSnapshotAndEvent(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 27, 10, 0, 0, 0, time.UTC)
+	externalAccountID := uuid.New()
+	commandID := uuid.New()
+	operationID := uuid.New()
+	operationOutboxID := uuid.New()
+	scanOutboxID := uuid.New()
+	executor := &fakeWriteExecutor{
+		result: providerclient.WriteResult{
+			ResultRef:        "https://github.com/codex-k8s/kodex",
+			ProviderObjectID: "101",
+			ProviderVersion:  "abc123",
+			Target: &providerclient.Target{
+				ProviderSlug:         enum.ProviderSlugGitHub,
+				RepositoryFullName:   "codex-k8s/kodex",
+				ProviderRepositoryID: "101",
+				WebURL:               "https://github.com/codex-k8s/kodex",
+			},
+			RepositoryAdoptionScan: &providerclient.RepositoryAdoptionScan{
+				RepositoryTarget: providerclient.Target{
+					ProviderSlug:         enum.ProviderSlugGitHub,
+					RepositoryFullName:   "codex-k8s/kodex",
+					ProviderRepositoryID: "101",
+					WebURL:               "https://github.com/codex-k8s/kodex",
+				},
+				RepositoryFullName:   "codex-k8s/kodex",
+				ProviderRepositoryID: "101",
+				RepositoryURL:        "https://github.com/codex-k8s/kodex",
+				DefaultBranch:        "main",
+				RequestedRef:         "main",
+				ScannedRef:           "main",
+				HeadSHA:              "abc123",
+				Status:               enum.RepositoryAdoptionScanStatusCompleted,
+				Markers: []providerclient.RepositoryAdoptionScanMarker{{
+					Path:         "services.yaml",
+					Kind:         enum.RepositoryAdoptionMarkerServiceDescriptor,
+					ObjectDigest: "blob-sha",
+					SizeBytes:    42,
+				}},
+				FileCount:        8,
+				VisibleFileCount: 8,
+				SnapshotDigest:   "safe-digest",
+				ObservedAt:       now.Add(time.Minute),
+			},
+			BaseBranch: "main",
+		},
+	}
+	repository := &fakeRepository{}
+	var accountUsageInput ExternalAccountUsageInput
+	service := NewWithDependencies(Dependencies{
+		Repository:  repository,
+		Clock:       fixedClock{now: now},
+		IDGenerator: &sequenceIDs{ids: []uuid.UUID{operationID, operationOutboxID, scanOutboxID}},
+		AccountUsageResolver: fakeAccountUsageResolver{onResolve: func(input ExternalAccountUsageInput) {
+			accountUsageInput = input
+		}},
+		SecretResolver:         &fakeSecretResolver{secret: secretresolver.NewSecretValue([]byte("read-token"))},
+		ProviderWriteExecutors: []providerclient.WriteExecutor{executor},
+	})
+
+	result, err := service.ScanRepositoryForAdoption(context.Background(), ScanRepositoryForAdoptionInput{
+		ProviderSlug:      enum.ProviderSlugGitHub,
+		RepositoryTarget:  ProviderTarget{ProviderSlug: enum.ProviderSlugGitHub, RepositoryFullName: "codex-k8s/kodex"},
+		ExternalAccountID: externalAccountID,
+		Options: RepositoryAdoptionScanOptions{
+			RequestedRef:       "main",
+			AllowedRefPrefixes: []string{"refs/heads/"},
+			MaxTreeEntries:     500,
+			MaxMarkerPaths:     10,
+			MarkerPathHints:    []string{"docs/README.md"},
+		},
+		Meta: value.CommandMeta{
+			CommandID: commandID,
+			OperationPolicyContext: value.ProviderOperationPolicyContext{
+				RiskLevel: value.ProviderOperationRiskLevelLow,
+				ChangedFields: []string{
+					"repository_target",
+					"scan_options",
+					"requested_ref",
+					"allowed_ref_prefixes",
+					"marker_path_hints",
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("ScanRepositoryForAdoption(): %v", err)
+	}
+	if executor.calls != 1 || executor.request.ScanRepositoryForAdoption == nil {
+		t.Fatalf("executor request = %+v, want scan repository command", executor.request)
+	}
+	if accountUsageInput.ActionKey != accesscatalog.ActionProviderReconciliationRun ||
+		accountUsageInput.ScopeType != providerUsageScopeRepository ||
+		accountUsageInput.ScopeID != "codex-k8s/kodex" {
+		t.Fatalf("account usage input = %+v, want repository reconciliation action", accountUsageInput)
+	}
+	if repository.recordedProviderOperation.OperationType != enum.ProviderOperationScanRepositoryForAdoption ||
+		repository.recordedProviderOperation.Status != enum.ProviderOperationStatusSucceeded ||
+		repository.recordedProviderOperation.RepositoryFullName != "codex-k8s/kodex" {
+		t.Fatalf("operation = %+v, want succeeded adoption scan operation", repository.recordedProviderOperation)
+	}
+	if repository.recordedProjection.AdoptionScan == nil ||
+		repository.recordedProjection.AdoptionScan.ProviderOperationID != operationID ||
+		repository.recordedProjection.AdoptionScan.SnapshotDigest != "safe-digest" ||
+		len(repository.recordedProjection.AdoptionScan.Markers) != 1 {
+		t.Fatalf("adoption scan = %+v, want safe snapshot", repository.recordedProjection.AdoptionScan)
+	}
+	if len(repository.recordedOutboxEvents) != 2 ||
+		repository.recordedOutboxEvents[1].ID != scanOutboxID ||
+		repository.recordedOutboxEvents[1].EventType != providerEventRepositoryAdoptionScanCompleted {
+		t.Fatalf("outbox events = %+v, want operation and adoption scan completed", repository.recordedOutboxEvents)
+	}
+	if result.AdoptionScan == nil || result.AdoptionScan.HeadSHA != "abc123" || result.Result.BaseBranch != "main" {
+		t.Fatalf("result = %+v, snapshot = %+v, want scan snapshot and base branch", result.Result, result.AdoptionScan)
+	}
+}
+
+func TestScanRepositoryForAdoptionReplayDoesNotCallProviderTwice(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 27, 10, 30, 0, 0, time.UTC)
+	externalAccountID := uuid.New()
+	commandID := uuid.New()
+	executor := &fakeWriteExecutor{
+		result: providerclient.WriteResult{
+			ResultRef:        "https://github.com/codex-k8s/kodex",
+			ProviderObjectID: "101",
+			ProviderVersion:  "abc123",
+			Target:           &providerclient.Target{ProviderSlug: enum.ProviderSlugGitHub, RepositoryFullName: "codex-k8s/kodex"},
+			RepositoryAdoptionScan: &providerclient.RepositoryAdoptionScan{
+				RepositoryTarget:     providerclient.Target{ProviderSlug: enum.ProviderSlugGitHub, RepositoryFullName: "codex-k8s/kodex"},
+				RepositoryFullName:   "codex-k8s/kodex",
+				ProviderRepositoryID: "101",
+				DefaultBranch:        "main",
+				ScannedRef:           "main",
+				HeadSHA:              "abc123",
+				Status:               enum.RepositoryAdoptionScanStatusNeedsReview,
+				FileCount:            3,
+				VisibleFileCount:     3,
+				SnapshotDigest:       "safe-digest",
+				ObservedAt:           now,
+			},
+			BaseBranch: "main",
+		},
+	}
+	repository := &fakeRepository{}
+	service := NewWithDependencies(Dependencies{
+		Repository:             repository,
+		Clock:                  fixedClock{now: now},
+		IDGenerator:            &sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New(), uuid.New()}},
+		AccountUsageResolver:   fakeAccountUsageResolver{},
+		SecretResolver:         &fakeSecretResolver{secret: secretresolver.NewSecretValue([]byte("read-token"))},
+		ProviderWriteExecutors: []providerclient.WriteExecutor{executor},
+	})
+	input := ScanRepositoryForAdoptionInput{
+		ProviderSlug:      enum.ProviderSlugGitHub,
+		RepositoryTarget:  ProviderTarget{ProviderSlug: enum.ProviderSlugGitHub, RepositoryFullName: "codex-k8s/kodex"},
+		ExternalAccountID: externalAccountID,
+		Meta: value.CommandMeta{
+			CommandID: commandID,
+			OperationPolicyContext: value.ProviderOperationPolicyContext{
+				RiskLevel:     value.ProviderOperationRiskLevelLow,
+				ChangedFields: []string{"repository_target", "scan_options"},
+			},
+		},
+	}
+	first, err := service.ScanRepositoryForAdoption(context.Background(), input)
+	if err != nil {
+		t.Fatalf("ScanRepositoryForAdoption() first: %v", err)
+	}
+	second, err := service.ScanRepositoryForAdoption(context.Background(), input)
+	if err != nil {
+		t.Fatalf("ScanRepositoryForAdoption() replay: %v", err)
+	}
+	if executor.calls != 1 {
+		t.Fatalf("executor calls = %d, want one provider scan and one replay", executor.calls)
+	}
+	if first.AdoptionScan == nil ||
+		second.AdoptionScan == nil ||
+		second.AdoptionScan.SnapshotDigest != first.AdoptionScan.SnapshotDigest ||
+		second.Result.ResultRef != first.Result.ResultRef {
+		t.Fatalf("replay result = %+v, snapshot = %+v, want stored scan snapshot", second.Result, second.AdoptionScan)
+	}
+}
+
 func TestCreateAdoptionPullRequestReplayDoesNotWriteProviderTwice(t *testing.T) {
 	t.Parallel()
 
@@ -2327,6 +2515,7 @@ type fakeRepository struct {
 	recordedProviderEvents      []entity.ProviderEvent
 	recordedOutboxEvents        []entity.OutboxEvent
 	recordedProviderOperation   entity.ProviderOperation
+	adoptionScan                entity.RepositoryAdoptionScanSnapshot
 	workItemProjection          entity.ProviderWorkItemProjection
 	relationship                entity.ProviderRelationship
 	lastWorkItemLookup          query.ProviderTargetLookup
@@ -2494,6 +2683,9 @@ func (r *fakeRepository) ApplyProviderOperation(_ context.Context, completion pr
 	r.recordedProjection = completion.ProjectionUpdate
 	r.recordedProviderEvents = append([]entity.ProviderEvent(nil), completion.ProviderEvents...)
 	r.recordedOutboxEvents = append([]entity.OutboxEvent(nil), completion.OutboxEvents...)
+	if completion.ProjectionUpdate.AdoptionScan != nil {
+		r.adoptionScan = *completion.ProjectionUpdate.AdoptionScan
+	}
 	return completion.Operation, r.err
 }
 
@@ -2507,6 +2699,13 @@ func (r *fakeRepository) GetProviderOperationByCommand(context.Context, enum.Pro
 		return r.recordedProviderOperation, r.err
 	}
 	return entity.ProviderOperation{}, errs.ErrNotFound
+}
+
+func (r *fakeRepository) GetRepositoryAdoptionScanByOperation(context.Context, uuid.UUID) (entity.RepositoryAdoptionScanSnapshot, error) {
+	if r.adoptionScan.ID == uuid.Nil {
+		return entity.RepositoryAdoptionScanSnapshot{}, errs.ErrNotFound
+	}
+	return r.adoptionScan, r.err
 }
 
 func (r *fakeRepository) ListProviderOperations(_ context.Context, filter query.ProviderOperationFilter) ([]entity.ProviderOperation, query.PageResult, error) {
@@ -2609,9 +2808,13 @@ type fakeAccountUsageResolver struct {
 	providerSlug      enum.ProviderSlug
 	allowedActionKeys []string
 	err               error
+	onResolve         func(ExternalAccountUsageInput)
 }
 
 func (r fakeAccountUsageResolver) ResolveExternalAccountUsage(_ context.Context, input ExternalAccountUsageInput) (ExternalAccountUsageResult, error) {
+	if r.onResolve != nil {
+		r.onResolve(input)
+	}
 	if r.err != nil {
 		return ExternalAccountUsageResult{}, r.err
 	}

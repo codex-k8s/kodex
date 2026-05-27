@@ -1058,6 +1058,107 @@ func TestExecuteWriteMapsGitHubRateLimitWithoutSecretLeak(t *testing.T) {
 	}
 }
 
+func TestExecuteScanRepositoryForAdoptionReadsSafeTreeMetadata(t *testing.T) {
+	t.Parallel()
+
+	var paths []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		if r.Header.Get("Authorization") != "Bearer token-value" {
+			t.Fatalf("authorization header = %q", r.Header.Get("Authorization"))
+		}
+		switch r.URL.Path {
+		case "/repos/codex-k8s/kodex":
+			_, _ = w.Write([]byte(`{"id":101,"full_name":"codex-k8s/kodex","html_url":"https://github.com/codex-k8s/kodex","default_branch":"main"}`))
+		case "/repos/codex-k8s/kodex/git/ref/heads/main":
+			_, _ = w.Write([]byte(`{"ref":"refs/heads/main","object":{"sha":"abc123","type":"commit"}}`))
+		case "/repos/codex-k8s/kodex/git/commits/abc123":
+			_, _ = w.Write([]byte(`{"sha":"abc123","tree":{"sha":"tree123"}}`))
+		case "/repos/codex-k8s/kodex/git/trees/tree123":
+			if r.URL.Query().Get("recursive") != "1" {
+				t.Fatalf("recursive = %q, want 1", r.URL.Query().Get("recursive"))
+			}
+			_, _ = w.Write([]byte(`{"sha":"tree123","truncated":false,"tree":[{"path":"services.yaml","mode":"100644","type":"blob","sha":"blob-services","size":123},{"path":"README.md","mode":"100644","type":"blob","sha":"blob-readme","size":44},{"path":"docs/README.md","mode":"100644","type":"blob","sha":"blob-docs","size":77},{"path":"secret.txt","mode":"100644","type":"blob","sha":"blob-secret","size":12}]}`))
+		default:
+			t.Fatalf("unexpected path = %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	token := secretresolver.NewSecretValue([]byte("token-value"))
+	defer token.Clear()
+	result, err := New(Config{BaseURL: server.URL, HTTPClient: server.Client()}).Execute(context.Background(), providerclient.WriteRequest{
+		Credential:   providerclient.AccountCredential{ExternalAccountID: uuid.New(), ProviderSlug: enum.ProviderSlugGitHub, Token: token},
+		ProviderSlug: enum.ProviderSlugGitHub,
+		ScanRepositoryForAdoption: &providerclient.ScanRepositoryForAdoptionCommand{
+			RepositoryTarget: providerclient.Target{ProviderSlug: enum.ProviderSlugGitHub, RepositoryFullName: "codex-k8s/kodex"},
+			Options: providerclient.RepositoryAdoptionScanOptions{
+				RequestedRef:       "main",
+				AllowedRefPrefixes: []string{"refs/heads/"},
+				MaxTreeEntries:     50,
+				MaxMarkerPaths:     10,
+				MarkerPathHints:    []string{"docs/README.md"},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Execute(): %v", err)
+	}
+	if result.RepositoryAdoptionScan == nil {
+		t.Fatalf("RepositoryAdoptionScan = nil, want safe scan snapshot")
+	}
+	snapshot := result.RepositoryAdoptionScan
+	if snapshot.RepositoryFullName != "codex-k8s/kodex" ||
+		snapshot.ProviderRepositoryID != "101" ||
+		snapshot.ScannedRef != "main" ||
+		snapshot.HeadSHA != "abc123" ||
+		snapshot.Status != enum.RepositoryAdoptionScanStatusCompleted ||
+		snapshot.FileCount != 4 ||
+		snapshot.VisibleFileCount != 4 {
+		t.Fatalf("snapshot = %+v, want completed safe tree metadata", snapshot)
+	}
+	if len(snapshot.Markers) != 3 {
+		t.Fatalf("markers = %+v, want services/readme/docs markers only", snapshot.Markers)
+	}
+	for _, path := range paths {
+		if strings.Contains(path, "/git/blobs/") || strings.Contains(path, "/contents/") {
+			t.Fatalf("scan read raw file endpoint %s", path)
+		}
+	}
+}
+
+func TestExecuteScanRepositoryForAdoptionFailsClosedForDisallowedRef(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/repos/codex-k8s/kodex":
+			_, _ = w.Write([]byte(`{"id":101,"full_name":"codex-k8s/kodex","default_branch":"main"}`))
+		default:
+			t.Fatalf("unexpected path = %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	token := secretresolver.NewSecretValue([]byte("token-value"))
+	defer token.Clear()
+	_, err := New(Config{BaseURL: server.URL, HTTPClient: server.Client()}).Execute(context.Background(), providerclient.WriteRequest{
+		Credential:   providerclient.AccountCredential{ExternalAccountID: uuid.New(), ProviderSlug: enum.ProviderSlugGitHub, Token: token},
+		ProviderSlug: enum.ProviderSlugGitHub,
+		ScanRepositoryForAdoption: &providerclient.ScanRepositoryForAdoptionCommand{
+			RepositoryTarget: providerclient.Target{ProviderSlug: enum.ProviderSlugGitHub, RepositoryFullName: "codex-k8s/kodex"},
+			Options: providerclient.RepositoryAdoptionScanOptions{
+				RequestedRef:       "feature/unapproved",
+				AllowedRefPrefixes: []string{"refs/heads/kodex/"},
+			},
+		},
+	})
+	var providerErr *providerclient.Error
+	if !errors.As(err, &providerErr) || providerErr.Kind != providerclient.ErrorKindUnsupported {
+		t.Fatalf("Execute() err = %v, want unsupported provider error", err)
+	}
+}
+
 func TestReconcileSupportsGitHubWebURLAndRepositoryIDTargets(t *testing.T) {
 	t.Parallel()
 

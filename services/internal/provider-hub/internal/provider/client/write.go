@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -35,6 +36,7 @@ type WriteRequest struct {
 	UpdatePullRequest          *UpdatePullRequestCommand
 	CreateBootstrapPullRequest *CreateBootstrapPullRequestCommand
 	CreateAdoptionPullRequest  *CreateAdoptionPullRequestCommand
+	ScanRepositoryForAdoption  *ScanRepositoryForAdoptionCommand
 	CreateReviewSignal         *CreateReviewSignalCommand
 	UpdateRelationship         *UpdateRelationshipCommand
 }
@@ -147,6 +149,49 @@ type CreateAdoptionPullRequestCommand struct {
 	Files          []AdoptionFile
 }
 
+// RepositoryAdoptionScanOptions bounds provider-side repository inspection for adoption.
+type RepositoryAdoptionScanOptions struct {
+	RequestedRef       string
+	AllowedRefPrefixes []string
+	MaxTreeEntries     int
+	MaxMarkerPaths     int
+	MarkerPathHints    []string
+}
+
+// ScanRepositoryForAdoptionCommand describes a lightweight provider-side repository scan.
+type ScanRepositoryForAdoptionCommand struct {
+	RepositoryTarget Target
+	Options          RepositoryAdoptionScanOptions
+}
+
+// RepositoryAdoptionScanMarker is one safe marker discovered without reading raw file content.
+type RepositoryAdoptionScanMarker struct {
+	Path         string
+	Kind         enum.RepositoryAdoptionMarkerKind
+	ObjectDigest string
+	SizeBytes    int64
+}
+
+// RepositoryAdoptionScan contains a provider-neutral safe adoption scan result.
+type RepositoryAdoptionScan struct {
+	RepositoryTarget     Target
+	RepositoryFullName   string
+	ProviderRepositoryID string
+	RepositoryURL        string
+	DefaultBranch        string
+	RequestedRef         string
+	ScannedRef           string
+	HeadSHA              string
+	Status               enum.RepositoryAdoptionScanStatus
+	Markers              []RepositoryAdoptionScanMarker
+	FileCount            int64
+	VisibleFileCount     int64
+	TreeTruncated        bool
+	Warnings             []string
+	SnapshotDigest       string
+	ObservedAt           time.Time
+}
+
 // UpdatePullRequestCommand describes one provider-native pull request update.
 type UpdatePullRequestCommand struct {
 	Target                  Target
@@ -222,6 +267,7 @@ type WriteResult struct {
 	WorkItemProjectionID   *uuid.UUID
 	CommentProjectionID    *uuid.UUID
 	RelationshipID         *uuid.UUID
+	RepositoryAdoptionScan *RepositoryAdoptionScan
 	ReconciliationEnqueued bool
 	BaseBranch             string
 }
