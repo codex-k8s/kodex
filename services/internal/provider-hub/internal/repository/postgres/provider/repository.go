@@ -519,6 +519,24 @@ func storeProviderArtifactSignal(ctx context.Context, db queryer, operation stri
 	return stored, nil
 }
 
+func storeRepositoryMergeSignal(ctx context.Context, db queryer, operation string, signal entity.RepositoryMergeSignal) (entity.RepositoryMergeSignal, bool, error) {
+	stored, err := queryOne(ctx, db, operation, queryRepositoryMergeSignalInsert, repositoryMergeSignalArgs(signal), scanRepositoryMergeSignal)
+	if errors.Is(err, errs.ErrNotFound) {
+		stored, err = queryOne(ctx, db, operation, queryRepositoryMergeSignalGetByKey, repositoryMergeSignalIdentityArgs(signal), scanRepositoryMergeSignal)
+		if err == nil && !sameRepositoryMergeSignal(signal, stored) {
+			err = errs.ErrConflict
+		}
+		return stored, false, err
+	}
+	if err != nil {
+		return entity.RepositoryMergeSignal{}, false, err
+	}
+	if !sameRepositoryMergeSignal(signal, stored) {
+		return entity.RepositoryMergeSignal{}, false, errs.ErrConflict
+	}
+	return stored, true, nil
+}
+
 func enqueueSyncCursors(ctx context.Context, db queryer, operation string, request entity.ReconciliationRequest, cursors []entity.SyncCursor) ([]entity.SyncCursor, error) {
 	inserted, err := queryOne(ctx, db, operation, queryReconciliationRequestInsert, reconciliationRequestArgs(request), scanReconciliationRequest)
 	if errors.Is(err, errs.ErrNotFound) {
@@ -571,6 +589,35 @@ func sameProviderArtifactSignal(expected entity.ProviderArtifactSignal, actual e
 		sameJSON(expected.PayloadJSON, actual.PayloadJSON)
 }
 
+func sameRepositoryMergeSignal(expected entity.RepositoryMergeSignal, actual entity.RepositoryMergeSignal) bool {
+	return expected.SignalKey == actual.SignalKey &&
+		expected.Kind == actual.Kind &&
+		expected.ProviderSlug == actual.ProviderSlug &&
+		sameOptionalUUID(expected.ProjectID, actual.ProjectID) &&
+		sameOptionalUUID(expected.RepositoryID, actual.RepositoryID) &&
+		expected.RepositoryFullName == actual.RepositoryFullName &&
+		expected.ProviderRepositoryID == actual.ProviderRepositoryID &&
+		expected.WorkItemProjectionID == actual.WorkItemProjectionID &&
+		expected.ProviderWorkItemID == actual.ProviderWorkItemID &&
+		expected.PullRequestNumber == actual.PullRequestNumber &&
+		expected.PullRequestProviderID == actual.PullRequestProviderID &&
+		expected.PullRequestURL == actual.PullRequestURL &&
+		expected.BaseBranch == actual.BaseBranch &&
+		expected.HeadBranch == actual.HeadBranch &&
+		expected.MergeCommitSHA == actual.MergeCommitSHA &&
+		expected.SourceRef == actual.SourceRef &&
+		expected.RelatedProviderOperationRef == actual.RelatedProviderOperationRef &&
+		expected.WatermarkDigest == actual.WatermarkDigest &&
+		expected.Status == actual.Status
+}
+
+func sameOptionalUUID(expected *uuid.UUID, actual *uuid.UUID) bool {
+	if expected == nil || actual == nil {
+		return expected == nil && actual == nil
+	}
+	return *expected == *actual
+}
+
 type projectionUpdater interface {
 	queryer
 	execer
@@ -580,6 +627,8 @@ type projectionApplyResult struct {
 	hasProjection               bool
 	workItemApplied             bool
 	workItemProjectionID        uuid.UUID
+	mergeSignalApplied          bool
+	mergeSignalID               uuid.UUID
 	appliedCommentProjectionIDs map[uuid.UUID]struct{}
 	appliedCommentProviderIDs   map[string]struct{}
 	appliedRelationshipIDs      map[uuid.UUID]struct{}
@@ -591,7 +640,7 @@ func applyProjectionUpdate(ctx context.Context, db projectionUpdater, operation 
 		appliedCommentProviderIDs:   make(map[string]struct{}),
 		appliedRelationshipIDs:      make(map[uuid.UUID]struct{}),
 	}
-	result.hasProjection = update.WorkItem != nil || len(update.Comments) > 0 || len(update.Relationships) > 0
+	result.hasProjection = update.WorkItem != nil || len(update.Comments) > 0 || len(update.Relationships) > 0 || update.MergeSignal != nil
 	if update.WorkItem != nil {
 		storedWorkItem, workItemApplied, err := upsertFreshWorkItemProjection(ctx, db, operation, *update.WorkItem)
 		if err != nil {
@@ -618,6 +667,25 @@ func applyProjectionUpdate(ctx context.Context, db projectionUpdater, operation 
 			if err := upsertRelationships(ctx, db, operation, nonWatermarkRelationships, result.appliedRelationshipIDs); err != nil {
 				return result, err
 			}
+		}
+		if update.MergeSignal != nil {
+			signal := *update.MergeSignal
+			signal.WorkItemProjectionID = storedWorkItem.ID
+			if signal.ProjectID == nil {
+				signal.ProjectID = storedWorkItem.ProjectID
+			}
+			if signal.RepositoryID == nil {
+				signal.RepositoryID = storedWorkItem.RepositoryID
+			}
+			if signal.RepositoryFullName == "" {
+				signal.RepositoryFullName = storedWorkItem.RepositoryFullName
+			}
+			storedSignal, applied, err := storeRepositoryMergeSignal(ctx, db, operation, signal)
+			if err != nil {
+				return result, err
+			}
+			result.mergeSignalApplied = applied
+			result.mergeSignalID = storedSignal.ID
 		}
 		return result, nil
 	}
@@ -769,6 +837,10 @@ func filterOutboxEvents(events []entity.OutboxEvent, providerEvents []entity.Pro
 			}
 		case providerevents.EventRelationshipSynced:
 			if _, ok := result.appliedRelationshipIDs[event.AggregateID]; ok {
+				filtered = append(filtered, event)
+			}
+		case providerevents.EventRepositoryBootstrapMerged, providerevents.EventRepositoryAdoptionMerged:
+			if result.mergeSignalApplied && event.AggregateID == result.mergeSignalID {
 				filtered = append(filtered, event)
 			}
 		default:

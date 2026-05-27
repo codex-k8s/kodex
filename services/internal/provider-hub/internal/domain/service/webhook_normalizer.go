@@ -2,6 +2,7 @@ package service
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -24,7 +25,7 @@ type webhookNormalizationResult struct {
 	outboxEvents     []entity.OutboxEvent
 }
 
-func (s *Service) normalizeWebhook(webhook entity.WebhookEvent) (webhookNormalizationResult, error) {
+func (s *Service) normalizeWebhook(ctx context.Context, webhook entity.WebhookEvent) (webhookNormalizationResult, error) {
 	receivedEvent, err := s.webhookReceivedOutbox(webhook)
 	if err != nil {
 		return webhookNormalizationResult{}, err
@@ -83,7 +84,7 @@ func (s *Service) normalizeWebhook(webhook entity.WebhookEvent) (webhookNormaliz
 	if err != nil {
 		return webhookNormalizationResult{}, err
 	}
-	projectionUpdate, projectionOutbox, err := s.projectionUpdateFromFacts(webhook, facts)
+	projectionUpdate, projectionOutbox, err := s.projectionUpdateFromFacts(ctx, webhook, facts)
 	if err != nil {
 		return webhookNormalizationResult{}, err
 	}

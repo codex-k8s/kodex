@@ -1200,6 +1200,38 @@ func TestNormalizeWebhookMapsGitHubIssuePayload(t *testing.T) {
 	}
 }
 
+func TestNormalizeWebhookMapsGitHubMergedPullRequestSignal(t *testing.T) {
+	t.Parallel()
+
+	receivedAt := time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC)
+	facts, ok, err := New(Config{}).NormalizeWebhook(entity.WebhookEvent{
+		ProviderSlug: enum.ProviderSlugGitHub,
+		EventName:    "pull_request",
+		ReceivedAt:   receivedAt,
+		PayloadJSON:  []byte(`{"action":"closed","repository":{"id":101,"full_name":"codex-k8s/kodex"},"pull_request":{"id":8801,"number":88,"html_url":"https://github.com/codex-k8s/kodex/pull/88","title":"Bootstrap platform","state":"closed","body":"<!-- kodex:artifact v1\nkind: pull_request\nmanaged_by: kodex\nwork_type: bootstrap\nsource_ref: kodex/bootstrap\n-->\nBody","merged":true,"merge_commit_sha":"abc123","base":{"ref":"main","sha":"base-sha"},"head":{"ref":"kodex/bootstrap","sha":"head-sha"},"merged_at":"2026-05-26T11:59:00Z","updated_at":"2026-05-26T11:59:10Z"}}`),
+	})
+	if err != nil {
+		t.Fatalf("NormalizeWebhook(): %v", err)
+	}
+	if !ok {
+		t.Fatal("NormalizeWebhook() ok = false, want true")
+	}
+	if facts.ProviderWorkItemID != "github:codex-k8s/kodex:pull_request:88" || facts.WorkItem == nil || facts.WorkItem.State != "merged" {
+		t.Fatalf("facts = %+v work item = %+v, want merged pull request facts", facts, facts.WorkItem)
+	}
+	if facts.MergeSignal == nil {
+		t.Fatal("merge signal is nil, want safe GitHub PR merge refs")
+	}
+	if facts.MergeSignal.PullRequestProviderID != "8801" ||
+		facts.MergeSignal.PullRequestURL != "https://github.com/codex-k8s/kodex/pull/88" ||
+		facts.MergeSignal.BaseBranch != "main" ||
+		facts.MergeSignal.HeadBranch != "kodex/bootstrap" ||
+		facts.MergeSignal.MergeCommitSHA != "abc123" ||
+		!facts.MergeSignal.MergedAt.Equal(time.Date(2026, 5, 26, 11, 59, 0, 0, time.UTC)) {
+		t.Fatalf("merge signal = %+v, want safe PR refs", facts.MergeSignal)
+	}
+}
+
 func TestNormalizeWebhookMapsGitHubPRConversationCommentToPullRequestProjection(t *testing.T) {
 	t.Parallel()
 

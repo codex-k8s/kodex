@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-05
 updated_at: 2026-05-26
-related_issues: [628, 629, 630, 631, 632, 633, 794, 810, 818]
+related_issues: [628, 629, 630, 631, 632, 633, 794, 810, 818, 840]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -43,7 +43,7 @@ approvals:
 
 `CreateRepositoryBootstrapPullRequest` — project-side команда для сценария пустого репозитория по модели C. Она работает только по уже существующему `Repository` binding, проверяет проектную принадлежность, provider target, `base_branch`, подготовленные файлы, обязательный watermark и проверенную проекцию `services.yaml`, затем делегирует запись в `provider-hub CreateBootstrapPullRequest`. Команда не создаёт provider-native репозиторий, не генерирует шаблон репозитория, не выполняет adoption scan и не импортирует политику после merge; эти шаги остаются отдельными срезами.
 
-`ImportBootstrapServicesPolicy` — project-side команда завершения bootstrap после merge provider-native PR/MR. Команда не читает GitHub/GitLab и не принимает raw provider payload: вызывающий внутренний контур передаёт уже проверенный сигнал с provider target, `base_branch`, `source_ref`, commit, `content_hash`, watermark и нормализованным `validated_payload_json`. `project-catalog` сверяет сигнал с repository binding, проверяет ожидаемую версию pending binding, импортирует `services.yaml` штатным валидатором, сохраняет checked projection и переводит binding в `active`. Повтор того же commit/source ref идемпотентен; другой commit/ref после активации возвращает конфликт.
+`ImportBootstrapServicesPolicy` — project-side команда завершения bootstrap после merge provider-native PR/MR. Команда не читает GitHub/GitLab и не принимает raw provider payload: вызывающий внутренний контур передаёт уже проверенный сигнал, основанный на `provider.repository.bootstrap_merged`, с provider target, `base_branch`, `source_ref`, commit, `content_hash`, watermark и нормализованным `validated_payload_json`. `project-catalog` сверяет сигнал с repository binding, проверяет ожидаемую версию pending binding, импортирует `services.yaml` штатным валидатором, сохраняет checked projection и переводит binding в `active`. Повтор того же commit/source ref идемпотентен; другой commit/ref после активации возвращает конфликт.
 
 | Операция | Вид | Доступ | Идемпотентность | Примечание |
 |---|---|---|---|---|

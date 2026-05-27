@@ -43,6 +43,8 @@ components:
         - $ref: '#/components/schemas/RepositoryCreatedEvent'
         - $ref: '#/components/schemas/RepositoryBootstrapCompletedEvent'
         - $ref: '#/components/schemas/RepositoryAdoptionPRCreatedEvent'
+        - $ref: '#/components/schemas/RepositoryBootstrapMergedEvent'
+        - $ref: '#/components/schemas/RepositoryAdoptionMergedEvent'
     ProviderEventEnvelopeBase:
       type: object
       additionalProperties: false
@@ -194,6 +196,22 @@ components:
       type: object
       properties: {event_type: {type: string, const: provider.repository.adoption_pr_created}, aggregate_type: {type: string, const: repository}, payload: {$ref: '#/components/schemas/ProviderEventPayload'}}
       required: [event_type, aggregate_type, payload]
+    RepositoryBootstrapMergedEvent:
+      allOf:
+        - $ref: '#/components/schemas/ProviderEventEnvelopeBase'
+        - $ref: '#/components/schemas/RepositoryBootstrapMergedEventKind'
+    RepositoryBootstrapMergedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: provider.repository.bootstrap_merged}, aggregate_type: {type: string, const: repository_merge_signal}, payload: {$ref: '#/components/schemas/ProviderEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+    RepositoryAdoptionMergedEvent:
+      allOf:
+        - $ref: '#/components/schemas/ProviderEventEnvelopeBase'
+        - $ref: '#/components/schemas/RepositoryAdoptionMergedEventKind'
+    RepositoryAdoptionMergedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: provider.repository.adoption_merged}, aggregate_type: {type: string, const: repository_merge_signal}, payload: {$ref: '#/components/schemas/ProviderEventPayload'}}
+      required: [event_type, aggregate_type, payload]
 
     ProviderEventType:
       type: string
@@ -214,6 +232,8 @@ components:
         - provider.repository.created
         - provider.repository.bootstrap_completed
         - provider.repository.adoption_pr_created
+        - provider.repository.bootstrap_merged
+        - provider.repository.adoption_merged
     ProviderEventPayload:
       type: object
       additionalProperties: false
@@ -245,10 +265,37 @@ components:
           format: uuid
         provider_work_item_id:
           type: string
+        repository_merge_signal_id:
+          type: string
+          format: uuid
+        signal_key:
+          type: string
+        signal_kind:
+          type: string
         kind:
           type: string
         number:
           type: integer
+        pull_request_provider_id:
+          type: string
+        pull_request_url:
+          type: string
+        head_branch:
+          type: string
+        merge_commit_sha:
+          type: string
+        source_ref:
+          type: string
+        related_provider_operation_ref:
+          type: string
+        watermark_digest:
+          type: string
+        observed_at:
+          type: string
+          format: date-time
+        merged_at:
+          type: string
+          format: date-time
         comment_projection_id:
           type: string
           format: uuid

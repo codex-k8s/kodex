@@ -262,6 +262,45 @@ func scanProviderArtifactSignal(row postgreslib.RowScanner) (entity.ProviderArti
 	return signal, err
 }
 
+func scanRepositoryMergeSignal(row postgreslib.RowScanner) (entity.RepositoryMergeSignal, error) {
+	var signal entity.RepositoryMergeSignal
+	var kind, providerSlug, status string
+	var projectID, repositoryID pgtype.UUID
+	err := row.Scan(
+		&signal.ID,
+		&signal.SignalKey,
+		&kind,
+		&providerSlug,
+		&projectID,
+		&repositoryID,
+		&signal.RepositoryFullName,
+		&signal.ProviderRepositoryID,
+		&signal.WorkItemProjectionID,
+		&signal.ProviderWorkItemID,
+		&signal.PullRequestNumber,
+		&signal.PullRequestProviderID,
+		&signal.PullRequestURL,
+		&signal.BaseBranch,
+		&signal.HeadBranch,
+		&signal.MergeCommitSHA,
+		&signal.SourceRef,
+		&signal.RelatedProviderOperationRef,
+		&signal.WatermarkDigest,
+		&signal.ObservedAt,
+		&signal.MergedAt,
+		&status,
+		&signal.Version,
+		&signal.CreatedAt,
+		&signal.UpdatedAt,
+	)
+	signal.Kind = enum.RepositoryMergeSignalKind(kind)
+	signal.ProviderSlug = enum.ProviderSlug(providerSlug)
+	signal.ProjectID = postgreslib.UUIDPtrFromPG(projectID)
+	signal.RepositoryID = postgreslib.UUIDPtrFromPG(repositoryID)
+	signal.Status = enum.RepositoryMergeSignalStatus(status)
+	return signal, err
+}
+
 func scanLimitSnapshot(row postgreslib.RowScanner) (entity.ProviderLimitSnapshot, error) {
 	var snapshot entity.ProviderLimitSnapshot
 	var providerSlug, source string

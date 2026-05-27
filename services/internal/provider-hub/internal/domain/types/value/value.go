@@ -78,6 +78,7 @@ type ProviderWebhookFacts struct {
 	OccurredAt           time.Time
 	WorkItem             *ProviderWorkItemSnapshot
 	Comment              *ProviderCommentSnapshot
+	MergeSignal          *ProviderRepositoryMergeSignalSnapshot
 }
 
 // ProviderWorkItemSnapshot is a provider-neutral snapshot extracted from webhook or sync payload.
@@ -110,4 +111,15 @@ type ProviderCommentSnapshot struct {
 	Body               string
 	ProviderCreatedAt  time.Time
 	ProviderUpdatedAt  time.Time
+}
+
+// ProviderRepositoryMergeSignalSnapshot contains safe provider refs from a merged PR webhook.
+type ProviderRepositoryMergeSignalSnapshot struct {
+	PullRequestProviderID string
+	PullRequestURL        string
+	BaseBranch            string
+	HeadBranch            string
+	MergeCommitSHA        string
+	SourceRef             string
+	MergedAt              time.Time
 }

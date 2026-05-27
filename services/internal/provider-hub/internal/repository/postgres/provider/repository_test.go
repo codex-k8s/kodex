@@ -831,6 +831,51 @@ func TestRepositoryIntegrationRuntimeStateLimitsAndOperations(t *testing.T) {
 	}
 }
 
+func TestRepositoryIntegrationRepositoryMergeSignalIsIdempotentAndRejectsConflict(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openIntegrationPool(t, ctx)
+	repository := NewRepository(pool)
+	now := time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC)
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	workItemID := uuid.New()
+	signalID := uuid.New()
+	signalKey := "provider:github:repository_merge:bootstrap:github:codex-k8s/kodex:pull_request:88"
+	update := repositoryMergeSignalProjectionForTest(workItemID, signalID, projectID, repositoryID, signalKey, "abc123", now)
+	outboxEvent := testOutboxEvent(providerevents.EventRepositoryBootstrapMerged, providerevents.AggregateRepositoryMergeSignal, signalID, now)
+
+	if _, _, err := repository.StoreWebhookEvent(ctx, webhookEventForTest(now, "delivery-merge-1"), update, nil, []entity.OutboxEvent{outboxEvent}); err != nil {
+		t.Fatalf("store merge signal: %v", err)
+	}
+	replayed := repositoryMergeSignalProjectionForTest(workItemID, uuid.New(), projectID, repositoryID, signalKey, "abc123", now.Add(time.Minute))
+	if _, _, err := repository.StoreWebhookEvent(ctx, webhookEventForTest(now.Add(time.Minute), "delivery-merge-2"), replayed, nil, []entity.OutboxEvent{
+		testOutboxEvent(providerevents.EventRepositoryBootstrapMerged, providerevents.AggregateRepositoryMergeSignal, replayed.MergeSignal.ID, now),
+	}); err != nil {
+		t.Fatalf("replay merge signal: %v", err)
+	}
+	var signalCount int
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM provider_hub_repository_merge_signals WHERE signal_key = $1", signalKey).Scan(&signalCount); err != nil {
+		t.Fatalf("count merge signals: %v", err)
+	}
+	if signalCount != 1 {
+		t.Fatalf("merge signal count = %d, want one idempotent signal", signalCount)
+	}
+	var outboxCount int
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM provider_hub_outbox_events WHERE event_type = $1", providerevents.EventRepositoryBootstrapMerged).Scan(&outboxCount); err != nil {
+		t.Fatalf("count merge outbox events: %v", err)
+	}
+	if outboxCount != 1 {
+		t.Fatalf("merge outbox count = %d, want one event after replay", outboxCount)
+	}
+	conflicting := repositoryMergeSignalProjectionForTest(workItemID, uuid.New(), projectID, repositoryID, signalKey, "def456", now)
+	_, _, err := repository.StoreWebhookEvent(ctx, webhookEventForTest(now.Add(2*time.Minute), "delivery-merge-3"), conflicting, nil, nil)
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("conflicting merge signal err = %v, want %v", err, errs.ErrConflict)
+	}
+}
+
 func TestRepositoryIntegrationProjectionIgnoresStaleWorkItemAndComment(t *testing.T) {
 	t.Parallel()
 
@@ -977,6 +1022,65 @@ func projectionUpdateForTest(workItemID uuid.UUID, commentID uuid.UUID, provider
 			Confidence:        enum.RelationshipConfidenceConfirmed,
 			CreatedAt:         providerUpdatedAt,
 		}},
+	}
+}
+
+func repositoryMergeSignalProjectionForTest(workItemID uuid.UUID, signalID uuid.UUID, projectID uuid.UUID, repositoryID uuid.UUID, signalKey string, mergeCommitSHA string, observedAt time.Time) providerrepo.ProjectionUpdate {
+	providerUpdatedAt := observedAt
+	workItem := entity.ProviderWorkItemProjection{
+		Base:               entity.Base{ID: workItemID, Version: 1, CreatedAt: observedAt, UpdatedAt: observedAt},
+		ProviderSlug:       enum.ProviderSlugGitHub,
+		ProviderWorkItemID: "github:codex-k8s/kodex:pull_request:88",
+		ProjectID:          &projectID,
+		RepositoryID:       &repositoryID,
+		RepositoryFullName: "codex-k8s/kodex",
+		Kind:               enum.WorkItemKindPullRequest,
+		Number:             88,
+		URL:                "https://github.com/codex-k8s/kodex/pull/88",
+		Title:              "Bootstrap platform",
+		State:              "merged",
+		WorkItemType:       "bootstrap",
+		LabelsJSON:         []byte(`[]`),
+		AssigneesJSON:      []byte(`[]`),
+		ProjectFieldsJSON:  []byte(`{}`),
+		WatermarkStatus:    enum.WorkItemWatermarkStatusMissing,
+		WatermarkJSON:      []byte(`{}`),
+		BodyDigest:         "body-digest",
+		ProviderUpdatedAt:  &providerUpdatedAt,
+		SyncedAt:           observedAt,
+		DriftStatus:        enum.WorkItemDriftStatusFresh,
+	}
+	return providerrepo.ProjectionUpdate{
+		WorkItem: &workItem,
+		MergeSignal: &entity.RepositoryMergeSignal{
+			Base: entity.Base{
+				ID:        signalID,
+				Version:   1,
+				CreatedAt: observedAt,
+				UpdatedAt: observedAt,
+			},
+			SignalKey:                   signalKey,
+			Kind:                        enum.RepositoryMergeSignalKindBootstrap,
+			ProviderSlug:                enum.ProviderSlugGitHub,
+			ProjectID:                   &projectID,
+			RepositoryID:                &repositoryID,
+			RepositoryFullName:          "codex-k8s/kodex",
+			ProviderRepositoryID:        "101",
+			WorkItemProjectionID:        workItemID,
+			ProviderWorkItemID:          "github:codex-k8s/kodex:pull_request:88",
+			PullRequestNumber:           88,
+			PullRequestProviderID:       "8801",
+			PullRequestURL:              "https://github.com/codex-k8s/kodex/pull/88",
+			BaseBranch:                  "main",
+			HeadBranch:                  "kodex/bootstrap",
+			MergeCommitSHA:              mergeCommitSHA,
+			SourceRef:                   "kodex/bootstrap",
+			RelatedProviderOperationRef: "provider-hub:create_bootstrap_pull_request:github:codex-k8s/kodex:pull_request:88",
+			WatermarkDigest:             "watermark-digest",
+			ObservedAt:                  observedAt,
+			MergedAt:                    observedAt.Add(-time.Minute),
+			Status:                      enum.RepositoryMergeSignalStatusMerged,
+		},
 	}
 }
 

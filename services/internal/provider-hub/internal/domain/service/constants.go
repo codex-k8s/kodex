@@ -18,15 +18,18 @@ const (
 	providerEventRepositoryCreated            = providerevents.EventRepositoryCreated
 	providerEventRepositoryBootstrapCompleted = providerevents.EventRepositoryBootstrapCompleted
 	providerEventRepositoryAdoptionPRCreated  = providerevents.EventRepositoryAdoptionPRCreated
+	providerEventRepositoryBootstrapMerged    = providerevents.EventRepositoryBootstrapMerged
+	providerEventRepositoryAdoptionMerged     = providerevents.EventRepositoryAdoptionMerged
 
-	providerAggregateWebhookEvent      = providerevents.AggregateWebhookEvent
-	providerAggregateProviderEvent     = providerevents.AggregateProviderEvent
-	providerAggregateProviderOperation = providerevents.AggregateProviderOperation
-	providerAggregateRepository        = providerevents.AggregateRepository
-	providerAggregateWorkItem          = providerevents.AggregateWorkItem
-	providerAggregateComment           = providerevents.AggregateComment
-	providerAggregateRelationship      = providerevents.AggregateRelationship
-	providerAggregateSyncCursor        = providerevents.AggregateSyncCursor
+	providerAggregateWebhookEvent          = providerevents.AggregateWebhookEvent
+	providerAggregateProviderEvent         = providerevents.AggregateProviderEvent
+	providerAggregateProviderOperation     = providerevents.AggregateProviderOperation
+	providerAggregateRepository            = providerevents.AggregateRepository
+	providerAggregateRepositoryMergeSignal = providerevents.AggregateRepositoryMergeSignal
+	providerAggregateWorkItem              = providerevents.AggregateWorkItem
+	providerAggregateComment               = providerevents.AggregateComment
+	providerAggregateRelationship          = providerevents.AggregateRelationship
+	providerAggregateSyncCursor            = providerevents.AggregateSyncCursor
 
 	providerEventSchemaVersion = providerevents.SchemaVersion
 	webhookPayloadRetention    = 30 * 24 * time.Hour
