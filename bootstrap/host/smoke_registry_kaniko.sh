@@ -14,6 +14,7 @@ require_cmd() { command -v "$1" >/dev/null 2>&1 || die "Missing required command
 [ -f "$ENV_FILE" ] || die "Env file not found"
 require_cmd go
 require_cmd kubectl
+ENV_FILE_ABS="$(cd "$(dirname "$ENV_FILE")" && pwd)/$(basename "$ENV_FILE")"
 
 set -a
 # shellcheck disable=SC1090
@@ -39,14 +40,17 @@ cleanup() {
 trap cleanup EXIT
 
 log "Render registry and Kaniko smoke manifests"
-go run "${PROJECT_ROOT}/cmd/manifest-render" \
-  --env-file "$ENV_FILE" \
-  --source "${PROJECT_ROOT}/deploy/base/bootstrap-foundation" \
-  --output "${RENDER_DIR}/bootstrap-foundation"
-go run "${PROJECT_ROOT}/cmd/manifest-render" \
-  --env-file "$ENV_FILE" \
-  --source "${PROJECT_ROOT}/deploy/base/bootstrap-builder-smoke" \
-  --output "${RENDER_DIR}/bootstrap-builder-smoke"
+(
+  cd "$PROJECT_ROOT"
+  go run ./cmd/manifest-render \
+    --env-file "$ENV_FILE_ABS" \
+    --source deploy/base/bootstrap-foundation \
+    --output "${RENDER_DIR}/bootstrap-foundation"
+  go run ./cmd/manifest-render \
+    --env-file "$ENV_FILE_ABS" \
+    --source deploy/base/bootstrap-builder-smoke \
+    --output "${RENDER_DIR}/bootstrap-builder-smoke"
+)
 
 if [ "$DRY_RUN" = "true" ]; then
   log "Dry-run only: smoke manifests rendered but not applied"
