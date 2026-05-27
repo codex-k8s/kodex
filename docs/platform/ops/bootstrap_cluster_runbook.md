@@ -33,6 +33,7 @@ Runbook используется для первого Kubernetes-контура
 - Реальный env хранится вне Git в `bootstrap/host/config.env` или отдельном защищённом файле.
 - Значения `TARGET_*`, домены, адреса, email, токены, ключи и kubeconfig не публикуются в рабочих логах, Issue, PR и документации.
 - Для удалённого режима нужен SSH-доступ к target host и operator public key.
+- Для локального режима нужен `OPERATOR_USER`; operator public key не обязателен, если доступ по SSH для этого пользователя не нужен.
 - Docker daemon не требуется: registry/Kaniko smoke использует Kubernetes jobs.
 
 ## Диагностика
