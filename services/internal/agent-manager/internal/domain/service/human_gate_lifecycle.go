@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 	"strings"
 
 	"github.com/google/uuid"
@@ -25,14 +26,16 @@ type humanGateCommandPayload struct {
 }
 
 type humanGateDecision struct {
-	HumanGateRequestID       string `json:"human_gate_request_id"`
-	Status                   string `json:"status"`
-	Outcome                  string `json:"outcome"`
-	SafeSummary              string `json:"safe_summary,omitempty"`
-	InteractionRequestRef    string `json:"interaction_request_ref,omitempty"`
-	InteractionResponseRef   string `json:"interaction_response_ref,omitempty"`
-	GovernanceGateRequestRef string `json:"governance_gate_request_ref,omitempty"`
-	GovernanceDecisionRef    string `json:"governance_decision_ref,omitempty"`
+	HumanGateRequestID             string `json:"human_gate_request_id"`
+	Status                         string `json:"status"`
+	Outcome                        string `json:"outcome"`
+	SafeSummary                    string `json:"safe_summary,omitempty"`
+	InteractionRequestRef          string `json:"interaction_request_ref,omitempty"`
+	InteractionResponseRef         string `json:"interaction_response_ref,omitempty"`
+	InteractionResponseFingerprint string `json:"interaction_response_fingerprint,omitempty"`
+	InteractionRequestVersion      int64  `json:"interaction_request_version,omitempty"`
+	GovernanceGateRequestRef       string `json:"governance_gate_request_ref,omitempty"`
+	GovernanceDecisionRef          string `json:"governance_decision_ref,omitempty"`
 }
 
 func (s *Service) RequestHumanGate(ctx context.Context, input RequestHumanGateInput) (entity.HumanGateRequest, error) {
@@ -107,7 +110,14 @@ func (s *Service) RecordHumanGateDecision(ctx context.Context, input RecordHuman
 	if err != nil {
 		return entity.HumanGateRequest{}, err
 	}
-	decision := humanGateDecisionFromInput(input, outcome, refs, summary)
+	fingerprint, err := normalizeHumanGateDecisionFingerprint(input.InteractionResponseFingerprint)
+	if err != nil {
+		return entity.HumanGateRequest{}, err
+	}
+	if input.InteractionRequestVersion < 0 {
+		return entity.HumanGateRequest{}, errs.ErrInvalidArgument
+	}
+	decision := humanGateDecisionFromInput(input, outcome, refs, summary, fingerprint)
 	if replay, ok, err := findReplay(ctx, s, input.Meta, operationRecordHumanGateDecision, enum.CommandAggregateTypeHumanGate, humanGateFromPayload, verifyHumanGateDecisionReplay(decision, s.repository.GetHumanGateRequest)); ok || err != nil {
 		return replay, err
 	}
@@ -266,16 +276,18 @@ func normalizeHumanGateDecisionRefs(input RecordHumanGateDecisionInput) (humanGa
 	}, nil
 }
 
-func humanGateDecisionFromInput(input RecordHumanGateDecisionInput, outcome enum.HumanGateOutcome, refs humanGateDecisionRefs, summary string) humanGateDecision {
+func humanGateDecisionFromInput(input RecordHumanGateDecisionInput, outcome enum.HumanGateOutcome, refs humanGateDecisionRefs, summary string, fingerprint string) humanGateDecision {
 	return humanGateDecision{
-		HumanGateRequestID:       input.HumanGateRequestID.String(),
-		Status:                   string(input.Status),
-		Outcome:                  string(outcome),
-		SafeSummary:              summary,
-		InteractionRequestRef:    refs.interactionRequestRef,
-		InteractionResponseRef:   refs.interactionResponseRef,
-		GovernanceGateRequestRef: refs.governanceGateRequestRef,
-		GovernanceDecisionRef:    refs.governanceDecisionRef,
+		HumanGateRequestID:             input.HumanGateRequestID.String(),
+		Status:                         string(input.Status),
+		Outcome:                        string(outcome),
+		SafeSummary:                    summary,
+		InteractionRequestRef:          refs.interactionRequestRef,
+		InteractionResponseRef:         refs.interactionResponseRef,
+		InteractionResponseFingerprint: fingerprint,
+		InteractionRequestVersion:      input.InteractionRequestVersion,
+		GovernanceGateRequestRef:       refs.governanceGateRequestRef,
+		GovernanceDecisionRef:          refs.governanceDecisionRef,
 	}
 }
 
@@ -319,6 +331,10 @@ func normalizeHumanGateCode(value string, required bool) (string, error) {
 
 func normalizeHumanGateSummary(value string, required bool) (string, error) {
 	return normalizeBoundedSafeText(value, humanGateSummaryLimit, required, unsafeHumanGateText)
+}
+
+func normalizeHumanGateDecisionFingerprint(value string) (string, error) {
+	return normalizeSHA256Digest(value)
 }
 
 func normalizeHumanGateOutcome(outcome enum.HumanGateOutcome) (enum.HumanGateOutcome, error) {
@@ -411,14 +427,16 @@ func sameHumanGateDecision(left humanGateDecision, right humanGateDecision) bool
 	return true
 }
 
-func humanGateDecisionFields(decision humanGateDecision) [8]string {
-	return [8]string{
+func humanGateDecisionFields(decision humanGateDecision) [10]string {
+	return [10]string{
 		decision.HumanGateRequestID,
 		decision.Status,
 		decision.Outcome,
 		decision.SafeSummary,
 		decision.InteractionRequestRef,
 		decision.InteractionResponseRef,
+		decision.InteractionResponseFingerprint,
+		strconv.FormatInt(decision.InteractionRequestVersion, 10),
 		decision.GovernanceGateRequestRef,
 		decision.GovernanceDecisionRef,
 	}

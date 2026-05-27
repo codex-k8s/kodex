@@ -7,6 +7,7 @@ import (
 
 	"github.com/caarlos0/env/v11"
 
+	eventconsumer "github.com/codex-k8s/kodex/libs/go/eventconsumer"
 	grpcserver "github.com/codex-k8s/kodex/libs/go/grpcserver"
 	outboxlib "github.com/codex-k8s/kodex/libs/go/outbox"
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
@@ -14,60 +15,72 @@ import (
 
 // Config contains process-level agent-manager server configuration.
 type Config struct {
-	DatabaseDSN                  string        `env:"KODEX_AGENT_MANAGER_DATABASE_DSN,required,notEmpty"`
-	DatabaseMaxConns             int32         `env:"KODEX_AGENT_MANAGER_DATABASE_MAX_CONNS" envDefault:"8"`
-	DatabaseMinConns             int32         `env:"KODEX_AGENT_MANAGER_DATABASE_MIN_CONNS" envDefault:"1"`
-	DatabaseMaxConnLifetime      time.Duration `env:"KODEX_AGENT_MANAGER_DATABASE_MAX_CONN_LIFETIME" envDefault:"1h"`
-	DatabaseMaxConnIdleTime      time.Duration `env:"KODEX_AGENT_MANAGER_DATABASE_MAX_CONN_IDLE_TIME" envDefault:"15m"`
-	DatabaseHealthPeriod         time.Duration `env:"KODEX_AGENT_MANAGER_DATABASE_HEALTH_CHECK_PERIOD" envDefault:"30s"`
-	DatabasePingTimeout          time.Duration `env:"KODEX_AGENT_MANAGER_DATABASE_PING_TIMEOUT" envDefault:"5s"`
-	DatabaseRetryAttempts        int           `env:"KODEX_AGENT_MANAGER_DATABASE_CONNECT_RETRY_MAX_ATTEMPTS" envDefault:"6"`
-	DatabaseRetryInitial         time.Duration `env:"KODEX_AGENT_MANAGER_DATABASE_CONNECT_RETRY_INITIAL_DELAY" envDefault:"500ms"`
-	DatabaseRetryMax             time.Duration `env:"KODEX_AGENT_MANAGER_DATABASE_CONNECT_RETRY_MAX_DELAY" envDefault:"5s"`
-	DatabaseRetryJitterRatio     float64       `env:"KODEX_AGENT_MANAGER_DATABASE_CONNECT_RETRY_JITTER_RATIO" envDefault:"0.2"`
-	EventLogDatabaseDSN          string        `env:"KODEX_AGENT_MANAGER_EVENT_LOG_DATABASE_DSN"`
-	EventLogDatabaseMaxConns     int32         `env:"KODEX_AGENT_MANAGER_EVENT_LOG_DATABASE_MAX_CONNS" envDefault:"4"`
-	EventLogDatabaseMinConns     int32         `env:"KODEX_AGENT_MANAGER_EVENT_LOG_DATABASE_MIN_CONNS" envDefault:"0"`
-	HTTPAddr                     string        `env:"KODEX_AGENT_MANAGER_HTTP_ADDR" envDefault:":8080"`
-	GRPCAddr                     string        `env:"KODEX_AGENT_MANAGER_GRPC_ADDR" envDefault:":9090"`
-	GRPCAuthRequired             bool          `env:"KODEX_AGENT_MANAGER_GRPC_AUTH_REQUIRED" envDefault:"true"`
-	GRPCAuthToken                string        `env:"KODEX_AGENT_MANAGER_GRPC_AUTH_TOKEN"`
-	GRPCMaxConcurrentStreams     uint32        `env:"KODEX_AGENT_MANAGER_GRPC_MAX_CONCURRENT_STREAMS" envDefault:"128"`
-	GRPCMaxInFlight              int           `env:"KODEX_AGENT_MANAGER_GRPC_MAX_IN_FLIGHT" envDefault:"128"`
-	GRPCMaxRecvMessageBytes      int           `env:"KODEX_AGENT_MANAGER_GRPC_MAX_RECV_MESSAGE_BYTES" envDefault:"4194304"`
-	GRPCMaxSendMessageBytes      int           `env:"KODEX_AGENT_MANAGER_GRPC_MAX_SEND_MESSAGE_BYTES" envDefault:"4194304"`
-	GRPCKeepaliveMinTime         time.Duration `env:"KODEX_AGENT_MANAGER_GRPC_KEEPALIVE_MIN_TIME" envDefault:"30s"`
-	GRPCKeepaliveTime            time.Duration `env:"KODEX_AGENT_MANAGER_GRPC_KEEPALIVE_TIME" envDefault:"2m"`
-	GRPCKeepaliveTimeout         time.Duration `env:"KODEX_AGENT_MANAGER_GRPC_KEEPALIVE_TIMEOUT" envDefault:"20s"`
-	GRPCPermitWithoutStream      bool          `env:"KODEX_AGENT_MANAGER_GRPC_PERMIT_WITHOUT_STREAM" envDefault:"false"`
-	GRPCUnaryTimeout             time.Duration `env:"KODEX_AGENT_MANAGER_GRPC_UNARY_TIMEOUT" envDefault:"30s"`
-	PackageHubEnabled            bool          `env:"KODEX_AGENT_MANAGER_PACKAGE_HUB_ENABLED" envDefault:"true"`
-	PackageHubGRPCAddr           string        `env:"KODEX_AGENT_MANAGER_PACKAGE_HUB_GRPC_ADDR" envDefault:"package-hub:9090"`
-	PackageHubGRPCAuthToken      string        `env:"KODEX_AGENT_MANAGER_PACKAGE_HUB_GRPC_AUTH_TOKEN"`
-	PackageHubReadTimeout        time.Duration `env:"KODEX_AGENT_MANAGER_PACKAGE_HUB_READ_TIMEOUT" envDefault:"3s"`
-	RuntimePreparationEnabled    bool          `env:"KODEX_AGENT_MANAGER_RUNTIME_PREPARATION_ENABLED" envDefault:"false"`
-	ProjectCatalogGRPCAddr       string        `env:"KODEX_AGENT_MANAGER_PROJECT_CATALOG_GRPC_ADDR" envDefault:"project-catalog:9090"`
-	ProjectCatalogGRPCAuthToken  string        `env:"KODEX_AGENT_MANAGER_PROJECT_CATALOG_GRPC_AUTH_TOKEN"`
-	ProjectCatalogReadTimeout    time.Duration `env:"KODEX_AGENT_MANAGER_PROJECT_CATALOG_READ_TIMEOUT" envDefault:"3s"`
-	RuntimeManagerGRPCAddr       string        `env:"KODEX_AGENT_MANAGER_RUNTIME_MANAGER_GRPC_ADDR" envDefault:"runtime-manager:9090"`
-	RuntimeManagerGRPCAuthToken  string        `env:"KODEX_AGENT_MANAGER_RUNTIME_MANAGER_GRPC_AUTH_TOKEN"`
-	RuntimeManagerPrepareTimeout time.Duration `env:"KODEX_AGENT_MANAGER_RUNTIME_MANAGER_PREPARE_TIMEOUT" envDefault:"10s"`
-	ProviderHubWriteEnabled      bool          `env:"KODEX_AGENT_MANAGER_PROVIDER_HUB_WRITE_ENABLED" envDefault:"false"`
-	ProviderHubGRPCAddr          string        `env:"KODEX_AGENT_MANAGER_PROVIDER_HUB_GRPC_ADDR" envDefault:"provider-hub:9090"`
-	ProviderHubGRPCAuthToken     string        `env:"KODEX_AGENT_MANAGER_PROVIDER_HUB_GRPC_AUTH_TOKEN"`
-	ProviderHubWriteTimeout      time.Duration `env:"KODEX_AGENT_MANAGER_PROVIDER_HUB_WRITE_TIMEOUT" envDefault:"10s"`
-	OutboxDispatchEnabled        bool          `env:"KODEX_AGENT_MANAGER_OUTBOX_DISPATCH_ENABLED" envDefault:"true"`
-	OutboxPublisherKind          string        `env:"KODEX_AGENT_MANAGER_OUTBOX_PUBLISHER_KIND" envDefault:"postgres-event-log"`
-	OutboxEventLogSource         string        `env:"KODEX_AGENT_MANAGER_OUTBOX_EVENT_LOG_SOURCE" envDefault:"agent-manager"`
-	OutboxAllowLossy             bool          `env:"KODEX_AGENT_MANAGER_OUTBOX_ALLOW_LOSSY_DIAGNOSTIC_PUBLISHER" envDefault:"false"`
-	OutboxBatchSize              int           `env:"KODEX_AGENT_MANAGER_OUTBOX_BATCH_SIZE" envDefault:"100"`
-	OutboxPollInterval           time.Duration `env:"KODEX_AGENT_MANAGER_OUTBOX_POLL_INTERVAL" envDefault:"1s"`
-	OutboxLockTTL                time.Duration `env:"KODEX_AGENT_MANAGER_OUTBOX_LOCK_TTL" envDefault:"30s"`
-	OutboxPublishTimeout         time.Duration `env:"KODEX_AGENT_MANAGER_OUTBOX_PUBLISH_TIMEOUT" envDefault:"10s"`
-	OutboxLeaseSafetyMargin      time.Duration `env:"KODEX_AGENT_MANAGER_OUTBOX_LEASE_SAFETY_MARGIN" envDefault:"5s"`
-	OutboxRetryInitialDelay      time.Duration `env:"KODEX_AGENT_MANAGER_OUTBOX_RETRY_INITIAL_DELAY" envDefault:"1s"`
-	OutboxRetryMaxDelay          time.Duration `env:"KODEX_AGENT_MANAGER_OUTBOX_RETRY_MAX_DELAY" envDefault:"1m"`
-	OutboxFailureLimit           int           `env:"KODEX_AGENT_MANAGER_OUTBOX_FAILURE_MESSAGE_LIMIT" envDefault:"512"`
+	DatabaseDSN                                    string        `env:"KODEX_AGENT_MANAGER_DATABASE_DSN,required,notEmpty"`
+	DatabaseMaxConns                               int32         `env:"KODEX_AGENT_MANAGER_DATABASE_MAX_CONNS" envDefault:"8"`
+	DatabaseMinConns                               int32         `env:"KODEX_AGENT_MANAGER_DATABASE_MIN_CONNS" envDefault:"1"`
+	DatabaseMaxConnLifetime                        time.Duration `env:"KODEX_AGENT_MANAGER_DATABASE_MAX_CONN_LIFETIME" envDefault:"1h"`
+	DatabaseMaxConnIdleTime                        time.Duration `env:"KODEX_AGENT_MANAGER_DATABASE_MAX_CONN_IDLE_TIME" envDefault:"15m"`
+	DatabaseHealthPeriod                           time.Duration `env:"KODEX_AGENT_MANAGER_DATABASE_HEALTH_CHECK_PERIOD" envDefault:"30s"`
+	DatabasePingTimeout                            time.Duration `env:"KODEX_AGENT_MANAGER_DATABASE_PING_TIMEOUT" envDefault:"5s"`
+	DatabaseRetryAttempts                          int           `env:"KODEX_AGENT_MANAGER_DATABASE_CONNECT_RETRY_MAX_ATTEMPTS" envDefault:"6"`
+	DatabaseRetryInitial                           time.Duration `env:"KODEX_AGENT_MANAGER_DATABASE_CONNECT_RETRY_INITIAL_DELAY" envDefault:"500ms"`
+	DatabaseRetryMax                               time.Duration `env:"KODEX_AGENT_MANAGER_DATABASE_CONNECT_RETRY_MAX_DELAY" envDefault:"5s"`
+	DatabaseRetryJitterRatio                       float64       `env:"KODEX_AGENT_MANAGER_DATABASE_CONNECT_RETRY_JITTER_RATIO" envDefault:"0.2"`
+	EventLogDatabaseDSN                            string        `env:"KODEX_AGENT_MANAGER_EVENT_LOG_DATABASE_DSN"`
+	EventLogDatabaseMaxConns                       int32         `env:"KODEX_AGENT_MANAGER_EVENT_LOG_DATABASE_MAX_CONNS" envDefault:"4"`
+	EventLogDatabaseMinConns                       int32         `env:"KODEX_AGENT_MANAGER_EVENT_LOG_DATABASE_MIN_CONNS" envDefault:"0"`
+	HTTPAddr                                       string        `env:"KODEX_AGENT_MANAGER_HTTP_ADDR" envDefault:":8080"`
+	GRPCAddr                                       string        `env:"KODEX_AGENT_MANAGER_GRPC_ADDR" envDefault:":9090"`
+	GRPCAuthRequired                               bool          `env:"KODEX_AGENT_MANAGER_GRPC_AUTH_REQUIRED" envDefault:"true"`
+	GRPCAuthToken                                  string        `env:"KODEX_AGENT_MANAGER_GRPC_AUTH_TOKEN"`
+	GRPCMaxConcurrentStreams                       uint32        `env:"KODEX_AGENT_MANAGER_GRPC_MAX_CONCURRENT_STREAMS" envDefault:"128"`
+	GRPCMaxInFlight                                int           `env:"KODEX_AGENT_MANAGER_GRPC_MAX_IN_FLIGHT" envDefault:"128"`
+	GRPCMaxRecvMessageBytes                        int           `env:"KODEX_AGENT_MANAGER_GRPC_MAX_RECV_MESSAGE_BYTES" envDefault:"4194304"`
+	GRPCMaxSendMessageBytes                        int           `env:"KODEX_AGENT_MANAGER_GRPC_MAX_SEND_MESSAGE_BYTES" envDefault:"4194304"`
+	GRPCKeepaliveMinTime                           time.Duration `env:"KODEX_AGENT_MANAGER_GRPC_KEEPALIVE_MIN_TIME" envDefault:"30s"`
+	GRPCKeepaliveTime                              time.Duration `env:"KODEX_AGENT_MANAGER_GRPC_KEEPALIVE_TIME" envDefault:"2m"`
+	GRPCKeepaliveTimeout                           time.Duration `env:"KODEX_AGENT_MANAGER_GRPC_KEEPALIVE_TIMEOUT" envDefault:"20s"`
+	GRPCPermitWithoutStream                        bool          `env:"KODEX_AGENT_MANAGER_GRPC_PERMIT_WITHOUT_STREAM" envDefault:"false"`
+	GRPCUnaryTimeout                               time.Duration `env:"KODEX_AGENT_MANAGER_GRPC_UNARY_TIMEOUT" envDefault:"30s"`
+	PackageHubEnabled                              bool          `env:"KODEX_AGENT_MANAGER_PACKAGE_HUB_ENABLED" envDefault:"true"`
+	PackageHubGRPCAddr                             string        `env:"KODEX_AGENT_MANAGER_PACKAGE_HUB_GRPC_ADDR" envDefault:"package-hub:9090"`
+	PackageHubGRPCAuthToken                        string        `env:"KODEX_AGENT_MANAGER_PACKAGE_HUB_GRPC_AUTH_TOKEN"`
+	PackageHubReadTimeout                          time.Duration `env:"KODEX_AGENT_MANAGER_PACKAGE_HUB_READ_TIMEOUT" envDefault:"3s"`
+	RuntimePreparationEnabled                      bool          `env:"KODEX_AGENT_MANAGER_RUNTIME_PREPARATION_ENABLED" envDefault:"false"`
+	ProjectCatalogGRPCAddr                         string        `env:"KODEX_AGENT_MANAGER_PROJECT_CATALOG_GRPC_ADDR" envDefault:"project-catalog:9090"`
+	ProjectCatalogGRPCAuthToken                    string        `env:"KODEX_AGENT_MANAGER_PROJECT_CATALOG_GRPC_AUTH_TOKEN"`
+	ProjectCatalogReadTimeout                      time.Duration `env:"KODEX_AGENT_MANAGER_PROJECT_CATALOG_READ_TIMEOUT" envDefault:"3s"`
+	RuntimeManagerGRPCAddr                         string        `env:"KODEX_AGENT_MANAGER_RUNTIME_MANAGER_GRPC_ADDR" envDefault:"runtime-manager:9090"`
+	RuntimeManagerGRPCAuthToken                    string        `env:"KODEX_AGENT_MANAGER_RUNTIME_MANAGER_GRPC_AUTH_TOKEN"`
+	RuntimeManagerPrepareTimeout                   time.Duration `env:"KODEX_AGENT_MANAGER_RUNTIME_MANAGER_PREPARE_TIMEOUT" envDefault:"10s"`
+	ProviderHubWriteEnabled                        bool          `env:"KODEX_AGENT_MANAGER_PROVIDER_HUB_WRITE_ENABLED" envDefault:"false"`
+	ProviderHubGRPCAddr                            string        `env:"KODEX_AGENT_MANAGER_PROVIDER_HUB_GRPC_ADDR" envDefault:"provider-hub:9090"`
+	ProviderHubGRPCAuthToken                       string        `env:"KODEX_AGENT_MANAGER_PROVIDER_HUB_GRPC_AUTH_TOKEN"`
+	ProviderHubWriteTimeout                        time.Duration `env:"KODEX_AGENT_MANAGER_PROVIDER_HUB_WRITE_TIMEOUT" envDefault:"10s"`
+	OutboxDispatchEnabled                          bool          `env:"KODEX_AGENT_MANAGER_OUTBOX_DISPATCH_ENABLED" envDefault:"true"`
+	OutboxPublisherKind                            string        `env:"KODEX_AGENT_MANAGER_OUTBOX_PUBLISHER_KIND" envDefault:"postgres-event-log"`
+	OutboxEventLogSource                           string        `env:"KODEX_AGENT_MANAGER_OUTBOX_EVENT_LOG_SOURCE" envDefault:"agent-manager"`
+	OutboxAllowLossy                               bool          `env:"KODEX_AGENT_MANAGER_OUTBOX_ALLOW_LOSSY_DIAGNOSTIC_PUBLISHER" envDefault:"false"`
+	OutboxBatchSize                                int           `env:"KODEX_AGENT_MANAGER_OUTBOX_BATCH_SIZE" envDefault:"100"`
+	OutboxPollInterval                             time.Duration `env:"KODEX_AGENT_MANAGER_OUTBOX_POLL_INTERVAL" envDefault:"1s"`
+	OutboxLockTTL                                  time.Duration `env:"KODEX_AGENT_MANAGER_OUTBOX_LOCK_TTL" envDefault:"30s"`
+	OutboxPublishTimeout                           time.Duration `env:"KODEX_AGENT_MANAGER_OUTBOX_PUBLISH_TIMEOUT" envDefault:"10s"`
+	OutboxLeaseSafetyMargin                        time.Duration `env:"KODEX_AGENT_MANAGER_OUTBOX_LEASE_SAFETY_MARGIN" envDefault:"5s"`
+	OutboxRetryInitialDelay                        time.Duration `env:"KODEX_AGENT_MANAGER_OUTBOX_RETRY_INITIAL_DELAY" envDefault:"1s"`
+	OutboxRetryMaxDelay                            time.Duration `env:"KODEX_AGENT_MANAGER_OUTBOX_RETRY_MAX_DELAY" envDefault:"1m"`
+	OutboxFailureLimit                             int           `env:"KODEX_AGENT_MANAGER_OUTBOX_FAILURE_MESSAGE_LIMIT" envDefault:"512"`
+	InteractionResponseConsumerEnabled             bool          `env:"KODEX_AGENT_MANAGER_INTERACTION_RESPONSE_CONSUMER_ENABLED" envDefault:"true"`
+	InteractionResponseConsumerName                string        `env:"KODEX_AGENT_MANAGER_INTERACTION_RESPONSE_CONSUMER_NAME" envDefault:"agent-manager.human-gate-response"`
+	InteractionResponseConsumerLeaseOwner          string        `env:"KODEX_AGENT_MANAGER_INTERACTION_RESPONSE_CONSUMER_LEASE_OWNER"`
+	InteractionResponseConsumerBatchSize           int           `env:"KODEX_AGENT_MANAGER_INTERACTION_RESPONSE_CONSUMER_BATCH_SIZE" envDefault:"50"`
+	InteractionResponseConsumerPollInterval        time.Duration `env:"KODEX_AGENT_MANAGER_INTERACTION_RESPONSE_CONSUMER_POLL_INTERVAL" envDefault:"1s"`
+	InteractionResponseConsumerLeaseTTL            time.Duration `env:"KODEX_AGENT_MANAGER_INTERACTION_RESPONSE_CONSUMER_LEASE_TTL" envDefault:"30s"`
+	InteractionResponseConsumerHandlerTimeout      time.Duration `env:"KODEX_AGENT_MANAGER_INTERACTION_RESPONSE_CONSUMER_HANDLER_TIMEOUT" envDefault:"10s"`
+	InteractionResponseConsumerRetryInitialDelay   time.Duration `env:"KODEX_AGENT_MANAGER_INTERACTION_RESPONSE_CONSUMER_RETRY_INITIAL_DELAY" envDefault:"1s"`
+	InteractionResponseConsumerRetryMaxDelay       time.Duration `env:"KODEX_AGENT_MANAGER_INTERACTION_RESPONSE_CONSUMER_RETRY_MAX_DELAY" envDefault:"1m"`
+	InteractionResponseConsumerFailureMessageLimit int           `env:"KODEX_AGENT_MANAGER_INTERACTION_RESPONSE_CONSUMER_FAILURE_MESSAGE_LIMIT" envDefault:"512"`
+	InteractionResponseConsumerConcurrencyLimit    int           `env:"KODEX_AGENT_MANAGER_INTERACTION_RESPONSE_CONSUMER_CONCURRENCY_LIMIT" envDefault:"2"`
+	InteractionResponseConsumerMaxAttempts         int           `env:"KODEX_AGENT_MANAGER_INTERACTION_RESPONSE_CONSUMER_MAX_ATTEMPTS" envDefault:"5"`
 }
 
 // LoadConfig reads process configuration from environment variables.
@@ -152,6 +165,15 @@ func (cfg Config) Validate() error {
 		{name: "KODEX_AGENT_MANAGER_OUTBOX_RETRY_INITIAL_DELAY", valid: cfg.OutboxRetryInitialDelay > 0},
 		{name: "KODEX_AGENT_MANAGER_OUTBOX_RETRY_MAX_DELAY", valid: cfg.OutboxRetryMaxDelay >= cfg.OutboxRetryInitialDelay},
 		{name: "KODEX_AGENT_MANAGER_OUTBOX_FAILURE_MESSAGE_LIMIT", valid: cfg.OutboxFailureLimit > 0},
+		{name: "KODEX_AGENT_MANAGER_INTERACTION_RESPONSE_CONSUMER_BATCH_SIZE", valid: cfg.InteractionResponseConsumerBatchSize > 0},
+		{name: "KODEX_AGENT_MANAGER_INTERACTION_RESPONSE_CONSUMER_POLL_INTERVAL", valid: cfg.InteractionResponseConsumerPollInterval > 0},
+		{name: "KODEX_AGENT_MANAGER_INTERACTION_RESPONSE_CONSUMER_LEASE_TTL", valid: cfg.InteractionResponseConsumerLeaseTTL > 0},
+		{name: "KODEX_AGENT_MANAGER_INTERACTION_RESPONSE_CONSUMER_HANDLER_TIMEOUT", valid: cfg.InteractionResponseConsumerHandlerTimeout > 0},
+		{name: "KODEX_AGENT_MANAGER_INTERACTION_RESPONSE_CONSUMER_RETRY_INITIAL_DELAY", valid: cfg.InteractionResponseConsumerRetryInitialDelay > 0},
+		{name: "KODEX_AGENT_MANAGER_INTERACTION_RESPONSE_CONSUMER_RETRY_MAX_DELAY", valid: cfg.InteractionResponseConsumerRetryMaxDelay >= cfg.InteractionResponseConsumerRetryInitialDelay},
+		{name: "KODEX_AGENT_MANAGER_INTERACTION_RESPONSE_CONSUMER_FAILURE_MESSAGE_LIMIT", valid: cfg.InteractionResponseConsumerFailureMessageLimit > 0},
+		{name: "KODEX_AGENT_MANAGER_INTERACTION_RESPONSE_CONSUMER_CONCURRENCY_LIMIT", valid: cfg.InteractionResponseConsumerConcurrencyLimit > 0},
+		{name: "KODEX_AGENT_MANAGER_INTERACTION_RESPONSE_CONSUMER_MAX_ATTEMPTS", valid: cfg.InteractionResponseConsumerMaxAttempts > 0},
 	} {
 		if !item.valid {
 			return fmt.Errorf("%s is invalid", item.name)
@@ -180,11 +202,14 @@ func (cfg Config) Validate() error {
 	if strings.TrimSpace(cfg.OutboxPublisherKind) == outboxlib.PublisherKindPostgresEventLog && strings.TrimSpace(cfg.OutboxEventLogSource) == "" {
 		return fmt.Errorf("KODEX_AGENT_MANAGER_OUTBOX_EVENT_LOG_SOURCE must be configured for postgres-event-log publisher")
 	}
+	if cfg.InteractionResponseConsumerEnabled && strings.TrimSpace(cfg.InteractionResponseConsumerName) == "" {
+		return fmt.Errorf("KODEX_AGENT_MANAGER_INTERACTION_RESPONSE_CONSUMER_NAME is required when interaction response consumer is enabled")
+	}
 	if cfg.needsEventLogDatabase() && strings.TrimSpace(cfg.EventLogDatabaseDSN) == "" {
-		return fmt.Errorf("KODEX_AGENT_MANAGER_EVENT_LOG_DATABASE_DSN is required for postgres-event-log publisher")
+		return fmt.Errorf("KODEX_AGENT_MANAGER_EVENT_LOG_DATABASE_DSN is required for event-log publisher or consumer")
 	}
 	if cfg.needsEventLogDatabase() && cfg.EventLogDatabaseMaxConns < 1 {
-		return fmt.Errorf("KODEX_AGENT_MANAGER_EVENT_LOG_DATABASE_MAX_CONNS must be greater than zero for postgres-event-log publisher")
+		return fmt.Errorf("KODEX_AGENT_MANAGER_EVENT_LOG_DATABASE_MAX_CONNS must be greater than zero for event-log publisher or consumer")
 	}
 	if cfg.OutboxPublishTimeout+cfg.OutboxLeaseSafetyMargin >= cfg.OutboxLockTTL {
 		return fmt.Errorf("KODEX_AGENT_MANAGER_OUTBOX_PUBLISH_TIMEOUT plus safety margin must be less than KODEX_AGENT_MANAGER_OUTBOX_LOCK_TTL")
@@ -193,7 +218,7 @@ func (cfg Config) Validate() error {
 }
 
 func (cfg Config) needsEventLogDatabase() bool {
-	return cfg.OutboxDispatchEnabled && strings.TrimSpace(cfg.OutboxPublisherKind) == outboxlib.PublisherKindPostgresEventLog
+	return cfg.InteractionResponseConsumerEnabled || (cfg.OutboxDispatchEnabled && strings.TrimSpace(cfg.OutboxPublisherKind) == outboxlib.PublisherKindPostgresEventLog)
 }
 
 // DatabasePoolSettings converts service env config to the shared pgxpool contract.
@@ -235,4 +260,56 @@ func (cfg Config) GRPCServerConfig() grpcserver.Config {
 // OutboxDispatcherConfig converts service env config to the outbox delivery worker contract.
 func (cfg Config) OutboxDispatcherConfig() outboxlib.Config {
 	return outboxlib.ConfigFromRuntimeValues(cfg.OutboxBatchSize, cfg.OutboxPollInterval, cfg.OutboxLockTTL, cfg.OutboxPublishTimeout, cfg.OutboxRetryInitialDelay, cfg.OutboxRetryMaxDelay, cfg.OutboxFailureLimit)
+}
+
+// InteractionResponseConsumerConfig converts env fields to the shared event consumer runtime.
+func (cfg Config) InteractionResponseConsumerConfig() eventconsumer.Config {
+	runtime := cfg.interactionResponseConsumerRuntime()
+	return eventconsumer.ConfigFromRuntimeValues(
+		runtime.name,
+		runtime.leaseOwner,
+		runtime.batchSize,
+		runtime.pollInterval,
+		runtime.leaseTTL,
+		runtime.handlerTimeout,
+		runtime.retryInitialDelay,
+		runtime.retryMaxDelay,
+		runtime.failureMessageLimit,
+		runtime.concurrencyLimit,
+		runtime.maxAttempts,
+	)
+}
+
+type interactionResponseConsumerRuntime struct {
+	name                string
+	leaseOwner          string
+	batchSize           int
+	pollInterval        time.Duration
+	leaseTTL            time.Duration
+	handlerTimeout      time.Duration
+	retryInitialDelay   time.Duration
+	retryMaxDelay       time.Duration
+	failureMessageLimit int
+	concurrencyLimit    int
+	maxAttempts         int
+}
+
+func (cfg Config) interactionResponseConsumerRuntime() interactionResponseConsumerRuntime {
+	leaseOwner := strings.TrimSpace(cfg.InteractionResponseConsumerLeaseOwner)
+	if leaseOwner == "" {
+		leaseOwner = eventconsumer.DefaultLeaseOwner("agent-manager-human-gate-response")
+	}
+	return interactionResponseConsumerRuntime{
+		name:                cfg.InteractionResponseConsumerName,
+		leaseOwner:          leaseOwner,
+		batchSize:           cfg.InteractionResponseConsumerBatchSize,
+		pollInterval:        cfg.InteractionResponseConsumerPollInterval,
+		leaseTTL:            cfg.InteractionResponseConsumerLeaseTTL,
+		handlerTimeout:      cfg.InteractionResponseConsumerHandlerTimeout,
+		retryInitialDelay:   cfg.InteractionResponseConsumerRetryInitialDelay,
+		retryMaxDelay:       cfg.InteractionResponseConsumerRetryMaxDelay,
+		failureMessageLimit: cfg.InteractionResponseConsumerFailureMessageLimit,
+		concurrencyLimit:    cfg.InteractionResponseConsumerConcurrencyLimit,
+		maxAttempts:         cfg.InteractionResponseConsumerMaxAttempts,
+	}
 }

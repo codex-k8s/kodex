@@ -3180,6 +3180,67 @@ func TestRecordHumanGateDecisionReplayRejectsConflictingPayload(t *testing.T) {
 	}
 }
 
+func TestRecordHumanGateDecisionReplayRejectsConflictingInteractionFingerprint(t *testing.T) {
+	t.Parallel()
+
+	gateID := uuid.MustParse("92929292-aaaa-bbbb-cccc-dddddddddddd")
+	expectedVersion := int64(1)
+	resolved := entity.HumanGateRequest{
+		VersionedBase:          entity.VersionedBase{ID: gateID, Version: 2},
+		RequestKind:            "owner_decision",
+		ReasonCode:             "needs_owner_approval",
+		SafeSummary:            "Owner approved the Human gate response",
+		InteractionRequestRef:  "interaction:request/42",
+		InteractionResponseRef: "interaction:response/42",
+		Status:                 enum.HumanGateStatusResolved,
+		Outcome:                enum.HumanGateOutcomeApprove,
+	}
+	decision := humanGateDecision{
+		HumanGateRequestID:             gateID.String(),
+		Status:                         string(enum.HumanGateStatusResolved),
+		Outcome:                        string(enum.HumanGateOutcomeApprove),
+		SafeSummary:                    "Owner approved the Human gate response",
+		InteractionRequestRef:          "interaction:request/42",
+		InteractionResponseRef:         "interaction:response/42",
+		InteractionResponseFingerprint: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		InteractionRequestVersion:      2,
+	}
+	payload, err := marshalCommandPayload(humanGateCommandPayload{HumanGateRequest: resolved, Decision: &decision})
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	repository := &fakeRepository{
+		replay: &entity.CommandResult{
+			IdempotencyKey: "human-gate-interaction-fingerprint-replay",
+			Actor:          testActor(),
+			Operation:      operationRecordHumanGateDecision,
+			AggregateType:  enum.CommandAggregateTypeHumanGate,
+			AggregateID:    gateID,
+			ResultPayload:  payload,
+		},
+		humanGateByID: map[uuid.UUID]entity.HumanGateRequest{gateID: resolved},
+	}
+	service := New(Config{Repository: repository})
+
+	_, err = service.RecordHumanGateDecision(context.Background(), RecordHumanGateDecisionInput{
+		Meta:                           value.CommandMeta{IdempotencyKey: "human-gate-interaction-fingerprint-replay", ExpectedVersion: &expectedVersion, Actor: testActor()},
+		HumanGateRequestID:             gateID,
+		Status:                         enum.HumanGateStatusResolved,
+		Outcome:                        enum.HumanGateOutcomeApprove,
+		SafeSummary:                    "Owner approved the Human gate response",
+		InteractionRequestRef:          "interaction:request/42",
+		InteractionResponseRef:         "interaction:response/42",
+		InteractionResponseFingerprint: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+		InteractionRequestVersion:      3,
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("RecordHumanGateDecision() err = %v, want %v", err, errs.ErrConflict)
+	}
+	if repository.updateHumanGateCalled {
+		t.Fatal("UpdateHumanGateRequestWithResult called for conflicting replay")
+	}
+}
+
 func decodeAgentPayload(t *testing.T, event entity.OutboxEvent) agentevents.Payload {
 	t.Helper()
 

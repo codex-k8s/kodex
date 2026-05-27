@@ -605,15 +605,17 @@ type RequestHumanGateInput struct {
 }
 
 type RecordHumanGateDecisionInput struct {
-	Meta                     value.CommandMeta
-	HumanGateRequestID       uuid.UUID
-	Status                   enum.HumanGateStatus
-	Outcome                  enum.HumanGateOutcome
-	SafeSummary              string
-	InteractionRequestRef    string
-	InteractionResponseRef   string
-	GovernanceGateRequestRef string
-	GovernanceDecisionRef    string
+	Meta                           value.CommandMeta
+	HumanGateRequestID             uuid.UUID
+	Status                         enum.HumanGateStatus
+	Outcome                        enum.HumanGateOutcome
+	SafeSummary                    string
+	InteractionRequestRef          string
+	InteractionResponseRef         string
+	InteractionResponseFingerprint string
+	InteractionRequestVersion      int64
+	GovernanceGateRequestRef       string
+	GovernanceDecisionRef          string
 }
 
 type HumanGateList = query.HumanGateFilter
