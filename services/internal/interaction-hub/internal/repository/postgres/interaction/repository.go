@@ -50,6 +50,7 @@ const (
 	operationUpdateInteractionRequest  = "domain.Repository.UpdateInteractionRequestWithResult"
 	operationUpdateInteractionRequests = "domain.Repository.UpdateInteractionRequestsWithResult"
 	operationCreateInteractionResponse = "domain.Repository.CreateInteractionResponseWithResult"
+	operationCreateCallbackResponse    = "domain.Repository.CreateChannelCallbackResponseWithResult"
 	operationCreateNotification        = "domain.Repository.CreateNotificationWithResult"
 	operationCreateSubscription        = "domain.Repository.CreateSubscriptionWithResult"
 	operationCreateDeliveryAttempt     = "domain.Repository.CreateDeliveryAttemptWithResult"
@@ -66,6 +67,7 @@ const (
 	operationGetCallbackByCallbackID   = "domain.Repository.GetChannelCallbackByCallbackID"
 	operationGetInteractionRequest     = "domain.Repository.GetInteractionRequest"
 	operationGetInteractionResponse    = "domain.Repository.GetInteractionResponse"
+	operationGetResponseBySource       = "domain.Repository.GetInteractionResponseBySource"
 	operationGetNotification           = "domain.Repository.GetNotification"
 	operationGetSubscription           = "domain.Repository.GetSubscription"
 	operationFindActiveDeliveryRoute   = "domain.Repository.FindActiveDeliveryRoute"
@@ -175,12 +177,34 @@ func (r *Repository) CreateInteractionResponseWithResult(ctx context.Context, re
 	)
 }
 
+func (r *Repository) CreateChannelCallbackResponseWithResult(ctx context.Context, callback entity.ChannelCallback, response entity.InteractionResponse, request entity.InteractionRequest, previousRequestVersion int64, result entity.CommandResult, events []entity.OutboxEvent) error {
+	if len(events) == 0 {
+		return wrapError(operationCreateCallbackResponse, errs.ErrInvalidArgument)
+	}
+	err := postgreslib.WithTx(ctx, r.db, func(tx pgx.Tx) error {
+		if err := postgreslib.RunDistinctMutations(ctx, tx, errs.ErrConflict,
+			affectedMutation(queryChannelCallbackCreate, channelCallbackArgs(callback)),
+			affectedMutation(queryResponseCreate, responseArgs(response)),
+			affectedMutation(queryRequestUpdateStatus, requestUpdateStatusArgs(request, previousRequestVersion)),
+			commandResultMutation(result),
+		); err != nil {
+			return err
+		}
+		return runOutboxBatch(ctx, tx, events)
+	})
+	return wrapError(operationCreateCallbackResponse, err)
+}
+
 func (r *Repository) GetInteractionRequest(ctx context.Context, id uuid.UUID) (entity.InteractionRequest, error) {
 	return queryOne(ctx, r.db, operationGetInteractionRequest, queryRequestGet, pgx.NamedArgs{"id": id}, scanRequest)
 }
 
 func (r *Repository) GetInteractionResponse(ctx context.Context, id uuid.UUID) (entity.InteractionResponse, error) {
 	return queryOne(ctx, r.db, operationGetInteractionResponse, queryResponseGet, pgx.NamedArgs{"id": id}, scanResponse)
+}
+
+func (r *Repository) GetInteractionResponseBySource(ctx context.Context, sourceKind enum.InteractionResponseSourceKind, sourceRef string) (entity.InteractionResponse, error) {
+	return queryOne(ctx, r.db, operationGetResponseBySource, queryResponseGetBySource, responseSourceArgs(sourceKind, sourceRef), scanResponse)
 }
 
 func (r *Repository) ListInteractionRequests(ctx context.Context, filter query.InteractionRequestFilter) ([]entity.InteractionRequest, value.PageResult, error) {

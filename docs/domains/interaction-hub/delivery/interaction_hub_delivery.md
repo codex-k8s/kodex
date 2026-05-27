@@ -6,7 +6,7 @@ status: active
 owner_role: EM
 created_at: 2026-05-22
 updated_at: 2026-05-27
-related_issues: [582, 768, 781, 783, 800, 806, 821, 835, 843, 853]
+related_issues: [582, 768, 781, 783, 800, 806, 821, 835, 843, 853, 855]
 related_prs: []
 related_docsets:
   - docs/domains/interaction-hub/product/requirements.md
@@ -51,6 +51,7 @@ approvals:
 | IH-5a | #821 | Notification и subscription lifecycle готовы без delivery attempts и без конкретных внешних каналов: `RequestNotification`, `UpsertSubscription`, `DisableSubscription`, `ListSubscriptions`, idempotency, optimistic concurrency, safe refs/status/policy refs и outbox events. |
 | IH-5b | #835 | Delivery attempts и безопасные статусы доставки готовы без конкретных внешних каналов: `PlanDelivery`, `RecordDeliveryResult`, `GetDeliveryStatus`, retry/reminder refs и delivery attempt state machine. |
 | IH-6 | #843 | Channel contract integration готова: owner-side route/capability refs, safe delivery command refs, callback envelope lifecycle и package runtime boundary refs без vendor-specific канала. |
+| IH-6b | #855 | Callback request resolution готов: `RecordChannelCallback` связывает safe callback с delivery/request, идемпотентно создаёт `InteractionResponse` для terminal action и сохраняет diagnostic no-op для terminal/invalid callback без изменения owner decision state. |
 | IH-7 | не назначено | MCP-интеграция готова: `platform-mcp-server` маршрутизирует `interaction.feedback.request`, `interaction.approval.request`, `interaction.human_gate.request`, status reads. |
 | IH-8 | не назначено | Связка с `agent-manager`, `codex-hook-ingress`, `governance-manager` и `provider-hub` готова для PermissionRequest, owner feedback, owner decision refs и событий ответа. |
 | IH-9 | не назначено | Проекции для `operations-hub`, operator visibility, dual-surface inbox status и диагностика delivery failures готовы. |
@@ -112,7 +113,7 @@ IH-2 не должен:
 | `UpsertSubscription` / `DisableSubscription` / `ListSubscriptions` | Реализовано: create/update/disable/list, optimistic concurrency, command idempotency, source owner/channel hints/policy refs и `interaction.subscription.updated` event | IH-5a |
 | `PlanDelivery` | Реализовано: создаёт delivery attempt для request/notification target, выбирает active route по scope или принимает route ref, пишет safe `interaction.delivery.requested` event и command idempotency | IH-5b |
 | `RecordDeliveryResult` | Реализовано: фиксирует safe channel/runtime result по `delivery_id`, переводит attempt в `accepted`, `delivered`, `failed` или `expired`, сохраняет bounded diagnostics/retry/runtime metadata и публикует safe delivery event | IH-5b/IH-6 |
-| `RecordChannelCallback` | Реализовано: принимает sanitized callback envelope, связывает его с delivery attempt/request, хранит safe refs/status/fingerprint и публикует `interaction.callback.received` без raw payload | IH-6 |
+| `RecordChannelCallback` | Реализовано: принимает sanitized callback envelope, связывает его с delivery attempt/request, хранит safe refs/status/fingerprint, создаёт `InteractionResponse` для разрешённого terminal action и публикует safe callback/response events без raw payload | IH-6/IH-6b |
 | `GetDeliveryStatus` | Реализовано: возвращает request/notification context и текущие delivery attempts/status по target или `delivery_id` без raw channel payload | IH-5b |
 
 ## Синхронизация с параллельными доменами
@@ -126,7 +127,7 @@ IH-2 не должен:
 | `package-hub` | Согласовано для IH-6 | Channel package capability, installation refs и manifest requirements хранятся в пакетном домене; `interaction-hub` держит только refs. |
 | `runtime-manager` и `fleet-manager` | Согласовано для IH-6 | Runtime-нагрузку channel package запускает runtime/fleet контур; `interaction-hub` хранит только safe runtime/job refs. |
 | `operations-hub` | Перед IH-9 | Операторские очереди и dual-surface inbox читают проекции и события `interaction.*`. |
-| `integration-gateway` | После IH-6 | Публичный callback transport активирован как generic route: gateway проверяет source/signature/limits и вызывает `RecordChannelCallback`; lifecycle и storage остаются в `interaction-hub`. |
+| `integration-gateway` | После IH-6/IH-6b | Публичный callback transport активирован как generic route: gateway проверяет source/signature/limits и вызывает `RecordChannelCallback`; lifecycle, storage, дедупликация и request resolution остаются в `interaction-hub`. |
 
 ## Критерии начала кода
 

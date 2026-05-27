@@ -9,6 +9,7 @@ import (
 
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
 	"github.com/codex-k8s/kodex/services/internal/interaction-hub/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/interaction-hub/internal/domain/types/enum"
 	"github.com/codex-k8s/kodex/services/internal/interaction-hub/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/interaction-hub/internal/domain/types/value"
 )
@@ -147,6 +148,10 @@ func responseArgs(response entity.InteractionResponse) pgx.NamedArgs {
 		"owner_decision_ref":         response.OwnerDecisionRef,
 		"created_at":                 response.CreatedAt,
 	}
+}
+
+func responseSourceArgs(sourceKind enum.InteractionResponseSourceKind, sourceRef string) pgx.NamedArgs {
+	return pgx.NamedArgs{"source_kind": string(sourceKind), "source_ref": sourceRef}
 }
 
 func notificationArgs(notification entity.Notification) pgx.NamedArgs {

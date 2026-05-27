@@ -21,7 +21,7 @@
 - Внешние каналы подключаются через гибридную модель: package-owned runtime плюс стабильный channel delivery/callback contract.
 - Плагин канала устанавливается и описывается через `package-hub`; runtime-нагрузку выполняют `runtime-manager` и `fleet-manager`.
 - `interaction-hub` хранит request lifecycle, delivery attempts, callback records и ответы человека, но не владеет business decision state, package installation, UI или внешним HTTP gateway.
-- OpenAPI-каркас внешнего callback-входа находится в `integration-gateway`; текущая доменная каноника фиксирует payload и lifecycle channel contract.
+- OpenAPI-каркас внешнего callback-входа находится в `integration-gateway`; текущая доменная каноника фиксирует payload, callback lifecycle и применение safe callback к request response lifecycle.
 
 ## Границы
 

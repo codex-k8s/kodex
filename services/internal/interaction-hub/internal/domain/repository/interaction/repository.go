@@ -25,8 +25,10 @@ type Repository interface {
 	UpdateInteractionRequestWithResult(context.Context, entity.InteractionRequest, int64, entity.CommandResult, entity.OutboxEvent) error
 	UpdateInteractionRequestsWithResult(context.Context, []entity.InteractionRequest, map[uuid.UUID]int64, entity.CommandResult, []entity.OutboxEvent) error
 	CreateInteractionResponseWithResult(context.Context, entity.InteractionResponse, entity.InteractionRequest, int64, entity.CommandResult, entity.OutboxEvent) error
+	CreateChannelCallbackResponseWithResult(context.Context, entity.ChannelCallback, entity.InteractionResponse, entity.InteractionRequest, int64, entity.CommandResult, []entity.OutboxEvent) error
 	GetInteractionRequest(context.Context, uuid.UUID) (entity.InteractionRequest, error)
 	GetInteractionResponse(context.Context, uuid.UUID) (entity.InteractionResponse, error)
+	GetInteractionResponseBySource(context.Context, enum.InteractionResponseSourceKind, string) (entity.InteractionResponse, error)
 	ListInteractionRequests(context.Context, query.InteractionRequestFilter) ([]entity.InteractionRequest, value.PageResult, error)
 	ListExpirableInteractionRequests(context.Context, value.ScopeRef, time.Time, int32) ([]entity.InteractionRequest, error)
 	CreateNotificationWithResult(context.Context, entity.Notification, entity.CommandResult, entity.OutboxEvent) error

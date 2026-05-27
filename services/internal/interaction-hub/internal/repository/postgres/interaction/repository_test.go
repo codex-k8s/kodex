@@ -432,8 +432,24 @@ func TestRepositoryIntegrationDeliveryAttemptLifecycle(t *testing.T) {
 	callback := testChannelCallback(storedAccepted, request.ID, sentAt.Add(time.Minute))
 	callbackResult := testCommandResult(uuid.New(), "callback-record", enum.OperationRecordChannelCallback, interactionevents.AggregateCallback, callback.ID, "callback-record-fingerprint", callback.CreatedAt)
 	callbackEvent := testOutboxEvent(interactionevents.EventCallbackReceived, interactionevents.AggregateCallback, callback.ID, callback.CreatedAt)
-	if err := repository.CreateChannelCallbackWithResult(ctx, callback, callbackResult, callbackEvent); err != nil {
-		t.Fatalf("create channel callback: %v", err)
+	callbackResponse := entity.InteractionResponse{
+		ID:                  uuid.New(),
+		RequestID:           request.ID,
+		ResponseAction:      enum.InteractionResponseActionApprove,
+		RespondedByActorRef: callback.ActorRef,
+		ResponseSummary:     callback.CallbackSummary,
+		SourceKind:          enum.InteractionResponseSourceKindChannelCallback,
+		SourceRef:           callback.ID.String(),
+		CreatedAt:           callback.CreatedAt,
+	}
+	answeredRequest := request
+	answeredRequest.Status = enum.InteractionRequestStatusAnswered
+	answeredRequest.Version = 2
+	answeredRequest.UpdatedAt = callback.CreatedAt
+	answeredRequest.ResolvedAt = &callback.CreatedAt
+	responseEvent := testOutboxEvent(interactionevents.EventRequestResponseRecorded, interactionevents.AggregateRequest, request.ID, callback.CreatedAt)
+	if err := repository.CreateChannelCallbackResponseWithResult(ctx, callback, callbackResponse, answeredRequest, 1, callbackResult, []entity.OutboxEvent{callbackEvent, responseEvent}); err != nil {
+		t.Fatalf("create channel callback response: %v", err)
 	}
 	storedCallback, err := repository.GetChannelCallbackByCallbackID(ctx, callback.CallbackID)
 	if err != nil {
@@ -441,6 +457,20 @@ func TestRepositoryIntegrationDeliveryAttemptLifecycle(t *testing.T) {
 	}
 	if storedCallback.DeliveryAttemptID == nil || *storedCallback.DeliveryAttemptID != storedAccepted.ID || storedCallback.CallbackRouteRef != callback.CallbackRouteRef || storedCallback.CallbackFingerprint != callback.CallbackFingerprint {
 		t.Fatalf("stored callback = %+v, want linked callback refs", storedCallback)
+	}
+	storedCallbackResponse, err := repository.GetInteractionResponseBySource(ctx, enum.InteractionResponseSourceKindChannelCallback, callback.ID.String())
+	if err != nil {
+		t.Fatalf("get callback response by source: %v", err)
+	}
+	if storedCallbackResponse.ID != callbackResponse.ID || storedCallbackResponse.RequestID != request.ID {
+		t.Fatalf("stored callback response = %+v, want %s", storedCallbackResponse, callbackResponse.ID)
+	}
+	storedAnsweredRequest, err := repository.GetInteractionRequest(ctx, request.ID)
+	if err != nil {
+		t.Fatalf("get answered callback request: %v", err)
+	}
+	if storedAnsweredRequest.Status != enum.InteractionRequestStatusAnswered || storedAnsweredRequest.Version != 2 {
+		t.Fatalf("answered request = %+v, want answered v2", storedAnsweredRequest)
 	}
 	latestCallback, err := repository.GetLatestChannelCallback(ctx, query.ChannelCallbackFilter{DeliveryAttemptIDs: []uuid.UUID{storedAccepted.ID}})
 	if err != nil {

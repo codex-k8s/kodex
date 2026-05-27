@@ -128,12 +128,12 @@ approvals:
 | `responded_by_actor_ref` | text | нет | Проверенный actor. |
 | `response_summary` | text | да | Короткая безопасная сводка. |
 | `response_object_ref` | text | да | Ссылка на полный ответ или вложения. |
-| `source_kind` | enum | нет | `web_console`, `mcp`, `channel_callback`, `system`. |
+| `source_kind` | enum | нет | `web_console`, `mcp`, `channel_callback`, `system`, `service`. |
 | `source_ref` | text | да | Callback, message или command ref. |
 | `owner_decision_ref` | text | да | Ссылка на решение у сервиса-владельца, если оно уже зафиксировано. |
 | `created_at` | timestamptz | нет | Время ответа. |
 
-Для request с terminal state допускается только один итоговый ответ. Повторная доставка того же callback возвращает уже сохранённый ответ.
+Для request с terminal state допускается только один итоговый ответ. Callback response использует `source_kind=channel_callback` и `source_ref` на безопасную callback record. Повторная доставка того же callback возвращает уже сохранённый ответ.
 
 ### Notification
 
@@ -274,6 +274,8 @@ One-way уведомления и reminders не создают `InteractionRequ
 
 `interaction-hub` не хранит сырую подпись, токены, секреты канала и полный внешний payload. Публичная проверка выполняется gateway до вызова домена.
 
+Если callback сопоставлен с feedback, approval или Human gate request и выбирает разрешённый terminal action, `interaction-hub` создаёт `InteractionResponse` и переводит request в `answered` в одной транзакции с callback record. Callback к terminal request, callback с недопустимым action или callback без достаточного safe actor/response context сохраняется как `processing_status=rejected` с bounded `error_code`; такая запись не создаёт новый response и не меняет owner business decision state.
+
 ### CommandResult
 
 `CommandResult` хранит идемпотентный след команд.
@@ -316,6 +318,7 @@ One-way уведомления и reminders не создают `InteractionRequ
 | `Notification` -> `DeliveryAttempt` | 1:N | Уведомление может доставляться нескольким получателям и поверхностям. |
 | `Subscription` -> `Notification` | 1:N | Подписка может создавать много уведомлений. |
 | `DeliveryAttempt` -> `ChannelCallback` | 1:N | Callback может быть повторён; идемпотентность по `callback_id`. |
+| `ChannelCallback` -> `InteractionResponse` | 1:0..1 | Только accepted terminal callback создаёт итоговый response через `source_kind=channel_callback`. |
 
 ## Индексы и критичные запросы
 
@@ -325,6 +328,7 @@ One-way уведомления и reminders не создают `InteractionRequ
 | Найти request по владельцу сценария | `(source_owner_kind, source_owner_ref)` |
 | Найти попытки доставки для retry | `(status, next_retry_at, route_id)` |
 | Найти callback по idempotency key | unique `(callback_id)` |
+| Найти response по callback source | partial unique `(source_kind, source_ref)` для `source_kind='channel_callback'` |
 | Найти delivery attempt по channel delivery id | unique `(delivery_id)` |
 | Найти подписки по scope и event filter | `(scope_type, scope_ref, status)` плюс JSONB GIN по `event_filter` при необходимости |
 | Найти сообщения ветки | `(thread_id, created_at)` |
