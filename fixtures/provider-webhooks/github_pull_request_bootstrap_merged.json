@@ -1,0 +1,34 @@
+{
+  "action": "closed",
+  "repository": {
+    "id": 9001001,
+    "full_name": "kodex-smoke/repository"
+  },
+  "pull_request": {
+    "id": 900188,
+    "number": 88,
+    "html_url": "https://example.invalid/kodex-smoke/repository/pull/88",
+    "title": "Bootstrap services policy",
+    "state": "closed",
+    "body": "<!-- kodex:artifact v1\nkind: pull_request\nmanaged_by: kodex\nwork_type: repository_bootstrap\nsource_ref: kodex/bootstrap\nprovider_operation_ref: provider-hub:operation:00000000-0000-4000-8000-000000000088\n-->\nSafe smoke bootstrap PR.",
+    "labels": [
+      {
+        "name": "type/repository_bootstrap"
+      }
+    ],
+    "assignees": [],
+    "merged": true,
+    "merge_commit_sha": "0123456789abcdef0123456789abcdef01234567",
+    "base": {
+      "ref": "main",
+      "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "head": {
+      "ref": "kodex/bootstrap",
+      "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "merged_at": "2026-05-27T12:34:56Z",
+    "closed_at": "2026-05-27T12:34:56Z",
+    "updated_at": "2026-05-27T12:34:56Z"
+  }
+}

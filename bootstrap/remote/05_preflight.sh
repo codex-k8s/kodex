@@ -60,7 +60,12 @@ esac
 if [ -z "${OPERATOR_SSH_PUBKEY:-}" ] && [ -n "${OPERATOR_SSH_PUBKEY_PATH:-}" ] && [ -f "${OPERATOR_SSH_PUBKEY_PATH}" ]; then
   OPERATOR_SSH_PUBKEY="$(cat "${OPERATOR_SSH_PUBKEY_PATH}")"
 fi
-[ -n "${OPERATOR_SSH_PUBKEY:-}" ] || die "OPERATOR_SSH_PUBKEY is required"
+if [ -z "${OPERATOR_SSH_PUBKEY:-}" ]; then
+  if [ "$KODEX_BOOTSTRAP_MODE" = "remote" ]; then
+    die "OPERATOR_SSH_PUBKEY is required for remote mode"
+  fi
+  log "Operator SSH public key is not configured; local mode will skip authorized_keys provisioning"
+fi
 
 if [ -n "${KODEX_PRODUCTION_DOMAIN:-}" ] && [ "$KODEX_BOOTSTRAP_SKIP_DNS_CHECK" != "true" ]; then
   if [ -n "${TARGET_HOST:-}" ]; then

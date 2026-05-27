@@ -2745,6 +2745,9 @@ func (r *fakeRepository) StoreWebhookEvent(_ context.Context, webhook entity.Web
 	r.recordedProjection = projection
 	r.recordedProviderEvents = providerEvents
 	r.recordedOutboxEvents = outboxEvents
+	if projection.MergeSignal != nil {
+		r.mergeSignal = *projection.MergeSignal
+	}
 	return webhook, providerEvents, r.err
 }
 
@@ -2753,6 +2756,9 @@ func (r *fakeRepository) ProcessWebhookEvent(_ context.Context, webhook entity.W
 	r.recordedProjection = projection
 	r.recordedProviderEvents = providerEvents
 	r.recordedOutboxEvents = outboxEvents
+	if projection.MergeSignal != nil {
+		r.mergeSignal = *projection.MergeSignal
+	}
 	if r.webhookAfterProcess != nil {
 		r.recordedWebhook = *r.webhookAfterProcess
 	}

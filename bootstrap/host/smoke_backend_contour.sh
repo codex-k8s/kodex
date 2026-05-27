@@ -4,7 +4,7 @@ set -euo pipefail
 PROJECT_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 ENV_FILE="${KODEX_SMOKE_ENV_FILE:-${PROJECT_ROOT}/bootstrap/host/config.env}"
 RUN_REGISTRY_SMOKE="${KODEX_BACKEND_SMOKE_RUN_REGISTRY:-true}"
-SERVICES="${KODEX_BACKEND_SMOKE_SERVICES:-access-manager project-catalog package-hub provider-hub fleet-manager runtime-manager interaction-hub codex-hook-ingress integration-gateway}"
+SERVICES="${KODEX_BACKEND_SMOKE_SERVICES:-access-manager project-catalog package-hub provider-hub fleet-manager runtime-manager interaction-hub agent-manager codex-hook-ingress integration-gateway}"
 
 log() { echo "[$(date -Is)] $*"; }
 die() { echo "ERROR: $*" >&2; exit 1; }

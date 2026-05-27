@@ -5,8 +5,8 @@ title: "provider-hub — runbook: развёртывание и smoke-прове
 status: active
 owner_role: SRE
 created_at: 2026-05-14
-updated_at: 2026-05-26
-related_issues: [754, 770, 840]
+updated_at: 2026-05-27
+related_issues: [754, 770, 840, 895]
 related_alerts: []
 approvals:
   required: ["Owner"]
@@ -69,6 +69,28 @@ KODEX_SMOKE_ENV_FILE=/path/to/bootstrap.env \
 - проверяет gRPC boundary через `ProviderHubService/ListProviderOperations`.
 
 Smoke не выполняет реальные операции GitHub/GitLab и не читает значения provider-секретов. Проверка gRPC допускает прикладной `PermissionDenied`, если токен и transport boundary корректны, но у smoke-актора нет доменных прав.
+
+### Smoke producer path для merge signal
+
+```bash
+scripts/smoke-provider-merge-signal.sh
+```
+
+Этот staged smoke использует синтетический safe fixture GitHub `pull_request closed + merged` из `fixtures/provider-webhooks/github_pull_request_bootstrap_merged.json` и не требует live webhook secret, реального домена, provider API или Kubernetes. Проверка состоит из двух частей:
+
+- `integration-gateway` route test принимает подписанный тестовым секретом fixture и передаёт envelope в owner client без хранения gateway state;
+- `provider-hub` domain test обрабатывает тот же fixture через GitHub normalizer, создаёт safe `RepositoryMergeSignal`, читает его через `GetRepositoryMergeSignal` и проверяет локальный outbox event `provider.repository.bootstrap_merged`.
+
+Live HTTP режим запускается отдельно:
+
+```bash
+KODEX_PROVIDER_MERGE_SIGNAL_SMOKE_MODE=live-http \
+KODEX_PROVIDER_MERGE_SIGNAL_SMOKE_GATEWAY_URL=http://127.0.0.1:18086 \
+KODEX_PROVIDER_MERGE_SIGNAL_SMOKE_PROVIDER_HUB_GRPC_ADDR=127.0.0.1:19095 \
+scripts/smoke-provider-merge-signal.sh
+```
+
+Для live HTTP режима нужны настроенный webhook secret, доступный `integration-gateway`, доступный gRPC `provider-hub` и уже существующая bootstrap/adoption PR-проекция с `project_repository_binding` в `provider-hub`. Без этой provider-side precondition один webhook корректно обновит PR-проекцию, но не создаст onboarding merge signal. Если требуется проверить публикацию в `platform-event-log`, дополнительно задаётся `KODEX_PROVIDER_MERGE_SIGNAL_SMOKE_CHECK_EVENT_LOG=true` и DSN event-log через безопасный локальный env; значение DSN не выводится.
 
 ## Диагностика миграций
 
