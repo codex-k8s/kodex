@@ -14,6 +14,15 @@ import (
 
 const safeOnboardingErrorSummaryLimit = 160
 
+const (
+	maxOnboardingSignalKeyLength          = 256
+	maxOnboardingProviderSlugLength       = 64
+	maxOnboardingProviderRefLength        = 256
+	maxOnboardingRepositoryFullNameLength = 256
+	maxOnboardingArtifactRefLength        = 512
+	maxOnboardingArtifactVersionLength    = 128
+)
+
 func (s *Service) recordOnboardingSignalProcessing(ctx context.Context, input *OnboardingSignalReconciliationInput) error {
 	if input == nil {
 		return nil
@@ -114,10 +123,52 @@ func (s *Service) onboardingSignalRecord(
 func normalizeOnboardingSignalReconciliationInput(input OnboardingSignalReconciliationInput) (OnboardingSignalReconciliationInput, error) {
 	projectID := input.ProjectID
 	repositoryID := input.RepositoryID
-	if strings.TrimSpace(input.SignalKey) == "" ||
-		strings.TrimSpace(input.SignalFingerprint) == "" ||
-		strings.TrimSpace(input.ProviderSlug) == "" ||
-		strings.TrimSpace(input.RepositoryFullName) == "" {
+	signalKey, err := normalizeSafeOnboardingRef(input.SignalKey, maxOnboardingSignalKeyLength, true)
+	if err != nil {
+		return OnboardingSignalReconciliationInput{}, errs.ErrInvalidArgument
+	}
+	signalFingerprint := strings.ToLower(strings.TrimSpace(input.SignalFingerprint))
+	if !validSHA256ContentHash(signalFingerprint) {
+		return OnboardingSignalReconciliationInput{}, errs.ErrInvalidArgument
+	}
+	providerSlug, err := normalizeSafeOnboardingRef(input.ProviderSlug, maxOnboardingProviderSlugLength, true)
+	if err != nil {
+		return OnboardingSignalReconciliationInput{}, errs.ErrInvalidArgument
+	}
+	repositoryFullName, err := normalizeOnboardingRepositoryFullName(input.RepositoryFullName)
+	if err != nil {
+		return OnboardingSignalReconciliationInput{}, err
+	}
+	providerRepositoryID, err := normalizeSafeOnboardingRef(input.ProviderRepositoryID, maxOnboardingProviderRefLength, false)
+	if err != nil {
+		return OnboardingSignalReconciliationInput{}, err
+	}
+	baseBranch, err := normalizeSafeOnboardingBranch(input.BaseBranch)
+	if err != nil {
+		return OnboardingSignalReconciliationInput{}, err
+	}
+	sourceRef, err := normalizeSafeOnboardingRef(input.SourceRef, maxOnboardingProviderRefLength, false)
+	if err != nil {
+		return OnboardingSignalReconciliationInput{}, err
+	}
+	sourceCommitSHA := strings.ToLower(strings.TrimSpace(input.SourceCommitSHA))
+	if sourceCommitSHA != "" && !validGitCommitSHA(sourceCommitSHA) {
+		return OnboardingSignalReconciliationInput{}, errs.ErrInvalidArgument
+	}
+	artifactRef, err := normalizeSafeOnboardingRef(input.ArtifactRef, maxOnboardingArtifactRefLength, false)
+	if err != nil {
+		return OnboardingSignalReconciliationInput{}, err
+	}
+	artifactDigest := strings.ToLower(strings.TrimSpace(input.ArtifactDigest))
+	if artifactDigest != "" && !validSHA256ContentHash(artifactDigest) {
+		return OnboardingSignalReconciliationInput{}, errs.ErrInvalidArgument
+	}
+	artifactVersion, err := normalizeSafeOnboardingRef(input.ArtifactVersion, maxOnboardingArtifactVersionLength, false)
+	if err != nil {
+		return OnboardingSignalReconciliationInput{}, err
+	}
+	contentHash := strings.ToLower(strings.TrimSpace(input.ContentHash))
+	if contentHash != "" && !validSHA256ContentHash(contentHash) {
 		return OnboardingSignalReconciliationInput{}, errs.ErrInvalidArgument
 	}
 	if projectID == uuid.Nil || repositoryID == uuid.Nil {
@@ -130,21 +181,87 @@ func normalizeOnboardingSignalReconciliationInput(input OnboardingSignalReconcil
 		ProjectID:            projectID,
 		RepositoryID:         repositoryID,
 		SignalKind:           input.SignalKind,
-		SignalKey:            strings.TrimSpace(input.SignalKey),
-		SignalFingerprint:    strings.TrimSpace(input.SignalFingerprint),
-		ProviderSlug:         strings.TrimSpace(input.ProviderSlug),
-		RepositoryFullName:   strings.TrimSpace(input.RepositoryFullName),
-		ProviderRepositoryID: strings.TrimSpace(input.ProviderRepositoryID),
-		BaseBranch:           strings.TrimSpace(input.BaseBranch),
-		SourceRef:            strings.TrimSpace(input.SourceRef),
-		SourceCommitSHA:      strings.ToLower(strings.TrimSpace(input.SourceCommitSHA)),
-		ArtifactRef:          strings.TrimSpace(input.ArtifactRef),
-		ArtifactDigest:       strings.TrimSpace(input.ArtifactDigest),
-		ArtifactVersion:      strings.TrimSpace(input.ArtifactVersion),
-		ContentHash:          strings.TrimSpace(input.ContentHash),
+		SignalKey:            signalKey,
+		SignalFingerprint:    signalFingerprint,
+		ProviderSlug:         providerSlug,
+		RepositoryFullName:   repositoryFullName,
+		ProviderRepositoryID: providerRepositoryID,
+		BaseBranch:           baseBranch,
+		SourceRef:            sourceRef,
+		SourceCommitSHA:      sourceCommitSHA,
+		ArtifactRef:          artifactRef,
+		ArtifactDigest:       artifactDigest,
+		ArtifactVersion:      artifactVersion,
+		ContentHash:          contentHash,
 		Summary:              truncateSafeOnboardingSummary(input.Summary),
 		ObservedAt:           strings.TrimSpace(input.ObservedAt),
 	}, nil
+}
+
+func normalizeSafeOnboardingBranch(text string) (string, error) {
+	branch, err := normalizeSafeOnboardingRef(text, maxOnboardingProviderRefLength, false)
+	if err != nil || branch == "" {
+		return branch, err
+	}
+	if !validBootstrapBranchName(branch) {
+		return "", errs.ErrInvalidArgument
+	}
+	return branch, nil
+}
+
+func normalizeOnboardingRepositoryFullName(text string) (string, error) {
+	fullName, err := normalizeSafeOnboardingRef(text, maxOnboardingRepositoryFullNameLength, true)
+	if err != nil {
+		return "", err
+	}
+	owner, name, ok := strings.Cut(fullName, "/")
+	if !ok {
+		return "", errs.ErrInvalidArgument
+	}
+	lastSlash := strings.LastIndex(fullName, "/")
+	if lastSlash > 0 && lastSlash < len(fullName)-1 {
+		owner = fullName[:lastSlash]
+		name = fullName[lastSlash+1:]
+	}
+	if !validProviderOwnerRef(owner) || !validProviderRepositoryName(name) {
+		return "", errs.ErrInvalidArgument
+	}
+	return fullName, nil
+}
+
+func normalizeSafeOnboardingRef(text string, limit int, required bool) (string, error) {
+	trimmed := strings.TrimSpace(text)
+	if trimmed == "" {
+		if required {
+			return "", errs.ErrInvalidArgument
+		}
+		return "", nil
+	}
+	if len(trimmed) > limit || !validSafeOnboardingRef(trimmed) {
+		return "", errs.ErrInvalidArgument
+	}
+	return trimmed, nil
+}
+
+func validSafeOnboardingRef(text string) bool {
+	for _, char := range text {
+		if char >= 'a' && char <= 'z' {
+			continue
+		}
+		if char >= 'A' && char <= 'Z' {
+			continue
+		}
+		if char >= '0' && char <= '9' {
+			continue
+		}
+		switch char {
+		case '-', '_', '.', '/', ':', '@', '+', '=', ',', '#', '%', '?', '&':
+			continue
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 func safeOnboardingSignalError(cause error) (string, string) {

@@ -1458,6 +1458,134 @@ func TestReconcileBootstrapMergeSignalStoresSafeFailureStatus(t *testing.T) {
 	}
 }
 
+func TestReconcileBootstrapMergeSignalRejectsUnsafeJournalMetadata(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+
+	for _, tc := range []struct {
+		name   string
+		mutate func(*ReconcileBootstrapMergeSignalInput)
+	}{
+		{
+			name: "oversized signal key",
+			mutate: func(input *ReconcileBootstrapMergeSignalInput) {
+				input.MergeSignal.SignalKey = strings.Repeat("x", maxOnboardingSignalKeyLength+1)
+			},
+		},
+		{
+			name: "control char repository full name",
+			mutate: func(input *ReconcileBootstrapMergeSignalInput) {
+				input.MergeSignal.ProviderTarget.RepositoryFullName = "codex-k8s/kodex\nraw"
+			},
+		},
+		{
+			name: "oversized artifact ref",
+			mutate: func(input *ReconcileBootstrapMergeSignalInput) {
+				input.CheckedPolicy.ArtifactRef = "artifact://" + strings.Repeat("x", maxOnboardingArtifactRefLength+1)
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store := newMemoryRepository()
+			store.repositories[repositoryID] = pendingBootstrapRepository(projectID, repositoryID)
+			svc := NewWithConfig(store, fixedClock{}, &sequenceIDs{}, Config{})
+			input := reconcileBootstrapMergeSignalInput(projectID, repositoryID, commandMetaWithVersion(uuid.Nil, 3))
+			tc.mutate(&input)
+
+			_, err := svc.ReconcileBootstrapMergeSignal(ctx, input)
+			if !errors.Is(err, errs.ErrInvalidArgument) {
+				t.Fatalf("ReconcileBootstrapMergeSignal() err = %v, want invalid argument", err)
+			}
+			if len(store.onboardingSignals) != 0 || len(store.policies) != 0 || len(store.events) != 0 || len(store.commandResults) != 0 {
+				t.Fatalf(
+					"onboardingSignals=%d policies=%d events=%d commandResults=%d, want no writes",
+					len(store.onboardingSignals),
+					len(store.policies),
+					len(store.events),
+					len(store.commandResults),
+				)
+			}
+		})
+	}
+}
+
+func TestNormalizeOnboardingSignalReconciliationRejectsUnsafeMetadata(t *testing.T) {
+	valid := OnboardingSignalReconciliationInput{
+		ProjectID:            uuid.New(),
+		RepositoryID:         uuid.New(),
+		SignalKind:           enum.OnboardingSignalKindBootstrapMerge,
+		SignalKey:            "github/bootstrap/PR_123",
+		SignalFingerprint:    "sha256:" + strings.Repeat("a", 64),
+		ProviderSlug:         "github",
+		RepositoryFullName:   "codex-k8s/kodex",
+		ProviderRepositoryID: "R_123",
+		BaseBranch:           "main",
+		SourceRef:            "refs/heads/main",
+		SourceCommitSHA:      bootstrapMergeCommitSHA,
+		ArtifactRef:          "artifact://provider/bootstrap/PR_123/services.yaml",
+		ArtifactDigest:       bootstrapContentHash(bootstrapServicesPolicyFileContent),
+		ArtifactVersion:      bootstrapMergeCommitSHA,
+		ContentHash:          bootstrapContentHash(bootstrapServicesPolicyFileContent),
+	}
+
+	for _, tc := range []struct {
+		name   string
+		mutate func(*OnboardingSignalReconciliationInput)
+	}{
+		{
+			name: "control char signal key",
+			mutate: func(input *OnboardingSignalReconciliationInput) {
+				input.SignalKey = "github/bootstrap/PR_123\nraw"
+			},
+		},
+		{
+			name: "invalid fingerprint",
+			mutate: func(input *OnboardingSignalReconciliationInput) {
+				input.SignalFingerprint = "raw-fingerprint"
+			},
+		},
+		{
+			name: "control char provider repository id",
+			mutate: func(input *OnboardingSignalReconciliationInput) {
+				input.ProviderRepositoryID = "R_123\nraw"
+			},
+		},
+		{
+			name: "unsafe base branch",
+			mutate: func(input *OnboardingSignalReconciliationInput) {
+				input.BaseBranch = "main branch"
+			},
+		},
+		{
+			name: "control char artifact version",
+			mutate: func(input *OnboardingSignalReconciliationInput) {
+				input.ArtifactVersion = bootstrapMergeCommitSHA + "\nraw"
+			},
+		},
+		{
+			name: "invalid artifact digest",
+			mutate: func(input *OnboardingSignalReconciliationInput) {
+				input.ArtifactDigest = "sha256:" + strings.Repeat("z", 64)
+			},
+		},
+		{
+			name: "invalid content hash",
+			mutate: func(input *OnboardingSignalReconciliationInput) {
+				input.ContentHash = "raw-content-hash"
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			input := valid
+			tc.mutate(&input)
+			if _, err := normalizeOnboardingSignalReconciliationInput(input); !errors.Is(err, errs.ErrInvalidArgument) {
+				t.Fatalf("normalizeOnboardingSignalReconciliationInput() err = %v, want invalid argument", err)
+			}
+		})
+	}
+}
+
 func TestReconcileBootstrapMergeSignalRejectsMismatchedSignal(t *testing.T) {
 	ctx := context.Background()
 	projectID := uuid.New()
