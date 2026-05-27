@@ -54,6 +54,49 @@ func scanRepository(row postgreslib.RowScanner) (entity.RepositoryBinding, error
 	return repository, err
 }
 
+func scanOnboardingSignalReconciliation(row postgreslib.RowScanner) (entity.OnboardingSignalReconciliation, error) {
+	var signal entity.OnboardingSignalReconciliation
+	var signalKind, status string
+	var servicesPolicyID pgtype.UUID
+	var completedAt pgtype.Timestamptz
+	err := row.Scan(
+		&signal.ID,
+		&signal.ProjectID,
+		&signal.RepositoryID,
+		&signalKind,
+		&signal.SignalKey,
+		&signal.SignalFingerprint,
+		&signal.ProviderSlug,
+		&signal.RepositoryFullName,
+		&signal.ProviderRepositoryID,
+		&signal.BaseBranch,
+		&signal.SourceRef,
+		&signal.SourceCommitSHA,
+		&signal.ArtifactRef,
+		&signal.ArtifactDigest,
+		&signal.ArtifactVersion,
+		&signal.ContentHash,
+		&status,
+		&signal.ErrorCode,
+		&signal.ErrorSummary,
+		&signal.Summary,
+		&servicesPolicyID,
+		&signal.ServicesPolicyVersion,
+		&signal.ObservedAt,
+		&completedAt,
+		&signal.Version,
+		&signal.CreatedAt,
+		&signal.UpdatedAt,
+	)
+	signal.SignalKind = enum.OnboardingSignalKind(signalKind)
+	signal.Status = enum.OnboardingSignalStatus(status)
+	signal.ServicesPolicyID = postgreslib.UUIDPtrFromPG(servicesPolicyID)
+	if completedAt.Valid {
+		signal.CompletedAt = &completedAt.Time
+	}
+	return signal, err
+}
+
 func scanServicesPolicy(row postgreslib.RowScanner) (entity.ServicesPolicy, error) {
 	var policy entity.ServicesPolicy
 	var sourceRepositoryID pgtype.UUID

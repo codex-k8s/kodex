@@ -53,28 +53,50 @@ func (s *Service) ImportBootstrapServicesPolicy(ctx context.Context, input Impor
 	if err := s.authorizeCommand(ctx, input.Meta, projectActionPolicyImport, projectScopedResource(projectAggregateServicesPolicy, input.ProjectID)); err != nil {
 		return BootstrapServicesPolicyImportResult{}, err
 	}
+	if err := s.recordOnboardingSignalProcessing(ctx, input.OnboardingSignal); err != nil {
+		return BootstrapServicesPolicyImportResult{}, err
+	}
 	if replay, ok, err := s.replayBootstrapServicesPolicyImport(ctx, input); ok || err != nil {
+		if err != nil {
+			s.recordOnboardingSignalFailed(ctx, input.OnboardingSignal, err)
+			return replay, err
+		}
+		if recordErr := s.recordOnboardingSignalImported(ctx, input.OnboardingSignal, replay); recordErr != nil {
+			return BootstrapServicesPolicyImportResult{}, recordErr
+		}
 		return replay, err
 	}
 	repository, err := s.repository.GetRepository(ctx, input.RepositoryID)
 	if err != nil {
+		s.recordOnboardingSignalFailed(ctx, input.OnboardingSignal, err)
 		return BootstrapServicesPolicyImportResult{}, err
 	}
 	if repository.ProjectID != input.ProjectID {
+		s.recordOnboardingSignalFailed(ctx, input.OnboardingSignal, errs.ErrPreconditionFailed)
 		return BootstrapServicesPolicyImportResult{}, errs.ErrPreconditionFailed
 	}
 	normalized, err := normalizeBootstrapPolicyImportInput(input, repository)
 	if err != nil {
+		s.recordOnboardingSignalFailed(ctx, input.OnboardingSignal, err)
 		return BootstrapServicesPolicyImportResult{}, err
 	}
 	if replay, ok, err := s.replayBootstrapServicesPolicyImportBySource(ctx, repository, normalized); ok || err != nil {
+		if err != nil {
+			s.recordOnboardingSignalFailed(ctx, input.OnboardingSignal, err)
+			return replay, err
+		}
+		if recordErr := s.recordOnboardingSignalImported(ctx, input.OnboardingSignal, replay); recordErr != nil {
+			return BootstrapServicesPolicyImportResult{}, recordErr
+		}
 		return replay, err
 	}
 	if repository.Status != enum.RepositoryStatusPending {
+		s.recordOnboardingSignalFailed(ctx, input.OnboardingSignal, errs.ErrPreconditionFailed)
 		return BootstrapServicesPolicyImportResult{}, errs.ErrPreconditionFailed
 	}
 	previousVersion, err := expectedVersion(input.Meta)
 	if err != nil {
+		s.recordOnboardingSignalFailed(ctx, input.OnboardingSignal, err)
 		return BootstrapServicesPolicyImportResult{}, err
 	}
 	now := s.clock.Now()
@@ -84,6 +106,7 @@ func (s *Service) ImportBootstrapServicesPolicy(ctx context.Context, input Impor
 		ValidatedPayload:   normalized.ValidatedPayload,
 	}, enum.ServicesPolicyValidationValid)
 	if err != nil {
+		s.recordOnboardingSignalFailed(ctx, input.OnboardingSignal, err)
 		return BootstrapServicesPolicyImportResult{}, err
 	}
 	policy := entity.ServicesPolicy{
@@ -107,14 +130,17 @@ func (s *Service) ImportBootstrapServicesPolicy(ctx context.Context, input Impor
 	documentationSources := s.preparePolicyDocumentationSources(policy, projection.documentationSources, now)
 	payload, err := bootstrapPolicyImportCommandPayloadJSON(normalized)
 	if err != nil {
+		s.recordOnboardingSignalFailed(ctx, input.OnboardingSignal, err)
 		return BootstrapServicesPolicyImportResult{}, err
 	}
 	command, err := commandResultWithPayload(input.Meta, projectOperationImportBootstrapPolicy, projectAggregateServicesPolicy, policy.ID, now, payload)
 	if err != nil {
+		s.recordOnboardingSignalFailed(ctx, input.OnboardingSignal, err)
 		return BootstrapServicesPolicyImportResult{}, err
 	}
 	repositoryEvent, err := s.repositoryEvent(projectEventRepositoryUpdated, updatedRepository)
 	if err != nil {
+		s.recordOnboardingSignalFailed(ctx, input.OnboardingSignal, err)
 		return BootstrapServicesPolicyImportResult{}, err
 	}
 	buildPolicyEvent := func(policy entity.ServicesPolicy) (entity.OutboxEvent, error) {
@@ -132,9 +158,14 @@ func (s *Service) ImportBootstrapServicesPolicy(ctx context.Context, input Impor
 		buildPolicyEvent,
 	)
 	if err != nil {
+		s.recordOnboardingSignalFailed(ctx, input.OnboardingSignal, err)
 		return BootstrapServicesPolicyImportResult{}, err
 	}
-	return bootstrapServicesPolicyImportResult(activated, imported, normalized), nil
+	result := bootstrapServicesPolicyImportResult(activated, imported, normalized)
+	if err := s.recordOnboardingSignalImported(ctx, input.OnboardingSignal, result); err != nil {
+		return BootstrapServicesPolicyImportResult{}, err
+	}
+	return result, nil
 }
 
 func (s *Service) replayBootstrapServicesPolicyImport(ctx context.Context, input ImportBootstrapServicesPolicyInput) (BootstrapServicesPolicyImportResult, bool, error) {

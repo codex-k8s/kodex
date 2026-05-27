@@ -5,8 +5,8 @@ title: kodex — модель данных домена проектов и ре
 status: active
 owner_role: SA
 created_at: 2026-05-05
-updated_at: 2026-05-26
-related_issues: [628, 629, 630, 631, 632, 633, 818]
+updated_at: 2026-05-27
+related_issues: [628, 629, 630, 631, 632, 633, 818, 881]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -20,7 +20,7 @@ approvals:
 
 ## TL;DR
 
-- Ключевые сущности: `Project`, `RepositoryBinding`, `ServicesPolicy`, `ServiceDescriptor`, `DocumentationSource`, `BranchRules`, `ReleasePolicy`, `ReleaseLine`, `PlacementPolicy`, `PolicyOverride`.
+- Ключевые сущности: `Project`, `RepositoryBinding`, `OnboardingSignalReconciliation`, `ServicesPolicy`, `ServiceDescriptor`, `DocumentationSource`, `BranchRules`, `ReleasePolicy`, `ReleaseLine`, `PlacementPolicy`, `PolicyOverride`.
 - Технические агрегаты: `CommandResult`, `OutboxEvent`.
 - Основные связи: проект владеет репозиториями и политикой; репозиторий может иметь свои уточняющие правила; источники документации связываются с проектом, репозиторием или сервисом.
 - Риски миграций: нельзя хранить чужие provider-native сущности как канонические данные; нельзя делать SQL-связи с БД других сервисов.
@@ -64,6 +64,44 @@ approvals:
 | `version` | bigint | нет | Оптимистичная конкуренция. |
 
 `pending` используется для bootstrap до появления проверенной политики: binding уже содержит project-owned `repository_id`, provider refs и `base_branch`, но ещё не входит в активный рабочий контур. После импорта проверенной `services.yaml` из merge commit команда bootstrap-import переводит binding в `active` в той же транзакции, где создаётся `ServicesPolicy`.
+
+### OnboardingSignalReconciliation
+
+`OnboardingSignalReconciliation` фиксирует project-side состояние обработки безопасного provider onboarding signal. Эта запись нужна для smoke/CLI/ops-диагностики: bootstrap merge signal не остаётся только внешним событием, а получает в `project-catalog` короткий статус результата. Та же форма зарезервирована для будущего project-side adoption scan planning command, но scan snapshot без checked policy payload сам по себе не импортирует `services.yaml`.
+
+Правила:
+- запись хранит только safe refs, digests, artifact refs/version, короткий summary и safe error code/summary;
+- `validated_payload` хранится только в `ServicesPolicy`, а не дублируется в журнале сигнала;
+- raw webhook body, provider response, diff, YAML-текст, содержимое файлов, секреты и большие детали не хранятся;
+- для bootstrap merge успешная запись связывается с импортированной `ServicesPolicy`;
+- для adoption scan текущий provider snapshot является planning-сигналом без checked policy payload, поэтому сам по себе не создаёт `ServicesPolicy`.
+
+| Поле | Тип | Может быть пустым | Примечание |
+|---|---|---:|---|
+| `id` | uuid | нет | Идентификатор project-side записи обработки. |
+| `project_id` | uuid | нет | Проект-владелец. |
+| `repository_id` | uuid | нет | Project-owned repository binding. |
+| `signal_kind` | enum | нет | `bootstrap_merge` или будущий `adoption_scan`. |
+| `signal_key` | text | нет | Идемпотентный ключ provider-side сигнала. |
+| `signal_fingerprint` | text | нет | Digest безопасных refs/artifact metadata, по которому ловится конфликтующий replay. |
+| `provider_slug` | text | нет | Нормализованный provider id. |
+| `repository_full_name` | text | нет | Safe provider owner/name. |
+| `provider_repository_id` | text | да | Provider-native repository id, если известен. |
+| `base_branch` | text | да | Branch, к которому относится сигнал. |
+| `source_ref` | text | да | Safe source/base ref для импорта или planning. |
+| `source_commit_sha` | text | да | Merge/head commit, если применимо. |
+| `artifact_ref` | text | да | Immutable ref checked artifact, если он есть. |
+| `artifact_digest` | text | да | Digest checked artifact. |
+| `artifact_version` | text | да | Версия artifact, для bootstrap равна merge commit. |
+| `content_hash` | text | да | Нормализованный hash checked `services.yaml`. |
+| `status` | enum | нет | `processing`, `imported`, `failed`, `received`, `needs_review`. |
+| `error_code` | text | да | Safe machine code ошибки без downstream details. |
+| `error_summary` | text | да | Короткое безопасное описание ошибки. |
+| `summary` | text | да | Короткий безопасный итог для UI/CLI. |
+| `services_policy_id` | uuid | да | Связь с imported checked policy после успешного bootstrap merge. |
+| `services_policy_version` | bigint | да | Версия imported checked policy. |
+| `observed_at` | timestamptz | нет | Время provider observation или project-side записи. |
+| `completed_at` | timestamptz | да | Когда обработка завершилась success/failure. |
 
 ### ServicesPolicy
 
@@ -243,7 +281,8 @@ approvals:
 
 ## Связи
 
-- `Project` владеет `RepositoryBinding`, `ServicesPolicy`, `ServiceDescriptor`, `DocumentationSource`, `BranchRules`, `ReleasePolicy`, `ReleaseLine`, `PlacementPolicy`, `PolicyOverride`.
+- `Project` владеет `RepositoryBinding`, `OnboardingSignalReconciliation`, `ServicesPolicy`, `ServiceDescriptor`, `DocumentationSource`, `BranchRules`, `ReleasePolicy`, `ReleaseLine`, `PlacementPolicy`, `PolicyOverride`.
+- `OnboardingSignalReconciliation` связан с project-owned repository binding и, после успешного bootstrap merge import, с конкретной `ServicesPolicy`. Он не является provider-native projection и не заменяет запись `provider-hub`.
 - `ServicesPolicy` владеет набором `ServiceDescriptor`, полученным из проверенной версии `services.yaml`.
 - `validated_payload` хранится как нормализованный JSON по модели политики `services.yaml`; сырой YAML остаётся в Git у провайдера.
 - Для bootstrap-import повтор одного и того же `source_repository_id + source_path + source_commit_sha + content_hash` считается идемпотентным повтором проверенной проекции; другой commit/ref после активации binding не переписывает результат bootstrap.
@@ -264,6 +303,7 @@ approvals:
 | Сервисы репозитория | `(repository_id, status, service_key)` |
 | Актуальная проекция `services.yaml` | `(project_id, projection_status, policy_version)` |
 | Идемпотентный source replay политики | lookup `(project_id, source_repository_id, source_path, source_commit_sha, imported_at DESC)` для активных проверенных проекций; решение о replay/conflict принимает `project-catalog` use-case |
+| Статус обработки onboarding signal | unique `(project_id, signal_kind, signal_key)` и lookup `(project_id, repository_id, status, updated_at DESC)` |
 | Сверка политики по источнику | `(source_repository_id, source_path, source_commit_sha, content_hash)` |
 | Источники документации для рабочего контура | unique `(project_id, scope_type, scope_id, local_path)`, чтение `(project_id, scope_type, scope_id, status)` |
 | Активные правила веток | `(project_id, repository_id, status)` |

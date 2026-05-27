@@ -39,6 +39,8 @@ type Repository interface {
 	GetRepositoryByProviderRef(ctx context.Context, provider enum.RepositoryProvider, owner string, name string) (entity.RepositoryBinding, error)
 	// ListRepositories returns repository bindings matching filter.
 	ListRepositories(ctx context.Context, filter query.RepositoryFilter) ([]entity.RepositoryBinding, query.PageResult, error)
+	// RecordOnboardingSignalReconciliation stores safe project-side processing state for one onboarding signal.
+	RecordOnboardingSignalReconciliation(ctx context.Context, signal entity.OnboardingSignalReconciliation) (entity.OnboardingSignalReconciliation, error)
 	// ImportServicesPolicy stores checked policy, descriptors, documentation sources, outbox event and command result atomically.
 	ImportServicesPolicy(ctx context.Context, policy entity.ServicesPolicy, descriptors []entity.ServiceDescriptor, documentationSources []entity.DocumentationSource, result entity.CommandResult, buildEvent ServicesPolicyEventBuilder) (entity.ServicesPolicy, error)
 	// ImportBootstrapServicesPolicy stores checked policy and activates a bootstrap repository binding atomically.

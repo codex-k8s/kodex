@@ -43,6 +43,34 @@ type RepositoryBinding struct {
 	IconObjectURI        string
 }
 
+// OnboardingSignalReconciliation stores project-side processing state for safe provider onboarding signals.
+type OnboardingSignalReconciliation struct {
+	Base
+	ProjectID             uuid.UUID
+	RepositoryID          uuid.UUID
+	SignalKind            enum.OnboardingSignalKind
+	SignalKey             string
+	SignalFingerprint     string
+	ProviderSlug          string
+	RepositoryFullName    string
+	ProviderRepositoryID  string
+	BaseBranch            string
+	SourceRef             string
+	SourceCommitSHA       string
+	ArtifactRef           string
+	ArtifactDigest        string
+	ArtifactVersion       string
+	ContentHash           string
+	Status                enum.OnboardingSignalStatus
+	ErrorCode             string
+	ErrorSummary          string
+	Summary               string
+	ServicesPolicyID      *uuid.UUID
+	ServicesPolicyVersion int64
+	ObservedAt            time.Time
+	CompletedAt           *time.Time
+}
+
 // ServicesPolicy stores a checked projection of services.yaml.
 type ServicesPolicy struct {
 	Base
