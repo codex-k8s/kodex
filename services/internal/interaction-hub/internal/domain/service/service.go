@@ -836,7 +836,17 @@ func (s *Service) RecordChannelCallback(ctx context.Context, input RecordChannel
 		}
 		if err := s.repository.CreateChannelCallbackResponseWithResult(ctx, callback, *response, updatedRequest, previousRequestVersion, result, []entity.OutboxEvent{event, responseEvent}); err != nil {
 			if errors.Is(err, errs.ErrAlreadyExists) {
-				return s.replayExistingChannelCallback(ctx, input.Callback.CallbackID, callbackFingerprint)
+				replayed, replayErr := s.replayExistingChannelCallback(ctx, input.Callback.CallbackID, callbackFingerprint)
+				if replayErr == nil {
+					return replayed, nil
+				}
+				if !errors.Is(replayErr, errs.ErrConflict) {
+					return ChannelCallbackResult{}, replayErr
+				}
+			}
+			fallback, handled, fallbackErr := s.recordTerminalDiagnosticCallback(ctx, callback, result, callbackFingerprint, now, err)
+			if handled || fallbackErr != nil {
+				return fallback, fallbackErr
 			}
 			return ChannelCallbackResult{}, err
 		}
@@ -1433,6 +1443,37 @@ func (s *Service) replayExistingChannelCallback(ctx context.Context, callbackID 
 		return ChannelCallbackResult{}, errs.ErrConflict
 	}
 	return s.channelCallbackResult(ctx, existing)
+}
+
+func (s *Service) recordTerminalDiagnosticCallback(ctx context.Context, callback entity.ChannelCallback, result entity.CommandResult, fingerprint string, now time.Time, cause error) (ChannelCallbackResult, bool, error) {
+	if !errors.Is(cause, errs.ErrConflict) && !errors.Is(cause, errs.ErrAlreadyExists) {
+		return ChannelCallbackResult{}, false, nil
+	}
+	if callback.RequestID == nil {
+		return ChannelCallbackResult{}, false, nil
+	}
+	request, err := s.repository.GetInteractionRequest(ctx, *callback.RequestID)
+	if err != nil {
+		return ChannelCallbackResult{}, true, err
+	}
+	if !request.Status.Terminal() {
+		return ChannelCallbackResult{}, false, nil
+	}
+
+	callback.ProcessingStatus = enum.CallbackProcessingStatusRejected
+	callback.ErrorCode = callbackErrorRequestResolved
+	event, err := s.outboxEvent(interactionevents.EventCallbackReceived, interactionevents.AggregateCallback, callback.ID, callbackReceivedPayload(callback), now)
+	if err != nil {
+		return ChannelCallbackResult{}, true, err
+	}
+	if err := s.repository.CreateChannelCallbackWithResult(ctx, callback, result, event); err != nil {
+		if errors.Is(err, errs.ErrAlreadyExists) {
+			replayed, replayErr := s.replayExistingChannelCallback(ctx, callback.CallbackID, fingerprint)
+			return replayed, true, replayErr
+		}
+		return ChannelCallbackResult{}, true, err
+	}
+	return ChannelCallbackResult{Callback: callback}, true, nil
 }
 
 func (s *Service) channelCallbackResponse(callback entity.ChannelCallback, request entity.InteractionRequest, now time.Time) (*entity.InteractionResponse, entity.InteractionRequest, int64, string) {

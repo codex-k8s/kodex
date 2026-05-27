@@ -1062,6 +1062,78 @@ func TestServiceRecordsChannelCallbackWithSafeOutboxAndReplay(t *testing.T) {
 	}
 }
 
+func TestServiceRecordsDiagnosticWhenConcurrentCallbackResolvesRequest(t *testing.T) {
+	t.Parallel()
+
+	repository := newFakeRepository()
+	now := time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC)
+	requestID := uuid.New()
+	routeID := uuid.New()
+	seedInteractionRequest(repository, requestID, now, enum.InteractionRequestStatusWaiting)
+	seedDeliveryRoute(repository, routeID, now)
+	svc := NewWithConfig(repository, Config{Clock: fixedClock{now: now.Add(time.Minute)}, UUIDGenerator: &sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New()}}})
+	planned, err := svc.PlanDelivery(context.Background(), validPlanDeliveryInput(requestID, routeID))
+	if err != nil {
+		t.Fatalf("PlanDelivery(): %v", err)
+	}
+
+	winnerAt := now.Add(90 * time.Second)
+	repository.beforeCallbackResponseCreate = func(r *fakeRepository) {
+		winnerCallback := entity.ChannelCallback{
+			ID:                  uuid.New(),
+			CallbackID:          "callback-winning",
+			DeliveryID:          planned.DeliveryID,
+			DeliveryAttemptID:   uuidPtr(planned.ID),
+			RequestID:           uuidPtr(requestID),
+			SourceRouteID:       uuidPtr(routeID),
+			ActorRef:            "user:approver-2",
+			Action:              string(enum.InteractionResponseActionApprove),
+			SignatureStatus:     enum.CallbackSignatureStatusVerified,
+			ProcessingStatus:    enum.CallbackProcessingStatusAccepted,
+			ReceivedAt:          winnerAt,
+			CreatedAt:           winnerAt,
+			CallbackRouteRef:    "callback-route:interaction-channel",
+			CallbackFingerprint: "winner-fingerprint",
+		}
+		r.callbacks[winnerCallback.ID] = winnerCallback
+		winnerResponseID := uuid.New()
+		r.responses[winnerResponseID] = entity.InteractionResponse{
+			ID:                  winnerResponseID,
+			RequestID:           requestID,
+			ResponseAction:      enum.InteractionResponseActionApprove,
+			RespondedByActorRef: winnerCallback.ActorRef,
+			SourceKind:          enum.InteractionResponseSourceKindChannelCallback,
+			SourceRef:           winnerCallback.ID.String(),
+			CreatedAt:           winnerAt,
+		}
+		request := r.requests[requestID]
+		request.Status = enum.InteractionRequestStatusAnswered
+		request.Version++
+		request.UpdatedAt = winnerAt
+		request.ResolvedAt = &winnerAt
+		r.requests[requestID] = request
+	}
+
+	input := validRecordChannelCallbackInput(planned.DeliveryID, requestID)
+	input.Callback.CallbackID = "callback-late"
+	result, err := svc.RecordChannelCallback(context.Background(), input)
+	if err != nil {
+		t.Fatalf("RecordChannelCallback() concurrent terminal fallback: %v", err)
+	}
+	if result.Response != nil || result.Callback.CallbackID != input.Callback.CallbackID || result.Callback.ProcessingStatus != enum.CallbackProcessingStatusRejected || result.Callback.ErrorCode != callbackErrorRequestResolved {
+		t.Fatalf("result = %+v, want rejected diagnostic callback for concurrently resolved request", result)
+	}
+	if len(repository.callbacks) != 2 || len(repository.responses) != 1 {
+		t.Fatalf("callbacks=%d responses=%d, want winning callback/response plus diagnostic callback", len(repository.callbacks), len(repository.responses))
+	}
+	if storedRequest := repository.requests[requestID]; storedRequest.Status != enum.InteractionRequestStatusAnswered || storedRequest.Version != 2 {
+		t.Fatalf("request = %+v, want answered by competing callback", storedRequest)
+	}
+	if len(repository.events) != 2 {
+		t.Fatalf("events=%d, want delivery event plus diagnostic callback event", len(repository.events))
+	}
+}
+
 func TestServiceValidatesDeliveryIDOnlyChannelCallbackAgainstRequest(t *testing.T) {
 	t.Parallel()
 
@@ -1257,20 +1329,21 @@ func TestServiceRecordChannelCallbackRequiresReadyRepository(t *testing.T) {
 }
 
 type fakeRepository struct {
-	ready                bool
-	operations           []enum.Operation
-	threads              map[uuid.UUID]entity.ConversationThread
-	messages             map[uuid.UUID]entity.ConversationMessage
-	requests             map[uuid.UUID]entity.InteractionRequest
-	responses            map[uuid.UUID]entity.InteractionResponse
-	notifications        map[uuid.UUID]entity.Notification
-	subscriptions        map[uuid.UUID]entity.Subscription
-	routes               map[uuid.UUID]entity.DeliveryRoute
-	deliveries           map[uuid.UUID]entity.DeliveryAttempt
-	callbacks            map[uuid.UUID]entity.ChannelCallback
-	results              map[string]entity.CommandResult
-	events               []entity.OutboxEvent
-	beforeDeliveryUpdate func(*fakeRepository)
+	ready                        bool
+	operations                   []enum.Operation
+	threads                      map[uuid.UUID]entity.ConversationThread
+	messages                     map[uuid.UUID]entity.ConversationMessage
+	requests                     map[uuid.UUID]entity.InteractionRequest
+	responses                    map[uuid.UUID]entity.InteractionResponse
+	notifications                map[uuid.UUID]entity.Notification
+	subscriptions                map[uuid.UUID]entity.Subscription
+	routes                       map[uuid.UUID]entity.DeliveryRoute
+	deliveries                   map[uuid.UUID]entity.DeliveryAttempt
+	callbacks                    map[uuid.UUID]entity.ChannelCallback
+	results                      map[string]entity.CommandResult
+	events                       []entity.OutboxEvent
+	beforeDeliveryUpdate         func(*fakeRepository)
+	beforeCallbackResponseCreate func(*fakeRepository)
 }
 
 func newFakeRepository() *fakeRepository {
@@ -1602,6 +1675,10 @@ func (r *fakeRepository) CreateInteractionResponseWithResult(_ context.Context, 
 }
 
 func (r *fakeRepository) CreateChannelCallbackResponseWithResult(_ context.Context, callback entity.ChannelCallback, response entity.InteractionResponse, request entity.InteractionRequest, previousRequestVersion int64, result entity.CommandResult, events []entity.OutboxEvent) error {
+	if r.beforeCallbackResponseCreate != nil {
+		r.beforeCallbackResponseCreate(r)
+		r.beforeCallbackResponseCreate = nil
+	}
 	stored, ok := r.requests[request.ID]
 	if !ok {
 		return errs.ErrNotFound
