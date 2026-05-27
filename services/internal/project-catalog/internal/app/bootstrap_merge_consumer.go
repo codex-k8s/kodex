@@ -20,7 +20,10 @@ import (
 	projectservice "github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/service"
 )
 
-const bootstrapMergeMissingCheckedArtifactCode = "missing_checked_artifact"
+const (
+	bootstrapMergeMissingCheckedArtifactCode    = "missing_checked_artifact"
+	bootstrapMergeIncompleteCheckedArtifactCode = "incomplete_checked_artifact"
+)
 
 type bootstrapMergeReconciler interface {
 	RecordBootstrapMergeSignalDiagnostic(context.Context, projectservice.BootstrapMergeSignalDiagnosticInput) error
@@ -93,7 +96,7 @@ func (h bootstrapMergeEventHandler) HandleEvent(ctx context.Context, event event
 		return eventconsumer.Poison("invalid_signal_kind", "bootstrap merge event signal_kind is not bootstrap")
 	}
 	mergeSignal := bootstrapMergeSignalFromPayload(payload)
-	if bootstrapMergePayloadHasCheckedPolicy(payload) {
+	if bootstrapMergePayloadHasCompleteCheckedPolicy(payload) {
 		_, err := h.reconciler.ReconcileBootstrapMergeSignal(ctx, projectservice.ReconcileBootstrapMergeSignalInput{
 			ProjectID:    projectID,
 			RepositoryID: repositoryID,
@@ -112,13 +115,19 @@ func (h bootstrapMergeEventHandler) HandleEvent(ctx context.Context, event event
 		}
 		return eventconsumer.Ack()
 	}
+	diagnosticCode := bootstrapMergeMissingCheckedArtifactCode
+	diagnosticSummary := "provider bootstrap merge event does not include checked services policy artifact input"
+	if bootstrapMergePayloadHasAnyCheckedPolicy(payload) {
+		diagnosticCode = bootstrapMergeIncompleteCheckedArtifactCode
+		diagnosticSummary = "provider bootstrap merge event includes incomplete checked services policy artifact input"
+	}
 	input := projectservice.BootstrapMergeSignalDiagnosticInput{
 		ProjectID:         projectID,
 		RepositoryID:      repositoryID,
 		MergeSignal:       mergeSignal,
 		SignalFingerprint: bootstrapMergeEventFingerprint(storedEvent, payload),
-		ErrorCode:         bootstrapMergeMissingCheckedArtifactCode,
-		ErrorSummary:      "provider bootstrap merge event does not include checked services policy artifact input",
+		ErrorCode:         diagnosticCode,
+		ErrorSummary:      diagnosticSummary,
 		Summary:           "provider bootstrap merge signal received",
 	}
 	if err := h.reconciler.RecordBootstrapMergeSignalDiagnostic(ctx, input); err != nil {
@@ -150,14 +159,34 @@ func bootstrapMergeSignalFromPayload(payload providerevents.Payload) projectserv
 	}
 }
 
-func bootstrapMergePayloadHasCheckedPolicy(payload providerevents.Payload) bool {
-	return strings.TrimSpace(payload.CheckedArtifactRef) != "" ||
-		strings.TrimSpace(payload.CheckedArtifactDigest) != "" ||
-		strings.TrimSpace(payload.CheckedArtifactVersion) != "" ||
-		strings.TrimSpace(payload.CheckedSourcePath) != "" ||
-		strings.TrimSpace(payload.CheckedContentHash) != "" ||
-		strings.TrimSpace(payload.CheckedValidatedPayloadJSON) != "" ||
-		strings.TrimSpace(payload.CheckedWatermarkJSON) != ""
+func bootstrapMergePayloadHasCompleteCheckedPolicy(payload providerevents.Payload) bool {
+	for _, field := range bootstrapMergeCheckedPolicyFields(payload) {
+		if field == "" {
+			return false
+		}
+	}
+	return true
+}
+
+func bootstrapMergePayloadHasAnyCheckedPolicy(payload providerevents.Payload) bool {
+	for _, field := range bootstrapMergeCheckedPolicyFields(payload) {
+		if field != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func bootstrapMergeCheckedPolicyFields(payload providerevents.Payload) []string {
+	return []string{
+		strings.TrimSpace(payload.CheckedArtifactRef),
+		strings.TrimSpace(payload.CheckedArtifactDigest),
+		strings.TrimSpace(payload.CheckedArtifactVersion),
+		strings.TrimSpace(payload.CheckedSourcePath),
+		strings.TrimSpace(payload.CheckedContentHash),
+		strings.TrimSpace(payload.CheckedValidatedPayloadJSON),
+		strings.TrimSpace(payload.CheckedWatermarkJSON),
+	}
 }
 
 func bootstrapMergeConsumerError(err error) eventconsumer.Result {

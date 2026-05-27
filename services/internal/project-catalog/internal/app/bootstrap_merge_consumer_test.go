@@ -49,6 +49,35 @@ func TestBootstrapMergeEventHandlerRecordsDiagnostic(t *testing.T) {
 	}
 }
 
+func TestBootstrapMergeEventHandlerRecordsDiagnosticForPartialCheckedPolicy(t *testing.T) {
+	t.Parallel()
+
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	recorder := &fakeBootstrapMergeRecorder{}
+	handler := bootstrapMergeEventHandler{reconciler: recorder}
+	payload := bootstrapMergePayload(projectID, repositoryID)
+	payload.CheckedArtifactRef = "artifact://provider/bootstrap/PR_123/services.yaml"
+
+	result := handler.HandleEvent(context.Background(), eventconsumer.Event{StoredEvent: bootstrapMergeStoredEvent(t, payload)})
+	if result.Status != eventconsumer.ResultAck {
+		t.Fatalf("HandleEvent() status = %s, want ack: %+v", result.Status, result)
+	}
+	if len(recorder.inputs) != 1 {
+		t.Fatalf("recorded inputs = %d, want 1", len(recorder.inputs))
+	}
+	if len(recorder.reconcileInputs) != 0 {
+		t.Fatalf("reconcile inputs = %d, want 0", len(recorder.reconcileInputs))
+	}
+	input := recorder.inputs[0]
+	if input.ErrorCode != bootstrapMergeIncompleteCheckedArtifactCode {
+		t.Fatalf("error code = %q, want %q", input.ErrorCode, bootstrapMergeIncompleteCheckedArtifactCode)
+	}
+	if input.SignalFingerprint == "" {
+		t.Fatalf("signal fingerprint is empty for partial checked policy diagnostic")
+	}
+}
+
 func TestBootstrapMergeEventHandlerRejectsUnsafePayload(t *testing.T) {
 	t.Parallel()
 
