@@ -190,6 +190,32 @@ func acceptanceEvent(id uuid.UUID, eventType string, reasonCode string, acceptan
 }
 
 func followUpRequestedEvent(id uuid.UUID, intent entity.FollowUpIntent, occurredAt time.Time) (entity.OutboxEvent, error) {
+	return followUpEvent(id, agentevents.EventFollowUpRequested, "", intent, occurredAt)
+}
+
+func followUpResultEvent(id uuid.UUID, previousStatus string, intent entity.FollowUpIntent, occurredAt time.Time) (*entity.OutboxEvent, error) {
+	if previousStatus == string(intent.Status) {
+		return nil, nil
+	}
+	var eventType string
+	var reasonCode string
+	switch intent.Status {
+	case enum.FollowUpIntentStatusCreated:
+		eventType = agentevents.EventFollowUpCreated
+	case enum.FollowUpIntentStatusFailed:
+		eventType = agentevents.EventFollowUpFailed
+		reasonCode = "provider_command_failed"
+	default:
+		return nil, nil
+	}
+	event, err := followUpEvent(id, eventType, reasonCode, intent, occurredAt)
+	if err != nil {
+		return nil, err
+	}
+	return &event, nil
+}
+
+func followUpEvent(id uuid.UUID, eventType string, reasonCode string, intent entity.FollowUpIntent, occurredAt time.Time) (entity.OutboxEvent, error) {
 	payload, err := json.Marshal(agentevents.Payload{
 		SessionID:               intent.SessionID.String(),
 		RunID:                   optionalUUIDValue(intent.RunID),
@@ -206,12 +232,14 @@ func followUpRequestedEvent(id uuid.UUID, intent entity.FollowUpIntent, occurred
 		ProviderOperationRef:    intent.ProviderOperationRef,
 		Status:                  string(intent.Status),
 		Summary:                 intent.SafeSummary,
+		ReasonCode:              reasonCode,
+		FailureCode:             reasonCode,
 		Version:                 intent.Version,
 	})
 	if err != nil {
 		return entity.OutboxEvent{}, err
 	}
-	return outboxEvent(id, agentevents.EventFollowUpRequested, agentevents.AggregateFollowUp, intent.ID, payload, occurredAt), nil
+	return outboxEvent(id, eventType, agentevents.AggregateFollowUp, intent.ID, payload, occurredAt), nil
 }
 
 func optionalUUIDValue(id *uuid.UUID) string {

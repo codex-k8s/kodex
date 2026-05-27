@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package kodex.agents.v1;
 
+import "kodex/providers/v1/provider_hub.proto";
+
 option go_package = "github.com/codex-k8s/kodex/proto/gen/go/kodex/agents/v1;agentsv1";
 
 // AgentManagerService is the stable v1 inter-service contract for the agent
@@ -56,8 +58,10 @@ service AgentManagerService {
   rpc GetAcceptanceResult(GetAcceptanceResultRequest) returns (AcceptanceResultResponse);
   // ListAcceptanceResults returns acceptance results by session, run, stage or status.
   rpc ListAcceptanceResults(ListAcceptanceResultsRequest) returns (ListAcceptanceResultsResponse);
-  // CreateFollowUpIntent creates an intent to create or update the next provider-native Issue.
+  // CreateFollowUpIntent records an intent for the next provider-native work item.
   rpc CreateFollowUpIntent(CreateFollowUpIntentRequest) returns (FollowUpIntentResponse);
+  // DispatchFollowUpIntent sends a requested follow-up intent to provider-hub as a typed Issue command.
+  rpc DispatchFollowUpIntent(DispatchFollowUpIntentRequest) returns (FollowUpIntentResponse);
   // RecordAgentActivity records one safe timeline entry for a session or run.
   rpc RecordAgentActivity(RecordAgentActivityRequest) returns (AgentActivityResponse);
   // ListAgentActivities returns safe timeline entries by session or run.
@@ -953,6 +957,23 @@ message CreateFollowUpIntentRequest {
   optional string safe_summary = 12;
   optional string role_hint = 13;
   optional string stage_hint = 14;
+}
+
+message DispatchFollowUpIntentRequest {
+  CommandMeta meta = 1;
+  string follow_up_intent_id = 2;
+  string project_id = 3;
+  string repository_id = 4;
+  string provider_slug = 5;
+  string external_account_id = 6;
+  kodex.providers.v1.ProviderTarget repository_target = 7;
+  repeated string labels = 8;
+  repeated string assignee_provider_logins = 9;
+  optional string milestone = 10;
+  optional string watermark_json = 11;
+  kodex.providers.v1.ProviderOperationPolicyContext operation_policy_context = 12;
+  kodex.providers.v1.ApprovalGateReference approval_gate_ref = 13;
+  optional string safe_body_hint = 14;
 }
 
 message RecordAgentActivityRequest {

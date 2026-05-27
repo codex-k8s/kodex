@@ -266,6 +266,12 @@ func followUpIntentArgs(intent entity.FollowUpIntent) pgx.NamedArgs {
 	}, intent.ID, intent.Version, intent.CreatedAt, intent.UpdatedAt)
 }
 
+func followUpIntentUpdateArgs(intent entity.FollowUpIntent, previousVersion int64) pgx.NamedArgs {
+	args := followUpIntentArgs(intent)
+	args["previous_version"] = previousVersion
+	return args
+}
+
 func agentActivityArgs(activity entity.AgentActivity) pgx.NamedArgs {
 	return postgreslib.AddBaseArgs(pgx.NamedArgs{
 		"session_id":        activity.SessionID,

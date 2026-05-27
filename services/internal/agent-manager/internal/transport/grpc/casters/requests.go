@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 
 	agentsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/agents/v1"
+	providersv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/providers/v1"
 	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/service"
 	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/types/enum"
@@ -490,6 +491,53 @@ func CreateFollowUpIntentInput(request *agentsv1.CreateFollowUpIntentRequest) (s
 	}, nil
 }
 
+func DispatchFollowUpIntentInput(request *agentsv1.DispatchFollowUpIntentRequest) (service.DispatchFollowUpIntentInput, error) {
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return service.DispatchFollowUpIntentInput{}, err
+	}
+	intentID, err := requiredUUID(request.GetFollowUpIntentId())
+	if err != nil {
+		return service.DispatchFollowUpIntentInput{}, err
+	}
+	projectID, err := requiredUUID(request.GetProjectId())
+	if err != nil {
+		return service.DispatchFollowUpIntentInput{}, err
+	}
+	repositoryID, err := requiredUUID(request.GetRepositoryId())
+	if err != nil {
+		return service.DispatchFollowUpIntentInput{}, err
+	}
+	externalAccountID, err := requiredUUID(request.GetExternalAccountId())
+	if err != nil {
+		return service.DispatchFollowUpIntentInput{}, err
+	}
+	policy, err := providerPolicyContextFromProto(request.GetOperationPolicyContext())
+	if err != nil {
+		return service.DispatchFollowUpIntentInput{}, err
+	}
+	approval, err := providerApprovalGateRefFromProto(request.GetApprovalGateRef())
+	if err != nil {
+		return service.DispatchFollowUpIntentInput{}, err
+	}
+	return service.DispatchFollowUpIntentInput{
+		Meta:                   meta,
+		FollowUpIntentID:       intentID,
+		ProjectID:              projectID,
+		RepositoryID:           repositoryID,
+		ProviderSlug:           strings.TrimSpace(request.GetProviderSlug()),
+		ExternalAccountID:      externalAccountID,
+		RepositoryTarget:       providerCommandTargetFromProto(request.GetRepositoryTarget()),
+		Labels:                 trimProtoStrings(request.GetLabels()),
+		AssigneeProviderLogins: trimProtoStrings(request.GetAssigneeProviderLogins()),
+		Milestone:              strings.TrimSpace(request.GetMilestone()),
+		WatermarkJSON:          optionalBytes(request.WatermarkJson),
+		OperationPolicyContext: policy,
+		ApprovalGateRef:        approval,
+		SafeBodyHint:           strings.TrimSpace(request.GetSafeBodyHint()),
+	}, nil
+}
+
 func RecordAgentActivityInput(request *agentsv1.RecordAgentActivityRequest) (service.RecordAgentActivityInput, error) {
 	meta, err := CommandMetaFromProto(request.GetMeta())
 	if err != nil {
@@ -837,4 +885,122 @@ func stringList(items []string) []string {
 		result = append(result, trimmed)
 	}
 	return result
+}
+
+func providerCommandTargetFromProto(target *providersv1.ProviderTarget) service.ProviderCommandTarget {
+	if target == nil {
+		return service.ProviderCommandTarget{}
+	}
+	return service.ProviderCommandTarget{
+		ProviderSlug:         strings.TrimSpace(target.GetProviderSlug()),
+		RepositoryFullName:   strings.TrimSpace(target.GetRepositoryFullName()),
+		ProviderRepositoryID: strings.TrimSpace(target.GetProviderRepositoryId()),
+		WorkItemKind:         providerWorkItemKindFromProto(target.GetWorkItemKind()),
+		Number:               target.GetNumber(),
+		ProviderObjectID:     strings.TrimSpace(target.GetProviderObjectId()),
+		WebURL:               strings.TrimSpace(target.GetWebUrl()),
+	}
+}
+
+func providerPolicyContextFromProto(policy *providersv1.ProviderOperationPolicyContext) (service.ProviderOperationPolicyContext, error) {
+	if policy == nil {
+		return service.ProviderOperationPolicyContext{}, nil
+	}
+	operationType, err := providerOperationTypeFromProto(policy.GetOperationType())
+	if err != nil {
+		return service.ProviderOperationPolicyContext{}, err
+	}
+	riskLevel, err := providerRiskLevelFromProto(policy.GetRiskLevel())
+	if err != nil {
+		return service.ProviderOperationPolicyContext{}, err
+	}
+	return service.ProviderOperationPolicyContext{
+		ProjectID:         strings.TrimSpace(policy.GetProjectId()),
+		RepositoryID:      strings.TrimSpace(policy.GetRepositoryId()),
+		Stage:             strings.TrimSpace(policy.GetStage()),
+		RoleID:            strings.TrimSpace(policy.GetRoleId()),
+		RoleKey:           strings.TrimSpace(policy.GetRoleKey()),
+		OperationType:     operationType,
+		TargetRef:         strings.TrimSpace(policy.GetTargetRef()),
+		ChangedFields:     trimProtoStrings(policy.GetChangedFields()),
+		RiskTags:          trimProtoStrings(policy.GetRiskTags()),
+		RiskLevel:         riskLevel,
+		ApprovalRequired:  policy.GetApprovalRequired(),
+		PolicyVersion:     strings.TrimSpace(policy.GetPolicyVersion()),
+		PolicySnapshotRef: strings.TrimSpace(policy.GetPolicySnapshotRef()),
+	}, nil
+}
+
+func providerApprovalGateRefFromProto(reference *providersv1.ApprovalGateReference) (service.ProviderApprovalGateReference, error) {
+	if reference == nil {
+		return service.ProviderApprovalGateReference{}, nil
+	}
+	return service.ProviderApprovalGateReference{
+		ApprovalID:       strings.TrimSpace(reference.GetApprovalId()),
+		GateType:         strings.TrimSpace(reference.GetGateType()),
+		Decision:         strings.TrimSpace(reference.GetDecision()),
+		DecidedByActorID: strings.TrimSpace(reference.GetDecidedByActorId()),
+		DecidedAt:        strings.TrimSpace(reference.GetDecidedAt()),
+		EvidenceRef:      strings.TrimSpace(reference.GetEvidenceRef()),
+		PolicyVersion:    strings.TrimSpace(reference.GetPolicyVersion()),
+	}, nil
+}
+
+func providerWorkItemKindFromProto(kind providersv1.WorkItemKind) string {
+	switch kind {
+	case providersv1.WorkItemKind_WORK_ITEM_KIND_ISSUE:
+		return "issue"
+	case providersv1.WorkItemKind_WORK_ITEM_KIND_PULL_REQUEST:
+		return "pull_request"
+	case providersv1.WorkItemKind_WORK_ITEM_KIND_MERGE_REQUEST:
+		return "merge_request"
+	default:
+		return ""
+	}
+}
+
+func providerOperationTypeFromProto(operationType providersv1.ProviderOperationType) (string, error) {
+	switch operationType {
+	case providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_UNSPECIFIED,
+		providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_ISSUE:
+		return service.ProviderOperationTypeCreateIssue, nil
+	default:
+		return "", errs.ErrInvalidArgument
+	}
+}
+
+func providerRiskLevelFromProto(riskLevel providersv1.ProviderOperationRiskLevel) (string, error) {
+	switch riskLevel {
+	case providersv1.ProviderOperationRiskLevel_PROVIDER_OPERATION_RISK_LEVEL_UNSPECIFIED:
+		return "", nil
+	case providersv1.ProviderOperationRiskLevel_PROVIDER_OPERATION_RISK_LEVEL_LOW:
+		return service.ProviderRiskLevelLow, nil
+	case providersv1.ProviderOperationRiskLevel_PROVIDER_OPERATION_RISK_LEVEL_MEDIUM:
+		return service.ProviderRiskLevelMedium, nil
+	case providersv1.ProviderOperationRiskLevel_PROVIDER_OPERATION_RISK_LEVEL_HIGH:
+		return service.ProviderRiskLevelHigh, nil
+	case providersv1.ProviderOperationRiskLevel_PROVIDER_OPERATION_RISK_LEVEL_CRITICAL:
+		return service.ProviderRiskLevelCritical, nil
+	default:
+		return "", errs.ErrInvalidArgument
+	}
+}
+
+func trimProtoStrings(values []string) []string {
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		result = append(result, strings.TrimSpace(value))
+	}
+	return result
+}
+
+func optionalBytes(value *string) []byte {
+	if value == nil {
+		return nil
+	}
+	trimmed := strings.TrimSpace(*value)
+	if trimmed == "" {
+		return nil
+	}
+	return []byte(trimmed)
 }

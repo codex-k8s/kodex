@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-12
 updated_at: 2026-05-26
-related_issues: [733, 753, 698, 322, 782, 795, 820, 834]
+related_issues: [733, 753, 698, 322, 782, 795, 820, 834, 842]
 related_prs: []
 related_adrs: []
 approvals:
@@ -63,7 +63,7 @@ approvals:
 | Запись снимков сессии | Фиксирует метаданные Codex session state после turn/checkpoint и обновляет указатель на актуальный снимок. |
 | История действий агента | Хранит canonical persistent safe timeline по session/run: tool intent/result, lifecycle, permission, runtime/provider signals, bounded summary, digest, refs и timestamps без raw payload. |
 | Движок приёмки | Проверяет артефакты, watermark, статусы provider-native сущностей и условия перехода. |
-| Планировщик follow-up | Формирует авторитетное намерение следующей задачи с safe refs/status/summary; provider-контур создаёт или обновляет `Issue` отдельной интеграционной командой. |
+| Планировщик follow-up | Формирует авторитетное намерение следующей задачи с safe refs/status/summary и dispatch-командой вызывает typed `provider-hub.CreateIssue`; update существующей provider-native задачи остаётся следующим срезом. |
 | Outbox-доставщик | Публикует `agent.*` события через `platform-event-log`. |
 
 ## Основные потоки
@@ -137,11 +137,14 @@ sequenceDiagram
     GOV->>IH: deliver gate request
   else готово к следующему этапу
     AM->>AM: CreateFollowUpIntent(safe refs, title, summary)
-    AM-->>PH: future typed provider command
+    AM->>AM: Reserve dispatch by expected_version + deterministic provider command ref
+    AM->>PH: CreateIssue(safe title/body hints, policy/gate refs, deterministic command id)
+    PH-->>AM: provider_operation_ref + safe result refs
+    AM->>AM: status created/failed
   end
 ```
 
-Приёмка не считает локальный ответ агента источником истины. Она сверяется с provider-native артефактами и platform watermark, а затем фиксирует follow-up intent. Реальный provider write выполняется только через `provider-hub`, когда будет подключён согласованный provider-контракт.
+Приёмка не считает локальный ответ агента источником истины. Она сверяется с provider-native артефактами и platform watermark, а затем фиксирует follow-up intent. Создание следующего `Issue` выполняется только через `provider-hub.CreateIssue`; перед вызовом `agent-manager` атомарно резервирует dispatch локальной версией, а provider command id детерминирован от intent. Поэтому параллельный dispatch с тем же `expected_version` получает conflict до повторного provider write, а retry после частичного сбоя идёт в provider-hub с тем же command id. `agent-manager` хранит `provider_operation_ref`, safe result refs и статус, но не provider payload, raw response или body будущего `Issue`.
 
 ## Интеграции
 
@@ -185,7 +188,8 @@ MVP-путь:
 ### `provider-hub`
 
 `agent-manager` использует provider-контур для:
-- создания и обновления `Issue`;
+- создания следующего follow-up `Issue` через `provider-hub.CreateIssue`;
+- будущего обновления `Issue`, когда intent будет безопасно различать create/update target;
 - создания `PR/MR`, комментариев и review-сигналов через типизированные инструменты;
 - чтения проекций provider-native артефактов для приёмки;
 - постановки ускоряющей сверки после работы агента.
@@ -260,6 +264,7 @@ MCP не владеет доменным состоянием и не подме
 - `agent.acceptance.failed`;
 - `agent.follow_up.requested`;
 - `agent.follow_up.created`;
+- `agent.follow_up.failed`;
 - `agent.human_gate.requested` как ожидание governance gate в flow;
 - `agent.human_gate.resolved` как получение ссылки на resolved governance decision;
 - `agent.flow.version_activated`;

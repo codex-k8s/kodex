@@ -44,6 +44,7 @@ const (
 	AgentManagerService_GetAcceptanceResult_FullMethodName           = "/kodex.agents.v1.AgentManagerService/GetAcceptanceResult"
 	AgentManagerService_ListAcceptanceResults_FullMethodName         = "/kodex.agents.v1.AgentManagerService/ListAcceptanceResults"
 	AgentManagerService_CreateFollowUpIntent_FullMethodName          = "/kodex.agents.v1.AgentManagerService/CreateFollowUpIntent"
+	AgentManagerService_DispatchFollowUpIntent_FullMethodName        = "/kodex.agents.v1.AgentManagerService/DispatchFollowUpIntent"
 	AgentManagerService_RecordAgentActivity_FullMethodName           = "/kodex.agents.v1.AgentManagerService/RecordAgentActivity"
 	AgentManagerService_ListAgentActivities_FullMethodName           = "/kodex.agents.v1.AgentManagerService/ListAgentActivities"
 	AgentManagerService_RequestHumanGate_FullMethodName              = "/kodex.agents.v1.AgentManagerService/RequestHumanGate"
@@ -107,8 +108,10 @@ type AgentManagerServiceClient interface {
 	GetAcceptanceResult(ctx context.Context, in *GetAcceptanceResultRequest, opts ...grpc.CallOption) (*AcceptanceResultResponse, error)
 	// ListAcceptanceResults returns acceptance results by session, run, stage or status.
 	ListAcceptanceResults(ctx context.Context, in *ListAcceptanceResultsRequest, opts ...grpc.CallOption) (*ListAcceptanceResultsResponse, error)
-	// CreateFollowUpIntent creates an intent to create or update the next provider-native Issue.
+	// CreateFollowUpIntent records an intent for the next provider-native work item.
 	CreateFollowUpIntent(ctx context.Context, in *CreateFollowUpIntentRequest, opts ...grpc.CallOption) (*FollowUpIntentResponse, error)
+	// DispatchFollowUpIntent sends a requested follow-up intent to provider-hub as a typed Issue command.
+	DispatchFollowUpIntent(ctx context.Context, in *DispatchFollowUpIntentRequest, opts ...grpc.CallOption) (*FollowUpIntentResponse, error)
 	// RecordAgentActivity records one safe timeline entry for a session or run.
 	RecordAgentActivity(ctx context.Context, in *RecordAgentActivityRequest, opts ...grpc.CallOption) (*AgentActivityResponse, error)
 	// ListAgentActivities returns safe timeline entries by session or run.
@@ -379,6 +382,16 @@ func (c *agentManagerServiceClient) CreateFollowUpIntent(ctx context.Context, in
 	return out, nil
 }
 
+func (c *agentManagerServiceClient) DispatchFollowUpIntent(ctx context.Context, in *DispatchFollowUpIntentRequest, opts ...grpc.CallOption) (*FollowUpIntentResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(FollowUpIntentResponse)
+	err := c.cc.Invoke(ctx, AgentManagerService_DispatchFollowUpIntent_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *agentManagerServiceClient) RecordAgentActivity(ctx context.Context, in *RecordAgentActivityRequest, opts ...grpc.CallOption) (*AgentActivityResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(AgentActivityResponse)
@@ -485,8 +498,10 @@ type AgentManagerServiceServer interface {
 	GetAcceptanceResult(context.Context, *GetAcceptanceResultRequest) (*AcceptanceResultResponse, error)
 	// ListAcceptanceResults returns acceptance results by session, run, stage or status.
 	ListAcceptanceResults(context.Context, *ListAcceptanceResultsRequest) (*ListAcceptanceResultsResponse, error)
-	// CreateFollowUpIntent creates an intent to create or update the next provider-native Issue.
+	// CreateFollowUpIntent records an intent for the next provider-native work item.
 	CreateFollowUpIntent(context.Context, *CreateFollowUpIntentRequest) (*FollowUpIntentResponse, error)
+	// DispatchFollowUpIntent sends a requested follow-up intent to provider-hub as a typed Issue command.
+	DispatchFollowUpIntent(context.Context, *DispatchFollowUpIntentRequest) (*FollowUpIntentResponse, error)
 	// RecordAgentActivity records one safe timeline entry for a session or run.
 	RecordAgentActivity(context.Context, *RecordAgentActivityRequest) (*AgentActivityResponse, error)
 	// ListAgentActivities returns safe timeline entries by session or run.
@@ -581,6 +596,9 @@ func (UnimplementedAgentManagerServiceServer) ListAcceptanceResults(context.Cont
 }
 func (UnimplementedAgentManagerServiceServer) CreateFollowUpIntent(context.Context, *CreateFollowUpIntentRequest) (*FollowUpIntentResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateFollowUpIntent not implemented")
+}
+func (UnimplementedAgentManagerServiceServer) DispatchFollowUpIntent(context.Context, *DispatchFollowUpIntentRequest) (*FollowUpIntentResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DispatchFollowUpIntent not implemented")
 }
 func (UnimplementedAgentManagerServiceServer) RecordAgentActivity(context.Context, *RecordAgentActivityRequest) (*AgentActivityResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RecordAgentActivity not implemented")
@@ -1068,6 +1086,24 @@ func _AgentManagerService_CreateFollowUpIntent_Handler(srv interface{}, ctx cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentManagerService_DispatchFollowUpIntent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DispatchFollowUpIntentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentManagerServiceServer).DispatchFollowUpIntent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentManagerService_DispatchFollowUpIntent_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentManagerServiceServer).DispatchFollowUpIntent(ctx, req.(*DispatchFollowUpIntentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AgentManagerService_RecordAgentActivity_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RecordAgentActivityRequest)
 	if err := dec(in); err != nil {
@@ -1264,6 +1300,10 @@ var AgentManagerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CreateFollowUpIntent",
 			Handler:    _AgentManagerService_CreateFollowUpIntent_Handler,
+		},
+		{
+			MethodName: "DispatchFollowUpIntent",
+			Handler:    _AgentManagerService_DispatchFollowUpIntent_Handler,
 		},
 		{
 			MethodName: "RecordAgentActivity",

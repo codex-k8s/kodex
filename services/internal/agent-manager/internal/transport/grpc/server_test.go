@@ -10,6 +10,7 @@ import (
 
 	grpcserver "github.com/codex-k8s/kodex/libs/go/grpcserver"
 	agentsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/agents/v1"
+	providersv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/providers/v1"
 	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/errs"
 	agentservice "github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/service"
 	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/types/entity"
@@ -741,6 +742,75 @@ func TestCreateFollowUpIntentHandlerMapsRequest(t *testing.T) {
 	}
 }
 
+func TestDispatchFollowUpIntentHandlerMapsRequest(t *testing.T) {
+	t.Parallel()
+
+	intentID := uuid.MustParse("85858585-7777-8888-9999-aaaaaaaaaaaa")
+	projectID := uuid.MustParse("85858585-8888-9999-aaaa-bbbbbbbbbbbb")
+	repositoryID := uuid.MustParse("85858585-9999-aaaa-bbbb-cccccccccccc")
+	accountID := uuid.MustParse("85858585-aaaa-bbbb-cccc-dddddddddddd")
+	expectedVersion := int64(4)
+	service := &fakeAgentService{
+		dispatchFollowUpIntent: func(_ context.Context, input agentservice.DispatchFollowUpIntentInput) (entity.FollowUpIntent, error) {
+			if input.FollowUpIntentID != intentID || input.ProjectID != projectID || input.RepositoryID != repositoryID || input.ExternalAccountID != accountID {
+				t.Fatalf("refs input = %+v", input)
+			}
+			if input.ProviderSlug != "github" || input.RepositoryTarget.RepositoryFullName != "codex-k8s/kodex" {
+				t.Fatalf("provider target = %+v", input.RepositoryTarget)
+			}
+			if input.OperationPolicyContext.RiskLevel != agentservice.ProviderRiskLevelLow || input.OperationPolicyContext.OperationType != agentservice.ProviderOperationTypeCreateIssue {
+				t.Fatalf("policy = %+v", input.OperationPolicyContext)
+			}
+			if input.ApprovalGateRef.ApprovalID != "gate:123" || input.SafeBodyHint != "Follow-up body" {
+				t.Fatalf("approval/body = %+v/%q", input.ApprovalGateRef, input.SafeBodyHint)
+			}
+			now := sampleTime()
+			return entity.FollowUpIntent{
+				VersionedBase:        entity.VersionedBase{ID: intentID, Version: expectedVersion + 1, CreatedAt: now, UpdatedAt: now},
+				SessionID:            uuid.MustParse("85858585-bbbb-cccc-dddd-eeeeeeeeeeee"),
+				ProviderTarget:       value.ProviderTargetRef{WorkItemRef: "github:repo:codex-k8s/kodex:issue:123"},
+				ProviderWorkItemType: "task",
+				ProviderOperationRef: "provider_operation:op-1",
+				SafeTitle:            "Follow-up",
+				Status:               enum.FollowUpIntentStatusCreated,
+			}, nil
+		},
+	}
+	response, err := NewServer(service).DispatchFollowUpIntent(context.Background(), &agentsv1.DispatchFollowUpIntentRequest{
+		Meta:              commandMeta("85858585-cccc-dddd-eeee-ffffffffffff", "", &expectedVersion),
+		FollowUpIntentId:  intentID.String(),
+		ProjectId:         projectID.String(),
+		RepositoryId:      repositoryID.String(),
+		ProviderSlug:      "github",
+		ExternalAccountId: accountID.String(),
+		RepositoryTarget: &providersv1.ProviderTarget{
+			ProviderSlug:       "github",
+			RepositoryFullName: ptr("codex-k8s/kodex"),
+		},
+		Labels:                 []string{"agent", "next-stage"},
+		AssigneeProviderLogins: []string{"kodex-agent"},
+		SafeBodyHint:           ptr("Follow-up body"),
+		OperationPolicyContext: &providersv1.ProviderOperationPolicyContext{
+			OperationType: providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_ISSUE,
+			RiskLevel:     providersv1.ProviderOperationRiskLevel_PROVIDER_OPERATION_RISK_LEVEL_LOW,
+		},
+		ApprovalGateRef: &providersv1.ApprovalGateReference{
+			ApprovalId: "gate:123",
+			GateType:   "owner_approval",
+			Decision:   "approved",
+		},
+	})
+	if err != nil {
+		t.Fatalf("DispatchFollowUpIntent() error = %v", err)
+	}
+	if response.GetFollowUpIntent().GetStatus() != agentsv1.FollowUpIntentStatus_FOLLOW_UP_INTENT_STATUS_CREATED {
+		t.Fatalf("intent = %+v", response.GetFollowUpIntent())
+	}
+	if response.GetFollowUpIntent().GetProviderOperationRef() != "provider_operation:op-1" {
+		t.Fatalf("provider operation ref = %q", response.GetFollowUpIntent().GetProviderOperationRef())
+	}
+}
+
 func TestAgentActivityHandlersMapRequests(t *testing.T) {
 	t.Parallel()
 
@@ -928,6 +998,7 @@ type fakeAgentService struct {
 	getAcceptanceResult         func(context.Context, uuid.UUID) (entity.AcceptanceResult, error)
 	listAcceptanceResults       func(context.Context, agentservice.AcceptanceResultList) ([]entity.AcceptanceResult, value.PageResult, error)
 	createFollowUpIntent        func(context.Context, agentservice.CreateFollowUpIntentInput) (entity.FollowUpIntent, error)
+	dispatchFollowUpIntent      func(context.Context, agentservice.DispatchFollowUpIntentInput) (entity.FollowUpIntent, error)
 	recordAgentActivity         func(context.Context, agentservice.RecordAgentActivityInput) (entity.AgentActivity, error)
 	listAgentActivities         func(context.Context, agentservice.AgentActivityList) ([]entity.AgentActivity, value.PageResult, error)
 }
@@ -1133,6 +1204,13 @@ func (f *fakeAgentService) CreateFollowUpIntent(ctx context.Context, input agent
 		return entity.FollowUpIntent{}, errs.ErrPreconditionFailed
 	}
 	return f.createFollowUpIntent(ctx, input)
+}
+
+func (f *fakeAgentService) DispatchFollowUpIntent(ctx context.Context, input agentservice.DispatchFollowUpIntentInput) (entity.FollowUpIntent, error) {
+	if f.dispatchFollowUpIntent == nil {
+		return entity.FollowUpIntent{}, errs.ErrPreconditionFailed
+	}
+	return f.dispatchFollowUpIntent(ctx, input)
 }
 
 func (f *fakeAgentService) RecordAgentActivity(ctx context.Context, input agentservice.RecordAgentActivityInput) (entity.AgentActivity, error) {
