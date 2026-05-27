@@ -12,6 +12,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/types/enum"
+	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/types/value"
 )
 
 type bootstrapServicesPolicyImportCommandPayload struct {
@@ -42,8 +43,37 @@ type normalizedBootstrapPolicyImport struct {
 	Summary                      string
 }
 
+type servicesPolicyImportMode struct {
+	Operation                string
+	WatermarkWorkType        string
+	IdempotencyPrefix        string
+	AllowActiveRepository    bool
+	ConflictActiveSourceMiss bool
+}
+
+var (
+	bootstrapServicesPolicyImportMode = servicesPolicyImportMode{
+		Operation:                projectOperationImportBootstrapPolicy,
+		WatermarkWorkType:        bootstrapPolicyWatermarkWorkType,
+		IdempotencyPrefix:        bootstrapMergeIdempotencyPrefix,
+		AllowActiveRepository:    false,
+		ConflictActiveSourceMiss: true,
+	}
+	adoptionServicesPolicyImportMode = servicesPolicyImportMode{
+		Operation:                projectOperationImportAdoptionPolicy,
+		WatermarkWorkType:        adoptionPolicyWatermarkWorkType,
+		IdempotencyPrefix:        adoptionMergeIdempotencyPrefix,
+		AllowActiveRepository:    true,
+		ConflictActiveSourceMiss: false,
+	}
+)
+
 // ImportBootstrapServicesPolicy imports checked services.yaml after bootstrap PR merge and activates the binding.
 func (s *Service) ImportBootstrapServicesPolicy(ctx context.Context, input ImportBootstrapServicesPolicyInput) (BootstrapServicesPolicyImportResult, error) {
+	return s.importCheckedServicesPolicy(ctx, input, bootstrapServicesPolicyImportMode)
+}
+
+func (s *Service) importCheckedServicesPolicy(ctx context.Context, input ImportBootstrapServicesPolicyInput, mode servicesPolicyImportMode) (BootstrapServicesPolicyImportResult, error) {
 	if err := requireProjectID(input.ProjectID); err != nil {
 		return BootstrapServicesPolicyImportResult{}, err
 	}
@@ -56,7 +86,7 @@ func (s *Service) ImportBootstrapServicesPolicy(ctx context.Context, input Impor
 	if err := s.recordOnboardingSignalProcessing(ctx, input.OnboardingSignal); err != nil {
 		return BootstrapServicesPolicyImportResult{}, err
 	}
-	if replay, ok, err := s.replayBootstrapServicesPolicyImport(ctx, input); ok || err != nil {
+	if replay, ok, err := s.replayBootstrapServicesPolicyImport(ctx, input, mode); ok || err != nil {
 		if err != nil {
 			s.recordOnboardingSignalFailed(ctx, input.OnboardingSignal, err)
 			return replay, err
@@ -75,12 +105,12 @@ func (s *Service) ImportBootstrapServicesPolicy(ctx context.Context, input Impor
 		s.recordOnboardingSignalFailed(ctx, input.OnboardingSignal, errs.ErrPreconditionFailed)
 		return BootstrapServicesPolicyImportResult{}, errs.ErrPreconditionFailed
 	}
-	normalized, err := normalizeBootstrapPolicyImportInput(input, repository)
+	normalized, err := normalizeBootstrapPolicyImportInput(input, repository, mode)
 	if err != nil {
 		s.recordOnboardingSignalFailed(ctx, input.OnboardingSignal, err)
 		return BootstrapServicesPolicyImportResult{}, err
 	}
-	if replay, ok, err := s.replayBootstrapServicesPolicyImportBySource(ctx, repository, normalized); ok || err != nil {
+	if replay, ok, err := s.replayBootstrapServicesPolicyImportBySource(ctx, repository, normalized, mode); ok || err != nil {
 		if err != nil {
 			s.recordOnboardingSignalFailed(ctx, input.OnboardingSignal, err)
 			return replay, err
@@ -90,11 +120,11 @@ func (s *Service) ImportBootstrapServicesPolicy(ctx context.Context, input Impor
 		}
 		return replay, err
 	}
-	if repository.Status != enum.RepositoryStatusPending {
-		s.recordOnboardingSignalFailed(ctx, input.OnboardingSignal, errs.ErrPreconditionFailed)
-		return BootstrapServicesPolicyImportResult{}, errs.ErrPreconditionFailed
+	if err := validateRepositoryStatusForCheckedPolicyImport(repository, mode); err != nil {
+		s.recordOnboardingSignalFailed(ctx, input.OnboardingSignal, err)
+		return BootstrapServicesPolicyImportResult{}, err
 	}
-	previousVersion, err := expectedVersion(input.Meta)
+	previousVersion, err := checkedPolicyImportPreviousVersion(input.Meta, repository, mode)
 	if err != nil {
 		s.recordOnboardingSignalFailed(ctx, input.OnboardingSignal, err)
 		return BootstrapServicesPolicyImportResult{}, err
@@ -133,7 +163,7 @@ func (s *Service) ImportBootstrapServicesPolicy(ctx context.Context, input Impor
 		s.recordOnboardingSignalFailed(ctx, input.OnboardingSignal, err)
 		return BootstrapServicesPolicyImportResult{}, err
 	}
-	command, err := commandResultWithPayload(input.Meta, projectOperationImportBootstrapPolicy, projectAggregateServicesPolicy, policy.ID, now, payload)
+	command, err := commandResultWithPayload(input.Meta, mode.Operation, projectAggregateServicesPolicy, policy.ID, now, payload)
 	if err != nil {
 		s.recordOnboardingSignalFailed(ctx, input.OnboardingSignal, err)
 		return BootstrapServicesPolicyImportResult{}, err
@@ -168,8 +198,8 @@ func (s *Service) ImportBootstrapServicesPolicy(ctx context.Context, input Impor
 	return result, nil
 }
 
-func (s *Service) replayBootstrapServicesPolicyImport(ctx context.Context, input ImportBootstrapServicesPolicyInput) (BootstrapServicesPolicyImportResult, bool, error) {
-	result, ok, err := s.findCommandResult(ctx, input.Meta, projectOperationImportBootstrapPolicy, projectAggregateServicesPolicy)
+func (s *Service) replayBootstrapServicesPolicyImport(ctx context.Context, input ImportBootstrapServicesPolicyInput, mode servicesPolicyImportMode) (BootstrapServicesPolicyImportResult, bool, error) {
+	result, ok, err := s.findCommandResult(ctx, input.Meta, mode.Operation, projectAggregateServicesPolicy)
 	if err != nil || !ok {
 		return BootstrapServicesPolicyImportResult{}, ok, err
 	}
@@ -202,11 +232,11 @@ func (s *Service) replayBootstrapServicesPolicyImport(ctx context.Context, input
 	}, true, nil
 }
 
-func (s *Service) replayBootstrapServicesPolicyImportBySource(ctx context.Context, repository entity.RepositoryBinding, input normalizedBootstrapPolicyImport) (BootstrapServicesPolicyImportResult, bool, error) {
+func (s *Service) replayBootstrapServicesPolicyImportBySource(ctx context.Context, repository entity.RepositoryBinding, input normalizedBootstrapPolicyImport, mode servicesPolicyImportMode) (BootstrapServicesPolicyImportResult, bool, error) {
 	policy, err := s.repository.GetServicesPolicyBySource(ctx, repository.ProjectID, repository.ID, input.SourcePath, input.SourceCommitSHA)
 	if err != nil {
 		if errors.Is(err, errs.ErrNotFound) {
-			if repository.Status == enum.RepositoryStatusActive {
+			if mode.ConflictActiveSourceMiss && repository.Status == enum.RepositoryStatusActive {
 				return BootstrapServicesPolicyImportResult{}, true, errs.ErrConflict
 			}
 			return BootstrapServicesPolicyImportResult{}, false, nil
@@ -222,7 +252,27 @@ func (s *Service) replayBootstrapServicesPolicyImportBySource(ctx context.Contex
 	return bootstrapServicesPolicyImportResult(repository, policy, input), true, nil
 }
 
-func normalizeBootstrapPolicyImportInput(input ImportBootstrapServicesPolicyInput, repository entity.RepositoryBinding) (normalizedBootstrapPolicyImport, error) {
+func validateRepositoryStatusForCheckedPolicyImport(repository entity.RepositoryBinding, mode servicesPolicyImportMode) error {
+	if repository.Status == enum.RepositoryStatusPending {
+		return nil
+	}
+	if mode.AllowActiveRepository && repository.Status == enum.RepositoryStatusActive {
+		return nil
+	}
+	return errs.ErrPreconditionFailed
+}
+
+func checkedPolicyImportPreviousVersion(meta value.CommandMeta, repository entity.RepositoryBinding, mode servicesPolicyImportMode) (int64, error) {
+	if meta.ExpectedVersion != nil {
+		return expectedVersion(meta)
+	}
+	if strings.HasPrefix(strings.TrimSpace(meta.IdempotencyKey), mode.IdempotencyPrefix) {
+		return repository.Version, nil
+	}
+	return expectedVersion(meta)
+}
+
+func normalizeBootstrapPolicyImportInput(input ImportBootstrapServicesPolicyInput, repository entity.RepositoryBinding, mode servicesPolicyImportMode) (normalizedBootstrapPolicyImport, error) {
 	if err := validateBootstrapRepository(repository); err != nil {
 		return normalizedBootstrapPolicyImport{}, err
 	}
@@ -253,7 +303,7 @@ func normalizeBootstrapPolicyImportInput(input ImportBootstrapServicesPolicyInpu
 	if len(payload) == 0 || !json.Valid(payload) {
 		return normalizedBootstrapPolicyImport{}, errs.ErrInvalidArgument
 	}
-	watermark, err := parseBootstrapPolicyImportWatermark(input.WatermarkJSON)
+	watermark, err := parsePolicyImportWatermark(input.WatermarkJSON, mode.WatermarkWorkType)
 	if err != nil {
 		return normalizedBootstrapPolicyImport{}, err
 	}
@@ -311,7 +361,7 @@ func normalizeBootstrapPolicyProviderTarget(target RepositoryBootstrapProviderTa
 	}
 }
 
-func parseBootstrapPolicyImportWatermark(raw []byte) (bootstrapWatermark, error) {
+func parsePolicyImportWatermark(raw []byte, expectedWorkType string) (bootstrapWatermark, error) {
 	payload, err := normalizeBootstrapWatermark(raw)
 	if err != nil {
 		return bootstrapWatermark{}, err
@@ -322,7 +372,7 @@ func parseBootstrapPolicyImportWatermark(raw []byte) (bootstrapWatermark, error)
 	}
 	if strings.TrimSpace(watermark.Kind) != "provider_pr" ||
 		strings.TrimSpace(watermark.ManagedBy) != "kodex" ||
-		strings.TrimSpace(watermark.WorkType) != "repository_bootstrap" {
+		strings.TrimSpace(watermark.WorkType) != expectedWorkType {
 		return bootstrapWatermark{}, errs.ErrInvalidArgument
 	}
 	watermark.SourceRef = strings.TrimSpace(watermark.SourceRef)

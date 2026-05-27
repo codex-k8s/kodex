@@ -74,6 +74,18 @@ type Config struct {
 	ProviderBootstrapMergeConsumerFailureMessageLimit int           `env:"KODEX_PROJECT_CATALOG_PROVIDER_BOOTSTRAP_MERGE_CONSUMER_FAILURE_MESSAGE_LIMIT" envDefault:"512"`
 	ProviderBootstrapMergeConsumerConcurrencyLimit    int           `env:"KODEX_PROJECT_CATALOG_PROVIDER_BOOTSTRAP_MERGE_CONSUMER_CONCURRENCY_LIMIT" envDefault:"2"`
 	ProviderBootstrapMergeConsumerMaxAttempts         int           `env:"KODEX_PROJECT_CATALOG_PROVIDER_BOOTSTRAP_MERGE_CONSUMER_MAX_ATTEMPTS" envDefault:"5"`
+	ProviderAdoptionMergeConsumerEnabled              bool          `env:"KODEX_PROJECT_CATALOG_PROVIDER_ADOPTION_MERGE_CONSUMER_ENABLED" envDefault:"true"`
+	ProviderAdoptionMergeConsumerName                 string        `env:"KODEX_PROJECT_CATALOG_PROVIDER_ADOPTION_MERGE_CONSUMER_NAME" envDefault:"project-catalog.provider-adoption-merge"`
+	ProviderAdoptionMergeConsumerLeaseOwner           string        `env:"KODEX_PROJECT_CATALOG_PROVIDER_ADOPTION_MERGE_CONSUMER_LEASE_OWNER"`
+	ProviderAdoptionMergeConsumerBatchSize            int           `env:"KODEX_PROJECT_CATALOG_PROVIDER_ADOPTION_MERGE_CONSUMER_BATCH_SIZE" envDefault:"50"`
+	ProviderAdoptionMergeConsumerPollInterval         time.Duration `env:"KODEX_PROJECT_CATALOG_PROVIDER_ADOPTION_MERGE_CONSUMER_POLL_INTERVAL" envDefault:"1s"`
+	ProviderAdoptionMergeConsumerLeaseTTL             time.Duration `env:"KODEX_PROJECT_CATALOG_PROVIDER_ADOPTION_MERGE_CONSUMER_LEASE_TTL" envDefault:"30s"`
+	ProviderAdoptionMergeConsumerHandlerTimeout       time.Duration `env:"KODEX_PROJECT_CATALOG_PROVIDER_ADOPTION_MERGE_CONSUMER_HANDLER_TIMEOUT" envDefault:"10s"`
+	ProviderAdoptionMergeConsumerRetryInitialDelay    time.Duration `env:"KODEX_PROJECT_CATALOG_PROVIDER_ADOPTION_MERGE_CONSUMER_RETRY_INITIAL_DELAY" envDefault:"1s"`
+	ProviderAdoptionMergeConsumerRetryMaxDelay        time.Duration `env:"KODEX_PROJECT_CATALOG_PROVIDER_ADOPTION_MERGE_CONSUMER_RETRY_MAX_DELAY" envDefault:"1m"`
+	ProviderAdoptionMergeConsumerFailureMessageLimit  int           `env:"KODEX_PROJECT_CATALOG_PROVIDER_ADOPTION_MERGE_CONSUMER_FAILURE_MESSAGE_LIMIT" envDefault:"512"`
+	ProviderAdoptionMergeConsumerConcurrencyLimit     int           `env:"KODEX_PROJECT_CATALOG_PROVIDER_ADOPTION_MERGE_CONSUMER_CONCURRENCY_LIMIT" envDefault:"2"`
+	ProviderAdoptionMergeConsumerMaxAttempts          int           `env:"KODEX_PROJECT_CATALOG_PROVIDER_ADOPTION_MERGE_CONSUMER_MAX_ATTEMPTS" envDefault:"5"`
 }
 
 // LoadConfig reads process configuration from environment variables.
@@ -135,6 +147,15 @@ func (cfg Config) Validate() error {
 		{name: "KODEX_PROJECT_CATALOG_PROVIDER_BOOTSTRAP_MERGE_CONSUMER_FAILURE_MESSAGE_LIMIT", valid: cfg.ProviderBootstrapMergeConsumerFailureMessageLimit > 0},
 		{name: "KODEX_PROJECT_CATALOG_PROVIDER_BOOTSTRAP_MERGE_CONSUMER_CONCURRENCY_LIMIT", valid: cfg.ProviderBootstrapMergeConsumerConcurrencyLimit > 0},
 		{name: "KODEX_PROJECT_CATALOG_PROVIDER_BOOTSTRAP_MERGE_CONSUMER_MAX_ATTEMPTS", valid: cfg.ProviderBootstrapMergeConsumerMaxAttempts > 0},
+		{name: "KODEX_PROJECT_CATALOG_PROVIDER_ADOPTION_MERGE_CONSUMER_BATCH_SIZE", valid: cfg.ProviderAdoptionMergeConsumerBatchSize > 0},
+		{name: "KODEX_PROJECT_CATALOG_PROVIDER_ADOPTION_MERGE_CONSUMER_POLL_INTERVAL", valid: cfg.ProviderAdoptionMergeConsumerPollInterval > 0},
+		{name: "KODEX_PROJECT_CATALOG_PROVIDER_ADOPTION_MERGE_CONSUMER_LEASE_TTL", valid: cfg.ProviderAdoptionMergeConsumerLeaseTTL > 0},
+		{name: "KODEX_PROJECT_CATALOG_PROVIDER_ADOPTION_MERGE_CONSUMER_HANDLER_TIMEOUT", valid: cfg.ProviderAdoptionMergeConsumerHandlerTimeout > 0},
+		{name: "KODEX_PROJECT_CATALOG_PROVIDER_ADOPTION_MERGE_CONSUMER_RETRY_INITIAL_DELAY", valid: cfg.ProviderAdoptionMergeConsumerRetryInitialDelay > 0},
+		{name: "KODEX_PROJECT_CATALOG_PROVIDER_ADOPTION_MERGE_CONSUMER_RETRY_MAX_DELAY", valid: cfg.ProviderAdoptionMergeConsumerRetryMaxDelay >= cfg.ProviderAdoptionMergeConsumerRetryInitialDelay},
+		{name: "KODEX_PROJECT_CATALOG_PROVIDER_ADOPTION_MERGE_CONSUMER_FAILURE_MESSAGE_LIMIT", valid: cfg.ProviderAdoptionMergeConsumerFailureMessageLimit > 0},
+		{name: "KODEX_PROJECT_CATALOG_PROVIDER_ADOPTION_MERGE_CONSUMER_CONCURRENCY_LIMIT", valid: cfg.ProviderAdoptionMergeConsumerConcurrencyLimit > 0},
+		{name: "KODEX_PROJECT_CATALOG_PROVIDER_ADOPTION_MERGE_CONSUMER_MAX_ATTEMPTS", valid: cfg.ProviderAdoptionMergeConsumerMaxAttempts > 0},
 	} {
 		if !item.valid {
 			return fmt.Errorf("%s is invalid", item.name)
@@ -179,6 +200,9 @@ func (cfg Config) Validate() error {
 	if cfg.ProviderBootstrapMergeConsumerEnabled && strings.TrimSpace(cfg.ProviderBootstrapMergeConsumerName) == "" {
 		return fmt.Errorf("KODEX_PROJECT_CATALOG_PROVIDER_BOOTSTRAP_MERGE_CONSUMER_NAME is required when bootstrap merge consumer is enabled")
 	}
+	if cfg.ProviderAdoptionMergeConsumerEnabled && strings.TrimSpace(cfg.ProviderAdoptionMergeConsumerName) == "" {
+		return fmt.Errorf("KODEX_PROJECT_CATALOG_PROVIDER_ADOPTION_MERGE_CONSUMER_NAME is required when adoption merge consumer is enabled")
+	}
 	if cfg.needsEventLogDatabase() && strings.TrimSpace(cfg.EventLogDatabaseDSN) == "" {
 		return fmt.Errorf("KODEX_PROJECT_CATALOG_EVENT_LOG_DATABASE_DSN is required for event-log publisher or consumer")
 	}
@@ -195,7 +219,9 @@ func (cfg Config) Validate() error {
 }
 
 func (cfg Config) needsEventLogDatabase() bool {
-	return cfg.ProviderBootstrapMergeConsumerEnabled || (cfg.OutboxDispatchEnabled && strings.TrimSpace(cfg.OutboxPublisherKind) == outboxlib.PublisherKindPostgresEventLog)
+	return cfg.ProviderBootstrapMergeConsumerEnabled ||
+		cfg.ProviderAdoptionMergeConsumerEnabled ||
+		(cfg.OutboxDispatchEnabled && strings.TrimSpace(cfg.OutboxPublisherKind) == outboxlib.PublisherKindPostgresEventLog)
 }
 
 // DatabasePoolSettings converts service config to the shared pgxpool contract.
@@ -226,21 +252,69 @@ func (cfg Config) OutboxDispatcherConfig() outboxlib.Config {
 
 // ProviderBootstrapMergeConsumerConfig converts env fields to the shared event consumer runtime.
 func (cfg Config) ProviderBootstrapMergeConsumerConfig() eventconsumer.Config {
-	leaseOwner := strings.TrimSpace(cfg.ProviderBootstrapMergeConsumerLeaseOwner)
+	return providerMergeConsumerConfig(cfg.providerMergeConsumerRuntime("bootstrap"))
+}
+
+// ProviderAdoptionMergeConsumerConfig converts env fields to the shared event consumer runtime.
+func (cfg Config) ProviderAdoptionMergeConsumerConfig() eventconsumer.Config {
+	return providerMergeConsumerConfig(cfg.providerMergeConsumerRuntime("adoption"))
+}
+
+func (cfg Config) providerMergeConsumerRuntime(kind string) providerMergeConsumerRuntime {
+	if kind == "adoption" {
+		return newProviderMergeConsumerRuntime(cfg.ProviderAdoptionMergeConsumerName, cfg.ProviderAdoptionMergeConsumerLeaseOwner, "project-catalog-provider-adoption-merge", cfg.ProviderAdoptionMergeConsumerBatchSize, cfg.ProviderAdoptionMergeConsumerPollInterval, cfg.ProviderAdoptionMergeConsumerLeaseTTL, cfg.ProviderAdoptionMergeConsumerHandlerTimeout, cfg.ProviderAdoptionMergeConsumerRetryInitialDelay, cfg.ProviderAdoptionMergeConsumerRetryMaxDelay, cfg.ProviderAdoptionMergeConsumerFailureMessageLimit, cfg.ProviderAdoptionMergeConsumerConcurrencyLimit, cfg.ProviderAdoptionMergeConsumerMaxAttempts)
+	}
+	return newProviderMergeConsumerRuntime(cfg.ProviderBootstrapMergeConsumerName, cfg.ProviderBootstrapMergeConsumerLeaseOwner, "project-catalog-provider-bootstrap-merge", cfg.ProviderBootstrapMergeConsumerBatchSize, cfg.ProviderBootstrapMergeConsumerPollInterval, cfg.ProviderBootstrapMergeConsumerLeaseTTL, cfg.ProviderBootstrapMergeConsumerHandlerTimeout, cfg.ProviderBootstrapMergeConsumerRetryInitialDelay, cfg.ProviderBootstrapMergeConsumerRetryMaxDelay, cfg.ProviderBootstrapMergeConsumerFailureMessageLimit, cfg.ProviderBootstrapMergeConsumerConcurrencyLimit, cfg.ProviderBootstrapMergeConsumerMaxAttempts)
+}
+
+func newProviderMergeConsumerRuntime(name string, leaseOwner string, defaultLeaseOwner string, batchSize int, pollInterval time.Duration, leaseTTL time.Duration, handlerTimeout time.Duration, retryInitialDelay time.Duration, retryMaxDelay time.Duration, failureMessageLimit int, concurrencyLimit int, maxAttempts int) providerMergeConsumerRuntime {
+	return providerMergeConsumerRuntime{
+		Name:                name,
+		LeaseOwner:          leaseOwner,
+		DefaultLeaseOwner:   defaultLeaseOwner,
+		BatchSize:           batchSize,
+		PollInterval:        pollInterval,
+		LeaseTTL:            leaseTTL,
+		HandlerTimeout:      handlerTimeout,
+		RetryInitialDelay:   retryInitialDelay,
+		RetryMaxDelay:       retryMaxDelay,
+		FailureMessageLimit: failureMessageLimit,
+		ConcurrencyLimit:    concurrencyLimit,
+		MaxAttempts:         maxAttempts,
+	}
+}
+
+type providerMergeConsumerRuntime struct {
+	Name                string
+	LeaseOwner          string
+	DefaultLeaseOwner   string
+	BatchSize           int
+	PollInterval        time.Duration
+	LeaseTTL            time.Duration
+	HandlerTimeout      time.Duration
+	RetryInitialDelay   time.Duration
+	RetryMaxDelay       time.Duration
+	FailureMessageLimit int
+	ConcurrencyLimit    int
+	MaxAttempts         int
+}
+
+func providerMergeConsumerConfig(runtime providerMergeConsumerRuntime) eventconsumer.Config {
+	leaseOwner := strings.TrimSpace(runtime.LeaseOwner)
 	if leaseOwner == "" {
-		leaseOwner = eventconsumer.DefaultLeaseOwner("project-catalog-provider-bootstrap-merge")
+		leaseOwner = eventconsumer.DefaultLeaseOwner(runtime.DefaultLeaseOwner)
 	}
 	return eventconsumer.ConfigFromRuntimeValues(
-		cfg.ProviderBootstrapMergeConsumerName,
+		runtime.Name,
 		leaseOwner,
-		cfg.ProviderBootstrapMergeConsumerBatchSize,
-		cfg.ProviderBootstrapMergeConsumerPollInterval,
-		cfg.ProviderBootstrapMergeConsumerLeaseTTL,
-		cfg.ProviderBootstrapMergeConsumerHandlerTimeout,
-		cfg.ProviderBootstrapMergeConsumerRetryInitialDelay,
-		cfg.ProviderBootstrapMergeConsumerRetryMaxDelay,
-		cfg.ProviderBootstrapMergeConsumerFailureMessageLimit,
-		cfg.ProviderBootstrapMergeConsumerConcurrencyLimit,
-		cfg.ProviderBootstrapMergeConsumerMaxAttempts,
+		runtime.BatchSize,
+		runtime.PollInterval,
+		runtime.LeaseTTL,
+		runtime.HandlerTimeout,
+		runtime.RetryInitialDelay,
+		runtime.RetryMaxDelay,
+		runtime.FailureMessageLimit,
+		runtime.ConcurrencyLimit,
+		runtime.MaxAttempts,
 	)
 }

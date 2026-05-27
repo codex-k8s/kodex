@@ -51,6 +51,7 @@ type OnboardingSignalKind string
 const (
 	OnboardingSignalKindBootstrapMerge OnboardingSignalKind = "bootstrap_merge"
 	OnboardingSignalKindAdoptionScan   OnboardingSignalKind = "adoption_scan"
+	OnboardingSignalKindAdoptionMerge  OnboardingSignalKind = "adoption_merge"
 )
 
 // OnboardingSignalStatus describes project-side processing state of one provider onboarding signal.
