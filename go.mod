@@ -6,6 +6,8 @@ toolchain go1.25.8
 
 require (
 	github.com/caarlos0/env/v11 v11.3.1
+	github.com/codex-k8s/kodex/libs/go/eventconsumer v0.0.0
+	github.com/codex-k8s/kodex/libs/go/eventlog v0.0.0
 	github.com/codex-k8s/kodex/libs/go/grpcserver v0.0.0
 	github.com/codex-k8s/kodex/libs/go/migrationtest v0.0.0
 	github.com/codex-k8s/kodex/libs/go/outbox v0.0.0
@@ -20,6 +22,7 @@ require (
 	github.com/jackc/pgx/v5 v5.9.2
 	github.com/labstack/echo/v5 v5.0.3
 	github.com/modelcontextprotocol/go-sdk v1.3.0
+	github.com/prometheus/client_golang v1.23.2
 	go.yaml.in/yaml/v2 v2.4.3
 	google.golang.org/grpc v1.79.3
 	google.golang.org/protobuf v1.36.11
@@ -31,7 +34,6 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/codex-k8s/kodex/libs/go/eventlog v0.0.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/emicklei/go-restful/v3 v3.12.2 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
@@ -69,7 +71,6 @@ require (
 	github.com/oasdiff/yaml v0.0.0-20250309154309-f31be36b4037 // indirect
 	github.com/oasdiff/yaml3 v0.0.0-20250309153720-d2182401db90 // indirect
 	github.com/perimeterx/marshmallow v1.1.5 // indirect
-	github.com/prometheus/client_golang v1.23.2 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.66.1 // indirect
 	github.com/prometheus/procfs v0.16.1 // indirect
@@ -106,6 +107,8 @@ require (
 )
 
 replace github.com/codex-k8s/kodex/libs/go/eventlog => ./libs/go/eventlog
+
+replace github.com/codex-k8s/kodex/libs/go/eventconsumer => ./libs/go/eventconsumer
 
 replace github.com/codex-k8s/kodex/libs/go/grpcserver => ./libs/go/grpcserver
 

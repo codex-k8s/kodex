@@ -21,7 +21,50 @@ const (
 	maxOnboardingRepositoryFullNameLength = 256
 	maxOnboardingArtifactRefLength        = 512
 	maxOnboardingArtifactVersionLength    = 128
+	maxOnboardingErrorCodeLength          = 64
 )
+
+// RecordBootstrapMergeSignalDiagnostic stores safe processing state for a bootstrap merge event that cannot import yet.
+func (s *Service) RecordBootstrapMergeSignalDiagnostic(ctx context.Context, input BootstrapMergeSignalDiagnosticInput) error {
+	signalInput, code, summary, err := normalizeBootstrapMergeSignalDiagnosticInput(input)
+	if err != nil {
+		return err
+	}
+	repository, err := s.repository.GetRepository(ctx, signalInput.RepositoryID)
+	if err != nil {
+		return err
+	}
+	if repository.ProjectID != signalInput.ProjectID {
+		return errs.ErrPreconditionFailed
+	}
+	if err := validateBootstrapRepository(repository); err != nil {
+		return err
+	}
+	if signalInput.BaseBranch != strings.TrimSpace(repository.DefaultBranch) {
+		return errs.ErrPreconditionFailed
+	}
+	providerSlug, err := repositoryProviderSlug(repository.Provider)
+	if err != nil {
+		return err
+	}
+	if err := validateBootstrapPolicyProviderTarget(providerSlug, repository, RepositoryBootstrapProviderTarget{
+		ProviderSlug:         signalInput.ProviderSlug,
+		RepositoryFullName:   signalInput.RepositoryFullName,
+		ProviderRepositoryID: signalInput.ProviderRepositoryID,
+	}); err != nil {
+		return err
+	}
+	signal, err := s.onboardingSignalRecord(signalInput, enum.OnboardingSignalStatusNeedsReview, nil, nil)
+	if err != nil {
+		return err
+	}
+	signal.ErrorCode = code
+	signal.ErrorSummary = summary
+	completedAt := s.clock.Now()
+	signal.CompletedAt = &completedAt
+	_, err = s.repository.RecordOnboardingSignalReconciliation(ctx, signal)
+	return err
+}
 
 func (s *Service) recordOnboardingSignalProcessing(ctx context.Context, input *OnboardingSignalReconciliationInput) error {
 	if input == nil {
@@ -118,6 +161,61 @@ func (s *Service) onboardingSignalRecord(
 		signal.CompletedAt = &completedAt
 	}
 	return signal, nil
+}
+
+func normalizeBootstrapMergeSignalDiagnosticInput(input BootstrapMergeSignalDiagnosticInput) (OnboardingSignalReconciliationInput, string, string, error) {
+	if input.ProjectID == uuid.Nil || input.RepositoryID == uuid.Nil {
+		return OnboardingSignalReconciliationInput{}, "", "", errs.ErrInvalidArgument
+	}
+	signal := input.MergeSignal
+	if err := validateOptionalSignalID(signal.SignalID); err != nil {
+		return OnboardingSignalReconciliationInput{}, "", "", err
+	}
+	signalKey := strings.TrimSpace(signal.SignalKey)
+	if signalKey == "" || strings.TrimSpace(signal.SignalKind) != bootstrapMergeSignalKind {
+		return OnboardingSignalReconciliationInput{}, "", "", errs.ErrInvalidArgument
+	}
+	baseBranch := normalizeBootstrapMergeBaseBranch(signal.BaseBranch)
+	providerSourceRef := strings.TrimSpace(signal.SourceRef)
+	mergeCommitSHA := strings.ToLower(strings.TrimSpace(signal.MergeCommitSHA))
+	if baseBranch == "" || !validSafeProviderSourceRef(providerSourceRef) || !validGitCommitSHA(mergeCommitSHA) {
+		return OnboardingSignalReconciliationInput{}, "", "", errs.ErrInvalidArgument
+	}
+	if strings.TrimSpace(signal.MergeObservedAt) != "" {
+		if _, err := parseRFC3339(signal.MergeObservedAt); err != nil {
+			return OnboardingSignalReconciliationInput{}, "", "", err
+		}
+	}
+	if strings.TrimSpace(signal.MergedAt) != "" {
+		if _, err := parseRFC3339(signal.MergedAt); err != nil {
+			return OnboardingSignalReconciliationInput{}, "", "", err
+		}
+	}
+	code, err := normalizeSafeOnboardingRef(input.ErrorCode, maxOnboardingErrorCodeLength, true)
+	if err != nil {
+		return OnboardingSignalReconciliationInput{}, "", "", err
+	}
+	summary := truncateSafeOnboardingSummary(firstNonEmpty(input.ErrorSummary, input.Summary, "bootstrap merge signal needs checked artifact input"))
+	signalInput := OnboardingSignalReconciliationInput{
+		ProjectID:            input.ProjectID,
+		RepositoryID:         input.RepositoryID,
+		SignalKind:           enum.OnboardingSignalKindBootstrapMerge,
+		SignalKey:            signalKey,
+		SignalFingerprint:    input.SignalFingerprint,
+		ProviderSlug:         signal.ProviderTarget.ProviderSlug,
+		RepositoryFullName:   signal.ProviderTarget.RepositoryFullName,
+		ProviderRepositoryID: signal.ProviderTarget.ProviderRepositoryID,
+		BaseBranch:           baseBranch,
+		SourceRef:            "refs/heads/" + baseBranch,
+		SourceCommitSHA:      mergeCommitSHA,
+		Summary:              truncateSafeOnboardingSummary(firstNonEmpty(input.Summary, summary)),
+		ObservedAt:           firstNonEmpty(strings.TrimSpace(signal.MergeObservedAt), strings.TrimSpace(signal.MergedAt)),
+	}
+	normalized, err := normalizeOnboardingSignalReconciliationInput(signalInput)
+	if err != nil {
+		return OnboardingSignalReconciliationInput{}, "", "", err
+	}
+	return normalized, code, summary, nil
 }
 
 func normalizeOnboardingSignalReconciliationInput(input OnboardingSignalReconciliationInput) (OnboardingSignalReconciliationInput, error) {

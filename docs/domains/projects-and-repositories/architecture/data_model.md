@@ -74,6 +74,7 @@ approvals:
 - `validated_payload` хранится только в `ServicesPolicy`, а не дублируется в журнале сигнала;
 - raw webhook body, provider response, diff, YAML-текст, содержимое файлов, секреты и большие детали не хранятся;
 - для bootstrap merge успешная запись связывается с импортированной `ServicesPolicy`;
+- consumer `provider.repository.bootstrap_merged` записывает `needs_review` с safe error code, если событие содержит merge refs, но ещё не содержит checked artifact metadata и нормализованный payload для импорта;
 - для adoption scan текущий provider snapshot является planning-сигналом без checked policy payload, поэтому сам по себе не создаёт `ServicesPolicy`.
 
 | Поле | Тип | Может быть пустым | Примечание |

@@ -1326,6 +1326,88 @@ func TestReconcileBootstrapMergeSignalReplayDoesNotDuplicateImport(t *testing.T)
 	}
 }
 
+func TestRecordBootstrapMergeSignalDiagnosticIsIdempotent(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = pendingBootstrapRepository(projectID, repositoryID)
+	svc := NewWithConfig(
+		store,
+		fixedClock{},
+		&sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New()}},
+		Config{},
+	)
+	input := bootstrapMergeSignalDiagnosticInput(projectID, repositoryID, "sha256:"+strings.Repeat("1", 64))
+
+	if err := svc.RecordBootstrapMergeSignalDiagnostic(ctx, input); err != nil {
+		t.Fatalf("RecordBootstrapMergeSignalDiagnostic(): %v", err)
+	}
+	if err := svc.RecordBootstrapMergeSignalDiagnostic(ctx, input); err != nil {
+		t.Fatalf("replay RecordBootstrapMergeSignalDiagnostic(): %v", err)
+	}
+	if len(store.onboardingSignals) != 1 {
+		t.Fatalf("onboarding signals = %d, want one idempotent diagnostic", len(store.onboardingSignals))
+	}
+	for _, signal := range store.onboardingSignals {
+		if signal.Status != enum.OnboardingSignalStatusNeedsReview || signal.ErrorCode != "missing_checked_artifact" {
+			t.Fatalf("signal = %+v, want needs_review missing_checked_artifact", signal)
+		}
+		if signal.ServicesPolicyID != nil || signal.ArtifactRef != "" || signal.ContentHash != "" {
+			t.Fatalf("signal = %+v, want diagnostic without imported policy/artifact payload", signal)
+		}
+		for _, forbidden := range []string{bootstrapServicesPolicyPayload, "raw_provider_payload", "diff", "watermark_json"} {
+			if strings.Contains(signal.Summary+signal.ErrorSummary+signal.ArtifactRef, forbidden) {
+				t.Fatalf("diagnostic stores unsafe data %q in %+v", forbidden, signal)
+			}
+		}
+	}
+}
+
+func TestRecordBootstrapMergeSignalDiagnosticRejectsConflictingReplay(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = pendingBootstrapRepository(projectID, repositoryID)
+	svc := NewWithConfig(
+		store,
+		fixedClock{},
+		&sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New()}},
+		Config{},
+	)
+	input := bootstrapMergeSignalDiagnosticInput(projectID, repositoryID, "sha256:"+strings.Repeat("1", 64))
+	if err := svc.RecordBootstrapMergeSignalDiagnostic(ctx, input); err != nil {
+		t.Fatalf("RecordBootstrapMergeSignalDiagnostic(): %v", err)
+	}
+	input.SignalFingerprint = "sha256:" + strings.Repeat("2", 64)
+
+	if err := svc.RecordBootstrapMergeSignalDiagnostic(ctx, input); !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("conflicting RecordBootstrapMergeSignalDiagnostic() err = %v, want conflict", err)
+	}
+	if len(store.onboardingSignals) != 1 {
+		t.Fatalf("onboarding signals = %d, want no duplicate diagnostic", len(store.onboardingSignals))
+	}
+}
+
+func TestRecordBootstrapMergeSignalDiagnosticChecksRepositoryBinding(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = pendingBootstrapRepository(projectID, repositoryID)
+	svc := NewWithConfig(store, fixedClock{}, &sequenceIDs{ids: []uuid.UUID{uuid.New()}}, Config{})
+	input := bootstrapMergeSignalDiagnosticInput(projectID, repositoryID, "sha256:"+strings.Repeat("1", 64))
+	input.MergeSignal.ProviderTarget.RepositoryFullName = "codex-k8s/other"
+
+	if err := svc.RecordBootstrapMergeSignalDiagnostic(ctx, input); !errors.Is(err, errs.ErrPreconditionFailed) {
+		t.Fatalf("RecordBootstrapMergeSignalDiagnostic() err = %v, want precondition failed", err)
+	}
+	if len(store.onboardingSignals) != 0 {
+		t.Fatalf("onboarding signals = %d, want no write for mismatched provider refs", len(store.onboardingSignals))
+	}
+}
+
 func TestReconcileBootstrapMergeSignalReplayStillChecksAccess(t *testing.T) {
 	ctx := context.Background()
 	projectID := uuid.New()
@@ -1899,6 +1981,19 @@ func reconcileBootstrapMergeSignalInput(projectID uuid.UUID, repositoryID uuid.U
 			ValidatedPayload: []byte(bootstrapServicesPolicyPayload),
 		},
 		Meta: meta,
+	}
+}
+
+func bootstrapMergeSignalDiagnosticInput(projectID uuid.UUID, repositoryID uuid.UUID, fingerprint string) BootstrapMergeSignalDiagnosticInput {
+	input := reconcileBootstrapMergeSignalInput(projectID, repositoryID, value.CommandMeta{})
+	return BootstrapMergeSignalDiagnosticInput{
+		ProjectID:         projectID,
+		RepositoryID:      repositoryID,
+		MergeSignal:       input.MergeSignal,
+		SignalFingerprint: fingerprint,
+		ErrorCode:         "missing_checked_artifact",
+		ErrorSummary:      "bootstrap merge signal needs checked artifact input",
+		Summary:           "bootstrap merge signal received",
 	}
 }
 

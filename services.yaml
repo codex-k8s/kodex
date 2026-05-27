@@ -79,11 +79,13 @@ spec:
         - services/internal/project-catalog
         - libs/go/accesscheck
         - libs/go/accesscatalog
+        - libs/go/eventconsumer
         - libs/go/grpcserver
         - libs/go/postgres
         - libs/go/eventlog
         - libs/go/migrationtest
         - libs/go/outbox
+        - libs/go/platformevents/provider
         - libs/go/platformevents/project
         - libs/go/serviceprocess
         - libs/go/servicemain

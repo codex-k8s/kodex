@@ -63,8 +63,9 @@
 | ONB-3 | #818 | готово | `ImportBootstrapServicesPolicy` принимает проверенный merge/artifact-сигнал, импортирует checked `services.yaml` и атомарно переводит pending repository binding в `active` без прямого GitHub/GitLab доступа. |
 | ONB-4 | #864 | готово | `ReconcileBootstrapMergeSignal` принимает safe provider bootstrap merge signal и checked artifact metadata, валидирует signal/artifact/binding и вызывает `ImportBootstrapServicesPolicy` без GitHub/GitLab-клиента в `project-catalog`. |
 | ONB-5 | #881 | готово | `project-catalog` сохраняет project-side `OnboardingSignalReconciliation` для bootstrap merge signal: safe fingerprint, refs, artifact metadata, итоговый статус, short summary и safe error code/summary без raw provider payload. |
+| Event consumer | #893 | готово | Общий `libs/go/eventconsumer` читает `platform-event-log` через `eventlog.Store` с lease/checkpoint, handler registry, retry/backoff и safe diagnostics; первый consumer `project-catalog` принимает `provider.repository.bootstrap_merged`, восстанавливает safe signal input и фиксирует `OnboardingSignalReconciliation(needs_review)` без импорта, если событие не содержит checked artifact input. |
 
-Итог: `project-catalog` имеет стабильные `v1` контракты, БД, миграции, gRPC-слой, outbox-публикацию в `platform-event-log`, deploy-манифесты и smoke-контур. Операции из Wave 8 реализованы; ONB-1 добавил project-side bootstrap команду для уже существующего repository binding, ONB-2 добавил project-side создание provider repo/base ref через `provider-hub` и связывание результата с binding, ONB-3 добавил импорт проверенной политики после merge bootstrap PR и активацию binding, ONB-4 добавил явный reconciliation path от safe provider merge signal к import use-case.
+Итог: `project-catalog` имеет стабильные `v1` контракты, БД, миграции, gRPC-слой, outbox-публикацию в `platform-event-log`, deploy-манифесты и smoke-контур. Операции из Wave 8 реализованы; ONB-1 добавил project-side bootstrap команду для уже существующего repository binding, ONB-2 добавил project-side создание provider repo/base ref через `provider-hub` и связывание результата с binding, ONB-3 добавил импорт проверенной политики после merge bootstrap PR и активацию binding, ONB-4 добавил явный reconciliation path от safe provider merge signal к import use-case, а #893 добавил общий event consumer runtime и первый project-side consumer safe merge signal.
 
 ## Что уже сделано по `runtime-manager`
 
@@ -113,7 +114,7 @@
 
 | Направление | Статус | Что осталось |
 |---|---|---|
-| Bootstrap пустого репозитория | ONB-1, ONB-2, ONB-3, ONB-4 и ONB-5 готовы, полный сценарий открыт: #281, #748 | `project-catalog` владеет проектной политикой и binding: `CreateProviderRepository` создаёт provider repo/base ref через `provider-hub CreateRepository` и сохраняет безопасные refs в pending binding; `CreateRepositoryBootstrapPullRequest` проверяет существующий binding, provider target, `base_branch`, prepared files, watermark и checked `services.yaml`, затем вызывает `provider-hub CreateBootstrapPullRequest`; `ReconcileBootstrapMergeSignal` принимает safe provider merge signal и checked artifact metadata, валидирует signal/artifact/binding, ведёт safe `OnboardingSignalReconciliation` journal и вызывает `ImportBootstrapServicesPolicy`; `ImportBootstrapServicesPolicy` импортирует checked projection и переводит binding в `active`. Выбор и применение шаблона, полноценный worker/consumer поверх `platform-event-log` и adoption остаются отдельными срезами. |
+| Bootstrap пустого репозитория | ONB-1, ONB-2, ONB-3, ONB-4, ONB-5 и #893 готовы, полный сценарий открыт: #281, #748 | `project-catalog` владеет проектной политикой и binding: `CreateProviderRepository` создаёт provider repo/base ref через `provider-hub CreateRepository` и сохраняет безопасные refs в pending binding; `CreateRepositoryBootstrapPullRequest` проверяет существующий binding, provider target, `base_branch`, prepared files, watermark и checked `services.yaml`, затем вызывает `provider-hub CreateBootstrapPullRequest`; `ReconcileBootstrapMergeSignal` принимает safe provider merge signal и checked artifact metadata, валидирует signal/artifact/binding, ведёт safe `OnboardingSignalReconciliation` journal и вызывает `ImportBootstrapServicesPolicy`; `ImportBootstrapServicesPolicy` импортирует checked projection и переводит binding в `active`; consumer `provider.repository.bootstrap_merged` доставляет safe merge signal из `platform-event-log` и фиксирует `needs_review`, если checked artifact input ещё не передан. Выбор и применение шаблона, передача checked artifact/payload в event-driven контур и adoption остаются отдельными срезами. |
 | Adoption существующего репозитория | модель выбрана, ждёт реализации: #282 | Provider-side lightweight scan snapshot готов как safe planning signal, но он не содержит checked `services.yaml` payload. Project-side import для adoption должен получать checked artifact/import signal после adoption PR merge или отдельного validated artifact контура; `project-catalog` не читает GitHub/GitLab напрямую. |
 | UI/gateway для проектов и runtime | запланировано позже | Делать после определения фактических экранов `web-console` и состава `staff-gateway` ручек. |
 | `project.policy_override.expired` | запланировано позже | Контракт события есть; нужна логика обслуживания или platform job, которая будет снимать истёкшие переопределения как операционный срез. |
@@ -152,13 +153,13 @@
 
 Реальные оставшиеся блокировки:
 
-- #281 и #282 требуют provider-native операций: создать или просканировать репозиторий, открыть bootstrap/adoption PR, связать provider Issue/PR/MR с локальными проектом и репозиторием; PRV-8a закрывает provider-side открытие bootstrap PR для заранее существующего пустого repo по готовым файлам и refs, ONB-1 закрывает project-side вызов для существующего binding, ONB-2 закрывает project-side создание provider repo/base ref, ONB-3 закрывает project-side import checked policy after merge, ONB-4 закрывает явный project-side reconciliation command от safe provider merge signal к import use-case, но полноценный worker/consumer и adoption scan остаются открытыми;
+- #281 и #282 требуют provider-native операций: создать или просканировать репозиторий, открыть bootstrap/adoption PR, связать provider Issue/PR/MR с локальными проектом и репозиторием; PRV-8a закрывает provider-side открытие bootstrap PR для заранее существующего пустого repo по готовым файлам и refs, ONB-1 закрывает project-side вызов для существующего binding, ONB-2 закрывает project-side создание provider repo/base ref, ONB-3 закрывает project-side import checked policy after merge, ONB-4 закрывает явный project-side reconciliation command от safe provider merge signal к import use-case, ONB-5 закрывает project-side journal, #893 закрывает общий consumer framework и первый delivery path safe merge signal, но передача checked artifact input в event-driven контур и adoption scan остаются открытыми;
 - `CreatePolicyEditProposal` в `project-catalog` сохраняет предложение, но создание PR с правкой `services.yaml` должно идти через provider-контур;
 - workspace `source_ref` и сигналы после работы slot-агентов должны синхронизироваться с provider-проекциями, но runtime не должен напрямую ходить в GitHub/GitLab.
 
 Нужны новые или уточнённые контракты:
 
-- полноценный worker/consumer поверх `platform-event-log`, который будет вызывать `ReconcileBootstrapMergeSignal` после provider projection merge-сигнала и подготовки checked artifact;
+- checked artifact input/watermark payload для event-driven bootstrap merge consumer, чтобы после provider projection merge-сигнала он мог вызвать полный `ReconcileBootstrapMergeSignal`, а не только safe diagnostic;
 - команда provider-контура на создание bootstrap/policy PR по проверенному предложению `project-catalog`;
 - событие или команда ускоряющего сигнала после появления provider-native артефакта из runtime/agent workspace.
 
@@ -194,8 +195,8 @@
 
 ## Рекомендуемый следующий шаг
 
-Для агента #1 нет незавершённого локального Wave 8, RTM или FLEET среза, который нужно закрыть до соседних доменов. После MCP-3d рационально идти в один из трёх вариантов:
+Для агента #1 нет незавершённого локального Wave 8, RTM или FLEET среза, который нужно закрыть до соседних доменов. После #893 рационально идти в один из трёх вариантов:
 
 - продолжить MCP governance routes после готового review signal contract: `governance.signal.record_review` и read surface без хранения signal state в MCP;
-- продолжить bootstrap пустого репозитория следующим ONB-срезом: подключить worker/consumer поверх `platform-event-log` к `ReconcileBootstrapMergeSignal` или закрыть детерминированный template executor без переноса шаблонов в `project-catalog`;
+- продолжить bootstrap пустого репозитория следующим ONB-срезом: передать checked artifact input/watermark payload в event-driven контур и вызвать полный `ReconcileBootstrapMergeSignal` из consumer либо закрыть детерминированный template executor без переноса шаблонов в `project-catalog`;
 - перейти к runtime/fleet интеграции с реальным исполнителем platform jobs после согласования `agent-manager` и ops-контуров.

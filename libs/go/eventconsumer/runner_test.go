@@ -1,0 +1,285 @@
+package eventconsumer
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"log/slog"
+	"testing"
+	"time"
+
+	eventlog "github.com/codex-k8s/kodex/libs/go/eventlog"
+	"github.com/google/uuid"
+)
+
+func TestRunOnceAdvancesAfterAck(t *testing.T) {
+	t.Parallel()
+
+	store := &fakeStore{
+		claims: []eventlog.ClaimedBatch{batchOf(eventOf(1, "provider.repository.bootstrap_merged", 1))},
+	}
+	registry := registryFor(t, "provider.repository.bootstrap_merged", 1, HandlerFunc(func(context.Context, Event) Result {
+		return Ack()
+	}))
+	runner := newTestRunner(t, store, registry)
+
+	if err := runner.RunOnce(context.Background()); err != nil {
+		t.Fatalf("RunOnce(): %v", err)
+	}
+	if len(store.advances) != 1 {
+		t.Fatalf("advance count = %d, want 1", len(store.advances))
+	}
+	if store.advances[0].LastSequenceID != 1 {
+		t.Fatalf("advance sequence = %d, want 1", store.advances[0].LastSequenceID)
+	}
+	if len(store.releases) != 0 {
+		t.Fatalf("release count = %d, want 0", len(store.releases))
+	}
+}
+
+func TestRunOnceKeepsCheckpointBeforeRetry(t *testing.T) {
+	t.Parallel()
+
+	store := &fakeStore{
+		claims: []eventlog.ClaimedBatch{batchOf(
+			eventOf(10, "provider.repository.bootstrap_merged", 1),
+			eventOf(11, "provider.repository.bootstrap_merged", 1),
+		)},
+	}
+	registry := registryFor(t, "provider.repository.bootstrap_merged", 1, HandlerFunc(func(_ context.Context, event Event) Result {
+		if event.StoredEvent.SequenceID == 10 {
+			return Retry(errors.New("temporary downstream failure with diagnostic details"))
+		}
+		return Ack()
+	}))
+	runner := newTestRunner(t, store, registry)
+
+	err := runner.RunOnce(context.Background())
+	if !errors.Is(err, ErrRetryable) {
+		t.Fatalf("RunOnce() err = %v, want retryable", err)
+	}
+	if len(store.advances) != 0 {
+		t.Fatalf("advance count = %d, want 0", len(store.advances))
+	}
+	if len(store.releases) != 1 {
+		t.Fatalf("release count = %d, want 1", len(store.releases))
+	}
+}
+
+func TestRunOnceAdvancesPrefixBeforeRetry(t *testing.T) {
+	t.Parallel()
+
+	store := &fakeStore{
+		claims: []eventlog.ClaimedBatch{batchOf(
+			eventOf(20, "provider.repository.bootstrap_merged", 1),
+			eventOf(21, "provider.repository.bootstrap_merged", 1),
+		)},
+	}
+	registry := registryFor(t, "provider.repository.bootstrap_merged", 1, HandlerFunc(func(_ context.Context, event Event) Result {
+		if event.StoredEvent.SequenceID == 21 {
+			return Retry(errors.New("temporary failure"))
+		}
+		return Ack()
+	}))
+	runner := newTestRunner(t, store, registry)
+
+	err := runner.RunOnce(context.Background())
+	if !errors.Is(err, ErrRetryable) {
+		t.Fatalf("RunOnce() err = %v, want retryable", err)
+	}
+	if len(store.advances) != 1 {
+		t.Fatalf("advance count = %d, want 1", len(store.advances))
+	}
+	if store.advances[0].LastSequenceID != 20 {
+		t.Fatalf("advance sequence = %d, want 20", store.advances[0].LastSequenceID)
+	}
+	if len(store.releases) != 1 {
+		t.Fatalf("release count = %d, want 1", len(store.releases))
+	}
+}
+
+func TestRunOncePoisonsAfterMaxAttempts(t *testing.T) {
+	t.Parallel()
+
+	event := eventOf(30, "provider.repository.bootstrap_merged", 1)
+	store := &fakeStore{
+		claims: []eventlog.ClaimedBatch{batchOf(event), batchOf(event)},
+	}
+	registry := registryFor(t, "provider.repository.bootstrap_merged", 1, HandlerFunc(func(context.Context, Event) Result {
+		return Retry(errors.New("still failing"))
+	}))
+	runner := newTestRunner(t, store, registry)
+	runner.cfg.MaxAttempts = 2
+
+	if err := runner.RunOnce(context.Background()); !errors.Is(err, ErrRetryable) {
+		t.Fatalf("first RunOnce() err = %v, want retryable", err)
+	}
+	if err := runner.RunOnce(context.Background()); err != nil {
+		t.Fatalf("second RunOnce(): %v", err)
+	}
+	if len(store.advances) != 1 {
+		t.Fatalf("advance count = %d, want 1", len(store.advances))
+	}
+	if store.advances[0].LastSequenceID != 30 {
+		t.Fatalf("advance sequence = %d, want 30", store.advances[0].LastSequenceID)
+	}
+}
+
+func TestRunOnceSkipsUnknownAndPoisonsUnsupportedVersion(t *testing.T) {
+	t.Parallel()
+
+	store := &fakeStore{
+		claims: []eventlog.ClaimedBatch{batchOf(
+			eventOf(40, "other.event", 1),
+			eventOf(41, "provider.repository.bootstrap_merged", 2),
+		)},
+	}
+	registry := registryFor(t, "provider.repository.bootstrap_merged", 1, HandlerFunc(func(context.Context, Event) Result {
+		t.Fatal("handler should not be called")
+		return Ack()
+	}))
+	hook := &captureHook{}
+	runner := newTestRunner(t, store, registry)
+	runner.hook = hook
+	runner.cfg.ConcurrencyLimit = 1
+
+	if err := runner.RunOnce(context.Background()); err != nil {
+		t.Fatalf("RunOnce(): %v", err)
+	}
+	if len(store.advances) != 1 {
+		t.Fatalf("advance count = %d, want 1", len(store.advances))
+	}
+	if store.advances[0].LastSequenceID != 41 {
+		t.Fatalf("advance sequence = %d, want 41", store.advances[0].LastSequenceID)
+	}
+	if got := hook.statuses(); fmt.Sprint(got) != "[ack poison]" {
+		t.Fatalf("statuses = %v, want [ack poison]", got)
+	}
+}
+
+func TestRegistryRejectsDuplicateHandler(t *testing.T) {
+	t.Parallel()
+
+	_, err := NewRegistry(
+		Registration{EventType: "provider.repository.bootstrap_merged", SchemaVersion: 1, Handler: HandlerFunc(func(context.Context, Event) Result { return Ack() })},
+		Registration{EventType: "provider.repository.bootstrap_merged", SchemaVersion: 1, Handler: HandlerFunc(func(context.Context, Event) Result { return Ack() })},
+	)
+	if !errors.Is(err, ErrDuplicateHandler) {
+		t.Fatalf("NewRegistry() err = %v, want duplicate handler", err)
+	}
+}
+
+func TestRetryDelayIsBounded(t *testing.T) {
+	t.Parallel()
+
+	runner := newTestRunner(t, &fakeStore{}, registryFor(t, "event", 1, HandlerFunc(func(context.Context, Event) Result { return Ack() })))
+	runner.cfg.RetryInitialDelay = time.Second
+	runner.cfg.RetryMaxDelay = 5 * time.Second
+
+	if got := runner.retryDelay(1); got != time.Second {
+		t.Fatalf("retryDelay(1) = %s, want 1s", got)
+	}
+	if got := runner.retryDelay(4); got != 5*time.Second {
+		t.Fatalf("retryDelay(4) = %s, want 5s", got)
+	}
+}
+
+func newTestRunner(t *testing.T, store *fakeStore, registry Registry) *Runner {
+	t.Helper()
+	runner, err := NewRunner(store, registry, ConfigFromRuntimeValues(
+		"test-consumer",
+		"test-owner",
+		10,
+		time.Millisecond,
+		time.Minute,
+		time.Minute,
+		time.Millisecond,
+		time.Second,
+		128,
+		2,
+		3,
+	), slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
+	if err != nil {
+		t.Fatalf("NewRunner(): %v", err)
+	}
+	return runner
+}
+
+func registryFor(t *testing.T, eventType string, schemaVersion int, handler Handler) Registry {
+	t.Helper()
+	registry, err := NewRegistry(Registration{EventType: eventType, SchemaVersion: schemaVersion, Handler: handler})
+	if err != nil {
+		t.Fatalf("NewRegistry(): %v", err)
+	}
+	return registry
+}
+
+func batchOf(events ...eventlog.StoredEvent) eventlog.ClaimedBatch {
+	return eventlog.ClaimedBatch{
+		ConsumerName: "test-consumer",
+		LeaseOwner:   "test-owner",
+		LockedUntil:  time.Now().Add(time.Minute),
+		Events:       events,
+	}
+}
+
+func eventOf(sequence int64, eventType string, schemaVersion int) eventlog.StoredEvent {
+	return eventlog.StoredEvent{
+		SequenceID: sequence,
+		Event: eventlog.Event{
+			ID:            uuid.New(),
+			SourceService: "provider-hub",
+			EventType:     eventType,
+			SchemaVersion: schemaVersion,
+			AggregateType: "repository_merge_signal",
+			AggregateID:   uuid.New(),
+			Payload:       []byte(`{"safe":true}`),
+			OccurredAt:    time.Now().UTC(),
+		},
+		RecordedAt: time.Now().UTC(),
+	}
+}
+
+type fakeStore struct {
+	claims   []eventlog.ClaimedBatch
+	advances []eventlog.AdvanceParams
+	releases []eventlog.ReleaseParams
+}
+
+func (s *fakeStore) Claim(context.Context, eventlog.ClaimParams) (eventlog.ClaimedBatch, error) {
+	if len(s.claims) == 0 {
+		return eventlog.ClaimedBatch{ConsumerName: "test-consumer", LeaseOwner: "test-owner"}, nil
+	}
+	batch := s.claims[0]
+	s.claims = s.claims[1:]
+	return batch, nil
+}
+
+func (s *fakeStore) Advance(_ context.Context, params eventlog.AdvanceParams) error {
+	s.advances = append(s.advances, params)
+	return nil
+}
+
+func (s *fakeStore) Release(_ context.Context, params eventlog.ReleaseParams) error {
+	s.releases = append(s.releases, params)
+	return nil
+}
+
+type captureHook struct {
+	handled []HandleInfo
+}
+
+func (h *captureHook) Claimed(context.Context, ClaimInfo) {}
+
+func (h *captureHook) Handled(_ context.Context, info HandleInfo) {
+	h.handled = append(h.handled, info)
+}
+
+func (h *captureHook) statuses() []ResultStatus {
+	statuses := make([]ResultStatus, 0, len(h.handled))
+	for _, info := range h.handled {
+		statuses = append(statuses, info.Status)
+	}
+	return statuses
+}
