@@ -6,7 +6,7 @@ status: active
 owner_role: EM
 created_at: 2026-05-25
 updated_at: 2026-05-27
-related_issues: [781, 792, 807, 770, 829, 853, 895]
+related_issues: [781, 792, 807, 770, 829, 853, 895, 909]
 related_prs: []
 related_docsets:
   - docs/domains/integration-gateway/product/requirements.md
@@ -50,7 +50,7 @@ approvals:
 | IGW-4 | #819 | Security hardening: per-source/per-route limits, backpressure policy, safe audit summary, replay/idempotency tests и compatibility tests OpenAPI без расширения бизнес-состояния gateway. |
 | IGW-5 | #829 | Deploy-контур: Dockerfile, manifests, secrets refs, smoke, runbook, monitoring и rollback. |
 | IGW-6 | #853 | Первый active callback route: generic `/v1/external-callbacks/{callback_source}` проверяет source binding, HMAC SHA-256 подпись, лимиты и вызывает `interaction-hub.RecordChannelCallback` safe envelope без gateway business state. |
-| Provider merge signal smoke | #895 | Staged fixture smoke проверяет GitHub provider webhook route wiring до `provider-hub.IngestWebhookEvent` и live HTTP diagnostic mode без переноса provider business state в gateway. |
+| Provider merge signal smoke | #895, #909 | Staged fixture smoke проверяет GitHub provider webhook route wiring до `provider-hub.IngestWebhookEvent` и live HTTP diagnostic mode без переноса provider business state в gateway; bootstrap и adoption fixtures проходят один и тот же thin-edge route. |
 
 ## Зависимости и блокировки
 
@@ -93,7 +93,7 @@ approvals:
 | Smoke | `scripts/smoke-integration-gateway.sh` проверяет health/readiness/metrics/OpenAPI и safe negative responses для GitHub route без реального webhook secret. |
 | Ops | Runbook и monitoring docs описывают route checks, backpressure, safe errors, provider-hub connectivity и rollback. |
 
-Дополнительный staged smoke `scripts/smoke-provider-merge-signal.sh` использует synthetic GitHub `pull_request closed + merged` fixture: на gateway-стороне проверяется только HTTP boundary, HMAC verifier, delivery/event headers, correlation metadata и передача payload в `provider-hub` client. Provider-owned merge signal, read surface и outbox проверяются в `provider-hub`; `integration-gateway` не хранит provider projections, inbox, operation state или бизнес-события.
+Дополнительный staged smoke `scripts/smoke-provider-merge-signal.sh` использует synthetic GitHub `pull_request closed + merged` bootstrap/adoption fixtures: на gateway-стороне проверяется только HTTP boundary, HMAC verifier, delivery/event headers, correlation metadata и передача payload в `provider-hub` client. Provider-owned merge signal, read surface, replay/conflict и outbox проверяются в `provider-hub`; `integration-gateway` не хранит provider projections, inbox, operation state или бизнес-события.
 
 ## Реализованный callback route IGW-6
 

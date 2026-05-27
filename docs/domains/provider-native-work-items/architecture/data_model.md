@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-06
 updated_at: 2026-05-27
-related_issues: [281, 282, 711, 719, 725, 729, 737, 748, 761, 770, 840, 864, 865]
+related_issues: [281, 282, 711, 719, 725, 729, 737, 748, 761, 770, 840, 864, 865, 908, 909]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -30,7 +30,8 @@ approvals:
 - Таблицы не имеют `FOREIGN KEY` в БД других сервисов.
 - Конкурентные команды используют версии агрегатов и идемпотентные ключи.
 - Межсервисные доменные события сначала фиксируются в локальном outbox сервиса-владельца, а затем доставляются в общий `platform-event-log`.
-- Сырые webhook payload имеют срок хранения.
+- Canonical provider webhook payload хранится только во внутреннем inbox `provider_hub_webhook_events.payload_json` для retry/reprocess и имеет срок хранения.
+- Webhook inbox не является safe read surface: соседние сервисы получают только нормализованные safe refs/facts/digests/status через gRPC read surface и доменные события.
 - Нормализованные проекции хранят только поля, нужные платформе для UI, поиска, приёмки, синхронизации и аудита.
 - Полные diff, review truth, ветки и теги остаются у провайдера.
 
@@ -63,15 +64,16 @@ approvals:
 
 ### `WebhookEvent`
 
-Назначение: сырой входящий сигнал провайдера.
+Назначение: внутренний входящий сигнал провайдера для дедупликации, нормализации и retry/reprocess.
 
 Важные инварианты:
 
 - дедупликация обязательна по delivery id или аналогу;
-- payload хранится ограниченный срок;
+- canonical provider webhook payload хранится ограниченный срок во внутреннем поле `payload_json`, пока не реализован отдельный privacy-hardening storage;
 - нормализация может идти синхронно при приёме или через отдельный обработчик, но повторная обработка должна быть идемпотентной;
 - если конкурентный повтор уже перевёл событие из `pending` или `failed` в терминальное состояние, команда повторной обработки перечитывает и возвращает это состояние вместо ложного `not found`;
 - `pending` после повторного чтения не считается успешной обработкой и должен возвращаться как конфликт.
+- `payload_json` не передаётся наружу как safe read surface и не входит в `RepositoryMergeSignal`, provider-owned read responses, outbox/event-log payload или междоменные checked artifact inputs.
 
 | Поле | Тип | Nullable | Ограничения | Примечание |
 |---|---|---:|---|---|
@@ -82,7 +84,7 @@ approvals:
 | `repository_provider_id` | text | no | default '' | Внешний id репозитория, если есть. |
 | `received_at` | timestamptz | no | indexed | Время приёма. |
 | `processing_status` | text | no | indexed | `pending`, `processed`, `failed`, `ignored`. |
-| `payload_json` | jsonb | no |  | Сырой payload с ограниченным сроком хранения. |
+| `payload_json` | jsonb | no |  | Canonical provider webhook payload с ограниченным сроком хранения; внутреннее поле для retry/reprocess, не safe read surface. |
 | `last_error` | text | no | default '' | Короткая ошибка обработки. |
 | `retain_until` | timestamptz | no | indexed | Срок хранения payload. |
 
