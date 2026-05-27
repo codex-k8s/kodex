@@ -41,24 +41,28 @@ type followUpProviderCommandPayload struct {
 }
 
 type followUpProviderCommand struct {
-	Kind          FollowUpDispatchKind
-	CreateIssue   *ProviderCreateIssueInput
-	UpdateIssue   *ProviderUpdateIssueInput
-	CreateComment *ProviderCreateCommentInput
-	UpdateComment *ProviderUpdateCommentInput
+	Kind               FollowUpDispatchKind
+	CreateIssue        *ProviderCreateIssueInput
+	UpdateIssue        *ProviderUpdateIssueInput
+	CreateComment      *ProviderCreateCommentInput
+	UpdateComment      *ProviderUpdateCommentInput
+	UpdatePullRequest  *ProviderUpdatePullRequestInput
+	CreateReviewSignal *ProviderCreateReviewSignalInput
 }
 
 type followUpDispatchSnapshot struct {
-	Kind                   string                         `json:"kind"`
-	FollowUpIntentID       string                         `json:"follow_up_intent_id"`
-	ProviderCommandID      string                         `json:"provider_command_id"`
-	ProviderIdempotencyKey string                         `json:"provider_idempotency_key"`
-	OperationPolicyContext ProviderOperationPolicyContext `json:"operation_policy_context"`
-	ApprovalGateRef        ProviderApprovalGateReference  `json:"approval_gate_ref,omitempty"`
-	CreateIssue            *followUpCreateIssueSnapshot   `json:"create_issue,omitempty"`
-	UpdateIssue            *followUpUpdateIssueSnapshot   `json:"update_issue,omitempty"`
-	CreateComment          *followUpCommentSnapshot       `json:"create_comment,omitempty"`
-	UpdateComment          *followUpUpdateCommentSnapshot `json:"update_comment,omitempty"`
+	Kind                   string                             `json:"kind"`
+	FollowUpIntentID       string                             `json:"follow_up_intent_id"`
+	ProviderCommandID      string                             `json:"provider_command_id"`
+	ProviderIdempotencyKey string                             `json:"provider_idempotency_key"`
+	OperationPolicyContext ProviderOperationPolicyContext     `json:"operation_policy_context"`
+	ApprovalGateRef        ProviderApprovalGateReference      `json:"approval_gate_ref,omitempty"`
+	CreateIssue            *followUpCreateIssueSnapshot       `json:"create_issue,omitempty"`
+	UpdateIssue            *followUpUpdateIssueSnapshot       `json:"update_issue,omitempty"`
+	CreateComment          *followUpCommentSnapshot           `json:"create_comment,omitempty"`
+	UpdateComment          *followUpUpdateCommentSnapshot     `json:"update_comment,omitempty"`
+	UpdatePullRequest      *followUpUpdatePullRequestSnapshot `json:"update_pull_request,omitempty"`
+	CreateReviewSignal     *followUpReviewSignalSnapshot      `json:"create_review_signal,omitempty"`
 }
 
 type followUpCreateIssueSnapshot struct {
@@ -116,6 +120,53 @@ type followUpUpdateCommentSnapshot struct {
 	ExpectedProviderVersion string                         `json:"expected_provider_version,omitempty"`
 	OperationPolicyContext  ProviderOperationPolicyContext `json:"operation_policy_context"`
 	ApprovalGateRef         ProviderApprovalGateReference  `json:"approval_gate_ref,omitempty"`
+}
+
+type followUpUpdatePullRequestSnapshot struct {
+	ExternalAccountID       string                         `json:"external_account_id"`
+	Target                  ProviderCommandTarget          `json:"target"`
+	Title                   string                         `json:"title,omitempty"`
+	TitleSet                bool                           `json:"title_set,omitempty"`
+	BodyDigest              string                         `json:"body_digest,omitempty"`
+	BodySet                 bool                           `json:"body_set,omitempty"`
+	Labels                  *ProviderStringListPatch       `json:"labels,omitempty"`
+	AssigneeProviderLogins  *ProviderStringListPatch       `json:"assignee_provider_logins,omitempty"`
+	Milestone               string                         `json:"milestone,omitempty"`
+	MilestoneSet            bool                           `json:"milestone_set,omitempty"`
+	State                   string                         `json:"state,omitempty"`
+	StateSet                bool                           `json:"state_set,omitempty"`
+	BaseBranch              string                         `json:"base_branch,omitempty"`
+	BaseBranchSet           bool                           `json:"base_branch_set,omitempty"`
+	MaintainerCanModify     bool                           `json:"maintainer_can_modify,omitempty"`
+	MaintainerCanModifySet  bool                           `json:"maintainer_can_modify_set,omitempty"`
+	WatermarkJSON           string                         `json:"watermark_json,omitempty"`
+	WatermarkJSONSet        bool                           `json:"watermark_json_set,omitempty"`
+	ExpectedProviderVersion string                         `json:"expected_provider_version"`
+	OperationPolicyContext  ProviderOperationPolicyContext `json:"operation_policy_context"`
+	ApprovalGateRef         ProviderApprovalGateReference  `json:"approval_gate_ref,omitempty"`
+}
+
+type followUpReviewSignalSnapshot struct {
+	ExternalAccountID      string                         `json:"external_account_id"`
+	Target                 ProviderCommandTarget          `json:"target"`
+	Kind                   string                         `json:"kind"`
+	BodyDigest             string                         `json:"body_digest,omitempty"`
+	BodySet                bool                           `json:"body_set,omitempty"`
+	InlineComments         []followUpReviewInlineSnapshot `json:"inline_comments,omitempty"`
+	OperationPolicyContext ProviderOperationPolicyContext `json:"operation_policy_context"`
+	ApprovalGateRef        ProviderApprovalGateReference  `json:"approval_gate_ref,omitempty"`
+}
+
+type followUpReviewInlineSnapshot struct {
+	PathDigest                 string `json:"path_digest"`
+	BodyDigest                 string `json:"body_digest"`
+	Line                       int64  `json:"line,omitempty"`
+	LineSet                    bool   `json:"line_set,omitempty"`
+	StartLine                  int64  `json:"start_line,omitempty"`
+	StartLineSet               bool   `json:"start_line_set,omitempty"`
+	Side                       string `json:"side,omitempty"`
+	StartSide                  string `json:"start_side,omitempty"`
+	InReplyToProviderCommentID string `json:"in_reply_to_provider_comment_id,omitempty"`
 }
 
 func (s *Service) CreateFollowUpIntent(ctx context.Context, input CreateFollowUpIntentInput) (entity.FollowUpIntent, error) {
@@ -377,6 +428,12 @@ func normalizeFollowUpDispatchCommand(intent entity.FollowUpIntent, input Dispat
 	case FollowUpDispatchKindUpdateComment:
 		updateComment, detail, normalizeErr := normalizeFollowUpUpdateCommentCommand(input.Meta, providerMeta, input.OperationPolicyContext, input.ApprovalGateRef, *input.UpdateComment)
 		providerCommand, providerDetail, err = updateComment, detail, normalizeErr
+	case FollowUpDispatchKindUpdatePullRequest:
+		updatePullRequest, detail, normalizeErr := normalizeFollowUpUpdatePullRequestCommand(input.Meta, providerMeta, input.OperationPolicyContext, input.ApprovalGateRef, *input.UpdatePullRequest)
+		providerCommand, providerDetail, err = updatePullRequest, detail, normalizeErr
+	case FollowUpDispatchKindCreateReviewSignal:
+		reviewSignal, detail, normalizeErr := normalizeFollowUpCreateReviewSignalCommand(input.Meta, providerMeta, input.OperationPolicyContext, input.ApprovalGateRef, *input.CreateReviewSignal)
+		providerCommand, providerDetail, err = reviewSignal, detail, normalizeErr
 	default:
 		return followUpProviderCommand{}, followUpDispatchSnapshot{}, errs.ErrInvalidArgument
 	}
@@ -428,6 +485,20 @@ func applyFollowUpDispatchCommand(command *followUpProviderCommand, snapshot *fo
 		}
 		command.UpdateComment = &typed
 		snapshot.UpdateComment = &typedDetail
+	case ProviderUpdatePullRequestInput:
+		typedDetail, ok := detail.(followUpUpdatePullRequestSnapshot)
+		if !ok {
+			return errs.ErrInvalidArgument
+		}
+		command.UpdatePullRequest = &typed
+		snapshot.UpdatePullRequest = &typedDetail
+	case ProviderCreateReviewSignalInput:
+		typedDetail, ok := detail.(followUpReviewSignalSnapshot)
+		if !ok {
+			return errs.ErrInvalidArgument
+		}
+		command.CreateReviewSignal = &typed
+		snapshot.CreateReviewSignal = &typedDetail
 	default:
 		return errs.ErrInvalidArgument
 	}
@@ -456,6 +527,16 @@ func validateFollowUpDispatchTarget(intent entity.FollowUpIntent, command follow
 			return err
 		}
 		return requireFollowUpIntentTargetMatch(intent.ProviderTarget.WorkItemRef, followUpCommandTargetRefCandidates(command.UpdateComment.Target), false)
+	case FollowUpDispatchKindUpdatePullRequest:
+		if command.UpdatePullRequest == nil {
+			return errs.ErrInvalidArgument
+		}
+		return requireFollowUpIntentTargetMatch(intent.ProviderTarget.PullRequestRef, followUpCommandTargetRefCandidates(command.UpdatePullRequest.Target), true)
+	case FollowUpDispatchKindCreateReviewSignal:
+		if command.CreateReviewSignal == nil {
+			return errs.ErrInvalidArgument
+		}
+		return requireFollowUpIntentTargetMatch(intent.ProviderTarget.PullRequestRef, followUpCommandTargetRefCandidates(command.CreateReviewSignal.Target), true)
 	default:
 		return errs.ErrInvalidArgument
 	}
@@ -528,6 +609,10 @@ func followUpDispatchPolicy(providerCommand any) (ProviderOperationPolicyContext
 		return typed.OperationPolicyContext, typed.ApprovalGateRef, nil
 	case ProviderUpdateCommentInput:
 		return typed.OperationPolicyContext, typed.ApprovalGateRef, nil
+	case ProviderUpdatePullRequestInput:
+		return typed.OperationPolicyContext, typed.ApprovalGateRef, nil
+	case ProviderCreateReviewSignalInput:
+		return typed.OperationPolicyContext, typed.ApprovalGateRef, nil
 	default:
 		return ProviderOperationPolicyContext{}, ProviderApprovalGateReference{}, errs.ErrInvalidArgument
 	}
@@ -544,6 +629,8 @@ func selectedFollowUpDispatchKind(input DispatchFollowUpIntentInput) (FollowUpDi
 		{kind: FollowUpDispatchKindUpdateIssue, present: input.UpdateIssue != nil},
 		{kind: FollowUpDispatchKindCreateComment, present: input.CreateComment != nil},
 		{kind: FollowUpDispatchKindUpdateComment, present: input.UpdateComment != nil},
+		{kind: FollowUpDispatchKindUpdatePullRequest, present: input.UpdatePullRequest != nil},
+		{kind: FollowUpDispatchKindCreateReviewSignal, present: input.CreateReviewSignal != nil},
 	}
 	for _, candidate := range candidates {
 		if !candidate.present {
@@ -839,6 +926,170 @@ func normalizeFollowUpUpdateCommentCommand(callerMeta value.CommandMeta, provide
 	return command, snapshot, nil
 }
 
+func normalizeFollowUpUpdatePullRequestCommand(callerMeta value.CommandMeta, providerMeta value.CommandMeta, policyContext ProviderOperationPolicyContext, approvalRef ProviderApprovalGateReference, input FollowUpUpdatePullRequestCommand) (ProviderUpdatePullRequestInput, followUpUpdatePullRequestSnapshot, error) {
+	if input.ExternalAccountID == uuid.Nil {
+		return ProviderUpdatePullRequestInput{}, followUpUpdatePullRequestSnapshot{}, errs.ErrInvalidArgument
+	}
+	target, err := normalizeFollowUpPullRequestTarget(input.Target)
+	if err != nil {
+		return ProviderUpdatePullRequestInput{}, followUpUpdatePullRequestSnapshot{}, err
+	}
+	title, err := normalizeOptionalFollowUpText(input.SafeTitle, followUpTitleLimit, true)
+	if err != nil {
+		return ProviderUpdatePullRequestInput{}, followUpUpdatePullRequestSnapshot{}, err
+	}
+	body, err := normalizeOptionalFollowUpText(input.SafeBodyHint, followUpBodyLimit, true)
+	if err != nil {
+		return ProviderUpdatePullRequestInput{}, followUpUpdatePullRequestSnapshot{}, err
+	}
+	labels, err := normalizeFollowUpStringListPatch(input.Labels)
+	if err != nil {
+		return ProviderUpdatePullRequestInput{}, followUpUpdatePullRequestSnapshot{}, err
+	}
+	assignees, err := normalizeFollowUpStringListPatch(input.AssigneeProviderLogins)
+	if err != nil {
+		return ProviderUpdatePullRequestInput{}, followUpUpdatePullRequestSnapshot{}, err
+	}
+	milestone, err := normalizeOptionalFollowUpText(input.Milestone, followUpHintLimit, false)
+	if err != nil {
+		return ProviderUpdatePullRequestInput{}, followUpUpdatePullRequestSnapshot{}, err
+	}
+	state, err := normalizeOptionalFollowUpHint(input.State, true)
+	if err != nil {
+		return ProviderUpdatePullRequestInput{}, followUpUpdatePullRequestSnapshot{}, err
+	}
+	baseBranch, err := normalizeOptionalFollowUpHint(input.BaseBranch, true)
+	if err != nil {
+		return ProviderUpdatePullRequestInput{}, followUpUpdatePullRequestSnapshot{}, err
+	}
+	watermarkJSON, err := normalizeOptionalFollowUpCommandJSON(input.WatermarkJSON)
+	if err != nil {
+		return ProviderUpdatePullRequestInput{}, followUpUpdatePullRequestSnapshot{}, err
+	}
+	expectedProviderVersion, err := normalizeFollowUpRefText(input.ExpectedProviderVersion, true)
+	if err != nil {
+		return ProviderUpdatePullRequestInput{}, followUpUpdatePullRequestSnapshot{}, err
+	}
+	changedFields := followUpUpdatePullRequestChangedFields(title, body, labels, assignees, milestone, state, baseBranch, input.MaintainerCanModify, watermarkJSON)
+	if len(changedFields) == 0 {
+		return ProviderUpdatePullRequestInput{}, followUpUpdatePullRequestSnapshot{}, errs.ErrInvalidArgument
+	}
+	policy, err := normalizeFollowUpProviderPolicy(policyContext, followUpProviderPolicyInput{
+		OperationType: ProviderOperationTypeUpdatePullRequest,
+		TargetRef:     followUpProviderCommandTargetRef(target),
+		ChangedFields: changedFields,
+	})
+	if err != nil {
+		return ProviderUpdatePullRequestInput{}, followUpUpdatePullRequestSnapshot{}, err
+	}
+	approval, err := normalizeFollowUpApprovalGateRef(approvalRef)
+	if err != nil {
+		return ProviderUpdatePullRequestInput{}, followUpUpdatePullRequestSnapshot{}, err
+	}
+	providerMeta.Actor = callerMeta.Actor
+	command := ProviderUpdatePullRequestInput{
+		Meta:                    providerMeta,
+		Target:                  target,
+		Title:                   title,
+		Body:                    body,
+		Labels:                  labels,
+		AssigneeProviderLogins:  assignees,
+		Milestone:               milestone,
+		State:                   state,
+		BaseBranch:              baseBranch,
+		MaintainerCanModify:     input.MaintainerCanModify,
+		WatermarkJSON:           watermarkJSON,
+		ExpectedProviderVersion: expectedProviderVersion,
+		OperationPolicyContext:  policy,
+		ApprovalGateRef:         approval,
+		ExternalAccountID:       input.ExternalAccountID,
+	}
+	snapshot := followUpUpdatePullRequestSnapshot{
+		ExternalAccountID:       input.ExternalAccountID.String(),
+		Target:                  target,
+		Title:                   optionalStringValue(command.Title),
+		TitleSet:                command.Title != nil,
+		BodyDigest:              optionalBodyDigest(command.Body),
+		BodySet:                 command.Body != nil,
+		Labels:                  cloneProviderStringListPatch(labels),
+		AssigneeProviderLogins:  cloneProviderStringListPatch(assignees),
+		Milestone:               optionalStringValue(command.Milestone),
+		MilestoneSet:            command.Milestone != nil,
+		State:                   optionalStringValue(command.State),
+		StateSet:                command.State != nil,
+		BaseBranch:              optionalStringValue(command.BaseBranch),
+		BaseBranchSet:           command.BaseBranch != nil,
+		MaintainerCanModify:     optionalBoolValue(command.MaintainerCanModify),
+		MaintainerCanModifySet:  command.MaintainerCanModify != nil,
+		WatermarkJSON:           optionalBytesString(command.WatermarkJSON),
+		WatermarkJSONSet:        command.WatermarkJSON != nil,
+		ExpectedProviderVersion: expectedProviderVersion,
+		OperationPolicyContext:  policy,
+		ApprovalGateRef:         approval,
+	}
+	return command, snapshot, nil
+}
+
+func normalizeFollowUpCreateReviewSignalCommand(callerMeta value.CommandMeta, providerMeta value.CommandMeta, policyContext ProviderOperationPolicyContext, approvalRef ProviderApprovalGateReference, input FollowUpCreateReviewSignalCommand) (ProviderCreateReviewSignalInput, followUpReviewSignalSnapshot, error) {
+	if input.ExternalAccountID == uuid.Nil {
+		return ProviderCreateReviewSignalInput{}, followUpReviewSignalSnapshot{}, errs.ErrInvalidArgument
+	}
+	target, err := normalizeFollowUpPullRequestTarget(input.Target)
+	if err != nil {
+		return ProviderCreateReviewSignalInput{}, followUpReviewSignalSnapshot{}, err
+	}
+	kind, err := normalizeProviderReviewSignalKind(input.Kind)
+	if err != nil {
+		return ProviderCreateReviewSignalInput{}, followUpReviewSignalSnapshot{}, err
+	}
+	body, bodySet, err := normalizeFollowUpReviewSignalBody(input.SafeBodyHint)
+	if err != nil {
+		return ProviderCreateReviewSignalInput{}, followUpReviewSignalSnapshot{}, err
+	}
+	inlineComments, inlineSnapshot, err := normalizeFollowUpReviewInlineComments(input.InlineComments)
+	if err != nil {
+		return ProviderCreateReviewSignalInput{}, followUpReviewSignalSnapshot{}, err
+	}
+	if kind != ProviderReviewSignalKindApproval && body == "" && len(inlineComments) == 0 {
+		return ProviderCreateReviewSignalInput{}, followUpReviewSignalSnapshot{}, errs.ErrInvalidArgument
+	}
+	changedFields := followUpCreateReviewSignalChangedFields(bodySet, len(inlineComments) > 0)
+	policy, err := normalizeFollowUpProviderPolicy(policyContext, followUpProviderPolicyInput{
+		OperationType: ProviderOperationTypeCreateReviewSignal,
+		TargetRef:     followUpProviderCommandTargetRef(target),
+		ChangedFields: changedFields,
+	})
+	if err != nil {
+		return ProviderCreateReviewSignalInput{}, followUpReviewSignalSnapshot{}, err
+	}
+	approval, err := normalizeFollowUpApprovalGateRef(approvalRef)
+	if err != nil {
+		return ProviderCreateReviewSignalInput{}, followUpReviewSignalSnapshot{}, err
+	}
+	providerMeta.Actor = callerMeta.Actor
+	command := ProviderCreateReviewSignalInput{
+		Meta:                   providerMeta,
+		Target:                 target,
+		Kind:                   kind,
+		Body:                   body,
+		InlineComments:         inlineComments,
+		OperationPolicyContext: policy,
+		ApprovalGateRef:        approval,
+		ExternalAccountID:      input.ExternalAccountID,
+	}
+	snapshot := followUpReviewSignalSnapshot{
+		ExternalAccountID:      input.ExternalAccountID.String(),
+		Target:                 target,
+		Kind:                   string(kind),
+		BodyDigest:             optionalReviewBodyDigest(body, bodySet),
+		BodySet:                bodySet,
+		InlineComments:         inlineSnapshot,
+		OperationPolicyContext: policy,
+		ApprovalGateRef:        approval,
+	}
+	return command, snapshot, nil
+}
+
 func reserveFollowUpDispatch(ctx context.Context, service *Service, intent entity.FollowUpIntent, previousVersion int64, snapshot followUpDispatchSnapshot) (entity.FollowUpIntent, error) {
 	reserved := intent
 	reserved.ProviderOperationRef = followUpProviderCommandRef(snapshot.ProviderCommandID)
@@ -904,6 +1155,19 @@ func normalizeFollowUpProviderCommandTarget(target ProviderCommandTarget, requir
 		return ProviderCommandTarget{}, errs.ErrInvalidArgument
 	}
 	return target, nil
+}
+
+func normalizeFollowUpPullRequestTarget(target ProviderCommandTarget) (ProviderCommandTarget, error) {
+	normalized, err := normalizeFollowUpProviderCommandTarget(target, true)
+	if err != nil {
+		return ProviderCommandTarget{}, err
+	}
+	switch normalized.WorkItemKind {
+	case "pull_request", "merge_request":
+		return normalized, nil
+	default:
+		return ProviderCommandTarget{}, errs.ErrInvalidArgument
+	}
 }
 
 func normalizeFollowUpWorkItemKind(kind string) (string, error) {
@@ -1087,11 +1351,127 @@ func optionalBytesString(value *[]byte) string {
 	return string(*value)
 }
 
+func optionalBoolValue(value *bool) bool {
+	if value == nil {
+		return false
+	}
+	return *value
+}
+
 func cloneProviderStringListPatch(patch *ProviderStringListPatch) *ProviderStringListPatch {
 	if patch == nil {
 		return nil
 	}
 	return &ProviderStringListPatch{Values: append([]string(nil), patch.Values...)}
+}
+
+func normalizeProviderReviewSignalKind(kind ProviderReviewSignalKind) (ProviderReviewSignalKind, error) {
+	switch ProviderReviewSignalKind(strings.TrimSpace(string(kind))) {
+	case ProviderReviewSignalKindComment:
+		return ProviderReviewSignalKindComment, nil
+	case ProviderReviewSignalKindApproval:
+		return ProviderReviewSignalKindApproval, nil
+	case ProviderReviewSignalKindChangesRequested:
+		return ProviderReviewSignalKindChangesRequested, nil
+	default:
+		return "", errs.ErrInvalidArgument
+	}
+}
+
+func normalizeFollowUpReviewSignalBody(value *string) (string, bool, error) {
+	if value == nil {
+		return "", false, nil
+	}
+	body, err := normalizeFollowUpText(*value, followUpBodyLimit, false)
+	if err != nil {
+		return "", false, err
+	}
+	return body, true, nil
+}
+
+func normalizeFollowUpReviewInlineComments(comments []ProviderReviewInlineComment) ([]ProviderReviewInlineComment, []followUpReviewInlineSnapshot, error) {
+	if len(comments) == 0 {
+		return nil, nil, nil
+	}
+	result := make([]ProviderReviewInlineComment, 0, len(comments))
+	snapshot := make([]followUpReviewInlineSnapshot, 0, len(comments))
+	for _, comment := range comments {
+		path, err := normalizeFollowUpText(comment.Path, followUpRefTextLimit, true)
+		if err != nil {
+			return nil, nil, err
+		}
+		body, err := normalizeFollowUpText(comment.Body, followUpBodyLimit, true)
+		if err != nil {
+			return nil, nil, err
+		}
+		line, err := normalizeOptionalPositiveFollowUpLine(comment.Line)
+		if err != nil {
+			return nil, nil, err
+		}
+		startLine, err := normalizeOptionalPositiveFollowUpLine(comment.StartLine)
+		if err != nil {
+			return nil, nil, err
+		}
+		side, err := normalizeFollowUpHint(comment.Side)
+		if err != nil {
+			return nil, nil, err
+		}
+		startSide, err := normalizeFollowUpHint(comment.StartSide)
+		if err != nil {
+			return nil, nil, err
+		}
+		replyID, err := normalizeFollowUpRefText(comment.InReplyToProviderCommentID, false)
+		if err != nil {
+			return nil, nil, err
+		}
+		normalized := ProviderReviewInlineComment{
+			Path:                       path,
+			Body:                       body,
+			Line:                       line,
+			StartLine:                  startLine,
+			Side:                       side,
+			StartSide:                  startSide,
+			InReplyToProviderCommentID: replyID,
+		}
+		result = append(result, normalized)
+		snapshot = append(snapshot, followUpReviewInlineSnapshot{
+			PathDigest:                 followUpBodyDigest(path),
+			BodyDigest:                 followUpBodyDigest(body),
+			Line:                       optionalInt64Value(line),
+			LineSet:                    line != nil,
+			StartLine:                  optionalInt64Value(startLine),
+			StartLineSet:               startLine != nil,
+			Side:                       side,
+			StartSide:                  startSide,
+			InReplyToProviderCommentID: replyID,
+		})
+	}
+	return result, snapshot, nil
+}
+
+func normalizeOptionalPositiveFollowUpLine(value *int64) (*int64, error) {
+	if value == nil {
+		return nil, nil
+	}
+	if *value <= 0 {
+		return nil, errs.ErrInvalidArgument
+	}
+	line := *value
+	return &line, nil
+}
+
+func optionalInt64Value(value *int64) int64 {
+	if value == nil {
+		return 0
+	}
+	return *value
+}
+
+func optionalReviewBodyDigest(body string, set bool) string {
+	if !set {
+		return ""
+	}
+	return followUpBodyDigest(body)
 }
 
 func followUpProviderCommandMeta(meta value.CommandMeta, intentID uuid.UUID, kind FollowUpDispatchKind) value.CommandMeta {
@@ -1159,6 +1539,51 @@ func followUpUpdateIssueChangedFields(title *string, body *string, labels *Provi
 	return fields
 }
 
+func followUpUpdatePullRequestChangedFields(title *string, body *string, labels *ProviderStringListPatch, assignees *ProviderStringListPatch, milestone *string, state *string, baseBranch *string, maintainerCanModify *bool, watermarkJSON *[]byte) []string {
+	fields := make([]string, 0, 9)
+	if title != nil {
+		fields = append(fields, "title")
+	}
+	if body != nil {
+		fields = append(fields, "body")
+	}
+	if labels != nil {
+		fields = append(fields, "labels")
+	}
+	if assignees != nil {
+		fields = append(fields, "assignee_provider_logins")
+	}
+	if milestone != nil {
+		fields = append(fields, "milestone")
+	}
+	if state != nil {
+		fields = append(fields, "state")
+	}
+	if baseBranch != nil {
+		fields = append(fields, "base_branch")
+	}
+	if maintainerCanModify != nil {
+		fields = append(fields, "maintainer_can_modify")
+	}
+	if watermarkJSON != nil {
+		fields = append(fields, "watermark_json")
+	}
+	sort.Strings(fields)
+	return fields
+}
+
+func followUpCreateReviewSignalChangedFields(bodySet bool, hasInlineComments bool) []string {
+	fields := []string{"kind"}
+	if bodySet {
+		fields = append(fields, "body")
+	}
+	if hasInlineComments {
+		fields = append(fields, "inline_comments")
+	}
+	sort.Strings(fields)
+	return fields
+}
+
 func followUpProviderCommandTargetRef(target ProviderCommandTarget) string {
 	if target.ProviderSlug != "" && target.RepositoryFullName != "" && target.Number > 0 {
 		kind := target.WorkItemKind
@@ -1190,7 +1615,9 @@ func validFollowUpDispatchKind(kind FollowUpDispatchKind) bool {
 	case FollowUpDispatchKindCreateIssue,
 		FollowUpDispatchKindUpdateIssue,
 		FollowUpDispatchKindCreateComment,
-		FollowUpDispatchKindUpdateComment:
+		FollowUpDispatchKindUpdateComment,
+		FollowUpDispatchKindUpdatePullRequest,
+		FollowUpDispatchKindCreateReviewSignal:
 		return true
 	default:
 		return false
@@ -1380,6 +1807,16 @@ func dispatchFollowUpProviderCommand(ctx context.Context, dispatcher ProviderFol
 			return ProviderCommandResult{}, errs.ErrInvalidArgument
 		}
 		return dispatcher.UpdateComment(ctx, *command.UpdateComment)
+	case FollowUpDispatchKindUpdatePullRequest:
+		if command.UpdatePullRequest == nil {
+			return ProviderCommandResult{}, errs.ErrInvalidArgument
+		}
+		return dispatcher.UpdatePullRequest(ctx, *command.UpdatePullRequest)
+	case FollowUpDispatchKindCreateReviewSignal:
+		if command.CreateReviewSignal == nil {
+			return ProviderCommandResult{}, errs.ErrInvalidArgument
+		}
+		return dispatcher.CreateReviewSignal(ctx, *command.CreateReviewSignal)
 	default:
 		return ProviderCommandResult{}, errs.ErrInvalidArgument
 	}
@@ -1407,6 +1844,12 @@ func applyFollowUpProviderResult(intent entity.FollowUpIntent, result ProviderCo
 		case FollowUpDispatchKindCreateComment, FollowUpDispatchKindUpdateComment:
 			intent.ProviderTarget.CommentRef = resultRef
 			intent.Status = enum.FollowUpIntentStatusCommented
+		case FollowUpDispatchKindUpdatePullRequest:
+			intent.ProviderTarget.PullRequestRef = resultRef
+			intent.Status = enum.FollowUpIntentStatusUpdated
+		case FollowUpDispatchKindCreateReviewSignal:
+			intent.ProviderTarget.ReviewSignalRef = resultRef
+			intent.Status = enum.FollowUpIntentStatusReviewSignaled
 		default:
 			return entity.FollowUpIntent{}, errs.ErrDependencyUnavailable
 		}
@@ -1424,7 +1867,11 @@ func followUpProviderResultRef(result ProviderCommandResult, kind FollowUpDispat
 		result.Target.WebURL,
 	}
 	if result.Target.ProviderSlug != "" && result.Target.RepositoryFullName != "" && result.Target.Number > 0 {
-		candidates = append(candidates, result.Target.ProviderSlug+":repo:"+result.Target.RepositoryFullName+":"+followUpResultRefKind(kind)+":"+strconv.FormatInt(result.Target.Number, 10))
+		refKind := followUpResultRefKind(kind)
+		if kind == FollowUpDispatchKindUpdatePullRequest && result.Target.WorkItemKind != "" {
+			refKind = result.Target.WorkItemKind
+		}
+		candidates = append(candidates, result.Target.ProviderSlug+":repo:"+result.Target.RepositoryFullName+":"+refKind+":"+strconv.FormatInt(result.Target.Number, 10))
 	}
 	if result.Target.ProviderSlug != "" && result.Target.ProviderObjectID != "" {
 		candidates = append(candidates, result.Target.ProviderSlug+":object:"+result.Target.ProviderObjectID)
@@ -1442,6 +1889,10 @@ func followUpResultRefKind(kind FollowUpDispatchKind) string {
 	switch kind {
 	case FollowUpDispatchKindCreateComment, FollowUpDispatchKindUpdateComment:
 		return "comment"
+	case FollowUpDispatchKindUpdatePullRequest:
+		return "pull_request"
+	case FollowUpDispatchKindCreateReviewSignal:
+		return "review_signal"
 	default:
 		return "issue"
 	}
@@ -1755,6 +2206,14 @@ func normalizeFollowUpDispatchSnapshot(snapshot *followUpDispatchSnapshot) {
 	}
 	if snapshot.UpdateComment != nil {
 		normalizeFollowUpPolicySnapshot(&snapshot.UpdateComment.OperationPolicyContext)
+	}
+	if snapshot.UpdatePullRequest != nil {
+		normalizeProviderStringListPatch(snapshot.UpdatePullRequest.Labels)
+		normalizeProviderStringListPatch(snapshot.UpdatePullRequest.AssigneeProviderLogins)
+		normalizeFollowUpPolicySnapshot(&snapshot.UpdatePullRequest.OperationPolicyContext)
+	}
+	if snapshot.CreateReviewSignal != nil {
+		normalizeFollowUpPolicySnapshot(&snapshot.CreateReviewSignal.OperationPolicyContext)
 	}
 }
 

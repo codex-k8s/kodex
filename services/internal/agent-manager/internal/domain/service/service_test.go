@@ -2091,6 +2091,12 @@ func TestDispatchFollowUpIntentUpdateAndCommentPaths(t *testing.T) {
 		WorkItemKind:       "issue",
 		Number:             42,
 	}
+	pullRequestTarget := ProviderCommandTarget{
+		ProviderSlug:       "github",
+		RepositoryFullName: "codex-k8s/kodex",
+		WorkItemKind:       "pull_request",
+		Number:             77,
+	}
 	policy := ProviderOperationPolicyContext{
 		ProjectID:    projectID.String(),
 		RepositoryID: repositoryID.String(),
@@ -2205,6 +2211,139 @@ func TestDispatchFollowUpIntentUpdateAndCommentPaths(t *testing.T) {
 			t.Fatalf("event = %+v", repository.updateFollowUpEvent)
 		}
 	})
+
+	t.Run("update pull request", func(t *testing.T) {
+		t.Parallel()
+		intentID := uuid.MustParse("89898989-bbbb-cccc-dddd-333333333333")
+		sessionID := uuid.MustParse("89898989-bbbb-cccc-dddd-444444444444")
+		expectedVersion := int64(5)
+		body := "Bounded PR update."
+		baseBranch := "release"
+		intent := entity.FollowUpIntent{
+			VersionedBase:        entity.VersionedBase{ID: intentID, Version: expectedVersion},
+			SessionID:            sessionID,
+			ProviderTarget:       value.ProviderTargetRef{PullRequestRef: "github:pull_request:77"},
+			ProviderWorkItemType: "review",
+			SafeTitle:            "Prepare review follow-up",
+			Status:               enum.FollowUpIntentStatusRequested,
+		}
+		dispatcher := &fakeProviderFollowUpDispatcher{result: ProviderCommandResult{
+			ProviderOperationRef: "provider_operation:pr-op",
+			ResultRef:            "github:pull_request:77",
+			Target:               pullRequestTarget,
+			Status:               ProviderOperationStatusSucceeded,
+		}}
+		repository := &fakeRepository{followUpByID: map[uuid.UUID]entity.FollowUpIntent{intentID: intent}}
+		service := New(Config{
+			Repository:                 repository,
+			IDGenerator:                &sequenceIDGenerator{ids: []uuid.UUID{uuid.MustParse("89898989-bbbb-cccc-dddd-555555555555")}},
+			ProviderFollowUpDispatcher: dispatcher,
+		})
+
+		updated, err := service.DispatchFollowUpIntent(context.Background(), DispatchFollowUpIntentInput{
+			Meta:             value.CommandMeta{CommandID: uuid.MustParse("89898989-bbbb-cccc-dddd-666666666666"), ExpectedVersion: &expectedVersion, Actor: testActor()},
+			FollowUpIntentID: intentID,
+			DispatchKind:     FollowUpDispatchKindUpdatePullRequest,
+			UpdatePullRequest: &FollowUpUpdatePullRequestCommand{
+				ExternalAccountID:       accountID,
+				Target:                  pullRequestTarget,
+				SafeBodyHint:            &body,
+				BaseBranch:              &baseBranch,
+				ExpectedProviderVersion: "etag:77",
+			},
+			OperationPolicyContext: policy,
+		})
+		if err != nil {
+			t.Fatalf("DispatchFollowUpIntent() err = %v", err)
+		}
+		if updated.Status != enum.FollowUpIntentStatusUpdated || updated.ProviderTarget.PullRequestRef != "github:pull_request:77" {
+			t.Fatalf("updated = %+v", updated)
+		}
+		if dispatcher.updatePullRequestCalls != 1 || dispatcher.updatePullRequestInput.Body == nil || *dispatcher.updatePullRequestInput.Body != body ||
+			dispatcher.updatePullRequestInput.ExpectedProviderVersion != "etag:77" {
+			t.Fatalf("update pull request input = %+v calls=%d", dispatcher.updatePullRequestInput, dispatcher.updatePullRequestCalls)
+		}
+		if dispatcher.updatePullRequestInput.OperationPolicyContext.OperationType != ProviderOperationTypeUpdatePullRequest ||
+			!sameStringSet(dispatcher.updatePullRequestInput.OperationPolicyContext.ChangedFields, []string{"base_branch", "body"}) {
+			t.Fatalf("policy = %+v", dispatcher.updatePullRequestInput.OperationPolicyContext)
+		}
+		if repository.updateFollowUpEvent == nil || repository.updateFollowUpEvent.EventType != agentevents.EventFollowUpUpdated {
+			t.Fatalf("event = %+v", repository.updateFollowUpEvent)
+		}
+		if strings.Contains(string(repository.updateFollowUpResult.ResultPayload), body) {
+			t.Fatalf("raw body stored in result payload: %s", repository.updateFollowUpResult.ResultPayload)
+		}
+	})
+
+	t.Run("create review signal", func(t *testing.T) {
+		t.Parallel()
+		intentID := uuid.MustParse("89898989-bbbb-cccc-dddd-777777777777")
+		sessionID := uuid.MustParse("89898989-bbbb-cccc-dddd-888888888888")
+		expectedVersion := int64(6)
+		body := "Bounded review signal."
+		inlineBody := "Bounded inline note."
+		line := int64(12)
+		intent := entity.FollowUpIntent{
+			VersionedBase:        entity.VersionedBase{ID: intentID, Version: expectedVersion},
+			SessionID:            sessionID,
+			ProviderTarget:       value.ProviderTargetRef{PullRequestRef: "github:pull_request:77"},
+			ProviderWorkItemType: "review",
+			SafeTitle:            "Prepare review follow-up",
+			Status:               enum.FollowUpIntentStatusRequested,
+		}
+		dispatcher := &fakeProviderFollowUpDispatcher{result: ProviderCommandResult{
+			ProviderOperationRef: "provider_operation:review-op",
+			ResultRef:            "github:review_signal:990",
+			Target:               pullRequestTarget,
+			Status:               ProviderOperationStatusSucceeded,
+		}}
+		repository := &fakeRepository{followUpByID: map[uuid.UUID]entity.FollowUpIntent{intentID: intent}}
+		service := New(Config{
+			Repository:                 repository,
+			IDGenerator:                &sequenceIDGenerator{ids: []uuid.UUID{uuid.MustParse("89898989-bbbb-cccc-dddd-999999999999")}},
+			ProviderFollowUpDispatcher: dispatcher,
+		})
+
+		updated, err := service.DispatchFollowUpIntent(context.Background(), DispatchFollowUpIntentInput{
+			Meta:             value.CommandMeta{CommandID: uuid.MustParse("89898989-cccc-dddd-eeee-111111111111"), ExpectedVersion: &expectedVersion, Actor: testActor()},
+			FollowUpIntentID: intentID,
+			DispatchKind:     FollowUpDispatchKindCreateReviewSignal,
+			CreateReviewSignal: &FollowUpCreateReviewSignalCommand{
+				ExternalAccountID: accountID,
+				Target:            pullRequestTarget,
+				Kind:              ProviderReviewSignalKindChangesRequested,
+				SafeBodyHint:      &body,
+				InlineComments: []ProviderReviewInlineComment{{
+					Path: "services/internal/agent-manager/internal/domain/service/service_test.go",
+					Body: inlineBody,
+					Line: &line,
+					Side: "RIGHT",
+				}},
+			},
+			OperationPolicyContext: policy,
+		})
+		if err != nil {
+			t.Fatalf("DispatchFollowUpIntent() err = %v", err)
+		}
+		if updated.Status != enum.FollowUpIntentStatusReviewSignaled || updated.ProviderTarget.ReviewSignalRef != "github:review_signal:990" {
+			t.Fatalf("updated = %+v", updated)
+		}
+		if dispatcher.createReviewSignalCalls != 1 || dispatcher.createReviewSignalInput.Body != body ||
+			dispatcher.createReviewSignalInput.Kind != ProviderReviewSignalKindChangesRequested ||
+			len(dispatcher.createReviewSignalInput.InlineComments) != 1 {
+			t.Fatalf("review signal input = %+v calls=%d", dispatcher.createReviewSignalInput, dispatcher.createReviewSignalCalls)
+		}
+		if dispatcher.createReviewSignalInput.OperationPolicyContext.OperationType != ProviderOperationTypeCreateReviewSignal {
+			t.Fatalf("policy = %+v", dispatcher.createReviewSignalInput.OperationPolicyContext)
+		}
+		if repository.updateFollowUpEvent == nil || repository.updateFollowUpEvent.EventType != agentevents.EventFollowUpReviewSignaled {
+			t.Fatalf("event = %+v", repository.updateFollowUpEvent)
+		}
+		resultPayload := string(repository.updateFollowUpResult.ResultPayload)
+		if strings.Contains(resultPayload, body) || strings.Contains(resultPayload, inlineBody) {
+			t.Fatalf("raw review body stored in result payload: %s", repository.updateFollowUpResult.ResultPayload)
+		}
+	})
 }
 
 func TestDispatchFollowUpIntentRejectsMismatchedProviderTargets(t *testing.T) {
@@ -2228,6 +2367,14 @@ func TestDispatchFollowUpIntentRejectsMismatchedProviderTargets(t *testing.T) {
 	}
 	mismatchedIssueTarget := matchingIssueTarget
 	mismatchedIssueTarget.Number = 99
+	matchingPullRequestTarget := ProviderCommandTarget{
+		ProviderSlug:       "github",
+		RepositoryFullName: "codex-k8s/kodex",
+		WorkItemKind:       "pull_request",
+		Number:             77,
+	}
+	mismatchedPullRequestTarget := matchingPullRequestTarget
+	mismatchedPullRequestTarget.Number = 88
 
 	cases := []struct {
 		name   string
@@ -2292,6 +2439,46 @@ func TestDispatchFollowUpIntentRejectsMismatchedProviderTargets(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "update pull request target",
+			intent: entity.FollowUpIntent{
+				VersionedBase:        entity.VersionedBase{ID: uuid.MustParse("8b8b8b8b-1111-2222-3333-aaaaaaaaaaaa"), Version: expectedVersion},
+				SessionID:            uuid.MustParse("8b8b8b8b-1111-2222-3333-bbbbbbbbbbbb"),
+				ProviderTarget:       value.ProviderTargetRef{PullRequestRef: "github:pull_request:77"},
+				ProviderWorkItemType: "review",
+				SafeTitle:            "Prepare review follow-up",
+				Status:               enum.FollowUpIntentStatusRequested,
+			},
+			input: DispatchFollowUpIntentInput{
+				DispatchKind: FollowUpDispatchKindUpdatePullRequest,
+				UpdatePullRequest: &FollowUpUpdatePullRequestCommand{
+					ExternalAccountID:       accountID,
+					Target:                  mismatchedPullRequestTarget,
+					SafeBodyHint:            &body,
+					ExpectedProviderVersion: "etag:77",
+				},
+			},
+		},
+		{
+			name: "create review signal target",
+			intent: entity.FollowUpIntent{
+				VersionedBase:        entity.VersionedBase{ID: uuid.MustParse("8b8b8b8b-1111-2222-3333-cccccccccccc"), Version: expectedVersion},
+				SessionID:            uuid.MustParse("8b8b8b8b-1111-2222-3333-dddddddddddd"),
+				ProviderTarget:       value.ProviderTargetRef{PullRequestRef: "github:pull_request:77"},
+				ProviderWorkItemType: "review",
+				SafeTitle:            "Prepare review follow-up",
+				Status:               enum.FollowUpIntentStatusRequested,
+			},
+			input: DispatchFollowUpIntentInput{
+				DispatchKind: FollowUpDispatchKindCreateReviewSignal,
+				CreateReviewSignal: &FollowUpCreateReviewSignalCommand{
+					ExternalAccountID: accountID,
+					Target:            mismatchedPullRequestTarget,
+					Kind:              ProviderReviewSignalKindComment,
+					SafeBodyHint:      &body,
+				},
+			},
+		},
 	}
 
 	for _, tc := range cases {
@@ -2312,7 +2499,7 @@ func TestDispatchFollowUpIntentRejectsMismatchedProviderTargets(t *testing.T) {
 			if repository.updateFollowUpCalled {
 				t.Fatalf("reserved mismatched follow-up target")
 			}
-			if dispatcher.calls+dispatcher.updateIssueCalls+dispatcher.createCommentCalls+dispatcher.updateCommentCalls != 0 {
+			if dispatcher.calls+dispatcher.updateIssueCalls+dispatcher.createCommentCalls+dispatcher.updateCommentCalls+dispatcher.updatePullRequestCalls+dispatcher.createReviewSignalCalls != 0 {
 				t.Fatalf("provider dispatcher called on mismatched target: %+v", dispatcher)
 			}
 		})
@@ -3241,17 +3428,21 @@ func (f *fakeRuntimePreparer) PrepareRuntime(_ context.Context, input RuntimePre
 }
 
 type fakeProviderFollowUpDispatcher struct {
-	result             ProviderCommandResult
-	err                error
-	calls              int
-	input              ProviderCreateIssueInput
-	inputs             []ProviderCreateIssueInput
-	updateIssueCalls   int
-	updateIssueInput   ProviderUpdateIssueInput
-	createCommentCalls int
-	createCommentInput ProviderCreateCommentInput
-	updateCommentCalls int
-	updateCommentInput ProviderUpdateCommentInput
+	result                  ProviderCommandResult
+	err                     error
+	calls                   int
+	input                   ProviderCreateIssueInput
+	inputs                  []ProviderCreateIssueInput
+	updateIssueCalls        int
+	updateIssueInput        ProviderUpdateIssueInput
+	createCommentCalls      int
+	createCommentInput      ProviderCreateCommentInput
+	updateCommentCalls      int
+	updateCommentInput      ProviderUpdateCommentInput
+	updatePullRequestCalls  int
+	updatePullRequestInput  ProviderUpdatePullRequestInput
+	createReviewSignalCalls int
+	createReviewSignalInput ProviderCreateReviewSignalInput
 }
 
 func (f *fakeProviderFollowUpDispatcher) CreateIssue(_ context.Context, input ProviderCreateIssueInput) (ProviderCommandResult, error) {
@@ -3276,5 +3467,17 @@ func (f *fakeProviderFollowUpDispatcher) CreateComment(_ context.Context, input 
 func (f *fakeProviderFollowUpDispatcher) UpdateComment(_ context.Context, input ProviderUpdateCommentInput) (ProviderCommandResult, error) {
 	f.updateCommentCalls++
 	f.updateCommentInput = input
+	return f.result, f.err
+}
+
+func (f *fakeProviderFollowUpDispatcher) UpdatePullRequest(_ context.Context, input ProviderUpdatePullRequestInput) (ProviderCommandResult, error) {
+	f.updatePullRequestCalls++
+	f.updatePullRequestInput = input
+	return f.result, f.err
+}
+
+func (f *fakeProviderFollowUpDispatcher) CreateReviewSignal(_ context.Context, input ProviderCreateReviewSignalInput) (ProviderCommandResult, error) {
+	f.createReviewSignalCalls++
+	f.createReviewSignalInput = input
 	return f.result, f.err
 }

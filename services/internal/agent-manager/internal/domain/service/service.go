@@ -75,6 +75,8 @@ type ProviderFollowUpDispatcher interface {
 	UpdateIssue(context.Context, ProviderUpdateIssueInput) (ProviderCommandResult, error)
 	CreateComment(context.Context, ProviderCreateCommentInput) (ProviderCommandResult, error)
 	UpdateComment(context.Context, ProviderUpdateCommentInput) (ProviderCommandResult, error)
+	UpdatePullRequest(context.Context, ProviderUpdatePullRequestInput) (ProviderCommandResult, error)
+	CreateReviewSignal(context.Context, ProviderCreateReviewSignalInput) (ProviderCommandResult, error)
 }
 
 // DisabledGuidanceResolver keeps agent-manager runnable before package-hub is wired.
@@ -124,6 +126,16 @@ func (DisabledProviderFollowUpDispatcher) CreateComment(context.Context, Provide
 
 // UpdateComment reports that provider-hub write operations are unavailable.
 func (DisabledProviderFollowUpDispatcher) UpdateComment(context.Context, ProviderUpdateCommentInput) (ProviderCommandResult, error) {
+	return ProviderCommandResult{}, errs.ErrDependencyUnavailable
+}
+
+// UpdatePullRequest reports that provider-hub write operations are unavailable.
+func (DisabledProviderFollowUpDispatcher) UpdatePullRequest(context.Context, ProviderUpdatePullRequestInput) (ProviderCommandResult, error) {
+	return ProviderCommandResult{}, errs.ErrDependencyUnavailable
+}
+
+// CreateReviewSignal reports that provider-hub write operations are unavailable.
+func (DisabledProviderFollowUpDispatcher) CreateReviewSignal(context.Context, ProviderCreateReviewSignalInput) (ProviderCommandResult, error) {
 	return ProviderCommandResult{}, errs.ErrDependencyUnavailable
 }
 

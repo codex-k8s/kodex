@@ -560,6 +560,26 @@ func DispatchFollowUpIntentInput(request *agentsv1.DispatchFollowUpIntentRequest
 			return service.DispatchFollowUpIntentInput{}, err
 		}
 		input.UpdateComment = &updateComment
+	case service.FollowUpDispatchKindUpdatePullRequest:
+		command := request.GetUpdatePullRequest()
+		if command == nil {
+			return service.DispatchFollowUpIntentInput{}, errs.ErrInvalidArgument
+		}
+		updatePullRequest, err := followUpUpdatePullRequestCommandFromProto(command)
+		if err != nil {
+			return service.DispatchFollowUpIntentInput{}, err
+		}
+		input.UpdatePullRequest = &updatePullRequest
+	case service.FollowUpDispatchKindCreateReviewSignal:
+		command := request.GetCreateReviewSignal()
+		if command == nil {
+			return service.DispatchFollowUpIntentInput{}, errs.ErrInvalidArgument
+		}
+		reviewSignal, err := followUpCreateReviewSignalCommandFromProto(command)
+		if err != nil {
+			return service.DispatchFollowUpIntentInput{}, err
+		}
+		input.CreateReviewSignal = &reviewSignal
 	default:
 		return service.DispatchFollowUpIntentInput{}, errs.ErrInvalidArgument
 	}
@@ -644,6 +664,57 @@ func followUpUpdateCommentCommandFromProto(command *agentsv1.FollowUpUpdateComme
 		ProviderCommentID:       strings.TrimSpace(command.GetProviderCommentId()),
 		SafeBodyHint:            strings.TrimSpace(command.GetSafeBodyHint()),
 		ExpectedProviderVersion: strings.TrimSpace(command.GetExpectedProviderVersion()),
+	}, nil
+}
+
+func followUpUpdatePullRequestCommandFromProto(command *agentsv1.FollowUpUpdatePullRequestCommand) (service.FollowUpUpdatePullRequestCommand, error) {
+	externalAccountID, err := requiredUUID(command.GetExternalAccountId())
+	if err != nil {
+		return service.FollowUpUpdatePullRequestCommand{}, err
+	}
+	labels, err := providerStringListPatchFromProto(command.GetLabels())
+	if err != nil {
+		return service.FollowUpUpdatePullRequestCommand{}, err
+	}
+	assignees, err := providerStringListPatchFromProto(command.GetAssigneeProviderLogins())
+	if err != nil {
+		return service.FollowUpUpdatePullRequestCommand{}, err
+	}
+	return service.FollowUpUpdatePullRequestCommand{
+		ExternalAccountID:       externalAccountID,
+		Target:                  providerCommandTargetFromProto(command.GetTarget()),
+		SafeTitle:               optionalTrimmedString(command.SafeTitle),
+		SafeBodyHint:            optionalTrimmedString(command.SafeBodyHint),
+		Labels:                  labels,
+		AssigneeProviderLogins:  assignees,
+		Milestone:               optionalTrimmedString(command.Milestone),
+		State:                   optionalTrimmedString(command.State),
+		BaseBranch:              optionalTrimmedString(command.BaseBranch),
+		MaintainerCanModify:     command.MaintainerCanModify,
+		WatermarkJSON:           optionalBytesPtr(command.WatermarkJson),
+		ExpectedProviderVersion: strings.TrimSpace(command.GetExpectedProviderVersion()),
+	}, nil
+}
+
+func followUpCreateReviewSignalCommandFromProto(command *agentsv1.FollowUpCreateReviewSignalCommand) (service.FollowUpCreateReviewSignalCommand, error) {
+	externalAccountID, err := requiredUUID(command.GetExternalAccountId())
+	if err != nil {
+		return service.FollowUpCreateReviewSignalCommand{}, err
+	}
+	kind, err := providerReviewSignalKindFromProto(command.GetKind())
+	if err != nil {
+		return service.FollowUpCreateReviewSignalCommand{}, err
+	}
+	inlineComments, err := providerReviewInlineCommentsFromProto(command.GetInlineComments())
+	if err != nil {
+		return service.FollowUpCreateReviewSignalCommand{}, err
+	}
+	return service.FollowUpCreateReviewSignalCommand{
+		ExternalAccountID: externalAccountID,
+		Target:            providerCommandTargetFromProto(command.GetTarget()),
+		Kind:              kind,
+		SafeBodyHint:      optionalTrimmedString(command.SafeBodyHint),
+		InlineComments:    inlineComments,
 	}, nil
 }
 
@@ -1079,6 +1150,10 @@ func providerOperationTypeFromProto(operationType providersv1.ProviderOperationT
 		return service.ProviderOperationTypeCreateComment, nil
 	case providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_UPDATE_COMMENT:
 		return service.ProviderOperationTypeUpdateComment, nil
+	case providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_UPDATE_PULL_REQUEST:
+		return service.ProviderOperationTypeUpdatePullRequest, nil
+	case providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_REVIEW_SIGNAL:
+		return service.ProviderOperationTypeCreateReviewSignal, nil
 	default:
 		return "", errs.ErrInvalidArgument
 	}
@@ -1086,10 +1161,12 @@ func providerOperationTypeFromProto(operationType providersv1.ProviderOperationT
 
 func followUpDispatchKindFromProto(kind agentsv1.FollowUpDispatchKind) (service.FollowUpDispatchKind, error) {
 	kinds := map[agentsv1.FollowUpDispatchKind]service.FollowUpDispatchKind{
-		agentsv1.FollowUpDispatchKind_FOLLOW_UP_DISPATCH_KIND_CREATE_ISSUE:   service.FollowUpDispatchKindCreateIssue,
-		agentsv1.FollowUpDispatchKind_FOLLOW_UP_DISPATCH_KIND_UPDATE_ISSUE:   service.FollowUpDispatchKindUpdateIssue,
-		agentsv1.FollowUpDispatchKind_FOLLOW_UP_DISPATCH_KIND_CREATE_COMMENT: service.FollowUpDispatchKindCreateComment,
-		agentsv1.FollowUpDispatchKind_FOLLOW_UP_DISPATCH_KIND_UPDATE_COMMENT: service.FollowUpDispatchKindUpdateComment,
+		agentsv1.FollowUpDispatchKind_FOLLOW_UP_DISPATCH_KIND_CREATE_ISSUE:         service.FollowUpDispatchKindCreateIssue,
+		agentsv1.FollowUpDispatchKind_FOLLOW_UP_DISPATCH_KIND_UPDATE_ISSUE:         service.FollowUpDispatchKindUpdateIssue,
+		agentsv1.FollowUpDispatchKind_FOLLOW_UP_DISPATCH_KIND_CREATE_COMMENT:       service.FollowUpDispatchKindCreateComment,
+		agentsv1.FollowUpDispatchKind_FOLLOW_UP_DISPATCH_KIND_UPDATE_COMMENT:       service.FollowUpDispatchKindUpdateComment,
+		agentsv1.FollowUpDispatchKind_FOLLOW_UP_DISPATCH_KIND_UPDATE_PULL_REQUEST:  service.FollowUpDispatchKindUpdatePullRequest,
+		agentsv1.FollowUpDispatchKind_FOLLOW_UP_DISPATCH_KIND_CREATE_REVIEW_SIGNAL: service.FollowUpDispatchKindCreateReviewSignal,
 	}
 	if mapped, ok := kinds[kind]; ok {
 		return mapped, nil
@@ -1155,4 +1232,39 @@ func providerStringListPatchFromProto(patch *providersv1.StringListPatch) (*serv
 		return nil, nil
 	}
 	return &service.ProviderStringListPatch{Values: trimProtoStrings(patch.GetValues())}, nil
+}
+
+func providerReviewSignalKindFromProto(kind providersv1.ReviewSignalKind) (service.ProviderReviewSignalKind, error) {
+	switch kind {
+	case providersv1.ReviewSignalKind_REVIEW_SIGNAL_KIND_COMMENT:
+		return service.ProviderReviewSignalKindComment, nil
+	case providersv1.ReviewSignalKind_REVIEW_SIGNAL_KIND_APPROVAL:
+		return service.ProviderReviewSignalKindApproval, nil
+	case providersv1.ReviewSignalKind_REVIEW_SIGNAL_KIND_CHANGES_REQUESTED:
+		return service.ProviderReviewSignalKindChangesRequested, nil
+	default:
+		return "", errs.ErrInvalidArgument
+	}
+}
+
+func providerReviewInlineCommentsFromProto(comments []*providersv1.ReviewInlineComment) ([]service.ProviderReviewInlineComment, error) {
+	if len(comments) == 0 {
+		return nil, nil
+	}
+	result := make([]service.ProviderReviewInlineComment, 0, len(comments))
+	for _, comment := range comments {
+		if comment == nil {
+			return nil, errs.ErrInvalidArgument
+		}
+		result = append(result, service.ProviderReviewInlineComment{
+			Path:                       strings.TrimSpace(comment.GetPath()),
+			Body:                       strings.TrimSpace(comment.GetBody()),
+			Line:                       comment.Line,
+			StartLine:                  comment.StartLine,
+			Side:                       strings.TrimSpace(comment.GetSide()),
+			StartSide:                  strings.TrimSpace(comment.GetStartSide()),
+			InReplyToProviderCommentID: strings.TrimSpace(comment.GetInReplyToProviderCommentId()),
+		})
+	}
+	return result, nil
 }

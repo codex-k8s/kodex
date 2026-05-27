@@ -145,13 +145,14 @@ const (
 type FollowUpIntentStatus string
 
 const (
-	FollowUpIntentStatusPlanned   FollowUpIntentStatus = "planned"
-	FollowUpIntentStatusRequested FollowUpIntentStatus = "requested"
-	FollowUpIntentStatusCreated   FollowUpIntentStatus = "created"
-	FollowUpIntentStatusFailed    FollowUpIntentStatus = "failed"
-	FollowUpIntentStatusCancelled FollowUpIntentStatus = "cancelled"
-	FollowUpIntentStatusUpdated   FollowUpIntentStatus = "updated"
-	FollowUpIntentStatusCommented FollowUpIntentStatus = "commented"
+	FollowUpIntentStatusPlanned        FollowUpIntentStatus = "planned"
+	FollowUpIntentStatusRequested      FollowUpIntentStatus = "requested"
+	FollowUpIntentStatusCreated        FollowUpIntentStatus = "created"
+	FollowUpIntentStatusFailed         FollowUpIntentStatus = "failed"
+	FollowUpIntentStatusCancelled      FollowUpIntentStatus = "cancelled"
+	FollowUpIntentStatusUpdated        FollowUpIntentStatus = "updated"
+	FollowUpIntentStatusCommented      FollowUpIntentStatus = "commented"
+	FollowUpIntentStatusReviewSignaled FollowUpIntentStatus = "review_signaled"
 )
 
 type AgentActivityKind string
