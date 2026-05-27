@@ -11,6 +11,7 @@ import (
 	interactionservice "github.com/codex-k8s/kodex/services/internal/interaction-hub/internal/domain/service"
 	"github.com/codex-k8s/kodex/services/internal/interaction-hub/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/interaction-hub/internal/domain/types/enum"
+	"github.com/codex-k8s/kodex/services/internal/interaction-hub/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/interaction-hub/internal/domain/types/value"
 )
 
@@ -179,22 +180,45 @@ func ListOwnerInboxItemsInput(input *interactionsv1.ListOwnerInboxItemsRequest) 
 		return interactionservice.ListOwnerInboxItemsInput{}, err
 	}
 	result := interactionservice.ListOwnerInboxItemsInput{
-		Meta:               QueryMeta(input.GetMeta()),
-		Scope:              scope,
-		RequestKinds:       RequestKinds(input.GetRequestKinds()),
-		Statuses:           RequestStatuses(input.GetStatuses()),
-		SourceOwnerRef:     strings.TrimSpace(input.GetSourceOwnerRef()),
-		AssigneeRef:        ActorRef(input.GetAssigneeRef()),
-		ActorRef:           strings.TrimSpace(input.GetActorRef()),
-		CorrelationRef:     ExternalRef(input.GetCorrelationRef()),
-		CorrelationID:      strings.TrimSpace(input.GetCorrelationId()),
-		IncludeDiagnostics: input.GetIncludeDiagnostics(),
-		Page:               PageRequest(input.GetPage()),
+		Meta: QueryMeta(input.GetMeta()),
+		Filter: query.OwnerInboxFilter{
+			Scope:              scope,
+			RequestKinds:       RequestKinds(input.GetRequestKinds()),
+			Statuses:           RequestStatuses(input.GetStatuses()),
+			SourceOwnerRef:     strings.TrimSpace(input.GetSourceOwnerRef()),
+			AssigneeRef:        ActorRef(input.GetAssigneeRef()),
+			ActorRef:           strings.TrimSpace(input.GetActorRef()),
+			CorrelationRef:     ExternalRef(input.GetCorrelationRef()),
+			CorrelationID:      strings.TrimSpace(input.GetCorrelationId()),
+			IncludeDiagnostics: input.GetIncludeDiagnostics(),
+			Page:               PageRequest(input.GetPage()),
+		},
 	}
 	if input.SourceOwnerKind != nil {
-		result.SourceOwnerKind = SourceOwnerKind(input.GetSourceOwnerKind())
+		result.Filter.SourceOwnerKind = SourceOwnerKind(input.GetSourceOwnerKind())
 	}
 	return result, nil
+}
+
+func GetOwnerInboxItemInput(input *interactionsv1.GetOwnerInboxItemRequest) (interactionservice.GetOwnerInboxItemInput, error) {
+	if input == nil {
+		return interactionservice.GetOwnerInboxItemInput{}, errs.ErrInvalidArgument
+	}
+	requestID, err := ParseUUID(input.GetRequestId())
+	if err != nil {
+		return interactionservice.GetOwnerInboxItemInput{}, err
+	}
+	scope, err := ScopeRef(input.GetScope())
+	if err != nil {
+		return interactionservice.GetOwnerInboxItemInput{}, err
+	}
+	return interactionservice.GetOwnerInboxItemInput{
+		Meta:               QueryMeta(input.GetMeta()),
+		RequestID:          requestID,
+		Scope:              scope,
+		AssigneeRef:        ActorRef(input.GetAssigneeRef()),
+		IncludeDiagnostics: input.GetIncludeDiagnostics(),
+	}, nil
 }
 
 func InteractionRequestDraft(input *interactionsv1.InteractionRequestDraft) (interactionservice.InteractionRequestDraftInput, error) {
@@ -254,6 +278,10 @@ func ListOwnerInboxItemsResponse(items []entity.OwnerInboxItem, page value.PageR
 	return &interactionsv1.ListOwnerInboxItemsResponse{Items: castSlice(items, OwnerInboxItem), Page: PageResponse(page)}
 }
 
+func OwnerInboxItemResponse(item entity.OwnerInboxItem) *interactionsv1.OwnerInboxItemResponse {
+	return &interactionsv1.OwnerInboxItemResponse{Item: OwnerInboxItem(item)}
+}
+
 func OwnerInboxItem(item entity.OwnerInboxItem) *interactionsv1.OwnerInboxItem {
 	response := &interactionsv1.OwnerInboxItem{
 		RequestId:         item.Request.ID.String(),
@@ -273,6 +301,7 @@ func OwnerInboxItem(item entity.OwnerInboxItem) *interactionsv1.OwnerInboxItem {
 		UpdatedAt:         TimeProto(item.Request.UpdatedAt),
 		ResolvedAt:        OptionalTimeProto(item.Request.ResolvedAt),
 		Version:           item.Request.Version,
+		AllowedActions:    InteractionActionsProto(item.Request.AllowedActions),
 	}
 	if item.LatestCallback != nil {
 		response.LatestCallback = OwnerInboxCallbackSummary(*item.LatestCallback)

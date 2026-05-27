@@ -500,6 +500,9 @@ func TestRepositoryIntegrationDeliveryAttemptLifecycle(t *testing.T) {
 	if inboxItem.Request.ID != request.ID || inboxItem.DeliverySummary.AttemptCount != 1 || inboxItem.DeliverySummary.LatestDeliveryID != storedAccepted.DeliveryID {
 		t.Fatalf("owner inbox item = %+v, want request and delivery summary", inboxItem)
 	}
+	if len(inboxItem.Request.AllowedActions) == 0 || inboxItem.Request.AllowedActions[0].ActionKey != "approve" {
+		t.Fatalf("owner inbox allowed actions = %+v, want response actions for UI detail", inboxItem.Request.AllowedActions)
+	}
 	if inboxItem.LatestCallback == nil || inboxItem.LatestCallback.ID != callback.ID || inboxItem.LatestResponse == nil || inboxItem.LatestResponse.ID != callbackResponse.ID {
 		t.Fatalf("owner inbox callback=%+v response=%+v, want latest safe refs", inboxItem.LatestCallback, inboxItem.LatestResponse)
 	}
@@ -511,6 +514,32 @@ func TestRepositoryIntegrationDeliveryAttemptLifecycle(t *testing.T) {
 	}
 	if inboxItem.LatestCallback.CallbackSummary != "" {
 		t.Fatalf("owner inbox leaked callback summary: %q", inboxItem.LatestCallback.CallbackSummary)
+	}
+	detailItems, _, err := repository.ListOwnerInboxItems(ctx, query.OwnerInboxFilter{
+		RequestID:   request.ID,
+		Scope:       request.Scope,
+		Statuses:    []enum.InteractionRequestStatus{enum.InteractionRequestStatusAnswered},
+		AssigneeRef: value.ActorRef{Kind: "user", Ref: "approver-1"},
+		Page:        value.PageRequest{PageSize: 1},
+	})
+	if err != nil {
+		t.Fatalf("get owner inbox item via request filter: %v", err)
+	}
+	if len(detailItems) != 1 || detailItems[0].Request.ID != request.ID {
+		t.Fatalf("detail items = %+v, want request-filtered owner inbox item", detailItems)
+	}
+	mismatchItems, _, err := repository.ListOwnerInboxItems(ctx, query.OwnerInboxFilter{
+		RequestID:   request.ID,
+		Scope:       request.Scope,
+		Statuses:    []enum.InteractionRequestStatus{enum.InteractionRequestStatusAnswered},
+		AssigneeRef: value.ActorRef{Kind: "user", Ref: "someone-else"},
+		Page:        value.PageRequest{PageSize: 1},
+	})
+	if err != nil {
+		t.Fatalf("owner inbox item with mismatched assignee: %v", err)
+	}
+	if len(mismatchItems) != 0 {
+		t.Fatalf("mismatch items = %+v, want no owner inbox item for wrong assignee", mismatchItems)
 	}
 }
 

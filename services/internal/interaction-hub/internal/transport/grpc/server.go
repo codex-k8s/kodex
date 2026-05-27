@@ -27,6 +27,7 @@ type interactionService interface {
 	GetInteractionRequest(context.Context, interactionservice.GetInteractionRequestInput) (entity.InteractionRequest, error)
 	ListInteractionRequests(context.Context, interactionservice.ListInteractionRequestsInput) ([]entity.InteractionRequest, value.PageResult, error)
 	ListOwnerInboxItems(context.Context, interactionservice.ListOwnerInboxItemsInput) ([]entity.OwnerInboxItem, value.PageResult, error)
+	GetOwnerInboxItem(context.Context, interactionservice.GetOwnerInboxItemInput) (entity.OwnerInboxItem, error)
 	RequestNotification(context.Context, interactionservice.RequestNotificationInput) (entity.Notification, error)
 	UpsertSubscription(context.Context, interactionservice.UpsertSubscriptionInput) (entity.Subscription, error)
 	DisableSubscription(context.Context, interactionservice.DisableSubscriptionInput) (entity.Subscription, error)
@@ -114,6 +115,10 @@ func (s *Server) ListInteractionRequests(ctx context.Context, request *interacti
 
 func (s *Server) ListOwnerInboxItems(ctx context.Context, request *interactionsv1.ListOwnerInboxItemsRequest) (*interactionsv1.ListOwnerInboxItemsResponse, error) {
 	return pagedResponse(ctx, request, casters.ListOwnerInboxItemsInput, s.service.ListOwnerInboxItems, casters.ListOwnerInboxItemsResponse)
+}
+
+func (s *Server) GetOwnerInboxItem(ctx context.Context, request *interactionsv1.GetOwnerInboxItemRequest) (*interactionsv1.OwnerInboxItemResponse, error) {
+	return commandResponse(ctx, request, unaryCommand(casters.GetOwnerInboxItemInput, s.service.GetOwnerInboxItem, casters.OwnerInboxItemResponse))
 }
 
 func (s *Server) RequestNotification(ctx context.Context, request *interactionsv1.RequestNotificationRequest) (*interactionsv1.NotificationResponse, error) {

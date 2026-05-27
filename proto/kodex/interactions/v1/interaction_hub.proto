@@ -37,6 +37,8 @@ service InteractionHubService {
   rpc ListInteractionRequests(ListInteractionRequestsRequest) returns (ListInteractionRequestsResponse);
   // ListOwnerInboxItems returns a safe domain read surface for pending owner decisions and callback diagnostics.
   rpc ListOwnerInboxItems(ListOwnerInboxItemsRequest) returns (ListOwnerInboxItemsResponse);
+  // GetOwnerInboxItem returns one safe owner inbox item with delivery, callback and response summaries.
+  rpc GetOwnerInboxItem(GetOwnerInboxItemRequest) returns (OwnerInboxItemResponse);
 
   // RequestNotification creates a one-way notification or reminder intent.
   rpc RequestNotification(RequestNotificationRequest) returns (NotificationResponse);
@@ -739,6 +741,14 @@ message ListOwnerInboxItemsRequest {
   PageRequest page = 12;
 }
 
+message GetOwnerInboxItemRequest {
+  QueryMeta meta = 1;
+  string request_id = 2;
+  ScopeRef scope = 3;
+  ActorRef assignee_ref = 4;
+  bool include_diagnostics = 5;
+}
+
 message RequestNotificationRequest {
   CommandMeta meta = 1;
   ScopeRef scope = 2;
@@ -860,6 +870,7 @@ message OwnerInboxItem {
   string updated_at = 17;
   optional string resolved_at = 18;
   int64 version = 19;
+  repeated InteractionAction allowed_actions = 20;
 }
 
 message OwnerInboxDeliverySummary {
@@ -910,6 +921,10 @@ message OwnerInboxResponseSummary {
 message ListOwnerInboxItemsResponse {
   repeated OwnerInboxItem items = 1;
   PageResponse page = 2;
+}
+
+message OwnerInboxItemResponse {
+  OwnerInboxItem item = 1;
 }
 
 message NotificationResponse {

@@ -36,13 +36,14 @@
 | IH-7 | #867 | готово как owner inbox read surface | `ListOwnerInboxItems` отдаёт pending/active feedback, approval, Human gate и callback diagnostics с safe refs/status/summary, фильтрами по scope/kind/status/assignee/actor/correlation refs и пагинацией; `staff-gateway`/`operations-hub` не входят. |
 | IH-7b | #882 | готово как response boundary refs | `interaction.request.response_recorded` отдаёт safe request kind, scope, source owner, decision owner и context refs для owner resume без raw response text и без изменения чужого decision state. |
 | IH-8 | #911 | готово как Human gate response surface | Response producer/read surface отдаёт safe request/response refs, source/decision owner refs, agent/provider/governance context refs, normalized outcome, digest/object refs, timestamps, correlation и idempotency digest для owner resume без raw response/callback payload; `agent-manager` consumer не входит. |
+| IH-9a | #921 | готово как owner inbox UI-readiness | `GetOwnerInboxItem` даёт safe detail для будущего `staff-gateway` UI flow `list -> detail -> safe action`: request/source/decision/context refs, delivery/callback/response summaries, allowed actions, timestamps и version; ответ записывается существующим `RecordInteractionResponse`. |
 | IH-11 | #894 | готово как ops deploy contour | Dockerfile, Kubernetes manifests, migration Job, services.yaml inventory, smoke-проверка, runbook и monitoring docs подготовлены для первого backend deploy без новой бизнес-логики. |
 
 ## Текущий бэклог
 
 | Срез | Статус | Почему не завершён |
 |---|---|---|
-| IH-9+ | ожидает отдельные срезы | MCP, concrete channel packages, runtime worker, gateway/UI-связки и cross-domain inbox aggregation должны поставляться малыми PR. |
+| IH-9b+ | ожидает отдельные срезы | MCP, concrete channel packages, runtime worker, gateway/UI-связки и cross-domain inbox aggregation должны поставляться малыми PR. |
 
 ## Блокировки от других доменов
 
@@ -59,4 +60,4 @@
 
 ## Рекомендуемый следующий шаг
 
-Следующий рациональный срез — IH-8 или отдельный gateway/runtime срез: MCP-связка, staff-gateway/UI surface, cross-domain operations inbox, конкретные channel packages и runtime worker остаются вне `interaction-hub`.
+Следующий рациональный срез — отдельная MCP, gateway/runtime или operations aggregation связка: `interaction-hub` уже отдаёт safe owner inbox list/detail и response lifecycle, а cross-domain screen composition, concrete channel packages и runtime worker остаются вне домена.

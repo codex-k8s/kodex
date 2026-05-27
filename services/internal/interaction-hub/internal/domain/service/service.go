@@ -398,27 +398,38 @@ func (s *Service) ListOwnerInboxItems(ctx context.Context, input ListOwnerInboxI
 	if err != nil {
 		return nil, value.PageResult{}, err
 	}
-	items, page, err := s.repository.ListOwnerInboxItems(ctx, query.OwnerInboxFilter{
-		Scope:              input.Scope,
-		RequestKinds:       input.RequestKinds,
-		Statuses:           input.Statuses,
-		SourceOwnerKind:    input.SourceOwnerKind,
-		SourceOwnerRef:     input.SourceOwnerRef,
-		AssigneeRef:        input.AssigneeRef,
-		ActorRef:           input.ActorRef,
-		CorrelationRef:     input.CorrelationRef,
-		CorrelationID:      input.CorrelationID,
-		IncludeDiagnostics: input.IncludeDiagnostics,
-		Page:               input.Page,
-	})
+	items, page, err := s.repository.ListOwnerInboxItems(ctx, input.Filter)
 	if err != nil {
 		return nil, value.PageResult{}, err
 	}
-	for i := range items {
-		items[i].Summary = items[i].Request.PromptSummary
-		items[i].Title = ownerInboxTitle(items[i].Request.PromptSummary)
-	}
+	enrichOwnerInboxItems(items)
 	return items, page, nil
+}
+
+func (s *Service) GetOwnerInboxItem(ctx context.Context, input GetOwnerInboxItemInput) (entity.OwnerInboxItem, error) {
+	if err := s.ensureReady(); err != nil {
+		return entity.OwnerInboxItem{}, err
+	}
+	input, err := normalizeGetOwnerInboxItemInput(input)
+	if err != nil {
+		return entity.OwnerInboxItem{}, err
+	}
+	items, _, err := s.repository.ListOwnerInboxItems(ctx, query.OwnerInboxFilter{
+		RequestID:          input.RequestID,
+		Scope:              input.Scope,
+		Statuses:           allOwnerInboxStatuses(),
+		AssigneeRef:        input.AssigneeRef,
+		IncludeDiagnostics: input.IncludeDiagnostics,
+		Page:               value.PageRequest{PageSize: 1},
+	})
+	if err != nil {
+		return entity.OwnerInboxItem{}, err
+	}
+	if len(items) == 0 {
+		return entity.OwnerInboxItem{}, errs.ErrNotFound
+	}
+	enrichOwnerInboxItems(items)
+	return items[0], nil
 }
 
 func (s *Service) RequestNotification(ctx context.Context, input RequestNotificationInput) (entity.Notification, error) {
@@ -1217,46 +1228,65 @@ func normalizeExpireInteractionRequestsInput(input ExpireInteractionRequestsInpu
 }
 
 func normalizeListOwnerInboxItemsInput(input ListOwnerInboxItemsInput) (ListOwnerInboxItemsInput, error) {
-	if err := validateScope(input.Scope); err != nil {
+	filter := input.Filter
+	if err := validateScope(filter.Scope); err != nil {
 		return ListOwnerInboxItemsInput{}, err
 	}
-	for _, kind := range input.RequestKinds {
+	for _, kind := range filter.RequestKinds {
 		if !kind.Valid() {
 			return ListOwnerInboxItemsInput{}, errs.ErrInvalidArgument
 		}
 	}
-	if len(input.Statuses) == 0 {
-		input.Statuses = activeOwnerInboxStatuses()
+	if len(filter.Statuses) == 0 {
+		filter.Statuses = activeOwnerInboxStatuses()
 	}
-	for _, status := range input.Statuses {
+	for _, status := range filter.Statuses {
 		if !status.Valid() {
 			return ListOwnerInboxItemsInput{}, errs.ErrInvalidArgument
 		}
 	}
-	if input.SourceOwnerKind != "" && !input.SourceOwnerKind.Valid() {
+	if filter.SourceOwnerKind != "" && !filter.SourceOwnerKind.Valid() {
 		return ListOwnerInboxItemsInput{}, errs.ErrInvalidArgument
 	}
-	input.SourceOwnerRef = strings.TrimSpace(input.SourceOwnerRef)
-	input.ActorRef = strings.TrimSpace(input.ActorRef)
-	input.CorrelationID = strings.TrimSpace(input.CorrelationID)
-	if len(input.SourceOwnerRef) > maxInteractionRefBytes ||
-		len(input.ActorRef) > maxInteractionRefBytes ||
-		len(input.CorrelationID) > maxInteractionRefBytes {
+	filter.SourceOwnerRef = strings.TrimSpace(filter.SourceOwnerRef)
+	filter.ActorRef = strings.TrimSpace(filter.ActorRef)
+	filter.CorrelationID = strings.TrimSpace(filter.CorrelationID)
+	if len(filter.SourceOwnerRef) > maxInteractionRefBytes ||
+		len(filter.ActorRef) > maxInteractionRefBytes ||
+		len(filter.CorrelationID) > maxInteractionRefBytes {
 		return ListOwnerInboxItemsInput{}, errs.ErrInvalidArgument
+	}
+	if filter.AssigneeRef.Kind != "" || filter.AssigneeRef.Ref != "" {
+		assignee, err := normalizeActorRef(filter.AssigneeRef)
+		if err != nil {
+			return ListOwnerInboxItemsInput{}, err
+		}
+		filter.AssigneeRef = assignee
+	}
+	if filter.CorrelationRef.Kind != "" || filter.CorrelationRef.Ref != "" {
+		ref := value.ExternalRef{Kind: strings.TrimSpace(filter.CorrelationRef.Kind), Ref: strings.TrimSpace(filter.CorrelationRef.Ref)}
+		if blank(ref.Kind) || blank(ref.Ref) || len(ref.Kind) > maxInteractionRefBytes || len(ref.Ref) > maxInteractionRefBytes {
+			return ListOwnerInboxItemsInput{}, errs.ErrInvalidArgument
+		}
+		filter.CorrelationRef = ref
+	}
+	input.Filter = filter
+	return input, nil
+}
+
+func normalizeGetOwnerInboxItemInput(input GetOwnerInboxItemInput) (GetOwnerInboxItemInput, error) {
+	if input.RequestID == uuid.Nil {
+		return GetOwnerInboxItemInput{}, errs.ErrInvalidArgument
+	}
+	if err := validateScope(input.Scope); err != nil {
+		return GetOwnerInboxItemInput{}, err
 	}
 	if input.AssigneeRef.Kind != "" || input.AssigneeRef.Ref != "" {
 		assignee, err := normalizeActorRef(input.AssigneeRef)
 		if err != nil {
-			return ListOwnerInboxItemsInput{}, err
+			return GetOwnerInboxItemInput{}, err
 		}
 		input.AssigneeRef = assignee
-	}
-	if input.CorrelationRef.Kind != "" || input.CorrelationRef.Ref != "" {
-		ref := value.ExternalRef{Kind: strings.TrimSpace(input.CorrelationRef.Kind), Ref: strings.TrimSpace(input.CorrelationRef.Ref)}
-		if blank(ref.Kind) || blank(ref.Ref) || len(ref.Kind) > maxInteractionRefBytes || len(ref.Ref) > maxInteractionRefBytes {
-			return ListOwnerInboxItemsInput{}, errs.ErrInvalidArgument
-		}
-		input.CorrelationRef = ref
 	}
 	return input, nil
 }
@@ -1266,6 +1296,25 @@ func activeOwnerInboxStatuses() []enum.InteractionRequestStatus {
 		enum.InteractionRequestStatusCreated,
 		enum.InteractionRequestStatusRouted,
 		enum.InteractionRequestStatusWaiting,
+	}
+}
+
+func allOwnerInboxStatuses() []enum.InteractionRequestStatus {
+	return []enum.InteractionRequestStatus{
+		enum.InteractionRequestStatusCreated,
+		enum.InteractionRequestStatusRouted,
+		enum.InteractionRequestStatusWaiting,
+		enum.InteractionRequestStatusAnswered,
+		enum.InteractionRequestStatusExpired,
+		enum.InteractionRequestStatusCancelled,
+		enum.InteractionRequestStatusFailed,
+	}
+}
+
+func enrichOwnerInboxItems(items []entity.OwnerInboxItem) {
+	for i := range items {
+		items[i].Summary = items[i].Request.PromptSummary
+		items[i].Title = ownerInboxTitle(items[i].Request.PromptSummary)
 	}
 }
 

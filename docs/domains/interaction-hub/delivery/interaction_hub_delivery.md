@@ -6,7 +6,7 @@ status: active
 owner_role: EM
 created_at: 2026-05-22
 updated_at: 2026-05-27
-related_issues: [582, 768, 781, 783, 800, 806, 821, 835, 843, 853, 855, 867, 882, 894, 911]
+related_issues: [582, 768, 781, 783, 800, 806, 821, 835, 843, 853, 855, 867, 882, 894, 911, 921]
 related_prs: []
 related_docsets:
   - docs/domains/interaction-hub/product/requirements.md
@@ -55,7 +55,8 @@ approvals:
 | IH-7 | #867 | Owner inbox read surface готова: `ListOwnerInboxItems` отдаёт pending/active feedback, approval, Human gate и callback diagnostics по собственным interaction-сущностям с safe summary/refs, фильтрами и пагинацией. |
 | IH-7b | #882 | Response boundary refs готовы: `interaction.request.response_recorded` несёт safe request kind, scope, source owner, decision owner и context refs для downstream owner resume без raw response text и без изменения чужого decision state. |
 | IH-8 | #911 | Human gate response producer/read surface готова: response event и owner inbox отдают safe request/response refs, owner/context refs, normalized outcome, digest/object refs, timestamps, correlation и idempotency digest для owner resume без raw response/callback payload. |
-| IH-9 | не назначено | MCP-интеграция готова: `platform-mcp-server` маршрутизирует `interaction.feedback.request`, `interaction.approval.request`, `interaction.human_gate.request`, status reads. |
+| IH-9a | #921 | Owner inbox UI-readiness готова: `GetOwnerInboxItem` открывает safe detail по request id/scope/assignee, `OwnerInboxItem` содержит allowed actions и version, а owner action использует существующий `RecordInteractionResponse` с idempotency и expected version. |
+| IH-9b | не назначено | MCP-интеграция готова: `platform-mcp-server` маршрутизирует `interaction.feedback.request`, `interaction.approval.request`, `interaction.human_gate.request`, status reads. |
 | IH-10 | не назначено | Связка с `agent-manager`, `codex-hook-ingress`, `governance-manager` и `provider-hub` готова для PermissionRequest, owner feedback, owner decision refs и событий ответа. |
 | IH-11 | #894 | Эксплуатационный контур готов: Dockerfile, deploy manifests, migration job, runtime env inventory, smoke-проверка, runbook и monitoring docs доступны для первого backend deploy. |
 | IH-12 | не назначено | Проекции для `operations-hub`, operator visibility, dual-surface inbox status и диагностика delivery failures готовы. |
@@ -112,7 +113,7 @@ IH-2 не должен:
 | `CancelInteractionRequest` | Реализовано через expected version, terminal status и `interaction.request.cancelled` event | IH-4 |
 | `ExpireInteractionRequests` | Реализовано batch-истечение по scope/deadline с идемпотентным результатом и `interaction.request.expired` events | IH-4 |
 | `GetInteractionRequest` / `ListInteractionRequests` | Реализованы PostgreSQL-чтения по request id и scope/status/kind/source owner/deadline | IH-4 |
-| `ListOwnerInboxItems` | Реализовано: domain read surface для pending/active feedback, approval, Human gate и callback diagnostics; фильтры по scope/kind/status/source owner/assignee/actor/correlation refs, safe delivery/callback/response summaries, response summary digest/object refs и deterministic pagination | IH-7/IH-8 |
+| `ListOwnerInboxItems` / `GetOwnerInboxItem` | Реализовано: domain read surface для pending/active feedback, approval, Human gate и callback diagnostics; list-фильтры по scope/kind/status/source owner/assignee/actor/correlation refs, detail по request id/scope/assignee, safe delivery/callback/response summaries, allowed actions, response summary digest/object refs, request version и deterministic pagination | IH-7/IH-8/IH-9a |
 | `RequestNotification` | Реализовано: one-way notification/reminder intent, safe title/summary/body preview, source owner refs, channel hints, policy ref, idempotency и `interaction.notification.requested` event | IH-5a |
 | `UpsertSubscription` / `DisableSubscription` / `ListSubscriptions` | Реализовано: create/update/disable/list, optimistic concurrency, command idempotency, source owner/channel hints/policy refs и `interaction.subscription.updated` event | IH-5a |
 | `PlanDelivery` | Реализовано: создаёт delivery attempt для request/notification target, выбирает active route по scope или принимает route ref, пишет safe `interaction.delivery.requested` event и command idempotency | IH-5b |
