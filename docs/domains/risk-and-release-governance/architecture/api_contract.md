@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-22
 updated_at: 2026-05-27
-related_issues: [322, 769, 790, 815, 827, 845, 856, 869]
+related_issues: [322, 769, 790, 815, 827, 845, 856, 869, 886]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -54,7 +54,7 @@ approvals:
 | `GetRiskAssessment` | gRPC query | `governance.risk.read` | нет | Читает assessment, factors и required gates. |
 | `ListRiskAssessments` | gRPC query | `governance.risk.read` | нет | Читает assessments по project/repository/target/risk class/status. |
 | `ListRiskFactors` | gRPC query | `governance.risk.read` | нет | Читает факторы риска assessment без полного diff или логов. |
-| `RecordReviewSignal` | gRPC command | `governance.signal.record` | `command_id` | Записывает signal от reviewer, QA, lexical gatekeeper, SRE, security или custom role. |
+| `RecordReviewSignal` | gRPC command | `governance.signal.record` | `command_id` + normalized owner evidence refs | Записывает signal от reviewer, QA, lexical gatekeeper, SRE, security или custom role. |
 | `ListReviewSignals` | gRPC query | `governance.signal.read` | нет | Читает signals по target или assessment. |
 | `RequestGate` | gRPC command | `governance.gate.request` | `command_id` | Создаёт governance gate request и evidence package; delivery request/ref остаётся у `interaction-hub`. |
 | `SubmitGateDecision` | gRPC command | `governance.gate.decide` | `command_id` + expected version | Фиксирует решение из UI/provider/external callback после проверки actor policy. |
@@ -78,6 +78,8 @@ approvals:
 | `GetReleaseSafetyState` | gRPC query | `governance.release.read` | нет | Читает текущее состояние release safety-loop. |
 
 ## Интеграции с другими сервисами
+
+`governance-manager` принимает review/risk/release refs только как safe owner-domain refs и summaries. Для `RecordReviewSignal` обязательны typed `evidence_refs`; provider review/comment/check refs остаются у `provider-hub`, agent run/session/acceptance refs остаются у `agent-manager`, interaction decision/callback refs остаются у `interaction-hub`. Сервис нормализует evidence refs, строит локальный source fingerprint и не создаёт новый signal при повторной передаче того же owner-domain ref set; конфликтующие факты с тем же fingerprint отклоняются.
 
 GOV-7b хранит явные safe refs/summaries в release package и выполняет read-validation/enrichment для локальных governance refs: risk assessment, review signal, gate request, gate decision и связанный release package. Для project/provider/agent/runtime refs `governance-manager` сохраняет explicit ref и безопасный diagnostic в `summary`, если вызывающая сторона не передала owner-domain summary; прямые service-client чтения соседних доменов подключаются отдельными интеграционными срезами после согласования read-контрактов и runtime composition.
 
@@ -149,7 +151,7 @@ MCP-инструменты не должны принимать свободны
 | AsyncAPI `governance.*` | Подготовлен как контрактный срез `GOV-1`; Go-константы событий сгенерированы в `libs/go/platformevents/governance`. |
 | Access actions | Добавлены в общий каталог для policy, risk, signal, gate и release операций. |
 | Сервисный процесс `governance-manager` | Каркас подготовлен: process, env, health/readiness/metrics, gRPC registration и bounded handlers. |
-| Storage, migrations и outbox publisher | MVP-основа готова: PostgreSQL repository, service-local outbox и handlers для поддержанных storage-операций. |
+| Storage, migrations и outbox publisher | MVP-основа готова: PostgreSQL repository, service-local outbox и handlers для поддержанных storage-операций. Review signals имеют локальную ref-level дедупликацию по normalized owner-domain evidence refs. |
 | Risk classifier и policy evaluator | Готовы для локальных risk profiles/rules, safe summaries/refs, идемпотентного replay, optimistic concurrency и safe outbox events. |
 | Release decision lifecycle и safety-loop | Готовы для release package build/read/list, decision request/submit/read/list, blocking signals и текущего safety-loop state на safe refs/summaries. |
 | Release integration refs | Поддержаны для release decision package: safe domain/kind/ref/status/summary/digest/timestamp/version, canonical order по `domain/kind/ref`, reject конфликтующих дублей, локальная проверка governance refs и отсутствие raw payload/logs/secrets. |

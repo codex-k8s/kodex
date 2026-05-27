@@ -215,6 +215,160 @@ func TestEvaluateRiskAccessDenied(t *testing.T) {
 	}
 }
 
+func TestRecordReviewSignalAccessDeniedBeforeRepositoryWrite(t *testing.T) {
+	t.Parallel()
+
+	commandID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
+	repository := &fakeRepository{ready: true}
+	service := NewWithConfig(Config{
+		Repository: repository,
+		Authorizer: authorizerFunc(func(context.Context, AuthorizationRequest) error {
+			return errs.ErrForbidden
+		}),
+	})
+
+	_, err := service.RecordReviewSignal(context.Background(), RecordReviewSignalInput{
+		Target:       value.ExternalRef{Type: "pull_request", Ref: "provider-pr:1"},
+		RoleKind:     enum.ReviewRoleKindReviewer,
+		AuthorRef:    "agent-run:reviewer-1",
+		Outcome:      enum.ReviewSignalOutcomeRequestChanges,
+		Severity:     enum.SignalSeverityBlocking,
+		EvidenceRefs: []value.EvidenceRef{{Kind: "provider_review", Ref: "provider-review:1", Summary: "changes requested"}},
+		Summary:      "changes requested",
+		Meta:         CommandMeta{CommandID: &commandID, Actor: value.Actor{Type: "service", ID: "agent-manager"}},
+	})
+	if !errors.Is(err, errs.ErrForbidden) {
+		t.Fatalf("RecordReviewSignal() error = %v, want ErrForbidden", err)
+	}
+	if repository.mutationCalls != 0 {
+		t.Fatalf("mutation calls = %d, want 0", repository.mutationCalls)
+	}
+}
+
+func TestRecordReviewSignalDeduplicatesOwnerEvidenceRefs(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 27, 14, 30, 0, 0, time.UTC)
+	commandID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
+	existingID := uuid.MustParse("bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb")
+	target := value.ExternalRef{Type: "pull_request", Ref: "provider-pr:1"}
+	evidenceRefs := []value.EvidenceRef{
+		{Kind: "agent_run", Ref: "agent-run:reviewer-1", Summary: "agent reviewer finished"},
+		{Kind: "provider_review", Ref: "provider-review:1", Summary: "provider review approved"},
+	}
+	normalizedEvidence, err := normalizeReviewSignalEvidenceRefs(evidenceRefs)
+	if err != nil {
+		t.Fatalf("normalize evidence: %v", err)
+	}
+	existing := entity.ReviewSignal{
+		ID:                existingID,
+		Target:            target,
+		RoleKind:          enum.ReviewRoleKindReviewer,
+		AuthorRef:         "agent-run:reviewer-1",
+		Outcome:           enum.ReviewSignalOutcomePass,
+		Severity:          enum.SignalSeverityInfo,
+		EvidenceRefs:      normalizedEvidence,
+		Summary:           "approved",
+		SourceFingerprint: reviewSignalFingerprint(target, enum.ReviewRoleKindReviewer, "agent-run:reviewer-1", normalizedEvidence),
+		CreatedAt:         now.Add(-time.Minute),
+	}
+	repository := &fakeRepository{ready: true, reviewSignalByFingerprint: existing}
+	service := NewWithConfig(Config{Repository: repository, Clock: fixedClock{now: now}, IDGenerator: uuidGenerator{}, Authorizer: AllowAllAuthorizer{}})
+
+	signal, err := service.RecordReviewSignal(context.Background(), RecordReviewSignalInput{
+		Target:       target,
+		RoleKind:     enum.ReviewRoleKindReviewer,
+		AuthorRef:    " agent-run:reviewer-1 ",
+		Outcome:      enum.ReviewSignalOutcomePass,
+		Severity:     enum.SignalSeverityInfo,
+		EvidenceRefs: []value.EvidenceRef{evidenceRefs[1], evidenceRefs[0]},
+		Summary:      " approved ",
+		Meta:         CommandMeta{CommandID: &commandID, Actor: value.Actor{Type: "service", ID: "agent-manager"}},
+	})
+	if err != nil {
+		t.Fatalf("RecordReviewSignal(): %v", err)
+	}
+	if signal.ID != existingID {
+		t.Fatalf("signal id = %s, want existing %s", signal.ID, existingID)
+	}
+	if repository.mutationCalls != 0 || len(repository.events) != 0 {
+		t.Fatalf("mutation calls/events = %d/%d, want 0/0 for source-ref replay", repository.mutationCalls, len(repository.events))
+	}
+	if repository.result.AggregateID != existingID {
+		t.Fatalf("recorded command result aggregate = %s, want %s", repository.result.AggregateID, existingID)
+	}
+}
+
+func TestRecordReviewSignalRejectsConflictingOwnerEvidenceRef(t *testing.T) {
+	t.Parallel()
+
+	commandID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
+	existingID := uuid.MustParse("bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb")
+	target := value.ExternalRef{Type: "pull_request", Ref: "provider-pr:1"}
+	evidenceRefs := []value.EvidenceRef{{Kind: "provider_review", Ref: "provider-review:1", Summary: "provider review approved"}}
+	fingerprint := reviewSignalFingerprint(target, enum.ReviewRoleKindReviewer, "agent-run:reviewer-1", evidenceRefs)
+	repository := &fakeRepository{ready: true, reviewSignalByFingerprint: entity.ReviewSignal{
+		ID:                existingID,
+		Target:            target,
+		RoleKind:          enum.ReviewRoleKindReviewer,
+		AuthorRef:         "agent-run:reviewer-1",
+		Outcome:           enum.ReviewSignalOutcomePass,
+		Severity:          enum.SignalSeverityInfo,
+		EvidenceRefs:      evidenceRefs,
+		Summary:           "approved",
+		SourceFingerprint: fingerprint,
+	}}
+	service := newTestService(repository)
+
+	_, err := service.RecordReviewSignal(context.Background(), RecordReviewSignalInput{
+		Target:       target,
+		RoleKind:     enum.ReviewRoleKindReviewer,
+		AuthorRef:    "agent-run:reviewer-1",
+		Outcome:      enum.ReviewSignalOutcomeRequestChanges,
+		Severity:     enum.SignalSeverityBlocking,
+		EvidenceRefs: evidenceRefs,
+		Summary:      "changes requested",
+		Meta:         CommandMeta{CommandID: &commandID, Actor: value.Actor{Type: "service", ID: "agent-manager"}},
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("RecordReviewSignal() error = %v, want ErrConflict", err)
+	}
+	if repository.mutationCalls != 0 {
+		t.Fatalf("mutation calls = %d, want 0", repository.mutationCalls)
+	}
+}
+
+func TestRecordReviewSignalRejectsUnsafeOrMissingRefs(t *testing.T) {
+	t.Parallel()
+
+	commandID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
+	service := newTestService(&fakeRepository{ready: true})
+	_, err := service.RecordReviewSignal(context.Background(), RecordReviewSignalInput{
+		Target:       value.ExternalRef{Type: "pull_request", Ref: "provider-pr:1"},
+		RoleKind:     enum.ReviewRoleKindReviewer,
+		AuthorRef:    "agent-run:reviewer-1",
+		Outcome:      enum.ReviewSignalOutcomePass,
+		Severity:     enum.SignalSeverityInfo,
+		EvidenceRefs: []value.EvidenceRef{{Kind: "provider_review", Ref: "provider-review:1", Summary: "raw_provider_payload token=secret"}},
+		Summary:      "approved",
+		Meta:         CommandMeta{CommandID: &commandID, Actor: value.Actor{Type: "service", ID: "agent-manager"}},
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("RecordReviewSignal() unsafe error = %v, want ErrInvalidArgument", err)
+	}
+	_, err = service.RecordReviewSignal(context.Background(), RecordReviewSignalInput{
+		Target:    value.ExternalRef{Type: "pull_request", Ref: "provider-pr:1"},
+		RoleKind:  enum.ReviewRoleKindReviewer,
+		AuthorRef: "agent-run:reviewer-1",
+		Outcome:   enum.ReviewSignalOutcomePass,
+		Severity:  enum.SignalSeverityInfo,
+		Meta:      CommandMeta{CommandID: &commandID, Actor: value.Actor{Type: "service", ID: "agent-manager"}},
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("RecordReviewSignal() missing evidence error = %v, want ErrInvalidArgument", err)
+	}
+}
+
 func TestRiskReadAccessDeniedBeforeRepositoryRead(t *testing.T) {
 	t.Parallel()
 
@@ -534,11 +688,31 @@ func TestMutatingUseCasesReplayStoredCommandResults(t *testing.T) {
 			name:   "record review signal",
 			result: commandResult(meta, enum.OperationRecordReviewSignal.String(), governanceevents.AggregateReviewSignal, reviewSignalID, now),
 			configure: func(repository *fakeRepository) {
-				repository.reviewSignal = entity.ReviewSignal{ID: reviewSignalID, Target: target, AuthorRef: "reviewer:owner"}
+				evidenceRefs := []value.EvidenceRef{{Kind: "provider_review", Ref: "provider-review:1", Summary: "provider review approved"}}
+				repository.reviewSignal = entity.ReviewSignal{
+					ID:                reviewSignalID,
+					Target:            target,
+					RoleKind:          enum.ReviewRoleKindReviewer,
+					AuthorRef:         "reviewer:owner",
+					Outcome:           enum.ReviewSignalOutcomePass,
+					Severity:          enum.SignalSeverityInfo,
+					EvidenceRefs:      evidenceRefs,
+					Summary:           "approved",
+					SourceFingerprint: reviewSignalFingerprint(target, enum.ReviewRoleKindReviewer, "reviewer:owner", evidenceRefs),
+				}
 			},
 			run: func(t *testing.T, service *Service) {
 				t.Helper()
-				signal, err := service.RecordReviewSignal(context.Background(), RecordReviewSignalInput{Target: target, AuthorRef: "reviewer:owner", Meta: meta})
+				signal, err := service.RecordReviewSignal(context.Background(), RecordReviewSignalInput{
+					Target:       target,
+					RoleKind:     enum.ReviewRoleKindReviewer,
+					AuthorRef:    "reviewer:owner",
+					Outcome:      enum.ReviewSignalOutcomePass,
+					Severity:     enum.SignalSeverityInfo,
+					EvidenceRefs: []value.EvidenceRef{{Kind: "provider_review", Ref: "provider-review:1", Summary: "provider review approved"}},
+					Summary:      "approved",
+					Meta:         meta,
+				})
 				if err != nil {
 					t.Fatalf("RecordReviewSignal(): %v", err)
 				}
@@ -1731,43 +1905,44 @@ func TestReleaseSafetyStateRejectsTerminalRollback(t *testing.T) {
 
 type fakeRepository struct {
 	governancerepo.Repository
-	ready                    bool
-	hasCommandResult         bool
-	commandResult            entity.CommandResult
-	profile                  entity.RiskProfile
-	profileVersion           entity.RiskProfileVersion
-	assessment               entity.RiskAssessment
-	assessmentReads          int
-	riskFactors              []entity.RiskFactor
-	riskAssessmentListCalls  int
-	riskFactorListCalls      int
-	assessmentUpdateCalls    int
-	reviewSignal             entity.ReviewSignal
-	reviewSignals            []entity.ReviewSignal
-	reviewSignalListCalls    int
-	gateRequest              entity.GateRequest
-	gateRequestErr           error
-	gateRequestReads         int
-	gateRequestListCalls     int
-	gateDecision             entity.GateDecision
-	gateDecisionErr          error
-	gateDecisionReads        int
-	gateDecisionListCalls    int
-	releasePackage           entity.ReleaseDecisionPackage
-	releasePackageReads      int
-	releasePackageListCalls  int
-	releaseDecision          entity.ReleaseDecision
-	releaseDecisionReads     int
-	releaseDecisionListCalls int
-	releaseSafetyState       entity.ReleaseSafetyState
-	releaseSafetyStateErr    error
-	blockingSignal           entity.BlockingSignal
-	blockingSignals          []entity.BlockingSignal
-	blockingSignalReads      int
-	blockingSignalListCalls  int
-	result                   entity.CommandResult
-	events                   []entity.OutboxEvent
-	mutationCalls            int
+	ready                     bool
+	hasCommandResult          bool
+	commandResult             entity.CommandResult
+	profile                   entity.RiskProfile
+	profileVersion            entity.RiskProfileVersion
+	assessment                entity.RiskAssessment
+	assessmentReads           int
+	riskFactors               []entity.RiskFactor
+	riskAssessmentListCalls   int
+	riskFactorListCalls       int
+	assessmentUpdateCalls     int
+	reviewSignal              entity.ReviewSignal
+	reviewSignals             []entity.ReviewSignal
+	reviewSignalByFingerprint entity.ReviewSignal
+	reviewSignalListCalls     int
+	gateRequest               entity.GateRequest
+	gateRequestErr            error
+	gateRequestReads          int
+	gateRequestListCalls      int
+	gateDecision              entity.GateDecision
+	gateDecisionErr           error
+	gateDecisionReads         int
+	gateDecisionListCalls     int
+	releasePackage            entity.ReleaseDecisionPackage
+	releasePackageReads       int
+	releasePackageListCalls   int
+	releaseDecision           entity.ReleaseDecision
+	releaseDecisionReads      int
+	releaseDecisionListCalls  int
+	releaseSafetyState        entity.ReleaseSafetyState
+	releaseSafetyStateErr     error
+	blockingSignal            entity.BlockingSignal
+	blockingSignals           []entity.BlockingSignal
+	blockingSignalReads       int
+	blockingSignalListCalls   int
+	result                    entity.CommandResult
+	events                    []entity.OutboxEvent
+	mutationCalls             int
 }
 
 func newTestService(repository *fakeRepository) *Service {
@@ -1788,6 +1963,11 @@ func (repository *fakeRepository) GetCommandResult(_ context.Context, _ query.Co
 		return entity.CommandResult{}, errs.ErrNotFound
 	}
 	return repository.commandResult, nil
+}
+
+func (repository *fakeRepository) RecordCommandResult(_ context.Context, result entity.CommandResult) error {
+	repository.result = result
+	return nil
 }
 
 func (repository *fakeRepository) CreateRiskProfile(_ context.Context, profile entity.RiskProfile, result entity.CommandResult) error {
@@ -1865,6 +2045,7 @@ func (repository *fakeRepository) ListRiskFactors(_ context.Context, _ query.Ris
 func (repository *fakeRepository) RecordReviewSignal(_ context.Context, signal entity.ReviewSignal, result entity.CommandResult, event entity.OutboxEvent) error {
 	repository.mutationCalls++
 	repository.reviewSignal = signal
+	repository.reviewSignalByFingerprint = signal
 	repository.result = result
 	repository.events = []entity.OutboxEvent{event}
 	return nil
@@ -1872,6 +2053,13 @@ func (repository *fakeRepository) RecordReviewSignal(_ context.Context, signal e
 
 func (repository *fakeRepository) GetReviewSignal(_ context.Context, _ uuid.UUID) (entity.ReviewSignal, error) {
 	return repository.reviewSignal, nil
+}
+
+func (repository *fakeRepository) GetReviewSignalByFingerprint(_ context.Context, fingerprint string) (entity.ReviewSignal, error) {
+	if repository.reviewSignalByFingerprint.SourceFingerprint == fingerprint && fingerprint != "" {
+		return repository.reviewSignalByFingerprint, nil
+	}
+	return entity.ReviewSignal{}, errs.ErrNotFound
 }
 
 func (repository *fakeRepository) ListReviewSignals(_ context.Context, _ query.ReviewSignalFilter) ([]entity.ReviewSignal, query.PageResult, error) {

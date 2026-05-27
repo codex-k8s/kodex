@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-22
 updated_at: 2026-05-27
-related_issues: [322, 769, 815, 827, 845, 856, 869]
+related_issues: [322, 769, 815, 827, 845, 856, 869, 886]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -132,7 +132,10 @@ approvals:
 | `confidence` | enum | да | `low`, `medium`, `high`, если применимо. |
 | `evidence_refs` | jsonb | нет | Ссылки на комментарии, checks, runtime summary, документы. |
 | `summary` | text | нет | Короткая безопасная сводка. |
+| `source_fingerprint` | text | нет | Локальный fingerprint normalized `target + role + author_ref + evidence_refs`, чтобы повторная передача того же provider/agent/interaction signal ref не создавала дубль. |
 | `created_at` | timestamptz | нет | Когда signal создан. |
+
+`ReviewSignal` принимает только safe refs от owner-доменов: provider review/comment/check refs из `provider-hub`, agent run/session/acceptance refs из `agent-manager`, interaction decision/callback refs из `interaction-hub` и локальные governance refs. Полный provider payload, diff, prompt/transcript, stdout/stderr, workspace paths, секреты и большие отчёты не сохраняются. Повтор с тем же normalized owner-domain evidence set возвращает уже записанный signal; повтор с тем же source fingerprint и другой outcome/severity/summary считается конфликтом фактов.
 
 ### GatePolicy
 

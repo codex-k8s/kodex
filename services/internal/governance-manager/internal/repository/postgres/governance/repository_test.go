@@ -214,9 +214,29 @@ func TestRepositoryIntegrationGovernanceStateAndOutbox(t *testing.T) {
 		t.Fatalf("updated factors = %+v, want one R3 secret factor", factors)
 	}
 
-	signal := entity.ReviewSignal{ID: uuid.New(), RiskAssessmentID: &assessment.ID, Target: assessment.Target, RoleKind: enum.ReviewRoleKindOwner, AuthorRef: "user:owner", Outcome: enum.ReviewSignalOutcomePass, Severity: enum.SignalSeverityInfo, Confidence: enum.ConfidenceHigh, Summary: "approved", CreatedAt: now}
+	signal := entity.ReviewSignal{
+		ID:                uuid.New(),
+		RiskAssessmentID:  &assessment.ID,
+		Target:            assessment.Target,
+		RoleKind:          enum.ReviewRoleKindOwner,
+		AuthorRef:         "user:owner",
+		Outcome:           enum.ReviewSignalOutcomePass,
+		Severity:          enum.SignalSeverityInfo,
+		Confidence:        enum.ConfidenceHigh,
+		EvidenceRefs:      []value.EvidenceRef{{Kind: "provider_review", Ref: "provider-review:1", Summary: "approved"}},
+		Summary:           "approved",
+		SourceFingerprint: "sha256:review-signal-one",
+		CreatedAt:         now,
+	}
 	if err := repository.RecordReviewSignal(ctx, signal, testCommandResult(uuid.New(), operationRecordReviewSignal, "review_signal", signal.ID, now), testEvent("governance.review_signal.recorded", "review_signal", signal.ID, now)); err != nil {
 		t.Fatalf("record review signal: %v", err)
+	}
+	storedSignal, err := repository.GetReviewSignalByFingerprint(ctx, signal.SourceFingerprint)
+	if err != nil {
+		t.Fatalf("get review signal by fingerprint: %v", err)
+	}
+	if storedSignal.ID != signal.ID || storedSignal.SourceFingerprint != signal.SourceFingerprint {
+		t.Fatalf("stored signal = %+v, want id/fingerprint %s/%s", storedSignal, signal.ID, signal.SourceFingerprint)
 	}
 	signals, _, err := repository.ListReviewSignals(ctx, query.ReviewSignalFilter{RiskAssessmentID: &assessment.ID})
 	if err != nil {

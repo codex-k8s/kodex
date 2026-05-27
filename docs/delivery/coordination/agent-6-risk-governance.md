@@ -63,6 +63,13 @@
 - Project/provider/agent/runtime refs остаются explicit refs: если вызывающая сторона не передала owner-domain summary, `governance-manager` добавляет safe summary diagnostic `explicit_ref_unvalidated`, но не читает соседние сервисы и не копирует чужой state.
 - Service-client чтения из `project-catalog`, `provider-hub`, `agent-manager` и `runtime-manager`, provider write, delivery callbacks и deploy orchestration остаются следующими GOV-7 интеграционными срезами.
 
+## Завершённый review signal refs-срез
+
+- Issue: #886.
+- Результат среза: `RecordReviewSignal` принимает provider/agent/interaction refs только как typed safe `evidence_refs`, проверяет `governance.signal.record`, нормализует evidence refs и сохраняет локальный source fingerprint.
+- Повторная передача того же owner-domain evidence ref set возвращает уже записанный signal без нового outbox event; конфликтующий outcome/severity/summary по тому же fingerprint отклоняется.
+- `governance-manager` не читает provider API, не копирует agent run/session state и не становится владельцем interaction delivery/callback фактов.
+
 ## Ближайшие зависимости
 
 | Домен | Что нужно согласовать |

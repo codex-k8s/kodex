@@ -218,6 +218,7 @@ func scanReviewSignal(row postgreslib.RowScanner) (entity.ReviewSignal, error) {
 		&confidence,
 		&evidenceRefs,
 		&signal.Summary,
+		&signal.SourceFingerprint,
 		&signal.CreatedAt,
 	)
 	signal.RiskAssessmentID = postgreslib.UUIDPtrFromPG(riskAssessmentID)

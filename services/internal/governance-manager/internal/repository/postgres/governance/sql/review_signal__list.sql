@@ -1,7 +1,7 @@
 -- name: review_signal__list :many
 SELECT
     id, risk_assessment_id, target_type, target_ref, role_kind, author_ref,
-    outcome, severity, confidence, evidence_refs, summary, created_at
+    outcome, severity, confidence, evidence_refs, summary, source_fingerprint, created_at
 FROM governance_manager_review_signals
 WHERE (@risk_assessment_id::uuid IS NULL OR risk_assessment_id = @risk_assessment_id)
   AND (@target_type::text = '' OR target_type = @target_type)

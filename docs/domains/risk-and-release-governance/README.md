@@ -47,11 +47,12 @@
 
 - Сервис-владелец: `services/internal/governance-manager`.
 - Сервисный каркас: процесс, конфигурация, health/readiness/metrics, gRPC registration и безопасные backlog-handlers.
+- Review signal refs intake: provider/agent/interaction evidence refs принимаются как safe refs owner-доменов, проходят access check и дедуплицируются по source fingerprint без копирования чужого state.
 - gRPC-контракт: `proto/kodex/governance/v1/governance_manager.proto`.
 - Сгенерированный Go-контракт: `proto/gen/go/kodex/governance/v1/**`.
 - AsyncAPI: `specs/asyncapi/governance-manager.v1.yaml`.
 - Сгенерированные Go-контракты событий: `libs/go/platformevents/governance/events.gen.go`.
-- Миграции и постоянное хранилище: будут созданы отдельным срезом после каркаса.
+- Миграции и постоянное хранилище: PostgreSQL-модель MVP-сущностей, repository и service-local outbox готовы.
 - Статус контрактов и бэклог реализации: `delivery/risk_governance_delivery.md`.
 
 ## Карта Issue
