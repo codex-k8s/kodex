@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-22
 updated_at: 2026-05-27
-related_issues: [322, 769, 790, 815, 827, 845, 856]
+related_issues: [322, 769, 790, 815, 827, 845, 856, 869]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -64,7 +64,7 @@ approvals:
 | `ListGateDecisions` | gRPC query | `governance.gate.read` | gate request или target | Читает final gate decisions по gate request или target; outcome используется только как уточняющий фильтр. |
 | `GetGateRequest` | gRPC query | `governance.gate.read` | нет | Читает gate request, evidence и decision status. |
 | `ListGateRequests` | gRPC query | `governance.gate.read` или `governance.risk.read` | target или risk assessment | Читает ожидающие, resolved или просроченные gates по target или assessment; status используется только как уточняющий фильтр. |
-| `BuildReleaseDecisionPackage` | gRPC command | `governance.release.prepare` | `command_id` | Собирает release evidence из project/provider/runtime/agent refs, explicit `integration_refs` и optional local `risk_assessment_id`. |
+| `BuildReleaseDecisionPackage` | gRPC command | `governance.release.prepare` | `command_id` | Собирает release evidence из project/provider/runtime/agent refs, explicit `integration_refs` и optional local `risk_assessment_id`; локальные governance refs обогащаются bounded snapshot. |
 | `GetReleaseDecisionPackage` | gRPC query | `governance.release.read` | нет | Читает release evidence package. |
 | `ListReleaseDecisionPackages` | gRPC query | `governance.release.read` | нет | Читает release packages по project/candidate/status. |
 | `RequestReleaseDecision` | gRPC command | `governance.release.request` | `command_id` | Запрашивает release gate или автоматическое decision по policy. |
@@ -79,7 +79,7 @@ approvals:
 
 ## Интеграции с другими сервисами
 
-GOV-7a хранит явные safe refs/summaries в release package. Прямые service-client чтения соседних доменов подключаются отдельными интеграционными срезами после согласования read-контрактов.
+GOV-7b хранит явные safe refs/summaries в release package и выполняет read-validation/enrichment для локальных governance refs: risk assessment, review signal, gate request, gate decision и связанный release package. Для project/provider/agent/runtime refs `governance-manager` сохраняет explicit ref и безопасный diagnostic в `summary`, если вызывающая сторона не передала owner-domain summary; прямые service-client чтения соседних доменов подключаются отдельными интеграционными срезами после согласования read-контрактов и runtime composition.
 
 | Сервис | Что приходит как refs или будущий read-contract | Правило |
 |---|---|---|
