@@ -1236,7 +1236,7 @@ func TestReconcileBootstrapMergeSignalImportsCheckedPolicy(t *testing.T) {
 	svc := NewWithConfig(
 		store,
 		fixedClock{},
-		&sequenceIDs{ids: []uuid.UUID{policyID, uuid.New(), uuid.New(), uuid.New()}},
+		&sequenceIDs{ids: []uuid.UUID{uuid.New(), policyID, uuid.New(), uuid.New(), uuid.New()}},
 		Config{},
 	)
 	input := reconcileBootstrapMergeSignalInput(projectID, repositoryID, commandMetaWithVersion(uuid.Nil, 3))
@@ -1253,6 +1253,22 @@ func TestReconcileBootstrapMergeSignalImportsCheckedPolicy(t *testing.T) {
 	}
 	if len(store.policies) != 1 || len(store.events) != 2 || len(store.commandResults) != 1 {
 		t.Fatalf("policies=%d events=%d commandResults=%d, want single import", len(store.policies), len(store.events), len(store.commandResults))
+	}
+	if len(store.onboardingSignals) != 1 {
+		t.Fatalf("onboarding signals = %d, want one status record", len(store.onboardingSignals))
+	}
+	for _, signal := range store.onboardingSignals {
+		if signal.Status != enum.OnboardingSignalStatusImported || signal.ServicesPolicyID == nil || *signal.ServicesPolicyID != policyID {
+			t.Fatalf("onboarding signal = %+v, want imported policy status", signal)
+		}
+		if signal.ArtifactRef == "" || signal.ArtifactDigest == "" || signal.ContentHash == "" || string(signal.SignalKind) != "bootstrap_merge" {
+			t.Fatalf("onboarding signal = %+v, want safe bootstrap refs and digests", signal)
+		}
+		for _, forbidden := range []string{bootstrapServicesPolicyPayload, "watermark_json", "raw_provider_payload", "diff"} {
+			if strings.Contains(signal.Summary+signal.ErrorSummary+signal.ArtifactRef, forbidden) {
+				t.Fatalf("onboarding signal stores unsafe data %q in %+v", forbidden, signal)
+			}
+		}
 	}
 	for key, commandResult := range store.commandResults {
 		if !strings.Contains(key, bootstrapMergeIdempotencyPrefix+input.MergeSignal.SignalKey) {
@@ -1300,6 +1316,14 @@ func TestReconcileBootstrapMergeSignalReplayDoesNotDuplicateImport(t *testing.T)
 	if len(store.policies) != 1 || len(store.commandResults) != 1 || len(store.events) != 2 {
 		t.Fatalf("policies=%d commandResults=%d events=%d, want no duplicate writes", len(store.policies), len(store.commandResults), len(store.events))
 	}
+	if len(store.onboardingSignals) != 1 {
+		t.Fatalf("onboarding signals = %d, want one idempotent status record", len(store.onboardingSignals))
+	}
+	for _, signal := range store.onboardingSignals {
+		if signal.Status != enum.OnboardingSignalStatusImported || signal.ServicesPolicyVersion != 1 {
+			t.Fatalf("onboarding signal = %+v, want imported replay status", signal)
+		}
+	}
 }
 
 func TestReconcileBootstrapMergeSignalReplayStillChecksAccess(t *testing.T) {
@@ -1320,6 +1344,10 @@ func TestReconcileBootstrapMergeSignalReplayStillChecksAccess(t *testing.T) {
 	if _, err := svc.ReconcileBootstrapMergeSignal(ctx, input); err != nil {
 		t.Fatalf("initial ReconcileBootstrapMergeSignal(): %v", err)
 	}
+	var signalBefore entity.OnboardingSignalReconciliation
+	for _, signal := range store.onboardingSignals {
+		signalBefore = signal
+	}
 	if len(authorizer.requests) != 1 || authorizer.requests[0].ActionKey != projectActionPolicyImport {
 		t.Fatalf("access requests = %+v, want initial policy import check", authorizer.requests)
 	}
@@ -1334,6 +1362,11 @@ func TestReconcileBootstrapMergeSignalReplayStillChecksAccess(t *testing.T) {
 	}
 	if len(store.policies) != 1 || len(store.commandResults) != 1 || len(store.events) != 2 {
 		t.Fatalf("policies=%d commandResults=%d events=%d, want no replay writes after denied access", len(store.policies), len(store.commandResults), len(store.events))
+	}
+	for _, signal := range store.onboardingSignals {
+		if signal.Version != signalBefore.Version || signal.Status != signalBefore.Status {
+			t.Fatalf("onboarding signal changed after denied replay: before=%+v after=%+v", signalBefore, signal)
+		}
 	}
 }
 
@@ -1364,6 +1397,9 @@ func TestReconcileBootstrapMergeSignalRejectsConflictingReplay(t *testing.T) {
 	if len(store.policies) != 1 || len(store.commandResults) != 1 || len(store.events) != 2 {
 		t.Fatalf("policies=%d commandResults=%d events=%d, want no conflicting replay writes", len(store.policies), len(store.commandResults), len(store.events))
 	}
+	if len(store.onboardingSignals) != 1 {
+		t.Fatalf("onboarding signals = %d, want existing status only", len(store.onboardingSignals))
+	}
 }
 
 func TestReconcileBootstrapMergeSignalRejectsStaleArtifact(t *testing.T) {
@@ -1382,6 +1418,43 @@ func TestReconcileBootstrapMergeSignalRejectsStaleArtifact(t *testing.T) {
 	}
 	if len(store.policies) != 0 || len(store.events) != 0 || len(store.commandResults) != 0 {
 		t.Fatalf("policies=%d events=%d commandResults=%d, want no writes", len(store.policies), len(store.events), len(store.commandResults))
+	}
+}
+
+func TestReconcileBootstrapMergeSignalStoresSafeFailureStatus(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = pendingBootstrapRepository(projectID, repositoryID)
+	svc := NewWithConfig(
+		store,
+		fixedClock{},
+		&sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New()}},
+		Config{},
+	)
+	input := reconcileBootstrapMergeSignalInput(projectID, repositoryID, commandMetaWithVersion(uuid.Nil, 3))
+	input.MergeSignal.ProviderTarget.RepositoryFullName = "codex-k8s/other"
+
+	_, err := svc.ReconcileBootstrapMergeSignal(ctx, input)
+	if !errors.Is(err, errs.ErrPreconditionFailed) {
+		t.Fatalf("ReconcileBootstrapMergeSignal() err = %v, want precondition failed", err)
+	}
+	if len(store.policies) != 0 || len(store.events) != 0 || len(store.commandResults) != 0 {
+		t.Fatalf("policies=%d events=%d commandResults=%d, want no import writes", len(store.policies), len(store.events), len(store.commandResults))
+	}
+	if len(store.onboardingSignals) != 1 {
+		t.Fatalf("onboarding signals = %d, want failed status record", len(store.onboardingSignals))
+	}
+	for _, signal := range store.onboardingSignals {
+		if signal.Status != enum.OnboardingSignalStatusFailed || signal.ErrorCode != "failed_precondition" {
+			t.Fatalf("onboarding signal = %+v, want safe failed status", signal)
+		}
+		for _, forbidden := range []string{bootstrapServicesPolicyPayload, "raw_provider_payload", "diff", "watermark_json"} {
+			if strings.Contains(signal.ErrorSummary+signal.Summary, forbidden) {
+				t.Fatalf("onboarding signal failure stores unsafe data %q in %+v", forbidden, signal)
+			}
+		}
 	}
 }
 
@@ -1729,6 +1802,7 @@ type memoryRepository struct {
 	documentationSources       map[uuid.UUID]entity.DocumentationSource
 	policyEditProposals        map[uuid.UUID]entity.PolicyEditProposal
 	policyOverrides            map[uuid.UUID]entity.PolicyOverride
+	onboardingSignals          map[string]entity.OnboardingSignalReconciliation
 	policyVersions             map[uuid.UUID]int64
 	commandResults             map[string]entity.CommandResult
 	events                     []entity.OutboxEvent
@@ -1745,6 +1819,7 @@ func newMemoryRepository() *memoryRepository {
 		documentationSources:       map[uuid.UUID]entity.DocumentationSource{},
 		policyEditProposals:        map[uuid.UUID]entity.PolicyEditProposal{},
 		policyOverrides:            map[uuid.UUID]entity.PolicyOverride{},
+		onboardingSignals:          map[string]entity.OnboardingSignalReconciliation{},
 		policyVersions:             map[uuid.UUID]int64{},
 		commandResults:             map[string]entity.CommandResult{},
 	}
@@ -1846,6 +1921,32 @@ func (r *memoryRepository) GetRepositoryByProviderRef(_ context.Context, provide
 
 func (r *memoryRepository) ListRepositories(context.Context, query.RepositoryFilter) ([]entity.RepositoryBinding, query.PageResult, error) {
 	return nil, query.PageResult{}, nil
+}
+
+func (r *memoryRepository) RecordOnboardingSignalReconciliation(_ context.Context, signal entity.OnboardingSignalReconciliation) (entity.OnboardingSignalReconciliation, error) {
+	if _, ok := r.repositories[signal.RepositoryID]; !ok {
+		return entity.OnboardingSignalReconciliation{}, errs.ErrNotFound
+	}
+	key := signal.ProjectID.String() + ":" + string(signal.SignalKind) + ":" + signal.SignalKey
+	if existing, ok := r.onboardingSignals[key]; ok {
+		if existing.SignalFingerprint != signal.SignalFingerprint {
+			return entity.OnboardingSignalReconciliation{}, errs.ErrConflict
+		}
+		signal.ID = existing.ID
+		signal.CreatedAt = existing.CreatedAt
+		signal.Version = existing.Version + 1
+		if signal.ServicesPolicyID == nil {
+			signal.ServicesPolicyID = existing.ServicesPolicyID
+		}
+		if signal.ServicesPolicyVersion == 0 {
+			signal.ServicesPolicyVersion = existing.ServicesPolicyVersion
+		}
+		if signal.CompletedAt == nil {
+			signal.CompletedAt = existing.CompletedAt
+		}
+	}
+	r.onboardingSignals[key] = signal
+	return signal, nil
 }
 
 func (r *memoryRepository) ImportServicesPolicy(_ context.Context, policy entity.ServicesPolicy, descriptors []entity.ServiceDescriptor, documentationSources []entity.DocumentationSource, result entity.CommandResult, buildEvent projectrepo.ServicesPolicyEventBuilder) (entity.ServicesPolicy, error) {

@@ -159,18 +159,20 @@ sequenceDiagram
   H->>H: update PR/MR projection and safe refs
   W->>P: ReconcileBootstrapMergeSignal(safe signal, checked artifact)
   P->>P: validate signal, artifact digest/version, binding, provider refs, base branch
+  P->>DB: upsert OnboardingSignalReconciliation(processing)
   P->>P: ImportBootstrapServicesPolicy(validated services.yaml)
   P->>DB: insert ServicesPolicy + descriptors + docs, activate repository binding
+  P->>DB: update OnboardingSignalReconciliation(imported or failed)
   P-->>W: active binding + checked policy
 ```
 
 Команда `ReconcileBootstrapMergeSignal` является явным project-side caller path для provider-side события `provider.repository.bootstrap_merged`. Она нужна на границе между provider projection и импортом проектной политики: `provider-hub` фиксирует safe merge signal, а вызывающий внутренний контур подготавливает checked artifact metadata и нормализованный payload `services.yaml`. `project-catalog` принимает только safe refs, digest, artifact ref/version и checked projection; сырой YAML, raw webhook body, diff, provider response и файлы не проходят через эту команду.
 
-`ReconcileBootstrapMergeSignal` проверяет, что сигнал относится к bootstrap, `signal_key` задан, `provider_target` соответствует repository binding, `base_branch` равен project default branch, `source_ref` указывает на эту ветку, merge commit валиден, artifact digest совпадает с `content_hash`, artifact version привязан к merge commit, watermark digest совпадает с переданным watermark payload, а ожидаемая версия совпадает с pending binding. После этих проверок команда вызывает `ImportBootstrapServicesPolicy`.
+`ReconcileBootstrapMergeSignal` проверяет, что сигнал относится к bootstrap, `signal_key` задан, `provider_target` соответствует repository binding, `base_branch` равен project default branch, `source_ref` указывает на эту ветку, merge commit валиден, artifact digest совпадает с `content_hash`, artifact version привязан к merge commit, watermark digest совпадает с переданным watermark payload, а ожидаемая версия совпадает с pending binding. После штатной проверки доступа команда записывает `OnboardingSignalReconciliation` со статусом `processing`, safe fingerprint, refs и artifact metadata, затем вызывает `ImportBootstrapServicesPolicy`. Успешный импорт переводит запись в `imported` и связывает её с `ServicesPolicy`; предсказуемая ошибка сохраняется как safe `error_code` и короткий `error_summary`.
 
 Команда `ImportBootstrapServicesPolicy` остаётся атомарным use-case импорта. Она принимает нормализованный `validated_payload_json`, а не сырой YAML и не raw provider payload; сырое содержимое остаётся в Git и во временном контуре проверки вызывающей стороны. `project-catalog` проверяет, что `provider_target` соответствует сохранённому binding, `base_branch` равен проектной default branch, `source_ref` указывает на эту ветку, commit и `content_hash` заданы, watermark относится к `repository_bootstrap`, а ожидаемая версия совпадает с pending binding.
 
-Импорт и активация binding выполняются в одной транзакции: создаётся новая `ServicesPolicy`, пересобираются `ServiceDescriptor` и источники документации из checked projection, binding переводится из `pending` в `active`, а outbox получает `project.repository.updated` и `project.services_policy.imported`. Событие политики содержит только безопасные refs и короткий summary. Повтор того же commit/source ref возвращает уже сохранённую проекцию, другой commit/ref после активации считается конфликтом и не меняет состояние.
+Импорт и активация binding выполняются в одной транзакции: создаётся новая `ServicesPolicy`, пересобираются `ServiceDescriptor` и источники документации из checked projection, binding переводится из `pending` в `active`, а outbox получает `project.repository.updated` и `project.services_policy.imported`. Событие политики содержит только безопасные refs и короткий summary. Повтор того же commit/source ref возвращает уже сохранённую проекцию, другой commit/ref после активации считается конфликтом и не меняет состояние. Повтор того же provider `signal_key` с тем же fingerprint идемпотентно обновляет статус обработки, а тот же `signal_key` с другим fingerprint конфликтует до повторного импорта.
 
 ### Подготовка политики рабочего контура
 
@@ -255,9 +257,9 @@ sequenceDiagram
 ## Наблюдаемость
 
 - Логи: команда, агрегат, версия, actor, correlation id, результат.
-- Метрики: количество команд, конфликтов версий, ошибок валидации политики, задержка чтения списков.
+- Метрики: количество команд, конфликтов версий, ошибок валидации политики, задержка чтения списков, статусы onboarding signal reconciliation.
 - Трейсы: входящий gRPC, проверка доступа, слой репозитория, публикация outbox.
-- Алерты: рост конфликтов, сбой публикации событий, систематическая невалидность `services.yaml`.
+- Алерты: рост конфликтов, сбой публикации событий, систематическая невалидность `services.yaml`, накопление failed onboarding signal.
 
 ## Апрув
 

@@ -45,6 +45,25 @@ const (
 	RepositoryStatusArchived RepositoryStatus = "archived"
 )
 
+// OnboardingSignalKind classifies safe provider onboarding signals accepted by project-catalog.
+type OnboardingSignalKind string
+
+const (
+	OnboardingSignalKindBootstrapMerge OnboardingSignalKind = "bootstrap_merge"
+	OnboardingSignalKindAdoptionScan   OnboardingSignalKind = "adoption_scan"
+)
+
+// OnboardingSignalStatus describes project-side processing state of one provider onboarding signal.
+type OnboardingSignalStatus string
+
+const (
+	OnboardingSignalStatusProcessing  OnboardingSignalStatus = "processing"
+	OnboardingSignalStatusImported    OnboardingSignalStatus = "imported"
+	OnboardingSignalStatusFailed      OnboardingSignalStatus = "failed"
+	OnboardingSignalStatusReceived    OnboardingSignalStatus = "received"
+	OnboardingSignalStatusNeedsReview OnboardingSignalStatus = "needs_review"
+)
+
 // ServicesPolicyValidationStatus describes services.yaml validation result.
 type ServicesPolicyValidationStatus string
 

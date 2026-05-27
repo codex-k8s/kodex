@@ -55,6 +55,34 @@ func repositoryUpdateArgs(repository entity.RepositoryBinding, previousVersion i
 	return args
 }
 
+func onboardingSignalReconciliationArgs(signal entity.OnboardingSignalReconciliation) pgx.NamedArgs {
+	return withBaseArgs(signal.Base, pgx.NamedArgs{
+		"project_id":              signal.ProjectID,
+		"repository_id":           signal.RepositoryID,
+		"signal_kind":             string(signal.SignalKind),
+		"signal_key":              signal.SignalKey,
+		"signal_fingerprint":      signal.SignalFingerprint,
+		"provider_slug":           signal.ProviderSlug,
+		"repository_full_name":    signal.RepositoryFullName,
+		"provider_repository_id":  signal.ProviderRepositoryID,
+		"base_branch":             signal.BaseBranch,
+		"source_ref":              signal.SourceRef,
+		"source_commit_sha":       signal.SourceCommitSHA,
+		"artifact_ref":            signal.ArtifactRef,
+		"artifact_digest":         signal.ArtifactDigest,
+		"artifact_version":        signal.ArtifactVersion,
+		"content_hash":            signal.ContentHash,
+		"status":                  string(signal.Status),
+		"error_code":              signal.ErrorCode,
+		"error_summary":           signal.ErrorSummary,
+		"summary":                 signal.Summary,
+		"services_policy_id":      postgreslib.NullableUUID(signal.ServicesPolicyID),
+		"services_policy_version": signal.ServicesPolicyVersion,
+		"observed_at":             signal.ObservedAt,
+		"completed_at":            postgreslib.NullableTime(signal.CompletedAt),
+	})
+}
+
 func servicesPolicyArgs(policy entity.ServicesPolicy) pgx.NamedArgs {
 	return withBaseArgs(policy.Base, pgx.NamedArgs{
 		"project_id":           policy.ProjectID,

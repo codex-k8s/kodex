@@ -207,6 +207,7 @@ type ImportBootstrapServicesPolicyInput struct {
 	ProviderObjectID             string
 	MergeObservedAt              string
 	ReconciliationFingerprint    string
+	OnboardingSignal             *OnboardingSignalReconciliationInput
 	Meta                         value.CommandMeta
 }
 
@@ -246,6 +247,27 @@ type ReconcileBootstrapMergeSignalInput struct {
 	MergeSignal   BootstrapRepositoryMergeSignal
 	CheckedPolicy CheckedBootstrapServicesPolicyArtifact
 	Meta          value.CommandMeta
+}
+
+// OnboardingSignalReconciliationInput contains safe metadata for project-side signal status.
+type OnboardingSignalReconciliationInput struct {
+	ProjectID            uuid.UUID
+	RepositoryID         uuid.UUID
+	SignalKind           enum.OnboardingSignalKind
+	SignalKey            string
+	SignalFingerprint    string
+	ProviderSlug         string
+	RepositoryFullName   string
+	ProviderRepositoryID string
+	BaseBranch           string
+	SourceRef            string
+	SourceCommitSHA      string
+	ArtifactRef          string
+	ArtifactDigest       string
+	ArtifactVersion      string
+	ContentHash          string
+	Summary              string
+	ObservedAt           string
 }
 
 // BootstrapServicesPolicyImportResult returns activated binding and checked policy state.

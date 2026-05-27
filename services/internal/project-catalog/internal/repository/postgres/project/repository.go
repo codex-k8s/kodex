@@ -82,6 +82,7 @@ const (
 	operationMarkOutboxEventFailed            = "domain.Repository.MarkOutboxEventFailed"
 	operationMarkOutboxEventPermanentlyFailed = "domain.Repository.MarkOutboxEventPermanentlyFailed"
 	operationMarkOutboxEventPublished         = "domain.Repository.MarkOutboxEventPublished"
+	operationRecordOnboardingSignal           = "domain.Repository.RecordOnboardingSignalReconciliation"
 	operationPutBranchRules                   = "domain.Repository.PutBranchRules"
 	operationPutDocumentationSource           = "domain.Repository.PutDocumentationSource"
 	operationPutPlacementPolicy               = "domain.Repository.PutPlacementPolicy"
@@ -144,6 +145,14 @@ func (r *Repository) GetRepositoryByProviderRef(ctx context.Context, provider en
 
 func (r *Repository) ListRepositories(ctx context.Context, filter query.RepositoryFilter) ([]entity.RepositoryBinding, query.PageResult, error) {
 	return queryPage(ctx, r.db, operationListRepositories, queryRepositoryList, repositoryFilterArgs(filter), scanRepository)
+}
+
+func (r *Repository) RecordOnboardingSignalReconciliation(ctx context.Context, signal entity.OnboardingSignalReconciliation) (entity.OnboardingSignalReconciliation, error) {
+	stored, err := queryOne(ctx, r.db, operationRecordOnboardingSignal, queryOnboardingSignalReconciliationUpsert, onboardingSignalReconciliationArgs(signal), scanOnboardingSignalReconciliation)
+	if errors.Is(err, errs.ErrNotFound) {
+		return entity.OnboardingSignalReconciliation{}, errs.ErrConflict
+	}
+	return stored, err
 }
 
 func (r *Repository) ImportServicesPolicy(ctx context.Context, policy entity.ServicesPolicy, descriptors []entity.ServiceDescriptor, documentationSources []entity.DocumentationSource, result entity.CommandResult, buildEvent projectrepo.ServicesPolicyEventBuilder) (entity.ServicesPolicy, error) {

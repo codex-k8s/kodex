@@ -74,6 +74,7 @@ func (s *Service) ReconcileBootstrapMergeSignal(ctx context.Context, input Recon
 	if err != nil {
 		return BootstrapServicesPolicyImportResult{}, err
 	}
+	signalStatus := bootstrapMergeOnboardingSignalInput(input.ProjectID, input.RepositoryID, normalized, fingerprint)
 	return s.ImportBootstrapServicesPolicy(ctx, ImportBootstrapServicesPolicyInput{
 		ProjectID:                    input.ProjectID,
 		RepositoryID:                 input.RepositoryID,
@@ -91,8 +92,31 @@ func (s *Service) ReconcileBootstrapMergeSignal(ctx context.Context, input Recon
 		ProviderObjectID:             normalized.ProviderObjectID,
 		MergeObservedAt:              normalized.MergeObservedAt,
 		ReconciliationFingerprint:    fingerprint,
+		OnboardingSignal:             &signalStatus,
 		Meta:                         meta,
 	})
+}
+
+func bootstrapMergeOnboardingSignalInput(projectID uuid.UUID, repositoryID uuid.UUID, input normalizedBootstrapMergeReconciliation, fingerprint string) OnboardingSignalReconciliationInput {
+	return OnboardingSignalReconciliationInput{
+		ProjectID:            projectID,
+		RepositoryID:         repositoryID,
+		SignalKind:           "bootstrap_merge",
+		SignalKey:            input.SignalKey,
+		SignalFingerprint:    fingerprint,
+		ProviderSlug:         input.ProviderTarget.ProviderSlug,
+		RepositoryFullName:   input.ProviderTarget.RepositoryFullName,
+		ProviderRepositoryID: input.ProviderTarget.ProviderRepositoryID,
+		BaseBranch:           input.BaseBranch,
+		SourceRef:            input.SourceRef,
+		SourceCommitSHA:      input.MergeCommitSHA,
+		ArtifactRef:          input.ArtifactRef,
+		ArtifactDigest:       input.ArtifactDigest,
+		ArtifactVersion:      input.ArtifactVersion,
+		ContentHash:          input.ContentHash,
+		Summary:              servicesPolicyImportSummary(input.SourceRef, input.MergeCommitSHA),
+		ObservedAt:           input.MergeObservedAt,
+	}
 }
 
 func normalizeBootstrapMergeReconciliationInput(input ReconcileBootstrapMergeSignalInput) (normalizedBootstrapMergeReconciliation, error) {
