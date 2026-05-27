@@ -15,48 +15,27 @@ import (
 )
 
 func RequestFeedbackInput(input *interactionsv1.RequestFeedbackRequest) (interactionservice.RequestFeedbackInput, error) {
-	if input == nil {
-		return interactionservice.RequestFeedbackInput{}, errs.ErrInvalidArgument
-	}
-	meta, draft, err := interactionRequestCommandParts(input.GetMeta(), input.GetRequest())
-	if err != nil {
-		return interactionservice.RequestFeedbackInput{}, err
-	}
-	return interactionservice.RequestFeedbackInput{Meta: meta, Request: draft}, nil
+	return commandPayloadInput(input, (*interactionsv1.RequestFeedbackRequest).GetMeta, (*interactionsv1.RequestFeedbackRequest).GetRequest, InteractionRequestDraft, feedbackInputFromDraft)
 }
 
 func RequestApprovalInput(input *interactionsv1.RequestApprovalRequest) (interactionservice.RequestApprovalInput, error) {
-	if input == nil {
-		return interactionservice.RequestApprovalInput{}, errs.ErrInvalidArgument
-	}
-	meta, draft, err := interactionRequestCommandParts(input.GetMeta(), input.GetRequest())
-	if err != nil {
-		return interactionservice.RequestApprovalInput{}, err
-	}
-	return interactionservice.RequestApprovalInput{Meta: meta, Request: draft}, nil
+	return commandPayloadInput(input, (*interactionsv1.RequestApprovalRequest).GetMeta, (*interactionsv1.RequestApprovalRequest).GetRequest, InteractionRequestDraft, approvalInputFromDraft)
 }
 
 func RequestHumanGateInput(input *interactionsv1.RequestHumanGateRequest) (interactionservice.RequestHumanGateInput, error) {
-	if input == nil {
-		return interactionservice.RequestHumanGateInput{}, errs.ErrInvalidArgument
-	}
-	meta, draft, err := interactionRequestCommandParts(input.GetMeta(), input.GetRequest())
-	if err != nil {
-		return interactionservice.RequestHumanGateInput{}, err
-	}
-	return interactionservice.RequestHumanGateInput{Meta: meta, Request: draft}, nil
+	return commandPayloadInput(input, (*interactionsv1.RequestHumanGateRequest).GetMeta, (*interactionsv1.RequestHumanGateRequest).GetRequest, InteractionRequestDraft, humanGateInputFromDraft)
 }
 
-func interactionRequestCommandParts(metaInput *interactionsv1.CommandMeta, requestInput *interactionsv1.InteractionRequestDraft) (value.CommandMeta, interactionservice.InteractionRequestDraftInput, error) {
-	meta, err := CommandMeta(metaInput)
-	if err != nil {
-		return value.CommandMeta{}, interactionservice.InteractionRequestDraftInput{}, err
-	}
-	draft, err := InteractionRequestDraft(requestInput)
-	if err != nil {
-		return value.CommandMeta{}, interactionservice.InteractionRequestDraftInput{}, err
-	}
-	return meta, draft, nil
+func feedbackInputFromDraft(meta value.CommandMeta, draft interactionservice.InteractionRequestDraftInput) interactionservice.RequestFeedbackInput {
+	return interactionservice.RequestFeedbackInput{Meta: meta, Request: draft}
+}
+
+func approvalInputFromDraft(meta value.CommandMeta, draft interactionservice.InteractionRequestDraftInput) interactionservice.RequestApprovalInput {
+	return interactionservice.RequestApprovalInput{Meta: meta, Request: draft}
+}
+
+func humanGateInputFromDraft(meta value.CommandMeta, draft interactionservice.InteractionRequestDraftInput) interactionservice.RequestHumanGateInput {
+	return interactionservice.RequestHumanGateInput{Meta: meta, Request: draft}
 }
 
 func RecordInteractionResponseInput(input *interactionsv1.RecordInteractionResponseRequest) (interactionservice.RecordInteractionResponseInput, error) {
@@ -85,18 +64,26 @@ func RecordInteractionResponseInput(input *interactionsv1.RecordInteractionRespo
 }
 
 func CancelInteractionRequestInput(input *interactionsv1.CancelInteractionRequestRequest) (interactionservice.CancelInteractionRequestInput, error) {
-	if input == nil {
-		return interactionservice.CancelInteractionRequestInput{}, errs.ErrInvalidArgument
+	return commandIDInput(input, (*interactionsv1.CancelInteractionRequestRequest).GetMeta, (*interactionsv1.CancelInteractionRequestRequest).GetRequestId, cancelRequestInput)
+}
+
+func cancelRequestInput(meta value.CommandMeta, requestID uuid.UUID) interactionservice.CancelInteractionRequestInput {
+	return interactionservice.CancelInteractionRequestInput{Meta: meta, RequestID: requestID}
+}
+
+func commandIDInput[
+	Request any,
+	Output any,
+](
+	input *Request,
+	metaInput func(*Request) *interactionsv1.CommandMeta,
+	idInput func(*Request) string,
+	build func(value.CommandMeta, uuid.UUID) Output,
+) (Output, error) {
+	decodeID := func(request *Request) (uuid.UUID, error) {
+		return ParseUUID(idInput(request))
 	}
-	meta, err := CommandMeta(input.GetMeta())
-	if err != nil {
-		return interactionservice.CancelInteractionRequestInput{}, err
-	}
-	requestID, err := ParseUUID(input.GetRequestId())
-	if err != nil {
-		return interactionservice.CancelInteractionRequestInput{}, err
-	}
-	return interactionservice.CancelInteractionRequestInput{Meta: meta, RequestID: requestID}, nil
+	return decodeCommandEnvelope(input, metaInput, decodeID, build)
 }
 
 func ExpireInteractionRequestsInput(input *interactionsv1.ExpireInteractionRequestsRequest) (interactionservice.ExpireInteractionRequestsInput, error) {
@@ -126,7 +113,30 @@ func GetInteractionRequestInput(input *interactionsv1.GetInteractionRequestReque
 	if err != nil {
 		return interactionservice.GetInteractionRequestInput{}, err
 	}
-	return interactionservice.GetInteractionRequestInput{Meta: QueryMeta(input.GetMeta()), RequestID: requestID}, nil
+	return interactionRequestReadInput(QueryMeta(input.GetMeta()), requestID), nil
+}
+
+func interactionRequestReadInput(meta value.QueryMeta, requestID uuid.UUID) interactionservice.GetInteractionRequestInput {
+	return interactionservice.GetInteractionRequestInput{Meta: meta, RequestID: requestID}
+}
+
+type queryIDAdapter[Request comparable, Output any] struct {
+	metaInput func(Request) *interactionsv1.QueryMeta
+	idInput   func(Request) string
+	build     func(value.QueryMeta, uuid.UUID) Output
+}
+
+func queryIDInput[Request comparable, Output any](input Request, adapter queryIDAdapter[Request, Output]) (Output, error) {
+	var zero Output
+	var empty Request
+	if input == empty {
+		return zero, errs.ErrInvalidArgument
+	}
+	id, err := ParseUUID(adapter.idInput(input))
+	if err != nil {
+		return zero, err
+	}
+	return adapter.build(QueryMeta(adapter.metaInput(input)), id), nil
 }
 
 func ListInteractionRequestsInput(input *interactionsv1.ListInteractionRequestsRequest) (interactionservice.ListInteractionRequestsInput, error) {
@@ -237,19 +247,11 @@ func ExpireInteractionRequestsResponse(result interactionservice.ExpireInteracti
 }
 
 func ListInteractionRequestsResponse(requests []entity.InteractionRequest, page value.PageResult) *interactionsv1.ListInteractionRequestsResponse {
-	items := make([]*interactionsv1.InteractionRequest, 0, len(requests))
-	for _, request := range requests {
-		items = append(items, InteractionRequest(request))
-	}
-	return &interactionsv1.ListInteractionRequestsResponse{Requests: items, Page: PageResponse(page)}
+	return &interactionsv1.ListInteractionRequestsResponse{Requests: castSlice(requests, InteractionRequest), Page: PageResponse(page)}
 }
 
 func ListOwnerInboxItemsResponse(items []entity.OwnerInboxItem, page value.PageResult) *interactionsv1.ListOwnerInboxItemsResponse {
-	response := &interactionsv1.ListOwnerInboxItemsResponse{Items: make([]*interactionsv1.OwnerInboxItem, 0, len(items)), Page: PageResponse(page)}
-	for _, item := range items {
-		response.Items = append(response.Items, OwnerInboxItem(item))
-	}
-	return response
+	return &interactionsv1.ListOwnerInboxItemsResponse{Items: castSlice(items, OwnerInboxItem), Page: PageResponse(page)}
 }
 
 func OwnerInboxItem(item entity.OwnerInboxItem) *interactionsv1.OwnerInboxItem {
@@ -372,7 +374,7 @@ func SourceOwnerRef(input *interactionsv1.SourceOwnerRef) value.SourceOwnerRef {
 }
 
 func SourceOwnerRefProto(input value.SourceOwnerRef) *interactionsv1.SourceOwnerRef {
-	if input.Kind == "" && input.Ref == "" {
+	if refPairEmpty(string(input.Kind), input.Ref) {
 		return nil
 	}
 	return &interactionsv1.SourceOwnerRef{Kind: SourceOwnerKindProto(input.Kind), Ref: OptionalString(input.Ref)}
@@ -386,10 +388,17 @@ func IngressRef(input *interactionsv1.IngressRef) value.IngressRef {
 }
 
 func IngressRefProto(input value.IngressRef) *interactionsv1.IngressRef {
-	if input.Kind == "" && input.Ref == "" {
+	if refPairEmpty(string(input.Kind), input.Ref) {
 		return nil
 	}
-	return &interactionsv1.IngressRef{Kind: IngressKindProto(input.Kind), Ref: OptionalString(input.Ref)}
+	ref := &interactionsv1.IngressRef{}
+	ref.Kind = IngressKindProto(input.Kind)
+	ref.Ref = OptionalString(input.Ref)
+	return ref
+}
+
+func refPairEmpty(kind string, ref string) bool {
+	return kind == "" && ref == ""
 }
 
 func DecisionOwnerRef(input *interactionsv1.DecisionOwnerRef) value.DecisionOwnerRef {
@@ -415,22 +424,11 @@ func DecisionOwnerRefProto(input value.DecisionOwnerRef) *interactionsv1.Decisio
 }
 
 func ActorRefs(input []*interactionsv1.ActorRef) []value.ActorRef {
-	result := make([]value.ActorRef, 0, len(input))
-	for _, ref := range input {
-		if ref == nil {
-			continue
-		}
-		result = append(result, value.ActorRef{Kind: strings.TrimSpace(ref.GetRefKind()), Ref: strings.TrimSpace(ref.GetRef())})
-	}
-	return result
+	return collectRefs(input, (*interactionsv1.ActorRef)(nil), (*interactionsv1.ActorRef).GetRefKind, (*interactionsv1.ActorRef).GetRef, actorRefValue)
 }
 
 func ActorRefsProto(input []value.ActorRef) []*interactionsv1.ActorRef {
-	result := make([]*interactionsv1.ActorRef, 0, len(input))
-	for _, ref := range input {
-		result = append(result, &interactionsv1.ActorRef{RefKind: ref.Kind, Ref: ref.Ref})
-	}
-	return result
+	return castSlice(input, actorRefItemProto)
 }
 
 func RequestKinds(input []interactionsv1.InteractionRequestKind) []enum.InteractionRequestKind {
@@ -449,30 +447,51 @@ func castSlice[Source any, Target any](input []Source, cast func(Source) Target)
 	return result
 }
 
+func collectRefs[Source comparable, Target any](input []Source, zero Source, kind func(Source) string, ref func(Source) string, build func(string, string) Target) []Target {
+	result := make([]Target, 0, len(input))
+	for _, item := range input {
+		if item == zero {
+			continue
+		}
+		result = append(result, build(strings.TrimSpace(kind(item)), strings.TrimSpace(ref(item))))
+	}
+	return result
+}
+
 func ExternalRef(input *interactionsv1.ExternalRef) value.ExternalRef {
 	if input == nil {
 		return value.ExternalRef{}
 	}
-	return value.ExternalRef{Kind: strings.TrimSpace(input.GetRefKind()), Ref: strings.TrimSpace(input.GetRef())}
+	kind := strings.TrimSpace(input.GetRefKind())
+	ref := strings.TrimSpace(input.GetRef())
+	return externalRefValue(kind, ref)
 }
 
 func ExternalRefs(input []*interactionsv1.ExternalRef) []value.ExternalRef {
-	result := make([]value.ExternalRef, 0, len(input))
-	for _, ref := range input {
-		if ref == nil {
-			continue
-		}
-		result = append(result, value.ExternalRef{Kind: strings.TrimSpace(ref.GetRefKind()), Ref: strings.TrimSpace(ref.GetRef())})
-	}
-	return result
+	return collectRefs(input, (*interactionsv1.ExternalRef)(nil), (*interactionsv1.ExternalRef).GetRefKind, (*interactionsv1.ExternalRef).GetRef, externalRefValue)
 }
 
 func ExternalRefsProto(input []value.ExternalRef) []*interactionsv1.ExternalRef {
-	result := make([]*interactionsv1.ExternalRef, 0, len(input))
-	for _, ref := range input {
-		result = append(result, &interactionsv1.ExternalRef{RefKind: ref.Kind, Ref: ref.Ref})
-	}
-	return result
+	return castSlice(input, externalRefItemProto)
+}
+
+func actorRefValue(kind string, ref string) value.ActorRef {
+	return value.ActorRef{Kind: kind, Ref: ref}
+}
+
+func actorRefItemProto(ref value.ActorRef) *interactionsv1.ActorRef {
+	return &interactionsv1.ActorRef{RefKind: ref.Kind, Ref: ref.Ref}
+}
+
+func externalRefValue(kind string, ref string) value.ExternalRef {
+	return value.ExternalRef{Kind: kind, Ref: ref}
+}
+
+func externalRefItemProto(ref value.ExternalRef) *interactionsv1.ExternalRef {
+	output := &interactionsv1.ExternalRef{}
+	output.RefKind = ref.Kind
+	output.Ref = ref.Ref
+	return output
 }
 
 func InteractionActions(input []*interactionsv1.InteractionAction) []value.InteractionAction {

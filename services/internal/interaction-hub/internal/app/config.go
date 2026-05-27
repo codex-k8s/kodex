@@ -187,9 +187,14 @@ func (cfg Config) EventLogDatabasePoolSettings() postgreslib.PoolSettings {
 }
 
 func (cfg Config) databaseRuntimeSettings(dsn string, maxConns int32, minConns int32) postgreslib.PoolRuntimeSettings {
-	settings := postgreslib.PoolRuntimeSettings{DSN: dsn}
+	settings := postgreslib.PoolRuntimeSettings{}
+	settings.DSN = dsn
 	settings.MaxConns = maxConns
 	settings.MinConns = minConns
+	return cfg.withDatabaseRuntime(settings)
+}
+
+func (cfg Config) withDatabaseRuntime(settings postgreslib.PoolRuntimeSettings) postgreslib.PoolRuntimeSettings {
 	settings.MaxConnLifetime = cfg.DatabaseMaxConnLifetime
 	settings.MaxConnIdleTime = cfg.DatabaseMaxConnIdleTime
 	settings.HealthCheckPeriod = cfg.DatabaseHealthPeriod

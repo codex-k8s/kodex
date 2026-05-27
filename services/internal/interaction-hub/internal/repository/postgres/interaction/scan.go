@@ -6,7 +6,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	outboxlib "github.com/codex-k8s/kodex/libs/go/outbox"
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
 	"github.com/codex-k8s/kodex/services/internal/interaction-hub/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/interaction-hub/internal/domain/types/enum"
@@ -562,24 +561,22 @@ func scanOutboxEvent(row postgreslib.RowScanner) (entity.OutboxEvent, error) {
 	if err != nil {
 		return entity.OutboxEvent{}, err
 	}
-	return entity.OutboxEvent{
-		Event: outboxlib.Event{
-			ID:            raw.Identity.RowID,
-			EventType:     raw.Identity.TypeName,
-			SchemaVersion: raw.Identity.ContractVersion,
-			AggregateType: raw.Identity.SubjectKind,
-			AggregateID:   raw.Identity.SubjectID,
-			Payload:       raw.Body,
-			OccurredAt:    raw.Identity.CreatedAt,
-			AttemptCount:  raw.Delivery.Attempts,
-		},
-		PublishedAt:         raw.Delivery.SentAt,
-		NextAttemptAt:       raw.Delivery.RetryAt,
-		LockedUntil:         raw.Delivery.LeaseUntil,
-		FailedPermanentlyAt: raw.Failure.DeadAt,
-		FailureKind:         raw.Failure.FailureCode,
-		LastError:           raw.Failure.ErrorText,
-	}, nil
+	event := entity.OutboxEvent{}
+	event.ID = raw.Identity.RowID
+	event.EventType = raw.Identity.TypeName
+	event.SchemaVersion = raw.Identity.ContractVersion
+	event.AggregateType = raw.Identity.SubjectKind
+	event.AggregateID = raw.Identity.SubjectID
+	event.Payload = raw.Body
+	event.OccurredAt = raw.Identity.CreatedAt
+	event.AttemptCount = raw.Delivery.Attempts
+	event.PublishedAt = raw.Delivery.SentAt
+	event.NextAttemptAt = raw.Delivery.RetryAt
+	event.LockedUntil = raw.Delivery.LeaseUntil
+	event.FailedPermanentlyAt = raw.Failure.DeadAt
+	event.FailureKind = raw.Failure.FailureCode
+	event.LastError = raw.Failure.ErrorText
+	return event, nil
 }
 
 func unmarshalArray[T any](input []byte) ([]T, error) {

@@ -57,39 +57,31 @@ func RegisterInteractionHubService(registrar grpcruntime.ServiceRegistrar, servi
 }
 
 func (s *Server) CreateConversationThread(ctx context.Context, request *interactionsv1.CreateConversationThreadRequest) (*interactionsv1.ConversationThreadResponse, error) {
-	return commandResponse(ctx, request, casters.CreateConversationThreadInput, s.service.CreateConversationThread, casters.ConversationThreadResponse)
+	return commandResponse(ctx, request, unaryCommand(casters.CreateConversationThreadInput, s.service.CreateConversationThread, casters.ConversationThreadResponse))
 }
 
 func (s *Server) RecordConversationMessage(ctx context.Context, request *interactionsv1.RecordConversationMessageRequest) (*interactionsv1.ConversationMessageResponse, error) {
-	return commandResponse(ctx, request, casters.RecordConversationMessageInput, s.service.RecordConversationMessage, casters.ConversationMessageResponse)
+	return commandResponse(ctx, request, unaryCommand(casters.RecordConversationMessageInput, s.service.RecordConversationMessage, casters.ConversationMessageResponse))
 }
 
 func (s *Server) GetConversationThread(ctx context.Context, request *interactionsv1.GetConversationThreadRequest) (*interactionsv1.ConversationThreadResponse, error) {
-	return commandResponse(ctx, request, casters.GetConversationThreadInput, s.service.GetConversationThread, casters.ConversationThreadResponse)
+	return commandResponse(ctx, request, unaryCommand(casters.GetConversationThreadInput, s.service.GetConversationThread, casters.ConversationThreadResponse))
 }
 
 func (s *Server) ListConversationMessages(ctx context.Context, request *interactionsv1.ListConversationMessagesRequest) (*interactionsv1.ListConversationMessagesResponse, error) {
-	input, err := casters.ListConversationMessagesInput(request)
-	if err != nil {
-		return nil, err
-	}
-	messages, page, err := s.service.ListConversationMessages(ctx, input)
-	if err != nil {
-		return nil, err
-	}
-	return casters.ListConversationMessagesResponse(messages, page), nil
+	return pagedResponse(ctx, request, casters.ListConversationMessagesInput, s.service.ListConversationMessages, casters.ListConversationMessagesResponse)
 }
 
 func (s *Server) RequestFeedback(ctx context.Context, request *interactionsv1.RequestFeedbackRequest) (*interactionsv1.InteractionRequestResponse, error) {
-	return commandResponse(ctx, request, casters.RequestFeedbackInput, s.service.RequestFeedback, casters.InteractionRequestResponse)
+	return commandResponse(ctx, request, unaryCommand(casters.RequestFeedbackInput, s.service.RequestFeedback, casters.InteractionRequestResponse))
 }
 
 func (s *Server) RequestApproval(ctx context.Context, request *interactionsv1.RequestApprovalRequest) (*interactionsv1.InteractionRequestResponse, error) {
-	return commandResponse(ctx, request, casters.RequestApprovalInput, s.service.RequestApproval, casters.InteractionRequestResponse)
+	return commandResponse(ctx, request, unaryCommand(casters.RequestApprovalInput, s.service.RequestApproval, casters.InteractionRequestResponse))
 }
 
 func (s *Server) RequestHumanGate(ctx context.Context, request *interactionsv1.RequestHumanGateRequest) (*interactionsv1.InteractionRequestResponse, error) {
-	return commandResponse(ctx, request, casters.RequestHumanGateInput, s.service.RequestHumanGate, casters.InteractionRequestResponse)
+	return commandResponse(ctx, request, unaryCommand(casters.RequestHumanGateInput, s.service.RequestHumanGate, casters.InteractionRequestResponse))
 }
 
 func (s *Server) RecordInteractionResponse(ctx context.Context, request *interactionsv1.RecordInteractionResponseRequest) (*interactionsv1.InteractionResponseResponse, error) {
@@ -105,95 +97,107 @@ func (s *Server) RecordInteractionResponse(ctx context.Context, request *interac
 }
 
 func (s *Server) CancelInteractionRequest(ctx context.Context, request *interactionsv1.CancelInteractionRequestRequest) (*interactionsv1.InteractionRequestResponse, error) {
-	return commandResponse(ctx, request, casters.CancelInteractionRequestInput, s.service.CancelInteractionRequest, casters.InteractionRequestResponse)
+	return commandResponse(ctx, request, unaryCommand(casters.CancelInteractionRequestInput, s.service.CancelInteractionRequest, casters.InteractionRequestResponse))
 }
 
 func (s *Server) ExpireInteractionRequests(ctx context.Context, request *interactionsv1.ExpireInteractionRequestsRequest) (*interactionsv1.ExpireInteractionRequestsResponse, error) {
-	return commandResponse(ctx, request, casters.ExpireInteractionRequestsInput, s.service.ExpireInteractionRequests, casters.ExpireInteractionRequestsResponse)
+	return commandResponse(ctx, request, unaryCommand(casters.ExpireInteractionRequestsInput, s.service.ExpireInteractionRequests, casters.ExpireInteractionRequestsResponse))
 }
 
 func (s *Server) GetInteractionRequest(ctx context.Context, request *interactionsv1.GetInteractionRequestRequest) (*interactionsv1.InteractionRequestResponse, error) {
-	return commandResponse(ctx, request, casters.GetInteractionRequestInput, s.service.GetInteractionRequest, casters.InteractionRequestResponse)
+	return commandResponse(ctx, request, unaryCommand(casters.GetInteractionRequestInput, s.service.GetInteractionRequest, casters.InteractionRequestResponse))
 }
 
 func (s *Server) ListInteractionRequests(ctx context.Context, request *interactionsv1.ListInteractionRequestsRequest) (*interactionsv1.ListInteractionRequestsResponse, error) {
-	input, err := casters.ListInteractionRequestsInput(request)
-	if err != nil {
-		return nil, err
-	}
-	requests, page, err := s.service.ListInteractionRequests(ctx, input)
-	if err != nil {
-		return nil, err
-	}
-	return casters.ListInteractionRequestsResponse(requests, page), nil
+	return pagedResponse(ctx, request, casters.ListInteractionRequestsInput, s.service.ListInteractionRequests, casters.ListInteractionRequestsResponse)
 }
 
 func (s *Server) ListOwnerInboxItems(ctx context.Context, request *interactionsv1.ListOwnerInboxItemsRequest) (*interactionsv1.ListOwnerInboxItemsResponse, error) {
-	input, err := casters.ListOwnerInboxItemsInput(request)
-	if err != nil {
-		return nil, err
-	}
-	items, page, err := s.service.ListOwnerInboxItems(ctx, input)
-	if err != nil {
-		return nil, err
-	}
-	return casters.ListOwnerInboxItemsResponse(items, page), nil
+	return pagedResponse(ctx, request, casters.ListOwnerInboxItemsInput, s.service.ListOwnerInboxItems, casters.ListOwnerInboxItemsResponse)
 }
 
 func (s *Server) RequestNotification(ctx context.Context, request *interactionsv1.RequestNotificationRequest) (*interactionsv1.NotificationResponse, error) {
-	return commandResponse(ctx, request, casters.RequestNotificationInput, s.service.RequestNotification, casters.NotificationResponse)
+	return commandResponse(ctx, request, unaryCommand(casters.RequestNotificationInput, s.service.RequestNotification, casters.NotificationResponse))
 }
 
 func (s *Server) UpsertSubscription(ctx context.Context, request *interactionsv1.UpsertSubscriptionRequest) (*interactionsv1.SubscriptionResponse, error) {
-	return commandResponse(ctx, request, casters.UpsertSubscriptionInput, s.service.UpsertSubscription, casters.SubscriptionResponse)
+	return commandResponse(ctx, request, unaryCommand(casters.UpsertSubscriptionInput, s.service.UpsertSubscription, casters.SubscriptionResponse))
 }
 
 func (s *Server) DisableSubscription(ctx context.Context, request *interactionsv1.DisableSubscriptionRequest) (*interactionsv1.SubscriptionResponse, error) {
-	return commandResponse(ctx, request, casters.DisableSubscriptionInput, s.service.DisableSubscription, casters.SubscriptionResponse)
+	return commandResponse(ctx, request, unaryCommand(casters.DisableSubscriptionInput, s.service.DisableSubscription, casters.SubscriptionResponse))
 }
 
 func (s *Server) ListSubscriptions(ctx context.Context, request *interactionsv1.ListSubscriptionsRequest) (*interactionsv1.ListSubscriptionsResponse, error) {
-	input, err := casters.ListSubscriptionsInput(request)
-	if err != nil {
-		return nil, err
-	}
-	subscriptions, page, err := s.service.ListSubscriptions(ctx, input)
-	if err != nil {
-		return nil, err
-	}
-	return casters.ListSubscriptionsResponse(subscriptions, page), nil
+	return pagedResponse(ctx, request, casters.ListSubscriptionsInput, s.service.ListSubscriptions, casters.ListSubscriptionsResponse)
 }
 
 func (s *Server) PlanDelivery(ctx context.Context, request *interactionsv1.PlanDeliveryRequest) (*interactionsv1.DeliveryAttemptResponse, error) {
-	return commandResponse(ctx, request, casters.PlanDeliveryInput, s.service.PlanDelivery, casters.DeliveryAttemptResponse)
+	return commandResponse(ctx, request, unaryCommand(casters.PlanDeliveryInput, s.service.PlanDelivery, casters.DeliveryAttemptResponse))
 }
 
 func (s *Server) RecordDeliveryResult(ctx context.Context, request *interactionsv1.RecordDeliveryResultRequest) (*interactionsv1.DeliveryAttemptResponse, error) {
-	return commandResponse(ctx, request, casters.RecordDeliveryResultInput, s.service.RecordDeliveryResult, casters.DeliveryAttemptResponse)
+	return commandResponse(ctx, request, unaryCommand(casters.RecordDeliveryResultInput, s.service.RecordDeliveryResult, casters.DeliveryAttemptResponse))
 }
 
 func (s *Server) RecordChannelCallback(ctx context.Context, request *interactionsv1.RecordChannelCallbackRequest) (*interactionsv1.ChannelCallbackResponse, error) {
-	return commandResponse(ctx, request, casters.RecordChannelCallbackInput, s.service.RecordChannelCallback, casters.ChannelCallbackResponse)
+	return commandResponse(ctx, request, unaryCommand(casters.RecordChannelCallbackInput, s.service.RecordChannelCallback, casters.ChannelCallbackResponse))
 }
 
 func (s *Server) GetDeliveryStatus(ctx context.Context, request *interactionsv1.GetDeliveryStatusRequest) (*interactionsv1.DeliveryStatusResponse, error) {
-	return commandResponse(ctx, request, casters.GetDeliveryStatusInput, s.service.GetDeliveryStatus, casters.DeliveryStatusResponse)
+	return commandResponse(ctx, request, unaryCommand(casters.GetDeliveryStatusInput, s.service.GetDeliveryStatus, casters.DeliveryStatusResponse))
 }
 
-func commandResponse[Request any, Input any, Output any, Response any](
-	ctx context.Context,
-	request *Request,
+type commandEndpoint[Request any, Input any, Output any, Response any] struct {
+	decode func(*Request) (Input, error)
+	call   func(context.Context, Input) (Output, error)
+	encode func(Output) *Response
+}
+
+func unaryCommand[Request any, Input any, Output any, Response any](
 	decode func(*Request) (Input, error),
 	call func(context.Context, Input) (Output, error),
 	encode func(Output) *Response,
+) commandEndpoint[Request, Input, Output, Response] {
+	return commandEndpoint[Request, Input, Output, Response]{decode: decode, call: call, encode: encode}
+}
+
+func commandResponse[
+	Request any,
+	Input any,
+	Output any,
+	Response any,
+](
+	ctx context.Context,
+	request *Request,
+	endpoint commandEndpoint[Request, Input, Output, Response],
+) (*Response, error) {
+	input, err := endpoint.decode(request)
+	if err != nil {
+		return nil, err
+	}
+	output, callErr := endpoint.call(ctx, input)
+	if callErr != nil {
+		return nil, callErr
+	}
+	response := endpoint.encode(output)
+	return response, nil
+}
+
+func pagedResponse[Request any, Input any, Item any, Response any](
+	ctx context.Context,
+	request *Request,
+	decode func(*Request) (Input, error),
+	call func(context.Context, Input) ([]Item, value.PageResult, error),
+	encode func([]Item, value.PageResult) *Response,
 ) (*Response, error) {
 	input, err := decode(request)
 	if err != nil {
 		return nil, err
 	}
-	output, err := call(ctx, input)
+	items, page, err := call(ctx, input)
 	if err != nil {
 		return nil, err
 	}
-	return encode(output), nil
+	return encode(items, page), nil
 }

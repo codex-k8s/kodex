@@ -91,7 +91,7 @@ func (s *Service) CreateConversationThread(ctx context.Context, input CreateConv
 	if err != nil {
 		return entity.ConversationThread{}, err
 	}
-	if thread, ok, err := s.replayThreadCommand(ctx, input.Meta, enum.OperationCreateConversationThread, fingerprint); err != nil || ok {
+	if thread, ok, err := replayAggregate(ctx, s, input.Meta, enum.OperationCreateConversationThread, fingerprint, s.repository.GetConversationThread); err != nil || ok {
 		return thread, err
 	}
 
@@ -143,7 +143,7 @@ func (s *Service) RecordConversationMessage(ctx context.Context, input RecordCon
 	if err != nil {
 		return entity.ConversationMessage{}, err
 	}
-	if message, ok, err := s.replayMessageCommand(ctx, input.Meta, enum.OperationRecordConversationMessage, fingerprint); err != nil || ok {
+	if message, ok, err := replayAggregate(ctx, s, input.Meta, enum.OperationRecordConversationMessage, fingerprint, s.repository.GetConversationMessage); err != nil || ok {
 		return message, err
 	}
 	thread, err := s.repository.GetConversationThread(ctx, input.ThreadID)
@@ -152,18 +152,7 @@ func (s *Service) RecordConversationMessage(ctx context.Context, input RecordCon
 	}
 
 	now := s.clock.Now()
-	message := entity.ConversationMessage{
-		ID:           s.ids.New(),
-		ThreadID:     input.ThreadID,
-		MessageKind:  input.MessageKind,
-		AuthorRef:    input.AuthorRef,
-		BodySummary:  input.BodySummary,
-		BodyObject:   input.BodyObject,
-		BodyDigest:   input.BodyDigest,
-		Locale:       input.Locale,
-		SafeMetadata: input.SafeMetadata,
-		CreatedAt:    now,
-	}
+	message := newConversationMessage(s.ids.New(), input, now)
 	thread.LatestMessageID = &message.ID
 	thread.Version++
 	thread.UpdatedAt = now
@@ -185,13 +174,7 @@ func (s *Service) RecordConversationMessage(ctx context.Context, input RecordCon
 }
 
 func (s *Service) GetConversationThread(ctx context.Context, input GetConversationThreadInput) (entity.ConversationThread, error) {
-	if err := s.ensureReady(); err != nil {
-		return entity.ConversationThread{}, err
-	}
-	if input.ThreadID == uuid.Nil {
-		return entity.ConversationThread{}, errs.ErrInvalidArgument
-	}
-	return s.repository.GetConversationThread(ctx, input.ThreadID)
+	return getServiceAggregate(ctx, s, input.ThreadID, loadConversationThread)
 }
 
 func (s *Service) ListConversationMessages(ctx context.Context, input ListConversationMessagesInput) ([]entity.ConversationMessage, value.PageResult, error) {
@@ -250,18 +233,7 @@ func (s *Service) RecordInteractionResponse(ctx context.Context, input RecordInt
 	}
 
 	now := s.clock.Now()
-	response := entity.InteractionResponse{
-		ID:                  s.ids.New(),
-		RequestID:           request.ID,
-		ResponseAction:      input.ResponseAction,
-		RespondedByActorRef: input.RespondedByActorRef,
-		ResponseSummary:     input.ResponseSummary,
-		ResponseObject:      input.ResponseObject,
-		SourceKind:          input.SourceKind,
-		SourceRef:           input.SourceRef,
-		OwnerDecisionRef:    input.OwnerDecisionRef,
-		CreatedAt:           now,
-	}
+	response := newInteractionResponse(s.ids.New(), request.ID, input, now)
 	previousVersion := request.Version
 	request.Status = enum.InteractionRequestStatusAnswered
 	request.Version++
@@ -293,7 +265,7 @@ func (s *Service) CancelInteractionRequest(ctx context.Context, input CancelInte
 	if err != nil {
 		return entity.InteractionRequest{}, err
 	}
-	if request, ok, err := s.replayRequestCommand(ctx, input.Meta, enum.OperationCancelInteractionRequest, fingerprint); err != nil || ok {
+	if request, ok, err := replayAggregate(ctx, s, input.Meta, enum.OperationCancelInteractionRequest, fingerprint, s.repository.GetInteractionRequest); err != nil || ok {
 		return request, err
 	}
 	request, err := s.repository.GetInteractionRequest(ctx, input.RequestID)
@@ -393,13 +365,7 @@ func (s *Service) ExpireInteractionRequests(ctx context.Context, input ExpireInt
 }
 
 func (s *Service) GetInteractionRequest(ctx context.Context, input GetInteractionRequestInput) (entity.InteractionRequest, error) {
-	if err := s.ensureReady(); err != nil {
-		return entity.InteractionRequest{}, err
-	}
-	if input.RequestID == uuid.Nil {
-		return entity.InteractionRequest{}, errs.ErrInvalidArgument
-	}
-	return s.repository.GetInteractionRequest(ctx, input.RequestID)
+	return getServiceAggregate(ctx, s, input.RequestID, loadInteractionRequest)
 }
 
 func (s *Service) ListInteractionRequests(ctx context.Context, input ListInteractionRequestsInput) ([]entity.InteractionRequest, value.PageResult, error) {
@@ -418,15 +384,7 @@ func (s *Service) ListInteractionRequests(ctx context.Context, input ListInterac
 	if input.SourceOwnerKind != "" && !input.SourceOwnerKind.Valid() {
 		return nil, value.PageResult{}, errs.ErrInvalidArgument
 	}
-	return s.repository.ListInteractionRequests(ctx, query.InteractionRequestFilter{
-		Scope:           input.Scope,
-		RequestKind:     input.RequestKind,
-		Status:          input.Status,
-		SourceOwnerKind: input.SourceOwnerKind,
-		SourceOwnerRef:  strings.TrimSpace(input.SourceOwnerRef),
-		DeadlineBefore:  input.DeadlineBefore,
-		Page:            input.Page,
-	})
+	return s.repository.ListInteractionRequests(ctx, interactionRequestListFilter(input))
 }
 
 func (s *Service) ListOwnerInboxItems(ctx context.Context, input ListOwnerInboxItemsInput) ([]entity.OwnerInboxItem, value.PageResult, error) {
@@ -475,7 +433,7 @@ func (s *Service) RequestNotification(ctx context.Context, input RequestNotifica
 	if err != nil {
 		return entity.Notification{}, err
 	}
-	if notification, ok, err := s.replayNotificationCommand(ctx, input.Meta, enum.OperationRequestNotification, fingerprint); err != nil || ok {
+	if notification, ok, err := replayAggregate(ctx, s, input.Meta, enum.OperationRequestNotification, fingerprint, s.repository.GetNotification); err != nil || ok {
 		return notification, err
 	}
 	if input.RequestID != uuid.Nil {
@@ -538,7 +496,7 @@ func (s *Service) UpsertSubscription(ctx context.Context, input UpsertSubscripti
 	if err != nil {
 		return entity.Subscription{}, err
 	}
-	if subscription, ok, err := s.replaySubscriptionCommand(ctx, input.Meta, enum.OperationUpsertSubscription, fingerprint); err != nil || ok {
+	if subscription, ok, err := replayAggregate(ctx, s, input.Meta, enum.OperationUpsertSubscription, fingerprint, s.repository.GetSubscription); err != nil || ok {
 		return subscription, err
 	}
 
@@ -608,7 +566,7 @@ func (s *Service) DisableSubscription(ctx context.Context, input DisableSubscrip
 	if err != nil {
 		return entity.Subscription{}, err
 	}
-	if subscription, ok, err := s.replaySubscriptionCommand(ctx, input.Meta, enum.OperationDisableSubscription, fingerprint); err != nil || ok {
+	if subscription, ok, err := replayAggregate(ctx, s, input.Meta, enum.OperationDisableSubscription, fingerprint, s.repository.GetSubscription); err != nil || ok {
 		return subscription, err
 	}
 	subscription, err := s.repository.GetSubscription(ctx, input.SubscriptionID)
@@ -968,7 +926,7 @@ func (s *Service) createInteractionRequest(ctx context.Context, kind enum.Intera
 	if err != nil {
 		return entity.InteractionRequest{}, err
 	}
-	if request, ok, err := s.replayRequestCommand(ctx, meta, operation, fingerprint); err != nil || ok {
+	if request, ok, err := replayAggregate(ctx, s, meta, operation, fingerprint, s.repository.GetInteractionRequest); err != nil || ok {
 		return request, err
 	}
 
@@ -1012,24 +970,65 @@ func (s *Service) ensureReady() error {
 	return nil
 }
 
-func (s *Service) replayThreadCommand(ctx context.Context, meta value.CommandMeta, operation enum.Operation, fingerprint string) (entity.ConversationThread, bool, error) {
-	return replayAggregate(ctx, s, meta, operation, fingerprint, s.repository.GetConversationThread)
+func getServiceAggregate[T any](ctx context.Context, s *Service, id uuid.UUID, load func(interactionrepo.Repository, context.Context, uuid.UUID) (T, error)) (T, error) {
+	var zero T
+	if err := s.ensureReady(); err != nil {
+		return zero, err
+	}
+	if id == uuid.Nil {
+		return zero, errs.ErrInvalidArgument
+	}
+	return load(s.repository, ctx, id)
 }
 
-func (s *Service) replayMessageCommand(ctx context.Context, meta value.CommandMeta, operation enum.Operation, fingerprint string) (entity.ConversationMessage, bool, error) {
-	return replayAggregate(ctx, s, meta, operation, fingerprint, s.repository.GetConversationMessage)
+func loadConversationThread(repository interactionrepo.Repository, ctx context.Context, id uuid.UUID) (entity.ConversationThread, error) {
+	return repository.GetConversationThread(ctx, id)
 }
 
-func (s *Service) replayRequestCommand(ctx context.Context, meta value.CommandMeta, operation enum.Operation, fingerprint string) (entity.InteractionRequest, bool, error) {
-	return replayAggregate(ctx, s, meta, operation, fingerprint, s.repository.GetInteractionRequest)
+func loadInteractionRequest(repository interactionrepo.Repository, ctx context.Context, id uuid.UUID) (entity.InteractionRequest, error) {
+	return repository.GetInteractionRequest(ctx, id)
 }
 
-func (s *Service) replayNotificationCommand(ctx context.Context, meta value.CommandMeta, operation enum.Operation, fingerprint string) (entity.Notification, bool, error) {
-	return replayAggregate(ctx, s, meta, operation, fingerprint, s.repository.GetNotification)
+func interactionRequestListFilter(input ListInteractionRequestsInput) query.InteractionRequestFilter {
+	return query.InteractionRequestFilter{
+		Scope:           input.Scope,
+		RequestKind:     input.RequestKind,
+		Status:          input.Status,
+		SourceOwnerKind: input.SourceOwnerKind,
+		SourceOwnerRef:  strings.TrimSpace(input.SourceOwnerRef),
+		DeadlineBefore:  input.DeadlineBefore,
+		Page:            input.Page,
+	}
 }
 
-func (s *Service) replaySubscriptionCommand(ctx context.Context, meta value.CommandMeta, operation enum.Operation, fingerprint string) (entity.Subscription, bool, error) {
-	return replayAggregate(ctx, s, meta, operation, fingerprint, s.repository.GetSubscription)
+func newConversationMessage(id uuid.UUID, input RecordConversationMessageInput, now time.Time) entity.ConversationMessage {
+	return entity.ConversationMessage{
+		ID:           id,
+		ThreadID:     input.ThreadID,
+		MessageKind:  input.MessageKind,
+		AuthorRef:    input.AuthorRef,
+		BodySummary:  input.BodySummary,
+		BodyObject:   input.BodyObject,
+		BodyDigest:   input.BodyDigest,
+		Locale:       input.Locale,
+		SafeMetadata: input.SafeMetadata,
+		CreatedAt:    now,
+	}
+}
+
+func newInteractionResponse(id uuid.UUID, requestID uuid.UUID, input RecordInteractionResponseInput, now time.Time) entity.InteractionResponse {
+	return entity.InteractionResponse{
+		ID:                  id,
+		RequestID:           requestID,
+		ResponseAction:      input.ResponseAction,
+		RespondedByActorRef: input.RespondedByActorRef,
+		ResponseSummary:     input.ResponseSummary,
+		ResponseObject:      input.ResponseObject,
+		SourceKind:          input.SourceKind,
+		SourceRef:           input.SourceRef,
+		OwnerDecisionRef:    input.OwnerDecisionRef,
+		CreatedAt:           now,
+	}
 }
 
 func (s *Service) replayResponseCommand(ctx context.Context, meta value.CommandMeta, fingerprint string) (entity.InteractionRequest, entity.InteractionResponse, bool, error) {
