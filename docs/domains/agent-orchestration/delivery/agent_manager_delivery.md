@@ -6,13 +6,15 @@ status: active
 owner_role: EM
 created_at: 2026-05-12
 updated_at: 2026-05-27
-related_issues: [733, 739, 744, 749, 755, 759, 772, 322, 782, 795, 809, 820, 834, 842, 862, 866]
+related_issues: [733, 739, 744, 749, 755, 759, 772, 322, 782, 795, 809, 820, 834, 842, 862, 866, 891, 897]
 related_prs: []
 related_docsets:
   - docs/domains/agent-orchestration/product/requirements.md
   - docs/domains/agent-orchestration/architecture/design.md
   - docs/domains/agent-orchestration/architecture/data_model.md
   - docs/domains/agent-orchestration/architecture/api_contract.md
+  - docs/domains/agent-orchestration/ops/agent_manager_runbook.md
+  - docs/domains/agent-orchestration/ops/agent_manager_monitoring.md
 approvals:
   required: ["Owner"]
   status: approved
@@ -25,7 +27,7 @@ approvals:
 
 ## TL;DR
 
-`agent-manager` поставляется малыми срезами: сначала доменный пакет документации, затем транспортные контракты, сервисный каркас, модель flow/role/prompt, сессии и `Run`, интеграции с package/runtime, машина приёмки, follow-up задачи и связи с provider/governance/interaction контурами.
+`agent-manager` поставляется малыми срезами: сначала доменный пакет документации, затем транспортные контракты, сервисный каркас, модель flow/role/prompt, сессии и `Run`, интеграции с package/runtime, машина приёмки, follow-up задачи, связи с provider/governance/interaction контурами и эксплуатационный контур первого backend deploy.
 
 ## Входные артефакты
 
@@ -35,6 +37,8 @@ approvals:
 | Дизайн домена | `docs/domains/agent-orchestration/architecture/design.md` |
 | Модель данных | `docs/domains/agent-orchestration/architecture/data_model.md` |
 | API-обзор | `docs/domains/agent-orchestration/architecture/api_contract.md` |
+| Runbook | `docs/domains/agent-orchestration/ops/agent_manager_runbook.md` |
+| Наблюдаемость | `docs/domains/agent-orchestration/ops/agent_manager_monitoring.md` |
 | Карта Issue | `docs/delivery/issue-map/domains/agent-orchestration.md` |
 
 ## Срезы поставки
@@ -49,7 +53,7 @@ approvals:
 | AGO-4 | #759 | Сессии и agent `Run`: создание, чтение, статусы, снимки состояния, идемпотентность, защита активной session от дублей, stage-bound проверка роли и AsyncAPI-совместимые события готовы. |
 | AGO-5 | #772 | Интеграция с `package-hub` для guidance packages готова: `agent-manager` выбирает установки, проверяет manifest/version metadata и фиксирует refs/summary в `Run` без checkout/mount. |
 | AGO-6 | #782 | Контекст руководящих пакетов в workspace готов: зафиксирован MVP-путь передачи замороженных `guidance_refs` в `runtime-manager` как источников `guidance_package`, локальные пути `.kodex/guidance/<safe_local_name>`, проверка идентичности источника через `package-hub` и граница без checkout из `agent-manager`. |
-| AGO-7 | #795 | Интеграция `StartAgentRun` с `project-catalog.GetWorkspacePolicy` и `runtime-manager.PrepareRuntime` готова: workspace request собирается из project/source refs, role/run context и `guidance_refs`; `Run` фиксирует только runtime refs, fingerprint/summary и безопасную классификацию ошибок. До появления deploy wiring для `agent-manager` подготовка runtime включается явно через `KODEX_AGENT_MANAGER_RUNTIME_PREPARATION_ENABLED=true`. |
+| AGO-7 | #795 | Интеграция `StartAgentRun` с `project-catalog.GetWorkspacePolicy` и `runtime-manager.PrepareRuntime` готова: workspace request собирается из project/source refs, role/run context и `guidance_refs`; `Run` фиксирует только runtime refs, fingerprint/summary и безопасную классификацию ошибок. Runtime preparation управляется явным `KODEX_AGENT_MANAGER_RUNTIME_PREPARATION_ENABLED`. |
 | AGO-8 | #809 | Базовая machine acceptance готова: `agent-manager` создаёт pending acceptance result по session/run/stage, записывает `passed`/`failed`/`waiting`/`skipped` через ожидаемую версию, ограничивает `target_ref` safe-ref форматом, хранит только safe refs/status/bounded details и публикует service-local outbox events без QA runner, Human gate decision, provider write pipeline и хранения raw payload. Для `human_gate` фиксируется только `waiting` с gate/risk/governance ref. |
 | AGO-9a | #820 | Follow-up intent lifecycle готов в границах `agent-manager`: команда `CreateFollowUpIntent` сохраняет session/run/stage/acceptance refs, provider target refs, тип следующей provider-native задачи, safe title/summary/hints, idempotency trace и статус, публикует `agent.follow_up.requested` без provider write. |
 | AGO-9b | #834 | Safe activity timeline готова: `agent-manager` хранит canonical persistent историю действий по session/run, операции `RecordAgentActivity` и `ListAgentActivities`, PostgreSQL-модель, idempotency, safe guards и gRPC handler без raw tool payload, stdout/stderr, prompt, transcript, provider payload или workspace paths. |
@@ -57,7 +61,7 @@ approvals:
 | AGO-9c.1 | #862 | Follow-up dispatch приведён к целевой typed-модели: `DispatchFollowUpIntent` принимает явный `FollowUpDispatchKind` и typed `oneof` для `create_issue`, `update_issue`, `create_comment` или `update_comment`, резервирует dispatch до provider write, вызывает только соответствующие typed команды `provider-hub`, сохраняет `provider_operation_ref`, safe result refs и статус `created`/`updated`/`commented`/`failed`, публикует `agent.follow_up.created`/`agent.follow_up.updated`/`agent.follow_up.commented`/`agent.follow_up.failed`. `UpdatePullRequest` и `CreateReviewSignal` вынесены в следующий явный срез. |
 | AGO-9c.2 | #866 | Typed follow-up dispatch покрывает PR/MR и provider-native review signal: `DispatchFollowUpIntent` поддерживает `update_pull_request` и `create_review_signal`, вызывает только `provider-hub.UpdatePullRequest`/`CreateReviewSignal`, строго сверяет сохранённый PR/MR target ref, требует provider expected version для PR update, сохраняет safe operation/result refs и публикует `agent.follow_up.updated` или `agent.follow_up.review_signaled`. Review signal не является governance decision. |
 | AGO-9d | #891 | Human gate wait/result lifecycle готов: `agent-manager` создаёт owner decision wait по session/run/stage/acceptance/provider refs, записывает normalized outcome `approve`/`reject`/`request_changes`/`answer` через expected version, хранит только interaction/governance refs, safe summary/status/idempotency и публикует `agent.human_gate.requested`/`agent.human_gate.resolved` без transport payload, governance body, prompt/transcript/logs/PII. |
-| AGO-10 | не назначено | Эксплуатационный контур `agent-manager`: deploy manifests, migration job, smoke-проверки и runbook готовы. |
+| AGO-10 | #897 | Эксплуатационный контур `agent-manager` готов: Dockerfile, Kubernetes manifests, migration job, PostgreSQL bootstrap/env/secret wiring, `services.yaml`, smoke-проверка, runbook и monitoring docs. |
 
 ## Статус операций `AgentManagerService`
 
@@ -84,12 +88,12 @@ approvals:
 | Домен | Когда синхронизироваться | Причина |
 |---|---|---|
 | `package-hub` | Готово для AGO-5 | Используются чтения установок, package/version metadata и manifest validation state; `agent-manager` не хранит manifest payload и не меняет установки. |
-| `runtime-manager` | Готово для AGO-7 | `agent-manager` вызывает `PrepareRuntime(agent_run_id, workspace policy, runtime profile, placement constraints)` при явно включённой runtime preparation и не материализует workspace сам. |
-| `provider-hub` | Готово для AGO-9c.2 | `agent-manager` вызывает typed `CreateIssue`, `UpdateIssue`, `CreateComment`, `UpdateComment`, `UpdatePullRequest` и `CreateReviewSignal`, хранит только safe operation/result refs; provider write pipeline, adapter state и provider-native истина остаются у `provider-hub`. |
+| `runtime-manager` | Готово для AGO-7/AGO-10 | `agent-manager` вызывает `PrepareRuntime(agent_run_id, workspace policy, runtime profile, placement constraints)` при включённой runtime preparation; deploy-контур включает явный env switch и gRPC secret ref, а workspace остаётся у runtime. |
+| `provider-hub` | Готово для AGO-9c.2/AGO-10 | `agent-manager` вызывает typed `CreateIssue`, `UpdateIssue`, `CreateComment`, `UpdateComment`, `UpdatePullRequest` и `CreateReviewSignal`, хранит только safe operation/result refs; deploy-контур включает provider-hub gRPC secret ref, но provider write pipeline, adapter state и provider-native истина остаются у `provider-hub`. |
 | `risk-and-release-governance` | Для governance-backed gates после AGO-9d | `agent-manager` хранит `governance_gate_request_ref`/`governance_decision_ref` и normalized outcome; governance/risk/release decision body и policy engine остаются у `governance-manager`. |
 | `interaction-hub` | Для transport delivery/callback после AGO-9d | `agent-manager` хранит `interaction_request_ref`/`interaction_response_ref` и normalized outcome; transport request/response lifecycle, callback body и delivery каналы остаются у `interaction-hub`. |
 | `codex-hook-ingress` | После AGO-9b | Persistent timeline готова в `agent-manager`; следующий CHI-срез должен маршрутизировать sanitized `PreToolUse`/`PostToolUse` в `RecordAgentActivity`, сохраняя `codex-hook-ingress` как sanitizer/router/realtime ops feed без долгого хранения tool calls. |
-| `project-catalog` | Готово для AGO-7 | `agent-manager` читает проверенную workspace policy и использует project/repository refs без владения проектной политикой. |
+| `project-catalog` | Готово для AGO-7/AGO-10 | `agent-manager` читает проверенную workspace policy и использует project/repository refs без владения проектной политикой; deploy-контур включает project-catalog gRPC secret ref только для runtime preparation. |
 | `access-manager` | Перед открытием команд через gateway/MCP | Действия доступа заведены в AGO-1; текущие gRPC use-case не обходят будущие сервисные проверки, но не реализуют полноценный контур авторизации команд. |
 | `platform-mcp-server` | Перед AGO-5 и далее | MCP-0 зафиксировал границы и MVP-группы инструментов. Для реальных вызовов session, `Run` и gate нужен следующий контрактный и сервисный срез MCP, но `agent-manager` остаётся владельцем состояния. |
 
@@ -104,6 +108,7 @@ approvals:
 ## Критерии завершения домена
 
 - `agent-manager` имеет свой контур данных, миграций, контрактов и событий.
+- `agent-manager` имеет Dockerfile, Kubernetes manifests, migration job, env/secret inventory, smoke-путь, runbook и monitoring docs для первого backend deploy.
 - Flow, stage, role, prompt, session, run, acceptance и follow-up имеют авторитетные команды и чтения.
 - Сервис публикует `agent.*` события через outbox и `platform-event-log`.
 - `package-hub`, `runtime-manager`, `provider-hub`, `governance-manager`, `interaction-hub`, `project-catalog`, `access-manager` и `platform-mcp-server` связаны через согласованные контракты.

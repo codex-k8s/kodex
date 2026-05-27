@@ -37,6 +37,8 @@
 | Модель данных | `architecture/data_model.md` |
 | API-обзор | `architecture/api_contract.md` |
 | План поставки | `delivery/agent_manager_delivery.md` |
+| Runbook | `ops/agent_manager_runbook.md` |
+| Наблюдаемость | `ops/agent_manager_monitoring.md` |
 
 ## Связанные каталоги
 
@@ -51,6 +53,7 @@
 | Go-контракты gRPC | `proto/gen/go/kodex/agents/v1/**` |
 | AsyncAPI событий `agent.*` | `specs/asyncapi/agent-manager.v1.yaml` |
 | Go-контракты событий | `libs/go/platformevents/agent/events.gen.go` |
+| Kubernetes deploy | `deploy/base/agent-manager/**` |
 
 ## Карта Issue
 
