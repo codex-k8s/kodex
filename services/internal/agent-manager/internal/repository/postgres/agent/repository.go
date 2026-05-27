@@ -44,54 +44,59 @@ type Repository struct {
 	db database
 }
 
-const (
-	operationCreateFlow            = "domain.Repository.CreateFlowWithResult"
-	operationUpdateFlow            = "domain.Repository.UpdateFlowWithResult"
-	operationGetFlow               = "domain.Repository.GetFlow"
-	operationListFlows             = "domain.Repository.ListFlows"
-	operationCreateFlowVersion     = "domain.Repository.CreateFlowVersionWithResult"
-	operationActivateFlowVersion   = "domain.Repository.ActivateFlowVersionWithResult"
-	operationGetFlowVersion        = "domain.Repository.GetFlowVersion"
-	operationListFlowVersions      = "domain.Repository.ListFlowVersions"
-	operationCreateRole            = "domain.Repository.CreateRoleProfileWithResult"
-	operationUpdateRole            = "domain.Repository.UpdateRoleProfileWithResult"
-	operationGetRole               = "domain.Repository.GetRoleProfile"
-	operationListRoles             = "domain.Repository.ListRoleProfiles"
-	operationCreatePromptTemplate  = "domain.Repository.CreatePromptTemplateWithResult"
-	operationGetPromptTemplate     = "domain.Repository.GetPromptTemplate"
-	operationListPromptTemplates   = "domain.Repository.ListPromptTemplates"
-	operationCreatePromptVersion   = "domain.Repository.CreatePromptTemplateVersionWithResult"
-	operationActivatePromptVersion = "domain.Repository.ActivatePromptTemplateVersionWithResult"
-	operationGetPromptVersion      = "domain.Repository.GetPromptTemplateVersion"
-	operationListPromptVersions    = "domain.Repository.ListPromptTemplateVersions"
-	operationCreateSession         = "domain.Repository.CreateAgentSessionWithResult"
-	operationUpdateSession         = "domain.Repository.UpdateAgentSessionWithResult"
-	operationGetSession            = "domain.Repository.GetAgentSession"
-	operationFindActiveSession     = "domain.Repository.FindActiveAgentSessionByProviderWorkItem"
-	operationCreateRun             = "domain.Repository.CreateAgentRunWithResult"
-	operationUpdateRun             = "domain.Repository.UpdateAgentRunWithResult"
-	operationGetRun                = "domain.Repository.GetAgentRun"
-	operationListRuns              = "domain.Repository.ListAgentRuns"
-	operationCreateSnapshot        = "domain.Repository.CreateSessionStateSnapshotWithResult"
-	operationGetSnapshot           = "domain.Repository.GetSessionStateSnapshot"
-	operationCreateAcceptance      = "domain.Repository.CreateAcceptanceResultWithResult"
-	operationUpdateAcceptance      = "domain.Repository.UpdateAcceptanceResultWithResult"
-	operationGetAcceptance         = "domain.Repository.GetAcceptanceResult"
-	operationListAcceptance        = "domain.Repository.ListAcceptanceResults"
-	operationCreateFollowUp        = "domain.Repository.CreateFollowUpIntentWithResult"
-	operationReserveFollowUp       = "domain.Repository.ReserveFollowUpIntentDispatch"
-	operationUpdateFollowUp        = "domain.Repository.UpdateFollowUpIntentWithResult"
-	operationGetFollowUp           = "domain.Repository.GetFollowUpIntent"
-	operationRecordActivity        = "domain.Repository.RecordAgentActivityWithResult"
-	operationGetActivity           = "domain.Repository.GetAgentActivity"
-	operationListActivities        = "domain.Repository.ListAgentActivities"
-	operationGetCommandResult      = "domain.Repository.GetCommandResult"
-	operationRecordCommandResult   = "domain.Repository.RecordCommandResult"
-	operationOutboxClaim           = "domain.Repository.ClaimOutboxEvents"
-	operationOutboxMarkFailed      = "domain.Repository.MarkOutboxEventFailed"
-	operationOutboxMarkPermanent   = "domain.Repository.MarkOutboxEventPermanentlyFailed"
-	operationOutboxMarkPublished   = "domain.Repository.MarkOutboxEventPublished"
+const repositoryOperationPrefix = "domain.Repository."
+
+var (
+	operationCreateFlow            = repositoryOperation("CreateFlowWithResult")
+	operationUpdateFlow            = repositoryOperation("UpdateFlowWithResult")
+	operationGetFlow               = repositoryOperation("GetFlow")
+	operationListFlows             = repositoryOperation("ListFlows")
+	operationCreateFlowVersion     = repositoryOperation("CreateFlowVersionWithResult")
+	operationActivateFlowVersion   = repositoryOperation("ActivateFlowVersionWithResult")
+	operationGetFlowVersion        = repositoryOperation("GetFlowVersion")
+	operationListFlowVersions      = repositoryOperation("ListFlowVersions")
+	operationCreateRole            = repositoryOperation("CreateRoleProfileWithResult")
+	operationUpdateRole            = repositoryOperation("UpdateRoleProfileWithResult")
+	operationGetRole               = repositoryOperation("GetRoleProfile")
+	operationListRoles             = repositoryOperation("ListRoleProfiles")
+	operationCreatePromptTemplate  = repositoryOperation("CreatePromptTemplateWithResult")
+	operationGetPromptTemplate     = repositoryOperation("GetPromptTemplate")
+	operationListPromptTemplates   = repositoryOperation("ListPromptTemplates")
+	operationCreatePromptVersion   = repositoryOperation("CreatePromptTemplateVersionWithResult")
+	operationActivatePromptVersion = repositoryOperation("ActivatePromptTemplateVersionWithResult")
+	operationGetPromptVersion      = repositoryOperation("GetPromptTemplateVersion")
+	operationListPromptVersions    = repositoryOperation("ListPromptTemplateVersions")
+	operationCreateSession         = repositoryOperation("CreateAgentSessionWithResult")
+	operationUpdateSession         = repositoryOperation("UpdateAgentSessionWithResult")
+	operationGetSession            = repositoryOperation("GetAgentSession")
+	operationFindActiveSession     = repositoryOperation("FindActiveAgentSessionByProviderWorkItem")
+	operationCreateRun             = repositoryOperation("CreateAgentRunWithResult")
+	operationUpdateRun             = repositoryOperation("UpdateAgentRunWithResult")
+	operationGetRun                = repositoryOperation("GetAgentRun")
+	operationListRuns              = repositoryOperation("ListAgentRuns")
+	operationCreateSnapshot        = repositoryOperation("CreateSessionStateSnapshotWithResult")
+	operationGetSnapshot           = repositoryOperation("GetSessionStateSnapshot")
+	operationCreateAcceptance      = repositoryOperation("CreateAcceptanceResultWithResult")
+	operationUpdateAcceptance      = repositoryOperation("UpdateAcceptanceResultWithResult")
+	operationGetAcceptance         = repositoryOperation("GetAcceptanceResult")
+	operationListAcceptance        = repositoryOperation("ListAcceptanceResults")
+	operationCreateFollowUp        = repositoryOperation("CreateFollowUpIntentWithResult")
+	operationUpdateFollowUp        = repositoryOperation("UpdateFollowUpIntentWithResult")
+	operationGetFollowUp           = repositoryOperation("GetFollowUpIntent")
+	operationRecordActivity        = repositoryOperation("RecordAgentActivityWithResult")
+	operationGetActivity           = repositoryOperation("GetAgentActivity")
+	operationListActivities        = repositoryOperation("ListAgentActivities")
+	operationGetCommandResult      = repositoryOperation("GetCommandResult")
+	operationRecordCommandResult   = repositoryOperation("RecordCommandResult")
+	operationOutboxClaim           = repositoryOperation("ClaimOutboxEvents")
+	operationOutboxMarkFailed      = repositoryOperation("MarkOutboxEventFailed")
+	operationOutboxMarkPermanent   = repositoryOperation("MarkOutboxEventPermanentlyFailed")
+	operationOutboxMarkPublished   = repositoryOperation("MarkOutboxEventPublished")
 )
+
+func repositoryOperation(name string) string {
+	return repositoryOperationPrefix + name
+}
 
 func NewRepository(db *pgxpool.Pool) *Repository {
 	return &Repository{db: db}
@@ -148,7 +153,7 @@ func (r *Repository) CreateRoleProfileWithResult(ctx context.Context, role entit
 }
 
 func (r *Repository) UpdateRoleProfileWithResult(ctx context.Context, role entity.RoleProfile, previousVersion int64, result entity.CommandResult, event *entity.OutboxEvent) error {
-	return r.mutateWithResult(ctx, operationUpdateRole, queryRoleUpdate, roleProfileUpdateArgs(role, previousVersion), result, event)
+	return r.updateRoleProfileRow(ctx, role, previousVersion, result, event)
 }
 
 func (r *Repository) GetRoleProfile(ctx context.Context, id uuid.UUID) (entity.RoleProfile, error) {
@@ -201,11 +206,13 @@ func (r *Repository) ListPromptTemplateVersions(ctx context.Context, filter quer
 }
 
 func (r *Repository) CreateAgentSessionWithResult(ctx context.Context, session entity.AgentSession, result entity.CommandResult, event entity.OutboxEvent) error {
-	return r.mutateWithResult(ctx, operationCreateSession, querySessionCreate, agentSessionArgs(session), result, &event)
+	eventRef := &event
+	return r.mutateWithResult(ctx, operationCreateSession, querySessionCreate, agentSessionArgs(session), result, eventRef)
 }
 
 func (r *Repository) UpdateAgentSessionWithResult(ctx context.Context, session entity.AgentSession, previousVersion int64, result entity.CommandResult, event entity.OutboxEvent) error {
-	return r.mutateWithResult(ctx, operationUpdateSession, querySessionUpdate, agentSessionUpdateArgs(session, previousVersion), result, &event)
+	args := agentSessionUpdateArgs(session, previousVersion)
+	return r.mutateWithResult(ctx, operationUpdateSession, querySessionUpdate, args, result, &event)
 }
 
 func (r *Repository) GetAgentSession(ctx context.Context, id uuid.UUID) (entity.AgentSession, error) {
@@ -225,7 +232,8 @@ func (r *Repository) CreateAgentRunWithResult(ctx context.Context, run entity.Ag
 }
 
 func (r *Repository) UpdateAgentRunWithResult(ctx context.Context, run entity.AgentRun, previousVersion int64, result entity.CommandResult, event *entity.OutboxEvent) error {
-	return r.mutateWithResult(ctx, operationUpdateRun, queryRunUpdate, agentRunUpdateArgs(run, previousVersion), result, event)
+	args := agentRunUpdateArgs(run, previousVersion)
+	return r.mutateWithResult(ctx, operationUpdateRun, queryRunUpdate, args, result, event)
 }
 
 func (r *Repository) GetAgentRun(ctx context.Context, id uuid.UUID) (entity.AgentRun, error) {
@@ -261,8 +269,7 @@ func (r *Repository) CreateAcceptanceResultWithResult(ctx context.Context, accep
 }
 
 func (r *Repository) UpdateAcceptanceResultWithResult(ctx context.Context, acceptance entity.AcceptanceResult, previousVersion int64, result entity.CommandResult, event *entity.OutboxEvent) error {
-	args := acceptanceResultUpdateArgs(acceptance, previousVersion)
-	return r.mutateWithResult(ctx, operationUpdateAcceptance, queryAcceptanceResultUpdate, args, result, event)
+	return r.mutateWithResult(ctx, operationUpdateAcceptance, queryAcceptanceResultUpdate, acceptanceResultUpdateArgs(acceptance, previousVersion), result, event)
 }
 
 func (r *Repository) GetAcceptanceResult(ctx context.Context, id uuid.UUID) (entity.AcceptanceResult, error) {
@@ -274,7 +281,8 @@ func (r *Repository) ListAcceptanceResults(ctx context.Context, filter query.Acc
 }
 
 func (r *Repository) CreateFollowUpIntentWithResult(ctx context.Context, intent entity.FollowUpIntent, result entity.CommandResult, event entity.OutboxEvent) error {
-	return r.mutateWithResult(ctx, operationCreateFollowUp, queryFollowUpIntentCreate, followUpIntentArgs(intent), result, &event)
+	args := followUpIntentArgs(intent)
+	return r.mutateWithResult(ctx, operationCreateFollowUp, queryFollowUpIntentCreate, args, result, &event)
 }
 
 func (r *Repository) ReserveFollowUpIntentDispatch(ctx context.Context, intent entity.FollowUpIntent, previousVersion int64) error {
@@ -282,7 +290,7 @@ func (r *Repository) ReserveFollowUpIntentDispatch(ctx context.Context, intent e
 }
 
 func (r *Repository) UpdateFollowUpIntentWithResult(ctx context.Context, intent entity.FollowUpIntent, previousVersion int64, result entity.CommandResult, event *entity.OutboxEvent) error {
-	return r.mutateWithResult(ctx, operationUpdateFollowUp, queryFollowUpIntentUpdate, followUpIntentUpdateArgs(intent, previousVersion), result, event)
+	return r.mutateFollowUpIntent(ctx, followUpIntentUpdateArgs(intent, previousVersion), result, event)
 }
 
 func (r *Repository) GetFollowUpIntent(ctx context.Context, id uuid.UUID) (entity.FollowUpIntent, error) {
@@ -319,14 +327,7 @@ func (r *Repository) RecordCommandResult(ctx context.Context, result entity.Comm
 }
 
 func (r *Repository) ClaimOutboxEvents(ctx context.Context, limit int, now time.Time, lockedUntil time.Time) ([]entity.OutboxEvent, error) {
-	events, queryRan, err := postgreslib.ClaimOutboxRows(ctx, r.db, queryOutboxEventClaim, limit, now, lockedUntil, scanOutboxEvent)
-	if !queryRan {
-		return nil, wrapError(operationOutboxClaim, errs.ErrInvalidArgument)
-	}
-	if err != nil {
-		return nil, wrapError(operationOutboxClaim, err)
-	}
-	return events, nil
+	return claimAgentOutboxEvents(ctx, r.db, limit, now, lockedUntil)
 }
 
 func (r *Repository) MarkOutboxEventPublished(ctx context.Context, id uuid.UUID, attemptCount int, publishedAt time.Time) error {
@@ -347,29 +348,22 @@ func (r *Repository) MarkOutboxEventPermanentlyFailed(ctx context.Context, id uu
 }
 
 func (r *Repository) mutateWithResult(ctx context.Context, operation string, mutationQuery string, mutationArgs pgx.NamedArgs, result entity.CommandResult, event *entity.OutboxEvent) error {
-	err := postgreslib.WithTx(ctx, r.db, func(tx pgx.Tx) error {
-		if err := runMutation(ctx, tx, mutationQuery, mutationArgs, true); err != nil {
+	work := func(tx pgx.Tx) error {
+		if err := runRequiredMutation(ctx, tx, mutationQuery, mutationArgs); err != nil {
 			return err
 		}
-		if err := runCommandResult(ctx, tx, result); err != nil {
-			return err
-		}
-		if event == nil {
-			return nil
-		}
-		return runOutboxEvent(ctx, tx, *event)
-	})
-	return wrapError(operation, err)
+		return recordCommandOutcome(ctx, tx, result, event)
+	}
+	return r.withRepositoryTx(ctx, operation, work)
 }
 
 func (r *Repository) createWithResult(ctx context.Context, operation string, result entity.CommandResult, create func(pgx.Tx) error) error {
-	err := postgreslib.WithTx(ctx, r.db, func(tx pgx.Tx) error {
+	return r.withRepositoryTx(ctx, operation, func(tx pgx.Tx) error {
 		if err := create(tx); err != nil {
 			return err
 		}
 		return runCommandResult(ctx, tx, result)
 	})
-	return wrapError(operation, err)
 }
 
 func (r *Repository) markOutboxDeliveryFailure(ctx context.Context, operation string, query string, timestampName string, id uuid.UUID, attemptCount int, timestamp time.Time, lastError string) error {
@@ -381,8 +375,18 @@ func (r *Repository) markOutboxDeliveryFailure(ctx context.Context, operation st
 	return wrapError(operation, err)
 }
 
+func (r *Repository) updateRoleProfileRow(ctx context.Context, role entity.RoleProfile, previousVersion int64, result entity.CommandResult, event *entity.OutboxEvent) error {
+	args := roleProfileUpdateArgs(role, previousVersion)
+	queryText := queryRoleUpdate
+	return r.mutateWithResult(ctx, operationUpdateRole, queryText, args, result, event)
+}
+
+func (r *Repository) mutateFollowUpIntent(ctx context.Context, args pgx.NamedArgs, result entity.CommandResult, event *entity.OutboxEvent) error {
+	return r.mutateWithResult(ctx, operationUpdateFollowUp, queryFollowUpIntentUpdate, args, result, event)
+}
+
 func (r *Repository) activateVersionWithResult(ctx context.Context, operation string, mutations []postgreslib.Mutation, result entity.CommandResult, event entity.OutboxEvent) error {
-	err := postgreslib.WithTx(ctx, r.db, func(tx pgx.Tx) error {
+	return r.withRepositoryTx(ctx, operation, func(tx pgx.Tx) error {
 		for _, item := range mutations {
 			if err := postgreslib.RunMutation(ctx, tx, errs.ErrConflict, item); err != nil {
 				return err
@@ -393,7 +397,10 @@ func (r *Repository) activateVersionWithResult(ctx context.Context, operation st
 		}
 		return runOutboxEvent(ctx, tx, event)
 	})
-	return wrapError(operation, err)
+}
+
+func (r *Repository) withRepositoryTx(ctx context.Context, operation string, fn func(pgx.Tx) error) error {
+	return wrapError(operation, postgreslib.WithTx(ctx, r.db, fn))
 }
 
 func (r *Repository) createFlowVersionChildren(ctx context.Context, db dataRunner, version entity.FlowVersion) error {
@@ -438,6 +445,10 @@ func runMutation(ctx context.Context, db dataRunner, query string, args pgx.Name
 	return postgreslib.RunMutation(ctx, db, errs.ErrConflict, mutation(query, args, requireAffected))
 }
 
+func runRequiredMutation(ctx context.Context, db dataRunner, query string, args pgx.NamedArgs) error {
+	return runMutation(ctx, db, query, args, true)
+}
+
 func mutation(query string, args pgx.NamedArgs, requireAffected bool) postgreslib.Mutation {
 	return postgreslib.Mutation{Query: query, Args: args, RequireAffected: requireAffected}
 }
@@ -450,9 +461,59 @@ func runOutboxEvent(ctx context.Context, db dataRunner, event entity.OutboxEvent
 	return runMutation(ctx, db, queryOutboxEventCreate, outboxEventArgs(event), true)
 }
 
+func recordCommandOutcome(ctx context.Context, db dataRunner, result entity.CommandResult, event *entity.OutboxEvent) error {
+	if err := runCommandResult(ctx, db, result); err != nil {
+		return err
+	}
+	return recordOptionalOutboxEvent(ctx, db, event)
+}
+
+func recordOptionalOutboxEvent(ctx context.Context, db dataRunner, event *entity.OutboxEvent) error {
+	if event == nil {
+		return nil
+	}
+	return runOutboxEvent(ctx, db, *event)
+}
+
 func queryOne[T any](ctx context.Context, db dataRunner, operation string, query string, args pgx.NamedArgs, scan func(postgreslib.RowScanner) (T, error)) (T, error) {
-	row := db.QueryRow(ctx, query, args)
-	item, err := scan(row)
+	item, err := scan(db.QueryRow(ctx, query, args))
+	return repositoryItem(operation, item, err)
+}
+
+func queryMany[T any](ctx context.Context, db dataRunner, operation string, query string, args pgx.NamedArgs, scan func(postgreslib.RowScanner) (T, error)) ([]T, error) {
+	rows, err := db.Query(ctx, query, args)
+	if err != nil {
+		return repositoryItemsError[T](operation, err)
+	}
+	return scanRepositoryItems(operation, rows, scan)
+}
+
+func queryPage[T any](ctx context.Context, db dataRunner, operation string, query string, page pageQueryArgs, scan func(postgreslib.RowScanner) (T, error)) ([]T, value.PageResult, error) {
+	items, err := queryMany(ctx, db, operation, query, page.NamedArgs, scan)
+	return repositoryPage(items, page, err)
+}
+
+func repositoryPage[T any](items []T, page pageQueryArgs, err error) ([]T, value.PageResult, error) {
+	if err != nil {
+		return nil, value.PageResult{}, err
+	}
+	trimmed, result := pageResult(items, page)
+	return trimmed, result, nil
+}
+
+func claimAgentOutboxEvents(ctx context.Context, db dataRunner, limit int, now time.Time, lockedUntil time.Time) ([]entity.OutboxEvent, error) {
+	events, queryRan, err := postgreslib.ClaimOutboxRows(ctx, db, queryOutboxEventClaim, limit, now, lockedUntil, scanOutboxEvent)
+	switch {
+	case !queryRan:
+		return nil, wrapError(operationOutboxClaim, errs.ErrInvalidArgument)
+	case err != nil:
+		return nil, wrapError(operationOutboxClaim, err)
+	default:
+		return events, nil
+	}
+}
+
+func repositoryItem[T any](operation string, item T, err error) (T, error) {
 	if err != nil {
 		var zero T
 		return zero, wrapError(operation, err)
@@ -460,25 +521,14 @@ func queryOne[T any](ctx context.Context, db dataRunner, operation string, query
 	return item, nil
 }
 
-func queryMany[T any](ctx context.Context, db dataRunner, operation string, query string, args pgx.NamedArgs, scan func(postgreslib.RowScanner) (T, error)) ([]T, error) {
-	rows, err := db.Query(ctx, query, args)
+func scanRepositoryItems[T any](operation string, rows pgx.Rows, scan func(postgreslib.RowScanner) (T, error)) ([]T, error) {
+	items, err := postgreslib.ScanRows(rows, scan)
 	if err != nil {
-		var none []T
-		return none, wrapError(operation, err)
-	}
-	items, scanErr := postgreslib.ScanRows(rows, scan)
-	if scanErr != nil {
-		var none []T
-		return none, wrapError(operation, scanErr)
+		return repositoryItemsError[T](operation, err)
 	}
 	return items, nil
 }
 
-func queryPage[T any](ctx context.Context, db dataRunner, operation string, query string, page pageQueryArgs, scan func(postgreslib.RowScanner) (T, error)) ([]T, value.PageResult, error) {
-	items, err := queryMany(ctx, db, operation, query, page.NamedArgs, scan)
-	if err != nil {
-		return nil, value.PageResult{}, err
-	}
-	trimmed, result := pageResult(items, page)
-	return trimmed, result, nil
+func repositoryItemsError[T any](operation string, err error) ([]T, error) {
+	return nil, wrapError(operation, err)
 }

@@ -38,15 +38,7 @@ var stageTypesFromProto = enumMap(
 
 var stageRoleBindingKindsFromProto = stageRoleBindingKindValues()
 
-var roleKindsFromProto = map[agentsv1.RoleKind]enum.RoleKind{
-	agentsv1.RoleKind_ROLE_KIND_WORKER:     enum.RoleKindWorker,
-	agentsv1.RoleKind_ROLE_KIND_REVIEWER:   enum.RoleKindReviewer,
-	agentsv1.RoleKind_ROLE_KIND_GATEKEEPER: enum.RoleKindGatekeeper,
-	agentsv1.RoleKind_ROLE_KIND_MANAGER:    enum.RoleKindManager,
-	agentsv1.RoleKind_ROLE_KIND_QA:         enum.RoleKindQA,
-	agentsv1.RoleKind_ROLE_KIND_OPS:        enum.RoleKindOps,
-	agentsv1.RoleKind_ROLE_KIND_CUSTOM:     enum.RoleKindCustom,
-}
+var roleKindsFromProto = roleKindValues()
 
 var roleStatusesFromProto = map[agentsv1.RoleStatus]enum.RoleStatus{
 	agentsv1.RoleStatus_ROLE_STATUS_DRAFT:    enum.RoleStatusDraft,
@@ -70,15 +62,7 @@ var promptVersionStatusesFromProto = map[agentsv1.PromptVersionStatus]enum.Promp
 	agentsv1.PromptVersionStatus_PROMPT_VERSION_STATUS_REJECTED:   enum.PromptVersionStatusRejected,
 }
 
-var agentRunStatusesFromProto = map[agentsv1.AgentRunStatus]enum.AgentRunStatus{
-	agentsv1.AgentRunStatus_AGENT_RUN_STATUS_REQUESTED: enum.AgentRunStatusRequested,
-	agentsv1.AgentRunStatus_AGENT_RUN_STATUS_STARTING:  enum.AgentRunStatusStarting,
-	agentsv1.AgentRunStatus_AGENT_RUN_STATUS_RUNNING:   enum.AgentRunStatusRunning,
-	agentsv1.AgentRunStatus_AGENT_RUN_STATUS_WAITING:   enum.AgentRunStatusWaiting,
-	agentsv1.AgentRunStatus_AGENT_RUN_STATUS_COMPLETED: enum.AgentRunStatusCompleted,
-	agentsv1.AgentRunStatus_AGENT_RUN_STATUS_FAILED:    enum.AgentRunStatusFailed,
-	agentsv1.AgentRunStatus_AGENT_RUN_STATUS_CANCELLED: enum.AgentRunStatusCancelled,
-}
+var agentRunStatusesFromProto = agentRunStatusValues()
 
 var agentSessionSnapshotKindsFromProto = map[agentsv1.AgentSessionSnapshotKind]enum.AgentSessionSnapshotKind{
 	agentsv1.AgentSessionSnapshotKind_AGENT_SESSION_SNAPSHOT_KIND_TURN_CHECKPOINT:     enum.AgentSessionSnapshotKindTurnCheckpoint,
@@ -108,27 +92,9 @@ var followUpIntentStatusesToProto = enumMap(
 	enumPair(enum.FollowUpIntentStatusReviewSignaled, agentsv1.FollowUpIntentStatus_FOLLOW_UP_INTENT_STATUS_REVIEW_SIGNALED),
 )
 
-var agentActivityKindsFromProto = enumMap(
-	enumPair(agentsv1.AgentActivityKind_AGENT_ACTIVITY_KIND_LIFECYCLE, enum.AgentActivityKindLifecycle),
-	enumPair(agentsv1.AgentActivityKind_AGENT_ACTIVITY_KIND_TOOL_USE, enum.AgentActivityKindToolUse),
-	enumPair(agentsv1.AgentActivityKind_AGENT_ACTIVITY_KIND_TOOL_RESULT, enum.AgentActivityKindToolResult),
-	enumPair(agentsv1.AgentActivityKind_AGENT_ACTIVITY_KIND_PERMISSION, enum.AgentActivityKindPermission),
-	enumPair(agentsv1.AgentActivityKind_AGENT_ACTIVITY_KIND_PROVIDER_SIGNAL, enum.AgentActivityKindProviderSignal),
-	enumPair(agentsv1.AgentActivityKind_AGENT_ACTIVITY_KIND_RUNTIME_SIGNAL, enum.AgentActivityKindRuntimeSignal),
-	enumPair(agentsv1.AgentActivityKind_AGENT_ACTIVITY_KIND_CHECKPOINT, enum.AgentActivityKindCheckpoint),
-	enumPair(agentsv1.AgentActivityKind_AGENT_ACTIVITY_KIND_OTHER, enum.AgentActivityKindOther),
-)
+var agentActivityKindsFromProto = agentActivityKindValues()
 
-var agentActivityStatusesFromProto = map[agentsv1.AgentActivityStatus]enum.AgentActivityStatus{
-	agentsv1.AgentActivityStatus_AGENT_ACTIVITY_STATUS_PLANNED:   enum.AgentActivityStatusPlanned,
-	agentsv1.AgentActivityStatus_AGENT_ACTIVITY_STATUS_STARTED:   enum.AgentActivityStatusStarted,
-	agentsv1.AgentActivityStatus_AGENT_ACTIVITY_STATUS_SUCCEEDED: enum.AgentActivityStatusSucceeded,
-	agentsv1.AgentActivityStatus_AGENT_ACTIVITY_STATUS_FAILED:    enum.AgentActivityStatusFailed,
-	agentsv1.AgentActivityStatus_AGENT_ACTIVITY_STATUS_DENIED:    enum.AgentActivityStatusDenied,
-	agentsv1.AgentActivityStatus_AGENT_ACTIVITY_STATUS_WAITING:   enum.AgentActivityStatusWaiting,
-	agentsv1.AgentActivityStatus_AGENT_ACTIVITY_STATUS_CANCELLED: enum.AgentActivityStatusCancelled,
-	agentsv1.AgentActivityStatus_AGENT_ACTIVITY_STATUS_SKIPPED:   enum.AgentActivityStatusSkipped,
-}
+var agentActivityStatusesFromProto = agentActivityStatusValues()
 
 var (
 	scopeTypesToProto                = reverseEnumMap(scopeTypesFromProto)
@@ -365,6 +331,85 @@ func enumMap[Proto comparable, Domain comparable](items ...enumKV[Proto, Domain]
 		result[item.proto] = item.domain
 	}
 	return result
+}
+
+func roleKindValues() map[agentsv1.RoleKind]enum.RoleKind {
+	protoValues := []agentsv1.RoleKind{
+		agentsv1.RoleKind_ROLE_KIND_WORKER,
+		agentsv1.RoleKind_ROLE_KIND_REVIEWER,
+		agentsv1.RoleKind_ROLE_KIND_GATEKEEPER,
+		agentsv1.RoleKind_ROLE_KIND_MANAGER,
+		agentsv1.RoleKind_ROLE_KIND_QA,
+		agentsv1.RoleKind_ROLE_KIND_OPS,
+		agentsv1.RoleKind_ROLE_KIND_CUSTOM,
+	}
+	domainValues := []enum.RoleKind{
+		enum.RoleKindWorker,
+		enum.RoleKindReviewer,
+		enum.RoleKindGatekeeper,
+		enum.RoleKindManager,
+		enum.RoleKindQA,
+		enum.RoleKindOps,
+		enum.RoleKindCustom,
+	}
+	return pairedEnumValues(protoValues, domainValues)
+}
+
+func agentRunStatusValues() map[agentsv1.AgentRunStatus]enum.AgentRunStatus {
+	values := make(map[agentsv1.AgentRunStatus]enum.AgentRunStatus, 7)
+	values[agentsv1.AgentRunStatus_AGENT_RUN_STATUS_REQUESTED] = enum.AgentRunStatusRequested
+	values[agentsv1.AgentRunStatus_AGENT_RUN_STATUS_STARTING] = enum.AgentRunStatusStarting
+	values[agentsv1.AgentRunStatus_AGENT_RUN_STATUS_RUNNING] = enum.AgentRunStatusRunning
+	values[agentsv1.AgentRunStatus_AGENT_RUN_STATUS_WAITING] = enum.AgentRunStatusWaiting
+	values[agentsv1.AgentRunStatus_AGENT_RUN_STATUS_COMPLETED] = enum.AgentRunStatusCompleted
+	values[agentsv1.AgentRunStatus_AGENT_RUN_STATUS_FAILED] = enum.AgentRunStatusFailed
+	values[agentsv1.AgentRunStatus_AGENT_RUN_STATUS_CANCELLED] = enum.AgentRunStatusCancelled
+	return values
+}
+
+func agentActivityKindValues() map[agentsv1.AgentActivityKind]enum.AgentActivityKind {
+	protoValues := []agentsv1.AgentActivityKind{
+		agentsv1.AgentActivityKind_AGENT_ACTIVITY_KIND_LIFECYCLE,
+		agentsv1.AgentActivityKind_AGENT_ACTIVITY_KIND_TOOL_USE,
+		agentsv1.AgentActivityKind_AGENT_ACTIVITY_KIND_TOOL_RESULT,
+		agentsv1.AgentActivityKind_AGENT_ACTIVITY_KIND_PERMISSION,
+		agentsv1.AgentActivityKind_AGENT_ACTIVITY_KIND_PROVIDER_SIGNAL,
+		agentsv1.AgentActivityKind_AGENT_ACTIVITY_KIND_RUNTIME_SIGNAL,
+		agentsv1.AgentActivityKind_AGENT_ACTIVITY_KIND_CHECKPOINT,
+		agentsv1.AgentActivityKind_AGENT_ACTIVITY_KIND_OTHER,
+	}
+	domainValues := []enum.AgentActivityKind{
+		enum.AgentActivityKindLifecycle,
+		enum.AgentActivityKindToolUse,
+		enum.AgentActivityKindToolResult,
+		enum.AgentActivityKindPermission,
+		enum.AgentActivityKindProviderSignal,
+		enum.AgentActivityKindRuntimeSignal,
+		enum.AgentActivityKindCheckpoint,
+		enum.AgentActivityKindOther,
+	}
+	return pairedEnumValues(protoValues, domainValues)
+}
+
+func agentActivityStatusValues() map[agentsv1.AgentActivityStatus]enum.AgentActivityStatus {
+	values := make(map[agentsv1.AgentActivityStatus]enum.AgentActivityStatus, 8)
+	values[agentsv1.AgentActivityStatus_AGENT_ACTIVITY_STATUS_PLANNED] = enum.AgentActivityStatusPlanned
+	values[agentsv1.AgentActivityStatus_AGENT_ACTIVITY_STATUS_STARTED] = enum.AgentActivityStatusStarted
+	values[agentsv1.AgentActivityStatus_AGENT_ACTIVITY_STATUS_SUCCEEDED] = enum.AgentActivityStatusSucceeded
+	values[agentsv1.AgentActivityStatus_AGENT_ACTIVITY_STATUS_FAILED] = enum.AgentActivityStatusFailed
+	values[agentsv1.AgentActivityStatus_AGENT_ACTIVITY_STATUS_DENIED] = enum.AgentActivityStatusDenied
+	values[agentsv1.AgentActivityStatus_AGENT_ACTIVITY_STATUS_WAITING] = enum.AgentActivityStatusWaiting
+	values[agentsv1.AgentActivityStatus_AGENT_ACTIVITY_STATUS_CANCELLED] = enum.AgentActivityStatusCancelled
+	values[agentsv1.AgentActivityStatus_AGENT_ACTIVITY_STATUS_SKIPPED] = enum.AgentActivityStatusSkipped
+	return values
+}
+
+func pairedEnumValues[Proto comparable, Domain comparable](protoValues []Proto, domainValues []Domain) map[Proto]Domain {
+	values := make(map[Proto]Domain, len(protoValues))
+	for idx, protoValue := range protoValues {
+		values[protoValue] = domainValues[idx]
+	}
+	return values
 }
 
 func stageRoleBindingKindValues() map[agentsv1.StageRoleBindingKind]enum.StageRoleBindingKind {

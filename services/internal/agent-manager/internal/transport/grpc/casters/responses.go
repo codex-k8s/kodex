@@ -415,17 +415,25 @@ func ScopeToProto(scope value.ScopeRef) *agentsv1.ScopeRef {
 }
 
 func LocalizedTextToProto(text []value.LocalizedText) []*agentsv1.LocalizedText {
-	result := make([]*agentsv1.LocalizedText, 0, len(text))
-	for _, item := range text {
-		result = append(result, &agentsv1.LocalizedText{Locale: item.Locale, Text: item.Text})
-	}
-	return result
+	return collectProtoValues(text, localizedTextProto)
 }
 
 func ObjectRefToProto(object value.ObjectRef) *agentsv1.ObjectRef {
-	if object.ObjectURI == "" && object.ObjectDigest == "" && object.ObjectSizeBytes == nil {
+	if objectRefIsEmpty(object) {
 		return nil
 	}
+	return objectRefProto(object)
+}
+
+func localizedTextProto(item value.LocalizedText) (*agentsv1.LocalizedText, bool) {
+	return &agentsv1.LocalizedText{Locale: item.Locale, Text: item.Text}, true
+}
+
+func objectRefIsEmpty(object value.ObjectRef) bool {
+	return object.ObjectURI == "" && object.ObjectDigest == "" && object.ObjectSizeBytes == nil
+}
+
+func objectRefProto(object value.ObjectRef) *agentsv1.ObjectRef {
 	return &agentsv1.ObjectRef{
 		ObjectUri:       object.ObjectURI,
 		ObjectDigest:    object.ObjectDigest,
