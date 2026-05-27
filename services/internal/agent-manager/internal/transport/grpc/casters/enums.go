@@ -105,6 +105,7 @@ var followUpIntentStatusesToProto = enumMap(
 	enumPair(enum.FollowUpIntentStatusCancelled, agentsv1.FollowUpIntentStatus_FOLLOW_UP_INTENT_STATUS_CANCELLED),
 	enumPair(enum.FollowUpIntentStatusUpdated, agentsv1.FollowUpIntentStatus_FOLLOW_UP_INTENT_STATUS_UPDATED),
 	enumPair(enum.FollowUpIntentStatusCommented, agentsv1.FollowUpIntentStatus_FOLLOW_UP_INTENT_STATUS_COMMENTED),
+	enumPair(enum.FollowUpIntentStatusReviewSignaled, agentsv1.FollowUpIntentStatus_FOLLOW_UP_INTENT_STATUS_REVIEW_SIGNALED),
 )
 
 var agentActivityKindsFromProto = enumMap(

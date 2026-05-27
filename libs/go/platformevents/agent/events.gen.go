@@ -20,6 +20,7 @@ const (
 	EventFollowUpCreated         = "agent.follow_up.created"
 	EventFollowUpUpdated         = "agent.follow_up.updated"
 	EventFollowUpCommented       = "agent.follow_up.commented"
+	EventFollowUpReviewSignaled  = "agent.follow_up.review_signaled"
 	EventFollowUpFailed          = "agent.follow_up.failed"
 	EventHumanGateRequested      = "agent.human_gate.requested"
 	EventHumanGateResolved       = "agent.human_gate.resolved"

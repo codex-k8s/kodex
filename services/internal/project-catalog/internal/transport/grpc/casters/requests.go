@@ -336,6 +336,56 @@ func ImportBootstrapServicesPolicyInput(request *projectsv1.ImportBootstrapServi
 	}, nil
 }
 
+func ReconcileBootstrapMergeSignalInput(request *projectsv1.ReconcileBootstrapMergeSignalRequest) (projectservice.ReconcileBootstrapMergeSignalInput, error) {
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return projectservice.ReconcileBootstrapMergeSignalInput{}, err
+	}
+	projectID, err := requiredUUID(request.GetProjectId())
+	if err != nil {
+		return projectservice.ReconcileBootstrapMergeSignalInput{}, err
+	}
+	repositoryID, err := requiredUUID(request.GetRepositoryId())
+	if err != nil {
+		return projectservice.ReconcileBootstrapMergeSignalInput{}, err
+	}
+	signal := request.GetMergeSignal()
+	checkedPolicy := request.GetCheckedPolicy()
+	if signal == nil || checkedPolicy == nil || signal.GetProviderTarget() == nil {
+		return projectservice.ReconcileBootstrapMergeSignalInput{}, errs.ErrInvalidArgument
+	}
+	return projectservice.ReconcileBootstrapMergeSignalInput{
+		ProjectID:    projectID,
+		RepositoryID: repositoryID,
+		MergeSignal: projectservice.BootstrapRepositoryMergeSignal{
+			SignalID:                     strings.TrimSpace(signal.GetSignalId()),
+			SignalKey:                    strings.TrimSpace(signal.GetSignalKey()),
+			SignalKind:                   strings.TrimSpace(signal.GetSignalKind()),
+			ProviderTarget:               bootstrapProviderTargetFromProto(signal.GetProviderTarget()),
+			BaseBranch:                   strings.TrimSpace(signal.GetBaseBranch()),
+			SourceRef:                    strings.TrimSpace(signal.GetSourceRef()),
+			MergeCommitSHA:               strings.TrimSpace(signal.GetMergeCommitSha()),
+			SourceBlobSHA:                strings.TrimSpace(signal.GetSourceBlobSha()),
+			WatermarkDigest:              strings.TrimSpace(signal.GetWatermarkDigest()),
+			WatermarkJSON:                []byte(strings.TrimSpace(signal.GetWatermarkJson())),
+			ProviderWorkItemProjectionID: strings.TrimSpace(signal.GetProviderWorkItemProjectionId()),
+			ProviderWebURL:               strings.TrimSpace(signal.GetProviderWebUrl()),
+			ProviderObjectID:             strings.TrimSpace(signal.GetProviderObjectId()),
+			MergeObservedAt:              strings.TrimSpace(signal.GetMergeObservedAt()),
+			MergedAt:                     strings.TrimSpace(signal.GetMergedAt()),
+		},
+		CheckedPolicy: projectservice.CheckedBootstrapServicesPolicyArtifact{
+			ArtifactRef:      strings.TrimSpace(checkedPolicy.GetArtifactRef()),
+			ArtifactDigest:   strings.TrimSpace(checkedPolicy.GetArtifactDigest()),
+			ArtifactVersion:  strings.TrimSpace(checkedPolicy.GetArtifactVersion()),
+			SourcePath:       strings.TrimSpace(checkedPolicy.GetSourcePath()),
+			ContentHash:      strings.TrimSpace(checkedPolicy.GetContentHash()),
+			ValidatedPayload: []byte(strings.TrimSpace(checkedPolicy.GetValidatedPayloadJson())),
+		},
+		Meta: meta,
+	}, nil
+}
+
 func bootstrapProviderTargetFromProto(target *projectsv1.RepositoryBootstrapProviderTarget) projectservice.RepositoryBootstrapProviderTarget {
 	return projectservice.RepositoryBootstrapProviderTarget{
 		ProviderSlug:         strings.TrimSpace(target.GetProviderSlug()),

@@ -90,6 +90,10 @@ func (r *Repository) ListInteractionRequests(context.Context, query.InteractionR
 	return nil, value.PageResult{}, errs.ErrNotImplemented
 }
 
+func (r *Repository) ListOwnerInboxItems(context.Context, query.OwnerInboxFilter) ([]entity.OwnerInboxItem, value.PageResult, error) {
+	return nil, value.PageResult{}, errs.ErrNotImplemented
+}
+
 func (r *Repository) ListExpirableInteractionRequests(context.Context, value.ScopeRef, time.Time, int32) ([]entity.InteractionRequest, error) {
 	return nil, errs.ErrNotImplemented
 }

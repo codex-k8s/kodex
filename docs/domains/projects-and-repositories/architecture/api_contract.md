@@ -5,8 +5,8 @@ title: kodex — API-обзор project-catalog
 status: active
 owner_role: SA
 created_at: 2026-05-05
-updated_at: 2026-05-26
-related_issues: [628, 629, 630, 631, 632, 633, 794, 810, 818, 840]
+updated_at: 2026-05-27
+related_issues: [628, 629, 630, 631, 632, 633, 794, 810, 818, 840, 864]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -43,7 +43,9 @@ approvals:
 
 `CreateRepositoryBootstrapPullRequest` — project-side команда для сценария пустого репозитория по модели C. Она работает только по уже существующему `Repository` binding, проверяет проектную принадлежность, provider target, `base_branch`, подготовленные файлы, обязательный watermark и проверенную проекцию `services.yaml`, затем делегирует запись в `provider-hub CreateBootstrapPullRequest`. Команда не создаёт provider-native репозиторий, не генерирует шаблон репозитория, не выполняет adoption scan и не импортирует политику после merge; эти шаги остаются отдельными срезами.
 
-`ImportBootstrapServicesPolicy` — project-side команда завершения bootstrap после merge provider-native PR/MR. Команда не читает GitHub/GitLab и не принимает raw provider payload: вызывающий внутренний контур передаёт уже проверенный сигнал, основанный на `provider.repository.bootstrap_merged`, с provider target, `base_branch`, `source_ref`, commit, `content_hash`, watermark и нормализованным `validated_payload_json`. `project-catalog` сверяет сигнал с repository binding, проверяет ожидаемую версию pending binding, импортирует `services.yaml` штатным валидатором, сохраняет checked projection и переводит binding в `active`. Повтор того же commit/source ref идемпотентен; другой commit/ref после активации возвращает конфликт.
+`ImportBootstrapServicesPolicy` — низкоуровневая project-side команда завершения bootstrap после merge provider-native PR/MR. Команда не читает GitHub/GitLab и не принимает raw provider payload: вызывающий внутренний контур передаёт уже проверенный сигнал, provider target, `base_branch`, `source_ref`, commit, `content_hash`, watermark и нормализованный `validated_payload_json`. `project-catalog` сверяет сигнал с repository binding, проверяет ожидаемую версию pending binding, импортирует `services.yaml` штатным валидатором, сохраняет checked projection и переводит binding в `active`. Повтор того же commit/source ref идемпотентен; другой commit/ref после активации возвращает конфликт.
+
+`ReconcileBootstrapMergeSignal` — явный project-side reconciliation path для события `provider.repository.bootstrap_merged`, пока в доменных сервисах не введён общий worker/consumer framework поверх `platform-event-log`. Команда принимает только safe `BootstrapRepositoryMergeSignal` и `CheckedBootstrapServicesPolicyArtifact`: provider refs, signal key/id, `base_branch`, `source_ref`, merge commit, watermark digest, artifact ref/digest/version и checked `validated_payload_json`. Она проверяет, что сигнал относится к bootstrap, artifact digest совпадает с `content_hash`, artifact version привязан к merge commit, watermark digest совпадает с переданным watermark payload, затем вызывает `ImportBootstrapServicesPolicy`. Если caller не передал `command_id` или `idempotency_key`, project-catalog использует provider `signal_key` как идемпотентный ключ импорта. Сырые webhook body, diff, provider response, YAML-текст и файлы в команду не передаются.
 
 | Операция | Вид | Доступ | Идемпотентность | Примечание |
 |---|---|---|---|---|
@@ -60,6 +62,7 @@ approvals:
 | `ListRepositories` | gRPC query | `repository.list` | нет | Список репозиториев проекта. |
 | `ImportServicesPolicy` | gRPC command | `project.policy.import` | `CommandMeta.command_id` | Импортирует `services.yaml`, управляемый через Git, после первичной загрузки, слияния PR или сверки и сохраняет проверенную проекцию. |
 | `ImportBootstrapServicesPolicy` | gRPC command | `project.policy.import` | `CommandMeta.command_id` + source commit replay | Принимает проверенный merge-сигнал bootstrap PR, импортирует `services.yaml` и активирует pending repository binding. |
+| `ReconcileBootstrapMergeSignal` | gRPC command | `project.policy.import` | `CommandMeta` или provider `signal_key` + source commit replay | Принимает safe provider merge signal и checked artifact metadata, валидирует связь signal/artifact/binding и запускает import bootstrap policy. |
 | `GetServicesPolicy` | gRPC query | `project.policy.read` | нет | Читает активную проверенную проекцию `services.yaml`. |
 | `ListServiceDescriptors` | gRPC query | `project.policy.read` | нет | Читает типизированный список сервисов из последней политики `valid + synced/overridden`. |
 | `CreatePolicyEditProposal` | gRPC command | `project.policy.propose` | `CommandMeta.command_id` | Создаёт запрос на PR-изменение `services.yaml` вместо прямой записи в БД. |
@@ -137,7 +140,7 @@ approvals:
 | gRPC proto `ProjectCatalogService` | Стабильный `v1`, покрывает весь согласованный объём операций. |
 | AsyncAPI `project.*` | Стабильный `v1`, покрывает события из этого документа. |
 | Сервисный процесс `project-catalog` | Подключены entrypoint, конфигурация, health/readyz/metrics, gRPC-сервер, проверка доступа через `access-manager` и outbox-dispatcher. |
-| Бизнес-обработчики gRPC | Подключены к доменному сервису для проектов, репозиториев, создания provider repo/base ref через `provider-hub`, bootstrap PR по существующему binding, импорта bootstrap policy после merge, проверенной проекции `services.yaml`, операторских переопределений, источников документации, правил веток, релизных политик, релизных линий и политики размещения. |
+| Бизнес-обработчики gRPC | Подключены к доменному сервису для проектов, репозиториев, создания provider repo/base ref через `provider-hub`, bootstrap PR по существующему binding, reconciliation safe bootstrap merge signal, импорта bootstrap policy после merge, проверенной проекции `services.yaml`, операторских переопределений, источников документации, правил веток, релизных политик, релизных линий и политики размещения. |
 | PostgreSQL и outbox | Модель БД, миграции, слой репозитория, сервисный outbox и публикация событий в `platform-event-log` подключены. |
 
 ## Совместимость

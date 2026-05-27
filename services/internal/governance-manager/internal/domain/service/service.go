@@ -636,7 +636,8 @@ func (s *Service) BuildReleaseDecisionPackage(ctx context.Context, input BuildRe
 			return entity.ReleaseDecisionPackage{}, err
 		}
 	}
-	if err := s.validateReleaseIntegrationRefs(ctx, integrationRefs); err != nil {
+	integrationRefs, err = s.enrichReleaseIntegrationRefs(ctx, integrationRefs)
+	if err != nil {
 		return entity.ReleaseDecisionPackage{}, err
 	}
 	for _, reviewSignalID := range input.ReviewSignalIDs {
@@ -683,41 +684,6 @@ func (s *Service) GetReleaseDecisionPackage(ctx context.Context, input GetReleas
 
 func (s *Service) ListReleaseDecisionPackages(ctx context.Context, input ListReleaseDecisionPackagesInput) ([]entity.ReleaseDecisionPackage, query.PageResult, error) {
 	return listWithAuthorization(ctx, input.Meta, input.Filter, s.authorizeReleasePackageList, s.repository.ListReleaseDecisionPackages)
-}
-
-func (s *Service) validateReleaseIntegrationRefs(ctx context.Context, refs []value.ReleaseIntegrationRef) error {
-	for _, ref := range refs {
-		if ref.Domain != "governance" {
-			continue
-		}
-		id, err := uuid.Parse(ref.Ref)
-		if err != nil {
-			return errs.ErrInvalidArgument
-		}
-		switch ref.Kind {
-		case "risk_assessment":
-			if _, err := s.repository.GetRiskAssessment(ctx, id); err != nil {
-				return err
-			}
-		case "review_signal":
-			if _, err := s.repository.GetReviewSignal(ctx, id); err != nil {
-				return err
-			}
-		case "gate_request":
-			if _, err := s.repository.GetGateRequest(ctx, id); err != nil {
-				return err
-			}
-		case "gate_decision":
-			if _, err := s.repository.GetGateDecision(ctx, id); err != nil {
-				return err
-			}
-		case "release_decision_package":
-			if _, err := s.repository.GetReleaseDecisionPackage(ctx, id); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
 }
 
 // RequestReleaseDecision starts the minimal release decision lifecycle.

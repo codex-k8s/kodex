@@ -6,7 +6,7 @@ status: active
 owner_role: EM
 created_at: 2026-05-06
 updated_at: 2026-05-27
-related_issues: [281, 282, 711, 719, 725, 729, 737, 754, 761, 770, 781, 840, 865]
+related_issues: [281, 282, 711, 719, 725, 729, 737, 754, 761, 770, 781, 840, 864, 865]
 related_prs: []
 related_docsets:
   - docs/domains/provider-native-work-items/product/requirements.md
@@ -78,7 +78,7 @@ approvals:
 | Операционное состояние аккаунта и лимиты | Готово: состояние аккаунта у провайдера, снимки лимитов и журнал операций. | Реализовано в PRV-3: доменная логика, PostgreSQL-репозиторий, gRPC-чтение/запись снимков лимитов, базовый GitHub-адаптер для проверки лимитов. Фильтры по проекту и организации в списке операционных состояний остаются контрактным заделом до подключения разрешения внешних аккаунтов через `access-manager`. |
 | Первичная инициализация пустого репозитория | Готово: `CreateRepository` создаёт GitHub-репозиторий и provider default branch, `CreateBootstrapPullRequest` принимает подготовленные файлы и refs, создаёт или обновляет bootstrap branch/PR. | PRV-8b реализует создание репозитория на стороне провайдера через общий pipeline и GitHub-адаптер с `auto_init=true`, фиксирует `base_branch` и событие `provider.repository.created`. PRV-8a реализует provider-side запись bootstrap branch/PR, обновляет проекцию `PR`, provider relationship к project/repository binding и событие `provider.repository.bootstrap_completed`. End-to-end вызов из проектного или агентного контура остаётся отдельным срезом. |
 | Подключение существующего репозитория | Готово: `ScanRepositoryForAdoption` снимает lightweight provider-side snapshot, а `CreateAdoptionPullRequest` принимает подготовленные файлы и refs, создаёт или обновляет adoption branch/PR, фиксирует проекцию, связь и событие `provider.repository.adoption_pr_created`. | PRV-8e реализует GitHub metadata/ref/tree scan без чтения содержимого файлов и сохраняет только safe refs, marker path refs/digests/counts, bounded warnings и snapshot digest. PRV-8c реализует provider-side запись adoption branch/PR без генерации `services.yaml`, выбора шаблонов и project policy decision. End-to-end вызов, глубокий workspace scan/report и импорт политики остаются отдельными срезами соседних доменов. |
-| Merge bootstrap/adoption PR | Готово: безопасный provider-side merge signal и AsyncAPI события `provider.repository.bootstrap_merged` / `provider.repository.adoption_merged`. | Реализовано в PRV-8d: GitHub `pull_request closed + merged` связывается с уже известной bootstrap/adoption PR-проекцией, сохраняет только safe refs/digest/timestamps, дедуплицируется по signal key и конфликтует при другом commit/source ref. `provider-hub` не вызывает `project-catalog ImportBootstrapServicesPolicy` напрямую. |
+| Merge bootstrap/adoption PR | Готово: безопасный provider-side merge signal и AsyncAPI события `provider.repository.bootstrap_merged` / `provider.repository.adoption_merged`. | Реализовано в PRV-8d: GitHub `pull_request closed + merged` связывается с уже известной bootstrap/adoption PR-проекцией, сохраняет только safe refs/digest/timestamps, дедуплицируется по signal key и конфликтует при другом commit/source ref. `provider-hub` не вызывает `project-catalog` напрямую; project-side reconciliation вызывает `ReconcileBootstrapMergeSignal` с safe signal и checked artifact metadata. |
 | Эксплуатационный контур | Готово: Dockerfile, Kubernetes-манифесты, bootstrap БД, migration job, smoke-путь, runbook и monitoring docs. | PRV-9 добавил `deploy/base/provider-hub/**`, подключение `kodex_provider_hub` к PostgreSQL bootstrap/runtime secrets, build/smoke scripts и эксплуатационные документы. Реальная проверка на кластере выполняется отдельным операторским запуском smoke-скрипта с нормализованным bootstrap env. |
 
 ## Текущее состояние реализации
@@ -175,6 +175,7 @@ approvals:
 - в PRV-8c `provider-hub` принимает подготовленный набор файлов и refs, создаёт или обновляет adoption branch/PR и фиксирует связи, но не выполняет scan, не генерирует `services.yaml` и не выбирает шаблон;
 - в PRV-8d `provider-hub` фиксирует факт merge bootstrap/adoption PR и публикует безопасный сигнал, но не проверяет содержимое `services.yaml`, не импортирует project policy и не активирует repository binding;
 - в PRV-8e `provider-hub` снимает lightweight provider-side scan snapshot без raw file contents, но не строит adoption report, не импортирует `services.yaml`, не запускает агента и не принимает project/adoption decision;
+- в ONB-4 `project-catalog` принимает этот safe signal только через checked artifact metadata и вызывает свой import use-case; provider-native факт merge и raw webhook остаются в `provider-hub`;
 - existing repository adoption end-to-end остаётся проектно-агентным сценарием: глубокий workspace scan, отчёт, выбор шаблона, approval и импорт политики выполняют соседние домены.
 
 ## Definition of Done для каждого PR

@@ -134,6 +134,71 @@ func TestFollowUpDispatcherMapsUpdateAndCommentRequests(t *testing.T) {
 	}
 }
 
+func TestFollowUpDispatcherMapsPullRequestAndReviewSignalRequests(t *testing.T) {
+	t.Parallel()
+
+	accountID := uuid.MustParse("93939393-1111-2222-3333-444444444444")
+	body := "Safe PR body"
+	baseBranch := "release"
+	maintainerCanModify := true
+	line := int64(42)
+	client := &fakeProviderHubClient{
+		response: &providersv1.ProviderOperationResponse{
+			ProviderOperation: &providersv1.ProviderOperation{
+				ProviderOperationId: "op-3",
+				Status:              providersv1.ProviderOperationStatus_PROVIDER_OPERATION_STATUS_SUCCEEDED,
+			},
+			Result: &providersv1.ProviderOperationCommandResult{ResultRef: ptr("github:pull_request:77")},
+		},
+	}
+	dispatcher, err := newFollowUpDispatcher(client, Config{AuthToken: "token", Timeout: time.Second})
+	if err != nil {
+		t.Fatalf("newFollowUpDispatcher() err = %v", err)
+	}
+	_, err = dispatcher.UpdatePullRequest(context.Background(), agentservice.ProviderUpdatePullRequestInput{
+		Meta:                    value.CommandMeta{CommandID: uuid.MustParse("93939393-2222-3333-4444-555555555555"), Actor: value.Actor{Type: "user", ID: "owner"}},
+		Target:                  agentservice.ProviderCommandTarget{ProviderSlug: "github", RepositoryFullName: "codex-k8s/kodex", WorkItemKind: "pull_request", Number: 77},
+		Body:                    &body,
+		BaseBranch:              &baseBranch,
+		MaintainerCanModify:     &maintainerCanModify,
+		ExpectedProviderVersion: "etag:77",
+		ExternalAccountID:       accountID,
+		OperationPolicyContext: agentservice.ProviderOperationPolicyContext{
+			RiskLevel:     agentservice.ProviderRiskLevelMedium,
+			OperationType: agentservice.ProviderOperationTypeUpdatePullRequest,
+		},
+	})
+	if err != nil {
+		t.Fatalf("UpdatePullRequest() err = %v", err)
+	}
+	if client.updatePullRequestRequest.GetBody() != body || client.updatePullRequestRequest.GetBaseBranch() != baseBranch ||
+		client.updatePullRequestRequest.GetMaintainerCanModify() != maintainerCanModify ||
+		client.updatePullRequestRequest.GetExpectedProviderVersion() != "etag:77" {
+		t.Fatalf("update pull request request = %+v", client.updatePullRequestRequest)
+	}
+	_, err = dispatcher.CreateReviewSignal(context.Background(), agentservice.ProviderCreateReviewSignalInput{
+		Meta:              value.CommandMeta{CommandID: uuid.MustParse("93939393-3333-4444-5555-666666666666"), Actor: value.Actor{Type: "user", ID: "owner"}},
+		Target:            agentservice.ProviderCommandTarget{ProviderSlug: "github", RepositoryFullName: "codex-k8s/kodex", WorkItemKind: "pull_request", Number: 77},
+		Kind:              agentservice.ProviderReviewSignalKindChangesRequested,
+		Body:              "Safe review",
+		InlineComments:    []agentservice.ProviderReviewInlineComment{{Path: "README.md", Body: "Inline", Line: &line, Side: "RIGHT"}},
+		ExternalAccountID: accountID,
+		OperationPolicyContext: agentservice.ProviderOperationPolicyContext{
+			RiskLevel:     agentservice.ProviderRiskLevelMedium,
+			OperationType: agentservice.ProviderOperationTypeCreateReviewSignal,
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateReviewSignal() err = %v", err)
+	}
+	if client.createReviewSignalRequest.GetKind() != providersv1.ReviewSignalKind_REVIEW_SIGNAL_KIND_CHANGES_REQUESTED ||
+		client.createReviewSignalRequest.GetBody() != "Safe review" ||
+		len(client.createReviewSignalRequest.GetInlineComments()) != 1 ||
+		client.createReviewSignalRequest.GetInlineComments()[0].GetLine() != line {
+		t.Fatalf("create review signal request = %+v", client.createReviewSignalRequest)
+	}
+}
+
 func TestFollowUpDispatcherMapsProviderHubErrors(t *testing.T) {
 	t.Parallel()
 
@@ -148,12 +213,14 @@ func TestFollowUpDispatcherMapsProviderHubErrors(t *testing.T) {
 }
 
 type fakeProviderHubClient struct {
-	createIssueRequest   *providersv1.CreateIssueRequest
-	updateIssueRequest   *providersv1.UpdateIssueRequest
-	createCommentRequest *providersv1.CreateCommentRequest
-	updateCommentRequest *providersv1.UpdateCommentRequest
-	response             *providersv1.ProviderOperationResponse
-	err                  error
+	createIssueRequest        *providersv1.CreateIssueRequest
+	updateIssueRequest        *providersv1.UpdateIssueRequest
+	createCommentRequest      *providersv1.CreateCommentRequest
+	updateCommentRequest      *providersv1.UpdateCommentRequest
+	updatePullRequestRequest  *providersv1.UpdatePullRequestRequest
+	createReviewSignalRequest *providersv1.CreateReviewSignalRequest
+	response                  *providersv1.ProviderOperationResponse
+	err                       error
 }
 
 func (f *fakeProviderHubClient) CreateIssue(_ context.Context, request *providersv1.CreateIssueRequest, _ ...grpc.CallOption) (*providersv1.ProviderOperationResponse, error) {
@@ -182,6 +249,22 @@ func (f *fakeProviderHubClient) CreateComment(_ context.Context, request *provid
 
 func (f *fakeProviderHubClient) UpdateComment(_ context.Context, request *providersv1.UpdateCommentRequest, _ ...grpc.CallOption) (*providersv1.ProviderOperationResponse, error) {
 	f.updateCommentRequest = request
+	if f.err != nil {
+		return nil, f.err
+	}
+	return f.response, nil
+}
+
+func (f *fakeProviderHubClient) UpdatePullRequest(_ context.Context, request *providersv1.UpdatePullRequestRequest, _ ...grpc.CallOption) (*providersv1.ProviderOperationResponse, error) {
+	f.updatePullRequestRequest = request
+	if f.err != nil {
+		return nil, f.err
+	}
+	return f.response, nil
+}
+
+func (f *fakeProviderHubClient) CreateReviewSignal(_ context.Context, request *providersv1.CreateReviewSignalRequest, _ ...grpc.CallOption) (*providersv1.ProviderOperationResponse, error) {
+	f.createReviewSignalRequest = request
 	if f.err != nil {
 		return nil, f.err
 	}

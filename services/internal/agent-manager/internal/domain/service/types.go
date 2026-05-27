@@ -251,22 +251,31 @@ const (
 type FollowUpDispatchKind string
 
 const (
-	FollowUpDispatchKindCreateIssue   FollowUpDispatchKind = "create_issue"
-	FollowUpDispatchKindUpdateIssue   FollowUpDispatchKind = "update_issue"
-	FollowUpDispatchKindCreateComment FollowUpDispatchKind = "create_comment"
-	FollowUpDispatchKindUpdateComment FollowUpDispatchKind = "update_comment"
+	FollowUpDispatchKindCreateIssue        FollowUpDispatchKind = "create_issue"
+	FollowUpDispatchKindUpdateIssue        FollowUpDispatchKind = "update_issue"
+	FollowUpDispatchKindCreateComment      FollowUpDispatchKind = "create_comment"
+	FollowUpDispatchKindUpdateComment      FollowUpDispatchKind = "update_comment"
+	FollowUpDispatchKindUpdatePullRequest  FollowUpDispatchKind = "update_pull_request"
+	FollowUpDispatchKindCreateReviewSignal FollowUpDispatchKind = "create_review_signal"
 )
 
 const (
-	ProviderOperationTypeCreateIssue   = "create_issue"
-	ProviderOperationTypeUpdateIssue   = "update_issue"
-	ProviderOperationTypeCreateComment = "create_comment"
-	ProviderOperationTypeUpdateComment = "update_comment"
-	ProviderRiskLevelLow               = "low"
-	ProviderRiskLevelMedium            = "medium"
-	ProviderRiskLevelHigh              = "high"
-	ProviderRiskLevelCritical          = "critical"
+	ProviderOperationTypeCreateIssue         = "create_issue"
+	ProviderOperationTypeUpdateIssue         = "update_issue"
+	ProviderOperationTypeCreateComment       = "create_comment"
+	ProviderOperationTypeUpdateComment       = "update_comment"
+	ProviderOperationTypeUpdatePullRequest   = "update_pull_request"
+	ProviderOperationTypeCreateReviewSignal  = "create_review_signal"
+	ProviderRiskLevelLow                     = "low"
+	ProviderRiskLevelMedium                  = "medium"
+	ProviderRiskLevelHigh                    = "high"
+	ProviderRiskLevelCritical                = "critical"
+	ProviderReviewSignalKindComment          = "comment"
+	ProviderReviewSignalKindApproval         = "approval"
+	ProviderReviewSignalKindChangesRequested = "changes_requested"
 )
+
+type ProviderReviewSignalKind string
 
 type ProviderCommandTarget struct {
 	ProviderSlug         string
@@ -314,6 +323,8 @@ type DispatchFollowUpIntentInput struct {
 	UpdateIssue            *FollowUpUpdateIssueCommand
 	CreateComment          *FollowUpCreateCommentCommand
 	UpdateComment          *FollowUpUpdateCommentCommand
+	UpdatePullRequest      *FollowUpUpdatePullRequestCommand
+	CreateReviewSignal     *FollowUpCreateReviewSignalCommand
 }
 
 type FollowUpCreateIssueCommand struct {
@@ -357,8 +368,41 @@ type FollowUpUpdateCommentCommand struct {
 	ExpectedProviderVersion string
 }
 
+type FollowUpUpdatePullRequestCommand struct {
+	ExternalAccountID       uuid.UUID
+	Target                  ProviderCommandTarget
+	SafeTitle               *string
+	SafeBodyHint            *string
+	Labels                  *ProviderStringListPatch
+	AssigneeProviderLogins  *ProviderStringListPatch
+	Milestone               *string
+	State                   *string
+	BaseBranch              *string
+	MaintainerCanModify     *bool
+	WatermarkJSON           *[]byte
+	ExpectedProviderVersion string
+}
+
+type FollowUpCreateReviewSignalCommand struct {
+	ExternalAccountID uuid.UUID
+	Target            ProviderCommandTarget
+	Kind              ProviderReviewSignalKind
+	SafeBodyHint      *string
+	InlineComments    []ProviderReviewInlineComment
+}
+
 type ProviderStringListPatch struct {
 	Values []string
+}
+
+type ProviderReviewInlineComment struct {
+	Path                       string
+	Body                       string
+	Line                       *int64
+	StartLine                  *int64
+	Side                       string
+	StartSide                  string
+	InReplyToProviderCommentID string
 }
 
 type ProviderCreateIssueInput struct {
@@ -414,6 +458,35 @@ type ProviderUpdateCommentInput struct {
 	OperationPolicyContext  ProviderOperationPolicyContext
 	ApprovalGateRef         ProviderApprovalGateReference
 	ExternalAccountID       uuid.UUID
+}
+
+type ProviderUpdatePullRequestInput struct {
+	Meta                    value.CommandMeta
+	Target                  ProviderCommandTarget
+	Title                   *string
+	Body                    *string
+	Labels                  *ProviderStringListPatch
+	AssigneeProviderLogins  *ProviderStringListPatch
+	Milestone               *string
+	State                   *string
+	BaseBranch              *string
+	MaintainerCanModify     *bool
+	WatermarkJSON           *[]byte
+	ExpectedProviderVersion string
+	OperationPolicyContext  ProviderOperationPolicyContext
+	ApprovalGateRef         ProviderApprovalGateReference
+	ExternalAccountID       uuid.UUID
+}
+
+type ProviderCreateReviewSignalInput struct {
+	Meta                   value.CommandMeta
+	Target                 ProviderCommandTarget
+	Kind                   ProviderReviewSignalKind
+	Body                   string
+	InlineComments         []ProviderReviewInlineComment
+	OperationPolicyContext ProviderOperationPolicyContext
+	ApprovalGateRef        ProviderApprovalGateReference
+	ExternalAccountID      uuid.UUID
 }
 
 type ProviderCommandResult struct {

@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-12
 updated_at: 2026-05-27
-related_issues: [733, 749, 759, 772, 322, 782, 795, 809, 820, 834, 842]
+related_issues: [733, 749, 759, 772, 322, 782, 795, 809, 820, 834, 842, 862, 866]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -274,7 +274,7 @@ approvals:
 
 ### FollowUpIntent
 
-`FollowUpIntent` описывает намерение выполнить следующий безопасный provider-native шаг. В `agent-manager` это авторитетное состояние intent и lifecycle dispatch: создание `Issue`, обновление `Issue`, создание комментария и обновление комментария выполняются только через typed команды `provider-hub`, а `agent-manager` сохраняет результат как safe refs/status.
+`FollowUpIntent` описывает намерение выполнить следующий безопасный provider-native шаг. В `agent-manager` это авторитетное состояние intent и lifecycle dispatch: создание или обновление `Issue`, создание или обновление комментария, обновление `PR/MR` и создание provider-native review signal выполняются только через typed команды `provider-hub`, а `agent-manager` сохраняет результат как safe refs/status.
 
 | Поле | Тип | Может быть пустым | Примечание |
 |---|---|---:|---|
@@ -287,7 +287,7 @@ approvals:
 | `provider_work_item_ref`, `provider_pull_request_ref`, `provider_comment_ref`, `provider_review_signal_ref` | text | да | Безопасные provider refs. Хотя бы один target ref обязателен; значения имеют safe-ref формат `kind:value`, ограничены по длине и не содержат raw/log/secret markers. |
 | `provider_work_item_type` | text | нет | Тип следующего provider-native work item, например `task`, `bug`, `qa`, `release`; может сверяться с `StageTransition.follow_up_type`. |
 | `provider_operation_ref` | text | да | Safe ref операции `provider-hub` после dispatch или заранее известная ссылка; сам provider payload, response body и raw error не хранятся. |
-| `status` | enum | нет | `planned`, `requested`, `created`, `updated`, `commented`, `failed`, `cancelled`. |
+| `status` | enum | нет | `planned`, `requested`, `created`, `updated`, `commented`, `review_signaled`, `failed`, `cancelled`. |
 | `instruction_body_digest` | text | да | Digest открытых инструкций follow-up без сохранения body. |
 | `safe_title` | text | нет | Bounded title для следующей provider-native задачи; не содержит transcript, prompt text, raw provider payload, stdout/stderr/logs или секреты. |
 | `safe_summary` | text | да | Bounded summary для события и UI, без больших отчётов и raw payload. |
@@ -296,7 +296,7 @@ approvals:
 | `version` | bigint | нет | Версия intent для будущих lifecycle-переходов. |
 | `created_at`, `updated_at` | timestamptz | нет | Технические временные метки. |
 
-`FollowUpIntent` не хранит raw prompt, transcript, файлы workspace, большие отчёты, provider response, body будущего `Issue`, тело комментария, тексты руководящих документов, prompt templates или flow files. При dispatch `agent-manager` сначала атомарно резервирует локальный переход bump версии и safe `provider_command:<uuid>` ref, сформированный детерминированно от intent и `FollowUpDispatchKind`. Только после этого формируется bounded safe instruction body для typed вызова `provider-hub.CreateIssue`, `UpdateIssue`, `CreateComment` или `UpdateComment`; в БД остаются `safe_title`, `safe_summary`, digest, статус, `provider_operation_ref`, safe provider result refs и bounded command snapshot без raw body. Повтор команды с тем же ключом возвращает тот же intent только при совпадении нормализованного payload; отличающийся payload или stale `expected_version` получает безопасный conflict до повторного provider write.
+`FollowUpIntent` не хранит raw prompt, transcript, файлы workspace, большие отчёты, provider response, body будущего `Issue`, тело комментария, тело review signal, inline comment body, тексты руководящих документов, prompt templates или flow files. При dispatch `agent-manager` сначала атомарно резервирует локальный переход bump версии и safe `provider_command:<uuid>` ref, сформированный детерминированно от intent и `FollowUpDispatchKind`. Только после этого формируется bounded safe instruction body для typed вызова `provider-hub.CreateIssue`, `UpdateIssue`, `CreateComment`, `UpdateComment`, `UpdatePullRequest` или `CreateReviewSignal`; в БД остаются `safe_title`, `safe_summary`, digest, статус, `provider_operation_ref`, safe provider result refs и bounded command snapshot без raw body. Для `update_pull_request` target должен совпадать с сохранённым `provider_pull_request_ref`, а команда требует provider expected version. Для `create_review_signal` сохраняется только `provider_review_signal_ref` и статус `review_signaled`; governance approval/release decision остаётся в governance-контуре. Повтор команды с тем же ключом возвращает тот же intent только при совпадении нормализованного payload; отличающийся payload или stale `expected_version` получает безопасный conflict до повторного provider write.
 
 ### AutomationBinding
 

@@ -5,8 +5,8 @@ title: kodex — требования домена центра взаимоде
 status: active
 owner_role: PM
 created_at: 2026-05-22
-updated_at: 2026-05-26
-related_issues: [582, 768, 781, 800]
+updated_at: 2026-05-27
+related_issues: [582, 768, 781, 800, 867]
 related_prs: []
 related_docsets:
   - docs/platform/architecture/domain_map.md
@@ -71,7 +71,7 @@ approvals:
 | INT-FR-8 | Домен должен принимать callback внешних каналов через проверенный пограничный контур, связывать callback с исходным request/delivery attempt и создавать итоговый `InteractionResponse`, если callback выбирает допустимый terminal action. | Обязательно |
 | INT-FR-9 | Внешние каналы должны подключаться через гибридную модель: package-owned runtime плюс стабильный channel delivery/callback contract. | Обязательно |
 | INT-FR-10 | Список внешних каналов не должен фиксироваться в ядре; manifest plugin package объявляет capability канала, требуемые API, права, секреты и runtime-требования. | Обязательно |
-| INT-FR-11 | Домен должен отдавать `platform-mcp-server` типизированные операции запроса feedback, approval и чтения статуса доставки. | Обязательно |
+| INT-FR-11 | Домен должен отдавать типизированные операции запроса feedback, approval, чтения статуса доставки и owner inbox по собственным interaction-сущностям. | Обязательно |
 | INT-FR-12 | Домен должен принимать от `agent-manager` запросы feedback, Human gate и notification intent, но не хранить flow, `Run`, session или acceptance как свою истину. | Обязательно |
 | INT-FR-13 | Домен должен принимать нормализованные события `codex-hook-ingress`, если hook требует вопроса, разрешения или уведомления человеку. | Обязательно |
 | INT-FR-14 | Домен должен связывать запросы с provider-native артефактами через safe refs и события, но не выполнять provider write pipeline. | Обязательно |
@@ -90,6 +90,7 @@ approvals:
 | INT-AC-5 | Если внешний канал недоступен, `interaction-hub` фиксирует ошибку доставки, refs retry/reminder policy и событие для операторской видимости. |
 | INT-AC-6 | Если установлен channel package, `interaction-hub` использует его capability и package installation ref, но не меняет установку и не запускает runtime-нагрузку сам. |
 | INT-AC-7 | Если канал возвращает callback повторно, команда идемпотентна и не создаёт второй ответ. |
+| INT-AC-8 | Если UI или operator surface запрашивает входящие решения, `interaction-hub` возвращает только pending/active request и callback diagnostics по своим сущностям; cross-domain aggregation остаётся вне домена. |
 | INT-AC-8 | Если запрос истёк, домен публикует событие истечения и соседний сервис-владелец решает, как менять своё состояние. |
 
 ## Что не входит

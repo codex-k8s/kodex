@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-06
 updated_at: 2026-05-27
-related_issues: [281, 282, 711, 719, 725, 729, 737, 761, 770, 781, 818, 840, 865]
+related_issues: [281, 282, 711, 719, 725, 729, 737, 761, 770, 781, 818, 840, 864, 865]
 related_prs: []
 related_adrs: []
 approvals:
@@ -191,7 +191,7 @@ sequenceDiagram
 
 Bootstrap-команда не создаёт сам репозиторий у провайдера, не создаёт начальный base ref, не генерирует `services.yaml`, не выбирает шаблоны и не сканирует содержимое репозитория. Она отклоняется, если `base_branch` и `bootstrap_branch` совпадают, либо если дерево `base_branch` содержит что-либо кроме безопасного `README.md`, созданного провайдером при `auto_init`. Если bootstrap branch уже существует после неудачной или повторной попытки, новый commit строится от текущей головы bootstrap branch, но дерево commit собирается из пустого дерева или дерева только с `README.md` и подготовленного набора файлов, чтобы не протащить старые файлы. После успешной записи сервис обновляет локальную проекцию bootstrap `PR/MR`, проставляет `project_id` и `repository_id`, создаёт provider relationship `project_repository_binding` и публикует `provider.repository.bootstrap_completed`. Содержимое подготовленных файлов остаётся только входом provider-вызова и не сохраняется в журнале операций, outbox, событиях, логах, ошибках или трассировке.
 
-После merge bootstrap `PR/MR` provider-side контур отвечает за факт provider-native изменения: webhook inbox, нормализацию, PR/MR projection и безопасные refs. Для GitHub закрытый и смёрженный `pull_request` создаёт `RepositoryMergeSignal` kind `bootstrap` с project/repository refs, PR number/id/url, base/head branch, merge commit sha, source ref, related provider operation ref, watermark digest, timestamps, status и version. Проверенная проекция `services.yaml` импортируется не в `provider-hub`, а в `project-catalog` через внутреннюю команду `ImportBootstrapServicesPolicy`. В этот вызов не передаются raw webhook body, полный provider response или содержимое provider payload; только безопасные ссылки, source ref, commit, `content_hash`, watermark и нормализованный checked payload, подготовленный вызывающим контуром.
+После merge bootstrap `PR/MR` provider-side контур отвечает за факт provider-native изменения: webhook inbox, нормализацию, PR/MR projection и безопасные refs. Для GitHub закрытый и смёрженный `pull_request` создаёт `RepositoryMergeSignal` kind `bootstrap` с project/repository refs, PR number/id/url, base/head branch, merge commit sha, source ref, related provider operation ref, watermark digest, timestamps, status и version. Проверенная проекция `services.yaml` импортируется не в `provider-hub`, а в `project-catalog` через внутреннюю команду `ReconcileBootstrapMergeSignal`, которая валидирует safe signal, checked artifact ref/digest/version и вызывает `ImportBootstrapServicesPolicy`. В этот вызов не передаются raw webhook body, полный provider response или содержимое provider payload; только безопасные ссылки, source ref, commit, artifact refs/digests, watermark и нормализованный checked payload, подготовленный вызывающим контуром.
 
 ### Lightweight scan существующего репозитория
 

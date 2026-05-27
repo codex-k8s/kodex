@@ -124,6 +124,61 @@ func requestFilterArgs(filter query.InteractionRequestFilter) pageQueryArgs {
 	})
 }
 
+func ownerInboxFilterArgs(filter query.OwnerInboxFilter) pageQueryArgs {
+	return withPage(filter.Page, pgx.NamedArgs{
+		"scope_type":          string(filter.Scope.Type),
+		"scope_ref":           filter.Scope.Ref,
+		"request_kinds":       requestKindValues(filter.RequestKinds),
+		"statuses":            requestStatusValues(filter.Statuses),
+		"default_statuses":    requestStatusValues(activeOwnerInboxStatuses()),
+		"source_owner_kind":   string(filter.SourceOwnerKind),
+		"source_owner_ref":    filter.SourceOwnerRef,
+		"assignee_ref":        ownerInboxActorRefPayload(filter.AssigneeRef),
+		"actor_ref":           filter.ActorRef,
+		"correlation_ref":     ownerInboxCorrelationRefPayload(filter.CorrelationRef),
+		"correlation_id":      filter.CorrelationID,
+		"include_diagnostics": filter.IncludeDiagnostics,
+	})
+}
+
+func requestKindValues(input []enum.InteractionRequestKind) []string {
+	values := make([]string, 0, len(input))
+	for _, item := range input {
+		values = append(values, string(item))
+	}
+	return values
+}
+
+func requestStatusValues(input []enum.InteractionRequestStatus) []string {
+	values := make([]string, 0, len(input))
+	for _, item := range input {
+		values = append(values, string(item))
+	}
+	return values
+}
+
+func activeOwnerInboxStatuses() []enum.InteractionRequestStatus {
+	return []enum.InteractionRequestStatus{
+		enum.InteractionRequestStatusCreated,
+		enum.InteractionRequestStatusRouted,
+		enum.InteractionRequestStatusWaiting,
+	}
+}
+
+func ownerInboxActorRefPayload(ref value.ActorRef) string {
+	if ref.Kind == "" || ref.Ref == "" {
+		return "[]"
+	}
+	return arrayPayload([]value.ActorRef{ref})
+}
+
+func ownerInboxCorrelationRefPayload(ref value.ExternalRef) string {
+	if ref.Kind == "" || ref.Ref == "" {
+		return "[]"
+	}
+	return arrayPayload([]value.ExternalRef{ref})
+}
+
 func expirableRequestArgs(scope value.ScopeRef, deadlineBefore time.Time, limit int32) pgx.NamedArgs {
 	return pgx.NamedArgs{
 		"scope_type":      string(scope.Type),

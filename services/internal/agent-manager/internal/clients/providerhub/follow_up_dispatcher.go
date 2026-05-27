@@ -30,11 +30,16 @@ type Config struct {
 }
 
 type providerHubClient interface {
-	CreateIssue(context.Context, *providersv1.CreateIssueRequest, ...grpc.CallOption) (*providersv1.ProviderOperationResponse, error)
-	UpdateIssue(context.Context, *providersv1.UpdateIssueRequest, ...grpc.CallOption) (*providersv1.ProviderOperationResponse, error)
-	CreateComment(context.Context, *providersv1.CreateCommentRequest, ...grpc.CallOption) (*providersv1.ProviderOperationResponse, error)
-	UpdateComment(context.Context, *providersv1.UpdateCommentRequest, ...grpc.CallOption) (*providersv1.ProviderOperationResponse, error)
+	CreateIssue(context.Context, *providersv1.CreateIssueRequest, ...grpcCallOption) (*providerOperationResponse, error)
+	UpdateIssue(context.Context, *providersv1.UpdateIssueRequest, ...grpcCallOption) (*providerOperationResponse, error)
+	CreateComment(context.Context, *providersv1.CreateCommentRequest, ...grpcCallOption) (*providerOperationResponse, error)
+	UpdateComment(context.Context, *providersv1.UpdateCommentRequest, ...grpcCallOption) (*providerOperationResponse, error)
+	UpdatePullRequest(context.Context, *providersv1.UpdatePullRequestRequest, ...grpcCallOption) (*providerOperationResponse, error)
+	CreateReviewSignal(context.Context, *providersv1.CreateReviewSignalRequest, ...grpcCallOption) (*providerOperationResponse, error)
 }
+
+type grpcCallOption = grpc.CallOption
+type providerOperationResponse = providersv1.ProviderOperationResponse
 
 type providerFollowUpCommand int
 
@@ -43,13 +48,17 @@ const (
 	providerFollowUpUpdateIssue
 	providerFollowUpCreateComment
 	providerFollowUpUpdateComment
+	providerFollowUpUpdatePullRequest
+	providerFollowUpCreateReviewSignal
 )
 
 var providerOperationTypeByName = map[string]providersv1.ProviderOperationType{
-	agentservice.ProviderOperationTypeCreateIssue:   providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_ISSUE,
-	agentservice.ProviderOperationTypeUpdateIssue:   providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_UPDATE_ISSUE,
-	agentservice.ProviderOperationTypeCreateComment: providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_COMMENT,
-	agentservice.ProviderOperationTypeUpdateComment: providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_UPDATE_COMMENT,
+	agentservice.ProviderOperationTypeCreateIssue:        providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_ISSUE,
+	agentservice.ProviderOperationTypeUpdateIssue:        providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_UPDATE_ISSUE,
+	agentservice.ProviderOperationTypeCreateComment:      providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_COMMENT,
+	agentservice.ProviderOperationTypeUpdateComment:      providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_UPDATE_COMMENT,
+	agentservice.ProviderOperationTypeUpdatePullRequest:  providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_UPDATE_PULL_REQUEST,
+	agentservice.ProviderOperationTypeCreateReviewSignal: providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_REVIEW_SIGNAL,
 }
 
 // FollowUpDispatcher calls provider-hub typed write commands.
@@ -102,6 +111,16 @@ func (dispatcher *FollowUpDispatcher) UpdateComment(ctx context.Context, input a
 	return dispatcher.dispatchProviderCommand(ctx, providerFollowUpUpdateComment, updateCommentRequest(input))
 }
 
+// UpdatePullRequest sends a typed update PR/MR command through provider-hub.
+func (dispatcher *FollowUpDispatcher) UpdatePullRequest(ctx context.Context, input agentservice.ProviderUpdatePullRequestInput) (agentservice.ProviderCommandResult, error) {
+	return dispatcher.dispatchProviderCommand(ctx, providerFollowUpUpdatePullRequest, updatePullRequestRequest(input))
+}
+
+// CreateReviewSignal sends a typed review signal command through provider-hub.
+func (dispatcher *FollowUpDispatcher) CreateReviewSignal(ctx context.Context, input agentservice.ProviderCreateReviewSignalInput) (agentservice.ProviderCommandResult, error) {
+	return dispatcher.dispatchProviderCommand(ctx, providerFollowUpCreateReviewSignal, createReviewSignalRequest(input))
+}
+
 func (dispatcher *FollowUpDispatcher) dispatchProviderCommand(ctx context.Context, command providerFollowUpCommand, request any) (agentservice.ProviderCommandResult, error) {
 	return dispatcher.dispatch(ctx, func(callCtx context.Context) (*providersv1.ProviderOperationResponse, error) {
 		switch command {
@@ -113,6 +132,10 @@ func (dispatcher *FollowUpDispatcher) dispatchProviderCommand(ctx context.Contex
 			return dispatcher.client.CreateComment(callCtx, request.(*providersv1.CreateCommentRequest))
 		case providerFollowUpUpdateComment:
 			return dispatcher.client.UpdateComment(callCtx, request.(*providersv1.UpdateCommentRequest))
+		case providerFollowUpUpdatePullRequest:
+			return dispatcher.client.UpdatePullRequest(callCtx, request.(*providersv1.UpdatePullRequestRequest))
+		case providerFollowUpCreateReviewSignal:
+			return dispatcher.client.CreateReviewSignal(callCtx, request.(*providersv1.CreateReviewSignalRequest))
 		default:
 			return nil, errs.ErrInvalidArgument
 		}
@@ -195,6 +218,35 @@ func updateCommentRequest(input agentservice.ProviderUpdateCommentInput) *provid
 		ExpectedProviderVersion: optionalString(strings.TrimSpace(input.ExpectedProviderVersion)),
 		Meta:                    commandMeta(input.Meta, input.OperationPolicyContext, input.ApprovalGateRef),
 		ExternalAccountId:       input.ExternalAccountID.String(),
+	}
+}
+
+func updatePullRequestRequest(input agentservice.ProviderUpdatePullRequestInput) *providersv1.UpdatePullRequestRequest {
+	return &providersv1.UpdatePullRequestRequest{
+		Target:                  providerTarget(input.Target),
+		Title:                   optionalStringPointer(input.Title),
+		Body:                    optionalStringPointer(input.Body),
+		Labels:                  stringListPatch(input.Labels),
+		AssigneeProviderLogins:  stringListPatch(input.AssigneeProviderLogins),
+		Milestone:               optionalStringPointer(input.Milestone),
+		State:                   optionalStringPointer(input.State),
+		BaseBranch:              optionalStringPointer(input.BaseBranch),
+		MaintainerCanModify:     input.MaintainerCanModify,
+		WatermarkJson:           optionalBytesPointer(input.WatermarkJSON),
+		ExpectedProviderVersion: optionalString(strings.TrimSpace(input.ExpectedProviderVersion)),
+		Meta:                    commandMeta(input.Meta, input.OperationPolicyContext, input.ApprovalGateRef),
+		ExternalAccountId:       input.ExternalAccountID.String(),
+	}
+}
+
+func createReviewSignalRequest(input agentservice.ProviderCreateReviewSignalInput) *providersv1.CreateReviewSignalRequest {
+	return &providersv1.CreateReviewSignalRequest{
+		Target:            providerTarget(input.Target),
+		Kind:              reviewSignalKind(input.Kind),
+		Body:              strings.TrimSpace(input.Body),
+		InlineComments:    reviewInlineComments(input.InlineComments),
+		Meta:              commandMeta(input.Meta, input.OperationPolicyContext, input.ApprovalGateRef),
+		ExternalAccountId: input.ExternalAccountID.String(),
 	}
 }
 
@@ -410,6 +462,25 @@ func stringListPatch(patch *agentservice.ProviderStringListPatch) *providersv1.S
 	return &providersv1.StringListPatch{Values: append([]string(nil), patch.Values...)}
 }
 
+func reviewInlineComments(comments []agentservice.ProviderReviewInlineComment) []*providersv1.ReviewInlineComment {
+	if len(comments) == 0 {
+		return nil
+	}
+	result := make([]*providersv1.ReviewInlineComment, 0, len(comments))
+	for _, comment := range comments {
+		result = append(result, &providersv1.ReviewInlineComment{
+			Path:                       strings.TrimSpace(comment.Path),
+			Body:                       strings.TrimSpace(comment.Body),
+			Line:                       comment.Line,
+			StartLine:                  comment.StartLine,
+			Side:                       optionalString(strings.TrimSpace(comment.Side)),
+			StartSide:                  optionalString(strings.TrimSpace(comment.StartSide)),
+			InReplyToProviderCommentId: optionalString(strings.TrimSpace(comment.InReplyToProviderCommentID)),
+		})
+	}
+	return result
+}
+
 func workItemKindToProto(kind string) providersv1.WorkItemKind {
 	switch strings.TrimSpace(kind) {
 	case "issue":
@@ -441,6 +512,19 @@ func operationType(operationType string) providersv1.ProviderOperationType {
 		return mapped
 	}
 	return providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_UNSPECIFIED
+}
+
+func reviewSignalKind(kind agentservice.ProviderReviewSignalKind) providersv1.ReviewSignalKind {
+	switch kind {
+	case agentservice.ProviderReviewSignalKindComment:
+		return providersv1.ReviewSignalKind_REVIEW_SIGNAL_KIND_COMMENT
+	case agentservice.ProviderReviewSignalKindApproval:
+		return providersv1.ReviewSignalKind_REVIEW_SIGNAL_KIND_APPROVAL
+	case agentservice.ProviderReviewSignalKindChangesRequested:
+		return providersv1.ReviewSignalKind_REVIEW_SIGNAL_KIND_CHANGES_REQUESTED
+	default:
+		return providersv1.ReviewSignalKind_REVIEW_SIGNAL_KIND_UNSPECIFIED
+	}
 }
 
 func riskLevel(level string) providersv1.ProviderOperationRiskLevel {

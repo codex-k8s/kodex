@@ -160,6 +160,33 @@ func ListInteractionRequestsInput(input *interactionsv1.ListInteractionRequestsR
 	return result, nil
 }
 
+func ListOwnerInboxItemsInput(input *interactionsv1.ListOwnerInboxItemsRequest) (interactionservice.ListOwnerInboxItemsInput, error) {
+	if input == nil {
+		return interactionservice.ListOwnerInboxItemsInput{}, errs.ErrInvalidArgument
+	}
+	scope, err := ScopeRef(input.GetScope())
+	if err != nil {
+		return interactionservice.ListOwnerInboxItemsInput{}, err
+	}
+	result := interactionservice.ListOwnerInboxItemsInput{
+		Meta:               QueryMeta(input.GetMeta()),
+		Scope:              scope,
+		RequestKinds:       RequestKinds(input.GetRequestKinds()),
+		Statuses:           RequestStatuses(input.GetStatuses()),
+		SourceOwnerRef:     strings.TrimSpace(input.GetSourceOwnerRef()),
+		AssigneeRef:        ActorRef(input.GetAssigneeRef()),
+		ActorRef:           strings.TrimSpace(input.GetActorRef()),
+		CorrelationRef:     ExternalRef(input.GetCorrelationRef()),
+		CorrelationID:      strings.TrimSpace(input.GetCorrelationId()),
+		IncludeDiagnostics: input.GetIncludeDiagnostics(),
+		Page:               PageRequest(input.GetPage()),
+	}
+	if input.SourceOwnerKind != nil {
+		result.SourceOwnerKind = SourceOwnerKind(input.GetSourceOwnerKind())
+	}
+	return result, nil
+}
+
 func InteractionRequestDraft(input *interactionsv1.InteractionRequestDraft) (interactionservice.InteractionRequestDraftInput, error) {
 	if input == nil {
 		return interactionservice.InteractionRequestDraftInput{}, errs.ErrInvalidArgument
@@ -215,6 +242,86 @@ func ListInteractionRequestsResponse(requests []entity.InteractionRequest, page 
 		items = append(items, InteractionRequest(request))
 	}
 	return &interactionsv1.ListInteractionRequestsResponse{Requests: items, Page: PageResponse(page)}
+}
+
+func ListOwnerInboxItemsResponse(items []entity.OwnerInboxItem, page value.PageResult) *interactionsv1.ListOwnerInboxItemsResponse {
+	response := &interactionsv1.ListOwnerInboxItemsResponse{Items: make([]*interactionsv1.OwnerInboxItem, 0, len(items)), Page: PageResponse(page)}
+	for _, item := range items {
+		response.Items = append(response.Items, OwnerInboxItem(item))
+	}
+	return response
+}
+
+func OwnerInboxItem(item entity.OwnerInboxItem) *interactionsv1.OwnerInboxItem {
+	response := &interactionsv1.OwnerInboxItem{
+		RequestId:         item.Request.ID.String(),
+		RequestKind:       RequestKindProto(item.Request.RequestKind),
+		RequestStatus:     RequestStatusProto(item.Request.Status),
+		Scope:             &interactionsv1.ScopeRef{Type: ScopeTypeProto(item.Request.Scope.Type), Ref: item.Request.Scope.Ref},
+		Requester:         SourceOwnerRefProto(item.Request.SourceOwner),
+		DecisionOwner:     DecisionOwnerRefProto(item.Request.DecisionOwner),
+		AssigneeRefs:      ActorRefsProto(item.Request.TargetRefs),
+		ContextRefs:       ExternalRefsProto(item.Request.ContextRefs),
+		Title:             item.Title,
+		Summary:           item.Summary,
+		DeadlineAt:        OptionalTimeProto(item.Request.DeadlineAt),
+		ReminderPolicyRef: OptionalString(item.Request.ReminderPolicyRef),
+		DeliverySummary:   OwnerInboxDeliverySummary(item.DeliverySummary),
+		CreatedAt:         TimeProto(item.Request.CreatedAt),
+		UpdatedAt:         TimeProto(item.Request.UpdatedAt),
+		ResolvedAt:        OptionalTimeProto(item.Request.ResolvedAt),
+		Version:           item.Request.Version,
+	}
+	if item.LatestCallback != nil {
+		response.LatestCallback = OwnerInboxCallbackSummary(*item.LatestCallback)
+	}
+	if item.LatestResponse != nil {
+		response.LatestResponse = OwnerInboxResponseSummary(*item.LatestResponse)
+	}
+	return response
+}
+
+func OwnerInboxDeliverySummary(summary entity.OwnerInboxDeliverySummary) *interactionsv1.OwnerInboxDeliverySummary {
+	return &interactionsv1.OwnerInboxDeliverySummary{
+		AttemptCount:            summary.AttemptCount,
+		LatestDeliveryAttemptId: OptionalUUIDProto(summary.LatestAttemptID),
+		LatestDeliveryId:        OptionalString(summary.LatestDeliveryID),
+		LatestStatus:            DeliveryAttemptStatusProto(summary.LatestStatus),
+		LatestErrorCode:         OptionalString(summary.LatestErrorCode),
+		LatestErrorClass:        DeliveryErrorClassProto(summary.LatestErrorClass),
+		NextRetryAt:             OptionalTimeProto(summary.NextRetryAt),
+		LatestUpdatedAt:         OptionalTimeProto(summary.LatestUpdatedAt),
+		RouteId:                 OptionalUUIDProto(summary.RouteID),
+		ChannelMessageRef:       OptionalString(summary.ChannelMessageRef),
+	}
+}
+
+func OwnerInboxCallbackSummary(callback entity.ChannelCallback) *interactionsv1.OwnerInboxCallbackSummary {
+	return &interactionsv1.OwnerInboxCallbackSummary{
+		CallbackRef:      callback.ID.String(),
+		CallbackId:       callback.CallbackID,
+		DeliveryId:       OptionalString(callback.DeliveryID),
+		SignatureStatus:  CallbackSignatureStatusProto(callback.SignatureStatus),
+		ProcessingStatus: CallbackProcessingStatusProto(callback.ProcessingStatus),
+		ActorRef:         OptionalString(callback.ActorRef),
+		Action:           OptionalString(callback.Action),
+		ErrorCode:        OptionalString(callback.ErrorCode),
+		ReceivedAt:       TimeProto(callback.ReceivedAt),
+		GatewayRef:       OptionalString(callback.GatewayRef),
+		CorrelationId:    OptionalString(callback.CorrelationID),
+	}
+}
+
+func OwnerInboxResponseSummary(response entity.InteractionResponse) *interactionsv1.OwnerInboxResponseSummary {
+	return &interactionsv1.OwnerInboxResponseSummary{
+		ResponseId:          response.ID.String(),
+		ResponseAction:      ResponseActionProto(response.ResponseAction),
+		RespondedByActorRef: response.RespondedByActorRef,
+		SourceKind:          ResponseSourceKindProto(response.SourceKind),
+		SourceRef:           OptionalString(response.SourceRef),
+		OwnerDecisionRef:    OptionalString(response.OwnerDecisionRef),
+		CreatedAt:           TimeProto(response.CreatedAt),
+	}
 }
 
 func InteractionRequest(request entity.InteractionRequest) *interactionsv1.InteractionRequest {
@@ -324,6 +431,29 @@ func ActorRefsProto(input []value.ActorRef) []*interactionsv1.ActorRef {
 		result = append(result, &interactionsv1.ActorRef{RefKind: ref.Kind, Ref: ref.Ref})
 	}
 	return result
+}
+
+func RequestKinds(input []interactionsv1.InteractionRequestKind) []enum.InteractionRequestKind {
+	return castSlice(input, RequestKind)
+}
+
+func RequestStatuses(input []interactionsv1.InteractionRequestStatus) []enum.InteractionRequestStatus {
+	return castSlice(input, RequestStatus)
+}
+
+func castSlice[Source any, Target any](input []Source, cast func(Source) Target) []Target {
+	result := make([]Target, 0, len(input))
+	for _, item := range input {
+		result = append(result, cast(item))
+	}
+	return result
+}
+
+func ExternalRef(input *interactionsv1.ExternalRef) value.ExternalRef {
+	if input == nil {
+		return value.ExternalRef{}
+	}
+	return value.ExternalRef{Kind: strings.TrimSpace(input.GetRefKind()), Ref: strings.TrimSpace(input.GetRef())}
 }
 
 func ExternalRefs(input []*interactionsv1.ExternalRef) []value.ExternalRef {

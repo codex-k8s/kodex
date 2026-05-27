@@ -31,6 +31,7 @@ const (
 	InteractionHubService_ExpireInteractionRequests_FullMethodName = "/kodex.interactions.v1.InteractionHubService/ExpireInteractionRequests"
 	InteractionHubService_GetInteractionRequest_FullMethodName     = "/kodex.interactions.v1.InteractionHubService/GetInteractionRequest"
 	InteractionHubService_ListInteractionRequests_FullMethodName   = "/kodex.interactions.v1.InteractionHubService/ListInteractionRequests"
+	InteractionHubService_ListOwnerInboxItems_FullMethodName       = "/kodex.interactions.v1.InteractionHubService/ListOwnerInboxItems"
 	InteractionHubService_RequestNotification_FullMethodName       = "/kodex.interactions.v1.InteractionHubService/RequestNotification"
 	InteractionHubService_UpsertSubscription_FullMethodName        = "/kodex.interactions.v1.InteractionHubService/UpsertSubscription"
 	InteractionHubService_DisableSubscription_FullMethodName       = "/kodex.interactions.v1.InteractionHubService/DisableSubscription"
@@ -75,6 +76,8 @@ type InteractionHubServiceClient interface {
 	GetInteractionRequest(ctx context.Context, in *GetInteractionRequestRequest, opts ...grpc.CallOption) (*InteractionRequestResponse, error)
 	// ListInteractionRequests returns requests by scope, kind, source owner and status.
 	ListInteractionRequests(ctx context.Context, in *ListInteractionRequestsRequest, opts ...grpc.CallOption) (*ListInteractionRequestsResponse, error)
+	// ListOwnerInboxItems returns a safe domain read surface for pending owner decisions and callback diagnostics.
+	ListOwnerInboxItems(ctx context.Context, in *ListOwnerInboxItemsRequest, opts ...grpc.CallOption) (*ListOwnerInboxItemsResponse, error)
 	// RequestNotification creates a one-way notification or reminder intent.
 	RequestNotification(ctx context.Context, in *RequestNotificationRequest, opts ...grpc.CallOption) (*NotificationResponse, error)
 	// UpsertSubscription creates or updates a notification subscription.
@@ -221,6 +224,16 @@ func (c *interactionHubServiceClient) ListInteractionRequests(ctx context.Contex
 	return out, nil
 }
 
+func (c *interactionHubServiceClient) ListOwnerInboxItems(ctx context.Context, in *ListOwnerInboxItemsRequest, opts ...grpc.CallOption) (*ListOwnerInboxItemsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListOwnerInboxItemsResponse)
+	err := c.cc.Invoke(ctx, InteractionHubService_ListOwnerInboxItems_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *interactionHubServiceClient) RequestNotification(ctx context.Context, in *RequestNotificationRequest, opts ...grpc.CallOption) (*NotificationResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(NotificationResponse)
@@ -335,6 +348,8 @@ type InteractionHubServiceServer interface {
 	GetInteractionRequest(context.Context, *GetInteractionRequestRequest) (*InteractionRequestResponse, error)
 	// ListInteractionRequests returns requests by scope, kind, source owner and status.
 	ListInteractionRequests(context.Context, *ListInteractionRequestsRequest) (*ListInteractionRequestsResponse, error)
+	// ListOwnerInboxItems returns a safe domain read surface for pending owner decisions and callback diagnostics.
+	ListOwnerInboxItems(context.Context, *ListOwnerInboxItemsRequest) (*ListOwnerInboxItemsResponse, error)
 	// RequestNotification creates a one-way notification or reminder intent.
 	RequestNotification(context.Context, *RequestNotificationRequest) (*NotificationResponse, error)
 	// UpsertSubscription creates or updates a notification subscription.
@@ -396,6 +411,9 @@ func (UnimplementedInteractionHubServiceServer) GetInteractionRequest(context.Co
 }
 func (UnimplementedInteractionHubServiceServer) ListInteractionRequests(context.Context, *ListInteractionRequestsRequest) (*ListInteractionRequestsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListInteractionRequests not implemented")
+}
+func (UnimplementedInteractionHubServiceServer) ListOwnerInboxItems(context.Context, *ListOwnerInboxItemsRequest) (*ListOwnerInboxItemsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListOwnerInboxItems not implemented")
 }
 func (UnimplementedInteractionHubServiceServer) RequestNotification(context.Context, *RequestNotificationRequest) (*NotificationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RequestNotification not implemented")
@@ -658,6 +676,24 @@ func _InteractionHubService_ListInteractionRequests_Handler(srv interface{}, ctx
 	return interceptor(ctx, in, info, handler)
 }
 
+func _InteractionHubService_ListOwnerInboxItems_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListOwnerInboxItemsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InteractionHubServiceServer).ListOwnerInboxItems(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InteractionHubService_ListOwnerInboxItems_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InteractionHubServiceServer).ListOwnerInboxItems(ctx, req.(*ListOwnerInboxItemsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _InteractionHubService_RequestNotification_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RequestNotificationRequest)
 	if err := dec(in); err != nil {
@@ -856,6 +892,10 @@ var InteractionHubService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListInteractionRequests",
 			Handler:    _InteractionHubService_ListInteractionRequests_Handler,
+		},
+		{
+			MethodName: "ListOwnerInboxItems",
+			Handler:    _InteractionHubService_ListOwnerInboxItems_Handler,
 		},
 		{
 			MethodName: "RequestNotification",

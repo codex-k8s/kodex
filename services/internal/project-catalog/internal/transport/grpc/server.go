@@ -29,6 +29,7 @@ type projectService interface {
 	ListRepositories(context.Context, projectservice.ListRepositoriesInput) (projectservice.ListRepositoriesResult, error)
 	ImportServicesPolicy(context.Context, projectservice.ImportServicesPolicyInput) (entity.ServicesPolicy, error)
 	ImportBootstrapServicesPolicy(context.Context, projectservice.ImportBootstrapServicesPolicyInput) (projectservice.BootstrapServicesPolicyImportResult, error)
+	ReconcileBootstrapMergeSignal(context.Context, projectservice.ReconcileBootstrapMergeSignalInput) (projectservice.BootstrapServicesPolicyImportResult, error)
 	GetServicesPolicy(context.Context, projectservice.GetServicesPolicyInput) (entity.ServicesPolicy, error)
 	ListServiceDescriptors(context.Context, projectservice.ListServiceDescriptorsInput) (projectservice.ListServiceDescriptorsResult, error)
 	CreatePolicyEditProposal(context.Context, projectservice.CreatePolicyEditProposalInput) (entity.PolicyEditProposal, error)
@@ -139,6 +140,11 @@ func (s *Server) ImportServicesPolicy(ctx context.Context, request *projectsv1.I
 // ImportBootstrapServicesPolicy imports checked services.yaml after bootstrap merge and activates the repository binding.
 func (s *Server) ImportBootstrapServicesPolicy(ctx context.Context, request *projectsv1.ImportBootstrapServicesPolicyRequest) (*projectsv1.BootstrapServicesPolicyImportResponse, error) {
 	return handleUnary(ctx, request, grpccasters.ImportBootstrapServicesPolicyInput, s.service.ImportBootstrapServicesPolicy, grpccasters.BootstrapServicesPolicyImportResponse)
+}
+
+// ReconcileBootstrapMergeSignal imports checked services.yaml from a safe provider bootstrap merge signal.
+func (s *Server) ReconcileBootstrapMergeSignal(ctx context.Context, request *projectsv1.ReconcileBootstrapMergeSignalRequest) (*projectsv1.BootstrapServicesPolicyImportResponse, error) {
+	return handleUnary(ctx, request, grpccasters.ReconcileBootstrapMergeSignalInput, s.service.ReconcileBootstrapMergeSignal, grpccasters.BootstrapServicesPolicyImportResponse)
 }
 
 // GetServicesPolicy returns a checked services.yaml projection.

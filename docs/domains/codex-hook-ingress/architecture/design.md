@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-22
 updated_at: 2026-05-27
-related_issues: [698, 753, 778, 786, 793, 808, 823, 836, 854, 322, 834]
+related_issues: [698, 753, 778, 786, 793, 808, 823, 836, 854, 868, 322, 834]
 related_prs: []
 related_adrs: []
 approvals:
@@ -252,6 +252,7 @@ sequenceDiagram
 - Добавление нового hook event требует отдельного решения и обновления доменной документации.
 - Изменение лимитов должно идти через typed platform settings или согласованную config policy, а не через скрытый hardcode.
 - Будущий транспорт может быть gRPC или HTTP, но внешняя семантика `SubmitHookEvent` должна остаться стабильной.
+- Deploy-контур не меняет ownership: Kubernetes service публикует только `/health/livez`, `/health/readyz` и `/metrics`; `SubmitHookEvent` остаётся in-process logical boundary до отдельного transport contract.
 
 ## Апрув
 

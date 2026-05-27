@@ -75,6 +75,7 @@ const (
 	operationGetLatestCallback         = "domain.Repository.GetLatestChannelCallback"
 	operationListConversationMessages  = "domain.Repository.ListConversationMessages"
 	operationListInteractionRequests   = "domain.Repository.ListInteractionRequests"
+	operationListOwnerInboxItems       = "domain.Repository.ListOwnerInboxItems"
 	operationListExpirableRequests     = "domain.Repository.ListExpirableInteractionRequests"
 	operationListSubscriptions         = "domain.Repository.ListSubscriptions"
 	operationOutboxClaim               = "domain.Repository.ClaimOutboxEvents"
@@ -210,6 +211,16 @@ func (r *Repository) GetInteractionResponseBySource(ctx context.Context, sourceK
 func (r *Repository) ListInteractionRequests(ctx context.Context, filter query.InteractionRequestFilter) ([]entity.InteractionRequest, value.PageResult, error) {
 	args := requestFilterArgs(filter)
 	items, err := queryAll(ctx, r.db, operationListInteractionRequests, queryRequestList, args.NamedArgs, scanRequest)
+	if err != nil {
+		return nil, value.PageResult{}, err
+	}
+	pageItems, page := pageFromItems(items, args)
+	return pageItems, page, nil
+}
+
+func (r *Repository) ListOwnerInboxItems(ctx context.Context, filter query.OwnerInboxFilter) ([]entity.OwnerInboxItem, value.PageResult, error) {
+	args := ownerInboxFilterArgs(filter)
+	items, err := queryAll(ctx, r.db, operationListOwnerInboxItems, queryOwnerInboxList, args.NamedArgs, scanOwnerInboxItem)
 	if err != nil {
 		return nil, value.PageResult{}, err
 	}
