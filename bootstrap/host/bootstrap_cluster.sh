@@ -19,7 +19,7 @@ Usage: bootstrap/host/bootstrap_cluster.sh <preflight|install> [options]
 Options:
   --mode local|remote       Run on this server or through TARGET_* SSH.
   --env-file PATH           Bootstrap env file. Defaults to bootstrap/host/config.env.
-  --dry-run                 Run local checks and print the install plan without mutating the host.
+  --dry-run                 Run mode-specific preflight and print the install plan without install steps.
   --skip-ssh                Skip SSH reachability check in remote preflight.
   -h, --help                Show this help.
 
@@ -110,7 +110,7 @@ print_plan() {
 }
 
 run_local_preflight() {
-  BOOTSTRAP_ENV_FILE="$ENV_FILE" bash "${ROOT_DIR}/remote/05_preflight.sh"
+  KODEX_BOOTSTRAP_MODE="local" BOOTSTRAP_ENV_FILE="$ENV_FILE" bash "${ROOT_DIR}/remote/05_preflight.sh"
 }
 
 run_local_install() {
@@ -169,7 +169,7 @@ run_remote_preflight() {
   scp "${scp_base_args[@]}" "$env_copy" "${TARGET_ROOT_USER:-root}@${TARGET_HOST}:${remote_env}"
   log "Run remote preflight"
   ssh "${ssh_base_args[@]}" "${TARGET_ROOT_USER:-root}@${TARGET_HOST}" \
-    "BOOTSTRAP_ENV_FILE='${remote_env}' bash '${remote_bootstrap_dir}/remote/05_preflight.sh'"
+    "KODEX_BOOTSTRAP_MODE='remote' BOOTSTRAP_ENV_FILE='${remote_env}' bash '${remote_bootstrap_dir}/remote/05_preflight.sh'"
 }
 
 run_remote_install() {
@@ -204,7 +204,7 @@ run_remote_install() {
 
   log "Run remote bootstrap"
   ssh "${ssh_base_args[@]}" "${TARGET_ROOT_USER:-root}@${TARGET_HOST}" \
-    "${remote_run_prefix}env KODEX_REMOTE_REPO_ARCHIVE='${remote_repo_archive}' bash '${remote_bootstrap_dir}/remote/bootstrap_production.sh' '${remote_env}'"
+    "${remote_run_prefix}env KODEX_BOOTSTRAP_MODE='remote' KODEX_REMOTE_REPO_ARCHIVE='${remote_repo_archive}' bash '${remote_bootstrap_dir}/remote/bootstrap_production.sh' '${remote_env}'"
 }
 
 case "$MODE" in
@@ -216,7 +216,10 @@ check_local_files
 load_env
 
 if [ "$DRY_RUN" = "true" ]; then
-  run_local_preflight
+  case "$MODE" in
+    local) run_local_preflight ;;
+    remote) run_remote_preflight ;;
+  esac
   print_plan
   exit 0
 fi

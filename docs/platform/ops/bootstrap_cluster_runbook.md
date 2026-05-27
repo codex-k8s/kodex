@@ -38,14 +38,15 @@ Runbook используется для первого Kubernetes-контура
 ## Диагностика
 
 1. Выполнить preflight в нужном режиме.
-2. Если k3s уже установлен, проверить `kubectl get --raw=/readyz` с kubeconfig целевого кластера.
-3. Проверить наличие `deploy/base/bootstrap-foundation/**` и `deploy/base/bootstrap-builder-smoke/**`.
-4. После install проверить rollout `deployment/kodex-registry` в production namespace.
-5. Запустить registry/Kaniko smoke и проверить завершение jobs `kodex-registry-mirror-smoke`, `kodex-registry-pull-smoke`, `kodex-kaniko-build-smoke`.
+2. Для remote dry-run убедиться, что preflight выполняется на target через `TARGET_*`; режим не запускает install, k3s, firewall или registry-шаги.
+3. Если k3s уже установлен, проверить `kubectl get --raw=/readyz` с kubeconfig целевого кластера.
+4. Проверить наличие `deploy/base/bootstrap-foundation/**` и `deploy/base/bootstrap-builder-smoke/**`.
+5. После install проверить rollout `deployment/kodex-registry` в production namespace.
+6. Запустить registry/Kaniko smoke и проверить завершение jobs `kodex-registry-mirror-smoke`, `kodex-registry-pull-smoke`, `kodex-kaniko-build-smoke`.
 
 ## Митигирование
 
-- Если preflight падает на DNS/ingress prerequisites, исправить DNS или временно запускать только host/foundation шаги без публикации внешнего ingress.
+- Если preflight падает на DNS/ingress prerequisites, исправить привязку production domain к target host. `KODEX_BOOTSTRAP_SKIP_DNS_CHECK=true` допустим только для изолированной проверки host/foundation без публикации внешнего ingress.
 - Если registry не готов, проверить PVC, port binding `127.0.0.1:<KODEX_INTERNAL_REGISTRY_PORT>` и readiness `/v2/`.
 - Если Kaniko smoke не пушит образ, проверить доступ job к node loopback registry и значение `KODEX_KANIKO_EXECUTOR_IMAGE`.
 - Если backend smoke падает на image pull, сначала выполнить mirror/build шаги для соответствующих backend images.

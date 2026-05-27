@@ -31,6 +31,10 @@ require_cmd sed
 require_cmd sort
 require_cmd tar
 require_cmd openssl
+require_cmd getent
+require_cmd hostname
+require_cmd grep
+require_cmd tr
 
 KODEX_PRODUCTION_NAMESPACE="${KODEX_PRODUCTION_NAMESPACE:-kodex-prod}"
 KODEX_INTERNAL_REGISTRY_PORT="${KODEX_INTERNAL_REGISTRY_PORT:-5000}"
@@ -39,11 +43,16 @@ KODEX_KANIKO_TIMEOUT="${KODEX_KANIKO_TIMEOUT:-1800s}"
 KODEX_FIREWALL_ENABLED="${KODEX_FIREWALL_ENABLED:-true}"
 KODEX_INGRESS_HOST_NETWORK="${KODEX_INGRESS_HOST_NETWORK:-true}"
 KODEX_BOOTSTRAP_SKIP_DNS_CHECK="${KODEX_BOOTSTRAP_SKIP_DNS_CHECK:-false}"
+KODEX_BOOTSTRAP_MODE="${KODEX_BOOTSTRAP_MODE:-local}"
 
 validate_integer "KODEX_INTERNAL_REGISTRY_PORT" "$KODEX_INTERNAL_REGISTRY_PORT"
 validate_bool "KODEX_FIREWALL_ENABLED" "$KODEX_FIREWALL_ENABLED"
 validate_bool "KODEX_INGRESS_HOST_NETWORK" "$KODEX_INGRESS_HOST_NETWORK"
 validate_bool "KODEX_BOOTSTRAP_SKIP_DNS_CHECK" "$KODEX_BOOTSTRAP_SKIP_DNS_CHECK"
+case "$KODEX_BOOTSTRAP_MODE" in
+  local|remote) ;;
+  *) die "KODEX_BOOTSTRAP_MODE must be local or remote";;
+esac
 
 [ -n "${KODEX_PRODUCTION_NAMESPACE}" ] || die "KODEX_PRODUCTION_NAMESPACE is required"
 [ -n "${KODEX_INTERNAL_REGISTRY_HOST}" ] || die "KODEX_INTERNAL_REGISTRY_HOST is required"
@@ -54,7 +63,13 @@ fi
 [ -n "${OPERATOR_SSH_PUBKEY:-}" ] || die "OPERATOR_SSH_PUBKEY is required"
 
 if [ -n "${KODEX_PRODUCTION_DOMAIN:-}" ] && [ "$KODEX_BOOTSTRAP_SKIP_DNS_CHECK" != "true" ]; then
-  ensure_domain_resolves "$KODEX_PRODUCTION_DOMAIN"
+  if [ -n "${TARGET_HOST:-}" ]; then
+    ensure_domain_targets_host "$KODEX_PRODUCTION_DOMAIN" "$TARGET_HOST"
+  elif [ "$KODEX_BOOTSTRAP_MODE" = "local" ]; then
+    ensure_domain_targets_current_host "$KODEX_PRODUCTION_DOMAIN"
+  else
+    die "TARGET_HOST is required for remote production DNS binding check"
+  fi
 else
   log "DNS check skipped or production domain is not configured"
 fi

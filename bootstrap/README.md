@@ -59,13 +59,15 @@ bash bootstrap/host/bootstrap_cluster.sh preflight --mode local --env-file boots
 bash bootstrap/host/bootstrap_cluster.sh preflight --mode remote --env-file bootstrap/host/config.env
 ```
 
-План без изменений на сервере:
+План без запуска install-шагов:
 
 ```bash
 bash bootstrap/host/bootstrap_cluster.sh install --mode remote --env-file bootstrap/host/config.env --dry-run
 ```
 
-Preflight проверяет ОС, root/sudo, базовые команды, k3s/kubectl при наличии, DNS/ingress prerequisites, registry/Kaniko manifests и обязательные env-поля. Проверка не печатает значения env.
+В режиме `local` dry-run выполняет preflight на текущем сервере и печатает план. В режиме `remote` dry-run доставляет только preflight bundle через `TARGET_*`, выполняет target-side preflight по SSH и печатает план без запуска install, k3s, firewall или registry-шагов. Если `--skip-ssh` указан явно, remote preflight проверяет только локальную конфигурацию `TARGET_*` и не подтверждает состояние target.
+
+Preflight проверяет ОС, root/sudo, базовые команды, k3s/kubectl при наличии, DNS/ingress prerequisites, registry/Kaniko manifests и обязательные env-поля. DNS prerequisite для `KODEX_PRODUCTION_DOMAIN` требует, чтобы production domain резолвился в `TARGET_HOST` или, в local mode без `TARGET_HOST`, в текущий host. Проверка не печатает значения env, домены или адреса.
 
 ## Установка после merge
 
