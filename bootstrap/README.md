@@ -26,8 +26,10 @@ installer.
 | `bootstrap/host/smoke_backend_contour.sh` | Backend smoke после подготовки образов сервисов. |
 | `deploy/base/bootstrap-foundation/**` | Manifests внутреннего registry. |
 | `deploy/base/bootstrap-builder-smoke/**` | Manifests mirror/Kaniko smoke jobs. |
+| `cmd/bootstrap-preflight` | Safe preflight: env names, stack inventory, dry-run render, kustomize и read-only Kubernetes checks. |
 | `cmd/manifest-render` | Stack-aware renderer: читает `services.yaml`, затем применяет env overrides. |
 | `libs/go/stackinventory` | Общая Go-библиотека чтения корневого stack inventory для renderer/install/deploy tools. |
+| `libs/go/manifestrender` | Общая Go-библиотека рендера manifest templates поверх `stackinventory`. |
 | `bootstrap/host/config.env.example` | Минимальный пример env для локальной установки. |
 
 ## Подготовка env
@@ -79,6 +81,31 @@ bash bootstrap/host/bootstrap_cluster.sh install --env-file bootstrap/host/confi
 Preflight проверяет ОС, root/sudo, базовые команды, k3s/kubectl при наличии,
 DNS prerequisite, наличие bootstrap manifests и обязательные env-поля. Проверка
 не печатает значения env, домены или адреса.
+
+Если `go` доступен, preflight дополнительно запускает `cmd/bootstrap-preflight`.
+Этот шаг:
+
+- загружает `bootstrap/host/config.env`, но печатает только имена проверок, без значений;
+- читает root `services.yaml` через `libs/go/stackinventory`;
+- разрешает registry/Kaniko/crane/busybox image refs через stack inventory и env override-слой;
+- рендерит `bootstrap-foundation` и `bootstrap-builder-smoke` через `libs/go/manifestrender`;
+- выполняет `kubectl kustomize`, если `kubectl` доступен;
+- выполняет read-only Kubernetes checks: context, `/readyz`, namespace, `kodex-registry` Deployment/Service.
+
+Если `go` ещё не установлен на чистом host, shell preflight фиксирует deferred
+status: `00_prepare_host.sh` установит Go перед install-шагами, а dry-run
+render можно повторить после подготовки host.
+
+Для строгой проверки уже установленного кластера:
+
+```bash
+bash bootstrap/host/bootstrap_cluster.sh preflight \
+  --env-file bootstrap/host/config.env \
+  --require-kubernetes
+```
+
+Без `--require-kubernetes` отсутствующий `kubectl`, namespace или registry
+фиксируется как deferred check: install или foundation smoke подготовят их позже.
 
 ## Установка
 

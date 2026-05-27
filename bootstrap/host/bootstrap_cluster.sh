@@ -6,6 +6,7 @@ PROJECT_ROOT="$(cd "${ROOT_DIR}/.." && pwd)"
 ENV_FILE="${KODEX_BOOTSTRAP_CONFIG_FILE:-${ROOT_DIR}/host/config.env}"
 ACTION="preflight"
 DRY_RUN="false"
+REQUIRE_KUBERNETES="false"
 
 log() { echo "[$(date -Is)] $*"; }
 die() { echo "ERROR: $*" >&2; exit 1; }
@@ -17,6 +18,7 @@ Usage: bootstrap/host/bootstrap_cluster.sh <preflight|install> [options]
 Options:
   --env-file PATH           Bootstrap env file. Defaults to bootstrap/host/config.env.
   --dry-run                 Run local preflight and print the install plan without install steps.
+  --require-kubernetes      Fail preflight when live Kubernetes, namespace or registry checks are unavailable.
   -h, --help                Show this help.
 
 This installer is local-on-server only. It never prints env values. Domains,
@@ -36,6 +38,10 @@ while (($# > 0)); do
       ;;
     --dry-run)
       DRY_RUN="true"
+      shift
+      ;;
+    --require-kubernetes)
+      REQUIRE_KUBERNETES="true"
       shift
       ;;
     -h|--help)
@@ -114,6 +120,19 @@ print_plan() {
 
 run_preflight() {
   KODEX_BOOTSTRAP_MODE="local" BOOTSTRAP_ENV_FILE="$ENV_FILE" bash "${ROOT_DIR}/local/steps/05_preflight.sh"
+  if command -v go >/dev/null 2>&1; then
+    local args=(
+      --repo-root "$PROJECT_ROOT"
+      --env-file "$ENV_FILE"
+      --services-file "${PROJECT_ROOT}/services.yaml"
+    )
+    if [ "$REQUIRE_KUBERNETES" = "true" ]; then
+      args+=(--require-kubernetes)
+    fi
+    (cd "$PROJECT_ROOT" && go run ./cmd/bootstrap-preflight "${args[@]}")
+  else
+    log "Go binary is not present; stackinventory render preflight is deferred until host preparation"
+  fi
 }
 
 run_install() {
