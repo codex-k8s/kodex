@@ -101,22 +101,6 @@ repo_dir() {
   echo "/opt/kodex"
 }
 
-inventory_version() {
-  local key="$1"
-  local services_file="${2:-$(repo_dir)/services.yaml}"
-  [ -f "$services_file" ] || die "services.yaml not found in repository snapshot"
-  awk -v key="$key" '
-    $0 ~ "^    " key ":" { found = 1; next }
-    found && $1 == "value:" {
-      value = $2
-      gsub(/"/, "", value)
-      print value
-      exit
-    }
-    found && $0 ~ "^    [A-Za-z0-9_-]+:" { exit }
-  ' "$services_file"
-}
-
 escape_squote() {
   printf "%s" "$1" | sed "s/'/'\\\\''/g"
 }

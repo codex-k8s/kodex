@@ -27,6 +27,7 @@ installer.
 | `deploy/base/bootstrap-foundation/**` | Manifests внутреннего registry. |
 | `deploy/base/bootstrap-builder-smoke/**` | Manifests mirror/Kaniko smoke jobs. |
 | `cmd/manifest-render` | Stack-aware renderer: читает `services.yaml`, затем применяет env overrides. |
+| `libs/go/stackinventory` | Общая Go-библиотека чтения корневого stack inventory для renderer/install/deploy tools. |
 | `bootstrap/host/config.env.example` | Минимальный пример env для локальной установки. |
 
 ## Подготовка env
@@ -56,7 +57,9 @@ PR, логах и документации.
 
 Правило defaults:
 
-- `services.yaml` задаёт версии, образы, deploy inventory и стандартные имена артефактов;
+- корневой `services.yaml` задаёт версии, образы, deploy inventory и стандартные имена артефактов платформенного стека;
+- это не проектный `services.yaml`: пользовательской project policy, импортом и проверенной проекцией владеет `project-catalog`;
+- Go-инструменты читают корневой stack inventory через `libs/go/stackinventory`, а не через собственный YAML/awk/parser слой;
 - Go config сервиса задаёт безопасные runtime defaults самого сервиса;
 - Kubernetes templates не повторяют runtime defaults сервиса как `envOr`, если сервис уже имеет такой default;
 - `bootstrap/host/config.env.example` хранит только локальные install-настройки и secret/bootstrap seed-поля.

@@ -2,19 +2,17 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"text/template"
 
-	"gopkg.in/yaml.v3"
+	"github.com/codex-k8s/kodex/libs/go/stackinventory"
 )
 
 func main() {
@@ -62,7 +60,7 @@ func runWithOptions(options renderOptions) error {
 			return err
 		}
 	}
-	stack, err := loadServiceStack(options.ServicesFilePath)
+	stack, err := stackinventory.LoadOptional(options.ServicesFilePath)
 	if err != nil {
 		return err
 	}
@@ -76,7 +74,7 @@ func runWithOptions(options renderOptions) error {
 	return renderFile(options.SourcePath, options.OutputPath, sourceInfo.Mode(), stack)
 }
 
-func renderDir(sourceDir, outputDir string, stack serviceStack) error {
+func renderDir(sourceDir, outputDir string, stack stackinventory.Stack) error {
 	return filepath.WalkDir(sourceDir, func(path string, entry os.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -97,20 +95,14 @@ func renderDir(sourceDir, outputDir string, stack serviceStack) error {
 	})
 }
 
-func renderFile(sourcePath, outputPath string, mode os.FileMode, stack serviceStack) error {
+func renderFile(sourcePath, outputPath string, mode os.FileMode, stack stackinventory.Stack) error {
 	if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil {
 		return fmt.Errorf("create output directory for %s: %w", outputPath, err)
 	}
 	if !strings.HasSuffix(sourcePath, ".tpl") {
 		return copyFile(sourcePath, outputPath, mode)
 	}
-	tpl, err := template.New(filepath.Base(sourcePath)).Funcs(template.FuncMap{
-		"envOr":   envOr,
-		"env":     os.Getenv,
-		"image":   stack.image,
-		"imageOr": stack.imageOr,
-		"version": stack.version,
-	}).ParseFiles(sourcePath)
+	tpl, err := template.New(filepath.Base(sourcePath)).Funcs(stack.TemplateFuncs()).ParseFiles(sourcePath)
 	if err != nil {
 		return fmt.Errorf("parse template %s: %w", sourcePath, err)
 	}
@@ -186,139 +178,4 @@ func parseEnvValue(value string) string {
 		}
 	}
 	return value
-}
-
-func envOr(name string, fallback string) string {
-	value := os.Getenv(name)
-	if value == "" {
-		return fallback
-	}
-	return value
-}
-
-type serviceStack struct {
-	Versions map[string]string
-	Images   map[string]imageSpec
-}
-
-type servicesFile struct {
-	Spec struct {
-		Versions map[string]struct {
-			Value string `yaml:"value"`
-		} `yaml:"versions"`
-		Images map[string]imageSpec `yaml:"images"`
-	} `yaml:"spec"`
-}
-
-type imageSpec struct {
-	From        string `yaml:"from"`
-	Local       string `yaml:"local"`
-	Repository  string `yaml:"repository"`
-	TagTemplate string `yaml:"tagTemplate"`
-	ImageEnv    string `yaml:"imageEnv"`
-}
-
-var inventoryVersionIndexPattern = regexp.MustCompile(`index\s+\.Versions\s+"([^"]+)"`)
-
-func loadServiceStack(path string) (serviceStack, error) {
-	if strings.TrimSpace(path) == "" {
-		return serviceStack{}, nil
-	}
-	data, err := os.ReadFile(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return serviceStack{}, nil
-	}
-	if err != nil {
-		return serviceStack{}, fmt.Errorf("read services file %s: %w", path, err)
-	}
-	var file servicesFile
-	if err := yaml.Unmarshal(data, &file); err != nil {
-		return serviceStack{}, fmt.Errorf("parse services file %s: %w", path, err)
-	}
-	stack := serviceStack{
-		Versions: make(map[string]string, len(file.Spec.Versions)),
-		Images:   file.Spec.Images,
-	}
-	for key, version := range file.Spec.Versions {
-		stack.Versions[key] = version.Value
-	}
-	return stack, nil
-}
-
-func (stack serviceStack) version(name string) (string, error) {
-	value := stack.Versions[name]
-	if value == "" {
-		return "", fmt.Errorf("version %q is not defined in services.yaml", name)
-	}
-	return value, nil
-}
-
-func (stack serviceStack) imageOr(name string, envName string) (string, error) {
-	if value := os.Getenv(envName); value != "" {
-		return value, nil
-	}
-	return stack.image(name)
-}
-
-func (stack serviceStack) image(name string) (string, error) {
-	spec, ok := stack.Images[name]
-	if !ok {
-		return "", fmt.Errorf("image %q is not defined in services.yaml", name)
-	}
-	if spec.ImageEnv != "" {
-		if value := os.Getenv(spec.ImageEnv); value != "" {
-			return value, nil
-		}
-	}
-	switch {
-	case spec.From != "":
-		return stack.renderInventoryTemplate(name, "from", spec.From)
-	case spec.Repository != "" && spec.TagTemplate != "":
-		repository, err := stack.renderInventoryTemplate(name, "repository", spec.Repository)
-		if err != nil {
-			return "", err
-		}
-		tag, err := stack.renderInventoryTemplate(name, "tagTemplate", spec.TagTemplate)
-		if err != nil {
-			return "", err
-		}
-		return repository + ":" + tag, nil
-	default:
-		return "", fmt.Errorf("image %q has no supported source in services.yaml", name)
-	}
-}
-
-func (stack serviceStack) renderInventoryTemplate(imageName, fieldName, source string) (string, error) {
-	if err := stack.validateInventoryTemplateVersions(imageName, fieldName, source); err != nil {
-		return "", err
-	}
-	tpl, err := template.New(imageName + "." + fieldName).Funcs(template.FuncMap{
-		"envOr":   envOr,
-		"env":     os.Getenv,
-		"version": stack.version,
-	}).Parse(source)
-	if err != nil {
-		return "", fmt.Errorf("parse services.yaml image %s %s template: %w", imageName, fieldName, err)
-	}
-	var output bytes.Buffer
-	if err := tpl.Execute(&output, struct {
-		Versions map[string]string
-	}{
-		Versions: stack.Versions,
-	}); err != nil {
-		return "", fmt.Errorf("render services.yaml image %s %s template: %w", imageName, fieldName, err)
-	}
-	return output.String(), nil
-}
-
-func (stack serviceStack) validateInventoryTemplateVersions(imageName, fieldName, source string) error {
-	for _, match := range inventoryVersionIndexPattern.FindAllStringSubmatch(source, -1) {
-		if len(match) < 2 {
-			continue
-		}
-		if _, err := stack.version(match[1]); err != nil {
-			return fmt.Errorf("validate services.yaml image %s %s template: %w", imageName, fieldName, err)
-		}
-	}
-	return nil
 }
