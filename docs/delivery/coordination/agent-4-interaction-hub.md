@@ -35,12 +35,13 @@
 | IH-6b | #855 | готово как callback request resolution | `RecordChannelCallback` идемпотентно связывает safe callback с delivery/request, создаёт `InteractionResponse` для terminal action и сохраняет diagnostic no-op для terminal/invalid callback без владения owner decision state. |
 | IH-7 | #867 | готово как owner inbox read surface | `ListOwnerInboxItems` отдаёт pending/active feedback, approval, Human gate и callback diagnostics с safe refs/status/summary, фильтрами по scope/kind/status/assignee/actor/correlation refs и пагинацией; `staff-gateway`/`operations-hub` не входят. |
 | IH-7b | #882 | готово как response boundary refs | `interaction.request.response_recorded` отдаёт safe request kind, scope, source owner, decision owner и context refs для owner resume без raw response text и без изменения чужого decision state. |
+| IH-11 | #894 | готово как ops deploy contour | Dockerfile, Kubernetes manifests, migration Job, services.yaml inventory, smoke-проверка, runbook и monitoring docs подготовлены для первого backend deploy без новой бизнес-логики. |
 
 ## Текущий бэклог
 
 | Срез | Статус | Почему не завершён |
 |---|---|---|
-| IH-8+ | ожидает отдельные срезы | MCP, concrete channel packages, runtime worker, gateway/UI/ops-связки и cross-domain inbox aggregation должны поставляться малыми PR. |
+| IH-8+ | ожидает отдельные срезы | MCP, concrete channel packages, runtime worker, gateway/UI-связки и cross-domain inbox aggregation должны поставляться малыми PR. |
 
 ## Блокировки от других доменов
 
