@@ -72,7 +72,7 @@ func (r *Repository) Ping(ctx context.Context) error {
 	return nil
 }
 
-// StoreWebhookEvent stores a raw webhook, projections, normalized provider events and outbox events atomically.
+// StoreWebhookEvent stores a webhook inbox record, projections, normalized provider events and outbox events atomically.
 func (r *Repository) StoreWebhookEvent(ctx context.Context, webhook entity.WebhookEvent, projectionUpdate providerrepo.ProjectionUpdate, providerEvents []entity.ProviderEvent, outboxEvents []entity.OutboxEvent) (entity.WebhookEvent, []entity.ProviderEvent, error) {
 	var stored entity.WebhookEvent
 	var storedProviderEvents []entity.ProviderEvent
@@ -267,12 +267,12 @@ func (r *Repository) ApplyReconciliationBatch(ctx context.Context, completion pr
 	return cursor, storedProviderEvents, nil
 }
 
-// GetWebhookEvent returns a stored raw webhook by id.
+// GetWebhookEvent returns a stored webhook inbox record by id.
 func (r *Repository) GetWebhookEvent(ctx context.Context, id uuid.UUID) (entity.WebhookEvent, error) {
 	return queryOne(ctx, r.db, operationGetWebhookEvent, queryWebhookEventGet, pgx.NamedArgs{"id": id}, scanWebhookEvent)
 }
 
-// ListWebhookEvents returns raw webhook events.
+// ListWebhookEvents returns stored webhook inbox records.
 func (r *Repository) ListWebhookEvents(ctx context.Context, filter query.WebhookEventFilter) ([]entity.WebhookEvent, query.PageResult, error) {
 	return queryPage(ctx, r.db, operationListWebhookEvents, queryWebhookEventList, webhookEventFilterArgs(filter), scanWebhookEvent)
 }
@@ -934,11 +934,17 @@ func filterOutboxEvents(events []entity.OutboxEvent, providerEvents []entity.Pro
 }
 
 func sameWebhookEvent(left entity.WebhookEvent, right entity.WebhookEvent) bool {
+	samePayload := false
+	if left.PayloadDigest != "" && right.PayloadDigest != "" {
+		samePayload = left.PayloadDigest == right.PayloadDigest
+	} else {
+		samePayload = bytes.Equal(compactJSON(left.PayloadJSON), compactJSON(right.PayloadJSON))
+	}
 	return left.ProviderSlug == right.ProviderSlug &&
 		left.DeliveryID == right.DeliveryID &&
 		left.EventName == right.EventName &&
 		left.RepositoryProviderID == right.RepositoryProviderID &&
-		bytes.Equal(compactJSON(left.PayloadJSON), compactJSON(right.PayloadJSON))
+		samePayload
 }
 
 func sameJSON(left []byte, right []byte) bool {

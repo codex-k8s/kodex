@@ -30,7 +30,7 @@ approvals:
 - Таблицы не имеют `FOREIGN KEY` в БД других сервисов.
 - Конкурентные команды используют версии агрегатов и идемпотентные ключи.
 - Межсервисные доменные события сначала фиксируются в локальном outbox сервиса-владельца, а затем доставляются в общий `platform-event-log`.
-- Canonical provider webhook payload хранится только во внутреннем inbox `provider_hub_webhook_events.payload_json` для retry/reprocess и имеет срок хранения.
+- Canonical provider webhook payload хранится во внутреннем inbox только для `pending`/`failed` retry/reprocess; terminal записи хранят safe envelope и digest.
 - Webhook inbox не является safe read surface: соседние сервисы получают только нормализованные safe refs/facts/digests/status через gRPC read surface и доменные события.
 - Нормализованные проекции хранят только поля, нужные платформе для UI, поиска, приёмки, синхронизации и аудита.
 - Полные diff, review truth, ветки и теги остаются у провайдера.
@@ -69,11 +69,14 @@ approvals:
 Важные инварианты:
 
 - дедупликация обязательна по delivery id или аналогу;
-- canonical provider webhook payload хранится ограниченный срок во внутреннем поле `payload_json`, пока не реализован отдельный privacy-hardening storage;
+- digest canonical payload хранится в `payload_sha256` и используется для replay/conflict после редактирования payload;
+- canonical provider webhook payload хранится во внутреннем поле `payload_json` только пока запись остаётся `pending` или `failed` и нужна для retry/reprocess;
+- после перехода в `processed` или `ignored` поле `payload_json` заменяется safe envelope с `payload_storage`, `payload_sha256`, delivery/source refs и retention metadata без raw provider body;
 - нормализация может идти синхронно при приёме или через отдельный обработчик, но повторная обработка должна быть идемпотентной;
 - если конкурентный повтор уже перевёл событие из `pending` или `failed` в терминальное состояние, команда повторной обработки перечитывает и возвращает это состояние вместо ложного `not found`;
 - `pending` после повторного чтения не считается успешной обработкой и должен возвращаться как конфликт.
-- `payload_json` не передаётся наружу как safe read surface и не входит в `RepositoryMergeSignal`, provider-owned read responses, outbox/event-log payload или междоменные checked artifact inputs.
+- read RPC и safe diagnostics никогда не возвращают raw/canonical webhook payload: `WebhookEvent.payload_json` в gRPC является safe envelope, а не копией storage payload.
+- raw/canonical webhook payload не входит в `RepositoryMergeSignal`, provider-owned read responses, outbox/event-log payload или междоменные checked artifact inputs.
 
 | Поле | Тип | Nullable | Ограничения | Примечание |
 |---|---|---:|---|---|
@@ -84,9 +87,10 @@ approvals:
 | `repository_provider_id` | text | no | default '' | Внешний id репозитория, если есть. |
 | `received_at` | timestamptz | no | indexed | Время приёма. |
 | `processing_status` | text | no | indexed | `pending`, `processed`, `failed`, `ignored`. |
-| `payload_json` | jsonb | no |  | Canonical provider webhook payload с ограниченным сроком хранения; внутреннее поле для retry/reprocess, не safe read surface. |
+| `payload_json` | jsonb | no | object | Canonical provider webhook payload для `pending`/`failed` retry или safe envelope после `processed`/`ignored`; внутреннее поле, не safe read surface. |
+| `payload_sha256` | text | no | sha256 hex or empty for legacy rows | Digest canonical provider payload для replay/conflict и safe diagnostics. |
 | `last_error` | text | no | default '' | Короткая ошибка обработки. |
-| `retain_until` | timestamptz | no | indexed | Срок хранения payload. |
+| `retain_until` | timestamptz | no | indexed | Срок хранения inbox-записи и, для retryable статусов, полного payload. |
 
 ### `ProviderEvent`
 

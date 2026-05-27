@@ -2242,7 +2242,7 @@ func (x *ProviderTarget) GetWebUrl() string {
 	return ""
 }
 
-// WebhookEvent is a stored raw webhook accepted from the edge gateway.
+// WebhookEvent is stored webhook inbox metadata accepted from the edge gateway.
 type WebhookEvent struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// webhook_event_id is the stored webhook id.
@@ -2259,12 +2259,15 @@ type WebhookEvent struct {
 	ReceivedAt string `protobuf:"bytes,6,opt,name=received_at,json=receivedAt,proto3" json:"received_at,omitempty"`
 	// processing_status is raw webhook processing status.
 	ProcessingStatus WebhookProcessingStatus `protobuf:"varint,7,opt,name=processing_status,json=processingStatus,proto3,enum=kodex.providers.v1.WebhookProcessingStatus" json:"processing_status,omitempty"`
-	// payload_json is the raw provider payload retained for a limited time.
+	// payload_json is a safe envelope with payload storage status and digest.
+	// Raw provider payload is never returned by read RPCs.
 	PayloadJson string `protobuf:"bytes,8,opt,name=payload_json,json=payloadJson,proto3" json:"payload_json,omitempty"`
 	// last_error is a short processing error without secrets.
 	LastError *string `protobuf:"bytes,9,opt,name=last_error,json=lastError,proto3,oneof" json:"last_error,omitempty"`
 	// retain_until is the payload retention deadline in RFC3339 format.
-	RetainUntil   string `protobuf:"bytes,10,opt,name=retain_until,json=retainUntil,proto3" json:"retain_until,omitempty"`
+	RetainUntil string `protobuf:"bytes,10,opt,name=retain_until,json=retainUntil,proto3" json:"retain_until,omitempty"`
+	// payload_sha256 is the digest of the canonical provider payload when known.
+	PayloadSha256 string `protobuf:"bytes,11,opt,name=payload_sha256,json=payloadSha256,proto3" json:"payload_sha256,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2365,6 +2368,13 @@ func (x *WebhookEvent) GetLastError() string {
 func (x *WebhookEvent) GetRetainUntil() string {
 	if x != nil {
 		return x.RetainUntil
+	}
+	return ""
+}
+
+func (x *WebhookEvent) GetPayloadSha256() string {
+	if x != nil {
+		return x.PayloadSha256
 	}
 	return ""
 }
@@ -9364,7 +9374,7 @@ const file_kodex_providers_v1_provider_hub_proto_rawDesc = "" +
 	"\a_numberB\x15\n" +
 	"\x13_provider_object_idB\n" +
 	"\n" +
-	"\b_web_url\"\xe7\x03\n" +
+	"\b_web_url\"\x8e\x04\n" +
 	"\fWebhookEvent\x12(\n" +
 	"\x10webhook_event_id\x18\x01 \x01(\tR\x0ewebhookEventId\x12#\n" +
 	"\rprovider_slug\x18\x02 \x01(\tR\fproviderSlug\x12\x1f\n" +
@@ -9380,7 +9390,8 @@ const file_kodex_providers_v1_provider_hub_proto_rawDesc = "" +
 	"\n" +
 	"last_error\x18\t \x01(\tH\x01R\tlastError\x88\x01\x01\x12!\n" +
 	"\fretain_until\x18\n" +
-	" \x01(\tR\vretainUntilB\x19\n" +
+	" \x01(\tR\vretainUntil\x12%\n" +
+	"\x0epayload_sha256\x18\v \x01(\tR\rpayloadSha256B\x19\n" +
 	"\x17_repository_provider_idB\r\n" +
 	"\v_last_error\"\xc0\x02\n" +
 	"\rProviderEvent\x12*\n" +

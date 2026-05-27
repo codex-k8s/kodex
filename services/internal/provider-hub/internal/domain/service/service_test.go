@@ -146,6 +146,16 @@ func TestIngestWebhookEventStoresProcessedGitHubIssueWebhook(t *testing.T) {
 	if webhook.ID != webhookID || webhook.ProcessingStatus != enum.WebhookProcessingStatusProcessed {
 		t.Fatalf("webhook = %+v, want processed id %s", webhook, webhookID)
 	}
+	storedPayload := string(repository.recordedWebhook.PayloadJSON)
+	if repository.recordedWebhook.PayloadDigest == "" {
+		t.Fatal("stored webhook payload digest is empty, want canonical digest")
+	}
+	if strings.Contains(storedPayload, "updated_at") || strings.Contains(storedPayload, "\"issue\"") {
+		t.Fatalf("stored processed webhook payload = %s, want safe envelope without raw provider body", storedPayload)
+	}
+	if !strings.Contains(storedPayload, string(value.WebhookPayloadStorageRedacted)) {
+		t.Fatalf("stored processed webhook payload = %s, want redacted storage marker", storedPayload)
+	}
 	if len(repository.recordedProviderEvents) != 1 {
 		t.Fatalf("provider events = %d, want 1", len(repository.recordedProviderEvents))
 	}
@@ -414,6 +424,12 @@ func TestIngestWebhookEventStoresFailedKnownWebhookWithBadPayloadShape(t *testin
 	if webhook.ProcessingStatus != enum.WebhookProcessingStatusFailed || webhook.LastError == "" {
 		t.Fatalf("webhook = %+v, want failed with error", webhook)
 	}
+	if repository.recordedWebhook.PayloadDigest == "" {
+		t.Fatal("failed webhook payload digest is empty, want canonical digest for replay diagnostics")
+	}
+	if !strings.Contains(string(repository.recordedWebhook.PayloadJSON), "\"repository\"") {
+		t.Fatalf("failed webhook payload = %s, want retained canonical payload for retry", repository.recordedWebhook.PayloadJSON)
+	}
 	if len(repository.recordedProviderEvents) != 0 || len(repository.recordedOutboxEvents) != 1 {
 		t.Fatalf("provider events = %d outbox = %d, want only received outbox", len(repository.recordedProviderEvents), len(repository.recordedOutboxEvents))
 	}
@@ -588,6 +604,55 @@ func TestRetryWebhookEventProcessingReturnsCurrentStateAfterConcurrentProcessing
 	}
 	if webhook.ProcessingStatus != enum.WebhookProcessingStatusProcessed {
 		t.Fatalf("status = %s, want processed", webhook.ProcessingStatus)
+	}
+}
+
+func TestRetryWebhookEventProcessingRedactsPayloadAfterTerminalRetry(t *testing.T) {
+	t.Parallel()
+
+	webhookID := uuid.New()
+	now := time.Date(2026, 5, 7, 12, 0, 0, 0, time.UTC)
+	repository := &fakeRepository{
+		recordedWebhook: entity.WebhookEvent{
+			ID:               webhookID,
+			ProviderSlug:     enum.ProviderSlugGitHub,
+			DeliveryID:       "delivery-retry-redact",
+			EventName:        "issues",
+			ReceivedAt:       now,
+			ProcessingStatus: enum.WebhookProcessingStatusFailed,
+			PayloadJSON:      []byte(`{"secret":"do-not-leak","repository":{"id":101},"issue":{"id":55}}`),
+			RetainUntil:      now.Add(webhookPayloadRetention),
+		},
+	}
+	service := NewWithRuntime(
+		repository,
+		fixedClock{now: now},
+		&sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New(), uuid.New()}},
+		fakeWebhookNormalizer{facts: value.ProviderWebhookFacts{
+			FactKind:             value.ProviderWebhookFactKindWorkItem,
+			ProviderWorkItemID:   "55",
+			Kind:                 "issue",
+			RepositoryProviderID: "101",
+			OccurredAt:           now,
+		}, ok: true},
+	)
+
+	webhook, err := service.RetryWebhookEventProcessing(context.Background(), RetryWebhookEventProcessingInput{
+		WebhookEventID: webhookID,
+		Meta:           value.CommandMeta{CommandID: uuid.New()},
+	})
+	if err != nil {
+		t.Fatalf("RetryWebhookEventProcessing(): %v", err)
+	}
+	if webhook.ProcessingStatus != enum.WebhookProcessingStatusProcessed {
+		t.Fatalf("status = %s, want processed", webhook.ProcessingStatus)
+	}
+	storedPayload := string(repository.recordedWebhook.PayloadJSON)
+	if strings.Contains(storedPayload, "do-not-leak") || strings.Contains(storedPayload, "\"issue\"") {
+		t.Fatalf("retried webhook payload = %s, want safe envelope without raw provider body", storedPayload)
+	}
+	if !strings.Contains(storedPayload, string(value.WebhookPayloadStorageRedacted)) || repository.recordedWebhook.PayloadDigest == "" {
+		t.Fatalf("retried webhook = %+v, want redacted payload with digest", repository.recordedWebhook)
 	}
 }
 

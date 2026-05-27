@@ -3,6 +3,7 @@ package grpc
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -289,6 +290,13 @@ func TestIngestWebhookEventMapsRequestAndResponse(t *testing.T) {
 	if response.GetWebhookEvent().GetProcessingStatus() != providersv1.WebhookProcessingStatus_WEBHOOK_PROCESSING_STATUS_PROCESSED {
 		t.Fatalf("status = %s, want processed", response.GetWebhookEvent().GetProcessingStatus())
 	}
+	payload := response.GetWebhookEvent().GetPayloadJson()
+	if strings.Contains(payload, "\"issue\"") {
+		t.Fatalf("webhook response payload = %s, want safe envelope without raw provider body", payload)
+	}
+	if !strings.Contains(payload, "payload_storage") || response.GetWebhookEvent().GetPayloadSha256() == "" {
+		t.Fatalf("webhook response = %+v, want safe payload envelope and digest", response.GetWebhookEvent())
+	}
 }
 
 func TestEnqueueReconciliationMapsRequestAndResponse(t *testing.T) {
@@ -397,6 +405,7 @@ func (fakeService) IngestWebhookEvent(_ context.Context, input providerservice.I
 		ReceivedAt:       input.ReceivedAt,
 		ProcessingStatus: enum.WebhookProcessingStatusProcessed,
 		PayloadJSON:      input.PayloadJSON,
+		PayloadDigest:    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 		RetainUntil:      input.ReceivedAt.Add(24 * time.Hour),
 	}, nil
 }
@@ -411,6 +420,7 @@ func (fakeService) GetWebhookEvent(context.Context, providerservice.GetWebhookEv
 		ReceivedAt:       now,
 		ProcessingStatus: enum.WebhookProcessingStatusProcessed,
 		PayloadJSON:      []byte(`{}`),
+		PayloadDigest:    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 		RetainUntil:      now.Add(24 * time.Hour),
 	}, nil
 }

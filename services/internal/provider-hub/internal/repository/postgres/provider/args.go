@@ -70,6 +70,7 @@ func webhookEventArgs(event entity.WebhookEvent) pgx.NamedArgs {
 		"received_at":            event.ReceivedAt,
 		"processing_status":      string(event.ProcessingStatus),
 		"payload_json":           postgreslib.JSONPayload(event.PayloadJSON),
+		"payload_sha256":         event.PayloadDigest,
 		"last_error":             event.LastError,
 		"retain_until":           event.RetainUntil,
 	}
@@ -98,6 +99,8 @@ func webhookEventProcessingArgs(event entity.WebhookEvent) pgx.NamedArgs {
 	return pgx.NamedArgs{
 		"id":                event.ID,
 		"processing_status": string(event.ProcessingStatus),
+		"payload_json":      postgreslib.JSONPayload(event.PayloadJSON),
+		"payload_sha256":    event.PayloadDigest,
 		"last_error":        event.LastError,
 	}
 }

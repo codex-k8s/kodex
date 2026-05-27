@@ -31,7 +31,7 @@ type ProviderAccountRuntimeState struct {
 	LastErrorMessage  string
 }
 
-// WebhookEvent stores a raw provider webhook accepted from the edge gateway.
+// WebhookEvent stores one provider webhook accepted from the edge gateway.
 type WebhookEvent struct {
 	ID                   uuid.UUID
 	ProviderSlug         enum.ProviderSlug
@@ -41,6 +41,7 @@ type WebhookEvent struct {
 	ReceivedAt           time.Time
 	ProcessingStatus     enum.WebhookProcessingStatus
 	PayloadJSON          []byte
+	PayloadDigest        string
 	LastError            string
 	RetainUntil          time.Time
 }

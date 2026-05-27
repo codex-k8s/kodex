@@ -146,6 +146,7 @@ func (s *Service) IngestWebhookEvent(ctx context.Context, input IngestWebhookEve
 		ReceivedAt:           input.ReceivedAt.UTC(),
 		ProcessingStatus:     enum.WebhookProcessingStatusPending,
 		PayloadJSON:          payload,
+		PayloadDigest:        webhookPayloadDigest(payload),
 		RetainUntil:          input.ReceivedAt.UTC().Add(webhookPayloadRetention),
 	}
 	normalization, err := s.normalizeWebhook(ctx, webhook)
@@ -154,6 +155,10 @@ func (s *Service) IngestWebhookEvent(ctx context.Context, input IngestWebhookEve
 	}
 	webhook.ProcessingStatus = normalization.status
 	webhook.LastError = normalization.lastError
+	webhook, err = webhookForInboxStorage(webhook)
+	if err != nil {
+		return entity.WebhookEvent{}, err
+	}
 	stored, _, err := s.repository.StoreWebhookEvent(ctx, webhook, normalization.projectionUpdate, normalization.providerEvents, normalization.outboxEvents)
 	return stored, err
 }
@@ -215,6 +220,10 @@ func (s *Service) RetryWebhookEventProcessing(ctx context.Context, input RetryWe
 	}
 	webhook.ProcessingStatus = normalization.status
 	webhook.LastError = normalization.lastError
+	webhook, err = webhookForInboxStorage(webhook)
+	if err != nil {
+		return entity.WebhookEvent{}, err
+	}
 	stored, err := s.repository.ProcessWebhookEvent(ctx, webhook, normalization.projectionUpdate, normalization.providerEvents, normalization.outboxEvents[1:])
 	if errors.Is(err, errs.ErrNotFound) {
 		return s.currentWebhookAfterConcurrentProcessing(ctx, input.WebhookEventID)

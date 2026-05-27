@@ -8,6 +8,7 @@ SELECT
     received_at,
     processing_status,
     payload_json,
+    payload_sha256,
     last_error,
     retain_until
 FROM provider_hub_webhook_events

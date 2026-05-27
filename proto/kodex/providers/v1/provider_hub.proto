@@ -455,7 +455,7 @@ message ProviderTarget {
   optional string web_url = 7;
 }
 
-// WebhookEvent is a stored raw webhook accepted from the edge gateway.
+// WebhookEvent is stored webhook inbox metadata accepted from the edge gateway.
 message WebhookEvent {
   // webhook_event_id is the stored webhook id.
   string webhook_event_id = 1;
@@ -471,12 +471,15 @@ message WebhookEvent {
   string received_at = 6;
   // processing_status is raw webhook processing status.
   WebhookProcessingStatus processing_status = 7;
-  // payload_json is the raw provider payload retained for a limited time.
+  // payload_json is a safe envelope with payload storage status and digest.
+  // Raw provider payload is never returned by read RPCs.
   string payload_json = 8;
   // last_error is a short processing error without secrets.
   optional string last_error = 9;
   // retain_until is the payload retention deadline in RFC3339 format.
   string retain_until = 10;
+  // payload_sha256 is the digest of the canonical provider payload when known.
+  string payload_sha256 = 11;
 }
 
 // ProviderEvent is a normalized event produced from webhook or reconciliation.

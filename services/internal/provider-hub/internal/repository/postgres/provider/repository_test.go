@@ -2,6 +2,8 @@ package provider
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"io/fs"
 	"os"
@@ -665,6 +667,7 @@ func TestRepositoryIntegrationRuntimeStateLimitsAndOperations(t *testing.T) {
 		PayloadJSON:          []byte(`{"issue":{"id":55,"number":7},"repository":{"id":100}}`),
 		RetainUntil:          now.Add(30 * 24 * time.Hour),
 	}
+	webhook.PayloadDigest = testPayloadDigest(webhook.PayloadJSON)
 	sourceWebhookID := webhook.ID
 	providerEvent := entity.ProviderEvent{
 		ID:                   uuid.New(),
@@ -804,12 +807,34 @@ func TestRepositoryIntegrationRuntimeStateLimitsAndOperations(t *testing.T) {
 	changedWebhook := webhook
 	changedWebhook.ID = uuid.New()
 	changedWebhook.PayloadJSON = []byte(`{"issue":{"id":56},"repository":{"id":100}}`)
+	changedWebhook.PayloadDigest = testPayloadDigest(changedWebhook.PayloadJSON)
 	_, _, err = repository.StoreWebhookEvent(ctx, changedWebhook, providerrepo.ProjectionUpdate{}, nil, nil)
 	if !errors.Is(err, errs.ErrConflict) {
 		t.Fatalf("store changed duplicate webhook err = %v, want %v", err, errs.ErrConflict)
 	}
+	redactedWebhook := webhookEventForTest(now.Add(2*time.Minute), "delivery-redacted-1")
+	redactedWebhook.PayloadDigest = testPayloadDigest(redactedWebhook.PayloadJSON)
+	redactedWebhook.PayloadJSON = []byte(`{"payload_sha256":"` + redactedWebhook.PayloadDigest + `","payload_storage":"redacted_after_terminal_processing"}`)
+	if _, _, err := repository.StoreWebhookEvent(ctx, redactedWebhook, providerrepo.ProjectionUpdate{}, nil, nil); err != nil {
+		t.Fatalf("store redacted webhook event: %v", err)
+	}
+	replayedRedactedWebhook := webhookEventForTest(now.Add(3*time.Minute), "delivery-redacted-1")
+	replayedRedactedWebhook.ID = uuid.New()
+	replayedRedactedWebhook.PayloadDigest = redactedWebhook.PayloadDigest
+	if _, _, err := repository.StoreWebhookEvent(ctx, replayedRedactedWebhook, providerrepo.ProjectionUpdate{}, nil, nil); err != nil {
+		t.Fatalf("replay redacted webhook by digest: %v", err)
+	}
+	conflictingRedactedWebhook := replayedRedactedWebhook
+	conflictingRedactedWebhook.ID = uuid.New()
+	conflictingRedactedWebhook.PayloadJSON = []byte(`{"issue":{"id":99},"repository":{"id":100}}`)
+	conflictingRedactedWebhook.PayloadDigest = testPayloadDigest(conflictingRedactedWebhook.PayloadJSON)
+	_, _, err = repository.StoreWebhookEvent(ctx, conflictingRedactedWebhook, providerrepo.ProjectionUpdate{}, nil, nil)
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("store changed redacted duplicate webhook err = %v, want %v", err, errs.ErrConflict)
+	}
 	webhooks, _, err := repository.ListWebhookEvents(ctx, query.WebhookEventFilter{
 		ProviderSlug:       enum.ProviderSlugGitHub,
+		DeliveryID:         "delivery-1",
 		EventNames:         []string{"issues"},
 		ProcessingStatuses: []enum.WebhookProcessingStatus{enum.WebhookProcessingStatusProcessed},
 	})
@@ -987,6 +1012,7 @@ func TestRepositoryIntegrationProjectionRebuildsWatermarkRelationships(t *testin
 }
 
 func webhookEventForTest(receivedAt time.Time, deliveryID string) entity.WebhookEvent {
+	payload := []byte(`{"issue":{"id":55,"number":7},"repository":{"id":100}}`)
 	return entity.WebhookEvent{
 		ID:                   uuid.New(),
 		ProviderSlug:         enum.ProviderSlugGitHub,
@@ -995,9 +1021,15 @@ func webhookEventForTest(receivedAt time.Time, deliveryID string) entity.Webhook
 		RepositoryProviderID: "100",
 		ReceivedAt:           receivedAt,
 		ProcessingStatus:     enum.WebhookProcessingStatusProcessed,
-		PayloadJSON:          []byte(`{"issue":{"id":55,"number":7},"repository":{"id":100}}`),
+		PayloadJSON:          payload,
+		PayloadDigest:        testPayloadDigest(payload),
 		RetainUntil:          receivedAt.Add(30 * 24 * time.Hour),
 	}
+}
+
+func testPayloadDigest(payload []byte) string {
+	sum := sha256.Sum256(payload)
+	return hex.EncodeToString(sum[:])
 }
 
 func projectionUpdateForTest(workItemID uuid.UUID, commentID uuid.UUID, providerUpdatedAt time.Time, title string, bodyDigest string, summary string, commentDigest string, nextRef string) providerrepo.ProjectionUpdate {
