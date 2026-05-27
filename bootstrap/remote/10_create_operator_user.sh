@@ -8,6 +8,9 @@ load_env_file "${BOOTSTRAP_ENV_FILE:?}"
 require_root
 
 : "${OPERATOR_USER:?OPERATOR_USER is required}"
+if [ -z "${OPERATOR_SSH_PUBKEY:-}" ] && [ -n "${OPERATOR_SSH_PUBKEY_PATH:-}" ] && [ -f "${OPERATOR_SSH_PUBKEY_PATH}" ]; then
+  OPERATOR_SSH_PUBKEY="$(cat "${OPERATOR_SSH_PUBKEY_PATH}")"
+fi
 : "${OPERATOR_SSH_PUBKEY:?OPERATOR_SSH_PUBKEY is required}"
 
 if ! id -u "$OPERATOR_USER" >/dev/null 2>&1; then

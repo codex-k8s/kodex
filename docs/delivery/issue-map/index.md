@@ -5,7 +5,7 @@ title: kodex — индекс карты Issue
 status: active
 owner_role: KM
 created_at: 2026-04-25
-updated_at: 2026-05-25
+updated_at: 2026-05-27
 ---
 
 # Индекс карты Issue
@@ -40,3 +40,4 @@ updated_at: 2026-05-25
 | Волна 7 — доступ, организации, группы и внешние аккаунты | `waves/wave-007-access-and-accounts.md` |
 | Технический срез после волны 7 | `waves/post-wave-7-housekeeping.md` |
 | Волна 8 — проекты и репозитории | `waves/wave-008-projects-and-repositories.md` |
+| MVP bootstrap/deploy | `waves/mvp-bootstrap-deploy.md` |

@@ -4,8 +4,7 @@ set -euo pipefail
 cat >&2 <<'MSG'
 add_allowed_user.sh is deprecated.
 Use one of the following instead:
-1) Staff web-console (Admin -> Users)
-2) Staff API endpoint for user upsert
-3) codex-bootstrap/user-management command once it is enabled in your environment
+1) access-manager administrative command/API once the owner-side surface is enabled
+2) a migration or seed path owned by access-manager for first bootstrap environments
 MSG
 exit 1

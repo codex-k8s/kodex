@@ -35,7 +35,7 @@ configs:
 EOF
 
 if [ ! -f "${K3S_REGISTRIES_FILE}" ] || ! cmp -s "${tmp_registries}" "${K3S_REGISTRIES_FILE}"; then
-  log "Configure k3s registry mirror for ${KODEX_INTERNAL_REGISTRY_HOST}"
+  log "Configure k3s registry mirror for internal registry"
   mkdir -p "$(dirname "${K3S_REGISTRIES_FILE}")"
   install -m 600 "${tmp_registries}" "${K3S_REGISTRIES_FILE}"
   systemctl restart k3s

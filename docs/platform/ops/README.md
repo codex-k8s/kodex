@@ -16,3 +16,9 @@
 | План релиза | `release_plan.md` | Описывает подготовку и выпуск релиза. |
 | Заметки релиза | `release_notes.md` | Описывает состав выпуска. |
 | Разбор инцидента | `incident_postmortem.md` | Фиксирует причины и выводы после инцидента. |
+
+## Активные документы
+
+| Документ | Назначение |
+|---|---|
+| [bootstrap_cluster_runbook.md](bootstrap_cluster_runbook.md) | Runbook первого bootstrap-контура кластера: local/remote preflight, install, registry/Kaniko smoke и backend smoke. |

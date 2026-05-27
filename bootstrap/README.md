@@ -1,135 +1,148 @@
-# Bootstrap (production)
+# Bootstrap кластера
 
-Набор скриптов для первичного развёртывания `kodex` на удалённом сервере Ubuntu 24.04.
+## Назначение
 
-## Что делает bootstrap
+`bootstrap/**` задаёт воспроизводимый путь подготовки первого Kubernetes-контура `kodex` без Docker daemon:
 
-- запускается с хоста разработчика;
-- подключается к удалённому серверу по SSH под `root`;
-- упаковывает текущий локальный snapshot репозитория и передаёт его на сервер в `/opt/kodex`;
-- создаёт отдельного операционного пользователя;
-- ставит k3s; базовые сетевые компоненты (ingress-nginx/cert-manager) применяются через Go runtime deploy prerequisites;
-- проверяет DNS до старта раскатки: `KODEX_PRODUCTION_DOMAIN` должен резолвиться в IP `TARGET_HOST`;
-- поднимает внутренний registry без auth в loopback-режиме (`127.0.0.1` на node) и собирает образ через Kaniko;
-- автоматически настраивает `/etc/rancher/k3s/registries.yaml` для mirror на локальный registry (`http://127.0.0.1:<port>`);
-- настраивает kubelet image GC thresholds и host-level prune timer для `containerd`, чтобы node не накапливал сотни гигабайт неиспользуемых образов;
-- разворачивает PostgreSQL и `kodex` в production namespace;
-- TLS для `KODEX_PRODUCTION_DOMAIN` управляется в runtime-deploy:
-  - перед выпуском сертификата выполняется HTTP echo-probe (проверка доступности домена на этот кластер);
-  - после выпуска TLS secret сохраняется в служебный namespace (`KODEX_TLS_SYSTEM_NAMESPACE`) и переиспользуется в следующих деплоях;
-- применяет baseline `NetworkPolicy` (platform namespace + labels для `system/platform` зон);
-- включает host firewall hardening: с внешней сети доступны только `SSH`, `HTTP`, `HTTPS`;
-- запрашивает внешние креды (`GitHub fine-grained token`, `KODEX_OPENAI_API_KEY`), внутренние секреты генерирует автоматически;
-- настраивает GitHub webhook и каталог labels для platform repo (`KODEX_GITHUB_REPO`);
-- создаёт или обновляет GitHub webhook и каталог labels в platform repo (`KODEX_GITHUB_REPO`) и, если задан отдельный `KODEX_FIRST_PROJECT_GITHUB_REPO`, дополнительно синхронизирует webhook/labels там;
-- при старте `control-plane` автоматически создаёт/обновляет записи Project/Repositories в БД для `KODEX_GITHUB_REPO`
-  (и опционально для `KODEX_FIRST_PROJECT_GITHUB_REPO`); platform project защищён от удаления через staff UI/API;
-- разворачивает platform stack через Kubernetes API без зависимости от GitHub Actions workflows.
+- локальный режим: выполнение на сервере, где будет жить k3s;
+- удалённый режим: доставка bootstrap bundle через `TARGET_*` и запуск по SSH;
+- preflight/dry-run без раскрытия значений env;
+- установка и проверка k3s, kubeconfig, image GC и host firewall;
+- foundation для внутреннего registry и smoke-проверки mirror/Kaniko;
+- инструкции для последующего deploy backend-сервисов через готовые smoke scripts.
 
-## Быстрый запуск
+Реальная установка кластера запускается только отдельной командой владельца. PR с изменениями bootstrap не должен сам выполнять install.
 
-1. Скопируйте пример конфига:
+## Файлы
+
+| Путь | Назначение |
+|---|---|
+| `bootstrap/host/bootstrap_cluster.sh` | Основной entrypoint: `preflight` и `install`, режимы `local`/`remote`, `--dry-run`. |
+| `bootstrap/host/bootstrap_remote_production.sh` | Совместимый wrapper для удалённого install. |
+| `bootstrap/host/smoke_registry_kaniko.sh` | Проверяет registry mirror и Kaniko build/push без Docker daemon. |
+| `bootstrap/host/smoke_backend_contour.sh` | Последовательно запускает registry/Kaniko smoke и smoke готовых backend-сервисов. |
+| `bootstrap/remote/*.sh` | Идемпотентные шаги, которые выполняются на целевом сервере. |
+| `deploy/base/bootstrap-foundation/**` | Активные manifests внутреннего registry. |
+| `deploy/base/bootstrap-builder-smoke/**` | Активные manifests mirror/Kaniko smoke jobs. |
+| `bootstrap/host/config.env.example` | Пример локального env. Реальный `config.env` не коммитится и не печатается. |
+
+## Подготовка env
 
 ```bash
 cp bootstrap/host/config.env.example bootstrap/host/config.env
 ```
 
-2. Заполните `bootstrap/host/config.env`.
+Заполните `bootstrap/host/config.env`. Значения `TARGET_*`, домены, адреса, email, токены, ключи и kubeconfig считаются чувствительными: не публикуйте их в Issue, PR, логах и документации.
 
-3. Для полного bootstrap + deploy запускайте:
+Минимально важные группы параметров:
 
-```bash
-go run ./cmd/codex-bootstrap validate \
-  --config services.yaml \
-  --env production
+- `TARGET_*` и `OPERATOR_*` для удалённого режима;
+- `KODEX_PRODUCTION_NAMESPACE`;
+- `KODEX_PRODUCTION_DOMAIN` и `KODEX_INGRESS_HOST_NETWORK` как входные предпосылки будущего ingress-контура;
+- `KODEX_INTERNAL_REGISTRY_*`;
+- `KODEX_KANIKO_*` и `KODEX_IMAGE_MIRROR_*`;
+- токены и секреты сервисов-владельцев, если они не должны генерироваться bootstrap-скриптом.
 
-go run ./cmd/codex-bootstrap preflight \
-  --env-file bootstrap/host/config.env
+Если runtime token, PostgreSQL password или DSN оставлены пустыми, `bootstrap/remote/45_prepare_runtime_env.sh` генерирует или выводит безопасные значения на целевом сервере и дописывает их в переданный bootstrap env без печати секретов.
 
-go run ./cmd/codex-bootstrap bootstrap \
-  --config services.yaml \
-  --env-file bootstrap/host/config.env
-```
+## Preflight и dry-run
 
-Команда `bootstrap` после host provisioning автоматически запускает удалённый pipeline:
-`runtime-deploy --prerequisites-only` -> `sync-secrets` -> `github-sync` -> `runtime-deploy`.
-
-4. Низкоуровневый host-only скрипт (без post-provision deploy pipeline) оставлен для диагностики:
+Локальная проверка без установки:
 
 ```bash
-bash bootstrap/host/bootstrap_remote_production.sh
+bash bootstrap/host/bootstrap_cluster.sh preflight --mode local --env-file bootstrap/host/config.env
 ```
 
-Для отдельного e2e контура:
+Удалённая проверка через SSH:
 
 ```bash
-go run ./cmd/codex-bootstrap bootstrap \
-  --config services.yaml \
-  --env-file bootstrap/host/config-e2e-test.env \
-  --dry-run
+bash bootstrap/host/bootstrap_cluster.sh preflight --mode remote --env-file bootstrap/host/config.env
 ```
 
-Опции `preflight`:
-- `--skip-ssh` — пропустить проверку SSH-доступа к target host.
-- `--skip-github` — пропустить проверку доступа к GitHub API (repo/webhook/labels).
-- `--timeout=30s` — увеличить timeout для сетевых проверок.
+План без запуска install-шагов:
 
-## Примечания
+```bash
+bash bootstrap/host/bootstrap_cluster.sh install --mode remote --env-file bootstrap/host/config.env --dry-run
+```
 
-- Скрипты — каркас первого этапа. Перед production обязательны hardening и отдельный runbook.
-- `bootstrap/host/bootstrap_remote_production.sh` может читать env из кастомного файла через `KODEX_BOOTSTRAP_CONFIG_FILE`; по умолчанию используется `bootstrap/host/config.env`.
-- `KODEX_GITHUB_REPO` — platform repo (репозиторий с кодом `kodex` и bootstrap/runtime metadata).
-- `KODEX_FIRST_PROJECT_GITHUB_REPO` (опционально) — отдельный репозиторий первого подключаемого проекта, где bootstrap дополнительно создаёт webhook и каталог labels; если пусто, используется только `KODEX_GITHUB_REPO` (dogfooding).
-- Bootstrap-секреты и platform-конфиг (`KODEX_*`) записываются только в Kubernetes `Secret`/`ConfigMap`.
-  В `KODEX_FIRST_PROJECT_GITHUB_REPO` bootstrap настраивает только webhook и labels.
-- Для AI слотов (env `ai`) runtime deploy берёт общие секреты из `kodex-runtime-ai` и `kodex-oauth2-proxy-ai`
-  в production namespace. Это позволяет задавать отдельные credentials/политику для AI слотов, не затрагивая production.
-- Для раздельных значений между окружениями можно использовать ключи-оверрайды в `bootstrap/host/config.env`:
-  - `KODEX_AI_<NAME>` для k8s secret `kodex-runtime-ai`;
-  - `KODEX_PRODUCTION_<NAME>` для production runtime secret.
-  Пустая строка означает "не перезаписывать существующее значение".
-- Для bootstrap нужен `KODEX_GITHUB_PAT` (fine-grained) с правами, достаточными для работы с репозиторием и `administration` (webhooks/labels).
-  GitHub secrets/variables платформа больше не синхронизирует и не использует как runtime-источник истины.
-- Для PR-flow (создание/обновление PR, комментарии, review, push в рабочие ветки) использовать только `KODEX_GIT_BOT_TOKEN`.
-  При локальных ручных операциях `gh` токен берётся из `bootstrap/host/config.env` (`KODEX_GIT_BOT_TOKEN`).
-- Для staff UI и staff API требуется платформенный SSO/OIDC-контур. Базовый вариант — Keycloak; GitHub/GitLab подключаются в нём как внешние поставщики идентичности.
-  - callback платформенного SSO/gateway: `https://<KODEX_PRODUCTION_DOMAIN>/oauth2/callback`;
-  - слоты используют общий SSO/gateway и не требуют отдельного OAuth-приложения у GitHub/GitLab на каждый slot;
-- `KODEX_PUBLIC_BASE_URL` должен совпадать с публичным URL (обычно `https://<KODEX_PRODUCTION_DOMAIN>`).
-- `KODEX_BOOTSTRAP_OWNER_EMAIL` задаёт единственный email, которому разрешён первый вход (platform admin). Self-signup запрещён.
-- `KODEX_BOOTSTRAP_ALLOWED_EMAILS` (опционально) — дополнительные staff email'ы (через запятую),
-  которые будут автоматически добавлены в БД при старте `api-gateway`, чтобы первый вход не упирался в
-  `{"code":"forbidden","message":"email is not allowed"}`.
-- `KODEX_BOOTSTRAP_PLATFORM_ADMIN_EMAILS` (опционально) — дополнительные platform admin (owners) email'ы (через запятую),
-  которые будут автоматически добавлены/обновлены в БД при старте `api-gateway` с `is_platform_admin=true`.
-- `KODEX_GITHUB_WEBHOOK_SECRET` используется для валидации `X-Hub-Signature-256`; если переменная пуста, bootstrap генерирует значение автоматически.
-- `KODEX_GITHUB_WEBHOOK_URL` (опционально) позволяет переопределить URL webhook; по умолчанию используется `https://<KODEX_PRODUCTION_DOMAIN>/api/v1/webhooks/github`.
-- `KODEX_GITHUB_WEBHOOK_EVENTS` задаёт список событий webhook (comma-separated).
-- `KODEX_ACCESS_MANAGER_GRPC_AUTH_TOKEN` — shared token для внутренней gRPC-границы `access-manager`; если переменная пуста, bootstrap генерирует значение автоматически.
-- `KODEX_ACCESS_MANAGER_GRPC_*` параметры лимитов, keepalive, deadline и размера сообщений сохраняются в runtime secret вместе с остальными platform `KODEX_*` значениями.
-- `KODEX_PLATFORM_DEPLOYMENT_REPLICAS` управляет replicas для platform `Deployment`-объектов (кроме PostgreSQL); для `production` по умолчанию `2`.
-- Worker-параметры (`KODEX_WORKER_*`) сохраняются в Kubernetes runtime secret и применяются при deploy.
-- `KODEX_LEARNING_MODE_DEFAULT` задаёт default для новых проектов (`true` в шаблоне; пустое значение = выключено).
-- В `bootstrap/host/config.env` используйте только переменные с префиксом `KODEX_` для платформенных параметров и секретов.
-- `KODEX_PRODUCTION_DOMAIN`, `KODEX_AI_DOMAIN` и `KODEX_LETSENCRYPT_EMAIL` обязательны.
-- Для single-node/bare-metal production по умолчанию включён `KODEX_INGRESS_HOST_NETWORK=true` (ingress слушает хостовые `:80/:443`).
-- При `KODEX_INGRESS_HOST_NETWORK=true` сервис ingress автоматически приводится к `ClusterIP`, чтобы не оставлять внешние `NodePort`.
-- Внутренний registry работает без auth по design MVP и слушает только `127.0.0.1:<KODEX_INTERNAL_REGISTRY_PORT>` на node.
-- Loopback-режим registry рассчитан на single-node production; для multi-node нужен отдельный registry-профиль.
-- Registry GC и host `containerd` prune — разные механизмы:
-  - registry GC чистит untagged blobs в PVC internal registry;
-  - host prune (`k3s crictl rmi --prune`) чистит неиспользуемые образы и snapshots на node.
-- Параметры host image GC:
-  - `KODEX_K3S_IMAGE_GC_HIGH_THRESHOLD_PERCENT`
-  - `KODEX_K3S_IMAGE_GC_LOW_THRESHOLD_PERCENT`
-  - `KODEX_K3S_IMAGE_PRUNE_TIMER_ENABLED`
-  - `KODEX_K3S_IMAGE_PRUNE_ONCALENDAR`
-- По умолчанию включён baseline `NetworkPolicy` (`KODEX_NETWORK_POLICY_BASELINE=true`).
-- Чтобы worker мог обращаться к Kubernetes API, baseline также разрешает egress на API endpoint
-  (для k3s обычно это `nodeIP:6443`). Управляется переменными:
-  - `KODEX_K8S_API_CIDR` (рекомендуется `TARGET_HOST/32` для single-node production);
-  - `KODEX_K8S_API_PORT` (по умолчанию `6443`).
-- Для новых namespace проектов/агентов используйте `deploy/base/network-policies/project-agent-baseline.yaml.tpl`
-  через runtime deploy (`services/internal/control-plane/internal/domain/runtimedeploy`) или вручную через
-  `go run ./cmd/codex-bootstrap render-manifest --template deploy/base/network-policies/project-agent-baseline.yaml.tpl`.
-- По умолчанию включён firewall hardening (`KODEX_FIREWALL_ENABLED=true`), снаружи открыты только `KODEX_SSH_PORT`, `80`, `443`.
+В режиме `local` dry-run выполняет preflight на текущем сервере и печатает план. В режиме `remote` dry-run доставляет только preflight bundle через `TARGET_*`, выполняет target-side preflight по SSH и печатает план без запуска install, k3s, firewall или registry-шагов. Если `--skip-ssh` указан явно, remote preflight проверяет только локальную конфигурацию `TARGET_*` и не подтверждает состояние target.
+
+Preflight проверяет ОС, root/sudo, базовые команды, k3s/kubectl при наличии, DNS/ingress prerequisites, registry/Kaniko manifests и обязательные env-поля. DNS prerequisite для `KODEX_PRODUCTION_DOMAIN` требует, чтобы production domain резолвился в `TARGET_HOST` или, в local mode без `TARGET_HOST`, в текущий host. Проверка не печатает значения env, домены или адреса.
+
+## Установка после merge
+
+Локальный режим на сервере:
+
+```bash
+bash bootstrap/host/bootstrap_cluster.sh install --mode local --env-file bootstrap/host/config.env
+```
+
+Удалённый режим через `TARGET_*`:
+
+```bash
+bash bootstrap/host/bootstrap_cluster.sh install --mode remote --env-file bootstrap/host/config.env
+```
+
+Install выполняет шаги:
+
+1. preflight;
+2. подготовка ОС и системных пакетов;
+3. создание operator user;
+4. установка или проверка k3s;
+5. настройка `/etc/rancher/k3s/registries.yaml` на internal registry;
+6. настройка kubelet image GC и host image prune timer;
+7. проверка network prerequisites без установки ingress/cert-manager;
+8. доставка snapshot репозитория в `/opt/kodex`;
+9. подготовка runtime env без печати секретов;
+10. применение internal registry foundation;
+11. включение host firewall baseline;
+12. итоговый отчёт с командами проверки.
+
+Архив репозитория исключает `.git`, `.local` и `bootstrap/host/*.env`; runtime env передаётся отдельно.
+
+## Registry и Kaniko smoke
+
+После установки foundation:
+
+```bash
+KODEX_SMOKE_ENV_FILE=bootstrap/host/config.env \
+  bash bootstrap/host/smoke_registry_kaniko.sh
+```
+
+Скрипт:
+
+- рендерит `deploy/base/bootstrap-foundation/**` и `deploy/base/bootstrap-builder-smoke/**`;
+- ждёт readiness `kodex-registry`;
+- зеркалирует внешний тестовый образ во внутренний registry через `crane`;
+- запускает pull-smoke из внутреннего registry;
+- собирает минимальный scratch-образ через Kaniko и пушит его во внутренний registry.
+
+Docker daemon не требуется.
+
+## Backend smoke после подготовки образов
+
+Когда backend-образы и migration-образы уже доступны во внутреннем registry:
+
+```bash
+KODEX_SMOKE_ENV_FILE=bootstrap/host/config.env \
+  bash bootstrap/host/smoke_backend_contour.sh
+```
+
+По умолчанию запускаются smoke scripts для готового backend-контура: `access-manager`, `project-catalog`, `package-hub`, `provider-hub`, `fleet-manager`, `runtime-manager`, `codex-hook-ingress`, `integration-gateway`.
+
+Можно ограничить набор:
+
+```bash
+KODEX_BACKEND_SMOKE_SERVICES="access-manager project-catalog" \
+KODEX_SMOKE_ENV_FILE=bootstrap/host/config.env \
+  bash bootstrap/host/smoke_backend_contour.sh
+```
+
+Frontend в этом bootstrap-срезе не разворачивается.
+
+## Границы среза
+
+- Registry в MVP-профиле работает без auth и доступен на node loopback через `hostPort` `127.0.0.1:<KODEX_INTERNAL_REGISTRY_PORT>`.
+- Профиль рассчитан на single-node k3s. Для multi-node нужен отдельный registry profile.
+- Ingress controller, cert-manager, frontend, full runtime image build orchestration и физический deploy pipeline не добавлены этим срезом.
+- `bootstrap/**` не хранит и не печатает secret values; raw env находится только в локальном/целевом bootstrap env.

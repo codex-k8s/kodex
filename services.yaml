@@ -19,6 +19,7 @@ spec:
   activeRoots:
     - AGENTS.md
     - README.md
+    - bootstrap
     - docs/index.md
     - docs/design-guidelines
     - docs/templates
@@ -239,6 +240,14 @@ spec:
       value: "1.25.8-alpine"
     pgvector:
       value: "pg16"
+    registry:
+      value: "2"
+    kaniko-executor:
+      value: "v1.24.0-debug"
+    crane:
+      value: "debug"
+    busybox:
+      value: "1.36"
   images:
     golang-alpine:
       type: external
@@ -248,6 +257,22 @@ spec:
       type: external
       from: 'pgvector/pgvector:{{ index .Versions "pgvector" }}'
       local: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/kodex/mirror/pgvector:{{ index .Versions "pgvector" }}'
+    registry:
+      type: external
+      from: 'registry:{{ index .Versions "registry" }}'
+      local: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/kodex/mirror/registry:{{ index .Versions "registry" }}'
+    kaniko-executor:
+      type: external
+      from: 'gcr.io/kaniko-project/executor:{{ index .Versions "kaniko-executor" }}'
+      local: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/kodex/mirror/kaniko-executor:{{ index .Versions "kaniko-executor" }}'
+    crane:
+      type: external
+      from: 'gcr.io/go-containerregistry/crane:{{ index .Versions "crane" }}'
+      local: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/kodex/mirror/crane:{{ index .Versions "crane" }}'
+    busybox:
+      type: external
+      from: 'busybox:{{ index .Versions "busybox" }}'
+      local: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/kodex/mirror/busybox:{{ index .Versions "busybox" }}'
     access-manager:
       type: build
       repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_ACCESS_MANAGER_INTERNAL_IMAGE_REPOSITORY" "kodex/access-manager" }}'
@@ -760,6 +785,23 @@ spec:
           readyz: /health/readyz
           metrics: /metrics
   deployManifests:
+    - name: bootstrap-foundation
+      path: deploy/base/bootstrap-foundation/kustomization.yaml.tpl
+      renderMode: kustomize
+      purpose: internal-registry-foundation
+      includes:
+        - deploy/base/bootstrap-foundation/registry.yaml.tpl
+    - name: bootstrap-builder-smoke
+      path: deploy/base/bootstrap-builder-smoke/kustomization.yaml.tpl
+      renderMode: kustomize
+      purpose: registry-mirror-and-kaniko-smoke
+      requires:
+        - bootstrap-foundation
+      includes:
+        - deploy/base/bootstrap-builder-smoke/registry-mirror-smoke.yaml.tpl
+        - deploy/base/bootstrap-builder-smoke/kaniko-smoke.yaml.tpl
+        - deploy/base/bootstrap-builder-smoke/kaniko-smoke.Dockerfile
+        - deploy/base/bootstrap-builder-smoke/kaniko-smoke.marker
     - name: postgres-stack
       path: deploy/base/postgres/kustomization.yaml.tpl
       renderMode: kustomize
