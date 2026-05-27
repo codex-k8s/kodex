@@ -27,6 +27,14 @@ service ProviderHubService {
   rpc ListComments(ListCommentsRequest) returns (ListCommentsResponse);
   // ListRelationships returns normalized provider-native relationships.
   rpc ListRelationships(ListRelationshipsRequest) returns (ListRelationshipsResponse);
+  // GetRepositoryMergeSignal returns one safe provider-owned bootstrap/adoption merge signal.
+  rpc GetRepositoryMergeSignal(GetRepositoryMergeSignalRequest) returns (RepositoryMergeSignalResponse);
+  // ListRepositoryMergeSignals returns safe provider-owned merge signals by repository/project context.
+  rpc ListRepositoryMergeSignals(ListRepositoryMergeSignalsRequest) returns (ListRepositoryMergeSignalsResponse);
+  // GetRepositoryAdoptionScanSnapshot returns one safe provider-side adoption scan snapshot.
+  rpc GetRepositoryAdoptionScanSnapshot(GetRepositoryAdoptionScanSnapshotRequest) returns (RepositoryAdoptionScanSnapshotResponse);
+  // ListRepositoryAdoptionScanSnapshots returns safe provider-side adoption scan snapshots by repository context.
+  rpc ListRepositoryAdoptionScanSnapshots(ListRepositoryAdoptionScanSnapshotsRequest) returns (ListRepositoryAdoptionScanSnapshotsResponse);
 
   // RegisterProviderArtifactSignal accepts an accelerating signal from an agent or manager.
   rpc RegisterProviderArtifactSignal(RegisterProviderArtifactSignalRequest) returns (ProviderArtifactSignalResponse);
@@ -364,6 +372,28 @@ enum RepositoryAdoptionScanStatus {
   REPOSITORY_ADOPTION_SCAN_STATUS_COMPLETED = 1;
   REPOSITORY_ADOPTION_SCAN_STATUS_LIMITED = 2;
   REPOSITORY_ADOPTION_SCAN_STATUS_NEEDS_REVIEW = 3;
+}
+
+// ProviderOwnedDataStatus describes readiness of a provider-owned read result.
+enum ProviderOwnedDataStatus {
+  PROVIDER_OWNED_DATA_STATUS_UNSPECIFIED = 0;
+  PROVIDER_OWNED_DATA_STATUS_READY = 1;
+  PROVIDER_OWNED_DATA_STATUS_NOT_FOUND = 2;
+  PROVIDER_OWNED_DATA_STATUS_NOT_VERIFIED = 3;
+  PROVIDER_OWNED_DATA_STATUS_STALE = 4;
+}
+
+// RepositoryMergeSignalKind classifies provider-side onboarding merge signals.
+enum RepositoryMergeSignalKind {
+  REPOSITORY_MERGE_SIGNAL_KIND_UNSPECIFIED = 0;
+  REPOSITORY_MERGE_SIGNAL_KIND_BOOTSTRAP = 1;
+  REPOSITORY_MERGE_SIGNAL_KIND_ADOPTION = 2;
+}
+
+// RepositoryMergeSignalStatus describes the provider-side merge signal lifecycle.
+enum RepositoryMergeSignalStatus {
+  REPOSITORY_MERGE_SIGNAL_STATUS_UNSPECIFIED = 0;
+  REPOSITORY_MERGE_SIGNAL_STATUS_MERGED = 1;
 }
 
 // RepositoryAdoptionMarkerKind classifies safe file markers discovered without reading raw content.
@@ -1285,6 +1315,174 @@ message RepositoryAdoptionScanSnapshot {
   string snapshot_digest = 19;
   // observed_at is the scan observation time in RFC3339 format.
   string observed_at = 20;
+  // version is the provider-hub snapshot projection version.
+  int64 version = 21;
+  // etag is a stable safe read token based on provider-owned refs/digests/version.
+  string etag = 22;
+  // created_at is the provider-hub snapshot creation time in RFC3339 format.
+  string created_at = 23;
+  // updated_at is the provider-hub snapshot update time in RFC3339 format.
+  string updated_at = 24;
+}
+
+// RepositoryMergeSignal is a safe provider-owned fact that an onboarding PR/MR was merged.
+message RepositoryMergeSignal {
+  // signal_id is the provider-hub persisted signal id.
+  string signal_id = 1;
+  // signal_key is the provider-hub idempotency key for this merge signal.
+  string signal_key = 2;
+  // kind classifies bootstrap or adoption merge.
+  RepositoryMergeSignalKind kind = 3;
+  // provider_slug identifies the provider adapter.
+  string provider_slug = 4;
+  // project_id links the project-catalog project context known from the provider relationship.
+  string project_id = 5;
+  // repository_id links the project-catalog repository context known from the provider relationship.
+  string repository_id = 6;
+  // repository_full_name is the safe provider owner/name.
+  string repository_full_name = 7;
+  // provider_repository_id is the provider-native repository id when known.
+  string provider_repository_id = 8;
+  // work_item_projection_id is the safe provider-hub PR/MR projection id.
+  string work_item_projection_id = 9;
+  // provider_work_item_id is the provider-hub provider-native work item id.
+  string provider_work_item_id = 10;
+  // pull_request_number is the provider PR/MR number.
+  int64 pull_request_number = 11;
+  // pull_request_provider_id is the provider-native PR/MR object id.
+  string pull_request_provider_id = 12;
+  // pull_request_url is the safe provider PR/MR URL.
+  string pull_request_url = 13;
+  // base_branch is the provider target branch that received the merge.
+  string base_branch = 14;
+  // head_branch is the provider source branch observed on the PR/MR.
+  string head_branch = 15;
+  // merge_commit_sha is the provider merge commit sha.
+  string merge_commit_sha = 16;
+  // source_ref is the provider source ref bound to the onboarding operation.
+  string source_ref = 17;
+  // related_provider_operation_ref links the provider operation that created the onboarding PR/MR.
+  string related_provider_operation_ref = 18;
+  // watermark_digest is the safe digest of the parsed platform watermark.
+  string watermark_digest = 19;
+  // observed_at is the provider observation time in RFC3339 format.
+  string observed_at = 20;
+  // merged_at is the provider merge time in RFC3339 format.
+  string merged_at = 21;
+  // status is the provider-side merge signal status.
+  RepositoryMergeSignalStatus status = 22;
+  // version is the provider-hub signal projection version.
+  int64 version = 23;
+  // etag is a stable safe read token based on provider-owned refs/digests/version.
+  string etag = 24;
+  // created_at is the provider-hub signal creation time in RFC3339 format.
+  string created_at = 25;
+  // updated_at is the provider-hub signal update time in RFC3339 format.
+  string updated_at = 26;
+}
+
+// GetRepositoryMergeSignalRequest reads one safe merge signal by stable provider-hub identity.
+message GetRepositoryMergeSignalRequest {
+  // signal_id optionally selects a provider-hub merge signal id.
+  optional string signal_id = 1;
+  // signal_key optionally selects a provider-hub merge signal idempotency key.
+  optional string signal_key = 2;
+  // meta carries read actor and request context.
+  QueryMeta meta = 3;
+}
+
+// RepositoryMergeSignalResponse returns a safe merge signal or an explicit read status.
+message RepositoryMergeSignalResponse {
+  // read_status describes whether provider-owned data is ready for the caller.
+  ProviderOwnedDataStatus read_status = 1;
+  // merge_signal is present when read_status is READY.
+  RepositoryMergeSignal merge_signal = 2;
+}
+
+// ListRepositoryMergeSignalsRequest lists safe merge signals by repository/project context.
+message ListRepositoryMergeSignalsRequest {
+  // project_id optionally filters by project-catalog project context.
+  optional string project_id = 1;
+  // repository_id optionally filters by project-catalog repository context.
+  optional string repository_id = 2;
+  // provider_slug optionally filters provider.
+  optional string provider_slug = 3;
+  // repository_full_name optionally filters provider owner/name.
+  optional string repository_full_name = 4;
+  // provider_repository_id optionally filters provider-native repository id.
+  optional string provider_repository_id = 5;
+  // kinds optionally filter bootstrap/adoption signal kind.
+  repeated RepositoryMergeSignalKind kinds = 6;
+  // statuses optionally filter provider-side signal status.
+  repeated RepositoryMergeSignalStatus statuses = 7;
+  // pull_request_number optionally filters a provider PR/MR number.
+  optional int64 pull_request_number = 8;
+  // merged_since optionally filters lower merge time in RFC3339 format.
+  optional string merged_since = 9;
+  // page limits response size.
+  PageRequest page = 10;
+  // meta carries read actor and request context.
+  QueryMeta meta = 11;
+}
+
+// ListRepositoryMergeSignalsResponse returns safe merge signals in stable server-defined order.
+message ListRepositoryMergeSignalsResponse {
+  // merge_signals are returned newest first.
+  repeated RepositoryMergeSignal merge_signals = 1;
+  // page describes continuation state.
+  PageResponse page = 2;
+}
+
+// GetRepositoryAdoptionScanSnapshotRequest reads one safe adoption scan snapshot by stable identity.
+message GetRepositoryAdoptionScanSnapshotRequest {
+  // snapshot_id optionally selects a provider-hub snapshot id.
+  optional string snapshot_id = 1;
+  // snapshot_key optionally selects a provider-hub snapshot idempotency key.
+  optional string snapshot_key = 2;
+  // provider_operation_id optionally selects the operation that produced the snapshot.
+  optional string provider_operation_id = 3;
+  // meta carries read actor and request context.
+  QueryMeta meta = 4;
+}
+
+// RepositoryAdoptionScanSnapshotResponse returns a safe scan snapshot or an explicit read status.
+message RepositoryAdoptionScanSnapshotResponse {
+  // read_status describes whether provider-owned data is ready for the caller.
+  ProviderOwnedDataStatus read_status = 1;
+  // adoption_scan_snapshot is present when read_status is READY.
+  RepositoryAdoptionScanSnapshot adoption_scan_snapshot = 2;
+}
+
+// ListRepositoryAdoptionScanSnapshotsRequest lists safe scan snapshots by repository/project context.
+message ListRepositoryAdoptionScanSnapshotsRequest {
+  // project_id optionally filters by project context recorded on the provider operation policy.
+  optional string project_id = 1;
+  // repository_id optionally filters by repository context recorded on the provider operation policy.
+  optional string repository_id = 2;
+  // provider_slug optionally filters provider.
+  optional string provider_slug = 3;
+  // external_account_id optionally filters access-manager external account.
+  optional string external_account_id = 4;
+  // repository_full_name optionally filters provider owner/name.
+  optional string repository_full_name = 5;
+  // provider_repository_id optionally filters provider-native repository id.
+  optional string provider_repository_id = 6;
+  // statuses optionally filter snapshot status.
+  repeated RepositoryAdoptionScanStatus statuses = 7;
+  // observed_since optionally filters lower observation time in RFC3339 format.
+  optional string observed_since = 8;
+  // page limits response size.
+  PageRequest page = 9;
+  // meta carries read actor and request context.
+  QueryMeta meta = 10;
+}
+
+// ListRepositoryAdoptionScanSnapshotsResponse returns safe scan snapshots in stable server-defined order.
+message ListRepositoryAdoptionScanSnapshotsResponse {
+  // adoption_scan_snapshots are returned newest first.
+  repeated RepositoryAdoptionScanSnapshot adoption_scan_snapshots = 1;
+  // page describes continuation state.
+  PageResponse page = 2;
 }
 
 // UpdatePullRequestRequest updates provider-native PR/MR fields.

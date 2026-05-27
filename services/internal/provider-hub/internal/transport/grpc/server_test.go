@@ -148,6 +148,67 @@ func TestScanRepositoryForAdoptionMapsRequestAndResponse(t *testing.T) {
 	}
 }
 
+func TestGetRepositoryMergeSignalMapsSafeReadResponse(t *testing.T) {
+	t.Parallel()
+
+	signalKey := "provider:github:repository_merge:bootstrap:github:codex-k8s/kodex:pull_request:88"
+	response, err := NewServer(fakeService{}).GetRepositoryMergeSignal(context.Background(), &providersv1.GetRepositoryMergeSignalRequest{
+		SignalKey: &signalKey,
+		Meta:      &providersv1.QueryMeta{RequestId: "req-read-1"},
+	})
+	if err != nil {
+		t.Fatalf("GetRepositoryMergeSignal(): %v", err)
+	}
+	signal := response.GetMergeSignal()
+	if response.GetReadStatus() != providersv1.ProviderOwnedDataStatus_PROVIDER_OWNED_DATA_STATUS_READY ||
+		signal.GetSignalKey() != signalKey ||
+		signal.GetKind() != providersv1.RepositoryMergeSignalKind_REPOSITORY_MERGE_SIGNAL_KIND_BOOTSTRAP ||
+		signal.GetMergeCommitSha() != "abc123" ||
+		signal.GetWatermarkDigest() != "watermark-digest" ||
+		signal.GetVersion() != 2 ||
+		signal.GetEtag() == "" {
+		t.Fatalf("response = %+v, want ready safe merge signal", response)
+	}
+}
+
+func TestGetRepositoryMergeSignalMapsNotFoundStatus(t *testing.T) {
+	t.Parallel()
+
+	signalKey := "missing"
+	response, err := NewServer(fakeService{}).GetRepositoryMergeSignal(context.Background(), &providersv1.GetRepositoryMergeSignalRequest{
+		SignalKey: &signalKey,
+		Meta:      &providersv1.QueryMeta{RequestId: "req-read-2"},
+	})
+	if err != nil {
+		t.Fatalf("GetRepositoryMergeSignal(): %v", err)
+	}
+	if response.GetReadStatus() != providersv1.ProviderOwnedDataStatus_PROVIDER_OWNED_DATA_STATUS_NOT_FOUND || response.GetMergeSignal() != nil {
+		t.Fatalf("response = %+v, want not found without merge signal", response)
+	}
+}
+
+func TestGetRepositoryAdoptionScanSnapshotMapsSafeReadResponse(t *testing.T) {
+	t.Parallel()
+
+	snapshotKey := "provider:github:repository_adoption_scan:codex-k8s/kodex:main"
+	response, err := NewServer(fakeService{}).GetRepositoryAdoptionScanSnapshot(context.Background(), &providersv1.GetRepositoryAdoptionScanSnapshotRequest{
+		SnapshotKey: &snapshotKey,
+		Meta:        &providersv1.QueryMeta{RequestId: "req-read-3"},
+	})
+	if err != nil {
+		t.Fatalf("GetRepositoryAdoptionScanSnapshot(): %v", err)
+	}
+	snapshot := response.GetAdoptionScanSnapshot()
+	if response.GetReadStatus() != providersv1.ProviderOwnedDataStatus_PROVIDER_OWNED_DATA_STATUS_READY ||
+		snapshot.GetSnapshotDigest() != "safe-digest" ||
+		snapshot.GetHeadSha() != "abc123" ||
+		snapshot.GetVersion() != 2 ||
+		snapshot.GetEtag() == "" ||
+		len(snapshot.GetMarkers()) != 1 {
+		t.Fatalf("response = %+v, want ready safe adoption scan snapshot", response)
+	}
+}
+
 func TestCreateRepositoryMapsRequestAndResponse(t *testing.T) {
 	t.Parallel()
 
@@ -420,6 +481,98 @@ func (fakeService) ListRelationships(context.Context, providerservice.ListRelati
 		}},
 		Page: query.PageResult{},
 	}, nil
+}
+
+func (fakeService) GetRepositoryMergeSignal(_ context.Context, input providerservice.GetRepositoryMergeSignalInput) (providerservice.RepositoryMergeSignalResult, error) {
+	if input.SignalKey == "missing" {
+		return providerservice.RepositoryMergeSignalResult{Status: enum.ProviderOwnedDataStatusNotFound}, nil
+	}
+	signal := fakeRepositoryMergeSignal(input.SignalKey)
+	return providerservice.RepositoryMergeSignalResult{Status: enum.ProviderOwnedDataStatusReady, MergeSignal: &signal}, nil
+}
+
+func (fakeService) ListRepositoryMergeSignals(context.Context, providerservice.ListRepositoryMergeSignalsInput) (providerservice.ListRepositoryMergeSignalsResult, error) {
+	return providerservice.ListRepositoryMergeSignalsResult{
+		MergeSignals: []entity.RepositoryMergeSignal{fakeRepositoryMergeSignal("provider:github:repository_merge:bootstrap:github:codex-k8s/kodex:pull_request:88")},
+		Page:         query.PageResult{},
+	}, nil
+}
+
+func (fakeService) GetRepositoryAdoptionScanSnapshot(_ context.Context, input providerservice.GetRepositoryAdoptionScanSnapshotInput) (providerservice.RepositoryAdoptionScanSnapshotResult, error) {
+	if input.SnapshotKey == "missing" {
+		return providerservice.RepositoryAdoptionScanSnapshotResult{Status: enum.ProviderOwnedDataStatusNotFound}, nil
+	}
+	snapshot := fakeRepositoryAdoptionScanSnapshot(input.SnapshotKey)
+	return providerservice.RepositoryAdoptionScanSnapshotResult{Status: enum.ProviderOwnedDataStatusReady, Snapshot: &snapshot}, nil
+}
+
+func (fakeService) ListRepositoryAdoptionScanSnapshots(context.Context, providerservice.ListRepositoryAdoptionScanSnapshotsInput) (providerservice.ListRepositoryAdoptionScanSnapshotsResult, error) {
+	return providerservice.ListRepositoryAdoptionScanSnapshotsResult{
+		Snapshots: []entity.RepositoryAdoptionScanSnapshot{fakeRepositoryAdoptionScanSnapshot("provider:github:repository_adoption_scan:codex-k8s/kodex:main")},
+		Page:      query.PageResult{},
+	}, nil
+}
+
+func fakeRepositoryMergeSignal(signalKey string) entity.RepositoryMergeSignal {
+	now := time.Date(2026, 5, 27, 10, 0, 0, 0, time.UTC)
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	return entity.RepositoryMergeSignal{
+		Base: entity.Base{
+			ID:        uuid.New(),
+			Version:   2,
+			CreatedAt: now.Add(-time.Minute),
+			UpdatedAt: now,
+		},
+		SignalKey:                   signalKey,
+		Kind:                        enum.RepositoryMergeSignalKindBootstrap,
+		ProviderSlug:                enum.ProviderSlugGitHub,
+		ProjectID:                   &projectID,
+		RepositoryID:                &repositoryID,
+		RepositoryFullName:          "codex-k8s/kodex",
+		ProviderRepositoryID:        "101",
+		WorkItemProjectionID:        uuid.New(),
+		ProviderWorkItemID:          "github:codex-k8s/kodex:pull_request:88",
+		PullRequestNumber:           88,
+		PullRequestProviderID:       "8801",
+		PullRequestURL:              "https://github.com/codex-k8s/kodex/pull/88",
+		BaseBranch:                  "main",
+		HeadBranch:                  "kodex/bootstrap",
+		MergeCommitSHA:              "abc123",
+		SourceRef:                   "kodex/bootstrap",
+		RelatedProviderOperationRef: "provider-hub:create_bootstrap_pull_request:github:codex-k8s/kodex:pull_request:88",
+		WatermarkDigest:             "watermark-digest",
+		ObservedAt:                  now,
+		MergedAt:                    now.Add(-time.Minute),
+		Status:                      enum.RepositoryMergeSignalStatusMerged,
+	}
+}
+
+func fakeRepositoryAdoptionScanSnapshot(snapshotKey string) entity.RepositoryAdoptionScanSnapshot {
+	now := time.Date(2026, 5, 27, 10, 0, 0, 0, time.UTC)
+	return entity.RepositoryAdoptionScanSnapshot{
+		Base:                entity.Base{ID: uuid.New(), Version: 2, CreatedAt: now.Add(-time.Minute), UpdatedAt: now},
+		SnapshotKey:         snapshotKey,
+		ProviderOperationID: uuid.New(),
+		ExternalAccountID:   uuid.New(),
+		ProviderSlug:        enum.ProviderSlugGitHub,
+		RepositoryFullName:  "codex-k8s/kodex",
+		DefaultBranch:       "main",
+		RequestedRef:        "main",
+		ScannedRef:          "main",
+		HeadSHA:             "abc123",
+		Status:              enum.RepositoryAdoptionScanStatusCompleted,
+		Markers: []entity.RepositoryAdoptionScanMarker{{
+			Path:         "services.yaml",
+			Kind:         enum.RepositoryAdoptionMarkerServiceDescriptor,
+			ObjectDigest: "blob-sha",
+			SizeBytes:    42,
+		}},
+		FileCount:        8,
+		VisibleFileCount: 8,
+		SnapshotDigest:   "safe-digest",
+		ObservedAt:       now,
+	}
 }
 
 func (fakeService) RegisterProviderArtifactSignal(_ context.Context, input providerservice.RegisterProviderArtifactSignalInput) (providerservice.ProviderArtifactSignalResult, error) {

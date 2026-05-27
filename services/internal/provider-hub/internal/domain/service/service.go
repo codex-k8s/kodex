@@ -325,6 +325,123 @@ func (s *Service) ListRelationships(ctx context.Context, input ListRelationships
 	return ListRelationshipsResult{Relationships: relationships, Page: page}, nil
 }
 
+// GetRepositoryMergeSignal returns one safe provider-owned merge signal by stable identity.
+func (s *Service) GetRepositoryMergeSignal(ctx context.Context, input GetRepositoryMergeSignalInput) (RepositoryMergeSignalResult, error) {
+	if input.SignalID != nil && *input.SignalID == uuid.Nil {
+		return RepositoryMergeSignalResult{}, errs.ErrInvalidArgument
+	}
+	signalKey := strings.TrimSpace(input.SignalKey)
+	if input.SignalID == nil && signalKey == "" {
+		return RepositoryMergeSignalResult{}, errs.ErrInvalidArgument
+	}
+	signal, err := s.repository.GetRepositoryMergeSignal(ctx, query.RepositoryMergeSignalLookup{
+		ID:        input.SignalID,
+		SignalKey: signalKey,
+	})
+	if errors.Is(err, errs.ErrNotFound) {
+		return RepositoryMergeSignalResult{Status: enum.ProviderOwnedDataStatusNotFound}, nil
+	}
+	if err != nil {
+		return RepositoryMergeSignalResult{}, err
+	}
+	return RepositoryMergeSignalResult{Status: enum.ProviderOwnedDataStatusReady, MergeSignal: &signal}, nil
+}
+
+// ListRepositoryMergeSignals returns safe provider-owned merge signals by repository/project context.
+func (s *Service) ListRepositoryMergeSignals(ctx context.Context, input ListRepositoryMergeSignalsInput) (ListRepositoryMergeSignalsResult, error) {
+	if input.ProjectID != nil && *input.ProjectID == uuid.Nil {
+		return ListRepositoryMergeSignalsResult{}, errs.ErrInvalidArgument
+	}
+	if input.RepositoryID != nil && *input.RepositoryID == uuid.Nil {
+		return ListRepositoryMergeSignalsResult{}, errs.ErrInvalidArgument
+	}
+	if input.ProviderSlug != "" && !validProviderSlug(input.ProviderSlug) {
+		return ListRepositoryMergeSignalsResult{}, errs.ErrInvalidArgument
+	}
+	if !validRepositoryMergeSignalKinds(input.Kinds) || !validRepositoryMergeSignalStatuses(input.Statuses) {
+		return ListRepositoryMergeSignalsResult{}, errs.ErrInvalidArgument
+	}
+	if input.PullRequestNumber != nil && *input.PullRequestNumber <= 0 {
+		return ListRepositoryMergeSignalsResult{}, errs.ErrInvalidArgument
+	}
+	signals, page, err := s.repository.ListRepositoryMergeSignals(ctx, query.RepositoryMergeSignalFilter{
+		ProjectID:            input.ProjectID,
+		RepositoryID:         input.RepositoryID,
+		ProviderSlug:         input.ProviderSlug,
+		RepositoryFullName:   strings.TrimSpace(input.RepositoryFullName),
+		ProviderRepositoryID: strings.TrimSpace(input.ProviderRepositoryID),
+		Kinds:                input.Kinds,
+		Statuses:             input.Statuses,
+		PullRequestNumber:    input.PullRequestNumber,
+		MergedSince:          input.MergedSince,
+		Page:                 input.Page,
+	})
+	if err != nil {
+		return ListRepositoryMergeSignalsResult{}, err
+	}
+	return ListRepositoryMergeSignalsResult{MergeSignals: signals, Page: page}, nil
+}
+
+// GetRepositoryAdoptionScanSnapshot returns one safe provider-owned adoption scan snapshot.
+func (s *Service) GetRepositoryAdoptionScanSnapshot(ctx context.Context, input GetRepositoryAdoptionScanSnapshotInput) (RepositoryAdoptionScanSnapshotResult, error) {
+	if input.SnapshotID != nil && *input.SnapshotID == uuid.Nil {
+		return RepositoryAdoptionScanSnapshotResult{}, errs.ErrInvalidArgument
+	}
+	if input.ProviderOperationID != nil && *input.ProviderOperationID == uuid.Nil {
+		return RepositoryAdoptionScanSnapshotResult{}, errs.ErrInvalidArgument
+	}
+	snapshotKey := strings.TrimSpace(input.SnapshotKey)
+	if input.SnapshotID == nil && input.ProviderOperationID == nil && snapshotKey == "" {
+		return RepositoryAdoptionScanSnapshotResult{}, errs.ErrInvalidArgument
+	}
+	snapshot, err := s.repository.GetRepositoryAdoptionScan(ctx, query.RepositoryAdoptionScanLookup{
+		ID:                  input.SnapshotID,
+		SnapshotKey:         snapshotKey,
+		ProviderOperationID: input.ProviderOperationID,
+	})
+	if errors.Is(err, errs.ErrNotFound) {
+		return RepositoryAdoptionScanSnapshotResult{Status: enum.ProviderOwnedDataStatusNotFound}, nil
+	}
+	if err != nil {
+		return RepositoryAdoptionScanSnapshotResult{}, err
+	}
+	return RepositoryAdoptionScanSnapshotResult{Status: enum.ProviderOwnedDataStatusReady, Snapshot: &snapshot}, nil
+}
+
+// ListRepositoryAdoptionScanSnapshots returns safe provider-owned adoption scan snapshots by repository/project context.
+func (s *Service) ListRepositoryAdoptionScanSnapshots(ctx context.Context, input ListRepositoryAdoptionScanSnapshotsInput) (ListRepositoryAdoptionScanSnapshotsResult, error) {
+	if input.ProjectID != nil && *input.ProjectID == uuid.Nil {
+		return ListRepositoryAdoptionScanSnapshotsResult{}, errs.ErrInvalidArgument
+	}
+	if input.RepositoryID != nil && *input.RepositoryID == uuid.Nil {
+		return ListRepositoryAdoptionScanSnapshotsResult{}, errs.ErrInvalidArgument
+	}
+	if input.ExternalAccountID != nil && *input.ExternalAccountID == uuid.Nil {
+		return ListRepositoryAdoptionScanSnapshotsResult{}, errs.ErrInvalidArgument
+	}
+	if input.ProviderSlug != "" && !validProviderSlug(input.ProviderSlug) {
+		return ListRepositoryAdoptionScanSnapshotsResult{}, errs.ErrInvalidArgument
+	}
+	if !validRepositoryAdoptionScanStatuses(input.Statuses) {
+		return ListRepositoryAdoptionScanSnapshotsResult{}, errs.ErrInvalidArgument
+	}
+	snapshots, page, err := s.repository.ListRepositoryAdoptionScans(ctx, query.RepositoryAdoptionScanFilter{
+		ProjectID:            input.ProjectID,
+		RepositoryID:         input.RepositoryID,
+		ExternalAccountID:    input.ExternalAccountID,
+		ProviderSlug:         input.ProviderSlug,
+		RepositoryFullName:   strings.TrimSpace(input.RepositoryFullName),
+		ProviderRepositoryID: strings.TrimSpace(input.ProviderRepositoryID),
+		Statuses:             input.Statuses,
+		ObservedSince:        input.ObservedSince,
+		Page:                 input.Page,
+	})
+	if err != nil {
+		return ListRepositoryAdoptionScanSnapshotsResult{}, err
+	}
+	return ListRepositoryAdoptionScanSnapshotsResult{Snapshots: snapshots, Page: page}, nil
+}
+
 // EnqueueReconciliation creates or updates sync cursors for one reconciliation scope.
 func (s *Service) EnqueueReconciliation(ctx context.Context, input EnqueueReconciliationInput) (EnqueueReconciliationResult, error) {
 	idempotencyKey := strings.TrimSpace(input.Meta.IdempotencyKey)

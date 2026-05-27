@@ -79,6 +79,10 @@ func RepositoryAdoptionScanSnapshotToProto(snapshot entity.RepositoryAdoptionSca
 		Warnings:             append([]string(nil), snapshot.Warnings...),
 		SnapshotDigest:       snapshot.SnapshotDigest,
 		ObservedAt:           snapshot.ObservedAt.Format(time.RFC3339Nano),
+		Version:              snapshot.Version,
+		Etag:                 repositoryAdoptionScanETag(snapshot),
+		CreatedAt:            formatTime(snapshot.CreatedAt),
+		UpdatedAt:            formatTime(snapshot.UpdatedAt),
 	}
 }
 

@@ -381,6 +381,26 @@ func (r *Repository) GetProviderOperationByCommand(ctx context.Context, operatio
 	}, scanProviderOperation)
 }
 
+// GetRepositoryMergeSignal returns one safe provider-owned merge signal.
+func (r *Repository) GetRepositoryMergeSignal(ctx context.Context, lookup query.RepositoryMergeSignalLookup) (entity.RepositoryMergeSignal, error) {
+	return queryOne(ctx, r.db, operationGetRepositoryMergeSignal, queryRepositoryMergeSignalGet, repositoryMergeSignalLookupArgs(lookup), scanRepositoryMergeSignal)
+}
+
+// ListRepositoryMergeSignals returns safe provider-owned merge signals by supported filters.
+func (r *Repository) ListRepositoryMergeSignals(ctx context.Context, filter query.RepositoryMergeSignalFilter) ([]entity.RepositoryMergeSignal, query.PageResult, error) {
+	return queryPage(ctx, r.db, operationListRepositoryMergeSignals, queryRepositoryMergeSignalList, repositoryMergeSignalFilterArgs(filter), scanRepositoryMergeSignal)
+}
+
+// GetRepositoryAdoptionScan returns one safe provider-owned adoption scan snapshot.
+func (r *Repository) GetRepositoryAdoptionScan(ctx context.Context, lookup query.RepositoryAdoptionScanLookup) (entity.RepositoryAdoptionScanSnapshot, error) {
+	return queryOne(ctx, r.db, operationGetRepositoryAdoptionScan, queryRepositoryAdoptionScanGet, repositoryAdoptionScanLookupArgs(lookup), scanRepositoryAdoptionScan)
+}
+
+// ListRepositoryAdoptionScans returns safe provider-owned adoption scan snapshots by supported filters.
+func (r *Repository) ListRepositoryAdoptionScans(ctx context.Context, filter query.RepositoryAdoptionScanFilter) ([]entity.RepositoryAdoptionScanSnapshot, query.PageResult, error) {
+	return queryPage(ctx, r.db, operationListRepositoryAdoptionScans, queryRepositoryAdoptionScanList, repositoryAdoptionScanFilterArgs(filter), scanRepositoryAdoptionScan)
+}
+
 // GetRepositoryAdoptionScanByOperation returns the safe adoption scan snapshot produced by one operation.
 func (r *Repository) GetRepositoryAdoptionScanByOperation(ctx context.Context, providerOperationID uuid.UUID) (entity.RepositoryAdoptionScanSnapshot, error) {
 	return queryOne(ctx, r.db, operationGetRepositoryAdoptionScanByOperation, queryRepositoryAdoptionScanGetByOperation, repositoryAdoptionScanOperationArgs(providerOperationID), scanRepositoryAdoptionScan)
@@ -443,6 +463,10 @@ const (
 	operationApplyProviderOperation               = "domain.Repository.ApplyProviderOperation"
 	operationListProviderOperations               = "domain.Repository.ListProviderOperations"
 	operationGetProviderOperationByCommand        = "domain.Repository.GetProviderOperationByCommand"
+	operationGetRepositoryMergeSignal             = "domain.Repository.GetRepositoryMergeSignal"
+	operationListRepositoryMergeSignals           = "domain.Repository.ListRepositoryMergeSignals"
+	operationGetRepositoryAdoptionScan            = "domain.Repository.GetRepositoryAdoptionScan"
+	operationListRepositoryAdoptionScans          = "domain.Repository.ListRepositoryAdoptionScans"
 	operationGetRepositoryAdoptionScanByOperation = "domain.Repository.GetRepositoryAdoptionScanByOperation"
 	operationClaimOutboxEvents                    = "domain.Repository.ClaimOutboxEvents"
 	operationMarkOutboxEventPublished             = "domain.Repository.MarkOutboxEventPublished"
