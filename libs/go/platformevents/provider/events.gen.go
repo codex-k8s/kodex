@@ -46,6 +46,13 @@ type Payload struct {
 	AdoptionPRRef                    string `json:"adoption_pr_ref,omitempty"`
 	BaseBranch                       string `json:"base_branch,omitempty"`
 	BootstrapMode                    string `json:"bootstrap_mode,omitempty"`
+	CheckedArtifactDigest            string `json:"checked_artifact_digest,omitempty"`
+	CheckedArtifactRef               string `json:"checked_artifact_ref,omitempty"`
+	CheckedArtifactVersion           string `json:"checked_artifact_version,omitempty"`
+	CheckedContentHash               string `json:"checked_content_hash,omitempty"`
+	CheckedSourcePath                string `json:"checked_source_path,omitempty"`
+	CheckedValidatedPayloadJSON      string `json:"checked_validated_payload_json,omitempty"`
+	CheckedWatermarkJSON             string `json:"checked_watermark_json,omitempty"`
 	CommentProjectionID              string `json:"comment_projection_id,omitempty"`
 	DefaultBranch                    string `json:"default_branch,omitempty"`
 	DeliveryID                       string `json:"delivery_id,omitempty"`

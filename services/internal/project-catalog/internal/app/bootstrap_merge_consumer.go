@@ -22,15 +22,16 @@ import (
 
 const bootstrapMergeMissingCheckedArtifactCode = "missing_checked_artifact"
 
-type bootstrapMergeDiagnosticRecorder interface {
+type bootstrapMergeReconciler interface {
 	RecordBootstrapMergeSignalDiagnostic(context.Context, projectservice.BootstrapMergeSignalDiagnosticInput) error
+	ReconcileBootstrapMergeSignal(context.Context, projectservice.ReconcileBootstrapMergeSignalInput) (projectservice.BootstrapServicesPolicyImportResult, error)
 }
 
 func startProviderBootstrapMergeConsumer(
 	ctx context.Context,
 	cfg Config,
 	eventLogPool *pgxpool.Pool,
-	recorder bootstrapMergeDiagnosticRecorder,
+	reconciler bootstrapMergeReconciler,
 	logger *slog.Logger,
 	errCh chan<- error,
 ) error {
@@ -40,8 +41,8 @@ func startProviderBootstrapMergeConsumer(
 	if logger == nil {
 		logger = slog.Default()
 	}
-	if recorder == nil {
-		return fmt.Errorf("project-catalog bootstrap merge consumer requires project service recorder")
+	if reconciler == nil {
+		return fmt.Errorf("project-catalog bootstrap merge consumer requires project service reconciler")
 	}
 	if eventLogPool == nil {
 		return fmt.Errorf("project-catalog bootstrap merge consumer requires platform event-log database")
@@ -49,7 +50,7 @@ func startProviderBootstrapMergeConsumer(
 	registry, err := eventconsumer.NewRegistry(eventconsumer.Registration{
 		EventType:     providerevents.EventRepositoryBootstrapMerged,
 		SchemaVersion: providerevents.SchemaVersion,
-		Handler:       bootstrapMergeEventHandler{recorder: recorder},
+		Handler:       bootstrapMergeEventHandler{reconciler: reconciler},
 	})
 	if err != nil {
 		return err
@@ -68,7 +69,7 @@ func startProviderBootstrapMergeConsumer(
 }
 
 type bootstrapMergeEventHandler struct {
-	recorder bootstrapMergeDiagnosticRecorder
+	reconciler bootstrapMergeReconciler
 }
 
 func (h bootstrapMergeEventHandler) HandleEvent(ctx context.Context, event eventconsumer.Event) eventconsumer.Result {
@@ -91,37 +92,72 @@ func (h bootstrapMergeEventHandler) HandleEvent(ctx context.Context, event event
 	if strings.TrimSpace(payload.SignalKind) != "bootstrap" {
 		return eventconsumer.Poison("invalid_signal_kind", "bootstrap merge event signal_kind is not bootstrap")
 	}
-	input := projectservice.BootstrapMergeSignalDiagnosticInput{
-		ProjectID:    projectID,
-		RepositoryID: repositoryID,
-		MergeSignal: projectservice.BootstrapRepositoryMergeSignal{
-			SignalID:   strings.TrimSpace(payload.RepositoryMergeSignalID),
-			SignalKey:  strings.TrimSpace(payload.SignalKey),
-			SignalKind: strings.TrimSpace(payload.SignalKind),
-			ProviderTarget: projectservice.RepositoryBootstrapProviderTarget{
-				ProviderSlug:         strings.TrimSpace(payload.ProviderSlug),
-				RepositoryFullName:   strings.TrimSpace(payload.RepositoryFullName),
-				ProviderRepositoryID: strings.TrimSpace(payload.ProviderRepositoryID),
+	mergeSignal := bootstrapMergeSignalFromPayload(payload)
+	if bootstrapMergePayloadHasCheckedPolicy(payload) {
+		_, err := h.reconciler.ReconcileBootstrapMergeSignal(ctx, projectservice.ReconcileBootstrapMergeSignalInput{
+			ProjectID:    projectID,
+			RepositoryID: repositoryID,
+			MergeSignal:  mergeSignal,
+			CheckedPolicy: projectservice.CheckedBootstrapServicesPolicyArtifact{
+				ArtifactRef:      strings.TrimSpace(payload.CheckedArtifactRef),
+				ArtifactDigest:   strings.TrimSpace(payload.CheckedArtifactDigest),
+				ArtifactVersion:  strings.TrimSpace(payload.CheckedArtifactVersion),
+				SourcePath:       strings.TrimSpace(payload.CheckedSourcePath),
+				ContentHash:      strings.TrimSpace(payload.CheckedContentHash),
+				ValidatedPayload: []byte(strings.TrimSpace(payload.CheckedValidatedPayloadJSON)),
 			},
-			BaseBranch:                   strings.TrimSpace(payload.BaseBranch),
-			SourceRef:                    firstNonEmptyString(payload.SourceRef, payload.HeadBranch),
-			MergeCommitSHA:               strings.TrimSpace(payload.MergeCommitSHA),
-			WatermarkDigest:              strings.TrimSpace(payload.WatermarkDigest),
-			ProviderWorkItemProjectionID: strings.TrimSpace(payload.WorkItemProjectionID),
-			ProviderWebURL:               strings.TrimSpace(payload.PullRequestURL),
-			ProviderObjectID:             strings.TrimSpace(payload.PullRequestProviderID),
-			MergeObservedAt:              strings.TrimSpace(payload.ObservedAt),
-			MergedAt:                     strings.TrimSpace(payload.MergedAt),
-		},
+		})
+		if err != nil {
+			return bootstrapMergeConsumerError(err)
+		}
+		return eventconsumer.Ack()
+	}
+	input := projectservice.BootstrapMergeSignalDiagnosticInput{
+		ProjectID:         projectID,
+		RepositoryID:      repositoryID,
+		MergeSignal:       mergeSignal,
 		SignalFingerprint: bootstrapMergeEventFingerprint(storedEvent, payload),
 		ErrorCode:         bootstrapMergeMissingCheckedArtifactCode,
 		ErrorSummary:      "provider bootstrap merge event does not include checked services policy artifact input",
 		Summary:           "provider bootstrap merge signal received",
 	}
-	if err := h.recorder.RecordBootstrapMergeSignalDiagnostic(ctx, input); err != nil {
+	if err := h.reconciler.RecordBootstrapMergeSignalDiagnostic(ctx, input); err != nil {
 		return bootstrapMergeConsumerError(err)
 	}
 	return eventconsumer.Ack()
+}
+
+func bootstrapMergeSignalFromPayload(payload providerevents.Payload) projectservice.BootstrapRepositoryMergeSignal {
+	return projectservice.BootstrapRepositoryMergeSignal{
+		SignalID:   strings.TrimSpace(payload.RepositoryMergeSignalID),
+		SignalKey:  strings.TrimSpace(payload.SignalKey),
+		SignalKind: strings.TrimSpace(payload.SignalKind),
+		ProviderTarget: projectservice.RepositoryBootstrapProviderTarget{
+			ProviderSlug:         strings.TrimSpace(payload.ProviderSlug),
+			RepositoryFullName:   strings.TrimSpace(payload.RepositoryFullName),
+			ProviderRepositoryID: strings.TrimSpace(payload.ProviderRepositoryID),
+		},
+		BaseBranch:                   strings.TrimSpace(payload.BaseBranch),
+		SourceRef:                    firstNonEmptyString(payload.SourceRef, payload.HeadBranch),
+		MergeCommitSHA:               strings.TrimSpace(payload.MergeCommitSHA),
+		WatermarkDigest:              strings.TrimSpace(payload.WatermarkDigest),
+		WatermarkJSON:                []byte(strings.TrimSpace(payload.CheckedWatermarkJSON)),
+		ProviderWorkItemProjectionID: strings.TrimSpace(payload.WorkItemProjectionID),
+		ProviderWebURL:               strings.TrimSpace(payload.PullRequestURL),
+		ProviderObjectID:             strings.TrimSpace(payload.PullRequestProviderID),
+		MergeObservedAt:              strings.TrimSpace(payload.ObservedAt),
+		MergedAt:                     strings.TrimSpace(payload.MergedAt),
+	}
+}
+
+func bootstrapMergePayloadHasCheckedPolicy(payload providerevents.Payload) bool {
+	return strings.TrimSpace(payload.CheckedArtifactRef) != "" ||
+		strings.TrimSpace(payload.CheckedArtifactDigest) != "" ||
+		strings.TrimSpace(payload.CheckedArtifactVersion) != "" ||
+		strings.TrimSpace(payload.CheckedSourcePath) != "" ||
+		strings.TrimSpace(payload.CheckedContentHash) != "" ||
+		strings.TrimSpace(payload.CheckedValidatedPayloadJSON) != "" ||
+		strings.TrimSpace(payload.CheckedWatermarkJSON) != ""
 }
 
 func bootstrapMergeConsumerError(err error) eventconsumer.Result {

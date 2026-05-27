@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -23,7 +25,7 @@ func TestBootstrapMergeEventHandlerRecordsDiagnostic(t *testing.T) {
 	projectID := uuid.New()
 	repositoryID := uuid.New()
 	recorder := &fakeBootstrapMergeRecorder{}
-	handler := bootstrapMergeEventHandler{recorder: recorder}
+	handler := bootstrapMergeEventHandler{reconciler: recorder}
 
 	result := handler.HandleEvent(context.Background(), eventconsumer.Event{StoredEvent: bootstrapMergeStoredEvent(t, bootstrapMergePayload(projectID, repositoryID))})
 	if result.Status != eventconsumer.ResultAck {
@@ -50,7 +52,7 @@ func TestBootstrapMergeEventHandlerRecordsDiagnostic(t *testing.T) {
 func TestBootstrapMergeEventHandlerRejectsUnsafePayload(t *testing.T) {
 	t.Parallel()
 
-	handler := bootstrapMergeEventHandler{recorder: &fakeBootstrapMergeRecorder{}}
+	handler := bootstrapMergeEventHandler{reconciler: &fakeBootstrapMergeRecorder{}}
 	storedEvent := bootstrapMergeStoredEvent(t, providerevents.Payload{})
 	storedEvent.Payload = []byte(`{"project_id":`)
 
@@ -79,12 +81,64 @@ func TestBootstrapMergeEventHandlerMapsDomainErrors(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			handler := bootstrapMergeEventHandler{recorder: &fakeBootstrapMergeRecorder{err: tc.err}}
+			handler := bootstrapMergeEventHandler{reconciler: &fakeBootstrapMergeRecorder{diagnosticErr: tc.err}}
 			result := handler.HandleEvent(context.Background(), eventconsumer.Event{StoredEvent: bootstrapMergeStoredEvent(t, bootstrapMergePayload(projectID, repositoryID))})
 			if result.Status != tc.status || result.Code != tc.code {
 				t.Fatalf("HandleEvent() = %+v, want %s/%s", result, tc.status, tc.code)
 			}
 		})
+	}
+}
+
+func TestBootstrapMergeEventHandlerReconcilesCheckedPolicy(t *testing.T) {
+	t.Parallel()
+
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	recorder := &fakeBootstrapMergeRecorder{}
+	handler := bootstrapMergeEventHandler{reconciler: recorder}
+	payload := bootstrapMergePayload(projectID, repositoryID)
+	payloadWithCheckedPolicy(&payload)
+
+	result := handler.HandleEvent(context.Background(), eventconsumer.Event{StoredEvent: bootstrapMergeStoredEvent(t, payload)})
+	if result.Status != eventconsumer.ResultAck {
+		t.Fatalf("HandleEvent() status = %s, want ack: %+v", result.Status, result)
+	}
+	if len(recorder.reconcileInputs) != 1 {
+		t.Fatalf("reconcile inputs = %d, want 1", len(recorder.reconcileInputs))
+	}
+	if len(recorder.inputs) != 0 {
+		t.Fatalf("diagnostic inputs = %d, want 0", len(recorder.inputs))
+	}
+	input := recorder.reconcileInputs[0]
+	if input.ProjectID != projectID || input.RepositoryID != repositoryID {
+		t.Fatalf("ids = %s/%s, want %s/%s", input.ProjectID, input.RepositoryID, projectID, repositoryID)
+	}
+	if input.MergeSignal.WatermarkDigest != bootstrapWatermarkDigest() || string(input.MergeSignal.WatermarkJSON) != bootstrapWatermarkJSON {
+		t.Fatalf("watermark = %s/%s, want checked watermark", input.MergeSignal.WatermarkDigest, input.MergeSignal.WatermarkJSON)
+	}
+	if input.CheckedPolicy.ArtifactRef != "artifact://provider/bootstrap/PR_123/services.yaml" ||
+		input.CheckedPolicy.ArtifactDigest != bootstrapCheckedContentHash() ||
+		input.CheckedPolicy.ArtifactVersion != payload.MergeCommitSHA ||
+		input.CheckedPolicy.SourcePath != "services.yaml" ||
+		input.CheckedPolicy.ContentHash != bootstrapCheckedContentHash() ||
+		string(input.CheckedPolicy.ValidatedPayload) != bootstrapValidatedPayloadJSON {
+		t.Fatalf("checked policy = %+v, want checked artifact input", input.CheckedPolicy)
+	}
+}
+
+func TestBootstrapMergeEventHandlerMapsReconcileErrors(t *testing.T) {
+	t.Parallel()
+
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	payload := bootstrapMergePayload(projectID, repositoryID)
+	payloadWithCheckedPolicy(&payload)
+	handler := bootstrapMergeEventHandler{reconciler: &fakeBootstrapMergeRecorder{reconcileErr: errs.ErrConflict}}
+
+	result := handler.HandleEvent(context.Background(), eventconsumer.Event{StoredEvent: bootstrapMergeStoredEvent(t, payload)})
+	if result.Status != eventconsumer.ResultPoison || result.Code != "conflicting_signal" {
+		t.Fatalf("HandleEvent() = %+v, want conflicting_signal poison", result)
 	}
 }
 
@@ -139,6 +193,33 @@ func bootstrapMergePayload(projectID uuid.UUID, repositoryID uuid.UUID) provider
 	}
 }
 
+const bootstrapValidatedPayloadJSON = `{"spec":{"services":[{"key":"api","rootPath":"services/api","kind":"backend"}]}}`
+const bootstrapWatermarkJSON = `{"kind":"provider_pr","managed_by":"kodex","work_type":"repository_bootstrap","source_ref":"services.yaml"}`
+
+func payloadWithCheckedPolicy(payload *providerevents.Payload) {
+	payload.CheckedArtifactRef = "artifact://provider/bootstrap/PR_123/services.yaml"
+	payload.CheckedArtifactDigest = bootstrapCheckedContentHash()
+	payload.CheckedArtifactVersion = payload.MergeCommitSHA
+	payload.CheckedSourcePath = "services.yaml"
+	payload.CheckedContentHash = bootstrapCheckedContentHash()
+	payload.CheckedValidatedPayloadJSON = bootstrapValidatedPayloadJSON
+	payload.CheckedWatermarkJSON = bootstrapWatermarkJSON
+	payload.WatermarkDigest = bootstrapWatermarkDigest()
+}
+
+func bootstrapCheckedContentHash() string {
+	return sha256Hex([]byte("spec:\n  services:\n    - key: api\n      rootPath: services/api\n      kind: backend\n"))
+}
+
+func bootstrapWatermarkDigest() string {
+	return sha256Hex([]byte(bootstrapWatermarkJSON))
+}
+
+func sha256Hex(payload []byte) string {
+	sum := sha256.Sum256(payload)
+	return "sha256:" + hex.EncodeToString(sum[:])
+}
+
 func bootstrapMergeStoredEvent(t *testing.T, payload providerevents.Payload) eventlog.StoredEvent {
 	t.Helper()
 	payloadBytes, err := json.Marshal(payload)
@@ -162,11 +243,18 @@ func bootstrapMergeStoredEvent(t *testing.T, payload providerevents.Payload) eve
 }
 
 type fakeBootstrapMergeRecorder struct {
-	inputs []projectservice.BootstrapMergeSignalDiagnosticInput
-	err    error
+	inputs          []projectservice.BootstrapMergeSignalDiagnosticInput
+	reconcileInputs []projectservice.ReconcileBootstrapMergeSignalInput
+	diagnosticErr   error
+	reconcileErr    error
 }
 
 func (r *fakeBootstrapMergeRecorder) RecordBootstrapMergeSignalDiagnostic(_ context.Context, input projectservice.BootstrapMergeSignalDiagnosticInput) error {
 	r.inputs = append(r.inputs, input)
-	return r.err
+	return r.diagnosticErr
+}
+
+func (r *fakeBootstrapMergeRecorder) ReconcileBootstrapMergeSignal(_ context.Context, input projectservice.ReconcileBootstrapMergeSignalInput) (projectservice.BootstrapServicesPolicyImportResult, error) {
+	r.reconcileInputs = append(r.reconcileInputs, input)
+	return projectservice.BootstrapServicesPolicyImportResult{}, r.reconcileErr
 }
