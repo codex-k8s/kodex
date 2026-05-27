@@ -210,7 +210,7 @@ approvals:
 | `status` | enum | нет | `draft`, `ready`, `decision_requested`, `closed`. |
 | `created_at`, `updated_at` | timestamptz | нет | Технические временные метки. |
 
-`integration_refs` связывают release package с project/repository/release line refs, provider Issue/PR/check/review refs, agent run/acceptance refs, runtime job/deploy refs, local risk assessment refs и gate refs. `governance-manager` валидирует локальные governance refs, но не читает соседние сервисы напрямую и не становится владельцем provider, project, run, deploy или interaction state.
+`integration_refs` связывают release package с project/repository/release line refs, provider Issue/PR/check/review refs, agent run/acceptance refs, runtime job/deploy refs, local risk assessment refs и gate refs. `governance-manager` валидирует локальные governance refs, но не читает соседние сервисы напрямую и не становится владельцем provider, project, run, deploy или interaction state. Для audit snapshot refs нормализуются в canonical order по `domain/kind/ref`; полностью одинаковые дубли схлопываются, а дубли с разными `status`, `summary`, `digest`, `observed_at` или `version` отклоняются как конфликтующие факты.
 
 ### ReleaseDecision
 

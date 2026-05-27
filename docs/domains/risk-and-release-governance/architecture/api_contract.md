@@ -152,7 +152,7 @@ MCP-инструменты не должны принимать свободны
 | Storage, migrations и outbox publisher | MVP-основа готова: PostgreSQL repository, service-local outbox и handlers для поддержанных storage-операций. |
 | Risk classifier и policy evaluator | Готовы для локальных risk profiles/rules, safe summaries/refs, идемпотентного replay, optimistic concurrency и safe outbox events. |
 | Release decision lifecycle и safety-loop | Готовы для release package build/read/list, decision request/submit/read/list, blocking signals и текущего safety-loop state на safe refs/summaries. |
-| Release integration refs | Поддержаны для release decision package: safe domain/kind/ref/status/summary/digest/timestamp/version, локальная проверка governance refs и отсутствие raw payload/logs/secrets. |
+| Release integration refs | Поддержаны для release decision package: safe domain/kind/ref/status/summary/digest/timestamp/version, canonical order по `domain/kind/ref`, reject конфликтующих дублей, локальная проверка governance refs и отсутствие raw payload/logs/secrets. |
 | Интеграции с project/agent/provider/runtime/interaction | Зафиксированы в refs и границах контрактов; межсервисные read-клиенты, delivery callbacks, provider write и deploy orchestration остаются отдельными срезами. |
 
 ## Совместимость

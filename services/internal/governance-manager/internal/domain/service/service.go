@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -1363,8 +1364,7 @@ func normalizeReleaseIntegrationRefs(refs []value.ReleaseIntegrationRef) ([]valu
 	if len(refs) > maxReleasePackageRefs {
 		return nil, errs.ErrInvalidArgument
 	}
-	result := make([]value.ReleaseIntegrationRef, 0, len(refs))
-	seen := make(map[string]struct{}, len(refs))
+	normalizedRefs := make([]value.ReleaseIntegrationRef, 0, len(refs))
 	for _, ref := range refs {
 		normalized := value.ReleaseIntegrationRef{
 			Domain:     strings.ToLower(strings.TrimSpace(ref.Domain)),
@@ -1379,14 +1379,34 @@ func normalizeReleaseIntegrationRefs(refs []value.ReleaseIntegrationRef) ([]valu
 		if err := validateReleaseIntegrationRef(normalized); err != nil {
 			return nil, err
 		}
-		key := normalized.Domain + "\x00" + normalized.Kind + "\x00" + normalized.Ref
-		if _, exists := seen[key]; exists {
+		normalizedRefs = append(normalizedRefs, normalized)
+	}
+	sort.Slice(normalizedRefs, func(i int, j int) bool {
+		return releaseIntegrationRefKey(normalizedRefs[i]) < releaseIntegrationRefKey(normalizedRefs[j])
+	})
+	result := make([]value.ReleaseIntegrationRef, 0, len(normalizedRefs))
+	for _, ref := range normalizedRefs {
+		if len(result) > 0 && releaseIntegrationRefKey(result[len(result)-1]) == releaseIntegrationRefKey(ref) {
+			if !sameReleaseIntegrationRefSnapshot(result[len(result)-1], ref) {
+				return nil, errs.ErrInvalidArgument
+			}
 			continue
 		}
-		seen[key] = struct{}{}
-		result = append(result, normalized)
+		result = append(result, ref)
 	}
 	return result, nil
+}
+
+func releaseIntegrationRefKey(ref value.ReleaseIntegrationRef) string {
+	return ref.Domain + "\x00" + ref.Kind + "\x00" + ref.Ref
+}
+
+func sameReleaseIntegrationRefSnapshot(left value.ReleaseIntegrationRef, right value.ReleaseIntegrationRef) bool {
+	return left.Status == right.Status &&
+		left.Summary == right.Summary &&
+		left.Digest == right.Digest &&
+		left.ObservedAt == right.ObservedAt &&
+		left.Version == right.Version
 }
 
 func validateReleaseIntegrationRef(ref value.ReleaseIntegrationRef) error {
