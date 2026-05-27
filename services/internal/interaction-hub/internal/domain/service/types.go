@@ -124,6 +124,21 @@ type ListInteractionRequestsInput struct {
 	Page            value.PageRequest
 }
 
+type ListOwnerInboxItemsInput struct {
+	Meta               value.QueryMeta
+	Scope              value.ScopeRef
+	RequestKinds       []enum.InteractionRequestKind
+	Statuses           []enum.InteractionRequestStatus
+	SourceOwnerKind    enum.SourceOwnerKind
+	SourceOwnerRef     string
+	AssigneeRef        value.ActorRef
+	ActorRef           string
+	CorrelationRef     value.ExternalRef
+	CorrelationID      string
+	IncludeDiagnostics bool
+	Page               value.PageRequest
+}
+
 type RequestNotificationInput struct {
 	Meta                  value.CommandMeta
 	Scope                 value.ScopeRef

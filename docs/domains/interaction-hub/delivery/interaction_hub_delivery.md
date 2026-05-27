@@ -6,7 +6,7 @@ status: active
 owner_role: EM
 created_at: 2026-05-22
 updated_at: 2026-05-27
-related_issues: [582, 768, 781, 783, 800, 806, 821, 835, 843, 853, 855]
+related_issues: [582, 768, 781, 783, 800, 806, 821, 835, 843, 853, 855, 867]
 related_prs: []
 related_docsets:
   - docs/domains/interaction-hub/product/requirements.md
@@ -52,10 +52,11 @@ approvals:
 | IH-5b | #835 | Delivery attempts и безопасные статусы доставки готовы без конкретных внешних каналов: `PlanDelivery`, `RecordDeliveryResult`, `GetDeliveryStatus`, retry/reminder refs и delivery attempt state machine. |
 | IH-6 | #843 | Channel contract integration готова: owner-side route/capability refs, safe delivery command refs, callback envelope lifecycle и package runtime boundary refs без vendor-specific канала. |
 | IH-6b | #855 | Callback request resolution готов: `RecordChannelCallback` связывает safe callback с delivery/request, идемпотентно создаёт `InteractionResponse` для terminal action и сохраняет diagnostic no-op для terminal/invalid callback без изменения owner decision state. |
-| IH-7 | не назначено | MCP-интеграция готова: `platform-mcp-server` маршрутизирует `interaction.feedback.request`, `interaction.approval.request`, `interaction.human_gate.request`, status reads. |
-| IH-8 | не назначено | Связка с `agent-manager`, `codex-hook-ingress`, `governance-manager` и `provider-hub` готова для PermissionRequest, owner feedback, owner decision refs и событий ответа. |
-| IH-9 | не назначено | Проекции для `operations-hub`, operator visibility, dual-surface inbox status и диагностика delivery failures готовы. |
-| IH-10 | не назначено | Эксплуатационный контур: deploy manifests, migration job, smoke-проверка, runbook и monitoring docs готовы. |
+| IH-7 | #867 | Owner inbox read surface готова: `ListOwnerInboxItems` отдаёт pending/active feedback, approval, Human gate и callback diagnostics по собственным interaction-сущностям с safe summary/refs, фильтрами и пагинацией. |
+| IH-8 | не назначено | MCP-интеграция готова: `platform-mcp-server` маршрутизирует `interaction.feedback.request`, `interaction.approval.request`, `interaction.human_gate.request`, status reads. |
+| IH-9 | не назначено | Связка с `agent-manager`, `codex-hook-ingress`, `governance-manager` и `provider-hub` готова для PermissionRequest, owner feedback, owner decision refs и событий ответа. |
+| IH-10 | не назначено | Проекции для `operations-hub`, operator visibility, dual-surface inbox status и диагностика delivery failures готовы. |
+| IH-11 | не назначено | Эксплуатационный контур: deploy manifests, migration job, smoke-проверка, runbook и monitoring docs готовы. |
 
 ## Минимальный первый кодовый срез IH-1
 
@@ -109,6 +110,7 @@ IH-2 не должен:
 | `CancelInteractionRequest` | Реализовано через expected version, terminal status и `interaction.request.cancelled` event | IH-4 |
 | `ExpireInteractionRequests` | Реализовано batch-истечение по scope/deadline с идемпотентным результатом и `interaction.request.expired` events | IH-4 |
 | `GetInteractionRequest` / `ListInteractionRequests` | Реализованы PostgreSQL-чтения по request id и scope/status/kind/source owner/deadline | IH-4 |
+| `ListOwnerInboxItems` | Реализовано: domain read surface для pending/active feedback, approval, Human gate и callback diagnostics; фильтры по scope/kind/status/source owner/assignee/actor/correlation refs, safe delivery/callback/response summaries и deterministic pagination | IH-7 |
 | `RequestNotification` | Реализовано: one-way notification/reminder intent, safe title/summary/body preview, source owner refs, channel hints, policy ref, idempotency и `interaction.notification.requested` event | IH-5a |
 | `UpsertSubscription` / `DisableSubscription` / `ListSubscriptions` | Реализовано: create/update/disable/list, optimistic concurrency, command idempotency, source owner/channel hints/policy refs и `interaction.subscription.updated` event | IH-5a |
 | `PlanDelivery` | Реализовано: создаёт delivery attempt для request/notification target, выбирает active route по scope или принимает route ref, пишет safe `interaction.delivery.requested` event и command idempotency | IH-5b |

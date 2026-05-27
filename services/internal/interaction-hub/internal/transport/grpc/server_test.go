@@ -83,6 +83,17 @@ func TestServerRoutesAllStableRPCsToDomainUseCases(t *testing.T) {
 			})
 			return err
 		}},
+		{name: "ListOwnerInboxItems", want: enum.OperationListOwnerInboxItems, call: func(ctx context.Context, s *Server) error {
+			_, err := s.ListOwnerInboxItems(ctx, &interactionsv1.ListOwnerInboxItemsRequest{
+				Scope: &interactionsv1.ScopeRef{Type: interactionsv1.InteractionScopeType_INTERACTION_SCOPE_TYPE_SERVICE, Ref: "agent-manager"},
+				Statuses: []interactionsv1.InteractionRequestStatus{
+					interactionsv1.InteractionRequestStatus_INTERACTION_REQUEST_STATUS_WAITING,
+				},
+				AssigneeRef: &interactionsv1.ActorRef{RefKind: "user", Ref: "approver-1"},
+				Page:        &interactionsv1.PageRequest{PageSize: 10},
+			})
+			return err
+		}},
 		{name: "RequestNotification", want: enum.OperationRequestNotification, call: func(ctx context.Context, s *Server) error {
 			_, err := s.RequestNotification(ctx, validRequestNotificationRequest())
 			return err
@@ -311,6 +322,23 @@ func (f *fakeInteractionService) ListInteractionRequests(context.Context, intera
 		return nil, value.PageResult{}, err
 	}
 	return []entity.InteractionRequest{fakeRequest(validInteractionRequestDraftInput(), enum.InteractionRequestKindApproval)}, value.PageResult{}, nil
+}
+
+func (f *fakeInteractionService) ListOwnerInboxItems(context.Context, interactionservice.ListOwnerInboxItemsInput) ([]entity.OwnerInboxItem, value.PageResult, error) {
+	if err := f.record(enum.OperationListOwnerInboxItems); err != nil {
+		return nil, value.PageResult{}, err
+	}
+	request := fakeRequest(validInteractionRequestDraftInput(), enum.InteractionRequestKindApproval)
+	return []entity.OwnerInboxItem{{
+		Request: request,
+		Title:   "safe title",
+		Summary: "safe summary",
+		DeliverySummary: entity.OwnerInboxDeliverySummary{
+			AttemptCount:     1,
+			LatestDeliveryID: "delivery-1",
+			LatestStatus:     enum.DeliveryAttemptStatusDelivered,
+		},
+	}}, value.PageResult{}, nil
 }
 
 func (f *fakeInteractionService) RequestNotification(_ context.Context, input interactionservice.RequestNotificationInput) (entity.Notification, error) {

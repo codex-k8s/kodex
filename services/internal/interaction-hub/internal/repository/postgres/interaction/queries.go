@@ -21,6 +21,7 @@ var (
 	queryMessageList               = mustLoadQuery("message__list")
 	queryNotificationCreate        = mustLoadQuery("notification__create")
 	queryNotificationGet           = mustLoadQuery("notification__get")
+	queryOwnerInboxList            = mustLoadQuery("owner_inbox__list")
 	queryOutboxEventClaim          = mustLoadQuery("outbox_event__claim")
 	queryOutboxEventCreate         = mustLoadQuery("outbox_event__create")
 	queryOutboxEventMarkFailed     = mustLoadQuery("outbox_event__mark_failed")
