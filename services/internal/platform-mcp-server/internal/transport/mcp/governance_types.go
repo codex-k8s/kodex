@@ -18,6 +18,19 @@ const (
 	ToolGovernanceGateSubmitDecision = "governance.gate.submit_decision"
 	ToolGovernanceGateCancel         = "governance.gate.cancel"
 	ToolGovernanceGateExpire         = "governance.gate.expire"
+
+	ToolGovernanceReleasePrepareDecisionPackage = "governance.release.prepare_decision_package"
+	ToolGovernanceReleaseGetDecisionPackage     = "governance.release.get_decision_package"
+	ToolGovernanceReleaseListDecisionPackages   = "governance.release.list_decision_packages"
+	ToolGovernanceReleaseRequestDecision        = "governance.release.request_decision"
+	ToolGovernanceReleaseSubmitDecision         = "governance.release.submit_decision"
+	ToolGovernanceReleaseGetDecision            = "governance.release.get_decision"
+	ToolGovernanceReleaseListDecisions          = "governance.release.list_decisions"
+	ToolGovernanceReleaseRecordBlockingSignal   = "governance.release.record_blocking_signal"
+	ToolGovernanceReleaseResolveBlockingSignal  = "governance.release.resolve_blocking_signal"
+	ToolGovernanceReleaseListBlockingSignals    = "governance.release.list_blocking_signals"
+	ToolGovernanceReleaseRecordSafetyState      = "governance.release.record_safety_state"
+	ToolGovernanceReleaseGetSafetyState         = "governance.release.get_safety_state"
 )
 
 // GovernanceManagerClient is the owner route used by governance MCP tools.
@@ -26,6 +39,7 @@ type GovernanceManagerClient interface {
 	GovernanceGateRequestClient
 	GovernanceGateDecisionClient
 	GovernanceGateTerminalClient
+	GovernanceReleaseClient
 }
 
 // GovernanceRiskAssessmentClient evaluates and reads risk assessments.
@@ -52,6 +66,22 @@ type GovernanceGateDecisionClient interface {
 type GovernanceGateTerminalClient interface {
 	CancelGate(context.Context, *governancev1.CancelGateRequest) (*governancev1.GateRequestResponse, error)
 	ExpireGate(context.Context, *governancev1.ExpireGateRequest) (*governancev1.GateRequestResponse, error)
+}
+
+// GovernanceReleaseClient routes release package, decision, blocking signal and safety-loop operations.
+type GovernanceReleaseClient interface {
+	BuildReleaseDecisionPackage(context.Context, *governancev1.BuildReleaseDecisionPackageRequest) (*governancev1.ReleaseDecisionPackageResponse, error)
+	GetReleaseDecisionPackage(context.Context, *governancev1.GetReleaseDecisionPackageRequest) (*governancev1.ReleaseDecisionPackageResponse, error)
+	ListReleaseDecisionPackages(context.Context, *governancev1.ListReleaseDecisionPackagesRequest) (*governancev1.ListReleaseDecisionPackagesResponse, error)
+	RequestReleaseDecision(context.Context, *governancev1.RequestReleaseDecisionRequest) (*governancev1.ReleaseDecisionResponse, error)
+	SubmitReleaseDecision(context.Context, *governancev1.SubmitReleaseDecisionRequest) (*governancev1.ReleaseDecisionResponse, error)
+	GetReleaseDecision(context.Context, *governancev1.GetReleaseDecisionRequest) (*governancev1.ReleaseDecisionResponse, error)
+	ListReleaseDecisions(context.Context, *governancev1.ListReleaseDecisionsRequest) (*governancev1.ListReleaseDecisionsResponse, error)
+	RecordBlockingSignal(context.Context, *governancev1.RecordBlockingSignalRequest) (*governancev1.BlockingSignalResponse, error)
+	ResolveBlockingSignal(context.Context, *governancev1.ResolveBlockingSignalRequest) (*governancev1.BlockingSignalResponse, error)
+	ListBlockingSignals(context.Context, *governancev1.ListBlockingSignalsRequest) (*governancev1.ListBlockingSignalsResponse, error)
+	RecordReleaseSafetyState(context.Context, *governancev1.RecordReleaseSafetyStateRequest) (*governancev1.ReleaseSafetyStateResponse, error)
+	GetReleaseSafetyState(context.Context, *governancev1.GetReleaseSafetyStateRequest) (*governancev1.ReleaseSafetyStateResponse, error)
 }
 
 // GovernanceCommandMetaInput carries safe command metadata for governance-manager tools.
@@ -247,6 +277,101 @@ type CancelGovernanceGateInput struct {
 
 type ExpireGovernanceGateInput = CancelGovernanceGateInput
 
+type PrepareGovernanceReleaseDecisionPackageInput struct {
+	Meta                    GovernanceCommandMetaInput          `json:"meta" jsonschema:"command metadata"`
+	ReleaseCandidateRef     string                              `json:"release_candidate_ref" jsonschema:"release candidate artifact or tag ref"`
+	ProjectContext          GovernanceProjectContextRefInput    `json:"project_context" jsonschema:"project-catalog release policy refs"`
+	RepositoryRefs          []string                            `json:"repository_refs,omitempty" jsonschema:"project repository refs participating in release"`
+	ProviderRefs            []GovernanceProviderContextRefInput `json:"provider_refs,omitempty" jsonschema:"provider-hub projection refs"`
+	RuntimeRefs             []GovernanceRuntimeContextRefInput  `json:"runtime_refs,omitempty" jsonschema:"runtime-manager build, deploy or postdeploy refs"`
+	AgentContext            GovernanceAgentContextRefInput      `json:"agent_context,omitempty" jsonschema:"agent-manager refs"`
+	ReviewSignalIDs         []string                            `json:"review_signal_ids,omitempty" jsonschema:"review signal identifiers already stored by governance-manager"`
+	EvidenceRefs            []GovernanceEvidenceRefInput        `json:"evidence_refs,omitempty" jsonschema:"bounded evidence refs"`
+	KnownLimitationsSummary string                              `json:"known_limitations_summary,omitempty" jsonschema:"short safe accepted-risk summary"`
+	RiskAssessmentID        string                              `json:"risk_assessment_id,omitempty" jsonschema:"risk assessment identifier linked to release package"`
+}
+
+type GetGovernanceReleaseDecisionPackageInput struct {
+	Meta                     GovernanceQueryMetaInput `json:"meta" jsonschema:"query metadata"`
+	ReleaseDecisionPackageID string                   `json:"release_decision_package_id" jsonschema:"release decision package identifier"`
+}
+
+type ListGovernanceReleaseDecisionPackagesInput struct {
+	Meta                GovernanceQueryMetaInput         `json:"meta" jsonschema:"query metadata"`
+	ProjectContext      GovernanceProjectContextRefInput `json:"project_context,omitempty" jsonschema:"project or repository filter and authorization context"`
+	ReleaseCandidateRef string                           `json:"release_candidate_ref,omitempty" jsonschema:"release candidate filter and authorization context"`
+	Status              string                           `json:"status,omitempty" jsonschema:"package status: draft, ready, decision_requested or closed"`
+	Page                GovernancePageInput              `json:"page,omitempty" jsonschema:"page request"`
+}
+
+type RequestGovernanceReleaseDecisionInput struct {
+	Meta                     GovernanceCommandMetaInput `json:"meta" jsonschema:"command metadata"`
+	ReleaseDecisionPackageID string                     `json:"release_decision_package_id" jsonschema:"release decision package identifier"`
+	RequestGateIfRequired    bool                       `json:"request_gate_if_required,omitempty" jsonschema:"ask governance-manager to request a gate if policy requires one"`
+}
+
+type SubmitGovernanceReleaseDecisionInput struct {
+	Meta                     GovernanceCommandMetaInput `json:"meta" jsonschema:"command metadata"`
+	ReleaseDecisionPackageID string                     `json:"release_decision_package_id" jsonschema:"release decision package identifier"`
+	GateDecisionID           string                     `json:"gate_decision_id,omitempty" jsonschema:"gate decision identifier when a human gate resolved the release"`
+	Outcome                  string                     `json:"outcome" jsonschema:"outcome: go, go_with_conditions, no_go, hold, rollback or follow_up_required"`
+	DecisionActorRef         string                     `json:"decision_actor_ref" jsonschema:"human or policy automation actor ref"`
+	DecisionPolicyRef        string                     `json:"decision_policy_ref" jsonschema:"policy or evaluator version ref"`
+	Reason                   string                     `json:"reason" jsonschema:"bounded safe decision reason"`
+	ConditionsSummary        string                     `json:"conditions_summary,omitempty" jsonschema:"bounded safe follow-up or limitation summary"`
+}
+
+type GetGovernanceReleaseDecisionInput struct {
+	Meta              GovernanceQueryMetaInput `json:"meta" jsonschema:"query metadata"`
+	ReleaseDecisionID string                   `json:"release_decision_id" jsonschema:"release decision identifier"`
+}
+
+type ListGovernanceReleaseDecisionsInput struct {
+	Meta                     GovernanceQueryMetaInput         `json:"meta" jsonschema:"query metadata"`
+	ReleaseDecisionPackageID string                           `json:"release_decision_package_id,omitempty" jsonschema:"release package filter and authorization context"`
+	ProjectContext           GovernanceProjectContextRefInput `json:"project_context,omitempty" jsonschema:"project or repository filter and authorization context"`
+	Status                   string                           `json:"status,omitempty" jsonschema:"decision status: requested, resolved or cancelled"`
+	Outcome                  string                           `json:"outcome,omitempty" jsonschema:"decision outcome filter"`
+	Page                     GovernancePageInput              `json:"page,omitempty" jsonschema:"page request"`
+}
+
+type RecordGovernanceBlockingSignalInput struct {
+	Meta       GovernanceCommandMetaInput `json:"meta" jsonschema:"command metadata"`
+	Target     GovernanceTargetInput      `json:"target" jsonschema:"blocked target"`
+	SourceType string                     `json:"source_type" jsonschema:"source: acceptance, review_signal, runtime, provider, interaction, human or monitoring"`
+	SourceRef  string                     `json:"source_ref,omitempty" jsonschema:"safe source signal or summary ref"`
+	Severity   string                     `json:"severity" jsonschema:"severity: info, warning, blocking or critical"`
+	Summary    string                     `json:"summary" jsonschema:"short safe blocking summary"`
+}
+
+type ResolveGovernanceBlockingSignalInput struct {
+	Meta              GovernanceCommandMetaInput `json:"meta" jsonschema:"command metadata"`
+	BlockingSignalID  string                     `json:"blocking_signal_id" jsonschema:"blocking signal identifier"`
+	TerminalStatus    string                     `json:"terminal_status" jsonschema:"terminal status: resolved or dismissed"`
+	ResolutionSummary string                     `json:"resolution_summary" jsonschema:"short safe resolution summary"`
+}
+
+type ListGovernanceBlockingSignalsInput struct {
+	Meta     GovernanceQueryMetaInput `json:"meta" jsonschema:"query metadata"`
+	Target   GovernanceTargetInput    `json:"target" jsonschema:"blocked target filter and authorization context"`
+	Status   string                   `json:"status,omitempty" jsonschema:"blocking signal status filter"`
+	Severity string                   `json:"severity,omitempty" jsonschema:"blocking signal severity filter"`
+	Page     GovernancePageInput      `json:"page,omitempty" jsonschema:"page request"`
+}
+
+type RecordGovernanceReleaseSafetyStateInput struct {
+	Meta                     GovernanceCommandMetaInput `json:"meta" jsonschema:"command metadata"`
+	ReleaseDecisionPackageID string                     `json:"release_decision_package_id" jsonschema:"release decision package identifier"`
+	CurrentState             string                     `json:"current_state" jsonschema:"state: release_candidate, awaiting_release_gate, deploying, postdeploy_observation, stable, hold, rollback or follow_up_required"`
+	RuntimeJobRef            string                     `json:"runtime_job_ref,omitempty" jsonschema:"runtime-manager deploy or postdeploy job ref"`
+	LastStateReason          string                     `json:"last_state_reason" jsonschema:"short safe state transition reason"`
+}
+
+type GetGovernanceReleaseSafetyStateInput struct {
+	Meta                     GovernanceQueryMetaInput `json:"meta" jsonschema:"query metadata"`
+	ReleaseDecisionPackageID string                   `json:"release_decision_package_id" jsonschema:"release decision package identifier"`
+}
+
 // GovernanceRiskAssessmentOutput is a safe risk assessment response.
 type GovernanceRiskAssessmentOutput struct {
 	RiskAssessment    GovernanceRiskAssessmentSummary `json:"risk_assessment" jsonschema:"risk assessment"`
@@ -382,3 +507,105 @@ type GovernanceInteractionDeliverySummary = GovernanceInteractionDeliveryRefInpu
 
 // GovernanceEvidenceSummary is a safe evidence reference.
 type GovernanceEvidenceSummary = GovernanceEvidenceRefInput
+
+// GovernanceReleaseDecisionPackageOutput is a safe release package response.
+type GovernanceReleaseDecisionPackageOutput struct {
+	ReleaseDecisionPackage GovernanceReleaseDecisionPackageSummary `json:"release_decision_package" jsonschema:"release decision package"`
+}
+
+// GovernanceReleaseDecisionPackageListOutput is a safe release package list response.
+type GovernanceReleaseDecisionPackageListOutput struct {
+	ReleaseDecisionPackages []GovernanceReleaseDecisionPackageSummary `json:"release_decision_packages" jsonschema:"release decision packages"`
+	Page                    PageSummary                               `json:"page" jsonschema:"page metadata"`
+}
+
+// GovernanceReleaseDecisionPackageSummary is a bounded release evidence package summary.
+type GovernanceReleaseDecisionPackageSummary struct {
+	ID                      string                             `json:"id" jsonschema:"release decision package identifier"`
+	ReleaseCandidateRef     string                             `json:"release_candidate_ref" jsonschema:"release candidate ref"`
+	ProjectContext          GovernanceProjectContextSummary    `json:"project_context" jsonschema:"project-catalog refs"`
+	RepositoryRefs          []string                           `json:"repository_refs,omitempty" jsonschema:"repository refs"`
+	RiskAssessmentID        string                             `json:"risk_assessment_id,omitempty" jsonschema:"linked risk assessment identifier"`
+	ProviderRefs            []GovernanceProviderContextSummary `json:"provider_refs,omitempty" jsonschema:"provider-hub refs"`
+	RuntimeRefs             []GovernanceRuntimeContextSummary  `json:"runtime_refs,omitempty" jsonschema:"runtime-manager refs"`
+	AgentContext            GovernanceAgentContextSummary      `json:"agent_context" jsonschema:"agent-manager refs"`
+	ReviewSignalIDs         []string                           `json:"review_signal_ids,omitempty" jsonschema:"review signal identifiers"`
+	ReviewSignalCount       int                                `json:"review_signal_count" jsonschema:"review signal count"`
+	EvidenceRefs            []GovernanceEvidenceSummary        `json:"evidence_refs,omitempty" jsonschema:"bounded evidence refs"`
+	EvidenceRefCount        int                                `json:"evidence_ref_count" jsonschema:"bounded evidence ref count"`
+	KnownLimitationsSummary string                             `json:"known_limitations_summary,omitempty" jsonschema:"short safe limitations summary"`
+	Status                  string                             `json:"status" jsonschema:"package status"`
+	Version                 int64                              `json:"version" jsonschema:"package version"`
+	CreatedAt               string                             `json:"created_at" jsonschema:"created timestamp"`
+	UpdatedAt               string                             `json:"updated_at" jsonschema:"updated timestamp"`
+}
+
+// GovernanceReleaseDecisionOutput is a safe release decision response.
+type GovernanceReleaseDecisionOutput struct {
+	ReleaseDecision        GovernanceReleaseDecisionSummary        `json:"release_decision" jsonschema:"release decision"`
+	ReleaseDecisionPackage GovernanceReleaseDecisionPackageSummary `json:"release_decision_package,omitempty" jsonschema:"release decision package"`
+}
+
+// GovernanceReleaseDecisionListOutput is a safe release decision list response.
+type GovernanceReleaseDecisionListOutput struct {
+	ReleaseDecisions []GovernanceReleaseDecisionSummary `json:"release_decisions" jsonschema:"release decisions"`
+	Page             PageSummary                        `json:"page" jsonschema:"page metadata"`
+}
+
+// GovernanceReleaseDecisionSummary is a bounded release decision summary.
+type GovernanceReleaseDecisionSummary struct {
+	ID                       string `json:"id" jsonschema:"release decision identifier"`
+	ReleaseDecisionPackageID string `json:"release_decision_package_id" jsonschema:"release decision package identifier"`
+	GateDecisionID           string `json:"gate_decision_id,omitempty" jsonschema:"linked gate decision identifier"`
+	Outcome                  string `json:"outcome" jsonschema:"release decision outcome"`
+	DecisionActorRef         string `json:"decision_actor_ref" jsonschema:"decision actor ref"`
+	DecisionPolicyRef        string `json:"decision_policy_ref" jsonschema:"decision policy ref"`
+	Reason                   string `json:"reason,omitempty" jsonschema:"bounded safe reason"`
+	ConditionsSummary        string `json:"conditions_summary,omitempty" jsonschema:"bounded safe conditions summary"`
+	Status                   string `json:"status" jsonschema:"decision status"`
+	Version                  int64  `json:"version" jsonschema:"decision version"`
+	DecidedAt                string `json:"decided_at" jsonschema:"decision timestamp"`
+}
+
+// GovernanceBlockingSignalOutput is a safe blocking signal response.
+type GovernanceBlockingSignalOutput struct {
+	BlockingSignal GovernanceBlockingSignalSummary `json:"blocking_signal" jsonschema:"blocking signal"`
+}
+
+// GovernanceBlockingSignalListOutput is a safe blocking signal list response.
+type GovernanceBlockingSignalListOutput struct {
+	BlockingSignals []GovernanceBlockingSignalSummary `json:"blocking_signals" jsonschema:"blocking signals"`
+	Page            PageSummary                       `json:"page" jsonschema:"page metadata"`
+}
+
+// GovernanceBlockingSignalSummary is a bounded blocking signal summary.
+type GovernanceBlockingSignalSummary struct {
+	ID         string                  `json:"id" jsonschema:"blocking signal identifier"`
+	Target     GovernanceTargetSummary `json:"target" jsonschema:"blocked target"`
+	SourceType string                  `json:"source_type" jsonschema:"blocking signal source type"`
+	SourceRef  string                  `json:"source_ref,omitempty" jsonschema:"safe source ref"`
+	Severity   string                  `json:"severity" jsonschema:"signal severity"`
+	Summary    string                  `json:"summary,omitempty" jsonschema:"short safe summary"`
+	Status     string                  `json:"status" jsonschema:"signal status"`
+	Version    int64                   `json:"version" jsonschema:"signal version"`
+	CreatedAt  string                  `json:"created_at" jsonschema:"created timestamp"`
+	ResolvedAt string                  `json:"resolved_at,omitempty" jsonschema:"resolved timestamp"`
+}
+
+// GovernanceReleaseSafetyStateOutput is a safe release safety-loop response.
+type GovernanceReleaseSafetyStateOutput struct {
+	ReleaseSafetyState GovernanceReleaseSafetyStateSummary `json:"release_safety_state" jsonschema:"release safety-loop state"`
+}
+
+// GovernanceReleaseSafetyStateSummary is a bounded release safety-loop summary.
+type GovernanceReleaseSafetyStateSummary struct {
+	ID                       string `json:"id" jsonschema:"release safety state identifier"`
+	ReleaseDecisionPackageID string `json:"release_decision_package_id" jsonschema:"release decision package identifier"`
+	CurrentState             string `json:"current_state" jsonschema:"safety-loop state"`
+	RuntimeJobRef            string `json:"runtime_job_ref,omitempty" jsonschema:"runtime job ref"`
+	BlockingSignalCount      int32  `json:"blocking_signal_count" jsonschema:"active blocking signal count"`
+	LastStateReason          string `json:"last_state_reason,omitempty" jsonschema:"short safe transition reason"`
+	Version                  int64  `json:"version" jsonschema:"state version"`
+	CreatedAt                string `json:"created_at" jsonschema:"created timestamp"`
+	UpdatedAt                string `json:"updated_at" jsonschema:"updated timestamp"`
+}
