@@ -154,6 +154,14 @@ func (s *Service) replayBootstrapServicesPolicyImport(ctx context.Context, input
 		return BootstrapServicesPolicyImportResult{}, true, errs.ErrConflict
 	}
 	payload := decodeBootstrapPolicyImportCommandPayload(result.ResultPayload, policy)
+	if expectedFingerprint := strings.TrimSpace(input.ReconciliationFingerprint); expectedFingerprint != "" {
+		if payload.ReconciliationFingerprint != expectedFingerprint ||
+			payload.SourceRef != strings.TrimSpace(input.SourceRef) ||
+			payload.SourceCommitSHA != strings.ToLower(strings.TrimSpace(input.SourceCommitSHA)) ||
+			payload.ContentHash != strings.ToLower(strings.TrimSpace(input.ContentHash)) {
+			return BootstrapServicesPolicyImportResult{}, true, errs.ErrConflict
+		}
+	}
 	return BootstrapServicesPolicyImportResult{
 		Repository:      repository,
 		ServicesPolicy:  policy,

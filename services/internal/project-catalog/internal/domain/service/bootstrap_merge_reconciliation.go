@@ -10,7 +10,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/errs"
-	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/types/value"
 )
 
 const (
@@ -75,9 +74,6 @@ func (s *Service) ReconcileBootstrapMergeSignal(ctx context.Context, input Recon
 	if err != nil {
 		return BootstrapServicesPolicyImportResult{}, err
 	}
-	if replay, ok, err := s.replayBootstrapMergeReconciliation(ctx, input, normalized, meta, fingerprint); ok || err != nil {
-		return replay, err
-	}
 	return s.ImportBootstrapServicesPolicy(ctx, ImportBootstrapServicesPolicyInput{
 		ProjectID:                    input.ProjectID,
 		RepositoryID:                 input.RepositoryID,
@@ -97,44 +93,6 @@ func (s *Service) ReconcileBootstrapMergeSignal(ctx context.Context, input Recon
 		ReconciliationFingerprint:    fingerprint,
 		Meta:                         meta,
 	})
-}
-
-func (s *Service) replayBootstrapMergeReconciliation(
-	ctx context.Context,
-	input ReconcileBootstrapMergeSignalInput,
-	normalized normalizedBootstrapMergeReconciliation,
-	meta value.CommandMeta,
-	fingerprint string,
-) (BootstrapServicesPolicyImportResult, bool, error) {
-	result, ok, err := s.findCommandResult(ctx, meta, projectOperationImportBootstrapPolicy, projectAggregateServicesPolicy)
-	if err != nil || !ok {
-		return BootstrapServicesPolicyImportResult{}, ok, err
-	}
-	policy, err := s.repository.GetServicesPolicy(ctx, input.ProjectID, &result.AggregateID)
-	if err != nil {
-		return BootstrapServicesPolicyImportResult{}, true, err
-	}
-	repository, err := s.repository.GetRepository(ctx, input.RepositoryID)
-	if err != nil {
-		return BootstrapServicesPolicyImportResult{}, true, err
-	}
-	if policy.ProjectID != input.ProjectID || policy.SourceRepositoryID == nil || *policy.SourceRepositoryID != input.RepositoryID || repository.ProjectID != input.ProjectID {
-		return BootstrapServicesPolicyImportResult{}, true, errs.ErrConflict
-	}
-	payload := decodeBootstrapPolicyImportCommandPayload(result.ResultPayload, policy)
-	if payload.ReconciliationFingerprint != fingerprint ||
-		payload.SourceRef != normalized.SourceRef ||
-		payload.SourceCommitSHA != normalized.MergeCommitSHA ||
-		payload.ContentHash != normalized.ContentHash {
-		return BootstrapServicesPolicyImportResult{}, true, errs.ErrConflict
-	}
-	return BootstrapServicesPolicyImportResult{
-		Repository:      repository,
-		ServicesPolicy:  policy,
-		SourceRef:       firstNonEmpty(payload.SourceRef, policy.SourceRef),
-		SourceCommitSHA: policy.SourceCommitSHA,
-		Summary:         firstNonEmpty(payload.Summary, servicesPolicyImportSummary(policy.SourceRef, policy.SourceCommitSHA)),
-	}, true, nil
 }
 
 func normalizeBootstrapMergeReconciliationInput(input ReconcileBootstrapMergeSignalInput) (normalizedBootstrapMergeReconciliation, error) {

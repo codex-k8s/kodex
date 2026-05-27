@@ -1302,6 +1302,41 @@ func TestReconcileBootstrapMergeSignalReplayDoesNotDuplicateImport(t *testing.T)
 	}
 }
 
+func TestReconcileBootstrapMergeSignalReplayStillChecksAccess(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	authorizer := &spyAuthorizer{}
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = pendingBootstrapRepository(projectID, repositoryID)
+	svc := NewWithConfig(
+		store,
+		fixedClock{},
+		&sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New(), uuid.New(), uuid.New()}},
+		Config{Authorizer: authorizer},
+	)
+	input := reconcileBootstrapMergeSignalInput(projectID, repositoryID, commandMetaWithVersion(uuid.Nil, 3))
+
+	if _, err := svc.ReconcileBootstrapMergeSignal(ctx, input); err != nil {
+		t.Fatalf("initial ReconcileBootstrapMergeSignal(): %v", err)
+	}
+	if len(authorizer.requests) != 1 || authorizer.requests[0].ActionKey != projectActionPolicyImport {
+		t.Fatalf("access requests = %+v, want initial policy import check", authorizer.requests)
+	}
+
+	authorizer.err = errs.ErrForbidden
+	_, err := svc.ReconcileBootstrapMergeSignal(ctx, input)
+	if !errors.Is(err, errs.ErrForbidden) {
+		t.Fatalf("replay err = %v, want forbidden", err)
+	}
+	if len(authorizer.requests) != 2 {
+		t.Fatalf("access checks = %d, want 2 including replay", len(authorizer.requests))
+	}
+	if len(store.policies) != 1 || len(store.commandResults) != 1 || len(store.events) != 2 {
+		t.Fatalf("policies=%d commandResults=%d events=%d, want no replay writes after denied access", len(store.policies), len(store.commandResults), len(store.events))
+	}
+}
+
 func TestReconcileBootstrapMergeSignalRejectsConflictingReplay(t *testing.T) {
 	ctx := context.Background()
 	projectID := uuid.New()
