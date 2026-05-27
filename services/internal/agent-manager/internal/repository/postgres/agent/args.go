@@ -310,13 +310,18 @@ func commandResultArgs(result entity.CommandResult) pgx.NamedArgs {
 }
 
 func commandIdentityArgs(identity query.CommandIdentity) pgx.NamedArgs {
-	return pgx.NamedArgs{
+	args := pgx.NamedArgs{
 		"command_id":      postgreslib.NullableUUID(identity.CommandID),
 		"idempotency_key": identity.IdempotencyKey,
 		"operation":       identity.Operation,
-		"actor_type":      identity.Actor.Type,
-		"actor_id":        identity.Actor.ID,
 	}
+	addCommandActorArgs(args, identity.Actor)
+	return args
+}
+
+func addCommandActorArgs(args pgx.NamedArgs, actor value.Actor) {
+	args["actor_type"] = actor.Type
+	args["actor_id"] = actor.ID
 }
 
 func outboxEventArgs(event entity.OutboxEvent) pgx.NamedArgs {

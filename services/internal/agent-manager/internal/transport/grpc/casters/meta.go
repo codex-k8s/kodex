@@ -49,17 +49,7 @@ func ActorFromProto(actor *agentsv1.Actor) value.Actor {
 }
 
 func LocalizedTextFromProto(text []*agentsv1.LocalizedText) []value.LocalizedText {
-	result := make([]value.LocalizedText, 0, len(text))
-	for _, item := range text {
-		if item == nil {
-			continue
-		}
-		result = append(result, value.LocalizedText{
-			Locale: strings.TrimSpace(item.GetLocale()),
-			Text:   strings.TrimSpace(item.GetText()),
-		})
-	}
-	return result
+	return collectProtoValues(text, localizedTextValue)
 }
 
 func ScopeFromProto(scope *agentsv1.ScopeRef) (value.ScopeRef, error) {
@@ -77,15 +67,10 @@ func ObjectRefFromProto(object *agentsv1.ObjectRef) value.ObjectRef {
 	if object == nil {
 		return value.ObjectRef{}
 	}
-	var size *int64
-	if object.ObjectSizeBytes != nil {
-		copied := object.GetObjectSizeBytes()
-		size = &copied
-	}
 	return value.ObjectRef{
 		ObjectURI:       strings.TrimSpace(object.GetObjectUri()),
 		ObjectDigest:    strings.TrimSpace(object.GetObjectDigest()),
-		ObjectSizeBytes: size,
+		ObjectSizeBytes: objectSizeBytesPtr(object),
 	}
 }
 
@@ -93,36 +78,87 @@ func RuntimeContextFromProto(context *agentsv1.RuntimeContextRef) value.RuntimeC
 	if context == nil {
 		return value.RuntimeContextRef{}
 	}
-	return value.RuntimeContextRef{
-		SlotRef:      strings.TrimSpace(context.GetSlotRef()),
-		JobRef:       strings.TrimSpace(context.GetJobRef()),
-		WorkspaceRef: strings.TrimSpace(context.GetWorkspaceRef()),
-		ContextRef:   strings.TrimSpace(context.GetContextRef()),
-	}
+	refs := trimmedProtoStringGetters(
+		context.GetSlotRef,
+		context.GetJobRef,
+		context.GetWorkspaceRef,
+		context.GetContextRef,
+	)
+	return value.RuntimeContextRef{SlotRef: refs[0], JobRef: refs[1], WorkspaceRef: refs[2], ContextRef: refs[3]}
 }
 
 func ProviderTargetFromProto(target *agentsv1.ProviderTargetRef) value.ProviderTargetRef {
 	if target == nil {
 		return value.ProviderTargetRef{}
 	}
+	return providerTargetValue(target)
+}
+
+func providerTargetValue(target *agentsv1.ProviderTargetRef) value.ProviderTargetRef {
+	refs := trimmedProtoStrings(target.GetWorkItemRef(), target.GetPullRequestRef(), target.GetCommentRef(), target.GetReviewSignalRef())
 	return value.ProviderTargetRef{
-		WorkItemRef:     strings.TrimSpace(target.GetWorkItemRef()),
-		PullRequestRef:  strings.TrimSpace(target.GetPullRequestRef()),
-		CommentRef:      strings.TrimSpace(target.GetCommentRef()),
-		ReviewSignalRef: strings.TrimSpace(target.GetReviewSignalRef()),
+		WorkItemRef:     refs[0],
+		PullRequestRef:  refs[1],
+		CommentRef:      refs[2],
+		ReviewSignalRef: refs[3],
 	}
 }
 
 func GuidanceSelectionHintsFromProto(hints []*agentsv1.GuidanceSelectionHint) []value.GuidanceSelectionHint {
-	result := make([]value.GuidanceSelectionHint, 0, len(hints))
-	for _, hint := range hints {
-		if hint == nil {
-			continue
+	return collectProtoValues(hints, guidanceSelectionHintValue)
+}
+
+func localizedTextValue(item *agentsv1.LocalizedText) (value.LocalizedText, bool) {
+	if item == nil {
+		return value.LocalizedText{}, false
+	}
+	text := value.LocalizedText{}
+	text.Locale = strings.TrimSpace(item.GetLocale())
+	text.Text = strings.TrimSpace(item.GetText())
+	return text, true
+}
+
+func guidanceSelectionHintValue(hint *agentsv1.GuidanceSelectionHint) (value.GuidanceSelectionHint, bool) {
+	if hint == nil {
+		return value.GuidanceSelectionHint{}, false
+	}
+	return value.GuidanceSelectionHint{
+		PackageInstallationRef: strings.TrimSpace(hint.GetPackageInstallationRef()),
+		PackageSlug:            strings.TrimSpace(hint.GetPackageSlug()),
+	}, true
+}
+
+func collectProtoValues[Proto any, Domain any](items []Proto, cast func(Proto) (Domain, bool)) []Domain {
+	result := make([]Domain, 0, len(items))
+	for _, item := range items {
+		value, ok := cast(item)
+		if ok {
+			result = append(result, value)
 		}
-		result = append(result, value.GuidanceSelectionHint{
-			PackageInstallationRef: strings.TrimSpace(hint.GetPackageInstallationRef()),
-			PackageSlug:            strings.TrimSpace(hint.GetPackageSlug()),
-		})
+	}
+	return result
+}
+
+func objectSizeBytesPtr(object *agentsv1.ObjectRef) *int64 {
+	if object.ObjectSizeBytes == nil {
+		return nil
+	}
+	copied := object.GetObjectSizeBytes()
+	return &copied
+}
+
+func trimmedProtoStrings(values ...string) []string {
+	result := make([]string, len(values))
+	for idx, value := range values {
+		result[idx] = strings.TrimSpace(value)
+	}
+	return result
+}
+
+func trimmedProtoStringGetters(getters ...func() string) []string {
+	result := make([]string, len(getters))
+	for idx, getter := range getters {
+		result[idx] = strings.TrimSpace(getter())
 	}
 	return result
 }

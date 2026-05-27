@@ -207,18 +207,24 @@ func (cfg Config) EventLogDatabasePoolSettings() postgreslib.PoolSettings {
 }
 
 func (cfg Config) databaseRuntimeSettings(dsn string, maxConns int32, minConns int32) postgreslib.PoolRuntimeSettings {
-	settings := postgreslib.PoolRuntimeSettings{DSN: dsn}
+	settings := cfg.databaseTimingSettings()
+	settings.DSN = dsn
 	settings.MaxConns = maxConns
 	settings.MinConns = minConns
-	settings.MaxConnLifetime = cfg.DatabaseMaxConnLifetime
-	settings.MaxConnIdleTime = cfg.DatabaseMaxConnIdleTime
-	settings.HealthCheckPeriod = cfg.DatabaseHealthPeriod
-	settings.PingTimeout = cfg.DatabasePingTimeout
-	settings.ConnectRetryMaxAttempts = cfg.DatabaseRetryAttempts
-	settings.ConnectRetryInitialDelay = cfg.DatabaseRetryInitial
-	settings.ConnectRetryMaxDelay = cfg.DatabaseRetryMax
-	settings.ConnectRetryJitterRatio = cfg.DatabaseRetryJitterRatio
 	return settings
+}
+
+func (cfg Config) databaseTimingSettings() postgreslib.PoolRuntimeSettings {
+	return postgreslib.PoolRuntimeSettings{
+		MaxConnLifetime:          cfg.DatabaseMaxConnLifetime,
+		MaxConnIdleTime:          cfg.DatabaseMaxConnIdleTime,
+		HealthCheckPeriod:        cfg.DatabaseHealthPeriod,
+		PingTimeout:              cfg.DatabasePingTimeout,
+		ConnectRetryMaxAttempts:  cfg.DatabaseRetryAttempts,
+		ConnectRetryInitialDelay: cfg.DatabaseRetryInitial,
+		ConnectRetryMaxDelay:     cfg.DatabaseRetryMax,
+		ConnectRetryJitterRatio:  cfg.DatabaseRetryJitterRatio,
+	}
 }
 
 // GRPCServerConfig converts service env config to the shared gRPC runtime contract.
