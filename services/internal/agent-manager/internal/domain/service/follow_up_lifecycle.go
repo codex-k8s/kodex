@@ -386,6 +386,9 @@ func normalizeFollowUpDispatchCommand(intent entity.FollowUpIntent, input Dispat
 	if err := applyFollowUpDispatchCommand(&command, &snapshot, providerCommand, providerDetail); err != nil {
 		return followUpProviderCommand{}, followUpDispatchSnapshot{}, err
 	}
+	if err := validateFollowUpDispatchTarget(intent, command); err != nil {
+		return followUpProviderCommand{}, followUpDispatchSnapshot{}, err
+	}
 	policy, approval, err := followUpDispatchPolicy(providerCommand)
 	if err != nil {
 		return followUpProviderCommand{}, followUpDispatchSnapshot{}, err
@@ -429,6 +432,90 @@ func applyFollowUpDispatchCommand(command *followUpProviderCommand, snapshot *fo
 		return errs.ErrInvalidArgument
 	}
 	return nil
+}
+
+func validateFollowUpDispatchTarget(intent entity.FollowUpIntent, command followUpProviderCommand) error {
+	switch command.Kind {
+	case FollowUpDispatchKindCreateIssue:
+		return nil
+	case FollowUpDispatchKindUpdateIssue:
+		if command.UpdateIssue == nil {
+			return errs.ErrInvalidArgument
+		}
+		return requireFollowUpIntentTargetMatch(intent.ProviderTarget.WorkItemRef, followUpCommandTargetRefCandidates(command.UpdateIssue.Target), true)
+	case FollowUpDispatchKindCreateComment:
+		if command.CreateComment == nil {
+			return errs.ErrInvalidArgument
+		}
+		return requireFollowUpIntentTargetMatch(intent.ProviderTarget.WorkItemRef, followUpCommandTargetRefCandidates(command.CreateComment.Target), true)
+	case FollowUpDispatchKindUpdateComment:
+		if command.UpdateComment == nil {
+			return errs.ErrInvalidArgument
+		}
+		if err := requireFollowUpIntentTargetMatch(intent.ProviderTarget.CommentRef, followUpCommentRefCandidates(command.UpdateComment.Target, command.UpdateComment.ProviderCommentID), true); err != nil {
+			return err
+		}
+		return requireFollowUpIntentTargetMatch(intent.ProviderTarget.WorkItemRef, followUpCommandTargetRefCandidates(command.UpdateComment.Target), false)
+	default:
+		return errs.ErrInvalidArgument
+	}
+}
+
+func requireFollowUpIntentTargetMatch(storedRef string, candidates []string, required bool) error {
+	stored, err := normalizeFollowUpRefText(storedRef, required)
+	if err != nil {
+		return err
+	}
+	if stored == "" {
+		return nil
+	}
+	for _, candidate := range candidates {
+		normalized, err := normalizeFollowUpRefText(candidate, false)
+		if err != nil {
+			return err
+		}
+		if normalized == stored {
+			return nil
+		}
+	}
+	return errs.ErrInvalidArgument
+}
+
+func followUpCommandTargetRefCandidates(target ProviderCommandTarget) []string {
+	candidates := []string{followUpProviderCommandTargetRef(target)}
+	if target.ProviderSlug != "" && target.Number > 0 {
+		kind := target.WorkItemKind
+		if kind == "" {
+			kind = "work_item"
+		}
+		candidates = append(candidates, target.ProviderSlug+":"+kind+":"+strconv.FormatInt(target.Number, 10))
+		if kind != "work_item" {
+			candidates = append(candidates, target.ProviderSlug+":work_item:"+strconv.FormatInt(target.Number, 10))
+		}
+	}
+	if target.ProviderSlug != "" && target.ProviderObjectID != "" {
+		candidates = append(candidates, target.ProviderSlug+":object:"+target.ProviderObjectID)
+	}
+	if target.WebURL != "" {
+		candidates = append(candidates, target.WebURL)
+		if target.ProviderSlug != "" {
+			candidates = append(candidates, target.ProviderSlug+":url:"+target.WebURL)
+		}
+	}
+	return candidates
+}
+
+func followUpCommentRefCandidates(target ProviderCommandTarget, providerCommentID string) []string {
+	commentID := strings.TrimSpace(providerCommentID)
+	candidates := []string{commentID}
+	if commentID == "" {
+		return candidates
+	}
+	candidates = append(candidates, "comment:"+commentID)
+	if target.ProviderSlug != "" {
+		candidates = append(candidates, target.ProviderSlug+":comment:"+commentID, target.ProviderSlug+":object:"+commentID)
+	}
+	return candidates
 }
 
 func followUpDispatchPolicy(providerCommand any) (ProviderOperationPolicyContext, ProviderApprovalGateReference, error) {

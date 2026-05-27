@@ -2207,6 +2207,118 @@ func TestDispatchFollowUpIntentUpdateAndCommentPaths(t *testing.T) {
 	})
 }
 
+func TestDispatchFollowUpIntentRejectsMismatchedProviderTargets(t *testing.T) {
+	t.Parallel()
+
+	projectID := uuid.MustParse("8b8b8b8b-1111-2222-3333-111111111111")
+	repositoryID := uuid.MustParse("8b8b8b8b-1111-2222-3333-222222222222")
+	accountID := uuid.MustParse("8b8b8b8b-1111-2222-3333-333333333333")
+	expectedVersion := int64(5)
+	body := "Bounded update body."
+	policy := ProviderOperationPolicyContext{
+		ProjectID:    projectID.String(),
+		RepositoryID: repositoryID.String(),
+		RiskLevel:    ProviderRiskLevelLow,
+	}
+	matchingIssueTarget := ProviderCommandTarget{
+		ProviderSlug:       "github",
+		RepositoryFullName: "codex-k8s/kodex",
+		WorkItemKind:       "issue",
+		Number:             42,
+	}
+	mismatchedIssueTarget := matchingIssueTarget
+	mismatchedIssueTarget.Number = 99
+
+	cases := []struct {
+		name   string
+		intent entity.FollowUpIntent
+		input  DispatchFollowUpIntentInput
+	}{
+		{
+			name: "update issue target",
+			intent: entity.FollowUpIntent{
+				VersionedBase:        entity.VersionedBase{ID: uuid.MustParse("8b8b8b8b-1111-2222-3333-444444444444"), Version: expectedVersion},
+				SessionID:            uuid.MustParse("8b8b8b8b-1111-2222-3333-555555555555"),
+				ProviderTarget:       value.ProviderTargetRef{WorkItemRef: "github:issue:42"},
+				ProviderWorkItemType: "task",
+				SafeTitle:            "Prepare QA follow-up",
+				Status:               enum.FollowUpIntentStatusRequested,
+			},
+			input: DispatchFollowUpIntentInput{
+				DispatchKind: FollowUpDispatchKindUpdateIssue,
+				UpdateIssue: &FollowUpUpdateIssueCommand{
+					ExternalAccountID: accountID,
+					Target:            mismatchedIssueTarget,
+					SafeBodyHint:      &body,
+				},
+			},
+		},
+		{
+			name: "create comment parent target",
+			intent: entity.FollowUpIntent{
+				VersionedBase:        entity.VersionedBase{ID: uuid.MustParse("8b8b8b8b-1111-2222-3333-666666666666"), Version: expectedVersion},
+				SessionID:            uuid.MustParse("8b8b8b8b-1111-2222-3333-777777777777"),
+				ProviderTarget:       value.ProviderTargetRef{WorkItemRef: "github:issue:42"},
+				ProviderWorkItemType: "task",
+				SafeTitle:            "Prepare QA follow-up",
+				Status:               enum.FollowUpIntentStatusRequested,
+			},
+			input: DispatchFollowUpIntentInput{
+				DispatchKind: FollowUpDispatchKindCreateComment,
+				CreateComment: &FollowUpCreateCommentCommand{
+					ExternalAccountID: accountID,
+					Target:            mismatchedIssueTarget,
+					SafeBodyHint:      "Bounded public comment.",
+				},
+			},
+		},
+		{
+			name: "update comment ref",
+			intent: entity.FollowUpIntent{
+				VersionedBase:        entity.VersionedBase{ID: uuid.MustParse("8b8b8b8b-1111-2222-3333-888888888888"), Version: expectedVersion},
+				SessionID:            uuid.MustParse("8b8b8b8b-1111-2222-3333-999999999999"),
+				ProviderTarget:       value.ProviderTargetRef{WorkItemRef: "github:issue:42", CommentRef: "github:comment:55"},
+				ProviderWorkItemType: "task",
+				SafeTitle:            "Prepare QA follow-up",
+				Status:               enum.FollowUpIntentStatusRequested,
+			},
+			input: DispatchFollowUpIntentInput{
+				DispatchKind: FollowUpDispatchKindUpdateComment,
+				UpdateComment: &FollowUpUpdateCommentCommand{
+					ExternalAccountID: accountID,
+					Target:            matchingIssueTarget,
+					ProviderCommentID: "99",
+					SafeBodyHint:      "Bounded comment update.",
+				},
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			tc.input.Meta = value.CommandMeta{CommandID: uuid.New(), ExpectedVersion: &expectedVersion, Actor: testActor()}
+			tc.input.FollowUpIntentID = tc.intent.ID
+			tc.input.OperationPolicyContext = policy
+			repository := &fakeRepository{followUpByID: map[uuid.UUID]entity.FollowUpIntent{tc.intent.ID: tc.intent}}
+			dispatcher := &fakeProviderFollowUpDispatcher{}
+			service := New(Config{Repository: repository, ProviderFollowUpDispatcher: dispatcher})
+
+			_, err := service.DispatchFollowUpIntent(context.Background(), tc.input)
+			if !errors.Is(err, errs.ErrInvalidArgument) {
+				t.Fatalf("DispatchFollowUpIntent() err = %v, want %v", err, errs.ErrInvalidArgument)
+			}
+			if repository.updateFollowUpCalled {
+				t.Fatalf("reserved mismatched follow-up target")
+			}
+			if dispatcher.calls+dispatcher.updateIssueCalls+dispatcher.createCommentCalls+dispatcher.updateCommentCalls != 0 {
+				t.Fatalf("provider dispatcher called on mismatched target: %+v", dispatcher)
+			}
+		})
+	}
+}
+
 func TestDispatchFollowUpIntentRejectsInvalidStateAndUnsafePayload(t *testing.T) {
 	t.Parallel()
 
