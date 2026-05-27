@@ -317,7 +317,10 @@ func (s *Service) ListRiskFactors(ctx context.Context, input ListRiskFactorsInpu
 func (s *Service) RecordReviewSignal(ctx context.Context, input RecordReviewSignalInput) (entity.ReviewSignal, error) {
 	target := value.ExternalRef{Type: strings.TrimSpace(input.Target.Type), Ref: strings.TrimSpace(input.Target.Ref)}
 	authorRef := strings.TrimSpace(input.AuthorRef)
-	summary := strings.TrimSpace(input.Summary)
+	summary, err := normalizeEventSafeSummary("review_signal.summary", input.Summary, maxEvaluationFactorSummary)
+	if err != nil {
+		return entity.ReviewSignal{}, err
+	}
 	evidenceRefs, err := normalizeReviewSignalEvidenceRefs(input.EvidenceRefs)
 	if err != nil {
 		return entity.ReviewSignal{}, err
@@ -325,13 +328,13 @@ func (s *Service) RecordReviewSignal(ctx context.Context, input RecordReviewSign
 	if target.Type == "" || target.Ref == "" || authorRef == "" || input.RoleKind == "" || input.Outcome == "" || input.Severity == "" || len(evidenceRefs) == 0 {
 		return entity.ReviewSignal{}, errs.ErrInvalidArgument
 	}
-	if err := validateSafeRef("review_signal.target_ref", target.Ref, true); err != nil {
+	if err := validateEventSafeRef("review_signal.target_type", target.Type, true); err != nil {
 		return entity.ReviewSignal{}, err
 	}
-	if err := validateSafeRef("review_signal.author_ref", authorRef, true); err != nil {
+	if err := validateEventSafeRef("review_signal.target_ref", target.Ref, true); err != nil {
 		return entity.ReviewSignal{}, err
 	}
-	if err := validateSafeText("review_signal.summary", summary, maxEvaluationFactorSummary); err != nil {
+	if err := validateEventSafeRef("review_signal.author_ref", authorRef, true); err != nil {
 		return entity.ReviewSignal{}, err
 	}
 	if err := s.authorizeCommand(ctx, input.Meta, actionSignalRecord, signalTargetResource(target)); err != nil {
@@ -428,13 +431,32 @@ func (s *Service) ListReviewSignals(ctx context.Context, input ListReviewSignals
 
 // RequestGate stores a gate request without owning delivery retries.
 func (s *Service) RequestGate(ctx context.Context, input RequestGateInput) (entity.GateRequest, error) {
-	if input.Target.Type == "" || input.Target.Ref == "" {
+	target := value.ExternalRef{Type: strings.TrimSpace(input.Target.Type), Ref: strings.TrimSpace(input.Target.Ref)}
+	if target.Type == "" || target.Ref == "" {
 		return entity.GateRequest{}, errs.ErrInvalidArgument
+	}
+	if err := validateEventSafeRef("gate.target_type", target.Type, true); err != nil {
+		return entity.GateRequest{}, err
+	}
+	if err := validateEventSafeRef("gate.target_ref", target.Ref, true); err != nil {
+		return entity.GateRequest{}, err
+	}
+	evidenceRefs, err := normalizeEventSafeEvidenceRefs(input.EvidenceRefs, "gate.evidence_ref.ref", "gate.evidence_ref.summary")
+	if err != nil {
+		return entity.GateRequest{}, err
+	}
+	evidenceSummary, err := normalizeEventSafeSummary("gate.evidence_summary", input.EvidenceSummary, maxEvaluationFactorSummary)
+	if err != nil {
+		return entity.GateRequest{}, err
+	}
+	interactionDeliveryRef, err := normalizeEventSafeInteractionDeliveryRef(input.InteractionDeliveryRef)
+	if err != nil {
+		return entity.GateRequest{}, err
 	}
 	if err := requireCommand(input.Meta, enum.OperationRequestGate.String()); err != nil {
 		return entity.GateRequest{}, err
 	}
-	if err := s.authorizeCommand(ctx, input.Meta, actionGateRequest, gateTargetResource(input.Target)); err != nil {
+	if err := s.authorizeCommand(ctx, input.Meta, actionGateRequest, gateTargetResource(target)); err != nil {
 		return entity.GateRequest{}, err
 	}
 	result, replayed, err := s.replayCommand(ctx, input.Meta, enum.OperationRequestGate.String(), aggregateGateRequest)
@@ -446,7 +468,7 @@ func (s *Service) RequestGate(ctx context.Context, input RequestGateInput) (enti
 		if err != nil {
 			return entity.GateRequest{}, err
 		}
-		if !sameExternalRef(request.Target, input.Target) {
+		if !sameExternalRef(request.Target, target) {
 			return entity.GateRequest{}, errs.ErrConflict
 		}
 		return request, nil
@@ -456,10 +478,10 @@ func (s *Service) RequestGate(ctx context.Context, input RequestGateInput) (enti
 		VersionedBase:          entity.VersionedBase{ID: s.idGenerator.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
 		RiskAssessmentID:       input.RiskAssessmentID,
 		GatePolicyID:           input.GatePolicyID,
-		Target:                 input.Target,
-		InteractionDeliveryRef: input.InteractionDeliveryRef,
-		EvidenceRefs:           input.EvidenceRefs,
-		EvidenceSummary:        input.EvidenceSummary,
+		Target:                 target,
+		InteractionDeliveryRef: interactionDeliveryRef,
+		EvidenceRefs:           evidenceRefs,
+		EvidenceSummary:        evidenceSummary,
 		Status:                 enum.GateRequestStatusRequested,
 	}
 	result = commandResult(input.Meta, enum.OperationRequestGate.String(), aggregateGateRequest, request.ID, now)
@@ -482,6 +504,30 @@ func (s *Service) SubmitGateDecision(ctx context.Context, input SubmitGateDecisi
 		return entity.GateDecision{}, entity.GateRequest{}, errs.ErrInvalidArgument
 	}
 	if err := requireCommand(input.Meta, enum.OperationSubmitGateDecision.String()); err != nil {
+		return entity.GateDecision{}, entity.GateRequest{}, err
+	}
+	decisionActorRef, err := normalizeEventSafeRef("gate_decision.actor_ref", input.DecisionActorRef, true)
+	if err != nil {
+		return entity.GateDecision{}, entity.GateRequest{}, err
+	}
+	decisionPolicyRef, err := normalizeEventSafeRef("gate_decision.policy_ref", input.DecisionPolicyRef, false)
+	if err != nil {
+		return entity.GateDecision{}, entity.GateRequest{}, err
+	}
+	reason, err := normalizeEventSafeSummary("gate_decision.reason", input.Reason, maxEvaluationFactorSummary)
+	if err != nil {
+		return entity.GateDecision{}, entity.GateRequest{}, err
+	}
+	conditionsSummary, err := normalizeEventSafeSummary("gate_decision.conditions_summary", input.ConditionsSummary, maxEvaluationSummaryLength)
+	if err != nil {
+		return entity.GateDecision{}, entity.GateRequest{}, err
+	}
+	sourceRef, err := normalizeEventSafeRef("gate_decision.source_ref", input.SourceRef, false)
+	if err != nil {
+		return entity.GateDecision{}, entity.GateRequest{}, err
+	}
+	interactionDeliveryRef, err := normalizeEventSafeInteractionDeliveryRef(input.InteractionDeliveryRef)
+	if err != nil {
 		return entity.GateDecision{}, entity.GateRequest{}, err
 	}
 	if err := s.authorizeCommand(ctx, input.Meta, actionGateDecide, gateResource(input.GateRequestID)); err != nil {
@@ -523,16 +569,16 @@ func (s *Service) SubmitGateDecision(ctx context.Context, input SubmitGateDecisi
 	request.Version = previousVersion + 1
 	request.Status = enum.GateRequestStatusResolved
 	request.UpdatedAt = now
-	request.InteractionDeliveryRef = input.InteractionDeliveryRef
+	request.InteractionDeliveryRef = interactionDeliveryRef
 	decision := entity.GateDecision{
 		ID:                s.idGenerator.New(),
 		GateRequestID:     request.ID,
-		DecisionActorRef:  strings.TrimSpace(input.DecisionActorRef),
-		DecisionPolicyRef: strings.TrimSpace(input.DecisionPolicyRef),
+		DecisionActorRef:  decisionActorRef,
+		DecisionPolicyRef: decisionPolicyRef,
 		Outcome:           input.Outcome,
-		Reason:            input.Reason,
-		ConditionsSummary: input.ConditionsSummary,
-		SourceRef:         input.SourceRef,
+		Reason:            reason,
+		ConditionsSummary: conditionsSummary,
+		SourceRef:         sourceRef,
 		DecidedAt:         now,
 	}
 	if decision.DecisionActorRef == "" {
@@ -1619,6 +1665,91 @@ func normalizeReleaseSafeText(name string, value string, maxLength int) (string,
 	return normalized, nil
 }
 
+func normalizeEventSafeSummary(name string, value string, maxLength int) (string, error) {
+	normalized := strings.TrimSpace(value)
+	if err := validateEventSafeText(name, normalized, maxLength); err != nil {
+		return "", err
+	}
+	return normalized, nil
+}
+
+func normalizeEventSafeRef(name string, value string, required bool) (string, error) {
+	normalized := strings.TrimSpace(value)
+	if err := validateEventSafeRef(name, normalized, required); err != nil {
+		return "", err
+	}
+	return normalized, nil
+}
+
+func normalizeEventSafeInteractionDeliveryRef(ref value.InteractionDeliveryRef) (value.InteractionDeliveryRef, error) {
+	normalized := value.InteractionDeliveryRef{
+		RequestRef:  strings.TrimSpace(ref.RequestRef),
+		DeliveryRef: strings.TrimSpace(ref.DeliveryRef),
+		CallbackRef: strings.TrimSpace(ref.CallbackRef),
+		DecisionRef: strings.TrimSpace(ref.DecisionRef),
+	}
+	for _, item := range []struct {
+		name  string
+		value string
+	}{
+		{name: "interaction_delivery.request_ref", value: normalized.RequestRef},
+		{name: "interaction_delivery.delivery_ref", value: normalized.DeliveryRef},
+		{name: "interaction_delivery.callback_ref", value: normalized.CallbackRef},
+		{name: "interaction_delivery.decision_ref", value: normalized.DecisionRef},
+	} {
+		if err := validateEventSafeRef(item.name, item.value, false); err != nil {
+			return value.InteractionDeliveryRef{}, err
+		}
+	}
+	return normalized, nil
+}
+
+func normalizeEventSafeEvidenceRefs(refs []value.EvidenceRef, refName string, summaryName string) ([]value.EvidenceRef, error) {
+	result := make([]value.EvidenceRef, 0, len(refs))
+	seen := make(map[string]struct{}, len(refs))
+	for _, ref := range refs {
+		normalized, err := normalizeEventSafeEvidenceRef(ref, refName, summaryName)
+		if err != nil {
+			return nil, err
+		}
+		key := normalized.Kind + "\x00" + normalized.Ref
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		result = append(result, normalized)
+	}
+	return result, nil
+}
+
+func normalizeEventSafeEvidenceRef(ref value.EvidenceRef, refName string, summaryName string) (value.EvidenceRef, error) {
+	normalized := trimEvidenceRef(ref)
+	if normalized.Kind == "" || normalized.Ref == "" {
+		return value.EvidenceRef{}, errs.ErrInvalidArgument
+	}
+	if err := validateEventSafeRef(refName, normalized.Ref, true); err != nil {
+		return value.EvidenceRef{}, err
+	}
+	if err := validateEventSafeText(summaryName, normalized.Summary, maxEvaluationFactorSummary); err != nil {
+		return value.EvidenceRef{}, err
+	}
+	if err := validateEventSafeRef("evidence_ref.digest", normalized.Digest, false); err != nil {
+		return value.EvidenceRef{}, err
+	}
+	if err := validateEventSafeRef("evidence_ref.retention_class", normalized.RetentionClass, false); err != nil {
+		return value.EvidenceRef{}, err
+	}
+	return normalized, nil
+}
+
+func validateEventSafeRef(name string, value string, required bool) error {
+	return validateReleaseSafeRef(name, value, required)
+}
+
+func validateEventSafeText(name string, value string, maxLength int) error {
+	return validateReleaseSafeText(name, value, maxLength)
+}
+
 func validateReleaseSafeRef(name string, value string, required bool) error {
 	if err := validateSafeRef(name, value, required); err != nil {
 		return err
@@ -1687,6 +1818,14 @@ func (s *Service) closeGateRequest(ctx context.Context, input closeGateRequestIn
 	if err := requireCommand(input.Meta, input.Operation.String()); err != nil {
 		return entity.GateRequest{}, err
 	}
+	reason, err := normalizeEventSafeSummary("gate.terminal_reason", input.Reason, maxEvaluationFactorSummary)
+	if err != nil {
+		return entity.GateRequest{}, err
+	}
+	interactionDeliveryRef, err := normalizeEventSafeInteractionDeliveryRef(input.InteractionDeliveryRef)
+	if err != nil {
+		return entity.GateRequest{}, err
+	}
 	if err := s.authorizeCommand(ctx, input.Meta, actionGateDecide, gateResource(input.GateRequestID)); err != nil {
 		return entity.GateRequest{}, err
 	}
@@ -1720,10 +1859,10 @@ func (s *Service) closeGateRequest(ctx context.Context, input closeGateRequestIn
 	request.Status = input.Status
 	request.UpdatedAt = now
 	request.TerminalActorRef = actorRef(input.Meta.Actor)
-	request.TerminalReason = strings.TrimSpace(input.Reason)
+	request.TerminalReason = reason
 	request.TerminalAt = &now
-	if !emptyInteractionDeliveryRef(input.InteractionDeliveryRef) {
-		request.InteractionDeliveryRef = input.InteractionDeliveryRef
+	if !emptyInteractionDeliveryRef(interactionDeliveryRef) {
+		request.InteractionDeliveryRef = interactionDeliveryRef
 	}
 	result = commandResultWithPayload(input.Meta, input.Operation.String(), aggregateGateRequest, request.ID, now, map[string]any{
 		"status": string(request.Status),
@@ -2122,7 +2261,7 @@ func normalizeReviewSignalEvidenceRefs(refs []value.EvidenceRef) ([]value.Eviden
 	result := make([]value.EvidenceRef, 0, len(refs))
 	seen := make(map[string]value.EvidenceRef)
 	for _, ref := range refs {
-		normalized, err := normalizeEvidenceRef(ref, "review_signal.evidence_ref.ref", "review_signal.evidence_ref.summary")
+		normalized, err := normalizeEventSafeEvidenceRef(ref, "review_signal.evidence_ref.ref", "review_signal.evidence_ref.summary")
 		if err != nil {
 			return nil, err
 		}

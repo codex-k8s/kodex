@@ -398,6 +398,76 @@ func TestRecordReviewSignalRejectsUnsafeOrMissingRefs(t *testing.T) {
 	}
 }
 
+func TestRecordReviewSignalRejectsEventUnsafePayload(t *testing.T) {
+	t.Parallel()
+
+	commandID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
+	tests := []struct {
+		name    string
+		input   RecordReviewSignalInput
+		wantErr error
+	}{
+		{
+			name: "summary stdout marker",
+			input: RecordReviewSignalInput{
+				Target:       value.ExternalRef{Type: "pull_request", Ref: "provider-pr:1"},
+				RoleKind:     enum.ReviewRoleKindReviewer,
+				AuthorRef:    "agent-run:reviewer-1",
+				Outcome:      enum.ReviewSignalOutcomePass,
+				Severity:     enum.SignalSeverityInfo,
+				EvidenceRefs: []value.EvidenceRef{{Kind: "provider_review", Ref: "provider-review:1", Summary: "provider review approved"}},
+				Summary:      "stdout contains provider logs",
+				Meta:         CommandMeta{CommandID: &commandID, Actor: value.Actor{Type: "service", ID: "agent-manager"}},
+			},
+			wantErr: errs.ErrInvalidArgument,
+		},
+		{
+			name: "evidence source bearer marker",
+			input: RecordReviewSignalInput{
+				Target:       value.ExternalRef{Type: "pull_request", Ref: "provider-pr:1"},
+				RoleKind:     enum.ReviewRoleKindReviewer,
+				AuthorRef:    "agent-run:reviewer-1",
+				Outcome:      enum.ReviewSignalOutcomePass,
+				Severity:     enum.SignalSeverityInfo,
+				EvidenceRefs: []value.EvidenceRef{{Kind: "provider_review", Ref: "provider-review:1 authorization: bearer abc", Summary: "provider review approved"}},
+				Summary:      "approved",
+				Meta:         CommandMeta{CommandID: &commandID, Actor: value.Actor{Type: "service", ID: "agent-manager"}},
+			},
+			wantErr: errs.ErrInvalidArgument,
+		},
+		{
+			name: "evidence summary workspace path",
+			input: RecordReviewSignalInput{
+				Target:       value.ExternalRef{Type: "pull_request", Ref: "provider-pr:1"},
+				RoleKind:     enum.ReviewRoleKindReviewer,
+				AuthorRef:    "agent-run:reviewer-1",
+				Outcome:      enum.ReviewSignalOutcomePass,
+				Severity:     enum.SignalSeverityInfo,
+				EvidenceRefs: []value.EvidenceRef{{Kind: "provider_review", Ref: "provider-review:1", Summary: "workspace path /home/s/workspace/file"}},
+				Summary:      "approved",
+				Meta:         CommandMeta{CommandID: &commandID, Actor: value.Actor{Type: "service", ID: "agent-manager"}},
+			},
+			wantErr: errs.ErrInvalidArgument,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			repository := &fakeRepository{ready: true}
+			_, err := newTestService(repository).RecordReviewSignal(context.Background(), tt.input)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("RecordReviewSignal() error = %v, want %v", err, tt.wantErr)
+			}
+			if repository.mutationCalls != 0 || len(repository.events) != 0 {
+				t.Fatalf("mutation calls/events = %d/%d, want 0/0 for event-unsafe input", repository.mutationCalls, len(repository.events))
+			}
+		})
+	}
+}
+
 func TestRiskReadAccessDeniedBeforeRepositoryRead(t *testing.T) {
 	t.Parallel()
 
@@ -1004,6 +1074,124 @@ func TestExistingAggregateMutationsRejectStaleExpectedVersion(t *testing.T) {
 			}
 			if repository.mutationCalls != 0 {
 				t.Fatalf("mutation calls = %d, want 0 for stale expected_version", repository.mutationCalls)
+			}
+		})
+	}
+}
+
+func TestGateLifecycleRejectsEventUnsafePayload(t *testing.T) {
+	t.Parallel()
+
+	commandID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
+	gateRequestID := uuid.MustParse("cccccccc-cccc-4ccc-cccc-cccccccccccc")
+	expectedVersion := int64(1)
+	target := value.ExternalRef{Type: "pull_request", Ref: "provider:pr:1"}
+	meta := CommandMeta{
+		CommandID:       &commandID,
+		ExpectedVersion: &expectedVersion,
+		Actor:           value.Actor{Type: "service", ID: "agent-manager"},
+	}
+	tests := []struct {
+		name      string
+		configure func(*fakeRepository)
+		run       func(*Service) error
+	}{
+		{
+			name: "request gate evidence summary",
+			run: func(service *Service) error {
+				_, err := service.RequestGate(context.Background(), RequestGateInput{
+					Target:          target,
+					EvidenceSummary: "raw provider payload with secret=abc",
+					Meta:            meta,
+				})
+				return err
+			},
+		},
+		{
+			name: "request gate evidence ref",
+			run: func(service *Service) error {
+				_, err := service.RequestGate(context.Background(), RequestGateInput{
+					Target:       target,
+					EvidenceRefs: []value.EvidenceRef{{Kind: "provider_review", Ref: "provider-review:1", Summary: "stderr raw logs"}},
+					Meta:         meta,
+				})
+				return err
+			},
+		},
+		{
+			name: "request gate interaction ref",
+			run: func(service *Service) error {
+				_, err := service.RequestGate(context.Background(), RequestGateInput{
+					Target: target,
+					InteractionDeliveryRef: value.InteractionDeliveryRef{
+						RequestRef: "interaction:request:1 authorization: bearer token",
+					},
+					Meta: meta,
+				})
+				return err
+			},
+		},
+		{
+			name: "submit gate decision reason",
+			configure: func(repository *fakeRepository) {
+				repository.gateRequest = entity.GateRequest{VersionedBase: entity.VersionedBase{ID: gateRequestID, Version: 1}, Target: target, Status: enum.GateRequestStatusRequested}
+			},
+			run: func(service *Service) error {
+				_, _, err := service.SubmitGateDecision(context.Background(), SubmitGateDecisionInput{
+					GateRequestID:    gateRequestID,
+					DecisionActorRef: "user:owner",
+					Reason:           "stdout contains owner prompt transcript",
+					Meta:             meta,
+				})
+				return err
+			},
+		},
+		{
+			name: "submit gate decision source ref",
+			configure: func(repository *fakeRepository) {
+				repository.gateRequest = entity.GateRequest{VersionedBase: entity.VersionedBase{ID: gateRequestID, Version: 1}, Target: target, Status: enum.GateRequestStatusRequested}
+			},
+			run: func(service *Service) error {
+				_, _, err := service.SubmitGateDecision(context.Background(), SubmitGateDecisionInput{
+					GateRequestID:    gateRequestID,
+					DecisionActorRef: "user:owner",
+					SourceRef:        "provider-response authorization: bearer token",
+					Meta:             meta,
+				})
+				return err
+			},
+		},
+		{
+			name: "cancel gate terminal reason",
+			configure: func(repository *fakeRepository) {
+				repository.gateRequest = entity.GateRequest{VersionedBase: entity.VersionedBase{ID: gateRequestID, Version: 1}, Target: target, Status: enum.GateRequestStatusRequested}
+			},
+			run: func(service *Service) error {
+				_, err := service.CancelGate(context.Background(), CancelGateInput{
+					GateRequestID: gateRequestID,
+					Reason:        "kubeconfig contains cluster secret",
+					Meta:          meta,
+				})
+				return err
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			repository := &fakeRepository{ready: true}
+			if tt.configure != nil {
+				tt.configure(repository)
+			}
+			err := tt.run(newTestService(repository))
+			if !errors.Is(err, errs.ErrInvalidArgument) {
+				t.Fatalf("%s error = %v, want ErrInvalidArgument", tt.name, err)
+			}
+			if repository.mutationCalls != 0 || len(repository.events) != 0 {
+				t.Fatalf("mutation calls/events = %d/%d, want 0/0 for event-unsafe input", repository.mutationCalls, len(repository.events))
 			}
 		})
 	}

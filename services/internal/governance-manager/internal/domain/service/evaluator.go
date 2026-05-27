@@ -779,13 +779,7 @@ func normalizeEvidenceRefs(refs []value.EvidenceRef) ([]value.EvidenceRef, error
 }
 
 func normalizeEvidenceRef(ref value.EvidenceRef, refName string, summaryName string) (value.EvidenceRef, error) {
-	normalized := value.EvidenceRef{
-		Kind:           strings.TrimSpace(ref.Kind),
-		Ref:            strings.TrimSpace(ref.Ref),
-		Summary:        strings.TrimSpace(ref.Summary),
-		Digest:         strings.TrimSpace(ref.Digest),
-		RetentionClass: strings.TrimSpace(ref.RetentionClass),
-	}
+	normalized := trimEvidenceRef(ref)
 	if normalized.Kind == "" || normalized.Ref == "" {
 		return value.EvidenceRef{}, errs.ErrInvalidArgument
 	}
@@ -796,6 +790,16 @@ func normalizeEvidenceRef(ref value.EvidenceRef, refName string, summaryName str
 		return value.EvidenceRef{}, err
 	}
 	return normalized, nil
+}
+
+func trimEvidenceRef(ref value.EvidenceRef) value.EvidenceRef {
+	return value.EvidenceRef{
+		Kind:           strings.TrimSpace(ref.Kind),
+		Ref:            strings.TrimSpace(ref.Ref),
+		Summary:        strings.TrimSpace(ref.Summary),
+		Digest:         strings.TrimSpace(ref.Digest),
+		RetentionClass: strings.TrimSpace(ref.RetentionClass),
+	}
 }
 
 func validateSafeRef(_ string, value string, required bool) error {
