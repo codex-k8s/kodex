@@ -98,6 +98,66 @@ func (c *Client) ExpireGate(ctx context.Context, request *governancev1.ExpireGat
 	return ownergrpc.Call(ctx, c.callConfig(), request, c.client.ExpireGate)
 }
 
+// BuildReleaseDecisionPackage routes release package preparation to governance-manager.
+func (c *Client) BuildReleaseDecisionPackage(ctx context.Context, request *governancev1.BuildReleaseDecisionPackageRequest) (*governancev1.ReleaseDecisionPackageResponse, error) {
+	return ownergrpc.Call(ctx, c.callConfig(), request, c.client.BuildReleaseDecisionPackage)
+}
+
+// GetReleaseDecisionPackage routes release package reads to governance-manager.
+func (c *Client) GetReleaseDecisionPackage(ctx context.Context, request *governancev1.GetReleaseDecisionPackageRequest) (*governancev1.ReleaseDecisionPackageResponse, error) {
+	return ownergrpc.Call(ctx, c.callConfig(), request, c.client.GetReleaseDecisionPackage)
+}
+
+// ListReleaseDecisionPackages routes release package list reads to governance-manager.
+func (c *Client) ListReleaseDecisionPackages(ctx context.Context, request *governancev1.ListReleaseDecisionPackagesRequest) (*governancev1.ListReleaseDecisionPackagesResponse, error) {
+	return ownergrpc.Call(ctx, c.callConfig(), request, c.client.ListReleaseDecisionPackages)
+}
+
+// RequestReleaseDecision routes release decision requests to governance-manager.
+func (c *Client) RequestReleaseDecision(ctx context.Context, request *governancev1.RequestReleaseDecisionRequest) (*governancev1.ReleaseDecisionResponse, error) {
+	return ownergrpc.Call(ctx, c.callConfig(), request, c.client.RequestReleaseDecision)
+}
+
+// SubmitReleaseDecision routes release decisions to governance-manager.
+func (c *Client) SubmitReleaseDecision(ctx context.Context, request *governancev1.SubmitReleaseDecisionRequest) (*governancev1.ReleaseDecisionResponse, error) {
+	return ownergrpc.Call(ctx, c.callConfig(), request, c.client.SubmitReleaseDecision)
+}
+
+// GetReleaseDecision routes release decision reads to governance-manager.
+func (c *Client) GetReleaseDecision(ctx context.Context, request *governancev1.GetReleaseDecisionRequest) (*governancev1.ReleaseDecisionResponse, error) {
+	return ownergrpc.Call(ctx, c.callConfig(), request, c.client.GetReleaseDecision)
+}
+
+// ListReleaseDecisions routes release decision list reads to governance-manager.
+func (c *Client) ListReleaseDecisions(ctx context.Context, request *governancev1.ListReleaseDecisionsRequest) (*governancev1.ListReleaseDecisionsResponse, error) {
+	return ownergrpc.Call(ctx, c.callConfig(), request, c.client.ListReleaseDecisions)
+}
+
+// RecordBlockingSignal routes blocking signal recording to governance-manager.
+func (c *Client) RecordBlockingSignal(ctx context.Context, request *governancev1.RecordBlockingSignalRequest) (*governancev1.BlockingSignalResponse, error) {
+	return ownergrpc.Call(ctx, c.callConfig(), request, c.client.RecordBlockingSignal)
+}
+
+// ResolveBlockingSignal routes blocking signal resolution to governance-manager.
+func (c *Client) ResolveBlockingSignal(ctx context.Context, request *governancev1.ResolveBlockingSignalRequest) (*governancev1.BlockingSignalResponse, error) {
+	return ownergrpc.Call(ctx, c.callConfig(), request, c.client.ResolveBlockingSignal)
+}
+
+// ListBlockingSignals routes blocking signal list reads to governance-manager.
+func (c *Client) ListBlockingSignals(ctx context.Context, request *governancev1.ListBlockingSignalsRequest) (*governancev1.ListBlockingSignalsResponse, error) {
+	return ownergrpc.Call(ctx, c.callConfig(), request, c.client.ListBlockingSignals)
+}
+
+// RecordReleaseSafetyState routes release safety-loop updates to governance-manager.
+func (c *Client) RecordReleaseSafetyState(ctx context.Context, request *governancev1.RecordReleaseSafetyStateRequest) (*governancev1.ReleaseSafetyStateResponse, error) {
+	return ownergrpc.Call(ctx, c.callConfig(), request, c.client.RecordReleaseSafetyState)
+}
+
+// GetReleaseSafetyState routes release safety-loop reads to governance-manager.
+func (c *Client) GetReleaseSafetyState(ctx context.Context, request *governancev1.GetReleaseSafetyStateRequest) (*governancev1.ReleaseSafetyStateResponse, error) {
+	return ownergrpc.Call(ctx, c.callConfig(), request, c.client.GetReleaseSafetyState)
+}
+
 func (c *Client) callConfig() ownergrpc.Config {
 	return ownergrpc.Config{Service: serviceName, AuthToken: c.authToken, Timeout: c.timeout}
 }

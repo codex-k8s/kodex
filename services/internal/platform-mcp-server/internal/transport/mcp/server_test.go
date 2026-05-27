@@ -116,6 +116,78 @@ func TestToolsListSnapshot(t *testing.T) {
     "has_output_schema": true
   },
   {
+    "name": "governance.release.get_decision",
+    "description": "Read a safe release decision summary through governance-manager.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
+  {
+    "name": "governance.release.get_decision_package",
+    "description": "Read a safe release decision package summary through governance-manager.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
+  {
+    "name": "governance.release.get_safety_state",
+    "description": "Read release safety-loop state through governance-manager.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
+  {
+    "name": "governance.release.list_blocking_signals",
+    "description": "List safe release blocking signal summaries through governance-manager.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
+  {
+    "name": "governance.release.list_decision_packages",
+    "description": "List safe release decision package summaries through governance-manager.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
+  {
+    "name": "governance.release.list_decisions",
+    "description": "List safe release decision summaries through governance-manager.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
+  {
+    "name": "governance.release.prepare_decision_package",
+    "description": "Prepare a release decision package through governance-manager from safe refs.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
+  {
+    "name": "governance.release.record_blocking_signal",
+    "description": "Record a release blocking signal through governance-manager.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
+  {
+    "name": "governance.release.record_safety_state",
+    "description": "Record release safety-loop state through governance-manager.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
+  {
+    "name": "governance.release.request_decision",
+    "description": "Request a release decision through governance-manager.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
+  {
+    "name": "governance.release.resolve_blocking_signal",
+    "description": "Resolve a release blocking signal through governance-manager.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
+  {
+    "name": "governance.release.submit_decision",
+    "description": "Submit a release decision through governance-manager.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
+  {
     "name": "governance.risk.evaluate",
     "description": "Evaluate risk through governance-manager from safe refs and summaries.",
     "has_input_schema": true,
@@ -1070,6 +1142,241 @@ func TestGovernanceGateOwnerErrorIsSafe(t *testing.T) {
 	}
 }
 
+func TestGovernanceReleasePackagePrepareRoutesToOwner(t *testing.T) {
+	t.Parallel()
+
+	governance := newFakeGovernanceManagerClient()
+	server := newTestServerWithGovernance(t, governance)
+	session, cleanup := connectClient(t, server)
+	defer cleanup()
+
+	result, err := session.CallTool(context.Background(), &mcpsdk.CallToolParams{
+		Name: ToolGovernanceReleasePrepareDecisionPackage,
+		Arguments: map[string]any{
+			"meta":                  validGovernanceCommandMetaArgs("prepare_release_package", nil),
+			"release_candidate_ref": "release-candidate:v1.2.3",
+			"project_context": map[string]any{
+				"project_ref":        "project:core",
+				"repository_ref":     "repository:kodex",
+				"release_policy_ref": "release-policy:v1",
+			},
+			"repository_refs": []any{"repository:kodex"},
+			"provider_refs": []any{map[string]any{
+				"pull_request_ref":          "provider:pr:1",
+				"changed_files_summary_ref": "changed-files-summary-1",
+				"provider_operation_ref":    "provider-operation-1",
+			}},
+			"runtime_refs": []any{map[string]any{
+				"job_ref":     "runtime-job-1",
+				"summary_ref": "runtime-summary-1",
+			}},
+			"agent_context": map[string]any{
+				"session_ref": "session-1",
+				"run_ref":     "run-1",
+			},
+			"review_signal_ids":         []any{"review-signal-1"},
+			"known_limitations_summary": "bounded limitations summary",
+			"risk_assessment_id":        "risk-assessment-1",
+			"evidence_refs":             []any{map[string]any{"kind": "document", "ref": "release-evidence-1", "summary": "bounded release evidence"}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool(): %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("CallTool() returned tool error: %+v", result.Content)
+	}
+	if governance.buildReleasePackageCalls != 1 {
+		t.Fatalf("buildReleasePackageCalls = %d, want 1", governance.buildReleasePackageCalls)
+	}
+	data, err := json.Marshal(result.StructuredContent)
+	if err != nil {
+		t.Fatalf("Marshal(): %v", err)
+	}
+	if !strings.Contains(string(data), "release-package-1") || !strings.Contains(string(data), "release-policy:v1") {
+		t.Fatalf("structured content does not include release package summary: %s", data)
+	}
+	if strings.Contains(string(data), "raw_provider_payload") || strings.Contains(string(data), "secret-token") {
+		t.Fatalf("structured content exposes unsafe data: %s", data)
+	}
+}
+
+func TestGovernanceReleaseDecisionSubmitRoutesToOwnerWithExpectedVersion(t *testing.T) {
+	t.Parallel()
+
+	governance := newFakeGovernanceManagerClient()
+	server := newTestServerWithGovernance(t, governance)
+	session, cleanup := connectClient(t, server)
+	defer cleanup()
+
+	expectedVersion := int64(9)
+	result, err := session.CallTool(context.Background(), &mcpsdk.CallToolParams{
+		Name: ToolGovernanceReleaseSubmitDecision,
+		Arguments: map[string]any{
+			"meta":                        validGovernanceCommandMetaArgs("submit_release_decision", &expectedVersion),
+			"release_decision_package_id": "release-package-1",
+			"gate_decision_id":            "gate-decision-1",
+			"outcome":                     "go_with_conditions",
+			"decision_actor_ref":          "user:owner",
+			"decision_policy_ref":         "release-policy:v1",
+			"reason":                      "bounded release decision reason",
+			"conditions_summary":          "watch postdeploy metrics",
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool(): %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("CallTool() returned tool error: %+v", result.Content)
+	}
+	if governance.submitReleaseCalls != 1 {
+		t.Fatalf("submitReleaseCalls = %d, want 1", governance.submitReleaseCalls)
+	}
+	if governance.lastExpectedVersion == nil || *governance.lastExpectedVersion != expectedVersion {
+		t.Fatalf("lastExpectedVersion = %v, want %d", governance.lastExpectedVersion, expectedVersion)
+	}
+	data, err := json.Marshal(result.StructuredContent)
+	if err != nil {
+		t.Fatalf("Marshal(): %v", err)
+	}
+	if !strings.Contains(string(data), "go_with_conditions") || strings.Contains(string(data), "transcript") {
+		t.Fatalf("structured content is not bounded release decision summary: %s", data)
+	}
+}
+
+func TestGovernanceReleaseDecisionListRequiresPackageOrProjectScope(t *testing.T) {
+	t.Parallel()
+
+	governance := newFakeGovernanceManagerClient()
+	server := newTestServerWithGovernance(t, governance)
+	session, cleanup := connectClient(t, server)
+	defer cleanup()
+
+	result, err := session.CallTool(context.Background(), &mcpsdk.CallToolParams{
+		Name: ToolGovernanceReleaseListDecisions,
+		Arguments: map[string]any{
+			"meta":    validGovernanceQueryMetaArgs(),
+			"outcome": "go",
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool(): %v", err)
+	}
+	if !result.IsError {
+		t.Fatalf("CallTool() IsError = false, want true")
+	}
+	if governance.listReleaseCalls != 0 {
+		t.Fatalf("listReleaseCalls = %d, want 0", governance.listReleaseCalls)
+	}
+}
+
+func TestGovernanceBlockingSignalLifecycleRoutesToOwner(t *testing.T) {
+	t.Parallel()
+
+	governance := newFakeGovernanceManagerClient()
+	server := newTestServerWithGovernance(t, governance)
+	session, cleanup := connectClient(t, server)
+	defer cleanup()
+
+	target := map[string]any{"type": "release_candidate", "ref": "release-candidate:v1.2.3"}
+	result, err := session.CallTool(context.Background(), &mcpsdk.CallToolParams{
+		Name: ToolGovernanceReleaseRecordBlockingSignal,
+		Arguments: map[string]any{
+			"meta":        validGovernanceCommandMetaArgs("record_blocking_signal", nil),
+			"target":      target,
+			"source_type": "runtime",
+			"source_ref":  "runtime-summary-1",
+			"severity":    "blocking",
+			"summary":     "bounded blocking summary",
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool(record): %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("CallTool(record) returned tool error: %+v", result.Content)
+	}
+
+	expectedVersion := int64(2)
+	result, err = session.CallTool(context.Background(), &mcpsdk.CallToolParams{
+		Name: ToolGovernanceReleaseResolveBlockingSignal,
+		Arguments: map[string]any{
+			"meta":               validGovernanceCommandMetaArgs("resolve_blocking_signal", &expectedVersion),
+			"blocking_signal_id": "blocking-signal-1",
+			"terminal_status":    "resolved",
+			"resolution_summary": "bounded resolution summary",
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool(resolve): %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("CallTool(resolve) returned tool error: %+v", result.Content)
+	}
+	if governance.recordBlockingCalls != 1 || governance.resolveBlockingCalls != 1 {
+		t.Fatalf("blocking calls = record %d resolve %d, want 1/1", governance.recordBlockingCalls, governance.resolveBlockingCalls)
+	}
+	if governance.lastExpectedVersion == nil || *governance.lastExpectedVersion != expectedVersion {
+		t.Fatalf("lastExpectedVersion = %v, want %d", governance.lastExpectedVersion, expectedVersion)
+	}
+	data, err := json.Marshal(result.StructuredContent)
+	if err != nil {
+		t.Fatalf("Marshal(): %v", err)
+	}
+	if !strings.Contains(string(data), "resolved") || strings.Contains(string(data), "stdout") {
+		t.Fatalf("structured content is not safe blocking signal summary: %s", data)
+	}
+}
+
+func TestGovernanceReleaseSafetyStateRoutesToOwner(t *testing.T) {
+	t.Parallel()
+
+	governance := newFakeGovernanceManagerClient()
+	server := newTestServerWithGovernance(t, governance)
+	session, cleanup := connectClient(t, server)
+	defer cleanup()
+
+	result, err := session.CallTool(context.Background(), &mcpsdk.CallToolParams{
+		Name: ToolGovernanceReleaseRecordSafetyState,
+		Arguments: map[string]any{
+			"meta":                        validGovernanceCommandMetaArgs("record_safety_state", nil),
+			"release_decision_package_id": "release-package-1",
+			"current_state":               "postdeploy_observation",
+			"runtime_job_ref":             "runtime-job-1",
+			"last_state_reason":           "bounded safety-loop reason",
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool(record): %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("CallTool(record) returned tool error: %+v", result.Content)
+	}
+	result, err = session.CallTool(context.Background(), &mcpsdk.CallToolParams{
+		Name: ToolGovernanceReleaseGetSafetyState,
+		Arguments: map[string]any{
+			"meta":                        validGovernanceQueryMetaArgs(),
+			"release_decision_package_id": "release-package-1",
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool(get): %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("CallTool(get) returned tool error: %+v", result.Content)
+	}
+	if governance.recordSafetyCalls != 1 || governance.getSafetyCalls != 1 {
+		t.Fatalf("safety calls = record %d get %d, want 1/1", governance.recordSafetyCalls, governance.getSafetyCalls)
+	}
+	data, err := json.Marshal(result.StructuredContent)
+	if err != nil {
+		t.Fatalf("Marshal(): %v", err)
+	}
+	if !strings.Contains(string(data), "postdeploy_observation") || strings.Contains(string(data), "kubeconfig") {
+		t.Fatalf("structured content is not safe safety-loop summary: %s", data)
+	}
+}
+
 func TestHTTPHandlerRequiresBearerToken(t *testing.T) {
 	t.Parallel()
 
@@ -1673,6 +1980,18 @@ type fakeGovernanceManagerClient struct {
 	submitDecisionCalls      int
 	cancelGateCalls          int
 	expireGateCalls          int
+	buildReleasePackageCalls int
+	getReleasePackageCalls   int
+	listReleasePackageCalls  int
+	requestReleaseCalls      int
+	submitReleaseCalls       int
+	getReleaseCalls          int
+	listReleaseCalls         int
+	recordBlockingCalls      int
+	resolveBlockingCalls     int
+	listBlockingCalls        int
+	recordSafetyCalls        int
+	getSafetyCalls           int
 	lastExpectedVersion      *int64
 	err                      error
 }
@@ -1805,6 +2124,139 @@ func (f *fakeGovernanceManagerClient) ExpireGate(_ context.Context, request *gov
 	return &governancev1.GateRequestResponse{GateRequest: gate}, nil
 }
 
+func (f *fakeGovernanceManagerClient) BuildReleaseDecisionPackage(_ context.Context, request *governancev1.BuildReleaseDecisionPackageRequest) (*governancev1.ReleaseDecisionPackageResponse, error) {
+	f.buildReleasePackageCalls++
+	f.lastExpectedVersion = request.GetMeta().ExpectedVersion
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &governancev1.ReleaseDecisionPackageResponse{ReleaseDecisionPackage: fakeReleaseDecisionPackage(request.GetReleaseCandidateRef())}, nil
+}
+
+func (f *fakeGovernanceManagerClient) GetReleaseDecisionPackage(_ context.Context, _ *governancev1.GetReleaseDecisionPackageRequest) (*governancev1.ReleaseDecisionPackageResponse, error) {
+	f.getReleasePackageCalls++
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &governancev1.ReleaseDecisionPackageResponse{ReleaseDecisionPackage: fakeReleaseDecisionPackage("release-candidate:v1.2.3")}, nil
+}
+
+func (f *fakeGovernanceManagerClient) ListReleaseDecisionPackages(_ context.Context, _ *governancev1.ListReleaseDecisionPackagesRequest) (*governancev1.ListReleaseDecisionPackagesResponse, error) {
+	f.listReleasePackageCalls++
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &governancev1.ListReleaseDecisionPackagesResponse{
+		ReleaseDecisionPackages: []*governancev1.ReleaseDecisionPackage{fakeReleaseDecisionPackage("release-candidate:v1.2.3")},
+		Page:                    &governancev1.PageResponse{},
+	}, nil
+}
+
+func (f *fakeGovernanceManagerClient) RequestReleaseDecision(_ context.Context, request *governancev1.RequestReleaseDecisionRequest) (*governancev1.ReleaseDecisionResponse, error) {
+	f.requestReleaseCalls++
+	f.lastExpectedVersion = request.GetMeta().ExpectedVersion
+	if f.err != nil {
+		return nil, f.err
+	}
+	decision := fakeReleaseDecision(request.GetReleaseDecisionPackageId())
+	decision.Status = governancev1.ReleaseDecisionStatus_RELEASE_DECISION_STATUS_REQUESTED
+	return &governancev1.ReleaseDecisionResponse{
+		ReleaseDecision:        decision,
+		ReleaseDecisionPackage: fakeReleaseDecisionPackage("release-candidate:v1.2.3"),
+	}, nil
+}
+
+func (f *fakeGovernanceManagerClient) SubmitReleaseDecision(_ context.Context, request *governancev1.SubmitReleaseDecisionRequest) (*governancev1.ReleaseDecisionResponse, error) {
+	f.submitReleaseCalls++
+	f.lastExpectedVersion = request.GetMeta().ExpectedVersion
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &governancev1.ReleaseDecisionResponse{
+		ReleaseDecision:        fakeReleaseDecision(request.GetReleaseDecisionPackageId()),
+		ReleaseDecisionPackage: fakeReleaseDecisionPackage("release-candidate:v1.2.3"),
+	}, nil
+}
+
+func (f *fakeGovernanceManagerClient) GetReleaseDecision(_ context.Context, _ *governancev1.GetReleaseDecisionRequest) (*governancev1.ReleaseDecisionResponse, error) {
+	f.getReleaseCalls++
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &governancev1.ReleaseDecisionResponse{
+		ReleaseDecision:        fakeReleaseDecision("release-package-1"),
+		ReleaseDecisionPackage: fakeReleaseDecisionPackage("release-candidate:v1.2.3"),
+	}, nil
+}
+
+func (f *fakeGovernanceManagerClient) ListReleaseDecisions(_ context.Context, _ *governancev1.ListReleaseDecisionsRequest) (*governancev1.ListReleaseDecisionsResponse, error) {
+	f.listReleaseCalls++
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &governancev1.ListReleaseDecisionsResponse{
+		ReleaseDecisions: []*governancev1.ReleaseDecision{fakeReleaseDecision("release-package-1")},
+		Page:             &governancev1.PageResponse{},
+	}, nil
+}
+
+func (f *fakeGovernanceManagerClient) RecordBlockingSignal(_ context.Context, request *governancev1.RecordBlockingSignalRequest) (*governancev1.BlockingSignalResponse, error) {
+	f.recordBlockingCalls++
+	f.lastExpectedVersion = request.GetMeta().ExpectedVersion
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &governancev1.BlockingSignalResponse{BlockingSignal: fakeBlockingSignal(request.GetTarget())}, nil
+}
+
+func (f *fakeGovernanceManagerClient) ResolveBlockingSignal(_ context.Context, request *governancev1.ResolveBlockingSignalRequest) (*governancev1.BlockingSignalResponse, error) {
+	f.resolveBlockingCalls++
+	f.lastExpectedVersion = request.GetMeta().ExpectedVersion
+	if f.err != nil {
+		return nil, f.err
+	}
+	signal := fakeBlockingSignal(&governancev1.TargetRef{
+		Type: governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_RELEASE_CANDIDATE,
+		Ref:  "release-candidate:v1.2.3",
+	})
+	signal.Status = request.GetTerminalStatus()
+	signal.ResolvedAt = stringPtr("2026-05-26T00:10:00Z")
+	return &governancev1.BlockingSignalResponse{BlockingSignal: signal}, nil
+}
+
+func (f *fakeGovernanceManagerClient) ListBlockingSignals(_ context.Context, _ *governancev1.ListBlockingSignalsRequest) (*governancev1.ListBlockingSignalsResponse, error) {
+	f.listBlockingCalls++
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &governancev1.ListBlockingSignalsResponse{
+		BlockingSignals: []*governancev1.BlockingSignal{fakeBlockingSignal(&governancev1.TargetRef{
+			Type: governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_RELEASE_CANDIDATE,
+			Ref:  "release-candidate:v1.2.3",
+		})},
+		Page: &governancev1.PageResponse{},
+	}, nil
+}
+
+func (f *fakeGovernanceManagerClient) RecordReleaseSafetyState(_ context.Context, request *governancev1.RecordReleaseSafetyStateRequest) (*governancev1.ReleaseSafetyStateResponse, error) {
+	f.recordSafetyCalls++
+	f.lastExpectedVersion = request.GetMeta().ExpectedVersion
+	if f.err != nil {
+		return nil, f.err
+	}
+	state := fakeReleaseSafetyState(request.GetReleaseDecisionPackageId())
+	state.CurrentState = request.GetCurrentState()
+	return &governancev1.ReleaseSafetyStateResponse{ReleaseSafetyState: state}, nil
+}
+
+func (f *fakeGovernanceManagerClient) GetReleaseSafetyState(_ context.Context, _ *governancev1.GetReleaseSafetyStateRequest) (*governancev1.ReleaseSafetyStateResponse, error) {
+	f.getSafetyCalls++
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &governancev1.ReleaseSafetyStateResponse{ReleaseSafetyState: fakeReleaseSafetyState("release-package-1")}, nil
+}
+
 func fakeRiskAssessmentResponse(target *governancev1.TargetRef) *governancev1.RiskAssessmentResponse {
 	return &governancev1.RiskAssessmentResponse{
 		RiskAssessment: fakeRiskAssessment(target),
@@ -1925,6 +2377,84 @@ func fakeGateDecision() *governancev1.GateDecision {
 		ConditionsSummary: stringPtr("ship after QA sign-off"),
 		SourceRef:         stringPtr("interaction-decision-1"),
 		DecidedAt:         "2026-05-25T00:01:00Z",
+	}
+}
+
+func fakeReleaseDecisionPackage(candidateRef string) *governancev1.ReleaseDecisionPackage {
+	return &governancev1.ReleaseDecisionPackage{
+		Id:                  "release-package-1",
+		ReleaseCandidateRef: candidateRef,
+		ProjectContext: &governancev1.ProjectContextRef{
+			ProjectRef:       stringPtr("project:core"),
+			RepositoryRef:    stringPtr("repository:kodex"),
+			ReleasePolicyRef: stringPtr("release-policy:v1"),
+		},
+		RepositoryRefs:   []string{"repository:kodex"},
+		RiskAssessmentId: stringPtr("risk-assessment-1"),
+		ProviderRefs: []*governancev1.ProviderContextRef{{
+			PullRequestRef:         stringPtr("provider:pr:1"),
+			ChangedFilesSummaryRef: stringPtr("changed-files-summary-1"),
+		}},
+		RuntimeRefs: []*governancev1.RuntimeContextRef{{
+			JobRef:      stringPtr("runtime-job-1"),
+			SummaryRef:  stringPtr("runtime-summary-1"),
+			ArtifactRef: stringPtr("release-artifact-1"),
+		}},
+		AgentContext: &governancev1.AgentContextRef{
+			SessionRef: stringPtr("session-1"),
+			RunRef:     stringPtr("run-1"),
+		},
+		ReviewSignalIds:         []string{"review-signal-1"},
+		EvidenceRefs:            []*governancev1.EvidenceRef{{Kind: governancev1.EvidenceKind_EVIDENCE_KIND_DOCUMENT, Ref: "release-evidence-1", Summary: "bounded release evidence"}},
+		KnownLimitationsSummary: "bounded limitations summary",
+		Status:                  governancev1.ReleaseDecisionPackageStatus_RELEASE_DECISION_PACKAGE_STATUS_READY,
+		Version:                 7,
+		CreatedAt:               "2026-05-26T00:00:00Z",
+		UpdatedAt:               "2026-05-26T00:01:00Z",
+	}
+}
+
+func fakeReleaseDecision(packageID string) *governancev1.ReleaseDecision {
+	return &governancev1.ReleaseDecision{
+		Id:                       "release-decision-1",
+		ReleaseDecisionPackageId: packageID,
+		GateDecisionId:           stringPtr("gate-decision-1"),
+		Outcome:                  governancev1.ReleaseDecisionOutcome_RELEASE_DECISION_OUTCOME_GO_WITH_CONDITIONS,
+		DecisionActorRef:         "user:owner",
+		DecisionPolicyRef:        "release-policy:v1",
+		Reason:                   "bounded release decision reason",
+		ConditionsSummary:        stringPtr("watch postdeploy metrics"),
+		Status:                   governancev1.ReleaseDecisionStatus_RELEASE_DECISION_STATUS_RESOLVED,
+		Version:                  3,
+		DecidedAt:                "2026-05-26T00:05:00Z",
+	}
+}
+
+func fakeBlockingSignal(target *governancev1.TargetRef) *governancev1.BlockingSignal {
+	return &governancev1.BlockingSignal{
+		Id:         "blocking-signal-1",
+		Target:     target,
+		SourceType: governancev1.BlockingSignalSourceType_BLOCKING_SIGNAL_SOURCE_TYPE_RUNTIME,
+		SourceRef:  stringPtr("runtime-summary-1"),
+		Severity:   governancev1.SignalSeverity_SIGNAL_SEVERITY_BLOCKING,
+		Summary:    "bounded blocking summary",
+		Status:     governancev1.BlockingSignalStatus_BLOCKING_SIGNAL_STATUS_ACTIVE,
+		Version:    2,
+		CreatedAt:  "2026-05-26T00:02:00Z",
+	}
+}
+
+func fakeReleaseSafetyState(packageID string) *governancev1.ReleaseSafetyState {
+	return &governancev1.ReleaseSafetyState{
+		Id:                       "release-safety-state-1",
+		ReleaseDecisionPackageId: packageID,
+		CurrentState:             governancev1.ReleaseSafetyStateKind_RELEASE_SAFETY_STATE_KIND_POSTDEPLOY_OBSERVATION,
+		RuntimeJobRef:            stringPtr("runtime-job-1"),
+		BlockingSignalCount:      1,
+		LastStateReason:          "bounded safety-loop reason",
+		Version:                  4,
+		CreatedAt:                "2026-05-26T00:06:00Z",
+		UpdatedAt:                "2026-05-26T00:07:00Z",
 	}
 }
 

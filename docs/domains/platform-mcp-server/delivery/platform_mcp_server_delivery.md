@@ -5,8 +5,8 @@ title: kodex — поставка platform-mcp-server
 status: active
 owner_role: EM
 created_at: 2026-05-14
-updated_at: 2026-05-26
-related_issues: [747, 753, 760, 771, 780, 830, 841, 698, 322]
+updated_at: 2026-05-27
+related_issues: [747, 753, 760, 771, 780, 830, 841, 852, 698, 322]
 related_prs: []
 related_docsets:
   - docs/domains/platform-mcp-server/product/requirements.md
@@ -45,8 +45,9 @@ approvals:
 | MCP-1 | #753 | Стратегия контрактов готова: MCP-инструменты описываются через MCP SDK, JSON Schema и snapshot-проверки `tools/list`; Codex hooks вынесены в `codex-hook-ingress`; YAML-каталог не является каноникой. |
 | MCP-2 | #760 | Сервисный каркас готов: процесс, конфигурация, health/readiness/metrics, MCP Streamable HTTP, проверка bearer-токена, `diagnostics.mcp_status.read`, каталог маршрутов к сервисам-владельцам и snapshot-проверка `tools/list`. Бизнес-маршруты, входной контур hooks, хранилище skills и манифесты выкладки не входят. |
 | MCP-3 | #771 | Инструменты `agent-manager` для реализованной поверхности: `agent.session.start`, `agent.run.start`, `agent.run.record_state`, `agent.session.record_snapshot` и `diagnostics.run_context.read` маршрутизируются только через `agent-manager`; acceptance, follow-up и Human gate остаются следующими срезами до готовности владельца. |
-| MCP-3g | #830 | Gate lifecycle инструменты governance готовы: `governance.gate.request/get/list/submit_decision/cancel/expire` маршрутизируются только через `governance-manager`, возвращают безопасные refs/status/summary и не хранят decision state в MCP. Risk evaluator, release decision engine и delivery/callback остаются отдельными срезами. |
+| MCP-3g | #830 | Gate lifecycle инструменты governance готовы: `governance.gate.request/get/list/submit_decision/cancel/expire` маршрутизируются только через `governance-manager`, возвращают безопасные refs/status/summary и не хранят decision state в MCP. Risk evaluator и release decision lifecycle закрываются отдельными срезами MCP-3r/MCP-3d; delivery/callback остаётся отдельным контуром. |
 | MCP-3r | #841 | Risk evaluator инструменты governance готовы: `governance.risk.evaluate/reevaluate/get/list` маршрутизируются только через `governance-manager`, принимают typed refs и bounded summaries, добирают matched rules/factors через typed owner-read и возвращают assessment refs/status/risk class, matched rule refs/counts, required gate refs, version/timestamps без хранения risk state в MCP. |
+| MCP-3d | #852 | Release decision lifecycle инструменты governance готовы: release package prepare/get/list, decision request/submit/get/list, blocking signal record/resolve/list и safety-loop record/get маршрутизируются только через `governance-manager`, возвращают safe refs/status/summary, counts, version/timestamps и не хранят release state в MCP. |
 | MCP-4 | #780 | Инструменты provider готовы: маршруты чтения и записи проекций work item, комментариев, связей, artifact signal, операций Issue/PR/comment/review и repository bootstrap/adoption идут только через `provider-hub`; artifact signal не принимает raw JSON payload в MCP-входе; webhook/reconciliation/limits не входят в этот срез. |
 | MCP-5 | не назначено | Project/runtime/fleet/package reads и ограниченная диагностика через сервисы-владельцы. |
 | MCP-6 | не назначено | Security hardening: actor/source binding, rate limits, backpressure, audit, idempotency и redaction metrics. |
@@ -57,7 +58,7 @@ approvals:
 | Домен или сервис | Связь | Статус |
 |---|---|---|
 | `agent-manager` | Владеет `Run`, session, flow, role, prompt, acceptance и состоянием ожидания flow. | MCP-3 подключает только готовые операции сессии, `Run`, session snapshot и безопасного чтения. Acceptance, follow-up и Human gate не регистрируются как MCP-инструменты до бизнес-реализации в `agent-manager` и соседних доменах. |
-| `governance-manager` | Владеет risk assessment, review signals, gate request/decision, release decision package и release decision. | MCP-3g подключает gate lifecycle к готовому GOV-4 контракту, MCP-3r подключает risk evaluator к готовому GOV-5 контракту. MCP не хранит risk/gate/release state и не делает `agent-manager` вторым владельцем governance-состояния; review signals и release decision engine остаются следующими срезами. |
+| `governance-manager` | Владеет risk assessment, review signals, gate request/decision, release decision package, release decision, blocking signals и release safety-loop. | MCP-3g подключает gate lifecycle к готовому GOV-4 контракту, MCP-3r подключает risk evaluator к готовому GOV-5 контракту, MCP-3d подключает release decision lifecycle к готовому GOV-6 контракту. MCP не хранит risk/gate/release state и не делает `agent-manager` вторым владельцем governance-состояния; review signals остаются отдельным срезом. |
 | `provider-hub` | Владеет чтением, записью и зеркалом provider-данных. | MCP-4 подключает только реализованные операции чтения и записи через `provider-hub`; MCP не ходит в GitHub/GitLab напрямую, не хранит provider-состояние и не возвращает сырой provider payload. |
 | `runtime-manager` | Владеет slot, workspace, job и runtime state. | MCP читает и маршрутизирует runtime-инструменты, но не выбирает слот и не исполняет job. |
 | `fleet-manager` | Владеет cluster health и placement decisions. | MCP может читать fleet status, но не повторяет placement resolver. |
