@@ -83,7 +83,7 @@ kodex_smoke_require_values() {
   if (( ${#missing_values[@]} > 0 )); then
     echo "${KODEX_SMOKE_SCRIPT_NAME}: normalized bootstrap env is required before render" >&2
     echo "missing values: ${missing_values[*]}" >&2
-    echo "use KODEX_SMOKE_ENV_FILE with generated bootstrap.env from bootstrap/host/bootstrap_remote_production.sh" >&2
+    echo "use KODEX_SMOKE_ENV_FILE with generated bootstrap env from bootstrap/host/bootstrap_cluster.sh install" >&2
     exit 1
   fi
 }
@@ -113,10 +113,13 @@ kodex_smoke_render() {
   if [[ "$KODEX_SMOKE_RENDER_DIR_IS_TEMP" != "true" ]]; then
     rm -rf "$RENDER_DIR"
   fi
-  go run "${PROJECT_ROOT}/cmd/manifest-render" \
-    --env-file "$KODEX_SMOKE_RENDER_ENV_FILE" \
-    --source "${PROJECT_ROOT}/deploy/base" \
-    --output "$RENDER_DIR"
+  (
+    cd "$PROJECT_ROOT"
+    go run ./cmd/manifest-render \
+      --env-file "$KODEX_SMOKE_RENDER_ENV_FILE" \
+      --source deploy/base \
+      --output "$RENDER_DIR"
+  )
 }
 
 kodex_kubectl() {

@@ -47,7 +47,11 @@
   `services.yaml`, `deploy/base/postgres/secrets.yaml.tpl`,
   `deploy/base/postgres/bootstrap-databases.sh`, `deploy/base/postgres/postgres.yaml.tpl`,
   профильный `deploy/base/<db-owner>/migrations.yaml.tpl`, `bootstrap/host/config.env.example`,
-  `bootstrap/host/bootstrap_remote_production.sh` и соответствующая архитектурная документация.
+  `bootstrap/host/bootstrap_cluster.sh` и соответствующая архитектурная документация.
+- Источник defaults не размножен: `services.yaml` владеет версиями/образами/deploy inventory,
+  Go config владеет безопасными runtime defaults сервиса, Kubernetes templates не дублируют
+  эти defaults через `envOr`, а `bootstrap/host/config.env.example` содержит только локальный
+  install-профиль и secret/bootstrap seed-поля.
 - Вынос общего кода в целевой `libs/*` оправдан (>= 2 потребителя); нет “god-lib”.
 - Если общий код или локальный контракт стал зависимостью deployable-сервиса, `services.yaml` `spec.versions.<service>.bumpOn` синхронно обновлён для всех потребителей, чтобы изменение зависимости поднимало версии и образы сервисов.
 - Новый production-код не размещён внутри устаревших или архивных каталогов.

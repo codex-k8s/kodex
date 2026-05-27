@@ -86,7 +86,7 @@ spec:
         runAsNonRoot: true
       containers:
         - name: codex-hook-ingress
-          image: {{ envOr "KODEX_CODEX_HOOK_INGRESS_IMAGE" "" }}
+          image: {{ image "codex-hook-ingress" }}
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

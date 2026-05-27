@@ -6,7 +6,7 @@ source "${ROOT_DIR}/lib.sh"
 load_env_file "${BOOTSTRAP_ENV_FILE:?}"
 
 REPO_DIR="$(repo_dir)"
-REPO_ARCHIVE="${KODEX_REMOTE_REPO_ARCHIVE:-/root/kodex-bootstrap/repo-src.tgz}"
+REPO_ARCHIVE="${KODEX_BOOTSTRAP_REPO_ARCHIVE:?KODEX_BOOTSTRAP_REPO_ARCHIVE is required}"
 
 [ -f "$REPO_ARCHIVE" ] || die "Repository archive not found: $REPO_ARCHIVE"
 

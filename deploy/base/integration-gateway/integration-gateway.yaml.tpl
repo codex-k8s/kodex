@@ -98,7 +98,7 @@ spec:
         runAsNonRoot: true
       containers:
         - name: integration-gateway
-          image: {{ envOr "KODEX_INTEGRATION_GATEWAY_IMAGE" "" }}
+          image: {{ image "integration-gateway" }}
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

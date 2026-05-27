@@ -2,29 +2,32 @@
 
 ## Назначение
 
-`bootstrap/**` задаёт воспроизводимый путь подготовки первого Kubernetes-контура `kodex` без Docker daemon:
+`bootstrap/**` задаёт один активный путь установки MVP: зайти на сервер,
+подготовить минимальный `bootstrap/host/config.env` и запустить локальный
+installer.
 
-- локальный режим: выполнение на сервере, где будет жить k3s;
-- удалённый режим: доставка bootstrap bundle через `TARGET_*` и запуск по SSH;
-- preflight/dry-run без раскрытия значений env;
-- установка и проверка k3s, kubeconfig, image GC и host firewall;
-- foundation для внутреннего registry и smoke-проверки mirror/Kaniko;
-- инструкции для последующего deploy backend-сервисов через готовые smoke scripts.
+Контур поднимает и проверяет:
 
-Реальная установка кластера запускается только отдельной командой владельца. PR с изменениями bootstrap не должен сам выполнять install.
+- k3s на текущем сервере;
+- kubeconfig для `OPERATOR_USER`;
+- kubelet image GC и host image prune timer;
+- `/opt/kodex` как локальный snapshot репозитория для install;
+- internal registry foundation;
+- registry mirror и Kaniko build smoke.
 
 ## Файлы
 
 | Путь | Назначение |
 |---|---|
-| `bootstrap/host/bootstrap_cluster.sh` | Основной entrypoint: `preflight` и `install`, режимы `local`/`remote`, `--dry-run`. |
-| `bootstrap/host/bootstrap_remote_production.sh` | Совместимый wrapper для удалённого install. |
-| `bootstrap/host/smoke_registry_kaniko.sh` | Проверяет registry mirror и Kaniko build/push без Docker daemon. |
-| `bootstrap/host/smoke_backend_contour.sh` | Последовательно запускает registry/Kaniko smoke и smoke готовых backend-сервисов. |
-| `bootstrap/remote/*.sh` | Идемпотентные шаги, которые выполняются на целевом сервере. |
-| `deploy/base/bootstrap-foundation/**` | Активные manifests внутреннего registry. |
-| `deploy/base/bootstrap-builder-smoke/**` | Активные manifests mirror/Kaniko smoke jobs. |
-| `bootstrap/host/config.env.example` | Пример локального env. Реальный `config.env` не коммитится и не печатается. |
+| `bootstrap/host/bootstrap_cluster.sh` | Единственный активный entrypoint: `preflight`, `install`, `--dry-run`. |
+| `bootstrap/local/install.sh` | Локальный privileged orchestrator install-шагов. |
+| `bootstrap/local/steps/*.sh` | Узкие idempotent host/Kubernetes steps. |
+| `bootstrap/host/smoke_registry_kaniko.sh` | Registry mirror + Kaniko build/push smoke без Docker daemon. |
+| `bootstrap/host/smoke_backend_contour.sh` | Backend smoke после подготовки образов сервисов. |
+| `deploy/base/bootstrap-foundation/**` | Manifests внутреннего registry. |
+| `deploy/base/bootstrap-builder-smoke/**` | Manifests mirror/Kaniko smoke jobs. |
+| `cmd/manifest-render` | Stack-aware renderer: читает `services.yaml`, затем применяет env overrides. |
+| `bootstrap/host/config.env.example` | Минимальный пример env для локальной установки. |
 
 ## Подготовка env
 
@@ -32,74 +35,73 @@
 cp bootstrap/host/config.env.example bootstrap/host/config.env
 ```
 
-Заполните `bootstrap/host/config.env`. Значения `TARGET_*`, домены, адреса, email, токены, ключи и kubeconfig считаются чувствительными: не публикуйте их в Issue, PR, логах и документации.
+Заполните `bootstrap/host/config.env`. Домены, адреса, email, токены, ключи,
+пароли, DSN и kubeconfig считаются чувствительными: не публикуйте их в Issue,
+PR, логах и документации.
 
-Минимально важные группы параметров:
+Минимально важные параметры:
 
-- `TARGET_*` и operator public key для удалённого режима;
-- `OPERATOR_USER` для локального и удалённого режима; в локальном режиме operator public key можно не задавать, тогда bootstrap создаёт пользователя без `authorized_keys`;
+- `OPERATOR_USER`;
 - `KODEX_PRODUCTION_NAMESPACE`;
-- `KODEX_PRODUCTION_DOMAIN` и `KODEX_INGRESS_HOST_NETWORK` как входные предпосылки будущего ingress-контура;
+- `KODEX_PRODUCTION_DOMAIN`;
+- `KODEX_BOOTSTRAP_PUBLIC_HOST`, если DNS нужно сверять с публичным host/IP, а не с локальными адресами сервера;
 - `KODEX_INTERNAL_REGISTRY_*`;
-- `KODEX_KANIKO_*` и `KODEX_IMAGE_MIRROR_*`;
-- токены и секреты сервисов-владельцев, если они не должны генерироваться bootstrap-скриптом.
+- `KODEX_SSH_PORT`, если host firewall включён;
+- пустые runtime secret seeds, которые bootstrap сгенерирует при install.
 
-Если runtime token, PostgreSQL password или DSN оставлены пустыми, `bootstrap/remote/45_prepare_runtime_env.sh` генерирует или выводит безопасные значения на целевом сервере и дописывает их в переданный bootstrap env без печати секретов.
+Версии и дефолтные имена образов берутся из `services.yaml`. Env-переменные
+вроде `KODEX_REGISTRY_IMAGE`, `KODEX_KANIKO_EXECUTOR_IMAGE` и
+`KODEX_IMAGE_MIRROR_TOOL_IMAGE` являются override-слоем, а не вторым источником
+версий.
+
+Правило defaults:
+
+- `services.yaml` задаёт версии, образы, deploy inventory и стандартные имена артефактов;
+- Go config сервиса задаёт безопасные runtime defaults самого сервиса;
+- Kubernetes templates не повторяют runtime defaults сервиса как `envOr`, если сервис уже имеет такой default;
+- `bootstrap/host/config.env.example` хранит только локальные install-настройки и secret/bootstrap seed-поля.
 
 ## Preflight и dry-run
 
-Локальная проверка без установки:
-
 ```bash
-bash bootstrap/host/bootstrap_cluster.sh preflight --mode local --env-file bootstrap/host/config.env
-```
-
-Удалённая проверка через SSH:
-
-```bash
-bash bootstrap/host/bootstrap_cluster.sh preflight --mode remote --env-file bootstrap/host/config.env
+bash bootstrap/host/bootstrap_cluster.sh preflight --env-file bootstrap/host/config.env
 ```
 
 План без запуска install-шагов:
 
 ```bash
-bash bootstrap/host/bootstrap_cluster.sh install --mode remote --env-file bootstrap/host/config.env --dry-run
+bash bootstrap/host/bootstrap_cluster.sh install --env-file bootstrap/host/config.env --dry-run
 ```
 
-В режиме `local` dry-run выполняет preflight на текущем сервере и печатает план. В режиме `remote` dry-run доставляет только preflight bundle через `TARGET_*`, выполняет target-side preflight по SSH и печатает план без запуска install, k3s, firewall или registry-шагов. Если `--skip-ssh` указан явно, remote preflight проверяет только локальную конфигурацию `TARGET_*` и не подтверждает состояние target.
+Preflight проверяет ОС, root/sudo, базовые команды, k3s/kubectl при наличии,
+DNS prerequisite, наличие bootstrap manifests и обязательные env-поля. Проверка
+не печатает значения env, домены или адреса.
 
-Preflight проверяет ОС, root/sudo, базовые команды, k3s/kubectl при наличии, DNS/ingress prerequisites, registry/Kaniko manifests и обязательные env-поля. DNS prerequisite для `KODEX_PRODUCTION_DOMAIN` требует, чтобы production domain резолвился в `TARGET_HOST` или, в local mode без `TARGET_HOST`, в текущий host. Проверка не печатает значения env, домены или адреса.
+## Установка
 
-## Установка после merge
-
-Локальный режим на сервере:
-
-```bash
-bash bootstrap/host/bootstrap_cluster.sh install --mode local --env-file bootstrap/host/config.env
-```
-
-Удалённый режим через `TARGET_*`:
+Установка запускается только на сервере, где должен жить Kubernetes:
 
 ```bash
-bash bootstrap/host/bootstrap_cluster.sh install --mode remote --env-file bootstrap/host/config.env
+bash bootstrap/host/bootstrap_cluster.sh install --env-file bootstrap/host/config.env
 ```
 
 Install выполняет шаги:
 
 1. preflight;
 2. подготовка ОС и системных пакетов;
-3. создание operator user;
+3. создание `OPERATOR_USER`;
 4. установка или проверка k3s;
 5. настройка `/etc/rancher/k3s/registries.yaml` на internal registry;
 6. настройка kubelet image GC и host image prune timer;
 7. проверка network prerequisites без установки ingress/cert-manager;
 8. доставка snapshot репозитория в `/opt/kodex`;
 9. подготовка runtime env без печати секретов;
-10. применение internal registry foundation;
+10. render/apply internal registry foundation;
 11. включение host firewall baseline;
-12. итоговый отчёт с командами проверки.
+12. итоговый отчёт.
 
-Архив репозитория исключает `.git`, `.local` и `bootstrap/host/*.env`; runtime env передаётся отдельно.
+Архив репозитория исключает `.git`, `.local` и `bootstrap/host/*.env`; runtime
+env передаётся отдельно.
 
 ## Registry и Kaniko smoke
 
@@ -129,21 +131,5 @@ KODEX_SMOKE_ENV_FILE=bootstrap/host/config.env \
   bash bootstrap/host/smoke_backend_contour.sh
 ```
 
-По умолчанию запускаются smoke scripts для готового backend-контура: `access-manager`, `project-catalog`, `package-hub`, `provider-hub`, `fleet-manager`, `runtime-manager`, `codex-hook-ingress`, `integration-gateway`.
-
-Можно ограничить набор:
-
-```bash
-KODEX_BACKEND_SMOKE_SERVICES="access-manager project-catalog" \
-KODEX_SMOKE_ENV_FILE=bootstrap/host/config.env \
-  bash bootstrap/host/smoke_backend_contour.sh
-```
-
-Frontend в этом bootstrap-срезе не разворачивается.
-
-## Границы среза
-
-- Registry в MVP-профиле работает без auth и доступен на node loopback через `hostPort` `127.0.0.1:<KODEX_INTERNAL_REGISTRY_PORT>`.
-- Профиль рассчитан на single-node k3s. Для multi-node нужен отдельный registry profile.
-- Ingress controller, cert-manager, frontend, full runtime image build orchestration и физический deploy pipeline не добавлены этим срезом.
-- `bootstrap/**` не хранит и не печатает secret values; raw env находится только в локальном/целевом bootstrap env.
+Frontend, business services deploy и full runtime build orchestration не входят
+в этот bootstrap foundation-срез.

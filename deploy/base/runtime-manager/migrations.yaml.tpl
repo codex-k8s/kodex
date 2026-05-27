@@ -21,7 +21,7 @@ spec:
         runAsNonRoot: true
       initContainers:
         - name: wait-runtime-manager-db
-          image: {{ envOr "KODEX_POSTGRES_IMAGE" "pgvector/pgvector:pg16" }}
+          image: {{ imageOr "postgres" "KODEX_POSTGRES_IMAGE" }}
           imagePullPolicy: IfNotPresent
           securityContext:
             runAsNonRoot: true
@@ -45,7 +45,7 @@ spec:
                   key: KODEX_RUNTIME_MANAGER_DATABASE_DSN
       containers:
         - name: migrations
-          image: {{ envOr "KODEX_RUNTIME_MANAGER_MIGRATIONS_IMAGE" "" }}
+          image: {{ image "runtime-manager-migrations" }}
           imagePullPolicy: IfNotPresent
           securityContext:
             runAsNonRoot: true

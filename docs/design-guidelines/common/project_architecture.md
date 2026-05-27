@@ -46,7 +46,7 @@
 - обновлять production deploy env/vars, манифесты и инвентарь сервисов;
 - обновлять bootstrap-синхронизацию GitHub vars/secrets и секретов Kubernetes:
   `bootstrap/host/config.env.example`,
-  `bootstrap/host/bootstrap_remote_production.sh` или новые согласованные bootstrap-компоненты;
+  `bootstrap/host/bootstrap_cluster.sh` или новые согласованные bootstrap-компоненты;
 - обновлять манифесты выкладки сервиса в `deploy/base/<service>/*.yaml.tpl`
   и Dockerfile сервиса в `services/<zone>/<service>/Dockerfile`.
 - если меняется набор инструментов для agent-runner (dogfooding), обновлять
@@ -61,9 +61,16 @@
 - обновлять `deploy/base/postgres/postgres.yaml.tpl`, если меняется Job подготовки БД или его env;
 - обновлять `deploy/base/<db-owner>/migrations.yaml.tpl`, если у владельца схемы есть отдельное
   Kubernetes-задание миграций;
-- обновлять `bootstrap/host/config.env.example` и `bootstrap/host/bootstrap_remote_production.sh`,
+- обновлять `bootstrap/host/config.env.example` и `bootstrap/host/bootstrap_cluster.sh`,
   чтобы env, DSN и image-переменные попали в runtime-секрет синхронно с кодом;
 - обновлять delivery/architecture документы, где описаны владелец БД, миграции и порядок выкладки.
+
+### Источники defaults
+
+- `services.yaml` является источником версий, образов, deploy inventory и стандартных имён артефактов.
+- Go config deployable-сервиса является источником безопасных runtime defaults самого сервиса.
+- Kubernetes templates задают обязательные env, секреты, связи с другими сервисами, параметры окружения и явные overrides; они не должны повторять runtime defaults сервиса как `envOr`, если default уже задан в Go config.
+- `bootstrap/host/config.env.example` остаётся минимальным локальным install-профилем: домен, namespace, локальные настройки установки и secret/bootstrap seed-поля.
 
 Целевое ядро сервисов определяется актуальной архитектурной документацией проекта.
 Устаревшие сервисы не являются базой новой реализации.

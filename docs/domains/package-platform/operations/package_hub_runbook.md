@@ -37,7 +37,7 @@ approvals:
 
 - Доступ к Kubernetes namespace платформы.
 - Доступ к логам `package-hub`, `package-hub-migrations`, `access-manager` и `postgres`.
-- Доступ к bootstrap env, сгенерированному `bootstrap/host/bootstrap_remote_production.sh`.
+- Доступ к локальному bootstrap env, подготовленному `bootstrap/host/bootstrap_cluster.sh`.
 - Значения секретов не выводить в логи, Issue, PR и сообщения.
 
 ## Диагностика

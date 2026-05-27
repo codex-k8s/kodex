@@ -60,7 +60,7 @@ spec:
         fsGroup: 1000
       containers:
         - name: registry
-          image: {{ envOr "KODEX_REGISTRY_IMAGE" "registry:2" }}
+          image: {{ imageOr "registry" "KODEX_REGISTRY_IMAGE" }}
           imagePullPolicy: IfNotPresent
           ports:
             - name: registry

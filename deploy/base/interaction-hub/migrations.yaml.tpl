@@ -21,7 +21,7 @@ spec:
         runAsNonRoot: true
       initContainers:
         - name: wait-interaction-hub-db
-          image: {{ envOr "KODEX_POSTGRES_IMAGE" "pgvector/pgvector:pg16" }}
+          image: {{ imageOr "postgres" "KODEX_POSTGRES_IMAGE" }}
           imagePullPolicy: IfNotPresent
           securityContext:
             runAsNonRoot: true
@@ -45,7 +45,7 @@ spec:
                   key: KODEX_INTERACTION_HUB_DATABASE_DSN
       containers:
         - name: migrations
-          image: {{ envOr "KODEX_INTERACTION_HUB_MIGRATIONS_IMAGE" "" }}
+          image: {{ image "interaction-hub-migrations" }}
           imagePullPolicy: IfNotPresent
           securityContext:
             runAsNonRoot: true

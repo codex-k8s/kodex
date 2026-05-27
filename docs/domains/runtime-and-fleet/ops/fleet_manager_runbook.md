@@ -35,7 +35,7 @@ approvals:
 - Доступ к Kubernetes-кластеру целевой установки.
 - Секреты, DSN, адреса и токены берутся из локального bootstrap-профиля и не публикуются в Issue/PR.
 - Для gRPC smoke-проверки локально нужен `grpcurl`.
-- Перед smoke-путём должен быть подготовлен нормализованный `bootstrap.env` из `bootstrap/host/bootstrap_remote_production.sh`.
+- Перед smoke-путём должен быть подготовлен локальный bootstrap env через `bootstrap/host/bootstrap_cluster.sh`.
 
 ## Сборка образов
 
