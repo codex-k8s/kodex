@@ -214,6 +214,8 @@ spec:
         - proto/kodex/access_accounts/v1
         - proto/kodex/governance/v1
         - specs/asyncapi/governance-manager.v1.yaml
+        - deploy/base/governance-manager
+        - scripts/smoke-governance-manager.sh
     platform-mcp-server:
       value: "0.1.0"
       bumpOn:
@@ -448,6 +450,23 @@ spec:
       context: .
       imageEnv: KODEX_FLEET_MANAGER_MIGRATIONS_IMAGE
       migratesDatabase: kodex_fleet_manager
+    governance-manager:
+      type: build
+      repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_GOVERNANCE_MANAGER_INTERNAL_IMAGE_REPOSITORY" "kodex/governance-manager" }}'
+      tagTemplate: '{{ index .Versions "governance-manager" }}'
+      dockerfile: services/internal/governance-manager/Dockerfile
+      target: prod
+      context: .
+      imageEnv: KODEX_GOVERNANCE_MANAGER_IMAGE
+    governance-manager-migrations:
+      type: migration-build
+      repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_GOVERNANCE_MANAGER_MIGRATIONS_INTERNAL_IMAGE_REPOSITORY" "kodex/governance-manager-migrations" }}'
+      tagTemplate: '{{ index .Versions "governance-manager" }}'
+      dockerfile: services/internal/governance-manager/Dockerfile
+      target: migrations
+      context: .
+      imageEnv: KODEX_GOVERNANCE_MANAGER_MIGRATIONS_IMAGE
+      migratesDatabase: kodex_governance_manager
     platform-event-log-migrations:
       type: migration-build
       repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_PLATFORM_EVENT_LOG_MIGRATIONS_INTERNAL_IMAGE_REPOSITORY" "kodex/platform-event-log-migrations" }}'
@@ -728,6 +747,40 @@ spec:
           livez: /health/livez
           readyz: /health/readyz
           metrics: /metrics
+    - name: governance-manager
+      status: foundation
+      zone: internal
+      path: services/internal/governance-manager
+      dockerfile: services/internal/governance-manager/Dockerfile
+      imageEnv: KODEX_GOVERNANCE_MANAGER_IMAGE
+      internalImageRepositoryEnv: KODEX_GOVERNANCE_MANAGER_INTERNAL_IMAGE_REPOSITORY
+      migrationsImageEnv: KODEX_GOVERNANCE_MANAGER_MIGRATIONS_IMAGE
+      migrationsInternalImageRepositoryEnv: KODEX_GOVERNANCE_MANAGER_MIGRATIONS_INTERNAL_IMAGE_REPOSITORY
+      ownerDomain: risk-and-release-governance
+      apiContracts:
+        grpc: proto/kodex/governance/v1/governance_manager.proto
+        asyncapi: specs/asyncapi/governance-manager.v1.yaml
+      database:
+        owner: governance-manager
+        migrations: services/internal/governance-manager/cmd/cli/migrations
+      dependencies:
+        - access-manager
+        - platform-event-log
+      implementation:
+        database: postgresql-foundation
+        repository: postgres
+        outbox: service-local-postgres-event-log
+        evaluator: local-safe-summary-rules
+        serviceClientReads: not-enabled
+        externalRefs: explicit-safe-refs-only
+      deploy:
+        serviceManifest: deploy/base/governance-manager/governance-manager.yaml.tpl
+        migrationsManifest: deploy/base/governance-manager/migrations.yaml.tpl
+        kustomization: deploy/base/governance-manager/kustomization.yaml.tpl
+        health:
+          livez: /health/livez
+          readyz: /health/readyz
+          metrics: /metrics
     - name: fleet-manager
       status: foundation
       zone: internal
@@ -819,6 +872,14 @@ spec:
       dockerfile: services/internal/provider-hub/Dockerfile
       migrationsImageEnv: KODEX_PROVIDER_HUB_MIGRATIONS_IMAGE
       purpose: provider-native-projections-webhook-reconciliation-operations
+    - name: governance-manager
+      status: foundation
+      owner: governance-manager
+      databaseName: kodex_governance_manager
+      migrations: services/internal/governance-manager/cmd/cli/migrations
+      dockerfile: services/internal/governance-manager/Dockerfile
+      migrationsImageEnv: KODEX_GOVERNANCE_MANAGER_MIGRATIONS_IMAGE
+      purpose: governance-risk-gate-release-decisions
     - name: interaction-hub
       status: foundation
       owner: interaction-hub
@@ -893,6 +954,31 @@ spec:
           livez: /health/livez
           readyz: /health/readyz
           metrics: /metrics
+    - name: interaction-hub
+      status: scaffold
+      zone: internal
+      path: services/internal/interaction-hub
+      ownerDomain: interaction-hub
+      apiContracts:
+        grpc: proto/kodex/interactions/v1/interaction_hub.proto
+        asyncapi: specs/asyncapi/interaction-hub.v1.yaml
+      dependencies:
+        - access-manager
+        - package-hub
+        - runtime-manager
+        - fleet-manager
+        - platform-event-log
+      implementation:
+        businessOperations: thread-message-mvp
+        database: postgresql-foundation
+        migrations: services/internal/interaction-hub/cmd/cli/migrations
+        outbox: service-local-postgres-event-log
+        channelAdapters: planned
+      deploy:
+        health:
+          livez: /health/livez
+          readyz: /health/readyz
+          metrics: /metrics
   deployManifests:
     - name: bootstrap-foundation
       path: deploy/base/bootstrap-foundation/kustomization.yaml.tpl
@@ -930,6 +1016,7 @@ spec:
         - kodex_project_catalog
         - kodex_package_hub
         - kodex_provider_hub
+        - kodex_governance_manager
         - kodex_interaction_hub
         - kodex_fleet_manager
         - kodex_runtime_manager
@@ -969,6 +1056,13 @@ spec:
     - name: provider-hub-migrations
       path: deploy/base/provider-hub/migrations.yaml.tpl
       migratesDatabase: kodex_provider_hub
+      requires:
+        - postgres-secrets
+        - postgres
+        - platform-event-log-migrations
+    - name: governance-manager-migrations
+      path: deploy/base/governance-manager/migrations.yaml.tpl
+      migratesDatabase: kodex_governance_manager
       requires:
         - postgres-secrets
         - postgres
@@ -1030,6 +1124,14 @@ spec:
       deploysService: provider-hub
       requires:
         - provider-hub-migrations
+        - platform-event-log-migrations
+        - access-manager
+    - name: governance-manager
+      path: deploy/base/governance-manager/governance-manager.yaml.tpl
+      kustomization: deploy/base/governance-manager/kustomization.yaml.tpl
+      deploysService: governance-manager
+      requires:
+        - governance-manager-migrations
         - platform-event-log-migrations
         - access-manager
     - name: interaction-hub

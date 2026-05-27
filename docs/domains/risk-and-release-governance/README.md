@@ -32,6 +32,8 @@
 | Дизайн | `architecture/design.md` |
 | Модель данных | `architecture/data_model.md` |
 | API-обзор | `architecture/api_contract.md` |
+| Runbook | `ops/governance_manager_runbook.md` |
+| Наблюдаемость | `ops/governance_manager_monitoring.md` |
 | План поставки | `delivery/risk_governance_delivery.md` |
 
 ## Ключевые решения
@@ -48,6 +50,7 @@
 - Сервис-владелец: `services/internal/governance-manager`.
 - Сервисный каркас: процесс, конфигурация, health/readiness/metrics, gRPC registration и безопасные backlog-handlers.
 - Review signal refs intake: provider/agent/interaction evidence refs принимаются как safe refs owner-доменов, проходят access check и дедуплицируются по source fingerprint без копирования чужого state.
+- Эксплуатационный контур: Dockerfile, Kubernetes manifests, migration Job, env/secret inventory, smoke-проверка, runbook и monitoring готовы для первого backend deploy.
 - gRPC-контракт: `proto/kodex/governance/v1/governance_manager.proto`.
 - Сгенерированный Go-контракт: `proto/gen/go/kodex/governance/v1/**`.
 - AsyncAPI: `specs/asyncapi/governance-manager.v1.yaml`.

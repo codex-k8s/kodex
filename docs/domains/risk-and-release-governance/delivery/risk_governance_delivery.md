@@ -13,6 +13,8 @@ related_docsets:
   - docs/domains/risk-and-release-governance/architecture/design.md
   - docs/domains/risk-and-release-governance/architecture/data_model.md
   - docs/domains/risk-and-release-governance/architecture/api_contract.md
+  - docs/domains/risk-and-release-governance/ops/governance_manager_runbook.md
+  - docs/domains/risk-and-release-governance/ops/governance_manager_monitoring.md
 approvals:
   required: ["Owner"]
   status: pending
@@ -50,7 +52,7 @@ approvals:
 | GOV-7b | #869 | Release package enrichment готов: локальные governance refs валидируются и обогащаются bounded snapshot, внешние refs остаются explicit с safe summary diagnostic до service-client срезов. |
 | GOV-7c | #886 | Review signal refs intake готов: provider/agent/interaction evidence refs принимаются как safe owner-domain refs, запись проверяет `governance.signal.record`, повтор по source fingerprint не создаёт дубль. |
 | GOV-7 | не назначено | Интеграции с `agent-manager`, `provider-hub`, `interaction-hub`, `runtime-manager`, `project-catalog` и `operations-hub` подключены через согласованные контракты. |
-| GOV-8 | не назначено | Эксплуатационный контур: deploy manifests, migration job, smoke checks, runbook и operator projections. |
+| GOV-8 | без отдельного Issue | Эксплуатационный контур для первого backend deploy готов: Dockerfile, Kubernetes manifests, migration Job, env/secret inventory, smoke check, runbook и monitoring. Operator projections остаются отдельным operations-срезом. |
 
 ## MVP-порядок
 
@@ -79,6 +81,7 @@ approvals:
 | Review signal refs intake | Готов для provider review/comment/check refs, agent run/session/acceptance refs и interaction decision/callback refs через typed `evidence_refs`; `governance-manager` хранит только signal projection metadata, нормализует refs, проверяет access и дедуплицирует повтор по source fingerprint. | GOV-7c |
 | Release decision lifecycle и safety-loop | Готовы для package build/read/list, decision request/submit/read/list, blocking signals и текущего safety-loop state на safe refs/summaries. | GOV-6 |
 | Release integration refs | Готовы для project/repository/release line, provider Issue/PR/check/review, agent run/acceptance, runtime job/deploy, local risk assessment и gate refs с bounded summaries/status/digest/timestamps/version; локальные governance refs обогащаются из repository, внешние refs получают safe summary diagnostic при отсутствии owner summary. | GOV-7b |
+| Эксплуатационный контур | Готов для первого backend deploy: service/migrations Dockerfile stages, Kubernetes ServiceAccount/Service/Deployment/Job, runtime env/secret inventory, PostgreSQL database bootstrap, smoke-проверка, runbook и monitoring. | GOV-8 |
 | Интеграции с `agent-manager`, `provider-hub`, `interaction-hub`, `runtime-manager` и `project-catalog` | Service-client чтения, provider write, delivery callbacks и deploy orchestration не реализованы; governance связывает safe refs без владения чужой доменной истиной. | GOV-7 |
 
 ## Синхронизация с соседними доменами
