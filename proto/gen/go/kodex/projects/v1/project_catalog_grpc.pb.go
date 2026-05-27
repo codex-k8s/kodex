@@ -32,6 +32,7 @@ const (
 	ProjectCatalogService_ListRepositories_FullMethodName                     = "/kodex.projects.v1.ProjectCatalogService/ListRepositories"
 	ProjectCatalogService_ImportServicesPolicy_FullMethodName                 = "/kodex.projects.v1.ProjectCatalogService/ImportServicesPolicy"
 	ProjectCatalogService_ImportBootstrapServicesPolicy_FullMethodName        = "/kodex.projects.v1.ProjectCatalogService/ImportBootstrapServicesPolicy"
+	ProjectCatalogService_ReconcileBootstrapMergeSignal_FullMethodName        = "/kodex.projects.v1.ProjectCatalogService/ReconcileBootstrapMergeSignal"
 	ProjectCatalogService_GetServicesPolicy_FullMethodName                    = "/kodex.projects.v1.ProjectCatalogService/GetServicesPolicy"
 	ProjectCatalogService_ListServiceDescriptors_FullMethodName               = "/kodex.projects.v1.ProjectCatalogService/ListServiceDescriptors"
 	ProjectCatalogService_CreatePolicyEditProposal_FullMethodName             = "/kodex.projects.v1.ProjectCatalogService/CreatePolicyEditProposal"
@@ -90,6 +91,8 @@ type ProjectCatalogServiceClient interface {
 	ImportServicesPolicy(ctx context.Context, in *ImportServicesPolicyRequest, opts ...grpc.CallOption) (*ServicesPolicyResponse, error)
 	// ImportBootstrapServicesPolicy imports checked services.yaml after a merged bootstrap PR and activates the repository binding.
 	ImportBootstrapServicesPolicy(ctx context.Context, in *ImportBootstrapServicesPolicyRequest, opts ...grpc.CallOption) (*BootstrapServicesPolicyImportResponse, error)
+	// ReconcileBootstrapMergeSignal imports checked services.yaml from a safe provider bootstrap merge signal.
+	ReconcileBootstrapMergeSignal(ctx context.Context, in *ReconcileBootstrapMergeSignalRequest, opts ...grpc.CallOption) (*BootstrapServicesPolicyImportResponse, error)
 	// GetServicesPolicy returns a checked services.yaml projection.
 	GetServicesPolicy(ctx context.Context, in *GetServicesPolicyRequest, opts ...grpc.CallOption) (*ServicesPolicyResponse, error)
 	// ListServiceDescriptors returns typed service descriptors from active policy.
@@ -268,6 +271,16 @@ func (c *projectCatalogServiceClient) ImportBootstrapServicesPolicy(ctx context.
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(BootstrapServicesPolicyImportResponse)
 	err := c.cc.Invoke(ctx, ProjectCatalogService_ImportBootstrapServicesPolicy_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectCatalogServiceClient) ReconcileBootstrapMergeSignal(ctx context.Context, in *ReconcileBootstrapMergeSignalRequest, opts ...grpc.CallOption) (*BootstrapServicesPolicyImportResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BootstrapServicesPolicyImportResponse)
+	err := c.cc.Invoke(ctx, ProjectCatalogService_ReconcileBootstrapMergeSignal_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -528,6 +541,8 @@ type ProjectCatalogServiceServer interface {
 	ImportServicesPolicy(context.Context, *ImportServicesPolicyRequest) (*ServicesPolicyResponse, error)
 	// ImportBootstrapServicesPolicy imports checked services.yaml after a merged bootstrap PR and activates the repository binding.
 	ImportBootstrapServicesPolicy(context.Context, *ImportBootstrapServicesPolicyRequest) (*BootstrapServicesPolicyImportResponse, error)
+	// ReconcileBootstrapMergeSignal imports checked services.yaml from a safe provider bootstrap merge signal.
+	ReconcileBootstrapMergeSignal(context.Context, *ReconcileBootstrapMergeSignalRequest) (*BootstrapServicesPolicyImportResponse, error)
 	// GetServicesPolicy returns a checked services.yaml projection.
 	GetServicesPolicy(context.Context, *GetServicesPolicyRequest) (*ServicesPolicyResponse, error)
 	// ListServiceDescriptors returns typed service descriptors from active policy.
@@ -620,6 +635,9 @@ func (UnimplementedProjectCatalogServiceServer) ImportServicesPolicy(context.Con
 }
 func (UnimplementedProjectCatalogServiceServer) ImportBootstrapServicesPolicy(context.Context, *ImportBootstrapServicesPolicyRequest) (*BootstrapServicesPolicyImportResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ImportBootstrapServicesPolicy not implemented")
+}
+func (UnimplementedProjectCatalogServiceServer) ReconcileBootstrapMergeSignal(context.Context, *ReconcileBootstrapMergeSignalRequest) (*BootstrapServicesPolicyImportResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReconcileBootstrapMergeSignal not implemented")
 }
 func (UnimplementedProjectCatalogServiceServer) GetServicesPolicy(context.Context, *GetServicesPolicyRequest) (*ServicesPolicyResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetServicesPolicy not implemented")
@@ -938,6 +956,24 @@ func _ProjectCatalogService_ImportBootstrapServicesPolicy_Handler(srv interface{
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ProjectCatalogServiceServer).ImportBootstrapServicesPolicy(ctx, req.(*ImportBootstrapServicesPolicyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProjectCatalogService_ReconcileBootstrapMergeSignal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReconcileBootstrapMergeSignalRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectCatalogServiceServer).ReconcileBootstrapMergeSignal(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectCatalogService_ReconcileBootstrapMergeSignal_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectCatalogServiceServer).ReconcileBootstrapMergeSignal(ctx, req.(*ReconcileBootstrapMergeSignalRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1396,6 +1432,10 @@ var ProjectCatalogService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ImportBootstrapServicesPolicy",
 			Handler:    _ProjectCatalogService_ImportBootstrapServicesPolicy_Handler,
+		},
+		{
+			MethodName: "ReconcileBootstrapMergeSignal",
+			Handler:    _ProjectCatalogService_ReconcileBootstrapMergeSignal_Handler,
 		},
 		{
 			MethodName: "GetServicesPolicy",

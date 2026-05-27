@@ -34,6 +34,8 @@ service ProjectCatalogService {
   rpc ImportServicesPolicy(ImportServicesPolicyRequest) returns (ServicesPolicyResponse);
   // ImportBootstrapServicesPolicy imports checked services.yaml after a merged bootstrap PR and activates the repository binding.
   rpc ImportBootstrapServicesPolicy(ImportBootstrapServicesPolicyRequest) returns (BootstrapServicesPolicyImportResponse);
+  // ReconcileBootstrapMergeSignal imports checked services.yaml from a safe provider bootstrap merge signal.
+  rpc ReconcileBootstrapMergeSignal(ReconcileBootstrapMergeSignalRequest) returns (BootstrapServicesPolicyImportResponse);
   // GetServicesPolicy returns a checked services.yaml projection.
   rpc GetServicesPolicy(GetServicesPolicyRequest) returns (ServicesPolicyResponse);
   // ListServiceDescriptors returns typed service descriptors from active policy.
@@ -936,6 +938,70 @@ message ImportBootstrapServicesPolicyRequest {
   optional string merge_observed_at = 15;
   // meta carries idempotency, expected repository version and audit context.
   CommandMeta meta = 16;
+}
+
+// BootstrapRepositoryMergeSignal is the safe provider-side merge signal used to close repository bootstrap.
+message BootstrapRepositoryMergeSignal {
+  // signal_id is provider-hub repository_merge_signal id when known.
+  optional string signal_id = 1;
+  // signal_key is provider-hub idempotency key for this merge signal.
+  string signal_key = 2;
+  // signal_kind must be bootstrap for this project-catalog command.
+  string signal_kind = 3;
+  // provider_target is the safe provider repository target from provider projection.
+  RepositoryBootstrapProviderTarget provider_target = 4;
+  // base_branch is the branch that received the merge.
+  string base_branch = 5;
+  // source_ref is the provider PR/MR source ref from the safe merge signal; checked import uses base_branch.
+  string source_ref = 6;
+  // merge_commit_sha is the merge commit observed by provider-hub.
+  string merge_commit_sha = 7;
+  // source_blob_sha is the provider file object hash when available.
+  optional string source_blob_sha = 8;
+  // watermark_digest is the provider-hub digest of the parsed platform watermark.
+  string watermark_digest = 9;
+  // watermark_json is the parsed platform watermark payload from the merged provider work item.
+  string watermark_json = 10;
+  // provider_work_item_projection_id is the safe provider-hub PR/MR projection id when known.
+  optional string provider_work_item_projection_id = 11;
+  // provider_web_url is the safe provider PR/MR URL when known.
+  optional string provider_web_url = 12;
+  // provider_object_id is the provider-native PR/MR object id when known.
+  optional string provider_object_id = 13;
+  // merge_observed_at is the provider merge observation time in RFC3339 format when known.
+  optional string merge_observed_at = 14;
+  // merged_at is the provider merge time in RFC3339 format when known.
+  optional string merged_at = 15;
+}
+
+// CheckedBootstrapServicesPolicyArtifact is the checked services.yaml artifact prepared outside project-catalog.
+message CheckedBootstrapServicesPolicyArtifact {
+  // artifact_ref is a safe immutable ref to the checked artifact.
+  string artifact_ref = 1;
+  // artifact_digest is the digest of the checked normalized services.yaml artifact.
+  string artifact_digest = 2;
+  // artifact_version is the immutable artifact version bound to the merge commit in this slice.
+  string artifact_version = 3;
+  // source_path is the services.yaml path in the merged commit.
+  string source_path = 4;
+  // content_hash is the normalized services.yaml source content hash.
+  string content_hash = 5;
+  // validated_payload_json is normalized services.yaml payload already checked by the caller contour.
+  string validated_payload_json = 6;
+}
+
+// ReconcileBootstrapMergeSignalRequest imports checked services.yaml from a safe provider bootstrap merge signal.
+message ReconcileBootstrapMergeSignalRequest {
+  // project_id is the project that owns the repository binding.
+  string project_id = 1;
+  // repository_id is the project-catalog repository binding id.
+  string repository_id = 2;
+  // merge_signal is the safe provider-side bootstrap merge signal.
+  BootstrapRepositoryMergeSignal merge_signal = 3;
+  // checked_policy is the checked services.yaml artifact selected by the caller contour.
+  CheckedBootstrapServicesPolicyArtifact checked_policy = 4;
+  // meta carries idempotency, expected repository version and audit context.
+  CommandMeta meta = 5;
 }
 
 // BootstrapServicesPolicyImportResponse returns imported policy and activated repository binding state.

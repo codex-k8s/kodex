@@ -21,6 +21,7 @@ type bootstrapServicesPolicyImportCommandPayload struct {
 	ProviderWorkItemProjectionID string `json:"provider_work_item_projection_id,omitempty"`
 	ProviderWebURL               string `json:"provider_web_url,omitempty"`
 	ProviderObjectID             string `json:"provider_object_id,omitempty"`
+	ReconciliationFingerprint    string `json:"reconciliation_fingerprint,omitempty"`
 	Summary                      string `json:"summary,omitempty"`
 }
 
@@ -37,6 +38,7 @@ type normalizedBootstrapPolicyImport struct {
 	ProviderWorkItemProjectionID string
 	ProviderWebURL               string
 	ProviderObjectID             string
+	ReconciliationFingerprint    string
 	Summary                      string
 }
 
@@ -152,6 +154,14 @@ func (s *Service) replayBootstrapServicesPolicyImport(ctx context.Context, input
 		return BootstrapServicesPolicyImportResult{}, true, errs.ErrConflict
 	}
 	payload := decodeBootstrapPolicyImportCommandPayload(result.ResultPayload, policy)
+	if expectedFingerprint := strings.TrimSpace(input.ReconciliationFingerprint); expectedFingerprint != "" {
+		if payload.ReconciliationFingerprint != expectedFingerprint ||
+			payload.SourceRef != strings.TrimSpace(input.SourceRef) ||
+			payload.SourceCommitSHA != strings.ToLower(strings.TrimSpace(input.SourceCommitSHA)) ||
+			payload.ContentHash != strings.ToLower(strings.TrimSpace(input.ContentHash)) {
+			return BootstrapServicesPolicyImportResult{}, true, errs.ErrConflict
+		}
+	}
 	return BootstrapServicesPolicyImportResult{
 		Repository:      repository,
 		ServicesPolicy:  policy,
@@ -238,6 +248,7 @@ func normalizeBootstrapPolicyImportInput(input ImportBootstrapServicesPolicyInpu
 		ProviderWorkItemProjectionID: strings.TrimSpace(input.ProviderWorkItemProjectionID),
 		ProviderWebURL:               providerWebURL,
 		ProviderObjectID:             strings.TrimSpace(input.ProviderObjectID),
+		ReconciliationFingerprint:    strings.TrimSpace(input.ReconciliationFingerprint),
 		Summary:                      summary,
 	}, nil
 }
@@ -346,6 +357,7 @@ func bootstrapPolicyImportCommandPayloadJSON(input normalizedBootstrapPolicyImpo
 		ProviderWorkItemProjectionID: input.ProviderWorkItemProjectionID,
 		ProviderWebURL:               input.ProviderWebURL,
 		ProviderObjectID:             input.ProviderObjectID,
+		ReconciliationFingerprint:    input.ReconciliationFingerprint,
 		Summary:                      input.Summary,
 	})
 	if err != nil {

@@ -283,6 +283,106 @@ func TestImportBootstrapServicesPolicyCallsDomainService(t *testing.T) {
 	}
 }
 
+func TestReconcileBootstrapMergeSignalCallsDomainService(t *testing.T) {
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	policyID := uuid.New()
+	commandID := uuid.New()
+	projectionID := uuid.New().String()
+	signalID := uuid.New().String()
+	expectedVersion := int64(3)
+	service := &fakeProjectService{}
+	service.reconcileBootstrapMerge = func(_ context.Context, input projectservice.ReconcileBootstrapMergeSignalInput) (projectservice.BootstrapServicesPolicyImportResult, error) {
+		if input.ProjectID != projectID ||
+			input.RepositoryID != repositoryID ||
+			input.MergeSignal.SignalID != signalID ||
+			input.MergeSignal.SignalKey != "github/bootstrap/PR_123" ||
+			input.MergeSignal.SignalKind != "bootstrap" ||
+			input.MergeSignal.ProviderTarget.ProviderSlug != "github" ||
+			input.MergeSignal.ProviderTarget.RepositoryFullName != "codex-k8s/kodex" ||
+			input.MergeSignal.BaseBranch != "main" ||
+			input.MergeSignal.SourceRef != "kodex/bootstrap" ||
+			input.MergeSignal.MergeCommitSHA != "0123456789abcdef0123456789abcdef01234567" ||
+			input.MergeSignal.WatermarkDigest != "watermark-digest" ||
+			input.MergeSignal.ProviderWorkItemProjectionID != projectionID {
+			t.Fatalf("merge signal input = %+v, want safe signal fields", input.MergeSignal)
+		}
+		if input.CheckedPolicy.ArtifactRef != "artifact://provider/bootstrap/1" ||
+			input.CheckedPolicy.ArtifactDigest != "sha256:policy" ||
+			input.CheckedPolicy.ArtifactVersion != "0123456789abcdef0123456789abcdef01234567" ||
+			input.CheckedPolicy.SourcePath != "services.yaml" {
+			t.Fatalf("checked policy = %+v, want checked artifact fields", input.CheckedPolicy)
+		}
+		if input.Meta.CommandID != commandID || input.Meta.ExpectedVersion == nil || *input.Meta.ExpectedVersion != expectedVersion {
+			t.Fatalf("meta = %+v, want command id and expected version", input.Meta)
+		}
+		return projectservice.BootstrapServicesPolicyImportResult{
+			Repository: entity.RepositoryBinding{
+				Base:          entity.Base{ID: repositoryID, Version: 4},
+				ProjectID:     projectID,
+				Provider:      enum.RepositoryProviderGitHub,
+				ProviderOwner: "codex-k8s",
+				ProviderName:  "kodex",
+				DefaultBranch: "main",
+				Status:        enum.RepositoryStatusActive,
+			},
+			ServicesPolicy: entity.ServicesPolicy{
+				Base:            entity.Base{ID: policyID, Version: 1},
+				ProjectID:       projectID,
+				SourcePath:      "services.yaml",
+				SourceRef:       "refs/heads/main",
+				SourceCommitSHA: "0123456789abcdef0123456789abcdef01234567",
+				PolicyVersion:   1,
+				ContentHash:     "sha256:policy",
+				ImportedAt:      time.Date(2026, 5, 6, 12, 0, 0, 0, time.UTC),
+			},
+			SourceRef:       "refs/heads/main",
+			SourceCommitSHA: "0123456789abcdef0123456789abcdef01234567",
+			Summary:         "services.yaml imported from refs/heads/main at 0123456789ab",
+		}, nil
+	}
+	server := NewServer(service)
+	meta := commandMeta(commandID.String())
+	meta.ExpectedVersion = &expectedVersion
+
+	response, err := server.ReconcileBootstrapMergeSignal(context.Background(), &projectsv1.ReconcileBootstrapMergeSignalRequest{
+		ProjectId:    projectID.String(),
+		RepositoryId: repositoryID.String(),
+		MergeSignal: &projectsv1.BootstrapRepositoryMergeSignal{
+			SignalId:   &signalID,
+			SignalKey:  "github/bootstrap/PR_123",
+			SignalKind: "bootstrap",
+			ProviderTarget: &projectsv1.RepositoryBootstrapProviderTarget{
+				ProviderSlug:       "github",
+				RepositoryFullName: "codex-k8s/kodex",
+			},
+			BaseBranch:                   "main",
+			SourceRef:                    "kodex/bootstrap",
+			MergeCommitSha:               "0123456789abcdef0123456789abcdef01234567",
+			WatermarkDigest:              "watermark-digest",
+			WatermarkJson:                `{"kind":"provider_pr","managed_by":"kodex","work_type":"repository_bootstrap","source_ref":"services.yaml"}`,
+			ProviderWorkItemProjectionId: &projectionID,
+		},
+		CheckedPolicy: &projectsv1.CheckedBootstrapServicesPolicyArtifact{
+			ArtifactRef:          "artifact://provider/bootstrap/1",
+			ArtifactDigest:       "sha256:policy",
+			ArtifactVersion:      "0123456789abcdef0123456789abcdef01234567",
+			SourcePath:           "services.yaml",
+			ContentHash:          "sha256:policy",
+			ValidatedPayloadJson: `{"spec":{"services":[{"key":"api","rootPath":"services/api"}]}}`,
+		},
+		Meta: meta,
+	})
+	if err != nil {
+		t.Fatalf("ReconcileBootstrapMergeSignal(): %v", err)
+	}
+	if response.GetRepository().GetStatus() != projectsv1.RepositoryStatus_REPOSITORY_STATUS_ACTIVE ||
+		response.GetServicesPolicy().GetServicesPolicyId() != policyID.String() ||
+		response.GetSummary() == "" {
+		t.Fatalf("response = %+v, want active repository and imported policy", response)
+	}
+}
+
 func TestErrorToStatusMapsDomainErrors(t *testing.T) {
 	t.Parallel()
 
@@ -336,6 +436,7 @@ type fakeProjectService struct {
 	createProviderRepository func(context.Context, projectservice.CreateProviderRepositoryInput) (projectservice.RepositoryProviderCreateResult, error)
 	createBootstrap          func(context.Context, projectservice.CreateRepositoryBootstrapPullRequestInput) (projectservice.RepositoryBootstrapPullRequestResult, error)
 	importBootstrapPolicy    func(context.Context, projectservice.ImportBootstrapServicesPolicyInput) (projectservice.BootstrapServicesPolicyImportResult, error)
+	reconcileBootstrapMerge  func(context.Context, projectservice.ReconcileBootstrapMergeSignalInput) (projectservice.BootstrapServicesPolicyImportResult, error)
 }
 
 func (s *fakeProjectService) CreateProject(ctx context.Context, input projectservice.CreateProjectInput) (entity.Project, error) {
@@ -364,6 +465,13 @@ func (s *fakeProjectService) ImportBootstrapServicesPolicy(ctx context.Context, 
 		return projectservice.BootstrapServicesPolicyImportResult{}, errs.ErrInvalidArgument
 	}
 	return s.importBootstrapPolicy(ctx, input)
+}
+
+func (s *fakeProjectService) ReconcileBootstrapMergeSignal(ctx context.Context, input projectservice.ReconcileBootstrapMergeSignalInput) (projectservice.BootstrapServicesPolicyImportResult, error) {
+	if s.reconcileBootstrapMerge == nil {
+		return projectservice.BootstrapServicesPolicyImportResult{}, errs.ErrInvalidArgument
+	}
+	return s.reconcileBootstrapMerge(ctx, input)
 }
 
 type unimplementedProjectService struct{}
@@ -417,6 +525,10 @@ func (unimplementedProjectService) ImportServicesPolicy(context.Context, project
 }
 
 func (unimplementedProjectService) ImportBootstrapServicesPolicy(context.Context, projectservice.ImportBootstrapServicesPolicyInput) (projectservice.BootstrapServicesPolicyImportResult, error) {
+	return projectservice.BootstrapServicesPolicyImportResult{}, errs.ErrInvalidArgument
+}
+
+func (unimplementedProjectService) ReconcileBootstrapMergeSignal(context.Context, projectservice.ReconcileBootstrapMergeSignalInput) (projectservice.BootstrapServicesPolicyImportResult, error) {
 	return projectservice.BootstrapServicesPolicyImportResult{}, errs.ErrInvalidArgument
 }
 
