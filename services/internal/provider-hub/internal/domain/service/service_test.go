@@ -2323,6 +2323,90 @@ func TestScanRepositoryForAdoptionReplayDoesNotCallProviderTwice(t *testing.T) {
 	}
 }
 
+func TestGetRepositoryMergeSignalReturnsExplicitReadStatus(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 27, 11, 0, 0, 0, time.UTC)
+	repository := &fakeRepository{
+		mergeSignal: entity.RepositoryMergeSignal{
+			Base:                        entity.Base{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+			SignalKey:                   "provider:github:repository_merge:bootstrap:github:codex-k8s/kodex:pull_request:88",
+			Kind:                        enum.RepositoryMergeSignalKindBootstrap,
+			ProviderSlug:                enum.ProviderSlugGitHub,
+			RepositoryFullName:          "codex-k8s/kodex",
+			ProviderRepositoryID:        "101",
+			WorkItemProjectionID:        uuid.New(),
+			ProviderWorkItemID:          "github:codex-k8s/kodex:pull_request:88",
+			PullRequestNumber:           88,
+			PullRequestProviderID:       "8801",
+			PullRequestURL:              "https://github.com/codex-k8s/kodex/pull/88",
+			BaseBranch:                  "main",
+			HeadBranch:                  "kodex/bootstrap",
+			MergeCommitSHA:              "abc123",
+			SourceRef:                   "kodex/bootstrap",
+			RelatedProviderOperationRef: "provider-hub:create_bootstrap_pull_request:github:codex-k8s/kodex:pull_request:88",
+			WatermarkDigest:             "watermark-digest",
+			ObservedAt:                  now,
+			MergedAt:                    now,
+			Status:                      enum.RepositoryMergeSignalStatusMerged,
+		},
+	}
+	service := NewWithRuntime(repository, fixedClock{now: now}, &sequenceIDs{})
+
+	result, err := service.GetRepositoryMergeSignal(context.Background(), GetRepositoryMergeSignalInput{SignalKey: repository.mergeSignal.SignalKey})
+	if err != nil {
+		t.Fatalf("GetRepositoryMergeSignal(): %v", err)
+	}
+	if result.Status != enum.ProviderOwnedDataStatusReady || result.MergeSignal == nil || result.MergeSignal.SignalKey != repository.mergeSignal.SignalKey {
+		t.Fatalf("result = %+v, want ready merge signal", result)
+	}
+
+	emptyService := NewWithRuntime(&fakeRepository{}, fixedClock{now: now}, &sequenceIDs{})
+	missing, err := emptyService.GetRepositoryMergeSignal(context.Background(), GetRepositoryMergeSignalInput{SignalKey: "missing"})
+	if err != nil {
+		t.Fatalf("GetRepositoryMergeSignal() missing: %v", err)
+	}
+	if missing.Status != enum.ProviderOwnedDataStatusNotFound || missing.MergeSignal != nil {
+		t.Fatalf("missing result = %+v, want explicit not_found status", missing)
+	}
+}
+
+func TestListRepositoryAdoptionScanSnapshotsReturnsProviderOwnedData(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 27, 11, 30, 0, 0, time.UTC)
+	repository := &fakeRepository{
+		adoptionScan: entity.RepositoryAdoptionScanSnapshot{
+			Base:                entity.Base{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+			SnapshotKey:         "provider:github:repository_adoption_scan:codex-k8s/kodex:main",
+			ProviderOperationID: uuid.New(),
+			ExternalAccountID:   uuid.New(),
+			ProviderSlug:        enum.ProviderSlugGitHub,
+			RepositoryFullName:  "codex-k8s/kodex",
+			DefaultBranch:       "main",
+			RequestedRef:        "main",
+			ScannedRef:          "main",
+			HeadSHA:             "abc123",
+			Status:              enum.RepositoryAdoptionScanStatusCompleted,
+			SnapshotDigest:      "safe-digest",
+			ObservedAt:          now,
+		},
+	}
+	service := NewWithRuntime(repository, fixedClock{now: now}, &sequenceIDs{})
+
+	result, err := service.ListRepositoryAdoptionScanSnapshots(context.Background(), ListRepositoryAdoptionScanSnapshotsInput{
+		ProviderSlug:       enum.ProviderSlugGitHub,
+		RepositoryFullName: "codex-k8s/kodex",
+		Statuses:           []enum.RepositoryAdoptionScanStatus{enum.RepositoryAdoptionScanStatusCompleted},
+	})
+	if err != nil {
+		t.Fatalf("ListRepositoryAdoptionScanSnapshots(): %v", err)
+	}
+	if len(result.Snapshots) != 1 || result.Snapshots[0].SnapshotDigest != "safe-digest" {
+		t.Fatalf("snapshots = %+v, want stored provider-owned snapshot", result.Snapshots)
+	}
+}
+
 func TestCreateAdoptionPullRequestReplayDoesNotWriteProviderTwice(t *testing.T) {
 	t.Parallel()
 
@@ -2635,6 +2719,7 @@ type fakeRepository struct {
 	recordedOutboxEvents        []entity.OutboxEvent
 	recordedProviderOperation   entity.ProviderOperation
 	adoptionScan                entity.RepositoryAdoptionScanSnapshot
+	mergeSignal                 entity.RepositoryMergeSignal
 	workItemProjection          entity.ProviderWorkItemProjection
 	relationship                entity.ProviderRelationship
 	lastWorkItemLookup          query.ProviderTargetLookup
@@ -2818,6 +2903,34 @@ func (r *fakeRepository) GetProviderOperationByCommand(context.Context, enum.Pro
 		return r.recordedProviderOperation, r.err
 	}
 	return entity.ProviderOperation{}, errs.ErrNotFound
+}
+
+func (r *fakeRepository) GetRepositoryMergeSignal(context.Context, query.RepositoryMergeSignalLookup) (entity.RepositoryMergeSignal, error) {
+	if r.mergeSignal.ID == uuid.Nil {
+		return entity.RepositoryMergeSignal{}, errs.ErrNotFound
+	}
+	return r.mergeSignal, r.err
+}
+
+func (r *fakeRepository) ListRepositoryMergeSignals(context.Context, query.RepositoryMergeSignalFilter) ([]entity.RepositoryMergeSignal, query.PageResult, error) {
+	if r.mergeSignal.ID == uuid.Nil {
+		return nil, query.PageResult{}, r.err
+	}
+	return []entity.RepositoryMergeSignal{r.mergeSignal}, query.PageResult{}, r.err
+}
+
+func (r *fakeRepository) GetRepositoryAdoptionScan(context.Context, query.RepositoryAdoptionScanLookup) (entity.RepositoryAdoptionScanSnapshot, error) {
+	if r.adoptionScan.ID == uuid.Nil {
+		return entity.RepositoryAdoptionScanSnapshot{}, errs.ErrNotFound
+	}
+	return r.adoptionScan, r.err
+}
+
+func (r *fakeRepository) ListRepositoryAdoptionScans(context.Context, query.RepositoryAdoptionScanFilter) ([]entity.RepositoryAdoptionScanSnapshot, query.PageResult, error) {
+	if r.adoptionScan.ID == uuid.Nil {
+		return nil, query.PageResult{}, r.err
+	}
+	return []entity.RepositoryAdoptionScanSnapshot{r.adoptionScan}, query.PageResult{}, r.err
 }
 
 func (r *fakeRepository) GetRepositoryAdoptionScanByOperation(context.Context, uuid.UUID) (entity.RepositoryAdoptionScanSnapshot, error) {

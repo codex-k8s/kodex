@@ -96,6 +96,46 @@ type RelationshipLookup struct {
 	RelationshipType  string
 }
 
+// RepositoryMergeSignalLookup selects one provider-owned merge signal.
+type RepositoryMergeSignalLookup struct {
+	ID        *uuid.UUID
+	SignalKey string
+}
+
+// RepositoryMergeSignalFilter selects provider-owned merge signals.
+type RepositoryMergeSignalFilter struct {
+	ProjectID            *uuid.UUID
+	RepositoryID         *uuid.UUID
+	ProviderSlug         enum.ProviderSlug
+	RepositoryFullName   string
+	ProviderRepositoryID string
+	Kinds                []enum.RepositoryMergeSignalKind
+	Statuses             []enum.RepositoryMergeSignalStatus
+	PullRequestNumber    *int64
+	MergedSince          *time.Time
+	Page                 value.PageRequest
+}
+
+// RepositoryAdoptionScanLookup selects one provider-owned adoption scan snapshot.
+type RepositoryAdoptionScanLookup struct {
+	ID                  *uuid.UUID
+	SnapshotKey         string
+	ProviderOperationID *uuid.UUID
+}
+
+// RepositoryAdoptionScanFilter selects provider-owned adoption scan snapshots.
+type RepositoryAdoptionScanFilter struct {
+	ProjectID            *uuid.UUID
+	RepositoryID         *uuid.UUID
+	ExternalAccountID    *uuid.UUID
+	ProviderSlug         enum.ProviderSlug
+	RepositoryFullName   string
+	ProviderRepositoryID string
+	Statuses             []enum.RepositoryAdoptionScanStatus
+	ObservedSince        *time.Time
+	Page                 value.PageRequest
+}
+
 // SyncCursorFilter selects reconciliation cursors.
 type SyncCursorFilter struct {
 	ProviderSlug      enum.ProviderSlug

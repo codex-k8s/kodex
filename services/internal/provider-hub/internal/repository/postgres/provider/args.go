@@ -291,6 +291,27 @@ func repositoryMergeSignalIdentityArgs(signal entity.RepositoryMergeSignal) pgx.
 	return pgx.NamedArgs{"signal_key": signal.SignalKey}
 }
 
+func repositoryMergeSignalLookupArgs(lookup query.RepositoryMergeSignalLookup) pgx.NamedArgs {
+	return pgx.NamedArgs{
+		"id":         postgreslib.NullableUUID(lookup.ID),
+		"signal_key": strings.TrimSpace(lookup.SignalKey),
+	}
+}
+
+func repositoryMergeSignalFilterArgs(filter query.RepositoryMergeSignalFilter) pageQueryArgs {
+	return withPage(filter.Page, pgx.NamedArgs{
+		"project_id":             postgreslib.NullableUUID(filter.ProjectID),
+		"repository_id":          postgreslib.NullableUUID(filter.RepositoryID),
+		"provider_slug":          string(filter.ProviderSlug),
+		"repository_full_name":   strings.TrimSpace(filter.RepositoryFullName),
+		"provider_repository_id": strings.TrimSpace(filter.ProviderRepositoryID),
+		"kinds":                  postgreslib.StringValues(filter.Kinds),
+		"statuses":               postgreslib.StringValues(filter.Statuses),
+		"pull_request_number":    int64PtrValue(filter.PullRequestNumber),
+		"merged_since":           postgreslib.NullableTime(filter.MergedSince),
+	})
+}
+
 func repositoryAdoptionScanArgs(snapshot entity.RepositoryAdoptionScanSnapshot) pgx.NamedArgs {
 	return withBaseArgs(snapshot.Base, pgx.NamedArgs{
 		"snapshot_key":           snapshot.SnapshotKey,
@@ -317,6 +338,27 @@ func repositoryAdoptionScanArgs(snapshot entity.RepositoryAdoptionScanSnapshot) 
 
 func repositoryAdoptionScanOperationArgs(providerOperationID uuid.UUID) pgx.NamedArgs {
 	return pgx.NamedArgs{"provider_operation_id": providerOperationID}
+}
+
+func repositoryAdoptionScanLookupArgs(lookup query.RepositoryAdoptionScanLookup) pgx.NamedArgs {
+	return pgx.NamedArgs{
+		"id":                    postgreslib.NullableUUID(lookup.ID),
+		"snapshot_key":          strings.TrimSpace(lookup.SnapshotKey),
+		"provider_operation_id": postgreslib.NullableUUID(lookup.ProviderOperationID),
+	}
+}
+
+func repositoryAdoptionScanFilterArgs(filter query.RepositoryAdoptionScanFilter) pageQueryArgs {
+	return withPage(filter.Page, pgx.NamedArgs{
+		"project_id":             uuidPtrText(filter.ProjectID),
+		"repository_id":          uuidPtrText(filter.RepositoryID),
+		"external_account_id":    postgreslib.NullableUUID(filter.ExternalAccountID),
+		"provider_slug":          string(filter.ProviderSlug),
+		"repository_full_name":   strings.TrimSpace(filter.RepositoryFullName),
+		"provider_repository_id": strings.TrimSpace(filter.ProviderRepositoryID),
+		"statuses":               postgreslib.StringValues(filter.Statuses),
+		"observed_since":         postgreslib.NullableTime(filter.ObservedSince),
+	})
 }
 
 type repositoryAdoptionMarkerJSON struct {
@@ -524,6 +566,13 @@ func int64PtrValue(value *int64) any {
 		return nil
 	}
 	return *value
+}
+
+func uuidPtrText(id *uuid.UUID) string {
+	if id == nil {
+		return ""
+	}
+	return id.String()
 }
 
 func textValues(values []string) []string {

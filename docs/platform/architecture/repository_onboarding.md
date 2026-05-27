@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-14
 updated_at: 2026-05-27
-related_issues: [281, 282, 761, 794, 810, 818, 840, 864, 865]
+related_issues: [281, 282, 761, 794, 810, 818, 840, 864, 865, 883]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -42,7 +42,7 @@ approvals:
 | Сервис | Ответственность в bootstrap/adoption |
 |---|---|
 | `project-catalog` | Владеет проектом, repository binding, `services.yaml`, проектной политикой и проверенной проекцией. Не является Git-клиентом. |
-| `provider-hub` | Выполняет provider-native операции: читать репозиторий, снять lightweight scan snapshot без содержимого файлов, создать репозиторий, создать или обновить ветку, Issue, PR/MR, комментарий, связь и зеркало. Создание самого репозитория остаётся отдельной командой и не смешивается с генерацией `services.yaml`, выбором шаблона, deep adoption scan/report и bootstrap branch/PR. |
+| `provider-hub` | Выполняет provider-native операции: читать репозиторий, снять lightweight scan snapshot без содержимого файлов, создать репозиторий, создать или обновить ветку, Issue, PR/MR, комментарий, связь и зеркало; отдаёт safe scan snapshots и merge signals через gRPC read surface. Создание самого репозитория остаётся отдельной командой и не смешивается с генерацией `services.yaml`, выбором шаблона, deep adoption scan/report и bootstrap branch/PR. |
 | `package-hub` | Владеет пакетами, шаблонами репозиториев, источниками, установками, manifest и состоянием магазина пакетов. Не выполняет checkout файлов пакета. |
 | `agent-manager` | Запускает агентные роли и детерминированные bootstrap/adoption-запуски, которые готовят PR, отчёт подключения, проверки и рекомендации. |
 | `runtime-manager` | Материализует workspace по политике, `source_ref`, шаблонам и установкам пакетов. Не владеет проектной политикой. |
@@ -103,16 +103,16 @@ approvals:
 7. `project-catalog` принимает project-side bootstrap-команду по существующему repository binding: проверяет provider target, `base_branch`, подготовленные файлы, watermark и связь с проверенной политикой `services.yaml`.
 8. `project-catalog` вызывает `provider-hub CreateBootstrapPullRequest` с готовым provider target, refs, файлами и policy context. `provider-hub` использует уже созданный репозиторий, создаёт или обновляет bootstrap branch и PR с подготовленным bootstrap-набором файлов. Bootstrap-команда допускает пустой base branch или `README.md`, созданный GitHub при `auto_init`.
 9. Владелец проверяет PR у провайдера и подтверждает переход через merge.
-10. Webhook или сверка провайдера фиксирует merge; `provider-hub` сохраняет safe merge signal для bootstrap/adoption `PR/MR`, связывает merged projection с `project_id` и `repository_id` и публикует `provider.repository.bootstrap_merged` или `provider.repository.adoption_merged`; внутренний контур передаёт в `project-catalog ReconcileBootstrapMergeSignal` только safe bootstrap signal и checked artifact metadata: provider target, `signal_key`, `base_branch`, `source_ref`, commit, artifact ref/digest/version, `content_hash`, watermark digest/payload и нормализованный `services.yaml`.
+10. Webhook или сверка провайдера фиксирует merge; `provider-hub` сохраняет safe merge signal для bootstrap/adoption `PR/MR`, связывает merged projection с `project_id` и `repository_id`, публикует `provider.repository.bootstrap_merged` или `provider.repository.adoption_merged` и отдаёт этот provider-owned факт через gRPC read surface. Внутренний контур передаёт в `project-catalog ReconcileBootstrapMergeSignal` только safe bootstrap signal и checked artifact metadata: provider target, `signal_key`, `base_branch`, `source_ref`, commit, artifact ref/digest/version, `content_hash`, watermark digest/payload и нормализованный `services.yaml`.
 11. `project-catalog` сверяет signal/artifact с project/repository binding, проверяет ожидаемую версию pending binding, вызывает `ImportBootstrapServicesPolicy`, импортирует проверенную политику штатным контуром и переводит repository binding в `active`. Повтор того же signal/commit/source ref возвращает уже сохранённую проекцию, а другой commit/ref считается конфликтом bootstrap-завершения.
 
-В реализованном project-side контуре пустого репозитория покрыты четыре шага модели C: создание provider-native репозитория с фиксацией `base_branch` в project-owned binding, создание bootstrap PR по уже подготовленному payload, явный reconciliation path от safe provider merge signal к import use-case и импорт проверенной `services.yaml` после merge с активацией binding. Provider-side контур фиксирует safe merge signal и lightweight snapshot существующего репозитория, но выбор и применение шаблона, полный worker/consumer поверх `platform-event-log`, deep workspace scan/report и adoption decision остаются отдельными шагами модели C.
+В реализованном project-side контуре пустого репозитория покрыты четыре шага модели C: создание provider-native репозитория с фиксацией `base_branch` в project-owned binding, создание bootstrap PR по уже подготовленному payload, явный reconciliation path от safe provider merge signal к import use-case и импорт проверенной `services.yaml` после merge с активацией binding. Provider-side контур фиксирует safe merge signal и lightweight snapshot существующего репозитория, отдаёт эти provider-owned данные через gRPC read surface, но выбор и применение шаблона, checked artifact/payload, полный worker/consumer поверх `platform-event-log`, deep workspace scan/report и adoption decision остаются отдельными шагами модели C.
 
 ### Существующий репозиторий
 
 1. Пользователь или оператор указывает provider ref существующего репозитория.
 2. Проектный или агентный контур вызывает `provider-hub ScanRepositoryForAdoption` с provider target refs, выбранным внешним аккаунтом, branch/ref policy и bounded scan options.
-3. `provider-hub` читает только provider metadata/ref/tree, фиксирует safe snapshot: default/scanned ref, head sha, marker path refs/digests/counts, bounded warnings и snapshot digest; содержимое файлов, diff/archive и provider response не сохраняются.
+3. `provider-hub` читает только provider metadata/ref/tree, фиксирует safe snapshot: default/scanned ref, head sha, marker path refs/digests/counts, bounded warnings и snapshot digest; содержимое файлов, diff/archive и provider response не сохраняются. Snapshot доступен соседним сервисам через `GetRepositoryAdoptionScanSnapshot`/`ListRepositoryAdoptionScanSnapshots` с safe refs/status/timestamps/version/etag.
 4. `project-catalog` использует snapshot как вход planning: проверяет состояние repository binding, ожидаемый `source_ref`, наличие безопасных маркеров и необходимость deep scan, но не читает provider напрямую.
 5. Если репозиторий подходит под выбранный шаблон и конфликтов нет, детерминированный исполнитель готовит payload для PR: добавляет или обновляет `services.yaml`, локальные инструкции, скелет документации и ссылки на руководящие пакеты.
 6. Если структура неоднозначна или есть конфликты, `agent-manager` запускает adoption-роль в read-only workspace.

@@ -227,6 +227,16 @@ const (
 	RepositoryMergeSignalStatusMerged RepositoryMergeSignalStatus = "merged"
 )
 
+// ProviderOwnedDataStatus describes readiness of provider-owned data for service reads.
+type ProviderOwnedDataStatus string
+
+const (
+	ProviderOwnedDataStatusReady       ProviderOwnedDataStatus = "ready"
+	ProviderOwnedDataStatusNotFound    ProviderOwnedDataStatus = "not_found"
+	ProviderOwnedDataStatusNotVerified ProviderOwnedDataStatus = "not_verified"
+	ProviderOwnedDataStatusStale       ProviderOwnedDataStatus = "stale"
+)
+
 // ReviewSignalKind classifies provider-native review actions requested by the platform.
 type ReviewSignalKind string
 

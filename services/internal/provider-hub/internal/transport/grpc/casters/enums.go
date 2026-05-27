@@ -113,6 +113,22 @@ var repositoryAdoptionScanStatuses = map[providersv1.RepositoryAdoptionScanStatu
 	providersv1.RepositoryAdoptionScanStatus_REPOSITORY_ADOPTION_SCAN_STATUS_NEEDS_REVIEW: enum.RepositoryAdoptionScanStatusNeedsReview,
 }
 
+var providerOwnedDataStatuses = map[providersv1.ProviderOwnedDataStatus]enum.ProviderOwnedDataStatus{
+	providersv1.ProviderOwnedDataStatus_PROVIDER_OWNED_DATA_STATUS_READY:        enum.ProviderOwnedDataStatusReady,
+	providersv1.ProviderOwnedDataStatus_PROVIDER_OWNED_DATA_STATUS_NOT_FOUND:    enum.ProviderOwnedDataStatusNotFound,
+	providersv1.ProviderOwnedDataStatus_PROVIDER_OWNED_DATA_STATUS_NOT_VERIFIED: enum.ProviderOwnedDataStatusNotVerified,
+	providersv1.ProviderOwnedDataStatus_PROVIDER_OWNED_DATA_STATUS_STALE:        enum.ProviderOwnedDataStatusStale,
+}
+
+var repositoryMergeSignalKinds = map[providersv1.RepositoryMergeSignalKind]enum.RepositoryMergeSignalKind{
+	providersv1.RepositoryMergeSignalKind_REPOSITORY_MERGE_SIGNAL_KIND_BOOTSTRAP: enum.RepositoryMergeSignalKindBootstrap,
+	providersv1.RepositoryMergeSignalKind_REPOSITORY_MERGE_SIGNAL_KIND_ADOPTION:  enum.RepositoryMergeSignalKindAdoption,
+}
+
+var repositoryMergeSignalStatuses = map[providersv1.RepositoryMergeSignalStatus]enum.RepositoryMergeSignalStatus{
+	providersv1.RepositoryMergeSignalStatus_REPOSITORY_MERGE_SIGNAL_STATUS_MERGED: enum.RepositoryMergeSignalStatusMerged,
+}
+
 var repositoryAdoptionMarkerKinds = map[providersv1.RepositoryAdoptionMarkerKind]enum.RepositoryAdoptionMarkerKind{
 	providersv1.RepositoryAdoptionMarkerKind_REPOSITORY_ADOPTION_MARKER_KIND_SERVICE_DESCRIPTOR: enum.RepositoryAdoptionMarkerServiceDescriptor,
 	providersv1.RepositoryAdoptionMarkerKind_REPOSITORY_ADOPTION_MARKER_KIND_GITMODULES:         enum.RepositoryAdoptionMarkerGitmodules,
@@ -337,6 +353,30 @@ func OperationTypeToProto(operationType enum.ProviderOperationType) providersv1.
 
 func RepositoryAdoptionScanStatusToProto(status enum.RepositoryAdoptionScanStatus) providersv1.RepositoryAdoptionScanStatus {
 	return enumToProto(status, providersv1.RepositoryAdoptionScanStatus_REPOSITORY_ADOPTION_SCAN_STATUS_UNSPECIFIED, invertEnum(repositoryAdoptionScanStatuses))
+}
+
+func repositoryAdoptionScanStatusesFromProto(statuses []providersv1.RepositoryAdoptionScanStatus) ([]enum.RepositoryAdoptionScanStatus, error) {
+	return enumsFromProto(statuses, providersv1.RepositoryAdoptionScanStatus_REPOSITORY_ADOPTION_SCAN_STATUS_UNSPECIFIED, repositoryAdoptionScanStatuses)
+}
+
+func ProviderOwnedDataStatusToProto(status enum.ProviderOwnedDataStatus) providersv1.ProviderOwnedDataStatus {
+	return enumToProto(status, providersv1.ProviderOwnedDataStatus_PROVIDER_OWNED_DATA_STATUS_UNSPECIFIED, invertEnum(providerOwnedDataStatuses))
+}
+
+func repositoryMergeSignalKindsFromProto(kinds []providersv1.RepositoryMergeSignalKind) ([]enum.RepositoryMergeSignalKind, error) {
+	return enumsFromProto(kinds, providersv1.RepositoryMergeSignalKind_REPOSITORY_MERGE_SIGNAL_KIND_UNSPECIFIED, repositoryMergeSignalKinds)
+}
+
+func RepositoryMergeSignalKindToProto(kind enum.RepositoryMergeSignalKind) providersv1.RepositoryMergeSignalKind {
+	return enumToProto(kind, providersv1.RepositoryMergeSignalKind_REPOSITORY_MERGE_SIGNAL_KIND_UNSPECIFIED, invertEnum(repositoryMergeSignalKinds))
+}
+
+func repositoryMergeSignalStatusesFromProto(statuses []providersv1.RepositoryMergeSignalStatus) ([]enum.RepositoryMergeSignalStatus, error) {
+	return enumsFromProto(statuses, providersv1.RepositoryMergeSignalStatus_REPOSITORY_MERGE_SIGNAL_STATUS_UNSPECIFIED, repositoryMergeSignalStatuses)
+}
+
+func RepositoryMergeSignalStatusToProto(status enum.RepositoryMergeSignalStatus) providersv1.RepositoryMergeSignalStatus {
+	return enumToProto(status, providersv1.RepositoryMergeSignalStatus_REPOSITORY_MERGE_SIGNAL_STATUS_UNSPECIFIED, invertEnum(repositoryMergeSignalStatuses))
 }
 
 func RepositoryAdoptionMarkerKindToProto(kind enum.RepositoryAdoptionMarkerKind) providersv1.RepositoryAdoptionMarkerKind {
