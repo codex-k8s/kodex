@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-12
 updated_at: 2026-05-27
-related_issues: [733, 749, 759, 772, 322, 782, 795, 809, 820, 834, 842, 862, 866]
+related_issues: [733, 749, 759, 772, 322, 782, 795, 809, 820, 834, 842, 862, 866, 891, 905, 918]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -275,6 +275,8 @@ approvals:
 ### HumanGateRequest
 
 `HumanGateRequest` — авторитетная модель ожидания и результата owner decision в `agent-manager`. Она связывает решение с session/run/stage/acceptance и provider-native target refs, но не владеет транспортом сообщения и не хранит governance decision body. Повтор `RequestHumanGate` с тем же command/idempotency key возвращает тот же wait только при совпадении нормализованного payload. `RecordHumanGateDecision` требует expected version, переводит ожидание в `resolved` и сохраняет normalized outcome для следующего шага flow.
+
+Request-side интеграция с `interaction-hub` включается явным runtime switch. В этом режиме `RequestHumanGate` после replay-check создаёт `interaction-hub.RequestHumanGate` с owner-side ref `agent:human_gate/<human_gate_request_id>`, source owner `agent_manager`, decision owner `agent_manager`, safe session/run/stage/provider refs, target actor ref из `AgentSession.created_by_actor_ref` и bounded `safe_summary`. Если команда повторяется с тем же idempotency trace, `agent-manager` возвращает уже сохранённый wait и не создаёт второй transport request. Если вызов `interaction-hub` временно недоступен, локальный wait не записывается, поэтому retry сохраняет тот же owner ref и идёт с тем же interaction command identity.
 
 Event-driven resume идёт через уже очищенное событие `interaction.request.response_recorded`. Для Human gate `interaction-hub` указывает `owner_service=agent_manager`, `request_kind=human_gate`, `owner_request_ref` на `HumanGateRequest` и safe refs `request_id`/`response_id`. Consumer `agent-manager` принимает только action/status/version/timestamps из event log и вычисленный digest безопасного event snapshot; raw response body, callback payload, transport delivery body, prompt/transcript/logs/PII не копируются. Replay одного `response_id` возвращает уже записанный result, а несовпадающий outcome, request/response ref, fingerprint или interaction request version получает conflict.
 

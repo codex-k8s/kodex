@@ -12,10 +12,12 @@ import (
 	grpcserver "github.com/codex-k8s/kodex/libs/go/grpcserver"
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
 	serviceprocess "github.com/codex-k8s/kodex/libs/go/serviceprocess"
+	interactionsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/interactions/v1"
 	packagesv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/packages/v1"
 	projectsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/projects/v1"
 	providersv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/providers/v1"
 	runtimev1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/runtime/v1"
+	interactionhubclient "github.com/codex-k8s/kodex/services/internal/agent-manager/internal/clients/interactionhub"
 	packagehubclient "github.com/codex-k8s/kodex/services/internal/agent-manager/internal/clients/packagehub"
 	projectcatalogclient "github.com/codex-k8s/kodex/services/internal/agent-manager/internal/clients/projectcatalog"
 	providerhubclient "github.com/codex-k8s/kodex/services/internal/agent-manager/internal/clients/providerhub"
@@ -72,6 +74,13 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	if providerHubConn != nil {
 		defer func() { _ = providerHubConn.Close() }()
 	}
+	humanGateRequester, interactionHubConn, err := newHumanGateRequester(cfg)
+	if err != nil {
+		return err
+	}
+	if interactionHubConn != nil {
+		defer func() { _ = interactionHubConn.Close() }()
+	}
 	agentRepository := agentpostgres.NewRepository(dbPool)
 	agentService := agentservice.New(agentservice.Config{
 		Repository:                 agentRepository,
@@ -81,7 +90,9 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		WorkspacePolicyResolver:    workspacePolicyResolver,
 		RuntimePreparer:            runtimePreparer,
 		ProviderFollowUpDispatcher: providerFollowUpDispatcher,
+		HumanGateRequester:         humanGateRequester,
 		RuntimePreparationEnabled:  cfg.RuntimePreparationEnabled,
+		HumanGateRequestEnabled:    cfg.InteractionHubRequestEnabled,
 		EventPublisher:             agentservice.DisabledEventPublisher{},
 	})
 	httpServer := &http.Server{
@@ -199,19 +210,50 @@ func newRuntimePreparer(cfg Config) (agentservice.RuntimePreparer, *grpcruntime.
 
 func newProviderFollowUpDispatcher(cfg Config) (agentservice.ProviderFollowUpDispatcher, *grpcruntime.ClientConn, error) {
 	if !cfg.ProviderHubWriteEnabled {
-		disabled := agentservice.DisabledProviderFollowUpDispatcher{}
-		return disabled, nil, nil
+		return agentservice.DisabledProviderFollowUpDispatcher{}, nil, nil
 	}
-	return connectProviderFollowUpDispatcher(providerhubclient.Config{
+	clientConfig := providerhubclient.Config{
 		Addr:      cfg.ProviderHubGRPCAddr,
 		AuthToken: cfg.ProviderHubGRPCAuthToken,
 		Timeout:   cfg.ProviderHubWriteTimeout,
+	}
+	return connectGeneratedOwnerService[agentservice.ProviderFollowUpDispatcher](clientConfig, providerhubclient.NewConnection, providersv1.NewProviderHubServiceClient, func(client providersv1.ProviderHubServiceClient, clientConfig providerhubclient.Config) (agentservice.ProviderFollowUpDispatcher, error) {
+		return providerhubclient.NewFollowUpDispatcher(client, clientConfig)
 	})
 }
 
-func connectProviderFollowUpDispatcher(clientConfig providerhubclient.Config) (agentservice.ProviderFollowUpDispatcher, *grpcruntime.ClientConn, error) {
-	return connectOwnerService[agentservice.ProviderFollowUpDispatcher](clientConfig, providerhubclient.NewConnection, func(conn *grpcruntime.ClientConn, clientConfig providerhubclient.Config) (agentservice.ProviderFollowUpDispatcher, error) {
-		return providerhubclient.NewFollowUpDispatcher(providersv1.NewProviderHubServiceClient(conn), clientConfig)
+func newHumanGateRequester(cfg Config) (agentservice.HumanGateInteractionRequester, *grpcruntime.ClientConn, error) {
+	clientConfig := interactionhubclient.Config{Addr: cfg.InteractionHubGRPCAddr, AuthToken: cfg.InteractionHubGRPCAuthToken, Timeout: cfg.InteractionHubRequestTimeout}
+	disabled := agentservice.HumanGateInteractionRequester(agentservice.DisabledHumanGateInteractionRequester{})
+	return optionalOwnerService(cfg.InteractionHubRequestEnabled, disabled, clientConfig, connectHumanGateRequester)
+}
+
+func connectHumanGateRequester(clientConfig interactionhubclient.Config) (agentservice.HumanGateInteractionRequester, *grpcruntime.ClientConn, error) {
+	return connectGeneratedOwnerService[agentservice.HumanGateInteractionRequester](clientConfig, interactionhubclient.NewConnection, interactionsv1.NewInteractionHubServiceClient, func(client interactionsv1.InteractionHubServiceClient, clientConfig interactionhubclient.Config) (agentservice.HumanGateInteractionRequester, error) {
+		return interactionhubclient.NewHumanGateRequester(client, clientConfig)
+	})
+}
+
+func optionalOwnerService[T any, C any](
+	enabled bool,
+	disabled T,
+	clientConfig C,
+	connect func(C) (T, *grpcruntime.ClientConn, error),
+) (T, *grpcruntime.ClientConn, error) {
+	if !enabled {
+		return disabled, nil, nil
+	}
+	return connect(clientConfig)
+}
+
+func connectGeneratedOwnerService[T any, C any, P any](
+	clientConfig C,
+	newConnection func(C) (*grpcruntime.ClientConn, error),
+	newGeneratedClient func(grpcruntime.ClientConnInterface) P,
+	newAdapter func(P, C) (T, error),
+) (T, *grpcruntime.ClientConn, error) {
+	return connectOwnerService[T](clientConfig, newConnection, func(conn *grpcruntime.ClientConn, clientConfig C) (T, error) {
+		return newAdapter(newGeneratedClient(conn), clientConfig)
 	})
 }
 

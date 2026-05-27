@@ -20,7 +20,9 @@ type Config struct {
 	WorkspacePolicyResolver    WorkspacePolicyResolver
 	RuntimePreparer            RuntimePreparer
 	ProviderFollowUpDispatcher ProviderFollowUpDispatcher
+	HumanGateRequester         HumanGateInteractionRequester
 	RuntimePreparationEnabled  bool
+	HumanGateRequestEnabled    bool
 	// EventPublisher is a future outbox-backed publisher for agent domain events.
 	EventPublisher EventPublisher
 }
@@ -34,7 +36,9 @@ type Service struct {
 	workspacePolicyResolver    WorkspacePolicyResolver
 	runtimePreparer            RuntimePreparer
 	providerFollowUpDispatcher ProviderFollowUpDispatcher
+	humanGateRequester         HumanGateInteractionRequester
 	runtimePreparationEnabled  bool
+	humanGateRequestEnabled    bool
 	eventPublisher             EventPublisher
 }
 
@@ -77,6 +81,11 @@ type ProviderFollowUpDispatcher interface {
 	UpdateComment(context.Context, ProviderUpdateCommentInput) (ProviderCommandResult, error)
 	UpdatePullRequest(context.Context, ProviderUpdatePullRequestInput) (ProviderCommandResult, error)
 	CreateReviewSignal(context.Context, ProviderCreateReviewSignalInput) (ProviderCommandResult, error)
+}
+
+// HumanGateInteractionRequester creates owner-visible requests in interaction-hub.
+type HumanGateInteractionRequester interface {
+	RequestHumanGate(context.Context, HumanGateInteractionRequestInput) (HumanGateInteractionRequestResult, error)
 }
 
 // DisabledGuidanceResolver keeps agent-manager runnable before package-hub is wired.
@@ -139,6 +148,14 @@ func (DisabledProviderFollowUpDispatcher) CreateReviewSignal(context.Context, Pr
 	return ProviderCommandResult{}, errs.ErrDependencyUnavailable
 }
 
+// DisabledHumanGateInteractionRequester keeps interaction request creation opt-in.
+type DisabledHumanGateInteractionRequester struct{}
+
+// RequestHumanGate reports that interaction-hub request creation is unavailable.
+func (DisabledHumanGateInteractionRequester) RequestHumanGate(context.Context, HumanGateInteractionRequestInput) (HumanGateInteractionRequestResult, error) {
+	return HumanGateInteractionRequestResult{}, errs.ErrDependencyUnavailable
+}
+
 // New creates an agent-manager service scaffold.
 func New(cfg Config) *Service {
 	if cfg.EventPublisher == nil {
@@ -156,23 +173,29 @@ func New(cfg Config) *Service {
 	if cfg.ProviderFollowUpDispatcher == nil {
 		cfg.ProviderFollowUpDispatcher = DisabledProviderFollowUpDispatcher{}
 	}
+	if cfg.HumanGateRequester == nil {
+		cfg.HumanGateRequester = DisabledHumanGateInteractionRequester{}
+	}
 	if cfg.Clock == nil {
 		cfg.Clock = systemClock{}
 	}
 	if cfg.IDGenerator == nil {
 		cfg.IDGenerator = zeroIDGenerator{}
 	}
-	return &Service{
-		repository:                 cfg.Repository,
-		clock:                      cfg.Clock,
-		idGenerator:                cfg.IDGenerator,
-		guidanceResolver:           cfg.GuidanceResolver,
-		workspacePolicyResolver:    cfg.WorkspacePolicyResolver,
-		runtimePreparer:            cfg.RuntimePreparer,
-		providerFollowUpDispatcher: cfg.ProviderFollowUpDispatcher,
-		runtimePreparationEnabled:  cfg.RuntimePreparationEnabled,
-		eventPublisher:             cfg.EventPublisher,
+	service := &Service{
+		repository:  cfg.Repository,
+		clock:       cfg.Clock,
+		idGenerator: cfg.IDGenerator,
 	}
+	service.guidanceResolver = cfg.GuidanceResolver
+	service.workspacePolicyResolver = cfg.WorkspacePolicyResolver
+	service.runtimePreparer = cfg.RuntimePreparer
+	service.providerFollowUpDispatcher = cfg.ProviderFollowUpDispatcher
+	service.humanGateRequester = cfg.HumanGateRequester
+	service.runtimePreparationEnabled = cfg.RuntimePreparationEnabled
+	service.humanGateRequestEnabled = cfg.HumanGateRequestEnabled
+	service.eventPublisher = cfg.EventPublisher
+	return service
 }
 
 // Ready reports whether the process has the minimal composed dependencies.

@@ -2902,6 +2902,249 @@ func TestRequestHumanGateStoresWaitAndOutbox(t *testing.T) {
 	}
 }
 
+func TestRequestHumanGateCreatesInteractionRequestWhenEnabled(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 27, 11, 30, 0, 0, time.UTC)
+	sessionID := uuid.MustParse("89898989-6666-7777-8888-999999999999")
+	runID := uuid.MustParse("89898989-7777-8888-9999-aaaaaaaaaaaa")
+	eventID := uuid.MustParse("89898989-8888-9999-aaaa-bbbbbbbbbbbb")
+	requester := &fakeHumanGateRequester{
+		result: HumanGateInteractionRequestResult{InteractionRequestRef: "interaction:request/ih-1", Status: "waiting", Version: 1, SafeSummary: "Review stage needs owner decision"},
+	}
+	repository := &fakeRepository{
+		sessionByID: map[uuid.UUID]entity.AgentSession{sessionID: {
+			VersionedBase:     entity.VersionedBase{ID: sessionID, Version: 1},
+			Scope:             value.ScopeRef{Type: string(enum.AgentScopeTypeProject), Ref: "project:alpha"},
+			Status:            enum.AgentSessionStatusOpen,
+			CreatedByActorRef: "user:owner",
+		}},
+		runByID:       map[uuid.UUID]entity.AgentRun{runID: {VersionedBase: entity.VersionedBase{ID: runID, Version: 1}, SessionID: sessionID}},
+		humanGateByID: map[uuid.UUID]entity.HumanGateRequest{},
+	}
+	service := New(Config{
+		Repository:              repository,
+		Clock:                   fixedClock{now: now},
+		IDGenerator:             fixedIDGenerator{ids: []uuid.UUID{eventID}},
+		HumanGateRequester:      requester,
+		HumanGateRequestEnabled: true,
+	})
+
+	gate, err := service.RequestHumanGate(context.Background(), RequestHumanGateInput{
+		Meta:           value.CommandMeta{IdempotencyKey: "human-gate-interaction", Actor: testActor()},
+		SessionID:      sessionID,
+		RunID:          &runID,
+		ProviderTarget: value.ProviderTargetRef{WorkItemRef: "provider:issue/42"},
+		TargetRef:      "artifact:run-summary",
+		RequestKind:    "owner_decision",
+		ReasonCode:     "needs_owner_approval",
+		SafeSummary:    "Review stage needs owner decision",
+	})
+	if err != nil {
+		t.Fatalf("RequestHumanGate() err = %v", err)
+	}
+	if requester.calls != 1 {
+		t.Fatalf("requester calls = %d, want 1", requester.calls)
+	}
+	if gate.InteractionRequestRef != "interaction:request/ih-1" || repository.createdHumanGate.InteractionRequestRef != "interaction:request/ih-1" {
+		t.Fatalf("interaction ref gate=%q stored=%q", gate.InteractionRequestRef, repository.createdHumanGate.InteractionRequestRef)
+	}
+	if requester.last.HumanGateRequestID != gate.ID || requester.last.SourceOwnerRef != "agent:human_gate/"+gate.ID.String() {
+		t.Fatalf("requester owner refs = %+v gate=%s", requester.last, gate.ID)
+	}
+	if len(requester.last.TargetRefs) != 1 || requester.last.TargetRefs[0] != (HumanGateInteractionActorRef{Kind: "user", Ref: "owner"}) {
+		t.Fatalf("target refs = %+v", requester.last.TargetRefs)
+	}
+	if !hasHumanGateContextRef(requester.last.ContextRefs, "agent_session", sessionID.String()) ||
+		!hasHumanGateContextRef(requester.last.ContextRefs, "agent_run", runID.String()) ||
+		!hasHumanGateContextRef(requester.last.ContextRefs, "provider_work_item", "provider:issue/42") {
+		t.Fatalf("context refs = %+v", requester.last.ContextRefs)
+	}
+	payload := decodeAgentPayload(t, repository.humanGateEvent)
+	if payload.InteractionRequestRef != "interaction:request/ih-1" {
+		t.Fatalf("event payload = %+v", payload)
+	}
+	resultPayload := string(repository.humanGateResult.ResultPayload)
+	if strings.Contains(resultPayload, "raw_provider_payload") || strings.Contains(resultPayload, "transcript") || strings.Contains(resultPayload, "secret") {
+		t.Fatalf("command payload contains unsafe marker: %s", resultPayload)
+	}
+}
+
+func TestRequestHumanGateInteractionReplayDoesNotDuplicateRequest(t *testing.T) {
+	t.Parallel()
+
+	sessionID := uuid.MustParse("89898989-9999-aaaa-bbbb-cccccccccccc")
+	gateID := uuid.MustParse("89898989-aaaa-bbbb-cccc-dddddddddddd")
+	gate := entity.HumanGateRequest{
+		VersionedBase:         entity.VersionedBase{ID: gateID, Version: 1},
+		SessionID:             sessionID,
+		RequestKind:           "owner_decision",
+		ReasonCode:            "needs_owner_approval",
+		SafeSummary:           "Review stage needs owner decision",
+		InteractionRequestRef: "interaction:request/replay",
+		IdempotencyKey:        operationRequestHumanGate + ":user:owner:human-gate-replay",
+		Status:                enum.HumanGateStatusWaiting,
+		Outcome:               enum.HumanGateOutcomeNone,
+	}
+	payload, err := marshalCommandPayload(humanGateCommandPayload{HumanGateRequest: gate})
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	requester := &fakeHumanGateRequester{result: HumanGateInteractionRequestResult{InteractionRequestRef: "interaction:request/new"}}
+	repository := &fakeRepository{
+		replay: &entity.CommandResult{
+			IdempotencyKey: "human-gate-replay",
+			Actor:          testActor(),
+			Operation:      operationRequestHumanGate,
+			AggregateType:  enum.CommandAggregateTypeHumanGate,
+			AggregateID:    gateID,
+			ResultPayload:  payload,
+		},
+		sessionByID: map[uuid.UUID]entity.AgentSession{sessionID: {
+			VersionedBase:     entity.VersionedBase{ID: sessionID, Version: 1},
+			Scope:             value.ScopeRef{Type: string(enum.AgentScopeTypeProject), Ref: "project:alpha"},
+			Status:            enum.AgentSessionStatusOpen,
+			CreatedByActorRef: "user:owner",
+		}},
+		humanGateByID: map[uuid.UUID]entity.HumanGateRequest{gateID: gate},
+	}
+	service := New(Config{Repository: repository, HumanGateRequester: requester, HumanGateRequestEnabled: true})
+
+	replay, err := service.RequestHumanGate(context.Background(), RequestHumanGateInput{
+		Meta:        value.CommandMeta{IdempotencyKey: "human-gate-replay", Actor: testActor()},
+		SessionID:   sessionID,
+		RequestKind: "owner_decision",
+		ReasonCode:  "needs_owner_approval",
+		SafeSummary: "Review stage needs owner decision",
+	})
+	if err != nil {
+		t.Fatalf("RequestHumanGate() err = %v", err)
+	}
+	if replay.ID != gateID || requester.calls != 0 || repository.createHumanGateCalled {
+		t.Fatalf("replay=%s requester=%d create=%v", replay.ID, requester.calls, repository.createHumanGateCalled)
+	}
+}
+
+func TestRequestHumanGateInteractionFailureDoesNotPersistWait(t *testing.T) {
+	t.Parallel()
+
+	sessionID := uuid.MustParse("89898989-bbbb-cccc-dddd-eeeeeeeeeeee")
+	requester := &fakeHumanGateRequester{err: errs.ErrDependencyUnavailable}
+	repository := &fakeRepository{
+		sessionByID: map[uuid.UUID]entity.AgentSession{sessionID: {
+			VersionedBase:     entity.VersionedBase{ID: sessionID, Version: 1},
+			Scope:             value.ScopeRef{Type: string(enum.AgentScopeTypeProject), Ref: "project:alpha"},
+			Status:            enum.AgentSessionStatusOpen,
+			CreatedByActorRef: "user:owner",
+		}},
+	}
+	service := New(Config{Repository: repository, HumanGateRequester: requester, HumanGateRequestEnabled: true})
+
+	_, err := service.RequestHumanGate(context.Background(), RequestHumanGateInput{
+		Meta:        value.CommandMeta{IdempotencyKey: "human-gate-failure", Actor: testActor()},
+		SessionID:   sessionID,
+		RequestKind: "owner_decision",
+		ReasonCode:  "needs_owner_approval",
+		SafeSummary: "Review stage needs owner decision",
+	})
+	if !errors.Is(err, errs.ErrDependencyUnavailable) {
+		t.Fatalf("RequestHumanGate() err = %v, want %v", err, errs.ErrDependencyUnavailable)
+	}
+	if !requester.called() || repository.createHumanGateCalled {
+		t.Fatalf("requester calls=%d create=%v", requester.calls, repository.createHumanGateCalled)
+	}
+}
+
+func TestRequestHumanGateInteractionDuplicateDoesNotPersistWait(t *testing.T) {
+	t.Parallel()
+
+	sessionID := uuid.MustParse("89898989-cdcd-dede-efef-010101010101")
+	requester := &fakeHumanGateRequester{err: errs.ErrAlreadyExists}
+	repository := &fakeRepository{
+		sessionByID: map[uuid.UUID]entity.AgentSession{sessionID: {
+			VersionedBase:     entity.VersionedBase{ID: sessionID, Version: 1},
+			Scope:             value.ScopeRef{Type: string(enum.AgentScopeTypeProject), Ref: "project:alpha"},
+			Status:            enum.AgentSessionStatusOpen,
+			CreatedByActorRef: "user:owner",
+		}},
+	}
+	service := New(Config{Repository: repository, HumanGateRequester: requester, HumanGateRequestEnabled: true})
+
+	_, err := service.RequestHumanGate(context.Background(), RequestHumanGateInput{
+		Meta:        value.CommandMeta{IdempotencyKey: "human-gate-duplicate", Actor: testActor()},
+		SessionID:   sessionID,
+		RequestKind: "owner_decision",
+		ReasonCode:  "needs_owner_approval",
+		SafeSummary: "Review stage needs owner decision",
+	})
+	if !errors.Is(err, errs.ErrAlreadyExists) {
+		t.Fatalf("RequestHumanGate() err = %v, want %v", err, errs.ErrAlreadyExists)
+	}
+	if !requester.called() || repository.createHumanGateCalled {
+		t.Fatalf("requester calls=%d create=%v", requester.calls, repository.createHumanGateCalled)
+	}
+}
+
+func TestRequestHumanGateInteractionRejectsInvalidOwnerRef(t *testing.T) {
+	t.Parallel()
+
+	sessionID := uuid.MustParse("89898989-cccc-dddd-eeee-ffffffffffff")
+	requester := &fakeHumanGateRequester{result: HumanGateInteractionRequestResult{InteractionRequestRef: "interaction:request/invalid"}}
+	repository := &fakeRepository{
+		sessionByID: map[uuid.UUID]entity.AgentSession{sessionID: {
+			VersionedBase:     entity.VersionedBase{ID: sessionID, Version: 1},
+			Scope:             value.ScopeRef{Type: string(enum.AgentScopeTypeProject), Ref: "project:alpha"},
+			Status:            enum.AgentSessionStatusOpen,
+			CreatedByActorRef: "owner-without-kind",
+		}},
+	}
+	service := New(Config{Repository: repository, HumanGateRequester: requester, HumanGateRequestEnabled: true})
+
+	_, err := service.RequestHumanGate(context.Background(), RequestHumanGateInput{
+		Meta:        value.CommandMeta{IdempotencyKey: "human-gate-invalid-owner", Actor: testActor()},
+		SessionID:   sessionID,
+		RequestKind: "owner_decision",
+		ReasonCode:  "needs_owner_approval",
+		SafeSummary: "Review stage needs owner decision",
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("RequestHumanGate() err = %v, want %v", err, errs.ErrInvalidArgument)
+	}
+	if requester.calls != 0 || repository.createHumanGateCalled {
+		t.Fatalf("requester calls=%d create=%v", requester.calls, repository.createHumanGateCalled)
+	}
+}
+
+func TestRequestHumanGateInteractionRejectsInvalidScope(t *testing.T) {
+	t.Parallel()
+
+	sessionID := uuid.MustParse("89898989-dede-efef-0101-020202020202")
+	requester := &fakeHumanGateRequester{result: HumanGateInteractionRequestResult{InteractionRequestRef: "interaction:request/invalid-scope"}}
+	repository := &fakeRepository{
+		sessionByID: map[uuid.UUID]entity.AgentSession{sessionID: {
+			VersionedBase:     entity.VersionedBase{ID: sessionID, Version: 1},
+			Scope:             value.ScopeRef{Type: "invalid_scope", Ref: "project:alpha"},
+			Status:            enum.AgentSessionStatusOpen,
+			CreatedByActorRef: "user:owner",
+		}},
+	}
+	service := New(Config{Repository: repository, HumanGateRequester: requester, HumanGateRequestEnabled: true})
+
+	_, err := service.RequestHumanGate(context.Background(), RequestHumanGateInput{
+		Meta:        value.CommandMeta{IdempotencyKey: "human-gate-invalid-scope", Actor: testActor()},
+		SessionID:   sessionID,
+		RequestKind: "owner_decision",
+		ReasonCode:  "needs_owner_approval",
+		SafeSummary: "Review stage needs owner decision",
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("RequestHumanGate() err = %v, want %v", err, errs.ErrInvalidArgument)
+	}
+	if requester.calls != 0 || repository.createHumanGateCalled {
+		t.Fatalf("requester calls=%d create=%v", requester.calls, repository.createHumanGateCalled)
+	}
+}
+
 func TestRequestHumanGateReplaysSameCommand(t *testing.T) {
 	t.Parallel()
 
@@ -3319,6 +3562,35 @@ type fakeRepository struct {
 	createActivityCalled   bool
 	createHumanGateCalled  bool
 	updateHumanGateCalled  bool
+}
+
+type fakeHumanGateRequester struct {
+	last   HumanGateInteractionRequestInput
+	result HumanGateInteractionRequestResult
+	err    error
+	calls  int
+}
+
+func (f *fakeHumanGateRequester) RequestHumanGate(_ context.Context, input HumanGateInteractionRequestInput) (HumanGateInteractionRequestResult, error) {
+	f.calls++
+	f.last = input
+	if f.err != nil {
+		return HumanGateInteractionRequestResult{}, f.err
+	}
+	return f.result, nil
+}
+
+func (f *fakeHumanGateRequester) called() bool {
+	return f.calls > 0
+}
+
+func hasHumanGateContextRef(refs []HumanGateInteractionExternalRef, kind string, ref string) bool {
+	for _, candidate := range refs {
+		if candidate.Kind == kind && candidate.Ref == ref {
+			return true
+		}
+	}
+	return false
 }
 
 func (f *fakeRepository) CreateFlowWithResult(_ context.Context, flow entity.Flow, result entity.CommandResult) error {
