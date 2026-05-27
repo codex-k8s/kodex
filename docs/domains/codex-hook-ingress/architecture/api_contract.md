@@ -53,13 +53,15 @@ approvals:
 
 Logical response CHI-4 также содержит route delivery diagnostics. Unsupported, disabled или failed route не считается успешной доставкой. Diagnostic text должен быть safe: без raw downstream error, prompt, tool input/output, stdout/stderr, provider payload, kubeconfig и secret values.
 
-Persistent история tool/activity не является операцией `codex-hook-ingress`. Отдельный CHI-срез маршрутизирует sanitized `PreToolUse`/`PostToolUse` в `agent-manager.RecordAgentActivity`; `codex-hook-ingress` остаётся sanitizer/router/realtime ops feed и не хранит долгую историю tool calls.
+Persistent история tool/activity не является операцией `codex-hook-ingress`. Sanitized `PreToolUse`/`PostToolUse` маршрутизируются в typed owner port `agent-manager.RecordAgentActivity`; `codex-hook-ingress` остаётся sanitizer/router/realtime ops feed и не хранит долгую историю tool calls.
 
-## Состояние реализации CHI-3/CHI-4/CHI-5/CHI-6a
+## Состояние реализации CHI-3/CHI-4/CHI-4b/CHI-5/CHI-6a
 
 Кодовый каркас `services/internal/codex-hook-ingress` реализует `SubmitHookEvent` только как in-process logical boundary в `internal/transport/command`. Он нужен для проверки доменного use-case, idempotency и sanitizer boundary без фиксации physical transport.
 
 CHI-4 добавляет route registry и owner ports/stubs для dispatch безопасных частей события к `agent-manager`, `runtime-manager`, `provider-hub`, `governance-manager`, `interaction-hub`, operations/realtime placeholder и audit placeholder. Registry строит canonical route plan по `hook_event_name`; `downstream_routes` из envelope сверяются с этой матрицей и не являются источником истины для dispatch. Registry проецирует только canonical `safe_parts`, возвращает safe delivery diagnostics и не вызывает business command у соседнего домена.
+
+CHI-4b добавляет typed owner route для `agent-manager.RecordAgentActivity`. Для `PreToolUse` и `PostToolUse` route строит safe activity record: `session_id`, `run_id`, `slot_id`, `turn_id`, `tool_use_id`, tool name/category, activity kind/status, timestamps, safe summary, payload digest, `PostToolUse` `exit_status`/`output_digest`, bounded error metadata, capability/skill refs и correlation/idempotency trace. `PostToolUse` с `exit_status != 0` записывается как failed даже без optional `bounded_error`. Raw `tool_input`, `tool_response`, stdout/stderr, prompt, transcript/session dump, provider payload, kubeconfig, tokens, secrets и локальные workspace paths в outgoing record не попадают. Повтор завершённого hook event возвращает cached route diagnostics и не создаёт второй activity record; conflict по `event_id`/digest/correlation/event kind отклоняется безопасной ошибкой.
 
 Process config CHI-4 добавляет `KODEX_CODEX_HOOK_INGRESS_DISABLED_ROUTES` для отключения отдельных owner routes и `KODEX_CODEX_HOOK_INGRESS_ROUTE_FAILURE_POLICY` со значениями `diagnostic` или `fail_closed`. В режиме `diagnostic` неуспешные routes отражаются только в diagnostics; в режиме `fail_closed` handler result становится безопасным `fail_closed`.
 

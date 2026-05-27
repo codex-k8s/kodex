@@ -108,6 +108,8 @@ const (
 	SafeEventPartPromptDigest           SafeEventPart = "prompt_digest"
 	SafeEventPartRiskClass              SafeEventPart = "risk_class"
 	SafeEventPartSanitizedReason        SafeEventPart = "sanitized_reason"
+	SafeEventPartExitStatus             SafeEventPart = "exit_status"
+	SafeEventPartOutputDigest           SafeEventPart = "output_digest"
 	SafeEventPartBoundedError           SafeEventPart = "bounded_error"
 	SafeEventPartProviderArtifactSignal SafeEventPart = "provider_artifact_signal"
 	SafeEventPartRateLimitHint          SafeEventPart = "rate_limit_hint"
@@ -129,6 +131,8 @@ func SafeEventParts() []SafeEventPart {
 		SafeEventPartPromptDigest,
 		SafeEventPartRiskClass,
 		SafeEventPartSanitizedReason,
+		SafeEventPartExitStatus,
+		SafeEventPartOutputDigest,
 		SafeEventPartBoundedError,
 		SafeEventPartProviderArtifactSignal,
 		SafeEventPartRateLimitHint,

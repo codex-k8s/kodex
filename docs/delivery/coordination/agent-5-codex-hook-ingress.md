@@ -33,6 +33,7 @@
 | CHI-2 | #786 | готово | Контракт hook emitter/local sidecar, runtime config JSON Schema, logical `SubmitHookEvent`, sanitizer до buffer/send, auth, idempotency, ordering, retry, bounded buffer, backpressure и failure policy без выбора physical transport. |
 | CHI-3 | #793 | готово | Сервисный каркас `services/internal/codex-hook-ingress`: process, config, graceful shutdown, health/readiness/metrics, in-process logical `SubmitHookEvent`, source binding placeholder, schema validation hook, sanitizer boundary, idempotency repository stub без raw payload storage. |
 | CHI-4 | #808 | готово | Route registry и dispatch безопасных частей hook events через owner ports/stubs к `agent-manager`, `runtime-manager`, `provider-hub`, `governance-manager`, `interaction-hub` и operations/realtime placeholder; unsupported/disabled/downstream-failed routes дают safe diagnostics и не считаются успешной доставкой. |
+| CHI-4b | #844 | готово | Sanitized `PreToolUse`/`PostToolUse` маршрутизируются в typed owner port `agent-manager.RecordAgentActivity`: формируется safe activity record с session/run/slot/turn refs, tool metadata, status, timestamps, digest, bounded error, capability refs и correlation/idempotency trace; persistent timeline остаётся у `agent-manager`. |
 | CHI-5 | #836 | готово | `PermissionRequest` bridge и policy-controlled `PreToolUse`: safe request context, owner decision ports/stubs для `governance-manager`, `agent-manager`, `interaction-hub`, explicit handler states, timeout/fail-closed policy и idempotent replay без persistent истории tool/activity в ingress. |
 | CHI-6a | #823 | готово | Bounded in-memory ops/realtime feed, TTL/capacity retention, sanitizer metrics, route diagnostics, fixed-window rate limits, safe backpressure и operator diagnostics поверх CHI-4 registry без служебной БД. |
 
@@ -40,7 +41,6 @@
 
 | Срез | Что осталось |
 |---|---|
-| CHI-4b | Маршрутизация sanitized `PreToolUse`/`PostToolUse` в `agent-manager.RecordAgentActivity` после готовности owner-side timeline; ingress не хранит persistent tool history. |
 | CHI-6b | Persistent ops feed или integration с operations-hub, если понадобится восстановление ленты после рестарта и отдельные retention jobs. |
 | CHI-7 | Capability context refs для Codex skills без skill catalog в ingress. |
 | CHI-8 | Deploy-контур: Dockerfile, manifests, migration job только если нужна служебная БД, smoke, runbook и monitoring. |

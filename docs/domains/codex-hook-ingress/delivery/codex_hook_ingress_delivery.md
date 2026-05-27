@@ -6,7 +6,7 @@ status: active
 owner_role: EM
 created_at: 2026-05-22
 updated_at: 2026-05-26
-related_issues: [698, 753, 778, 786, 793, 808, 823, 836, 322, 834]
+related_issues: [698, 753, 778, 786, 793, 808, 823, 836, 844, 322, 834]
 related_prs: []
 related_docsets:
   - docs/domains/codex-hook-ingress/product/requirements.md
@@ -49,7 +49,7 @@ approvals:
 | CHI-2 | #786 | Контракт hook emitter/local sidecar: runtime role, чтение Codex hook JSON из `stdin`, sanitizer до buffer/send, logical `SubmitHookEvent`, auth, idempotency, ordering, retry, bounded buffer, backpressure и failure policy без выбора physical transport. |
 | CHI-3 | #793 | Сервисный каркас `codex-hook-ingress`: process, config, graceful shutdown, health/readiness/metrics, in-process logical `SubmitHookEvent`, source verifier placeholder, schema validation hook, sanitizer boundary, idempotency repository stub без raw payload storage. |
 | CHI-4 | #808 | Route registry и dispatch безопасных частей events через owner ports/stubs к `agent-manager`, `runtime-manager`, `provider-hub`, `governance-manager`, `interaction-hub` и operations/realtime placeholder без бизнес-состояния в ingress. |
-| CHI-4b | не назначено | Маршрутизация sanitized `PreToolUse`/`PostToolUse` в `agent-manager.RecordAgentActivity` после готовности AGO-9b; ingress остаётся sanitizer/router/realtime feed и не хранит persistent tool history. |
+| CHI-4b | #844 | Маршрутизация sanitized `PreToolUse`/`PostToolUse` в typed owner port `agent-manager.RecordAgentActivity`: safe activity record содержит refs, tool metadata, status/timestamps, digest, `PostToolUse` `exit_status`/`output_digest`, bounded error, capability refs и correlation/idempotency trace; ingress остаётся sanitizer/router/realtime feed и не хранит persistent tool history. |
 | CHI-5 | #836 | `PermissionRequest` и policy-controlled `PreToolUse` bridge к gate/decision у `governance-manager`, ожиданию flow у `agent-manager` и delivery через `interaction-hub`; ingress держит только safe context, idempotency и bounded diagnostics без persistent tool/activity timeline. |
 | CHI-6a | #823 | Bounded in-memory realtime/ops feed, retention TTL/capacity, sanitizer metrics, route diagnostics, fixed-window rate limits, safe backpressure и operator diagnostics без служебной БД. |
 | CHI-6b | не назначено | Persistent ops feed или integration с operations-hub, если требуется восстановление ленты после рестарта, отдельные retention jobs и SRE runbook. |

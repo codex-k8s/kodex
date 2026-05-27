@@ -207,6 +207,7 @@ spec:
         - services/internal/codex-hook-ingress
         - libs/go/serviceprocess
         - libs/go/servicemain
+        - proto/kodex/agents/v1
         - specs/jsonschema/codex-hook-ingress.v1
     interaction-hub:
       value: "0.1.0"
@@ -652,6 +653,7 @@ spec:
         logicalCommand: SubmitHookEvent
         physicalTransport: not-selected
       implementation:
+        agentActivityRoute: typed-record-agent-activity-owner-port
         businessRoutes: route-registry-safe-parts-only
         database: stub-only-no-raw-payload-storage
         decisionBridge: permission-and-policy-pre-tool-owner-ports-stubbed

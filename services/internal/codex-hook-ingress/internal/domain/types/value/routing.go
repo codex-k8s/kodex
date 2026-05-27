@@ -1,6 +1,8 @@
 package value
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 
 	hookenum "github.com/codex-k8s/kodex/services/internal/codex-hook-ingress/internal/domain/types/enum"
@@ -26,6 +28,7 @@ const (
 type SafeHookEvent struct {
 	EventID                uuid.UUID                `json:"event_id"`
 	HookEventName          hookenum.HookEventName   `json:"hook_event_name"`
+	EventTime              time.Time                `json:"event_time"`
 	Owner                  hookenum.DownstreamOwner `json:"owner"`
 	DeliveryMode           hookenum.DeliveryMode    `json:"delivery_mode"`
 	SafeParts              []string                 `json:"safe_parts"`
@@ -37,6 +40,8 @@ type SafeHookEvent struct {
 	PromptDigest           string                   `json:"prompt_digest,omitempty"`
 	RiskClass              string                   `json:"risk_class,omitempty"`
 	SanitizedReason        string                   `json:"sanitized_reason,omitempty"`
+	ExitStatus             *int                     `json:"exit_status,omitempty"`
+	OutputDigest           string                   `json:"output_digest,omitempty"`
 	BoundedError           *BoundedError            `json:"bounded_error,omitempty"`
 	ProviderArtifactSignal *ProviderArtifactSignal  `json:"provider_artifact_signal,omitempty"`
 	RateLimitHint          *RateLimitHint           `json:"rate_limit_hint,omitempty"`

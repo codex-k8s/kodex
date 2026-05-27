@@ -20,7 +20,7 @@ Codex hooks являются command-обработчиками Codex: hook emit
 
 Сервисный каркас расположен в `services/internal/codex-hook-ingress`.
 
-Текущий срез реализует process, config, graceful shutdown, `/health/livez`, `/health/readyz`, `/metrics`, in-process logical boundary `SubmitHookEvent`, source binding placeholder, schema validation hook, sanitizer boundary, idempotency repository stub, route registry для dispatch безопасных частей событий через owner ports/stubs, decision bridge для `PermissionRequest` и policy-controlled `PreToolUse`, а также bounded in-memory ops/realtime feed для operator diagnostics. Физический transport для `SubmitHookEvent` не выбран и не реализован; соседние домены получают только safe projections/context без raw payload и без бизнес-команд.
+Текущий срез реализует process, config, graceful shutdown, `/health/livez`, `/health/readyz`, `/metrics`, in-process logical boundary `SubmitHookEvent`, source binding placeholder, schema validation hook, sanitizer boundary, idempotency repository stub, route registry для dispatch безопасных частей событий через owner ports/stubs, typed route для `agent-manager.RecordAgentActivity` по sanitized `PreToolUse`/`PostToolUse`, decision bridge для `PermissionRequest` и policy-controlled `PreToolUse`, а также bounded in-memory ops/realtime feed для operator diagnostics. Физический transport для `SubmitHookEvent` не выбран и не реализован; соседние домены получают только safe projections/context без raw payload и без бизнес-команд.
 
 ## Что не входит
 
