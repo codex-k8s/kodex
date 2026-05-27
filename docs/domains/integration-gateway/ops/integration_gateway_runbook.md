@@ -6,7 +6,7 @@ status: active
 owner_role: SRE
 created_at: 2026-05-26
 updated_at: 2026-05-27
-related_issues: [829, 853]
+related_issues: [829, 853, 895]
 related_alerts: []
 approvals:
   required: ["Owner"]
@@ -63,6 +63,19 @@ KODEX_SMOKE_ENV_FILE=/path/to/bootstrap.env \
 - выполняет safe negative checks для GitHub webhook route и disabled callback route без реальных секретов: неподписанный GitHub webhook должен получить `401/signature_invalid`, неподдержанный provider slug и выключенный callback route — `400/source_not_allowed`.
 
 Smoke не выполняет реальные GitHub/GitLab операции, не требует валидного webhook secret для positive route и не сохраняет provider payload в gateway.
+
+### Staged smoke для GitHub merge signal
+
+```bash
+scripts/smoke-provider-merge-signal.sh
+```
+
+Скрипт использует синтетический safe fixture `pull_request closed + merged` и по умолчанию запускает hermetic checks без live webhook secret:
+
+- проверяет, что route `POST /v1/provider-webhooks/github` принимает корректно подписанный тестовым секретом fixture и передаёт `event_name=pull_request`, delivery id, request id и payload в `provider-hub` client boundary;
+- проверяет provider-side продолжение через `provider-hub`: safe merge signal, read surface и producer outbox event.
+
+Live HTTP режим `KODEX_PROVIDER_MERGE_SIGNAL_SMOKE_MODE=live-http` отправляет тот же fixture в запущенный `integration-gateway`, а затем читает `RepositoryMergeSignal` через gRPC `provider-hub`. Для него нужны настроенный webhook secret текущего контура и заранее существующая bootstrap/adoption PR-проекция с provider relationship; gateway сам не создаёт эту precondition и не хранит state.
 
 ## Диагностика rollout и health
 

@@ -36,7 +36,8 @@ cp bootstrap/host/config.env.example bootstrap/host/config.env
 
 Минимально важные группы параметров:
 
-- `TARGET_*` и `OPERATOR_*` для удалённого режима;
+- `TARGET_*` и operator public key для удалённого режима;
+- `OPERATOR_USER` для локального и удалённого режима; в локальном режиме operator public key можно не задавать, тогда bootstrap создаёт пользователя без `authorized_keys`;
 - `KODEX_PRODUCTION_NAMESPACE`;
 - `KODEX_PRODUCTION_DOMAIN` и `KODEX_INGRESS_HOST_NETWORK` как входные предпосылки будущего ingress-контура;
 - `KODEX_INTERNAL_REGISTRY_*`;
