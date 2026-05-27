@@ -13,3 +13,4 @@ updated_at: 2026-05-27
 | Issue/PR | Документы и артефакты | Срез | Статус | Связь |
 |---|---|---|---|---|
 | #888 / #890 | `bootstrap/**`, `deploy/base/bootstrap-foundation/**`, `deploy/base/bootstrap-builder-smoke/**`, `services.yaml`, `docs/platform/ops/bootstrap_cluster_runbook.md` | Первый bootstrap-контур кластера | готово | Локальный preflight/install path, internal registry foundation, Kaniko/mirror smoke и backend smoke orchestration. |
+| #910 / #913 | `libs/go/stackinventory/**`, `cmd/manifest-render/**`, `bootstrap/**`, `scripts/lib/inventory.sh`, `docs/design-guidelines/**`, `docs/platform/ops/bootstrap_cluster_runbook.md` | Общий root stack inventory parser | готово | Корневой `services.yaml` читается через общий Go-пакет для render/install/deploy tooling; shell fallback ограничен legacy smoke/build wrappers. |

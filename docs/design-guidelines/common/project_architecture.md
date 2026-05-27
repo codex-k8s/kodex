@@ -18,7 +18,7 @@
 ## Структура репозитория
 
 Целевой верхний уровень:
-- `services.yaml` или его новая согласованная замена — инвентарь деплоя и окружений.
+- `services.yaml` или его новая согласованная замена — корневой stack inventory платформы для версий, образов, deploy inventory и install/render tooling.
 - `services/` — сервисы по зонам (`internal|external|staff|jobs|dev`), создаются заново.
 - `libs/` — переиспользуемый код (`go|ts|vue`), создаётся только при наличии реального переиспользования.
 - `proto/` — gRPC контракты, создаётся заново при появлении внутренних gRPC API.
@@ -67,7 +67,9 @@
 
 ### Источники defaults
 
-- `services.yaml` является источником версий, образов, deploy inventory и стандартных имён артефактов.
+- Корневой `services.yaml` является источником версий, образов, deploy inventory и стандартных имён артефактов платформенного стека.
+- Корневой `services.yaml` отличается от проектного `services.yaml` пользовательского репозитория: проектная политика, импорт и проверенная проекция принадлежат `project-catalog`.
+- Go tooling, которому нужны версии или образы платформенного стека, читает root stack inventory через `libs/go/stackinventory`; собственные YAML parsers и shell/awk разборы допустимы только как временный узкий fallback для legacy wrappers.
 - Go config deployable-сервиса является источником безопасных runtime defaults самого сервиса.
 - Kubernetes templates задают обязательные env, секреты, связи с другими сервисами, параметры окружения и явные overrides; они не должны повторять runtime defaults сервиса как `envOr`, если default уже задан в Go config.
 - `bootstrap/host/config.env.example` остаётся минимальным локальным install-профилем: домен, namespace, локальные настройки установки и secret/bootstrap seed-поля.

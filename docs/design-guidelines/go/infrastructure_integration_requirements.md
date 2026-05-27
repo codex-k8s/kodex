@@ -89,13 +89,15 @@
   `proto/**`, `libs/go/**`, `GOCACHE=/tmp/.cache/go-build` и поддерживает dev-слоты
   без пересборки production-образа.
 - Стадия `prod` запускает готовый бинарник в минимальном runtime без исходников и инструментов разработки.
-- `services.yaml` — единый инвентарь deploy-конфигурации в рамках репозитория.
+- Корневой `services.yaml` — единый stack inventory deploy-конфигурации в рамках репозитория kodex.
+- Go tools читают root stack inventory через `libs/go/stackinventory`; не добавлять новый YAML parser для тех же версий, образов и deploy inventory.
+- Проектный `services.yaml` пользовательских репозиториев является project policy и принадлежит `project-catalog`, а не bootstrap/render tooling.
 - `services.yaml/spec.versions` задаётся только объектным форматом:
   - `service: { value: "0.1.0", bumpOn: ["services/<zone>/<service>", ...] }`.
 - Для Go runtime-сервисов стартовый `resources.limits.cpu` по умолчанию — `2` CPU. Иное значение
   задаётся через конфигурацию окружения и требует явной причины: профиль нагрузки, ограничения кластера
   или результаты замеров.
-- Для build image `tagTemplate` должен ссылаться на `spec.versions` через рендер-контекст (`{{ index .Versions "<service>" }}`), а не дублировать версию литералом.
+- Для build image `tagTemplate` должен ссылаться на `spec.versions` через typed helper (`{{ version "<service>" }}`), а не дублировать версию литералом.
 - Для `push` в `main/master` допускается авто-bump версии по `bumpOn`:
   - если в merge-коммитах есть изменённый путь, совпадающий с `bumpOn`, платформа поднимает последний numeric token версии;
   - bump коммитится в `main/master`, после чего deploy идёт по новому тегу.
