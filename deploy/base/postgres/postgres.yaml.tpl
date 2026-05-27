@@ -36,7 +36,7 @@ spec:
     spec:
       containers:
         - name: postgres
-          image: {{ envOr "KODEX_POSTGRES_IMAGE" "pgvector/pgvector:pg16" }}
+          image: {{ imageOr "postgres" "KODEX_POSTGRES_IMAGE" }}
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 5432
@@ -93,7 +93,7 @@ spec:
       restartPolicy: OnFailure
       containers:
         - name: bootstrap-databases
-          image: {{ envOr "KODEX_POSTGRES_IMAGE" "pgvector/pgvector:pg16" }}
+          image: {{ imageOr "postgres" "KODEX_POSTGRES_IMAGE" }}
           imagePullPolicy: IfNotPresent
           command: ["/bin/sh", "/scripts/bootstrap-databases.sh"]
           env:

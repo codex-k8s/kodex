@@ -19,7 +19,7 @@ spec:
         runAsNonRoot: true
       initContainers:
         - name: wait-platform-event-log-db
-          image: {{ envOr "KODEX_POSTGRES_IMAGE" "pgvector/pgvector:pg16" }}
+          image: {{ imageOr "postgres" "KODEX_POSTGRES_IMAGE" }}
           imagePullPolicy: IfNotPresent
           securityContext:
             runAsNonRoot: true
@@ -43,7 +43,7 @@ spec:
                   key: KODEX_PLATFORM_EVENT_LOG_DATABASE_DSN
       containers:
         - name: migrations
-          image: {{ envOr "KODEX_PLATFORM_EVENT_LOG_MIGRATIONS_IMAGE" "" }}
+          image: {{ image "platform-event-log-migrations" }}
           imagePullPolicy: IfNotPresent
           securityContext:
             runAsNonRoot: true

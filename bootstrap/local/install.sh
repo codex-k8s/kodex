@@ -2,12 +2,14 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ENV_FILE="${1:-${ROOT_DIR}/../bootstrap.env}"
+STEPS_DIR="${ROOT_DIR}/steps"
+ENV_FILE="${1:-${ROOT_DIR}/bootstrap.env}"
 
 # shellcheck disable=SC1091
-source "${ROOT_DIR}/lib.sh"
+source "${STEPS_DIR}/lib.sh"
 
 require_root
+ENV_FILE="$(cd "$(dirname "$ENV_FILE")" && pwd)/$(basename "$ENV_FILE")"
 load_env_file "$ENV_FILE"
 export BOOTSTRAP_ENV_FILE="$ENV_FILE"
 
@@ -27,7 +29,7 @@ steps=(
 
 for step in "${steps[@]}"; do
   log "Run step: $step"
-  bash "${ROOT_DIR}/${step}"
+  bash "${STEPS_DIR}/${step}"
 done
 
-log "Remote bootstrap done"
+log "Local bootstrap done"

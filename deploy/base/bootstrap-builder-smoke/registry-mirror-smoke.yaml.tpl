@@ -22,14 +22,14 @@ spec:
       dnsPolicy: ClusterFirstWithHostNet
       containers:
         - name: mirror
-          image: {{ envOr "KODEX_IMAGE_MIRROR_TOOL_IMAGE" "gcr.io/go-containerregistry/crane:debug" }}
+          image: {{ imageOr "crane" "KODEX_IMAGE_MIRROR_TOOL_IMAGE" }}
           imagePullPolicy: IfNotPresent
           command:
             - crane
           args:
             - copy
             - "--platform={{ envOr "KODEX_IMAGE_MIRROR_PLATFORM" "linux/amd64" }}"
-            - "{{ envOr "KODEX_REGISTRY_SMOKE_SOURCE_IMAGE" "busybox:1.36" }}"
+            - "{{ imageOr "busybox" "KODEX_REGISTRY_SMOKE_SOURCE_IMAGE" }}"
             - "{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/kodex/mirror/smoke:bootstrap"
             - --insecure
           resources:

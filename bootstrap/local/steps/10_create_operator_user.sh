@@ -9,15 +9,9 @@ require_root
 
 : "${OPERATOR_USER:?OPERATOR_USER is required}"
 KODEX_BOOTSTRAP_MODE="${KODEX_BOOTSTRAP_MODE:-local}"
-case "$KODEX_BOOTSTRAP_MODE" in
-  local|remote) ;;
-  *) die "KODEX_BOOTSTRAP_MODE must be local or remote";;
-esac
+[ "$KODEX_BOOTSTRAP_MODE" = "local" ] || die "KODEX_BOOTSTRAP_MODE must be local"
 if [ -z "${OPERATOR_SSH_PUBKEY:-}" ] && [ -n "${OPERATOR_SSH_PUBKEY_PATH:-}" ] && [ -f "${OPERATOR_SSH_PUBKEY_PATH}" ]; then
   OPERATOR_SSH_PUBKEY="$(cat "${OPERATOR_SSH_PUBKEY_PATH}")"
-fi
-if [ -z "${OPERATOR_SSH_PUBKEY:-}" ] && [ "$KODEX_BOOTSTRAP_MODE" = "remote" ]; then
-  die "OPERATOR_SSH_PUBKEY is required for remote mode"
 fi
 
 if ! id -u "$OPERATOR_USER" >/dev/null 2>&1; then

@@ -22,7 +22,7 @@ spec:
       dnsPolicy: ClusterFirstWithHostNet
       containers:
         - name: kaniko
-          image: {{ envOr "KODEX_KANIKO_EXECUTOR_IMAGE" "gcr.io/kaniko-project/executor:v1.24.0-debug" }}
+          image: {{ imageOr "kaniko-executor" "KODEX_KANIKO_EXECUTOR_IMAGE" }}
           imagePullPolicy: IfNotPresent
           args:
             - "--context=dir:///workspace/context"

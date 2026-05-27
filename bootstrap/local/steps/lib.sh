@@ -52,7 +52,7 @@ ensure_domain_targets_host() {
   local target_host="$2"
   local domain_ips target_ips
 
-  [ -n "$target_host" ] || die "TARGET_HOST is required for production DNS binding check"
+  [ -n "$target_host" ] || die "KODEX_BOOTSTRAP_PUBLIC_HOST is required for production DNS binding check"
   domain_ips="$(resolve_ipv4_records "$domain")"
   if is_ipv4_literal "$target_host"; then
     target_ips="$target_host"
@@ -61,7 +61,7 @@ ensure_domain_targets_host() {
   fi
 
   [ -n "$domain_ips" ] || die "Configured production domain does not resolve via IPv4"
-  [ -n "$target_ips" ] || die "Configured target host does not resolve via IPv4"
+  [ -n "$target_ips" ] || die "Configured bootstrap public host does not resolve via IPv4"
   if has_ipv4_intersection "$domain_ips" "$target_ips"; then
     log "Configured production domain resolves to the target host"
     return

@@ -55,7 +55,7 @@ spec:
         runAsNonRoot: true
       initContainers:
         - name: wait-database
-          image: {{ envOr "KODEX_POSTGRES_IMAGE" "pgvector/pgvector:pg16" }}
+          image: {{ imageOr "postgres" "KODEX_POSTGRES_IMAGE" }}
           imagePullPolicy: IfNotPresent
           securityContext:
             runAsNonRoot: true
@@ -87,7 +87,7 @@ spec:
                   key: KODEX_PROVIDER_HUB_EVENT_LOG_DATABASE_DSN
       containers:
         - name: provider-hub
-          image: {{ envOr "KODEX_PROVIDER_HUB_IMAGE" "" }}
+          image: {{ image "provider-hub" }}
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

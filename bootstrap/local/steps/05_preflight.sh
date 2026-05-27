@@ -44,15 +44,13 @@ KODEX_FIREWALL_ENABLED="${KODEX_FIREWALL_ENABLED:-true}"
 KODEX_INGRESS_HOST_NETWORK="${KODEX_INGRESS_HOST_NETWORK:-true}"
 KODEX_BOOTSTRAP_SKIP_DNS_CHECK="${KODEX_BOOTSTRAP_SKIP_DNS_CHECK:-false}"
 KODEX_BOOTSTRAP_MODE="${KODEX_BOOTSTRAP_MODE:-local}"
+KODEX_BOOTSTRAP_PUBLIC_HOST="${KODEX_BOOTSTRAP_PUBLIC_HOST:-}"
 
 validate_integer "KODEX_INTERNAL_REGISTRY_PORT" "$KODEX_INTERNAL_REGISTRY_PORT"
 validate_bool "KODEX_FIREWALL_ENABLED" "$KODEX_FIREWALL_ENABLED"
 validate_bool "KODEX_INGRESS_HOST_NETWORK" "$KODEX_INGRESS_HOST_NETWORK"
 validate_bool "KODEX_BOOTSTRAP_SKIP_DNS_CHECK" "$KODEX_BOOTSTRAP_SKIP_DNS_CHECK"
-case "$KODEX_BOOTSTRAP_MODE" in
-  local|remote) ;;
-  *) die "KODEX_BOOTSTRAP_MODE must be local or remote";;
-esac
+[ "$KODEX_BOOTSTRAP_MODE" = "local" ] || die "KODEX_BOOTSTRAP_MODE must be local"
 
 [ -n "${KODEX_PRODUCTION_NAMESPACE}" ] || die "KODEX_PRODUCTION_NAMESPACE is required"
 [ -n "${KODEX_INTERNAL_REGISTRY_HOST}" ] || die "KODEX_INTERNAL_REGISTRY_HOST is required"
@@ -61,19 +59,14 @@ if [ -z "${OPERATOR_SSH_PUBKEY:-}" ] && [ -n "${OPERATOR_SSH_PUBKEY_PATH:-}" ] &
   OPERATOR_SSH_PUBKEY="$(cat "${OPERATOR_SSH_PUBKEY_PATH}")"
 fi
 if [ -z "${OPERATOR_SSH_PUBKEY:-}" ]; then
-  if [ "$KODEX_BOOTSTRAP_MODE" = "remote" ]; then
-    die "OPERATOR_SSH_PUBKEY is required for remote mode"
-  fi
   log "Operator SSH public key is not configured; local mode will skip authorized_keys provisioning"
 fi
 
 if [ -n "${KODEX_PRODUCTION_DOMAIN:-}" ] && [ "$KODEX_BOOTSTRAP_SKIP_DNS_CHECK" != "true" ]; then
-  if [ -n "${TARGET_HOST:-}" ]; then
-    ensure_domain_targets_host "$KODEX_PRODUCTION_DOMAIN" "$TARGET_HOST"
-  elif [ "$KODEX_BOOTSTRAP_MODE" = "local" ]; then
-    ensure_domain_targets_current_host "$KODEX_PRODUCTION_DOMAIN"
+  if [ -n "${KODEX_BOOTSTRAP_PUBLIC_HOST:-}" ]; then
+    ensure_domain_targets_host "$KODEX_PRODUCTION_DOMAIN" "$KODEX_BOOTSTRAP_PUBLIC_HOST"
   else
-    die "TARGET_HOST is required for remote production DNS binding check"
+    ensure_domain_targets_current_host "$KODEX_PRODUCTION_DOMAIN"
   fi
 else
   log "DNS check skipped or production domain is not configured"

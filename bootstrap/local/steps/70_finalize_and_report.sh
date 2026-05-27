@@ -5,13 +5,10 @@ ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "${ROOT_DIR}/lib.sh"
 load_env_file "${BOOTSTRAP_ENV_FILE:?}"
 
-KODEX_PRODUCTION_NAMESPACE="${KODEX_PRODUCTION_NAMESPACE:-kodex-prod}"
-KODEX_INTERNAL_REGISTRY_SERVICE="${KODEX_INTERNAL_REGISTRY_SERVICE:-kodex-registry}"
-KODEX_INTERNAL_REGISTRY_HOST="${KODEX_INTERNAL_REGISTRY_HOST:-127.0.0.1:5000}"
 KODEX_FIREWALL_ENABLED="${KODEX_FIREWALL_ENABLED:-true}"
 KODEX_SSH_PORT="${KODEX_SSH_PORT:-22}"
 
-log "Production namespace: ${KODEX_PRODUCTION_NAMESPACE}"
+log "Production namespace configured"
 log "Internal registry endpoint configured (no auth, node loopback profile)"
 if [ "$KODEX_FIREWALL_ENABLED" = "true" ] && command -v nft >/dev/null 2>&1; then
   log "Firewall policy active (public tcp ports: ${KODEX_SSH_PORT},80,443):"
