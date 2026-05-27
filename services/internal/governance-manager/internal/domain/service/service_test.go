@@ -1329,6 +1329,108 @@ func TestBuildReleaseDecisionPackageStoresIntegrationRefs(t *testing.T) {
 	}
 }
 
+func TestBuildReleaseDecisionPackageEnrichesIntegrationRefs(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 27, 12, 0, 0, 0, time.UTC)
+	assessmentUpdatedAt := time.Date(2026, 5, 27, 11, 59, 0, 0, time.UTC)
+	packageID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+	eventID := uuid.MustParse("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+	commandID := uuid.MustParse("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
+	assessmentID := uuid.MustParse("dddddddd-dddd-4ddd-8ddd-dddddddddddd")
+	repository := &fakeRepository{
+		ready: true,
+		assessment: entity.RiskAssessment{
+			VersionedBase:      entity.VersionedBase{ID: assessmentID, Version: 7, CreatedAt: assessmentUpdatedAt.Add(-time.Minute), UpdatedAt: assessmentUpdatedAt},
+			Status:             enum.RiskAssessmentStatusActive,
+			EffectiveRiskClass: enum.RiskClassR2,
+		},
+	}
+	service := NewWithConfig(Config{
+		Repository:  repository,
+		Clock:       fixedClock{now: now},
+		IDGenerator: &fixedIDs{ids: []uuid.UUID{packageID, eventID}},
+		Authorizer:  AllowAllAuthorizer{},
+	})
+
+	item, err := service.BuildReleaseDecisionPackage(context.Background(), BuildReleaseDecisionPackageInput{
+		ReleaseCandidateRef: "release:v1.0.0",
+		ProjectContext:      value.ProjectContextRef{ProjectRef: "project:alpha"},
+		IntegrationRefs: []value.ReleaseIntegrationRef{
+			{Domain: "governance", Kind: "risk_assessment", Ref: assessmentID.String()},
+			{Domain: "provider", Kind: "check", Ref: "provider:check:1"},
+		},
+		Meta: CommandMeta{
+			CommandID: &commandID,
+			Actor:     value.Actor{Type: "service", ID: "agent-manager"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("BuildReleaseDecisionPackage(): %v", err)
+	}
+	var governanceRef value.ReleaseIntegrationRef
+	var providerRef value.ReleaseIntegrationRef
+	for _, ref := range item.IntegrationRefs {
+		if ref.Domain == "governance" && ref.Kind == "risk_assessment" {
+			governanceRef = ref
+		}
+		if ref.Domain == "provider" && ref.Kind == "check" {
+			providerRef = ref
+		}
+	}
+	if governanceRef.Status != "active" || governanceRef.Summary != "risk assessment active R2" || governanceRef.Version != "7" {
+		t.Fatalf("governance ref = %+v, want enriched local risk snapshot", governanceRef)
+	}
+	if governanceRef.ObservedAt != "2026-05-27T11:59:00Z" || !strings.HasPrefix(governanceRef.Digest, "sha256:") {
+		t.Fatalf("governance ref metadata = %+v, want digest and observed_at", governanceRef)
+	}
+	if providerRef.Status != "" || providerRef.Summary != "explicit_ref_unvalidated: provider check explicit ref retained; owner read client not connected" {
+		t.Fatalf("provider ref = %+v, want explicit ref diagnostic", providerRef)
+	}
+	if providerRef.Digest != "" || providerRef.ObservedAt != "" || providerRef.Version != "" {
+		t.Fatalf("provider ref metadata = %+v, want no fabricated owner snapshot", providerRef)
+	}
+	if payload := string(repository.events[0].Payload); strings.Contains(payload, "provider:check:1") || strings.Contains(payload, "risk assessment active") {
+		t.Fatalf("release package event leaked enriched details: %s", payload)
+	}
+}
+
+func TestBuildReleaseDecisionPackageRejectsConflictingLocalIntegrationSnapshot(t *testing.T) {
+	t.Parallel()
+
+	assessmentID := uuid.MustParse("dddddddd-dddd-4ddd-8ddd-dddddddddddd")
+	repository := &fakeRepository{
+		ready: true,
+		assessment: entity.RiskAssessment{
+			VersionedBase:      entity.VersionedBase{ID: assessmentID, Version: 7, UpdatedAt: time.Date(2026, 5, 27, 11, 59, 0, 0, time.UTC)},
+			Status:             enum.RiskAssessmentStatusActive,
+			EffectiveRiskClass: enum.RiskClassR2,
+		},
+	}
+	service := newTestService(repository)
+
+	_, err := service.BuildReleaseDecisionPackage(context.Background(), BuildReleaseDecisionPackageInput{
+		ReleaseCandidateRef: "release:v1.0.0",
+		ProjectContext:      value.ProjectContextRef{ProjectRef: "project:alpha"},
+		IntegrationRefs: []value.ReleaseIntegrationRef{{
+			Domain: "governance",
+			Kind:   "risk_assessment",
+			Ref:    assessmentID.String(),
+			Status: "draft",
+		}},
+		Meta: CommandMeta{
+			CommandID: ptrUUID(uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")),
+			Actor:     value.Actor{Type: "service", ID: "agent-manager"},
+		},
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("BuildReleaseDecisionPackage() error = %v, want ErrInvalidArgument", err)
+	}
+	if repository.mutationCalls != 0 {
+		t.Fatalf("mutation calls = %d, want 0", repository.mutationCalls)
+	}
+}
+
 func TestNormalizeReleaseIntegrationRefsCanonicalizesAndRejectsConflicts(t *testing.T) {
 	t.Parallel()
 

@@ -56,6 +56,13 @@
 - `governance-manager` нормализует domain/kind/ref/status/summary/digest/timestamp/version, проверяет только локальные governance refs и не сохраняет raw diff, provider payload, prompt/transcript, logs, workspace paths, secrets, kubeconfig или PII.
 - Service-client чтения из `project-catalog`, `provider-hub`, `agent-manager`, `runtime-manager`, `interaction-hub`, provider write, delivery callbacks и deploy orchestration остаются следующими GOV-7 интеграционными срезами.
 
+## Завершённый release package enrichment-срез
+
+- Issue: #869.
+- Результат среза: `BuildReleaseDecisionPackage` валидирует и обогащает локальные `governance` integration refs (`risk_assessment`, `review_signal`, `gate_request`, `gate_decision`, `release_decision_package`) bounded snapshot полями `status`, `summary`, `digest`, `observed_at`, `version`.
+- Project/provider/agent/runtime refs остаются explicit refs: если вызывающая сторона не передала owner-domain summary, `governance-manager` добавляет safe summary diagnostic `explicit_ref_unvalidated`, но не читает соседние сервисы и не копирует чужой state.
+- Service-client чтения из `project-catalog`, `provider-hub`, `agent-manager` и `runtime-manager`, provider write, delivery callbacks и deploy orchestration остаются следующими GOV-7 интеграционными срезами.
+
 ## Ближайшие зависимости
 
 | Домен | Что нужно согласовать |

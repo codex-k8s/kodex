@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-22
 updated_at: 2026-05-27
-related_issues: [322, 769, 815, 827, 845, 856]
+related_issues: [322, 769, 815, 827, 845, 856, 869]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -205,12 +205,12 @@ approvals:
 | `agent_context` | jsonb | нет | Run/session/stage/acceptance refs без prompt, transcript или workspace paths. |
 | `review_signal_ids` | uuid[] | нет | Локальные review signals, включённые в пакет. |
 | `evidence_refs` | jsonb | нет | Safe refs/digests/summaries на evidence, без больших отчётов. |
-| `integration_refs` | jsonb | нет | Явные safe refs соседних доменов: `domain`, `kind`, `ref`, optional `status`, `summary`, `digest`, `observed_at`, `version`. |
+| `integration_refs` | jsonb | нет | Явные safe refs соседних доменов: `domain`, `kind`, `ref`, optional `status`, `summary`, `digest`, `observed_at`, `version`; локальные governance refs получают bounded enrichment. |
 | `known_limitations_summary` | text | нет | Короткая safe summary осознанных ограничений и accepted risk. |
 | `status` | enum | нет | `draft`, `ready`, `decision_requested`, `closed`. |
 | `created_at`, `updated_at` | timestamptz | нет | Технические временные метки. |
 
-`integration_refs` связывают release package с project/repository/release line refs, provider Issue/PR/check/review refs, agent run/acceptance refs, runtime job/deploy refs, local risk assessment refs и gate refs. `governance-manager` валидирует локальные governance refs, но не читает соседние сервисы напрямую и не становится владельцем provider, project, run, deploy или interaction state. Для audit snapshot refs нормализуются в canonical order по `domain/kind/ref`; полностью одинаковые дубли схлопываются, а дубли с разными `status`, `summary`, `digest`, `observed_at` или `version` отклоняются как конфликтующие факты.
+`integration_refs` связывают release package с project/repository/release line refs, provider Issue/PR/check/review refs, agent run/acceptance refs, runtime job/deploy refs, local risk assessment refs и gate refs. `governance-manager` валидирует и обогащает только локальные governance refs: для найденных assessment/signal/gate/package refs сохраняются bounded `status`, короткий `summary`, `digest`, `observed_at` и `version` там, где у локального aggregate есть версия. Если вызывающая сторона передала локальный snapshot, который конфликтует с текущим governance state, package build отклоняется. Для project/provider/agent/runtime refs сервис не читает соседние сервисы напрямую: explicit ref сохраняется, а при отсутствии owner-domain summary добавляется safe diagnostic `explicit_ref_unvalidated` в `summary` без raw details. Для audit snapshot refs нормализуются в canonical order по `domain/kind/ref`; полностью одинаковые дубли схлопываются, а дубли с разными `status`, `summary`, `digest`, `observed_at` или `version` отклоняются как конфликтующие факты.
 
 ### ReleaseDecision
 
