@@ -1,7 +1,10 @@
 package interaction
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -157,7 +160,8 @@ func scanOwnerInboxItem(row postgreslib.RowScanner) (entity.OwnerInboxItem, erro
 	var deadlineAt, resolvedAt, latestNextRetryAt, latestUpdatedAt pgtype.Timestamptz
 	var latestDeliveryStatus, latestDeliveryErrorClass string
 	var responseID, callbackID pgtype.UUID
-	var responseAction, responseActor, responseSourceKind, responseSourceRef, responseOwnerDecisionRef pgtype.Text
+	var responseAction, responseActor, responseSummary, responseObjectURI, responseObjectDigest, responseSourceKind, responseSourceRef, responseOwnerDecisionRef pgtype.Text
+	var responseObjectSize pgtype.Int8
 	var responseCreatedAt pgtype.Timestamptz
 	var callbackCallbackID, callbackDeliveryID, callbackActorRef, callbackAction pgtype.Text
 	var callbackSignatureStatus, callbackProcessingStatus, callbackErrorCode pgtype.Text
@@ -204,6 +208,10 @@ func scanOwnerInboxItem(row postgreslib.RowScanner) (entity.OwnerInboxItem, erro
 		&responseID,
 		&responseAction,
 		&responseActor,
+		&responseSummary,
+		&responseObjectURI,
+		&responseObjectDigest,
+		&responseObjectSize,
 		&responseSourceKind,
 		&responseSourceRef,
 		&responseOwnerDecisionRef,
@@ -254,14 +262,24 @@ func scanOwnerInboxItem(row postgreslib.RowScanner) (entity.OwnerInboxItem, erro
 	}
 	if responseID.Valid {
 		item.LatestResponse = &entity.InteractionResponse{
-			ID:                  uuid.UUID(responseID.Bytes),
-			RequestID:           item.Request.ID,
-			ResponseAction:      enum.InteractionResponseAction(textFromPG(responseAction)),
-			RespondedByActorRef: textFromPG(responseActor),
-			SourceKind:          enum.InteractionResponseSourceKind(textFromPG(responseSourceKind)),
-			SourceRef:           textFromPG(responseSourceRef),
-			OwnerDecisionRef:    textFromPG(responseOwnerDecisionRef),
-			CreatedAt:           *postgreslib.TimePtrFromPG(responseCreatedAt),
+			ID:                    uuid.UUID(responseID.Bytes),
+			RequestID:             item.Request.ID,
+			ResponseAction:        enum.InteractionResponseAction(textFromPG(responseAction)),
+			RespondedByActorRef:   textFromPG(responseActor),
+			ResponseSummary:       textFromPG(responseSummary),
+			ResponseSummaryDigest: safeStringDigest(textFromPG(responseSummary)),
+			ResponseObject: value.ObjectRef{
+				URI:    textFromPG(responseObjectURI),
+				Digest: textFromPG(responseObjectDigest),
+			},
+			SourceKind:       enum.InteractionResponseSourceKind(textFromPG(responseSourceKind)),
+			SourceRef:        textFromPG(responseSourceRef),
+			OwnerDecisionRef: textFromPG(responseOwnerDecisionRef),
+			CreatedAt:        *postgreslib.TimePtrFromPG(responseCreatedAt),
+		}
+		if responseObjectSize.Valid {
+			value := responseObjectSize.Int64
+			item.LatestResponse.ResponseObject.SizeBytes = &value
 		}
 	}
 	if callbackID.Valid {
@@ -303,6 +321,7 @@ func scanResponse(row postgreslib.RowScanner) (entity.InteractionResponse, error
 	)
 	response.ResponseAction = enum.InteractionResponseAction(responseAction)
 	response.SourceKind = enum.InteractionResponseSourceKind(sourceKind)
+	response.ResponseSummaryDigest = safeStringDigest(response.ResponseSummary)
 	if responseObjectSize.Valid {
 		value := responseObjectSize.Int64
 		response.ResponseObject.SizeBytes = &value
@@ -529,6 +548,15 @@ func textFromPG(input pgtype.Text) string {
 		return ""
 	}
 	return input.String
+}
+
+func safeStringDigest(input string) string {
+	input = strings.TrimSpace(input)
+	if input == "" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(input))
+	return "sha256:" + hex.EncodeToString(sum[:])
 }
 
 func scanCommandResult(row postgreslib.RowScanner) (entity.CommandResult, error) {

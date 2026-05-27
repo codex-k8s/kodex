@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-22
 updated_at: 2026-05-27
-related_issues: [582, 768, 781, 800, 821, 835, 843, 853, 867, 882]
+related_issues: [582, 768, 781, 800, 821, 835, 843, 853, 867, 882, 911]
 related_prs: []
 related_adrs: []
 approvals:
@@ -77,7 +77,7 @@ approvals:
 | Subscription engine | Правила подписки на события и области, создание notification intent и reminders. |
 | Outbox-доставщик | Публикация `interaction.*` событий через `platform-event-log`. |
 
-Текущая сервисная основа реализует authoritative lifecycle `Notification`, `Subscription`, delivery attempts и safe callback records: создание notification intent, создание/изменение/отключение/чтение подписок, `PlanDelivery`, `RecordDeliveryResult`, `RecordChannelCallback`, `GetDeliveryStatus`, `ListOwnerInboxItems`, command idempotency, optimistic concurrency для subscription и safe `interaction.*` outbox events. Внешний `integration-gateway` callback route передаёт generic safe envelope в `RecordChannelCallback`; `RecordChannelCallback` применяет допустимый terminal callback к feedback/approval/Human gate request как `InteractionResponse`, но не фиксирует owner business decision. Событие `interaction.request.response_recorded` содержит safe request kind, scope, source owner, decision owner и context refs, чтобы owner service мог возобновить свой lifecycle через собственную границу без чтения raw response text. Owner inbox read surface отдаёт только собственные request/delivery/callback/response summaries `interaction-hub`; cross-domain aggregation остаётся у `staff-gateway`/`operations-hub`. Конкретные channel packages и runtime worker остаются отдельным контуром.
+Текущая сервисная основа реализует authoritative lifecycle `Notification`, `Subscription`, delivery attempts и safe callback records: создание notification intent, создание/изменение/отключение/чтение подписок, `PlanDelivery`, `RecordDeliveryResult`, `RecordChannelCallback`, `GetDeliveryStatus`, `ListOwnerInboxItems`, command idempotency, optimistic concurrency для subscription и safe `interaction.*` outbox events. Внешний `integration-gateway` callback route передаёт generic safe envelope в `RecordChannelCallback`; `RecordChannelCallback` применяет допустимый terminal callback к feedback/approval/Human gate request как `InteractionResponse`, но не фиксирует owner business decision. Событие `interaction.request.response_recorded` содержит safe request/response refs, request kind, scope, source owner, decision owner, agent/provider/governance context refs, normalized outcome, digest/object refs, timestamps и correlation/idempotency digest, чтобы owner service мог возобновить свой lifecycle через собственную границу без чтения raw response text. Owner inbox read surface отдаёт только собственные request/delivery/callback/response summaries `interaction-hub`, включая bounded response summary и digest; cross-domain aggregation остаётся у `staff-gateway`/`operations-hub`. Конкретные channel packages и runtime worker остаются отдельным контуром.
 
 ## Основные потоки
 

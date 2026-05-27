@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-22
 updated_at: 2026-05-27
-related_issues: [582, 768, 800, 821, 835, 843, 867]
+related_issues: [582, 768, 800, 821, 835, 843, 867, 911]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -287,9 +287,9 @@ One-way уведомления и reminders не создают `InteractionRequ
 - deadline, reminder policy ref, timestamps и version;
 - delivery summary: attempt count, latest delivery id/status/error class/error code, retry time, route/channel message refs;
 - latest callback diagnostic: callback id/ref, delivery id, signature/processing status, actor/action, error code, gateway/correlation refs;
-- latest response summary: response id, action, actor, source kind/source ref и owner decision ref.
+- latest response summary: response id/ref, action, actor, source kind/source ref, owner decision ref, bounded response summary, summary digest и sanitized response object ref/digest.
 
-Read-модель не возвращает raw prompt object, raw callback payload, response body/object, headers, tokens, provider payload, stdout/stderr, logs или расширенную PII.
+Read-модель не возвращает raw prompt object, raw callback payload, raw response body, headers, tokens, provider payload, stdout/stderr, logs или расширенную PII. Полный ответ доступен только как sanitized object ref/digest после отдельной политики хранения; operator/owner read surface получает bounded safe summary и digest.
 
 ### CommandResult
 

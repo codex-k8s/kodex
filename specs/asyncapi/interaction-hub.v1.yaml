@@ -241,6 +241,10 @@ components:
           type: string
         response_id:
           type: string
+        interaction_request_ref:
+          type: string
+        interaction_response_ref:
+          type: string
         notification_id:
           type: string
         subscription_id:
@@ -283,6 +287,8 @@ components:
           type: string
         source_kind:
           type: string
+        response_source_ref:
+          type: string
         source_owner_kind:
           type: string
         source_owner_ref:
@@ -293,9 +299,19 @@ components:
           type: string
         provider_operation_ref:
           type: string
+        provider_work_item_ref:
+          type: string
+        agent_session_ref:
+          type: string
         agent_run_ref:
           type: string
+        agent_stage_ref:
+          type: string
+        governance_gate_request_ref:
+          type: string
         owner_service:
+          type: string
+        decision_owner_kind:
           type: string
         owner_request_ref:
           type: string
@@ -305,6 +321,17 @@ components:
           type: string
         response_action:
           type: string
+        response_outcome:
+          type: string
+        response_summary_digest:
+          type: string
+        response_object_ref:
+          type: string
+        response_object_digest:
+          type: string
+        response_object_size_bytes:
+          type: integer
+          minimum: 0
         priority:
           type: string
         subscriber_ref:
@@ -332,6 +359,16 @@ components:
           type: string
         correlation_id:
           type: string
+        command_id:
+          type: string
+        idempotency_key_digest:
+          type: string
+        response_recorded_at:
+          type: string
+          format: date-time
+        request_resolved_at:
+          type: string
+          format: date-time
         version:
           type: integer
           minimum: 0

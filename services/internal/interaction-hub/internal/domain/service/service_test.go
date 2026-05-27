@@ -351,6 +351,18 @@ func TestServiceRecordsInteractionResponseWithTerminalStatusAndIdempotency(t *te
 	if payload["response_action"] != "approve" || payload["owner_decision_ref"] != "decision:1" {
 		t.Fatalf("payload = %+v, want response refs", payload)
 	}
+	if payload["interaction_request_ref"] != request.ID.String() || payload["interaction_response_ref"] != response.ID.String() || payload["response_outcome"] != "approve" {
+		t.Fatalf("payload = %+v, want stable interaction refs and normalized outcome", payload)
+	}
+	if payload["command_id"] != input.Meta.CommandID.String() || payload["correlation_id"] != input.Meta.RequestID {
+		t.Fatalf("payload = %+v, want command and correlation refs", payload)
+	}
+	if digest, ok := payload["response_summary_digest"].(string); !ok || !strings.HasPrefix(digest, "sha256:") {
+		t.Fatalf("payload = %+v, want response summary digest", payload)
+	}
+	if payload["response_recorded_at"] != response.CreatedAt.Format(time.RFC3339Nano) || payload["request_resolved_at"] != request.ResolvedAt.Format(time.RFC3339Nano) {
+		t.Fatalf("payload = %+v, want response timestamps", payload)
+	}
 	if payload["request_kind"] != "approval" || payload["scope_type"] != "service" || payload["scope_ref"] != "agent-manager" {
 		t.Fatalf("payload = %+v, want request scope refs", payload)
 	}
@@ -381,6 +393,104 @@ func TestServiceRecordsInteractionResponseWithTerminalStatusAndIdempotency(t *te
 	_, _, err = svc.RecordInteractionResponse(context.Background(), conflictingInput)
 	if !errors.Is(err, errs.ErrConflict) {
 		t.Fatalf("second response err = %v, want ErrConflict", err)
+	}
+}
+
+func TestServiceRecordsHumanGateResponseSurfaceForOwnerResume(t *testing.T) {
+	t.Parallel()
+
+	repository := newFakeRepository()
+	now := time.Date(2026, 5, 27, 9, 30, 0, 0, time.UTC)
+	requestID := uuid.New()
+	seedInteractionRequest(repository, requestID, now, enum.InteractionRequestStatusWaiting)
+	request := repository.requests[requestID]
+	request.RequestKind = enum.InteractionRequestKindHumanGate
+	request.DecisionOwner = value.DecisionOwnerRef{Kind: enum.DecisionOwnerKindAgentManager, OwnerRequestRef: "human-gate:req-1"}
+	request.ContextRefs = []value.ExternalRef{
+		{Kind: "agent_session", Ref: "session:123"},
+		{Kind: "agent_run", Ref: "run:123"},
+		{Kind: "agent_stage", Ref: "stage:review"},
+		{Kind: "provider_work_item", Ref: "issue:456"},
+		{Kind: "governance_gate_request", Ref: "gov-gate:req-1"},
+	}
+	repository.requests[requestID] = request
+
+	objectSize := int64(512)
+	expectedVersion := int64(1)
+	input := RecordInteractionResponseInput{
+		Meta: value.CommandMeta{
+			IdempotencyKey:  "human-gate-response/run-123",
+			ExpectedVersion: &expectedVersion,
+			Actor:           value.Actor{Type: "service", ID: "interaction-consumer"},
+			RequestID:       "trace-human-gate-response",
+		},
+		RequestID:           requestID,
+		ResponseAction:      enum.InteractionResponseActionApprove,
+		RespondedByActorRef: "user:owner-1",
+		ResponseSummary:     "bounded safe approval summary",
+		ResponseObject:      value.ObjectRef{URI: "s3://kodex-interactions/responses/1", Digest: "sha256:response-object", SizeBytes: &objectSize},
+		SourceKind:          enum.InteractionResponseSourceKindService,
+		SourceRef:           "staff-gateway:response-command-1",
+	}
+	svc := NewWithConfig(repository, Config{Clock: fixedClock{now: now.Add(time.Minute)}, UUIDGenerator: &sequenceIDs{ids: []uuid.UUID{uuid.New()}}})
+
+	answered, response, err := svc.RecordInteractionResponse(context.Background(), input)
+	if err != nil {
+		t.Fatalf("RecordInteractionResponse(): %v", err)
+	}
+	if answered.RequestKind != enum.InteractionRequestKindHumanGate || answered.Status != enum.InteractionRequestStatusAnswered {
+		t.Fatalf("request = %+v, want answered human gate", answered)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(repository.events[0].Payload, &payload); err != nil {
+		t.Fatalf("unmarshal outbox payload: %v", err)
+	}
+	expected := map[string]string{
+		"request_id":                  requestID.String(),
+		"interaction_request_ref":     requestID.String(),
+		"request_kind":                "human_gate",
+		"response_id":                 response.ID.String(),
+		"interaction_response_ref":    response.ID.String(),
+		"response_action":             "approve",
+		"response_outcome":            "approve",
+		"response_source_ref":         "staff-gateway:response-command-1",
+		"source_owner_kind":           "agent_manager",
+		"source_owner_ref":            "run:123",
+		"decision_owner_kind":         "agent_manager",
+		"owner_request_ref":           "human-gate:req-1",
+		"agent_session_ref":           "session:123",
+		"agent_run_ref":               "run:123",
+		"agent_stage_ref":             "stage:review",
+		"provider_work_item_ref":      "issue:456",
+		"governance_gate_request_ref": "gov-gate:req-1",
+		"correlation_id":              "trace-human-gate-response",
+		"response_object_ref":         "s3://kodex-interactions/responses/1",
+		"response_object_digest":      "sha256:response-object",
+	}
+	for key, want := range expected {
+		if payload[key] != want {
+			t.Fatalf("payload[%s] = %v, want %s; payload=%+v", key, payload[key], want, payload)
+		}
+	}
+	if payload["response_object_size_bytes"] != float64(objectSize) {
+		t.Fatalf("payload = %+v, want response object size", payload)
+	}
+	if digest, ok := payload["idempotency_key_digest"].(string); !ok || !strings.HasPrefix(digest, "sha256:") {
+		t.Fatalf("payload = %+v, want idempotency key digest", payload)
+	}
+	if digest, ok := payload["response_summary_digest"].(string); !ok || !strings.HasPrefix(digest, "sha256:") {
+		t.Fatalf("payload = %+v, want response summary digest", payload)
+	}
+	if _, ok := payload["response_summary"]; ok {
+		t.Fatalf("outbox payload contains response_summary: %+v", payload)
+	}
+
+	replayedRequest, replayedResponse, err := svc.RecordInteractionResponse(context.Background(), input)
+	if err != nil {
+		t.Fatalf("RecordInteractionResponse() replay: %v", err)
+	}
+	if replayedRequest.ID != answered.ID || replayedResponse.ID != response.ID || len(repository.events) != 1 {
+		t.Fatalf("replay request=%+v response=%+v events=%d, want original response", replayedRequest, replayedResponse, len(repository.events))
 	}
 }
 
@@ -1124,6 +1234,15 @@ func TestServiceRecordsChannelCallbackWithSafeOutboxAndReplay(t *testing.T) {
 	}
 	if responsePayload["response_id"] != result.Response.ID.String() || responsePayload["status"] != string(enum.InteractionRequestStatusAnswered) {
 		t.Fatalf("response payload = %+v, want safe response refs", responsePayload)
+	}
+	if responsePayload["interaction_response_ref"] != result.Response.ID.String() || responsePayload["callback_id"] != callback.CallbackID || responsePayload["delivery_id"] != planned.DeliveryID {
+		t.Fatalf("response payload = %+v, want callback-linked response refs", responsePayload)
+	}
+	if responsePayload["gateway_ref"] != input.Callback.GatewayRef || responsePayload["correlation_id"] != input.Callback.CorrelationID {
+		t.Fatalf("response payload = %+v, want gateway correlation refs", responsePayload)
+	}
+	if digest, ok := responsePayload["response_summary_digest"].(string); !ok || !strings.HasPrefix(digest, "sha256:") {
+		t.Fatalf("response payload = %+v, want callback response summary digest", responsePayload)
 	}
 	if _, ok := responsePayload["response_summary"]; ok {
 		t.Fatalf("response payload contains response_summary: %+v", responsePayload)
