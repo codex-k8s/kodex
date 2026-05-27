@@ -96,6 +96,22 @@ var agentActivityKindsFromProto = agentActivityKindValues()
 
 var agentActivityStatusesFromProto = agentActivityStatusValues()
 
+var humanGateStatusesFromProto = enumMap(
+	enumPair(agentsv1.HumanGateStatus_HUMAN_GATE_STATUS_REQUESTED, enum.HumanGateStatusRequested),
+	enumPair(agentsv1.HumanGateStatus_HUMAN_GATE_STATUS_WAITING, enum.HumanGateStatusWaiting),
+	enumPair(agentsv1.HumanGateStatus_HUMAN_GATE_STATUS_RESOLVED, enum.HumanGateStatusResolved),
+	enumPair(agentsv1.HumanGateStatus_HUMAN_GATE_STATUS_FAILED, enum.HumanGateStatusFailed),
+	enumPair(agentsv1.HumanGateStatus_HUMAN_GATE_STATUS_CANCELLED, enum.HumanGateStatusCancelled),
+)
+
+var humanGateOutcomesFromProto = enumMap(
+	enumPair(agentsv1.HumanGateOutcome_HUMAN_GATE_OUTCOME_NONE, enum.HumanGateOutcomeNone),
+	enumPair(agentsv1.HumanGateOutcome_HUMAN_GATE_OUTCOME_APPROVE, enum.HumanGateOutcomeApprove),
+	enumPair(agentsv1.HumanGateOutcome_HUMAN_GATE_OUTCOME_REJECT, enum.HumanGateOutcomeReject),
+	enumPair(agentsv1.HumanGateOutcome_HUMAN_GATE_OUTCOME_REQUEST_CHANGES, enum.HumanGateOutcomeRequestChanges),
+	enumPair(agentsv1.HumanGateOutcome_HUMAN_GATE_OUTCOME_ANSWER, enum.HumanGateOutcomeAnswer),
+)
+
 var (
 	scopeTypesToProto                = reverseEnumMap(scopeTypesFromProto)
 	flowStatusesToProto              = reverseEnumMap(flowStatusesFromProto)
@@ -111,6 +127,8 @@ var (
 	acceptanceStatusesToProto        = reverseEnumMap(acceptanceStatusesFromProto)
 	agentActivityKindsToProto        = reverseEnumMap(agentActivityKindsFromProto)
 	agentActivityStatusesToProto     = reverseEnumMap(agentActivityStatusesFromProto)
+	humanGateStatusesToProto         = reverseEnumMap(humanGateStatusesFromProto)
+	humanGateOutcomesToProto         = reverseEnumMap(humanGateOutcomesFromProto)
 )
 
 func ScopeTypeFromProto(value agentsv1.AgentScopeType) (enum.AgentScopeType, error) {
@@ -278,6 +296,30 @@ func OptionalAgentActivityStatusFromProto(value *agentsv1.AgentActivityStatus) (
 
 func AgentActivityStatusToProto(value enum.AgentActivityStatus) agentsv1.AgentActivityStatus {
 	return enumToProto(value, agentActivityStatusesToProto, agentsv1.AgentActivityStatus_AGENT_ACTIVITY_STATUS_UNSPECIFIED)
+}
+
+func HumanGateStatusFromProto(value agentsv1.HumanGateStatus) (enum.HumanGateStatus, error) {
+	return enumFromProto(value, humanGateStatusesFromProto)
+}
+
+func OptionalHumanGateStatusFromProto(value *agentsv1.HumanGateStatus) (*enum.HumanGateStatus, error) {
+	return optionalEnumFromProto(value, humanGateStatusesFromProto)
+}
+
+func HumanGateStatusToProto(value enum.HumanGateStatus) agentsv1.HumanGateStatus {
+	return enumToProto(value, humanGateStatusesToProto, agentsv1.HumanGateStatus_HUMAN_GATE_STATUS_UNSPECIFIED)
+}
+
+func HumanGateOutcomeFromProto(value agentsv1.HumanGateOutcome) (enum.HumanGateOutcome, error) {
+	return enumFromProto(value, humanGateOutcomesFromProto)
+}
+
+func OptionalHumanGateOutcomeFromProto(value *agentsv1.HumanGateOutcome) (*enum.HumanGateOutcome, error) {
+	return optionalEnumFromProto(value, humanGateOutcomesFromProto)
+}
+
+func HumanGateOutcomeToProto(value enum.HumanGateOutcome) agentsv1.HumanGateOutcome {
+	return enumToProto(value, humanGateOutcomesToProto, agentsv1.HumanGateOutcome_HUMAN_GATE_OUTCOME_UNSPECIFIED)
 }
 
 func enumFromProto[Proto comparable, Domain comparable](value Proto, values map[Proto]Domain) (Domain, error) {

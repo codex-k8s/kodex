@@ -248,6 +248,51 @@ func followUpEvent(id uuid.UUID, eventType string, reasonCode string, intent ent
 	return outboxEvent(id, eventType, agentevents.AggregateFollowUp, intent.ID, payload, occurredAt), nil
 }
 
+func humanGateRequestedEvent(id uuid.UUID, gate entity.HumanGateRequest, occurredAt time.Time) (entity.OutboxEvent, error) {
+	return humanGateEvent(id, agentevents.EventHumanGateRequested, "", gate, occurredAt)
+}
+
+func humanGateResultEvent(id uuid.UUID, previousStatus string, gate entity.HumanGateRequest, occurredAt time.Time) (*entity.OutboxEvent, error) {
+	if previousStatus == string(gate.Status) {
+		return nil, nil
+	}
+	if gate.Status != enum.HumanGateStatusResolved {
+		return nil, nil
+	}
+	event, err := humanGateEvent(id, agentevents.EventHumanGateResolved, "", gate, occurredAt)
+	if err != nil {
+		return nil, err
+	}
+	return &event, nil
+}
+
+func humanGateEvent(id uuid.UUID, eventType string, reasonCode string, gate entity.HumanGateRequest, occurredAt time.Time) (entity.OutboxEvent, error) {
+	payload, err := json.Marshal(agentevents.Payload{
+		SessionID:                gate.SessionID.String(),
+		RunID:                    optionalUUIDValue(gate.RunID),
+		StageID:                  optionalUUIDValue(gate.StageID),
+		AcceptanceResultID:       optionalUUIDValue(gate.AcceptanceResultID),
+		HumanGateRequestID:       gate.ID.String(),
+		ProviderWorkItemRef:      gate.ProviderTarget.WorkItemRef,
+		ProviderPullRequestRef:   gate.ProviderTarget.PullRequestRef,
+		ProviderCommentRef:       gate.ProviderTarget.CommentRef,
+		ProviderReviewSignalRef:  gate.ProviderTarget.ReviewSignalRef,
+		InteractionRequestRef:    gate.InteractionRequestRef,
+		InteractionResponseRef:   gate.InteractionResponseRef,
+		GovernanceGateRequestRef: gate.GovernanceGateRequestRef,
+		GovernanceDecisionRef:    gate.GovernanceDecisionRef,
+		HumanGateOutcome:         string(gate.Outcome),
+		Status:                   string(gate.Status),
+		Summary:                  gate.SafeSummary,
+		ReasonCode:               chooseString(reasonCode, gate.ReasonCode),
+		Version:                  gate.Version,
+	})
+	if err != nil {
+		return entity.OutboxEvent{}, err
+	}
+	return outboxEvent(id, eventType, agentevents.AggregateHumanGate, gate.ID, payload, occurredAt), nil
+}
+
 func optionalUUIDValue(id *uuid.UUID) string {
 	if id == nil {
 		return ""

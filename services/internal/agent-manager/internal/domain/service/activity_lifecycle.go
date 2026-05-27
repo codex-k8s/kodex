@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -224,20 +223,7 @@ func (s *Service) normalizeAgentActivity(ctx context.Context, session entity.Age
 }
 
 func activityIdempotencyKey(meta value.CommandMeta) (string, error) {
-	identity, err := commandIdentity(meta, operationRecordAgentActivity)
-	if err != nil {
-		return "", err
-	}
-	key := commandResultKey(identity)
-	if len(key) > 512 || unsafeActivityText(key) {
-		return "", errs.ErrInvalidArgument
-	}
-	for _, char := range key {
-		if !safeAcceptanceRefChar(char) {
-			return "", errs.ErrInvalidArgument
-		}
-	}
-	return key, nil
+	return safeCommandResultKey(meta, operationRecordAgentActivity, unsafeActivityText)
 }
 
 func normalizeActivityKind(kind enum.AgentActivityKind) (enum.AgentActivityKind, error) {
@@ -320,19 +306,7 @@ func normalizeSafeIdentifier(value string, limit int, unsafeText func(string) bo
 }
 
 func normalizeActivityText(value string, limit int, required bool) (string, error) {
-	trimmed := strings.TrimSpace(value)
-	if required && trimmed == "" {
-		return "", errs.ErrInvalidArgument
-	}
-	if utf8.RuneCountInString(trimmed) > limit || unsafeActivityText(trimmed) {
-		return "", errs.ErrInvalidArgument
-	}
-	for _, char := range trimmed {
-		if char < 32 || char == 127 {
-			return "", errs.ErrInvalidArgument
-		}
-	}
-	return trimmed, nil
+	return normalizeBoundedSafeText(value, limit, required, unsafeActivityText)
 }
 
 func normalizeSHA256Digest(value string) (string, error) {

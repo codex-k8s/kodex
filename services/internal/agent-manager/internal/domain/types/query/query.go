@@ -70,3 +70,12 @@ type AgentActivityFilter struct {
 	Status       *enum.AgentActivityStatus
 	Page         value.PageRequest
 }
+
+type HumanGateFilter struct {
+	SessionID uuid.UUID
+	RunID     uuid.UUID
+	StageID   uuid.UUID
+	Status    *enum.HumanGateStatus
+	Outcome   *enum.HumanGateOutcome
+	Page      value.PageRequest
+}

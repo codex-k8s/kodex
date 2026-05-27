@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -70,4 +71,20 @@ func normalizeObjectPayload(payload []byte) ([]byte, error) {
 		return nil, errs.ErrInvalidArgument
 	}
 	return payload, nil
+}
+
+func normalizeBoundedSafeText(value string, limit int, required bool, unsafeText func(string) bool) (string, error) {
+	trimmed := strings.TrimSpace(value)
+	if required && trimmed == "" {
+		return "", errs.ErrInvalidArgument
+	}
+	if utf8.RuneCountInString(trimmed) > limit || unsafeText(trimmed) {
+		return "", errs.ErrInvalidArgument
+	}
+	for _, char := range trimmed {
+		if char < 32 || char == 127 {
+			return "", errs.ErrInvalidArgument
+		}
+	}
+	return trimmed, nil
 }

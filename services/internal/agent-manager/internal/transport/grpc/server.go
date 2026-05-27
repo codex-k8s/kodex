@@ -56,6 +56,10 @@ type agentService interface {
 	DispatchFollowUpIntent(context.Context, agentservice.DispatchFollowUpIntentInput) (entity.FollowUpIntent, error)
 	RecordAgentActivity(context.Context, agentservice.RecordAgentActivityInput) (entity.AgentActivity, error)
 	ListAgentActivities(context.Context, agentservice.AgentActivityList) ([]entity.AgentActivity, value.PageResult, error)
+	RequestHumanGate(context.Context, agentservice.RequestHumanGateInput) (entity.HumanGateRequest, error)
+	RecordHumanGateDecision(context.Context, agentservice.RecordHumanGateDecisionInput) (entity.HumanGateRequest, error)
+	GetHumanGateRequest(context.Context, uuid.UUID) (entity.HumanGateRequest, error)
+	ListHumanGateRequests(context.Context, agentservice.HumanGateList) ([]entity.HumanGateRequest, value.PageResult, error)
 }
 
 // NewServer creates an agent-manager gRPC server boundary.
@@ -221,6 +225,26 @@ func (server *Server) ListAgentActivities(ctx context.Context, request *agentsv1
 	return grpcserver.HandleUnary(ctx, request, grpccasters.ListAgentActivitiesInput, server.listAgentActivities, grpccasters.ListAgentActivitiesResponse)
 }
 
+// RequestHumanGate records an owner-decision wait with safe external refs.
+func (server *Server) RequestHumanGate(ctx context.Context, request *agentsv1.RequestHumanGateRequest) (*agentsv1.HumanGateRequestResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.RequestHumanGateInput, server.service.RequestHumanGate, grpccasters.HumanGateRequestResponse)
+}
+
+// RecordHumanGateDecision stores the normalized owner decision outcome.
+func (server *Server) RecordHumanGateDecision(ctx context.Context, request *agentsv1.RecordHumanGateDecisionRequest) (*agentsv1.HumanGateRequestResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.RecordHumanGateDecisionInput, server.service.RecordHumanGateDecision, grpccasters.HumanGateRequestResponse)
+}
+
+// GetHumanGateRequest returns one owner-decision wait/result.
+func (server *Server) GetHumanGateRequest(ctx context.Context, request *agentsv1.GetHumanGateRequestRequest) (*agentsv1.HumanGateRequestResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.GetHumanGateRequestInput, server.getHumanGateRequest, grpccasters.HumanGateRequestResponse)
+}
+
+// ListHumanGateRequests returns owner-decision waits/results by refs and state.
+func (server *Server) ListHumanGateRequests(ctx context.Context, request *agentsv1.ListHumanGateRequestsRequest) (*agentsv1.ListHumanGateRequestsResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.ListHumanGateRequestsInput, server.listHumanGateRequests, grpccasters.ListHumanGateRequestsResponse)
+}
+
 func (server *Server) getFlow(ctx context.Context, input grpccasters.IDQueryInput) (grpccasters.FlowOutput, error) {
 	return entityOutputByID(ctx, input, server.service.GetFlow, server.flowOutput)
 }
@@ -283,6 +307,14 @@ func (server *Server) listAcceptanceResults(ctx context.Context, input agentserv
 
 func (server *Server) listAgentActivities(ctx context.Context, input agentservice.AgentActivityList) (grpccasters.AgentActivityListOutput, error) {
 	return listWithPage(ctx, input, server.service.ListAgentActivities)
+}
+
+func (server *Server) getHumanGateRequest(ctx context.Context, input grpccasters.IDQueryInput) (entity.HumanGateRequest, error) {
+	return server.service.GetHumanGateRequest(ctx, input.ID)
+}
+
+func (server *Server) listHumanGateRequests(ctx context.Context, input agentservice.HumanGateList) (grpccasters.HumanGateListOutput, error) {
+	return listWithPage(ctx, input, server.service.ListHumanGateRequests)
 }
 
 func listWithPage[Input any, Item any](

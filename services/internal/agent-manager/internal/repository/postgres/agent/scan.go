@@ -423,6 +423,46 @@ func scanAgentActivity(row postgreslib.RowScanner) (entity.AgentActivity, error)
 	return activity, err
 }
 
+func scanHumanGateRequest(row postgreslib.RowScanner) (entity.HumanGateRequest, error) {
+	var gate entity.HumanGateRequest
+	var runID, stageID, acceptanceResultID pgtype.UUID
+	var resolvedAt pgtype.Timestamptz
+	var status, outcome string
+	err := row.Scan(
+		&gate.ID,
+		&gate.SessionID,
+		&runID,
+		&stageID,
+		&acceptanceResultID,
+		&gate.ProviderTarget.WorkItemRef,
+		&gate.ProviderTarget.PullRequestRef,
+		&gate.ProviderTarget.CommentRef,
+		&gate.ProviderTarget.ReviewSignalRef,
+		&gate.TargetRef,
+		&gate.RequestKind,
+		&gate.ReasonCode,
+		&gate.SafeSummary,
+		&gate.InteractionRequestRef,
+		&gate.InteractionResponseRef,
+		&gate.GovernanceGateRequestRef,
+		&gate.GovernanceDecisionRef,
+		&gate.IdempotencyKey,
+		&status,
+		&outcome,
+		&gate.Version,
+		&resolvedAt,
+		&gate.CreatedAt,
+		&gate.UpdatedAt,
+	)
+	gate.RunID = postgreslib.UUIDPtrFromPG(runID)
+	gate.StageID = postgreslib.UUIDPtrFromPG(stageID)
+	gate.AcceptanceResultID = postgreslib.UUIDPtrFromPG(acceptanceResultID)
+	gate.Status = enum.HumanGateStatus(status)
+	gate.Outcome = enum.HumanGateOutcome(outcome)
+	gate.ResolvedAt = postgreslib.TimePtrFromPG(resolvedAt)
+	return gate, err
+}
+
 func scanCommandResult(row postgreslib.RowScanner) (entity.CommandResult, error) {
 	var raw commandResultRow
 	if err := raw.scan(row); err != nil {

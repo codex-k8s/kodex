@@ -66,8 +66,14 @@ service AgentManagerService {
   rpc RecordAgentActivity(RecordAgentActivityRequest) returns (AgentActivityResponse);
   // ListAgentActivities returns safe timeline entries by session or run.
   rpc ListAgentActivities(ListAgentActivitiesRequest) returns (ListAgentActivitiesResponse);
-  // RequestHumanGate creates a human decision request through interaction-hub.
+  // RequestHumanGate records an owner-decision wait and safe interaction/governance refs.
   rpc RequestHumanGate(RequestHumanGateRequest) returns (HumanGateRequestResponse);
+  // RecordHumanGateDecision records a normalized owner decision outcome.
+  rpc RecordHumanGateDecision(RecordHumanGateDecisionRequest) returns (HumanGateRequestResponse);
+  // GetHumanGateRequest returns one owner-decision wait.
+  rpc GetHumanGateRequest(GetHumanGateRequestRequest) returns (HumanGateRequestResponse);
+  // ListHumanGateRequests returns owner-decision waits by session, run, stage or state.
+  rpc ListHumanGateRequests(ListHumanGateRequestsRequest) returns (ListHumanGateRequestsResponse);
   // GetAgentSession returns authoritative session state.
   rpc GetAgentSession(GetAgentSessionRequest) returns (AgentSessionResponse);
   // ListAgentRuns returns agent runs by session, role, status or provider target.
@@ -420,6 +426,16 @@ enum HumanGateStatus {
   HUMAN_GATE_STATUS_CANCELLED = 5;
 }
 
+// HumanGateOutcome is the normalized owner decision used by agent-manager flow state.
+enum HumanGateOutcome {
+  HUMAN_GATE_OUTCOME_UNSPECIFIED = 0;
+  HUMAN_GATE_OUTCOME_NONE = 1;
+  HUMAN_GATE_OUTCOME_APPROVE = 2;
+  HUMAN_GATE_OUTCOME_REJECT = 3;
+  HUMAN_GATE_OUTCOME_REQUEST_CHANGES = 4;
+  HUMAN_GATE_OUTCOME_ANSWER = 5;
+}
+
 // AutomationTriggerKind classifies automation input.
 enum AutomationTriggerKind {
   AUTOMATION_TRIGGER_KIND_UNSPECIFIED = 0;
@@ -674,19 +690,29 @@ message AgentActivity {
   string updated_at = 22;
 }
 
-// HumanGateRequest is a reference to an interaction-hub human decision request.
+// HumanGateRequest is the authoritative agent-manager wait/result state for an owner decision.
 message HumanGateRequest {
   string id = 1;
   string session_id = 2;
   optional string run_id = 3;
   optional string stage_id = 4;
-  string request_kind = 5;
-  string reason_code = 6;
-  optional string interaction_ref = 7;
-  HumanGateStatus status = 8;
-  int64 version = 9;
-  string created_at = 10;
-  string updated_at = 11;
+  optional string acceptance_result_id = 5;
+  ProviderTargetRef provider_target = 6;
+  optional string target_ref = 7;
+  string request_kind = 8;
+  string reason_code = 9;
+  optional string safe_summary = 10;
+  optional string interaction_request_ref = 11;
+  optional string interaction_response_ref = 12;
+  optional string governance_gate_request_ref = 13;
+  optional string governance_decision_ref = 14;
+  HumanGateStatus status = 15;
+  HumanGateOutcome outcome = 16;
+  string idempotency_key = 17;
+  int64 version = 18;
+  string created_at = 19;
+  string updated_at = 20;
+  optional string resolved_at = 21;
 }
 
 // FlowDefinitionInput is the typed input for immutable flow version creation.
@@ -1088,9 +1114,41 @@ message RequestHumanGateRequest {
   string session_id = 2;
   optional string run_id = 3;
   optional string stage_id = 4;
-  string request_kind = 5;
-  string reason_code = 6;
-  optional string interaction_ref = 7;
+  optional string acceptance_result_id = 5;
+  ProviderTargetRef provider_target = 6;
+  optional string target_ref = 7;
+  string request_kind = 8;
+  string reason_code = 9;
+  optional string safe_summary = 10;
+  optional string interaction_request_ref = 11;
+  optional string governance_gate_request_ref = 12;
+}
+
+message RecordHumanGateDecisionRequest {
+  CommandMeta meta = 1;
+  string human_gate_request_id = 2;
+  HumanGateStatus status = 3;
+  HumanGateOutcome outcome = 4;
+  optional string safe_summary = 5;
+  optional string interaction_request_ref = 6;
+  optional string interaction_response_ref = 7;
+  optional string governance_gate_request_ref = 8;
+  optional string governance_decision_ref = 9;
+}
+
+message GetHumanGateRequestRequest {
+  QueryMeta meta = 1;
+  string human_gate_request_id = 2;
+}
+
+message ListHumanGateRequestsRequest {
+  QueryMeta meta = 1;
+  optional string session_id = 2;
+  optional string run_id = 3;
+  optional string stage_id = 4;
+  optional HumanGateStatus status = 5;
+  optional HumanGateOutcome outcome = 6;
+  PageRequest page = 7;
 }
 
 message GetAgentSessionRequest {
@@ -1145,6 +1203,11 @@ message ListAgentActivitiesResponse {
 
 message HumanGateRequestResponse {
   HumanGateRequest human_gate_request = 1;
+}
+
+message ListHumanGateRequestsResponse {
+  repeated HumanGateRequest human_gate_requests = 1;
+  PageResponse page = 2;
 }
 
 message ListAgentRunsResponse {

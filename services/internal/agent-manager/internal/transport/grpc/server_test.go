@@ -927,6 +927,111 @@ func TestAgentActivityHandlersMapRequests(t *testing.T) {
 	}
 }
 
+func TestHumanGateHandlersMapRequests(t *testing.T) {
+	t.Parallel()
+
+	sessionID := uuid.MustParse("89898989-1111-2222-3333-444444444444")
+	runID := uuid.MustParse("89898989-2222-3333-4444-555555555555")
+	stageID := uuid.MustParse("89898989-3333-4444-5555-666666666666")
+	gateID := uuid.MustParse("89898989-4444-5555-6666-777777777777")
+	expectedVersion := int64(1)
+	statusFilter := agentsv1.HumanGateStatus_HUMAN_GATE_STATUS_WAITING
+	outcomeFilter := agentsv1.HumanGateOutcome_HUMAN_GATE_OUTCOME_NONE
+	service := &fakeAgentService{
+		requestHumanGate: func(_ context.Context, input agentservice.RequestHumanGateInput) (entity.HumanGateRequest, error) {
+			if input.SessionID != sessionID || input.RunID == nil || *input.RunID != runID || input.StageID == nil || *input.StageID != stageID {
+				t.Fatalf("request refs = %+v", input)
+			}
+			if input.RequestKind != "owner_decision" || input.InteractionRequestRef != "interaction:request/42" {
+				t.Fatalf("request input = %+v", input)
+			}
+			return sampleHumanGate(gateID, sessionID, &runID, &stageID), nil
+		},
+		recordHumanGateDecision: func(_ context.Context, input agentservice.RecordHumanGateDecisionInput) (entity.HumanGateRequest, error) {
+			if input.HumanGateRequestID != gateID || input.Meta.ExpectedVersion == nil || *input.Meta.ExpectedVersion != expectedVersion {
+				t.Fatalf("decision refs = %+v", input)
+			}
+			if input.Status != enum.HumanGateStatusResolved || input.Outcome != enum.HumanGateOutcomeApprove || input.InteractionResponseRef != "interaction:response/42" {
+				t.Fatalf("decision input = %+v", input)
+			}
+			gate := sampleHumanGate(gateID, sessionID, &runID, &stageID)
+			gate.Status = enum.HumanGateStatusResolved
+			gate.Outcome = enum.HumanGateOutcomeApprove
+			gate.InteractionResponseRef = input.InteractionResponseRef
+			gate.Version = 2
+			return gate, nil
+		},
+		getHumanGateRequest: func(_ context.Context, id uuid.UUID) (entity.HumanGateRequest, error) {
+			if id != gateID {
+				t.Fatalf("gate id = %s", id)
+			}
+			return sampleHumanGate(gateID, sessionID, &runID, &stageID), nil
+		},
+		listHumanGateRequests: func(_ context.Context, input agentservice.HumanGateList) ([]entity.HumanGateRequest, value.PageResult, error) {
+			if input.SessionID != sessionID || input.RunID != runID || input.StageID != stageID {
+				t.Fatalf("list refs = %+v", input)
+			}
+			if input.Status == nil || *input.Status != enum.HumanGateStatusWaiting || input.Outcome == nil || *input.Outcome != enum.HumanGateOutcomeNone {
+				t.Fatalf("list state = %+v", input)
+			}
+			return []entity.HumanGateRequest{sampleHumanGate(gateID, sessionID, &runID, &stageID)}, value.PageResult{NextPageToken: "gate-next"}, nil
+		},
+	}
+	server := NewServer(service)
+
+	requested, err := server.RequestHumanGate(context.Background(), &agentsv1.RequestHumanGateRequest{
+		Meta:                     commandMeta("", "human-gate", nil),
+		SessionId:                sessionID.String(),
+		RunId:                    ptr(runID.String()),
+		StageId:                  ptr(stageID.String()),
+		ProviderTarget:           &agentsv1.ProviderTargetRef{PullRequestRef: ptr("provider-pr:42")},
+		TargetRef:                ptr("artifact:run-summary"),
+		RequestKind:              "owner_decision",
+		ReasonCode:               "needs_owner_approval",
+		SafeSummary:              ptr("Need owner decision"),
+		InteractionRequestRef:    ptr("interaction:request/42"),
+		GovernanceGateRequestRef: ptr("governance:gate/42"),
+	})
+	if err != nil {
+		t.Fatalf("RequestHumanGate() error = %v", err)
+	}
+	if requested.GetHumanGateRequest().GetId() != gateID.String() || requested.GetHumanGateRequest().GetOutcome() != agentsv1.HumanGateOutcome_HUMAN_GATE_OUTCOME_NONE {
+		t.Fatalf("requested = %+v", requested.GetHumanGateRequest())
+	}
+	recorded, err := server.RecordHumanGateDecision(context.Background(), &agentsv1.RecordHumanGateDecisionRequest{
+		Meta:                   commandMeta("", "human-gate-decision", &expectedVersion),
+		HumanGateRequestId:     gateID.String(),
+		Status:                 agentsv1.HumanGateStatus_HUMAN_GATE_STATUS_RESOLVED,
+		Outcome:                agentsv1.HumanGateOutcome_HUMAN_GATE_OUTCOME_APPROVE,
+		SafeSummary:            ptr("Approved"),
+		InteractionResponseRef: ptr("interaction:response/42"),
+	})
+	if err != nil {
+		t.Fatalf("RecordHumanGateDecision() error = %v", err)
+	}
+	if recorded.GetHumanGateRequest().GetStatus() != agentsv1.HumanGateStatus_HUMAN_GATE_STATUS_RESOLVED {
+		t.Fatalf("recorded = %+v", recorded.GetHumanGateRequest())
+	}
+	if _, err := server.GetHumanGateRequest(context.Background(), &agentsv1.GetHumanGateRequestRequest{Meta: queryMeta(), HumanGateRequestId: gateID.String()}); err != nil {
+		t.Fatalf("GetHumanGateRequest() error = %v", err)
+	}
+	list, err := server.ListHumanGateRequests(context.Background(), &agentsv1.ListHumanGateRequestsRequest{
+		Meta:      queryMeta(),
+		SessionId: ptr(sessionID.String()),
+		RunId:     ptr(runID.String()),
+		StageId:   ptr(stageID.String()),
+		Status:    &statusFilter,
+		Outcome:   &outcomeFilter,
+		Page:      &agentsv1.PageRequest{PageSize: 2},
+	})
+	if err != nil {
+		t.Fatalf("ListHumanGateRequests() error = %v", err)
+	}
+	if len(list.GetHumanGateRequests()) != 1 || list.GetPage().GetNextPageToken() != "gate-next" {
+		t.Fatalf("list = %+v", list)
+	}
+}
+
 func TestTransportRejectsValidationErrorsBeforeDomainCall(t *testing.T) {
 	t.Parallel()
 
@@ -1007,6 +1112,10 @@ type fakeAgentService struct {
 	dispatchFollowUpIntent      func(context.Context, agentservice.DispatchFollowUpIntentInput) (entity.FollowUpIntent, error)
 	recordAgentActivity         func(context.Context, agentservice.RecordAgentActivityInput) (entity.AgentActivity, error)
 	listAgentActivities         func(context.Context, agentservice.AgentActivityList) ([]entity.AgentActivity, value.PageResult, error)
+	requestHumanGate            func(context.Context, agentservice.RequestHumanGateInput) (entity.HumanGateRequest, error)
+	recordHumanGateDecision     func(context.Context, agentservice.RecordHumanGateDecisionInput) (entity.HumanGateRequest, error)
+	getHumanGateRequest         func(context.Context, uuid.UUID) (entity.HumanGateRequest, error)
+	listHumanGateRequests       func(context.Context, agentservice.HumanGateList) ([]entity.HumanGateRequest, value.PageResult, error)
 }
 
 func (f *fakeAgentService) CreateFlow(ctx context.Context, input agentservice.CreateFlowInput) (entity.Flow, error) {
@@ -1233,6 +1342,34 @@ func (f *fakeAgentService) ListAgentActivities(ctx context.Context, input agents
 	return f.listAgentActivities(ctx, input)
 }
 
+func (f *fakeAgentService) RequestHumanGate(ctx context.Context, input agentservice.RequestHumanGateInput) (entity.HumanGateRequest, error) {
+	if f.requestHumanGate == nil {
+		return entity.HumanGateRequest{}, errs.ErrPreconditionFailed
+	}
+	return f.requestHumanGate(ctx, input)
+}
+
+func (f *fakeAgentService) RecordHumanGateDecision(ctx context.Context, input agentservice.RecordHumanGateDecisionInput) (entity.HumanGateRequest, error) {
+	if f.recordHumanGateDecision == nil {
+		return entity.HumanGateRequest{}, errs.ErrPreconditionFailed
+	}
+	return f.recordHumanGateDecision(ctx, input)
+}
+
+func (f *fakeAgentService) GetHumanGateRequest(ctx context.Context, id uuid.UUID) (entity.HumanGateRequest, error) {
+	if f.getHumanGateRequest == nil {
+		return entity.HumanGateRequest{}, errs.ErrPreconditionFailed
+	}
+	return f.getHumanGateRequest(ctx, id)
+}
+
+func (f *fakeAgentService) ListHumanGateRequests(ctx context.Context, input agentservice.HumanGateList) ([]entity.HumanGateRequest, value.PageResult, error) {
+	if f.listHumanGateRequests == nil {
+		return nil, value.PageResult{}, errs.ErrPreconditionFailed
+	}
+	return f.listHumanGateRequests(ctx, input)
+}
+
 func commandMeta(commandID string, idempotencyKey string, expectedVersion *int64) *agentsv1.CommandMeta {
 	return &agentsv1.CommandMeta{
 		CommandId:       optional(commandID),
@@ -1333,6 +1470,26 @@ func sampleAcceptanceResult(id uuid.UUID, sessionID uuid.UUID, runID *uuid.UUID,
 		Status:        status,
 		TargetRef:     "artifact:run-summary",
 		DetailsJSON:   []byte(`{"summary":"ok"}`),
+	}
+}
+
+func sampleHumanGate(id uuid.UUID, sessionID uuid.UUID, runID *uuid.UUID, stageID *uuid.UUID) entity.HumanGateRequest {
+	now := sampleTime()
+	return entity.HumanGateRequest{
+		VersionedBase:            entity.VersionedBase{ID: id, Version: 1, CreatedAt: now, UpdatedAt: now},
+		SessionID:                sessionID,
+		RunID:                    runID,
+		StageID:                  stageID,
+		ProviderTarget:           value.ProviderTargetRef{PullRequestRef: "provider-pr:42"},
+		TargetRef:                "artifact:run-summary",
+		RequestKind:              "owner_decision",
+		ReasonCode:               "needs_owner_approval",
+		SafeSummary:              "Need owner decision",
+		InteractionRequestRef:    "interaction:request/42",
+		GovernanceGateRequestRef: "governance:gate/42",
+		IdempotencyKey:           "domain.Service.RequestHumanGate:user:operator-1:human-gate",
+		Status:                   enum.HumanGateStatusWaiting,
+		Outcome:                  enum.HumanGateOutcomeNone,
 	}
 }
 

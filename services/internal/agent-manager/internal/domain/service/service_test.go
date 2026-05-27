@@ -2841,6 +2841,345 @@ func TestListAgentActivitiesValidatesFilterAndDelegates(t *testing.T) {
 	}
 }
 
+func TestRequestHumanGateStoresWaitAndOutbox(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 27, 11, 0, 0, 0, time.UTC)
+	sessionID := uuid.MustParse("89898989-1111-2222-3333-444444444444")
+	runID := uuid.MustParse("89898989-2222-3333-4444-555555555555")
+	acceptanceID := uuid.MustParse("89898989-3333-4444-5555-666666666666")
+	gateID := uuid.MustParse("89898989-4444-5555-6666-777777777777")
+	eventID := uuid.MustParse("89898989-5555-6666-7777-888888888888")
+	repository := &fakeRepository{
+		sessionByID: map[uuid.UUID]entity.AgentSession{sessionID: {VersionedBase: entity.VersionedBase{ID: sessionID, Version: 1}, Status: enum.AgentSessionStatusOpen}},
+		runByID:     map[uuid.UUID]entity.AgentRun{runID: {VersionedBase: entity.VersionedBase{ID: runID, Version: 1}, SessionID: sessionID}},
+		acceptanceByID: map[uuid.UUID]entity.AcceptanceResult{acceptanceID: {
+			VersionedBase: entity.VersionedBase{ID: acceptanceID, Version: 1},
+			SessionID:     sessionID,
+			RunID:         &runID,
+			CheckKind:     enum.AcceptanceCheckKindHumanGate,
+			Status:        enum.AcceptanceStatusWaiting,
+		}},
+		humanGateByID: map[uuid.UUID]entity.HumanGateRequest{},
+	}
+	service := New(Config{
+		Repository:  repository,
+		Clock:       fixedClock{now: now},
+		IDGenerator: fixedIDGenerator{ids: []uuid.UUID{gateID, eventID}},
+	})
+
+	gate, err := service.RequestHumanGate(context.Background(), RequestHumanGateInput{
+		Meta:                     value.CommandMeta{IdempotencyKey: "human-gate-1", Actor: testActor()},
+		SessionID:                sessionID,
+		RunID:                    &runID,
+		AcceptanceResultID:       &acceptanceID,
+		ProviderTarget:           value.ProviderTargetRef{PullRequestRef: "provider-pr:42"},
+		TargetRef:                "artifact:run-summary",
+		RequestKind:              "owner_decision",
+		ReasonCode:               "needs_owner_approval",
+		SafeSummary:              "Review stage needs owner decision",
+		InteractionRequestRef:    "interaction:request/42",
+		GovernanceGateRequestRef: "governance:gate/42",
+	})
+	if err != nil {
+		t.Fatalf("RequestHumanGate() err = %v", err)
+	}
+	if gate.ID != gateID || gate.Status != enum.HumanGateStatusWaiting || gate.Outcome != enum.HumanGateOutcomeNone {
+		t.Fatalf("gate = %+v", gate)
+	}
+	if gate.IdempotencyKey != operationRequestHumanGate+":user:owner:human-gate-1" {
+		t.Fatalf("idempotency key = %q", gate.IdempotencyKey)
+	}
+	if repository.humanGateResult.AggregateType != enum.CommandAggregateTypeHumanGate || repository.humanGateResult.AggregateID != gateID {
+		t.Fatalf("command result = %+v", repository.humanGateResult)
+	}
+	if repository.humanGateEvent.EventType != agentevents.EventHumanGateRequested {
+		t.Fatalf("event type = %s", repository.humanGateEvent.EventType)
+	}
+	payload := decodeAgentPayload(t, repository.humanGateEvent)
+	if payload.HumanGateRequestID != gateID.String() || payload.InteractionRequestRef != "interaction:request/42" || payload.GovernanceGateRequestRef != "governance:gate/42" {
+		t.Fatalf("payload = %+v", payload)
+	}
+}
+
+func TestRequestHumanGateReplaysSameCommand(t *testing.T) {
+	t.Parallel()
+
+	sessionID := uuid.MustParse("90909090-1111-2222-3333-444444444444")
+	gateID := uuid.MustParse("90909090-2222-3333-4444-555555555555")
+	gate := entity.HumanGateRequest{
+		VersionedBase:  entity.VersionedBase{ID: gateID, Version: 1},
+		SessionID:      sessionID,
+		RequestKind:    "owner_decision",
+		ReasonCode:     "needs_owner_approval",
+		IdempotencyKey: operationRequestHumanGate + ":user:owner:human-gate-replay",
+		Status:         enum.HumanGateStatusWaiting,
+		Outcome:        enum.HumanGateOutcomeNone,
+	}
+	payload, err := marshalCommandPayload(humanGateCommandPayload{HumanGateRequest: gate})
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	repository := &fakeRepository{
+		replay: &entity.CommandResult{
+			IdempotencyKey: "human-gate-replay",
+			Actor:          testActor(),
+			Operation:      operationRequestHumanGate,
+			AggregateType:  enum.CommandAggregateTypeHumanGate,
+			AggregateID:    gateID,
+			ResultPayload:  payload,
+		},
+		sessionByID:   map[uuid.UUID]entity.AgentSession{sessionID: {VersionedBase: entity.VersionedBase{ID: sessionID, Version: 1}, Status: enum.AgentSessionStatusOpen}},
+		humanGateByID: map[uuid.UUID]entity.HumanGateRequest{gateID: gate},
+	}
+	service := New(Config{Repository: repository})
+
+	replay, err := service.RequestHumanGate(context.Background(), RequestHumanGateInput{
+		Meta:        value.CommandMeta{IdempotencyKey: "human-gate-replay", Actor: testActor()},
+		SessionID:   sessionID,
+		RequestKind: "owner_decision",
+		ReasonCode:  "needs_owner_approval",
+	})
+	if err != nil {
+		t.Fatalf("RequestHumanGate() err = %v", err)
+	}
+	if replay.ID != gateID || repository.createHumanGateCalled {
+		t.Fatalf("replay/create = %s/%v", replay.ID, repository.createHumanGateCalled)
+	}
+}
+
+func TestRequestHumanGateRejectsUnsafePayload(t *testing.T) {
+	t.Parallel()
+
+	sessionID := uuid.MustParse("91919191-1111-2222-3333-444444444444")
+	repository := &fakeRepository{
+		sessionByID: map[uuid.UUID]entity.AgentSession{sessionID: {VersionedBase: entity.VersionedBase{ID: sessionID, Version: 1}, Status: enum.AgentSessionStatusOpen}},
+	}
+	service := New(Config{Repository: repository})
+
+	_, err := service.RequestHumanGate(context.Background(), RequestHumanGateInput{
+		Meta:        value.CommandMeta{IdempotencyKey: "human-gate-unsafe", Actor: testActor()},
+		SessionID:   sessionID,
+		RequestKind: "owner_decision",
+		ReasonCode:  "needs_owner_approval",
+		SafeSummary: "raw_provider_payload should not be stored",
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("RequestHumanGate() err = %v, want %v", err, errs.ErrInvalidArgument)
+	}
+	if repository.createHumanGateCalled {
+		t.Fatal("CreateHumanGateRequestWithResult called for unsafe payload")
+	}
+}
+
+func TestRecordHumanGateDecisionStoresOutcomeAndOutbox(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 27, 12, 0, 0, 0, time.UTC)
+	sessionID := uuid.MustParse("92929292-1111-2222-3333-444444444444")
+	gateID := uuid.MustParse("92929292-2222-3333-4444-555555555555")
+	eventID := uuid.MustParse("92929292-3333-4444-5555-666666666666")
+	gate := entity.HumanGateRequest{
+		VersionedBase:         entity.VersionedBase{ID: gateID, Version: 1},
+		SessionID:             sessionID,
+		RequestKind:           "owner_decision",
+		ReasonCode:            "needs_owner_approval",
+		InteractionRequestRef: "interaction:request/42",
+		IdempotencyKey:        operationRequestHumanGate + ":user:owner:human-gate-decision",
+		Status:                enum.HumanGateStatusWaiting,
+		Outcome:               enum.HumanGateOutcomeNone,
+	}
+	repository := &fakeRepository{humanGateByID: map[uuid.UUID]entity.HumanGateRequest{gateID: gate}}
+	service := New(Config{
+		Repository:  repository,
+		Clock:       fixedClock{now: now},
+		IDGenerator: fixedIDGenerator{ids: []uuid.UUID{eventID}},
+	})
+	expectedVersion := int64(1)
+
+	resolved, err := service.RecordHumanGateDecision(context.Background(), RecordHumanGateDecisionInput{
+		Meta:                   value.CommandMeta{IdempotencyKey: "human-gate-decision", ExpectedVersion: &expectedVersion, Actor: testActor()},
+		HumanGateRequestID:     gateID,
+		Status:                 enum.HumanGateStatusResolved,
+		Outcome:                enum.HumanGateOutcomeApprove,
+		SafeSummary:            "Owner approved the next step",
+		InteractionRequestRef:  "interaction:request/42",
+		InteractionResponseRef: "interaction:response/42",
+	})
+	if err != nil {
+		t.Fatalf("RecordHumanGateDecision() err = %v", err)
+	}
+	if resolved.Status != enum.HumanGateStatusResolved || resolved.Outcome != enum.HumanGateOutcomeApprove || resolved.ResolvedAt == nil {
+		t.Fatalf("resolved = %+v", resolved)
+	}
+	if resolved.Version != 2 || repository.updateHumanGateResult.Operation != operationRecordHumanGateDecision {
+		t.Fatalf("update result = %+v", repository.updateHumanGateResult)
+	}
+	if repository.updateHumanGateEvent == nil || repository.updateHumanGateEvent.EventType != agentevents.EventHumanGateResolved {
+		t.Fatalf("event = %+v", repository.updateHumanGateEvent)
+	}
+	payload := decodeAgentPayload(t, *repository.updateHumanGateEvent)
+	if payload.HumanGateOutcome != string(enum.HumanGateOutcomeApprove) || payload.InteractionResponseRef != "interaction:response/42" {
+		t.Fatalf("payload = %+v", payload)
+	}
+}
+
+func TestRecordHumanGateDecisionRejectsMismatchedRequestRefs(t *testing.T) {
+	t.Parallel()
+
+	gateID := uuid.MustParse("92929292-4444-5555-6666-777777777777")
+	expectedVersion := int64(1)
+	tests := []struct {
+		name  string
+		input RecordHumanGateDecisionInput
+	}{
+		{
+			name: "interaction request mismatch",
+			input: RecordHumanGateDecisionInput{
+				Meta:                   value.CommandMeta{IdempotencyKey: "human-gate-interaction-mismatch", ExpectedVersion: &expectedVersion, Actor: testActor()},
+				HumanGateRequestID:     gateID,
+				Status:                 enum.HumanGateStatusResolved,
+				Outcome:                enum.HumanGateOutcomeApprove,
+				InteractionRequestRef:  "interaction:request/other",
+				InteractionResponseRef: "interaction:response/42",
+			},
+		},
+		{
+			name: "governance gate mismatch",
+			input: RecordHumanGateDecisionInput{
+				Meta:                     value.CommandMeta{IdempotencyKey: "human-gate-governance-mismatch", ExpectedVersion: &expectedVersion, Actor: testActor()},
+				HumanGateRequestID:       gateID,
+				Status:                   enum.HumanGateStatusResolved,
+				Outcome:                  enum.HumanGateOutcomeApprove,
+				GovernanceGateRequestRef: "governance:gate/other",
+				GovernanceDecisionRef:    "governance:decision/42",
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			repository := &fakeRepository{humanGateByID: map[uuid.UUID]entity.HumanGateRequest{
+				gateID: {
+					VersionedBase:            entity.VersionedBase{ID: gateID, Version: 1},
+					RequestKind:              "owner_decision",
+					ReasonCode:               "needs_owner_approval",
+					InteractionRequestRef:    "interaction:request/42",
+					GovernanceGateRequestRef: "governance:gate/42",
+					Status:                   enum.HumanGateStatusWaiting,
+					Outcome:                  enum.HumanGateOutcomeNone,
+				},
+			}}
+			service := New(Config{
+				Repository:  repository,
+				Clock:       fixedClock{now: time.Date(2026, 5, 27, 12, 0, 0, 0, time.UTC)},
+				IDGenerator: fixedIDGenerator{ids: []uuid.UUID{uuid.MustParse("92929292-5555-6666-7777-888888888888")}},
+			})
+
+			_, err := service.RecordHumanGateDecision(context.Background(), test.input)
+			if !errors.Is(err, errs.ErrConflict) {
+				t.Fatalf("RecordHumanGateDecision() err = %v, want %v", err, errs.ErrConflict)
+			}
+			if repository.updateHumanGateCalled || repository.updateHumanGateEvent != nil {
+				t.Fatalf("update/outbox happened: %v/%+v", repository.updateHumanGateCalled, repository.updateHumanGateEvent)
+			}
+		})
+	}
+}
+
+func TestRecordHumanGateDecisionRejectsVersionConflict(t *testing.T) {
+	t.Parallel()
+
+	sessionID := uuid.MustParse("93939393-1111-2222-3333-444444444444")
+	gateID := uuid.MustParse("93939393-2222-3333-4444-555555555555")
+	gate := entity.HumanGateRequest{
+		VersionedBase: entity.VersionedBase{ID: gateID, Version: 1},
+		SessionID:     sessionID,
+		RequestKind:   "owner_decision",
+		ReasonCode:    "needs_owner_approval",
+		Status:        enum.HumanGateStatusWaiting,
+		Outcome:       enum.HumanGateOutcomeNone,
+	}
+	repository := &fakeRepository{humanGateByID: map[uuid.UUID]entity.HumanGateRequest{gateID: gate}}
+	service := New(Config{Repository: repository})
+	expectedVersion := int64(2)
+
+	_, err := service.RecordHumanGateDecision(context.Background(), RecordHumanGateDecisionInput{
+		Meta:                   value.CommandMeta{IdempotencyKey: "human-gate-conflict", ExpectedVersion: &expectedVersion, Actor: testActor()},
+		HumanGateRequestID:     gateID,
+		Status:                 enum.HumanGateStatusResolved,
+		Outcome:                enum.HumanGateOutcomeReject,
+		InteractionResponseRef: "interaction:response/42",
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("RecordHumanGateDecision() err = %v, want %v", err, errs.ErrConflict)
+	}
+	if repository.updateHumanGateCalled {
+		t.Fatal("UpdateHumanGateRequestWithResult called after version conflict")
+	}
+}
+
+func TestRecordHumanGateDecisionReplayRejectsConflictingPayload(t *testing.T) {
+	t.Parallel()
+
+	gateID := uuid.MustParse("92929292-7777-8888-9999-aaaaaaaaaaaa")
+	expectedVersion := int64(1)
+	resolved := entity.HumanGateRequest{
+		VersionedBase:          entity.VersionedBase{ID: gateID, Version: 2},
+		RequestKind:            "owner_decision",
+		ReasonCode:             "needs_owner_approval",
+		SafeSummary:            "Owner approved the next step",
+		InteractionRequestRef:  "interaction:request/42",
+		InteractionResponseRef: "interaction:response/42",
+		Status:                 enum.HumanGateStatusResolved,
+		Outcome:                enum.HumanGateOutcomeApprove,
+	}
+	decision := humanGateDecision{
+		HumanGateRequestID:     gateID.String(),
+		Status:                 string(enum.HumanGateStatusResolved),
+		Outcome:                string(enum.HumanGateOutcomeApprove),
+		SafeSummary:            "Owner approved the next step",
+		InteractionRequestRef:  "interaction:request/42",
+		InteractionResponseRef: "interaction:response/42",
+	}
+	payload, err := marshalCommandPayload(humanGateCommandPayload{HumanGateRequest: resolved, Decision: &decision})
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	repository := &fakeRepository{
+		replay: &entity.CommandResult{
+			IdempotencyKey: "human-gate-decision-replay",
+			Actor:          testActor(),
+			Operation:      operationRecordHumanGateDecision,
+			AggregateType:  enum.CommandAggregateTypeHumanGate,
+			AggregateID:    gateID,
+			ResultPayload:  payload,
+		},
+		humanGateByID: map[uuid.UUID]entity.HumanGateRequest{gateID: resolved},
+	}
+	service := New(Config{
+		Repository: repository,
+		Clock:      fixedClock{now: time.Date(2026, 5, 27, 12, 0, 0, 0, time.UTC)},
+	})
+
+	_, err = service.RecordHumanGateDecision(context.Background(), RecordHumanGateDecisionInput{
+		Meta:                   value.CommandMeta{IdempotencyKey: "human-gate-decision-replay", ExpectedVersion: &expectedVersion, Actor: testActor()},
+		HumanGateRequestID:     gateID,
+		Status:                 enum.HumanGateStatusResolved,
+		Outcome:                enum.HumanGateOutcomeApprove,
+		SafeSummary:            "Different approved summary",
+		InteractionRequestRef:  "interaction:request/42",
+		InteractionResponseRef: "interaction:response/42",
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("RecordHumanGateDecision() err = %v, want %v", err, errs.ErrConflict)
+	}
+	if repository.updateHumanGateCalled {
+		t.Fatal("UpdateHumanGateRequestWithResult called for conflicting replay")
+	}
+}
+
 func decodeAgentPayload(t *testing.T, event entity.OutboxEvent) agentevents.Payload {
 	t.Helper()
 
@@ -2866,6 +3205,10 @@ type fakeRepository struct {
 	activityList           []entity.AgentActivity
 	activityPage           value.PageResult
 	activityFilter         query.AgentActivityFilter
+	humanGateByID          map[uuid.UUID]entity.HumanGateRequest
+	humanGateList          []entity.HumanGateRequest
+	humanGatePage          value.PageResult
+	humanGateFilter        query.HumanGateFilter
 	roleByID               map[uuid.UUID]entity.RoleProfile
 	promptVersionByID      map[uuid.UUID]entity.PromptTemplateVersion
 	activeSession          entity.AgentSession
@@ -2899,6 +3242,12 @@ type fakeRepository struct {
 	reservedFollowUp       entity.FollowUpIntent
 	createdActivity        entity.AgentActivity
 	activityResult         entity.CommandResult
+	createdHumanGate       entity.HumanGateRequest
+	humanGateResult        entity.CommandResult
+	humanGateEvent         entity.OutboxEvent
+	updatedHumanGate       entity.HumanGateRequest
+	updateHumanGateResult  entity.CommandResult
+	updateHumanGateEvent   *entity.OutboxEvent
 	createFlowCalled       bool
 	createSessionCalled    bool
 	createRunCalled        bool
@@ -2907,6 +3256,8 @@ type fakeRepository struct {
 	reserveFollowUpCalled  bool
 	updateFollowUpCalled   bool
 	createActivityCalled   bool
+	createHumanGateCalled  bool
+	updateHumanGateCalled  bool
 }
 
 func (f *fakeRepository) CreateFlowWithResult(_ context.Context, flow entity.Flow, result entity.CommandResult) error {
@@ -3211,6 +3562,50 @@ func (f *fakeRepository) GetAgentActivity(_ context.Context, id uuid.UUID) (enti
 func (f *fakeRepository) ListAgentActivities(_ context.Context, filter query.AgentActivityFilter) ([]entity.AgentActivity, value.PageResult, error) {
 	f.activityFilter = filter
 	return f.activityList, f.activityPage, nil
+}
+
+func (f *fakeRepository) CreateHumanGateRequestWithResult(_ context.Context, gate entity.HumanGateRequest, result entity.CommandResult, event entity.OutboxEvent) error {
+	f.createHumanGateCalled = true
+	f.createdHumanGate = gate
+	f.humanGateResult = result
+	f.humanGateEvent = event
+	if f.humanGateByID != nil {
+		f.humanGateByID[gate.ID] = gate
+	}
+	return nil
+}
+
+func (f *fakeRepository) UpdateHumanGateRequestWithResult(_ context.Context, gate entity.HumanGateRequest, previousVersion int64, result entity.CommandResult, event *entity.OutboxEvent) error {
+	stored, ok := f.humanGateByID[gate.ID]
+	if !ok {
+		return errs.ErrNotFound
+	}
+	if stored.Version != previousVersion || gate.Version != previousVersion+1 {
+		return errs.ErrConflict
+	}
+	f.updateHumanGateCalled = true
+	f.updatedHumanGate = gate
+	f.updateHumanGateResult = result
+	f.updateHumanGateEvent = event
+	if f.humanGateByID != nil {
+		f.humanGateByID[gate.ID] = gate
+	}
+	return nil
+}
+
+func (f *fakeRepository) GetHumanGateRequest(_ context.Context, id uuid.UUID) (entity.HumanGateRequest, error) {
+	if f.humanGateByID != nil {
+		gate, ok := f.humanGateByID[id]
+		if ok {
+			return gate, nil
+		}
+	}
+	return entity.HumanGateRequest{}, errors.ErrUnsupported
+}
+
+func (f *fakeRepository) ListHumanGateRequests(_ context.Context, filter query.HumanGateFilter) ([]entity.HumanGateRequest, value.PageResult, error) {
+	f.humanGateFilter = filter
+	return f.humanGateList, f.humanGatePage, nil
 }
 
 func (f *fakeRepository) ClaimOutboxEvents(context.Context, int, time.Time, time.Time) ([]entity.OutboxEvent, error) {
