@@ -290,12 +290,6 @@ func (s *Service) onboardingMergeAnchor(ctx context.Context, workItem entity.Pro
 	if !fieldsOK {
 		return onboardingMergeAnchor{}, false, nil
 	}
-	fields := watermarkFields(workItem)
-	sourceRef := strings.TrimSpace(fields["source_ref"])
-	operationRef := onboardingMergeWatermarkOperationRef(fields)
-	if sourceRef == "" || operationRef == "" || !onboardingSourceRefMatchesProvider(sourceRef, signal) {
-		return onboardingMergeAnchor{}, false, nil
-	}
 	hasBinding, err := s.hasProjectRepositoryBinding(ctx, workItem)
 	if err != nil {
 		return onboardingMergeAnchor{}, false, err
@@ -303,21 +297,56 @@ func (s *Service) onboardingMergeAnchor(ctx context.Context, workItem entity.Pro
 	if !hasBinding {
 		return onboardingMergeAnchor{}, false, nil
 	}
+	if operationRef, sourceRef, ok, err := s.onboardingMergeOperationAnchor(ctx, kind, workItem, signal); err != nil {
+		return onboardingMergeAnchor{}, false, err
+	} else if ok {
+		return onboardingMergeAnchor{kind: kind, sourceRef: sourceRef, operationRef: operationRef}, true, nil
+	}
+	fields := watermarkFields(workItem)
+	sourceRef := strings.TrimSpace(fields["source_ref"])
+	operationRef := onboardingMergeWatermarkOperationRef(fields)
+	if sourceRef == "" || operationRef == "" || !onboardingSourceRefMatchesProvider(sourceRef, signal) {
+		return onboardingMergeAnchor{}, false, nil
+	}
 	return onboardingMergeAnchor{kind: kind, sourceRef: sourceRef, operationRef: operationRef}, true, nil
 }
 
 func onboardingMergeWatermarkKind(workItem entity.ProviderWorkItemProjection) (enum.RepositoryMergeSignalKind, bool) {
-	if workItem.WatermarkStatus != enum.WorkItemWatermarkStatusValid {
-		return "", false
-	}
 	fields := watermarkFields(workItem)
-	if fields["kind"] != string(enum.WorkItemKindPullRequest) || fields["managed_by"] != "kodex" {
+	if fields["managed_by"] != "kodex" || strings.TrimSpace(fields["source_ref"]) == "" {
 		return "", false
 	}
-	switch strings.ToLower(strings.TrimSpace(fields["work_type"])) {
+	watermarkKind := strings.TrimSpace(fields["kind"])
+	workType := strings.ToLower(strings.TrimSpace(fields["work_type"]))
+	switch watermarkKind {
+	case string(enum.WorkItemKindPullRequest):
+		if workItem.WatermarkStatus != enum.WorkItemWatermarkStatusValid {
+			return "", false
+		}
+		return onboardingMergeWorkTypeKind(workType)
+	case "provider_pr":
+		return onboardingMergeProviderPRWorkTypeKind(workType)
+	default:
+		return "", false
+	}
+}
+
+func onboardingMergeWorkTypeKind(workType string) (enum.RepositoryMergeSignalKind, bool) {
+	switch workType {
 	case string(enum.RepositoryMergeSignalKindBootstrap), "repository_bootstrap":
 		return enum.RepositoryMergeSignalKindBootstrap, true
 	case string(enum.RepositoryMergeSignalKindAdoption), "repository_adoption":
+		return enum.RepositoryMergeSignalKindAdoption, true
+	default:
+		return "", false
+	}
+}
+
+func onboardingMergeProviderPRWorkTypeKind(workType string) (enum.RepositoryMergeSignalKind, bool) {
+	switch workType {
+	case "repository_bootstrap":
+		return enum.RepositoryMergeSignalKindBootstrap, true
+	case "repository_adoption":
 		return enum.RepositoryMergeSignalKindAdoption, true
 	default:
 		return "", false
@@ -352,6 +381,84 @@ func onboardingSourceRefMatchesProvider(sourceRef string, signal value.ProviderR
 		}
 	}
 	return false
+}
+
+func (s *Service) onboardingMergeOperationAnchor(
+	ctx context.Context,
+	kind enum.RepositoryMergeSignalKind,
+	workItem entity.ProviderWorkItemProjection,
+	signal value.ProviderRepositoryMergeSignalSnapshot,
+) (string, string, bool, error) {
+	if workItem.RepositoryID == nil {
+		return "", "", false, nil
+	}
+	operationType, targetKind := onboardingMergeOperationIdentity(kind)
+	if operationType == "" || targetKind == "" {
+		return "", "", false, nil
+	}
+	for _, sourceRef := range uniqueNonEmptyStrings(signal.SourceRef, signal.HeadBranch) {
+		targetRef := repositoryTargetRef(workItem.ProviderSlug, workItem.RepositoryID.String()) + "#" + targetKind + ":" + sourceRef
+		operations, _, err := s.repository.ListProviderOperations(ctx, query.ProviderOperationFilter{
+			ProviderSlug:   workItem.ProviderSlug,
+			OperationTypes: []enum.ProviderOperationType{operationType},
+			Statuses:       []enum.ProviderOperationStatus{enum.ProviderOperationStatusSucceeded},
+			TargetRef:      targetRef,
+			Page:           value.PageRequest{PageSize: 2},
+		})
+		if err != nil {
+			return "", "", false, err
+		}
+		for _, operation := range operations {
+			if onboardingMergeOperationMatches(operation, workItem, signal) {
+				return "provider-hub:operation:" + operation.ID.String(), sourceRef, true, nil
+			}
+		}
+	}
+	return "", "", false, nil
+}
+
+func onboardingMergeOperationIdentity(kind enum.RepositoryMergeSignalKind) (enum.ProviderOperationType, string) {
+	switch kind {
+	case enum.RepositoryMergeSignalKindBootstrap:
+		return enum.ProviderOperationCreateBootstrapPullRequest, "bootstrap_pull_request"
+	case enum.RepositoryMergeSignalKindAdoption:
+		return enum.ProviderOperationCreateAdoptionPullRequest, "adoption_pull_request"
+	default:
+		return "", ""
+	}
+}
+
+func onboardingMergeOperationMatches(operation entity.ProviderOperation, workItem entity.ProviderWorkItemProjection, signal value.ProviderRepositoryMergeSignalSnapshot) bool {
+	if operation.ID == uuid.Nil {
+		return false
+	}
+	if repository := strings.TrimSpace(operation.RepositoryFullName); repository != "" && repository != strings.TrimSpace(workItem.RepositoryFullName) {
+		return false
+	}
+	if providerObjectID := strings.TrimSpace(operation.ProviderObjectID); providerObjectID != "" && providerObjectID != strings.TrimSpace(workItem.ProviderWorkItemID) {
+		return false
+	}
+	if resultRef := strings.TrimSpace(operation.ResultRef); resultRef != "" && resultRef != strings.TrimSpace(workItem.URL) && resultRef != strings.TrimSpace(signal.PullRequestURL) {
+		return false
+	}
+	return true
+}
+
+func uniqueNonEmptyStrings(values ...string) []string {
+	seen := make(map[string]struct{}, len(values))
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	return result
 }
 
 func (s *Service) hasProjectRepositoryBinding(ctx context.Context, workItem entity.ProviderWorkItemProjection) (bool, error) {

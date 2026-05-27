@@ -168,7 +168,8 @@ func TestIngestWebhookEventRecordsRepositoryBootstrapMergeSignal(t *testing.T) {
 	projectID := uuid.New()
 	repositoryID := uuid.New()
 	workItemID := stableUUID("work-item", string(enum.ProviderSlugGitHub), "github:codex-k8s/kodex:pull_request:88")
-	operationRef := "provider-hub:operation:" + uuid.NewString()
+	operationID := uuid.New()
+	operationRef := "provider-hub:operation:" + operationID.String()
 	now := time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC)
 	mergedAt := now.Add(-time.Minute)
 	repository := &fakeRepository{
@@ -184,8 +185,8 @@ func TestIngestWebhookEventRecordsRepositoryBootstrapMergeSignal(t *testing.T) {
 			URL:                "https://github.com/codex-k8s/kodex/pull/88",
 			State:              "open",
 			WorkItemType:       "bootstrap",
-			WatermarkStatus:    enum.WorkItemWatermarkStatusValid,
-			WatermarkJSON:      []byte(`{"kind":"pull_request","managed_by":"kodex","provider_operation_ref":"` + operationRef + `","source_ref":"kodex/bootstrap","work_type":"bootstrap"}`),
+			WatermarkStatus:    enum.WorkItemWatermarkStatusInvalid,
+			WatermarkJSON:      []byte(`{"error":"watermark kind mismatch","kind":"provider_pr","managed_by":"kodex","source_ref":"services.yaml","work_type":"repository_bootstrap"}`),
 			SyncedAt:           now.Add(-time.Hour),
 			DriftStatus:        enum.WorkItemDriftStatusFresh,
 		},
@@ -197,6 +198,17 @@ func TestIngestWebhookEventRecordsRepositoryBootstrapMergeSignal(t *testing.T) {
 			Source:            enum.RelationshipSourceManual,
 			Confidence:        enum.RelationshipConfidenceConfirmed,
 			CreatedAt:         now.Add(-time.Hour),
+		},
+		recordedProviderOperation: entity.ProviderOperation{
+			Base:               entity.Base{ID: operationID, Version: 1, CreatedAt: now.Add(-time.Hour), UpdatedAt: now.Add(-time.Hour)},
+			ProviderSlug:       enum.ProviderSlugGitHub,
+			OperationType:      enum.ProviderOperationCreateBootstrapPullRequest,
+			TargetRef:          repositoryTargetRef(enum.ProviderSlugGitHub, repositoryID.String()) + "#bootstrap_pull_request:kodex/bootstrap",
+			Status:             enum.ProviderOperationStatusSucceeded,
+			ResultRef:          "https://github.com/codex-k8s/kodex/pull/88",
+			ProviderObjectID:   "github:codex-k8s/kodex:pull_request:88",
+			RepositoryFullName: "codex-k8s/kodex",
+			StartedAt:          now.Add(-time.Hour),
 		},
 	}
 	service := NewWithRuntime(
@@ -2497,8 +2509,45 @@ func (r *fakeRepository) GetProviderOperationByCommand(context.Context, enum.Pro
 	return entity.ProviderOperation{}, errs.ErrNotFound
 }
 
-func (r *fakeRepository) ListProviderOperations(context.Context, query.ProviderOperationFilter) ([]entity.ProviderOperation, query.PageResult, error) {
-	return nil, query.PageResult{}, r.err
+func (r *fakeRepository) ListProviderOperations(_ context.Context, filter query.ProviderOperationFilter) ([]entity.ProviderOperation, query.PageResult, error) {
+	if r.recordedProviderOperation.ID == uuid.Nil || !matchesProviderOperationFilter(r.recordedProviderOperation, filter) {
+		return nil, query.PageResult{}, r.err
+	}
+	return []entity.ProviderOperation{r.recordedProviderOperation}, query.PageResult{}, r.err
+}
+
+func matchesProviderOperationFilter(operation entity.ProviderOperation, filter query.ProviderOperationFilter) bool {
+	if filter.ProviderSlug != "" && operation.ProviderSlug != filter.ProviderSlug {
+		return false
+	}
+	if filter.TargetRef != "" && operation.TargetRef != filter.TargetRef {
+		return false
+	}
+	if len(filter.OperationTypes) > 0 {
+		found := false
+		for _, operationType := range filter.OperationTypes {
+			if operation.OperationType == operationType {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	if len(filter.Statuses) > 0 {
+		found := false
+		for _, status := range filter.Statuses {
+			if operation.Status == status {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
 }
 
 func (r *fakeRepository) ClaimOutboxEvents(context.Context, int, time.Time, time.Time) ([]entity.OutboxEvent, error) {
