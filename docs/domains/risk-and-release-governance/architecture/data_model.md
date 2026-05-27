@@ -132,10 +132,10 @@ approvals:
 | `confidence` | enum | да | `low`, `medium`, `high`, если применимо. |
 | `evidence_refs` | jsonb | нет | Ссылки на комментарии, checks, runtime summary, документы. |
 | `summary` | text | нет | Короткая безопасная сводка. |
-| `source_fingerprint` | text | нет | Локальный fingerprint normalized `target + role + author_ref + evidence_refs`, чтобы повторная передача того же provider/agent/interaction signal ref не создавала дубль. |
+| `source_fingerprint` | text | нет | Локальный fingerprint normalized `target + role + author_ref + evidence kind/ref identity`, чтобы повторная передача того же provider/agent/interaction signal ref не создавала дубль. |
 | `created_at` | timestamptz | нет | Когда signal создан. |
 
-`ReviewSignal` принимает только safe refs от owner-доменов: provider review/comment/check refs из `provider-hub`, agent run/session/acceptance refs из `agent-manager`, interaction decision/callback refs из `interaction-hub` и локальные governance refs. Полный provider payload, diff, prompt/transcript, stdout/stderr, workspace paths, секреты и большие отчёты не сохраняются. Повтор с тем же normalized owner-domain evidence set возвращает уже записанный signal; повтор с тем же source fingerprint и другой outcome/severity/summary считается конфликтом фактов.
+`ReviewSignal` принимает только safe refs от owner-доменов: provider review/comment/check refs из `provider-hub`, agent run/session/acceptance refs из `agent-manager`, interaction decision/callback refs из `interaction-hub` и локальные governance refs. Полный provider payload, diff, prompt/transcript, stdout/stderr, workspace paths, секреты и большие отчёты не сохраняются. Повтор с тем же normalized owner-domain evidence identity set возвращает уже записанный signal; повтор с тем же source fingerprint и другой outcome/severity/summary считается конфликтом фактов. Дубли одного `kind/ref` с разной evidence metadata внутри команды отклоняются как неканонический вход.
 
 ### GatePolicy
 

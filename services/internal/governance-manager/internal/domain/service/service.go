@@ -1994,33 +1994,52 @@ func optionalUUIDString(id *uuid.UUID) string {
 }
 
 func normalizeReviewSignalEvidenceRefs(refs []value.EvidenceRef) ([]value.EvidenceRef, error) {
-	normalized, err := normalizeEvidenceRefs(refs)
-	if err != nil {
-		return nil, err
+	result := make([]value.EvidenceRef, 0, len(refs))
+	seen := make(map[string]value.EvidenceRef)
+	for _, ref := range refs {
+		normalized, err := normalizeEvidenceRef(ref, "review_signal.evidence_ref.ref", "review_signal.evidence_ref.summary")
+		if err != nil {
+			return nil, err
+		}
+		key := reviewSignalEvidenceIdentity(normalized)
+		if existing, ok := seen[key]; ok {
+			if existing != normalized {
+				return nil, errs.ErrInvalidArgument
+			}
+			continue
+		}
+		seen[key] = normalized
+		result = append(result, normalized)
 	}
-	sort.Slice(normalized, func(i, j int) bool {
-		left := normalized[i]
-		right := normalized[j]
-		return strings.Join([]string{left.Kind, left.Ref, left.Summary, left.Digest, left.RetentionClass}, "\x00") <
-			strings.Join([]string{right.Kind, right.Ref, right.Summary, right.Digest, right.RetentionClass}, "\x00")
+	sort.Slice(result, func(i, j int) bool {
+		return reviewSignalEvidenceIdentity(result[i]) < reviewSignalEvidenceIdentity(result[j])
 	})
-	return normalized, nil
+	return result, nil
 }
 
 func reviewSignalFingerprint(target value.ExternalRef, roleKind enum.ReviewRoleKind, authorRef string, evidenceRefs []value.EvidenceRef) string {
+	identities := make([]string, 0, len(evidenceRefs))
+	for _, ref := range evidenceRefs {
+		identities = append(identities, reviewSignalEvidenceIdentity(ref))
+	}
+	sort.Strings(identities)
 	payload, _ := json.Marshal(struct {
-		Target       value.ExternalRef   `json:"target"`
-		RoleKind     enum.ReviewRoleKind `json:"role_kind"`
-		AuthorRef    string              `json:"author_ref"`
-		EvidenceRefs []value.EvidenceRef `json:"evidence_refs"`
+		Target             value.ExternalRef   `json:"target"`
+		RoleKind           enum.ReviewRoleKind `json:"role_kind"`
+		AuthorRef          string              `json:"author_ref"`
+		EvidenceIdentities []string            `json:"evidence_identities"`
 	}{
-		Target:       target,
-		RoleKind:     roleKind,
-		AuthorRef:    authorRef,
-		EvidenceRefs: evidenceRefs,
+		Target:             target,
+		RoleKind:           roleKind,
+		AuthorRef:          authorRef,
+		EvidenceIdentities: identities,
 	})
 	sum := sha256.Sum256(payload)
 	return fmt.Sprintf("sha256:%x", sum[:])
+}
+
+func reviewSignalEvidenceIdentity(ref value.EvidenceRef) string {
+	return strings.TrimSpace(ref.Kind) + "\x00" + strings.TrimSpace(ref.Ref)
 }
 
 func sameReviewSignal(left entity.ReviewSignal, right entity.ReviewSignal) bool {

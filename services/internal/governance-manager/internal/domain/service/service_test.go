@@ -326,7 +326,7 @@ func TestRecordReviewSignalRejectsConflictingOwnerEvidenceRef(t *testing.T) {
 		AuthorRef:    "agent-run:reviewer-1",
 		Outcome:      enum.ReviewSignalOutcomeRequestChanges,
 		Severity:     enum.SignalSeverityBlocking,
-		EvidenceRefs: evidenceRefs,
+		EvidenceRefs: []value.EvidenceRef{{Kind: "provider_review", Ref: "provider-review:1", Summary: "provider review changed", Digest: "digest:v2"}},
 		Summary:      "changes requested",
 		Meta:         CommandMeta{CommandID: &commandID, Actor: value.Actor{Type: "service", ID: "agent-manager"}},
 	})
@@ -366,6 +366,22 @@ func TestRecordReviewSignalRejectsUnsafeOrMissingRefs(t *testing.T) {
 	})
 	if !errors.Is(err, errs.ErrInvalidArgument) {
 		t.Fatalf("RecordReviewSignal() missing evidence error = %v, want ErrInvalidArgument", err)
+	}
+	_, err = service.RecordReviewSignal(context.Background(), RecordReviewSignalInput{
+		Target:    value.ExternalRef{Type: "pull_request", Ref: "provider-pr:1"},
+		RoleKind:  enum.ReviewRoleKindReviewer,
+		AuthorRef: "agent-run:reviewer-1",
+		Outcome:   enum.ReviewSignalOutcomePass,
+		Severity:  enum.SignalSeverityInfo,
+		EvidenceRefs: []value.EvidenceRef{
+			{Kind: "provider_review", Ref: "provider-review:1", Summary: "provider review approved"},
+			{Kind: "provider_review", Ref: "provider-review:1", Summary: "provider review changed", Digest: "digest:v2"},
+		},
+		Summary: "approved",
+		Meta:    CommandMeta{CommandID: &commandID, Actor: value.Actor{Type: "service", ID: "agent-manager"}},
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("RecordReviewSignal() conflicting evidence metadata error = %v, want ErrInvalidArgument", err)
 	}
 }
 

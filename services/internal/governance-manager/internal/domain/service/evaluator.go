@@ -752,20 +752,8 @@ func normalizeEvidenceRefs(refs []value.EvidenceRef) ([]value.EvidenceRef, error
 	result := make([]value.EvidenceRef, 0, len(refs))
 	seen := make(map[string]struct{})
 	for _, ref := range refs {
-		normalized := value.EvidenceRef{
-			Kind:           strings.TrimSpace(ref.Kind),
-			Ref:            strings.TrimSpace(ref.Ref),
-			Summary:        strings.TrimSpace(ref.Summary),
-			Digest:         strings.TrimSpace(ref.Digest),
-			RetentionClass: strings.TrimSpace(ref.RetentionClass),
-		}
-		if normalized.Kind == "" || normalized.Ref == "" {
-			return nil, errs.ErrInvalidArgument
-		}
-		if err := validateSafeRef("evidence_ref.ref", normalized.Ref, true); err != nil {
-			return nil, err
-		}
-		if err := validateSafeText("evidence_ref.summary", normalized.Summary, maxEvaluationFactorSummary); err != nil {
+		normalized, err := normalizeEvidenceRef(ref, "evidence_ref.ref", "evidence_ref.summary")
+		if err != nil {
 			return nil, err
 		}
 		key := normalized.Kind + "\x00" + normalized.Ref
@@ -776,6 +764,26 @@ func normalizeEvidenceRefs(refs []value.EvidenceRef) ([]value.EvidenceRef, error
 		result = append(result, normalized)
 	}
 	return result, nil
+}
+
+func normalizeEvidenceRef(ref value.EvidenceRef, refName string, summaryName string) (value.EvidenceRef, error) {
+	normalized := value.EvidenceRef{
+		Kind:           strings.TrimSpace(ref.Kind),
+		Ref:            strings.TrimSpace(ref.Ref),
+		Summary:        strings.TrimSpace(ref.Summary),
+		Digest:         strings.TrimSpace(ref.Digest),
+		RetentionClass: strings.TrimSpace(ref.RetentionClass),
+	}
+	if normalized.Kind == "" || normalized.Ref == "" {
+		return value.EvidenceRef{}, errs.ErrInvalidArgument
+	}
+	if err := validateSafeRef(refName, normalized.Ref, true); err != nil {
+		return value.EvidenceRef{}, err
+	}
+	if err := validateSafeText(summaryName, normalized.Summary, maxEvaluationFactorSummary); err != nil {
+		return value.EvidenceRef{}, err
+	}
+	return normalized, nil
 }
 
 func validateSafeRef(_ string, value string, required bool) error {
