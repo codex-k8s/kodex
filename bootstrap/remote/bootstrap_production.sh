@@ -12,11 +12,15 @@ load_env_file "$ENV_FILE"
 export BOOTSTRAP_ENV_FILE="$ENV_FILE"
 
 steps=(
+  "05_preflight.sh"
   "00_prepare_host.sh"
   "10_create_operator_user.sh"
   "20_install_k3s.sh"
   "25_configure_image_gc.sh"
+  "30_install_network_stack.sh"
   "40_install_platform_dependencies.sh"
+  "45_prepare_runtime_env.sh"
+  "50_install_registry_and_builder.sh"
   "65_harden_network_firewall.sh"
   "70_finalize_and_report.sh"
 )

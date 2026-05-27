@@ -10,7 +10,7 @@ REPO_ARCHIVE="${KODEX_REMOTE_REPO_ARCHIVE:-/root/kodex-bootstrap/repo-src.tgz}"
 
 [ -f "$REPO_ARCHIVE" ] || die "Repository archive not found: $REPO_ARCHIVE"
 
-log "Extract repository archive ${REPO_ARCHIVE} -> ${REPO_DIR}"
+log "Extract repository archive into active bootstrap repository directory"
 rm -rf "$REPO_DIR"
 mkdir -p "$REPO_DIR"
 tar -xzf "$REPO_ARCHIVE" -C "$REPO_DIR"
