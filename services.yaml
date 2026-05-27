@@ -241,6 +241,8 @@ spec:
       value: "0.1.0"
       bumpOn:
         - services/internal/interaction-hub
+        - deploy/base/interaction-hub
+        - scripts/smoke-interaction-hub.sh
         - libs/go/eventlog
         - libs/go/grpcserver
         - libs/go/migrationtest
@@ -364,6 +366,23 @@ spec:
       context: .
       imageEnv: KODEX_PROVIDER_HUB_MIGRATIONS_IMAGE
       migratesDatabase: kodex_provider_hub
+    interaction-hub:
+      type: build
+      repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_INTERACTION_HUB_INTERNAL_IMAGE_REPOSITORY" "kodex/interaction-hub" }}'
+      tagTemplate: '{{ index .Versions "interaction-hub" }}'
+      dockerfile: services/internal/interaction-hub/Dockerfile
+      target: prod
+      context: .
+      imageEnv: KODEX_INTERACTION_HUB_IMAGE
+    interaction-hub-migrations:
+      type: migration-build
+      repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_INTERACTION_HUB_MIGRATIONS_INTERNAL_IMAGE_REPOSITORY" "kodex/interaction-hub-migrations" }}'
+      tagTemplate: '{{ index .Versions "interaction-hub" }}'
+      dockerfile: services/internal/interaction-hub/Dockerfile
+      target: migrations
+      context: .
+      imageEnv: KODEX_INTERACTION_HUB_MIGRATIONS_IMAGE
+      migratesDatabase: kodex_interaction_hub
     integration-gateway:
       type: build
       repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_INTEGRATION_GATEWAY_INTERNAL_IMAGE_REPOSITORY" "kodex/integration-gateway" }}'
@@ -556,6 +575,37 @@ spec:
         serviceManifest: deploy/base/provider-hub/provider-hub.yaml.tpl
         migrationsManifest: deploy/base/provider-hub/migrations.yaml.tpl
         kustomization: deploy/base/provider-hub/kustomization.yaml.tpl
+        health:
+          livez: /health/livez
+          readyz: /health/readyz
+          metrics: /metrics
+    - name: interaction-hub
+      status: foundation
+      zone: internal
+      path: services/internal/interaction-hub
+      dockerfile: services/internal/interaction-hub/Dockerfile
+      imageEnv: KODEX_INTERACTION_HUB_IMAGE
+      internalImageRepositoryEnv: KODEX_INTERACTION_HUB_INTERNAL_IMAGE_REPOSITORY
+      migrationsImageEnv: KODEX_INTERACTION_HUB_MIGRATIONS_IMAGE
+      migrationsInternalImageRepositoryEnv: KODEX_INTERACTION_HUB_MIGRATIONS_INTERNAL_IMAGE_REPOSITORY
+      ownerDomain: interaction-hub
+      apiContracts:
+        grpc: proto/kodex/interactions/v1/interaction_hub.proto
+        asyncapi: specs/asyncapi/interaction-hub.v1.yaml
+      database:
+        owner: interaction-hub
+        migrations: services/internal/interaction-hub/cmd/cli/migrations
+      dependencies:
+        - platform-event-log
+      implementation:
+        businessOperations: request-response-delivery-callback-lifecycle
+        database: postgresql
+        outbox: service-local-postgres-event-log
+        channelAdapters: external-package-runtime-boundary
+      deploy:
+        serviceManifest: deploy/base/interaction-hub/interaction-hub.yaml.tpl
+        migrationsManifest: deploy/base/interaction-hub/migrations.yaml.tpl
+        kustomization: deploy/base/interaction-hub/kustomization.yaml.tpl
         health:
           livez: /health/livez
           readyz: /health/readyz
@@ -830,6 +880,14 @@ spec:
       dockerfile: services/internal/governance-manager/Dockerfile
       migrationsImageEnv: KODEX_GOVERNANCE_MANAGER_MIGRATIONS_IMAGE
       purpose: governance-risk-gate-release-decisions
+    - name: interaction-hub
+      status: foundation
+      owner: interaction-hub
+      databaseName: kodex_interaction_hub
+      migrations: services/internal/interaction-hub/cmd/cli/migrations
+      dockerfile: services/internal/interaction-hub/Dockerfile
+      migrationsImageEnv: KODEX_INTERACTION_HUB_MIGRATIONS_IMAGE
+      purpose: interaction-requests-responses-delivery-callbacks
     - name: fleet-manager
       status: foundation
       owner: fleet-manager
@@ -870,6 +928,32 @@ spec:
           readyz: /health/readyz
           metrics: /metrics
         mcp: /mcp
+    - name: governance-manager
+      status: scaffold
+      zone: internal
+      path: services/internal/governance-manager
+      ownerDomain: risk-and-release-governance
+      apiContracts:
+        grpc: proto/kodex/governance/v1/governance_manager.proto
+        asyncapi: specs/asyncapi/governance-manager.v1.yaml
+      dependencies:
+        - access-manager
+        - project-catalog
+        - provider-hub
+        - agent-manager
+        - runtime-manager
+        - interaction-hub
+        - platform-event-log
+      implementation:
+        database: services/internal/governance-manager/cmd/cli/migrations
+        repository: postgres
+        outbox: service-local-governance-events
+        evaluator: planned
+      deploy:
+        health:
+          livez: /health/livez
+          readyz: /health/readyz
+          metrics: /metrics
     - name: interaction-hub
       status: scaffold
       zone: internal
@@ -933,6 +1017,7 @@ spec:
         - kodex_package_hub
         - kodex_provider_hub
         - kodex_governance_manager
+        - kodex_interaction_hub
         - kodex_fleet_manager
         - kodex_runtime_manager
         - kodex_agent_manager
@@ -978,6 +1063,13 @@ spec:
     - name: governance-manager-migrations
       path: deploy/base/governance-manager/migrations.yaml.tpl
       migratesDatabase: kodex_governance_manager
+      requires:
+        - postgres-secrets
+        - postgres
+        - platform-event-log-migrations
+    - name: interaction-hub-migrations
+      path: deploy/base/interaction-hub/migrations.yaml.tpl
+      migratesDatabase: kodex_interaction_hub
       requires:
         - postgres-secrets
         - postgres
@@ -1042,6 +1134,13 @@ spec:
         - governance-manager-migrations
         - platform-event-log-migrations
         - access-manager
+    - name: interaction-hub
+      path: deploy/base/interaction-hub/interaction-hub.yaml.tpl
+      kustomization: deploy/base/interaction-hub/kustomization.yaml.tpl
+      deploysService: interaction-hub
+      requires:
+        - interaction-hub-migrations
+        - platform-event-log-migrations
     - name: integration-gateway
       path: deploy/base/integration-gateway/integration-gateway.yaml.tpl
       kustomization: deploy/base/integration-gateway/kustomization.yaml.tpl
@@ -1052,6 +1151,7 @@ spec:
         - openapi
       requires:
         - provider-hub
+        - interaction-hub
     - name: codex-hook-ingress
       path: deploy/base/codex-hook-ingress/codex-hook-ingress.yaml.tpl
       kustomization: deploy/base/codex-hook-ingress/kustomization.yaml.tpl

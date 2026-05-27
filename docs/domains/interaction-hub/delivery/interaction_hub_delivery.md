@@ -6,7 +6,7 @@ status: active
 owner_role: EM
 created_at: 2026-05-22
 updated_at: 2026-05-27
-related_issues: [582, 768, 781, 783, 800, 806, 821, 835, 843, 853, 855, 867, 882]
+related_issues: [582, 768, 781, 783, 800, 806, 821, 835, 843, 853, 855, 867, 882, 894]
 related_prs: []
 related_docsets:
   - docs/domains/interaction-hub/product/requirements.md
@@ -57,7 +57,7 @@ approvals:
 | IH-8 | не назначено | MCP-интеграция готова: `platform-mcp-server` маршрутизирует `interaction.feedback.request`, `interaction.approval.request`, `interaction.human_gate.request`, status reads. |
 | IH-9 | не назначено | Связка с `agent-manager`, `codex-hook-ingress`, `governance-manager` и `provider-hub` готова для PermissionRequest, owner feedback, owner decision refs и событий ответа. |
 | IH-10 | не назначено | Проекции для `operations-hub`, operator visibility, dual-surface inbox status и диагностика delivery failures готовы. |
-| IH-11 | не назначено | Эксплуатационный контур: deploy manifests, migration job, smoke-проверка, runbook и monitoring docs готовы. |
+| IH-11 | #894 | Эксплуатационный контур готов: Dockerfile, deploy manifests, migration job, runtime env inventory, smoke-проверка, runbook и monitoring docs доступны для первого backend deploy. |
 
 ## Минимальный первый кодовый срез IH-1
 

@@ -126,6 +126,8 @@ spec:
               value: "{{ envOr "KODEX_PROVIDER_HUB_DATABASE_NAME" "kodex_provider_hub" }}"
             - name: KODEX_GOVERNANCE_MANAGER_DATABASE_NAME
               value: "{{ envOr "KODEX_GOVERNANCE_MANAGER_DATABASE_NAME" "kodex_governance_manager" }}"
+            - name: KODEX_INTERACTION_HUB_DATABASE_NAME
+              value: "{{ envOr "KODEX_INTERACTION_HUB_DATABASE_NAME" "kodex_interaction_hub" }}"
             - name: KODEX_FLEET_MANAGER_DATABASE_NAME
               value: "{{ envOr "KODEX_FLEET_MANAGER_DATABASE_NAME" "kodex_fleet_manager" }}"
             - name: KODEX_RUNTIME_MANAGER_DATABASE_NAME

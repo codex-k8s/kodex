@@ -40,6 +40,8 @@
 | `architecture/data_model.md` | Сущности, связи, индексы, retention и правила внешних ссылок. |
 | `architecture/api_contract.md` | API-обзор будущего `InteractionHubService`, MCP-инструменты, channel contract и события. |
 | `delivery/interaction_hub_delivery.md` | План поставки домена и порядок кодовых срезов. |
+| `ops/runbook.md` | Runbook deploy, миграций, readiness и диагностики `interaction-hub`. |
+| `ops/monitoring.md` | Метрики, health checks, alerts и safe logging для `interaction-hub`. |
 
 ## Карта Issue
 
