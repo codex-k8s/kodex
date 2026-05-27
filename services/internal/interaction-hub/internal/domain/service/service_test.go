@@ -1410,6 +1410,58 @@ func TestServiceRecordChannelCallbackRequiresReadyRepository(t *testing.T) {
 	}
 }
 
+func TestServiceReadPathsRequireReadyRepository(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		call func(*Service) error
+	}{
+		{
+			name: "conversation thread",
+			call: func(svc *Service) error {
+				_, err := svc.GetConversationThread(context.Background(), GetConversationThreadInput{ThreadID: uuid.New()})
+				return err
+			},
+		},
+		{
+			name: "interaction request",
+			call: func(svc *Service) error {
+				_, err := svc.GetInteractionRequest(context.Background(), GetInteractionRequestInput{RequestID: uuid.New()})
+				return err
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name+"/nil service", func(t *testing.T) {
+			t.Parallel()
+			requireUnavailableWithoutPanic(t, func() error {
+				return tc.call(nil)
+			})
+		})
+		t.Run(tc.name+"/unready repository", func(t *testing.T) {
+			t.Parallel()
+			requireUnavailableWithoutPanic(t, func() error {
+				return tc.call(New(&fakeRepository{}))
+			})
+		})
+	}
+}
+
+func requireUnavailableWithoutPanic(t *testing.T, call func() error) {
+	t.Helper()
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			t.Fatalf("call panicked: %v", recovered)
+		}
+	}()
+	if err := call(); !errors.Is(err, errs.ErrUnavailable) {
+		t.Fatalf("err = %v, want ErrUnavailable", err)
+	}
+}
+
 type fakeRepository struct {
 	ready                        bool
 	operations                   []enum.Operation

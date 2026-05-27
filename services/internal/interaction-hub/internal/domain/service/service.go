@@ -174,7 +174,7 @@ func (s *Service) RecordConversationMessage(ctx context.Context, input RecordCon
 }
 
 func (s *Service) GetConversationThread(ctx context.Context, input GetConversationThreadInput) (entity.ConversationThread, error) {
-	return getServiceAggregate(ctx, s, input.ThreadID, s.repository.GetConversationThread)
+	return getServiceAggregate(ctx, s, input.ThreadID, loadConversationThread)
 }
 
 func (s *Service) ListConversationMessages(ctx context.Context, input ListConversationMessagesInput) ([]entity.ConversationMessage, value.PageResult, error) {
@@ -365,7 +365,7 @@ func (s *Service) ExpireInteractionRequests(ctx context.Context, input ExpireInt
 }
 
 func (s *Service) GetInteractionRequest(ctx context.Context, input GetInteractionRequestInput) (entity.InteractionRequest, error) {
-	return getServiceAggregate(ctx, s, input.RequestID, s.repository.GetInteractionRequest)
+	return getServiceAggregate(ctx, s, input.RequestID, loadInteractionRequest)
 }
 
 func (s *Service) ListInteractionRequests(ctx context.Context, input ListInteractionRequestsInput) ([]entity.InteractionRequest, value.PageResult, error) {
@@ -970,7 +970,7 @@ func (s *Service) ensureReady() error {
 	return nil
 }
 
-func getServiceAggregate[T any](ctx context.Context, s *Service, id uuid.UUID, load func(context.Context, uuid.UUID) (T, error)) (T, error) {
+func getServiceAggregate[T any](ctx context.Context, s *Service, id uuid.UUID, load func(interactionrepo.Repository, context.Context, uuid.UUID) (T, error)) (T, error) {
 	var zero T
 	if err := s.ensureReady(); err != nil {
 		return zero, err
@@ -978,7 +978,15 @@ func getServiceAggregate[T any](ctx context.Context, s *Service, id uuid.UUID, l
 	if id == uuid.Nil {
 		return zero, errs.ErrInvalidArgument
 	}
-	return load(ctx, id)
+	return load(s.repository, ctx, id)
+}
+
+func loadConversationThread(repository interactionrepo.Repository, ctx context.Context, id uuid.UUID) (entity.ConversationThread, error) {
+	return repository.GetConversationThread(ctx, id)
+}
+
+func loadInteractionRequest(repository interactionrepo.Repository, ctx context.Context, id uuid.UUID) (entity.InteractionRequest, error) {
+	return repository.GetInteractionRequest(ctx, id)
 }
 
 func interactionRequestListFilter(input ListInteractionRequestsInput) query.InteractionRequestFilter {
