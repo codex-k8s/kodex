@@ -6,7 +6,7 @@ status: active
 owner_role: EM
 created_at: 2026-05-27
 updated_at: 2026-05-27
-related_issues: [78, 281, 282, 294, 380, 582, 586, 698]
+related_issues: [78, 281, 282, 294, 380, 582, 586, 698, 895]
 related_prs: []
 related_docsets:
   - docs/platform/**
@@ -95,7 +95,7 @@ MVP считается достаточным, когда владелец мо�
 Состав:
 
 - `project-catalog`: завершить связку bootstrap/adoption policy import, worker/consumer или явный service-command путь от safe provider signals к проверенной проекции.
-- `provider-hub`: базовое gRPC-чтение safe scan snapshots и provider merge signals для project/adoption контура есть; GitLab parity делать только при отдельном решении владельца.
+- `provider-hub`: базовое gRPC-чтение safe scan snapshots и provider merge signals для project/adoption контура есть; producer-side smoke проверяет GitHub webhook fixture -> safe merge signal -> outbox path; GitLab parity делать только при отдельном решении владельца.
 - `agent-manager`: завершить Human gate refs, ожидания владельца и переходы follow-up/acceptance без прямого GitHub/GitLab write.
 - `interaction-hub`: связать owner inbox и request lifecycle с агентным сценарием.
 - `governance-manager`: безопасно принимать и обогащать review/risk/release refs по одному owner-домену за срез.
