@@ -13,14 +13,14 @@ Codex hooks являются command-обработчиками Codex: hook emit
 - Очистка входа, ограничение размера и запрет сырых секретов, больших stdout/stderr и полных session dumps.
 - Маршрутизация событий к сервисам-владельцам: `agent-manager`, `runtime-manager`, `provider-hub`, `governance-manager`, `interaction-hub`.
 - Короткая операционная лента для realtime UI и метрики срабатываний hooks.
-- Передача только ссылок на выбранный capability context и skill refs, если они уже выбраны `agent-manager` и материализованы `runtime-manager`.
+- Передача только ссылок и digest на выбранный capability context и skill refs, если они уже выбраны `agent-manager`, связаны с `package-hub`/policy refs и материализованы `runtime-manager`.
 - Маршрутизация sanitized `PreToolUse`/`PostToolUse` в `agent-manager` для persistent activity timeline, когда owner-side contract подключён.
 
 ## Состояние реализации
 
 Сервисный каркас расположен в `services/internal/codex-hook-ingress`.
 
-Текущий срез реализует process, config, graceful shutdown, `/health/livez`, `/health/readyz`, `/metrics`, in-process logical boundary `SubmitHookEvent`, source binding placeholder, schema validation hook, sanitizer boundary, idempotency repository stub, route registry для dispatch безопасных частей событий через owner ports/stubs, typed route для `agent-manager.RecordAgentActivity` по sanitized `PreToolUse`/`PostToolUse`, decision bridge для `PermissionRequest` и policy-controlled `PreToolUse`, а также bounded in-memory ops/realtime feed для operator diagnostics. Физический transport для `SubmitHookEvent` не выбран и не реализован; соседние домены получают только safe projections/context без raw payload и без бизнес-команд.
+Текущий срез реализует process, config, graceful shutdown, `/health/livez`, `/health/readyz`, `/metrics`, in-process logical boundary `SubmitHookEvent`, source binding placeholder, schema validation hook, sanitizer boundary, idempotency repository stub, route registry для dispatch безопасных частей событий через owner ports/stubs, typed route для `agent-manager.RecordAgentActivity` по sanitized `PreToolUse`/`PostToolUse`, decision bridge для `PermissionRequest` и policy-controlled `PreToolUse`, bounded in-memory ops/realtime feed для operator diagnostics, а также безопасную прокладку capability context refs/digests для Codex skills. Физический transport для `SubmitHookEvent` не выбран и не реализован; соседние домены получают только safe projections/context без raw payload, `SKILL.md`, manifest payload, workspace paths и без бизнес-команд.
 
 ## Что не входит
 

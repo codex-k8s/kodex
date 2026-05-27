@@ -29,6 +29,33 @@
     "path_category": "workspace",
     "mcp_tool_name": null
   },
+  "capability_context": {
+    "capability_context_id": "77777777-7777-4777-8777-777777777777",
+    "capability_context_ref": "capability-context:run-5555:guidance",
+    "capability_digest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "selected_by_ref": "agent-manager:capability-selection:123",
+    "materialized_by_ref": "runtime-manager:materialization:456",
+    "scope_kind": "repository",
+    "skill_refs": [
+      {
+        "source_kind": "package",
+        "skill_ref": "skill:docs-review",
+        "version_ref": "1.0.0",
+        "source_ref": "package-source:docs-review",
+        "package_ref": "package:docs-review",
+        "package_installation_ref": "package-installation:guidance:docs-review",
+        "package_version_ref": "package-version:docs-review:1.0.0",
+        "manifest_digest": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "capability_ref": "capability:guidance:docs-review",
+        "capability_kind": "guidance",
+        "package_slug": "docs-review",
+        "package_version_label": "1.0.0",
+        "invocation_policy_ref": "policy:skill:docs-review:default",
+        "policy_summary_digest": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+        "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    ]
+  },
   "safe_payload": {
     "permission_mode": "default",
     "safe_summary": "Command completed and produced a provider artifact signal.",

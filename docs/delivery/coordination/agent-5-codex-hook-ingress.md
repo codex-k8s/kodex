@@ -12,7 +12,7 @@
 - очистку входа, размерные лимиты, redaction, безопасные preview, digest и refs;
 - маршрутизацию безопасных частей hook events к владельцам: `agent-manager`, `runtime-manager`, `provider-hub`, `governance-manager`, `interaction-hub` и realtime/operations контуру;
 - отделение Codex hooks от MCP tools, MCP transport и business commands;
-- сохранение Codex skills только как `capability_context_ref`, `skill_ref` и digest без каталога skills или manifest-хранилища в ingress.
+- сохранение Codex skills только как `capability_context_ref`, `skill_ref`, source/package/version refs и digest без каталога skills, manifest-хранилища или materialization state в ingress.
 
 `codex-hook-ingress` не владеет:
 
@@ -36,13 +36,13 @@
 | CHI-4b | #844 | готово | Sanitized `PreToolUse`/`PostToolUse` маршрутизируются в typed owner port `agent-manager.RecordAgentActivity`: формируется safe activity record с session/run/slot/turn refs, tool metadata, status, timestamps, digest, bounded error, capability refs и correlation/idempotency trace; persistent timeline остаётся у `agent-manager`. |
 | CHI-5 | #836 | готово | `PermissionRequest` bridge и policy-controlled `PreToolUse`: safe request context, owner decision ports/stubs для `governance-manager`, `agent-manager`, `interaction-hub`, explicit handler states, timeout/fail-closed policy и idempotent replay без persistent истории tool/activity в ingress. |
 | CHI-6a | #823 | готово | Bounded in-memory ops/realtime feed, TTL/capacity retention, sanitizer metrics, route diagnostics, fixed-window rate limits, safe backpressure и operator diagnostics поверх CHI-4 registry без служебной БД. |
+| CHI-7 | #854 | готово | Capability context refs для Codex skills проходят через normalized envelope, sanitizer boundary, route registry и `agent-manager.RecordAgentActivity` как refs/digests без skill catalog, manifest payload, package installation state или workspace paths в ingress. |
 
 ## Текущий бэклог агента #5
 
 | Срез | Что осталось |
 |---|---|
 | CHI-6b | Persistent ops feed или integration с operations-hub, если понадобится восстановление ленты после рестарта и отдельные retention jobs. |
-| CHI-7 | Capability context refs для Codex skills без skill catalog в ingress. |
 | CHI-8 | Deploy-контур: Dockerfile, manifests, migration job только если нужна служебная БД, smoke, runbook и monitoring. |
 
 ## Синхронизация с соседними доменами
@@ -55,7 +55,7 @@
 | `runtime-manager` | Slot/session binding, workspace refs, materialized capability refs, local emitter/sidecar placement и runtime diagnostics. |
 | `provider-hub` | Provider artifact signals, rate-limit hints и hot reconciliation hints без provider payload и stdout `gh`. |
 | `interaction-hub` | Delivery request refs, owner feedback, Human gate prompt и callback refs без хранения decision state в interaction. |
-| `package-hub` | Package-backed skill source/version/install/manifest refs; ingress не хранит manifest или `SKILL.md`. |
+| `package-hub` | Package-backed skill source/version/install/manifest refs и manifest digest; ingress не хранит manifest payload, package installation state или `SKILL.md`. |
 | `access-manager` | Source binding, actor policy, tool/capability use policy и audit-safe authorization facts. |
 
 ## Блокировки и правила работы

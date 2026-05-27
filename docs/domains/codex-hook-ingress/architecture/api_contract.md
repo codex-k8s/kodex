@@ -5,8 +5,8 @@ title: codex-hook-ingress - API overview
 status: active
 owner_role: SA
 created_at: 2026-05-22
-updated_at: 2026-05-26
-related_issues: [698, 753, 778, 786, 793, 808, 823, 836, 322, 834]
+updated_at: 2026-05-27
+related_issues: [698, 753, 778, 786, 793, 808, 823, 836, 854, 322, 834]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -55,7 +55,7 @@ Logical response CHI-4 также содержит route delivery diagnostics. U
 
 Persistent история tool/activity не является операцией `codex-hook-ingress`. Sanitized `PreToolUse`/`PostToolUse` маршрутизируются в typed owner port `agent-manager.RecordAgentActivity`; `codex-hook-ingress` остаётся sanitizer/router/realtime ops feed и не хранит долгую историю tool calls.
 
-## Состояние реализации CHI-3/CHI-4/CHI-4b/CHI-5/CHI-6a
+## Состояние реализации CHI-3/CHI-4/CHI-4b/CHI-5/CHI-6a/CHI-7
 
 Кодовый каркас `services/internal/codex-hook-ingress` реализует `SubmitHookEvent` только как in-process logical boundary в `internal/transport/command`. Он нужен для проверки доменного use-case, idempotency и sanitizer boundary без фиксации physical transport.
 
@@ -73,7 +73,9 @@ Process config CHI-5 добавляет `KODEX_CODEX_HOOK_INGRESS_DECISION_BRIDG
 
 CHI-6a добавляет bounded in-memory ops/realtime feed, безопасный snapshot diagnostics, sanitizer/route counters, payload/latency buckets, fixed-window logical rate limit и backpressure перед downstream dispatch. Ops entry содержит только safe summary, event kind, route result, owner target, digest, size bucket, status, reject reason и timestamps. Перегрузка возвращает `hook.rate_limited` или `hook.backpressure` и не считается успешной доставкой.
 
-В CHI-3/CHI-4/CHI-5/CHI-6a не создаются proto, OpenAPI, AsyncAPI, HTTP/gRPC handler для `SubmitHookEvent` и network client emitter/sidecar. Служебный HTTP-процесс отдаёт только `/health/livez`, `/health/readyz` и `/metrics`.
+CHI-7 расширяет normalized envelope и sanitizer boundary для safe capability refs Codex skills. `capability_context` может нести `capability_context_ref`, `capability_digest`, refs выбора `agent-manager`, refs materialization `runtime-manager` и массив `skill_refs`. Refs/digests (`skill_ref`, `source_ref`, `package_ref`, `package_installation_ref`, `package_version_ref`, `manifest_digest`, `capability_ref`, `invocation_policy_ref`, `policy_summary_digest`, `digest`) проходят validation/sanitizer/routing и попадают в `agent-manager.RecordAgentActivity` через refs-only `safe_refs_json`, если событие маршрутизируется в persistent activity timeline. Safe classifier/display details (`source_kind`, `capability_kind`, `package_slug`, `package_version_label`) передаются отдельно через `safe_details_json`, чтобы owner-side `normalizeActivityJSON(..., refsOnly=true)` не принимал plain string values как refs. `codex-hook-ingress` не читает и не хранит `SKILL.md`, manifest payload, materialized workspace path или package installation state.
+
+В CHI-3/CHI-4/CHI-5/CHI-6a/CHI-7 не создаются proto, OpenAPI, AsyncAPI, HTTP/gRPC handler для `SubmitHookEvent` и network client emitter/sidecar. Служебный HTTP-процесс отдаёт только `/health/livez`, `/health/readyz` и `/metrics`.
 
 ## Логический контракт hook emitter/local sidecar
 
@@ -105,7 +107,7 @@ Machine-readable конфигурация: `specs/jsonschema/codex-hook-ingress.
 | `source_context` | object | да | Actor/source/org/project/repository refs без секретов. |
 | `run_context` | object | да | `run_id`, `session_id`, `slot_id`, optional `turn_id`, `role_ref`, `stage_ref`. |
 | `tool_context` | object | нет | Для tool-scoped events: `tool_name`, `tool_category`, `tool_use_id`, command hash, path category. |
-| `capability_context` | object | нет | Только refs/digests selected by `agent-manager` and materialized by `runtime-manager`. |
+| `capability_context` | object | нет | Только refs/digests selected by `agent-manager`, linked to package/policy refs и materialized by `runtime-manager`. |
 | `safe_payload` | object | да | Sanitized payload, bounded previews, exit status, artifact signals. |
 | `payload_digest` | string | да | Digest normalized significant data. |
 | `sanitizer_report` | object | да | Audit-safe факт очистки: результат, применённые правила, счётчики redaction/truncation без значений. |
@@ -142,7 +144,7 @@ Input:
 - `source`: `startup`, `resume` или `clear`;
 - `model`;
 - `cwd_ref` или workspace ref после нормализации;
-- `capability_context_ref`, если run стартует с выбранными skills.
+- `capability_context_ref`, `capability_digest` и `skill_refs`, если run стартует с выбранными skills.
 
 Routes:
 
@@ -172,7 +174,7 @@ Input:
 - `tool_name`, `tool_category`, `tool_use_id`;
 - command hash and bounded sanitized preview для shell/patch;
 - MCP tool name только как имя, не как MCP call;
-- `capability_context_ref` or `skill_ref`, если tool вызван из skill workflow.
+- `capability_context_ref`, `skill_ref`, package/source/version refs и policy digest, если tool вызван из skill workflow.
 
 Routes:
 
@@ -247,7 +249,7 @@ Routes:
 | `hook.invalid_context` | Нет actor/source/run/session/slot/scope context. |
 | `hook.invalid_binding` | Source binding не найден, истёк или не совпадает с run/session/slot. |
 | `hook.payload_too_large` | Envelope или preview превышает лимит. |
-| `hook.payload_rejected` | Forbidden field, binary data, raw transcript/session dump или secret-like content. |
+| `hook.payload_rejected` | Forbidden field, binary data, raw transcript/session dump, unsafe capability ref, workspace/local path или secret-like content. |
 | `hook.duplicate_conflict` | Повторный `event_id` пришёл с другим digest. |
 | `hook.rate_limited` | Превышен лимит source/run/event class. |
 | `hook.backpressure` | Bounded ops/feed admission не может безопасно принять событие перед dispatch. |
@@ -281,7 +283,7 @@ Routes:
 - Новые hook events требуют отдельного решения владельца и обновления PRD/design/API.
 - Удаление поля проходит через deprecation period в schema version.
 - Изменение route semantics требует синхронизации с владельцем downstream-сервиса.
-- `capability_context` остаётся ссылочным объектом; перенос skill manifest в hook API считается breaking boundary violation.
+- `capability_context` остаётся ссылочным объектом; перенос skill manifest, `SKILL.md`, script/reference/asset content или materialized workspace path в hook API считается breaking boundary violation.
 
 ## Апрув
 

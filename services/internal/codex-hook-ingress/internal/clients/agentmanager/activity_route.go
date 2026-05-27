@@ -155,47 +155,66 @@ func activityCommandMeta(event value.SafeHookEvent) *agentsv1.CommandMeta {
 }
 
 type activitySafeRefs struct {
-	EventRef             string             `json:"event_ref,omitempty"`
-	SourceRef            string             `json:"source_ref,omitempty"`
-	SessionRef           string             `json:"session_ref,omitempty"`
-	RunRef               string             `json:"run_ref,omitempty"`
-	SlotRef              string             `json:"slot_ref,omitempty"`
-	TurnRef              string             `json:"turn_ref,omitempty"`
-	ToolUseRef           string             `json:"tool_use_ref,omitempty"`
-	CapabilityContextRef string             `json:"capability_context_ref,omitempty"`
-	SkillRefs            []activitySkillRef `json:"skill_refs,omitempty"`
-	ProviderArtifactRef  string             `json:"provider_artifact_ref,omitempty"`
-	RateLimitResetRef    string             `json:"rate_limit_reset_ref,omitempty"`
-	CheckpointRef        string             `json:"checkpoint_ref,omitempty"`
-	CorrelationRef       string             `json:"correlation_ref,omitempty"`
+	EventRef                     string             `json:"event_ref,omitempty"`
+	SourceRef                    string             `json:"source_ref,omitempty"`
+	SessionRef                   string             `json:"session_ref,omitempty"`
+	RunRef                       string             `json:"run_ref,omitempty"`
+	SlotRef                      string             `json:"slot_ref,omitempty"`
+	TurnRef                      string             `json:"turn_ref,omitempty"`
+	ToolUseRef                   string             `json:"tool_use_ref,omitempty"`
+	CapabilityContextRef         string             `json:"capability_context_ref,omitempty"`
+	CapabilityDigestRef          string             `json:"capability_digest_ref,omitempty"`
+	CapabilitySelectionRef       string             `json:"capability_selection_ref,omitempty"`
+	CapabilityMaterializationRef string             `json:"capability_materialization_ref,omitempty"`
+	SkillRefs                    []activitySkillRef `json:"skill_refs,omitempty"`
+	ProviderArtifactRef          string             `json:"provider_artifact_ref,omitempty"`
+	RateLimitResetRef            string             `json:"rate_limit_reset_ref,omitempty"`
+	CheckpointRef                string             `json:"checkpoint_ref,omitempty"`
+	CorrelationRef               string             `json:"correlation_ref,omitempty"`
 }
 
 type activitySkillRef struct {
 	SkillRef               string `json:"skill_ref,omitempty"`
+	SourceRef              string `json:"source_ref,omitempty"`
 	VersionRef             string `json:"version_ref,omitempty"`
+	PackageRef             string `json:"package_ref,omitempty"`
 	PackageInstallationRef string `json:"package_installation_ref,omitempty"`
+	PackageVersionRef      string `json:"package_version_ref,omitempty"`
+	ManifestDigestRef      string `json:"manifest_digest_ref,omitempty"`
+	CapabilityRef          string `json:"capability_ref,omitempty"`
+	InvocationPolicyRef    string `json:"invocation_policy_ref,omitempty"`
+	PolicySummaryDigestRef string `json:"policy_summary_digest_ref,omitempty"`
 	DigestRef              string `json:"digest_ref,omitempty"`
 }
 
+type activitySkillDetails struct {
+	SkillRef            string `json:"skill_ref,omitempty"`
+	SourceKind          string `json:"source_kind,omitempty"`
+	CapabilityKind      string `json:"capability_kind,omitempty"`
+	PackageSlug         string `json:"package_slug,omitempty"`
+	PackageVersionLabel string `json:"package_version_label,omitempty"`
+}
+
 type activitySafeDetails struct {
-	HookEventName         string `json:"hook_event_name,omitempty"`
-	DeliveryMode          string `json:"delivery_mode,omitempty"`
-	ToolCategory          string `json:"tool_category,omitempty"`
-	PathCategory          string `json:"path_category,omitempty"`
-	MCPToolName           string `json:"mcp_tool_name,omitempty"`
-	CommandDigest         string `json:"command_digest,omitempty"`
-	RiskClass             string `json:"risk_class,omitempty"`
-	ProviderKind          string `json:"provider_kind,omitempty"`
-	ProviderArtifactKind  string `json:"provider_artifact_kind,omitempty"`
-	ProviderSignalKind    string `json:"provider_signal_kind,omitempty"`
-	RateLimitScope        string `json:"rate_limit_scope,omitempty"`
-	RateLimitHintClass    string `json:"rate_limit_hint_class,omitempty"`
-	ExitStatus            *int   `json:"exit_status,omitempty"`
-	OutputDigest          string `json:"output_digest,omitempty"`
-	BoundedErrorClass     string `json:"bounded_error_class,omitempty"`
-	BoundedErrorDigest    string `json:"bounded_error_digest,omitempty"`
-	BoundedErrorTruncated bool   `json:"bounded_error_truncated,omitempty"`
-	CapabilityScopeKind   string `json:"capability_scope_kind,omitempty"`
+	HookEventName         string                 `json:"hook_event_name,omitempty"`
+	DeliveryMode          string                 `json:"delivery_mode,omitempty"`
+	ToolCategory          string                 `json:"tool_category,omitempty"`
+	PathCategory          string                 `json:"path_category,omitempty"`
+	MCPToolName           string                 `json:"mcp_tool_name,omitempty"`
+	CommandDigest         string                 `json:"command_digest,omitempty"`
+	RiskClass             string                 `json:"risk_class,omitempty"`
+	ProviderKind          string                 `json:"provider_kind,omitempty"`
+	ProviderArtifactKind  string                 `json:"provider_artifact_kind,omitempty"`
+	ProviderSignalKind    string                 `json:"provider_signal_kind,omitempty"`
+	RateLimitScope        string                 `json:"rate_limit_scope,omitempty"`
+	RateLimitHintClass    string                 `json:"rate_limit_hint_class,omitempty"`
+	ExitStatus            *int                   `json:"exit_status,omitempty"`
+	OutputDigest          string                 `json:"output_digest,omitempty"`
+	BoundedErrorClass     string                 `json:"bounded_error_class,omitempty"`
+	BoundedErrorDigest    string                 `json:"bounded_error_digest,omitempty"`
+	BoundedErrorTruncated bool                   `json:"bounded_error_truncated,omitempty"`
+	CapabilityScopeKind   string                 `json:"capability_scope_kind,omitempty"`
+	SkillDetails          []activitySkillDetails `json:"skill_details,omitempty"`
 }
 
 func marshalActivitySafeRefs(event value.SafeHookEvent) (string, error) {
@@ -218,7 +237,10 @@ func marshalActivitySafeRefs(event value.SafeHookEvent) (string, error) {
 		refs.ToolUseRef = prefixedRef("tool-use", event.ToolContext.ToolUseID)
 	}
 	if event.CapabilityContext != nil {
-		refs.CapabilityContextRef = prefixedRef("capability-context", event.CapabilityContext.CapabilityContextID.String())
+		refs.CapabilityContextRef = capabilityContextRef(*event.CapabilityContext)
+		refs.CapabilityDigestRef = prefixedRef("digest", event.CapabilityContext.CapabilityDigest)
+		refs.CapabilitySelectionRef = prefixedRef("capability-selection", event.CapabilityContext.SelectedByRef)
+		refs.CapabilityMaterializationRef = prefixedRef("capability-materialization", event.CapabilityContext.MaterializedByRef)
 		refs.SkillRefs = activitySkillRefs(event.CapabilityContext.SkillRefs)
 	}
 	if event.ProviderArtifactSignal != nil {
@@ -241,12 +263,26 @@ func activitySkillRefs(skillRefs []value.SkillRef) []activitySkillRef {
 	for _, skill := range skillRefs {
 		refs = append(refs, activitySkillRef{
 			SkillRef:               prefixedRef("skill", skill.SkillRef),
+			SourceRef:              prefixedRef("source", stringPtrValue(skill.SourceRef)),
 			VersionRef:             prefixedRef("skill-version", stringPtrValue(skill.VersionRef)),
+			PackageRef:             prefixedRef("package", stringPtrValue(skill.PackageRef)),
 			PackageInstallationRef: prefixedRef("package-installation", stringPtrValue(skill.PackageInstallationRef)),
+			PackageVersionRef:      prefixedRef("package-version", stringPtrValue(skill.PackageVersionRef)),
+			ManifestDigestRef:      prefixedRef("digest", stringPtrValue(skill.ManifestDigest)),
+			CapabilityRef:          prefixedRef("capability", stringPtrValue(skill.CapabilityRef)),
+			InvocationPolicyRef:    prefixedRef("policy", stringPtrValue(skill.InvocationPolicyRef)),
+			PolicySummaryDigestRef: prefixedRef("digest", stringPtrValue(skill.PolicySummaryDigest)),
 			DigestRef:              prefixedRef("digest", skill.Digest),
 		})
 	}
 	return refs
+}
+
+func capabilityContextRef(context value.CapabilityContext) string {
+	if strings.TrimSpace(context.CapabilityContextRef) != "" {
+		return prefixedRef("capability-context", context.CapabilityContextRef)
+	}
+	return prefixedRef("capability-context", context.CapabilityContextID.String())
 }
 
 func marshalActivitySafeDetails(event value.SafeHookEvent) (string, error) {
@@ -282,8 +318,26 @@ func marshalActivitySafeDetails(event value.SafeHookEvent) (string, error) {
 	}
 	if event.CapabilityContext != nil {
 		details.CapabilityScopeKind = event.CapabilityContext.ScopeKind
+		details.SkillDetails = activitySkillDetailsList(event.CapabilityContext.SkillRefs)
 	}
 	return compactActivityJSON(details)
+}
+
+func activitySkillDetailsList(skillRefs []value.SkillRef) []activitySkillDetails {
+	if len(skillRefs) == 0 {
+		return nil
+	}
+	details := make([]activitySkillDetails, 0, len(skillRefs))
+	for _, skill := range skillRefs {
+		details = append(details, activitySkillDetails{
+			SkillRef:            prefixedRef("skill", skill.SkillRef),
+			SourceKind:          strings.TrimSpace(skill.SourceKind),
+			CapabilityKind:      strings.TrimSpace(stringPtrValue(skill.CapabilityKind)),
+			PackageSlug:         strings.TrimSpace(stringPtrValue(skill.PackageSlug)),
+			PackageVersionLabel: strings.TrimSpace(stringPtrValue(skill.PackageVersionLabel)),
+		})
+	}
+	return details
 }
 
 func compactActivityJSON(payload any) (string, error) {

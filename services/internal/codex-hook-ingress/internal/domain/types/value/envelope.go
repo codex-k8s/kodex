@@ -61,11 +61,13 @@ type ToolContext struct {
 
 // CapabilityContext contains refs to selected and materialized skills without content.
 type CapabilityContext struct {
-	CapabilityContextID uuid.UUID  `json:"capability_context_id"`
-	SelectedByRef       string     `json:"selected_by_ref"`
-	MaterializedByRef   string     `json:"materialized_by_ref"`
-	ScopeKind           string     `json:"scope_kind"`
-	SkillRefs           []SkillRef `json:"skill_refs"`
+	CapabilityContextID  uuid.UUID  `json:"capability_context_id"`
+	CapabilityContextRef string     `json:"capability_context_ref,omitempty"`
+	CapabilityDigest     string     `json:"capability_digest,omitempty"`
+	SelectedByRef        string     `json:"selected_by_ref"`
+	MaterializedByRef    string     `json:"materialized_by_ref"`
+	ScopeKind            string     `json:"scope_kind"`
+	SkillRefs            []SkillRef `json:"skill_refs"`
 }
 
 // SkillRef identifies a selected skill by refs and digest only.
@@ -73,7 +75,17 @@ type SkillRef struct {
 	SourceKind             string  `json:"source_kind"`
 	SkillRef               string  `json:"skill_ref"`
 	VersionRef             *string `json:"version_ref,omitempty"`
+	SourceRef              *string `json:"source_ref,omitempty"`
+	PackageRef             *string `json:"package_ref,omitempty"`
 	PackageInstallationRef *string `json:"package_installation_ref,omitempty"`
+	PackageVersionRef      *string `json:"package_version_ref,omitempty"`
+	ManifestDigest         *string `json:"manifest_digest,omitempty"`
+	CapabilityRef          *string `json:"capability_ref,omitempty"`
+	CapabilityKind         *string `json:"capability_kind,omitempty"`
+	PackageSlug            *string `json:"package_slug,omitempty"`
+	PackageVersionLabel    *string `json:"package_version_label,omitempty"`
+	InvocationPolicyRef    *string `json:"invocation_policy_ref,omitempty"`
+	PolicySummaryDigest    *string `json:"policy_summary_digest,omitempty"`
 	Digest                 string  `json:"digest"`
 }
 

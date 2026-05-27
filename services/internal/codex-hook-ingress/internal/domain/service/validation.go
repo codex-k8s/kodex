@@ -283,10 +283,16 @@ func validateCapabilityContext(context value.CapabilityContext) error {
 	if context.CapabilityContextID == uuid.Nil {
 		return fmt.Errorf("%w: capability_context_id is required", hookerrs.ErrInvalidArgument)
 	}
-	if err := validateStringField("selected_by_ref", context.SelectedByRef, 1, 160); err != nil {
+	if err := validateOptionalSafeRefField("capability_context_ref", context.CapabilityContextRef, 160); err != nil {
 		return err
 	}
-	if err := validateStringField("materialized_by_ref", context.MaterializedByRef, 1, 160); err != nil {
+	if err := validateDigestField("capability_digest", context.CapabilityDigest, false); err != nil {
+		return err
+	}
+	if err := validateSafeRefField("selected_by_ref", context.SelectedByRef, 1, 160); err != nil {
+		return err
+	}
+	if err := validateSafeRefField("materialized_by_ref", context.MaterializedByRef, 1, 160); err != nil {
 		return err
 	}
 	if err := validateEnumField("scope_kind", context.ScopeKind, scopeKindValues, true); err != nil {
@@ -307,13 +313,43 @@ func validateSkillRef(skillRef value.SkillRef) error {
 	if err := validateEnumField("skill_ref.source_kind", skillRef.SourceKind, skillSourceValues, true); err != nil {
 		return err
 	}
-	if err := validateStringField("skill_ref", skillRef.SkillRef, 1, 160); err != nil {
+	if err := validateSafeRefField("skill_ref", skillRef.SkillRef, 1, 160); err != nil {
 		return err
 	}
-	if err := validateOptionalStringPtr("skill_ref.version_ref", skillRef.VersionRef, 128); err != nil {
+	if err := validateOptionalSafeRefPtr("skill_ref.version_ref", skillRef.VersionRef, 128); err != nil {
 		return err
 	}
-	if err := validateOptionalStringPtr("skill_ref.package_installation_ref", skillRef.PackageInstallationRef, 160); err != nil {
+	if err := validateOptionalSafeRefPtr("skill_ref.source_ref", skillRef.SourceRef, 160); err != nil {
+		return err
+	}
+	if err := validateOptionalSafeRefPtr("skill_ref.package_ref", skillRef.PackageRef, 160); err != nil {
+		return err
+	}
+	if err := validateOptionalSafeRefPtr("skill_ref.package_installation_ref", skillRef.PackageInstallationRef, 160); err != nil {
+		return err
+	}
+	if err := validateOptionalSafeRefPtr("skill_ref.package_version_ref", skillRef.PackageVersionRef, 160); err != nil {
+		return err
+	}
+	if err := validateOptionalDigestPtr("skill_ref.manifest_digest", skillRef.ManifestDigest); err != nil {
+		return err
+	}
+	if err := validateOptionalSafeRefPtr("skill_ref.capability_ref", skillRef.CapabilityRef, 160); err != nil {
+		return err
+	}
+	if err := validateOptionalSafeRefPtr("skill_ref.capability_kind", skillRef.CapabilityKind, 80); err != nil {
+		return err
+	}
+	if err := validateOptionalSafeRefPtr("skill_ref.package_slug", skillRef.PackageSlug, 80); err != nil {
+		return err
+	}
+	if err := validateOptionalSafeRefPtr("skill_ref.package_version_label", skillRef.PackageVersionLabel, 128); err != nil {
+		return err
+	}
+	if err := validateOptionalSafeRefPtr("skill_ref.invocation_policy_ref", skillRef.InvocationPolicyRef, 160); err != nil {
+		return err
+	}
+	if err := validateOptionalDigestPtr("skill_ref.policy_summary_digest", skillRef.PolicySummaryDigest); err != nil {
 		return err
 	}
 	return validateDigestField("skill_ref.digest", skillRef.Digest, true)
@@ -470,6 +506,30 @@ func validateOptionalStringPtr(name string, value *string, maxLength int) error 
 	return validateStringField(name, *value, 1, maxLength)
 }
 
+func validateSafeRefField(name string, value string, minLength int, maxLength int) error {
+	if err := validateStringField(name, value, minLength, maxLength); err != nil {
+		return err
+	}
+	if !validSafeRef(value) {
+		return fmt.Errorf("%w: %s contains unsafe ref characters", hookerrs.ErrInvalidArgument, name)
+	}
+	return nil
+}
+
+func validateOptionalSafeRefField(name string, value string, maxLength int) error {
+	if value == "" {
+		return nil
+	}
+	return validateSafeRefField(name, value, 1, maxLength)
+}
+
+func validateOptionalSafeRefPtr(name string, value *string, maxLength int) error {
+	if value == nil {
+		return nil
+	}
+	return validateSafeRefField(name, *value, 1, maxLength)
+}
+
 func validateEnumField(name string, value string, allowed map[string]struct{}, required bool) error {
 	if value == "" {
 		if required {
@@ -545,6 +605,21 @@ func validCorrelationID(value string) bool {
 		}
 		switch r {
 		case '_', '.', ':', '-':
+			continue
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func validSafeRef(value string) bool {
+	for _, r := range value {
+		if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			continue
+		}
+		switch r {
+		case '_', '.', ':', '-', '@', '+':
 			continue
 		default:
 			return false

@@ -71,6 +71,9 @@ func TestSubmitHookEventDispatchesSelectedSafeRoutes(t *testing.T) {
 	if agentEvents[0].SourceContext == nil || agentEvents[0].RunContext == nil || agentEvents[0].ToolContext == nil || agentEvents[0].CorrelationID == "" {
 		t.Fatalf("agent route event did not receive selected safe parts: %+v", agentEvents[0])
 	}
+	if agentEvents[0].CapabilityContext == nil || agentEvents[0].CapabilityContext.CapabilityContextRef != "capability-context:run-5555:guidance" {
+		t.Fatalf("agent route event did not receive capability refs: %+v", agentEvents[0].CapabilityContext)
+	}
 	runtimeEvents := runtimeRoute.Events()
 	if len(runtimeEvents) != 1 {
 		t.Fatalf("runtime route events = %d, want 1", len(runtimeEvents))
@@ -90,6 +93,15 @@ func TestAgentActivityRoutePlanCarriesSafeActivityParts(t *testing.T) {
 	for _, part := range []string{"source_context", "run_context", "tool_context", "capability_context", "safe_summary", "risk_class", "payload_digest", "correlation_id"} {
 		if !containsString(preRoute.SafeParts, part) {
 			t.Fatalf("PreToolUse agent-manager safe parts = %v, want %s", preRoute.SafeParts, part)
+		}
+	}
+	sessionRoute, ok := canonicalRouteForOwner(canonicalRoutePlan(hookenum.HookEventSessionStart), hookenum.DownstreamOwnerAgentManager)
+	if !ok {
+		t.Fatal("SessionStart agent-manager route is missing")
+	}
+	for _, part := range []string{"source_context", "run_context", "capability_context", "safe_summary", "payload_digest", "correlation_id"} {
+		if !containsString(sessionRoute.SafeParts, part) {
+			t.Fatalf("SessionStart agent-manager safe parts = %v, want %s", sessionRoute.SafeParts, part)
 		}
 	}
 	postRoute, ok := canonicalRouteForOwner(canonicalRoutePlan(hookenum.HookEventPostToolUse), hookenum.DownstreamOwnerAgentManager)
@@ -897,6 +909,26 @@ func TestSubmitHookEventRejectsSanitizerRejectedClasses(t *testing.T) {
 	}
 }
 
+func TestSubmitHookEventRejectsUnsafeCapabilityRefWithoutDispatch(t *testing.T) {
+	t.Parallel()
+
+	agentRoute := &recordingOwnerRoute{}
+	service := newTestServiceWithConfig(Config{}, testRouteRegistry(map[hookenum.DownstreamOwner]OwnerRoute{
+		hookenum.DownstreamOwnerAgentManager: agentRoute,
+	}))
+	envelope := validPreToolUseEnvelope()
+	unsafeSourceRef := "/home/s/projects-second/kodex-agent-2/.codex/skills/raw"
+	envelope.CapabilityContext.SkillRefs[0].SourceRef = &unsafeSourceRef
+
+	_, err := service.SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: envelope})
+	if !errors.Is(err, hookerrs.ErrInvalidArgument) {
+		t.Fatalf("SubmitHookEvent() error = %v, want ErrInvalidArgument", err)
+	}
+	if len(agentRoute.Events()) != 0 {
+		t.Fatalf("agent-manager route dispatch count = %d, want 0", len(agentRoute.Events()))
+	}
+}
+
 func TestDefaultEnvelopeValidatorRejectsSchemaBoundViolations(t *testing.T) {
 	t.Parallel()
 
@@ -958,6 +990,18 @@ func TestDefaultEnvelopeValidatorRejectsSchemaBoundViolations(t *testing.T) {
 			name: "prompt digest format",
 			mutate: func(envelope *value.HookEnvelope) {
 				envelope.SafePayload.PromptDigest = "sha256:short"
+			},
+		},
+		{
+			name: "capability ref path",
+			mutate: func(envelope *value.HookEnvelope) {
+				envelope.CapabilityContext.CapabilityContextRef = "capability/context/raw"
+			},
+		},
+		{
+			name: "skill source kind enum",
+			mutate: func(envelope *value.HookEnvelope) {
+				envelope.CapabilityContext.SkillRefs[0].SourceKind = "guidance_package"
 			},
 		},
 	}
@@ -1024,6 +1068,18 @@ func testRouteRegistry(overrides map[hookenum.DownstreamOwner]OwnerRoute) *Route
 
 func validPreToolUseEnvelope() value.HookEnvelope {
 	turnID := "turn-12"
+	versionRef := "skill-version:docs-review:1.0.0"
+	sourceRef := "package-source:docs-review"
+	packageRef := "package:docs-review"
+	packageInstallationRef := "package-installation:guidance:docs-review"
+	packageVersionRef := "package-version:docs-review:1.0.0"
+	manifestDigest := digest("f")
+	capabilityRef := "capability:guidance:docs-review"
+	capabilityKind := "guidance"
+	packageSlug := "docs-review"
+	packageVersionLabel := "1.0.0"
+	invocationPolicyRef := "policy:skill:docs-review:default"
+	policySummaryDigest := digest("9")
 	return value.HookEnvelope{
 		EventID:       uuid.MustParse("11111111-2222-4111-8111-111111111111"),
 		SchemaVersion: "codex-hook-ingress.normalized-hook-envelope.v1",
@@ -1048,6 +1104,31 @@ func validPreToolUseEnvelope() value.HookEnvelope {
 			ToolName:     "Bash",
 			ToolCategory: hookenum.ToolCategoryShell,
 			ToolUseID:    "toolu-001",
+		},
+		CapabilityContext: &value.CapabilityContext{
+			CapabilityContextID:  uuid.MustParse("77777777-7777-4777-8777-777777777777"),
+			CapabilityContextRef: "capability-context:run-5555:guidance",
+			CapabilityDigest:     digest("e"),
+			SelectedByRef:        "agent-manager:capability-selection:123",
+			MaterializedByRef:    "runtime-manager:materialization:456",
+			ScopeKind:            "repository",
+			SkillRefs: []value.SkillRef{{
+				SourceKind:             "package",
+				SkillRef:               "skill:docs-review",
+				VersionRef:             &versionRef,
+				SourceRef:              &sourceRef,
+				PackageRef:             &packageRef,
+				PackageInstallationRef: &packageInstallationRef,
+				PackageVersionRef:      &packageVersionRef,
+				ManifestDigest:         &manifestDigest,
+				CapabilityRef:          &capabilityRef,
+				CapabilityKind:         &capabilityKind,
+				PackageSlug:            &packageSlug,
+				PackageVersionLabel:    &packageVersionLabel,
+				InvocationPolicyRef:    &invocationPolicyRef,
+				PolicySummaryDigest:    &policySummaryDigest,
+				Digest:                 digest("d"),
+			}},
 		},
 		SafePayload: value.SafePayload{
 			SafeSummary: "Agent intends to run a documentation check command.",

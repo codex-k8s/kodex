@@ -2,6 +2,7 @@ package agentmanager
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -50,8 +51,36 @@ func TestActivityRouteRecordsPreToolUseSafeRequest(t *testing.T) {
 	if request.GetMeta().GetActor().GetType() != activityRouteActorType || request.GetMeta().GetActor().GetId() != activityRouteActorID {
 		t.Fatalf("meta actor = %+v", request.GetMeta().GetActor())
 	}
-	assertContainsAll(t, request.GetSafeRefsJson(), "hook-event:", "session:", "run:", "slot:", "tool-use:", "capability-context:", "skill:")
+	assertContainsAll(
+		t,
+		request.GetSafeRefsJson(),
+		"hook-event:",
+		"session:",
+		"run:",
+		"slot:",
+		"tool-use:",
+		`"capability_context_ref":"capability-context:run-5555:guidance"`,
+		`"capability_digest_ref":"`+digest("q")+`"`,
+		`"capability_selection_ref":"agent-manager:capability-selection:123"`,
+		`"capability_materialization_ref":"runtime-manager:materialization:456"`,
+		`"source_ref":"package-source:go-guidelines"`,
+		`"package_ref":"package:go-guidelines"`,
+		`"package_version_ref":"package-version:go-guidelines:v1"`,
+		`"manifest_digest_ref":"`+digest("m")+`"`,
+		`"capability_ref":"capability:guidance:go-guidelines"`,
+		`"policy_summary_digest_ref":"`+digest("p")+`"`,
+	)
+	assertRefsOnlyJSON(t, request.GetSafeRefsJson())
+	assertNotContainsAny(t, request.GetSafeRefsJson(), `"source_kind"`, `"capability_kind"`, `"package_slug"`, `"package_version_label"`)
 	assertContainsAll(t, request.GetSafeDetailsJson(), `"hook_event_name":"PreToolUse"`, `"risk_class":"low"`, `"tool_category":"shell"`)
+	assertContainsAll(
+		t,
+		request.GetSafeDetailsJson(),
+		`"source_kind":"package"`,
+		`"capability_kind":"guidance"`,
+		`"package_slug":"go-guidelines"`,
+		`"package_version_label":"v1"`,
+	)
 }
 
 func TestActivityRouteRecordsPostToolUseSafeFailureWithoutRawLeak(t *testing.T) {
@@ -159,6 +188,16 @@ func validActivityEvent(eventName hookenum.HookEventName) value.SafeHookEvent {
 	mcpToolName := "functions.exec_command"
 	versionRef := "skill-version:go-guidelines@v1"
 	packageRef := "package-installation:guidance-1"
+	sourceRef := "package-source:go-guidelines"
+	packageVersionRef := "package-version:go-guidelines:v1"
+	packageEntryRef := "package:go-guidelines"
+	manifestDigest := digest("m")
+	capabilityRef := "capability:guidance:go-guidelines"
+	capabilityKind := "guidance"
+	packageSlug := "go-guidelines"
+	packageVersionLabel := "v1"
+	invocationPolicyRef := "policy:skill:go-guidelines:default"
+	policySummaryDigest := digest("p")
 	event := value.SafeHookEvent{
 		EventID:       uuid.MustParse("11111111-2222-4111-8111-111111111111"),
 		HookEventName: eventName,
@@ -190,13 +229,27 @@ func validActivityEvent(eventName hookenum.HookEventName) value.SafeHookEvent {
 			MCPToolName:   &mcpToolName,
 		},
 		CapabilityContext: &value.CapabilityContext{
-			CapabilityContextID: uuid.MustParse("88888888-8888-4888-8888-888888888888"),
-			ScopeKind:           "run",
+			CapabilityContextID:  uuid.MustParse("88888888-8888-4888-8888-888888888888"),
+			CapabilityContextRef: "capability-context:run-5555:guidance",
+			CapabilityDigest:     digest("q"),
+			SelectedByRef:        "agent-manager:capability-selection:123",
+			MaterializedByRef:    "runtime-manager:materialization:456",
+			ScopeKind:            "run",
 			SkillRefs: []value.SkillRef{{
-				SourceKind:             "guidance_package",
+				SourceKind:             "package",
 				SkillRef:               "skill:go-guidelines",
 				VersionRef:             &versionRef,
+				SourceRef:              &sourceRef,
+				PackageRef:             &packageEntryRef,
 				PackageInstallationRef: &packageRef,
+				PackageVersionRef:      &packageVersionRef,
+				ManifestDigest:         &manifestDigest,
+				CapabilityRef:          &capabilityRef,
+				CapabilityKind:         &capabilityKind,
+				PackageSlug:            &packageSlug,
+				PackageVersionLabel:    &packageVersionLabel,
+				InvocationPolicyRef:    &invocationPolicyRef,
+				PolicySummaryDigest:    &policySummaryDigest,
 				Digest:                 digest("d"),
 			}},
 		},
@@ -220,6 +273,45 @@ func assertContainsAll(t *testing.T, value string, parts ...string) {
 		if !strings.Contains(value, part) {
 			t.Fatalf("%q does not contain %q", value, part)
 		}
+	}
+}
+
+func assertNotContainsAny(t *testing.T, value string, parts ...string) {
+	t.Helper()
+	for _, part := range parts {
+		if strings.Contains(value, part) {
+			t.Fatalf("%q contains forbidden part %q", value, part)
+		}
+	}
+}
+
+func assertRefsOnlyJSON(t *testing.T, raw string) {
+	t.Helper()
+	var payload any
+	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
+		t.Fatalf("safe_refs_json is not JSON: %v", err)
+	}
+	assertRefsOnlyJSONValue(t, "$", payload)
+}
+
+func assertRefsOnlyJSONValue(t *testing.T, path string, value any) {
+	t.Helper()
+	switch typed := value.(type) {
+	case map[string]any:
+		for key, child := range typed {
+			assertRefsOnlyJSONValue(t, path+"."+key, child)
+		}
+	case []any:
+		for index, child := range typed {
+			assertRefsOnlyJSONValue(t, fmt.Sprintf("%s[%d]", path, index), child)
+		}
+	case string:
+		if strings.TrimSpace(typed) == "" || !strings.Contains(typed, ":") {
+			t.Fatalf("safe_refs_json value at %s = %q, want namespaced ref", path, typed)
+		}
+	case nil:
+	default:
+		t.Fatalf("safe_refs_json value at %s has non-ref type %T", path, value)
 	}
 }
 

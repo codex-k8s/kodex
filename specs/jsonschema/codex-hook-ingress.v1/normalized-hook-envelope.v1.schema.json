@@ -172,6 +172,24 @@
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
     },
+    "safeRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160,
+      "pattern": "^[A-Za-z0-9_.:@+-]+$"
+    },
+    "nullableSafeRef": {
+      "anyOf": [
+        {"$ref": "#/$defs/safeRef"},
+        {"type": "null"}
+      ]
+    },
+    "nullableDigest": {
+      "anyOf": [
+        {"$ref": "#/$defs/digest"},
+        {"type": "null"}
+      ]
+    },
     "safeText": {
       "type": "string",
       "maxLength": 4096
@@ -263,8 +281,10 @@
       "required": ["capability_context_id", "selected_by_ref", "materialized_by_ref", "scope_kind", "skill_refs"],
       "properties": {
         "capability_context_id": {"$ref": "#/$defs/uuid"},
-        "selected_by_ref": {"type": "string", "minLength": 1, "maxLength": 160},
-        "materialized_by_ref": {"type": "string", "minLength": 1, "maxLength": 160},
+        "capability_context_ref": {"$ref": "#/$defs/safeRef"},
+        "capability_digest": {"$ref": "#/$defs/digest"},
+        "selected_by_ref": {"$ref": "#/$defs/safeRef"},
+        "materialized_by_ref": {"$ref": "#/$defs/safeRef"},
         "scope_kind": {
           "type": "string",
           "enum": ["platform", "organization", "project", "repository", "flow", "stage", "role"]
@@ -282,19 +302,19 @@
       "required": ["source_kind", "skill_ref", "digest"],
       "properties": {
         "source_kind": {"type": "string", "enum": ["built_in", "repository", "package", "user"]},
-        "skill_ref": {"type": "string", "minLength": 1, "maxLength": 160},
-        "version_ref": {
-          "anyOf": [
-            {"type": "string", "minLength": 1, "maxLength": 128},
-            {"type": "null"}
-          ]
-        },
-        "package_installation_ref": {
-          "anyOf": [
-            {"type": "string", "minLength": 1, "maxLength": 160},
-            {"type": "null"}
-          ]
-        },
+        "skill_ref": {"$ref": "#/$defs/safeRef"},
+        "version_ref": {"$ref": "#/$defs/nullableSafeRef"},
+        "source_ref": {"$ref": "#/$defs/nullableSafeRef"},
+        "package_ref": {"$ref": "#/$defs/nullableSafeRef"},
+        "package_installation_ref": {"$ref": "#/$defs/nullableSafeRef"},
+        "package_version_ref": {"$ref": "#/$defs/nullableSafeRef"},
+        "manifest_digest": {"$ref": "#/$defs/nullableDigest"},
+        "capability_ref": {"$ref": "#/$defs/nullableSafeRef"},
+        "capability_kind": {"$ref": "#/$defs/nullableSafeRef"},
+        "package_slug": {"$ref": "#/$defs/nullableSafeRef"},
+        "package_version_label": {"$ref": "#/$defs/nullableSafeRef"},
+        "invocation_policy_ref": {"$ref": "#/$defs/nullableSafeRef"},
+        "policy_summary_digest": {"$ref": "#/$defs/nullableDigest"},
         "digest": {"$ref": "#/$defs/digest"}
       }
     },

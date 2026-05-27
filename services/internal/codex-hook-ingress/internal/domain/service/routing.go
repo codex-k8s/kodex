@@ -234,8 +234,8 @@ func canonicalRoutePlan(event hookenum.HookEventName) []value.DownstreamRoute {
 	switch event {
 	case hookenum.HookEventSessionStart:
 		return []value.DownstreamRoute{
-			canonicalRoute(hookenum.DownstreamOwnerAgentManager, hookenum.DeliveryModeAsync, "source_context", "run_context", "safe_summary", "correlation_id"),
-			canonicalRoute(hookenum.DownstreamOwnerRuntimeManager, hookenum.DeliveryModeAsync, "source_context", "run_context", "safe_summary", "correlation_id"),
+			canonicalRoute(hookenum.DownstreamOwnerAgentManager, hookenum.DeliveryModeAsync, "source_context", "run_context", "capability_context", "safe_summary", "payload_digest", "correlation_id"),
+			canonicalRoute(hookenum.DownstreamOwnerRuntimeManager, hookenum.DeliveryModeAsync, "source_context", "run_context", "capability_context", "safe_summary", "payload_digest", "correlation_id"),
 		}
 	case hookenum.HookEventUserPromptSubmit:
 		return []value.DownstreamRoute{
