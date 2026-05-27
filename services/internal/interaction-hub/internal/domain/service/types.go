@@ -182,6 +182,11 @@ type RecordDeliveryResultInput struct {
 	Result value.ChannelDeliveryResult
 }
 
+type RecordChannelCallbackInput struct {
+	Meta     value.CommandMeta
+	Callback value.ChannelCallbackEnvelope
+}
+
 type GetDeliveryStatusInput struct {
 	Meta       value.QueryMeta
 	Target     value.DeliveryTarget
@@ -192,4 +197,10 @@ type DeliveryStatusResult struct {
 	Request          *entity.InteractionRequest
 	Notification     *entity.Notification
 	DeliveryAttempts []entity.DeliveryAttempt
+	LatestCallback   *entity.ChannelCallback
+}
+
+type ChannelCallbackResult struct {
+	Callback entity.ChannelCallback
+	Response *entity.InteractionResponse
 }

@@ -36,7 +36,9 @@ components:
         - $ref: '#/components/schemas/SubscriptionUpdatedEvent'
         - $ref: '#/components/schemas/DeliveryRequestedEvent'
         - $ref: '#/components/schemas/DeliveryAcceptedEvent'
+        - $ref: '#/components/schemas/DeliveryDeliveredEvent'
         - $ref: '#/components/schemas/DeliveryFailedEvent'
+        - $ref: '#/components/schemas/DeliveryExpiredEvent'
         - $ref: '#/components/schemas/CallbackReceivedEvent'
         - $ref: '#/components/schemas/RequestResponseRecordedEvent'
         - $ref: '#/components/schemas/RequestExpiredEvent'
@@ -145,6 +147,15 @@ components:
       properties: {event_type: {type: string, const: interaction.delivery.accepted}, aggregate_type: {type: string, const: delivery}, payload: {$ref: '#/components/schemas/InteractionEventPayload'}}
       required: [event_type, aggregate_type, payload]
 
+    DeliveryDeliveredEvent:
+      allOf:
+        - $ref: '#/components/schemas/InteractionEventEnvelopeBase'
+        - $ref: '#/components/schemas/DeliveryDeliveredEventKind'
+    DeliveryDeliveredEventKind:
+      type: object
+      properties: {event_type: {type: string, const: interaction.delivery.delivered}, aggregate_type: {type: string, const: delivery}, payload: {$ref: '#/components/schemas/InteractionEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+
     DeliveryFailedEvent:
       allOf:
         - $ref: '#/components/schemas/InteractionEventEnvelopeBase'
@@ -152,6 +163,15 @@ components:
     DeliveryFailedEventKind:
       type: object
       properties: {event_type: {type: string, const: interaction.delivery.failed}, aggregate_type: {type: string, const: delivery}, payload: {$ref: '#/components/schemas/InteractionEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+
+    DeliveryExpiredEvent:
+      allOf:
+        - $ref: '#/components/schemas/InteractionEventEnvelopeBase'
+        - $ref: '#/components/schemas/DeliveryExpiredEventKind'
+    DeliveryExpiredEventKind:
+      type: object
+      properties: {event_type: {type: string, const: interaction.delivery.expired}, aggregate_type: {type: string, const: delivery}, payload: {$ref: '#/components/schemas/InteractionEventPayload'}}
       required: [event_type, aggregate_type, payload]
 
     CallbackReceivedEvent:
@@ -202,7 +222,9 @@ components:
         - interaction.subscription.updated
         - interaction.delivery.requested
         - interaction.delivery.accepted
+        - interaction.delivery.delivered
         - interaction.delivery.failed
+        - interaction.delivery.expired
         - interaction.callback.received
         - interaction.request.response_recorded
         - interaction.request.expired
@@ -230,6 +252,26 @@ components:
         callback_id:
           type: string
         route_id:
+          type: string
+        channel_capability_ref:
+          type: string
+        package_installation_ref:
+          type: string
+        package_version_ref:
+          type: string
+        delivery_command_ref:
+          type: string
+        callback_ref:
+          type: string
+        callback_route_ref:
+          type: string
+        runtime_ref:
+          type: string
+        runtime_job_ref:
+          type: string
+        routing_policy_ref:
+          type: string
+        gateway_ref:
           type: string
         scope_type:
           type: string

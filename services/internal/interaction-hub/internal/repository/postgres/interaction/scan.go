@@ -280,6 +280,9 @@ func scanDeliveryRoute(row postgreslib.RowScanner) (entity.DeliveryRoute, error)
 		&status,
 		&route.CreatedAt,
 		&route.UpdatedAt,
+		&route.PackageVersionRef,
+		&route.CallbackRouteRef,
+		&route.RuntimeRef,
 	)
 	route.Scope.Type = enum.ScopeType(scopeType)
 	route.SurfaceKind = enum.DeliverySurfaceKind(surfaceKind)
@@ -307,6 +310,15 @@ func scanDeliveryAttempt(row postgreslib.RowScanner) (entity.DeliveryAttempt, er
 		&errorClass,
 		&attempt.PayloadDigest,
 		&attempt.ResultFingerprint,
+		&attempt.ChannelCapabilityRef,
+		&attempt.PackageInstallationRef,
+		&attempt.PackageVersionRef,
+		&attempt.DeliveryCommandRef,
+		&attempt.CallbackRef,
+		&attempt.CallbackRouteRef,
+		&attempt.RuntimeRef,
+		&attempt.RuntimeJobRef,
+		&attempt.RoutingPolicyRef,
 		&attempt.CreatedAt,
 		&attempt.UpdatedAt,
 		&sentAt,
@@ -320,6 +332,46 @@ func scanDeliveryAttempt(row postgreslib.RowScanner) (entity.DeliveryAttempt, er
 	return attempt, err
 }
 
+func scanChannelCallback(row postgreslib.RowScanner) (entity.ChannelCallback, error) {
+	var callback entity.ChannelCallback
+	var deliveryAttemptID, requestID, sourceRouteID pgtype.UUID
+	var signatureStatus, processingStatus string
+	var objectSize pgtype.Int8
+	err := row.Scan(
+		&callback.ID,
+		&callback.CallbackID,
+		&callback.DeliveryID,
+		&deliveryAttemptID,
+		&requestID,
+		&sourceRouteID,
+		&callback.ActorRef,
+		&callback.Action,
+		&callback.CallbackSummary,
+		&callback.CallbackObject.URI,
+		&callback.CallbackObject.Digest,
+		&objectSize,
+		&signatureStatus,
+		&processingStatus,
+		&callback.ErrorCode,
+		&callback.ReceivedAt,
+		&callback.CreatedAt,
+		&callback.CallbackRouteRef,
+		&callback.GatewayRef,
+		&callback.CorrelationID,
+		&callback.CallbackFingerprint,
+	)
+	callback.DeliveryAttemptID = uuidFromPG(deliveryAttemptID)
+	callback.RequestID = uuidFromPG(requestID)
+	callback.SourceRouteID = uuidFromPG(sourceRouteID)
+	callback.SignatureStatus = enum.CallbackSignatureStatus(signatureStatus)
+	callback.ProcessingStatus = enum.CallbackProcessingStatus(processingStatus)
+	if objectSize.Valid {
+		value := objectSize.Int64
+		callback.CallbackObject.SizeBytes = &value
+	}
+	return callback, err
+}
+
 func deliveryTargetFromPG(requestID pgtype.UUID, notificationID pgtype.UUID) value.DeliveryTarget {
 	if requestID.Valid {
 		return value.DeliveryTarget{Kind: value.DeliveryTargetKindRequest, ID: uuid.UUID(requestID.Bytes)}
@@ -328,6 +380,14 @@ func deliveryTargetFromPG(requestID pgtype.UUID, notificationID pgtype.UUID) val
 		return value.DeliveryTarget{Kind: value.DeliveryTargetKindNotification, ID: uuid.UUID(notificationID.Bytes)}
 	}
 	return value.DeliveryTarget{}
+}
+
+func uuidFromPG(input pgtype.UUID) *uuid.UUID {
+	if !input.Valid {
+		return nil
+	}
+	value := uuid.UUID(input.Bytes)
+	return &value
 }
 
 func scanCommandResult(row postgreslib.RowScanner) (entity.CommandResult, error) {

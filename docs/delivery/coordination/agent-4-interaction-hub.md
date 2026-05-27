@@ -30,12 +30,13 @@
 | IH-4 | #806 | готово как request lifecycle | Feedback, approval и Human gate request lifecycle работает поверх PostgreSQL repository: create/get/list, response, cancel, expire, idempotency и безопасные `interaction.*` outbox events без внешних channel adapters и без владения decision state. |
 | IH-5a | #821 | готово как notification/subscription lifecycle | `RequestNotification`, `UpsertSubscription`, `DisableSubscription`, `ListSubscriptions`, idempotency, optimistic concurrency и safe `interaction.*` outbox events работают без delivery attempts, callback routes и hardcoded external channel list. |
 | IH-5b | #835 | готово как delivery attempt lifecycle | `PlanDelivery`, `RecordDeliveryResult`, `GetDeliveryStatus`, delivery attempt state machine, safe retry metadata и outbox events работают без channel adapters, callback routes и package runtime. |
+| IH-6 | #843 | готово как channel contract integration | Delivery route/capability refs, safe delivery command refs, runtime/job refs и `RecordChannelCallback` работают без hardcoded каналов, внешнего callback route и запуска package runtime. |
 
 ## Текущий бэклог
 
 | Срез | Статус | Почему не завершён |
 |---|---|---|
-| IH-6+ | ожидает отдельные срезы | Channel contract integration, callback lifecycle, MCP и ops-связки должны поставляться малыми PR. |
+| IH-7+ | ожидает отдельные срезы | MCP, integration-gateway callback routes, concrete channel packages, runtime worker и ops-связки должны поставляться малыми PR. |
 
 ## Блокировки от других доменов
 
@@ -52,4 +53,4 @@
 
 ## Рекомендуемый следующий шаг
 
-Следующий рациональный срез — IH-6: channel contract integration без hardcoded внешних каналов. Callback routes `integration-gateway`, package channel runtime и MCP-связки остаются отдельными последующими срезами.
+Следующий рациональный срез — IH-7 или отдельный gateway/runtime срез: MCP-связка, внешний `integration-gateway` callback route, конкретные channel packages и runtime worker остаются вне `interaction-hub` IH-6.

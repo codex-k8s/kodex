@@ -1322,6 +1322,8 @@ const (
 	ChannelDeliveryResultStatus_CHANNEL_DELIVERY_RESULT_STATUS_DEFERRED    ChannelDeliveryResultStatus = 2
 	ChannelDeliveryResultStatus_CHANNEL_DELIVERY_RESULT_STATUS_REJECTED    ChannelDeliveryResultStatus = 3
 	ChannelDeliveryResultStatus_CHANNEL_DELIVERY_RESULT_STATUS_FAILED      ChannelDeliveryResultStatus = 4
+	ChannelDeliveryResultStatus_CHANNEL_DELIVERY_RESULT_STATUS_DELIVERED   ChannelDeliveryResultStatus = 5
+	ChannelDeliveryResultStatus_CHANNEL_DELIVERY_RESULT_STATUS_EXPIRED     ChannelDeliveryResultStatus = 6
 )
 
 // Enum value maps for ChannelDeliveryResultStatus.
@@ -1332,6 +1334,8 @@ var (
 		2: "CHANNEL_DELIVERY_RESULT_STATUS_DEFERRED",
 		3: "CHANNEL_DELIVERY_RESULT_STATUS_REJECTED",
 		4: "CHANNEL_DELIVERY_RESULT_STATUS_FAILED",
+		5: "CHANNEL_DELIVERY_RESULT_STATUS_DELIVERED",
+		6: "CHANNEL_DELIVERY_RESULT_STATUS_EXPIRED",
 	}
 	ChannelDeliveryResultStatus_value = map[string]int32{
 		"CHANNEL_DELIVERY_RESULT_STATUS_UNSPECIFIED": 0,
@@ -1339,6 +1343,8 @@ var (
 		"CHANNEL_DELIVERY_RESULT_STATUS_DEFERRED":    2,
 		"CHANNEL_DELIVERY_RESULT_STATUS_REJECTED":    3,
 		"CHANNEL_DELIVERY_RESULT_STATUS_FAILED":      4,
+		"CHANNEL_DELIVERY_RESULT_STATUS_DELIVERED":   5,
+		"CHANNEL_DELIVERY_RESULT_STATUS_EXPIRED":     6,
 	}
 )
 
@@ -3355,7 +3361,13 @@ type DeliveryRoute struct {
 	// created_at is an RFC3339 timestamp.
 	CreatedAt string `protobuf:"bytes,8,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	// updated_at is an RFC3339 timestamp.
-	UpdatedAt     string `protobuf:"bytes,9,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	UpdatedAt string `protobuf:"bytes,9,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	// package_version_ref points to the selected package version without owning package truth.
+	PackageVersionRef *string `protobuf:"bytes,10,opt,name=package_version_ref,json=packageVersionRef,proto3,oneof" json:"package_version_ref,omitempty"`
+	// callback_route_ref points to a gateway-owned callback route when configured.
+	CallbackRouteRef *string `protobuf:"bytes,11,opt,name=callback_route_ref,json=callbackRouteRef,proto3,oneof" json:"callback_route_ref,omitempty"`
+	// runtime_ref points to the package-owned runtime boundary, not a Kubernetes workload.
+	RuntimeRef    *string `protobuf:"bytes,12,opt,name=runtime_ref,json=runtimeRef,proto3,oneof" json:"runtime_ref,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3449,6 +3461,27 @@ func (x *DeliveryRoute) GetCreatedAt() string {
 func (x *DeliveryRoute) GetUpdatedAt() string {
 	if x != nil {
 		return x.UpdatedAt
+	}
+	return ""
+}
+
+func (x *DeliveryRoute) GetPackageVersionRef() string {
+	if x != nil && x.PackageVersionRef != nil {
+		return *x.PackageVersionRef
+	}
+	return ""
+}
+
+func (x *DeliveryRoute) GetCallbackRouteRef() string {
+	if x != nil && x.CallbackRouteRef != nil {
+		return *x.CallbackRouteRef
+	}
+	return ""
+}
+
+func (x *DeliveryRoute) GetRuntimeRef() string {
+	if x != nil && x.RuntimeRef != nil {
+		return *x.RuntimeRef
 	}
 	return ""
 }
@@ -3570,9 +3603,27 @@ type DeliveryAttempt struct {
 	// updated_at is an RFC3339 timestamp.
 	UpdatedAt string `protobuf:"bytes,14,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
 	// sent_at is an RFC3339 timestamp when the command left interaction-hub.
-	SentAt        *string `protobuf:"bytes,15,opt,name=sent_at,json=sentAt,proto3,oneof" json:"sent_at,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	SentAt *string `protobuf:"bytes,15,opt,name=sent_at,json=sentAt,proto3,oneof" json:"sent_at,omitempty"`
+	// channel_capability_ref is the selected package channel capability snapshot.
+	ChannelCapabilityRef *string `protobuf:"bytes,16,opt,name=channel_capability_ref,json=channelCapabilityRef,proto3,oneof" json:"channel_capability_ref,omitempty"`
+	// package_installation_ref is the selected package installation snapshot.
+	PackageInstallationRef *string `protobuf:"bytes,17,opt,name=package_installation_ref,json=packageInstallationRef,proto3,oneof" json:"package_installation_ref,omitempty"`
+	// package_version_ref is the selected package version snapshot.
+	PackageVersionRef *string `protobuf:"bytes,18,opt,name=package_version_ref,json=packageVersionRef,proto3,oneof" json:"package_version_ref,omitempty"`
+	// delivery_command_ref identifies the safe command envelope prepared for runtime.
+	DeliveryCommandRef *string `protobuf:"bytes,19,opt,name=delivery_command_ref,json=deliveryCommandRef,proto3,oneof" json:"delivery_command_ref,omitempty"`
+	// callback_ref is the opaque callback matching reference in the command envelope.
+	CallbackRef *string `protobuf:"bytes,20,opt,name=callback_ref,json=callbackRef,proto3,oneof" json:"callback_ref,omitempty"`
+	// callback_route_ref points to a gateway-owned callback route when configured.
+	CallbackRouteRef *string `protobuf:"bytes,21,opt,name=callback_route_ref,json=callbackRouteRef,proto3,oneof" json:"callback_route_ref,omitempty"`
+	// runtime_ref points to the package-owned runtime boundary, not a Kubernetes workload.
+	RuntimeRef *string `protobuf:"bytes,22,opt,name=runtime_ref,json=runtimeRef,proto3,oneof" json:"runtime_ref,omitempty"`
+	// runtime_job_ref is a safe runtime job ref reported by runtime when available.
+	RuntimeJobRef *string `protobuf:"bytes,23,opt,name=runtime_job_ref,json=runtimeJobRef,proto3,oneof" json:"runtime_job_ref,omitempty"`
+	// routing_policy_ref is the selected route policy snapshot.
+	RoutingPolicyRef *string `protobuf:"bytes,24,opt,name=routing_policy_ref,json=routingPolicyRef,proto3,oneof" json:"routing_policy_ref,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *DeliveryAttempt) Reset() {
@@ -3710,6 +3761,69 @@ func (x *DeliveryAttempt) GetSentAt() string {
 	return ""
 }
 
+func (x *DeliveryAttempt) GetChannelCapabilityRef() string {
+	if x != nil && x.ChannelCapabilityRef != nil {
+		return *x.ChannelCapabilityRef
+	}
+	return ""
+}
+
+func (x *DeliveryAttempt) GetPackageInstallationRef() string {
+	if x != nil && x.PackageInstallationRef != nil {
+		return *x.PackageInstallationRef
+	}
+	return ""
+}
+
+func (x *DeliveryAttempt) GetPackageVersionRef() string {
+	if x != nil && x.PackageVersionRef != nil {
+		return *x.PackageVersionRef
+	}
+	return ""
+}
+
+func (x *DeliveryAttempt) GetDeliveryCommandRef() string {
+	if x != nil && x.DeliveryCommandRef != nil {
+		return *x.DeliveryCommandRef
+	}
+	return ""
+}
+
+func (x *DeliveryAttempt) GetCallbackRef() string {
+	if x != nil && x.CallbackRef != nil {
+		return *x.CallbackRef
+	}
+	return ""
+}
+
+func (x *DeliveryAttempt) GetCallbackRouteRef() string {
+	if x != nil && x.CallbackRouteRef != nil {
+		return *x.CallbackRouteRef
+	}
+	return ""
+}
+
+func (x *DeliveryAttempt) GetRuntimeRef() string {
+	if x != nil && x.RuntimeRef != nil {
+		return *x.RuntimeRef
+	}
+	return ""
+}
+
+func (x *DeliveryAttempt) GetRuntimeJobRef() string {
+	if x != nil && x.RuntimeJobRef != nil {
+		return *x.RuntimeJobRef
+	}
+	return ""
+}
+
+func (x *DeliveryAttempt) GetRoutingPolicyRef() string {
+	if x != nil && x.RoutingPolicyRef != nil {
+		return *x.RoutingPolicyRef
+	}
+	return ""
+}
+
 // ChannelCallback stores a safe normalized callback record.
 type ChannelCallback struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -3740,7 +3854,15 @@ type ChannelCallback struct {
 	// received_at is an RFC3339 timestamp from the gateway.
 	ReceivedAt string `protobuf:"bytes,13,opt,name=received_at,json=receivedAt,proto3" json:"received_at,omitempty"`
 	// created_at is an RFC3339 timestamp when the callback was stored.
-	CreatedAt     string `protobuf:"bytes,14,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	CreatedAt string `protobuf:"bytes,14,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	// delivery_id is the safe delivery id from the callback envelope when present.
+	DeliveryId *string `protobuf:"bytes,15,opt,name=delivery_id,json=deliveryId,proto3,oneof" json:"delivery_id,omitempty"`
+	// callback_route_ref points to a gateway-owned callback route when present.
+	CallbackRouteRef *string `protobuf:"bytes,16,opt,name=callback_route_ref,json=callbackRouteRef,proto3,oneof" json:"callback_route_ref,omitempty"`
+	// gateway_ref is a safe gateway request reference.
+	GatewayRef *string `protobuf:"bytes,17,opt,name=gateway_ref,json=gatewayRef,proto3,oneof" json:"gateway_ref,omitempty"`
+	// correlation_id links this callback to traces and owner context.
+	CorrelationId *string `protobuf:"bytes,18,opt,name=correlation_id,json=correlationId,proto3,oneof" json:"correlation_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3873,6 +3995,34 @@ func (x *ChannelCallback) GetCreatedAt() string {
 	return ""
 }
 
+func (x *ChannelCallback) GetDeliveryId() string {
+	if x != nil && x.DeliveryId != nil {
+		return *x.DeliveryId
+	}
+	return ""
+}
+
+func (x *ChannelCallback) GetCallbackRouteRef() string {
+	if x != nil && x.CallbackRouteRef != nil {
+		return *x.CallbackRouteRef
+	}
+	return ""
+}
+
+func (x *ChannelCallback) GetGatewayRef() string {
+	if x != nil && x.GatewayRef != nil {
+		return *x.GatewayRef
+	}
+	return ""
+}
+
+func (x *ChannelCallback) GetCorrelationId() string {
+	if x != nil && x.CorrelationId != nil {
+		return *x.CorrelationId
+	}
+	return ""
+}
+
 // ChannelDeliveryCommand is the stable DTO sent through the runtime boundary to
 // a package-owned channel workload. It carries no channel secrets or raw payloads.
 type ChannelDeliveryCommand struct {
@@ -3902,9 +4052,25 @@ type ChannelDeliveryCommand struct {
 	// expires_at is an RFC3339 timestamp for the delivery attempt.
 	ExpiresAt *string `protobuf:"bytes,12,opt,name=expires_at,json=expiresAt,proto3,oneof" json:"expires_at,omitempty"`
 	// context_refs point to neighboring domain context without copying state.
-	ContextRefs   []*ExternalRef `protobuf:"bytes,13,rep,name=context_refs,json=contextRefs,proto3" json:"context_refs,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	ContextRefs []*ExternalRef `protobuf:"bytes,13,rep,name=context_refs,json=contextRefs,proto3" json:"context_refs,omitempty"`
+	// route_id is the selected delivery route.
+	RouteId string `protobuf:"bytes,14,opt,name=route_id,json=routeId,proto3" json:"route_id,omitempty"`
+	// channel_capability_ref points to the package channel capability.
+	ChannelCapabilityRef *string `protobuf:"bytes,15,opt,name=channel_capability_ref,json=channelCapabilityRef,proto3,oneof" json:"channel_capability_ref,omitempty"`
+	// package_installation_ref points to package-hub installation state.
+	PackageInstallationRef *string `protobuf:"bytes,16,opt,name=package_installation_ref,json=packageInstallationRef,proto3,oneof" json:"package_installation_ref,omitempty"`
+	// package_version_ref points to selected package version state.
+	PackageVersionRef *string `protobuf:"bytes,17,opt,name=package_version_ref,json=packageVersionRef,proto3,oneof" json:"package_version_ref,omitempty"`
+	// delivery_command_ref identifies this safe runtime command envelope.
+	DeliveryCommandRef string `protobuf:"bytes,18,opt,name=delivery_command_ref,json=deliveryCommandRef,proto3" json:"delivery_command_ref,omitempty"`
+	// callback_route_ref points to a gateway-owned callback route when configured.
+	CallbackRouteRef *string `protobuf:"bytes,19,opt,name=callback_route_ref,json=callbackRouteRef,proto3,oneof" json:"callback_route_ref,omitempty"`
+	// runtime_ref points to the package-owned runtime boundary, not a Kubernetes workload.
+	RuntimeRef *string `protobuf:"bytes,20,opt,name=runtime_ref,json=runtimeRef,proto3,oneof" json:"runtime_ref,omitempty"`
+	// routing_policy_ref is the selected routing policy reference.
+	RoutingPolicyRef *string `protobuf:"bytes,21,opt,name=routing_policy_ref,json=routingPolicyRef,proto3,oneof" json:"routing_policy_ref,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *ChannelDeliveryCommand) Reset() {
@@ -4028,6 +4194,62 @@ func (x *ChannelDeliveryCommand) GetContextRefs() []*ExternalRef {
 	return nil
 }
 
+func (x *ChannelDeliveryCommand) GetRouteId() string {
+	if x != nil {
+		return x.RouteId
+	}
+	return ""
+}
+
+func (x *ChannelDeliveryCommand) GetChannelCapabilityRef() string {
+	if x != nil && x.ChannelCapabilityRef != nil {
+		return *x.ChannelCapabilityRef
+	}
+	return ""
+}
+
+func (x *ChannelDeliveryCommand) GetPackageInstallationRef() string {
+	if x != nil && x.PackageInstallationRef != nil {
+		return *x.PackageInstallationRef
+	}
+	return ""
+}
+
+func (x *ChannelDeliveryCommand) GetPackageVersionRef() string {
+	if x != nil && x.PackageVersionRef != nil {
+		return *x.PackageVersionRef
+	}
+	return ""
+}
+
+func (x *ChannelDeliveryCommand) GetDeliveryCommandRef() string {
+	if x != nil {
+		return x.DeliveryCommandRef
+	}
+	return ""
+}
+
+func (x *ChannelDeliveryCommand) GetCallbackRouteRef() string {
+	if x != nil && x.CallbackRouteRef != nil {
+		return *x.CallbackRouteRef
+	}
+	return ""
+}
+
+func (x *ChannelDeliveryCommand) GetRuntimeRef() string {
+	if x != nil && x.RuntimeRef != nil {
+		return *x.RuntimeRef
+	}
+	return ""
+}
+
+func (x *ChannelDeliveryCommand) GetRoutingPolicyRef() string {
+	if x != nil && x.RoutingPolicyRef != nil {
+		return *x.RoutingPolicyRef
+	}
+	return ""
+}
+
 // ChannelDeliveryResult is the safe result returned from runtime or channel package workload.
 type ChannelDeliveryResult struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -4046,7 +4268,13 @@ type ChannelDeliveryResult struct {
 	// retry_after is an RFC3339 timestamp or duration token chosen by the channel package.
 	RetryAfter *string `protobuf:"bytes,7,opt,name=retry_after,json=retryAfter,proto3,oneof" json:"retry_after,omitempty"`
 	// occurred_at is an RFC3339 timestamp.
-	OccurredAt    string `protobuf:"bytes,8,opt,name=occurred_at,json=occurredAt,proto3" json:"occurred_at,omitempty"`
+	OccurredAt string `protobuf:"bytes,8,opt,name=occurred_at,json=occurredAt,proto3" json:"occurred_at,omitempty"`
+	// delivery_command_ref identifies the safe command envelope this result belongs to.
+	DeliveryCommandRef *string `protobuf:"bytes,9,opt,name=delivery_command_ref,json=deliveryCommandRef,proto3,oneof" json:"delivery_command_ref,omitempty"`
+	// runtime_ref points to the package-owned runtime boundary that produced the result.
+	RuntimeRef *string `protobuf:"bytes,10,opt,name=runtime_ref,json=runtimeRef,proto3,oneof" json:"runtime_ref,omitempty"`
+	// runtime_job_ref is a safe runtime job reference when available.
+	RuntimeJobRef *string `protobuf:"bytes,11,opt,name=runtime_job_ref,json=runtimeJobRef,proto3,oneof" json:"runtime_job_ref,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4133,6 +4361,27 @@ func (x *ChannelDeliveryResult) GetRetryAfter() string {
 func (x *ChannelDeliveryResult) GetOccurredAt() string {
 	if x != nil {
 		return x.OccurredAt
+	}
+	return ""
+}
+
+func (x *ChannelDeliveryResult) GetDeliveryCommandRef() string {
+	if x != nil && x.DeliveryCommandRef != nil {
+		return *x.DeliveryCommandRef
+	}
+	return ""
+}
+
+func (x *ChannelDeliveryResult) GetRuntimeRef() string {
+	if x != nil && x.RuntimeRef != nil {
+		return *x.RuntimeRef
+	}
+	return ""
+}
+
+func (x *ChannelDeliveryResult) GetRuntimeJobRef() string {
+	if x != nil && x.RuntimeJobRef != nil {
+		return *x.RuntimeJobRef
 	}
 	return ""
 }
@@ -6803,7 +7052,7 @@ const file_kodex_interactions_v1_interaction_hub_proto_rawDesc = "" +
 	"\x11channel_hint_refs\x18\v \x03(\v2\".kodex.interactions.v1.ExternalRefR\x0fchannelHintRefs\x12;\n" +
 	"\x17subscription_policy_ref\x18\f \x01(\tH\x01R\x15subscriptionPolicyRef\x88\x01\x01B\x0f\n" +
 	"\r_source_ownerB\x1a\n" +
-	"\x18_subscription_policy_ref\"\xa3\x04\n" +
+	"\x18_subscription_policy_ref\"\xf0\x05\n" +
 	"\rDeliveryRoute\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x125\n" +
 	"\x05scope\x18\x02 \x01(\v2\x1f.kodex.interactions.v1.ScopeRefR\x05scope\x12M\n" +
@@ -6815,15 +7064,24 @@ const file_kodex_interactions_v1_interaction_hub_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\b \x01(\tR\tcreatedAt\x12\x1d\n" +
 	"\n" +
-	"updated_at\x18\t \x01(\tR\tupdatedAtB\x19\n" +
+	"updated_at\x18\t \x01(\tR\tupdatedAt\x123\n" +
+	"\x13package_version_ref\x18\n" +
+	" \x01(\tH\x03R\x11packageVersionRef\x88\x01\x01\x121\n" +
+	"\x12callback_route_ref\x18\v \x01(\tH\x04R\x10callbackRouteRef\x88\x01\x01\x12$\n" +
+	"\vruntime_ref\x18\f \x01(\tH\x05R\n" +
+	"runtimeRef\x88\x01\x01B\x19\n" +
 	"\x17_channel_capability_refB\x1b\n" +
 	"\x19_package_installation_refB\x15\n" +
-	"\x13_routing_policy_ref\"f\n" +
+	"\x13_routing_policy_refB\x16\n" +
+	"\x14_package_version_refB\x15\n" +
+	"\x13_callback_route_refB\x0e\n" +
+	"\f_runtime_ref\"f\n" +
 	"\x0eDeliveryTarget\x12\x1f\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tH\x00R\trequestId\x12)\n" +
 	"\x0fnotification_id\x18\x02 \x01(\tH\x00R\x0enotificationIdB\b\n" +
-	"\x06target\"\xe9\x05\n" +
+	"\x06target\"\xfc\n" +
+	"\n" +
 	"\x0fDeliveryAttempt\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12=\n" +
 	"\x06target\x18\x02 \x01(\v2%.kodex.interactions.v1.DeliveryTargetR\x06target\x12\x19\n" +
@@ -6845,12 +7103,32 @@ const file_kodex_interactions_v1_interaction_hub_proto_rawDesc = "" +
 	"created_at\x18\r \x01(\tR\tcreatedAt\x12\x1d\n" +
 	"\n" +
 	"updated_at\x18\x0e \x01(\tR\tupdatedAt\x12\x1c\n" +
-	"\asent_at\x18\x0f \x01(\tH\x03R\x06sentAt\x88\x01\x01B\x16\n" +
+	"\asent_at\x18\x0f \x01(\tH\x03R\x06sentAt\x88\x01\x01\x129\n" +
+	"\x16channel_capability_ref\x18\x10 \x01(\tH\x04R\x14channelCapabilityRef\x88\x01\x01\x12=\n" +
+	"\x18package_installation_ref\x18\x11 \x01(\tH\x05R\x16packageInstallationRef\x88\x01\x01\x123\n" +
+	"\x13package_version_ref\x18\x12 \x01(\tH\x06R\x11packageVersionRef\x88\x01\x01\x125\n" +
+	"\x14delivery_command_ref\x18\x13 \x01(\tH\aR\x12deliveryCommandRef\x88\x01\x01\x12&\n" +
+	"\fcallback_ref\x18\x14 \x01(\tH\bR\vcallbackRef\x88\x01\x01\x121\n" +
+	"\x12callback_route_ref\x18\x15 \x01(\tH\tR\x10callbackRouteRef\x88\x01\x01\x12$\n" +
+	"\vruntime_ref\x18\x16 \x01(\tH\n" +
+	"R\n" +
+	"runtimeRef\x88\x01\x01\x12+\n" +
+	"\x0fruntime_job_ref\x18\x17 \x01(\tH\vR\rruntimeJobRef\x88\x01\x01\x121\n" +
+	"\x12routing_policy_ref\x18\x18 \x01(\tH\fR\x10routingPolicyRef\x88\x01\x01B\x16\n" +
 	"\x14_channel_message_refB\x10\n" +
 	"\x0e_next_retry_atB\r\n" +
 	"\v_error_codeB\n" +
 	"\n" +
-	"\b_sent_at\"\xb0\x06\n" +
+	"\b_sent_atB\x19\n" +
+	"\x17_channel_capability_refB\x1b\n" +
+	"\x19_package_installation_refB\x16\n" +
+	"\x14_package_version_refB\x17\n" +
+	"\x15_delivery_command_refB\x0f\n" +
+	"\r_callback_refB\x15\n" +
+	"\x13_callback_route_refB\x0e\n" +
+	"\f_runtime_refB\x12\n" +
+	"\x10_runtime_job_refB\x15\n" +
+	"\x13_routing_policy_ref\"\xa5\b\n" +
 	"\x0fChannelCallback\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1f\n" +
 	"\vcallback_id\x18\x02 \x01(\tR\n" +
@@ -6871,7 +7149,14 @@ const file_kodex_interactions_v1_interaction_hub_proto_rawDesc = "" +
 	"\vreceived_at\x18\r \x01(\tR\n" +
 	"receivedAt\x12\x1d\n" +
 	"\n" +
-	"created_at\x18\x0e \x01(\tR\tcreatedAtB\x16\n" +
+	"created_at\x18\x0e \x01(\tR\tcreatedAt\x12$\n" +
+	"\vdelivery_id\x18\x0f \x01(\tH\bR\n" +
+	"deliveryId\x88\x01\x01\x121\n" +
+	"\x12callback_route_ref\x18\x10 \x01(\tH\tR\x10callbackRouteRef\x88\x01\x01\x12$\n" +
+	"\vgateway_ref\x18\x11 \x01(\tH\n" +
+	"R\n" +
+	"gatewayRef\x88\x01\x01\x12*\n" +
+	"\x0ecorrelation_id\x18\x12 \x01(\tH\vR\rcorrelationId\x88\x01\x01B\x16\n" +
 	"\x14_delivery_attempt_idB\r\n" +
 	"\v_request_idB\x12\n" +
 	"\x10_source_route_idB\f\n" +
@@ -6880,7 +7165,12 @@ const file_kodex_interactions_v1_interaction_hub_proto_rawDesc = "" +
 	"\a_actionB\x13\n" +
 	"\x11_callback_summaryB\x12\n" +
 	"\x10_callback_objectB\r\n" +
-	"\v_error_code\"\xed\x05\n" +
+	"\v_error_codeB\x0e\n" +
+	"\f_delivery_idB\x15\n" +
+	"\x13_callback_route_refB\x0e\n" +
+	"\f_gateway_refB\x11\n" +
+	"\x0f_correlation_id\"\x83\n" +
+	"\n" +
 	"\x16ChannelDeliveryCommand\x12)\n" +
 	"\x10contract_version\x18\x01 \x01(\tR\x0fcontractVersion\x12\x1f\n" +
 	"\vdelivery_id\x18\x02 \x01(\tR\n" +
@@ -6897,9 +7187,24 @@ const file_kodex_interactions_v1_interaction_hub_proto_rawDesc = "" +
 	"\x0ecorrelation_id\x18\v \x01(\tR\rcorrelationId\x12\"\n" +
 	"\n" +
 	"expires_at\x18\f \x01(\tH\x01R\texpiresAt\x88\x01\x01\x12E\n" +
-	"\fcontext_refs\x18\r \x03(\v2\".kodex.interactions.v1.ExternalRefR\vcontextRefsB\x17\n" +
+	"\fcontext_refs\x18\r \x03(\v2\".kodex.interactions.v1.ExternalRefR\vcontextRefs\x12\x19\n" +
+	"\broute_id\x18\x0e \x01(\tR\arouteId\x129\n" +
+	"\x16channel_capability_ref\x18\x0f \x01(\tH\x02R\x14channelCapabilityRef\x88\x01\x01\x12=\n" +
+	"\x18package_installation_ref\x18\x10 \x01(\tH\x03R\x16packageInstallationRef\x88\x01\x01\x123\n" +
+	"\x13package_version_ref\x18\x11 \x01(\tH\x04R\x11packageVersionRef\x88\x01\x01\x120\n" +
+	"\x14delivery_command_ref\x18\x12 \x01(\tR\x12deliveryCommandRef\x121\n" +
+	"\x12callback_route_ref\x18\x13 \x01(\tH\x05R\x10callbackRouteRef\x88\x01\x01\x12$\n" +
+	"\vruntime_ref\x18\x14 \x01(\tH\x06R\n" +
+	"runtimeRef\x88\x01\x01\x121\n" +
+	"\x12routing_policy_ref\x18\x15 \x01(\tH\aR\x10routingPolicyRef\x88\x01\x01B\x17\n" +
 	"\x15_message_template_refB\r\n" +
-	"\v_expires_at\"\xdf\x03\n" +
+	"\v_expires_atB\x19\n" +
+	"\x17_channel_capability_refB\x1b\n" +
+	"\x19_package_installation_refB\x16\n" +
+	"\x14_package_version_refB\x15\n" +
+	"\x13_callback_route_refB\x0e\n" +
+	"\f_runtime_refB\x15\n" +
+	"\x13_routing_policy_ref\"\xa6\x05\n" +
 	"\x15ChannelDeliveryResult\x12)\n" +
 	"\x10contract_version\x18\x01 \x01(\tR\x0fcontractVersion\x12\x1f\n" +
 	"\vdelivery_id\x18\x02 \x01(\tR\n" +
@@ -6913,10 +7218,18 @@ const file_kodex_interactions_v1_interaction_hub_proto_rawDesc = "" +
 	"\vretry_after\x18\a \x01(\tH\x02R\n" +
 	"retryAfter\x88\x01\x01\x12\x1f\n" +
 	"\voccurred_at\x18\b \x01(\tR\n" +
-	"occurredAtB\x16\n" +
+	"occurredAt\x125\n" +
+	"\x14delivery_command_ref\x18\t \x01(\tH\x03R\x12deliveryCommandRef\x88\x01\x01\x12$\n" +
+	"\vruntime_ref\x18\n" +
+	" \x01(\tH\x04R\n" +
+	"runtimeRef\x88\x01\x01\x12+\n" +
+	"\x0fruntime_job_ref\x18\v \x01(\tH\x05R\rruntimeJobRef\x88\x01\x01B\x16\n" +
 	"\x14_channel_message_refB\r\n" +
 	"\v_error_codeB\x0e\n" +
-	"\f_retry_after\"\x8f\x05\n" +
+	"\f_retry_afterB\x17\n" +
+	"\x15_delivery_command_refB\x0e\n" +
+	"\f_runtime_refB\x12\n" +
+	"\x10_runtime_job_ref\"\x8f\x05\n" +
 	"\x17ChannelCallbackEnvelope\x12)\n" +
 	"\x10contract_version\x18\x01 \x01(\tR\x0fcontractVersion\x12\x1f\n" +
 	"\vcallback_id\x18\x02 \x01(\tR\n" +
@@ -7332,13 +7645,15 @@ const file_kodex_interactions_v1_interaction_hub_proto_rawDesc = "" +
 	"\x1eDELIVERY_ERROR_CLASS_PERMANENT\x10\x02\x12\x1d\n" +
 	"\x19DELIVERY_ERROR_CLASS_AUTH\x10\x03\x12%\n" +
 	"!DELIVERY_ERROR_CLASS_RATE_LIMITED\x10\x04\x12\x1f\n" +
-	"\x1bDELIVERY_ERROR_CLASS_POLICY\x10\x05*\xff\x01\n" +
+	"\x1bDELIVERY_ERROR_CLASS_POLICY\x10\x05*\xd9\x02\n" +
 	"\x1bChannelDeliveryResultStatus\x12.\n" +
 	"*CHANNEL_DELIVERY_RESULT_STATUS_UNSPECIFIED\x10\x00\x12+\n" +
 	"'CHANNEL_DELIVERY_RESULT_STATUS_ACCEPTED\x10\x01\x12+\n" +
 	"'CHANNEL_DELIVERY_RESULT_STATUS_DEFERRED\x10\x02\x12+\n" +
 	"'CHANNEL_DELIVERY_RESULT_STATUS_REJECTED\x10\x03\x12)\n" +
-	"%CHANNEL_DELIVERY_RESULT_STATUS_FAILED\x10\x04*\xd2\x01\n" +
+	"%CHANNEL_DELIVERY_RESULT_STATUS_FAILED\x10\x04\x12,\n" +
+	"(CHANNEL_DELIVERY_RESULT_STATUS_DELIVERED\x10\x05\x12*\n" +
+	"&CHANNEL_DELIVERY_RESULT_STATUS_EXPIRED\x10\x06*\xd2\x01\n" +
 	"\x17CallbackSignatureStatus\x12)\n" +
 	"%CALLBACK_SIGNATURE_STATUS_UNSPECIFIED\x10\x00\x12&\n" +
 	"\"CALLBACK_SIGNATURE_STATUS_VERIFIED\x10\x01\x12.\n" +

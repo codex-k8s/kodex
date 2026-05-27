@@ -14,7 +14,9 @@ const (
 	EventSubscriptionUpdated     = "interaction.subscription.updated"
 	EventDeliveryRequested       = "interaction.delivery.requested"
 	EventDeliveryAccepted        = "interaction.delivery.accepted"
+	EventDeliveryDelivered       = "interaction.delivery.delivered"
 	EventDeliveryFailed          = "interaction.delivery.failed"
+	EventDeliveryExpired         = "interaction.delivery.expired"
 	EventCallbackReceived        = "interaction.callback.received"
 	EventRequestResponseRecorded = "interaction.request.response_recorded"
 	EventRequestExpired          = "interaction.request.expired"
@@ -33,43 +35,53 @@ const (
 
 // Payload is the generated common payload envelope for domain events.
 type Payload struct {
-	ActorRef             string `json:"actor_ref,omitempty"`
-	AgentRunRef          string `json:"agent_run_ref,omitempty"`
-	AttemptNumber        int64  `json:"attempt_number,omitempty"`
-	CallbackID           string `json:"callback_id,omitempty"`
-	CancelledByRef       string `json:"cancelled_by_ref,omitempty"`
-	ChannelMessageRef    string `json:"channel_message_ref,omitempty"`
-	CorrelationID        string `json:"correlation_id,omitempty"`
-	DeadlineAt           string `json:"deadline_at,omitempty"`
-	DeliveryAttemptID    string `json:"delivery_attempt_id,omitempty"`
-	DeliveryID           string `json:"delivery_id,omitempty"`
-	ErrorClass           string `json:"error_class,omitempty"`
-	ErrorCode            string `json:"error_code,omitempty"`
-	IngressKind          string `json:"ingress_kind,omitempty"`
-	MessageID            string `json:"message_id,omitempty"`
-	NextRetryAt          string `json:"next_retry_at,omitempty"`
-	NotificationID       string `json:"notification_id,omitempty"`
-	NotificationKind     string `json:"notification_kind,omitempty"`
-	OwnerDecisionRef     string `json:"owner_decision_ref,omitempty"`
-	OwnerRequestRef      string `json:"owner_request_ref,omitempty"`
-	OwnerService         string `json:"owner_service,omitempty"`
-	Priority             string `json:"priority,omitempty"`
-	ProcessingStatus     string `json:"processing_status,omitempty"`
-	ProviderOperationRef string `json:"provider_operation_ref,omitempty"`
-	RequestID            string `json:"request_id,omitempty"`
-	RequestKind          string `json:"request_kind,omitempty"`
-	ResponseAction       string `json:"response_action,omitempty"`
-	ResponseID           string `json:"response_id,omitempty"`
-	RiskClass            string `json:"risk_class,omitempty"`
-	RouteID              string `json:"route_id,omitempty"`
-	ScopeRef             string `json:"scope_ref,omitempty"`
-	ScopeType            string `json:"scope_type,omitempty"`
-	SourceKind           string `json:"source_kind,omitempty"`
-	SourceOwnerKind      string `json:"source_owner_kind,omitempty"`
-	SourceOwnerRef       string `json:"source_owner_ref,omitempty"`
-	Status               string `json:"status,omitempty"`
-	SubscriberRef        string `json:"subscriber_ref,omitempty"`
-	SubscriptionID       string `json:"subscription_id,omitempty"`
-	ThreadID             string `json:"thread_id,omitempty"`
-	Version              int64  `json:"version,omitempty"`
+	ActorRef               string `json:"actor_ref,omitempty"`
+	AgentRunRef            string `json:"agent_run_ref,omitempty"`
+	AttemptNumber          int64  `json:"attempt_number,omitempty"`
+	CallbackID             string `json:"callback_id,omitempty"`
+	CallbackRef            string `json:"callback_ref,omitempty"`
+	CallbackRouteRef       string `json:"callback_route_ref,omitempty"`
+	CancelledByRef         string `json:"cancelled_by_ref,omitempty"`
+	ChannelCapabilityRef   string `json:"channel_capability_ref,omitempty"`
+	ChannelMessageRef      string `json:"channel_message_ref,omitempty"`
+	CorrelationID          string `json:"correlation_id,omitempty"`
+	DeadlineAt             string `json:"deadline_at,omitempty"`
+	DeliveryAttemptID      string `json:"delivery_attempt_id,omitempty"`
+	DeliveryCommandRef     string `json:"delivery_command_ref,omitempty"`
+	DeliveryID             string `json:"delivery_id,omitempty"`
+	ErrorClass             string `json:"error_class,omitempty"`
+	ErrorCode              string `json:"error_code,omitempty"`
+	GatewayRef             string `json:"gateway_ref,omitempty"`
+	IngressKind            string `json:"ingress_kind,omitempty"`
+	MessageID              string `json:"message_id,omitempty"`
+	NextRetryAt            string `json:"next_retry_at,omitempty"`
+	NotificationID         string `json:"notification_id,omitempty"`
+	NotificationKind       string `json:"notification_kind,omitempty"`
+	OwnerDecisionRef       string `json:"owner_decision_ref,omitempty"`
+	OwnerRequestRef        string `json:"owner_request_ref,omitempty"`
+	OwnerService           string `json:"owner_service,omitempty"`
+	PackageInstallationRef string `json:"package_installation_ref,omitempty"`
+	PackageVersionRef      string `json:"package_version_ref,omitempty"`
+	Priority               string `json:"priority,omitempty"`
+	ProcessingStatus       string `json:"processing_status,omitempty"`
+	ProviderOperationRef   string `json:"provider_operation_ref,omitempty"`
+	RequestID              string `json:"request_id,omitempty"`
+	RequestKind            string `json:"request_kind,omitempty"`
+	ResponseAction         string `json:"response_action,omitempty"`
+	ResponseID             string `json:"response_id,omitempty"`
+	RiskClass              string `json:"risk_class,omitempty"`
+	RouteID                string `json:"route_id,omitempty"`
+	RoutingPolicyRef       string `json:"routing_policy_ref,omitempty"`
+	RuntimeJobRef          string `json:"runtime_job_ref,omitempty"`
+	RuntimeRef             string `json:"runtime_ref,omitempty"`
+	ScopeRef               string `json:"scope_ref,omitempty"`
+	ScopeType              string `json:"scope_type,omitempty"`
+	SourceKind             string `json:"source_kind,omitempty"`
+	SourceOwnerKind        string `json:"source_owner_kind,omitempty"`
+	SourceOwnerRef         string `json:"source_owner_ref,omitempty"`
+	Status                 string `json:"status,omitempty"`
+	SubscriberRef          string `json:"subscriber_ref,omitempty"`
+	SubscriptionID         string `json:"subscription_id,omitempty"`
+	ThreadID               string `json:"thread_id,omitempty"`
+	Version                int64  `json:"version,omitempty"`
 }

@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-22
 updated_at: 2026-05-26
-related_issues: [582, 768, 800, 821, 835]
+related_issues: [582, 768, 800, 821, 835, 843]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -202,7 +202,10 @@ One-way уведомления и reminders не создают `InteractionRequ
 | `surface_kind` | enum | нет | `web_console`, `voice`, `provider_surface`, `channel_package`, `system`. |
 | `channel_capability_ref` | text | да | Ссылка на capability установленного plugin package. |
 | `package_installation_ref` | text | да | Ссылка на установку пакета в `package-hub`. |
+| `package_version_ref` | text | да | Ссылка на выбранную версию пакета в `package-hub`; package truth остаётся там. |
 | `routing_policy_ref` | text | да | Ссылка на правила маршрутизации: приоритеты, fallback, quiet hours, retry strategy. Тело policy не хранится в route в текущем контракте. |
+| `callback_route_ref` | text | да | Ссылка на gateway-owned callback route, если маршрут поддерживает callback. |
+| `runtime_ref` | text | да | Ссылка на package-owned runtime boundary; Kubernetes job/workload не принадлежит `interaction-hub`. |
 | `status` | enum | нет | `active`, `paused`, `disabled`. |
 | `created_at`, `updated_at` | timestamptz | нет | Временные метки. |
 
@@ -231,6 +234,15 @@ One-way уведомления и reminders не создают `InteractionRequ
 | `error_class` | enum | да | `temporary`, `permanent`, `auth`, `rate_limited`, `policy`. |
 | `payload_digest` | text | нет | Digest нормализованного delivery command. |
 | `result_fingerprint` | text | да | Digest нормализованного safe delivery result; используется для идемпотентного replay по `delivery_id` без повторного outbox event. |
+| `channel_capability_ref` | text | да | Снимок выбранной channel capability на момент планирования. |
+| `package_installation_ref` | text | да | Снимок установки channel package без владения package state. |
+| `package_version_ref` | text | да | Снимок выбранной версии channel package. |
+| `delivery_command_ref` | text | да | Ссылка на safe delivery command envelope для runtime boundary. |
+| `callback_ref` | text | да | Непрозрачная ссылка сопоставления callback. |
+| `callback_route_ref` | text | да | Ссылка на callback route, если настроена. |
+| `runtime_ref` | text | да | Ссылка на package-owned runtime boundary. |
+| `runtime_job_ref` | text | да | Safe ref runtime job/workload, если runtime сообщил его результатом доставки. |
+| `routing_policy_ref` | text | да | Снимок routing policy ref. |
 | `created_at`, `updated_at`, `sent_at` | timestamptz | да | Временные метки. |
 
 Ровно одно из полей `request_id` или `notification_id` должно быть заполнено. Статус request не выводится из статуса one-way notification; request завершает только `InteractionResponse` или доменная команда истечения/отмены.
@@ -243,6 +255,7 @@ One-way уведомления и reminders не создают `InteractionRequ
 |---|---|---:|---|
 | `id` | uuid | нет | Идентификатор записи callback. |
 | `callback_id` | text | нет | Идемпотентный ключ callback. |
+| `delivery_id` | text | да | Safe delivery id из callback envelope. |
 | `delivery_attempt_id` | uuid | да | Попытка доставки, если сопоставлена. |
 | `request_id` | uuid | да | Запрос, если сопоставлен. |
 | `source_route_id` | uuid | да | Маршрут канала. |
@@ -253,6 +266,10 @@ One-way уведомления и reminders не создают `InteractionRequ
 | `signature_status` | enum | нет | `verified`, `trusted_internal`, `rejected_before_domain`. |
 | `processing_status` | enum | нет | `accepted`, `duplicate`, `rejected`, `failed`. |
 | `error_code` | text | да | Безопасный код ошибки обработки. |
+| `callback_route_ref` | text | да | Safe ref gateway-owned callback route. |
+| `gateway_ref` | text | да | Safe ref gateway request. |
+| `correlation_id` | text | да | Сквозная корреляция callback с delivery/owner context. |
+| `callback_fingerprint` | text | да | Digest нормализованного safe callback envelope для replay/conflict. |
 | `received_at`, `created_at` | timestamptz | нет | Временные метки. |
 
 `interaction-hub` не хранит сырую подпись, токены, секреты канала и полный внешний payload. Публичная проверка выполняется gateway до вызова домена.

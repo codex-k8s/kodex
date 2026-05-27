@@ -51,6 +51,21 @@ func RecordDeliveryResultInput(input *interactionsv1.RecordDeliveryResultRequest
 	return interactionservice.RecordDeliveryResultInput{Meta: meta, Result: result}, nil
 }
 
+func RecordChannelCallbackInput(input *interactionsv1.RecordChannelCallbackRequest) (interactionservice.RecordChannelCallbackInput, error) {
+	if input == nil {
+		return interactionservice.RecordChannelCallbackInput{}, errs.ErrInvalidArgument
+	}
+	meta, err := CommandMeta(input.GetMeta())
+	if err != nil {
+		return interactionservice.RecordChannelCallbackInput{}, err
+	}
+	callback, err := ChannelCallbackEnvelope(input.GetCallback())
+	if err != nil {
+		return interactionservice.RecordChannelCallbackInput{}, err
+	}
+	return interactionservice.RecordChannelCallbackInput{Meta: meta, Callback: callback}, nil
+}
+
 func GetDeliveryStatusInput(input *interactionsv1.GetDeliveryStatusRequest) (interactionservice.GetDeliveryStatusInput, error) {
 	if input == nil {
 		return interactionservice.GetDeliveryStatusInput{}, errs.ErrInvalidArgument
@@ -81,26 +96,46 @@ func DeliveryStatusResponse(result interactionservice.DeliveryStatusResult) *int
 	for _, attempt := range result.DeliveryAttempts {
 		response.DeliveryAttempts = append(response.DeliveryAttempts, DeliveryAttempt(attempt))
 	}
+	if result.LatestCallback != nil {
+		response.LatestCallback = ChannelCallback(*result.LatestCallback)
+	}
+	return response
+}
+
+func ChannelCallbackResponse(result interactionservice.ChannelCallbackResult) *interactionsv1.ChannelCallbackResponse {
+	response := &interactionsv1.ChannelCallbackResponse{Callback: ChannelCallback(result.Callback)}
+	if result.Response != nil {
+		response.Response = InteractionResponse(*result.Response)
+	}
 	return response
 }
 
 func DeliveryAttempt(attempt entity.DeliveryAttempt) *interactionsv1.DeliveryAttempt {
 	return &interactionsv1.DeliveryAttempt{
-		Id:                attempt.ID.String(),
-		Target:            DeliveryTargetProto(attempt.Target),
-		RouteId:           attempt.RouteID.String(),
-		DeliveryId:        attempt.DeliveryID,
-		DeliveryKind:      DeliveryKindProto(attempt.DeliveryKind),
-		Status:            DeliveryAttemptStatusProto(attempt.Status),
-		ChannelMessageRef: OptionalString(attempt.ChannelMessageRef),
-		AttemptNumber:     attempt.AttemptNumber,
-		NextRetryAt:       OptionalTimeProto(attempt.NextRetryAt),
-		ErrorCode:         OptionalString(attempt.ErrorCode),
-		ErrorClass:        DeliveryErrorClassProto(attempt.ErrorClass),
-		PayloadDigest:     attempt.PayloadDigest,
-		CreatedAt:         TimeProto(attempt.CreatedAt),
-		UpdatedAt:         TimeProto(attempt.UpdatedAt),
-		SentAt:            OptionalTimeProto(attempt.SentAt),
+		Id:                     attempt.ID.String(),
+		Target:                 DeliveryTargetProto(attempt.Target),
+		RouteId:                attempt.RouteID.String(),
+		DeliveryId:             attempt.DeliveryID,
+		DeliveryKind:           DeliveryKindProto(attempt.DeliveryKind),
+		Status:                 DeliveryAttemptStatusProto(attempt.Status),
+		ChannelMessageRef:      OptionalString(attempt.ChannelMessageRef),
+		AttemptNumber:          attempt.AttemptNumber,
+		NextRetryAt:            OptionalTimeProto(attempt.NextRetryAt),
+		ErrorCode:              OptionalString(attempt.ErrorCode),
+		ErrorClass:             DeliveryErrorClassProto(attempt.ErrorClass),
+		PayloadDigest:          attempt.PayloadDigest,
+		CreatedAt:              TimeProto(attempt.CreatedAt),
+		UpdatedAt:              TimeProto(attempt.UpdatedAt),
+		SentAt:                 OptionalTimeProto(attempt.SentAt),
+		ChannelCapabilityRef:   OptionalString(attempt.ChannelCapabilityRef),
+		PackageInstallationRef: OptionalString(attempt.PackageInstallationRef),
+		PackageVersionRef:      OptionalString(attempt.PackageVersionRef),
+		DeliveryCommandRef:     OptionalString(attempt.DeliveryCommandRef),
+		CallbackRef:            OptionalString(attempt.CallbackRef),
+		CallbackRouteRef:       OptionalString(attempt.CallbackRouteRef),
+		RuntimeRef:             OptionalString(attempt.RuntimeRef),
+		RuntimeJobRef:          OptionalString(attempt.RuntimeJobRef),
+		RoutingPolicyRef:       OptionalString(attempt.RoutingPolicyRef),
 	}
 }
 
@@ -150,15 +185,65 @@ func ChannelDeliveryResult(input *interactionsv1.ChannelDeliveryResult) (value.C
 		return value.ChannelDeliveryResult{}, err
 	}
 	return value.ChannelDeliveryResult{
-		ContractVersion:   strings.TrimSpace(input.GetContractVersion()),
-		DeliveryID:        strings.TrimSpace(input.GetDeliveryId()),
-		ResultStatus:      ChannelDeliveryResultStatus(input.GetResultStatus()),
-		ChannelMessageRef: strings.TrimSpace(input.GetChannelMessageRef()),
-		ErrorCode:         strings.TrimSpace(input.GetErrorCode()),
-		ErrorClass:        DeliveryErrorClass(input.GetErrorClass()),
-		RetryAfter:        retryAfter,
-		OccurredAt:        occurredAt,
+		ContractVersion:    strings.TrimSpace(input.GetContractVersion()),
+		DeliveryID:         strings.TrimSpace(input.GetDeliveryId()),
+		ResultStatus:       ChannelDeliveryResultStatus(input.GetResultStatus()),
+		ChannelMessageRef:  strings.TrimSpace(input.GetChannelMessageRef()),
+		ErrorCode:          strings.TrimSpace(input.GetErrorCode()),
+		ErrorClass:         DeliveryErrorClass(input.GetErrorClass()),
+		RetryAfter:         retryAfter,
+		OccurredAt:         occurredAt,
+		DeliveryCommandRef: strings.TrimSpace(input.GetDeliveryCommandRef()),
+		RuntimeRef:         strings.TrimSpace(input.GetRuntimeRef()),
+		RuntimeJobRef:      strings.TrimSpace(input.GetRuntimeJobRef()),
 	}, nil
+}
+
+func ChannelCallbackEnvelope(input *interactionsv1.ChannelCallbackEnvelope) (value.ChannelCallbackEnvelope, error) {
+	if input == nil {
+		return value.ChannelCallbackEnvelope{}, errs.ErrInvalidArgument
+	}
+	receivedAt, err := parseRequiredTime(input.GetReceivedAt())
+	if err != nil {
+		return value.ChannelCallbackEnvelope{}, err
+	}
+	return value.ChannelCallbackEnvelope{
+		ContractVersion: strings.TrimSpace(input.GetContractVersion()),
+		CallbackID:      strings.TrimSpace(input.GetCallbackId()),
+		DeliveryID:      strings.TrimSpace(input.GetDeliveryId()),
+		RequestRef:      strings.TrimSpace(input.GetRequestRef()),
+		ActorRef:        strings.TrimSpace(input.GetActorRef()),
+		Action:          strings.TrimSpace(input.GetAction()),
+		AnswerSummary:   strings.TrimSpace(input.GetAnswerSummary()),
+		AnswerObject:    ObjectRef(input.GetAnswerObject()),
+		SignatureStatus: CallbackSignatureStatus(input.GetSignatureStatus()),
+		GatewayRef:      strings.TrimSpace(input.GetGatewayRef()),
+		ReceivedAt:      receivedAt,
+		CorrelationID:   strings.TrimSpace(input.GetCorrelationId()),
+	}, nil
+}
+
+func ChannelCallback(callback entity.ChannelCallback) *interactionsv1.ChannelCallback {
+	return &interactionsv1.ChannelCallback{
+		Id:                callback.ID.String(),
+		CallbackId:        callback.CallbackID,
+		DeliveryId:        OptionalString(callback.DeliveryID),
+		DeliveryAttemptId: OptionalUUIDProto(callback.DeliveryAttemptID),
+		RequestId:         OptionalUUIDProto(callback.RequestID),
+		SourceRouteId:     OptionalUUIDProto(callback.SourceRouteID),
+		ActorRef:          OptionalString(callback.ActorRef),
+		Action:            OptionalString(callback.Action),
+		CallbackSummary:   OptionalString(callback.CallbackSummary),
+		CallbackObject:    ObjectRefProto(callback.CallbackObject),
+		SignatureStatus:   CallbackSignatureStatusProto(callback.SignatureStatus),
+		ProcessingStatus:  CallbackProcessingStatusProto(callback.ProcessingStatus),
+		ErrorCode:         OptionalString(callback.ErrorCode),
+		ReceivedAt:        TimeProto(callback.ReceivedAt),
+		CreatedAt:         TimeProto(callback.CreatedAt),
+		CallbackRouteRef:  OptionalString(callback.CallbackRouteRef),
+		GatewayRef:        OptionalString(callback.GatewayRef),
+		CorrelationId:     OptionalString(callback.CorrelationID),
+	}
 }
 
 func parseRequiredTime(input string) (time.Time, error) {
@@ -210,4 +295,16 @@ func DeliveryErrorClassProto(input enum.DeliveryErrorClass) interactionsv1.Deliv
 
 func ChannelDeliveryResultStatus(input interactionsv1.ChannelDeliveryResultStatus) enum.ChannelDeliveryResultStatus {
 	return domainEnumValue[enum.ChannelDeliveryResultStatus](input, "CHANNEL_DELIVERY_RESULT_STATUS_")
+}
+
+func CallbackSignatureStatus(input interactionsv1.CallbackSignatureStatus) enum.CallbackSignatureStatus {
+	return domainEnumValue[enum.CallbackSignatureStatus](input, "CALLBACK_SIGNATURE_STATUS_")
+}
+
+func CallbackSignatureStatusProto(input enum.CallbackSignatureStatus) interactionsv1.CallbackSignatureStatus {
+	return protoEnumValue(input, interactionsv1.CallbackSignatureStatus_value, "CALLBACK_SIGNATURE_STATUS_", interactionsv1.CallbackSignatureStatus_CALLBACK_SIGNATURE_STATUS_UNSPECIFIED)
+}
+
+func CallbackProcessingStatusProto(input enum.CallbackProcessingStatus) interactionsv1.CallbackProcessingStatus {
+	return protoEnumValue(input, interactionsv1.CallbackProcessingStatus_value, "CALLBACK_PROCESSING_STATUS_", interactionsv1.CallbackProcessingStatus_CALLBACK_PROCESSING_STATUS_UNSPECIFIED)
 }

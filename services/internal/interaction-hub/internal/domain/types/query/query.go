@@ -37,6 +37,12 @@ type DeliveryAttemptFilter struct {
 	Limit      int32
 }
 
+type ChannelCallbackFilter struct {
+	DeliveryAttemptIDs []uuid.UUID
+	RequestID          uuid.UUID
+	DeliveryID         string
+}
+
 type CommandIdentity struct {
 	CommandID      uuid.UUID
 	IdempotencyKey string
