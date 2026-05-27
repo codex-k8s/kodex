@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/accesscheck"
-	accessaccountsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/access_accounts/v1"
 	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/errs"
 	projectservice "github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/service"
 	"google.golang.org/grpc"
@@ -25,18 +24,13 @@ type Authorizer = accesscheck.Authorizer[projectservice.AuthorizationRequest]
 
 var _ projectservice.Authorizer = (*Authorizer)(nil)
 
-// NewConnection creates a lazy gRPC client connection to access-manager.
-func NewConnection(cfg Config) (*grpc.ClientConn, error) {
-	return accesscheck.NewConnection(cfg.Addr)
+// NewConnectedAuthorizer creates the access-manager connection and authorizer.
+func NewConnectedAuthorizer(cfg Config) (*Authorizer, *grpc.ClientConn, error) {
+	return accesscheck.NewConnectedAuthorizer(accessSettings(cfg), projectAccessRequest, projectErrors())
 }
 
-// NewAuthorizer wraps a generated access-manager client.
-func NewAuthorizer(client accessaccountsv1.AccessManagerServiceClient, cfg Config) (*Authorizer, error) {
-	return accesscheck.NewAuthorizer(client, accesscheck.Config{
-		AuthToken: cfg.AuthToken,
-		CallerID:  callerID,
-		Timeout:   cfg.Timeout,
-	}, projectAccessRequest, projectErrors())
+func accessSettings(cfg Config) accesscheck.Config {
+	return accesscheck.Config{Addr: cfg.Addr, AuthToken: cfg.AuthToken, CallerID: callerID, Timeout: cfg.Timeout}
 }
 
 func projectErrors() accesscheck.DomainErrors {

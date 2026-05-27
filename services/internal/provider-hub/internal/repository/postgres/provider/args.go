@@ -506,9 +506,7 @@ func outboxEventArgs(event entity.OutboxEvent) pgx.NamedArgs {
 }
 
 func withPage(page value.PageRequest, args pgx.NamedArgs) pageQueryArgs {
-	limit, offset, nextOffset := postgreslib.OffsetPageBounds(page.PageSize, page.PageToken, defaultPageSize, maxPageSize)
-	args["limit"] = limit + 1
-	args["offset"] = offset
+	limit, _, nextOffset := postgreslib.AddOffsetPageArgs(args, page.PageSize, page.PageToken, defaultPageSize, maxPageSize)
 	return pageQueryArgs{args: args, limit: limit, nextOffset: nextOffset}
 }
 

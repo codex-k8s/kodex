@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/accesscheck"
-	accessaccountsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/access_accounts/v1"
 	"github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/errs"
 	runtimeservice "github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/service"
 	"google.golang.org/grpc"
@@ -25,15 +24,13 @@ type Authorizer = accesscheck.Authorizer[runtimeservice.AuthorizationRequest]
 
 var _ runtimeservice.Authorizer = (*Authorizer)(nil)
 
-// NewConnection creates a lazy gRPC client connection to access-manager.
-func NewConnection(cfg Config) (*grpc.ClientConn, error) {
-	return accesscheck.NewConnection(cfg.Addr)
+// NewConnectedAuthorizer creates the access-manager connection and authorizer.
+func NewConnectedAuthorizer(cfg Config) (*Authorizer, *grpc.ClientConn, error) {
+	return accesscheck.NewConnectedAuthorizer(accessSettings(cfg), runtimeAccessRequest, runtimeErrors())
 }
 
-// NewAuthorizer wraps a generated access-manager client.
-func NewAuthorizer(client accessaccountsv1.AccessManagerServiceClient, cfg Config) (*Authorizer, error) {
-	settings := accesscheck.Config{AuthToken: cfg.AuthToken, CallerID: callerID, Timeout: cfg.Timeout}
-	return accesscheck.NewAuthorizer(client, settings, runtimeAccessRequest, runtimeErrors())
+func accessSettings(cfg Config) accesscheck.Config {
+	return accesscheck.Config{Addr: cfg.Addr, AuthToken: cfg.AuthToken, CallerID: callerID, Timeout: cfg.Timeout}
 }
 
 func runtimeErrors() accesscheck.DomainErrors {
@@ -45,19 +42,17 @@ func runtimeErrors() accesscheck.DomainErrors {
 }
 
 func runtimeAccessRequest(request runtimeservice.AuthorizationRequest) accesscheck.Request {
-	fields := accesscheck.RequestFields{
-		SubjectType:  request.Subject.Type,
-		SubjectID:    request.Subject.ID,
-		ActionKey:    request.ActionKey,
-		ResourceType: request.ResourceType,
-		ResourceID:   request.ResourceID,
-		ScopeType:    request.ScopeType,
-		ScopeID:      request.ScopeID,
-		RequestID:    request.RequestID,
+	return accesscheck.Request{
+		Subject:   accesscheck.Subject{Type: request.Subject.Type, ID: request.Subject.ID},
+		ActionKey: request.ActionKey,
+		Resource:  accesscheck.Resource{Type: request.ResourceType, ID: request.ResourceID},
+		Scope:     accesscheck.Scope{Type: request.ScopeType, ID: request.ScopeID},
+		RequestID: request.RequestID,
+		RequestContext: accesscheck.RequestContext{
+			Source:       request.RequestContext.Source,
+			TraceID:      request.RequestContext.TraceID,
+			SessionID:    request.RequestContext.SessionID,
+			ClientIPHash: request.RequestContext.ClientIPHash,
+		},
 	}
-	fields.Context.Source = request.RequestContext.Source
-	fields.Context.TraceID = request.RequestContext.TraceID
-	fields.Context.SessionID = request.RequestContext.SessionID
-	fields.Context.ClientIPHash = request.RequestContext.ClientIPHash
-	return accesscheck.NewRequest(fields)
 }

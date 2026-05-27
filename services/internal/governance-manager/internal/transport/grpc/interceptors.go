@@ -11,14 +11,18 @@ import (
 
 // UnaryErrorInterceptor maps governance-manager domain errors to the public gRPC boundary.
 func UnaryErrorInterceptor(logger *slog.Logger) grpcruntime.UnaryServerInterceptor {
-	return grpcserver.UnaryBoundaryErrorInterceptor("governance-manager", logger, grpcserver.NewDomainErrorMapper(
-		grpcserver.DomainErrorRule{Target: errs.ErrAlreadyExists, Code: codes.AlreadyExists, Message: "resource already exists"},
-		grpcserver.DomainErrorRule{Target: errs.ErrConflict, Code: codes.Aborted, Message: "concurrent change conflict"},
-		grpcserver.DomainErrorRule{Target: errs.ErrForbidden, Code: codes.PermissionDenied, Message: "permission denied"},
-		grpcserver.DomainErrorRule{Target: errs.ErrInvalidArgument, Code: codes.InvalidArgument, Message: "invalid request"},
-		grpcserver.DomainErrorRule{Target: errs.ErrNotFound, Code: codes.NotFound, Message: "resource not found"},
-		grpcserver.DomainErrorRule{Target: errs.ErrPreconditionFailed, Code: codes.FailedPrecondition, Message: "precondition failed"},
-		grpcserver.DomainErrorRule{Target: errs.ErrDependencyUnavailable, Code: codes.Unavailable, Message: "dependency unavailable"},
-		grpcserver.DomainErrorRule{Target: errs.ErrNotImplemented, Code: codes.Unimplemented, Message: "operation remains backlog in governance-manager skeleton"},
-	))
+	return grpcserver.UnaryBoundaryErrorInterceptor("governance-manager", logger, governanceErrorMapper())
+}
+
+func governanceErrorMapper() grpcserver.DomainErrorMapper {
+	rules := make([]grpcserver.DomainErrorRule, 0, 8)
+	rules = append(rules, grpcserver.DomainRule(errs.ErrAlreadyExists, codes.AlreadyExists, "resource already exists"))
+	rules = append(rules, grpcserver.DomainRule(errs.ErrConflict, codes.Aborted, "concurrent change conflict"))
+	rules = append(rules, grpcserver.DomainRule(errs.ErrForbidden, codes.PermissionDenied, "permission denied"))
+	rules = append(rules, grpcserver.DomainRule(errs.ErrInvalidArgument, codes.InvalidArgument, "invalid request"))
+	rules = append(rules, grpcserver.DomainRule(errs.ErrNotFound, codes.NotFound, "resource not found"))
+	rules = append(rules, grpcserver.DomainRule(errs.ErrPreconditionFailed, codes.FailedPrecondition, "precondition failed"))
+	rules = append(rules, grpcserver.DomainRule(errs.ErrDependencyUnavailable, codes.Unavailable, "dependency unavailable"))
+	rules = append(rules, grpcserver.DomainRule(errs.ErrNotImplemented, codes.Unimplemented, "operation remains backlog in governance-manager skeleton"))
+	return grpcserver.NewDomainErrorMapper(rules...)
 }

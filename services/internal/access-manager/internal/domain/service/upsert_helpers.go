@@ -113,17 +113,36 @@ type catalogState struct {
 	Status string
 }
 
+type accessRuleComparableState struct {
+	effect       enum.AccessEffect
+	subjectType  enum.AccessSubjectType
+	subjectID    string
+	actionKey    string
+	resourceType string
+	resourceID   string
+	scopeType    string
+	scopeID      string
+	priority     int
+	status       enum.AccessRuleStatus
+}
+
 func sameAccessRuleState(a entity.AccessRule, b entity.AccessRule) bool {
-	return a.Effect == b.Effect &&
-		a.SubjectType == b.SubjectType &&
-		a.SubjectID == b.SubjectID &&
-		a.ActionKey == b.ActionKey &&
-		a.ResourceType == b.ResourceType &&
-		a.ResourceID == b.ResourceID &&
-		a.ScopeType == b.ScopeType &&
-		a.ScopeID == b.ScopeID &&
-		a.Priority == b.Priority &&
-		a.Status == b.Status
+	return comparableAccessRuleState(a) == comparableAccessRuleState(b)
+}
+
+func comparableAccessRuleState(rule entity.AccessRule) accessRuleComparableState {
+	var state accessRuleComparableState
+	state.effect = rule.Effect
+	state.subjectType = rule.SubjectType
+	state.subjectID = rule.SubjectID
+	state.actionKey = rule.ActionKey
+	state.resourceType = rule.ResourceType
+	state.resourceID = rule.ResourceID
+	state.scopeType = rule.ScopeType
+	state.scopeID = rule.ScopeID
+	state.priority = rule.Priority
+	state.status = rule.Status
+	return state
 }
 
 func normalizeExternalAccountOwnerScope(scopeType enum.ExternalAccountScopeType, scopeID string) (enum.ExternalAccountScopeType, string, error) {

@@ -184,19 +184,9 @@ func (cfg Config) EventLogDatabasePoolSettings() postgreslib.PoolSettings {
 }
 
 func (cfg Config) databaseRuntimeSettings(dsn string, maxConns int32, minConns int32) postgreslib.PoolRuntimeSettings {
-	return postgreslib.PoolRuntimeSettings{
-		DSN:                      dsn,
-		MaxConns:                 maxConns,
-		MinConns:                 minConns,
-		MaxConnLifetime:          cfg.DatabaseMaxConnLifetime,
-		MaxConnIdleTime:          cfg.DatabaseMaxConnIdleTime,
-		HealthCheckPeriod:        cfg.DatabaseHealthCheckPeriod,
-		PingTimeout:              cfg.DatabasePingTimeout,
-		ConnectRetryMaxAttempts:  cfg.DatabaseRetryMaxAttempts,
-		ConnectRetryInitialDelay: cfg.DatabaseRetryInitialDelay,
-		ConnectRetryMaxDelay:     cfg.DatabaseRetryMaxDelay,
-		ConnectRetryJitterRatio:  cfg.DatabaseRetryJitterRatio,
-	}
+	runtime := postgreslib.PoolRuntimeSettingsFromValues(dsn, maxConns, minConns, cfg.DatabaseMaxConnLifetime, cfg.DatabaseMaxConnIdleTime, cfg.DatabaseHealthCheckPeriod, cfg.DatabasePingTimeout, cfg.DatabaseRetryMaxAttempts, cfg.DatabaseRetryInitialDelay, cfg.DatabaseRetryMaxDelay, cfg.DatabaseRetryJitterRatio)
+	runtime.MinConns = minConns
+	return runtime
 }
 
 // GRPCServerConfig converts service env config to the shared gRPC runtime contract.

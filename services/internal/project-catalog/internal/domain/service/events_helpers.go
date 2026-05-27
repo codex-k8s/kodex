@@ -63,11 +63,15 @@ func (s *Service) aggregateEvent(
 	occurredAt time.Time,
 	options ...projectEventPayloadOption,
 ) (entity.OutboxEvent, error) {
-	payload := value.ProjectEventPayload{}
-	for _, option := range options {
-		option(&payload)
+	return s.event(eventType, aggregateType, aggregateID, projectEventPayloadFromOptions(options), occurredAt)
+}
+
+func projectEventPayloadFromOptions(options []projectEventPayloadOption) value.ProjectEventPayload {
+	var payload value.ProjectEventPayload
+	for _, apply := range options {
+		apply(&payload)
 	}
-	return s.event(eventType, aggregateType, aggregateID, payload, occurredAt)
+	return payload
 }
 
 func payloadProjectID(id uuid.UUID) projectEventPayloadOption {

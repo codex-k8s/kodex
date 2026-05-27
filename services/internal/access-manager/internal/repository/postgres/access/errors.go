@@ -6,11 +6,6 @@ import (
 )
 
 func wrapError(operation string, err error) error {
-	return postgreslib.WrapError(operation, err, postgreslib.ErrorSentinels{
-		AlreadyExists:      errs.ErrAlreadyExists,
-		Conflict:           errs.ErrConflict,
-		InvalidArgument:    errs.ErrInvalidArgument,
-		NotFound:           errs.ErrNotFound,
-		PreconditionFailed: errs.ErrPreconditionFailed,
-	})
+	sentinels := postgreslib.CRUDSentinels(errs.ErrAlreadyExists, errs.ErrConflict, errs.ErrInvalidArgument, errs.ErrNotFound, errs.ErrPreconditionFailed)
+	return postgreslib.WrapError(operation, err, sentinels)
 }

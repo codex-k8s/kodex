@@ -314,9 +314,9 @@ func protoArray[T proto.Message](items []T) ([]byte, error) {
 }
 
 func reviewSignalIDs(values []string) ([]uuid.UUID, error) {
-	result := make([]uuid.UUID, 0, len(values))
-	for _, value := range values {
-		id, err := requiredUUID(value)
+	var result []uuid.UUID
+	for index := range values {
+		id, err := requiredUUID(values[index])
 		if err != nil {
 			return nil, err
 		}

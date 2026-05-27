@@ -5,6 +5,7 @@ import (
 
 	"github.com/google/uuid"
 
+	grpcserver "github.com/codex-k8s/kodex/libs/go/grpcserver"
 	accessaccountsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/access_accounts/v1"
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/value"
@@ -40,14 +41,12 @@ func CommandMetaFromProto(meta *accessaccountsv1.CommandMeta) (value.CommandMeta
 }
 
 func requestContextFromProto(context *accessaccountsv1.RequestContext) value.RequestContext {
-	if context == nil {
-		return value.RequestContext{}
-	}
+	source, traceID, sessionID, clientIPHash := grpcserver.RequestContextParts(context)
 	return value.RequestContext{
-		Source:       strings.TrimSpace(context.GetSource()),
-		TraceID:      strings.TrimSpace(context.GetTraceId()),
-		SessionID:    strings.TrimSpace(context.GetSessionId()),
-		ClientIPHash: strings.TrimSpace(context.GetClientIpHash()),
+		Source:       source,
+		TraceID:      traceID,
+		SessionID:    sessionID,
+		ClientIPHash: clientIPHash,
 	}
 }
 
