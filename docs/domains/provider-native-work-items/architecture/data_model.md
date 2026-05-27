@@ -5,8 +5,8 @@ title: kodex — модель данных provider-hub
 status: active
 owner_role: SA
 created_at: 2026-05-06
-updated_at: 2026-05-26
-related_issues: [281, 282, 711, 719, 725, 729, 737, 748, 761, 770, 840]
+updated_at: 2026-05-27
+related_issues: [281, 282, 711, 719, 725, 729, 737, 748, 761, 770, 840, 864]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -189,7 +189,7 @@ Bootstrap/adoption-команды могут создать служебную �
 - сигнал создаётся из provider-native webhook/reconciliation факта, связанного с bootstrap/adoption PR через безопасную PR-проекцию, watermark, provider relationship или operation ref;
 - `provider-hub` хранит только safe refs, digest, timestamps и статус, но не хранит raw provider payload, body PR, содержимое файлов, provider response, токены или секреты;
 - естественный ключ строится из provider slug, kind и provider work item id; повтор того же сигнала идемпотентен, а повтор с тем же ключом и другим commit/source ref считается конфликтом;
-- merge signal не запускает импорт `services.yaml` сам: `project-catalog` остаётся владельцем проверки policy payload и активации repository binding.
+- merge signal не запускает импорт `services.yaml` сам: `project-catalog` остаётся владельцем проверки policy payload и активации repository binding, а project-side reconciliation принимает только safe signal refs и checked artifact metadata.
 
 | Поле | Тип | Nullable | Ограничения | Примечание |
 |---|---|---:|---|---|

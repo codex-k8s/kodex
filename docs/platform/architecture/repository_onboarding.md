@@ -5,8 +5,8 @@ title: kodex — варианты bootstrap/adoption репозитория
 status: active
 owner_role: SA
 created_at: 2026-05-14
-updated_at: 2026-05-26
-related_issues: [281, 282, 761, 794, 810, 818, 840]
+updated_at: 2026-05-27
+related_issues: [281, 282, 761, 794, 810, 818, 840, 864]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -103,10 +103,10 @@ approvals:
 7. `project-catalog` принимает project-side bootstrap-команду по существующему repository binding: проверяет provider target, `base_branch`, подготовленные файлы, watermark и связь с проверенной политикой `services.yaml`.
 8. `project-catalog` вызывает `provider-hub CreateBootstrapPullRequest` с готовым provider target, refs, файлами и policy context. `provider-hub` использует уже созданный репозиторий, создаёт или обновляет bootstrap branch и PR с подготовленным bootstrap-набором файлов. Bootstrap-команда допускает пустой base branch или `README.md`, созданный GitHub при `auto_init`.
 9. Владелец проверяет PR у провайдера и подтверждает переход через merge.
-10. Webhook или сверка провайдера фиксирует merge; `provider-hub` сохраняет safe merge signal для bootstrap/adoption `PR/MR`, связывает merged projection с `project_id` и `repository_id` и публикует `provider.repository.bootstrap_merged` или `provider.repository.adoption_merged`; внутренний контур передаёт в `project-catalog ImportBootstrapServicesPolicy` только проверенный сигнал: provider target, `base_branch`, `source_ref`, commit, `content_hash`, watermark и нормализованный `services.yaml`.
-11. `project-catalog` сверяет сигнал с project/repository binding, проверяет ожидаемую версию pending binding, импортирует проверенную политику штатным контуром и переводит repository binding в `active`. Повтор того же commit/source ref возвращает уже сохранённую проекцию, а другой commit/ref считается конфликтом bootstrap-завершения.
+10. Webhook или сверка провайдера фиксирует merge; `provider-hub` сохраняет safe merge signal для bootstrap/adoption `PR/MR`, связывает merged projection с `project_id` и `repository_id` и публикует `provider.repository.bootstrap_merged` или `provider.repository.adoption_merged`; внутренний контур передаёт в `project-catalog ReconcileBootstrapMergeSignal` только safe bootstrap signal и checked artifact metadata: provider target, `signal_key`, `base_branch`, `source_ref`, commit, artifact ref/digest/version, `content_hash`, watermark digest/payload и нормализованный `services.yaml`.
+11. `project-catalog` сверяет signal/artifact с project/repository binding, проверяет ожидаемую версию pending binding, вызывает `ImportBootstrapServicesPolicy`, импортирует проверенную политику штатным контуром и переводит repository binding в `active`. Повтор того же signal/commit/source ref возвращает уже сохранённую проекцию, а другой commit/ref считается конфликтом bootstrap-завершения.
 
-В реализованном project-side контуре пустого репозитория покрыты три шага модели C: создание provider-native репозитория с фиксацией `base_branch` в project-owned binding, создание bootstrap PR по уже подготовленному payload и импорт проверенной `services.yaml` после merge с активацией binding. Provider-side контур уже фиксирует safe merge signal, но выбор и применение шаблона, webhook endpoint/reconciliation executor для полного e2e и adoption существующего репозитория остаются отдельными шагами модели C.
+В реализованном project-side контуре пустого репозитория покрыты четыре шага модели C: создание provider-native репозитория с фиксацией `base_branch` в project-owned binding, создание bootstrap PR по уже подготовленному payload, явный reconciliation path от safe provider merge signal к import use-case и импорт проверенной `services.yaml` после merge с активацией binding. Выбор и применение шаблона, полный worker/consumer поверх `platform-event-log` и adoption существующего репозитория остаются отдельными шагами модели C.
 
 ### Существующий репозиторий
 

@@ -1226,6 +1226,164 @@ func TestImportBootstrapServicesPolicyRejectsProviderTargetMismatch(t *testing.T
 	}
 }
 
+func TestReconcileBootstrapMergeSignalImportsCheckedPolicy(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	policyID := uuid.New()
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = pendingBootstrapRepository(projectID, repositoryID)
+	svc := NewWithConfig(
+		store,
+		fixedClock{},
+		&sequenceIDs{ids: []uuid.UUID{policyID, uuid.New(), uuid.New(), uuid.New()}},
+		Config{},
+	)
+	input := reconcileBootstrapMergeSignalInput(projectID, repositoryID, commandMetaWithVersion(uuid.Nil, 3))
+
+	result, err := svc.ReconcileBootstrapMergeSignal(ctx, input)
+	if err != nil {
+		t.Fatalf("ReconcileBootstrapMergeSignal(): %v", err)
+	}
+	if result.Repository.Status != enum.RepositoryStatusActive || result.ServicesPolicy.ID != policyID {
+		t.Fatalf("result = %+v, want active repository and checked policy", result)
+	}
+	if result.ServicesPolicy.SourceRef != "refs/heads/main" || result.SourceRef != "refs/heads/main" {
+		t.Fatalf("source ref = policy:%q result:%q, want merged base branch", result.ServicesPolicy.SourceRef, result.SourceRef)
+	}
+	if len(store.policies) != 1 || len(store.events) != 2 || len(store.commandResults) != 1 {
+		t.Fatalf("policies=%d events=%d commandResults=%d, want single import", len(store.policies), len(store.events), len(store.commandResults))
+	}
+	for key, commandResult := range store.commandResults {
+		if !strings.Contains(key, bootstrapMergeIdempotencyPrefix+input.MergeSignal.SignalKey) {
+			t.Fatalf("command key = %q, want derived signal idempotency key", key)
+		}
+		for _, forbidden := range [][]byte{
+			[]byte("validated_payload_json"),
+			[]byte(bootstrapServicesPolicyPayload),
+			[]byte("watermark_json"),
+			[]byte("raw_provider_payload"),
+			[]byte("diff"),
+		} {
+			if bytes.Contains(commandResult.ResultPayload, forbidden) {
+				t.Fatalf("command payload stores unsafe reconciliation data %q in %s", forbidden, commandResult.ResultPayload)
+			}
+		}
+	}
+}
+
+func TestReconcileBootstrapMergeSignalReplayDoesNotDuplicateImport(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = pendingBootstrapRepository(projectID, repositoryID)
+	svc := NewWithConfig(
+		store,
+		fixedClock{},
+		&sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New(), uuid.New(), uuid.New()}},
+		Config{},
+	)
+	input := reconcileBootstrapMergeSignalInput(projectID, repositoryID, commandMetaWithVersion(uuid.Nil, 3))
+
+	first, err := svc.ReconcileBootstrapMergeSignal(ctx, input)
+	if err != nil {
+		t.Fatalf("first ReconcileBootstrapMergeSignal(): %v", err)
+	}
+	second, err := svc.ReconcileBootstrapMergeSignal(ctx, input)
+	if err != nil {
+		t.Fatalf("replay ReconcileBootstrapMergeSignal(): %v", err)
+	}
+	if first.ServicesPolicy.ID != second.ServicesPolicy.ID || second.Repository.Status != enum.RepositoryStatusActive {
+		t.Fatalf("replay result = %+v, want existing import", second)
+	}
+	if len(store.policies) != 1 || len(store.commandResults) != 1 || len(store.events) != 2 {
+		t.Fatalf("policies=%d commandResults=%d events=%d, want no duplicate writes", len(store.policies), len(store.commandResults), len(store.events))
+	}
+}
+
+func TestReconcileBootstrapMergeSignalRejectsStaleArtifact(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = pendingBootstrapRepository(projectID, repositoryID)
+	svc := NewWithConfig(store, fixedClock{}, &sequenceIDs{}, Config{})
+	input := reconcileBootstrapMergeSignalInput(projectID, repositoryID, commandMetaWithVersion(uuid.Nil, 3))
+	input.CheckedPolicy.ArtifactVersion = strings.Repeat("a", 40)
+
+	_, err := svc.ReconcileBootstrapMergeSignal(ctx, input)
+	if !errors.Is(err, errs.ErrPreconditionFailed) {
+		t.Fatalf("ReconcileBootstrapMergeSignal() err = %v, want precondition failed", err)
+	}
+	if len(store.policies) != 0 || len(store.events) != 0 || len(store.commandResults) != 0 {
+		t.Fatalf("policies=%d events=%d commandResults=%d, want no writes", len(store.policies), len(store.events), len(store.commandResults))
+	}
+}
+
+func TestReconcileBootstrapMergeSignalRejectsMismatchedSignal(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = pendingBootstrapRepository(projectID, repositoryID)
+	svc := NewWithConfig(store, fixedClock{}, &sequenceIDs{}, Config{})
+
+	for _, tc := range []struct {
+		name   string
+		mutate func(*ReconcileBootstrapMergeSignalInput)
+		err    error
+	}{
+		{
+			name: "adoption signal",
+			mutate: func(input *ReconcileBootstrapMergeSignalInput) {
+				input.MergeSignal.SignalKind = "adoption"
+			},
+			err: errs.ErrInvalidArgument,
+		},
+		{
+			name: "watermark digest mismatch",
+			mutate: func(input *ReconcileBootstrapMergeSignalInput) {
+				input.MergeSignal.WatermarkDigest = strings.Repeat("b", 64)
+			},
+			err: errs.ErrPreconditionFailed,
+		},
+		{
+			name: "artifact digest mismatch",
+			mutate: func(input *ReconcileBootstrapMergeSignalInput) {
+				input.CheckedPolicy.ArtifactDigest = "sha256:" + strings.Repeat("c", 64)
+			},
+			err: errs.ErrPreconditionFailed,
+		},
+		{
+			name: "missing provider source ref",
+			mutate: func(input *ReconcileBootstrapMergeSignalInput) {
+				input.MergeSignal.SourceRef = ""
+			},
+			err: errs.ErrInvalidArgument,
+		},
+		{
+			name: "provider target mismatch",
+			mutate: func(input *ReconcileBootstrapMergeSignalInput) {
+				input.MergeSignal.ProviderTarget.RepositoryFullName = "codex-k8s/other"
+			},
+			err: errs.ErrPreconditionFailed,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			input := reconcileBootstrapMergeSignalInput(projectID, repositoryID, commandMetaWithVersion(uuid.Nil, 3))
+			tc.mutate(&input)
+			_, err := svc.ReconcileBootstrapMergeSignal(ctx, input)
+			if !errors.Is(err, tc.err) {
+				t.Fatalf("ReconcileBootstrapMergeSignal() err = %v, want %v", err, tc.err)
+			}
+			if len(store.policies) != 0 || len(store.events) != 0 || len(store.commandResults) != 0 {
+				t.Fatalf("policies=%d events=%d commandResults=%d, want no writes", len(store.policies), len(store.events), len(store.commandResults))
+			}
+		})
+	}
+}
+
 func TestPutDocumentationSourceNormalizesAndPublishesEvent(t *testing.T) {
 	ctx := context.Background()
 	store := newMemoryRepository()
@@ -1440,6 +1598,45 @@ func importBootstrapServicesPolicyInput(projectID uuid.UUID, repositoryID uuid.U
 	}
 }
 
+func reconcileBootstrapMergeSignalInput(projectID uuid.UUID, repositoryID uuid.UUID, meta value.CommandMeta) ReconcileBootstrapMergeSignalInput {
+	watermarkJSON := []byte(`{"kind":"provider_pr","managed_by":"kodex","work_type":"repository_bootstrap","source_ref":"services.yaml"}`)
+	return ReconcileBootstrapMergeSignalInput{
+		ProjectID:    projectID,
+		RepositoryID: repositoryID,
+		MergeSignal: BootstrapRepositoryMergeSignal{
+			SignalID:   uuid.New().String(),
+			SignalKey:  "github/bootstrap/PR_123",
+			SignalKind: "bootstrap",
+			ProviderTarget: RepositoryBootstrapProviderTarget{
+				ProviderSlug:         "github",
+				RepositoryFullName:   "codex-k8s/kodex",
+				ProviderRepositoryID: "R_123",
+				WebURL:               "https://github.com/codex-k8s/kodex",
+			},
+			BaseBranch:                   "main",
+			SourceRef:                    "kodex/bootstrap",
+			MergeCommitSHA:               bootstrapMergeCommitSHA,
+			SourceBlobSHA:                "blob-1",
+			WatermarkDigest:              sha256HexDigest(watermarkJSON),
+			WatermarkJSON:                watermarkJSON,
+			ProviderWorkItemProjectionID: "projection-1",
+			ProviderWebURL:               "https://github.com/codex-k8s/kodex/pull/7",
+			ProviderObjectID:             "PR_123",
+			MergeObservedAt:              fixedClock{}.Now().Format(time.RFC3339Nano),
+			MergedAt:                     fixedClock{}.Now().Format(time.RFC3339Nano),
+		},
+		CheckedPolicy: CheckedBootstrapServicesPolicyArtifact{
+			ArtifactRef:      "artifact://provider/bootstrap/PR_123/services.yaml",
+			ArtifactDigest:   bootstrapContentHash(bootstrapServicesPolicyFileContent),
+			ArtifactVersion:  bootstrapMergeCommitSHA,
+			SourcePath:       "services.yaml",
+			ContentHash:      bootstrapContentHash(bootstrapServicesPolicyFileContent),
+			ValidatedPayload: []byte(bootstrapServicesPolicyPayload),
+		},
+		Meta: meta,
+	}
+}
+
 func bootstrapServicesPolicyForContent(content string, payload []byte) RepositoryBootstrapServicesPolicy {
 	return RepositoryBootstrapServicesPolicy{
 		SourcePath:       "services.yaml",
@@ -1451,6 +1648,11 @@ func bootstrapServicesPolicyForContent(content string, payload []byte) Repositor
 func bootstrapContentHash(content string) string {
 	sum := sha256.Sum256([]byte(content))
 	return "sha256:" + hex.EncodeToString(sum[:])
+}
+
+func sha256HexDigest(payload []byte) string {
+	sum := sha256.Sum256([]byte(strings.TrimSpace(string(payload))))
+	return hex.EncodeToString(sum[:])
 }
 
 type memoryRepository struct {

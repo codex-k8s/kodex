@@ -209,6 +209,44 @@ type ImportBootstrapServicesPolicyInput struct {
 	Meta                         value.CommandMeta
 }
 
+// BootstrapRepositoryMergeSignal contains safe provider refs from a merged bootstrap PR.
+type BootstrapRepositoryMergeSignal struct {
+	SignalID                     string
+	SignalKey                    string
+	SignalKind                   string
+	ProviderTarget               RepositoryBootstrapProviderTarget
+	BaseBranch                   string
+	SourceRef                    string
+	MergeCommitSHA               string
+	SourceBlobSHA                string
+	WatermarkDigest              string
+	WatermarkJSON                []byte
+	ProviderWorkItemProjectionID string
+	ProviderWebURL               string
+	ProviderObjectID             string
+	MergeObservedAt              string
+	MergedAt                     string
+}
+
+// CheckedBootstrapServicesPolicyArtifact contains checked policy artifact metadata prepared by the caller contour.
+type CheckedBootstrapServicesPolicyArtifact struct {
+	ArtifactRef      string
+	ArtifactDigest   string
+	ArtifactVersion  string
+	SourcePath       string
+	ContentHash      string
+	ValidatedPayload []byte
+}
+
+// ReconcileBootstrapMergeSignalInput closes bootstrap after provider-hub records a safe merge signal.
+type ReconcileBootstrapMergeSignalInput struct {
+	ProjectID     uuid.UUID
+	RepositoryID  uuid.UUID
+	MergeSignal   BootstrapRepositoryMergeSignal
+	CheckedPolicy CheckedBootstrapServicesPolicyArtifact
+	Meta          value.CommandMeta
+}
+
 // BootstrapServicesPolicyImportResult returns activated binding and checked policy state.
 type BootstrapServicesPolicyImportResult struct {
 	Repository      entity.RepositoryBinding
