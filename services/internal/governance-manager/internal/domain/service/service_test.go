@@ -1260,6 +1260,94 @@ func TestBuildReleaseDecisionPackageRejectsUnsafeEvidence(t *testing.T) {
 	}
 }
 
+func TestBuildReleaseDecisionPackageStoresIntegrationRefs(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 27, 11, 0, 0, 0, time.UTC)
+	packageID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+	eventID := uuid.MustParse("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+	commandID := uuid.MustParse("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
+	assessmentID := uuid.MustParse("dddddddd-dddd-4ddd-8ddd-dddddddddddd")
+	gateDecisionID := uuid.MustParse("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee")
+	repository := &fakeRepository{
+		ready:        true,
+		assessment:   entity.RiskAssessment{VersionedBase: entity.VersionedBase{ID: assessmentID}},
+		gateDecision: entity.GateDecision{ID: gateDecisionID},
+	}
+	service := NewWithConfig(Config{
+		Repository:  repository,
+		Clock:       fixedClock{now: now},
+		IDGenerator: &fixedIDs{ids: []uuid.UUID{packageID, eventID}},
+		Authorizer:  AllowAllAuthorizer{},
+	})
+
+	item, err := service.BuildReleaseDecisionPackage(context.Background(), BuildReleaseDecisionPackageInput{
+		ReleaseCandidateRef: "release:v1.0.0",
+		ProjectContext:      value.ProjectContextRef{ProjectRef: "project:alpha"},
+		IntegrationRefs: []value.ReleaseIntegrationRef{
+			{
+				Domain:     " PROVIDER ",
+				Kind:       " pull_request ",
+				Ref:        " provider:pr:1 ",
+				Status:     "checks_passed",
+				Summary:    "bounded merge status",
+				Digest:     "sha256:release-pr",
+				ObservedAt: "2026-05-27T11:00:00Z",
+				Version:    "provider-version:1",
+			},
+			{Domain: "governance", Kind: "risk_assessment", Ref: assessmentID.String()},
+			{Domain: "governance", Kind: "gate_decision", Ref: gateDecisionID.String()},
+		},
+		Meta: CommandMeta{
+			CommandID: &commandID,
+			Actor:     value.Actor{Type: "service", ID: "agent-manager"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("BuildReleaseDecisionPackage(): %v", err)
+	}
+	if item.ID != packageID || len(item.IntegrationRefs) != 3 {
+		t.Fatalf("release package = %+v, want package with three integration refs", item)
+	}
+	if item.IntegrationRefs[0].Domain != "provider" || item.IntegrationRefs[0].Kind != "pull_request" || item.IntegrationRefs[0].Ref != "provider:pr:1" {
+		t.Fatalf("normalized provider ref = %+v", item.IntegrationRefs[0])
+	}
+	if repository.assessmentReads != 1 || repository.gateDecisionReads != 1 {
+		t.Fatalf("local governance ref reads = assessment %d gate decision %d, want 1/1", repository.assessmentReads, repository.gateDecisionReads)
+	}
+	if len(repository.releasePackage.IntegrationRefs) != 3 {
+		t.Fatalf("stored integration refs = %+v, want three refs", repository.releasePackage.IntegrationRefs)
+	}
+}
+
+func TestBuildReleaseDecisionPackageRejectsUnsafeIntegrationRef(t *testing.T) {
+	t.Parallel()
+
+	repository := &fakeRepository{ready: true}
+	service := newTestService(repository)
+
+	_, err := service.BuildReleaseDecisionPackage(context.Background(), BuildReleaseDecisionPackageInput{
+		ReleaseCandidateRef: "release:v1.0.0",
+		ProjectContext:      value.ProjectContextRef{ProjectRef: "project:alpha"},
+		IntegrationRefs: []value.ReleaseIntegrationRef{{
+			Domain:  "runtime",
+			Kind:    "job",
+			Ref:     "runtime:job:1",
+			Summary: "stdout raw logs with token=secret",
+		}},
+		Meta: CommandMeta{
+			CommandID: ptrUUID(uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")),
+			Actor:     value.Actor{Type: "service", ID: "agent-manager"},
+		},
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("BuildReleaseDecisionPackage() error = %v, want ErrInvalidArgument", err)
+	}
+	if repository.mutationCalls != 0 {
+		t.Fatalf("mutation calls = %d, want 0", repository.mutationCalls)
+	}
+}
+
 func TestReleaseReadAccessDeniedBeforeRepositoryRead(t *testing.T) {
 	t.Parallel()
 

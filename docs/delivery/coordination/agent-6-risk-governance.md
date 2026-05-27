@@ -49,6 +49,13 @@
 - Результат среза: release decision package, release decision, blocking signal и release safety-loop state работают на PostgreSQL repository с access checks, idempotent replay, optimistic concurrency и safe `governance.release_*`/`governance.blocking_signal.*` outbox events.
 - Интеграции с `agent-manager`, `provider-hub`, `interaction-hub`, `runtime-manager`, `project-catalog` и `operations-hub` остаются GOV-7.
 
+## Завершённый release integration refs-срез
+
+- Issue: #856.
+- Результат среза: release decision package явно хранит safe `integration_refs` для project/repository/release line, provider Issue/PR/check/review, agent run/acceptance, runtime job/deploy, local risk assessment и gate refs.
+- `governance-manager` нормализует domain/kind/ref/status/summary/digest/timestamp/version, проверяет только локальные governance refs и не сохраняет raw diff, provider payload, prompt/transcript, logs, workspace paths, secrets, kubeconfig или PII.
+- Service-client чтения из `project-catalog`, `provider-hub`, `agent-manager`, `runtime-manager`, `interaction-hub`, provider write, delivery callbacks и deploy orchestration остаются следующими GOV-7 интеграционными срезами.
+
 ## Ближайшие зависимости
 
 | Домен | Что нужно согласовать |

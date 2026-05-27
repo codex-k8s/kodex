@@ -724,6 +724,7 @@ func (server *Server) BuildReleaseDecisionPackage(ctx context.Context, req *gove
 		AgentContext:            agentContext,
 		ReviewSignalIDs:         reviewSignalIDs,
 		EvidenceRefs:            evidenceRefs(req.GetEvidenceRefs()),
+		IntegrationRefs:         releaseIntegrationRefs(req.GetIntegrationRefs()),
 		KnownLimitationsSummary: req.GetKnownLimitationsSummary(),
 		Meta:                    meta,
 	})

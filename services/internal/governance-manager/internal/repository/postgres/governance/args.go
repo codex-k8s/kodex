@@ -192,6 +192,7 @@ func releaseDecisionPackageArgs(item entity.ReleaseDecisionPackage) pgx.NamedArg
 		"agent_context":             jsonObjectPayload(item.AgentContext),
 		"review_signal_ids":         item.ReviewSignalIDs,
 		"evidence_refs":             jsonArrayPayload(item.EvidenceRefs),
+		"integration_refs":          jsonArrayPayload(item.IntegrationRefs),
 		"known_limitations_summary": item.KnownLimitationsSummary,
 		"status":                    string(item.Status),
 	}, item.ID, item.Version, item.CreatedAt, item.UpdatedAt)

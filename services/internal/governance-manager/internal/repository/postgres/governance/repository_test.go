@@ -283,15 +283,25 @@ func TestRepositoryIntegrationGovernanceStateAndOutbox(t *testing.T) {
 	}
 
 	releasePackage := entity.ReleaseDecisionPackage{
-		VersionedBase:           entity.VersionedBase{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
-		ReleaseCandidateRef:     "release:v1.0.0",
-		ProjectContext:          value.ProjectContextRef{ProjectRef: "project:alpha", ReleasePolicyRef: "release-policy:stable"},
-		RepositoryRefs:          []string{"repo:main"},
-		RiskAssessmentID:        &assessment.ID,
-		ProviderRefs:            []byte(`[{"pull_request_ref":"provider:pr:1"}]`),
-		RuntimeRefs:             []byte(`[{"job_ref":"runtime:job:1"}]`),
-		AgentContext:            []byte(`{"run_ref":"agent:run:1"}`),
-		ReviewSignalIDs:         []uuid.UUID{signal.ID},
+		VersionedBase:       entity.VersionedBase{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		ReleaseCandidateRef: "release:v1.0.0",
+		ProjectContext:      value.ProjectContextRef{ProjectRef: "project:alpha", ReleasePolicyRef: "release-policy:stable"},
+		RepositoryRefs:      []string{"repo:main"},
+		RiskAssessmentID:    &assessment.ID,
+		ProviderRefs:        []byte(`[{"pull_request_ref":"provider:pr:1"}]`),
+		RuntimeRefs:         []byte(`[{"job_ref":"runtime:job:1"}]`),
+		AgentContext:        []byte(`{"run_ref":"agent:run:1"}`),
+		ReviewSignalIDs:     []uuid.UUID{signal.ID},
+		IntegrationRefs: []value.ReleaseIntegrationRef{{
+			Domain:     "provider",
+			Kind:       "pull_request",
+			Ref:        "provider:pr:1",
+			Status:     "merged",
+			Summary:    "checks passed",
+			Digest:     "sha256:release-pr",
+			ObservedAt: "2026-05-26T12:00:00Z",
+			Version:    "provider-version:1",
+		}},
 		KnownLimitationsSummary: "none",
 		Status:                  enum.ReleaseDecisionPackageStatusReady,
 	}
@@ -304,6 +314,9 @@ func TestRepositoryIntegrationGovernanceStateAndOutbox(t *testing.T) {
 	}
 	if len(packages) != 1 || packages[0].ReleaseCandidateRef != releasePackage.ReleaseCandidateRef {
 		t.Fatalf("packages = %+v, want release package", packages)
+	}
+	if len(packages[0].IntegrationRefs) != 1 || packages[0].IntegrationRefs[0].Ref != "provider:pr:1" {
+		t.Fatalf("integration refs = %+v, want persisted provider ref", packages[0].IntegrationRefs)
 	}
 
 	requestedDecision := entity.ReleaseDecision{

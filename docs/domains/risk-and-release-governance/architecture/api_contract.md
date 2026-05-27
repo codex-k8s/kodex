@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-22
 updated_at: 2026-05-27
-related_issues: [322, 769, 790, 815, 827, 845]
+related_issues: [322, 769, 790, 815, 827, 845, 856]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -64,7 +64,7 @@ approvals:
 | `ListGateDecisions` | gRPC query | `governance.gate.read` | gate request или target | Читает final gate decisions по gate request или target; outcome используется только как уточняющий фильтр. |
 | `GetGateRequest` | gRPC query | `governance.gate.read` | нет | Читает gate request, evidence и decision status. |
 | `ListGateRequests` | gRPC query | `governance.gate.read` или `governance.risk.read` | target или risk assessment | Читает ожидающие, resolved или просроченные gates по target или assessment; status используется только как уточняющий фильтр. |
-| `BuildReleaseDecisionPackage` | gRPC command | `governance.release.prepare` | `command_id` | Собирает release evidence из project/provider/runtime/agent refs и optional local `risk_assessment_id`. |
+| `BuildReleaseDecisionPackage` | gRPC command | `governance.release.prepare` | `command_id` | Собирает release evidence из project/provider/runtime/agent refs, explicit `integration_refs` и optional local `risk_assessment_id`. |
 | `GetReleaseDecisionPackage` | gRPC query | `governance.release.read` | нет | Читает release evidence package. |
 | `ListReleaseDecisionPackages` | gRPC query | `governance.release.read` | нет | Читает release packages по project/candidate/status. |
 | `RequestReleaseDecision` | gRPC command | `governance.release.request` | `command_id` | Запрашивает release gate или автоматическое decision по policy. |
@@ -79,7 +79,9 @@ approvals:
 
 ## Интеграции с другими сервисами
 
-| Сервис | Вызовы из `governance-manager` | Правило |
+GOV-7a хранит явные safe refs/summaries в release package. Прямые service-client чтения соседних доменов подключаются отдельными интеграционными срезами после согласования read-контрактов.
+
+| Сервис | Что приходит как refs или будущий read-contract | Правило |
 |---|---|---|
 | `project-catalog` | Project/repository refs, `GetServicesPolicy`, branch rules, release policy, release line, risk profile refs | Проектная policy остаётся у `project-catalog`; governance хранит только risk/gate policy и decisions. |
 | `agent-manager` | Flow/run/acceptance refs и role outputs через команды Evaluate/RecordReviewSignal | Flow, run и acceptance остаются у `agent-manager`. |
@@ -150,7 +152,8 @@ MCP-инструменты не должны принимать свободны
 | Storage, migrations и outbox publisher | MVP-основа готова: PostgreSQL repository, service-local outbox и handlers для поддержанных storage-операций. |
 | Risk classifier и policy evaluator | Готовы для локальных risk profiles/rules, safe summaries/refs, идемпотентного replay, optimistic concurrency и safe outbox events. |
 | Release decision lifecycle и safety-loop | Готовы для release package build/read/list, decision request/submit/read/list, blocking signals и текущего safety-loop state на safe refs/summaries. |
-| Интеграции с project/agent/provider/runtime/interaction | Зафиксированы в refs и границах контрактов; межсервисная связка остаётся отдельным интеграционным срезом. |
+| Release integration refs | Поддержаны для release decision package: safe domain/kind/ref/status/summary/digest/timestamp/version, локальная проверка governance refs и отсутствие raw payload/logs/secrets. |
+| Интеграции с project/agent/provider/runtime/interaction | Зафиксированы в refs и границах контрактов; межсервисные read-клиенты, delivery callbacks, provider write и deploy orchestration остаются отдельными срезами. |
 
 ## Совместимость
 

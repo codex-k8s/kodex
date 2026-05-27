@@ -5,8 +5,8 @@ title: kodex — дизайн домена рисков и релизов
 status: active
 owner_role: SA
 created_at: 2026-05-22
-updated_at: 2026-05-26
-related_issues: [322, 769, 827]
+updated_at: 2026-05-27
+related_issues: [322, 769, 827, 845, 856]
 related_prs: []
 related_adrs: []
 approvals:
@@ -63,7 +63,7 @@ approvals:
 | Risk classifier | Рассчитывает initial и effective risk class по safe summaries/refs, typed factors, policy rules и review signals без raw diff/provider payload/logs. |
 | Review signal intake | Принимает signals от agent roles, людей, provider review и runtime/postdeploy checks. |
 | Gate decision engine | Создаёт gate requests, собирает evidence package и фиксирует outcome. |
-| Release decision package builder | Собирает release context: linked issues/PRs, release line, rollout strategy, checks, signals и known limitations. |
+| Release decision package builder | Собирает release context как safe refs/summaries: linked issues/PRs/checks/reviews, release line, risk/gate refs, agent acceptance refs, runtime job/deploy refs и known limitations. |
 | Safety-loop tracker | Ведёт состояния `release_candidate`, `awaiting_release_gate`, `deploying`, `postdeploy_observation`, `stable`, `hold`, `rollback`, `follow_up_required`. |
 | Outbox-доставщик | Публикует `governance.*` события через `platform-event-log`. |
 
@@ -129,13 +129,14 @@ sequenceDiagram
   participant AM as agent-manager
   participant GOV as governance-manager
   participant PC as project-catalog
+  participant PH as provider-hub
   participant RT as runtime-manager
-  participant IH as interaction-hub
-  AM->>GOV: BuildReleaseDecisionPackage(release candidate)
-  GOV->>PC: release policy, release line, branch rules
-  GOV->>RT: job readiness and target environment summary
-  GOV->>IH: deliver release gate if required
-  IH-->>GOV: decision callback
+  AM->>GOV: BuildReleaseDecisionPackage(release candidate + safe refs)
+  PC-->>AM: release policy, release line, branch rules refs
+  PH-->>AM: issue/PR/check/review refs
+  RT-->>AM: job/deploy readiness summary refs
+  GOV->>GOV: validate local risk/gate refs and store package
+  GOV-->>AM: release package/decision refs
   GOV-->>RT: release decision ref allows deploy
   RT-->>GOV: deploy/postdeploy signals
   GOV->>GOV: update safety-loop state

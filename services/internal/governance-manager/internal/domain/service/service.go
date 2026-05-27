@@ -605,6 +605,10 @@ func (s *Service) BuildReleaseDecisionPackage(ctx context.Context, input BuildRe
 	if err != nil {
 		return entity.ReleaseDecisionPackage{}, err
 	}
+	integrationRefs, err := normalizeReleaseIntegrationRefs(input.IntegrationRefs)
+	if err != nil {
+		return entity.ReleaseDecisionPackage{}, err
+	}
 	knownLimitationsSummary, err := normalizeReleaseSafeText("release.known_limitations_summary", input.KnownLimitationsSummary, maxEvaluationSummaryLength)
 	if err != nil {
 		return entity.ReleaseDecisionPackage{}, err
@@ -631,6 +635,9 @@ func (s *Service) BuildReleaseDecisionPackage(ctx context.Context, input BuildRe
 			return entity.ReleaseDecisionPackage{}, err
 		}
 	}
+	if err := s.validateReleaseIntegrationRefs(ctx, integrationRefs); err != nil {
+		return entity.ReleaseDecisionPackage{}, err
+	}
 	for _, reviewSignalID := range input.ReviewSignalIDs {
 		if reviewSignalID == uuid.Nil {
 			return entity.ReleaseDecisionPackage{}, errs.ErrInvalidArgument
@@ -651,6 +658,7 @@ func (s *Service) BuildReleaseDecisionPackage(ctx context.Context, input BuildRe
 		AgentContext:            agentContext,
 		ReviewSignalIDs:         input.ReviewSignalIDs,
 		EvidenceRefs:            evidenceRefs,
+		IntegrationRefs:         integrationRefs,
 		KnownLimitationsSummary: knownLimitationsSummary,
 		Status:                  enum.ReleaseDecisionPackageStatusReady,
 	}
@@ -674,6 +682,41 @@ func (s *Service) GetReleaseDecisionPackage(ctx context.Context, input GetReleas
 
 func (s *Service) ListReleaseDecisionPackages(ctx context.Context, input ListReleaseDecisionPackagesInput) ([]entity.ReleaseDecisionPackage, query.PageResult, error) {
 	return listWithAuthorization(ctx, input.Meta, input.Filter, s.authorizeReleasePackageList, s.repository.ListReleaseDecisionPackages)
+}
+
+func (s *Service) validateReleaseIntegrationRefs(ctx context.Context, refs []value.ReleaseIntegrationRef) error {
+	for _, ref := range refs {
+		if ref.Domain != "governance" {
+			continue
+		}
+		id, err := uuid.Parse(ref.Ref)
+		if err != nil {
+			return errs.ErrInvalidArgument
+		}
+		switch ref.Kind {
+		case "risk_assessment":
+			if _, err := s.repository.GetRiskAssessment(ctx, id); err != nil {
+				return err
+			}
+		case "review_signal":
+			if _, err := s.repository.GetReviewSignal(ctx, id); err != nil {
+				return err
+			}
+		case "gate_request":
+			if _, err := s.repository.GetGateRequest(ctx, id); err != nil {
+				return err
+			}
+		case "gate_decision":
+			if _, err := s.repository.GetGateDecision(ctx, id); err != nil {
+				return err
+			}
+		case "release_decision_package":
+			if _, err := s.repository.GetReleaseDecisionPackage(ctx, id); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // RequestReleaseDecision starts the minimal release decision lifecycle.
@@ -1316,6 +1359,98 @@ func normalizeReleaseRepositoryRefs(refs []string) ([]string, error) {
 	return result, nil
 }
 
+func normalizeReleaseIntegrationRefs(refs []value.ReleaseIntegrationRef) ([]value.ReleaseIntegrationRef, error) {
+	if len(refs) > maxReleasePackageRefs {
+		return nil, errs.ErrInvalidArgument
+	}
+	result := make([]value.ReleaseIntegrationRef, 0, len(refs))
+	seen := make(map[string]struct{}, len(refs))
+	for _, ref := range refs {
+		normalized := value.ReleaseIntegrationRef{
+			Domain:     strings.ToLower(strings.TrimSpace(ref.Domain)),
+			Kind:       strings.ToLower(strings.TrimSpace(ref.Kind)),
+			Ref:        strings.TrimSpace(ref.Ref),
+			Status:     strings.TrimSpace(ref.Status),
+			Summary:    strings.TrimSpace(ref.Summary),
+			Digest:     strings.TrimSpace(ref.Digest),
+			ObservedAt: strings.TrimSpace(ref.ObservedAt),
+			Version:    strings.TrimSpace(ref.Version),
+		}
+		if err := validateReleaseIntegrationRef(normalized); err != nil {
+			return nil, err
+		}
+		key := normalized.Domain + "\x00" + normalized.Kind + "\x00" + normalized.Ref
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		result = append(result, normalized)
+	}
+	return result, nil
+}
+
+func validateReleaseIntegrationRef(ref value.ReleaseIntegrationRef) error {
+	if err := validateReleaseSafeRef("release.integration_refs.domain", ref.Domain, true); err != nil {
+		return err
+	}
+	if err := validateReleaseSafeRef("release.integration_refs.kind", ref.Kind, true); err != nil {
+		return err
+	}
+	if !validReleaseIntegrationKind(ref.Domain, ref.Kind) {
+		return errs.ErrInvalidArgument
+	}
+	if err := validateReleaseSafeRef("release.integration_refs.ref", ref.Ref, true); err != nil {
+		return err
+	}
+	if err := validateReleaseSafeRef("release.integration_refs.status", ref.Status, false); err != nil {
+		return err
+	}
+	if err := validateReleaseSafeText("release.integration_refs.summary", ref.Summary, maxEvaluationFactorSummary); err != nil {
+		return err
+	}
+	if err := validateReleaseSafeRef("release.integration_refs.digest", ref.Digest, false); err != nil {
+		return err
+	}
+	if err := validateReleaseSafeRef("release.integration_refs.version", ref.Version, false); err != nil {
+		return err
+	}
+	if err := validateReleaseSafeRef("release.integration_refs.observed_at", ref.ObservedAt, false); err != nil {
+		return err
+	}
+	if ref.ObservedAt != "" {
+		if _, err := time.Parse(time.RFC3339, ref.ObservedAt); err != nil {
+			return errs.ErrInvalidArgument
+		}
+	}
+	return nil
+}
+
+func validReleaseIntegrationKind(domain string, kind string) bool {
+	switch domain {
+	case "project":
+		return isOneOfString(kind, "project", "repository", "service", "branch_rules", "release_policy", "release_line")
+	case "provider":
+		return isOneOfString(kind, "issue", "pull_request", "merge_request", "check", "review", "comment", "operation", "changed_files_summary")
+	case "agent":
+		return isOneOfString(kind, "session", "run", "stage", "acceptance", "role")
+	case "runtime":
+		return isOneOfString(kind, "job", "deploy", "postdeploy", "environment", "artifact", "summary")
+	case "governance":
+		return isOneOfString(kind, "risk_assessment", "review_signal", "gate_request", "gate_decision", "release_decision_package")
+	default:
+		return false
+	}
+}
+
+func isOneOfString(value string, allowed ...string) bool {
+	for _, candidate := range allowed {
+		if value == candidate {
+			return true
+		}
+	}
+	return false
+}
+
 func normalizeReleaseJSONArrayPayload(name string, payload []byte) ([]byte, error) {
 	raw := strings.TrimSpace(string(payload))
 	if raw == "" || raw == "null" {
@@ -1460,6 +1595,10 @@ func unsafeReleaseText(value string) bool {
 		"authorization:",
 		"bearer ",
 		"kubeconfig",
+		"workspace path",
+		"workspace_path",
+		"/workspace/",
+		"/home/",
 		"personal data",
 		"pii",
 	} {

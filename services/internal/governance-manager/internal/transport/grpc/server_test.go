@@ -97,6 +97,40 @@ func TestGetRiskAssessmentIncludesFactorsAndReviewSignals(t *testing.T) {
 	}
 }
 
+func TestBuildReleaseDecisionPackageRoutesIntegrationRefsToDomainService(t *testing.T) {
+	t.Parallel()
+
+	packageID := "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"
+	service := &fakeBacklogService{}
+	response, err := NewServer(service).BuildReleaseDecisionPackage(context.Background(), &governancev1.BuildReleaseDecisionPackageRequest{
+		ReleaseCandidateRef: "release:v1.0.0",
+		ProjectContext:      &governancev1.ProjectContextRef{ProjectRef: ptrString("project:alpha")},
+		IntegrationRefs: []*governancev1.ReleaseIntegrationRef{{
+			Domain:     "provider",
+			Kind:       "pull_request",
+			Ref:        "provider:pr:1",
+			Status:     ptrString("checks_passed"),
+			Summary:    ptrString("bounded check summary"),
+			Digest:     ptrString("sha256:release-pr"),
+			ObservedAt: ptrString("2026-05-27T11:00:00Z"),
+			Version:    ptrString("provider-version:1"),
+		}},
+		Meta: &governancev1.CommandMeta{
+			Actor:     &governancev1.Actor{Type: "service", Id: "agent-manager"},
+			CommandId: ptrString("bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb"),
+		},
+	})
+	if err != nil {
+		t.Fatalf("BuildReleaseDecisionPackage(): %v", err)
+	}
+	if service.buildReleaseDecisionPackageInput.ReleaseCandidateRef != "release:v1.0.0" || len(service.buildReleaseDecisionPackageInput.IntegrationRefs) != 1 {
+		t.Fatalf("input = %+v, want routed release package with integration ref", service.buildReleaseDecisionPackageInput)
+	}
+	if response.GetReleaseDecisionPackage().GetId() != packageID || len(response.GetReleaseDecisionPackage().GetIntegrationRefs()) != 1 {
+		t.Fatalf("response = %+v, want package %s with one integration ref", response.GetReleaseDecisionPackage(), packageID)
+	}
+}
+
 func TestRequestReleaseDecisionRoutesToDomainService(t *testing.T) {
 	t.Parallel()
 
@@ -166,12 +200,13 @@ func TestUnaryErrorInterceptorMapsRepositoryDomainErrors(t *testing.T) {
 
 type fakeBacklogService struct {
 	governanceService
-	operation                   enum.Operation
-	reevaluateRiskInput         governanceservice.ReevaluateRiskInput
-	riskAssessmentID            uuid.UUID
-	riskFactorsInput            governanceservice.ListRiskFactorsInput
-	reviewSignalsInput          governanceservice.ListReviewSignalsInput
-	requestReleaseDecisionInput governanceservice.RequestReleaseDecisionInput
+	operation                        enum.Operation
+	reevaluateRiskInput              governanceservice.ReevaluateRiskInput
+	riskAssessmentID                 uuid.UUID
+	riskFactorsInput                 governanceservice.ListRiskFactorsInput
+	reviewSignalsInput               governanceservice.ListReviewSignalsInput
+	buildReleaseDecisionPackageInput governanceservice.BuildReleaseDecisionPackageInput
+	requestReleaseDecisionInput      governanceservice.RequestReleaseDecisionInput
 }
 
 func (service *fakeBacklogService) BacklogOperation(_ context.Context, input governanceservice.BacklogOperationInput) error {
@@ -210,6 +245,17 @@ func (service *fakeBacklogService) ListReviewSignals(_ context.Context, input go
 		Outcome:          enum.ReviewSignalOutcomePass,
 		Summary:          "approved",
 	}}, query.PageResult{}, nil
+}
+
+func (service *fakeBacklogService) BuildReleaseDecisionPackage(_ context.Context, input governanceservice.BuildReleaseDecisionPackageInput) (entity.ReleaseDecisionPackage, error) {
+	service.buildReleaseDecisionPackageInput = input
+	return entity.ReleaseDecisionPackage{
+		VersionedBase:       entity.VersionedBase{ID: uuid.MustParse("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"), Version: 1},
+		ReleaseCandidateRef: input.ReleaseCandidateRef,
+		ProjectContext:      input.ProjectContext,
+		IntegrationRefs:     input.IntegrationRefs,
+		Status:              enum.ReleaseDecisionPackageStatusReady,
+	}, nil
 }
 
 func (service *fakeBacklogService) RequestReleaseDecision(_ context.Context, input governanceservice.RequestReleaseDecisionInput) (entity.ReleaseDecision, entity.ReleaseDecisionPackage, error) {

@@ -294,7 +294,7 @@ func scanReleaseDecisionPackage(row postgreslib.RowScanner) (entity.ReleaseDecis
 	var item entity.ReleaseDecisionPackage
 	var riskAssessmentID pgtype.UUID
 	var status string
-	var providerRefs, runtimeRefs, agentContext, evidenceRefs []byte
+	var providerRefs, runtimeRefs, agentContext, evidenceRefs, integrationRefs []byte
 	err := row.Scan(
 		&item.ID,
 		&item.ReleaseCandidateRef,
@@ -311,6 +311,7 @@ func scanReleaseDecisionPackage(row postgreslib.RowScanner) (entity.ReleaseDecis
 		&agentContext,
 		&item.ReviewSignalIDs,
 		&evidenceRefs,
+		&integrationRefs,
 		&item.KnownLimitationsSummary,
 		&status,
 		&item.Version,
@@ -327,6 +328,9 @@ func scanReleaseDecisionPackage(row postgreslib.RowScanner) (entity.ReleaseDecis
 	}
 	if err := unmarshalJSON(evidenceRefs, &item.EvidenceRefs); err != nil {
 		return item, fmt.Errorf("scan release package evidence refs: %w", err)
+	}
+	if err := unmarshalJSON(integrationRefs, &item.IntegrationRefs); err != nil {
+		return item, fmt.Errorf("scan release package integration refs: %w", err)
 	}
 	return item, nil
 }
