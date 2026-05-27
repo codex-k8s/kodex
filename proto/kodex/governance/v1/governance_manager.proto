@@ -857,6 +857,7 @@ message BuildReleaseDecisionPackageRequest {
   repeated EvidenceRef evidence_refs = 8;
   string known_limitations_summary = 9;
   CommandMeta meta = 10;
+  optional string risk_assessment_id = 11;
 }
 
 message GetReleaseDecisionPackageRequest {

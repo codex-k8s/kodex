@@ -93,6 +93,23 @@ type ReleaseDecisionPackageFilter struct {
 	Page                PageRequest
 }
 
+// ReleaseDecisionFilter filters release decisions.
+type ReleaseDecisionFilter struct {
+	ReleaseDecisionPackageID *uuid.UUID
+	ProjectContext           value.ProjectContextRef
+	Status                   enum.ReleaseDecisionStatus
+	Outcome                  enum.ReleaseDecisionOutcome
+	Page                     PageRequest
+}
+
+// BlockingSignalFilter filters blocking signals by target and state.
+type BlockingSignalFilter struct {
+	Target   value.ExternalRef
+	Status   enum.BlockingSignalStatus
+	Severity enum.SignalSeverity
+	Page     PageRequest
+}
+
 // CommandIdentity identifies a mutating command for idempotent replay.
 type CommandIdentity struct {
 	CommandID      *uuid.UUID

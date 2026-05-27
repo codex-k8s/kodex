@@ -306,6 +306,113 @@ func TestRepositoryIntegrationGovernanceStateAndOutbox(t *testing.T) {
 		t.Fatalf("packages = %+v, want release package", packages)
 	}
 
+	requestedDecision := entity.ReleaseDecision{
+		VersionedBase:            entity.VersionedBase{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		ReleaseDecisionPackageID: releasePackage.ID,
+		DecisionActorRef:         "service:agent-manager",
+		DecisionPolicyRef:        "release-policy:stable",
+		Status:                   enum.ReleaseDecisionStatusRequested,
+		DecidedAt:                now,
+	}
+	releasePackage.Status = enum.ReleaseDecisionPackageStatusDecisionRequested
+	releasePackage.Version = 2
+	releasePackage.UpdatedAt = now.Add(time.Minute)
+	if err := repository.CreateReleaseDecision(ctx, releasePackage, 1, requestedDecision, testCommandResult(uuid.New(), operationCreateReleaseDecision, "release_decision", requestedDecision.ID, now), testEvent("governance.release_decision.requested", "release_decision", requestedDecision.ID, now)); err != nil {
+		t.Fatalf("request release decision: %v", err)
+	}
+	storedReleaseDecision, err := repository.GetReleaseDecisionByPackage(ctx, releasePackage.ID)
+	if err != nil {
+		t.Fatalf("get release decision by package: %v", err)
+	}
+	if storedReleaseDecision.Status != enum.ReleaseDecisionStatusRequested || storedReleaseDecision.ReleaseDecisionPackageID != releasePackage.ID {
+		t.Fatalf("release decision = %+v, want requested for package %s", storedReleaseDecision, releasePackage.ID)
+	}
+	releasePackage.Status = enum.ReleaseDecisionPackageStatusClosed
+	releasePackage.Version = 3
+	releasePackage.UpdatedAt = now.Add(2 * time.Minute)
+	storedReleaseDecision.Status = enum.ReleaseDecisionStatusResolved
+	storedReleaseDecision.Outcome = enum.ReleaseDecisionOutcomeGoWithConditions
+	storedReleaseDecision.GateDecisionID = &decision.ID
+	storedReleaseDecision.DecisionActorRef = "user:owner"
+	storedReleaseDecision.DecisionPolicyRef = "release-policy:stable"
+	storedReleaseDecision.Reason = "gate approved"
+	storedReleaseDecision.ConditionsSummary = "watch rollout"
+	storedReleaseDecision.Version = 2
+	storedReleaseDecision.DecidedAt = now.Add(2 * time.Minute)
+	storedReleaseDecision.UpdatedAt = now.Add(2 * time.Minute)
+	if err := repository.UpdateReleaseDecision(ctx, releasePackage, 2, storedReleaseDecision, 1, testCommandResult(uuid.New(), operationUpdateReleaseDecision, "release_decision", storedReleaseDecision.ID, now), testEvent("governance.release_decision.resolved", "release_decision", storedReleaseDecision.ID, now)); err != nil {
+		t.Fatalf("update release decision: %v", err)
+	}
+	releaseDecisions, _, err := repository.ListReleaseDecisions(ctx, query.ReleaseDecisionFilter{ProjectContext: value.ProjectContextRef{ProjectRef: "project:alpha"}, Outcome: enum.ReleaseDecisionOutcomeGoWithConditions})
+	if err != nil {
+		t.Fatalf("list release decisions: %v", err)
+	}
+	if len(releaseDecisions) != 1 || releaseDecisions[0].Version != 2 || releaseDecisions[0].GateDecisionID == nil {
+		t.Fatalf("release decisions = %+v, want resolved decision with gate ref", releaseDecisions)
+	}
+
+	blockingSignal := entity.BlockingSignal{
+		VersionedBase: entity.VersionedBase{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		Target:        value.ExternalRef{Type: "release_candidate", Ref: releasePackage.ReleaseCandidateRef},
+		SourceType:    enum.BlockingSignalSourceTypeRuntime,
+		SourceRef:     "runtime:job:deploy",
+		Severity:      enum.SignalSeverityBlocking,
+		Summary:       "deploy health check failed",
+		Status:        enum.BlockingSignalStatusActive,
+	}
+	if err := repository.RecordBlockingSignal(ctx, blockingSignal, testCommandResult(uuid.New(), operationRecordBlockingSignal, "blocking_signal", blockingSignal.ID, now), testEvent("governance.blocking_signal.recorded", "blocking_signal", blockingSignal.ID, now)); err != nil {
+		t.Fatalf("record blocking signal: %v", err)
+	}
+	blockingSignals, _, err := repository.ListBlockingSignals(ctx, query.BlockingSignalFilter{Target: blockingSignal.Target, Status: enum.BlockingSignalStatusActive})
+	if err != nil {
+		t.Fatalf("list blocking signals: %v", err)
+	}
+	if len(blockingSignals) != 1 || blockingSignals[0].Severity != enum.SignalSeverityBlocking {
+		t.Fatalf("blocking signals = %+v, want active blocking signal", blockingSignals)
+	}
+	resolvedAt := now.Add(3 * time.Minute)
+	blockingSignal.Status = enum.BlockingSignalStatusResolved
+	blockingSignal.Version = 2
+	blockingSignal.Summary = "resolved"
+	blockingSignal.UpdatedAt = resolvedAt
+	blockingSignal.ResolvedAt = &resolvedAt
+	if err := repository.UpdateBlockingSignal(ctx, blockingSignal, 1, testCommandResult(uuid.New(), operationUpdateBlockingSignal, "blocking_signal", blockingSignal.ID, now), testEvent("governance.blocking_signal.resolved", "blocking_signal", blockingSignal.ID, now)); err != nil {
+		t.Fatalf("resolve blocking signal: %v", err)
+	}
+	storedBlockingSignal, err := repository.GetBlockingSignal(ctx, blockingSignal.ID)
+	if err != nil {
+		t.Fatalf("get blocking signal: %v", err)
+	}
+	if storedBlockingSignal.Status != enum.BlockingSignalStatusResolved || storedBlockingSignal.ResolvedAt == nil {
+		t.Fatalf("stored blocking signal = %+v, want resolved", storedBlockingSignal)
+	}
+
+	safetyState := entity.ReleaseSafetyState{
+		VersionedBase:            entity.VersionedBase{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		ReleaseDecisionPackageID: releasePackage.ID,
+		CurrentState:             enum.ReleaseSafetyStateKindDeploying,
+		RuntimeJobRef:            "runtime:job:deploy",
+		LastStateReason:          "deploy started",
+	}
+	if err := repository.RecordReleaseSafetyState(ctx, safetyState, testCommandResult(uuid.New(), operationRecordReleaseSafetyState, "release_safety_state", safetyState.ID, now), testEvent("governance.release_safety_state.changed", "release_safety_state", safetyState.ID, now)); err != nil {
+		t.Fatalf("record safety state: %v", err)
+	}
+	safetyState.CurrentState = enum.ReleaseSafetyStateKindStable
+	safetyState.BlockingSignalCount = 0
+	safetyState.LastStateReason = "postdeploy healthy"
+	safetyState.Version = 2
+	safetyState.UpdatedAt = now.Add(4 * time.Minute)
+	if err := repository.UpdateReleaseSafetyState(ctx, safetyState, 1, testCommandResult(uuid.New(), operationUpdateReleaseSafetyState, "release_safety_state", safetyState.ID, now), testEvent("governance.release_safety_state.changed", "release_safety_state", safetyState.ID, now)); err != nil {
+		t.Fatalf("update safety state: %v", err)
+	}
+	storedSafetyState, err := repository.GetReleaseSafetyStateByPackage(ctx, releasePackage.ID)
+	if err != nil {
+		t.Fatalf("get safety state: %v", err)
+	}
+	if storedSafetyState.CurrentState != enum.ReleaseSafetyStateKindStable || storedSafetyState.Version != 2 {
+		t.Fatalf("stored safety state = %+v, want stable v2", storedSafetyState)
+	}
+
 	claimed, err := repository.ClaimOutboxEvents(ctx, 10, now.Add(2*time.Minute), now.Add(3*time.Minute))
 	if err != nil {
 		t.Fatalf("claim outbox events: %v", err)

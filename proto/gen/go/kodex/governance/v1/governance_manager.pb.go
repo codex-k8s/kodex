@@ -6476,6 +6476,7 @@ type BuildReleaseDecisionPackageRequest struct {
 	EvidenceRefs            []*EvidenceRef         `protobuf:"bytes,8,rep,name=evidence_refs,json=evidenceRefs,proto3" json:"evidence_refs,omitempty"`
 	KnownLimitationsSummary string                 `protobuf:"bytes,9,opt,name=known_limitations_summary,json=knownLimitationsSummary,proto3" json:"known_limitations_summary,omitempty"`
 	Meta                    *CommandMeta           `protobuf:"bytes,10,opt,name=meta,proto3" json:"meta,omitempty"`
+	RiskAssessmentId        *string                `protobuf:"bytes,11,opt,name=risk_assessment_id,json=riskAssessmentId,proto3,oneof" json:"risk_assessment_id,omitempty"`
 	unknownFields           protoimpl.UnknownFields
 	sizeCache               protoimpl.SizeCache
 }
@@ -6578,6 +6579,13 @@ func (x *BuildReleaseDecisionPackageRequest) GetMeta() *CommandMeta {
 		return x.Meta
 	}
 	return nil
+}
+
+func (x *BuildReleaseDecisionPackageRequest) GetRiskAssessmentId() string {
+	if x != nil && x.RiskAssessmentId != nil {
+		return *x.RiskAssessmentId
+	}
+	return ""
 }
 
 type GetReleaseDecisionPackageRequest struct {
@@ -8963,7 +8971,7 @@ const file_kodex_governance_v1_governance_manager_proto_rawDesc = "" +
 	"\x04page\x18\x04 \x01(\v2 .kodex.governance.v1.PageRequestR\x04page\x122\n" +
 	"\x04meta\x18\x05 \x01(\v2\x1e.kodex.governance.v1.QueryMetaR\x04metaB\x15\n" +
 	"\x13_risk_assessment_idB\t\n" +
-	"\a_status\"\x9b\x05\n" +
+	"\a_status\"\xe5\x05\n" +
 	"\"BuildReleaseDecisionPackageRequest\x122\n" +
 	"\x15release_candidate_ref\x18\x01 \x01(\tR\x13releaseCandidateRef\x12O\n" +
 	"\x0fproject_context\x18\x02 \x01(\v2&.kodex.governance.v1.ProjectContextRefR\x0eprojectContext\x12'\n" +
@@ -8975,7 +8983,9 @@ const file_kodex_governance_v1_governance_manager_proto_rawDesc = "" +
 	"\revidence_refs\x18\b \x03(\v2 .kodex.governance.v1.EvidenceRefR\fevidenceRefs\x12:\n" +
 	"\x19known_limitations_summary\x18\t \x01(\tR\x17knownLimitationsSummary\x124\n" +
 	"\x04meta\x18\n" +
-	" \x01(\v2 .kodex.governance.v1.CommandMetaR\x04meta\"\x95\x01\n" +
+	" \x01(\v2 .kodex.governance.v1.CommandMetaR\x04meta\x121\n" +
+	"\x12risk_assessment_id\x18\v \x01(\tH\x00R\x10riskAssessmentId\x88\x01\x01B\x15\n" +
+	"\x13_risk_assessment_id\"\x95\x01\n" +
 	" GetReleaseDecisionPackageRequest\x12=\n" +
 	"\x1brelease_decision_package_id\x18\x01 \x01(\tR\x18releaseDecisionPackageId\x122\n" +
 	"\x04meta\x18\x02 \x01(\v2\x1e.kodex.governance.v1.QueryMetaR\x04meta\"\x8d\x03\n" +
@@ -9812,6 +9822,7 @@ func file_kodex_governance_v1_governance_manager_proto_init() {
 	file_kodex_governance_v1_governance_manager_proto_msgTypes[50].OneofWrappers = []any{}
 	file_kodex_governance_v1_governance_manager_proto_msgTypes[54].OneofWrappers = []any{}
 	file_kodex_governance_v1_governance_manager_proto_msgTypes[56].OneofWrappers = []any{}
+	file_kodex_governance_v1_governance_manager_proto_msgTypes[57].OneofWrappers = []any{}
 	file_kodex_governance_v1_governance_manager_proto_msgTypes[59].OneofWrappers = []any{}
 	file_kodex_governance_v1_governance_manager_proto_msgTypes[61].OneofWrappers = []any{}
 	file_kodex_governance_v1_governance_manager_proto_msgTypes[63].OneofWrappers = []any{}

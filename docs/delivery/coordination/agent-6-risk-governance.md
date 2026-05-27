@@ -37,11 +37,17 @@
 - Результат среза: lifecycle gate request/decision `request/read/decision/cancel/expire`, access checks через `access-manager`, optimistic concurrency, idempotent replay и безопасные события `governance.gate.*`.
 - Delivery/callback orchestration остаётся у `interaction-hub`; `governance-manager` хранит только governance state и safe refs.
 
-## Текущий risk evaluator-срез
+## Завершённый risk evaluator-срез
 
 - Issue: #827.
 - Результат среза: risk classifier и policy evaluator в `governance-manager` работают по входным safe summaries/refs, локальным risk profiles/rules, deterministic risk class, matched rule refs, required gates, evidence refs и безопасным `governance.risk_assessment.*` событиям.
 - Release decision engine, delivery/callback, provider write pipeline, project policy ownership, deploy orchestration и UI/gateway остаются вне среза.
+
+## Завершённый release decision-срез
+
+- Issue: #845.
+- Результат среза: release decision package, release decision, blocking signal и release safety-loop state работают на PostgreSQL repository с access checks, idempotent replay, optimistic concurrency и safe `governance.release_*`/`governance.blocking_signal.*` outbox events.
+- Интеграции с `agent-manager`, `provider-hub`, `interaction-hub`, `runtime-manager`, `project-catalog` и `operations-hub` остаются GOV-7.
 
 ## Ближайшие зависимости
 

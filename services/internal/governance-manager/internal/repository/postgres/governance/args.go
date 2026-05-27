@@ -197,6 +197,80 @@ func releaseDecisionPackageArgs(item entity.ReleaseDecisionPackage) pgx.NamedArg
 	}, item.ID, item.Version, item.CreatedAt, item.UpdatedAt)
 }
 
+func releaseDecisionPackageUpdateArgs(item entity.ReleaseDecisionPackage, previousVersion int64) pgx.NamedArgs {
+	return pgx.NamedArgs{
+		"id":               item.ID,
+		"status":           string(item.Status),
+		"version":          item.Version,
+		"updated_at":       item.UpdatedAt,
+		"previous_version": previousVersion,
+	}
+}
+
+func releaseDecisionArgs(item entity.ReleaseDecision) pgx.NamedArgs {
+	return postgreslib.AddBaseArgs(pgx.NamedArgs{
+		"release_decision_package_id": item.ReleaseDecisionPackageID,
+		"gate_decision_id":            postgreslib.NullableUUID(item.GateDecisionID),
+		"outcome":                     string(item.Outcome),
+		"decision_actor_ref":          item.DecisionActorRef,
+		"decision_policy_ref":         item.DecisionPolicyRef,
+		"reason":                      item.Reason,
+		"conditions_summary":          item.ConditionsSummary,
+		"status":                      string(item.Status),
+		"decided_at":                  item.DecidedAt,
+	}, item.ID, item.Version, item.CreatedAt, item.UpdatedAt)
+}
+
+func releaseDecisionUpdateArgs(item entity.ReleaseDecision, previousVersion int64) pgx.NamedArgs {
+	args := releaseDecisionArgs(item)
+	args["previous_version"] = previousVersion
+	return args
+}
+
+func releaseDecisionFilterArgs(filter query.ReleaseDecisionFilter) pageQueryArgs {
+	return withPage(filter.Page, pgx.NamedArgs{
+		"release_decision_package_id": postgreslib.NullableUUID(filter.ReleaseDecisionPackageID),
+		"project_ref":                 filter.ProjectContext.ProjectRef,
+		"status":                      string(filter.Status),
+		"outcome":                     string(filter.Outcome),
+	})
+}
+
+func releaseSafetyStateArgs(item entity.ReleaseSafetyState) pgx.NamedArgs {
+	return postgreslib.AddBaseArgs(pgx.NamedArgs{
+		"release_decision_package_id": item.ReleaseDecisionPackageID,
+		"current_state":               string(item.CurrentState),
+		"runtime_job_ref":             item.RuntimeJobRef,
+		"blocking_signal_count":       item.BlockingSignalCount,
+		"last_state_reason":           item.LastStateReason,
+	}, item.ID, item.Version, item.CreatedAt, item.UpdatedAt)
+}
+
+func releaseSafetyStateUpdateArgs(item entity.ReleaseSafetyState, previousVersion int64) pgx.NamedArgs {
+	args := releaseSafetyStateArgs(item)
+	args["previous_version"] = previousVersion
+	return args
+}
+
+func blockingSignalArgs(item entity.BlockingSignal) pgx.NamedArgs {
+	return postgreslib.AddBaseArgs(pgx.NamedArgs{
+		"target_type": item.Target.Type,
+		"target_ref":  item.Target.Ref,
+		"source_type": string(item.SourceType),
+		"source_ref":  item.SourceRef,
+		"severity":    string(item.Severity),
+		"summary":     item.Summary,
+		"status":      string(item.Status),
+		"resolved_at": postgreslib.NullableTime(item.ResolvedAt),
+	}, item.ID, item.Version, item.CreatedAt, item.UpdatedAt)
+}
+
+func blockingSignalUpdateArgs(item entity.BlockingSignal, previousVersion int64) pgx.NamedArgs {
+	args := blockingSignalArgs(item)
+	args["previous_version"] = previousVersion
+	return args
+}
+
 func commandResultArgs(result entity.CommandResult) pgx.NamedArgs {
 	return pgx.NamedArgs{
 		"key":             result.Key,
@@ -312,6 +386,15 @@ func releaseDecisionPackageFilterArgs(filter query.ReleaseDecisionPackageFilter)
 		"project_ref":           filter.ProjectContext.ProjectRef,
 		"release_candidate_ref": filter.ReleaseCandidateRef,
 		"status":                string(filter.Status),
+	})
+}
+
+func blockingSignalFilterArgs(filter query.BlockingSignalFilter) pageQueryArgs {
+	return withPage(filter.Page, pgx.NamedArgs{
+		"target_type": filter.Target.Type,
+		"target_ref":  filter.Target.Ref,
+		"status":      string(filter.Status),
+		"severity":    string(filter.Severity),
 	})
 }
 

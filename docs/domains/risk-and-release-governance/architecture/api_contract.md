@@ -5,8 +5,8 @@ title: kodex — API-обзор governance-manager
 status: active
 owner_role: SA
 created_at: 2026-05-22
-updated_at: 2026-05-26
-related_issues: [322, 769, 790, 815, 827]
+updated_at: 2026-05-27
+related_issues: [322, 769, 790, 815, 827, 845]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -64,7 +64,7 @@ approvals:
 | `ListGateDecisions` | gRPC query | `governance.gate.read` | gate request или target | Читает final gate decisions по gate request или target; outcome используется только как уточняющий фильтр. |
 | `GetGateRequest` | gRPC query | `governance.gate.read` | нет | Читает gate request, evidence и decision status. |
 | `ListGateRequests` | gRPC query | `governance.gate.read` или `governance.risk.read` | target или risk assessment | Читает ожидающие, resolved или просроченные gates по target или assessment; status используется только как уточняющий фильтр. |
-| `BuildReleaseDecisionPackage` | gRPC command | `governance.release.prepare` | `command_id` | Собирает release evidence из project/provider/runtime/agent refs. |
+| `BuildReleaseDecisionPackage` | gRPC command | `governance.release.prepare` | `command_id` | Собирает release evidence из project/provider/runtime/agent refs и optional local `risk_assessment_id`. |
 | `GetReleaseDecisionPackage` | gRPC query | `governance.release.read` | нет | Читает release evidence package. |
 | `ListReleaseDecisionPackages` | gRPC query | `governance.release.read` | нет | Читает release packages по project/candidate/status. |
 | `RequestReleaseDecision` | gRPC command | `governance.release.request` | `command_id` | Запрашивает release gate или автоматическое decision по policy. |
@@ -149,8 +149,8 @@ MCP-инструменты не должны принимать свободны
 | Сервисный процесс `governance-manager` | Каркас подготовлен: process, env, health/readiness/metrics, gRPC registration и bounded handlers. |
 | Storage, migrations и outbox publisher | MVP-основа готова: PostgreSQL repository, service-local outbox и handlers для поддержанных storage-операций. |
 | Risk classifier и policy evaluator | Готовы для локальных risk profiles/rules, safe summaries/refs, идемпотентного replay, optimistic concurrency и safe outbox events. |
-| Release decision engine и safety-loop | Не реализованы; остаются следующими срезами после risk evaluator. |
-| Интеграции с project/agent/provider/runtime/interaction | Зафиксированы в refs и границах контрактов; реализация идёт отдельными срезами. |
+| Release decision lifecycle и safety-loop | Готовы для release package build/read/list, decision request/submit/read/list, blocking signals и текущего safety-loop state на safe refs/summaries. |
+| Интеграции с project/agent/provider/runtime/interaction | Зафиксированы в refs и границах контрактов; межсервисная связка остаётся отдельным интеграционным срезом. |
 
 ## Совместимость
 
@@ -164,4 +164,4 @@ MCP-инструменты не должны принимать свободны
 
 - request_id: `owner-2026-05-22-risk-governance-kickoff`
 - Решение: pending
-- Комментарий: API-обзор синхронизирован с контрактным срезом GOV-1; сервисная реализация и интеграции остаются следующими срезами.
+- Комментарий: API-обзор синхронизирован с реализованными storage, evaluator, gate и release lifecycle возможностями; межсервисные интеграции остаются отдельным этапом.

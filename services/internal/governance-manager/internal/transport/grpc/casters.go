@@ -510,6 +510,73 @@ func toReleaseDecisionPackages(items []entity.ReleaseDecisionPackage) []*governa
 	return result
 }
 
+func toReleaseDecision(item entity.ReleaseDecision) *governancev1.ReleaseDecision {
+	result := &governancev1.ReleaseDecision{
+		Id:                       item.ID.String(),
+		ReleaseDecisionPackageId: item.ReleaseDecisionPackageID.String(),
+		Outcome:                  toReleaseDecisionOutcome(item.Outcome),
+		DecisionActorRef:         item.DecisionActorRef,
+		DecisionPolicyRef:        item.DecisionPolicyRef,
+		Reason:                   item.Reason,
+		ConditionsSummary:        ptrStringNonEmpty(item.ConditionsSummary),
+		Status:                   toReleaseDecisionStatus(item.Status),
+		Version:                  item.Version,
+		DecidedAt:                formatTime(item.DecidedAt),
+	}
+	if item.GateDecisionID != nil {
+		result.GateDecisionId = ptrString(item.GateDecisionID.String())
+	}
+	return result
+}
+
+func toReleaseDecisions(items []entity.ReleaseDecision) []*governancev1.ReleaseDecision {
+	result := make([]*governancev1.ReleaseDecision, 0, len(items))
+	for _, item := range items {
+		result = append(result, toReleaseDecision(item))
+	}
+	return result
+}
+
+func toReleaseSafetyState(item entity.ReleaseSafetyState) *governancev1.ReleaseSafetyState {
+	return &governancev1.ReleaseSafetyState{
+		Id:                       item.ID.String(),
+		ReleaseDecisionPackageId: item.ReleaseDecisionPackageID.String(),
+		CurrentState:             toReleaseSafetyStateKind(item.CurrentState),
+		RuntimeJobRef:            ptrStringNonEmpty(item.RuntimeJobRef),
+		BlockingSignalCount:      item.BlockingSignalCount,
+		LastStateReason:          item.LastStateReason,
+		Version:                  item.Version,
+		CreatedAt:                formatTime(item.CreatedAt),
+		UpdatedAt:                formatTime(item.UpdatedAt),
+	}
+}
+
+func toBlockingSignal(item entity.BlockingSignal) *governancev1.BlockingSignal {
+	result := &governancev1.BlockingSignal{
+		Id:         item.ID.String(),
+		Target:     toTargetRef(item.Target),
+		SourceType: toBlockingSignalSourceType(item.SourceType),
+		SourceRef:  ptrStringNonEmpty(item.SourceRef),
+		Severity:   toSignalSeverity(item.Severity),
+		Summary:    item.Summary,
+		Status:     toBlockingSignalStatus(item.Status),
+		Version:    item.Version,
+		CreatedAt:  formatTime(item.CreatedAt),
+	}
+	if item.ResolvedAt != nil {
+		result.ResolvedAt = ptrString(formatTime(*item.ResolvedAt))
+	}
+	return result
+}
+
+func toBlockingSignals(items []entity.BlockingSignal) []*governancev1.BlockingSignal {
+	result := make([]*governancev1.BlockingSignal, 0, len(items))
+	for _, item := range items {
+		result = append(result, toBlockingSignal(item))
+	}
+	return result
+}
+
 func toScopeRef(item value.ExternalRef) *governancev1.ScopeRef {
 	return &governancev1.ScopeRef{Type: toScopeType(item.Type), Ref: item.Ref}
 }
@@ -1402,5 +1469,183 @@ func toReleaseDecisionPackageStatus(item enum.ReleaseDecisionPackageStatus) gove
 		return governancev1.ReleaseDecisionPackageStatus_RELEASE_DECISION_PACKAGE_STATUS_CLOSED
 	default:
 		return governancev1.ReleaseDecisionPackageStatus_RELEASE_DECISION_PACKAGE_STATUS_UNSPECIFIED
+	}
+}
+
+func releaseDecisionStatus(item governancev1.ReleaseDecisionStatus) enum.ReleaseDecisionStatus {
+	switch item {
+	case governancev1.ReleaseDecisionStatus_RELEASE_DECISION_STATUS_REQUESTED:
+		return enum.ReleaseDecisionStatusRequested
+	case governancev1.ReleaseDecisionStatus_RELEASE_DECISION_STATUS_RESOLVED:
+		return enum.ReleaseDecisionStatusResolved
+	case governancev1.ReleaseDecisionStatus_RELEASE_DECISION_STATUS_CANCELLED:
+		return enum.ReleaseDecisionStatusCancelled
+	default:
+		return ""
+	}
+}
+
+func toReleaseDecisionStatus(item enum.ReleaseDecisionStatus) governancev1.ReleaseDecisionStatus {
+	switch item {
+	case enum.ReleaseDecisionStatusRequested:
+		return governancev1.ReleaseDecisionStatus_RELEASE_DECISION_STATUS_REQUESTED
+	case enum.ReleaseDecisionStatusResolved:
+		return governancev1.ReleaseDecisionStatus_RELEASE_DECISION_STATUS_RESOLVED
+	case enum.ReleaseDecisionStatusCancelled:
+		return governancev1.ReleaseDecisionStatus_RELEASE_DECISION_STATUS_CANCELLED
+	default:
+		return governancev1.ReleaseDecisionStatus_RELEASE_DECISION_STATUS_UNSPECIFIED
+	}
+}
+
+func releaseDecisionOutcome(item governancev1.ReleaseDecisionOutcome) enum.ReleaseDecisionOutcome {
+	switch item {
+	case governancev1.ReleaseDecisionOutcome_RELEASE_DECISION_OUTCOME_GO:
+		return enum.ReleaseDecisionOutcomeGo
+	case governancev1.ReleaseDecisionOutcome_RELEASE_DECISION_OUTCOME_GO_WITH_CONDITIONS:
+		return enum.ReleaseDecisionOutcomeGoWithConditions
+	case governancev1.ReleaseDecisionOutcome_RELEASE_DECISION_OUTCOME_NO_GO:
+		return enum.ReleaseDecisionOutcomeNoGo
+	case governancev1.ReleaseDecisionOutcome_RELEASE_DECISION_OUTCOME_HOLD:
+		return enum.ReleaseDecisionOutcomeHold
+	case governancev1.ReleaseDecisionOutcome_RELEASE_DECISION_OUTCOME_ROLLBACK:
+		return enum.ReleaseDecisionOutcomeRollback
+	case governancev1.ReleaseDecisionOutcome_RELEASE_DECISION_OUTCOME_FOLLOW_UP_REQUIRED:
+		return enum.ReleaseDecisionOutcomeFollowUpRequired
+	default:
+		return ""
+	}
+}
+
+func toReleaseDecisionOutcome(item enum.ReleaseDecisionOutcome) governancev1.ReleaseDecisionOutcome {
+	switch item {
+	case enum.ReleaseDecisionOutcomeGo:
+		return governancev1.ReleaseDecisionOutcome_RELEASE_DECISION_OUTCOME_GO
+	case enum.ReleaseDecisionOutcomeGoWithConditions:
+		return governancev1.ReleaseDecisionOutcome_RELEASE_DECISION_OUTCOME_GO_WITH_CONDITIONS
+	case enum.ReleaseDecisionOutcomeNoGo:
+		return governancev1.ReleaseDecisionOutcome_RELEASE_DECISION_OUTCOME_NO_GO
+	case enum.ReleaseDecisionOutcomeHold:
+		return governancev1.ReleaseDecisionOutcome_RELEASE_DECISION_OUTCOME_HOLD
+	case enum.ReleaseDecisionOutcomeRollback:
+		return governancev1.ReleaseDecisionOutcome_RELEASE_DECISION_OUTCOME_ROLLBACK
+	case enum.ReleaseDecisionOutcomeFollowUpRequired:
+		return governancev1.ReleaseDecisionOutcome_RELEASE_DECISION_OUTCOME_FOLLOW_UP_REQUIRED
+	default:
+		return governancev1.ReleaseDecisionOutcome_RELEASE_DECISION_OUTCOME_UNSPECIFIED
+	}
+}
+
+func releaseSafetyStateKind(item governancev1.ReleaseSafetyStateKind) enum.ReleaseSafetyStateKind {
+	switch item {
+	case governancev1.ReleaseSafetyStateKind_RELEASE_SAFETY_STATE_KIND_RELEASE_CANDIDATE:
+		return enum.ReleaseSafetyStateKindReleaseCandidate
+	case governancev1.ReleaseSafetyStateKind_RELEASE_SAFETY_STATE_KIND_AWAITING_RELEASE_GATE:
+		return enum.ReleaseSafetyStateKindAwaitingReleaseGate
+	case governancev1.ReleaseSafetyStateKind_RELEASE_SAFETY_STATE_KIND_DEPLOYING:
+		return enum.ReleaseSafetyStateKindDeploying
+	case governancev1.ReleaseSafetyStateKind_RELEASE_SAFETY_STATE_KIND_POSTDEPLOY_OBSERVATION:
+		return enum.ReleaseSafetyStateKindPostdeployObservation
+	case governancev1.ReleaseSafetyStateKind_RELEASE_SAFETY_STATE_KIND_STABLE:
+		return enum.ReleaseSafetyStateKindStable
+	case governancev1.ReleaseSafetyStateKind_RELEASE_SAFETY_STATE_KIND_HOLD:
+		return enum.ReleaseSafetyStateKindHold
+	case governancev1.ReleaseSafetyStateKind_RELEASE_SAFETY_STATE_KIND_ROLLBACK:
+		return enum.ReleaseSafetyStateKindRollback
+	case governancev1.ReleaseSafetyStateKind_RELEASE_SAFETY_STATE_KIND_FOLLOW_UP_REQUIRED:
+		return enum.ReleaseSafetyStateKindFollowUpRequired
+	default:
+		return ""
+	}
+}
+
+func toReleaseSafetyStateKind(item enum.ReleaseSafetyStateKind) governancev1.ReleaseSafetyStateKind {
+	switch item {
+	case enum.ReleaseSafetyStateKindReleaseCandidate:
+		return governancev1.ReleaseSafetyStateKind_RELEASE_SAFETY_STATE_KIND_RELEASE_CANDIDATE
+	case enum.ReleaseSafetyStateKindAwaitingReleaseGate:
+		return governancev1.ReleaseSafetyStateKind_RELEASE_SAFETY_STATE_KIND_AWAITING_RELEASE_GATE
+	case enum.ReleaseSafetyStateKindDeploying:
+		return governancev1.ReleaseSafetyStateKind_RELEASE_SAFETY_STATE_KIND_DEPLOYING
+	case enum.ReleaseSafetyStateKindPostdeployObservation:
+		return governancev1.ReleaseSafetyStateKind_RELEASE_SAFETY_STATE_KIND_POSTDEPLOY_OBSERVATION
+	case enum.ReleaseSafetyStateKindStable:
+		return governancev1.ReleaseSafetyStateKind_RELEASE_SAFETY_STATE_KIND_STABLE
+	case enum.ReleaseSafetyStateKindHold:
+		return governancev1.ReleaseSafetyStateKind_RELEASE_SAFETY_STATE_KIND_HOLD
+	case enum.ReleaseSafetyStateKindRollback:
+		return governancev1.ReleaseSafetyStateKind_RELEASE_SAFETY_STATE_KIND_ROLLBACK
+	case enum.ReleaseSafetyStateKindFollowUpRequired:
+		return governancev1.ReleaseSafetyStateKind_RELEASE_SAFETY_STATE_KIND_FOLLOW_UP_REQUIRED
+	default:
+		return governancev1.ReleaseSafetyStateKind_RELEASE_SAFETY_STATE_KIND_UNSPECIFIED
+	}
+}
+
+func blockingSignalSourceType(item governancev1.BlockingSignalSourceType) enum.BlockingSignalSourceType {
+	switch item {
+	case governancev1.BlockingSignalSourceType_BLOCKING_SIGNAL_SOURCE_TYPE_ACCEPTANCE:
+		return enum.BlockingSignalSourceTypeAcceptance
+	case governancev1.BlockingSignalSourceType_BLOCKING_SIGNAL_SOURCE_TYPE_REVIEW_SIGNAL:
+		return enum.BlockingSignalSourceTypeReviewSignal
+	case governancev1.BlockingSignalSourceType_BLOCKING_SIGNAL_SOURCE_TYPE_RUNTIME:
+		return enum.BlockingSignalSourceTypeRuntime
+	case governancev1.BlockingSignalSourceType_BLOCKING_SIGNAL_SOURCE_TYPE_PROVIDER:
+		return enum.BlockingSignalSourceTypeProvider
+	case governancev1.BlockingSignalSourceType_BLOCKING_SIGNAL_SOURCE_TYPE_INTERACTION:
+		return enum.BlockingSignalSourceTypeInteraction
+	case governancev1.BlockingSignalSourceType_BLOCKING_SIGNAL_SOURCE_TYPE_HUMAN:
+		return enum.BlockingSignalSourceTypeHuman
+	case governancev1.BlockingSignalSourceType_BLOCKING_SIGNAL_SOURCE_TYPE_MONITORING:
+		return enum.BlockingSignalSourceTypeMonitoring
+	default:
+		return ""
+	}
+}
+
+func toBlockingSignalSourceType(item enum.BlockingSignalSourceType) governancev1.BlockingSignalSourceType {
+	switch item {
+	case enum.BlockingSignalSourceTypeAcceptance:
+		return governancev1.BlockingSignalSourceType_BLOCKING_SIGNAL_SOURCE_TYPE_ACCEPTANCE
+	case enum.BlockingSignalSourceTypeReviewSignal:
+		return governancev1.BlockingSignalSourceType_BLOCKING_SIGNAL_SOURCE_TYPE_REVIEW_SIGNAL
+	case enum.BlockingSignalSourceTypeRuntime:
+		return governancev1.BlockingSignalSourceType_BLOCKING_SIGNAL_SOURCE_TYPE_RUNTIME
+	case enum.BlockingSignalSourceTypeProvider:
+		return governancev1.BlockingSignalSourceType_BLOCKING_SIGNAL_SOURCE_TYPE_PROVIDER
+	case enum.BlockingSignalSourceTypeInteraction:
+		return governancev1.BlockingSignalSourceType_BLOCKING_SIGNAL_SOURCE_TYPE_INTERACTION
+	case enum.BlockingSignalSourceTypeHuman:
+		return governancev1.BlockingSignalSourceType_BLOCKING_SIGNAL_SOURCE_TYPE_HUMAN
+	case enum.BlockingSignalSourceTypeMonitoring:
+		return governancev1.BlockingSignalSourceType_BLOCKING_SIGNAL_SOURCE_TYPE_MONITORING
+	default:
+		return governancev1.BlockingSignalSourceType_BLOCKING_SIGNAL_SOURCE_TYPE_UNSPECIFIED
+	}
+}
+
+func blockingSignalStatus(item governancev1.BlockingSignalStatus) enum.BlockingSignalStatus {
+	switch item {
+	case governancev1.BlockingSignalStatus_BLOCKING_SIGNAL_STATUS_ACTIVE:
+		return enum.BlockingSignalStatusActive
+	case governancev1.BlockingSignalStatus_BLOCKING_SIGNAL_STATUS_RESOLVED:
+		return enum.BlockingSignalStatusResolved
+	case governancev1.BlockingSignalStatus_BLOCKING_SIGNAL_STATUS_DISMISSED:
+		return enum.BlockingSignalStatusDismissed
+	default:
+		return ""
+	}
+}
+
+func toBlockingSignalStatus(item enum.BlockingSignalStatus) governancev1.BlockingSignalStatus {
+	switch item {
+	case enum.BlockingSignalStatusActive:
+		return governancev1.BlockingSignalStatus_BLOCKING_SIGNAL_STATUS_ACTIVE
+	case enum.BlockingSignalStatusResolved:
+		return governancev1.BlockingSignalStatus_BLOCKING_SIGNAL_STATUS_RESOLVED
+	case enum.BlockingSignalStatusDismissed:
+		return governancev1.BlockingSignalStatus_BLOCKING_SIGNAL_STATUS_DISMISSED
+	default:
+		return governancev1.BlockingSignalStatus_BLOCKING_SIGNAL_STATUS_UNSPECIFIED
 	}
 }

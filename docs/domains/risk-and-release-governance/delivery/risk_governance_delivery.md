@@ -6,7 +6,7 @@ status: active
 owner_role: EM
 created_at: 2026-05-22
 updated_at: 2026-05-26
-related_issues: [322, 769, 790, 802, 815, 827]
+related_issues: [322, 769, 790, 802, 815, 827, 845]
 related_prs: []
 related_docsets:
   - docs/domains/risk-and-release-governance/product/requirements.md
@@ -45,7 +45,7 @@ approvals:
 | GOV-3 | #802 | PostgreSQL-модель MVP-сущностей, repository слой, service-local outbox и gRPC handlers для поддержанных storage-операций готовы. |
 | GOV-4 | #815 | Gate request/decision lifecycle готов: request/read/list, submit decision, cancel/expire, access checks, optimistic concurrency, idempotency и безопасные события. |
 | GOV-5 | #827 | Risk classifier и policy evaluator работают по входным safe summaries/refs, локальным risk profiles/rules и service/path/API/DB/secret/release/runtime factors без release decision engine. |
-| GOV-6 | не назначено | Release decision package, release decision и release safety-loop state готовы без UI/gateway. |
+| GOV-6 | #845 | Release decision package, release decision, blocking signal и release safety-loop state готовы без UI/gateway. |
 | GOV-7 | не назначено | Интеграции с `agent-manager`, `provider-hub`, `interaction-hub`, `runtime-manager`, `project-catalog` и `operations-hub` подключены через согласованные контракты. |
 | GOV-8 | не назначено | Эксплуатационный контур: deploy manifests, migration job, smoke checks, runbook и operator projections. |
 
@@ -68,13 +68,13 @@ approvals:
 | Go-контракт событий `libs/go/platformevents/governance/events.gen.go` | Сгенерирован из AsyncAPI; вручную не правится. | GOV-1 |
 | Access actions | Добавлены в общий каталог для policy, risk, signal, gate и release операций. | GOV-1 |
 | Сервисный процесс, env, health/readiness/metrics и gRPC registration | Готовы как runnable skeleton без deploy-manifests. | GOV-2 |
-| gRPC handlers | Поддержанные storage, gate lifecycle и risk evaluator операции используют доменный сервис и repository; будущие release/safety-loop операции явно возвращают `Unimplemented`. | GOV-5 |
+| gRPC handlers | Поддержанные storage, gate lifecycle, risk evaluator, release decision и safety-loop операции используют доменный сервис и repository; будущие интеграционные операции остаются следующими срезами. | GOV-6 |
 | Repository interfaces/stubs и MVP storage shapes | Stub заменён PostgreSQL repository для risk profile/version, assessment/factors, review signals, gate request/decision, release decision package, command result и outbox. | GOV-3 |
 | Storage, migrations и outbox publisher | MVP-миграции и service-local outbox готовы; event-log dispatch подключается через shared outbox runtime. | GOV-3 |
 | Gate request/decision lifecycle и access checks | Готовы для `request/read/list/decision/cancel/expire`; delivery/callback orchestration остаётся у `interaction-hub`. | GOV-4 |
 | Risk classifier и policy evaluator | Готовы для локальных rules, safe summaries/refs, matched rule refs, required gates, идемпотентного replay, expected version и safe outbox events. | GOV-5 |
-| Release decision engine и safety-loop | Не реализованы. | GOV-6+ |
-| Интеграции с `agent-manager`, `provider-hub`, `interaction-hub`, `runtime-manager` и `project-catalog` | Не реализованы; в GOV-1 зафиксированы typed refs и границы. | GOV-7 |
+| Release decision lifecycle и safety-loop | Готовы для package build/read/list, decision request/submit/read/list, blocking signals и текущего safety-loop state на safe refs/summaries. | GOV-6 |
+| Интеграции с `agent-manager`, `provider-hub`, `interaction-hub`, `runtime-manager` и `project-catalog` | Не реализованы; typed refs и локальные reads используются без владения чужой доменной истиной. | GOV-7 |
 
 ## Синхронизация с соседними доменами
 
@@ -83,7 +83,7 @@ approvals:
 | `projects-and-repositories` | Перед GOV-1 и GOV-5 | Нужны project/repository refs, services policy, branch rules, release policy, release line и risk profile refs без копирования проектной policy. |
 | `agent-orchestration` | Перед GOV-1, GOV-5 и GOV-7 | Нужны run/session/acceptance refs, role signals и ожидание governance decision. |
 | `provider-native-work-items` | Перед GOV-4 и GOV-5 | Нужны provider projections, changed file summary, comments/reviews/check refs и gate ref validation для provider writes. |
-| `runtime-and-fleet` | Перед GOV-6 и GOV-7 | Нужны job/deploy/postdeploy/cleanup signals и target environment refs. |
+| `runtime-and-fleet` | Перед GOV-7 | Нужны job/deploy/postdeploy/cleanup signals и target environment refs. |
 | `interaction-hub` | Перед GOV-4 | Нужен delivery request/callback контракт для Human gate, reminders и escalation без владения decision state. |
 | `access-and-accounts` | Перед GOV-1 и GOV-4 | Нужны actions и проверки прав для policy management, gate decision и release decision. |
 | `console-and-operations-ux` | После GOV-5 | Нужны read models для operator risk/release state; UI не входит в стартовые срезы. |

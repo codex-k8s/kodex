@@ -155,6 +155,62 @@ type BuildReleaseDecisionPackageInput struct {
 	Meta                    CommandMeta
 }
 
+type GetReleaseDecisionPackageInput struct {
+	ReleaseDecisionPackageID uuid.UUID
+	Meta                     QueryMeta
+}
+
+type RequestReleaseDecisionInput struct {
+	ReleaseDecisionPackageID uuid.UUID
+	RequestGateIfRequired    bool
+	Meta                     CommandMeta
+}
+
+type SubmitReleaseDecisionInput struct {
+	ReleaseDecisionPackageID uuid.UUID
+	GateDecisionID           *uuid.UUID
+	Outcome                  enum.ReleaseDecisionOutcome
+	DecisionActorRef         string
+	DecisionPolicyRef        string
+	Reason                   string
+	ConditionsSummary        string
+	Meta                     CommandMeta
+}
+
+type GetReleaseDecisionInput struct {
+	ReleaseDecisionID uuid.UUID
+	Meta              QueryMeta
+}
+
+type RecordBlockingSignalInput struct {
+	Target     value.ExternalRef
+	SourceType enum.BlockingSignalSourceType
+	SourceRef  string
+	Severity   enum.SignalSeverity
+	Summary    string
+	Meta       CommandMeta
+}
+
+type ResolveBlockingSignalInput struct {
+	BlockingSignalID  uuid.UUID
+	TerminalStatus    enum.BlockingSignalStatus
+	ResolutionSummary string
+	Meta              CommandMeta
+}
+
+type RecordReleaseSafetyStateInput struct {
+	ReleaseDecisionPackageID uuid.UUID
+	CurrentState             enum.ReleaseSafetyStateKind
+	RuntimeJobRef            string
+	LastStateReason          string
+	Meta                     CommandMeta
+}
+
+type GetReleaseSafetyStateInput struct {
+	ReleaseDecisionPackageID uuid.UUID
+	Meta                     QueryMeta
+}
+
 type ListRiskProfilesInput struct {
 	Filter query.RiskProfileFilter
 }
@@ -210,4 +266,15 @@ type GetGateDecisionInput struct {
 
 type ListReleaseDecisionPackagesInput struct {
 	Filter query.ReleaseDecisionPackageFilter
+	Meta   QueryMeta
+}
+
+type ListReleaseDecisionsInput struct {
+	Filter query.ReleaseDecisionFilter
+	Meta   QueryMeta
+}
+
+type ListBlockingSignalsInput struct {
+	Filter query.BlockingSignalFilter
+	Meta   QueryMeta
 }

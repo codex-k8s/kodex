@@ -47,22 +47,29 @@ type Repository struct {
 const (
 	operationActivateRiskProfileVersion  = "domain.Repository.ActivateRiskProfileVersion"
 	operationArchiveRiskProfile          = "domain.Repository.ArchiveRiskProfile"
+	operationCreateReleaseDecision       = "domain.Repository.CreateReleaseDecision"
 	operationBuildReleaseDecisionPackage = "domain.Repository.CreateReleaseDecisionPackage"
 	operationCreateGateRequest           = "domain.Repository.CreateGateRequest"
 	operationCreateRiskAssessment        = "domain.Repository.CreateRiskAssessment"
 	operationCreateRiskProfile           = "domain.Repository.CreateRiskProfile"
 	operationCreateRiskProfileVersion    = "domain.Repository.CreateRiskProfileVersion"
+	operationGetBlockingSignal           = "domain.Repository.GetBlockingSignal"
 	operationGetCommandResult            = "domain.Repository.GetCommandResult"
 	operationGetGateDecision             = "domain.Repository.GetGateDecision"
 	operationGetGateRequest              = "domain.Repository.GetGateRequest"
+	operationGetReleaseDecision          = "domain.Repository.GetReleaseDecision"
+	operationGetReleaseDecisionByPackage = "domain.Repository.GetReleaseDecisionByPackage"
 	operationGetReleaseDecisionPackage   = "domain.Repository.GetReleaseDecisionPackage"
+	operationGetReleaseSafetyState       = "domain.Repository.GetReleaseSafetyStateByPackage"
 	operationGetReviewSignal             = "domain.Repository.GetReviewSignal"
 	operationGetRiskAssessment           = "domain.Repository.GetRiskAssessment"
 	operationGetRiskProfile              = "domain.Repository.GetRiskProfile"
 	operationGetRiskProfileVersion       = "domain.Repository.GetRiskProfileVersion"
+	operationListBlockingSignals         = "domain.Repository.ListBlockingSignals"
 	operationListGateDecisions           = "domain.Repository.ListGateDecisions"
 	operationListGatePolicies            = "domain.Repository.ListGatePolicies"
 	operationListGateRequests            = "domain.Repository.ListGateRequests"
+	operationListReleaseDecisions        = "domain.Repository.ListReleaseDecisions"
 	operationListReleaseDecisionPackages = "domain.Repository.ListReleaseDecisionPackages"
 	operationListReviewSignals           = "domain.Repository.ListReviewSignals"
 	operationListRiskAssessments         = "domain.Repository.ListRiskAssessments"
@@ -74,9 +81,15 @@ const (
 	operationOutboxMarkPermanent         = "domain.Repository.MarkOutboxEventPermanentlyFailed"
 	operationOutboxMarkPublished         = "domain.Repository.MarkOutboxEventPublished"
 	operationRecordCommandResult         = "domain.Repository.RecordCommandResult"
+	operationRecordBlockingSignal        = "domain.Repository.RecordBlockingSignal"
+	operationRecordReleaseSafetyState    = "domain.Repository.RecordReleaseSafetyState"
 	operationRecordReviewSignal          = "domain.Repository.RecordReviewSignal"
+	operationUpdateBlockingSignal        = "domain.Repository.UpdateBlockingSignal"
 	operationSubmitGateDecision          = "domain.Repository.UpdateGateRequestWithDecision"
 	operationUpdateGateRequestStatus     = "domain.Repository.UpdateGateRequestStatus"
+	operationUpdateReleaseDecision       = "domain.Repository.UpdateReleaseDecision"
+	operationUpdateReleasePackageStatus  = "domain.Repository.UpdateReleaseDecisionPackageStatus"
+	operationUpdateReleaseSafetyState    = "domain.Repository.UpdateReleaseSafetyState"
 	operationUpdateRiskAssessment        = "domain.Repository.UpdateRiskAssessment"
 )
 
@@ -298,6 +311,11 @@ func (r *Repository) CreateReleaseDecisionPackage(ctx context.Context, item enti
 	return r.mutateWithResult(ctx, operationBuildReleaseDecisionPackage, queryReleaseDecisionPackageCreate, releaseDecisionPackageArgs(item), result, &event)
 }
 
+// UpdateReleaseDecisionPackageStatus updates release package lifecycle status.
+func (r *Repository) UpdateReleaseDecisionPackageStatus(ctx context.Context, item entity.ReleaseDecisionPackage, previousVersion int64, result entity.CommandResult, event entity.OutboxEvent) error {
+	return r.mutateWithResult(ctx, operationUpdateReleasePackageStatus, queryReleaseDecisionPackageUpdate, releaseDecisionPackageUpdateArgs(item, previousVersion), result, &event)
+}
+
 // GetReleaseDecisionPackage returns a release decision package by id.
 func (r *Repository) GetReleaseDecisionPackage(ctx context.Context, id uuid.UUID) (entity.ReleaseDecisionPackage, error) {
 	return queryOne(ctx, r.db, operationGetReleaseDecisionPackage, queryReleaseDecisionPackageGet, pgx.NamedArgs{"id": id}, scanReleaseDecisionPackage)
@@ -306,6 +324,90 @@ func (r *Repository) GetReleaseDecisionPackage(ctx context.Context, id uuid.UUID
 // ListReleaseDecisionPackages returns release decision packages by filter.
 func (r *Repository) ListReleaseDecisionPackages(ctx context.Context, filter query.ReleaseDecisionPackageFilter) ([]entity.ReleaseDecisionPackage, query.PageResult, error) {
 	return queryPage(ctx, r.db, operationListReleaseDecisionPackages, queryReleaseDecisionPackageList, releaseDecisionPackageFilterArgs(filter), scanReleaseDecisionPackage)
+}
+
+// CreateReleaseDecision stores a requested release decision and advances the package.
+func (r *Repository) CreateReleaseDecision(ctx context.Context, pkg entity.ReleaseDecisionPackage, previousPackageVersion int64, decision entity.ReleaseDecision, result entity.CommandResult, event entity.OutboxEvent) error {
+	err := postgreslib.WithTx(ctx, r.db, func(tx pgx.Tx) error {
+		if err := runMutation(ctx, tx, queryReleaseDecisionPackageUpdate, releaseDecisionPackageUpdateArgs(pkg, previousPackageVersion), true); err != nil {
+			return err
+		}
+		if err := runMutation(ctx, tx, queryReleaseDecisionCreate, releaseDecisionArgs(decision), true); err != nil {
+			return err
+		}
+		if err := runCommandResult(ctx, tx, result); err != nil {
+			return err
+		}
+		return runOutboxEvent(ctx, tx, event)
+	})
+	return wrapError(operationCreateReleaseDecision, err)
+}
+
+// UpdateReleaseDecision stores a terminal release decision and closes the package.
+func (r *Repository) UpdateReleaseDecision(ctx context.Context, pkg entity.ReleaseDecisionPackage, previousPackageVersion int64, decision entity.ReleaseDecision, previousDecisionVersion int64, result entity.CommandResult, event entity.OutboxEvent) error {
+	err := postgreslib.WithTx(ctx, r.db, func(tx pgx.Tx) error {
+		if err := runMutation(ctx, tx, queryReleaseDecisionPackageUpdate, releaseDecisionPackageUpdateArgs(pkg, previousPackageVersion), true); err != nil {
+			return err
+		}
+		if err := runMutation(ctx, tx, queryReleaseDecisionUpdate, releaseDecisionUpdateArgs(decision, previousDecisionVersion), true); err != nil {
+			return err
+		}
+		if err := runCommandResult(ctx, tx, result); err != nil {
+			return err
+		}
+		return runOutboxEvent(ctx, tx, event)
+	})
+	return wrapError(operationUpdateReleaseDecision, err)
+}
+
+// GetReleaseDecision returns one release decision by id.
+func (r *Repository) GetReleaseDecision(ctx context.Context, id uuid.UUID) (entity.ReleaseDecision, error) {
+	return queryOne(ctx, r.db, operationGetReleaseDecision, queryReleaseDecisionGet, pgx.NamedArgs{"id": id}, scanReleaseDecision)
+}
+
+// GetReleaseDecisionByPackage returns the current release decision for a package.
+func (r *Repository) GetReleaseDecisionByPackage(ctx context.Context, releaseDecisionPackageID uuid.UUID) (entity.ReleaseDecision, error) {
+	return queryOne(ctx, r.db, operationGetReleaseDecisionByPackage, queryReleaseDecisionGetByPackage, pgx.NamedArgs{"release_decision_package_id": releaseDecisionPackageID}, scanReleaseDecision)
+}
+
+// ListReleaseDecisions returns release decisions by filter.
+func (r *Repository) ListReleaseDecisions(ctx context.Context, filter query.ReleaseDecisionFilter) ([]entity.ReleaseDecision, query.PageResult, error) {
+	return queryPage(ctx, r.db, operationListReleaseDecisions, queryReleaseDecisionList, releaseDecisionFilterArgs(filter), scanReleaseDecision)
+}
+
+// RecordReleaseSafetyState creates the current safety-loop state.
+func (r *Repository) RecordReleaseSafetyState(ctx context.Context, state entity.ReleaseSafetyState, result entity.CommandResult, event entity.OutboxEvent) error {
+	return r.mutateWithResult(ctx, operationRecordReleaseSafetyState, queryReleaseSafetyStateCreate, releaseSafetyStateArgs(state), result, &event)
+}
+
+// UpdateReleaseSafetyState updates the current safety-loop state.
+func (r *Repository) UpdateReleaseSafetyState(ctx context.Context, state entity.ReleaseSafetyState, previousVersion int64, result entity.CommandResult, event entity.OutboxEvent) error {
+	return r.mutateWithResult(ctx, operationUpdateReleaseSafetyState, queryReleaseSafetyStateUpdate, releaseSafetyStateUpdateArgs(state, previousVersion), result, &event)
+}
+
+// GetReleaseSafetyStateByPackage returns current safety-loop state for a package.
+func (r *Repository) GetReleaseSafetyStateByPackage(ctx context.Context, releaseDecisionPackageID uuid.UUID) (entity.ReleaseSafetyState, error) {
+	return queryOne(ctx, r.db, operationGetReleaseSafetyState, queryReleaseSafetyStateGet, pgx.NamedArgs{"release_decision_package_id": releaseDecisionPackageID}, scanReleaseSafetyState)
+}
+
+// RecordBlockingSignal stores a blocking signal.
+func (r *Repository) RecordBlockingSignal(ctx context.Context, signal entity.BlockingSignal, result entity.CommandResult, event entity.OutboxEvent) error {
+	return r.mutateWithResult(ctx, operationRecordBlockingSignal, queryBlockingSignalCreate, blockingSignalArgs(signal), result, &event)
+}
+
+// UpdateBlockingSignal stores a terminal blocking signal transition.
+func (r *Repository) UpdateBlockingSignal(ctx context.Context, signal entity.BlockingSignal, previousVersion int64, result entity.CommandResult, event entity.OutboxEvent) error {
+	return r.mutateWithResult(ctx, operationUpdateBlockingSignal, queryBlockingSignalUpdate, blockingSignalUpdateArgs(signal, previousVersion), result, &event)
+}
+
+// GetBlockingSignal returns one blocking signal by id.
+func (r *Repository) GetBlockingSignal(ctx context.Context, id uuid.UUID) (entity.BlockingSignal, error) {
+	return queryOne(ctx, r.db, operationGetBlockingSignal, queryBlockingSignalGet, pgx.NamedArgs{"id": id}, scanBlockingSignal)
+}
+
+// ListBlockingSignals returns blocking signals by target and state.
+func (r *Repository) ListBlockingSignals(ctx context.Context, filter query.BlockingSignalFilter) ([]entity.BlockingSignal, query.PageResult, error) {
+	return queryPage(ctx, r.db, operationListBlockingSignals, queryBlockingSignalList, blockingSignalFilterArgs(filter), scanBlockingSignal)
 }
 
 // GetCommandResult returns a stored idempotency result.

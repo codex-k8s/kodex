@@ -12,11 +12,19 @@ import (
 )
 
 const (
-	actionGateRequest  = accesscatalog.ActionGovernanceGateRequest
-	actionGateRead     = accesscatalog.ActionGovernanceGateRead
-	actionGateDecide   = accesscatalog.ActionGovernanceGateDecide
-	actionRiskEvaluate = accesscatalog.ActionGovernanceRiskEvaluate
-	actionRiskRead     = accesscatalog.ActionGovernanceRiskRead
+	actionGateRequest    = accesscatalog.ActionGovernanceGateRequest
+	actionGateRead       = accesscatalog.ActionGovernanceGateRead
+	actionGateDecide     = accesscatalog.ActionGovernanceGateDecide
+	actionRiskEvaluate   = accesscatalog.ActionGovernanceRiskEvaluate
+	actionRiskRead       = accesscatalog.ActionGovernanceRiskRead
+	actionReleasePrepare = accesscatalog.ActionGovernanceReleasePrepare
+	actionReleaseRequest = accesscatalog.ActionGovernanceReleaseRequest
+	actionReleaseRead    = accesscatalog.ActionGovernanceReleaseRead
+	actionReleaseDecide  = accesscatalog.ActionGovernanceReleaseDecide
+	actionReleaseUpdate  = accesscatalog.ActionGovernanceReleaseUpdate
+	actionSignalRecord   = accesscatalog.ActionGovernanceSignalRecord
+	actionSignalRead     = accesscatalog.ActionGovernanceSignalRead
+	actionSignalResolve  = accesscatalog.ActionGovernanceSignalResolve
 )
 
 // Authorizer checks whether the caller may access governance-manager state.
@@ -120,5 +128,41 @@ func riskTargetResource(target value.ExternalRef) resourceRef {
 func riskContextResource(ref string) resourceRef {
 	resource := riskAssessmentResource(uuid.Nil)
 	resource.ID = strings.TrimSpace(ref)
+	return resource
+}
+
+func releaseDecisionResource(id uuid.UUID) resourceRef {
+	resourceID := ""
+	if id != uuid.Nil {
+		resourceID = id.String()
+	}
+	return resourceRef{Type: accesscatalog.ResourceGovernanceReleaseDecision, ID: resourceID, ScopeType: accesscatalog.ScopeGlobal}
+}
+
+func releaseDecisionContextResource(ref string) resourceRef {
+	resource := releaseDecisionResource(uuid.Nil)
+	resource.ID = strings.TrimSpace(ref)
+	return resource
+}
+
+func releaseSafetyStateResource(id uuid.UUID) resourceRef {
+	resourceID := ""
+	if id != uuid.Nil {
+		resourceID = id.String()
+	}
+	return resourceRef{Type: accesscatalog.ResourceGovernanceReleaseSafetyState, ID: resourceID, ScopeType: accesscatalog.ScopeGlobal}
+}
+
+func signalResource(id uuid.UUID) resourceRef {
+	resourceID := ""
+	if id != uuid.Nil {
+		resourceID = id.String()
+	}
+	return resourceRef{Type: accesscatalog.ResourceGovernanceSignal, ID: resourceID, ScopeType: accesscatalog.ScopeGlobal}
+}
+
+func signalTargetResource(target value.ExternalRef) resourceRef {
+	resource := signalResource(uuid.Nil)
+	resource.ID = strings.TrimSpace(target.Ref)
 	return resource
 }
