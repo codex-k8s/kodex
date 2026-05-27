@@ -67,14 +67,14 @@ approvals:
 | AGO-FR-7 | Домен должен использовать `provider-hub` для типизированных provider-операций и сигналов после работы агента, но не владеть provider-native состоянием. | Обязательно |
 | AGO-FR-8 | Домен должен описывать машину приёмки: ожидаемые артефакты, правила проверки, статусы, ошибки и решение о следующем этапе. | Обязательно |
 | AGO-FR-9 | Домен должен создавать или запрашивать создание follow-up `Issue` как provider-native задачи нужного типа через provider-контур. | Обязательно |
-| AGO-FR-10 | Домен должен запрашивать Human gate через `governance-manager`, а доставку человеку получать через `interaction-hub`; `agent-manager` не хранит gate request, gate decision, диалоги, доставку и внешние каналы у себя. | Обязательно |
+| AGO-FR-10 | Домен должен хранить orchestration wait/result для Human gate: session/run/stage refs, refs на interaction/governance lifecycle и normalized outcome для продолжения или остановки flow; transport request/response остаётся у `interaction-hub`, governance/risk/release decision — у `governance-manager`. | Обязательно |
 | AGO-FR-11 | Домен должен публиковать `agent.*` события по жизненному циклу сессии, запуска, приёмки и follow-up. | Обязательно |
 | AGO-FR-12 | Домен должен поддерживать идемпотентные команды, ожидаемую версию и безопасный повтор запуска или приёмки. | Обязательно |
 | AGO-FR-13 | Домен должен работать через `platform-mcp-server` как инструментальную поверхность быстрого agent-manager и агентов в слотах. | Обязательно |
 | AGO-FR-14 | Домен должен принимать события жизненного цикла Codex-сессии через `codex-hook-ingress`, а не через MCP-инструменты. Минимальный набор событий: `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PermissionRequest`, `PostToolUse`, `Stop`. | Обязательно |
 | AGO-FR-15 | Домен должен хранить актуальную ссылку на Codex session JSON/JSONL в S3-compatible объектном хранилище после каждого значимого turn/checkpoint, не записывая большой JSON в PostgreSQL. | Обязательно |
 | AGO-FR-16 | Домен должен хранить безопасную persistent timeline действий агента по session/run: lifecycle, tool intent/result, permission, runtime/provider signals, статус, время, bounded summary/error, digest и safe refs/details без raw tool input/output, stdout/stderr, prompt, transcript, provider payload или workspace paths. | Обязательно |
-| AGO-FR-17 | Домен не должен владеть слотами, workspace filesystem, platform jobs, GitHub/GitLab состоянием, пакетами, установками пакетов, диалогами или уведомлениями. | Обязательно |
+| AGO-FR-17 | Домен не должен владеть слотами, workspace filesystem, platform jobs, GitHub/GitLab состоянием, пакетами, установками пакетов, диалогами, уведомлениями, transport payload или governance decision body. | Обязательно |
 
 ## Критерии приёмки
 
@@ -83,7 +83,7 @@ approvals:
 | AGO-AC-1 | Если пользователь запускает работу, `agent-manager` может связать запрос с flow, ролью, provider-native задачей и агентной сессией. |
 | AGO-AC-2 | Если этап требует ролевого агента, `agent-manager` создаёт `Run`, получает руководящие пакеты и запрашивает runtime у `runtime-manager`. |
 | AGO-AC-3 | Если агент завершил работу, машина приёмки проверяет ожидаемые `PR/MR`, follow-up `Issue`, watermark, обязательные поля и результат policy. |
-| AGO-AC-4 | Если требуется решение человека, `agent-manager` запрашивает gate у `governance-manager`, фиксирует ожидание flow и ждёт результат, не владея gate decision или каналом доставки. |
+| AGO-AC-4 | Если требуется решение человека, `agent-manager` фиксирует ожидание flow, refs на interaction/governance request и затем normalized outcome `approve`/`reject`/`request_changes`/`answer` с refs на response/decision, не владея каналом доставки или полным decision payload. |
 | AGO-AC-5 | Если flow требует следующий этап, follow-up `Issue` создаётся или обновляется через provider-контур с правильным типом и открытыми инструкциями. |
 | AGO-AC-6 | Если роль или flow меняется, новая версия не ломает уже запущенные сессии: `Run` фиксирует использованные версии. |
 | AGO-AC-7 | Если руководящий пакет установлен в scope, `agent-manager` читает его через `ListPackageInstallations(package_kind=guidance)`, `GetPackageVersion` и `GetPackageManifest`, а runtime workspace получает read-only локальный источник `.kodex/guidance/<safe_local_name>`; перед checkout `runtime-manager` читает `PackageVersion` и `PackageSource` в `package-hub` по замороженному `package_version_ref`. |
@@ -109,7 +109,7 @@ approvals:
 | AGO-NFR-1 | Надёжность | Каждое существенное изменение `Run`, приёмки или follow-up фиксируется в БД и публикуется через outbox. |
 | AGO-NFR-2 | Производительность | Быстрый agent-manager должен получать нужные чтения локально через сервисы и MCP, без постоянных обходов GitHub/GitLab. |
 | AGO-NFR-3 | Безопасность | Все действия роли проходят через policy, доступные MCP-инструменты и разрешённые внешние аккаунты. |
-| AGO-NFR-4 | Наблюдаемость | Сессии, `Run`, acceptance, retry, follow-up и ожидание governance gate имеют correlation id, метрики и безопасные ошибки. |
+| AGO-NFR-4 | Наблюдаемость | Сессии, `Run`, acceptance, retry, follow-up и Human gate wait/result имеют correlation id, метрики и безопасные ошибки. |
 | AGO-NFR-4a | Наблюдаемость | Activity timeline имеет correlation/idempotency trace, cursor pagination и безопасные summaries без raw payload. |
 | AGO-NFR-5 | Совместимость | `Run` фиксирует версии flow, stage, role, prompt и руководящих пакетов, чтобы будущие изменения не меняли историю выполнения. |
 | AGO-NFR-6 | Расширяемость | Новый flow, stage или роль добавляется через версионируемую конфигурацию и policy, а не через изменение кода ядра. |

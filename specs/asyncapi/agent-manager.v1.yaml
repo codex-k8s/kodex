@@ -353,6 +353,16 @@ components:
           type: string
         interaction_ref:
           type: string
+        interaction_request_ref:
+          type: string
+        interaction_response_ref:
+          type: string
+        governance_gate_request_ref:
+          type: string
+        governance_decision_ref:
+          type: string
+        human_gate_outcome:
+          type: string
         status:
           type: string
         previous_status:
@@ -459,7 +469,7 @@ components:
       allOf:
         - $ref: '#/components/schemas/AgentEventPayload'
         - type: object
-          required: [session_id, human_gate_request_id, interaction_ref, status, version]
+          required: [session_id, human_gate_request_id, status, human_gate_outcome, version]
     FlowVersionActivatedPayload:
       allOf:
         - $ref: '#/components/schemas/AgentEventPayload'

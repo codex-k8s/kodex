@@ -106,6 +106,23 @@ func commandResultKey(identity query.CommandIdentity) string {
 	return identity.Operation + ":" + actor + ":" + identity.IdempotencyKey
 }
 
+func safeCommandResultKey(meta value.CommandMeta, operation string, unsafeText func(string) bool) (string, error) {
+	identity, err := commandIdentity(meta, operation)
+	if err != nil {
+		return "", err
+	}
+	key := commandResultKey(identity)
+	if len(key) > 512 || unsafeText(key) {
+		return "", errs.ErrInvalidArgument
+	}
+	for _, char := range key {
+		if !safeAcceptanceRefChar(char) {
+			return "", errs.ErrInvalidArgument
+		}
+	}
+	return key, nil
+}
+
 func expectedVersion(meta value.CommandMeta) (int64, error) {
 	if meta.ExpectedVersion == nil || *meta.ExpectedVersion < 1 {
 		return 0, errs.ErrInvalidArgument
@@ -119,4 +136,20 @@ func marshalCommandPayload(value any) ([]byte, error) {
 		return nil, err
 	}
 	return payload, nil
+}
+
+func verifyEntityRequestReplay[T any](expected T, load func(context.Context, uuid.UUID) (T, error), idOf func(T) uuid.UUID, same func(T, T) bool) func(context.Context, entity.CommandResult, T) error {
+	return func(ctx context.Context, result entity.CommandResult, replay T) error {
+		if idOf(replay) != result.AggregateID {
+			return errs.ErrConflict
+		}
+		stored, err := load(ctx, result.AggregateID)
+		if err != nil {
+			return err
+		}
+		if idOf(stored) != idOf(replay) || !same(stored, expected) {
+			return errs.ErrConflict
+		}
+		return nil
+	}
 }

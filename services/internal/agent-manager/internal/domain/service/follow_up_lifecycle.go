@@ -188,7 +188,8 @@ func (s *Service) CreateFollowUpIntent(ctx context.Context, input CreateFollowUp
 	if err != nil {
 		return entity.FollowUpIntent{}, err
 	}
-	if replay, ok, err := findReplay(ctx, s, input.Meta, operationCreateFollowUpIntent, enum.CommandAggregateTypeFollowUp, followUpIntentFromPayload, verifyFollowUpIntentReplay(intent, s.repository.GetFollowUpIntent)); ok || err != nil {
+	verifyReplay := verifyEntityRequestReplay(intent, s.repository.GetFollowUpIntent, followUpIntentID, sameFollowUpIntentRequest)
+	if replay, ok, err := findReplay(ctx, s, input.Meta, operationCreateFollowUpIntent, enum.CommandAggregateTypeFollowUp, followUpIntentFromPayload, verifyReplay); ok || err != nil {
 		return replay, err
 	}
 	if isTerminalSessionStatus(session.Status) {
@@ -2126,22 +2127,6 @@ func followUpProviderIntentFromPayload(payload []byte) (entity.FollowUpIntent, e
 	return result.FollowUpIntent, err
 }
 
-func verifyFollowUpIntentReplay(expected entity.FollowUpIntent, load func(context.Context, uuid.UUID) (entity.FollowUpIntent, error)) func(context.Context, entity.CommandResult, entity.FollowUpIntent) error {
-	return func(ctx context.Context, result entity.CommandResult, replay entity.FollowUpIntent) error {
-		if replay.ID != result.AggregateID {
-			return errs.ErrConflict
-		}
-		stored, err := load(ctx, result.AggregateID)
-		if err != nil {
-			return err
-		}
-		if stored.ID != replay.ID || !sameFollowUpIntentRequest(stored, expected) {
-			return errs.ErrConflict
-		}
-		return nil
-	}
-}
-
 func verifyFollowUpProviderReplay(expected followUpDispatchSnapshot, load func(context.Context, uuid.UUID) (entity.FollowUpIntent, error)) func(context.Context, entity.CommandResult, entity.FollowUpIntent) error {
 	return func(ctx context.Context, result entity.CommandResult, replay entity.FollowUpIntent) error {
 		if replay.ID != result.AggregateID || replay.ID.String() != expected.FollowUpIntentID {
@@ -2178,6 +2163,10 @@ func sameFollowUpIntentRequest(stored entity.FollowUpIntent, expected entity.Fol
 		stored.StageHint == expected.StageHint &&
 		stored.IdempotencyKey == expected.IdempotencyKey &&
 		stored.Status == expected.Status
+}
+
+func followUpIntentID(intent entity.FollowUpIntent) uuid.UUID {
+	return intent.ID
 }
 
 func sameFollowUpDispatchSnapshot(left followUpDispatchSnapshot, right followUpDispatchSnapshot) bool {

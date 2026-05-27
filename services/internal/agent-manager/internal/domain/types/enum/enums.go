@@ -181,6 +181,26 @@ const (
 	AgentActivityStatusSkipped   AgentActivityStatus = "skipped"
 )
 
+type HumanGateStatus string
+
+const (
+	HumanGateStatusRequested HumanGateStatus = "requested"
+	HumanGateStatusWaiting   HumanGateStatus = "waiting"
+	HumanGateStatusResolved  HumanGateStatus = "resolved"
+	HumanGateStatusFailed    HumanGateStatus = "failed"
+	HumanGateStatusCancelled HumanGateStatus = "cancelled"
+)
+
+type HumanGateOutcome string
+
+const (
+	HumanGateOutcomeNone           HumanGateOutcome = "none"
+	HumanGateOutcomeApprove        HumanGateOutcome = "approve"
+	HumanGateOutcomeReject         HumanGateOutcome = "reject"
+	HumanGateOutcomeRequestChanges HumanGateOutcome = "request_changes"
+	HumanGateOutcomeAnswer         HumanGateOutcome = "answer"
+)
+
 type CommandAggregateType string
 
 const (
@@ -195,4 +215,5 @@ const (
 	CommandAggregateTypeAcceptance            CommandAggregateType = "acceptance"
 	CommandAggregateTypeFollowUp              CommandAggregateType = "follow_up"
 	CommandAggregateTypeActivity              CommandAggregateType = "activity"
+	CommandAggregateTypeHumanGate             CommandAggregateType = "human_gate"
 )

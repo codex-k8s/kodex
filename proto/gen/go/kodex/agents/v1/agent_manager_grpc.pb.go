@@ -48,6 +48,9 @@ const (
 	AgentManagerService_RecordAgentActivity_FullMethodName           = "/kodex.agents.v1.AgentManagerService/RecordAgentActivity"
 	AgentManagerService_ListAgentActivities_FullMethodName           = "/kodex.agents.v1.AgentManagerService/ListAgentActivities"
 	AgentManagerService_RequestHumanGate_FullMethodName              = "/kodex.agents.v1.AgentManagerService/RequestHumanGate"
+	AgentManagerService_RecordHumanGateDecision_FullMethodName       = "/kodex.agents.v1.AgentManagerService/RecordHumanGateDecision"
+	AgentManagerService_GetHumanGateRequest_FullMethodName           = "/kodex.agents.v1.AgentManagerService/GetHumanGateRequest"
+	AgentManagerService_ListHumanGateRequests_FullMethodName         = "/kodex.agents.v1.AgentManagerService/ListHumanGateRequests"
 	AgentManagerService_GetAgentSession_FullMethodName               = "/kodex.agents.v1.AgentManagerService/GetAgentSession"
 	AgentManagerService_ListAgentRuns_FullMethodName                 = "/kodex.agents.v1.AgentManagerService/ListAgentRuns"
 )
@@ -116,8 +119,14 @@ type AgentManagerServiceClient interface {
 	RecordAgentActivity(ctx context.Context, in *RecordAgentActivityRequest, opts ...grpc.CallOption) (*AgentActivityResponse, error)
 	// ListAgentActivities returns safe timeline entries by session or run.
 	ListAgentActivities(ctx context.Context, in *ListAgentActivitiesRequest, opts ...grpc.CallOption) (*ListAgentActivitiesResponse, error)
-	// RequestHumanGate creates a human decision request through interaction-hub.
+	// RequestHumanGate records an owner-decision wait and safe interaction/governance refs.
 	RequestHumanGate(ctx context.Context, in *RequestHumanGateRequest, opts ...grpc.CallOption) (*HumanGateRequestResponse, error)
+	// RecordHumanGateDecision records a normalized owner decision outcome.
+	RecordHumanGateDecision(ctx context.Context, in *RecordHumanGateDecisionRequest, opts ...grpc.CallOption) (*HumanGateRequestResponse, error)
+	// GetHumanGateRequest returns one owner-decision wait.
+	GetHumanGateRequest(ctx context.Context, in *GetHumanGateRequestRequest, opts ...grpc.CallOption) (*HumanGateRequestResponse, error)
+	// ListHumanGateRequests returns owner-decision waits by session, run, stage or state.
+	ListHumanGateRequests(ctx context.Context, in *ListHumanGateRequestsRequest, opts ...grpc.CallOption) (*ListHumanGateRequestsResponse, error)
 	// GetAgentSession returns authoritative session state.
 	GetAgentSession(ctx context.Context, in *GetAgentSessionRequest, opts ...grpc.CallOption) (*AgentSessionResponse, error)
 	// ListAgentRuns returns agent runs by session, role, status or provider target.
@@ -422,6 +431,36 @@ func (c *agentManagerServiceClient) RequestHumanGate(ctx context.Context, in *Re
 	return out, nil
 }
 
+func (c *agentManagerServiceClient) RecordHumanGateDecision(ctx context.Context, in *RecordHumanGateDecisionRequest, opts ...grpc.CallOption) (*HumanGateRequestResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(HumanGateRequestResponse)
+	err := c.cc.Invoke(ctx, AgentManagerService_RecordHumanGateDecision_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentManagerServiceClient) GetHumanGateRequest(ctx context.Context, in *GetHumanGateRequestRequest, opts ...grpc.CallOption) (*HumanGateRequestResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(HumanGateRequestResponse)
+	err := c.cc.Invoke(ctx, AgentManagerService_GetHumanGateRequest_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentManagerServiceClient) ListHumanGateRequests(ctx context.Context, in *ListHumanGateRequestsRequest, opts ...grpc.CallOption) (*ListHumanGateRequestsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListHumanGateRequestsResponse)
+	err := c.cc.Invoke(ctx, AgentManagerService_ListHumanGateRequests_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *agentManagerServiceClient) GetAgentSession(ctx context.Context, in *GetAgentSessionRequest, opts ...grpc.CallOption) (*AgentSessionResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(AgentSessionResponse)
@@ -506,8 +545,14 @@ type AgentManagerServiceServer interface {
 	RecordAgentActivity(context.Context, *RecordAgentActivityRequest) (*AgentActivityResponse, error)
 	// ListAgentActivities returns safe timeline entries by session or run.
 	ListAgentActivities(context.Context, *ListAgentActivitiesRequest) (*ListAgentActivitiesResponse, error)
-	// RequestHumanGate creates a human decision request through interaction-hub.
+	// RequestHumanGate records an owner-decision wait and safe interaction/governance refs.
 	RequestHumanGate(context.Context, *RequestHumanGateRequest) (*HumanGateRequestResponse, error)
+	// RecordHumanGateDecision records a normalized owner decision outcome.
+	RecordHumanGateDecision(context.Context, *RecordHumanGateDecisionRequest) (*HumanGateRequestResponse, error)
+	// GetHumanGateRequest returns one owner-decision wait.
+	GetHumanGateRequest(context.Context, *GetHumanGateRequestRequest) (*HumanGateRequestResponse, error)
+	// ListHumanGateRequests returns owner-decision waits by session, run, stage or state.
+	ListHumanGateRequests(context.Context, *ListHumanGateRequestsRequest) (*ListHumanGateRequestsResponse, error)
 	// GetAgentSession returns authoritative session state.
 	GetAgentSession(context.Context, *GetAgentSessionRequest) (*AgentSessionResponse, error)
 	// ListAgentRuns returns agent runs by session, role, status or provider target.
@@ -608,6 +653,15 @@ func (UnimplementedAgentManagerServiceServer) ListAgentActivities(context.Contex
 }
 func (UnimplementedAgentManagerServiceServer) RequestHumanGate(context.Context, *RequestHumanGateRequest) (*HumanGateRequestResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RequestHumanGate not implemented")
+}
+func (UnimplementedAgentManagerServiceServer) RecordHumanGateDecision(context.Context, *RecordHumanGateDecisionRequest) (*HumanGateRequestResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RecordHumanGateDecision not implemented")
+}
+func (UnimplementedAgentManagerServiceServer) GetHumanGateRequest(context.Context, *GetHumanGateRequestRequest) (*HumanGateRequestResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetHumanGateRequest not implemented")
+}
+func (UnimplementedAgentManagerServiceServer) ListHumanGateRequests(context.Context, *ListHumanGateRequestsRequest) (*ListHumanGateRequestsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListHumanGateRequests not implemented")
 }
 func (UnimplementedAgentManagerServiceServer) GetAgentSession(context.Context, *GetAgentSessionRequest) (*AgentSessionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetAgentSession not implemented")
@@ -1158,6 +1212,60 @@ func _AgentManagerService_RequestHumanGate_Handler(srv interface{}, ctx context.
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentManagerService_RecordHumanGateDecision_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RecordHumanGateDecisionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentManagerServiceServer).RecordHumanGateDecision(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentManagerService_RecordHumanGateDecision_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentManagerServiceServer).RecordHumanGateDecision(ctx, req.(*RecordHumanGateDecisionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentManagerService_GetHumanGateRequest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetHumanGateRequestRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentManagerServiceServer).GetHumanGateRequest(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentManagerService_GetHumanGateRequest_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentManagerServiceServer).GetHumanGateRequest(ctx, req.(*GetHumanGateRequestRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentManagerService_ListHumanGateRequests_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListHumanGateRequestsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentManagerServiceServer).ListHumanGateRequests(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentManagerService_ListHumanGateRequests_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentManagerServiceServer).ListHumanGateRequests(ctx, req.(*ListHumanGateRequestsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AgentManagerService_GetAgentSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetAgentSessionRequest)
 	if err := dec(in); err != nil {
@@ -1316,6 +1424,18 @@ var AgentManagerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RequestHumanGate",
 			Handler:    _AgentManagerService_RequestHumanGate_Handler,
+		},
+		{
+			MethodName: "RecordHumanGateDecision",
+			Handler:    _AgentManagerService_RecordHumanGateDecision_Handler,
+		},
+		{
+			MethodName: "GetHumanGateRequest",
+			Handler:    _AgentManagerService_GetHumanGateRequest_Handler,
+		},
+		{
+			MethodName: "ListHumanGateRequests",
+			Handler:    _AgentManagerService_ListHumanGateRequests_Handler,
 		},
 		{
 			MethodName: "GetAgentSession",

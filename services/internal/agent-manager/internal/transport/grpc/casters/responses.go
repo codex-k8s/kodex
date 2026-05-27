@@ -40,6 +40,8 @@ type AcceptanceResultListOutput = PageOutput[entity.AcceptanceResult]
 
 type AgentActivityListOutput = PageOutput[entity.AgentActivity]
 
+type HumanGateListOutput = PageOutput[entity.HumanGateRequest]
+
 type AgentSessionOutput struct {
 	Session        entity.AgentSession
 	LatestSnapshot *entity.AgentSessionStateSnapshot
@@ -150,6 +152,14 @@ func AgentActivityResponse(activity entity.AgentActivity) *agentsv1.AgentActivit
 
 func ListAgentActivitiesResponse(output AgentActivityListOutput) *agentsv1.ListAgentActivitiesResponse {
 	return &agentsv1.ListAgentActivitiesResponse{Activities: protoList(output.Items, AgentActivityToProto), Page: pageResponseToProto(output.Page)}
+}
+
+func HumanGateRequestResponse(gate entity.HumanGateRequest) *agentsv1.HumanGateRequestResponse {
+	return &agentsv1.HumanGateRequestResponse{HumanGateRequest: HumanGateRequestToProto(gate)}
+}
+
+func ListHumanGateRequestsResponse(output HumanGateListOutput) *agentsv1.ListHumanGateRequestsResponse {
+	return &agentsv1.ListHumanGateRequestsResponse{HumanGateRequests: protoList(output.Items, HumanGateRequestToProto), Page: pageResponseToProto(output.Page)}
 }
 
 func protoList[Domain any, Proto any](items []Domain, cast func(Domain) *Proto) []*Proto {
@@ -407,6 +417,32 @@ func AgentActivityToProto(activity entity.AgentActivity) *agentsv1.AgentActivity
 		Version:         activity.Version,
 		CreatedAt:       formatTime(activity.CreatedAt),
 		UpdatedAt:       formatTime(activity.UpdatedAt),
+	}
+}
+
+func HumanGateRequestToProto(gate entity.HumanGateRequest) *agentsv1.HumanGateRequest {
+	return &agentsv1.HumanGateRequest{
+		Id:                       gate.ID.String(),
+		SessionId:                gate.SessionID.String(),
+		RunId:                    optionalUUIDStringPtr(gate.RunID),
+		StageId:                  optionalUUIDStringPtr(gate.StageID),
+		AcceptanceResultId:       optionalUUIDStringPtr(gate.AcceptanceResultID),
+		ProviderTarget:           ProviderTargetToProto(gate.ProviderTarget),
+		TargetRef:                optionalStringPtr(gate.TargetRef),
+		RequestKind:              gate.RequestKind,
+		ReasonCode:               gate.ReasonCode,
+		SafeSummary:              optionalStringPtr(gate.SafeSummary),
+		InteractionRequestRef:    optionalStringPtr(gate.InteractionRequestRef),
+		InteractionResponseRef:   optionalStringPtr(gate.InteractionResponseRef),
+		GovernanceGateRequestRef: optionalStringPtr(gate.GovernanceGateRequestRef),
+		GovernanceDecisionRef:    optionalStringPtr(gate.GovernanceDecisionRef),
+		Status:                   HumanGateStatusToProto(gate.Status),
+		Outcome:                  HumanGateOutcomeToProto(gate.Outcome),
+		IdempotencyKey:           gate.IdempotencyKey,
+		Version:                  gate.Version,
+		CreatedAt:                formatTime(gate.CreatedAt),
+		UpdatedAt:                formatTime(gate.UpdatedAt),
+		ResolvedAt:               optionalTimePtr(gate.ResolvedAt),
 	}
 }
 

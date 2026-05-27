@@ -19,4 +19,6 @@ const (
 	operationCreateFollowUpIntent        = "domain.Service.CreateFollowUpIntent"
 	operationDispatchFollowUpIntent      = "domain.Service.DispatchFollowUpIntent"
 	operationRecordAgentActivity         = "domain.Service.RecordAgentActivity"
+	operationRequestHumanGate            = "domain.Service.RequestHumanGate"
+	operationRecordHumanGateDecision     = "domain.Service.RecordHumanGateDecision"
 )

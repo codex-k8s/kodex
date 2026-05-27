@@ -798,6 +798,111 @@ func ListAgentActivitiesInput(request *agentsv1.ListAgentActivitiesRequest) (ser
 	}, nil
 }
 
+func RequestHumanGateInput(request *agentsv1.RequestHumanGateRequest) (service.RequestHumanGateInput, error) {
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return service.RequestHumanGateInput{}, err
+	}
+	sessionID, err := requiredUUID(request.GetSessionId())
+	if err != nil {
+		return service.RequestHumanGateInput{}, err
+	}
+	runID, err := optionalUUIDPtr(request.GetRunId())
+	if err != nil {
+		return service.RequestHumanGateInput{}, err
+	}
+	stageID, err := optionalUUIDPtr(request.GetStageId())
+	if err != nil {
+		return service.RequestHumanGateInput{}, err
+	}
+	acceptanceID, err := optionalUUIDPtr(request.GetAcceptanceResultId())
+	if err != nil {
+		return service.RequestHumanGateInput{}, err
+	}
+	return service.RequestHumanGateInput{
+		Meta:                     meta,
+		SessionID:                sessionID,
+		RunID:                    runID,
+		StageID:                  stageID,
+		AcceptanceResultID:       acceptanceID,
+		ProviderTarget:           ProviderTargetFromProto(request.GetProviderTarget()),
+		TargetRef:                strings.TrimSpace(request.GetTargetRef()),
+		RequestKind:              strings.TrimSpace(request.GetRequestKind()),
+		ReasonCode:               strings.TrimSpace(request.GetReasonCode()),
+		SafeSummary:              strings.TrimSpace(request.GetSafeSummary()),
+		InteractionRequestRef:    strings.TrimSpace(request.GetInteractionRequestRef()),
+		GovernanceGateRequestRef: strings.TrimSpace(request.GetGovernanceGateRequestRef()),
+	}, nil
+}
+
+func RecordHumanGateDecisionInput(request *agentsv1.RecordHumanGateDecisionRequest) (service.RecordHumanGateDecisionInput, error) {
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return service.RecordHumanGateDecisionInput{}, err
+	}
+	gateID, err := requiredUUID(request.GetHumanGateRequestId())
+	if err != nil {
+		return service.RecordHumanGateDecisionInput{}, err
+	}
+	status, err := HumanGateStatusFromProto(request.GetStatus())
+	if err != nil {
+		return service.RecordHumanGateDecisionInput{}, err
+	}
+	outcome, err := HumanGateOutcomeFromProto(request.GetOutcome())
+	if err != nil {
+		return service.RecordHumanGateDecisionInput{}, err
+	}
+	return service.RecordHumanGateDecisionInput{
+		Meta:                     meta,
+		HumanGateRequestID:       gateID,
+		Status:                   status,
+		Outcome:                  outcome,
+		SafeSummary:              strings.TrimSpace(request.GetSafeSummary()),
+		InteractionRequestRef:    strings.TrimSpace(request.GetInteractionRequestRef()),
+		InteractionResponseRef:   strings.TrimSpace(request.GetInteractionResponseRef()),
+		GovernanceGateRequestRef: strings.TrimSpace(request.GetGovernanceGateRequestRef()),
+		GovernanceDecisionRef:    strings.TrimSpace(request.GetGovernanceDecisionRef()),
+	}, nil
+}
+
+func GetHumanGateRequestInput(request *agentsv1.GetHumanGateRequestRequest) (IDQueryInput, error) {
+	return idQueryInput(request.GetHumanGateRequestId(), request.GetMeta())
+}
+
+func ListHumanGateRequestsInput(request *agentsv1.ListHumanGateRequestsRequest) (service.HumanGateList, error) {
+	if _, err := QueryMetaFromProto(request.GetMeta()); err != nil {
+		return service.HumanGateList{}, err
+	}
+	sessionID, err := optionalUUIDValue(request.GetSessionId())
+	if err != nil {
+		return service.HumanGateList{}, err
+	}
+	runID, err := optionalUUIDValue(request.GetRunId())
+	if err != nil {
+		return service.HumanGateList{}, err
+	}
+	stageID, err := optionalUUIDValue(request.GetStageId())
+	if err != nil {
+		return service.HumanGateList{}, err
+	}
+	status, err := OptionalHumanGateStatusFromProto(request.Status)
+	if err != nil {
+		return service.HumanGateList{}, err
+	}
+	outcome, err := OptionalHumanGateOutcomeFromProto(request.Outcome)
+	if err != nil {
+		return service.HumanGateList{}, err
+	}
+	return service.HumanGateList{
+		SessionID: sessionID,
+		RunID:     runID,
+		StageID:   stageID,
+		Status:    status,
+		Outcome:   outcome,
+		Page:      pageRequestFromProto(request.GetPage()),
+	}, nil
+}
+
 func GetAgentSessionInput(request *agentsv1.GetAgentSessionRequest) (IDQueryInput, error) {
 	return idQueryInput(request.GetSessionId(), request.GetMeta())
 }

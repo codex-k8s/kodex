@@ -588,3 +588,32 @@ type RecordAgentActivityInput struct {
 }
 
 type AgentActivityList = query.AgentActivityFilter
+
+type RequestHumanGateInput struct {
+	Meta                     value.CommandMeta
+	SessionID                uuid.UUID
+	RunID                    *uuid.UUID
+	StageID                  *uuid.UUID
+	AcceptanceResultID       *uuid.UUID
+	ProviderTarget           value.ProviderTargetRef
+	TargetRef                string
+	RequestKind              string
+	ReasonCode               string
+	SafeSummary              string
+	InteractionRequestRef    string
+	GovernanceGateRequestRef string
+}
+
+type RecordHumanGateDecisionInput struct {
+	Meta                     value.CommandMeta
+	HumanGateRequestID       uuid.UUID
+	Status                   enum.HumanGateStatus
+	Outcome                  enum.HumanGateOutcome
+	SafeSummary              string
+	InteractionRequestRef    string
+	InteractionResponseRef   string
+	GovernanceGateRequestRef string
+	GovernanceDecisionRef    string
+}
+
+type HumanGateList = query.HumanGateFilter

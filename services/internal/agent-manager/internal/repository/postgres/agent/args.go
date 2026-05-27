@@ -295,6 +295,37 @@ func agentActivityArgs(activity entity.AgentActivity) pgx.NamedArgs {
 	}, activity.ID, activity.Version, activity.CreatedAt, activity.UpdatedAt)
 }
 
+func humanGateRequestArgs(gate entity.HumanGateRequest) pgx.NamedArgs {
+	return postgreslib.AddBaseArgs(pgx.NamedArgs{
+		"session_id":                  gate.SessionID,
+		"run_id":                      postgreslib.NullableUUID(gate.RunID),
+		"stage_id":                    postgreslib.NullableUUID(gate.StageID),
+		"acceptance_result_id":        postgreslib.NullableUUID(gate.AcceptanceResultID),
+		"provider_work_item_ref":      gate.ProviderTarget.WorkItemRef,
+		"provider_pull_request_ref":   gate.ProviderTarget.PullRequestRef,
+		"provider_comment_ref":        gate.ProviderTarget.CommentRef,
+		"provider_review_signal_ref":  gate.ProviderTarget.ReviewSignalRef,
+		"target_ref":                  gate.TargetRef,
+		"request_kind":                gate.RequestKind,
+		"reason_code":                 gate.ReasonCode,
+		"safe_summary":                gate.SafeSummary,
+		"interaction_request_ref":     gate.InteractionRequestRef,
+		"interaction_response_ref":    gate.InteractionResponseRef,
+		"governance_gate_request_ref": gate.GovernanceGateRequestRef,
+		"governance_decision_ref":     gate.GovernanceDecisionRef,
+		"idempotency_key":             gate.IdempotencyKey,
+		"status":                      string(gate.Status),
+		"outcome":                     string(gate.Outcome),
+		"resolved_at":                 postgreslib.NullableTime(gate.ResolvedAt),
+	}, gate.ID, gate.Version, gate.CreatedAt, gate.UpdatedAt)
+}
+
+func humanGateRequestUpdateArgs(gate entity.HumanGateRequest, previousVersion int64) pgx.NamedArgs {
+	args := humanGateRequestArgs(gate)
+	args["previous_version"] = previousVersion
+	return args
+}
+
 func commandResultArgs(result entity.CommandResult) pgx.NamedArgs {
 	args := pgx.NamedArgs{"key": result.Key}
 	args["command_id"] = postgreslib.NullableUUID(result.CommandID)
@@ -391,6 +422,16 @@ func acceptanceResultFilterArgs(filter query.AcceptanceResultFilter) pageQueryAr
 	args["run_id"] = optionalUUID(filter.RunID)
 	args["stage_id"] = optionalUUID(filter.StageID)
 	args["status"] = optionalEnum(filter.Status)
+	return withPage(filter.Page, args)
+}
+
+func humanGateRequestFilterArgs(filter query.HumanGateFilter) pageQueryArgs {
+	args := pgx.NamedArgs{}
+	args["session_id"] = optionalUUID(filter.SessionID)
+	args["run_id"] = optionalUUID(filter.RunID)
+	args["stage_id"] = optionalUUID(filter.StageID)
+	args["status"] = optionalEnum(filter.Status)
+	args["outcome"] = optionalEnum(filter.Outcome)
 	return withPage(filter.Page, args)
 }
 

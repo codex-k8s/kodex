@@ -220,11 +220,11 @@ MCP не владеет доменным состоянием и не подме
 
 ### `governance-manager`
 
-`agent-manager` обращается к `governance-manager` за оценкой риска, записью review signals, созданием gate request и чтением итогового gate/release decision. `agent-manager` хранит только ожидание flow и ссылки на governance-решения; сами risk/gate/release decisions остаются в governance-контуре.
+`agent-manager` обращается к `governance-manager` за оценкой риска, записью review signals, созданием gate request и чтением итогового gate/release decision. `agent-manager` хранит только ожидание flow, normalized owner outcome и ссылки на governance request/decision; сами risk/gate/release decisions остаются в governance-контуре.
 
 ### `interaction-hub`
 
-`agent-manager` создаёт запрос обратной связи или уведомления, но не хранит диалоговую ветку и попытки доставки. Human gate доставляется через `interaction-hub` по запросу `governance-manager`, а результат решения возвращается в `agent-manager` как governance decision ref или событие продолжения flow.
+`agent-manager` фиксирует, что flow ждёт обратную связь или owner decision, но не хранит диалоговую ветку, callback body и попытки доставки. Human gate transport request/response принадлежит `interaction-hub`; в `agent-manager` остаются только `interaction_request_ref`, `interaction_response_ref`, safe summary и normalized outcome для orchestration state.
 
 ## Flow, stage, role и prompt
 
@@ -249,7 +249,14 @@ MCP не владеет доменным состоянием и не подме
 - результаты ролевых проверок;
 - риск и необходимость Human gate.
 
-Результат приёмки не меняет чужую истину напрямую. Базовый lifecycle создаёт и обновляет `AcceptanceResult` в `agent-manager`, хранит только статусы, safe refs, bounded summary/digest и публикует события. Если проверка требует provider/governance/interaction/runtime действия, `agent-manager` фиксирует ожидание или ссылку, а операцию выполняет сервис-владелец в отдельном срезе. Для `human_gate` `agent-manager` фиксирует только `waiting` с безопасным gate/risk/governance ref и не записывает финальное решение.
+Результат приёмки не меняет чужую истину напрямую. Базовый lifecycle создаёт и обновляет `AcceptanceResult` в `agent-manager`, хранит только статусы, safe refs, bounded summary/digest и публикует события. Если проверка требует provider/governance/interaction/runtime действия, `agent-manager` фиксирует ожидание или ссылку, а операцию выполняет сервис-владелец.
+
+Для `human_gate` граница разделена явно:
+- `agent-manager` владеет orchestration state: wait/result, session/run/stage/acceptance refs, normalized outcome, idempotency, expected version и события для продолжения или остановки flow;
+- `interaction-hub` владеет transport request/response lifecycle и callback delivery;
+- `governance-manager` владеет governance/risk/release decision там, где Human gate связан с policy gate.
+
+`agent-manager` хранит только `interaction_request_ref`, `interaction_response_ref`, `governance_gate_request_ref`, `governance_decision_ref`, provider target refs, safe summary и outcome `approve`/`reject`/`request_changes`/`answer`. Полные сообщения, transport payload, decision body, prompt/transcript/logs/PII и provider payload не копируются в БД `agent-manager`.
 
 ## События
 
@@ -270,8 +277,8 @@ MCP не владеет доменным состоянием и не подме
 - `agent.follow_up.commented`;
 - `agent.follow_up.review_signaled`;
 - `agent.follow_up.failed`;
-- `agent.human_gate.requested` как ожидание governance gate в flow;
-- `agent.human_gate.resolved` как получение ссылки на resolved governance decision;
+- `agent.human_gate.requested` как ожидание owner decision в flow;
+- `agent.human_gate.resolved` как normalized owner outcome с refs на interaction/governance result;
 - `agent.flow.version_activated`;
 - `agent.role.version_activated`;
 - `agent.prompt.version_activated`.
@@ -289,7 +296,7 @@ MCP не владеет доменным состоянием и не подме
 ## Наблюдаемость
 
 - Логи: session id, run id, flow, stage, role, provider target, runtime ref, activity id, correlation id, результат.
-- Метрики: запрошенные, выполняемые, ожидающие, упавшие и завершённые `Run`; длительность этапов; ошибки приёмки; повторные запуски; ожидания governance gate.
+- Метрики: запрошенные, выполняемые, ожидающие, упавшие и завершённые `Run`; длительность этапов; ошибки приёмки; повторные запуски; Human gate wait/result.
 - Трейсы: входящий gRPC/MCP, чтение package/project/provider, runtime prepare, activity record/list, acceptance, outbox.
 - Алерты: рост упавших `Run`, застрявшие ожидающие `Run`, рост ошибок приёмки, массовые ошибки package/runtime/provider зависимостей.
 

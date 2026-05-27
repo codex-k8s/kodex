@@ -202,6 +202,27 @@ type AgentActivity struct {
 	IdempotencyKey  string
 }
 
+type HumanGateRequest struct {
+	VersionedBase
+	SessionID                uuid.UUID
+	RunID                    *uuid.UUID
+	StageID                  *uuid.UUID
+	AcceptanceResultID       *uuid.UUID
+	ProviderTarget           value.ProviderTargetRef
+	TargetRef                string
+	RequestKind              string
+	ReasonCode               string
+	SafeSummary              string
+	InteractionRequestRef    string
+	InteractionResponseRef   string
+	GovernanceGateRequestRef string
+	GovernanceDecisionRef    string
+	IdempotencyKey           string
+	Status                   enum.HumanGateStatus
+	Outcome                  enum.HumanGateOutcome
+	ResolvedAt               *time.Time
+}
+
 type CommandResult struct {
 	Key            string
 	CommandID      *uuid.UUID

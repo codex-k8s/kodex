@@ -255,7 +255,7 @@ approvals:
 
 ### AcceptanceCheck и AcceptanceResult
 
-`AcceptanceCheck` описывает тип проверки в policy/flow-контексте, а `AcceptanceResult` является хранимым агрегатом результата. Базовый lifecycle создаёт один pending result на команду `RequestAcceptance`, затем `RecordAcceptanceResult` переводит его в `passed`, `failed`, `waiting` или `skipped` через ожидаемую версию. Для `human_gate` доступна только фиксация ожидания `waiting` с безопасной ссылкой на gate/risk/governance; финальное решение остаётся в сервисе-владельце.
+`AcceptanceCheck` описывает тип проверки в policy/flow-контексте, а `AcceptanceResult` является хранимым агрегатом результата. Базовый lifecycle создаёт один pending result на команду `RequestAcceptance`, затем `RecordAcceptanceResult` переводит его в `passed`, `failed`, `waiting` или `skipped` через ожидаемую версию. Для `human_gate` acceptance фиксирует только ожидание `waiting` с безопасной ссылкой на gate/risk/governance; итог owner decision хранится в отдельном `HumanGateRequest` агрегате `agent-manager` как normalized orchestration result.
 
 | Поле | Тип | Может быть пустым | Примечание |
 |---|---|---:|---|
@@ -270,7 +270,34 @@ approvals:
 | `version` | bigint | нет | Оптимистичная конкуренция результата приёмки. |
 | `created_at`, `updated_at` | timestamptz | нет | Технические временные метки. |
 
-`details_json` не является отчётом QA runner и не хранит raw provider payload, workspace files, prompt text, flow files, руководящие документы, stdout/stderr/logs, секреты, токены или PII. Если приёмка ждёт Human gate или governance decision, `agent-manager` фиксирует только статус ожидания и безопасные `gate_ref`/`risk_ref`/`governance` refs; само решение хранит сервис-владелец.
+`details_json` не является отчётом QA runner и не хранит raw provider payload, workspace files, prompt text, flow files, руководящие документы, stdout/stderr/logs, секреты, токены или PII. Если приёмка ждёт Human gate или governance decision, `agent-manager` фиксирует только статус ожидания и безопасные `gate_ref`/`risk_ref`/`governance` refs; normalized результат решения записывается в `HumanGateRequest`, а transport/governance payload остаётся у сервисов-владельцев.
+
+### HumanGateRequest
+
+`HumanGateRequest` — авторитетная модель ожидания и результата owner decision в `agent-manager`. Она связывает решение с session/run/stage/acceptance и provider-native target refs, но не владеет транспортом сообщения и не хранит governance decision body. Повтор `RequestHumanGate` с тем же command/idempotency key возвращает тот же wait только при совпадении нормализованного payload. `RecordHumanGateDecision` требует expected version, переводит ожидание в `resolved` и сохраняет normalized outcome для следующего шага flow.
+
+| Поле | Тип | Может быть пустым | Примечание |
+|---|---|---:|---|
+| `id` | uuid | нет | Идентификатор ожидания Human gate. |
+| `session_id` | uuid | нет | Сессия, которая должна продолжиться или завершиться после решения. |
+| `run_id` | uuid | да | Запуск, который ждёт решения или породил артефакт. |
+| `stage_id` | uuid | да | Этап flow, к которому относится ожидание. |
+| `acceptance_result_id` | uuid | да | Human-gate acceptance result в статусе `waiting`, если ожидание создано из machine acceptance. |
+| `provider_work_item_ref`, `provider_pull_request_ref`, `provider_comment_ref`, `provider_review_signal_ref` | text | да | Safe refs на provider-native артефакты; provider-native истина остаётся у `provider-hub`. |
+| `target_ref` | text | да | Safe ref артефакта/этапа/объекта решения, до 512 символов, namespace format `kind:value`. |
+| `request_kind` | text | нет | Тип owner decision wait, например `owner_decision`, `release_gate`, `clarification`. |
+| `reason_code` | text | нет | Машинный safe reason для ожидания. |
+| `safe_summary` | text | да | Bounded summary для UI и события; не содержит prompt, transcript, logs, PII или внешние payload. |
+| `interaction_request_ref`, `interaction_response_ref` | text | да | Refs на transport lifecycle `interaction-hub`; request/response payload не копируется. |
+| `governance_gate_request_ref`, `governance_decision_ref` | text | да | Refs на governance/risk/release lifecycle `governance-manager`; decision body не копируется. |
+| `status` | enum | нет | `requested`, `waiting`, `resolved`, `failed`, `cancelled`; запись решения переводит ожидание в `resolved`. |
+| `outcome` | enum | нет | `none`, `approve`, `reject`, `request_changes`, `answer`; для `resolved` outcome не может быть `none`. |
+| `idempotency_key` | text | нет | Сохранённый command idempotency trace. |
+| `version` | bigint | нет | Версия wait/result для optimistic concurrency. |
+| `resolved_at` | timestamptz | да | Время фиксации normalized outcome. |
+| `created_at`, `updated_at` | timestamptz | нет | Технические временные метки. |
+
+`HumanGateRequest` не хранит raw prompt/transcript, workspace paths/files, stdout/stderr/logs, provider payload, transport callback body, governance decision body, секреты, токены, email/phone/address и другой PII. Если требуется показать полный ответ владельца, UI читает его через owner-сервис `interaction-hub` с учётом доступа и retention; `agent-manager` хранит только refs и bounded summary.
 
 ### FollowUpIntent
 

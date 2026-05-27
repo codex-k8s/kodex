@@ -86,6 +86,10 @@ var (
 	operationRecordActivity        = repositoryOperation("RecordAgentActivityWithResult")
 	operationGetActivity           = repositoryOperation("GetAgentActivity")
 	operationListActivities        = repositoryOperation("ListAgentActivities")
+	operationCreateHumanGate       = repositoryOperation("CreateHumanGateRequestWithResult")
+	operationUpdateHumanGate       = repositoryOperation("UpdateHumanGateRequestWithResult")
+	operationGetHumanGate          = repositoryOperation("GetHumanGateRequest")
+	operationListHumanGate         = repositoryOperation("ListHumanGateRequests")
 	operationGetCommandResult      = repositoryOperation("GetCommandResult")
 	operationRecordCommandResult   = repositoryOperation("RecordCommandResult")
 	operationOutboxClaim           = repositoryOperation("ClaimOutboxEvents")
@@ -316,6 +320,26 @@ func (r *Repository) ListAgentActivities(ctx context.Context, filter query.Agent
 	}
 	trimmed, result := activityPageResult(items, page)
 	return trimmed, result, nil
+}
+
+func (r *Repository) CreateHumanGateRequestWithResult(ctx context.Context, gate entity.HumanGateRequest, result entity.CommandResult, event entity.OutboxEvent) error {
+	return r.mutateWithResult(ctx, operationCreateHumanGate, queryHumanGateRequestCreate, humanGateRequestArgs(gate), result, &event)
+}
+
+func (r *Repository) UpdateHumanGateRequestWithResult(ctx context.Context, gate entity.HumanGateRequest, previousVersion int64, result entity.CommandResult, event *entity.OutboxEvent) error {
+	return r.mutateHumanGateRequest(ctx, humanGateRequestUpdateArgs(gate, previousVersion), result, event)
+}
+
+func (r *Repository) GetHumanGateRequest(ctx context.Context, id uuid.UUID) (entity.HumanGateRequest, error) {
+	return queryOne(ctx, r.db, operationGetHumanGate, queryHumanGateRequestGet, pgx.NamedArgs{"id": id}, scanHumanGateRequest)
+}
+
+func (r *Repository) ListHumanGateRequests(ctx context.Context, filter query.HumanGateFilter) ([]entity.HumanGateRequest, value.PageResult, error) {
+	return queryPage(ctx, r.db, operationListHumanGate, queryHumanGateRequestList, humanGateRequestFilterArgs(filter), scanHumanGateRequest)
+}
+
+func (r *Repository) mutateHumanGateRequest(ctx context.Context, args pgx.NamedArgs, result entity.CommandResult, event *entity.OutboxEvent) error {
+	return r.mutateWithResult(ctx, operationUpdateHumanGate, queryHumanGateRequestUpdate, args, result, event)
 }
 
 func (r *Repository) GetCommandResult(ctx context.Context, identity query.CommandIdentity) (entity.CommandResult, error) {

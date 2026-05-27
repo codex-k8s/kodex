@@ -94,7 +94,7 @@ CHI-2 закрепляет локальную runtime-роль emitter/sidecar: 
 | `SessionStart` | Старт или resume Codex-сессии внутри slot. | `agent-manager`, `runtime-manager` | Управление, аудит | В БД: связь session/run/slot, источник старта, время, версия модели, workspace ref. Не хранить стенограмму сессии. |
 | `UserPromptSubmit` | Новый prompt, который может быть проверен на секреты, политику и контекст задачи. | `agent-manager`, `interaction-hub` | Управление, аудит | В БД: факт prompt submit, hash, короткая сводка, решение политики. Полный prompt хранить только в контуре диалога, если это пользовательская переписка. |
 | `PreToolUse` | Предварительная проверка инструмента: shell, `apply_patch`, MCP tool; realtime-показ “агент хочет вызвать tool”. | `codex-hook-ingress`, `agent-manager`, `governance-manager`, при необходимости `runtime-manager` | Управление, диагностика, realtime UI | В `agent-manager.AgentActivity`: только safe tool metadata, status, summary, digest, refs/details и correlation trace. Массовые realtime-сигналы держать в короткой операционной ленте ingress и метриках. |
-| `PermissionRequest` | Запрос разрешения Codex на действие с повышенным риском. | `codex-hook-ingress`, `governance-manager`, `agent-manager`, `interaction-hub` | Управление, аудит | В БД governance: request id, decision id, субъект, действие, риск, gate ref, sanitized reason, решение и время; `agent-manager` хранит только ожидание flow и refs. |
+| `PermissionRequest` | Запрос разрешения Codex на действие с повышенным риском. | `codex-hook-ingress`, `governance-manager`, `agent-manager`, `interaction-hub` | Управление, аудит | В БД governance: request id, decision id, субъект, действие, риск, gate ref, sanitized reason, решение и время; `agent-manager` хранит только Human gate wait/result refs и normalized outcome. |
 | `PostToolUse` | Результат инструмента после выполнения; realtime-показ “tool отработал”, provider signals и диагностика. | `provider-hub`, `runtime-manager`, `agent-manager` | Диагностика, аудит для рискованных действий, realtime UI | В `agent-manager.AgentActivity`: только важные итоги, bounded error, digest, safe refs/details и provider artifact signal. Полный stdout/stderr и raw tool response не хранить. |
 | `Stop` | Завершение хода агента; возможность зафиксировать итог и pending actions. | `agent-manager`, `runtime-manager`, `provider-hub`, `governance-manager`, `interaction-hub` | Управление, аудит | В БД: контрольная точка run, итоговый status, pending gate refs, provider signals, короткая сводка. |
 
@@ -104,7 +104,7 @@ CHI-2 закрепляет локальную runtime-роль emitter/sidecar: 
 
 | Получатель | Что получает | Что не получает |
 |---|---|---|
-| `agent-manager` | Жизненный цикл run/session, persistent safe activity timeline, ожидания flow, governance decision refs, внутренние контрольные точки сессии, stop summary. | Сырые tool input/output, секреты, полные стенограммы сессий, gate decision state. |
+| `agent-manager` | Жизненный цикл run/session, persistent safe activity timeline, ожидания flow, Human gate wait/result refs, normalized outcome, внутренние контрольные точки сессии, stop summary. | Сырые tool input/output, секреты, полные стенограммы сессий, transport callback payload и governance decision body. |
 | `runtime-manager` | Slot/session binding, диагностика рабочего пространства, snapshot object refs, короткий хвост ошибок среды исполнения. | Provider payload и решения бизнес-политик. |
 | `codex-hook-ingress` | Нормализованные hook events для проверки источника, минимальной policy pre-check, маршрутизации и короткой realtime/ops feed. | MCP tools, `tools/list`, `tools/call`, долгое хранение состояния, persistent tool history и доменную бизнес-логику. |
 | `governance-manager` | Risk assessment, gate request/decision, policy-based approvals, release decision refs и audit-critical decision state. | Доставку уведомлений, callback transport, технические tool logs и provider payload. |
@@ -134,9 +134,9 @@ CHI-2 закрепляет локальную runtime-роль emitter/sidecar: 
 
 1. Hook emitter отправляет запрос в `codex-hook-ingress`.
 2. `codex-hook-ingress` определяет actor, run, role, stage, project, repository, tool category.
-3. `governance-manager` создаёт или находит pending gate, а `agent-manager` фиксирует ожидание flow, если действие связано с агентным переходом.
+3. `governance-manager` создаёт или находит pending gate, а `agent-manager` фиксирует ожидание flow с refs на interaction/governance request, если действие связано с агентным переходом.
 4. `interaction-hub` доставляет запрос обратной связи владельца в UI или внешний адаптер и возвращает callback/result в governance-контур.
-5. После решения `governance-manager` фиксирует decision и отдаёт decision ref; `agent-manager` или hook handler получает allow/deny или `no_decision` через согласованный callback.
+5. После решения `governance-manager` фиксирует decision и отдаёт decision ref; `agent-manager` записывает normalized outcome и refs, а hook handler получает allow/deny или `no_decision` через согласованный callback.
 
 `no_decision` означает, что hook handler не возвращает hook-specific decision и Codex может продолжить штатный approval flow только по policy владельца. `PreToolUse` не должен маппить ожидание владельца в `permissionDecision: "ask"`, потому что это не поддерживаемый output Codex hook. Если решение не пришло за timeout, действие должно завершиться безопасной ошибкой или перейти в ожидание, но не продолжаться молча.
 
@@ -238,13 +238,13 @@ MVP-объём:
 - Realtime-лента безопасных событий для UI.
 - Короткая операционная история с retention для восстановления экрана после переподключения.
 - Очистка чувствительных данных.
-- `PermissionRequest` через `governance-manager`, ожидание flow в `agent-manager` и delivery/callback через `interaction-hub`.
+- `PermissionRequest` через `governance-manager`, Human gate wait/result refs в `agent-manager` и delivery/callback через `interaction-hub`.
 - `PostToolUse` provider artifact signal.
 - `Stop` run checkpoint.
 
 Влияние на домены:
 
-- `agent-manager`: жизненный цикл, ожидания flow, governance decision refs и контрольные точки.
+- `agent-manager`: жизненный цикл, ожидания flow, Human gate refs/outcome и контрольные точки.
 - `governance-manager`: risk assessment, gates, policy-based approvals и decision state.
 - `runtime-manager`: slot/session diagnostics и object refs.
 - `provider-hub`: hot cursor по provider artifacts.
