@@ -91,7 +91,7 @@ var syncCursorPriorities = map[providersv1.SyncCursorPriority]enum.SyncCursorPri
 var operationTypes = providerOperationTypes()
 
 func providerOperationTypes() map[providersv1.ProviderOperationType]enum.ProviderOperationType {
-	result := make(map[providersv1.ProviderOperationType]enum.ProviderOperationType, 11)
+	result := make(map[providersv1.ProviderOperationType]enum.ProviderOperationType, 12)
 	result[providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_REPOSITORY] = enum.ProviderOperationCreateRepository
 	result[providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_ISSUE] = enum.ProviderOperationCreateIssue
 	result[providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_UPDATE_ISSUE] = enum.ProviderOperationUpdateIssue
@@ -101,9 +101,29 @@ func providerOperationTypes() map[providersv1.ProviderOperationType]enum.Provide
 	result[providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_UPDATE_PULL_REQUEST] = enum.ProviderOperationUpdatePullRequest
 	result[providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_BOOTSTRAP_PULL_REQUEST] = enum.ProviderOperationCreateBootstrapPullRequest
 	result[providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_ADOPTION_PULL_REQUEST] = enum.ProviderOperationCreateAdoptionPullRequest
+	result[providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_SCAN_REPOSITORY_FOR_ADOPTION] = enum.ProviderOperationScanRepositoryForAdoption
 	result[providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_REVIEW_SIGNAL] = enum.ProviderOperationCreateReviewSignal
 	result[providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_UPDATE_RELATIONSHIP] = enum.ProviderOperationUpdateRelationship
 	return result
+}
+
+var repositoryAdoptionScanStatuses = map[providersv1.RepositoryAdoptionScanStatus]enum.RepositoryAdoptionScanStatus{
+	providersv1.RepositoryAdoptionScanStatus_REPOSITORY_ADOPTION_SCAN_STATUS_COMPLETED:    enum.RepositoryAdoptionScanStatusCompleted,
+	providersv1.RepositoryAdoptionScanStatus_REPOSITORY_ADOPTION_SCAN_STATUS_LIMITED:      enum.RepositoryAdoptionScanStatusLimited,
+	providersv1.RepositoryAdoptionScanStatus_REPOSITORY_ADOPTION_SCAN_STATUS_NEEDS_REVIEW: enum.RepositoryAdoptionScanStatusNeedsReview,
+}
+
+var repositoryAdoptionMarkerKinds = map[providersv1.RepositoryAdoptionMarkerKind]enum.RepositoryAdoptionMarkerKind{
+	providersv1.RepositoryAdoptionMarkerKind_REPOSITORY_ADOPTION_MARKER_KIND_SERVICE_DESCRIPTOR: enum.RepositoryAdoptionMarkerServiceDescriptor,
+	providersv1.RepositoryAdoptionMarkerKind_REPOSITORY_ADOPTION_MARKER_KIND_GITMODULES:         enum.RepositoryAdoptionMarkerGitmodules,
+	providersv1.RepositoryAdoptionMarkerKind_REPOSITORY_ADOPTION_MARKER_KIND_README:             enum.RepositoryAdoptionMarkerReadme,
+	providersv1.RepositoryAdoptionMarkerKind_REPOSITORY_ADOPTION_MARKER_KIND_AGENTS:             enum.RepositoryAdoptionMarkerAgents,
+	providersv1.RepositoryAdoptionMarkerKind_REPOSITORY_ADOPTION_MARKER_KIND_DOCS:               enum.RepositoryAdoptionMarkerDocs,
+	providersv1.RepositoryAdoptionMarkerKind_REPOSITORY_ADOPTION_MARKER_KIND_WORKFLOW:           enum.RepositoryAdoptionMarkerWorkflow,
+	providersv1.RepositoryAdoptionMarkerKind_REPOSITORY_ADOPTION_MARKER_KIND_MODULE:             enum.RepositoryAdoptionMarkerModule,
+	providersv1.RepositoryAdoptionMarkerKind_REPOSITORY_ADOPTION_MARKER_KIND_PACKAGE:            enum.RepositoryAdoptionMarkerPackage,
+	providersv1.RepositoryAdoptionMarkerKind_REPOSITORY_ADOPTION_MARKER_KIND_DEPLOY:             enum.RepositoryAdoptionMarkerDeploy,
+	providersv1.RepositoryAdoptionMarkerKind_REPOSITORY_ADOPTION_MARKER_KIND_OTHER:              enum.RepositoryAdoptionMarkerOther,
 }
 
 var repositoryOwnerKinds = map[providersv1.RepositoryOwnerKind]enum.RepositoryOwnerKind{
@@ -313,6 +333,14 @@ func operationTypesFromProto(types []providersv1.ProviderOperationType) ([]enum.
 
 func OperationTypeToProto(operationType enum.ProviderOperationType) providersv1.ProviderOperationType {
 	return enumToProto(operationType, providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_UNSPECIFIED, invertEnum(operationTypes))
+}
+
+func RepositoryAdoptionScanStatusToProto(status enum.RepositoryAdoptionScanStatus) providersv1.RepositoryAdoptionScanStatus {
+	return enumToProto(status, providersv1.RepositoryAdoptionScanStatus_REPOSITORY_ADOPTION_SCAN_STATUS_UNSPECIFIED, invertEnum(repositoryAdoptionScanStatuses))
+}
+
+func RepositoryAdoptionMarkerKindToProto(kind enum.RepositoryAdoptionMarkerKind) providersv1.RepositoryAdoptionMarkerKind {
+	return enumToProto(kind, providersv1.RepositoryAdoptionMarkerKind_REPOSITORY_ADOPTION_MARKER_KIND_UNSPECIFIED, invertEnum(repositoryAdoptionMarkerKinds))
 }
 
 func repositoryOwnerKindFromProto(kind providersv1.RepositoryOwnerKind) (enum.RepositoryOwnerKind, error) {

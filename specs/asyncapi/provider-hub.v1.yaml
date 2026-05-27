@@ -43,6 +43,7 @@ components:
         - $ref: '#/components/schemas/RepositoryCreatedEvent'
         - $ref: '#/components/schemas/RepositoryBootstrapCompletedEvent'
         - $ref: '#/components/schemas/RepositoryAdoptionPRCreatedEvent'
+        - $ref: '#/components/schemas/RepositoryAdoptionScanCompletedEvent'
         - $ref: '#/components/schemas/RepositoryBootstrapMergedEvent'
         - $ref: '#/components/schemas/RepositoryAdoptionMergedEvent'
     ProviderEventEnvelopeBase:
@@ -196,6 +197,14 @@ components:
       type: object
       properties: {event_type: {type: string, const: provider.repository.adoption_pr_created}, aggregate_type: {type: string, const: repository}, payload: {$ref: '#/components/schemas/ProviderEventPayload'}}
       required: [event_type, aggregate_type, payload]
+    RepositoryAdoptionScanCompletedEvent:
+      allOf:
+        - $ref: '#/components/schemas/ProviderEventEnvelopeBase'
+        - $ref: '#/components/schemas/RepositoryAdoptionScanCompletedEventKind'
+    RepositoryAdoptionScanCompletedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: provider.repository.adoption_scan_completed}, aggregate_type: {type: string, const: repository_adoption_scan}, payload: {$ref: '#/components/schemas/ProviderEventPayload'}}
+      required: [event_type, aggregate_type, payload]
     RepositoryBootstrapMergedEvent:
       allOf:
         - $ref: '#/components/schemas/ProviderEventEnvelopeBase'
@@ -232,6 +241,7 @@ components:
         - provider.repository.created
         - provider.repository.bootstrap_completed
         - provider.repository.adoption_pr_created
+        - provider.repository.adoption_scan_completed
         - provider.repository.bootstrap_merged
         - provider.repository.adoption_merged
     ProviderEventPayload:
@@ -268,6 +278,9 @@ components:
         repository_merge_signal_id:
           type: string
           format: uuid
+        repository_adoption_scan_snapshot_id:
+          type: string
+          format: uuid
         signal_key:
           type: string
         signal_kind:
@@ -282,9 +295,27 @@ components:
           type: string
         head_branch:
           type: string
+        head_sha:
+          type: string
         merge_commit_sha:
           type: string
         source_ref:
+          type: string
+        scanned_ref:
+          type: string
+        requested_ref:
+          type: string
+        default_branch:
+          type: string
+        marker_count:
+          type: integer
+        file_count:
+          type: integer
+        warning_count:
+          type: integer
+        tree_truncated:
+          type: boolean
+        snapshot_digest:
           type: string
         related_provider_operation_ref:
           type: string

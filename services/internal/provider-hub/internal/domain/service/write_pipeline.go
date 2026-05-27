@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"slices"
 	"sort"
 	"strings"
@@ -37,9 +38,14 @@ const (
 	writeFailureProviderPermanent   = "provider_permanent_error"
 	writeFailureProviderUnsupported = "provider_unsupported"
 
-	maxRepositoryWriteFiles             = 64
-	maxRepositoryWriteFileContentBytes  = 512 * 1024
-	maxRepositoryWriteTotalContentBytes = 4 * 1024 * 1024
+	maxRepositoryWriteFiles                  = 64
+	maxRepositoryWriteFileContentBytes       = 512 * 1024
+	maxRepositoryWriteTotalContentBytes      = 4 * 1024 * 1024
+	defaultRepositoryAdoptionScanTreeEntries = 1000
+	defaultRepositoryAdoptionScanMarkerPaths = 64
+	maxRepositoryAdoptionScanTreeEntries     = 10000
+	maxRepositoryAdoptionScanMarkerPaths     = 256
+	maxRepositoryAdoptionScanHints           = 64
 )
 
 type providerWritePlan struct {
@@ -572,6 +578,59 @@ func (s *Service) CreateAdoptionPullRequest(ctx context.Context, input CreateAdo
 	return s.createRepositoryBranchPullRequest(ctx, request)
 }
 
+// ScanRepositoryForAdoption records a lightweight provider-side repository snapshot for adoption planning.
+func (s *Service) ScanRepositoryForAdoption(ctx context.Context, input ScanRepositoryForAdoptionInput) (ProviderOperationResult, error) {
+	repositoryTarget, err := repositoryAdoptionScanTarget(input.ProviderSlug, input.RepositoryTarget)
+	if err != nil {
+		return ProviderOperationResult{}, err
+	}
+	options, err := normalizeRepositoryAdoptionScanOptions(input.Options)
+	if err != nil {
+		return ProviderOperationResult{}, err
+	}
+	if !validCommandIdentity(input.Meta) || !validProviderSlug(input.ProviderSlug) || input.ExternalAccountID == uuid.Nil {
+		return ProviderOperationResult{}, errs.ErrInvalidArgument
+	}
+	targetRef := repositoryAdoptionScanTargetRef(input.ProviderSlug, repositoryTarget, options)
+	changedFields := requiredChangedFields(
+		"repository_target",
+		"scan_options",
+		optionalChangedField("requested_ref", options.RequestedRef != ""),
+		optionalChangedField("allowed_ref_prefixes", len(options.AllowedRefPrefixes) > 0),
+		optionalChangedField("marker_path_hints", len(options.MarkerPathHints) > 0),
+	)
+	plan, err := s.buildWritePlan(providerWritePlan{
+		operationType:     enum.ProviderOperationScanRepositoryForAdoption,
+		actionKey:         accesscatalog.ActionProviderReconciliationRun,
+		providerSlug:      input.ProviderSlug,
+		externalAccountID: input.ExternalAccountID,
+		targetRef:         targetRef,
+		scopeType:         providerUsageScopeRepository,
+		scopeID:           providerScopeIDFromTarget(repositoryTarget),
+		resultTarget:      &repositoryTarget,
+		meta:              input.Meta,
+		executorRequest: providerclient.WriteRequest{
+			CommandID:    providerCommandKey(input.Meta),
+			TargetRef:    targetRef,
+			ProviderSlug: input.ProviderSlug,
+			ScanRepositoryForAdoption: &providerclient.ScanRepositoryForAdoptionCommand{
+				RepositoryTarget: toClientTarget(repositoryTarget),
+				Options: providerclient.RepositoryAdoptionScanOptions{
+					RequestedRef:       options.RequestedRef,
+					AllowedRefPrefixes: append([]string(nil), options.AllowedRefPrefixes...),
+					MaxTreeEntries:     options.MaxTreeEntries,
+					MaxMarkerPaths:     options.MaxMarkerPaths,
+					MarkerPathHints:    append([]string(nil), options.MarkerPathHints...),
+				},
+			},
+		},
+	}, changedFields)
+	if err != nil {
+		return ProviderOperationResult{}, err
+	}
+	return s.executeProviderWrite(ctx, plan)
+}
+
 // UpdatePullRequest records a typed provider PR/MR update command in the shared write pipeline.
 func (s *Service) UpdatePullRequest(ctx context.Context, input UpdatePullRequestInput) (ProviderOperationResult, error) {
 	target := input.Target
@@ -904,8 +963,17 @@ func (s *Service) replayProviderWrite(ctx context.Context, plan providerWritePla
 	if stored.Status == enum.ProviderOperationStatusInProgress {
 		return false, ProviderOperationResult{}, errs.ErrConflict
 	}
+	var adoptionScan *entity.RepositoryAdoptionScanSnapshot
+	if stored.OperationType == enum.ProviderOperationScanRepositoryForAdoption && stored.Status == enum.ProviderOperationStatusSucceeded {
+		snapshot, scanErr := s.repository.GetRepositoryAdoptionScanByOperation(ctx, stored.ID)
+		if scanErr != nil {
+			return false, ProviderOperationResult{}, scanErr
+		}
+		adoptionScan = &snapshot
+	}
 	return true, ProviderOperationResult{
 		ProviderOperation: &stored,
+		AdoptionScan:      adoptionScan,
 		Result: ProviderOperationCommandResult{
 			Target:            replayProviderWriteTarget(stored, plan),
 			ResultRef:         stored.ResultRef,
@@ -1076,7 +1144,7 @@ func (s *Service) finalizeProviderWrite(ctx context.Context, plan providerWriteP
 	if err != nil {
 		return ProviderOperationResult{}, err
 	}
-	projectionUpdate, providerEvents, projectionOutboxEvents, projectionResult, err := s.providerWriteProjection(ctx, plan, executorResult, finishedAt)
+	projectionUpdate, providerEvents, projectionOutboxEvents, projectionResult, err := s.providerWriteProjection(ctx, plan, startedOperation.ID, executorResult, finishedAt)
 	if err != nil {
 		return ProviderOperationResult{}, err
 	}
@@ -1099,6 +1167,7 @@ func (s *Service) finalizeProviderWrite(ctx context.Context, plan providerWriteP
 		WorkItemProjection: projectionResult.WorkItem,
 		CommentProjection:  projectionResult.Comment,
 		Relationship:       projectionResult.Relationship,
+		AdoptionScan:       projectionResult.AdoptionScan,
 		Result: ProviderOperationCommandResult{
 			Target:                 resultTarget,
 			ResultRef:              strings.TrimSpace(executorResult.ResultRef),
@@ -1115,9 +1184,10 @@ type providerWriteProjectionResult struct {
 	WorkItem     *entity.ProviderWorkItemProjection
 	Comment      *entity.ProviderCommentProjection
 	Relationship *entity.ProviderRelationship
+	AdoptionScan *entity.RepositoryAdoptionScanSnapshot
 }
 
-func (s *Service) providerWriteProjection(ctx context.Context, plan providerWritePlan, result providerclient.WriteResult, now time.Time) (providerrepo.ProjectionUpdate, []entity.ProviderEvent, []entity.OutboxEvent, providerWriteProjectionResult, error) {
+func (s *Service) providerWriteProjection(ctx context.Context, plan providerWritePlan, operationID uuid.UUID, result providerclient.WriteResult, now time.Time) (providerrepo.ProjectionUpdate, []entity.ProviderEvent, []entity.OutboxEvent, providerWriteProjectionResult, error) {
 	var update providerrepo.ProjectionUpdate
 	var providerEvents []entity.ProviderEvent
 	var outboxEvents []entity.OutboxEvent
@@ -1180,6 +1250,19 @@ func (s *Service) providerWriteProjection(ctx context.Context, plan providerWrit
 	}
 	if plan.operationType == enum.ProviderOperationCreateRepository && result.Target != nil {
 		outboxEvent, err := s.providerRepositoryCreatedOutbox(plan, result, now)
+		if err != nil {
+			return providerrepo.ProjectionUpdate{}, nil, nil, providerWriteProjectionResult{}, err
+		}
+		outboxEvents = append(outboxEvents, outboxEvent)
+	}
+	if result.RepositoryAdoptionScan != nil {
+		snapshot, err := repositoryAdoptionScanFromProviderResult(plan, operationID, *result.RepositoryAdoptionScan, now)
+		if err != nil {
+			return providerrepo.ProjectionUpdate{}, nil, nil, providerWriteProjectionResult{}, err
+		}
+		update.AdoptionScan = &snapshot
+		commandResult.AdoptionScan = &snapshot
+		outboxEvent, err := s.providerRepositoryAdoptionScanCompletedOutbox(plan, snapshot)
 		if err != nil {
 			return providerrepo.ProjectionUpdate{}, nil, nil, providerWriteProjectionResult{}, err
 		}
@@ -1414,6 +1497,162 @@ func (s *Service) providerRepositoryCreatedOutbox(plan providerWritePlan, result
 	return outboxEventRecord(s.ids.New(), providerEventRepositoryCreated, providerAggregateRepository, aggregateID, payload, occurredAt), nil
 }
 
+func repositoryAdoptionScanFromProviderResult(plan providerWritePlan, operationID uuid.UUID, result providerclient.RepositoryAdoptionScan, now time.Time) (entity.RepositoryAdoptionScanSnapshot, error) {
+	target := result.RepositoryTarget
+	if target.ProviderSlug == "" {
+		target.ProviderSlug = plan.providerSlug
+	}
+	serviceTarget := fromClientTarget(target)
+	if serviceTarget == nil {
+		return entity.RepositoryAdoptionScanSnapshot{}, errs.ErrInvalidArgument
+	}
+	repositoryFullName := strings.TrimSpace(result.RepositoryFullName)
+	if repositoryFullName == "" {
+		repositoryFullName = strings.TrimSpace(target.RepositoryFullName)
+	}
+	scannedRef := strings.TrimSpace(result.ScannedRef)
+	headSHA := strings.TrimSpace(result.HeadSHA)
+	if operationID == uuid.Nil ||
+		!validProviderSlug(plan.providerSlug) ||
+		repositoryFullName == "" ||
+		scannedRef == "" ||
+		headSHA == "" ||
+		!validRepositoryAdoptionScanStatus(result.Status) {
+		return entity.RepositoryAdoptionScanSnapshot{}, errs.ErrInvalidArgument
+	}
+	observedAt := result.ObservedAt.UTC()
+	if observedAt.IsZero() {
+		observedAt = now
+	}
+	markers, err := repositoryAdoptionScanMarkersFromProvider(result.Markers)
+	if err != nil {
+		return entity.RepositoryAdoptionScanSnapshot{}, err
+	}
+	warnings := trimStrings(result.Warnings)
+	if hasBlankStrings(warnings) {
+		return entity.RepositoryAdoptionScanSnapshot{}, errs.ErrInvalidArgument
+	}
+	snapshotDigest := strings.TrimSpace(result.SnapshotDigest)
+	if snapshotDigest == "" {
+		snapshotDigest = repositoryAdoptionScanDigest(result, markers, warnings)
+	}
+	snapshotKey := strings.Join([]string{
+		"provider",
+		string(plan.providerSlug),
+		"repository_adoption_scan",
+		providerScopeIDFromTarget(*serviceTarget),
+		scannedRef,
+		headSHA,
+		operationID.String(),
+	}, ":")
+	return entity.RepositoryAdoptionScanSnapshot{
+		Base: entity.Base{
+			ID:        stableUUID("repository-adoption-scan", operationID.String()),
+			Version:   1,
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		SnapshotKey:          snapshotKey,
+		ProviderOperationID:  operationID,
+		ExternalAccountID:    plan.externalAccountID,
+		ProviderSlug:         plan.providerSlug,
+		RepositoryFullName:   repositoryFullName,
+		ProviderRepositoryID: strings.TrimSpace(result.ProviderRepositoryID),
+		RepositoryURL:        strings.TrimSpace(result.RepositoryURL),
+		DefaultBranch:        strings.TrimSpace(result.DefaultBranch),
+		RequestedRef:         strings.TrimSpace(result.RequestedRef),
+		ScannedRef:           scannedRef,
+		HeadSHA:              headSHA,
+		Status:               result.Status,
+		Markers:              markers,
+		FileCount:            result.FileCount,
+		VisibleFileCount:     result.VisibleFileCount,
+		TreeTruncated:        result.TreeTruncated,
+		Warnings:             warnings,
+		SnapshotDigest:       snapshotDigest,
+		ObservedAt:           observedAt,
+	}, nil
+}
+
+func repositoryAdoptionScanMarkersFromProvider(input []providerclient.RepositoryAdoptionScanMarker) ([]entity.RepositoryAdoptionScanMarker, error) {
+	markers := make([]entity.RepositoryAdoptionScanMarker, 0, len(input))
+	for _, marker := range input {
+		path := strings.TrimSpace(marker.Path)
+		if !validRepositoryFilePath(path) || !validRepositoryAdoptionMarkerKind(marker.Kind) || strings.TrimSpace(marker.ObjectDigest) == "" || marker.SizeBytes < 0 {
+			return nil, errs.ErrInvalidArgument
+		}
+		markers = append(markers, entity.RepositoryAdoptionScanMarker{
+			Path:         path,
+			Kind:         marker.Kind,
+			ObjectDigest: strings.TrimSpace(marker.ObjectDigest),
+			SizeBytes:    marker.SizeBytes,
+		})
+	}
+	return markers, nil
+}
+
+func repositoryAdoptionScanDigest(result providerclient.RepositoryAdoptionScan, markers []entity.RepositoryAdoptionScanMarker, warnings []string) string {
+	payload, err := json.Marshal(struct {
+		RepositoryFullName   string                                `json:"repository_full_name"`
+		ProviderRepositoryID string                                `json:"provider_repository_id,omitempty"`
+		DefaultBranch        string                                `json:"default_branch,omitempty"`
+		RequestedRef         string                                `json:"requested_ref,omitempty"`
+		ScannedRef           string                                `json:"scanned_ref"`
+		HeadSHA              string                                `json:"head_sha"`
+		Status               enum.RepositoryAdoptionScanStatus     `json:"status"`
+		Markers              []entity.RepositoryAdoptionScanMarker `json:"markers,omitempty"`
+		FileCount            int64                                 `json:"file_count,omitempty"`
+		VisibleFileCount     int64                                 `json:"visible_file_count,omitempty"`
+		TreeTruncated        bool                                  `json:"tree_truncated,omitempty"`
+		Warnings             []string                              `json:"warnings,omitempty"`
+	}{
+		RepositoryFullName:   strings.TrimSpace(result.RepositoryFullName),
+		ProviderRepositoryID: strings.TrimSpace(result.ProviderRepositoryID),
+		DefaultBranch:        strings.TrimSpace(result.DefaultBranch),
+		RequestedRef:         strings.TrimSpace(result.RequestedRef),
+		ScannedRef:           strings.TrimSpace(result.ScannedRef),
+		HeadSHA:              strings.TrimSpace(result.HeadSHA),
+		Status:               result.Status,
+		Markers:              markers,
+		FileCount:            result.FileCount,
+		VisibleFileCount:     result.VisibleFileCount,
+		TreeTruncated:        result.TreeTruncated,
+		Warnings:             warnings,
+	})
+	if err != nil {
+		return ""
+	}
+	return bodyDigest(string(payload))
+}
+
+func (s *Service) providerRepositoryAdoptionScanCompletedOutbox(plan providerWritePlan, snapshot entity.RepositoryAdoptionScanSnapshot) (entity.OutboxEvent, error) {
+	payload, err := marshalProviderEventPayload(value.ProviderEventPayload{
+		ProviderSlug:                     string(snapshot.ProviderSlug),
+		ExternalAccountID:                snapshot.ExternalAccountID.String(),
+		RepositoryAdoptionScanSnapshotID: snapshot.ID.String(),
+		ProviderOperationID:              snapshot.ProviderOperationID.String(),
+		RepositoryFullName:               snapshot.RepositoryFullName,
+		ProviderRepositoryID:             snapshot.ProviderRepositoryID,
+		OperationType:                    string(plan.operationType),
+		Status:                           string(snapshot.Status),
+		ResultRef:                        snapshot.RepositoryURL,
+		DefaultBranch:                    snapshot.DefaultBranch,
+		RequestedRef:                     snapshot.RequestedRef,
+		ScannedRef:                       snapshot.ScannedRef,
+		HeadSHA:                          snapshot.HeadSHA,
+		MarkerCount:                      int64(len(snapshot.Markers)),
+		FileCount:                        snapshot.FileCount,
+		WarningCount:                     int64(len(snapshot.Warnings)),
+		TreeTruncated:                    snapshot.TreeTruncated,
+		SnapshotDigest:                   snapshot.SnapshotDigest,
+		ObservedAt:                       snapshot.ObservedAt.Format(time.RFC3339Nano),
+	})
+	if err != nil {
+		return entity.OutboxEvent{}, err
+	}
+	return outboxEventRecord(s.ids.New(), providerEventRepositoryAdoptionScanCompleted, providerAggregateRepositoryAdoptionScan, snapshot.ID, payload, snapshot.ObservedAt), nil
+}
+
 func (s *Service) providerOperationOutbox(operation entity.ProviderOperation) (entity.OutboxEvent, error) {
 	payload, err := marshalProviderEventPayload(value.ProviderEventPayload{
 		ProviderSlug:        string(operation.ProviderSlug),
@@ -1571,6 +1810,69 @@ func repositoryTarget(providerSlug enum.ProviderSlug, target ProviderTarget) (Pr
 	return target, nil
 }
 
+func repositoryAdoptionScanTarget(providerSlug enum.ProviderSlug, target ProviderTarget) (ProviderTarget, error) {
+	target, err := repositoryTarget(providerSlug, target)
+	if err != nil {
+		return ProviderTarget{}, err
+	}
+	if target.WebURL == "" {
+		return target, nil
+	}
+	repositoryFullName, err := canonicalGitHubRepositoryFullNameFromWebURL(providerSlug, target.WebURL)
+	if err != nil {
+		return ProviderTarget{}, err
+	}
+	if target.RepositoryFullName != "" && target.RepositoryFullName != repositoryFullName {
+		return ProviderTarget{}, errs.ErrInvalidArgument
+	}
+	target.RepositoryFullName = repositoryFullName
+	target.WebURL = ""
+	return target, nil
+}
+
+func canonicalGitHubRepositoryFullNameFromWebURL(providerSlug enum.ProviderSlug, rawURL string) (string, error) {
+	if providerSlug != enum.ProviderSlugGitHub {
+		return "", errs.ErrInvalidArgument
+	}
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil ||
+		parsed.Scheme != "https" ||
+		parsed.User != nil ||
+		parsed.RawQuery != "" ||
+		parsed.Fragment != "" ||
+		parsed.Port() != "" {
+		return "", errs.ErrInvalidArgument
+	}
+	host := strings.TrimPrefix(strings.ToLower(parsed.Hostname()), "www.")
+	if host != "github.com" {
+		return "", errs.ErrInvalidArgument
+	}
+	parts := strings.Split(strings.Trim(parsed.EscapedPath(), "/"), "/")
+	if len(parts) != 2 ||
+		!validGitHubRepositoryPathSegment(parts[0]) ||
+		!validGitHubRepositoryPathSegment(parts[1]) {
+		return "", errs.ErrInvalidArgument
+	}
+	return parts[0] + "/" + parts[1], nil
+}
+
+func validGitHubRepositoryPathSegment(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, char := range value {
+		switch {
+		case char >= 'a' && char <= 'z':
+		case char >= 'A' && char <= 'Z':
+		case char >= '0' && char <= '9':
+		case char == '-', char == '_', char == '.':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
 func repositoryTargetRef(providerSlug enum.ProviderSlug, repositoryID string) string {
 	return string(providerSlug) + ":repository:" + strings.TrimSpace(repositoryID)
 }
@@ -1724,6 +2026,100 @@ func normalizeRepositoryFiles(files []RepositoryFile) ([]RepositoryFile, error) 
 		})
 	}
 	return result, nil
+}
+
+func normalizeRepositoryAdoptionScanOptions(input RepositoryAdoptionScanOptions) (RepositoryAdoptionScanOptions, error) {
+	options := RepositoryAdoptionScanOptions{
+		RequestedRef:       strings.TrimSpace(input.RequestedRef),
+		AllowedRefPrefixes: trimStrings(input.AllowedRefPrefixes),
+		MaxTreeEntries:     input.MaxTreeEntries,
+		MaxMarkerPaths:     input.MaxMarkerPaths,
+		MarkerPathHints:    trimStrings(input.MarkerPathHints),
+	}
+	if options.MaxTreeEntries == 0 {
+		options.MaxTreeEntries = defaultRepositoryAdoptionScanTreeEntries
+	}
+	if options.MaxMarkerPaths == 0 {
+		options.MaxMarkerPaths = defaultRepositoryAdoptionScanMarkerPaths
+	}
+	if options.MaxTreeEntries <= 0 ||
+		options.MaxTreeEntries > maxRepositoryAdoptionScanTreeEntries ||
+		options.MaxMarkerPaths <= 0 ||
+		options.MaxMarkerPaths > maxRepositoryAdoptionScanMarkerPaths ||
+		len(options.MarkerPathHints) > maxRepositoryAdoptionScanHints ||
+		(options.RequestedRef != "" && !validProviderRef(options.RequestedRef)) ||
+		hasBlankStrings(options.AllowedRefPrefixes) ||
+		hasBlankStrings(options.MarkerPathHints) {
+		return RepositoryAdoptionScanOptions{}, errs.ErrInvalidArgument
+	}
+	for _, prefix := range options.AllowedRefPrefixes {
+		if !validProviderRefPrefix(prefix) {
+			return RepositoryAdoptionScanOptions{}, errs.ErrInvalidArgument
+		}
+	}
+	seenHints := make(map[string]struct{}, len(options.MarkerPathHints))
+	hints := make([]string, 0, len(options.MarkerPathHints))
+	for _, hint := range options.MarkerPathHints {
+		if !validRepositoryFilePath(hint) {
+			return RepositoryAdoptionScanOptions{}, errs.ErrInvalidArgument
+		}
+		if _, exists := seenHints[hint]; exists {
+			continue
+		}
+		seenHints[hint] = struct{}{}
+		hints = append(hints, hint)
+	}
+	sort.Strings(options.AllowedRefPrefixes)
+	sort.Strings(hints)
+	options.MarkerPathHints = hints
+	return options, nil
+}
+
+func repositoryAdoptionScanTargetRef(providerSlug enum.ProviderSlug, target ProviderTarget, options RepositoryAdoptionScanOptions) string {
+	payload, err := json.Marshal(struct {
+		RequestedRef       string   `json:"requested_ref,omitempty"`
+		AllowedRefPrefixes []string `json:"allowed_ref_prefixes,omitempty"`
+		MaxTreeEntries     int      `json:"max_tree_entries,omitempty"`
+		MaxMarkerPaths     int      `json:"max_marker_paths,omitempty"`
+		MarkerPathHints    []string `json:"marker_path_hints,omitempty"`
+	}{
+		RequestedRef:       options.RequestedRef,
+		AllowedRefPrefixes: options.AllowedRefPrefixes,
+		MaxTreeEntries:     options.MaxTreeEntries,
+		MaxMarkerPaths:     options.MaxMarkerPaths,
+		MarkerPathHints:    options.MarkerPathHints,
+	})
+	if err != nil {
+		payload = []byte("{}")
+	}
+	return string(providerSlug) + ":repository_scan:" + providerScopeIDFromTarget(target) + "#adoption:" + bodyDigest(string(payload))
+}
+
+func validProviderRef(ref string) bool {
+	ref = strings.TrimSpace(ref)
+	if ref == "" ||
+		strings.Contains(ref, "\x00") ||
+		strings.Contains(ref, "..") ||
+		strings.HasPrefix(ref, "/") ||
+		strings.HasSuffix(ref, "/") ||
+		strings.HasSuffix(ref, ".") ||
+		strings.Contains(ref, "//") {
+		return false
+	}
+	for _, segment := range strings.Split(ref, "/") {
+		if segment == "" || segment == "." || segment == ".." {
+			return false
+		}
+	}
+	return true
+}
+
+func validProviderRefPrefix(prefix string) bool {
+	prefix = strings.TrimSpace(prefix)
+	if prefix == "" || strings.Contains(prefix, "\x00") || strings.Contains(prefix, "..") || strings.Contains(prefix, "//") {
+		return false
+	}
+	return true
 }
 
 func validRepositoryFilePath(path string) bool {

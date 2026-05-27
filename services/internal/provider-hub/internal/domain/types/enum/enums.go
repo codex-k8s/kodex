@@ -154,6 +154,7 @@ const (
 	ProviderOperationUpdatePullRequest          ProviderOperationType = "update_pull_request"
 	ProviderOperationCreateBootstrapPullRequest ProviderOperationType = "create_bootstrap_pull_request"
 	ProviderOperationCreateAdoptionPullRequest  ProviderOperationType = "create_adoption_pull_request"
+	ProviderOperationScanRepositoryForAdoption  ProviderOperationType = "scan_repository_for_adoption"
 	ProviderOperationCreateReviewSignal         ProviderOperationType = "create_review_signal"
 	ProviderOperationUpdateRelationship         ProviderOperationType = "update_relationship"
 )
@@ -173,6 +174,31 @@ const (
 	RepositoryVisibilityPublic   RepositoryVisibility = "public"
 	RepositoryVisibilityPrivate  RepositoryVisibility = "private"
 	RepositoryVisibilityInternal RepositoryVisibility = "internal"
+)
+
+// RepositoryAdoptionScanStatus describes the safe result status of a lightweight adoption scan.
+type RepositoryAdoptionScanStatus string
+
+const (
+	RepositoryAdoptionScanStatusCompleted   RepositoryAdoptionScanStatus = "completed"
+	RepositoryAdoptionScanStatusLimited     RepositoryAdoptionScanStatus = "limited"
+	RepositoryAdoptionScanStatusNeedsReview RepositoryAdoptionScanStatus = "needs_review"
+)
+
+// RepositoryAdoptionMarkerKind classifies provider-side adoption markers without file contents.
+type RepositoryAdoptionMarkerKind string
+
+const (
+	RepositoryAdoptionMarkerServiceDescriptor RepositoryAdoptionMarkerKind = "service_descriptor"
+	RepositoryAdoptionMarkerGitmodules        RepositoryAdoptionMarkerKind = "gitmodules"
+	RepositoryAdoptionMarkerReadme            RepositoryAdoptionMarkerKind = "readme"
+	RepositoryAdoptionMarkerAgents            RepositoryAdoptionMarkerKind = "agents"
+	RepositoryAdoptionMarkerDocs              RepositoryAdoptionMarkerKind = "docs"
+	RepositoryAdoptionMarkerWorkflow          RepositoryAdoptionMarkerKind = "workflow"
+	RepositoryAdoptionMarkerModule            RepositoryAdoptionMarkerKind = "module"
+	RepositoryAdoptionMarkerPackage           RepositoryAdoptionMarkerKind = "package"
+	RepositoryAdoptionMarkerDeploy            RepositoryAdoptionMarkerKind = "deploy"
+	RepositoryAdoptionMarkerOther             RepositoryAdoptionMarkerKind = "other"
 )
 
 // ProviderOperationStatus is the terminal or current operation state.

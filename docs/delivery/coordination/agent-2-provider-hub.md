@@ -36,6 +36,7 @@
 | PRV-8b | #761 | готово | Создание GitHub-репозитория на стороне провайдера: `CreateRepository` создаёт репозиторий с `auto_init=true`, фиксирует начальный default branch как `base_branch`, журнал операции и событие `provider.repository.created`; `services.yaml`, шаблоны и adoption scan остаются вне `provider-hub`. |
 | PRV-8c | #770 | готово | Provider-side adoption существующего репозитория: подготовленные файлы пишутся в adoption branch, создаётся или обновляется adoption PR, фиксируются проекция, `project_repository_binding` и событие `provider.repository.adoption_pr_created`; scan, отчёт и проектное решение остаются вне `provider-hub`. |
 | PRV-8d | #840 | готово | GitHub-first provider-side merge signal для bootstrap/adoption PR: `pull_request closed + merged` фиксируется как безопасные refs/digest/timestamps и публикует `provider.repository.bootstrap_merged` или `provider.repository.adoption_merged`; импорт политики остаётся в `project-catalog`. |
+| PRV-8e | #865 | готово | Lightweight provider-side adoption repository scan: `ScanRepositoryForAdoption` читает GitHub metadata/ref/tree, фиксирует safe snapshot refs/markers/counts/warnings/digest и публикует `provider.repository.adoption_scan_completed`; raw file contents и project decision остаются вне `provider-hub`. |
 | PRV-9 | #754 | готово | Эксплуатационный контур: Dockerfile, Kubernetes manifests, PostgreSQL bootstrap, migration job, build/smoke scripts, runbook и monitoring docs. |
 | IGW-0 | #781 | готово | Смежный срез `integration-gateway`: зафиксированы границы внешнего HTTP-входа, первый route provider webhook -> `provider-hub.IngestWebhookEvent`, требования security/backpressure/retry/idempotency и OpenAPI-каркас. Реализация gateway-сервиса не входит. |
 | IGW-1 | #792 | готово | Сервисный каркас `integration-gateway`: process/config/graceful shutdown, health/readiness/metrics, HTTP router, OpenAPI validation/generated models, safe middleware и provider-hub client interface. Provider route зарегистрирован как отключённый stub до verifier-среза. |
@@ -48,7 +49,7 @@
 
 | Срез | Статус | Почему не завершён |
 |---|---|---|
-| End-to-end repository adoption | ждёт проектного и агентного контура | Adoption существующего repo требует agent-manager orchestration, workspace scan/report, approval и импорт проектной политики модели C; provider-hub уже закрывает provider-native PR/relationship/projection запись и safe merge signal. |
+| End-to-end repository adoption | ждёт проектного и агентного контура | Adoption существующего repo требует project-catalog policy/import, agent-manager orchestration, deep workspace scan/report и approval; provider-hub уже закрывает lightweight provider snapshot, provider-native PR/relationship/projection запись и safe merge signal. |
 | GitLab webhook route | ждёт отдельного решения владельца | IGW-2 активирует только GitHub; GitLab требует отдельный verifier/source policy и OpenAPI-уточнение. |
 
 ## Блокировки от `access-manager`
@@ -79,7 +80,7 @@
 
 Реальные блокировки:
 - привязка проекций к проекту и repository binding требует контракта сопоставления `provider_slug + repository_full_name/provider repository id -> project_id + repository_id`;
-- end-to-end bootstrap/adoption требует проектной политики, проверенной версии `services.yaml`, состояния repository binding и выбора владельца по вариантам repository onboarding; PRV-8a/PRV-8b/PRV-8c принимают `project_id`, `repository_id`, provider-native параметры, prepared files и refs как готовый вход, а PRV-8d возвращает safe merge signal; `provider-hub` не ходит в `project-catalog`;
+- end-to-end bootstrap/adoption требует проектной политики, проверенной версии `services.yaml`, состояния repository binding и выбора владельца по вариантам repository onboarding; PRV-8e возвращает lightweight safe snapshot для planning, PRV-8a/PRV-8b/PRV-8c принимают `project_id`, `repository_id`, provider-native параметры, prepared files и refs как готовый вход, а PRV-8d возвращает safe merge signal; `provider-hub` не ходит в `project-catalog`;
 - фильтры операционных состояний по проекту/организации не должны включаться, пока область аккаунта не связывается с проектной моделью.
 
 ## Блокировки от `package-hub`
@@ -107,4 +108,4 @@
 
 ## Рекомендуемый следующий шаг
 
-Следующий provider-срез — интеграция provider tools с `agent-manager`/platform MCP, GitLab write/webhook adapter или расширение callback routes после новых owner-service contracts. Project-side импорт bootstrap/adoption должен потреблять safe provider merge signal, но проверка `services.yaml` и активация binding остаются в `project-catalog`.
+Следующий provider-срез — интеграция provider tools с `agent-manager`/platform MCP, GitLab write/webhook adapter или расширение callback routes после новых owner-service contracts. Project-side импорт bootstrap/adoption должен потреблять lightweight snapshot и safe provider merge signal, но проверка `services.yaml`, deep workspace scan/report и активация binding остаются в `project-catalog`/`agent-manager`.

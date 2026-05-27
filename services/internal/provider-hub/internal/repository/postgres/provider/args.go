@@ -291,6 +291,54 @@ func repositoryMergeSignalIdentityArgs(signal entity.RepositoryMergeSignal) pgx.
 	return pgx.NamedArgs{"signal_key": signal.SignalKey}
 }
 
+func repositoryAdoptionScanArgs(snapshot entity.RepositoryAdoptionScanSnapshot) pgx.NamedArgs {
+	return withBaseArgs(snapshot.Base, pgx.NamedArgs{
+		"snapshot_key":           snapshot.SnapshotKey,
+		"provider_operation_id":  snapshot.ProviderOperationID,
+		"external_account_id":    snapshot.ExternalAccountID,
+		"provider_slug":          string(snapshot.ProviderSlug),
+		"repository_full_name":   snapshot.RepositoryFullName,
+		"provider_repository_id": snapshot.ProviderRepositoryID,
+		"repository_url":         snapshot.RepositoryURL,
+		"default_branch":         snapshot.DefaultBranch,
+		"requested_ref":          snapshot.RequestedRef,
+		"scanned_ref":            snapshot.ScannedRef,
+		"head_sha":               snapshot.HeadSHA,
+		"status":                 string(snapshot.Status),
+		"markers_json":           jsonStructOrDefault(repositoryAdoptionMarkersJSON(snapshot.Markers), "[]"),
+		"file_count":             snapshot.FileCount,
+		"visible_file_count":     snapshot.VisibleFileCount,
+		"tree_truncated":         snapshot.TreeTruncated,
+		"warnings_json":          jsonStructOrDefault(snapshot.Warnings, "[]"),
+		"snapshot_digest":        snapshot.SnapshotDigest,
+		"observed_at":            snapshot.ObservedAt.UTC().Round(time.Microsecond),
+	})
+}
+
+func repositoryAdoptionScanOperationArgs(providerOperationID uuid.UUID) pgx.NamedArgs {
+	return pgx.NamedArgs{"provider_operation_id": providerOperationID}
+}
+
+type repositoryAdoptionMarkerJSON struct {
+	Path         string `json:"path"`
+	Kind         string `json:"kind"`
+	ObjectDigest string `json:"object_digest"`
+	SizeBytes    int64  `json:"size_bytes"`
+}
+
+func repositoryAdoptionMarkersJSON(markers []entity.RepositoryAdoptionScanMarker) []repositoryAdoptionMarkerJSON {
+	result := make([]repositoryAdoptionMarkerJSON, 0, len(markers))
+	for _, marker := range markers {
+		result = append(result, repositoryAdoptionMarkerJSON{
+			Path:         marker.Path,
+			Kind:         string(marker.Kind),
+			ObjectDigest: marker.ObjectDigest,
+			SizeBytes:    marker.SizeBytes,
+		})
+	}
+	return result
+}
+
 func reconciliationRequestArgs(request entity.ReconciliationRequest) pgx.NamedArgs {
 	return pgx.NamedArgs{
 		"id":                  request.ID,

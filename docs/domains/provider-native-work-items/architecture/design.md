@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-06
 updated_at: 2026-05-27
-related_issues: [281, 282, 711, 719, 725, 729, 737, 761, 770, 781, 818, 840, 864]
+related_issues: [281, 282, 711, 719, 725, 729, 737, 761, 770, 781, 818, 840, 864, 865]
 related_prs: []
 related_adrs: []
 approvals:
@@ -193,9 +193,34 @@ Bootstrap-команда не создаёт сам репозиторий у п
 
 После merge bootstrap `PR/MR` provider-side контур отвечает за факт provider-native изменения: webhook inbox, нормализацию, PR/MR projection и безопасные refs. Для GitHub закрытый и смёрженный `pull_request` создаёт `RepositoryMergeSignal` kind `bootstrap` с project/repository refs, PR number/id/url, base/head branch, merge commit sha, source ref, related provider operation ref, watermark digest, timestamps, status и version. Проверенная проекция `services.yaml` импортируется не в `provider-hub`, а в `project-catalog` через внутреннюю команду `ReconcileBootstrapMergeSignal`, которая валидирует safe signal, checked artifact ref/digest/version и вызывает `ImportBootstrapServicesPolicy`. В этот вызов не передаются raw webhook body, полный provider response или содержимое provider payload; только безопасные ссылки, source ref, commit, artifact refs/digests, watermark и нормализованный checked payload, подготовленный вызывающим контуром.
 
+### Lightweight scan существующего репозитория
+
+Перед проектным решением по adoption вызывающий контур может запросить `ScanRepositoryForAdoption`. Это provider-side read-команда: `provider-hub` подтверждает выбранный внешний аккаунт через `access-manager`, получает секрет только на время GitHub API-вызова, читает metadata/ref/tree существующего репозитория и возвращает безопасный snapshot без чтения blob/file contents.
+
+```mermaid
+sequenceDiagram
+  participant C as project/agent contour
+  participant H as provider-hub
+  participant A as access-manager
+  participant R as secret resolver
+  participant P as GitHub
+  participant DB as provider DB
+  C->>H: ScanRepositoryForAdoption(target refs, ref policy, bounded options)
+  H->>A: ResolveExternalAccountUsage(provider.reconciliation.run)
+  A-->>H: provider_slug + secret_ref
+  H->>R: Resolve(secret_ref)
+  R-->>H: SecretValue in memory
+  H->>P: read repository metadata, ref, commit tree
+  P-->>H: default branch, head sha, tree entries
+  H->>DB: ProviderOperation + RepositoryAdoptionScanSnapshot + outbox
+  H-->>C: safe snapshot без raw file contents
+```
+
+Snapshot содержит provider refs, default branch, requested/scanned ref, head sha, обнаруженные marker path refs (`services.yaml`, `.gitmodules`, `README`, `AGENTS.md`, `docs`, workflow/deploy/module/package markers), object digests, counts, bounded warnings, status и snapshot digest. `provider-hub` не читает содержимое файлов, не строит adoption report, не выбирает шаблон, не импортирует `services.yaml`, не запускает агента и не создаёт проектную политику. Повтор той же команды по `command_id` возвращает сохранённый snapshot и не выполняет второй provider API scan.
+
 ### Подключение существующего репозитория через adoption PR
 
-Provider-side часть adoption работает с уже существующим репозиторием и не принимает проектные решения. `agent-manager`, детерминированный исполнитель или другой проектный контур заранее сканирует репозиторий в workspace, готовит отчёт, выбирает шаблон или фиксирует отказ от шаблона, формирует набор текстовых файлов, refs, заголовок и тело reviewable `PR/MR`. `provider-hub` принимает этот готовый payload через `CreateAdoptionPullRequest`, подтверждает внешний аккаунт через `access-manager`, получает секрет только на время GitHub API-вызова и выполняет provider-native запись.
+Provider-side часть adoption PR работает с уже существующим репозиторием и не принимает проектные решения. `agent-manager`, детерминированный исполнитель или другой проектный контур использует lightweight snapshot, глубокий workspace scan или другой согласованный вход, готовит отчёт, выбирает шаблон или фиксирует отказ от шаблона, формирует набор текстовых файлов, refs, заголовок и тело reviewable `PR/MR`. `provider-hub` принимает этот готовый payload через `CreateAdoptionPullRequest`, подтверждает внешний аккаунт через `access-manager`, получает секрет только на время GitHub API-вызова и выполняет provider-native запись.
 
 ```mermaid
 sequenceDiagram
@@ -216,9 +241,9 @@ sequenceDiagram
   H-->>C: ProviderOperationResponse без файлового payload и секрета
 ```
 
-Adoption-команда не создаёт репозиторий, не выполняет scan, не генерирует `services.yaml`, не выбирает шаблон и не меняет branch protection. В отличие от bootstrap, она допускает непустой `base_branch`, потому что работает с существующим репозиторием. Если adoption branch уже существует, новая команда строит commit от текущей головы adoption branch, но дерево commit собирается из текущего дерева base branch и подготовленного набора файлов. После успешной записи сервис обновляет локальную проекцию adoption `PR/MR`, проставляет `project_id` и `repository_id`, создаёт provider relationship `project_repository_binding` и публикует `provider.repository.adoption_pr_created`. Содержимое подготовленных файлов не сохраняется в журнале операций, outbox, событиях, логах, ошибках или трассировке.
+Adoption PR-команда не создаёт репозиторий, не выполняет scan, не генерирует `services.yaml`, не выбирает шаблон и не меняет branch protection. В отличие от bootstrap, она допускает непустой `base_branch`, потому что работает с существующим репозиторием. Если adoption branch уже существует, новая команда строит commit от текущей головы adoption branch, но дерево commit собирается из текущего дерева base branch и подготовленного набора файлов. После успешной записи сервис обновляет локальную проекцию adoption `PR/MR`, проставляет `project_id` и `repository_id`, создаёт provider relationship `project_repository_binding` и публикует `provider.repository.adoption_pr_created`. Содержимое подготовленных файлов не сохраняется в журнале операций, outbox, событиях, логах, ошибках или трассировке.
 
-После merge adoption `PR/MR` provider-side контур фиксирует `RepositoryMergeSignal` kind `adoption` по тем же правилам, что bootstrap: только безопасные refs, digest, timestamps и статус. Повтор того же provider PR merge не создаёт второй сигнал или outbox event, а конфликтующий commit/source ref отклоняется как конфликт. Adoption scan, отчёт, проверка `services.yaml`, выбор шаблона и активация project binding остаются у соседних доменов.
+После merge adoption `PR/MR` provider-side контур фиксирует `RepositoryMergeSignal` kind `adoption` по тем же правилам, что bootstrap: только безопасные refs, digest, timestamps и статус. Повтор того же provider PR merge не создаёт второй сигнал или outbox event, а конфликтующий commit/source ref отклоняется как конфликт. Глубокий workspace scan, отчёт, проверка `services.yaml`, выбор шаблона и активация project binding остаются у соседних доменов.
 
 ### Сигнал от slot-агента
 
@@ -267,6 +292,7 @@ sequenceDiagram
 - `provider.repository.adoption_required`;
 - `provider.repository.bootstrap_completed`;
 - `provider.repository.adoption_pr_created`;
+- `provider.repository.adoption_scan_completed`;
 - `provider.repository.bootstrap_merged`;
 - `provider.repository.adoption_merged`.
 
@@ -279,7 +305,7 @@ sequenceDiagram
 
 ## Наблюдаемость
 
-- Метрики: входящие webhook, dedupe, ошибки нормализации, задержка обработки, длительность сверки, drift status, расход лимитов, ошибки provider API.
+- Метрики: входящие webhook, dedupe, ошибки нормализации, задержка обработки, длительность сверки, lightweight adoption scan, drift status, расход лимитов, ошибки provider API.
 - Логи: операции, webhook delivery id, provider type, repository ref, aggregate id, correlation id, ошибка и классификация.
 - Трейсы: входящий webhook, provider operation, reconciliation, чтение проекции.
 - Алерты: рост ошибок webhook, длительная рассинхронизация, исчерпание лимита, потеря авторизации внешнего аккаунта.

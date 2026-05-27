@@ -41,6 +41,7 @@ const (
 	ProviderHubService_CreateRepository_FullMethodName                 = "/kodex.providers.v1.ProviderHubService/CreateRepository"
 	ProviderHubService_CreateBootstrapPullRequest_FullMethodName       = "/kodex.providers.v1.ProviderHubService/CreateBootstrapPullRequest"
 	ProviderHubService_CreateAdoptionPullRequest_FullMethodName        = "/kodex.providers.v1.ProviderHubService/CreateAdoptionPullRequest"
+	ProviderHubService_ScanRepositoryForAdoption_FullMethodName        = "/kodex.providers.v1.ProviderHubService/ScanRepositoryForAdoption"
 	ProviderHubService_UpdatePullRequest_FullMethodName                = "/kodex.providers.v1.ProviderHubService/UpdatePullRequest"
 	ProviderHubService_CreateReviewSignal_FullMethodName               = "/kodex.providers.v1.ProviderHubService/CreateReviewSignal"
 	ProviderHubService_UpdateRelationship_FullMethodName               = "/kodex.providers.v1.ProviderHubService/UpdateRelationship"
@@ -103,6 +104,8 @@ type ProviderHubServiceClient interface {
 	CreateBootstrapPullRequest(ctx context.Context, in *CreateBootstrapPullRequestRequest, opts ...grpc.CallOption) (*ProviderOperationResponse, error)
 	// CreateAdoptionPullRequest creates or updates adoption branch/PR for an existing repository.
 	CreateAdoptionPullRequest(ctx context.Context, in *CreateAdoptionPullRequestRequest, opts ...grpc.CallOption) (*ProviderOperationResponse, error)
+	// ScanRepositoryForAdoption records a lightweight provider-side repository snapshot for adoption planning.
+	ScanRepositoryForAdoption(ctx context.Context, in *ScanRepositoryForAdoptionRequest, opts ...grpc.CallOption) (*ProviderOperationResponse, error)
 	// UpdatePullRequest updates allowed PR/MR fields through a managed external account.
 	UpdatePullRequest(ctx context.Context, in *UpdatePullRequestRequest, opts ...grpc.CallOption) (*ProviderOperationResponse, error)
 	// CreateReviewSignal creates a review comment, approval or changes-request signal.
@@ -349,6 +352,16 @@ func (c *providerHubServiceClient) CreateAdoptionPullRequest(ctx context.Context
 	return out, nil
 }
 
+func (c *providerHubServiceClient) ScanRepositoryForAdoption(ctx context.Context, in *ScanRepositoryForAdoptionRequest, opts ...grpc.CallOption) (*ProviderOperationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ProviderOperationResponse)
+	err := c.cc.Invoke(ctx, ProviderHubService_ScanRepositoryForAdoption_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *providerHubServiceClient) UpdatePullRequest(ctx context.Context, in *UpdatePullRequestRequest, opts ...grpc.CallOption) (*ProviderOperationResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ProviderOperationResponse)
@@ -481,6 +494,8 @@ type ProviderHubServiceServer interface {
 	CreateBootstrapPullRequest(context.Context, *CreateBootstrapPullRequestRequest) (*ProviderOperationResponse, error)
 	// CreateAdoptionPullRequest creates or updates adoption branch/PR for an existing repository.
 	CreateAdoptionPullRequest(context.Context, *CreateAdoptionPullRequestRequest) (*ProviderOperationResponse, error)
+	// ScanRepositoryForAdoption records a lightweight provider-side repository snapshot for adoption planning.
+	ScanRepositoryForAdoption(context.Context, *ScanRepositoryForAdoptionRequest) (*ProviderOperationResponse, error)
 	// UpdatePullRequest updates allowed PR/MR fields through a managed external account.
 	UpdatePullRequest(context.Context, *UpdatePullRequestRequest) (*ProviderOperationResponse, error)
 	// CreateReviewSignal creates a review comment, approval or changes-request signal.
@@ -572,6 +587,9 @@ func (UnimplementedProviderHubServiceServer) CreateBootstrapPullRequest(context.
 }
 func (UnimplementedProviderHubServiceServer) CreateAdoptionPullRequest(context.Context, *CreateAdoptionPullRequestRequest) (*ProviderOperationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateAdoptionPullRequest not implemented")
+}
+func (UnimplementedProviderHubServiceServer) ScanRepositoryForAdoption(context.Context, *ScanRepositoryForAdoptionRequest) (*ProviderOperationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ScanRepositoryForAdoption not implemented")
 }
 func (UnimplementedProviderHubServiceServer) UpdatePullRequest(context.Context, *UpdatePullRequestRequest) (*ProviderOperationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpdatePullRequest not implemented")
@@ -1014,6 +1032,24 @@ func _ProviderHubService_CreateAdoptionPullRequest_Handler(srv interface{}, ctx 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ProviderHubService_ScanRepositoryForAdoption_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ScanRepositoryForAdoptionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProviderHubServiceServer).ScanRepositoryForAdoption(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProviderHubService_ScanRepositoryForAdoption_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProviderHubServiceServer).ScanRepositoryForAdoption(ctx, req.(*ScanRepositoryForAdoptionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ProviderHubService_UpdatePullRequest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(UpdatePullRequestRequest)
 	if err := dec(in); err != nil {
@@ -1252,6 +1288,10 @@ var ProviderHubService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CreateAdoptionPullRequest",
 			Handler:    _ProviderHubService_CreateAdoptionPullRequest_Handler,
+		},
+		{
+			MethodName: "ScanRepositoryForAdoption",
+			Handler:    _ProviderHubService_ScanRepositoryForAdoption_Handler,
 		},
 		{
 			MethodName: "UpdatePullRequest",

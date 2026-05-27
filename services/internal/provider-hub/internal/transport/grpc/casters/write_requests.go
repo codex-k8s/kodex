@@ -394,6 +394,43 @@ func newAdoptionPullRequestInput(
 	}
 }
 
+// ScanRepositoryForAdoptionInput maps a lightweight adoption scan request to the domain model.
+func ScanRepositoryForAdoptionInput(request *providersv1.ScanRepositoryForAdoptionRequest) (providerservice.ScanRepositoryForAdoptionInput, error) {
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return providerservice.ScanRepositoryForAdoptionInput{}, err
+	}
+	externalAccountID, err := requiredUUID(request.GetExternalAccountId())
+	if err != nil {
+		return providerservice.ScanRepositoryForAdoptionInput{}, err
+	}
+	repositoryTarget, err := ProviderTargetFromProto(request.GetRepositoryTarget())
+	if err != nil {
+		return providerservice.ScanRepositoryForAdoptionInput{}, err
+	}
+	options := repositoryAdoptionScanOptionsFromProto(request.GetOptions())
+	return providerservice.ScanRepositoryForAdoptionInput{
+		ProviderSlug:      providerSlug(request.GetProviderSlug()),
+		RepositoryTarget:  repositoryTarget,
+		Options:           options,
+		Meta:              meta,
+		ExternalAccountID: externalAccountID,
+	}, nil
+}
+
+func repositoryAdoptionScanOptionsFromProto(options *providersv1.RepositoryAdoptionScanOptions) providerservice.RepositoryAdoptionScanOptions {
+	if options == nil {
+		return providerservice.RepositoryAdoptionScanOptions{}
+	}
+	return providerservice.RepositoryAdoptionScanOptions{
+		RequestedRef:       strings.TrimSpace(options.GetRequestedRef()),
+		AllowedRefPrefixes: trimProtoStrings(options.GetAllowedRefPrefixes()),
+		MaxTreeEntries:     int(options.GetMaxTreeEntries()),
+		MaxMarkerPaths:     int(options.GetMaxMarkerPaths()),
+		MarkerPathHints:    trimProtoStrings(options.GetMarkerPathHints()),
+	}
+}
+
 // UpdatePullRequestInput maps a typed PR/MR update request to the domain model.
 func UpdatePullRequestInput(request *providersv1.UpdatePullRequestRequest) (providerservice.UpdatePullRequestInput, error) {
 	meta, err := CommandMetaFromProto(request.GetMeta())

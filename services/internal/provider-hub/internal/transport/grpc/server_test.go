@@ -118,6 +118,36 @@ func TestCreateAdoptionPullRequestMapsRequestAndResponse(t *testing.T) {
 	}
 }
 
+func TestScanRepositoryForAdoptionMapsRequestAndResponse(t *testing.T) {
+	t.Parallel()
+
+	commandID := uuid.NewString()
+	externalAccountID := uuid.NewString()
+	response, err := NewServer(fakeService{}).ScanRepositoryForAdoption(context.Background(), &providersv1.ScanRepositoryForAdoptionRequest{
+		ProviderSlug:     "github",
+		RepositoryTarget: &providersv1.ProviderTarget{ProviderSlug: "github", RepositoryFullName: ptrString("codex-k8s/kodex")},
+		Options: &providersv1.RepositoryAdoptionScanOptions{
+			RequestedRef:       ptrString("main"),
+			AllowedRefPrefixes: []string{"refs/heads/"},
+			MaxTreeEntries:     500,
+			MaxMarkerPaths:     10,
+			MarkerPathHints:    []string{"docs/README.md"},
+		},
+		Meta:              &providersv1.CommandMeta{CommandId: &commandID, RequestId: "req-1"},
+		ExternalAccountId: externalAccountID,
+	})
+	if err != nil {
+		t.Fatalf("ScanRepositoryForAdoption(): %v", err)
+	}
+	snapshot := response.GetAdoptionScanSnapshot()
+	if snapshot.GetRepositoryFullName() != "codex-k8s/kodex" ||
+		snapshot.GetScannedRef() != "main" ||
+		snapshot.GetStatus() != providersv1.RepositoryAdoptionScanStatus_REPOSITORY_ADOPTION_SCAN_STATUS_COMPLETED ||
+		len(snapshot.GetMarkers()) != 1 {
+		t.Fatalf("snapshot = %+v, want completed adoption scan", snapshot)
+	}
+}
+
 func TestCreateRepositoryMapsRequestAndResponse(t *testing.T) {
 	t.Parallel()
 
@@ -603,6 +633,40 @@ func (fakeService) CreateAdoptionPullRequest(_ context.Context, input providerse
 			Target: &providerservice.ProviderTarget{
 				ProviderSlug: input.ProviderSlug,
 			},
+		},
+	}, nil
+}
+
+func (fakeService) ScanRepositoryForAdoption(_ context.Context, input providerservice.ScanRepositoryForAdoptionInput) (providerservice.ProviderOperationResult, error) {
+	snapshotID := uuid.New()
+	operationID := uuid.New()
+	observedAt := time.Date(2026, 5, 27, 10, 0, 0, 0, time.UTC)
+	return providerservice.ProviderOperationResult{
+		AdoptionScan: &entity.RepositoryAdoptionScanSnapshot{
+			Base:                entity.Base{ID: snapshotID, Version: 1, CreatedAt: observedAt, UpdatedAt: observedAt},
+			ProviderOperationID: operationID,
+			ExternalAccountID:   input.ExternalAccountID,
+			ProviderSlug:        input.ProviderSlug,
+			RepositoryFullName:  input.RepositoryTarget.RepositoryFullName,
+			DefaultBranch:       "main",
+			RequestedRef:        input.Options.RequestedRef,
+			ScannedRef:          "main",
+			HeadSHA:             "abc123",
+			Status:              enum.RepositoryAdoptionScanStatusCompleted,
+			Markers: []entity.RepositoryAdoptionScanMarker{{
+				Path:         "services.yaml",
+				Kind:         enum.RepositoryAdoptionMarkerServiceDescriptor,
+				ObjectDigest: "blob-sha",
+				SizeBytes:    42,
+			}},
+			FileCount:        8,
+			VisibleFileCount: 8,
+			SnapshotDigest:   "safe-digest",
+			ObservedAt:       observedAt,
+		},
+		Result: providerservice.ProviderOperationCommandResult{
+			ResultRef: "adoption_scan:completed",
+			Target:    &input.RepositoryTarget,
 		},
 	}, nil
 }

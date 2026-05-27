@@ -55,6 +55,8 @@ service ProviderHubService {
   rpc CreateBootstrapPullRequest(CreateBootstrapPullRequestRequest) returns (ProviderOperationResponse);
   // CreateAdoptionPullRequest creates or updates adoption branch/PR for an existing repository.
   rpc CreateAdoptionPullRequest(CreateAdoptionPullRequestRequest) returns (ProviderOperationResponse);
+  // ScanRepositoryForAdoption records a lightweight provider-side repository snapshot for adoption planning.
+  rpc ScanRepositoryForAdoption(ScanRepositoryForAdoptionRequest) returns (ProviderOperationResponse);
   // UpdatePullRequest updates allowed PR/MR fields through a managed external account.
   rpc UpdatePullRequest(UpdatePullRequestRequest) returns (ProviderOperationResponse);
   // CreateReviewSignal creates a review comment, approval or changes-request signal.
@@ -328,6 +330,7 @@ enum ProviderOperationType {
   PROVIDER_OPERATION_TYPE_CREATE_BOOTSTRAP_PULL_REQUEST = 9;
   PROVIDER_OPERATION_TYPE_CREATE_REPOSITORY = 10;
   PROVIDER_OPERATION_TYPE_CREATE_ADOPTION_PULL_REQUEST = 11;
+  PROVIDER_OPERATION_TYPE_SCAN_REPOSITORY_FOR_ADOPTION = 12;
 }
 
 // ProviderOperationStatus is the execution state of a provider operation.
@@ -353,6 +356,29 @@ enum RepositoryVisibility {
   REPOSITORY_VISIBILITY_PUBLIC = 1;
   REPOSITORY_VISIBILITY_PRIVATE = 2;
   REPOSITORY_VISIBILITY_INTERNAL = 3;
+}
+
+// RepositoryAdoptionScanStatus is the safe outcome status of a lightweight provider-side adoption scan.
+enum RepositoryAdoptionScanStatus {
+  REPOSITORY_ADOPTION_SCAN_STATUS_UNSPECIFIED = 0;
+  REPOSITORY_ADOPTION_SCAN_STATUS_COMPLETED = 1;
+  REPOSITORY_ADOPTION_SCAN_STATUS_LIMITED = 2;
+  REPOSITORY_ADOPTION_SCAN_STATUS_NEEDS_REVIEW = 3;
+}
+
+// RepositoryAdoptionMarkerKind classifies safe file markers discovered without reading raw content.
+enum RepositoryAdoptionMarkerKind {
+  REPOSITORY_ADOPTION_MARKER_KIND_UNSPECIFIED = 0;
+  REPOSITORY_ADOPTION_MARKER_KIND_SERVICE_DESCRIPTOR = 1;
+  REPOSITORY_ADOPTION_MARKER_KIND_GITMODULES = 2;
+  REPOSITORY_ADOPTION_MARKER_KIND_README = 3;
+  REPOSITORY_ADOPTION_MARKER_KIND_AGENTS = 4;
+  REPOSITORY_ADOPTION_MARKER_KIND_DOCS = 5;
+  REPOSITORY_ADOPTION_MARKER_KIND_WORKFLOW = 6;
+  REPOSITORY_ADOPTION_MARKER_KIND_MODULE = 7;
+  REPOSITORY_ADOPTION_MARKER_KIND_PACKAGE = 8;
+  REPOSITORY_ADOPTION_MARKER_KIND_DEPLOY = 9;
+  REPOSITORY_ADOPTION_MARKER_KIND_OTHER = 10;
 }
 
 // ReviewSignalKind classifies provider-native review actions.
@@ -1177,6 +1203,90 @@ message CreateAdoptionPullRequestRequest {
   string external_account_id = 14;
 }
 
+// RepositoryAdoptionScanOptions bounds a provider-side scan of an existing repository.
+message RepositoryAdoptionScanOptions {
+  // requested_ref is the branch or provider ref to inspect. Empty means provider default branch.
+  optional string requested_ref = 1;
+  // allowed_ref_prefixes is the caller-approved branch/ref policy. Empty allows only the default branch.
+  repeated string allowed_ref_prefixes = 2;
+  // max_tree_entries limits provider file tree entries inspected.
+  int32 max_tree_entries = 3;
+  // max_marker_paths limits marker paths returned in the snapshot.
+  int32 max_marker_paths = 4;
+  // marker_path_hints are additional safe repository-relative paths to classify if present.
+  repeated string marker_path_hints = 5;
+}
+
+// ScanRepositoryForAdoptionRequest creates a safe, bounded provider-native repository snapshot.
+message ScanRepositoryForAdoptionRequest {
+  // provider_slug is an extensible provider identifier.
+  string provider_slug = 1;
+  // repository_target identifies an existing provider repository.
+  ProviderTarget repository_target = 2;
+  // options bounds branch/ref selection and marker extraction.
+  RepositoryAdoptionScanOptions options = 3;
+  // meta carries idempotency and audit context.
+  CommandMeta meta = 4;
+  // external_account_id is the account selected by caller policy for the provider read.
+  string external_account_id = 5;
+}
+
+// RepositoryAdoptionScanMarker is one safe marker path discovered without reading raw file content.
+message RepositoryAdoptionScanMarker {
+  // path is a repository-relative safe path.
+  string path = 1;
+  // kind classifies the marker.
+  RepositoryAdoptionMarkerKind kind = 2;
+  // object_digest is the provider object sha or equivalent digest, not file content.
+  string object_digest = 3;
+  // size_bytes is the provider-reported object size when available.
+  int64 size_bytes = 4;
+}
+
+// RepositoryAdoptionScanSnapshot is a safe provider-side summary for later adoption decisions.
+message RepositoryAdoptionScanSnapshot {
+  // snapshot_id is the provider-hub persisted snapshot id.
+  string snapshot_id = 1;
+  // provider_operation_id links this snapshot to the audited operation.
+  string provider_operation_id = 2;
+  // provider_slug identifies the provider adapter.
+  string provider_slug = 3;
+  // external_account_id links the managed external account used for the scan.
+  string external_account_id = 4;
+  // repository_target repeats the safe repository target input.
+  ProviderTarget repository_target = 5;
+  // repository_full_name is the provider owner/name when known.
+  string repository_full_name = 6;
+  // provider_repository_id is the provider repository id when known.
+  string provider_repository_id = 7;
+  // repository_url is a provider web URL safe for UI and audit.
+  string repository_url = 8;
+  // default_branch is provider default branch at scan time.
+  string default_branch = 9;
+  // requested_ref is the caller requested branch/ref, empty when default branch was used.
+  string requested_ref = 10;
+  // scanned_ref is the concrete provider ref scanned.
+  string scanned_ref = 11;
+  // head_sha is the scanned commit sha.
+  string head_sha = 12;
+  // status is the safe scan status.
+  RepositoryAdoptionScanStatus status = 13;
+  // markers are bounded safe file markers. Raw file content is not included.
+  repeated RepositoryAdoptionScanMarker markers = 14;
+  // file_count is the provider-reported file count when known.
+  int64 file_count = 15;
+  // visible_file_count is the bounded count inspected by provider-hub.
+  int64 visible_file_count = 16;
+  // tree_truncated is true when provider or local bounds truncated tree inspection.
+  bool tree_truncated = 17;
+  // warnings are bounded safe machine-readable warning codes.
+  repeated string warnings = 18;
+  // snapshot_digest is a digest over safe snapshot fields.
+  string snapshot_digest = 19;
+  // observed_at is the scan observation time in RFC3339 format.
+  string observed_at = 20;
+}
+
 // UpdatePullRequestRequest updates provider-native PR/MR fields.
 message UpdatePullRequestRequest {
   // target identifies the provider-native PR/MR.
@@ -1274,6 +1384,8 @@ message ProviderOperationResponse {
   ProviderRelationship relationship = 4;
   // result is a safe command result summary.
   ProviderOperationCommandResult result = 5;
+  // adoption_scan_snapshot is returned when operation produced a lightweight adoption scan.
+  RepositoryAdoptionScanSnapshot adoption_scan_snapshot = 6;
 }
 
 // GetProviderAccountRuntimeStateRequest reads runtime state.

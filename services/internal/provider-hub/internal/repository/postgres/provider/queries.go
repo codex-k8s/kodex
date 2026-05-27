@@ -26,6 +26,8 @@ var (
 	queryProviderArtifactSignalInsert          = mustLoadQuery("artifact_signal__insert")
 	queryRepositoryMergeSignalGetByKey         = mustLoadQuery("repository_merge_signal__get_by_key")
 	queryRepositoryMergeSignalInsert           = mustLoadQuery("repository_merge_signal__insert")
+	queryRepositoryAdoptionScanGetByOperation  = mustLoadQuery("repository_adoption_scan__get_by_operation")
+	queryRepositoryAdoptionScanInsert          = mustLoadQuery("repository_adoption_scan__insert")
 	queryReconciliationRequestGetByIdentity    = mustLoadQuery("reconciliation_request__get_by_identity")
 	queryReconciliationRequestInsert           = mustLoadQuery("reconciliation_request__insert")
 	querySyncCursorClaim                       = mustLoadQuery("sync_cursor__claim")

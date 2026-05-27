@@ -184,6 +184,38 @@ type RepositoryMergeSignal struct {
 	Status                      enum.RepositoryMergeSignalStatus
 }
 
+// RepositoryAdoptionScanMarker stores one safe marker path discovered without file contents.
+type RepositoryAdoptionScanMarker struct {
+	Path         string
+	Kind         enum.RepositoryAdoptionMarkerKind
+	ObjectDigest string
+	SizeBytes    int64
+}
+
+// RepositoryAdoptionScanSnapshot stores a safe lightweight snapshot for repository adoption planning.
+type RepositoryAdoptionScanSnapshot struct {
+	Base
+	SnapshotKey          string
+	ProviderOperationID  uuid.UUID
+	ExternalAccountID    uuid.UUID
+	ProviderSlug         enum.ProviderSlug
+	RepositoryFullName   string
+	ProviderRepositoryID string
+	RepositoryURL        string
+	DefaultBranch        string
+	RequestedRef         string
+	ScannedRef           string
+	HeadSHA              string
+	Status               enum.RepositoryAdoptionScanStatus
+	Markers              []RepositoryAdoptionScanMarker
+	FileCount            int64
+	VisibleFileCount     int64
+	TreeTruncated        bool
+	Warnings             []string
+	SnapshotDigest       string
+	ObservedAt           time.Time
+}
+
 // ProviderLimitSnapshot stores one observed provider rate or quota snapshot.
 type ProviderLimitSnapshot struct {
 	ID                uuid.UUID
