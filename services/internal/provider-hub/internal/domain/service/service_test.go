@@ -2136,6 +2136,125 @@ func TestScanRepositoryForAdoptionRecordsSafeSnapshotAndEvent(t *testing.T) {
 	}
 }
 
+func TestScanRepositoryForAdoptionCanonicalizesGitHubWebURLBeforeWritePlan(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 27, 10, 15, 0, 0, time.UTC)
+	externalAccountID := uuid.New()
+	commandID := uuid.New()
+	executor := &fakeWriteExecutor{
+		result: providerclient.WriteResult{
+			ResultRef:        "https://github.com/codex-k8s/kodex",
+			ProviderObjectID: "101",
+			ProviderVersion:  "abc123",
+			Target: &providerclient.Target{
+				ProviderSlug:         enum.ProviderSlugGitHub,
+				RepositoryFullName:   "codex-k8s/kodex",
+				ProviderRepositoryID: "101",
+				WebURL:               "https://github.com/codex-k8s/kodex",
+			},
+			RepositoryAdoptionScan: &providerclient.RepositoryAdoptionScan{
+				RepositoryTarget:     providerclient.Target{ProviderSlug: enum.ProviderSlugGitHub, RepositoryFullName: "codex-k8s/kodex"},
+				RepositoryFullName:   "codex-k8s/kodex",
+				ProviderRepositoryID: "101",
+				DefaultBranch:        "main",
+				ScannedRef:           "main",
+				HeadSHA:              "abc123",
+				Status:               enum.RepositoryAdoptionScanStatusCompleted,
+				FileCount:            1,
+				VisibleFileCount:     1,
+				SnapshotDigest:       "safe-digest",
+				ObservedAt:           now,
+			},
+			BaseBranch: "main",
+		},
+	}
+	repository := &fakeRepository{}
+	var accountUsageInput ExternalAccountUsageInput
+	service := NewWithDependencies(Dependencies{
+		Repository:  repository,
+		Clock:       fixedClock{now: now},
+		IDGenerator: &sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New(), uuid.New()}},
+		AccountUsageResolver: fakeAccountUsageResolver{onResolve: func(input ExternalAccountUsageInput) {
+			accountUsageInput = input
+		}},
+		SecretResolver:         &fakeSecretResolver{secret: secretresolver.NewSecretValue([]byte("read-token"))},
+		ProviderWriteExecutors: []providerclient.WriteExecutor{executor},
+	})
+
+	_, err := service.ScanRepositoryForAdoption(context.Background(), ScanRepositoryForAdoptionInput{
+		ProviderSlug:      enum.ProviderSlugGitHub,
+		RepositoryTarget:  ProviderTarget{ProviderSlug: enum.ProviderSlugGitHub, WebURL: "https://github.com/codex-k8s/kodex/"},
+		ExternalAccountID: externalAccountID,
+		Meta: value.CommandMeta{
+			CommandID: commandID,
+			OperationPolicyContext: value.ProviderOperationPolicyContext{
+				RiskLevel:     value.ProviderOperationRiskLevelLow,
+				ChangedFields: []string{"repository_target", "scan_options"},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("ScanRepositoryForAdoption(): %v", err)
+	}
+	command := executor.request.ScanRepositoryForAdoption
+	if executor.calls != 1 || command == nil {
+		t.Fatalf("executor request = %+v, want scan repository command", executor.request)
+	}
+	if command.RepositoryTarget.RepositoryFullName != "codex-k8s/kodex" || command.RepositoryTarget.WebURL != "" {
+		t.Fatalf("repository target = %+v, want canonical full name without web URL", command.RepositoryTarget)
+	}
+	if accountUsageInput.ScopeID != "codex-k8s/kodex" {
+		t.Fatalf("account usage scope id = %q, want canonical repository full name", accountUsageInput.ScopeID)
+	}
+	if strings.Contains(repository.recordedProviderOperation.TargetRef, "https://") ||
+		strings.Contains(executor.request.TargetRef, "https://") {
+		t.Fatalf("target refs = %q / %q, want no raw URL", repository.recordedProviderOperation.TargetRef, executor.request.TargetRef)
+	}
+}
+
+func TestScanRepositoryForAdoptionRejectsUnsafeGitHubWebURLBeforeWritePlan(t *testing.T) {
+	t.Parallel()
+
+	var usageCalled bool
+	secretResolver := &fakeSecretResolver{secret: secretresolver.NewSecretValue([]byte("read-token"))}
+	executor := &fakeWriteExecutor{}
+	repository := &fakeRepository{}
+	service := NewWithDependencies(Dependencies{
+		Repository: repository,
+		AccountUsageResolver: fakeAccountUsageResolver{onResolve: func(ExternalAccountUsageInput) {
+			usageCalled = true
+		}},
+		SecretResolver:         secretResolver,
+		ProviderWriteExecutors: []providerclient.WriteExecutor{executor},
+	})
+
+	_, err := service.ScanRepositoryForAdoption(context.Background(), ScanRepositoryForAdoptionInput{
+		ProviderSlug:      enum.ProviderSlugGitHub,
+		RepositoryTarget:  ProviderTarget{ProviderSlug: enum.ProviderSlugGitHub, WebURL: "https://user:token@github.com/org/repo?token=x"},
+		ExternalAccountID: uuid.New(),
+		Meta: value.CommandMeta{
+			CommandID: uuid.New(),
+			OperationPolicyContext: value.ProviderOperationPolicyContext{
+				RiskLevel:     value.ProviderOperationRiskLevelLow,
+				ChangedFields: []string{"repository_target", "scan_options"},
+			},
+		},
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("ScanRepositoryForAdoption() err = %v, want invalid argument", err)
+	}
+	if usageCalled || executor.calls != 0 || secretResolver.calls != 0 || repository.recordedProviderOperation.ID != uuid.Nil {
+		t.Fatalf(
+			"unsafe URL reached side effects: usageCalled=%v executorCalls=%d secretCalls=%d operation=%+v",
+			usageCalled,
+			executor.calls,
+			secretResolver.calls,
+			repository.recordedProviderOperation,
+		)
+	}
+}
+
 func TestScanRepositoryForAdoptionReplayDoesNotCallProviderTwice(t *testing.T) {
 	t.Parallel()
 

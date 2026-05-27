@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"slices"
 	"sort"
 	"strings"
@@ -579,7 +580,7 @@ func (s *Service) CreateAdoptionPullRequest(ctx context.Context, input CreateAdo
 
 // ScanRepositoryForAdoption records a lightweight provider-side repository snapshot for adoption planning.
 func (s *Service) ScanRepositoryForAdoption(ctx context.Context, input ScanRepositoryForAdoptionInput) (ProviderOperationResult, error) {
-	repositoryTarget, err := repositoryTarget(input.ProviderSlug, input.RepositoryTarget)
+	repositoryTarget, err := repositoryAdoptionScanTarget(input.ProviderSlug, input.RepositoryTarget)
 	if err != nil {
 		return ProviderOperationResult{}, err
 	}
@@ -1807,6 +1808,69 @@ func repositoryTarget(providerSlug enum.ProviderSlug, target ProviderTarget) (Pr
 		return ProviderTarget{}, errs.ErrInvalidArgument
 	}
 	return target, nil
+}
+
+func repositoryAdoptionScanTarget(providerSlug enum.ProviderSlug, target ProviderTarget) (ProviderTarget, error) {
+	target, err := repositoryTarget(providerSlug, target)
+	if err != nil {
+		return ProviderTarget{}, err
+	}
+	if target.WebURL == "" {
+		return target, nil
+	}
+	repositoryFullName, err := canonicalGitHubRepositoryFullNameFromWebURL(providerSlug, target.WebURL)
+	if err != nil {
+		return ProviderTarget{}, err
+	}
+	if target.RepositoryFullName != "" && target.RepositoryFullName != repositoryFullName {
+		return ProviderTarget{}, errs.ErrInvalidArgument
+	}
+	target.RepositoryFullName = repositoryFullName
+	target.WebURL = ""
+	return target, nil
+}
+
+func canonicalGitHubRepositoryFullNameFromWebURL(providerSlug enum.ProviderSlug, rawURL string) (string, error) {
+	if providerSlug != enum.ProviderSlugGitHub {
+		return "", errs.ErrInvalidArgument
+	}
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil ||
+		parsed.Scheme != "https" ||
+		parsed.User != nil ||
+		parsed.RawQuery != "" ||
+		parsed.Fragment != "" ||
+		parsed.Port() != "" {
+		return "", errs.ErrInvalidArgument
+	}
+	host := strings.TrimPrefix(strings.ToLower(parsed.Hostname()), "www.")
+	if host != "github.com" {
+		return "", errs.ErrInvalidArgument
+	}
+	parts := strings.Split(strings.Trim(parsed.EscapedPath(), "/"), "/")
+	if len(parts) != 2 ||
+		!validGitHubRepositoryPathSegment(parts[0]) ||
+		!validGitHubRepositoryPathSegment(parts[1]) {
+		return "", errs.ErrInvalidArgument
+	}
+	return parts[0] + "/" + parts[1], nil
+}
+
+func validGitHubRepositoryPathSegment(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, char := range value {
+		switch {
+		case char >= 'a' && char <= 'z':
+		case char >= 'A' && char <= 'Z':
+		case char >= '0' && char <= '9':
+		case char == '-', char == '_', char == '.':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 func repositoryTargetRef(providerSlug enum.ProviderSlug, repositoryID string) string {
