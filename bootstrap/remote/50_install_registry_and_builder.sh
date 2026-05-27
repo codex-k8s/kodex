@@ -13,6 +13,7 @@ REPO_DIR="$(repo_dir)"
 RENDER_ROOT="/var/lib/kodex/bootstrap-render"
 KODEX_PRODUCTION_NAMESPACE="${KODEX_PRODUCTION_NAMESPACE:-kodex-prod}"
 KODEX_ROLLOUT_TIMEOUT="${KODEX_ROLLOUT_TIMEOUT:-300s}"
+BOOTSTRAP_ENV_FILE_ABS="$(cd "$(dirname "$BOOTSTRAP_ENV_FILE")" && pwd)/$(basename "$BOOTSTRAP_ENV_FILE")"
 
 [ -d "${REPO_DIR}/deploy/base/bootstrap-foundation" ] || die "bootstrap foundation manifests are missing from repository snapshot"
 
@@ -21,10 +22,13 @@ install -d -m 700 "${RENDER_ROOT}"
 rm -rf "${RENDER_ROOT}/bootstrap-foundation"
 
 log "Render bootstrap foundation manifests"
-go run "${REPO_DIR}/cmd/manifest-render" \
-  --env-file "${BOOTSTRAP_ENV_FILE}" \
-  --source "${REPO_DIR}/deploy/base/bootstrap-foundation" \
-  --output "${RENDER_ROOT}/bootstrap-foundation"
+(
+  cd "$REPO_DIR"
+  go run ./cmd/manifest-render \
+    --env-file "${BOOTSTRAP_ENV_FILE_ABS}" \
+    --source deploy/base/bootstrap-foundation \
+    --output "${RENDER_ROOT}/bootstrap-foundation"
+)
 
 log "Apply production namespace and internal registry"
 kubectl create namespace "${KODEX_PRODUCTION_NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
