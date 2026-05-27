@@ -12,9 +12,6 @@ if [[ -n "$ENV_FILE" ]]; then
   kodex_build_require_env_file "build-codex-hook-ingress-images" "$ENV_FILE"
   # shellcheck disable=SC1090
   source "$ENV_FILE"
-elif [[ -f "${PROJECT_ROOT}/bootstrap/host/config.env" ]]; then
-  # shellcheck disable=SC1091
-  source "${PROJECT_ROOT}/bootstrap/host/config.env"
 fi
 
 # shellcheck disable=SC1091

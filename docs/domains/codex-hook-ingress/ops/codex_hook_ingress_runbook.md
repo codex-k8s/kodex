@@ -43,7 +43,7 @@ approvals:
 scripts/build-codex-hook-ingress-images.sh
 ```
 
-Скрипт собирает только `codex-hook-ingress` prod image. Он использует image/version из `services.yaml` и optional env override; migration image не создаётся, потому что у сервиса нет собственной БД.
+Скрипт собирает только `codex-hook-ingress` prod image. Он использует image/version из `services.yaml`, уже экспортированные env или явно переданный `KODEX_BUILD_ENV_FILE` с non-secret build overrides. `bootstrap/host/config.env` автоматически не читается; migration image не создаётся, потому что у сервиса нет собственной БД.
 
 ## Smoke-проверка
 
