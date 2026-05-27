@@ -34,6 +34,7 @@
 | IH-6 | #843 | готово как channel contract integration | Delivery route/capability refs, safe delivery command refs, runtime/job refs и `RecordChannelCallback` работают без hardcoded каналов, внешнего callback route и запуска package runtime. |
 | IH-6b | #855 | готово как callback request resolution | `RecordChannelCallback` идемпотентно связывает safe callback с delivery/request, создаёт `InteractionResponse` для terminal action и сохраняет diagnostic no-op для terminal/invalid callback без владения owner decision state. |
 | IH-7 | #867 | готово как owner inbox read surface | `ListOwnerInboxItems` отдаёт pending/active feedback, approval, Human gate и callback diagnostics с safe refs/status/summary, фильтрами по scope/kind/status/assignee/actor/correlation refs и пагинацией; `staff-gateway`/`operations-hub` не входят. |
+| IH-7b | #882 | готово как response boundary refs | `interaction.request.response_recorded` отдаёт safe request kind, scope, source owner, decision owner и context refs для owner resume без raw response text и без изменения чужого decision state. |
 
 ## Текущий бэклог
 
@@ -45,7 +46,7 @@
 
 | Домен или сервис | Что блокирует | Решение |
 |---|---|---|
-| `agent-manager` | End-to-end Human gate, feedback и продолжение сессии после ответа или owner decision. | `interaction-hub` отдаёт request/response events и не меняет `Run` сам. |
+| `agent-manager` | End-to-end Human gate, feedback и продолжение сессии после ответа или owner decision. | `interaction-hub` отдаёт request/response events с safe owner/source/context refs и не меняет `Run` сам. |
 | `platform-mcp-server` | MCP tools `interaction.*` для slot-агентов и быстрого manager. | MCP остаётся policy/audit boundary и маршрутизирует к `interaction-hub`. |
 | `codex-hook-ingress` | PermissionRequest и другие hook events, требующие вопроса человеку. | Hook ingress передаёт безопасный normalized event; `interaction-hub` создаёт request. |
 | `provider-hub` | Owner decision refs для provider write pipeline. | `interaction-hub` хранит delivery/response lifecycle, а provider write и approval decision остаются у владельцев. |
