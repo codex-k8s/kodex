@@ -153,6 +153,18 @@ func (registry *Registry) addGovernanceTools(server *mcpsdk.Server, handler *Gov
 		name     string
 		register func(string)
 	}{
+		{name: ToolGovernanceRiskEvaluate, register: func(description string) {
+			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolGovernanceRiskEvaluate, Description: description}, handler.EvaluateRisk)
+		}},
+		{name: ToolGovernanceRiskReevaluate, register: func(description string) {
+			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolGovernanceRiskReevaluate, Description: description}, handler.ReevaluateRisk)
+		}},
+		{name: ToolGovernanceRiskGet, register: func(description string) {
+			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolGovernanceRiskGet, Description: description}, handler.GetRiskAssessment)
+		}},
+		{name: ToolGovernanceRiskList, register: func(description string) {
+			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolGovernanceRiskList, Description: description}, handler.ListRiskAssessments)
+		}},
 		{name: ToolGovernanceGateRequest, register: func(description string) {
 			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolGovernanceGateRequest, Description: description}, handler.RequestGate)
 		}},

@@ -48,6 +48,26 @@ func New(client governancev1.GovernanceManagerServiceClient, cfg Config) (*Clien
 	return result, nil
 }
 
+// EvaluateRisk routes risk evaluation to governance-manager.
+func (c *Client) EvaluateRisk(ctx context.Context, request *governancev1.EvaluateRiskRequest) (*governancev1.RiskAssessmentResponse, error) {
+	return ownergrpc.Call(ctx, c.callConfig(), request, c.client.EvaluateRisk)
+}
+
+// ReevaluateRisk routes risk reevaluation to governance-manager.
+func (c *Client) ReevaluateRisk(ctx context.Context, request *governancev1.ReevaluateRiskRequest) (*governancev1.RiskAssessmentResponse, error) {
+	return ownergrpc.Call(ctx, c.callConfig(), request, c.client.ReevaluateRisk)
+}
+
+// GetRiskAssessment routes risk assessment reads to governance-manager.
+func (c *Client) GetRiskAssessment(ctx context.Context, request *governancev1.GetRiskAssessmentRequest) (*governancev1.RiskAssessmentResponse, error) {
+	return ownergrpc.Call(ctx, c.callConfig(), request, c.client.GetRiskAssessment)
+}
+
+// ListRiskAssessments routes risk assessment list reads to governance-manager.
+func (c *Client) ListRiskAssessments(ctx context.Context, request *governancev1.ListRiskAssessmentsRequest) (*governancev1.ListRiskAssessmentsResponse, error) {
+	return ownergrpc.Call(ctx, c.callConfig(), request, c.client.ListRiskAssessments)
+}
+
 // RequestGate routes gate request creation to governance-manager.
 func (c *Client) RequestGate(ctx context.Context, request *governancev1.RequestGateRequest) (*governancev1.GateRequestResponse, error) {
 	return ownergrpc.Call(ctx, c.callConfig(), request, c.client.RequestGate)

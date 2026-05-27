@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-14
 updated_at: 2026-05-26
-related_issues: [747, 753, 760, 771, 830, 322, 782]
+related_issues: [747, 753, 760, 771, 830, 841, 322, 782]
 related_prs: []
 related_adrs: []
 approvals:
@@ -56,7 +56,7 @@ approvals:
 | Сервис | Ответственность | Роль MCP |
 |---|---|---|
 | `agent-manager` | `Run`, session, flow, role, prompt, acceptance, agent lifecycle и состояние ожидания flow. | MCP вызывает только типизированные инструменты agent-manager и не хранит состояние `Run` или ожидания. |
-| `governance-manager` | Risk assessment, review signals, gate request/decision, release decision package, release decision и release safety-loop. | MCP вызывает governance-инструменты и не хранит risk/gate/release decision state; gate lifecycle маршрутизируется в `governance-manager` через `governance.gate.request/get/list/submit_decision/cancel/expire`. |
+| `governance-manager` | Risk assessment, review signals, gate request/decision, release decision package, release decision и release safety-loop. | MCP вызывает governance-инструменты и не хранит risk/gate/release decision state; risk evaluator маршрутизируется через `governance.risk.evaluate/reevaluate/get/list`, gate lifecycle — через `governance.gate.request/get/list/submit_decision/cancel/expire`. |
 | `runtime-manager` | Slot, workspace, job, cleanup, prewarm и runtime refs. | MCP маршрутизирует чтения и разрешённые команды runtime, не выбирает slot и не меняет job state сам. |
 | `fleet-manager` | Серверы, Kubernetes-кластеры, health и placement decision. | MCP маршрутизирует административные чтения и будущие fleet-инструменты без собственной placement-логики. |
 | `provider-hub` | Provider projections, webhook, reconciliation, лимиты, provider write pipeline. | MCP вызывает инструменты provider только через `provider-hub`, не через GitHub/GitLab напрямую. |
@@ -122,7 +122,7 @@ sequenceDiagram
   end
 ```
 
-`agent-manager` остаётся владельцем `Run`, session и состояния ожидания flow. `governance-manager` владеет gate request/decision и release decision. MCP только проверяет инструментальную границу, передаёт typed command/query meta, target, delivery refs и bounded evidence refs владельцу, а в ответе возвращает safe refs, status, version, timestamps и короткие summary.
+`agent-manager` остаётся владельцем `Run`, session и состояния ожидания flow. `governance-manager` владеет risk assessment, gate request/decision и release decision. MCP только проверяет инструментальную границу, передаёт typed command/query meta, target, delivery refs, project/provider/agent/runtime refs и bounded evidence refs владельцу, а в ответе возвращает safe refs, status, risk class, version, timestamps и короткие summary.
 
 Если MCP-инструмент инициирует подготовку agent runtime, он передаёт владельцам уже согласованные refs: `agent-manager` остаётся владельцем `Run`, `package-hub` — пакетной истины, а `runtime-manager` материализует источники `guidance_package` в workspace. MCP не делает checkout руководящих пакетов и не хранит сгенерированный контекст.
 
