@@ -208,7 +208,7 @@ approvals:
 | `selected_by_ref` | Ref решения `agent-manager`. |
 | `materialized_by_ref` | Ref materialization у `runtime-manager`. |
 | `scope` | Platform, organization, project, repository, flow, stage или role. |
-| `skill_refs` | Массив refs: `source_kind`, `skill_ref`, `source_ref`, `package_ref`, `package_installation_ref`, `package_version_ref`, `manifest_digest`, `capability_ref`, `capability_kind`, `package_slug`, `package_version_label`, `invocation_policy_ref`, `policy_summary_digest`, `digest`. |
+| `skill_refs` | Массив safe fields: refs/digests `skill_ref`, `source_ref`, `package_ref`, `package_installation_ref`, `package_version_ref`, `manifest_digest`, `capability_ref`, `invocation_policy_ref`, `policy_summary_digest`, `digest`; classifier/display details `source_kind`, `capability_kind`, `package_slug`, `package_version_label`. При маршрутизации в `RecordAgentActivity` refs/digests идут в `safe_refs_json`, а classifier/display details — в `safe_details_json`. |
 | `workspace_ref` | Не передаётся как local path; допустим только owner-issued object/ref, если отдельный контракт разрешит такую ссылку. |
 
 `codex-hook-ingress` может копировать этот value object в sanitized event только как refs/digests. Тексты `SKILL.md`, scripts, references, assets, package manifest payload, package installation state, materialized workspace path и raw tool data не хранятся здесь. Unsafe refs с `/`, `\`, пробелами или path-like содержимым отклоняются на validation/sanitizer boundary и не маршрутизируются владельцам.
