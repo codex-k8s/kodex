@@ -44,6 +44,12 @@ type Repository struct {
 	db database
 }
 
+type mutationStep struct {
+	query           string
+	args            pgx.NamedArgs
+	requireAffected bool
+}
+
 const (
 	operationActivateRiskProfileVersion  = "domain.Repository.ActivateRiskProfileVersion"
 	operationArchiveRiskProfile          = "domain.Repository.ArchiveRiskProfile"
@@ -127,25 +133,14 @@ func (r *Repository) CreateRiskProfileVersion(ctx context.Context, version entit
 
 // ActivateRiskProfileVersion activates a profile version and records an event.
 func (r *Repository) ActivateRiskProfileVersion(ctx context.Context, profile entity.RiskProfile, previousProfileVersion int64, activatedVersion entity.RiskProfileVersion, result entity.CommandResult, event entity.OutboxEvent) error {
-	err := postgreslib.WithTx(ctx, r.db, func(tx pgx.Tx) error {
-		if err := runMutation(ctx, tx, queryRiskProfileVersionSupersede, pgx.NamedArgs{
+	return r.mutateStepsWithResult(ctx, operationActivateRiskProfileVersion, result, &event,
+		optionalMutation(queryRiskProfileVersionSupersede, pgx.NamedArgs{
 			"risk_profile_id": activatedVersion.RiskProfileID,
 			"profile_version": activatedVersion.ProfileVersion,
-		}, false); err != nil {
-			return err
-		}
-		if err := runMutation(ctx, tx, queryRiskProfileVersionActivate, riskProfileVersionArgs(activatedVersion), true); err != nil {
-			return err
-		}
-		if err := runMutation(ctx, tx, queryRiskProfileUpdate, riskProfileUpdateArgs(profile, previousProfileVersion), true); err != nil {
-			return err
-		}
-		if err := runCommandResult(ctx, tx, result); err != nil {
-			return err
-		}
-		return runOutboxEvent(ctx, tx, event)
-	})
-	return wrapError(operationActivateRiskProfileVersion, err)
+		}),
+		requiredMutation(queryRiskProfileVersionActivate, riskProfileVersionArgs(activatedVersion)),
+		requiredMutation(queryRiskProfileUpdate, riskProfileUpdateArgs(profile, previousProfileVersion)),
+	)
 }
 
 // ArchiveRiskProfile archives a profile without deleting historical decisions.
@@ -266,24 +261,22 @@ func (r *Repository) CreateGateRequest(ctx context.Context, request entity.GateR
 
 // UpdateGateRequestStatus stores a terminal gate request lifecycle transition.
 func (r *Repository) UpdateGateRequestStatus(ctx context.Context, request entity.GateRequest, previousVersion int64, result entity.CommandResult, event entity.OutboxEvent) error {
-	return r.mutateWithResult(ctx, operationUpdateGateRequestStatus, queryGateRequestUpdate, gateRequestUpdateArgs(request, previousVersion), result, &event)
+	return r.updateGateRequestLifecycle(ctx, request, previousVersion, result, event)
+}
+
+func (r *Repository) updateGateRequestLifecycle(ctx context.Context, request entity.GateRequest, previousVersion int64, result entity.CommandResult, event entity.OutboxEvent) error {
+	args := gateRequestUpdateArgs(request, previousVersion)
+	eventRef := &event
+	return r.mutateWithResult(ctx, operationUpdateGateRequestStatus, queryGateRequestUpdate, args, result, eventRef)
 }
 
 // UpdateGateRequestWithDecision stores a final gate decision and resolves the request.
 func (r *Repository) UpdateGateRequestWithDecision(ctx context.Context, request entity.GateRequest, previousVersion int64, decision entity.GateDecision, result entity.CommandResult, event entity.OutboxEvent) error {
-	err := postgreslib.WithTx(ctx, r.db, func(tx pgx.Tx) error {
-		if err := runMutation(ctx, tx, queryGateRequestUpdate, gateRequestUpdateArgs(request, previousVersion), true); err != nil {
-			return err
-		}
-		if err := runMutation(ctx, tx, queryGateDecisionCreate, gateDecisionArgs(decision), true); err != nil {
-			return err
-		}
-		if err := runCommandResult(ctx, tx, result); err != nil {
-			return err
-		}
-		return runOutboxEvent(ctx, tx, event)
-	})
-	return wrapError(operationSubmitGateDecision, err)
+	steps := []mutationStep{
+		requiredMutation(queryGateRequestUpdate, gateRequestUpdateArgs(request, previousVersion)),
+		requiredMutation(queryGateDecisionCreate, gateDecisionArgs(decision)),
+	}
+	return r.mutateStepsWithResult(ctx, operationSubmitGateDecision, result, &event, steps...)
 }
 
 // GetGateRequest returns a gate request by id.
@@ -313,7 +306,12 @@ func (r *Repository) CreateReleaseDecisionPackage(ctx context.Context, item enti
 
 // UpdateReleaseDecisionPackageStatus updates release package lifecycle status.
 func (r *Repository) UpdateReleaseDecisionPackageStatus(ctx context.Context, item entity.ReleaseDecisionPackage, previousVersion int64, result entity.CommandResult, event entity.OutboxEvent) error {
-	return r.mutateWithResult(ctx, operationUpdateReleasePackageStatus, queryReleaseDecisionPackageUpdate, releaseDecisionPackageUpdateArgs(item, previousVersion), result, &event)
+	return r.updateReleasePackageStatus(ctx, item, previousVersion, result, event)
+}
+
+func (r *Repository) updateReleasePackageStatus(ctx context.Context, item entity.ReleaseDecisionPackage, previousVersion int64, result entity.CommandResult, event entity.OutboxEvent) error {
+	args := releaseDecisionPackageUpdateArgs(item, previousVersion)
+	return r.mutateWithResult(ctx, operationUpdateReleasePackageStatus, queryReleaseDecisionPackageUpdate, args, result, &event)
 }
 
 // GetReleaseDecisionPackage returns a release decision package by id.
@@ -328,36 +326,24 @@ func (r *Repository) ListReleaseDecisionPackages(ctx context.Context, filter que
 
 // CreateReleaseDecision stores a requested release decision and advances the package.
 func (r *Repository) CreateReleaseDecision(ctx context.Context, pkg entity.ReleaseDecisionPackage, previousPackageVersion int64, decision entity.ReleaseDecision, result entity.CommandResult, event entity.OutboxEvent) error {
-	err := postgreslib.WithTx(ctx, r.db, func(tx pgx.Tx) error {
-		if err := runMutation(ctx, tx, queryReleaseDecisionPackageUpdate, releaseDecisionPackageUpdateArgs(pkg, previousPackageVersion), true); err != nil {
-			return err
-		}
-		if err := runMutation(ctx, tx, queryReleaseDecisionCreate, releaseDecisionArgs(decision), true); err != nil {
-			return err
-		}
-		if err := runCommandResult(ctx, tx, result); err != nil {
-			return err
-		}
-		return runOutboxEvent(ctx, tx, event)
-	})
-	return wrapError(operationCreateReleaseDecision, err)
+	packageUpdate := requiredMutation(queryReleaseDecisionPackageUpdate, releaseDecisionPackageUpdateArgs(pkg, previousPackageVersion))
+	decisionCreate := requiredMutation(queryReleaseDecisionCreate, releaseDecisionArgs(decision))
+	return r.mutateStepsWithResult(ctx, operationCreateReleaseDecision, result, &event,
+		packageUpdate,
+		decisionCreate,
+	)
 }
 
 // UpdateReleaseDecision stores a terminal release decision and closes the package.
 func (r *Repository) UpdateReleaseDecision(ctx context.Context, pkg entity.ReleaseDecisionPackage, previousPackageVersion int64, decision entity.ReleaseDecision, previousDecisionVersion int64, result entity.CommandResult, event entity.OutboxEvent) error {
-	err := postgreslib.WithTx(ctx, r.db, func(tx pgx.Tx) error {
-		if err := runMutation(ctx, tx, queryReleaseDecisionPackageUpdate, releaseDecisionPackageUpdateArgs(pkg, previousPackageVersion), true); err != nil {
-			return err
-		}
-		if err := runMutation(ctx, tx, queryReleaseDecisionUpdate, releaseDecisionUpdateArgs(decision, previousDecisionVersion), true); err != nil {
-			return err
-		}
-		if err := runCommandResult(ctx, tx, result); err != nil {
-			return err
-		}
-		return runOutboxEvent(ctx, tx, event)
-	})
-	return wrapError(operationUpdateReleaseDecision, err)
+	return r.mutateReleaseDecisionUpdate(ctx, pkg, previousPackageVersion, decision, previousDecisionVersion, result, event)
+}
+
+func (r *Repository) mutateReleaseDecisionUpdate(ctx context.Context, pkg entity.ReleaseDecisionPackage, previousPackageVersion int64, decision entity.ReleaseDecision, previousDecisionVersion int64, result entity.CommandResult, event entity.OutboxEvent) error {
+	return r.mutateStepsWithResult(ctx, operationUpdateReleaseDecision, result, &event,
+		requiredMutation(queryReleaseDecisionPackageUpdate, releaseDecisionPackageUpdateArgs(pkg, previousPackageVersion)),
+		requiredMutation(queryReleaseDecisionUpdate, releaseDecisionUpdateArgs(decision, previousDecisionVersion)),
+	)
 }
 
 // GetReleaseDecision returns one release decision by id.
@@ -382,7 +368,8 @@ func (r *Repository) RecordReleaseSafetyState(ctx context.Context, state entity.
 
 // UpdateReleaseSafetyState updates the current safety-loop state.
 func (r *Repository) UpdateReleaseSafetyState(ctx context.Context, state entity.ReleaseSafetyState, previousVersion int64, result entity.CommandResult, event entity.OutboxEvent) error {
-	return r.mutateWithResult(ctx, operationUpdateReleaseSafetyState, queryReleaseSafetyStateUpdate, releaseSafetyStateUpdateArgs(state, previousVersion), result, &event)
+	step := requiredMutation(queryReleaseSafetyStateUpdate, releaseSafetyStateUpdateArgs(state, previousVersion))
+	return r.mutateStepsWithResult(ctx, operationUpdateReleaseSafetyState, result, &event, step)
 }
 
 // GetReleaseSafetyStateByPackage returns current safety-loop state for a package.
@@ -397,7 +384,9 @@ func (r *Repository) RecordBlockingSignal(ctx context.Context, signal entity.Blo
 
 // UpdateBlockingSignal stores a terminal blocking signal transition.
 func (r *Repository) UpdateBlockingSignal(ctx context.Context, signal entity.BlockingSignal, previousVersion int64, result entity.CommandResult, event entity.OutboxEvent) error {
-	return r.mutateWithResult(ctx, operationUpdateBlockingSignal, queryBlockingSignalUpdate, blockingSignalUpdateArgs(signal, previousVersion), result, &event)
+	eventRef := &event
+	updateArgs := blockingSignalUpdateArgs(signal, previousVersion)
+	return r.mutateWithResult(ctx, operationUpdateBlockingSignal, queryBlockingSignalUpdate, updateArgs, result, eventRef)
 }
 
 // GetBlockingSignal returns one blocking signal by id.
@@ -439,18 +428,29 @@ func (r *Repository) MarkOutboxEventPublished(ctx context.Context, id uuid.UUID,
 
 // MarkOutboxEventFailed schedules an outbox retry.
 func (r *Repository) MarkOutboxEventFailed(ctx context.Context, id uuid.UUID, attemptCount int, nextAttemptAt time.Time, lastError string) error {
-	return wrapError(operationOutboxMarkFailed, postgreslib.ApplyOutboxDeliveryFailure(ctx, r.db, queryOutboxEventMarkFailed, errs.ErrInvalidArgument, id, attemptCount, "next_attempt_at", nextAttemptAt, lastError))
+	return r.markOutboxFailure(ctx, operationOutboxMarkFailed, queryOutboxEventMarkFailed, id, attemptCount, "next_attempt_at", nextAttemptAt, lastError)
 }
 
 // MarkOutboxEventPermanentlyFailed marks an outbox event terminally failed.
 func (r *Repository) MarkOutboxEventPermanentlyFailed(ctx context.Context, id uuid.UUID, attemptCount int, failedAt time.Time, lastError string) error {
-	return wrapError(operationOutboxMarkPermanent, postgreslib.ApplyOutboxDeliveryFailure(ctx, r.db, queryOutboxEventMarkPermanent, errs.ErrInvalidArgument, id, attemptCount, "failed_permanently_at", failedAt, lastError))
+	return r.markOutboxFailure(ctx, operationOutboxMarkPermanent, queryOutboxEventMarkPermanent, id, attemptCount, "failed_permanently_at", failedAt, lastError)
+}
+
+func (r *Repository) markOutboxFailure(ctx context.Context, operation string, sqlText string, id uuid.UUID, attemptCount int, timestampColumn string, timestamp time.Time, lastError string) error {
+	err := postgreslib.ApplyOutboxDeliveryFailure(ctx, r.db, sqlText, errs.ErrInvalidArgument, id, attemptCount, timestampColumn, timestamp, lastError)
+	return wrapError(operation, err)
 }
 
 func (r *Repository) mutateWithResult(ctx context.Context, operation string, mutationQuery string, mutationArgs pgx.NamedArgs, result entity.CommandResult, event *entity.OutboxEvent) error {
+	return r.mutateStepsWithResult(ctx, operation, result, event, requiredMutation(mutationQuery, mutationArgs))
+}
+
+func (r *Repository) mutateStepsWithResult(ctx context.Context, operation string, result entity.CommandResult, event *entity.OutboxEvent, steps ...mutationStep) error {
 	err := postgreslib.WithTx(ctx, r.db, func(tx pgx.Tx) error {
-		if err := runMutation(ctx, tx, mutationQuery, mutationArgs, true); err != nil {
-			return err
+		for _, step := range steps {
+			if err := runMutation(ctx, tx, step.query, step.args, step.requireAffected); err != nil {
+				return err
+			}
 		}
 		if err := runCommandResult(ctx, tx, result); err != nil {
 			return err
@@ -463,46 +463,53 @@ func (r *Repository) mutateWithResult(ctx context.Context, operation string, mut
 	return wrapError(operation, err)
 }
 
+func requiredMutation(query string, args pgx.NamedArgs) mutationStep {
+	return mutationStep{query: query, args: args, requireAffected: true}
+}
+
+func optionalMutation(query string, args pgx.NamedArgs) mutationStep {
+	return mutationStep{query: query, args: args}
+}
+
 func queueGatePolicies(ctx context.Context, tx pgx.Tx, policies []entity.GatePolicy) error {
-	if len(policies) == 0 {
-		return nil
-	}
-	batch := &pgx.Batch{}
-	for _, policy := range policies {
-		batch.Queue(queryGatePolicyCreate, gatePolicyArgs(policy))
-	}
-	return execBatch(ctx, tx, batch)
+	return queueBatch(ctx, tx, policies, queueGatePolicy)
 }
 
 func queueRiskRules(ctx context.Context, tx pgx.Tx, rules []entity.RiskRule) error {
-	if len(rules) == 0 {
-		return nil
-	}
-	batch := &pgx.Batch{}
-	for _, rule := range rules {
-		batch.Queue(queryRiskRuleCreate, riskRuleArgs(rule))
-	}
-	return execBatch(ctx, tx, batch)
+	return queueBatch(ctx, tx, rules, queueRiskRule)
 }
 
 func queueRiskFactors(ctx context.Context, tx pgx.Tx, factors []entity.RiskFactor) error {
-	if len(factors) == 0 {
-		return nil
-	}
-	batch := &pgx.Batch{}
-	for _, factor := range factors {
-		batch.Queue(queryRiskFactorCreate, riskFactorArgs(factor))
-	}
-	return execBatch(ctx, tx, batch)
+	return queueBatch(ctx, tx, factors, queueRiskFactor)
 }
 
 func queueOutboxEvents(ctx context.Context, tx pgx.Tx, events []entity.OutboxEvent) error {
-	if len(events) == 0 {
+	return queueBatch(ctx, tx, events, queueOutboxEvent)
+}
+
+func queueGatePolicy(batch *pgx.Batch, policy entity.GatePolicy) {
+	batch.Queue(queryGatePolicyCreate, gatePolicyArgs(policy))
+}
+
+func queueRiskRule(batch *pgx.Batch, rule entity.RiskRule) {
+	batch.Queue(queryRiskRuleCreate, riskRuleArgs(rule))
+}
+
+func queueRiskFactor(batch *pgx.Batch, factor entity.RiskFactor) {
+	batch.Queue(queryRiskFactorCreate, riskFactorArgs(factor))
+}
+
+func queueOutboxEvent(batch *pgx.Batch, event entity.OutboxEvent) {
+	batch.Queue(queryOutboxEventCreate, outboxEventArgs(event))
+}
+
+func queueBatch[T any](ctx context.Context, tx pgx.Tx, items []T, queue func(*pgx.Batch, T)) error {
+	if len(items) == 0 {
 		return nil
 	}
 	batch := &pgx.Batch{}
-	for _, event := range events {
-		batch.Queue(queryOutboxEventCreate, outboxEventArgs(event))
+	for _, item := range items {
+		queue(batch, item)
 	}
 	return execBatch(ctx, tx, batch)
 }

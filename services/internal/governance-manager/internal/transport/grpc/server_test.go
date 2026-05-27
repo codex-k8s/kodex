@@ -35,6 +35,26 @@ func TestNewServerRequiresService(t *testing.T) {
 	_ = NewServer(nil)
 }
 
+func TestEnumCastersUseProtoDescriptors(t *testing.T) {
+	t.Parallel()
+
+	if got := riskClass(governancev1.RiskClass_RISK_CLASS_R0); got != enum.RiskClassR0 {
+		t.Fatalf("riskClass(R0) = %q", got)
+	}
+	if got := toRiskRuleKind(enum.RiskRuleKindAPI); got != governancev1.RiskRuleKind_RISK_RULE_KIND_API {
+		t.Fatalf("toRiskRuleKind(api) = %s", got)
+	}
+	if got := reviewRoleKind(governancev1.ReviewRoleKind_REVIEW_ROLE_KIND_SRE); got != enum.ReviewRoleKindSRE {
+		t.Fatalf("reviewRoleKind(SRE) = %q", got)
+	}
+	if got := toReleaseSafetyStateKind(enum.ReleaseSafetyStateKindFollowUpRequired); got != governancev1.ReleaseSafetyStateKind_RELEASE_SAFETY_STATE_KIND_FOLLOW_UP_REQUIRED {
+		t.Fatalf("toReleaseSafetyStateKind(follow_up_required) = %s", got)
+	}
+	if got := blockingSignalSourceType(governancev1.BlockingSignalSourceType_BLOCKING_SIGNAL_SOURCE_TYPE_REVIEW_SIGNAL); got != enum.BlockingSignalSourceTypeReviewSignal {
+		t.Fatalf("blockingSignalSourceType(review_signal) = %q", got)
+	}
+}
+
 func TestReevaluateRiskRoutesSafeSummaryToDomainService(t *testing.T) {
 	t.Parallel()
 
