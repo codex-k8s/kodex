@@ -21,6 +21,18 @@ const (
 
 type humanGateCommandPayload struct {
 	HumanGateRequest entity.HumanGateRequest `json:"human_gate_request"`
+	Decision         *humanGateDecision      `json:"decision,omitempty"`
+}
+
+type humanGateDecision struct {
+	HumanGateRequestID       string `json:"human_gate_request_id"`
+	Status                   string `json:"status"`
+	Outcome                  string `json:"outcome"`
+	SafeSummary              string `json:"safe_summary,omitempty"`
+	InteractionRequestRef    string `json:"interaction_request_ref,omitempty"`
+	InteractionResponseRef   string `json:"interaction_response_ref,omitempty"`
+	GovernanceGateRequestRef string `json:"governance_gate_request_ref,omitempty"`
+	GovernanceDecisionRef    string `json:"governance_decision_ref,omitempty"`
 }
 
 func (s *Service) RequestHumanGate(ctx context.Context, input RequestHumanGateInput) (entity.HumanGateRequest, error) {
@@ -95,7 +107,8 @@ func (s *Service) RecordHumanGateDecision(ctx context.Context, input RecordHuman
 	if err != nil {
 		return entity.HumanGateRequest{}, err
 	}
-	if replay, ok, err := findReplay(ctx, s, input.Meta, operationRecordHumanGateDecision, enum.CommandAggregateTypeHumanGate, humanGateFromPayload, verifyHumanGateDecisionReplay(input.HumanGateRequestID, s.repository.GetHumanGateRequest)); ok || err != nil {
+	decision := humanGateDecisionFromInput(input, outcome, refs, summary)
+	if replay, ok, err := findReplay(ctx, s, input.Meta, operationRecordHumanGateDecision, enum.CommandAggregateTypeHumanGate, humanGateFromPayload, verifyHumanGateDecisionReplay(decision, s.repository.GetHumanGateRequest)); ok || err != nil {
 		return replay, err
 	}
 	gate, err := s.repository.GetHumanGateRequest(ctx, input.HumanGateRequestID)
@@ -107,6 +120,9 @@ func (s *Service) RecordHumanGateDecision(ctx context.Context, input RecordHuman
 	}
 	if !humanGateAwaitingDecision(gate.Status) {
 		return entity.HumanGateRequest{}, errs.ErrPreconditionFailed
+	}
+	if err := validateHumanGateDecisionBinding(gate, refs); err != nil {
+		return entity.HumanGateRequest{}, err
 	}
 	now := s.clock.Now()
 	previousStatus := string(gate.Status)
@@ -120,7 +136,7 @@ func (s *Service) RecordHumanGateDecision(ctx context.Context, input RecordHuman
 	gate.ResolvedAt = &now
 	gate.Version++
 	gate.UpdatedAt = now
-	payload, err := marshalCommandPayload(humanGateCommandPayload{HumanGateRequest: gate})
+	payload, err := marshalCommandPayload(humanGateCommandPayload{HumanGateRequest: gate, Decision: &decision})
 	if err != nil {
 		return entity.HumanGateRequest{}, err
 	}
@@ -250,6 +266,42 @@ func normalizeHumanGateDecisionRefs(input RecordHumanGateDecisionInput) (humanGa
 	}, nil
 }
 
+func humanGateDecisionFromInput(input RecordHumanGateDecisionInput, outcome enum.HumanGateOutcome, refs humanGateDecisionRefs, summary string) humanGateDecision {
+	return humanGateDecision{
+		HumanGateRequestID:       input.HumanGateRequestID.String(),
+		Status:                   string(input.Status),
+		Outcome:                  string(outcome),
+		SafeSummary:              summary,
+		InteractionRequestRef:    refs.interactionRequestRef,
+		InteractionResponseRef:   refs.interactionResponseRef,
+		GovernanceGateRequestRef: refs.governanceGateRequestRef,
+		GovernanceDecisionRef:    refs.governanceDecisionRef,
+	}
+}
+
+func validateHumanGateDecisionBinding(gate entity.HumanGateRequest, refs humanGateDecisionRefs) error {
+	if err := validateHumanGateStoredRef(gate.InteractionRequestRef, refs.interactionRequestRef); err != nil {
+		return err
+	}
+	if err := validateHumanGateStoredRef(gate.GovernanceGateRequestRef, refs.governanceGateRequestRef); err != nil {
+		return err
+	}
+	if refs.interactionResponseRef != "" && gate.InteractionRequestRef != "" && refs.interactionRequestRef == "" {
+		return errs.ErrConflict
+	}
+	if refs.governanceDecisionRef != "" && gate.GovernanceGateRequestRef != "" && refs.governanceGateRequestRef == "" {
+		return errs.ErrConflict
+	}
+	return nil
+}
+
+func validateHumanGateStoredRef(stored string, incoming string) error {
+	if stored != "" && incoming != "" && stored != incoming {
+		return errs.ErrConflict
+	}
+	return nil
+}
+
 func humanGateIdempotencyKey(meta value.CommandMeta, operation string) (string, error) {
 	return safeCommandResultKey(meta, operation, unsafeHumanGateText)
 }
@@ -318,10 +370,13 @@ func humanGateFromPayload(payload []byte) (entity.HumanGateRequest, error) {
 	return result.HumanGateRequest, err
 }
 
-func verifyHumanGateDecisionReplay(expectedID uuid.UUID, load func(context.Context, uuid.UUID) (entity.HumanGateRequest, error)) func(context.Context, entity.CommandResult, entity.HumanGateRequest) error {
+func verifyHumanGateDecisionReplay(expected humanGateDecision, load func(context.Context, uuid.UUID) (entity.HumanGateRequest, error)) func(context.Context, entity.CommandResult, entity.HumanGateRequest) error {
 	return func(ctx context.Context, result entity.CommandResult, replay entity.HumanGateRequest) error {
-		if replay.ID != result.AggregateID || replay.ID != expectedID {
+		if replay.ID != result.AggregateID || replay.ID.String() != expected.HumanGateRequestID {
 			return errs.ErrConflict
+		}
+		if err := verifyHumanGateDecisionPayload(result.ResultPayload, expected); err != nil {
+			return err
 		}
 		stored, err := load(ctx, result.AggregateID)
 		if err != nil {
@@ -331,6 +386,41 @@ func verifyHumanGateDecisionReplay(expectedID uuid.UUID, load func(context.Conte
 			return errs.ErrConflict
 		}
 		return nil
+	}
+}
+
+func verifyHumanGateDecisionPayload(payload []byte, expected humanGateDecision) error {
+	var result humanGateCommandPayload
+	if err := json.Unmarshal(payload, &result); err != nil {
+		return err
+	}
+	if result.Decision == nil || !sameHumanGateDecision(*result.Decision, expected) {
+		return errs.ErrConflict
+	}
+	return nil
+}
+
+func sameHumanGateDecision(left humanGateDecision, right humanGateDecision) bool {
+	leftFields := humanGateDecisionFields(left)
+	rightFields := humanGateDecisionFields(right)
+	for index := range leftFields {
+		if leftFields[index] != rightFields[index] {
+			return false
+		}
+	}
+	return true
+}
+
+func humanGateDecisionFields(decision humanGateDecision) [8]string {
+	return [8]string{
+		decision.HumanGateRequestID,
+		decision.Status,
+		decision.Outcome,
+		decision.SafeSummary,
+		decision.InteractionRequestRef,
+		decision.InteractionResponseRef,
+		decision.GovernanceGateRequestRef,
+		decision.GovernanceDecisionRef,
 	}
 }
 

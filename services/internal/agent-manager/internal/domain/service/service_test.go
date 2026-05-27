@@ -3003,6 +3003,7 @@ func TestRecordHumanGateDecisionStoresOutcomeAndOutbox(t *testing.T) {
 		Status:                 enum.HumanGateStatusResolved,
 		Outcome:                enum.HumanGateOutcomeApprove,
 		SafeSummary:            "Owner approved the next step",
+		InteractionRequestRef:  "interaction:request/42",
 		InteractionResponseRef: "interaction:response/42",
 	})
 	if err != nil {
@@ -3020,6 +3021,70 @@ func TestRecordHumanGateDecisionStoresOutcomeAndOutbox(t *testing.T) {
 	payload := decodeAgentPayload(t, *repository.updateHumanGateEvent)
 	if payload.HumanGateOutcome != string(enum.HumanGateOutcomeApprove) || payload.InteractionResponseRef != "interaction:response/42" {
 		t.Fatalf("payload = %+v", payload)
+	}
+}
+
+func TestRecordHumanGateDecisionRejectsMismatchedRequestRefs(t *testing.T) {
+	t.Parallel()
+
+	gateID := uuid.MustParse("92929292-4444-5555-6666-777777777777")
+	expectedVersion := int64(1)
+	tests := []struct {
+		name  string
+		input RecordHumanGateDecisionInput
+	}{
+		{
+			name: "interaction request mismatch",
+			input: RecordHumanGateDecisionInput{
+				Meta:                   value.CommandMeta{IdempotencyKey: "human-gate-interaction-mismatch", ExpectedVersion: &expectedVersion, Actor: testActor()},
+				HumanGateRequestID:     gateID,
+				Status:                 enum.HumanGateStatusResolved,
+				Outcome:                enum.HumanGateOutcomeApprove,
+				InteractionRequestRef:  "interaction:request/other",
+				InteractionResponseRef: "interaction:response/42",
+			},
+		},
+		{
+			name: "governance gate mismatch",
+			input: RecordHumanGateDecisionInput{
+				Meta:                     value.CommandMeta{IdempotencyKey: "human-gate-governance-mismatch", ExpectedVersion: &expectedVersion, Actor: testActor()},
+				HumanGateRequestID:       gateID,
+				Status:                   enum.HumanGateStatusResolved,
+				Outcome:                  enum.HumanGateOutcomeApprove,
+				GovernanceGateRequestRef: "governance:gate/other",
+				GovernanceDecisionRef:    "governance:decision/42",
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			repository := &fakeRepository{humanGateByID: map[uuid.UUID]entity.HumanGateRequest{
+				gateID: {
+					VersionedBase:            entity.VersionedBase{ID: gateID, Version: 1},
+					RequestKind:              "owner_decision",
+					ReasonCode:               "needs_owner_approval",
+					InteractionRequestRef:    "interaction:request/42",
+					GovernanceGateRequestRef: "governance:gate/42",
+					Status:                   enum.HumanGateStatusWaiting,
+					Outcome:                  enum.HumanGateOutcomeNone,
+				},
+			}}
+			service := New(Config{
+				Repository:  repository,
+				Clock:       fixedClock{now: time.Date(2026, 5, 27, 12, 0, 0, 0, time.UTC)},
+				IDGenerator: fixedIDGenerator{ids: []uuid.UUID{uuid.MustParse("92929292-5555-6666-7777-888888888888")}},
+			})
+
+			_, err := service.RecordHumanGateDecision(context.Background(), test.input)
+			if !errors.Is(err, errs.ErrConflict) {
+				t.Fatalf("RecordHumanGateDecision() err = %v, want %v", err, errs.ErrConflict)
+			}
+			if repository.updateHumanGateCalled || repository.updateHumanGateEvent != nil {
+				t.Fatalf("update/outbox happened: %v/%+v", repository.updateHumanGateCalled, repository.updateHumanGateEvent)
+			}
+		})
 	}
 }
 
@@ -3052,6 +3117,66 @@ func TestRecordHumanGateDecisionRejectsVersionConflict(t *testing.T) {
 	}
 	if repository.updateHumanGateCalled {
 		t.Fatal("UpdateHumanGateRequestWithResult called after version conflict")
+	}
+}
+
+func TestRecordHumanGateDecisionReplayRejectsConflictingPayload(t *testing.T) {
+	t.Parallel()
+
+	gateID := uuid.MustParse("92929292-7777-8888-9999-aaaaaaaaaaaa")
+	expectedVersion := int64(1)
+	resolved := entity.HumanGateRequest{
+		VersionedBase:          entity.VersionedBase{ID: gateID, Version: 2},
+		RequestKind:            "owner_decision",
+		ReasonCode:             "needs_owner_approval",
+		SafeSummary:            "Owner approved the next step",
+		InteractionRequestRef:  "interaction:request/42",
+		InteractionResponseRef: "interaction:response/42",
+		Status:                 enum.HumanGateStatusResolved,
+		Outcome:                enum.HumanGateOutcomeApprove,
+	}
+	decision := humanGateDecision{
+		HumanGateRequestID:     gateID.String(),
+		Status:                 string(enum.HumanGateStatusResolved),
+		Outcome:                string(enum.HumanGateOutcomeApprove),
+		SafeSummary:            "Owner approved the next step",
+		InteractionRequestRef:  "interaction:request/42",
+		InteractionResponseRef: "interaction:response/42",
+	}
+	payload, err := marshalCommandPayload(humanGateCommandPayload{HumanGateRequest: resolved, Decision: &decision})
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	repository := &fakeRepository{
+		replay: &entity.CommandResult{
+			IdempotencyKey: "human-gate-decision-replay",
+			Actor:          testActor(),
+			Operation:      operationRecordHumanGateDecision,
+			AggregateType:  enum.CommandAggregateTypeHumanGate,
+			AggregateID:    gateID,
+			ResultPayload:  payload,
+		},
+		humanGateByID: map[uuid.UUID]entity.HumanGateRequest{gateID: resolved},
+	}
+	service := New(Config{
+		Repository: repository,
+		Clock:      fixedClock{now: time.Date(2026, 5, 27, 12, 0, 0, 0, time.UTC)},
+	})
+
+	_, err = service.RecordHumanGateDecision(context.Background(), RecordHumanGateDecisionInput{
+		Meta:                   value.CommandMeta{IdempotencyKey: "human-gate-decision-replay", ExpectedVersion: &expectedVersion, Actor: testActor()},
+		HumanGateRequestID:     gateID,
+		Status:                 enum.HumanGateStatusResolved,
+		Outcome:                enum.HumanGateOutcomeApprove,
+		SafeSummary:            "Different approved summary",
+		InteractionRequestRef:  "interaction:request/42",
+		InteractionResponseRef: "interaction:response/42",
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("RecordHumanGateDecision() err = %v, want %v", err, errs.ErrConflict)
+	}
+	if repository.updateHumanGateCalled {
+		t.Fatal("UpdateHumanGateRequestWithResult called for conflicting replay")
 	}
 }
 
