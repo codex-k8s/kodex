@@ -869,8 +869,29 @@ func TestRepositoryIntegrationRepositoryMergeSignalIsIdempotentAndRejectsConflic
 	if outboxCount != 1 {
 		t.Fatalf("merge outbox count = %d, want one event after replay", outboxCount)
 	}
+	readSignal, err := repository.GetRepositoryMergeSignal(ctx, query.RepositoryMergeSignalLookup{SignalKey: signalKey})
+	if err != nil {
+		t.Fatalf("get merge signal: %v", err)
+	}
+	if readSignal.ID != signalID || readSignal.MergeCommitSHA != "abc123" {
+		t.Fatalf("read signal = %+v, want stored signal %s", readSignal, signalID)
+	}
+	signals, _, err := repository.ListRepositoryMergeSignals(ctx, query.RepositoryMergeSignalFilter{
+		ProjectID:          &projectID,
+		RepositoryID:       &repositoryID,
+		ProviderSlug:       enum.ProviderSlugGitHub,
+		RepositoryFullName: "codex-k8s/kodex",
+		Kinds:              []enum.RepositoryMergeSignalKind{enum.RepositoryMergeSignalKindBootstrap},
+		Statuses:           []enum.RepositoryMergeSignalStatus{enum.RepositoryMergeSignalStatusMerged},
+	})
+	if err != nil {
+		t.Fatalf("list merge signals: %v", err)
+	}
+	if len(signals) != 1 || signals[0].ID != signalID {
+		t.Fatalf("merge signals = %+v, want stored signal %s", signals, signalID)
+	}
 	conflicting := repositoryMergeSignalProjectionForTest(workItemID, uuid.New(), projectID, repositoryID, signalKey, "def456", now)
-	_, _, err := repository.StoreWebhookEvent(ctx, webhookEventForTest(now.Add(2*time.Minute), "delivery-merge-3"), conflicting, nil, nil)
+	_, _, err = repository.StoreWebhookEvent(ctx, webhookEventForTest(now.Add(2*time.Minute), "delivery-merge-3"), conflicting, nil, nil)
 	if !errors.Is(err, errs.ErrConflict) {
 		t.Fatalf("conflicting merge signal err = %v, want %v", err, errs.ErrConflict)
 	}

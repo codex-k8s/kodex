@@ -216,6 +216,134 @@ func ListRelationshipsInput(request *providersv1.ListRelationshipsRequest) (prov
 	}, nil
 }
 
+// GetRepositoryMergeSignalInput maps a gRPC request to the provider-owned read input.
+func GetRepositoryMergeSignalInput(request *providersv1.GetRepositoryMergeSignalRequest) (providerservice.GetRepositoryMergeSignalInput, error) {
+	meta, err := QueryMetaFromProto(request.GetMeta())
+	if err != nil {
+		return providerservice.GetRepositoryMergeSignalInput{}, err
+	}
+	signalID, err := optionalUUIDPtr(request.GetSignalId())
+	if err != nil {
+		return providerservice.GetRepositoryMergeSignalInput{}, err
+	}
+	return providerservice.GetRepositoryMergeSignalInput{
+		SignalID:  signalID,
+		SignalKey: strings.TrimSpace(request.GetSignalKey()),
+		Meta:      meta,
+	}, nil
+}
+
+// ListRepositoryMergeSignalsInput maps a gRPC request to provider-owned merge signal filters.
+func ListRepositoryMergeSignalsInput(request *providersv1.ListRepositoryMergeSignalsRequest) (providerservice.ListRepositoryMergeSignalsInput, error) {
+	meta, err := QueryMetaFromProto(request.GetMeta())
+	if err != nil {
+		return providerservice.ListRepositoryMergeSignalsInput{}, err
+	}
+	projectID, err := optionalUUIDPtr(request.GetProjectId())
+	if err != nil {
+		return providerservice.ListRepositoryMergeSignalsInput{}, err
+	}
+	repositoryID, err := optionalUUIDPtr(request.GetRepositoryId())
+	if err != nil {
+		return providerservice.ListRepositoryMergeSignalsInput{}, err
+	}
+	kinds, err := repositoryMergeSignalKindsFromProto(request.GetKinds())
+	if err != nil {
+		return providerservice.ListRepositoryMergeSignalsInput{}, err
+	}
+	statuses, err := repositoryMergeSignalStatusesFromProto(request.GetStatuses())
+	if err != nil {
+		return providerservice.ListRepositoryMergeSignalsInput{}, err
+	}
+	mergedSince, err := optionalTimePtr(request.GetMergedSince())
+	if err != nil {
+		return providerservice.ListRepositoryMergeSignalsInput{}, err
+	}
+	return providerservice.ListRepositoryMergeSignalsInput{
+		ProjectID:            projectID,
+		RepositoryID:         repositoryID,
+		ProviderSlug:         providerSlug(request.GetProviderSlug()),
+		RepositoryFullName:   strings.TrimSpace(request.GetRepositoryFullName()),
+		ProviderRepositoryID: strings.TrimSpace(request.GetProviderRepositoryId()),
+		Kinds:                kinds,
+		Statuses:             statuses,
+		PullRequestNumber:    request.PullRequestNumber,
+		MergedSince:          mergedSince,
+		Page:                 pageRequestFromProto(request.GetPage()),
+		Meta:                 meta,
+	}, nil
+}
+
+// GetRepositoryAdoptionScanSnapshotInput maps a gRPC request to the provider-owned read input.
+func GetRepositoryAdoptionScanSnapshotInput(request *providersv1.GetRepositoryAdoptionScanSnapshotRequest) (providerservice.GetRepositoryAdoptionScanSnapshotInput, error) {
+	meta, err := QueryMetaFromProto(request.GetMeta())
+	if err != nil {
+		return providerservice.GetRepositoryAdoptionScanSnapshotInput{}, err
+	}
+	snapshotID, providerOperationID, err := adoptionScanSnapshotReadIDs(request)
+	if err != nil {
+		return providerservice.GetRepositoryAdoptionScanSnapshotInput{}, err
+	}
+	return providerservice.GetRepositoryAdoptionScanSnapshotInput{
+		SnapshotID:          snapshotID,
+		SnapshotKey:         strings.TrimSpace(request.GetSnapshotKey()),
+		ProviderOperationID: providerOperationID,
+		Meta:                meta,
+	}, nil
+}
+
+func adoptionScanSnapshotReadIDs(request *providersv1.GetRepositoryAdoptionScanSnapshotRequest) (*uuid.UUID, *uuid.UUID, error) {
+	snapshotID, err := optionalUUIDPtr(request.GetSnapshotId())
+	if err != nil {
+		return nil, nil, err
+	}
+	providerOperationID, err := optionalUUIDPtr(request.GetProviderOperationId())
+	if err != nil {
+		return nil, nil, err
+	}
+	return snapshotID, providerOperationID, nil
+}
+
+// ListRepositoryAdoptionScanSnapshotsInput maps a gRPC request to provider-owned scan filters.
+func ListRepositoryAdoptionScanSnapshotsInput(request *providersv1.ListRepositoryAdoptionScanSnapshotsRequest) (providerservice.ListRepositoryAdoptionScanSnapshotsInput, error) {
+	meta, err := QueryMetaFromProto(request.GetMeta())
+	if err != nil {
+		return providerservice.ListRepositoryAdoptionScanSnapshotsInput{}, err
+	}
+	projectID, err := optionalUUIDPtr(request.GetProjectId())
+	if err != nil {
+		return providerservice.ListRepositoryAdoptionScanSnapshotsInput{}, err
+	}
+	repositoryID, err := optionalUUIDPtr(request.GetRepositoryId())
+	if err != nil {
+		return providerservice.ListRepositoryAdoptionScanSnapshotsInput{}, err
+	}
+	externalAccountID, err := optionalUUIDPtr(request.GetExternalAccountId())
+	if err != nil {
+		return providerservice.ListRepositoryAdoptionScanSnapshotsInput{}, err
+	}
+	statuses, err := repositoryAdoptionScanStatusesFromProto(request.GetStatuses())
+	if err != nil {
+		return providerservice.ListRepositoryAdoptionScanSnapshotsInput{}, err
+	}
+	observedSince, err := optionalTimePtr(request.GetObservedSince())
+	if err != nil {
+		return providerservice.ListRepositoryAdoptionScanSnapshotsInput{}, err
+	}
+	return providerservice.ListRepositoryAdoptionScanSnapshotsInput{
+		ProjectID:            projectID,
+		RepositoryID:         repositoryID,
+		ExternalAccountID:    externalAccountID,
+		ProviderSlug:         providerSlug(request.GetProviderSlug()),
+		RepositoryFullName:   strings.TrimSpace(request.GetRepositoryFullName()),
+		ProviderRepositoryID: strings.TrimSpace(request.GetProviderRepositoryId()),
+		Statuses:             statuses,
+		ObservedSince:        observedSince,
+		Page:                 pageRequestFromProto(request.GetPage()),
+		Meta:                 meta,
+	}, nil
+}
+
 // RegisterProviderArtifactSignalInput maps an accelerating signal to the domain command input.
 func RegisterProviderArtifactSignalInput(request *providersv1.RegisterProviderArtifactSignalRequest) (providerservice.RegisterProviderArtifactSignalInput, error) {
 	meta, err := CommandMetaFromProto(request.GetMeta())

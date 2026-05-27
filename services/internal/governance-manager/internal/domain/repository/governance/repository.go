@@ -30,6 +30,7 @@ type Repository interface {
 	ListRiskFactors(ctx context.Context, filter query.RiskFactorFilter) ([]entity.RiskFactor, query.PageResult, error)
 	RecordReviewSignal(ctx context.Context, signal entity.ReviewSignal, result entity.CommandResult, event entity.OutboxEvent) error
 	GetReviewSignal(ctx context.Context, id uuid.UUID) (entity.ReviewSignal, error)
+	GetReviewSignalByFingerprint(ctx context.Context, fingerprint string) (entity.ReviewSignal, error)
 	ListReviewSignals(ctx context.Context, filter query.ReviewSignalFilter) ([]entity.ReviewSignal, query.PageResult, error)
 	CreateGateRequest(ctx context.Context, request entity.GateRequest, result entity.CommandResult, event entity.OutboxEvent) error
 	UpdateGateRequestStatus(ctx context.Context, request entity.GateRequest, previousVersion int64, result entity.CommandResult, event entity.OutboxEvent) error

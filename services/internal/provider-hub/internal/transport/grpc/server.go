@@ -23,6 +23,10 @@ type providerService interface {
 	ListWorkItemProjections(context.Context, providerservice.ListWorkItemProjectionsInput) (providerservice.ListWorkItemProjectionsResult, error)
 	ListComments(context.Context, providerservice.ListCommentsInput) (providerservice.ListCommentsResult, error)
 	ListRelationships(context.Context, providerservice.ListRelationshipsInput) (providerservice.ListRelationshipsResult, error)
+	GetRepositoryMergeSignal(context.Context, providerservice.GetRepositoryMergeSignalInput) (providerservice.RepositoryMergeSignalResult, error)
+	ListRepositoryMergeSignals(context.Context, providerservice.ListRepositoryMergeSignalsInput) (providerservice.ListRepositoryMergeSignalsResult, error)
+	GetRepositoryAdoptionScanSnapshot(context.Context, providerservice.GetRepositoryAdoptionScanSnapshotInput) (providerservice.RepositoryAdoptionScanSnapshotResult, error)
+	ListRepositoryAdoptionScanSnapshots(context.Context, providerservice.ListRepositoryAdoptionScanSnapshotsInput) (providerservice.ListRepositoryAdoptionScanSnapshotsResult, error)
 	RegisterProviderArtifactSignal(context.Context, providerservice.RegisterProviderArtifactSignalInput) (providerservice.ProviderArtifactSignalResult, error)
 	EnqueueReconciliation(context.Context, providerservice.EnqueueReconciliationInput) (providerservice.EnqueueReconciliationResult, error)
 	RunReconciliationBatch(context.Context, providerservice.RunReconciliationBatchInput) (providerservice.RunReconciliationBatchResult, error)
@@ -109,6 +113,26 @@ func (s *Server) ListComments(ctx context.Context, request *providersv1.ListComm
 // ListRelationships returns normalized provider-native relationships.
 func (s *Server) ListRelationships(ctx context.Context, request *providersv1.ListRelationshipsRequest) (*providersv1.ListRelationshipsResponse, error) {
 	return grpcserver.HandleUnary(ctx, request, grpccasters.ListRelationshipsInput, s.service.ListRelationships, grpccasters.ListRelationshipsResponse)
+}
+
+// GetRepositoryMergeSignal returns one safe provider-owned bootstrap/adoption merge signal.
+func (s *Server) GetRepositoryMergeSignal(ctx context.Context, request *providersv1.GetRepositoryMergeSignalRequest) (*providersv1.RepositoryMergeSignalResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.GetRepositoryMergeSignalInput, s.service.GetRepositoryMergeSignal, grpccasters.RepositoryMergeSignalResponse)
+}
+
+// ListRepositoryMergeSignals returns safe provider-owned merge signals by supported filters.
+func (s *Server) ListRepositoryMergeSignals(ctx context.Context, request *providersv1.ListRepositoryMergeSignalsRequest) (*providersv1.ListRepositoryMergeSignalsResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.ListRepositoryMergeSignalsInput, s.service.ListRepositoryMergeSignals, grpccasters.ListRepositoryMergeSignalsResponse)
+}
+
+// GetRepositoryAdoptionScanSnapshot returns one safe provider-side adoption scan snapshot.
+func (s *Server) GetRepositoryAdoptionScanSnapshot(ctx context.Context, request *providersv1.GetRepositoryAdoptionScanSnapshotRequest) (*providersv1.RepositoryAdoptionScanSnapshotResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.GetRepositoryAdoptionScanSnapshotInput, s.service.GetRepositoryAdoptionScanSnapshot, grpccasters.RepositoryAdoptionScanSnapshotResponse)
+}
+
+// ListRepositoryAdoptionScanSnapshots returns safe provider-side adoption scan snapshots by supported filters.
+func (s *Server) ListRepositoryAdoptionScanSnapshots(ctx context.Context, request *providersv1.ListRepositoryAdoptionScanSnapshotsRequest) (*providersv1.ListRepositoryAdoptionScanSnapshotsResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.ListRepositoryAdoptionScanSnapshotsInput, s.service.ListRepositoryAdoptionScanSnapshots, grpccasters.ListRepositoryAdoptionScanSnapshotsResponse)
 }
 
 // RegisterProviderArtifactSignal accepts an internal signal and accelerates reconciliation.

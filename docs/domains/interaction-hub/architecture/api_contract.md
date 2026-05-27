@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-22
 updated_at: 2026-05-27
-related_issues: [582, 768, 781, 783, 800, 806, 821, 835, 843, 853, 867]
+related_issues: [582, 768, 781, 783, 800, 806, 821, 835, 843, 853, 867, 882]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -208,7 +208,7 @@ Delivery-specific safe error codes:
 | `interaction.delivery.failed` | delivery | `delivery_attempt_id`, `delivery_id`, `error_code`, `error_class`, `next_retry_at`, `status` |
 | `interaction.delivery.expired` | delivery | `delivery_attempt_id`, `delivery_id`, `error_code`, `status` |
 | `interaction.callback.received` | callback | `callback_id`, `delivery_attempt_id`, `request_id`, `processing_status`, `callback_route_ref`, `gateway_ref`, `correlation_id` |
-| `interaction.request.response_recorded` | request | `request_id`, `response_id`, `response_action`, `actor_ref`, `owner_request_ref`, `owner_decision_ref` |
+| `interaction.request.response_recorded` | request | `request_id`, `request_kind`, `scope_type`, `scope_ref`, `source_owner_kind`, `source_owner_ref`, `agent_run_ref`, `provider_operation_ref`, `response_id`, `response_action`, `actor_ref`, `source_kind`, `owner_request_ref`, `owner_decision_ref` |
 | `interaction.request.expired` | request | `request_id`, `deadline_at` |
 | `interaction.request.cancelled` | request | `request_id`, `cancelled_by_ref` |
 

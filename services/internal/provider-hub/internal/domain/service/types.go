@@ -185,6 +185,74 @@ type ListRelationshipsResult struct {
 	Page          query.PageResult
 }
 
+// GetRepositoryMergeSignalInput identifies one safe provider-owned merge signal.
+type GetRepositoryMergeSignalInput struct {
+	SignalID  *uuid.UUID
+	SignalKey string
+	Meta      value.QueryMeta
+}
+
+// RepositoryMergeSignalResult returns a merge signal with explicit readiness.
+type RepositoryMergeSignalResult struct {
+	Status      enum.ProviderOwnedDataStatus
+	MergeSignal *entity.RepositoryMergeSignal
+}
+
+// ListRepositoryMergeSignalsInput selects safe provider-owned merge signals.
+type ListRepositoryMergeSignalsInput struct {
+	ProjectID            *uuid.UUID
+	RepositoryID         *uuid.UUID
+	ProviderSlug         enum.ProviderSlug
+	RepositoryFullName   string
+	ProviderRepositoryID string
+	Kinds                []enum.RepositoryMergeSignalKind
+	Statuses             []enum.RepositoryMergeSignalStatus
+	PullRequestNumber    *int64
+	MergedSince          *time.Time
+	Page                 value.PageRequest
+	Meta                 value.QueryMeta
+}
+
+// ListRepositoryMergeSignalsResult returns merge signals and paging metadata.
+type ListRepositoryMergeSignalsResult struct {
+	MergeSignals []entity.RepositoryMergeSignal
+	Page         query.PageResult
+}
+
+// GetRepositoryAdoptionScanSnapshotInput identifies one safe provider-owned adoption scan snapshot.
+type GetRepositoryAdoptionScanSnapshotInput struct {
+	SnapshotID          *uuid.UUID
+	SnapshotKey         string
+	ProviderOperationID *uuid.UUID
+	Meta                value.QueryMeta
+}
+
+// RepositoryAdoptionScanSnapshotResult returns a snapshot with explicit readiness.
+type RepositoryAdoptionScanSnapshotResult struct {
+	Status   enum.ProviderOwnedDataStatus
+	Snapshot *entity.RepositoryAdoptionScanSnapshot
+}
+
+// ListRepositoryAdoptionScanSnapshotsInput selects safe provider-owned adoption scan snapshots.
+type ListRepositoryAdoptionScanSnapshotsInput struct {
+	ProjectID            *uuid.UUID
+	RepositoryID         *uuid.UUID
+	ExternalAccountID    *uuid.UUID
+	ProviderSlug         enum.ProviderSlug
+	RepositoryFullName   string
+	ProviderRepositoryID string
+	Statuses             []enum.RepositoryAdoptionScanStatus
+	ObservedSince        *time.Time
+	Page                 value.PageRequest
+	Meta                 value.QueryMeta
+}
+
+// ListRepositoryAdoptionScanSnapshotsResult returns adoption scan snapshots and paging metadata.
+type ListRepositoryAdoptionScanSnapshotsResult struct {
+	Snapshots []entity.RepositoryAdoptionScanSnapshot
+	Page      query.PageResult
+}
+
 // ProviderArtifactTarget identifies a provider-native object referenced by an accelerating signal.
 type ProviderArtifactTarget struct {
 	ProviderSlug         enum.ProviderSlug

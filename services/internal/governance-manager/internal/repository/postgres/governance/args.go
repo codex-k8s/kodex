@@ -137,6 +137,7 @@ func reviewSignalArgs(signal entity.ReviewSignal) pgx.NamedArgs {
 		"confidence":         string(signal.Confidence),
 		"evidence_refs":      jsonArrayPayload(signal.EvidenceRefs),
 		"summary":            signal.Summary,
+		"source_fingerprint": signal.SourceFingerprint,
 		"created_at":         signal.CreatedAt,
 	}
 }

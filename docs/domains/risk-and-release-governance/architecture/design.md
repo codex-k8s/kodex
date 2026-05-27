@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-22
 updated_at: 2026-05-27
-related_issues: [322, 769, 827, 845, 856]
+related_issues: [322, 769, 827, 845, 856, 886]
 related_prs: []
 related_adrs: []
 approvals:
@@ -101,6 +101,8 @@ sequenceDiagram
 ```
 
 Роль создаёт проверяемый signal. Signal может блокировать переход, рекомендовать повышение риска, подтверждать конкретный тип evidence или требовать revise. Он не заменяет Human gate, если policy требует человеческое решение.
+
+Первый backend-интеграционный контур review signals принимает только safe refs от owner-доменов. `provider-hub` остаётся владельцем provider-native PR/MR, review, comment и check projections; `agent-manager` остаётся владельцем session/run/acceptance; `interaction-hub` остаётся владельцем delivery/callback фактов. `governance-manager` сохраняет target, role/author refs, typed outcome/severity/confidence, bounded summary, evidence refs и локальный fingerprint для идемпотентности. Fingerprint строится по identity-проекции evidence refs (`kind/ref`) плюс target/role/author, поэтому обновление safe metadata не создаёт второй signal. Повтор того же provider/agent/interaction evidence ref set возвращает уже записанный signal и не публикует новое событие; конфликтующий outcome по тому же source fingerprint отклоняется.
 
 ### Human gate без владения доставкой
 

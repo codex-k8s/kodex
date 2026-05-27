@@ -37,6 +37,7 @@ var (
 	queryReleaseSafetyStateUpdate     = mustLoadQuery("release_safety_state__update")
 	queryReviewSignalCreate           = mustLoadQuery("review_signal__create")
 	queryReviewSignalGet              = mustLoadQuery("review_signal__get")
+	queryReviewSignalGetByFingerprint = mustLoadQuery("review_signal__get_by_fingerprint")
 	queryReviewSignalList             = mustLoadQuery("review_signal__list")
 	queryRiskAssessmentCreate         = mustLoadQuery("risk_assessment__create")
 	queryRiskAssessmentGet            = mustLoadQuery("risk_assessment__get")

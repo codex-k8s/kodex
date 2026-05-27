@@ -2,6 +2,7 @@ package casters
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/google/uuid"
 
@@ -123,6 +124,83 @@ func ListRelationshipsResponse(result providerservice.ListRelationshipsResult) *
 		Relationships: mapSlice(result.Relationships, RelationshipToProto),
 		Page:          pageResponseToProto(result.Page),
 	}
+}
+
+// RepositoryMergeSignalResponse maps one provider-owned merge signal read result to gRPC.
+func RepositoryMergeSignalResponse(result providerservice.RepositoryMergeSignalResult) *providersv1.RepositoryMergeSignalResponse {
+	response := &providersv1.RepositoryMergeSignalResponse{
+		ReadStatus: ProviderOwnedDataStatusToProto(result.Status),
+	}
+	if result.MergeSignal != nil {
+		response.MergeSignal = RepositoryMergeSignalToProto(*result.MergeSignal)
+	}
+	return response
+}
+
+func RepositoryMergeSignalToProto(signal entity.RepositoryMergeSignal) *providersv1.RepositoryMergeSignal {
+	return &providersv1.RepositoryMergeSignal{
+		SignalId:                    signal.ID.String(),
+		SignalKey:                   signal.SignalKey,
+		Kind:                        RepositoryMergeSignalKindToProto(signal.Kind),
+		ProviderSlug:                string(signal.ProviderSlug),
+		ProjectId:                   uuidPtrValue(signal.ProjectID),
+		RepositoryId:                uuidPtrValue(signal.RepositoryID),
+		RepositoryFullName:          signal.RepositoryFullName,
+		ProviderRepositoryId:        signal.ProviderRepositoryID,
+		WorkItemProjectionId:        signal.WorkItemProjectionID.String(),
+		ProviderWorkItemId:          signal.ProviderWorkItemID,
+		PullRequestNumber:           signal.PullRequestNumber,
+		PullRequestProviderId:       signal.PullRequestProviderID,
+		PullRequestUrl:              signal.PullRequestURL,
+		BaseBranch:                  signal.BaseBranch,
+		HeadBranch:                  signal.HeadBranch,
+		MergeCommitSha:              signal.MergeCommitSHA,
+		SourceRef:                   signal.SourceRef,
+		RelatedProviderOperationRef: signal.RelatedProviderOperationRef,
+		WatermarkDigest:             signal.WatermarkDigest,
+		ObservedAt:                  formatTime(signal.ObservedAt),
+		MergedAt:                    formatTime(signal.MergedAt),
+		Status:                      RepositoryMergeSignalStatusToProto(signal.Status),
+		Version:                     signal.Version,
+		Etag:                        repositoryMergeSignalETag(signal),
+		CreatedAt:                   formatTime(signal.CreatedAt),
+		UpdatedAt:                   formatTime(signal.UpdatedAt),
+	}
+}
+
+// ListRepositoryMergeSignalsResponse maps provider-owned merge signals to gRPC.
+func ListRepositoryMergeSignalsResponse(result providerservice.ListRepositoryMergeSignalsResult) *providersv1.ListRepositoryMergeSignalsResponse {
+	return &providersv1.ListRepositoryMergeSignalsResponse{
+		MergeSignals: mapSlice(result.MergeSignals, RepositoryMergeSignalToProto),
+		Page:         pageResponseToProto(result.Page),
+	}
+}
+
+// RepositoryAdoptionScanSnapshotResponse maps one provider-owned scan snapshot read result to gRPC.
+func RepositoryAdoptionScanSnapshotResponse(result providerservice.RepositoryAdoptionScanSnapshotResult) *providersv1.RepositoryAdoptionScanSnapshotResponse {
+	response := &providersv1.RepositoryAdoptionScanSnapshotResponse{
+		ReadStatus: ProviderOwnedDataStatusToProto(result.Status),
+	}
+	if result.Snapshot != nil {
+		response.AdoptionScanSnapshot = RepositoryAdoptionScanSnapshotToProto(*result.Snapshot)
+	}
+	return response
+}
+
+// ListRepositoryAdoptionScanSnapshotsResponse maps provider-owned scan snapshots to gRPC.
+func ListRepositoryAdoptionScanSnapshotsResponse(result providerservice.ListRepositoryAdoptionScanSnapshotsResult) *providersv1.ListRepositoryAdoptionScanSnapshotsResponse {
+	return &providersv1.ListRepositoryAdoptionScanSnapshotsResponse{
+		AdoptionScanSnapshots: mapSlice(result.Snapshots, RepositoryAdoptionScanSnapshotToProto),
+		Page:                  pageResponseToProto(result.Page),
+	}
+}
+
+func repositoryMergeSignalETag(signal entity.RepositoryMergeSignal) string {
+	return fmt.Sprintf("repository_merge_signal:%s:%d:%s:%s", signal.ID.String(), signal.Version, signal.MergeCommitSHA, signal.WatermarkDigest)
+}
+
+func repositoryAdoptionScanETag(snapshot entity.RepositoryAdoptionScanSnapshot) string {
+	return fmt.Sprintf("repository_adoption_scan:%s:%d:%s:%s", snapshot.ID.String(), snapshot.Version, snapshot.HeadSHA, snapshot.SnapshotDigest)
 }
 
 // ProviderArtifactSignalResponse maps accepted signal state to gRPC.
@@ -307,6 +385,13 @@ func uuidPtrString(id *uuid.UUID) *string {
 	}
 	value := id.String()
 	return &value
+}
+
+func uuidPtrValue(id *uuid.UUID) string {
+	if id == nil {
+		return ""
+	}
+	return id.String()
 }
 
 func stringArrayFromJSON(raw []byte) []string {

@@ -261,6 +261,38 @@ func validRepositoryAdoptionScanStatus(status enum.RepositoryAdoptionScanStatus)
 	}
 }
 
+func validRepositoryAdoptionScanStatuses(statuses []enum.RepositoryAdoptionScanStatus) bool {
+	for _, status := range statuses {
+		if !validRepositoryAdoptionScanStatus(status) {
+			return false
+		}
+	}
+	return true
+}
+
+func validRepositoryMergeSignalKinds(kinds []enum.RepositoryMergeSignalKind) bool {
+	for _, kind := range kinds {
+		switch kind {
+		case enum.RepositoryMergeSignalKindBootstrap,
+			enum.RepositoryMergeSignalKindAdoption:
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func validRepositoryMergeSignalStatuses(statuses []enum.RepositoryMergeSignalStatus) bool {
+	for _, status := range statuses {
+		switch status {
+		case enum.RepositoryMergeSignalStatusMerged:
+		default:
+			return false
+		}
+	}
+	return true
+}
+
 func validRepositoryAdoptionMarkerKind(kind enum.RepositoryAdoptionMarkerKind) bool {
 	_, ok := repositoryAdoptionMarkerKinds[kind]
 	return ok

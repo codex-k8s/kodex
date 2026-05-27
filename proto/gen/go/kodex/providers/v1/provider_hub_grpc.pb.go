@@ -19,37 +19,41 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	ProviderHubService_IngestWebhookEvent_FullMethodName               = "/kodex.providers.v1.ProviderHubService/IngestWebhookEvent"
-	ProviderHubService_GetWebhookEvent_FullMethodName                  = "/kodex.providers.v1.ProviderHubService/GetWebhookEvent"
-	ProviderHubService_ListWebhookEvents_FullMethodName                = "/kodex.providers.v1.ProviderHubService/ListWebhookEvents"
-	ProviderHubService_RetryWebhookEventProcessing_FullMethodName      = "/kodex.providers.v1.ProviderHubService/RetryWebhookEventProcessing"
-	ProviderHubService_GetWorkItemProjection_FullMethodName            = "/kodex.providers.v1.ProviderHubService/GetWorkItemProjection"
-	ProviderHubService_FindWorkItemByProviderRef_FullMethodName        = "/kodex.providers.v1.ProviderHubService/FindWorkItemByProviderRef"
-	ProviderHubService_ListWorkItemProjections_FullMethodName          = "/kodex.providers.v1.ProviderHubService/ListWorkItemProjections"
-	ProviderHubService_ListComments_FullMethodName                     = "/kodex.providers.v1.ProviderHubService/ListComments"
-	ProviderHubService_ListRelationships_FullMethodName                = "/kodex.providers.v1.ProviderHubService/ListRelationships"
-	ProviderHubService_RegisterProviderArtifactSignal_FullMethodName   = "/kodex.providers.v1.ProviderHubService/RegisterProviderArtifactSignal"
-	ProviderHubService_EnqueueReconciliation_FullMethodName            = "/kodex.providers.v1.ProviderHubService/EnqueueReconciliation"
-	ProviderHubService_RunReconciliationBatch_FullMethodName           = "/kodex.providers.v1.ProviderHubService/RunReconciliationBatch"
-	ProviderHubService_GetSyncCursor_FullMethodName                    = "/kodex.providers.v1.ProviderHubService/GetSyncCursor"
-	ProviderHubService_ListSyncCursors_FullMethodName                  = "/kodex.providers.v1.ProviderHubService/ListSyncCursors"
-	ProviderHubService_CreateIssue_FullMethodName                      = "/kodex.providers.v1.ProviderHubService/CreateIssue"
-	ProviderHubService_UpdateIssue_FullMethodName                      = "/kodex.providers.v1.ProviderHubService/UpdateIssue"
-	ProviderHubService_CreateComment_FullMethodName                    = "/kodex.providers.v1.ProviderHubService/CreateComment"
-	ProviderHubService_UpdateComment_FullMethodName                    = "/kodex.providers.v1.ProviderHubService/UpdateComment"
-	ProviderHubService_CreatePullRequest_FullMethodName                = "/kodex.providers.v1.ProviderHubService/CreatePullRequest"
-	ProviderHubService_CreateRepository_FullMethodName                 = "/kodex.providers.v1.ProviderHubService/CreateRepository"
-	ProviderHubService_CreateBootstrapPullRequest_FullMethodName       = "/kodex.providers.v1.ProviderHubService/CreateBootstrapPullRequest"
-	ProviderHubService_CreateAdoptionPullRequest_FullMethodName        = "/kodex.providers.v1.ProviderHubService/CreateAdoptionPullRequest"
-	ProviderHubService_ScanRepositoryForAdoption_FullMethodName        = "/kodex.providers.v1.ProviderHubService/ScanRepositoryForAdoption"
-	ProviderHubService_UpdatePullRequest_FullMethodName                = "/kodex.providers.v1.ProviderHubService/UpdatePullRequest"
-	ProviderHubService_CreateReviewSignal_FullMethodName               = "/kodex.providers.v1.ProviderHubService/CreateReviewSignal"
-	ProviderHubService_UpdateRelationship_FullMethodName               = "/kodex.providers.v1.ProviderHubService/UpdateRelationship"
-	ProviderHubService_GetProviderAccountRuntimeState_FullMethodName   = "/kodex.providers.v1.ProviderHubService/GetProviderAccountRuntimeState"
-	ProviderHubService_ListProviderAccountRuntimeStates_FullMethodName = "/kodex.providers.v1.ProviderHubService/ListProviderAccountRuntimeStates"
-	ProviderHubService_RecordProviderLimitSnapshot_FullMethodName      = "/kodex.providers.v1.ProviderHubService/RecordProviderLimitSnapshot"
-	ProviderHubService_ListProviderLimitSnapshots_FullMethodName       = "/kodex.providers.v1.ProviderHubService/ListProviderLimitSnapshots"
-	ProviderHubService_ListProviderOperations_FullMethodName           = "/kodex.providers.v1.ProviderHubService/ListProviderOperations"
+	ProviderHubService_IngestWebhookEvent_FullMethodName                  = "/kodex.providers.v1.ProviderHubService/IngestWebhookEvent"
+	ProviderHubService_GetWebhookEvent_FullMethodName                     = "/kodex.providers.v1.ProviderHubService/GetWebhookEvent"
+	ProviderHubService_ListWebhookEvents_FullMethodName                   = "/kodex.providers.v1.ProviderHubService/ListWebhookEvents"
+	ProviderHubService_RetryWebhookEventProcessing_FullMethodName         = "/kodex.providers.v1.ProviderHubService/RetryWebhookEventProcessing"
+	ProviderHubService_GetWorkItemProjection_FullMethodName               = "/kodex.providers.v1.ProviderHubService/GetWorkItemProjection"
+	ProviderHubService_FindWorkItemByProviderRef_FullMethodName           = "/kodex.providers.v1.ProviderHubService/FindWorkItemByProviderRef"
+	ProviderHubService_ListWorkItemProjections_FullMethodName             = "/kodex.providers.v1.ProviderHubService/ListWorkItemProjections"
+	ProviderHubService_ListComments_FullMethodName                        = "/kodex.providers.v1.ProviderHubService/ListComments"
+	ProviderHubService_ListRelationships_FullMethodName                   = "/kodex.providers.v1.ProviderHubService/ListRelationships"
+	ProviderHubService_GetRepositoryMergeSignal_FullMethodName            = "/kodex.providers.v1.ProviderHubService/GetRepositoryMergeSignal"
+	ProviderHubService_ListRepositoryMergeSignals_FullMethodName          = "/kodex.providers.v1.ProviderHubService/ListRepositoryMergeSignals"
+	ProviderHubService_GetRepositoryAdoptionScanSnapshot_FullMethodName   = "/kodex.providers.v1.ProviderHubService/GetRepositoryAdoptionScanSnapshot"
+	ProviderHubService_ListRepositoryAdoptionScanSnapshots_FullMethodName = "/kodex.providers.v1.ProviderHubService/ListRepositoryAdoptionScanSnapshots"
+	ProviderHubService_RegisterProviderArtifactSignal_FullMethodName      = "/kodex.providers.v1.ProviderHubService/RegisterProviderArtifactSignal"
+	ProviderHubService_EnqueueReconciliation_FullMethodName               = "/kodex.providers.v1.ProviderHubService/EnqueueReconciliation"
+	ProviderHubService_RunReconciliationBatch_FullMethodName              = "/kodex.providers.v1.ProviderHubService/RunReconciliationBatch"
+	ProviderHubService_GetSyncCursor_FullMethodName                       = "/kodex.providers.v1.ProviderHubService/GetSyncCursor"
+	ProviderHubService_ListSyncCursors_FullMethodName                     = "/kodex.providers.v1.ProviderHubService/ListSyncCursors"
+	ProviderHubService_CreateIssue_FullMethodName                         = "/kodex.providers.v1.ProviderHubService/CreateIssue"
+	ProviderHubService_UpdateIssue_FullMethodName                         = "/kodex.providers.v1.ProviderHubService/UpdateIssue"
+	ProviderHubService_CreateComment_FullMethodName                       = "/kodex.providers.v1.ProviderHubService/CreateComment"
+	ProviderHubService_UpdateComment_FullMethodName                       = "/kodex.providers.v1.ProviderHubService/UpdateComment"
+	ProviderHubService_CreatePullRequest_FullMethodName                   = "/kodex.providers.v1.ProviderHubService/CreatePullRequest"
+	ProviderHubService_CreateRepository_FullMethodName                    = "/kodex.providers.v1.ProviderHubService/CreateRepository"
+	ProviderHubService_CreateBootstrapPullRequest_FullMethodName          = "/kodex.providers.v1.ProviderHubService/CreateBootstrapPullRequest"
+	ProviderHubService_CreateAdoptionPullRequest_FullMethodName           = "/kodex.providers.v1.ProviderHubService/CreateAdoptionPullRequest"
+	ProviderHubService_ScanRepositoryForAdoption_FullMethodName           = "/kodex.providers.v1.ProviderHubService/ScanRepositoryForAdoption"
+	ProviderHubService_UpdatePullRequest_FullMethodName                   = "/kodex.providers.v1.ProviderHubService/UpdatePullRequest"
+	ProviderHubService_CreateReviewSignal_FullMethodName                  = "/kodex.providers.v1.ProviderHubService/CreateReviewSignal"
+	ProviderHubService_UpdateRelationship_FullMethodName                  = "/kodex.providers.v1.ProviderHubService/UpdateRelationship"
+	ProviderHubService_GetProviderAccountRuntimeState_FullMethodName      = "/kodex.providers.v1.ProviderHubService/GetProviderAccountRuntimeState"
+	ProviderHubService_ListProviderAccountRuntimeStates_FullMethodName    = "/kodex.providers.v1.ProviderHubService/ListProviderAccountRuntimeStates"
+	ProviderHubService_RecordProviderLimitSnapshot_FullMethodName         = "/kodex.providers.v1.ProviderHubService/RecordProviderLimitSnapshot"
+	ProviderHubService_ListProviderLimitSnapshots_FullMethodName          = "/kodex.providers.v1.ProviderHubService/ListProviderLimitSnapshots"
+	ProviderHubService_ListProviderOperations_FullMethodName              = "/kodex.providers.v1.ProviderHubService/ListProviderOperations"
 )
 
 // ProviderHubServiceClient is the client API for ProviderHubService service.
@@ -78,6 +82,14 @@ type ProviderHubServiceClient interface {
 	ListComments(ctx context.Context, in *ListCommentsRequest, opts ...grpc.CallOption) (*ListCommentsResponse, error)
 	// ListRelationships returns normalized provider-native relationships.
 	ListRelationships(ctx context.Context, in *ListRelationshipsRequest, opts ...grpc.CallOption) (*ListRelationshipsResponse, error)
+	// GetRepositoryMergeSignal returns one safe provider-owned bootstrap/adoption merge signal.
+	GetRepositoryMergeSignal(ctx context.Context, in *GetRepositoryMergeSignalRequest, opts ...grpc.CallOption) (*RepositoryMergeSignalResponse, error)
+	// ListRepositoryMergeSignals returns safe provider-owned merge signals by repository/project context.
+	ListRepositoryMergeSignals(ctx context.Context, in *ListRepositoryMergeSignalsRequest, opts ...grpc.CallOption) (*ListRepositoryMergeSignalsResponse, error)
+	// GetRepositoryAdoptionScanSnapshot returns one safe provider-side adoption scan snapshot.
+	GetRepositoryAdoptionScanSnapshot(ctx context.Context, in *GetRepositoryAdoptionScanSnapshotRequest, opts ...grpc.CallOption) (*RepositoryAdoptionScanSnapshotResponse, error)
+	// ListRepositoryAdoptionScanSnapshots returns safe provider-side adoption scan snapshots by repository context.
+	ListRepositoryAdoptionScanSnapshots(ctx context.Context, in *ListRepositoryAdoptionScanSnapshotsRequest, opts ...grpc.CallOption) (*ListRepositoryAdoptionScanSnapshotsResponse, error)
 	// RegisterProviderArtifactSignal accepts an accelerating signal from an agent or manager.
 	RegisterProviderArtifactSignal(ctx context.Context, in *RegisterProviderArtifactSignalRequest, opts ...grpc.CallOption) (*ProviderArtifactSignalResponse, error)
 	// EnqueueReconciliation schedules a reconciliation scope.
@@ -216,6 +228,46 @@ func (c *providerHubServiceClient) ListRelationships(ctx context.Context, in *Li
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListRelationshipsResponse)
 	err := c.cc.Invoke(ctx, ProviderHubService_ListRelationships_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *providerHubServiceClient) GetRepositoryMergeSignal(ctx context.Context, in *GetRepositoryMergeSignalRequest, opts ...grpc.CallOption) (*RepositoryMergeSignalResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RepositoryMergeSignalResponse)
+	err := c.cc.Invoke(ctx, ProviderHubService_GetRepositoryMergeSignal_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *providerHubServiceClient) ListRepositoryMergeSignals(ctx context.Context, in *ListRepositoryMergeSignalsRequest, opts ...grpc.CallOption) (*ListRepositoryMergeSignalsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListRepositoryMergeSignalsResponse)
+	err := c.cc.Invoke(ctx, ProviderHubService_ListRepositoryMergeSignals_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *providerHubServiceClient) GetRepositoryAdoptionScanSnapshot(ctx context.Context, in *GetRepositoryAdoptionScanSnapshotRequest, opts ...grpc.CallOption) (*RepositoryAdoptionScanSnapshotResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RepositoryAdoptionScanSnapshotResponse)
+	err := c.cc.Invoke(ctx, ProviderHubService_GetRepositoryAdoptionScanSnapshot_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *providerHubServiceClient) ListRepositoryAdoptionScanSnapshots(ctx context.Context, in *ListRepositoryAdoptionScanSnapshotsRequest, opts ...grpc.CallOption) (*ListRepositoryAdoptionScanSnapshotsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListRepositoryAdoptionScanSnapshotsResponse)
+	err := c.cc.Invoke(ctx, ProviderHubService_ListRepositoryAdoptionScanSnapshots_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -468,6 +520,14 @@ type ProviderHubServiceServer interface {
 	ListComments(context.Context, *ListCommentsRequest) (*ListCommentsResponse, error)
 	// ListRelationships returns normalized provider-native relationships.
 	ListRelationships(context.Context, *ListRelationshipsRequest) (*ListRelationshipsResponse, error)
+	// GetRepositoryMergeSignal returns one safe provider-owned bootstrap/adoption merge signal.
+	GetRepositoryMergeSignal(context.Context, *GetRepositoryMergeSignalRequest) (*RepositoryMergeSignalResponse, error)
+	// ListRepositoryMergeSignals returns safe provider-owned merge signals by repository/project context.
+	ListRepositoryMergeSignals(context.Context, *ListRepositoryMergeSignalsRequest) (*ListRepositoryMergeSignalsResponse, error)
+	// GetRepositoryAdoptionScanSnapshot returns one safe provider-side adoption scan snapshot.
+	GetRepositoryAdoptionScanSnapshot(context.Context, *GetRepositoryAdoptionScanSnapshotRequest) (*RepositoryAdoptionScanSnapshotResponse, error)
+	// ListRepositoryAdoptionScanSnapshots returns safe provider-side adoption scan snapshots by repository context.
+	ListRepositoryAdoptionScanSnapshots(context.Context, *ListRepositoryAdoptionScanSnapshotsRequest) (*ListRepositoryAdoptionScanSnapshotsResponse, error)
 	// RegisterProviderArtifactSignal accepts an accelerating signal from an agent or manager.
 	RegisterProviderArtifactSignal(context.Context, *RegisterProviderArtifactSignalRequest) (*ProviderArtifactSignalResponse, error)
 	// EnqueueReconciliation schedules a reconciliation scope.
@@ -548,6 +608,18 @@ func (UnimplementedProviderHubServiceServer) ListComments(context.Context, *List
 }
 func (UnimplementedProviderHubServiceServer) ListRelationships(context.Context, *ListRelationshipsRequest) (*ListRelationshipsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListRelationships not implemented")
+}
+func (UnimplementedProviderHubServiceServer) GetRepositoryMergeSignal(context.Context, *GetRepositoryMergeSignalRequest) (*RepositoryMergeSignalResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetRepositoryMergeSignal not implemented")
+}
+func (UnimplementedProviderHubServiceServer) ListRepositoryMergeSignals(context.Context, *ListRepositoryMergeSignalsRequest) (*ListRepositoryMergeSignalsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListRepositoryMergeSignals not implemented")
+}
+func (UnimplementedProviderHubServiceServer) GetRepositoryAdoptionScanSnapshot(context.Context, *GetRepositoryAdoptionScanSnapshotRequest) (*RepositoryAdoptionScanSnapshotResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetRepositoryAdoptionScanSnapshot not implemented")
+}
+func (UnimplementedProviderHubServiceServer) ListRepositoryAdoptionScanSnapshots(context.Context, *ListRepositoryAdoptionScanSnapshotsRequest) (*ListRepositoryAdoptionScanSnapshotsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListRepositoryAdoptionScanSnapshots not implemented")
 }
 func (UnimplementedProviderHubServiceServer) RegisterProviderArtifactSignal(context.Context, *RegisterProviderArtifactSignalRequest) (*ProviderArtifactSignalResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RegisterProviderArtifactSignal not implemented")
@@ -794,6 +866,78 @@ func _ProviderHubService_ListRelationships_Handler(srv interface{}, ctx context.
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ProviderHubServiceServer).ListRelationships(ctx, req.(*ListRelationshipsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProviderHubService_GetRepositoryMergeSignal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRepositoryMergeSignalRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProviderHubServiceServer).GetRepositoryMergeSignal(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProviderHubService_GetRepositoryMergeSignal_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProviderHubServiceServer).GetRepositoryMergeSignal(ctx, req.(*GetRepositoryMergeSignalRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProviderHubService_ListRepositoryMergeSignals_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListRepositoryMergeSignalsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProviderHubServiceServer).ListRepositoryMergeSignals(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProviderHubService_ListRepositoryMergeSignals_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProviderHubServiceServer).ListRepositoryMergeSignals(ctx, req.(*ListRepositoryMergeSignalsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProviderHubService_GetRepositoryAdoptionScanSnapshot_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRepositoryAdoptionScanSnapshotRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProviderHubServiceServer).GetRepositoryAdoptionScanSnapshot(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProviderHubService_GetRepositoryAdoptionScanSnapshot_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProviderHubServiceServer).GetRepositoryAdoptionScanSnapshot(ctx, req.(*GetRepositoryAdoptionScanSnapshotRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProviderHubService_ListRepositoryAdoptionScanSnapshots_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListRepositoryAdoptionScanSnapshotsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProviderHubServiceServer).ListRepositoryAdoptionScanSnapshots(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProviderHubService_ListRepositoryAdoptionScanSnapshots_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProviderHubServiceServer).ListRepositoryAdoptionScanSnapshots(ctx, req.(*ListRepositoryAdoptionScanSnapshotsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1236,6 +1380,22 @@ var ProviderHubService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListRelationships",
 			Handler:    _ProviderHubService_ListRelationships_Handler,
+		},
+		{
+			MethodName: "GetRepositoryMergeSignal",
+			Handler:    _ProviderHubService_GetRepositoryMergeSignal_Handler,
+		},
+		{
+			MethodName: "ListRepositoryMergeSignals",
+			Handler:    _ProviderHubService_ListRepositoryMergeSignals_Handler,
+		},
+		{
+			MethodName: "GetRepositoryAdoptionScanSnapshot",
+			Handler:    _ProviderHubService_GetRepositoryAdoptionScanSnapshot_Handler,
+		},
+		{
+			MethodName: "ListRepositoryAdoptionScanSnapshots",
+			Handler:    _ProviderHubService_ListRepositoryAdoptionScanSnapshots_Handler,
 		},
 		{
 			MethodName: "RegisterProviderArtifactSignal",

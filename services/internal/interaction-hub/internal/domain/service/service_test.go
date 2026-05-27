@@ -351,6 +351,18 @@ func TestServiceRecordsInteractionResponseWithTerminalStatusAndIdempotency(t *te
 	if payload["response_action"] != "approve" || payload["owner_decision_ref"] != "decision:1" {
 		t.Fatalf("payload = %+v, want response refs", payload)
 	}
+	if payload["request_kind"] != "approval" || payload["scope_type"] != "service" || payload["scope_ref"] != "agent-manager" {
+		t.Fatalf("payload = %+v, want request scope refs", payload)
+	}
+	if payload["source_owner_kind"] != "agent_manager" || payload["source_owner_ref"] != "run:123" || payload["agent_run_ref"] != "run:123" {
+		t.Fatalf("payload = %+v, want agent owner refs", payload)
+	}
+	if payload["owner_service"] != "governance_manager" || payload["owner_request_ref"] != "gate:req-1" || payload["provider_operation_ref"] != "provider:op-1" {
+		t.Fatalf("payload = %+v, want decision owner refs", payload)
+	}
+	if payload["source_kind"] != "mcp" || payload["ingress_kind"] != "direct_grpc" || payload["risk_class"] != "high" {
+		t.Fatalf("payload = %+v, want safe response metadata", payload)
+	}
 	if _, ok := payload["response_summary"]; ok {
 		t.Fatalf("outbox payload contains response_summary: %+v", payload)
 	}
@@ -1559,7 +1571,6 @@ func validInteractionRequestDraft(deadline time.Time) InteractionRequestDraftInp
 		},
 		ContextRefs: []value.ExternalRef{
 			{Kind: "agent_run", Ref: "run:123"},
-			{Kind: "provider_operation", Ref: "provider:op-1"},
 		},
 		PromptSummary: "safe prompt summary",
 		AllowedActions: []value.InteractionAction{
@@ -1660,6 +1671,7 @@ func seedInteractionRequest(repository *fakeRepository, requestID uuid.UUID, now
 		},
 		ContextRefs: []value.ExternalRef{
 			{Kind: "agent_run", Ref: "run:123"},
+			{Kind: "provider_operation", Ref: "provider:op-1"},
 		},
 		PromptSummary: "safe prompt summary",
 		AllowedActions: []value.InteractionAction{
