@@ -233,6 +233,88 @@ func TestServiceCreatesInteractionRequestWithOutboxAndIdempotentReplay(t *testin
 	}
 }
 
+func TestServiceListsOwnerInboxItemsWithSafeSummaryAndDefaultActiveStatuses(t *testing.T) {
+	t.Parallel()
+
+	repository := newFakeRepository()
+	now := time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC)
+	requestID := uuid.New()
+	seedInteractionRequest(repository, requestID, now, enum.InteractionRequestStatusWaiting)
+	request := repository.requests[requestID]
+	request.PromptSummary = strings.Repeat("x", maxOwnerInboxTitleRunes+10)
+	callbackID := uuid.New()
+	responseID := uuid.New()
+	repository.ownerInboxItems = []entity.OwnerInboxItem{{
+		Request: request,
+		DeliverySummary: entity.OwnerInboxDeliverySummary{
+			AttemptCount:     2,
+			LatestDeliveryID: "delivery-2",
+			LatestStatus:     enum.DeliveryAttemptStatusFailed,
+			LatestErrorCode:  "DELIVERY_RATE_LIMITED",
+			LatestErrorClass: enum.DeliveryErrorClassRateLimited,
+		},
+		LatestCallback: &entity.ChannelCallback{
+			ID:               callbackID,
+			CallbackID:       "callback-1",
+			RequestID:        &requestID,
+			ProcessingStatus: enum.CallbackProcessingStatusRejected,
+			ErrorCode:        callbackErrorRequestResolved,
+			ReceivedAt:       now.Add(time.Minute),
+		},
+		LatestResponse: &entity.InteractionResponse{
+			ID:                  responseID,
+			RequestID:           requestID,
+			ResponseAction:      enum.InteractionResponseActionApprove,
+			RespondedByActorRef: "user:approver-1",
+			SourceKind:          enum.InteractionResponseSourceKindChannelCallback,
+			SourceRef:           callbackID.String(),
+			CreatedAt:           now.Add(2 * time.Minute),
+		},
+	}}
+	svc := New(repository)
+	input := ListOwnerInboxItemsInput{
+		Scope:              request.Scope,
+		AssigneeRef:        value.ActorRef{Kind: "user", Ref: "approver-1"},
+		ActorRef:           "user:approver-1",
+		CorrelationRef:     value.ExternalRef{Kind: "agent_run", Ref: "run:123"},
+		CorrelationID:      "trace-callback",
+		IncludeDiagnostics: true,
+		Page:               value.PageRequest{PageSize: 10},
+	}
+
+	items, _, err := svc.ListOwnerInboxItems(context.Background(), input)
+	if err != nil {
+		t.Fatalf("ListOwnerInboxItems(): %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("items=%d, want 1", len(items))
+	}
+	if items[0].Title != strings.Repeat("x", maxOwnerInboxTitleRunes) || items[0].Summary != request.PromptSummary {
+		t.Fatalf("item title=%q summary len=%d, want bounded title and full safe summary", items[0].Title, len(items[0].Summary))
+	}
+	if len(repository.ownerInboxFilter.Statuses) != 3 || repository.ownerInboxFilter.Statuses[2] != enum.InteractionRequestStatusWaiting {
+		t.Fatalf("statuses = %v, want active defaults", repository.ownerInboxFilter.Statuses)
+	}
+	if repository.ownerInboxFilter.AssigneeRef.Ref != "approver-1" || !repository.ownerInboxFilter.IncludeDiagnostics {
+		t.Fatalf("filter = %+v, want assignee and diagnostics", repository.ownerInboxFilter)
+	}
+}
+
+func TestServiceListOwnerInboxItemsRejectsUnsafeFilters(t *testing.T) {
+	t.Parallel()
+
+	repository := newFakeRepository()
+	svc := New(repository)
+	_, _, err := svc.ListOwnerInboxItems(context.Background(), ListOwnerInboxItemsInput{
+		Scope:         value.ScopeRef{Type: enum.ScopeTypeService, Ref: "agent-manager"},
+		AssigneeRef:   value.ActorRef{Kind: "user"},
+		CorrelationID: strings.Repeat("x", maxInteractionRefBytes+1),
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("ListOwnerInboxItems() err = %v, want ErrInvalidArgument", err)
+	}
+}
+
 func TestServiceRecordsInteractionResponseWithTerminalStatusAndIdempotency(t *testing.T) {
 	t.Parallel()
 
@@ -1340,6 +1422,8 @@ type fakeRepository struct {
 	routes                       map[uuid.UUID]entity.DeliveryRoute
 	deliveries                   map[uuid.UUID]entity.DeliveryAttempt
 	callbacks                    map[uuid.UUID]entity.ChannelCallback
+	ownerInboxItems              []entity.OwnerInboxItem
+	ownerInboxFilter             query.OwnerInboxFilter
 	results                      map[string]entity.CommandResult
 	events                       []entity.OutboxEvent
 	beforeDeliveryUpdate         func(*fakeRepository)
@@ -1759,6 +1843,11 @@ func (r *fakeRepository) ListInteractionRequests(_ context.Context, filter query
 		requests = append(requests, request)
 	}
 	return requests, value.PageResult{}, nil
+}
+
+func (r *fakeRepository) ListOwnerInboxItems(_ context.Context, filter query.OwnerInboxFilter) ([]entity.OwnerInboxItem, value.PageResult, error) {
+	r.ownerInboxFilter = filter
+	return r.ownerInboxItems, value.PageResult{}, nil
 }
 
 func (r *fakeRepository) ListExpirableInteractionRequests(_ context.Context, scope value.ScopeRef, deadlineBefore time.Time, limit int32) ([]entity.InteractionRequest, error) {

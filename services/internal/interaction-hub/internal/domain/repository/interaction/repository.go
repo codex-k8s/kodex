@@ -30,6 +30,7 @@ type Repository interface {
 	GetInteractionResponse(context.Context, uuid.UUID) (entity.InteractionResponse, error)
 	GetInteractionResponseBySource(context.Context, enum.InteractionResponseSourceKind, string) (entity.InteractionResponse, error)
 	ListInteractionRequests(context.Context, query.InteractionRequestFilter) ([]entity.InteractionRequest, value.PageResult, error)
+	ListOwnerInboxItems(context.Context, query.OwnerInboxFilter) ([]entity.OwnerInboxItem, value.PageResult, error)
 	ListExpirableInteractionRequests(context.Context, value.ScopeRef, time.Time, int32) ([]entity.InteractionRequest, error)
 	CreateNotificationWithResult(context.Context, entity.Notification, entity.CommandResult, entity.OutboxEvent) error
 	GetNotification(context.Context, uuid.UUID) (entity.Notification, error)

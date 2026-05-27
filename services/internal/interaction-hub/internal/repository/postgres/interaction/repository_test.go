@@ -479,6 +479,31 @@ func TestRepositoryIntegrationDeliveryAttemptLifecycle(t *testing.T) {
 	if latestCallback.ID != callback.ID {
 		t.Fatalf("latest callback = %+v, want %s", latestCallback, callback.ID)
 	}
+	inboxItems, _, err := repository.ListOwnerInboxItems(ctx, query.OwnerInboxFilter{
+		Scope:          request.Scope,
+		Statuses:       []enum.InteractionRequestStatus{enum.InteractionRequestStatusAnswered},
+		AssigneeRef:    value.ActorRef{Kind: "user", Ref: "approver-1"},
+		ActorRef:       callback.ActorRef,
+		CorrelationRef: value.ExternalRef{Kind: "agent_run", Ref: "run:123"},
+		CorrelationID:  callback.CorrelationID,
+		Page:           value.PageRequest{PageSize: 10},
+	})
+	if err != nil {
+		t.Fatalf("list owner inbox items: %v", err)
+	}
+	if len(inboxItems) != 1 {
+		t.Fatalf("owner inbox items = %+v, want one item", inboxItems)
+	}
+	inboxItem := inboxItems[0]
+	if inboxItem.Request.ID != request.ID || inboxItem.DeliverySummary.AttemptCount != 1 || inboxItem.DeliverySummary.LatestDeliveryID != storedAccepted.DeliveryID {
+		t.Fatalf("owner inbox item = %+v, want request and delivery summary", inboxItem)
+	}
+	if inboxItem.LatestCallback == nil || inboxItem.LatestCallback.ID != callback.ID || inboxItem.LatestResponse == nil || inboxItem.LatestResponse.ID != callbackResponse.ID {
+		t.Fatalf("owner inbox callback=%+v response=%+v, want latest safe refs", inboxItem.LatestCallback, inboxItem.LatestResponse)
+	}
+	if inboxItem.LatestResponse.ResponseSummary != "" || inboxItem.LatestCallback.CallbackSummary != "" {
+		t.Fatalf("owner inbox leaked summary fields: callback=%q response=%q", inboxItem.LatestCallback.CallbackSummary, inboxItem.LatestResponse.ResponseSummary)
+	}
 }
 
 func testThread(now time.Time) entity.ConversationThread {

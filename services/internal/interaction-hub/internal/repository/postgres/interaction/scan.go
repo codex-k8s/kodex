@@ -149,6 +149,141 @@ func scanRequest(row postgreslib.RowScanner) (entity.InteractionRequest, error) 
 	return request, nil
 }
 
+func scanOwnerInboxItem(row postgreslib.RowScanner) (entity.OwnerInboxItem, error) {
+	var item entity.OwnerInboxItem
+	var requestKind, scopeType, sourceOwnerKind, ingressKind, decisionOwnerKind, riskClass, status string
+	var threadID, latestAttemptID, latestRouteID pgtype.UUID
+	var promptObjectSize pgtype.Int8
+	var targetRefs, contextRefs, allowedActions []byte
+	var deadlineAt, resolvedAt, latestNextRetryAt, latestUpdatedAt pgtype.Timestamptz
+	var latestDeliveryStatus, latestDeliveryErrorClass string
+	var responseID, callbackID pgtype.UUID
+	var responseAction, responseActor, responseSourceKind, responseSourceRef, responseOwnerDecisionRef pgtype.Text
+	var responseCreatedAt pgtype.Timestamptz
+	var callbackCallbackID, callbackDeliveryID, callbackActorRef, callbackAction pgtype.Text
+	var callbackSignatureStatus, callbackProcessingStatus, callbackErrorCode pgtype.Text
+	var callbackReceivedAt pgtype.Timestamptz
+	var callbackGatewayRef, callbackCorrelationID pgtype.Text
+	err := row.Scan(
+		&item.Request.ID,
+		&requestKind,
+		&scopeType,
+		&item.Request.Scope.Ref,
+		&threadID,
+		&sourceOwnerKind,
+		&item.Request.SourceOwner.Ref,
+		&ingressKind,
+		&item.Request.Ingress.Ref,
+		&decisionOwnerKind,
+		&item.Request.DecisionOwner.OwnerRequestRef,
+		&item.Request.DecisionOwner.OwnerDecisionRef,
+		&targetRefs,
+		&contextRefs,
+		&item.Request.PromptSummary,
+		&item.Request.PromptObject.URI,
+		&item.Request.PromptObject.Digest,
+		&promptObjectSize,
+		&allowedActions,
+		&riskClass,
+		&status,
+		&deadlineAt,
+		&item.Request.ReminderPolicyRef,
+		&item.Request.Version,
+		&item.Request.CreatedAt,
+		&item.Request.UpdatedAt,
+		&resolvedAt,
+		&item.DeliverySummary.AttemptCount,
+		&latestAttemptID,
+		&item.DeliverySummary.LatestDeliveryID,
+		&latestDeliveryStatus,
+		&item.DeliverySummary.LatestErrorCode,
+		&latestDeliveryErrorClass,
+		&latestNextRetryAt,
+		&latestUpdatedAt,
+		&latestRouteID,
+		&item.DeliverySummary.ChannelMessageRef,
+		&responseID,
+		&responseAction,
+		&responseActor,
+		&responseSourceKind,
+		&responseSourceRef,
+		&responseOwnerDecisionRef,
+		&responseCreatedAt,
+		&callbackID,
+		&callbackCallbackID,
+		&callbackDeliveryID,
+		&callbackActorRef,
+		&callbackAction,
+		&callbackSignatureStatus,
+		&callbackProcessingStatus,
+		&callbackErrorCode,
+		&callbackReceivedAt,
+		&callbackGatewayRef,
+		&callbackCorrelationID,
+	)
+	item.Request.RequestKind = enum.InteractionRequestKind(requestKind)
+	item.Request.Scope.Type = enum.ScopeType(scopeType)
+	item.Request.ThreadID = postgreslib.UUIDPtrFromPG(threadID)
+	item.Request.SourceOwner.Kind = enum.SourceOwnerKind(sourceOwnerKind)
+	item.Request.Ingress.Kind = enum.IngressKind(ingressKind)
+	item.Request.DecisionOwner.Kind = enum.DecisionOwnerKind(decisionOwnerKind)
+	if promptObjectSize.Valid {
+		value := promptObjectSize.Int64
+		item.Request.PromptObject.SizeBytes = &value
+	}
+	item.Request.RiskClass = enum.InteractionRiskClass(riskClass)
+	item.Request.Status = enum.InteractionRequestStatus(status)
+	item.Request.DeadlineAt = postgreslib.TimePtrFromPG(deadlineAt)
+	item.Request.ResolvedAt = postgreslib.TimePtrFromPG(resolvedAt)
+	item.DeliverySummary.LatestAttemptID = postgreslib.UUIDPtrFromPG(latestAttemptID)
+	item.DeliverySummary.LatestStatus = enum.DeliveryAttemptStatus(latestDeliveryStatus)
+	item.DeliverySummary.LatestErrorClass = enum.DeliveryErrorClass(latestDeliveryErrorClass)
+	item.DeliverySummary.NextRetryAt = postgreslib.TimePtrFromPG(latestNextRetryAt)
+	item.DeliverySummary.LatestUpdatedAt = postgreslib.TimePtrFromPG(latestUpdatedAt)
+	item.DeliverySummary.RouteID = postgreslib.UUIDPtrFromPG(latestRouteID)
+	if err != nil {
+		return item, err
+	}
+	if item.Request.TargetRefs, err = unmarshalArray[value.ActorRef](targetRefs); err != nil {
+		return item, err
+	}
+	if item.Request.ContextRefs, err = unmarshalArray[value.ExternalRef](contextRefs); err != nil {
+		return item, err
+	}
+	if item.Request.AllowedActions, err = unmarshalArray[value.InteractionAction](allowedActions); err != nil {
+		return item, err
+	}
+	if responseID.Valid {
+		item.LatestResponse = &entity.InteractionResponse{
+			ID:                  uuid.UUID(responseID.Bytes),
+			RequestID:           item.Request.ID,
+			ResponseAction:      enum.InteractionResponseAction(textFromPG(responseAction)),
+			RespondedByActorRef: textFromPG(responseActor),
+			SourceKind:          enum.InteractionResponseSourceKind(textFromPG(responseSourceKind)),
+			SourceRef:           textFromPG(responseSourceRef),
+			OwnerDecisionRef:    textFromPG(responseOwnerDecisionRef),
+			CreatedAt:           *postgreslib.TimePtrFromPG(responseCreatedAt),
+		}
+	}
+	if callbackID.Valid {
+		item.LatestCallback = &entity.ChannelCallback{
+			ID:               uuid.UUID(callbackID.Bytes),
+			CallbackID:       textFromPG(callbackCallbackID),
+			DeliveryID:       textFromPG(callbackDeliveryID),
+			RequestID:        &item.Request.ID,
+			ActorRef:         textFromPG(callbackActorRef),
+			Action:           textFromPG(callbackAction),
+			SignatureStatus:  enum.CallbackSignatureStatus(textFromPG(callbackSignatureStatus)),
+			ProcessingStatus: enum.CallbackProcessingStatus(textFromPG(callbackProcessingStatus)),
+			ErrorCode:        textFromPG(callbackErrorCode),
+			ReceivedAt:       *postgreslib.TimePtrFromPG(callbackReceivedAt),
+			GatewayRef:       textFromPG(callbackGatewayRef),
+			CorrelationID:    textFromPG(callbackCorrelationID),
+		}
+	}
+	return item, nil
+}
+
 func scanResponse(row postgreslib.RowScanner) (entity.InteractionResponse, error) {
 	var response entity.InteractionResponse
 	var responseAction, sourceKind string
@@ -388,6 +523,13 @@ func uuidFromPG(input pgtype.UUID) *uuid.UUID {
 	}
 	value := uuid.UUID(input.Bytes)
 	return &value
+}
+
+func textFromPG(input pgtype.Text) string {
+	if !input.Valid {
+		return ""
+	}
+	return input.String
 }
 
 func scanCommandResult(row postgreslib.RowScanner) (entity.CommandResult, error) {

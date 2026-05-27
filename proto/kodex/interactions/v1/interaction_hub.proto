@@ -35,6 +35,8 @@ service InteractionHubService {
   rpc GetInteractionRequest(GetInteractionRequestRequest) returns (InteractionRequestResponse);
   // ListInteractionRequests returns requests by scope, kind, source owner and status.
   rpc ListInteractionRequests(ListInteractionRequestsRequest) returns (ListInteractionRequestsResponse);
+  // ListOwnerInboxItems returns a safe domain read surface for pending owner decisions and callback diagnostics.
+  rpc ListOwnerInboxItems(ListOwnerInboxItemsRequest) returns (ListOwnerInboxItemsResponse);
 
   // RequestNotification creates a one-way notification or reminder intent.
   rpc RequestNotification(RequestNotificationRequest) returns (NotificationResponse);
@@ -722,6 +724,21 @@ message ListInteractionRequestsRequest {
   PageRequest page = 8;
 }
 
+message ListOwnerInboxItemsRequest {
+  QueryMeta meta = 1;
+  ScopeRef scope = 2;
+  repeated InteractionRequestKind request_kinds = 3;
+  repeated InteractionRequestStatus statuses = 4;
+  optional SourceOwnerKind source_owner_kind = 5;
+  optional string source_owner_ref = 6;
+  ActorRef assignee_ref = 7;
+  optional string actor_ref = 8;
+  ExternalRef correlation_ref = 9;
+  optional string correlation_id = 10;
+  bool include_diagnostics = 11;
+  PageRequest page = 12;
+}
+
 message RequestNotificationRequest {
   CommandMeta meta = 1;
   ScopeRef scope = 2;
@@ -820,6 +837,70 @@ message ExpireInteractionRequestsResponse {
 
 message ListInteractionRequestsResponse {
   repeated InteractionRequest requests = 1;
+  PageResponse page = 2;
+}
+
+message OwnerInboxItem {
+  string request_id = 1;
+  InteractionRequestKind request_kind = 2;
+  InteractionRequestStatus request_status = 3;
+  ScopeRef scope = 4;
+  SourceOwnerRef requester = 5;
+  optional DecisionOwnerRef decision_owner = 6;
+  repeated ActorRef assignee_refs = 7;
+  repeated ExternalRef context_refs = 8;
+  string title = 9;
+  string summary = 10;
+  optional string deadline_at = 11;
+  optional string reminder_policy_ref = 12;
+  OwnerInboxDeliverySummary delivery_summary = 13;
+  optional OwnerInboxCallbackSummary latest_callback = 14;
+  optional OwnerInboxResponseSummary latest_response = 15;
+  string created_at = 16;
+  string updated_at = 17;
+  optional string resolved_at = 18;
+  int64 version = 19;
+}
+
+message OwnerInboxDeliverySummary {
+  int32 attempt_count = 1;
+  optional string latest_delivery_attempt_id = 2;
+  optional string latest_delivery_id = 3;
+  DeliveryAttemptStatus latest_status = 4;
+  optional string latest_error_code = 5;
+  DeliveryErrorClass latest_error_class = 6;
+  optional string next_retry_at = 7;
+  optional string latest_updated_at = 8;
+  optional string route_id = 9;
+  optional string channel_message_ref = 10;
+}
+
+message OwnerInboxCallbackSummary {
+  string callback_ref = 1;
+  string callback_id = 2;
+  optional string delivery_id = 3;
+  CallbackSignatureStatus signature_status = 4;
+  CallbackProcessingStatus processing_status = 5;
+  optional string actor_ref = 6;
+  optional string action = 7;
+  optional string error_code = 8;
+  string received_at = 9;
+  optional string gateway_ref = 10;
+  optional string correlation_id = 11;
+}
+
+message OwnerInboxResponseSummary {
+  string response_id = 1;
+  InteractionResponseAction response_action = 2;
+  string responded_by_actor_ref = 3;
+  InteractionResponseSourceKind source_kind = 4;
+  optional string source_ref = 5;
+  optional string owner_decision_ref = 6;
+  string created_at = 7;
+}
+
+message ListOwnerInboxItemsResponse {
+  repeated OwnerInboxItem items = 1;
   PageResponse page = 2;
 }
 

@@ -26,6 +26,7 @@ type interactionService interface {
 	ExpireInteractionRequests(context.Context, interactionservice.ExpireInteractionRequestsInput) (interactionservice.ExpireInteractionRequestsResult, error)
 	GetInteractionRequest(context.Context, interactionservice.GetInteractionRequestInput) (entity.InteractionRequest, error)
 	ListInteractionRequests(context.Context, interactionservice.ListInteractionRequestsInput) ([]entity.InteractionRequest, value.PageResult, error)
+	ListOwnerInboxItems(context.Context, interactionservice.ListOwnerInboxItemsInput) ([]entity.OwnerInboxItem, value.PageResult, error)
 	RequestNotification(context.Context, interactionservice.RequestNotificationInput) (entity.Notification, error)
 	UpsertSubscription(context.Context, interactionservice.UpsertSubscriptionInput) (entity.Subscription, error)
 	DisableSubscription(context.Context, interactionservice.DisableSubscriptionInput) (entity.Subscription, error)
@@ -125,6 +126,18 @@ func (s *Server) ListInteractionRequests(ctx context.Context, request *interacti
 		return nil, err
 	}
 	return casters.ListInteractionRequestsResponse(requests, page), nil
+}
+
+func (s *Server) ListOwnerInboxItems(ctx context.Context, request *interactionsv1.ListOwnerInboxItemsRequest) (*interactionsv1.ListOwnerInboxItemsResponse, error) {
+	input, err := casters.ListOwnerInboxItemsInput(request)
+	if err != nil {
+		return nil, err
+	}
+	items, page, err := s.service.ListOwnerInboxItems(ctx, input)
+	if err != nil {
+		return nil, err
+	}
+	return casters.ListOwnerInboxItemsResponse(items, page), nil
 }
 
 func (s *Server) RequestNotification(ctx context.Context, request *interactionsv1.RequestNotificationRequest) (*interactionsv1.NotificationResponse, error) {

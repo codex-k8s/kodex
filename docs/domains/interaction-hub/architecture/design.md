@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-22
 updated_at: 2026-05-27
-related_issues: [582, 768, 781, 800, 821, 835, 843, 853]
+related_issues: [582, 768, 781, 800, 821, 835, 843, 853, 867]
 related_prs: []
 related_adrs: []
 approvals:
@@ -73,10 +73,11 @@ approvals:
 | Delivery planner | Выбор допустимого delivery route по scope, policy, подпискам и channel capability. |
 | Channel contract boundary | Стабильный контракт доставки в установленный channel package и обратного callback. |
 | Callback resolver | Идемпотентная привязка callback к delivery attempt/request и безопасное применение terminal callback к request response lifecycle. |
+| Owner inbox reader | Авторитетное чтение pending/active request и callback diagnostics по собственным сущностям `interaction-hub`. |
 | Subscription engine | Правила подписки на события и области, создание notification intent и reminders. |
 | Outbox-доставщик | Публикация `interaction.*` событий через `platform-event-log`. |
 
-Текущая сервисная основа реализует authoritative lifecycle `Notification`, `Subscription`, delivery attempts и safe callback records: создание notification intent, создание/изменение/отключение/чтение подписок, `PlanDelivery`, `RecordDeliveryResult`, `RecordChannelCallback`, `GetDeliveryStatus`, command idempotency, optimistic concurrency для subscription и safe `interaction.*` outbox events. Внешний `integration-gateway` callback route передаёт generic safe envelope в `RecordChannelCallback`; `RecordChannelCallback` применяет допустимый terminal callback к feedback/approval/Human gate request как `InteractionResponse`, но не фиксирует owner business decision. Конкретные channel packages и runtime worker остаются отдельным контуром.
+Текущая сервисная основа реализует authoritative lifecycle `Notification`, `Subscription`, delivery attempts и safe callback records: создание notification intent, создание/изменение/отключение/чтение подписок, `PlanDelivery`, `RecordDeliveryResult`, `RecordChannelCallback`, `GetDeliveryStatus`, `ListOwnerInboxItems`, command idempotency, optimistic concurrency для subscription и safe `interaction.*` outbox events. Внешний `integration-gateway` callback route передаёт generic safe envelope в `RecordChannelCallback`; `RecordChannelCallback` применяет допустимый terminal callback к feedback/approval/Human gate request как `InteractionResponse`, но не фиксирует owner business decision. Owner inbox read surface отдаёт только собственные request/delivery/callback/response summaries `interaction-hub`; cross-domain aggregation остаётся у `staff-gateway`/`operations-hub`. Конкретные channel packages и runtime worker остаются отдельным контуром.
 
 ## Основные потоки
 
@@ -168,6 +169,23 @@ sequenceDiagram
 
 Публичная проверка подписи и rate limit живут в `integration-gateway`. `interaction-hub` принимает только безопасный внутренний envelope, сопоставляет его с delivery/request, сохраняет callback record и создаёт `InteractionResponse`, если request активен и action является разрешённым terminal action. Для terminal request повторный или поздний callback сохраняется как diagnostic no-op без повторного response.
 
+### Входящие решения владельца
+
+```mermaid
+sequenceDiagram
+  participant UI as future staff UI
+  participant SG as staff-gateway
+  participant IH as interaction-hub
+  participant Ops as operations-hub
+  UI->>SG: list pending decisions
+  SG->>IH: ListOwnerInboxItems(scope/filter/page)
+  IH->>IH: read requests + delivery/callback/response summaries
+  IH-->>SG: safe owner inbox items
+  Ops-->>SG: later cross-domain projections
+```
+
+`ListOwnerInboxItems` — доменное авторитетное чтение только по interaction-сущностям. Оно возвращает pending/active feedback, approval, Human gate request и callback diagnostics с фильтрами по scope, kind/status, assignee, actor и correlation refs. `staff-gateway` и `operations-hub` позже объединяют этот результат с provider/agent/runtime контекстом, но не переносят decision state в `interaction-hub`.
+
 ## Channel delivery contract
 
 Контракт канала описывает смысл данных, которые передаются установленному channel package. Транспорт и конкретный gateway не фиксируются этим документом.
@@ -233,7 +251,7 @@ sequenceDiagram
 | `package-hub` | Даёт сведения об установленном channel package, manifest capability и required platform APIs; установка и секреты пакета остаются там. |
 | `runtime-manager` и `fleet-manager` | Исполняют runtime-нагрузку channel package; `interaction-hub` не создаёт jobs сам. |
 | `access-manager` | Проверяет права создания запроса, отправки ответа, чтения статуса и использования channel package. |
-| `operations-hub` | Получает события и читает авторитетные статусы для операторской очереди и dual-surface inbox. |
+| `operations-hub` | Получает события и читает авторитетные статусы для операторской очереди и dual-surface inbox; cross-domain aggregation остаётся у него, а `interaction-hub` отдаёт только собственные inbox items. |
 | `integration-gateway` | Выполняет внешнюю аутентификацию, public rate limit, signature verification и маршрутизацию callback. |
 
 ## События

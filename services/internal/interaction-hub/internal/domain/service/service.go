@@ -35,6 +35,7 @@ const (
 	defaultExpireLimit         = int32(100)
 	maxExpireLimit             = int32(500)
 	maxDeliveryStatusAttempts  = int32(100)
+	maxOwnerInboxTitleRunes    = 120
 	aggregateResponse          = "response"
 
 	callbackErrorRejected          = "CALLBACK_REJECTED"
@@ -426,6 +427,37 @@ func (s *Service) ListInteractionRequests(ctx context.Context, input ListInterac
 		DeadlineBefore:  input.DeadlineBefore,
 		Page:            input.Page,
 	})
+}
+
+func (s *Service) ListOwnerInboxItems(ctx context.Context, input ListOwnerInboxItemsInput) ([]entity.OwnerInboxItem, value.PageResult, error) {
+	if err := s.ensureReady(); err != nil {
+		return nil, value.PageResult{}, err
+	}
+	input, err := normalizeListOwnerInboxItemsInput(input)
+	if err != nil {
+		return nil, value.PageResult{}, err
+	}
+	items, page, err := s.repository.ListOwnerInboxItems(ctx, query.OwnerInboxFilter{
+		Scope:              input.Scope,
+		RequestKinds:       input.RequestKinds,
+		Statuses:           input.Statuses,
+		SourceOwnerKind:    input.SourceOwnerKind,
+		SourceOwnerRef:     input.SourceOwnerRef,
+		AssigneeRef:        input.AssigneeRef,
+		ActorRef:           input.ActorRef,
+		CorrelationRef:     input.CorrelationRef,
+		CorrelationID:      input.CorrelationID,
+		IncludeDiagnostics: input.IncludeDiagnostics,
+		Page:               input.Page,
+	})
+	if err != nil {
+		return nil, value.PageResult{}, err
+	}
+	for i := range items {
+		items[i].Summary = items[i].Request.PromptSummary
+		items[i].Title = ownerInboxTitle(items[i].Request.PromptSummary)
+	}
+	return items, page, nil
 }
 
 func (s *Service) RequestNotification(ctx context.Context, input RequestNotificationInput) (entity.Notification, error) {
@@ -1173,6 +1205,68 @@ func normalizeExpireInteractionRequestsInput(input ExpireInteractionRequestsInpu
 		return ExpireInteractionRequestsInput{}, errs.ErrInvalidArgument
 	}
 	return input, nil
+}
+
+func normalizeListOwnerInboxItemsInput(input ListOwnerInboxItemsInput) (ListOwnerInboxItemsInput, error) {
+	if err := validateScope(input.Scope); err != nil {
+		return ListOwnerInboxItemsInput{}, err
+	}
+	for _, kind := range input.RequestKinds {
+		if !kind.Valid() {
+			return ListOwnerInboxItemsInput{}, errs.ErrInvalidArgument
+		}
+	}
+	if len(input.Statuses) == 0 {
+		input.Statuses = activeOwnerInboxStatuses()
+	}
+	for _, status := range input.Statuses {
+		if !status.Valid() {
+			return ListOwnerInboxItemsInput{}, errs.ErrInvalidArgument
+		}
+	}
+	if input.SourceOwnerKind != "" && !input.SourceOwnerKind.Valid() {
+		return ListOwnerInboxItemsInput{}, errs.ErrInvalidArgument
+	}
+	input.SourceOwnerRef = strings.TrimSpace(input.SourceOwnerRef)
+	input.ActorRef = strings.TrimSpace(input.ActorRef)
+	input.CorrelationID = strings.TrimSpace(input.CorrelationID)
+	if len(input.SourceOwnerRef) > maxInteractionRefBytes ||
+		len(input.ActorRef) > maxInteractionRefBytes ||
+		len(input.CorrelationID) > maxInteractionRefBytes {
+		return ListOwnerInboxItemsInput{}, errs.ErrInvalidArgument
+	}
+	if input.AssigneeRef.Kind != "" || input.AssigneeRef.Ref != "" {
+		assignee, err := normalizeActorRef(input.AssigneeRef)
+		if err != nil {
+			return ListOwnerInboxItemsInput{}, err
+		}
+		input.AssigneeRef = assignee
+	}
+	if input.CorrelationRef.Kind != "" || input.CorrelationRef.Ref != "" {
+		ref := value.ExternalRef{Kind: strings.TrimSpace(input.CorrelationRef.Kind), Ref: strings.TrimSpace(input.CorrelationRef.Ref)}
+		if blank(ref.Kind) || blank(ref.Ref) || len(ref.Kind) > maxInteractionRefBytes || len(ref.Ref) > maxInteractionRefBytes {
+			return ListOwnerInboxItemsInput{}, errs.ErrInvalidArgument
+		}
+		input.CorrelationRef = ref
+	}
+	return input, nil
+}
+
+func activeOwnerInboxStatuses() []enum.InteractionRequestStatus {
+	return []enum.InteractionRequestStatus{
+		enum.InteractionRequestStatusCreated,
+		enum.InteractionRequestStatusRouted,
+		enum.InteractionRequestStatusWaiting,
+	}
+}
+
+func ownerInboxTitle(summary string) string {
+	title := strings.Join(strings.Fields(summary), " ")
+	if utf8.RuneCountInString(title) <= maxOwnerInboxTitleRunes {
+		return title
+	}
+	runes := []rune(title)
+	return string(runes[:maxOwnerInboxTitleRunes])
 }
 
 func normalizeRequestNotificationInput(input RequestNotificationInput, now time.Time) (RequestNotificationInput, error) {

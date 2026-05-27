@@ -24,6 +24,20 @@ type InteractionRequestFilter struct {
 	Page            value.PageRequest
 }
 
+type OwnerInboxFilter struct {
+	Scope              value.ScopeRef
+	RequestKinds       []enum.InteractionRequestKind
+	Statuses           []enum.InteractionRequestStatus
+	SourceOwnerKind    enum.SourceOwnerKind
+	SourceOwnerRef     string
+	AssigneeRef        value.ActorRef
+	ActorRef           string
+	CorrelationRef     value.ExternalRef
+	CorrelationID      string
+	IncludeDiagnostics bool
+	Page               value.PageRequest
+}
+
 type SubscriptionFilter struct {
 	Scope         value.ScopeRef
 	SubscriberRef string

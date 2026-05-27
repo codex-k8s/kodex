@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-04-26
 updated_at: 2026-05-27
-related_issues: [599, 600, 601, 602, 655, 711, 725, 747, 753, 778, 781, 786, 852, 322, 782, 834]
+related_issues: [599, 600, 601, 602, 655, 711, 725, 747, 753, 778, 781, 786, 852, 322, 782, 834, 867]
 related_prs: []
 related_adrs: []
 approvals:
@@ -75,8 +75,8 @@ Gateway-сервисы, `web-console`, `platform-mcp-server` и `codex-hook-ingr
 | `runtime-manager` | Жизненный цикл слота, подготовка workspace, платформенные задания, сборка, выкладка, зеркалирование, prewarm/reuse, очистка, статус среды исполнения, срок хранения. | Продуктовый смысл задач, агентные запуски, risk/gate/release decisions, артефакты провайдера, серверы и Kubernetes-кластеры как реестр fleet. |
 | `governance-manager` | Риск-профили, правила риска, оценка риска, review signals, gate policy, gate requests, gate decisions, release decision package, release decisions, blocking signals, release safety-loop state. | Проектная политика, flow/run/acceptance как процесс, provider-native артефакты, runtime job execution, доставка уведомлений, callback transport, UI/gateway. |
 | `billing-hub` | Биллинговые аккаунты, записи затрат, распределение, основа счёта, экономика пакетов. | Истина среды исполнения, истина провайдера, граф доступа. |
-| `interaction-hub` | Диалоги, доставка запросов согласования, уведомления, подписки, внешние обратные вызовы, попытки доставки. | Бизнес-логика процессов, risk/gate/release decisions, канонические статусы агентных запусков и заданий, состояние проекта. |
-| `operations-hub` | Модели чтения, ленты событий, операторские очереди, агрегированные статусы. | Первичная истина пользователя, проекта, провайдера, агентного запуска или задания. |
+| `interaction-hub` | Диалоги, доставка запросов согласования, уведомления, подписки, внешние обратные вызовы, попытки доставки, авторитетное чтение owner inbox по собственным interaction-сущностям. | Бизнес-логика процессов, risk/gate/release decisions, канонические статусы агентных запусков и заданий, состояние проекта, cross-domain operations inbox. |
+| `operations-hub` | Модели чтения, ленты событий, операторские очереди, агрегированные статусы и cross-domain inbox. | Первичная истина пользователя, проекта, провайдера, агентного запуска, задания или interaction lifecycle. |
 
 ## Общие библиотеки на границе сервисов
 

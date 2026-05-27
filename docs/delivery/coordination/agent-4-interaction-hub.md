@@ -14,6 +14,7 @@
 - подписки;
 - попытки доставки и retry/reminder metadata;
 - callback внешних каналов;
+- owner inbox read surface по собственным feedback, approval, Human gate и callback diagnostics;
 - стабильный channel delivery/callback contract поверх package-owned runtime;
 - доменная документация `docs/domains/interaction-hub/**`.
 
@@ -32,12 +33,13 @@
 | IH-5b | #835 | готово как delivery attempt lifecycle | `PlanDelivery`, `RecordDeliveryResult`, `GetDeliveryStatus`, delivery attempt state machine, safe retry metadata и outbox events работают без channel adapters, callback routes и package runtime. |
 | IH-6 | #843 | готово как channel contract integration | Delivery route/capability refs, safe delivery command refs, runtime/job refs и `RecordChannelCallback` работают без hardcoded каналов, внешнего callback route и запуска package runtime. |
 | IH-6b | #855 | готово как callback request resolution | `RecordChannelCallback` идемпотентно связывает safe callback с delivery/request, создаёт `InteractionResponse` для terminal action и сохраняет diagnostic no-op для terminal/invalid callback без владения owner decision state. |
+| IH-7 | #867 | готово как owner inbox read surface | `ListOwnerInboxItems` отдаёт pending/active feedback, approval, Human gate и callback diagnostics с safe refs/status/summary, фильтрами по scope/kind/status/assignee/actor/correlation refs и пагинацией; `staff-gateway`/`operations-hub` не входят. |
 
 ## Текущий бэклог
 
 | Срез | Статус | Почему не завершён |
 |---|---|---|
-| IH-7+ | ожидает отдельные срезы | MCP, внешний `integration-gateway` callback route, concrete channel packages, runtime worker и ops-связки должны поставляться малыми PR. |
+| IH-8+ | ожидает отдельные срезы | MCP, concrete channel packages, runtime worker, gateway/UI/ops-связки и cross-domain inbox aggregation должны поставляться малыми PR. |
 
 ## Блокировки от других доменов
 
@@ -50,8 +52,8 @@
 | `package-hub` | Channel package capability, installation refs и manifest requirements. | Использовать чтения `package-hub`; не управлять установками пакетов. |
 | `runtime-manager` и `fleet-manager` | Runtime-нагрузки channel package. | Runtime/fleet исполняют package-owned workloads; `interaction-hub` работает через channel contract. |
 | `integration-gateway` | Публичный callback transport, подписи и OpenAPI. | HTTP route, signature edge и rate limit принадлежат gateway; callback lifecycle и request resolution принадлежат `interaction-hub`. |
-| `operations-hub` | Dual-surface inbox, operator queue и агрегированные статусы. | `operations-hub` строит read models по событиям и чтениям `interaction-hub`. |
+| `operations-hub` | Dual-surface inbox, operator queue и агрегированные статусы. | `interaction-hub` отдаёт свои owner inbox items; `operations-hub` строит cross-domain read models по событиям и чтениям владельцев. |
 
 ## Рекомендуемый следующий шаг
 
-Следующий рациональный срез — IH-7 или отдельный gateway/runtime срез: MCP-связка, внешний `integration-gateway` callback route, конкретные channel packages и runtime worker остаются вне `interaction-hub`.
+Следующий рациональный срез — IH-8 или отдельный gateway/runtime срез: MCP-связка, staff-gateway/UI surface, cross-domain operations inbox, конкретные channel packages и runtime worker остаются вне `interaction-hub`.

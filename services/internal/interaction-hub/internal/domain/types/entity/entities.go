@@ -179,6 +179,28 @@ type ChannelCallback struct {
 	CallbackFingerprint string
 }
 
+type OwnerInboxItem struct {
+	Request         InteractionRequest
+	Title           string
+	Summary         string
+	DeliverySummary OwnerInboxDeliverySummary
+	LatestCallback  *ChannelCallback
+	LatestResponse  *InteractionResponse
+}
+
+type OwnerInboxDeliverySummary struct {
+	AttemptCount      int32
+	LatestAttemptID   *uuid.UUID
+	LatestDeliveryID  string
+	LatestStatus      enum.DeliveryAttemptStatus
+	LatestErrorCode   string
+	LatestErrorClass  enum.DeliveryErrorClass
+	NextRetryAt       *time.Time
+	LatestUpdatedAt   *time.Time
+	RouteID           *uuid.UUID
+	ChannelMessageRef string
+}
+
 type CommandResult struct {
 	Key                string
 	CommandID          uuid.UUID
