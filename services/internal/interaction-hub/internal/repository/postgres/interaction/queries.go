@@ -33,6 +33,7 @@ var (
 	queryRequestUpdateStatus       = mustLoadQuery("request__update_status")
 	queryResponseCreate            = mustLoadQuery("response__create")
 	queryResponseGet               = mustLoadQuery("response__get")
+	queryResponseGetBySource       = mustLoadQuery("response__get_by_source")
 	querySubscriptionCreate        = mustLoadQuery("subscription__create")
 	querySubscriptionGet           = mustLoadQuery("subscription__get")
 	querySubscriptionList          = mustLoadQuery("subscription__list")

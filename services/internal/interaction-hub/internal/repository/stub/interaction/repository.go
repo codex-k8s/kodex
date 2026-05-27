@@ -70,11 +70,19 @@ func (r *Repository) CreateInteractionResponseWithResult(context.Context, entity
 	return errs.ErrNotImplemented
 }
 
+func (r *Repository) CreateChannelCallbackResponseWithResult(context.Context, entity.ChannelCallback, entity.InteractionResponse, entity.InteractionRequest, int64, entity.CommandResult, []entity.OutboxEvent) error {
+	return errs.ErrNotImplemented
+}
+
 func (r *Repository) GetInteractionRequest(context.Context, uuid.UUID) (entity.InteractionRequest, error) {
 	return entity.InteractionRequest{}, errs.ErrNotFound
 }
 
 func (r *Repository) GetInteractionResponse(context.Context, uuid.UUID) (entity.InteractionResponse, error) {
+	return entity.InteractionResponse{}, errs.ErrNotFound
+}
+
+func (r *Repository) GetInteractionResponseBySource(context.Context, enum.InteractionResponseSourceKind, string) (entity.InteractionResponse, error) {
 	return entity.InteractionResponse{}, errs.ErrNotFound
 }
 

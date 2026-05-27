@@ -996,8 +996,23 @@ func TestServiceRecordsChannelCallbackWithSafeOutboxAndReplay(t *testing.T) {
 	if callback.CallbackRouteRef != "callback-route:interaction-channel" || callback.ProcessingStatus != enum.CallbackProcessingStatusAccepted {
 		t.Fatalf("callback = %+v, want accepted callback with route ref", callback)
 	}
-	if len(repository.events) != 2 {
-		t.Fatalf("events=%d, want requested and callback", len(repository.events))
+	if result.Response == nil {
+		t.Fatal("response is nil, want callback to resolve request")
+	}
+	if result.Response.RequestID != requestID ||
+		result.Response.ResponseAction != enum.InteractionResponseActionApprove ||
+		result.Response.SourceKind != enum.InteractionResponseSourceKindChannelCallback ||
+		result.Response.SourceRef != callback.ID.String() {
+		t.Fatalf("response = %+v, want channel callback response", result.Response)
+	}
+	if storedRequest := repository.requests[requestID]; storedRequest.Status != enum.InteractionRequestStatusAnswered || storedRequest.Version != 2 || storedRequest.ResolvedAt == nil {
+		t.Fatalf("request = %+v, want answered v2", storedRequest)
+	}
+	if len(repository.responses) != 1 {
+		t.Fatalf("responses=%d, want one response", len(repository.responses))
+	}
+	if len(repository.events) != 3 {
+		t.Fatalf("events=%d, want requested, callback and response", len(repository.events))
 	}
 	var payload map[string]any
 	if err := json.Unmarshal(repository.events[1].Payload, &payload); err != nil {
@@ -1009,13 +1024,23 @@ func TestServiceRecordsChannelCallbackWithSafeOutboxAndReplay(t *testing.T) {
 	if _, ok := payload["answer_summary"]; ok {
 		t.Fatalf("outbox payload contains answer_summary: %+v", payload)
 	}
+	var responsePayload map[string]any
+	if err := json.Unmarshal(repository.events[2].Payload, &responsePayload); err != nil {
+		t.Fatalf("unmarshal response event: %v", err)
+	}
+	if responsePayload["response_id"] != result.Response.ID.String() || responsePayload["status"] != string(enum.InteractionRequestStatusAnswered) {
+		t.Fatalf("response payload = %+v, want safe response refs", responsePayload)
+	}
+	if _, ok := responsePayload["response_summary"]; ok {
+		t.Fatalf("response payload contains response_summary: %+v", responsePayload)
+	}
 
 	replayed, err := svc.RecordChannelCallback(context.Background(), input)
 	if err != nil {
 		t.Fatalf("RecordChannelCallback() replay: %v", err)
 	}
-	if replayed.Callback.ID != callback.ID || len(repository.events) != 2 {
-		t.Fatalf("replay callback = %+v events=%d, want original callback and no extra event", replayed.Callback, len(repository.events))
+	if replayed.Callback.ID != callback.ID || replayed.Response == nil || replayed.Response.ID != result.Response.ID || len(repository.events) != 3 {
+		t.Fatalf("replay callback = %+v response=%+v events=%d, want original callback/response and no extra event", replayed.Callback, replayed.Response, len(repository.events))
 	}
 
 	retryWithNewReceivedAt := input
@@ -1025,8 +1050,8 @@ func TestServiceRecordsChannelCallbackWithSafeOutboxAndReplay(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RecordChannelCallback() callback_id replay with new received_at: %v", err)
 	}
-	if replayed.Callback.ID != callback.ID || !replayed.Callback.ReceivedAt.Equal(input.Callback.ReceivedAt) || len(repository.events) != 2 {
-		t.Fatalf("received_at replay callback = %+v events=%d, want original callback and no extra event", replayed.Callback, len(repository.events))
+	if replayed.Callback.ID != callback.ID || replayed.Response == nil || replayed.Response.ID != result.Response.ID || !replayed.Callback.ReceivedAt.Equal(input.Callback.ReceivedAt) || len(repository.events) != 3 {
+		t.Fatalf("received_at replay callback = %+v response=%+v events=%d, want original callback/response and no extra event", replayed.Callback, replayed.Response, len(repository.events))
 	}
 
 	changed := input
@@ -1046,6 +1071,35 @@ func TestServiceValidatesDeliveryIDOnlyChannelCallbackAgainstRequest(t *testing.
 	routeID := uuid.New()
 	seedInteractionRequest(repository, requestID, now, enum.InteractionRequestStatusWaiting)
 	seedDeliveryRoute(repository, routeID, now)
+	svc := NewWithConfig(repository, Config{Clock: fixedClock{now: now.Add(time.Minute)}, UUIDGenerator: &sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New()}}})
+	planned, err := svc.PlanDelivery(context.Background(), validPlanDeliveryInput(requestID, routeID))
+	if err != nil {
+		t.Fatalf("PlanDelivery(): %v", err)
+	}
+	input := validRecordChannelCallbackInput(planned.DeliveryID, requestID)
+	input.Callback.RequestRef = ""
+
+	result, err := svc.RecordChannelCallback(context.Background(), input)
+	if err != nil {
+		t.Fatalf("RecordChannelCallback() delivery-id only: %v", err)
+	}
+	if result.Response == nil || result.Response.RequestID != requestID {
+		t.Fatalf("result = %+v, want response resolved through delivery id", result)
+	}
+	if storedRequest := repository.requests[requestID]; storedRequest.Status != enum.InteractionRequestStatusAnswered {
+		t.Fatalf("request = %+v, want answered", storedRequest)
+	}
+}
+
+func TestServiceRejectsDeliveryIDOnlyChannelCallbackWithDiagnostic(t *testing.T) {
+	t.Parallel()
+
+	repository := newFakeRepository()
+	now := time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC)
+	requestID := uuid.New()
+	routeID := uuid.New()
+	seedInteractionRequest(repository, requestID, now, enum.InteractionRequestStatusWaiting)
+	seedDeliveryRoute(repository, routeID, now)
 	svc := NewWithConfig(repository, Config{Clock: fixedClock{now: now.Add(time.Minute)}, UUIDGenerator: &sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New(), uuid.New(), uuid.New()}}})
 	planned, err := svc.PlanDelivery(context.Background(), validPlanDeliveryInput(requestID, routeID))
 	if err != nil {
@@ -1055,11 +1109,47 @@ func TestServiceValidatesDeliveryIDOnlyChannelCallbackAgainstRequest(t *testing.
 	input.Callback.RequestRef = ""
 	input.Callback.Action = "unexpected_action"
 
-	if _, err := svc.RecordChannelCallback(context.Background(), input); !errors.Is(err, errs.ErrConflict) {
-		t.Fatalf("RecordChannelCallback() invalid action err = %v, want ErrConflict", err)
+	result, err := svc.RecordChannelCallback(context.Background(), input)
+	if err != nil {
+		t.Fatalf("RecordChannelCallback() invalid action: %v", err)
 	}
-	if len(repository.callbacks) != 0 || len(repository.events) != 1 {
-		t.Fatalf("callbacks=%d events=%d, want no callback write", len(repository.callbacks), len(repository.events))
+	if result.Response != nil || result.Callback.ProcessingStatus != enum.CallbackProcessingStatusRejected || result.Callback.ErrorCode != callbackErrorActionNotAllowed {
+		t.Fatalf("result = %+v, want rejected diagnostic callback without response", result)
+	}
+	if storedRequest := repository.requests[requestID]; storedRequest.Status != enum.InteractionRequestStatusWaiting || storedRequest.Version != 1 {
+		t.Fatalf("request = %+v, want unchanged waiting request", storedRequest)
+	}
+	if len(repository.callbacks) != 1 || len(repository.events) != 2 {
+		t.Fatalf("callbacks=%d events=%d, want diagnostic callback write", len(repository.callbacks), len(repository.events))
+	}
+}
+
+func TestServiceRecordsRejectedSignatureCallbackWithoutResponse(t *testing.T) {
+	t.Parallel()
+
+	repository := newFakeRepository()
+	now := time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC)
+	requestID := uuid.New()
+	routeID := uuid.New()
+	seedInteractionRequest(repository, requestID, now, enum.InteractionRequestStatusWaiting)
+	seedDeliveryRoute(repository, routeID, now)
+	svc := NewWithConfig(repository, Config{Clock: fixedClock{now: now.Add(time.Minute)}, UUIDGenerator: &sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New(), uuid.New(), uuid.New()}}})
+	planned, err := svc.PlanDelivery(context.Background(), validPlanDeliveryInput(requestID, routeID))
+	if err != nil {
+		t.Fatalf("PlanDelivery(): %v", err)
+	}
+	input := validRecordChannelCallbackInput(planned.DeliveryID, requestID)
+	input.Callback.SignatureStatus = enum.CallbackSignatureStatusRejectedBeforeDomain
+
+	result, err := svc.RecordChannelCallback(context.Background(), input)
+	if err != nil {
+		t.Fatalf("RecordChannelCallback() rejected signature: %v", err)
+	}
+	if result.Response != nil || result.Callback.ProcessingStatus != enum.CallbackProcessingStatusRejected || result.Callback.ErrorCode != callbackErrorRejected {
+		t.Fatalf("result = %+v, want rejected callback without response", result)
+	}
+	if storedRequest := repository.requests[requestID]; storedRequest.Status != enum.InteractionRequestStatusWaiting || storedRequest.Version != 1 {
+		t.Fatalf("request = %+v, want unchanged waiting request", storedRequest)
 	}
 }
 
@@ -1083,11 +1173,15 @@ func TestServiceRejectsDeliveryIDOnlyChannelCallbackForTerminalRequest(t *testin
 	input := validRecordChannelCallbackInput(planned.DeliveryID, requestID)
 	input.Callback.RequestRef = ""
 
-	if _, err := svc.RecordChannelCallback(context.Background(), input); !errors.Is(err, errs.ErrConflict) {
-		t.Fatalf("RecordChannelCallback() terminal request err = %v, want ErrConflict", err)
+	result, err := svc.RecordChannelCallback(context.Background(), input)
+	if err != nil {
+		t.Fatalf("RecordChannelCallback() terminal request: %v", err)
 	}
-	if len(repository.callbacks) != 0 || len(repository.events) != 1 {
-		t.Fatalf("callbacks=%d events=%d, want no callback write", len(repository.callbacks), len(repository.events))
+	if result.Response != nil || result.Callback.ProcessingStatus != enum.CallbackProcessingStatusRejected || result.Callback.ErrorCode != callbackErrorRequestResolved {
+		t.Fatalf("result = %+v, want request-resolved diagnostic callback", result)
+	}
+	if len(repository.callbacks) != 1 || len(repository.events) != 2 {
+		t.Fatalf("callbacks=%d events=%d, want diagnostic callback write", len(repository.callbacks), len(repository.events))
 	}
 }
 
@@ -1507,6 +1601,38 @@ func (r *fakeRepository) CreateInteractionResponseWithResult(_ context.Context, 
 	return nil
 }
 
+func (r *fakeRepository) CreateChannelCallbackResponseWithResult(_ context.Context, callback entity.ChannelCallback, response entity.InteractionResponse, request entity.InteractionRequest, previousRequestVersion int64, result entity.CommandResult, events []entity.OutboxEvent) error {
+	stored, ok := r.requests[request.ID]
+	if !ok {
+		return errs.ErrNotFound
+	}
+	if stored.Version != previousRequestVersion {
+		return errs.ErrConflict
+	}
+	if _, ok := r.callbacks[callback.ID]; ok {
+		return errs.ErrAlreadyExists
+	}
+	for _, existing := range r.callbacks {
+		if existing.CallbackID == callback.CallbackID {
+			return errs.ErrAlreadyExists
+		}
+	}
+	for _, existing := range r.responses {
+		if existing.RequestID == response.RequestID {
+			return errs.ErrAlreadyExists
+		}
+		if existing.SourceKind == response.SourceKind && existing.SourceRef == response.SourceRef && response.SourceRef != "" {
+			return errs.ErrAlreadyExists
+		}
+	}
+	r.callbacks[callback.ID] = callback
+	r.responses[response.ID] = response
+	r.requests[request.ID] = request
+	r.results[result.Key] = result
+	r.events = append(r.events, events...)
+	return nil
+}
+
 func (r *fakeRepository) GetInteractionRequest(_ context.Context, id uuid.UUID) (entity.InteractionRequest, error) {
 	request, ok := r.requests[id]
 	if !ok {
@@ -1521,6 +1647,15 @@ func (r *fakeRepository) GetInteractionResponse(_ context.Context, id uuid.UUID)
 		return entity.InteractionResponse{}, errs.ErrNotFound
 	}
 	return response, nil
+}
+
+func (r *fakeRepository) GetInteractionResponseBySource(_ context.Context, sourceKind enum.InteractionResponseSourceKind, sourceRef string) (entity.InteractionResponse, error) {
+	for _, response := range r.responses {
+		if response.SourceKind == sourceKind && response.SourceRef == sourceRef {
+			return response, nil
+		}
+	}
+	return entity.InteractionResponse{}, errs.ErrNotFound
 }
 
 func (r *fakeRepository) ListInteractionRequests(_ context.Context, filter query.InteractionRequestFilter) ([]entity.InteractionRequest, value.PageResult, error) {

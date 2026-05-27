@@ -36,6 +36,14 @@ const (
 	maxExpireLimit             = int32(500)
 	maxDeliveryStatusAttempts  = int32(100)
 	aggregateResponse          = "response"
+
+	callbackErrorRejected          = "CALLBACK_REJECTED"
+	callbackErrorRequestResolved   = "REQUEST_ALREADY_RESOLVED"
+	callbackErrorActionNotAllowed  = "CALLBACK_ACTION_NOT_ALLOWED"
+	callbackErrorActionUnsupported = "CALLBACK_ACTION_UNSUPPORTED"
+	callbackErrorActionNotTerminal = "CALLBACK_ACTION_NOT_TERMINAL"
+	callbackErrorActorRequired     = "CALLBACK_ACTOR_REQUIRED"
+	callbackErrorResponseRequired  = "CALLBACK_RESPONSE_REQUIRED"
 )
 
 // Service coordinates interaction-hub domain use cases.
@@ -260,17 +268,7 @@ func (s *Service) RecordInteractionResponse(ctx context.Context, input RecordInt
 	request.ResolvedAt = &now
 
 	result := commandResult(input.Meta, enum.OperationRecordInteractionResponse, aggregateResponse, response.ID, fingerprint, now)
-	event, err := s.outboxEvent(interactionevents.EventRequestResponseRecorded, interactionevents.AggregateRequest, request.ID, interactionevents.Payload{
-		RequestID:        request.ID.String(),
-		ResponseID:       response.ID.String(),
-		ResponseAction:   string(response.ResponseAction),
-		ActorRef:         response.RespondedByActorRef,
-		OwnerService:     string(request.DecisionOwner.Kind),
-		OwnerRequestRef:  request.DecisionOwner.OwnerRequestRef,
-		OwnerDecisionRef: response.OwnerDecisionRef,
-		Status:           string(request.Status),
-		Version:          request.Version,
-	}, now)
+	event, err := s.outboxEvent(interactionevents.EventRequestResponseRecorded, interactionevents.AggregateRequest, request.ID, requestResponseRecordedPayload(request, response), now)
 	if err != nil {
 		return entity.InteractionRequest{}, entity.InteractionResponse{}, err
 	}
@@ -767,7 +765,10 @@ func (s *Service) RecordChannelCallback(ctx context.Context, input RecordChannel
 		return ChannelCallbackResult{}, err
 	}
 	if callback, ok, err := replayAggregate(ctx, s, input.Meta, enum.OperationRecordChannelCallback, fingerprint, s.repository.GetChannelCallback); err != nil || ok {
-		return ChannelCallbackResult{Callback: callback}, err
+		if err != nil {
+			return ChannelCallbackResult{}, err
+		}
+		return s.channelCallbackResult(ctx, callback)
 	}
 	callbackFingerprint, err := callbackEnvelopeFingerprint(input.Callback)
 	if err != nil {
@@ -775,7 +776,7 @@ func (s *Service) RecordChannelCallback(ctx context.Context, input RecordChannel
 	}
 	if existing, err := s.repository.GetChannelCallbackByCallbackID(ctx, input.Callback.CallbackID); err == nil {
 		if existing.CallbackFingerprint == callbackFingerprint {
-			return ChannelCallbackResult{Callback: existing}, nil
+			return s.channelCallbackResult(ctx, existing)
 		}
 		return ChannelCallbackResult{}, errs.ErrConflict
 	} else if !errors.Is(err, errs.ErrNotFound) {
@@ -809,23 +810,41 @@ func (s *Service) RecordChannelCallback(ctx context.Context, input RecordChannel
 	}
 	if !input.Callback.SignatureStatus.Accepted() {
 		callback.ProcessingStatus = enum.CallbackProcessingStatusRejected
-		callback.ErrorCode = "CALLBACK_REJECTED"
+		callback.ErrorCode = callbackErrorRejected
+	}
+	var response *entity.InteractionResponse
+	var updatedRequest entity.InteractionRequest
+	var previousRequestVersion int64
+	if callback.ProcessingStatus == enum.CallbackProcessingStatusAccepted && resolved.request != nil {
+		var rejectionCode string
+		response, updatedRequest, previousRequestVersion, rejectionCode = s.channelCallbackResponse(callback, *resolved.request, now)
+		if rejectionCode != "" {
+			callback.ProcessingStatus = enum.CallbackProcessingStatusRejected
+			callback.ErrorCode = rejectionCode
+			response = nil
+		}
 	}
 	result := commandResult(input.Meta, enum.OperationRecordChannelCallback, interactionevents.AggregateCallback, callback.ID, fingerprint, now)
 	event, err := s.outboxEvent(interactionevents.EventCallbackReceived, interactionevents.AggregateCallback, callback.ID, callbackReceivedPayload(callback), now)
 	if err != nil {
 		return ChannelCallbackResult{}, err
 	}
+	if response != nil {
+		responseEvent, err := s.outboxEvent(interactionevents.EventRequestResponseRecorded, interactionevents.AggregateRequest, updatedRequest.ID, requestResponseRecordedPayload(updatedRequest, *response), now)
+		if err != nil {
+			return ChannelCallbackResult{}, err
+		}
+		if err := s.repository.CreateChannelCallbackResponseWithResult(ctx, callback, *response, updatedRequest, previousRequestVersion, result, []entity.OutboxEvent{event, responseEvent}); err != nil {
+			if errors.Is(err, errs.ErrAlreadyExists) {
+				return s.replayExistingChannelCallback(ctx, input.Callback.CallbackID, callbackFingerprint)
+			}
+			return ChannelCallbackResult{}, err
+		}
+		return ChannelCallbackResult{Callback: callback, Response: response}, nil
+	}
 	if err := s.repository.CreateChannelCallbackWithResult(ctx, callback, result, event); err != nil {
 		if errors.Is(err, errs.ErrAlreadyExists) {
-			existing, getErr := s.repository.GetChannelCallbackByCallbackID(ctx, input.Callback.CallbackID)
-			if getErr != nil {
-				return ChannelCallbackResult{}, getErr
-			}
-			if existing.CallbackFingerprint == callbackFingerprint {
-				return ChannelCallbackResult{Callback: existing}, nil
-			}
-			return ChannelCallbackResult{}, errs.ErrConflict
+			return s.replayExistingChannelCallback(ctx, input.Callback.CallbackID, callbackFingerprint)
 		}
 		return ChannelCallbackResult{}, err
 	}
@@ -1343,6 +1362,7 @@ type callbackResolution struct {
 	requestID         *uuid.UUID
 	sourceRouteID     *uuid.UUID
 	callbackRouteRef  string
+	request           *entity.InteractionRequest
 }
 
 func (s *Service) resolveChannelCallback(ctx context.Context, envelope value.ChannelCallbackEnvelope) (callbackResolution, error) {
@@ -1377,17 +1397,84 @@ func (s *Service) resolveChannelCallback(ctx context.Context, envelope value.Cha
 		if err != nil {
 			return callbackResolution{}, err
 		}
-		if request.Status.Terminal() {
-			return callbackResolution{}, errs.ErrConflict
-		}
-		if !callbackActionAllowed(request.AllowedActions, envelope.Action) {
-			return callbackResolution{}, errs.ErrConflict
-		}
+		resolved.request = &request
 	}
 	if resolved.requestID == nil && resolved.deliveryAttemptID == nil {
 		return callbackResolution{}, errs.ErrInvalidArgument
 	}
 	return resolved, nil
+}
+
+func (s *Service) channelCallbackResult(ctx context.Context, callback entity.ChannelCallback) (ChannelCallbackResult, error) {
+	result := ChannelCallbackResult{Callback: callback}
+	if callback.ProcessingStatus != enum.CallbackProcessingStatusAccepted || callback.RequestID == nil {
+		return result, nil
+	}
+	response, err := s.repository.GetInteractionResponseBySource(ctx, enum.InteractionResponseSourceKindChannelCallback, callbackResponseSourceRef(callback))
+	if errors.Is(err, errs.ErrNotFound) {
+		return result, nil
+	}
+	if err != nil {
+		return ChannelCallbackResult{}, err
+	}
+	result.Response = &response
+	return result, nil
+}
+
+func (s *Service) replayExistingChannelCallback(ctx context.Context, callbackID string, fingerprint string) (ChannelCallbackResult, error) {
+	existing, getErr := s.repository.GetChannelCallbackByCallbackID(ctx, callbackID)
+	if errors.Is(getErr, errs.ErrNotFound) {
+		return ChannelCallbackResult{}, errs.ErrConflict
+	}
+	if getErr != nil {
+		return ChannelCallbackResult{}, getErr
+	}
+	if existing.CallbackFingerprint != fingerprint {
+		return ChannelCallbackResult{}, errs.ErrConflict
+	}
+	return s.channelCallbackResult(ctx, existing)
+}
+
+func (s *Service) channelCallbackResponse(callback entity.ChannelCallback, request entity.InteractionRequest, now time.Time) (*entity.InteractionResponse, entity.InteractionRequest, int64, string) {
+	if request.Status.Terminal() {
+		return nil, entity.InteractionRequest{}, 0, callbackErrorRequestResolved
+	}
+	if !callbackActionAllowed(request.AllowedActions, callback.Action) {
+		return nil, entity.InteractionRequest{}, 0, callbackErrorActionNotAllowed
+	}
+	responseAction := enum.InteractionResponseAction(callback.Action)
+	if !responseAction.Valid() {
+		return nil, entity.InteractionRequest{}, 0, callbackErrorActionUnsupported
+	}
+	if !terminalAllowedAction(request.AllowedActions, responseAction) {
+		return nil, entity.InteractionRequest{}, 0, callbackErrorActionNotTerminal
+	}
+	if blank(callback.ActorRef) {
+		return nil, entity.InteractionRequest{}, 0, callbackErrorActorRequired
+	}
+	if responseAction == enum.InteractionResponseActionAnswer || responseAction == enum.InteractionResponseActionCustom {
+		if blank(callback.CallbackSummary) && !hasObjectRef(callback.CallbackObject) {
+			return nil, entity.InteractionRequest{}, 0, callbackErrorResponseRequired
+		}
+	}
+
+	response := entity.InteractionResponse{
+		ID:                  s.ids.New(),
+		RequestID:           request.ID,
+		ResponseAction:      responseAction,
+		RespondedByActorRef: callback.ActorRef,
+		ResponseSummary:     callback.CallbackSummary,
+		ResponseObject:      callback.CallbackObject,
+		SourceKind:          enum.InteractionResponseSourceKindChannelCallback,
+		SourceRef:           callbackResponseSourceRef(callback),
+		CreatedAt:           now,
+	}
+	previousVersion := request.Version
+	request.Status = enum.InteractionRequestStatusAnswered
+	request.Version++
+	request.UpdatedAt = now
+	request.ResolvedAt = &now
+	return &response, request, previousVersion, ""
 }
 
 func callbackActionAllowed(actions []value.InteractionAction, action string) bool {
@@ -1397,6 +1484,10 @@ func callbackActionAllowed(actions []value.InteractionAction, action string) boo
 		}
 	}
 	return len(actions) == 0
+}
+
+func callbackResponseSourceRef(callback entity.ChannelCallback) string {
+	return callback.ID.String()
 }
 
 func uuidPtr(id uuid.UUID) *uuid.UUID {
@@ -1958,6 +2049,20 @@ func requestEventPayload(request entity.InteractionRequest) interactionevents.Pa
 		Status:               string(request.Status),
 		DeadlineAt:           timeProto(request.DeadlineAt),
 		Version:              request.Version,
+	}
+}
+
+func requestResponseRecordedPayload(request entity.InteractionRequest, response entity.InteractionResponse) interactionevents.Payload {
+	return interactionevents.Payload{
+		RequestID:        request.ID.String(),
+		ResponseID:       response.ID.String(),
+		ResponseAction:   string(response.ResponseAction),
+		ActorRef:         response.RespondedByActorRef,
+		OwnerService:     string(request.DecisionOwner.Kind),
+		OwnerRequestRef:  request.DecisionOwner.OwnerRequestRef,
+		OwnerDecisionRef: response.OwnerDecisionRef,
+		Status:           string(request.Status),
+		Version:          request.Version,
 	}
 }
 

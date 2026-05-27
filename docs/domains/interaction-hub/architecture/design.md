@@ -72,11 +72,11 @@ approvals:
 | Lifecycle engine | Переходы feedback, approval, Human gate и one-way notification/reminder. |
 | Delivery planner | Выбор допустимого delivery route по scope, policy, подпискам и channel capability. |
 | Channel contract boundary | Стабильный контракт доставки в установленный channel package и обратного callback. |
-| Callback resolver | Идемпотентная привязка callback к delivery attempt и request. |
+| Callback resolver | Идемпотентная привязка callback к delivery attempt/request и безопасное применение terminal callback к request response lifecycle. |
 | Subscription engine | Правила подписки на события и области, создание notification intent и reminders. |
 | Outbox-доставщик | Публикация `interaction.*` событий через `platform-event-log`. |
 
-Текущая сервисная основа реализует authoritative lifecycle `Notification`, `Subscription`, delivery attempts и safe callback records: создание notification intent, создание/изменение/отключение/чтение подписок, `PlanDelivery`, `RecordDeliveryResult`, `RecordChannelCallback`, `GetDeliveryStatus`, command idempotency, optimistic concurrency для subscription и safe `interaction.*` outbox events. Внешний `integration-gateway` callback route, конкретные channel packages и runtime worker остаются отдельным контуром.
+Текущая сервисная основа реализует authoritative lifecycle `Notification`, `Subscription`, delivery attempts и safe callback records: создание notification intent, создание/изменение/отключение/чтение подписок, `PlanDelivery`, `RecordDeliveryResult`, `RecordChannelCallback`, `GetDeliveryStatus`, command idempotency, optimistic concurrency для subscription и safe `interaction.*` outbox events. `RecordChannelCallback` применяет допустимый terminal callback к feedback/approval/Human gate request как `InteractionResponse`, но не фиксирует owner business decision. Внешний `integration-gateway` callback route, конкретные channel packages и runtime worker остаются отдельным контуром.
 
 ## Основные потоки
 
@@ -162,11 +162,11 @@ sequenceDiagram
   External->>GW: callback
   GW->>GW: authenticate, verify signature, sanitize payload
   GW->>IH: RecordChannelCallback(safe envelope)
-  IH->>IH: idempotency + request transition
-  IH-->>Ops: interaction.callback.received / request resolved
+  IH->>IH: idempotency + callback record + terminal response transition
+  IH-->>Ops: interaction.callback.received / interaction.request.response_recorded
 ```
 
-Публичная проверка подписи и rate limit живут в `integration-gateway`. `interaction-hub` принимает только безопасный внутренний envelope.
+Публичная проверка подписи и rate limit живут в `integration-gateway`. `interaction-hub` принимает только безопасный внутренний envelope, сопоставляет его с delivery/request, сохраняет callback record и создаёт `InteractionResponse`, если request активен и action является разрешённым terminal action. Для terminal request повторный или поздний callback сохраняется как diagnostic no-op без повторного response.
 
 ## Channel delivery contract
 
@@ -220,6 +220,7 @@ sequenceDiagram
 | `answer_object_ref` | Ссылка на полный ответ или вложения, если они хранятся вне PostgreSQL. |
 | `received_at` | Время получения callback. |
 | `signature_status` | Результат проверки gateway, без сырой подписи. |
+| `gateway_ref`, `correlation_id` | Safe refs для диагностики и трассировки без заголовков и raw payload. |
 
 ## Междоменные связи
 
@@ -262,8 +263,8 @@ sequenceDiagram
 
 - Каждый изменяемый request имеет `version`.
 - Команда ответа передаёт expected version или идемпотентный `command_id`.
-- Повтор callback с тем же `callback_id` возвращает уже сохранённый безопасный результат.
-- Две разные попытки решить один request конфликтуют, если request уже находится в terminal state.
+- Повтор callback с тем же `callback_id` возвращает уже сохранённый безопасный callback/response результат.
+- Две разные попытки решить один request не создают второй response; поздний callback к terminal request фиксируется как безопасный diagnostic no-op.
 - Долгие ожидания человека не держат SQL-блокировку; срок ожидания хранится в request, а правила напоминаний передаются как `reminder_policy_ref`.
 - Повтор delivery command не создаёт новую попытку, если `delivery_id` уже принят с тем же безопасным отпечатком.
 
