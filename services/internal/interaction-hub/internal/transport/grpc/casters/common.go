@@ -53,7 +53,14 @@ func Actor(input *interactionsv1.Actor) value.Actor {
 	if input == nil {
 		return value.Actor{}
 	}
-	return value.Actor{Type: strings.TrimSpace(input.GetType()), ID: strings.TrimSpace(input.GetId())}
+	return actorFromTransport(input.GetType(), input.GetId())
+}
+
+func actorFromTransport(actorType string, actorID string) value.Actor {
+	return value.Actor{
+		Type: strings.TrimSpace(actorType),
+		ID:   strings.TrimSpace(actorID),
+	}
 }
 
 func ScopeRef(input *interactionsv1.ScopeRef) (value.ScopeRef, error) {
@@ -105,11 +112,7 @@ func ObjectRef(input *interactionsv1.ObjectRef) value.ObjectRef {
 	if input == nil {
 		return value.ObjectRef{}
 	}
-	var size *int64
-	if input.ObjectSizeBytes != nil {
-		value := input.GetObjectSizeBytes()
-		size = &value
-	}
+	size := optionalObjectSize(input)
 	return value.ObjectRef{
 		URI:       strings.TrimSpace(input.GetObjectUri()),
 		Digest:    strings.TrimSpace(input.GetObjectDigest()),
@@ -117,15 +120,26 @@ func ObjectRef(input *interactionsv1.ObjectRef) value.ObjectRef {
 	}
 }
 
+func optionalObjectSize(input *interactionsv1.ObjectRef) *int64 {
+	if input.ObjectSizeBytes == nil {
+		return nil
+	}
+	value := input.GetObjectSizeBytes()
+	return &value
+}
+
 func ObjectRefProto(input value.ObjectRef) *interactionsv1.ObjectRef {
 	if input.URI == "" && input.Digest == "" && input.SizeBytes == nil {
 		return nil
 	}
-	return &interactionsv1.ObjectRef{
-		ObjectUri:       input.URI,
-		ObjectDigest:    input.Digest,
-		ObjectSizeBytes: input.SizeBytes,
-	}
+	return objectRefMessage(input.URI, input.Digest, input.SizeBytes)
+}
+
+func objectRefMessage(uri string, digest string, size *int64) *interactionsv1.ObjectRef {
+	output := &interactionsv1.ObjectRef{ObjectUri: uri}
+	output.ObjectDigest = digest
+	output.ObjectSizeBytes = size
+	return output
 }
 
 func PageRequest(input *interactionsv1.PageRequest) value.PageRequest {

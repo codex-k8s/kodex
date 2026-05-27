@@ -3,6 +3,8 @@ package casters
 import (
 	"strings"
 
+	"github.com/google/uuid"
+
 	interactionsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/interactions/v1"
 	"github.com/codex-k8s/kodex/services/internal/interaction-hub/internal/domain/errs"
 	interactionservice "github.com/codex-k8s/kodex/services/internal/interaction-hub/internal/domain/service"
@@ -87,18 +89,11 @@ func UpsertSubscriptionInput(input *interactionsv1.UpsertSubscriptionRequest) (i
 }
 
 func DisableSubscriptionInput(input *interactionsv1.DisableSubscriptionRequest) (interactionservice.DisableSubscriptionInput, error) {
-	if input == nil {
-		return interactionservice.DisableSubscriptionInput{}, errs.ErrInvalidArgument
-	}
-	meta, err := CommandMeta(input.GetMeta())
-	if err != nil {
-		return interactionservice.DisableSubscriptionInput{}, err
-	}
-	subscriptionID, err := ParseUUID(input.GetSubscriptionId())
-	if err != nil {
-		return interactionservice.DisableSubscriptionInput{}, err
-	}
-	return interactionservice.DisableSubscriptionInput{Meta: meta, SubscriptionID: subscriptionID}, nil
+	return commandIDInput(input, (*interactionsv1.DisableSubscriptionRequest).GetMeta, (*interactionsv1.DisableSubscriptionRequest).GetSubscriptionId, disableSubscriptionInput)
+}
+
+func disableSubscriptionInput(meta value.CommandMeta, subscriptionID uuid.UUID) interactionservice.DisableSubscriptionInput {
+	return interactionservice.DisableSubscriptionInput{Meta: meta, SubscriptionID: subscriptionID}
 }
 
 func ListSubscriptionsInput(input *interactionsv1.ListSubscriptionsRequest) (interactionservice.ListSubscriptionsInput, error) {
@@ -130,11 +125,7 @@ func SubscriptionResponse(subscription entity.Subscription) *interactionsv1.Subs
 }
 
 func ListSubscriptionsResponse(subscriptions []entity.Subscription, page value.PageResult) *interactionsv1.ListSubscriptionsResponse {
-	items := make([]*interactionsv1.Subscription, 0, len(subscriptions))
-	for _, subscription := range subscriptions {
-		items = append(items, Subscription(subscription))
-	}
-	return &interactionsv1.ListSubscriptionsResponse{Subscriptions: items, Page: PageResponse(page)}
+	return &interactionsv1.ListSubscriptionsResponse{Subscriptions: castSlice(subscriptions, Subscription), Page: PageResponse(page)}
 }
 
 func Notification(notification entity.Notification) *interactionsv1.Notification {
@@ -183,14 +174,17 @@ func ActorRef(input *interactionsv1.ActorRef) value.ActorRef {
 	if input == nil {
 		return value.ActorRef{}
 	}
-	return value.ActorRef{Kind: strings.TrimSpace(input.GetRefKind()), Ref: strings.TrimSpace(input.GetRef())}
+	return actorRefValue(strings.TrimSpace(input.GetRefKind()), strings.TrimSpace(input.GetRef()))
 }
 
 func ActorRefProto(input value.ActorRef) *interactionsv1.ActorRef {
 	if input.Kind == "" && input.Ref == "" {
 		return nil
 	}
-	return &interactionsv1.ActorRef{RefKind: input.Kind, Ref: input.Ref}
+	ref := &interactionsv1.ActorRef{}
+	ref.RefKind = input.Kind
+	ref.Ref = input.Ref
+	return ref
 }
 
 func NotificationKind(input interactionsv1.NotificationKind) enum.NotificationKind {

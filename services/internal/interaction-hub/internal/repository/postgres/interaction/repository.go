@@ -33,7 +33,15 @@ type database interface {
 }
 
 type execQuerier interface {
+	sqlExecutor
+	sqlReader
+}
+
+type sqlExecutor interface {
 	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+}
+
+type sqlReader interface {
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
@@ -101,11 +109,7 @@ func (r *Repository) RecordBacklogOperation(_ context.Context, operation enum.Op
 }
 
 func (r *Repository) CreateConversationThreadWithResult(ctx context.Context, thread entity.ConversationThread, result entity.CommandResult, event entity.OutboxEvent) error {
-	return r.mutate(ctx, operationCreateConversationThread,
-		affectedMutation(queryThreadCreate, threadArgs(thread)),
-		commandResultMutation(result),
-		outboxEventMutation(event),
-	)
+	return r.persistCommandAggregate(ctx, operationCreateConversationThread, queryThreadCreate, threadArgs(thread), result, event)
 }
 
 func (r *Repository) GetConversationThread(ctx context.Context, id uuid.UUID) (entity.ConversationThread, error) {
@@ -113,12 +117,11 @@ func (r *Repository) GetConversationThread(ctx context.Context, id uuid.UUID) (e
 }
 
 func (r *Repository) CreateConversationMessageWithResult(ctx context.Context, message entity.ConversationMessage, thread entity.ConversationThread, previousThreadVersion int64, result entity.CommandResult, event entity.OutboxEvent) error {
-	return r.mutate(ctx, operationCreateConversationMessage,
+	writes := []mutation{
 		affectedMutation(queryMessageCreate, messageArgs(message)),
 		affectedMutation(queryThreadUpdateLatestMessage, threadLatestMessageArgs(thread, previousThreadVersion)),
-		commandResultMutation(result),
-		outboxEventMutation(event),
-	)
+	}
+	return r.persistCommandMutations(ctx, operationCreateConversationMessage, result, event, writes...)
 }
 
 func (r *Repository) GetConversationMessage(ctx context.Context, id uuid.UUID) (entity.ConversationMessage, error) {
@@ -126,29 +129,21 @@ func (r *Repository) GetConversationMessage(ctx context.Context, id uuid.UUID) (
 }
 
 func (r *Repository) ListConversationMessages(ctx context.Context, filter query.ConversationMessageFilter) ([]entity.ConversationMessage, value.PageResult, error) {
-	args := messageFilterArgs(filter)
-	items, err := queryAll(ctx, r.db, operationListConversationMessages, queryMessageList, args.NamedArgs, scanMessage)
-	if err != nil {
-		return nil, value.PageResult{}, err
-	}
-	pageItems, page := pageFromItems(items, args)
-	return pageItems, page, nil
+	return listPaged(ctx, r.db, operationListConversationMessages, queryMessageList, messageFilterArgs(filter), scanMessage)
 }
 
 func (r *Repository) CreateInteractionRequestWithResult(ctx context.Context, request entity.InteractionRequest, result entity.CommandResult, event entity.OutboxEvent) error {
-	return r.mutate(ctx, operationCreateInteractionRequest,
-		affectedMutation(queryRequestCreate, requestArgs(request)),
-		commandResultMutation(result),
-		outboxEventMutation(event),
-	)
+	return r.persistCommandAggregate(ctx, operationCreateInteractionRequest, queryRequestCreate, requestArgs(request), result, event)
 }
 
 func (r *Repository) UpdateInteractionRequestWithResult(ctx context.Context, request entity.InteractionRequest, previousVersion int64, result entity.CommandResult, event entity.OutboxEvent) error {
-	return r.mutate(ctx, operationUpdateInteractionRequest,
-		affectedMutation(queryRequestUpdateStatus, requestUpdateStatusArgs(request, previousVersion)),
-		commandResultMutation(result),
-		outboxEventMutation(event),
-	)
+	command := interactionRequestUpdateCommand{
+		request:         request,
+		previousVersion: previousVersion,
+		result:          result,
+		event:           event,
+	}
+	return r.persistInteractionRequestUpdate(ctx, command)
 }
 
 func (r *Repository) UpdateInteractionRequestsWithResult(ctx context.Context, requests []entity.InteractionRequest, previousVersions map[uuid.UUID]int64, result entity.CommandResult, events []entity.OutboxEvent) error {
@@ -170,12 +165,9 @@ func (r *Repository) UpdateInteractionRequestsWithResult(ctx context.Context, re
 }
 
 func (r *Repository) CreateInteractionResponseWithResult(ctx context.Context, response entity.InteractionResponse, request entity.InteractionRequest, previousRequestVersion int64, result entity.CommandResult, event entity.OutboxEvent) error {
-	return r.mutate(ctx, operationCreateInteractionResponse,
-		affectedMutation(queryResponseCreate, responseArgs(response)),
-		affectedMutation(queryRequestUpdateStatus, requestUpdateStatusArgs(request, previousRequestVersion)),
-		commandResultMutation(result),
-		outboxEventMutation(event),
-	)
+	responseWrite := affectedMutation(queryResponseCreate, responseArgs(response))
+	statusWrite := affectedMutation(queryRequestUpdateStatus, requestUpdateStatusArgs(request, previousRequestVersion))
+	return r.persistCommandMutations(ctx, operationCreateInteractionResponse, result, event, responseWrite, statusWrite)
 }
 
 func (r *Repository) CreateChannelCallbackResponseWithResult(ctx context.Context, callback entity.ChannelCallback, response entity.InteractionResponse, request entity.InteractionRequest, previousRequestVersion int64, result entity.CommandResult, events []entity.OutboxEvent) error {
@@ -209,23 +201,11 @@ func (r *Repository) GetInteractionResponseBySource(ctx context.Context, sourceK
 }
 
 func (r *Repository) ListInteractionRequests(ctx context.Context, filter query.InteractionRequestFilter) ([]entity.InteractionRequest, value.PageResult, error) {
-	args := requestFilterArgs(filter)
-	items, err := queryAll(ctx, r.db, operationListInteractionRequests, queryRequestList, args.NamedArgs, scanRequest)
-	if err != nil {
-		return nil, value.PageResult{}, err
-	}
-	pageItems, page := pageFromItems(items, args)
-	return pageItems, page, nil
+	return listPaged(ctx, r.db, operationListInteractionRequests, queryRequestList, requestFilterArgs(filter), scanRequest)
 }
 
 func (r *Repository) ListOwnerInboxItems(ctx context.Context, filter query.OwnerInboxFilter) ([]entity.OwnerInboxItem, value.PageResult, error) {
-	args := ownerInboxFilterArgs(filter)
-	items, err := queryAll(ctx, r.db, operationListOwnerInboxItems, queryOwnerInboxList, args.NamedArgs, scanOwnerInboxItem)
-	if err != nil {
-		return nil, value.PageResult{}, err
-	}
-	pageItems, page := pageFromItems(items, args)
-	return pageItems, page, nil
+	return listPaged(ctx, r.db, operationListOwnerInboxItems, queryOwnerInboxList, ownerInboxFilterArgs(filter), scanOwnerInboxItem)
 }
 
 func (r *Repository) ListExpirableInteractionRequests(ctx context.Context, scope value.ScopeRef, deadlineBefore time.Time, limit int32) ([]entity.InteractionRequest, error) {
@@ -233,11 +213,7 @@ func (r *Repository) ListExpirableInteractionRequests(ctx context.Context, scope
 }
 
 func (r *Repository) CreateNotificationWithResult(ctx context.Context, notification entity.Notification, result entity.CommandResult, event entity.OutboxEvent) error {
-	return r.mutate(ctx, operationCreateNotification,
-		affectedMutation(queryNotificationCreate, notificationArgs(notification)),
-		commandResultMutation(result),
-		outboxEventMutation(event),
-	)
+	return r.persistCommandAggregate(ctx, operationCreateNotification, queryNotificationCreate, notificationArgs(notification), result, event)
 }
 
 func (r *Repository) GetNotification(ctx context.Context, id uuid.UUID) (entity.Notification, error) {
@@ -245,19 +221,12 @@ func (r *Repository) GetNotification(ctx context.Context, id uuid.UUID) (entity.
 }
 
 func (r *Repository) CreateSubscriptionWithResult(ctx context.Context, subscription entity.Subscription, result entity.CommandResult, event entity.OutboxEvent) error {
-	return r.mutate(ctx, operationCreateSubscription,
-		affectedMutation(querySubscriptionCreate, subscriptionArgs(subscription)),
-		commandResultMutation(result),
-		outboxEventMutation(event),
-	)
+	return r.persistCommandAggregate(ctx, operationCreateSubscription, querySubscriptionCreate, subscriptionArgs(subscription), result, event)
 }
 
 func (r *Repository) UpdateSubscriptionWithResult(ctx context.Context, subscription entity.Subscription, previousVersion int64, result entity.CommandResult, event entity.OutboxEvent) error {
-	return r.mutate(ctx, operationUpdateSubscription,
-		affectedMutation(querySubscriptionUpdate, subscriptionUpdateArgs(subscription, previousVersion)),
-		commandResultMutation(result),
-		outboxEventMutation(event),
-	)
+	write := affectedMutation(querySubscriptionUpdate, subscriptionUpdateArgs(subscription, previousVersion))
+	return r.persistCommandMutations(ctx, operationUpdateSubscription, result, event, []mutation{write}...)
 }
 
 func (r *Repository) GetSubscription(ctx context.Context, id uuid.UUID) (entity.Subscription, error) {
@@ -265,29 +234,15 @@ func (r *Repository) GetSubscription(ctx context.Context, id uuid.UUID) (entity.
 }
 
 func (r *Repository) ListSubscriptions(ctx context.Context, filter query.SubscriptionFilter) ([]entity.Subscription, value.PageResult, error) {
-	args := subscriptionFilterArgs(filter)
-	items, err := queryAll(ctx, r.db, operationListSubscriptions, querySubscriptionList, args.NamedArgs, scanSubscription)
-	if err != nil {
-		return nil, value.PageResult{}, err
-	}
-	pageItems, page := pageFromItems(items, args)
-	return pageItems, page, nil
+	return listPaged(ctx, r.db, operationListSubscriptions, querySubscriptionList, subscriptionFilterArgs(filter), scanSubscription)
 }
 
 func (r *Repository) CreateDeliveryAttemptWithResult(ctx context.Context, attempt entity.DeliveryAttempt, result entity.CommandResult, event entity.OutboxEvent) error {
-	return r.mutate(ctx, operationCreateDeliveryAttempt,
-		affectedMutation(queryDeliveryAttemptCreate, deliveryAttemptArgs(attempt)),
-		commandResultMutation(result),
-		outboxEventMutation(event),
-	)
+	return r.persistCommandAggregate(ctx, operationCreateDeliveryAttempt, queryDeliveryAttemptCreate, deliveryAttemptArgs(attempt), result, event)
 }
 
 func (r *Repository) UpdateDeliveryAttemptWithResult(ctx context.Context, attempt entity.DeliveryAttempt, result entity.CommandResult, event entity.OutboxEvent) error {
-	return r.mutate(ctx, operationUpdateDeliveryAttempt,
-		affectedMutation(queryDeliveryAttemptUpdate, deliveryAttemptArgs(attempt)),
-		commandResultMutation(result),
-		outboxEventMutation(event),
-	)
+	return r.persistCommandAggregate(ctx, operationUpdateDeliveryAttempt, queryDeliveryAttemptUpdate, deliveryAttemptArgs(attempt), result, event)
 }
 
 func (r *Repository) GetDeliveryRoute(ctx context.Context, id uuid.UUID) (entity.DeliveryRoute, error) {
@@ -314,11 +269,7 @@ func (r *Repository) ListDeliveryAttempts(ctx context.Context, filter query.Deli
 }
 
 func (r *Repository) CreateChannelCallbackWithResult(ctx context.Context, callback entity.ChannelCallback, result entity.CommandResult, event entity.OutboxEvent) error {
-	return r.mutate(ctx, operationCreateChannelCallback,
-		affectedMutation(queryChannelCallbackCreate, channelCallbackArgs(callback)),
-		commandResultMutation(result),
-		outboxEventMutation(event),
-	)
+	return r.persistCommandAggregate(ctx, operationCreateChannelCallback, queryChannelCallbackCreate, channelCallbackArgs(callback), result, event)
 }
 
 func (r *Repository) GetChannelCallback(ctx context.Context, id uuid.UUID) (entity.ChannelCallback, error) {
@@ -338,16 +289,12 @@ func (r *Repository) GetCommandResult(ctx context.Context, identity query.Comman
 }
 
 func (r *Repository) ClaimOutboxEvents(ctx context.Context, limit int, now time.Time, lockedUntil time.Time) ([]entity.OutboxEvent, error) {
-	events, ok, err := postgreslib.ClaimOutboxRows(ctx, r.db, queryOutboxEventClaim, limit, now, lockedUntil, scanOutboxEvent)
-	if !ok {
-		return nil, wrapError(operationOutboxClaim, errs.ErrInvalidArgument)
-	}
-	return events, wrapError(operationOutboxClaim, err)
+	return r.claimOutboxEvents(ctx, limit, now, lockedUntil)
 }
 
 func (r *Repository) MarkOutboxEventPublished(ctx context.Context, id uuid.UUID, attemptCount int, publishedAt time.Time) error {
-	err := postgreslib.ApplyOutboxPublished(ctx, r.db, queryOutboxEventMarkPublished, errs.ErrInvalidArgument, id, attemptCount, publishedAt)
-	return wrapError(operationOutboxMarkPublished, err)
+	command := outboxPublishCommand{id: id, attemptCount: attemptCount, publishedAt: publishedAt}
+	return r.applyPublishedOutboxCommand(ctx, command)
 }
 
 func (r *Repository) MarkOutboxEventFailed(ctx context.Context, id uuid.UUID, attemptCount int, nextAttemptAt time.Time, lastError string) error {
@@ -359,17 +306,62 @@ func (r *Repository) MarkOutboxEventPermanentlyFailed(ctx context.Context, id uu
 }
 
 func (r *Repository) markOutboxFailure(ctx context.Context, operation string, queryText string, id uuid.UUID, attemptCount int, timestampName string, timestamp time.Time, lastError string) error {
-	err := postgreslib.ApplyOutboxDeliveryFailure(ctx, r.db, queryText, errs.ErrInvalidArgument, id, attemptCount, timestampName, timestamp, lastError)
-	return wrapError(operation, err)
+	return wrapError(operation, postgreslib.ApplyOutboxDeliveryFailure(ctx, r.db, queryText, errs.ErrInvalidArgument, id, attemptCount, timestampName, timestamp, lastError))
 }
 
 type mutation = postgreslib.Mutation
 
 func (r *Repository) mutate(ctx context.Context, operation string, mutations ...mutation) error {
-	err := postgreslib.WithTx(ctx, r.db, func(tx pgx.Tx) error {
+	runInteractionMutations := func(tx pgx.Tx) error {
 		return postgreslib.RunDistinctMutations(ctx, tx, errs.ErrConflict, mutations...)
-	})
-	return wrapError(operation, err)
+	}
+	return wrapError(operation, postgreslib.WithTx(ctx, r.db, runInteractionMutations))
+}
+
+func (r *Repository) claimOutboxEvents(ctx context.Context, limit int, now time.Time, lockedUntil time.Time) ([]entity.OutboxEvent, error) {
+	events, claimed, err := postgreslib.ClaimOutboxRows(ctx, r.db, queryOutboxEventClaim, limit, now, lockedUntil, scanOutboxEvent)
+	switch {
+	case err != nil:
+		return nil, wrapError(operationOutboxClaim, err)
+	case !claimed:
+		return nil, wrapError(operationOutboxClaim, errs.ErrInvalidArgument)
+	default:
+		return events, nil
+	}
+}
+
+func (r *Repository) persistCommandAggregate(ctx context.Context, operation string, queryText string, args pgx.NamedArgs, result entity.CommandResult, event entity.OutboxEvent) error {
+	write := affectedMutation(queryText, args)
+	return r.persistCommandMutations(ctx, operation, result, event, write)
+}
+
+func (r *Repository) persistCommandMutations(ctx context.Context, operation string, result entity.CommandResult, event entity.OutboxEvent, writes ...mutation) error {
+	mutations := append([]mutation{}, writes...)
+	mutations = append(mutations, commandResultMutation(result), outboxEventMutation(event))
+	return r.mutate(ctx, operation, mutations...)
+}
+
+type interactionRequestUpdateCommand struct {
+	request         entity.InteractionRequest
+	previousVersion int64
+	result          entity.CommandResult
+	event           entity.OutboxEvent
+}
+
+func (r *Repository) persistInteractionRequestUpdate(ctx context.Context, command interactionRequestUpdateCommand) error {
+	args := requestUpdateStatusArgs(command.request, command.previousVersion)
+	return r.persistCommandAggregate(ctx, operationUpdateInteractionRequest, queryRequestUpdateStatus, args, command.result, command.event)
+}
+
+type outboxPublishCommand struct {
+	id           uuid.UUID
+	attemptCount int
+	publishedAt  time.Time
+}
+
+func (r *Repository) applyPublishedOutboxCommand(ctx context.Context, command outboxPublishCommand) error {
+	err := postgreslib.ApplyOutboxPublished(ctx, r.db, queryOutboxEventMarkPublished, errs.ErrInvalidArgument, command.id, command.attemptCount, command.publishedAt)
+	return wrapError(operationOutboxMarkPublished, err)
 }
 
 func affectedMutation(queryText string, args pgx.NamedArgs) mutation {
@@ -385,36 +377,34 @@ func outboxEventMutation(event entity.OutboxEvent) mutation {
 }
 
 func runRequestStatusBatch(ctx context.Context, tx pgx.Tx, requests []entity.InteractionRequest, previousVersions map[uuid.UUID]int64) error {
-	batch := &pgx.Batch{}
-	for _, request := range requests {
-		previousVersion, ok := previousVersions[request.ID]
-		if !ok {
-			return errs.ErrInvalidArgument
+	return runAffectedBatch(ctx, tx, len(requests), func(batch *pgx.Batch) error {
+		for _, request := range requests {
+			previousVersion, ok := previousVersions[request.ID]
+			if !ok {
+				return errs.ErrInvalidArgument
+			}
+			batch.Queue(queryRequestUpdateStatus, requestUpdateStatusArgs(request, previousVersion))
 		}
-		batch.Queue(queryRequestUpdateStatus, requestUpdateStatusArgs(request, previousVersion))
-	}
-	results := tx.SendBatch(ctx, batch)
-	for range requests {
-		tag, err := results.Exec()
-		if err != nil {
-			_ = results.Close()
-			return err
-		}
-		if tag.RowsAffected() == 0 {
-			_ = results.Close()
-			return errs.ErrConflict
-		}
-	}
-	return results.Close()
+		return nil
+	})
 }
 
 func runOutboxBatch(ctx context.Context, tx pgx.Tx, events []entity.OutboxEvent) error {
+	return runAffectedBatch(ctx, tx, len(events), func(batch *pgx.Batch) error {
+		for _, event := range events {
+			batch.Queue(queryOutboxEventCreate, outboxEventArgs(event))
+		}
+		return nil
+	})
+}
+
+func runAffectedBatch(ctx context.Context, tx pgx.Tx, itemCount int, fill func(*pgx.Batch) error) error {
 	batch := &pgx.Batch{}
-	for _, event := range events {
-		batch.Queue(queryOutboxEventCreate, outboxEventArgs(event))
+	if err := fill(batch); err != nil {
+		return err
 	}
 	results := tx.SendBatch(ctx, batch)
-	for range events {
+	for range itemCount {
 		tag, err := results.Exec()
 		if err != nil {
 			_ = results.Close()
@@ -428,23 +418,32 @@ func runOutboxBatch(ctx context.Context, tx pgx.Tx, events []entity.OutboxEvent)
 	return results.Close()
 }
 
-func queryOne[T any](ctx context.Context, db execQuerier, operation string, queryText string, args pgx.NamedArgs, scan func(postgreslib.RowScanner) (T, error)) (T, error) {
-	value, err := scan(db.QueryRow(ctx, queryText, args))
-	if err != nil {
-		var zero T
-		return zero, wrapError(operation, err)
+func listPaged[T any](ctx context.Context, db execQuerier, operation string, queryText string, args pageQueryArgs, scan func(postgreslib.RowScanner) (T, error)) ([]T, value.PageResult, error) {
+	items, queryErr := queryAll(ctx, db, operation, queryText, args.NamedArgs, scan)
+	if queryErr != nil {
+		return nil, value.PageResult{}, queryErr
 	}
-	return value, nil
+	pageItems, nextToken := postgreslib.TrimOffsetPage(items, args.PageSize, args.NextOffset)
+	return pageItems, value.PageResult{NextPageToken: nextToken}, nil
 }
 
-func queryAll[T any](ctx context.Context, db execQuerier, operation string, queryText string, args pgx.NamedArgs, scan func(postgreslib.RowScanner) (T, error)) ([]T, error) {
-	rows, err := db.Query(ctx, queryText, args)
-	if err != nil {
-		return nil, wrapError(operation, err)
+func queryOne[T any](ctx context.Context, db execQuerier, operation string, queryText string, args pgx.NamedArgs, scan func(postgreslib.RowScanner) (T, error)) (T, error) {
+	item, err := scan(db.QueryRow(ctx, queryText, args))
+	if err == nil {
+		return item, nil
 	}
-	items, err := postgreslib.ScanRows(rows, scan)
-	if err != nil {
-		return nil, wrapError(operation, err)
+	var zero T
+	return zero, wrapError(operation, err)
+}
+
+func queryAll[T any](ctx context.Context, db execQuerier, operation string, queryText string, args pgx.NamedArgs, scan func(postgreslib.RowScanner) (T, error)) (items []T, err error) {
+	rows, queryErr := db.Query(ctx, queryText, args)
+	if queryErr != nil {
+		return nil, wrapError(operation, queryErr)
 	}
-	return items, nil
+	items, scanErr := postgreslib.ScanRows(rows, scan)
+	if scanErr != nil {
+		return nil, wrapError(operation, scanErr)
+	}
+	return
 }

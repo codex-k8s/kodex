@@ -11,16 +11,24 @@ import (
 
 // UnaryErrorInterceptor maps interaction-hub domain errors to transport-safe gRPC statuses.
 func UnaryErrorInterceptor(logger *slog.Logger) grpcruntime.UnaryServerInterceptor {
+	mapper := interactionDomainErrorMapper()
 	return grpcserver.UnaryBoundaryErrorInterceptor(
 		"interaction-hub",
 		logger,
-		grpcserver.NewDomainErrorMapper(
-			grpcserver.DomainErrorRule{Target: errs.ErrAlreadyExists, Code: codes.AlreadyExists, Message: "interaction already exists"},
-			grpcserver.DomainErrorRule{Target: errs.ErrConflict, Code: codes.FailedPrecondition, Message: "interaction conflict"},
-			grpcserver.DomainErrorRule{Target: errs.ErrInvalidArgument, Code: codes.InvalidArgument, Message: "invalid request"},
-			grpcserver.DomainErrorRule{Target: errs.ErrNotFound, Code: codes.NotFound, Message: "interaction not found"},
-			grpcserver.DomainErrorRule{Target: errs.ErrNotImplemented, Code: codes.Unimplemented, Message: "operation is not implemented in interaction-hub skeleton"},
-			grpcserver.DomainErrorRule{Target: errs.ErrUnavailable, Code: codes.Unavailable, Message: "interaction dependency unavailable"},
-		),
+		mapper,
+	)
+}
+
+func interactionDomainErrorMapper() grpcserver.DomainErrorMapper {
+	rules := []grpcserver.DomainErrorRule{
+		{Target: errs.ErrAlreadyExists, Code: codes.AlreadyExists, Message: "interaction already exists"},
+		{Target: errs.ErrConflict, Code: codes.FailedPrecondition, Message: "interaction conflict"},
+		{Target: errs.ErrInvalidArgument, Code: codes.InvalidArgument, Message: "invalid request"},
+		{Target: errs.ErrNotFound, Code: codes.NotFound, Message: "interaction not found"},
+		{Target: errs.ErrNotImplemented, Code: codes.Unimplemented, Message: "operation is not implemented in interaction-hub skeleton"},
+		{Target: errs.ErrUnavailable, Code: codes.Unavailable, Message: "interaction dependency unavailable"},
+	}
+	return grpcserver.NewDomainErrorMapper(
+		rules...,
 	)
 }

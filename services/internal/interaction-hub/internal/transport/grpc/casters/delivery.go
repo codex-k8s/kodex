@@ -37,33 +37,19 @@ func PlanDeliveryInput(input *interactionsv1.PlanDeliveryRequest) (interactionse
 }
 
 func RecordDeliveryResultInput(input *interactionsv1.RecordDeliveryResultRequest) (interactionservice.RecordDeliveryResultInput, error) {
-	if input == nil {
-		return interactionservice.RecordDeliveryResultInput{}, errs.ErrInvalidArgument
-	}
-	meta, err := CommandMeta(input.GetMeta())
-	if err != nil {
-		return interactionservice.RecordDeliveryResultInput{}, err
-	}
-	result, err := ChannelDeliveryResult(input.GetResult())
-	if err != nil {
-		return interactionservice.RecordDeliveryResultInput{}, err
-	}
-	return interactionservice.RecordDeliveryResultInput{Meta: meta, Result: result}, nil
+	return commandPayloadInput(input, (*interactionsv1.RecordDeliveryResultRequest).GetMeta, (*interactionsv1.RecordDeliveryResultRequest).GetResult, ChannelDeliveryResult, deliveryResultInput)
 }
 
 func RecordChannelCallbackInput(input *interactionsv1.RecordChannelCallbackRequest) (interactionservice.RecordChannelCallbackInput, error) {
-	if input == nil {
-		return interactionservice.RecordChannelCallbackInput{}, errs.ErrInvalidArgument
-	}
-	meta, err := CommandMeta(input.GetMeta())
-	if err != nil {
-		return interactionservice.RecordChannelCallbackInput{}, err
-	}
-	callback, err := ChannelCallbackEnvelope(input.GetCallback())
-	if err != nil {
-		return interactionservice.RecordChannelCallbackInput{}, err
-	}
-	return interactionservice.RecordChannelCallbackInput{Meta: meta, Callback: callback}, nil
+	return commandPayloadInput(input, (*interactionsv1.RecordChannelCallbackRequest).GetMeta, (*interactionsv1.RecordChannelCallbackRequest).GetCallback, ChannelCallbackEnvelope, channelCallbackInput)
+}
+
+func deliveryResultInput(meta value.CommandMeta, result value.ChannelDeliveryResult) interactionservice.RecordDeliveryResultInput {
+	return interactionservice.RecordDeliveryResultInput{Meta: meta, Result: result}
+}
+
+func channelCallbackInput(meta value.CommandMeta, callback value.ChannelCallbackEnvelope) interactionservice.RecordChannelCallbackInput {
+	return interactionservice.RecordChannelCallbackInput{Meta: meta, Callback: callback}
 }
 
 func GetDeliveryStatusInput(input *interactionsv1.GetDeliveryStatusRequest) (interactionservice.GetDeliveryStatusInput, error) {
@@ -255,6 +241,40 @@ func parseRequiredTime(input string) (time.Time, error) {
 		return time.Time{}, errs.ErrInvalidArgument
 	}
 	return parsed.UTC(), nil
+}
+
+func commandPayloadInput[Request any, Payload any, DomainPayload any, Output any](
+	input *Request,
+	metaInput func(*Request) *interactionsv1.CommandMeta,
+	payloadInput func(*Request) *Payload,
+	decodePayload func(*Payload) (DomainPayload, error),
+	build func(value.CommandMeta, DomainPayload) Output,
+) (Output, error) {
+	decode := func(request *Request) (DomainPayload, error) {
+		return decodePayload(payloadInput(request))
+	}
+	return decodeCommandEnvelope(input, metaInput, decode, build)
+}
+
+func decodeCommandEnvelope[Request any, DomainPayload any, Output any](
+	input *Request,
+	metaInput func(*Request) *interactionsv1.CommandMeta,
+	decodePayload func(*Request) (DomainPayload, error),
+	build func(value.CommandMeta, DomainPayload) Output,
+) (Output, error) {
+	var zero Output
+	if input == nil {
+		return zero, errs.ErrInvalidArgument
+	}
+	meta, err := CommandMeta(metaInput(input))
+	if err != nil {
+		return zero, err
+	}
+	payload, err := decodePayload(input)
+	if err != nil {
+		return zero, err
+	}
+	return build(meta, payload), nil
 }
 
 func retryAfterTime(input string, occurredAt time.Time) (*time.Time, error) {

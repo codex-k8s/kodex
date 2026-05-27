@@ -401,14 +401,14 @@ func outboxEventArgs(event entity.OutboxEvent) pgx.NamedArgs {
 
 func withPage(page value.PageRequest, args pgx.NamedArgs) pageQueryArgs {
 	pageSize, offset, nextOffset := postgreslib.OffsetPageBounds(page.PageSize, page.PageToken, defaultPageSize, maxPageSize)
-	args["limit"] = pageSize + 1
-	args["offset"] = offset
-	return pageQueryArgs{NamedArgs: args, PageSize: pageSize, NextOffset: nextOffset}
-}
-
-func pageFromItems[T any](items []T, args pageQueryArgs) ([]T, value.PageResult) {
-	trimmed, token := postgreslib.TrimOffsetPage(items, args.PageSize, args.NextOffset)
-	return trimmed, value.PageResult{NextPageToken: token}
+	pagedArgs := args
+	pagedArgs["limit"] = pageSize + 1
+	pagedArgs["offset"] = offset
+	return pageQueryArgs{
+		NamedArgs:  pagedArgs,
+		PageSize:   pageSize,
+		NextOffset: nextOffset,
+	}
 }
 
 func objectPayload(value any) string {
