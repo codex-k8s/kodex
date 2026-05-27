@@ -33,18 +33,55 @@ const (
 
 // ExternalCallbackAccepted defines model for ExternalCallbackAccepted.
 type ExternalCallbackAccepted struct {
-	CallbackSource string `json:"callback_source"`
-	CorrelationId  string `json:"correlation_id"`
-	DeliveryId     string `json:"delivery_id"`
+	CallbackId     string  `json:"callback_id"`
+	CallbackSource string  `json:"callback_source"`
+	CorrelationId  string  `json:"correlation_id"`
+	DeliveryId     *string `json:"delivery_id,omitempty"`
 
 	// OwnerService Owner service selected by route registry.
 	OwnerService *string                        `json:"owner_service,omitempty"`
 	RequestId    string                         `json:"request_id"`
+	RequestRef   *string                        `json:"request_ref,omitempty"`
 	Status       ExternalCallbackAcceptedStatus `json:"status"`
 }
 
 // ExternalCallbackAcceptedStatus defines model for ExternalCallbackAccepted.Status.
 type ExternalCallbackAcceptedStatus string
+
+// ExternalCallbackObjectRef Safe object reference for sanitized callback content outside the gateway.
+type ExternalCallbackObjectRef struct {
+	ObjectDigest    string `json:"object_digest"`
+	ObjectSizeBytes *int64 `json:"object_size_bytes,omitempty"`
+	ObjectUri       string `json:"object_uri"`
+}
+
+// ExternalChannelCallbackRequest Safe generic callback envelope accepted by integration-gateway and forwarded to interaction-hub.
+type ExternalChannelCallbackRequest struct {
+	// Action Owner-defined action key selected by the actor.
+	Action string `json:"action"`
+
+	// ActorRef Verified external actor or subject ref, without PII.
+	ActorRef *string `json:"actor_ref,omitempty"`
+
+	// AnswerObject Safe object reference for sanitized callback content outside the gateway.
+	AnswerObject *ExternalCallbackObjectRef `json:"answer_object,omitempty"`
+
+	// AnswerSummary Bounded safe answer summary. Raw transcripts and provider payloads are not allowed.
+	AnswerSummary *string `json:"answer_summary,omitempty"`
+
+	// CallbackId Idempotency key for interaction-hub callback processing.
+	CallbackId      string `json:"callback_id"`
+	ContractVersion string `json:"contract_version"`
+
+	// CorrelationId Optional caller correlation id; gateway uses request_id when absent.
+	CorrelationId *string `json:"correlation_id,omitempty"`
+
+	// DeliveryId Safe delivery id when the channel callback is tied to a delivery attempt.
+	DeliveryId *string `json:"delivery_id,omitempty"`
+
+	// RequestRef Safe interaction request ref when delivery_id is unavailable.
+	RequestRef *string `json:"request_ref,omitempty"`
+}
 
 // ExternalJsonPayload Raw JSON payload intended for the owner service. Gateway must not log it in full.
 type ExternalJsonPayload map[string]interface{}
@@ -121,10 +158,10 @@ type IngestExternalCallbackParams struct {
 	// XKodexRequestId Optional caller-supplied request id. Gateway may replace invalid values.
 	XKodexRequestId *RequestIdHeader `json:"X-Kodex-Request-Id,omitempty"`
 
-	// XKodexExternalDelivery External callback idempotency key.
+	// XKodexExternalDelivery Optional external callback idempotency key. When present it must match callback_id in the JSON body.
 	XKodexExternalDelivery *ExternalDeliveryHeader `json:"X-Kodex-External-Delivery,omitempty"`
 
-	// XKodexExternalSignature External callback signature or token. It must be redacted before logs, metrics and errors.
+	// XKodexExternalSignature Generic HMAC SHA-256 callback signature. It must be redacted before logs, metrics and errors.
 	XKodexExternalSignature *ExternalSignatureHeader `json:"X-Kodex-External-Signature,omitempty"`
 }
 
@@ -144,7 +181,7 @@ type IngestProviderWebhookParams struct {
 }
 
 // IngestExternalCallbackJSONRequestBody defines body for IngestExternalCallback for application/json ContentType.
-type IngestExternalCallbackJSONRequestBody = ExternalJsonPayload
+type IngestExternalCallbackJSONRequestBody = ExternalChannelCallbackRequest
 
 // IngestProviderWebhookJSONRequestBody defines body for IngestProviderWebhook for application/json ContentType.
 type IngestProviderWebhookJSONRequestBody = ExternalJsonPayload

@@ -9,9 +9,12 @@ import (
 
 	"github.com/codex-k8s/kodex/libs/go/secretresolver"
 	serviceprocess "github.com/codex-k8s/kodex/libs/go/serviceprocess"
+	interactionsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/interactions/v1"
 	providersv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/providers/v1"
+	interactionhubclient "github.com/codex-k8s/kodex/services/external/integration-gateway/internal/clients/interactionhub"
 	providerhubclient "github.com/codex-k8s/kodex/services/external/integration-gateway/internal/clients/providerhub"
 	httptransport "github.com/codex-k8s/kodex/services/external/integration-gateway/internal/transport/http"
+	"google.golang.org/grpc"
 )
 
 const serviceName = "integration-gateway"
@@ -27,12 +30,26 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	}
 	defer closeProviderClient()
 
-	verifier, err := buildProviderWebhookVerifier(cfg)
+	interactionClient, closeInteractionClient, err := buildInteractionHubClient(cfg)
+	if err != nil {
+		return err
+	}
+	defer closeInteractionClient()
+
+	providerVerifier, externalVerifier, err := buildEdgeVerifiers(cfg)
 	if err != nil {
 		return err
 	}
 
-	apiHandler, err := httptransport.NewRouterWithVerifier(ctx, cfg.HTTPRouterConfig(), providerClient, verifier, logger)
+	apiHandler, err := httptransport.NewRouterWithClientsAndVerifiers(
+		ctx,
+		cfg.HTTPRouterConfig(),
+		providerClient,
+		interactionClient,
+		providerVerifier,
+		externalVerifier,
+		logger,
+	)
 	if err != nil {
 		return err
 	}
@@ -58,14 +75,15 @@ func buildProviderHubClient(cfg Config) (httptransport.ProviderHubClient, func()
 	if !cfg.ProviderWebhook.Enabled {
 		return providerhubclient.Disabled{}, func() {}, nil
 	}
-	conn, err := providerhubclient.NewConnection(cfg.ProviderHubClientConfig())
+	clientCfg := cfg.ProviderHubClientConfig()
+	conn, err := providerhubclient.NewConnection(clientCfg)
 	if err != nil {
 		return nil, nil, err
 	}
 	closeFn := func() {
 		_ = conn.Close()
 	}
-	client, err := providerhubclient.New(providersv1.NewProviderHubServiceClient(conn), cfg.ProviderHubClientConfig())
+	client, err := providerhubclient.New(providersv1.NewProviderHubServiceClient(conn), clientCfg)
 	if err != nil {
 		closeFn()
 		return nil, nil, err
@@ -73,15 +91,58 @@ func buildProviderHubClient(cfg Config) (httptransport.ProviderHubClient, func()
 	return client, closeFn, nil
 }
 
-func buildProviderWebhookVerifier(cfg Config) (httptransport.ProviderWebhookVerifier, error) {
-	if !cfg.ProviderWebhook.Enabled {
-		return nil, nil
+func buildInteractionHubClient(cfg Config) (httptransport.InteractionHubClient, func(), error) {
+	var disabled httptransport.InteractionHubClient = interactionhubclient.Disabled{}
+	return buildOwnerClient[httptransport.InteractionHubClient](
+		cfg.ExternalCallback.Enabled,
+		disabled,
+		func() (*grpc.ClientConn, error) {
+			return interactionhubclient.NewConnection(cfg.InteractionHubClientConfig())
+		},
+		func(conn *grpc.ClientConn) (httptransport.InteractionHubClient, error) {
+			return interactionhubclient.New(interactionsv1.NewInteractionHubServiceClient(conn), cfg.InteractionHubClientConfig())
+		},
+	)
+}
+
+func buildOwnerClient[T any](enabled bool, disabled T, newConnection func() (*grpc.ClientConn, error), newClient func(*grpc.ClientConn) (T, error)) (T, func(), error) {
+	if !enabled {
+		return disabled, func() {}, nil
+	}
+	conn, err := newConnection()
+	if err != nil {
+		var zero T
+		return zero, nil, err
+	}
+	closeFn := func() {
+		_ = conn.Close()
+	}
+	client, err := newClient(conn)
+	if err != nil {
+		closeFn()
+		var zero T
+		return zero, nil, err
+	}
+	return client, closeFn, nil
+}
+
+func buildEdgeVerifiers(cfg Config) (httptransport.ProviderWebhookVerifier, httptransport.ExternalCallbackVerifier, error) {
+	if !cfg.ProviderWebhook.Enabled && !cfg.ExternalCallback.Enabled {
+		return nil, nil, nil
 	}
 	resolver, err := buildSecretResolver(cfg.SecretResolver)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return httptransport.NewGitHubProviderWebhookVerifier(resolver, cfg.GitHubWebhookSecretRef()), nil
+	var providerVerifier httptransport.ProviderWebhookVerifier
+	if cfg.ProviderWebhook.Enabled {
+		providerVerifier = httptransport.NewGitHubProviderWebhookVerifier(resolver, cfg.GitHubWebhookSecretRef())
+	}
+	var externalVerifier httptransport.ExternalCallbackVerifier
+	if cfg.ExternalCallback.Enabled {
+		externalVerifier = httptransport.NewExternalCallbackHMACVerifier(resolver, cfg.ExternalCallbackSecretRef())
+	}
+	return providerVerifier, externalVerifier, nil
 }
 
 func buildSecretResolver(cfg SecretResolverConfig) (secretresolver.Resolver, error) {

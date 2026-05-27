@@ -20,6 +20,10 @@ KODEX_PLATFORM_EVENT_LOG_MIGRATIONS_IMAGE="$(kodex_image_from_repo KODEX_PLATFOR
 KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_ENABLED="${KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_ENABLED:-true}"
 KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_GITHUB_SECRET_STORE_TYPE="${KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_GITHUB_SECRET_STORE_TYPE:-env}"
 KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_GITHUB_SECRET_STORE_REF="${KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_GITHUB_SECRET_STORE_REF:-KODEX_GITHUB_WEBHOOK_SECRET}"
+KODEX_INTEGRATION_GATEWAY_EXTERNAL_CALLBACK_ENABLED="${KODEX_INTEGRATION_GATEWAY_EXTERNAL_CALLBACK_ENABLED:-false}"
+KODEX_INTEGRATION_GATEWAY_EXTERNAL_CALLBACK_ALLOWED_SOURCES="${KODEX_INTEGRATION_GATEWAY_EXTERNAL_CALLBACK_ALLOWED_SOURCES:-channel-package}"
+KODEX_INTEGRATION_GATEWAY_EXTERNAL_CALLBACK_SECRET_STORE_TYPE="${KODEX_INTEGRATION_GATEWAY_EXTERNAL_CALLBACK_SECRET_STORE_TYPE:-env}"
+KODEX_INTEGRATION_GATEWAY_EXTERNAL_CALLBACK_SECRET_STORE_REF="${KODEX_INTEGRATION_GATEWAY_EXTERNAL_CALLBACK_SECRET_STORE_REF:-KODEX_EXTERNAL_CALLBACK_SECRET}"
 
 required_runtime_values=(
   KODEX_POSTGRES_PASSWORD
@@ -58,6 +62,10 @@ kodex_smoke_render \
   KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_ENABLED \
   KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_GITHUB_SECRET_STORE_TYPE \
   KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_GITHUB_SECRET_STORE_REF \
+  KODEX_INTEGRATION_GATEWAY_EXTERNAL_CALLBACK_ENABLED \
+  KODEX_INTEGRATION_GATEWAY_EXTERNAL_CALLBACK_ALLOWED_SOURCES \
+  KODEX_INTEGRATION_GATEWAY_EXTERNAL_CALLBACK_SECRET_STORE_TYPE \
+  KODEX_INTEGRATION_GATEWAY_EXTERNAL_CALLBACK_SECRET_STORE_REF \
   KODEX_PLATFORM_EVENT_LOG_MIGRATIONS_IMAGE
 
 kodex_smoke_apply_foundation
@@ -71,6 +79,7 @@ kodex_smoke_check_readyz integration-gateway 18086
 curl -fsS "http://127.0.0.1:18086/health/livez" >/dev/null
 curl -fsS "http://127.0.0.1:18086/metrics" >/dev/null
 curl -fsS "http://127.0.0.1:18086/openapi/integration-gateway.v1.yaml" | grep -q "/v1/provider-webhooks/{provider_slug}"
+curl -fsS "http://127.0.0.1:18086/openapi/integration-gateway.v1.yaml" | grep -q "/v1/external-callbacks/{callback_source}"
 
 response_file="$(mktemp)"
 trap 'rm -f "$response_file"; kodex_smoke_cleanup' EXIT
@@ -107,6 +116,23 @@ if ! grep -q '"code":"source_not_allowed"' "$response_file"; then
   cat "$response_file" >&2 || true
   echo "smoke-integration-gateway: unsupported provider response must use source_not_allowed" >&2
   exit 1
+fi
+
+if [[ "$KODEX_INTEGRATION_GATEWAY_EXTERNAL_CALLBACK_ENABLED" == "false" ]]; then
+  status="$(curl -sS -o "$response_file" -w "%{http_code}" \
+    -X POST "http://127.0.0.1:18086/v1/external-callbacks/channel-package" \
+    -H "Content-Type: application/json" \
+    --data '{"contract_version":"interaction.channel.v1","callback_id":"smoke-callback-disabled","delivery_id":"smoke-delivery-disabled","action":"ack"}')"
+  if [[ "$status" != "400" ]]; then
+    cat "$response_file" >&2 || true
+    echo "smoke-integration-gateway: disabled external callback route must be rejected with 400" >&2
+    exit 1
+  fi
+  if ! grep -q '"code":"source_not_allowed"' "$response_file"; then
+    cat "$response_file" >&2 || true
+    echo "smoke-integration-gateway: disabled external callback response must use source_not_allowed" >&2
+    exit 1
+  fi
 fi
 
 echo "smoke-integration-gateway: HTTP edge boundary OK"
