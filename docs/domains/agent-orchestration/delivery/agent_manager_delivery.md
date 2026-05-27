@@ -6,7 +6,7 @@ status: active
 owner_role: EM
 created_at: 2026-05-12
 updated_at: 2026-05-27
-related_issues: [733, 739, 744, 749, 755, 759, 772, 322, 782, 795, 809, 820, 834, 842, 862, 866, 891, 897]
+related_issues: [733, 739, 744, 749, 755, 759, 772, 322, 782, 795, 809, 820, 834, 842, 862, 866, 891, 897, 905]
 related_prs: []
 related_docsets:
   - docs/domains/agent-orchestration/product/requirements.md
@@ -62,6 +62,7 @@ approvals:
 | AGO-9c.2 | #866 | Typed follow-up dispatch покрывает PR/MR и provider-native review signal: `DispatchFollowUpIntent` поддерживает `update_pull_request` и `create_review_signal`, вызывает только `provider-hub.UpdatePullRequest`/`CreateReviewSignal`, строго сверяет сохранённый PR/MR target ref, требует provider expected version для PR update, сохраняет safe operation/result refs и публикует `agent.follow_up.updated` или `agent.follow_up.review_signaled`. Review signal не является governance decision. |
 | AGO-9d | #891 | Human gate wait/result lifecycle готов: `agent-manager` создаёт owner decision wait по session/run/stage/acceptance/provider refs, записывает normalized outcome `approve`/`reject`/`request_changes`/`answer` через expected version, хранит только interaction/governance refs, safe summary/status/idempotency и публикует `agent.human_gate.requested`/`agent.human_gate.resolved` без transport payload, governance body, prompt/transcript/logs/PII. |
 | AGO-10 | #897 | Эксплуатационный контур `agent-manager` готов: Dockerfile, Kubernetes manifests, migration job, PostgreSQL bootstrap/env/secret wiring, `services.yaml`, smoke-проверка, runbook и monitoring docs. |
+| AGO-11 | #905 | Human gate resume consumer готов: `agent-manager` потребляет `interaction.request.response_recorded` из platform event log, находит wait по `owner_request_ref`, записывает normalized outcome через существующий `RecordHumanGateDecision`, сохраняет только safe interaction refs/status/fingerprint/version и не меняет `interaction-hub` producer/transport. |
 
 ## Статус операций `AgentManagerService`
 
@@ -80,7 +81,7 @@ approvals:
 | `CreateFollowUpIntent` | Слой хранения, use-case и gRPC handler готовы; команда валидирует session/run/stage/acceptance связи, поддерживает idempotency replay и conflict для отличающегося payload, хранит только safe provider refs/title/summary/hints/digest/status и публикует `agent.follow_up.requested` без provider write | AGO-9a |
 | `DispatchFollowUpIntent` | Слой хранения, use-case, typed provider-hub client и gRPC handler готовы; команда требует expected version, поддерживает idempotency replay/conflict, резервирует dispatch до provider write, принимает `FollowUpDispatchKind` + typed `oneof`, вызывает `provider-hub.CreateIssue`/`UpdateIssue`/`CreateComment`/`UpdateComment`/`UpdatePullRequest`/`CreateReviewSignal`, обновляет intent до `created`/`updated`/`commented`/`review_signaled`/`failed` и хранит только safe operation/result refs | AGO-9c, AGO-9c.1, AGO-9c.2 |
 | `RecordAgentActivity` / `ListAgentActivities` | Слой хранения, use-case и gRPC handlers готовы; record поддерживает idempotency replay/conflict и safe-storage guards для activity kind/status/tool metadata/timestamps/summary/digest/refs/details; list читает timeline по session/run с фильтрами и cursor pagination | AGO-9b |
-| `RequestHumanGate` / `RecordHumanGateDecision` / `GetHumanGateRequest` / `ListHumanGateRequests` | Слой хранения, use-case и gRPC handlers готовы; request создаёт `waiting` owner decision state с idempotency replay/conflict и refs на interaction/governance request, record требует expected version и сохраняет normalized outcome + safe refs/summary без внешних payload; list/get читают ожидания по session/run/stage/status/outcome | AGO-9d |
+| `RequestHumanGate` / `RecordHumanGateDecision` / `GetHumanGateRequest` / `ListHumanGateRequests` | Слой хранения, use-case и gRPC handlers готовы; request создаёт `waiting` owner decision state с idempotency replay/conflict и refs на interaction/governance request, record требует expected version и сохраняет normalized outcome + safe refs/summary без внешних payload; event consumer `interaction.request.response_recorded` вызывает тот же lifecycle по safe refs/fingerprint/version; list/get читают ожидания по session/run/stage/status/outcome | AGO-9d, AGO-11 |
 | `GetAgentSession` / `ListAgentRuns` | Слой хранения, use-case и gRPC handlers готовы; `GetAgentSession` возвращает последний снимок при наличии указателя | AGO-4 |
 
 ## Синхронизация с параллельными доменами
@@ -91,7 +92,7 @@ approvals:
 | `runtime-manager` | Готово для AGO-7/AGO-10 | `agent-manager` вызывает `PrepareRuntime(agent_run_id, workspace policy, runtime profile, placement constraints)` при включённой runtime preparation; deploy-контур включает явный env switch и gRPC secret ref, а workspace остаётся у runtime. |
 | `provider-hub` | Готово для AGO-9c.2/AGO-10 | `agent-manager` вызывает typed `CreateIssue`, `UpdateIssue`, `CreateComment`, `UpdateComment`, `UpdatePullRequest` и `CreateReviewSignal`, хранит только safe operation/result refs; deploy-контур включает provider-hub gRPC secret ref, но provider write pipeline, adapter state и provider-native истина остаются у `provider-hub`. |
 | `risk-and-release-governance` | Для governance-backed gates после AGO-9d | `agent-manager` хранит `governance_gate_request_ref`/`governance_decision_ref` и normalized outcome; governance/risk/release decision body и policy engine остаются у `governance-manager`. |
-| `interaction-hub` | Для transport delivery/callback после AGO-9d | `agent-manager` хранит `interaction_request_ref`/`interaction_response_ref` и normalized outcome; transport request/response lifecycle, callback body и delivery каналы остаются у `interaction-hub`. |
+| `interaction-hub` | Готово для Human gate resume consumer; producer/read surface развивается в домене `interaction-hub` | `agent-manager` хранит `interaction_request_ref`/`interaction_response_ref` и normalized outcome, а consumer читает safe `interaction.request.response_recorded` по `owner_request_ref`; transport request/response lifecycle, callback body, delivery каналы и owner inbox остаются у `interaction-hub`. |
 | `codex-hook-ingress` | После AGO-9b | Persistent timeline готова в `agent-manager`; следующий CHI-срез должен маршрутизировать sanitized `PreToolUse`/`PostToolUse` в `RecordAgentActivity`, сохраняя `codex-hook-ingress` как sanitizer/router/realtime ops feed без долгого хранения tool calls. |
 | `project-catalog` | Готово для AGO-7/AGO-10 | `agent-manager` читает проверенную workspace policy и использует project/repository refs без владения проектной политикой; deploy-контур включает project-catalog gRPC secret ref только для runtime preparation. |
 | `access-manager` | Перед открытием команд через gateway/MCP | Действия доступа заведены в AGO-1; текущие gRPC use-case не обходят будущие сервисные проверки, но не реализуют полноценный контур авторизации команд. |

@@ -276,6 +276,8 @@ approvals:
 
 `HumanGateRequest` — авторитетная модель ожидания и результата owner decision в `agent-manager`. Она связывает решение с session/run/stage/acceptance и provider-native target refs, но не владеет транспортом сообщения и не хранит governance decision body. Повтор `RequestHumanGate` с тем же command/idempotency key возвращает тот же wait только при совпадении нормализованного payload. `RecordHumanGateDecision` требует expected version, переводит ожидание в `resolved` и сохраняет normalized outcome для следующего шага flow.
 
+Event-driven resume идёт через уже очищенное событие `interaction.request.response_recorded`. Для Human gate `interaction-hub` указывает `owner_service=agent_manager`, `request_kind=human_gate`, `owner_request_ref` на `HumanGateRequest` и safe refs `request_id`/`response_id`. Consumer `agent-manager` принимает только action/status/version/timestamps из event log и вычисленный digest безопасного event snapshot; raw response body, callback payload, transport delivery body, prompt/transcript/logs/PII не копируются. Replay одного `response_id` возвращает уже записанный result, а несовпадающий outcome, request/response ref, fingerprint или interaction request version получает conflict.
+
 | Поле | Тип | Может быть пустым | Примечание |
 |---|---|---:|---|
 | `id` | uuid | нет | Идентификатор ожидания Human gate. |
