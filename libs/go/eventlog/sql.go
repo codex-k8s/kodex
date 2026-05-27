@@ -14,6 +14,7 @@ var (
 	queryEventLogAppend             = mustLoadQuery("event_log__append")
 	queryEventLogClaim              = mustLoadQuery("event_log__claim")
 	queryEventLogAdvanceCheckpoint  = mustLoadQuery("event_log__advance_checkpoint")
+	queryEventLogDeferCheckpoint    = mustLoadQuery("event_log__defer_checkpoint")
 	queryEventLogReleaseCheckpoint  = mustLoadQuery("event_log__release_checkpoint")
 	queryEventLogEnsureCheckpoint   = mustLoadQuery("event_log__ensure_checkpoint")
 	queryEventLogGetStoredEventByID = mustLoadQuery("event_log__get_stored_event_by_id")

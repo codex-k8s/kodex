@@ -249,6 +249,17 @@ type ReconcileBootstrapMergeSignalInput struct {
 	Meta          value.CommandMeta
 }
 
+// BootstrapMergeSignalDiagnosticInput records a safe bootstrap merge signal that cannot yet import policy.
+type BootstrapMergeSignalDiagnosticInput struct {
+	ProjectID         uuid.UUID
+	RepositoryID      uuid.UUID
+	MergeSignal       BootstrapRepositoryMergeSignal
+	SignalFingerprint string
+	ErrorCode         string
+	ErrorSummary      string
+	Summary           string
+}
+
 // OnboardingSignalReconciliationInput contains safe metadata for project-side signal status.
 type OnboardingSignalReconciliationInput struct {
 	ProjectID            uuid.UUID

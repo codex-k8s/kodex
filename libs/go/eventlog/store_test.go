@@ -74,6 +74,22 @@ func TestClaimValidatesLeaseContract(t *testing.T) {
 	}
 }
 
+func TestDeferValidatesLeaseContract(t *testing.T) {
+	t.Parallel()
+
+	store := &Store{db: panicDatabase{}}
+	now := time.Date(2026, 5, 4, 13, 0, 0, 0, time.UTC)
+	err := store.Defer(context.Background(), DeferParams{
+		ConsumerName: "projection",
+		LeaseOwner:   "worker-1",
+		Now:          now,
+		LockedUntil:  now,
+	})
+	if !errors.Is(err, ErrInvalidClaim) {
+		t.Fatalf("Defer() err = %v, want %v", err, ErrInvalidClaim)
+	}
+}
+
 func TestPostgresIntegrationAppendClaimAdvanceAndFanOut(t *testing.T) {
 	dsn := os.Getenv("KODEX_EVENTLOG_TEST_DATABASE_DSN")
 	if dsn == "" {

@@ -4,6 +4,9 @@ SET
     last_sequence_id = GREATEST(last_sequence_id, @last_sequence_id),
     lease_owner = '',
     locked_until = NULL,
+    retry_sequence_id = 0,
+    retry_attempt = 0,
+    last_error = '',
     updated_at = @updated_at
 WHERE consumer_name = @consumer_name
   AND lease_owner = @lease_owner

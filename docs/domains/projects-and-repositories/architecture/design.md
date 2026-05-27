@@ -153,20 +153,27 @@ sequenceDiagram
 sequenceDiagram
   participant W as webhook/reconciliation
   participant H as provider-hub
+  participant C as eventconsumer
   participant P as project-catalog
   participant DB as project DB
   W->>H: provider merge event or reconciliation
   H->>H: update PR/MR projection and safe refs
-  W->>P: ReconcileBootstrapMergeSignal(safe signal, checked artifact)
-  P->>P: validate signal, artifact digest/version, binding, provider refs, base branch
-  P->>DB: upsert OnboardingSignalReconciliation(processing)
-  P->>P: ImportBootstrapServicesPolicy(validated services.yaml)
-  P->>DB: insert ServicesPolicy + descriptors + docs, activate repository binding
-  P->>DB: update OnboardingSignalReconciliation(imported or failed)
-  P-->>W: active binding + checked policy
+  H-->>C: provider.repository.bootstrap_merged
+  C->>C: validate event type/version and safe refs
+  alt checked artifact input is available
+    C->>P: ReconcileBootstrapMergeSignal(safe signal, checked artifact)
+    P->>P: validate signal, artifact digest/version, binding, provider refs, base branch
+    P->>DB: upsert OnboardingSignalReconciliation(processing)
+    P->>P: ImportBootstrapServicesPolicy(validated services.yaml)
+    P->>DB: insert ServicesPolicy + descriptors + docs, activate repository binding
+    P->>DB: update OnboardingSignalReconciliation(imported or failed)
+  else provider event has only safe merge refs
+    C->>P: RecordBootstrapMergeSignalDiagnostic(safe signal, missing_checked_artifact)
+    P->>DB: upsert OnboardingSignalReconciliation(needs_review)
+  end
 ```
 
-Команда `ReconcileBootstrapMergeSignal` является явным project-side caller path для provider-side события `provider.repository.bootstrap_merged`. Она нужна на границе между provider projection и импортом проектной политики: `provider-hub` фиксирует safe merge signal, а вызывающий внутренний контур подготавливает checked artifact metadata и нормализованный payload `services.yaml`. `project-catalog` принимает только safe refs, digest, artifact ref/version и checked projection; сырой YAML, raw webhook body, diff, provider response и файлы не проходят через эту команду.
+Consumer `project-catalog` для события `provider.repository.bootstrap_merged` является тонкой доставкой поверх `platform-event-log`: он проверяет тип/версию события, восстанавливает safe signal input и вызывает доменный use-case. Команда `ReconcileBootstrapMergeSignal` остаётся явным project-side caller path для импорта, когда у вызывающего контура есть checked artifact metadata и нормализованный payload `services.yaml`. Если provider event содержит только safe merge refs, consumer фиксирует `OnboardingSignalReconciliation(needs_review)` с кодом `missing_checked_artifact` и не импортирует проектную политику без checked input. Сырой YAML, raw webhook body, diff, provider response и файлы не проходят через consumer, команду и журнал.
 
 `ReconcileBootstrapMergeSignal` проверяет, что сигнал относится к bootstrap, `signal_key` задан, `provider_target` соответствует repository binding, `base_branch` равен project default branch, `source_ref` указывает на эту ветку, merge commit валиден, artifact digest совпадает с `content_hash`, artifact version привязан к merge commit, watermark digest совпадает с переданным watermark payload, а ожидаемая версия совпадает с pending binding. После штатной проверки доступа команда записывает `OnboardingSignalReconciliation` со статусом `processing`, safe fingerprint, refs и artifact metadata, затем вызывает `ImportBootstrapServicesPolicy`. Успешный импорт переводит запись в `imported` и связывает её с `ServicesPolicy`; предсказуемая ошибка сохраняется как safe `error_code` и короткий `error_summary`.
 

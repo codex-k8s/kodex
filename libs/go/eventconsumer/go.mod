@@ -1,0 +1,24 @@
+module github.com/codex-k8s/kodex/libs/go/eventconsumer
+
+go 1.25.7
+
+toolchain go1.25.8
+
+require (
+	github.com/codex-k8s/kodex/libs/go/eventlog v0.0.0
+	github.com/google/uuid v1.6.0
+)
+
+require (
+	github.com/codex-k8s/kodex/libs/go/outbox v0.0.0 // indirect
+	github.com/jackc/pgpassfile v1.0.0 // indirect
+	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
+	github.com/jackc/pgx/v5 v5.9.2 // indirect
+	github.com/jackc/puddle/v2 v2.2.2 // indirect
+	golang.org/x/sync v0.19.0 // indirect
+	golang.org/x/text v0.33.0 // indirect
+)
+
+replace github.com/codex-k8s/kodex/libs/go/eventlog => ../eventlog
+
+replace github.com/codex-k8s/kodex/libs/go/outbox => ../outbox
