@@ -70,6 +70,10 @@
           "binary_payload",
           "skill_manifest",
           "skill_content",
+          "skill_script",
+          "skill_asset",
+          "workspace_path",
+          "local_path",
           "mcp.tools_call_payload"
         ]
       }
@@ -147,6 +151,8 @@
         "prompt_digest",
         "risk_class",
         "sanitized_reason",
+        "exit_status",
+        "output_digest",
         "bounded_error",
         "provider_artifact_signal",
         "rate_limit_hint",

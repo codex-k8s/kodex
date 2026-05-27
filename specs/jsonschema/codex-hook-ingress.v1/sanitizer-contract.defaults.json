@@ -33,6 +33,10 @@
     "binary_payload",
     "skill_manifest",
     "skill_content",
+    "skill_script",
+    "skill_asset",
+    "workspace_path",
+    "local_path",
     "mcp.tools_call_payload"
   ],
   "forbidden_field_classes": [
@@ -152,6 +156,8 @@
       "safe_summary",
       "prompt_digest",
       "risk_class",
+      "exit_status",
+      "output_digest",
       "bounded_error",
       "provider_artifact_signal",
       "rate_limit_hint",
@@ -182,6 +188,7 @@
       "source_context",
       "run_context",
       "tool_context",
+      "capability_context",
       "risk_class",
       "sanitized_reason",
       "payload_digest",

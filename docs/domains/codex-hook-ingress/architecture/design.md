@@ -5,8 +5,8 @@ title: kodex - дизайн codex-hook-ingress
 status: active
 owner_role: SA
 created_at: 2026-05-22
-updated_at: 2026-05-26
-related_issues: [698, 753, 778, 786, 793, 808, 823, 836, 322, 834]
+updated_at: 2026-05-27
+related_issues: [698, 753, 778, 786, 793, 808, 823, 836, 854, 322, 834]
 related_prs: []
 related_adrs: []
 approvals:
@@ -135,7 +135,7 @@ Machine-readable форма CHI-1 живёт в `specs/jsonschema/codex-hook-ing
 | `actor_ref`, `source_ref` | Кто инициировал runtime и какой emitter/sidecar отправил событие. |
 | `run_id`, `session_id`, `slot_id`, `turn_id` | Связь с агентной сессией и runtime. |
 | `role_ref`, `stage_ref` | Контекст роли и этапа, если выбран `agent-manager`. |
-| `capability_context_ref` | Опциональная ссылка на выбранный skill/capability set для run. |
+| `capability_context_ref` | Опциональная safe-ссылка на выбранный skill/capability set для run; дополняется `capability_digest` и refs/digests внутри `skill_refs`. |
 | `tool_category`, `tool_name`, `tool_use_id` | Safe tool metadata для tool-scoped events. |
 | `safe_summary` | Короткая сводка без секретов и raw payload. |
 | `payload_digest` | Digest исходного очищенного payload или значимых частей. |
@@ -162,9 +162,9 @@ Machine-readable sanitizer contract живёт в `specs/jsonschema/codex-hook-i
 |---|---|---|
 | `SessionStart` | `agent-manager`, `runtime-manager` | Session/run/slot binding, start source, model slug, workspace ref, emitter version. |
 | `UserPromptSubmit` | `agent-manager`, `interaction-hub` | Prompt hash, prompt class, policy pre-check result, safe summary. |
-| `PreToolUse` | `agent-manager`, `governance-manager`, `runtime-manager`, realtime UI | Tool category, tool name, command hash, path category, risk hints, skill/capability ref. Для persistent UI history следующий CHI-срез вызывает `agent-manager.RecordAgentActivity` с sanitized refs/details. |
+| `PreToolUse` | `agent-manager`, `governance-manager`, `runtime-manager`, realtime UI | Tool category, tool name, command hash, path category, risk hints, skill/capability refs. Для persistent UI history route вызывает `agent-manager.RecordAgentActivity` с sanitized refs/details. |
 | `PermissionRequest` | `governance-manager`, `agent-manager`, `interaction-hub` | Request id, tool category, sanitized reason, risk class, timeout, capability ref. |
-| `PostToolUse` | `agent-manager`, `runtime-manager`, `provider-hub`, realtime UI | Exit status, bounded error, artifact signal, rate-limit hint, command digest. Для persistent UI history следующий CHI-срез вызывает `agent-manager.RecordAgentActivity` без raw stdout/stderr/tool response. |
+| `PostToolUse` | `agent-manager`, `runtime-manager`, `provider-hub`, realtime UI | Exit status, bounded error, artifact signal, rate-limit hint, command digest, skill/capability refs. Для persistent UI history route вызывает `agent-manager.RecordAgentActivity` без raw stdout/stderr/tool response. |
 | `Stop` | `agent-manager`, `runtime-manager`, `provider-hub`, `governance-manager`, `interaction-hub` | Turn status, pending actions, stop summary, provider signals, checkpoint refs. |
 
 ## PermissionRequest bridge
@@ -207,9 +207,9 @@ sequenceDiagram
 | Кто выбирает skill для run | `agent-manager` | Role/stage/flow/project policy, required/allowed/forbidden lists, invocation policy. |
 | Кто кладёт skill в workspace | `runtime-manager` | Materialization path, file permissions, sandbox, script execution profile, local config. |
 | Кто проверяет MCP/tool dependencies | `agent-manager`, `platform-mcp-server`, `access-manager` | Skill metadata может требовать tools, но права выдаются отдельно. |
-| Что видит hook ingress | `codex-hook-ingress` | Только `capability_context_ref`, `skill_ref`, digest и safe usage signal. |
+| Что видит hook ingress | `codex-hook-ingress` | Только `capability_context_ref`, `capability_digest`, `skill_ref`, `source_ref`, `package_ref`, `package_installation_ref`, `package_version_ref`, `manifest_digest`, `capability_ref`, `invocation_policy_ref`, `policy_summary_digest` и safe usage signal. |
 
-Если hook был вызван skill-provided script, emitter может передать `skill_ref` и `script_ref`, но не содержимое script, не output целиком и не локальные секреты.
+Если hook был вызван skill-provided script, emitter может передать `skill_ref`, refs источника/пакета/версии и digest manifest/policy, но не содержимое script, `SKILL.md`, references/assets, manifest payload, output целиком, materialized workspace path или локальные секреты. Refs валидируются как bounded safe refs; path-like значения отклоняются до маршрутизации.
 
 ## Ошибки и безопасное поведение
 

@@ -50,7 +50,26 @@ func TestActivityRouteRecordsPreToolUseSafeRequest(t *testing.T) {
 	if request.GetMeta().GetActor().GetType() != activityRouteActorType || request.GetMeta().GetActor().GetId() != activityRouteActorID {
 		t.Fatalf("meta actor = %+v", request.GetMeta().GetActor())
 	}
-	assertContainsAll(t, request.GetSafeRefsJson(), "hook-event:", "session:", "run:", "slot:", "tool-use:", "capability-context:", "skill:")
+	assertContainsAll(
+		t,
+		request.GetSafeRefsJson(),
+		"hook-event:",
+		"session:",
+		"run:",
+		"slot:",
+		"tool-use:",
+		`"capability_context_ref":"capability-context:run-5555:guidance"`,
+		`"capability_digest_ref":"`+digest("q")+`"`,
+		`"capability_selection_ref":"agent-manager:capability-selection:123"`,
+		`"capability_materialization_ref":"runtime-manager:materialization:456"`,
+		`"source_kind":"package"`,
+		`"source_ref":"package-source:go-guidelines"`,
+		`"package_ref":"package:go-guidelines"`,
+		`"package_version_ref":"package-version:go-guidelines:v1"`,
+		`"manifest_digest_ref":"`+digest("m")+`"`,
+		`"capability_ref":"capability:guidance:go-guidelines"`,
+		`"policy_summary_digest_ref":"`+digest("p")+`"`,
+	)
 	assertContainsAll(t, request.GetSafeDetailsJson(), `"hook_event_name":"PreToolUse"`, `"risk_class":"low"`, `"tool_category":"shell"`)
 }
 
@@ -159,6 +178,16 @@ func validActivityEvent(eventName hookenum.HookEventName) value.SafeHookEvent {
 	mcpToolName := "functions.exec_command"
 	versionRef := "skill-version:go-guidelines@v1"
 	packageRef := "package-installation:guidance-1"
+	sourceRef := "package-source:go-guidelines"
+	packageVersionRef := "package-version:go-guidelines:v1"
+	packageEntryRef := "package:go-guidelines"
+	manifestDigest := digest("m")
+	capabilityRef := "capability:guidance:go-guidelines"
+	capabilityKind := "guidance"
+	packageSlug := "go-guidelines"
+	packageVersionLabel := "v1"
+	invocationPolicyRef := "policy:skill:go-guidelines:default"
+	policySummaryDigest := digest("p")
 	event := value.SafeHookEvent{
 		EventID:       uuid.MustParse("11111111-2222-4111-8111-111111111111"),
 		HookEventName: eventName,
@@ -190,13 +219,27 @@ func validActivityEvent(eventName hookenum.HookEventName) value.SafeHookEvent {
 			MCPToolName:   &mcpToolName,
 		},
 		CapabilityContext: &value.CapabilityContext{
-			CapabilityContextID: uuid.MustParse("88888888-8888-4888-8888-888888888888"),
-			ScopeKind:           "run",
+			CapabilityContextID:  uuid.MustParse("88888888-8888-4888-8888-888888888888"),
+			CapabilityContextRef: "capability-context:run-5555:guidance",
+			CapabilityDigest:     digest("q"),
+			SelectedByRef:        "agent-manager:capability-selection:123",
+			MaterializedByRef:    "runtime-manager:materialization:456",
+			ScopeKind:            "run",
 			SkillRefs: []value.SkillRef{{
-				SourceKind:             "guidance_package",
+				SourceKind:             "package",
 				SkillRef:               "skill:go-guidelines",
 				VersionRef:             &versionRef,
+				SourceRef:              &sourceRef,
+				PackageRef:             &packageEntryRef,
 				PackageInstallationRef: &packageRef,
+				PackageVersionRef:      &packageVersionRef,
+				ManifestDigest:         &manifestDigest,
+				CapabilityRef:          &capabilityRef,
+				CapabilityKind:         &capabilityKind,
+				PackageSlug:            &packageSlug,
+				PackageVersionLabel:    &packageVersionLabel,
+				InvocationPolicyRef:    &invocationPolicyRef,
+				PolicySummaryDigest:    &policySummaryDigest,
 				Digest:                 digest("d"),
 			}},
 		},

@@ -5,8 +5,8 @@ title: kodex - требования к codex-hook-ingress
 status: active
 owner_role: PM
 created_at: 2026-05-22
-updated_at: 2026-05-26
-related_issues: [698, 753, 778, 786, 793, 808, 322, 834]
+updated_at: 2026-05-27
+related_issues: [698, 753, 778, 786, 793, 808, 823, 836, 844, 854, 322, 834]
 related_prs: []
 related_docsets:
   - docs/domains/codex-hook-ingress/architecture/design.md
@@ -94,7 +94,7 @@ Codex запускает hooks как command-обработчики в рабо
 | CHI-FR-17 | Сервис должен публиковать короткую операционную ленту и метрики по событиям, отказам, sanitizer, лимитам, latency и retry. | Обязательно |
 | CHI-FR-18 | Высокочастотные allow-события должны иметь короткий retention и не должны писаться в БД построчно без доменной причины. | Обязательно |
 | CHI-FR-19 | Сервис должен поддерживать идемпотентность по `event_id` и `correlation_id`, чтобы retries emitter/sidecar не создавали дубликаты downstream-событий. | Обязательно |
-| CHI-FR-20 | Сервис должен принимать только ссылки на выбранный capability context и skill refs, если они уже выбраны `agent-manager` и материализованы `runtime-manager`; хранение каталога skills, manifest и текстов `SKILL.md` в `codex-hook-ingress` запрещено. | Обязательно |
+| CHI-FR-20 | Сервис должен принимать только ссылки и digest на выбранный capability context и skill refs, если они уже выбраны `agent-manager`, связаны с source/package/version/policy refs и материализованы `runtime-manager`; хранение каталога skills, manifest payload, package installation state, workspace paths и текстов `SKILL.md` в `codex-hook-ingress` запрещено. | Обязательно |
 | CHI-FR-21 | Machine-readable контракт CHI-1 должен быть JSON Schema в `specs/jsonschema/codex-hook-ingress.v1/**`: normalized hook envelope, sanitizer contract и safe examples. Эти схемы не являются proto, OpenAPI, AsyncAPI или MCP tool schema. | Обязательно |
 | CHI-FR-22 | Hook emitter должен запускаться как Codex command hook в slot runtime и читать только JSON object из `stdin`; `transcript_path` не является стабильным интерфейсом и не должен читаться, буферизоваться или пересылаться. | Обязательно |
 | CHI-FR-23 | Local sidecar может использоваться как локальный процесс рядом с Codex runtime для bounded retry buffer, но он должен принимать и хранить только normalized/sanitized envelope после sanitizer. | Обязательно |
@@ -113,12 +113,12 @@ Codex skills рассматриваются как управляемые capabi
 | Область | Требование |
 |---|---|
 | Источник | Источник skill фиксируется как built-in platform source, user/repository source или package source. Для package source авторитетные package/version/install данные отдаёт `package-hub`. |
-| Версия | `agent-manager` фиксирует выбранную версию skill или package installation ref в metadata run. `codex-hook-ingress` принимает только ссылку и digest, если они уже есть в run context. |
+| Версия | `agent-manager` фиксирует выбранную версию skill или package installation ref в metadata run. `codex-hook-ingress` принимает только `version_ref`, `package_version_ref`, `manifest_digest`, `policy_summary_digest` и общий digest, если они уже есть в run context. |
 | Область | Skill может быть доступен на уровне platform, organization, project, repository, flow, stage или role. Решение о применимости принимает `agent-manager` по policy. |
-| Manifest/metadata | `package-hub` хранит package manifest и установку. `agents/openai.yaml`, `SKILL.md` metadata и tool dependencies используются при выборе и materialization, но не копируются в hook ingress. |
+| Manifest/metadata | `package-hub` хранит package manifest и установку. `agents/openai.yaml`, `SKILL.md` metadata и tool dependencies используются при выборе и materialization, но не копируются в hook ingress; допустимы только refs/digests на выбранные записи. |
 | Workspace requirements | `runtime-manager` материализует разрешённые skills в рабочее пространство, следит за путями, правами файлов, scripts/assets/references и sandbox profile. |
 | Выбор | `agent-manager` выбирает allowed/required/forbidden skills для run, role и stage и передаёт runtime только утверждённый skill set. |
-| Materialization | `runtime-manager` получает выбранный skill set и подготавливает локальную структуру для Codex. Hook events могут ссылаться на `capability_context_id` или `skill_ref`, но не передавать содержимое skill. |
+| Materialization | `runtime-manager` получает выбранный skill set и подготавливает локальную структуру для Codex. Hook events могут ссылаться на `capability_context_id`, `capability_context_ref`, `skill_ref` и materialization ref, но не передавать содержимое skill или локальные workspace paths. |
 | Ограничение прав | Skill не расширяет права роли. Если skill требует MCP tools, scripts или внешние системы, это должно быть разрешено отдельно через policy и MCP/permission контуры. |
 
 ## Нефункциональные требования

@@ -2,9 +2,9 @@
 
 ## Назначение
 
-Этот каталог фиксирует CHI-1/CHI-2 machine-readable contract для normalized Codex hook envelope, sanitizer contract и runtime config hook emitter/local sidecar.
+Этот каталог фиксирует machine-readable contract для normalized Codex hook envelope, sanitizer contract и runtime config hook emitter/local sidecar.
 
-Схемы не являются transport contract: `proto`, OpenAPI или AsyncAPI для `SubmitHookEvent` выбираются отдельным срезом. JSON Schema описывает безопасную форму данных и runtime policy, которую hook emitter или local sidecar должен соблюдать до передачи envelope в `codex-hook-ingress`.
+Схемы не являются transport contract: `proto`, OpenAPI или AsyncAPI для `SubmitHookEvent` выбираются отдельным срезом. JSON Schema описывает безопасную форму данных и runtime policy, которую hook emitter или local sidecar должен соблюдать до передачи envelope в `codex-hook-ingress`. Capability context для Codex skills передаётся только как refs/digests; `SKILL.md`, manifest payload, package installation state и local workspace paths в схемы не входят.
 
 ## Файлы
 
@@ -40,4 +40,4 @@ npx --yes ajv-cli@5.0.0 validate --spec=draft2020 \
   -d specs/jsonschema/codex-hook-ingress.v1/hook-emitter-config.defaults.json
 ```
 
-Эта проверка валидирует machine-readable форму схем, defaults и safe examples. Она не генерирует Go-код: CHI-1/CHI-2 не создают transport contract и сервисный каркас.
+Эта проверка валидирует machine-readable форму схем, defaults и safe examples. Она не генерирует Go-код: JSON Schema не создаёт transport contract и сервисный каркас.
