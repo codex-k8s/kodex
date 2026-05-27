@@ -1,0 +1,34 @@
+{
+  "action": "closed",
+  "repository": {
+    "id": 9002001,
+    "full_name": "kodex-smoke/existing-repository"
+  },
+  "pull_request": {
+    "id": 900289,
+    "number": 89,
+    "html_url": "https://example.invalid/kodex-smoke/existing-repository/pull/89",
+    "title": "Adopt existing repository",
+    "state": "closed",
+    "body": "<!-- kodex:artifact v1\nkind: pull_request\nmanaged_by: kodex\nwork_type: repository_adoption\nsource_ref: kodex/adoption\nprovider_operation_ref: provider-hub:operation:00000000-0000-4000-8000-000000000089\n-->\nSafe smoke adoption PR.\nRAW_PROVIDER_PAYLOAD_DO_NOT_LEAK_ADOPTION",
+    "labels": [
+      {
+        "name": "type/repository_adoption"
+      }
+    ],
+    "assignees": [],
+    "merged": true,
+    "merge_commit_sha": "fedcba9876543210fedcba9876543210fedcba98",
+    "base": {
+      "ref": "main",
+      "sha": "cccccccccccccccccccccccccccccccccccccccc"
+    },
+    "head": {
+      "ref": "kodex/adoption",
+      "sha": "dddddddddddddddddddddddddddddddddddddddd"
+    },
+    "merged_at": "2026-05-27T12:44:56Z",
+    "closed_at": "2026-05-27T12:44:56Z",
+    "updated_at": "2026-05-27T12:44:56Z"
+  }
+}

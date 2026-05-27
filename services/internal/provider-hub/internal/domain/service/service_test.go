@@ -2705,30 +2705,33 @@ func TestUpdateRelationshipChecksExpectedVersionBeforeExecutor(t *testing.T) {
 }
 
 type fakeRepository struct {
-	mu                          sync.Mutex
-	err                         error
-	calls                       int
-	missProviderOperationReplay bool
-	recordedSnapshot            entity.ProviderLimitSnapshot
-	recordedRuntimeState        entity.ProviderAccountRuntimeState
-	recordedWebhook             entity.WebhookEvent
-	recordedProjection          providerrepo.ProjectionUpdate
-	processWebhookErr           error
-	webhookAfterProcess         *entity.WebhookEvent
-	recordedProviderEvents      []entity.ProviderEvent
-	recordedOutboxEvents        []entity.OutboxEvent
-	recordedProviderOperation   entity.ProviderOperation
-	adoptionScan                entity.RepositoryAdoptionScanSnapshot
-	mergeSignal                 entity.RepositoryMergeSignal
-	workItemProjection          entity.ProviderWorkItemProjection
-	relationship                entity.ProviderRelationship
-	lastWorkItemLookup          query.ProviderTargetLookup
-	reconciliationRequest       entity.ReconciliationRequest
-	enqueuedSyncCursors         []entity.SyncCursor
-	providerArtifactSignal      entity.ProviderArtifactSignal
-	syncCursor                  entity.SyncCursor
-	syncCursorClaim             providerrepo.SyncCursorClaim
-	reconciliationCompletion    providerrepo.ReconciliationBatchCompletion
+	mu                            sync.Mutex
+	err                           error
+	calls                         int
+	missProviderOperationReplay   bool
+	recordedSnapshot              entity.ProviderLimitSnapshot
+	recordedRuntimeState          entity.ProviderAccountRuntimeState
+	recordedWebhook               entity.WebhookEvent
+	recordedProjection            providerrepo.ProjectionUpdate
+	processWebhookErr             error
+	webhookAfterProcess           *entity.WebhookEvent
+	recordedProviderEvents        []entity.ProviderEvent
+	recordedOutboxEvents          []entity.OutboxEvent
+	recordedOutboxEventHistory    []entity.OutboxEvent
+	recordedProviderOperation     entity.ProviderOperation
+	adoptionScan                  entity.RepositoryAdoptionScanSnapshot
+	mergeSignal                   entity.RepositoryMergeSignal
+	enforceMergeSignalIdempotency bool
+	mergeSignalsByKey             map[string]entity.RepositoryMergeSignal
+	workItemProjection            entity.ProviderWorkItemProjection
+	relationship                  entity.ProviderRelationship
+	lastWorkItemLookup            query.ProviderTargetLookup
+	reconciliationRequest         entity.ReconciliationRequest
+	enqueuedSyncCursors           []entity.SyncCursor
+	providerArtifactSignal        entity.ProviderArtifactSignal
+	syncCursor                    entity.SyncCursor
+	syncCursorClaim               providerrepo.SyncCursorClaim
+	reconciliationCompletion      providerrepo.ReconciliationBatchCompletion
 }
 
 func (r *fakeRepository) Ping(context.Context) error {
@@ -2741,21 +2744,34 @@ func (r *fakeRepository) UpsertAccountRuntimeState(context.Context, entity.Provi
 }
 
 func (r *fakeRepository) StoreWebhookEvent(_ context.Context, webhook entity.WebhookEvent, projection providerrepo.ProjectionUpdate, providerEvents []entity.ProviderEvent, outboxEvents []entity.OutboxEvent) (entity.WebhookEvent, []entity.ProviderEvent, error) {
+	if r.err != nil {
+		return entity.WebhookEvent{}, nil, r.err
+	}
+	projection, outboxEvents, err := r.applyFakeMergeSignalStore(projection, outboxEvents)
+	if err != nil {
+		return entity.WebhookEvent{}, nil, err
+	}
 	r.recordedWebhook = webhook
 	r.recordedProjection = projection
 	r.recordedProviderEvents = providerEvents
 	r.recordedOutboxEvents = outboxEvents
+	r.recordedOutboxEventHistory = append(r.recordedOutboxEventHistory, outboxEvents...)
 	if projection.MergeSignal != nil {
 		r.mergeSignal = *projection.MergeSignal
 	}
-	return webhook, providerEvents, r.err
+	return webhook, providerEvents, nil
 }
 
 func (r *fakeRepository) ProcessWebhookEvent(_ context.Context, webhook entity.WebhookEvent, projection providerrepo.ProjectionUpdate, providerEvents []entity.ProviderEvent, outboxEvents []entity.OutboxEvent) (entity.WebhookEvent, error) {
+	projection, outboxEvents, err := r.applyFakeMergeSignalStore(projection, outboxEvents)
+	if err != nil {
+		return entity.WebhookEvent{}, err
+	}
 	r.recordedWebhook = webhook
 	r.recordedProjection = projection
 	r.recordedProviderEvents = providerEvents
 	r.recordedOutboxEvents = outboxEvents
+	r.recordedOutboxEventHistory = append(r.recordedOutboxEventHistory, outboxEvents...)
 	if projection.MergeSignal != nil {
 		r.mergeSignal = *projection.MergeSignal
 	}
@@ -2766,6 +2782,70 @@ func (r *fakeRepository) ProcessWebhookEvent(_ context.Context, webhook entity.W
 		return webhook, r.processWebhookErr
 	}
 	return webhook, r.err
+}
+
+func (r *fakeRepository) applyFakeMergeSignalStore(projection providerrepo.ProjectionUpdate, outboxEvents []entity.OutboxEvent) (providerrepo.ProjectionUpdate, []entity.OutboxEvent, error) {
+	if projection.MergeSignal == nil || !r.enforceMergeSignalIdempotency {
+		return projection, outboxEvents, nil
+	}
+	if r.mergeSignalsByKey == nil {
+		r.mergeSignalsByKey = map[string]entity.RepositoryMergeSignal{}
+	}
+	signal := *projection.MergeSignal
+	stored, ok := r.mergeSignalsByKey[signal.SignalKey]
+	if ok {
+		if !sameFakeRepositoryMergeSignal(stored, signal) {
+			return providerrepo.ProjectionUpdate{}, nil, errs.ErrConflict
+		}
+		projection.MergeSignal = &stored
+		return projection, filterMergeSignalOutboxEvents(outboxEvents), nil
+	}
+	r.mergeSignalsByKey[signal.SignalKey] = signal
+	r.mergeSignal = signal
+	return projection, outboxEvents, nil
+}
+
+func sameFakeRepositoryMergeSignal(left entity.RepositoryMergeSignal, right entity.RepositoryMergeSignal) bool {
+	return left.SignalKey == right.SignalKey &&
+		left.Kind == right.Kind &&
+		left.ProviderSlug == right.ProviderSlug &&
+		sameOptionalUUID(left.ProjectID, right.ProjectID) &&
+		sameOptionalUUID(left.RepositoryID, right.RepositoryID) &&
+		left.RepositoryFullName == right.RepositoryFullName &&
+		left.ProviderRepositoryID == right.ProviderRepositoryID &&
+		left.WorkItemProjectionID == right.WorkItemProjectionID &&
+		left.ProviderWorkItemID == right.ProviderWorkItemID &&
+		left.PullRequestNumber == right.PullRequestNumber &&
+		left.PullRequestProviderID == right.PullRequestProviderID &&
+		left.PullRequestURL == right.PullRequestURL &&
+		left.BaseBranch == right.BaseBranch &&
+		left.HeadBranch == right.HeadBranch &&
+		left.MergeCommitSHA == right.MergeCommitSHA &&
+		left.SourceRef == right.SourceRef &&
+		left.RelatedProviderOperationRef == right.RelatedProviderOperationRef &&
+		left.WatermarkDigest == right.WatermarkDigest &&
+		left.Status == right.Status
+}
+
+func filterMergeSignalOutboxEvents(events []entity.OutboxEvent) []entity.OutboxEvent {
+	filtered := events[:0]
+	for _, event := range events {
+		if event.AggregateType == providerAggregateRepositoryMergeSignal {
+			continue
+		}
+		filtered = append(filtered, event)
+	}
+	return filtered
+}
+
+func (r *fakeRepository) outboxEventCount(eventType string) int {
+	count := 0
+	for _, event := range r.recordedOutboxEventHistory {
+		if event.EventType == eventType {
+			count++
+		}
+	}
+	return count
 }
 
 func (r *fakeRepository) GetWebhookEvent(context.Context, uuid.UUID) (entity.WebhookEvent, error) {

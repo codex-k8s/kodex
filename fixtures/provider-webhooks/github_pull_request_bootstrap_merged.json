@@ -10,7 +10,7 @@
     "html_url": "https://example.invalid/kodex-smoke/repository/pull/88",
     "title": "Bootstrap services policy",
     "state": "closed",
-    "body": "<!-- kodex:artifact v1\nkind: pull_request\nmanaged_by: kodex\nwork_type: repository_bootstrap\nsource_ref: kodex/bootstrap\nprovider_operation_ref: provider-hub:operation:00000000-0000-4000-8000-000000000088\n-->\nSafe smoke bootstrap PR.",
+    "body": "<!-- kodex:artifact v1\nkind: pull_request\nmanaged_by: kodex\nwork_type: repository_bootstrap\nsource_ref: kodex/bootstrap\nprovider_operation_ref: provider-hub:operation:00000000-0000-4000-8000-000000000088\n-->\nSafe smoke bootstrap PR.\nRAW_PROVIDER_PAYLOAD_DO_NOT_LEAK_BOOTSTRAP",
     "labels": [
       {
         "name": "type/repository_bootstrap"

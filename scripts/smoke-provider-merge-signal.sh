@@ -3,7 +3,9 @@ set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-FIXTURE_PATH="${KODEX_PROVIDER_MERGE_SIGNAL_SMOKE_FIXTURE:-${PROJECT_ROOT}/fixtures/provider-webhooks/github_pull_request_bootstrap_merged.json}"
+BOOTSTRAP_FIXTURE_PATH="${PROJECT_ROOT}/fixtures/provider-webhooks/github_pull_request_bootstrap_merged.json"
+ADOPTION_FIXTURE_PATH="${PROJECT_ROOT}/fixtures/provider-webhooks/github_pull_request_adoption_merged.json"
+FIXTURE_PATH="${KODEX_PROVIDER_MERGE_SIGNAL_SMOKE_FIXTURE:-$BOOTSTRAP_FIXTURE_PATH}"
 MODE="${KODEX_PROVIDER_MERGE_SIGNAL_SMOKE_MODE:-fixture}"
 SIGNAL_KEY="${KODEX_PROVIDER_MERGE_SIGNAL_SMOKE_SIGNAL_KEY:-provider:github:repository_merge:bootstrap:github:kodex-smoke/repository:pull_request:88}"
 DELIVERY_ID="${KODEX_PROVIDER_MERGE_SIGNAL_SMOKE_DELIVERY_ID:-smoke-bootstrap-merged}"
@@ -25,7 +27,7 @@ Usage:
   KODEX_PROVIDER_MERGE_SIGNAL_SMOKE_MODE=live-http scripts/smoke-provider-merge-signal.sh
 
 Modes:
-  fixture    Hermetic staged smoke. Runs the safe GitHub pull_request merged fixture through
+  fixture    Hermetic staged smoke. Runs safe GitHub pull_request merged fixtures through
              integration-gateway route tests and provider-hub domain/read/outbox tests.
              No live secret, real domain, Kubernetes cluster, or provider API is required.
 
@@ -34,14 +36,18 @@ Modes:
              configured webhook secret and an existing bootstrap/adoption PR projection in
              provider-hub. Set KODEX_PROVIDER_MERGE_SIGNAL_SMOKE_CHECK_EVENT_LOG=true and
              KODEX_PROVIDER_MERGE_SIGNAL_SMOKE_EVENT_LOG_DSN to verify platform-event-log.
+             For adoption, override KODEX_PROVIDER_MERGE_SIGNAL_SMOKE_FIXTURE,
+             KODEX_PROVIDER_MERGE_SIGNAL_SMOKE_SIGNAL_KEY and
+             KODEX_PROVIDER_MERGE_SIGNAL_SMOKE_DELIVERY_ID together.
 USAGE
 }
 
 run_fixture_mode() {
   require_commands go
-  echo "smoke-provider-merge-signal: fixture path ${FIXTURE_PATH#"$PROJECT_ROOT"/}"
-  go test ./services/internal/provider-hub/internal/domain/service -run TestSmokeFixtureGitHubBootstrapMergeSignalPath -count=1
-  go test ./services/external/integration-gateway/internal/transport/http -run TestProviderWebhookForwardsGitHubPullRequestMergedFixture -count=1
+  echo "smoke-provider-merge-signal: bootstrap fixture ${BOOTSTRAP_FIXTURE_PATH#"$PROJECT_ROOT"/}"
+  echo "smoke-provider-merge-signal: adoption fixture ${ADOPTION_FIXTURE_PATH#"$PROJECT_ROOT"/}"
+  go test ./services/internal/provider-hub/internal/domain/service -run 'TestSmokeFixtureGitHubMergeSignal(Path|ReplayAndConflictDiagnostics)$' -count=1
+  go test ./services/external/integration-gateway/internal/transport/http -run TestProviderWebhookForwardsGitHubPullRequestMergedFixtures -count=1
   echo "smoke-provider-merge-signal: fixture/domain/edge path OK"
 }
 
@@ -78,6 +84,9 @@ with open(sys.argv[1], "r", encoding="utf-8") as fixture_file:
 with open(sys.argv[2], "r", encoding="utf-8") as response_file:
     response = json.load(response_file)
 signal_key = sys.argv[3]
+expected_kind = "REPOSITORY_MERGE_SIGNAL_KIND_BOOTSTRAP"
+if ":repository_merge:adoption:" in signal_key:
+    expected_kind = "REPOSITORY_MERGE_SIGNAL_KIND_ADOPTION"
 
 signal = response.get("mergeSignal") or {}
 pull_request = fixture["pull_request"]
@@ -85,7 +94,7 @@ repository = fixture["repository"]
 
 checks = {
     "signalKey": signal_key,
-    "kind": "REPOSITORY_MERGE_SIGNAL_KIND_BOOTSTRAP",
+    "kind": expected_kind,
     "providerSlug": "github",
     "repositoryFullName": repository["full_name"],
     "baseBranch": pull_request["base"]["ref"],

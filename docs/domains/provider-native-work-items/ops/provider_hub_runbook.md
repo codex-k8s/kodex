@@ -6,7 +6,7 @@ status: active
 owner_role: SRE
 created_at: 2026-05-14
 updated_at: 2026-05-27
-related_issues: [754, 770, 840, 895]
+related_issues: [754, 770, 840, 895, 908, 909]
 related_alerts: []
 approvals:
   required: ["Owner"]
@@ -76,10 +76,12 @@ Smoke не выполняет реальные операции GitHub/GitLab и
 scripts/smoke-provider-merge-signal.sh
 ```
 
-Этот staged smoke использует синтетический safe fixture GitHub `pull_request closed + merged` из `fixtures/provider-webhooks/github_pull_request_bootstrap_merged.json` и не требует live webhook secret, реального домена, provider API или Kubernetes. Проверка состоит из двух частей:
+Этот staged smoke использует синтетические safe fixtures GitHub `pull_request closed + merged` для bootstrap и adoption из `fixtures/provider-webhooks/**` и не требует live webhook secret, реального домена, provider API или Kubernetes. Проверка состоит из двух частей:
 
-- `integration-gateway` route test принимает подписанный тестовым секретом fixture и передаёт envelope в owner client без хранения gateway state;
-- `provider-hub` domain test обрабатывает тот же fixture через GitHub normalizer, создаёт safe `RepositoryMergeSignal`, читает его через `GetRepositoryMergeSignal` и проверяет локальный outbox event `provider.repository.bootstrap_merged`.
+- `integration-gateway` route test принимает подписанные тестовым секретом fixtures и передаёт envelope в owner client без хранения gateway state;
+- `provider-hub` domain test обрабатывает fixtures через GitHub normalizer, создаёт safe `RepositoryMergeSignal`, читает его через `GetRepositoryMergeSignal`, проверяет локальные outbox events `provider.repository.bootstrap_merged` / `provider.repository.adoption_merged`, replay без дубля merge event и conflict diagnostic без raw payload.
+
+В fixture mode проверяется граница хранения: canonical webhook payload остаётся только во внутреннем `provider_hub_webhook_events.payload_json`, а `RepositoryMergeSignal`, read surface, normalized provider event payload и outbox/event-log payload не содержат raw/canonical webhook body, body PR, provider response, diff, checked artifact payload или checked `services.yaml`.
 
 Live HTTP режим запускается отдельно:
 
@@ -90,7 +92,15 @@ KODEX_PROVIDER_MERGE_SIGNAL_SMOKE_PROVIDER_HUB_GRPC_ADDR=127.0.0.1:19095 \
 scripts/smoke-provider-merge-signal.sh
 ```
 
-Для live HTTP режима нужны настроенный webhook secret, доступный `integration-gateway`, доступный gRPC `provider-hub` и уже существующая bootstrap/adoption PR-проекция с `project_repository_binding` в `provider-hub`. Без этой provider-side precondition один webhook корректно обновит PR-проекцию, но не создаст onboarding merge signal. Если требуется проверить публикацию в `platform-event-log`, дополнительно задаётся `KODEX_PROVIDER_MERGE_SIGNAL_SMOKE_CHECK_EVENT_LOG=true` и DSN event-log через безопасный локальный env; значение DSN не выводится.
+Для live HTTP режима нужны настроенный webhook secret, доступный `integration-gateway`, доступный gRPC `provider-hub` и уже существующая bootstrap/adoption PR-проекция с `project_repository_binding` в `provider-hub`. Без этой provider-side precondition один webhook корректно обновит PR-проекцию, но не создаст onboarding merge signal. Для adoption live check вместе переопределяются `KODEX_PROVIDER_MERGE_SIGNAL_SMOKE_FIXTURE`, `KODEX_PROVIDER_MERGE_SIGNAL_SMOKE_SIGNAL_KEY` и `KODEX_PROVIDER_MERGE_SIGNAL_SMOKE_DELIVERY_ID`. Если требуется проверить публикацию в `platform-event-log`, дополнительно задаётся `KODEX_PROVIDER_MERGE_SIGNAL_SMOKE_CHECK_EVENT_LOG=true` и DSN event-log через безопасный локальный env; значение DSN не выводится.
+
+### Граница webhook inbox и safe diagnostics
+
+`provider-hub` сейчас хранит canonical provider webhook payload в `provider_hub_webhook_events.payload_json` для PRV-4 retry/reprocess. Это внутренний inbox сервиса и не safe read surface. Соседние сервисы не должны читать этот payload и не должны использовать его как checked artifact input.
+
+Safe outputs `provider-hub` для bootstrap/adoption merge содержат только provider-owned refs/facts/digests/status/timestamps/version: repository refs, PR refs, branches, merge commit sha, source ref, provider operation ref и watermark digest. Raw/canonical webhook payload, подписи, provider response, body PR, diff, checked artifact payload и checked `services.yaml` не должны попадать в `RepositoryMergeSignal`, gRPC read responses, outbox payload, `platform-event-log`, ошибки или safe diagnostics.
+
+Отказ от хранения полного webhook payload, safe envelope, encryption-at-rest, retention/TTL, re-fetch/reprocess и миграция текущей схемы отслеживаются отдельным privacy-hardening срезом #908.
 
 ## Диагностика миграций
 
