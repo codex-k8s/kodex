@@ -1,0 +1,181 @@
+---
+doc_id: RB-CK8S-AGENT-MANAGER-0001
+type: runbook
+title: "agent-manager — runbook: развёртывание и smoke-проверка"
+status: active
+owner_role: SRE
+created_at: 2026-05-27
+updated_at: 2026-05-27
+related_issues: [897]
+related_alerts: []
+approvals:
+  required: ["Owner"]
+  status: approved
+  request_id: "owner-2026-05-27-agent-manager-deploy"
+  approved_by: "ai-da-stas"
+  approved_at: 2026-05-27
+---
+
+# Runbook: agent-manager — развёртывание и smoke-проверка
+
+## TL;DR
+
+- Симптом: `agent-manager` не стартует, не проходит readiness, не отвечает по gRPC или не публикует `agent.*` события.
+- Быстрая диагностика: проверить migration job, `Deployment`, `/health/readyz`, `/metrics`, БД `agent-manager`, БД `platform-event-log` и доступность owner-сервисов `package-hub`, `project-catalog`, `runtime-manager`, `provider-hub`.
+- Быстрое восстановление: исправить env/secret/image, повторить migration job, перезапустить `Deployment/agent-manager`, выполнить smoke-скрипт.
+
+## Когда использовать
+
+- После сборки и публикации образов `agent-manager` и `agent-manager-migrations`.
+- После изменения миграций, deploy-манифестов, runtime env, gRPC контрактов или shared Go-библиотек.
+- При сбоях session/run, activity timeline, acceptance, follow-up dispatch, Human gate wait/result, guidance resolution, runtime preparation или outbox-доставки.
+
+## Предпосылки и доступы
+
+- Доступ к Kubernetes namespace платформы.
+- Доступ к логам `agent-manager`, `agent-manager-migrations`, `postgres` и owner-сервисов.
+- Нормализованный `bootstrap.env`, подготовленный bootstrap-процессом.
+- Локально для smoke-проверки нужны `kubectl`, `curl`, `grpcurl` и `go`.
+- Значения секретов, DSN, приватные домены, адреса серверов, raw prompt, transcript, workspace paths и provider payload не выводить в логи, Issue, PR и сообщения.
+
+## Сборка образов
+
+```bash
+KODEX_BUILD_ENV_FILE=/path/to/bootstrap.env \
+  scripts/build-agent-manager-images.sh
+```
+
+Скрипт собирает `agent-manager`, его миграции и минимальные backend-зависимости smoke-пути: `access-manager`, `project-catalog`, `package-hub`, `provider-hub`, `fleet-manager`, `runtime-manager` и migrations image общего event log.
+
+## Smoke-проверка
+
+```bash
+KODEX_SMOKE_ENV_FILE=/path/to/bootstrap.env \
+  scripts/smoke-agent-manager.sh
+```
+
+Путь проверки:
+
+- рендерит манифесты во временный каталог;
+- применяет PostgreSQL stack и bootstrap database job;
+- применяет `platform-event-log` migrations;
+- применяет migrations/deployments для owner-сервисов, нужных текущим включённым интеграциям;
+- применяет `agent-manager` migrations и deployment;
+- проверяет `GET /health/readyz`;
+- проверяет gRPC boundary через `AgentManagerService/ListAgentRuns`.
+
+Smoke не запускает executor, QA runner, UI/gateway, provider adapter или transport-доставку Human gate. Проверка gRPC должна вернуть application-level статус, а не сетевую ошибку.
+
+## Диагностика миграций
+
+```bash
+kubectl -n "$KODEX_PRODUCTION_NAMESPACE" get job/agent-manager-migrations
+kubectl -n "$KODEX_PRODUCTION_NAMESPACE" logs job/agent-manager-migrations
+kubectl -n "$KODEX_PRODUCTION_NAMESPACE" describe job/agent-manager-migrations
+```
+
+Проверить:
+
+- `KODEX_AGENT_MANAGER_DATABASE_DSN` указывает на БД `kodex_agent_manager`;
+- БД создана `kodex-postgres-bootstrap-databases`;
+- образ `agent-manager-migrations` соответствует версии сервиса;
+- migration job не требует доступа к workspace files, GitHub/GitLab, prompt templates или raw provider payload.
+
+## Диагностика rollout и health
+
+```bash
+kubectl -n "$KODEX_PRODUCTION_NAMESPACE" get deployment/agent-manager service/agent-manager
+kubectl -n "$KODEX_PRODUCTION_NAMESPACE" rollout status deployment/agent-manager
+kubectl -n "$KODEX_PRODUCTION_NAMESPACE" describe deployment/agent-manager
+kubectl -n "$KODEX_PRODUCTION_NAMESPACE" logs deploy/agent-manager
+kubectl -n "$KODEX_PRODUCTION_NAMESPACE" port-forward svc/agent-manager 18087:8080
+curl -fsS http://127.0.0.1:18087/health/livez
+curl -fsS http://127.0.0.1:18087/health/readyz
+curl -fsS http://127.0.0.1:18087/metrics
+```
+
+Readiness должна видеть:
+
+- БД `agent-manager`;
+- общую БД `platform-event-log`, если outbox dispatch включён и publisher kind равен `postgres-event-log`.
+
+## Диагностика зависимостей
+
+### package-hub
+
+- Проверить `KODEX_AGENT_MANAGER_PACKAGE_HUB_ENABLED`.
+- Проверить доступность `package-hub` по `KODEX_AGENT_MANAGER_PACKAGE_HUB_GRPC_ADDR`.
+- Проверить, что `KODEX_AGENT_MANAGER_PACKAGE_HUB_GRPC_AUTH_TOKEN` соответствует boundary token `package-hub`.
+- `agent-manager` не хранит manifest payload, `SKILL.md`, scripts, assets или package source.
+
+### runtime preparation
+
+- Проверить `KODEX_AGENT_MANAGER_RUNTIME_PREPARATION_ENABLED`.
+- Проверить доступность `project-catalog` и `runtime-manager`.
+- Проверить `KODEX_AGENT_MANAGER_PROJECT_CATALOG_GRPC_AUTH_TOKEN` и `KODEX_AGENT_MANAGER_RUNTIME_MANAGER_GRPC_AUTH_TOKEN`.
+- Checkout, workspace paths, `.kodex/guidance/*` и `.kodex/context/agent-run.json` остаются у `runtime-manager`; `agent-manager` хранит только safe refs/status/fingerprint/diagnostic summary.
+
+### provider-hub follow-up dispatch
+
+- Проверить `KODEX_AGENT_MANAGER_PROVIDER_HUB_WRITE_ENABLED`.
+- Проверить доступность `provider-hub` по `KODEX_AGENT_MANAGER_PROVIDER_HUB_GRPC_ADDR`.
+- Проверить `KODEX_AGENT_MANAGER_PROVIDER_HUB_GRPC_AUTH_TOKEN`.
+- `agent-manager` вызывает только typed provider-hub operations и не ходит напрямую в GitHub/GitLab.
+
+### platform-event-log
+
+- Проверить `platform-event-log-migrations`.
+- Проверить `KODEX_AGENT_MANAGER_EVENT_LOG_DATABASE_DSN`.
+- Если события не доходят, проверить локальную outbox-таблицу `agent-manager` и короткую причину последней ошибки публикации.
+
+### PostgreSQL
+
+- Проверить доступность `postgres`.
+- Проверить, что database bootstrap job создаёт `kodex_agent_manager`.
+- Проверить лимиты пула: `KODEX_AGENT_MANAGER_DATABASE_MAX_CONNS` и `KODEX_AGENT_MANAGER_EVENT_LOG_DATABASE_MAX_CONNS` должны учитывать число replicas и не создавать connection storm.
+
+## Частые отказы
+
+| Симптом | Вероятная причина | Что проверить |
+|---|---|---|
+| `agent-manager-migrations` падает | БД не создана, неверный DSN или не тот образ миграций | bootstrap job, `KODEX_AGENT_MANAGER_DATABASE_DSN`, image tag |
+| `/health/readyz` не проходит | Недоступна БД `agent-manager` или `platform-event-log` | DSN, PostgreSQL, event-log migrations |
+| gRPC возвращает `Unauthenticated` | Неверный runtime gRPC token | `KODEX_AGENT_MANAGER_GRPC_AUTH_TOKEN` в `kodex-platform-runtime` |
+| `StartAgentRun` получает dependency unavailable | Недоступен `package-hub`, `project-catalog` или `runtime-manager` | соответствующий gRPC addr/token и rollout owner-сервиса |
+| `DispatchFollowUpIntent` остаётся failed | Ошибка typed provider write через `provider-hub` | provider operation ref, safe status/error, provider-hub logs без raw payload |
+| Outbox backlog растёт | Event log DSN недоступен или publisher не успевает | локальная outbox-таблица, event-log БД, outbox лимиты |
+
+## Митигирование
+
+- Если миграции упали из-за временной недоступности БД, удалить failed job и применить migration manifest повторно.
+- Если readiness падает из-за БД, проверить `postgres`, database bootstrap и DSN.
+- Если readiness падает из-за event log, проверить `platform-event-log-migrations` и event-log DSN.
+- Если gRPC transport не отвечает, проверить service port `grpc`, NetworkPolicy и shared gRPC настройки.
+- Если owner-сервис недоступен, исправить его rollout или временно выключить соответствующую интеграцию только осознанным env-переключателем.
+
+## План отката
+
+- Вернуть предыдущий образ `agent-manager` через image tag или предыдущий rendered manifest.
+- Не откатывать миграции вручную без отдельного плана восстановления данных.
+- Если новый сервис блокирует rollout платформы, временно не применять `agent-manager` manifests, но оставить БД и общий event log в согласованном состоянии.
+- Не удалять session/run/activity/acceptance/follow-up/Human gate state вручную: это нарушит идемпотентность orchestration state.
+
+## Проверка результата
+
+- `Job/agent-manager-migrations` завершён успешно.
+- `Deployment/agent-manager` доступен.
+- `/health/readyz` возвращает успешный ответ.
+- `/metrics` доступен.
+- `scripts/smoke-agent-manager.sh` проходит до сообщения `gRPC boundary OK`.
+
+## Пост-действия
+
+- Если была авария, создать Issue с причиной и корректирующими действиями.
+- Если обнаружен пробел в манифестах, env или smoke-проверке, обновить этот runbook в том же изменении, где исправляется поведение.
+- В Issue/PR не прикладывать значения DSN, токенов, адресов целевого сервера, приватных доменов или raw prompt/transcript/provider payload.
+
+## Апрув
+
+- request_id: `owner-2026-05-27-agent-manager-deploy`
+- Решение: approved
+- Комментарий: runbook входит в эксплуатационный контур AGO-10.
