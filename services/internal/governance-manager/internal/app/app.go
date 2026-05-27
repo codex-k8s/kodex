@@ -11,7 +11,6 @@ import (
 	grpcserver "github.com/codex-k8s/kodex/libs/go/grpcserver"
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
 	serviceprocess "github.com/codex-k8s/kodex/libs/go/serviceprocess"
-	accessaccountsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/access_accounts/v1"
 	accessclient "github.com/codex-k8s/kodex/services/internal/governance-manager/internal/clients/access"
 	governanceservice "github.com/codex-k8s/kodex/services/internal/governance-manager/internal/domain/service"
 	governancepostgres "github.com/codex-k8s/kodex/services/internal/governance-manager/internal/repository/postgres/governance"
@@ -114,24 +113,16 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 }
 
 func newAuthorizer(cfg Config) (governanceservice.Authorizer, *grpcruntime.ClientConn, error) {
-	if !cfg.AccessCheckEnabled {
+	switch {
+	case !cfg.AccessCheckEnabled:
 		return governanceservice.AllowAllAuthorizer{}, nil, nil
+	default:
+		return accessclient.NewConnectedAuthorizer(accessclient.Config{
+			Addr:      cfg.AccessManagerGRPCAddr,
+			AuthToken: cfg.AccessManagerGRPCAuthToken,
+			Timeout:   cfg.AccessManagerCheckTimeout,
+		})
 	}
-	accessConfig := accessclient.Config{
-		Addr:      cfg.AccessManagerGRPCAddr,
-		AuthToken: cfg.AccessManagerGRPCAuthToken,
-		Timeout:   cfg.AccessManagerCheckTimeout,
-	}
-	conn, err := accessclient.NewConnection(accessConfig)
-	if err != nil {
-		return nil, nil, err
-	}
-	authorizer, err := accessclient.NewAuthorizer(accessaccountsv1.NewAccessManagerServiceClient(conn), accessConfig)
-	if err != nil {
-		_ = conn.Close()
-		return nil, nil, err
-	}
-	return authorizer, conn, nil
 }
 
 type readyService interface {

@@ -69,19 +69,14 @@ func (s *Service) GetBranchRules(ctx context.Context, id uuid.UUID, meta value.Q
 
 // ListBranchRules returns branch rules matching filter.
 func (s *Service) ListBranchRules(ctx context.Context, input ListBranchRulesInput) (ListBranchRulesResult, error) {
-	return listProjectScoped(s, ctx, input.ProjectID, input.Meta, projectActionBranchRulesRead, projectAggregateBranchRules,
-		func(ctx context.Context) ([]entity.BranchRules, value.PageResult, error) {
-			return s.repository.ListBranchRules(ctx, query.BranchRulesFilter{
-				ProjectID:    input.ProjectID,
-				RepositoryID: input.RepositoryID,
-				Statuses:     input.Statuses,
-				Page:         input.Page,
-			})
-		},
-		func(rules []entity.BranchRules, page value.PageResult) ListBranchRulesResult {
-			return ListBranchRulesResult{BranchRules: rules, Page: page}
-		},
-	)
+	fetch := func(ctx context.Context) ([]entity.BranchRules, value.PageResult, error) {
+		filter := query.BranchRulesFilter{ProjectID: input.ProjectID, RepositoryID: input.RepositoryID, Statuses: input.Statuses, Page: input.Page}
+		return s.repository.ListBranchRules(ctx, filter)
+	}
+	build := func(rules []entity.BranchRules, page value.PageResult) ListBranchRulesResult {
+		return ListBranchRulesResult{BranchRules: rules, Page: page}
+	}
+	return listProjectScoped(s, ctx, input.ProjectID, input.Meta, projectActionBranchRulesRead, projectAggregateBranchRules, fetch, build)
 }
 
 // PutReleasePolicy creates or updates a release policy.
@@ -140,18 +135,13 @@ func (s *Service) GetReleasePolicy(ctx context.Context, id uuid.UUID, meta value
 
 // ListReleasePolicies returns release policies matching filter.
 func (s *Service) ListReleasePolicies(ctx context.Context, input ListReleasePoliciesInput) (ListReleasePoliciesResult, error) {
-	return listProjectScoped(s, ctx, input.ProjectID, input.Meta, projectActionReleasePolicyRead, projectAggregateReleasePolicy,
-		func(ctx context.Context) ([]entity.ReleasePolicy, value.PageResult, error) {
-			return s.repository.ListReleasePolicies(ctx, query.ReleasePolicyFilter{
-				ProjectID: input.ProjectID,
-				Statuses:  input.Statuses,
-				Page:      input.Page,
-			})
-		},
-		func(policies []entity.ReleasePolicy, page value.PageResult) ListReleasePoliciesResult {
-			return ListReleasePoliciesResult{ReleasePolicies: policies, Page: page}
-		},
-	)
+	fetch := func(ctx context.Context) ([]entity.ReleasePolicy, value.PageResult, error) {
+		return s.repository.ListReleasePolicies(ctx, query.ReleasePolicyFilter{ProjectID: input.ProjectID, Statuses: input.Statuses, Page: input.Page})
+	}
+	build := func(items []entity.ReleasePolicy, page value.PageResult) ListReleasePoliciesResult {
+		return ListReleasePoliciesResult{ReleasePolicies: items, Page: page}
+	}
+	return listProjectScoped(s, ctx, input.ProjectID, input.Meta, projectActionReleasePolicyRead, projectAggregateReleasePolicy, fetch, build)
 }
 
 // PutReleaseLine creates or updates a release line.
@@ -208,18 +198,12 @@ func (s *Service) GetReleaseLine(ctx context.Context, id uuid.UUID, meta value.Q
 
 // ListReleaseLines returns release lines matching filter.
 func (s *Service) ListReleaseLines(ctx context.Context, input ListReleaseLinesInput) (ListReleaseLinesResult, error) {
+	filter := query.ReleaseLineFilter{ProjectID: input.ProjectID, ReleasePolicyID: input.ReleasePolicyID, Statuses: input.Statuses, Page: input.Page}
 	return listProjectScoped(s, ctx, input.ProjectID, input.Meta, projectActionReleaseLineRead, projectAggregateReleaseLine,
 		func(ctx context.Context) ([]entity.ReleaseLine, value.PageResult, error) {
-			return s.repository.ListReleaseLines(ctx, query.ReleaseLineFilter{
-				ProjectID:       input.ProjectID,
-				ReleasePolicyID: input.ReleasePolicyID,
-				Statuses:        input.Statuses,
-				Page:            input.Page,
-			})
+			return s.repository.ListReleaseLines(ctx, filter)
 		},
-		func(lines []entity.ReleaseLine, page value.PageResult) ListReleaseLinesResult {
-			return ListReleaseLinesResult{ReleaseLines: lines, Page: page}
-		},
+		releaseLineListResult,
 	)
 }
 
@@ -277,20 +261,14 @@ func (s *Service) GetPlacementPolicy(ctx context.Context, id uuid.UUID, meta val
 
 // ListPlacementPolicies returns placement policies matching filter.
 func (s *Service) ListPlacementPolicies(ctx context.Context, input ListPlacementPoliciesInput) (ListPlacementPoliciesResult, error) {
-	return listProjectScoped(s, ctx, input.ProjectID, input.Meta, projectActionPlacementPolicyRead, projectAggregatePlacementPolicy,
-		func(ctx context.Context) ([]entity.PlacementPolicy, value.PageResult, error) {
-			return s.repository.ListPlacementPolicies(ctx, query.PlacementPolicyFilter{
-				ProjectID:    input.ProjectID,
-				RepositoryID: input.RepositoryID,
-				ServiceKey:   input.ServiceKey,
-				Statuses:     input.Statuses,
-				Page:         input.Page,
-			})
-		},
-		func(policies []entity.PlacementPolicy, page value.PageResult) ListPlacementPoliciesResult {
-			return ListPlacementPoliciesResult{PlacementPolicies: policies, Page: page}
-		},
-	)
+	fetch := func(ctx context.Context) ([]entity.PlacementPolicy, value.PageResult, error) {
+		filter := query.PlacementPolicyFilter{ProjectID: input.ProjectID, RepositoryID: input.RepositoryID, ServiceKey: input.ServiceKey, Statuses: input.Statuses, Page: input.Page}
+		return s.repository.ListPlacementPolicies(ctx, filter)
+	}
+	build := func(items []entity.PlacementPolicy, page value.PageResult) ListPlacementPoliciesResult {
+		return ListPlacementPoliciesResult{PlacementPolicies: items, Page: page}
+	}
+	return listProjectScoped(s, ctx, input.ProjectID, input.Meta, projectActionPlacementPolicyRead, projectAggregatePlacementPolicy, fetch, build)
 }
 
 func putIdentity(id *uuid.UUID, meta value.CommandMeta, generated uuid.UUID) (uuid.UUID, *int64, error) {
@@ -364,11 +342,29 @@ func placementPolicyEventType(created bool, status enum.PlacementPolicyStatus) s
 }
 
 func (s *Service) branchRulesEvent(eventType string, rules entity.BranchRules) (entity.OutboxEvent, error) {
-	return s.policyStatusEvent(eventType, projectAggregateBranchRules, rules.ID, rules.ProjectID, rules.UpdatedAt, string(rules.Status), rules.Version, payloadField(projectPayloadBranchRulesID, rules.ID.String()))
+	input := policyStatusEventInput{
+		aggregateType: projectAggregateBranchRules,
+		aggregateID:   rules.ID,
+		projectID:     rules.ProjectID,
+		occurredAt:    rules.UpdatedAt,
+		status:        string(rules.Status),
+		version:       rules.Version,
+		idField:       projectPayloadBranchRulesID,
+	}
+	return s.policyStatusEventFromInput(eventType, input)
 }
 
 func (s *Service) releasePolicyEvent(eventType string, policy entity.ReleasePolicy) (entity.OutboxEvent, error) {
-	return s.policyStatusEvent(eventType, projectAggregateReleasePolicy, policy.ID, policy.ProjectID, policy.UpdatedAt, string(policy.Status), policy.Version, payloadField(projectPayloadReleasePolicyID, policy.ID.String()))
+	return s.policyStatusEvent(
+		eventType,
+		projectAggregateReleasePolicy,
+		policy.ID,
+		policy.ProjectID,
+		policy.UpdatedAt,
+		string(policy.Status),
+		policy.Version,
+		payloadField(projectPayloadReleasePolicyID, policy.ID.String()),
+	)
 }
 
 func (s *Service) releaseLineEvent(eventType string, line entity.ReleaseLine) (entity.OutboxEvent, error) {
@@ -386,7 +382,33 @@ func (s *Service) releaseLineEvent(eventType string, line entity.ReleaseLine) (e
 }
 
 func (s *Service) placementPolicyEvent(eventType string, policy entity.PlacementPolicy) (entity.OutboxEvent, error) {
-	return s.policyStatusEvent(eventType, projectAggregatePlacementPolicy, policy.ID, policy.ProjectID, policy.UpdatedAt, string(policy.Status), policy.Version, payloadField(projectPayloadPlacementPolicyID, policy.ID.String()))
+	input := policyStatusEventInput{}
+	input.aggregateType = projectAggregatePlacementPolicy
+	input.aggregateID = policy.ID
+	input.projectID = policy.ProjectID
+	input.occurredAt = policy.UpdatedAt
+	input.status = string(policy.Status)
+	input.version = policy.Version
+	input.idField = projectPayloadPlacementPolicyID
+	return s.policyStatusEventFromInput(eventType, input)
+}
+
+type policyStatusEventInput struct {
+	aggregateType string
+	aggregateID   uuid.UUID
+	projectID     uuid.UUID
+	occurredAt    time.Time
+	status        string
+	version       int64
+	idField       projectPayloadStringField
+}
+
+func (s *Service) policyStatusEventFromInput(eventType string, input policyStatusEventInput) (entity.OutboxEvent, error) {
+	return s.policyStatusEvent(eventType, input.aggregateType, input.aggregateID, input.projectID, input.occurredAt, input.status, input.version, payloadField(input.idField, input.aggregateID.String()))
+}
+
+func releaseLineListResult(lines []entity.ReleaseLine, page value.PageResult) ListReleaseLinesResult {
+	return ListReleaseLinesResult{ReleaseLines: lines, Page: page}
 }
 
 func (s *Service) policyStatusEvent(

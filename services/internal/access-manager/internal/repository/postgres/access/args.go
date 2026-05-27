@@ -24,17 +24,14 @@ func organizationArgs(organization entity.Organization) pgx.NamedArgs {
 }
 
 func userArgs(user entity.User) pgx.NamedArgs {
-	return pgx.NamedArgs{
-		"id":               user.ID,
+	args := postgreslib.AddBaseArgs(pgx.NamedArgs{
 		"primary_email":    user.PrimaryEmail,
 		"display_name":     user.DisplayName,
 		"avatar_asset_ref": user.AvatarAssetRef,
-		"status":           string(user.Status),
 		"locale":           user.Locale,
-		"version":          user.Version,
-		"created_at":       user.CreatedAt,
-		"updated_at":       user.UpdatedAt,
-	}
+	}, user.ID, user.Version, user.CreatedAt, user.UpdatedAt)
+	args["status"] = string(user.Status)
+	return args
 }
 
 func userUpdateArgs(user entity.User, previousVersion int64) pgx.NamedArgs {
@@ -44,14 +41,15 @@ func userUpdateArgs(user entity.User, previousVersion int64) pgx.NamedArgs {
 }
 
 func userIdentityArgs(identity entity.UserIdentity) pgx.NamedArgs {
-	return pgx.NamedArgs{
+	args := pgx.NamedArgs{
 		"id":             identity.ID,
 		"user_id":        identity.UserID,
 		"provider":       string(identity.Provider),
 		"subject":        identity.Subject,
 		"email_at_login": identity.EmailAtLogin,
-		"last_login_at":  postgreslib.NullableTime(identity.LastLoginAt),
 	}
+	args["last_login_at"] = postgreslib.NullableTime(identity.LastLoginAt)
+	return args
 }
 
 func userIdentityLookupArgs(provider string, subject string) pgx.NamedArgs {

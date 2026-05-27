@@ -125,14 +125,7 @@ var placementStatuses = map[projectsv1.PlacementPolicyStatus]enum.PlacementPolic
 	projectsv1.PlacementPolicyStatus_PLACEMENT_POLICY_STATUS_DISABLED: enum.PlacementPolicyStatusDisabled,
 }
 
-var policyOverrideTargets = map[projectsv1.PolicyOverrideTargetType]enum.PolicyOverrideTargetType{
-	projectsv1.PolicyOverrideTargetType_POLICY_OVERRIDE_TARGET_TYPE_SERVICES_POLICY:      enum.PolicyOverrideTargetServicesPolicy,
-	projectsv1.PolicyOverrideTargetType_POLICY_OVERRIDE_TARGET_TYPE_BRANCH_RULES:         enum.PolicyOverrideTargetBranchRules,
-	projectsv1.PolicyOverrideTargetType_POLICY_OVERRIDE_TARGET_TYPE_RELEASE_POLICY:       enum.PolicyOverrideTargetReleasePolicy,
-	projectsv1.PolicyOverrideTargetType_POLICY_OVERRIDE_TARGET_TYPE_RELEASE_LINE:         enum.PolicyOverrideTargetReleaseLine,
-	projectsv1.PolicyOverrideTargetType_POLICY_OVERRIDE_TARGET_TYPE_PLACEMENT_POLICY:     enum.PolicyOverrideTargetPlacementPolicy,
-	projectsv1.PolicyOverrideTargetType_POLICY_OVERRIDE_TARGET_TYPE_DOCUMENTATION_SOURCE: enum.PolicyOverrideTargetDocumentationSource,
-}
+var policyOverrideTargets = policyOverrideTargetMap()
 
 var policyOverrideStatuses = map[projectsv1.PolicyOverrideStatus]enum.PolicyOverrideStatus{
 	projectsv1.PolicyOverrideStatus_POLICY_OVERRIDE_STATUS_ACTIVE:    enum.PolicyOverrideStatusActive,
@@ -321,4 +314,32 @@ func invertEnum[P comparable, D domainEnum](mapping map[P]D) map[D]P {
 		result[domainValue] = protoValue
 	}
 	return result
+}
+
+func policyOverrideTargetMap() map[projectsv1.PolicyOverrideTargetType]enum.PolicyOverrideTargetType {
+	protoValues := []projectsv1.PolicyOverrideTargetType{
+		projectsv1.PolicyOverrideTargetType_POLICY_OVERRIDE_TARGET_TYPE_SERVICES_POLICY,
+		projectsv1.PolicyOverrideTargetType_POLICY_OVERRIDE_TARGET_TYPE_BRANCH_RULES,
+		projectsv1.PolicyOverrideTargetType_POLICY_OVERRIDE_TARGET_TYPE_RELEASE_POLICY,
+		projectsv1.PolicyOverrideTargetType_POLICY_OVERRIDE_TARGET_TYPE_RELEASE_LINE,
+		projectsv1.PolicyOverrideTargetType_POLICY_OVERRIDE_TARGET_TYPE_PLACEMENT_POLICY,
+		projectsv1.PolicyOverrideTargetType_POLICY_OVERRIDE_TARGET_TYPE_DOCUMENTATION_SOURCE,
+	}
+	domainValues := []enum.PolicyOverrideTargetType{
+		enum.PolicyOverrideTargetServicesPolicy,
+		enum.PolicyOverrideTargetBranchRules,
+		enum.PolicyOverrideTargetReleasePolicy,
+		enum.PolicyOverrideTargetReleaseLine,
+		enum.PolicyOverrideTargetPlacementPolicy,
+		enum.PolicyOverrideTargetDocumentationSource,
+	}
+	return pairedEnums(protoValues, domainValues)
+}
+
+func pairedEnums[P comparable, D domainEnum](protoValues []P, domainValues []D) map[P]D {
+	values := make(map[P]D, len(protoValues))
+	for idx := range protoValues {
+		values[protoValues[idx]] = domainValues[idx]
+	}
+	return values
 }

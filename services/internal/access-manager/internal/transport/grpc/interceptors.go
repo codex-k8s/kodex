@@ -16,13 +16,13 @@ func UnaryErrorInterceptor(logger *slog.Logger) grpcruntime.UnaryServerIntercept
 
 func accessErrorMapper() grpcserver.DomainErrorMapper {
 	return grpcserver.NewDomainErrorMapper(
-		grpcserver.DomainErrorRule{Target: errs.ErrInvalidArgument, Code: codes.InvalidArgument, Message: "invalid request"},
-		grpcserver.DomainErrorRule{Target: errs.ErrUnauthorizedSubject, Code: codes.Unauthenticated, Message: "unauthenticated"},
-		grpcserver.DomainErrorRule{Target: errs.ErrForbidden, Code: codes.PermissionDenied, Message: "permission denied"},
-		grpcserver.DomainErrorRule{Target: errs.ErrNotFound, Code: codes.NotFound, Message: "not found"},
-		grpcserver.DomainErrorRule{Target: errs.ErrAlreadyExists, Code: codes.AlreadyExists, Message: "already exists"},
-		grpcserver.DomainErrorRule{Target: errs.ErrConflict, Code: codes.Aborted, Message: "version conflict"},
-		grpcserver.DomainErrorRule{Target: errs.ErrOwnerOrgImmutable, Code: codes.FailedPrecondition, Message: "precondition failed"},
-		grpcserver.DomainErrorRule{Target: errs.ErrPreconditionFailed, Code: codes.FailedPrecondition, Message: "precondition failed"},
+		grpcserver.DomainRule(errs.ErrInvalidArgument, codes.InvalidArgument, "invalid request"),
+		grpcserver.DomainRule(errs.ErrUnauthorizedSubject, codes.Unauthenticated, "unauthenticated"),
+		grpcserver.DomainRule(errs.ErrForbidden, codes.PermissionDenied, "permission denied"),
+		grpcserver.DomainRule(errs.ErrNotFound, codes.NotFound, "not found"),
+		grpcserver.DomainRule(errs.ErrAlreadyExists, codes.AlreadyExists, "already exists"),
+		grpcserver.DomainRule(errs.ErrConflict, codes.Aborted, "version conflict"),
+		grpcserver.DomainRule(errs.ErrOwnerOrgImmutable, codes.FailedPrecondition, "precondition failed"),
+		grpcserver.DomainRule(errs.ErrPreconditionFailed, codes.FailedPrecondition, "precondition failed"),
 	)
 }

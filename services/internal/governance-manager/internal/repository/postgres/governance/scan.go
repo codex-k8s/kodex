@@ -10,6 +10,7 @@ import (
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
 	"github.com/codex-k8s/kodex/services/internal/governance-manager/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/governance-manager/internal/domain/types/enum"
+	"github.com/codex-k8s/kodex/services/internal/governance-manager/internal/domain/types/value"
 )
 
 func scanRiskProfile(row postgreslib.RowScanner) (entity.RiskProfile, error) {
@@ -275,7 +276,7 @@ func scanGateRequest(row postgreslib.RowScanner) (entity.GateRequest, error) {
 func scanGateDecision(row postgreslib.RowScanner) (entity.GateDecision, error) {
 	var decision entity.GateDecision
 	var outcome string
-	err := row.Scan(
+	dest := []any{
 		&decision.ID,
 		&decision.GateRequestID,
 		&decision.DecisionActorRef,
@@ -285,7 +286,8 @@ func scanGateDecision(row postgreslib.RowScanner) (entity.GateDecision, error) {
 		&decision.ConditionsSummary,
 		&decision.SourceRef,
 		&decision.DecidedAt,
-	)
+	}
+	err := row.Scan(dest...)
 	decision.Outcome = enum.GateOutcome(outcome)
 	return decision, err
 }
@@ -404,22 +406,18 @@ func scanBlockingSignal(row postgreslib.RowScanner) (entity.BlockingSignal, erro
 }
 
 func scanCommandResult(row postgreslib.RowScanner) (entity.CommandResult, error) {
-	var result entity.CommandResult
-	var commandID pgtype.UUID
-	err := row.Scan(
-		&result.Key,
-		&commandID,
-		&result.IdempotencyKey,
-		&result.Actor.Type,
-		&result.Actor.ID,
-		&result.Operation,
-		&result.AggregateType,
-		&result.AggregateID,
-		&result.ResultPayload,
-		&result.CreatedAt,
-	)
-	result.CommandID = postgreslib.UUIDPtrFromPG(commandID)
-	return result, err
+	rowResult, err := postgreslib.ScanCommandResultRow(row)
+	return entity.CommandResult{
+		Key:            rowResult.Key,
+		CommandID:      rowResult.CommandID,
+		IdempotencyKey: rowResult.IdempotencyKey,
+		Actor:          value.Actor{Type: rowResult.ActorType, ID: rowResult.ActorID},
+		Operation:      rowResult.Operation,
+		AggregateType:  rowResult.AggregateType,
+		AggregateID:    rowResult.AggregateID,
+		ResultPayload:  rowResult.ResultPayload,
+		CreatedAt:      rowResult.CreatedAt,
+	}, err
 }
 
 func scanOutboxEvent(row postgreslib.RowScanner) (entity.OutboxEvent, error) {

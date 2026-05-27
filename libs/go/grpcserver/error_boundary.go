@@ -16,6 +16,11 @@ type DomainErrorRule struct {
 	Message string
 }
 
+// DomainRule maps one domain sentinel to a public gRPC status.
+func DomainRule(target error, code codes.Code, message string) DomainErrorRule {
+	return DomainErrorRule{Target: target, Code: code, Message: message}
+}
+
 // DomainErrorMapper maps service-local errors to transport-safe gRPC errors.
 type DomainErrorMapper func(error) error
 

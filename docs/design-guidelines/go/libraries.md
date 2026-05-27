@@ -35,6 +35,14 @@
 - `libs/go/repo/*` — общий слой provider интерфейсов для GitHub/GitLab.
 - `libs/go/mcp/*` — общий слой MCP tool contracts и helpers.
 
+## Межсервисный plumbing
+
+- Для gRPC error boundary использовать `grpcserver.DomainRule` и `grpcserver.NewDomainErrorMapper`, не копировать вручную одинаковые `DomainErrorRule` literals между сервисами.
+- Для безопасных metadata-полей из protobuf использовать `grpcserver.ActorParts` и `grpcserver.RequestContextParts`, затем приводить к service-owned value object.
+- Для `access-manager` checks использовать `accesscheck.NewConnectedAuthorizer` и `accesscheck.NewRequestFromValues`/`NewRequest`, оставляя в сервисе только маппинг собственных domain request fields.
+- Для PostgreSQL pagination/query/idempotency plumbing использовать `postgres.AddOffsetPageArgs`, `postgres.QueryRows`, `postgres.ScanCommandResultRow` и `postgres.CRUDSentinels`, если форма строк совпадает между сервисами.
+- Shared helper не должен скрывать доменное решение: service-owned enum casting, lifecycle state transitions и payload semantics остаются в сервисе.
+
 ## Что запрещено выносить
 
 - доменные правила конкретного сервиса;

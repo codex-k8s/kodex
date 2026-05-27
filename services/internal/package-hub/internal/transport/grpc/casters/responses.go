@@ -20,12 +20,11 @@ func ListPackageSourcesResponse(result service.ListPackageSourcesResult) *packag
 }
 
 func SyncAvailablePackagesResponse(result service.SyncAvailablePackagesResult) *packagesv1.SyncAvailablePackagesResponse {
-	return &packagesv1.SyncAvailablePackagesResponse{
-		Source:       PackageSource(result.Source),
-		PackageCount: int32(result.PackageCount),
-		VersionCount: int32(result.VersionCount),
-		SyncedAt:     formatTime(result.SyncedAt),
-	}
+	response := &packagesv1.SyncAvailablePackagesResponse{Source: PackageSource(result.Source)}
+	response.PackageCount = int32(result.PackageCount)
+	response.VersionCount = int32(result.VersionCount)
+	response.SyncedAt = formatTime(result.SyncedAt)
+	return response
 }
 
 func PackageResponse(entry entity.PackageEntry) *packagesv1.PackageResponse {

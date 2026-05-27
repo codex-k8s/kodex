@@ -10,23 +10,9 @@ import (
 type enumMap[P comparable, D ~string] map[P]D
 type reverseEnumMap[D comparable, P any] map[D]P
 
-var organizationKindFromProto = enumMap[accessaccountsv1.OrganizationKind, enum.OrganizationKind]{
-	accessaccountsv1.OrganizationKind_ORGANIZATION_KIND_OWNER:           enum.OrganizationKindOwner,
-	accessaccountsv1.OrganizationKind_ORGANIZATION_KIND_CLIENT:          enum.OrganizationKindClient,
-	accessaccountsv1.OrganizationKind_ORGANIZATION_KIND_CONTRACTOR:      enum.OrganizationKindContractor,
-	accessaccountsv1.OrganizationKind_ORGANIZATION_KIND_SAAS:            enum.OrganizationKindSaaS,
-	accessaccountsv1.OrganizationKind_ORGANIZATION_KIND_SAAS_CLIENT:     enum.OrganizationKindSaaSClient,
-	accessaccountsv1.OrganizationKind_ORGANIZATION_KIND_SAAS_CONTRACTOR: enum.OrganizationKindSaaSContractor,
-}
+var organizationKindFromProto = organizationKindMap()
 
-var organizationKindToProto = reverseEnumMap[enum.OrganizationKind, accessaccountsv1.OrganizationKind]{
-	enum.OrganizationKindOwner:          accessaccountsv1.OrganizationKind_ORGANIZATION_KIND_OWNER,
-	enum.OrganizationKindClient:         accessaccountsv1.OrganizationKind_ORGANIZATION_KIND_CLIENT,
-	enum.OrganizationKindContractor:     accessaccountsv1.OrganizationKind_ORGANIZATION_KIND_CONTRACTOR,
-	enum.OrganizationKindSaaS:           accessaccountsv1.OrganizationKind_ORGANIZATION_KIND_SAAS,
-	enum.OrganizationKindSaaSClient:     accessaccountsv1.OrganizationKind_ORGANIZATION_KIND_SAAS_CLIENT,
-	enum.OrganizationKindSaaSContractor: accessaccountsv1.OrganizationKind_ORGANIZATION_KIND_SAAS_CONTRACTOR,
-}
+var organizationKindToProto = reverseEnumMapFromForward(organizationKindFromProto)
 
 var organizationStatusFromProto = enumMap[accessaccountsv1.OrganizationStatus, enum.OrganizationStatus]{
 	accessaccountsv1.OrganizationStatus_ORGANIZATION_STATUS_ACTIVE:    enum.OrganizationStatusActive,
@@ -142,23 +128,9 @@ var allowlistStatusToProto = reverseEnumMap[enum.AllowlistStatus, accessaccounts
 	enum.AllowlistStatusDisabled: accessaccountsv1.AllowlistStatus_ALLOWLIST_STATUS_DISABLED,
 }
 
-var externalProviderKindFromProto = enumMap[accessaccountsv1.ExternalProviderKind, enum.ExternalProviderKind]{
-	accessaccountsv1.ExternalProviderKind_EXTERNAL_PROVIDER_KIND_REPOSITORY: enum.ExternalProviderRepository,
-	accessaccountsv1.ExternalProviderKind_EXTERNAL_PROVIDER_KIND_IDENTITY:   enum.ExternalProviderIdentity,
-	accessaccountsv1.ExternalProviderKind_EXTERNAL_PROVIDER_KIND_MODEL:      enum.ExternalProviderModel,
-	accessaccountsv1.ExternalProviderKind_EXTERNAL_PROVIDER_KIND_MESSAGING:  enum.ExternalProviderMessaging,
-	accessaccountsv1.ExternalProviderKind_EXTERNAL_PROVIDER_KIND_PAYMENTS:   enum.ExternalProviderPayments,
-	accessaccountsv1.ExternalProviderKind_EXTERNAL_PROVIDER_KIND_OTHER:      enum.ExternalProviderOther,
-}
+var externalProviderKindFromProto = externalProviderKindMap()
 
-var externalProviderKindToProto = reverseEnumMap[enum.ExternalProviderKind, accessaccountsv1.ExternalProviderKind]{
-	enum.ExternalProviderRepository: accessaccountsv1.ExternalProviderKind_EXTERNAL_PROVIDER_KIND_REPOSITORY,
-	enum.ExternalProviderIdentity:   accessaccountsv1.ExternalProviderKind_EXTERNAL_PROVIDER_KIND_IDENTITY,
-	enum.ExternalProviderModel:      accessaccountsv1.ExternalProviderKind_EXTERNAL_PROVIDER_KIND_MODEL,
-	enum.ExternalProviderMessaging:  accessaccountsv1.ExternalProviderKind_EXTERNAL_PROVIDER_KIND_MESSAGING,
-	enum.ExternalProviderPayments:   accessaccountsv1.ExternalProviderKind_EXTERNAL_PROVIDER_KIND_PAYMENTS,
-	enum.ExternalProviderOther:      accessaccountsv1.ExternalProviderKind_EXTERNAL_PROVIDER_KIND_OTHER,
-}
+var externalProviderKindToProto = reverseEnumMapFromForward(externalProviderKindFromProto)
 
 var externalProviderStatusFromProto = enumMap[accessaccountsv1.ExternalProviderStatus, enum.ExternalProviderStatus]{
 	accessaccountsv1.ExternalProviderStatus_EXTERNAL_PROVIDER_STATUS_ACTIVE:   enum.ExternalProviderStatusActive,
@@ -184,23 +156,9 @@ var externalAccountTypeToProto = reverseEnumMap[enum.ExternalAccountType, access
 	enum.ExternalAccountIntegration: accessaccountsv1.ExternalAccountType_EXTERNAL_ACCOUNT_TYPE_INTEGRATION,
 }
 
-var externalAccountStatusFromProto = enumMap[accessaccountsv1.ExternalAccountStatus, enum.ExternalAccountStatus]{
-	accessaccountsv1.ExternalAccountStatus_EXTERNAL_ACCOUNT_STATUS_ACTIVE:       enum.ExternalAccountStatusActive,
-	accessaccountsv1.ExternalAccountStatus_EXTERNAL_ACCOUNT_STATUS_PENDING:      enum.ExternalAccountStatusPending,
-	accessaccountsv1.ExternalAccountStatus_EXTERNAL_ACCOUNT_STATUS_NEEDS_REAUTH: enum.ExternalAccountStatusNeedsReauth,
-	accessaccountsv1.ExternalAccountStatus_EXTERNAL_ACCOUNT_STATUS_LIMITED:      enum.ExternalAccountStatusLimited,
-	accessaccountsv1.ExternalAccountStatus_EXTERNAL_ACCOUNT_STATUS_BLOCKED:      enum.ExternalAccountStatusBlocked,
-	accessaccountsv1.ExternalAccountStatus_EXTERNAL_ACCOUNT_STATUS_DISABLED:     enum.ExternalAccountStatusDisabled,
-}
+var externalAccountStatusFromProto = externalAccountStatusMap()
 
-var externalAccountStatusToProto = reverseEnumMap[enum.ExternalAccountStatus, accessaccountsv1.ExternalAccountStatus]{
-	enum.ExternalAccountStatusActive:      accessaccountsv1.ExternalAccountStatus_EXTERNAL_ACCOUNT_STATUS_ACTIVE,
-	enum.ExternalAccountStatusPending:     accessaccountsv1.ExternalAccountStatus_EXTERNAL_ACCOUNT_STATUS_PENDING,
-	enum.ExternalAccountStatusNeedsReauth: accessaccountsv1.ExternalAccountStatus_EXTERNAL_ACCOUNT_STATUS_NEEDS_REAUTH,
-	enum.ExternalAccountStatusLimited:     accessaccountsv1.ExternalAccountStatus_EXTERNAL_ACCOUNT_STATUS_LIMITED,
-	enum.ExternalAccountStatusBlocked:     accessaccountsv1.ExternalAccountStatus_EXTERNAL_ACCOUNT_STATUS_BLOCKED,
-	enum.ExternalAccountStatusDisabled:    accessaccountsv1.ExternalAccountStatus_EXTERNAL_ACCOUNT_STATUS_DISABLED,
-}
+var externalAccountStatusToProto = reverseEnumMapFromForward(externalAccountStatusFromProto)
 
 var externalAccountScopeTypes = []struct {
 	proto  accessaccountsv1.ExternalAccountScopeType
@@ -276,6 +234,48 @@ var secretStoreTypeToProtoString = map[enum.SecretStoreType]string{
 	enum.SecretStoreVault:                   "vault",
 	enum.SecretStoreKubernetesMountedSecret: "kubernetes_mounted_secret",
 	enum.SecretStoreEnv:                     "env",
+}
+
+func reverseEnumMapFromForward[P comparable, D ~string](values enumMap[P, D]) reverseEnumMap[D, P] {
+	result := make(reverseEnumMap[D, P], len(values))
+	for protoValue, domainValue := range values {
+		result[domainValue] = protoValue
+	}
+	return result
+}
+
+func organizationKindMap() enumMap[accessaccountsv1.OrganizationKind, enum.OrganizationKind] {
+	return enumMap[accessaccountsv1.OrganizationKind, enum.OrganizationKind]{
+		accessaccountsv1.OrganizationKind_ORGANIZATION_KIND_OWNER:           enum.OrganizationKindOwner,
+		accessaccountsv1.OrganizationKind_ORGANIZATION_KIND_CLIENT:          enum.OrganizationKindClient,
+		accessaccountsv1.OrganizationKind_ORGANIZATION_KIND_CONTRACTOR:      enum.OrganizationKindContractor,
+		accessaccountsv1.OrganizationKind_ORGANIZATION_KIND_SAAS:            enum.OrganizationKindSaaS,
+		accessaccountsv1.OrganizationKind_ORGANIZATION_KIND_SAAS_CLIENT:     enum.OrganizationKindSaaSClient,
+		accessaccountsv1.OrganizationKind_ORGANIZATION_KIND_SAAS_CONTRACTOR: enum.OrganizationKindSaaSContractor,
+	}
+}
+
+func externalProviderKindMap() enumMap[accessaccountsv1.ExternalProviderKind, enum.ExternalProviderKind] {
+	kinds := enumMap[accessaccountsv1.ExternalProviderKind, enum.ExternalProviderKind]{
+		accessaccountsv1.ExternalProviderKind_EXTERNAL_PROVIDER_KIND_REPOSITORY: enum.ExternalProviderRepository,
+		accessaccountsv1.ExternalProviderKind_EXTERNAL_PROVIDER_KIND_IDENTITY:   enum.ExternalProviderIdentity,
+		accessaccountsv1.ExternalProviderKind_EXTERNAL_PROVIDER_KIND_MODEL:      enum.ExternalProviderModel,
+	}
+	kinds[accessaccountsv1.ExternalProviderKind_EXTERNAL_PROVIDER_KIND_MESSAGING] = enum.ExternalProviderMessaging
+	kinds[accessaccountsv1.ExternalProviderKind_EXTERNAL_PROVIDER_KIND_PAYMENTS] = enum.ExternalProviderPayments
+	kinds[accessaccountsv1.ExternalProviderKind_EXTERNAL_PROVIDER_KIND_OTHER] = enum.ExternalProviderOther
+	return kinds
+}
+
+func externalAccountStatusMap() enumMap[accessaccountsv1.ExternalAccountStatus, enum.ExternalAccountStatus] {
+	statuses := make(enumMap[accessaccountsv1.ExternalAccountStatus, enum.ExternalAccountStatus], 6)
+	statuses[accessaccountsv1.ExternalAccountStatus_EXTERNAL_ACCOUNT_STATUS_ACTIVE] = enum.ExternalAccountStatusActive
+	statuses[accessaccountsv1.ExternalAccountStatus_EXTERNAL_ACCOUNT_STATUS_PENDING] = enum.ExternalAccountStatusPending
+	statuses[accessaccountsv1.ExternalAccountStatus_EXTERNAL_ACCOUNT_STATUS_NEEDS_REAUTH] = enum.ExternalAccountStatusNeedsReauth
+	statuses[accessaccountsv1.ExternalAccountStatus_EXTERNAL_ACCOUNT_STATUS_LIMITED] = enum.ExternalAccountStatusLimited
+	statuses[accessaccountsv1.ExternalAccountStatus_EXTERNAL_ACCOUNT_STATUS_BLOCKED] = enum.ExternalAccountStatusBlocked
+	statuses[accessaccountsv1.ExternalAccountStatus_EXTERNAL_ACCOUNT_STATUS_DISABLED] = enum.ExternalAccountStatusDisabled
+	return statuses
 }
 
 func requiredEnum[P comparable, D ~string](value P, values enumMap[P, D]) (D, error) {

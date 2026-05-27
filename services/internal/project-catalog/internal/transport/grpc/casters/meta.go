@@ -5,6 +5,7 @@ import (
 
 	"github.com/google/uuid"
 
+	grpcserver "github.com/codex-k8s/kodex/libs/go/grpcserver"
 	projectsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/projects/v1"
 	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/types/value"
@@ -45,22 +46,18 @@ func QueryMetaFromProto(meta *projectsv1.QueryMeta) (value.QueryMeta, error) {
 
 // ActorFromProto maps actor identity.
 func ActorFromProto(actor *projectsv1.Actor) value.Actor {
-	if actor == nil {
-		return value.Actor{}
-	}
-	return value.Actor{Type: strings.TrimSpace(actor.GetType()), ID: strings.TrimSpace(actor.GetId())}
+	actorType, actorID := grpcserver.ActorParts(actor)
+	return value.Actor{Type: actorType, ID: actorID}
 }
 
 // RequestContextFromProto maps safe request metadata.
 func RequestContextFromProto(context *projectsv1.RequestContext) value.RequestContext {
-	if context == nil {
-		return value.RequestContext{}
-	}
+	source, traceID, sessionID, clientIPHash := grpcserver.RequestContextParts(context)
 	return value.RequestContext{
-		Source:       strings.TrimSpace(context.GetSource()),
-		TraceID:      strings.TrimSpace(context.GetTraceId()),
-		SessionID:    strings.TrimSpace(context.GetSessionId()),
-		ClientIPHash: strings.TrimSpace(context.GetClientIpHash()),
+		Source:       source,
+		TraceID:      traceID,
+		SessionID:    sessionID,
+		ClientIPHash: clientIPHash,
 	}
 }
 

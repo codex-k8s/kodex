@@ -112,15 +112,16 @@ func riskAssessmentUpdateArgs(assessment entity.RiskAssessment, previousVersion 
 }
 
 func riskFactorArgs(factor entity.RiskFactor) pgx.NamedArgs {
-	return pgx.NamedArgs{
+	args := pgx.NamedArgs{
 		"id":                 factor.ID,
 		"risk_assessment_id": factor.RiskAssessmentID,
 		"source_type":        string(factor.SourceType),
 		"source_ref":         factor.SourceRef,
 		"risk_class":         string(factor.RiskClass),
 		"summary":            factor.Summary,
-		"created_at":         factor.CreatedAt,
 	}
+	args["created_at"] = factor.CreatedAt
+	return args
 }
 
 func reviewSignalArgs(signal entity.ReviewSignal) pgx.NamedArgs {
@@ -396,9 +397,7 @@ func blockingSignalFilterArgs(filter query.BlockingSignalFilter) pageQueryArgs {
 }
 
 func withPage(page query.PageRequest, args pgx.NamedArgs) pageQueryArgs {
-	limit, offset, _ := postgreslib.OffsetPageBounds(page.PageSize, page.PageToken, defaultPageSize, maxPageSize)
-	args["limit"] = limit + 1
-	args["offset"] = offset
+	limit, offset, _ := postgreslib.AddOffsetPageArgs(args, page.PageSize, page.PageToken, defaultPageSize, maxPageSize)
 	return pageQueryArgs{NamedArgs: args, PageSize: limit, Offset: offset}
 }
 

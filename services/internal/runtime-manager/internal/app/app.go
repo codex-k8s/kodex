@@ -12,7 +12,6 @@ import (
 	grpcserver "github.com/codex-k8s/kodex/libs/go/grpcserver"
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
 	serviceprocess "github.com/codex-k8s/kodex/libs/go/serviceprocess"
-	accessaccountsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/access_accounts/v1"
 	fleetv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/fleet/v1"
 	accessclient "github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/clients/access"
 	fleetclient "github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/clients/fleet"
@@ -139,16 +138,7 @@ func newAuthorizer(cfg Config) (runtimeservice.Authorizer, *grpcruntime.ClientCo
 		AuthToken: cfg.Access.AccessManagerAuthToken,
 		Timeout:   cfg.Access.CheckTimeout,
 	}
-	conn, err := accessclient.NewConnection(accessConfig)
-	if err != nil {
-		return nil, nil, err
-	}
-	authorizer, err := accessclient.NewAuthorizer(accessaccountsv1.NewAccessManagerServiceClient(conn), accessConfig)
-	if err != nil {
-		_ = conn.Close()
-		return nil, nil, err
-	}
-	return authorizer, conn, nil
+	return accessclient.NewConnectedAuthorizer(accessConfig)
 }
 
 func newPlacementResolver(cfg Config) (runtimeservice.PlacementResolver, *grpcruntime.ClientConn, error) {

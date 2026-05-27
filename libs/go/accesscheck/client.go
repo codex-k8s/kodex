@@ -88,6 +88,24 @@ func NewAuthorizer[T any](
 	return &Authorizer[T]{checker: checker, mapper: mapper, errors: domainErrors}, nil
 }
 
+// NewConnectedAuthorizer creates the access-manager connection and wraps it in a domain authorizer.
+func NewConnectedAuthorizer[T any](
+	cfg Config,
+	mapper RequestMapper[T],
+	domainErrors DomainErrors,
+) (*Authorizer[T], *grpc.ClientConn, error) {
+	conn, err := NewConnection(cfg.Addr)
+	if err != nil {
+		return nil, nil, err
+	}
+	authorizer, err := NewAuthorizer(accessaccountsv1.NewAccessManagerServiceClient(conn), cfg, mapper, domainErrors)
+	if err != nil {
+		_ = conn.Close()
+		return nil, nil, err
+	}
+	return authorizer, conn, nil
+}
+
 // Authorize implements the service-domain Authorizer interface for T.
 func (a *Authorizer[T]) Authorize(ctx context.Context, request T) error {
 	return MapError(a.checker.Check(ctx, a.mapper(request)), a.errors)
@@ -142,6 +160,39 @@ func NewRequest(fields RequestFields) Request {
 		RequestID:      fields.RequestID,
 		RequestContext: fields.Context,
 	}
+}
+
+// NewRequestFromValues builds a CheckAccess request from flattened service-domain fields.
+func NewRequestFromValues(
+	subjectType string,
+	subjectID string,
+	actionKey string,
+	resourceType string,
+	resourceID string,
+	scopeType string,
+	scopeID string,
+	requestID string,
+	source string,
+	traceID string,
+	sessionID string,
+	clientIPHash string,
+) Request {
+	return NewRequest(RequestFields{
+		SubjectType:  subjectType,
+		SubjectID:    subjectID,
+		ActionKey:    actionKey,
+		ResourceType: resourceType,
+		ResourceID:   resourceID,
+		ScopeType:    scopeType,
+		ScopeID:      scopeID,
+		RequestID:    requestID,
+		Context: RequestContext{
+			Source:       source,
+			TraceID:      traceID,
+			SessionID:    sessionID,
+			ClientIPHash: clientIPHash,
+		},
+	})
 }
 
 // MapError converts shared accesscheck errors to service-domain errors.

@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"time"
 
-	accessaccountsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/access_accounts/v1"
 	providersv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/providers/v1"
 	"github.com/google/uuid"
 	grpcruntime "google.golang.org/grpc"
@@ -137,16 +136,7 @@ func newAuthorizer(cfg Config) (projectservice.Authorizer, *grpcruntime.ClientCo
 		AuthToken: cfg.AccessManagerGRPCAuthToken,
 		Timeout:   cfg.AccessManagerCheckTimeout,
 	}
-	conn, err := accessclient.NewConnection(accessConfig)
-	if err != nil {
-		return nil, nil, err
-	}
-	authorizer, err := accessclient.NewAuthorizer(accessaccountsv1.NewAccessManagerServiceClient(conn), accessConfig)
-	if err != nil {
-		_ = conn.Close()
-		return nil, nil, err
-	}
-	return authorizer, conn, nil
+	return accessclient.NewConnectedAuthorizer(accessConfig)
 }
 
 func newBootstrapProvider(cfg Config) (projectservice.BootstrapProvider, *grpcruntime.ClientConn, error) {

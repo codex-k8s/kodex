@@ -36,29 +36,23 @@ lint-go:
 
 dupl-go:
 	@tmp="$$(mktemp)"; \
-	filtered="$$(mktemp)"; \
 	candidates="$$(mktemp)"; \
 	roots="$$(for root in services libs; do if [ -d "$$root" ]; then printf '%s\n' "$$root"; fi; done)"; \
 	if [ -n "$$roots" ]; then \
 		printf '%s\n' "$$roots" | xargs rg --files -g '*.go' -g '!**/*_test.go' -g '!**/generated/**' -g '!**/*.gen.go' > "$$candidates"; \
 	fi; \
 	if [ ! -s "$$candidates" ]; then \
-		rm -f "$$tmp" "$$filtered" "$$candidates"; \
+		rm -f "$$tmp" "$$candidates"; \
 		exit 0; \
 	fi; \
 	dupl -t 50 -plumbing -files < "$$candidates" > "$$tmp"; \
-	if [ -f tools/lint/dupl-baseline.txt ]; then \
-		grep -F -x -v -f tools/lint/dupl-baseline.txt "$$tmp" > "$$filtered" || true; \
-	else \
-		cp "$$tmp" "$$filtered"; \
-	fi; \
-	if [ -s "$$filtered" ]; then \
-		cat "$$filtered"; \
+	if [ -s "$$tmp" ]; then \
+		cat "$$tmp"; \
 		echo "dupl-go: duplicates found (threshold=50)"; \
-		rm -f "$$tmp" "$$filtered" "$$candidates"; \
+		rm -f "$$tmp" "$$candidates"; \
 		exit 1; \
 	fi; \
-	rm -f "$$tmp" "$$filtered" "$$candidates"
+	rm -f "$$tmp" "$$candidates"
 
 test-go:
 	@unit_env="env \

@@ -306,12 +306,7 @@ func (r *Repository) CreateReleaseDecisionPackage(ctx context.Context, item enti
 
 // UpdateReleaseDecisionPackageStatus updates release package lifecycle status.
 func (r *Repository) UpdateReleaseDecisionPackageStatus(ctx context.Context, item entity.ReleaseDecisionPackage, previousVersion int64, result entity.CommandResult, event entity.OutboxEvent) error {
-	return r.updateReleasePackageStatus(ctx, item, previousVersion, result, event)
-}
-
-func (r *Repository) updateReleasePackageStatus(ctx context.Context, item entity.ReleaseDecisionPackage, previousVersion int64, result entity.CommandResult, event entity.OutboxEvent) error {
-	args := releaseDecisionPackageUpdateArgs(item, previousVersion)
-	return r.mutateWithResult(ctx, operationUpdateReleasePackageStatus, queryReleaseDecisionPackageUpdate, args, result, &event)
+	return r.mutateWithResult(ctx, operationUpdateReleasePackageStatus, queryReleaseDecisionPackageUpdate, releaseDecisionPackageUpdateArgs(item, previousVersion), result, &event)
 }
 
 // GetReleaseDecisionPackage returns a release decision package by id.
@@ -438,7 +433,10 @@ func (r *Repository) MarkOutboxEventPermanentlyFailed(ctx context.Context, id uu
 
 func (r *Repository) markOutboxFailure(ctx context.Context, operation string, sqlText string, id uuid.UUID, attemptCount int, timestampColumn string, timestamp time.Time, lastError string) error {
 	err := postgreslib.ApplyOutboxDeliveryFailure(ctx, r.db, sqlText, errs.ErrInvalidArgument, id, attemptCount, timestampColumn, timestamp, lastError)
-	return wrapError(operation, err)
+	if err != nil {
+		return wrapError(operation, err)
+	}
+	return nil
 }
 
 func (r *Repository) mutateWithResult(ctx context.Context, operation string, mutationQuery string, mutationArgs pgx.NamedArgs, result entity.CommandResult, event *entity.OutboxEvent) error {
@@ -550,13 +548,9 @@ func queryOne[T any](ctx context.Context, db dataRunner, operation string, sqlTe
 }
 
 func queryMany[T any](ctx context.Context, db dataRunner, operation string, sqlText string, args pgx.NamedArgs, scan func(postgreslib.RowScanner) (T, error)) ([]T, error) {
-	rows, err := db.Query(ctx, sqlText, args)
+	items, err := postgreslib.QueryRows(ctx, db, sqlText, args, scan)
 	if err != nil {
 		return nil, wrapError(operation, err)
-	}
-	items, scanErr := postgreslib.ScanRows(rows, scan)
-	if scanErr != nil {
-		return nil, wrapError(operation, scanErr)
 	}
 	return items, nil
 }
@@ -571,11 +565,6 @@ func queryPage[T any](ctx context.Context, db dataRunner, operation string, sqlT
 }
 
 func wrapError(operation string, err error) error {
-	return postgreslib.WrapError(operation, err, postgreslib.ErrorSentinels{
-		AlreadyExists:      errs.ErrAlreadyExists,
-		Conflict:           errs.ErrConflict,
-		InvalidArgument:    errs.ErrInvalidArgument,
-		NotFound:           errs.ErrNotFound,
-		PreconditionFailed: errs.ErrPreconditionFailed,
-	})
+	sentinels := postgreslib.CRUDSentinels(errs.ErrAlreadyExists, errs.ErrConflict, errs.ErrInvalidArgument, errs.ErrNotFound, errs.ErrPreconditionFailed)
+	return postgreslib.WrapError(operation, err, sentinels)
 }

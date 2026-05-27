@@ -7,6 +7,7 @@ import (
 
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
 	"github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/types/value"
 )
 
 func scanSlot(row postgreslib.RowScanner) (entity.Slot, error) {
@@ -57,21 +58,15 @@ func scanSlot(row postgreslib.RowScanner) (entity.Slot, error) {
 }
 
 func scanCommandResult(row postgreslib.RowScanner) (entity.CommandResult, error) {
-	var result entity.CommandResult
-	var commandID pgtype.UUID
-	err := row.Scan(
-		&result.Key,
-		&commandID,
-		&result.IdempotencyKey,
-		&result.Actor.Type,
-		&result.Actor.ID,
-		&result.Operation,
-		&result.AggregateType,
-		&result.AggregateID,
-		&result.ResultPayload,
-		&result.CreatedAt,
-	)
-	result.CommandID = postgreslib.UUIDPtrFromPG(commandID)
+	rowResult, err := postgreslib.ScanCommandResultRow(row)
+	result := entity.CommandResult{Key: rowResult.Key, CommandID: rowResult.CommandID}
+	result.IdempotencyKey = rowResult.IdempotencyKey
+	result.Actor = value.Actor{Type: rowResult.ActorType, ID: rowResult.ActorID}
+	result.Operation = rowResult.Operation
+	result.AggregateType = rowResult.AggregateType
+	result.AggregateID = rowResult.AggregateID
+	result.ResultPayload = rowResult.ResultPayload
+	result.CreatedAt = rowResult.CreatedAt
 	return result, err
 }
 

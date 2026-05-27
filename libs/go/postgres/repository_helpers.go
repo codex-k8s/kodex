@@ -30,6 +30,17 @@ type ErrorSentinels struct {
 	PreconditionFailed error
 }
 
+// CRUDSentinels builds the common create/read/update/delete repository error mapping.
+func CRUDSentinels(alreadyExists error, conflict error, invalidArgument error, notFound error, preconditionFailed error) ErrorSentinels {
+	return ErrorSentinels{
+		AlreadyExists:      alreadyExists,
+		Conflict:           conflict,
+		InvalidArgument:    invalidArgument,
+		NotFound:           notFound,
+		PreconditionFailed: preconditionFailed,
+	}
+}
+
 // RowScanner is the minimal pgx row/rows scanning contract used by repository code.
 type RowScanner interface {
 	Scan(dest ...any) error
@@ -157,6 +168,15 @@ func ScanRows[T any](rows pgx.Rows, scan func(RowScanner) (T, error)) ([]T, erro
 	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (T, error) {
 		return scan(row)
 	})
+}
+
+// QueryRows runs a read query and scans all rows with the supplied caster.
+func QueryRows[T any](ctx context.Context, db RowQuerier, sqlText string, args pgx.NamedArgs, scan func(RowScanner) (T, error)) ([]T, error) {
+	rows, err := db.Query(ctx, sqlText, args)
+	if err != nil {
+		return nil, err
+	}
+	return ScanRows(rows, scan)
 }
 
 // WithTx executes fn in a PostgreSQL transaction and rolls it back unless commit succeeds.
@@ -392,12 +412,54 @@ func OffsetPageBounds(pageSize int32, pageToken string, defaultPageSize int32, m
 	return limit, offset, offset + limit
 }
 
+// AddOffsetPageArgs appends LIMIT/OFFSET named args and returns the computed page bounds.
+func AddOffsetPageArgs(args pgx.NamedArgs, pageSize int32, pageToken string, defaultPageSize int32, maxPageSize int32) (limit int32, offset int32, nextOffset int32) {
+	limit, offset, nextOffset = OffsetPageBounds(pageSize, pageToken, defaultPageSize, maxPageSize)
+	args["limit"] = limit + 1
+	args["offset"] = offset
+	return limit, offset, nextOffset
+}
+
 // TrimOffsetPage keeps one extra queried row only as a continuation signal.
 func TrimOffsetPage[T any](items []T, limit int32, nextOffset int32) ([]T, string) {
 	if int32(len(items)) <= limit {
 		return items, ""
 	}
 	return items[:len(items)-1], strconv.FormatInt(int64(nextOffset), 10)
+}
+
+// CommandResultRow stores common idempotency result columns shared by service repositories.
+type CommandResultRow struct {
+	Key            string
+	CommandID      *uuid.UUID
+	IdempotencyKey string
+	ActorType      string
+	ActorID        string
+	Operation      string
+	AggregateType  string
+	AggregateID    uuid.UUID
+	ResultPayload  []byte
+	CreatedAt      time.Time
+}
+
+// ScanCommandResultRow scans the common command-results row shape used by idempotent writes.
+func ScanCommandResultRow(row RowScanner) (CommandResultRow, error) {
+	var result CommandResultRow
+	var commandID pgtype.UUID
+	err := row.Scan(
+		&result.Key,
+		&commandID,
+		&result.IdempotencyKey,
+		&result.ActorType,
+		&result.ActorID,
+		&result.Operation,
+		&result.AggregateType,
+		&result.AggregateID,
+		&result.ResultPayload,
+		&result.CreatedAt,
+	)
+	result.CommandID = UUIDPtrFromPG(commandID)
+	return result, err
 }
 
 // OutboxEventRow stores transport-neutral outbox columns scanned from service databases.
