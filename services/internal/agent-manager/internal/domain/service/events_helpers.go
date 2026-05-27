@@ -202,6 +202,10 @@ func followUpResultEvent(id uuid.UUID, previousStatus string, intent entity.Foll
 	switch intent.Status {
 	case enum.FollowUpIntentStatusCreated:
 		eventType = agentevents.EventFollowUpCreated
+	case enum.FollowUpIntentStatusUpdated:
+		eventType = agentevents.EventFollowUpUpdated
+	case enum.FollowUpIntentStatusCommented:
+		eventType = agentevents.EventFollowUpCommented
 	case enum.FollowUpIntentStatusFailed:
 		eventType = agentevents.EventFollowUpFailed
 		reasonCode = "provider_command_failed"

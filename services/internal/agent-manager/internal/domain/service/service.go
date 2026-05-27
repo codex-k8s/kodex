@@ -13,29 +13,29 @@ import (
 
 // Config contains dependencies required by the agent-manager service.
 type Config struct {
-	Repository                agentrepo.Repository
-	Clock                     agentrepo.Clock
-	IDGenerator               agentrepo.IDGenerator
-	GuidanceResolver          GuidanceResolver
-	WorkspacePolicyResolver   WorkspacePolicyResolver
-	RuntimePreparer           RuntimePreparer
-	ProviderIssueCreator      ProviderIssueCreator
-	RuntimePreparationEnabled bool
+	Repository                 agentrepo.Repository
+	Clock                      agentrepo.Clock
+	IDGenerator                agentrepo.IDGenerator
+	GuidanceResolver           GuidanceResolver
+	WorkspacePolicyResolver    WorkspacePolicyResolver
+	RuntimePreparer            RuntimePreparer
+	ProviderFollowUpDispatcher ProviderFollowUpDispatcher
+	RuntimePreparationEnabled  bool
 	// EventPublisher is a future outbox-backed publisher for agent domain events.
 	EventPublisher EventPublisher
 }
 
 // Service is the agent-manager domain entry point.
 type Service struct {
-	repository                agentrepo.Repository
-	clock                     agentrepo.Clock
-	idGenerator               agentrepo.IDGenerator
-	guidanceResolver          GuidanceResolver
-	workspacePolicyResolver   WorkspacePolicyResolver
-	runtimePreparer           RuntimePreparer
-	providerIssueCreator      ProviderIssueCreator
-	runtimePreparationEnabled bool
-	eventPublisher            EventPublisher
+	repository                 agentrepo.Repository
+	clock                      agentrepo.Clock
+	idGenerator                agentrepo.IDGenerator
+	guidanceResolver           GuidanceResolver
+	workspacePolicyResolver    WorkspacePolicyResolver
+	runtimePreparer            RuntimePreparer
+	providerFollowUpDispatcher ProviderFollowUpDispatcher
+	runtimePreparationEnabled  bool
+	eventPublisher             EventPublisher
 }
 
 // GuidanceResolver resolves guidance package selections into safe frozen refs.
@@ -69,9 +69,12 @@ type RuntimePreparer interface {
 	PrepareRuntime(context.Context, RuntimePreparationInput) (RuntimePreparationResult, error)
 }
 
-// ProviderIssueCreator calls provider-hub typed issue write operations.
-type ProviderIssueCreator interface {
-	CreateIssue(context.Context, ProviderCreateIssueInput) (ProviderIssueCommandResult, error)
+// ProviderFollowUpDispatcher calls provider-hub typed follow-up write operations.
+type ProviderFollowUpDispatcher interface {
+	CreateIssue(context.Context, ProviderCreateIssueInput) (ProviderCommandResult, error)
+	UpdateIssue(context.Context, ProviderUpdateIssueInput) (ProviderCommandResult, error)
+	CreateComment(context.Context, ProviderCreateCommentInput) (ProviderCommandResult, error)
+	UpdateComment(context.Context, ProviderUpdateCommentInput) (ProviderCommandResult, error)
 }
 
 // DisabledGuidanceResolver keeps agent-manager runnable before package-hub is wired.
@@ -101,12 +104,27 @@ func (DisabledRuntimePreparer) PrepareRuntime(context.Context, RuntimePreparatio
 	return RuntimePreparationResult{}, errs.ErrDependencyUnavailable
 }
 
-// DisabledProviderIssueCreator keeps follow-up provider dispatch opt-in at composition time.
-type DisabledProviderIssueCreator struct{}
+// DisabledProviderFollowUpDispatcher keeps follow-up provider dispatch opt-in at composition time.
+type DisabledProviderFollowUpDispatcher struct{}
 
 // CreateIssue reports that provider-hub write operations are unavailable.
-func (DisabledProviderIssueCreator) CreateIssue(context.Context, ProviderCreateIssueInput) (ProviderIssueCommandResult, error) {
-	return ProviderIssueCommandResult{}, errs.ErrDependencyUnavailable
+func (DisabledProviderFollowUpDispatcher) CreateIssue(context.Context, ProviderCreateIssueInput) (ProviderCommandResult, error) {
+	return ProviderCommandResult{}, errs.ErrDependencyUnavailable
+}
+
+// UpdateIssue reports that provider-hub write operations are unavailable.
+func (DisabledProviderFollowUpDispatcher) UpdateIssue(context.Context, ProviderUpdateIssueInput) (ProviderCommandResult, error) {
+	return ProviderCommandResult{}, errs.ErrDependencyUnavailable
+}
+
+// CreateComment reports that provider-hub write operations are unavailable.
+func (DisabledProviderFollowUpDispatcher) CreateComment(context.Context, ProviderCreateCommentInput) (ProviderCommandResult, error) {
+	return ProviderCommandResult{}, errs.ErrDependencyUnavailable
+}
+
+// UpdateComment reports that provider-hub write operations are unavailable.
+func (DisabledProviderFollowUpDispatcher) UpdateComment(context.Context, ProviderUpdateCommentInput) (ProviderCommandResult, error) {
+	return ProviderCommandResult{}, errs.ErrDependencyUnavailable
 }
 
 // New creates an agent-manager service scaffold.
@@ -123,8 +141,8 @@ func New(cfg Config) *Service {
 	if cfg.RuntimePreparer == nil {
 		cfg.RuntimePreparer = DisabledRuntimePreparer{}
 	}
-	if cfg.ProviderIssueCreator == nil {
-		cfg.ProviderIssueCreator = DisabledProviderIssueCreator{}
+	if cfg.ProviderFollowUpDispatcher == nil {
+		cfg.ProviderFollowUpDispatcher = DisabledProviderFollowUpDispatcher{}
 	}
 	if cfg.Clock == nil {
 		cfg.Clock = systemClock{}
@@ -133,15 +151,15 @@ func New(cfg Config) *Service {
 		cfg.IDGenerator = zeroIDGenerator{}
 	}
 	return &Service{
-		repository:                cfg.Repository,
-		clock:                     cfg.Clock,
-		idGenerator:               cfg.IDGenerator,
-		guidanceResolver:          cfg.GuidanceResolver,
-		workspacePolicyResolver:   cfg.WorkspacePolicyResolver,
-		runtimePreparer:           cfg.RuntimePreparer,
-		providerIssueCreator:      cfg.ProviderIssueCreator,
-		runtimePreparationEnabled: cfg.RuntimePreparationEnabled,
-		eventPublisher:            cfg.EventPublisher,
+		repository:                 cfg.Repository,
+		clock:                      cfg.Clock,
+		idGenerator:                cfg.IDGenerator,
+		guidanceResolver:           cfg.GuidanceResolver,
+		workspacePolicyResolver:    cfg.WorkspacePolicyResolver,
+		runtimePreparer:            cfg.RuntimePreparer,
+		providerFollowUpDispatcher: cfg.ProviderFollowUpDispatcher,
+		runtimePreparationEnabled:  cfg.RuntimePreparationEnabled,
+		eventPublisher:             cfg.EventPublisher,
 	}
 }
 

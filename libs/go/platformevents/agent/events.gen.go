@@ -18,6 +18,8 @@ const (
 	EventAcceptanceFailed        = "agent.acceptance.failed"
 	EventFollowUpRequested       = "agent.follow_up.requested"
 	EventFollowUpCreated         = "agent.follow_up.created"
+	EventFollowUpUpdated         = "agent.follow_up.updated"
+	EventFollowUpCommented       = "agent.follow_up.commented"
 	EventFollowUpFailed          = "agent.follow_up.failed"
 	EventHumanGateRequested      = "agent.human_gate.requested"
 	EventHumanGateResolved       = "agent.human_gate.resolved"

@@ -206,7 +206,7 @@ func (server *Server) CreateFollowUpIntent(ctx context.Context, request *agentsv
 	return grpcserver.HandleUnary(ctx, request, grpccasters.CreateFollowUpIntentInput, server.service.CreateFollowUpIntent, grpccasters.FollowUpIntentResponse)
 }
 
-// DispatchFollowUpIntent sends a planned follow-up through provider-hub CreateIssue.
+// DispatchFollowUpIntent sends a planned follow-up through a typed provider-hub command.
 func (server *Server) DispatchFollowUpIntent(ctx context.Context, request *agentsv1.DispatchFollowUpIntentRequest) (*agentsv1.FollowUpIntentResponse, error) {
 	return grpcserver.HandleUnary(ctx, request, grpccasters.DispatchFollowUpIntentInput, server.service.DispatchFollowUpIntent, grpccasters.FollowUpIntentResponse)
 }

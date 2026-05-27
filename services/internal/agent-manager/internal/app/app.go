@@ -65,7 +65,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	if runtimeManagerConn != nil {
 		defer func() { _ = runtimeManagerConn.Close() }()
 	}
-	providerIssueCreator, providerHubConn, err := newProviderIssueCreator(cfg)
+	providerFollowUpDispatcher, providerHubConn, err := newProviderFollowUpDispatcher(cfg)
 	if err != nil {
 		return err
 	}
@@ -74,15 +74,15 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	}
 	agentRepository := agentpostgres.NewRepository(dbPool)
 	agentService := agentservice.New(agentservice.Config{
-		Repository:                agentRepository,
-		Clock:                     systemClock{},
-		IDGenerator:               uuidGenerator{},
-		GuidanceResolver:          guidanceResolver,
-		WorkspacePolicyResolver:   workspacePolicyResolver,
-		RuntimePreparer:           runtimePreparer,
-		ProviderIssueCreator:      providerIssueCreator,
-		RuntimePreparationEnabled: cfg.RuntimePreparationEnabled,
-		EventPublisher:            agentservice.DisabledEventPublisher{},
+		Repository:                 agentRepository,
+		Clock:                      systemClock{},
+		IDGenerator:                uuidGenerator{},
+		GuidanceResolver:           guidanceResolver,
+		WorkspacePolicyResolver:    workspacePolicyResolver,
+		RuntimePreparer:            runtimePreparer,
+		ProviderFollowUpDispatcher: providerFollowUpDispatcher,
+		RuntimePreparationEnabled:  cfg.RuntimePreparationEnabled,
+		EventPublisher:             agentservice.DisabledEventPublisher{},
 	})
 	httpServer := &http.Server{
 		Addr:              cfg.HTTPAddr,
@@ -194,21 +194,21 @@ func newRuntimePreparer(cfg Config) (agentservice.RuntimePreparer, *grpcruntime.
 	})
 }
 
-func newProviderIssueCreator(cfg Config) (agentservice.ProviderIssueCreator, *grpcruntime.ClientConn, error) {
+func newProviderFollowUpDispatcher(cfg Config) (agentservice.ProviderFollowUpDispatcher, *grpcruntime.ClientConn, error) {
 	if !cfg.ProviderHubWriteEnabled {
-		disabled := agentservice.DisabledProviderIssueCreator{}
+		disabled := agentservice.DisabledProviderFollowUpDispatcher{}
 		return disabled, nil, nil
 	}
-	return connectProviderIssueCreator(providerhubclient.Config{
+	return connectProviderFollowUpDispatcher(providerhubclient.Config{
 		Addr:      cfg.ProviderHubGRPCAddr,
 		AuthToken: cfg.ProviderHubGRPCAuthToken,
 		Timeout:   cfg.ProviderHubWriteTimeout,
 	})
 }
 
-func connectProviderIssueCreator(clientConfig providerhubclient.Config) (agentservice.ProviderIssueCreator, *grpcruntime.ClientConn, error) {
-	return connectOwnerService[agentservice.ProviderIssueCreator](clientConfig, providerhubclient.NewConnection, func(conn *grpcruntime.ClientConn, clientConfig providerhubclient.Config) (agentservice.ProviderIssueCreator, error) {
-		return providerhubclient.NewIssueCreator(providersv1.NewProviderHubServiceClient(conn), clientConfig)
+func connectProviderFollowUpDispatcher(clientConfig providerhubclient.Config) (agentservice.ProviderFollowUpDispatcher, *grpcruntime.ClientConn, error) {
+	return connectOwnerService[agentservice.ProviderFollowUpDispatcher](clientConfig, providerhubclient.NewConnection, func(conn *grpcruntime.ClientConn, clientConfig providerhubclient.Config) (agentservice.ProviderFollowUpDispatcher, error) {
+		return providerhubclient.NewFollowUpDispatcher(providersv1.NewProviderHubServiceClient(conn), clientConfig)
 	})
 }
 

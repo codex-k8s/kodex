@@ -110,7 +110,7 @@ type AgentManagerServiceClient interface {
 	ListAcceptanceResults(ctx context.Context, in *ListAcceptanceResultsRequest, opts ...grpc.CallOption) (*ListAcceptanceResultsResponse, error)
 	// CreateFollowUpIntent records an intent for the next provider-native work item.
 	CreateFollowUpIntent(ctx context.Context, in *CreateFollowUpIntentRequest, opts ...grpc.CallOption) (*FollowUpIntentResponse, error)
-	// DispatchFollowUpIntent sends a requested follow-up intent to provider-hub as a typed Issue command.
+	// DispatchFollowUpIntent sends a requested follow-up intent to provider-hub as a typed provider command.
 	DispatchFollowUpIntent(ctx context.Context, in *DispatchFollowUpIntentRequest, opts ...grpc.CallOption) (*FollowUpIntentResponse, error)
 	// RecordAgentActivity records one safe timeline entry for a session or run.
 	RecordAgentActivity(ctx context.Context, in *RecordAgentActivityRequest, opts ...grpc.CallOption) (*AgentActivityResponse, error)
@@ -500,7 +500,7 @@ type AgentManagerServiceServer interface {
 	ListAcceptanceResults(context.Context, *ListAcceptanceResultsRequest) (*ListAcceptanceResultsResponse, error)
 	// CreateFollowUpIntent records an intent for the next provider-native work item.
 	CreateFollowUpIntent(context.Context, *CreateFollowUpIntentRequest) (*FollowUpIntentResponse, error)
-	// DispatchFollowUpIntent sends a requested follow-up intent to provider-hub as a typed Issue command.
+	// DispatchFollowUpIntent sends a requested follow-up intent to provider-hub as a typed provider command.
 	DispatchFollowUpIntent(context.Context, *DispatchFollowUpIntentRequest) (*FollowUpIntentResponse, error)
 	// RecordAgentActivity records one safe timeline entry for a session or run.
 	RecordAgentActivity(context.Context, *RecordAgentActivityRequest) (*AgentActivityResponse, error)
