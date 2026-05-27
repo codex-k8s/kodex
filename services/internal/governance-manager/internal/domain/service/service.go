@@ -2023,6 +2023,15 @@ func requireCommand(meta CommandMeta, operation string) error {
 	if strings.TrimSpace(operation) == "" || strings.TrimSpace(meta.Actor.Type) == "" || strings.TrimSpace(meta.Actor.ID) == "" {
 		return errs.ErrInvalidArgument
 	}
+	if err := validateEventSafeRef("command.actor_type", meta.Actor.Type, true); err != nil {
+		return err
+	}
+	if err := validateEventSafeRef("command.actor_id", meta.Actor.ID, true); err != nil {
+		return err
+	}
+	if err := validateEventSafeRef("command.request_id", meta.RequestID, false); err != nil {
+		return err
+	}
 	if (meta.CommandID == nil || *meta.CommandID == uuid.Nil) && strings.TrimSpace(meta.IdempotencyKey) == "" {
 		return errs.ErrInvalidArgument
 	}

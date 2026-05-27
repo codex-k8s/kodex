@@ -1132,6 +1132,18 @@ func TestGateLifecycleRejectsEventUnsafePayload(t *testing.T) {
 			},
 		},
 		{
+			name: "request gate request id",
+			run: func(service *Service) error {
+				unsafeMeta := meta
+				unsafeMeta.RequestID = "authorization: bearer raw-request-token"
+				_, err := service.RequestGate(context.Background(), RequestGateInput{
+					Target: target,
+					Meta:   unsafeMeta,
+				})
+				return err
+			},
+		},
+		{
 			name: "submit gate decision reason",
 			configure: func(repository *fakeRepository) {
 				repository.gateRequest = entity.GateRequest{VersionedBase: entity.VersionedBase{ID: gateRequestID, Version: 1}, Target: target, Status: enum.GateRequestStatusRequested}
