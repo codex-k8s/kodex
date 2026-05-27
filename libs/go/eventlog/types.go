@@ -95,6 +95,18 @@ type AdvanceParams struct {
 	Now time.Time
 }
 
+// DeferParams keeps the consumer checkpoint leased until the next retry window.
+type DeferParams struct {
+	// ConsumerName is the stable logical subscriber name.
+	ConsumerName string
+	// LeaseOwner must match the worker that claimed the batch.
+	LeaseOwner string
+	// Now is used to reject stale workers after lease expiry.
+	Now time.Time
+	// LockedUntil is the next shared retry claim time.
+	LockedUntil time.Time
+}
+
 // ReleaseParams releases a consumer lease without advancing the checkpoint.
 type ReleaseParams struct {
 	// ConsumerName is the stable logical subscriber name.

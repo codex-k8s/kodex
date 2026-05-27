@@ -25,6 +25,7 @@ var (
 type Store interface {
 	Claim(context.Context, eventlog.ClaimParams) (eventlog.ClaimedBatch, error)
 	Advance(context.Context, eventlog.AdvanceParams) error
+	Defer(context.Context, eventlog.DeferParams) error
 	Release(context.Context, eventlog.ReleaseParams) error
 }
 
@@ -56,7 +57,7 @@ type ResultStatus string
 const (
 	// ResultAck advances the checkpoint after the handler has idempotently handled the event.
 	ResultAck ResultStatus = "ack"
-	// ResultRetry releases the lease and keeps the checkpoint before this event.
+	// ResultRetry defers the shared lease and keeps the checkpoint before this event.
 	ResultRetry ResultStatus = "retry"
 	// ResultPoison advances the checkpoint with a bounded safe diagnostic.
 	ResultPoison ResultStatus = "poison"

@@ -12,6 +12,8 @@ import (
 	eventlog "github.com/codex-k8s/kodex/libs/go/eventlog"
 )
 
+var errHandlerPanic = errors.New("event handler panicked")
+
 // Runner claims platform-event-log events and dispatches them to typed handlers.
 type Runner struct {
 	store    Store
@@ -87,6 +89,12 @@ func (r *Runner) RunOnce(ctx context.Context) error {
 	}
 	results := r.handleBatch(ctx, batch.Events)
 	advanceTo, retryEvent, retryResult := r.contiguousAdvance(batch.Events, results)
+	if retryEvent.SequenceID != 0 {
+		if err := r.deferRetry(ctx, batch, retryEvent); err != nil {
+			return err
+		}
+		return fmt.Errorf("%w: event sequence %d: %s", ErrRetryable, retryEvent.SequenceID, safeSummary(errorText(retryResult), r.cfg.FailureMessageLimit))
+	}
 	if advanceTo > 0 {
 		if err := r.store.Advance(ctx, eventlog.AdvanceParams{
 			ConsumerName:   batch.ConsumerName,
@@ -97,17 +105,7 @@ func (r *Runner) RunOnce(ctx context.Context) error {
 			return fmt.Errorf("advance event log checkpoint: %w", err)
 		}
 	}
-	if retryEvent.SequenceID == 0 {
-		return nil
-	}
-	if err := r.store.Release(ctx, eventlog.ReleaseParams{
-		ConsumerName: batch.ConsumerName,
-		LeaseOwner:   batch.LeaseOwner,
-		Now:          time.Now().UTC(),
-	}); err != nil {
-		return fmt.Errorf("release event log checkpoint: %w", err)
-	}
-	return fmt.Errorf("%w: event sequence %d: %s", ErrRetryable, retryEvent.SequenceID, safeSummary(errorText(retryResult), r.cfg.FailureMessageLimit))
+	return nil
 }
 
 func (r *Runner) handleBatch(ctx context.Context, events []eventlog.StoredEvent) []Result {
@@ -142,7 +140,7 @@ func (r *Runner) handleOne(ctx context.Context, storedEvent eventlog.StoredEvent
 	switch status {
 	case lookupHandled:
 		handlerCtx, cancel := context.WithTimeout(ctx, r.cfg.HandlerTimeout)
-		result = handler.HandleEvent(handlerCtx, Event{StoredEvent: storedEvent, Attempt: attempt})
+		result = r.callHandler(handlerCtx, handler, Event{StoredEvent: storedEvent, Attempt: attempt})
 		handlerErr := handlerCtx.Err()
 		cancel()
 		if handlerErr != nil {
@@ -166,6 +164,20 @@ func (r *Runner) handleOne(ctx context.Context, storedEvent eventlog.StoredEvent
 	})
 	r.logHandled(storedEvent, result, attempt)
 	return result
+}
+
+func (r *Runner) callHandler(ctx context.Context, handler Handler, event Event) (result Result) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			result = Result{
+				Status:  ResultRetry,
+				Code:    "handler_panic",
+				Summary: "event handler panicked",
+				Err:     errHandlerPanic,
+			}
+		}
+	}()
+	return handler.HandleEvent(ctx, event)
 }
 
 func (r *Runner) normalizeResult(storedEvent eventlog.StoredEvent, attempt int, result Result) Result {
@@ -194,6 +206,19 @@ func (r *Runner) contiguousAdvance(events []eventlog.StoredEvent, results []Resu
 	return advanceTo, eventlog.StoredEvent{}, Result{}
 }
 
+func (r *Runner) deferRetry(ctx context.Context, batch eventlog.ClaimedBatch, storedEvent eventlog.StoredEvent) error {
+	now := time.Now().UTC()
+	if err := r.store.Defer(ctx, eventlog.DeferParams{
+		ConsumerName: batch.ConsumerName,
+		LeaseOwner:   batch.LeaseOwner,
+		Now:          now,
+		LockedUntil:  now.Add(r.retryDelay(r.currentAttempt(storedEvent))),
+	}); err != nil {
+		return fmt.Errorf("defer event log checkpoint retry: %w", err)
+	}
+	return nil
+}
+
 func (r *Runner) nextAttempt(storedEvent eventlog.StoredEvent) int {
 	key := storedEvent.ID.String()
 	r.mu.Lock()
@@ -201,6 +226,13 @@ func (r *Runner) nextAttempt(storedEvent eventlog.StoredEvent) int {
 	attempt := r.attempts[key] + 1
 	r.attempts[key] = attempt
 	return attempt
+}
+
+func (r *Runner) currentAttempt(storedEvent eventlog.StoredEvent) int {
+	key := storedEvent.ID.String()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.attempts[key]
 }
 
 func (r *Runner) clearAttempt(storedEvent eventlog.StoredEvent) {

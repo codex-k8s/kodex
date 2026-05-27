@@ -88,6 +88,32 @@ func TestBootstrapMergeEventHandlerMapsDomainErrors(t *testing.T) {
 	}
 }
 
+func TestBootstrapMergeEventFingerprintIgnoresDeliveryIdentity(t *testing.T) {
+	t.Parallel()
+
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	payload := bootstrapMergePayload(projectID, repositoryID)
+	first := bootstrapMergeStoredEvent(t, payload)
+	second := bootstrapMergeStoredEvent(t, payload)
+	second.SequenceID = first.SequenceID + 1
+	second.Event.ID = uuid.New()
+	second.Event.AggregateID = uuid.New()
+
+	firstFingerprint := bootstrapMergeEventFingerprint(first, payload)
+	secondFingerprint := bootstrapMergeEventFingerprint(second, payload)
+	if firstFingerprint != secondFingerprint {
+		t.Fatalf("fingerprints differ for delivery replay: %s != %s", firstFingerprint, secondFingerprint)
+	}
+
+	changedPayload := payload
+	changedPayload.MergeCommitSHA = "fedcba9876543210fedcba9876543210fedcba98"
+	changedFingerprint := bootstrapMergeEventFingerprint(second, changedPayload)
+	if changedFingerprint == firstFingerprint {
+		t.Fatalf("fingerprint did not change after safe provider merge commit changed: %s", changedFingerprint)
+	}
+}
+
 func bootstrapMergePayload(projectID uuid.UUID, repositoryID uuid.UUID) providerevents.Payload {
 	return providerevents.Payload{
 		ProviderSlug:                "github",

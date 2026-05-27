@@ -85,6 +85,14 @@ func (s *Store) Advance(ctx context.Context, params AdvanceParams) error {
 	return s.execOwnedCheckpoint(ctx, queryEventLogAdvanceCheckpoint, advanceArgs(params))
 }
 
+// Defer keeps the consumer checkpoint before the current event and moves the shared retry time.
+func (s *Store) Defer(ctx context.Context, params DeferParams) error {
+	if err := validateDefer(params); err != nil {
+		return err
+	}
+	return s.execOwnedCheckpoint(ctx, queryEventLogDeferCheckpoint, deferArgs(params))
+}
+
 // Release clears a consumer lease without advancing the checkpoint.
 func (s *Store) Release(ctx context.Context, params ReleaseParams) error {
 	if err := validateRelease(params); err != nil {
@@ -196,6 +204,21 @@ func validateAdvance(params AdvanceParams) error {
 	}
 }
 
+func validateDefer(params DeferParams) error {
+	switch {
+	case strings.TrimSpace(params.ConsumerName) == "":
+		return fmt.Errorf("%w: consumer name is required", ErrInvalidClaim)
+	case strings.TrimSpace(params.LeaseOwner) == "":
+		return fmt.Errorf("%w: lease owner is required", ErrInvalidClaim)
+	case params.Now.IsZero():
+		return fmt.Errorf("%w: now is required", ErrInvalidClaim)
+	case !params.LockedUntil.After(params.Now):
+		return fmt.Errorf("%w: locked_until must be after now", ErrInvalidClaim)
+	default:
+		return nil
+	}
+}
+
 func validateRelease(params ReleaseParams) error {
 	switch {
 	case strings.TrimSpace(params.ConsumerName) == "":
@@ -237,6 +260,12 @@ func claimArgs(params ClaimParams) pgx.NamedArgs {
 func advanceArgs(params AdvanceParams) pgx.NamedArgs {
 	args := ownedCheckpointArgs(params.ConsumerName, params.LeaseOwner, params.Now)
 	args["last_sequence_id"] = params.LastSequenceID
+	return args
+}
+
+func deferArgs(params DeferParams) pgx.NamedArgs {
+	args := ownedCheckpointArgs(params.ConsumerName, params.LeaseOwner, params.Now)
+	args["locked_until"] = params.LockedUntil
 	return args
 }
 

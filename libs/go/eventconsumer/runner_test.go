@@ -62,12 +62,15 @@ func TestRunOnceKeepsCheckpointBeforeRetry(t *testing.T) {
 	if len(store.advances) != 0 {
 		t.Fatalf("advance count = %d, want 0", len(store.advances))
 	}
-	if len(store.releases) != 1 {
-		t.Fatalf("release count = %d, want 1", len(store.releases))
+	if len(store.defers) != 1 {
+		t.Fatalf("defer count = %d, want 1", len(store.defers))
+	}
+	if len(store.releases) != 0 {
+		t.Fatalf("release count = %d, want 0", len(store.releases))
 	}
 }
 
-func TestRunOnceAdvancesPrefixBeforeRetry(t *testing.T) {
+func TestRunOnceDefersWholeBatchBeforeRetry(t *testing.T) {
 	t.Parallel()
 
 	store := &fakeStore{
@@ -88,14 +91,14 @@ func TestRunOnceAdvancesPrefixBeforeRetry(t *testing.T) {
 	if !errors.Is(err, ErrRetryable) {
 		t.Fatalf("RunOnce() err = %v, want retryable", err)
 	}
-	if len(store.advances) != 1 {
-		t.Fatalf("advance count = %d, want 1", len(store.advances))
+	if len(store.advances) != 0 {
+		t.Fatalf("advance count = %d, want 0", len(store.advances))
 	}
-	if store.advances[0].LastSequenceID != 20 {
-		t.Fatalf("advance sequence = %d, want 20", store.advances[0].LastSequenceID)
+	if len(store.defers) != 1 {
+		t.Fatalf("defer count = %d, want 1", len(store.defers))
 	}
-	if len(store.releases) != 1 {
-		t.Fatalf("release count = %d, want 1", len(store.releases))
+	if len(store.releases) != 0 {
+		t.Fatalf("release count = %d, want 0", len(store.releases))
 	}
 }
 
@@ -115,6 +118,9 @@ func TestRunOncePoisonsAfterMaxAttempts(t *testing.T) {
 	if err := runner.RunOnce(context.Background()); !errors.Is(err, ErrRetryable) {
 		t.Fatalf("first RunOnce() err = %v, want retryable", err)
 	}
+	if len(store.defers) != 1 {
+		t.Fatalf("defer count after first run = %d, want 1", len(store.defers))
+	}
 	if err := runner.RunOnce(context.Background()); err != nil {
 		t.Fatalf("second RunOnce(): %v", err)
 	}
@@ -123,6 +129,66 @@ func TestRunOncePoisonsAfterMaxAttempts(t *testing.T) {
 	}
 	if store.advances[0].LastSequenceID != 30 {
 		t.Fatalf("advance sequence = %d, want 30", store.advances[0].LastSequenceID)
+	}
+}
+
+func TestRunOnceRecoversHandlerPanic(t *testing.T) {
+	t.Parallel()
+
+	store := &fakeStore{
+		claims: []eventlog.ClaimedBatch{batchOf(eventOf(35, "provider.repository.bootstrap_merged", 1))},
+	}
+	registry := registryFor(t, "provider.repository.bootstrap_merged", 1, HandlerFunc(func(context.Context, Event) Result {
+		panic("raw panic detail must not leak")
+	}))
+	hook := &captureHook{}
+	runner := newTestRunner(t, store, registry)
+	runner.hook = hook
+
+	err := runner.RunOnce(context.Background())
+	if !errors.Is(err, ErrRetryable) {
+		t.Fatalf("RunOnce() err = %v, want retryable", err)
+	}
+	if len(store.advances) != 0 {
+		t.Fatalf("advance count = %d, want 0", len(store.advances))
+	}
+	if len(store.defers) != 1 {
+		t.Fatalf("defer count = %d, want 1", len(store.defers))
+	}
+	if got := hook.statuses(); fmt.Sprint(got) != "[retry]" {
+		t.Fatalf("statuses = %v, want [retry]", got)
+	}
+	if len(hook.handled) != 1 || hook.handled[0].Code != "handler_panic" || hook.handled[0].Summary != "event handler panicked" {
+		t.Fatalf("handled = %+v, want safe handler_panic diagnostic", hook.handled)
+	}
+}
+
+func TestRunOnceRetryDeferBlocksOtherLeaseOwner(t *testing.T) {
+	t.Parallel()
+
+	store := &leaseAwareStore{
+		events: []eventlog.StoredEvent{eventOf(37, "provider.repository.bootstrap_merged", 1)},
+	}
+	var calls int
+	registry := registryFor(t, "provider.repository.bootstrap_merged", 1, HandlerFunc(func(context.Context, Event) Result {
+		calls++
+		return Retry(errors.New("temporary failure"))
+	}))
+	first := newTestRunnerWithOwner(t, store, registry, "owner-1")
+	first.cfg.RetryInitialDelay = time.Hour
+	second := newTestRunnerWithOwner(t, store, registry, "owner-2")
+
+	if err := first.RunOnce(context.Background()); !errors.Is(err, ErrRetryable) {
+		t.Fatalf("first RunOnce() err = %v, want retryable", err)
+	}
+	if err := second.RunOnce(context.Background()); err != nil {
+		t.Fatalf("second RunOnce(): %v", err)
+	}
+	if calls != 1 {
+		t.Fatalf("handler calls = %d, want 1", calls)
+	}
+	if store.deferCount != 1 {
+		t.Fatalf("defer count = %d, want 1", store.deferCount)
 	}
 }
 
@@ -185,11 +251,16 @@ func TestRetryDelayIsBounded(t *testing.T) {
 	}
 }
 
-func newTestRunner(t *testing.T, store *fakeStore, registry Registry) *Runner {
+func newTestRunner(t *testing.T, store Store, registry Registry) *Runner {
+	t.Helper()
+	return newTestRunnerWithOwner(t, store, registry, "test-owner")
+}
+
+func newTestRunnerWithOwner(t *testing.T, store Store, registry Registry, leaseOwner string) *Runner {
 	t.Helper()
 	runner, err := NewRunner(store, registry, ConfigFromRuntimeValues(
 		"test-consumer",
-		"test-owner",
+		leaseOwner,
 		10,
 		time.Millisecond,
 		time.Minute,
@@ -244,6 +315,7 @@ func eventOf(sequence int64, eventType string, schemaVersion int) eventlog.Store
 type fakeStore struct {
 	claims   []eventlog.ClaimedBatch
 	advances []eventlog.AdvanceParams
+	defers   []eventlog.DeferParams
 	releases []eventlog.ReleaseParams
 }
 
@@ -261,8 +333,66 @@ func (s *fakeStore) Advance(_ context.Context, params eventlog.AdvanceParams) er
 	return nil
 }
 
+func (s *fakeStore) Defer(_ context.Context, params eventlog.DeferParams) error {
+	s.defers = append(s.defers, params)
+	return nil
+}
+
 func (s *fakeStore) Release(_ context.Context, params eventlog.ReleaseParams) error {
 	s.releases = append(s.releases, params)
+	return nil
+}
+
+type leaseAwareStore struct {
+	events         []eventlog.StoredEvent
+	lastSequenceID int64
+	leaseOwner     string
+	lockedUntil    time.Time
+	deferCount     int
+}
+
+func (s *leaseAwareStore) Claim(_ context.Context, params eventlog.ClaimParams) (eventlog.ClaimedBatch, error) {
+	if !s.lockedUntil.IsZero() && s.lockedUntil.After(params.Now) {
+		return eventlog.ClaimedBatch{ConsumerName: params.ConsumerName, LeaseOwner: params.LeaseOwner}, nil
+	}
+	s.leaseOwner = params.LeaseOwner
+	s.lockedUntil = params.LockedUntil
+	events := make([]eventlog.StoredEvent, 0, len(s.events))
+	for _, event := range s.events {
+		if event.SequenceID > s.lastSequenceID {
+			events = append(events, event)
+		}
+	}
+	return eventlog.ClaimedBatch{
+		ConsumerName: params.ConsumerName,
+		LeaseOwner:   params.LeaseOwner,
+		LockedUntil:  params.LockedUntil,
+		Events:       events,
+	}, nil
+}
+
+func (s *leaseAwareStore) Advance(_ context.Context, params eventlog.AdvanceParams) error {
+	s.lastSequenceID = params.LastSequenceID
+	s.leaseOwner = ""
+	s.lockedUntil = time.Time{}
+	return nil
+}
+
+func (s *leaseAwareStore) Defer(_ context.Context, params eventlog.DeferParams) error {
+	if s.leaseOwner != params.LeaseOwner || s.lockedUntil.IsZero() || !s.lockedUntil.After(params.Now) {
+		return eventlog.ErrCheckpointNotOwned
+	}
+	s.lockedUntil = params.LockedUntil
+	s.deferCount++
+	return nil
+}
+
+func (s *leaseAwareStore) Release(_ context.Context, params eventlog.ReleaseParams) error {
+	if s.leaseOwner != params.LeaseOwner || s.lockedUntil.IsZero() || !s.lockedUntil.After(params.Now) {
+		return eventlog.ErrCheckpointNotOwned
+	}
+	s.leaseOwner = ""
+	s.lockedUntil = time.Time{}
 	return nil
 }
 

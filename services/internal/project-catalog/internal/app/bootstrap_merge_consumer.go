@@ -139,13 +139,8 @@ func bootstrapMergeConsumerError(err error) eventconsumer.Result {
 	}
 }
 
-func bootstrapMergeEventFingerprint(storedEvent eventlog.StoredEvent, payload providerevents.Payload) string {
+func bootstrapMergeEventFingerprint(_ eventlog.StoredEvent, payload providerevents.Payload) string {
 	fingerprintPayload, err := json.Marshal(bootstrapMergeEventFingerprintPayload{
-		EventID:                  storedEvent.ID.String(),
-		EventType:                strings.TrimSpace(storedEvent.EventType),
-		SchemaVersion:            storedEvent.SchemaVersion,
-		AggregateType:            strings.TrimSpace(storedEvent.AggregateType),
-		AggregateID:              storedEvent.AggregateID.String(),
 		RepositoryMergeSignalID:  strings.TrimSpace(payload.RepositoryMergeSignalID),
 		SignalKey:                strings.TrimSpace(payload.SignalKey),
 		SignalKind:               strings.TrimSpace(payload.SignalKind),
@@ -164,18 +159,18 @@ func bootstrapMergeEventFingerprint(storedEvent eventlog.StoredEvent, payload pr
 		Version:                  payload.Version,
 	})
 	if err != nil {
-		fingerprintPayload = []byte(storedEvent.ID.String())
+		fingerprintPayload = []byte(strings.Join([]string{
+			strings.TrimSpace(payload.SignalKey),
+			strings.TrimSpace(payload.ProjectID),
+			strings.TrimSpace(payload.RepositoryID),
+			strings.TrimSpace(payload.MergeCommitSHA),
+		}, "|"))
 	}
 	sum := sha256.Sum256(fingerprintPayload)
 	return "sha256:" + hex.EncodeToString(sum[:])
 }
 
 type bootstrapMergeEventFingerprintPayload struct {
-	EventID                  string `json:"event_id"`
-	EventType                string `json:"event_type"`
-	SchemaVersion            int    `json:"schema_version"`
-	AggregateType            string `json:"aggregate_type"`
-	AggregateID              string `json:"aggregate_id"`
 	RepositoryMergeSignalID  string `json:"repository_merge_signal_id,omitempty"`
 	SignalKey                string `json:"signal_key"`
 	SignalKind               string `json:"signal_kind"`
