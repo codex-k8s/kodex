@@ -6,7 +6,7 @@ status: active
 owner_role: EM
 created_at: 2026-05-22
 updated_at: 2026-05-27
-related_issues: [322, 769, 790, 802, 815, 827, 845, 856, 869, 886, 907]
+related_issues: [322, 769, 790, 802, 815, 827, 845, 856, 869, 886, 907, 919]
 related_prs: []
 related_docsets:
   - docs/domains/risk-and-release-governance/product/requirements.md
@@ -51,6 +51,7 @@ approvals:
 | GOV-7a | #856 | Release decision package явно хранит safe integration refs/summaries соседних доменов без переноса владения project/provider/agent/runtime/interaction state. |
 | GOV-7b | #869 | Release package enrichment готов: локальные governance refs валидируются и обогащаются bounded snapshot, внешние refs остаются explicit с safe summary diagnostic до service-client срезов. |
 | GOV-7c | #886 | Review signal refs intake готов: provider/agent/interaction evidence refs принимаются как safe owner-domain refs, запись проверяет `governance.signal.record`, повтор по source fingerprint не создаёт дубль. |
+| GOV-7d | #919 | Provider review signal consumer готов: `provider.comment.synced` с approved/changes_requested преобразуется в локальный review signal через `libs/go/eventconsumer` без чтения БД/API `provider-hub`. |
 | GOV-7 | не назначено | Интеграции с `agent-manager`, `provider-hub`, `interaction-hub`, `runtime-manager`, `project-catalog` и `operations-hub` подключены через согласованные контракты. |
 | GOV-8 | без отдельного Issue | Эксплуатационный контур для первого backend deploy готов: Dockerfile, Kubernetes manifests, migration Job, env/secret inventory, smoke check, runbook и monitoring. Operator projections остаются отдельным operations-срезом. |
 | GOV-9 | #907 | Event-driven/read-model основа готова: `governance.*` decision lifecycle события несут safe metadata/refs/summary/idempotency correlation для consumers через `platform-event-log`, а authoritative lookup остаётся через gRPC. |
@@ -80,6 +81,7 @@ approvals:
 | Gate request/decision lifecycle и access checks | Готовы для `request/read/list/decision/cancel/expire`; delivery/callback orchestration остаётся у `interaction-hub`. | GOV-4 |
 | Risk classifier и policy evaluator | Готовы для локальных rules, safe summaries/refs, matched rule refs, required gates, идемпотентного replay, expected version и safe outbox events. | GOV-5 |
 | Review signal refs intake | Готов для provider review/comment/check refs, agent run/session/acceptance refs и interaction decision/callback refs через typed `evidence_refs`; `governance-manager` хранит только signal projection metadata, нормализует refs, проверяет access и дедуплицирует повтор по source fingerprint. | GOV-7c |
+| Provider review signal consumer | Готов для `provider.comment.synced`: approved/changes_requested provider review evidence превращается в локальный `RecordReviewSignal`, остальные review states ack-игнорируются, конфликтующий fingerprint poisonится без retry loop. | GOV-7d |
 | Release decision lifecycle и safety-loop | Готовы для package build/read/list, decision request/submit/read/list, blocking signals и текущего safety-loop state на safe refs/summaries. | GOV-6 |
 | Release integration refs | Готовы для project/repository/release line, provider Issue/PR/check/review, agent run/acceptance, runtime job/deploy, local risk assessment и gate refs с bounded summaries/status/digest/timestamps/version; локальные governance refs обогащаются из repository, внешние refs получают safe summary diagnostic при отсутствии owner summary. | GOV-7b |
 | Эксплуатационный контур | Готов для первого backend deploy: service/migrations Dockerfile stages, Kubernetes ServiceAccount/Service/Deployment/Job, runtime env/secret inventory, PostgreSQL database bootstrap, smoke-проверка, runbook и monitoring. | GOV-8 |
