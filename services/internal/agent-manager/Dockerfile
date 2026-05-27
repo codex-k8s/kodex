@@ -24,7 +24,6 @@ COPY proto/ proto/
 COPY services/internal/agent-manager/ services/internal/agent-manager/
 COPY --from=build /go/bin/CompileDaemon /usr/local/bin/CompileDaemon
 
-EXPOSE 8080 9090
 CMD ["CompileDaemon", "--build=go build -o /tmp/agent-manager ./services/internal/agent-manager/cmd/agent-manager", "--command=/tmp/agent-manager"]
 
 FROM ${GOLANG_IMAGE} AS migrations
@@ -34,5 +33,4 @@ ENTRYPOINT ["/usr/local/bin/goose"]
 
 FROM ${GOLANG_IMAGE} AS prod
 COPY --from=build /out/agent-manager /usr/local/bin/agent-manager
-EXPOSE 8080 9090
 ENTRYPOINT ["/usr/local/bin/agent-manager"]
