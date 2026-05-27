@@ -110,17 +110,18 @@ type RiskFactor struct {
 
 // ReviewSignal records a role-driven signal used as evidence.
 type ReviewSignal struct {
-	ID               uuid.UUID
-	RiskAssessmentID *uuid.UUID
-	Target           value.ExternalRef
-	RoleKind         enum.ReviewRoleKind
-	AuthorRef        string
-	Outcome          enum.ReviewSignalOutcome
-	Severity         enum.SignalSeverity
-	Confidence       enum.Confidence
-	EvidenceRefs     []value.EvidenceRef
-	Summary          string
-	CreatedAt        time.Time
+	ID                uuid.UUID
+	RiskAssessmentID  *uuid.UUID
+	Target            value.ExternalRef
+	RoleKind          enum.ReviewRoleKind
+	AuthorRef         string
+	Outcome           enum.ReviewSignalOutcome
+	Severity          enum.SignalSeverity
+	Confidence        enum.Confidence
+	EvidenceRefs      []value.EvidenceRef
+	Summary           string
+	SourceFingerprint string
+	CreatedAt         time.Time
 }
 
 // GateRequest describes a concrete governance gate.

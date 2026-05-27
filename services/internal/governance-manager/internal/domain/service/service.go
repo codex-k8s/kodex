@@ -314,31 +314,78 @@ func (s *Service) ListRiskFactors(ctx context.Context, input ListRiskFactorsInpu
 
 // RecordReviewSignal stores a bounded review signal reference.
 func (s *Service) RecordReviewSignal(ctx context.Context, input RecordReviewSignalInput) (entity.ReviewSignal, error) {
+	target := value.ExternalRef{Type: strings.TrimSpace(input.Target.Type), Ref: strings.TrimSpace(input.Target.Ref)}
+	authorRef := strings.TrimSpace(input.AuthorRef)
+	summary := strings.TrimSpace(input.Summary)
+	evidenceRefs, err := normalizeReviewSignalEvidenceRefs(input.EvidenceRefs)
+	if err != nil {
+		return entity.ReviewSignal{}, err
+	}
+	if target.Type == "" || target.Ref == "" || authorRef == "" || input.RoleKind == "" || input.Outcome == "" || input.Severity == "" || len(evidenceRefs) == 0 {
+		return entity.ReviewSignal{}, errs.ErrInvalidArgument
+	}
+	if err := validateSafeRef("review_signal.target_ref", target.Ref, true); err != nil {
+		return entity.ReviewSignal{}, err
+	}
+	if err := validateSafeRef("review_signal.author_ref", authorRef, true); err != nil {
+		return entity.ReviewSignal{}, err
+	}
+	if err := validateSafeText("review_signal.summary", summary, maxEvaluationFactorSummary); err != nil {
+		return entity.ReviewSignal{}, err
+	}
+	if err := s.authorizeCommand(ctx, input.Meta, actionSignalRecord, signalTargetResource(target)); err != nil {
+		return entity.ReviewSignal{}, err
+	}
 	result, replayed, err := s.replayCommand(ctx, input.Meta, enum.OperationRecordReviewSignal.String(), governanceevents.AggregateReviewSignal)
 	if err != nil {
 		return entity.ReviewSignal{}, err
 	}
 	if replayed {
 		return replayedEntity(ctx, result, s.repository.GetReviewSignal, func(signal entity.ReviewSignal) bool {
-			return sameExternalRef(signal.Target, input.Target) && signal.AuthorRef == strings.TrimSpace(input.AuthorRef)
+			return sameReviewSignal(signal, entity.ReviewSignal{
+				RiskAssessmentID:  input.RiskAssessmentID,
+				Target:            target,
+				RoleKind:          input.RoleKind,
+				AuthorRef:         authorRef,
+				Outcome:           input.Outcome,
+				Severity:          input.Severity,
+				Confidence:        input.Confidence,
+				EvidenceRefs:      evidenceRefs,
+				Summary:           summary,
+				SourceFingerprint: reviewSignalFingerprint(target, input.RoleKind, authorRef, evidenceRefs),
+			})
 		})
-	}
-	if input.Target.Type == "" || input.Target.Ref == "" || strings.TrimSpace(input.AuthorRef) == "" {
-		return entity.ReviewSignal{}, errs.ErrInvalidArgument
 	}
 	now := s.clock.Now()
 	signal := entity.ReviewSignal{
-		ID:               s.idGenerator.New(),
-		RiskAssessmentID: input.RiskAssessmentID,
-		Target:           input.Target,
-		RoleKind:         input.RoleKind,
-		AuthorRef:        strings.TrimSpace(input.AuthorRef),
-		Outcome:          input.Outcome,
-		Severity:         input.Severity,
-		Confidence:       input.Confidence,
-		EvidenceRefs:     input.EvidenceRefs,
-		Summary:          input.Summary,
-		CreatedAt:        now,
+		ID:                s.idGenerator.New(),
+		RiskAssessmentID:  input.RiskAssessmentID,
+		Target:            target,
+		RoleKind:          input.RoleKind,
+		AuthorRef:         authorRef,
+		Outcome:           input.Outcome,
+		Severity:          input.Severity,
+		Confidence:        input.Confidence,
+		EvidenceRefs:      evidenceRefs,
+		Summary:           summary,
+		SourceFingerprint: reviewSignalFingerprint(target, input.RoleKind, authorRef, evidenceRefs),
+		CreatedAt:         now,
+	}
+	existing, err := s.repository.GetReviewSignalByFingerprint(ctx, signal.SourceFingerprint)
+	if err == nil {
+		if !sameReviewSignal(existing, signal) {
+			return entity.ReviewSignal{}, errs.ErrConflict
+		}
+		result = commandResult(input.Meta, enum.OperationRecordReviewSignal.String(), governanceevents.AggregateReviewSignal, existing.ID, now)
+		if err := s.repository.RecordCommandResult(ctx, result); err != nil {
+			if !errors.Is(err, errs.ErrAlreadyExists) {
+				return entity.ReviewSignal{}, err
+			}
+		}
+		return existing, nil
+	}
+	if !errors.Is(err, errs.ErrNotFound) {
+		return entity.ReviewSignal{}, err
 	}
 	result = commandResult(input.Meta, enum.OperationRecordReviewSignal.String(), governanceevents.AggregateReviewSignal, signal.ID, now)
 	event := outboxEvent(s.idGenerator.New(), governanceevents.EventReviewSignalRecorded, governanceevents.AggregateReviewSignal, signal.ID, now, governanceevents.Payload{
@@ -347,6 +394,16 @@ func (s *Service) RecordReviewSignal(ctx context.Context, input RecordReviewSign
 		Status:         string(signal.Severity),
 	})
 	if err := s.repository.RecordReviewSignal(ctx, signal, result, event); err != nil {
+		if errors.Is(err, errs.ErrAlreadyExists) {
+			existing, loadErr := s.repository.GetReviewSignalByFingerprint(ctx, signal.SourceFingerprint)
+			if loadErr == nil && sameReviewSignal(existing, signal) {
+				result = commandResult(input.Meta, enum.OperationRecordReviewSignal.String(), governanceevents.AggregateReviewSignal, existing.ID, now)
+				if recordErr := s.repository.RecordCommandResult(ctx, result); recordErr != nil && !errors.Is(recordErr, errs.ErrAlreadyExists) {
+					return entity.ReviewSignal{}, recordErr
+				}
+				return existing, nil
+			}
+		}
 		return entity.ReviewSignal{}, err
 	}
 	return signal, nil
@@ -1934,6 +1991,95 @@ func optionalUUIDString(id *uuid.UUID) string {
 		return ""
 	}
 	return id.String()
+}
+
+func normalizeReviewSignalEvidenceRefs(refs []value.EvidenceRef) ([]value.EvidenceRef, error) {
+	result := make([]value.EvidenceRef, 0, len(refs))
+	seen := make(map[string]value.EvidenceRef)
+	for _, ref := range refs {
+		normalized, err := normalizeEvidenceRef(ref, "review_signal.evidence_ref.ref", "review_signal.evidence_ref.summary")
+		if err != nil {
+			return nil, err
+		}
+		key := reviewSignalEvidenceIdentity(normalized)
+		if existing, ok := seen[key]; ok {
+			if existing != normalized {
+				return nil, errs.ErrInvalidArgument
+			}
+			continue
+		}
+		seen[key] = normalized
+		result = append(result, normalized)
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return reviewSignalEvidenceIdentity(result[i]) < reviewSignalEvidenceIdentity(result[j])
+	})
+	return result, nil
+}
+
+func reviewSignalFingerprint(target value.ExternalRef, roleKind enum.ReviewRoleKind, authorRef string, evidenceRefs []value.EvidenceRef) string {
+	identities := make([]string, 0, len(evidenceRefs))
+	for _, ref := range evidenceRefs {
+		identities = append(identities, reviewSignalEvidenceIdentity(ref))
+	}
+	sort.Strings(identities)
+	payload, _ := json.Marshal(struct {
+		Target             value.ExternalRef   `json:"target"`
+		RoleKind           enum.ReviewRoleKind `json:"role_kind"`
+		AuthorRef          string              `json:"author_ref"`
+		EvidenceIdentities []string            `json:"evidence_identities"`
+	}{
+		Target:             target,
+		RoleKind:           roleKind,
+		AuthorRef:          authorRef,
+		EvidenceIdentities: identities,
+	})
+	sum := sha256.Sum256(payload)
+	return fmt.Sprintf("sha256:%x", sum[:])
+}
+
+func reviewSignalEvidenceIdentity(ref value.EvidenceRef) string {
+	return strings.TrimSpace(ref.Kind) + "\x00" + strings.TrimSpace(ref.Ref)
+}
+
+func sameReviewSignal(left entity.ReviewSignal, right entity.ReviewSignal) bool {
+	return sameOptionalUUID(left.RiskAssessmentID, right.RiskAssessmentID) &&
+		sameExternalRef(left.Target, right.Target) &&
+		left.RoleKind == right.RoleKind &&
+		strings.TrimSpace(left.AuthorRef) == strings.TrimSpace(right.AuthorRef) &&
+		left.Outcome == right.Outcome &&
+		left.Severity == right.Severity &&
+		left.Confidence == right.Confidence &&
+		strings.TrimSpace(left.Summary) == strings.TrimSpace(right.Summary) &&
+		reviewSignalStoredFingerprint(left) == reviewSignalStoredFingerprint(right) &&
+		sameEvidenceRefs(left.EvidenceRefs, right.EvidenceRefs)
+}
+
+func reviewSignalStoredFingerprint(signal entity.ReviewSignal) string {
+	fingerprint := strings.TrimSpace(signal.SourceFingerprint)
+	if fingerprint != "" {
+		return fingerprint
+	}
+	return reviewSignalFingerprint(signal.Target, signal.RoleKind, strings.TrimSpace(signal.AuthorRef), signal.EvidenceRefs)
+}
+
+func sameOptionalUUID(left *uuid.UUID, right *uuid.UUID) bool {
+	if left == nil || right == nil {
+		return left == nil && right == nil
+	}
+	return *left == *right
+}
+
+func sameEvidenceRefs(left []value.EvidenceRef, right []value.EvidenceRef) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if left[index] != right[index] {
+			return false
+		}
+	}
+	return true
 }
 
 func sameExternalRef(left value.ExternalRef, right value.ExternalRef) bool {
