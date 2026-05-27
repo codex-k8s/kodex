@@ -135,7 +135,7 @@ CREATE TABLE agent_manager_follow_up_intents (
     CONSTRAINT agent_manager_follow_up_intents_idempotency_chk
         CHECK (idempotency_key <> '' AND char_length(idempotency_key) <= 512),
     CONSTRAINT agent_manager_follow_up_intents_status_chk
-        CHECK (status IN ('planned', 'requested', 'created', 'updated', 'commented', 'review_signaled', 'failed', 'cancelled')),
+        CHECK (status IN ('planned', 'requested', 'created', 'updated', 'commented', 'failed', 'cancelled')),
     CONSTRAINT agent_manager_follow_up_intents_version_chk CHECK (version > 0)
 );
 
