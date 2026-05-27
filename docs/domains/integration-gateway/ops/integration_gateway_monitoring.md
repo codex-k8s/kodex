@@ -5,8 +5,8 @@ title: "integration-gateway — наблюдаемость"
 status: active
 owner_role: SRE
 created_at: 2026-05-26
-updated_at: 2026-05-26
-related_issues: [829]
+updated_at: 2026-05-27
+related_issues: [829, 853]
 approvals:
   required: ["Owner"]
   status: approved
@@ -88,7 +88,7 @@ approvals:
 
 - Liveness: `/health/livez` возвращает успешный ответ.
 - Readiness: `/health/readyz` подтверждает HTTP router, OpenAPI validator и route registry.
-- OpenAPI: `/openapi/integration-gateway.v1.yaml` доступен и содержит активный provider webhook route.
+- OpenAPI: `/openapi/integration-gateway.v1.yaml` доступен и содержит активные provider webhook и external callback routes.
 - Negative synthetic: неподписанный GitHub webhook получает `401/signature_invalid`; неподдержанный provider slug получает `400/source_not_allowed`.
 - Downstream: retryable `downstream_unavailable` не должен оставаться высоким после восстановления `provider-hub`.
 
@@ -107,7 +107,7 @@ approvals:
 
 - Конкретные Prometheus recording rules и alert rules будут закреплены после появления штатного observability stack.
 - GitLab-специфичные route dashboards добавляются вместе с GitLab verifier/source policy.
-- Callback route dashboards добавляются вместе с owner-service callback contracts.
+- Callback route dashboards используют те же safe labels `route=external_callback`, `source`, `status`, `payload_size_bucket` и `reject_reason`; owner-side lifecycle и callback duplicates смотреть в `interaction-hub`.
 
 ## Апрув
 

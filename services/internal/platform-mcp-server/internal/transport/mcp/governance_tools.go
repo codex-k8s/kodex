@@ -13,32 +13,31 @@ type governanceEnumPair[Enum comparable] struct {
 	value Enum
 }
 
-const (
-	governanceRiskEvaluateDescription   = "Evaluate risk through governance-manager from safe refs and summaries."
-	governanceRiskReevaluateDescription = "Reevaluate an existing risk assessment through governance-manager."
-	governanceRiskGetDescription        = "Read a safe risk assessment summary through governance-manager."
-	governanceRiskListDescription       = "List safe risk assessment summaries through governance-manager."
-
-	governanceGateRequestDescription        = "Request a governance gate through governance-manager without storing decision state in MCP."
-	governanceGateGetDescription            = "Read a safe governance gate request summary through governance-manager."
-	governanceGateListDescription           = "List safe governance gate request summaries through governance-manager."
-	governanceGateSubmitDecisionDescription = "Submit a governance gate decision through governance-manager."
-	governanceGateCancelDescription         = "Cancel an open governance gate request through governance-manager."
-	governanceGateExpireDescription         = "Expire an open governance gate request through governance-manager."
-)
-
 var governanceToolDescriptions = map[string]string{
-	ToolGovernanceRiskEvaluate:   governanceRiskEvaluateDescription,
-	ToolGovernanceRiskReevaluate: governanceRiskReevaluateDescription,
-	ToolGovernanceRiskGet:        governanceRiskGetDescription,
-	ToolGovernanceRiskList:       governanceRiskListDescription,
+	ToolGovernanceRiskEvaluate:   "Evaluate risk through governance-manager from safe refs and summaries.",
+	ToolGovernanceRiskReevaluate: "Reevaluate an existing risk assessment through governance-manager.",
+	ToolGovernanceRiskGet:        "Read a safe risk assessment summary through governance-manager.",
+	ToolGovernanceRiskList:       "List safe risk assessment summaries through governance-manager.",
 
-	ToolGovernanceGateRequest:        governanceGateRequestDescription,
-	ToolGovernanceGateGet:            governanceGateGetDescription,
-	ToolGovernanceGateList:           governanceGateListDescription,
-	ToolGovernanceGateSubmitDecision: governanceGateSubmitDecisionDescription,
-	ToolGovernanceGateCancel:         governanceGateCancelDescription,
-	ToolGovernanceGateExpire:         governanceGateExpireDescription,
+	ToolGovernanceGateRequest:        "Request a governance gate through governance-manager without storing decision state in MCP.",
+	ToolGovernanceGateGet:            "Read a safe governance gate request summary through governance-manager.",
+	ToolGovernanceGateList:           "List safe governance gate request summaries through governance-manager.",
+	ToolGovernanceGateSubmitDecision: "Submit a governance gate decision through governance-manager.",
+	ToolGovernanceGateCancel:         "Cancel an open governance gate request through governance-manager.",
+	ToolGovernanceGateExpire:         "Expire an open governance gate request through governance-manager.",
+
+	ToolGovernanceReleasePrepareDecisionPackage: "Prepare a release decision package through governance-manager from safe refs.",
+	ToolGovernanceReleaseGetDecisionPackage:     "Read a safe release decision package summary through governance-manager.",
+	ToolGovernanceReleaseListDecisionPackages:   "List safe release decision package summaries through governance-manager.",
+	ToolGovernanceReleaseRequestDecision:        "Request a release decision through governance-manager.",
+	ToolGovernanceReleaseSubmitDecision:         "Submit a release decision through governance-manager.",
+	ToolGovernanceReleaseGetDecision:            "Read a safe release decision summary through governance-manager.",
+	ToolGovernanceReleaseListDecisions:          "List safe release decision summaries through governance-manager.",
+	ToolGovernanceReleaseRecordBlockingSignal:   "Record a release blocking signal through governance-manager.",
+	ToolGovernanceReleaseResolveBlockingSignal:  "Resolve a release blocking signal through governance-manager.",
+	ToolGovernanceReleaseListBlockingSignals:    "List safe release blocking signal summaries through governance-manager.",
+	ToolGovernanceReleaseRecordSafetyState:      "Record release safety-loop state through governance-manager.",
+	ToolGovernanceReleaseGetSafetyState:         "Read release safety-loop state through governance-manager.",
 }
 
 var governanceTargetTypes = map[string]governancev1.GovernanceTargetType{
@@ -171,7 +170,84 @@ var governanceGateOutcomeNames = map[governancev1.GateOutcome]string{
 	governancev1.GateOutcome_GATE_OUTCOME_ESCALATE:                "escalate",
 }
 
-// GovernanceToolsHandler routes gate lifecycle tools to governance-manager.
+var governanceReleasePackageStatusPairs = []governanceEnumPair[governancev1.ReleaseDecisionPackageStatus]{
+	{name: "draft", value: governancev1.ReleaseDecisionPackageStatus_RELEASE_DECISION_PACKAGE_STATUS_DRAFT},
+	{name: "ready", value: governancev1.ReleaseDecisionPackageStatus_RELEASE_DECISION_PACKAGE_STATUS_READY},
+	{name: "decision_requested", value: governancev1.ReleaseDecisionPackageStatus_RELEASE_DECISION_PACKAGE_STATUS_DECISION_REQUESTED},
+	{name: "closed", value: governancev1.ReleaseDecisionPackageStatus_RELEASE_DECISION_PACKAGE_STATUS_CLOSED},
+}
+
+var governanceReleasePackageStatuses = governanceEnumValues(governanceReleasePackageStatusPairs)
+var governanceReleasePackageStatusNames = governanceEnumNames(governanceReleasePackageStatusPairs)
+
+var governanceReleaseDecisionStatusPairs = []governanceEnumPair[governancev1.ReleaseDecisionStatus]{
+	{name: "requested", value: governancev1.ReleaseDecisionStatus_RELEASE_DECISION_STATUS_REQUESTED},
+	{name: "resolved", value: governancev1.ReleaseDecisionStatus_RELEASE_DECISION_STATUS_RESOLVED},
+	{name: "cancelled", value: governancev1.ReleaseDecisionStatus_RELEASE_DECISION_STATUS_CANCELLED},
+}
+
+var governanceReleaseDecisionStatuses = governanceEnumValues(governanceReleaseDecisionStatusPairs)
+var governanceReleaseDecisionStatusNames = governanceEnumNames(governanceReleaseDecisionStatusPairs)
+
+var governanceReleaseDecisionOutcomePairs = []governanceEnumPair[governancev1.ReleaseDecisionOutcome]{
+	{name: "go", value: governancev1.ReleaseDecisionOutcome_RELEASE_DECISION_OUTCOME_GO},
+	{name: "go_with_conditions", value: governancev1.ReleaseDecisionOutcome_RELEASE_DECISION_OUTCOME_GO_WITH_CONDITIONS},
+	{name: "no_go", value: governancev1.ReleaseDecisionOutcome_RELEASE_DECISION_OUTCOME_NO_GO},
+	{name: "hold", value: governancev1.ReleaseDecisionOutcome_RELEASE_DECISION_OUTCOME_HOLD},
+	{name: "rollback", value: governancev1.ReleaseDecisionOutcome_RELEASE_DECISION_OUTCOME_ROLLBACK},
+	{name: "follow_up_required", value: governancev1.ReleaseDecisionOutcome_RELEASE_DECISION_OUTCOME_FOLLOW_UP_REQUIRED},
+}
+
+var governanceReleaseDecisionOutcomes = governanceEnumValues(governanceReleaseDecisionOutcomePairs)
+var governanceReleaseDecisionOutcomeNames = governanceEnumNames(governanceReleaseDecisionOutcomePairs)
+
+var governanceReleaseSafetyStatePairs = []governanceEnumPair[governancev1.ReleaseSafetyStateKind]{
+	{name: "release_candidate", value: governancev1.ReleaseSafetyStateKind_RELEASE_SAFETY_STATE_KIND_RELEASE_CANDIDATE},
+	{name: "awaiting_release_gate", value: governancev1.ReleaseSafetyStateKind_RELEASE_SAFETY_STATE_KIND_AWAITING_RELEASE_GATE},
+	{name: "deploying", value: governancev1.ReleaseSafetyStateKind_RELEASE_SAFETY_STATE_KIND_DEPLOYING},
+	{name: "postdeploy_observation", value: governancev1.ReleaseSafetyStateKind_RELEASE_SAFETY_STATE_KIND_POSTDEPLOY_OBSERVATION},
+	{name: "stable", value: governancev1.ReleaseSafetyStateKind_RELEASE_SAFETY_STATE_KIND_STABLE},
+	{name: "hold", value: governancev1.ReleaseSafetyStateKind_RELEASE_SAFETY_STATE_KIND_HOLD},
+	{name: "rollback", value: governancev1.ReleaseSafetyStateKind_RELEASE_SAFETY_STATE_KIND_ROLLBACK},
+	{name: "follow_up_required", value: governancev1.ReleaseSafetyStateKind_RELEASE_SAFETY_STATE_KIND_FOLLOW_UP_REQUIRED},
+}
+
+var governanceReleaseSafetyStates = governanceEnumValues(governanceReleaseSafetyStatePairs)
+var governanceReleaseSafetyStateNames = governanceEnumNames(governanceReleaseSafetyStatePairs)
+
+var governanceBlockingSignalSourcePairs = []governanceEnumPair[governancev1.BlockingSignalSourceType]{
+	{name: "acceptance", value: governancev1.BlockingSignalSourceType_BLOCKING_SIGNAL_SOURCE_TYPE_ACCEPTANCE},
+	{name: "review_signal", value: governancev1.BlockingSignalSourceType_BLOCKING_SIGNAL_SOURCE_TYPE_REVIEW_SIGNAL},
+	{name: "runtime", value: governancev1.BlockingSignalSourceType_BLOCKING_SIGNAL_SOURCE_TYPE_RUNTIME},
+	{name: "provider", value: governancev1.BlockingSignalSourceType_BLOCKING_SIGNAL_SOURCE_TYPE_PROVIDER},
+	{name: "interaction", value: governancev1.BlockingSignalSourceType_BLOCKING_SIGNAL_SOURCE_TYPE_INTERACTION},
+	{name: "human", value: governancev1.BlockingSignalSourceType_BLOCKING_SIGNAL_SOURCE_TYPE_HUMAN},
+	{name: "monitoring", value: governancev1.BlockingSignalSourceType_BLOCKING_SIGNAL_SOURCE_TYPE_MONITORING},
+}
+
+var governanceBlockingSignalSources = governanceEnumValues(governanceBlockingSignalSourcePairs)
+var governanceBlockingSignalSourceNames = governanceEnumNames(governanceBlockingSignalSourcePairs)
+
+var governanceBlockingSignalStatusPairs = []governanceEnumPair[governancev1.BlockingSignalStatus]{
+	{name: "active", value: governancev1.BlockingSignalStatus_BLOCKING_SIGNAL_STATUS_ACTIVE},
+	{name: "resolved", value: governancev1.BlockingSignalStatus_BLOCKING_SIGNAL_STATUS_RESOLVED},
+	{name: "dismissed", value: governancev1.BlockingSignalStatus_BLOCKING_SIGNAL_STATUS_DISMISSED},
+}
+
+var governanceBlockingSignalStatuses = governanceEnumValues(governanceBlockingSignalStatusPairs)
+var governanceBlockingSignalStatusNames = governanceEnumNames(governanceBlockingSignalStatusPairs)
+
+var governanceSignalSeverityPairs = []governanceEnumPair[governancev1.SignalSeverity]{
+	{name: "info", value: governancev1.SignalSeverity_SIGNAL_SEVERITY_INFO},
+	{name: "warning", value: governancev1.SignalSeverity_SIGNAL_SEVERITY_WARNING},
+	{name: "blocking", value: governancev1.SignalSeverity_SIGNAL_SEVERITY_BLOCKING},
+	{name: "critical", value: governancev1.SignalSeverity_SIGNAL_SEVERITY_CRITICAL},
+}
+
+var governanceSignalSeverities = governanceEnumValues(governanceSignalSeverityPairs)
+var governanceSignalSeverityNames = governanceEnumNames(governanceSignalSeverityPairs)
+
+// GovernanceToolsHandler routes governance tools to governance-manager.
 type GovernanceToolsHandler struct {
 	client GovernanceManagerClient
 }
@@ -236,6 +312,54 @@ func (handler *GovernanceToolsHandler) CancelGate(ctx context.Context, _ *mcpsdk
 
 func (handler *GovernanceToolsHandler) ExpireGate(ctx context.Context, _ *mcpsdk.CallToolRequest, input ExpireGovernanceGateInput) (*mcpsdk.CallToolResult, GovernanceGateOutput, error) {
 	return routeOwnerTool(ctx, input, expireGateRequest, handler.client.ExpireGate, governanceGateOutput, ToolGovernanceGateExpire)
+}
+
+func (handler *GovernanceToolsHandler) PrepareReleaseDecisionPackage(ctx context.Context, _ *mcpsdk.CallToolRequest, input PrepareGovernanceReleaseDecisionPackageInput) (*mcpsdk.CallToolResult, GovernanceReleaseDecisionPackageOutput, error) {
+	return routeOwnerTool(ctx, input, prepareReleaseDecisionPackageRequest, handler.client.BuildReleaseDecisionPackage, governanceReleaseDecisionPackageOutput, ToolGovernanceReleasePrepareDecisionPackage)
+}
+
+func (handler *GovernanceToolsHandler) GetReleaseDecisionPackage(ctx context.Context, _ *mcpsdk.CallToolRequest, input GetGovernanceReleaseDecisionPackageInput) (*mcpsdk.CallToolResult, GovernanceReleaseDecisionPackageOutput, error) {
+	return routeOwnerTool(ctx, input, getReleaseDecisionPackageRequest, handler.client.GetReleaseDecisionPackage, governanceReleaseDecisionPackageOutput, ToolGovernanceReleaseGetDecisionPackage)
+}
+
+func (handler *GovernanceToolsHandler) ListReleaseDecisionPackages(ctx context.Context, _ *mcpsdk.CallToolRequest, input ListGovernanceReleaseDecisionPackagesInput) (*mcpsdk.CallToolResult, GovernanceReleaseDecisionPackageListOutput, error) {
+	return routeOwnerTool(ctx, input, listReleaseDecisionPackagesRequest, handler.client.ListReleaseDecisionPackages, governanceReleaseDecisionPackageListOutput, ToolGovernanceReleaseListDecisionPackages)
+}
+
+func (handler *GovernanceToolsHandler) RequestReleaseDecision(ctx context.Context, _ *mcpsdk.CallToolRequest, input RequestGovernanceReleaseDecisionInput) (*mcpsdk.CallToolResult, GovernanceReleaseDecisionOutput, error) {
+	return routeOwnerTool(ctx, input, requestReleaseDecisionRequest, handler.client.RequestReleaseDecision, governanceReleaseDecisionOutput, ToolGovernanceReleaseRequestDecision)
+}
+
+func (handler *GovernanceToolsHandler) SubmitReleaseDecision(ctx context.Context, _ *mcpsdk.CallToolRequest, input SubmitGovernanceReleaseDecisionInput) (*mcpsdk.CallToolResult, GovernanceReleaseDecisionOutput, error) {
+	return routeOwnerTool(ctx, input, submitReleaseDecisionRequest, handler.client.SubmitReleaseDecision, governanceReleaseDecisionOutput, ToolGovernanceReleaseSubmitDecision)
+}
+
+func (handler *GovernanceToolsHandler) GetReleaseDecision(ctx context.Context, _ *mcpsdk.CallToolRequest, input GetGovernanceReleaseDecisionInput) (*mcpsdk.CallToolResult, GovernanceReleaseDecisionOutput, error) {
+	return routeOwnerTool(ctx, input, getReleaseDecisionRequest, handler.client.GetReleaseDecision, governanceReleaseDecisionOutput, ToolGovernanceReleaseGetDecision)
+}
+
+func (handler *GovernanceToolsHandler) ListReleaseDecisions(ctx context.Context, _ *mcpsdk.CallToolRequest, input ListGovernanceReleaseDecisionsInput) (*mcpsdk.CallToolResult, GovernanceReleaseDecisionListOutput, error) {
+	return routeOwnerTool(ctx, input, listReleaseDecisionsRequest, handler.client.ListReleaseDecisions, governanceReleaseDecisionListOutput, ToolGovernanceReleaseListDecisions)
+}
+
+func (handler *GovernanceToolsHandler) RecordBlockingSignal(ctx context.Context, _ *mcpsdk.CallToolRequest, input RecordGovernanceBlockingSignalInput) (*mcpsdk.CallToolResult, GovernanceBlockingSignalOutput, error) {
+	return routeOwnerTool(ctx, input, recordBlockingSignalRequest, handler.client.RecordBlockingSignal, governanceBlockingSignalOutput, ToolGovernanceReleaseRecordBlockingSignal)
+}
+
+func (handler *GovernanceToolsHandler) ResolveBlockingSignal(ctx context.Context, _ *mcpsdk.CallToolRequest, input ResolveGovernanceBlockingSignalInput) (*mcpsdk.CallToolResult, GovernanceBlockingSignalOutput, error) {
+	return routeOwnerTool(ctx, input, resolveBlockingSignalRequest, handler.client.ResolveBlockingSignal, governanceBlockingSignalOutput, ToolGovernanceReleaseResolveBlockingSignal)
+}
+
+func (handler *GovernanceToolsHandler) ListBlockingSignals(ctx context.Context, _ *mcpsdk.CallToolRequest, input ListGovernanceBlockingSignalsInput) (*mcpsdk.CallToolResult, GovernanceBlockingSignalListOutput, error) {
+	return routeOwnerTool(ctx, input, listBlockingSignalsRequest, handler.client.ListBlockingSignals, governanceBlockingSignalListOutput, ToolGovernanceReleaseListBlockingSignals)
+}
+
+func (handler *GovernanceToolsHandler) RecordReleaseSafetyState(ctx context.Context, _ *mcpsdk.CallToolRequest, input RecordGovernanceReleaseSafetyStateInput) (*mcpsdk.CallToolResult, GovernanceReleaseSafetyStateOutput, error) {
+	return routeOwnerTool(ctx, input, recordReleaseSafetyStateRequest, handler.client.RecordReleaseSafetyState, governanceReleaseSafetyStateOutput, ToolGovernanceReleaseRecordSafetyState)
+}
+
+func (handler *GovernanceToolsHandler) GetReleaseSafetyState(ctx context.Context, _ *mcpsdk.CallToolRequest, input GetGovernanceReleaseSafetyStateInput) (*mcpsdk.CallToolResult, GovernanceReleaseSafetyStateOutput, error) {
+	return routeOwnerTool(ctx, input, getReleaseSafetyStateRequest, handler.client.GetReleaseSafetyState, governanceReleaseSafetyStateOutput, ToolGovernanceReleaseGetSafetyState)
 }
 
 func routeRiskCommand[Input any, Request governanceRiskCommandRequest](
@@ -451,19 +575,9 @@ func requestGateRequest(input RequestGovernanceGateInput) (*governancev1.Request
 }
 
 func getGateRequest(input GetGovernanceGateInput) (*governancev1.GetGateRequestRequest, error) {
-	meta, err := governanceQueryMeta(input.Meta)
-	if err != nil {
-		return nil, err
-	}
-	gateRequestID, err := requiredTrimmed(input.GateRequestID, "gate_request_id")
-	if err != nil {
-		return nil, err
-	}
-	return &governancev1.GetGateRequestRequest{
-		GateRequestId:   gateRequestID,
-		IncludeDecision: input.IncludeDecision,
-		Meta:            meta,
-	}, nil
+	return governanceQueryRequestWithID(input.Meta, input.GateRequestID, "gate_request_id", func(id string, meta *governancev1.QueryMeta) *governancev1.GetGateRequestRequest {
+		return &governancev1.GetGateRequestRequest{GateRequestId: id, IncludeDecision: input.IncludeDecision, Meta: meta}
+	})
 }
 
 func listGateRequests(input ListGovernanceGatesInput) (*governancev1.ListGateRequestsRequest, error) {
@@ -577,6 +691,315 @@ func terminalGovernanceGateInput(input CancelGovernanceGateInput) (string, strin
 		return "", "", nil, nil, err
 	}
 	return gateRequestID, reason, meta, governanceInteractionDeliveryRef(input.InteractionDeliveryRef), nil
+}
+
+func prepareReleaseDecisionPackageRequest(input PrepareGovernanceReleaseDecisionPackageInput) (*governancev1.BuildReleaseDecisionPackageRequest, error) {
+	meta, err := governanceCommandMeta(input.Meta)
+	if err != nil {
+		return nil, err
+	}
+	releaseCandidateRef, err := requiredTrimmed(input.ReleaseCandidateRef, "release_candidate_ref")
+	if err != nil {
+		return nil, err
+	}
+	if !governanceProjectContextHasListScope(input.ProjectContext) {
+		return nil, invalidInput("project_context.project_ref or project_context.repository_ref is required")
+	}
+	evidenceRefs, err := governanceEvidenceRefs(input.EvidenceRefs)
+	if err != nil {
+		return nil, err
+	}
+	return &governancev1.BuildReleaseDecisionPackageRequest{
+		ReleaseCandidateRef:     releaseCandidateRef,
+		ProjectContext:          governanceProjectContext(input.ProjectContext, true),
+		RepositoryRefs:          trimmedStrings(input.RepositoryRefs),
+		ProviderRefs:            governanceProviderContexts(input.ProviderRefs),
+		RuntimeRefs:             governanceRuntimeContexts(input.RuntimeRefs),
+		AgentContext:            governanceAgentContext(input.AgentContext),
+		ReviewSignalIds:         trimmedStrings(input.ReviewSignalIDs),
+		EvidenceRefs:            evidenceRefs,
+		KnownLimitationsSummary: strings.TrimSpace(input.KnownLimitationsSummary),
+		Meta:                    meta,
+		RiskAssessmentId:        optionalString(input.RiskAssessmentID),
+	}, nil
+}
+
+func getReleaseDecisionPackageRequest(input GetGovernanceReleaseDecisionPackageInput) (*governancev1.GetReleaseDecisionPackageRequest, error) {
+	return governanceQueryRequestWithID(input.Meta, input.ReleaseDecisionPackageID, "release_decision_package_id", newGetReleaseDecisionPackageRequest)
+}
+
+func newGetReleaseDecisionPackageRequest(id string, meta *governancev1.QueryMeta) *governancev1.GetReleaseDecisionPackageRequest {
+	return &governancev1.GetReleaseDecisionPackageRequest{ReleaseDecisionPackageId: id, Meta: meta}
+}
+
+func listReleaseDecisionPackagesRequest(input ListGovernanceReleaseDecisionPackagesInput) (*governancev1.ListReleaseDecisionPackagesRequest, error) {
+	meta, err := governanceQueryMeta(input.Meta)
+	if err != nil {
+		return nil, err
+	}
+	releaseCandidateRef := strings.TrimSpace(input.ReleaseCandidateRef)
+	if releaseCandidateRef == "" && !governanceProjectContextHasListScope(input.ProjectContext) {
+		return nil, invalidInput("release_candidate_ref or project_context.project_ref/repository_ref is required")
+	}
+	status, err := optionalGovernanceReleasePackageStatus(input.Status)
+	if err != nil {
+		return nil, err
+	}
+	return &governancev1.ListReleaseDecisionPackagesRequest{
+		ProjectContext:      governanceProjectContext(input.ProjectContext, false),
+		ReleaseCandidateRef: optionalString(releaseCandidateRef),
+		Status:              status,
+		Page:                governancePageRequest(input.Page),
+		Meta:                meta,
+	}, nil
+}
+
+func requestReleaseDecisionRequest(input RequestGovernanceReleaseDecisionInput) (*governancev1.RequestReleaseDecisionRequest, error) {
+	build := func(id string, meta *governancev1.CommandMeta) *governancev1.RequestReleaseDecisionRequest {
+		return &governancev1.RequestReleaseDecisionRequest{ReleaseDecisionPackageId: id, RequestGateIfRequired: input.RequestGateIfRequired, Meta: meta}
+	}
+	return governanceCommandRequestWithID(input.Meta, input.ReleaseDecisionPackageID, "release_decision_package_id", build)
+}
+
+func submitReleaseDecisionRequest(input SubmitGovernanceReleaseDecisionInput) (*governancev1.SubmitReleaseDecisionRequest, error) {
+	meta, err := governanceCommandMeta(input.Meta)
+	if err != nil {
+		return nil, err
+	}
+	packageID, actorRef, policyRef, reason, err := releaseDecisionRequiredFields(input)
+	if err != nil {
+		return nil, err
+	}
+	outcome, err := governanceReleaseDecisionOutcome(input.Outcome)
+	if err != nil {
+		return nil, err
+	}
+	return &governancev1.SubmitReleaseDecisionRequest{
+		ReleaseDecisionPackageId: packageID,
+		GateDecisionId:           optionalString(input.GateDecisionID),
+		Outcome:                  outcome,
+		DecisionActorRef:         actorRef,
+		DecisionPolicyRef:        policyRef,
+		Reason:                   reason,
+		ConditionsSummary:        optionalString(input.ConditionsSummary),
+		Meta:                     meta,
+	}, nil
+}
+
+func releaseDecisionRequiredFields(input SubmitGovernanceReleaseDecisionInput) (string, string, string, string, error) {
+	packageID, err := requiredTrimmed(input.ReleaseDecisionPackageID, "release_decision_package_id")
+	if err != nil {
+		return "", "", "", "", err
+	}
+	actorRef, err := requiredTrimmed(input.DecisionActorRef, "decision_actor_ref")
+	if err != nil {
+		return "", "", "", "", err
+	}
+	policyRef, err := requiredTrimmed(input.DecisionPolicyRef, "decision_policy_ref")
+	if err != nil {
+		return "", "", "", "", err
+	}
+	reason, err := requiredTrimmed(input.Reason, "reason")
+	if err != nil {
+		return "", "", "", "", err
+	}
+	return packageID, actorRef, policyRef, reason, nil
+}
+
+func getReleaseDecisionRequest(input GetGovernanceReleaseDecisionInput) (*governancev1.GetReleaseDecisionRequest, error) {
+	return governanceQueryRequestWithID(input.Meta, input.ReleaseDecisionID, "release_decision_id", newGetReleaseDecisionRequest)
+}
+
+func newGetReleaseDecisionRequest(id string, meta *governancev1.QueryMeta) *governancev1.GetReleaseDecisionRequest {
+	return &governancev1.GetReleaseDecisionRequest{ReleaseDecisionId: id, Meta: meta}
+}
+
+func listReleaseDecisionsRequest(input ListGovernanceReleaseDecisionsInput) (*governancev1.ListReleaseDecisionsRequest, error) {
+	meta, err := governanceQueryMeta(input.Meta)
+	if err != nil {
+		return nil, err
+	}
+	packageID := strings.TrimSpace(input.ReleaseDecisionPackageID)
+	if packageID == "" && !governanceProjectContextHasListScope(input.ProjectContext) {
+		return nil, invalidInput("release_decision_package_id or project_context.project_ref/repository_ref is required")
+	}
+	status, err := optionalGovernanceReleaseDecisionStatus(input.Status)
+	if err != nil {
+		return nil, err
+	}
+	outcome, err := optionalGovernanceReleaseDecisionOutcome(input.Outcome)
+	if err != nil {
+		return nil, err
+	}
+	return &governancev1.ListReleaseDecisionsRequest{
+		ReleaseDecisionPackageId: optionalString(packageID),
+		ProjectContext:           governanceProjectContext(input.ProjectContext, false),
+		Status:                   status,
+		Outcome:                  outcome,
+		Page:                     governancePageRequest(input.Page),
+		Meta:                     meta,
+	}, nil
+}
+
+func recordBlockingSignalRequest(input RecordGovernanceBlockingSignalInput) (*governancev1.RecordBlockingSignalRequest, error) {
+	meta, err := governanceCommandMeta(input.Meta)
+	if err != nil {
+		return nil, err
+	}
+	target, err := governanceTarget(input.Target, true, "target")
+	if err != nil {
+		return nil, err
+	}
+	sourceType, severity, summary, err := blockingSignalFields(input.SourceType, input.Severity, input.Summary)
+	if err != nil {
+		return nil, err
+	}
+	return &governancev1.RecordBlockingSignalRequest{
+		Target:     target,
+		SourceType: sourceType,
+		SourceRef:  optionalString(input.SourceRef),
+		Severity:   severity,
+		Summary:    summary,
+		Meta:       meta,
+	}, nil
+}
+
+func blockingSignalFields(sourceInput string, severityInput string, summaryInput string) (governancev1.BlockingSignalSourceType, governancev1.SignalSeverity, string, error) {
+	sourceType, err := governanceBlockingSignalSource(sourceInput)
+	if err != nil {
+		return governancev1.BlockingSignalSourceType_BLOCKING_SIGNAL_SOURCE_TYPE_UNSPECIFIED, governancev1.SignalSeverity_SIGNAL_SEVERITY_UNSPECIFIED, "", err
+	}
+	severity, err := governanceSignalSeverity(severityInput)
+	if err != nil {
+		return governancev1.BlockingSignalSourceType_BLOCKING_SIGNAL_SOURCE_TYPE_UNSPECIFIED, governancev1.SignalSeverity_SIGNAL_SEVERITY_UNSPECIFIED, "", err
+	}
+	summary, err := requiredTrimmed(summaryInput, "summary")
+	if err != nil {
+		return governancev1.BlockingSignalSourceType_BLOCKING_SIGNAL_SOURCE_TYPE_UNSPECIFIED, governancev1.SignalSeverity_SIGNAL_SEVERITY_UNSPECIFIED, "", err
+	}
+	return sourceType, severity, summary, nil
+}
+
+func resolveBlockingSignalRequest(input ResolveGovernanceBlockingSignalInput) (*governancev1.ResolveBlockingSignalRequest, error) {
+	meta, err := governanceCommandMeta(input.Meta)
+	if err != nil {
+		return nil, err
+	}
+	signalID, err := requiredTrimmed(input.BlockingSignalID, "blocking_signal_id")
+	if err != nil {
+		return nil, err
+	}
+	terminalStatus, err := governanceTerminalBlockingSignalStatus(input.TerminalStatus)
+	if err != nil {
+		return nil, err
+	}
+	resolutionSummary, err := requiredTrimmed(input.ResolutionSummary, "resolution_summary")
+	if err != nil {
+		return nil, err
+	}
+	return &governancev1.ResolveBlockingSignalRequest{
+		BlockingSignalId:  signalID,
+		TerminalStatus:    terminalStatus,
+		ResolutionSummary: resolutionSummary,
+		Meta:              meta,
+	}, nil
+}
+
+func listBlockingSignalsRequest(input ListGovernanceBlockingSignalsInput) (*governancev1.ListBlockingSignalsRequest, error) {
+	meta, err := governanceQueryMeta(input.Meta)
+	if err != nil {
+		return nil, err
+	}
+	target, err := governanceTarget(input.Target, true, "target")
+	if err != nil {
+		return nil, err
+	}
+	status, err := optionalGovernanceBlockingSignalStatus(input.Status)
+	if err != nil {
+		return nil, err
+	}
+	severity, err := optionalGovernanceSignalSeverity(input.Severity)
+	if err != nil {
+		return nil, err
+	}
+	return &governancev1.ListBlockingSignalsRequest{
+		Target:   target,
+		Status:   status,
+		Severity: severity,
+		Page:     governancePageRequest(input.Page),
+		Meta:     meta,
+	}, nil
+}
+
+func recordReleaseSafetyStateRequest(input RecordGovernanceReleaseSafetyStateInput) (*governancev1.RecordReleaseSafetyStateRequest, error) {
+	meta, err := governanceCommandMeta(input.Meta)
+	if err != nil {
+		return nil, err
+	}
+	packageID, err := requiredTrimmed(input.ReleaseDecisionPackageID, "release_decision_package_id")
+	if err != nil {
+		return nil, err
+	}
+	state, err := governanceReleaseSafetyState(input.CurrentState)
+	if err != nil {
+		return nil, err
+	}
+	reason, err := requiredTrimmed(input.LastStateReason, "last_state_reason")
+	if err != nil {
+		return nil, err
+	}
+	return &governancev1.RecordReleaseSafetyStateRequest{
+		ReleaseDecisionPackageId: packageID,
+		CurrentState:             state,
+		RuntimeJobRef:            optionalString(input.RuntimeJobRef),
+		LastStateReason:          reason,
+		Meta:                     meta,
+	}, nil
+}
+
+func getReleaseSafetyStateRequest(input GetGovernanceReleaseSafetyStateInput) (*governancev1.GetReleaseSafetyStateRequest, error) {
+	return governanceQueryRequestWithID(input.Meta, input.ReleaseDecisionPackageID, "release_decision_package_id", newGetReleaseSafetyStateRequest)
+}
+
+func newGetReleaseSafetyStateRequest(id string, meta *governancev1.QueryMeta) *governancev1.GetReleaseSafetyStateRequest {
+	return &governancev1.GetReleaseSafetyStateRequest{ReleaseDecisionPackageId: id, Meta: meta}
+}
+
+func governanceQueryRequestWithID[Request any](
+	metaInput GovernanceQueryMetaInput,
+	idInput string,
+	field string,
+	build func(string, *governancev1.QueryMeta) Request,
+) (Request, error) {
+	return governanceRequestWithID(metaInput, idInput, field, governanceQueryMeta, build)
+}
+
+func governanceCommandRequestWithID[Request any](
+	metaInput GovernanceCommandMetaInput,
+	idInput string,
+	field string,
+	build func(string, *governancev1.CommandMeta) Request,
+) (Request, error) {
+	return governanceRequestWithID(metaInput, idInput, field, governanceCommandMeta, build)
+}
+
+func governanceRequestWithID[MetaInput any, Meta any, Request any](
+	metaInput MetaInput,
+	idInput string,
+	field string,
+	buildMeta func(MetaInput) (Meta, error),
+	build func(string, Meta) Request,
+) (Request, error) {
+	var zero Request
+	meta, err := buildMeta(metaInput)
+	if err != nil {
+		return zero, err
+	}
+	id, err := requiredTrimmed(idInput, field)
+	if err != nil {
+		return zero, err
+	}
+	return build(id, meta), nil
 }
 
 func governanceCommandMeta(input GovernanceCommandMetaInput) (*governancev1.CommandMeta, error) {
@@ -723,12 +1146,7 @@ func governanceProjectContext(input GovernanceProjectContextRefInput, includeEmp
 }
 
 func governanceProjectContextEmpty(input GovernanceProjectContextRefInput) bool {
-	return strings.TrimSpace(input.ProjectRef) == "" &&
-		strings.TrimSpace(input.RepositoryRef) == "" &&
-		strings.TrimSpace(input.ServiceRef) == "" &&
-		strings.TrimSpace(input.BranchRulesRef) == "" &&
-		strings.TrimSpace(input.ReleasePolicyRef) == "" &&
-		strings.TrimSpace(input.ReleaseLineRef) == ""
+	return allBlankValues(input.ProjectRef, input.RepositoryRef, input.ServiceRef, input.BranchRulesRef, input.ReleasePolicyRef, input.ReleaseLineRef)
 }
 
 func governanceProjectContextHasListScope(input GovernanceProjectContextRefInput) bool {
@@ -754,6 +1172,14 @@ func governanceProviderContext(input GovernanceProviderContextRefInput) *governa
 	}
 }
 
+func governanceProviderContexts(inputs []GovernanceProviderContextRefInput) []*governancev1.ProviderContextRef {
+	return compactGovernanceContexts(inputs, governanceProviderContextEmpty, governanceProviderContext)
+}
+
+func governanceProviderContextEmpty(input GovernanceProviderContextRefInput) bool {
+	return allBlankValues(input.WorkItemRef, input.PullRequestRef, input.CommentRef, input.ReviewSignalRef, input.ProviderOperationRef, input.ChangedFilesSummaryRef)
+}
+
 func governanceAgentContext(input GovernanceAgentContextRefInput) *governancev1.AgentContextRef {
 	refs := optionalRefValues(input.SessionRef, input.RunRef, input.StageRef, input.AcceptanceRef, input.RoleRef)
 	return &governancev1.AgentContextRef{
@@ -773,6 +1199,14 @@ func governanceRuntimeContext(input GovernanceRuntimeContextRefInput) *governanc
 		ArtifactRef:    optionalString(input.ArtifactRef),
 		SummaryRef:     optionalString(input.SummaryRef),
 	}
+}
+
+func governanceRuntimeContexts(inputs []GovernanceRuntimeContextRefInput) []*governancev1.RuntimeContextRef {
+	return compactGovernanceContexts(inputs, governanceRuntimeContextEmpty, governanceRuntimeContext)
+}
+
+func governanceRuntimeContextEmpty(input GovernanceRuntimeContextRefInput) bool {
+	return allBlankValues(input.SlotRef, input.JobRef, input.EnvironmentRef, input.ArtifactRef, input.SummaryRef)
 }
 
 func governanceRiskEvaluationSummary(input GovernanceRiskEvaluationSummaryInput) (*governancev1.RiskEvaluationSummary, error) {
@@ -835,6 +1269,28 @@ func optionalRefValues(values ...string) []*string {
 		result[index] = optionalString(value)
 	}
 	return result
+}
+
+func compactGovernanceContexts[Input any, Output any](inputs []Input, empty func(Input) bool, cast func(Input) *Output) []*Output {
+	if len(inputs) == 0 {
+		return nil
+	}
+	result := make([]*Output, 0, len(inputs))
+	for _, input := range inputs {
+		if !empty(input) {
+			result = append(result, cast(input))
+		}
+	}
+	return result
+}
+
+func allBlankValues(values ...string) bool {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return false
+		}
+	}
+	return true
 }
 
 func governancePageRequest(input GovernancePageInput) *governancev1.PageRequest {
@@ -1078,6 +1534,160 @@ func governanceGateDecisionSummary(decision *governancev1.GateDecision) Governan
 	}
 }
 
+func governanceReleaseDecisionPackageOutput(response *governancev1.ReleaseDecisionPackageResponse) GovernanceReleaseDecisionPackageOutput {
+	if response == nil {
+		return GovernanceReleaseDecisionPackageOutput{}
+	}
+	return GovernanceReleaseDecisionPackageOutput{ReleaseDecisionPackage: governanceReleaseDecisionPackageSummary(response.GetReleaseDecisionPackage())}
+}
+
+func governanceReleaseDecisionPackageListOutput(response *governancev1.ListReleaseDecisionPackagesResponse) GovernanceReleaseDecisionPackageListOutput {
+	if response == nil {
+		return GovernanceReleaseDecisionPackageListOutput{}
+	}
+	return GovernanceReleaseDecisionPackageListOutput{
+		ReleaseDecisionPackages: governanceReleaseDecisionPackageSummaries(response.GetReleaseDecisionPackages()),
+		Page:                    governancePageSummary(response.GetPage()),
+	}
+}
+
+func governanceReleaseDecisionPackageSummaries(packages []*governancev1.ReleaseDecisionPackage) []GovernanceReleaseDecisionPackageSummary {
+	return summarizeItems(packages, governanceReleaseDecisionPackageSummary)
+}
+
+func governanceReleaseDecisionPackageSummary(pkg *governancev1.ReleaseDecisionPackage) GovernanceReleaseDecisionPackageSummary {
+	if pkg == nil {
+		return GovernanceReleaseDecisionPackageSummary{}
+	}
+	evidenceRefs := governanceEvidenceSummaries(pkg.GetEvidenceRefs())
+	reviewSignalIDs := trimmedStrings(pkg.GetReviewSignalIds())
+	return GovernanceReleaseDecisionPackageSummary{
+		ID:                      pkg.GetId(),
+		ReleaseCandidateRef:     pkg.GetReleaseCandidateRef(),
+		ProjectContext:          governanceProjectContextSummary(pkg.GetProjectContext()),
+		RepositoryRefs:          trimmedStrings(pkg.GetRepositoryRefs()),
+		RiskAssessmentID:        pkg.GetRiskAssessmentId(),
+		ProviderRefs:            governanceProviderContextSummaries(pkg.GetProviderRefs()),
+		RuntimeRefs:             governanceRuntimeContextSummaries(pkg.GetRuntimeRefs()),
+		AgentContext:            governanceAgentContextSummary(pkg.GetAgentContext()),
+		ReviewSignalIDs:         reviewSignalIDs,
+		ReviewSignalCount:       len(reviewSignalIDs),
+		EvidenceRefs:            evidenceRefs,
+		EvidenceRefCount:        len(evidenceRefs),
+		KnownLimitationsSummary: pkg.GetKnownLimitationsSummary(),
+		Status:                  governanceReleasePackageStatusName(pkg.GetStatus()),
+		Version:                 pkg.GetVersion(),
+		CreatedAt:               pkg.GetCreatedAt(),
+		UpdatedAt:               pkg.GetUpdatedAt(),
+	}
+}
+
+func governanceReleaseDecisionOutput(response *governancev1.ReleaseDecisionResponse) GovernanceReleaseDecisionOutput {
+	if response == nil {
+		return GovernanceReleaseDecisionOutput{}
+	}
+	return GovernanceReleaseDecisionOutput{
+		ReleaseDecision:        governanceReleaseDecisionSummary(response.GetReleaseDecision()),
+		ReleaseDecisionPackage: governanceReleaseDecisionPackageSummary(response.GetReleaseDecisionPackage()),
+	}
+}
+
+func governanceReleaseDecisionListOutput(response *governancev1.ListReleaseDecisionsResponse) GovernanceReleaseDecisionListOutput {
+	if response == nil {
+		return GovernanceReleaseDecisionListOutput{}
+	}
+	return GovernanceReleaseDecisionListOutput{
+		ReleaseDecisions: governanceReleaseDecisionSummaries(response.GetReleaseDecisions()),
+		Page:             governancePageSummary(response.GetPage()),
+	}
+}
+
+func governanceReleaseDecisionSummaries(decisions []*governancev1.ReleaseDecision) []GovernanceReleaseDecisionSummary {
+	return summarizeItems(decisions, governanceReleaseDecisionSummary)
+}
+
+func governanceReleaseDecisionSummary(decision *governancev1.ReleaseDecision) GovernanceReleaseDecisionSummary {
+	if decision == nil {
+		return GovernanceReleaseDecisionSummary{}
+	}
+	return GovernanceReleaseDecisionSummary{
+		ID:                       decision.GetId(),
+		ReleaseDecisionPackageID: decision.GetReleaseDecisionPackageId(),
+		GateDecisionID:           decision.GetGateDecisionId(),
+		Outcome:                  governanceReleaseDecisionOutcomeName(decision.GetOutcome()),
+		DecisionActorRef:         decision.GetDecisionActorRef(),
+		DecisionPolicyRef:        decision.GetDecisionPolicyRef(),
+		Reason:                   decision.GetReason(),
+		ConditionsSummary:        decision.GetConditionsSummary(),
+		Status:                   governanceReleaseDecisionStatusName(decision.GetStatus()),
+		Version:                  decision.GetVersion(),
+		DecidedAt:                decision.GetDecidedAt(),
+	}
+}
+
+func governanceBlockingSignalOutput(response *governancev1.BlockingSignalResponse) GovernanceBlockingSignalOutput {
+	if response == nil {
+		return GovernanceBlockingSignalOutput{}
+	}
+	return GovernanceBlockingSignalOutput{BlockingSignal: governanceBlockingSignalSummary(response.GetBlockingSignal())}
+}
+
+func governanceBlockingSignalListOutput(response *governancev1.ListBlockingSignalsResponse) GovernanceBlockingSignalListOutput {
+	if response == nil {
+		return GovernanceBlockingSignalListOutput{}
+	}
+	return GovernanceBlockingSignalListOutput{
+		BlockingSignals: governanceBlockingSignalSummaries(response.GetBlockingSignals()),
+		Page:            governancePageSummary(response.GetPage()),
+	}
+}
+
+func governanceBlockingSignalSummaries(signals []*governancev1.BlockingSignal) []GovernanceBlockingSignalSummary {
+	return summarizeItems(signals, governanceBlockingSignalSummary)
+}
+
+func governanceBlockingSignalSummary(signal *governancev1.BlockingSignal) GovernanceBlockingSignalSummary {
+	if signal == nil {
+		return GovernanceBlockingSignalSummary{}
+	}
+	return GovernanceBlockingSignalSummary{
+		ID:         signal.GetId(),
+		Target:     governanceTargetSummary(signal.GetTarget()),
+		SourceType: governanceBlockingSignalSourceName(signal.GetSourceType()),
+		SourceRef:  signal.GetSourceRef(),
+		Severity:   governanceSignalSeverityName(signal.GetSeverity()),
+		Summary:    signal.GetSummary(),
+		Status:     governanceBlockingSignalStatusName(signal.GetStatus()),
+		Version:    signal.GetVersion(),
+		CreatedAt:  signal.GetCreatedAt(),
+		ResolvedAt: signal.GetResolvedAt(),
+	}
+}
+
+func governanceReleaseSafetyStateOutput(response *governancev1.ReleaseSafetyStateResponse) GovernanceReleaseSafetyStateOutput {
+	if response == nil {
+		return GovernanceReleaseSafetyStateOutput{}
+	}
+	return GovernanceReleaseSafetyStateOutput{ReleaseSafetyState: governanceReleaseSafetyStateSummary(response.GetReleaseSafetyState())}
+}
+
+func governanceReleaseSafetyStateSummary(state *governancev1.ReleaseSafetyState) GovernanceReleaseSafetyStateSummary {
+	if state == nil {
+		return GovernanceReleaseSafetyStateSummary{}
+	}
+	return GovernanceReleaseSafetyStateSummary{
+		ID:                       state.GetId(),
+		ReleaseDecisionPackageID: state.GetReleaseDecisionPackageId(),
+		CurrentState:             governanceReleaseSafetyStateName(state.GetCurrentState()),
+		RuntimeJobRef:            state.GetRuntimeJobRef(),
+		BlockingSignalCount:      state.GetBlockingSignalCount(),
+		LastStateReason:          state.GetLastStateReason(),
+		Version:                  state.GetVersion(),
+		CreatedAt:                state.GetCreatedAt(),
+		UpdatedAt:                state.GetUpdatedAt(),
+	}
+}
+
 func governanceProjectContextSummary(contextRef *governancev1.ProjectContextRef) GovernanceProjectContextSummary {
 	if contextRef == nil {
 		return GovernanceProjectContextSummary{}
@@ -1106,6 +1716,10 @@ func governanceProviderContextSummary(contextRef *governancev1.ProviderContextRe
 	return summary
 }
 
+func governanceProviderContextSummaries(contextRefs []*governancev1.ProviderContextRef) []GovernanceProviderContextSummary {
+	return summarizeItems(contextRefs, governanceProviderContextSummary)
+}
+
 func governanceAgentContextSummary(contextRef *governancev1.AgentContextRef) GovernanceAgentContextSummary {
 	if contextRef == nil {
 		return GovernanceAgentContextSummary{}
@@ -1130,6 +1744,10 @@ func governanceRuntimeContextSummary(contextRef *governancev1.RuntimeContextRef)
 	summary.ArtifactRef = contextRef.GetArtifactRef()
 	summary.SummaryRef = contextRef.GetSummaryRef()
 	return summary
+}
+
+func governanceRuntimeContextSummaries(contextRefs []*governancev1.RuntimeContextRef) []GovernanceRuntimeContextSummary {
+	return summarizeItems(contextRefs, governanceRuntimeContextSummary)
 }
 
 func governanceTargetSummary(target *governancev1.TargetRef) GovernanceTargetSummary {
@@ -1226,6 +1844,26 @@ func optionalGovernanceGateStatus(value string) (*governancev1.GateRequestStatus
 	return optionalGovernanceEnum(value, "status", governanceGateStatuses, governancev1.GateRequestStatus_GATE_REQUEST_STATUS_UNSPECIFIED)
 }
 
+func optionalGovernanceReleasePackageStatus(value string) (*governancev1.ReleaseDecisionPackageStatus, error) {
+	return optionalGovernanceEnum(value, "status", governanceReleasePackageStatuses, governancev1.ReleaseDecisionPackageStatus_RELEASE_DECISION_PACKAGE_STATUS_UNSPECIFIED)
+}
+
+func optionalGovernanceReleaseDecisionStatus(value string) (*governancev1.ReleaseDecisionStatus, error) {
+	return optionalGovernanceEnum(value, "status", governanceReleaseDecisionStatuses, governancev1.ReleaseDecisionStatus_RELEASE_DECISION_STATUS_UNSPECIFIED)
+}
+
+func optionalGovernanceReleaseDecisionOutcome(value string) (*governancev1.ReleaseDecisionOutcome, error) {
+	return optionalGovernanceEnum(value, "outcome", governanceReleaseDecisionOutcomes, governancev1.ReleaseDecisionOutcome_RELEASE_DECISION_OUTCOME_UNSPECIFIED)
+}
+
+func optionalGovernanceBlockingSignalStatus(value string) (*governancev1.BlockingSignalStatus, error) {
+	return optionalGovernanceEnum(value, "status", governanceBlockingSignalStatuses, governancev1.BlockingSignalStatus_BLOCKING_SIGNAL_STATUS_UNSPECIFIED)
+}
+
+func optionalGovernanceSignalSeverity(value string) (*governancev1.SignalSeverity, error) {
+	return optionalGovernanceEnum(value, "severity", governanceSignalSeverities, governancev1.SignalSeverity_SIGNAL_SEVERITY_UNSPECIFIED)
+}
+
 func optionalGovernanceEnum[Enum comparable](value string, field string, values map[string]Enum, zero Enum) (*Enum, error) {
 	key := governanceEnumKey(value)
 	if key == "" {
@@ -1240,6 +1878,33 @@ func optionalGovernanceEnum[Enum comparable](value string, field string, values 
 
 func governanceGateOutcome(value string) (governancev1.GateOutcome, error) {
 	return requiredEnumValue(governanceEnumKey(value), governanceGateOutcomes, governancev1.GateOutcome_GATE_OUTCOME_UNSPECIFIED, "outcome")
+}
+
+func governanceReleaseDecisionOutcome(value string) (governancev1.ReleaseDecisionOutcome, error) {
+	return requiredEnumValue(governanceEnumKey(value), governanceReleaseDecisionOutcomes, governancev1.ReleaseDecisionOutcome_RELEASE_DECISION_OUTCOME_UNSPECIFIED, "outcome")
+}
+
+func governanceBlockingSignalSource(value string) (governancev1.BlockingSignalSourceType, error) {
+	return requiredEnumValue(governanceEnumKey(value), governanceBlockingSignalSources, governancev1.BlockingSignalSourceType_BLOCKING_SIGNAL_SOURCE_TYPE_UNSPECIFIED, "source_type")
+}
+
+func governanceSignalSeverity(value string) (governancev1.SignalSeverity, error) {
+	return requiredEnumValue(governanceEnumKey(value), governanceSignalSeverities, governancev1.SignalSeverity_SIGNAL_SEVERITY_UNSPECIFIED, "severity")
+}
+
+func governanceReleaseSafetyState(value string) (governancev1.ReleaseSafetyStateKind, error) {
+	return requiredEnumValue(governanceEnumKey(value), governanceReleaseSafetyStates, governancev1.ReleaseSafetyStateKind_RELEASE_SAFETY_STATE_KIND_UNSPECIFIED, "current_state")
+}
+
+func governanceTerminalBlockingSignalStatus(value string) (governancev1.BlockingSignalStatus, error) {
+	statusValue, err := requiredEnumValue(governanceEnumKey(value), governanceBlockingSignalStatuses, governancev1.BlockingSignalStatus_BLOCKING_SIGNAL_STATUS_UNSPECIFIED, "terminal_status")
+	if err != nil {
+		return governancev1.BlockingSignalStatus_BLOCKING_SIGNAL_STATUS_UNSPECIFIED, err
+	}
+	if statusValue == governancev1.BlockingSignalStatus_BLOCKING_SIGNAL_STATUS_ACTIVE {
+		return governancev1.BlockingSignalStatus_BLOCKING_SIGNAL_STATUS_UNSPECIFIED, invalidInput("terminal_status must be resolved or dismissed")
+	}
+	return statusValue, nil
 }
 
 func governanceTargetTypeName(value governancev1.GovernanceTargetType) string {
@@ -1274,6 +1939,34 @@ func governanceGateOutcomeName(value governancev1.GateOutcome) string {
 	return enumName(value, governanceGateOutcomeNames)
 }
 
+func governanceReleasePackageStatusName(value governancev1.ReleaseDecisionPackageStatus) string {
+	return enumName(value, governanceReleasePackageStatusNames)
+}
+
+func governanceReleaseDecisionStatusName(value governancev1.ReleaseDecisionStatus) string {
+	return enumName(value, governanceReleaseDecisionStatusNames)
+}
+
+func governanceReleaseDecisionOutcomeName(value governancev1.ReleaseDecisionOutcome) string {
+	return enumName(value, governanceReleaseDecisionOutcomeNames)
+}
+
+func governanceReleaseSafetyStateName(value governancev1.ReleaseSafetyStateKind) string {
+	return enumName(value, governanceReleaseSafetyStateNames)
+}
+
+func governanceBlockingSignalSourceName(value governancev1.BlockingSignalSourceType) string {
+	return enumName(value, governanceBlockingSignalSourceNames)
+}
+
+func governanceBlockingSignalStatusName(value governancev1.BlockingSignalStatus) string {
+	return enumName(value, governanceBlockingSignalStatusNames)
+}
+
+func governanceSignalSeverityName(value governancev1.SignalSeverity) string {
+	return enumName(value, governanceSignalSeverityNames)
+}
+
 func governanceEnumValues[Enum comparable](pairs []governanceEnumPair[Enum]) map[string]Enum {
 	result := make(map[string]Enum, len(pairs))
 	for _, pair := range pairs {
@@ -1301,6 +1994,13 @@ func governanceEnumKey(value string) string {
 		"gate_kind_",
 		"gate_request_status_",
 		"gate_outcome_",
+		"release_decision_package_status_",
+		"release_decision_status_",
+		"release_decision_outcome_",
+		"release_safety_state_kind_",
+		"blocking_signal_source_type_",
+		"blocking_signal_status_",
+		"signal_severity_",
 	}
 	for _, prefix := range prefixes {
 		key = strings.TrimPrefix(key, prefix)

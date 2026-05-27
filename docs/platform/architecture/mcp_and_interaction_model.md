@@ -5,8 +5,8 @@ title: kodex — MCP и модель взаимодействий
 status: active
 owner_role: SA
 created_at: 2026-04-26
-updated_at: 2026-05-26
-related_issues: [599, 600, 601, 602, 747, 753, 778, 786, 830, 841, 322, 782]
+updated_at: 2026-05-27
+related_issues: [599, 600, 601, 602, 747, 753, 778, 786, 830, 841, 852, 322, 782]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -67,7 +67,7 @@ approvals:
 | Группа | Владелец маршрута | MVP-смысл |
 |---|---|---|
 | Agent tools | `agent-manager` | Run, session, acceptance, follow-up и ожидание flow только через `agent-manager`. |
-| Governance tools | `governance-manager` | Risk evaluator маршрутизируется через `governance.risk.evaluate/reevaluate/get/list`, gate lifecycle — через `governance.gate.request/get/list/submit_decision/cancel/expire`; review signals, release decisions и release safety-loop добавляются отдельными governance-срезами. |
+| Governance tools | `governance-manager` | Risk evaluator маршрутизируется через `governance.risk.evaluate/reevaluate/get/list`, gate lifecycle — через `governance.gate.request/get/list/submit_decision/cancel/expire`, release decision lifecycle — через `governance.release.*`; review signals добавляются отдельным governance-срезом. |
 | Provider tools | `provider-hub` | Read/write операции провайдера через типизированный provider pipeline, без прямого GitHub/GitLab доступа из MCP. |
 | Project/runtime/fleet/package reads | `project-catalog`, `runtime-manager`, `fleet-manager`, `package-hub` | Авторитетные чтения проектной политики, runtime/fleet состояния и пакетных manifest/installations. |
 | Interaction tools | `interaction-hub` | Запросы обратной связи, approval delivery и callbacks, когда готов контракт `interaction-hub`. |
@@ -77,7 +77,7 @@ Codex hook events для MVP: `SessionStart`, `UserPromptSubmit`, `PreToolUse`, 
 
 MCP может быть инструментальной поверхностью для запуска подготовки runtime, но не становится materializer. Для руководящих пакетов MCP передаёт владельцам только refs: `agent-manager` владеет `Run` и замороженными guidance refs, `package-hub` отдаёт package/install/manifest truth, `runtime-manager` материализует источники `guidance_package` и сгенерированный контекст в workspace.
 
-Governance risk и gate tools в MCP являются тонкими маршрутами к `governance-manager`: risk evaluate/reevaluate/get/list используют typed governance client, безопасный actor/source/request context, project/provider/agent/runtime refs, bounded evidence refs и safe classifier summary; gate request/get/list/submit/cancel/expire используют typed governance client, безопасный actor/source/request context и bounded refs. MCP не хранит risk assessment, gate request, gate decision, delivery callback или release decision state и не подменяет `interaction-hub` для доставки человеку.
+Governance risk, gate и release tools в MCP являются тонкими маршрутами к `governance-manager`: risk evaluate/reevaluate/get/list используют typed governance client, безопасный actor/source/request context, project/provider/agent/runtime refs, bounded evidence refs и safe classifier summary; gate request/get/list/submit/cancel/expire используют typed governance client, безопасный actor/source/request context и bounded refs; release package/decision/blocking/safety-loop tools используют typed refs, bounded summaries, expected version/idempotency/correlation и возвращают только safe refs/status/outcome/state/counts/version/timestamps. MCP не хранит risk assessment, gate request, gate decision, release decision package, release decision, blocking signal, safety-loop или delivery callback state и не подменяет `interaction-hub` для доставки человеку.
 
 Детальная сервисная граница, стратегия контрактов и план поставки живут в `docs/domains/platform-mcp-server/**`. Граница входного контура Codex hooks живёт в `docs/domains/codex-hook-ingress/**`.
 

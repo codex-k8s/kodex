@@ -5,8 +5,8 @@ title: kodex — API-обзор interaction-hub
 status: active
 owner_role: SA
 created_at: 2026-05-22
-updated_at: 2026-05-26
-related_issues: [582, 768, 781, 783, 800, 806, 821, 835, 843]
+updated_at: 2026-05-27
+related_issues: [582, 768, 781, 783, 800, 806, 821, 835, 843, 853]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -202,7 +202,7 @@ Delivery-specific safe error codes:
 | Go-реализация `interaction-hub` | Готовы process config, health/readiness/metrics, gRPC registration, PostgreSQL repository, service-local outbox, thread/message MVP lifecycle, feedback/approval/Human gate request lifecycle, lifecycle уведомлений/подписок, delivery attempt lifecycle, channel contract integration и callback request resolution с safe response lifecycle. |
 | MCP-инструменты | Зафиксированы как контрактный задел `platform-mcp-server`; реализация зависит от готовности доменного контракта. |
 | Channel package integration | Зафиксирована и реализована на owner-side refs: delivery route/capability, safe delivery command ref, runtime/job refs и callback envelope без конкретных каналов. |
-| Gateway callback OpenAPI | Каркас закреплён в `specs/openapi/integration-gateway.v1.yaml`; активация внешнего callback route остаётся отдельным срезом `integration-gateway`. |
+| Gateway callback OpenAPI | Generic route закреплён в `specs/openapi/integration-gateway.v1.yaml`: `integration-gateway` проверяет source/signature/limits и вызывает `RecordChannelCallback`, не владея lifecycle callback. |
 
 ## Совместимость
 

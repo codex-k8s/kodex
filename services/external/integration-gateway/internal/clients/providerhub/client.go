@@ -7,14 +7,10 @@ import (
 	"strings"
 	"time"
 
-	grpcserver "github.com/codex-k8s/kodex/libs/go/grpcserver"
 	providersv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/providers/v1"
+	"github.com/codex-k8s/kodex/services/external/integration-gateway/internal/clients/clientruntime"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/metadata"
 )
-
-const callerID = "integration-gateway"
 
 // Config contains provider-hub gRPC connection settings.
 type Config struct {
@@ -62,11 +58,7 @@ var ErrDisabled = fmt.Errorf("provider webhook route is disabled")
 
 // NewConnection creates a gRPC client connection to provider-hub.
 func NewConnection(cfg Config) (*grpc.ClientConn, error) {
-	addr, err := requiredValue(cfg.Addr, "provider-hub address")
-	if err != nil {
-		return nil, err
-	}
-	return grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	return clientruntime.NewConnection(cfg.Addr, "provider-hub")
 }
 
 // New wraps a generated provider-hub client.
@@ -74,11 +66,12 @@ func New(client providersv1.ProviderHubServiceClient, cfg Config) (*Client, erro
 	if client == nil {
 		return nil, fmt.Errorf("provider-hub client is required")
 	}
-	authToken, err := requiredValue(cfg.AuthToken, "provider-hub auth token")
+	authToken, err := clientruntime.RequiredValue(cfg.AuthToken, "provider-hub auth token")
 	if err != nil {
 		return nil, err
 	}
-	return &Client{client: client, authToken: authToken, timeout: effectiveTimeout(cfg.Timeout)}, nil
+	timeout := clientruntime.EffectiveTimeout(cfg.Timeout)
+	return &Client{client: client, authToken: authToken, timeout: timeout}, nil
 }
 
 // IngestWebhookEvent forwards the verified webhook envelope to provider-hub.
@@ -92,17 +85,7 @@ func (c *Client) IngestWebhookEvent(ctx context.Context, event WebhookEvent) (We
 		EventName:    event.EventName,
 		PayloadJson:  event.PayloadJSON,
 		ReceivedAt:   event.ReceivedAt.UTC().Format(time.RFC3339Nano),
-		Meta: &providersv1.CommandMeta{
-			IdempotencyKey: &idempotencyKey,
-			Actor:          &providersv1.Actor{Type: "service", Id: callerID},
-			Reason:         "provider webhook edge ingress",
-			RequestId:      event.RequestID,
-			RequestContext: &providersv1.RequestContext{
-				Source:       callerID,
-				TraceId:      optionalString(event.CorrelationID),
-				ClientIpHash: optionalString(event.ClientIPHash),
-			},
-		},
+		Meta:         providerCommandMeta(event, idempotencyKey),
 	}
 	if event.RepositoryProviderID != "" {
 		request.RepositoryProviderId = &event.RepositoryProviderID
@@ -118,6 +101,19 @@ func (c *Client) IngestWebhookEvent(ctx context.Context, event WebhookEvent) (We
 	return result, nil
 }
 
+func providerCommandMeta(event WebhookEvent, idempotencyKey string) *providersv1.CommandMeta {
+	context := &providersv1.RequestContext{Source: clientruntime.CallerID}
+	context.TraceId = clientruntime.OptionalString(event.CorrelationID)
+	context.ClientIpHash = clientruntime.OptionalString(event.ClientIPHash)
+	return &providersv1.CommandMeta{
+		IdempotencyKey: &idempotencyKey,
+		Actor:          &providersv1.Actor{Type: "service", Id: clientruntime.CallerID},
+		Reason:         "provider webhook edge ingress",
+		RequestId:      event.RequestID,
+		RequestContext: context,
+	}
+}
+
 func webhookIdempotencyKey(event WebhookEvent) string {
 	providerSlug := strings.TrimSpace(event.ProviderSlug)
 	deliveryID := strings.TrimSpace(event.DeliveryID)
@@ -131,44 +127,9 @@ func webhookIdempotencyKey(event WebhookEvent) string {
 }
 
 func outgoingContext(ctx context.Context, authToken string, event WebhookEvent) context.Context {
-	values := []string{
-		grpcserver.MetadataAuthorization,
-		"Bearer " + strings.TrimSpace(authToken),
-		grpcserver.MetadataCallerType,
-		"service",
-		grpcserver.MetadataCallerID,
-		callerID,
-		grpcserver.MetadataRequestSource,
-		callerID,
-	}
-	if event.RequestID != "" {
-		values = append(values, grpcserver.MetadataRequestID, event.RequestID)
-	}
-	if event.CorrelationID != "" {
-		values = append(values, grpcserver.MetadataTraceID, event.CorrelationID)
-	}
-	return metadata.AppendToOutgoingContext(ctx, values...)
-}
-
-func requiredValue(value string, name string) (string, error) {
-	trimmed := strings.TrimSpace(value)
-	if trimmed == "" {
-		return "", fmt.Errorf("%s is required", name)
-	}
-	return trimmed, nil
-}
-
-func effectiveTimeout(value time.Duration) time.Duration {
-	if value <= 0 {
-		return 3 * time.Second
-	}
-	return value
-}
-
-func optionalString(value string) *string {
-	trimmed := strings.TrimSpace(value)
-	if trimmed == "" {
-		return nil
-	}
-	return &trimmed
+	return clientruntime.OutgoingContext(ctx, clientruntime.RequestMetadata{
+		AuthToken:     authToken,
+		RequestID:     event.RequestID,
+		CorrelationID: event.CorrelationID,
+	})
 }

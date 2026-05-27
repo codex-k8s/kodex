@@ -5,8 +5,8 @@ title: kodex — поставка integration-gateway
 status: active
 owner_role: EM
 created_at: 2026-05-25
-updated_at: 2026-05-26
-related_issues: [781, 792, 807, 770, 829]
+updated_at: 2026-05-27
+related_issues: [781, 792, 807, 770, 829, 853]
 related_prs: []
 related_docsets:
   - docs/domains/integration-gateway/product/requirements.md
@@ -46,16 +46,17 @@ approvals:
 | IGW-0 | #781 | Граница `integration-gateway`, первый MVP route provider webhook -> `provider-hub.IngestWebhookEvent`, требования security/backpressure/retry/idempotency и OpenAPI-каркас зафиксированы. Код сервиса не входит. |
 | IGW-1 | #792 | Сервисный каркас: процесс, конфигурация, graceful shutdown, health/readiness/metrics, HTTP router, OpenAPI runtime validation/codegen-модели, payload guard, request id, timeout, structured safe errors, redaction-safe logging и provider-hub client interface без provider business logic. Provider route зарегистрирован как отключённый stub до проверки подписи. |
 | IGW-2 | #807 | Реальный route `POST /v1/provider-webhooks/{provider_slug}` для `provider_slug=github`: проверка `X-Hub-Signature-256`, обязательных GitHub headers, лимита payload, idempotency mapping и вызов `provider-hub.IngestWebhookEvent`. |
-| IGW-3 | не назначено | Callback routes для внешних каналов и пакетов после готовности owner-service contracts: `interaction-hub`, `package-hub` или другой владелец. |
+| IGW-3 | не назначено | Расширение callback routes для внешних каналов и пакетов после готовности дополнительных owner-service contracts. |
 | IGW-4 | #819 | Security hardening: per-source/per-route limits, backpressure policy, safe audit summary, replay/idempotency tests и compatibility tests OpenAPI без расширения бизнес-состояния gateway. |
 | IGW-5 | #829 | Deploy-контур: Dockerfile, manifests, secrets refs, smoke, runbook, monitoring и rollback. |
+| IGW-6 | #853 | Первый active callback route: generic `/v1/external-callbacks/{callback_source}` проверяет source binding, HMAC SHA-256 подпись, лимиты и вызывает `interaction-hub.RecordChannelCallback` safe envelope без gateway business state. |
 
 ## Зависимости и блокировки
 
 | Домен или сервис | Связь | Статус |
 |---|---|---|
 | `provider-hub` | Владеет webhook inbox, дедупликацией и нормализацией provider events. | Первый внутренний контракт готов: `IngestWebhookEvent`. |
-| `interaction-hub` | Владеет delivery/callback lifecycle внешних каналов. | Callback route остаётся контрактным заделом до готовности owner-service callback API. |
+| `interaction-hub` | Владеет delivery/callback lifecycle внешних каналов. | Первый owner-service callback API готов: gateway вызывает `RecordChannelCallback` и не меняет request/decision lifecycle. |
 | `package-hub` | Владеет пакетами, package-owned runtime metadata и package callbacks. | Callback route добавляется только после package-owned контракта. |
 | `access-manager` / secret resolver | Нужны для безопасного разрешения secret refs webhook источников. | В IGW-2 GitHub webhook secret задаётся через `secret_store_type + secret_store_ref` в deployment config; значение разрешается через `libs/go/secretresolver` только в памяти процесса. |
 | `platform-event-log` | Доменные события публикуют сервисы-владельцы. | Gateway не публикует provider business events сам. |
@@ -90,6 +91,17 @@ approvals:
 | Config | Route guard, HTTP limits, OpenAPI path, provider-hub address/timeout и secret resolver backends задаются env/config refs. |
 | Smoke | `scripts/smoke-integration-gateway.sh` проверяет health/readiness/metrics/OpenAPI и safe negative responses для GitHub route без реального webhook secret. |
 | Ops | Runbook и monitoring docs описывают route checks, backpressure, safe errors, provider-hub connectivity и rollback. |
+
+## Реализованный callback route IGW-6
+
+| Область | Состояние |
+|---|---|
+| HTTP route | `POST /v1/external-callbacks/{callback_source}` активируется конфигурацией `KODEX_INTEGRATION_GATEWAY_EXTERNAL_CALLBACK_*`. |
+| Source binding | Разрешённые `callback_source` задаются статическим deployment config; route не содержит Telegram/WhatsApp/Slack hardcode. |
+| Signature | `X-Kodex-External-Signature` проверяется как HMAC SHA-256 по raw request body через safe secret ref; значение подписи и секрета не логируется. |
+| Owner call | Gateway строит `RecordChannelCallback` envelope для `interaction-hub`: `callback_id`, `delivery_id` или `request_ref`, `contract_version`, `action`, safe refs, `gateway_ref`, `received_at`, `correlation_id` и `signature_status=VERIFIED`. |
+| Idempotency | Gateway передаёт `callback_id` владельцу и не создаёт собственный cache, inbox или БД для дедупликации. |
+| Guard | Для callback route используется отдельный per-route/per-source in-memory guard с env-лимитами и `Retry-After`. |
 
 ## Критерии начала реального provider route
 

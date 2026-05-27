@@ -5,8 +5,8 @@ title: kodex — границы сервисов
 status: active
 owner_role: SA
 created_at: 2026-04-26
-updated_at: 2026-05-26
-related_issues: [599, 600, 601, 602, 655, 711, 725, 747, 753, 778, 781, 786, 322, 782, 834]
+updated_at: 2026-05-27
+related_issues: [599, 600, 601, 602, 655, 711, 725, 747, 753, 778, 781, 786, 852, 322, 782, 834]
 related_prs: []
 related_adrs: []
 approvals:
@@ -73,7 +73,7 @@ Gateway-сервисы, `web-console`, `platform-mcp-server` и `codex-hook-ingr
 | `agent-manager` | Процессы, этапы, роли, промпты, агентные запуски и сессии, безопасная persistent activity timeline, правила автоматизации, приёмка, состояния ожидания flow. | Детали API провайдера, исполнение слотов и заданий, risk/gate decisions, delivery уведомлений, raw tool payload/logs. |
 | `fleet-manager` | Серверы, Kubernetes-кластеры, связность, здоровье, политика размещения. | Жизненный цикл агентного запуска, состояние провайдера, статус задания как истина среды исполнения. |
 | `runtime-manager` | Жизненный цикл слота, подготовка workspace, платформенные задания, сборка, выкладка, зеркалирование, prewarm/reuse, очистка, статус среды исполнения, срок хранения. | Продуктовый смысл задач, агентные запуски, risk/gate/release decisions, артефакты провайдера, серверы и Kubernetes-кластеры как реестр fleet. |
-| `governance-manager` | Риск-профили, правила риска, оценка риска, review signals, gate policy, gate requests, gate decisions, release decision package, release decisions, release safety-loop state. | Проектная политика, flow/run/acceptance как процесс, provider-native артефакты, runtime job execution, доставка уведомлений, callback transport, UI/gateway. |
+| `governance-manager` | Риск-профили, правила риска, оценка риска, review signals, gate policy, gate requests, gate decisions, release decision package, release decisions, blocking signals, release safety-loop state. | Проектная политика, flow/run/acceptance как процесс, provider-native артефакты, runtime job execution, доставка уведомлений, callback transport, UI/gateway. |
 | `billing-hub` | Биллинговые аккаунты, записи затрат, распределение, основа счёта, экономика пакетов. | Истина среды исполнения, истина провайдера, граф доступа. |
 | `interaction-hub` | Диалоги, доставка запросов согласования, уведомления, подписки, внешние обратные вызовы, попытки доставки. | Бизнес-логика процессов, risk/gate/release decisions, канонические статусы агентных запусков и заданий, состояние проекта. |
 | `operations-hub` | Модели чтения, ленты событий, операторские очереди, агрегированные статусы. | Первичная истина пользователя, проекта, провайдера, агентного запуска или задания. |
@@ -98,7 +98,7 @@ Gateway-сервисы, `web-console`, `platform-mcp-server` и `codex-hook-ingr
 - `user-gateway` можно сдвинуть на границу MVP или после MVP, пока не подтверждены сценарии внешних пользователей.
 - Общий `api-gateway` не создаётся: каждый gateway-сервис отвечает за своё направление доступа и не становится местом доменной оркестрации.
 
-`integration-gateway` принимает внешние webhook и callback события. Он проверяет source binding, подпись, content type, размер payload, лимиты, redaction и backpressure, после чего вызывает сервис-владелец по gRPC. Первый MVP-маршрут — provider webhook -> `provider-hub.IngestWebhookEvent`. `integration-gateway` не хранит provider projections, cursors, операции провайдера, состояние доставки внешнего канала или business decisions; эти данные остаются у `provider-hub`, `interaction-hub`, `package-hub` или другого владельца.
+`integration-gateway` принимает внешние webhook и callback события. Он проверяет source binding, подпись, content type, размер payload, лимиты, redaction и backpressure, после чего вызывает сервис-владелец по gRPC. Активные MVP-маршруты: provider webhook -> `provider-hub.IngestWebhookEvent` и generic channel callback -> `interaction-hub.RecordChannelCallback`. `integration-gateway` не хранит provider projections, cursors, операции провайдера, состояние доставки внешнего канала или business decisions; эти данные остаются у `provider-hub`, `interaction-hub`, `package-hub` или другого владельца.
 
 Подробный пакет границы: `docs/domains/integration-gateway/**`.
 
@@ -106,7 +106,7 @@ Gateway-сервисы, `web-console`, `platform-mcp-server` и `codex-hook-ingr
 
 Отвечает за MCP-поверхность инструментов, проверки политик, аудит MCP-вызовов и маршрутизацию к сервисам-владельцам. Не хранит каноническое состояние агентного запуска, задания, проекта, пакета или артефакта провайдера.
 
-Provider-инструменты в MCP должны оставаться типизированными на внешней поверхности. Для операций записи MCP передаёт в `provider-hub` типизированную команду, выбранный `external_account_id`, безопасный `operation_policy_context` и `approval_gate_ref`, если политика по риску требует gate. MCP и `agent-manager` получают risk/gate decision из `governance-manager`, а `provider-hub` владеет только исполнением provider-команды, GitHub/GitLab-адаптером записи и журналом операции.
+Provider-инструменты в MCP должны оставаться типизированными на внешней поверхности. Для операций записи MCP передаёт в `provider-hub` типизированную команду, выбранный `external_account_id`, безопасный `operation_policy_context` и `approval_gate_ref`, если политика по риску требует gate. MCP и `agent-manager` получают risk/gate/release decision refs из `governance-manager`, а `provider-hub` владеет только исполнением provider-команды, GitHub/GitLab-адаптером записи и журналом операции. Release package, blocking signal и safety-loop state не копируются в MCP и остаются состоянием `governance-manager`.
 
 Контекст руководящих пакетов в workspace не меняет границы сервисов: `agent-manager` выбирает и замораживает refs руководящих пакетов, `package-hub` остаётся владельцем package/install/version/source/manifest истины, `project-catalog` отдаёт проверенную workspace policy, а `runtime-manager` материализует источники `guidance_package` и сгенерированный контекст в workspace. Ни MCP, ни `agent-manager` не делают checkout руководящих пакетов. Runtime-контур строит локальные пути только через `safe_local_name` и перед checkout читает тип источника, commit и идентичность источника из `package-hub` по `package_version_ref`, а не выводит способ получения из произвольной строки `source_ref`.
 

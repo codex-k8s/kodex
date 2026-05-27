@@ -42,6 +42,7 @@
 | IGW-2 | #807 | готово | GitHub provider webhook route в `integration-gateway`: source binding `provider_slug=github`, обязательные GitHub headers, HMAC SHA-256 проверка `X-Hub-Signature-256` через `secret_store_type + secret_store_ref`, payload limit и вызов `provider-hub.IngestWebhookEvent` без хранения state в gateway. |
 | IGW-4 | #819 | готово | Security hardening активного GitHub route: per-route/per-source in-memory limits, backpressure с `Retry-After`, safe audit summary, replay/idempotency tests и OpenAPI compatibility tests без gateway inbox, БД или provider business logic. |
 | IGW-5 | #829 | готово | Deploy-контур `integration-gateway`: Dockerfile, Kubernetes manifests, secret refs, smoke, runbook, monitoring и rollback без реального remote deploy и без хранения gateway state. |
+| IGW-6 | #853 | готово | Generic channel/package callback route в `integration-gateway`: `/v1/external-callbacks/{callback_source}` проверяет source binding, HMAC SHA-256 подпись, payload/backpressure guard и вызывает `interaction-hub.RecordChannelCallback` safe envelope без gateway business state. |
 
 ## Текущий бэклог
 
@@ -106,4 +107,4 @@
 
 ## Рекомендуемый следующий шаг
 
-Следующий provider-срез — интеграция provider tools с `agent-manager`/platform MCP, GitLab write/webhook adapter или будущие callback routes `integration-gateway` после появления owner-service contracts. Project-side импорт bootstrap/adoption должен потреблять safe provider merge signal, но проверка `services.yaml` и активация binding остаются в `project-catalog`.
+Следующий provider-срез — интеграция provider tools с `agent-manager`/platform MCP, GitLab write/webhook adapter или расширение callback routes после новых owner-service contracts. Project-side импорт bootstrap/adoption должен потреблять safe provider merge signal, но проверка `services.yaml` и активация binding остаются в `project-catalog`.

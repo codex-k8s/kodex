@@ -183,6 +183,42 @@ func (registry *Registry) addGovernanceTools(server *mcpsdk.Server, handler *Gov
 		{name: ToolGovernanceGateExpire, register: func(description string) {
 			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolGovernanceGateExpire, Description: description}, handler.ExpireGate)
 		}},
+		{name: ToolGovernanceReleasePrepareDecisionPackage, register: func(description string) {
+			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolGovernanceReleasePrepareDecisionPackage, Description: description}, handler.PrepareReleaseDecisionPackage)
+		}},
+		{name: ToolGovernanceReleaseGetDecisionPackage, register: func(description string) {
+			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolGovernanceReleaseGetDecisionPackage, Description: description}, handler.GetReleaseDecisionPackage)
+		}},
+		{name: ToolGovernanceReleaseListDecisionPackages, register: func(description string) {
+			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolGovernanceReleaseListDecisionPackages, Description: description}, handler.ListReleaseDecisionPackages)
+		}},
+		{name: ToolGovernanceReleaseRequestDecision, register: func(description string) {
+			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolGovernanceReleaseRequestDecision, Description: description}, handler.RequestReleaseDecision)
+		}},
+		{name: ToolGovernanceReleaseSubmitDecision, register: func(description string) {
+			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolGovernanceReleaseSubmitDecision, Description: description}, handler.SubmitReleaseDecision)
+		}},
+		{name: ToolGovernanceReleaseGetDecision, register: func(description string) {
+			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolGovernanceReleaseGetDecision, Description: description}, handler.GetReleaseDecision)
+		}},
+		{name: ToolGovernanceReleaseListDecisions, register: func(description string) {
+			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolGovernanceReleaseListDecisions, Description: description}, handler.ListReleaseDecisions)
+		}},
+		{name: ToolGovernanceReleaseRecordBlockingSignal, register: func(description string) {
+			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolGovernanceReleaseRecordBlockingSignal, Description: description}, handler.RecordBlockingSignal)
+		}},
+		{name: ToolGovernanceReleaseResolveBlockingSignal, register: func(description string) {
+			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolGovernanceReleaseResolveBlockingSignal, Description: description}, handler.ResolveBlockingSignal)
+		}},
+		{name: ToolGovernanceReleaseListBlockingSignals, register: func(description string) {
+			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolGovernanceReleaseListBlockingSignals, Description: description}, handler.ListBlockingSignals)
+		}},
+		{name: ToolGovernanceReleaseRecordSafetyState, register: func(description string) {
+			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolGovernanceReleaseRecordSafetyState, Description: description}, handler.RecordReleaseSafetyState)
+		}},
+		{name: ToolGovernanceReleaseGetSafetyState, register: func(description string) {
+			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolGovernanceReleaseGetSafetyState, Description: description}, handler.GetReleaseSafetyState)
+		}},
 	}
 	for _, tool := range tools {
 		description := governanceToolDescriptions[tool.name]
