@@ -436,7 +436,7 @@ var runtimeSlotStatusNames = map[runtimev1.SlotStatus]string{
 	runtimev1.SlotStatus_SLOT_STATUS_READY:           agentservice.RuntimeSlotStatusReady,
 	runtimev1.SlotStatus_SLOT_STATUS_IN_USE:          "in_use",
 	runtimev1.SlotStatus_SLOT_STATUS_RELEASING:       "releasing",
-	runtimev1.SlotStatus_SLOT_STATUS_FAILED:          "failed",
+	runtimev1.SlotStatus_SLOT_STATUS_FAILED:          agentservice.RuntimeSlotStatusFailed,
 	runtimev1.SlotStatus_SLOT_STATUS_CLEANUP_PENDING: "cleanup_pending",
 	runtimev1.SlotStatus_SLOT_STATUS_CLEANED:         "cleaned",
 }
@@ -445,8 +445,8 @@ var runtimeWorkspaceMaterializationStatusNames = map[runtimev1.WorkspaceMaterial
 	runtimev1.WorkspaceMaterializationStatus_WORKSPACE_MATERIALIZATION_STATUS_PENDING:   "pending",
 	runtimev1.WorkspaceMaterializationStatus_WORKSPACE_MATERIALIZATION_STATUS_RUNNING:   "running",
 	runtimev1.WorkspaceMaterializationStatus_WORKSPACE_MATERIALIZATION_STATUS_COMPLETED: agentservice.RuntimeWorkspaceMaterializationStatusCompleted,
-	runtimev1.WorkspaceMaterializationStatus_WORKSPACE_MATERIALIZATION_STATUS_FAILED:    "failed",
-	runtimev1.WorkspaceMaterializationStatus_WORKSPACE_MATERIALIZATION_STATUS_CANCELLED: "cancelled",
+	runtimev1.WorkspaceMaterializationStatus_WORKSPACE_MATERIALIZATION_STATUS_FAILED:    agentservice.RuntimeWorkspaceMaterializationStatusFailed,
+	runtimev1.WorkspaceMaterializationStatus_WORKSPACE_MATERIALIZATION_STATUS_CANCELLED: agentservice.RuntimeWorkspaceMaterializationStatusCancelled,
 }
 
 func runtimeJobStatus(status runtimev1.JobStatus) string {

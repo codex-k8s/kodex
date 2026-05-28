@@ -149,9 +149,12 @@ const (
 
 	RuntimeJobRunnerModeCodexAgent = "codex_agent"
 
-	RuntimeSlotStatusReady = "ready"
+	RuntimeSlotStatusReady  = "ready"
+	RuntimeSlotStatusFailed = "failed"
 
 	RuntimeWorkspaceMaterializationStatusCompleted = "completed"
+	RuntimeWorkspaceMaterializationStatusFailed    = "failed"
+	RuntimeWorkspaceMaterializationStatusCancelled = "cancelled"
 
 	WorkspaceSourceKindCode             = "code"
 	WorkspaceSourceKindDocumentation    = "documentation"

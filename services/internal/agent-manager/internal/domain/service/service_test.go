@@ -1167,7 +1167,12 @@ func TestStartAgentRunReplayDispatchesRuntimeJobAfterMaterializationReady(t *tes
 		Status:                  enum.AgentRunStatusWaiting,
 		ResultSummary:           "runtime materialization pending",
 	}
-	payload, err := marshalCommandPayload(agentRunCommandPayload{Run: run})
+	startedRun := run
+	startedRun.Version = 1
+	startedRun.RuntimeContext = value.RuntimeContextRef{}
+	startedRun.Status = enum.AgentRunStatusRequested
+	startedRun.ResultSummary = ""
+	payload, err := marshalCommandPayload(agentRunCommandPayload{Run: startedRun})
 	if err != nil {
 		t.Fatalf("marshal payload: %v", err)
 	}
@@ -1216,6 +1221,84 @@ func TestStartAgentRunReplayDispatchesRuntimeJobAfterMaterializationReady(t *tes
 	}
 	if replay.RuntimeContext.JobRef != "runtime-job-123" || replay.Status != enum.AgentRunStatusStarting {
 		t.Fatalf("replayed run = %s/%+v", replay.Status, replay.RuntimeContext)
+	}
+}
+
+func TestStartAgentRunReplayRecordsFailedRuntimeMaterialization(t *testing.T) {
+	t.Parallel()
+
+	fixture := newRuntimePreparationFixture()
+	slotRef := uuid.MustParse("10101010-bbbb-cccc-dddd-eeeeeeeeeeee").String()
+	materializationRef := uuid.MustParse("10101010-cccc-dddd-eeee-ffffffffffff").String()
+	run := entity.AgentRun{
+		VersionedBase:           entity.VersionedBase{ID: fixture.runID, Version: 2, CreatedAt: fixture.now, UpdatedAt: fixture.now},
+		SessionID:               fixture.sessionID,
+		RoleProfileID:           fixture.roleID,
+		RoleProfileVersion:      1,
+		RoleProfileDigest:       "sha256:role",
+		PromptTemplateVersionID: fixture.promptVersionID,
+		PromptTemplateDigest:    "sha256:prompt",
+		RuntimeContext:          value.RuntimeContextRef{SlotRef: slotRef, WorkspaceRef: materializationRef},
+		GuidanceRefs:            fixture.guidanceResolver.refs,
+		Status:                  enum.AgentRunStatusWaiting,
+		ResultSummary:           "runtime materialization pending",
+	}
+	startedRun := run
+	startedRun.Version = 1
+	startedRun.RuntimeContext = value.RuntimeContextRef{}
+	startedRun.Status = enum.AgentRunStatusRequested
+	startedRun.ResultSummary = ""
+	payload, err := marshalCommandPayload(agentRunCommandPayload{Run: startedRun})
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	commandID := fixture.input.Meta.CommandID
+	fixture.repository.replay = &entity.CommandResult{
+		CommandID:     &commandID,
+		Actor:         testActor(),
+		Operation:     operationStartAgentRun,
+		AggregateType: enum.CommandAggregateTypeRun,
+		AggregateID:   run.ID,
+		ResultPayload: payload,
+	}
+	fixture.repository.runByID = map[uuid.UUID]entity.AgentRun{run.ID: run}
+	runtimePreparer := &fakeRuntimePreparer{result: RuntimePreparationResult{
+		SlotRef:                        slotRef,
+		SlotStatus:                     RuntimeSlotStatusReady,
+		WorkspaceRef:                   materializationRef,
+		WorkspaceMaterializationStatus: RuntimeWorkspaceMaterializationStatusFailed,
+		ContextDigest:                  "sha256:agent-run-context",
+		MaterializationFingerprint:     "sha256:workspace",
+	}}
+	runtimeJobCreator := &fakeRuntimeJobCreator{result: RuntimeJobResult{JobRef: "runtime-job-123", Status: "pending"}}
+	service := New(Config{
+		Repository:                fixture.repository,
+		Clock:                     fixedClock{now: fixture.now},
+		IDGenerator:               &sequenceIDGenerator{ids: fixture.ids},
+		GuidanceResolver:          fixture.guidanceResolver,
+		WorkspacePolicyResolver:   fixture.policyResolver,
+		RuntimePreparer:           runtimePreparer,
+		RuntimeJobCreator:         runtimeJobCreator,
+		RuntimePreparationEnabled: true,
+		RuntimeJobDispatchEnabled: true,
+		RuntimeJobRunnerImageRef:  "image://codex-agent@sha256:runner",
+	})
+
+	replay, err := service.StartAgentRun(context.Background(), fixture.input)
+	if err != nil {
+		t.Fatalf("StartAgentRun() err = %v", err)
+	}
+	if runtimePreparer.calls != 1 || runtimeJobCreator.calls != 0 {
+		t.Fatalf("preparer/job calls = %d/%d", runtimePreparer.calls, runtimeJobCreator.calls)
+	}
+	if replay.Status != enum.AgentRunStatusFailed || replay.FailureCode != runtimePrepareFailureCode || replay.RuntimeContext.SlotRef != slotRef {
+		t.Fatalf("replayed run = %s/%q/%+v", replay.Status, replay.FailureCode, replay.RuntimeContext)
+	}
+	if !strings.Contains(replay.ResultSummary, "runtime_materialization_failed") {
+		t.Fatalf("result summary = %q", replay.ResultSummary)
+	}
+	if fixture.repository.updateRunEvent == nil || fixture.repository.updateRunEvent.EventType != agentevents.EventRunFailed {
+		t.Fatalf("event = %+v", fixture.repository.updateRunEvent)
 	}
 }
 

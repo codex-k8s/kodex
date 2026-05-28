@@ -135,7 +135,24 @@ func (s *Service) retryRuntimeJobDispatchForReplay(ctx context.Context, meta val
 		return run, nil
 	}
 	result, err := s.runtimePreparer.PrepareRuntime(ctx, request)
-	if err != nil || !runtimePreparationReadyForJob(result) {
+	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return run, err
+		}
+		failure := classifyRuntimePreparationFailure(err)
+		if failure.retryable {
+			return run, nil
+		}
+		return s.recordRuntimePreparationFailure(ctx, meta, run, err)
+	}
+	if !runtimePreparationReadyForJob(result) {
+		if err := runtimePreparationTerminalFailure(result); err != nil {
+			runtimeContext, contextErr := runtimeContextFromPreparation(result)
+			if contextErr != nil {
+				return s.recordRuntimePreparationFailure(ctx, meta, run, err)
+			}
+			return s.recordRuntimePreparationFailureWithContext(ctx, meta, run, runtimeContext, err)
+		}
 		return run, nil
 	}
 	return s.dispatchRuntimeJobForRun(ctx, meta, role, run, result)
@@ -476,12 +493,15 @@ func (s *Service) dispatchRuntimeJobForRun(
 		runtimeContext.JobRef = strings.TrimSpace(run.RuntimeContext.JobRef)
 		return s.recordRuntimePreparationState(ctx, meta, run, enum.AgentRunStatusStarting, runtimeContext, runtimePreparationSuccessSummary(result), "", "")
 	}
+	if err := runtimePreparationTerminalFailure(result); err != nil {
+		return s.recordRuntimePreparationFailureWithContext(ctx, meta, run, runtimeContext, err)
+	}
 	if !runtimePreparationReadyForJob(result) {
 		return s.recordRuntimeMaterializationPending(ctx, meta, run, runtimeContext, result)
 	}
 	spec, err := s.agentRunExecutionSpec(run, role, result)
 	if err != nil {
-		return s.recordRuntimeJobFailure(ctx, meta, run, runtimeContext, err)
+		return s.recordRuntimeOperationFailure(ctx, meta, run, runtimeContext, classifyRuntimeJobFailure(err), runtimeJobReasonRetryable, runtimeJobFailureCode)
 	}
 	job, err := s.runtimeJobCreator.CreateAgentRunJob(ctx, RuntimeJobInput{
 		Meta:          runtimeJobCommandMeta(meta, run.ID),
@@ -493,7 +513,7 @@ func (s *Service) dispatchRuntimeJobForRun(
 		if errors.Is(err, context.Canceled) {
 			return run, err
 		}
-		return s.recordRuntimeJobFailure(ctx, meta, run, runtimeContext, err)
+		return s.recordRuntimeOperationFailure(ctx, meta, run, runtimeContext, classifyRuntimeJobFailure(err), runtimeJobReasonRetryable, runtimeJobFailureCode)
 	}
 	return s.recordRuntimeJobSuccess(ctx, meta, run, runtimeContext, result, job)
 }
@@ -501,6 +521,20 @@ func (s *Service) dispatchRuntimeJobForRun(
 func runtimePreparationReadyForJob(result RuntimePreparationResult) bool {
 	return strings.TrimSpace(result.SlotStatus) == RuntimeSlotStatusReady &&
 		strings.TrimSpace(result.WorkspaceMaterializationStatus) == RuntimeWorkspaceMaterializationStatusCompleted
+}
+
+func runtimePreparationTerminalFailure(result RuntimePreparationResult) error {
+	if strings.TrimSpace(result.SlotStatus) == RuntimeSlotStatusFailed {
+		return NewRuntimePreparationError(false, "runtime_slot_failed", "runtime-manager reported failed runtime slot")
+	}
+	switch strings.TrimSpace(result.WorkspaceMaterializationStatus) {
+	case RuntimeWorkspaceMaterializationStatusFailed:
+		return NewRuntimePreparationError(false, "runtime_materialization_failed", "runtime-manager reported failed workspace materialization")
+	case RuntimeWorkspaceMaterializationStatusCancelled:
+		return NewRuntimePreparationError(false, "runtime_materialization_cancelled", "runtime-manager reported cancelled workspace materialization")
+	default:
+		return nil
+	}
 }
 
 func (s *Service) agentRunExecutionSpec(run entity.AgentRun, role entity.RoleProfile, result RuntimePreparationResult) (AgentRunExecutionSpec, error) {
@@ -715,7 +749,7 @@ func (s *Service) recordRuntimeJobSuccess(
 ) (entity.AgentRun, error) {
 	runtimeContext.JobRef = strings.TrimSpace(job.JobRef)
 	if strings.TrimSpace(runtimeContext.JobRef) == "" {
-		return s.recordRuntimeJobFailure(ctx, meta, run, runtimeContext, errs.ErrDependencyUnavailable)
+		return s.recordRuntimeOperationFailure(ctx, meta, run, runtimeContext, classifyRuntimeJobFailure(errs.ErrDependencyUnavailable), runtimeJobReasonRetryable, runtimeJobFailureCode)
 	}
 	summary := runtimeJobSuccessSummary(preparation, job)
 	return s.recordRuntimePreparationState(ctx, meta, run, enum.AgentRunStatusStarting, runtimeContext, summary, "", "")
@@ -732,31 +766,39 @@ func (s *Service) recordRuntimeMaterializationPending(
 	return s.recordRuntimePreparationState(ctx, meta, run, enum.AgentRunStatusWaiting, runtimeContext, summary, "", runtimeMaterializationPending)
 }
 
-func (s *Service) recordRuntimeJobFailure(
-	ctx context.Context,
-	meta value.CommandMeta,
-	run entity.AgentRun,
-	runtimeContext value.RuntimeContextRef,
-	err error,
-) (entity.AgentRun, error) {
-	failure := classifyRuntimeJobFailure(err)
-	if failure.retryable {
-		return s.recordRuntimePreparationState(ctx, meta, run, enum.AgentRunStatusWaiting, runtimeContext, failure.summary(), "", runtimeJobReasonRetryable)
-	}
-	return s.recordRuntimePreparationState(ctx, meta, run, enum.AgentRunStatusFailed, runtimeContext, failure.summary(), runtimeJobFailureCode, "")
-}
-
 func (s *Service) recordRuntimePreparationFailure(
 	ctx context.Context,
 	meta value.CommandMeta,
 	run entity.AgentRun,
 	err error,
 ) (entity.AgentRun, error) {
+	return s.recordRuntimePreparationFailureWithContext(ctx, meta, run, value.RuntimeContextRef{}, err)
+}
+
+func (s *Service) recordRuntimePreparationFailureWithContext(
+	ctx context.Context,
+	meta value.CommandMeta,
+	run entity.AgentRun,
+	runtimeContext value.RuntimeContextRef,
+	err error,
+) (entity.AgentRun, error) {
 	failure := classifyRuntimePreparationFailure(err)
+	return s.recordRuntimeOperationFailure(ctx, meta, run, runtimeContext, failure, runtimePrepareReasonRetryable, runtimePrepareFailureCode)
+}
+
+func (s *Service) recordRuntimeOperationFailure(
+	ctx context.Context,
+	meta value.CommandMeta,
+	run entity.AgentRun,
+	runtimeContext value.RuntimeContextRef,
+	failure runtimeOperationFailure,
+	retryReasonCode string,
+	failureCode string,
+) (entity.AgentRun, error) {
 	if failure.retryable {
-		return s.recordRuntimePreparationState(ctx, meta, run, enum.AgentRunStatusWaiting, value.RuntimeContextRef{}, failure.summary(), "", runtimePrepareReasonRetryable)
+		return s.recordRuntimePreparationState(ctx, meta, run, enum.AgentRunStatusWaiting, runtimeContext, failure.summary(), "", retryReasonCode)
 	}
-	return s.recordRuntimePreparationState(ctx, meta, run, enum.AgentRunStatusFailed, value.RuntimeContextRef{}, failure.summary(), runtimePrepareFailureCode, "")
+	return s.recordRuntimePreparationState(ctx, meta, run, enum.AgentRunStatusFailed, runtimeContext, failure.summary(), failureCode, "")
 }
 
 func (s *Service) recordRuntimePreparationState(

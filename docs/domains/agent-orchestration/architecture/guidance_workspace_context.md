@@ -139,7 +139,7 @@ Digest сгенерированного контекста передаётся 
 
 - Повтор `StartAgentRun` с тем же `command_id` возвращает тот же `Run` и тот же набор `guidance_refs`.
 - Повтор `PrepareRuntime` должен использовать `agent_run_id` и runtime `command_id`, чтобы не создавать несколько независимых слотов для одного запуска.
-- Повтор постановки `JOB_TYPE_AGENT_RUN` должен использовать `agent_run_id`, `slot_ref` и детерминированный runtime `command_id`; если `runtime_job_ref` уже сохранён в `Run`, `agent-manager` не создаёт новое задание. Если job ещё нет, replay `StartAgentRun` повторно читает idempotent `PrepareRuntime` и создаёт job только после `ready/completed`.
+- Повтор постановки `JOB_TYPE_AGENT_RUN` должен использовать `agent_run_id`, `slot_ref` и детерминированный runtime `command_id`; если `runtime_job_ref` уже сохранён в `Run`, `agent-manager` не создаёт новое задание. Если job ещё нет, replay `StartAgentRun` повторно читает idempotent `PrepareRuntime` и создаёт job только после `ready/completed`; terminal materialization state `failed`/`cancelled` переводит `Run` в безопасный `failed`.
 - Если при постановке `JOB_TYPE_AGENT_RUN` не хватает materialization id, context digest, workspace fingerprint или runner image ref, `agent-manager` фиксирует безопасную классифицированную ошибку и не вызывает `CreateJob` с неполным spec.
 - Если `package-hub` больше не отдаёт установку или manifest после создания `Run`, уже замороженный `Run` остаётся исторически валидным, но новый runtime start должен завершиться безопасной ошибкой зависимости.
 - `package-hub` не создаёт локальные пути и не подготавливает workspace.
