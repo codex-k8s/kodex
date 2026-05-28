@@ -762,17 +762,20 @@ func normalizeRiskEvaluationSummary(summary value.RiskEvaluationSummary) (value.
 
 func normalizeEvidenceRefs(refs []value.EvidenceRef) ([]value.EvidenceRef, error) {
 	result := make([]value.EvidenceRef, 0, len(refs))
-	seen := make(map[string]struct{})
+	seen := make(map[string]value.EvidenceRef)
 	for _, ref := range refs {
 		normalized, err := normalizeEvidenceRef(ref, "evidence_ref.ref", "evidence_ref.summary")
 		if err != nil {
 			return nil, err
 		}
 		key := normalized.Kind + "\x00" + normalized.Ref
-		if _, ok := seen[key]; ok {
+		if existing, ok := seen[key]; ok {
+			if existing != normalized {
+				return nil, errs.ErrInvalidArgument
+			}
 			continue
 		}
-		seen[key] = struct{}{}
+		seen[key] = normalized
 		result = append(result, normalized)
 	}
 	return result, nil

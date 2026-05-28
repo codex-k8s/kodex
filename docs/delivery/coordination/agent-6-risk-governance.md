@@ -59,7 +59,7 @@
 ## Завершённый release package enrichment-срез
 
 - Issue: #869.
-- Результат среза: `BuildReleaseDecisionPackage` валидирует и обогащает локальные `governance` integration refs (`risk_assessment`, `review_signal`, `gate_request`, `gate_decision`, `release_decision_package`) bounded snapshot полями `status`, `summary`, `digest`, `observed_at`, `version`.
+- Результат среза: `BuildReleaseDecisionPackage` валидирует и обогащает локальные `governance` integration refs (`risk_assessment`, `review_signal`, `gate_request`, `gate_decision`, `release_decision_package`) ограниченным snapshot с полями `status`, `summary`, `digest`, `observed_at`, `version`.
 - Project/provider/agent/runtime refs остаются explicit refs: если вызывающая сторона не передала owner-domain summary, `governance-manager` добавляет safe summary diagnostic `explicit_ref_unvalidated`, но не читает соседние сервисы и не копирует чужой state.
 - Service-client чтения из `project-catalog`, `provider-hub`, `agent-manager` и `runtime-manager`, provider write, delivery callbacks и deploy orchestration остаются следующими GOV-7 интеграционными срезами.
 
@@ -87,7 +87,7 @@
 
 - Issue: #919.
 - Результат среза: `governance-manager` потребляет стабильное событие `provider.comment.synced` из `provider-hub` через `libs/go/eventconsumer` и превращает `review_state=approved/changes_requested` в локальный `RecordReviewSignal`.
-- Сервис сохраняет только provider work item ref, provider comment/comment projection evidence ref, outcome/severity, bounded summary, actor/request refs и idempotency correlation; raw provider payload, comment body, diff, webhook body и provider API response не читаются и не сохраняются.
+- Сервис сохраняет только provider work item ref, provider comment/comment projection evidence ref, outcome/severity, ограниченный summary, actor/request refs и idempotency correlation; raw provider payload, comment body, diff, webhook body и provider API response не читаются и не сохраняются.
 - `agent-manager` acceptance/follow-up events и `interaction-hub` response events не маппятся в review signal без отдельного согласованного outcome/gate boundary.
 
 ## Завершённый срез потребителя interaction gate decision
@@ -104,6 +104,14 @@
 - Команда дозаписывает только `runtime_refs`, ограниченные `evidence_refs` и `integration_refs` домена `runtime` с `status`, коротким `summary`, `digest`, `observed_at`, `version`/etag и опциональным `error_code`; raw logs, stdout/stderr, kubeconfig, Kubernetes payload, deploy scripts, workspace paths и secrets не сохраняются.
 - Идемпотентный replay с тем же входом не создаёт новую версию или событие, конфликтующий снимок для того же `domain/kind/ref` отклоняется, `closed` package не меняется.
 - Прямой consumer для `runtime.job.*` не включается: стабильные события `runtime-manager` пока не несут согласованную безопасную привязку к `release_decision_package_id` или локальному gate/package ref.
+
+## Завершённый срез чтения runtime/deploy evidence
+
+- Issue: без отдельного Issue.
+- Результат среза: `GetReleaseDecisionPackage` и `ListReleaseDecisionPackages` дают интерфейсу владельца и персонала безопасный снимок runtime/deploy evidence из release package без нового контракта.
+- Поверхность чтения содержит связанные runtime job refs, deploy/postdeploy refs, status, короткий безопасный `summary`, `error_code`, `observed_at`, digest/version, package version, `release_candidate_ref` и связи с gate request/decision через `integration_refs`.
+- Для `job|deploy|postdeploy` принимаются только статусы `pending`, `claimed`, `running`, `succeeded`, `failed`, `cancelled`, `timed_out`; повтор с тем же fingerprint/digest идемпотентен, конфликтующий fingerprint отклоняется, устаревший status не перезаписывает сохранённый факт.
+- `governance-manager` не читает Kubernetes, deploy scripts, БД `runtime-manager` и provider payload; исходные логи и полные отчёты остаются у домена-владельца.
 
 ## Ближайшие зависимости
 

@@ -347,14 +347,15 @@ func TestRepositoryIntegrationGovernanceStateAndOutbox(t *testing.T) {
 		RetentionClass: "safe_ref",
 	}}
 	releasePackage.IntegrationRefs = append(releasePackage.IntegrationRefs, value.ReleaseIntegrationRef{
-		Domain:    "runtime",
-		Kind:      "deploy",
-		Ref:       "runtime:job:deploy",
-		Status:    "failed",
-		Summary:   "deploy failed with bounded diagnostic",
-		Digest:    "sha256:deploy",
-		Version:   "job-version:2",
-		ErrorCode: "DEPLOY_HEALTHCHECK_FAILED",
+		Domain:     "runtime",
+		Kind:       "deploy",
+		Ref:        "runtime:job:deploy",
+		Status:     "failed",
+		Summary:    "deploy failed with bounded diagnostic",
+		Digest:     "sha256:deploy",
+		ObservedAt: "2026-05-26T12:01:00Z",
+		Version:    "job-version:2",
+		ErrorCode:  "DEPLOY_HEALTHCHECK_FAILED",
 	})
 	releasePackage.Version = 2
 	releasePackage.UpdatedAt = now.Add(time.Minute)
@@ -368,8 +369,9 @@ func TestRepositoryIntegrationGovernanceStateAndOutbox(t *testing.T) {
 	if storedReleasePackage.Version != 2 || len(storedReleasePackage.EvidenceRefs) != 1 || len(storedReleasePackage.IntegrationRefs) != 2 {
 		t.Fatalf("stored release package = %+v, want runtime evidence refs", storedReleasePackage)
 	}
-	if storedReleasePackage.IntegrationRefs[1].ErrorCode != "DEPLOY_HEALTHCHECK_FAILED" {
-		t.Fatalf("runtime error code = %q, want persisted code", storedReleasePackage.IntegrationRefs[1].ErrorCode)
+	runtimeRef := storedReleasePackage.IntegrationRefs[1]
+	if runtimeRef.Status != "failed" || runtimeRef.Summary == "" || runtimeRef.Digest != "sha256:deploy" || runtimeRef.ObservedAt != "2026-05-26T12:01:00Z" || runtimeRef.Version != "job-version:2" || runtimeRef.ErrorCode != "DEPLOY_HEALTHCHECK_FAILED" {
+		t.Fatalf("runtime read surface = %+v, want persisted status/summary/digest/timestamp/version/error code", runtimeRef)
 	}
 
 	requestedDecision := entity.ReleaseDecision{
