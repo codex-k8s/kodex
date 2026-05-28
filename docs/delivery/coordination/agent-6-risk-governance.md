@@ -83,6 +83,13 @@
 - Соседние consumers реагируют через `platform-event-log` и `libs/go/eventconsumer`; authoritative lookup, access checks, optimistic concurrency и команды остаются через gRPC `GovernanceManagerService`.
 - `governance-manager` не переносит delivery lifecycle, provider write, agent run/session state или bootstrap import внутрь своей БД.
 
+## Завершённый provider review signal consumer-срез
+
+- Issue: #919.
+- Результат среза: `governance-manager` потребляет стабильное событие `provider.comment.synced` из `provider-hub` через `libs/go/eventconsumer` и превращает `review_state=approved/changes_requested` в локальный `RecordReviewSignal`.
+- Сервис сохраняет только provider work item ref, provider comment/comment projection evidence ref, outcome/severity, bounded summary, actor/request refs и idempotency correlation; raw provider payload, comment body, diff, webhook body и provider API response не читаются и не сохраняются.
+- `agent-manager` acceptance/follow-up events и `interaction-hub` response events не маппятся в review signal без отдельного согласованного outcome/gate boundary.
+
 ## Ближайшие зависимости
 
 | Домен | Что нужно согласовать |
