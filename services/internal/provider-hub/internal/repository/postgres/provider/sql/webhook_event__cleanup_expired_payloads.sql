@@ -4,6 +4,7 @@ WITH candidates AS (
     FROM provider_hub_webhook_events
     WHERE processing_status IN ('pending', 'failed')
       AND retain_until <= @now
+      AND COALESCE(payload_json ->> 'payload_storage', '') IN ('', 'retained_for_retry')
       AND (
         last_error <> 'payload_expired'
         OR (payload_json ->> 'payload_storage') IS DISTINCT FROM 'expired_after_retention'

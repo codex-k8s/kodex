@@ -48,10 +48,10 @@ func webhookSafePayloadJSON(event entity.WebhookEvent) string {
 	if ok {
 		return webhookSafeEnvelopeJSON(stored, event)
 	}
-	storage := value.WebhookPayloadStorageRetained
+	storage := value.WebhookPayloadStorageSafeEnvelope
 	if event.ProcessingStatus == enum.WebhookProcessingStatusProcessed ||
 		event.ProcessingStatus == enum.WebhookProcessingStatusIgnored {
-		storage = value.WebhookPayloadStorageRedacted
+		storage = value.WebhookPayloadStorageSafeEnvelope
 	}
 	return webhookSafeEnvelopeJSON(value.WebhookPayloadEnvelope{PayloadStorage: string(storage)}, event)
 }
@@ -62,7 +62,10 @@ func webhookStoredSafeEnvelope(event entity.WebhookEvent) (value.WebhookPayloadE
 		return value.WebhookPayloadEnvelope{}, false
 	}
 	switch envelope.PayloadStorage {
-	case string(value.WebhookPayloadStorageRedacted), string(value.WebhookPayloadStorageExpired):
+	case string(value.WebhookPayloadStorageSafeEnvelope),
+		string(value.WebhookPayloadStorageRetained),
+		string(value.WebhookPayloadStorageRedacted),
+		string(value.WebhookPayloadStorageExpired):
 		return envelope, true
 	default:
 		return value.WebhookPayloadEnvelope{}, false

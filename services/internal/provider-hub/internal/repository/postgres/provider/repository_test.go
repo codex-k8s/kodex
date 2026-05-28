@@ -668,6 +668,7 @@ func TestRepositoryIntegrationRuntimeStateLimitsAndOperations(t *testing.T) {
 		RetainUntil:          now.Add(30 * 24 * time.Hour),
 	}
 	webhook.PayloadDigest = testPayloadDigest(webhook.PayloadJSON)
+	webhook.PayloadJSON = webhookPayloadEnvelopeForTest(webhook, value.WebhookPayloadStorageSafeEnvelope)
 	sourceWebhookID := webhook.ID
 	providerEvent := entity.ProviderEvent{
 		ID:                   uuid.New(),
@@ -806,8 +807,9 @@ func TestRepositoryIntegrationRuntimeStateLimitsAndOperations(t *testing.T) {
 	}
 	changedWebhook := webhook
 	changedWebhook.ID = uuid.New()
-	changedWebhook.PayloadJSON = []byte(`{"issue":{"id":56},"repository":{"id":100}}`)
-	changedWebhook.PayloadDigest = testPayloadDigest(changedWebhook.PayloadJSON)
+	changedRawPayload := []byte(`{"issue":{"id":56},"repository":{"id":100}}`)
+	changedWebhook.PayloadDigest = testPayloadDigest(changedRawPayload)
+	changedWebhook.PayloadJSON = webhookPayloadEnvelopeForTest(changedWebhook, value.WebhookPayloadStorageSafeEnvelope)
 	_, _, err = repository.StoreWebhookEvent(ctx, changedWebhook, providerrepo.ProjectionUpdate{}, nil, nil)
 	if !errors.Is(err, errs.ErrConflict) {
 		t.Fatalf("store changed duplicate webhook err = %v, want %v", err, errs.ErrConflict)
@@ -826,8 +828,9 @@ func TestRepositoryIntegrationRuntimeStateLimitsAndOperations(t *testing.T) {
 	}
 	conflictingRedactedWebhook := replayedRedactedWebhook
 	conflictingRedactedWebhook.ID = uuid.New()
-	conflictingRedactedWebhook.PayloadJSON = []byte(`{"issue":{"id":99},"repository":{"id":100}}`)
-	conflictingRedactedWebhook.PayloadDigest = testPayloadDigest(conflictingRedactedWebhook.PayloadJSON)
+	conflictingRawPayload := []byte(`{"issue":{"id":99},"repository":{"id":100}}`)
+	conflictingRedactedWebhook.PayloadDigest = testPayloadDigest(conflictingRawPayload)
+	conflictingRedactedWebhook.PayloadJSON = webhookPayloadEnvelopeForTest(conflictingRedactedWebhook, value.WebhookPayloadStorageSafeEnvelope)
 	_, _, err = repository.StoreWebhookEvent(ctx, conflictingRedactedWebhook, providerrepo.ProjectionUpdate{}, nil, nil)
 	if !errors.Is(err, errs.ErrConflict) {
 		t.Fatalf("store changed redacted duplicate webhook err = %v, want %v", err, errs.ErrConflict)
@@ -849,6 +852,25 @@ func TestRepositoryIntegrationRuntimeStateLimitsAndOperations(t *testing.T) {
 	}
 	if storedWebhook.ID != migratedTerminalWebhook.ID {
 		t.Fatalf("migrated terminal replay returned webhook %s, want %s", storedWebhook.ID, migratedTerminalWebhook.ID)
+	}
+	migratedRetryableWebhook := webhookEventForTest(now.Add(6*time.Minute), "delivery-migrated-retryable-1")
+	migratedRetryableWebhook.ProcessingStatus = enum.WebhookProcessingStatusFailed
+	migratedRetryableWebhook.PayloadDigest = strings.Repeat("b", 64)
+	migratedRetryableWebhook.PayloadJSON = []byte(`{"payload_cleanup_reason":"raw_payload_removed","payload_digest_source":"postgres_jsonb_text","payload_sha256":"` + migratedRetryableWebhook.PayloadDigest + `","payload_storage":"safe_envelope_only"}`)
+	if _, _, err := repository.StoreWebhookEvent(ctx, migratedRetryableWebhook, providerrepo.ProjectionUpdate{}, nil, nil); err != nil {
+		t.Fatalf("store migrated retryable webhook event: %v", err)
+	}
+	replayedMigratedRetryable := webhookEventForTest(now.Add(7*time.Minute), "delivery-migrated-retryable-1")
+	replayedMigratedRetryable.ID = uuid.New()
+	if replayedMigratedRetryable.PayloadDigest == migratedRetryableWebhook.PayloadDigest {
+		t.Fatal("test setup produced equal digests, want migrated retryable digest source mismatch")
+	}
+	storedWebhook, _, err = repository.StoreWebhookEvent(ctx, replayedMigratedRetryable, providerrepo.ProjectionUpdate{}, nil, nil)
+	if err != nil {
+		t.Fatalf("replay migrated retryable webhook by identity: %v", err)
+	}
+	if storedWebhook.ID != migratedRetryableWebhook.ID {
+		t.Fatalf("migrated retryable replay returned webhook %s, want %s", storedWebhook.ID, migratedRetryableWebhook.ID)
 	}
 	webhooks, _, err := repository.ListWebhookEvents(ctx, query.WebhookEventFilter{
 		ProviderSlug:       enum.ProviderSlugGitHub,
@@ -881,14 +903,16 @@ func TestRepositoryIntegrationCleanupExpiredWebhookPayloads(t *testing.T) {
 	now := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
 	fresh := webhookEventForTest(now.Add(-time.Hour), "delivery-retained-before-ttl")
 	fresh.ProcessingStatus = enum.WebhookProcessingStatusFailed
-	fresh.PayloadJSON = []byte(`{"secret":"keep-before-ttl","repository":{"id":100}}`)
-	fresh.PayloadDigest = testPayloadDigest(fresh.PayloadJSON)
+	freshRawPayload := []byte(`{"secret":"keep-before-ttl","repository":{"id":100}}`)
+	fresh.PayloadDigest = testPayloadDigest(freshRawPayload)
 	fresh.RetainUntil = now.Add(time.Hour)
+	fresh.PayloadJSON = webhookPayloadEnvelopeForTest(fresh, value.WebhookPayloadStorageRetained)
 	expired := webhookEventForTest(now.Add(-48*time.Hour), "delivery-expired-after-ttl")
 	expired.ProcessingStatus = enum.WebhookProcessingStatusPending
-	expired.PayloadJSON = []byte(`{"secret":"do-not-leak","repository":{"id":100}}`)
-	expired.PayloadDigest = testPayloadDigest(expired.PayloadJSON)
+	expiredRawPayload := []byte(`{"secret":"do-not-leak","repository":{"id":100}}`)
+	expired.PayloadDigest = testPayloadDigest(expiredRawPayload)
 	expired.RetainUntil = now.Add(-time.Hour)
+	expired.PayloadJSON = webhookPayloadEnvelopeForTest(expired, value.WebhookPayloadStorageRetained)
 	if _, _, err := repository.StoreWebhookEvent(ctx, fresh, providerrepo.ProjectionUpdate{}, nil, nil); err != nil {
 		t.Fatalf("store fresh webhook: %v", err)
 	}
@@ -915,8 +939,10 @@ func TestRepositoryIntegrationCleanupExpiredWebhookPayloads(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get fresh webhook: %v", err)
 	}
-	if !strings.Contains(string(loadedFresh.PayloadJSON), "keep-before-ttl") {
-		t.Fatalf("fresh payload = %s, want retained raw payload before TTL", loadedFresh.PayloadJSON)
+	loadedFreshPayload := string(loadedFresh.PayloadJSON)
+	if strings.Contains(loadedFreshPayload, "keep-before-ttl") ||
+		!strings.Contains(loadedFreshPayload, string(value.WebhookPayloadStorageRetained)) {
+		t.Fatalf("fresh payload = %s, want retained safe envelope before TTL", loadedFresh.PayloadJSON)
 	}
 	cleanedAgain, err := repository.CleanupExpiredWebhookPayloads(ctx, now.Add(time.Minute), 10)
 	if err != nil {
@@ -1084,7 +1110,7 @@ func TestRepositoryIntegrationProjectionRebuildsWatermarkRelationships(t *testin
 
 func webhookEventForTest(receivedAt time.Time, deliveryID string) entity.WebhookEvent {
 	payload := []byte(`{"issue":{"id":55,"number":7},"repository":{"id":100}}`)
-	return entity.WebhookEvent{
+	webhook := entity.WebhookEvent{
 		ID:                   uuid.New(),
 		ProviderSlug:         enum.ProviderSlugGitHub,
 		DeliveryID:           deliveryID,
@@ -1096,6 +1122,18 @@ func webhookEventForTest(receivedAt time.Time, deliveryID string) entity.Webhook
 		PayloadDigest:        testPayloadDigest(payload),
 		RetainUntil:          receivedAt.Add(30 * 24 * time.Hour),
 	}
+	webhook.PayloadJSON = webhookPayloadEnvelopeForTest(webhook, value.WebhookPayloadStorageSafeEnvelope)
+	return webhook
+}
+
+func webhookPayloadEnvelopeForTest(webhook entity.WebhookEvent, storage value.WebhookPayloadStorage) []byte {
+	return []byte(`{"provider_slug":"` + string(webhook.ProviderSlug) +
+		`","delivery_id":"` + webhook.DeliveryID +
+		`","event_name":"` + webhook.EventName +
+		`","repository_provider_id":"` + webhook.RepositoryProviderID +
+		`","payload_sha256":"` + webhook.PayloadDigest +
+		`","payload_storage":"` + string(storage) +
+		`","retain_until":"` + webhook.RetainUntil.UTC().Format(time.RFC3339Nano) + `"}`)
 }
 
 func testPayloadDigest(payload []byte) string {

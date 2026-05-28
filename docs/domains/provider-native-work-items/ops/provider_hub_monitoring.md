@@ -87,7 +87,7 @@ approvals:
 - Readiness: процесс видит БД `provider-hub` и, при включённой outbox-доставке, БД `platform-event-log`.
 - gRPC integration check: `ProviderHubService/ListProviderOperations` должен давать application-level статус, а не сетевую ошибку.
 - Webhook inbox: oldest pending не должен выходить за допустимое окно.
-- Webhook payload retention: истёкшие `pending`/`failed` payload должны очищаться явной служебной операцией; read surface должен показывать только safe envelope и `payload_sha256`.
+- Webhook inbox privacy: `payload_json` должен оставаться safe envelope only; legacy `retained_for_retry` payload очищается явной служебной операцией, read surface показывает только safe envelope и `payload_sha256`.
 - Reconciliation: hot cursors не должны оставаться без попыток обработки.
 - Provider operations: retryable errors должны снижаться после retry window, permanent errors не должны бесконечно повторяться.
 

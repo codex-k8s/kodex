@@ -4,11 +4,16 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/entity"
-	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/enum"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/value"
+)
+
+const (
+	webhookLastErrorPayloadInvalid     = "provider_payload_invalid"
+	webhookLastErrorPayloadUnavailable = "payload_unavailable"
 )
 
 func webhookPayloadDigest(payload []byte) string {
@@ -16,12 +21,11 @@ func webhookPayloadDigest(payload []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func webhookForInboxStorage(webhook entity.WebhookEvent) (entity.WebhookEvent, error) {
-	webhook.PayloadDigest = webhookPayloadDigest(webhook.PayloadJSON)
-	if !webhookProcessingTerminal(webhook.ProcessingStatus) {
-		return webhook, nil
+func webhookForInboxStorage(webhook entity.WebhookEvent, facts value.ProviderWebhookFacts) (entity.WebhookEvent, error) {
+	if strings.TrimSpace(webhook.PayloadDigest) == "" {
+		webhook.PayloadDigest = webhookPayloadDigest(webhook.PayloadJSON)
 	}
-	payload, err := webhookPayloadEnvelopeJSON(webhook, value.WebhookPayloadStorageRedacted)
+	payload, err := webhookPayloadEnvelopeJSONWithFacts(webhook, value.WebhookPayloadStorageSafeEnvelope, "", time.Time{}, facts)
 	if err != nil {
 		return entity.WebhookEvent{}, err
 	}
@@ -29,20 +33,21 @@ func webhookForInboxStorage(webhook entity.WebhookEvent) (entity.WebhookEvent, e
 	return webhook, nil
 }
 
-func webhookProcessingTerminal(status enum.WebhookProcessingStatus) bool {
-	switch status {
-	case enum.WebhookProcessingStatusProcessed, enum.WebhookProcessingStatusIgnored:
-		return true
-	default:
-		return false
-	}
-}
-
 func webhookPayloadEnvelopeJSON(webhook entity.WebhookEvent, storage value.WebhookPayloadStorage) ([]byte, error) {
-	return webhookPayloadEnvelopeJSONWithCleanup(webhook, storage, "", time.Time{})
+	return webhookPayloadEnvelopeJSONWithFacts(webhook, storage, "", time.Time{}, value.ProviderWebhookFacts{})
 }
 
 func webhookPayloadEnvelopeJSONWithCleanup(webhook entity.WebhookEvent, storage value.WebhookPayloadStorage, reason value.WebhookPayloadCleanupReason, occurredAt time.Time) ([]byte, error) {
+	return webhookPayloadEnvelopeJSONWithFacts(webhook, storage, reason, occurredAt, value.ProviderWebhookFacts{})
+}
+
+func webhookPayloadEnvelopeJSONWithFacts(
+	webhook entity.WebhookEvent,
+	storage value.WebhookPayloadStorage,
+	reason value.WebhookPayloadCleanupReason,
+	occurredAt time.Time,
+	facts value.ProviderWebhookFacts,
+) ([]byte, error) {
 	retainUntil := ""
 	if !webhook.RetainUntil.IsZero() {
 		retainUntil = webhook.RetainUntil.UTC().Format(time.RFC3339Nano)
@@ -56,6 +61,12 @@ func webhookPayloadEnvelopeJSONWithCleanup(webhook entity.WebhookEvent, storage 
 		DeliveryID:           webhook.DeliveryID,
 		EventName:            webhook.EventName,
 		RepositoryProviderID: webhook.RepositoryProviderID,
+		RepositoryFullName:   strings.TrimSpace(facts.RepositoryFullName),
+		ProviderWorkItemID:   strings.TrimSpace(facts.ProviderWorkItemID),
+		ProviderCommentID:    strings.TrimSpace(facts.ProviderCommentID),
+		FactKind:             string(facts.FactKind),
+		Kind:                 strings.TrimSpace(facts.Kind),
+		Number:               facts.Number,
 		PayloadSHA256:        webhook.PayloadDigest,
 		PayloadStorage:       string(storage),
 		PayloadCleanupReason: string(reason),
@@ -68,11 +79,41 @@ func webhookPayloadEnvelopeJSONWithCleanup(webhook entity.WebhookEvent, storage 
 	return payload, nil
 }
 
-func webhookPayloadExpired(webhook entity.WebhookEvent) bool {
+func webhookPayloadStorage(webhook entity.WebhookEvent) (value.WebhookPayloadStorage, value.WebhookPayloadCleanupReason, bool) {
 	var envelope value.WebhookPayloadEnvelope
 	if err := json.Unmarshal(webhook.PayloadJSON, &envelope); err != nil {
+		return "", "", false
+	}
+	storage := value.WebhookPayloadStorage(strings.TrimSpace(envelope.PayloadStorage))
+	if storage == "" {
+		return "", "", false
+	}
+	return storage, value.WebhookPayloadCleanupReason(strings.TrimSpace(envelope.PayloadCleanupReason)), true
+}
+
+func webhookPayloadUnavailableReason(webhook entity.WebhookEvent) string {
+	storage, reason, ok := webhookPayloadStorage(webhook)
+	if !ok {
+		return ""
+	}
+	if storage == value.WebhookPayloadStorageExpired || reason == value.WebhookPayloadCleanupReasonExpired {
+		return string(value.WebhookPayloadCleanupReasonExpired)
+	}
+	return webhookLastErrorPayloadUnavailable
+}
+
+func webhookPayloadUnavailableForReprocess(webhook entity.WebhookEvent) bool {
+	storage, _, ok := webhookPayloadStorage(webhook)
+	if !ok {
 		return false
 	}
-	return envelope.PayloadStorage == string(value.WebhookPayloadStorageExpired) &&
-		envelope.PayloadCleanupReason == string(value.WebhookPayloadCleanupReasonExpired)
+	switch storage {
+	case value.WebhookPayloadStorageSafeEnvelope,
+		value.WebhookPayloadStorageRetained,
+		value.WebhookPayloadStorageRedacted,
+		value.WebhookPayloadStorageExpired:
+		return true
+	default:
+		return false
+	}
 }

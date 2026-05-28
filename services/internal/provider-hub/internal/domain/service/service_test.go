@@ -150,11 +150,14 @@ func TestIngestWebhookEventStoresProcessedGitHubIssueWebhook(t *testing.T) {
 	if repository.recordedWebhook.PayloadDigest == "" {
 		t.Fatal("stored webhook payload digest is empty, want canonical digest")
 	}
-	if strings.Contains(storedPayload, "updated_at") || strings.Contains(storedPayload, "\"issue\"") {
+	if strings.Contains(storedPayload, "updated_at") || strings.Contains(storedPayload, "\"issue\":") {
 		t.Fatalf("stored processed webhook payload = %s, want safe envelope without raw provider body", storedPayload)
 	}
-	if !strings.Contains(storedPayload, string(value.WebhookPayloadStorageRedacted)) {
-		t.Fatalf("stored processed webhook payload = %s, want redacted storage marker", storedPayload)
+	if !strings.Contains(storedPayload, string(value.WebhookPayloadStorageSafeEnvelope)) {
+		t.Fatalf("stored processed webhook payload = %s, want safe envelope storage marker", storedPayload)
+	}
+	if !strings.Contains(storedPayload, "provider_work_item_id") || !strings.Contains(storedPayload, "fact_kind") {
+		t.Fatalf("stored processed webhook payload = %s, want bounded safe facts", storedPayload)
 	}
 	if len(repository.recordedProviderEvents) != 1 {
 		t.Fatalf("provider events = %d, want 1", len(repository.recordedProviderEvents))
@@ -421,14 +424,18 @@ func TestIngestWebhookEventStoresFailedKnownWebhookWithBadPayloadShape(t *testin
 	if err != nil {
 		t.Fatalf("IngestWebhookEvent(): %v", err)
 	}
-	if webhook.ProcessingStatus != enum.WebhookProcessingStatusFailed || webhook.LastError == "" {
-		t.Fatalf("webhook = %+v, want failed with error", webhook)
+	if webhook.ProcessingStatus != enum.WebhookProcessingStatusFailed || webhook.LastError != webhookLastErrorPayloadInvalid {
+		t.Fatalf("webhook = %+v, want failed with safe invalid payload error", webhook)
 	}
 	if repository.recordedWebhook.PayloadDigest == "" {
 		t.Fatal("failed webhook payload digest is empty, want canonical digest for replay diagnostics")
 	}
-	if !strings.Contains(string(repository.recordedWebhook.PayloadJSON), "\"repository\"") {
-		t.Fatalf("failed webhook payload = %s, want retained canonical payload for retry", repository.recordedWebhook.PayloadJSON)
+	storedPayload := string(repository.recordedWebhook.PayloadJSON)
+	if strings.Contains(storedPayload, "\"repository\"") || strings.Contains(storedPayload, "provider payload misses required id") {
+		t.Fatalf("failed webhook payload = %s, want safe envelope without raw provider body or parser detail", repository.recordedWebhook.PayloadJSON)
+	}
+	if !strings.Contains(storedPayload, string(value.WebhookPayloadStorageSafeEnvelope)) {
+		t.Fatalf("failed webhook payload = %s, want safe envelope storage marker", repository.recordedWebhook.PayloadJSON)
 	}
 	if len(repository.recordedProviderEvents) != 0 || len(repository.recordedOutboxEvents) != 1 {
 		t.Fatalf("provider events = %d outbox = %d, want only received outbox", len(repository.recordedProviderEvents), len(repository.recordedOutboxEvents))
@@ -678,11 +685,55 @@ func TestRetryWebhookEventProcessingRedactsPayloadAfterTerminalRetry(t *testing.
 		t.Fatalf("status = %s, want processed", webhook.ProcessingStatus)
 	}
 	storedPayload := string(repository.recordedWebhook.PayloadJSON)
-	if strings.Contains(storedPayload, "do-not-leak") || strings.Contains(storedPayload, "\"issue\"") {
+	if strings.Contains(storedPayload, "do-not-leak") || strings.Contains(storedPayload, "\"issue\":") {
 		t.Fatalf("retried webhook payload = %s, want safe envelope without raw provider body", storedPayload)
 	}
-	if !strings.Contains(storedPayload, string(value.WebhookPayloadStorageRedacted)) || repository.recordedWebhook.PayloadDigest == "" {
-		t.Fatalf("retried webhook = %+v, want redacted payload with digest", repository.recordedWebhook)
+	if !strings.Contains(storedPayload, string(value.WebhookPayloadStorageSafeEnvelope)) || repository.recordedWebhook.PayloadDigest == "" {
+		t.Fatalf("retried webhook = %+v, want safe envelope with digest", repository.recordedWebhook)
+	}
+}
+
+func TestRetryWebhookEventProcessingRejectsUnavailablePayloadSafely(t *testing.T) {
+	t.Parallel()
+
+	webhookID := uuid.New()
+	now := time.Date(2026, 5, 28, 10, 0, 0, 0, time.UTC)
+	webhook := entity.WebhookEvent{
+		ID:               webhookID,
+		ProviderSlug:     enum.ProviderSlugGitHub,
+		DeliveryID:       "delivery-safe-envelope",
+		EventName:        "issues",
+		ReceivedAt:       now.Add(-48 * time.Hour),
+		ProcessingStatus: enum.WebhookProcessingStatusFailed,
+		PayloadDigest:    strings.Repeat("a", 64),
+		LastError:        webhookLastErrorPayloadInvalid,
+		RetainUntil:      now.Add(-24 * time.Hour),
+	}
+	payload, err := webhookPayloadEnvelopeJSON(webhook, value.WebhookPayloadStorageSafeEnvelope)
+	if err != nil {
+		t.Fatalf("webhookPayloadEnvelopeJSON(): %v", err)
+	}
+	webhook.PayloadJSON = payload
+	repository := &fakeRepository{recordedWebhook: webhook}
+	service := NewWithRuntime(
+		repository,
+		fixedClock{now: now},
+		&sequenceIDs{ids: []uuid.UUID{uuid.New()}},
+		fakeWebhookNormalizer{ok: true, err: errors.New("normalizer should not be called")},
+	)
+
+	retried, err := service.RetryWebhookEventProcessing(context.Background(), RetryWebhookEventProcessingInput{
+		WebhookEventID: webhookID,
+		Meta:           value.CommandMeta{CommandID: uuid.New()},
+	})
+	if !errors.Is(err, errs.ErrPreconditionFailed) {
+		t.Fatalf("RetryWebhookEventProcessing() err = %v, want %v", err, errs.ErrPreconditionFailed)
+	}
+	if repository.processWebhookCalls != 0 {
+		t.Fatalf("ProcessWebhookEvent calls = %d, want 0", repository.processWebhookCalls)
+	}
+	if retried.LastError != webhookLastErrorPayloadUnavailable {
+		t.Fatalf("last error = %s, want %s", retried.LastError, webhookLastErrorPayloadUnavailable)
 	}
 }
 
