@@ -16,7 +16,7 @@
 - запуск ролевых агентов через `runtime-manager`;
 - чтение руководящих пакетов через `package-hub`;
 - provider-native операции через `provider-hub`;
-- ожидание Human gate и normalized owner outcome как orchestration state, со ссылками на `interaction-hub` и `governance-manager`;
+- ожидание Human gate, machine acceptance, follow-up intent и normalized owner outcome как orchestration state, со safe refs на `interaction-hub` и typed governance/policy refs на `governance-manager`;
 - MCP-инструменты через `platform-mcp-server`.
 
 ## Что не входит

@@ -152,13 +152,14 @@ type AgentSessionStateSnapshot struct {
 
 type AcceptanceResult struct {
 	VersionedBase
-	SessionID   uuid.UUID
-	RunID       *uuid.UUID
-	StageID     *uuid.UUID
-	CheckKind   enum.AcceptanceCheckKind
-	Status      enum.AcceptanceStatus
-	TargetRef   string
-	DetailsJSON []byte
+	SessionID         uuid.UUID
+	RunID             *uuid.UUID
+	StageID           *uuid.UUID
+	CheckKind         enum.AcceptanceCheckKind
+	Status            enum.AcceptanceStatus
+	TargetRef         string
+	DetailsJSON       []byte
+	GovernanceContext value.GovernanceContextRef
 }
 
 type FollowUpIntent struct {
@@ -177,6 +178,7 @@ type FollowUpIntent struct {
 	RoleHint              string
 	StageHint             string
 	IdempotencyKey        string
+	GovernanceContext     value.GovernanceContextRef
 	Status                enum.FollowUpIntentStatus
 }
 
@@ -218,6 +220,7 @@ type HumanGateRequest struct {
 	GovernanceGateRequestRef string
 	GovernanceDecisionRef    string
 	IdempotencyKey           string
+	GovernanceContext        value.GovernanceContextRef
 	Status                   enum.HumanGateStatus
 	Outcome                  enum.HumanGateOutcome
 	ResolvedAt               *time.Time

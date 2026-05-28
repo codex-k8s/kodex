@@ -389,17 +389,18 @@ func AgentSessionStateSnapshotToProto(snapshot entity.AgentSessionStateSnapshot)
 
 func AcceptanceResultToProto(acceptance entity.AcceptanceResult) *agentsv1.AcceptanceResult {
 	return &agentsv1.AcceptanceResult{
-		Id:          acceptance.ID.String(),
-		SessionId:   acceptance.SessionID.String(),
-		RunId:       optionalUUIDStringPtr(acceptance.RunID),
-		StageId:     optionalUUIDStringPtr(acceptance.StageID),
-		CheckKind:   AcceptanceCheckKindToProto(acceptance.CheckKind),
-		Status:      AcceptanceStatusToProto(acceptance.Status),
-		TargetRef:   optionalStringPtr(acceptance.TargetRef),
-		DetailsJson: string(acceptance.DetailsJSON),
-		Version:     acceptance.Version,
-		CreatedAt:   formatTime(acceptance.CreatedAt),
-		UpdatedAt:   formatTime(acceptance.UpdatedAt),
+		Id:                acceptance.ID.String(),
+		SessionId:         acceptance.SessionID.String(),
+		RunId:             optionalUUIDStringPtr(acceptance.RunID),
+		StageId:           optionalUUIDStringPtr(acceptance.StageID),
+		CheckKind:         AcceptanceCheckKindToProto(acceptance.CheckKind),
+		Status:            AcceptanceStatusToProto(acceptance.Status),
+		TargetRef:         optionalStringPtr(acceptance.TargetRef),
+		DetailsJson:       string(acceptance.DetailsJSON),
+		Version:           acceptance.Version,
+		CreatedAt:         formatTime(acceptance.CreatedAt),
+		UpdatedAt:         formatTime(acceptance.UpdatedAt),
+		GovernanceContext: GovernanceContextToProto(acceptance.GovernanceContext),
 	}
 }
 
@@ -424,6 +425,7 @@ func FollowUpIntentToProto(intent entity.FollowUpIntent) *agentsv1.FollowUpInten
 		RoleHint:              optionalStringPtr(intent.RoleHint),
 		StageHint:             optionalStringPtr(intent.StageHint),
 		IdempotencyKey:        intent.IdempotencyKey,
+		GovernanceContext:     GovernanceContextToProto(intent.GovernanceContext),
 	}
 }
 
@@ -477,6 +479,7 @@ func HumanGateRequestToProto(gate entity.HumanGateRequest) *agentsv1.HumanGateRe
 		CreatedAt:                formatTime(gate.CreatedAt),
 		UpdatedAt:                formatTime(gate.UpdatedAt),
 		ResolvedAt:               optionalTimePtr(gate.ResolvedAt),
+		GovernanceContext:        GovernanceContextToProto(gate.GovernanceContext),
 	}
 }
 
@@ -536,6 +539,29 @@ func ProviderTargetToProto(target value.ProviderTargetRef) *agentsv1.ProviderTar
 		PullRequestRef:  optionalStringPtr(target.PullRequestRef),
 		CommentRef:      optionalStringPtr(target.CommentRef),
 		ReviewSignalRef: optionalStringPtr(target.ReviewSignalRef),
+	}
+}
+
+func GovernanceContextToProto(context value.GovernanceContextRef) *agentsv1.GovernanceContextRef {
+	if context.RiskAssessmentRef == "" &&
+		context.GateRequestRef == "" &&
+		context.GateDecisionRef == "" &&
+		context.ReleaseDecisionPackageRef == "" &&
+		context.ReleaseDecisionRef == "" &&
+		context.RiskProfileRef == "" &&
+		context.GatePolicyRef == "" &&
+		context.ReleasePolicyRef == "" {
+		return nil
+	}
+	return &agentsv1.GovernanceContextRef{
+		RiskAssessmentRef:         optionalStringPtr(context.RiskAssessmentRef),
+		GateRequestRef:            optionalStringPtr(context.GateRequestRef),
+		GateDecisionRef:           optionalStringPtr(context.GateDecisionRef),
+		ReleaseDecisionPackageRef: optionalStringPtr(context.ReleaseDecisionPackageRef),
+		ReleaseDecisionRef:        optionalStringPtr(context.ReleaseDecisionRef),
+		RiskProfileRef:            optionalStringPtr(context.RiskProfileRef),
+		GatePolicyRef:             optionalStringPtr(context.GatePolicyRef),
+		ReleasePolicyRef:          optionalStringPtr(context.ReleasePolicyRef),
 	}
 }
 

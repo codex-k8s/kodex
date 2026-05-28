@@ -392,12 +392,13 @@ func RequestAcceptanceInput(request *agentsv1.RequestAcceptanceRequest) (service
 		return service.RequestAcceptanceInput{}, err
 	}
 	return service.RequestAcceptanceInput{
-		Meta:       meta,
-		SessionID:  sessionID,
-		RunID:      runID,
-		StageID:    stageID,
-		CheckKinds: checkKinds,
-		TargetRef:  strings.TrimSpace(request.GetTargetRef()),
+		Meta:              meta,
+		SessionID:         sessionID,
+		RunID:             runID,
+		StageID:           stageID,
+		CheckKinds:        checkKinds,
+		TargetRef:         strings.TrimSpace(request.GetTargetRef()),
+		GovernanceContext: GovernanceContextFromProto(request.GetGovernanceContext()),
 	}, nil
 }
 
@@ -420,6 +421,7 @@ func RecordAcceptanceResultInput(request *agentsv1.RecordAcceptanceResultRequest
 		Status:             status,
 		TargetRef:          strings.TrimSpace(request.GetTargetRef()),
 		DetailsJSON:        []byte(strings.TrimSpace(request.GetDetailsJson())),
+		GovernanceContext:  GovernanceContextFromProto(request.GetGovernanceContext()),
 	}, nil
 }
 
@@ -496,6 +498,7 @@ func CreateFollowUpIntentInput(request *agentsv1.CreateFollowUpIntentRequest) (s
 		SafeSummary:           strings.TrimSpace(request.GetSafeSummary()),
 		RoleHint:              strings.TrimSpace(request.GetRoleHint()),
 		StageHint:             strings.TrimSpace(request.GetStageHint()),
+		GovernanceContext:     GovernanceContextFromProto(request.GetGovernanceContext()),
 	}, nil
 }
 
@@ -840,6 +843,7 @@ func RequestHumanGateInput(request *agentsv1.RequestHumanGateRequest) (service.R
 		SafeSummary:              strings.TrimSpace(request.GetSafeSummary()),
 		InteractionRequestRef:    strings.TrimSpace(request.GetInteractionRequestRef()),
 		GovernanceGateRequestRef: strings.TrimSpace(request.GetGovernanceGateRequestRef()),
+		GovernanceContext:        GovernanceContextFromProto(request.GetGovernanceContext()),
 	}, nil
 }
 
@@ -870,6 +874,7 @@ func RecordHumanGateDecisionInput(request *agentsv1.RecordHumanGateDecisionReque
 		InteractionResponseRef:   strings.TrimSpace(request.GetInteractionResponseRef()),
 		GovernanceGateRequestRef: strings.TrimSpace(request.GetGovernanceGateRequestRef()),
 		GovernanceDecisionRef:    strings.TrimSpace(request.GetGovernanceDecisionRef()),
+		GovernanceContext:        GovernanceContextFromProto(request.GetGovernanceContext()),
 	}, nil
 }
 

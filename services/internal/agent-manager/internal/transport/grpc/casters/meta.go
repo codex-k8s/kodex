@@ -94,6 +94,22 @@ func ProviderTargetFromProto(target *agentsv1.ProviderTargetRef) value.ProviderT
 	return providerTargetValue(target)
 }
 
+func GovernanceContextFromProto(context *agentsv1.GovernanceContextRef) value.GovernanceContextRef {
+	if context == nil {
+		return value.GovernanceContextRef{}
+	}
+	return value.GovernanceContextRef{
+		RiskAssessmentRef:         strings.TrimSpace(context.GetRiskAssessmentRef()),
+		GateRequestRef:            strings.TrimSpace(context.GetGateRequestRef()),
+		GateDecisionRef:           strings.TrimSpace(context.GetGateDecisionRef()),
+		ReleaseDecisionPackageRef: strings.TrimSpace(context.GetReleaseDecisionPackageRef()),
+		ReleaseDecisionRef:        strings.TrimSpace(context.GetReleaseDecisionRef()),
+		RiskProfileRef:            strings.TrimSpace(context.GetRiskProfileRef()),
+		GatePolicyRef:             strings.TrimSpace(context.GetGatePolicyRef()),
+		ReleasePolicyRef:          strings.TrimSpace(context.GetReleasePolicyRef()),
+	}
+}
+
 func providerTargetValue(target *agentsv1.ProviderTargetRef) value.ProviderTargetRef {
 	refs := trimmedProtoStrings(target.GetWorkItemRef(), target.GetPullRequestRef(), target.GetCommentRef(), target.GetReviewSignalRef())
 	return value.ProviderTargetRef{

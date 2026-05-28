@@ -621,12 +621,13 @@ type SessionSnapshotResult struct {
 type AgentRunList = query.AgentRunFilter
 
 type RequestAcceptanceInput struct {
-	Meta       value.CommandMeta
-	SessionID  uuid.UUID
-	RunID      *uuid.UUID
-	StageID    *uuid.UUID
-	CheckKinds []enum.AcceptanceCheckKind
-	TargetRef  string
+	Meta              value.CommandMeta
+	SessionID         uuid.UUID
+	RunID             *uuid.UUID
+	StageID           *uuid.UUID
+	CheckKinds        []enum.AcceptanceCheckKind
+	TargetRef         string
+	GovernanceContext value.GovernanceContextRef
 }
 
 type RecordAcceptanceResultInput struct {
@@ -635,6 +636,7 @@ type RecordAcceptanceResultInput struct {
 	Status             enum.AcceptanceStatus
 	TargetRef          string
 	DetailsJSON        []byte
+	GovernanceContext  value.GovernanceContextRef
 }
 
 type AcceptanceResultList = query.AcceptanceResultFilter
@@ -654,6 +656,7 @@ type CreateFollowUpIntentInput struct {
 	SafeSummary           string
 	RoleHint              string
 	StageHint             string
+	GovernanceContext     value.GovernanceContextRef
 }
 
 type RecordAgentActivityInput struct {
@@ -692,6 +695,7 @@ type RequestHumanGateInput struct {
 	SafeSummary              string
 	InteractionRequestRef    string
 	GovernanceGateRequestRef string
+	GovernanceContext        value.GovernanceContextRef
 }
 
 type HumanGateInteractionActorRef struct {
@@ -744,6 +748,7 @@ type RecordHumanGateDecisionInput struct {
 	InteractionRequestVersion      int64
 	GovernanceGateRequestRef       string
 	GovernanceDecisionRef          string
+	GovernanceContext              value.GovernanceContextRef
 }
 
 type HumanGateList = query.HumanGateFilter
