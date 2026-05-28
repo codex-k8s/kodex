@@ -301,7 +301,7 @@ func OwnerInboxItem(item entity.OwnerInboxItem) *interactionsv1.OwnerInboxItem {
 		UpdatedAt:         TimeProto(item.Request.UpdatedAt),
 		ResolvedAt:        OptionalTimeProto(item.Request.ResolvedAt),
 		Version:           item.Request.Version,
-		AllowedActions:    InteractionActionsProto(item.Request.AllowedActions),
+		AllowedActions:    ownerInboxAllowedActions(item.Request),
 	}
 	if item.LatestCallback != nil {
 		response.LatestCallback = OwnerInboxCallbackSummary(*item.LatestCallback)
@@ -310,6 +310,13 @@ func OwnerInboxItem(item entity.OwnerInboxItem) *interactionsv1.OwnerInboxItem {
 		response.LatestResponse = OwnerInboxResponseSummary(*item.LatestResponse)
 	}
 	return response
+}
+
+func ownerInboxAllowedActions(request entity.InteractionRequest) []*interactionsv1.InteractionAction {
+	if request.Status.Terminal() {
+		return nil
+	}
+	return InteractionActionsProto(request.AllowedActions)
 }
 
 func OwnerInboxDeliverySummary(summary entity.OwnerInboxDeliverySummary) *interactionsv1.OwnerInboxDeliverySummary {

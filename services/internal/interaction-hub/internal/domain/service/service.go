@@ -1315,6 +1315,9 @@ func enrichOwnerInboxItems(items []entity.OwnerInboxItem) {
 	for i := range items {
 		items[i].Summary = items[i].Request.PromptSummary
 		items[i].Title = ownerInboxTitle(items[i].Request.PromptSummary)
+		if items[i].Request.Status.Terminal() {
+			items[i].Request.AllowedActions = nil
+		}
 	}
 }
 

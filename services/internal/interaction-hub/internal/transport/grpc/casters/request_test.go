@@ -61,3 +61,38 @@ func TestOwnerInboxItemCastsAllowedActionsWithoutRawCallbackPayload(t *testing.T
 		t.Fatalf("latest callback = %+v, want safe callback refs", dto.GetLatestCallback())
 	}
 }
+
+func TestOwnerInboxItemOmitsAllowedActionsForTerminalRequests(t *testing.T) {
+	t.Parallel()
+
+	for _, status := range []enum.InteractionRequestStatus{
+		enum.InteractionRequestStatusAnswered,
+		enum.InteractionRequestStatusCancelled,
+		enum.InteractionRequestStatusExpired,
+		enum.InteractionRequestStatusFailed,
+	} {
+		status := status
+		t.Run(string(status), func(t *testing.T) {
+			t.Parallel()
+
+			dto := OwnerInboxItem(entity.OwnerInboxItem{
+				Request: entity.InteractionRequest{
+					ID:          uuid.New(),
+					RequestKind: enum.InteractionRequestKindHumanGate,
+					Scope:       value.ScopeRef{Type: enum.ScopeTypeService, Ref: "agent-manager"},
+					SourceOwner: value.SourceOwnerRef{Kind: enum.SourceOwnerKindAgentManager, Ref: "run:123"},
+					AllowedActions: []value.InteractionAction{
+						{ActionKey: "approve", LabelTemplateRef: "interaction.actions.approve", Terminal: true},
+					},
+					Status:    status,
+					CreatedAt: time.Date(2026, 5, 27, 12, 30, 0, 0, time.UTC),
+					UpdatedAt: time.Date(2026, 5, 27, 12, 30, 0, 0, time.UTC),
+					Version:   2,
+				},
+			})
+			if len(dto.GetAllowedActions()) != 0 {
+				t.Fatalf("allowed_actions for %s = %+v, want none", status, dto.GetAllowedActions())
+			}
+		})
+	}
+}

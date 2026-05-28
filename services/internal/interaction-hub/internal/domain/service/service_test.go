@@ -391,6 +391,25 @@ func TestServiceGetsOwnerInboxItemDetailForActiveAndResolvedRequests(t *testing.
 	if resolved.Request.Status != enum.InteractionRequestStatusAnswered || resolved.LatestResponse == nil || resolved.LatestResponse.ID != response.ID {
 		t.Fatalf("resolved item = %+v, want answered item with latest response", resolved)
 	}
+	if len(resolved.Request.AllowedActions) != 0 {
+		t.Fatalf("resolved allowed actions = %+v, want none for terminal request", resolved.Request.AllowedActions)
+	}
+	for _, status := range []enum.InteractionRequestStatus{enum.InteractionRequestStatusCancelled, enum.InteractionRequestStatusExpired} {
+		requestID := uuid.New()
+		seedInteractionRequest(repository, requestID, now, status)
+		repository.ownerInboxItems = []entity.OwnerInboxItem{{Request: repository.requests[requestID]}}
+		item, err := svc.GetOwnerInboxItem(context.Background(), GetOwnerInboxItemInput{
+			RequestID:   requestID,
+			Scope:       repository.requests[requestID].Scope,
+			AssigneeRef: value.ActorRef{Kind: "user", Ref: "approver-1"},
+		})
+		if err != nil {
+			t.Fatalf("GetOwnerInboxItem() terminal %s: %v", status, err)
+		}
+		if len(item.Request.AllowedActions) != 0 {
+			t.Fatalf("allowed actions for %s = %+v, want none", status, item.Request.AllowedActions)
+		}
+	}
 }
 
 func TestServiceGetOwnerInboxItemRejectsInvalidScopeOrAssignee(t *testing.T) {
