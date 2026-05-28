@@ -98,6 +98,7 @@ type StartedJob struct {
 // ExecutionResult хранит ограниченный итог исполнения для команд жизненного цикла runtime-manager.
 type ExecutionResult struct {
 	Succeeded    bool
+	Interrupted  bool
 	ShortLogTail string
 	ErrorCode    string
 	ErrorMessage string
@@ -163,6 +164,9 @@ func (e *Executor) Start(ctx context.Context, job entity.Job) (StartedJob, error
 	if err != nil {
 		return StartedJob{}, newExecutionError("kubernetes_job_create_failed", "Kubernetes Job could not be created")
 	}
+	if !isManagedRuntimeJob(created, job) {
+		return StartedJob{}, newExecutionError("kubernetes_job_name_conflict", "Kubernetes Job name is already used by a different object")
+	}
 	ref := kubernetesJobRef(access.ClusterID, spec.Namespace, created.GetName())
 	return StartedJob{
 		RuntimeJobID: job.ID,
@@ -190,18 +194,24 @@ func (e *Executor) Wait(ctx context.Context, started StartedJob) ExecutionResult
 	if pollInterval <= 0 {
 		pollInterval = e.config.PollInterval
 	}
-	ctx, cancel := context.WithTimeout(ctx, timeout)
+	waitCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	ticker := time.NewTicker(pollInterval)
 	defer ticker.Stop()
 
 	for {
-		result, done := e.observe(ctx, started)
+		if errors.Is(ctx.Err(), context.Canceled) {
+			return interruptedExecutionResult()
+		}
+		result, done := e.observe(waitCtx, started)
 		if done {
 			return result
 		}
 		select {
-		case <-ctx.Done():
+		case <-waitCtx.Done():
+			if errors.Is(ctx.Err(), context.Canceled) {
+				return interruptedExecutionResult()
+			}
 			logCtx, logCancel := context.WithTimeout(context.Background(), 2*time.Second)
 			tail := e.shortLogTail(logCtx, started)
 			logCancel()
@@ -227,9 +237,25 @@ func ErrorDiagnostic(err error) (string, string) {
 func (e *Executor) observe(ctx context.Context, started StartedJob) (ExecutionResult, bool) {
 	job, err := started.client.BatchV1().Jobs(started.Namespace).Get(ctx, started.JobName, metav1.GetOptions{})
 	if err != nil {
+		if errors.Is(ctx.Err(), context.Canceled) {
+			return interruptedExecutionResult(), true
+		}
+		if apierrors.IsNotFound(err) {
+			return ExecutionResult{
+				ErrorCode:    "kubernetes_job_cancelled",
+				ErrorMessage: "Kubernetes Job was deleted before completion",
+			}, true
+		}
 		return ExecutionResult{
 			ErrorCode:    "kubernetes_job_status_unavailable",
 			ErrorMessage: "Kubernetes Job status is unavailable",
+		}, true
+	}
+	if job.DeletionTimestamp != nil {
+		return ExecutionResult{
+			ShortLogTail: e.shortLogTail(ctx, started),
+			ErrorCode:    "kubernetes_job_cancelled",
+			ErrorMessage: "Kubernetes Job was deleted before completion",
 		}, true
 	}
 	for _, condition := range job.Status.Conditions {
@@ -248,6 +274,14 @@ func (e *Executor) observe(ctx context.Context, started StartedJob) (ExecutionRe
 		}
 	}
 	return ExecutionResult{}, false
+}
+
+func interruptedExecutionResult() ExecutionResult {
+	return ExecutionResult{
+		Interrupted:  true,
+		ErrorCode:    "runtime_worker_stopped",
+		ErrorMessage: "Runtime worker stopped before Kubernetes Job reached a terminal state",
+	}
 }
 
 func (e *Executor) clientForCluster(ctx context.Context, access fleetclient.ClusterAccess) (kubernetes.Interface, error) {
@@ -394,6 +428,15 @@ func managedLabels(job entity.Job, selector labels.Set) map[string]string {
 		result[key] = value
 	}
 	return result
+}
+
+func isManagedRuntimeJob(job *batchv1.Job, runtimeJob entity.Job) bool {
+	if job == nil {
+		return false
+	}
+	return job.Labels["app.kubernetes.io/managed-by"] == managedBy &&
+		job.Labels[runtimeJobLabel] == runtimeJob.ID.String() &&
+		job.Labels[runtimeJobTypeLabel] == string(runtimeJob.JobType)
 }
 
 func (e *Executor) shortLogTail(ctx context.Context, started StartedJob) string {
