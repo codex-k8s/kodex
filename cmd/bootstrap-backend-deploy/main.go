@@ -28,7 +28,7 @@ func main() {
 	repoRoot := flag.String("repo-root", ".", "repository root containing services.yaml and deploy/base")
 	envFile := flag.String("env-file", "", "bootstrap env file; values are loaded but never printed")
 	servicesFile := flag.String("services-file", "", "root services.yaml path; defaults to <repo-root>/services.yaml")
-	ring := flag.String("ring", "first", "backend deploy ring: first, second, or all")
+	ring := flag.String("ring", "first", "backend deploy ring: first, second, staff, or all")
 	skipBuild := flag.Bool("skip-build", false, "skip Kaniko image builds and only apply manifests")
 	skipHealth := flag.Bool("skip-health", false, "skip HTTP readiness checks after rollout")
 	flag.Parse()
@@ -110,6 +110,10 @@ var secondRingServices = []serviceDeploy{
 	{Name: "codex-hook-ingress", Dir: "codex-hook-ingress", ReadyPort: "8080"},
 }
 
+var staffRingServices = []serviceDeploy{
+	{Name: "staff-gateway", Dir: "staff-gateway", ReadyPort: "8080"},
+}
+
 var firstRingImageNames = []string{
 	"platform-event-log-migrations",
 	"access-manager",
@@ -138,6 +142,10 @@ var secondRingImageNames = []string{
 	"codex-hook-ingress",
 }
 
+var staffRingImageNames = []string{
+	"staff-gateway",
+}
+
 var (
 	firstRing = backendRing{
 		Name:       "first",
@@ -150,6 +158,12 @@ var (
 		Label:      "second backend ring",
 		Services:   secondRingServices,
 		ImageNames: secondRingImageNames,
+	}
+	staffRing = backendRing{
+		Name:       "staff",
+		Label:      "staff gateway contour",
+		Services:   staffRingServices,
+		ImageNames: staffRingImageNames,
 	}
 )
 
@@ -242,10 +256,12 @@ func selectBackendRings(value string) ([]backendRing, error) {
 		return []backendRing{firstRing}, nil
 	case "second", "ring-2", "2":
 		return []backendRing{secondRing}, nil
+	case "staff", "staff-gateway":
+		return []backendRing{staffRing}, nil
 	case "all":
 		return []backendRing{firstRing, secondRing}, nil
 	default:
-		return nil, fmt.Errorf("unsupported backend deploy ring %q; expected first, second, or all", value)
+		return nil, fmt.Errorf("unsupported backend deploy ring %q; expected first, second, staff, or all", value)
 	}
 }
 

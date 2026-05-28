@@ -146,6 +146,7 @@ spec:
       value: "0.1.0"
       bumpOn:
         - services/staff/staff-gateway
+        - deploy/base/staff-gateway
         - specs/openapi/staff-gateway.v1.yaml
         - tools/codegen/openapi/staff-gateway.oapi-codegen.yaml
         - proto/kodex/agents/v1
@@ -403,6 +404,14 @@ spec:
       target: prod
       context: .
       imageEnv: KODEX_INTEGRATION_GATEWAY_IMAGE
+    staff-gateway:
+      type: build
+      repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_STAFF_GATEWAY_INTERNAL_IMAGE_REPOSITORY" "kodex/staff-gateway" }}'
+      tagTemplate: '{{ version "staff-gateway" }}'
+      dockerfile: services/staff/staff-gateway/Dockerfile
+      target: prod
+      context: .
+      imageEnv: KODEX_STAFF_GATEWAY_IMAGE
     codex-hook-ingress:
       type: build
       repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_CODEX_HOOK_INGRESS_INTERNAL_IMAGE_REPOSITORY" "kodex/codex-hook-ingress" }}'
@@ -731,6 +740,40 @@ spec:
           livez: /health/livez
           readyz: /health/readyz
           metrics: /metrics
+    - name: staff-gateway
+      status: foundation
+      zone: staff
+      path: services/staff/staff-gateway
+      dockerfile: services/staff/staff-gateway/Dockerfile
+      imageEnv: KODEX_STAFF_GATEWAY_IMAGE
+      internalImageRepositoryEnv: KODEX_STAFF_GATEWAY_INTERNAL_IMAGE_REPOSITORY
+      ownerDomain: console-and-operations-ux
+      apiContracts:
+        openapi: specs/openapi/staff-gateway.v1.yaml
+        ownerInboxGrpcClient: proto/kodex/interactions/v1/interaction_hub.proto
+        runtimeStatusGrpcClient: proto/kodex/agents/v1/agent_manager.proto
+      dependencies:
+        - agent-manager
+        - interaction-hub
+      implementation:
+        businessState: none
+        description: staff edge for owner inbox decisions, agent run runtime summary and activity timeline
+        firstSurface: owner-inbox-list-detail-respond-runtime-status-activity-timeline
+        downstreamCalls:
+          - agent-manager.GetAgentRunRuntimeStatus
+          - agent-manager.ListAgentActivities
+          - interaction-hub.ListOwnerInboxItems
+          - interaction-hub.GetOwnerInboxItem
+          - interaction-hub.RecordInteractionResponse
+        safePayloadsOnly: true
+      deploy:
+        serviceManifest: deploy/base/staff-gateway/staff-gateway.yaml.tpl
+        kustomization: deploy/base/staff-gateway/kustomization.yaml.tpl
+        health:
+          livez: /health/livez
+          readyz: /health/readyz
+          metrics: /metrics
+          openapi: /openapi/staff-gateway.v1.yaml
     - name: runtime-manager
       status: foundation
       zone: internal
@@ -918,35 +961,6 @@ spec:
       migrationsImageEnv: KODEX_AGENT_MANAGER_MIGRATIONS_IMAGE
       purpose: agent-flow-run-session-activity-acceptance-follow-up-human-gate
   serviceScaffolds:
-    - name: staff-gateway
-      status: scaffold
-      zone: staff
-      path: services/staff/staff-gateway
-      ownerDomain: console-and-operations-ux
-      apiContracts:
-        openapi: specs/openapi/staff-gateway.v1.yaml
-        ownerInboxGrpcClient: proto/kodex/interactions/v1/interaction_hub.proto
-        runtimeStatusGrpcClient: proto/kodex/agents/v1/agent_manager.proto
-      dependencies:
-        - agent-manager
-        - interaction-hub
-      implementation:
-        businessState: none
-        description: staff edge for owner inbox decisions, agent run runtime summary and activity timeline
-        firstSurface: owner-inbox-list-detail-respond-runtime-status-activity-timeline
-        downstreamCalls:
-          - agent-manager.GetAgentRunRuntimeStatus
-          - agent-manager.ListAgentActivities
-          - interaction-hub.ListOwnerInboxItems
-          - interaction-hub.GetOwnerInboxItem
-          - interaction-hub.RecordInteractionResponse
-        safePayloadsOnly: true
-      deploy:
-        health:
-          livez: /health/livez
-          readyz: /health/readyz
-          metrics: /metrics
-        openapi: /openapi/staff-gateway.v1.yaml
     - name: platform-mcp-server
       status: scaffold
       zone: internal

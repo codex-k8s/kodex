@@ -120,6 +120,7 @@ func TestSelectBackendRings(t *testing.T) {
 		{name: "default", value: "", want: []string{"first"}},
 		{name: "first", value: "first", want: []string{"first"}},
 		{name: "second", value: "second", want: []string{"second"}},
+		{name: "staff", value: "staff", want: []string{"staff"}},
 		{name: "all", value: "all", want: []string{"first", "second"}},
 	}
 	for _, tt := range tests {
@@ -136,11 +137,11 @@ func TestSelectBackendRings(t *testing.T) {
 }
 
 func TestSelectBackendRingsRejectsUnsupportedValue(t *testing.T) {
-	_, err := selectBackendRings("staff")
+	_, err := selectBackendRings("web")
 	if err == nil {
 		t.Fatal("expected unsupported ring to fail")
 	}
-	if !strings.Contains(err.Error(), "expected first, second, or all") {
+	if !strings.Contains(err.Error(), "expected first, second, staff, or all") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -184,6 +185,38 @@ func TestAllRingImageBuildsDeduplicateSharedImages(t *testing.T) {
 	}
 	if seen["platform-event-log-migrations"] != 1 {
 		t.Fatalf("shared platform-event-log migration image was not deduplicated: %v", seen["platform-event-log-migrations"])
+	}
+}
+
+func TestStaffRingImageBuildsOnlyStaffGateway(t *testing.T) {
+	stack, err := stackinventory.Parse([]byte(testStackInventory(staffRingImageNames)))
+	if err != nil {
+		t.Fatalf("parse stack: %v", err)
+	}
+	builds, err := ringImageBuilds(stack, []backendRing{staffRing})
+	if err != nil {
+		t.Fatalf("staff ring builds: %v", err)
+	}
+	if len(builds) != 1 {
+		t.Fatalf("unexpected build count: got %d want 1", len(builds))
+	}
+	if builds[0].ImageName != "staff-gateway" {
+		t.Fatalf("unexpected staff ring image: %s", builds[0].ImageName)
+	}
+}
+
+func TestAllRingSelectionDoesNotIncludeStaffGateway(t *testing.T) {
+	rings, err := selectBackendRings("all")
+	if err != nil {
+		t.Fatalf("select all rings: %v", err)
+	}
+	if got := ringNames(rings); !reflect.DeepEqual(got, []string{"first", "second"}) {
+		t.Fatalf("all ring mismatch: got %v", got)
+	}
+	for _, imageName := range imageNamesForRings(rings) {
+		if imageName == "staff-gateway" {
+			t.Fatal("staff-gateway must be deployed through explicit staff ring, not all")
+		}
 	}
 }
 
