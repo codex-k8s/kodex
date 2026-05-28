@@ -85,7 +85,7 @@ approvals:
 
 - Liveness: процесс отвечает на `/health/livez`.
 - Readiness: процесс видит БД `provider-hub` и, при включённой outbox-доставке, БД `platform-event-log`.
-- gRPC smoke: `ProviderHubService/ListProviderOperations` должен давать application-level статус, а не сетевую ошибку.
+- gRPC integration check: `ProviderHubService/ListProviderOperations` должен давать application-level статус, а не сетевую ошибку.
 - Webhook inbox: oldest pending не должен выходить за допустимое окно.
 - Webhook payload retention: истёкшие `pending`/`failed` payload должны очищаться явной служебной операцией; read surface должен показывать только safe envelope и `payload_sha256`.
 - Reconciliation: hot cursors не должны оставаться без попыток обработки.

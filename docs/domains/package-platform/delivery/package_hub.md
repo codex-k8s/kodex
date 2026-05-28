@@ -59,7 +59,7 @@ approvals:
 | PKG-6.2 | #704 | Руководящие пакеты доступны как `package_kind=guidance`: каталог, установки и manifest читаются через существующие операции без отдельного RPC, runtime-запуска и provider-native синхронизации. |
 | PKG-6.3a | #706 | Локальные сценарии `store` и `platform_content` готовы: manifest validation, чтения каталога, чтения установок и границы без runtime-запуска, provider-native синхронизации и хранения файлов в БД. |
 | PKG-6.3b+ | не назначено | Следующие интеграционные сценарии магазина и пользовательского контента платформы готовы после согласования внешнего адаптера магазина, provider-native доступа и runtime-размещения. |
-| PKG-7 | #710 | Манифесты deploy, migration job, config, health, metrics, smoke-проверка и runbook готовы. |
+| PKG-7 | #710 | Манифесты deploy, migration job, config, health, metrics, проверка готовности и runbook готовы. |
 
 ## Статус операций `PackageHubService`
 
@@ -176,7 +176,7 @@ approvals:
 | Kubernetes manifests | готово | `deploy/base/package-hub/**` содержит `Deployment`, `Service`, `ServiceAccount` и `Job/package-hub-migrations`; секреты и БД добавлены в postgres-базу платформы. |
 | Конфигурация | готово | Env покрывает gRPC auth, лимиты соединений, БД, access-check, outbox, health/metrics и ресурсы Kubernetes без хардкода. |
 | `services.yaml` | готово | Сервис, версии, образы, БД, миграции, зависимости, health и manifests описаны в инвентаре платформы. |
-| Smoke-проверка | готово | `scripts/build-package-hub-images.sh` собирает smoke-набор образов, `scripts/smoke-package-hub.sh` проверяет миграции, rollout, `/health/readyz` и gRPC boundary. |
+| Проверки | готово | Первый серверный контур проверяется через `bootstrap/host/smoke_backend_contour.sh`; gRPC boundary и доменные сценарии должны жить в Go tests или будущем Go integration runner. |
 | Runbook | готово | `docs/domains/package-platform/operations/package_hub_runbook.md` описывает диагностику, восстановление и откат. |
 | Не входит в срез | запланировано | Runtime-запуск пакетов, provider-native синхронизация и внешний магазин остаются отдельными срезами. |
 

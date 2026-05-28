@@ -50,7 +50,7 @@ approvals:
 | FLEET-4 | #726 | Проверки связности, health snapshots и события деградации для нескольких кластеров. |
 | FLEET-5 | #730 | Правила размещения, `ResolvePlacement` по набору активных кластеров, журнал решений и интеграционный контракт для `runtime-manager`. |
 | RTM-FLEET-1 | #735 | `runtime-manager` вызывает `fleet-manager.ResolvePlacement` для новых слотов и jobs без slot; fleet остаётся владельцем выбора кластера и журнала решений. |
-| FLEET-6 | #738 | Dockerfile, манифесты, migration job, `services.yaml`, smoke-путь, runbook и monitoring. |
+| FLEET-6 | #738 | Dockerfile, манифесты, migration job, `services.yaml`, путь проверки готовности, runbook и monitoring. |
 
 ## Таблица реализации
 
@@ -63,7 +63,7 @@ approvals:
 | Kubernetes clusters | Готов: `RegisterKubernetesCluster`, `UpdateKubernetesCluster`, `DisableKubernetesCluster`, `EnableKubernetesCluster`, `GetKubernetesCluster`, `ListKubernetesClusters`. | FLEET-3 реализует реестр нескольких кластеров, default-кластер внутри scope и ссылки на secret без чтения значения секрета. |
 | Связность и health | Готов: `RunClusterConnectivityCheck`, `GetClusterHealthSnapshot`, `ListClusterHealthSnapshots`, события `fleet.health.*`. | FLEET-4 реализует проверки Kubernetes API через отдельный checker, `secretresolver`, command result, outbox-события, latest health на cluster и историю snapshots без сохранения kubeconfig. |
 | Placement | Готов: `PutPlacementRule`, `GetPlacementRule`, `ListPlacementRules`, `ResolvePlacement`, чтения решений и события `fleet.placement.*`. | Реализовано в FLEET-5: базовый выбор из набора активных кластеров, журнал решений, проверки доступа, идемпотентность и outbox-события. |
-| Контур выкладки | Не gRPC-группа. | FLEET-6 добавляет Dockerfile, Kubernetes-манифесты, PostgreSQL bootstrap, smoke-путь, runbook и monitoring. |
+| Контур выкладки | Не gRPC-группа. | FLEET-6 добавляет Dockerfile, Kubernetes-манифесты, PostgreSQL bootstrap, путь проверки готовности, runbook и monitoring. |
 
 ## Зависимости и блокировки
 
@@ -106,7 +106,7 @@ approvals:
 
 ## Рекомендуемый следующий шаг после FLEET-6
 
-RTM-FLEET-1 готов: `runtime-manager` вызывает `fleet-manager.ResolvePlacement` для новых слотов и jobs без slot. FLEET-6 готов: `fleet-manager` имеет deploy-контур, smoke, runbook и monitoring. Следующие runtime/fleet улучшения нужно запускать отдельными срезами после согласования реального исполнителя platform jobs, capacity automation или расширенных сценариев Kubernetes lifecycle.
+RTM-FLEET-1 готов: `runtime-manager` вызывает `fleet-manager.ResolvePlacement` для новых слотов и jobs без slot. FLEET-6 готов: `fleet-manager` имеет deploy-контур, runbook и monitoring. Следующие runtime/fleet улучшения нужно запускать отдельными срезами после согласования реального исполнителя platform jobs, capacity automation или расширенных сценариев Kubernetes lifecycle.
 
 ## Апрув
 

@@ -1,7 +1,7 @@
 ---
 doc_id: RB-CK8S-RUNTIME-MANAGER-0001
 type: runbook
-title: "runtime-manager — runbook: развёртывание и smoke-проверка"
+title: "runtime-manager — runbook: развёртывание и проверка готовности"
 status: active
 owner_role: SRE
 created_at: 2026-05-08
@@ -16,7 +16,7 @@ approvals:
   approved_at: 2026-05-07
 ---
 
-# Runbook: runtime-manager — развёртывание и smoke-проверка
+# Runbook: runtime-manager — развёртывание и проверка готовности
 
 ## TL;DR
 - Симптом: `runtime-manager` не стартует, не проходит readiness или не отвечает по gRPC.
@@ -33,8 +33,8 @@ approvals:
 
 - Доступ к Kubernetes-кластеру целевой установки.
 - Секреты и адреса берутся из локального bootstrap-профиля и не публикуются в Issue/PR.
-- Для полной gRPC smoke-проверки локально нужен `grpcurl`.
-- Перед запуском smoke-пути должен быть подготовлен локальный bootstrap env через `bootstrap/host/bootstrap_cluster.sh`.
+- Для полной gRPC проверки готовности локально нужен `grpcurl`.
+- Перед запуском проверки готовности должен быть подготовлен локальный bootstrap env через `bootstrap/host/bootstrap_cluster.sh`.
 
 ## Сборка образов
 
@@ -48,20 +48,12 @@ KODEX_BUILD_ENV_FILE=/path/to/bootstrap.env \
 - `runtime-manager` и его миграции;
 - `platform-event-log` migrations image.
 
-## Smoke-проверка
+## Проверки
 
-```bash
-KODEX_SMOKE_ENV_FILE=/path/to/bootstrap.env \
-  scripts/smoke-runtime-manager.sh
-```
-
-Путь проверки:
-- применяет PostgreSQL stack и bootstrap database job;
-- применяет `platform-event-log` migrations;
-- применяет `access-manager` migrations и deployment;
-- применяет `runtime-manager` migrations и deployment;
-- проверяет `GET /health/readyz`;
-- проверяет gRPC boundary через вызов `RuntimeManagerService/GetSlot` с ожидаемым application-level статусом.
+Для `runtime-manager` нет активного shell smoke-сценария. Проверки Kubernetes
+executor, job lifecycle и gRPC boundary должны жить в Go tests или отдельном Go
+integration runner. Shell допускается только как тонкая обвязка общего
+deploy/diagnostic tooling.
 
 ## Диагностика
 

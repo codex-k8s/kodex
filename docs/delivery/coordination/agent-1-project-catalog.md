@@ -56,7 +56,7 @@
 | Wave 8.3 | #631 | #641 | готово | gRPC-операции, проверки доступа через `access-manager`, события и транспортные тесты. |
 | Wave 8.4.1 | #632 | #644 | готово | Импорт и проверенная проекция `services.yaml`, построение описаний сервисов. |
 | Wave 8.4.2 | #632 | #649 | готово | `GetWorkspacePolicy`, источники документации, операторские переопределения и политика рабочего контура. |
-| Wave 8.5 | #633 | #652 | готово | Правила веток, релизная политика, политика размещения, Dockerfile, Kubernetes-манифесты, migration job и smoke-путь. |
+| Wave 8.5 | #633 | #652 | готово | Правила веток, релизная политика, политика размещения, Dockerfile, Kubernetes-манифесты, migration job и путь проверки готовности. |
 | Wave 8 closeout | #633 | #654 | готово | Статусы Wave 8, карты Issue и документы поставки приведены к завершённому состоянию. |
 | ONB-1 | #794 | готово | `CreateRepositoryBootstrapPullRequest` готовит project-side bootstrap-контекст для существующего binding и вызывает `provider-hub CreateBootstrapPullRequest` без Git-клиента, генерации шаблона и adoption scan. |
 | ONB-2 | #810 | готово | `CreateProviderRepository` резервирует pending project-owned repository binding, вызывает `provider-hub CreateRepository`, сохраняет безопасные provider refs и `base_branch` для последующего bootstrap PR. |
@@ -66,7 +66,7 @@
 | Event consumer | #893 | готово | Общий `libs/go/eventconsumer` читает `platform-event-log` через `eventlog.Store` с lease/checkpoint, handler registry, retry/backoff и safe diagnostics; consumer `project-catalog` принимает `provider.repository.bootstrap_merged`, восстанавливает safe signal input, вызывает `ReconcileBootstrapMergeSignal` при наличии checked artifact/payload и фиксирует `OnboardingSignalReconciliation(needs_review)` без импорта, если событие не содержит checked artifact input. |
 | Adoption import | #917 | готово | `project-catalog` принимает `provider.repository.adoption_merged` через отдельный event consumer, вызывает `ReconcileAdoptionMergeSignal` при наличии checked artifact/payload, импортирует checked `services.yaml` projection и активирует или обновляет repository binding; lightweight scan snapshot остаётся planning-сигналом и не импортируется как policy. |
 
-Итог: `project-catalog` имеет стабильные `v1` контракты, БД, миграции, gRPC-слой, outbox-публикацию в `platform-event-log`, deploy-манифесты и smoke-контур. Операции из Wave 8 реализованы; ONB-1 добавил project-side bootstrap команду для уже существующего repository binding, ONB-2 добавил project-side создание provider repo/base ref через `provider-hub` и связывание результата с binding, ONB-3 добавил импорт проверенной политики после merge bootstrap PR и активацию binding, ONB-4 добавил явный reconciliation path от safe provider merge signal к import use-case, #893 добавил общий event consumer runtime и первый project-side consumer safe merge signal, а #917 добавил симметричный adoption import path после checked adoption merge signal.
+Итог: `project-catalog` имеет стабильные `v1` контракты, БД, миграции, gRPC-слой, outbox-публикацию в `platform-event-log`, deploy-манифесты и контур проверок готовности. Операции из Wave 8 реализованы; ONB-1 добавил project-side bootstrap команду для уже существующего repository binding, ONB-2 добавил project-side создание provider repo/base ref через `provider-hub` и связывание результата с binding, ONB-3 добавил импорт проверенной политики после merge bootstrap PR и активацию binding, ONB-4 добавил явный reconciliation path от safe provider merge signal к import use-case, #893 добавил общий event consumer runtime и первый project-side consumer safe merge signal, а #917 добавил симметричный adoption import path после checked adoption merge signal.
 
 ## Что уже сделано по `runtime-manager`
 
@@ -78,11 +78,11 @@
 | RTM-3 | #658 | #676 | готово | Жизненный цикл слотов: reserve, extend lease, release, fail, чтения, идемпотентность и bootstrap-граница fleet. |
 | RTM-4 | #659 | #683 | готово | Workspace материализация: `source_ref`, access mode, local paths, fingerprint, progress и безопасные ошибки подготовки. |
 | RTM-5 | #660 | #687 | готово | Platform job MVP: job/step state machine, claim lease, progress, complete/fail/cancel, short log tail и runtime artifact refs. |
-| RTM-6 | #661 | #691 | готово | Dockerfile, manifests, PostgreSQL bootstrap, migration job, `services.yaml`, smoke-путь, runbook и monitoring-документы. |
+| RTM-6 | #661 | #691 | готово | Dockerfile, manifests, PostgreSQL bootstrap, migration job, `services.yaml`, путь проверки готовности, runbook и monitoring-документы. |
 | RTM-7 | #662 | #696 | готово | Cleanup policy, cleanup batch, prewarm pool, deterministic slot reuse, очистка хвостов логов и видимость cleanup failures. |
 | RTM-K8S-1 | #940 | готово | Основа Kubernetes-исполнителя: включаемый явно исполнитель заданий `health_check` получает ссылку на секрет кластера через `fleet-manager.GetKubernetesCluster`, создаёт ограниченный Kubernetes Job через `client-go` и завершает runtime job через `ReportJobStepProgress`, `CompleteJob` или `FailJob` без хранения kubeconfig, значений секретов и больших логов. В том же runtime-контракте добавлен канонический тип задания `agent_run` для запуска agent Run без подмены на `build`/`deploy`/`housekeeping`; отдельный исполнитель остаётся за следующим срезом `agent-manager`/runtime. |
 
-Итог: `runtime-manager` имеет стабильные `v1` контракты, БД, миграции, gRPC-слой, outbox, deploy-контур, smoke-путь и реализованный runtime MVP по слотам, материализация workspace, platform jobs, cleanup, prewarm и reuse.
+Итог: `runtime-manager` имеет стабильные `v1` контракты, БД, миграции, gRPC-слой, outbox, deploy-контур, путь проверки готовности и реализованный runtime MVP по слотам, материализация workspace, platform jobs, cleanup, prewarm и reuse.
 
 ## Что уже сделано по `fleet-manager`
 
@@ -95,7 +95,7 @@
 | FLEET-4 | #726 | готово | Проверки связности Kubernetes API, health snapshots, чтения health, события `fleet.health.*`, command result и безопасное получение kubeconfig через `secretresolver`. |
 | FLEET-5 | #730 | готово | Правила размещения, базовый `ResolvePlacement`, журнал placement decisions, проверки доступа, идемпотентность и outbox-события `fleet.placement.*`. |
 | RTM-FLEET-1 | #735 | готово | `runtime-manager` вызывает `fleet-manager.ResolvePlacement` для `PrepareRuntime`, `ReserveSlot` и `CreateJob` без slot; fleet остаётся владельцем выбора кластера и журнала решений. |
-| FLEET-6 | #738 | готово | Dockerfile, Kubernetes-манифесты, PostgreSQL bootstrap, migration job, `services.yaml`, smoke-путь, runbook и monitoring-документы `fleet-manager`. |
+| FLEET-6 | #738 | готово | Dockerfile, Kubernetes-манифесты, PostgreSQL bootstrap, migration job, `services.yaml`, путь проверки готовности, runbook и monitoring-документы `fleet-manager`. |
 
 Итог: `fleet-manager` имеет сервисный процесс, БД, registry-поверхность, health-поверхность, placement rules, базовый `ResolvePlacement`, журнал решений и эксплуатационный контур. RTM-FLEET-1 готов: `runtime-manager` вызывает fleet decision для новых runtime-операций.
 
@@ -124,7 +124,7 @@
 | Организационные runtime-политики | частично заблокировано | Cleanup для `organization` scope отклоняется, а prewarm хранит политику без фактической раскладки, пока runtime не получает проекцию организации на слоты. |
 | Реальный исполнитель platform jobs | первый Kubernetes-срез готов: #940 | `runtime-manager` умеет исполнять только безопасное задание `health_check` через включаемый явно Kubernetes-исполнитель. `agent_run` уже является отдельным допустимым типом задания для агентного Run, но его исполнитель не подключён в этом срезе. Задания `build`/`deploy`, нагрузки slot-агента, исполнитель workspace materialization и расширенные типы заданий остаются отдельными срезами после согласования с `agent-manager`/ops-контуром. |
 | Интеграция `runtime-manager` с fleet placement | готово: #735 | RTM-FLEET-1 перевёл `PrepareRuntime`, `ReserveSlot` и `CreateJob` без slot на `fleet-manager.ResolvePlacement`; runtime сохраняет только `fleet_scope_id` и `cluster_id`. |
-| Deploy-контур `fleet-manager` | готово: #738 | FLEET-6 добавил Dockerfile, manifests, PostgreSQL bootstrap, migration job, smoke, runbook и monitoring без изменения registry/health/placement бизнес-логики. |
+| Deploy-контур `fleet-manager` | готово: #738 | FLEET-6 добавил Dockerfile, manifests, PostgreSQL bootstrap, migration job, runbook и monitoring без изменения registry/health/placement бизнес-логики. |
 | `platform-mcp-server` | готово: #747, #753, #760, #771, #780, #830, #841, #852, #933 | MCP-0 фиксирует границы, группы инструментов, безопасность и план поставки; MCP-1 фиксирует стратегию контрактов через MCP SDK, JSON Schema и snapshot-проверки `tools/list`, а также отделяет Codex hooks в `codex-hook-ingress`; MCP-2 добавляет сервисный каркас; MCP-3 подключает первые маршруты к `agent-manager`; MCP-3g подключает жизненный цикл gate к `governance-manager`; MCP-3r подключает оценку риска к `governance-manager`; MCP-3d подключает релизные решения к `governance-manager`; MCP-4 подключает маршруты чтения и записи provider-данных к `provider-hub`; MCP-4o подключает Human gate, входящие задачи владельца и review signals к готовым операциям сервисов-владельцев без хранения бизнес-состояния в MCP. |
 
 ## Блокировки от `access-manager`
@@ -162,7 +162,7 @@
 
 Нужны новые или уточнённые контракты:
 
-- следующий adoption-срез должен связать smoke/CLI/readiness с journal `adoption_merge` и показать владельцу разницу между lightweight scan snapshot и checked artifact import;
+- следующий adoption-срез должен связать Go checks/CLI/readiness с journal `adoption_merge` и показать владельцу разницу между lightweight scan snapshot и checked artifact import;
 - команда provider-контура на создание bootstrap/policy PR по проверенному предложению `project-catalog`;
 - событие или команда ускоряющего сигнала после появления provider-native артефакта из runtime/agent workspace.
 
@@ -201,5 +201,5 @@
 Для агента #1 нет незавершённого локального Wave 8, RTM или FLEET среза, который нужно закрыть до соседних доменов. После #933 рационально идти в один из трёх вариантов:
 
 - продолжить MCP чтения project/runtime/fleet/package через сервисы-владельцы без хранения бизнес-состояния в MCP;
-- продолжить bootstrap пустого репозитория следующим ONB-срезом: закрыть детерминированный template executor без переноса шаблонов в `project-catalog` либо связать smoke/CLI с adoption journal для существующего репозитория;
+- продолжить bootstrap пустого репозитория следующим ONB-срезом: закрыть детерминированный template executor без переноса шаблонов в `project-catalog` либо связать Go checks/CLI с adoption journal для существующего репозитория;
 - перейти к runtime/fleet интеграции с реальным исполнителем platform jobs после согласования `agent-manager` и ops-контуров.

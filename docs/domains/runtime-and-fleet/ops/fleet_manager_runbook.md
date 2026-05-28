@@ -1,7 +1,7 @@
 ---
 doc_id: RB-CK8S-FLEET-MANAGER-0001
 type: runbook
-title: "fleet-manager — runbook: развёртывание и smoke-проверка"
+title: "fleet-manager — runbook: развёртывание и проверка готовности"
 status: active
 owner_role: SRE
 created_at: 2026-05-13
@@ -16,7 +16,7 @@ approvals:
   approved_at: 2026-05-11
 ---
 
-# Runbook: fleet-manager — развёртывание и smoke-проверка
+# Runbook: fleet-manager — развёртывание и проверка готовности
 
 ## TL;DR
 
@@ -34,8 +34,8 @@ approvals:
 
 - Доступ к Kubernetes-кластеру целевой установки.
 - Секреты, DSN, адреса и токены берутся из локального bootstrap-профиля и не публикуются в Issue/PR.
-- Для gRPC smoke-проверки локально нужен `grpcurl`.
-- Перед smoke-путём должен быть подготовлен локальный bootstrap env через `bootstrap/host/bootstrap_cluster.sh`.
+- Для gRPC проверки готовности локально нужен `grpcurl`.
+- Перед проверкой готовности должен быть подготовлен локальный bootstrap env через `bootstrap/host/bootstrap_cluster.sh`.
 
 ## Сборка образов
 
@@ -50,24 +50,12 @@ KODEX_BUILD_ENV_FILE=/path/to/bootstrap.env \
 - `fleet-manager` и его миграции;
 - `platform-event-log` migrations image.
 
-## Smoke-проверка
+## Проверки
 
-```bash
-KODEX_SMOKE_ENV_FILE=/path/to/bootstrap.env \
-  scripts/smoke-fleet-manager.sh
-```
-
-Путь проверки:
-
-- рендерит манифесты во временный каталог;
-- применяет PostgreSQL stack и bootstrap database job;
-- применяет `platform-event-log` migrations;
-- применяет `access-manager` migrations и deployment;
-- применяет `fleet-manager` migrations и deployment;
-- проверяет `GET /health/readyz`;
-- проверяет gRPC boundary через `FleetManagerService/ListFleetScopes` с ожидаемым application-level статусом.
-
-Smoke не обращается к приватному внешнему серверу напрямую: он работает через переданный kubeconfig и локальный port-forward к сервису в выбранном кластере.
+Для `fleet-manager` нет активного shell smoke-сценария. Проверки fleet scope,
+placement и gRPC boundary должны жить в Go tests или отдельном Go integration
+runner. Shell допускается только как тонкая обвязка общего deploy/diagnostic
+tooling.
 
 ## Диагностика миграций
 

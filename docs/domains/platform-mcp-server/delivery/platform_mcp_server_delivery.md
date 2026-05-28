@@ -52,7 +52,7 @@ approvals:
 | MCP-4o | #933 | Инструменты к готовым сервисным поверхностям владельцев готовы: `agent.human_gate.request/get/list` идут через `agent-manager`, `interaction.owner_inbox.list/get/respond` — через `interaction-hub`, `governance.signal.record_review/list_review` — через `governance-manager`; MCP возвращает только безопасные ссылки, статусы, сводки, версии и timestamps. |
 | MCP-5 | не назначено | Project/runtime/fleet/package reads и ограниченная диагностика через сервисы-владельцы. |
 | MCP-6 | не назначено | Security hardening: actor/source binding, rate limits, backpressure, audit, idempotency и redaction metrics. |
-| MCP-7 | не назначено | Deploy-контур: Dockerfile, manifests, migration job только если нужна служебная БД, smoke, runbook и monitoring. |
+| MCP-7 | не назначено | Deploy-контур: Dockerfile, manifests, migration job только если нужна служебная БД, runbook и monitoring. |
 
 ## Зависимости и блокировки
 

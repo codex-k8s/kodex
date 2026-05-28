@@ -67,7 +67,7 @@ approvals:
 
 ### OnboardingSignalReconciliation
 
-`OnboardingSignalReconciliation` фиксирует project-side состояние обработки безопасного provider onboarding signal. Эта запись нужна для smoke/CLI/ops-диагностики: bootstrap/adoption merge signal не остаётся только внешним событием, а получает в `project-catalog` короткий статус результата. Та же форма используется для будущего adoption scan planning command, но scan snapshot без checked policy payload сам по себе не импортирует `services.yaml`.
+`OnboardingSignalReconciliation` фиксирует project-side состояние обработки безопасного provider onboarding signal. Эта запись нужна для Go checks, CLI и ops-диагностики: bootstrap/adoption merge signal не остаётся только внешним событием, а получает в `project-catalog` короткий статус результата. Та же форма используется для будущего adoption scan planning command, но scan snapshot без checked policy payload сам по себе не импортирует `services.yaml`.
 
 Правила:
 - запись хранит только safe refs, digests, artifact refs/version, короткий summary и safe error code/summary;

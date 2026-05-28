@@ -1,7 +1,7 @@
 ---
 doc_id: RB-CK8S-PROVIDER-HUB-0001
 type: runbook
-title: "provider-hub — runbook: развёртывание и smoke-проверка"
+title: "provider-hub — runbook: развёртывание и диагностика"
 status: active
 owner_role: SRE
 created_at: 2026-05-14
@@ -16,13 +16,13 @@ approvals:
   approved_at: 2026-05-14
 ---
 
-# Runbook: provider-hub — развёртывание и smoke-проверка
+# Runbook: provider-hub — развёртывание и диагностика
 
 ## TL;DR
 
 - Симптом: `provider-hub` не стартует, не проходит readiness, не отвечает по gRPC или не публикует `provider.*` события.
 - Быстрая диагностика: проверить migration job, `Deployment`, `/health/readyz`, `/metrics`, БД `provider-hub`, БД `platform-event-log`, доступность `access-manager` и параметры secret resolver.
-- Быстрое восстановление: исправить env/secret/image, повторить migration job, перезапустить `Deployment/provider-hub`, выполнить smoke-скрипт.
+- Быстрое восстановление: исправить env/secret/image, повторить migration job, перезапустить `Deployment/provider-hub`, выполнить `bootstrap/host/smoke_backend_contour.sh`.
 
 ## Когда использовать
 
@@ -35,7 +35,7 @@ approvals:
 - Доступ к Kubernetes namespace платформы.
 - Доступ к логам `provider-hub`, `provider-hub-migrations`, `access-manager` и `postgres`.
 - Нормализованный `bootstrap.env`, подготовленный bootstrap-процессом.
-- Локально для smoke-проверки нужны `kubectl`, `curl`, `grpcurl` и `go`.
+- Локально для deploy и проверки первого кольца нужны `kubectl`, `curl` и `go`.
 - Значения секретов, DSN, приватные домены, адреса серверов и provider payload не выводить в логи, Issue, PR и сообщения.
 
 ## Сборка образов
@@ -51,74 +51,25 @@ KODEX_BUILD_ENV_FILE=/path/to/bootstrap.env \
 - `provider-hub` и его миграции;
 - `platform-event-log` migrations image.
 
-## Smoke-проверка
+## Проверки
 
-```bash
-KODEX_SMOKE_ENV_FILE=/path/to/bootstrap.env \
-  scripts/smoke-provider-hub.sh
-```
+Для первого серверного кольца `provider-hub` проверяется через
+`bootstrap/host/deploy_backend_ring.sh` и
+`bootstrap/host/smoke_backend_contour.sh`: migration job, deployment rollout и
+`/health/readyz` проходят вместе с `access-manager`, `project-catalog` и
+`package-hub`.
 
-Путь проверки:
+Доменные provider-сценарии не запускаются shell smoke-скриптами. Staged
+fixtures GitHub `pull_request closed + merged` для bootstrap/adoption остаются
+материалом Go tests в `integration-gateway` и `provider-hub`; они проверяют
+HMAC boundary, owner client, safe `RepositoryMergeSignal`, replay/conflict
+diagnostics и outbox без live provider API.
 
-- рендерит манифесты во временный каталог;
-- применяет PostgreSQL stack и bootstrap database job;
-- применяет `platform-event-log` migrations;
-- применяет `access-manager` migrations и deployment;
-- применяет `provider-hub` migrations и deployment;
-- проверяет `GET /health/readyz`;
-- проверяет gRPC boundary через `ProviderHubService/ListProviderOperations`.
-
-Smoke не выполняет реальные операции GitHub/GitLab и не читает значения provider-секретов. Проверка gRPC допускает прикладной `PermissionDenied`, если токен и transport boundary корректны, но у smoke-актора нет доменных прав.
-
-### Smoke producer path для merge signal
-
-```bash
-scripts/smoke-provider-merge-signal.sh
-```
-
-Этот staged smoke использует синтетические safe fixtures GitHub `pull_request closed + merged` для bootstrap и adoption из `fixtures/provider-webhooks/**` и не требует live webhook secret, реального домена, provider API или Kubernetes. Проверка состоит из двух частей:
-
-- `integration-gateway` route test принимает подписанные тестовым секретом fixtures и передаёт envelope в owner client без хранения gateway state;
-- `provider-hub` domain test обрабатывает fixtures через GitHub normalizer, создаёт safe `RepositoryMergeSignal`, читает его через `GetRepositoryMergeSignal`, проверяет локальные outbox events `provider.repository.bootstrap_merged` / `provider.repository.adoption_merged`, replay без дубля merge event и conflict diagnostic без raw payload.
-
-В fixture mode проверяется граница хранения: canonical webhook payload нужен только во внутреннем retryable inbox до terminal статуса и не дольше `retain_until`; после обработки или cleanup `provider_hub_webhook_events.payload_json` содержит safe envelope, а `RepositoryMergeSignal`, read surface, normalized provider event payload и outbox/event-log payload не содержат raw/canonical webhook body, body PR, provider response, diff, checked artifact payload или checked `services.yaml`.
-
-Live HTTP режим запускается отдельно:
-
-```bash
-KODEX_PROVIDER_MERGE_SIGNAL_SMOKE_MODE=live-http \
-KODEX_PROVIDER_MERGE_SIGNAL_SMOKE_GATEWAY_URL=http://127.0.0.1:18086 \
-KODEX_PROVIDER_MERGE_SIGNAL_SMOKE_PROVIDER_HUB_GRPC_ADDR=127.0.0.1:19095 \
-scripts/smoke-provider-merge-signal.sh
-```
-
-Для live HTTP режима нужны настроенный webhook secret, доступный `integration-gateway`, доступный gRPC `provider-hub` и уже существующая bootstrap/adoption PR-проекция с `project_repository_binding` в `provider-hub`. Без этой provider-side precondition один webhook корректно обновит PR-проекцию, но не создаст onboarding merge signal. Для adoption live check вместе переопределяются `KODEX_PROVIDER_MERGE_SIGNAL_SMOKE_FIXTURE`, `KODEX_PROVIDER_MERGE_SIGNAL_SMOKE_SIGNAL_KEY` и `KODEX_PROVIDER_MERGE_SIGNAL_SMOKE_DELIVERY_ID`. Если требуется проверить публикацию в `platform-event-log`, дополнительно задаётся `KODEX_PROVIDER_MERGE_SIGNAL_SMOKE_CHECK_EVENT_LOG=true` и DSN event-log через безопасный локальный env; значение DSN не выводится.
-
-### Live-smoke GitHub provider path
-
-```bash
-scripts/smoke-provider-github-live.sh --dry-run
-```
-
-Этот smoke готовит проверку с настоящим GitHub-репозиторием в организации `codex-k8s`, но по умолчанию работает в dry-run и не меняет GitHub. Реальные изменения выполняются только при явном флаге:
-
-```bash
-KODEX_PROVIDER_LIVE_SMOKE_REPO=kodex-smoke-provider-20260528-a2 \
-  scripts/smoke-provider-github-live.sh --apply
-```
-
-Скрипт:
-
-- проверяет доступность `KODEX_GITHUB_PAT` или `KODEX_PROVIDER_LIVE_SMOKE_GITHUB_TOKEN` и организации;
-- создаёт или переиспользует приватный тестовый репозиторий с безопасным префиксом `kodex-smoke-provider-*`;
-- перед любым изменяющим GitHub-вызовом отказывает по умолчанию, если организация не равна `codex-k8s`, репозиторий не начинается с `kodex-smoke-provider-*`, ветка — с `kodex/live-smoke-*`, а файл — с `kodex-live-smoke/`;
-- создаёт ветку `kodex/live-smoke-<kind>-<date>-<time>`, безопасный текстовый файл, PR и выполняет merge;
-- собирает настоящий GitHub `pull_request closed + merged` payload во временный файл, не печатая raw payload;
-- при заданных `KODEX_PROVIDER_LIVE_SMOKE_GATEWAY_URL` и `KODEX_PROVIDER_LIVE_SMOKE_WEBHOOK_SECRET` отправляет payload в `integration-gateway`;
-- при заданном `KODEX_PROVIDER_LIVE_SMOKE_PROVIDER_HUB_GRPC_ADDR` проверяет gRPC boundary `provider-hub`;
-- при `KODEX_PROVIDER_LIVE_SMOKE_EXPECT_SIGNAL=true` читает `RepositoryMergeSignal`, если заранее подготовлены provider-hub PR projection, `project_repository_binding` и watermark/operation anchor.
-
-Скрипт не создаёт webhook в GitHub и не удаляет тестовый репозиторий. Ручная очистка выполняется только после отдельного решения владельца, например через `gh repo delete <org>/<repo> --confirm`. Вывод не печатает значения runtime endpoint, webhook secret, токен, подпись, приватные адреса, домены или полный provider payload.
+Live GitHub provider path должен быть отдельным Go integration runner с явной
+safe-конфигурацией, idempotency, cleanup policy и запретом на вывод token, DSN,
+адресов, доменов, подписи, raw provider payload, body PR, diff и checked
+artifact payload. Shell-сценарий для создания репозитория/ветки/PR и merge не
+является активным путём проверки.
 
 ### Граница webhook inbox и safe diagnostics
 
@@ -233,12 +184,12 @@ Readiness должна видеть:
 - `Deployment/provider-hub` доступен.
 - `/health/readyz` возвращает успешный ответ.
 - `/metrics` доступен.
-- `scripts/smoke-provider-hub.sh` проходит до сообщения `gRPC boundary OK`.
+- `bootstrap/host/smoke_backend_contour.sh` проходит без повторной сборки образов.
 
 ## Пост-действия
 
 - Если была авария, создать Issue с причиной и корректирующими действиями.
-- Если обнаружен пробел в манифестах, env или smoke-проверке, обновить этот runbook в том же PR, где исправляется поведение.
+- Если обнаружен пробел в манифестах, env или проверке готовности, обновить этот runbook в том же PR, где исправляется поведение.
 - В Issue/PR не прикладывать значения DSN, токенов, адресов целевого сервера, приватных доменов или сырые provider payload.
 
 ## Апрув

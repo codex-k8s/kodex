@@ -1,7 +1,7 @@
 ---
 doc_id: RB-CK8S-GOVERNANCE-MANAGER-0001
 type: runbook
-title: "governance-manager — runbook: развёртывание и smoke-проверка"
+title: "governance-manager — runbook: развёртывание и диагностика"
 status: active
 owner_role: SRE
 created_at: 2026-05-27
@@ -16,13 +16,13 @@ approvals:
   approved_at: 2026-05-27
 ---
 
-# Runbook: governance-manager — развёртывание и smoke-проверка
+# Runbook: governance-manager — развёртывание и диагностика
 
 ## TL;DR
 
 - Симптом: `governance-manager` не стартует, не проходит readiness, не отвечает по gRPC или не публикует `governance.*` события.
 - Быстрая диагностика: проверить migration job, `Deployment`, `/health/readyz`, `/metrics`, БД `governance-manager`, БД `platform-event-log`, доступность `access-manager` и outbox-настройки.
-- Быстрое восстановление: исправить env/secret/image, повторить migration job, перезапустить `Deployment/governance-manager`, выполнить smoke-скрипт.
+- Быстрое восстановление: исправить env/secret/image, повторить migration job, перезапустить `Deployment/governance-manager`, выполнить Go checks или общий deploy/diagnostic runner.
 
 ## Когда использовать
 
@@ -35,7 +35,7 @@ approvals:
 - Доступ к Kubernetes namespace платформы.
 - Доступ к логам `governance-manager`, `governance-manager-migrations`, `access-manager` и `postgres`.
 - Нормализованный `bootstrap.env`, подготовленный bootstrap-процессом.
-- Локально для smoke-проверки нужны `kubectl`, `curl` и `go`.
+- Локально для проверки готовности нужны `kubectl`, `curl` и `go`.
 - Значения секретов, DSN, приватные домены, адреса серверов, raw provider payload, prompt/transcript, stdout/stderr и runtime logs не выводить в логи, Issue, PR и сообщения.
 
 ## Образы
@@ -48,23 +48,12 @@ approvals:
 
 Серверный контур не требует Docker daemon: builder может собирать стадии `prod` и `migrations` через Kaniko или совместимый registry workflow по данным `services.yaml`.
 
-## Smoke-проверка
+## Проверки
 
-```bash
-KODEX_SMOKE_ENV_FILE=/path/to/bootstrap.env \
-  scripts/smoke-governance-manager.sh
-```
-
-Путь проверки:
-
-- рендерит манифесты во временный каталог;
-- применяет PostgreSQL stack и bootstrap database job;
-- применяет `platform-event-log` migrations;
-- применяет `access-manager` migrations и deployment;
-- применяет `governance-manager` migrations и deployment;
-- проверяет `GET /health/readyz`.
-
-Smoke не вызывает risk/gate/release business-команды и не передаёт provider, agent, interaction или runtime payload. Проверка подтверждает миграции, runtime env, доступность БД и готовность HTTP health boundary.
+Для `governance-manager` нет активного shell smoke-сценария. Проверки
+risk/gate/release boundary, migrations и health должны жить в Go tests или
+отдельном Go integration runner. Shell допускается только как тонкая обвязка
+общего deploy/diagnostic tooling.
 
 ## Диагностика миграций
 
@@ -154,12 +143,13 @@ Readiness должна видеть:
 - `Deployment/governance-manager` доступен.
 - `/health/readyz` возвращает успешный ответ.
 - `/metrics` доступен.
-- `scripts/smoke-governance-manager.sh` проходит до сообщения `readyz OK`.
+- Go tests доменного и транспортного слоя проходят в `make test-go`; будущая
+  deploy/integration проверка запускается через Go integration runner.
 
 ## Пост-действия
 
 - Если была авария, создать Issue с безопасными симптомами, root cause и корректирующими действиями.
-- Если обнаружен пробел в манифестах, env или smoke-проверке, обновить этот runbook в том же PR, где исправляется поведение.
+- Если обнаружен пробел в манифестах, env или проверке готовности, обновить этот runbook в том же PR, где исправляется поведение.
 - В Issue/PR не прикладывать значения DSN, токенов, адресов целевого сервера, приватных доменов, raw provider payload, prompt/transcript, stdout/stderr или runtime logs.
 
 ## Апрув

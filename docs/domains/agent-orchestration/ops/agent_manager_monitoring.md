@@ -83,7 +83,7 @@ approvals:
 
 - Liveness: процесс отвечает на `/health/livez`.
 - Readiness: процесс видит БД `agent-manager` и, при включённой outbox-доставке, БД `platform-event-log`.
-- gRPC smoke: `AgentManagerService/ListAgentRuns` должен давать application-level статус, а не сетевую ошибку.
+- gRPC integration check: `AgentManagerService/ListAgentRuns` должен давать application-level статус, а не сетевую ошибку.
 - Outbox: oldest unpublished event не должен выходить за допустимое окно.
 - Human gate waits: long-waiting records должны соответствовать реальным ожиданиям owner decision, а не зависшему callback.
 - Follow-up dispatch: repeated failed intents должны иметь safe error summary и provider operation ref, если write успел начаться.

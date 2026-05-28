@@ -47,7 +47,7 @@ approvals:
 | RTM-3 | #658 | Жизненный цикл слотов готов: reserve, extend lease, release, fail, fleet refs, проверка доступа через `access-manager` и `runtime.slot.*` события. |
 | RTM-4 | #659 | Workspace materialization готова: source refs, writable/read-only, local paths, fingerprint и ошибки подготовки. |
 | RTM-5 | #660 | Platform job MVP готов: job/step state machine, short log tail, full log ref, executor boundary и `runtime.job.*` события. |
-| RTM-6 | #661 | Эксплуатационный контур готов: Dockerfile, manifests, DB bootstrap, migration job, `services.yaml`, smoke path и runbook. |
+| RTM-6 | #661 | Эксплуатационный контур готов: Dockerfile, manifests, DB bootstrap, migration job, `services.yaml`, путь проверки готовности и runbook. |
 | RTM-7 | #662 | Cleanup, retention, prewarm pool, deterministic reuse и видимость cleanup failures готовы. |
 | RTM-FLEET-1 | #735 | `runtime-manager` переключён на `fleet-manager.ResolvePlacement` для `PrepareRuntime`, `ReserveSlot` и `CreateJob` без slot. |
 
@@ -62,7 +62,7 @@ approvals:
 | Platform jobs | Готов: создание, claim с `lease_token`, progress, complete/fail/cancel, чтения и события `runtime.job.*`. | Команды `CreateJob`, `ClaimRunnableJob`, `ReportJobStepProgress`, `CompleteJob`, `FailJob`, `CancelJob`, чтения `GetJob`/`ListJobs`, PostgreSQL repository, проверка доступа и gRPC-подключение готовы. `CreateJob` без slot получает fleet-ссылки через `ResolvePlacement`; `CreateJob` со slot наследует refs из slot. Исполнитель получает короткий lease и одноразовый `lease_token`. `agent_run` является отдельным каноническим типом задания для agent Run и не подменяется `build`/`deploy`/`housekeeping`; его исполнитель подключается отдельным срезом. Первый Kubernetes-исполнитель готов для заданий `health_check`: он включается явным env-флагом, читает ссылку на секрет кластера через `fleet-manager`, создаёт ограниченный Kubernetes Job через `client-go` и завершает runtime job через штатные lifecycle-команды. |
 | Runtime artifact refs | Готов: запись и чтение ссылок на внешние runtime-артефакты. | Команды `RecordRuntimeArtifactRef`/`ListRuntimeArtifactRefs` готовы; PostgreSQL хранит только ссылку, digest и ограниченную диагностику без blob, полного лога или registry catalog. |
 | Cleanup/prewarm/reuse | Готов: политики очистки, пакетная очистка, prewarm pool и события cleanup/prewarm. | Готовы команды `CreateOrUpdateCleanupPolicy`, `RunCleanupBatch`, `CreateOrUpdatePrewarmPool`, `ReconcilePrewarmPool`, PostgreSQL repository, проверка доступа и gRPC-подключение. Очистка переводит устаревшие слоты в `cleaned`, очищает короткие хвосты логов job и job step по политике и публикует видимый `runtime.cleanup.failed`, если очистку блокирует активная работа. Cleanup policy временно отклоняет `organization` scope, пока runtime не получает проекцию организации для слотов. Prewarm pool создаёт базовые `code_only` слоты под runtime profile; `ReserveSlot` переиспользует только безопасный prewarmed/ready слот с совпадающим fingerprint и совместимым project/repository scope. Организационный scope для prewarm фиксируется как состояние политики, но остаётся `insufficient`, пока runtime не получает проекцию организации для слотов. |
-| Deploy/manifests | Не gRPC-группа. | Готовы Dockerfile, service/deployment manifests, migration job, `services.yaml`, DB bootstrap wiring, smoke-путь и эксплуатационные документы. |
+| Deploy/manifests | Не gRPC-группа. | Готовы Dockerfile, service/deployment manifests, migration job, `services.yaml`, DB bootstrap wiring, путь проверки готовности и эксплуатационные документы. |
 
 ## Эксплуатационный контур
 
@@ -85,9 +85,9 @@ Runtime-сервис использует:
 - `fleet-manager` как владельца placement decision для новых слотов и jobs без slot;
 - явные slot defaults `KODEX_RUNTIME_MANAGER_SLOT_DEFAULT_FLEET_SCOPE_ID` и `KODEX_RUNTIME_MANAGER_SLOT_DEFAULT_CLUSTER_ID` только для оставшихся внутренних контуров, которые ещё не переведены на `ResolvePlacement`.
 
-Smoke-путь:
-- `scripts/build-runtime-manager-images.sh` собирает образы для runtime-проверки;
-- `scripts/smoke-runtime-manager.sh` применяет зависимости, миграции, deployment, проверяет readiness и gRPC boundary;
+Проверки:
+- readiness и gRPC boundary проверяются Go tests или будущим Go integration runner;
+- shell smoke для доменного сценария не используется;
 - адреса, домены и креды из локального `bootstrap/host/config.env` не публикуются в Issue/PR.
 
 Операционные документы:

@@ -56,7 +56,7 @@ approvals:
 | CHI-6a | #823 | Bounded in-memory realtime/ops feed, retention TTL/capacity, sanitizer metrics, route diagnostics, fixed-window rate limits, safe backpressure и operator diagnostics без служебной БД. |
 | CHI-6b | не назначено | Persistent ops feed или integration с operations-hub, если требуется восстановление ленты после рестарта, отдельные retention jobs и SRE runbook. |
 | CHI-7 | #854 | Capability context refs для skills подготовлены: normalized envelope, sanitizer boundary и activity route переносят только refs/digests для `package-hub`, выбора `agent-manager` и materialization `runtime-manager`; skill catalog, manifest store и workspace materialization state не входят в ingress. |
-| CHI-8 | #868 | Deploy-контур подготовлен: Dockerfile, Kubernetes manifests, service/image/config inventory, smoke, runbook и monitoring. Служебная БД и migration job не создаются, потому что текущая реализация использует bounded in-memory diagnostics и stub repositories без persistent ingress state. |
+| CHI-8 | #868 | Deploy-контур подготовлен: Dockerfile, Kubernetes manifests, service/image/config inventory, runbook и monitoring. Служебная БД и migration job не создаются, потому что текущая реализация использует bounded in-memory diagnostics и stub repositories без persistent ingress state. |
 
 ## Зависимости и блокировки
 
@@ -92,7 +92,7 @@ approvals:
 - `PostToolUse` может передать provider artifact signal в `provider-hub` без provider payload.
 - Realtime UI получает короткую безопасную ленту событий, а persistent история действий для восстановления экрана строится из `agent-manager.AgentActivity`.
 - Skills доступны как refs/digests на выбранный capability context; каталог, manifest payload, package installation state и materialization остаются у `package-hub`, `agent-manager` и `runtime-manager`.
-- Deploy-контур содержит image build, Kubernetes `Deployment/Service/ConfigMap`, health/readiness/metrics probes, smoke и runbook/monitoring без добавления physical `SubmitHookEvent` transport.
+- Deploy-контур содержит image build, Kubernetes `Deployment/Service/ConfigMap`, health/readiness/metrics probes, runbook и runbook/monitoring без добавления physical `SubmitHookEvent` transport.
 
 ## Риски
 

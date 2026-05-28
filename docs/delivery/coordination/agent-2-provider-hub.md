@@ -38,16 +38,16 @@
 | PRV-8d | #840 | готово | GitHub-first provider-side merge signal для bootstrap/adoption PR: `pull_request closed + merged` фиксируется как безопасные refs/digest/timestamps и публикует `provider.repository.bootstrap_merged` или `provider.repository.adoption_merged`; импорт политики остаётся в `project-catalog`. |
 | PRV-8e | #865 | готово | Lightweight provider-side adoption repository scan: `ScanRepositoryForAdoption` читает GitHub metadata/ref/tree, фиксирует safe snapshot refs/markers/counts/warnings/digest и публикует `provider.repository.adoption_scan_completed`; raw file contents и project decision остаются вне `provider-hub`. |
 | PRV-8f | #883 | готово | Provider-native read surface для bootstrap/adoption: gRPC отдаёт adoption scan snapshots и safe merge signals по stable ids/context с provider refs, branches, commits, status, timestamps, version и safe `etag`; checked artifact/payload остаются в `project-catalog`. |
-| PRV-8g | #895 | готово | Smoke/diagnostic producer path: safe GitHub `pull_request closed + merged` fixture проверяет `integration-gateway` route wiring, `provider-hub IngestWebhookEvent`, read surface merge signal и outbox/event-log readiness без consumer framework. |
-| PRV-8h | #909 | готово | Adoption merge signal smoke и producer-side hardening: bootstrap/adoption fixtures проверяют route/ingest/read/outbox, replay не создаёт дубль merge event, conflict даёт безопасную диагностику, а raw/canonical webhook payload не попадает в safe signal/read surface/outbox. |
-| PRV-8i | #939 | готово | GitHub live-smoke provider-контура: скрипт с режимами dry-run/apply создаёт или переиспользует тестовый репозиторий `kodex-smoke-provider-*`, ветку, PR и merge, формирует настоящий `pull_request closed + merged` payload и опционально проверяет запущенные `integration-gateway`/`provider-hub`. |
+| PRV-8g | #895 | готово | Go checks producer path: safe GitHub `pull_request closed + merged` fixture проверяет `integration-gateway` route wiring, `provider-hub IngestWebhookEvent`, read surface merge signal и outbox/event-log readiness без consumer framework. |
+| PRV-8h | #909 | готово | Adoption merge signal checks и producer-side hardening: bootstrap/adoption fixtures проверяют route/ingest/read/outbox, replay не создаёт дубль merge event, conflict даёт безопасную диагностику, а raw/canonical webhook payload не попадает в safe signal/read surface/outbox. |
+| PRV-8i | #939 | заменён backlog Go-runner | GitHub live provider path должен быть Go integration runner с dry-run/apply, safe target policy, idempotency и cleanup policy; shell-сценарий не является активным путём проверки. |
 | PRV-4 privacy retention | #908 | готово частично | Retryable webhook payload получает управляемый TTL: `CleanupExpiredWebhookPayloads` явно очищает истёкшие `pending`/`failed` payload в safe envelope с `payload_expired`, а retry после очистки безопасно отказывает без raw payload. |
-| PRV-9 | #754 | готово | Эксплуатационный контур: Dockerfile, Kubernetes manifests, PostgreSQL bootstrap, migration job, build/smoke scripts, runbook и monitoring docs. |
+| PRV-9 | #754 | готово | Эксплуатационный контур: Dockerfile, Kubernetes manifests, PostgreSQL bootstrap, migration job, runbook и monitoring docs; проверка первого кольца идёт через общую bootstrap-обвязку. |
 | IGW-0 | #781 | готово | Смежный срез `integration-gateway`: зафиксированы границы внешнего HTTP-входа, первый route provider webhook -> `provider-hub.IngestWebhookEvent`, требования security/backpressure/retry/idempotency и OpenAPI-каркас. Реализация gateway-сервиса не входит. |
 | IGW-1 | #792 | готово | Сервисный каркас `integration-gateway`: process/config/graceful shutdown, health/readiness/metrics, HTTP router, OpenAPI validation/generated models, safe middleware и provider-hub client interface. Provider route зарегистрирован как отключённый stub до verifier-среза. |
 | IGW-2 | #807 | готово | GitHub provider webhook route в `integration-gateway`: source binding `provider_slug=github`, обязательные GitHub headers, HMAC SHA-256 проверка `X-Hub-Signature-256` через `secret_store_type + secret_store_ref`, payload limit и вызов `provider-hub.IngestWebhookEvent` без хранения state в gateway. |
 | IGW-4 | #819 | готово | Security hardening активного GitHub route: per-route/per-source in-memory limits, backpressure с `Retry-After`, safe audit summary, replay/idempotency tests и OpenAPI compatibility tests без gateway inbox, БД или provider business logic. |
-| IGW-5 | #829 | готово | Deploy-контур `integration-gateway`: Dockerfile, Kubernetes manifests, secret refs, smoke, runbook, monitoring и rollback без реального remote deploy и без хранения gateway state. |
+| IGW-5 | #829 | готово | Deploy-контур `integration-gateway`: Dockerfile, Kubernetes manifests, secret refs, runbook, monitoring и rollback без реального remote deploy и без хранения gateway state. |
 | IGW-6 | #853 | готово | Generic channel/package callback route в `integration-gateway`: `/v1/external-callbacks/{callback_source}` проверяет source binding, HMAC SHA-256 подпись, payload/backpressure guard и вызывает `interaction-hub.RecordChannelCallback` safe envelope без gateway business state. |
 
 ## Текущий бэклог
@@ -86,7 +86,7 @@
 
 Реальные блокировки:
 - привязка проекций к проекту и repository binding требует контракта сопоставления `provider_slug + repository_full_name/provider repository id -> project_id + repository_id`;
-- end-to-end bootstrap/adoption требует проектной политики, проверенной версии `services.yaml`, состояния repository binding и выбора владельца по вариантам repository onboarding; PRV-8e возвращает lightweight safe snapshot для planning, PRV-8a/PRV-8b/PRV-8c принимают `project_id`, `repository_id`, provider-native параметры, prepared files и refs как готовый вход, PRV-8d фиксирует safe merge signal, PRV-8f отдаёт эти provider-owned факты через gRPC read surface, PRV-8g/PRV-8h дают producer-side smoke для route -> ingest -> signal -> outbox по bootstrap/adoption, а PRV-8i добавляет live GitHub сценарий с репозиторием, веткой, PR и merge для проверки после deploy; `provider-hub` не ходит в `project-catalog`;
+- end-to-end bootstrap/adoption требует проектной политики, проверенной версии `services.yaml`, состояния repository binding и выбора владельца по вариантам repository onboarding; PRV-8e возвращает lightweight safe snapshot для planning, PRV-8a/PRV-8b/PRV-8c принимают `project_id`, `repository_id`, provider-native параметры, prepared files и refs как готовый вход, PRV-8d фиксирует safe merge signal, PRV-8f отдаёт эти provider-owned факты через gRPC read surface, PRV-8g/PRV-8h дают producer-side checks для route -> ingest -> signal -> outbox по bootstrap/adoption, а PRV-8i добавляет live GitHub сценарий с репозиторием, веткой, PR и merge для проверки после deploy; `provider-hub` не ходит в `project-catalog`;
 - фильтры операционных состояний по проекту/организации не должны включаться, пока область аккаунта не связывается с проектной моделью.
 
 ## Блокировки от `package-hub`
@@ -104,7 +104,7 @@
 Требует решения позже:
 - если пакетная сверка будет исполняться как платформенная job, нужен контракт постановки и claim job в `runtime-manager`;
 - если сверка будет внутренним worker-процессом `provider-hub`, `runtime-manager` не нужен для текущего контура;
-- реальный запуск smoke на кластере выполняется операторским действием с нормализованным bootstrap env, когда владелец даст команду на развёртывание сервиса.
+- реальная проверка готовности на кластере выполняется операторским действием с нормализованным bootstrap env, когда владелец даст команду на развёртывание сервиса.
 
 ## Блокировки для других агентов
 
@@ -114,4 +114,4 @@
 
 ## Рекомендуемый следующий шаг
 
-Следующий provider-срез — интеграция provider tools с `agent-manager`/platform MCP, GitLab write/webhook adapter, encryption/refetch продолжение webhook inbox privacy-hardening или расширение callback routes после новых owner-service contracts. Project-side импорт bootstrap/adoption должен читать lightweight snapshot и safe provider merge signal через provider-hub read surface, а producer-side route/signal можно проверять через staged smoke и live GitHub smoke после deploy; проверка `services.yaml`, deep workspace scan/report и активация binding остаются в `project-catalog`/`agent-manager`.
+Следующий provider-срез — интеграция provider tools с `agent-manager`/platform MCP, GitLab write/webhook adapter, encryption/refetch продолжение webhook inbox privacy-hardening или расширение callback routes после новых owner-service contracts. Project-side импорт bootstrap/adoption должен читать lightweight snapshot и safe provider merge signal через provider-hub read surface, а producer-side route/signal можно проверять через staged fixture checks и будущий Go live GitHub runner после deploy; проверка `services.yaml`, deep workspace scan/report и активация binding остаются в `project-catalog`/`agent-manager`.

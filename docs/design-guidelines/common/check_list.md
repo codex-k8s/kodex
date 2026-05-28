@@ -31,6 +31,9 @@
   имена без префикса `KODEX_` не добавляются.
 - Kubernetes манифесты не “вшиты” heredoc’ами в bash: шаблоны лежат в целевом deploy-каталоге,
   а рендер/применение выполняются Go-рантаймом новой архитектуры.
+- Shell-скрипты в контуре проверок не содержат доменные smoke/e2e сценарии. Допустимы только тонкие
+  bootstrap/deploy обвязки, Make target runners и wrappers над Go tooling; интеграционные проверки
+  реализуются как Go tests или отдельные Go integration runners.
 - Для runtime-токенов дефолтные TTL не меньше времени жизни соответствующих контейнеров;
   для MCP baseline TTL не ниже `24h`.
 - Для multi-service deploy у каждого deployable-сервиса есть собственные image vars/repositories

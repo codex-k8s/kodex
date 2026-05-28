@@ -5,7 +5,7 @@ if [[ -z "${PROJECT_ROOT:-}" ]]; then
   exit 1
 fi
 
-# Minimal shell fallback for legacy smoke/build wrappers. The authoritative
+# Minimal shell fallback for legacy local Docker build wrappers. The authoritative
 # parser and template helpers live in libs/go/stackinventory and
 # cmd/manifest-render; keep this file limited to pre-Go-wrapper image strings.
 inventory_version() {
