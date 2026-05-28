@@ -934,11 +934,9 @@ func filterOutboxEvents(events []entity.OutboxEvent, providerEvents []entity.Pro
 }
 
 func sameWebhookEvent(left entity.WebhookEvent, right entity.WebhookEvent) bool {
-	samePayload := false
-	if left.PayloadDigest != "" && right.PayloadDigest != "" {
-		samePayload = left.PayloadDigest == right.PayloadDigest
-	} else {
-		samePayload = bytes.Equal(compactJSON(left.PayloadJSON), compactJSON(right.PayloadJSON))
+	samePayload := bytes.Equal(compactJSON(left.PayloadJSON), compactJSON(right.PayloadJSON))
+	if left.PayloadDigest != "" && right.PayloadDigest != "" && left.PayloadDigest == right.PayloadDigest {
+		samePayload = true
 	}
 	return left.ProviderSlug == right.ProviderSlug &&
 		left.DeliveryID == right.DeliveryID &&

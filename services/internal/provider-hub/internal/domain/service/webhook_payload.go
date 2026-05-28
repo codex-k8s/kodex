@@ -17,9 +17,7 @@ func webhookPayloadDigest(payload []byte) string {
 }
 
 func webhookForInboxStorage(webhook entity.WebhookEvent) (entity.WebhookEvent, error) {
-	if webhook.PayloadDigest == "" {
-		webhook.PayloadDigest = webhookPayloadDigest(webhook.PayloadJSON)
-	}
+	webhook.PayloadDigest = webhookPayloadDigest(webhook.PayloadJSON)
 	if !webhookProcessingTerminal(webhook.ProcessingStatus) {
 		return webhook, nil
 	}

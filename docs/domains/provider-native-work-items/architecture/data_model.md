@@ -88,7 +88,7 @@ approvals:
 | `received_at` | timestamptz | no | indexed | Время приёма. |
 | `processing_status` | text | no | indexed | `pending`, `processed`, `failed`, `ignored`. |
 | `payload_json` | jsonb | no | object | Canonical provider webhook payload для `pending`/`failed` retry или safe envelope после `processed`/`ignored`; внутреннее поле, не safe read surface. |
-| `payload_sha256` | text | no | sha256 hex or empty for legacy rows | Digest canonical provider payload для replay/conflict и safe diagnostics. |
+| `payload_sha256` | text | no | sha256 hex | Digest canonical provider payload для replay/conflict и safe diagnostics. |
 | `last_error` | text | no | default '' | Короткая ошибка обработки. |
 | `retain_until` | timestamptz | no | indexed | Срок хранения inbox-записи и, для retryable статусов, полного payload. |
 
