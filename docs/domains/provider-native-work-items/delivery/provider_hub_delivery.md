@@ -180,16 +180,16 @@ approvals:
 - в PRV-8c `provider-hub` принимает подготовленный набор файлов и refs, создаёт или обновляет adoption branch/PR и фиксирует связи, но не выполняет scan, не генерирует `services.yaml` и не выбирает шаблон;
 - в PRV-8d/PRV-8h `provider-hub` фиксирует факт merge bootstrap/adoption PR и публикует безопасный сигнал, но не проверяет содержимое `services.yaml`, не импортирует project policy и не активирует repository binding;
 - в PRV-8e `provider-hub` снимает lightweight provider-side scan snapshot без raw file contents, но не строит adoption report, не импортирует `services.yaml`, не запускает агента и не принимает project/adoption decision;
-- `project-catalog` принимает safe bootstrap/adoption merge signal только через checked artifact metadata и вызывает свой import use-case; provider-native факт merge и raw webhook остаются в `provider-hub`;
+- `project-catalog` принимает safe bootstrap/adoption merge signal только через checked artifact metadata и вызывает свой import use-case; provider-native факт merge остаётся в `provider-hub`, а raw webhook доступен только внутреннему retryable inbox до terminal обработки;
 - existing repository adoption end-to-end остаётся проектно-агентным сценарием: глубокий workspace scan, отчёт, выбор шаблона, approval и импорт политики выполняют соседние домены.
 
 ## Граница webhook payload и safe surface
 
-Текущий `provider-hub` webhook inbox хранит canonical provider webhook payload в `provider_hub_webhook_events.payload_json`, чтобы сохранить PRV-4 retry/reprocess semantics. Это внутреннее хранилище `provider-hub`, а не safe read surface для соседних сервисов.
+`provider-hub` webhook inbox хранит canonical provider webhook payload в `provider_hub_webhook_events.payload_json` только для `pending` и `failed` записей, чтобы сохранить PRV-4 retry/reprocess semantics. После `processed` или `ignored` полный provider payload заменяется safe envelope с digest/source refs и storage status. Это внутреннее хранилище `provider-hub`, а не safe read surface для соседних сервисов.
 
-Наружу через `GetRepositoryMergeSignal`/`ListRepositoryMergeSignals`, `ProviderEventPayload`, outbox и `platform-event-log` уходят только safe refs/facts/digests/status/timestamps/version: provider slug, repository refs, PR number/id/url, base/head branch, merge commit sha, source ref, related provider operation ref, watermark digest и статус. Raw/canonical webhook body, body PR, provider response, diff, checked artifact payload и checked `services.yaml` не входят в merge signal и доменные события.
+Наружу через `GetWebhookEvent`/`ListWebhookEvents`, `GetRepositoryMergeSignal`/`ListRepositoryMergeSignals`, `ProviderEventPayload`, outbox и `platform-event-log` уходят только safe refs/facts/digests/status/timestamps/version: provider slug, repository refs, PR number/id/url, base/head branch, merge commit sha, source ref, related provider operation ref, watermark digest и статус. В webhook read RPC поле `payload_json` является safe envelope, а `payload_sha256` — digest canonical body. Raw/canonical webhook body, body PR, provider response, diff, checked artifact payload и checked `services.yaml` не входят в read surface, merge signal и доменные события.
 
-Отказ от хранения полного webhook payload, переход на safe envelope, encryption-at-rest, короткий retention/TTL или re-fetch/reprocess strategy вынесены в отдельный privacy-hardening срез #908, чтобы не ломать текущую retry/reprocess семантику webhook inbox.
+Оставшиеся шаги privacy-hardening для webhook inbox: short-retention cleanup для retryable payload, encryption-at-rest/KMS policy и re-fetch/reprocess strategy для сценариев, где полный payload нельзя удерживать даже в `failed` состоянии.
 
 ## Definition of Done для каждого PR
 

@@ -53,7 +53,7 @@
 | Срез | Статус | Почему не завершён |
 |---|---|---|
 | End-to-end repository adoption | ждёт проектного и агентного контура | Adoption существующего repo требует project-catalog policy/import, agent-manager orchestration, deep workspace scan/report и approval; provider-hub уже закрывает lightweight provider snapshot, provider-native PR/relationship/projection запись, safe merge signal и gRPC read surface для этих provider-owned фактов. |
-| Webhook inbox privacy-hardening | ждёт отдельного решения | Текущий PRV-4 inbox хранит canonical provider webhook payload в `provider_hub_webhook_events.payload_json` для retry/reprocess; отказ от полного payload, safe envelope, encryption-at-rest, retention/TTL, re-fetch/reprocess и миграция схемы вынесены в #908. |
+| Webhook inbox privacy-hardening | частично готово | PRV-4 inbox хранит canonical provider webhook payload только для `pending`/`failed` retry/reprocess, терминальные `processed`/`ignored` записи заменяют `payload_json` safe envelope и используют `payload_sha256` для replay/conflict; наружу read RPC/events/diagnostics отдают только safe envelope/digest. Осталось решить short TTL cleanup, encryption-at-rest/KMS и re-fetch/reprocess для отказа от payload в долгих failed-сценариях. |
 | GitLab webhook route | ждёт отдельного решения владельца | IGW-2 активирует только GitHub; GitLab требует отдельный verifier/source policy и OpenAPI-уточнение. |
 
 ## Блокировки от `access-manager`
@@ -112,4 +112,4 @@
 
 ## Рекомендуемый следующий шаг
 
-Следующий provider-срез — интеграция provider tools с `agent-manager`/platform MCP, GitLab write/webhook adapter, privacy-hardening webhook inbox #908 или расширение callback routes после новых owner-service contracts. Project-side импорт bootstrap/adoption должен читать lightweight snapshot и safe provider merge signal через provider-hub read surface, а producer-side route/signal можно проверять через staged smoke; проверка `services.yaml`, deep workspace scan/report и активация binding остаются в `project-catalog`/`agent-manager`.
+Следующий provider-срез — интеграция provider tools с `agent-manager`/platform MCP, GitLab write/webhook adapter, short-retention/encryption/refetch продолжение webhook inbox privacy-hardening или расширение callback routes после новых owner-service contracts. Project-side импорт bootstrap/adoption должен читать lightweight snapshot и safe provider merge signal через provider-hub read surface, а producer-side route/signal можно проверять через staged smoke; проверка `services.yaml`, deep workspace scan/report и активация binding остаются в `project-catalog`/`agent-manager`.

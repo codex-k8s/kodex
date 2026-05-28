@@ -49,6 +49,7 @@ func scanWebhookEvent(row postgreslib.RowScanner) (entity.WebhookEvent, error) {
 		&event.ReceivedAt,
 		&status,
 		&payload,
+		&event.PayloadDigest,
 		&event.LastError,
 		&event.RetainUntil,
 	)

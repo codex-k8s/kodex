@@ -10,6 +10,7 @@ import (
 	providerservice "github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/service"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/enum"
+	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/value"
 )
 
 // WebhookEventResponse maps a stored webhook to gRPC.
@@ -26,10 +27,32 @@ func WebhookEventToProto(event entity.WebhookEvent) *providersv1.WebhookEvent {
 		RepositoryProviderId: optionalStringPtr(event.RepositoryProviderID),
 		ReceivedAt:           formatTime(event.ReceivedAt),
 		ProcessingStatus:     WebhookStatusToProto(event.ProcessingStatus),
-		PayloadJson:          string(event.PayloadJSON),
+		PayloadJson:          webhookSafePayloadJSON(event),
 		LastError:            optionalStringPtr(event.LastError),
 		RetainUntil:          formatTime(event.RetainUntil),
+		PayloadSha256:        event.PayloadDigest,
 	}
+}
+
+func webhookSafePayloadJSON(event entity.WebhookEvent) string {
+	storage := value.WebhookPayloadStorageRetained
+	if event.ProcessingStatus == enum.WebhookProcessingStatusProcessed ||
+		event.ProcessingStatus == enum.WebhookProcessingStatusIgnored {
+		storage = value.WebhookPayloadStorageRedacted
+	}
+	payload, err := json.Marshal(value.WebhookPayloadEnvelope{
+		ProviderSlug:         string(event.ProviderSlug),
+		DeliveryID:           event.DeliveryID,
+		EventName:            event.EventName,
+		RepositoryProviderID: event.RepositoryProviderID,
+		PayloadSHA256:        event.PayloadDigest,
+		PayloadStorage:       string(storage),
+		RetainUntil:          formatTime(event.RetainUntil),
+	})
+	if err != nil {
+		return "{}"
+	}
+	return string(payload)
 }
 
 // ListWebhookEventsResponse maps stored webhooks to gRPC.

@@ -8,6 +8,7 @@ INSERT INTO provider_hub_webhook_events (
     received_at,
     processing_status,
     payload_json,
+    payload_sha256,
     last_error,
     retain_until
 ) VALUES (
@@ -19,6 +20,7 @@ INSERT INTO provider_hub_webhook_events (
     @received_at,
     @processing_status,
     @payload_json::jsonb,
+    @payload_sha256,
     @last_error,
     @retain_until
 )
@@ -32,5 +34,6 @@ RETURNING
     received_at,
     processing_status,
     payload_json,
+    payload_sha256,
     last_error,
     retain_until;

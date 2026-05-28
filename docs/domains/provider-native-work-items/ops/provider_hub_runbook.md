@@ -81,7 +81,7 @@ scripts/smoke-provider-merge-signal.sh
 - `integration-gateway` route test принимает подписанные тестовым секретом fixtures и передаёт envelope в owner client без хранения gateway state;
 - `provider-hub` domain test обрабатывает fixtures через GitHub normalizer, создаёт safe `RepositoryMergeSignal`, читает его через `GetRepositoryMergeSignal`, проверяет локальные outbox events `provider.repository.bootstrap_merged` / `provider.repository.adoption_merged`, replay без дубля merge event и conflict diagnostic без raw payload.
 
-В fixture mode проверяется граница хранения: canonical webhook payload остаётся только во внутреннем `provider_hub_webhook_events.payload_json`, а `RepositoryMergeSignal`, read surface, normalized provider event payload и outbox/event-log payload не содержат raw/canonical webhook body, body PR, provider response, diff, checked artifact payload или checked `services.yaml`.
+В fixture mode проверяется граница хранения: canonical webhook payload нужен только во внутреннем retryable inbox до terminal статуса; после обработки `provider_hub_webhook_events.payload_json` содержит safe envelope, а `RepositoryMergeSignal`, read surface, normalized provider event payload и outbox/event-log payload не содержат raw/canonical webhook body, body PR, provider response, diff, checked artifact payload или checked `services.yaml`.
 
 Live HTTP режим запускается отдельно:
 
@@ -96,11 +96,15 @@ scripts/smoke-provider-merge-signal.sh
 
 ### Граница webhook inbox и safe diagnostics
 
-`provider-hub` сейчас хранит canonical provider webhook payload в `provider_hub_webhook_events.payload_json` для PRV-4 retry/reprocess. Это внутренний inbox сервиса и не safe read surface. Соседние сервисы не должны читать этот payload и не должны использовать его как checked artifact input.
+`provider-hub` хранит canonical provider webhook payload в `provider_hub_webhook_events.payload_json` только пока webhook остаётся `pending` или `failed` и может быть повторно нормализован через PRV-4 retry/reprocess. После терминального состояния `processed` или `ignored` storage payload заменяется safe envelope с `payload_storage`, `payload_sha256`, delivery/source refs и retention metadata без raw provider body. Это внутренний inbox сервиса и не safe read surface. Соседние сервисы не должны читать storage payload и не должны использовать его как checked artifact input.
+
+Миграция privacy-hardening backfill-ит уже существующие `processed`/`ignored` строки: сначала фиксирует digest текущего canonical payload через стабильную `public.digest`, затем заменяет storage payload safe envelope. Для таких migrated terminal rows envelope содержит `payload_digest_source=postgres_jsonb_text`; поздний duplicate delivery обрабатывается как replay по provider/delivery identity, потому что исходный body уже удалён и повторно сверить runtime compact digest невозможно. `pending`/`failed` строки остаются с canonical payload для retry/reprocess.
 
 Safe outputs `provider-hub` для bootstrap/adoption merge содержат только provider-owned refs/facts/digests/status/timestamps/version: repository refs, PR refs, branches, merge commit sha, source ref, provider operation ref и watermark digest. Raw/canonical webhook payload, подписи, provider response, body PR, diff, checked artifact payload и checked `services.yaml` не должны попадать в `RepositoryMergeSignal`, gRPC read responses, outbox payload, `platform-event-log`, ошибки или safe diagnostics.
 
-Отказ от хранения полного webhook payload, safe envelope, encryption-at-rest, retention/TTL, re-fetch/reprocess и миграция текущей схемы отслеживаются отдельным privacy-hardening срезом #908.
+`GetWebhookEvent`, `ListWebhookEvents` и retry response возвращают в `WebhookEvent.payload_json` только safe envelope, даже если полный payload временно удерживается внутри retryable inbox-записи. `payload_sha256` можно использовать для диагностики replay/conflict без вывода тела.
+
+Оставшийся privacy backlog: короткий TTL cleanup для retryable payload, encryption-at-rest/KMS policy и re-fetch/reprocess strategy для отказа от полного payload при долгих failed-сценариях.
 
 ## Диагностика миграций
 
