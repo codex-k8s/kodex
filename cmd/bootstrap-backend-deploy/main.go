@@ -28,6 +28,7 @@ func main() {
 	repoRoot := flag.String("repo-root", ".", "repository root containing services.yaml and deploy/base")
 	envFile := flag.String("env-file", "", "bootstrap env file; values are loaded but never printed")
 	servicesFile := flag.String("services-file", "", "root services.yaml path; defaults to <repo-root>/services.yaml")
+	ring := flag.String("ring", "first", "backend deploy ring: first, second, or all")
 	skipBuild := flag.Bool("skip-build", false, "skip Kaniko image builds and only apply manifests")
 	skipHealth := flag.Bool("skip-health", false, "skip HTTP readiness checks after rollout")
 	flag.Parse()
@@ -38,6 +39,7 @@ func main() {
 		RepoRoot:         *repoRoot,
 		EnvFilePath:      *envFile,
 		ServicesFilePath: *servicesFile,
+		Ring:             *ring,
 		SkipBuild:        *skipBuild,
 		SkipHealth:       *skipHealth,
 	}, os.Stdout); err != nil {
@@ -50,6 +52,7 @@ type deployOptions struct {
 	RepoRoot         string
 	EnvFilePath      string
 	ServicesFilePath string
+	Ring             string
 	SkipBuild        bool
 	SkipHealth       bool
 }
@@ -64,6 +67,13 @@ type serviceDeploy struct {
 	Dir          string
 	MigrationJob string
 	ReadyPort    string
+}
+
+type backendRing struct {
+	Name       string
+	Label      string
+	Services   []serviceDeploy
+	ImageNames []string
 }
 
 type imageBuild struct {
@@ -90,6 +100,16 @@ var firstRingServices = []serviceDeploy{
 	{Name: "provider-hub", Dir: "provider-hub", MigrationJob: "provider-hub-migrations", ReadyPort: "8080"},
 }
 
+var secondRingServices = []serviceDeploy{
+	{Name: "fleet-manager", Dir: "fleet-manager", MigrationJob: "fleet-manager-migrations", ReadyPort: "8080"},
+	{Name: "runtime-manager", Dir: "runtime-manager", MigrationJob: "runtime-manager-migrations", ReadyPort: "8080"},
+	{Name: "interaction-hub", Dir: "interaction-hub", MigrationJob: "interaction-hub-migrations", ReadyPort: "8080"},
+	{Name: "governance-manager", Dir: "governance-manager", MigrationJob: "governance-manager-migrations", ReadyPort: "8080"},
+	{Name: "agent-manager", Dir: "agent-manager", MigrationJob: "agent-manager-migrations", ReadyPort: "8080"},
+	{Name: "integration-gateway", Dir: "integration-gateway", ReadyPort: "8080"},
+	{Name: "codex-hook-ingress", Dir: "codex-hook-ingress", ReadyPort: "8080"},
+}
+
 var firstRingImageNames = []string{
 	"platform-event-log-migrations",
 	"access-manager",
@@ -101,6 +121,37 @@ var firstRingImageNames = []string{
 	"provider-hub",
 	"provider-hub-migrations",
 }
+
+var secondRingImageNames = []string{
+	"platform-event-log-migrations",
+	"fleet-manager",
+	"fleet-manager-migrations",
+	"runtime-manager",
+	"runtime-manager-migrations",
+	"interaction-hub",
+	"interaction-hub-migrations",
+	"governance-manager",
+	"governance-manager-migrations",
+	"agent-manager",
+	"agent-manager-migrations",
+	"integration-gateway",
+	"codex-hook-ingress",
+}
+
+var (
+	firstRing = backendRing{
+		Name:       "first",
+		Label:      "first backend ring",
+		Services:   firstRingServices,
+		ImageNames: firstRingImageNames,
+	}
+	secondRing = backendRing{
+		Name:       "second",
+		Label:      "second backend ring",
+		Services:   secondRingServices,
+		ImageNames: secondRingImageNames,
+	}
+)
 
 func run(ctx context.Context, options deployOptions, output io.Writer) error {
 	repoRoot, err := absolutePath(firstNonEmpty(options.RepoRoot, "."))
@@ -129,6 +180,12 @@ func run(ctx context.Context, options deployOptions, output io.Writer) error {
 	}
 	ok(output, "root services.yaml loaded through stackinventory")
 
+	rings, err := selectBackendRings(options.Ring)
+	if err != nil {
+		return err
+	}
+	ok(output, "selected backend deploy rings: "+strings.Join(ringNames(rings), ", "))
+
 	config, err := loadDeployConfig()
 	if err != nil {
 		return err
@@ -149,18 +206,18 @@ func run(ctx context.Context, options deployOptions, output io.Writer) error {
 	}
 	defer cleanupRenderEnv()
 
-	renderDir, cleanupRenderDir, err := renderFirstRing(repoRoot, servicesFile, renderEnv)
+	renderDir, cleanupRenderDir, err := renderBackendRings(repoRoot, servicesFile, renderEnv, rings)
 	if err != nil {
 		return err
 	}
 	defer cleanupRenderDir()
-	ok(output, "first backend ring manifests rendered in a private temp dir")
+	ok(output, "backend ring manifests rendered in a private temp dir")
 
 	if err := applyRegistry(ctx, config, renderDir, output); err != nil {
 		return err
 	}
 	if !options.SkipBuild {
-		if err := buildImages(ctx, config, repoRoot, stack, output); err != nil {
+		if err := buildImages(ctx, config, repoRoot, stack, rings, output); err != nil {
 			return err
 		}
 	} else {
@@ -169,14 +226,35 @@ func run(ctx context.Context, options deployOptions, output io.Writer) error {
 	if err := applyPostgres(ctx, config, renderDir, output); err != nil {
 		return err
 	}
-	if err := applyMigrations(ctx, config, renderDir, output); err != nil {
+	if err := applyMigrations(ctx, config, renderDir, rings, output); err != nil {
 		return err
 	}
-	if err := applyServices(ctx, config, renderDir, !options.SkipHealth, output); err != nil {
+	if err := applyServices(ctx, config, renderDir, rings, !options.SkipHealth, output); err != nil {
 		return err
 	}
-	ok(output, "first backend ring deploy finished")
+	ok(output, "backend ring deploy finished")
 	return nil
+}
+
+func selectBackendRings(value string) ([]backendRing, error) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "first", "ring-1", "1":
+		return []backendRing{firstRing}, nil
+	case "second", "ring-2", "2":
+		return []backendRing{secondRing}, nil
+	case "all":
+		return []backendRing{firstRing, secondRing}, nil
+	default:
+		return nil, fmt.Errorf("unsupported backend deploy ring %q; expected first, second, or all", value)
+	}
+}
+
+func ringNames(rings []backendRing) []string {
+	names := make([]string, 0, len(rings))
+	for _, ring := range rings {
+		names = append(names, ring.Name)
+	}
+	return names
 }
 
 func loadDeployConfig() (deployConfig, error) {
@@ -513,8 +591,8 @@ func writeRenderEnv(values map[string]string) (string, func(), error) {
 	return path, func() { _ = os.Remove(path) }, nil
 }
 
-func renderFirstRing(repoRoot, servicesFile, renderEnv string) (string, func(), error) {
-	renderDir, err := os.MkdirTemp("", "kodex-first-ring-render-*")
+func renderBackendRings(repoRoot, servicesFile, renderEnv string, rings []backendRing) (string, func(), error) {
+	renderDir, err := os.MkdirTemp("", "kodex-backend-ring-render-*")
 	if err != nil {
 		return "", func() {}, fmt.Errorf("create render dir: %w", err)
 	}
@@ -527,7 +605,7 @@ func renderFirstRing(repoRoot, servicesFile, renderEnv string) (string, func(), 
 		{source: filepath.Join(repoRoot, "deploy/base/postgres"), output: filepath.Join(renderDir, "postgres")},
 		{source: filepath.Join(repoRoot, "deploy/base/platform-event-log/migrations.yaml.tpl"), output: filepath.Join(renderDir, "platform-event-log", "migrations.yaml")},
 	}
-	for _, service := range firstRingServices {
+	for _, service := range servicesForRings(rings) {
 		sets = append(sets, struct {
 			source string
 			output string
@@ -558,8 +636,8 @@ func applyRegistry(ctx context.Context, config deployConfig, renderDir string, o
 	return nil
 }
 
-func buildImages(ctx context.Context, config deployConfig, repoRoot string, stack stackinventory.Stack, output io.Writer) error {
-	builds, err := firstRingImageBuilds(stack)
+func buildImages(ctx context.Context, config deployConfig, repoRoot string, stack stackinventory.Stack, rings []backendRing, output io.Writer) error {
+	builds, err := ringImageBuilds(stack, rings)
 	if err != nil {
 		return err
 	}
@@ -588,9 +666,10 @@ func buildImages(ctx context.Context, config deployConfig, repoRoot string, stac
 	return nil
 }
 
-func firstRingImageBuilds(stack stackinventory.Stack) ([]imageBuild, error) {
-	builds := make([]imageBuild, 0, len(firstRingImageNames))
-	for _, imageName := range firstRingImageNames {
+func ringImageBuilds(stack stackinventory.Stack, rings []backendRing) ([]imageBuild, error) {
+	imageNames := imageNamesForRings(rings)
+	builds := make([]imageBuild, 0, len(imageNames))
+	for _, imageName := range imageNames {
 		spec, ok := stack.Spec.Images[imageName]
 		if !ok {
 			return nil, fmt.Errorf("image %s is missing from services.yaml", imageName)
@@ -611,6 +690,36 @@ func firstRingImageBuilds(stack stackinventory.Stack) ([]imageBuild, error) {
 		})
 	}
 	return builds, nil
+}
+
+func imageNamesForRings(rings []backendRing) []string {
+	seen := map[string]bool{}
+	result := []string{}
+	for _, ring := range rings {
+		for _, imageName := range ring.ImageNames {
+			if seen[imageName] {
+				continue
+			}
+			seen[imageName] = true
+			result = append(result, imageName)
+		}
+	}
+	return result
+}
+
+func servicesForRings(rings []backendRing) []serviceDeploy {
+	seen := map[string]bool{}
+	result := []serviceDeploy{}
+	for _, ring := range rings {
+		for _, service := range ring.Services {
+			if seen[service.Name] {
+				continue
+			}
+			seen[service.Name] = true
+			result = append(result, service)
+		}
+	}
+	return result
 }
 
 func kanikoBuildJobManifest(namespace, jobName, repoRoot, kanikoImage, golangImage string, build imageBuild) string {
@@ -666,11 +775,14 @@ func applyPostgres(ctx context.Context, config deployConfig, renderDir string, o
 	return nil
 }
 
-func applyMigrations(ctx context.Context, config deployConfig, renderDir string, output io.Writer) error {
+func applyMigrations(ctx context.Context, config deployConfig, renderDir string, rings []backendRing, output io.Writer) error {
 	if err := runMigration(ctx, config, filepath.Join(renderDir, "platform-event-log", "migrations.yaml"), "platform-event-log-migrations", output); err != nil {
 		return err
 	}
-	for _, service := range firstRingServices {
+	for _, service := range servicesForRings(rings) {
+		if service.MigrationJob == "" {
+			continue
+		}
 		if err := runMigration(ctx, config, filepath.Join(renderDir, service.Dir, "migrations.yaml"), service.MigrationJob, output); err != nil {
 			return err
 		}
@@ -692,8 +804,8 @@ func runMigration(ctx context.Context, config deployConfig, manifestPath, jobNam
 	return nil
 }
 
-func applyServices(ctx context.Context, config deployConfig, renderDir string, checkHealth bool, output io.Writer) error {
-	for _, service := range firstRingServices {
+func applyServices(ctx context.Context, config deployConfig, renderDir string, rings []backendRing, checkHealth bool, output io.Writer) error {
+	for _, service := range servicesForRings(rings) {
 		if err := kubectlQuiet(ctx, "apply", "-k", filepath.Join(renderDir, service.Dir)); err != nil {
 			return fmt.Errorf("apply service %s: %w", service.Name, err)
 		}
