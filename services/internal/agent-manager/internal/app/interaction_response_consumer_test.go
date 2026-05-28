@@ -75,6 +75,54 @@ func TestInteractionResponseEventHandlerRecordsHumanGateDecision(t *testing.T) {
 	}
 }
 
+func TestInteractionResponseEventHandlerMapsAdditionalHumanGateOutcomes(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name    string
+		action  string
+		outcome enum.HumanGateOutcome
+	}{
+		{name: "reject", action: "reject", outcome: enum.HumanGateOutcomeReject},
+		{name: "request_changes", action: "request_changes", outcome: enum.HumanGateOutcomeRequestChanges},
+		{name: "answer", action: "answer", outcome: enum.HumanGateOutcomeAnswer},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			gateID := uuid.New()
+			recorder := &fakeHumanGateResponseRecorder{
+				gates: map[uuid.UUID]entity.HumanGateRequest{
+					gateID: {
+						VersionedBase: entity.VersionedBase{ID: gateID, Version: 3},
+						Status:        enum.HumanGateStatusWaiting,
+						Outcome:       enum.HumanGateOutcomeNone,
+					},
+				},
+			}
+			handler := interactionResponseEventHandler{recorder: recorder}
+
+			result := handler.HandleEvent(context.Background(), eventconsumer.Event{StoredEvent: interactionResponseStoredEvent(t, interactionevents.Payload{
+				RequestID:       uuid.NewString(),
+				RequestKind:     "human_gate",
+				ResponseID:      uuid.NewString(),
+				ResponseAction:  tc.action,
+				OwnerService:    "agent_manager",
+				OwnerRequestRef: gateID.String(),
+				Status:          "answered",
+				Version:         2,
+			})})
+			if result.Status != eventconsumer.ResultAck {
+				t.Fatalf("HandleEvent() = %+v, want ack", result)
+			}
+			if len(recorder.inputs) != 1 || recorder.inputs[0].Outcome != tc.outcome {
+				t.Fatalf("recorded inputs = %+v, want outcome %s", recorder.inputs, tc.outcome)
+			}
+		})
+	}
+}
+
 func TestInteractionResponseEventHandlerIgnoresOtherOwners(t *testing.T) {
 	t.Parallel()
 
@@ -115,6 +163,54 @@ func TestInteractionResponseEventHandlerPoisonsUnsafeResponse(t *testing.T) {
 	})})
 	if result.Status != eventconsumer.ResultPoison || result.Code != "invalid_owner_request_ref" {
 		t.Fatalf("HandleEvent() = %+v, want invalid owner request poison", result)
+	}
+}
+
+func TestInteractionResponseEventHandlerPoisonsUnknownAction(t *testing.T) {
+	t.Parallel()
+
+	gateID := uuid.New()
+	recorder := &fakeHumanGateResponseRecorder{}
+	handler := interactionResponseEventHandler{recorder: recorder}
+	result := handler.HandleEvent(context.Background(), eventconsumer.Event{StoredEvent: interactionResponseStoredEvent(t, interactionevents.Payload{
+		RequestID:       uuid.NewString(),
+		RequestKind:     "human_gate",
+		ResponseID:      uuid.NewString(),
+		ResponseAction:  "defer",
+		OwnerService:    "agent_manager",
+		OwnerRequestRef: "human_gate:" + gateID.String(),
+		Status:          "answered",
+		Version:         2,
+	})})
+	if result.Status != eventconsumer.ResultPoison || result.Code != "unsupported_response_action" {
+		t.Fatalf("HandleEvent() = %+v, want unsupported action poison", result)
+	}
+	if len(recorder.inputs) != 0 {
+		t.Fatalf("recorded inputs = %d, want 0", len(recorder.inputs))
+	}
+}
+
+func TestInteractionResponseEventHandlerPoisonsStaleStatus(t *testing.T) {
+	t.Parallel()
+
+	gateID := uuid.New()
+	recorder := &fakeHumanGateResponseRecorder{}
+	handler := interactionResponseEventHandler{recorder: recorder}
+	result := handler.HandleEvent(context.Background(), eventconsumer.Event{StoredEvent: interactionResponseStoredEvent(t, interactionevents.Payload{
+		RequestID:       uuid.NewString(),
+		RequestKind:     "human_gate",
+		ResponseID:      uuid.NewString(),
+		ResponseAction:  "approve",
+		OwnerService:    "agent_manager",
+		OwnerRequestRef: "human_gate:" + gateID.String(),
+		Status:          "waiting",
+		Version:         2,
+	})})
+	if result.Status != eventconsumer.ResultPoison || result.Code != "invalid_response_status" {
+		t.Fatalf("HandleEvent() = %+v, want invalid status poison", result)
+	}
+	if len(recorder.inputs) != 0 {
+		t.Fatalf("recorded inputs = %d, want 0", len(recorder.inputs))
 	}
 }
 

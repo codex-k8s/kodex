@@ -5,7 +5,7 @@ title: kodex — карта Issue домена оркестрации агент
 status: active
 owner_role: KM
 created_at: 2026-04-25
-updated_at: 2026-05-27
+updated_at: 2026-05-28
 ---
 
 # Карта Issue — оркестрация агентов
@@ -41,3 +41,4 @@ updated_at: 2026-05-27
 | #897 | `services/internal/agent-manager/Dockerfile`, `deploy/base/agent-manager/**`, `services.yaml`, `bootstrap/host/config.env.example`, `bootstrap/host/smoke_backend_contour.sh`, `deploy/base/postgres/**`, `scripts/build-agent-manager-images.sh`, `scripts/smoke-agent-manager.sh`, `docs/domains/agent-orchestration/ops/**`, `docs/domains/agent-orchestration/delivery/agent_manager_delivery.md`, `docs/delivery/coordination/agent-3-package-hub.md` | AGO-10 | готово | Эксплуатационный контур `agent-manager` готов для первого backend deploy: Dockerfile, manifests, PostgreSQL bootstrap/runtime secrets, migration job, image/env inventory, smoke-путь, runbook и monitoring docs без нового бизнес-функционала. |
 | #905 | `services/internal/agent-manager/**`, `deploy/base/agent-manager/agent-manager.yaml.tpl`, `services.yaml`, `docs/domains/agent-orchestration/**`, `docs/delivery/coordination/agent-3-package-hub.md` | AGO-11 | готово | `agent-manager` потребляет safe `interaction.request.response_recorded` из platform event log, находит Human gate wait по `owner_request_ref`, записывает normalized outcome через существующий lifecycle и сохраняет только refs/status/fingerprint/version без raw interaction payload. |
 | #918 | `services/internal/agent-manager/**`, `deploy/base/agent-manager/agent-manager.yaml.tpl`, `services.yaml`, `docs/domains/agent-orchestration/**`, `docs/delivery/coordination/agent-3-package-hub.md` | AGO-12 | готово | `agent-manager` создаёт owner-visible Human gate request через typed `interaction-hub.RequestHumanGate` при включённом runtime switch, сохраняет только `interaction_request_ref`, safe summary/status/refs и сохраняет idempotent replay без переноса owner inbox, callback body или delivery lifecycle из `interaction-hub`. |
+| #937 | `services/internal/agent-manager/**`, `docs/domains/agent-orchestration/**`, `docs/delivery/coordination/agent-3-package-hub.md` | AGO-13 | готово | Таксономия исходов Human gate выровнена с `interaction-hub`: request-side `RequestHumanGate` передаёт `approve`/`reject`/`request_changes`/`answer`, обработчик события нормализует те же значения из `interaction.request.response_recorded`, а `reject` и `request_changes` разделены по смыслу без raw response payload. |

@@ -49,6 +49,7 @@ func TestHumanGateRequesterMapsRequestAndResponse(t *testing.T) {
 		AllowedActions: []agentservice.HumanGateInteractionAction{
 			{ActionKey: "approve", LabelTemplateRef: "interaction.actions.approve", Terminal: true},
 			{ActionKey: "reject", LabelTemplateRef: "interaction.actions.reject", Terminal: true},
+			{ActionKey: "request_changes", LabelTemplateRef: "interaction.actions.request_changes", Terminal: true},
 			{ActionKey: "answer", LabelTemplateRef: "interaction.actions.answer", Terminal: true},
 		},
 		RiskClass: "low",
@@ -70,8 +71,13 @@ func TestHumanGateRequesterMapsRequestAndResponse(t *testing.T) {
 		draft.GetDecisionOwner().GetOwnerRequestRef() != "agent:human_gate/"+gateID.String() {
 		t.Fatalf("draft owner/scope = %+v", draft)
 	}
-	if len(draft.GetTargetRefs()) != 1 || draft.GetTargetRefs()[0].GetRefKind() != "user" || len(draft.GetAllowedActions()) != 3 {
+	if len(draft.GetTargetRefs()) != 1 || draft.GetTargetRefs()[0].GetRefKind() != "user" || len(draft.GetAllowedActions()) != 4 {
 		t.Fatalf("draft refs/actions = %+v", draft)
+	}
+	if draft.GetAllowedActions()[2].GetActionKey() != "request_changes" ||
+		draft.GetAllowedActions()[2].GetLabelTemplateRef() != "interaction.actions.request_changes" ||
+		!draft.GetAllowedActions()[2].GetIsTerminal() {
+		t.Fatalf("request_changes action = %+v", draft.GetAllowedActions()[2])
 	}
 }
 
