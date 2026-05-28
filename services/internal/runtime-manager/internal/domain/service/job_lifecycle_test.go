@@ -13,6 +13,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/types/enum"
+	"github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/types/value"
 )
 
 func TestJobLifecycleCreatesClaimsProgressesAndFails(t *testing.T) {
@@ -191,6 +192,54 @@ func TestClaimRunnableJobReplayDoesNotClaimAnotherJob(t *testing.T) {
 	}
 	if pending != 1 {
 		t.Fatalf("pending jobs after claim replay = %d, want second job untouched", pending)
+	}
+}
+
+func TestAgentRunJobTypeCanBeCreatedListedAndClaimed(t *testing.T) {
+	t.Parallel()
+
+	resolver := defaultPlacementResolver()
+	svc, _ := newTestServiceWithPlacementResolver(resolver)
+	agentRunID := mustUUID("00000000-0000-0000-0000-000000000531")
+	projectID := mustUUID("00000000-0000-0000-0000-000000000532")
+	job, err := svc.CreateJob(context.Background(), CreateJobInput{
+		JobType:      enum.JobTypeAgentRun,
+		Priority:     enum.JobPriorityHigh,
+		AgentRunID:   &agentRunID,
+		ProjectID:    &projectID,
+		JobInputJSON: []byte(`{"run_ref":"agent-run-531"}`),
+		Meta:         commandMeta(mustUUID("00000000-0000-0000-0000-000000000533"), 0),
+	})
+	if err != nil {
+		t.Fatalf("CreateJob(agent_run): %v", err)
+	}
+	if job.JobType != enum.JobTypeAgentRun || !sameUUIDPtr(job.AgentRunID, &agentRunID) {
+		t.Fatalf("agent run job = %#v, want agent_run with agent_run_id", job)
+	}
+
+	list, err := svc.ListJobs(context.Background(), ListJobsInput{
+		JobTypes:   []enum.JobType{enum.JobTypeAgentRun},
+		AgentRunID: &agentRunID,
+		Meta:       value.QueryMeta{Actor: value.Actor{Type: "service", ID: "agent-manager"}},
+	})
+	if err != nil {
+		t.Fatalf("ListJobs(agent_run): %v", err)
+	}
+	if len(list.Jobs) != 1 || list.Jobs[0].JobType != enum.JobTypeAgentRun {
+		t.Fatalf("ListJobs(agent_run) = %#v, want one agent_run job", list.Jobs)
+	}
+
+	claim, err := svc.ClaimRunnableJob(context.Background(), ClaimRunnableJobInput{
+		JobTypes:   []enum.JobType{enum.JobTypeAgentRun},
+		LeaseOwner: "worker/agent-run",
+		LeaseUntil: testNow.Add(10 * time.Minute),
+		Meta:       commandMeta(mustUUID("00000000-0000-0000-0000-000000000534"), 0),
+	})
+	if err != nil {
+		t.Fatalf("ClaimRunnableJob(agent_run): %v", err)
+	}
+	if claim.Job.ID != job.ID || claim.Job.JobType != enum.JobTypeAgentRun || claim.LeaseToken == "" {
+		t.Fatalf("claim = %#v, want claimed agent_run job with token", claim)
 	}
 }
 

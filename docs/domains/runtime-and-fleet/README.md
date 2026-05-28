@@ -17,7 +17,7 @@
 - подготовка workspace по политике, которой владеет `project-catalog`;
 - materialization руководящих пакетов как read-only workspace sources по refs из `agent-manager` и `package-hub`;
 - prewarmed slots и безопасное повторное использование по deterministic fingerprint;
-- platform jobs для mirror/build/deploy/cleanup/health-check/housekeeping;
+- platform jobs для mirror/build/deploy/cleanup/health-check/housekeeping/workspace materialization/agent Run;
 - короткий хвост лога и ссылки на полный источник логов;
 - cleanup и retention policy для runtime-объектов;
 - явная граница с `fleet-manager`, который выбирает и проверяет инфраструктурный контур;

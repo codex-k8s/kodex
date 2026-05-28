@@ -104,7 +104,7 @@ kubectl -n "$KODEX_PRODUCTION_NAMESPACE" get secret kodex-platform-runtime -o js
 
 Базовый manifest выдаёт `runtime-manager` права на создание Job в production namespace. Если `KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_DEFAULT_NAMESPACE` указывает другой namespace, оператор должен выдать аналогичные RBAC-права для service account `runtime-manager` в этом namespace.
 
-Первый поддержанный тип задания — `health_check`. Исполнитель создаёт только ограниченный Kubernetes Job, не вызывает `kubectl`, не читает GitHub/GitLab, не хранит kubeconfig и не сохраняет полный лог. В БД попадают статус job, шаг `kubernetes_health_check`, короткий хвост лога, ссылка на Kubernetes Job и ссылка на namespace.
+Первый поддержанный этим исполнителем тип задания — `health_check`. Канонический тип `agent_run` можно создавать, читать и забирать через runtime job lifecycle отдельно, но Kubernetes-исполнитель его не забирает и не выполняет. Исполнитель создаёт только ограниченный Kubernetes Job, не вызывает `kubectl`, не читает GitHub/GitLab, не хранит kubeconfig и не сохраняет полный лог. В БД попадают статус job, шаг `kubernetes_health_check`, короткий хвост лога, ссылка на Kubernetes Job и ссылка на namespace.
 
 Если задание падает с `cluster_secret_unavailable`, `cluster_ref_unavailable`, `kubernetes_client_init_failed` или `kubernetes_job_create_failed`, проверять нужно secret ref в `fleet-manager`, настройки `KODEX_RUNTIME_MANAGER_SECRET_RESOLVER_*`, RBAC service account `runtime-manager` и наличие default namespace/image. Значения kubeconfig, токенов, DSN и содержимое Secret не выводить в Issue/PR и не прикладывать к отчётам.
 

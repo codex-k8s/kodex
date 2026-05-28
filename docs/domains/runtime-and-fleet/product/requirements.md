@@ -72,7 +72,7 @@ approvals:
 | RTM-FR-2 | В первой версии слот должен поддерживать модель namespace-per-task в Kubernetes. | Обязательно |
 | RTM-FR-3 | Модель слота должна оставлять задел под nested cluster и другие формы изоляции. | Обязательно |
 | RTM-FR-4 | `runtime-manager` должен поддерживать reserve, extend lease, release, fail и cleanup переходы слота. | Обязательно |
-| RTM-FR-5 | `runtime-manager` должен хранить platform job как техническую операцию среды: mirror, build, deploy, cleanup, health-check или housekeeping. | Обязательно |
+| RTM-FR-5 | `runtime-manager` должен хранить platform job как техническую операцию среды: mirror, build, deploy, cleanup, health-check, housekeeping, workspace materialization или agent Run. | Обязательно |
 | RTM-FR-6 | `Run` и агентная сессия принадлежат `agent-manager`; `runtime-manager` хранит только внешние ссылки на них. | Обязательно |
 | RTM-FR-7 | `runtime-manager` должен хранить шаги job, статус, время, короткий хвост лога и ссылку на полный источник логов. | Обязательно |
 | RTM-FR-8 | Полные build/deploy/container logs не должны храниться в PostgreSQL. | Обязательно |

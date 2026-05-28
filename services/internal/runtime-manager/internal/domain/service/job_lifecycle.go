@@ -707,7 +707,7 @@ func leaseTokenHash(token string) string {
 
 func validJobType(jobType enum.JobType) bool {
 	switch jobType {
-	case enum.JobTypeMirror, enum.JobTypeBuild, enum.JobTypeDeploy, enum.JobTypeCleanup, enum.JobTypeHealthCheck, enum.JobTypeHousekeeping, enum.JobTypeWorkspaceMaterialization:
+	case enum.JobTypeMirror, enum.JobTypeBuild, enum.JobTypeDeploy, enum.JobTypeCleanup, enum.JobTypeHealthCheck, enum.JobTypeHousekeeping, enum.JobTypeWorkspaceMaterialization, enum.JobTypeAgentRun:
 		return true
 	default:
 		return false

@@ -322,6 +322,7 @@ const (
 	JobType_JOB_TYPE_HEALTH_CHECK              JobType = 5
 	JobType_JOB_TYPE_HOUSEKEEPING              JobType = 6
 	JobType_JOB_TYPE_WORKSPACE_MATERIALIZATION JobType = 7
+	JobType_JOB_TYPE_AGENT_RUN                 JobType = 8
 )
 
 // Enum value maps for JobType.
@@ -335,6 +336,7 @@ var (
 		5: "JOB_TYPE_HEALTH_CHECK",
 		6: "JOB_TYPE_HOUSEKEEPING",
 		7: "JOB_TYPE_WORKSPACE_MATERIALIZATION",
+		8: "JOB_TYPE_AGENT_RUN",
 	}
 	JobType_value = map[string]int32{
 		"JOB_TYPE_UNSPECIFIED":               0,
@@ -345,6 +347,7 @@ var (
 		"JOB_TYPE_HEALTH_CHECK":              5,
 		"JOB_TYPE_HOUSEKEEPING":              6,
 		"JOB_TYPE_WORKSPACE_MATERIALIZATION": 7,
+		"JOB_TYPE_AGENT_RUN":                 8,
 	}
 )
 
@@ -6360,7 +6363,7 @@ const file_kodex_runtime_v1_runtime_manager_proto_rawDesc = "" +
 	"(WORKSPACE_MATERIALIZATION_STATUS_RUNNING\x10\x02\x12.\n" +
 	"*WORKSPACE_MATERIALIZATION_STATUS_COMPLETED\x10\x03\x12+\n" +
 	"'WORKSPACE_MATERIALIZATION_STATUS_FAILED\x10\x04\x12.\n" +
-	"*WORKSPACE_MATERIALIZATION_STATUS_CANCELLED\x10\x05*\xd5\x01\n" +
+	"*WORKSPACE_MATERIALIZATION_STATUS_CANCELLED\x10\x05*\xed\x01\n" +
 	"\aJobType\x12\x18\n" +
 	"\x14JOB_TYPE_UNSPECIFIED\x10\x00\x12\x13\n" +
 	"\x0fJOB_TYPE_MIRROR\x10\x01\x12\x12\n" +
@@ -6369,7 +6372,8 @@ const file_kodex_runtime_v1_runtime_manager_proto_rawDesc = "" +
 	"\x10JOB_TYPE_CLEANUP\x10\x04\x12\x19\n" +
 	"\x15JOB_TYPE_HEALTH_CHECK\x10\x05\x12\x19\n" +
 	"\x15JOB_TYPE_HOUSEKEEPING\x10\x06\x12&\n" +
-	"\"JOB_TYPE_WORKSPACE_MATERIALIZATION\x10\a*\xd4\x01\n" +
+	"\"JOB_TYPE_WORKSPACE_MATERIALIZATION\x10\a\x12\x16\n" +
+	"\x12JOB_TYPE_AGENT_RUN\x10\b*\xd4\x01\n" +
 	"\tJobStatus\x12\x1a\n" +
 	"\x16JOB_STATUS_UNSPECIFIED\x10\x00\x12\x16\n" +
 	"\x12JOB_STATUS_PENDING\x10\x01\x12\x16\n" +

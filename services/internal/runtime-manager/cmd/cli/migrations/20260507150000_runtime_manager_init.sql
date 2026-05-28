@@ -137,7 +137,7 @@ CREATE TABLE runtime_manager_jobs (
     version bigint NOT NULL,
     CONSTRAINT runtime_manager_jobs_command_id_chk CHECK (command_id <> ''),
     CONSTRAINT runtime_manager_jobs_type_chk
-        CHECK (job_type IN ('mirror', 'build', 'deploy', 'cleanup', 'health_check', 'housekeeping', 'workspace_materialization')),
+        CHECK (job_type IN ('mirror', 'build', 'deploy', 'cleanup', 'health_check', 'housekeeping', 'workspace_materialization', 'agent_run')),
     CONSTRAINT runtime_manager_jobs_status_chk
         CHECK (status IN ('pending', 'claimed', 'running', 'succeeded', 'failed', 'cancelled', 'timed_out')),
     CONSTRAINT runtime_manager_jobs_priority_chk

@@ -114,6 +114,8 @@ sequenceDiagram
 Если lease истёк и задание забрал другой исполнитель, старый `lease_token` больше не принимается.
 Повторный `ClaimRunnableJob` с тем же `command_id` или `idempotency_key` не забирает следующую job: runtime-manager находит сохранённый `RuntimeManagerCommandResult` и возвращает conflict, так как одноразовый `lease_token` не хранится в открытом виде и не переотдаётся при replay.
 
+Тип `agent_run` выделен отдельно для agent Run: `agent-manager` может ставить такое задание через `CreateJob`, а исполнитель agent Run может забирать его через `ClaimRunnableJob` без обходной подмены на `build`, `deploy` или `housekeeping`. Runtime-manager хранит тип, ссылки, статус и диагностику, но не становится владельцем agent Run и не запускает этот тип через первый Kubernetes-исполнитель.
+
 Первый реальный исполнитель Kubernetes находится внутри `runtime-manager` и выключен по умолчанию. После включения он забирает только `health_check` job, получает `cluster_id` из сохранённого placement, читает через `fleet-manager.GetKubernetesCluster` только безопасную ссылку на kubeconfig/service account secret и создаёт ограниченный Kubernetes Job через `client-go`. Runtime не вызывает `kubectl`, не читает БД `fleet-manager`, не хранит kubeconfig и не пишет полный лог или Kubernetes events в PostgreSQL. Поля `namespace`, `service_account`, `image`, `env`, `labels` и `annotations` проходят строгую проверку; команда контейнера фиксирована для проверки здоровья.
 
 ### Cleanup и retention

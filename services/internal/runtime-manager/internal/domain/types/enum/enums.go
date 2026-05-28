@@ -66,6 +66,7 @@ const (
 	JobTypeHealthCheck              JobType = "health_check"
 	JobTypeHousekeeping             JobType = "housekeeping"
 	JobTypeWorkspaceMaterialization JobType = "workspace_materialization"
+	JobTypeAgentRun                 JobType = "agent_run"
 )
 
 // JobStatus is the platform job lifecycle status.
