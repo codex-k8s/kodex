@@ -240,6 +240,12 @@ type CheckedBootstrapServicesPolicyArtifact struct {
 	ValidatedPayload []byte
 }
 
+// RepositoryAdoptionMergeSignal contains safe provider refs from a merged adoption PR.
+type RepositoryAdoptionMergeSignal = BootstrapRepositoryMergeSignal
+
+// CheckedAdoptionServicesPolicyArtifact contains checked policy artifact metadata for adoption import.
+type CheckedAdoptionServicesPolicyArtifact = CheckedBootstrapServicesPolicyArtifact
+
 // ReconcileBootstrapMergeSignalInput closes bootstrap after provider-hub records a safe merge signal.
 type ReconcileBootstrapMergeSignalInput struct {
 	ProjectID     uuid.UUID
@@ -249,11 +255,31 @@ type ReconcileBootstrapMergeSignalInput struct {
 	Meta          value.CommandMeta
 }
 
+// ReconcileAdoptionMergeSignalInput imports checked services.yaml after provider-hub records a safe adoption merge signal.
+type ReconcileAdoptionMergeSignalInput struct {
+	ProjectID     uuid.UUID
+	RepositoryID  uuid.UUID
+	MergeSignal   RepositoryAdoptionMergeSignal
+	CheckedPolicy CheckedAdoptionServicesPolicyArtifact
+	Meta          value.CommandMeta
+}
+
 // BootstrapMergeSignalDiagnosticInput records a safe bootstrap merge signal that cannot yet import policy.
 type BootstrapMergeSignalDiagnosticInput struct {
 	ProjectID         uuid.UUID
 	RepositoryID      uuid.UUID
 	MergeSignal       BootstrapRepositoryMergeSignal
+	SignalFingerprint string
+	ErrorCode         string
+	ErrorSummary      string
+	Summary           string
+}
+
+// AdoptionMergeSignalDiagnosticInput records a safe adoption merge signal that cannot yet import policy.
+type AdoptionMergeSignalDiagnosticInput struct {
+	ProjectID         uuid.UUID
+	RepositoryID      uuid.UUID
+	MergeSignal       RepositoryAdoptionMergeSignal
 	SignalFingerprint string
 	ErrorCode         string
 	ErrorSummary      string

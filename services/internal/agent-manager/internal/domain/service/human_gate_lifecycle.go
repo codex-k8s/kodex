@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"strconv"
 	"strings"
@@ -18,6 +20,14 @@ import (
 const (
 	humanGateCodeLimit    = 128
 	humanGateSummaryLimit = 1000
+)
+
+var humanGateInteractionRequestNamespace = uuid.MustParse("7e8e3c89-deda-4f2f-9c8d-8de44d7d4a3f")
+
+const (
+	humanGateOwnerRequestRefPrefix = "agent:human_gate/"
+	humanGateSourceOwnerRefPrefix  = "agent:human_gate/"
+	humanGateRiskClassLow          = "low"
 )
 
 type humanGateCommandPayload struct {
@@ -65,7 +75,19 @@ func (s *Service) RequestHumanGate(ctx context.Context, input RequestHumanGateIn
 		return entity.HumanGateRequest{}, errs.ErrPreconditionFailed
 	}
 	now := s.clock.Now()
-	gate.ID = s.idGenerator.New()
+	needsInteractionRequest := s.shouldRequestHumanGateInteraction(gate)
+	gateID, err := s.nextHumanGateID(input.Meta, needsInteractionRequest)
+	if err != nil {
+		return entity.HumanGateRequest{}, err
+	}
+	gate.ID = gateID
+	if needsInteractionRequest {
+		interactionRequest, err := s.requestHumanGateInteraction(ctx, input.Meta, session, gate)
+		if err != nil {
+			return entity.HumanGateRequest{}, err
+		}
+		gate.InteractionRequestRef = strings.TrimSpace(interactionRequest.InteractionRequestRef)
+	}
 	gate.Version = 1
 	gate.CreatedAt = now
 	gate.UpdatedAt = now
@@ -82,6 +104,181 @@ func (s *Service) RequestHumanGate(ctx context.Context, input RequestHumanGateIn
 		return entity.HumanGateRequest{}, err
 	}
 	return gate, s.repository.CreateHumanGateRequestWithResult(ctx, gate, result, event)
+}
+
+func (s *Service) shouldRequestHumanGateInteraction(gate entity.HumanGateRequest) bool {
+	return s.humanGateRequestEnabled && strings.TrimSpace(gate.InteractionRequestRef) == ""
+}
+
+func (s *Service) nextHumanGateID(meta value.CommandMeta, deterministic bool) (uuid.UUID, error) {
+	if !deterministic {
+		return s.idGenerator.New(), nil
+	}
+	key, err := safeCommandResultKey(meta, operationRequestHumanGate, unsafeHumanGateText)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	return uuid.NewSHA1(humanGateInteractionRequestNamespace, []byte(key)), nil
+}
+
+func (s *Service) requestHumanGateInteraction(ctx context.Context, meta value.CommandMeta, session entity.AgentSession, gate entity.HumanGateRequest) (HumanGateInteractionRequestResult, error) {
+	input, err := humanGateInteractionRequestInput(meta, session, gate)
+	if err != nil {
+		return HumanGateInteractionRequestResult{}, err
+	}
+	result, err := s.humanGateRequester.RequestHumanGate(ctx, input)
+	if err != nil {
+		return HumanGateInteractionRequestResult{}, err
+	}
+	if strings.TrimSpace(result.InteractionRequestRef) == "" {
+		return HumanGateInteractionRequestResult{}, errs.ErrDependencyUnavailable
+	}
+	return result, nil
+}
+
+func humanGateInteractionRequestInput(meta value.CommandMeta, session entity.AgentSession, gate entity.HumanGateRequest) (HumanGateInteractionRequestInput, error) {
+	if err := validateHumanGateInteractionScope(session.Scope); err != nil {
+		return HumanGateInteractionRequestInput{}, err
+	}
+	target, err := humanGateInteractionTarget(session.CreatedByActorRef)
+	if err != nil {
+		return HumanGateInteractionRequestInput{}, err
+	}
+	if strings.TrimSpace(gate.SafeSummary) == "" {
+		return HumanGateInteractionRequestInput{}, errs.ErrInvalidArgument
+	}
+	return HumanGateInteractionRequestInput{
+		Meta:                     humanGateInteractionMeta(meta, gate.ID),
+		HumanGateRequestID:       gate.ID,
+		Scope:                    session.Scope,
+		SourceOwnerRef:           humanGateSourceOwnerRef(gate.ID),
+		IngressRef:               humanGateInteractionIngressRef(meta),
+		PromptSummary:            gate.SafeSummary,
+		TargetRefs:               []HumanGateInteractionActorRef{target},
+		ContextRefs:              humanGateInteractionContextRefs(session, gate),
+		AllowedActions:           humanGateInteractionActions(),
+		RiskClass:                humanGateRiskClassLow,
+		GovernanceGateRequestRef: gate.GovernanceGateRequestRef,
+	}, nil
+}
+
+func validateHumanGateInteractionScope(scope value.ScopeRef) error {
+	if err := validateScope(scope); err != nil {
+		return err
+	}
+	switch strings.TrimSpace(scope.Type) {
+	case string(enum.AgentScopeTypePlatform),
+		string(enum.AgentScopeTypeOrganization),
+		string(enum.AgentScopeTypeProject),
+		string(enum.AgentScopeTypeRepository):
+		return nil
+	default:
+		return errs.ErrInvalidArgument
+	}
+}
+
+func humanGateInteractionMeta(meta value.CommandMeta, gateID uuid.UUID) value.CommandMeta {
+	outgoing := meta
+	outgoing.ExpectedVersion = nil
+	if strings.TrimSpace(outgoing.IdempotencyKey) == "" {
+		outgoing.IdempotencyKey = "agent_manager:human_gate_request:" + gateID.String()
+	}
+	return outgoing
+}
+
+func humanGateInteractionTarget(actorRef string) (HumanGateInteractionActorRef, error) {
+	kind, ref, ok := strings.Cut(strings.TrimSpace(actorRef), ":")
+	if !ok || strings.TrimSpace(kind) == "" || strings.TrimSpace(ref) == "" {
+		return HumanGateInteractionActorRef{}, errs.ErrInvalidArgument
+	}
+	if unsafeHumanGateText(kind) || unsafeHumanGateText(ref) || len(kind) > followUpRefTextLimit || len(ref) > followUpRefTextLimit {
+		return HumanGateInteractionActorRef{}, errs.ErrInvalidArgument
+	}
+	return HumanGateInteractionActorRef{Kind: strings.TrimSpace(kind), Ref: strings.TrimSpace(ref)}, nil
+}
+
+func humanGateSourceOwnerRef(gateID uuid.UUID) string {
+	return humanGateSourceOwnerRefPrefix + gateID.String()
+}
+
+func humanGateOwnerRequestRef(gateID uuid.UUID) string {
+	return humanGateOwnerRequestRefPrefix + gateID.String()
+}
+
+func humanGateInteractionIngressRef(meta value.CommandMeta) string {
+	if meta.CommandID != uuid.Nil {
+		return "agent-command:" + meta.CommandID.String()
+	}
+	idempotencyKey := strings.TrimSpace(meta.IdempotencyKey)
+	if idempotencyKey == "" {
+		return "agent-command:" + uuid.Nil.String()
+	}
+	return "agent-idempotency:" + shortSafeDigest(idempotencyKey)
+}
+
+func humanGateInteractionContextRefs(session entity.AgentSession, gate entity.HumanGateRequest) []HumanGateInteractionExternalRef {
+	refs := []HumanGateInteractionExternalRef{
+		{Kind: "agent_session", Ref: session.ID.String()},
+		{Kind: "human_gate", Ref: humanGateOwnerRequestRef(gate.ID)},
+	}
+	if gate.RunID != nil {
+		refs = append(refs, HumanGateInteractionExternalRef{Kind: "agent_run", Ref: gate.RunID.String()})
+	}
+	if gate.StageID != nil {
+		refs = append(refs, HumanGateInteractionExternalRef{Kind: "agent_stage", Ref: gate.StageID.String()})
+	}
+	if gate.AcceptanceResultID != nil {
+		refs = append(refs, HumanGateInteractionExternalRef{Kind: "acceptance_result", Ref: gate.AcceptanceResultID.String()})
+	}
+	if targetRef := strings.TrimSpace(gate.TargetRef); targetRef != "" {
+		refs = append(refs, HumanGateInteractionExternalRef{Kind: "target", Ref: targetRef})
+	}
+	if providerRef := humanGateProviderContextRef(gate.ProviderTarget); providerRef != "" {
+		refs = append(refs, HumanGateInteractionExternalRef{Kind: "provider_work_item", Ref: providerRef})
+	}
+	if governanceRef := strings.TrimSpace(gate.GovernanceGateRequestRef); governanceRef != "" {
+		refs = append(refs, HumanGateInteractionExternalRef{Kind: "governance_gate_request", Ref: governanceRef})
+	}
+	return refs
+}
+
+func humanGateProviderContextRef(target value.ProviderTargetRef) string {
+	if ref := strings.TrimSpace(target.WorkItemRef); ref != "" {
+		return ref
+	}
+	if ref := strings.TrimSpace(target.PullRequestRef); ref != "" {
+		return ref
+	}
+	if ref := strings.TrimSpace(target.CommentRef); ref != "" {
+		return ref
+	}
+	if ref := strings.TrimSpace(target.ReviewSignalRef); ref != "" {
+		return ref
+	}
+	return ""
+}
+
+func humanGateInteractionActions() []HumanGateInteractionAction {
+	// interaction-hub accepts InteractionResponseAction values; request_changes
+	// stays a local Human gate outcome until the shared taxonomy is extended.
+	return []HumanGateInteractionAction{
+		{ActionKey: string(enum.HumanGateOutcomeApprove), LabelTemplateRef: "interaction.actions.approve", Terminal: true},
+		{ActionKey: string(enum.HumanGateOutcomeReject), LabelTemplateRef: "interaction.actions.reject", Terminal: true},
+		{ActionKey: string(enum.HumanGateOutcomeAnswer), LabelTemplateRef: "interaction.actions.answer", Terminal: true},
+	}
+}
+
+func shortSafeDigest(value string) string {
+	sum := sha256Sum(value)
+	if len(sum) > 24 {
+		return sum[:24]
+	}
+	return sum
+}
+
+func sha256Sum(value string) string {
+	sum := sha256.Sum256([]byte(value))
+	return hex.EncodeToString(sum[:])
 }
 
 func (s *Service) RecordHumanGateDecision(ctx context.Context, input RecordHumanGateDecisionInput) (entity.HumanGateRequest, error) {
@@ -452,9 +649,17 @@ func sameHumanGateRequest(stored entity.HumanGateRequest, expected entity.HumanG
 		stored.RequestKind == expected.RequestKind &&
 		stored.ReasonCode == expected.ReasonCode &&
 		stored.SafeSummary == expected.SafeSummary &&
-		stored.InteractionRequestRef == expected.InteractionRequestRef &&
+		sameHumanGateInteractionRequestRef(stored.InteractionRequestRef, expected.InteractionRequestRef) &&
 		stored.GovernanceGateRequestRef == expected.GovernanceGateRequestRef &&
 		stored.IdempotencyKey == expected.IdempotencyKey
+}
+
+func sameHumanGateInteractionRequestRef(stored string, expected string) bool {
+	expected = strings.TrimSpace(expected)
+	if expected == "" {
+		return true
+	}
+	return strings.TrimSpace(stored) == expected
 }
 
 func humanGateID(gate entity.HumanGateRequest) uuid.UUID {

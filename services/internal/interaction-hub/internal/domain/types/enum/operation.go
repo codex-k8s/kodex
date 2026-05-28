@@ -17,6 +17,7 @@ const (
 	OperationGetInteractionRequest     Operation = "interaction.GetInteractionRequest"
 	OperationListInteractionRequests   Operation = "interaction.ListInteractionRequests"
 	OperationListOwnerInboxItems       Operation = "interaction.ListOwnerInboxItems"
+	OperationGetOwnerInboxItem         Operation = "interaction.GetOwnerInboxItem"
 	OperationRequestNotification       Operation = "interaction.RequestNotification"
 	OperationUpsertSubscription        Operation = "interaction.UpsertSubscription"
 	OperationDisableSubscription       Operation = "interaction.DisableSubscription"
@@ -43,6 +44,7 @@ func (o Operation) Valid() bool {
 		OperationGetInteractionRequest,
 		OperationListInteractionRequests,
 		OperationListOwnerInboxItems,
+		OperationGetOwnerInboxItem,
 		OperationRequestNotification,
 		OperationUpsertSubscription,
 		OperationDisableSubscription,

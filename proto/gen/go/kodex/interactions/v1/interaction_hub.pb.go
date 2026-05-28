@@ -5659,6 +5659,82 @@ func (x *ListOwnerInboxItemsRequest) GetPage() *PageRequest {
 	return nil
 }
 
+type GetOwnerInboxItemRequest struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	Meta               *QueryMeta             `protobuf:"bytes,1,opt,name=meta,proto3" json:"meta,omitempty"`
+	RequestId          string                 `protobuf:"bytes,2,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	Scope              *ScopeRef              `protobuf:"bytes,3,opt,name=scope,proto3" json:"scope,omitempty"`
+	AssigneeRef        *ActorRef              `protobuf:"bytes,4,opt,name=assignee_ref,json=assigneeRef,proto3" json:"assignee_ref,omitempty"`
+	IncludeDiagnostics bool                   `protobuf:"varint,5,opt,name=include_diagnostics,json=includeDiagnostics,proto3" json:"include_diagnostics,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *GetOwnerInboxItemRequest) Reset() {
+	*x = GetOwnerInboxItemRequest{}
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[41]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetOwnerInboxItemRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetOwnerInboxItemRequest) ProtoMessage() {}
+
+func (x *GetOwnerInboxItemRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[41]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetOwnerInboxItemRequest.ProtoReflect.Descriptor instead.
+func (*GetOwnerInboxItemRequest) Descriptor() ([]byte, []int) {
+	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{41}
+}
+
+func (x *GetOwnerInboxItemRequest) GetMeta() *QueryMeta {
+	if x != nil {
+		return x.Meta
+	}
+	return nil
+}
+
+func (x *GetOwnerInboxItemRequest) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+func (x *GetOwnerInboxItemRequest) GetScope() *ScopeRef {
+	if x != nil {
+		return x.Scope
+	}
+	return nil
+}
+
+func (x *GetOwnerInboxItemRequest) GetAssigneeRef() *ActorRef {
+	if x != nil {
+		return x.AssigneeRef
+	}
+	return nil
+}
+
+func (x *GetOwnerInboxItemRequest) GetIncludeDiagnostics() bool {
+	if x != nil {
+		return x.IncludeDiagnostics
+	}
+	return false
+}
+
 type RequestNotificationRequest struct {
 	state                 protoimpl.MessageState `protogen:"open.v1"`
 	Meta                  *CommandMeta           `protobuf:"bytes,1,opt,name=meta,proto3" json:"meta,omitempty"`
@@ -5684,7 +5760,7 @@ type RequestNotificationRequest struct {
 
 func (x *RequestNotificationRequest) Reset() {
 	*x = RequestNotificationRequest{}
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[41]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5696,7 +5772,7 @@ func (x *RequestNotificationRequest) String() string {
 func (*RequestNotificationRequest) ProtoMessage() {}
 
 func (x *RequestNotificationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[41]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5709,7 +5785,7 @@ func (x *RequestNotificationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RequestNotificationRequest.ProtoReflect.Descriptor instead.
 func (*RequestNotificationRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{41}
+	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *RequestNotificationRequest) GetMeta() *CommandMeta {
@@ -5849,7 +5925,7 @@ type UpsertSubscriptionRequest struct {
 
 func (x *UpsertSubscriptionRequest) Reset() {
 	*x = UpsertSubscriptionRequest{}
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[42]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5861,7 +5937,7 @@ func (x *UpsertSubscriptionRequest) String() string {
 func (*UpsertSubscriptionRequest) ProtoMessage() {}
 
 func (x *UpsertSubscriptionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[42]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5874,7 +5950,7 @@ func (x *UpsertSubscriptionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpsertSubscriptionRequest.ProtoReflect.Descriptor instead.
 func (*UpsertSubscriptionRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{42}
+	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *UpsertSubscriptionRequest) GetMeta() *CommandMeta {
@@ -5957,7 +6033,7 @@ type DisableSubscriptionRequest struct {
 
 func (x *DisableSubscriptionRequest) Reset() {
 	*x = DisableSubscriptionRequest{}
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[43]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5969,7 +6045,7 @@ func (x *DisableSubscriptionRequest) String() string {
 func (*DisableSubscriptionRequest) ProtoMessage() {}
 
 func (x *DisableSubscriptionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[43]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5982,7 +6058,7 @@ func (x *DisableSubscriptionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DisableSubscriptionRequest.ProtoReflect.Descriptor instead.
 func (*DisableSubscriptionRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{43}
+	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *DisableSubscriptionRequest) GetMeta() *CommandMeta {
@@ -6012,7 +6088,7 @@ type ListSubscriptionsRequest struct {
 
 func (x *ListSubscriptionsRequest) Reset() {
 	*x = ListSubscriptionsRequest{}
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[44]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6024,7 +6100,7 @@ func (x *ListSubscriptionsRequest) String() string {
 func (*ListSubscriptionsRequest) ProtoMessage() {}
 
 func (x *ListSubscriptionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[44]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6037,7 +6113,7 @@ func (x *ListSubscriptionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSubscriptionsRequest.ProtoReflect.Descriptor instead.
 func (*ListSubscriptionsRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{44}
+	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *ListSubscriptionsRequest) GetMeta() *QueryMeta {
@@ -6087,7 +6163,7 @@ type PlanDeliveryRequest struct {
 
 func (x *PlanDeliveryRequest) Reset() {
 	*x = PlanDeliveryRequest{}
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[45]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6099,7 +6175,7 @@ func (x *PlanDeliveryRequest) String() string {
 func (*PlanDeliveryRequest) ProtoMessage() {}
 
 func (x *PlanDeliveryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[45]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6112,7 +6188,7 @@ func (x *PlanDeliveryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlanDeliveryRequest.ProtoReflect.Descriptor instead.
 func (*PlanDeliveryRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{45}
+	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *PlanDeliveryRequest) GetMeta() *CommandMeta {
@@ -6153,7 +6229,7 @@ type RecordDeliveryResultRequest struct {
 
 func (x *RecordDeliveryResultRequest) Reset() {
 	*x = RecordDeliveryResultRequest{}
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[46]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6165,7 +6241,7 @@ func (x *RecordDeliveryResultRequest) String() string {
 func (*RecordDeliveryResultRequest) ProtoMessage() {}
 
 func (x *RecordDeliveryResultRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[46]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6178,7 +6254,7 @@ func (x *RecordDeliveryResultRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecordDeliveryResultRequest.ProtoReflect.Descriptor instead.
 func (*RecordDeliveryResultRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{46}
+	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *RecordDeliveryResultRequest) GetMeta() *CommandMeta {
@@ -6205,7 +6281,7 @@ type RecordChannelCallbackRequest struct {
 
 func (x *RecordChannelCallbackRequest) Reset() {
 	*x = RecordChannelCallbackRequest{}
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[47]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6217,7 +6293,7 @@ func (x *RecordChannelCallbackRequest) String() string {
 func (*RecordChannelCallbackRequest) ProtoMessage() {}
 
 func (x *RecordChannelCallbackRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[47]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6230,7 +6306,7 @@ func (x *RecordChannelCallbackRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecordChannelCallbackRequest.ProtoReflect.Descriptor instead.
 func (*RecordChannelCallbackRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{47}
+	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *RecordChannelCallbackRequest) GetMeta() *CommandMeta {
@@ -6258,7 +6334,7 @@ type GetDeliveryStatusRequest struct {
 
 func (x *GetDeliveryStatusRequest) Reset() {
 	*x = GetDeliveryStatusRequest{}
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[48]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6270,7 +6346,7 @@ func (x *GetDeliveryStatusRequest) String() string {
 func (*GetDeliveryStatusRequest) ProtoMessage() {}
 
 func (x *GetDeliveryStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[48]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6283,7 +6359,7 @@ func (x *GetDeliveryStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetDeliveryStatusRequest.ProtoReflect.Descriptor instead.
 func (*GetDeliveryStatusRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{48}
+	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *GetDeliveryStatusRequest) GetMeta() *QueryMeta {
@@ -6316,7 +6392,7 @@ type ConversationThreadResponse struct {
 
 func (x *ConversationThreadResponse) Reset() {
 	*x = ConversationThreadResponse{}
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[49]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6328,7 +6404,7 @@ func (x *ConversationThreadResponse) String() string {
 func (*ConversationThreadResponse) ProtoMessage() {}
 
 func (x *ConversationThreadResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[49]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6341,7 +6417,7 @@ func (x *ConversationThreadResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConversationThreadResponse.ProtoReflect.Descriptor instead.
 func (*ConversationThreadResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{49}
+	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *ConversationThreadResponse) GetThread() *ConversationThread {
@@ -6360,7 +6436,7 @@ type ConversationMessageResponse struct {
 
 func (x *ConversationMessageResponse) Reset() {
 	*x = ConversationMessageResponse{}
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[50]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6372,7 +6448,7 @@ func (x *ConversationMessageResponse) String() string {
 func (*ConversationMessageResponse) ProtoMessage() {}
 
 func (x *ConversationMessageResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[50]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6385,7 +6461,7 @@ func (x *ConversationMessageResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConversationMessageResponse.ProtoReflect.Descriptor instead.
 func (*ConversationMessageResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{50}
+	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *ConversationMessageResponse) GetMessage() *ConversationMessage {
@@ -6405,7 +6481,7 @@ type ListConversationMessagesResponse struct {
 
 func (x *ListConversationMessagesResponse) Reset() {
 	*x = ListConversationMessagesResponse{}
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[51]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6417,7 +6493,7 @@ func (x *ListConversationMessagesResponse) String() string {
 func (*ListConversationMessagesResponse) ProtoMessage() {}
 
 func (x *ListConversationMessagesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[51]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6430,7 +6506,7 @@ func (x *ListConversationMessagesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListConversationMessagesResponse.ProtoReflect.Descriptor instead.
 func (*ListConversationMessagesResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{51}
+	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *ListConversationMessagesResponse) GetMessages() []*ConversationMessage {
@@ -6456,7 +6532,7 @@ type InteractionRequestResponse struct {
 
 func (x *InteractionRequestResponse) Reset() {
 	*x = InteractionRequestResponse{}
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[52]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6468,7 +6544,7 @@ func (x *InteractionRequestResponse) String() string {
 func (*InteractionRequestResponse) ProtoMessage() {}
 
 func (x *InteractionRequestResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[52]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6481,7 +6557,7 @@ func (x *InteractionRequestResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InteractionRequestResponse.ProtoReflect.Descriptor instead.
 func (*InteractionRequestResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{52}
+	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *InteractionRequestResponse) GetRequest() *InteractionRequest {
@@ -6501,7 +6577,7 @@ type InteractionResponseResponse struct {
 
 func (x *InteractionResponseResponse) Reset() {
 	*x = InteractionResponseResponse{}
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[53]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6513,7 +6589,7 @@ func (x *InteractionResponseResponse) String() string {
 func (*InteractionResponseResponse) ProtoMessage() {}
 
 func (x *InteractionResponseResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[53]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6526,7 +6602,7 @@ func (x *InteractionResponseResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InteractionResponseResponse.ProtoReflect.Descriptor instead.
 func (*InteractionResponseResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{53}
+	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *InteractionResponseResponse) GetRequest() *InteractionRequest {
@@ -6553,7 +6629,7 @@ type ExpireInteractionRequestsResponse struct {
 
 func (x *ExpireInteractionRequestsResponse) Reset() {
 	*x = ExpireInteractionRequestsResponse{}
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[54]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6565,7 +6641,7 @@ func (x *ExpireInteractionRequestsResponse) String() string {
 func (*ExpireInteractionRequestsResponse) ProtoMessage() {}
 
 func (x *ExpireInteractionRequestsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[54]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6578,7 +6654,7 @@ func (x *ExpireInteractionRequestsResponse) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use ExpireInteractionRequestsResponse.ProtoReflect.Descriptor instead.
 func (*ExpireInteractionRequestsResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{54}
+	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *ExpireInteractionRequestsResponse) GetExpiredRequestIds() []string {
@@ -6605,7 +6681,7 @@ type ListInteractionRequestsResponse struct {
 
 func (x *ListInteractionRequestsResponse) Reset() {
 	*x = ListInteractionRequestsResponse{}
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[55]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6617,7 +6693,7 @@ func (x *ListInteractionRequestsResponse) String() string {
 func (*ListInteractionRequestsResponse) ProtoMessage() {}
 
 func (x *ListInteractionRequestsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[55]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6630,7 +6706,7 @@ func (x *ListInteractionRequestsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListInteractionRequestsResponse.ProtoReflect.Descriptor instead.
 func (*ListInteractionRequestsResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{55}
+	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *ListInteractionRequestsResponse) GetRequests() []*InteractionRequest {
@@ -6668,13 +6744,14 @@ type OwnerInboxItem struct {
 	UpdatedAt         string                     `protobuf:"bytes,17,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
 	ResolvedAt        *string                    `protobuf:"bytes,18,opt,name=resolved_at,json=resolvedAt,proto3,oneof" json:"resolved_at,omitempty"`
 	Version           int64                      `protobuf:"varint,19,opt,name=version,proto3" json:"version,omitempty"`
+	AllowedActions    []*InteractionAction       `protobuf:"bytes,20,rep,name=allowed_actions,json=allowedActions,proto3" json:"allowed_actions,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
 
 func (x *OwnerInboxItem) Reset() {
 	*x = OwnerInboxItem{}
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[56]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6686,7 +6763,7 @@ func (x *OwnerInboxItem) String() string {
 func (*OwnerInboxItem) ProtoMessage() {}
 
 func (x *OwnerInboxItem) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[56]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6699,7 +6776,7 @@ func (x *OwnerInboxItem) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OwnerInboxItem.ProtoReflect.Descriptor instead.
 func (*OwnerInboxItem) Descriptor() ([]byte, []int) {
-	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{56}
+	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{57}
 }
 
 func (x *OwnerInboxItem) GetRequestId() string {
@@ -6835,6 +6912,13 @@ func (x *OwnerInboxItem) GetVersion() int64 {
 	return 0
 }
 
+func (x *OwnerInboxItem) GetAllowedActions() []*InteractionAction {
+	if x != nil {
+		return x.AllowedActions
+	}
+	return nil
+}
+
 type OwnerInboxDeliverySummary struct {
 	state                   protoimpl.MessageState `protogen:"open.v1"`
 	AttemptCount            int32                  `protobuf:"varint,1,opt,name=attempt_count,json=attemptCount,proto3" json:"attempt_count,omitempty"`
@@ -6853,7 +6937,7 @@ type OwnerInboxDeliverySummary struct {
 
 func (x *OwnerInboxDeliverySummary) Reset() {
 	*x = OwnerInboxDeliverySummary{}
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[57]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6865,7 +6949,7 @@ func (x *OwnerInboxDeliverySummary) String() string {
 func (*OwnerInboxDeliverySummary) ProtoMessage() {}
 
 func (x *OwnerInboxDeliverySummary) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[57]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6878,7 +6962,7 @@ func (x *OwnerInboxDeliverySummary) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OwnerInboxDeliverySummary.ProtoReflect.Descriptor instead.
 func (*OwnerInboxDeliverySummary) Descriptor() ([]byte, []int) {
-	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{57}
+	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *OwnerInboxDeliverySummary) GetAttemptCount() int32 {
@@ -6970,7 +7054,7 @@ type OwnerInboxCallbackSummary struct {
 
 func (x *OwnerInboxCallbackSummary) Reset() {
 	*x = OwnerInboxCallbackSummary{}
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[58]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6982,7 +7066,7 @@ func (x *OwnerInboxCallbackSummary) String() string {
 func (*OwnerInboxCallbackSummary) ProtoMessage() {}
 
 func (x *OwnerInboxCallbackSummary) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[58]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6995,7 +7079,7 @@ func (x *OwnerInboxCallbackSummary) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OwnerInboxCallbackSummary.ProtoReflect.Descriptor instead.
 func (*OwnerInboxCallbackSummary) Descriptor() ([]byte, []int) {
-	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{58}
+	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *OwnerInboxCallbackSummary) GetCallbackRef() string {
@@ -7098,7 +7182,7 @@ type OwnerInboxResponseSummary struct {
 
 func (x *OwnerInboxResponseSummary) Reset() {
 	*x = OwnerInboxResponseSummary{}
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[59]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7110,7 +7194,7 @@ func (x *OwnerInboxResponseSummary) String() string {
 func (*OwnerInboxResponseSummary) ProtoMessage() {}
 
 func (x *OwnerInboxResponseSummary) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[59]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7123,7 +7207,7 @@ func (x *OwnerInboxResponseSummary) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OwnerInboxResponseSummary.ProtoReflect.Descriptor instead.
 func (*OwnerInboxResponseSummary) Descriptor() ([]byte, []int) {
-	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{59}
+	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{60}
 }
 
 func (x *OwnerInboxResponseSummary) GetResponseId() string {
@@ -7213,7 +7297,7 @@ type ListOwnerInboxItemsResponse struct {
 
 func (x *ListOwnerInboxItemsResponse) Reset() {
 	*x = ListOwnerInboxItemsResponse{}
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[60]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7225,7 +7309,7 @@ func (x *ListOwnerInboxItemsResponse) String() string {
 func (*ListOwnerInboxItemsResponse) ProtoMessage() {}
 
 func (x *ListOwnerInboxItemsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[60]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7238,7 +7322,7 @@ func (x *ListOwnerInboxItemsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListOwnerInboxItemsResponse.ProtoReflect.Descriptor instead.
 func (*ListOwnerInboxItemsResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{60}
+	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{61}
 }
 
 func (x *ListOwnerInboxItemsResponse) GetItems() []*OwnerInboxItem {
@@ -7255,6 +7339,50 @@ func (x *ListOwnerInboxItemsResponse) GetPage() *PageResponse {
 	return nil
 }
 
+type OwnerInboxItemResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Item          *OwnerInboxItem        `protobuf:"bytes,1,opt,name=item,proto3" json:"item,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *OwnerInboxItemResponse) Reset() {
+	*x = OwnerInboxItemResponse{}
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[62]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OwnerInboxItemResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OwnerInboxItemResponse) ProtoMessage() {}
+
+func (x *OwnerInboxItemResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[62]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OwnerInboxItemResponse.ProtoReflect.Descriptor instead.
+func (*OwnerInboxItemResponse) Descriptor() ([]byte, []int) {
+	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{62}
+}
+
+func (x *OwnerInboxItemResponse) GetItem() *OwnerInboxItem {
+	if x != nil {
+		return x.Item
+	}
+	return nil
+}
+
 type NotificationResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Notification  *Notification          `protobuf:"bytes,1,opt,name=notification,proto3" json:"notification,omitempty"`
@@ -7264,7 +7392,7 @@ type NotificationResponse struct {
 
 func (x *NotificationResponse) Reset() {
 	*x = NotificationResponse{}
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[61]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[63]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7276,7 +7404,7 @@ func (x *NotificationResponse) String() string {
 func (*NotificationResponse) ProtoMessage() {}
 
 func (x *NotificationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[61]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[63]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7289,7 +7417,7 @@ func (x *NotificationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NotificationResponse.ProtoReflect.Descriptor instead.
 func (*NotificationResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{61}
+	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{63}
 }
 
 func (x *NotificationResponse) GetNotification() *Notification {
@@ -7308,7 +7436,7 @@ type SubscriptionResponse struct {
 
 func (x *SubscriptionResponse) Reset() {
 	*x = SubscriptionResponse{}
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[62]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[64]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7320,7 +7448,7 @@ func (x *SubscriptionResponse) String() string {
 func (*SubscriptionResponse) ProtoMessage() {}
 
 func (x *SubscriptionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[62]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[64]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7333,7 +7461,7 @@ func (x *SubscriptionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubscriptionResponse.ProtoReflect.Descriptor instead.
 func (*SubscriptionResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{62}
+	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{64}
 }
 
 func (x *SubscriptionResponse) GetSubscription() *Subscription {
@@ -7353,7 +7481,7 @@ type ListSubscriptionsResponse struct {
 
 func (x *ListSubscriptionsResponse) Reset() {
 	*x = ListSubscriptionsResponse{}
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[63]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[65]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7365,7 +7493,7 @@ func (x *ListSubscriptionsResponse) String() string {
 func (*ListSubscriptionsResponse) ProtoMessage() {}
 
 func (x *ListSubscriptionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[63]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[65]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7378,7 +7506,7 @@ func (x *ListSubscriptionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSubscriptionsResponse.ProtoReflect.Descriptor instead.
 func (*ListSubscriptionsResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{63}
+	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{65}
 }
 
 func (x *ListSubscriptionsResponse) GetSubscriptions() []*Subscription {
@@ -7404,7 +7532,7 @@ type DeliveryAttemptResponse struct {
 
 func (x *DeliveryAttemptResponse) Reset() {
 	*x = DeliveryAttemptResponse{}
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[64]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[66]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7416,7 +7544,7 @@ func (x *DeliveryAttemptResponse) String() string {
 func (*DeliveryAttemptResponse) ProtoMessage() {}
 
 func (x *DeliveryAttemptResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[64]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[66]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7429,7 +7557,7 @@ func (x *DeliveryAttemptResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeliveryAttemptResponse.ProtoReflect.Descriptor instead.
 func (*DeliveryAttemptResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{64}
+	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{66}
 }
 
 func (x *DeliveryAttemptResponse) GetDeliveryAttempt() *DeliveryAttempt {
@@ -7449,7 +7577,7 @@ type ChannelCallbackResponse struct {
 
 func (x *ChannelCallbackResponse) Reset() {
 	*x = ChannelCallbackResponse{}
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[65]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[67]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7461,7 +7589,7 @@ func (x *ChannelCallbackResponse) String() string {
 func (*ChannelCallbackResponse) ProtoMessage() {}
 
 func (x *ChannelCallbackResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[65]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[67]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7474,7 +7602,7 @@ func (x *ChannelCallbackResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChannelCallbackResponse.ProtoReflect.Descriptor instead.
 func (*ChannelCallbackResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{65}
+	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{67}
 }
 
 func (x *ChannelCallbackResponse) GetCallback() *ChannelCallback {
@@ -7503,7 +7631,7 @@ type DeliveryStatusResponse struct {
 
 func (x *DeliveryStatusResponse) Reset() {
 	*x = DeliveryStatusResponse{}
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[66]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[68]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7515,7 +7643,7 @@ func (x *DeliveryStatusResponse) String() string {
 func (*DeliveryStatusResponse) ProtoMessage() {}
 
 func (x *DeliveryStatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[66]
+	mi := &file_kodex_interactions_v1_interaction_hub_proto_msgTypes[68]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7528,7 +7656,7 @@ func (x *DeliveryStatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeliveryStatusResponse.ProtoReflect.Descriptor instead.
 func (*DeliveryStatusResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{66}
+	return file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP(), []int{68}
 }
 
 func (x *DeliveryStatusResponse) GetRequest() *InteractionRequest {
@@ -8133,7 +8261,14 @@ const file_kodex_interactions_v1_interaction_hub_proto_rawDesc = "" +
 	"\x11_source_owner_refB\f\n" +
 	"\n" +
 	"_actor_refB\x11\n" +
-	"\x0f_correlation_id\"\xe1\b\n" +
+	"\x0f_correlation_id\"\x9b\x02\n" +
+	"\x18GetOwnerInboxItemRequest\x124\n" +
+	"\x04meta\x18\x01 \x01(\v2 .kodex.interactions.v1.QueryMetaR\x04meta\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x02 \x01(\tR\trequestId\x125\n" +
+	"\x05scope\x18\x03 \x01(\v2\x1f.kodex.interactions.v1.ScopeRefR\x05scope\x12B\n" +
+	"\fassignee_ref\x18\x04 \x01(\v2\x1f.kodex.interactions.v1.ActorRefR\vassigneeRef\x12/\n" +
+	"\x13include_diagnostics\x18\x05 \x01(\bR\x12includeDiagnostics\"\xe1\b\n" +
 	"\x1aRequestNotificationRequest\x126\n" +
 	"\x04meta\x18\x01 \x01(\v2\".kodex.interactions.v1.CommandMetaR\x04meta\x125\n" +
 	"\x05scope\x18\x02 \x01(\v2\x1f.kodex.interactions.v1.ScopeRefR\x05scope\x12T\n" +
@@ -8223,7 +8358,8 @@ const file_kodex_interactions_v1_interaction_hub_proto_rawDesc = "" +
 	"\rexpired_count\x18\x02 \x01(\x05R\fexpiredCount\"\xa1\x01\n" +
 	"\x1fListInteractionRequestsResponse\x12E\n" +
 	"\brequests\x18\x01 \x03(\v2).kodex.interactions.v1.InteractionRequestR\brequests\x127\n" +
-	"\x04page\x18\x02 \x01(\v2#.kodex.interactions.v1.PageResponseR\x04page\"\xd0\t\n" +
+	"\x04page\x18\x02 \x01(\v2#.kodex.interactions.v1.PageResponseR\x04page\"\xa3\n" +
+	"\n" +
 	"\x0eOwnerInboxItem\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12P\n" +
@@ -8249,7 +8385,8 @@ const file_kodex_interactions_v1_interaction_hub_proto_rawDesc = "" +
 	"updated_at\x18\x11 \x01(\tR\tupdatedAt\x12$\n" +
 	"\vresolved_at\x18\x12 \x01(\tH\x05R\n" +
 	"resolvedAt\x88\x01\x01\x12\x18\n" +
-	"\aversion\x18\x13 \x01(\x03R\aversionB\x11\n" +
+	"\aversion\x18\x13 \x01(\x03R\aversion\x12Q\n" +
+	"\x0fallowed_actions\x18\x14 \x03(\v2(.kodex.interactions.v1.InteractionActionR\x0eallowedActionsB\x11\n" +
 	"\x0f_decision_ownerB\x0e\n" +
 	"\f_deadline_atB\x16\n" +
 	"\x14_reminder_policy_refB\x12\n" +
@@ -8325,7 +8462,9 @@ const file_kodex_interactions_v1_interaction_hub_proto_rawDesc = "" +
 	"\x19_interaction_response_ref\"\x93\x01\n" +
 	"\x1bListOwnerInboxItemsResponse\x12;\n" +
 	"\x05items\x18\x01 \x03(\v2%.kodex.interactions.v1.OwnerInboxItemR\x05items\x127\n" +
-	"\x04page\x18\x02 \x01(\v2#.kodex.interactions.v1.PageResponseR\x04page\"_\n" +
+	"\x04page\x18\x02 \x01(\v2#.kodex.interactions.v1.PageResponseR\x04page\"S\n" +
+	"\x16OwnerInboxItemResponse\x129\n" +
+	"\x04item\x18\x01 \x01(\v2%.kodex.interactions.v1.OwnerInboxItemR\x04item\"_\n" +
 	"\x14NotificationResponse\x12G\n" +
 	"\fnotification\x18\x01 \x01(\v2#.kodex.interactions.v1.NotificationR\fnotification\"_\n" +
 	"\x14SubscriptionResponse\x12G\n" +
@@ -8525,7 +8664,7 @@ const file_kodex_interactions_v1_interaction_hub_proto_rawDesc = "" +
 	"#CALLBACK_PROCESSING_STATUS_ACCEPTED\x10\x01\x12(\n" +
 	"$CALLBACK_PROCESSING_STATUS_DUPLICATE\x10\x02\x12'\n" +
 	"#CALLBACK_PROCESSING_STATUS_REJECTED\x10\x03\x12%\n" +
-	"!CALLBACK_PROCESSING_STATUS_FAILED\x10\x042\xfe\x14\n" +
+	"!CALLBACK_PROCESSING_STATUS_FAILED\x10\x042\xf3\x15\n" +
 	"\x15InteractionHubService\x12\x85\x01\n" +
 	"\x18CreateConversationThread\x126.kodex.interactions.v1.CreateConversationThreadRequest\x1a1.kodex.interactions.v1.ConversationThreadResponse\x12\x88\x01\n" +
 	"\x19RecordConversationMessage\x127.kodex.interactions.v1.RecordConversationMessageRequest\x1a2.kodex.interactions.v1.ConversationMessageResponse\x12\x7f\n" +
@@ -8539,7 +8678,8 @@ const file_kodex_interactions_v1_interaction_hub_proto_rawDesc = "" +
 	"\x19ExpireInteractionRequests\x127.kodex.interactions.v1.ExpireInteractionRequestsRequest\x1a8.kodex.interactions.v1.ExpireInteractionRequestsResponse\x12\x7f\n" +
 	"\x15GetInteractionRequest\x123.kodex.interactions.v1.GetInteractionRequestRequest\x1a1.kodex.interactions.v1.InteractionRequestResponse\x12\x88\x01\n" +
 	"\x17ListInteractionRequests\x125.kodex.interactions.v1.ListInteractionRequestsRequest\x1a6.kodex.interactions.v1.ListInteractionRequestsResponse\x12|\n" +
-	"\x13ListOwnerInboxItems\x121.kodex.interactions.v1.ListOwnerInboxItemsRequest\x1a2.kodex.interactions.v1.ListOwnerInboxItemsResponse\x12u\n" +
+	"\x13ListOwnerInboxItems\x121.kodex.interactions.v1.ListOwnerInboxItemsRequest\x1a2.kodex.interactions.v1.ListOwnerInboxItemsResponse\x12s\n" +
+	"\x11GetOwnerInboxItem\x12/.kodex.interactions.v1.GetOwnerInboxItemRequest\x1a-.kodex.interactions.v1.OwnerInboxItemResponse\x12u\n" +
 	"\x13RequestNotification\x121.kodex.interactions.v1.RequestNotificationRequest\x1a+.kodex.interactions.v1.NotificationResponse\x12s\n" +
 	"\x12UpsertSubscription\x120.kodex.interactions.v1.UpsertSubscriptionRequest\x1a+.kodex.interactions.v1.SubscriptionResponse\x12u\n" +
 	"\x13DisableSubscription\x121.kodex.interactions.v1.DisableSubscriptionRequest\x1a+.kodex.interactions.v1.SubscriptionResponse\x12v\n" +
@@ -8562,7 +8702,7 @@ func file_kodex_interactions_v1_interaction_hub_proto_rawDescGZIP() []byte {
 }
 
 var file_kodex_interactions_v1_interaction_hub_proto_enumTypes = make([]protoimpl.EnumInfo, 25)
-var file_kodex_interactions_v1_interaction_hub_proto_msgTypes = make([]protoimpl.MessageInfo, 69)
+var file_kodex_interactions_v1_interaction_hub_proto_msgTypes = make([]protoimpl.MessageInfo, 71)
 var file_kodex_interactions_v1_interaction_hub_proto_goTypes = []any{
 	(InteractionScopeType)(0),                 // 0: kodex.interactions.v1.InteractionScopeType
 	(ConversationThreadKind)(0),               // 1: kodex.interactions.v1.ConversationThreadKind
@@ -8630,34 +8770,36 @@ var file_kodex_interactions_v1_interaction_hub_proto_goTypes = []any{
 	(*GetInteractionRequestRequest)(nil),      // 63: kodex.interactions.v1.GetInteractionRequestRequest
 	(*ListInteractionRequestsRequest)(nil),    // 64: kodex.interactions.v1.ListInteractionRequestsRequest
 	(*ListOwnerInboxItemsRequest)(nil),        // 65: kodex.interactions.v1.ListOwnerInboxItemsRequest
-	(*RequestNotificationRequest)(nil),        // 66: kodex.interactions.v1.RequestNotificationRequest
-	(*UpsertSubscriptionRequest)(nil),         // 67: kodex.interactions.v1.UpsertSubscriptionRequest
-	(*DisableSubscriptionRequest)(nil),        // 68: kodex.interactions.v1.DisableSubscriptionRequest
-	(*ListSubscriptionsRequest)(nil),          // 69: kodex.interactions.v1.ListSubscriptionsRequest
-	(*PlanDeliveryRequest)(nil),               // 70: kodex.interactions.v1.PlanDeliveryRequest
-	(*RecordDeliveryResultRequest)(nil),       // 71: kodex.interactions.v1.RecordDeliveryResultRequest
-	(*RecordChannelCallbackRequest)(nil),      // 72: kodex.interactions.v1.RecordChannelCallbackRequest
-	(*GetDeliveryStatusRequest)(nil),          // 73: kodex.interactions.v1.GetDeliveryStatusRequest
-	(*ConversationThreadResponse)(nil),        // 74: kodex.interactions.v1.ConversationThreadResponse
-	(*ConversationMessageResponse)(nil),       // 75: kodex.interactions.v1.ConversationMessageResponse
-	(*ListConversationMessagesResponse)(nil),  // 76: kodex.interactions.v1.ListConversationMessagesResponse
-	(*InteractionRequestResponse)(nil),        // 77: kodex.interactions.v1.InteractionRequestResponse
-	(*InteractionResponseResponse)(nil),       // 78: kodex.interactions.v1.InteractionResponseResponse
-	(*ExpireInteractionRequestsResponse)(nil), // 79: kodex.interactions.v1.ExpireInteractionRequestsResponse
-	(*ListInteractionRequestsResponse)(nil),   // 80: kodex.interactions.v1.ListInteractionRequestsResponse
-	(*OwnerInboxItem)(nil),                    // 81: kodex.interactions.v1.OwnerInboxItem
-	(*OwnerInboxDeliverySummary)(nil),         // 82: kodex.interactions.v1.OwnerInboxDeliverySummary
-	(*OwnerInboxCallbackSummary)(nil),         // 83: kodex.interactions.v1.OwnerInboxCallbackSummary
-	(*OwnerInboxResponseSummary)(nil),         // 84: kodex.interactions.v1.OwnerInboxResponseSummary
-	(*ListOwnerInboxItemsResponse)(nil),       // 85: kodex.interactions.v1.ListOwnerInboxItemsResponse
-	(*NotificationResponse)(nil),              // 86: kodex.interactions.v1.NotificationResponse
-	(*SubscriptionResponse)(nil),              // 87: kodex.interactions.v1.SubscriptionResponse
-	(*ListSubscriptionsResponse)(nil),         // 88: kodex.interactions.v1.ListSubscriptionsResponse
-	(*DeliveryAttemptResponse)(nil),           // 89: kodex.interactions.v1.DeliveryAttemptResponse
-	(*ChannelCallbackResponse)(nil),           // 90: kodex.interactions.v1.ChannelCallbackResponse
-	(*DeliveryStatusResponse)(nil),            // 91: kodex.interactions.v1.DeliveryStatusResponse
-	nil,                                       // 92: kodex.interactions.v1.ConversationMessage.SafeMetadataEntry
-	nil,                                       // 93: kodex.interactions.v1.RecordConversationMessageRequest.SafeMetadataEntry
+	(*GetOwnerInboxItemRequest)(nil),          // 66: kodex.interactions.v1.GetOwnerInboxItemRequest
+	(*RequestNotificationRequest)(nil),        // 67: kodex.interactions.v1.RequestNotificationRequest
+	(*UpsertSubscriptionRequest)(nil),         // 68: kodex.interactions.v1.UpsertSubscriptionRequest
+	(*DisableSubscriptionRequest)(nil),        // 69: kodex.interactions.v1.DisableSubscriptionRequest
+	(*ListSubscriptionsRequest)(nil),          // 70: kodex.interactions.v1.ListSubscriptionsRequest
+	(*PlanDeliveryRequest)(nil),               // 71: kodex.interactions.v1.PlanDeliveryRequest
+	(*RecordDeliveryResultRequest)(nil),       // 72: kodex.interactions.v1.RecordDeliveryResultRequest
+	(*RecordChannelCallbackRequest)(nil),      // 73: kodex.interactions.v1.RecordChannelCallbackRequest
+	(*GetDeliveryStatusRequest)(nil),          // 74: kodex.interactions.v1.GetDeliveryStatusRequest
+	(*ConversationThreadResponse)(nil),        // 75: kodex.interactions.v1.ConversationThreadResponse
+	(*ConversationMessageResponse)(nil),       // 76: kodex.interactions.v1.ConversationMessageResponse
+	(*ListConversationMessagesResponse)(nil),  // 77: kodex.interactions.v1.ListConversationMessagesResponse
+	(*InteractionRequestResponse)(nil),        // 78: kodex.interactions.v1.InteractionRequestResponse
+	(*InteractionResponseResponse)(nil),       // 79: kodex.interactions.v1.InteractionResponseResponse
+	(*ExpireInteractionRequestsResponse)(nil), // 80: kodex.interactions.v1.ExpireInteractionRequestsResponse
+	(*ListInteractionRequestsResponse)(nil),   // 81: kodex.interactions.v1.ListInteractionRequestsResponse
+	(*OwnerInboxItem)(nil),                    // 82: kodex.interactions.v1.OwnerInboxItem
+	(*OwnerInboxDeliverySummary)(nil),         // 83: kodex.interactions.v1.OwnerInboxDeliverySummary
+	(*OwnerInboxCallbackSummary)(nil),         // 84: kodex.interactions.v1.OwnerInboxCallbackSummary
+	(*OwnerInboxResponseSummary)(nil),         // 85: kodex.interactions.v1.OwnerInboxResponseSummary
+	(*ListOwnerInboxItemsResponse)(nil),       // 86: kodex.interactions.v1.ListOwnerInboxItemsResponse
+	(*OwnerInboxItemResponse)(nil),            // 87: kodex.interactions.v1.OwnerInboxItemResponse
+	(*NotificationResponse)(nil),              // 88: kodex.interactions.v1.NotificationResponse
+	(*SubscriptionResponse)(nil),              // 89: kodex.interactions.v1.SubscriptionResponse
+	(*ListSubscriptionsResponse)(nil),         // 90: kodex.interactions.v1.ListSubscriptionsResponse
+	(*DeliveryAttemptResponse)(nil),           // 91: kodex.interactions.v1.DeliveryAttemptResponse
+	(*ChannelCallbackResponse)(nil),           // 92: kodex.interactions.v1.ChannelCallbackResponse
+	(*DeliveryStatusResponse)(nil),            // 93: kodex.interactions.v1.DeliveryStatusResponse
+	nil,                                       // 94: kodex.interactions.v1.ConversationMessage.SafeMetadataEntry
+	nil,                                       // 95: kodex.interactions.v1.RecordConversationMessageRequest.SafeMetadataEntry
 }
 var file_kodex_interactions_v1_interaction_hub_proto_depIdxs = []int32{
 	28,  // 0: kodex.interactions.v1.CommandMeta.actor:type_name -> kodex.interactions.v1.Actor
@@ -8674,7 +8816,7 @@ var file_kodex_interactions_v1_interaction_hub_proto_depIdxs = []int32{
 	2,   // 11: kodex.interactions.v1.ConversationThread.status:type_name -> kodex.interactions.v1.ConversationThreadStatus
 	4,   // 12: kodex.interactions.v1.ConversationMessage.message_kind:type_name -> kodex.interactions.v1.ConversationMessageKind
 	32,  // 13: kodex.interactions.v1.ConversationMessage.body_object:type_name -> kodex.interactions.v1.ObjectRef
-	92,  // 14: kodex.interactions.v1.ConversationMessage.safe_metadata:type_name -> kodex.interactions.v1.ConversationMessage.SafeMetadataEntry
+	94,  // 14: kodex.interactions.v1.ConversationMessage.safe_metadata:type_name -> kodex.interactions.v1.ConversationMessage.SafeMetadataEntry
 	8,   // 15: kodex.interactions.v1.InteractionRequest.request_kind:type_name -> kodex.interactions.v1.InteractionRequestKind
 	31,  // 16: kodex.interactions.v1.InteractionRequest.scope:type_name -> kodex.interactions.v1.ScopeRef
 	35,  // 17: kodex.interactions.v1.InteractionRequest.source_owner:type_name -> kodex.interactions.v1.SourceOwnerRef
@@ -8730,7 +8872,7 @@ var file_kodex_interactions_v1_interaction_hub_proto_depIdxs = []int32{
 	25,  // 67: kodex.interactions.v1.RecordConversationMessageRequest.meta:type_name -> kodex.interactions.v1.CommandMeta
 	4,   // 68: kodex.interactions.v1.RecordConversationMessageRequest.message_kind:type_name -> kodex.interactions.v1.ConversationMessageKind
 	32,  // 69: kodex.interactions.v1.RecordConversationMessageRequest.body_object:type_name -> kodex.interactions.v1.ObjectRef
-	93,  // 70: kodex.interactions.v1.RecordConversationMessageRequest.safe_metadata:type_name -> kodex.interactions.v1.RecordConversationMessageRequest.SafeMetadataEntry
+	95,  // 70: kodex.interactions.v1.RecordConversationMessageRequest.safe_metadata:type_name -> kodex.interactions.v1.RecordConversationMessageRequest.SafeMetadataEntry
 	26,  // 71: kodex.interactions.v1.GetConversationThreadRequest.meta:type_name -> kodex.interactions.v1.QueryMeta
 	26,  // 72: kodex.interactions.v1.ListConversationMessagesRequest.meta:type_name -> kodex.interactions.v1.QueryMeta
 	29,  // 73: kodex.interactions.v1.ListConversationMessagesRequest.page:type_name -> kodex.interactions.v1.PageRequest
@@ -8771,120 +8913,127 @@ var file_kodex_interactions_v1_interaction_hub_proto_depIdxs = []int32{
 	34,  // 108: kodex.interactions.v1.ListOwnerInboxItemsRequest.assignee_ref:type_name -> kodex.interactions.v1.ActorRef
 	33,  // 109: kodex.interactions.v1.ListOwnerInboxItemsRequest.correlation_ref:type_name -> kodex.interactions.v1.ExternalRef
 	29,  // 110: kodex.interactions.v1.ListOwnerInboxItemsRequest.page:type_name -> kodex.interactions.v1.PageRequest
-	25,  // 111: kodex.interactions.v1.RequestNotificationRequest.meta:type_name -> kodex.interactions.v1.CommandMeta
-	31,  // 112: kodex.interactions.v1.RequestNotificationRequest.scope:type_name -> kodex.interactions.v1.ScopeRef
-	13,  // 113: kodex.interactions.v1.RequestNotificationRequest.notification_kind:type_name -> kodex.interactions.v1.NotificationKind
-	34,  // 114: kodex.interactions.v1.RequestNotificationRequest.recipient_refs:type_name -> kodex.interactions.v1.ActorRef
-	14,  // 115: kodex.interactions.v1.RequestNotificationRequest.priority:type_name -> kodex.interactions.v1.NotificationPriority
-	35,  // 116: kodex.interactions.v1.RequestNotificationRequest.source_owner:type_name -> kodex.interactions.v1.SourceOwnerRef
-	36,  // 117: kodex.interactions.v1.RequestNotificationRequest.ingress:type_name -> kodex.interactions.v1.IngressRef
-	33,  // 118: kodex.interactions.v1.RequestNotificationRequest.context_refs:type_name -> kodex.interactions.v1.ExternalRef
-	33,  // 119: kodex.interactions.v1.RequestNotificationRequest.channel_hint_refs:type_name -> kodex.interactions.v1.ExternalRef
-	25,  // 120: kodex.interactions.v1.UpsertSubscriptionRequest.meta:type_name -> kodex.interactions.v1.CommandMeta
-	31,  // 121: kodex.interactions.v1.UpsertSubscriptionRequest.scope:type_name -> kodex.interactions.v1.ScopeRef
-	34,  // 122: kodex.interactions.v1.UpsertSubscriptionRequest.subscriber_ref:type_name -> kodex.interactions.v1.ActorRef
-	16,  // 123: kodex.interactions.v1.UpsertSubscriptionRequest.status:type_name -> kodex.interactions.v1.SubscriptionStatus
-	35,  // 124: kodex.interactions.v1.UpsertSubscriptionRequest.source_owner:type_name -> kodex.interactions.v1.SourceOwnerRef
-	33,  // 125: kodex.interactions.v1.UpsertSubscriptionRequest.channel_hint_refs:type_name -> kodex.interactions.v1.ExternalRef
-	25,  // 126: kodex.interactions.v1.DisableSubscriptionRequest.meta:type_name -> kodex.interactions.v1.CommandMeta
-	26,  // 127: kodex.interactions.v1.ListSubscriptionsRequest.meta:type_name -> kodex.interactions.v1.QueryMeta
-	31,  // 128: kodex.interactions.v1.ListSubscriptionsRequest.scope:type_name -> kodex.interactions.v1.ScopeRef
-	16,  // 129: kodex.interactions.v1.ListSubscriptionsRequest.status:type_name -> kodex.interactions.v1.SubscriptionStatus
-	29,  // 130: kodex.interactions.v1.ListSubscriptionsRequest.page:type_name -> kodex.interactions.v1.PageRequest
-	25,  // 131: kodex.interactions.v1.PlanDeliveryRequest.meta:type_name -> kodex.interactions.v1.CommandMeta
-	46,  // 132: kodex.interactions.v1.PlanDeliveryRequest.target:type_name -> kodex.interactions.v1.DeliveryTarget
-	25,  // 133: kodex.interactions.v1.RecordDeliveryResultRequest.meta:type_name -> kodex.interactions.v1.CommandMeta
-	50,  // 134: kodex.interactions.v1.RecordDeliveryResultRequest.result:type_name -> kodex.interactions.v1.ChannelDeliveryResult
-	25,  // 135: kodex.interactions.v1.RecordChannelCallbackRequest.meta:type_name -> kodex.interactions.v1.CommandMeta
-	51,  // 136: kodex.interactions.v1.RecordChannelCallbackRequest.callback:type_name -> kodex.interactions.v1.ChannelCallbackEnvelope
-	26,  // 137: kodex.interactions.v1.GetDeliveryStatusRequest.meta:type_name -> kodex.interactions.v1.QueryMeta
-	46,  // 138: kodex.interactions.v1.GetDeliveryStatusRequest.target:type_name -> kodex.interactions.v1.DeliveryTarget
-	39,  // 139: kodex.interactions.v1.ConversationThreadResponse.thread:type_name -> kodex.interactions.v1.ConversationThread
-	40,  // 140: kodex.interactions.v1.ConversationMessageResponse.message:type_name -> kodex.interactions.v1.ConversationMessage
-	40,  // 141: kodex.interactions.v1.ListConversationMessagesResponse.messages:type_name -> kodex.interactions.v1.ConversationMessage
-	30,  // 142: kodex.interactions.v1.ListConversationMessagesResponse.page:type_name -> kodex.interactions.v1.PageResponse
-	41,  // 143: kodex.interactions.v1.InteractionRequestResponse.request:type_name -> kodex.interactions.v1.InteractionRequest
-	41,  // 144: kodex.interactions.v1.InteractionResponseResponse.request:type_name -> kodex.interactions.v1.InteractionRequest
-	42,  // 145: kodex.interactions.v1.InteractionResponseResponse.response:type_name -> kodex.interactions.v1.InteractionResponse
-	41,  // 146: kodex.interactions.v1.ListInteractionRequestsResponse.requests:type_name -> kodex.interactions.v1.InteractionRequest
-	30,  // 147: kodex.interactions.v1.ListInteractionRequestsResponse.page:type_name -> kodex.interactions.v1.PageResponse
-	8,   // 148: kodex.interactions.v1.OwnerInboxItem.request_kind:type_name -> kodex.interactions.v1.InteractionRequestKind
-	10,  // 149: kodex.interactions.v1.OwnerInboxItem.request_status:type_name -> kodex.interactions.v1.InteractionRequestStatus
-	31,  // 150: kodex.interactions.v1.OwnerInboxItem.scope:type_name -> kodex.interactions.v1.ScopeRef
-	35,  // 151: kodex.interactions.v1.OwnerInboxItem.requester:type_name -> kodex.interactions.v1.SourceOwnerRef
-	37,  // 152: kodex.interactions.v1.OwnerInboxItem.decision_owner:type_name -> kodex.interactions.v1.DecisionOwnerRef
-	34,  // 153: kodex.interactions.v1.OwnerInboxItem.assignee_refs:type_name -> kodex.interactions.v1.ActorRef
-	33,  // 154: kodex.interactions.v1.OwnerInboxItem.context_refs:type_name -> kodex.interactions.v1.ExternalRef
-	82,  // 155: kodex.interactions.v1.OwnerInboxItem.delivery_summary:type_name -> kodex.interactions.v1.OwnerInboxDeliverySummary
-	83,  // 156: kodex.interactions.v1.OwnerInboxItem.latest_callback:type_name -> kodex.interactions.v1.OwnerInboxCallbackSummary
-	84,  // 157: kodex.interactions.v1.OwnerInboxItem.latest_response:type_name -> kodex.interactions.v1.OwnerInboxResponseSummary
-	20,  // 158: kodex.interactions.v1.OwnerInboxDeliverySummary.latest_status:type_name -> kodex.interactions.v1.DeliveryAttemptStatus
-	21,  // 159: kodex.interactions.v1.OwnerInboxDeliverySummary.latest_error_class:type_name -> kodex.interactions.v1.DeliveryErrorClass
-	23,  // 160: kodex.interactions.v1.OwnerInboxCallbackSummary.signature_status:type_name -> kodex.interactions.v1.CallbackSignatureStatus
-	24,  // 161: kodex.interactions.v1.OwnerInboxCallbackSummary.processing_status:type_name -> kodex.interactions.v1.CallbackProcessingStatus
-	11,  // 162: kodex.interactions.v1.OwnerInboxResponseSummary.response_action:type_name -> kodex.interactions.v1.InteractionResponseAction
-	12,  // 163: kodex.interactions.v1.OwnerInboxResponseSummary.source_kind:type_name -> kodex.interactions.v1.InteractionResponseSourceKind
-	32,  // 164: kodex.interactions.v1.OwnerInboxResponseSummary.response_object:type_name -> kodex.interactions.v1.ObjectRef
-	81,  // 165: kodex.interactions.v1.ListOwnerInboxItemsResponse.items:type_name -> kodex.interactions.v1.OwnerInboxItem
-	30,  // 166: kodex.interactions.v1.ListOwnerInboxItemsResponse.page:type_name -> kodex.interactions.v1.PageResponse
-	43,  // 167: kodex.interactions.v1.NotificationResponse.notification:type_name -> kodex.interactions.v1.Notification
-	44,  // 168: kodex.interactions.v1.SubscriptionResponse.subscription:type_name -> kodex.interactions.v1.Subscription
-	44,  // 169: kodex.interactions.v1.ListSubscriptionsResponse.subscriptions:type_name -> kodex.interactions.v1.Subscription
-	30,  // 170: kodex.interactions.v1.ListSubscriptionsResponse.page:type_name -> kodex.interactions.v1.PageResponse
-	47,  // 171: kodex.interactions.v1.DeliveryAttemptResponse.delivery_attempt:type_name -> kodex.interactions.v1.DeliveryAttempt
-	48,  // 172: kodex.interactions.v1.ChannelCallbackResponse.callback:type_name -> kodex.interactions.v1.ChannelCallback
-	42,  // 173: kodex.interactions.v1.ChannelCallbackResponse.response:type_name -> kodex.interactions.v1.InteractionResponse
-	41,  // 174: kodex.interactions.v1.DeliveryStatusResponse.request:type_name -> kodex.interactions.v1.InteractionRequest
-	43,  // 175: kodex.interactions.v1.DeliveryStatusResponse.notification:type_name -> kodex.interactions.v1.Notification
-	47,  // 176: kodex.interactions.v1.DeliveryStatusResponse.delivery_attempts:type_name -> kodex.interactions.v1.DeliveryAttempt
-	48,  // 177: kodex.interactions.v1.DeliveryStatusResponse.latest_callback:type_name -> kodex.interactions.v1.ChannelCallback
-	52,  // 178: kodex.interactions.v1.InteractionHubService.CreateConversationThread:input_type -> kodex.interactions.v1.CreateConversationThreadRequest
-	53,  // 179: kodex.interactions.v1.InteractionHubService.RecordConversationMessage:input_type -> kodex.interactions.v1.RecordConversationMessageRequest
-	54,  // 180: kodex.interactions.v1.InteractionHubService.GetConversationThread:input_type -> kodex.interactions.v1.GetConversationThreadRequest
-	55,  // 181: kodex.interactions.v1.InteractionHubService.ListConversationMessages:input_type -> kodex.interactions.v1.ListConversationMessagesRequest
-	57,  // 182: kodex.interactions.v1.InteractionHubService.RequestFeedback:input_type -> kodex.interactions.v1.RequestFeedbackRequest
-	58,  // 183: kodex.interactions.v1.InteractionHubService.RequestApproval:input_type -> kodex.interactions.v1.RequestApprovalRequest
-	59,  // 184: kodex.interactions.v1.InteractionHubService.RequestHumanGate:input_type -> kodex.interactions.v1.RequestHumanGateRequest
-	60,  // 185: kodex.interactions.v1.InteractionHubService.RecordInteractionResponse:input_type -> kodex.interactions.v1.RecordInteractionResponseRequest
-	61,  // 186: kodex.interactions.v1.InteractionHubService.CancelInteractionRequest:input_type -> kodex.interactions.v1.CancelInteractionRequestRequest
-	62,  // 187: kodex.interactions.v1.InteractionHubService.ExpireInteractionRequests:input_type -> kodex.interactions.v1.ExpireInteractionRequestsRequest
-	63,  // 188: kodex.interactions.v1.InteractionHubService.GetInteractionRequest:input_type -> kodex.interactions.v1.GetInteractionRequestRequest
-	64,  // 189: kodex.interactions.v1.InteractionHubService.ListInteractionRequests:input_type -> kodex.interactions.v1.ListInteractionRequestsRequest
-	65,  // 190: kodex.interactions.v1.InteractionHubService.ListOwnerInboxItems:input_type -> kodex.interactions.v1.ListOwnerInboxItemsRequest
-	66,  // 191: kodex.interactions.v1.InteractionHubService.RequestNotification:input_type -> kodex.interactions.v1.RequestNotificationRequest
-	67,  // 192: kodex.interactions.v1.InteractionHubService.UpsertSubscription:input_type -> kodex.interactions.v1.UpsertSubscriptionRequest
-	68,  // 193: kodex.interactions.v1.InteractionHubService.DisableSubscription:input_type -> kodex.interactions.v1.DisableSubscriptionRequest
-	69,  // 194: kodex.interactions.v1.InteractionHubService.ListSubscriptions:input_type -> kodex.interactions.v1.ListSubscriptionsRequest
-	70,  // 195: kodex.interactions.v1.InteractionHubService.PlanDelivery:input_type -> kodex.interactions.v1.PlanDeliveryRequest
-	71,  // 196: kodex.interactions.v1.InteractionHubService.RecordDeliveryResult:input_type -> kodex.interactions.v1.RecordDeliveryResultRequest
-	72,  // 197: kodex.interactions.v1.InteractionHubService.RecordChannelCallback:input_type -> kodex.interactions.v1.RecordChannelCallbackRequest
-	73,  // 198: kodex.interactions.v1.InteractionHubService.GetDeliveryStatus:input_type -> kodex.interactions.v1.GetDeliveryStatusRequest
-	74,  // 199: kodex.interactions.v1.InteractionHubService.CreateConversationThread:output_type -> kodex.interactions.v1.ConversationThreadResponse
-	75,  // 200: kodex.interactions.v1.InteractionHubService.RecordConversationMessage:output_type -> kodex.interactions.v1.ConversationMessageResponse
-	74,  // 201: kodex.interactions.v1.InteractionHubService.GetConversationThread:output_type -> kodex.interactions.v1.ConversationThreadResponse
-	76,  // 202: kodex.interactions.v1.InteractionHubService.ListConversationMessages:output_type -> kodex.interactions.v1.ListConversationMessagesResponse
-	77,  // 203: kodex.interactions.v1.InteractionHubService.RequestFeedback:output_type -> kodex.interactions.v1.InteractionRequestResponse
-	77,  // 204: kodex.interactions.v1.InteractionHubService.RequestApproval:output_type -> kodex.interactions.v1.InteractionRequestResponse
-	77,  // 205: kodex.interactions.v1.InteractionHubService.RequestHumanGate:output_type -> kodex.interactions.v1.InteractionRequestResponse
-	78,  // 206: kodex.interactions.v1.InteractionHubService.RecordInteractionResponse:output_type -> kodex.interactions.v1.InteractionResponseResponse
-	77,  // 207: kodex.interactions.v1.InteractionHubService.CancelInteractionRequest:output_type -> kodex.interactions.v1.InteractionRequestResponse
-	79,  // 208: kodex.interactions.v1.InteractionHubService.ExpireInteractionRequests:output_type -> kodex.interactions.v1.ExpireInteractionRequestsResponse
-	77,  // 209: kodex.interactions.v1.InteractionHubService.GetInteractionRequest:output_type -> kodex.interactions.v1.InteractionRequestResponse
-	80,  // 210: kodex.interactions.v1.InteractionHubService.ListInteractionRequests:output_type -> kodex.interactions.v1.ListInteractionRequestsResponse
-	85,  // 211: kodex.interactions.v1.InteractionHubService.ListOwnerInboxItems:output_type -> kodex.interactions.v1.ListOwnerInboxItemsResponse
-	86,  // 212: kodex.interactions.v1.InteractionHubService.RequestNotification:output_type -> kodex.interactions.v1.NotificationResponse
-	87,  // 213: kodex.interactions.v1.InteractionHubService.UpsertSubscription:output_type -> kodex.interactions.v1.SubscriptionResponse
-	87,  // 214: kodex.interactions.v1.InteractionHubService.DisableSubscription:output_type -> kodex.interactions.v1.SubscriptionResponse
-	88,  // 215: kodex.interactions.v1.InteractionHubService.ListSubscriptions:output_type -> kodex.interactions.v1.ListSubscriptionsResponse
-	89,  // 216: kodex.interactions.v1.InteractionHubService.PlanDelivery:output_type -> kodex.interactions.v1.DeliveryAttemptResponse
-	89,  // 217: kodex.interactions.v1.InteractionHubService.RecordDeliveryResult:output_type -> kodex.interactions.v1.DeliveryAttemptResponse
-	90,  // 218: kodex.interactions.v1.InteractionHubService.RecordChannelCallback:output_type -> kodex.interactions.v1.ChannelCallbackResponse
-	91,  // 219: kodex.interactions.v1.InteractionHubService.GetDeliveryStatus:output_type -> kodex.interactions.v1.DeliveryStatusResponse
-	199, // [199:220] is the sub-list for method output_type
-	178, // [178:199] is the sub-list for method input_type
-	178, // [178:178] is the sub-list for extension type_name
-	178, // [178:178] is the sub-list for extension extendee
-	0,   // [0:178] is the sub-list for field type_name
+	26,  // 111: kodex.interactions.v1.GetOwnerInboxItemRequest.meta:type_name -> kodex.interactions.v1.QueryMeta
+	31,  // 112: kodex.interactions.v1.GetOwnerInboxItemRequest.scope:type_name -> kodex.interactions.v1.ScopeRef
+	34,  // 113: kodex.interactions.v1.GetOwnerInboxItemRequest.assignee_ref:type_name -> kodex.interactions.v1.ActorRef
+	25,  // 114: kodex.interactions.v1.RequestNotificationRequest.meta:type_name -> kodex.interactions.v1.CommandMeta
+	31,  // 115: kodex.interactions.v1.RequestNotificationRequest.scope:type_name -> kodex.interactions.v1.ScopeRef
+	13,  // 116: kodex.interactions.v1.RequestNotificationRequest.notification_kind:type_name -> kodex.interactions.v1.NotificationKind
+	34,  // 117: kodex.interactions.v1.RequestNotificationRequest.recipient_refs:type_name -> kodex.interactions.v1.ActorRef
+	14,  // 118: kodex.interactions.v1.RequestNotificationRequest.priority:type_name -> kodex.interactions.v1.NotificationPriority
+	35,  // 119: kodex.interactions.v1.RequestNotificationRequest.source_owner:type_name -> kodex.interactions.v1.SourceOwnerRef
+	36,  // 120: kodex.interactions.v1.RequestNotificationRequest.ingress:type_name -> kodex.interactions.v1.IngressRef
+	33,  // 121: kodex.interactions.v1.RequestNotificationRequest.context_refs:type_name -> kodex.interactions.v1.ExternalRef
+	33,  // 122: kodex.interactions.v1.RequestNotificationRequest.channel_hint_refs:type_name -> kodex.interactions.v1.ExternalRef
+	25,  // 123: kodex.interactions.v1.UpsertSubscriptionRequest.meta:type_name -> kodex.interactions.v1.CommandMeta
+	31,  // 124: kodex.interactions.v1.UpsertSubscriptionRequest.scope:type_name -> kodex.interactions.v1.ScopeRef
+	34,  // 125: kodex.interactions.v1.UpsertSubscriptionRequest.subscriber_ref:type_name -> kodex.interactions.v1.ActorRef
+	16,  // 126: kodex.interactions.v1.UpsertSubscriptionRequest.status:type_name -> kodex.interactions.v1.SubscriptionStatus
+	35,  // 127: kodex.interactions.v1.UpsertSubscriptionRequest.source_owner:type_name -> kodex.interactions.v1.SourceOwnerRef
+	33,  // 128: kodex.interactions.v1.UpsertSubscriptionRequest.channel_hint_refs:type_name -> kodex.interactions.v1.ExternalRef
+	25,  // 129: kodex.interactions.v1.DisableSubscriptionRequest.meta:type_name -> kodex.interactions.v1.CommandMeta
+	26,  // 130: kodex.interactions.v1.ListSubscriptionsRequest.meta:type_name -> kodex.interactions.v1.QueryMeta
+	31,  // 131: kodex.interactions.v1.ListSubscriptionsRequest.scope:type_name -> kodex.interactions.v1.ScopeRef
+	16,  // 132: kodex.interactions.v1.ListSubscriptionsRequest.status:type_name -> kodex.interactions.v1.SubscriptionStatus
+	29,  // 133: kodex.interactions.v1.ListSubscriptionsRequest.page:type_name -> kodex.interactions.v1.PageRequest
+	25,  // 134: kodex.interactions.v1.PlanDeliveryRequest.meta:type_name -> kodex.interactions.v1.CommandMeta
+	46,  // 135: kodex.interactions.v1.PlanDeliveryRequest.target:type_name -> kodex.interactions.v1.DeliveryTarget
+	25,  // 136: kodex.interactions.v1.RecordDeliveryResultRequest.meta:type_name -> kodex.interactions.v1.CommandMeta
+	50,  // 137: kodex.interactions.v1.RecordDeliveryResultRequest.result:type_name -> kodex.interactions.v1.ChannelDeliveryResult
+	25,  // 138: kodex.interactions.v1.RecordChannelCallbackRequest.meta:type_name -> kodex.interactions.v1.CommandMeta
+	51,  // 139: kodex.interactions.v1.RecordChannelCallbackRequest.callback:type_name -> kodex.interactions.v1.ChannelCallbackEnvelope
+	26,  // 140: kodex.interactions.v1.GetDeliveryStatusRequest.meta:type_name -> kodex.interactions.v1.QueryMeta
+	46,  // 141: kodex.interactions.v1.GetDeliveryStatusRequest.target:type_name -> kodex.interactions.v1.DeliveryTarget
+	39,  // 142: kodex.interactions.v1.ConversationThreadResponse.thread:type_name -> kodex.interactions.v1.ConversationThread
+	40,  // 143: kodex.interactions.v1.ConversationMessageResponse.message:type_name -> kodex.interactions.v1.ConversationMessage
+	40,  // 144: kodex.interactions.v1.ListConversationMessagesResponse.messages:type_name -> kodex.interactions.v1.ConversationMessage
+	30,  // 145: kodex.interactions.v1.ListConversationMessagesResponse.page:type_name -> kodex.interactions.v1.PageResponse
+	41,  // 146: kodex.interactions.v1.InteractionRequestResponse.request:type_name -> kodex.interactions.v1.InteractionRequest
+	41,  // 147: kodex.interactions.v1.InteractionResponseResponse.request:type_name -> kodex.interactions.v1.InteractionRequest
+	42,  // 148: kodex.interactions.v1.InteractionResponseResponse.response:type_name -> kodex.interactions.v1.InteractionResponse
+	41,  // 149: kodex.interactions.v1.ListInteractionRequestsResponse.requests:type_name -> kodex.interactions.v1.InteractionRequest
+	30,  // 150: kodex.interactions.v1.ListInteractionRequestsResponse.page:type_name -> kodex.interactions.v1.PageResponse
+	8,   // 151: kodex.interactions.v1.OwnerInboxItem.request_kind:type_name -> kodex.interactions.v1.InteractionRequestKind
+	10,  // 152: kodex.interactions.v1.OwnerInboxItem.request_status:type_name -> kodex.interactions.v1.InteractionRequestStatus
+	31,  // 153: kodex.interactions.v1.OwnerInboxItem.scope:type_name -> kodex.interactions.v1.ScopeRef
+	35,  // 154: kodex.interactions.v1.OwnerInboxItem.requester:type_name -> kodex.interactions.v1.SourceOwnerRef
+	37,  // 155: kodex.interactions.v1.OwnerInboxItem.decision_owner:type_name -> kodex.interactions.v1.DecisionOwnerRef
+	34,  // 156: kodex.interactions.v1.OwnerInboxItem.assignee_refs:type_name -> kodex.interactions.v1.ActorRef
+	33,  // 157: kodex.interactions.v1.OwnerInboxItem.context_refs:type_name -> kodex.interactions.v1.ExternalRef
+	83,  // 158: kodex.interactions.v1.OwnerInboxItem.delivery_summary:type_name -> kodex.interactions.v1.OwnerInboxDeliverySummary
+	84,  // 159: kodex.interactions.v1.OwnerInboxItem.latest_callback:type_name -> kodex.interactions.v1.OwnerInboxCallbackSummary
+	85,  // 160: kodex.interactions.v1.OwnerInboxItem.latest_response:type_name -> kodex.interactions.v1.OwnerInboxResponseSummary
+	38,  // 161: kodex.interactions.v1.OwnerInboxItem.allowed_actions:type_name -> kodex.interactions.v1.InteractionAction
+	20,  // 162: kodex.interactions.v1.OwnerInboxDeliverySummary.latest_status:type_name -> kodex.interactions.v1.DeliveryAttemptStatus
+	21,  // 163: kodex.interactions.v1.OwnerInboxDeliverySummary.latest_error_class:type_name -> kodex.interactions.v1.DeliveryErrorClass
+	23,  // 164: kodex.interactions.v1.OwnerInboxCallbackSummary.signature_status:type_name -> kodex.interactions.v1.CallbackSignatureStatus
+	24,  // 165: kodex.interactions.v1.OwnerInboxCallbackSummary.processing_status:type_name -> kodex.interactions.v1.CallbackProcessingStatus
+	11,  // 166: kodex.interactions.v1.OwnerInboxResponseSummary.response_action:type_name -> kodex.interactions.v1.InteractionResponseAction
+	12,  // 167: kodex.interactions.v1.OwnerInboxResponseSummary.source_kind:type_name -> kodex.interactions.v1.InteractionResponseSourceKind
+	32,  // 168: kodex.interactions.v1.OwnerInboxResponseSummary.response_object:type_name -> kodex.interactions.v1.ObjectRef
+	82,  // 169: kodex.interactions.v1.ListOwnerInboxItemsResponse.items:type_name -> kodex.interactions.v1.OwnerInboxItem
+	30,  // 170: kodex.interactions.v1.ListOwnerInboxItemsResponse.page:type_name -> kodex.interactions.v1.PageResponse
+	82,  // 171: kodex.interactions.v1.OwnerInboxItemResponse.item:type_name -> kodex.interactions.v1.OwnerInboxItem
+	43,  // 172: kodex.interactions.v1.NotificationResponse.notification:type_name -> kodex.interactions.v1.Notification
+	44,  // 173: kodex.interactions.v1.SubscriptionResponse.subscription:type_name -> kodex.interactions.v1.Subscription
+	44,  // 174: kodex.interactions.v1.ListSubscriptionsResponse.subscriptions:type_name -> kodex.interactions.v1.Subscription
+	30,  // 175: kodex.interactions.v1.ListSubscriptionsResponse.page:type_name -> kodex.interactions.v1.PageResponse
+	47,  // 176: kodex.interactions.v1.DeliveryAttemptResponse.delivery_attempt:type_name -> kodex.interactions.v1.DeliveryAttempt
+	48,  // 177: kodex.interactions.v1.ChannelCallbackResponse.callback:type_name -> kodex.interactions.v1.ChannelCallback
+	42,  // 178: kodex.interactions.v1.ChannelCallbackResponse.response:type_name -> kodex.interactions.v1.InteractionResponse
+	41,  // 179: kodex.interactions.v1.DeliveryStatusResponse.request:type_name -> kodex.interactions.v1.InteractionRequest
+	43,  // 180: kodex.interactions.v1.DeliveryStatusResponse.notification:type_name -> kodex.interactions.v1.Notification
+	47,  // 181: kodex.interactions.v1.DeliveryStatusResponse.delivery_attempts:type_name -> kodex.interactions.v1.DeliveryAttempt
+	48,  // 182: kodex.interactions.v1.DeliveryStatusResponse.latest_callback:type_name -> kodex.interactions.v1.ChannelCallback
+	52,  // 183: kodex.interactions.v1.InteractionHubService.CreateConversationThread:input_type -> kodex.interactions.v1.CreateConversationThreadRequest
+	53,  // 184: kodex.interactions.v1.InteractionHubService.RecordConversationMessage:input_type -> kodex.interactions.v1.RecordConversationMessageRequest
+	54,  // 185: kodex.interactions.v1.InteractionHubService.GetConversationThread:input_type -> kodex.interactions.v1.GetConversationThreadRequest
+	55,  // 186: kodex.interactions.v1.InteractionHubService.ListConversationMessages:input_type -> kodex.interactions.v1.ListConversationMessagesRequest
+	57,  // 187: kodex.interactions.v1.InteractionHubService.RequestFeedback:input_type -> kodex.interactions.v1.RequestFeedbackRequest
+	58,  // 188: kodex.interactions.v1.InteractionHubService.RequestApproval:input_type -> kodex.interactions.v1.RequestApprovalRequest
+	59,  // 189: kodex.interactions.v1.InteractionHubService.RequestHumanGate:input_type -> kodex.interactions.v1.RequestHumanGateRequest
+	60,  // 190: kodex.interactions.v1.InteractionHubService.RecordInteractionResponse:input_type -> kodex.interactions.v1.RecordInteractionResponseRequest
+	61,  // 191: kodex.interactions.v1.InteractionHubService.CancelInteractionRequest:input_type -> kodex.interactions.v1.CancelInteractionRequestRequest
+	62,  // 192: kodex.interactions.v1.InteractionHubService.ExpireInteractionRequests:input_type -> kodex.interactions.v1.ExpireInteractionRequestsRequest
+	63,  // 193: kodex.interactions.v1.InteractionHubService.GetInteractionRequest:input_type -> kodex.interactions.v1.GetInteractionRequestRequest
+	64,  // 194: kodex.interactions.v1.InteractionHubService.ListInteractionRequests:input_type -> kodex.interactions.v1.ListInteractionRequestsRequest
+	65,  // 195: kodex.interactions.v1.InteractionHubService.ListOwnerInboxItems:input_type -> kodex.interactions.v1.ListOwnerInboxItemsRequest
+	66,  // 196: kodex.interactions.v1.InteractionHubService.GetOwnerInboxItem:input_type -> kodex.interactions.v1.GetOwnerInboxItemRequest
+	67,  // 197: kodex.interactions.v1.InteractionHubService.RequestNotification:input_type -> kodex.interactions.v1.RequestNotificationRequest
+	68,  // 198: kodex.interactions.v1.InteractionHubService.UpsertSubscription:input_type -> kodex.interactions.v1.UpsertSubscriptionRequest
+	69,  // 199: kodex.interactions.v1.InteractionHubService.DisableSubscription:input_type -> kodex.interactions.v1.DisableSubscriptionRequest
+	70,  // 200: kodex.interactions.v1.InteractionHubService.ListSubscriptions:input_type -> kodex.interactions.v1.ListSubscriptionsRequest
+	71,  // 201: kodex.interactions.v1.InteractionHubService.PlanDelivery:input_type -> kodex.interactions.v1.PlanDeliveryRequest
+	72,  // 202: kodex.interactions.v1.InteractionHubService.RecordDeliveryResult:input_type -> kodex.interactions.v1.RecordDeliveryResultRequest
+	73,  // 203: kodex.interactions.v1.InteractionHubService.RecordChannelCallback:input_type -> kodex.interactions.v1.RecordChannelCallbackRequest
+	74,  // 204: kodex.interactions.v1.InteractionHubService.GetDeliveryStatus:input_type -> kodex.interactions.v1.GetDeliveryStatusRequest
+	75,  // 205: kodex.interactions.v1.InteractionHubService.CreateConversationThread:output_type -> kodex.interactions.v1.ConversationThreadResponse
+	76,  // 206: kodex.interactions.v1.InteractionHubService.RecordConversationMessage:output_type -> kodex.interactions.v1.ConversationMessageResponse
+	75,  // 207: kodex.interactions.v1.InteractionHubService.GetConversationThread:output_type -> kodex.interactions.v1.ConversationThreadResponse
+	77,  // 208: kodex.interactions.v1.InteractionHubService.ListConversationMessages:output_type -> kodex.interactions.v1.ListConversationMessagesResponse
+	78,  // 209: kodex.interactions.v1.InteractionHubService.RequestFeedback:output_type -> kodex.interactions.v1.InteractionRequestResponse
+	78,  // 210: kodex.interactions.v1.InteractionHubService.RequestApproval:output_type -> kodex.interactions.v1.InteractionRequestResponse
+	78,  // 211: kodex.interactions.v1.InteractionHubService.RequestHumanGate:output_type -> kodex.interactions.v1.InteractionRequestResponse
+	79,  // 212: kodex.interactions.v1.InteractionHubService.RecordInteractionResponse:output_type -> kodex.interactions.v1.InteractionResponseResponse
+	78,  // 213: kodex.interactions.v1.InteractionHubService.CancelInteractionRequest:output_type -> kodex.interactions.v1.InteractionRequestResponse
+	80,  // 214: kodex.interactions.v1.InteractionHubService.ExpireInteractionRequests:output_type -> kodex.interactions.v1.ExpireInteractionRequestsResponse
+	78,  // 215: kodex.interactions.v1.InteractionHubService.GetInteractionRequest:output_type -> kodex.interactions.v1.InteractionRequestResponse
+	81,  // 216: kodex.interactions.v1.InteractionHubService.ListInteractionRequests:output_type -> kodex.interactions.v1.ListInteractionRequestsResponse
+	86,  // 217: kodex.interactions.v1.InteractionHubService.ListOwnerInboxItems:output_type -> kodex.interactions.v1.ListOwnerInboxItemsResponse
+	87,  // 218: kodex.interactions.v1.InteractionHubService.GetOwnerInboxItem:output_type -> kodex.interactions.v1.OwnerInboxItemResponse
+	88,  // 219: kodex.interactions.v1.InteractionHubService.RequestNotification:output_type -> kodex.interactions.v1.NotificationResponse
+	89,  // 220: kodex.interactions.v1.InteractionHubService.UpsertSubscription:output_type -> kodex.interactions.v1.SubscriptionResponse
+	89,  // 221: kodex.interactions.v1.InteractionHubService.DisableSubscription:output_type -> kodex.interactions.v1.SubscriptionResponse
+	90,  // 222: kodex.interactions.v1.InteractionHubService.ListSubscriptions:output_type -> kodex.interactions.v1.ListSubscriptionsResponse
+	91,  // 223: kodex.interactions.v1.InteractionHubService.PlanDelivery:output_type -> kodex.interactions.v1.DeliveryAttemptResponse
+	91,  // 224: kodex.interactions.v1.InteractionHubService.RecordDeliveryResult:output_type -> kodex.interactions.v1.DeliveryAttemptResponse
+	92,  // 225: kodex.interactions.v1.InteractionHubService.RecordChannelCallback:output_type -> kodex.interactions.v1.ChannelCallbackResponse
+	93,  // 226: kodex.interactions.v1.InteractionHubService.GetDeliveryStatus:output_type -> kodex.interactions.v1.DeliveryStatusResponse
+	205, // [205:227] is the sub-list for method output_type
+	183, // [183:205] is the sub-list for method input_type
+	183, // [183:183] is the sub-list for extension type_name
+	183, // [183:183] is the sub-list for extension extendee
+	0,   // [0:183] is the sub-list for field type_name
 }
 
 func init() { file_kodex_interactions_v1_interaction_hub_proto_init() }
@@ -8924,24 +9073,24 @@ func file_kodex_interactions_v1_interaction_hub_proto_init() {
 	file_kodex_interactions_v1_interaction_hub_proto_msgTypes[37].OneofWrappers = []any{}
 	file_kodex_interactions_v1_interaction_hub_proto_msgTypes[39].OneofWrappers = []any{}
 	file_kodex_interactions_v1_interaction_hub_proto_msgTypes[40].OneofWrappers = []any{}
-	file_kodex_interactions_v1_interaction_hub_proto_msgTypes[41].OneofWrappers = []any{}
 	file_kodex_interactions_v1_interaction_hub_proto_msgTypes[42].OneofWrappers = []any{}
-	file_kodex_interactions_v1_interaction_hub_proto_msgTypes[44].OneofWrappers = []any{}
+	file_kodex_interactions_v1_interaction_hub_proto_msgTypes[43].OneofWrappers = []any{}
 	file_kodex_interactions_v1_interaction_hub_proto_msgTypes[45].OneofWrappers = []any{}
-	file_kodex_interactions_v1_interaction_hub_proto_msgTypes[48].OneofWrappers = []any{}
-	file_kodex_interactions_v1_interaction_hub_proto_msgTypes[56].OneofWrappers = []any{}
+	file_kodex_interactions_v1_interaction_hub_proto_msgTypes[46].OneofWrappers = []any{}
+	file_kodex_interactions_v1_interaction_hub_proto_msgTypes[49].OneofWrappers = []any{}
 	file_kodex_interactions_v1_interaction_hub_proto_msgTypes[57].OneofWrappers = []any{}
 	file_kodex_interactions_v1_interaction_hub_proto_msgTypes[58].OneofWrappers = []any{}
 	file_kodex_interactions_v1_interaction_hub_proto_msgTypes[59].OneofWrappers = []any{}
-	file_kodex_interactions_v1_interaction_hub_proto_msgTypes[65].OneofWrappers = []any{}
-	file_kodex_interactions_v1_interaction_hub_proto_msgTypes[66].OneofWrappers = []any{}
+	file_kodex_interactions_v1_interaction_hub_proto_msgTypes[60].OneofWrappers = []any{}
+	file_kodex_interactions_v1_interaction_hub_proto_msgTypes[67].OneofWrappers = []any{}
+	file_kodex_interactions_v1_interaction_hub_proto_msgTypes[68].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_kodex_interactions_v1_interaction_hub_proto_rawDesc), len(file_kodex_interactions_v1_interaction_hub_proto_rawDesc)),
 			NumEnums:      25,
-			NumMessages:   69,
+			NumMessages:   71,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

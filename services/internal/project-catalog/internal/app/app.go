@@ -90,7 +90,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	}
 	projectgrpc.RegisterProjectCatalogService(grpcServer, components.ProjectService)
 
-	errCh := make(chan error, 4)
+	errCh := make(chan error, 5)
 	go serviceprocess.StartHTTPServer(httpServer, "project-catalog", logger, errCh)
 	go serviceprocess.StartGRPCServer(grpcServer, "project-catalog", cfg.GRPCAddr, logger, errCh)
 	err = serviceprocess.StartOutboxDispatcher(
@@ -113,6 +113,9 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		return err
 	}
 	if err := startProviderBootstrapMergeConsumer(ctx, cfg, eventLogPool, projectService, logger, errCh); err != nil {
+		return err
+	}
+	if err := startProviderAdoptionMergeConsumer(ctx, cfg, eventLogPool, projectService, logger, errCh); err != nil {
 		return err
 	}
 

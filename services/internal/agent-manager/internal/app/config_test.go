@@ -100,6 +100,17 @@ func TestValidateRequiresProviderHubWriteTokenWhenEnabled(t *testing.T) {
 	}
 }
 
+func TestValidateRequiresInteractionHubTokenWhenRequestEnabled(t *testing.T) {
+	t.Parallel()
+
+	cfg := validConfig()
+	cfg.InteractionHubRequestEnabled = true
+	cfg.InteractionHubGRPCAuthToken = ""
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() err = nil, want interaction-hub auth token error")
+	}
+}
+
 func TestGRPCServerConfigMapsRuntimeLimits(t *testing.T) {
 	t.Parallel()
 
@@ -157,6 +168,10 @@ func validConfig() Config {
 		ProviderHubGRPCAddr:                            "provider-hub:9090",
 		ProviderHubGRPCAuthToken:                       "provider-token",
 		ProviderHubWriteTimeout:                        10 * time.Second,
+		InteractionHubRequestEnabled:                   false,
+		InteractionHubGRPCAddr:                         "interaction-hub:9090",
+		InteractionHubGRPCAuthToken:                    "interaction-token",
+		InteractionHubRequestTimeout:                   10 * time.Second,
 		OutboxDispatchEnabled:                          false,
 		OutboxPublisherKind:                            "disabled",
 		OutboxBatchSize:                                100,

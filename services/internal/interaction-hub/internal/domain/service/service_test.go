@@ -273,13 +273,15 @@ func TestServiceListsOwnerInboxItemsWithSafeSummaryAndDefaultActiveStatuses(t *t
 	}}
 	svc := New(repository)
 	input := ListOwnerInboxItemsInput{
-		Scope:              request.Scope,
-		AssigneeRef:        value.ActorRef{Kind: "user", Ref: "approver-1"},
-		ActorRef:           "user:approver-1",
-		CorrelationRef:     value.ExternalRef{Kind: "agent_run", Ref: "run:123"},
-		CorrelationID:      "trace-callback",
-		IncludeDiagnostics: true,
-		Page:               value.PageRequest{PageSize: 10},
+		Filter: query.OwnerInboxFilter{
+			Scope:              request.Scope,
+			AssigneeRef:        value.ActorRef{Kind: "user", Ref: "approver-1"},
+			ActorRef:           "user:approver-1",
+			CorrelationRef:     value.ExternalRef{Kind: "agent_run", Ref: "run:123"},
+			CorrelationID:      "trace-callback",
+			IncludeDiagnostics: true,
+			Page:               value.PageRequest{PageSize: 10},
+		},
 	}
 
 	items, _, err := svc.ListOwnerInboxItems(context.Background(), input)
@@ -306,12 +308,148 @@ func TestServiceListOwnerInboxItemsRejectsUnsafeFilters(t *testing.T) {
 	repository := newFakeRepository()
 	svc := New(repository)
 	_, _, err := svc.ListOwnerInboxItems(context.Background(), ListOwnerInboxItemsInput{
-		Scope:         value.ScopeRef{Type: enum.ScopeTypeService, Ref: "agent-manager"},
-		AssigneeRef:   value.ActorRef{Kind: "user"},
-		CorrelationID: strings.Repeat("x", maxInteractionRefBytes+1),
+		Filter: query.OwnerInboxFilter{
+			Scope:         value.ScopeRef{Type: enum.ScopeTypeService, Ref: "agent-manager"},
+			AssigneeRef:   value.ActorRef{Kind: "user"},
+			CorrelationID: strings.Repeat("x", maxInteractionRefBytes+1),
+		},
 	})
 	if !errors.Is(err, errs.ErrInvalidArgument) {
 		t.Fatalf("ListOwnerInboxItems() err = %v, want ErrInvalidArgument", err)
+	}
+}
+
+func TestServiceGetsOwnerInboxItemDetailForActiveAndResolvedRequests(t *testing.T) {
+	t.Parallel()
+
+	repository := newFakeRepository()
+	now := time.Date(2026, 5, 27, 10, 0, 0, 0, time.UTC)
+	pendingID := uuid.New()
+	answeredID := uuid.New()
+	seedInteractionRequest(repository, pendingID, now, enum.InteractionRequestStatusWaiting)
+	seedInteractionRequest(repository, answeredID, now, enum.InteractionRequestStatusAnswered)
+	answered := repository.requests[answeredID]
+	response := entity.InteractionResponse{
+		ID:                    uuid.New(),
+		RequestID:             answeredID,
+		ResponseAction:        enum.InteractionResponseActionApprove,
+		RespondedByActorRef:   "user:approver-1",
+		ResponseSummary:       "bounded approval summary",
+		ResponseSummaryDigest: "sha256:response-summary",
+		ResponseObject:        value.ObjectRef{URI: "s3://kodex-interactions/responses/answered", Digest: "sha256:response-object"},
+		SourceKind:            enum.InteractionResponseSourceKindWebConsole,
+		SourceRef:             "staff-gateway:response-1",
+		CreatedAt:             now.Add(time.Minute),
+	}
+	repository.ownerInboxItems = []entity.OwnerInboxItem{
+		{
+			Request: repository.requests[pendingID],
+			DeliverySummary: entity.OwnerInboxDeliverySummary{
+				AttemptCount:     1,
+				LatestDeliveryID: "delivery-pending",
+				LatestStatus:     enum.DeliveryAttemptStatusDelivered,
+			},
+		},
+		{
+			Request:        answered,
+			LatestResponse: &response,
+			DeliverySummary: entity.OwnerInboxDeliverySummary{
+				AttemptCount:     1,
+				LatestDeliveryID: "delivery-answered",
+				LatestStatus:     enum.DeliveryAttemptStatusDelivered,
+			},
+		},
+	}
+	svc := New(repository)
+
+	pending, err := svc.GetOwnerInboxItem(context.Background(), GetOwnerInboxItemInput{
+		RequestID:   pendingID,
+		Scope:       repository.requests[pendingID].Scope,
+		AssigneeRef: value.ActorRef{Kind: "user", Ref: "approver-1"},
+	})
+	if err != nil {
+		t.Fatalf("GetOwnerInboxItem() pending: %v", err)
+	}
+	if pending.Request.ID != pendingID || pending.LatestResponse != nil || len(pending.Request.AllowedActions) == 0 {
+		t.Fatalf("pending item = %+v, want pending request detail with allowed actions", pending)
+	}
+	if pending.Title != "safe prompt summary" || pending.Summary != "safe prompt summary" {
+		t.Fatalf("pending title=%q summary=%q, want safe prompt summary", pending.Title, pending.Summary)
+	}
+	if len(repository.ownerInboxFilter.Statuses) != len(allOwnerInboxStatuses()) || repository.ownerInboxFilter.RequestID != pendingID {
+		t.Fatalf("filter = %+v, want request id and all statuses for detail", repository.ownerInboxFilter)
+	}
+
+	resolved, err := svc.GetOwnerInboxItem(context.Background(), GetOwnerInboxItemInput{
+		RequestID:   answeredID,
+		Scope:       answered.Scope,
+		AssigneeRef: value.ActorRef{Kind: "user", Ref: "approver-1"},
+	})
+	if err != nil {
+		t.Fatalf("GetOwnerInboxItem() resolved: %v", err)
+	}
+	if resolved.Request.Status != enum.InteractionRequestStatusAnswered || resolved.LatestResponse == nil || resolved.LatestResponse.ID != response.ID {
+		t.Fatalf("resolved item = %+v, want answered item with latest response", resolved)
+	}
+	if len(resolved.Request.AllowedActions) != 0 {
+		t.Fatalf("resolved allowed actions = %+v, want none for terminal request", resolved.Request.AllowedActions)
+	}
+	for _, status := range []enum.InteractionRequestStatus{enum.InteractionRequestStatusCancelled, enum.InteractionRequestStatusExpired} {
+		requestID := uuid.New()
+		seedInteractionRequest(repository, requestID, now, status)
+		repository.ownerInboxItems = []entity.OwnerInboxItem{{Request: repository.requests[requestID]}}
+		item, err := svc.GetOwnerInboxItem(context.Background(), GetOwnerInboxItemInput{
+			RequestID:   requestID,
+			Scope:       repository.requests[requestID].Scope,
+			AssigneeRef: value.ActorRef{Kind: "user", Ref: "approver-1"},
+		})
+		if err != nil {
+			t.Fatalf("GetOwnerInboxItem() terminal %s: %v", status, err)
+		}
+		if len(item.Request.AllowedActions) != 0 {
+			t.Fatalf("allowed actions for %s = %+v, want none", status, item.Request.AllowedActions)
+		}
+	}
+}
+
+func TestServiceGetOwnerInboxItemRejectsInvalidScopeOrAssignee(t *testing.T) {
+	t.Parallel()
+
+	svc := New(newFakeRepository())
+	_, err := svc.GetOwnerInboxItem(context.Background(), GetOwnerInboxItemInput{
+		RequestID: uuid.New(),
+		Scope:     value.ScopeRef{Type: enum.ScopeTypeService},
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("GetOwnerInboxItem() invalid scope err = %v, want ErrInvalidArgument", err)
+	}
+	_, err = svc.GetOwnerInboxItem(context.Background(), GetOwnerInboxItemInput{
+		RequestID:   uuid.New(),
+		Scope:       value.ScopeRef{Type: enum.ScopeTypeService, Ref: "agent-manager"},
+		AssigneeRef: value.ActorRef{Kind: "user"},
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("GetOwnerInboxItem() invalid assignee err = %v, want ErrInvalidArgument", err)
+	}
+}
+
+func TestServiceGetOwnerInboxItemReturnsNotFoundForAssigneeMismatch(t *testing.T) {
+	t.Parallel()
+
+	repository := newFakeRepository()
+	now := time.Date(2026, 5, 27, 10, 20, 0, 0, time.UTC)
+	requestID := uuid.New()
+	seedInteractionRequest(repository, requestID, now, enum.InteractionRequestStatusWaiting)
+	repository.ownerInboxItems = []entity.OwnerInboxItem{{Request: repository.requests[requestID]}}
+	svc := New(repository)
+
+	_, err := svc.GetOwnerInboxItem(context.Background(), GetOwnerInboxItemInput{
+		RequestID:   requestID,
+		Scope:       repository.requests[requestID].Scope,
+		AssigneeRef: value.ActorRef{Kind: "user", Ref: "someone-else"},
+	})
+	if !errors.Is(err, errs.ErrNotFound) {
+		t.Fatalf("GetOwnerInboxItem() err = %v, want ErrNotFound", err)
 	}
 }
 
@@ -393,6 +531,31 @@ func TestServiceRecordsInteractionResponseWithTerminalStatusAndIdempotency(t *te
 	_, _, err = svc.RecordInteractionResponse(context.Background(), conflictingInput)
 	if !errors.Is(err, errs.ErrConflict) {
 		t.Fatalf("second response err = %v, want ErrConflict", err)
+	}
+}
+
+func TestServiceRecordInteractionResponseRejectsStaleVersion(t *testing.T) {
+	t.Parallel()
+
+	repository := newFakeRepository()
+	now := time.Date(2026, 5, 27, 11, 0, 0, 0, time.UTC)
+	requestID := uuid.New()
+	seedInteractionRequest(repository, requestID, now, enum.InteractionRequestStatusWaiting)
+	svc := NewWithConfig(repository, Config{Clock: fixedClock{now: now.Add(time.Minute)}, UUIDGenerator: &sequenceIDs{ids: []uuid.UUID{uuid.New()}}})
+
+	_, _, err := svc.RecordInteractionResponse(context.Background(), RecordInteractionResponseInput{
+		Meta:                validVersionedCommandMeta(2),
+		RequestID:           requestID,
+		ResponseAction:      enum.InteractionResponseActionApprove,
+		RespondedByActorRef: "user:approver-1",
+		SourceKind:          enum.InteractionResponseSourceKindWebConsole,
+		SourceRef:           "staff-gateway:response-stale",
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("RecordInteractionResponse() stale version err = %v, want ErrConflict", err)
+	}
+	if len(repository.responses) != 0 || len(repository.events) != 0 {
+		t.Fatalf("responses=%d events=%d, want no mutation on stale version", len(repository.responses), len(repository.events))
 	}
 }
 
@@ -483,6 +646,24 @@ func TestServiceRecordsHumanGateResponseSurfaceForOwnerResume(t *testing.T) {
 	}
 	if _, ok := payload["response_summary"]; ok {
 		t.Fatalf("outbox payload contains response_summary: %+v", payload)
+	}
+	repository.ownerInboxItems = []entity.OwnerInboxItem{{
+		Request:        answered,
+		LatestResponse: &response,
+	}}
+	item, err := svc.GetOwnerInboxItem(context.Background(), GetOwnerInboxItemInput{
+		RequestID:   requestID,
+		Scope:       answered.Scope,
+		AssigneeRef: value.ActorRef{Kind: "user", Ref: "approver-1"},
+	})
+	if err != nil {
+		t.Fatalf("GetOwnerInboxItem() human gate response: %v", err)
+	}
+	if item.Request.RequestKind != enum.InteractionRequestKindHumanGate || item.LatestResponse == nil || item.LatestResponse.ID != response.ID {
+		t.Fatalf("owner inbox item = %+v, want human gate response detail", item)
+	}
+	if item.LatestResponse.ResponseSummary != input.ResponseSummary || item.LatestResponse.ResponseObject.URI != input.ResponseObject.URI {
+		t.Fatalf("owner inbox response = %+v, want safe response summary/object refs", item.LatestResponse)
 	}
 
 	replayedRequest, replayedResponse, err := svc.RecordInteractionResponse(context.Background(), input)
@@ -2030,7 +2211,41 @@ func (r *fakeRepository) ListInteractionRequests(_ context.Context, filter query
 
 func (r *fakeRepository) ListOwnerInboxItems(_ context.Context, filter query.OwnerInboxFilter) ([]entity.OwnerInboxItem, value.PageResult, error) {
 	r.ownerInboxFilter = filter
-	return r.ownerInboxItems, value.PageResult{}, nil
+	items := make([]entity.OwnerInboxItem, 0, len(r.ownerInboxItems))
+	for _, item := range r.ownerInboxItems {
+		if filter.RequestID != uuid.Nil && item.Request.ID != filter.RequestID {
+			continue
+		}
+		if item.Request.Scope != filter.Scope {
+			continue
+		}
+		if len(filter.Statuses) > 0 && !requestStatusAllowed(item.Request.Status, filter.Statuses) {
+			continue
+		}
+		if filter.AssigneeRef.Kind != "" && !actorRefAllowed(item.Request.TargetRefs, filter.AssigneeRef) {
+			continue
+		}
+		items = append(items, item)
+	}
+	return items, value.PageResult{}, nil
+}
+
+func requestStatusAllowed(status enum.InteractionRequestStatus, allowed []enum.InteractionRequestStatus) bool {
+	for _, item := range allowed {
+		if item == status {
+			return true
+		}
+	}
+	return false
+}
+
+func actorRefAllowed(refs []value.ActorRef, want value.ActorRef) bool {
+	for _, ref := range refs {
+		if ref == want {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *fakeRepository) ListExpirableInteractionRequests(_ context.Context, scope value.ScopeRef, deadlineBefore time.Time, limit int32) ([]entity.InteractionRequest, error) {

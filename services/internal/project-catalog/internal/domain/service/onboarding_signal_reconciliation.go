@@ -26,10 +26,63 @@ const (
 
 // RecordBootstrapMergeSignalDiagnostic stores safe processing state for a bootstrap merge event that cannot import yet.
 func (s *Service) RecordBootstrapMergeSignalDiagnostic(ctx context.Context, input BootstrapMergeSignalDiagnosticInput) error {
-	signalInput, code, summary, err := normalizeBootstrapMergeSignalDiagnosticInput(input)
+	return s.recordRepositoryMergeSignalDiagnosticFor(ctx, input.ProjectID, input.RepositoryID, input.MergeSignal, input.SignalFingerprint, input.ErrorCode, input.ErrorSummary, input.Summary, bootstrapMergeDiagnosticConfig)
+}
+
+// RecordAdoptionMergeSignalDiagnostic stores safe processing state for an adoption merge event that cannot import yet.
+func (s *Service) RecordAdoptionMergeSignalDiagnostic(ctx context.Context, input AdoptionMergeSignalDiagnosticInput) error {
+	return s.recordRepositoryMergeSignalDiagnosticFor(ctx, input.ProjectID, input.RepositoryID, input.MergeSignal, input.SignalFingerprint, input.ErrorCode, input.ErrorSummary, input.Summary, adoptionMergeDiagnosticConfig)
+}
+
+type repositoryMergeDiagnosticConfig struct {
+	ExpectedSignalKind string
+	SignalKind         enum.OnboardingSignalKind
+	DefaultSummary     string
+}
+
+var (
+	bootstrapMergeDiagnosticConfig = repositoryMergeDiagnosticConfig{
+		ExpectedSignalKind: bootstrapMergeSignalKind,
+		SignalKind:         enum.OnboardingSignalKindBootstrapMerge,
+		DefaultSummary:     "bootstrap merge signal needs checked artifact input",
+	}
+	adoptionMergeDiagnosticConfig = repositoryMergeDiagnosticConfig{
+		ExpectedSignalKind: adoptionMergeSignalKind,
+		SignalKind:         enum.OnboardingSignalKindAdoptionMerge,
+		DefaultSummary:     "adoption merge signal needs checked artifact input",
+	}
+)
+
+func (s *Service) recordRepositoryMergeSignalDiagnosticFor(
+	ctx context.Context,
+	projectID uuid.UUID,
+	repositoryID uuid.UUID,
+	mergeSignal BootstrapRepositoryMergeSignal,
+	fingerprint string,
+	errorCode string,
+	errorSummary string,
+	summary string,
+	config repositoryMergeDiagnosticConfig,
+) error {
+	signalInput, code, normalizedSummary, err := normalizeRepositoryMergeSignalDiagnosticInput(
+		projectID,
+		repositoryID,
+		mergeSignal,
+		fingerprint,
+		errorCode,
+		errorSummary,
+		summary,
+		config.ExpectedSignalKind,
+		config.SignalKind,
+		config.DefaultSummary,
+	)
 	if err != nil {
 		return err
 	}
+	return s.recordRepositoryMergeSignalDiagnostic(ctx, signalInput, code, normalizedSummary)
+}
+
+func (s *Service) recordRepositoryMergeSignalDiagnostic(ctx context.Context, signalInput OnboardingSignalReconciliationInput, code string, summary string) error {
 	repository, err := s.repository.GetRepository(ctx, signalInput.RepositoryID)
 	if err != nil {
 		return err
@@ -163,16 +216,26 @@ func (s *Service) onboardingSignalRecord(
 	return signal, nil
 }
 
-func normalizeBootstrapMergeSignalDiagnosticInput(input BootstrapMergeSignalDiagnosticInput) (OnboardingSignalReconciliationInput, string, string, error) {
-	if input.ProjectID == uuid.Nil || input.RepositoryID == uuid.Nil {
+func normalizeRepositoryMergeSignalDiagnosticInput(
+	projectID uuid.UUID,
+	repositoryID uuid.UUID,
+	signal BootstrapRepositoryMergeSignal,
+	signalFingerprint string,
+	errorCode string,
+	errorSummary string,
+	summaryText string,
+	expectedSignalKind string,
+	signalKind enum.OnboardingSignalKind,
+	defaultSummary string,
+) (OnboardingSignalReconciliationInput, string, string, error) {
+	if projectID == uuid.Nil || repositoryID == uuid.Nil {
 		return OnboardingSignalReconciliationInput{}, "", "", errs.ErrInvalidArgument
 	}
-	signal := input.MergeSignal
 	if err := validateOptionalSignalID(signal.SignalID); err != nil {
 		return OnboardingSignalReconciliationInput{}, "", "", err
 	}
 	signalKey := strings.TrimSpace(signal.SignalKey)
-	if signalKey == "" || strings.TrimSpace(signal.SignalKind) != bootstrapMergeSignalKind {
+	if signalKey == "" || strings.TrimSpace(signal.SignalKind) != expectedSignalKind {
 		return OnboardingSignalReconciliationInput{}, "", "", errs.ErrInvalidArgument
 	}
 	baseBranch := normalizeBootstrapMergeBaseBranch(signal.BaseBranch)
@@ -191,24 +254,24 @@ func normalizeBootstrapMergeSignalDiagnosticInput(input BootstrapMergeSignalDiag
 			return OnboardingSignalReconciliationInput{}, "", "", err
 		}
 	}
-	code, err := normalizeSafeOnboardingRef(input.ErrorCode, maxOnboardingErrorCodeLength, true)
+	code, err := normalizeSafeOnboardingRef(errorCode, maxOnboardingErrorCodeLength, true)
 	if err != nil {
 		return OnboardingSignalReconciliationInput{}, "", "", err
 	}
-	summary := truncateSafeOnboardingSummary(firstNonEmpty(input.ErrorSummary, input.Summary, "bootstrap merge signal needs checked artifact input"))
+	summary := truncateSafeOnboardingSummary(firstNonEmpty(errorSummary, summaryText, defaultSummary))
 	signalInput := OnboardingSignalReconciliationInput{
-		ProjectID:            input.ProjectID,
-		RepositoryID:         input.RepositoryID,
-		SignalKind:           enum.OnboardingSignalKindBootstrapMerge,
+		ProjectID:            projectID,
+		RepositoryID:         repositoryID,
+		SignalKind:           signalKind,
 		SignalKey:            signalKey,
-		SignalFingerprint:    input.SignalFingerprint,
+		SignalFingerprint:    signalFingerprint,
 		ProviderSlug:         signal.ProviderTarget.ProviderSlug,
 		RepositoryFullName:   signal.ProviderTarget.RepositoryFullName,
 		ProviderRepositoryID: signal.ProviderTarget.ProviderRepositoryID,
 		BaseBranch:           baseBranch,
 		SourceRef:            "refs/heads/" + baseBranch,
 		SourceCommitSHA:      mergeCommitSHA,
-		Summary:              truncateSafeOnboardingSummary(firstNonEmpty(input.Summary, summary)),
+		Summary:              truncateSafeOnboardingSummary(firstNonEmpty(summaryText, summary)),
 		ObservedAt:           firstNonEmpty(strings.TrimSpace(signal.MergeObservedAt), strings.TrimSpace(signal.MergedAt)),
 	}
 	normalized, err := normalizeOnboardingSignalReconciliationInput(signalInput)
@@ -272,7 +335,9 @@ func normalizeOnboardingSignalReconciliationInput(input OnboardingSignalReconcil
 	if projectID == uuid.Nil || repositoryID == uuid.Nil {
 		return OnboardingSignalReconciliationInput{}, errs.ErrInvalidArgument
 	}
-	if input.SignalKind != enum.OnboardingSignalKindBootstrapMerge && input.SignalKind != enum.OnboardingSignalKindAdoptionScan {
+	if input.SignalKind != enum.OnboardingSignalKindBootstrapMerge &&
+		input.SignalKind != enum.OnboardingSignalKindAdoptionScan &&
+		input.SignalKind != enum.OnboardingSignalKindAdoptionMerge {
 		return OnboardingSignalReconciliationInput{}, errs.ErrInvalidArgument
 	}
 	return OnboardingSignalReconciliationInput{
@@ -380,7 +445,7 @@ func safeOnboardingSignalError(cause error) (string, string) {
 	case errors.Is(cause, errs.ErrDependencyUnavailable):
 		code = "unavailable"
 	}
-	return code, truncateSafeOnboardingSummary("bootstrap merge reconciliation failed: " + code)
+	return code, truncateSafeOnboardingSummary("onboarding signal reconciliation failed: " + code)
 }
 
 func truncateSafeOnboardingSummary(text string) string {

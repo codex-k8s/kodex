@@ -25,6 +25,7 @@ type InteractionRequestFilter struct {
 }
 
 type OwnerInboxFilter struct {
+	RequestID          uuid.UUID
 	Scope              value.ScopeRef
 	RequestKinds       []enum.InteractionRequestKind
 	Statuses           []enum.InteractionRequestStatus

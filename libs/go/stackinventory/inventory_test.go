@@ -1,6 +1,8 @@
 package stackinventory
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -119,6 +121,25 @@ func TestStackFailsWhenImageIsMissing(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), `image "registry" is not defined in services.yaml`) {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestLoadEnvFileDoesNotExposeValues(t *testing.T) {
+	t.Setenv("KODEX_STACKINVENTORY_TEST_ONE", "")
+	t.Setenv("KODEX_STACKINVENTORY_TEST_TWO", "")
+	envFile := filepath.Join(t.TempDir(), "config.env")
+	if err := os.WriteFile(envFile, []byte("KODEX_STACKINVENTORY_TEST_ONE='quoted value'\nKODEX_STACKINVENTORY_TEST_TWO=\"escaped\\nvalue\"\n"), 0o600); err != nil {
+		t.Fatalf("write env file: %v", err)
+	}
+
+	if err := LoadEnvFile(envFile); err != nil {
+		t.Fatalf("load env file: %v", err)
+	}
+	if got := os.Getenv("KODEX_STACKINVENTORY_TEST_ONE"); got != "quoted value" {
+		t.Fatalf("unexpected single quoted value: %q", got)
+	}
+	if got := os.Getenv("KODEX_STACKINVENTORY_TEST_TWO"); got != "escaped\nvalue" {
+		t.Fatalf("unexpected double quoted value: %q", got)
 	}
 }
 

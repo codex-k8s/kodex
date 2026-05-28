@@ -1731,6 +1731,204 @@ func TestReconcileBootstrapMergeSignalRejectsMismatchedSignal(t *testing.T) {
 	}
 }
 
+func TestReconcileAdoptionMergeSignalImportsCheckedPolicyForPendingRepository(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	policyID := uuid.New()
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = pendingBootstrapRepository(projectID, repositoryID)
+	svc := NewWithConfig(
+		store,
+		fixedClock{},
+		&sequenceIDs{ids: []uuid.UUID{uuid.New(), policyID, uuid.New(), uuid.New(), uuid.New()}},
+		Config{},
+	)
+	input := reconcileAdoptionMergeSignalInput(projectID, repositoryID, commandMeta(uuid.Nil))
+
+	result, err := svc.ReconcileAdoptionMergeSignal(ctx, input)
+	if err != nil {
+		t.Fatalf("ReconcileAdoptionMergeSignal(): %v", err)
+	}
+	if result.Repository.Status != enum.RepositoryStatusActive || result.ServicesPolicy.ID != policyID {
+		t.Fatalf("result = %+v, want active repository and checked adoption policy", result)
+	}
+	if result.ServicesPolicy.SourceCommitSHA != bootstrapMergeCommitSHA || result.ServicesPolicy.ContentHash != bootstrapContentHash(bootstrapServicesPolicyFileContent) {
+		t.Fatalf("services policy = %+v, want checked adoption projection", result.ServicesPolicy)
+	}
+	if len(store.policies) != 1 || len(store.events) != 2 || len(store.commandResults) != 1 {
+		t.Fatalf("policies=%d events=%d commandResults=%d, want single adoption import", len(store.policies), len(store.events), len(store.commandResults))
+	}
+	for _, signal := range store.onboardingSignals {
+		if signal.Status != enum.OnboardingSignalStatusImported || signal.ServicesPolicyID == nil || *signal.ServicesPolicyID != policyID {
+			t.Fatalf("onboarding signal = %+v, want imported adoption policy status", signal)
+		}
+		if signal.SignalKind != enum.OnboardingSignalKindAdoptionMerge || signal.ArtifactRef == "" || signal.ContentHash == "" {
+			t.Fatalf("onboarding signal = %+v, want safe adoption refs and digests", signal)
+		}
+	}
+	for key, commandResult := range store.commandResults {
+		if !strings.Contains(key, adoptionMergeIdempotencyPrefix+input.MergeSignal.SignalKey) {
+			t.Fatalf("command key = %q, want derived adoption idempotency key", key)
+		}
+		for _, forbidden := range [][]byte{
+			[]byte("validated_payload_json"),
+			[]byte(bootstrapServicesPolicyPayload),
+			[]byte("watermark_json"),
+			[]byte("raw_provider_payload"),
+			[]byte("diff"),
+		} {
+			if bytes.Contains(commandResult.ResultPayload, forbidden) {
+				t.Fatalf("command payload stores unsafe adoption reconciliation data %q in %s", forbidden, commandResult.ResultPayload)
+			}
+		}
+	}
+}
+
+func TestReconcileAdoptionMergeSignalUpdatesActiveRepositoryPolicy(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = pendingBootstrapRepository(projectID, repositoryID)
+	svc := NewWithConfig(
+		store,
+		fixedClock{},
+		&sequenceIDs{ids: []uuid.UUID{
+			uuid.New(), uuid.New(), uuid.New(), uuid.New(),
+			uuid.New(), uuid.New(), uuid.New(), uuid.New(),
+		}},
+		Config{},
+	)
+	if _, err := svc.ImportBootstrapServicesPolicy(ctx, importBootstrapServicesPolicyInput(projectID, repositoryID, commandMetaWithVersion(uuid.New(), 3))); err != nil {
+		t.Fatalf("initial ImportBootstrapServicesPolicy(): %v", err)
+	}
+	input := reconcileAdoptionMergeSignalInput(projectID, repositoryID, commandMeta(uuid.Nil))
+	input.MergeSignal.MergeCommitSHA = strings.Repeat("a", 40)
+	input.CheckedPolicy.ArtifactVersion = strings.Repeat("a", 40)
+
+	result, err := svc.ReconcileAdoptionMergeSignal(ctx, input)
+	if err != nil {
+		t.Fatalf("ReconcileAdoptionMergeSignal(): %v", err)
+	}
+	if result.Repository.Status != enum.RepositoryStatusActive || result.Repository.Version != 5 {
+		t.Fatalf("repository = %+v, want active version 5", result.Repository)
+	}
+	if result.ServicesPolicy.PolicyVersion != 2 || result.ServicesPolicy.SourceCommitSHA != strings.Repeat("a", 40) {
+		t.Fatalf("services policy = %+v, want new checked adoption policy version", result.ServicesPolicy)
+	}
+	if len(store.policies) != 2 || len(store.events) != 4 || len(store.commandResults) != 2 {
+		t.Fatalf("policies=%d events=%d commandResults=%d, want bootstrap plus adoption import", len(store.policies), len(store.events), len(store.commandResults))
+	}
+}
+
+func TestReconcileAdoptionMergeSignalReplayDoesNotDuplicateImport(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = pendingBootstrapRepository(projectID, repositoryID)
+	svc := NewWithConfig(
+		store,
+		fixedClock{},
+		&sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New(), uuid.New(), uuid.New()}},
+		Config{},
+	)
+	input := reconcileAdoptionMergeSignalInput(projectID, repositoryID, commandMeta(uuid.Nil))
+
+	first, err := svc.ReconcileAdoptionMergeSignal(ctx, input)
+	if err != nil {
+		t.Fatalf("first ReconcileAdoptionMergeSignal(): %v", err)
+	}
+	second, err := svc.ReconcileAdoptionMergeSignal(ctx, input)
+	if err != nil {
+		t.Fatalf("replay ReconcileAdoptionMergeSignal(): %v", err)
+	}
+	if first.ServicesPolicy.ID != second.ServicesPolicy.ID || second.Repository.Status != enum.RepositoryStatusActive {
+		t.Fatalf("replay result = %+v, want existing adoption import", second)
+	}
+	if len(store.policies) != 1 || len(store.commandResults) != 1 || len(store.events) != 2 || len(store.onboardingSignals) != 1 {
+		t.Fatalf("policies=%d commandResults=%d events=%d signals=%d, want no duplicate adoption writes", len(store.policies), len(store.commandResults), len(store.events), len(store.onboardingSignals))
+	}
+}
+
+func TestRecordAdoptionMergeSignalDiagnosticIsIdempotent(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = pendingBootstrapRepository(projectID, repositoryID)
+	svc := NewWithConfig(store, fixedClock{}, &sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New()}}, Config{})
+	input := adoptionMergeSignalDiagnosticInput(projectID, repositoryID, "sha256:"+strings.Repeat("1", 64))
+
+	if err := svc.RecordAdoptionMergeSignalDiagnostic(ctx, input); err != nil {
+		t.Fatalf("RecordAdoptionMergeSignalDiagnostic(): %v", err)
+	}
+	if err := svc.RecordAdoptionMergeSignalDiagnostic(ctx, input); err != nil {
+		t.Fatalf("replay RecordAdoptionMergeSignalDiagnostic(): %v", err)
+	}
+	if len(store.onboardingSignals) != 1 {
+		t.Fatalf("onboarding signals = %d, want one idempotent adoption diagnostic", len(store.onboardingSignals))
+	}
+	for _, signal := range store.onboardingSignals {
+		if signal.SignalKind != enum.OnboardingSignalKindAdoptionMerge || signal.Status != enum.OnboardingSignalStatusNeedsReview || signal.ErrorCode != "missing_checked_artifact" {
+			t.Fatalf("signal = %+v, want adoption needs_review missing_checked_artifact", signal)
+		}
+		if signal.ServicesPolicyID != nil || signal.ArtifactRef != "" || signal.ContentHash != "" {
+			t.Fatalf("signal = %+v, want diagnostic without imported policy/artifact payload", signal)
+		}
+	}
+}
+
+func TestReconcileAdoptionMergeSignalRejectsConflictingReplay(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = pendingBootstrapRepository(projectID, repositoryID)
+	svc := NewWithConfig(
+		store,
+		fixedClock{},
+		&sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New(), uuid.New(), uuid.New()}},
+		Config{},
+	)
+	input := reconcileAdoptionMergeSignalInput(projectID, repositoryID, commandMeta(uuid.Nil))
+	if _, err := svc.ReconcileAdoptionMergeSignal(ctx, input); err != nil {
+		t.Fatalf("initial ReconcileAdoptionMergeSignal(): %v", err)
+	}
+
+	conflicting := input
+	conflicting.MergeSignal.MergeCommitSHA = strings.Repeat("a", 40)
+	conflicting.CheckedPolicy.ArtifactVersion = strings.Repeat("a", 40)
+	_, err := svc.ReconcileAdoptionMergeSignal(ctx, conflicting)
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("conflicting ReconcileAdoptionMergeSignal() err = %v, want conflict", err)
+	}
+	if len(store.policies) != 1 || len(store.commandResults) != 1 || len(store.events) != 2 || len(store.onboardingSignals) != 1 {
+		t.Fatalf("policies=%d commandResults=%d events=%d signals=%d, want no conflicting adoption writes", len(store.policies), len(store.commandResults), len(store.events), len(store.onboardingSignals))
+	}
+}
+
+func TestReconcileAdoptionMergeSignalRejectsMismatchedWatermark(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = pendingBootstrapRepository(projectID, repositoryID)
+	svc := NewWithConfig(store, fixedClock{}, &sequenceIDs{}, Config{})
+	input := reconcileAdoptionMergeSignalInput(projectID, repositoryID, commandMeta(uuid.Nil))
+	input.MergeSignal.WatermarkJSON = []byte(`{"kind":"provider_pr","managed_by":"kodex","work_type":"repository_bootstrap","source_ref":"services.yaml"}`)
+	input.MergeSignal.WatermarkDigest = sha256HexDigest(input.MergeSignal.WatermarkJSON)
+
+	_, err := svc.ReconcileAdoptionMergeSignal(ctx, input)
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("ReconcileAdoptionMergeSignal() err = %v, want invalid argument", err)
+	}
+	if len(store.policies) != 0 || len(store.events) != 0 || len(store.commandResults) != 0 {
+		t.Fatalf("policies=%d events=%d commandResults=%d, want no writes", len(store.policies), len(store.events), len(store.commandResults))
+	}
+}
+
 func TestPutDocumentationSourceNormalizesAndPublishesEvent(t *testing.T) {
 	ctx := context.Background()
 	store := newMemoryRepository()
@@ -1984,6 +2182,45 @@ func reconcileBootstrapMergeSignalInput(projectID uuid.UUID, repositoryID uuid.U
 	}
 }
 
+func reconcileAdoptionMergeSignalInput(projectID uuid.UUID, repositoryID uuid.UUID, meta value.CommandMeta) ReconcileAdoptionMergeSignalInput {
+	watermarkJSON := []byte(`{"kind":"provider_pr","managed_by":"kodex","work_type":"repository_adoption","source_ref":"services.yaml"}`)
+	return ReconcileAdoptionMergeSignalInput{
+		ProjectID:    projectID,
+		RepositoryID: repositoryID,
+		MergeSignal: RepositoryAdoptionMergeSignal{
+			SignalID:   uuid.New().String(),
+			SignalKey:  "github/adoption/PR_123",
+			SignalKind: "adoption",
+			ProviderTarget: RepositoryBootstrapProviderTarget{
+				ProviderSlug:         "github",
+				RepositoryFullName:   "codex-k8s/kodex",
+				ProviderRepositoryID: "R_123",
+				WebURL:               "https://github.com/codex-k8s/kodex",
+			},
+			BaseBranch:                   "main",
+			SourceRef:                    "kodex/adoption",
+			MergeCommitSHA:               bootstrapMergeCommitSHA,
+			SourceBlobSHA:                "blob-1",
+			WatermarkDigest:              sha256HexDigest(watermarkJSON),
+			WatermarkJSON:                watermarkJSON,
+			ProviderWorkItemProjectionID: "projection-adoption-1",
+			ProviderWebURL:               "https://github.com/codex-k8s/kodex/pull/8",
+			ProviderObjectID:             "PR_124",
+			MergeObservedAt:              fixedClock{}.Now().Format(time.RFC3339Nano),
+			MergedAt:                     fixedClock{}.Now().Format(time.RFC3339Nano),
+		},
+		CheckedPolicy: CheckedAdoptionServicesPolicyArtifact{
+			ArtifactRef:      "artifact://provider/adoption/PR_123/services.yaml",
+			ArtifactDigest:   bootstrapContentHash(bootstrapServicesPolicyFileContent),
+			ArtifactVersion:  bootstrapMergeCommitSHA,
+			SourcePath:       "services.yaml",
+			ContentHash:      bootstrapContentHash(bootstrapServicesPolicyFileContent),
+			ValidatedPayload: []byte(bootstrapServicesPolicyPayload),
+		},
+		Meta: meta,
+	}
+}
+
 func bootstrapMergeSignalDiagnosticInput(projectID uuid.UUID, repositoryID uuid.UUID, fingerprint string) BootstrapMergeSignalDiagnosticInput {
 	input := reconcileBootstrapMergeSignalInput(projectID, repositoryID, value.CommandMeta{})
 	return BootstrapMergeSignalDiagnosticInput{
@@ -1994,6 +2231,19 @@ func bootstrapMergeSignalDiagnosticInput(projectID uuid.UUID, repositoryID uuid.
 		ErrorCode:         "missing_checked_artifact",
 		ErrorSummary:      "bootstrap merge signal needs checked artifact input",
 		Summary:           "bootstrap merge signal received",
+	}
+}
+
+func adoptionMergeSignalDiagnosticInput(projectID uuid.UUID, repositoryID uuid.UUID, fingerprint string) AdoptionMergeSignalDiagnosticInput {
+	input := reconcileAdoptionMergeSignalInput(projectID, repositoryID, commandMeta(uuid.Nil))
+	return AdoptionMergeSignalDiagnosticInput{
+		ProjectID:         projectID,
+		RepositoryID:      repositoryID,
+		MergeSignal:       input.MergeSignal,
+		SignalFingerprint: fingerprint,
+		ErrorCode:         "missing_checked_artifact",
+		ErrorSummary:      "adoption merge signal needs checked artifact input",
+		Summary:           "adoption merge signal received",
 	}
 }
 

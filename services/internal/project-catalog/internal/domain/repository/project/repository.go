@@ -43,7 +43,7 @@ type Repository interface {
 	RecordOnboardingSignalReconciliation(ctx context.Context, signal entity.OnboardingSignalReconciliation) (entity.OnboardingSignalReconciliation, error)
 	// ImportServicesPolicy stores checked policy, descriptors, documentation sources, outbox event and command result atomically.
 	ImportServicesPolicy(ctx context.Context, policy entity.ServicesPolicy, descriptors []entity.ServiceDescriptor, documentationSources []entity.DocumentationSource, result entity.CommandResult, buildEvent ServicesPolicyEventBuilder) (entity.ServicesPolicy, error)
-	// ImportBootstrapServicesPolicy stores checked policy and activates a bootstrap repository binding atomically.
+	// ImportBootstrapServicesPolicy stores checked onboarding policy and updates repository binding atomically.
 	ImportBootstrapServicesPolicy(ctx context.Context, repository entity.RepositoryBinding, previousVersion int64, policy entity.ServicesPolicy, descriptors []entity.ServiceDescriptor, documentationSources []entity.DocumentationSource, repositoryEvent entity.OutboxEvent, result entity.CommandResult, buildPolicyEvent ServicesPolicyEventBuilder) (entity.ServicesPolicy, entity.RepositoryBinding, error)
 	// GetServicesPolicy returns active or concrete checked services policy.
 	GetServicesPolicy(ctx context.Context, projectID uuid.UUID, policyID *uuid.UUID) (entity.ServicesPolicy, error)

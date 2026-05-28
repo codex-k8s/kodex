@@ -1,4 +1,4 @@
-package main
+package manifestrender
 
 import (
 	"os"
@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestRunRendersTemplatesAndCopiesPlainFiles(t *testing.T) {
+func TestRenderRendersTemplatesAndCopiesPlainFiles(t *testing.T) {
 	t.Setenv("KODEX_TEST_VALUE", "")
 	tempDir := t.TempDir()
 	sourceDir := filepath.Join(tempDir, "source")
@@ -24,7 +24,11 @@ func TestRunRendersTemplatesAndCopiesPlainFiles(t *testing.T) {
 		t.Fatalf("write plain file: %v", err)
 	}
 
-	if err := run(sourceDir, outputDir, filepath.Join(sourceDir, "env.conf")); err != nil {
+	if err := Render(Options{
+		SourcePath:  sourceDir,
+		OutputPath:  outputDir,
+		EnvFilePath: filepath.Join(sourceDir, "env.conf"),
+	}); err != nil {
 		t.Fatalf("run render: %v", err)
 	}
 
@@ -44,7 +48,7 @@ func TestRunRendersTemplatesAndCopiesPlainFiles(t *testing.T) {
 	}
 }
 
-func TestRunUsesStackInventoryTemplateHelpers(t *testing.T) {
+func TestRenderUsesStackInventoryTemplateHelpers(t *testing.T) {
 	t.Setenv("KODEX_TEST_APP_IMAGE", "")
 	tempDir := t.TempDir()
 	sourceDir := filepath.Join(tempDir, "source")
@@ -69,7 +73,7 @@ func TestRunUsesStackInventoryTemplateHelpers(t *testing.T) {
 		t.Fatalf("write template: %v", err)
 	}
 
-	if err := runWithOptions(renderOptions{
+	if err := Render(Options{
 		SourcePath:       sourceDir,
 		OutputPath:       outputDir,
 		ServicesFilePath: servicesFile,
@@ -85,7 +89,7 @@ func TestRunUsesStackInventoryTemplateHelpers(t *testing.T) {
 	}
 
 	t.Setenv("KODEX_TEST_APP_IMAGE", "example.local/test-app:override")
-	if err := runWithOptions(renderOptions{
+	if err := Render(Options{
 		SourcePath:       sourceDir,
 		OutputPath:       outputDir,
 		ServicesFilePath: servicesFile,

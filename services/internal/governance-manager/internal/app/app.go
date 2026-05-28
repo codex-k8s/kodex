@@ -79,7 +79,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	}
 	governancegrpc.RegisterGovernanceManagerService(grpcServer, governanceService)
 
-	errCh := make(chan error, 3)
+	errCh := make(chan error, 4)
 	go serviceprocess.StartHTTPServer(httpServer, serviceName, logger, errCh)
 	go serviceprocess.StartGRPCServer(grpcServer, serviceName, cfg.GRPCAddr, logger, errCh)
 	err = serviceprocess.StartOutboxDispatcher(
@@ -99,6 +99,9 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		errCh,
 	)
 	if err != nil {
+		return err
+	}
+	if err := startProviderReviewSignalConsumer(ctx, cfg, eventLogPool, governanceService, logger, errCh); err != nil {
 		return err
 	}
 

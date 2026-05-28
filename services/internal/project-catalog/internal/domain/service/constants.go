@@ -52,6 +52,7 @@ const (
 	projectOperationDetachRepository      = "domain.Service.DetachRepository"
 	projectOperationImportServicesPolicy  = "domain.Service.ImportServicesPolicy"
 	projectOperationImportBootstrapPolicy = "domain.Service.ImportBootstrapServicesPolicy"
+	projectOperationImportAdoptionPolicy  = "domain.Service.ImportAdoptionServicesPolicy"
 	projectOperationPolicyEditProposal    = "domain.Service.CreatePolicyEditProposal"
 	projectOperationPolicyOverride        = "domain.Service.CreatePolicyOverride"
 	projectOperationCancelPolicyOverride  = "domain.Service.CancelPolicyOverride"

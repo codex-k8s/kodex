@@ -175,6 +175,8 @@ spec:
               value: "{{ envOr "KODEX_GOVERNANCE_MANAGER_OUTBOX_RETRY_MAX_DELAY" "1m" }}"
             - name: KODEX_GOVERNANCE_MANAGER_OUTBOX_FAILURE_MESSAGE_LIMIT
               value: "{{ envOr "KODEX_GOVERNANCE_MANAGER_OUTBOX_FAILURE_MESSAGE_LIMIT" "512" }}"
+            - name: KODEX_GOVERNANCE_MANAGER_PROVIDER_REVIEW_SIGNAL_CONSUMER_ENABLED
+              value: "{{ envOr "KODEX_GOVERNANCE_MANAGER_PROVIDER_REVIEW_SIGNAL_CONSUMER_ENABLED" "false" }}"
           readinessProbe:
             httpGet:
               path: /health/readyz

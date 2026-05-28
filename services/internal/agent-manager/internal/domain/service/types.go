@@ -604,6 +604,44 @@ type RequestHumanGateInput struct {
 	GovernanceGateRequestRef string
 }
 
+type HumanGateInteractionActorRef struct {
+	Kind string
+	Ref  string
+}
+
+type HumanGateInteractionExternalRef struct {
+	Kind string
+	Ref  string
+}
+
+type HumanGateInteractionAction struct {
+	ActionKey        string
+	LabelTemplateRef string
+	Terminal         bool
+}
+
+type HumanGateInteractionRequestInput struct {
+	Meta                     value.CommandMeta
+	HumanGateRequestID       uuid.UUID
+	Scope                    value.ScopeRef
+	SourceOwnerRef           string
+	IngressRef               string
+	PromptSummary            string
+	TargetRefs               []HumanGateInteractionActorRef
+	ContextRefs              []HumanGateInteractionExternalRef
+	AllowedActions           []HumanGateInteractionAction
+	RiskClass                string
+	ReminderPolicyRef        string
+	GovernanceGateRequestRef string
+}
+
+type HumanGateInteractionRequestResult struct {
+	InteractionRequestRef string
+	Status                string
+	SafeSummary           string
+	Version               int64
+}
+
 type RecordHumanGateDecisionInput struct {
 	Meta                           value.CommandMeta
 	HumanGateRequestID             uuid.UUID

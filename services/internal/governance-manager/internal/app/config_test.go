@@ -48,47 +48,82 @@ func TestConfigValidateRequiresAccessTokenWhenChecksEnabled(t *testing.T) {
 	}
 }
 
+func TestConfigValidateRequiresEventLogDSNWhenProviderReviewSignalConsumerEnabled(t *testing.T) {
+	t.Parallel()
+
+	cfg := validConfig()
+	cfg.ProviderReviewSignalConsumerEnabled = true
+	cfg.EventLogDatabaseDSN = ""
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "KODEX_GOVERNANCE_MANAGER_EVENT_LOG_DATABASE_DSN") {
+		t.Fatalf("Validate() error = %v, want missing event-log dsn", err)
+	}
+}
+
+func TestProviderReviewSignalConsumerConfigUsesConfiguredLeaseOwner(t *testing.T) {
+	t.Parallel()
+
+	cfg := validConfig()
+	cfg.ProviderReviewSignalConsumerEnabled = true
+	cfg.ProviderReviewSignalConsumerLeaseOwner = "test-lease-owner"
+	consumerCfg := cfg.ProviderReviewSignalConsumerConfig()
+	if consumerCfg.ConsumerName != "governance-manager.provider-review-signal" || consumerCfg.LeaseOwner != "test-lease-owner" {
+		t.Fatalf("ProviderReviewSignalConsumerConfig() = %+v, want configured name and lease owner", consumerCfg)
+	}
+}
+
 func validConfig() Config {
 	return Config{
-		DatabaseDSN:                "postgres://kodex:kodex@localhost:5432/kodex?sslmode=disable",
-		DatabaseMaxConns:           8,
-		DatabaseMinConns:           1,
-		DatabaseMaxConnLifetime:    time.Hour,
-		DatabaseMaxConnIdleTime:    15 * time.Minute,
-		DatabaseHealthPeriod:       30 * time.Second,
-		DatabasePingTimeout:        5 * time.Second,
-		DatabaseRetryAttempts:      6,
-		DatabaseRetryInitial:       500 * time.Millisecond,
-		DatabaseRetryMax:           5 * time.Second,
-		DatabaseRetryJitterRatio:   0.2,
-		EventLogDatabaseMaxConns:   4,
-		EventLogDatabaseMinConns:   0,
-		HTTPAddr:                   ":8080",
-		GRPCAddr:                   ":9090",
-		GRPCAuthRequired:           true,
-		GRPCAuthToken:              "test-token",
-		GRPCMaxConcurrentStreams:   128,
-		GRPCMaxInFlight:            128,
-		GRPCMaxRecvMessageBytes:    4 << 20,
-		GRPCMaxSendMessageBytes:    4 << 20,
-		GRPCKeepaliveMinTime:       30 * time.Second,
-		GRPCKeepaliveTime:          2 * time.Minute,
-		GRPCKeepaliveTimeout:       20 * time.Second,
-		GRPCUnaryTimeout:           30 * time.Second,
-		AccessCheckEnabled:         false,
-		AccessManagerGRPCAddr:      "access-manager:9090",
-		AccessManagerGRPCAuthToken: "access-token",
-		AccessManagerCheckTimeout:  3 * time.Second,
-		OutboxDispatchEnabled:      false,
-		OutboxPublisherKind:        "disabled",
-		OutboxEventLogSource:       "governance-manager",
-		OutboxBatchSize:            100,
-		OutboxPollInterval:         time.Second,
-		OutboxLockTTL:              30 * time.Second,
-		OutboxPublishTimeout:       10 * time.Second,
-		OutboxLeaseSafetyMargin:    5 * time.Second,
-		OutboxRetryInitialDelay:    time.Second,
-		OutboxRetryMaxDelay:        time.Minute,
-		OutboxFailureLimit:         512,
+		DatabaseDSN:                                     "postgres://kodex:kodex@localhost:5432/kodex?sslmode=disable",
+		DatabaseMaxConns:                                8,
+		DatabaseMinConns:                                1,
+		DatabaseMaxConnLifetime:                         time.Hour,
+		DatabaseMaxConnIdleTime:                         15 * time.Minute,
+		DatabaseHealthPeriod:                            30 * time.Second,
+		DatabasePingTimeout:                             5 * time.Second,
+		DatabaseRetryAttempts:                           6,
+		DatabaseRetryInitial:                            500 * time.Millisecond,
+		DatabaseRetryMax:                                5 * time.Second,
+		DatabaseRetryJitterRatio:                        0.2,
+		EventLogDatabaseDSN:                             "postgres://kodex:kodex@localhost:5432/platform_event_log?sslmode=disable",
+		EventLogDatabaseMaxConns:                        4,
+		EventLogDatabaseMinConns:                        0,
+		HTTPAddr:                                        ":8080",
+		GRPCAddr:                                        ":9090",
+		GRPCAuthRequired:                                true,
+		GRPCAuthToken:                                   "test-token",
+		GRPCMaxConcurrentStreams:                        128,
+		GRPCMaxInFlight:                                 128,
+		GRPCMaxRecvMessageBytes:                         4 << 20,
+		GRPCMaxSendMessageBytes:                         4 << 20,
+		GRPCKeepaliveMinTime:                            30 * time.Second,
+		GRPCKeepaliveTime:                               2 * time.Minute,
+		GRPCKeepaliveTimeout:                            20 * time.Second,
+		GRPCUnaryTimeout:                                30 * time.Second,
+		AccessCheckEnabled:                              false,
+		AccessManagerGRPCAddr:                           "access-manager:9090",
+		AccessManagerGRPCAuthToken:                      "access-token",
+		AccessManagerCheckTimeout:                       3 * time.Second,
+		OutboxDispatchEnabled:                           false,
+		OutboxPublisherKind:                             "disabled",
+		OutboxEventLogSource:                            "governance-manager",
+		OutboxBatchSize:                                 100,
+		OutboxPollInterval:                              time.Second,
+		OutboxLockTTL:                                   30 * time.Second,
+		OutboxPublishTimeout:                            10 * time.Second,
+		OutboxLeaseSafetyMargin:                         5 * time.Second,
+		OutboxRetryInitialDelay:                         time.Second,
+		OutboxRetryMaxDelay:                             time.Minute,
+		OutboxFailureLimit:                              512,
+		ProviderReviewSignalConsumerEnabled:             false,
+		ProviderReviewSignalConsumerName:                "governance-manager.provider-review-signal",
+		ProviderReviewSignalConsumerBatchSize:           50,
+		ProviderReviewSignalConsumerPollInterval:        time.Second,
+		ProviderReviewSignalConsumerLeaseTTL:            30 * time.Second,
+		ProviderReviewSignalConsumerHandlerTimeout:      10 * time.Second,
+		ProviderReviewSignalConsumerRetryInitialDelay:   time.Second,
+		ProviderReviewSignalConsumerRetryMaxDelay:       time.Minute,
+		ProviderReviewSignalConsumerFailureMessageLimit: 512,
+		ProviderReviewSignalConsumerConcurrencyLimit:    2,
+		ProviderReviewSignalConsumerMaxAttempts:         5,
 	}
 }
