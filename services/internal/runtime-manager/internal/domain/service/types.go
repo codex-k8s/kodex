@@ -117,7 +117,7 @@ type CreateJobInput struct {
 	Meta                  value.CommandMeta
 }
 
-// AgentRunExecutionSpecInput хранит безопасные refs для будущего исполнения agent_run.
+// AgentRunExecutionSpecInput contains safe refs for future agent_run execution.
 type AgentRunExecutionSpecInput struct {
 	AgentRunID                         uuid.UUID                   `json:"agent_run_id"`
 	SlotID                             uuid.UUID                   `json:"slot_id"`
@@ -135,7 +135,7 @@ type AgentRunExecutionSpecInput struct {
 	ReportingTargetRefs                []AgentRunExecutionRefInput `json:"reporting_target_refs,omitempty"`
 }
 
-// AgentRunExecutionRefInput хранит типизированную безопасную ссылку agent_run.
+// AgentRunExecutionRefInput contains a typed safe agent_run reference.
 type AgentRunExecutionRefInput struct {
 	Kind string `json:"kind"`
 	Ref  string `json:"ref"`

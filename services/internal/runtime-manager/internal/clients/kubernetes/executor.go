@@ -1,4 +1,4 @@
-// Package kubernetes содержит исполнитель Kubernetes-заданий runtime-manager.
+// Package kubernetes contains the runtime-manager Kubernetes job executor.
 package kubernetes
 
 import (
@@ -41,7 +41,7 @@ const (
 	maxMetadataItems       = 16
 )
 
-// Config ограничивает поведение исполнителя Kubernetes настройками оператора.
+// Config constrains Kubernetes executor behavior with operator-managed settings.
 type Config struct {
 	DefaultNamespace        string
 	DefaultServiceAccount   string
@@ -54,7 +54,7 @@ type Config struct {
 	LogTailBytes            int64
 }
 
-// ClusterAccessProvider получает безопасные ссылки на секреты кластера через fleet-manager.
+// ClusterAccessProvider obtains safe cluster secret references through fleet-manager.
 type ClusterAccessProvider interface {
 	GetClusterAccess(ctx context.Context, clusterID uuid.UUID) (fleetclient.ClusterAccess, error)
 }
@@ -74,7 +74,7 @@ func (realClientFactory) NewForKubeconfig(kubeconfig []byte) (kubernetes.Interfa
 	return kubernetes.NewForConfig(config)
 }
 
-// Executor создаёт и наблюдает ограниченные Kubernetes Jobs для заданий runtime-manager.
+// Executor creates and observes bounded Kubernetes Jobs for runtime-manager jobs.
 type Executor struct {
 	clusters ClusterAccessProvider
 	secrets  secretresolver.Resolver
@@ -82,7 +82,7 @@ type Executor struct {
 	config   Config
 }
 
-// StartedJob описывает Kubernetes Job, уже созданный для задания runtime-manager.
+// StartedJob describes a Kubernetes Job created for a runtime-manager job.
 type StartedJob struct {
 	RuntimeJobID uuid.UUID
 	ClusterID    uuid.UUID
@@ -95,7 +95,7 @@ type StartedJob struct {
 	selector     labels.Set
 }
 
-// ExecutionResult хранит ограниченный итог исполнения для команд жизненного цикла runtime-manager.
+// ExecutionResult contains a bounded execution result for runtime-manager lifecycle commands.
 type ExecutionResult struct {
 	Succeeded    bool
 	Interrupted  bool
@@ -104,7 +104,7 @@ type ExecutionResult struct {
 	ErrorMessage string
 }
 
-// ExecutionError хранит классифицированную ошибку, пригодную для диагностики runtime-manager.
+// ExecutionError contains a classified error suitable for runtime-manager diagnostics.
 type ExecutionError struct {
 	Code    string
 	Message string
@@ -114,12 +114,12 @@ func (e *ExecutionError) Error() string {
 	return strings.TrimSpace(e.Code) + ": " + strings.TrimSpace(e.Message)
 }
 
-// NewExecutor создаёт Kubernetes executor с настоящими client-go клиентами.
+// NewExecutor creates a Kubernetes executor with real client-go clients.
 func NewExecutor(clusters ClusterAccessProvider, secrets secretresolver.Resolver, cfg Config) (*Executor, error) {
 	return NewExecutorWithClientFactory(clusters, secrets, cfg, realClientFactory{})
 }
 
-// NewExecutorWithClientFactory используется тестами без настоящего кластера.
+// NewExecutorWithClientFactory is used by tests without a real cluster.
 func NewExecutorWithClientFactory(clusters ClusterAccessProvider, secrets secretresolver.Resolver, cfg Config, clients clientFactory) (*Executor, error) {
 	if clusters == nil || secrets == nil || clients == nil {
 		return nil, newExecutionError("runtime_kubernetes_executor_not_configured", "Kubernetes executor dependencies are not configured")
@@ -131,7 +131,7 @@ func NewExecutorWithClientFactory(clusters ClusterAccessProvider, secrets secret
 	return &Executor{clusters: clusters, secrets: secrets, clients: clients, config: normalized}, nil
 }
 
-// Start создаёт или переиспользует детерминированный Kubernetes Job для захваченного задания.
+// Start creates or reuses a deterministic Kubernetes Job for the claimed runtime job.
 func (e *Executor) Start(ctx context.Context, job entity.Job) (StartedJob, error) {
 	if job.JobType != enum.JobTypeHealthCheck {
 		return StartedJob{}, newExecutionError("unsupported_job_type", "Kubernetes executor supports only health_check jobs")
@@ -184,7 +184,7 @@ func (e *Executor) Start(ctx context.Context, job entity.Job) (StartedJob, error
 	}, nil
 }
 
-// Wait ждёт терминального статуса Kubernetes Job и возвращает ограниченную диагностику.
+// Wait waits for a terminal Kubernetes Job status and returns bounded diagnostics.
 func (e *Executor) Wait(ctx context.Context, started StartedJob) ExecutionResult {
 	timeout := started.config.JobTimeout
 	if timeout <= 0 {
@@ -225,7 +225,7 @@ func (e *Executor) Wait(ctx context.Context, started StartedJob) ExecutionResult
 	}
 }
 
-// ErrorDiagnostic переводит ошибки исполнителя в безопасную диагностику runtime-manager.
+// ErrorDiagnostic maps executor errors to safe runtime-manager diagnostics.
 func ErrorDiagnostic(err error) (string, string) {
 	var executionErr *ExecutionError
 	if errors.As(err, &executionErr) {

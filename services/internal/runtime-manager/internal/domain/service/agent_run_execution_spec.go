@@ -170,7 +170,7 @@ func agentRunJobInputHasExecutionSpec(payload []byte) bool {
 	return ok && spec != nil
 }
 
-// AgentRunExecutionSpecFromJobInput извлекает typed agent_run execution input из persisted job input.
+// AgentRunExecutionSpecFromJobInput extracts typed agent_run execution input from persisted job input.
 func AgentRunExecutionSpecFromJobInput(payload []byte) (*AgentRunExecutionSpecInput, bool) {
 	normalized, err := normalizedJSONObject(payload)
 	if err != nil || bytes.Equal(normalized, []byte(`{}`)) {

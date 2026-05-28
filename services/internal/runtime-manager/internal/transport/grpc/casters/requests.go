@@ -384,7 +384,7 @@ func CreateJobInput(request *runtimev1.CreateJobRequest) (runtimeservice.CreateJ
 	}, nil
 }
 
-// AgentRunExecutionSpecInputFromProto преобразует typed agent_run execution input из proto.
+// AgentRunExecutionSpecInputFromProto maps typed agent_run execution input from proto.
 func AgentRunExecutionSpecInputFromProto(spec *runtimev1.AgentRunExecutionSpec) (*runtimeservice.AgentRunExecutionSpecInput, error) {
 	if spec == nil {
 		return nil, nil

@@ -499,7 +499,7 @@ func (JobPriority) EnumDescriptor() ([]byte, []int) {
 	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{7}
 }
 
-// AgentRunRunnerMode задаёт фиксированный режим runner без произвольной команды.
+// AgentRunRunnerMode selects a fixed runner mode without arbitrary commands.
 type AgentRunRunnerMode int32
 
 const (
@@ -1770,12 +1770,12 @@ func (x *RuntimeContext) GetMaterializationFingerprint() string {
 	return ""
 }
 
-// AgentRunAllowedSecretRef описывает только ссылку на разрешённый секрет.
+// AgentRunAllowedSecretRef carries only an allowed secret reference.
 type AgentRunAllowedSecretRef struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// secret_ref указывает на секрет во внешнем owner-домене; значения секретов здесь не передаются.
+	// secret_ref points to a secret in an owner domain; secret values are never carried here.
 	SecretRef string `protobuf:"bytes,1,opt,name=secret_ref,json=secretRef,proto3" json:"secret_ref,omitempty"`
-	// purpose задаёт ограниченную машинную метку назначения.
+	// purpose is a bounded machine-readable usage label.
 	Purpose       string `protobuf:"bytes,2,opt,name=purpose,proto3" json:"purpose,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1825,12 +1825,12 @@ func (x *AgentRunAllowedSecretRef) GetPurpose() string {
 	return ""
 }
 
-// AgentRunReportingTargetRef описывает безопасную цель отчёта runner.
+// AgentRunReportingTargetRef carries a safe runner reporting target.
 type AgentRunReportingTargetRef struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// kind классифицирует owner-цель, например agent_run_state или agent_activity.
+	// kind classifies the owner target, for example agent_run_state or agent_activity.
 	Kind string `protobuf:"bytes,1,opt,name=kind,proto3" json:"kind,omitempty"`
-	// ref хранит ссылку в owner-домене.
+	// ref is the owner-domain reference.
 	Ref           string `protobuf:"bytes,2,opt,name=ref,proto3" json:"ref,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1880,36 +1880,36 @@ func (x *AgentRunReportingTargetRef) GetRef() string {
 	return ""
 }
 
-// AgentRunExecutionSpec задаёт безопасный контракт будущего исполнения agent Run.
+// AgentRunExecutionSpec defines the safe contract for future agent Run execution.
 type AgentRunExecutionSpec struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// agent_run_id хранит внешний id Run из agent-manager.
+	// agent_run_id is the external agent-manager Run id.
 	AgentRunId string `protobuf:"bytes,1,opt,name=agent_run_id,json=agentRunId,proto3" json:"agent_run_id,omitempty"`
-	// slot_id указывает на подготовленный runtime slot.
+	// slot_id identifies the prepared runtime slot.
 	SlotId string `protobuf:"bytes,2,opt,name=slot_id,json=slotId,proto3" json:"slot_id,omitempty"`
-	// expected_materialization_id указывает на ожидаемую попытку workspace materialization.
+	// expected_materialization_id identifies the expected workspace materialization attempt.
 	ExpectedMaterializationId string `protobuf:"bytes,3,opt,name=expected_materialization_id,json=expectedMaterializationId,proto3" json:"expected_materialization_id,omitempty"`
-	// expected_materialization_fingerprint хранит проверенный fingerprint workspace.
+	// expected_materialization_fingerprint is the checked workspace fingerprint.
 	ExpectedMaterializationFingerprint string `protobuf:"bytes,4,opt,name=expected_materialization_fingerprint,json=expectedMaterializationFingerprint,proto3" json:"expected_materialization_fingerprint,omitempty"`
-	// workspace_ref хранит runtime-owned ссылку на workspace.
+	// workspace_ref is the runtime-owned workspace reference.
 	WorkspaceRef string `protobuf:"bytes,5,opt,name=workspace_ref,json=workspaceRef,proto3" json:"workspace_ref,omitempty"`
-	// workspace_mount_ref хранит ссылку mount, видимую runner.
+	// workspace_mount_ref is the mount reference visible to the runner.
 	WorkspaceMountRef string `protobuf:"bytes,6,opt,name=workspace_mount_ref,json=workspaceMountRef,proto3" json:"workspace_mount_ref,omitempty"`
-	// workspace_pvc_ref хранит опциональную ссылку на Kubernetes PVC, не kubeconfig и не значение секрета.
+	// workspace_pvc_ref is an optional Kubernetes PVC reference, never a kubeconfig or secret value.
 	WorkspacePvcRef string `protobuf:"bytes,7,opt,name=workspace_pvc_ref,json=workspacePvcRef,proto3" json:"workspace_pvc_ref,omitempty"`
-	// context_ref указывает на .kodex/context/agent-run.json или эквивалентную runtime-owned ссылку.
+	// context_ref points to .kodex/context/agent-run.json or an equivalent runtime-owned reference.
 	ContextRef string `protobuf:"bytes,8,opt,name=context_ref,json=contextRef,proto3" json:"context_ref,omitempty"`
-	// context_digest хранит неизменяемый digest проверенного generated context.
+	// context_digest is the immutable digest of the checked generated context.
 	ContextDigest string `protobuf:"bytes,9,opt,name=context_digest,json=contextDigest,proto3" json:"context_digest,omitempty"`
-	// runner_profile_ref выбирает утверждённый runner profile.
+	// runner_profile_ref selects an approved runner profile.
 	RunnerProfileRef string `protobuf:"bytes,10,opt,name=runner_profile_ref,json=runnerProfileRef,proto3" json:"runner_profile_ref,omitempty"`
-	// runner_image_ref выбирает утверждённую ссылку на runner image.
+	// runner_image_ref selects an approved runner image reference.
 	RunnerImageRef string `protobuf:"bytes,11,opt,name=runner_image_ref,json=runnerImageRef,proto3" json:"runner_image_ref,omitempty"`
-	// runner_mode выбирает фиксированный режим runner без произвольной shell-команды.
+	// runner_mode selects a fixed runner mode without arbitrary shell commands.
 	RunnerMode AgentRunRunnerMode `protobuf:"varint,12,opt,name=runner_mode,json=runnerMode,proto3,enum=kodex.runtime.v1.AgentRunRunnerMode" json:"runner_mode,omitempty"`
-	// allowed_secret_refs перечисляет разрешённые ссылки на секреты без значений.
+	// allowed_secret_refs lists allowed secret references without values.
 	AllowedSecretRefs []*AgentRunAllowedSecretRef `protobuf:"bytes,13,rep,name=allowed_secret_refs,json=allowedSecretRefs,proto3" json:"allowed_secret_refs,omitempty"`
-	// reporting_target_refs перечисляет owner-domain цели для безопасного отчёта статуса.
+	// reporting_target_refs lists owner-domain targets for safe status reporting.
 	ReportingTargetRefs []*AgentRunReportingTargetRef `protobuf:"bytes,14,rep,name=reporting_target_refs,json=reportingTargetRefs,proto3" json:"reporting_target_refs,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
@@ -2455,7 +2455,7 @@ type Job struct {
 	Version int64 `protobuf:"varint,27,opt,name=version,proto3" json:"version,omitempty"`
 	// steps are job steps returned with the job state.
 	Steps []*JobStep `protobuf:"bytes,28,rep,name=steps,proto3" json:"steps,omitempty"`
-	// agent_run_execution_spec присутствует только у исполнимых JOB_TYPE_AGENT_RUN jobs.
+	// agent_run_execution_spec is present only for executable JOB_TYPE_AGENT_RUN jobs.
 	AgentRunExecutionSpec *AgentRunExecutionSpec `protobuf:"bytes,29,opt,name=agent_run_execution_spec,json=agentRunExecutionSpec,proto3,oneof" json:"agent_run_execution_spec,omitempty"`
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
@@ -4424,7 +4424,7 @@ type CreateJobRequest struct {
 	JobInputJson string `protobuf:"bytes,10,opt,name=job_input_json,json=jobInputJson,proto3" json:"job_input_json,omitempty"`
 	// meta carries idempotency and audit context.
 	Meta *CommandMeta `protobuf:"bytes,11,opt,name=meta,proto3" json:"meta,omitempty"`
-	// agent_run_execution_spec нужен до исполнения agent_run job.
+	// agent_run_execution_spec is required before an agent_run job can be executed.
 	AgentRunExecutionSpec *AgentRunExecutionSpec `protobuf:"bytes,12,opt,name=agent_run_execution_spec,json=agentRunExecutionSpec,proto3,oneof" json:"agent_run_execution_spec,omitempty"`
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache

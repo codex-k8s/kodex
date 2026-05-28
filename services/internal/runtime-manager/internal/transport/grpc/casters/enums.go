@@ -263,12 +263,12 @@ func JobPriorityToProto(priority enum.JobPriority) runtimev1.JobPriority {
 	return enumToProto(priority, jobPriorityToProto, runtimev1.JobPriority_JOB_PRIORITY_UNSPECIFIED)
 }
 
-// AgentRunRunnerModeFromProto преобразует режим runner для agent_run из proto.
+// AgentRunRunnerModeFromProto maps an agent_run runner mode from proto.
 func AgentRunRunnerModeFromProto(mode runtimev1.AgentRunRunnerMode) (enum.AgentRunRunnerMode, error) {
 	return enumFromProto(mode, agentRunRunnerModeFromProto)
 }
 
-// AgentRunRunnerModeToProto преобразует режим runner для agent_run в proto.
+// AgentRunRunnerModeToProto maps an agent_run runner mode to proto.
 func AgentRunRunnerModeToProto(mode enum.AgentRunRunnerMode) runtimev1.AgentRunRunnerMode {
 	return enumToProto(mode, agentRunRunnerModeToProto, runtimev1.AgentRunRunnerMode_AGENT_RUN_RUNNER_MODE_UNSPECIFIED)
 }

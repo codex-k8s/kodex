@@ -92,7 +92,7 @@ const (
 	JobPriorityBlocking JobPriority = "blocking"
 )
 
-// AgentRunRunnerMode выбирает фиксированный режим agent runner.
+// AgentRunRunnerMode selects a fixed agent runner mode.
 type AgentRunRunnerMode string
 
 const (

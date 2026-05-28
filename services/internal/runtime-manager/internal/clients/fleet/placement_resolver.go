@@ -40,7 +40,7 @@ type PlacementResolver struct {
 
 var _ runtimeservice.PlacementResolver = (*PlacementResolver)(nil)
 
-// ClusterAccess хранит безопасное представление runtime-manager о Kubernetes-кластере fleet-manager.
+// ClusterAccess contains the safe runtime-manager view of a fleet-manager Kubernetes cluster.
 type ClusterAccess struct {
 	ClusterID       uuid.UUID
 	FleetScopeID    uuid.UUID
@@ -103,7 +103,7 @@ func (r *PlacementResolver) ResolvePlacement(ctx context.Context, request runtim
 	return runtimeservice.PlacementResolution{FleetScopeID: fleetScopeID, ClusterID: clusterID}, nil
 }
 
-// GetClusterAccess возвращает безопасную ссылку на секрет для исполнителя runtime-manager.
+// GetClusterAccess returns a safe secret reference for the runtime-manager executor.
 func (r *PlacementResolver) GetClusterAccess(ctx context.Context, clusterID uuid.UUID) (ClusterAccess, error) {
 	if clusterID == uuid.Nil {
 		return ClusterAccess{}, errs.ErrInvalidArgument

@@ -204,7 +204,7 @@ enum JobPriority {
   JOB_PRIORITY_BLOCKING = 4;
 }
 
-// AgentRunRunnerMode задаёт фиксированный режим runner без произвольной команды.
+// AgentRunRunnerMode selects a fixed runner mode without arbitrary commands.
 enum AgentRunRunnerMode {
   AGENT_RUN_RUNNER_MODE_UNSPECIFIED = 0;
   AGENT_RUN_RUNNER_MODE_CODEX_AGENT = 1;
@@ -354,51 +354,51 @@ message RuntimeContext {
   string materialization_fingerprint = 8;
 }
 
-// AgentRunAllowedSecretRef описывает только ссылку на разрешённый секрет.
+// AgentRunAllowedSecretRef carries only an allowed secret reference.
 message AgentRunAllowedSecretRef {
-  // secret_ref указывает на секрет во внешнем owner-домене; значения секретов здесь не передаются.
+  // secret_ref points to a secret in an owner domain; secret values are never carried here.
   string secret_ref = 1;
-  // purpose задаёт ограниченную машинную метку назначения.
+  // purpose is a bounded machine-readable usage label.
   string purpose = 2;
 }
 
-// AgentRunReportingTargetRef описывает безопасную цель отчёта runner.
+// AgentRunReportingTargetRef carries a safe runner reporting target.
 message AgentRunReportingTargetRef {
-  // kind классифицирует owner-цель, например agent_run_state или agent_activity.
+  // kind classifies the owner target, for example agent_run_state or agent_activity.
   string kind = 1;
-  // ref хранит ссылку в owner-домене.
+  // ref is the owner-domain reference.
   string ref = 2;
 }
 
-// AgentRunExecutionSpec задаёт безопасный контракт будущего исполнения agent Run.
+// AgentRunExecutionSpec defines the safe contract for future agent Run execution.
 message AgentRunExecutionSpec {
-  // agent_run_id хранит внешний id Run из agent-manager.
+  // agent_run_id is the external agent-manager Run id.
   string agent_run_id = 1;
-  // slot_id указывает на подготовленный runtime slot.
+  // slot_id identifies the prepared runtime slot.
   string slot_id = 2;
-  // expected_materialization_id указывает на ожидаемую попытку workspace materialization.
+  // expected_materialization_id identifies the expected workspace materialization attempt.
   string expected_materialization_id = 3;
-  // expected_materialization_fingerprint хранит проверенный fingerprint workspace.
+  // expected_materialization_fingerprint is the checked workspace fingerprint.
   string expected_materialization_fingerprint = 4;
-  // workspace_ref хранит runtime-owned ссылку на workspace.
+  // workspace_ref is the runtime-owned workspace reference.
   string workspace_ref = 5;
-  // workspace_mount_ref хранит ссылку mount, видимую runner.
+  // workspace_mount_ref is the mount reference visible to the runner.
   string workspace_mount_ref = 6;
-  // workspace_pvc_ref хранит опциональную ссылку на Kubernetes PVC, не kubeconfig и не значение секрета.
+  // workspace_pvc_ref is an optional Kubernetes PVC reference, never a kubeconfig or secret value.
   string workspace_pvc_ref = 7;
-  // context_ref указывает на .kodex/context/agent-run.json или эквивалентную runtime-owned ссылку.
+  // context_ref points to .kodex/context/agent-run.json or an equivalent runtime-owned reference.
   string context_ref = 8;
-  // context_digest хранит неизменяемый digest проверенного generated context.
+  // context_digest is the immutable digest of the checked generated context.
   string context_digest = 9;
-  // runner_profile_ref выбирает утверждённый runner profile.
+  // runner_profile_ref selects an approved runner profile.
   string runner_profile_ref = 10;
-  // runner_image_ref выбирает утверждённую ссылку на runner image.
+  // runner_image_ref selects an approved runner image reference.
   string runner_image_ref = 11;
-  // runner_mode выбирает фиксированный режим runner без произвольной shell-команды.
+  // runner_mode selects a fixed runner mode without arbitrary shell commands.
   AgentRunRunnerMode runner_mode = 12;
-  // allowed_secret_refs перечисляет разрешённые ссылки на секреты без значений.
+  // allowed_secret_refs lists allowed secret references without values.
   repeated AgentRunAllowedSecretRef allowed_secret_refs = 13;
-  // reporting_target_refs перечисляет owner-domain цели для безопасного отчёта статуса.
+  // reporting_target_refs lists owner-domain targets for safe status reporting.
   repeated AgentRunReportingTargetRef reporting_target_refs = 14;
 }
 
@@ -530,7 +530,7 @@ message Job {
   int64 version = 27;
   // steps are job steps returned with the job state.
   repeated JobStep steps = 28;
-  // agent_run_execution_spec присутствует только у исполнимых JOB_TYPE_AGENT_RUN jobs.
+  // agent_run_execution_spec is present only for executable JOB_TYPE_AGENT_RUN jobs.
   optional AgentRunExecutionSpec agent_run_execution_spec = 29;
 }
 
@@ -835,7 +835,7 @@ message CreateJobRequest {
   string job_input_json = 10;
   // meta carries idempotency and audit context.
   CommandMeta meta = 11;
-  // agent_run_execution_spec нужен до исполнения agent_run job.
+  // agent_run_execution_spec is required before an agent_run job can be executed.
   optional AgentRunExecutionSpec agent_run_execution_spec = 12;
 }
 
