@@ -277,6 +277,18 @@ func (r *Repository) ListWebhookEvents(ctx context.Context, filter query.Webhook
 	return queryPage(ctx, r.db, operationListWebhookEvents, queryWebhookEventList, webhookEventFilterArgs(filter), scanWebhookEvent)
 }
 
+// CleanupExpiredWebhookPayloads removes full provider payload from expired retryable inbox rows.
+func (r *Repository) CleanupExpiredWebhookPayloads(ctx context.Context, now time.Time, limit int32) ([]entity.WebhookEvent, error) {
+	webhooks, err := postgreslib.QueryRows(ctx, r.db, queryWebhookEventCleanupExpiredPayloads, pgx.NamedArgs{
+		"now":   now,
+		"limit": limit,
+	}, scanWebhookEvent)
+	if err != nil {
+		return nil, wrapError(operationCleanupExpiredWebhookPayloads, err)
+	}
+	return webhooks, nil
+}
+
 // ListProviderEvents returns normalized provider events.
 func (r *Repository) ListProviderEvents(ctx context.Context, filter query.ProviderEventFilter) ([]entity.ProviderEvent, query.PageResult, error) {
 	return queryPage(ctx, r.db, operationListProviderEvents, queryProviderEventList, providerEventFilterArgs(filter), scanProviderEvent)
@@ -441,6 +453,7 @@ const (
 	operationProcessWebhookEvent                  = "domain.Repository.ProcessWebhookEvent"
 	operationGetWebhookEvent                      = "domain.Repository.GetWebhookEvent"
 	operationListWebhookEvents                    = "domain.Repository.ListWebhookEvents"
+	operationCleanupExpiredWebhookPayloads        = "domain.Repository.CleanupExpiredWebhookPayloads"
 	operationListProviderEvents                   = "domain.Repository.ListProviderEvents"
 	operationGetWorkItemProjection                = "domain.Repository.GetWorkItemProjection"
 	operationGetCommentProjectionByProviderID     = "domain.Repository.GetCommentProjectionByProviderID"

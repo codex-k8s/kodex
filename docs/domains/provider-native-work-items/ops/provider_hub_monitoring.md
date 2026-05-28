@@ -5,8 +5,8 @@ title: "provider-hub — наблюдаемость"
 status: active
 owner_role: SRE
 created_at: 2026-05-14
-updated_at: 2026-05-26
-related_issues: [754, 770, 840]
+updated_at: 2026-05-28
+related_issues: [754, 770, 840, 908]
 approvals:
   required: ["Owner"]
   status: approved
@@ -54,6 +54,7 @@ approvals:
 
 - Количество webhook inbox записей по статусам `pending`, `processing`, `processed`, `failed`.
 - Возраст самой старой `pending` и `failed` записи webhook inbox.
+- Количество safe cleanup результатов `payload_expired` и возраст самой старой `pending`/`failed` записи, где `retain_until` уже истёк.
 - Количество `sync_cursor` по priority `hot`, `warm`, `cold` и состояниям lease.
 - Возраст самого старого cursor без успешной сверки.
 - Количество `ProviderOperation` по типу операции и статусу.
@@ -86,6 +87,7 @@ approvals:
 - Readiness: процесс видит БД `provider-hub` и, при включённой outbox-доставке, БД `platform-event-log`.
 - gRPC smoke: `ProviderHubService/ListProviderOperations` должен давать application-level статус, а не сетевую ошибку.
 - Webhook inbox: oldest pending не должен выходить за допустимое окно.
+- Webhook payload retention: истёкшие `pending`/`failed` payload должны очищаться явной служебной операцией; read surface должен показывать только safe envelope и `payload_sha256`.
 - Reconciliation: hot cursors не должны оставаться без попыток обработки.
 - Provider operations: retryable errors должны снижаться после retry window, permanent errors не должны бесконечно повторяться.
 
@@ -95,6 +97,7 @@ approvals:
 - `provider-hub` migration job завершился ошибкой.
 - Outbox backlog растёт или самое старое событие старше допустимого порога.
 - Webhook inbox backlog растёт или oldest pending/failed старше допустимого порога.
+- Есть `pending`/`failed` записи с истёкшим `retain_until`, но cleanup не переводит их в safe envelope.
 - Hot reconciliation cursors застряли без lease или без `last_success_at`.
 - Частота `reauthorization_required` выросла по одному provider/account или группе аккаунтов.
 - Rate limit budget ниже порога, а очередь hot cursors продолжает расти.

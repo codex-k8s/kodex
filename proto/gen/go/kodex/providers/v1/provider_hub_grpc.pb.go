@@ -23,6 +23,7 @@ const (
 	ProviderHubService_GetWebhookEvent_FullMethodName                     = "/kodex.providers.v1.ProviderHubService/GetWebhookEvent"
 	ProviderHubService_ListWebhookEvents_FullMethodName                   = "/kodex.providers.v1.ProviderHubService/ListWebhookEvents"
 	ProviderHubService_RetryWebhookEventProcessing_FullMethodName         = "/kodex.providers.v1.ProviderHubService/RetryWebhookEventProcessing"
+	ProviderHubService_CleanupExpiredWebhookPayloads_FullMethodName       = "/kodex.providers.v1.ProviderHubService/CleanupExpiredWebhookPayloads"
 	ProviderHubService_GetWorkItemProjection_FullMethodName               = "/kodex.providers.v1.ProviderHubService/GetWorkItemProjection"
 	ProviderHubService_FindWorkItemByProviderRef_FullMethodName           = "/kodex.providers.v1.ProviderHubService/FindWorkItemByProviderRef"
 	ProviderHubService_ListWorkItemProjections_FullMethodName             = "/kodex.providers.v1.ProviderHubService/ListWorkItemProjections"
@@ -66,12 +67,14 @@ const (
 type ProviderHubServiceClient interface {
 	// IngestWebhookEvent stores a verified provider webhook from the edge gateway.
 	IngestWebhookEvent(ctx context.Context, in *IngestWebhookEventRequest, opts ...grpc.CallOption) (*WebhookEventResponse, error)
-	// GetWebhookEvent returns a stored raw webhook for diagnostics.
+	// GetWebhookEvent returns safe webhook diagnostics.
 	GetWebhookEvent(ctx context.Context, in *GetWebhookEventRequest, opts ...grpc.CallOption) (*WebhookEventResponse, error)
 	// ListWebhookEvents returns stored webhooks with operational filters.
 	ListWebhookEvents(ctx context.Context, in *ListWebhookEventsRequest, opts ...grpc.CallOption) (*ListWebhookEventsResponse, error)
 	// RetryWebhookEventProcessing enqueues a stored webhook for repeated normalization.
 	RetryWebhookEventProcessing(ctx context.Context, in *RetryWebhookEventProcessingRequest, opts ...grpc.CallOption) (*WebhookEventResponse, error)
+	// CleanupExpiredWebhookPayloads removes expired retryable provider payloads from the inbox.
+	CleanupExpiredWebhookPayloads(ctx context.Context, in *CleanupExpiredWebhookPayloadsRequest, opts ...grpc.CallOption) (*CleanupExpiredWebhookPayloadsResponse, error)
 	// GetWorkItemProjection returns a normalized Issue or PR/MR projection.
 	GetWorkItemProjection(ctx context.Context, in *GetWorkItemProjectionRequest, opts ...grpc.CallOption) (*WorkItemProjectionResponse, error)
 	// FindWorkItemByProviderRef finds a projection by provider-native reference.
@@ -178,6 +181,16 @@ func (c *providerHubServiceClient) RetryWebhookEventProcessing(ctx context.Conte
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(WebhookEventResponse)
 	err := c.cc.Invoke(ctx, ProviderHubService_RetryWebhookEventProcessing_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *providerHubServiceClient) CleanupExpiredWebhookPayloads(ctx context.Context, in *CleanupExpiredWebhookPayloadsRequest, opts ...grpc.CallOption) (*CleanupExpiredWebhookPayloadsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CleanupExpiredWebhookPayloadsResponse)
+	err := c.cc.Invoke(ctx, ProviderHubService_CleanupExpiredWebhookPayloads_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -504,12 +517,14 @@ func (c *providerHubServiceClient) ListProviderOperations(ctx context.Context, i
 type ProviderHubServiceServer interface {
 	// IngestWebhookEvent stores a verified provider webhook from the edge gateway.
 	IngestWebhookEvent(context.Context, *IngestWebhookEventRequest) (*WebhookEventResponse, error)
-	// GetWebhookEvent returns a stored raw webhook for diagnostics.
+	// GetWebhookEvent returns safe webhook diagnostics.
 	GetWebhookEvent(context.Context, *GetWebhookEventRequest) (*WebhookEventResponse, error)
 	// ListWebhookEvents returns stored webhooks with operational filters.
 	ListWebhookEvents(context.Context, *ListWebhookEventsRequest) (*ListWebhookEventsResponse, error)
 	// RetryWebhookEventProcessing enqueues a stored webhook for repeated normalization.
 	RetryWebhookEventProcessing(context.Context, *RetryWebhookEventProcessingRequest) (*WebhookEventResponse, error)
+	// CleanupExpiredWebhookPayloads removes expired retryable provider payloads from the inbox.
+	CleanupExpiredWebhookPayloads(context.Context, *CleanupExpiredWebhookPayloadsRequest) (*CleanupExpiredWebhookPayloadsResponse, error)
 	// GetWorkItemProjection returns a normalized Issue or PR/MR projection.
 	GetWorkItemProjection(context.Context, *GetWorkItemProjectionRequest) (*WorkItemProjectionResponse, error)
 	// FindWorkItemByProviderRef finds a projection by provider-native reference.
@@ -593,6 +608,9 @@ func (UnimplementedProviderHubServiceServer) ListWebhookEvents(context.Context, 
 }
 func (UnimplementedProviderHubServiceServer) RetryWebhookEventProcessing(context.Context, *RetryWebhookEventProcessingRequest) (*WebhookEventResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RetryWebhookEventProcessing not implemented")
+}
+func (UnimplementedProviderHubServiceServer) CleanupExpiredWebhookPayloads(context.Context, *CleanupExpiredWebhookPayloadsRequest) (*CleanupExpiredWebhookPayloadsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CleanupExpiredWebhookPayloads not implemented")
 }
 func (UnimplementedProviderHubServiceServer) GetWorkItemProjection(context.Context, *GetWorkItemProjectionRequest) (*WorkItemProjectionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetWorkItemProjection not implemented")
@@ -776,6 +794,24 @@ func _ProviderHubService_RetryWebhookEventProcessing_Handler(srv interface{}, ct
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ProviderHubServiceServer).RetryWebhookEventProcessing(ctx, req.(*RetryWebhookEventProcessingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProviderHubService_CleanupExpiredWebhookPayloads_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CleanupExpiredWebhookPayloadsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProviderHubServiceServer).CleanupExpiredWebhookPayloads(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProviderHubService_CleanupExpiredWebhookPayloads_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProviderHubServiceServer).CleanupExpiredWebhookPayloads(ctx, req.(*CleanupExpiredWebhookPayloadsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1360,6 +1396,10 @@ var ProviderHubService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RetryWebhookEventProcessing",
 			Handler:    _ProviderHubService_RetryWebhookEventProcessing_Handler,
+		},
+		{
+			MethodName: "CleanupExpiredWebhookPayloads",
+			Handler:    _ProviderHubService_CleanupExpiredWebhookPayloads_Handler,
 		},
 		{
 			MethodName: "GetWorkItemProjection",

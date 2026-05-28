@@ -146,6 +146,10 @@ spec:
               value: "{{ envOr "KODEX_PROVIDER_HUB_GITHUB_BASE_URL" "https://api.github.com" }}"
             - name: KODEX_PROVIDER_HUB_GITHUB_USER_AGENT
               value: "{{ envOr "KODEX_PROVIDER_HUB_GITHUB_USER_AGENT" "kodex-provider-hub" }}"
+            - name: KODEX_PROVIDER_HUB_WEBHOOK_PAYLOAD_RETENTION
+              value: "{{ envOr "KODEX_PROVIDER_HUB_WEBHOOK_PAYLOAD_RETENTION" "168h" }}"
+            - name: KODEX_PROVIDER_HUB_WEBHOOK_PAYLOAD_CLEANUP_LIMIT
+              value: "{{ envOr "KODEX_PROVIDER_HUB_WEBHOOK_PAYLOAD_CLEANUP_LIMIT" "100" }}"
             - name: KODEX_PROVIDER_HUB_SECRET_MOUNTED_ROOT
               value: "{{ envOr "KODEX_PROVIDER_HUB_SECRET_MOUNTED_ROOT" "/var/run/kodex/secrets" }}"
             - name: KODEX_PROVIDER_HUB_SECRET_MAX_BYTES

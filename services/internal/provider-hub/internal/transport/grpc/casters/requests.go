@@ -87,6 +87,26 @@ func RetryWebhookEventProcessingInput(request *providersv1.RetryWebhookEventProc
 	return input, err
 }
 
+// CleanupExpiredWebhookPayloadsInput maps a gRPC request to the domain cleanup command.
+func CleanupExpiredWebhookPayloadsInput(request *providersv1.CleanupExpiredWebhookPayloadsRequest) (providerservice.CleanupExpiredWebhookPayloadsInput, error) {
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return providerservice.CleanupExpiredWebhookPayloadsInput{}, err
+	}
+	now, err := optionalTimePtr(request.GetNow())
+	if err != nil {
+		return providerservice.CleanupExpiredWebhookPayloadsInput{}, err
+	}
+	input := providerservice.CleanupExpiredWebhookPayloadsInput{
+		Limit: request.GetLimit(),
+		Meta:  meta,
+	}
+	if now != nil {
+		input.Now = *now
+	}
+	return input, nil
+}
+
 // GetWorkItemProjectionInput maps a gRPC request to the domain read input.
 func GetWorkItemProjectionInput(request *providersv1.GetWorkItemProjectionRequest) (providerservice.GetWorkItemProjectionInput, error) {
 	id, meta, err := metaAndRequiredUUID(request.GetMeta(), request.GetWorkItemProjectionId(), QueryMetaFromProto)

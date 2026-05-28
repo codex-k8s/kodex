@@ -34,21 +34,49 @@ func WebhookEventToProto(event entity.WebhookEvent) *providersv1.WebhookEvent {
 	}
 }
 
+// CleanupExpiredWebhookPayloadsResponse maps cleanup result to safe gRPC diagnostics.
+func CleanupExpiredWebhookPayloadsResponse(result providerservice.CleanupExpiredWebhookPayloadsResult) *providersv1.CleanupExpiredWebhookPayloadsResponse {
+	return &providersv1.CleanupExpiredWebhookPayloadsResponse{
+		CleanedCount:  result.CleanedCount,
+		CleanedAt:     formatTime(result.CleanedAt),
+		WebhookEvents: mapSlice(result.WebhookEvents, WebhookEventToProto),
+	}
+}
+
 func webhookSafePayloadJSON(event entity.WebhookEvent) string {
+	stored, ok := webhookStoredSafeEnvelope(event)
+	if ok {
+		return webhookSafeEnvelopeJSON(stored, event)
+	}
 	storage := value.WebhookPayloadStorageRetained
 	if event.ProcessingStatus == enum.WebhookProcessingStatusProcessed ||
 		event.ProcessingStatus == enum.WebhookProcessingStatusIgnored {
 		storage = value.WebhookPayloadStorageRedacted
 	}
-	payload, err := json.Marshal(value.WebhookPayloadEnvelope{
-		ProviderSlug:         string(event.ProviderSlug),
-		DeliveryID:           event.DeliveryID,
-		EventName:            event.EventName,
-		RepositoryProviderID: event.RepositoryProviderID,
-		PayloadSHA256:        event.PayloadDigest,
-		PayloadStorage:       string(storage),
-		RetainUntil:          formatTime(event.RetainUntil),
-	})
+	return webhookSafeEnvelopeJSON(value.WebhookPayloadEnvelope{PayloadStorage: string(storage)}, event)
+}
+
+func webhookStoredSafeEnvelope(event entity.WebhookEvent) (value.WebhookPayloadEnvelope, bool) {
+	var envelope value.WebhookPayloadEnvelope
+	if err := json.Unmarshal(event.PayloadJSON, &envelope); err != nil {
+		return value.WebhookPayloadEnvelope{}, false
+	}
+	switch envelope.PayloadStorage {
+	case string(value.WebhookPayloadStorageRedacted), string(value.WebhookPayloadStorageExpired):
+		return envelope, true
+	default:
+		return value.WebhookPayloadEnvelope{}, false
+	}
+}
+
+func webhookSafeEnvelopeJSON(envelope value.WebhookPayloadEnvelope, event entity.WebhookEvent) string {
+	envelope.ProviderSlug = string(event.ProviderSlug)
+	envelope.DeliveryID = event.DeliveryID
+	envelope.EventName = event.EventName
+	envelope.RepositoryProviderID = event.RepositoryProviderID
+	envelope.PayloadSHA256 = event.PayloadDigest
+	envelope.RetainUntil = formatTime(event.RetainUntil)
+	payload, err := json.Marshal(envelope)
 	if err != nil {
 		return "{}"
 	}

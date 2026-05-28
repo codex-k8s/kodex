@@ -5,7 +5,7 @@ title: kodex — поставка provider-hub
 status: active
 owner_role: EM
 created_at: 2026-05-06
-updated_at: 2026-05-27
+updated_at: 2026-05-28
 related_issues: [281, 282, 711, 719, 725, 729, 737, 754, 761, 770, 781, 840, 864, 865, 895, 908, 909]
 related_prs: []
 related_docsets:
@@ -74,7 +74,7 @@ approvals:
 
 | Группа | Контракт | Реализация |
 |---|---|---|
-| Приём webhook | Готово: `IngestWebhookEvent`, чтение, список и повторная обработка. | Реализовано в PRV-4: входящий журнал, дедупликация по `provider_slug + delivery_id`, базовая нормализация GitHub-событий, статусы обработки и outbox-события `provider.webhook.received` / `provider.webhook.normalized`. Публичный HTTP webhook endpoint остаётся ответственностью будущего `integration-gateway`. |
+| Приём webhook | Готово: `IngestWebhookEvent`, чтение, список, повторная обработка и явная cleanup-операция истёкших retryable payload. | Реализовано в PRV-4: входящий журнал, дедупликация по `provider_slug + delivery_id`, базовая нормализация GitHub-событий, статусы обработки и outbox-события `provider.webhook.received` / `provider.webhook.normalized`. Privacy-hardening добавляет `payload_sha256`, safe envelope для терминальных и истёкших payload, `CleanupExpiredWebhookPayloads` и безопасный отказ retry с `payload_expired`. Публичный HTTP webhook endpoint остаётся ответственностью `integration-gateway`. |
 | Проекции артефактов провайдера | Готово: чтение рабочих артефактов, комментариев и связей. | Реализовано в PRV-5: запись проекций `Issue`, `PR/MR`, комментариев и review-сигналов при нормализации webhook, разбор watermark, связи из watermark, чтение по provider ref и списочные gRPC-операции. |
 | Сверка | Готово: сигналы, очередь сверки, пакетная обработка и курсоры. | Реализовано в режиме только чтения: PRV-6.1 добавил доменную модель `sync_cursor`, постановку области в очередь, чтение, список и короткую аренду курсора; PRV-6.3 добавил ускоряющий сигнал, который ставит `hot` cursor по provider target и выбранному внешнему аккаунту; PRV-6.2b подключил `ResolveExternalAccountUsage` и `libs/go/secretresolver` к обработчику, читает GitHub API по курсорам, обновляет проекции провайдера, лимитный бюджет, операционное состояние и безопасно продвигает курсор. |
 | Операции провайдера | Готово: типизированные команды записи, общий command pipeline, журнал операций и outbox-события результата. | PRV-7a зафиксировал контракт, PRV-7b реализовал gRPC handlers, casters, domain pipeline, optimistic concurrency, `ProviderOperation` с policy/gate trace и безопасный `ProviderOperationResponse`. PRV-7c подключает GitHub write-адаптер для создания и обновления задач, комментариев, `PR`, review-сигналов и provider-native связей без хранения токенов. GitLab-адаптер остаётся следующим расширением той же границы. |
@@ -107,6 +107,7 @@ approvals:
 - входящий журнал webhook с идемпотентной записью по `provider_slug + delivery_id`;
 - синхронный первый проход нормализации для базовых GitHub-событий `issues`, `pull_request`, `issue_comment`, `pull_request_review` и `pull_request_review_comment`;
 - повторная обработка webhook для записей в статусах `pending` и `failed`;
+- явная очистка истёкших retryable webhook payload через `CleanupExpiredWebhookPayloads`: `pending`/`failed` после `retain_until` сохраняют safe envelope, `payload_sha256`, статус `failed` и причину `payload_expired`; повторная обработка таких записей безопасно отказывает без попытки нормализации;
 - запись нормализованных provider events и локальных outbox-событий `provider.webhook.received` / `provider.webhook.normalized`;
 - запись нормализованных проекций `Issue` и `PR/MR` из GitHub webhook payload;
 - запись проекций комментариев и review-сигналов, привязанных к рабочему артефакту; review-сигналы сохраняют `review_state`;
@@ -185,11 +186,11 @@ approvals:
 
 ## Граница webhook payload и safe surface
 
-`provider-hub` webhook inbox хранит canonical provider webhook payload в `provider_hub_webhook_events.payload_json` только для `pending` и `failed` записей, чтобы сохранить PRV-4 retry/reprocess semantics. После `processed` или `ignored` полный provider payload заменяется safe envelope с digest/source refs и storage status. Это внутреннее хранилище `provider-hub`, а не safe read surface для соседних сервисов.
+`provider-hub` webhook inbox хранит canonical provider webhook payload в `provider_hub_webhook_events.payload_json` только для `pending` и `failed` записей до `retain_until`, чтобы сохранить PRV-4 retry/reprocess semantics в коротком диагностическом окне. После `processed` или `ignored` полный provider payload заменяется safe envelope с digest/source refs и storage status. После явной cleanup-операции истёкшие `pending`/`failed` записи тоже получают safe envelope с `payload_storage=expired_after_retention`, `payload_cleanup_reason=payload_expired` и `payload_sha256`. Это внутреннее хранилище `provider-hub`, а не safe read surface для соседних сервисов.
 
 Наружу через `GetWebhookEvent`/`ListWebhookEvents`, `GetRepositoryMergeSignal`/`ListRepositoryMergeSignals`, `ProviderEventPayload`, outbox и `platform-event-log` уходят только safe refs/facts/digests/status/timestamps/version: provider slug, repository refs, PR number/id/url, base/head branch, merge commit sha, source ref, related provider operation ref, watermark digest и статус. В webhook read RPC поле `payload_json` является safe envelope, а `payload_sha256` — digest canonical body. Raw/canonical webhook body, body PR, provider response, diff, checked artifact payload и checked `services.yaml` не входят в read surface, merge signal и доменные события.
 
-Оставшиеся шаги privacy-hardening для webhook inbox: short-retention cleanup для retryable payload, encryption-at-rest/KMS policy и re-fetch/reprocess strategy для сценариев, где полный payload нельзя удерживать даже в `failed` состоянии.
+Оставшиеся шаги privacy-hardening для webhook inbox: encryption-at-rest/KMS policy и re-fetch/reprocess strategy для сценариев, где полный payload нельзя удерживать даже в коротком `failed` окне.
 
 ## Definition of Done для каждого PR
 

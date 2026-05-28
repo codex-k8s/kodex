@@ -39,14 +39,16 @@ type ExternalAccountUsageResult struct {
 
 // Dependencies contains domain service collaborators.
 type Dependencies struct {
-	Repository             providerrepo.Repository
-	Clock                  providerrepo.Clock
-	IDGenerator            providerrepo.IDGenerator
-	AccountUsageResolver   AccountUsageResolver
-	SecretResolver         secretresolver.Resolver
-	ProviderAdapters       []providerclient.Adapter
-	ProviderWriteExecutors []providerclient.WriteExecutor
-	WebhookNormalizers     []providerrepo.WebhookNormalizer
+	Repository                 providerrepo.Repository
+	Clock                      providerrepo.Clock
+	IDGenerator                providerrepo.IDGenerator
+	WebhookPayloadRetention    time.Duration
+	WebhookPayloadCleanupLimit int32
+	AccountUsageResolver       AccountUsageResolver
+	SecretResolver             secretresolver.Resolver
+	ProviderAdapters           []providerclient.Adapter
+	ProviderWriteExecutors     []providerclient.WriteExecutor
+	WebhookNormalizers         []providerrepo.WebhookNormalizer
 }
 
 // GetProviderAccountRuntimeStateInput identifies one runtime state.
@@ -114,6 +116,20 @@ type ListWebhookEventsResult struct {
 type RetryWebhookEventProcessingInput struct {
 	WebhookEventID uuid.UUID
 	Meta           value.CommandMeta
+}
+
+// CleanupExpiredWebhookPayloadsInput removes full retryable payloads after retention TTL.
+type CleanupExpiredWebhookPayloadsInput struct {
+	Now   time.Time
+	Limit int32
+	Meta  value.CommandMeta
+}
+
+// CleanupExpiredWebhookPayloadsResult returns safe metadata for cleaned payloads.
+type CleanupExpiredWebhookPayloadsResult struct {
+	CleanedAt     time.Time
+	CleanedCount  int32
+	WebhookEvents []entity.WebhookEvent
 }
 
 // GetWorkItemProjectionInput identifies one stored work item projection.

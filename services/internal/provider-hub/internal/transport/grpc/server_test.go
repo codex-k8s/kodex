@@ -299,6 +299,29 @@ func TestIngestWebhookEventMapsRequestAndResponse(t *testing.T) {
 	}
 }
 
+func TestCleanupExpiredWebhookPayloadsMapsRequestAndSafeResponse(t *testing.T) {
+	t.Parallel()
+
+	commandID := uuid.NewString()
+	cleanedAt := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
+	limit := int32(25)
+	response, err := NewServer(fakeService{}).CleanupExpiredWebhookPayloads(context.Background(), &providersv1.CleanupExpiredWebhookPayloadsRequest{
+		Limit: &limit,
+		Now:   ptrString(cleanedAt.Format(time.RFC3339Nano)),
+		Meta:  &providersv1.CommandMeta{CommandId: &commandID, RequestId: "req-1"},
+	})
+	if err != nil {
+		t.Fatalf("CleanupExpiredWebhookPayloads(): %v", err)
+	}
+	if response.GetCleanedCount() != 1 || response.GetCleanedAt() != cleanedAt.Format(time.RFC3339Nano) {
+		t.Fatalf("cleanup response = %+v, want one cleaned event at %s", response, cleanedAt.Format(time.RFC3339Nano))
+	}
+	payload := response.GetWebhookEvents()[0].GetPayloadJson()
+	if strings.Contains(payload, "do-not-leak") || !strings.Contains(payload, "payload_expired") {
+		t.Fatalf("cleanup payload = %s, want safe expired envelope", payload)
+	}
+}
+
 func TestEnqueueReconciliationMapsRequestAndResponse(t *testing.T) {
 	t.Parallel()
 
@@ -667,6 +690,30 @@ func (fakeService) ListWebhookEvents(context.Context, providerservice.ListWebhoo
 
 func (fakeService) RetryWebhookEventProcessing(ctx context.Context, input providerservice.RetryWebhookEventProcessingInput) (entity.WebhookEvent, error) {
 	return fakeService{}.GetWebhookEvent(ctx, providerservice.GetWebhookEventInput{WebhookEventID: input.WebhookEventID})
+}
+
+func (fakeService) CleanupExpiredWebhookPayloads(_ context.Context, input providerservice.CleanupExpiredWebhookPayloadsInput) (providerservice.CleanupExpiredWebhookPayloadsResult, error) {
+	cleanedAt := input.Now
+	if cleanedAt.IsZero() {
+		cleanedAt = time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
+	}
+	webhook := entity.WebhookEvent{
+		ID:               uuid.New(),
+		ProviderSlug:     enum.ProviderSlugGitHub,
+		DeliveryID:       "delivery-expired",
+		EventName:        "issues",
+		ReceivedAt:       cleanedAt.Add(-48 * time.Hour),
+		ProcessingStatus: enum.WebhookProcessingStatusFailed,
+		PayloadJSON:      []byte(`{"payload_storage":"expired_after_retention","payload_cleanup_reason":"payload_expired","payload_expired_at":"` + cleanedAt.Format(time.RFC3339Nano) + `","secret":"do-not-leak"}`),
+		PayloadDigest:    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+		LastError:        "payload_expired",
+		RetainUntil:      cleanedAt.Add(-24 * time.Hour),
+	}
+	return providerservice.CleanupExpiredWebhookPayloadsResult{
+		CleanedAt:     cleanedAt,
+		CleanedCount:  1,
+		WebhookEvents: []entity.WebhookEvent{webhook},
+	}, nil
 }
 
 func (fakeService) GetProviderAccountRuntimeState(context.Context, providerservice.GetProviderAccountRuntimeStateInput) (entity.ProviderAccountRuntimeState, error) {

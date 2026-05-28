@@ -22,6 +22,7 @@ type Repository interface {
 	ProcessWebhookEvent(context.Context, entity.WebhookEvent, ProjectionUpdate, []entity.ProviderEvent, []entity.OutboxEvent) (entity.WebhookEvent, error)
 	GetWebhookEvent(context.Context, uuid.UUID) (entity.WebhookEvent, error)
 	ListWebhookEvents(context.Context, query.WebhookEventFilter) ([]entity.WebhookEvent, query.PageResult, error)
+	CleanupExpiredWebhookPayloads(context.Context, time.Time, int32) ([]entity.WebhookEvent, error)
 	ListProviderEvents(context.Context, query.ProviderEventFilter) ([]entity.ProviderEvent, query.PageResult, error)
 	GetWorkItemProjection(context.Context, query.ProviderTargetLookup) (entity.ProviderWorkItemProjection, error)
 	ListWorkItemProjections(context.Context, query.WorkItemProjectionFilter) ([]entity.ProviderWorkItemProjection, query.PageResult, error)
