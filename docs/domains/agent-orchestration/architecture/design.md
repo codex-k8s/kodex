@@ -175,7 +175,7 @@ MVP-путь:
 2. `StartAgentRun` получает проверенную workspace policy у `project-catalog` и добавляет в runtime request `WorkspaceSource` с видом `guidance_package` для каждого `GuidanceRef` и `generated_context` для `.kodex/context/agent-run.json`.
 3. `agent-manager` вызывает `runtime-manager.PrepareRuntime` с `agent_run_id`, runtime profile роли, workspace policy и placement constraints; прямой checkout из `agent-manager` запрещён.
 4. `runtime-manager` по `package_version_ref` читает в `package-hub` тип source ref, commit SHA и идентичность источника пакета, вычисляет безопасный `safe_local_name`, материализует эти источники только для чтения в `.kodex/guidance/<safe_local_name>` и создаёт сгенерированный контекст в `.kodex/context/agent-run.json`.
-5. При включённом `KODEX_AGENT_MANAGER_RUNTIME_JOB_DISPATCH_ENABLED` `agent-manager` ставит typed `JOB_TYPE_AGENT_RUN` через `runtime-manager.CreateJob` с `agent_run_id`, `slot_ref`, пустым `job_input_json={}` и детерминированным command id; повтор команды не создаёт второе runtime-задание, потому что replay возвращает сохранённый `runtime_job_ref`, а повторный runtime-вызов использует тот же command id.
+5. При включённом `KODEX_AGENT_MANAGER_RUNTIME_JOB_DISPATCH_ENABLED` `agent-manager` ставит typed `JOB_TYPE_AGENT_RUN` через `runtime-manager.CreateJob` с `agent_run_id`, `slot_ref`, `AgentRunExecutionSpec` и детерминированным command id; повтор команды не создаёт второе runtime-задание, потому что replay возвращает сохранённый `runtime_job_ref`, а повторный runtime-вызов использует тот же command id.
 6. `agent-manager` фиксирует только `runtime_context`, `runtime_job_ref`, fingerprint/diagnostic summary и переход статуса `Run`; локальные файлы, manifest payload, prompt text, flow files и scripts остаются в workspace/PVC.
 
 Если выбранный набор руководящих пакетов содержит конфликтующие `safe_local_name` после нормализации, подготовка runtime должна завершиться безопасной ошибкой до checkout. `package_slug` используется для диагностики и отображения, но не конкатенируется в путь напрямую. `agent-manager` передаёт только request-local `WorkspaceSource.local_path`, требуемый текущим proto, не сохраняет workspace paths в `Run` и не копирует файлы пакетов в свою БД.
@@ -187,6 +187,7 @@ MVP-путь:
 - runtime profile роли;
 - workspace policy и placement constraints;
 - rendered execution context;
+- `AgentRunExecutionSpec` с safe refs на подготовленную materialization, workspace mount/PVC/workspace, `.kodex/context/agent-run.json` ref/digest, runner profile/image, фиксированный runner mode, secret refs без значений и reporting target refs;
 - ссылки на provider-native задачу, stage, role и prompt version.
 - метаданные последнего Codex session snapshot, если runtime продолжает существующую сессию.
 

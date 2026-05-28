@@ -92,6 +92,13 @@ const (
 	JobPriorityBlocking JobPriority = "blocking"
 )
 
+// AgentRunRunnerMode selects a fixed agent runner mode.
+type AgentRunRunnerMode string
+
+const (
+	AgentRunRunnerModeCodexAgent AgentRunRunnerMode = "codex_agent"
+)
+
 // JobStepStatus is one job step status.
 type JobStepStatus string
 

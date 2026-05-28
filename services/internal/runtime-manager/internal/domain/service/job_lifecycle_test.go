@@ -195,7 +195,7 @@ func TestClaimRunnableJobReplayDoesNotClaimAnotherJob(t *testing.T) {
 	}
 }
 
-func TestAgentRunJobTypeCanBeCreatedListedAndClaimed(t *testing.T) {
+func TestAgentRunJobTypeWithoutExecutionSpecStaysWaiting(t *testing.T) {
 	t.Parallel()
 
 	resolver := defaultPlacementResolver()
@@ -216,6 +216,9 @@ func TestAgentRunJobTypeCanBeCreatedListedAndClaimed(t *testing.T) {
 	if job.JobType != enum.JobTypeAgentRun || !sameUUIDPtr(job.AgentRunID, &agentRunID) {
 		t.Fatalf("agent run job = %#v, want agent_run with agent_run_id", job)
 	}
+	if job.LastErrorCode != agentRunExecutionSpecRequiredCode || job.NextAction != agentRunExecutionSpecRequiredAction {
+		t.Fatalf("agent run job diagnostic = %q/%q, want execution spec requirement", job.LastErrorCode, job.NextAction)
+	}
 
 	list, err := svc.ListJobs(context.Background(), ListJobsInput{
 		JobTypes:   []enum.JobType{enum.JobTypeAgentRun},
@@ -229,17 +232,71 @@ func TestAgentRunJobTypeCanBeCreatedListedAndClaimed(t *testing.T) {
 		t.Fatalf("ListJobs(agent_run) = %#v, want one agent_run job", list.Jobs)
 	}
 
-	claim, err := svc.ClaimRunnableJob(context.Background(), ClaimRunnableJobInput{
+	_, err = svc.ClaimRunnableJob(context.Background(), ClaimRunnableJobInput{
 		JobTypes:   []enum.JobType{enum.JobTypeAgentRun},
 		LeaseOwner: "worker/agent-run",
 		LeaseUntil: testNow.Add(10 * time.Minute),
 		Meta:       commandMeta(mustUUID("00000000-0000-0000-0000-000000000534"), 0),
 	})
+	if !errors.Is(err, errs.ErrNotFound) {
+		t.Fatalf("ClaimRunnableJob(agent_run without spec) err = %v, want not found", err)
+	}
+}
+
+func TestAgentRunJobWithExecutionSpecCanBeClaimed(t *testing.T) {
+	t.Parallel()
+
+	resolver := defaultPlacementResolver()
+	svc, repo := newTestServiceWithPlacementResolver(resolver)
+	agentRunID := mustUUID("00000000-0000-0000-0000-000000000544")
+	slot, err := svc.ReserveSlot(context.Background(), ReserveSlotInput{
+		RuntimeProfile:        "agent/default",
+		RuntimeMode:           enum.RuntimeModeFullEnv,
+		WorkspacePolicyDigest: "sha256:workspace-policy",
+		AgentRunID:            &agentRunID,
+		Meta:                  commandMeta(mustUUID("00000000-0000-0000-0000-000000000545"), 0),
+	})
 	if err != nil {
-		t.Fatalf("ClaimRunnableJob(agent_run): %v", err)
+		t.Fatalf("ReserveSlot(): %v", err)
+	}
+	spec := testAgentRunExecutionSpec(agentRunID, slot.ID)
+	repo.workspaceMaterializations[spec.ExpectedMaterializationID] = entity.WorkspaceMaterialization{
+		Base:        entity.Base{ID: spec.ExpectedMaterializationID, Version: 1, CreatedAt: testNow, UpdatedAt: testNow},
+		SlotID:      slot.ID,
+		Status:      enum.WorkspaceMaterializationStatusCompleted,
+		Fingerprint: spec.ExpectedMaterializationFingerprint,
+	}
+	repo.slots[slot.ID] = readyAgentRunSlot(slot, spec)
+	job, err := svc.CreateJob(context.Background(), CreateJobInput{
+		JobType:               enum.JobTypeAgentRun,
+		Priority:              enum.JobPriorityHigh,
+		AgentRunExecutionSpec: &spec,
+		Meta:                  commandMeta(mustUUID("00000000-0000-0000-0000-000000000546"), 0),
+	})
+	if err != nil {
+		t.Fatalf("CreateJob(agent_run spec): %v", err)
+	}
+	if job.JobType != enum.JobTypeAgentRun || !sameUUIDPtr(job.AgentRunID, &agentRunID) || !sameUUIDPtr(job.SlotID, &slot.ID) {
+		t.Fatalf("agent run job refs = %#v, want spec refs", job)
+	}
+	if job.LastErrorCode != "" || job.NextAction != "" {
+		t.Fatalf("agent run job diagnostic = %q/%q, want executable spec without waiting diagnostic", job.LastErrorCode, job.NextAction)
+	}
+	if !agentRunJobInputHasExecutionSpec(job.JobInputJSON) {
+		t.Fatalf("agent run job input = %s, want typed execution spec", string(job.JobInputJSON))
+	}
+
+	claim, err := svc.ClaimRunnableJob(context.Background(), ClaimRunnableJobInput{
+		JobTypes:   []enum.JobType{enum.JobTypeAgentRun},
+		LeaseOwner: "worker/agent-run",
+		LeaseUntil: testNow.Add(10 * time.Minute),
+		Meta:       commandMeta(mustUUID("00000000-0000-0000-0000-000000000547"), 0),
+	})
+	if err != nil {
+		t.Fatalf("ClaimRunnableJob(agent_run spec): %v", err)
 	}
 	if claim.Job.ID != job.ID || claim.Job.JobType != enum.JobTypeAgentRun || claim.LeaseToken == "" {
-		t.Fatalf("claim = %#v, want claimed agent_run job with token", claim)
+		t.Fatalf("claim = %#v, want claimed executable agent_run job with token", claim)
 	}
 }
 
@@ -248,10 +305,14 @@ func TestAgentRunJobTypeRequiresSafeInput(t *testing.T) {
 
 	svc, _ := newTestService()
 	agentRunID := mustUUID("00000000-0000-0000-0000-000000000535")
+	slotID := mustUUID("00000000-0000-0000-0000-000000000538")
+	spec := testAgentRunExecutionSpec(agentRunID, slotID)
 	tests := []struct {
 		name       string
 		agentRunID *uuid.UUID
+		slotID     *uuid.UUID
 		payload    []byte
+		spec       *AgentRunExecutionSpecInput
 		commandID  uuid.UUID
 	}{
 		{
@@ -266,20 +327,177 @@ func TestAgentRunJobTypeRequiresSafeInput(t *testing.T) {
 			payload:    []byte(`{"prompt":"run this private task","token":"secret-value"}`),
 			commandID:  mustUUID("00000000-0000-0000-0000-000000000537"),
 		},
+		{
+			name:       "typed spec with legacy raw payload",
+			agentRunID: &agentRunID,
+			slotID:     &slotID,
+			payload:    []byte(`{"target":"agent"}`),
+			spec:       &spec,
+			commandID:  mustUUID("00000000-0000-0000-0000-000000000538"),
+		},
+		{
+			name:       "typed spec missing workspace ref",
+			agentRunID: &agentRunID,
+			slotID:     &slotID,
+			payload:    []byte(`{}`),
+			spec: func() *AgentRunExecutionSpecInput {
+				copy := spec
+				copy.WorkspaceRef = ""
+				return &copy
+			}(),
+			commandID: mustUUID("00000000-0000-0000-0000-000000000539"),
+		},
+		{
+			name:       "typed spec mismatched slot id",
+			agentRunID: &agentRunID,
+			slotID:     uuidPtr(mustUUID("00000000-0000-0000-0000-000000000540")),
+			payload:    []byte(`{}`),
+			spec:       &spec,
+			commandID:  mustUUID("00000000-0000-0000-0000-000000000541"),
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := svc.CreateJob(context.Background(), CreateJobInput{
-				JobType:      enum.JobTypeAgentRun,
-				Priority:     enum.JobPriorityHigh,
-				AgentRunID:   tt.agentRunID,
-				JobInputJSON: tt.payload,
-				Meta:         commandMeta(tt.commandID, 0),
+				JobType:               enum.JobTypeAgentRun,
+				Priority:              enum.JobPriorityHigh,
+				SlotID:                tt.slotID,
+				AgentRunID:            tt.agentRunID,
+				JobInputJSON:          tt.payload,
+				AgentRunExecutionSpec: tt.spec,
+				Meta:                  commandMeta(tt.commandID, 0),
 			})
 			if !errors.Is(err, errs.ErrInvalidArgument) {
 				t.Fatalf("CreateJob(agent_run unsafe input) err = %v, want invalid argument", err)
 			}
 		})
+	}
+}
+
+func TestAgentRunExecutionSpecRequiresCompletedMaterialization(t *testing.T) {
+	t.Parallel()
+
+	resolver := defaultPlacementResolver()
+	svc, repo := newTestServiceWithPlacementResolver(resolver)
+	agentRunID := mustUUID("00000000-0000-0000-0000-000000000542")
+	slot, err := svc.ReserveSlot(context.Background(), ReserveSlotInput{
+		RuntimeProfile:        "agent/default",
+		RuntimeMode:           enum.RuntimeModeFullEnv,
+		WorkspacePolicyDigest: "sha256:workspace-policy",
+		AgentRunID:            &agentRunID,
+		Meta:                  commandMeta(mustUUID("00000000-0000-0000-0000-000000000543"), 0),
+	})
+	if err != nil {
+		t.Fatalf("ReserveSlot(): %v", err)
+	}
+	spec := testAgentRunExecutionSpec(agentRunID, slot.ID)
+	repo.slots[slot.ID] = readyAgentRunSlot(slot, spec)
+	repo.workspaceMaterializations[spec.ExpectedMaterializationID] = entity.WorkspaceMaterialization{
+		Base:        entity.Base{ID: spec.ExpectedMaterializationID, Version: 1, CreatedAt: testNow, UpdatedAt: testNow},
+		SlotID:      slot.ID,
+		Status:      enum.WorkspaceMaterializationStatusRunning,
+		Fingerprint: spec.ExpectedMaterializationFingerprint,
+	}
+	_, err = svc.CreateJob(context.Background(), CreateJobInput{
+		JobType:               enum.JobTypeAgentRun,
+		Priority:              enum.JobPriorityHigh,
+		AgentRunExecutionSpec: &spec,
+		Meta:                  commandMeta(mustUUID("00000000-0000-0000-0000-000000000544"), 0),
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("CreateJob(agent_run running materialization) err = %v, want conflict", err)
+	}
+
+	repo.workspaceMaterializations[spec.ExpectedMaterializationID] = entity.WorkspaceMaterialization{
+		Base:        entity.Base{ID: spec.ExpectedMaterializationID, Version: 1, CreatedAt: testNow, UpdatedAt: testNow},
+		SlotID:      slot.ID,
+		Status:      enum.WorkspaceMaterializationStatusCompleted,
+		Fingerprint: "sha256:other",
+	}
+	_, err = svc.CreateJob(context.Background(), CreateJobInput{
+		JobType:               enum.JobTypeAgentRun,
+		Priority:              enum.JobPriorityHigh,
+		AgentRunExecutionSpec: &spec,
+		Meta:                  commandMeta(mustUUID("00000000-0000-0000-0000-000000000545"), 0),
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("CreateJob(agent_run stale materialization) err = %v, want conflict", err)
+	}
+}
+
+func TestAgentRunExecutionSpecRequiresCurrentSlotBinding(t *testing.T) {
+	t.Parallel()
+
+	resolver := defaultPlacementResolver()
+	svc, repo := newTestServiceWithPlacementResolver(resolver)
+	agentRunID := mustUUID("00000000-0000-0000-0000-000000000550")
+	slot, err := svc.ReserveSlot(context.Background(), ReserveSlotInput{
+		RuntimeProfile:        "agent/default",
+		RuntimeMode:           enum.RuntimeModeFullEnv,
+		WorkspacePolicyDigest: "sha256:workspace-policy",
+		Meta:                  commandMeta(mustUUID("00000000-0000-0000-0000-000000000551"), 0),
+	})
+	if err != nil {
+		t.Fatalf("ReserveSlot(): %v", err)
+	}
+	spec := testAgentRunExecutionSpec(agentRunID, slot.ID)
+	repo.workspaceMaterializations[spec.ExpectedMaterializationID] = entity.WorkspaceMaterialization{
+		Base:        entity.Base{ID: spec.ExpectedMaterializationID, Version: 1, CreatedAt: testNow, UpdatedAt: testNow},
+		SlotID:      slot.ID,
+		Status:      enum.WorkspaceMaterializationStatusCompleted,
+		Fingerprint: spec.ExpectedMaterializationFingerprint,
+	}
+	slotWithoutRun := readyAgentRunSlot(slot, spec)
+	slotWithoutRun.AgentRunID = nil
+	repo.slots[slot.ID] = slotWithoutRun
+	_, err = svc.CreateJob(context.Background(), CreateJobInput{
+		JobType:               enum.JobTypeAgentRun,
+		Priority:              enum.JobPriorityHigh,
+		AgentRunExecutionSpec: &spec,
+		Meta:                  commandMeta(mustUUID("00000000-0000-0000-0000-000000000552"), 0),
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("CreateJob(agent_run nil slot binding) err = %v, want conflict", err)
+	}
+
+	otherRunID := mustUUID("00000000-0000-0000-0000-000000000553")
+	mismatchedSlot := readyAgentRunSlot(slot, spec)
+	mismatchedSlot.AgentRunID = &otherRunID
+	repo.slots[slot.ID] = mismatchedSlot
+	_, err = svc.CreateJob(context.Background(), CreateJobInput{
+		JobType:               enum.JobTypeAgentRun,
+		Priority:              enum.JobPriorityHigh,
+		AgentRunExecutionSpec: &spec,
+		Meta:                  commandMeta(mustUUID("00000000-0000-0000-0000-000000000554"), 0),
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("CreateJob(agent_run mismatched slot binding) err = %v, want conflict", err)
+	}
+
+	staleSlot := readyAgentRunSlot(slot, spec)
+	staleSlot.Fingerprint = "sha256:stale"
+	repo.slots[slot.ID] = staleSlot
+	_, err = svc.CreateJob(context.Background(), CreateJobInput{
+		JobType:               enum.JobTypeAgentRun,
+		Priority:              enum.JobPriorityHigh,
+		AgentRunExecutionSpec: &spec,
+		Meta:                  commandMeta(mustUUID("00000000-0000-0000-0000-000000000555"), 0),
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("CreateJob(agent_run stale slot fingerprint) err = %v, want conflict", err)
+	}
+
+	failedSlot := readyAgentRunSlot(slot, spec)
+	failedSlot.Status = enum.SlotStatusFailed
+	repo.slots[slot.ID] = failedSlot
+	_, err = svc.CreateJob(context.Background(), CreateJobInput{
+		JobType:               enum.JobTypeAgentRun,
+		Priority:              enum.JobPriorityHigh,
+		AgentRunExecutionSpec: &spec,
+		Meta:                  commandMeta(mustUUID("00000000-0000-0000-0000-000000000556"), 0),
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("CreateJob(agent_run failed slot) err = %v, want conflict", err)
 	}
 }
 
@@ -519,6 +737,36 @@ func TestRecordRuntimeArtifactRefIsIdempotent(t *testing.T) {
 	if !errors.Is(err, errs.ErrConflict) {
 		t.Fatalf("conflicting replay err = %v, want conflict", err)
 	}
+}
+
+func testAgentRunExecutionSpec(agentRunID uuid.UUID, slotID uuid.UUID) AgentRunExecutionSpecInput {
+	return AgentRunExecutionSpecInput{
+		AgentRunID:                         agentRunID,
+		SlotID:                             slotID,
+		ExpectedMaterializationID:          mustUUID("00000000-0000-0000-0000-000000000548"),
+		ExpectedMaterializationFingerprint: "sha256:materialized-workspace",
+		WorkspaceRef:                       "runtime://workspace/00000000-0000-0000-0000-000000000549",
+		WorkspaceMountRef:                  "mount://workspace/00000000-0000-0000-0000-000000000549",
+		WorkspacePVCRef:                    "k8s://pvc/runtime-workspace-549",
+		ContextRef:                         "runtime://workspace/00000000-0000-0000-0000-000000000549/.kodex/context/agent-run.json",
+		ContextDigest:                      "sha256:agent-run-context",
+		RunnerProfileRef:                   "runner-profile://codex-agent/default",
+		RunnerImageRef:                     "image://codex-agent@sha256:runner",
+		RunnerMode:                         enum.AgentRunRunnerModeCodexAgent,
+		AllowedSecretRefs: []AgentRunExecutionRefInput{
+			{Kind: "runtime_api", Ref: "secret://runtime/agent-token"},
+		},
+		ReportingTargetRefs: []AgentRunExecutionRefInput{
+			{Kind: "agent_run_state", Ref: "agent-manager://runs/" + agentRunID.String()},
+		},
+	}
+}
+
+func readyAgentRunSlot(slot entity.Slot, spec AgentRunExecutionSpecInput) entity.Slot {
+	slot.Status = enum.SlotStatusReady
+	slot.AgentRunID = &spec.AgentRunID
+	slot.Fingerprint = spec.ExpectedMaterializationFingerprint
+	return slot
 }
 
 func entitySlot(slotID uuid.UUID, projectID uuid.UUID) entity.Slot {

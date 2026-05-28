@@ -116,7 +116,7 @@ type RuntimeFleetConfig struct {
 	ResolveTimeout        time.Duration `env:"MANAGER_RESOLVE_TIMEOUT" envDefault:"5s"`
 }
 
-// RuntimeSecretConfig хранит настройки secretresolver для исполнителя Kubernetes.
+// RuntimeSecretConfig contains secretresolver settings for the Kubernetes executor.
 type RuntimeSecretConfig struct {
 	EnvEnabled                bool   `env:"ENV_ENABLED" envDefault:"true"`
 	MountedKubernetesRoot     string `env:"MOUNTED_KUBERNETES_ROOT"`
@@ -126,7 +126,7 @@ type RuntimeSecretConfig struct {
 	VaultNamespace            string `env:"VAULT_NAMESPACE"`
 }
 
-// RuntimeKubernetesWorkerConfig управляет явно включаемым исполнителем Kubernetes-заданий.
+// RuntimeKubernetesWorkerConfig controls the explicitly enabled Kubernetes job executor.
 type RuntimeKubernetesWorkerConfig struct {
 	Enabled                 bool          `env:"ENABLED" envDefault:"false"`
 	WorkerID                string        `env:"WORKER_ID" envDefault:"runtime-manager-kubernetes-executor"`

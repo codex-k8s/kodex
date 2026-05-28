@@ -64,6 +64,11 @@ var (
 	}
 	jobPriorityToProto = invertEnumMap(jobPriorityFromProto)
 
+	agentRunRunnerModeFromProto = map[runtimev1.AgentRunRunnerMode]enum.AgentRunRunnerMode{
+		runtimev1.AgentRunRunnerMode_AGENT_RUN_RUNNER_MODE_CODEX_AGENT: enum.AgentRunRunnerModeCodexAgent,
+	}
+	agentRunRunnerModeToProto = invertEnumMap(agentRunRunnerModeFromProto)
+
 	jobStepStatusFromProto = map[runtimev1.JobStepStatus]enum.JobStepStatus{
 		runtimev1.JobStepStatus_JOB_STEP_STATUS_PENDING:   enum.JobStepStatusPending,
 		runtimev1.JobStepStatus_JOB_STEP_STATUS_RUNNING:   enum.JobStepStatusRunning,
@@ -256,6 +261,16 @@ func JobPriorityFromProto(priority runtimev1.JobPriority) (enum.JobPriority, err
 // JobPriorityToProto maps a job priority.
 func JobPriorityToProto(priority enum.JobPriority) runtimev1.JobPriority {
 	return enumToProto(priority, jobPriorityToProto, runtimev1.JobPriority_JOB_PRIORITY_UNSPECIFIED)
+}
+
+// AgentRunRunnerModeFromProto maps an agent_run runner mode from proto.
+func AgentRunRunnerModeFromProto(mode runtimev1.AgentRunRunnerMode) (enum.AgentRunRunnerMode, error) {
+	return enumFromProto(mode, agentRunRunnerModeFromProto)
+}
+
+// AgentRunRunnerModeToProto maps an agent_run runner mode to proto.
+func AgentRunRunnerModeToProto(mode enum.AgentRunRunnerMode) runtimev1.AgentRunRunnerMode {
+	return enumToProto(mode, agentRunRunnerModeToProto, runtimev1.AgentRunRunnerMode_AGENT_RUN_RUNNER_MODE_UNSPECIFIED)
 }
 
 // JobStepStatusFromProto maps a job step status.

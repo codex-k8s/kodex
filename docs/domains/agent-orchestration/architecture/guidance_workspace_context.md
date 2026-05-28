@@ -61,12 +61,12 @@ sequenceDiagram
   AM->>RT: PrepareRuntime(agent_run_id, workspace_policy с guidance sources)
   RT->>SLOT: материализовать код, документы, guidance packages и generated context
   RT-->>AM: runtime context + fingerprint подготовки
-  AM->>RT: CreateJob(job_type=JOB_TYPE_AGENT_RUN, slot_ref, agent_run_id)
+  AM->>RT: CreateJob(job_type=JOB_TYPE_AGENT_RUN, slot_ref, agent_run_id, AgentRunExecutionSpec)
   RT-->>AM: runtime_job_ref + job status
   AM->>AM: RecordRunState(starting/running, runtime_context + runtime_job_ref)
 ```
 
-`StartAgentRun` остаётся авторитетной командой создания `Run`. Подготовка runtime и постановка `JOB_TYPE_AGENT_RUN` могут быть выполнены тем же оркестрационным контуром сразу после создания `Run`, но прямой checkout, workspace materialization, Kubernetes-доступ и выполнение задания из `agent-manager` запрещены. Если `PrepareRuntime` или `CreateJob` временно запускаются внешним оператором или быстрым manager-агентом через MCP, входной набор данных должен быть тем же: замороженный `AgentRun.guidance_refs`, проверенная workspace policy, `agent_run_id` и `slot_ref`.
+`StartAgentRun` остаётся авторитетной командой создания `Run`. Подготовка runtime и постановка `JOB_TYPE_AGENT_RUN` могут быть выполнены тем же оркестрационным контуром сразу после создания `Run`, но прямой checkout, workspace materialization, Kubernetes-доступ и выполнение задания из `agent-manager` запрещены. Для будущего исполнения `CreateJob` передаёт `AgentRunExecutionSpec`: safe refs на `agent_run_id`, `slot_id`, ожидаемую materialization, workspace mount/PVC/workspace, `.kodex/context/agent-run.json` ref/digest, runner profile/image, фиксированный runner mode, secret refs без значений и reporting target refs. Если `PrepareRuntime` или `CreateJob` временно запускаются внешним оператором или быстрым manager-агентом через MCP, входной набор данных должен быть тем же: замороженный `AgentRun.guidance_refs`, проверенная workspace policy, `agent_run_id`, `slot_ref` и `AgentRunExecutionSpec`.
 
 ## Что хранится в БД и что живёт в workspace
 
