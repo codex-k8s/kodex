@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
@@ -238,8 +239,15 @@ func loadExistingSecrets(ctx context.Context, namespace string) (secretSnapshot,
 }
 
 func readSecret(ctx context.Context, namespace, name string) (map[string]string, error) {
-	output, err := kubectlOutput(ctx, "-n", namespace, "get", "secret", name, "-o", "json")
+	return readSecretWithKubectl(ctx, namespace, name, kubectlOutput)
+}
+
+func readSecretWithKubectl(ctx context.Context, namespace, name string, run func(context.Context, ...string) ([]byte, error)) (map[string]string, error) {
+	output, err := run(ctx, "-n", namespace, "get", "secret", name, "--ignore-not-found", "-o", "json")
 	if err != nil {
+		return nil, fmt.Errorf("read Kubernetes secret %s: %w", name, err)
+	}
+	if len(bytes.TrimSpace(output)) == 0 {
 		return map[string]string{}, nil
 	}
 	var secret struct {

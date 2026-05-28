@@ -1,6 +1,9 @@
 package main
 
 import (
+	"context"
+	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -55,6 +58,36 @@ func TestResolveSecretValuesPreservesExistingAndGeneratesMissing(t *testing.T) {
 	}
 	if len(values.Generated) == 0 {
 		t.Fatal("expected missing keys to be generated")
+	}
+}
+
+func TestReadSecretUsesIgnoreNotFoundAndTreatsEmptyOutputAsAbsent(t *testing.T) {
+	var gotArgs []string
+	values, err := readSecretWithKubectl(context.Background(), "kodex-test", "kodex-postgres", func(_ context.Context, args ...string) ([]byte, error) {
+		gotArgs = append([]string{}, args...)
+		return []byte("\n"), nil
+	})
+	if err != nil {
+		t.Fatalf("read secret: %v", err)
+	}
+	if len(values) != 0 {
+		t.Fatalf("expected absent secret to return empty values, got %v", values)
+	}
+	wantArgs := []string{"-n", "kodex-test", "get", "secret", "kodex-postgres", "--ignore-not-found", "-o", "json"}
+	if !reflect.DeepEqual(gotArgs, wantArgs) {
+		t.Fatalf("kubectl args mismatch:\ngot  %v\nwant %v", gotArgs, wantArgs)
+	}
+}
+
+func TestReadSecretFailsClosedOnKubectlReadError(t *testing.T) {
+	_, err := readSecretWithKubectl(context.Background(), "kodex-test", "kodex-platform-runtime", func(_ context.Context, args ...string) ([]byte, error) {
+		return nil, errors.New("temporary api failure")
+	})
+	if err == nil {
+		t.Fatal("expected kubectl read error to stop secret resolution")
+	}
+	if !strings.Contains(err.Error(), "read Kubernetes secret kodex-platform-runtime") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
