@@ -273,7 +273,7 @@ type OwnerInboxListResponse struct {
 	RequestId     string           `json:"request_id"`
 }
 
-// OwnerInboxRespondRequest defines model for OwnerInboxRespondRequest.
+// OwnerInboxRespondRequest Для идемпотентности должен быть передан command_id или idempotency_key.
 type OwnerInboxRespondRequest struct {
 	Action           ResponseAction `json:"action"`
 	CommandId        *string        `json:"command_id,omitempty"`
@@ -432,6 +432,9 @@ type NotFound = SafeError
 
 // PermissionDenied defines model for PermissionDenied.
 type PermissionDenied = SafeError
+
+// RateLimited defines model for RateLimited.
+type RateLimited = SafeError
 
 // Unauthorized defines model for Unauthorized.
 type Unauthorized = SafeError

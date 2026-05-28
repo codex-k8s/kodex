@@ -19,6 +19,8 @@
 
 Первый backend-контур для консоли сотрудников — `staff-gateway`. Он отдаёт `web-console` OpenAPI для входящих решений владельца: список, карточку одного решения и отправку ответа `approve`, `reject`, `request_changes` или `answer`, если это разрешено текущим request. Gateway остаётся тонким: он принимает actor/request context, вызывает `interaction-hub` по gRPC и возвращает только safe refs, статусы, краткие summaries, timestamps и version. Собственная модель решений, прямой доступ к БД доменных сервисов, управление `Run`/session/governance decision/provider write и междоменная агрегация в этот контур не входят.
 
+Список `owner inbox` поддерживает scope-фильтр, фильтры по kind/status/source owner/assignee/correlation, `include_diagnostics` и cursor pagination. Сортировку не выбирает клиент: её фиксирует `interaction-hub`, чтобы UI получал стабильный порядок с активными и срочными карточками выше. Карточка решения возвращает безопасные детали request, delivery/callback/response summaries, `allowed_actions`, timestamps и `version`; завершённые request не должны возвращать доступные действия. Ответ владельца отправляется с `expected_version` и `command_id` или `idempotency_key`, а gateway маппит ошибки `interaction-hub` в безопасные HTTP-статусы и коды без раскрытия raw payload.
+
 ## Карта Issue
 
 - Доменная карта: `docs/delivery/issue-map/domains/console-and-operations-ux.md`.

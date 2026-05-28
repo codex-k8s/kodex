@@ -38,7 +38,11 @@ func ListOwnerInboxItemsRequest(req *http.Request) (*interactionsv1.ListOwnerInb
 	if safeErr != nil {
 		return nil, safeErr
 	}
-	correlationRef, safeErr := externalRefFromQuery(query.Get("correlation_kind"), query.Get("correlation_ref"))
+	correlationRef, safeErr := optionalProtoRef(query.Get("correlation_kind"), query.Get("correlation_ref"), "correlation ref is invalid", newExternalRef)
+	if safeErr != nil {
+		return nil, safeErr
+	}
+	assigneeRef, safeErr := optionalProtoRef(query.Get("assignee_kind"), query.Get("assignee_ref"), "assignee ref is invalid", newActorRef)
 	if safeErr != nil {
 		return nil, safeErr
 	}
@@ -53,7 +57,7 @@ func ListOwnerInboxItemsRequest(req *http.Request) (*interactionsv1.ListOwnerInb
 		Statuses:           statuses,
 		SourceOwnerKind:    sourceOwnerKind,
 		SourceOwnerRef:     optionalString(query.Get("source_owner_ref")),
-		AssigneeRef:        actorRefFromQuery(query.Get("assignee_kind"), query.Get("assignee_ref")),
+		AssigneeRef:        assigneeRef,
 		ActorRef:           optionalString(query.Get("actor_ref")),
 		CorrelationRef:     correlationRef,
 		CorrelationId:      optionalString(query.Get("correlation_id")),
@@ -75,11 +79,15 @@ func GetOwnerInboxItemRequest(req *http.Request) (*interactionsv1.GetOwnerInboxI
 	if _, err := uuid.Parse(requestID); err != nil {
 		return nil, NewSafeError(http.StatusBadRequest, CodeInvalidRequest, "request id is invalid", false)
 	}
+	assigneeRef, safeErr := optionalProtoRef(req.URL.Query().Get("assignee_kind"), req.URL.Query().Get("assignee_ref"), "assignee ref is invalid", newActorRef)
+	if safeErr != nil {
+		return nil, safeErr
+	}
 	return &interactionsv1.GetOwnerInboxItemRequest{
 		Meta:               meta,
 		RequestId:          requestID,
 		Scope:              scope,
-		AssigneeRef:        actorRefFromQuery(req.URL.Query().Get("assignee_kind"), req.URL.Query().Get("assignee_ref")),
+		AssigneeRef:        assigneeRef,
 		IncludeDiagnostics: parseBool(req.URL.Query().Get("include_diagnostics")),
 	}, nil
 }
@@ -351,25 +359,32 @@ func responseActionProto(value string) (interactionsv1.InteractionResponseAction
 	}
 }
 
-func actorRefFromQuery(kind string, ref string) *interactionsv1.ActorRef {
-	kind = strings.TrimSpace(kind)
-	ref = strings.TrimSpace(ref)
-	if kind == "" && ref == "" {
-		return nil
+func optionalProtoRef[T any](kind string, ref string, invalidMessage string, build func(string, string) *T) (*T, *SafeError) {
+	kind, ref, safeErr := optionalRefParts(kind, ref, invalidMessage)
+	if safeErr != nil || kind == "" {
+		return nil, safeErr
 	}
+	return build(kind, ref), nil
+}
+
+func newActorRef(kind string, ref string) *interactionsv1.ActorRef {
 	return &interactionsv1.ActorRef{RefKind: kind, Ref: ref}
 }
 
-func externalRefFromQuery(kind string, ref string) (*interactionsv1.ExternalRef, *SafeError) {
+func newExternalRef(kind string, ref string) *interactionsv1.ExternalRef {
+	return &interactionsv1.ExternalRef{RefKind: kind, Ref: ref}
+}
+
+func optionalRefParts(kind string, ref string, invalidMessage string) (string, string, *SafeError) {
 	kind = strings.TrimSpace(kind)
 	ref = strings.TrimSpace(ref)
 	if kind == "" && ref == "" {
-		return nil, nil
+		return "", "", nil
 	}
 	if kind == "" || ref == "" {
-		return nil, NewSafeError(http.StatusBadRequest, CodeInvalidRequest, "correlation ref is invalid", false)
+		return "", "", NewSafeError(http.StatusBadRequest, CodeInvalidRequest, invalidMessage, false)
 	}
-	return &interactionsv1.ExternalRef{RefKind: kind, Ref: ref}, nil
+	return kind, ref, nil
 }
 
 func pageFromQuery(req *http.Request) (*interactionsv1.PageRequest, *SafeError) {
