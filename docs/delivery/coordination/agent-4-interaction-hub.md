@@ -38,13 +38,14 @@
 | IH-8 | #911 | готово как Human gate response surface | Response producer/read surface отдаёт safe request/response refs, source/decision owner refs, agent/provider/governance context refs, normalized outcome, digest/object refs, timestamps, correlation и idempotency digest для owner resume без raw response/callback payload; `agent-manager` consumer не входит. |
 | IH-9a | #921 | готово как owner inbox UI-readiness | `GetOwnerInboxItem` даёт safe detail для будущего `staff-gateway` UI flow `list -> detail -> safe action`: request/source/decision/context refs, delivery/callback/response summaries, allowed actions, timestamps и version; ответ записывается существующим `RecordInteractionResponse`. |
 | IH-9b | #928 | готово как таксономия действий владельца | `request_changes` закреплён как отдельный `InteractionResponseAction`: owner inbox list/detail и callback/response lifecycle отличают запрос доработки от `reject`, а завершённые request не возвращают `allowed_actions`. |
+| SGW-1 | не назначено | готово как первый staff-gateway owner inbox contour | `services/staff/staff-gateway` отдаёт OpenAPI для списка входящих решений, карточки решения и безопасного ответа владельца; внутри вызывает `interaction-hub` gRPC и не хранит собственный decision state. |
 | IH-11 | #894 | готово как ops deploy contour | Dockerfile, Kubernetes manifests, migration Job, services.yaml inventory, smoke-проверка, runbook и monitoring docs подготовлены для первого backend deploy без новой бизнес-логики. |
 
 ## Текущий бэклог
 
 | Срез | Статус | Почему не завершён |
 |---|---|---|
-| IH-9c+ | ожидает отдельные срезы | MCP, concrete channel packages, runtime worker, gateway/UI-связки и междоменная inbox aggregation должны поставляться малыми PR. |
+| IH-9c+ | ожидает отдельные срезы | MCP, concrete channel packages, runtime worker, расширение `staff-gateway` за пределы owner inbox и междоменная inbox aggregation должны поставляться малыми PR. |
 
 ## Блокировки от других доменов
 
@@ -61,4 +62,4 @@
 
 ## Рекомендуемый следующий шаг
 
-Следующий рациональный срез — отдельная MCP, gateway/runtime или operations aggregation связка: `interaction-hub` уже отдаёт safe owner inbox list/detail и response lifecycle, а cross-domain screen composition, concrete channel packages и runtime worker остаются вне домена.
+Следующий рациональный срез — отдельная MCP, runtime или operations aggregation связка: `interaction-hub` уже отдаёт safe owner inbox list/detail и response lifecycle, первый `staff-gateway` прокидывает этот flow наружу, а cross-domain screen composition, concrete channel packages и runtime worker остаются вне домена.

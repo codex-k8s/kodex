@@ -1,0 +1,702 @@
+openapi: 3.1.0
+info:
+  title: kodex staff-gateway API
+  version: 1.0.0
+  description: |
+    HTTP-поверхность для операторской консоли сотрудников.
+    Первый срез отдаёт входящие решения владельца из interaction-hub и передаёт безопасный ответ через RecordInteractionResponse.
+  license:
+    name: Proprietary
+    url: https://github.com/codex-k8s/kodex
+tags:
+  - name: owner-inbox
+    description: Входящие решения владельца.
+x-kodex-contract-status: mvp-owner-inbox
+paths:
+  /v1/owner-inbox/items:
+    get:
+      tags: [owner-inbox]
+      operationId: listOwnerInboxItems
+      summary: Получить список входящих решений владельца.
+      description: |
+        Возвращает безопасные карточки feedback, approval и Human gate request из interaction-hub.
+        Gateway не читает БД доменного сервиса и не хранит собственную модель решений.
+      parameters:
+        - $ref: '#/components/parameters/RequestIdHeader'
+        - $ref: '#/components/parameters/TraceIdHeader'
+        - $ref: '#/components/parameters/SessionIdHeader'
+        - $ref: '#/components/parameters/ActorTypeHeader'
+        - $ref: '#/components/parameters/ActorIdHeader'
+        - $ref: '#/components/parameters/ScopeTypeQuery'
+        - $ref: '#/components/parameters/ScopeRefQuery'
+        - $ref: '#/components/parameters/RequestKindsQuery'
+        - $ref: '#/components/parameters/RequestStatusesQuery'
+        - $ref: '#/components/parameters/SourceOwnerKindQuery'
+        - $ref: '#/components/parameters/SourceOwnerRefQuery'
+        - $ref: '#/components/parameters/AssigneeKindQuery'
+        - $ref: '#/components/parameters/AssigneeRefQuery'
+        - $ref: '#/components/parameters/ActorRefQuery'
+        - $ref: '#/components/parameters/CorrelationKindQuery'
+        - $ref: '#/components/parameters/CorrelationRefQuery'
+        - $ref: '#/components/parameters/CorrelationIdQuery'
+        - $ref: '#/components/parameters/IncludeDiagnosticsQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/PageTokenQuery'
+      responses:
+        '200':
+          description: Список входящих решений получен.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnerInboxListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/PermissionDenied'
+        '503':
+          $ref: '#/components/responses/DownstreamUnavailable'
+  /v1/owner-inbox/items/{request_id}:
+    get:
+      tags: [owner-inbox]
+      operationId: getOwnerInboxItem
+      summary: Получить карточку одного входящего решения.
+      description: |
+        Возвращает безопасные детали request, delivery/callback/response summaries, allowed actions и version.
+        Raw provider payload, callback body, prompt/transcript, secret values и большие логи в ответ не входят.
+      parameters:
+        - $ref: '#/components/parameters/RequestIdPath'
+        - $ref: '#/components/parameters/RequestIdHeader'
+        - $ref: '#/components/parameters/TraceIdHeader'
+        - $ref: '#/components/parameters/SessionIdHeader'
+        - $ref: '#/components/parameters/ActorTypeHeader'
+        - $ref: '#/components/parameters/ActorIdHeader'
+        - $ref: '#/components/parameters/ScopeTypeQuery'
+        - $ref: '#/components/parameters/ScopeRefQuery'
+        - $ref: '#/components/parameters/AssigneeKindQuery'
+        - $ref: '#/components/parameters/AssigneeRefQuery'
+        - $ref: '#/components/parameters/IncludeDiagnosticsQuery'
+      responses:
+        '200':
+          description: Карточка входящего решения получена.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnerInboxItemResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/PermissionDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/DownstreamUnavailable'
+  /v1/owner-inbox/items/{request_id}/response:
+    post:
+      tags: [owner-inbox]
+      operationId: respondOwnerInboxItem
+      summary: Записать ответ владельца.
+      description: |
+        Передаёт approve, reject, request_changes, answer, defer, acknowledge или custom в interaction-hub.RecordInteractionResponse.
+        Interaction-hub проверяет allowed actions, expected version, идемпотентность и terminal lifecycle.
+      parameters:
+        - $ref: '#/components/parameters/RequestIdPath'
+        - $ref: '#/components/parameters/RequestIdHeader'
+        - $ref: '#/components/parameters/TraceIdHeader'
+        - $ref: '#/components/parameters/SessionIdHeader'
+        - $ref: '#/components/parameters/ActorTypeHeader'
+        - $ref: '#/components/parameters/ActorIdHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OwnerInboxRespondRequest'
+      responses:
+        '200':
+          description: Ответ владельца записан или идемпотентно подтверждён.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnerInboxRespondResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/PermissionDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/DownstreamUnavailable'
+components:
+  parameters:
+    RequestIdPath:
+      name: request_id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Interaction request id.
+    RequestIdHeader:
+      name: X-Kodex-Request-Id
+      in: header
+      required: false
+      schema:
+        type: string
+        maxLength: 128
+      description: Идентификатор запроса для трассировки. Gateway может заменить невалидное значение.
+    TraceIdHeader:
+      name: X-Kodex-Trace-Id
+      in: header
+      required: false
+      schema:
+        type: string
+        maxLength: 128
+      description: Безопасная ссылка на трассу.
+    SessionIdHeader:
+      name: X-Kodex-Session-Id
+      in: header
+      required: false
+      schema:
+        type: string
+        maxLength: 128
+      description: Безопасная ссылка на пользовательскую сессию.
+    ActorTypeHeader:
+      name: X-Kodex-Actor-Type
+      in: header
+      required: true
+      schema:
+        type: string
+        enum: [user, service, agent, external_account]
+      description: Тип проверенного субъекта от внешнего auth boundary.
+    ActorIdHeader:
+      name: X-Kodex-Actor-Id
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 256
+      description: Safe id проверенного субъекта без email и имени.
+    ScopeTypeQuery:
+      name: scope_type
+      in: query
+      required: true
+      schema:
+        $ref: '#/components/schemas/ScopeType'
+      description: Тип области interaction request.
+    ScopeRefQuery:
+      name: scope_ref
+      in: query
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 256
+      description: Safe ref области.
+    RequestKindsQuery:
+      name: request_kind
+      in: query
+      required: false
+      style: form
+      explode: false
+      schema:
+        type: array
+        items:
+          $ref: '#/components/schemas/RequestKind'
+      description: Список kind через запятую.
+    RequestStatusesQuery:
+      name: status
+      in: query
+      required: false
+      style: form
+      explode: false
+      schema:
+        type: array
+        items:
+          $ref: '#/components/schemas/RequestStatus'
+      description: Список статусов через запятую. Пустое значение оставляет default interaction-hub.
+    SourceOwnerKindQuery:
+      name: source_owner_kind
+      in: query
+      required: false
+      schema:
+        $ref: '#/components/schemas/SourceOwnerKind'
+    SourceOwnerRefQuery:
+      name: source_owner_ref
+      in: query
+      required: false
+      schema:
+        type: string
+        maxLength: 256
+    AssigneeKindQuery:
+      name: assignee_kind
+      in: query
+      required: false
+      schema:
+        type: string
+        maxLength: 64
+    AssigneeRefQuery:
+      name: assignee_ref
+      in: query
+      required: false
+      schema:
+        type: string
+        maxLength: 256
+    ActorRefQuery:
+      name: actor_ref
+      in: query
+      required: false
+      schema:
+        type: string
+        maxLength: 256
+    CorrelationKindQuery:
+      name: correlation_kind
+      in: query
+      required: false
+      schema:
+        type: string
+        maxLength: 64
+    CorrelationRefQuery:
+      name: correlation_ref
+      in: query
+      required: false
+      schema:
+        type: string
+        maxLength: 256
+    CorrelationIdQuery:
+      name: correlation_id
+      in: query
+      required: false
+      schema:
+        type: string
+        maxLength: 256
+    IncludeDiagnosticsQuery:
+      name: include_diagnostics
+      in: query
+      required: false
+      schema:
+        type: boolean
+        default: false
+    PageSizeQuery:
+      name: page_size
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+    PageTokenQuery:
+      name: page_token
+      in: query
+      required: false
+      schema:
+        type: string
+        maxLength: 512
+  responses:
+    BadRequest:
+      description: Невалидный запрос.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/SafeError'
+    Unauthorized:
+      description: Не передан проверенный actor context.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/SafeError'
+    PermissionDenied:
+      description: Доменный сервис отказал в доступе.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/SafeError'
+    NotFound:
+      description: Входящее решение не найдено или не видно вызывающей стороне.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/SafeError'
+    Conflict:
+      description: Конфликт версии, terminal lifecycle или action вне allowed actions.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/SafeError'
+    DownstreamUnavailable:
+      description: interaction-hub временно недоступен.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/SafeError'
+  schemas:
+    SafeError:
+      type: object
+      additionalProperties: false
+      required: [request_id, code, message, retryable]
+      properties:
+        request_id:
+          type: string
+        correlation_id:
+          type: string
+        code:
+          type: string
+          enum:
+            - invalid_request
+            - unauthenticated
+            - permission_denied
+            - not_found
+            - conflict
+            - stale_version
+            - downstream_unavailable
+            - rate_limited
+        message:
+          type: string
+        retryable:
+          type: boolean
+    PageInfo:
+      type: object
+      additionalProperties: false
+      properties:
+        next_page_token:
+          type: string
+    ScopeType:
+      type: string
+      enum: [platform, organization, project, repository, service]
+    ScopeRef:
+      type: object
+      additionalProperties: false
+      required: [type, ref]
+      properties:
+        type:
+          $ref: '#/components/schemas/ScopeType'
+        ref:
+          type: string
+    RequestKind:
+      type: string
+      enum: [feedback, approval, human_gate]
+    RequestStatus:
+      type: string
+      enum: [created, routed, waiting, answered, expired, cancelled, failed]
+    SourceOwnerKind:
+      type: string
+      enum: [agent_manager, slot_agent, governance_manager, provider_hub, operations_hub, user, system]
+    DecisionOwnerKind:
+      type: string
+      enum: [agent_manager, governance_manager, provider_hub, operations_hub, system]
+    ResponseAction:
+      type: string
+      enum: [answer, approve, reject, request_changes, defer, acknowledge, custom]
+    ResponseSourceKind:
+      type: string
+      enum: [web_console, mcp, channel_callback, system, service]
+    DeliveryAttemptStatus:
+      type: string
+      enum: [unspecified, queued, sent, accepted, delivered, failed, cancelled, expired]
+    DeliveryErrorClass:
+      type: string
+      enum: [unspecified, temporary, permanent, auth, rate_limited, policy]
+    CallbackSignatureStatus:
+      type: string
+      enum: [unspecified, verified, trusted_internal, rejected_before_domain]
+    CallbackProcessingStatus:
+      type: string
+      enum: [unspecified, accepted, duplicate, rejected, failed]
+    SourceOwnerRef:
+      type: object
+      additionalProperties: false
+      required: [kind]
+      properties:
+        kind:
+          $ref: '#/components/schemas/SourceOwnerKind'
+        ref:
+          type: string
+    DecisionOwnerRef:
+      type: object
+      additionalProperties: false
+      required: [owner_kind, owner_request_ref]
+      properties:
+        owner_kind:
+          $ref: '#/components/schemas/DecisionOwnerKind'
+        owner_request_ref:
+          type: string
+        owner_decision_ref:
+          type: string
+    ActorRef:
+      type: object
+      additionalProperties: false
+      required: [ref_kind, ref]
+      properties:
+        ref_kind:
+          type: string
+        ref:
+          type: string
+    ExternalRef:
+      type: object
+      additionalProperties: false
+      required: [ref_kind, ref]
+      properties:
+        ref_kind:
+          type: string
+        ref:
+          type: string
+    InteractionAction:
+      type: object
+      additionalProperties: false
+      required: [action_key, is_terminal]
+      properties:
+        action_key:
+          type: string
+        label_template_ref:
+          type: string
+        is_terminal:
+          type: boolean
+    ObjectRef:
+      type: object
+      additionalProperties: false
+      required: [object_uri, object_digest]
+      properties:
+        object_uri:
+          type: string
+          minLength: 1
+          maxLength: 512
+        object_digest:
+          type: string
+          minLength: 1
+          maxLength: 256
+        object_size_bytes:
+          type: integer
+          format: int64
+          minimum: 0
+    OwnerInboxDeliverySummary:
+      type: object
+      additionalProperties: false
+      required: [attempt_count, latest_status, latest_error_class]
+      properties:
+        attempt_count:
+          type: integer
+          format: int32
+        latest_delivery_attempt_id:
+          type: string
+        latest_delivery_id:
+          type: string
+        latest_status:
+          $ref: '#/components/schemas/DeliveryAttemptStatus'
+        latest_error_code:
+          type: string
+        latest_error_class:
+          $ref: '#/components/schemas/DeliveryErrorClass'
+        next_retry_at:
+          type: string
+          format: date-time
+        latest_updated_at:
+          type: string
+          format: date-time
+        route_id:
+          type: string
+        channel_message_ref:
+          type: string
+    OwnerInboxCallbackSummary:
+      type: object
+      additionalProperties: false
+      required: [callback_ref, callback_id, signature_status, processing_status, received_at]
+      properties:
+        callback_ref:
+          type: string
+        callback_id:
+          type: string
+        delivery_id:
+          type: string
+        signature_status:
+          $ref: '#/components/schemas/CallbackSignatureStatus'
+        processing_status:
+          $ref: '#/components/schemas/CallbackProcessingStatus'
+        actor_ref:
+          type: string
+        action:
+          type: string
+        error_code:
+          type: string
+        received_at:
+          type: string
+          format: date-time
+        gateway_ref:
+          type: string
+        correlation_id:
+          type: string
+    OwnerInboxResponseSummary:
+      type: object
+      additionalProperties: false
+      required: [response_id, response_action, responded_by_actor_ref, source_kind, created_at]
+      properties:
+        response_id:
+          type: string
+        response_action:
+          $ref: '#/components/schemas/ResponseAction'
+        responded_by_actor_ref:
+          type: string
+        source_kind:
+          $ref: '#/components/schemas/ResponseSourceKind'
+        source_ref:
+          type: string
+        owner_decision_ref:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        response_summary:
+          type: string
+          maxLength: 2000
+        response_summary_digest:
+          type: string
+        response_object:
+          $ref: '#/components/schemas/ObjectRef'
+        interaction_response_ref:
+          type: string
+    OwnerInboxItem:
+      type: object
+      additionalProperties: false
+      required:
+        - request_id
+        - request_kind
+        - request_status
+        - scope
+        - requester
+        - assignee_refs
+        - context_refs
+        - title
+        - summary
+        - delivery_summary
+        - created_at
+        - updated_at
+        - version
+        - allowed_actions
+      properties:
+        request_id:
+          type: string
+        request_kind:
+          $ref: '#/components/schemas/RequestKind'
+        request_status:
+          $ref: '#/components/schemas/RequestStatus'
+        scope:
+          $ref: '#/components/schemas/ScopeRef'
+        requester:
+          $ref: '#/components/schemas/SourceOwnerRef'
+        decision_owner:
+          $ref: '#/components/schemas/DecisionOwnerRef'
+        assignee_refs:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActorRef'
+        context_refs:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExternalRef'
+        title:
+          type: string
+          maxLength: 240
+        summary:
+          type: string
+          maxLength: 2000
+        deadline_at:
+          type: string
+          format: date-time
+        reminder_policy_ref:
+          type: string
+        delivery_summary:
+          $ref: '#/components/schemas/OwnerInboxDeliverySummary'
+        latest_callback:
+          $ref: '#/components/schemas/OwnerInboxCallbackSummary'
+        latest_response:
+          $ref: '#/components/schemas/OwnerInboxResponseSummary'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        resolved_at:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          format: int64
+        allowed_actions:
+          type: array
+          items:
+            $ref: '#/components/schemas/InteractionAction'
+    OwnerInboxListResponse:
+      type: object
+      additionalProperties: false
+      required: [request_id, items, page]
+      properties:
+        request_id:
+          type: string
+        correlation_id:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OwnerInboxItem'
+        page:
+          $ref: '#/components/schemas/PageInfo'
+    OwnerInboxItemResponse:
+      type: object
+      additionalProperties: false
+      required: [request_id, item]
+      properties:
+        request_id:
+          type: string
+        correlation_id:
+          type: string
+        item:
+          $ref: '#/components/schemas/OwnerInboxItem'
+    OwnerInboxRespondRequest:
+      type: object
+      additionalProperties: false
+      required: [action, expected_version]
+      properties:
+        action:
+          $ref: '#/components/schemas/ResponseAction'
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 1
+        command_id:
+          type: string
+          maxLength: 128
+        idempotency_key:
+          type: string
+          maxLength: 256
+        response_summary:
+          type: string
+          maxLength: 2000
+        response_object:
+          $ref: '#/components/schemas/ObjectRef'
+        owner_decision_ref:
+          type: string
+          maxLength: 256
+        reason:
+          type: string
+          maxLength: 256
+    OwnerInboxRespondResponse:
+      type: object
+      additionalProperties: false
+      required: [request_id, item, response]
+      properties:
+        request_id:
+          type: string
+        correlation_id:
+          type: string
+        item:
+          $ref: '#/components/schemas/OwnerInboxItem'
+        response:
+          $ref: '#/components/schemas/OwnerInboxResponseSummary'
