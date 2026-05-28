@@ -39,9 +39,6 @@ const (
 	defaultContainerName   = "runtime-health-check"
 	defaultImagePullPolicy = "IfNotPresent"
 	maxMetadataItems       = 16
-	maxEnvItems            = 32
-	maxEnvValueBytes       = 1024
-	maxAnnotationValue     = 2048
 )
 
 // Config ограничивает поведение исполнителя Kubernetes настройками оператора.
@@ -273,18 +270,14 @@ type executionSpec struct {
 	ServiceAccount  string
 	Image           string
 	ImagePullPolicy corev1.PullPolicy
-	Env             map[string]string
 	Labels          map[string]string
-	Annotations     map[string]string
 }
 
 type restrictedJobInput struct {
 	Namespace      string            `json:"namespace"`
 	ServiceAccount string            `json:"service_account"`
 	Image          string            `json:"image"`
-	Env            map[string]string `json:"env"`
 	Labels         map[string]string `json:"labels"`
-	Annotations    map[string]string `json:"annotations"`
 }
 
 func (e *Executor) executionSpec(payload []byte) (executionSpec, error) {
@@ -297,9 +290,7 @@ func (e *Executor) executionSpec(payload []byte) (executionSpec, error) {
 		ServiceAccount:  firstNonEmpty(input.ServiceAccount, e.config.DefaultServiceAccount),
 		Image:           firstNonEmpty(input.Image, e.config.DefaultImage),
 		ImagePullPolicy: corev1.PullPolicy(e.config.ImagePullPolicy),
-		Env:             input.Env,
 		Labels:          input.Labels,
-		Annotations:     input.Annotations,
 	}
 	if err := validateExecutionSpec(spec); err != nil {
 		return executionSpec{}, err
@@ -337,25 +328,7 @@ func validateExecutionSpec(spec executionSpec) error {
 			return newExecutionError("invalid_job_input", "Kubernetes executor service account is invalid")
 		}
 	}
-	if err := validateEnv(spec.Env); err != nil {
-		return err
-	}
-	if err := validateLabels(spec.Labels); err != nil {
-		return err
-	}
-	return validateAnnotations(spec.Annotations)
-}
-
-func validateEnv(values map[string]string) error {
-	if len(values) > maxEnvItems {
-		return newExecutionError("invalid_job_input", "Kubernetes executor env input is too large")
-	}
-	for key, value := range values {
-		if !safeEnvName(key) || len(value) > maxEnvValueBytes {
-			return newExecutionError("invalid_job_input", "Kubernetes executor env input is invalid")
-		}
-	}
-	return nil
+	return validateLabels(spec.Labels)
 }
 
 func validateLabels(values map[string]string) error {
@@ -373,18 +346,6 @@ func validateLabels(values map[string]string) error {
 	return nil
 }
 
-func validateAnnotations(values map[string]string) error {
-	if len(values) > maxMetadataItems {
-		return newExecutionError("invalid_job_input", "Kubernetes executor annotations input is too large")
-	}
-	for key, value := range values {
-		if errs := validation.IsQualifiedName(key); len(errs) > 0 || len(value) > maxAnnotationValue {
-			return newExecutionError("invalid_job_input", "Kubernetes executor annotation input is invalid")
-		}
-	}
-	return nil
-}
-
 func buildJob(job entity.Job, spec executionSpec, cfg Config, name string, selector labels.Set) *batchv1.Job {
 	metadataLabels := map[string]string{}
 	for key, value := range spec.Labels {
@@ -393,24 +354,18 @@ func buildJob(job entity.Job, spec executionSpec, cfg Config, name string, selec
 	for key, value := range managedLabels(job, selector) {
 		metadataLabels[key] = value
 	}
-	metadataAnnotations := map[string]string{}
-	for key, value := range spec.Annotations {
-		metadataAnnotations[key] = value
-	}
 	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        name,
-			Namespace:   spec.Namespace,
-			Labels:      metadataLabels,
-			Annotations: metadataAnnotations,
+			Name:      name,
+			Namespace: spec.Namespace,
+			Labels:    metadataLabels,
 		},
 		Spec: batchv1.JobSpec{
 			BackoffLimit:            int32Ptr(cfg.BackoffLimit),
 			TTLSecondsAfterFinished: int32Ptr(cfg.TTLSecondsAfterFinished),
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels:      metadataLabels,
-					Annotations: metadataAnnotations,
+					Labels: metadataLabels,
 				},
 				Spec: corev1.PodSpec{
 					RestartPolicy:      corev1.RestartPolicyNever,
@@ -421,7 +376,6 @@ func buildJob(job entity.Job, spec executionSpec, cfg Config, name string, selec
 						ImagePullPolicy: spec.ImagePullPolicy,
 						Command:         []string{"/bin/sh", "-ec"},
 						Args:            []string{"echo kodex runtime health check"},
-						Env:             envVars(spec.Env),
 					}},
 				},
 			},
@@ -440,22 +394,6 @@ func managedLabels(job entity.Job, selector labels.Set) map[string]string {
 		result[key] = value
 	}
 	return result
-}
-
-func envVars(values map[string]string) []corev1.EnvVar {
-	if len(values) == 0 {
-		return nil
-	}
-	keys := make([]string, 0, len(values))
-	for key := range values {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	vars := make([]corev1.EnvVar, 0, len(keys))
-	for _, key := range keys {
-		vars = append(vars, corev1.EnvVar{Name: key, Value: values[key]})
-	}
-	return vars
 }
 
 func (e *Executor) shortLogTail(ctx context.Context, started StartedJob) string {
@@ -560,19 +498,6 @@ func firstNonEmpty(values ...string) string {
 
 func int32Ptr(value int32) *int32 {
 	return &value
-}
-
-func safeEnvName(name string) bool {
-	if strings.TrimSpace(name) != name || name == "" {
-		return false
-	}
-	for index, r := range name {
-		if r == '_' || r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z' || index > 0 && r >= '0' && r <= '9' {
-			continue
-		}
-		return false
-	}
-	return true
 }
 
 func boundedLogTail(text string, limit int) string {

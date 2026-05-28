@@ -25,7 +25,7 @@ func TestExecutorStartCreatesRestrictedHealthCheckJob(t *testing.T) {
 	client := fake.NewClientset()
 	executor := newTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
 	job := testHealthCheckJob()
-	job.JobInputJSON = []byte(`{"env":{"CHECK_MODE":"fast"},"labels":{"runtime.kodex.io/test":"true"},"annotations":{"runtime.kodex.io/purpose":"unit"}}`)
+	job.JobInputJSON = []byte(`{"labels":{"runtime.kodex.io/test":"true"}}`)
 
 	started, err := executor.Start(context.Background(), job)
 	if err != nil {
@@ -41,8 +41,11 @@ func TestExecutorStartCreatesRestrictedHealthCheckJob(t *testing.T) {
 	if got := created.Spec.Template.Spec.Containers[0].Image; got != "busybox:1.36" {
 		t.Fatalf("image = %q, want configured image", got)
 	}
-	if got := created.Spec.Template.Spec.Containers[0].Env[0].Name; got != "CHECK_MODE" {
-		t.Fatalf("env[0].Name = %q, want CHECK_MODE", got)
+	if got := created.Spec.Template.Spec.Containers[0].Env; len(got) != 0 {
+		t.Fatalf("container env = %v, want no literal env from job input", got)
+	}
+	if len(created.Annotations) != 0 || len(created.Spec.Template.Annotations) != 0 {
+		t.Fatalf("annotations = %v/%v, want none from job input", created.Annotations, created.Spec.Template.Annotations)
 	}
 	if created.Labels[runtimeJobLabel] != job.ID.String() || created.Labels["app.kubernetes.io/managed-by"] != managedBy {
 		t.Fatalf("managed labels = %v", created.Labels)
@@ -72,6 +75,22 @@ func TestExecutorStartRejectsUnknownInputFields(t *testing.T) {
 
 	_, err := executor.Start(context.Background(), job)
 	assertExecutionCode(t, err, "invalid_job_input")
+}
+
+func TestExecutorStartRejectsLiteralEnvAndAnnotations(t *testing.T) {
+	t.Parallel()
+
+	for _, payload := range [][]byte{
+		[]byte(`{"env":{"TOKEN":"secret-value"}}`),
+		[]byte(`{"annotations":{"runtime.kodex.io/token":"secret-value"}}`),
+	} {
+		executor := newTestExecutor(t, fake.NewClientset(), fakeClusterProvider{access: testClusterAccess()})
+		job := testHealthCheckJob()
+		job.JobInputJSON = payload
+
+		_, err := executor.Start(context.Background(), job)
+		assertExecutionCode(t, err, "invalid_job_input")
+	}
 }
 
 func TestExecutorWaitReportsCompletedJob(t *testing.T) {

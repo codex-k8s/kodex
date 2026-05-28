@@ -92,7 +92,7 @@ Generated execution context передаётся отдельным `WorkspaceSo
 
 Исполнитель Kubernetes в `runtime-manager` обрабатывает только ограниченный первый тип задания `health_check`. Он забирает задание через `ClaimRunnableJob`, читает выбранный кластер через `fleet-manager.GetKubernetesCluster`, получает только ссылку `secret_store_type`/`secret_store_ref` и разрешает kubeconfig в памяти через `secretresolver`. Значение kubeconfig, raw Kubernetes objects, events и полный лог не пишутся в БД. Запуск фиксируется через `ReportJobStepProgress` с `RuntimeArtifactRef` на Kubernetes Job и namespace, а завершение идёт через `CompleteJob` или `FailJob`.
 
-`JobInputJSON` для этого пути не является произвольным manifest. Поддержаны только ограниченные поля `namespace`, `service_account`, `image`, `env`, `labels` и `annotations`; команда контейнера остаётся фиксированной проверкой здоровья. Остальные типы заданий (`build`, `deploy`, slot-agent workloads и т.п.) не исполняются этим срезом.
+`JobInputJSON` для этого пути не является произвольным manifest. Поддержаны только ограниченные поля `namespace`, `service_account`, `image` и `labels`; значения `env`, annotations, команды контейнера, значения секретов, prompt, transcript, provider payload и большие тексты не принимаются. Команда контейнера остаётся фиксированной проверкой здоровья. Остальные типы заданий (`build`, `deploy`, нагрузки slot-agent и т.п.) не исполняются этим срезом.
 
 ### Runtime artifact refs
 

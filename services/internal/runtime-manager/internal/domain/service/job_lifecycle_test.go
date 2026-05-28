@@ -207,7 +207,7 @@ func TestAgentRunJobTypeCanBeCreatedListedAndClaimed(t *testing.T) {
 		Priority:     enum.JobPriorityHigh,
 		AgentRunID:   &agentRunID,
 		ProjectID:    &projectID,
-		JobInputJSON: []byte(`{"run_ref":"agent-run-531"}`),
+		JobInputJSON: []byte(`{}`),
 		Meta:         commandMeta(mustUUID("00000000-0000-0000-0000-000000000533"), 0),
 	})
 	if err != nil {
@@ -240,6 +240,46 @@ func TestAgentRunJobTypeCanBeCreatedListedAndClaimed(t *testing.T) {
 	}
 	if claim.Job.ID != job.ID || claim.Job.JobType != enum.JobTypeAgentRun || claim.LeaseToken == "" {
 		t.Fatalf("claim = %#v, want claimed agent_run job with token", claim)
+	}
+}
+
+func TestAgentRunJobTypeRequiresSafeInput(t *testing.T) {
+	t.Parallel()
+
+	svc, _ := newTestService()
+	agentRunID := mustUUID("00000000-0000-0000-0000-000000000535")
+	tests := []struct {
+		name       string
+		agentRunID *uuid.UUID
+		payload    []byte
+		commandID  uuid.UUID
+	}{
+		{
+			name:       "missing agent run id",
+			agentRunID: nil,
+			payload:    []byte(`{}`),
+			commandID:  mustUUID("00000000-0000-0000-0000-000000000536"),
+		},
+		{
+			name:       "raw prompt payload",
+			agentRunID: &agentRunID,
+			payload:    []byte(`{"prompt":"run this private task","token":"secret-value"}`),
+			commandID:  mustUUID("00000000-0000-0000-0000-000000000537"),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := svc.CreateJob(context.Background(), CreateJobInput{
+				JobType:      enum.JobTypeAgentRun,
+				Priority:     enum.JobPriorityHigh,
+				AgentRunID:   tt.agentRunID,
+				JobInputJSON: tt.payload,
+				Meta:         commandMeta(tt.commandID, 0),
+			})
+			if !errors.Is(err, errs.ErrInvalidArgument) {
+				t.Fatalf("CreateJob(agent_run unsafe input) err = %v, want invalid argument", err)
+			}
+		})
 	}
 }
 
