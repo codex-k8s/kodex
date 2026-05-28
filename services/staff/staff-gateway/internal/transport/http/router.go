@@ -30,8 +30,12 @@ func NewRouter(ctx context.Context, cfg Config, interactionHub InteractionHubCli
 	handler := RequestIDMiddleware(
 		errorBoundary(logger,
 			LoggingMiddleware(logger)(
-				TimeoutMiddleware(cfg.RequestTimeout)(
-					BodyLimitMiddleware(cfg.MaxBodyBytes)(mux),
+				ActorContextMiddleware(
+					TimeoutMiddleware(cfg.RequestTimeout)(
+						BodyLimitMiddleware(cfg.MaxBodyBytes)(
+							contract.Middleware(mux),
+						),
+					),
 				),
 			),
 		),

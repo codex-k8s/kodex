@@ -32,6 +32,20 @@ func TimeoutMiddleware(timeout time.Duration) Middleware {
 	}
 }
 
+func ActorContextMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if skipOpenAPIValidation(req.URL.Path) {
+			next.ServeHTTP(w, req)
+			return
+		}
+		if _, safeErr := actorFromHeaders(req); safeErr != nil {
+			WriteSafeError(w, req, safeErr)
+			return
+		}
+		next.ServeHTTP(w, req)
+	})
+}
+
 func BodyLimitMiddleware(limit int64) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {

@@ -113,6 +113,20 @@ func TestRouterRejectsUnknownAction(t *testing.T) {
 	}
 }
 
+func TestRouterOpenAPIValidationRejectsInvalidQueryBoolean(t *testing.T) {
+	client := &fakeInteractionHubClient{}
+	router := newTestRouter(t, client)
+	req := authenticatedRequest(http.MethodGet, "/v1/owner-inbox/items?scope_type=project&scope_ref=project-1&include_diagnostics=not-bool", "")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	assertErrorCode(t, rec, http.StatusBadRequest, generated.SafeErrorCodeInvalidRequest)
+	if client.listRequest != nil {
+		t.Fatalf("downstream was called after OpenAPI validation failure")
+	}
+}
+
 func TestRouterRejectsRawPayloadField(t *testing.T) {
 	client := &fakeInteractionHubClient{}
 	router := newTestRouter(t, client)
