@@ -1998,7 +1998,7 @@ func TestRecordReleaseRuntimeEvidenceReplayAndConflictHandling(t *testing.T) {
 				Domain: "runtime",
 				Kind:   "job",
 				Ref:    "runtime:job:deploy",
-				Status: "completed",
+				Status: "succeeded",
 				Digest: "sha256:deploystatus",
 			}},
 			Status: enum.ReleaseDecisionPackageStatusReady,
@@ -2012,7 +2012,7 @@ func TestRecordReleaseRuntimeEvidenceReplayAndConflictHandling(t *testing.T) {
 			Domain: "runtime",
 			Kind:   "job",
 			Ref:    "runtime:job:deploy",
-			Status: "completed",
+			Status: "succeeded",
 			Digest: "sha256:deploystatus",
 		}},
 		Meta: CommandMeta{
@@ -2043,6 +2043,216 @@ func TestRecordReleaseRuntimeEvidenceReplayAndConflictHandling(t *testing.T) {
 	})
 	if !errors.Is(err, errs.ErrConflict) {
 		t.Fatalf("RecordReleaseRuntimeEvidence(conflict replay) error = %v, want ErrConflict", err)
+	}
+}
+
+func TestRecordReleaseRuntimeEvidenceDuplicateFingerprintIsIdempotent(t *testing.T) {
+	t.Parallel()
+
+	packageID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+	commandID := uuid.MustParse("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+	expectedVersion := int64(4)
+	repository := &fakeRepository{
+		ready: true,
+		releasePackage: entity.ReleaseDecisionPackage{
+			VersionedBase:       entity.VersionedBase{ID: packageID, Version: expectedVersion},
+			ReleaseCandidateRef: "release:v1.0.0",
+			ProjectContext:      value.ProjectContextRef{ProjectRef: "project:alpha"},
+			RuntimeRefs:         []byte(`[{"job_ref":"runtime:job:deploy","summary_ref":"runtime:summary:deploy"}]`),
+			EvidenceRefs: []value.EvidenceRef{{
+				Kind:           "runtime_job",
+				Ref:            "runtime:job:deploy",
+				Summary:        "deploy job status",
+				Digest:         "sha256:deploystatus",
+				RetentionClass: "safe_ref",
+			}},
+			IntegrationRefs: []value.ReleaseIntegrationRef{{
+				Domain:     "runtime",
+				Kind:       "job",
+				Ref:        "runtime:job:deploy",
+				Status:     "succeeded",
+				Summary:    "deploy completed",
+				Digest:     "sha256:deploystatus",
+				ObservedAt: "2026-05-28T12:00:00Z",
+				Version:    "job-version:4",
+			}},
+			Status: enum.ReleaseDecisionPackageStatusReady,
+		},
+	}
+
+	item, err := newTestService(repository).RecordReleaseRuntimeEvidence(context.Background(), RecordReleaseRuntimeEvidenceInput{
+		ReleaseDecisionPackageID: packageID,
+		RuntimeRefs:              []byte(`[{"job_ref":"runtime:job:deploy","summary_ref":"runtime:summary:deploy"}]`),
+		EvidenceRefs: []value.EvidenceRef{{
+			Kind:           "runtime_job",
+			Ref:            "runtime:job:deploy",
+			Summary:        "deploy job status",
+			Digest:         "sha256:deploystatus",
+			RetentionClass: "safe_ref",
+		}},
+		IntegrationRefs: []value.ReleaseIntegrationRef{{
+			Domain:     "runtime",
+			Kind:       "job",
+			Ref:        "runtime:job:deploy",
+			Status:     "succeeded",
+			Summary:    "deploy completed",
+			Digest:     "sha256:deploystatus",
+			ObservedAt: "2026-05-28T12:00:00Z",
+			Version:    "job-version:4",
+		}},
+		Meta: CommandMeta{
+			CommandID:       &commandID,
+			ExpectedVersion: &expectedVersion,
+			Actor:           value.Actor{Type: "service", ID: "runtime-manager"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("RecordReleaseRuntimeEvidence(duplicate fingerprint): %v", err)
+	}
+	if item.Version != expectedVersion || repository.mutationCalls != 0 || len(repository.events) != 0 {
+		t.Fatalf("duplicate result version/mutations/events = %d/%d/%d, want %d/0/0", item.Version, repository.mutationCalls, len(repository.events), expectedVersion)
+	}
+	if repository.result.AggregateID != packageID || repository.result.CommandID == nil || *repository.result.CommandID != commandID {
+		t.Fatalf("command result = %+v, want idempotent command result for package", repository.result)
+	}
+}
+
+func TestRecordReleaseRuntimeEvidenceRejectsConflictingFingerprintAndStaleStatus(t *testing.T) {
+	t.Parallel()
+
+	packageID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+	expectedVersion := int64(4)
+	basePackage := entity.ReleaseDecisionPackage{
+		VersionedBase:       entity.VersionedBase{ID: packageID, Version: expectedVersion},
+		ReleaseCandidateRef: "release:v1.0.0",
+		ProjectContext:      value.ProjectContextRef{ProjectRef: "project:alpha"},
+		IntegrationRefs: []value.ReleaseIntegrationRef{{
+			Domain:     "runtime",
+			Kind:       "job",
+			Ref:        "runtime:job:deploy",
+			Status:     "succeeded",
+			Summary:    "deploy completed",
+			Digest:     "sha256:deploystatus",
+			ObservedAt: "2026-05-28T12:00:00Z",
+			Version:    "job-version:4",
+		}},
+		Status: enum.ReleaseDecisionPackageStatusReady,
+	}
+
+	for _, tc := range []struct {
+		name string
+		ref  value.ReleaseIntegrationRef
+		want error
+	}{
+		{
+			name: "conflicting digest",
+			ref: value.ReleaseIntegrationRef{
+				Domain:     "runtime",
+				Kind:       "job",
+				Ref:        "runtime:job:deploy",
+				Status:     "succeeded",
+				Summary:    "deploy completed",
+				Digest:     "sha256:different",
+				ObservedAt: "2026-05-28T12:00:00Z",
+				Version:    "job-version:4",
+			},
+			want: errs.ErrConflict,
+		},
+		{
+			name: "stale status",
+			ref: value.ReleaseIntegrationRef{
+				Domain:     "runtime",
+				Kind:       "job",
+				Ref:        "runtime:job:deploy",
+				Status:     "running",
+				Summary:    "deploy still running",
+				Digest:     "sha256:deploystatus",
+				ObservedAt: "2026-05-28T12:00:00Z",
+				Version:    "job-version:4",
+			},
+			want: errs.ErrPreconditionFailed,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repository := &fakeRepository{ready: true, releasePackage: basePackage}
+			_, err := newTestService(repository).RecordReleaseRuntimeEvidence(context.Background(), RecordReleaseRuntimeEvidenceInput{
+				ReleaseDecisionPackageID: packageID,
+				IntegrationRefs:          []value.ReleaseIntegrationRef{tc.ref},
+				Meta: CommandMeta{
+					CommandID:       ptrUUID(uuid.New()),
+					ExpectedVersion: &expectedVersion,
+					Actor:           value.Actor{Type: "service", ID: "runtime-manager"},
+				},
+			})
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("RecordReleaseRuntimeEvidence() error = %v, want %v", err, tc.want)
+			}
+			if repository.mutationCalls != 0 || len(repository.events) != 0 {
+				t.Fatalf("mutation calls/events = %d/%d, want 0/0", repository.mutationCalls, len(repository.events))
+			}
+		})
+	}
+}
+
+func TestRecordReleaseRuntimeEvidenceRejectsUnsafeEvidenceMetadata(t *testing.T) {
+	t.Parallel()
+
+	packageID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+	expectedVersion := int64(3)
+	baseRepository := &fakeRepository{
+		ready: true,
+		releasePackage: entity.ReleaseDecisionPackage{
+			VersionedBase:       entity.VersionedBase{ID: packageID, Version: expectedVersion},
+			ReleaseCandidateRef: "release:v1.0.0",
+			ProjectContext:      value.ProjectContextRef{ProjectRef: "project:alpha"},
+			Status:              enum.ReleaseDecisionPackageStatusReady,
+		},
+	}
+
+	for _, tc := range []struct {
+		name        string
+		evidenceRef value.EvidenceRef
+	}{
+		{
+			name: "unsafe digest",
+			evidenceRef: value.EvidenceRef{
+				Kind:           "runtime_job",
+				Ref:            "runtime:job:deploy",
+				Summary:        "deploy job status",
+				Digest:         "secret=runtime-token",
+				RetentionClass: "safe_ref",
+			},
+		},
+		{
+			name: "unsafe retention class",
+			evidenceRef: value.EvidenceRef{
+				Kind:           "runtime_job",
+				Ref:            "runtime:job:deploy",
+				Summary:        "deploy job status",
+				Digest:         "sha256:deploy",
+				RetentionClass: "kubeconfig",
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repository := *baseRepository
+			_, err := newTestService(&repository).RecordReleaseRuntimeEvidence(context.Background(), RecordReleaseRuntimeEvidenceInput{
+				ReleaseDecisionPackageID: packageID,
+				EvidenceRefs:             []value.EvidenceRef{tc.evidenceRef},
+				IntegrationRefs:          []value.ReleaseIntegrationRef{{Domain: "runtime", Kind: "job", Ref: "runtime:job:deploy", Status: "running"}},
+				Meta: CommandMeta{
+					CommandID:       ptrUUID(uuid.New()),
+					ExpectedVersion: &expectedVersion,
+					Actor:           value.Actor{Type: "service", ID: "runtime-manager"},
+				},
+			})
+			if !errors.Is(err, errs.ErrInvalidArgument) {
+				t.Fatalf("RecordReleaseRuntimeEvidence() error = %v, want ErrInvalidArgument", err)
+			}
+			if repository.mutationCalls != 0 || len(repository.events) != 0 {
+				t.Fatalf("mutation calls/events = %d/%d, want 0/0", repository.mutationCalls, len(repository.events))
+			}
+		})
 	}
 }
 
@@ -2078,6 +2288,12 @@ func TestRecordReleaseRuntimeEvidenceRejectsStaleUnknownAndUnsafeInputs(t *testi
 			name:            "unknown source",
 			expectedVersion: &currentVersion,
 			ref:             value.ReleaseIntegrationRef{Domain: "provider", Kind: "check", Ref: "provider:check:1"},
+			want:            errs.ErrInvalidArgument,
+		},
+		{
+			name:            "unknown status",
+			expectedVersion: &currentVersion,
+			ref:             value.ReleaseIntegrationRef{Domain: "runtime", Kind: "job", Ref: "runtime:job:1", Status: "completed"},
 			want:            errs.ErrInvalidArgument,
 		},
 		{
@@ -2154,6 +2370,59 @@ func TestRecordReleaseRuntimeEvidenceAccessDeniedBeforeRepositoryRead(t *testing
 	}
 	if repository.commandResultReads != 0 || repository.releasePackageReads != 0 || repository.mutationCalls != 0 {
 		t.Fatalf("repository calls = command:%d package:%d mutation:%d, want 0/0/0 before access allow", repository.commandResultReads, repository.releasePackageReads, repository.mutationCalls)
+	}
+}
+
+func TestReleaseDecisionPackageReadSurfaceReturnsRuntimeDeployEvidence(t *testing.T) {
+	t.Parallel()
+
+	packageID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+	gateRequestID := uuid.MustParse("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+	gateDecisionID := uuid.MustParse("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
+	repository := &fakeRepository{
+		ready: true,
+		releasePackage: entity.ReleaseDecisionPackage{
+			VersionedBase:       entity.VersionedBase{ID: packageID, Version: 5, CreatedAt: time.Date(2026, 5, 28, 11, 0, 0, 0, time.UTC), UpdatedAt: time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)},
+			ReleaseCandidateRef: "release:v1.0.0",
+			ProjectContext:      value.ProjectContextRef{ProjectRef: "project:alpha", RepositoryRef: "repo:alpha", ReleaseLineRef: "release-line:stable"},
+			RuntimeRefs:         []byte(`[{"job_ref":"runtime:job:deploy","summary_ref":"runtime:summary:deploy","artifact_ref":"runtime:artifact:image"}]`),
+			EvidenceRefs: []value.EvidenceRef{{
+				Kind:           "runtime_job",
+				Ref:            "runtime:job:deploy",
+				Summary:        "deploy job status summary",
+				Digest:         "sha256:deploy",
+				RetentionClass: "safe_ref",
+			}},
+			IntegrationRefs: []value.ReleaseIntegrationRef{
+				{Domain: "governance", Kind: "gate_request", Ref: gateRequestID.String(), Status: "resolved", Summary: "gate request resolved", Digest: "sha256:gate-request", ObservedAt: "2026-05-28T11:30:00Z", Version: "2"},
+				{Domain: "governance", Kind: "gate_decision", Ref: gateDecisionID.String(), Status: "approve", Summary: "gate decision approved", Digest: "sha256:gate-decision", ObservedAt: "2026-05-28T11:31:00Z"},
+				{Domain: "runtime", Kind: "deploy", Ref: "runtime:job:deploy", Status: "failed", Summary: "deploy failed with bounded diagnostic", Digest: "sha256:deploy", ObservedAt: "2026-05-28T11:59:00Z", Version: "job-version:5", ErrorCode: "DEPLOY_HEALTHCHECK_FAILED"},
+			},
+			Status: enum.ReleaseDecisionPackageStatusReady,
+		},
+	}
+
+	item, err := newTestService(repository).GetReleaseDecisionPackage(context.Background(), GetReleaseDecisionPackageInput{
+		ReleaseDecisionPackageID: packageID,
+		Meta:                     QueryMeta{Actor: value.Actor{Type: "service", ID: "staff-gateway"}},
+	})
+	if err != nil {
+		t.Fatalf("GetReleaseDecisionPackage(): %v", err)
+	}
+	if item.ReleaseCandidateRef != "release:v1.0.0" || item.Version != 5 || !strings.Contains(string(item.RuntimeRefs), "runtime:job:deploy") {
+		t.Fatalf("read package = %+v, want release candidate, version and runtime job ref", item)
+	}
+	if len(item.EvidenceRefs) != 1 || item.EvidenceRefs[0].Digest != "sha256:deploy" {
+		t.Fatalf("evidence refs = %+v, want bounded runtime evidence digest", item.EvidenceRefs)
+	}
+	if len(item.IntegrationRefs) != 3 || item.IntegrationRefs[2].ErrorCode != "DEPLOY_HEALTHCHECK_FAILED" || item.IntegrationRefs[0].Kind != "gate_request" || item.IntegrationRefs[1].Kind != "gate_decision" {
+		t.Fatalf("integration refs = %+v, want gate and runtime/deploy read surface", item.IntegrationRefs)
+	}
+	readSurface := string(item.RuntimeRefs) + " " + item.EvidenceRefs[0].Summary + " " + item.IntegrationRefs[2].Summary + " " + item.IntegrationRefs[2].ErrorCode
+	for _, unsafe := range []string{"token=", "kubeconfig", "stdout", "stderr", "raw_provider_payload"} {
+		if strings.Contains(readSurface, unsafe) {
+			t.Fatalf("read surface leaked unsafe marker %q: %s", unsafe, readSurface)
+		}
 	}
 }
 
