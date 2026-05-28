@@ -57,6 +57,80 @@ func TestExecutorStartCreatesRestrictedHealthCheckJob(t *testing.T) {
 	}
 }
 
+func TestExecutorStartCreatesRestrictedAgentRunJob(t *testing.T) {
+	t.Parallel()
+
+	client := fake.NewClientset()
+	executor := newTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
+	job := testAgentRunJob()
+
+	started, err := executor.Start(context.Background(), job)
+	if err != nil {
+		t.Fatalf("Start(agent_run): %v", err)
+	}
+	if started.Namespace != "runtime-jobs" || started.JobName == "" || started.ExternalRef == "" {
+		t.Fatalf("started agent_run job = %+v, want namespace/name/ref", started)
+	}
+	created, err := client.BatchV1().Jobs("runtime-jobs").Get(context.Background(), started.JobName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("get created Job: %v", err)
+	}
+	podSpec := created.Spec.Template.Spec
+	if podSpec.AutomountServiceAccountToken == nil || *podSpec.AutomountServiceAccountToken {
+		t.Fatalf("automount service account token = %v, want disabled", podSpec.AutomountServiceAccountToken)
+	}
+	container := podSpec.Containers[0]
+	if container.Name != agentRunContainerName || container.Image != "ghcr.io/codex-k8s/agent-runner@sha256:runner" {
+		t.Fatalf("container = %s/%s, want fixed agent runner container/image", container.Name, container.Image)
+	}
+	if strings.Join(container.Command, " ") != agentRunCommand || strings.Join(container.Args, " ") != agentRunCommandKind {
+		t.Fatalf("command/args = %v/%v, want fixed runner command", container.Command, container.Args)
+	}
+	if len(container.VolumeMounts) != 1 || container.VolumeMounts[0].MountPath != agentRunWorkspacePath {
+		t.Fatalf("volume mounts = %+v, want fixed workspace mount", container.VolumeMounts)
+	}
+	if len(podSpec.Volumes) != 1 || podSpec.Volumes[0].PersistentVolumeClaim == nil || podSpec.Volumes[0].PersistentVolumeClaim.ClaimName != "runtime-workspace-549" {
+		t.Fatalf("volumes = %+v, want workspace PVC ref", podSpec.Volumes)
+	}
+	env := envMap(container.Env)
+	if env["KODEX_AGENT_RUN_ID"] == "" || env["KODEX_AGENT_RUN_CONTEXT_PATH"] != agentRunContextPath {
+		t.Fatalf("agent_run env = %v, want safe runner refs", env)
+	}
+	if strings.Contains(env["KODEX_AGENT_RUN_ALLOWED_SECRET_REFS_JSON"], "secret-value") {
+		t.Fatalf("allowed secret refs env contains a secret value: %q", env["KODEX_AGENT_RUN_ALLOWED_SECRET_REFS_JSON"])
+	}
+	if len(created.Annotations) != 0 || len(created.Spec.Template.Annotations) != 0 {
+		t.Fatalf("annotations = %v/%v, want none from agent_run spec", created.Annotations, created.Spec.Template.Annotations)
+	}
+	if len(started.ArtifactRefs) != 3 {
+		t.Fatalf("artifact refs = %d, want job, namespace and image refs", len(started.ArtifactRefs))
+	}
+}
+
+func TestExecutorStartRejectsAgentRunWithoutExecutionSpec(t *testing.T) {
+	t.Parallel()
+
+	executor := newTestExecutor(t, fake.NewClientset(), fakeClusterProvider{access: testClusterAccess()})
+	job := testAgentRunJob()
+	job.JobInputJSON = []byte(`{}`)
+
+	_, err := executor.Start(context.Background(), job)
+
+	assertExecutionCode(t, err, "agent_run_execution_spec_required")
+}
+
+func TestExecutorStartRejectsAgentRunWithoutWorkspacePVCRef(t *testing.T) {
+	t.Parallel()
+
+	executor := newTestExecutor(t, fake.NewClientset(), fakeClusterProvider{access: testClusterAccess()})
+	job := testAgentRunJob()
+	job.JobInputJSON = []byte(`{"agent_run_execution_spec":{"agent_run_id":"00000000-0000-0000-0000-000000000031","slot_id":"00000000-0000-0000-0000-000000000032","expected_materialization_id":"00000000-0000-0000-0000-000000000033","expected_materialization_fingerprint":"sha256:workspace","workspace_ref":"runtime://workspace/31","workspace_mount_ref":"mount://workspace/31","context_ref":"runtime://workspace/31/.kodex/context/agent-run.json","context_digest":"sha256:context","runner_profile_ref":"runner-profile://codex-agent/default","runner_image_ref":"image://ghcr.io/codex-k8s/agent-runner@sha256:runner","runner_mode":"codex_agent"}}`)
+
+	_, err := executor.Start(context.Background(), job)
+
+	assertExecutionCode(t, err, "invalid_agent_run_execution_spec")
+}
+
 func TestExecutorStartReusesExistingManagedJob(t *testing.T) {
 	t.Parallel()
 
@@ -274,6 +348,31 @@ func testHealthCheckJob() entity.Job {
 		FleetScopeID: &fleetScopeID,
 		ClusterID:    &clusterID,
 	}
+}
+
+func testAgentRunJob() entity.Job {
+	fleetScopeID := uuid.MustParse("00000000-0000-0000-0000-000000000010")
+	clusterID := uuid.MustParse("00000000-0000-0000-0000-000000000011")
+	agentRunID := uuid.MustParse("00000000-0000-0000-0000-000000000031")
+	slotID := uuid.MustParse("00000000-0000-0000-0000-000000000032")
+	return entity.Job{
+		Base:         entity.Base{ID: uuid.MustParse("00000000-0000-0000-0000-000000000034"), Version: 2},
+		JobType:      enum.JobTypeAgentRun,
+		Status:       enum.JobStatusClaimed,
+		AgentRunID:   &agentRunID,
+		SlotID:       &slotID,
+		JobInputJSON: []byte(`{"agent_run_execution_spec":{"agent_run_id":"00000000-0000-0000-0000-000000000031","slot_id":"00000000-0000-0000-0000-000000000032","expected_materialization_id":"00000000-0000-0000-0000-000000000033","expected_materialization_fingerprint":"sha256:workspace","workspace_ref":"runtime://workspace/31","workspace_mount_ref":"mount://workspace/31","workspace_pvc_ref":"pvc://runtime-jobs/runtime-workspace-549","context_ref":"runtime://workspace/31/.kodex/context/agent-run.json","context_digest":"sha256:context","runner_profile_ref":"runner-profile://codex-agent/default","runner_image_ref":"image://ghcr.io/codex-k8s/agent-runner@sha256:runner","runner_mode":"codex_agent","allowed_secret_refs":[{"kind":"runtime_api","ref":"secret://runtime/agent-token"}],"reporting_target_refs":[{"kind":"agent_run_state","ref":"agent-manager://runs/00000000-0000-0000-0000-000000000031"}]}}`),
+		FleetScopeID: &fleetScopeID,
+		ClusterID:    &clusterID,
+	}
+}
+
+func envMap(values []corev1.EnvVar) map[string]string {
+	result := make(map[string]string, len(values))
+	for _, item := range values {
+		result[item.Name] = item.Value
+	}
+	return result
 }
 
 func testClusterAccess() fleetclient.ClusterAccess {

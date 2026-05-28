@@ -46,8 +46,41 @@ func TestKubernetesJobWorkerCompletesClaimedHealthCheck(t *testing.T) {
 	if service.claimCalls != 1 {
 		t.Fatalf("claim calls = %d, want 1", service.claimCalls)
 	}
+	if len(service.lastClaimJobTypes) != 2 || service.lastClaimJobTypes[0] != enum.JobTypeHealthCheck || service.lastClaimJobTypes[1] != enum.JobTypeAgentRun {
+		t.Fatalf("claim job types = %v, want health_check and agent_run", service.lastClaimJobTypes)
+	}
 	if len(service.reportStatuses) != 2 || service.reportStatuses[0] != enum.JobStepStatusRunning || service.reportStatuses[1] != enum.JobStepStatusSucceeded {
 		t.Fatalf("report statuses = %v, want running/succeeded", service.reportStatuses)
+	}
+	if service.completeCalls != 1 || service.failCalls != 0 {
+		t.Fatalf("complete/fail calls = %d/%d, want 1/0", service.completeCalls, service.failCalls)
+	}
+}
+
+func TestKubernetesJobWorkerReportsAgentRunStepKey(t *testing.T) {
+	t.Parallel()
+
+	job := entity.Job{
+		Base:    entity.Base{ID: uuid.MustParse("00000000-0000-0000-0000-000000000105"), Version: 2},
+		JobType: enum.JobTypeAgentRun,
+		Status:  enum.JobStatusClaimed,
+	}
+	service := &fakeRuntimeJobLifecycle{claim: runtimeservice.ClaimRunnableJobResult{Job: job, LeaseToken: "lease-token"}}
+	executor := fakeKubernetesExecutor{
+		started: runtimekubernetes.StartedJob{
+			RuntimeJobID: job.ID,
+			Namespace:    "runtime-jobs",
+			JobName:      "kodex-rt-test",
+			ExternalRef:  "kubernetes://cluster/namespaces/runtime-jobs/jobs/kodex-rt-test",
+		},
+		result: runtimekubernetes.ExecutionResult{Succeeded: true, ShortLogTail: "ok"},
+	}
+	worker := testKubernetesJobWorker(service, executor)
+
+	worker.claimAndExecute(context.Background())
+
+	if len(service.reportStepKeys) != 2 || service.reportStepKeys[0] != kubernetesAgentRunStepKey || service.reportStepKeys[1] != kubernetesAgentRunStepKey {
+		t.Fatalf("report step keys = %v, want agent_run step key", service.reportStepKeys)
 	}
 	if service.completeCalls != 1 || service.failCalls != 0 {
 		t.Fatalf("complete/fail calls = %d/%d, want 1/0", service.completeCalls, service.failCalls)
@@ -182,22 +215,26 @@ func testKubernetesJobWorker(service *fakeRuntimeJobLifecycle, executor fakeKube
 }
 
 type fakeRuntimeJobLifecycle struct {
-	claim          runtimeservice.ClaimRunnableJobResult
-	claimErr       error
-	claimCalls     int
-	reportStatuses []enum.JobStepStatus
-	completeCalls  int
-	failCalls      int
-	lastFailCode   string
+	claim             runtimeservice.ClaimRunnableJobResult
+	claimErr          error
+	claimCalls        int
+	lastClaimJobTypes []enum.JobType
+	reportStatuses    []enum.JobStepStatus
+	reportStepKeys    []string
+	completeCalls     int
+	failCalls         int
+	lastFailCode      string
 }
 
-func (s *fakeRuntimeJobLifecycle) ClaimRunnableJob(context.Context, runtimeservice.ClaimRunnableJobInput) (runtimeservice.ClaimRunnableJobResult, error) {
+func (s *fakeRuntimeJobLifecycle) ClaimRunnableJob(_ context.Context, input runtimeservice.ClaimRunnableJobInput) (runtimeservice.ClaimRunnableJobResult, error) {
 	s.claimCalls++
+	s.lastClaimJobTypes = append([]enum.JobType(nil), input.JobTypes...)
 	return s.claim, s.claimErr
 }
 
 func (s *fakeRuntimeJobLifecycle) ReportJobStepProgress(_ context.Context, input runtimeservice.ReportJobStepProgressInput) (entity.Job, error) {
 	s.reportStatuses = append(s.reportStatuses, input.Status)
+	s.reportStepKeys = append(s.reportStepKeys, input.StepKey)
 	job := s.claim.Job
 	if len(s.reportStatuses) > 0 {
 		job.Version += int64(len(s.reportStatuses))

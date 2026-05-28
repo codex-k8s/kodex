@@ -91,6 +91,7 @@ func normalizeAgentRunExecutionSpec(spec AgentRunExecutionSpecInput) (AgentRunEx
 		normalized.ExpectedMaterializationFingerprint,
 		normalized.WorkspaceRef,
 		normalized.WorkspaceMountRef,
+		normalized.WorkspacePVCRef,
 		normalized.ContextRef,
 		normalized.ContextDigest,
 		normalized.RunnerProfileRef,
@@ -100,9 +101,6 @@ func normalizeAgentRunExecutionSpec(spec AgentRunExecutionSpecInput) (AgentRunEx
 		if !safeAgentRunRef(ref, true) {
 			return AgentRunExecutionSpecInput{}, errs.ErrInvalidArgument
 		}
-	}
-	if !safeAgentRunRef(normalized.WorkspacePVCRef, false) {
-		return AgentRunExecutionSpecInput{}, errs.ErrInvalidArgument
 	}
 	if len(spec.AllowedSecretRefs) > maxAgentRunAllowedSecretRefs || len(spec.ReportingTargetRefs) > maxAgentRunReportingTargetRefs {
 		return AgentRunExecutionSpecInput{}, errs.ErrInvalidArgument

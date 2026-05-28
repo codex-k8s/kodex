@@ -6,7 +6,7 @@ status: active
 owner_role: SRE
 created_at: 2026-05-08
 updated_at: 2026-05-08
-related_issues: [661]
+related_issues: [661, 966]
 related_alerts: []
 approvals:
   required: ["Owner"]
@@ -96,7 +96,11 @@ kubectl -n "$KODEX_PRODUCTION_NAMESPACE" get secret kodex-platform-runtime -o js
 
 Базовый manifest выдаёт `runtime-manager` права на создание Job в production namespace. Если `KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_DEFAULT_NAMESPACE` указывает другой namespace, оператор должен выдать аналогичные RBAC-права для service account `runtime-manager` в этом namespace.
 
-Первый поддержанный этим исполнителем тип задания — `health_check`. Канонический тип `agent_run` можно создавать и читать через runtime job lifecycle, но Kubernetes-исполнитель его не забирает и не выполняет. Для будущего исполнения `agent_run` должен иметь `AgentRunExecutionSpec` с безопасными refs, digest и fingerprint; задание без spec остаётся ожидающим с диагностикой `agent_run_execution_spec_required` и не попадает в claim. Исполнитель создаёт только ограниченный Kubernetes Job, не вызывает `kubectl`, не читает GitHub/GitLab, не хранит kubeconfig и не сохраняет полный лог. В БД попадают статус job, шаг `kubernetes_health_check`, короткий хвост лога, ссылка на Kubernetes Job и ссылка на namespace.
+Поддержанные типы этого исполнителя — `health_check` и `agent_run` с валидным `AgentRunExecutionSpec`. Канонический тип `agent_run` можно создавать и читать через runtime job lifecycle; Kubernetes-исполнитель забирает его только при наличии spec. Задание без spec остаётся ожидающим с диагностикой `agent_run_execution_spec_required` и не попадает в claim.
+
+Для `agent_run` обязательны safe refs на Run/slot/materialization/workspace/context, `workspace_pvc_ref`, `runner_profile_ref`, `runner_image_ref`, фиксированный `runner_mode`, secret refs без значений и reporting target refs. Первый executor принимает `workspace_pvc_ref` как `pvc://<namespace>/<claim>` или `k8s://pvc/<claim>`. Runner image ref может быть прямой ссылкой на контейнерный образ или typed ref с префиксом `image://`; в Kubernetes Job используется образ без этого префикса. Контейнер запускается фиксированной командой `/kodex/bin/agent-runner run`, workspace монтируется в `/workspace`, automount service account token выключен.
+
+Исполнитель создаёт только ограниченный Kubernetes Job, не вызывает `kubectl`, не читает GitHub/GitLab, не хранит kubeconfig и не сохраняет полный лог. В БД попадают статус job, шаг `kubernetes_health_check` или `kubernetes_agent_run`, короткий хвост лога, ссылка на Kubernetes Job, ссылка на namespace и для `agent_run` ссылка на runner image.
 
 Если задание падает с `cluster_secret_unavailable`, `cluster_ref_unavailable`, `kubernetes_client_init_failed` или `kubernetes_job_create_failed`, проверять нужно secret ref в `fleet-manager`, настройки `KODEX_RUNTIME_MANAGER_SECRET_RESOLVER_*`, RBAC service account `runtime-manager` и наличие default namespace/image. Значения kubeconfig, токенов, DSN и содержимое Secret не выводить в Issue/PR и не прикладывать к отчётам.
 

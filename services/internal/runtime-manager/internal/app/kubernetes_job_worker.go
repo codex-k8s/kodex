@@ -17,10 +17,11 @@ import (
 )
 
 const (
-	kubernetesWorkerActor = "runtime-manager-kubernetes-executor"
-	kubernetesStepKey     = "kubernetes_health_check"
-	minWorkerRetryDelay   = time.Second
-	maxWorkerRetryDelay   = 30 * time.Second
+	kubernetesWorkerActor        = "runtime-manager-kubernetes-executor"
+	kubernetesHealthCheckStepKey = "kubernetes_health_check"
+	kubernetesAgentRunStepKey    = "kubernetes_agent_run"
+	minWorkerRetryDelay          = time.Second
+	maxWorkerRetryDelay          = 30 * time.Second
 )
 
 type kubernetesWorkerIteration int
@@ -101,7 +102,7 @@ func (w kubernetesJobWorker) run(ctx context.Context) error {
 
 func (w kubernetesJobWorker) claimAndExecute(ctx context.Context) kubernetesWorkerIteration {
 	claim, err := w.service.ClaimRunnableJob(ctx, runtimeservice.ClaimRunnableJobInput{
-		JobTypes:   []enum.JobType{enum.JobTypeHealthCheck},
+		JobTypes:   []enum.JobType{enum.JobTypeHealthCheck, enum.JobTypeAgentRun},
 		WorkerID:   w.cfg.WorkerID,
 		LeaseOwner: w.cfg.WorkerID,
 		LeaseUntil: time.Now().UTC().Add(w.cfg.ClaimLeaseTTL),
@@ -191,7 +192,7 @@ func (w kubernetesJobWorker) reportStep(
 	return w.service.ReportJobStepProgress(ctx, runtimeservice.ReportJobStepProgressInput{
 		JobID:        job.ID,
 		LeaseToken:   leaseToken,
-		StepKey:      kubernetesStepKey,
+		StepKey:      kubernetesStepKey(job.JobType),
 		Status:       status,
 		StartedAt:    startedAt,
 		FinishedAt:   finishedAt,
@@ -222,6 +223,13 @@ func (w kubernetesJobWorker) failClaimedJob(ctx context.Context, job entity.Job,
 	}); err != nil {
 		w.log().Warn("runtime-manager Kubernetes job fail failed", slog.String("job_id", job.ID.String()), slog.String("error_code", "fail_failed"))
 	}
+}
+
+func kubernetesStepKey(jobType enum.JobType) string {
+	if jobType == enum.JobTypeAgentRun {
+		return kubernetesAgentRunStepKey
+	}
+	return kubernetesHealthCheckStepKey
 }
 
 func (w kubernetesJobWorker) commandMeta(phase string, expectedVersion *int64) value.CommandMeta {

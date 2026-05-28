@@ -384,7 +384,7 @@ message AgentRunExecutionSpec {
   string workspace_ref = 5;
   // workspace_mount_ref is the mount reference visible to the runner.
   string workspace_mount_ref = 6;
-  // workspace_pvc_ref is an optional Kubernetes PVC reference, never a kubeconfig or secret value.
+  // workspace_pvc_ref is the Kubernetes PVC reference used for execution, never a kubeconfig or secret value.
   string workspace_pvc_ref = 7;
   // context_ref points to .kodex/context/agent-run.json or an equivalent runtime-owned reference.
   string context_ref = 8;
