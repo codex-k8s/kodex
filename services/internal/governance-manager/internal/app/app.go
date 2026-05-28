@@ -107,6 +107,15 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	if err := startInteractionGateDecisionConsumer(ctx, cfg, eventLogPool, governanceService, logger, errCh); err != nil {
 		return err
 	}
+	if err := startAgentAcceptanceEvidenceConsumer(ctx, agentAcceptanceEvidenceConsumerStart{
+		cfg:          cfg,
+		eventLogPool: eventLogPool,
+		recorder:     governanceService,
+		logger:       logger,
+		errCh:        errCh,
+	}); err != nil {
+		return err
+	}
 
 	select {
 	case <-ctx.Done():

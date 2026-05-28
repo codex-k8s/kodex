@@ -5,8 +5,8 @@ title: "governance-manager — runbook: развёртывание и диагн
 status: active
 owner_role: SRE
 created_at: 2026-05-27
-updated_at: 2026-05-27
-related_issues: []
+updated_at: 2026-05-28
+related_issues: [972]
 related_alerts: []
 approvals:
   required: ["Owner"]
@@ -103,6 +103,7 @@ Readiness должна видеть:
 - Если события не доходят, проверить локальную outbox-таблицу `governance-manager` и короткую причину последней ошибки публикации.
 - Входящий потребитель `provider.comment.synced` выключен по умолчанию; включать его только явным `KODEX_GOVERNANCE_MANAGER_PROVIDER_REVIEW_SIGNAL_CONSUMER_ENABLED=true` после готовности access policy и плана выкладки.
 - Входящий потребитель `interaction.request.response_recorded` для gate decision выключен по умолчанию; включать его только явным `KODEX_GOVERNANCE_MANAGER_INTERACTION_GATE_DECISION_CONSUMER_ENABLED=true` после готовности access policy для service actor `interaction-hub` и согласованного потока Human gate в `interaction-hub`.
+- Входящий потребитель `agent.acceptance.completed`/`agent.acceptance.failed` для release package evidence выключен по умолчанию; включать его только явным `KODEX_GOVERNANCE_MANAGER_AGENT_ACCEPTANCE_EVIDENCE_CONSUMER_ENABLED=true` после готовности service actor `agent-manager` и проверки, что события несут `governance_release_decision_package_ref`.
 
 ### PostgreSQL
 

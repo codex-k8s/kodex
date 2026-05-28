@@ -1,7 +1,9 @@
 package app
 
 import (
+	"context"
 	"errors"
+	"log/slog"
 	"time"
 
 	eventconsumer "github.com/codex-k8s/kodex/libs/go/eventconsumer"
@@ -47,6 +49,35 @@ func governanceEventConsumerConfig(
 	maxAttempts int,
 ) eventconsumer.Config {
 	return eventconsumer.ConfigFromRuntimeValues(name, leaseOwner, batchSize, pollInterval, leaseTTL, handlerTimeout, retryInitial, retryMax, failureLimit, concurrencyLimit, maxAttempts)
+}
+
+func startGovernanceEventConsumer(
+	ctx context.Context,
+	enabled bool,
+	logger *slog.Logger,
+	errCh chan<- error,
+	startMessage string,
+	buildRunner func(*slog.Logger) (*eventconsumer.Runner, error),
+) error {
+	if !enabled {
+		return nil
+	}
+	if logger == nil {
+		logger = slog.Default()
+	}
+	runner, err := buildRunner(logger)
+	if err != nil {
+		return err
+	}
+	go runGovernanceEventConsumer(ctx, runner, logger, errCh, startMessage)
+	return nil
+}
+
+func runGovernanceEventConsumer(ctx context.Context, runner *eventconsumer.Runner, logger *slog.Logger, errCh chan<- error, startMessage string) {
+	logger.Info(startMessage)
+	if err := runner.Run(ctx); err != nil {
+		errCh <- err
+	}
 }
 
 func governanceConsumerError(err error, candidates []eventConsumerDomainError) eventconsumer.Result {

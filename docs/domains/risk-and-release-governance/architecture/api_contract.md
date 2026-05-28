@@ -5,8 +5,8 @@ title: kodex — API-обзор governance-manager
 status: active
 owner_role: SA
 created_at: 2026-05-22
-updated_at: 2026-05-27
-related_issues: [322, 769, 790, 815, 827, 845, 856, 869, 886, 907, 919, 957]
+updated_at: 2026-05-28
+related_issues: [322, 769, 790, 815, 827, 845, 856, 869, 886, 907, 919, 957, 972]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -87,7 +87,9 @@ approvals:
 
 Второй входящий путь использует `interaction.request.response_recorded` из `interaction-hub` только как ответ владельца для gate decision, а не как review signal. Потребитель включается только через `KODEX_GOVERNANCE_MANAGER_INTERACTION_GATE_DECISION_CONSUMER_ENABLED=true` и обрабатывает событие, когда `owner_service=governance_manager`, `request_kind=human_gate`, статус request — `answered`, есть `governance_gate_request_ref` или `owner_request_ref` на локальный gate request, а `response_action` однозначно равен `approve` или `reject`. Потребитель читает локальный gate request для expected version, вызывает существующий `SubmitGateDecision` и сохраняет только actor ref, interaction request/response refs, safe source ref, digest summary, outcome, event/request ref и idempotency fingerprint. Сырые response text, callback body, delivery payload, prompt/transcript, logs, workspace paths и secrets не читаются и не сохраняются.
 
-События `agent.follow_up.review_signaled`, `agent.acceptance.completed` и `agent.acceptance.failed` пока не используются как review/risk signal input: в текущем контракте им не хватает typed governance outcome для безопасного маппинга без чтения owner-домена. `interaction.request.response_recorded` используется только для согласованной command boundary gate decision и не подменяет review signal.
+Третий входящий путь использует `agent.acceptance.completed` и `agent.acceptance.failed` из `agent-manager` только как release package evidence, а не как review/risk signal. Потребитель включается только через `KODEX_GOVERNANCE_MANAGER_AGENT_ACCEPTANCE_EVIDENCE_CONSUMER_ENABLED=true` и обрабатывает событие, когда есть явный `governance_release_decision_package_ref`, `acceptance_result_id`, `session_id` и terminal status, согласованный с типом события. Если package ref отсутствует, событие подтверждается без записи: `governance-manager` не делает implicit lookup по project/repository/run. Потребитель читает только локальный release package для expected version, вызывает существующий `RecordReleaseAgentEvidence` и сохраняет agent session/run/stage/acceptance refs, runtime job ref, status, bounded summary, digest, observed timestamp, version и event idempotency fingerprint. Сырые prompt, transcript, raw tool input/output, stdout/stderr, workspace paths, runtime logs, provider payload и secrets не читаются и не сохраняются.
+
+Событие `agent.follow_up.review_signaled` пока не используется как review/risk signal input: в текущем контракте ему не хватает typed governance outcome для безопасного маппинга без чтения owner-домена. `interaction.request.response_recorded` используется только для согласованной command boundary gate decision и не подменяет review signal.
 
 GOV-7b хранит явные safe refs/summaries в release package и выполняет read-validation/enrichment для локальных governance refs: risk assessment, review signal, gate request, gate decision и связанный release package. Для project/provider/agent/runtime refs `governance-manager` сохраняет explicit ref и безопасный diagnostic в `summary`, если вызывающая сторона не передала owner-domain summary; прямые service-client чтения соседних доменов подключаются отдельными интеграционными срезами после согласования read-контрактов и runtime composition.
 
@@ -166,6 +168,7 @@ MCP-инструменты не должны принимать свободны
 |---|---|---|---|
 | `provider-hub` | `provider.comment.synced` | `review_state=approved` или `changes_requested`, есть provider work item ref и provider comment/comment projection ref | Идемпотентный `RecordReviewSignal` с `reviewer/pass/info` или `reviewer/request_changes/blocking`; повтор того же evidence ref не создаёт второй signal, конфликтующий outcome poisonится как permanent diagnostic. |
 | `interaction-hub` | `interaction.request.response_recorded` | `owner_service=governance_manager`, `request_kind=human_gate`, `status=answered`, есть ref на локальный gate request, `response_action=approve` или `reject` | Идемпотентный `SubmitGateDecision` с `approve` или `reject`; повтор того же safe fingerprint возвращает уже записанное решение, конфликтующий fingerprint получает permanent diagnostic без retry storm. |
+| `agent-manager` | `agent.acceptance.completed`, `agent.acceptance.failed` | Есть явный `governance_release_decision_package_ref`, acceptance/session refs и terminal status `passed|skipped|failed`, согласованный с типом события | Идемпотентный `RecordReleaseAgentEvidence` для существующего release package; событие без package ref подтверждается без записи, некорректная ссылка или конфликтующий fingerprint получает permanent diagnostic без retry storm. |
 
 Остальные owner-domain events остаются trigger/read-model входами будущих срезов, пока в них нет стабильного typed governance outcome или пока они относятся к другой command boundary.
 
@@ -197,6 +200,7 @@ MCP-инструменты не должны принимать свободны
 | Event-driven/read-model основа | `governance.*` payload расширен safe metadata/refs: actor, request id, idempotency correlation, target/source refs, ограниченный summary, interaction/agent/runtime refs и policy/decision refs. Соседние сервисы могут строить read models через `platform-event-log` без чтения БД governance. |
 | Потребитель provider review signal | Готов для `provider.comment.synced`: approved/changes_requested review refs превращаются в локальный review signal через `libs/go/eventconsumer`, без чтения БД/API `provider-hub` и без копирования provider-native state. |
 | Потребитель interaction gate decision | Готов для `interaction.request.response_recorded`: answered Human gate response для `owner_service=governance_manager` и локального gate ref превращается в `SubmitGateDecision` по safe refs/digest/outcome без чтения БД/API `interaction-hub` и без копирования response text/callback body. |
+| Потребитель agent acceptance evidence | Готов для `agent.acceptance.completed` и `agent.acceptance.failed`: события с явным `governance_release_decision_package_ref` дозаписывают safe agent acceptance/runtime job evidence в существующий release package через `RecordReleaseAgentEvidence`; события без package ref подтверждаются без записи. |
 | Интеграции с project/agent/provider/runtime/interaction | Зафиксированы в refs и границах контрактов; межсервисные read-клиенты, delivery callbacks, provider write и deploy orchestration остаются отдельными срезами. |
 
 ## Совместимость

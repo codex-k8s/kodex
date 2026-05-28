@@ -70,6 +70,17 @@ func TestConfigValidateRequiresEventLogDSNWhenInteractionGateDecisionConsumerEna
 	}
 }
 
+func TestConfigValidateRequiresEventLogDSNWhenAgentAcceptanceEvidenceConsumerEnabled(t *testing.T) {
+	t.Parallel()
+
+	cfg := validConfig()
+	cfg.AgentAcceptanceEvidenceConsumerEnabled = true
+	cfg.EventLogDatabaseDSN = ""
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "KODEX_GOVERNANCE_MANAGER_EVENT_LOG_DATABASE_DSN") {
+		t.Fatalf("Validate() error = %v, want missing event-log dsn", err)
+	}
+}
+
 func TestProviderReviewSignalConsumerConfigUsesConfiguredLeaseOwner(t *testing.T) {
 	t.Parallel()
 
@@ -91,6 +102,18 @@ func TestInteractionGateDecisionConsumerConfigUsesConfiguredLeaseOwner(t *testin
 	consumerCfg := cfg.InteractionGateDecisionConsumerConfig()
 	if consumerCfg.ConsumerName != "governance-manager.interaction-gate-decision" || consumerCfg.LeaseOwner != "test-interaction-lease-owner" {
 		t.Fatalf("InteractionGateDecisionConsumerConfig() = %+v, want configured name and lease owner", consumerCfg)
+	}
+}
+
+func TestAgentAcceptanceEvidenceConsumerConfigUsesConfiguredLeaseOwner(t *testing.T) {
+	t.Parallel()
+
+	cfg := validConfig()
+	cfg.AgentAcceptanceEvidenceConsumerEnabled = true
+	cfg.AgentAcceptanceEvidenceConsumerLeaseOwner = "test-agent-acceptance-lease-owner"
+	consumerCfg := cfg.AgentAcceptanceEvidenceConsumerConfig()
+	if consumerCfg.ConsumerName != "governance-manager.agent-acceptance-evidence" || consumerCfg.LeaseOwner != "test-agent-acceptance-lease-owner" {
+		t.Fatalf("AgentAcceptanceEvidenceConsumerConfig() = %+v, want configured name and lease owner", consumerCfg)
 	}
 }
 
@@ -159,5 +182,16 @@ func validConfig() Config {
 		InteractionGateDecisionConsumerFailureLimit:     512,
 		InteractionGateDecisionConsumerConcurrencyLimit: 2,
 		InteractionGateDecisionConsumerMaxAttempts:      5,
+		AgentAcceptanceEvidenceConsumerEnabled:          false,
+		AgentAcceptanceEvidenceConsumerName:             "governance-manager.agent-acceptance-evidence",
+		AgentAcceptanceEvidenceConsumerBatchSize:        50,
+		AgentAcceptanceEvidenceConsumerPollInterval:     time.Second,
+		AgentAcceptanceEvidenceConsumerLeaseTTL:         30 * time.Second,
+		AgentAcceptanceEvidenceConsumerHandlerTimeout:   10 * time.Second,
+		AgentAcceptanceEvidenceConsumerRetryInitial:     time.Second,
+		AgentAcceptanceEvidenceConsumerRetryMax:         time.Minute,
+		AgentAcceptanceEvidenceConsumerFailureLimit:     512,
+		AgentAcceptanceEvidenceConsumerConcurrencyLimit: 2,
+		AgentAcceptanceEvidenceConsumerMaxAttempts:      5,
 	}
 }

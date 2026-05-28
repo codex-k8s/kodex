@@ -43,18 +43,29 @@ func startInteractionGateDecisionConsumer(
 	logger *slog.Logger,
 	errCh chan<- error,
 ) error {
-	if !cfg.InteractionGateDecisionConsumerEnabled {
-		return nil
+	starter := interactionGateDecisionConsumerStarter{
+		cfg:          cfg,
+		eventLogPool: eventLogPool,
+		recorder:     recorder,
 	}
-	if logger == nil {
-		logger = slog.Default()
-	}
-	runner, err := newInteractionGateDecisionRunner(cfg, eventLogPool, recorder, logger)
-	if err != nil {
-		return err
-	}
-	go runInteractionGateDecisionConsumer(ctx, runner, logger, errCh)
-	return nil
+	return startGovernanceEventConsumer(
+		ctx,
+		cfg.InteractionGateDecisionConsumerEnabled,
+		logger,
+		errCh,
+		"governance-manager interaction gate decision consumer starting",
+		starter.build,
+	)
+}
+
+type interactionGateDecisionConsumerStarter struct {
+	cfg          Config
+	eventLogPool *pgxpool.Pool
+	recorder     gateDecisionRecorder
+}
+
+func (s interactionGateDecisionConsumerStarter) build(logger *slog.Logger) (*eventconsumer.Runner, error) {
+	return newInteractionGateDecisionRunner(s.cfg, s.eventLogPool, s.recorder, logger)
 }
 
 func newInteractionGateDecisionRunner(cfg Config, eventLogPool *pgxpool.Pool, recorder gateDecisionRecorder, logger *slog.Logger) (*eventconsumer.Runner, error) {
@@ -77,13 +88,6 @@ func newInteractionGateDecisionRunner(cfg Config, eventLogPool *pgxpool.Pool, re
 		return nil, fmt.Errorf("build interaction gate decision consumer runner: %w", err)
 	}
 	return runner, nil
-}
-
-func runInteractionGateDecisionConsumer(ctx context.Context, runner *eventconsumer.Runner, logger *slog.Logger, errCh chan<- error) {
-	logger.Info("governance-manager interaction gate decision consumer starting")
-	if err := runner.Run(ctx); err != nil {
-		errCh <- err
-	}
 }
 
 type interactionGateDecisionEventHandler struct {
@@ -187,7 +191,7 @@ func interactionGateDecisionOutcome(action string, outcome string) (enum.GateOut
 
 func parseGateRequestID(refs ...string) (uuid.UUID, error) {
 	for _, ref := range refs {
-		for _, candidate := range gateRequestIDCandidates(ref) {
+		for _, candidate := range externalRefIDCandidates(ref) {
 			parsed, err := uuid.Parse(candidate)
 			if err == nil && parsed != uuid.Nil {
 				return parsed, nil
@@ -195,24 +199,6 @@ func parseGateRequestID(refs ...string) (uuid.UUID, error) {
 		}
 	}
 	return uuid.Nil, errs.ErrInvalidArgument
-}
-
-func gateRequestIDCandidates(ref string) []string {
-	trimmed := strings.TrimSpace(ref)
-	if trimmed == "" {
-		return nil
-	}
-	parts := strings.FieldsFunc(trimmed, func(r rune) bool {
-		return r == '/' || r == ':' || r == '#'
-	})
-	candidates := []string{trimmed}
-	for index := len(parts) - 1; index >= 0; index-- {
-		part := strings.TrimSpace(parts[index])
-		if part != "" {
-			candidates = append(candidates, part)
-		}
-	}
-	return candidates
 }
 
 func interactionGateDecisionDeliveryRef(payload interactionevents.Payload) value.InteractionDeliveryRef {
