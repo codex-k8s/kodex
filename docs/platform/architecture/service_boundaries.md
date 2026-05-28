@@ -5,7 +5,7 @@ title: kodex — границы сервисов
 status: active
 owner_role: SA
 created_at: 2026-04-26
-updated_at: 2026-05-27
+updated_at: 2026-05-28
 related_issues: [599, 600, 601, 602, 655, 711, 725, 747, 753, 778, 781, 786, 852, 322, 782, 834, 865, 867, 883]
 related_prs: []
 related_adrs: []
@@ -104,7 +104,7 @@ Gateway-сервисы, `web-console`, `platform-mcp-server` и `codex-hook-ingr
 
 Подробный пакет границы: `docs/domains/integration-gateway/**`.
 
-Первый активный контур `staff-gateway` — OpenAPI для входящих решений владельца. Он отдаёт список `owner inbox`, карточку одного решения и принимает безопасный ответ через gRPC-вызовы `interaction-hub`: `ListOwnerInboxItems`, `GetOwnerInboxItem` и `RecordInteractionResponse`. Gateway передаёт actor/request context, маппит ошибки в HTTP-статусы и не хранит собственную модель решений, delivery lifecycle, `Run`, session, governance decision, provider write или cross-domain inbox. В ответах остаются только safe refs, статусы, краткие summaries, timestamps и version; raw provider payload, секреты, полный prompt/transcript, callback payload и большие логи не возвращаются.
+Первый активный контур `staff-gateway` — OpenAPI для входящих решений владельца. Он отдаёт список `owner inbox`, карточку одного решения и принимает безопасный ответ через gRPC-вызовы `interaction-hub`: `ListOwnerInboxItems`, `GetOwnerInboxItem` и `RecordInteractionResponse`. Gateway передаёт actor/request context, проверяет HTTP path/query/body по контракту, маппит ошибки в HTTP-статусы и не хранит собственную модель решений, delivery lifecycle, `Run`, session, governance decision, provider write или cross-domain inbox. Список использует фильтры и cursor pagination, а порядок карточек остаётся доменной политикой `interaction-hub`, без настраиваемой сортировки в gateway. В ответах остаются только safe refs, статусы, краткие summaries, timestamps и version; raw provider payload, секреты, полный prompt/transcript, callback payload и большие логи не возвращаются.
 
 ### `platform-mcp-server`
 
