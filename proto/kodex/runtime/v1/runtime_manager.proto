@@ -180,6 +180,7 @@ enum JobType {
   JOB_TYPE_HEALTH_CHECK = 5;
   JOB_TYPE_HOUSEKEEPING = 6;
   JOB_TYPE_WORKSPACE_MATERIALIZATION = 7;
+  JOB_TYPE_AGENT_RUN = 8;
 }
 
 // JobStatus is the platform job lifecycle status.

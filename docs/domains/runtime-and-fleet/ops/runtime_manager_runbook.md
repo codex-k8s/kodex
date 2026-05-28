@@ -90,6 +90,24 @@ kubectl -n "$KODEX_PRODUCTION_NAMESPACE" get secret kodex-platform-runtime -o js
 - `KODEX_RUNTIME_MANAGER_ACCESS_MANAGER_GRPC_AUTH_TOKEN` совпадает с токеном доступа к `access-manager`;
 - `KODEX_RUNTIME_MANAGER_OUTBOX_PUBLISHER_KIND=postgres-event-log`.
 
+## Исполнитель Kubernetes
+
+По умолчанию исполнитель Kubernetes выключен: `KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_ENABLED=false`. При таком режиме `runtime-manager` хранит и выдаёт platform jobs, но не создаёт Kubernetes workloads.
+
+Для включения первого безопасного пути нужны:
+
+- `KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_ENABLED=true`;
+- `KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_DEFAULT_NAMESPACE` с namespace, где разрешено создавать проверочные Job;
+- `KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_DEFAULT_IMAGE` с образом, который содержит `/bin/sh`;
+- policy в `access-manager` для service actor `runtime-manager-kubernetes-executor` на `runtime.job.claim`, `runtime.job.step.report`, `runtime.job.complete` и `runtime.job.fail`;
+- cluster record в `fleet-manager` с `secret_store_type`/`secret_store_ref`, доступным `runtime-manager` через настроенный `secretresolver`.
+
+Базовый manifest выдаёт `runtime-manager` права на создание Job в production namespace. Если `KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_DEFAULT_NAMESPACE` указывает другой namespace, оператор должен выдать аналогичные RBAC-права для service account `runtime-manager` в этом namespace.
+
+Первый поддержанный этим исполнителем тип задания — `health_check`. Канонический тип `agent_run` можно создавать, читать и забирать через runtime job lifecycle отдельно, но Kubernetes-исполнитель его не забирает и не выполняет. Исполнитель создаёт только ограниченный Kubernetes Job, не вызывает `kubectl`, не читает GitHub/GitLab, не хранит kubeconfig и не сохраняет полный лог. В БД попадают статус job, шаг `kubernetes_health_check`, короткий хвост лога, ссылка на Kubernetes Job и ссылка на namespace.
+
+Если задание падает с `cluster_secret_unavailable`, `cluster_ref_unavailable`, `kubernetes_client_init_failed` или `kubernetes_job_create_failed`, проверять нужно secret ref в `fleet-manager`, настройки `KODEX_RUNTIME_MANAGER_SECRET_RESOLVER_*`, RBAC service account `runtime-manager` и наличие default namespace/image. Значения kubeconfig, токенов, DSN и содержимое Secret не выводить в Issue/PR и не прикладывать к отчётам.
+
 ## Митигирование
 
 - Если миграции не прошли, исправить причину и пересоздать `runtime-manager-migrations`.

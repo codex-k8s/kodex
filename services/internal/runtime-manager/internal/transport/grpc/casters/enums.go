@@ -154,6 +154,7 @@ func newJobTypeMap() map[runtimev1.JobType]enum.JobType {
 		runtimev1.JobType_JOB_TYPE_HEALTH_CHECK:              enum.JobTypeHealthCheck,
 		runtimev1.JobType_JOB_TYPE_HOUSEKEEPING:              enum.JobTypeHousekeeping,
 		runtimev1.JobType_JOB_TYPE_WORKSPACE_MATERIALIZATION: enum.JobTypeWorkspaceMaterialization,
+		runtimev1.JobType_JOB_TYPE_AGENT_RUN:                 enum.JobTypeAgentRun,
 	}
 }
 

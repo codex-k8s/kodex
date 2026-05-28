@@ -60,7 +60,7 @@ approvals:
 |---|---|
 | `runtime-manager` | Сервис-владелец runtime-домена. |
 | БД `runtime-manager` | Слоты, задания, шаги, materialization attempts, runtime refs, cleanup policy и outbox. |
-| Kubernetes adapter | Создаёт namespace, Job, Pod, ConfigMap, Secret reference и читает краткий runtime status. |
+| Kubernetes adapter | Создаёт ограниченные Kubernetes Job для runtime-заданий, читает статус и короткий хвост лога через `client-go`, работает только по ссылкам на секреты из `fleet-manager` и не хранит kubeconfig. |
 | Workspace materializer | Готовит локальные источники по workspace policy без владения этой policy. |
 | Job controller | Ведёт state machine технических заданий и шагов. |
 | Cleanup controller | Исполняет retention/cleanup и фиксирует сбои как runtime-состояние. |
@@ -113,6 +113,10 @@ sequenceDiagram
 `worker` может выполнять техническую работу, но не владеет конечным состоянием job.
 Если lease истёк и задание забрал другой исполнитель, старый `lease_token` больше не принимается.
 Повторный `ClaimRunnableJob` с тем же `command_id` или `idempotency_key` не забирает следующую job: runtime-manager находит сохранённый `RuntimeManagerCommandResult` и возвращает conflict, так как одноразовый `lease_token` не хранится в открытом виде и не переотдаётся при replay.
+
+Тип `agent_run` выделен отдельно для agent Run: `agent-manager` может ставить такое задание через `CreateJob`, а исполнитель agent Run может забирать его через `ClaimRunnableJob` без обходной подмены на `build`, `deploy` или `housekeeping`. Runtime-manager хранит тип, ссылки, статус и диагностику, но не становится владельцем agent Run и не запускает этот тип через первый Kubernetes-исполнитель.
+
+Первый реальный исполнитель Kubernetes находится внутри `runtime-manager` и выключен по умолчанию. После включения он забирает только `health_check` job, получает `cluster_id` из сохранённого placement, читает через `fleet-manager.GetKubernetesCluster` только безопасную ссылку на kubeconfig/service account secret и создаёт ограниченный Kubernetes Job через `client-go`. Runtime не вызывает `kubectl`, не читает БД `fleet-manager`, не хранит kubeconfig и не пишет полный лог или Kubernetes events в PostgreSQL. Поля `namespace`, `service_account`, `image` и `labels` проходят строгую проверку; значения `env`, annotations, команды контейнера, значения секретов, prompt, transcript и provider payload не принимаются. Команда контейнера фиксирована для проверки здоровья.
 
 ### Cleanup и retention
 
@@ -240,6 +244,7 @@ Fleet-события должны иметь отдельный префикс `
 | Один стартовый кластер станет вечным архитектурным пределом. | Сразу хранить fleet refs и вызывать `fleet-manager.ResolvePlacement`; `platform-default` остаётся seed/fallback внутри fleet. |
 | Полные логи заполнят PostgreSQL. | Хранить только short log tail и ссылку на полный источник. |
 | Runtime начнёт выбирать placement вместо fleet. | `runtime-manager` вызывает `fleet-manager.ResolvePlacement`, сохраняет только refs и не дублирует правила, health и журнал решений. |
+| Runtime начнёт обходить fleet-секреты. | Доступ к Kubernetes строится через `fleet-manager.GetKubernetesCluster` и `secretresolver`; в БД runtime сохраняются только `fleet_scope_id`, `cluster_id`, namespace и безопасные artifact refs. |
 | Cleanup останется невидимым. | Сделать cleanup job и failures доменными событиями runtime. |
 
 ## Апрув

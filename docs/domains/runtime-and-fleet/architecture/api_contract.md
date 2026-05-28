@@ -77,7 +77,7 @@ Generated execution context передаётся отдельным `WorkspaceSo
 
 | Операция | Назначение | Вызывает | Идемпотентность |
 |---|---|---|---|
-| `CreateJob` | Создать техническое задание: mirror, build, deploy, cleanup, health-check или housekeeping. | `agent-manager`, `package-hub`, release/governance контур, операторский контур | `command_id`. |
+| `CreateJob` | Создать техническое задание: mirror, build, deploy, cleanup, health-check, housekeeping, workspace materialization или agent Run. | `agent-manager`, `package-hub`, release/governance контур, операторский контур | `command_id`. |
 | `ClaimRunnableJob` | Забрать задание короткой арендой для исполнения и получить `lease_token`. | `worker` | `command_id` фиксируется в `RuntimeManagerCommandResult`; повтор с тем же ключом возвращает conflict без повторного захвата, потому что `lease_token` одноразовый и не хранится в открытом виде. |
 | `ReportJobStepProgress` | Обновить шаг, короткий хвост лога и refs. | `worker` | `lease_token + command_id + expected_version`. |
 | `CompleteJob` | Завершить задание успешно. | `worker` | `lease_token + command_id + expected_version`. |
@@ -87,6 +87,12 @@ Generated execution context передаётся отдельным `WorkspaceSo
 | `ListJobs` | Список по статусу, типу, проекту, слоту, agent run, release line. | Операторский контур | Read-only. |
 
 `CreateJob` без slot получает `fleet_scope_id` и `cluster_id` через `fleet-manager.ResolvePlacement` с runtime mode `platform_job`. `CreateJob` со slot не вызывает placement повторно и наследует fleet refs из slot.
+
+`JOB_TYPE_AGENT_RUN` является каноническим типом задания runtime для запуска agent Run со стороны `agent-manager`. Такое задание можно создать через `CreateJob`, отфильтровать через `ListJobs` и забрать через `ClaimRunnableJob` по отдельному типу без подмены на `build`, `deploy` или `housekeeping`. Семантика запуска агента остаётся за отдельным исполнителем: текущий Kubernetes-исполнитель этот тип не забирает и не выполняет.
+
+Исполнитель Kubernetes в `runtime-manager` обрабатывает только ограниченный первый тип задания `health_check`. Он забирает задание через `ClaimRunnableJob`, читает выбранный кластер через `fleet-manager.GetKubernetesCluster`, получает только ссылку `secret_store_type`/`secret_store_ref` и разрешает kubeconfig в памяти через `secretresolver`. Значение kubeconfig, raw Kubernetes objects, events и полный лог не пишутся в БД. Запуск фиксируется через `ReportJobStepProgress` с `RuntimeArtifactRef` на Kubernetes Job и namespace, а завершение идёт через `CompleteJob` или `FailJob`.
+
+`JobInputJSON` для этого пути не является произвольным manifest. Поддержаны только ограниченные поля `namespace`, `service_account`, `image` и `labels`; значения `env`, annotations, команды контейнера, значения секретов, prompt, transcript, provider payload и большие тексты не принимаются. Команда контейнера остаётся фиксированной проверкой здоровья. Остальные типы заданий (`build`, `deploy`, нагрузки slot-agent и т.п.) не исполняются этим срезом.
 
 ### Runtime artifact refs
 

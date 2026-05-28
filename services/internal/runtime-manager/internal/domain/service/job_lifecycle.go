@@ -391,6 +391,9 @@ func (s *Service) resolveJobCreateInput(ctx context.Context, input CreateJobInpu
 	if err != nil {
 		return resolvedCreateJobInput{}, err
 	}
+	if err := validateJobTypeSpecificInput(input, jobInputJSON); err != nil {
+		return resolvedCreateJobInput{}, err
+	}
 	resolved := resolvedCreateJobInput{
 		JobType:               input.JobType,
 		Priority:              input.Priority,
@@ -426,6 +429,19 @@ func (s *Service) resolveJobCreateInput(ctx context.Context, input CreateJobInpu
 		resolved.PlacementFingerprint = fingerprint
 	}
 	return resolved, nil
+}
+
+func validateJobTypeSpecificInput(input CreateJobInput, jobInputJSON []byte) error {
+	switch input.JobType {
+	case enum.JobTypeAgentRun:
+		if input.AgentRunID == nil || *input.AgentRunID == uuid.Nil {
+			return errs.ErrInvalidArgument
+		}
+		if !bytes.Equal(jobInputJSON, []byte(`{}`)) {
+			return errs.ErrInvalidArgument
+		}
+	}
+	return nil
 }
 
 func repositoryIDsForJob(repositoryID *uuid.UUID) []uuid.UUID {
@@ -707,7 +723,7 @@ func leaseTokenHash(token string) string {
 
 func validJobType(jobType enum.JobType) bool {
 	switch jobType {
-	case enum.JobTypeMirror, enum.JobTypeBuild, enum.JobTypeDeploy, enum.JobTypeCleanup, enum.JobTypeHealthCheck, enum.JobTypeHousekeeping, enum.JobTypeWorkspaceMaterialization:
+	case enum.JobTypeMirror, enum.JobTypeBuild, enum.JobTypeDeploy, enum.JobTypeCleanup, enum.JobTypeHealthCheck, enum.JobTypeHousekeeping, enum.JobTypeWorkspaceMaterialization, enum.JobTypeAgentRun:
 		return true
 	default:
 		return false

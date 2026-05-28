@@ -85,6 +85,23 @@ func TestValidateRequiresFleetToken(t *testing.T) {
 	}
 }
 
+func TestValidateRequiresKubernetesExecutorDefaultsWhenEnabled(t *testing.T) {
+	t.Parallel()
+
+	cfg := validConfig()
+	cfg.KubernetesWorker.Enabled = true
+
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() err = nil, want missing Kubernetes executor defaults error")
+	}
+
+	cfg.KubernetesWorker.DefaultNamespace = "runtime-jobs"
+	cfg.KubernetesWorker.DefaultImage = "busybox:1.36"
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() with executor defaults: %v", err)
+	}
+}
+
 func TestSlotServiceConfigIncludesSlotDefaults(t *testing.T) {
 	t.Parallel()
 
@@ -172,6 +189,22 @@ func validConfig() Config {
 			FleetManagerGRPCAddr:  "fleet-manager:9090",
 			FleetManagerAuthToken: "fleet-token",
 			ResolveTimeout:        5 * time.Second,
+		},
+		SecretResolver: RuntimeSecretConfig{
+			EnvEnabled:                true,
+			MountedKubernetesMaxBytes: 1024 * 1024,
+		},
+		KubernetesWorker: RuntimeKubernetesWorkerConfig{
+			Enabled:                 false,
+			WorkerID:                "runtime-manager-kubernetes-executor",
+			PollInterval:            5 * time.Second,
+			ClaimLeaseTTL:           5 * time.Minute,
+			JobTimeout:              2 * time.Minute,
+			KubernetesPollInterval:  2 * time.Second,
+			ImagePullPolicy:         "IfNotPresent",
+			BackoffLimit:            0,
+			TTLSecondsAfterFinished: 300,
+			LogTailBytes:            16 * 1024,
 		},
 	}
 }

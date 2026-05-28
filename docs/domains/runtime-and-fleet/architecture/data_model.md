@@ -114,7 +114,7 @@ approvals:
 |---|---|---:|---|---|
 | `id` | UUID | no | primary key | Идентификатор задания. |
 | `command_id` | text | no | unique | Идемпотентность команды создания. |
-| `job_type` | text | no | indexed | `mirror`, `build`, `deploy`, `cleanup`, `health_check`, `housekeeping`, `workspace_materialization`. |
+| `job_type` | text | no | indexed | `mirror`, `build`, `deploy`, `cleanup`, `health_check`, `housekeeping`, `workspace_materialization`, `agent_run`. |
 | `status` | text | no | indexed | `pending`, `claimed`, `running`, `succeeded`, `failed`, `cancelled`, `timed_out`. |
 | `priority` | text | no | indexed | `low`, `normal`, `high`, `blocking`. |
 | `job_input_json` | jsonb | no | default {} | Ограниченный вход технической операции без секретов; возвращается исполнителю при claim. |

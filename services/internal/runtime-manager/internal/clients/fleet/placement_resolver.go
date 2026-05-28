@@ -40,6 +40,15 @@ type PlacementResolver struct {
 
 var _ runtimeservice.PlacementResolver = (*PlacementResolver)(nil)
 
+// ClusterAccess хранит безопасное представление runtime-manager о Kubernetes-кластере fleet-manager.
+type ClusterAccess struct {
+	ClusterID       uuid.UUID
+	FleetScopeID    uuid.UUID
+	ClusterKey      string
+	SecretStoreType string
+	SecretStoreRef  string
+}
+
 // NewConnection creates a lazy gRPC client connection to fleet-manager.
 func NewConnection(cfg Config) (*grpc.ClientConn, error) {
 	addr := strings.TrimSpace(cfg.Addr)
@@ -92,6 +101,54 @@ func (r *PlacementResolver) ResolvePlacement(ctx context.Context, request runtim
 		return runtimeservice.PlacementResolution{}, errs.ErrDependencyUnavailable
 	}
 	return runtimeservice.PlacementResolution{FleetScopeID: fleetScopeID, ClusterID: clusterID}, nil
+}
+
+// GetClusterAccess возвращает безопасную ссылку на секрет для исполнителя runtime-manager.
+func (r *PlacementResolver) GetClusterAccess(ctx context.Context, clusterID uuid.UUID) (ClusterAccess, error) {
+	if clusterID == uuid.Nil {
+		return ClusterAccess{}, errs.ErrInvalidArgument
+	}
+	ctx, cancel := context.WithTimeout(ctx, r.timeout)
+	defer cancel()
+	response, err := r.client.GetKubernetesCluster(r.outgoingContext(ctx), &fleetv1.GetKubernetesClusterRequest{
+		ClusterId: clusterID.String(),
+		Meta: &fleetv1.QueryMeta{
+			Actor: &fleetv1.Actor{Type: "service", Id: callerID},
+			RequestContext: &fleetv1.RequestContext{
+				Source: callerID,
+			},
+		},
+	})
+	if err != nil {
+		return ClusterAccess{}, mapFleetError(err)
+	}
+	cluster := response.GetCluster()
+	if cluster == nil {
+		return ClusterAccess{}, errs.ErrDependencyUnavailable
+	}
+	parsedClusterID, err := uuid.Parse(strings.TrimSpace(cluster.GetId()))
+	if err != nil || parsedClusterID == uuid.Nil || parsedClusterID != clusterID {
+		return ClusterAccess{}, errs.ErrDependencyUnavailable
+	}
+	fleetScopeID, err := uuid.Parse(strings.TrimSpace(cluster.GetFleetScopeId()))
+	if err != nil || fleetScopeID == uuid.Nil {
+		return ClusterAccess{}, errs.ErrDependencyUnavailable
+	}
+	if cluster.GetStatus() != fleetv1.KubernetesClusterStatus_KUBERNETES_CLUSTER_STATUS_ACTIVE {
+		return ClusterAccess{}, errs.ErrPlacementRejected
+	}
+	secretStoreType := strings.TrimSpace(cluster.GetSecretStoreType())
+	secretStoreRef := strings.TrimSpace(cluster.GetSecretStoreRef())
+	if secretStoreType == "" || secretStoreRef == "" {
+		return ClusterAccess{}, errs.ErrPreconditionFailed
+	}
+	return ClusterAccess{
+		ClusterID:       parsedClusterID,
+		FleetScopeID:    fleetScopeID,
+		ClusterKey:      strings.TrimSpace(cluster.GetClusterKey()),
+		SecretStoreType: secretStoreType,
+		SecretStoreRef:  secretStoreRef,
+	}, nil
 }
 
 func (r *PlacementResolver) outgoingContext(ctx context.Context) context.Context {

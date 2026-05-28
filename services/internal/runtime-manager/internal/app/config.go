@@ -11,20 +11,23 @@ import (
 	grpcserver "github.com/codex-k8s/kodex/libs/go/grpcserver"
 	outboxlib "github.com/codex-k8s/kodex/libs/go/outbox"
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
+	"github.com/codex-k8s/kodex/libs/go/secretresolver"
 	runtimeservice "github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/service"
 )
 
 // Config contains process-level runtime-manager server configuration.
 type Config struct {
-	HTTPAddr         string                  `env:"KODEX_RUNTIME_MANAGER_HTTP_ADDR" envDefault:":8080"`
-	GRPCAddr         string                  `env:"KODEX_RUNTIME_MANAGER_GRPC_ADDR" envDefault:":9090"`
-	GRPC             RuntimeGRPCConfig       `envPrefix:"KODEX_RUNTIME_MANAGER_GRPC_"`
-	Database         RuntimeDatabaseConfig   `envPrefix:"KODEX_RUNTIME_MANAGER_DATABASE_"`
-	EventLogDatabase RuntimeEventLogDBConfig `envPrefix:"KODEX_RUNTIME_MANAGER_EVENT_LOG_DATABASE_"`
-	Outbox           RuntimeOutboxConfig     `envPrefix:"KODEX_RUNTIME_MANAGER_OUTBOX_"`
-	Slot             RuntimeSlotConfig       `envPrefix:"KODEX_RUNTIME_MANAGER_SLOT_"`
-	Access           RuntimeAccessConfig     `envPrefix:"KODEX_RUNTIME_MANAGER_ACCESS_"`
-	Fleet            RuntimeFleetConfig      `envPrefix:"KODEX_RUNTIME_MANAGER_FLEET_"`
+	HTTPAddr         string                        `env:"KODEX_RUNTIME_MANAGER_HTTP_ADDR" envDefault:":8080"`
+	GRPCAddr         string                        `env:"KODEX_RUNTIME_MANAGER_GRPC_ADDR" envDefault:":9090"`
+	GRPC             RuntimeGRPCConfig             `envPrefix:"KODEX_RUNTIME_MANAGER_GRPC_"`
+	Database         RuntimeDatabaseConfig         `envPrefix:"KODEX_RUNTIME_MANAGER_DATABASE_"`
+	EventLogDatabase RuntimeEventLogDBConfig       `envPrefix:"KODEX_RUNTIME_MANAGER_EVENT_LOG_DATABASE_"`
+	Outbox           RuntimeOutboxConfig           `envPrefix:"KODEX_RUNTIME_MANAGER_OUTBOX_"`
+	Slot             RuntimeSlotConfig             `envPrefix:"KODEX_RUNTIME_MANAGER_SLOT_"`
+	Access           RuntimeAccessConfig           `envPrefix:"KODEX_RUNTIME_MANAGER_ACCESS_"`
+	Fleet            RuntimeFleetConfig            `envPrefix:"KODEX_RUNTIME_MANAGER_FLEET_"`
+	SecretResolver   RuntimeSecretConfig           `envPrefix:"KODEX_RUNTIME_MANAGER_SECRET_RESOLVER_"`
+	KubernetesWorker RuntimeKubernetesWorkerConfig `envPrefix:"KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_"`
 }
 
 // RuntimeGRPCConfig contains gRPC boundary limits.
@@ -113,6 +116,33 @@ type RuntimeFleetConfig struct {
 	ResolveTimeout        time.Duration `env:"MANAGER_RESOLVE_TIMEOUT" envDefault:"5s"`
 }
 
+// RuntimeSecretConfig хранит настройки secretresolver для исполнителя Kubernetes.
+type RuntimeSecretConfig struct {
+	EnvEnabled                bool   `env:"ENV_ENABLED" envDefault:"true"`
+	MountedKubernetesRoot     string `env:"MOUNTED_KUBERNETES_ROOT"`
+	MountedKubernetesMaxBytes int64  `env:"MOUNTED_KUBERNETES_MAX_SECRET_BYTES" envDefault:"1048576"`
+	VaultAddr                 string `env:"VAULT_ADDR"`
+	VaultToken                string `env:"VAULT_TOKEN"`
+	VaultNamespace            string `env:"VAULT_NAMESPACE"`
+}
+
+// RuntimeKubernetesWorkerConfig управляет явно включаемым исполнителем Kubernetes-заданий.
+type RuntimeKubernetesWorkerConfig struct {
+	Enabled                 bool          `env:"ENABLED" envDefault:"false"`
+	WorkerID                string        `env:"WORKER_ID" envDefault:"runtime-manager-kubernetes-executor"`
+	DefaultNamespace        string        `env:"DEFAULT_NAMESPACE"`
+	DefaultServiceAccount   string        `env:"DEFAULT_SERVICE_ACCOUNT"`
+	DefaultImage            string        `env:"DEFAULT_IMAGE"`
+	ImagePullPolicy         string        `env:"IMAGE_PULL_POLICY" envDefault:"IfNotPresent"`
+	PollInterval            time.Duration `env:"POLL_INTERVAL" envDefault:"5s"`
+	ClaimLeaseTTL           time.Duration `env:"CLAIM_LEASE_TTL" envDefault:"5m"`
+	JobTimeout              time.Duration `env:"JOB_TIMEOUT" envDefault:"2m"`
+	KubernetesPollInterval  time.Duration `env:"KUBERNETES_POLL_INTERVAL" envDefault:"2s"`
+	BackoffLimit            int32         `env:"BACKOFF_LIMIT" envDefault:"0"`
+	TTLSecondsAfterFinished int32         `env:"TTL_SECONDS_AFTER_FINISHED" envDefault:"300"`
+	LogTailBytes            int64         `env:"LOG_TAIL_BYTES" envDefault:"16384"`
+}
+
 // LoadConfig reads process configuration from environment variables.
 func LoadConfig() (Config, error) {
 	cfg, err := env.ParseAs[Config]()
@@ -145,7 +175,13 @@ func (cfg Config) Validate() error {
 	if err := cfg.validateAccessSettings(); err != nil {
 		return err
 	}
-	return cfg.validateFleetSettings()
+	if err := cfg.validateFleetSettings(); err != nil {
+		return err
+	}
+	if err := cfg.validateSecretResolverSettings(); err != nil {
+		return err
+	}
+	return cfg.validateKubernetesWorkerSettings()
 }
 
 func (cfg Config) validateGRPCSettings() error {
@@ -288,6 +324,46 @@ func (cfg Config) validateFleetSettings() error {
 	return nil
 }
 
+func (cfg Config) validateSecretResolverSettings() error {
+	secrets := cfg.SecretResolver
+	switch {
+	case secrets.MountedKubernetesMaxBytes <= 0:
+		return fmt.Errorf("KODEX_RUNTIME_MANAGER_SECRET_RESOLVER_MOUNTED_KUBERNETES_MAX_SECRET_BYTES is invalid")
+	case strings.TrimSpace(secrets.VaultAddr) == "":
+		return nil
+	case strings.TrimSpace(secrets.VaultToken) == "":
+		return fmt.Errorf("KODEX_RUNTIME_MANAGER_SECRET_RESOLVER_VAULT_TOKEN is required when Vault address is configured")
+	default:
+		return nil
+	}
+}
+
+func (cfg Config) validateKubernetesWorkerSettings() error {
+	worker := cfg.KubernetesWorker
+	if worker.PollInterval <= 0 || worker.ClaimLeaseTTL <= 0 || worker.JobTimeout <= 0 || worker.KubernetesPollInterval <= 0 {
+		return fmt.Errorf("KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_* durations are invalid")
+	}
+	if worker.BackoffLimit < 0 || worker.TTLSecondsAfterFinished < 0 || worker.LogTailBytes <= 0 {
+		return fmt.Errorf("KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_* numeric settings are invalid")
+	}
+	if worker.ClaimLeaseTTL <= worker.JobTimeout {
+		return fmt.Errorf("KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_CLAIM_LEASE_TTL must be greater than JOB_TIMEOUT")
+	}
+	if !worker.Enabled {
+		return nil
+	}
+	if strings.TrimSpace(worker.WorkerID) == "" {
+		return fmt.Errorf("KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_WORKER_ID is required when executor is enabled")
+	}
+	if strings.TrimSpace(worker.DefaultNamespace) == "" {
+		return fmt.Errorf("KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_DEFAULT_NAMESPACE is required when executor is enabled")
+	}
+	if strings.TrimSpace(worker.DefaultImage) == "" {
+		return fmt.Errorf("KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_DEFAULT_IMAGE is required when executor is enabled")
+	}
+	return nil
+}
+
 func (cfg Config) needsEventLogDatabase() bool {
 	return cfg.Outbox.DispatchEnabled && strings.TrimSpace(cfg.Outbox.PublisherKind) == outboxlib.PublisherKindPostgresEventLog
 }
@@ -334,6 +410,53 @@ func (cfg Config) SlotServiceConfig() (runtimeservice.Config, error) {
 		NamespacePrefix:     strings.Trim(strings.ToLower(cfg.Slot.NamespacePrefix), "-"),
 		DefaultLeaseTTL:     cfg.Slot.DefaultLeaseTTL,
 	}, nil
+}
+
+func newSecretResolver(cfg RuntimeSecretConfig) (secretresolver.Resolver, error) {
+	backends := make(map[string]secretresolver.Backend)
+	if cfg.EnvEnabled {
+		backends[secretresolver.StoreTypeEnv] = secretresolver.NewEnvBackend()
+	}
+	if err := addRuntimeMountedKubernetesSecrets(backends, cfg); err != nil {
+		return nil, err
+	}
+	if err := addRuntimeVaultSecrets(backends, cfg); err != nil {
+		return nil, err
+	}
+	return secretresolver.NewMux(backends)
+}
+
+func addRuntimeMountedKubernetesSecrets(backends map[string]secretresolver.Backend, cfg RuntimeSecretConfig) error {
+	root := strings.TrimSpace(cfg.MountedKubernetesRoot)
+	if root == "" {
+		return nil
+	}
+	backend, err := secretresolver.NewMountedKubernetesBackend(secretresolver.MountedKubernetesBackendConfig{
+		Root:           root,
+		MaxSecretBytes: cfg.MountedKubernetesMaxBytes,
+	})
+	if err != nil {
+		return err
+	}
+	backends[secretresolver.StoreTypeKubernetesMountedSecret] = backend
+	return nil
+}
+
+func addRuntimeVaultSecrets(backends map[string]secretresolver.Backend, cfg RuntimeSecretConfig) error {
+	addr := strings.TrimSpace(cfg.VaultAddr)
+	if addr == "" {
+		return nil
+	}
+	backend, err := secretresolver.NewVaultBackendFromClientConfig(secretresolver.VaultClientConfig{
+		Addr:      addr,
+		Token:     strings.TrimSpace(cfg.VaultToken),
+		Namespace: strings.TrimSpace(cfg.VaultNamespace),
+	})
+	if err != nil {
+		return err
+	}
+	backends[secretresolver.StoreTypeVault] = backend
+	return nil
 }
 
 func parseRequiredUUID(name string, raw string) (uuid.UUID, error) {
