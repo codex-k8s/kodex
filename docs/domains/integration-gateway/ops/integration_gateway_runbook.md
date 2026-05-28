@@ -5,8 +5,8 @@ title: "integration-gateway — runbook: deploy, smoke и rollback"
 status: active
 owner_role: SRE
 created_at: 2026-05-26
-updated_at: 2026-05-27
-related_issues: [829, 853, 895, 909]
+updated_at: 2026-05-28
+related_issues: [829, 853, 895, 909, 939]
 related_alerts: []
 approvals:
   required: ["Owner"]
@@ -76,6 +76,15 @@ scripts/smoke-provider-merge-signal.sh
 - проверяет provider-side продолжение через `provider-hub`: safe merge signal, read surface, replay/conflict diagnostics и producer outbox event.
 
 Live HTTP режим `KODEX_PROVIDER_MERGE_SIGNAL_SMOKE_MODE=live-http` отправляет выбранный fixture в запущенный `integration-gateway`, а затем читает `RepositoryMergeSignal` через gRPC `provider-hub`. Для него нужны настроенный webhook secret текущего контура и заранее существующая bootstrap/adoption PR-проекция с provider relationship; gateway сам не создаёт эту precondition и не хранит state. Для adoption live check вместе переопределяются fixture path, signal key и delivery id.
+
+Для проверки на настоящем GitHub-репозитории используется provider-side live-smoke:
+
+```bash
+KODEX_PROVIDER_LIVE_SMOKE_GATEWAY_URL=http://127.0.0.1:18086 \
+  scripts/smoke-provider-github-live.sh --apply
+```
+
+Он создаёт или переиспользует тестовый репозиторий, ветку и PR в `codex-k8s`, выполняет merge, собирает live `pull_request closed + merged` payload во временный файл и отправляет его в `integration-gateway`, если задан webhook secret. Gateway по-прежнему проверяет только HTTP-boundary: подпись, delivery id, event headers, размер, backpressure и маршрутизацию в `provider-hub`; он не создаёт provider projection, binding или merge signal самостоятельно. Raw provider payload, подписи и секреты не печатаются.
 
 ## Диагностика rollout и health
 
