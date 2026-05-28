@@ -51,6 +51,7 @@ type governanceService interface {
 	ListGateRequests(context.Context, governanceservice.ListGateRequestsInput) ([]entity.GateRequest, query.PageResult, error)
 	BuildReleaseDecisionPackage(context.Context, governanceservice.BuildReleaseDecisionPackageInput) (entity.ReleaseDecisionPackage, error)
 	RecordReleaseRuntimeEvidence(context.Context, governanceservice.RecordReleaseRuntimeEvidenceInput) (entity.ReleaseDecisionPackage, error)
+	RecordReleaseAgentEvidence(context.Context, governanceservice.RecordReleaseAgentEvidenceInput) (entity.ReleaseDecisionPackage, error)
 	GetReleaseDecisionPackage(context.Context, governanceservice.GetReleaseDecisionPackageInput) (entity.ReleaseDecisionPackage, error)
 	ListReleaseDecisionPackages(context.Context, governanceservice.ListReleaseDecisionPackagesInput) ([]entity.ReleaseDecisionPackage, query.PageResult, error)
 	RequestReleaseDecision(context.Context, governanceservice.RequestReleaseDecisionInput) (entity.ReleaseDecision, entity.ReleaseDecisionPackage, error)
@@ -785,21 +786,93 @@ func (server *Server) BuildReleaseDecisionPackage(ctx context.Context, req *gove
 
 // RecordReleaseRuntimeEvidence appends safe runtime/deploy refs to a release package.
 func (server *Server) RecordReleaseRuntimeEvidence(ctx context.Context, req *governancev1.RecordReleaseRuntimeEvidenceRequest) (*governancev1.ReleaseDecisionPackageResponse, error) {
-	meta, packageID, err := commandMetaAndID(req.GetMeta(), req.GetReleaseDecisionPackageId())
-	if err != nil {
-		return nil, err
+	payload := parseRuntimeEvidencePayload(req.GetRuntimeRefs())
+	return server.recordReleaseEvidenceParsedResponse(ctx, req.GetMeta(), req.GetReleaseDecisionPackageId(), payload, req.GetEvidenceRefs(), req.GetIntegrationRefs(), releaseEvidenceTargetRuntime)
+}
+
+// RecordReleaseAgentEvidence appends safe agent evidence refs to a release package.
+func (server *Server) RecordReleaseAgentEvidence(ctx context.Context, req *governancev1.RecordReleaseAgentEvidenceRequest) (*governancev1.ReleaseDecisionPackageResponse, error) {
+	return server.recordReleaseEvidenceParsedResponse(ctx, req.GetMeta(), req.GetReleaseDecisionPackageId(), parseAgentEvidencePayload(req.GetAgentContext()), req.GetEvidenceRefs(), req.GetIntegrationRefs(), releaseEvidenceTargetAgent)
+}
+
+type releaseEvidenceTarget int
+
+const (
+	releaseEvidenceTargetRuntime releaseEvidenceTarget = iota + 1
+	releaseEvidenceTargetAgent
+)
+
+type releaseEvidencePayload struct {
+	value []byte
+	err   error
+}
+
+func parseRuntimeEvidencePayload(items []*governancev1.RuntimeContextRef) releaseEvidencePayload {
+	payload, err := runtimeRefs(items)
+	return releaseEvidencePayload{value: payload, err: err}
+}
+
+func parseAgentEvidencePayload(item *governancev1.AgentContextRef) releaseEvidencePayload {
+	payload, err := protoObject(item)
+	return releaseEvidencePayload{value: payload, err: err}
+}
+
+func (server *Server) recordReleaseEvidenceParsedResponse(
+	ctx context.Context,
+	metaRequest *governancev1.CommandMeta,
+	packageIDValue string,
+	payload releaseEvidencePayload,
+	evidenceRefMessages []*governancev1.EvidenceRef,
+	integrationRefMessages []*governancev1.ReleaseIntegrationRef,
+	target releaseEvidenceTarget,
+) (*governancev1.ReleaseDecisionPackageResponse, error) {
+	if payload.err != nil {
+		return nil, payload.err
 	}
-	runtimes, err := runtimeRefs(req.GetRuntimeRefs())
-	if err != nil {
-		return nil, err
-	}
-	item, err := server.service.RecordReleaseRuntimeEvidence(ctx, governanceservice.RecordReleaseRuntimeEvidenceInput{
-		ReleaseDecisionPackageID: packageID,
-		RuntimeRefs:              runtimes,
-		EvidenceRefs:             evidenceRefs(req.GetEvidenceRefs()),
-		IntegrationRefs:          releaseIntegrationRefs(req.GetIntegrationRefs()),
-		Meta:                     meta,
+	return server.recordReleaseEvidenceResponse(ctx, metaRequest, packageIDValue, payload.value, evidenceRefMessages, integrationRefMessages, target)
+}
+
+func (server *Server) recordReleaseEvidenceResponse(
+	ctx context.Context,
+	metaRequest *governancev1.CommandMeta,
+	packageIDValue string,
+	payload []byte,
+	evidenceRefMessages []*governancev1.EvidenceRef,
+	integrationRefMessages []*governancev1.ReleaseIntegrationRef,
+	target releaseEvidenceTarget,
+) (*governancev1.ReleaseDecisionPackageResponse, error) {
+	return server.releasePackageCommandResponse(ctx, metaRequest, packageIDValue, func(meta governanceservice.CommandMeta, packageID uuid.UUID) (entity.ReleaseDecisionPackage, error) {
+		refs := evidenceRefs(evidenceRefMessages)
+		integrationRefs := releaseIntegrationRefs(integrationRefMessages)
+		switch target {
+		case releaseEvidenceTargetRuntime:
+			return server.service.RecordReleaseRuntimeEvidence(ctx, governanceservice.RecordReleaseRuntimeEvidenceInput{
+				ReleaseDecisionPackageID: packageID,
+				RuntimeRefs:              payload,
+				EvidenceRefs:             refs,
+				IntegrationRefs:          integrationRefs,
+				Meta:                     meta,
+			})
+		case releaseEvidenceTargetAgent:
+			return server.service.RecordReleaseAgentEvidence(ctx, governanceservice.RecordReleaseAgentEvidenceInput{
+				ReleaseDecisionPackageID: packageID,
+				AgentContext:             payload,
+				EvidenceRefs:             refs,
+				IntegrationRefs:          integrationRefs,
+				Meta:                     meta,
+			})
+		default:
+			panic("unsupported release evidence target")
+		}
 	})
+}
+
+func (server *Server) releasePackageCommandResponse(ctx context.Context, metaRequest *governancev1.CommandMeta, packageIDValue string, call func(governanceservice.CommandMeta, uuid.UUID) (entity.ReleaseDecisionPackage, error)) (*governancev1.ReleaseDecisionPackageResponse, error) {
+	meta, packageID, err := commandMetaAndID(metaRequest, packageIDValue)
+	if err != nil {
+		return nil, err
+	}
+	item, err := call(meta, packageID)
 	if err != nil {
 		return nil, err
 	}

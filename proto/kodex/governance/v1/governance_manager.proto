@@ -60,6 +60,8 @@ service GovernanceManagerService {
   rpc BuildReleaseDecisionPackage(BuildReleaseDecisionPackageRequest) returns (ReleaseDecisionPackageResponse);
   // RecordReleaseRuntimeEvidence appends safe runtime/deploy evidence refs to a release package.
   rpc RecordReleaseRuntimeEvidence(RecordReleaseRuntimeEvidenceRequest) returns (ReleaseDecisionPackageResponse);
+  // RecordReleaseAgentEvidence appends safe agent acceptance/review/runtime refs to a release package.
+  rpc RecordReleaseAgentEvidence(RecordReleaseAgentEvidenceRequest) returns (ReleaseDecisionPackageResponse);
   // GetReleaseDecisionPackage returns one release decision package.
   rpc GetReleaseDecisionPackage(GetReleaseDecisionPackageRequest) returns (ReleaseDecisionPackageResponse);
   // ListReleaseDecisionPackages returns release packages by project, candidate or status.
@@ -876,6 +878,17 @@ message RecordReleaseRuntimeEvidenceRequest {
   CommandMeta meta = 5;
 }
 
+message RecordReleaseAgentEvidenceRequest {
+  string release_decision_package_id = 1;
+  // agent_context points to agent-manager session/run/stage/acceptance refs without copying agent state.
+  AgentContextRef agent_context = 2;
+  // evidence_refs point to bounded agent evidence without prompts, transcripts, logs or workspace paths.
+  repeated EvidenceRef evidence_refs = 3;
+  // integration_refs must use safe agent/runtime/governance refs needed by release governance.
+  repeated ReleaseIntegrationRef integration_refs = 4;
+  CommandMeta meta = 5;
+}
+
 message GetReleaseDecisionPackageRequest {
   string release_decision_package_id = 1;
   QueryMeta meta = 2;
@@ -1236,6 +1249,9 @@ enum EvidenceKind {
   EVIDENCE_KIND_INTERACTION_CALLBACK = 8;
   EVIDENCE_KIND_OBJECT_REF = 9;
   EVIDENCE_KIND_CUSTOM = 10;
+  EVIDENCE_KIND_AGENT_ACCEPTANCE = 11;
+  EVIDENCE_KIND_AGENT_RUN = 12;
+  EVIDENCE_KIND_AGENT_HUMAN_GATE = 13;
 }
 
 enum GateRequestStatus {

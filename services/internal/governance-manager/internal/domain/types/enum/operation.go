@@ -31,6 +31,7 @@ const (
 	OperationListGateRequests             Operation = "ListGateRequests"
 	OperationBuildReleaseDecisionPackage  Operation = "BuildReleaseDecisionPackage"
 	OperationRecordReleaseRuntimeEvidence Operation = "RecordReleaseRuntimeEvidence"
+	OperationRecordReleaseAgentEvidence   Operation = "RecordReleaseAgentEvidence"
 	OperationGetReleaseDecisionPackage    Operation = "GetReleaseDecisionPackage"
 	OperationListReleaseDecisionPackages  Operation = "ListReleaseDecisionPackages"
 	OperationRequestReleaseDecision       Operation = "RequestReleaseDecision"

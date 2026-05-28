@@ -1977,6 +1977,107 @@ func TestRecordReleaseRuntimeEvidenceAppendsRefsAndPublishesSafeEvent(t *testing
 	}
 }
 
+func TestRecordReleaseAgentEvidenceAppendsRefsAndPublishesSafeEvent(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
+	packageID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+	eventID := uuid.MustParse("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+	commandID := uuid.MustParse("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
+	expectedVersion := int64(3)
+	repository := &fakeRepository{
+		ready: true,
+		releasePackage: entity.ReleaseDecisionPackage{
+			VersionedBase:       entity.VersionedBase{ID: packageID, Version: expectedVersion, CreatedAt: now.Add(-time.Hour), UpdatedAt: now.Add(-time.Minute)},
+			ReleaseCandidateRef: "release:v1.0.0",
+			ProjectContext:      value.ProjectContextRef{ProjectRef: "project:alpha", RepositoryRef: "repo:alpha"},
+			AgentContext:        []byte(`{"runRef":"agent:run:reviewer","sessionRef":"agent:session:1"}`),
+			Status:              enum.ReleaseDecisionPackageStatusReady,
+		},
+	}
+	service := NewWithConfig(Config{
+		Repository:  repository,
+		Clock:       fixedClock{now: now},
+		IDGenerator: &fixedIDs{ids: []uuid.UUID{eventID}},
+		Authorizer:  AllowAllAuthorizer{},
+	})
+
+	item, err := service.RecordReleaseAgentEvidence(context.Background(), RecordReleaseAgentEvidenceInput{
+		ReleaseDecisionPackageID: packageID,
+		AgentContext:             []byte(`{"acceptanceRef":"agent:acceptance:qa","runRef":"agent:run:reviewer"}`),
+		EvidenceRefs: []value.EvidenceRef{{
+			Kind:           "agent_acceptance",
+			Ref:            "agent:acceptance:qa",
+			Summary:        "acceptance passed",
+			Digest:         "sha256:acceptance",
+			RetentionClass: "safe_ref",
+		}},
+		IntegrationRefs: []value.ReleaseIntegrationRef{
+			{
+				Domain:     "agent",
+				Kind:       "acceptance",
+				Ref:        "agent:acceptance:qa",
+				Status:     "passed",
+				Summary:    "acceptance passed",
+				Digest:     "sha256:acceptance",
+				ObservedAt: "2026-05-28T11:50:00Z",
+				Version:    "acceptance-version:4",
+			},
+			{
+				Domain:  "agent",
+				Kind:    "run",
+				Ref:     "agent:run:reviewer",
+				Status:  "completed",
+				Summary: "reviewer run completed",
+				Digest:  "sha256:run",
+				Version: "run-version:8",
+			},
+			{
+				Domain: "runtime",
+				Kind:   "job",
+				Ref:    "runtime:job:agent-reviewer",
+				Status: "succeeded",
+				Digest: "sha256:runtimejob",
+			},
+			{
+				Domain: "governance",
+				Kind:   "review_signal",
+				Ref:    "governance:review_signal:security",
+				Status: "pass",
+				Digest: "sha256:signal",
+			},
+		},
+		Meta: CommandMeta{
+			CommandID:       &commandID,
+			ExpectedVersion: &expectedVersion,
+			Actor:           value.Actor{Type: "service", ID: "agent-manager"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("RecordReleaseAgentEvidence(): %v", err)
+	}
+	if item.Version != 4 || len(item.EvidenceRefs) != 1 || len(item.IntegrationRefs) != 4 {
+		t.Fatalf("item = %+v, want updated package with agent evidence", item)
+	}
+	if agentContext := string(item.AgentContext); !strings.Contains(agentContext, "agent:session:1") || !strings.Contains(agentContext, "agent:acceptance:qa") {
+		t.Fatalf("agent context = %s, want merged session/run/acceptance refs", agentContext)
+	}
+	if repository.events[0].EventType != governanceevents.EventReleaseDecisionPackageAgentEvidenceRecorded {
+		t.Fatalf("event type = %q, want agent evidence event", repository.events[0].EventType)
+	}
+	payload := string(repository.events[0].Payload)
+	if !strings.Contains(payload, `"agent_acceptance_ref":"agent:acceptance:qa"`) ||
+		!strings.Contains(payload, `"agent_run_ref":"agent:run:reviewer"`) ||
+		!strings.Contains(payload, `"runtime_job_ref":"runtime:job:agent-reviewer"`) {
+		t.Fatalf("agent evidence event payload = %s, want safe refs", payload)
+	}
+	for _, unsafe := range []string{"acceptance passed", "reviewer run completed", "sha256:acceptance", "stdout", "stderr", "workspace"} {
+		if strings.Contains(payload, unsafe) {
+			t.Fatalf("agent evidence event payload leaked %q: %s", unsafe, payload)
+		}
+	}
+}
+
 func TestRecordReleaseRuntimeEvidenceReplayAndConflictHandling(t *testing.T) {
 	t.Parallel()
 
@@ -2117,6 +2218,77 @@ func TestRecordReleaseRuntimeEvidenceDuplicateFingerprintIsIdempotent(t *testing
 	}
 }
 
+func TestRecordReleaseAgentEvidenceDuplicateFingerprintIsIdempotent(t *testing.T) {
+	t.Parallel()
+
+	packageID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+	commandID := uuid.MustParse("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+	expectedVersion := int64(4)
+	repository := &fakeRepository{
+		ready: true,
+		releasePackage: entity.ReleaseDecisionPackage{
+			VersionedBase:       entity.VersionedBase{ID: packageID, Version: expectedVersion},
+			ReleaseCandidateRef: "release:v1.0.0",
+			ProjectContext:      value.ProjectContextRef{ProjectRef: "project:alpha"},
+			AgentContext:        []byte(`{"acceptanceRef":"agent:acceptance:qa","runRef":"agent:run:reviewer"}`),
+			EvidenceRefs: []value.EvidenceRef{{
+				Kind:           "agent_acceptance",
+				Ref:            "agent:acceptance:qa",
+				Summary:        "acceptance passed",
+				Digest:         "sha256:acceptance",
+				RetentionClass: "safe_ref",
+			}},
+			IntegrationRefs: []value.ReleaseIntegrationRef{{
+				Domain:     "agent",
+				Kind:       "acceptance",
+				Ref:        "agent:acceptance:qa",
+				Status:     "passed",
+				Summary:    "acceptance passed",
+				Digest:     "sha256:acceptance",
+				ObservedAt: "2026-05-28T12:00:00Z",
+				Version:    "acceptance-version:4",
+			}},
+			Status: enum.ReleaseDecisionPackageStatusReady,
+		},
+	}
+
+	item, err := newTestService(repository).RecordReleaseAgentEvidence(context.Background(), RecordReleaseAgentEvidenceInput{
+		ReleaseDecisionPackageID: packageID,
+		AgentContext:             []byte(`{"acceptanceRef":"agent:acceptance:qa","runRef":"agent:run:reviewer"}`),
+		EvidenceRefs: []value.EvidenceRef{{
+			Kind:           "agent_acceptance",
+			Ref:            "agent:acceptance:qa",
+			Summary:        "acceptance passed",
+			Digest:         "sha256:acceptance",
+			RetentionClass: "safe_ref",
+		}},
+		IntegrationRefs: []value.ReleaseIntegrationRef{{
+			Domain:     "agent",
+			Kind:       "acceptance",
+			Ref:        "agent:acceptance:qa",
+			Status:     "passed",
+			Summary:    "acceptance passed",
+			Digest:     "sha256:acceptance",
+			ObservedAt: "2026-05-28T12:00:00Z",
+			Version:    "acceptance-version:4",
+		}},
+		Meta: CommandMeta{
+			CommandID:       &commandID,
+			ExpectedVersion: &expectedVersion,
+			Actor:           value.Actor{Type: "service", ID: "agent-manager"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("RecordReleaseAgentEvidence(duplicate fingerprint): %v", err)
+	}
+	if item.Version != expectedVersion || repository.mutationCalls != 0 || len(repository.events) != 0 {
+		t.Fatalf("duplicate result version/mutations/events = %d/%d/%d, want %d/0/0", item.Version, repository.mutationCalls, len(repository.events), expectedVersion)
+	}
+	if repository.result.AggregateID != packageID || repository.result.CommandID == nil || *repository.result.CommandID != commandID {
+		t.Fatalf("command result = %+v, want idempotent command result for package", repository.result)
+	}
+}
+
 func TestRecordReleaseRuntimeEvidenceRejectsConflictingFingerprintAndStaleStatus(t *testing.T) {
 	t.Parallel()
 
@@ -2186,6 +2358,83 @@ func TestRecordReleaseRuntimeEvidenceRejectsConflictingFingerprintAndStaleStatus
 			})
 			if !errors.Is(err, tc.want) {
 				t.Fatalf("RecordReleaseRuntimeEvidence() error = %v, want %v", err, tc.want)
+			}
+			if repository.mutationCalls != 0 || len(repository.events) != 0 {
+				t.Fatalf("mutation calls/events = %d/%d, want 0/0", repository.mutationCalls, len(repository.events))
+			}
+		})
+	}
+}
+
+func TestRecordReleaseAgentEvidenceRejectsConflictingFingerprintAndStaleStatus(t *testing.T) {
+	t.Parallel()
+
+	packageID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+	expectedVersion := int64(4)
+	basePackage := entity.ReleaseDecisionPackage{
+		VersionedBase:       entity.VersionedBase{ID: packageID, Version: expectedVersion},
+		ReleaseCandidateRef: "release:v1.0.0",
+		ProjectContext:      value.ProjectContextRef{ProjectRef: "project:alpha"},
+		IntegrationRefs: []value.ReleaseIntegrationRef{{
+			Domain:     "agent",
+			Kind:       "acceptance",
+			Ref:        "agent:acceptance:qa",
+			Status:     "passed",
+			Summary:    "acceptance passed",
+			Digest:     "sha256:acceptance",
+			ObservedAt: "2026-05-28T12:00:00Z",
+			Version:    "acceptance-version:4",
+		}},
+		Status: enum.ReleaseDecisionPackageStatusReady,
+	}
+
+	for _, tc := range []struct {
+		name string
+		ref  value.ReleaseIntegrationRef
+		want error
+	}{
+		{
+			name: "conflicting digest",
+			ref: value.ReleaseIntegrationRef{
+				Domain:     "agent",
+				Kind:       "acceptance",
+				Ref:        "agent:acceptance:qa",
+				Status:     "passed",
+				Summary:    "acceptance passed",
+				Digest:     "sha256:different",
+				ObservedAt: "2026-05-28T12:00:00Z",
+				Version:    "acceptance-version:4",
+			},
+			want: errs.ErrConflict,
+		},
+		{
+			name: "stale status",
+			ref: value.ReleaseIntegrationRef{
+				Domain:     "agent",
+				Kind:       "acceptance",
+				Ref:        "agent:acceptance:qa",
+				Status:     "waiting",
+				Summary:    "acceptance still waiting",
+				Digest:     "sha256:acceptance",
+				ObservedAt: "2026-05-28T12:00:00Z",
+				Version:    "acceptance-version:4",
+			},
+			want: errs.ErrPreconditionFailed,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repository := &fakeRepository{ready: true, releasePackage: basePackage}
+			_, err := newTestService(repository).RecordReleaseAgentEvidence(context.Background(), RecordReleaseAgentEvidenceInput{
+				ReleaseDecisionPackageID: packageID,
+				IntegrationRefs:          []value.ReleaseIntegrationRef{tc.ref},
+				Meta: CommandMeta{
+					CommandID:       ptrUUID(uuid.New()),
+					ExpectedVersion: &expectedVersion,
+					Actor:           value.Actor{Type: "service", ID: "agent-manager"},
+				},
+			})
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("RecordReleaseAgentEvidence() error = %v, want %v", err, tc.want)
 			}
 			if repository.mutationCalls != 0 || len(repository.events) != 0 {
 				t.Fatalf("mutation calls/events = %d/%d, want 0/0", repository.mutationCalls, len(repository.events))
@@ -2339,6 +2588,103 @@ func TestRecordReleaseRuntimeEvidenceRejectsStaleUnknownAndUnsafeInputs(t *testi
 	})
 	if !errors.Is(err, errs.ErrPreconditionFailed) {
 		t.Fatalf("RecordReleaseRuntimeEvidence(closed) error = %v, want ErrPreconditionFailed", err)
+	}
+}
+
+func TestRecordReleaseAgentEvidenceRejectsStaleUnknownUnsafeAndClosedInputs(t *testing.T) {
+	t.Parallel()
+
+	packageID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+	staleVersion := int64(2)
+	currentVersion := int64(3)
+	service := newTestService(&fakeRepository{
+		ready: true,
+		releasePackage: entity.ReleaseDecisionPackage{
+			VersionedBase:       entity.VersionedBase{ID: packageID, Version: currentVersion},
+			ReleaseCandidateRef: "release:v1.0.0",
+			ProjectContext:      value.ProjectContextRef{ProjectRef: "project:alpha"},
+			Status:              enum.ReleaseDecisionPackageStatusReady,
+		},
+	})
+
+	for _, tc := range []struct {
+		name            string
+		expectedVersion *int64
+		ref             value.ReleaseIntegrationRef
+		want            error
+	}{
+		{
+			name:            "stale version",
+			expectedVersion: &staleVersion,
+			ref:             value.ReleaseIntegrationRef{Domain: "agent", Kind: "acceptance", Ref: "agent:acceptance:qa"},
+			want:            errs.ErrPreconditionFailed,
+		},
+		{
+			name:            "unknown source",
+			expectedVersion: &currentVersion,
+			ref:             value.ReleaseIntegrationRef{Domain: "provider", Kind: "review", Ref: "provider:review:1"},
+			want:            errs.ErrInvalidArgument,
+		},
+		{
+			name:            "unknown status",
+			expectedVersion: &currentVersion,
+			ref:             value.ReleaseIntegrationRef{Domain: "agent", Kind: "acceptance", Ref: "agent:acceptance:qa", Status: "done"},
+			want:            errs.ErrInvalidArgument,
+		},
+		{
+			name:            "unsafe summary",
+			expectedVersion: &currentVersion,
+			ref:             value.ReleaseIntegrationRef{Domain: "agent", Kind: "acceptance", Ref: "agent:acceptance:qa", Summary: "prompt transcript token=secret"},
+			want:            errs.ErrInvalidArgument,
+		},
+		{
+			name:            "unsafe agent context",
+			expectedVersion: &currentVersion,
+			ref:             value.ReleaseIntegrationRef{Domain: "agent", Kind: "acceptance", Ref: "agent:acceptance:qa"},
+			want:            errs.ErrInvalidArgument,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			agentContext := []byte(nil)
+			if tc.name == "unsafe agent context" {
+				agentContext = []byte(`{"workspace_path":"/workspace/secret"}`)
+			}
+			_, err := service.RecordReleaseAgentEvidence(context.Background(), RecordReleaseAgentEvidenceInput{
+				ReleaseDecisionPackageID: packageID,
+				AgentContext:             agentContext,
+				IntegrationRefs:          []value.ReleaseIntegrationRef{tc.ref},
+				Meta: CommandMeta{
+					CommandID:       ptrUUID(uuid.New()),
+					ExpectedVersion: tc.expectedVersion,
+					Actor:           value.Actor{Type: "service", ID: "agent-manager"},
+				},
+			})
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("RecordReleaseAgentEvidence() error = %v, want %v", err, tc.want)
+			}
+		})
+	}
+
+	closedService := newTestService(&fakeRepository{
+		ready: true,
+		releasePackage: entity.ReleaseDecisionPackage{
+			VersionedBase:       entity.VersionedBase{ID: packageID, Version: currentVersion},
+			ReleaseCandidateRef: "release:v1.0.0",
+			ProjectContext:      value.ProjectContextRef{ProjectRef: "project:alpha"},
+			Status:              enum.ReleaseDecisionPackageStatusClosed,
+		},
+	})
+	_, err := closedService.RecordReleaseAgentEvidence(context.Background(), RecordReleaseAgentEvidenceInput{
+		ReleaseDecisionPackageID: packageID,
+		IntegrationRefs:          []value.ReleaseIntegrationRef{{Domain: "agent", Kind: "acceptance", Ref: "agent:acceptance:qa"}},
+		Meta: CommandMeta{
+			CommandID:       ptrUUID(uuid.New()),
+			ExpectedVersion: &currentVersion,
+			Actor:           value.Actor{Type: "service", ID: "agent-manager"},
+		},
+	})
+	if !errors.Is(err, errs.ErrPreconditionFailed) {
+		t.Fatalf("RecordReleaseAgentEvidence(closed) error = %v, want ErrPreconditionFailed", err)
 	}
 }
 

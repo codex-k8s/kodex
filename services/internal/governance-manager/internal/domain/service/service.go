@@ -791,34 +791,124 @@ func (s *Service) GetReleaseDecisionPackage(ctx context.Context, input GetReleas
 
 // RecordReleaseRuntimeEvidence appends bounded runtime/deploy refs to an existing release package.
 func (s *Service) RecordReleaseRuntimeEvidence(ctx context.Context, input RecordReleaseRuntimeEvidenceInput) (entity.ReleaseDecisionPackage, error) {
+	return s.recordReleaseEvidenceCommand(ctx, input.ReleaseDecisionPackageID, input.RuntimeRefs, input.EvidenceRefs, input.IntegrationRefs, input.Meta, runtimeReleaseEvidenceConfig)
+}
+
+// RecordReleaseAgentEvidence appends bounded agent evidence refs to an existing release package.
+func (s *Service) RecordReleaseAgentEvidence(ctx context.Context, input RecordReleaseAgentEvidenceInput) (entity.ReleaseDecisionPackage, error) {
+	return s.recordReleaseEvidenceCommand(ctx, input.ReleaseDecisionPackageID, input.AgentContext, input.EvidenceRefs, input.IntegrationRefs, input.Meta, agentReleaseEvidenceConfig)
+}
+
+func (s *Service) recordReleaseEvidenceCommand(
+	ctx context.Context,
+	packageID uuid.UUID,
+	payload []byte,
+	refs []value.EvidenceRef,
+	integrationRefs []value.ReleaseIntegrationRef,
+	meta CommandMeta,
+	cfg releaseEvidenceUpdateConfig,
+) (entity.ReleaseDecisionPackage, error) {
+	update, err := normalizeReleaseEvidenceUpdate(packageID, payload, refs, integrationRefs, meta, cfg.NormalizePayload, cfg.ValidateIntegrationRefs)
+	if err != nil {
+		return entity.ReleaseDecisionPackage{}, err
+	}
+	return s.recordReleaseEvidence(ctx, update, cfg)
+}
+
+func normalizeReleaseEvidenceUpdate(
+	packageID uuid.UUID,
+	payload []byte,
+	refs []value.EvidenceRef,
+	integrationRefs []value.ReleaseIntegrationRef,
+	meta CommandMeta,
+	normalizePayload func([]byte) ([]byte, error),
+	validateIntegrationRefs func([]value.ReleaseIntegrationRef) error,
+) (releaseEvidenceUpdate, error) {
+	normalizedPayload, err := normalizePayload(payload)
+	if err != nil {
+		return releaseEvidenceUpdate{}, err
+	}
+	evidenceRefs, err := normalizeEvidenceRefs(refs)
+	if err != nil {
+		return releaseEvidenceUpdate{}, err
+	}
+	normalizedIntegrationRefs, err := normalizeReleaseIntegrationRefs(integrationRefs)
+	if err != nil {
+		return releaseEvidenceUpdate{}, err
+	}
+	if err := validateIntegrationRefs(normalizedIntegrationRefs); err != nil {
+		return releaseEvidenceUpdate{}, err
+	}
+	return releaseEvidenceUpdate{
+		ReleaseDecisionPackageID: packageID,
+		Payload:                  normalizedPayload,
+		EvidenceRefs:             evidenceRefs,
+		IntegrationRefs:          normalizedIntegrationRefs,
+		Meta:                     meta,
+	}, nil
+}
+
+func normalizeRuntimeReleaseEvidencePayload(payload []byte) ([]byte, error) {
+	return normalizeReleaseJSONArrayPayload("release.runtime_refs", payload)
+}
+
+func normalizeAgentReleaseEvidencePayload(payload []byte) ([]byte, error) {
+	return normalizeReleaseJSONObjectPayload("release.agent_context", payload)
+}
+
+type releaseEvidenceUpdate struct {
+	ReleaseDecisionPackageID uuid.UUID
+	Payload                  []byte
+	EvidenceRefs             []value.EvidenceRef
+	IntegrationRefs          []value.ReleaseIntegrationRef
+	Meta                     CommandMeta
+}
+
+type releaseEvidenceUpdateConfig struct {
+	Operation               enum.Operation
+	EventType               string
+	ReasonCode              string
+	SafeSummary             string
+	NormalizePayload        func([]byte) ([]byte, error)
+	ValidateIntegrationRefs func([]value.ReleaseIntegrationRef) error
+	Merge                   func(entity.ReleaseDecisionPackage, []byte, []value.EvidenceRef, []value.ReleaseIntegrationRef) (entity.ReleaseDecisionPackage, bool, error)
+}
+
+var (
+	runtimeReleaseEvidenceConfig = releaseEvidenceUpdateConfig{
+		Operation:               enum.OperationRecordReleaseRuntimeEvidence,
+		EventType:               governanceevents.EventReleaseDecisionPackageRuntimeEvidenceRecorded,
+		ReasonCode:              "runtime_evidence_recorded",
+		SafeSummary:             "runtime/deploy evidence refs recorded",
+		NormalizePayload:        normalizeRuntimeReleaseEvidencePayload,
+		ValidateIntegrationRefs: validateRuntimeReleaseIntegrationRefs,
+		Merge:                   mergeReleaseRuntimeEvidence,
+	}
+	agentReleaseEvidenceConfig = releaseEvidenceUpdateConfig{
+		Operation:               enum.OperationRecordReleaseAgentEvidence,
+		EventType:               governanceevents.EventReleaseDecisionPackageAgentEvidenceRecorded,
+		ReasonCode:              "agent_evidence_recorded",
+		SafeSummary:             "agent evidence refs recorded",
+		NormalizePayload:        normalizeAgentReleaseEvidencePayload,
+		ValidateIntegrationRefs: validateAgentReleaseIntegrationRefs,
+		Merge:                   mergeReleaseAgentEvidence,
+	}
+)
+
+func (s *Service) recordReleaseEvidence(ctx context.Context, input releaseEvidenceUpdate, cfg releaseEvidenceUpdateConfig) (entity.ReleaseDecisionPackage, error) {
 	if input.ReleaseDecisionPackageID == uuid.Nil {
 		return entity.ReleaseDecisionPackage{}, errs.ErrInvalidArgument
 	}
-	if err := requireCommand(input.Meta, enum.OperationRecordReleaseRuntimeEvidence.String()); err != nil {
+	if err := requireCommand(input.Meta, cfg.Operation.String()); err != nil {
 		return entity.ReleaseDecisionPackage{}, err
 	}
 	if err := s.authorizeCommand(ctx, input.Meta, actionReleaseUpdate, releaseDecisionResource(input.ReleaseDecisionPackageID)); err != nil {
 		return entity.ReleaseDecisionPackage{}, err
 	}
-	runtimeRefs, err := normalizeReleaseJSONArrayPayload("release.runtime_refs", input.RuntimeRefs)
-	if err != nil {
-		return entity.ReleaseDecisionPackage{}, err
-	}
-	evidenceRefs, err := normalizeEvidenceRefs(input.EvidenceRefs)
-	if err != nil {
-		return entity.ReleaseDecisionPackage{}, err
-	}
-	integrationRefs, err := normalizeReleaseIntegrationRefs(input.IntegrationRefs)
-	if err != nil {
-		return entity.ReleaseDecisionPackage{}, err
-	}
-	if err := validateRuntimeReleaseIntegrationRefs(integrationRefs); err != nil {
-		return entity.ReleaseDecisionPackage{}, err
-	}
-	if len(runtimeRefs) == 0 && len(evidenceRefs) == 0 && len(integrationRefs) == 0 {
+	if len(input.Payload) == 0 && len(input.EvidenceRefs) == 0 && len(input.IntegrationRefs) == 0 {
 		return entity.ReleaseDecisionPackage{}, errs.ErrInvalidArgument
 	}
-	result, replayed, err := s.replayCommand(ctx, input.Meta, enum.OperationRecordReleaseRuntimeEvidence.String(), governanceevents.AggregateReleaseDecisionPackage)
+	result, replayed, err := s.replayCommand(ctx, input.Meta, cfg.Operation.String(), governanceevents.AggregateReleaseDecisionPackage)
 	if err != nil {
 		return entity.ReleaseDecisionPackage{}, err
 	}
@@ -830,7 +920,7 @@ func (s *Service) RecordReleaseRuntimeEvidence(ctx context.Context, input Record
 		if err != nil {
 			return entity.ReleaseDecisionPackage{}, err
 		}
-		if _, changed, err := mergeReleaseRuntimeEvidence(replayedPackage, runtimeRefs, evidenceRefs, integrationRefs); err != nil {
+		if _, changed, err := cfg.Merge(replayedPackage, input.Payload, input.EvidenceRefs, input.IntegrationRefs); err != nil {
 			return entity.ReleaseDecisionPackage{}, errs.ErrConflict
 		} else if changed {
 			return entity.ReleaseDecisionPackage{}, errs.ErrConflict
@@ -851,12 +941,12 @@ func (s *Service) RecordReleaseRuntimeEvidence(ctx context.Context, input Record
 	if previousVersion != pkg.Version {
 		return entity.ReleaseDecisionPackage{}, errs.ErrPreconditionFailed
 	}
-	updated, changed, err := mergeReleaseRuntimeEvidence(pkg, runtimeRefs, evidenceRefs, integrationRefs)
+	updated, changed, err := cfg.Merge(pkg, input.Payload, input.EvidenceRefs, input.IntegrationRefs)
 	if err != nil {
 		return entity.ReleaseDecisionPackage{}, err
 	}
 	now := s.clock.Now()
-	result = commandResult(input.Meta, enum.OperationRecordReleaseRuntimeEvidence.String(), governanceevents.AggregateReleaseDecisionPackage, pkg.ID, now)
+	result = commandResult(input.Meta, cfg.Operation.String(), governanceevents.AggregateReleaseDecisionPackage, pkg.ID, now)
 	if !changed {
 		if err := s.repository.RecordCommandResult(ctx, result); err != nil && !errors.Is(err, errs.ErrAlreadyExists) {
 			return entity.ReleaseDecisionPackage{}, err
@@ -869,12 +959,12 @@ func (s *Service) RecordReleaseRuntimeEvidence(ctx context.Context, input Record
 		ReleaseDecisionPackageID: updated.ID.String(),
 		ReleaseCandidateRef:      updated.ReleaseCandidateRef,
 		Status:                   string(updated.Status),
-		ReasonCode:               "runtime_evidence_recorded",
-		SafeSummary:              "runtime/deploy evidence refs recorded",
+		ReasonCode:               cfg.ReasonCode,
+		SafeSummary:              cfg.SafeSummary,
 		Version:                  updated.Version,
 	}, updated.ProjectContext)
-	eventPayload = applyReleaseIntegrationEventRefs(eventPayload, integrationRefs)
-	event := outboxCommandEvent(s.idGenerator.New(), governanceevents.EventReleaseDecisionPackageRuntimeEvidenceRecorded, governanceevents.AggregateReleaseDecisionPackage, updated.ID, now, input.Meta, enum.OperationRecordReleaseRuntimeEvidence.String(), eventPayload)
+	eventPayload = applyReleaseIntegrationEventRefs(eventPayload, input.IntegrationRefs)
+	event := outboxCommandEvent(s.idGenerator.New(), cfg.EventType, governanceevents.AggregateReleaseDecisionPackage, updated.ID, now, input.Meta, cfg.Operation.String(), eventPayload)
 	if err := s.repository.UpdateReleaseDecisionPackageEvidence(ctx, updated, previousVersion, result, event); err != nil {
 		return entity.ReleaseDecisionPackage{}, err
 	}
@@ -1588,6 +1678,25 @@ func validateRuntimeReleaseIntegrationRefs(refs []value.ReleaseIntegrationRef) e
 	return nil
 }
 
+func validateAgentReleaseIntegrationRefs(refs []value.ReleaseIntegrationRef) error {
+	for _, ref := range refs {
+		switch ref.Domain {
+		case "agent":
+			if ref.Status != "" && !validAgentReleaseIntegrationStatus(ref.Kind, ref.Status) {
+				return errs.ErrInvalidArgument
+			}
+		case "runtime":
+			if ref.Status != "" && !validRuntimeReleaseIntegrationStatus(ref.Kind, ref.Status) {
+				return errs.ErrInvalidArgument
+			}
+		case "governance":
+		default:
+			return errs.ErrInvalidArgument
+		}
+	}
+	return nil
+}
+
 func validRuntimeReleaseIntegrationStatus(kind string, status string) bool {
 	switch kind {
 	case "job", "deploy", "postdeploy":
@@ -1597,8 +1706,57 @@ func validRuntimeReleaseIntegrationStatus(kind string, status string) bool {
 	}
 }
 
+func validAgentReleaseIntegrationStatus(kind string, status string) bool {
+	switch kind {
+	case "acceptance":
+		return isOneOfString(status, "pending", "passed", "failed", "waiting", "skipped")
+	case "run":
+		return isOneOfString(status, "requested", "starting", "running", "waiting", "completed", "failed", "cancelled")
+	case "human_gate":
+		return isOneOfString(status, "requested", "waiting", "resolved", "failed", "cancelled")
+	case "session":
+		return isOneOfString(status, "open", "waiting", "completed", "failed", "cancelled")
+	case "stage", "role":
+		return status == ""
+	default:
+		return false
+	}
+}
+
 func mergeReleaseRuntimeEvidence(pkg entity.ReleaseDecisionPackage, runtimeRefs []byte, evidenceRefs []value.EvidenceRef, integrationRefs []value.ReleaseIntegrationRef) (entity.ReleaseDecisionPackage, bool, error) {
-	mergedRuntimeRefs, err := mergeReleaseJSONArrayPayload("release.runtime_refs", pkg.RuntimeRefs, runtimeRefs)
+	return mergeReleasePackageEvidence(pkg, pkg.RuntimeRefs, runtimeRefs, mergeRuntimeReleaseEvidencePayload, assignRuntimeReleaseEvidencePayload, evidenceRefs, integrationRefs)
+}
+
+func mergeReleaseAgentEvidence(pkg entity.ReleaseDecisionPackage, agentContext []byte, evidenceRefs []value.EvidenceRef, integrationRefs []value.ReleaseIntegrationRef) (entity.ReleaseDecisionPackage, bool, error) {
+	return mergeReleasePackageEvidence(pkg, pkg.AgentContext, agentContext, mergeAgentReleaseEvidencePayload, assignAgentReleaseEvidencePayload, evidenceRefs, integrationRefs)
+}
+
+func mergeRuntimeReleaseEvidencePayload(existing []byte, additions []byte) ([]byte, error) {
+	return mergeReleaseJSONArrayPayload("release.runtime_refs", existing, additions)
+}
+
+func mergeAgentReleaseEvidencePayload(existing []byte, additions []byte) ([]byte, error) {
+	return mergeReleaseJSONObjectPayload("release.agent_context", existing, additions)
+}
+
+func assignRuntimeReleaseEvidencePayload(pkg *entity.ReleaseDecisionPackage, payload []byte) {
+	pkg.RuntimeRefs = payload
+}
+
+func assignAgentReleaseEvidencePayload(pkg *entity.ReleaseDecisionPackage, payload []byte) {
+	pkg.AgentContext = payload
+}
+
+func mergeReleasePackageEvidence(
+	pkg entity.ReleaseDecisionPackage,
+	currentPayload []byte,
+	payloadAdditions []byte,
+	mergePayload func([]byte, []byte) ([]byte, error),
+	assignPayload func(*entity.ReleaseDecisionPackage, []byte),
+	evidenceRefs []value.EvidenceRef,
+	integrationRefs []value.ReleaseIntegrationRef,
+) (entity.ReleaseDecisionPackage, bool, error) {
+	mergedPayload, err := mergePayload(currentPayload, payloadAdditions)
 	if err != nil {
 		return entity.ReleaseDecisionPackage{}, false, err
 	}
@@ -1610,10 +1768,10 @@ func mergeReleaseRuntimeEvidence(pkg entity.ReleaseDecisionPackage, runtimeRefs 
 	if err != nil {
 		return entity.ReleaseDecisionPackage{}, false, err
 	}
-	changed := string(pkg.RuntimeRefs) != string(mergedRuntimeRefs) ||
+	changed := string(currentPayload) != string(mergedPayload) ||
 		!sameEvidenceRefs(pkg.EvidenceRefs, mergedEvidenceRefs) ||
 		!sameReleaseIntegrationRefs(pkg.IntegrationRefs, mergedIntegrationRefs)
-	pkg.RuntimeRefs = mergedRuntimeRefs
+	assignPayload(&pkg, mergedPayload)
 	pkg.EvidenceRefs = mergedEvidenceRefs
 	pkg.IntegrationRefs = mergedIntegrationRefs
 	return pkg, changed, nil
@@ -1678,6 +1836,9 @@ func mergeReleaseIntegrationRefs(existing []value.ReleaseIntegrationRef, additio
 			if staleRuntimeReleaseIntegrationStatus(previous, ref) {
 				return nil, errs.ErrPreconditionFailed
 			}
+			if staleAgentReleaseIntegrationStatus(previous, ref) {
+				return nil, errs.ErrPreconditionFailed
+			}
 			return nil, errs.ErrConflict
 		}
 		seen[key] = ref
@@ -1702,6 +1863,56 @@ func staleRuntimeReleaseIntegrationStatus(previous value.ReleaseIntegrationRef, 
 		return false
 	}
 	return nextRank < previousRank
+}
+
+func staleAgentReleaseIntegrationStatus(previous value.ReleaseIntegrationRef, next value.ReleaseIntegrationRef) bool {
+	if previous.Domain != "agent" || next.Domain != "agent" || previous.Kind != next.Kind {
+		return false
+	}
+	if previous.Status == "" || next.Status == "" || previous.Status == next.Status {
+		return false
+	}
+	previousRank, previousKnown := agentReleaseStatusRank(previous.Kind, previous.Status)
+	nextRank, nextKnown := agentReleaseStatusRank(next.Kind, next.Status)
+	if !previousKnown || !nextKnown {
+		return false
+	}
+	return nextRank < previousRank
+}
+
+func agentReleaseStatusRank(kind string, status string) (int, bool) {
+	switch kind {
+	case "acceptance":
+		switch status {
+		case "pending":
+			return 1, true
+		case "waiting":
+			return 2, true
+		case "passed", "failed", "skipped":
+			return 3, true
+		}
+	case "run":
+		switch status {
+		case "requested":
+			return 1, true
+		case "starting":
+			return 2, true
+		case "running", "waiting":
+			return 3, true
+		case "completed", "failed", "cancelled":
+			return 4, true
+		}
+	case "human_gate":
+		switch status {
+		case "requested":
+			return 1, true
+		case "waiting":
+			return 2, true
+		case "resolved", "failed", "cancelled":
+			return 3, true
+		}
+	}
+	return 0, false
 }
 
 func runtimeReleaseStatusRank(status string) (int, bool) {
@@ -1790,7 +2001,7 @@ func validReleaseIntegrationKind(domain string, kind string) bool {
 	case "provider":
 		return isOneOfString(kind, "issue", "pull_request", "merge_request", "check", "review", "comment", "operation", "changed_files_summary")
 	case "agent":
-		return isOneOfString(kind, "session", "run", "stage", "acceptance", "role")
+		return isOneOfString(kind, "session", "run", "stage", "acceptance", "role", "human_gate")
 	case "runtime":
 		return isOneOfString(kind, "job", "deploy", "postdeploy", "environment", "artifact", "summary")
 	case "governance":
@@ -1891,6 +2102,59 @@ func releaseJSONArrayValues(name string, payload []byte) ([]any, error) {
 		return nil, errs.ErrInvalidArgument
 	}
 	return values, nil
+}
+
+func mergeReleaseJSONObjectPayload(name string, existing []byte, additions []byte) ([]byte, error) {
+	existingValues, err := releaseJSONObjectValue(name, existing)
+	if err != nil {
+		return nil, err
+	}
+	additionValues, err := releaseJSONObjectValue(name, additions)
+	if err != nil {
+		return nil, err
+	}
+	if len(existingValues) == 0 && len(additionValues) == 0 {
+		return nil, nil
+	}
+	result := make(map[string]any, len(existingValues)+len(additionValues))
+	for key, value := range existingValues {
+		result[key] = value
+	}
+	for key, value := range additionValues {
+		if previous, ok := result[key]; ok {
+			if !sameReleaseJSONValue(previous, value) {
+				return nil, errs.ErrConflict
+			}
+			continue
+		}
+		result[key] = value
+	}
+	payload, err := json.Marshal(result)
+	if err != nil {
+		return nil, errs.ErrInvalidArgument
+	}
+	return payload, nil
+}
+
+func releaseJSONObjectValue(name string, payload []byte) (map[string]any, error) {
+	normalized, err := normalizeReleaseJSONObjectPayload(name, payload)
+	if err != nil {
+		return nil, err
+	}
+	if len(normalized) == 0 {
+		return nil, nil
+	}
+	var values map[string]any
+	if err := json.Unmarshal(normalized, &values); err != nil {
+		return nil, errs.ErrInvalidArgument
+	}
+	return values, nil
+}
+
+func sameReleaseJSONValue(left any, right any) bool {
+	leftPayload, leftErr := json.Marshal(left)
+	rightPayload, rightErr := json.Marshal(right)
+	return leftErr == nil && rightErr == nil && string(leftPayload) == string(rightPayload)
 }
 
 func normalizeReleaseJSONObjectPayload(name string, payload []byte) ([]byte, error) {
@@ -2518,6 +2782,8 @@ func applyReleaseIntegrationEventRefs(payload governanceevents.Payload, refs []v
 			payload.AgentSessionRef = firstMatchingEventRef(payload.AgentSessionRef, kind, value, "session")
 			payload.AgentRunRef = firstMatchingEventRef(payload.AgentRunRef, kind, value, "run")
 			payload.AgentStageRef = firstMatchingEventRef(payload.AgentStageRef, kind, value, "stage")
+			payload.AgentAcceptanceRef = firstMatchingEventRef(payload.AgentAcceptanceRef, kind, value, "acceptance")
+			payload.AgentHumanGateRef = firstMatchingEventRef(payload.AgentHumanGateRef, kind, value, "human_gate")
 		case "runtime":
 			payload.RuntimeJobRef = firstMatchingEventRef(payload.RuntimeJobRef, kind, value, "job", "deploy")
 		case "interaction":

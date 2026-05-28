@@ -206,6 +206,56 @@ func TestRecordReleaseRuntimeEvidenceRoutesToDomainService(t *testing.T) {
 	}
 }
 
+func TestRecordReleaseAgentEvidenceRoutesToDomainService(t *testing.T) {
+	t.Parallel()
+
+	packageID := "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"
+	expectedVersion := int64(7)
+	service := &fakeBacklogService{}
+	response, err := NewServer(service).RecordReleaseAgentEvidence(context.Background(), &governancev1.RecordReleaseAgentEvidenceRequest{
+		ReleaseDecisionPackageId: packageID,
+		AgentContext: &governancev1.AgentContextRef{
+			SessionRef:    ptrString("agent:session:1"),
+			RunRef:        ptrString("agent:run:reviewer"),
+			AcceptanceRef: ptrString("agent:acceptance:qa"),
+		},
+		EvidenceRefs: []*governancev1.EvidenceRef{{
+			Kind:           governancev1.EvidenceKind_EVIDENCE_KIND_AGENT_ACCEPTANCE,
+			Ref:            "agent:acceptance:qa",
+			Summary:        "acceptance passed",
+			Digest:         ptrString("sha256:acceptance"),
+			RetentionClass: ptrString("safe_ref"),
+		}},
+		IntegrationRefs: []*governancev1.ReleaseIntegrationRef{{
+			Domain:     "agent",
+			Kind:       "acceptance",
+			Ref:        "agent:acceptance:qa",
+			Status:     ptrString("passed"),
+			Summary:    ptrString("acceptance passed"),
+			Digest:     ptrString("sha256:acceptance"),
+			ObservedAt: ptrString("2026-05-28T11:00:00Z"),
+			Version:    ptrString("acceptance-version:7"),
+		}},
+		Meta: &governancev1.CommandMeta{
+			Actor:           &governancev1.Actor{Type: "service", Id: "agent-manager"},
+			CommandId:       ptrString("bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb"),
+			ExpectedVersion: &expectedVersion,
+		},
+	})
+	if err != nil {
+		t.Fatalf("RecordReleaseAgentEvidence(): %v", err)
+	}
+	if service.recordReleaseAgentEvidenceInput.ReleaseDecisionPackageID.String() != packageID || len(service.recordReleaseAgentEvidenceInput.IntegrationRefs) != 1 {
+		t.Fatalf("input = %+v, want routed agent evidence", service.recordReleaseAgentEvidenceInput)
+	}
+	if service.recordReleaseAgentEvidenceInput.IntegrationRefs[0].Status != "passed" {
+		t.Fatalf("input status = %q, want passed", service.recordReleaseAgentEvidenceInput.IntegrationRefs[0].Status)
+	}
+	if response.GetReleaseDecisionPackage().GetAgentContext().GetAcceptanceRef() != "agent:acceptance:qa" {
+		t.Fatalf("response = %+v, want agent acceptance ref", response.GetReleaseDecisionPackage())
+	}
+}
+
 func TestGetReleaseDecisionPackageReturnsRuntimeEvidenceReadSurface(t *testing.T) {
 	t.Parallel()
 
@@ -253,6 +303,55 @@ func TestGetReleaseDecisionPackageReturnsRuntimeEvidenceReadSurface(t *testing.T
 	}
 	readSurface := item.GetRuntimeRefs()[0].GetJobRef() + " " + item.GetEvidenceRefs()[0].GetSummary() + " " + item.GetIntegrationRefs()[0].GetSummary()
 	for _, unsafe := range []string{"token=", "kubeconfig", "stdout", "stderr", "raw_provider_payload"} {
+		if strings.Contains(readSurface, unsafe) {
+			t.Fatalf("read surface leaked unsafe marker %q: %s", unsafe, readSurface)
+		}
+	}
+}
+
+func TestGetReleaseDecisionPackageReturnsAgentEvidenceReadSurface(t *testing.T) {
+	t.Parallel()
+
+	packageID := "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"
+	service := &fakeBacklogService{
+		releasePackage: entity.ReleaseDecisionPackage{
+			VersionedBase:       entity.VersionedBase{ID: uuid.MustParse(packageID), Version: 5},
+			ReleaseCandidateRef: "release:v1.0.0",
+			AgentContext:        []byte(`{"acceptanceRef":"agent:acceptance:qa","runRef":"agent:run:reviewer","sessionRef":"agent:session:1"}`),
+			EvidenceRefs: []value.EvidenceRef{{
+				Kind:           "agent_acceptance",
+				Ref:            "agent:acceptance:qa",
+				Summary:        "acceptance passed",
+				Digest:         "sha256:acceptance",
+				RetentionClass: "safe_ref",
+			}},
+			IntegrationRefs: []value.ReleaseIntegrationRef{{
+				Domain:     "agent",
+				Kind:       "acceptance",
+				Ref:        "agent:acceptance:qa",
+				Status:     "passed",
+				Summary:    "acceptance passed",
+				Digest:     "sha256:acceptance",
+				ObservedAt: "2026-05-28T11:59:00Z",
+				Version:    "acceptance-version:5",
+			}},
+			Status: enum.ReleaseDecisionPackageStatusReady,
+		},
+	}
+
+	response, err := NewServer(service).GetReleaseDecisionPackage(context.Background(), &governancev1.GetReleaseDecisionPackageRequest{
+		ReleaseDecisionPackageId: packageID,
+		Meta:                     &governancev1.QueryMeta{Actor: &governancev1.Actor{Type: "service", Id: "staff-gateway"}},
+	})
+	if err != nil {
+		t.Fatalf("GetReleaseDecisionPackage(): %v", err)
+	}
+	item := response.GetReleaseDecisionPackage()
+	if item.GetAgentContext().GetAcceptanceRef() != "agent:acceptance:qa" || item.GetIntegrationRefs()[0].GetStatus() != "passed" {
+		t.Fatalf("response = %+v, want agent evidence read surface", item)
+	}
+	readSurface := item.GetAgentContext().GetAcceptanceRef() + " " + item.GetEvidenceRefs()[0].GetSummary() + " " + item.GetIntegrationRefs()[0].GetSummary()
+	for _, unsafe := range []string{"token=", "kubeconfig", "stdout", "stderr", "transcript", "workspace"} {
 		if strings.Contains(readSurface, unsafe) {
 			t.Fatalf("read surface leaked unsafe marker %q: %s", unsafe, readSurface)
 		}
@@ -335,6 +434,7 @@ type fakeBacklogService struct {
 	reviewSignalsInput                governanceservice.ListReviewSignalsInput
 	buildReleaseDecisionPackageInput  governanceservice.BuildReleaseDecisionPackageInput
 	recordReleaseRuntimeEvidenceInput governanceservice.RecordReleaseRuntimeEvidenceInput
+	recordReleaseAgentEvidenceInput   governanceservice.RecordReleaseAgentEvidenceInput
 	getReleaseDecisionPackageInput    governanceservice.GetReleaseDecisionPackageInput
 	listReleaseDecisionPackagesInput  governanceservice.ListReleaseDecisionPackagesInput
 	releasePackage                    entity.ReleaseDecisionPackage
@@ -396,6 +496,18 @@ func (service *fakeBacklogService) RecordReleaseRuntimeEvidence(_ context.Contex
 		VersionedBase:       entity.VersionedBase{ID: input.ReleaseDecisionPackageID, Version: 2},
 		ReleaseCandidateRef: "release:v1.0.0",
 		RuntimeRefs:         input.RuntimeRefs,
+		EvidenceRefs:        input.EvidenceRefs,
+		IntegrationRefs:     input.IntegrationRefs,
+		Status:              enum.ReleaseDecisionPackageStatusReady,
+	}, nil
+}
+
+func (service *fakeBacklogService) RecordReleaseAgentEvidence(_ context.Context, input governanceservice.RecordReleaseAgentEvidenceInput) (entity.ReleaseDecisionPackage, error) {
+	service.recordReleaseAgentEvidenceInput = input
+	return entity.ReleaseDecisionPackage{
+		VersionedBase:       entity.VersionedBase{ID: input.ReleaseDecisionPackageID, Version: 2},
+		ReleaseCandidateRef: "release:v1.0.0",
+		AgentContext:        input.AgentContext,
 		EvidenceRefs:        input.EvidenceRefs,
 		IntegrationRefs:     input.IntegrationRefs,
 		Status:              enum.ReleaseDecisionPackageStatusReady,
