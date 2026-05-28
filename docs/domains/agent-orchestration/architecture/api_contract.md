@@ -5,8 +5,8 @@ title: kodex — API-обзор agent-manager
 status: active
 owner_role: SA
 created_at: 2026-05-12
-updated_at: 2026-05-27
-related_issues: [733, 739, 744, 753, 755, 698, 759, 772, 322, 782, 795, 809, 820, 834, 842, 862, 866, 891, 897, 905, 918]
+updated_at: 2026-05-28
+related_issues: [733, 739, 744, 753, 755, 698, 759, 772, 322, 782, 795, 809, 820, 834, 842, 862, 866, 891, 897, 905, 918, 937]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -69,7 +69,7 @@ approvals:
 | `DispatchFollowUpIntent` | gRPC command | `agent.follow_up.create` | `command_id` + expected version | Переводит `planned/requested` follow-up intent в одну из typed provider-команд `create_issue`, `update_issue`, `create_comment`, `update_comment`, `update_pull_request` или `create_review_signal`. Команда принимает явный `FollowUpDispatchKind` и соответствующий typed `oneof`, перед внешним write атомарно резервирует dispatch локальным bump версии и deterministic provider command ref от intent, затем сохраняет только `provider_operation_ref`, safe result refs и статус `created`/`updated`/`commented`/`review_signaled`/`failed`. Для PR/MR update требуется provider expected version, а review signal фиксируется как provider-native сигнал без governance decision. |
 | `RecordAgentActivity` | gRPC command | `agent.activity.record` | `command_id` или `idempotency_key` | Записывает одну safe timeline entry для session/run: kind, tool metadata, status, timings, summary, digest, bounded error, safe refs/details и correlation trace без raw tool payload, prompt, transcript, stdout/stderr или workspace paths. |
 | `ListAgentActivities` | gRPC query | `agent.activity.read` | cursor | Читает safe timeline по session или run с фильтрами kind/status и cursor pagination для будущего UI. |
-| `RequestHumanGate` | gRPC command | `agent.human_gate.request` | `command_id` или `idempotency_key` | Создаёт авторитетное ожидание owner decision в `agent-manager`: session/run/stage/acceptance refs, provider target refs, safe summary, `interaction_request_ref` и `governance_gate_request_ref`. При включённой request-side интеграции команда создаёт transport request через `interaction-hub.RequestHumanGate` и сохраняет только safe request ref; transport request/response остаётся у `interaction-hub`, governance/risk/release decision — у `governance-manager`. |
+| `RequestHumanGate` | gRPC command | `agent.human_gate.request` | `command_id` или `idempotency_key` | Создаёт авторитетное ожидание owner decision в `agent-manager`: session/run/stage/acceptance refs, provider target refs, safe summary, `interaction_request_ref` и `governance_gate_request_ref`. При включённой request-side интеграции команда создаёт transport request через `interaction-hub.RequestHumanGate`, передаёт действия `approve`/`reject`/`request_changes`/`answer` и сохраняет только safe request ref; transport request/response остаётся у `interaction-hub`, governance/risk/release decision — у `governance-manager`. |
 | `RecordHumanGateDecision` | gRPC command | `agent.human_gate.request` | `command_id` + expected version | Записывает normalized outcome `approve`/`reject`/`request_changes`/`answer`, safe summary и refs на `interaction_response`/`governance_decision`, переводя ожидание в `resolved` через optimistic concurrency без копирования внешних payload. |
 | `GetHumanGateRequest` | gRPC query | `agent.session.read` | нет | Читает одно ожидание/решение Human gate. |
 | `ListHumanGateRequests` | gRPC query | `agent.session.read` | cursor | Читает ожидания/решения по session/run/stage/status/outcome. |
@@ -120,7 +120,7 @@ Codex hooks не являются MCP-инструментами. `agent-manager
 | `project-catalog` | Чтение workspace policy, release policy, project/repository refs | Проектная policy остаётся у project. |
 | `governance-manager` | Risk assessment, record review signal, request gate, read gate/release decision | Risk/gate/release decisions остаются у governance. |
 | `access-manager` | Проверка действий, ролей, аккаунтов и scope | `agent-manager` не вычисляет права сам. |
-| `interaction-hub` | `RequestHumanGate` для создания owner-visible Human gate request; событие `interaction.request.response_recorded` для возобновления Human gate | Диалог, callback body, owner inbox и доставка остаются у interaction. `agent-manager` передаёт только safe owner/session/run/provider refs, target actor ref из session owner и bounded summary, а затем потребляет только safe refs/status/action/version из event log и хранит refs + normalized owner outcome. |
+| `interaction-hub` | `RequestHumanGate` для создания owner-visible Human gate request; событие `interaction.request.response_recorded` для возобновления Human gate | Диалог, callback body, owner inbox и доставка остаются у interaction. `agent-manager` передаёт только safe owner/session/run/provider refs, target actor ref из session owner, bounded summary и допустимые действия `approve`/`reject`/`request_changes`/`answer`, а затем потребляет только safe refs/status/action/version из event log и хранит refs + normalized owner outcome. |
 | `codex-hook-ingress` | Нормализованные Codex hook events: lifecycle, permission, tool result и stop summary | Hook transport и очистка входа остаются у hook ingress; `agent-manager` хранит только своё состояние. |
 
 `codex-hook-ingress` не хранит долгую историю tool calls. Он очищает событие, строит route plan и держит короткую realtime/ops feed; каноническая persistent история действий для UI записывается в `agent-manager.RecordAgentActivity`.

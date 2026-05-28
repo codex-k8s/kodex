@@ -5,8 +5,8 @@ title: kodex — требования домена оркестрации аге
 status: active
 owner_role: PM
 created_at: 2026-05-12
-updated_at: 2026-05-26
-related_issues: [733, 753, 698, 322, 782, 834]
+updated_at: 2026-05-28
+related_issues: [733, 753, 698, 322, 782, 834, 937]
 related_prs: []
 related_docsets:
   - docs/platform/product/product_model.md
@@ -83,7 +83,7 @@ approvals:
 | AGO-AC-1 | Если пользователь запускает работу, `agent-manager` может связать запрос с flow, ролью, provider-native задачей и агентной сессией. |
 | AGO-AC-2 | Если этап требует ролевого агента, `agent-manager` создаёт `Run`, получает руководящие пакеты и запрашивает runtime у `runtime-manager`. |
 | AGO-AC-3 | Если агент завершил работу, машина приёмки проверяет ожидаемые `PR/MR`, follow-up `Issue`, watermark, обязательные поля и результат policy. |
-| AGO-AC-4 | Если требуется решение человека, `agent-manager` фиксирует ожидание flow, refs на interaction/governance request и затем normalized outcome `approve`/`reject`/`request_changes`/`answer` с refs на response/decision, не владея каналом доставки или полным decision payload. |
+| AGO-AC-4 | Если требуется решение человека, `agent-manager` фиксирует ожидание flow, refs на interaction/governance request и затем normalized outcome `approve`/`reject`/`request_changes`/`answer` с refs на response/decision, не владея каналом доставки или полным decision payload; `reject` означает отказ от продолжения текущего шага, а `request_changes` — запрос доработки. |
 | AGO-AC-5 | Если flow требует следующий этап, follow-up `Issue` создаётся или обновляется через provider-контур с правильным типом и открытыми инструкциями. |
 | AGO-AC-6 | Если роль или flow меняется, новая версия не ломает уже запущенные сессии: `Run` фиксирует использованные версии. |
 | AGO-AC-7 | Если руководящий пакет установлен в scope, `agent-manager` читает его через `ListPackageInstallations(package_kind=guidance)`, `GetPackageVersion` и `GetPackageManifest`, а runtime workspace получает read-only локальный источник `.kodex/guidance/<safe_local_name>`; перед checkout `runtime-manager` читает `PackageVersion` и `PackageSource` в `package-hub` по замороженному `package_version_ref`. |

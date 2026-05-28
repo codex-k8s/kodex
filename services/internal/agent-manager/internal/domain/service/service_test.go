@@ -2960,6 +2960,16 @@ func TestRequestHumanGateCreatesInteractionRequestWhenEnabled(t *testing.T) {
 		!hasHumanGateContextRef(requester.last.ContextRefs, "provider_work_item", "provider:issue/42") {
 		t.Fatalf("context refs = %+v", requester.last.ContextRefs)
 	}
+	for _, action := range []enum.HumanGateOutcome{
+		enum.HumanGateOutcomeApprove,
+		enum.HumanGateOutcomeReject,
+		enum.HumanGateOutcomeRequestChanges,
+		enum.HumanGateOutcomeAnswer,
+	} {
+		if !hasHumanGateAction(requester.last.AllowedActions, string(action)) {
+			t.Fatalf("allowed actions = %+v, missing %s", requester.last.AllowedActions, action)
+		}
+	}
 	payload := decodeAgentPayload(t, repository.humanGateEvent)
 	if payload.InteractionRequestRef != "interaction:request/ih-1" {
 		t.Fatalf("event payload = %+v", payload)
@@ -3264,6 +3274,67 @@ func TestRecordHumanGateDecisionStoresOutcomeAndOutbox(t *testing.T) {
 	payload := decodeAgentPayload(t, *repository.updateHumanGateEvent)
 	if payload.HumanGateOutcome != string(enum.HumanGateOutcomeApprove) || payload.InteractionResponseRef != "interaction:response/42" {
 		t.Fatalf("payload = %+v", payload)
+	}
+}
+
+func TestRecordHumanGateDecisionReplaysSameRequestChangesOutcome(t *testing.T) {
+	t.Parallel()
+
+	gateID := uuid.MustParse("92929292-3333-4444-5555-666666666666")
+	expectedVersion := int64(1)
+	resolved := entity.HumanGateRequest{
+		VersionedBase:          entity.VersionedBase{ID: gateID, Version: 2},
+		RequestKind:            "owner_decision",
+		ReasonCode:             "needs_owner_changes",
+		SafeSummary:            "Owner requested bounded changes",
+		InteractionRequestRef:  "interaction:request/42",
+		InteractionResponseRef: "interaction:response/42",
+		Status:                 enum.HumanGateStatusResolved,
+		Outcome:                enum.HumanGateOutcomeRequestChanges,
+	}
+	decision := humanGateDecision{
+		HumanGateRequestID:             gateID.String(),
+		Status:                         string(enum.HumanGateStatusResolved),
+		Outcome:                        string(enum.HumanGateOutcomeRequestChanges),
+		SafeSummary:                    "Owner requested bounded changes",
+		InteractionRequestRef:          "interaction:request/42",
+		InteractionResponseRef:         "interaction:response/42",
+		InteractionResponseFingerprint: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		InteractionRequestVersion:      2,
+	}
+	payload, err := marshalCommandPayload(humanGateCommandPayload{HumanGateRequest: resolved, Decision: &decision})
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	repository := &fakeRepository{
+		replay: &entity.CommandResult{
+			IdempotencyKey: "human-gate-request-changes-replay",
+			Actor:          testActor(),
+			Operation:      operationRecordHumanGateDecision,
+			AggregateType:  enum.CommandAggregateTypeHumanGate,
+			AggregateID:    gateID,
+			ResultPayload:  payload,
+		},
+		humanGateByID: map[uuid.UUID]entity.HumanGateRequest{gateID: resolved},
+	}
+	service := New(Config{Repository: repository})
+
+	replay, err := service.RecordHumanGateDecision(context.Background(), RecordHumanGateDecisionInput{
+		Meta:                           value.CommandMeta{IdempotencyKey: "human-gate-request-changes-replay", ExpectedVersion: &expectedVersion, Actor: testActor()},
+		HumanGateRequestID:             gateID,
+		Status:                         enum.HumanGateStatusResolved,
+		Outcome:                        enum.HumanGateOutcomeRequestChanges,
+		SafeSummary:                    "Owner requested bounded changes",
+		InteractionRequestRef:          "interaction:request/42",
+		InteractionResponseRef:         "interaction:response/42",
+		InteractionResponseFingerprint: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		InteractionRequestVersion:      2,
+	})
+	if err != nil {
+		t.Fatalf("RecordHumanGateDecision() err = %v", err)
+	}
+	if replay.ID != gateID || replay.Outcome != enum.HumanGateOutcomeRequestChanges || repository.updateHumanGateCalled {
+		t.Fatalf("replay = %+v update=%v", replay, repository.updateHumanGateCalled)
 	}
 }
 
@@ -3587,6 +3658,15 @@ func (f *fakeHumanGateRequester) called() bool {
 func hasHumanGateContextRef(refs []HumanGateInteractionExternalRef, kind string, ref string) bool {
 	for _, candidate := range refs {
 		if candidate.Kind == kind && candidate.Ref == ref {
+			return true
+		}
+	}
+	return false
+}
+
+func hasHumanGateAction(actions []HumanGateInteractionAction, actionKey string) bool {
+	for _, candidate := range actions {
+		if candidate.ActionKey == actionKey && candidate.Terminal {
 			return true
 		}
 	}

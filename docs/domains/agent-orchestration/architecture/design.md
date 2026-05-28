@@ -5,8 +5,8 @@ title: kodex — дизайн домена оркестрации агентов
 status: active
 owner_role: SA
 created_at: 2026-05-12
-updated_at: 2026-05-27
-related_issues: [733, 753, 698, 322, 782, 795, 820, 834, 842, 862, 866]
+updated_at: 2026-05-28
+related_issues: [733, 753, 698, 322, 782, 795, 820, 834, 842, 862, 866, 937]
 related_prs: []
 related_adrs: []
 approvals:
@@ -226,9 +226,11 @@ MCP не владеет доменным состоянием и не подме
 
 `agent-manager` фиксирует, что flow ждёт обратную связь или owner decision, но не хранит диалоговую ветку, callback body и попытки доставки. Human gate transport request/response принадлежит `interaction-hub`; в `agent-manager` остаются только `interaction_request_ref`, `interaction_response_ref`, safe summary и normalized outcome для orchestration state.
 
-Request-side путь работает через typed gRPC client `interaction-hub.RequestHumanGate`. `agent-manager` сначала выполняет локальный replay-check, затем строит стабильный owner request ref `agent:human_gate/<human_gate_request_id>`, передаёт source/decision owner refs, session/run/stage/provider context refs, target actor ref из `AgentSession.created_by_actor_ref` и bounded `safe_summary`. При успешном ответе сохраняется только `interaction_request_ref`; статус ожидания остаётся orchestration state в `agent-manager`. Если interaction request не создан из-за временной ошибки, локальный wait не записывается, а повтор команды использует тот же deterministic owner ref и не создаёт второй request.
+Request-side путь работает через typed gRPC client `interaction-hub.RequestHumanGate`. `agent-manager` сначала выполняет локальный replay-check, затем строит стабильный owner request ref `agent:human_gate/<human_gate_request_id>`, передаёт source/decision owner refs, session/run/stage/provider context refs, target actor ref из `AgentSession.created_by_actor_ref`, bounded `safe_summary` и допустимые действия `approve`/`reject`/`request_changes`/`answer`. При успешном ответе сохраняется только `interaction_request_ref`; статус ожидания остаётся orchestration state в `agent-manager`. Если interaction request не создан из-за временной ошибки, локальный wait не записывается, а повтор команды использует тот же deterministic owner ref и не создаёт второй request.
 
 Для автоматического resume `agent-manager` читает из `platform-event-log` только событие `interaction.request.response_recorded`. Событие должно ссылаться на owner-side Human gate через `owner_service=agent_manager`, `request_kind=human_gate` и `owner_request_ref`; `request_id` и `response_id` превращаются в safe refs, `response_action` мапится в normalized outcome, а `version` и digest нормализованного safe snapshot участвуют в идемпотентности. Producer, channel callback, owner inbox и delivery lifecycle остаются в `interaction-hub`.
+
+Смысл исходов разделён: `approve` разрешает продолжение, `reject` фиксирует отказ владельца и даёт flow основание остановить или закрыть шаг, `request_changes` означает запрос доработки с продолжением по ветке исправления, а `answer` закрывает уточняющий вопрос без автоматического approve/reject. Полный текст ответа или доработки остаётся в `interaction-hub`; `agent-manager` хранит только refs, безопасную сводку и normalized outcome.
 
 ## Flow, stage, role и prompt
 

@@ -259,11 +259,10 @@ func humanGateProviderContextRef(target value.ProviderTargetRef) string {
 }
 
 func humanGateInteractionActions() []HumanGateInteractionAction {
-	// interaction-hub accepts InteractionResponseAction values; request_changes
-	// stays a local Human gate outcome until the shared taxonomy is extended.
 	return []HumanGateInteractionAction{
 		{ActionKey: string(enum.HumanGateOutcomeApprove), LabelTemplateRef: "interaction.actions.approve", Terminal: true},
 		{ActionKey: string(enum.HumanGateOutcomeReject), LabelTemplateRef: "interaction.actions.reject", Terminal: true},
+		{ActionKey: string(enum.HumanGateOutcomeRequestChanges), LabelTemplateRef: "interaction.actions.request_changes", Terminal: true},
 		{ActionKey: string(enum.HumanGateOutcomeAnswer), LabelTemplateRef: "interaction.actions.answer", Terminal: true},
 	}
 }
