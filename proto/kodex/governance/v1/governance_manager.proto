@@ -58,6 +58,8 @@ service GovernanceManagerService {
   rpc ListGateRequests(ListGateRequestsRequest) returns (ListGateRequestsResponse);
   // BuildReleaseDecisionPackage builds a bounded evidence package for a release candidate.
   rpc BuildReleaseDecisionPackage(BuildReleaseDecisionPackageRequest) returns (ReleaseDecisionPackageResponse);
+  // RecordReleaseRuntimeEvidence appends safe runtime/deploy evidence refs to a release package.
+  rpc RecordReleaseRuntimeEvidence(RecordReleaseRuntimeEvidenceRequest) returns (ReleaseDecisionPackageResponse);
   // GetReleaseDecisionPackage returns one release decision package.
   rpc GetReleaseDecisionPackage(GetReleaseDecisionPackageRequest) returns (ReleaseDecisionPackageResponse);
   // ListReleaseDecisionPackages returns release packages by project, candidate or status.
@@ -863,6 +865,17 @@ message BuildReleaseDecisionPackageRequest {
   repeated ReleaseIntegrationRef integration_refs = 12;
 }
 
+message RecordReleaseRuntimeEvidenceRequest {
+  string release_decision_package_id = 1;
+  // runtime_refs point to runtime jobs, environments, artifacts or bounded summaries.
+  repeated RuntimeContextRef runtime_refs = 2;
+  // evidence_refs point to bounded runtime/deploy evidence without logs or raw payloads.
+  repeated EvidenceRef evidence_refs = 3;
+  // integration_refs must use domain=runtime and safe kinds job/deploy/postdeploy/environment/artifact/summary.
+  repeated ReleaseIntegrationRef integration_refs = 4;
+  CommandMeta meta = 5;
+}
+
 message GetReleaseDecisionPackageRequest {
   string release_decision_package_id = 1;
   QueryMeta meta = 2;
@@ -1062,6 +1075,8 @@ message ReleaseIntegrationRef {
   optional string observed_at = 7;
   // version is an optional owner-domain version or etag.
   optional string version = 8;
+  // error_code is an optional bounded machine error code supplied by the owner domain.
+  optional string error_code = 9;
 }
 
 enum GovernanceScopeType {

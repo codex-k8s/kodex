@@ -6605,6 +6605,85 @@ func (x *BuildReleaseDecisionPackageRequest) GetIntegrationRefs() []*ReleaseInte
 	return nil
 }
 
+type RecordReleaseRuntimeEvidenceRequest struct {
+	state                    protoimpl.MessageState `protogen:"open.v1"`
+	ReleaseDecisionPackageId string                 `protobuf:"bytes,1,opt,name=release_decision_package_id,json=releaseDecisionPackageId,proto3" json:"release_decision_package_id,omitempty"`
+	// runtime_refs point to runtime jobs, environments, artifacts or bounded summaries.
+	RuntimeRefs []*RuntimeContextRef `protobuf:"bytes,2,rep,name=runtime_refs,json=runtimeRefs,proto3" json:"runtime_refs,omitempty"`
+	// evidence_refs point to bounded runtime/deploy evidence without logs or raw payloads.
+	EvidenceRefs []*EvidenceRef `protobuf:"bytes,3,rep,name=evidence_refs,json=evidenceRefs,proto3" json:"evidence_refs,omitempty"`
+	// integration_refs must use domain=runtime and safe kinds job/deploy/postdeploy/environment/artifact/summary.
+	IntegrationRefs []*ReleaseIntegrationRef `protobuf:"bytes,4,rep,name=integration_refs,json=integrationRefs,proto3" json:"integration_refs,omitempty"`
+	Meta            *CommandMeta             `protobuf:"bytes,5,opt,name=meta,proto3" json:"meta,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *RecordReleaseRuntimeEvidenceRequest) Reset() {
+	*x = RecordReleaseRuntimeEvidenceRequest{}
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[58]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RecordReleaseRuntimeEvidenceRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RecordReleaseRuntimeEvidenceRequest) ProtoMessage() {}
+
+func (x *RecordReleaseRuntimeEvidenceRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[58]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RecordReleaseRuntimeEvidenceRequest.ProtoReflect.Descriptor instead.
+func (*RecordReleaseRuntimeEvidenceRequest) Descriptor() ([]byte, []int) {
+	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{58}
+}
+
+func (x *RecordReleaseRuntimeEvidenceRequest) GetReleaseDecisionPackageId() string {
+	if x != nil {
+		return x.ReleaseDecisionPackageId
+	}
+	return ""
+}
+
+func (x *RecordReleaseRuntimeEvidenceRequest) GetRuntimeRefs() []*RuntimeContextRef {
+	if x != nil {
+		return x.RuntimeRefs
+	}
+	return nil
+}
+
+func (x *RecordReleaseRuntimeEvidenceRequest) GetEvidenceRefs() []*EvidenceRef {
+	if x != nil {
+		return x.EvidenceRefs
+	}
+	return nil
+}
+
+func (x *RecordReleaseRuntimeEvidenceRequest) GetIntegrationRefs() []*ReleaseIntegrationRef {
+	if x != nil {
+		return x.IntegrationRefs
+	}
+	return nil
+}
+
+func (x *RecordReleaseRuntimeEvidenceRequest) GetMeta() *CommandMeta {
+	if x != nil {
+		return x.Meta
+	}
+	return nil
+}
+
 type GetReleaseDecisionPackageRequest struct {
 	state                    protoimpl.MessageState `protogen:"open.v1"`
 	ReleaseDecisionPackageId string                 `protobuf:"bytes,1,opt,name=release_decision_package_id,json=releaseDecisionPackageId,proto3" json:"release_decision_package_id,omitempty"`
@@ -6615,7 +6694,7 @@ type GetReleaseDecisionPackageRequest struct {
 
 func (x *GetReleaseDecisionPackageRequest) Reset() {
 	*x = GetReleaseDecisionPackageRequest{}
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[58]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6627,7 +6706,7 @@ func (x *GetReleaseDecisionPackageRequest) String() string {
 func (*GetReleaseDecisionPackageRequest) ProtoMessage() {}
 
 func (x *GetReleaseDecisionPackageRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[58]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6640,7 +6719,7 @@ func (x *GetReleaseDecisionPackageRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetReleaseDecisionPackageRequest.ProtoReflect.Descriptor instead.
 func (*GetReleaseDecisionPackageRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{58}
+	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *GetReleaseDecisionPackageRequest) GetReleaseDecisionPackageId() string {
@@ -6670,7 +6749,7 @@ type ListReleaseDecisionPackagesRequest struct {
 
 func (x *ListReleaseDecisionPackagesRequest) Reset() {
 	*x = ListReleaseDecisionPackagesRequest{}
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[59]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6682,7 +6761,7 @@ func (x *ListReleaseDecisionPackagesRequest) String() string {
 func (*ListReleaseDecisionPackagesRequest) ProtoMessage() {}
 
 func (x *ListReleaseDecisionPackagesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[59]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6695,7 +6774,7 @@ func (x *ListReleaseDecisionPackagesRequest) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use ListReleaseDecisionPackagesRequest.ProtoReflect.Descriptor instead.
 func (*ListReleaseDecisionPackagesRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{59}
+	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{60}
 }
 
 func (x *ListReleaseDecisionPackagesRequest) GetProjectContext() *ProjectContextRef {
@@ -6744,7 +6823,7 @@ type RequestReleaseDecisionRequest struct {
 
 func (x *RequestReleaseDecisionRequest) Reset() {
 	*x = RequestReleaseDecisionRequest{}
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[60]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6756,7 +6835,7 @@ func (x *RequestReleaseDecisionRequest) String() string {
 func (*RequestReleaseDecisionRequest) ProtoMessage() {}
 
 func (x *RequestReleaseDecisionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[60]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6769,7 +6848,7 @@ func (x *RequestReleaseDecisionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RequestReleaseDecisionRequest.ProtoReflect.Descriptor instead.
 func (*RequestReleaseDecisionRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{60}
+	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{61}
 }
 
 func (x *RequestReleaseDecisionRequest) GetReleaseDecisionPackageId() string {
@@ -6809,7 +6888,7 @@ type SubmitReleaseDecisionRequest struct {
 
 func (x *SubmitReleaseDecisionRequest) Reset() {
 	*x = SubmitReleaseDecisionRequest{}
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[61]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6821,7 +6900,7 @@ func (x *SubmitReleaseDecisionRequest) String() string {
 func (*SubmitReleaseDecisionRequest) ProtoMessage() {}
 
 func (x *SubmitReleaseDecisionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[61]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6834,7 +6913,7 @@ func (x *SubmitReleaseDecisionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubmitReleaseDecisionRequest.ProtoReflect.Descriptor instead.
 func (*SubmitReleaseDecisionRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{61}
+	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *SubmitReleaseDecisionRequest) GetReleaseDecisionPackageId() string {
@@ -6903,7 +6982,7 @@ type GetReleaseDecisionRequest struct {
 
 func (x *GetReleaseDecisionRequest) Reset() {
 	*x = GetReleaseDecisionRequest{}
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[62]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[63]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6915,7 +6994,7 @@ func (x *GetReleaseDecisionRequest) String() string {
 func (*GetReleaseDecisionRequest) ProtoMessage() {}
 
 func (x *GetReleaseDecisionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[62]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[63]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6928,7 +7007,7 @@ func (x *GetReleaseDecisionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetReleaseDecisionRequest.ProtoReflect.Descriptor instead.
 func (*GetReleaseDecisionRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{62}
+	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{63}
 }
 
 func (x *GetReleaseDecisionRequest) GetReleaseDecisionId() string {
@@ -6959,7 +7038,7 @@ type ListReleaseDecisionsRequest struct {
 
 func (x *ListReleaseDecisionsRequest) Reset() {
 	*x = ListReleaseDecisionsRequest{}
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[63]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[64]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6971,7 +7050,7 @@ func (x *ListReleaseDecisionsRequest) String() string {
 func (*ListReleaseDecisionsRequest) ProtoMessage() {}
 
 func (x *ListReleaseDecisionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[63]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[64]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6984,7 +7063,7 @@ func (x *ListReleaseDecisionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListReleaseDecisionsRequest.ProtoReflect.Descriptor instead.
 func (*ListReleaseDecisionsRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{63}
+	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{64}
 }
 
 func (x *ListReleaseDecisionsRequest) GetReleaseDecisionPackageId() string {
@@ -7043,7 +7122,7 @@ type RecordBlockingSignalRequest struct {
 
 func (x *RecordBlockingSignalRequest) Reset() {
 	*x = RecordBlockingSignalRequest{}
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[64]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[65]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7055,7 +7134,7 @@ func (x *RecordBlockingSignalRequest) String() string {
 func (*RecordBlockingSignalRequest) ProtoMessage() {}
 
 func (x *RecordBlockingSignalRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[64]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[65]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7068,7 +7147,7 @@ func (x *RecordBlockingSignalRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecordBlockingSignalRequest.ProtoReflect.Descriptor instead.
 func (*RecordBlockingSignalRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{64}
+	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{65}
 }
 
 func (x *RecordBlockingSignalRequest) GetTarget() *TargetRef {
@@ -7125,7 +7204,7 @@ type ResolveBlockingSignalRequest struct {
 
 func (x *ResolveBlockingSignalRequest) Reset() {
 	*x = ResolveBlockingSignalRequest{}
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[65]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[66]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7137,7 +7216,7 @@ func (x *ResolveBlockingSignalRequest) String() string {
 func (*ResolveBlockingSignalRequest) ProtoMessage() {}
 
 func (x *ResolveBlockingSignalRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[65]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[66]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7150,7 +7229,7 @@ func (x *ResolveBlockingSignalRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolveBlockingSignalRequest.ProtoReflect.Descriptor instead.
 func (*ResolveBlockingSignalRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{65}
+	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{66}
 }
 
 func (x *ResolveBlockingSignalRequest) GetBlockingSignalId() string {
@@ -7194,7 +7273,7 @@ type ListBlockingSignalsRequest struct {
 
 func (x *ListBlockingSignalsRequest) Reset() {
 	*x = ListBlockingSignalsRequest{}
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[66]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[67]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7206,7 +7285,7 @@ func (x *ListBlockingSignalsRequest) String() string {
 func (*ListBlockingSignalsRequest) ProtoMessage() {}
 
 func (x *ListBlockingSignalsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[66]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[67]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7219,7 +7298,7 @@ func (x *ListBlockingSignalsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListBlockingSignalsRequest.ProtoReflect.Descriptor instead.
 func (*ListBlockingSignalsRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{66}
+	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{67}
 }
 
 func (x *ListBlockingSignalsRequest) GetTarget() *TargetRef {
@@ -7270,7 +7349,7 @@ type RecordReleaseSafetyStateRequest struct {
 
 func (x *RecordReleaseSafetyStateRequest) Reset() {
 	*x = RecordReleaseSafetyStateRequest{}
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[67]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[68]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7282,7 +7361,7 @@ func (x *RecordReleaseSafetyStateRequest) String() string {
 func (*RecordReleaseSafetyStateRequest) ProtoMessage() {}
 
 func (x *RecordReleaseSafetyStateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[67]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[68]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7295,7 +7374,7 @@ func (x *RecordReleaseSafetyStateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecordReleaseSafetyStateRequest.ProtoReflect.Descriptor instead.
 func (*RecordReleaseSafetyStateRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{67}
+	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{68}
 }
 
 func (x *RecordReleaseSafetyStateRequest) GetReleaseDecisionPackageId() string {
@@ -7343,7 +7422,7 @@ type GetReleaseSafetyStateRequest struct {
 
 func (x *GetReleaseSafetyStateRequest) Reset() {
 	*x = GetReleaseSafetyStateRequest{}
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[68]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[69]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7355,7 +7434,7 @@ func (x *GetReleaseSafetyStateRequest) String() string {
 func (*GetReleaseSafetyStateRequest) ProtoMessage() {}
 
 func (x *GetReleaseSafetyStateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[68]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[69]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7368,7 +7447,7 @@ func (x *GetReleaseSafetyStateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetReleaseSafetyStateRequest.ProtoReflect.Descriptor instead.
 func (*GetReleaseSafetyStateRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{68}
+	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{69}
 }
 
 func (x *GetReleaseSafetyStateRequest) GetReleaseDecisionPackageId() string {
@@ -7394,7 +7473,7 @@ type RiskProfileResponse struct {
 
 func (x *RiskProfileResponse) Reset() {
 	*x = RiskProfileResponse{}
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[69]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[70]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7406,7 +7485,7 @@ func (x *RiskProfileResponse) String() string {
 func (*RiskProfileResponse) ProtoMessage() {}
 
 func (x *RiskProfileResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[69]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[70]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7419,7 +7498,7 @@ func (x *RiskProfileResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RiskProfileResponse.ProtoReflect.Descriptor instead.
 func (*RiskProfileResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{69}
+	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{70}
 }
 
 func (x *RiskProfileResponse) GetRiskProfile() *RiskProfile {
@@ -7438,7 +7517,7 @@ type RiskProfileVersionResponse struct {
 
 func (x *RiskProfileVersionResponse) Reset() {
 	*x = RiskProfileVersionResponse{}
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[70]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[71]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7450,7 +7529,7 @@ func (x *RiskProfileVersionResponse) String() string {
 func (*RiskProfileVersionResponse) ProtoMessage() {}
 
 func (x *RiskProfileVersionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[70]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[71]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7463,7 +7542,7 @@ func (x *RiskProfileVersionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RiskProfileVersionResponse.ProtoReflect.Descriptor instead.
 func (*RiskProfileVersionResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{70}
+	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{71}
 }
 
 func (x *RiskProfileVersionResponse) GetRiskProfileVersion() *RiskProfileVersion {
@@ -7483,7 +7562,7 @@ type ListRiskProfilesResponse struct {
 
 func (x *ListRiskProfilesResponse) Reset() {
 	*x = ListRiskProfilesResponse{}
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[71]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[72]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7495,7 +7574,7 @@ func (x *ListRiskProfilesResponse) String() string {
 func (*ListRiskProfilesResponse) ProtoMessage() {}
 
 func (x *ListRiskProfilesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[71]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[72]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7508,7 +7587,7 @@ func (x *ListRiskProfilesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRiskProfilesResponse.ProtoReflect.Descriptor instead.
 func (*ListRiskProfilesResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{71}
+	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{72}
 }
 
 func (x *ListRiskProfilesResponse) GetRiskProfiles() []*RiskProfile {
@@ -7535,7 +7614,7 @@ type ListRiskRulesResponse struct {
 
 func (x *ListRiskRulesResponse) Reset() {
 	*x = ListRiskRulesResponse{}
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[72]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[73]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7547,7 +7626,7 @@ func (x *ListRiskRulesResponse) String() string {
 func (*ListRiskRulesResponse) ProtoMessage() {}
 
 func (x *ListRiskRulesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[72]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[73]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7560,7 +7639,7 @@ func (x *ListRiskRulesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRiskRulesResponse.ProtoReflect.Descriptor instead.
 func (*ListRiskRulesResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{72}
+	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{73}
 }
 
 func (x *ListRiskRulesResponse) GetRiskRules() []*RiskRule {
@@ -7587,7 +7666,7 @@ type ListGatePoliciesResponse struct {
 
 func (x *ListGatePoliciesResponse) Reset() {
 	*x = ListGatePoliciesResponse{}
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[73]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[74]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7599,7 +7678,7 @@ func (x *ListGatePoliciesResponse) String() string {
 func (*ListGatePoliciesResponse) ProtoMessage() {}
 
 func (x *ListGatePoliciesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[73]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[74]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7612,7 +7691,7 @@ func (x *ListGatePoliciesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListGatePoliciesResponse.ProtoReflect.Descriptor instead.
 func (*ListGatePoliciesResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{73}
+	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{74}
 }
 
 func (x *ListGatePoliciesResponse) GetGatePolicies() []*GatePolicy {
@@ -7640,7 +7719,7 @@ type RiskAssessmentResponse struct {
 
 func (x *RiskAssessmentResponse) Reset() {
 	*x = RiskAssessmentResponse{}
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[74]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[75]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7652,7 +7731,7 @@ func (x *RiskAssessmentResponse) String() string {
 func (*RiskAssessmentResponse) ProtoMessage() {}
 
 func (x *RiskAssessmentResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[74]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[75]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7665,7 +7744,7 @@ func (x *RiskAssessmentResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RiskAssessmentResponse.ProtoReflect.Descriptor instead.
 func (*RiskAssessmentResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{74}
+	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{75}
 }
 
 func (x *RiskAssessmentResponse) GetRiskAssessment() *RiskAssessment {
@@ -7699,7 +7778,7 @@ type ListRiskAssessmentsResponse struct {
 
 func (x *ListRiskAssessmentsResponse) Reset() {
 	*x = ListRiskAssessmentsResponse{}
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[75]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[76]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7711,7 +7790,7 @@ func (x *ListRiskAssessmentsResponse) String() string {
 func (*ListRiskAssessmentsResponse) ProtoMessage() {}
 
 func (x *ListRiskAssessmentsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[75]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[76]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7724,7 +7803,7 @@ func (x *ListRiskAssessmentsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRiskAssessmentsResponse.ProtoReflect.Descriptor instead.
 func (*ListRiskAssessmentsResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{75}
+	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{76}
 }
 
 func (x *ListRiskAssessmentsResponse) GetRiskAssessments() []*RiskAssessment {
@@ -7751,7 +7830,7 @@ type ListRiskFactorsResponse struct {
 
 func (x *ListRiskFactorsResponse) Reset() {
 	*x = ListRiskFactorsResponse{}
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[76]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[77]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7763,7 +7842,7 @@ func (x *ListRiskFactorsResponse) String() string {
 func (*ListRiskFactorsResponse) ProtoMessage() {}
 
 func (x *ListRiskFactorsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[76]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[77]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7776,7 +7855,7 @@ func (x *ListRiskFactorsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRiskFactorsResponse.ProtoReflect.Descriptor instead.
 func (*ListRiskFactorsResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{76}
+	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{77}
 }
 
 func (x *ListRiskFactorsResponse) GetRiskFactors() []*RiskFactor {
@@ -7802,7 +7881,7 @@ type ReviewSignalResponse struct {
 
 func (x *ReviewSignalResponse) Reset() {
 	*x = ReviewSignalResponse{}
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[77]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[78]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7814,7 +7893,7 @@ func (x *ReviewSignalResponse) String() string {
 func (*ReviewSignalResponse) ProtoMessage() {}
 
 func (x *ReviewSignalResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[77]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[78]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7827,7 +7906,7 @@ func (x *ReviewSignalResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReviewSignalResponse.ProtoReflect.Descriptor instead.
 func (*ReviewSignalResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{77}
+	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{78}
 }
 
 func (x *ReviewSignalResponse) GetReviewSignal() *ReviewSignal {
@@ -7847,7 +7926,7 @@ type ListReviewSignalsResponse struct {
 
 func (x *ListReviewSignalsResponse) Reset() {
 	*x = ListReviewSignalsResponse{}
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[78]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[79]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7859,7 +7938,7 @@ func (x *ListReviewSignalsResponse) String() string {
 func (*ListReviewSignalsResponse) ProtoMessage() {}
 
 func (x *ListReviewSignalsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[78]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[79]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7872,7 +7951,7 @@ func (x *ListReviewSignalsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListReviewSignalsResponse.ProtoReflect.Descriptor instead.
 func (*ListReviewSignalsResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{78}
+	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{79}
 }
 
 func (x *ListReviewSignalsResponse) GetReviewSignals() []*ReviewSignal {
@@ -7899,7 +7978,7 @@ type GateRequestResponse struct {
 
 func (x *GateRequestResponse) Reset() {
 	*x = GateRequestResponse{}
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[79]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[80]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7911,7 +7990,7 @@ func (x *GateRequestResponse) String() string {
 func (*GateRequestResponse) ProtoMessage() {}
 
 func (x *GateRequestResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[79]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[80]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7924,7 +8003,7 @@ func (x *GateRequestResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GateRequestResponse.ProtoReflect.Descriptor instead.
 func (*GateRequestResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{79}
+	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{80}
 }
 
 func (x *GateRequestResponse) GetGateRequest() *GateRequest {
@@ -7951,7 +8030,7 @@ type GateDecisionResponse struct {
 
 func (x *GateDecisionResponse) Reset() {
 	*x = GateDecisionResponse{}
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[80]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[81]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7963,7 +8042,7 @@ func (x *GateDecisionResponse) String() string {
 func (*GateDecisionResponse) ProtoMessage() {}
 
 func (x *GateDecisionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[80]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[81]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7976,7 +8055,7 @@ func (x *GateDecisionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GateDecisionResponse.ProtoReflect.Descriptor instead.
 func (*GateDecisionResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{80}
+	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{81}
 }
 
 func (x *GateDecisionResponse) GetGateDecision() *GateDecision {
@@ -8003,7 +8082,7 @@ type ListGateRequestsResponse struct {
 
 func (x *ListGateRequestsResponse) Reset() {
 	*x = ListGateRequestsResponse{}
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[81]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[82]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8015,7 +8094,7 @@ func (x *ListGateRequestsResponse) String() string {
 func (*ListGateRequestsResponse) ProtoMessage() {}
 
 func (x *ListGateRequestsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[81]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[82]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8028,7 +8107,7 @@ func (x *ListGateRequestsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListGateRequestsResponse.ProtoReflect.Descriptor instead.
 func (*ListGateRequestsResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{81}
+	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{82}
 }
 
 func (x *ListGateRequestsResponse) GetGateRequests() []*GateRequest {
@@ -8055,7 +8134,7 @@ type ListGateDecisionsResponse struct {
 
 func (x *ListGateDecisionsResponse) Reset() {
 	*x = ListGateDecisionsResponse{}
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[82]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[83]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8067,7 +8146,7 @@ func (x *ListGateDecisionsResponse) String() string {
 func (*ListGateDecisionsResponse) ProtoMessage() {}
 
 func (x *ListGateDecisionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[82]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[83]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8080,7 +8159,7 @@ func (x *ListGateDecisionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListGateDecisionsResponse.ProtoReflect.Descriptor instead.
 func (*ListGateDecisionsResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{82}
+	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{83}
 }
 
 func (x *ListGateDecisionsResponse) GetGateDecisions() []*GateDecision {
@@ -8106,7 +8185,7 @@ type ReleaseDecisionPackageResponse struct {
 
 func (x *ReleaseDecisionPackageResponse) Reset() {
 	*x = ReleaseDecisionPackageResponse{}
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[83]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[84]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8118,7 +8197,7 @@ func (x *ReleaseDecisionPackageResponse) String() string {
 func (*ReleaseDecisionPackageResponse) ProtoMessage() {}
 
 func (x *ReleaseDecisionPackageResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[83]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[84]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8131,7 +8210,7 @@ func (x *ReleaseDecisionPackageResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReleaseDecisionPackageResponse.ProtoReflect.Descriptor instead.
 func (*ReleaseDecisionPackageResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{83}
+	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{84}
 }
 
 func (x *ReleaseDecisionPackageResponse) GetReleaseDecisionPackage() *ReleaseDecisionPackage {
@@ -8151,7 +8230,7 @@ type ListReleaseDecisionPackagesResponse struct {
 
 func (x *ListReleaseDecisionPackagesResponse) Reset() {
 	*x = ListReleaseDecisionPackagesResponse{}
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[84]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[85]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8163,7 +8242,7 @@ func (x *ListReleaseDecisionPackagesResponse) String() string {
 func (*ListReleaseDecisionPackagesResponse) ProtoMessage() {}
 
 func (x *ListReleaseDecisionPackagesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[84]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[85]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8176,7 +8255,7 @@ func (x *ListReleaseDecisionPackagesResponse) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use ListReleaseDecisionPackagesResponse.ProtoReflect.Descriptor instead.
 func (*ListReleaseDecisionPackagesResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{84}
+	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{85}
 }
 
 func (x *ListReleaseDecisionPackagesResponse) GetReleaseDecisionPackages() []*ReleaseDecisionPackage {
@@ -8203,7 +8282,7 @@ type ReleaseDecisionResponse struct {
 
 func (x *ReleaseDecisionResponse) Reset() {
 	*x = ReleaseDecisionResponse{}
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[85]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[86]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8215,7 +8294,7 @@ func (x *ReleaseDecisionResponse) String() string {
 func (*ReleaseDecisionResponse) ProtoMessage() {}
 
 func (x *ReleaseDecisionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[85]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[86]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8228,7 +8307,7 @@ func (x *ReleaseDecisionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReleaseDecisionResponse.ProtoReflect.Descriptor instead.
 func (*ReleaseDecisionResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{85}
+	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{86}
 }
 
 func (x *ReleaseDecisionResponse) GetReleaseDecision() *ReleaseDecision {
@@ -8255,7 +8334,7 @@ type ListReleaseDecisionsResponse struct {
 
 func (x *ListReleaseDecisionsResponse) Reset() {
 	*x = ListReleaseDecisionsResponse{}
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[86]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[87]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8267,7 +8346,7 @@ func (x *ListReleaseDecisionsResponse) String() string {
 func (*ListReleaseDecisionsResponse) ProtoMessage() {}
 
 func (x *ListReleaseDecisionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[86]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[87]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8280,7 +8359,7 @@ func (x *ListReleaseDecisionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListReleaseDecisionsResponse.ProtoReflect.Descriptor instead.
 func (*ListReleaseDecisionsResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{86}
+	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{87}
 }
 
 func (x *ListReleaseDecisionsResponse) GetReleaseDecisions() []*ReleaseDecision {
@@ -8306,7 +8385,7 @@ type BlockingSignalResponse struct {
 
 func (x *BlockingSignalResponse) Reset() {
 	*x = BlockingSignalResponse{}
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[87]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[88]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8318,7 +8397,7 @@ func (x *BlockingSignalResponse) String() string {
 func (*BlockingSignalResponse) ProtoMessage() {}
 
 func (x *BlockingSignalResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[87]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[88]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8331,7 +8410,7 @@ func (x *BlockingSignalResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BlockingSignalResponse.ProtoReflect.Descriptor instead.
 func (*BlockingSignalResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{87}
+	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{88}
 }
 
 func (x *BlockingSignalResponse) GetBlockingSignal() *BlockingSignal {
@@ -8351,7 +8430,7 @@ type ListBlockingSignalsResponse struct {
 
 func (x *ListBlockingSignalsResponse) Reset() {
 	*x = ListBlockingSignalsResponse{}
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[88]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[89]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8363,7 +8442,7 @@ func (x *ListBlockingSignalsResponse) String() string {
 func (*ListBlockingSignalsResponse) ProtoMessage() {}
 
 func (x *ListBlockingSignalsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[88]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[89]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8376,7 +8455,7 @@ func (x *ListBlockingSignalsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListBlockingSignalsResponse.ProtoReflect.Descriptor instead.
 func (*ListBlockingSignalsResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{88}
+	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{89}
 }
 
 func (x *ListBlockingSignalsResponse) GetBlockingSignals() []*BlockingSignal {
@@ -8402,7 +8481,7 @@ type ReleaseSafetyStateResponse struct {
 
 func (x *ReleaseSafetyStateResponse) Reset() {
 	*x = ReleaseSafetyStateResponse{}
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[89]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[90]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8414,7 +8493,7 @@ func (x *ReleaseSafetyStateResponse) String() string {
 func (*ReleaseSafetyStateResponse) ProtoMessage() {}
 
 func (x *ReleaseSafetyStateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[89]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[90]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8427,7 +8506,7 @@ func (x *ReleaseSafetyStateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReleaseSafetyStateResponse.ProtoReflect.Descriptor instead.
 func (*ReleaseSafetyStateResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{89}
+	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{90}
 }
 
 func (x *ReleaseSafetyStateResponse) GetReleaseSafetyState() *ReleaseSafetyState {
@@ -8455,14 +8534,16 @@ type ReleaseIntegrationRef struct {
 	// observed_at is an RFC3339 timestamp for the referenced fact.
 	ObservedAt *string `protobuf:"bytes,7,opt,name=observed_at,json=observedAt,proto3,oneof" json:"observed_at,omitempty"`
 	// version is an optional owner-domain version or etag.
-	Version       *string `protobuf:"bytes,8,opt,name=version,proto3,oneof" json:"version,omitempty"`
+	Version *string `protobuf:"bytes,8,opt,name=version,proto3,oneof" json:"version,omitempty"`
+	// error_code is an optional bounded machine error code supplied by the owner domain.
+	ErrorCode     *string `protobuf:"bytes,9,opt,name=error_code,json=errorCode,proto3,oneof" json:"error_code,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ReleaseIntegrationRef) Reset() {
 	*x = ReleaseIntegrationRef{}
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[90]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[91]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8474,7 +8555,7 @@ func (x *ReleaseIntegrationRef) String() string {
 func (*ReleaseIntegrationRef) ProtoMessage() {}
 
 func (x *ReleaseIntegrationRef) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[90]
+	mi := &file_kodex_governance_v1_governance_manager_proto_msgTypes[91]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8487,7 +8568,7 @@ func (x *ReleaseIntegrationRef) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReleaseIntegrationRef.ProtoReflect.Descriptor instead.
 func (*ReleaseIntegrationRef) Descriptor() ([]byte, []int) {
-	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{90}
+	return file_kodex_governance_v1_governance_manager_proto_rawDescGZIP(), []int{91}
 }
 
 func (x *ReleaseIntegrationRef) GetDomain() string {
@@ -8542,6 +8623,13 @@ func (x *ReleaseIntegrationRef) GetObservedAt() string {
 func (x *ReleaseIntegrationRef) GetVersion() string {
 	if x != nil && x.Version != nil {
 		return *x.Version
+	}
+	return ""
+}
+
+func (x *ReleaseIntegrationRef) GetErrorCode() string {
+	if x != nil && x.ErrorCode != nil {
+		return *x.ErrorCode
 	}
 	return ""
 }
@@ -9113,7 +9201,13 @@ const file_kodex_governance_v1_governance_manager_proto_rawDesc = "" +
 	" \x01(\v2 .kodex.governance.v1.CommandMetaR\x04meta\x121\n" +
 	"\x12risk_assessment_id\x18\v \x01(\tH\x00R\x10riskAssessmentId\x88\x01\x01\x12U\n" +
 	"\x10integration_refs\x18\f \x03(\v2*.kodex.governance.v1.ReleaseIntegrationRefR\x0fintegrationRefsB\x15\n" +
-	"\x13_risk_assessment_id\"\x95\x01\n" +
+	"\x13_risk_assessment_id\"\x83\x03\n" +
+	"#RecordReleaseRuntimeEvidenceRequest\x12=\n" +
+	"\x1brelease_decision_package_id\x18\x01 \x01(\tR\x18releaseDecisionPackageId\x12I\n" +
+	"\fruntime_refs\x18\x02 \x03(\v2&.kodex.governance.v1.RuntimeContextRefR\vruntimeRefs\x12E\n" +
+	"\revidence_refs\x18\x03 \x03(\v2 .kodex.governance.v1.EvidenceRefR\fevidenceRefs\x12U\n" +
+	"\x10integration_refs\x18\x04 \x03(\v2*.kodex.governance.v1.ReleaseIntegrationRefR\x0fintegrationRefs\x124\n" +
+	"\x04meta\x18\x05 \x01(\v2 .kodex.governance.v1.CommandMetaR\x04meta\"\x95\x01\n" +
 	" GetReleaseDecisionPackageRequest\x12=\n" +
 	"\x1brelease_decision_package_id\x18\x01 \x01(\tR\x18releaseDecisionPackageId\x122\n" +
 	"\x04meta\x18\x02 \x01(\v2\x1e.kodex.governance.v1.QueryMetaR\x04meta\"\x8d\x03\n" +
@@ -9246,7 +9340,7 @@ const file_kodex_governance_v1_governance_manager_proto_rawDesc = "" +
 	"\x10blocking_signals\x18\x01 \x03(\v2#.kodex.governance.v1.BlockingSignalR\x0fblockingSignals\x125\n" +
 	"\x04page\x18\x02 \x01(\v2!.kodex.governance.v1.PageResponseR\x04page\"w\n" +
 	"\x1aReleaseSafetyStateResponse\x12Y\n" +
-	"\x14release_safety_state\x18\x01 \x01(\v2'.kodex.governance.v1.ReleaseSafetyStateR\x12releaseSafetyState\"\xb1\x02\n" +
+	"\x14release_safety_state\x18\x01 \x01(\v2'.kodex.governance.v1.ReleaseSafetyStateR\x12releaseSafetyState\"\xe4\x02\n" +
 	"\x15ReleaseIntegrationRef\x12\x16\n" +
 	"\x06domain\x18\x01 \x01(\tR\x06domain\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x10\n" +
@@ -9256,14 +9350,17 @@ const file_kodex_governance_v1_governance_manager_proto_rawDesc = "" +
 	"\x06digest\x18\x06 \x01(\tH\x02R\x06digest\x88\x01\x01\x12$\n" +
 	"\vobserved_at\x18\a \x01(\tH\x03R\n" +
 	"observedAt\x88\x01\x01\x12\x1d\n" +
-	"\aversion\x18\b \x01(\tH\x04R\aversion\x88\x01\x01B\t\n" +
+	"\aversion\x18\b \x01(\tH\x04R\aversion\x88\x01\x01\x12\"\n" +
+	"\n" +
+	"error_code\x18\t \x01(\tH\x05R\terrorCode\x88\x01\x01B\t\n" +
 	"\a_statusB\n" +
 	"\n" +
 	"\b_summaryB\t\n" +
 	"\a_digestB\x0e\n" +
 	"\f_observed_atB\n" +
 	"\n" +
-	"\b_version*\x92\x04\n" +
+	"\b_versionB\r\n" +
+	"\v_error_code*\x92\x04\n" +
 	"\x13GovernanceScopeType\x12%\n" +
 	"!GOVERNANCE_SCOPE_TYPE_UNSPECIFIED\x10\x00\x12\"\n" +
 	"\x1eGOVERNANCE_SCOPE_TYPE_PLATFORM\x10\x01\x12&\n" +
@@ -9458,7 +9555,7 @@ const file_kodex_governance_v1_governance_manager_proto_rawDesc = "" +
 	"\"BLOCKING_SIGNAL_STATUS_UNSPECIFIED\x10\x00\x12!\n" +
 	"\x1dBLOCKING_SIGNAL_STATUS_ACTIVE\x10\x01\x12#\n" +
 	"\x1fBLOCKING_SIGNAL_STATUS_RESOLVED\x10\x02\x12$\n" +
-	" BLOCKING_SIGNAL_STATUS_DISMISSED\x10\x032\x8b!\n" +
+	" BLOCKING_SIGNAL_STATUS_DISMISSED\x10\x032\x9b\"\n" +
 	"\x18GovernanceManagerService\x12l\n" +
 	"\x11CreateRiskProfile\x12-.kodex.governance.v1.CreateRiskProfileRequest\x1a(.kodex.governance.v1.RiskProfileResponse\x12\x81\x01\n" +
 	"\x18CreateRiskProfileVersion\x124.kodex.governance.v1.CreateRiskProfileVersionRequest\x1a/.kodex.governance.v1.RiskProfileVersionResponse\x12\x85\x01\n" +
@@ -9486,7 +9583,8 @@ const file_kodex_governance_v1_governance_manager_proto_rawDesc = "" +
 	"\x11ListGateDecisions\x12-.kodex.governance.v1.ListGateDecisionsRequest\x1a..kodex.governance.v1.ListGateDecisionsResponse\x12f\n" +
 	"\x0eGetGateRequest\x12*.kodex.governance.v1.GetGateRequestRequest\x1a(.kodex.governance.v1.GateRequestResponse\x12o\n" +
 	"\x10ListGateRequests\x12,.kodex.governance.v1.ListGateRequestsRequest\x1a-.kodex.governance.v1.ListGateRequestsResponse\x12\x8b\x01\n" +
-	"\x1bBuildReleaseDecisionPackage\x127.kodex.governance.v1.BuildReleaseDecisionPackageRequest\x1a3.kodex.governance.v1.ReleaseDecisionPackageResponse\x12\x87\x01\n" +
+	"\x1bBuildReleaseDecisionPackage\x127.kodex.governance.v1.BuildReleaseDecisionPackageRequest\x1a3.kodex.governance.v1.ReleaseDecisionPackageResponse\x12\x8d\x01\n" +
+	"\x1cRecordReleaseRuntimeEvidence\x128.kodex.governance.v1.RecordReleaseRuntimeEvidenceRequest\x1a3.kodex.governance.v1.ReleaseDecisionPackageResponse\x12\x87\x01\n" +
 	"\x19GetReleaseDecisionPackage\x125.kodex.governance.v1.GetReleaseDecisionPackageRequest\x1a3.kodex.governance.v1.ReleaseDecisionPackageResponse\x12\x90\x01\n" +
 	"\x1bListReleaseDecisionPackages\x127.kodex.governance.v1.ListReleaseDecisionPackagesRequest\x1a8.kodex.governance.v1.ListReleaseDecisionPackagesResponse\x12z\n" +
 	"\x16RequestReleaseDecision\x122.kodex.governance.v1.RequestReleaseDecisionRequest\x1a,.kodex.governance.v1.ReleaseDecisionResponse\x12x\n" +
@@ -9512,7 +9610,7 @@ func file_kodex_governance_v1_governance_manager_proto_rawDescGZIP() []byte {
 }
 
 var file_kodex_governance_v1_governance_manager_proto_enumTypes = make([]protoimpl.EnumInfo, 23)
-var file_kodex_governance_v1_governance_manager_proto_msgTypes = make([]protoimpl.MessageInfo, 91)
+var file_kodex_governance_v1_governance_manager_proto_msgTypes = make([]protoimpl.MessageInfo, 92)
 var file_kodex_governance_v1_governance_manager_proto_goTypes = []any{
 	(GovernanceScopeType)(0),                    // 0: kodex.governance.v1.GovernanceScopeType
 	(GovernanceTargetType)(0),                   // 1: kodex.governance.v1.GovernanceTargetType
@@ -9595,39 +9693,40 @@ var file_kodex_governance_v1_governance_manager_proto_goTypes = []any{
 	(*GetGateRequestRequest)(nil),               // 78: kodex.governance.v1.GetGateRequestRequest
 	(*ListGateRequestsRequest)(nil),             // 79: kodex.governance.v1.ListGateRequestsRequest
 	(*BuildReleaseDecisionPackageRequest)(nil),  // 80: kodex.governance.v1.BuildReleaseDecisionPackageRequest
-	(*GetReleaseDecisionPackageRequest)(nil),    // 81: kodex.governance.v1.GetReleaseDecisionPackageRequest
-	(*ListReleaseDecisionPackagesRequest)(nil),  // 82: kodex.governance.v1.ListReleaseDecisionPackagesRequest
-	(*RequestReleaseDecisionRequest)(nil),       // 83: kodex.governance.v1.RequestReleaseDecisionRequest
-	(*SubmitReleaseDecisionRequest)(nil),        // 84: kodex.governance.v1.SubmitReleaseDecisionRequest
-	(*GetReleaseDecisionRequest)(nil),           // 85: kodex.governance.v1.GetReleaseDecisionRequest
-	(*ListReleaseDecisionsRequest)(nil),         // 86: kodex.governance.v1.ListReleaseDecisionsRequest
-	(*RecordBlockingSignalRequest)(nil),         // 87: kodex.governance.v1.RecordBlockingSignalRequest
-	(*ResolveBlockingSignalRequest)(nil),        // 88: kodex.governance.v1.ResolveBlockingSignalRequest
-	(*ListBlockingSignalsRequest)(nil),          // 89: kodex.governance.v1.ListBlockingSignalsRequest
-	(*RecordReleaseSafetyStateRequest)(nil),     // 90: kodex.governance.v1.RecordReleaseSafetyStateRequest
-	(*GetReleaseSafetyStateRequest)(nil),        // 91: kodex.governance.v1.GetReleaseSafetyStateRequest
-	(*RiskProfileResponse)(nil),                 // 92: kodex.governance.v1.RiskProfileResponse
-	(*RiskProfileVersionResponse)(nil),          // 93: kodex.governance.v1.RiskProfileVersionResponse
-	(*ListRiskProfilesResponse)(nil),            // 94: kodex.governance.v1.ListRiskProfilesResponse
-	(*ListRiskRulesResponse)(nil),               // 95: kodex.governance.v1.ListRiskRulesResponse
-	(*ListGatePoliciesResponse)(nil),            // 96: kodex.governance.v1.ListGatePoliciesResponse
-	(*RiskAssessmentResponse)(nil),              // 97: kodex.governance.v1.RiskAssessmentResponse
-	(*ListRiskAssessmentsResponse)(nil),         // 98: kodex.governance.v1.ListRiskAssessmentsResponse
-	(*ListRiskFactorsResponse)(nil),             // 99: kodex.governance.v1.ListRiskFactorsResponse
-	(*ReviewSignalResponse)(nil),                // 100: kodex.governance.v1.ReviewSignalResponse
-	(*ListReviewSignalsResponse)(nil),           // 101: kodex.governance.v1.ListReviewSignalsResponse
-	(*GateRequestResponse)(nil),                 // 102: kodex.governance.v1.GateRequestResponse
-	(*GateDecisionResponse)(nil),                // 103: kodex.governance.v1.GateDecisionResponse
-	(*ListGateRequestsResponse)(nil),            // 104: kodex.governance.v1.ListGateRequestsResponse
-	(*ListGateDecisionsResponse)(nil),           // 105: kodex.governance.v1.ListGateDecisionsResponse
-	(*ReleaseDecisionPackageResponse)(nil),      // 106: kodex.governance.v1.ReleaseDecisionPackageResponse
-	(*ListReleaseDecisionPackagesResponse)(nil), // 107: kodex.governance.v1.ListReleaseDecisionPackagesResponse
-	(*ReleaseDecisionResponse)(nil),             // 108: kodex.governance.v1.ReleaseDecisionResponse
-	(*ListReleaseDecisionsResponse)(nil),        // 109: kodex.governance.v1.ListReleaseDecisionsResponse
-	(*BlockingSignalResponse)(nil),              // 110: kodex.governance.v1.BlockingSignalResponse
-	(*ListBlockingSignalsResponse)(nil),         // 111: kodex.governance.v1.ListBlockingSignalsResponse
-	(*ReleaseSafetyStateResponse)(nil),          // 112: kodex.governance.v1.ReleaseSafetyStateResponse
-	(*ReleaseIntegrationRef)(nil),               // 113: kodex.governance.v1.ReleaseIntegrationRef
+	(*RecordReleaseRuntimeEvidenceRequest)(nil), // 81: kodex.governance.v1.RecordReleaseRuntimeEvidenceRequest
+	(*GetReleaseDecisionPackageRequest)(nil),    // 82: kodex.governance.v1.GetReleaseDecisionPackageRequest
+	(*ListReleaseDecisionPackagesRequest)(nil),  // 83: kodex.governance.v1.ListReleaseDecisionPackagesRequest
+	(*RequestReleaseDecisionRequest)(nil),       // 84: kodex.governance.v1.RequestReleaseDecisionRequest
+	(*SubmitReleaseDecisionRequest)(nil),        // 85: kodex.governance.v1.SubmitReleaseDecisionRequest
+	(*GetReleaseDecisionRequest)(nil),           // 86: kodex.governance.v1.GetReleaseDecisionRequest
+	(*ListReleaseDecisionsRequest)(nil),         // 87: kodex.governance.v1.ListReleaseDecisionsRequest
+	(*RecordBlockingSignalRequest)(nil),         // 88: kodex.governance.v1.RecordBlockingSignalRequest
+	(*ResolveBlockingSignalRequest)(nil),        // 89: kodex.governance.v1.ResolveBlockingSignalRequest
+	(*ListBlockingSignalsRequest)(nil),          // 90: kodex.governance.v1.ListBlockingSignalsRequest
+	(*RecordReleaseSafetyStateRequest)(nil),     // 91: kodex.governance.v1.RecordReleaseSafetyStateRequest
+	(*GetReleaseSafetyStateRequest)(nil),        // 92: kodex.governance.v1.GetReleaseSafetyStateRequest
+	(*RiskProfileResponse)(nil),                 // 93: kodex.governance.v1.RiskProfileResponse
+	(*RiskProfileVersionResponse)(nil),          // 94: kodex.governance.v1.RiskProfileVersionResponse
+	(*ListRiskProfilesResponse)(nil),            // 95: kodex.governance.v1.ListRiskProfilesResponse
+	(*ListRiskRulesResponse)(nil),               // 96: kodex.governance.v1.ListRiskRulesResponse
+	(*ListGatePoliciesResponse)(nil),            // 97: kodex.governance.v1.ListGatePoliciesResponse
+	(*RiskAssessmentResponse)(nil),              // 98: kodex.governance.v1.RiskAssessmentResponse
+	(*ListRiskAssessmentsResponse)(nil),         // 99: kodex.governance.v1.ListRiskAssessmentsResponse
+	(*ListRiskFactorsResponse)(nil),             // 100: kodex.governance.v1.ListRiskFactorsResponse
+	(*ReviewSignalResponse)(nil),                // 101: kodex.governance.v1.ReviewSignalResponse
+	(*ListReviewSignalsResponse)(nil),           // 102: kodex.governance.v1.ListReviewSignalsResponse
+	(*GateRequestResponse)(nil),                 // 103: kodex.governance.v1.GateRequestResponse
+	(*GateDecisionResponse)(nil),                // 104: kodex.governance.v1.GateDecisionResponse
+	(*ListGateRequestsResponse)(nil),            // 105: kodex.governance.v1.ListGateRequestsResponse
+	(*ListGateDecisionsResponse)(nil),           // 106: kodex.governance.v1.ListGateDecisionsResponse
+	(*ReleaseDecisionPackageResponse)(nil),      // 107: kodex.governance.v1.ReleaseDecisionPackageResponse
+	(*ListReleaseDecisionPackagesResponse)(nil), // 108: kodex.governance.v1.ListReleaseDecisionPackagesResponse
+	(*ReleaseDecisionResponse)(nil),             // 109: kodex.governance.v1.ReleaseDecisionResponse
+	(*ListReleaseDecisionsResponse)(nil),        // 110: kodex.governance.v1.ListReleaseDecisionsResponse
+	(*BlockingSignalResponse)(nil),              // 111: kodex.governance.v1.BlockingSignalResponse
+	(*ListBlockingSignalsResponse)(nil),         // 112: kodex.governance.v1.ListBlockingSignalsResponse
+	(*ReleaseSafetyStateResponse)(nil),          // 113: kodex.governance.v1.ReleaseSafetyStateResponse
+	(*ReleaseIntegrationRef)(nil),               // 114: kodex.governance.v1.ReleaseIntegrationRef
 }
 var file_kodex_governance_v1_governance_manager_proto_depIdxs = []int32{
 	26,  // 0: kodex.governance.v1.CommandMeta.actor:type_name -> kodex.governance.v1.Actor
@@ -9685,7 +9784,7 @@ var file_kodex_governance_v1_governance_manager_proto_depIdxs = []int32{
 	34,  // 52: kodex.governance.v1.ReleaseDecisionPackage.agent_context:type_name -> kodex.governance.v1.AgentContextRef
 	37,  // 53: kodex.governance.v1.ReleaseDecisionPackage.evidence_refs:type_name -> kodex.governance.v1.EvidenceRef
 	17,  // 54: kodex.governance.v1.ReleaseDecisionPackage.status:type_name -> kodex.governance.v1.ReleaseDecisionPackageStatus
-	113, // 55: kodex.governance.v1.ReleaseDecisionPackage.integration_refs:type_name -> kodex.governance.v1.ReleaseIntegrationRef
+	114, // 55: kodex.governance.v1.ReleaseDecisionPackage.integration_refs:type_name -> kodex.governance.v1.ReleaseIntegrationRef
 	19,  // 56: kodex.governance.v1.ReleaseDecision.outcome:type_name -> kodex.governance.v1.ReleaseDecisionOutcome
 	18,  // 57: kodex.governance.v1.ReleaseDecision.status:type_name -> kodex.governance.v1.ReleaseDecisionStatus
 	20,  // 58: kodex.governance.v1.ReleaseSafetyState.current_state:type_name -> kodex.governance.v1.ReleaseSafetyStateKind
@@ -9781,149 +9880,155 @@ var file_kodex_governance_v1_governance_manager_proto_depIdxs = []int32{
 	34,  // 148: kodex.governance.v1.BuildReleaseDecisionPackageRequest.agent_context:type_name -> kodex.governance.v1.AgentContextRef
 	37,  // 149: kodex.governance.v1.BuildReleaseDecisionPackageRequest.evidence_refs:type_name -> kodex.governance.v1.EvidenceRef
 	23,  // 150: kodex.governance.v1.BuildReleaseDecisionPackageRequest.meta:type_name -> kodex.governance.v1.CommandMeta
-	113, // 151: kodex.governance.v1.BuildReleaseDecisionPackageRequest.integration_refs:type_name -> kodex.governance.v1.ReleaseIntegrationRef
-	24,  // 152: kodex.governance.v1.GetReleaseDecisionPackageRequest.meta:type_name -> kodex.governance.v1.QueryMeta
-	32,  // 153: kodex.governance.v1.ListReleaseDecisionPackagesRequest.project_context:type_name -> kodex.governance.v1.ProjectContextRef
-	17,  // 154: kodex.governance.v1.ListReleaseDecisionPackagesRequest.status:type_name -> kodex.governance.v1.ReleaseDecisionPackageStatus
-	27,  // 155: kodex.governance.v1.ListReleaseDecisionPackagesRequest.page:type_name -> kodex.governance.v1.PageRequest
-	24,  // 156: kodex.governance.v1.ListReleaseDecisionPackagesRequest.meta:type_name -> kodex.governance.v1.QueryMeta
-	23,  // 157: kodex.governance.v1.RequestReleaseDecisionRequest.meta:type_name -> kodex.governance.v1.CommandMeta
-	19,  // 158: kodex.governance.v1.SubmitReleaseDecisionRequest.outcome:type_name -> kodex.governance.v1.ReleaseDecisionOutcome
-	23,  // 159: kodex.governance.v1.SubmitReleaseDecisionRequest.meta:type_name -> kodex.governance.v1.CommandMeta
-	24,  // 160: kodex.governance.v1.GetReleaseDecisionRequest.meta:type_name -> kodex.governance.v1.QueryMeta
-	32,  // 161: kodex.governance.v1.ListReleaseDecisionsRequest.project_context:type_name -> kodex.governance.v1.ProjectContextRef
-	18,  // 162: kodex.governance.v1.ListReleaseDecisionsRequest.status:type_name -> kodex.governance.v1.ReleaseDecisionStatus
-	19,  // 163: kodex.governance.v1.ListReleaseDecisionsRequest.outcome:type_name -> kodex.governance.v1.ReleaseDecisionOutcome
-	27,  // 164: kodex.governance.v1.ListReleaseDecisionsRequest.page:type_name -> kodex.governance.v1.PageRequest
-	24,  // 165: kodex.governance.v1.ListReleaseDecisionsRequest.meta:type_name -> kodex.governance.v1.QueryMeta
-	31,  // 166: kodex.governance.v1.RecordBlockingSignalRequest.target:type_name -> kodex.governance.v1.TargetRef
-	21,  // 167: kodex.governance.v1.RecordBlockingSignalRequest.source_type:type_name -> kodex.governance.v1.BlockingSignalSourceType
-	12,  // 168: kodex.governance.v1.RecordBlockingSignalRequest.severity:type_name -> kodex.governance.v1.SignalSeverity
-	23,  // 169: kodex.governance.v1.RecordBlockingSignalRequest.meta:type_name -> kodex.governance.v1.CommandMeta
-	22,  // 170: kodex.governance.v1.ResolveBlockingSignalRequest.terminal_status:type_name -> kodex.governance.v1.BlockingSignalStatus
-	23,  // 171: kodex.governance.v1.ResolveBlockingSignalRequest.meta:type_name -> kodex.governance.v1.CommandMeta
-	31,  // 172: kodex.governance.v1.ListBlockingSignalsRequest.target:type_name -> kodex.governance.v1.TargetRef
-	22,  // 173: kodex.governance.v1.ListBlockingSignalsRequest.status:type_name -> kodex.governance.v1.BlockingSignalStatus
-	12,  // 174: kodex.governance.v1.ListBlockingSignalsRequest.severity:type_name -> kodex.governance.v1.SignalSeverity
-	27,  // 175: kodex.governance.v1.ListBlockingSignalsRequest.page:type_name -> kodex.governance.v1.PageRequest
-	24,  // 176: kodex.governance.v1.ListBlockingSignalsRequest.meta:type_name -> kodex.governance.v1.QueryMeta
-	20,  // 177: kodex.governance.v1.RecordReleaseSafetyStateRequest.current_state:type_name -> kodex.governance.v1.ReleaseSafetyStateKind
-	23,  // 178: kodex.governance.v1.RecordReleaseSafetyStateRequest.meta:type_name -> kodex.governance.v1.CommandMeta
-	24,  // 179: kodex.governance.v1.GetReleaseSafetyStateRequest.meta:type_name -> kodex.governance.v1.QueryMeta
-	41,  // 180: kodex.governance.v1.RiskProfileResponse.risk_profile:type_name -> kodex.governance.v1.RiskProfile
-	42,  // 181: kodex.governance.v1.RiskProfileVersionResponse.risk_profile_version:type_name -> kodex.governance.v1.RiskProfileVersion
-	41,  // 182: kodex.governance.v1.ListRiskProfilesResponse.risk_profiles:type_name -> kodex.governance.v1.RiskProfile
-	28,  // 183: kodex.governance.v1.ListRiskProfilesResponse.page:type_name -> kodex.governance.v1.PageResponse
-	43,  // 184: kodex.governance.v1.ListRiskRulesResponse.risk_rules:type_name -> kodex.governance.v1.RiskRule
-	28,  // 185: kodex.governance.v1.ListRiskRulesResponse.page:type_name -> kodex.governance.v1.PageResponse
-	44,  // 186: kodex.governance.v1.ListGatePoliciesResponse.gate_policies:type_name -> kodex.governance.v1.GatePolicy
-	28,  // 187: kodex.governance.v1.ListGatePoliciesResponse.page:type_name -> kodex.governance.v1.PageResponse
-	45,  // 188: kodex.governance.v1.RiskAssessmentResponse.risk_assessment:type_name -> kodex.governance.v1.RiskAssessment
-	46,  // 189: kodex.governance.v1.RiskAssessmentResponse.risk_factors:type_name -> kodex.governance.v1.RiskFactor
-	47,  // 190: kodex.governance.v1.RiskAssessmentResponse.review_signals:type_name -> kodex.governance.v1.ReviewSignal
-	45,  // 191: kodex.governance.v1.ListRiskAssessmentsResponse.risk_assessments:type_name -> kodex.governance.v1.RiskAssessment
-	28,  // 192: kodex.governance.v1.ListRiskAssessmentsResponse.page:type_name -> kodex.governance.v1.PageResponse
-	46,  // 193: kodex.governance.v1.ListRiskFactorsResponse.risk_factors:type_name -> kodex.governance.v1.RiskFactor
-	28,  // 194: kodex.governance.v1.ListRiskFactorsResponse.page:type_name -> kodex.governance.v1.PageResponse
-	47,  // 195: kodex.governance.v1.ReviewSignalResponse.review_signal:type_name -> kodex.governance.v1.ReviewSignal
-	47,  // 196: kodex.governance.v1.ListReviewSignalsResponse.review_signals:type_name -> kodex.governance.v1.ReviewSignal
-	28,  // 197: kodex.governance.v1.ListReviewSignalsResponse.page:type_name -> kodex.governance.v1.PageResponse
-	48,  // 198: kodex.governance.v1.GateRequestResponse.gate_request:type_name -> kodex.governance.v1.GateRequest
-	49,  // 199: kodex.governance.v1.GateRequestResponse.gate_decision:type_name -> kodex.governance.v1.GateDecision
-	49,  // 200: kodex.governance.v1.GateDecisionResponse.gate_decision:type_name -> kodex.governance.v1.GateDecision
-	48,  // 201: kodex.governance.v1.GateDecisionResponse.gate_request:type_name -> kodex.governance.v1.GateRequest
-	48,  // 202: kodex.governance.v1.ListGateRequestsResponse.gate_requests:type_name -> kodex.governance.v1.GateRequest
-	28,  // 203: kodex.governance.v1.ListGateRequestsResponse.page:type_name -> kodex.governance.v1.PageResponse
-	49,  // 204: kodex.governance.v1.ListGateDecisionsResponse.gate_decisions:type_name -> kodex.governance.v1.GateDecision
-	28,  // 205: kodex.governance.v1.ListGateDecisionsResponse.page:type_name -> kodex.governance.v1.PageResponse
-	50,  // 206: kodex.governance.v1.ReleaseDecisionPackageResponse.release_decision_package:type_name -> kodex.governance.v1.ReleaseDecisionPackage
-	50,  // 207: kodex.governance.v1.ListReleaseDecisionPackagesResponse.release_decision_packages:type_name -> kodex.governance.v1.ReleaseDecisionPackage
-	28,  // 208: kodex.governance.v1.ListReleaseDecisionPackagesResponse.page:type_name -> kodex.governance.v1.PageResponse
-	51,  // 209: kodex.governance.v1.ReleaseDecisionResponse.release_decision:type_name -> kodex.governance.v1.ReleaseDecision
-	50,  // 210: kodex.governance.v1.ReleaseDecisionResponse.release_decision_package:type_name -> kodex.governance.v1.ReleaseDecisionPackage
-	51,  // 211: kodex.governance.v1.ListReleaseDecisionsResponse.release_decisions:type_name -> kodex.governance.v1.ReleaseDecision
-	28,  // 212: kodex.governance.v1.ListReleaseDecisionsResponse.page:type_name -> kodex.governance.v1.PageResponse
-	53,  // 213: kodex.governance.v1.BlockingSignalResponse.blocking_signal:type_name -> kodex.governance.v1.BlockingSignal
-	53,  // 214: kodex.governance.v1.ListBlockingSignalsResponse.blocking_signals:type_name -> kodex.governance.v1.BlockingSignal
-	28,  // 215: kodex.governance.v1.ListBlockingSignalsResponse.page:type_name -> kodex.governance.v1.PageResponse
-	52,  // 216: kodex.governance.v1.ReleaseSafetyStateResponse.release_safety_state:type_name -> kodex.governance.v1.ReleaseSafetyState
-	56,  // 217: kodex.governance.v1.GovernanceManagerService.CreateRiskProfile:input_type -> kodex.governance.v1.CreateRiskProfileRequest
-	57,  // 218: kodex.governance.v1.GovernanceManagerService.CreateRiskProfileVersion:input_type -> kodex.governance.v1.CreateRiskProfileVersionRequest
-	58,  // 219: kodex.governance.v1.GovernanceManagerService.ActivateRiskProfileVersion:input_type -> kodex.governance.v1.ActivateRiskProfileVersionRequest
-	59,  // 220: kodex.governance.v1.GovernanceManagerService.ArchiveRiskProfile:input_type -> kodex.governance.v1.ArchiveRiskProfileRequest
-	60,  // 221: kodex.governance.v1.GovernanceManagerService.GetRiskProfile:input_type -> kodex.governance.v1.GetRiskProfileRequest
-	61,  // 222: kodex.governance.v1.GovernanceManagerService.GetRiskProfileVersion:input_type -> kodex.governance.v1.GetRiskProfileVersionRequest
-	62,  // 223: kodex.governance.v1.GovernanceManagerService.ListRiskProfiles:input_type -> kodex.governance.v1.ListRiskProfilesRequest
-	63,  // 224: kodex.governance.v1.GovernanceManagerService.ListRiskRules:input_type -> kodex.governance.v1.ListRiskRulesRequest
-	64,  // 225: kodex.governance.v1.GovernanceManagerService.ListGatePolicies:input_type -> kodex.governance.v1.ListGatePoliciesRequest
-	65,  // 226: kodex.governance.v1.GovernanceManagerService.EvaluateRisk:input_type -> kodex.governance.v1.EvaluateRiskRequest
-	66,  // 227: kodex.governance.v1.GovernanceManagerService.ReevaluateRisk:input_type -> kodex.governance.v1.ReevaluateRiskRequest
-	67,  // 228: kodex.governance.v1.GovernanceManagerService.GetRiskAssessment:input_type -> kodex.governance.v1.GetRiskAssessmentRequest
-	68,  // 229: kodex.governance.v1.GovernanceManagerService.ListRiskAssessments:input_type -> kodex.governance.v1.ListRiskAssessmentsRequest
-	69,  // 230: kodex.governance.v1.GovernanceManagerService.ListRiskFactors:input_type -> kodex.governance.v1.ListRiskFactorsRequest
-	70,  // 231: kodex.governance.v1.GovernanceManagerService.RecordReviewSignal:input_type -> kodex.governance.v1.RecordReviewSignalRequest
-	71,  // 232: kodex.governance.v1.GovernanceManagerService.ListReviewSignals:input_type -> kodex.governance.v1.ListReviewSignalsRequest
-	72,  // 233: kodex.governance.v1.GovernanceManagerService.RequestGate:input_type -> kodex.governance.v1.RequestGateRequest
-	73,  // 234: kodex.governance.v1.GovernanceManagerService.SubmitGateDecision:input_type -> kodex.governance.v1.SubmitGateDecisionRequest
-	74,  // 235: kodex.governance.v1.GovernanceManagerService.CancelGate:input_type -> kodex.governance.v1.CancelGateRequest
-	75,  // 236: kodex.governance.v1.GovernanceManagerService.ExpireGate:input_type -> kodex.governance.v1.ExpireGateRequest
-	76,  // 237: kodex.governance.v1.GovernanceManagerService.GetGateDecision:input_type -> kodex.governance.v1.GetGateDecisionRequest
-	77,  // 238: kodex.governance.v1.GovernanceManagerService.ListGateDecisions:input_type -> kodex.governance.v1.ListGateDecisionsRequest
-	78,  // 239: kodex.governance.v1.GovernanceManagerService.GetGateRequest:input_type -> kodex.governance.v1.GetGateRequestRequest
-	79,  // 240: kodex.governance.v1.GovernanceManagerService.ListGateRequests:input_type -> kodex.governance.v1.ListGateRequestsRequest
-	80,  // 241: kodex.governance.v1.GovernanceManagerService.BuildReleaseDecisionPackage:input_type -> kodex.governance.v1.BuildReleaseDecisionPackageRequest
-	81,  // 242: kodex.governance.v1.GovernanceManagerService.GetReleaseDecisionPackage:input_type -> kodex.governance.v1.GetReleaseDecisionPackageRequest
-	82,  // 243: kodex.governance.v1.GovernanceManagerService.ListReleaseDecisionPackages:input_type -> kodex.governance.v1.ListReleaseDecisionPackagesRequest
-	83,  // 244: kodex.governance.v1.GovernanceManagerService.RequestReleaseDecision:input_type -> kodex.governance.v1.RequestReleaseDecisionRequest
-	84,  // 245: kodex.governance.v1.GovernanceManagerService.SubmitReleaseDecision:input_type -> kodex.governance.v1.SubmitReleaseDecisionRequest
-	85,  // 246: kodex.governance.v1.GovernanceManagerService.GetReleaseDecision:input_type -> kodex.governance.v1.GetReleaseDecisionRequest
-	86,  // 247: kodex.governance.v1.GovernanceManagerService.ListReleaseDecisions:input_type -> kodex.governance.v1.ListReleaseDecisionsRequest
-	87,  // 248: kodex.governance.v1.GovernanceManagerService.RecordBlockingSignal:input_type -> kodex.governance.v1.RecordBlockingSignalRequest
-	88,  // 249: kodex.governance.v1.GovernanceManagerService.ResolveBlockingSignal:input_type -> kodex.governance.v1.ResolveBlockingSignalRequest
-	89,  // 250: kodex.governance.v1.GovernanceManagerService.ListBlockingSignals:input_type -> kodex.governance.v1.ListBlockingSignalsRequest
-	90,  // 251: kodex.governance.v1.GovernanceManagerService.RecordReleaseSafetyState:input_type -> kodex.governance.v1.RecordReleaseSafetyStateRequest
-	91,  // 252: kodex.governance.v1.GovernanceManagerService.GetReleaseSafetyState:input_type -> kodex.governance.v1.GetReleaseSafetyStateRequest
-	92,  // 253: kodex.governance.v1.GovernanceManagerService.CreateRiskProfile:output_type -> kodex.governance.v1.RiskProfileResponse
-	93,  // 254: kodex.governance.v1.GovernanceManagerService.CreateRiskProfileVersion:output_type -> kodex.governance.v1.RiskProfileVersionResponse
-	93,  // 255: kodex.governance.v1.GovernanceManagerService.ActivateRiskProfileVersion:output_type -> kodex.governance.v1.RiskProfileVersionResponse
-	92,  // 256: kodex.governance.v1.GovernanceManagerService.ArchiveRiskProfile:output_type -> kodex.governance.v1.RiskProfileResponse
-	92,  // 257: kodex.governance.v1.GovernanceManagerService.GetRiskProfile:output_type -> kodex.governance.v1.RiskProfileResponse
-	93,  // 258: kodex.governance.v1.GovernanceManagerService.GetRiskProfileVersion:output_type -> kodex.governance.v1.RiskProfileVersionResponse
-	94,  // 259: kodex.governance.v1.GovernanceManagerService.ListRiskProfiles:output_type -> kodex.governance.v1.ListRiskProfilesResponse
-	95,  // 260: kodex.governance.v1.GovernanceManagerService.ListRiskRules:output_type -> kodex.governance.v1.ListRiskRulesResponse
-	96,  // 261: kodex.governance.v1.GovernanceManagerService.ListGatePolicies:output_type -> kodex.governance.v1.ListGatePoliciesResponse
-	97,  // 262: kodex.governance.v1.GovernanceManagerService.EvaluateRisk:output_type -> kodex.governance.v1.RiskAssessmentResponse
-	97,  // 263: kodex.governance.v1.GovernanceManagerService.ReevaluateRisk:output_type -> kodex.governance.v1.RiskAssessmentResponse
-	97,  // 264: kodex.governance.v1.GovernanceManagerService.GetRiskAssessment:output_type -> kodex.governance.v1.RiskAssessmentResponse
-	98,  // 265: kodex.governance.v1.GovernanceManagerService.ListRiskAssessments:output_type -> kodex.governance.v1.ListRiskAssessmentsResponse
-	99,  // 266: kodex.governance.v1.GovernanceManagerService.ListRiskFactors:output_type -> kodex.governance.v1.ListRiskFactorsResponse
-	100, // 267: kodex.governance.v1.GovernanceManagerService.RecordReviewSignal:output_type -> kodex.governance.v1.ReviewSignalResponse
-	101, // 268: kodex.governance.v1.GovernanceManagerService.ListReviewSignals:output_type -> kodex.governance.v1.ListReviewSignalsResponse
-	102, // 269: kodex.governance.v1.GovernanceManagerService.RequestGate:output_type -> kodex.governance.v1.GateRequestResponse
-	103, // 270: kodex.governance.v1.GovernanceManagerService.SubmitGateDecision:output_type -> kodex.governance.v1.GateDecisionResponse
-	102, // 271: kodex.governance.v1.GovernanceManagerService.CancelGate:output_type -> kodex.governance.v1.GateRequestResponse
-	102, // 272: kodex.governance.v1.GovernanceManagerService.ExpireGate:output_type -> kodex.governance.v1.GateRequestResponse
-	103, // 273: kodex.governance.v1.GovernanceManagerService.GetGateDecision:output_type -> kodex.governance.v1.GateDecisionResponse
-	105, // 274: kodex.governance.v1.GovernanceManagerService.ListGateDecisions:output_type -> kodex.governance.v1.ListGateDecisionsResponse
-	102, // 275: kodex.governance.v1.GovernanceManagerService.GetGateRequest:output_type -> kodex.governance.v1.GateRequestResponse
-	104, // 276: kodex.governance.v1.GovernanceManagerService.ListGateRequests:output_type -> kodex.governance.v1.ListGateRequestsResponse
-	106, // 277: kodex.governance.v1.GovernanceManagerService.BuildReleaseDecisionPackage:output_type -> kodex.governance.v1.ReleaseDecisionPackageResponse
-	106, // 278: kodex.governance.v1.GovernanceManagerService.GetReleaseDecisionPackage:output_type -> kodex.governance.v1.ReleaseDecisionPackageResponse
-	107, // 279: kodex.governance.v1.GovernanceManagerService.ListReleaseDecisionPackages:output_type -> kodex.governance.v1.ListReleaseDecisionPackagesResponse
-	108, // 280: kodex.governance.v1.GovernanceManagerService.RequestReleaseDecision:output_type -> kodex.governance.v1.ReleaseDecisionResponse
-	108, // 281: kodex.governance.v1.GovernanceManagerService.SubmitReleaseDecision:output_type -> kodex.governance.v1.ReleaseDecisionResponse
-	108, // 282: kodex.governance.v1.GovernanceManagerService.GetReleaseDecision:output_type -> kodex.governance.v1.ReleaseDecisionResponse
-	109, // 283: kodex.governance.v1.GovernanceManagerService.ListReleaseDecisions:output_type -> kodex.governance.v1.ListReleaseDecisionsResponse
-	110, // 284: kodex.governance.v1.GovernanceManagerService.RecordBlockingSignal:output_type -> kodex.governance.v1.BlockingSignalResponse
-	110, // 285: kodex.governance.v1.GovernanceManagerService.ResolveBlockingSignal:output_type -> kodex.governance.v1.BlockingSignalResponse
-	111, // 286: kodex.governance.v1.GovernanceManagerService.ListBlockingSignals:output_type -> kodex.governance.v1.ListBlockingSignalsResponse
-	112, // 287: kodex.governance.v1.GovernanceManagerService.RecordReleaseSafetyState:output_type -> kodex.governance.v1.ReleaseSafetyStateResponse
-	112, // 288: kodex.governance.v1.GovernanceManagerService.GetReleaseSafetyState:output_type -> kodex.governance.v1.ReleaseSafetyStateResponse
-	253, // [253:289] is the sub-list for method output_type
-	217, // [217:253] is the sub-list for method input_type
-	217, // [217:217] is the sub-list for extension type_name
-	217, // [217:217] is the sub-list for extension extendee
-	0,   // [0:217] is the sub-list for field type_name
+	114, // 151: kodex.governance.v1.BuildReleaseDecisionPackageRequest.integration_refs:type_name -> kodex.governance.v1.ReleaseIntegrationRef
+	35,  // 152: kodex.governance.v1.RecordReleaseRuntimeEvidenceRequest.runtime_refs:type_name -> kodex.governance.v1.RuntimeContextRef
+	37,  // 153: kodex.governance.v1.RecordReleaseRuntimeEvidenceRequest.evidence_refs:type_name -> kodex.governance.v1.EvidenceRef
+	114, // 154: kodex.governance.v1.RecordReleaseRuntimeEvidenceRequest.integration_refs:type_name -> kodex.governance.v1.ReleaseIntegrationRef
+	23,  // 155: kodex.governance.v1.RecordReleaseRuntimeEvidenceRequest.meta:type_name -> kodex.governance.v1.CommandMeta
+	24,  // 156: kodex.governance.v1.GetReleaseDecisionPackageRequest.meta:type_name -> kodex.governance.v1.QueryMeta
+	32,  // 157: kodex.governance.v1.ListReleaseDecisionPackagesRequest.project_context:type_name -> kodex.governance.v1.ProjectContextRef
+	17,  // 158: kodex.governance.v1.ListReleaseDecisionPackagesRequest.status:type_name -> kodex.governance.v1.ReleaseDecisionPackageStatus
+	27,  // 159: kodex.governance.v1.ListReleaseDecisionPackagesRequest.page:type_name -> kodex.governance.v1.PageRequest
+	24,  // 160: kodex.governance.v1.ListReleaseDecisionPackagesRequest.meta:type_name -> kodex.governance.v1.QueryMeta
+	23,  // 161: kodex.governance.v1.RequestReleaseDecisionRequest.meta:type_name -> kodex.governance.v1.CommandMeta
+	19,  // 162: kodex.governance.v1.SubmitReleaseDecisionRequest.outcome:type_name -> kodex.governance.v1.ReleaseDecisionOutcome
+	23,  // 163: kodex.governance.v1.SubmitReleaseDecisionRequest.meta:type_name -> kodex.governance.v1.CommandMeta
+	24,  // 164: kodex.governance.v1.GetReleaseDecisionRequest.meta:type_name -> kodex.governance.v1.QueryMeta
+	32,  // 165: kodex.governance.v1.ListReleaseDecisionsRequest.project_context:type_name -> kodex.governance.v1.ProjectContextRef
+	18,  // 166: kodex.governance.v1.ListReleaseDecisionsRequest.status:type_name -> kodex.governance.v1.ReleaseDecisionStatus
+	19,  // 167: kodex.governance.v1.ListReleaseDecisionsRequest.outcome:type_name -> kodex.governance.v1.ReleaseDecisionOutcome
+	27,  // 168: kodex.governance.v1.ListReleaseDecisionsRequest.page:type_name -> kodex.governance.v1.PageRequest
+	24,  // 169: kodex.governance.v1.ListReleaseDecisionsRequest.meta:type_name -> kodex.governance.v1.QueryMeta
+	31,  // 170: kodex.governance.v1.RecordBlockingSignalRequest.target:type_name -> kodex.governance.v1.TargetRef
+	21,  // 171: kodex.governance.v1.RecordBlockingSignalRequest.source_type:type_name -> kodex.governance.v1.BlockingSignalSourceType
+	12,  // 172: kodex.governance.v1.RecordBlockingSignalRequest.severity:type_name -> kodex.governance.v1.SignalSeverity
+	23,  // 173: kodex.governance.v1.RecordBlockingSignalRequest.meta:type_name -> kodex.governance.v1.CommandMeta
+	22,  // 174: kodex.governance.v1.ResolveBlockingSignalRequest.terminal_status:type_name -> kodex.governance.v1.BlockingSignalStatus
+	23,  // 175: kodex.governance.v1.ResolveBlockingSignalRequest.meta:type_name -> kodex.governance.v1.CommandMeta
+	31,  // 176: kodex.governance.v1.ListBlockingSignalsRequest.target:type_name -> kodex.governance.v1.TargetRef
+	22,  // 177: kodex.governance.v1.ListBlockingSignalsRequest.status:type_name -> kodex.governance.v1.BlockingSignalStatus
+	12,  // 178: kodex.governance.v1.ListBlockingSignalsRequest.severity:type_name -> kodex.governance.v1.SignalSeverity
+	27,  // 179: kodex.governance.v1.ListBlockingSignalsRequest.page:type_name -> kodex.governance.v1.PageRequest
+	24,  // 180: kodex.governance.v1.ListBlockingSignalsRequest.meta:type_name -> kodex.governance.v1.QueryMeta
+	20,  // 181: kodex.governance.v1.RecordReleaseSafetyStateRequest.current_state:type_name -> kodex.governance.v1.ReleaseSafetyStateKind
+	23,  // 182: kodex.governance.v1.RecordReleaseSafetyStateRequest.meta:type_name -> kodex.governance.v1.CommandMeta
+	24,  // 183: kodex.governance.v1.GetReleaseSafetyStateRequest.meta:type_name -> kodex.governance.v1.QueryMeta
+	41,  // 184: kodex.governance.v1.RiskProfileResponse.risk_profile:type_name -> kodex.governance.v1.RiskProfile
+	42,  // 185: kodex.governance.v1.RiskProfileVersionResponse.risk_profile_version:type_name -> kodex.governance.v1.RiskProfileVersion
+	41,  // 186: kodex.governance.v1.ListRiskProfilesResponse.risk_profiles:type_name -> kodex.governance.v1.RiskProfile
+	28,  // 187: kodex.governance.v1.ListRiskProfilesResponse.page:type_name -> kodex.governance.v1.PageResponse
+	43,  // 188: kodex.governance.v1.ListRiskRulesResponse.risk_rules:type_name -> kodex.governance.v1.RiskRule
+	28,  // 189: kodex.governance.v1.ListRiskRulesResponse.page:type_name -> kodex.governance.v1.PageResponse
+	44,  // 190: kodex.governance.v1.ListGatePoliciesResponse.gate_policies:type_name -> kodex.governance.v1.GatePolicy
+	28,  // 191: kodex.governance.v1.ListGatePoliciesResponse.page:type_name -> kodex.governance.v1.PageResponse
+	45,  // 192: kodex.governance.v1.RiskAssessmentResponse.risk_assessment:type_name -> kodex.governance.v1.RiskAssessment
+	46,  // 193: kodex.governance.v1.RiskAssessmentResponse.risk_factors:type_name -> kodex.governance.v1.RiskFactor
+	47,  // 194: kodex.governance.v1.RiskAssessmentResponse.review_signals:type_name -> kodex.governance.v1.ReviewSignal
+	45,  // 195: kodex.governance.v1.ListRiskAssessmentsResponse.risk_assessments:type_name -> kodex.governance.v1.RiskAssessment
+	28,  // 196: kodex.governance.v1.ListRiskAssessmentsResponse.page:type_name -> kodex.governance.v1.PageResponse
+	46,  // 197: kodex.governance.v1.ListRiskFactorsResponse.risk_factors:type_name -> kodex.governance.v1.RiskFactor
+	28,  // 198: kodex.governance.v1.ListRiskFactorsResponse.page:type_name -> kodex.governance.v1.PageResponse
+	47,  // 199: kodex.governance.v1.ReviewSignalResponse.review_signal:type_name -> kodex.governance.v1.ReviewSignal
+	47,  // 200: kodex.governance.v1.ListReviewSignalsResponse.review_signals:type_name -> kodex.governance.v1.ReviewSignal
+	28,  // 201: kodex.governance.v1.ListReviewSignalsResponse.page:type_name -> kodex.governance.v1.PageResponse
+	48,  // 202: kodex.governance.v1.GateRequestResponse.gate_request:type_name -> kodex.governance.v1.GateRequest
+	49,  // 203: kodex.governance.v1.GateRequestResponse.gate_decision:type_name -> kodex.governance.v1.GateDecision
+	49,  // 204: kodex.governance.v1.GateDecisionResponse.gate_decision:type_name -> kodex.governance.v1.GateDecision
+	48,  // 205: kodex.governance.v1.GateDecisionResponse.gate_request:type_name -> kodex.governance.v1.GateRequest
+	48,  // 206: kodex.governance.v1.ListGateRequestsResponse.gate_requests:type_name -> kodex.governance.v1.GateRequest
+	28,  // 207: kodex.governance.v1.ListGateRequestsResponse.page:type_name -> kodex.governance.v1.PageResponse
+	49,  // 208: kodex.governance.v1.ListGateDecisionsResponse.gate_decisions:type_name -> kodex.governance.v1.GateDecision
+	28,  // 209: kodex.governance.v1.ListGateDecisionsResponse.page:type_name -> kodex.governance.v1.PageResponse
+	50,  // 210: kodex.governance.v1.ReleaseDecisionPackageResponse.release_decision_package:type_name -> kodex.governance.v1.ReleaseDecisionPackage
+	50,  // 211: kodex.governance.v1.ListReleaseDecisionPackagesResponse.release_decision_packages:type_name -> kodex.governance.v1.ReleaseDecisionPackage
+	28,  // 212: kodex.governance.v1.ListReleaseDecisionPackagesResponse.page:type_name -> kodex.governance.v1.PageResponse
+	51,  // 213: kodex.governance.v1.ReleaseDecisionResponse.release_decision:type_name -> kodex.governance.v1.ReleaseDecision
+	50,  // 214: kodex.governance.v1.ReleaseDecisionResponse.release_decision_package:type_name -> kodex.governance.v1.ReleaseDecisionPackage
+	51,  // 215: kodex.governance.v1.ListReleaseDecisionsResponse.release_decisions:type_name -> kodex.governance.v1.ReleaseDecision
+	28,  // 216: kodex.governance.v1.ListReleaseDecisionsResponse.page:type_name -> kodex.governance.v1.PageResponse
+	53,  // 217: kodex.governance.v1.BlockingSignalResponse.blocking_signal:type_name -> kodex.governance.v1.BlockingSignal
+	53,  // 218: kodex.governance.v1.ListBlockingSignalsResponse.blocking_signals:type_name -> kodex.governance.v1.BlockingSignal
+	28,  // 219: kodex.governance.v1.ListBlockingSignalsResponse.page:type_name -> kodex.governance.v1.PageResponse
+	52,  // 220: kodex.governance.v1.ReleaseSafetyStateResponse.release_safety_state:type_name -> kodex.governance.v1.ReleaseSafetyState
+	56,  // 221: kodex.governance.v1.GovernanceManagerService.CreateRiskProfile:input_type -> kodex.governance.v1.CreateRiskProfileRequest
+	57,  // 222: kodex.governance.v1.GovernanceManagerService.CreateRiskProfileVersion:input_type -> kodex.governance.v1.CreateRiskProfileVersionRequest
+	58,  // 223: kodex.governance.v1.GovernanceManagerService.ActivateRiskProfileVersion:input_type -> kodex.governance.v1.ActivateRiskProfileVersionRequest
+	59,  // 224: kodex.governance.v1.GovernanceManagerService.ArchiveRiskProfile:input_type -> kodex.governance.v1.ArchiveRiskProfileRequest
+	60,  // 225: kodex.governance.v1.GovernanceManagerService.GetRiskProfile:input_type -> kodex.governance.v1.GetRiskProfileRequest
+	61,  // 226: kodex.governance.v1.GovernanceManagerService.GetRiskProfileVersion:input_type -> kodex.governance.v1.GetRiskProfileVersionRequest
+	62,  // 227: kodex.governance.v1.GovernanceManagerService.ListRiskProfiles:input_type -> kodex.governance.v1.ListRiskProfilesRequest
+	63,  // 228: kodex.governance.v1.GovernanceManagerService.ListRiskRules:input_type -> kodex.governance.v1.ListRiskRulesRequest
+	64,  // 229: kodex.governance.v1.GovernanceManagerService.ListGatePolicies:input_type -> kodex.governance.v1.ListGatePoliciesRequest
+	65,  // 230: kodex.governance.v1.GovernanceManagerService.EvaluateRisk:input_type -> kodex.governance.v1.EvaluateRiskRequest
+	66,  // 231: kodex.governance.v1.GovernanceManagerService.ReevaluateRisk:input_type -> kodex.governance.v1.ReevaluateRiskRequest
+	67,  // 232: kodex.governance.v1.GovernanceManagerService.GetRiskAssessment:input_type -> kodex.governance.v1.GetRiskAssessmentRequest
+	68,  // 233: kodex.governance.v1.GovernanceManagerService.ListRiskAssessments:input_type -> kodex.governance.v1.ListRiskAssessmentsRequest
+	69,  // 234: kodex.governance.v1.GovernanceManagerService.ListRiskFactors:input_type -> kodex.governance.v1.ListRiskFactorsRequest
+	70,  // 235: kodex.governance.v1.GovernanceManagerService.RecordReviewSignal:input_type -> kodex.governance.v1.RecordReviewSignalRequest
+	71,  // 236: kodex.governance.v1.GovernanceManagerService.ListReviewSignals:input_type -> kodex.governance.v1.ListReviewSignalsRequest
+	72,  // 237: kodex.governance.v1.GovernanceManagerService.RequestGate:input_type -> kodex.governance.v1.RequestGateRequest
+	73,  // 238: kodex.governance.v1.GovernanceManagerService.SubmitGateDecision:input_type -> kodex.governance.v1.SubmitGateDecisionRequest
+	74,  // 239: kodex.governance.v1.GovernanceManagerService.CancelGate:input_type -> kodex.governance.v1.CancelGateRequest
+	75,  // 240: kodex.governance.v1.GovernanceManagerService.ExpireGate:input_type -> kodex.governance.v1.ExpireGateRequest
+	76,  // 241: kodex.governance.v1.GovernanceManagerService.GetGateDecision:input_type -> kodex.governance.v1.GetGateDecisionRequest
+	77,  // 242: kodex.governance.v1.GovernanceManagerService.ListGateDecisions:input_type -> kodex.governance.v1.ListGateDecisionsRequest
+	78,  // 243: kodex.governance.v1.GovernanceManagerService.GetGateRequest:input_type -> kodex.governance.v1.GetGateRequestRequest
+	79,  // 244: kodex.governance.v1.GovernanceManagerService.ListGateRequests:input_type -> kodex.governance.v1.ListGateRequestsRequest
+	80,  // 245: kodex.governance.v1.GovernanceManagerService.BuildReleaseDecisionPackage:input_type -> kodex.governance.v1.BuildReleaseDecisionPackageRequest
+	81,  // 246: kodex.governance.v1.GovernanceManagerService.RecordReleaseRuntimeEvidence:input_type -> kodex.governance.v1.RecordReleaseRuntimeEvidenceRequest
+	82,  // 247: kodex.governance.v1.GovernanceManagerService.GetReleaseDecisionPackage:input_type -> kodex.governance.v1.GetReleaseDecisionPackageRequest
+	83,  // 248: kodex.governance.v1.GovernanceManagerService.ListReleaseDecisionPackages:input_type -> kodex.governance.v1.ListReleaseDecisionPackagesRequest
+	84,  // 249: kodex.governance.v1.GovernanceManagerService.RequestReleaseDecision:input_type -> kodex.governance.v1.RequestReleaseDecisionRequest
+	85,  // 250: kodex.governance.v1.GovernanceManagerService.SubmitReleaseDecision:input_type -> kodex.governance.v1.SubmitReleaseDecisionRequest
+	86,  // 251: kodex.governance.v1.GovernanceManagerService.GetReleaseDecision:input_type -> kodex.governance.v1.GetReleaseDecisionRequest
+	87,  // 252: kodex.governance.v1.GovernanceManagerService.ListReleaseDecisions:input_type -> kodex.governance.v1.ListReleaseDecisionsRequest
+	88,  // 253: kodex.governance.v1.GovernanceManagerService.RecordBlockingSignal:input_type -> kodex.governance.v1.RecordBlockingSignalRequest
+	89,  // 254: kodex.governance.v1.GovernanceManagerService.ResolveBlockingSignal:input_type -> kodex.governance.v1.ResolveBlockingSignalRequest
+	90,  // 255: kodex.governance.v1.GovernanceManagerService.ListBlockingSignals:input_type -> kodex.governance.v1.ListBlockingSignalsRequest
+	91,  // 256: kodex.governance.v1.GovernanceManagerService.RecordReleaseSafetyState:input_type -> kodex.governance.v1.RecordReleaseSafetyStateRequest
+	92,  // 257: kodex.governance.v1.GovernanceManagerService.GetReleaseSafetyState:input_type -> kodex.governance.v1.GetReleaseSafetyStateRequest
+	93,  // 258: kodex.governance.v1.GovernanceManagerService.CreateRiskProfile:output_type -> kodex.governance.v1.RiskProfileResponse
+	94,  // 259: kodex.governance.v1.GovernanceManagerService.CreateRiskProfileVersion:output_type -> kodex.governance.v1.RiskProfileVersionResponse
+	94,  // 260: kodex.governance.v1.GovernanceManagerService.ActivateRiskProfileVersion:output_type -> kodex.governance.v1.RiskProfileVersionResponse
+	93,  // 261: kodex.governance.v1.GovernanceManagerService.ArchiveRiskProfile:output_type -> kodex.governance.v1.RiskProfileResponse
+	93,  // 262: kodex.governance.v1.GovernanceManagerService.GetRiskProfile:output_type -> kodex.governance.v1.RiskProfileResponse
+	94,  // 263: kodex.governance.v1.GovernanceManagerService.GetRiskProfileVersion:output_type -> kodex.governance.v1.RiskProfileVersionResponse
+	95,  // 264: kodex.governance.v1.GovernanceManagerService.ListRiskProfiles:output_type -> kodex.governance.v1.ListRiskProfilesResponse
+	96,  // 265: kodex.governance.v1.GovernanceManagerService.ListRiskRules:output_type -> kodex.governance.v1.ListRiskRulesResponse
+	97,  // 266: kodex.governance.v1.GovernanceManagerService.ListGatePolicies:output_type -> kodex.governance.v1.ListGatePoliciesResponse
+	98,  // 267: kodex.governance.v1.GovernanceManagerService.EvaluateRisk:output_type -> kodex.governance.v1.RiskAssessmentResponse
+	98,  // 268: kodex.governance.v1.GovernanceManagerService.ReevaluateRisk:output_type -> kodex.governance.v1.RiskAssessmentResponse
+	98,  // 269: kodex.governance.v1.GovernanceManagerService.GetRiskAssessment:output_type -> kodex.governance.v1.RiskAssessmentResponse
+	99,  // 270: kodex.governance.v1.GovernanceManagerService.ListRiskAssessments:output_type -> kodex.governance.v1.ListRiskAssessmentsResponse
+	100, // 271: kodex.governance.v1.GovernanceManagerService.ListRiskFactors:output_type -> kodex.governance.v1.ListRiskFactorsResponse
+	101, // 272: kodex.governance.v1.GovernanceManagerService.RecordReviewSignal:output_type -> kodex.governance.v1.ReviewSignalResponse
+	102, // 273: kodex.governance.v1.GovernanceManagerService.ListReviewSignals:output_type -> kodex.governance.v1.ListReviewSignalsResponse
+	103, // 274: kodex.governance.v1.GovernanceManagerService.RequestGate:output_type -> kodex.governance.v1.GateRequestResponse
+	104, // 275: kodex.governance.v1.GovernanceManagerService.SubmitGateDecision:output_type -> kodex.governance.v1.GateDecisionResponse
+	103, // 276: kodex.governance.v1.GovernanceManagerService.CancelGate:output_type -> kodex.governance.v1.GateRequestResponse
+	103, // 277: kodex.governance.v1.GovernanceManagerService.ExpireGate:output_type -> kodex.governance.v1.GateRequestResponse
+	104, // 278: kodex.governance.v1.GovernanceManagerService.GetGateDecision:output_type -> kodex.governance.v1.GateDecisionResponse
+	106, // 279: kodex.governance.v1.GovernanceManagerService.ListGateDecisions:output_type -> kodex.governance.v1.ListGateDecisionsResponse
+	103, // 280: kodex.governance.v1.GovernanceManagerService.GetGateRequest:output_type -> kodex.governance.v1.GateRequestResponse
+	105, // 281: kodex.governance.v1.GovernanceManagerService.ListGateRequests:output_type -> kodex.governance.v1.ListGateRequestsResponse
+	107, // 282: kodex.governance.v1.GovernanceManagerService.BuildReleaseDecisionPackage:output_type -> kodex.governance.v1.ReleaseDecisionPackageResponse
+	107, // 283: kodex.governance.v1.GovernanceManagerService.RecordReleaseRuntimeEvidence:output_type -> kodex.governance.v1.ReleaseDecisionPackageResponse
+	107, // 284: kodex.governance.v1.GovernanceManagerService.GetReleaseDecisionPackage:output_type -> kodex.governance.v1.ReleaseDecisionPackageResponse
+	108, // 285: kodex.governance.v1.GovernanceManagerService.ListReleaseDecisionPackages:output_type -> kodex.governance.v1.ListReleaseDecisionPackagesResponse
+	109, // 286: kodex.governance.v1.GovernanceManagerService.RequestReleaseDecision:output_type -> kodex.governance.v1.ReleaseDecisionResponse
+	109, // 287: kodex.governance.v1.GovernanceManagerService.SubmitReleaseDecision:output_type -> kodex.governance.v1.ReleaseDecisionResponse
+	109, // 288: kodex.governance.v1.GovernanceManagerService.GetReleaseDecision:output_type -> kodex.governance.v1.ReleaseDecisionResponse
+	110, // 289: kodex.governance.v1.GovernanceManagerService.ListReleaseDecisions:output_type -> kodex.governance.v1.ListReleaseDecisionsResponse
+	111, // 290: kodex.governance.v1.GovernanceManagerService.RecordBlockingSignal:output_type -> kodex.governance.v1.BlockingSignalResponse
+	111, // 291: kodex.governance.v1.GovernanceManagerService.ResolveBlockingSignal:output_type -> kodex.governance.v1.BlockingSignalResponse
+	112, // 292: kodex.governance.v1.GovernanceManagerService.ListBlockingSignals:output_type -> kodex.governance.v1.ListBlockingSignalsResponse
+	113, // 293: kodex.governance.v1.GovernanceManagerService.RecordReleaseSafetyState:output_type -> kodex.governance.v1.ReleaseSafetyStateResponse
+	113, // 294: kodex.governance.v1.GovernanceManagerService.GetReleaseSafetyState:output_type -> kodex.governance.v1.ReleaseSafetyStateResponse
+	258, // [258:295] is the sub-list for method output_type
+	221, // [221:258] is the sub-list for method input_type
+	221, // [221:221] is the sub-list for extension type_name
+	221, // [221:221] is the sub-list for extension extendee
+	0,   // [0:221] is the sub-list for field type_name
 }
 
 func init() { file_kodex_governance_v1_governance_manager_proto_init() }
@@ -9971,21 +10076,21 @@ func file_kodex_governance_v1_governance_manager_proto_init() {
 	file_kodex_governance_v1_governance_manager_proto_msgTypes[54].OneofWrappers = []any{}
 	file_kodex_governance_v1_governance_manager_proto_msgTypes[56].OneofWrappers = []any{}
 	file_kodex_governance_v1_governance_manager_proto_msgTypes[57].OneofWrappers = []any{}
-	file_kodex_governance_v1_governance_manager_proto_msgTypes[59].OneofWrappers = []any{}
-	file_kodex_governance_v1_governance_manager_proto_msgTypes[61].OneofWrappers = []any{}
-	file_kodex_governance_v1_governance_manager_proto_msgTypes[63].OneofWrappers = []any{}
+	file_kodex_governance_v1_governance_manager_proto_msgTypes[60].OneofWrappers = []any{}
+	file_kodex_governance_v1_governance_manager_proto_msgTypes[62].OneofWrappers = []any{}
 	file_kodex_governance_v1_governance_manager_proto_msgTypes[64].OneofWrappers = []any{}
-	file_kodex_governance_v1_governance_manager_proto_msgTypes[66].OneofWrappers = []any{}
+	file_kodex_governance_v1_governance_manager_proto_msgTypes[65].OneofWrappers = []any{}
 	file_kodex_governance_v1_governance_manager_proto_msgTypes[67].OneofWrappers = []any{}
-	file_kodex_governance_v1_governance_manager_proto_msgTypes[79].OneofWrappers = []any{}
-	file_kodex_governance_v1_governance_manager_proto_msgTypes[90].OneofWrappers = []any{}
+	file_kodex_governance_v1_governance_manager_proto_msgTypes[68].OneofWrappers = []any{}
+	file_kodex_governance_v1_governance_manager_proto_msgTypes[80].OneofWrappers = []any{}
+	file_kodex_governance_v1_governance_manager_proto_msgTypes[91].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_kodex_governance_v1_governance_manager_proto_rawDesc), len(file_kodex_governance_v1_governance_manager_proto_rawDesc)),
 			NumEnums:      23,
-			NumMessages:   91,
+			NumMessages:   92,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

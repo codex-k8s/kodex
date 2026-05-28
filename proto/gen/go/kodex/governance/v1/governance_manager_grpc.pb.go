@@ -19,42 +19,43 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	GovernanceManagerService_CreateRiskProfile_FullMethodName           = "/kodex.governance.v1.GovernanceManagerService/CreateRiskProfile"
-	GovernanceManagerService_CreateRiskProfileVersion_FullMethodName    = "/kodex.governance.v1.GovernanceManagerService/CreateRiskProfileVersion"
-	GovernanceManagerService_ActivateRiskProfileVersion_FullMethodName  = "/kodex.governance.v1.GovernanceManagerService/ActivateRiskProfileVersion"
-	GovernanceManagerService_ArchiveRiskProfile_FullMethodName          = "/kodex.governance.v1.GovernanceManagerService/ArchiveRiskProfile"
-	GovernanceManagerService_GetRiskProfile_FullMethodName              = "/kodex.governance.v1.GovernanceManagerService/GetRiskProfile"
-	GovernanceManagerService_GetRiskProfileVersion_FullMethodName       = "/kodex.governance.v1.GovernanceManagerService/GetRiskProfileVersion"
-	GovernanceManagerService_ListRiskProfiles_FullMethodName            = "/kodex.governance.v1.GovernanceManagerService/ListRiskProfiles"
-	GovernanceManagerService_ListRiskRules_FullMethodName               = "/kodex.governance.v1.GovernanceManagerService/ListRiskRules"
-	GovernanceManagerService_ListGatePolicies_FullMethodName            = "/kodex.governance.v1.GovernanceManagerService/ListGatePolicies"
-	GovernanceManagerService_EvaluateRisk_FullMethodName                = "/kodex.governance.v1.GovernanceManagerService/EvaluateRisk"
-	GovernanceManagerService_ReevaluateRisk_FullMethodName              = "/kodex.governance.v1.GovernanceManagerService/ReevaluateRisk"
-	GovernanceManagerService_GetRiskAssessment_FullMethodName           = "/kodex.governance.v1.GovernanceManagerService/GetRiskAssessment"
-	GovernanceManagerService_ListRiskAssessments_FullMethodName         = "/kodex.governance.v1.GovernanceManagerService/ListRiskAssessments"
-	GovernanceManagerService_ListRiskFactors_FullMethodName             = "/kodex.governance.v1.GovernanceManagerService/ListRiskFactors"
-	GovernanceManagerService_RecordReviewSignal_FullMethodName          = "/kodex.governance.v1.GovernanceManagerService/RecordReviewSignal"
-	GovernanceManagerService_ListReviewSignals_FullMethodName           = "/kodex.governance.v1.GovernanceManagerService/ListReviewSignals"
-	GovernanceManagerService_RequestGate_FullMethodName                 = "/kodex.governance.v1.GovernanceManagerService/RequestGate"
-	GovernanceManagerService_SubmitGateDecision_FullMethodName          = "/kodex.governance.v1.GovernanceManagerService/SubmitGateDecision"
-	GovernanceManagerService_CancelGate_FullMethodName                  = "/kodex.governance.v1.GovernanceManagerService/CancelGate"
-	GovernanceManagerService_ExpireGate_FullMethodName                  = "/kodex.governance.v1.GovernanceManagerService/ExpireGate"
-	GovernanceManagerService_GetGateDecision_FullMethodName             = "/kodex.governance.v1.GovernanceManagerService/GetGateDecision"
-	GovernanceManagerService_ListGateDecisions_FullMethodName           = "/kodex.governance.v1.GovernanceManagerService/ListGateDecisions"
-	GovernanceManagerService_GetGateRequest_FullMethodName              = "/kodex.governance.v1.GovernanceManagerService/GetGateRequest"
-	GovernanceManagerService_ListGateRequests_FullMethodName            = "/kodex.governance.v1.GovernanceManagerService/ListGateRequests"
-	GovernanceManagerService_BuildReleaseDecisionPackage_FullMethodName = "/kodex.governance.v1.GovernanceManagerService/BuildReleaseDecisionPackage"
-	GovernanceManagerService_GetReleaseDecisionPackage_FullMethodName   = "/kodex.governance.v1.GovernanceManagerService/GetReleaseDecisionPackage"
-	GovernanceManagerService_ListReleaseDecisionPackages_FullMethodName = "/kodex.governance.v1.GovernanceManagerService/ListReleaseDecisionPackages"
-	GovernanceManagerService_RequestReleaseDecision_FullMethodName      = "/kodex.governance.v1.GovernanceManagerService/RequestReleaseDecision"
-	GovernanceManagerService_SubmitReleaseDecision_FullMethodName       = "/kodex.governance.v1.GovernanceManagerService/SubmitReleaseDecision"
-	GovernanceManagerService_GetReleaseDecision_FullMethodName          = "/kodex.governance.v1.GovernanceManagerService/GetReleaseDecision"
-	GovernanceManagerService_ListReleaseDecisions_FullMethodName        = "/kodex.governance.v1.GovernanceManagerService/ListReleaseDecisions"
-	GovernanceManagerService_RecordBlockingSignal_FullMethodName        = "/kodex.governance.v1.GovernanceManagerService/RecordBlockingSignal"
-	GovernanceManagerService_ResolveBlockingSignal_FullMethodName       = "/kodex.governance.v1.GovernanceManagerService/ResolveBlockingSignal"
-	GovernanceManagerService_ListBlockingSignals_FullMethodName         = "/kodex.governance.v1.GovernanceManagerService/ListBlockingSignals"
-	GovernanceManagerService_RecordReleaseSafetyState_FullMethodName    = "/kodex.governance.v1.GovernanceManagerService/RecordReleaseSafetyState"
-	GovernanceManagerService_GetReleaseSafetyState_FullMethodName       = "/kodex.governance.v1.GovernanceManagerService/GetReleaseSafetyState"
+	GovernanceManagerService_CreateRiskProfile_FullMethodName            = "/kodex.governance.v1.GovernanceManagerService/CreateRiskProfile"
+	GovernanceManagerService_CreateRiskProfileVersion_FullMethodName     = "/kodex.governance.v1.GovernanceManagerService/CreateRiskProfileVersion"
+	GovernanceManagerService_ActivateRiskProfileVersion_FullMethodName   = "/kodex.governance.v1.GovernanceManagerService/ActivateRiskProfileVersion"
+	GovernanceManagerService_ArchiveRiskProfile_FullMethodName           = "/kodex.governance.v1.GovernanceManagerService/ArchiveRiskProfile"
+	GovernanceManagerService_GetRiskProfile_FullMethodName               = "/kodex.governance.v1.GovernanceManagerService/GetRiskProfile"
+	GovernanceManagerService_GetRiskProfileVersion_FullMethodName        = "/kodex.governance.v1.GovernanceManagerService/GetRiskProfileVersion"
+	GovernanceManagerService_ListRiskProfiles_FullMethodName             = "/kodex.governance.v1.GovernanceManagerService/ListRiskProfiles"
+	GovernanceManagerService_ListRiskRules_FullMethodName                = "/kodex.governance.v1.GovernanceManagerService/ListRiskRules"
+	GovernanceManagerService_ListGatePolicies_FullMethodName             = "/kodex.governance.v1.GovernanceManagerService/ListGatePolicies"
+	GovernanceManagerService_EvaluateRisk_FullMethodName                 = "/kodex.governance.v1.GovernanceManagerService/EvaluateRisk"
+	GovernanceManagerService_ReevaluateRisk_FullMethodName               = "/kodex.governance.v1.GovernanceManagerService/ReevaluateRisk"
+	GovernanceManagerService_GetRiskAssessment_FullMethodName            = "/kodex.governance.v1.GovernanceManagerService/GetRiskAssessment"
+	GovernanceManagerService_ListRiskAssessments_FullMethodName          = "/kodex.governance.v1.GovernanceManagerService/ListRiskAssessments"
+	GovernanceManagerService_ListRiskFactors_FullMethodName              = "/kodex.governance.v1.GovernanceManagerService/ListRiskFactors"
+	GovernanceManagerService_RecordReviewSignal_FullMethodName           = "/kodex.governance.v1.GovernanceManagerService/RecordReviewSignal"
+	GovernanceManagerService_ListReviewSignals_FullMethodName            = "/kodex.governance.v1.GovernanceManagerService/ListReviewSignals"
+	GovernanceManagerService_RequestGate_FullMethodName                  = "/kodex.governance.v1.GovernanceManagerService/RequestGate"
+	GovernanceManagerService_SubmitGateDecision_FullMethodName           = "/kodex.governance.v1.GovernanceManagerService/SubmitGateDecision"
+	GovernanceManagerService_CancelGate_FullMethodName                   = "/kodex.governance.v1.GovernanceManagerService/CancelGate"
+	GovernanceManagerService_ExpireGate_FullMethodName                   = "/kodex.governance.v1.GovernanceManagerService/ExpireGate"
+	GovernanceManagerService_GetGateDecision_FullMethodName              = "/kodex.governance.v1.GovernanceManagerService/GetGateDecision"
+	GovernanceManagerService_ListGateDecisions_FullMethodName            = "/kodex.governance.v1.GovernanceManagerService/ListGateDecisions"
+	GovernanceManagerService_GetGateRequest_FullMethodName               = "/kodex.governance.v1.GovernanceManagerService/GetGateRequest"
+	GovernanceManagerService_ListGateRequests_FullMethodName             = "/kodex.governance.v1.GovernanceManagerService/ListGateRequests"
+	GovernanceManagerService_BuildReleaseDecisionPackage_FullMethodName  = "/kodex.governance.v1.GovernanceManagerService/BuildReleaseDecisionPackage"
+	GovernanceManagerService_RecordReleaseRuntimeEvidence_FullMethodName = "/kodex.governance.v1.GovernanceManagerService/RecordReleaseRuntimeEvidence"
+	GovernanceManagerService_GetReleaseDecisionPackage_FullMethodName    = "/kodex.governance.v1.GovernanceManagerService/GetReleaseDecisionPackage"
+	GovernanceManagerService_ListReleaseDecisionPackages_FullMethodName  = "/kodex.governance.v1.GovernanceManagerService/ListReleaseDecisionPackages"
+	GovernanceManagerService_RequestReleaseDecision_FullMethodName       = "/kodex.governance.v1.GovernanceManagerService/RequestReleaseDecision"
+	GovernanceManagerService_SubmitReleaseDecision_FullMethodName        = "/kodex.governance.v1.GovernanceManagerService/SubmitReleaseDecision"
+	GovernanceManagerService_GetReleaseDecision_FullMethodName           = "/kodex.governance.v1.GovernanceManagerService/GetReleaseDecision"
+	GovernanceManagerService_ListReleaseDecisions_FullMethodName         = "/kodex.governance.v1.GovernanceManagerService/ListReleaseDecisions"
+	GovernanceManagerService_RecordBlockingSignal_FullMethodName         = "/kodex.governance.v1.GovernanceManagerService/RecordBlockingSignal"
+	GovernanceManagerService_ResolveBlockingSignal_FullMethodName        = "/kodex.governance.v1.GovernanceManagerService/ResolveBlockingSignal"
+	GovernanceManagerService_ListBlockingSignals_FullMethodName          = "/kodex.governance.v1.GovernanceManagerService/ListBlockingSignals"
+	GovernanceManagerService_RecordReleaseSafetyState_FullMethodName     = "/kodex.governance.v1.GovernanceManagerService/RecordReleaseSafetyState"
+	GovernanceManagerService_GetReleaseSafetyState_FullMethodName        = "/kodex.governance.v1.GovernanceManagerService/GetReleaseSafetyState"
 )
 
 // GovernanceManagerServiceClient is the client API for GovernanceManagerService service.
@@ -115,6 +116,8 @@ type GovernanceManagerServiceClient interface {
 	ListGateRequests(ctx context.Context, in *ListGateRequestsRequest, opts ...grpc.CallOption) (*ListGateRequestsResponse, error)
 	// BuildReleaseDecisionPackage builds a bounded evidence package for a release candidate.
 	BuildReleaseDecisionPackage(ctx context.Context, in *BuildReleaseDecisionPackageRequest, opts ...grpc.CallOption) (*ReleaseDecisionPackageResponse, error)
+	// RecordReleaseRuntimeEvidence appends safe runtime/deploy evidence refs to a release package.
+	RecordReleaseRuntimeEvidence(ctx context.Context, in *RecordReleaseRuntimeEvidenceRequest, opts ...grpc.CallOption) (*ReleaseDecisionPackageResponse, error)
 	// GetReleaseDecisionPackage returns one release decision package.
 	GetReleaseDecisionPackage(ctx context.Context, in *GetReleaseDecisionPackageRequest, opts ...grpc.CallOption) (*ReleaseDecisionPackageResponse, error)
 	// ListReleaseDecisionPackages returns release packages by project, candidate or status.
@@ -397,6 +400,16 @@ func (c *governanceManagerServiceClient) BuildReleaseDecisionPackage(ctx context
 	return out, nil
 }
 
+func (c *governanceManagerServiceClient) RecordReleaseRuntimeEvidence(ctx context.Context, in *RecordReleaseRuntimeEvidenceRequest, opts ...grpc.CallOption) (*ReleaseDecisionPackageResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReleaseDecisionPackageResponse)
+	err := c.cc.Invoke(ctx, GovernanceManagerService_RecordReleaseRuntimeEvidence_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *governanceManagerServiceClient) GetReleaseDecisionPackage(ctx context.Context, in *GetReleaseDecisionPackageRequest, opts ...grpc.CallOption) (*ReleaseDecisionPackageResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ReleaseDecisionPackageResponse)
@@ -565,6 +578,8 @@ type GovernanceManagerServiceServer interface {
 	ListGateRequests(context.Context, *ListGateRequestsRequest) (*ListGateRequestsResponse, error)
 	// BuildReleaseDecisionPackage builds a bounded evidence package for a release candidate.
 	BuildReleaseDecisionPackage(context.Context, *BuildReleaseDecisionPackageRequest) (*ReleaseDecisionPackageResponse, error)
+	// RecordReleaseRuntimeEvidence appends safe runtime/deploy evidence refs to a release package.
+	RecordReleaseRuntimeEvidence(context.Context, *RecordReleaseRuntimeEvidenceRequest) (*ReleaseDecisionPackageResponse, error)
 	// GetReleaseDecisionPackage returns one release decision package.
 	GetReleaseDecisionPackage(context.Context, *GetReleaseDecisionPackageRequest) (*ReleaseDecisionPackageResponse, error)
 	// ListReleaseDecisionPackages returns release packages by project, candidate or status.
@@ -671,6 +686,9 @@ func (UnimplementedGovernanceManagerServiceServer) ListGateRequests(context.Cont
 }
 func (UnimplementedGovernanceManagerServiceServer) BuildReleaseDecisionPackage(context.Context, *BuildReleaseDecisionPackageRequest) (*ReleaseDecisionPackageResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method BuildReleaseDecisionPackage not implemented")
+}
+func (UnimplementedGovernanceManagerServiceServer) RecordReleaseRuntimeEvidence(context.Context, *RecordReleaseRuntimeEvidenceRequest) (*ReleaseDecisionPackageResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RecordReleaseRuntimeEvidence not implemented")
 }
 func (UnimplementedGovernanceManagerServiceServer) GetReleaseDecisionPackage(context.Context, *GetReleaseDecisionPackageRequest) (*ReleaseDecisionPackageResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetReleaseDecisionPackage not implemented")
@@ -1177,6 +1195,24 @@ func _GovernanceManagerService_BuildReleaseDecisionPackage_Handler(srv interface
 	return interceptor(ctx, in, info, handler)
 }
 
+func _GovernanceManagerService_RecordReleaseRuntimeEvidence_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RecordReleaseRuntimeEvidenceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GovernanceManagerServiceServer).RecordReleaseRuntimeEvidence(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GovernanceManagerService_RecordReleaseRuntimeEvidence_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GovernanceManagerServiceServer).RecordReleaseRuntimeEvidence(ctx, req.(*RecordReleaseRuntimeEvidenceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _GovernanceManagerService_GetReleaseDecisionPackage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetReleaseDecisionPackageRequest)
 	if err := dec(in); err != nil {
@@ -1481,6 +1517,10 @@ var GovernanceManagerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "BuildReleaseDecisionPackage",
 			Handler:    _GovernanceManagerService_BuildReleaseDecisionPackage_Handler,
+		},
+		{
+			MethodName: "RecordReleaseRuntimeEvidence",
+			Handler:    _GovernanceManagerService_RecordReleaseRuntimeEvidence_Handler,
 		},
 		{
 			MethodName: "GetReleaseDecisionPackage",

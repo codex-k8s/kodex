@@ -97,6 +97,14 @@
 - Сервис обрабатывает только `request_kind=human_gate`, локальный gate request ref и `response_action=approve/reject`; остальные владельцы подтверждаются без записи, а неподдержанные action получают безопасный permanent diagnostic без retry storm.
 - Сохраняются только actor ref, interaction request/response refs, safe source ref, response digest summary, outcome, event/request ref и idempotency fingerprint; raw response text, callback body, delivery payload, prompt/transcript, logs, workspace paths и secrets не читаются и не сохраняются.
 
+## Завершённый срез runtime/deploy evidence refs
+
+- Issue: без отдельного Issue.
+- Результат среза: `governance-manager` принимает safe runtime/deploy evidence для существующего release decision package через `RecordReleaseRuntimeEvidence`.
+- Команда дозаписывает только `runtime_refs`, ограниченные `evidence_refs` и `integration_refs` домена `runtime` с `status`, коротким `summary`, `digest`, `observed_at`, `version`/etag и опциональным `error_code`; raw logs, stdout/stderr, kubeconfig, Kubernetes payload, deploy scripts, workspace paths и secrets не сохраняются.
+- Идемпотентный replay с тем же входом не создаёт новую версию или событие, конфликтующий снимок для того же `domain/kind/ref` отклоняется, `closed` package не меняется.
+- Прямой consumer для `runtime.job.*` не включается: стабильные события `runtime-manager` пока не несут согласованную безопасную привязку к `release_decision_package_id` или локальному gate/package ref.
+
 ## Ближайшие зависимости
 
 | Домен | Что нужно согласовать |
@@ -104,5 +112,5 @@
 | `projects-and-repositories` | Project/repository refs, services policy, branch rules, release policy, release line и risk profile refs. |
 | `agent-orchestration` | Run/session/acceptance refs, role review signals и ожидание governance decision; события `agent.acceptance.*` пока не дают typed governance outcome для прямого review/risk signal. |
 | `provider-native-work-items` | PR/MR projections, changed file summary, provider review/comment/check refs и validation gate refs для provider write operations. |
-| `runtime-and-fleet` | Job/deploy/postdeploy/cleanup signals и target environment refs. |
+| `runtime-and-fleet` | Runtime/deploy refs уже принимаются командой по известному release package; для прямого consumer нужен owner event с безопасной package/gate привязкой. |
 | `interaction-hub` | Delivery request/callback контракт для Human gate без владения decision state; ответ владельца уже принимается через `interaction.request.response_recorded` только для локального governance gate decision. |

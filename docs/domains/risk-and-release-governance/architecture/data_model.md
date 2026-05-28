@@ -204,16 +204,18 @@ approvals:
 | `release_line_ref` | text | да | Релизная линия из `project-catalog`. |
 | `risk_assessment_id` | uuid | да | Оценка риска релиза. |
 | `provider_refs` | jsonb | нет | Issue/PR/MR/check/review/tag/branch refs без raw provider payload. |
-| `runtime_refs` | jsonb | нет | Build/deploy/job/postdeploy refs и bounded summaries без logs/stdout/stderr. |
+| `runtime_refs` | jsonb | нет | Build/deploy/job/postdeploy refs и короткие безопасные сводки без логов/stdout/stderr. |
 | `agent_context` | jsonb | нет | Run/session/stage/acceptance refs без prompt, transcript или workspace paths. |
 | `review_signal_ids` | uuid[] | нет | Локальные review signals, включённые в пакет. |
 | `evidence_refs` | jsonb | нет | Safe refs/digests/summaries на evidence, без больших отчётов. |
-| `integration_refs` | jsonb | нет | Явные safe refs соседних доменов: `domain`, `kind`, `ref`, optional `status`, `summary`, `digest`, `observed_at`, `version`; локальные governance refs получают bounded enrichment. |
+| `integration_refs` | jsonb | нет | Явные безопасные refs соседних доменов: `domain`, `kind`, `ref`, опциональные `status`, `summary`, `digest`, `observed_at`, `version`, `error_code`; локальные governance refs получают ограниченное обогащение. |
 | `known_limitations_summary` | text | нет | Короткая safe summary осознанных ограничений и accepted risk. |
 | `status` | enum | нет | `draft`, `ready`, `decision_requested`, `closed`. |
 | `created_at`, `updated_at` | timestamptz | нет | Технические временные метки. |
 
-`integration_refs` связывают release package с project/repository/release line refs, provider Issue/PR/check/review refs, agent run/acceptance refs, runtime job/deploy refs, local risk assessment refs и gate refs. `governance-manager` валидирует и обогащает только локальные governance refs: для найденных assessment/signal/gate/package refs сохраняются bounded `status`, короткий `summary`, `digest`, `observed_at` и `version` там, где у локального aggregate есть версия. Если вызывающая сторона передала локальный snapshot, который конфликтует с текущим governance state, package build отклоняется. Для project/provider/agent/runtime refs сервис не читает соседние сервисы напрямую: explicit ref сохраняется, а при отсутствии owner-domain summary добавляется safe diagnostic `explicit_ref_unvalidated` в `summary` без raw details. Для audit snapshot refs нормализуются в canonical order по `domain/kind/ref`; полностью одинаковые дубли схлопываются, а дубли с разными `status`, `summary`, `digest`, `observed_at` или `version` отклоняются как конфликтующие факты.
+`integration_refs` связывают release package с project/repository/release line refs, provider Issue/PR/check/review refs, agent run/acceptance refs, runtime job/deploy refs, local risk assessment refs и gate refs. `governance-manager` валидирует и обогащает только локальные governance refs: для найденных assessment/signal/gate/package refs сохраняются bounded `status`, короткий `summary`, `digest`, `observed_at` и `version` там, где у локального aggregate есть версия. Если вызывающая сторона передала локальный snapshot, который конфликтует с текущим governance state, package build отклоняется. Для project/provider/agent/runtime refs сервис не читает соседние сервисы напрямую: explicit ref сохраняется, а при отсутствии owner-domain summary добавляется safe diagnostic `explicit_ref_unvalidated` в `summary` без raw details. Для audit snapshot refs нормализуются в canonical order по `domain/kind/ref`; полностью одинаковые дубли схлопываются, а дубли с разными `status`, `summary`, `digest`, `observed_at`, `version` или `error_code` отклоняются как конфликтующие факты.
+
+`RecordReleaseRuntimeEvidence` добавляет runtime/deploy evidence к уже созданному release package без новой таблицы: команда обновляет `runtime_refs`, `evidence_refs` и `integration_refs`, требует `expected_version`, не меняет `closed` package и публикует только безопасное событие `governance.release_decision_package.runtime_evidence_recorded`. Исходное состояние runtime job, deploy-артефакты, логи, Kubernetes objects и полный postdeploy-отчёт остаются у `runtime-manager` или внешнего владельца артефакта; governance хранит только refs, ограниченный статус, `error_code`, digest/version и короткую сводку.
 
 ### ReleaseDecision
 

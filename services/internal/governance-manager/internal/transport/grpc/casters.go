@@ -200,6 +200,7 @@ func releaseIntegrationRefs(items []*governancev1.ReleaseIntegrationRef) []value
 			Digest:     item.GetDigest(),
 			ObservedAt: item.GetObservedAt(),
 			Version:    item.GetVersion(),
+			ErrorCode:  item.GetErrorCode(),
 		})
 	}
 	return result
@@ -567,6 +568,7 @@ func toReleaseIntegrationRefs(items []value.ReleaseIntegrationRef) []*governance
 		ref.Digest = ptrStringNonEmpty(item.Digest)
 		ref.ObservedAt = ptrStringNonEmpty(item.ObservedAt)
 		ref.Version = ptrStringNonEmpty(item.Version)
+		ref.ErrorCode = ptrStringNonEmpty(item.ErrorCode)
 		result = append(result, ref)
 	}
 	return result

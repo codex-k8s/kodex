@@ -338,6 +338,39 @@ func TestRepositoryIntegrationGovernanceStateAndOutbox(t *testing.T) {
 	if len(packages[0].IntegrationRefs) != 1 || packages[0].IntegrationRefs[0].Ref != "provider:pr:1" {
 		t.Fatalf("integration refs = %+v, want persisted provider ref", packages[0].IntegrationRefs)
 	}
+	releasePackage.RuntimeRefs = []byte(`[{"job_ref":"runtime:job:1"},{"job_ref":"runtime:job:deploy"}]`)
+	releasePackage.EvidenceRefs = []value.EvidenceRef{{
+		Kind:           "runtime_job",
+		Ref:            "runtime:job:deploy",
+		Summary:        "deploy job status",
+		Digest:         "sha256:deploy",
+		RetentionClass: "safe_ref",
+	}}
+	releasePackage.IntegrationRefs = append(releasePackage.IntegrationRefs, value.ReleaseIntegrationRef{
+		Domain:    "runtime",
+		Kind:      "deploy",
+		Ref:       "runtime:job:deploy",
+		Status:    "failed",
+		Summary:   "deploy failed with bounded diagnostic",
+		Digest:    "sha256:deploy",
+		Version:   "job-version:2",
+		ErrorCode: "DEPLOY_HEALTHCHECK_FAILED",
+	})
+	releasePackage.Version = 2
+	releasePackage.UpdatedAt = now.Add(time.Minute)
+	if err := repository.UpdateReleaseDecisionPackageEvidence(ctx, releasePackage, 1, testCommandResult(uuid.New(), operationUpdateReleasePackageEvidence, "release_decision_package", releasePackage.ID, now), testEvent("governance.release_decision_package.runtime_evidence_recorded", "release_decision_package", releasePackage.ID, now)); err != nil {
+		t.Fatalf("record release runtime evidence refs: %v", err)
+	}
+	storedReleasePackage, err := repository.GetReleaseDecisionPackage(ctx, releasePackage.ID)
+	if err != nil {
+		t.Fatalf("get release package after evidence update: %v", err)
+	}
+	if storedReleasePackage.Version != 2 || len(storedReleasePackage.EvidenceRefs) != 1 || len(storedReleasePackage.IntegrationRefs) != 2 {
+		t.Fatalf("stored release package = %+v, want runtime evidence refs", storedReleasePackage)
+	}
+	if storedReleasePackage.IntegrationRefs[1].ErrorCode != "DEPLOY_HEALTHCHECK_FAILED" {
+		t.Fatalf("runtime error code = %q, want persisted code", storedReleasePackage.IntegrationRefs[1].ErrorCode)
+	}
 
 	requestedDecision := entity.ReleaseDecision{
 		VersionedBase:            entity.VersionedBase{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
@@ -348,9 +381,9 @@ func TestRepositoryIntegrationGovernanceStateAndOutbox(t *testing.T) {
 		DecidedAt:                now,
 	}
 	releasePackage.Status = enum.ReleaseDecisionPackageStatusDecisionRequested
-	releasePackage.Version = 2
-	releasePackage.UpdatedAt = now.Add(time.Minute)
-	if err := repository.CreateReleaseDecision(ctx, releasePackage, 1, requestedDecision, testCommandResult(uuid.New(), operationCreateReleaseDecision, "release_decision", requestedDecision.ID, now), testEvent("governance.release_decision.requested", "release_decision", requestedDecision.ID, now)); err != nil {
+	releasePackage.Version = 3
+	releasePackage.UpdatedAt = now.Add(2 * time.Minute)
+	if err := repository.CreateReleaseDecision(ctx, releasePackage, 2, requestedDecision, testCommandResult(uuid.New(), operationCreateReleaseDecision, "release_decision", requestedDecision.ID, now), testEvent("governance.release_decision.requested", "release_decision", requestedDecision.ID, now)); err != nil {
 		t.Fatalf("request release decision: %v", err)
 	}
 	storedReleaseDecision, err := repository.GetReleaseDecisionByPackage(ctx, releasePackage.ID)
@@ -361,8 +394,8 @@ func TestRepositoryIntegrationGovernanceStateAndOutbox(t *testing.T) {
 		t.Fatalf("release decision = %+v, want requested for package %s", storedReleaseDecision, releasePackage.ID)
 	}
 	releasePackage.Status = enum.ReleaseDecisionPackageStatusClosed
-	releasePackage.Version = 3
-	releasePackage.UpdatedAt = now.Add(2 * time.Minute)
+	releasePackage.Version = 4
+	releasePackage.UpdatedAt = now.Add(3 * time.Minute)
 	storedReleaseDecision.Status = enum.ReleaseDecisionStatusResolved
 	storedReleaseDecision.Outcome = enum.ReleaseDecisionOutcomeGoWithConditions
 	storedReleaseDecision.GateDecisionID = &decision.ID
@@ -373,7 +406,7 @@ func TestRepositoryIntegrationGovernanceStateAndOutbox(t *testing.T) {
 	storedReleaseDecision.Version = 2
 	storedReleaseDecision.DecidedAt = now.Add(2 * time.Minute)
 	storedReleaseDecision.UpdatedAt = now.Add(2 * time.Minute)
-	if err := repository.UpdateReleaseDecision(ctx, releasePackage, 2, storedReleaseDecision, 1, testCommandResult(uuid.New(), operationUpdateReleaseDecision, "release_decision", storedReleaseDecision.ID, now), testEvent("governance.release_decision.resolved", "release_decision", storedReleaseDecision.ID, now)); err != nil {
+	if err := repository.UpdateReleaseDecision(ctx, releasePackage, 3, storedReleaseDecision, 1, testCommandResult(uuid.New(), operationUpdateReleaseDecision, "release_decision", storedReleaseDecision.ID, now), testEvent("governance.release_decision.resolved", "release_decision", storedReleaseDecision.ID, now)); err != nil {
 		t.Fatalf("update release decision: %v", err)
 	}
 	releaseDecisions, _, err := repository.ListReleaseDecisions(ctx, query.ReleaseDecisionFilter{ProjectContext: value.ProjectContextRef{ProjectRef: "project:alpha"}, Outcome: enum.ReleaseDecisionOutcomeGoWithConditions})

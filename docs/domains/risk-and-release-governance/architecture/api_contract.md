@@ -65,6 +65,7 @@ approvals:
 | `GetGateRequest` | gRPC query | `governance.gate.read` | нет | Читает gate request, evidence и decision status. |
 | `ListGateRequests` | gRPC query | `governance.gate.read` или `governance.risk.read` | target или risk assessment | Читает ожидающие, resolved или просроченные gates по target или assessment; status используется только как уточняющий фильтр. |
 | `BuildReleaseDecisionPackage` | gRPC command | `governance.release.prepare` | `command_id` | Собирает release evidence из project/provider/runtime/agent refs, explicit `integration_refs` и optional local `risk_assessment_id`; локальные governance refs обогащаются bounded snapshot. |
+| `RecordReleaseRuntimeEvidence` | gRPC command | `governance.release.update` | `command_id` или `idempotency_key` + `expected_version` | Дозаписывает в release package безопасные `runtime_refs`, `evidence_refs` и `integration_refs` домена `runtime` после build/deploy/postdeploy факта. |
 | `GetReleaseDecisionPackage` | gRPC query | `governance.release.read` | нет | Читает release evidence package. |
 | `ListReleaseDecisionPackages` | gRPC query | `governance.release.read` | нет | Читает release packages по project/candidate/status. |
 | `RequestReleaseDecision` | gRPC command | `governance.release.request` | `command_id` | Запрашивает release gate или автоматическое decision по policy. |
@@ -88,6 +89,8 @@ approvals:
 События `agent.follow_up.review_signaled`, `agent.acceptance.completed` и `agent.acceptance.failed` пока не используются как review/risk signal input: в текущем контракте им не хватает typed governance outcome для безопасного маппинга без чтения owner-домена. `interaction.request.response_recorded` используется только для согласованной command boundary gate decision и не подменяет review signal.
 
 GOV-7b хранит явные safe refs/summaries в release package и выполняет read-validation/enrichment для локальных governance refs: risk assessment, review signal, gate request, gate decision и связанный release package. Для project/provider/agent/runtime refs `governance-manager` сохраняет explicit ref и безопасный diagnostic в `summary`, если вызывающая сторона не передала owner-domain summary; прямые service-client чтения соседних доменов подключаются отдельными интеграционными срезами после согласования read-контрактов и runtime composition.
+
+Для runtime/deploy фактов используется команда `RecordReleaseRuntimeEvidence`. Вызывающая сторона должна уже знать `release_decision_package_id` и передавать только безопасные `RuntimeContextRef`, `EvidenceRef` и `ReleaseIntegrationRef` с `domain=runtime`, `kind=job|deploy|postdeploy|environment|artifact|summary`, ограниченный `status`, короткий `summary`, `digest`, `observed_at`, `version`/etag и опциональный `error_code`. Команда требует `expected_version`, сохраняет идемпотентный command result, одинаковую повторную доставку не превращает в новое событие, а конфликтующий снимок для того же `domain/kind/ref` отклоняет. События `runtime.job.*` остаются сигналами домена-владельца `runtime-manager`; прямой consumer в governance не включается, пока событие не несёт согласованную безопасную привязку к `release_decision_package_id` или локальному gate/package ref.
 
 | Сервис | Что приходит как refs или будущий read-contract | Правило |
 |---|---|---|
@@ -146,6 +149,7 @@ MCP-инструменты не должны принимать свободны
 | `governance.gate.cancelled` | Открытый gate request отменён. |
 | `governance.gate.expired` | Открытый gate request истёк. |
 | `governance.release_decision_package.built` | Собран release evidence package. |
+| `governance.release_decision_package.runtime_evidence_recorded` | В существующий release package дозаписаны safe runtime/deploy refs без логов, raw payload и больших details. |
 | `governance.release_decision.requested` | Запрошено релизное решение. |
 | `governance.release_decision.resolved` | Релизное решение принято. |
 | `governance.release_safety_state.changed` | Изменилось состояние release safety-loop. |
@@ -167,7 +171,7 @@ MCP-инструменты не должны принимать свободны
 | Review signal refs | `governance.review_signal.recorded` | `agent-manager`, `provider-hub`, release projections | Когда нужно получить список signals по target/assessment или сверить конкретный signal id. |
 | Gate request/decision | `governance.gate.requested`, `resolved`, `cancelled`, `expired` | `agent-manager` resume, `interaction-hub` delivery correlation, provider write policy, operations projections | Когда нужно прочитать gate request/decision с evidence refs или проверить final decision перед mutating command. |
 | Blocking signals | `governance.blocking_signal.recorded`, `resolved` | release decision consumers, runtime/operations projections | Когда нужен список active/historical blockers по target. |
-| Release package/decision/safety-loop | `governance.release_decision_package.built`, `governance.release_decision.requested`, `resolved`, `governance.release_safety_state.changed` | `agent-manager`, `runtime-manager`, provider write policy, operations projections | Когда нужен authoritative release package snapshot, decision detail или current safety state. |
+| Release package/decision/safety-loop | `governance.release_decision_package.built`, `governance.release_decision_package.runtime_evidence_recorded`, `governance.release_decision.requested`, `resolved`, `governance.release_safety_state.changed` | `agent-manager`, `runtime-manager`, provider write policy, operations projections | Когда нужен authoritative release package snapshot, decision detail или current safety state. |
 
 События служат trigger/read-model основой и не заменяют синхронный gRPC для команд, optimistic concurrency, access checks и точечного authoritative lookup. Соседние сервисы не читают БД `governance-manager`: они реагируют на `platform-event-log` и при необходимости вызывают gRPC reads с текущими правами.
 
@@ -183,7 +187,8 @@ MCP-инструменты не должны принимать свободны
 | Storage, migrations и outbox publisher | MVP-основа готова: PostgreSQL repository, service-local outbox и handlers для поддержанных storage-операций. Review signals имеют локальную ref-level дедупликацию по normalized owner-domain evidence refs. |
 | Risk classifier и policy evaluator | Готовы для локальных risk profiles/rules, safe summaries/refs, идемпотентного replay, optimistic concurrency и safe outbox events. |
 | Release decision lifecycle и safety-loop | Готовы для release package build/read/list, decision request/submit/read/list, blocking signals и текущего safety-loop state на safe refs/summaries. |
-| Release integration refs | Поддержаны для release decision package: safe domain/kind/ref/status/summary/digest/timestamp/version, canonical order по `domain/kind/ref`, reject конфликтующих дублей, локальная проверка governance refs и отсутствие raw payload/logs/secrets. |
+| Release integration refs | Поддержаны для release decision package: safe domain/kind/ref/status/summary/digest/timestamp/version/error_code, canonical order по `domain/kind/ref`, reject конфликтующих дублей, локальная проверка governance refs и отсутствие raw payload/logs/secrets. |
+| Runtime/deploy evidence refs | `RecordReleaseRuntimeEvidence` дозаписывает `runtime_refs`, bounded `evidence_refs` и `integration_refs` домена `runtime` в существующий release package с expected version, replay и safe `governance.release_decision_package.runtime_evidence_recorded` event. |
 | Event-driven/read-model основа | `governance.*` payload расширен safe metadata/refs: actor, request id, idempotency correlation, target/source refs, bounded summary, interaction/agent/runtime refs и policy/decision refs. Соседние сервисы могут строить read models через `platform-event-log` без чтения БД governance. |
 | Потребитель provider review signal | Готов для `provider.comment.synced`: approved/changes_requested review refs превращаются в локальный review signal через `libs/go/eventconsumer`, без чтения БД/API `provider-hub` и без копирования provider-native state. |
 | Потребитель interaction gate decision | Готов для `interaction.request.response_recorded`: answered Human gate response для `owner_service=governance_manager` и локального gate ref превращается в `SubmitGateDecision` по safe refs/digest/outcome без чтения БД/API `interaction-hub` и без копирования response text/callback body. |

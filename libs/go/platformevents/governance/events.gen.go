@@ -5,21 +5,22 @@ package governance
 const SchemaVersion = 1
 
 const (
-	EventPolicyVersionActivated      = "governance.policy.version_activated"
-	EventRiskAssessmentRequested     = "governance.risk_assessment.requested"
-	EventRiskAssessmentCompleted     = "governance.risk_assessment.completed"
-	EventRiskAssessmentChanged       = "governance.risk_assessment.changed"
-	EventReviewSignalRecorded        = "governance.review_signal.recorded"
-	EventBlockingSignalRecorded      = "governance.blocking_signal.recorded"
-	EventBlockingSignalResolved      = "governance.blocking_signal.resolved"
-	EventGateRequested               = "governance.gate.requested"
-	EventGateResolved                = "governance.gate.resolved"
-	EventGateCancelled               = "governance.gate.cancelled"
-	EventGateExpired                 = "governance.gate.expired"
-	EventReleaseDecisionPackageBuilt = "governance.release_decision_package.built"
-	EventReleaseDecisionRequested    = "governance.release_decision.requested"
-	EventReleaseDecisionResolved     = "governance.release_decision.resolved"
-	EventReleaseSafetyStateChanged   = "governance.release_safety_state.changed"
+	EventPolicyVersionActivated                        = "governance.policy.version_activated"
+	EventRiskAssessmentRequested                       = "governance.risk_assessment.requested"
+	EventRiskAssessmentCompleted                       = "governance.risk_assessment.completed"
+	EventRiskAssessmentChanged                         = "governance.risk_assessment.changed"
+	EventReviewSignalRecorded                          = "governance.review_signal.recorded"
+	EventBlockingSignalRecorded                        = "governance.blocking_signal.recorded"
+	EventBlockingSignalResolved                        = "governance.blocking_signal.resolved"
+	EventGateRequested                                 = "governance.gate.requested"
+	EventGateResolved                                  = "governance.gate.resolved"
+	EventGateCancelled                                 = "governance.gate.cancelled"
+	EventGateExpired                                   = "governance.gate.expired"
+	EventReleaseDecisionPackageBuilt                   = "governance.release_decision_package.built"
+	EventReleaseDecisionPackageRuntimeEvidenceRecorded = "governance.release_decision_package.runtime_evidence_recorded"
+	EventReleaseDecisionRequested                      = "governance.release_decision.requested"
+	EventReleaseDecisionResolved                       = "governance.release_decision.resolved"
+	EventReleaseSafetyStateChanged                     = "governance.release_safety_state.changed"
 )
 
 const (
