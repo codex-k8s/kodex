@@ -139,7 +139,10 @@ func (s *Service) validateAgentRunExecutionSpecState(ctx context.Context, spec A
 	if slot.ID != spec.SlotID {
 		return errs.ErrConflict
 	}
-	if slot.AgentRunID != nil && *slot.AgentRunID != spec.AgentRunID {
+	if slot.AgentRunID == nil || *slot.AgentRunID != spec.AgentRunID {
+		return errs.ErrConflict
+	}
+	if slot.Status != enum.SlotStatusReady || slot.Fingerprint != spec.ExpectedMaterializationFingerprint {
 		return errs.ErrConflict
 	}
 	materialization, err := s.repository.GetWorkspaceMaterialization(ctx, spec.ExpectedMaterializationID)
