@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-12
 updated_at: 2026-05-28
-related_issues: [733, 753, 698, 322, 782, 795, 820, 834, 842, 862, 866, 937]
+related_issues: [733, 753, 698, 322, 782, 795, 820, 834, 842, 862, 866, 937, 954]
 related_prs: []
 related_adrs: []
 approvals:
@@ -110,10 +110,14 @@ sequenceDiagram
   R-->>AM: slot ref + runtime context
   AM->>R: CreateJob(job_type=agent_run, slot_ref, agent_run_id)
   R-->>AM: runtime_job_ref + job status
+  AM->>R: GetJob(runtime_job_ref)
+  R-->>AM: безопасный статус job для UI/MCP чтения
   AM->>MCP: создать инструментальный контекст для агента
 ```
 
 `agent-manager` не выполняет checkout и не монтирует файлы сам. Он выбирает руководящие пакеты и контекст, а подготовку workspace выполняет runtime-контур по проверенной политике.
+
+Для UI, MCP и owner-оператора `agent-manager` предоставляет отдельную безопасную поверхность чтения `GetAgentRunRuntimeStatus`. Она берёт сохранённые refs и state из `Run`, а актуальное состояние задания читает только через `runtime-manager.GetJob`. Прямой доступ к Kubernetes, БД `runtime-manager`, shell и логам запрещён; ответ содержит только `runtime_job_ref`, статус job, safe error code/summary, timestamps, версии и признаки ожидания orchestration вроде Human gate.
 
 Codex session state сохраняется как JSON/JSONL-объект в S3-compatible хранилище после каждого значимого turn/checkpoint. `agent-manager` хранит метаданные снимка, digest, размер и указатель на последний актуальный объект; сам большой файл сессии не пишется в PostgreSQL.
 
@@ -186,7 +190,7 @@ MVP-путь:
 - ссылки на provider-native задачу, stage, role и prompt version.
 - метаданные последнего Codex session snapshot, если runtime продолжает существующую сессию.
 
-`runtime-manager` возвращает slot ref, runtime context, runtime job ref и технический статус. `Run` остаётся у `agent-manager`, slot/job и исполнение задания остаются у runtime.
+`runtime-manager` возвращает slot ref, runtime context, runtime job ref и технический статус. `Run` остаётся у `agent-manager`, slot/job и исполнение задания остаются у runtime. Для чтения runtime-наблюдаемости `agent-manager` использует только `runtime-manager.GetJob` и не копирует `job_input_json`, steps, log refs, workspace paths или Kubernetes-детали.
 
 ### `provider-hub`
 

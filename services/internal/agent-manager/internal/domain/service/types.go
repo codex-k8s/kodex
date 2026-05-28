@@ -250,6 +250,84 @@ type RuntimeJobResult struct {
 	DiagnosticSummary string
 }
 
+type GetAgentRunRuntimeStatusInput struct {
+	Meta  value.QueryMeta
+	RunID uuid.UUID
+}
+
+type AgentRunRuntimeStatusResult struct {
+	Run           entity.AgentRun
+	RuntimeStatus AgentRunRuntimeStatus
+}
+
+type RuntimeObservationState string
+
+const (
+	RuntimeObservationStateNotCreated  RuntimeObservationState = "not_created"
+	RuntimeObservationStateStoredRef   RuntimeObservationState = "stored_ref"
+	RuntimeObservationStateLive        RuntimeObservationState = "live"
+	RuntimeObservationStateUnavailable RuntimeObservationState = "unavailable"
+	RuntimeObservationStateConflict    RuntimeObservationState = "conflict"
+)
+
+type RuntimeJobStatus string
+
+const (
+	RuntimeJobStatusPending   RuntimeJobStatus = "pending"
+	RuntimeJobStatusClaimed   RuntimeJobStatus = "claimed"
+	RuntimeJobStatusRunning   RuntimeJobStatus = "running"
+	RuntimeJobStatusSucceeded RuntimeJobStatus = "succeeded"
+	RuntimeJobStatusFailed    RuntimeJobStatus = "failed"
+	RuntimeJobStatusCancelled RuntimeJobStatus = "cancelled"
+	RuntimeJobStatusTimedOut  RuntimeJobStatus = "timed_out"
+)
+
+type RuntimeJobReadInput struct {
+	Meta       value.QueryMeta
+	AgentRunID uuid.UUID
+	JobRef     string
+}
+
+type RuntimeJobReadResult struct {
+	JobRef           string
+	AgentRunID       uuid.UUID
+	CommandRef       string
+	Status           RuntimeJobStatus
+	Version          int64
+	CreatedAt        *time.Time
+	StartedAt        *time.Time
+	FinishedAt       *time.Time
+	UpdatedAt        *time.Time
+	SafeErrorCode    string
+	SafeErrorSummary string
+	SafeSummary      string
+}
+
+type AgentRunRuntimeStatus struct {
+	RunID                uuid.UUID
+	RunStatus            enum.AgentRunStatus
+	RuntimeContext       value.RuntimeContextRef
+	ObservationState     RuntimeObservationState
+	RuntimeJobRef        string
+	RuntimeJobStatus     RuntimeJobStatus
+	RuntimeJobCommandRef string
+	RuntimeJobVersion    int64
+	RuntimeJobCreatedAt  *time.Time
+	RuntimeJobStartedAt  *time.Time
+	RuntimeJobFinishedAt *time.Time
+	RuntimeJobUpdatedAt  *time.Time
+	SafeErrorCode        string
+	SafeSummary          string
+	RunStartedAt         *time.Time
+	RunFinishedAt        *time.Time
+	RunUpdatedAt         time.Time
+	RunVersion           int64
+	HumanGateWaiting     bool
+	HumanGateRequestRef  string
+	HumanGateReasonCode  string
+	FollowUpWaiting      bool
+}
+
 type ProviderOperationStatus string
 
 const (

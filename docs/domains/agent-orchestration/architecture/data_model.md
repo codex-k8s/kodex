@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-12
 updated_at: 2026-05-28
-related_issues: [733, 749, 759, 772, 322, 782, 795, 809, 820, 834, 842, 862, 866, 891, 905, 918, 937]
+related_issues: [733, 749, 759, 772, 322, 782, 795, 809, 820, 834, 842, 862, 866, 891, 905, 918, 937, 954]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -192,7 +192,7 @@ approvals:
 | `role_profile_digest` | text | нет | Digest нормализованного профиля роли на момент запуска. |
 | `prompt_template_version_id` | uuid | нет | Версия prompt. |
 | `prompt_template_digest` | text | нет | Digest prompt version, использованной при запуске. |
-| `runtime_ref` | text/json | да | Безопасные refs runtime: slot/workspace/context или fingerprint подготовки без локальных workspace paths. |
+| `runtime_ref` | text/json | да | Безопасные refs runtime: slot/workspace/context, `runtime_job_ref` или fingerprint подготовки без локальных workspace paths. |
 | `provider_target_ref` | text | да | Основная provider-native цель. |
 | `guidance_refs` | jsonb | нет | Замороженные безопасные refs руководящих пакетов: installation ref, package/version ref, manifest digest, строковый source ref как подсказка, package slug/version label, capability ref и bounded policy summary без manifest payload. |
 | `status` | enum | нет | `requested`, `starting`, `running`, `waiting`, `completed`, `failed`, `cancelled`. |
@@ -205,6 +205,8 @@ approvals:
 `AgentRun.status` меняется только по доменной state machine: terminal-статусы `completed`, `failed` и `cancelled` не возвращаются в работу, `running` не откатывается в `starting`, а повтор текущего non-terminal статуса допускается только как безопасная идемпотентная фиксация без нового lifecycle event.
 
 `guidance_refs` не является manifest cache. В этом поле нельзя хранить `payload_json`, `SKILL.md`, prompt templates, flow files, scripts, assets, package source или расширенный снимок `PackageSource`. Локальные пути workspace также не являются частью модели `AgentRun`: runtime request передаёт их как часть `WorkspaceSource`, а авторитетное состояние workspace, нормализация путей и materialization остаются в `runtime-manager`. Тип source ref, commit SHA и идентичность источника runtime получает из `package-hub` по `package_version_ref` перед materialization.
+
+Поверхность чтения `AgentRunRuntimeStatus` не добавляет новое авторитетное хранилище runtime в БД `agent-manager`. Она строится из сохранённого `AgentRun.runtime_ref`, текущего состояния `Run` и актуального ответа `runtime-manager.GetJob` по `runtime_job_ref`. Наружу отдаются только job ref, безопасный статус, command ref, версии, timestamps, safe error code/summary и признак ожидания Human gate. `job_input_json`, steps, `short_log_tail`, `full_log_ref`, workspace paths, prompt body, provider payload, kubeconfig, секреты и большие логи не сохраняются и не возвращаются из `agent-manager`.
 
 ### AgentSessionStateSnapshot
 

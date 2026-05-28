@@ -48,6 +48,8 @@ service AgentManagerService {
   rpc StartAgentRun(StartAgentRunRequest) returns (AgentRunResponse);
   // RecordRunState records a run lifecycle transition from runtime, MCP or runner.
   rpc RecordRunState(RecordRunStateRequest) returns (AgentRunResponse);
+  // GetAgentRunRuntimeStatus возвращает безопасное состояние runtime для одного run.
+  rpc GetAgentRunRuntimeStatus(GetAgentRunRuntimeStatusRequest) returns (AgentRunRuntimeStatusResponse);
   // RecordSessionStateSnapshot records metadata for a Codex session state object.
   rpc RecordSessionStateSnapshot(RecordSessionStateSnapshotRequest) returns (AgentSessionStateSnapshotResponse);
   // RequestAcceptance requests acceptance checks for a session, run and stage.
@@ -334,6 +336,28 @@ enum AgentRunStatus {
   AGENT_RUN_STATUS_COMPLETED = 5;
   AGENT_RUN_STATUS_FAILED = 6;
   AGENT_RUN_STATUS_CANCELLED = 7;
+}
+
+// AgentRunRuntimeObservationState описывает, удалось ли прочитать актуальное состояние runtime.
+enum AgentRunRuntimeObservationState {
+  AGENT_RUN_RUNTIME_OBSERVATION_STATE_UNSPECIFIED = 0;
+  AGENT_RUN_RUNTIME_OBSERVATION_STATE_NOT_CREATED = 1;
+  AGENT_RUN_RUNTIME_OBSERVATION_STATE_STORED_REF = 2;
+  AGENT_RUN_RUNTIME_OBSERVATION_STATE_LIVE = 3;
+  AGENT_RUN_RUNTIME_OBSERVATION_STATE_UNAVAILABLE = 4;
+  AGENT_RUN_RUNTIME_OBSERVATION_STATE_CONFLICT = 5;
+}
+
+// AgentRuntimeJobStatus отражает безопасный жизненный цикл runtime job для чтения UI/MCP.
+enum AgentRuntimeJobStatus {
+  AGENT_RUNTIME_JOB_STATUS_UNSPECIFIED = 0;
+  AGENT_RUNTIME_JOB_STATUS_PENDING = 1;
+  AGENT_RUNTIME_JOB_STATUS_CLAIMED = 2;
+  AGENT_RUNTIME_JOB_STATUS_RUNNING = 3;
+  AGENT_RUNTIME_JOB_STATUS_SUCCEEDED = 4;
+  AGENT_RUNTIME_JOB_STATUS_FAILED = 5;
+  AGENT_RUNTIME_JOB_STATUS_CANCELLED = 6;
+  AGENT_RUNTIME_JOB_STATUS_TIMED_OUT = 7;
 }
 
 // AgentSessionSnapshotKind classifies Codex session state snapshots.
@@ -1165,6 +1189,11 @@ message ListAgentRunsRequest {
   PageRequest page = 6;
 }
 
+message GetAgentRunRuntimeStatusRequest {
+  QueryMeta meta = 1;
+  string run_id = 2;
+}
+
 message AgentSessionResponse {
   AgentSession session = 1;
   optional AgentSessionStateSnapshot latest_state_snapshot = 2;
@@ -1172,6 +1201,36 @@ message AgentSessionResponse {
 
 message AgentRunResponse {
   AgentRun run = 1;
+}
+
+message AgentRunRuntimeStatusResponse {
+  AgentRun run = 1;
+  AgentRunRuntimeStatus runtime_status = 2;
+}
+
+message AgentRunRuntimeStatus {
+  string run_id = 1;
+  AgentRunStatus run_status = 2;
+  RuntimeContextRef runtime_context = 3;
+  AgentRunRuntimeObservationState observation_state = 4;
+  optional string runtime_job_ref = 5;
+  AgentRuntimeJobStatus runtime_job_status = 6;
+  optional string runtime_job_command_ref = 7;
+  optional int64 runtime_job_version = 8;
+  optional string runtime_job_created_at = 9;
+  optional string runtime_job_started_at = 10;
+  optional string runtime_job_finished_at = 11;
+  optional string runtime_job_updated_at = 12;
+  optional string safe_error_code = 13;
+  optional string safe_summary = 14;
+  optional string run_started_at = 15;
+  optional string run_finished_at = 16;
+  string run_updated_at = 17;
+  int64 run_version = 18;
+  bool human_gate_waiting = 19;
+  optional string human_gate_request_ref = 20;
+  optional string human_gate_reason_code = 21;
+  bool follow_up_waiting = 22;
 }
 
 message AgentSessionStateSnapshotResponse {

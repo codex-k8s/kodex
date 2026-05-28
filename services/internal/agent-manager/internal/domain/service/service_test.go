@@ -903,6 +903,211 @@ func TestStartAgentRunRuntimeJobDispatchReplayDoesNotCreateDuplicateJob(t *testi
 	}
 }
 
+func TestGetAgentRunRuntimeStatusWithoutRuntimeJob(t *testing.T) {
+	t.Parallel()
+
+	runID := uuid.MustParse("11111111-aaaa-bbbb-cccc-dddddddddddd")
+	updatedAt := time.Date(2026, 5, 28, 10, 0, 0, 0, time.UTC)
+	run := entity.AgentRun{
+		VersionedBase: entity.VersionedBase{ID: runID, Version: 3, UpdatedAt: updatedAt},
+		SessionID:     uuid.MustParse("11111111-bbbb-cccc-dddd-eeeeeeeeeeee"),
+		Status:        enum.AgentRunStatusStarting,
+		ResultSummary: "runtime prepare started",
+	}
+	reader := &fakeRuntimeJobReader{}
+	service := New(Config{
+		Repository:       &fakeRepository{runByID: map[uuid.UUID]entity.AgentRun{runID: run}},
+		RuntimeJobReader: reader,
+	})
+
+	result, err := service.GetAgentRunRuntimeStatus(context.Background(), GetAgentRunRuntimeStatusInput{Meta: value.QueryMeta{Actor: testActor()}, RunID: runID})
+	if err != nil {
+		t.Fatalf("GetAgentRunRuntimeStatus() err = %v", err)
+	}
+	status := result.RuntimeStatus
+	if status.ObservationState != RuntimeObservationStateNotCreated || status.RuntimeJobRef != "" || reader.calls != 0 {
+		t.Fatalf("runtime status = %+v, reader calls = %d", status, reader.calls)
+	}
+	if status.RunVersion != 3 || !status.RunUpdatedAt.Equal(updatedAt) || status.SafeSummary != "runtime prepare started" {
+		t.Fatalf("run status fields = %+v", status)
+	}
+}
+
+func TestGetAgentRunRuntimeStatusWithRuntimeJobRefReadsLiveStatus(t *testing.T) {
+	t.Parallel()
+
+	runID := uuid.MustParse("22222222-aaaa-bbbb-cccc-dddddddddddd")
+	sessionID := uuid.MustParse("22222222-bbbb-cccc-dddd-eeeeeeeeeeee")
+	stageID := uuid.MustParse("22222222-cccc-dddd-eeee-ffffffffffff")
+	createdAt := time.Date(2026, 5, 28, 11, 0, 0, 0, time.UTC)
+	startedAt := createdAt.Add(2 * time.Minute)
+	run := entity.AgentRun{
+		VersionedBase:  entity.VersionedBase{ID: runID, Version: 5, UpdatedAt: startedAt},
+		SessionID:      sessionID,
+		StageID:        &stageID,
+		RuntimeContext: value.RuntimeContextRef{SlotRef: "slot-1", WorkspaceRef: "workspace-1", JobRef: "job-1"},
+		Status:         enum.AgentRunStatusStarting,
+		ResultSummary:  "runtime job created",
+	}
+	reader := &fakeRuntimeJobReader{result: RuntimeJobReadResult{
+		JobRef:      "job-1",
+		AgentRunID:  runID,
+		CommandRef:  "command-1",
+		Status:      RuntimeJobStatusRunning,
+		Version:     7,
+		CreatedAt:   &createdAt,
+		StartedAt:   &startedAt,
+		SafeSummary: "job_status=running",
+	}}
+	gateID := uuid.MustParse("22222222-dddd-eeee-ffff-111111111111")
+	service := New(Config{
+		Repository: &fakeRepository{
+			runByID: map[uuid.UUID]entity.AgentRun{runID: run},
+			humanGateList: []entity.HumanGateRequest{{
+				VersionedBase: entity.VersionedBase{ID: gateID},
+				SessionID:     sessionID,
+				RunID:         &runID,
+				StageID:       &stageID,
+				Status:        enum.HumanGateStatusWaiting,
+				ReasonCode:    "owner_approval",
+			}},
+		},
+		RuntimeJobReader: reader,
+	})
+
+	result, err := service.GetAgentRunRuntimeStatus(context.Background(), GetAgentRunRuntimeStatusInput{Meta: value.QueryMeta{Actor: testActor()}, RunID: runID})
+	if err != nil {
+		t.Fatalf("GetAgentRunRuntimeStatus() err = %v", err)
+	}
+	status := result.RuntimeStatus
+	if status.ObservationState != RuntimeObservationStateLive || status.RuntimeJobStatus != RuntimeJobStatusRunning || status.RuntimeJobCommandRef != "command-1" {
+		t.Fatalf("runtime status = %+v", status)
+	}
+	if status.RuntimeJobVersion != 7 || status.RuntimeJobCreatedAt == nil || !status.RuntimeJobCreatedAt.Equal(createdAt) {
+		t.Fatalf("job timestamps/version = %+v", status)
+	}
+	if !status.HumanGateWaiting || status.HumanGateRequestRef != gateID.String() || status.HumanGateReasonCode != "owner_approval" {
+		t.Fatalf("human gate signal = %+v", status)
+	}
+	if reader.calls != 1 || reader.last.Meta.Actor != testActor() || reader.last.AgentRunID != runID || reader.last.JobRef != "job-1" {
+		t.Fatalf("runtime reader input = %+v calls=%d", reader.last, reader.calls)
+	}
+}
+
+func TestGetAgentRunRuntimeStatusKeepsRuntimeCreateFailureSummary(t *testing.T) {
+	t.Parallel()
+
+	runID := uuid.MustParse("33333333-aaaa-bbbb-cccc-dddddddddddd")
+	run := entity.AgentRun{
+		VersionedBase: entity.VersionedBase{ID: runID, Version: 4, UpdatedAt: time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)},
+		SessionID:     uuid.MustParse("33333333-bbbb-cccc-dddd-eeeeeeeeeeee"),
+		Status:        enum.AgentRunStatusFailed,
+		ResultSummary: "runtime job permanent: code=failed_precondition; message=agent run job rejected",
+		FailureCode:   runtimeJobFailureCode,
+	}
+	service := New(Config{Repository: &fakeRepository{runByID: map[uuid.UUID]entity.AgentRun{runID: run}}})
+
+	result, err := service.GetAgentRunRuntimeStatus(context.Background(), GetAgentRunRuntimeStatusInput{Meta: value.QueryMeta{Actor: testActor()}, RunID: runID})
+	if err != nil {
+		t.Fatalf("GetAgentRunRuntimeStatus() err = %v", err)
+	}
+	status := result.RuntimeStatus
+	if status.ObservationState != RuntimeObservationStateNotCreated || status.SafeErrorCode != runtimeJobFailureCode {
+		t.Fatalf("runtime status = %+v", status)
+	}
+	if status.SafeSummary != run.ResultSummary {
+		t.Fatalf("safe summary = %q", status.SafeSummary)
+	}
+}
+
+func TestGetAgentRunRuntimeStatusMapsRuntimeReadFailureSafely(t *testing.T) {
+	t.Parallel()
+
+	runID := uuid.MustParse("44444444-aaaa-bbbb-cccc-dddddddddddd")
+	run := entity.AgentRun{
+		VersionedBase:  entity.VersionedBase{ID: runID, Version: 2, UpdatedAt: time.Date(2026, 5, 28, 13, 0, 0, 0, time.UTC)},
+		SessionID:      uuid.MustParse("44444444-bbbb-cccc-dddd-eeeeeeeeeeee"),
+		RuntimeContext: value.RuntimeContextRef{JobRef: "job-1"},
+		Status:         enum.AgentRunStatusStarting,
+	}
+	service := New(Config{
+		Repository:       &fakeRepository{runByID: map[uuid.UUID]entity.AgentRun{runID: run}},
+		RuntimeJobReader: &fakeRuntimeJobReader{err: errs.ErrDependencyUnavailable},
+	})
+
+	result, err := service.GetAgentRunRuntimeStatus(context.Background(), GetAgentRunRuntimeStatusInput{Meta: value.QueryMeta{Actor: testActor()}, RunID: runID})
+	if err != nil {
+		t.Fatalf("GetAgentRunRuntimeStatus() err = %v", err)
+	}
+	status := result.RuntimeStatus
+	if status.ObservationState != RuntimeObservationStateUnavailable || status.SafeErrorCode != "dependency_unavailable" {
+		t.Fatalf("runtime status = %+v", status)
+	}
+	for _, forbidden := range []string{"kubeconfig", "secret", "workspace/path"} {
+		if strings.Contains(status.SafeSummary, forbidden) {
+			t.Fatalf("safe summary contains forbidden marker %q: %s", forbidden, status.SafeSummary)
+		}
+	}
+}
+
+func TestGetAgentRunRuntimeStatusMapsMissingRuntimeJobRefToConflict(t *testing.T) {
+	t.Parallel()
+
+	runID := uuid.MustParse("45454545-aaaa-bbbb-cccc-dddddddddddd")
+	run := entity.AgentRun{
+		VersionedBase:  entity.VersionedBase{ID: runID, Version: 2, UpdatedAt: time.Date(2026, 5, 28, 13, 30, 0, 0, time.UTC)},
+		SessionID:      uuid.MustParse("45454545-bbbb-cccc-dddd-eeeeeeeeeeee"),
+		RuntimeContext: value.RuntimeContextRef{JobRef: "stale-job-ref"},
+		Status:         enum.AgentRunStatusStarting,
+	}
+	service := New(Config{
+		Repository:       &fakeRepository{runByID: map[uuid.UUID]entity.AgentRun{runID: run}},
+		RuntimeJobReader: &fakeRuntimeJobReader{err: errs.ErrNotFound},
+	})
+
+	result, err := service.GetAgentRunRuntimeStatus(context.Background(), GetAgentRunRuntimeStatusInput{Meta: value.QueryMeta{Actor: testActor()}, RunID: runID})
+	if err != nil {
+		t.Fatalf("GetAgentRunRuntimeStatus() err = %v", err)
+	}
+	status := result.RuntimeStatus
+	if status.ObservationState != RuntimeObservationStateConflict || status.SafeErrorCode != "not_found" {
+		t.Fatalf("runtime status = %+v", status)
+	}
+	if !strings.Contains(status.SafeSummary, "code=not_found") {
+		t.Fatalf("safe summary = %q, want not_found code", status.SafeSummary)
+	}
+}
+
+func TestGetAgentRunRuntimeStatusReadIsIdempotent(t *testing.T) {
+	t.Parallel()
+
+	runID := uuid.MustParse("55555555-aaaa-bbbb-cccc-dddddddddddd")
+	run := entity.AgentRun{
+		VersionedBase:  entity.VersionedBase{ID: runID, Version: 6, UpdatedAt: time.Date(2026, 5, 28, 14, 0, 0, 0, time.UTC)},
+		SessionID:      uuid.MustParse("55555555-bbbb-cccc-dddd-eeeeeeeeeeee"),
+		RuntimeContext: value.RuntimeContextRef{JobRef: "job-1"},
+		Status:         enum.AgentRunStatusStarting,
+	}
+	reader := &fakeRuntimeJobReader{result: RuntimeJobReadResult{JobRef: "job-1", AgentRunID: runID, Status: RuntimeJobStatusPending, Version: 1, SafeSummary: "job_status=pending"}}
+	repository := &fakeRepository{runByID: map[uuid.UUID]entity.AgentRun{runID: run}}
+	service := New(Config{Repository: repository, RuntimeJobReader: reader})
+
+	first, err := service.GetAgentRunRuntimeStatus(context.Background(), GetAgentRunRuntimeStatusInput{Meta: value.QueryMeta{Actor: testActor()}, RunID: runID})
+	if err != nil {
+		t.Fatalf("first GetAgentRunRuntimeStatus() err = %v", err)
+	}
+	second, err := service.GetAgentRunRuntimeStatus(context.Background(), GetAgentRunRuntimeStatusInput{Meta: value.QueryMeta{Actor: testActor()}, RunID: runID})
+	if err != nil {
+		t.Fatalf("second GetAgentRunRuntimeStatus() err = %v", err)
+	}
+	if reader.calls != 2 || repository.updatedRun.ID != uuid.Nil {
+		t.Fatalf("reader calls=%d updated run=%+v", reader.calls, repository.updatedRun)
+	}
+	if first.RuntimeStatus != second.RuntimeStatus {
+		t.Fatalf("runtime reads differ: %+v != %+v", first.RuntimeStatus, second.RuntimeStatus)
+	}
+}
+
 func TestStartAgentRunValidatesStageRoleBinding(t *testing.T) {
 	t.Parallel()
 
@@ -4431,6 +4636,22 @@ func (f *fakeRuntimeJobCreator) CreateAgentRunJob(_ context.Context, input Runti
 	f.last = input
 	if f.err != nil {
 		return RuntimeJobResult{}, f.err
+	}
+	return f.result, nil
+}
+
+type fakeRuntimeJobReader struct {
+	result RuntimeJobReadResult
+	err    error
+	calls  int
+	last   RuntimeJobReadInput
+}
+
+func (f *fakeRuntimeJobReader) GetAgentRunJob(_ context.Context, input RuntimeJobReadInput) (RuntimeJobReadResult, error) {
+	f.calls++
+	f.last = input
+	if f.err != nil {
+		return RuntimeJobReadResult{}, f.err
 	}
 	return f.result, nil
 }

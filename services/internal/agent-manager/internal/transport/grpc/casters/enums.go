@@ -3,6 +3,7 @@ package casters
 import (
 	agentsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/agents/v1"
 	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/errs"
+	agentservice "github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/service"
 	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/types/enum"
 )
 
@@ -110,6 +111,32 @@ var humanGateOutcomesFromProto = enumMap(
 	enumPair(agentsv1.HumanGateOutcome_HUMAN_GATE_OUTCOME_REJECT, enum.HumanGateOutcomeReject),
 	enumPair(agentsv1.HumanGateOutcome_HUMAN_GATE_OUTCOME_REQUEST_CHANGES, enum.HumanGateOutcomeRequestChanges),
 	enumPair(agentsv1.HumanGateOutcome_HUMAN_GATE_OUTCOME_ANSWER, enum.HumanGateOutcomeAnswer),
+)
+
+var runtimeObservationStatesToProto = enumMap(
+	enumPair(agentservice.RuntimeObservationStateNotCreated, agentsv1.AgentRunRuntimeObservationState_AGENT_RUN_RUNTIME_OBSERVATION_STATE_NOT_CREATED),
+	enumPair(agentservice.RuntimeObservationStateStoredRef, agentsv1.AgentRunRuntimeObservationState_AGENT_RUN_RUNTIME_OBSERVATION_STATE_STORED_REF),
+	enumPair(agentservice.RuntimeObservationStateLive, agentsv1.AgentRunRuntimeObservationState_AGENT_RUN_RUNTIME_OBSERVATION_STATE_LIVE),
+	enumPair(agentservice.RuntimeObservationStateUnavailable, agentsv1.AgentRunRuntimeObservationState_AGENT_RUN_RUNTIME_OBSERVATION_STATE_UNAVAILABLE),
+	enumPair(agentservice.RuntimeObservationStateConflict, agentsv1.AgentRunRuntimeObservationState_AGENT_RUN_RUNTIME_OBSERVATION_STATE_CONFLICT),
+)
+
+var runtimeJobStatusesToProto = enumMap(
+	enumPair(agentservice.RuntimeJobStatusPending, agentsv1.AgentRuntimeJobStatus_AGENT_RUNTIME_JOB_STATUS_PENDING),
+	enumPair(agentservice.RuntimeJobStatusClaimed, agentsv1.AgentRuntimeJobStatus_AGENT_RUNTIME_JOB_STATUS_CLAIMED),
+	enumPair(agentservice.RuntimeJobStatusRunning, agentsv1.AgentRuntimeJobStatus_AGENT_RUNTIME_JOB_STATUS_RUNNING),
+	enumPair(agentservice.RuntimeJobStatusSucceeded, agentsv1.AgentRuntimeJobStatus_AGENT_RUNTIME_JOB_STATUS_SUCCEEDED),
+	enumPair(agentservice.RuntimeJobStatusFailed, agentsv1.AgentRuntimeJobStatus_AGENT_RUNTIME_JOB_STATUS_FAILED),
+	enumPair(agentservice.RuntimeJobStatusCancelled, agentsv1.AgentRuntimeJobStatus_AGENT_RUNTIME_JOB_STATUS_CANCELLED),
+	enumPair(agentservice.RuntimeJobStatusTimedOut, agentsv1.AgentRuntimeJobStatus_AGENT_RUNTIME_JOB_STATUS_TIMED_OUT),
+)
+
+var agentSessionStatusesToProto = enumMap(
+	enumPair(enum.AgentSessionStatusOpen, agentsv1.AgentSessionStatus_AGENT_SESSION_STATUS_OPEN),
+	enumPair(enum.AgentSessionStatusWaiting, agentsv1.AgentSessionStatus_AGENT_SESSION_STATUS_WAITING),
+	enumPair(enum.AgentSessionStatusCompleted, agentsv1.AgentSessionStatus_AGENT_SESSION_STATUS_COMPLETED),
+	enumPair(enum.AgentSessionStatusFailed, agentsv1.AgentSessionStatus_AGENT_SESSION_STATUS_FAILED),
+	enumPair(enum.AgentSessionStatusCancelled, agentsv1.AgentSessionStatus_AGENT_SESSION_STATUS_CANCELLED),
 )
 
 var (
@@ -231,15 +258,16 @@ func AgentRunStatusToProto(value enum.AgentRunStatus) agentsv1.AgentRunStatus {
 	return enumToProto(value, agentRunStatusesToProto, agentsv1.AgentRunStatus_AGENT_RUN_STATUS_UNSPECIFIED)
 }
 
+func RuntimeObservationStateToProto(value agentservice.RuntimeObservationState) agentsv1.AgentRunRuntimeObservationState {
+	return enumToProto(value, runtimeObservationStatesToProto, agentsv1.AgentRunRuntimeObservationState_AGENT_RUN_RUNTIME_OBSERVATION_STATE_UNSPECIFIED)
+}
+
+func RuntimeJobStatusToProto(value agentservice.RuntimeJobStatus) agentsv1.AgentRuntimeJobStatus {
+	return enumToProto(value, runtimeJobStatusesToProto, agentsv1.AgentRuntimeJobStatus_AGENT_RUNTIME_JOB_STATUS_UNSPECIFIED)
+}
+
 func AgentSessionStatusToProto(value enum.AgentSessionStatus) agentsv1.AgentSessionStatus {
-	status := map[enum.AgentSessionStatus]agentsv1.AgentSessionStatus{
-		enum.AgentSessionStatusOpen:      agentsv1.AgentSessionStatus_AGENT_SESSION_STATUS_OPEN,
-		enum.AgentSessionStatusWaiting:   agentsv1.AgentSessionStatus_AGENT_SESSION_STATUS_WAITING,
-		enum.AgentSessionStatusCompleted: agentsv1.AgentSessionStatus_AGENT_SESSION_STATUS_COMPLETED,
-		enum.AgentSessionStatusFailed:    agentsv1.AgentSessionStatus_AGENT_SESSION_STATUS_FAILED,
-		enum.AgentSessionStatusCancelled: agentsv1.AgentSessionStatus_AGENT_SESSION_STATUS_CANCELLED,
-	}
-	return enumToProto(value, status, agentsv1.AgentSessionStatus_AGENT_SESSION_STATUS_UNSPECIFIED)
+	return enumToProto(value, agentSessionStatusesToProto, agentsv1.AgentSessionStatus_AGENT_SESSION_STATUS_UNSPECIFIED)
 }
 
 func AgentSessionSnapshotKindFromProto(value agentsv1.AgentSessionSnapshotKind) (enum.AgentSessionSnapshotKind, error) {

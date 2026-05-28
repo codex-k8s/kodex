@@ -60,7 +60,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	if projectCatalogConn != nil {
 		defer func() { _ = projectCatalogConn.Close() }()
 	}
-	runtimePreparer, runtimeJobCreator, runtimeManagerConn, err := newRuntimePreparer(cfg)
+	runtimePreparer, runtimeJobCreator, runtimeJobReader, runtimeManagerConn, err := newRuntimePreparer(cfg)
 	if err != nil {
 		return err
 	}
@@ -90,6 +90,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		WorkspacePolicyResolver:    workspacePolicyResolver,
 		RuntimePreparer:            runtimePreparer,
 		RuntimeJobCreator:          runtimeJobCreator,
+		RuntimeJobReader:           runtimeJobReader,
 		ProviderFollowUpDispatcher: providerFollowUpDispatcher,
 		HumanGateRequester:         humanGateRequester,
 		RuntimePreparationEnabled:  cfg.RuntimePreparationEnabled,
@@ -195,11 +196,12 @@ func newWorkspacePolicyResolver(cfg Config) (agentservice.WorkspacePolicyResolve
 	return agentservice.DisabledWorkspacePolicyResolver{}, nil, nil
 }
 
-func newRuntimePreparer(cfg Config) (agentservice.RuntimePreparer, agentservice.RuntimeJobCreator, *grpcruntime.ClientConn, error) {
+func newRuntimePreparer(cfg Config) (agentservice.RuntimePreparer, agentservice.RuntimeJobCreator, agentservice.RuntimeJobReader, *grpcruntime.ClientConn, error) {
 	if !cfg.RuntimePreparationEnabled {
 		disabled := agentservice.DisabledRuntimePreparer{}
 		disabledJob := agentservice.DisabledRuntimeJobCreator{}
-		return disabled, disabledJob, nil, nil
+		disabledReader := agentservice.DisabledRuntimeJobReader{}
+		return disabled, disabledJob, disabledReader, nil, nil
 	}
 	clientConfig := runtimeclient.Config{
 		Addr:      cfg.RuntimeManagerGRPCAddr,
@@ -210,12 +212,12 @@ func newRuntimePreparer(cfg Config) (agentservice.RuntimePreparer, agentservice.
 		return runtimeclient.NewPreparer(runtimev1.NewRuntimeManagerServiceClient(conn), clientConfig)
 	})
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	if !cfg.RuntimeJobDispatchEnabled {
-		return preparer, agentservice.DisabledRuntimeJobCreator{}, conn, nil
+		return preparer, agentservice.DisabledRuntimeJobCreator{}, preparer, conn, nil
 	}
-	return preparer, preparer, conn, nil
+	return preparer, preparer, preparer, conn, nil
 }
 
 func newProviderFollowUpDispatcher(cfg Config) (agentservice.ProviderFollowUpDispatcher, *grpcruntime.ClientConn, error) {
