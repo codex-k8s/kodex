@@ -330,6 +330,14 @@ func RecordRunStateInput(request *agentsv1.RecordRunStateRequest) (service.Recor
 	}, nil
 }
 
+func GetAgentRunRuntimeStatusInput(request *agentsv1.GetAgentRunRuntimeStatusRequest) (service.GetAgentRunRuntimeStatusInput, error) {
+	input, err := idQueryInput(request.GetRunId(), request.GetMeta())
+	if err != nil {
+		return service.GetAgentRunRuntimeStatusInput{}, err
+	}
+	return service.GetAgentRunRuntimeStatusInput{Meta: input.Meta, RunID: input.ID}, nil
+}
+
 func RecordSessionStateSnapshotInput(request *agentsv1.RecordSessionStateSnapshotRequest) (service.RecordSessionStateSnapshotInput, error) {
 	meta, err := CommandMetaFromProto(request.GetMeta())
 	if err != nil {

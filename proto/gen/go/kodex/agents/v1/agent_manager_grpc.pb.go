@@ -38,6 +38,7 @@ const (
 	AgentManagerService_StartAgentSession_FullMethodName             = "/kodex.agents.v1.AgentManagerService/StartAgentSession"
 	AgentManagerService_StartAgentRun_FullMethodName                 = "/kodex.agents.v1.AgentManagerService/StartAgentRun"
 	AgentManagerService_RecordRunState_FullMethodName                = "/kodex.agents.v1.AgentManagerService/RecordRunState"
+	AgentManagerService_GetAgentRunRuntimeStatus_FullMethodName      = "/kodex.agents.v1.AgentManagerService/GetAgentRunRuntimeStatus"
 	AgentManagerService_RecordSessionStateSnapshot_FullMethodName    = "/kodex.agents.v1.AgentManagerService/RecordSessionStateSnapshot"
 	AgentManagerService_RequestAcceptance_FullMethodName             = "/kodex.agents.v1.AgentManagerService/RequestAcceptance"
 	AgentManagerService_RecordAcceptanceResult_FullMethodName        = "/kodex.agents.v1.AgentManagerService/RecordAcceptanceResult"
@@ -101,6 +102,8 @@ type AgentManagerServiceClient interface {
 	StartAgentRun(ctx context.Context, in *StartAgentRunRequest, opts ...grpc.CallOption) (*AgentRunResponse, error)
 	// RecordRunState records a run lifecycle transition from runtime, MCP or runner.
 	RecordRunState(ctx context.Context, in *RecordRunStateRequest, opts ...grpc.CallOption) (*AgentRunResponse, error)
+	// GetAgentRunRuntimeStatus возвращает безопасное состояние runtime для одного run.
+	GetAgentRunRuntimeStatus(ctx context.Context, in *GetAgentRunRuntimeStatusRequest, opts ...grpc.CallOption) (*AgentRunRuntimeStatusResponse, error)
 	// RecordSessionStateSnapshot records metadata for a Codex session state object.
 	RecordSessionStateSnapshot(ctx context.Context, in *RecordSessionStateSnapshotRequest, opts ...grpc.CallOption) (*AgentSessionStateSnapshotResponse, error)
 	// RequestAcceptance requests acceptance checks for a session, run and stage.
@@ -331,6 +334,16 @@ func (c *agentManagerServiceClient) RecordRunState(ctx context.Context, in *Reco
 	return out, nil
 }
 
+func (c *agentManagerServiceClient) GetAgentRunRuntimeStatus(ctx context.Context, in *GetAgentRunRuntimeStatusRequest, opts ...grpc.CallOption) (*AgentRunRuntimeStatusResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AgentRunRuntimeStatusResponse)
+	err := c.cc.Invoke(ctx, AgentManagerService_GetAgentRunRuntimeStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *agentManagerServiceClient) RecordSessionStateSnapshot(ctx context.Context, in *RecordSessionStateSnapshotRequest, opts ...grpc.CallOption) (*AgentSessionStateSnapshotResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(AgentSessionStateSnapshotResponse)
@@ -527,6 +540,8 @@ type AgentManagerServiceServer interface {
 	StartAgentRun(context.Context, *StartAgentRunRequest) (*AgentRunResponse, error)
 	// RecordRunState records a run lifecycle transition from runtime, MCP or runner.
 	RecordRunState(context.Context, *RecordRunStateRequest) (*AgentRunResponse, error)
+	// GetAgentRunRuntimeStatus возвращает безопасное состояние runtime для одного run.
+	GetAgentRunRuntimeStatus(context.Context, *GetAgentRunRuntimeStatusRequest) (*AgentRunRuntimeStatusResponse, error)
 	// RecordSessionStateSnapshot records metadata for a Codex session state object.
 	RecordSessionStateSnapshot(context.Context, *RecordSessionStateSnapshotRequest) (*AgentSessionStateSnapshotResponse, error)
 	// RequestAcceptance requests acceptance checks for a session, run and stage.
@@ -623,6 +638,9 @@ func (UnimplementedAgentManagerServiceServer) StartAgentRun(context.Context, *St
 }
 func (UnimplementedAgentManagerServiceServer) RecordRunState(context.Context, *RecordRunStateRequest) (*AgentRunResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RecordRunState not implemented")
+}
+func (UnimplementedAgentManagerServiceServer) GetAgentRunRuntimeStatus(context.Context, *GetAgentRunRuntimeStatusRequest) (*AgentRunRuntimeStatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetAgentRunRuntimeStatus not implemented")
 }
 func (UnimplementedAgentManagerServiceServer) RecordSessionStateSnapshot(context.Context, *RecordSessionStateSnapshotRequest) (*AgentSessionStateSnapshotResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RecordSessionStateSnapshot not implemented")
@@ -1032,6 +1050,24 @@ func _AgentManagerService_RecordRunState_Handler(srv interface{}, ctx context.Co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentManagerService_GetAgentRunRuntimeStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAgentRunRuntimeStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentManagerServiceServer).GetAgentRunRuntimeStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentManagerService_GetAgentRunRuntimeStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentManagerServiceServer).GetAgentRunRuntimeStatus(ctx, req.(*GetAgentRunRuntimeStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AgentManagerService_RecordSessionStateSnapshot_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RecordSessionStateSnapshotRequest)
 	if err := dec(in); err != nil {
@@ -1384,6 +1420,10 @@ var AgentManagerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RecordRunState",
 			Handler:    _AgentManagerService_RecordRunState_Handler,
+		},
+		{
+			MethodName: "GetAgentRunRuntimeStatus",
+			Handler:    _AgentManagerService_GetAgentRunRuntimeStatus_Handler,
 		},
 		{
 			MethodName: "RecordSessionStateSnapshot",
