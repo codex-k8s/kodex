@@ -60,7 +60,7 @@ approvals:
 | SGW-1 | не назначено | Первый `staff-gateway` контур готов: OpenAPI list/detail/respond для owner inbox вызывает `interaction-hub` gRPC и не хранит собственную модель решений. |
 | IH-9c | не назначено | MCP-интеграция готова: `platform-mcp-server` маршрутизирует `interaction.feedback.request`, `interaction.approval.request`, `interaction.human_gate.request`, status reads. |
 | IH-10 | не назначено | Связка с `agent-manager`, `codex-hook-ingress`, `governance-manager` и `provider-hub` готова для PermissionRequest, owner feedback, owner decision refs и событий ответа. |
-| IH-11 | #894 | Эксплуатационный контур готов: Dockerfile, deploy manifests, migration job, runtime env inventory, smoke-проверка, runbook и monitoring docs доступны для первого backend deploy. |
+| IH-11 | #894 | Эксплуатационный контур готов: Dockerfile, deploy manifests, migration job, runtime env inventory, проверка готовности, runbook и monitoring docs доступны для первого backend deploy. |
 | IH-12 | не назначено | Проекции для `operations-hub`, operator visibility, dual-surface inbox status и диагностика delivery failures готовы. |
 
 ## Минимальный первый кодовый срез IH-1

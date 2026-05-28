@@ -67,7 +67,7 @@ approvals:
 
 - Liveness: процесс отвечает на `/health/livez`.
 - Readiness: процесс видит БД `runtime-manager` и, при включённой outbox-доставке, БД `platform-event-log`.
-- gRPC smoke: вызов `RuntimeManagerService/GetSlot` должен давать application-level статус, а не сетевую ошибку.
+- gRPC integration check: вызов `RuntimeManagerService/GetSlot` должен давать application-level статус, а не сетевую ошибку.
 
 ## Алерты
 

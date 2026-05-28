@@ -79,7 +79,7 @@ approvals:
 
 - Liveness: процесс отвечает на `/health/livez`.
 - Readiness: процесс видит БД `fleet-manager` и, при включённой outbox-доставке, БД `platform-event-log`.
-- gRPC smoke: `FleetManagerService/ListFleetScopes` должен давать application-level статус, а не сетевую ошибку.
+- gRPC integration check: `FleetManagerService/ListFleetScopes` должен давать application-level статус, а не сетевую ошибку.
 - Connectivity checks: latest snapshot для active/default cluster не должен быть старше допустимого окна, если кластер используется для placement.
 
 ## Алерты

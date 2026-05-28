@@ -22,7 +22,7 @@ approvals:
 
 - Миграции: `deploy/base/interaction-hub/migrations.yaml.tpl`.
 - Сервис: `deploy/base/interaction-hub/interaction-hub.yaml.tpl`.
-- Smoke: `KODEX_SMOKE_ENV_FILE=<env> bash scripts/smoke-interaction-hub.sh`.
+- Проверки: Go tests и будущий Go integration runner; shell smoke не используется.
 - Readiness: `GET /health/readyz` на HTTP-порту сервиса.
 
 ## Когда использовать

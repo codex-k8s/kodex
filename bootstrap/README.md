@@ -13,7 +13,7 @@ installer.
 - kubelet image GC и host image prune timer;
 - `/opt/kodex` как локальный snapshot репозитория для install;
 - internal registry foundation;
-- registry mirror и Kaniko build smoke.
+- проверка registry mirror и Kaniko build.
 
 ## Файлы
 
@@ -24,10 +24,10 @@ installer.
 | `bootstrap/host/deploy_backend_ring.sh` | Реальное применение первого backend-кольца: registry, Kubernetes `Secret`, Kaniko-сборки, PostgreSQL, миграции и первые сервисы. |
 | `bootstrap/local/install.sh` | Локальный privileged orchestrator install-шагов. |
 | `bootstrap/local/steps/*.sh` | Узкие idempotent host/Kubernetes steps. |
-| `bootstrap/host/smoke_registry_kaniko.sh` | Registry mirror + Kaniko build/push smoke без Docker daemon. |
-| `bootstrap/host/smoke_backend_contour.sh` | Backend smoke после подготовки образов сервисов. |
+| `bootstrap/host/smoke_registry_kaniko.sh` | Проверка registry mirror и Kaniko build/push без Docker daemon. |
+| `bootstrap/host/smoke_backend_contour.sh` | Тонкая обвязка проверки над `deploy_backend_ring.sh --skip-build`. |
 | `deploy/base/bootstrap-foundation/**` | Manifests внутреннего registry. |
-| `deploy/base/bootstrap-builder-smoke/**` | Manifests mirror/Kaniko smoke jobs. |
+| `deploy/base/bootstrap-builder-smoke/**` | Manifests заданий проверки mirror/Kaniko. |
 | `cmd/bootstrap-preflight` | Безопасный preflight: имена env, stack inventory, dry-run рендер, kustomize и проверки Kubernetes только на чтение. |
 | `cmd/bootstrap-deploy-plan` | Безопасный план backend deploy: инвентарь MVP-сервисов, PostgreSQL/event-log manifests, service manifests, builder refs и проверки foundation только на чтение. |
 | `cmd/manifest-render` | Stack-aware renderer: читает `services.yaml`, затем применяет env overrides. |
@@ -226,7 +226,7 @@ bash bootstrap/host/deploy_backend_ring.sh \
   --skip-build
 ```
 
-## Registry и Kaniko smoke
+## Проверка registry и Kaniko
 
 После установки foundation:
 
@@ -245,11 +245,11 @@ KODEX_SMOKE_ENV_FILE=bootstrap/host/config.env \
 
 Docker daemon не требуется.
 
-## Backend smoke после deploy
+## Проверка backend после deploy
 
-Когда первое backend-кольцо применено, можно запускать smoke-обёртку. По
-умолчанию она повторяет идемпотентный deploy первого кольца с `--skip-build`:
-проверяет registry, Kubernetes `Secret`, PostgreSQL, migrations, rollout и
+Когда первое backend-кольцо применено, можно запускать обвязку проверки. Она
+повторяет идемпотентный deploy первого кольца с `--skip-build`: проверяет
+registry, Kubernetes `Secret`, PostgreSQL, migrations, rollout и
 `/health/readyz`, не перезаписывая секреты значениями из env.
 
 ```bash
@@ -260,21 +260,11 @@ KODEX_SMOKE_ENV_FILE=bootstrap/host/config.env \
 Frontend и полный backend-набор за пределами первого кольца не входят в этот
 срез.
 
-Старые service-specific smoke scripts можно вызвать только явно:
+Доменные и end-to-end проверки не добавляются как shell smoke scripts в
+`scripts/**`. Их целевой формат — Go tests или отдельный Go integration runner;
+shell остаётся только тонкой обвязкой установки, deploy или запуска Go tooling.
 
-```bash
-KODEX_BACKEND_SMOKE_LEGACY_SERVICE_SCRIPTS=true \
-KODEX_BACKEND_SMOKE_SERVICES="access-manager project-catalog package-hub provider-hub" \
-KODEX_SMOKE_ENV_FILE=bootstrap/host/config.env \
-  bash bootstrap/host/smoke_backend_contour.sh
-```
-
-Этот режим предназначен для отладки и может повторно применить manifests из
-env-файла, поэтому штатный путь первого кольца использует
-`deploy_backend_ring.sh --skip-build`.
-
-Чтобы проверить backend smoke wrapper без запуска registry smoke и сервисных
-smoke-команд:
+Чтобы проверить backend wrapper без запуска проверки registry и deploy:
 
 ```bash
 KODEX_BACKEND_SMOKE_DRY_RUN=true \

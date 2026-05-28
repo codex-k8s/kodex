@@ -21,4 +21,4 @@
 
 | Документ | Назначение |
 |---|---|
-| [bootstrap_cluster_runbook.md](bootstrap_cluster_runbook.md) | Runbook первого bootstrap-контура кластера: локальный preflight/install, registry/Kaniko smoke и backend smoke. |
+| [bootstrap_cluster_runbook.md](bootstrap_cluster_runbook.md) | Runbook первого bootstrap-контура кластера: локальный preflight/install, проверки registry/Kaniko и backend. |

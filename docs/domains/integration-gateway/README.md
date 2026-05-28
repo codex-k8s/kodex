@@ -17,7 +17,7 @@
   HTTP router, OpenAPI runtime validation и provider-hub client interface.
 - Активный GitHub provider webhook route с source binding, HMAC SHA-256 проверкой подписи и безопасной ссылкой на webhook secret.
 - Per-route/per-source лимиты, backpressure guard и ограниченная диагностика входящего контура без сырых секретов, больших payload и бизнес-проекций.
-- Эксплуатационный контур: Dockerfile, Kubernetes manifests, secret refs, smoke, monitoring и rollback runbook.
+- Эксплуатационный контур: Dockerfile, Kubernetes manifests, secret refs, monitoring и rollback runbook.
 
 ## Что не входит
 

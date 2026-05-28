@@ -1,7 +1,7 @@
 ---
 doc_id: RB-CK8S-INTEGRATION-GATEWAY-0001
 type: runbook
-title: "integration-gateway — runbook: deploy, smoke и rollback"
+title: "integration-gateway — runbook: deploy, диагностика и rollback"
 status: active
 owner_role: SRE
 created_at: 2026-05-26
@@ -16,13 +16,13 @@ approvals:
   approved_at: 2026-05-26
 ---
 
-# Runbook: integration-gateway — deploy, smoke и rollback
+# Runbook: integration-gateway — deploy, диагностика и rollback
 
 ## TL;DR
 
 - Симптом: `integration-gateway` не стартует, не проходит readiness, не отдаёт OpenAPI, не отклоняет неподписанный GitHub webhook/callback или возвращает `503` при маршрутизации в `provider-hub` или `interaction-hub`.
 - Быстрая диагностика: проверить образ, `Deployment`, `/health/readyz`, `/metrics`, OpenAPI endpoint, runtime secret refs и доступность сервисов-владельцев.
-- Быстрое восстановление: исправить image/env/secret refs, перезапустить `Deployment/integration-gateway`, выполнить smoke, при необходимости откатить image tag.
+- Быстрое восстановление: исправить image/env/secret refs, перезапустить `Deployment/integration-gateway`, выполнить Go checks или общий deploy/diagnostic runner, при необходимости откатить image tag.
 
 ## Когда использовать
 
@@ -34,8 +34,8 @@ approvals:
 
 - Доступ к Kubernetes namespace платформы.
 - Доступ к логам `integration-gateway`, `provider-hub` и `interaction-hub`.
-- Нормализованный bootstrap env для локального render/smoke.
-- Локально для smoke нужны `kubectl`, `curl`, `grep` и `go`.
+- Нормализованный bootstrap env для локального render/diagnostic.
+- Локально для diagnostic checks нужны `kubectl`, `curl`, `grep` и `go`.
 - Значения секретов, подписи, токены, DSN, приватные домены, адреса серверов и raw provider payload не выводить в Issue, PR, логи диагностики и сообщения.
 
 ## Сборка образов
@@ -47,44 +47,17 @@ KODEX_BUILD_ENV_FILE=/path/to/bootstrap.env \
 
 Скрипт собирает `integration-gateway` и минимальный набор образов, нужных для smoke-зависимостей: `access-manager`, `provider-hub`, их migration images и `platform-event-log` migrations image.
 
-## Smoke-проверка
+## Проверки
 
-```bash
-KODEX_SMOKE_ENV_FILE=/path/to/bootstrap.env \
-  scripts/smoke-integration-gateway.sh
-```
+`integration-gateway` не имеет активного shell smoke-сценария. Проверки HTTP
+boundary, HMAC, route registry и safe negative responses живут в Go tests
+транспорта и входят в `make test-go`.
 
-Путь проверки:
-
-- рендерит `deploy/base/**` во временный каталог;
-- применяет PostgreSQL stack, `platform-event-log` migrations, `access-manager` и `provider-hub`;
-- применяет `integration-gateway`;
-- проверяет `/health/livez`, `/health/readyz`, `/metrics` и `/openapi/integration-gateway.v1.yaml`;
-- выполняет safe negative checks для GitHub webhook route и disabled callback route без реальных секретов: неподписанный GitHub webhook должен получить `401/signature_invalid`, неподдержанный provider slug и выключенный callback route — `400/source_not_allowed`.
-
-Smoke не выполняет реальные GitHub/GitLab операции, не требует валидного webhook secret для positive route и не сохраняет provider payload в gateway.
-
-### Staged smoke для GitHub merge signal
-
-```bash
-scripts/smoke-provider-merge-signal.sh
-```
-
-Скрипт использует синтетические safe fixtures `pull_request closed + merged` для bootstrap/adoption и по умолчанию запускает hermetic checks без live webhook secret:
-
-- проверяет, что route `POST /v1/provider-webhooks/github` принимает корректно подписанные тестовым секретом fixtures и передаёт `event_name=pull_request`, delivery id, request id и payload в `provider-hub` client boundary;
-- проверяет provider-side продолжение через `provider-hub`: safe merge signal, read surface, replay/conflict diagnostics и producer outbox event.
-
-Live HTTP режим `KODEX_PROVIDER_MERGE_SIGNAL_SMOKE_MODE=live-http` отправляет выбранный fixture в запущенный `integration-gateway`, а затем читает `RepositoryMergeSignal` через gRPC `provider-hub`. Для него нужны настроенный webhook secret текущего контура и заранее существующая bootstrap/adoption PR-проекция с provider relationship; gateway сам не создаёт эту precondition и не хранит state. Для adoption live check вместе переопределяются fixture path, signal key и delivery id.
-
-Для проверки на настоящем GitHub-репозитории используется provider-side live-smoke:
-
-```bash
-KODEX_PROVIDER_LIVE_SMOKE_GATEWAY_URL=http://127.0.0.1:18086 \
-  scripts/smoke-provider-github-live.sh --apply
-```
-
-Он создаёт или переиспользует тестовый репозиторий, ветку и PR в `codex-k8s`, выполняет merge, собирает live `pull_request closed + merged` payload во временный файл и отправляет его в `integration-gateway`, если задан webhook secret. Gateway по-прежнему проверяет только HTTP-boundary: подпись, delivery id, event headers, размер, backpressure и маршрутизацию в `provider-hub`; он не создаёт provider projection, binding или merge signal самостоятельно. Raw provider payload, подписи и секреты не печатаются.
+Provider merge signal и live GitHub path не запускаются shell-скриптами.
+Staged fixtures `pull_request closed + merged` остаются материалом для Go tests
+`integration-gateway` и `provider-hub`; live provider end-to-end проверка
+должна быть отдельным Go integration runner с явной safe-конфигурацией,
+idempotency и cleanup policy.
 
 ## Диагностика rollout и health
 
@@ -100,7 +73,7 @@ curl -fsS http://127.0.0.1:18086/metrics
 curl -fsS http://127.0.0.1:18086/openapi/integration-gateway.v1.yaml
 ```
 
-Readiness подтверждает, что HTTP router, OpenAPI validator и route registry собраны. Доступность `provider-hub` и `interaction-hub` проверяется через route smoke, negative checks и логи `downstream_unavailable`, потому что gateway не хранит собственное состояние и не открывает БД.
+Readiness подтверждает, что HTTP router, OpenAPI validator и route registry собраны. Доступность `provider-hub` и `interaction-hub` проверяется через route checks, negative checks и логи `downstream_unavailable`, потому что gateway не хранит собственное состояние и не открывает БД.
 
 ## Диагностика secret refs
 
@@ -157,12 +130,13 @@ Readiness подтверждает, что HTTP router, OpenAPI validator и rou
 - Неподписанный GitHub webhook получает `401/signature_invalid`.
 - Неподдержанный provider slug получает `400/source_not_allowed`.
 - Выключенный callback route получает `400/source_not_allowed`; включённый route без валидной `X-Kodex-External-Signature` получает `401/signature_invalid`.
-- `scripts/smoke-integration-gateway.sh` завершается сообщением `HTTP edge boundary OK`.
+- Go tests HTTP boundary проходят в `make test-go`; live provider сценарии
+  запускаются только через отдельный Go integration runner после его появления.
 
 ## Пост-действия
 
 - Если была авария, создать Issue с причиной, безопасными symptoms и корректирующими действиями.
-- Если обнаружен пробел в secret refs, guard config, manifests или smoke, обновить этот runbook вместе с исправлением.
+- Если обнаружен пробел в secret refs, guard config, manifests или проверках, обновить этот runbook вместе с исправлением.
 - В Issue/PR не прикладывать значения env, DSN, токенов, webhook secret, подписи, приватные домены или raw provider payload.
 
 ## Апрув

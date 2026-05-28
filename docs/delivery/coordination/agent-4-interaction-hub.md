@@ -39,7 +39,7 @@
 | IH-9a | #921 | готово как owner inbox UI-readiness | `GetOwnerInboxItem` даёт safe detail для будущего `staff-gateway` UI flow `list -> detail -> safe action`: request/source/decision/context refs, delivery/callback/response summaries, allowed actions, timestamps и version; ответ записывается существующим `RecordInteractionResponse`. |
 | IH-9b | #928 | готово как таксономия действий владельца | `request_changes` закреплён как отдельный `InteractionResponseAction`: owner inbox list/detail и callback/response lifecycle отличают запрос доработки от `reject`, а завершённые request не возвращают `allowed_actions`. |
 | SGW-1 | не назначено | готово как первый staff-gateway owner inbox contour | `services/staff/staff-gateway` отдаёт OpenAPI для списка входящих решений, карточки решения и безопасного ответа владельца; внутри вызывает `interaction-hub` gRPC и не хранит собственный decision state. |
-| IH-11 | #894 | готово как ops deploy contour | Dockerfile, Kubernetes manifests, migration Job, services.yaml inventory, smoke-проверка, runbook и monitoring docs подготовлены для первого backend deploy без новой бизнес-логики. |
+| IH-11 | #894 | готово как ops deploy contour | Dockerfile, Kubernetes manifests, migration Job, services.yaml inventory, проверка готовности, runbook и monitoring docs подготовлены для первого backend deploy без новой бизнес-логики. |
 
 ## Текущий бэклог
 

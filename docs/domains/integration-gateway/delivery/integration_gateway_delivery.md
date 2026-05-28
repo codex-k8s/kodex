@@ -48,9 +48,9 @@ approvals:
 | IGW-2 | #807 | Реальный route `POST /v1/provider-webhooks/{provider_slug}` для `provider_slug=github`: проверка `X-Hub-Signature-256`, обязательных GitHub headers, лимита payload, idempotency mapping и вызов `provider-hub.IngestWebhookEvent`. |
 | IGW-3 | не назначено | Расширение callback routes для внешних каналов и пакетов после готовности дополнительных owner-service contracts. |
 | IGW-4 | #819 | Security hardening: per-source/per-route limits, backpressure policy, safe audit summary, replay/idempotency tests и compatibility tests OpenAPI без расширения бизнес-состояния gateway. |
-| IGW-5 | #829 | Deploy-контур: Dockerfile, manifests, secrets refs, smoke, runbook, monitoring и rollback. |
+| IGW-5 | #829 | Deploy-контур: Dockerfile, manifests, secrets refs, runbook, monitoring и rollback. |
 | IGW-6 | #853 | Первый active callback route: generic `/v1/external-callbacks/{callback_source}` проверяет source binding, HMAC SHA-256 подпись, лимиты и вызывает `interaction-hub.RecordChannelCallback` safe envelope без gateway business state. |
-| Provider merge signal smoke | #895, #909 | Staged fixture smoke проверяет GitHub provider webhook route wiring до `provider-hub.IngestWebhookEvent` и live HTTP diagnostic mode без переноса provider business state в gateway; bootstrap и adoption fixtures проходят один и тот же thin-edge route. |
+| Provider merge signal checks | #895, #909 | Go checks на staged fixtures проверяют GitHub provider webhook route wiring до `provider-hub.IngestWebhookEvent` и live HTTP diagnostic mode без переноса provider business state в gateway; bootstrap и adoption fixtures проходят один и тот же thin-edge route. |
 
 ## Зависимости и блокировки
 
@@ -90,10 +90,10 @@ approvals:
 | Manifests | `deploy/base/integration-gateway/**` содержит kustomize base для `ServiceAccount`, `ConfigMap`, `Service`, `Deployment`, probes и metrics scrape annotations. |
 | Secret refs | GitHub webhook secret и provider-hub gRPC token подключаются через `kodex-platform-runtime` keys без значений в manifests/docs/tests. |
 | Config | Route guard, HTTP limits, OpenAPI path, provider-hub address/timeout и secret resolver backends задаются env/config refs. |
-| Smoke | `scripts/smoke-integration-gateway.sh` проверяет health/readiness/metrics/OpenAPI и safe negative responses для GitHub route без реального webhook secret. |
+| Проверки | Health/readiness/metrics/OpenAPI и safe negative responses для GitHub route проверяются Go tests или будущим Go integration runner. |
 | Ops | Runbook и monitoring docs описывают route checks, backpressure, safe errors, provider-hub connectivity и rollback. |
 
-Дополнительный staged smoke `scripts/smoke-provider-merge-signal.sh` использует synthetic GitHub `pull_request closed + merged` bootstrap/adoption fixtures: на gateway-стороне проверяется только HTTP boundary, HMAC verifier, delivery/event headers, correlation metadata и передача payload в `provider-hub` client. Provider-owned merge signal, read surface, replay/conflict и outbox проверяются в `provider-hub`; `integration-gateway` не хранит provider projections, inbox, operation state или бизнес-события.
+Staged fixtures GitHub `pull_request closed + merged` bootstrap/adoption используются в Go tests: на gateway-стороне проверяется только HTTP boundary, HMAC verifier, delivery/event headers, correlation metadata и передача payload в `provider-hub` client. Provider-owned merge signal, read surface, replay/conflict и outbox проверяются в `provider-hub`; `integration-gateway` не хранит provider projections, inbox, operation state или бизнес-события.
 
 ## Реализованный callback route IGW-6
 
@@ -120,7 +120,7 @@ approvals:
 - Payload size guard, redaction и backpressure работают до передачи владельцу.
 - `provider-hub` получает проверенный `IngestWebhookEvent` и остаётся владельцем webhook inbox.
 - Gateway не хранит provider projections, cursors, operations или raw secret values.
-- OpenAPI, runbook и smoke покрывают публичный route без раскрытия приватных env.
+- OpenAPI, runbook и проверка готовности покрывают публичный route без раскрытия приватных env.
 
 ## Апрув
 

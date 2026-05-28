@@ -82,7 +82,9 @@ approvals:
 
 - Liveness: процесс отвечает на `/health/livez`.
 - Readiness: процесс видит БД `governance-manager` и, при включённой outbox-доставке, БД `platform-event-log`.
-- Smoke: `scripts/smoke-governance-manager.sh` подтверждает migration job, deployment rollout и `/health/readyz`.
+- Integration checks: migration job, deployment rollout и `/health/readyz`
+  подтверждаются Go integration runner после его появления; shell smoke для
+  доменного сценария не используется.
 - Access boundary: команды управления risk/gate/release decision должны получать application-level отказ, а не transport failure, если actor не имеет права.
 - Outbox: локальная очередь не должна расти дольше допустимого окна.
 

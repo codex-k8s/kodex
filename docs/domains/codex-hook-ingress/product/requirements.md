@@ -105,7 +105,7 @@ Codex запускает hooks как command-обработчики в рабо
 | CHI-FR-28 | Compact checkpoints не должны появляться в `supported_hook_events`; будущая поддержка compact оформляется как внутренние события `agent-manager`/`runtime-manager`, а не `PreCompact`/`PostCompact` Codex hooks. | Обязательно |
 | CHI-FR-29 | Machine-readable контракт CHI-2 должен быть JSON Schema `hook-emitter-config.v1`, описывающей runtime input, delivery, auth, idempotency, ordering, retry, buffer, backpressure и failure policy без выбора физического транспорта. | Обязательно |
 | CHI-FR-30 | Долгая persistent история действий агента и tool calls должна маршрутизироваться в `agent-manager.RecordAgentActivity`; `codex-hook-ingress` хранит только короткую operational/realtime feed и sanitizer/route diagnostics. | Обязательно |
-| CHI-FR-31 | Deploy-контур должен публиковать только service health/readiness/metrics, image/config inventory, Kubernetes `Deployment/Service/ConfigMap`, smoke, runbook и monitoring; служебная БД, migration job и physical `SubmitHookEvent` transport не добавляются без отдельного решения. | Обязательно |
+| CHI-FR-31 | Deploy-контур должен публиковать только service health/readiness/metrics, image/config inventory, Kubernetes `Deployment/Service/ConfigMap`, runbook и monitoring; служебная БД, migration job и physical `SubmitHookEvent` transport не добавляются без отдельного решения. | Обязательно |
 
 ## Поддержка Codex skills как capability layer
 
@@ -148,7 +148,7 @@ Codex skills рассматриваются как управляемые capabi
 | CHI-AC-9 | CHI-2 содержит контракт hook emitter/local sidecar: runtime placement, чтение `stdin`, sanitizer до buffer/send, retry/backpressure/failure policy и логический `SubmitHookEvent` в `codex-hook-ingress`. |
 | CHI-AC-10 | CHI-2 не выбирает gRPC/HTTP transport, не создаёт OpenAPI/AsyncAPI/proto, не добавляет `PreCompact`/`PostCompact` в MVP hook set и не хранит raw payload. |
 | CHI-AC-11 | Сервисный каркас поддерживает route registry и dispatch только перечисленных safe event parts через owner ports/stubs; disabled, unsupported и failed routes возвращают safe diagnostics и не считаются успешной доставкой. |
-| CHI-AC-12 | Deploy-контур содержит Dockerfile, Kubernetes manifests, service/image/config entries в `services.yaml`, smoke, runbook и monitoring без БД, migration job, raw payload storage и физического endpoint для `SubmitHookEvent`. |
+| CHI-AC-12 | Deploy-контур содержит Dockerfile, Kubernetes manifests, service/image/config entries в `services.yaml`, runbook и monitoring без БД, migration job, raw payload storage и физического endpoint для `SubmitHookEvent`. |
 
 ## Не-цели
 

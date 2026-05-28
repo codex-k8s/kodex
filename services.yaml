@@ -135,7 +135,6 @@ spec:
         - services/external/integration-gateway
         - deploy/base/integration-gateway
         - scripts/build-integration-gateway-images.sh
-        - scripts/smoke-integration-gateway.sh
         - specs/openapi/integration-gateway.v1.yaml
         - proto/kodex/providers/v1
         - proto/kodex/interactions/v1
@@ -194,7 +193,6 @@ spec:
         - specs/asyncapi/interaction-hub.v1.yaml
         - deploy/base/agent-manager
         - scripts/build-agent-manager-images.sh
-        - scripts/smoke-agent-manager.sh
     fleet-manager:
       value: "0.1.0"
       bumpOn:
@@ -231,7 +229,6 @@ spec:
         - proto/kodex/governance/v1
         - specs/asyncapi/governance-manager.v1.yaml
         - deploy/base/governance-manager
-        - scripts/smoke-governance-manager.sh
     platform-mcp-server:
       value: "0.1.0"
       bumpOn:
@@ -248,7 +245,6 @@ spec:
         - services/internal/codex-hook-ingress
         - deploy/base/codex-hook-ingress
         - scripts/build-codex-hook-ingress-images.sh
-        - scripts/smoke-codex-hook-ingress.sh
         - libs/go/serviceprocess
         - libs/go/servicemain
         - proto/kodex/agents/v1
@@ -258,7 +254,6 @@ spec:
       bumpOn:
         - services/internal/interaction-hub
         - deploy/base/interaction-hub
-        - scripts/smoke-interaction-hub.sh
         - libs/go/eventlog
         - libs/go/grpcserver
         - libs/go/migrationtest

@@ -75,7 +75,7 @@ approvals:
 | Idempotency mapper | Извлекает delivery id или строит безопасный idempotency key для передачи владельцу. |
 | gRPC router | Вызывает сервис-владелец по внутреннему контракту и не выполняет доменную обработку. |
 | Bounded diagnostics | Возвращает и пишет только короткие статусы и безопасные причины отказа. |
-| Deploy contour | Собирает stateless container image, Kubernetes manifests, secret refs, probes, smoke и rollback/runbook без БД, inbox или provider business state. |
+| Deploy contour | Собирает stateless container image, Kubernetes manifests, secret refs, probes, диагностика и rollback/runbook без БД, inbox или provider business state. |
 
 ## Первый MVP-поток provider webhook
 
@@ -175,7 +175,7 @@ Safe audit summary gateway пишет только redaction-safe поля: requ
 - Kubernetes base живёт в `deploy/base/integration-gateway/**` и содержит `ServiceAccount`, `ConfigMap`, `Service`, `Deployment`, health probes и metrics endpoint;
 - route guard задаётся env-конфигурацией deployment: `max_in_flight`, `rate_limit_burst`, `rate_limit_window`, `retry_after`;
 - GitHub webhook secret, external callback secret, provider-hub token и interaction-hub token подключаются только через Kubernetes Secret refs, без значений в manifests и документации;
-- smoke проверяет health/readiness/OpenAPI и safe negative responses для GitHub route без реального webhook secret;
+- Go checks проверяют health/readiness/OpenAPI и safe negative responses для GitHub route без реального webhook secret;
 - rollback выполняется через предыдущий image tag или `kubectl rollout undo`, без отката `provider-hub` БД, inbox или projections.
 
 ## Риски

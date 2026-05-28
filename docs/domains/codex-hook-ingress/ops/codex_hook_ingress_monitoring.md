@@ -68,7 +68,8 @@ approvals:
 - Liveness: `/health/livez` возвращает успешный ответ.
 - Readiness: `/health/readyz` подтверждает, что process, domain service и logical command handler готовы.
 - Metrics: `/metrics` доступен для scrape по Kubernetes annotations.
-- Smoke: `scripts/smoke-codex-hook-ingress.sh` проходит без secret/DSN requirements.
+- Integration check: health/readiness/metrics подтверждаются Go tests или
+  будущим Go integration runner без shell-доменной логики.
 
 ## Алерты
 

@@ -1,7 +1,7 @@
 ---
 doc_id: RB-CK8S-AGENT-MANAGER-0001
 type: runbook
-title: "agent-manager — runbook: развёртывание и smoke-проверка"
+title: "agent-manager — runbook: развёртывание и диагностика"
 status: active
 owner_role: SRE
 created_at: 2026-05-27
@@ -16,13 +16,13 @@ approvals:
   approved_at: 2026-05-27
 ---
 
-# Runbook: agent-manager — развёртывание и smoke-проверка
+# Runbook: agent-manager — развёртывание и диагностика
 
 ## TL;DR
 
 - Симптом: `agent-manager` не стартует, не проходит readiness, не отвечает по gRPC или не публикует `agent.*` события.
 - Быстрая диагностика: проверить migration job, `Deployment`, `/health/readyz`, `/metrics`, БД `agent-manager`, БД `platform-event-log` и доступность owner-сервисов `package-hub`, `project-catalog`, `runtime-manager`, `provider-hub`.
-- Быстрое восстановление: исправить env/secret/image, повторить migration job, перезапустить `Deployment/agent-manager`, выполнить smoke-скрипт.
+- Быстрое восстановление: исправить env/secret/image, повторить migration job, перезапустить `Deployment/agent-manager`, выполнить Go checks или общий deploy/diagnostic runner.
 
 ## Когда использовать
 
@@ -35,7 +35,7 @@ approvals:
 - Доступ к Kubernetes namespace платформы.
 - Доступ к логам `agent-manager`, `agent-manager-migrations`, `postgres` и owner-сервисов.
 - Нормализованный `bootstrap.env`, подготовленный bootstrap-процессом.
-- Локально для smoke-проверки нужны `kubectl`, `curl`, `grpcurl` и `go`.
+- Локально для проверки готовности нужны `kubectl`, `curl`, `grpcurl` и `go`.
 - Значения секретов, DSN, приватные домены, адреса серверов, raw prompt, transcript, workspace paths и provider payload не выводить в логи, Issue, PR и сообщения.
 
 ## Сборка образов
@@ -45,26 +45,14 @@ KODEX_BUILD_ENV_FILE=/path/to/bootstrap.env \
   scripts/build-agent-manager-images.sh
 ```
 
-Скрипт собирает `agent-manager`, его миграции и минимальные backend-зависимости smoke-пути: `access-manager`, `project-catalog`, `package-hub`, `provider-hub`, `fleet-manager`, `runtime-manager` и migrations image общего event log.
+Скрипт собирает `agent-manager`, его миграции и минимальные backend-зависимости проверки готовности: `access-manager`, `project-catalog`, `package-hub`, `provider-hub`, `fleet-manager`, `runtime-manager` и migrations image общего event log.
 
-## Smoke-проверка
+## Проверки
 
-```bash
-KODEX_SMOKE_ENV_FILE=/path/to/bootstrap.env \
-  scripts/smoke-agent-manager.sh
-```
-
-Путь проверки:
-
-- рендерит манифесты во временный каталог;
-- применяет PostgreSQL stack и bootstrap database job;
-- применяет `platform-event-log` migrations;
-- применяет migrations/deployments для owner-сервисов, нужных текущим включённым интеграциям;
-- применяет `agent-manager` migrations и deployment;
-- проверяет `GET /health/readyz`;
-- проверяет gRPC boundary через `AgentManagerService/ListAgentRuns`.
-
-Smoke не запускает executor, QA runner, UI/gateway, provider adapter или transport-доставку Human gate. Проверка gRPC должна вернуть application-level статус, а не сетевую ошибку.
+Для `agent-manager` нет активного shell smoke-сценария. Проверки доменного
+gRPC boundary, runtime job и Human gate связок должны жить в Go tests или
+отдельном Go integration runner. Shell допускается только как тонкая обвязка
+общего deploy/diagnostic tooling.
 
 ## Диагностика миграций
 
@@ -168,12 +156,13 @@ Readiness должна видеть:
 - `Deployment/agent-manager` доступен.
 - `/health/readyz` возвращает успешный ответ.
 - `/metrics` доступен.
-- `scripts/smoke-agent-manager.sh` проходит до сообщения `gRPC boundary OK`.
+- Go tests доменного и транспортного слоя проходят в `make test-go`; будущая
+  end-to-end проверка запускается через Go integration runner.
 
 ## Пост-действия
 
 - Если была авария, создать Issue с причиной и корректирующими действиями.
-- Если обнаружен пробел в манифестах, env или smoke-проверке, обновить этот runbook в том же изменении, где исправляется поведение.
+- Если обнаружен пробел в манифестах, env или проверке готовности, обновить этот runbook в том же изменении, где исправляется поведение.
 - В Issue/PR не прикладывать значения DSN, токенов, адресов целевого сервера, приватных доменов или raw prompt/transcript/provider payload.
 
 ## Апрув

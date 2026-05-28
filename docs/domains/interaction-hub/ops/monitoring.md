@@ -59,7 +59,8 @@ approvals:
 
 - `livez` подтверждает, что процесс и HTTP server отвечают.
 - `readyz` подтверждает готовность доменного service, service DB и event-log DB, когда включён `postgres-event-log` outbox publisher.
-- Smoke-проверка `scripts/smoke-interaction-hub.sh` применяет foundation, миграции, deployment и проверяет `/health/readyz`.
+- Deploy/integration проверка `interaction-hub` должна быть Go integration runner.
+  Shell smoke для доменного сценария не используется.
 
 ## Alerts
 

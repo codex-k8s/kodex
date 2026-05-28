@@ -21,7 +21,7 @@ approvals:
 
 - Симптом: `package-hub` не готов, миграции не завершились, gRPC-запросы не отвечают или события `package.*` не уходят в общий журнал событий.
 - Быстрая диагностика: проверить `Deployment`, `Job/package-hub-migrations`, `/health/readyz`, `/metrics`, подключение к БД `package-hub`, доступ к `access-manager` и БД `platform-event-log`.
-- Быстрое восстановление: исправить env/secret/image, повторно применить миграции, перезапустить `Deployment/package-hub`, проверить smoke-скриптом.
+- Быстрое восстановление: исправить env/secret/image, повторно применить миграции, перезапустить `Deployment/package-hub`, проверить общей обвязкой первого кольца или Go checks.
 
 ## Когда использовать
 
@@ -71,10 +71,10 @@ approvals:
    curl -fsS http://127.0.0.1:18083/metrics
    ```
 
-5. Проверить gRPC boundary smoke:
+5. Проверить первый серверный контур через общую обвязку проверки:
 
    ```bash
-   KODEX_SMOKE_ENV_FILE=/path/to/bootstrap.env scripts/smoke-package-hub.sh
+   KODEX_SMOKE_ENV_FILE=/path/to/bootstrap.env bash bootstrap/host/smoke_backend_contour.sh
    ```
 
 6. Если `readyz` не проходит, проверить зависимости:
@@ -124,7 +124,7 @@ approvals:
 - номер версии образа `package-hub`;
 - статус `Deployment` и `Job`;
 - фрагменты логов без секретов;
-- результат smoke-проверки;
+- результат проверки готовности;
 - список последних изменений в манифестах и env.
 
 ## План отката
@@ -139,12 +139,13 @@ approvals:
 - `Deployment/package-hub` доступен.
 - `/health/readyz` возвращает успешный ответ.
 - `/metrics` доступен.
-- `scripts/smoke-package-hub.sh` проходит до сообщения `gRPC boundary OK`.
+- Общая обвязка первого кольца проходит без повторной сборки образов; gRPC
+  boundary проверяется Go tests или будущим Go integration runner.
 
 ## Пост-действия
 
 - Если была авария, создать Issue с причиной и корректирующими действиями.
-- Если обнаружен пробел в манифестах, env или smoke-проверке, обновить этот runbook в том же PR, где исправляется поведение.
+- Если обнаружен пробел в манифестах, env или проверке готовности, обновить этот runbook в том же PR, где исправляется поведение.
 
 ## Апрув
 

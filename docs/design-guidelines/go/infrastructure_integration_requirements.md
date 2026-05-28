@@ -58,6 +58,19 @@
 - Действия, меняющие состояние (pods/deployments/namespaces/secrets), логируются в аудит.
 - Для multi-pod корректности используется блокировка/синхронизация через БД.
 
+## Smoke и интеграционные проверки
+
+- Доменные smoke/e2e сценарии не пишутся в shell. Если проверка содержит бизнес-сценарий, provider
+  flow, HMAC/webhook payload, gRPC-команду доменного сервиса или ожидание записи в БД, она должна быть
+  Go test или отдельным Go integration runner.
+- Shell допустим только как тонкая обвязка bootstrap/deploy или Make target runner. Такая обвязка
+  не должна парсить доменные payload, принимать бизнес-решения, хранить секреты или печатать значения
+  env/DSN/token.
+- `scripts/test-go-postgres.sh` и `scripts/test-go-postgres-k8s.sh` остаются допустимыми runner для
+  `make test-go-postgres`: они поднимают тестовую инфраструктуру и запускают Go integration tests.
+- Для live provider-сценариев целевой формат — Go integration runner с явной safe-конфигурацией,
+  idempotency, cleanup policy и запретом на вывод сырых provider payload, token, DSN, доменов и адресов.
+
 ## Webhook/event processing
 
 - Вход в систему — webhook события от repository providers.
