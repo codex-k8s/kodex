@@ -61,10 +61,12 @@ sequenceDiagram
   AM->>RT: PrepareRuntime(agent_run_id, workspace_policy с guidance sources)
   RT->>SLOT: материализовать код, документы, guidance packages и generated context
   RT-->>AM: runtime context + fingerprint подготовки
-  AM->>AM: RecordRunState(starting/running, runtime_context)
+  AM->>RT: CreateJob(job_type=JOB_TYPE_AGENT_RUN, slot_ref, agent_run_id)
+  RT-->>AM: runtime_job_ref + job status
+  AM->>AM: RecordRunState(starting/running, runtime_context + runtime_job_ref)
 ```
 
-`StartAgentRun` остаётся авторитетной командой создания `Run`. Подготовка runtime может быть выполнена тем же оркестрационным контуром сразу после создания `Run`, но прямой checkout из `agent-manager` запрещён. Если `PrepareRuntime` временно запускается внешним оператором или быстрым manager-агентом через MCP, входной набор данных должен быть тем же: замороженный `AgentRun.guidance_refs` и проверенная workspace policy.
+`StartAgentRun` остаётся авторитетной командой создания `Run`. Подготовка runtime и постановка `JOB_TYPE_AGENT_RUN` могут быть выполнены тем же оркестрационным контуром сразу после создания `Run`, но прямой checkout, workspace materialization, Kubernetes-доступ и выполнение задания из `agent-manager` запрещены. Если `PrepareRuntime` или `CreateJob` временно запускаются внешним оператором или быстрым manager-агентом через MCP, входной набор данных должен быть тем же: замороженный `AgentRun.guidance_refs`, проверенная workspace policy, `agent_run_id` и `slot_ref`.
 
 ## Что хранится в БД и что живёт в workspace
 
@@ -81,7 +83,7 @@ sequenceDiagram
 | `payload_json` manifest | нет | runtime может получить от package/source контура при materialization, но не возвращает в `agent-manager` |
 | `SKILL.md`, руководства, шаблоны, scripts, assets | нет | да, как файлы источника только для чтения |
 | rendered execution context | нет как большой текст | да, как файл сгенерированного контекста |
-| slot/job/workspace refs | только ссылки в `runtime_context` | авторитетное состояние у `runtime-manager` |
+| slot/job/workspace refs | только ссылки в `runtime_context` и `runtime_job_ref` | авторитетное состояние у `runtime-manager` |
 
 ## WorkspaceSource для руководящего пакета
 
@@ -134,6 +136,7 @@ sequenceDiagram
 
 - Повтор `StartAgentRun` с тем же `command_id` возвращает тот же `Run` и тот же набор `guidance_refs`.
 - Повтор `PrepareRuntime` должен использовать `agent_run_id` и runtime `command_id`, чтобы не создавать несколько независимых слотов для одного запуска.
+- Повтор постановки `JOB_TYPE_AGENT_RUN` должен использовать `agent_run_id`, `slot_ref` и детерминированный runtime `command_id`; если `runtime_job_ref` уже сохранён в `Run`, `agent-manager` не создаёт новое задание.
 - Если `package-hub` больше не отдаёт установку или manifest после создания `Run`, уже замороженный `Run` остаётся исторически валидным, но новый runtime start должен завершиться безопасной ошибкой зависимости.
 - `package-hub` не создаёт локальные пути и не подготавливает workspace.
 - `runtime-manager` не выбирает flow, stage, role, prompt или guidance packages самостоятельно.

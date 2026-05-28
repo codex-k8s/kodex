@@ -111,9 +111,11 @@ Readiness должна видеть:
 ### runtime preparation
 
 - Проверить `KODEX_AGENT_MANAGER_RUNTIME_PREPARATION_ENABLED`.
+- Если после подготовки workspace нужно ставить задание агента, проверить `KODEX_AGENT_MANAGER_RUNTIME_JOB_DISPATCH_ENABLED`; этот switch требует включённой runtime preparation.
 - Проверить доступность `project-catalog` и `runtime-manager`.
 - Проверить `KODEX_AGENT_MANAGER_PROJECT_CATALOG_GRPC_AUTH_TOKEN` и `KODEX_AGENT_MANAGER_RUNTIME_MANAGER_GRPC_AUTH_TOKEN`.
-- Checkout, workspace paths, `.kodex/guidance/*` и `.kodex/context/agent-run.json` остаются у `runtime-manager`; `agent-manager` хранит только safe refs/status/fingerprint/diagnostic summary.
+- Checkout, workspace paths, `.kodex/guidance/*`, `.kodex/context/agent-run.json`, runtime job state и будущий executor остаются у `runtime-manager`; `agent-manager` хранит только safe refs/status/fingerprint/diagnostic summary и `runtime_job_ref`.
+- Если `Run` перешёл в `waiting` с reason `runtime_job_retryable`, проверить доступность `runtime-manager` и повторить orchestration-команду с тем же idempotency/command context. Если `Run` перешёл в `failed` с `runtime_job_failed`, смотреть безопасную summary в `Run` и состояние job/slot в `runtime-manager`.
 
 ### provider-hub follow-up dispatch
 

@@ -60,7 +60,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	if projectCatalogConn != nil {
 		defer func() { _ = projectCatalogConn.Close() }()
 	}
-	runtimePreparer, runtimeManagerConn, err := newRuntimePreparer(cfg)
+	runtimePreparer, runtimeJobCreator, runtimeManagerConn, err := newRuntimePreparer(cfg)
 	if err != nil {
 		return err
 	}
@@ -89,9 +89,11 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		GuidanceResolver:           guidanceResolver,
 		WorkspacePolicyResolver:    workspacePolicyResolver,
 		RuntimePreparer:            runtimePreparer,
+		RuntimeJobCreator:          runtimeJobCreator,
 		ProviderFollowUpDispatcher: providerFollowUpDispatcher,
 		HumanGateRequester:         humanGateRequester,
 		RuntimePreparationEnabled:  cfg.RuntimePreparationEnabled,
+		RuntimeJobDispatchEnabled:  cfg.RuntimeJobDispatchEnabled,
 		HumanGateRequestEnabled:    cfg.InteractionHubRequestEnabled,
 		EventPublisher:             agentservice.DisabledEventPublisher{},
 	})
@@ -193,19 +195,27 @@ func newWorkspacePolicyResolver(cfg Config) (agentservice.WorkspacePolicyResolve
 	return agentservice.DisabledWorkspacePolicyResolver{}, nil, nil
 }
 
-func newRuntimePreparer(cfg Config) (agentservice.RuntimePreparer, *grpcruntime.ClientConn, error) {
+func newRuntimePreparer(cfg Config) (agentservice.RuntimePreparer, agentservice.RuntimeJobCreator, *grpcruntime.ClientConn, error) {
 	if !cfg.RuntimePreparationEnabled {
 		disabled := agentservice.DisabledRuntimePreparer{}
-		return disabled, nil, nil
+		disabledJob := agentservice.DisabledRuntimeJobCreator{}
+		return disabled, disabledJob, nil, nil
 	}
 	clientConfig := runtimeclient.Config{
 		Addr:      cfg.RuntimeManagerGRPCAddr,
 		AuthToken: cfg.RuntimeManagerGRPCAuthToken,
 		Timeout:   cfg.RuntimeManagerPrepareTimeout,
 	}
-	return connectOwnerService[agentservice.RuntimePreparer](clientConfig, runtimeclient.NewConnection, func(conn *grpcruntime.ClientConn, clientConfig runtimeclient.Config) (agentservice.RuntimePreparer, error) {
+	preparer, conn, err := connectOwnerService[*runtimeclient.Preparer](clientConfig, runtimeclient.NewConnection, func(conn *grpcruntime.ClientConn, clientConfig runtimeclient.Config) (*runtimeclient.Preparer, error) {
 		return runtimeclient.NewPreparer(runtimev1.NewRuntimeManagerServiceClient(conn), clientConfig)
 	})
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if !cfg.RuntimeJobDispatchEnabled {
+		return preparer, agentservice.DisabledRuntimeJobCreator{}, conn, nil
+	}
+	return preparer, preparer, conn, nil
 }
 
 func newProviderFollowUpDispatcher(cfg Config) (agentservice.ProviderFollowUpDispatcher, *grpcruntime.ClientConn, error) {

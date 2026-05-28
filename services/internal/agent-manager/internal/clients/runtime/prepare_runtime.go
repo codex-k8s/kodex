@@ -33,9 +33,10 @@ type Config struct {
 
 type runtimeManagerClient interface {
 	PrepareRuntime(context.Context, *runtimev1.PrepareRuntimeRequest, ...grpc.CallOption) (*runtimev1.PrepareRuntimeResponse, error)
+	CreateJob(context.Context, *runtimev1.CreateJobRequest, ...grpc.CallOption) (*runtimev1.JobResponse, error)
 }
 
-// Preparer calls runtime-manager PrepareRuntime.
+// Preparer вызывает API runtime-manager для подготовки runtime и постановки job.
 type Preparer struct {
 	client    runtimeManagerClient
 	authToken string
@@ -43,6 +44,7 @@ type Preparer struct {
 }
 
 var _ agentservice.RuntimePreparer = (*Preparer)(nil)
+var _ agentservice.RuntimeJobCreator = (*Preparer)(nil)
 
 // NewConnection creates a gRPC connection to runtime-manager.
 func NewConnection(cfg Config) (*grpc.ClientConn, error) {
@@ -68,16 +70,41 @@ func newPreparer(client runtimeManagerClient, cfg Config) (*Preparer, error) {
 
 // PrepareRuntime reserves a runtime slot and starts workspace materialization.
 func (p *Preparer) PrepareRuntime(ctx context.Context, input agentservice.RuntimePreparationInput) (agentservice.RuntimePreparationResult, error) {
+	return runtimeOperation(ctx, p, input, prepareRuntimeRPC, mapRuntimeError, prepareRuntimeResult)
+}
+
+// CreateAgentRunJob ставит agent run job в подготовленный runtime slot.
+func (p *Preparer) CreateAgentRunJob(ctx context.Context, input agentservice.RuntimeJobInput) (agentservice.RuntimeJobResult, error) {
+	return runtimeOperation(ctx, p, input, createAgentRunJobRPC, mapRuntimeJobError, runtimeJobResult)
+}
+
+func runtimeOperation[I any, R any, O any](
+	ctx context.Context,
+	p *Preparer,
+	input I,
+	call func(context.Context, runtimeManagerClient, I) (R, error),
+	mapErr func(error) error,
+	result func(I, R) (O, error),
+) (O, error) {
+	var zero O
 	if p == nil || p.client == nil {
-		return agentservice.RuntimePreparationResult{}, errs.ErrDependencyUnavailable
+		return zero, errs.ErrDependencyUnavailable
 	}
 	callCtx, cancel := context.WithTimeout(p.outgoingContext(ctx), p.timeout)
 	defer cancel()
-	response, err := p.client.PrepareRuntime(callCtx, prepareRuntimeRequest(input))
+	response, err := call(callCtx, p.client, input)
 	if err != nil {
-		return agentservice.RuntimePreparationResult{}, mapRuntimeError(err)
+		return zero, mapErr(err)
 	}
-	return prepareRuntimeResult(input, response)
+	return result(input, response)
+}
+
+func prepareRuntimeRPC(ctx context.Context, client runtimeManagerClient, input agentservice.RuntimePreparationInput) (*runtimev1.PrepareRuntimeResponse, error) {
+	return client.PrepareRuntime(ctx, prepareRuntimeRequest(input))
+}
+
+func createAgentRunJobRPC(ctx context.Context, client runtimeManagerClient, input agentservice.RuntimeJobInput) (*runtimev1.JobResponse, error) {
+	return client.CreateJob(ctx, createAgentRunJobRequest(input))
 }
 
 func (p *Preparer) outgoingContext(ctx context.Context) context.Context {
@@ -93,6 +120,19 @@ func prepareRuntimeRequest(input agentservice.RuntimePreparationInput) *runtimev
 		WorkspacePolicy:      workspacePolicy(input.WorkspacePolicy),
 		PlacementConstraints: placementConstraints(input.PlacementConstraints),
 		Meta:                 commandMeta(input.Meta),
+	}
+}
+
+func createAgentRunJobRequest(input agentservice.RuntimeJobInput) *runtimev1.CreateJobRequest {
+	agentRunID := input.AgentRunID.String()
+	slotRef := strings.TrimSpace(input.SlotRef)
+	return &runtimev1.CreateJobRequest{
+		JobType:      runtimev1.JobType_JOB_TYPE_AGENT_RUN,
+		Priority:     runtimev1.JobPriority_JOB_PRIORITY_NORMAL,
+		SlotId:       optionalString(slotRef),
+		AgentRunId:   &agentRunID,
+		JobInputJson: "{}",
+		Meta:         commandMeta(input.Meta),
 	}
 }
 
@@ -182,6 +222,22 @@ func prepareRuntimeResult(input agentservice.RuntimePreparationInput, response *
 	}, nil
 }
 
+func runtimeJobResult(input agentservice.RuntimeJobInput, response *runtimev1.JobResponse) (agentservice.RuntimeJobResult, error) {
+	if response == nil || response.GetJob() == nil {
+		return agentservice.RuntimeJobResult{}, agentservice.NewRuntimeJobError(true, "dependency_unavailable", "runtime-manager returned an empty job response")
+	}
+	job := response.GetJob()
+	jobRef := strings.TrimSpace(job.GetJobId())
+	if jobRef == "" || job.GetJobType() != runtimev1.JobType_JOB_TYPE_AGENT_RUN || strings.TrimSpace(job.GetAgentRunId()) != input.AgentRunID.String() {
+		return agentservice.RuntimeJobResult{}, agentservice.NewRuntimeJobError(true, "dependency_unavailable", "runtime-manager returned incomplete agent run job refs")
+	}
+	return agentservice.RuntimeJobResult{
+		JobRef:            jobRef,
+		Status:            runtimeJobStatus(job.GetStatus()),
+		DiagnosticSummary: runtimeJobDiagnosticSummary(job),
+	}, nil
+}
+
 func runtimeDiagnosticSummary(slot *runtimev1.Slot, materialization *runtimev1.WorkspaceMaterialization) string {
 	parts := []string{}
 	if slot != nil && slot.GetStatus() != runtimev1.SlotStatus_SLOT_STATUS_UNSPECIFIED {
@@ -191,6 +247,34 @@ func runtimeDiagnosticSummary(slot *runtimev1.Slot, materialization *runtimev1.W
 		parts = append(parts, "workspace_status="+materialization.GetStatus().String())
 	}
 	return strings.Join(parts, ";")
+}
+
+func runtimeJobDiagnosticSummary(job *runtimev1.Job) string {
+	if job == nil {
+		return ""
+	}
+	parts := []string{}
+	if job.GetStatus() != runtimev1.JobStatus_JOB_STATUS_UNSPECIFIED {
+		parts = append(parts, "job_status="+runtimeJobStatus(job.GetStatus()))
+	}
+	if next := strings.TrimSpace(job.GetNextAction()); next != "" {
+		parts = append(parts, "next_action="+next)
+	}
+	return strings.Join(parts, ";")
+}
+
+var runtimeJobStatusNames = map[runtimev1.JobStatus]string{
+	runtimev1.JobStatus_JOB_STATUS_PENDING:   "pending",
+	runtimev1.JobStatus_JOB_STATUS_CLAIMED:   "claimed",
+	runtimev1.JobStatus_JOB_STATUS_RUNNING:   "running",
+	runtimev1.JobStatus_JOB_STATUS_SUCCEEDED: "succeeded",
+	runtimev1.JobStatus_JOB_STATUS_FAILED:    "failed",
+	runtimev1.JobStatus_JOB_STATUS_CANCELLED: "cancelled",
+	runtimev1.JobStatus_JOB_STATUS_TIMED_OUT: "timed_out",
+}
+
+func runtimeJobStatus(status runtimev1.JobStatus) string {
+	return runtimeJobStatusNames[status]
 }
 
 func runtimeMode(mode string) runtimev1.RuntimeMode {
@@ -255,6 +339,34 @@ func mapRuntimeError(err error) error {
 		return agentservice.NewRuntimePreparationError(true, "dependency_unavailable", "runtime-manager is temporarily unavailable")
 	default:
 		return agentservice.NewRuntimePreparationError(true, "runtime_prepare_failed", "runtime-manager workspace preparation failed")
+	}
+}
+
+func mapRuntimeJobError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, context.Canceled) {
+		return err
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return agentservice.NewRuntimeJobError(true, "deadline_exceeded", "runtime-manager did not finish agent run job request in time")
+	}
+	switch status.Code(err) {
+	case codes.InvalidArgument:
+		return agentservice.NewRuntimeJobError(false, "invalid_argument", "runtime-manager rejected the agent run job request")
+	case codes.NotFound:
+		return agentservice.NewRuntimeJobError(false, "not_found", "runtime-manager could not find required agent run job state")
+	case codes.PermissionDenied, codes.Unauthenticated:
+		return agentservice.NewRuntimeJobError(false, "permission_denied", "runtime-manager rejected the agent run job caller")
+	case codes.FailedPrecondition:
+		return agentservice.NewRuntimeJobError(false, "failed_precondition", "runtime-manager rejected agent run job preconditions")
+	case codes.Aborted, codes.AlreadyExists:
+		return agentservice.NewRuntimeJobError(true, "conflict", "runtime-manager reported a retryable agent run job conflict")
+	case codes.Unavailable, codes.DeadlineExceeded, codes.ResourceExhausted:
+		return agentservice.NewRuntimeJobError(true, "dependency_unavailable", "runtime-manager is temporarily unavailable")
+	default:
+		return agentservice.NewRuntimeJobError(true, "runtime_job_failed", "runtime-manager agent run job creation failed")
 	}
 }
 

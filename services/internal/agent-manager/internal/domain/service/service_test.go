@@ -620,6 +620,56 @@ func TestStartAgentRunPreparesRuntimeWorkspace(t *testing.T) {
 	}
 }
 
+func TestStartAgentRunCreatesRuntimeJobAfterPreparation(t *testing.T) {
+	t.Parallel()
+
+	fixture := newRuntimePreparationFixture()
+	slotRef := uuid.MustParse("10101010-bbbb-cccc-dddd-eeeeeeeeeeee").String()
+	runtimePreparer := &fakeRuntimePreparer{result: RuntimePreparationResult{
+		SlotRef:                    slotRef,
+		WorkspaceRef:               "workspace-456",
+		MaterializationFingerprint: "sha256:workspace",
+		DiagnosticSummary:          "workspace_status=running",
+	}}
+	runtimeJobCreator := &fakeRuntimeJobCreator{result: RuntimeJobResult{
+		JobRef:            "runtime-job-123",
+		Status:            "pending",
+		DiagnosticSummary: "job_status=pending",
+	}}
+	service := New(Config{
+		Repository:                fixture.repository,
+		Clock:                     fixedClock{now: fixture.now},
+		IDGenerator:               &sequenceIDGenerator{ids: fixture.ids},
+		GuidanceResolver:          fixture.guidanceResolver,
+		WorkspacePolicyResolver:   fixture.policyResolver,
+		RuntimePreparer:           runtimePreparer,
+		RuntimeJobCreator:         runtimeJobCreator,
+		RuntimePreparationEnabled: true,
+		RuntimeJobDispatchEnabled: true,
+	})
+
+	run, err := service.StartAgentRun(context.Background(), fixture.input)
+	if err != nil {
+		t.Fatalf("StartAgentRun() err = %v", err)
+	}
+	if run.Status != enum.AgentRunStatusStarting || run.RuntimeContext.SlotRef != slotRef || run.RuntimeContext.JobRef != "runtime-job-123" {
+		t.Fatalf("run runtime state = %s/%+v", run.Status, run.RuntimeContext)
+	}
+	if runtimePreparer.calls != 1 || runtimeJobCreator.calls != 1 {
+		t.Fatalf("preparer/job calls = %d/%d", runtimePreparer.calls, runtimeJobCreator.calls)
+	}
+	if runtimeJobCreator.last.AgentRunID != run.ID || runtimeJobCreator.last.SlotRef != slotRef {
+		t.Fatalf("runtime job input = %+v", runtimeJobCreator.last)
+	}
+	if runtimeJobCreator.last.Meta.CommandID == uuid.Nil || runtimeJobCreator.last.Meta.Actor != testActor() {
+		t.Fatalf("runtime job meta = %+v", runtimeJobCreator.last.Meta)
+	}
+	payload := decodeAgentPayload(t, *fixture.repository.updateRunEvent)
+	if payload.RuntimeJobRef != "runtime-job-123" || payload.RuntimeSlotRef != slotRef {
+		t.Fatalf("event payload runtime refs = %+v", payload)
+	}
+}
+
 func TestStartAgentRunStoresRetryableRuntimePreparationFailureAsWaiting(t *testing.T) {
 	t.Parallel()
 
@@ -651,6 +701,45 @@ func TestStartAgentRunStoresRetryableRuntimePreparationFailureAsWaiting(t *testi
 	}
 }
 
+func TestStartAgentRunStoresRetryableRuntimeJobFailureAsWaiting(t *testing.T) {
+	t.Parallel()
+
+	fixture := newRuntimePreparationFixture()
+	slotRef := uuid.MustParse("10101010-bbbb-cccc-dddd-eeeeeeeeeeee").String()
+	runtimePreparer := &fakeRuntimePreparer{result: RuntimePreparationResult{
+		SlotRef:                    slotRef,
+		WorkspaceRef:               "workspace-456",
+		MaterializationFingerprint: "sha256:workspace",
+	}}
+	runtimeJobCreator := &fakeRuntimeJobCreator{err: NewRuntimeJobError(true, "dependency_unavailable", "runtime-manager unavailable")}
+	service := New(Config{
+		Repository:                fixture.repository,
+		Clock:                     fixedClock{now: fixture.now},
+		IDGenerator:               &sequenceIDGenerator{ids: fixture.ids},
+		GuidanceResolver:          fixture.guidanceResolver,
+		WorkspacePolicyResolver:   fixture.policyResolver,
+		RuntimePreparer:           runtimePreparer,
+		RuntimeJobCreator:         runtimeJobCreator,
+		RuntimePreparationEnabled: true,
+		RuntimeJobDispatchEnabled: true,
+	})
+
+	run, err := service.StartAgentRun(context.Background(), fixture.input)
+	if err != nil {
+		t.Fatalf("StartAgentRun() err = %v", err)
+	}
+	if run.Status != enum.AgentRunStatusWaiting || run.FailureCode != "" || run.RuntimeContext.JobRef != "" {
+		t.Fatalf("run status/failure/runtime = %s/%q/%+v", run.Status, run.FailureCode, run.RuntimeContext)
+	}
+	if run.RuntimeContext.SlotRef != slotRef || !strings.Contains(run.ResultSummary, "runtime job retryable") {
+		t.Fatalf("run runtime summary = %+v/%q", run.RuntimeContext, run.ResultSummary)
+	}
+	payload := decodeAgentPayload(t, *fixture.repository.updateRunEvent)
+	if payload.ReasonCode != runtimeJobReasonRetryable {
+		t.Fatalf("reason code = %q, want %q", payload.ReasonCode, runtimeJobReasonRetryable)
+	}
+}
+
 func TestStartAgentRunStoresPermanentRuntimePreparationFailureAsFailed(t *testing.T) {
 	t.Parallel()
 
@@ -675,6 +764,44 @@ func TestStartAgentRunStoresPermanentRuntimePreparationFailureAsFailed(t *testin
 	}
 	if !strings.Contains(run.ResultSummary, "runtime prepare permanent") {
 		t.Fatalf("result summary = %q", run.ResultSummary)
+	}
+	if fixture.repository.updateRunEvent == nil || fixture.repository.updateRunEvent.EventType != agentevents.EventRunFailed {
+		t.Fatalf("event = %+v", fixture.repository.updateRunEvent)
+	}
+}
+
+func TestStartAgentRunStoresPermanentRuntimeJobFailureAsFailed(t *testing.T) {
+	t.Parallel()
+
+	fixture := newRuntimePreparationFixture()
+	slotRef := uuid.MustParse("10101010-bbbb-cccc-dddd-eeeeeeeeeeee").String()
+	runtimePreparer := &fakeRuntimePreparer{result: RuntimePreparationResult{
+		SlotRef:                    slotRef,
+		WorkspaceRef:               "workspace-456",
+		MaterializationFingerprint: "sha256:workspace",
+	}}
+	runtimeJobCreator := &fakeRuntimeJobCreator{err: NewRuntimeJobError(false, "failed_precondition", "agent run job rejected")}
+	service := New(Config{
+		Repository:                fixture.repository,
+		Clock:                     fixedClock{now: fixture.now},
+		IDGenerator:               &sequenceIDGenerator{ids: fixture.ids},
+		GuidanceResolver:          fixture.guidanceResolver,
+		WorkspacePolicyResolver:   fixture.policyResolver,
+		RuntimePreparer:           runtimePreparer,
+		RuntimeJobCreator:         runtimeJobCreator,
+		RuntimePreparationEnabled: true,
+		RuntimeJobDispatchEnabled: true,
+	})
+
+	run, err := service.StartAgentRun(context.Background(), fixture.input)
+	if err != nil {
+		t.Fatalf("StartAgentRun() err = %v", err)
+	}
+	if run.Status != enum.AgentRunStatusFailed || run.FailureCode != runtimeJobFailureCode || run.FinishedAt == nil {
+		t.Fatalf("run failed state = %s/%q/%v", run.Status, run.FailureCode, run.FinishedAt)
+	}
+	if run.RuntimeContext.SlotRef != slotRef || run.RuntimeContext.JobRef != "" || !strings.Contains(run.ResultSummary, "runtime job permanent") {
+		t.Fatalf("run runtime summary = %+v/%q", run.RuntimeContext, run.ResultSummary)
 	}
 	if fixture.repository.updateRunEvent == nil || fixture.repository.updateRunEvent.EventType != agentevents.EventRunFailed {
 		t.Fatalf("event = %+v", fixture.repository.updateRunEvent)
@@ -716,6 +843,63 @@ func TestStartAgentRunRuntimeRequestDoesNotCarryTextPayloads(t *testing.T) {
 		if strings.Contains(string(requestPayload), forbidden) {
 			t.Fatalf("runtime request contains forbidden payload marker %q: %s", forbidden, requestPayload)
 		}
+	}
+}
+
+func TestStartAgentRunRuntimeJobDispatchReplayDoesNotCreateDuplicateJob(t *testing.T) {
+	t.Parallel()
+
+	commandID := uuid.MustParse("22222222-aaaa-bbbb-cccc-dddddddddddd")
+	run := entity.AgentRun{
+		VersionedBase:           entity.VersionedBase{ID: uuid.MustParse("22222222-bbbb-cccc-dddd-eeeeeeeeeeee"), Version: 2},
+		SessionID:               uuid.MustParse("22222222-cccc-dddd-eeee-ffffffffffff"),
+		RoleProfileID:           uuid.MustParse("22222222-dddd-eeee-ffff-111111111111"),
+		RoleProfileVersion:      1,
+		RoleProfileDigest:       "sha256:role",
+		PromptTemplateVersionID: uuid.MustParse("22222222-eeee-ffff-1111-222222222222"),
+		PromptTemplateDigest:    "sha256:prompt",
+		RuntimeContext:          value.RuntimeContextRef{SlotRef: "slot-frozen", WorkspaceRef: "workspace-frozen", JobRef: "job-frozen"},
+		Status:                  enum.AgentRunStatusStarting,
+	}
+	payload, err := marshalCommandPayload(agentRunCommandPayload{Run: run})
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	repository := &fakeRepository{
+		replay: &entity.CommandResult{
+			CommandID:     &commandID,
+			Actor:         testActor(),
+			Operation:     operationStartAgentRun,
+			AggregateType: enum.CommandAggregateTypeRun,
+			AggregateID:   run.ID,
+			ResultPayload: payload,
+		},
+		runByID: map[uuid.UUID]entity.AgentRun{run.ID: run},
+	}
+	runtimePreparer := &fakeRuntimePreparer{err: errs.ErrDependencyUnavailable}
+	runtimeJobCreator := &fakeRuntimeJobCreator{err: errs.ErrDependencyUnavailable}
+	service := New(Config{
+		Repository:                repository,
+		RuntimePreparer:           runtimePreparer,
+		RuntimeJobCreator:         runtimeJobCreator,
+		RuntimePreparationEnabled: true,
+		RuntimeJobDispatchEnabled: true,
+	})
+
+	replay, err := service.StartAgentRun(context.Background(), StartAgentRunInput{
+		Meta:                    value.CommandMeta{CommandID: commandID, Actor: testActor()},
+		SessionID:               run.SessionID,
+		RoleProfileID:           run.RoleProfileID,
+		PromptTemplateVersionID: run.PromptTemplateVersionID,
+	})
+	if err != nil {
+		t.Fatalf("StartAgentRun() err = %v", err)
+	}
+	if runtimePreparer.calls != 0 || runtimeJobCreator.calls != 0 {
+		t.Fatalf("preparer/job calls = %d/%d", runtimePreparer.calls, runtimeJobCreator.calls)
+	}
+	if replay.RuntimeContext.JobRef != "job-frozen" {
+		t.Fatalf("replayed runtime context = %+v", replay.RuntimeContext)
 	}
 }
 
@@ -4231,6 +4415,22 @@ func (f *fakeRuntimePreparer) PrepareRuntime(_ context.Context, input RuntimePre
 	f.last = input
 	if f.err != nil {
 		return RuntimePreparationResult{}, f.err
+	}
+	return f.result, nil
+}
+
+type fakeRuntimeJobCreator struct {
+	result RuntimeJobResult
+	err    error
+	calls  int
+	last   RuntimeJobInput
+}
+
+func (f *fakeRuntimeJobCreator) CreateAgentRunJob(_ context.Context, input RuntimeJobInput) (RuntimeJobResult, error) {
+	f.calls++
+	f.last = input
+	if f.err != nil {
+		return RuntimeJobResult{}, f.err
 	}
 	return f.result, nil
 }

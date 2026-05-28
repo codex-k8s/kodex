@@ -391,13 +391,13 @@ Event-driven resume идёт через уже очищенное событие
 - `StageRoleBinding` связывает `Stage` и `RoleProfile`.
 - `AgentSession` содержит несколько `AgentRun`.
 - `AgentRun` фиксирует `FlowVersion`, `Stage`, `RoleProfile` с `role_profile_version` и `role_profile_digest`, `PromptTemplateVersion` с digest и использованные guidance refs.
-- Guidance refs в `AgentRun` появляются только после разрешения через `package-hub`: стартовая команда может передать selection hints, а `agent-manager` проверяет scope, активность установки, статус версии и состояние manifest. Runtime refs появляются только после подготовки workspace в `runtime-manager`.
+- Guidance refs в `AgentRun` появляются только после разрешения через `package-hub`: стартовая команда может передать selection hints, а `agent-manager` проверяет scope, активность установки, статус версии и состояние manifest. Runtime refs появляются только после подготовки workspace и постановки `JOB_TYPE_AGENT_RUN` в `runtime-manager`; в БД `agent-manager` сохраняются только `runtime_slot_ref`, `runtime_job_ref`, `runtime_context_ref`, `runtime_workspace_ref`, безопасная summary и статус.
 - В `guidance_refs` запрещено хранить `SKILL.md`, scripts, assets, исходники пакета, полный manifest или секреты; для диагностики сохраняется только bounded policy-safe summary.
 - `AgentSessionStateSnapshot` относится к `AgentSession` и опционально к `AgentRun`; `AgentSession.latest_state_snapshot_id` указывает на актуальный снимок.
 - `AgentActivity` относится к `AgentSession` и опционально к `AgentRun`; это authoritative safe timeline для будущего UI, а не копия hook payload.
 - `AcceptanceResult` и `FollowUpIntent` относятся к `AgentSession`, `AgentRun` и `Stage`.
 - Внутри БД `agent-manager` допустимы внешние ключи между своими таблицами.
-- Ссылки на provider, runtime, package, interaction, project и access домены хранятся как внешние идентификаторы без SQL-связей с чужими БД.
+- Ссылки на provider, runtime, package, interaction, project и access домены хранятся как внешние идентификаторы без SQL-связей с чужими БД. Workspace paths, kubeconfig, `job_input_json`, prompt/transcript, логи и raw payload внешних сервисов не хранятся в `agent-manager`.
 
 ## Индексы и запросы
 

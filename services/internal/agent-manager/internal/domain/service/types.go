@@ -238,6 +238,18 @@ type RuntimePreparationResult struct {
 	DiagnosticSummary          string
 }
 
+type RuntimeJobInput struct {
+	Meta       value.CommandMeta
+	AgentRunID uuid.UUID
+	SlotRef    string
+}
+
+type RuntimeJobResult struct {
+	JobRef            string
+	Status            string
+	DiagnosticSummary string
+}
+
 type ProviderOperationStatus string
 
 const (
