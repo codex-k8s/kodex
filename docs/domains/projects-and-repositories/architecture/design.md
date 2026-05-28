@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-05
 updated_at: 2026-05-27
-related_issues: [628, 629, 630, 631, 632, 633, 655, 794, 810, 818, 864]
+related_issues: [628, 629, 630, 631, 632, 633, 655, 794, 810, 818, 864, 917]
 related_prs: []
 related_adrs: []
 approvals:
@@ -147,7 +147,7 @@ sequenceDiagram
 
 В этом потоке `project-catalog` не становится Git-клиентом и не создаёт шаблон репозитория. Он выводит provider target из `Repository` binding, проверяет, что `base_branch` соответствует проектной привязке, связывает подготовленный `services.yaml` с проверенной нормализованной проекцией и передаёт provider-native запись в `provider-hub`. Полная генерация файлов остаётся у `package-hub` и bootstrap executor; импорт активной политики выполняется отдельным шагом после merge bootstrap PR.
 
-### Импорт политики после merge bootstrap PR
+### Импорт политики после merge bootstrap/adoption PR
 
 ```mermaid
 sequenceDiagram
@@ -173,11 +173,15 @@ sequenceDiagram
   end
 ```
 
-Consumer `project-catalog` для события `provider.repository.bootstrap_merged` является тонкой доставкой поверх `platform-event-log`: он проверяет тип/версию события, восстанавливает safe signal input и вызывает доменный use-case. Если событие содержит типизированные checked artifact metadata, normalized `validated_payload_json` и watermark JSON, consumer вызывает `ReconcileBootstrapMergeSignal`; команда остаётся владельцем сверки signal/artifact/binding, импорта и активации binding. Если provider event содержит только safe merge refs, consumer фиксирует `OnboardingSignalReconciliation(needs_review)` с кодом `missing_checked_artifact` и не импортирует проектную политику без checked input. Сырой YAML, raw webhook body, diff, provider response и файлы не проходят через consumer, команду и журнал.
+Consumer `project-catalog` для событий `provider.repository.bootstrap_merged` и `provider.repository.adoption_merged` является тонкой доставкой поверх `platform-event-log`: он проверяет тип/версию события, восстанавливает safe signal input, добавляет service actor meta и вызывает доменный use-case. Если событие содержит типизированные checked artifact metadata, normalized `validated_payload_json` и watermark JSON, bootstrap consumer вызывает `ReconcileBootstrapMergeSignal`, adoption consumer вызывает `ReconcileAdoptionMergeSignal`; команда остаётся владельцем сверки signal/artifact/binding, импорта и активации или обновления binding. Если provider event содержит только safe merge refs, consumer фиксирует `OnboardingSignalReconciliation(needs_review)` с кодом `missing_checked_artifact` и не импортирует проектную политику без checked input. Сырой YAML, raw webhook body, diff, provider response и файлы не проходят через consumer, команду и журнал.
 
 `ReconcileBootstrapMergeSignal` проверяет, что сигнал относится к bootstrap, `signal_key` задан, `provider_target` соответствует repository binding, `base_branch` равен project default branch, `source_ref` указывает на эту ветку, merge commit валиден, artifact digest совпадает с `content_hash`, artifact version привязан к merge commit, watermark digest совпадает с переданным watermark payload, а ожидаемая версия совпадает с pending binding. После штатной проверки доступа команда записывает `OnboardingSignalReconciliation` со статусом `processing`, safe fingerprint, refs и artifact metadata, затем вызывает `ImportBootstrapServicesPolicy`. Успешный импорт переводит запись в `imported` и связывает её с `ServicesPolicy`; предсказуемая ошибка сохраняется как safe `error_code` и короткий `error_summary`.
 
+`ReconcileAdoptionMergeSignal` использует тот же safe контур, но принимает только `signal_kind=adoption` и watermark `work_type=repository_adoption`. Lightweight adoption scan snapshot остаётся planning-сигналом и не создаёт `ServicesPolicy`. Успешный adoption import может активировать pending binding или обновить active binding новой checked policy version; повтор того же signal/fingerprint идемпотентен, а другой fingerprint по тому же `signal_key` конфликтует до импорта.
+
 Команда `ImportBootstrapServicesPolicy` остаётся атомарным use-case импорта. Она принимает нормализованный `validated_payload_json`, а не сырой YAML и не raw provider payload; сырое содержимое остаётся в Git и во временном контуре проверки вызывающей стороны. `project-catalog` проверяет, что `provider_target` соответствует сохранённому binding, `base_branch` равен проектной default branch, `source_ref` указывает на эту ветку, commit и `content_hash` заданы, watermark относится к `repository_bootstrap`, а ожидаемая версия совпадает с pending binding.
+
+Для adoption merge используется тот же атомарный импорт checked projection, но ожидаемый watermark work type равен `repository_adoption`, а active binding может получить новую проверенную версию политики из merge commit. Это не превращает adoption scan snapshot в источник политики: импорт начинается только с checked artifact/payload input.
 
 Импорт и активация binding выполняются в одной транзакции: создаётся новая `ServicesPolicy`, пересобираются `ServiceDescriptor` и источники документации из checked projection, binding переводится из `pending` в `active`, а outbox получает `project.repository.updated` и `project.services_policy.imported`. Событие политики содержит только безопасные refs и короткий summary. Повтор того же commit/source ref возвращает уже сохранённую проекцию, другой commit/ref после активации считается конфликтом и не меняет состояние. Повтор того же provider `signal_key` с тем же fingerprint идемпотентно обновляет статус обработки, а тот же `signal_key` с другим fingerprint конфликтует до повторного импорта.
 

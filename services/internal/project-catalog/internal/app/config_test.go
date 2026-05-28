@@ -23,6 +23,7 @@ func TestLoadConfigAllowsMissingGRPCAuthTokenWhenAuthDisabled(t *testing.T) {
 	t.Setenv("KODEX_PROJECT_CATALOG_PROVIDER_HUB_BOOTSTRAP_ENABLED", "false")
 	t.Setenv("KODEX_PROJECT_CATALOG_OUTBOX_DISPATCH_ENABLED", "false")
 	t.Setenv("KODEX_PROJECT_CATALOG_PROVIDER_BOOTSTRAP_MERGE_CONSUMER_ENABLED", "false")
+	t.Setenv("KODEX_PROJECT_CATALOG_PROVIDER_ADOPTION_MERGE_CONSUMER_ENABLED", "false")
 
 	cfg, err := LoadConfig()
 	if err != nil {
@@ -111,5 +112,16 @@ func validConfig() Config {
 		ProviderBootstrapMergeConsumerFailureMessageLimit: 512,
 		ProviderBootstrapMergeConsumerConcurrencyLimit:    2,
 		ProviderBootstrapMergeConsumerMaxAttempts:         5,
+		ProviderAdoptionMergeConsumerEnabled:              true,
+		ProviderAdoptionMergeConsumerName:                 "project-catalog.provider-adoption-merge",
+		ProviderAdoptionMergeConsumerBatchSize:            50,
+		ProviderAdoptionMergeConsumerPollInterval:         time.Second,
+		ProviderAdoptionMergeConsumerLeaseTTL:             30 * time.Second,
+		ProviderAdoptionMergeConsumerHandlerTimeout:       10 * time.Second,
+		ProviderAdoptionMergeConsumerRetryInitialDelay:    time.Second,
+		ProviderAdoptionMergeConsumerRetryMaxDelay:        time.Minute,
+		ProviderAdoptionMergeConsumerFailureMessageLimit:  512,
+		ProviderAdoptionMergeConsumerConcurrencyLimit:     2,
+		ProviderAdoptionMergeConsumerMaxAttempts:          5,
 	}
 }

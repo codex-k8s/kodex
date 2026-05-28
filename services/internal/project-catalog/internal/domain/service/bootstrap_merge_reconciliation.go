@@ -10,14 +10,21 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/errs"
+	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/types/enum"
+	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/types/value"
 )
 
 const (
-	bootstrapMergeSignalKind        = "bootstrap"
-	bootstrapMergeIdempotencyPrefix = "provider-bootstrap-merge:"
+	bootstrapMergeSignalKind         = "bootstrap"
+	adoptionMergeSignalKind          = "adoption"
+	bootstrapMergeIdempotencyPrefix  = "provider-bootstrap-merge:"
+	adoptionMergeIdempotencyPrefix   = "provider-adoption-merge:"
+	bootstrapPolicyWatermarkWorkType = "repository_bootstrap"
+	adoptionPolicyWatermarkWorkType  = "repository_adoption"
 )
 
 type normalizedBootstrapMergeReconciliation struct {
+	SignalKind                   string
 	SignalKey                    string
 	ProviderTarget               RepositoryBootstrapProviderTarget
 	BaseBranch                   string
@@ -60,24 +67,62 @@ type bootstrapMergeReconciliationFingerprintPayload struct {
 	ContentHash                  string `json:"content_hash"`
 }
 
+type repositoryMergeReconciliationConfig struct {
+	SignalKind           string
+	OnboardingSignalKind enum.OnboardingSignalKind
+	IdempotencyPrefix    string
+	ImportMode           servicesPolicyImportMode
+}
+
+var (
+	bootstrapMergeReconciliationConfig = repositoryMergeReconciliationConfig{
+		SignalKind:           bootstrapMergeSignalKind,
+		OnboardingSignalKind: enum.OnboardingSignalKindBootstrapMerge,
+		IdempotencyPrefix:    bootstrapMergeIdempotencyPrefix,
+		ImportMode:           bootstrapServicesPolicyImportMode,
+	}
+	adoptionMergeReconciliationConfig = repositoryMergeReconciliationConfig{
+		SignalKind:           adoptionMergeSignalKind,
+		OnboardingSignalKind: enum.OnboardingSignalKindAdoptionMerge,
+		IdempotencyPrefix:    adoptionMergeIdempotencyPrefix,
+		ImportMode:           adoptionServicesPolicyImportMode,
+	}
+)
+
 // ReconcileBootstrapMergeSignal imports checked services.yaml from a safe provider bootstrap merge signal.
 func (s *Service) ReconcileBootstrapMergeSignal(ctx context.Context, input ReconcileBootstrapMergeSignalInput) (BootstrapServicesPolicyImportResult, error) {
-	normalized, err := normalizeBootstrapMergeReconciliationInput(input)
+	return s.reconcileRepositoryMergeSignal(ctx, input.ProjectID, input.RepositoryID, input.MergeSignal, input.CheckedPolicy, input.Meta, bootstrapMergeReconciliationConfig)
+}
+
+// ReconcileAdoptionMergeSignal imports checked services.yaml from a safe provider adoption merge signal.
+func (s *Service) ReconcileAdoptionMergeSignal(ctx context.Context, input ReconcileAdoptionMergeSignalInput) (BootstrapServicesPolicyImportResult, error) {
+	return s.reconcileRepositoryMergeSignal(ctx, input.ProjectID, input.RepositoryID, input.MergeSignal, input.CheckedPolicy, input.Meta, adoptionMergeReconciliationConfig)
+}
+
+func (s *Service) reconcileRepositoryMergeSignal(
+	ctx context.Context,
+	projectID uuid.UUID,
+	repositoryID uuid.UUID,
+	mergeSignal BootstrapRepositoryMergeSignal,
+	checkedPolicy CheckedBootstrapServicesPolicyArtifact,
+	meta value.CommandMeta,
+	config repositoryMergeReconciliationConfig,
+) (BootstrapServicesPolicyImportResult, error) {
+	normalized, err := normalizeRepositoryMergeReconciliationInput(projectID, repositoryID, mergeSignal, checkedPolicy, config.SignalKind)
 	if err != nil {
 		return BootstrapServicesPolicyImportResult{}, err
 	}
-	meta := input.Meta
 	if meta.CommandID == uuid.Nil && strings.TrimSpace(meta.IdempotencyKey) == "" {
-		meta.IdempotencyKey = bootstrapMergeIdempotencyPrefix + normalized.SignalKey
+		meta.IdempotencyKey = config.IdempotencyPrefix + normalized.SignalKey
 	}
 	fingerprint, err := bootstrapMergeReconciliationFingerprint(normalized)
 	if err != nil {
 		return BootstrapServicesPolicyImportResult{}, err
 	}
-	signalStatus := bootstrapMergeOnboardingSignalInput(input.ProjectID, input.RepositoryID, normalized, fingerprint)
-	return s.ImportBootstrapServicesPolicy(ctx, ImportBootstrapServicesPolicyInput{
-		ProjectID:                    input.ProjectID,
-		RepositoryID:                 input.RepositoryID,
+	signalStatus := repositoryMergeOnboardingSignalInput(projectID, repositoryID, normalized, config.OnboardingSignalKind, fingerprint)
+	return s.importCheckedServicesPolicy(ctx, ImportBootstrapServicesPolicyInput{
+		ProjectID:                    projectID,
+		RepositoryID:                 repositoryID,
 		ProviderTarget:               normalized.ProviderTarget,
 		BaseBranch:                   normalized.BaseBranch,
 		SourceRef:                    normalized.SourceRef,
@@ -94,14 +139,14 @@ func (s *Service) ReconcileBootstrapMergeSignal(ctx context.Context, input Recon
 		ReconciliationFingerprint:    fingerprint,
 		OnboardingSignal:             &signalStatus,
 		Meta:                         meta,
-	})
+	}, config.ImportMode)
 }
 
-func bootstrapMergeOnboardingSignalInput(projectID uuid.UUID, repositoryID uuid.UUID, input normalizedBootstrapMergeReconciliation, fingerprint string) OnboardingSignalReconciliationInput {
+func repositoryMergeOnboardingSignalInput(projectID uuid.UUID, repositoryID uuid.UUID, input normalizedBootstrapMergeReconciliation, signalKind enum.OnboardingSignalKind, fingerprint string) OnboardingSignalReconciliationInput {
 	return OnboardingSignalReconciliationInput{
 		ProjectID:            projectID,
 		RepositoryID:         repositoryID,
-		SignalKind:           "bootstrap_merge",
+		SignalKind:           signalKind,
 		SignalKey:            input.SignalKey,
 		SignalFingerprint:    fingerprint,
 		ProviderSlug:         input.ProviderTarget.ProviderSlug,
@@ -119,20 +164,24 @@ func bootstrapMergeOnboardingSignalInput(projectID uuid.UUID, repositoryID uuid.
 	}
 }
 
-func normalizeBootstrapMergeReconciliationInput(input ReconcileBootstrapMergeSignalInput) (normalizedBootstrapMergeReconciliation, error) {
-	if err := requireProjectID(input.ProjectID); err != nil {
+func normalizeRepositoryMergeReconciliationInput(
+	projectID uuid.UUID,
+	repositoryID uuid.UUID,
+	signal BootstrapRepositoryMergeSignal,
+	policy CheckedBootstrapServicesPolicyArtifact,
+	expectedSignalKind string,
+) (normalizedBootstrapMergeReconciliation, error) {
+	if err := requireProjectID(projectID); err != nil {
 		return normalizedBootstrapMergeReconciliation{}, err
 	}
-	if input.RepositoryID == uuid.Nil {
+	if repositoryID == uuid.Nil {
 		return normalizedBootstrapMergeReconciliation{}, errs.ErrInvalidArgument
 	}
-	signal := input.MergeSignal
-	policy := input.CheckedPolicy
 	if err := validateOptionalSignalID(signal.SignalID); err != nil {
 		return normalizedBootstrapMergeReconciliation{}, err
 	}
 	signalKey := strings.TrimSpace(signal.SignalKey)
-	if signalKey == "" || strings.TrimSpace(signal.SignalKind) != bootstrapMergeSignalKind {
+	if signalKey == "" || strings.TrimSpace(signal.SignalKind) != expectedSignalKind {
 		return normalizedBootstrapMergeReconciliation{}, errs.ErrInvalidArgument
 	}
 	baseBranch := normalizeBootstrapMergeBaseBranch(signal.BaseBranch)
@@ -182,6 +231,7 @@ func normalizeBootstrapMergeReconciliationInput(input ReconcileBootstrapMergeSig
 		}
 	}
 	return normalizedBootstrapMergeReconciliation{
+		SignalKind:                   expectedSignalKind,
 		SignalKey:                    signalKey,
 		ProviderTarget:               signal.ProviderTarget,
 		BaseBranch:                   baseBranch,
@@ -207,7 +257,7 @@ func normalizeBootstrapMergeReconciliationInput(input ReconcileBootstrapMergeSig
 func bootstrapMergeReconciliationFingerprint(input normalizedBootstrapMergeReconciliation) (string, error) {
 	payload, err := json.Marshal(bootstrapMergeReconciliationFingerprintPayload{
 		SignalKey:                    input.SignalKey,
-		SignalKind:                   bootstrapMergeSignalKind,
+		SignalKind:                   input.SignalKind,
 		ProviderSlug:                 strings.TrimSpace(input.ProviderTarget.ProviderSlug),
 		RepositoryFullName:           strings.TrimSpace(input.ProviderTarget.RepositoryFullName),
 		ProviderRepositoryID:         strings.TrimSpace(input.ProviderTarget.ProviderRepositoryID),

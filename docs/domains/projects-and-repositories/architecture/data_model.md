@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-05
 updated_at: 2026-05-27
-related_issues: [628, 629, 630, 631, 632, 633, 818, 881]
+related_issues: [628, 629, 630, 631, 632, 633, 818, 881, 917]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -67,14 +67,15 @@ approvals:
 
 ### OnboardingSignalReconciliation
 
-`OnboardingSignalReconciliation` фиксирует project-side состояние обработки безопасного provider onboarding signal. Эта запись нужна для smoke/CLI/ops-диагностики: bootstrap merge signal не остаётся только внешним событием, а получает в `project-catalog` короткий статус результата. Та же форма зарезервирована для будущего project-side adoption scan planning command, но scan snapshot без checked policy payload сам по себе не импортирует `services.yaml`.
+`OnboardingSignalReconciliation` фиксирует project-side состояние обработки безопасного provider onboarding signal. Эта запись нужна для smoke/CLI/ops-диагностики: bootstrap/adoption merge signal не остаётся только внешним событием, а получает в `project-catalog` короткий статус результата. Та же форма используется для будущего adoption scan planning command, но scan snapshot без checked policy payload сам по себе не импортирует `services.yaml`.
 
 Правила:
 - запись хранит только safe refs, digests, artifact refs/version, короткий summary и safe error code/summary;
 - `validated_payload` хранится только в `ServicesPolicy`, а не дублируется в журнале сигнала;
 - raw webhook body, provider response, diff, YAML-текст, содержимое файлов, секреты и большие детали не хранятся;
-- для bootstrap merge успешная запись связывается с импортированной `ServicesPolicy`;
+- для bootstrap/adoption merge успешная запись связывается с импортированной `ServicesPolicy`;
 - consumer `provider.repository.bootstrap_merged` вызывает `ReconcileBootstrapMergeSignal`, если событие содержит checked artifact metadata, normalized payload и watermark payload; если событие содержит только merge refs, он записывает `needs_review` с safe error code и не импортирует политику;
+- consumer `provider.repository.adoption_merged` вызывает `ReconcileAdoptionMergeSignal`, если событие содержит checked artifact metadata, normalized payload и watermark payload; если событие содержит только scan/merge refs, он записывает `needs_review` и не импортирует lightweight scan snapshot как политику;
 - для adoption scan текущий provider snapshot является planning-сигналом без checked policy payload, поэтому сам по себе не создаёт `ServicesPolicy`.
 
 | Поле | Тип | Может быть пустым | Примечание |
@@ -82,7 +83,7 @@ approvals:
 | `id` | uuid | нет | Идентификатор project-side записи обработки. |
 | `project_id` | uuid | нет | Проект-владелец. |
 | `repository_id` | uuid | нет | Project-owned repository binding. |
-| `signal_kind` | enum | нет | `bootstrap_merge` или будущий `adoption_scan`. |
+| `signal_kind` | enum | нет | `bootstrap_merge`, `adoption_merge` или будущий `adoption_scan`. |
 | `signal_key` | text | нет | Идемпотентный ключ provider-side сигнала. |
 | `signal_fingerprint` | text | нет | Digest безопасных refs/artifact metadata, по которому ловится конфликтующий replay. |
 | `provider_slug` | text | нет | Нормализованный provider id. |
@@ -93,13 +94,13 @@ approvals:
 | `source_commit_sha` | text | да | Merge/head commit, если применимо. |
 | `artifact_ref` | text | да | Immutable ref checked artifact, если он есть. |
 | `artifact_digest` | text | да | Digest checked artifact. |
-| `artifact_version` | text | да | Версия artifact, для bootstrap равна merge commit. |
+| `artifact_version` | text | да | Версия artifact, для bootstrap/adoption merge равна merge commit. |
 | `content_hash` | text | да | Нормализованный hash checked `services.yaml`. |
 | `status` | enum | нет | `processing`, `imported`, `failed`, `received`, `needs_review`. |
 | `error_code` | text | да | Safe machine code ошибки без downstream details. |
 | `error_summary` | text | да | Короткое безопасное описание ошибки. |
 | `summary` | text | да | Короткий безопасный итог для UI/CLI. |
-| `services_policy_id` | uuid | да | Связь с imported checked policy после успешного bootstrap merge. |
+| `services_policy_id` | uuid | да | Связь с imported checked policy после успешного bootstrap/adoption merge. |
 | `services_policy_version` | bigint | да | Версия imported checked policy. |
 | `observed_at` | timestamptz | нет | Время provider observation или project-side записи. |
 | `completed_at` | timestamptz | да | Когда обработка завершилась success/failure. |

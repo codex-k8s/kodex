@@ -156,6 +156,86 @@ func TestBootstrapMergeEventHandlerReconcilesCheckedPolicy(t *testing.T) {
 	}
 }
 
+func TestAdoptionMergeEventHandlerRecordsDiagnostic(t *testing.T) {
+	t.Parallel()
+
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	recorder := &fakeBootstrapMergeRecorder{}
+	handler := adoptionMergeEventHandler{reconciler: recorder}
+
+	result := handler.HandleEvent(context.Background(), eventconsumer.Event{StoredEvent: adoptionMergeStoredEvent(t, adoptionMergePayload(projectID, repositoryID))})
+	if result.Status != eventconsumer.ResultAck {
+		t.Fatalf("HandleEvent() status = %s, want ack: %+v", result.Status, result)
+	}
+	if len(recorder.adoptionInputs) != 1 {
+		t.Fatalf("recorded adoption inputs = %d, want 1", len(recorder.adoptionInputs))
+	}
+	input := recorder.adoptionInputs[0]
+	if input.ProjectID != projectID || input.RepositoryID != repositoryID {
+		t.Fatalf("ids = %s/%s, want %s/%s", input.ProjectID, input.RepositoryID, projectID, repositoryID)
+	}
+	if input.MergeSignal.SignalKind != "adoption" || input.MergeSignal.SignalKey != "github/adoption/PR_123" {
+		t.Fatalf("merge signal = %+v, want adoption signal", input.MergeSignal)
+	}
+	if input.SignalFingerprint == "" || input.ErrorCode != adoptionMergeMissingCheckedArtifactCode {
+		t.Fatalf("diagnostic = %+v, want fingerprint and missing artifact code", input)
+	}
+}
+
+func TestAdoptionMergeEventHandlerReconcilesCheckedPolicy(t *testing.T) {
+	t.Parallel()
+
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	recorder := &fakeBootstrapMergeRecorder{}
+	handler := adoptionMergeEventHandler{reconciler: recorder}
+	payload := adoptionMergePayload(projectID, repositoryID)
+	payloadWithAdoptionCheckedPolicy(&payload)
+
+	result := handler.HandleEvent(context.Background(), eventconsumer.Event{StoredEvent: adoptionMergeStoredEvent(t, payload)})
+	if result.Status != eventconsumer.ResultAck {
+		t.Fatalf("HandleEvent() status = %s, want ack: %+v", result.Status, result)
+	}
+	if len(recorder.adoptionReconcileInputs) != 1 {
+		t.Fatalf("adoption reconcile inputs = %d, want 1", len(recorder.adoptionReconcileInputs))
+	}
+	if len(recorder.adoptionInputs) != 0 {
+		t.Fatalf("adoption diagnostic inputs = %d, want 0", len(recorder.adoptionInputs))
+	}
+	input := recorder.adoptionReconcileInputs[0]
+	if input.ProjectID != projectID || input.RepositoryID != repositoryID {
+		t.Fatalf("ids = %s/%s, want %s/%s", input.ProjectID, input.RepositoryID, projectID, repositoryID)
+	}
+	if input.MergeSignal.SignalKind != "adoption" || input.MergeSignal.SourceRef != "kodex/adoption" {
+		t.Fatalf("merge signal = %+v, want adoption merge refs", input.MergeSignal)
+	}
+	if input.MergeSignal.WatermarkDigest != adoptionWatermarkDigest() || string(input.MergeSignal.WatermarkJSON) != adoptionWatermarkJSON {
+		t.Fatalf("watermark = %s/%s, want checked adoption watermark", input.MergeSignal.WatermarkDigest, input.MergeSignal.WatermarkJSON)
+	}
+	if input.CheckedPolicy.ArtifactRef != "artifact://provider/adoption/PR_123/services.yaml" ||
+		input.CheckedPolicy.ArtifactDigest != bootstrapCheckedContentHash() ||
+		input.CheckedPolicy.ArtifactVersion != payload.MergeCommitSHA ||
+		input.CheckedPolicy.SourcePath != "services.yaml" ||
+		input.CheckedPolicy.ContentHash != bootstrapCheckedContentHash() ||
+		string(input.CheckedPolicy.ValidatedPayload) != bootstrapValidatedPayloadJSON {
+		t.Fatalf("checked policy = %+v, want checked adoption artifact input", input.CheckedPolicy)
+	}
+}
+
+func TestAdoptionMergeEventHandlerRejectsBootstrapSignal(t *testing.T) {
+	t.Parallel()
+
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	handler := adoptionMergeEventHandler{reconciler: &fakeBootstrapMergeRecorder{}}
+
+	result := handler.HandleEvent(context.Background(), eventconsumer.Event{StoredEvent: adoptionMergeStoredEvent(t, bootstrapMergePayload(projectID, repositoryID))})
+	if result.Status != eventconsumer.ResultPoison || result.Code != "invalid_signal_kind" {
+		t.Fatalf("HandleEvent() = %+v, want invalid_signal_kind poison", result)
+	}
+}
+
 func TestBootstrapMergeEventHandlerMapsReconcileErrors(t *testing.T) {
 	t.Parallel()
 
@@ -222,8 +302,19 @@ func bootstrapMergePayload(projectID uuid.UUID, repositoryID uuid.UUID) provider
 	}
 }
 
+func adoptionMergePayload(projectID uuid.UUID, repositoryID uuid.UUID) providerevents.Payload {
+	payload := bootstrapMergePayload(projectID, repositoryID)
+	payload.RepositoryMergeSignalID = uuid.New().String()
+	payload.SignalKey = "github/adoption/PR_123"
+	payload.SignalKind = "adoption"
+	payload.HeadBranch = "kodex/adoption"
+	payload.SourceRef = "kodex/adoption"
+	return payload
+}
+
 const bootstrapValidatedPayloadJSON = `{"spec":{"services":[{"key":"api","rootPath":"services/api","kind":"backend"}]}}`
 const bootstrapWatermarkJSON = `{"kind":"provider_pr","managed_by":"kodex","work_type":"repository_bootstrap","source_ref":"services.yaml"}`
+const adoptionWatermarkJSON = `{"kind":"provider_pr","managed_by":"kodex","work_type":"repository_adoption","source_ref":"services.yaml"}`
 
 func payloadWithCheckedPolicy(payload *providerevents.Payload) {
 	payload.CheckedArtifactRef = "artifact://provider/bootstrap/PR_123/services.yaml"
@@ -236,12 +327,27 @@ func payloadWithCheckedPolicy(payload *providerevents.Payload) {
 	payload.WatermarkDigest = bootstrapWatermarkDigest()
 }
 
+func payloadWithAdoptionCheckedPolicy(payload *providerevents.Payload) {
+	payload.CheckedArtifactRef = "artifact://provider/adoption/PR_123/services.yaml"
+	payload.CheckedArtifactDigest = bootstrapCheckedContentHash()
+	payload.CheckedArtifactVersion = payload.MergeCommitSHA
+	payload.CheckedSourcePath = "services.yaml"
+	payload.CheckedContentHash = bootstrapCheckedContentHash()
+	payload.CheckedValidatedPayloadJSON = bootstrapValidatedPayloadJSON
+	payload.CheckedWatermarkJSON = adoptionWatermarkJSON
+	payload.WatermarkDigest = adoptionWatermarkDigest()
+}
+
 func bootstrapCheckedContentHash() string {
 	return sha256Hex([]byte("spec:\n  services:\n    - key: api\n      rootPath: services/api\n      kind: backend\n"))
 }
 
 func bootstrapWatermarkDigest() string {
 	return sha256Hex([]byte(bootstrapWatermarkJSON))
+}
+
+func adoptionWatermarkDigest() string {
+	return sha256Hex([]byte(adoptionWatermarkJSON))
 }
 
 func sha256Hex(payload []byte) string {
@@ -271,11 +377,20 @@ func bootstrapMergeStoredEvent(t *testing.T, payload providerevents.Payload) eve
 	}
 }
 
+func adoptionMergeStoredEvent(t *testing.T, payload providerevents.Payload) eventlog.StoredEvent {
+	t.Helper()
+	event := bootstrapMergeStoredEvent(t, payload)
+	event.Event.EventType = providerevents.EventRepositoryAdoptionMerged
+	return event
+}
+
 type fakeBootstrapMergeRecorder struct {
-	inputs          []projectservice.BootstrapMergeSignalDiagnosticInput
-	reconcileInputs []projectservice.ReconcileBootstrapMergeSignalInput
-	diagnosticErr   error
-	reconcileErr    error
+	inputs                  []projectservice.BootstrapMergeSignalDiagnosticInput
+	reconcileInputs         []projectservice.ReconcileBootstrapMergeSignalInput
+	adoptionInputs          []projectservice.AdoptionMergeSignalDiagnosticInput
+	adoptionReconcileInputs []projectservice.ReconcileAdoptionMergeSignalInput
+	diagnosticErr           error
+	reconcileErr            error
 }
 
 func (r *fakeBootstrapMergeRecorder) RecordBootstrapMergeSignalDiagnostic(_ context.Context, input projectservice.BootstrapMergeSignalDiagnosticInput) error {
@@ -285,5 +400,15 @@ func (r *fakeBootstrapMergeRecorder) RecordBootstrapMergeSignalDiagnostic(_ cont
 
 func (r *fakeBootstrapMergeRecorder) ReconcileBootstrapMergeSignal(_ context.Context, input projectservice.ReconcileBootstrapMergeSignalInput) (projectservice.BootstrapServicesPolicyImportResult, error) {
 	r.reconcileInputs = append(r.reconcileInputs, input)
+	return projectservice.BootstrapServicesPolicyImportResult{}, r.reconcileErr
+}
+
+func (r *fakeBootstrapMergeRecorder) RecordAdoptionMergeSignalDiagnostic(_ context.Context, input projectservice.AdoptionMergeSignalDiagnosticInput) error {
+	r.adoptionInputs = append(r.adoptionInputs, input)
+	return r.diagnosticErr
+}
+
+func (r *fakeBootstrapMergeRecorder) ReconcileAdoptionMergeSignal(_ context.Context, input projectservice.ReconcileAdoptionMergeSignalInput) (projectservice.BootstrapServicesPolicyImportResult, error) {
+	r.adoptionReconcileInputs = append(r.adoptionReconcileInputs, input)
 	return projectservice.BootstrapServicesPolicyImportResult{}, r.reconcileErr
 }
