@@ -24,6 +24,7 @@ type Config struct {
 	WorkspacePolicyResolver    WorkspacePolicyResolver
 	RuntimePreparer            RuntimePreparer
 	RuntimeJobCreator          RuntimeJobCreator
+	RuntimeJobReader           RuntimeJobReader
 	ProviderFollowUpDispatcher ProviderFollowUpDispatcher
 	HumanGateRequester         HumanGateInteractionRequester
 	RuntimePreparationEnabled  bool
@@ -49,6 +50,7 @@ type Service struct {
 	workspacePolicyResolver    WorkspacePolicyResolver
 	runtimePreparer            RuntimePreparer
 	runtimeJobCreator          RuntimeJobCreator
+	runtimeJobReader           RuntimeJobReader
 	providerFollowUpDispatcher ProviderFollowUpDispatcher
 	humanGateRequester         HumanGateInteractionRequester
 }
@@ -87,6 +89,11 @@ type RuntimePreparer interface {
 // RuntimeJobCreator вызывает runtime-manager для постановки agent run job.
 type RuntimeJobCreator interface {
 	CreateAgentRunJob(context.Context, RuntimeJobInput) (RuntimeJobResult, error)
+}
+
+// RuntimeJobReader читает безопасное состояние runtime job через runtime-manager.
+type RuntimeJobReader interface {
+	GetAgentRunJob(context.Context, RuntimeJobReadInput) (RuntimeJobReadResult, error)
 }
 
 // ProviderFollowUpDispatcher calls provider-hub typed follow-up write operations.
@@ -137,6 +144,14 @@ type DisabledRuntimeJobCreator struct{}
 // CreateAgentRunJob сообщает, что постановка runtime job недоступна.
 func (DisabledRuntimeJobCreator) CreateAgentRunJob(context.Context, RuntimeJobInput) (RuntimeJobResult, error) {
 	return RuntimeJobResult{}, errs.ErrDependencyUnavailable
+}
+
+// DisabledRuntimeJobReader оставляет чтение runtime job явным на уровне сборки сервиса.
+type DisabledRuntimeJobReader struct{}
+
+// GetAgentRunJob сообщает, что чтение runtime job недоступно.
+func (DisabledRuntimeJobReader) GetAgentRunJob(context.Context, RuntimeJobReadInput) (RuntimeJobReadResult, error) {
+	return RuntimeJobReadResult{}, errs.ErrDependencyUnavailable
 }
 
 // DisabledProviderFollowUpDispatcher keeps follow-up provider dispatch opt-in at composition time.
@@ -197,6 +212,9 @@ func New(cfg Config) *Service {
 	if cfg.RuntimeJobCreator == nil {
 		cfg.RuntimeJobCreator = DisabledRuntimeJobCreator{}
 	}
+	if cfg.RuntimeJobReader == nil {
+		cfg.RuntimeJobReader = DisabledRuntimeJobReader{}
+	}
 	if cfg.ProviderFollowUpDispatcher == nil {
 		cfg.ProviderFollowUpDispatcher = DisabledProviderFollowUpDispatcher{}
 	}
@@ -218,6 +236,7 @@ func New(cfg Config) *Service {
 	service.workspacePolicyResolver = cfg.WorkspacePolicyResolver
 	service.runtimePreparer = cfg.RuntimePreparer
 	service.runtimeJobCreator = cfg.RuntimeJobCreator
+	service.runtimeJobReader = cfg.RuntimeJobReader
 	service.providerFollowUpDispatcher = cfg.ProviderFollowUpDispatcher
 	service.humanGateRequester = cfg.HumanGateRequester
 	service.runtimePreparationEnabled = cfg.RuntimePreparationEnabled

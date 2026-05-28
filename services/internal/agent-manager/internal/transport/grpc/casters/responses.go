@@ -123,6 +123,40 @@ func AgentRunResponse(run entity.AgentRun) *agentsv1.AgentRunResponse {
 	return &agentsv1.AgentRunResponse{Run: AgentRunToProto(run)}
 }
 
+func AgentRunRuntimeStatusResponse(output agentservice.AgentRunRuntimeStatusResult) *agentsv1.AgentRunRuntimeStatusResponse {
+	return &agentsv1.AgentRunRuntimeStatusResponse{
+		Run:           AgentRunToProto(output.Run),
+		RuntimeStatus: AgentRunRuntimeStatusToProto(output.RuntimeStatus),
+	}
+}
+
+func AgentRunRuntimeStatusToProto(status agentservice.AgentRunRuntimeStatus) *agentsv1.AgentRunRuntimeStatus {
+	return &agentsv1.AgentRunRuntimeStatus{
+		RunId:                status.RunID.String(),
+		RunStatus:            AgentRunStatusToProto(status.RunStatus),
+		RuntimeContext:       RuntimeContextToProto(status.RuntimeContext),
+		ObservationState:     RuntimeObservationStateToProto(status.ObservationState),
+		RuntimeJobRef:        optionalStringPtr(status.RuntimeJobRef),
+		RuntimeJobStatus:     RuntimeJobStatusToProto(status.RuntimeJobStatus),
+		RuntimeJobCommandRef: optionalStringPtr(status.RuntimeJobCommandRef),
+		RuntimeJobVersion:    optionalPositiveInt64Ptr(status.RuntimeJobVersion),
+		RuntimeJobCreatedAt:  optionalTimePtr(status.RuntimeJobCreatedAt),
+		RuntimeJobStartedAt:  optionalTimePtr(status.RuntimeJobStartedAt),
+		RuntimeJobFinishedAt: optionalTimePtr(status.RuntimeJobFinishedAt),
+		RuntimeJobUpdatedAt:  optionalTimePtr(status.RuntimeJobUpdatedAt),
+		SafeErrorCode:        optionalStringPtr(status.SafeErrorCode),
+		SafeSummary:          optionalStringPtr(status.SafeSummary),
+		RunStartedAt:         optionalTimePtr(status.RunStartedAt),
+		RunFinishedAt:        optionalTimePtr(status.RunFinishedAt),
+		RunUpdatedAt:         formatTime(status.RunUpdatedAt),
+		RunVersion:           status.RunVersion,
+		HumanGateWaiting:     status.HumanGateWaiting,
+		HumanGateRequestRef:  optionalStringPtr(status.HumanGateRequestRef),
+		HumanGateReasonCode:  optionalStringPtr(status.HumanGateReasonCode),
+		FollowUpWaiting:      status.FollowUpWaiting,
+	}
+}
+
 func AgentSessionStateSnapshotResponse(output agentservice.SessionSnapshotResult) *agentsv1.AgentSessionStateSnapshotResponse {
 	return &agentsv1.AgentSessionStateSnapshotResponse{
 		Snapshot: AgentSessionStateSnapshotToProto(output.Snapshot),
@@ -526,6 +560,14 @@ func optionalUUIDStringPtr(id *uuid.UUID) *string {
 	}
 	value := id.String()
 	return &value
+}
+
+func optionalPositiveInt64Ptr(value int64) *int64 {
+	if value <= 0 {
+		return nil
+	}
+	copied := value
+	return &copied
 }
 
 func optionalTimePtr(value *time.Time) *string {

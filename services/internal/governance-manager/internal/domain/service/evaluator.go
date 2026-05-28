@@ -762,34 +762,27 @@ func normalizeRiskEvaluationSummary(summary value.RiskEvaluationSummary) (value.
 
 func normalizeEvidenceRefs(refs []value.EvidenceRef) ([]value.EvidenceRef, error) {
 	result := make([]value.EvidenceRef, 0, len(refs))
-	seen := make(map[string]struct{})
+	seen := make(map[string]value.EvidenceRef)
 	for _, ref := range refs {
 		normalized, err := normalizeEvidenceRef(ref, "evidence_ref.ref", "evidence_ref.summary")
 		if err != nil {
 			return nil, err
 		}
 		key := normalized.Kind + "\x00" + normalized.Ref
-		if _, ok := seen[key]; ok {
+		if existing, ok := seen[key]; ok {
+			if existing != normalized {
+				return nil, errs.ErrInvalidArgument
+			}
 			continue
 		}
-		seen[key] = struct{}{}
+		seen[key] = normalized
 		result = append(result, normalized)
 	}
 	return result, nil
 }
 
 func normalizeEvidenceRef(ref value.EvidenceRef, refName string, summaryName string) (value.EvidenceRef, error) {
-	normalized := trimEvidenceRef(ref)
-	if normalized.Kind == "" || normalized.Ref == "" {
-		return value.EvidenceRef{}, errs.ErrInvalidArgument
-	}
-	if err := validateSafeRef(refName, normalized.Ref, true); err != nil {
-		return value.EvidenceRef{}, err
-	}
-	if err := validateSafeText(summaryName, normalized.Summary, maxEvaluationFactorSummary); err != nil {
-		return value.EvidenceRef{}, err
-	}
-	return normalized, nil
+	return normalizeSafeEvidenceRef(ref, refName, summaryName, validateReleaseSafeRef, validateReleaseSafeText)
 }
 
 func trimEvidenceRef(ref value.EvidenceRef) value.EvidenceRef {

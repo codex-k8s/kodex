@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -12,6 +13,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/governance-manager/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/governance-manager/internal/domain/types/enum"
 	"github.com/codex-k8s/kodex/services/internal/governance-manager/internal/domain/types/query"
+	"github.com/codex-k8s/kodex/services/internal/governance-manager/internal/domain/types/value"
 	grpcruntime "google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -204,6 +206,59 @@ func TestRecordReleaseRuntimeEvidenceRoutesToDomainService(t *testing.T) {
 	}
 }
 
+func TestGetReleaseDecisionPackageReturnsRuntimeEvidenceReadSurface(t *testing.T) {
+	t.Parallel()
+
+	packageID := "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"
+	service := &fakeBacklogService{
+		releasePackage: entity.ReleaseDecisionPackage{
+			VersionedBase:       entity.VersionedBase{ID: uuid.MustParse(packageID), Version: 5},
+			ReleaseCandidateRef: "release:v1.0.0",
+			RuntimeRefs:         []byte(`[{"jobRef":"runtime:job:deploy","summaryRef":"runtime:summary:deploy"}]`),
+			EvidenceRefs: []value.EvidenceRef{{
+				Kind:           "runtime_job",
+				Ref:            "runtime:job:deploy",
+				Summary:        "deploy status summary",
+				Digest:         "sha256:deploy",
+				RetentionClass: "safe_ref",
+			}},
+			IntegrationRefs: []value.ReleaseIntegrationRef{{
+				Domain:     "runtime",
+				Kind:       "deploy",
+				Ref:        "runtime:job:deploy",
+				Status:     "failed",
+				Summary:    "deploy failed with bounded diagnostic",
+				Digest:     "sha256:deploy",
+				ObservedAt: "2026-05-28T11:59:00Z",
+				Version:    "job-version:5",
+				ErrorCode:  "DEPLOY_HEALTHCHECK_FAILED",
+			}},
+			Status: enum.ReleaseDecisionPackageStatusReady,
+		},
+	}
+
+	response, err := NewServer(service).GetReleaseDecisionPackage(context.Background(), &governancev1.GetReleaseDecisionPackageRequest{
+		ReleaseDecisionPackageId: packageID,
+		Meta:                     &governancev1.QueryMeta{Actor: &governancev1.Actor{Type: "service", Id: "staff-gateway"}},
+	})
+	if err != nil {
+		t.Fatalf("GetReleaseDecisionPackage(): %v", err)
+	}
+	item := response.GetReleaseDecisionPackage()
+	if item.GetReleaseCandidateRef() != "release:v1.0.0" || item.GetVersion() != 5 || len(item.GetRuntimeRefs()) != 1 || len(item.GetEvidenceRefs()) != 1 || len(item.GetIntegrationRefs()) != 1 {
+		t.Fatalf("response = %+v, want release package with runtime evidence read surface", item)
+	}
+	if item.GetRuntimeRefs()[0].GetJobRef() != "runtime:job:deploy" || item.GetIntegrationRefs()[0].GetErrorCode() != "DEPLOY_HEALTHCHECK_FAILED" {
+		t.Fatalf("response = %+v, want runtime job ref and bounded error code", item)
+	}
+	readSurface := item.GetRuntimeRefs()[0].GetJobRef() + " " + item.GetEvidenceRefs()[0].GetSummary() + " " + item.GetIntegrationRefs()[0].GetSummary()
+	for _, unsafe := range []string{"token=", "kubeconfig", "stdout", "stderr", "raw_provider_payload"} {
+		if strings.Contains(readSurface, unsafe) {
+			t.Fatalf("read surface leaked unsafe marker %q: %s", unsafe, readSurface)
+		}
+	}
+}
+
 func TestRequestReleaseDecisionRoutesToDomainService(t *testing.T) {
 	t.Parallel()
 
@@ -280,6 +335,9 @@ type fakeBacklogService struct {
 	reviewSignalsInput                governanceservice.ListReviewSignalsInput
 	buildReleaseDecisionPackageInput  governanceservice.BuildReleaseDecisionPackageInput
 	recordReleaseRuntimeEvidenceInput governanceservice.RecordReleaseRuntimeEvidenceInput
+	getReleaseDecisionPackageInput    governanceservice.GetReleaseDecisionPackageInput
+	listReleaseDecisionPackagesInput  governanceservice.ListReleaseDecisionPackagesInput
+	releasePackage                    entity.ReleaseDecisionPackage
 	requestReleaseDecisionInput       governanceservice.RequestReleaseDecisionInput
 }
 
@@ -342,6 +400,16 @@ func (service *fakeBacklogService) RecordReleaseRuntimeEvidence(_ context.Contex
 		IntegrationRefs:     input.IntegrationRefs,
 		Status:              enum.ReleaseDecisionPackageStatusReady,
 	}, nil
+}
+
+func (service *fakeBacklogService) GetReleaseDecisionPackage(_ context.Context, input governanceservice.GetReleaseDecisionPackageInput) (entity.ReleaseDecisionPackage, error) {
+	service.getReleaseDecisionPackageInput = input
+	return service.releasePackage, nil
+}
+
+func (service *fakeBacklogService) ListReleaseDecisionPackages(_ context.Context, input governanceservice.ListReleaseDecisionPackagesInput) ([]entity.ReleaseDecisionPackage, query.PageResult, error) {
+	service.listReleaseDecisionPackagesInput = input
+	return []entity.ReleaseDecisionPackage{service.releasePackage}, query.PageResult{}, nil
 }
 
 func (service *fakeBacklogService) RequestReleaseDecision(_ context.Context, input governanceservice.RequestReleaseDecisionInput) (entity.ReleaseDecision, entity.ReleaseDecisionPackage, error) {

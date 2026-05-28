@@ -1581,8 +1581,20 @@ func validateRuntimeReleaseIntegrationRefs(refs []value.ReleaseIntegrationRef) e
 		if ref.Domain != "runtime" {
 			return errs.ErrInvalidArgument
 		}
+		if ref.Status != "" && !validRuntimeReleaseIntegrationStatus(ref.Kind, ref.Status) {
+			return errs.ErrInvalidArgument
+		}
 	}
 	return nil
+}
+
+func validRuntimeReleaseIntegrationStatus(kind string, status string) bool {
+	switch kind {
+	case "job", "deploy", "postdeploy":
+		return isOneOfString(status, "pending", "claimed", "running", "succeeded", "failed", "cancelled", "timed_out")
+	default:
+		return true
+	}
 }
 
 func mergeReleaseRuntimeEvidence(pkg entity.ReleaseDecisionPackage, runtimeRefs []byte, evidenceRefs []value.EvidenceRef, integrationRefs []value.ReleaseIntegrationRef) (entity.ReleaseDecisionPackage, bool, error) {
@@ -1608,34 +1620,103 @@ func mergeReleaseRuntimeEvidence(pkg entity.ReleaseDecisionPackage, runtimeRefs 
 }
 
 func mergeReleaseEvidenceRefs(existing []value.EvidenceRef, additions []value.EvidenceRef) ([]value.EvidenceRef, error) {
-	combined := make([]value.EvidenceRef, 0, len(existing)+len(additions))
-	combined = append(combined, existing...)
-	combined = append(combined, additions...)
-	result := make([]value.EvidenceRef, 0, len(combined))
-	seen := make(map[string]value.EvidenceRef, len(combined))
-	for _, ref := range combined {
-		normalized, err := normalizeEvidenceRef(ref, "evidence_ref.ref", "evidence_ref.summary")
-		if err != nil {
-			return nil, err
-		}
-		key := normalized.Kind + "\x00" + normalized.Ref
-		if existing, ok := seen[key]; ok {
-			if existing != normalized {
-				return nil, errs.ErrInvalidArgument
+	normalizedExisting, err := normalizeEvidenceRefs(existing)
+	if err != nil {
+		return nil, err
+	}
+	normalizedAdditions, err := normalizeEvidenceRefs(additions)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]value.EvidenceRef, 0, len(normalizedExisting)+len(normalizedAdditions))
+	seen := make(map[string]value.EvidenceRef, len(normalizedExisting)+len(normalizedAdditions))
+	for _, ref := range normalizedExisting {
+		key := evidenceRefKey(ref)
+		seen[key] = ref
+		result = append(result, ref)
+	}
+	for _, ref := range normalizedAdditions {
+		key := evidenceRefKey(ref)
+		if previous, ok := seen[key]; ok {
+			if previous != ref {
+				return nil, errs.ErrConflict
 			}
 			continue
 		}
-		seen[key] = normalized
-		result = append(result, normalized)
+		seen[key] = ref
+		result = append(result, ref)
 	}
 	return result, nil
 }
 
+func evidenceRefKey(ref value.EvidenceRef) string {
+	return ref.Kind + "\x00" + ref.Ref
+}
+
 func mergeReleaseIntegrationRefs(existing []value.ReleaseIntegrationRef, additions []value.ReleaseIntegrationRef) ([]value.ReleaseIntegrationRef, error) {
-	combined := make([]value.ReleaseIntegrationRef, 0, len(existing)+len(additions))
-	combined = append(combined, existing...)
-	combined = append(combined, additions...)
-	return normalizeReleaseIntegrationRefs(combined)
+	normalizedExisting, err := normalizeReleaseIntegrationRefs(existing)
+	if err != nil {
+		return nil, err
+	}
+	normalizedAdditions, err := normalizeReleaseIntegrationRefs(additions)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]value.ReleaseIntegrationRef, 0, len(normalizedExisting)+len(normalizedAdditions))
+	seen := make(map[string]value.ReleaseIntegrationRef, len(normalizedExisting)+len(normalizedAdditions))
+	for _, ref := range normalizedExisting {
+		key := releaseIntegrationRefKey(ref)
+		seen[key] = ref
+		result = append(result, ref)
+	}
+	for _, ref := range normalizedAdditions {
+		key := releaseIntegrationRefKey(ref)
+		if previous, ok := seen[key]; ok {
+			if sameReleaseIntegrationRefSnapshot(previous, ref) {
+				continue
+			}
+			if staleRuntimeReleaseIntegrationStatus(previous, ref) {
+				return nil, errs.ErrPreconditionFailed
+			}
+			return nil, errs.ErrConflict
+		}
+		seen[key] = ref
+		result = append(result, ref)
+	}
+	sort.Slice(result, func(i int, j int) bool {
+		return releaseIntegrationRefKey(result[i]) < releaseIntegrationRefKey(result[j])
+	})
+	return result, nil
+}
+
+func staleRuntimeReleaseIntegrationStatus(previous value.ReleaseIntegrationRef, next value.ReleaseIntegrationRef) bool {
+	if previous.Domain != "runtime" || next.Domain != "runtime" || previous.Kind != next.Kind {
+		return false
+	}
+	if previous.Status == "" || next.Status == "" || previous.Status == next.Status {
+		return false
+	}
+	previousRank, previousKnown := runtimeReleaseStatusRank(previous.Status)
+	nextRank, nextKnown := runtimeReleaseStatusRank(next.Status)
+	if !previousKnown || !nextKnown {
+		return false
+	}
+	return nextRank < previousRank
+}
+
+func runtimeReleaseStatusRank(status string) (int, bool) {
+	switch status {
+	case "pending":
+		return 1, true
+	case "claimed":
+		return 2, true
+	case "running":
+		return 3, true
+	case "succeeded", "failed", "cancelled", "timed_out":
+		return 4, true
+	default:
+		return 0, false
+	}
 }
 
 func sameReleaseIntegrationRefs(left []value.ReleaseIntegrationRef, right []value.ReleaseIntegrationRef) bool {
@@ -1949,20 +2030,30 @@ func normalizeEventSafeEvidenceRefs(refs []value.EvidenceRef, refName string, su
 }
 
 func normalizeEventSafeEvidenceRef(ref value.EvidenceRef, refName string, summaryName string) (value.EvidenceRef, error) {
+	return normalizeSafeEvidenceRef(ref, refName, summaryName, validateEventSafeRef, validateEventSafeText)
+}
+
+func normalizeSafeEvidenceRef(
+	ref value.EvidenceRef,
+	refName string,
+	summaryName string,
+	validateRef func(string, string, bool) error,
+	validateText func(string, string, int) error,
+) (value.EvidenceRef, error) {
 	normalized := trimEvidenceRef(ref)
 	if normalized.Kind == "" || normalized.Ref == "" {
 		return value.EvidenceRef{}, errs.ErrInvalidArgument
 	}
-	if err := validateEventSafeRef(refName, normalized.Ref, true); err != nil {
+	if err := validateRef(refName, normalized.Ref, true); err != nil {
 		return value.EvidenceRef{}, err
 	}
-	if err := validateEventSafeText(summaryName, normalized.Summary, maxEvaluationFactorSummary); err != nil {
+	if err := validateText(summaryName, normalized.Summary, maxEvaluationFactorSummary); err != nil {
 		return value.EvidenceRef{}, err
 	}
-	if err := validateEventSafeRef("evidence_ref.digest", normalized.Digest, false); err != nil {
+	if err := validateRef("evidence_ref.digest", normalized.Digest, false); err != nil {
 		return value.EvidenceRef{}, err
 	}
-	if err := validateEventSafeRef("evidence_ref.retention_class", normalized.RetentionClass, false); err != nil {
+	if err := validateRef("evidence_ref.retention_class", normalized.RetentionClass, false); err != nil {
 		return value.EvidenceRef{}, err
 	}
 	return normalized, nil

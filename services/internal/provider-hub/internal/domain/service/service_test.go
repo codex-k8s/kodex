@@ -2006,6 +2006,163 @@ func TestCreateRepositoryReplayReturnsRepositoryResult(t *testing.T) {
 	}
 }
 
+func TestCreateRepositoryReplayByIdempotencyKeyDoesNotWriteProviderTwice(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	externalAccountID := uuid.New()
+	actorID := uuid.New()
+	operationID := uuid.New()
+	executor := &fakeWriteExecutor{
+		result: providerclient.WriteResult{
+			ResultRef:        "https://github.com/codex-k8s/idempotent-service",
+			ProviderObjectID: "101",
+			ProviderVersion:  `"repo-etag"`,
+			Target: &providerclient.Target{
+				ProviderSlug:         enum.ProviderSlugGitHub,
+				RepositoryFullName:   "codex-k8s/idempotent-service",
+				ProviderRepositoryID: "101",
+				WebURL:               "https://github.com/codex-k8s/idempotent-service",
+			},
+			BaseBranch: "main",
+		},
+	}
+	repository := &fakeRepository{}
+	service := NewWithDependencies(Dependencies{
+		Repository:             repository,
+		Clock:                  fixedClock{now: now},
+		IDGenerator:            &sequenceIDs{ids: []uuid.UUID{operationID, uuid.New(), uuid.New()}},
+		AccountUsageResolver:   fakeAccountUsageResolver{},
+		SecretResolver:         &fakeSecretResolver{secret: secretresolver.NewSecretValue([]byte("write-token"))},
+		ProviderWriteExecutors: []providerclient.WriteExecutor{executor},
+	})
+	meta := value.CommandMeta{
+		IdempotencyKey: "repo-create-idempotency",
+		Actor:          value.Actor{Type: "service", ID: actorID.String()},
+		OperationPolicyContext: value.ProviderOperationPolicyContext{
+			RiskLevel: value.ProviderOperationRiskLevelMedium,
+			ChangedFields: []string{
+				"auto_init",
+				"owner_kind",
+				"provider_owner",
+				"repository_name",
+				"visibility",
+			},
+		},
+	}
+	owner := "codex-k8s"
+	input := CreateRepositoryInput{
+		ProjectID:         projectID,
+		RepositoryID:      repositoryID,
+		ProviderSlug:      enum.ProviderSlugGitHub,
+		OwnerKind:         enum.RepositoryOwnerKindOrganization,
+		ProviderOwner:     &owner,
+		RepositoryName:    "idempotent-service",
+		Visibility:        enum.RepositoryVisibilityPrivate,
+		ExternalAccountID: externalAccountID,
+		Meta:              meta,
+	}
+
+	first, err := service.CreateRepository(context.Background(), input)
+	if err != nil {
+		t.Fatalf("CreateRepository() first: %v", err)
+	}
+	second, err := service.CreateRepository(context.Background(), input)
+	if err != nil {
+		t.Fatalf("CreateRepository() replay: %v", err)
+	}
+	if executor.calls != 1 {
+		t.Fatalf("executor calls = %d, want one provider write and one replay", executor.calls)
+	}
+	wantCommandKey := "idempotency:service:" + actorID.String() + ":repo-create-idempotency"
+	if repository.recordedProviderOperation.CommandID != wantCommandKey {
+		t.Fatalf("command id = %q, want %q", repository.recordedProviderOperation.CommandID, wantCommandKey)
+	}
+	if first.ProviderOperation == nil || second.ProviderOperation == nil || second.ProviderOperation.ID != first.ProviderOperation.ID {
+		t.Fatalf("replay operation = %+v, want original operation %+v", second.ProviderOperation, first.ProviderOperation)
+	}
+	if second.Result.Target == nil ||
+		second.Result.Target.RepositoryFullName != "codex-k8s/idempotent-service" ||
+		second.Result.ProviderObjectID != "101" ||
+		second.Result.BaseBranch != "main" {
+		t.Fatalf("replay result = %+v, want stable repository target", second.Result)
+	}
+}
+
+func TestCreateRepositoryIdempotencyKeyConflictRejectsDifferentTarget(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 28, 12, 5, 0, 0, time.UTC)
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	externalAccountID := uuid.New()
+	actorID := uuid.New()
+	executor := &fakeWriteExecutor{
+		result: providerclient.WriteResult{
+			ResultRef:        "https://github.com/codex-k8s/first-service",
+			ProviderObjectID: "101",
+			Target: &providerclient.Target{
+				ProviderSlug:         enum.ProviderSlugGitHub,
+				RepositoryFullName:   "codex-k8s/first-service",
+				ProviderRepositoryID: "101",
+				WebURL:               "https://github.com/codex-k8s/first-service",
+			},
+			BaseBranch: "main",
+		},
+	}
+	repository := &fakeRepository{}
+	service := NewWithDependencies(Dependencies{
+		Repository:             repository,
+		Clock:                  fixedClock{now: now},
+		IDGenerator:            &sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New(), uuid.New()}},
+		AccountUsageResolver:   fakeAccountUsageResolver{},
+		SecretResolver:         &fakeSecretResolver{secret: secretresolver.NewSecretValue([]byte("write-token"))},
+		ProviderWriteExecutors: []providerclient.WriteExecutor{executor},
+	})
+	meta := value.CommandMeta{
+		IdempotencyKey: "repo-create-conflict",
+		Actor:          value.Actor{Type: "service", ID: actorID.String()},
+		OperationPolicyContext: value.ProviderOperationPolicyContext{
+			RiskLevel: value.ProviderOperationRiskLevelMedium,
+			ChangedFields: []string{
+				"auto_init",
+				"owner_kind",
+				"provider_owner",
+				"repository_name",
+				"visibility",
+			},
+		},
+	}
+	owner := "codex-k8s"
+	input := CreateRepositoryInput{
+		ProjectID:         projectID,
+		RepositoryID:      repositoryID,
+		ProviderSlug:      enum.ProviderSlugGitHub,
+		OwnerKind:         enum.RepositoryOwnerKindOrganization,
+		ProviderOwner:     &owner,
+		RepositoryName:    "first-service",
+		Visibility:        enum.RepositoryVisibilityPrivate,
+		ExternalAccountID: externalAccountID,
+		Meta:              meta,
+	}
+	if _, err := service.CreateRepository(context.Background(), input); err != nil {
+		t.Fatalf("CreateRepository() first: %v", err)
+	}
+	input.RepositoryName = "second-service"
+	_, err := service.CreateRepository(context.Background(), input)
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("CreateRepository() conflicting replay err = %v, want %v", err, errs.ErrConflict)
+	}
+	if executor.calls != 1 {
+		t.Fatalf("executor calls = %d, want no second provider write", executor.calls)
+	}
+	if repository.recordedProviderOperation.TargetRef != repositoryTargetRef(enum.ProviderSlugGitHub, repositoryID.String())+"#create_repository:first-service:codex-k8s" {
+		t.Fatalf("operation target ref = %q, want first target retained", repository.recordedProviderOperation.TargetRef)
+	}
+}
+
 func TestCreateBootstrapPullRequestRecordsProjectionAndBootstrapEvent(t *testing.T) {
 	t.Parallel()
 
@@ -2819,6 +2976,110 @@ func TestUpdateIssueChecksExpectedVersionBeforeExecutor(t *testing.T) {
 	}
 	if len(repository.recordedOutboxEvents) != 0 {
 		t.Fatalf("outbox = %+v, want no stored operation", repository.recordedOutboxEvents)
+	}
+}
+
+func TestProviderWriteFailuresStoreSafeOperationSummary(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name       string
+		err        error
+		wantStatus enum.ProviderOperationStatus
+		wantCode   string
+	}{
+		{
+			name:       "rate limit",
+			err:        &providerclient.Error{Kind: providerclient.ErrorKindRateLimited, RetryAfter: time.Minute, Cause: errors.New("token-value https://private.example.invalid raw provider payload")},
+			wantStatus: enum.ProviderOperationStatusRetryableFailed,
+			wantCode:   writeFailureProviderRateLimited,
+		},
+		{
+			name:       "transient",
+			err:        &providerclient.Error{Kind: providerclient.ErrorKindTransient, Cause: errors.New("temporary failure with raw provider response")},
+			wantStatus: enum.ProviderOperationStatusRetryableFailed,
+			wantCode:   writeFailureProviderTransient,
+		},
+		{
+			name:       "permission denied",
+			err:        &providerclient.Error{Kind: providerclient.ErrorKindAuthFailed, Cause: errors.New("Resource not accessible by integration token-value")},
+			wantStatus: enum.ProviderOperationStatusFailed,
+			wantCode:   writeFailureProviderAuthFailed,
+		},
+		{
+			name:       "not found",
+			err:        &providerclient.Error{Kind: providerclient.ErrorKindNotFound, Cause: errors.New("https://private.example.invalid/repos/missing")},
+			wantStatus: enum.ProviderOperationStatusFailed,
+			wantCode:   writeFailureProviderNotFound,
+		},
+		{
+			name:       "conflict",
+			err:        &providerclient.Error{Kind: providerclient.ErrorKindConflict, Cause: errors.New("conflicting fingerprint raw payload")},
+			wantStatus: enum.ProviderOperationStatusFailed,
+			wantCode:   writeFailureProviderConflict,
+		},
+		{
+			name:       "validation",
+			err:        &providerclient.Error{Kind: providerclient.ErrorKindValidation, Cause: errors.New("validation response body with secret")},
+			wantStatus: enum.ProviderOperationStatusFailed,
+			wantCode:   writeFailureProviderValidation,
+		},
+		{
+			name:       "plain executor error",
+			err:        errors.New("plain executor error with token-value and raw provider payload"),
+			wantStatus: enum.ProviderOperationStatusRetryableFailed,
+			wantCode:   writeFailureProviderTransient,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			repository := &fakeRepository{}
+			service := NewWithDependencies(Dependencies{
+				Repository:             repository,
+				Clock:                  fixedClock{now: time.Date(2026, 5, 28, 12, 10, 0, 0, time.UTC)},
+				IDGenerator:            &sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New()}},
+				AccountUsageResolver:   fakeAccountUsageResolver{},
+				SecretResolver:         &fakeSecretResolver{secret: secretresolver.NewSecretValue([]byte("write-token"))},
+				ProviderWriteExecutors: []providerclient.WriteExecutor{&fakeWriteExecutor{err: tc.err}},
+			})
+
+			result, err := service.CreateIssue(context.Background(), CreateIssueInput{
+				ProjectID:         uuid.New(),
+				RepositoryID:      uuid.New(),
+				ProviderSlug:      enum.ProviderSlugGitHub,
+				RepositoryTarget:  ProviderTarget{ProviderSlug: enum.ProviderSlugGitHub, RepositoryFullName: "codex-k8s/kodex"},
+				Title:             "Новая задача",
+				ExternalAccountID: uuid.New(),
+				Meta: value.CommandMeta{
+					CommandID: uuid.New(),
+					OperationPolicyContext: value.ProviderOperationPolicyContext{
+						RiskLevel:     value.ProviderOperationRiskLevelLow,
+						ChangedFields: []string{"title", "body", "labels", "assignee_provider_logins"},
+					},
+				},
+			})
+			if err != nil {
+				t.Fatalf("CreateIssue(): %v", err)
+			}
+			if result.ProviderOperation == nil ||
+				result.ProviderOperation.Status != tc.wantStatus ||
+				result.ProviderOperation.ErrorCode != tc.wantCode {
+				t.Fatalf("operation = %+v, want status %s code %s", result.ProviderOperation, tc.wantStatus, tc.wantCode)
+			}
+			if len(repository.recordedOutboxEvents) != 1 || repository.recordedOutboxEvents[0].EventType != providerEventOperationFailed {
+				t.Fatalf("outbox = %+v, want one failed operation event", repository.recordedOutboxEvents)
+			}
+			for _, leaked := range []string{"token-value", "write-token", "private.example.invalid", "raw provider", "response body", "secret"} {
+				if strings.Contains(result.ProviderOperation.ErrorMessage, leaked) ||
+					strings.Contains(result.ProviderOperation.ResultRef, leaked) ||
+					strings.Contains(result.ProviderOperation.ProviderObjectID, leaked) ||
+					strings.Contains(string(repository.recordedOutboxEvents[0].Payload), leaked) {
+					t.Fatalf("safe operation summary leaked %q: operation=%+v outbox=%s", leaked, result.ProviderOperation, repository.recordedOutboxEvents[0].Payload)
+				}
+			}
+		})
 	}
 }
 

@@ -3,6 +3,7 @@ package httptransport
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 )
 
@@ -24,11 +25,9 @@ func (h handlers) getOwnerInboxItem(w http.ResponseWriter, req *http.Request) {
 }
 
 func (h handlers) respondOwnerInboxItem(w http.ResponseWriter, req *http.Request) {
-	var body OwnerInboxRespondBody
-	decoder := json.NewDecoder(req.Body)
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&body); err != nil {
-		WriteSafeError(w, req, NewSafeError(http.StatusBadRequest, CodeInvalidRequest, "request body is invalid", false))
+	body, safeErr := decodeOwnerInboxRespondBody(req)
+	if safeErr != nil {
+		WriteSafeError(w, req, safeErr)
 		return
 	}
 	input, err := RecordInteractionResponseRequest(req, body)
@@ -47,6 +46,20 @@ func (h handlers) respondOwnerInboxItem(w http.ResponseWriter, req *http.Request
 		return
 	}
 	writeJSON(w, http.StatusOK, output)
+}
+
+func decodeOwnerInboxRespondBody(req *http.Request) (OwnerInboxRespondBody, *SafeError) {
+	var body OwnerInboxRespondBody
+	decoder := json.NewDecoder(req.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&body); err != nil {
+		return OwnerInboxRespondBody{}, NewSafeError(http.StatusBadRequest, CodeInvalidRequest, "request body is invalid", false)
+	}
+	var extra json.RawMessage
+	if err := decoder.Decode(&extra); err != io.EOF {
+		return OwnerInboxRespondBody{}, NewSafeError(http.StatusBadRequest, CodeInvalidRequest, "request body must contain one JSON object", false)
+	}
+	return body, nil
 }
 
 func (h handlers) openAPISpec(w http.ResponseWriter, req *http.Request) {

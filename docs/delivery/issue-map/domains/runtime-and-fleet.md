@@ -5,7 +5,7 @@ title: kodex — карта Issue домена runtime и fleet
 status: active
 owner_role: KM
 created_at: 2026-04-25
-updated_at: 2026-05-14
+updated_at: 2026-05-28
 ---
 
 # Карта Issue — runtime и контур серверов и кластеров
@@ -35,3 +35,4 @@ updated_at: 2026-05-14
 | #735 | `services/internal/runtime-manager/**`, `deploy/base/runtime-manager/**`, `deploy/base/postgres/secrets.yaml.tpl`, `bootstrap/host/config.env.example`, `services.yaml`, `docs/domains/runtime-and-fleet/**`, `docs/delivery/coordination/**` | RTM-FLEET-1 | готово | `runtime-manager` вызывает `fleet-manager.ResolvePlacement` для `PrepareRuntime`, `ReserveSlot` и `CreateJob` без slot; fleet остаётся владельцем выбора кластера и журнала решений. |
 | #738 | `services/internal/fleet-manager/Dockerfile`, `deploy/base/fleet-manager/**`, `deploy/base/postgres/**`, `bootstrap/host/config.env.example`, `bootstrap/host/bootstrap_cluster.sh`, `services.yaml`, `scripts/build-fleet-manager-images.sh`, `docs/domains/runtime-and-fleet/ops/**`, `docs/domains/runtime-and-fleet/delivery/fleet_manager_delivery.md`, `docs/delivery/coordination/**` | FLEET-6 | готово | Эксплуатационный контур `fleet-manager`: Dockerfile, manifests, DB bootstrap, migration job, runbook и monitoring; доменные проверки идут через Go tests/runner. |
 | #940 | `proto/kodex/runtime/v1/runtime_manager.proto`, `proto/gen/go/kodex/runtime/v1/**`, `services/internal/runtime-manager/**`, `deploy/base/runtime-manager/**`, `deploy/base/postgres/secrets.yaml.tpl`, `docs/domains/runtime-and-fleet/**`, `docs/delivery/coordination/agent-1-project-catalog.md` | RTM-K8S-1 | готово | Основа Kubernetes-исполнителя в `runtime-manager`: включаемый явно исполнитель забирает только задания `health_check`, получает ссылку на секрет кластера через `fleet-manager.GetKubernetesCluster`, создаёт ограниченный Kubernetes Job через `client-go` и завершает runtime job штатными lifecycle-командами без хранения kubeconfig, значений секретов и больших логов. Дополнительно зафиксирован канонический тип задания `agent_run` для запуска agent Run без подмены на `build`/`deploy`/`housekeeping`; отдельный исполнитель agent Run подключается следующим срезом. |
+| #949 | `services/internal/runtime-manager/internal/app/kubernetes_job_worker.go`, `services/internal/runtime-manager/internal/clients/kubernetes/**`, `docs/domains/runtime-and-fleet/**`, `docs/delivery/coordination/agent-1-project-catalog.md` | RTM-K8S-2 | готово | Kubernetes job worker различает остановку процесса и реальный таймаут, безопасно классифицирует ошибку, отмену и недоступный статус Kubernetes Job, переиспользует детерминированный Kubernetes Job при повторном claim и сдерживает повтор ошибок claim/report/complete увеличивающейся задержкой. |

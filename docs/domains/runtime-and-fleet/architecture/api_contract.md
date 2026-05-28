@@ -5,8 +5,8 @@ title: kodex — API-контракт runtime-manager
 status: active
 owner_role: SA
 created_at: 2026-05-07
-updated_at: 2026-05-26
-related_issues: [655, 656, 782]
+updated_at: 2026-05-28
+related_issues: [655, 656, 782, 949]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -93,6 +93,8 @@ Generated execution context передаётся отдельным `WorkspaceSo
 Исполнитель Kubernetes в `runtime-manager` обрабатывает только ограниченный первый тип задания `health_check`. Он забирает задание через `ClaimRunnableJob`, читает выбранный кластер через `fleet-manager.GetKubernetesCluster`, получает только ссылку `secret_store_type`/`secret_store_ref` и разрешает kubeconfig в памяти через `secretresolver`. Значение kubeconfig, raw Kubernetes objects, events и полный лог не пишутся в БД. Запуск фиксируется через `ReportJobStepProgress` с `RuntimeArtifactRef` на Kubernetes Job и namespace, а завершение идёт через `CompleteJob` или `FailJob`.
 
 `JobInputJSON` для этого пути не является произвольным manifest. Поддержаны только ограниченные поля `namespace`, `service_account`, `image` и `labels`; значения `env`, annotations, команды контейнера, значения секретов, prompt, transcript, provider payload и большие тексты не принимаются. Команда контейнера остаётся фиксированной проверкой здоровья. Остальные типы заданий (`build`, `deploy`, нагрузки slot-agent и т.п.) не исполняются этим срезом.
+
+Worker Kubernetes использует lease job как границу владения исполнением. Повторный claim после истечения lease переиспользует детерминированный Kubernetes Job по имени и проверяет, что объект действительно создан `runtime-manager` для того же runtime job. Остановка процесса или отмена контекста не переводит platform job в `failed`: claim остаётся для повторной сверки после истечения lease. Реальный таймаут Kubernetes Job, условие `JobFailed`, удалённый/отменённый Kubernetes Job или недоступный статус фиксируются классифицированной ошибкой через `FailJob`. Ошибки claim/report/complete сдерживаются повтором с увеличивающейся задержкой, чтобы worker не входил в частый цикл запросов.
 
 ### Runtime artifact refs
 

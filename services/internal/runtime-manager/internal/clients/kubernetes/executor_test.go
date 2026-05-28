@@ -3,8 +3,10 @@ package kubernetes
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -53,6 +55,55 @@ func TestExecutorStartCreatesRestrictedHealthCheckJob(t *testing.T) {
 	if len(started.ArtifactRefs) != 2 {
 		t.Fatalf("artifact refs = %d, want job and namespace refs", len(started.ArtifactRefs))
 	}
+}
+
+func TestExecutorStartReusesExistingManagedJob(t *testing.T) {
+	t.Parallel()
+
+	client := fake.NewClientset()
+	executor := newTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
+	job := testHealthCheckJob()
+
+	first, err := executor.Start(context.Background(), job)
+	if err != nil {
+		t.Fatalf("first Start(): %v", err)
+	}
+	second, err := executor.Start(context.Background(), job)
+	if err != nil {
+		t.Fatalf("second Start(): %v", err)
+	}
+	if second.JobName != first.JobName || second.ExternalRef != first.ExternalRef {
+		t.Fatalf("second start = %+v, want same job/ref as %+v", second, first)
+	}
+	jobs, err := client.BatchV1().Jobs(first.Namespace).List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		t.Fatalf("list jobs: %v", err)
+	}
+	if len(jobs.Items) != 1 {
+		t.Fatalf("jobs = %d, want one reused Kubernetes Job", len(jobs.Items))
+	}
+}
+
+func TestExecutorStartRejectsNameConflict(t *testing.T) {
+	t.Parallel()
+
+	client := fake.NewClientset()
+	executor := newTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
+	job := testHealthCheckJob()
+	_, err := client.BatchV1().Jobs("runtime-jobs").Create(context.Background(), &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      runtimeJobName(job.ID),
+			Namespace: "runtime-jobs",
+			Labels:    map[string]string{"app.kubernetes.io/managed-by": "other"},
+		},
+	}, metav1.CreateOptions{})
+	if err != nil {
+		t.Fatalf("create conflicting job: %v", err)
+	}
+
+	_, err = executor.Start(context.Background(), job)
+
+	assertExecutionCode(t, err, "kubernetes_job_name_conflict")
 }
 
 func TestExecutorStartRejectsMismatchedFleetScope(t *testing.T) {
@@ -114,6 +165,83 @@ func TestExecutorWaitReportsCompletedJob(t *testing.T) {
 	result := executor.Wait(context.Background(), started)
 	if !result.Succeeded || result.ErrorCode != "" {
 		t.Fatalf("Wait() = %+v, want success", result)
+	}
+}
+
+func TestExecutorWaitReportsFailedJob(t *testing.T) {
+	t.Parallel()
+
+	client := fake.NewClientset()
+	executor := newTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
+	started, err := executor.Start(context.Background(), testHealthCheckJob())
+	if err != nil {
+		t.Fatalf("Start(): %v", err)
+	}
+	created, err := client.BatchV1().Jobs(started.Namespace).Get(context.Background(), started.JobName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("get created Job: %v", err)
+	}
+	created.Status.Conditions = []batchv1.JobCondition{{Type: batchv1.JobFailed, Status: corev1.ConditionTrue}}
+	if _, err := client.BatchV1().Jobs(started.Namespace).UpdateStatus(context.Background(), created, metav1.UpdateOptions{}); err != nil {
+		t.Fatalf("update job status: %v", err)
+	}
+
+	result := executor.Wait(context.Background(), started)
+
+	if result.Succeeded || result.ErrorCode != "kubernetes_job_failed" {
+		t.Fatalf("Wait() = %+v, want Kubernetes failure", result)
+	}
+}
+
+func TestExecutorWaitReportsDeletedJobAsCancelled(t *testing.T) {
+	t.Parallel()
+
+	client := fake.NewClientset()
+	executor := newTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
+	started, err := executor.Start(context.Background(), testHealthCheckJob())
+	if err != nil {
+		t.Fatalf("Start(): %v", err)
+	}
+	if err := client.BatchV1().Jobs(started.Namespace).Delete(context.Background(), started.JobName, metav1.DeleteOptions{}); err != nil {
+		t.Fatalf("delete created Job: %v", err)
+	}
+
+	result := executor.Wait(context.Background(), started)
+
+	if result.Succeeded || result.ErrorCode != "kubernetes_job_cancelled" {
+		t.Fatalf("Wait() = %+v, want cancelled/deleted diagnostic", result)
+	}
+}
+
+func TestExecutorWaitDoesNotTurnContextCancelIntoJobFailure(t *testing.T) {
+	t.Parallel()
+
+	client := fake.NewClientset()
+	executor := newTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
+	started, err := executor.Start(context.Background(), testHealthCheckJob())
+	if err != nil {
+		t.Fatalf("Start(): %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	result := executor.Wait(ctx, started)
+
+	if !result.Interrupted || result.ErrorCode != "runtime_worker_stopped" || result.Succeeded {
+		t.Fatalf("Wait() = %+v, want interrupted worker result", result)
+	}
+}
+
+func TestBoundedLogTailLimitsBytesAndPreservesUTF8(t *testing.T) {
+	t.Parallel()
+
+	result := boundedLogTail("prefix-"+strings.Repeat("я", 20), 9)
+
+	if len(result) > 9 {
+		t.Fatalf("bounded tail length = %d, want <= 9", len(result))
+	}
+	if !utf8.ValidString(result) {
+		t.Fatalf("bounded tail is not valid UTF-8: %q", result)
 	}
 }
 

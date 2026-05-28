@@ -44,6 +44,48 @@ func TestRouterListOwnerInboxItems(t *testing.T) {
 	}
 }
 
+func TestRouterListOwnerInboxItemsFiltersAndPagination(t *testing.T) {
+	client := &fakeInteractionHubClient{listResponse: &interactionsv1.ListOwnerInboxItemsResponse{
+		Items: []*interactionsv1.OwnerInboxItem{sampleOwnerInboxItem(interactionsv1.InteractionRequestStatus_INTERACTION_REQUEST_STATUS_WAITING)},
+		Page:  &interactionsv1.PageResponse{NextPageToken: stringPtr("cursor-2")},
+	}}
+	router := newTestRouter(t, client)
+	target := "/v1/owner-inbox/items?scope_type=project&scope_ref=project-1" +
+		"&request_kind=feedback,human_gate&status=created,waiting" +
+		"&source_owner_kind=agent_manager&source_owner_ref=run-1" +
+		"&assignee_kind=user&assignee_ref=owner-1&actor_ref=user/owner-1" +
+		"&correlation_kind=agent_run&correlation_ref=run-1&correlation_id=corr-1" +
+		"&include_diagnostics=true&page_size=50&page_token=cursor-1"
+	req := authenticatedRequest(http.MethodGet, target, "")
+	req.Header.Set(headerTraceID, "trace-1")
+	req.Header.Set(headerSessionID, "session-1")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	recorded := client.listRequest
+	if len(recorded.GetRequestKinds()) != 2 || len(recorded.GetStatuses()) != 2 {
+		t.Fatalf("filters = %+v/%+v, want request kinds and statuses", recorded.GetRequestKinds(), recorded.GetStatuses())
+	}
+	if recorded.GetAssigneeRef().GetRefKind() != "user" || recorded.GetCorrelationRef().GetRef() != "run-1" {
+		t.Fatalf("refs = %+v/%+v, want assignee and correlation refs", recorded.GetAssigneeRef(), recorded.GetCorrelationRef())
+	}
+	if !recorded.GetIncludeDiagnostics() || recorded.GetPage().GetPageSize() != 50 || recorded.GetPage().GetPageToken() != "cursor-1" {
+		t.Fatalf("page/diagnostics = %+v/%t, want page and diagnostics", recorded.GetPage(), recorded.GetIncludeDiagnostics())
+	}
+	if recorded.GetMeta().GetRequestContext().GetTraceId() != "trace-1" || recorded.GetMeta().GetRequestContext().GetSessionId() != "session-1" {
+		t.Fatalf("request context = %+v, want trace and session", recorded.GetMeta().GetRequestContext())
+	}
+	var body generated.OwnerInboxListResponse
+	decodeJSON(t, rec, &body)
+	if body.Page.NextPageToken == nil || *body.Page.NextPageToken != "cursor-2" {
+		t.Fatalf("page response = %+v, want next token", body.Page)
+	}
+}
+
 func TestRouterGetOwnerInboxItem(t *testing.T) {
 	item := sampleOwnerInboxItem(interactionsv1.InteractionRequestStatus_INTERACTION_REQUEST_STATUS_WAITING)
 	client := &fakeInteractionHubClient{getResponse: &interactionsv1.OwnerInboxItemResponse{Item: item}}
@@ -63,6 +105,33 @@ func TestRouterGetOwnerInboxItem(t *testing.T) {
 	decodeJSON(t, rec, &body)
 	if len(body.Item.AllowedActions) != 3 {
 		t.Fatalf("allowed actions = %+v, want 3", body.Item.AllowedActions)
+	}
+}
+
+func TestRouterGetOwnerInboxItemReturnsSafeDetailDTO(t *testing.T) {
+	item := sampleOwnerInboxItemWithDiagnostics(interactionsv1.InteractionRequestStatus_INTERACTION_REQUEST_STATUS_ANSWERED)
+	client := &fakeInteractionHubClient{getResponse: &interactionsv1.OwnerInboxItemResponse{Item: item}}
+	router := newTestRouter(t, client)
+	req := authenticatedRequest(http.MethodGet, "/v1/owner-inbox/items/"+item.GetRequestId()+"?scope_type=project&scope_ref=project-1&include_diagnostics=true", "")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var body generated.OwnerInboxItemResponse
+	decodeJSON(t, rec, &body)
+	if body.Item.LatestCallback == nil || body.Item.LatestResponse == nil {
+		t.Fatalf("item = %+v, want callback and response summaries", body.Item)
+	}
+	if body.Item.LatestResponse.ResponseAction != generated.RequestChanges {
+		t.Fatalf("latest response action = %s, want request_changes", body.Item.LatestResponse.ResponseAction)
+	}
+	for _, forbidden := range []string{"raw_payload", "secret-token", "provider_payload"} {
+		if strings.Contains(rec.Body.String(), forbidden) {
+			t.Fatalf("response leaked %q marker: %s", forbidden, rec.Body.String())
+		}
 	}
 }
 
@@ -96,6 +165,35 @@ func TestRouterRespondOwnerInboxItem(t *testing.T) {
 	}
 }
 
+func TestRouterRespondOwnerInboxItemMapsSafeActions(t *testing.T) {
+	cases := map[string]interactionsv1.InteractionResponseAction{
+		"approve":         interactionsv1.InteractionResponseAction_INTERACTION_RESPONSE_ACTION_APPROVE,
+		"reject":          interactionsv1.InteractionResponseAction_INTERACTION_RESPONSE_ACTION_REJECT,
+		"request_changes": interactionsv1.InteractionResponseAction_INTERACTION_RESPONSE_ACTION_REQUEST_CHANGES,
+		"answer":          interactionsv1.InteractionResponseAction_INTERACTION_RESPONSE_ACTION_ANSWER,
+		"defer":           interactionsv1.InteractionResponseAction_INTERACTION_RESPONSE_ACTION_DEFER,
+	}
+	for action, want := range cases {
+		t.Run(action, func(t *testing.T) {
+			requestID := uuid.NewString()
+			client := &fakeInteractionHubClient{recordResponse: sampleInteractionResponseResponse(requestID, want)}
+			router := newTestRouter(t, client)
+			payload := `{"action":"` + action + `","expected_version":3,"command_id":"cmd-1","response_summary":"Безопасная сводка"}`
+			req := authenticatedRequest(http.MethodPost, "/v1/owner-inbox/items/"+requestID+"/response", payload)
+			rec := httptest.NewRecorder()
+
+			router.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+			}
+			if got := client.recordRequest.GetResponseAction(); got != want {
+				t.Fatalf("response action = %s, want %s", got, want)
+			}
+		})
+	}
+}
+
 func TestRouterRejectsUnknownAction(t *testing.T) {
 	client := &fakeInteractionHubClient{}
 	router := newTestRouter(t, client)
@@ -113,6 +211,20 @@ func TestRouterRejectsUnknownAction(t *testing.T) {
 	}
 }
 
+func TestRouterRejectsIncompleteAssigneeRef(t *testing.T) {
+	client := &fakeInteractionHubClient{}
+	router := newTestRouter(t, client)
+	req := authenticatedRequest(http.MethodGet, "/v1/owner-inbox/items?scope_type=project&scope_ref=project-1&assignee_ref=owner-1", "")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	assertErrorCode(t, rec, http.StatusBadRequest, generated.SafeErrorCodeInvalidRequest)
+	if client.listRequest != nil {
+		t.Fatalf("downstream was called for incomplete assignee ref")
+	}
+}
+
 func TestRouterOpenAPIValidationRejectsInvalidQueryBoolean(t *testing.T) {
 	client := &fakeInteractionHubClient{}
 	router := newTestRouter(t, client)
@@ -124,6 +236,52 @@ func TestRouterOpenAPIValidationRejectsInvalidQueryBoolean(t *testing.T) {
 	assertErrorCode(t, rec, http.StatusBadRequest, generated.SafeErrorCodeInvalidRequest)
 	if client.listRequest != nil {
 		t.Fatalf("downstream was called after OpenAPI validation failure")
+	}
+}
+
+func TestRouterRejectsMissingCommandIdAndIdempotencyKey(t *testing.T) {
+	client := &fakeInteractionHubClient{}
+	router := newTestRouter(t, client)
+	payload := `{"action":"approve","expected_version":3}`
+	req := authenticatedRequest(http.MethodPost, "/v1/owner-inbox/items/"+uuid.NewString()+"/response", payload)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	assertErrorCode(t, rec, http.StatusBadRequest, generated.SafeErrorCodeInvalidRequest)
+	if client.recordRequest != nil {
+		t.Fatalf("downstream was called after OpenAPI validation failure")
+	}
+}
+
+func TestRouterOpenAPIValidationRejectsWrongContentType(t *testing.T) {
+	client := &fakeInteractionHubClient{}
+	router := newTestRouter(t, client)
+	payload := `{"action":"approve","expected_version":3,"idempotency_key":"owner-response-1"}`
+	req := authenticatedRequest(http.MethodPost, "/v1/owner-inbox/items/"+uuid.NewString()+"/response", payload)
+	req.Header.Set("Content-Type", "text/plain")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	assertErrorCode(t, rec, http.StatusBadRequest, generated.SafeErrorCodeInvalidRequest)
+	if client.recordRequest != nil {
+		t.Fatalf("downstream was called after OpenAPI validation failure")
+	}
+}
+
+func TestRouterRejectsTrailingJSONBody(t *testing.T) {
+	client := &fakeInteractionHubClient{}
+	router := newTestRouter(t, client)
+	payload := `{"action":"approve","expected_version":3,"idempotency_key":"owner-response-1"}{}`
+	req := authenticatedRequest(http.MethodPost, "/v1/owner-inbox/items/"+uuid.NewString()+"/response", payload)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	assertErrorCode(t, rec, http.StatusBadRequest, generated.SafeErrorCodeInvalidRequest)
+	if client.recordRequest != nil {
+		t.Fatalf("downstream was called for trailing JSON body")
 	}
 }
 
@@ -165,6 +323,28 @@ func TestRouterMapsPermissionDenied(t *testing.T) {
 	router.ServeHTTP(rec, req)
 
 	assertErrorCode(t, rec, http.StatusForbidden, generated.SafeErrorCodePermissionDenied)
+}
+
+func TestRouterMapsNotFound(t *testing.T) {
+	client := &fakeInteractionHubClient{getErr: status.Error(codes.NotFound, "missing")}
+	router := newTestRouter(t, client)
+	req := authenticatedRequest(http.MethodGet, "/v1/owner-inbox/items/"+uuid.NewString()+"?scope_type=project&scope_ref=project-1", "")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	assertErrorCode(t, rec, http.StatusNotFound, generated.SafeErrorCodeNotFound)
+}
+
+func TestRouterMapsRateLimit(t *testing.T) {
+	client := &fakeInteractionHubClient{listErr: status.Error(codes.ResourceExhausted, "limited")}
+	router := newTestRouter(t, client)
+	req := authenticatedRequest(http.MethodGet, "/v1/owner-inbox/items?scope_type=project&scope_ref=project-1", "")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	assertErrorCode(t, rec, http.StatusTooManyRequests, generated.SafeErrorCodeRateLimited)
 }
 
 func TestRouterMapsDownstreamUnavailable(t *testing.T) {
@@ -295,6 +475,39 @@ func sampleOwnerInboxItem(status interactionsv1.InteractionRequestStatus) *inter
 			{ActionKey: "request_changes", IsTerminal: true},
 		},
 	}
+}
+
+func sampleOwnerInboxItemWithDiagnostics(status interactionsv1.InteractionRequestStatus) *interactionsv1.OwnerInboxItem {
+	item := sampleOwnerInboxItem(status)
+	now := time.Date(2026, 5, 28, 12, 2, 0, 0, time.UTC).Format(time.RFC3339Nano)
+	item.LatestCallback = &interactionsv1.OwnerInboxCallbackSummary{
+		CallbackRef:      "callback/ref-1",
+		CallbackId:       uuid.NewString(),
+		DeliveryId:       stringPtr(uuid.NewString()),
+		SignatureStatus:  interactionsv1.CallbackSignatureStatus_CALLBACK_SIGNATURE_STATUS_TRUSTED_INTERNAL,
+		ProcessingStatus: interactionsv1.CallbackProcessingStatus_CALLBACK_PROCESSING_STATUS_ACCEPTED,
+		ActorRef:         stringPtr("user/owner-1"),
+		Action:           stringPtr("request_changes"),
+		ReceivedAt:       now,
+		GatewayRef:       stringPtr("staff-gateway/request-1"),
+		CorrelationId:    stringPtr("corr-1"),
+	}
+	item.LatestResponse = &interactionsv1.OwnerInboxResponseSummary{
+		ResponseId:             uuid.NewString(),
+		ResponseAction:         interactionsv1.InteractionResponseAction_INTERACTION_RESPONSE_ACTION_REQUEST_CHANGES,
+		RespondedByActorRef:    "user/owner-1",
+		SourceKind:             interactionsv1.InteractionResponseSourceKind_INTERACTION_RESPONSE_SOURCE_KIND_WEB_CONSOLE,
+		SourceRef:              stringPtr("staff-gateway/request-1"),
+		OwnerDecisionRef:       stringPtr("decision/ref-1"),
+		CreatedAt:              now,
+		ResponseSummary:        stringPtr("Безопасная сводка без лишних данных"),
+		ResponseSummaryDigest:  stringPtr("sha256:digest"),
+		InteractionResponseRef: stringPtr("interaction-response/ref-1"),
+	}
+	item.AllowedActions = nil
+	item.ResolvedAt = stringPtr(now)
+	item.UpdatedAt = now
+	return item
 }
 
 func sampleInteractionResponseResponse(requestID string, action interactionsv1.InteractionResponseAction) *interactionsv1.InteractionResponseResponse {

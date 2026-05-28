@@ -5,8 +5,8 @@ title: kodex — дизайн домена runtime и fleet
 status: active
 owner_role: SA
 created_at: 2026-05-07
-updated_at: 2026-05-26
-related_issues: [655, 656, 657, 658, 659, 660, 661, 662, 782]
+updated_at: 2026-05-28
+related_issues: [655, 656, 657, 658, 659, 660, 661, 662, 782, 949]
 related_prs: []
 related_adrs: []
 approvals:
@@ -117,6 +117,8 @@ sequenceDiagram
 Тип `agent_run` выделен отдельно для agent Run: `agent-manager` может ставить такое задание через `CreateJob`, а исполнитель agent Run может забирать его через `ClaimRunnableJob` без обходной подмены на `build`, `deploy` или `housekeeping`. Runtime-manager хранит тип, ссылки, статус и диагностику, но не становится владельцем agent Run и не запускает этот тип через первый Kubernetes-исполнитель.
 
 Первый реальный исполнитель Kubernetes находится внутри `runtime-manager` и выключен по умолчанию. После включения он забирает только `health_check` job, получает `cluster_id` из сохранённого placement, читает через `fleet-manager.GetKubernetesCluster` только безопасную ссылку на kubeconfig/service account secret и создаёт ограниченный Kubernetes Job через `client-go`. Runtime не вызывает `kubectl`, не читает БД `fleet-manager`, не хранит kubeconfig и не пишет полный лог или Kubernetes events в PostgreSQL. Поля `namespace`, `service_account`, `image` и `labels` проходят строгую проверку; значения `env`, annotations, команды контейнера, значения секретов, prompt, transcript и provider payload не принимаются. Команда контейнера фиксирована для проверки здоровья.
+
+Kubernetes worker не считает остановку сервиса ошибкой platform job. Если процесс завершается во время ожидания Kubernetes Job, worker прекращает текущую попытку без `FailJob`; после истечения lease задание может быть забрано повторно, а детерминированное имя Kubernetes Job позволяет продолжить сверку уже созданного объекта без дубля. Терминальными ошибками считаются таймаут, условие `JobFailed`, удалённый/отменённый Kubernetes Job и невозможность получить статус Kubernetes Job. Повторные ошибки claim/report/complete выполняются с увеличивающейся задержкой. Короткий хвост лога остаётся ограниченным по размеру и проходит через штатную границу `ReportJobStepProgress`/`CompleteJob`/`FailJob`.
 
 ### Cleanup и retention
 
