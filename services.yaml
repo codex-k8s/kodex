@@ -148,6 +148,7 @@ spec:
         - services/staff/staff-gateway
         - specs/openapi/staff-gateway.v1.yaml
         - tools/codegen/openapi/staff-gateway.oapi-codegen.yaml
+        - proto/kodex/agents/v1
         - proto/kodex/interactions/v1
         - libs/go/grpcserver
         - libs/go/servicemain
@@ -925,12 +926,16 @@ spec:
       apiContracts:
         openapi: specs/openapi/staff-gateway.v1.yaml
         ownerInboxGrpcClient: proto/kodex/interactions/v1/interaction_hub.proto
+        runtimeStatusGrpcClient: proto/kodex/agents/v1/agent_manager.proto
       dependencies:
+        - agent-manager
         - interaction-hub
       implementation:
         businessState: none
-        firstSurface: owner-inbox-list-detail-respond
+        description: staff edge for owner inbox decisions and agent run runtime summary
+        firstSurface: owner-inbox-list-detail-respond-runtime-status
         downstreamCalls:
+          - agent-manager.GetAgentRunRuntimeStatus
           - interaction-hub.ListOwnerInboxItems
           - interaction-hub.GetOwnerInboxItem
           - interaction-hub.RecordInteractionResponse
