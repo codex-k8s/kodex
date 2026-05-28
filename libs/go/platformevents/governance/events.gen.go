@@ -18,6 +18,7 @@ const (
 	EventGateExpired                                   = "governance.gate.expired"
 	EventReleaseDecisionPackageBuilt                   = "governance.release_decision_package.built"
 	EventReleaseDecisionPackageRuntimeEvidenceRecorded = "governance.release_decision_package.runtime_evidence_recorded"
+	EventReleaseDecisionPackageAgentEvidenceRecorded   = "governance.release_decision_package.agent_evidence_recorded"
 	EventReleaseDecisionRequested                      = "governance.release_decision.requested"
 	EventReleaseDecisionResolved                       = "governance.release_decision.resolved"
 	EventReleaseSafetyStateChanged                     = "governance.release_safety_state.changed"
@@ -37,6 +38,8 @@ const (
 // Payload is the generated common payload envelope for domain events.
 type Payload struct {
 	ActorRef                   string `json:"actor_ref,omitempty"`
+	AgentAcceptanceRef         string `json:"agent_acceptance_ref,omitempty"`
+	AgentHumanGateRef          string `json:"agent_human_gate_ref,omitempty"`
 	AgentRunRef                string `json:"agent_run_ref,omitempty"`
 	AgentSessionRef            string `json:"agent_session_ref,omitempty"`
 	AgentStageRef              string `json:"agent_stage_ref,omitempty"`

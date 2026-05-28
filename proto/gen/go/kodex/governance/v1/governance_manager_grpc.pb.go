@@ -45,6 +45,7 @@ const (
 	GovernanceManagerService_ListGateRequests_FullMethodName             = "/kodex.governance.v1.GovernanceManagerService/ListGateRequests"
 	GovernanceManagerService_BuildReleaseDecisionPackage_FullMethodName  = "/kodex.governance.v1.GovernanceManagerService/BuildReleaseDecisionPackage"
 	GovernanceManagerService_RecordReleaseRuntimeEvidence_FullMethodName = "/kodex.governance.v1.GovernanceManagerService/RecordReleaseRuntimeEvidence"
+	GovernanceManagerService_RecordReleaseAgentEvidence_FullMethodName   = "/kodex.governance.v1.GovernanceManagerService/RecordReleaseAgentEvidence"
 	GovernanceManagerService_GetReleaseDecisionPackage_FullMethodName    = "/kodex.governance.v1.GovernanceManagerService/GetReleaseDecisionPackage"
 	GovernanceManagerService_ListReleaseDecisionPackages_FullMethodName  = "/kodex.governance.v1.GovernanceManagerService/ListReleaseDecisionPackages"
 	GovernanceManagerService_RequestReleaseDecision_FullMethodName       = "/kodex.governance.v1.GovernanceManagerService/RequestReleaseDecision"
@@ -118,6 +119,8 @@ type GovernanceManagerServiceClient interface {
 	BuildReleaseDecisionPackage(ctx context.Context, in *BuildReleaseDecisionPackageRequest, opts ...grpc.CallOption) (*ReleaseDecisionPackageResponse, error)
 	// RecordReleaseRuntimeEvidence appends safe runtime/deploy evidence refs to a release package.
 	RecordReleaseRuntimeEvidence(ctx context.Context, in *RecordReleaseRuntimeEvidenceRequest, opts ...grpc.CallOption) (*ReleaseDecisionPackageResponse, error)
+	// RecordReleaseAgentEvidence appends safe agent acceptance/review/runtime refs to a release package.
+	RecordReleaseAgentEvidence(ctx context.Context, in *RecordReleaseAgentEvidenceRequest, opts ...grpc.CallOption) (*ReleaseDecisionPackageResponse, error)
 	// GetReleaseDecisionPackage returns one release decision package.
 	GetReleaseDecisionPackage(ctx context.Context, in *GetReleaseDecisionPackageRequest, opts ...grpc.CallOption) (*ReleaseDecisionPackageResponse, error)
 	// ListReleaseDecisionPackages returns release packages by project, candidate or status.
@@ -410,6 +413,16 @@ func (c *governanceManagerServiceClient) RecordReleaseRuntimeEvidence(ctx contex
 	return out, nil
 }
 
+func (c *governanceManagerServiceClient) RecordReleaseAgentEvidence(ctx context.Context, in *RecordReleaseAgentEvidenceRequest, opts ...grpc.CallOption) (*ReleaseDecisionPackageResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReleaseDecisionPackageResponse)
+	err := c.cc.Invoke(ctx, GovernanceManagerService_RecordReleaseAgentEvidence_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *governanceManagerServiceClient) GetReleaseDecisionPackage(ctx context.Context, in *GetReleaseDecisionPackageRequest, opts ...grpc.CallOption) (*ReleaseDecisionPackageResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ReleaseDecisionPackageResponse)
@@ -580,6 +593,8 @@ type GovernanceManagerServiceServer interface {
 	BuildReleaseDecisionPackage(context.Context, *BuildReleaseDecisionPackageRequest) (*ReleaseDecisionPackageResponse, error)
 	// RecordReleaseRuntimeEvidence appends safe runtime/deploy evidence refs to a release package.
 	RecordReleaseRuntimeEvidence(context.Context, *RecordReleaseRuntimeEvidenceRequest) (*ReleaseDecisionPackageResponse, error)
+	// RecordReleaseAgentEvidence appends safe agent acceptance/review/runtime refs to a release package.
+	RecordReleaseAgentEvidence(context.Context, *RecordReleaseAgentEvidenceRequest) (*ReleaseDecisionPackageResponse, error)
 	// GetReleaseDecisionPackage returns one release decision package.
 	GetReleaseDecisionPackage(context.Context, *GetReleaseDecisionPackageRequest) (*ReleaseDecisionPackageResponse, error)
 	// ListReleaseDecisionPackages returns release packages by project, candidate or status.
@@ -689,6 +704,9 @@ func (UnimplementedGovernanceManagerServiceServer) BuildReleaseDecisionPackage(c
 }
 func (UnimplementedGovernanceManagerServiceServer) RecordReleaseRuntimeEvidence(context.Context, *RecordReleaseRuntimeEvidenceRequest) (*ReleaseDecisionPackageResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RecordReleaseRuntimeEvidence not implemented")
+}
+func (UnimplementedGovernanceManagerServiceServer) RecordReleaseAgentEvidence(context.Context, *RecordReleaseAgentEvidenceRequest) (*ReleaseDecisionPackageResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RecordReleaseAgentEvidence not implemented")
 }
 func (UnimplementedGovernanceManagerServiceServer) GetReleaseDecisionPackage(context.Context, *GetReleaseDecisionPackageRequest) (*ReleaseDecisionPackageResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetReleaseDecisionPackage not implemented")
@@ -1213,6 +1231,24 @@ func _GovernanceManagerService_RecordReleaseRuntimeEvidence_Handler(srv interfac
 	return interceptor(ctx, in, info, handler)
 }
 
+func _GovernanceManagerService_RecordReleaseAgentEvidence_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RecordReleaseAgentEvidenceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GovernanceManagerServiceServer).RecordReleaseAgentEvidence(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GovernanceManagerService_RecordReleaseAgentEvidence_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GovernanceManagerServiceServer).RecordReleaseAgentEvidence(ctx, req.(*RecordReleaseAgentEvidenceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _GovernanceManagerService_GetReleaseDecisionPackage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetReleaseDecisionPackageRequest)
 	if err := dec(in); err != nil {
@@ -1521,6 +1557,10 @@ var GovernanceManagerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RecordReleaseRuntimeEvidence",
 			Handler:    _GovernanceManagerService_RecordReleaseRuntimeEvidence_Handler,
+		},
+		{
+			MethodName: "RecordReleaseAgentEvidence",
+			Handler:    _GovernanceManagerService_RecordReleaseAgentEvidence_Handler,
 		},
 		{
 			MethodName: "GetReleaseDecisionPackage",

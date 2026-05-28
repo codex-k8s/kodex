@@ -40,6 +40,7 @@ components:
         - $ref: '#/components/schemas/GateExpiredEvent'
         - $ref: '#/components/schemas/ReleaseDecisionPackageBuiltEvent'
         - $ref: '#/components/schemas/ReleaseDecisionPackageRuntimeEvidenceRecordedEvent'
+        - $ref: '#/components/schemas/ReleaseDecisionPackageAgentEvidenceRecordedEvent'
         - $ref: '#/components/schemas/ReleaseDecisionRequestedEvent'
         - $ref: '#/components/schemas/ReleaseDecisionResolvedEvent'
         - $ref: '#/components/schemas/ReleaseSafetyStateChangedEvent'
@@ -176,6 +177,14 @@ components:
       type: object
       properties: {event_type: {type: string, const: governance.release_decision_package.runtime_evidence_recorded}, aggregate_type: {type: string, const: release_decision_package}, payload: {$ref: '#/components/schemas/ReleaseDecisionPackageRuntimeEvidenceRecordedPayload'}}
       required: [event_type, aggregate_type, payload]
+    ReleaseDecisionPackageAgentEvidenceRecordedEvent:
+      allOf:
+        - $ref: '#/components/schemas/GovernanceEventEnvelopeBase'
+        - $ref: '#/components/schemas/ReleaseDecisionPackageAgentEvidenceRecordedEventKind'
+    ReleaseDecisionPackageAgentEvidenceRecordedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: governance.release_decision_package.agent_evidence_recorded}, aggregate_type: {type: string, const: release_decision_package}, payload: {$ref: '#/components/schemas/ReleaseDecisionPackageAgentEvidenceRecordedPayload'}}
+      required: [event_type, aggregate_type, payload]
 
     ReleaseDecisionRequestedEvent:
       allOf:
@@ -219,6 +228,7 @@ components:
         - governance.gate.expired
         - governance.release_decision_package.built
         - governance.release_decision_package.runtime_evidence_recorded
+        - governance.release_decision_package.agent_evidence_recorded
         - governance.release_decision.requested
         - governance.release_decision.resolved
         - governance.release_safety_state.changed
@@ -287,6 +297,10 @@ components:
         agent_run_ref:
           type: string
         agent_stage_ref:
+          type: string
+        agent_acceptance_ref:
+          type: string
+        agent_human_gate_ref:
           type: string
         runtime_job_ref:
           type: string
@@ -381,6 +395,11 @@ components:
         - type: object
           required: [release_decision_package_id, release_candidate_ref, project_ref, status, version]
     ReleaseDecisionPackageRuntimeEvidenceRecordedPayload:
+      allOf:
+        - $ref: '#/components/schemas/GovernanceEventPayload'
+        - type: object
+          required: [release_decision_package_id, release_candidate_ref, project_ref, status, reason_code, version]
+    ReleaseDecisionPackageAgentEvidenceRecordedPayload:
       allOf:
         - $ref: '#/components/schemas/GovernanceEventPayload'
         - type: object

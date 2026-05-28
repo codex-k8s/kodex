@@ -169,6 +169,14 @@ type RecordReleaseRuntimeEvidenceInput struct {
 	Meta                     CommandMeta
 }
 
+type RecordReleaseAgentEvidenceInput struct {
+	ReleaseDecisionPackageID uuid.UUID
+	AgentContext             []byte
+	EvidenceRefs             []value.EvidenceRef
+	IntegrationRefs          []value.ReleaseIntegrationRef
+	Meta                     CommandMeta
+}
+
 type RequestReleaseDecisionInput struct {
 	ReleaseDecisionPackageID uuid.UUID
 	RequestGateIfRequired    bool
