@@ -101,6 +101,7 @@ type StartedJob struct {
 	client       kubernetes.Interface
 	config       Config
 	selector     labels.Set
+	collectLogs  bool
 }
 
 // ExecutionResult contains a bounded execution result for runtime-manager lifecycle commands.
@@ -186,6 +187,7 @@ func (e *Executor) Start(ctx context.Context, job entity.Job) (StartedJob, error
 		client:       client,
 		config:       e.config,
 		selector:     selector,
+		collectLogs:  spec.CollectPodLogs,
 	}, nil
 }
 
@@ -305,18 +307,21 @@ func (e *Executor) clientForCluster(ctx context.Context, access fleetclient.Clus
 }
 
 type executionSpec struct {
-	Namespace        string
-	ServiceAccount   string
-	Image            string
-	ImagePullPolicy  corev1.PullPolicy
-	Labels           map[string]string
-	ContainerName    string
-	Command          []string
-	Args             []string
-	Env              []corev1.EnvVar
-	Volumes          []corev1.Volume
-	VolumeMounts     []corev1.VolumeMount
-	ImageArtifactRef string
+	Namespace                string
+	ServiceAccount           string
+	Image                    string
+	ImagePullPolicy          corev1.PullPolicy
+	Labels                   map[string]string
+	ContainerName            string
+	Command                  []string
+	Args                     []string
+	Env                      []corev1.EnvVar
+	Volumes                  []corev1.Volume
+	VolumeMounts             []corev1.VolumeMount
+	PodSecurityContext       *corev1.PodSecurityContext
+	ContainerSecurityContext *corev1.SecurityContext
+	ImageArtifactRef         string
+	CollectPodLogs           bool
 }
 
 type restrictedJobInput struct {
@@ -351,6 +356,7 @@ func (e *Executor) healthCheckExecutionSpec(payload []byte) (executionSpec, erro
 		ContainerName:   healthCheckContainerName,
 		Command:         []string{"/bin/sh", "-ec"},
 		Args:            []string{"echo kodex runtime health check"},
+		CollectPodLogs:  true,
 	}
 	if err := validateExecutionSpec(spec); err != nil {
 		return executionSpec{}, err
@@ -386,15 +392,18 @@ func (e *Executor) agentRunExecutionSpec(job entity.Job) (executionSpec, error) 
 		return executionSpec{}, err
 	}
 	result := executionSpec{
-		Namespace:        pvc.Namespace,
-		ServiceAccount:   e.config.DefaultServiceAccount,
-		Image:            image,
-		ImagePullPolicy:  corev1.PullPolicy(e.config.ImagePullPolicy),
-		ContainerName:    agentRunContainerName,
-		Command:          []string{agentRunCommand},
-		Args:             []string{agentRunCommandKind},
-		Env:              env,
-		ImageArtifactRef: spec.RunnerImageRef,
+		Namespace:                pvc.Namespace,
+		ServiceAccount:           e.config.DefaultServiceAccount,
+		Image:                    image,
+		ImagePullPolicy:          corev1.PullPolicy(e.config.ImagePullPolicy),
+		ContainerName:            agentRunContainerName,
+		Command:                  []string{agentRunCommand},
+		Args:                     []string{agentRunCommandKind},
+		Env:                      env,
+		ImageArtifactRef:         spec.RunnerImageRef,
+		PodSecurityContext:       restrictedAgentRunPodSecurityContext(),
+		ContainerSecurityContext: restrictedAgentRunContainerSecurityContext(),
+		CollectPodLogs:           false,
 		Volumes: []corev1.Volume{{
 			Name: workspaceVolumeName,
 			VolumeSource: corev1.VolumeSource{
@@ -593,6 +602,7 @@ func buildJob(job entity.Job, spec executionSpec, cfg Config, name string, selec
 					RestartPolicy:                corev1.RestartPolicyNever,
 					AutomountServiceAccountToken: boolPtr(false),
 					ServiceAccountName:           spec.ServiceAccount,
+					SecurityContext:              spec.PodSecurityContext.DeepCopy(),
 					Volumes:                      append([]corev1.Volume(nil), spec.Volumes...),
 					Containers: []corev1.Container{{
 						Name:            spec.ContainerName,
@@ -602,9 +612,33 @@ func buildJob(job entity.Job, spec executionSpec, cfg Config, name string, selec
 						Args:            append([]string(nil), spec.Args...),
 						Env:             append([]corev1.EnvVar(nil), spec.Env...),
 						VolumeMounts:    append([]corev1.VolumeMount(nil), spec.VolumeMounts...),
+						SecurityContext: spec.ContainerSecurityContext.DeepCopy(),
 					}},
 				},
 			},
+		},
+	}
+}
+
+func restrictedAgentRunPodSecurityContext() *corev1.PodSecurityContext {
+	return &corev1.PodSecurityContext{
+		RunAsNonRoot: boolPtr(true),
+		SeccompProfile: &corev1.SeccompProfile{
+			Type: corev1.SeccompProfileTypeRuntimeDefault,
+		},
+	}
+}
+
+func restrictedAgentRunContainerSecurityContext() *corev1.SecurityContext {
+	return &corev1.SecurityContext{
+		AllowPrivilegeEscalation: boolPtr(false),
+		Capabilities: &corev1.Capabilities{
+			Drop: []corev1.Capability{corev1.Capability("ALL")},
+		},
+		Privileged:   boolPtr(false),
+		RunAsNonRoot: boolPtr(true),
+		SeccompProfile: &corev1.SeccompProfile{
+			Type: corev1.SeccompProfileTypeRuntimeDefault,
 		},
 	}
 }
@@ -647,6 +681,9 @@ func isManagedRuntimeJob(job *batchv1.Job, runtimeJob entity.Job) bool {
 }
 
 func (e *Executor) shortLogTail(ctx context.Context, started StartedJob) string {
+	if !started.collectLogs {
+		return ""
+	}
 	pods, err := started.client.CoreV1().Pods(started.Namespace).List(ctx, metav1.ListOptions{LabelSelector: started.selector.String()})
 	if err != nil || len(pods.Items) == 0 {
 		return ""

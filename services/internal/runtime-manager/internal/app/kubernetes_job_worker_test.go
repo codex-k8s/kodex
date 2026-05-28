@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -84,6 +85,57 @@ func TestKubernetesJobWorkerReportsAgentRunStepKey(t *testing.T) {
 	}
 	if service.completeCalls != 1 || service.failCalls != 0 {
 		t.Fatalf("complete/fail calls = %d/%d, want 1/0", service.completeCalls, service.failCalls)
+	}
+}
+
+func TestKubernetesJobWorkerDropsAgentRunLogTailDiagnostics(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name   string
+		result runtimekubernetes.ExecutionResult
+	}{
+		{
+			name:   "success",
+			result: runtimekubernetes.ExecutionResult{Succeeded: true, ShortLogTail: "prompt body secret-value provider payload"},
+		},
+		{
+			name:   "failure",
+			result: runtimekubernetes.ExecutionResult{ErrorCode: "kubernetes_job_failed", ErrorMessage: "Kubernetes Job failed", ShortLogTail: "prompt body secret-value provider payload"},
+		},
+	} {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			job := entity.Job{
+				Base:    entity.Base{ID: uuid.MustParse("00000000-0000-0000-0000-000000000106"), Version: 2},
+				JobType: enum.JobTypeAgentRun,
+				Status:  enum.JobStatusClaimed,
+			}
+			service := &fakeRuntimeJobLifecycle{claim: runtimeservice.ClaimRunnableJobResult{Job: job, LeaseToken: "lease-token"}}
+			executor := fakeKubernetesExecutor{
+				started: runtimekubernetes.StartedJob{
+					RuntimeJobID: job.ID,
+					Namespace:    "runtime-jobs",
+					JobName:      "kodex-rt-test",
+					ExternalRef:  "kubernetes://cluster/namespaces/runtime-jobs/jobs/kodex-rt-test",
+				},
+				result: tc.result,
+			}
+			worker := testKubernetesJobWorker(service, executor)
+
+			worker.claimAndExecute(context.Background())
+
+			for _, tail := range service.reportShortLogTails {
+				if tail != "" || strings.Contains(tail, "secret-value") {
+					t.Fatalf("reported short log tail = %q, want empty safe diagnostics", tail)
+				}
+			}
+			if service.completeShortLogTail != "" || service.failShortLogTail != "" {
+				t.Fatalf("terminal short log tails = complete %q fail %q, want empty safe diagnostics", service.completeShortLogTail, service.failShortLogTail)
+			}
+		})
 	}
 }
 
@@ -215,15 +267,18 @@ func testKubernetesJobWorker(service *fakeRuntimeJobLifecycle, executor fakeKube
 }
 
 type fakeRuntimeJobLifecycle struct {
-	claim             runtimeservice.ClaimRunnableJobResult
-	claimErr          error
-	claimCalls        int
-	lastClaimJobTypes []enum.JobType
-	reportStatuses    []enum.JobStepStatus
-	reportStepKeys    []string
-	completeCalls     int
-	failCalls         int
-	lastFailCode      string
+	claim                runtimeservice.ClaimRunnableJobResult
+	claimErr             error
+	claimCalls           int
+	lastClaimJobTypes    []enum.JobType
+	reportStatuses       []enum.JobStepStatus
+	reportStepKeys       []string
+	reportShortLogTails  []string
+	completeCalls        int
+	failCalls            int
+	lastFailCode         string
+	completeShortLogTail string
+	failShortLogTail     string
 }
 
 func (s *fakeRuntimeJobLifecycle) ClaimRunnableJob(_ context.Context, input runtimeservice.ClaimRunnableJobInput) (runtimeservice.ClaimRunnableJobResult, error) {
@@ -235,6 +290,7 @@ func (s *fakeRuntimeJobLifecycle) ClaimRunnableJob(_ context.Context, input runt
 func (s *fakeRuntimeJobLifecycle) ReportJobStepProgress(_ context.Context, input runtimeservice.ReportJobStepProgressInput) (entity.Job, error) {
 	s.reportStatuses = append(s.reportStatuses, input.Status)
 	s.reportStepKeys = append(s.reportStepKeys, input.StepKey)
+	s.reportShortLogTails = append(s.reportShortLogTails, input.ShortLogTail)
 	job := s.claim.Job
 	if len(s.reportStatuses) > 0 {
 		job.Version += int64(len(s.reportStatuses))
@@ -242,8 +298,9 @@ func (s *fakeRuntimeJobLifecycle) ReportJobStepProgress(_ context.Context, input
 	return job, nil
 }
 
-func (s *fakeRuntimeJobLifecycle) CompleteJob(context.Context, runtimeservice.CompleteJobInput) (entity.Job, error) {
+func (s *fakeRuntimeJobLifecycle) CompleteJob(_ context.Context, input runtimeservice.CompleteJobInput) (entity.Job, error) {
 	s.completeCalls++
+	s.completeShortLogTail = input.ShortLogTail
 	job := s.claim.Job
 	job.Status = enum.JobStatusSucceeded
 	return job, nil
@@ -252,6 +309,7 @@ func (s *fakeRuntimeJobLifecycle) CompleteJob(context.Context, runtimeservice.Co
 func (s *fakeRuntimeJobLifecycle) FailJob(_ context.Context, input runtimeservice.FailJobInput) (entity.Job, error) {
 	s.failCalls++
 	s.lastFailCode = input.ErrorCode
+	s.failShortLogTail = input.ShortLogTail
 	job := s.claim.Job
 	job.Status = enum.JobStatusFailed
 	return job, nil

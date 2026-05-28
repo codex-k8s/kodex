@@ -143,7 +143,8 @@ func (w kubernetesJobWorker) executeClaim(ctx context.Context, claim runtimeserv
 		return kubernetesWorkerProcessed
 	}
 	if result.Succeeded {
-		completed, err := w.reportStep(ctx, reported, claim.LeaseToken, enum.JobStepStatusSucceeded, result.ShortLogTail, started.ExternalRef, "", "", nil)
+		shortLogTail := safeExecutionShortLogTail(reported.JobType, result.ShortLogTail)
+		completed, err := w.reportStep(ctx, reported, claim.LeaseToken, enum.JobStepStatusSucceeded, shortLogTail, started.ExternalRef, "", "", nil)
 		if err != nil {
 			w.log().Warn("runtime-manager Kubernetes job completion step report failed", slog.String("job_id", reported.ID.String()), slog.String("error_code", "report_failed"))
 			return workerResultForContext(ctx)
@@ -151,7 +152,7 @@ func (w kubernetesJobWorker) executeClaim(ctx context.Context, claim runtimeserv
 		if _, err := w.service.CompleteJob(ctx, runtimeservice.CompleteJobInput{
 			JobID:        completed.ID,
 			LeaseToken:   claim.LeaseToken,
-			ShortLogTail: result.ShortLogTail,
+			ShortLogTail: shortLogTail,
 			Meta:         w.commandMeta("complete", &completed.Version),
 		}); err != nil {
 			w.log().Warn("runtime-manager Kubernetes job complete failed", slog.String("job_id", completed.ID.String()), slog.String("error_code", "complete_failed"))
@@ -159,13 +160,14 @@ func (w kubernetesJobWorker) executeClaim(ctx context.Context, claim runtimeserv
 		}
 		return kubernetesWorkerProcessed
 	}
-	failed, err := w.reportStep(ctx, reported, claim.LeaseToken, enum.JobStepStatusFailed, result.ShortLogTail, started.ExternalRef, result.ErrorCode, result.ErrorMessage, nil)
+	shortLogTail := safeExecutionShortLogTail(reported.JobType, result.ShortLogTail)
+	failed, err := w.reportStep(ctx, reported, claim.LeaseToken, enum.JobStepStatusFailed, shortLogTail, started.ExternalRef, result.ErrorCode, result.ErrorMessage, nil)
 	if err != nil {
 		w.log().Warn("runtime-manager Kubernetes job failure step report failed", slog.String("job_id", reported.ID.String()), slog.String("error_code", "report_failed"))
-		w.failClaimedJob(ctx, reported, claim.LeaseToken, result.ShortLogTail, result.ErrorCode, result.ErrorMessage)
+		w.failClaimedJob(ctx, reported, claim.LeaseToken, shortLogTail, result.ErrorCode, result.ErrorMessage)
 		return workerResultForContext(ctx)
 	}
-	w.failClaimedJob(ctx, failed, claim.LeaseToken, result.ShortLogTail, result.ErrorCode, result.ErrorMessage)
+	w.failClaimedJob(ctx, failed, claim.LeaseToken, shortLogTail, result.ErrorCode, result.ErrorMessage)
 	return kubernetesWorkerProcessed
 }
 
@@ -230,6 +232,13 @@ func kubernetesStepKey(jobType enum.JobType) string {
 		return kubernetesAgentRunStepKey
 	}
 	return kubernetesHealthCheckStepKey
+}
+
+func safeExecutionShortLogTail(jobType enum.JobType, shortLogTail string) string {
+	if jobType == enum.JobTypeAgentRun {
+		return ""
+	}
+	return shortLogTail
 }
 
 func (w kubernetesJobWorker) commandMeta(phase string, expectedVersion *int64) value.CommandMeta {

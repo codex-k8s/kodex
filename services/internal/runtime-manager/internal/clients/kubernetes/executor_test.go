@@ -17,8 +17,10 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	runtimeapi "k8s.io/apimachinery/pkg/runtime"
 	clientkubernetes "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
+	clienttesting "k8s.io/client-go/testing"
 )
 
 func TestExecutorStartCreatesRestrictedHealthCheckJob(t *testing.T) {
@@ -91,6 +93,30 @@ func TestExecutorStartCreatesRestrictedAgentRunJob(t *testing.T) {
 	}
 	if len(podSpec.Volumes) != 1 || podSpec.Volumes[0].PersistentVolumeClaim == nil || podSpec.Volumes[0].PersistentVolumeClaim.ClaimName != "runtime-workspace-549" {
 		t.Fatalf("volumes = %+v, want workspace PVC ref", podSpec.Volumes)
+	}
+	if podSpec.SecurityContext == nil || podSpec.SecurityContext.RunAsNonRoot == nil || !*podSpec.SecurityContext.RunAsNonRoot {
+		t.Fatalf("pod security context = %+v, want runAsNonRoot", podSpec.SecurityContext)
+	}
+	if podSpec.SecurityContext.SeccompProfile == nil || podSpec.SecurityContext.SeccompProfile.Type != corev1.SeccompProfileTypeRuntimeDefault {
+		t.Fatalf("pod seccomp profile = %+v, want RuntimeDefault", podSpec.SecurityContext.SeccompProfile)
+	}
+	if container.SecurityContext == nil {
+		t.Fatalf("container security context is nil, want restricted context")
+	}
+	if container.SecurityContext.AllowPrivilegeEscalation == nil || *container.SecurityContext.AllowPrivilegeEscalation {
+		t.Fatalf("allowPrivilegeEscalation = %+v, want false", container.SecurityContext.AllowPrivilegeEscalation)
+	}
+	if container.SecurityContext.Privileged == nil || *container.SecurityContext.Privileged {
+		t.Fatalf("privileged = %+v, want false", container.SecurityContext.Privileged)
+	}
+	if container.SecurityContext.RunAsNonRoot == nil || !*container.SecurityContext.RunAsNonRoot {
+		t.Fatalf("container runAsNonRoot = %+v, want true", container.SecurityContext.RunAsNonRoot)
+	}
+	if container.SecurityContext.SeccompProfile == nil || container.SecurityContext.SeccompProfile.Type != corev1.SeccompProfileTypeRuntimeDefault {
+		t.Fatalf("container seccomp profile = %+v, want RuntimeDefault", container.SecurityContext.SeccompProfile)
+	}
+	if container.SecurityContext.Capabilities == nil || !hasCapability(container.SecurityContext.Capabilities.Drop, "ALL") {
+		t.Fatalf("container dropped capabilities = %+v, want ALL", container.SecurityContext.Capabilities)
 	}
 	env := envMap(container.Env)
 	if env["KODEX_AGENT_RUN_ID"] == "" || env["KODEX_AGENT_RUN_CONTEXT_PATH"] != agentRunContextPath {
@@ -267,6 +293,35 @@ func TestExecutorWaitReportsFailedJob(t *testing.T) {
 	}
 }
 
+func TestExecutorWaitDoesNotCollectAgentRunPodLogs(t *testing.T) {
+	t.Parallel()
+
+	client := fake.NewClientset()
+	client.Fake.PrependReactor("list", "pods", func(clienttesting.Action) (bool, runtimeapi.Object, error) {
+		t.Fatalf("agent_run diagnostics must not list pods for raw log collection")
+		return true, &corev1.PodList{}, nil
+	})
+	executor := newTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
+	started, err := executor.Start(context.Background(), testAgentRunJob())
+	if err != nil {
+		t.Fatalf("Start(agent_run): %v", err)
+	}
+	created, err := client.BatchV1().Jobs(started.Namespace).Get(context.Background(), started.JobName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("get created Job: %v", err)
+	}
+	created.Status.Conditions = []batchv1.JobCondition{{Type: batchv1.JobComplete, Status: corev1.ConditionTrue}}
+	if _, err := client.BatchV1().Jobs(started.Namespace).UpdateStatus(context.Background(), created, metav1.UpdateOptions{}); err != nil {
+		t.Fatalf("update job status: %v", err)
+	}
+
+	result := executor.Wait(context.Background(), started)
+
+	if !result.Succeeded || result.ShortLogTail != "" {
+		t.Fatalf("Wait(agent_run) = %+v, want success without raw log tail", result)
+	}
+}
+
 func TestExecutorWaitReportsDeletedJobAsCancelled(t *testing.T) {
 	t.Parallel()
 
@@ -373,6 +428,15 @@ func envMap(values []corev1.EnvVar) map[string]string {
 		result[item.Name] = item.Value
 	}
 	return result
+}
+
+func hasCapability(values []corev1.Capability, want corev1.Capability) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
 
 func testClusterAccess() fleetclient.ClusterAccess {
