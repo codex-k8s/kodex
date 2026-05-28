@@ -15,6 +15,10 @@
 - экраны контура серверов и кластеров;
 - экраны биллинга и настроек автоматизации.
 
+## Gateway-поверхность
+
+Первый backend-контур для консоли сотрудников — `staff-gateway`. Он отдаёт `web-console` OpenAPI для входящих решений владельца: список, карточку одного решения и отправку ответа `approve`, `reject`, `request_changes` или `answer`, если это разрешено текущим request. Gateway остаётся тонким: он принимает actor/request context, вызывает `interaction-hub` по gRPC и возвращает только safe refs, статусы, краткие summaries, timestamps и version. Собственная модель решений, прямой доступ к БД доменных сервисов, управление `Run`/session/governance decision/provider write и междоменная агрегация в этот контур не входят.
+
 ## Карта Issue
 
 - Доменная карта: `docs/delivery/issue-map/domains/console-and-operations-ux.md`.

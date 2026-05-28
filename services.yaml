@@ -143,6 +143,16 @@ spec:
         - libs/go/servicemain
         - libs/go/serviceprocess
         - libs/go/secretresolver
+    staff-gateway:
+      value: "0.1.0"
+      bumpOn:
+        - services/staff/staff-gateway
+        - specs/openapi/staff-gateway.v1.yaml
+        - tools/codegen/openapi/staff-gateway.oapi-codegen.yaml
+        - proto/kodex/interactions/v1
+        - libs/go/grpcserver
+        - libs/go/servicemain
+        - libs/go/serviceprocess
     runtime-manager:
       value: "0.1.0"
       bumpOn:
@@ -912,6 +922,30 @@ spec:
       migrationsImageEnv: KODEX_AGENT_MANAGER_MIGRATIONS_IMAGE
       purpose: agent-flow-run-session-activity-acceptance-follow-up-human-gate
   serviceScaffolds:
+    - name: staff-gateway
+      status: scaffold
+      zone: staff
+      path: services/staff/staff-gateway
+      ownerDomain: console-and-operations-ux
+      apiContracts:
+        openapi: specs/openapi/staff-gateway.v1.yaml
+        ownerInboxGrpcClient: proto/kodex/interactions/v1/interaction_hub.proto
+      dependencies:
+        - interaction-hub
+      implementation:
+        businessState: none
+        firstSurface: owner-inbox-list-detail-respond
+        downstreamCalls:
+          - interaction-hub.ListOwnerInboxItems
+          - interaction-hub.GetOwnerInboxItem
+          - interaction-hub.RecordInteractionResponse
+        safePayloadsOnly: true
+      deploy:
+        health:
+          livez: /health/livez
+          readyz: /health/readyz
+          metrics: /metrics
+        openapi: /openapi/staff-gateway.v1.yaml
     - name: platform-mcp-server
       status: scaffold
       zone: internal

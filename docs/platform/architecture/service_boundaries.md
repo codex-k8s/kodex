@@ -104,6 +104,8 @@ Gateway-сервисы, `web-console`, `platform-mcp-server` и `codex-hook-ingr
 
 Подробный пакет границы: `docs/domains/integration-gateway/**`.
 
+Первый активный контур `staff-gateway` — OpenAPI для входящих решений владельца. Он отдаёт список `owner inbox`, карточку одного решения и принимает безопасный ответ через gRPC-вызовы `interaction-hub`: `ListOwnerInboxItems`, `GetOwnerInboxItem` и `RecordInteractionResponse`. Gateway передаёт actor/request context, маппит ошибки в HTTP-статусы и не хранит собственную модель решений, delivery lifecycle, `Run`, session, governance decision, provider write или cross-domain inbox. В ответах остаются только safe refs, статусы, краткие summaries, timestamps и version; raw provider payload, секреты, полный prompt/transcript, callback payload и большие логи не возвращаются.
+
 ### `platform-mcp-server`
 
 Отвечает за MCP-поверхность инструментов, проверки политик, аудит MCP-вызовов и маршрутизацию к сервисам-владельцам. Не хранит каноническое состояние агентного запуска, задания, проекта, пакета или артефакта провайдера.
