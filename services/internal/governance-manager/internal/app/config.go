@@ -71,6 +71,18 @@ type Config struct {
 	ProviderReviewSignalConsumerFailureMessageLimit int           `env:"KODEX_GOVERNANCE_MANAGER_PROVIDER_REVIEW_SIGNAL_CONSUMER_FAILURE_MESSAGE_LIMIT" envDefault:"512"`
 	ProviderReviewSignalConsumerConcurrencyLimit    int           `env:"KODEX_GOVERNANCE_MANAGER_PROVIDER_REVIEW_SIGNAL_CONSUMER_CONCURRENCY_LIMIT" envDefault:"2"`
 	ProviderReviewSignalConsumerMaxAttempts         int           `env:"KODEX_GOVERNANCE_MANAGER_PROVIDER_REVIEW_SIGNAL_CONSUMER_MAX_ATTEMPTS" envDefault:"5"`
+	InteractionGateDecisionConsumerEnabled          bool          `env:"KODEX_GOVERNANCE_MANAGER_INTERACTION_GATE_DECISION_CONSUMER_ENABLED" envDefault:"false"`
+	InteractionGateDecisionConsumerName             string        `env:"KODEX_GOVERNANCE_MANAGER_INTERACTION_GATE_DECISION_CONSUMER_NAME" envDefault:"governance-manager.interaction-gate-decision"`
+	InteractionGateDecisionConsumerLeaseOwner       string        `env:"KODEX_GOVERNANCE_MANAGER_INTERACTION_GATE_DECISION_CONSUMER_LEASE_OWNER"`
+	InteractionGateDecisionConsumerBatchSize        int           `env:"KODEX_GOVERNANCE_MANAGER_INTERACTION_GATE_DECISION_CONSUMER_BATCH_SIZE" envDefault:"50"`
+	InteractionGateDecisionConsumerPollInterval     time.Duration `env:"KODEX_GOVERNANCE_MANAGER_INTERACTION_GATE_DECISION_CONSUMER_POLL_INTERVAL" envDefault:"1s"`
+	InteractionGateDecisionConsumerLeaseTTL         time.Duration `env:"KODEX_GOVERNANCE_MANAGER_INTERACTION_GATE_DECISION_CONSUMER_LEASE_TTL" envDefault:"30s"`
+	InteractionGateDecisionConsumerHandlerTimeout   time.Duration `env:"KODEX_GOVERNANCE_MANAGER_INTERACTION_GATE_DECISION_CONSUMER_HANDLER_TIMEOUT" envDefault:"10s"`
+	InteractionGateDecisionConsumerRetryInitial     time.Duration `env:"KODEX_GOVERNANCE_MANAGER_INTERACTION_GATE_DECISION_CONSUMER_RETRY_INITIAL_DELAY" envDefault:"1s"`
+	InteractionGateDecisionConsumerRetryMax         time.Duration `env:"KODEX_GOVERNANCE_MANAGER_INTERACTION_GATE_DECISION_CONSUMER_RETRY_MAX_DELAY" envDefault:"1m"`
+	InteractionGateDecisionConsumerFailureLimit     int           `env:"KODEX_GOVERNANCE_MANAGER_INTERACTION_GATE_DECISION_CONSUMER_FAILURE_MESSAGE_LIMIT" envDefault:"512"`
+	InteractionGateDecisionConsumerConcurrencyLimit int           `env:"KODEX_GOVERNANCE_MANAGER_INTERACTION_GATE_DECISION_CONSUMER_CONCURRENCY_LIMIT" envDefault:"2"`
+	InteractionGateDecisionConsumerMaxAttempts      int           `env:"KODEX_GOVERNANCE_MANAGER_INTERACTION_GATE_DECISION_CONSUMER_MAX_ATTEMPTS" envDefault:"5"`
 }
 
 // LoadConfig reads process configuration from environment variables.
@@ -132,6 +144,15 @@ func (cfg Config) Validate() error {
 		{name: "KODEX_GOVERNANCE_MANAGER_PROVIDER_REVIEW_SIGNAL_CONSUMER_FAILURE_MESSAGE_LIMIT", valid: cfg.ProviderReviewSignalConsumerFailureMessageLimit > 0},
 		{name: "KODEX_GOVERNANCE_MANAGER_PROVIDER_REVIEW_SIGNAL_CONSUMER_CONCURRENCY_LIMIT", valid: cfg.ProviderReviewSignalConsumerConcurrencyLimit > 0},
 		{name: "KODEX_GOVERNANCE_MANAGER_PROVIDER_REVIEW_SIGNAL_CONSUMER_MAX_ATTEMPTS", valid: cfg.ProviderReviewSignalConsumerMaxAttempts > 0},
+		{name: "KODEX_GOVERNANCE_MANAGER_INTERACTION_GATE_DECISION_CONSUMER_BATCH_SIZE", valid: cfg.InteractionGateDecisionConsumerBatchSize > 0},
+		{name: "KODEX_GOVERNANCE_MANAGER_INTERACTION_GATE_DECISION_CONSUMER_POLL_INTERVAL", valid: cfg.InteractionGateDecisionConsumerPollInterval > 0},
+		{name: "KODEX_GOVERNANCE_MANAGER_INTERACTION_GATE_DECISION_CONSUMER_LEASE_TTL", valid: cfg.InteractionGateDecisionConsumerLeaseTTL > 0},
+		{name: "KODEX_GOVERNANCE_MANAGER_INTERACTION_GATE_DECISION_CONSUMER_HANDLER_TIMEOUT", valid: cfg.InteractionGateDecisionConsumerHandlerTimeout > 0},
+		{name: "KODEX_GOVERNANCE_MANAGER_INTERACTION_GATE_DECISION_CONSUMER_RETRY_INITIAL_DELAY", valid: cfg.InteractionGateDecisionConsumerRetryInitial > 0},
+		{name: "KODEX_GOVERNANCE_MANAGER_INTERACTION_GATE_DECISION_CONSUMER_RETRY_MAX_DELAY", valid: cfg.InteractionGateDecisionConsumerRetryMax >= cfg.InteractionGateDecisionConsumerRetryInitial},
+		{name: "KODEX_GOVERNANCE_MANAGER_INTERACTION_GATE_DECISION_CONSUMER_FAILURE_MESSAGE_LIMIT", valid: cfg.InteractionGateDecisionConsumerFailureLimit > 0},
+		{name: "KODEX_GOVERNANCE_MANAGER_INTERACTION_GATE_DECISION_CONSUMER_CONCURRENCY_LIMIT", valid: cfg.InteractionGateDecisionConsumerConcurrencyLimit > 0},
+		{name: "KODEX_GOVERNANCE_MANAGER_INTERACTION_GATE_DECISION_CONSUMER_MAX_ATTEMPTS", valid: cfg.InteractionGateDecisionConsumerMaxAttempts > 0},
 	} {
 		if !item.valid {
 			return fmt.Errorf("%s is invalid", item.name)
@@ -171,6 +192,9 @@ func (cfg Config) Validate() error {
 	if cfg.ProviderReviewSignalConsumerEnabled && strings.TrimSpace(cfg.ProviderReviewSignalConsumerName) == "" {
 		return fmt.Errorf("KODEX_GOVERNANCE_MANAGER_PROVIDER_REVIEW_SIGNAL_CONSUMER_NAME is required when provider review signal consumer is enabled")
 	}
+	if cfg.InteractionGateDecisionConsumerEnabled && strings.TrimSpace(cfg.InteractionGateDecisionConsumerName) == "" {
+		return fmt.Errorf("KODEX_GOVERNANCE_MANAGER_INTERACTION_GATE_DECISION_CONSUMER_NAME is required when interaction gate decision consumer is enabled")
+	}
 	if cfg.needsEventLogDatabase() && strings.TrimSpace(cfg.EventLogDatabaseDSN) == "" {
 		return fmt.Errorf("KODEX_GOVERNANCE_MANAGER_EVENT_LOG_DATABASE_DSN is required for event-log publisher or consumer")
 	}
@@ -185,6 +209,7 @@ func (cfg Config) Validate() error {
 
 func (cfg Config) needsEventLogDatabase() bool {
 	return cfg.ProviderReviewSignalConsumerEnabled ||
+		cfg.InteractionGateDecisionConsumerEnabled ||
 		(cfg.OutboxDispatchEnabled && strings.TrimSpace(cfg.OutboxPublisherKind) == outboxlib.PublisherKindPostgresEventLog)
 }
 
@@ -216,19 +241,7 @@ func (cfg Config) OutboxDispatcherConfig() outboxlib.Config {
 
 // ProviderReviewSignalConsumerConfig converts env fields to the shared event consumer runtime.
 func (cfg Config) ProviderReviewSignalConsumerConfig() eventconsumer.Config {
-	return eventconsumer.ConfigFromRuntimeValues(
-		strings.TrimSpace(cfg.ProviderReviewSignalConsumerName),
-		cfg.providerReviewSignalConsumerLeaseOwner(),
-		cfg.ProviderReviewSignalConsumerBatchSize,
-		cfg.ProviderReviewSignalConsumerPollInterval,
-		cfg.ProviderReviewSignalConsumerLeaseTTL,
-		cfg.ProviderReviewSignalConsumerHandlerTimeout,
-		cfg.ProviderReviewSignalConsumerRetryInitialDelay,
-		cfg.ProviderReviewSignalConsumerRetryMaxDelay,
-		cfg.ProviderReviewSignalConsumerFailureMessageLimit,
-		cfg.ProviderReviewSignalConsumerConcurrencyLimit,
-		cfg.ProviderReviewSignalConsumerMaxAttempts,
-	)
+	return cfg.eventConsumerConfig(consumerKindProviderReviewSignal)
 }
 
 func (cfg Config) providerReviewSignalConsumerLeaseOwner() string {
@@ -237,4 +250,55 @@ func (cfg Config) providerReviewSignalConsumerLeaseOwner() string {
 		return eventconsumer.DefaultLeaseOwner("governance-provider-review-signal")
 	}
 	return leaseOwner
+}
+
+// InteractionGateDecisionConsumerConfig converts env fields to the shared event consumer runtime.
+func (cfg Config) InteractionGateDecisionConsumerConfig() eventconsumer.Config {
+	return cfg.eventConsumerConfig(consumerKindInteractionGateDecision)
+}
+
+func (cfg Config) interactionGateDecisionConsumerLeaseOwner() string {
+	leaseOwner := strings.TrimSpace(cfg.InteractionGateDecisionConsumerLeaseOwner)
+	if leaseOwner == "" {
+		return eventconsumer.DefaultLeaseOwner("governance-interaction-gate-decision")
+	}
+	return leaseOwner
+}
+
+type governanceConsumerKind string
+
+const (
+	consumerKindProviderReviewSignal    governanceConsumerKind = "provider_review_signal"
+	consumerKindInteractionGateDecision governanceConsumerKind = "interaction_gate_decision"
+)
+
+func (cfg Config) eventConsumerConfig(kind governanceConsumerKind) eventconsumer.Config {
+	runtime := governanceConsumerRuntime{}
+	switch kind {
+	case consumerKindProviderReviewSignal:
+		runtime.Name = strings.TrimSpace(cfg.ProviderReviewSignalConsumerName)
+		runtime.LeaseOwner = cfg.providerReviewSignalConsumerLeaseOwner()
+		runtime.BatchSize = cfg.ProviderReviewSignalConsumerBatchSize
+		runtime.PollInterval = cfg.ProviderReviewSignalConsumerPollInterval
+		runtime.LeaseTTL = cfg.ProviderReviewSignalConsumerLeaseTTL
+		runtime.HandlerTimeout = cfg.ProviderReviewSignalConsumerHandlerTimeout
+		runtime.RetryInitial = cfg.ProviderReviewSignalConsumerRetryInitialDelay
+		runtime.RetryMax = cfg.ProviderReviewSignalConsumerRetryMaxDelay
+		runtime.FailureLimit = cfg.ProviderReviewSignalConsumerFailureMessageLimit
+		runtime.ConcurrencyLimit = cfg.ProviderReviewSignalConsumerConcurrencyLimit
+		runtime.MaxAttempts = cfg.ProviderReviewSignalConsumerMaxAttempts
+	case consumerKindInteractionGateDecision:
+		runtime.MaxAttempts = cfg.InteractionGateDecisionConsumerMaxAttempts
+		runtime.ConcurrencyLimit = cfg.InteractionGateDecisionConsumerConcurrencyLimit
+		runtime.FailureLimit = cfg.InteractionGateDecisionConsumerFailureLimit
+		runtime.RetryMax = cfg.InteractionGateDecisionConsumerRetryMax
+		runtime.RetryInitial = cfg.InteractionGateDecisionConsumerRetryInitial
+		runtime.HandlerTimeout = cfg.InteractionGateDecisionConsumerHandlerTimeout
+		runtime.LeaseTTL = cfg.InteractionGateDecisionConsumerLeaseTTL
+		runtime.PollInterval = cfg.InteractionGateDecisionConsumerPollInterval
+		runtime.BatchSize = cfg.InteractionGateDecisionConsumerBatchSize
+		runtime.LeaseOwner = cfg.interactionGateDecisionConsumerLeaseOwner()
+		runtime.Name = strings.TrimSpace(cfg.InteractionGateDecisionConsumerName)
+	}
+	return governanceEventConsumerConfig(runtime.Name, runtime.LeaseOwner, runtime.BatchSize, runtime.PollInterval, runtime.LeaseTTL, runtime.HandlerTimeout, runtime.RetryInitial, runtime.RetryMax, runtime.FailureLimit, runtime.ConcurrencyLimit, runtime.MaxAttempts)
 }

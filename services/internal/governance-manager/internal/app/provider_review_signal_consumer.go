@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -15,7 +14,6 @@ import (
 	providerevents "github.com/codex-k8s/kodex/libs/go/platformevents/provider"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/codex-k8s/kodex/services/internal/governance-manager/internal/domain/errs"
 	governanceservice "github.com/codex-k8s/kodex/services/internal/governance-manager/internal/domain/service"
 	"github.com/codex-k8s/kodex/services/internal/governance-manager/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/governance-manager/internal/domain/types/enum"
@@ -214,37 +212,14 @@ func providerReviewSignalRequestID(storedEvent eventlog.StoredEvent) string {
 	return "provider_event:" + storedEvent.ID.String()
 }
 
-var providerReviewSignalDomainErrorResults = []struct {
-	target error
-	result eventconsumer.Result
-}{
-	{
-		target: errs.ErrInvalidArgument,
-		result: eventconsumer.Poison("invalid_provider_review_signal", "provider review signal metadata is invalid"),
-	},
-	{
-		target: errs.ErrConflict,
-		result: eventconsumer.Poison("conflicting_provider_review_signal", "provider review signal conflicts with stored governance evidence"),
-	},
-	{
-		target: errs.ErrForbidden,
-		result: eventconsumer.Poison("forbidden_provider_review_signal", "provider review signal actor is not authorized"),
-	},
-	{
-		target: errs.ErrNotFound,
-		result: eventconsumer.Poison("unknown_provider_review_signal_ref", "provider review signal references unknown governance state"),
-	},
-	{
-		target: errs.ErrPreconditionFailed,
-		result: eventconsumer.Poison("stale_provider_review_signal", "provider review signal cannot update current governance state"),
-	},
-}
+var providerReviewSignalDomainErrorResults = governanceConsumerDomainErrors(
+	eventConsumerPoison{code: "invalid_provider_review_signal", summary: "provider review signal metadata is invalid"},
+	eventConsumerPoison{code: "conflicting_provider_review_signal", summary: "provider review signal conflicts with stored governance evidence"},
+	eventConsumerPoison{code: "forbidden_provider_review_signal", summary: "provider review signal actor is not authorized"},
+	eventConsumerPoison{code: "unknown_provider_review_signal_ref", summary: "provider review signal references unknown governance state"},
+	eventConsumerPoison{code: "stale_provider_review_signal", summary: "provider review signal cannot update current governance state"},
+)
 
 func providerReviewSignalConsumerError(err error) eventconsumer.Result {
-	for _, candidate := range providerReviewSignalDomainErrorResults {
-		if errors.Is(err, candidate.target) {
-			return candidate.result
-		}
-	}
-	return eventconsumer.Retry(err)
+	return governanceConsumerError(err, providerReviewSignalDomainErrorResults)
 }

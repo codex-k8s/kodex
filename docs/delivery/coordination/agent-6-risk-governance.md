@@ -83,19 +83,26 @@
 - Соседние consumers реагируют через `platform-event-log` и `libs/go/eventconsumer`; authoritative lookup, access checks, optimistic concurrency и команды остаются через gRPC `GovernanceManagerService`.
 - `governance-manager` не переносит delivery lifecycle, provider write, agent run/session state или bootstrap import внутрь своей БД.
 
-## Завершённый provider review signal consumer-срез
+## Завершённый срез потребителя provider review signal
 
 - Issue: #919.
 - Результат среза: `governance-manager` потребляет стабильное событие `provider.comment.synced` из `provider-hub` через `libs/go/eventconsumer` и превращает `review_state=approved/changes_requested` в локальный `RecordReviewSignal`.
 - Сервис сохраняет только provider work item ref, provider comment/comment projection evidence ref, outcome/severity, bounded summary, actor/request refs и idempotency correlation; raw provider payload, comment body, diff, webhook body и provider API response не читаются и не сохраняются.
 - `agent-manager` acceptance/follow-up events и `interaction-hub` response events не маппятся в review signal без отдельного согласованного outcome/gate boundary.
 
+## Завершённый срез потребителя interaction gate decision
+
+- Issue: #930.
+- Результат среза: `governance-manager` потребляет стабильное событие `interaction.request.response_recorded` из `interaction-hub` через `libs/go/eventconsumer` и превращает answered Human gate response для `owner_service=governance_manager` в локальный `SubmitGateDecision`.
+- Сервис обрабатывает только `request_kind=human_gate`, локальный gate request ref и `response_action=approve/reject`; остальные владельцы подтверждаются без записи, а неподдержанные action получают безопасный permanent diagnostic без retry storm.
+- Сохраняются только actor ref, interaction request/response refs, safe source ref, response digest summary, outcome, event/request ref и idempotency fingerprint; raw response text, callback body, delivery payload, prompt/transcript, logs, workspace paths и secrets не читаются и не сохраняются.
+
 ## Ближайшие зависимости
 
 | Домен | Что нужно согласовать |
 |---|---|
 | `projects-and-repositories` | Project/repository refs, services policy, branch rules, release policy, release line и risk profile refs. |
-| `agent-orchestration` | Run/session/acceptance refs, role review signals и ожидание governance decision. |
+| `agent-orchestration` | Run/session/acceptance refs, role review signals и ожидание governance decision; события `agent.acceptance.*` пока не дают typed governance outcome для прямого review/risk signal. |
 | `provider-native-work-items` | PR/MR projections, changed file summary, provider review/comment/check refs и validation gate refs для provider write operations. |
 | `runtime-and-fleet` | Job/deploy/postdeploy/cleanup signals и target environment refs. |
-| `interaction-hub` | Delivery request/callback контракт для Human gate без владения decision state. |
+| `interaction-hub` | Delivery request/callback контракт для Human gate без владения decision state; ответ владельца уже принимается через `interaction.request.response_recorded` только для локального governance gate decision. |
