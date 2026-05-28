@@ -19,14 +19,16 @@ installer.
 
 | Путь | Назначение |
 |---|---|
-| `bootstrap/host/bootstrap_cluster.sh` | Единственный активный entrypoint: `preflight`, `install`, `--dry-run`. |
+| `bootstrap/host/bootstrap_cluster.sh` | Единственная активная точка входа: `preflight`, `install`, `--dry-run`. |
+| `bootstrap/host/plan_backend_deploy.sh` | План первого backend deploy только на чтение: инвентарь, рендер, `kubectl kustomize` и проверки кластера без изменений. |
 | `bootstrap/local/install.sh` | Локальный privileged orchestrator install-шагов. |
 | `bootstrap/local/steps/*.sh` | Узкие idempotent host/Kubernetes steps. |
 | `bootstrap/host/smoke_registry_kaniko.sh` | Registry mirror + Kaniko build/push smoke без Docker daemon. |
 | `bootstrap/host/smoke_backend_contour.sh` | Backend smoke после подготовки образов сервисов. |
 | `deploy/base/bootstrap-foundation/**` | Manifests внутреннего registry. |
 | `deploy/base/bootstrap-builder-smoke/**` | Manifests mirror/Kaniko smoke jobs. |
-| `cmd/bootstrap-preflight` | Safe preflight: env names, stack inventory, dry-run render, kustomize и read-only Kubernetes checks. |
+| `cmd/bootstrap-preflight` | Безопасный preflight: имена env, stack inventory, dry-run рендер, kustomize и проверки Kubernetes только на чтение. |
+| `cmd/bootstrap-deploy-plan` | Безопасный план backend deploy: инвентарь MVP-сервисов, PostgreSQL/event-log manifests, service manifests, builder refs и проверки foundation только на чтение. |
 | `cmd/manifest-render` | Stack-aware renderer: читает `services.yaml`, затем применяет env overrides. |
 | `libs/go/stackinventory` | Общая Go-библиотека чтения корневого stack inventory для renderer/install/deploy tools. |
 | `libs/go/manifestrender` | Общая Go-библиотека рендера manifest templates поверх `stackinventory`. |
@@ -90,7 +92,7 @@ DNS prerequisite, наличие bootstrap manifests и обязательные
 - разрешает registry/Kaniko/crane/busybox image refs через stack inventory и env override-слой;
 - рендерит `bootstrap-foundation` и `bootstrap-builder-smoke` через `libs/go/manifestrender`;
 - выполняет `kubectl kustomize`, если `kubectl` доступен;
-- выполняет read-only Kubernetes checks: context, `/readyz`, namespace, `kodex-registry` Deployment/Service.
+- выполняет проверки Kubernetes только на чтение: context, `/readyz`, namespace, `kodex-registry` Deployment/Service.
 
 Если `go` ещё не установлен на чистом host, shell preflight фиксирует deferred
 status: `00_prepare_host.sh` установит Go перед install-шагами, а dry-run
@@ -133,6 +135,53 @@ Install выполняет шаги:
 Архив репозитория исключает `.git`, `.local` и `bootstrap/host/*.env`; runtime
 env передаётся отдельно.
 
+## Dry-run план backend deploy
+
+После preflight, до любого реального `kubectl apply`, запуска jobs или сборки
+образов, оператор строит план первого backend deploy только на чтение:
+
+```bash
+bash bootstrap/host/plan_backend_deploy.sh --env-file bootstrap/host/config.env
+```
+
+Команда не меняет кластер. Она:
+
+- читает `services.yaml` через `libs/go/stackinventory`;
+- проверяет deploy inventory MVP-сервисов, Dockerfile, service/migration
+  manifests и зависимости по именам сервисов;
+- разрешает image refs через stack inventory и env override-слой, но не печатает
+  значения registry, доменов или secret env;
+- рендерит `deploy/base/postgres/**`,
+  `deploy/base/platform-event-log/migrations.yaml.tpl`,
+  `deploy/base/bootstrap-foundation/**`,
+  `deploy/base/bootstrap-builder-smoke/**` и все текущие deployable service
+  manifests;
+- выполняет `kubectl kustomize` для отрендеренных manifest sets, если доступен
+  `kubectl`;
+- выполняет проверки текущего Kubernetes foundation только на чтение: context,
+  `/readyz`, namespace, registry Deployment/Service, PostgreSQL
+  StatefulSet/Service и runtime Secret refs.
+
+Для проверки только render/inventory без чтения Kubernetes:
+
+```bash
+bash bootstrap/host/plan_backend_deploy.sh \
+  --env-file bootstrap/host/config.env \
+  --skip-live-kubernetes
+```
+
+Для уже установленного foundation-контура можно включить строгий режим:
+
+```bash
+bash bootstrap/host/plan_backend_deploy.sh \
+  --env-file bootstrap/host/config.env \
+  --require-kubernetes
+```
+
+Если нужен каталог с отрендеренными файлами для ручной проверки, передайте
+пустой `--render-dir`. Непустой каталог отклоняется; команда не удаляет пути,
+переданные оператором.
+
 ## Registry и Kaniko smoke
 
 После установки foundation:
@@ -163,3 +212,15 @@ KODEX_SMOKE_ENV_FILE=bootstrap/host/config.env \
 
 Frontend, business services deploy и full runtime build orchestration не входят
 в этот bootstrap foundation-срез.
+
+Чтобы проверить backend smoke wrapper без запуска registry smoke и сервисных
+smoke-команд:
+
+```bash
+KODEX_BACKEND_SMOKE_DRY_RUN=true \
+KODEX_SMOKE_ENV_FILE=bootstrap/host/config.env \
+  bash bootstrap/host/smoke_backend_contour.sh
+```
+
+Этот режим вызывает план backend deploy и завершает работу до любых изменений
+кластера.
