@@ -7,6 +7,42 @@ metadata:
     app.kubernetes.io/name: runtime-manager
     app.kubernetes.io/part-of: kodex
 ---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: runtime-manager-kubernetes-executor
+  namespace: {{ envOr "KODEX_PRODUCTION_NAMESPACE" "" }}
+  labels:
+    app.kubernetes.io/name: runtime-manager
+    app.kubernetes.io/part-of: kodex
+rules:
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create", "get", "list", "watch", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: runtime-manager-kubernetes-executor
+  namespace: {{ envOr "KODEX_PRODUCTION_NAMESPACE" "" }}
+  labels:
+    app.kubernetes.io/name: runtime-manager
+    app.kubernetes.io/part-of: kodex
+subjects:
+  - kind: ServiceAccount
+    name: runtime-manager
+    namespace: {{ envOr "KODEX_PRODUCTION_NAMESPACE" "" }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: runtime-manager-kubernetes-executor
+---
 apiVersion: v1
 kind: Service
 metadata:
@@ -153,6 +189,48 @@ spec:
                   key: KODEX_RUNTIME_MANAGER_FLEET_MANAGER_GRPC_AUTH_TOKEN
             - name: KODEX_RUNTIME_MANAGER_FLEET_MANAGER_RESOLVE_TIMEOUT
               value: "{{ envOr "KODEX_RUNTIME_MANAGER_FLEET_MANAGER_RESOLVE_TIMEOUT" "5s" }}"
+            - name: KODEX_RUNTIME_MANAGER_SECRET_RESOLVER_ENV_ENABLED
+              value: "{{ envOr "KODEX_RUNTIME_MANAGER_SECRET_RESOLVER_ENV_ENABLED" "true" }}"
+            - name: KODEX_RUNTIME_MANAGER_SECRET_RESOLVER_MOUNTED_KUBERNETES_ROOT
+              value: "{{ envOr "KODEX_RUNTIME_MANAGER_SECRET_RESOLVER_MOUNTED_KUBERNETES_ROOT" "" }}"
+            - name: KODEX_RUNTIME_MANAGER_SECRET_RESOLVER_MOUNTED_KUBERNETES_MAX_SECRET_BYTES
+              value: "{{ envOr "KODEX_RUNTIME_MANAGER_SECRET_RESOLVER_MOUNTED_KUBERNETES_MAX_SECRET_BYTES" "1048576" }}"
+            - name: KODEX_RUNTIME_MANAGER_SECRET_RESOLVER_VAULT_ADDR
+              value: "{{ envOr "KODEX_RUNTIME_MANAGER_SECRET_RESOLVER_VAULT_ADDR" "" }}"
+            - name: KODEX_RUNTIME_MANAGER_SECRET_RESOLVER_VAULT_NAMESPACE
+              value: "{{ envOr "KODEX_RUNTIME_MANAGER_SECRET_RESOLVER_VAULT_NAMESPACE" "" }}"
+            - name: KODEX_RUNTIME_MANAGER_SECRET_RESOLVER_VAULT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: kodex-platform-runtime
+                  key: KODEX_RUNTIME_MANAGER_SECRET_RESOLVER_VAULT_TOKEN
+                  optional: true
+            - name: KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_ENABLED
+              value: "{{ envOr "KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_ENABLED" "false" }}"
+            - name: KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_WORKER_ID
+              value: "{{ envOr "KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_WORKER_ID" "runtime-manager-kubernetes-executor" }}"
+            - name: KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_DEFAULT_NAMESPACE
+              value: "{{ envOr "KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_DEFAULT_NAMESPACE" (envOr "KODEX_PRODUCTION_NAMESPACE" "") }}"
+            - name: KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_DEFAULT_SERVICE_ACCOUNT
+              value: "{{ envOr "KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_DEFAULT_SERVICE_ACCOUNT" "" }}"
+            - name: KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_DEFAULT_IMAGE
+              value: "{{ envOr "KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_DEFAULT_IMAGE" "" }}"
+            - name: KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_IMAGE_PULL_POLICY
+              value: "{{ envOr "KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_IMAGE_PULL_POLICY" "IfNotPresent" }}"
+            - name: KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_POLL_INTERVAL
+              value: "{{ envOr "KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_POLL_INTERVAL" "5s" }}"
+            - name: KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_CLAIM_LEASE_TTL
+              value: "{{ envOr "KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_CLAIM_LEASE_TTL" "5m" }}"
+            - name: KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_JOB_TIMEOUT
+              value: "{{ envOr "KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_JOB_TIMEOUT" "2m" }}"
+            - name: KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_KUBERNETES_POLL_INTERVAL
+              value: "{{ envOr "KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_KUBERNETES_POLL_INTERVAL" "2s" }}"
+            - name: KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_BACKOFF_LIMIT
+              value: "{{ envOr "KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_BACKOFF_LIMIT" "0" }}"
+            - name: KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_TTL_SECONDS_AFTER_FINISHED
+              value: "{{ envOr "KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_TTL_SECONDS_AFTER_FINISHED" "300" }}"
+            - name: KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_LOG_TAIL_BYTES
+              value: "{{ envOr "KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_LOG_TAIL_BYTES" "16384" }}"
             - name: KODEX_RUNTIME_MANAGER_EVENT_LOG_DATABASE_DSN
               valueFrom:
                 secretKeyRef:

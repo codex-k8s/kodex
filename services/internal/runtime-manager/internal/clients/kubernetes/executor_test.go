@@ -1,0 +1,183 @@
+package kubernetes
+
+import (
+	"context"
+	"errors"
+	"testing"
+	"time"
+
+	"github.com/google/uuid"
+
+	"github.com/codex-k8s/kodex/libs/go/secretresolver"
+	fleetclient "github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/clients/fleet"
+	"github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/types/enum"
+	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	clientkubernetes "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/fake"
+)
+
+func TestExecutorStartCreatesRestrictedHealthCheckJob(t *testing.T) {
+	t.Parallel()
+
+	client := fake.NewClientset()
+	executor := newTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
+	job := testHealthCheckJob()
+	job.JobInputJSON = []byte(`{"env":{"CHECK_MODE":"fast"},"labels":{"runtime.kodex.io/test":"true"},"annotations":{"runtime.kodex.io/purpose":"unit"}}`)
+
+	started, err := executor.Start(context.Background(), job)
+	if err != nil {
+		t.Fatalf("Start(): %v", err)
+	}
+	if started.Namespace != "runtime-jobs" || started.JobName == "" || started.ExternalRef == "" {
+		t.Fatalf("started job = %+v, want namespace/name/ref", started)
+	}
+	created, err := client.BatchV1().Jobs("runtime-jobs").Get(context.Background(), started.JobName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("get created Job: %v", err)
+	}
+	if got := created.Spec.Template.Spec.Containers[0].Image; got != "busybox:1.36" {
+		t.Fatalf("image = %q, want configured image", got)
+	}
+	if got := created.Spec.Template.Spec.Containers[0].Env[0].Name; got != "CHECK_MODE" {
+		t.Fatalf("env[0].Name = %q, want CHECK_MODE", got)
+	}
+	if created.Labels[runtimeJobLabel] != job.ID.String() || created.Labels["app.kubernetes.io/managed-by"] != managedBy {
+		t.Fatalf("managed labels = %v", created.Labels)
+	}
+	if len(started.ArtifactRefs) != 2 {
+		t.Fatalf("artifact refs = %d, want job and namespace refs", len(started.ArtifactRefs))
+	}
+}
+
+func TestExecutorStartRejectsMismatchedFleetScope(t *testing.T) {
+	t.Parallel()
+
+	access := testClusterAccess()
+	access.FleetScopeID = uuid.MustParse("00000000-0000-0000-0000-000000000099")
+	executor := newTestExecutor(t, fake.NewClientset(), fakeClusterProvider{access: access})
+
+	_, err := executor.Start(context.Background(), testHealthCheckJob())
+	assertExecutionCode(t, err, "cluster_scope_mismatch")
+}
+
+func TestExecutorStartRejectsUnknownInputFields(t *testing.T) {
+	t.Parallel()
+
+	executor := newTestExecutor(t, fake.NewClientset(), fakeClusterProvider{access: testClusterAccess()})
+	job := testHealthCheckJob()
+	job.JobInputJSON = []byte(`{"command":["rm","-rf","/"]}`)
+
+	_, err := executor.Start(context.Background(), job)
+	assertExecutionCode(t, err, "invalid_job_input")
+}
+
+func TestExecutorWaitReportsCompletedJob(t *testing.T) {
+	t.Parallel()
+
+	client := fake.NewClientset()
+	executor := newTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
+	started, err := executor.Start(context.Background(), testHealthCheckJob())
+	if err != nil {
+		t.Fatalf("Start(): %v", err)
+	}
+	created, err := client.BatchV1().Jobs(started.Namespace).Get(context.Background(), started.JobName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("get created Job: %v", err)
+	}
+	created.Status.Conditions = []batchv1.JobCondition{{Type: batchv1.JobComplete, Status: corev1.ConditionTrue}}
+	if _, err := client.BatchV1().Jobs(started.Namespace).UpdateStatus(context.Background(), created, metav1.UpdateOptions{}); err != nil {
+		t.Fatalf("update job status: %v", err)
+	}
+
+	result := executor.Wait(context.Background(), started)
+	if !result.Succeeded || result.ErrorCode != "" {
+		t.Fatalf("Wait() = %+v, want success", result)
+	}
+}
+
+func newTestExecutor(t *testing.T, client clientkubernetes.Interface, provider fakeClusterProvider) *Executor {
+	t.Helper()
+	executor, err := NewExecutorWithClientFactory(provider, fakeSecretResolver{value: secretresolver.NewSecretValue([]byte("kubeconfig"))}, Config{
+		DefaultNamespace:        "runtime-jobs",
+		DefaultImage:            "busybox:1.36",
+		ImagePullPolicy:         "IfNotPresent",
+		JobTimeout:              time.Second,
+		PollInterval:            time.Millisecond,
+		BackoffLimit:            0,
+		TTLSecondsAfterFinished: 30,
+		LogTailBytes:            1024,
+	}, fakeClientFactory{client: client})
+	if err != nil {
+		t.Fatalf("NewExecutorWithClientFactory(): %v", err)
+	}
+	return executor
+}
+
+func testHealthCheckJob() entity.Job {
+	fleetScopeID := uuid.MustParse("00000000-0000-0000-0000-000000000010")
+	clusterID := uuid.MustParse("00000000-0000-0000-0000-000000000011")
+	return entity.Job{
+		Base:         entity.Base{ID: uuid.MustParse("00000000-0000-0000-0000-000000000012"), Version: 2},
+		JobType:      enum.JobTypeHealthCheck,
+		Status:       enum.JobStatusClaimed,
+		JobInputJSON: []byte(`{}`),
+		FleetScopeID: &fleetScopeID,
+		ClusterID:    &clusterID,
+	}
+}
+
+func testClusterAccess() fleetclient.ClusterAccess {
+	return fleetclient.ClusterAccess{
+		ClusterID:       uuid.MustParse("00000000-0000-0000-0000-000000000011"),
+		FleetScopeID:    uuid.MustParse("00000000-0000-0000-0000-000000000010"),
+		ClusterKey:      "test-cluster",
+		SecretStoreType: secretresolver.StoreTypeEnv,
+		SecretStoreRef:  "KUBECONFIG",
+	}
+}
+
+func assertExecutionCode(t *testing.T, err error, want string) {
+	t.Helper()
+	var executionErr *ExecutionError
+	if !errors.As(err, &executionErr) {
+		t.Fatalf("error = %v, want ExecutionError", err)
+	}
+	if executionErr.Code != want {
+		t.Fatalf("error code = %q, want %q", executionErr.Code, want)
+	}
+}
+
+type fakeClusterProvider struct {
+	access fleetclient.ClusterAccess
+	err    error
+}
+
+func (p fakeClusterProvider) GetClusterAccess(context.Context, uuid.UUID) (fleetclient.ClusterAccess, error) {
+	if p.err != nil {
+		return fleetclient.ClusterAccess{}, p.err
+	}
+	return p.access, nil
+}
+
+type fakeSecretResolver struct {
+	value secretresolver.SecretValue
+	err   error
+}
+
+func (r fakeSecretResolver) Resolve(context.Context, secretresolver.SecretRef) (secretresolver.SecretValue, error) {
+	if r.err != nil {
+		return secretresolver.SecretValue{}, r.err
+	}
+	return r.value, nil
+}
+
+type fakeClientFactory struct {
+	client clientkubernetes.Interface
+}
+
+func (f fakeClientFactory) NewForKubeconfig([]byte) (clientkubernetes.Interface, error) {
+	return f.client, nil
+}

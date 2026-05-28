@@ -15,6 +15,7 @@ import (
 	fleetv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/fleet/v1"
 	accessclient "github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/clients/access"
 	fleetclient "github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/clients/fleet"
+	runtimekubernetes "github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/clients/kubernetes"
 	runtimeservice "github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/service"
 	runtimepostgres "github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/repository/postgres/runtime"
 	runtimegrpc "github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/transport/grpc"
@@ -63,6 +64,10 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	slotConfig.Authorizer = authorizer
 	slotConfig.PlacementResolver = placementResolver
 	runtimeService := runtimeservice.NewWithConfig(runtimeRepository, systemClock{}, uuidGenerator{}, slotConfig)
+	kubernetesExecutor, err := newKubernetesExecutor(cfg, placementResolver)
+	if err != nil {
+		return err
+	}
 	httpServer := &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           serviceprocess.NewHealthMux(readinessChecks(runtimeRepository, eventLogPool), 2*time.Second),
@@ -88,7 +93,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	}
 	runtimegrpc.RegisterRuntimeManagerService(grpcServer, runtimeService)
 
-	errCh := make(chan error, 3)
+	errCh := make(chan error, 4)
 	go serviceprocess.StartHTTPServer(httpServer, "runtime-manager", logger, errCh)
 	go serviceprocess.StartGRPCServer(grpcServer, "runtime-manager", cfg.GRPCAddr, logger, errCh)
 	err = serviceprocess.StartOutboxDispatcher(
@@ -108,6 +113,9 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		errCh,
 	)
 	if err != nil {
+		return err
+	}
+	if err := startKubernetesJobWorker(ctx, cfg, runtimeService, kubernetesExecutor, logger, errCh); err != nil {
 		return err
 	}
 
@@ -141,7 +149,7 @@ func newAuthorizer(cfg Config) (runtimeservice.Authorizer, *grpcruntime.ClientCo
 	return accessclient.NewConnectedAuthorizer(accessConfig)
 }
 
-func newPlacementResolver(cfg Config) (runtimeservice.PlacementResolver, *grpcruntime.ClientConn, error) {
+func newPlacementResolver(cfg Config) (*fleetclient.PlacementResolver, *grpcruntime.ClientConn, error) {
 	fleetConfig := fleetclient.Config{
 		Addr:      cfg.Fleet.FleetManagerGRPCAddr,
 		AuthToken: cfg.Fleet.FleetManagerAuthToken,
@@ -157,6 +165,27 @@ func newPlacementResolver(cfg Config) (runtimeservice.PlacementResolver, *grpcru
 		return nil, nil, err
 	}
 	return resolver, conn, nil
+}
+
+func newKubernetesExecutor(cfg Config, clusters runtimekubernetes.ClusterAccessProvider) (*runtimekubernetes.Executor, error) {
+	if !cfg.KubernetesWorker.Enabled {
+		return nil, nil
+	}
+	resolver, err := newSecretResolver(cfg.SecretResolver)
+	if err != nil {
+		return nil, err
+	}
+	return runtimekubernetes.NewExecutor(clusters, resolver, runtimekubernetes.Config{
+		DefaultNamespace:        cfg.KubernetesWorker.DefaultNamespace,
+		DefaultServiceAccount:   cfg.KubernetesWorker.DefaultServiceAccount,
+		DefaultImage:            cfg.KubernetesWorker.DefaultImage,
+		ImagePullPolicy:         cfg.KubernetesWorker.ImagePullPolicy,
+		JobTimeout:              cfg.KubernetesWorker.JobTimeout,
+		PollInterval:            cfg.KubernetesWorker.KubernetesPollInterval,
+		BackoffLimit:            cfg.KubernetesWorker.BackoffLimit,
+		TTLSecondsAfterFinished: cfg.KubernetesWorker.TTLSecondsAfterFinished,
+		LogTailBytes:            cfg.KubernetesWorker.LogTailBytes,
+	})
 }
 
 func readinessChecks(runtime runtimeStore, eventLog pingStore) []serviceprocess.ReadinessCheck {

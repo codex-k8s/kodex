@@ -88,6 +88,10 @@ Generated execution context передаётся отдельным `WorkspaceSo
 
 `CreateJob` без slot получает `fleet_scope_id` и `cluster_id` через `fleet-manager.ResolvePlacement` с runtime mode `platform_job`. `CreateJob` со slot не вызывает placement повторно и наследует fleet refs из slot.
 
+Исполнитель Kubernetes в `runtime-manager` обрабатывает только ограниченный первый тип задания `health_check`. Он забирает задание через `ClaimRunnableJob`, читает выбранный кластер через `fleet-manager.GetKubernetesCluster`, получает только ссылку `secret_store_type`/`secret_store_ref` и разрешает kubeconfig в памяти через `secretresolver`. Значение kubeconfig, raw Kubernetes objects, events и полный лог не пишутся в БД. Запуск фиксируется через `ReportJobStepProgress` с `RuntimeArtifactRef` на Kubernetes Job и namespace, а завершение идёт через `CompleteJob` или `FailJob`.
+
+`JobInputJSON` для этого пути не является произвольным manifest. Поддержаны только ограниченные поля `namespace`, `service_account`, `image`, `env`, `labels` и `annotations`; команда контейнера остаётся фиксированной проверкой здоровья. Остальные типы заданий (`build`, `deploy`, slot-agent workloads и т.п.) не исполняются этим срезом.
+
 ### Runtime artifact refs
 
 | Операция | Назначение | Вызывает | Идемпотентность |
