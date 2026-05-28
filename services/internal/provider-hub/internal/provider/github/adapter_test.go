@@ -852,6 +852,73 @@ func TestExecuteCreateBootstrapPullRequestReplacesStaleBootstrapTree(t *testing.
 	}
 }
 
+func TestExecuteCreateBootstrapPullRequestHandlesConcurrentBranchCreate(t *testing.T) {
+	t.Parallel()
+
+	seen := make(map[string]int)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		key := r.Method + " " + r.URL.Path
+		seen[key]++
+		switch key {
+		case "GET /repos/codex-k8s/kodex/git/ref/heads/main":
+			_, _ = w.Write([]byte(`{"ref":"refs/heads/main","object":{"type":"commit","sha":"base-sha"}}`))
+		case "GET /repos/codex-k8s/kodex/git/commits/base-sha":
+			_, _ = w.Write([]byte(`{"sha":"base-sha","tree":{"sha":"base-tree-sha"}}`))
+		case "GET /repos/codex-k8s/kodex/git/trees/base-tree-sha":
+			_, _ = w.Write([]byte(`{"sha":"base-tree-sha","tree":[]}`))
+		case "GET /repos/codex-k8s/kodex/git/ref/heads/kodex-bootstrap":
+			if seen[key] == 1 {
+				http.NotFound(w, r)
+				return
+			}
+			_, _ = w.Write([]byte(`{"ref":"refs/heads/kodex-bootstrap","object":{"type":"commit","sha":"base-sha"}}`))
+		case "POST /repos/codex-k8s/kodex/git/refs":
+			w.WriteHeader(http.StatusUnprocessableEntity)
+			_, _ = w.Write([]byte(`{"message":"Reference already exists"}`))
+		case "POST /repos/codex-k8s/kodex/git/trees":
+			_, _ = w.Write([]byte(`{"sha":"tree-sha","tree":[]}`))
+		case "POST /repos/codex-k8s/kodex/git/commits":
+			_, _ = w.Write([]byte(`{"sha":"commit-sha","tree":{"sha":"tree-sha"}}`))
+		case "PATCH /repos/codex-k8s/kodex/git/refs/heads/kodex-bootstrap":
+			_, _ = w.Write([]byte(`{"ref":"refs/heads/kodex-bootstrap","object":{"type":"commit","sha":"commit-sha"}}`))
+		case "GET /repos/codex-k8s/kodex/pulls":
+			_, _ = w.Write([]byte(`[]`))
+		case "POST /repos/codex-k8s/kodex/pulls":
+			w.Header().Set("ETag", `"bootstrap-pr"`)
+			_, _ = w.Write([]byte(`{"id":8800,"number":88,"html_url":"https://github.com/codex-k8s/kodex/pull/88","title":"Bootstrap платформы","state":"open","body":"Bootstrap body","updated_at":"2026-05-13T10:05:00Z"}`))
+		default:
+			t.Fatalf("unexpected request = %s %s", r.Method, r.URL.String())
+		}
+	}))
+	defer server.Close()
+
+	_, err := New(Config{BaseURL: server.URL, HTTPClient: server.Client()}).Execute(context.Background(), providerclient.WriteRequest{
+		Credential:   providerclient.AccountCredential{ExternalAccountID: uuid.New(), ProviderSlug: enum.ProviderSlugGitHub, Token: newGitHubWriteTestToken(t)},
+		ProviderSlug: enum.ProviderSlugGitHub,
+		CreateBootstrapPullRequest: &providerclient.CreateBootstrapPullRequestCommand{
+			RepositoryBranchPullRequestCommand: providerclient.RepositoryBranchPullRequestCommand{
+				ProjectID:        uuid.New().String(),
+				RepositoryID:     uuid.New().String(),
+				RepositoryTarget: providerclient.Target{ProviderSlug: enum.ProviderSlugGitHub, RepositoryFullName: "codex-k8s/kodex"},
+				BaseBranch:       "main",
+				CommitMessage:    "Bootstrap repository",
+				Title:            "Bootstrap платформы",
+				Body:             "Bootstrap body",
+			},
+			BootstrapBranch: "kodex-bootstrap",
+			Files:           []providerclient.BootstrapFile{{Path: "services.yaml", Content: "version: 1\n"}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Execute(): %v", err)
+	}
+	if seen["GET /repos/codex-k8s/kodex/git/ref/heads/kodex-bootstrap"] != 2 ||
+		seen["POST /repos/codex-k8s/kodex/git/refs"] != 1 ||
+		seen["POST /repos/codex-k8s/kodex/pulls"] != 1 {
+		t.Fatalf("seen requests = %+v, want branch re-read after concurrent create and one PR create", seen)
+	}
+}
+
 func TestExecuteUpdatePullRequestUsesPullEndpointForPullFields(t *testing.T) {
 	t.Parallel()
 
@@ -1055,6 +1122,126 @@ func TestExecuteWriteMapsGitHubRateLimitWithoutSecretLeak(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "token-value") {
 		t.Fatalf("error leaks token: %v", err)
+	}
+}
+
+func TestExecuteWriteClassifiesGitHubFailuresSafely(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name       string
+		statusCode int
+		headers    map[string]string
+		body       string
+		wantKind   providerclient.ErrorKind
+	}{
+		{
+			name:       "primary rate limit",
+			statusCode: http.StatusTooManyRequests,
+			headers:    map[string]string{"Retry-After": "30"},
+			body:       `{"message":"API rate limit exceeded for token-value at https://private.example.invalid"}`,
+			wantKind:   providerclient.ErrorKindRateLimited,
+		},
+		{
+			name:       "secondary rate limit",
+			statusCode: http.StatusForbidden,
+			headers:    map[string]string{"Retry-After": "45"},
+			body:       `{"message":"You have exceeded a secondary rate limit for raw payload {\"secret\":\"x\"}"}`,
+			wantKind:   providerclient.ErrorKindRateLimited,
+		},
+		{
+			name:       "transient provider error",
+			statusCode: http.StatusServiceUnavailable,
+			body:       `{"message":"temporary outage at https://private.example.invalid"}`,
+			wantKind:   providerclient.ErrorKindTransient,
+		},
+		{
+			name:       "permission denied",
+			statusCode: http.StatusForbidden,
+			body:       `{"message":"Resource not accessible by integration token-value"}`,
+			wantKind:   providerclient.ErrorKindAuthFailed,
+		},
+		{
+			name:       "not found",
+			statusCode: http.StatusNotFound,
+			body:       `{"message":"Repository not found at https://private.example.invalid"}`,
+			wantKind:   providerclient.ErrorKindNotFound,
+		},
+		{
+			name:       "conflict",
+			statusCode: http.StatusConflict,
+			body:       `{"message":"Merge conflict with raw provider payload"}`,
+			wantKind:   providerclient.ErrorKindConflict,
+		},
+		{
+			name:       "validation",
+			statusCode: http.StatusUnprocessableEntity,
+			body:       `{"message":"Validation Failed","errors":[{"message":"bad raw body"}]}`,
+			wantKind:   providerclient.ErrorKindValidation,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPost || r.URL.Path != "/repos/codex-k8s/kodex/issues" {
+					t.Fatalf("request = %s %s, want create issue", r.Method, r.URL.Path)
+				}
+				for key, value := range tc.headers {
+					w.Header().Set(key, value)
+				}
+				w.WriteHeader(tc.statusCode)
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			defer server.Close()
+
+			_, err := New(Config{BaseURL: server.URL, HTTPClient: server.Client()}).Execute(context.Background(), providerclient.WriteRequest{
+				Credential:   providerclient.AccountCredential{ExternalAccountID: uuid.New(), ProviderSlug: enum.ProviderSlugGitHub, Token: newGitHubWriteTestToken(t)},
+				ProviderSlug: enum.ProviderSlugGitHub,
+				CreateIssue: &providerclient.CreateIssueCommand{
+					RepositoryTarget: providerclient.Target{ProviderSlug: enum.ProviderSlugGitHub, RepositoryFullName: "codex-k8s/kodex"},
+					Title:            "Новая задача",
+					Body:             "Описание",
+				},
+			})
+			var providerErr *providerclient.Error
+			if !errors.As(err, &providerErr) || providerErr.Kind != tc.wantKind {
+				t.Fatalf("Execute() err = %v, want provider kind %s", err, tc.wantKind)
+			}
+			for _, leaked := range []string{"token-value", "private.example.invalid", "raw payload", "raw body", `{"secret":"x"}`} {
+				if strings.Contains(err.Error(), leaked) {
+					t.Fatalf("error %q leaks %q", err.Error(), leaked)
+				}
+			}
+		})
+	}
+}
+
+func TestExecuteWriteMapsNetworkFailureToTransientWithoutURLLeak(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("closed server must not receive requests")
+	}))
+	baseURL := server.URL
+	server.Close()
+
+	_, err := New(Config{BaseURL: baseURL, HTTPClient: server.Client()}).Execute(context.Background(), providerclient.WriteRequest{
+		Credential:   providerclient.AccountCredential{ExternalAccountID: uuid.New(), ProviderSlug: enum.ProviderSlugGitHub, Token: newGitHubWriteTestToken(t)},
+		ProviderSlug: enum.ProviderSlugGitHub,
+		CreateIssue: &providerclient.CreateIssueCommand{
+			RepositoryTarget: providerclient.Target{ProviderSlug: enum.ProviderSlugGitHub, RepositoryFullName: "codex-k8s/kodex"},
+			Title:            "Новая задача",
+			Body:             "Описание",
+		},
+	})
+	var providerErr *providerclient.Error
+	if !errors.As(err, &providerErr) || providerErr.Kind != providerclient.ErrorKindTransient {
+		t.Fatalf("Execute() err = %v, want transient provider error", err)
+	}
+	if strings.Contains(err.Error(), baseURL) {
+		t.Fatalf("error %q leaks base URL", err.Error())
 	}
 }
 
@@ -1424,4 +1611,13 @@ func (q *idQueue) New() uuid.UUID {
 	id := (*q)[0]
 	*q = (*q)[1:]
 	return id
+}
+
+func newGitHubWriteTestToken(t *testing.T) secretresolver.SecretValue {
+	t.Helper()
+	token := secretresolver.NewSecretValue([]byte("token-value"))
+	t.Cleanup(func() {
+		token.Clear()
+	})
+	return token
 }

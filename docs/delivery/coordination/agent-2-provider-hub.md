@@ -32,6 +32,7 @@
 | PRV-7a | #725 | готово | Контрактный каталог инструментов записи провайдера для `agent-manager`/MCP: типизированные инструменты, общий конвейер команд, контекст политики, ссылка на approval/gate и безопасный результат команды без реализации операций записи. |
 | PRV-7b | #731 | готово | Общий конвейер команд операций записи реализован в `provider-hub`: типизированные gRPC handlers, casters, доменный конвейер, идемпотентная запись `ProviderOperation`, проверка `expected_version`, контекст политики и `approval_gate_ref`, но без реальных GitHub/GitLab write-вызовов. |
 | PRV-7c | #737 | готово | GitHub write-адаптер подключён к общему конвейеру: создаёт и обновляет задачи, комментарии, `PR`, review-сигналы и provider-native связи, получает секрет только через resolver, обновляет локальные проекции после успешной записи и не повторяет внешний write при replay команды. |
+| PRV-7d | не назначено | готово | GitHub write-адаптер и жизненный цикл `ProviderOperation` усилены unit/component tests: повтор `CreateRepository` по `idempotency_key`, конфликт той же key с другой целью, bootstrap/adoption branch/PR path, `rate_limited`/secondary limit, временные ошибки, permission denied/not found и безопасные сводки ошибок без raw provider response, token, private URL или payload. |
 | PRV-8a | #748 | готово | Provider-side bootstrap для уже созданного пустого репозитория: подготовленные файлы пишутся в bootstrap branch, создаётся или обновляется bootstrap PR, фиксируются проекция, `project_repository_binding` и событие `provider.repository.bootstrap_completed`. |
 | PRV-8b | #761 | готово | Создание GitHub-репозитория на стороне провайдера: `CreateRepository` создаёт репозиторий с `auto_init=true`, фиксирует начальный default branch как `base_branch`, журнал операции и событие `provider.repository.created`; `services.yaml`, шаблоны и adoption scan остаются вне `provider-hub`. |
 | PRV-8c | #770 | готово | Provider-side adoption существующего репозитория: подготовленные файлы пишутся в adoption branch, создаётся или обновляется adoption PR, фиксируются проекция, `project_repository_binding` и событие `provider.repository.adoption_pr_created`; scan, отчёт и проектное решение остаются вне `provider-hub`. |
@@ -72,7 +73,7 @@
 Снято в `provider-hub`:
 - resolver-клиент подключён к обработчику пакетной сверки и GitHub-адаптеру;
 - значение секрета очищается после внешнего вызова и не попадает в журнал операций, события, тело аудита, трассировку, логи и ошибки.
-- операции записи используют тот же resolver-контур; PRV-7b закрепил общий command pipeline, а PRV-7c подключил GitHub write-вызовы поверх него.
+- операции записи используют тот же resolver-контур; PRV-7b закрепил общий command pipeline, PRV-7c подключил GitHub write-вызовы поверх него, а PRV-7d фиксирует безопасную классификацию отказов GitHub write и поведение повторов/конфликтов без обращения к реальному GitHub.
 - GitLab write-адаптер остаётся отдельным расширением того же контура.
 
 Требует отдельного решения:
