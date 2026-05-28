@@ -38,13 +38,21 @@ func New(client agentsv1.AgentManagerServiceClient, cfg Config) (*Client, error)
 }
 
 func (c *Client) GetAgentRunRuntimeStatus(ctx context.Context, request *agentsv1.GetAgentRunRuntimeStatusRequest) (*agentsv1.AgentRunRuntimeStatusResponse, error) {
-	callCtx, cancel := c.callContext(ctx, request.GetMeta())
-	defer cancel()
-	return c.client.GetAgentRunRuntimeStatus(callCtx, request)
+	return callQuery(ctx, c, request, c.client.GetAgentRunRuntimeStatus)
 }
 
-func (c *Client) callContext(ctx context.Context, meta *agentsv1.QueryMeta) (context.Context, context.CancelFunc) {
-	return clientruntime.OutgoingCallContext(ctx, agentRequestMetadata(c.authToken, meta), c.timeout)
+func (c *Client) ListAgentActivities(ctx context.Context, request *agentsv1.ListAgentActivitiesRequest) (*agentsv1.ListAgentActivitiesResponse, error) {
+	return callQuery(ctx, c, request, c.client.ListAgentActivities)
+}
+
+type queryRequest interface {
+	GetMeta() *agentsv1.QueryMeta
+}
+
+func callQuery[Request queryRequest, Response any](ctx context.Context, client *Client, request Request, invoke func(context.Context, Request, ...grpc.CallOption) (*Response, error)) (*Response, error) {
+	callCtx, cancel := clientruntime.OutgoingCallContext(ctx, agentRequestMetadata(client.authToken, request.GetMeta()), client.timeout)
+	defer cancel()
+	return invoke(callCtx, request)
 }
 
 func agentRequestMetadata(authToken string, meta *agentsv1.QueryMeta) clientruntime.RequestMetadata {

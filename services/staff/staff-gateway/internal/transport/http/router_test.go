@@ -472,6 +472,129 @@ func TestRouterGetAgentRunRuntimeStatusEmptyDownstreamResponse(t *testing.T) {
 	assertErrorCode(t, rec, http.StatusServiceUnavailable, generated.SafeErrorCodeDownstreamUnavailable)
 }
 
+func TestRouterListAgentRunActivities(t *testing.T) {
+	runID := uuid.NewString()
+	client := &fakeInteractionHubClient{activitiesResponse: &agentsv1.ListAgentActivitiesResponse{
+		Activities: []*agentsv1.AgentActivity{sampleAgentActivity(runID)},
+		Page:       &agentsv1.PageResponse{NextPageToken: stringPtr("cursor-2")},
+	}}
+	router := newTestRouter(t, client)
+	req := authenticatedRequest(http.MethodGet, "/v1/agent-runs/"+runID+"/activities?activity_kind=tool_use&status=succeeded&page_size=10&page_token=cursor-1", "")
+	req.Header.Set(headerTraceID, "trace-1")
+	req.Header.Set(headerSessionID, "session-1")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	recorded := client.activitiesRequest
+	if recorded.GetRunId() != runID || recorded.GetActivityKind() != agentsv1.AgentActivityKind_AGENT_ACTIVITY_KIND_TOOL_USE {
+		t.Fatalf("activities request = %+v, want run and kind filters", recorded)
+	}
+	if recorded.GetStatus() != agentsv1.AgentActivityStatus_AGENT_ACTIVITY_STATUS_SUCCEEDED ||
+		recorded.GetPage().GetPageSize() != 10 ||
+		recorded.GetPage().GetPageToken() != "cursor-1" {
+		t.Fatalf("activities filter/page = %+v, want status and pagination", recorded)
+	}
+	if recorded.GetMeta().GetRequestContext().GetTraceId() != "trace-1" || recorded.GetMeta().GetRequestContext().GetSessionId() != "session-1" {
+		t.Fatalf("request context = %+v, want trace and session", recorded.GetMeta().GetRequestContext())
+	}
+	var body generated.AgentRunActivitiesResponse
+	decodeJSON(t, rec, &body)
+	if body.RunId == nil || *body.RunId != runID || len(body.Activities) != 1 {
+		t.Fatalf("activities response = %+v, want run id and one activity", body)
+	}
+	activity := body.Activities[0]
+	if activity.ActivityKind != generated.AgentActivityKindToolUse || activity.Status != generated.AgentActivityStatusSucceeded {
+		t.Fatalf("activity = %+v, want tool_use/succeeded", activity)
+	}
+	if activity.ToolName == nil || *activity.ToolName != "apply_patch" || activity.PayloadDigest == nil {
+		t.Fatalf("activity = %+v, want tool metadata and digest", activity)
+	}
+	if body.Page.NextPageToken == nil || *body.Page.NextPageToken != "cursor-2" {
+		t.Fatalf("page = %+v, want cursor", body.Page)
+	}
+	for _, forbidden := range []string{"raw_tool_input", "raw_tool_output", "stdout", "stderr", "prompt body", "secret-token", "workspace/path", "provider_payload", "large log tail"} {
+		if strings.Contains(rec.Body.String(), forbidden) {
+			t.Fatalf("response leaked %q marker: %s", forbidden, rec.Body.String())
+		}
+	}
+}
+
+func TestRouterListAgentRunActivitiesUnknownStatusFallsBackToUnspecified(t *testing.T) {
+	runID := uuid.NewString()
+	activity := sampleAgentActivity(runID)
+	activity.ActivityKind = agentsv1.AgentActivityKind(99)
+	activity.Status = agentsv1.AgentActivityStatus(99)
+	client := &fakeInteractionHubClient{activitiesResponse: &agentsv1.ListAgentActivitiesResponse{Activities: []*agentsv1.AgentActivity{activity}}}
+	router := newTestRouter(t, client)
+	req := authenticatedRequest(http.MethodGet, "/v1/agent-runs/"+runID+"/activities", "")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var body generated.AgentRunActivitiesResponse
+	decodeJSON(t, rec, &body)
+	if body.Activities[0].ActivityKind != generated.AgentActivityKindUnspecified || body.Activities[0].Status != generated.AgentActivityStatusUnspecified {
+		t.Fatalf("activity = %+v, want unspecified fallbacks", body.Activities[0])
+	}
+}
+
+func TestRouterListAgentRunActivitiesRejectsBadRequest(t *testing.T) {
+	client := &fakeInteractionHubClient{}
+	router := newTestRouter(t, client)
+	req := authenticatedRequest(http.MethodGet, "/v1/agent-runs/"+uuid.NewString()+"/activities?activity_kind=raw_tool_input", "")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	assertErrorCode(t, rec, http.StatusBadRequest, generated.SafeErrorCodeInvalidRequest)
+	if client.activitiesRequest != nil {
+		t.Fatalf("downstream was called after OpenAPI validation failure")
+	}
+}
+
+func TestRouterListAgentRunActivitiesErrorMapping(t *testing.T) {
+	cases := map[string]struct {
+		err        error
+		statusCode int
+		code       generated.SafeErrorCode
+	}{
+		"not_found": {
+			err:        status.Error(codes.NotFound, "missing"),
+			statusCode: http.StatusNotFound,
+			code:       generated.SafeErrorCodeNotFound,
+		},
+		"permission_denied": {
+			err:        status.Error(codes.PermissionDenied, "denied"),
+			statusCode: http.StatusForbidden,
+			code:       generated.SafeErrorCodePermissionDenied,
+		},
+		"unavailable": {
+			err:        status.Error(codes.Unavailable, "unavailable"),
+			statusCode: http.StatusServiceUnavailable,
+			code:       generated.SafeErrorCodeDownstreamUnavailable,
+		},
+	}
+	for name, testCase := range cases {
+		t.Run(name, func(t *testing.T) {
+			client := &fakeInteractionHubClient{activitiesErr: testCase.err}
+			router := newTestRouter(t, client)
+			req := authenticatedRequest(http.MethodGet, "/v1/agent-runs/"+uuid.NewString()+"/activities", "")
+			rec := httptest.NewRecorder()
+
+			router.ServeHTTP(rec, req)
+
+			assertErrorCode(t, rec, testCase.statusCode, testCase.code)
+		})
+	}
+}
+
 func TestRouterRequiresActorContext(t *testing.T) {
 	router := newTestRouter(t, &fakeInteractionHubClient{})
 	req := httptest.NewRequest(http.MethodGet, "/v1/owner-inbox/items?scope_type=project&scope_ref=project-1", nil)
@@ -531,14 +654,17 @@ type fakeInteractionHubClient struct {
 	getRequest            *interactionsv1.GetOwnerInboxItemRequest
 	recordRequest         *interactionsv1.RecordInteractionResponseRequest
 	runtimeStatusRequest  *agentsv1.GetAgentRunRuntimeStatusRequest
+	activitiesRequest     *agentsv1.ListAgentActivitiesRequest
 	listResponse          *interactionsv1.ListOwnerInboxItemsResponse
 	getResponse           *interactionsv1.OwnerInboxItemResponse
 	recordResponse        *interactionsv1.InteractionResponseResponse
 	runtimeStatusResponse *agentsv1.AgentRunRuntimeStatusResponse
+	activitiesResponse    *agentsv1.ListAgentActivitiesResponse
 	listErr               error
 	getErr                error
 	recordErr             error
 	runtimeStatusErr      error
+	activitiesErr         error
 }
 
 func (f *fakeInteractionHubClient) ListOwnerInboxItems(_ context.Context, request *interactionsv1.ListOwnerInboxItemsRequest) (*interactionsv1.ListOwnerInboxItemsResponse, error) {
@@ -559,6 +685,11 @@ func (f *fakeInteractionHubClient) RecordInteractionResponse(_ context.Context, 
 func (f *fakeInteractionHubClient) GetAgentRunRuntimeStatus(_ context.Context, request *agentsv1.GetAgentRunRuntimeStatusRequest) (*agentsv1.AgentRunRuntimeStatusResponse, error) {
 	f.runtimeStatusRequest = request
 	return f.runtimeStatusResponse, f.runtimeStatusErr
+}
+
+func (f *fakeInteractionHubClient) ListAgentActivities(_ context.Context, request *agentsv1.ListAgentActivitiesRequest) (*agentsv1.ListAgentActivitiesResponse, error) {
+	f.activitiesRequest = request
+	return f.activitiesResponse, f.activitiesErr
 }
 
 func sampleOwnerInboxItem(status interactionsv1.InteractionRequestStatus) *interactionsv1.OwnerInboxItem {
@@ -699,6 +830,34 @@ func sampleAgentRunRuntimeStatusResponse(runID string) *agentsv1.AgentRunRuntime
 			HumanGateRequestRef:  stringPtr("human-gate-1"),
 			HumanGateReasonCode:  stringPtr("owner_approval"),
 		},
+	}
+}
+
+func sampleAgentActivity(runID string) *agentsv1.AgentActivity {
+	now := time.Date(2026, 5, 28, 12, 4, 0, 0, time.UTC).Format(time.RFC3339Nano)
+	return &agentsv1.AgentActivity{
+		Id:              uuid.NewString(),
+		SessionId:       "session-1",
+		RunId:           stringPtr(runID),
+		TurnId:          stringPtr("turn-1"),
+		ToolUseId:       stringPtr("tool-use-1"),
+		ActivityKind:    agentsv1.AgentActivityKind_AGENT_ACTIVITY_KIND_TOOL_USE,
+		ToolName:        stringPtr("apply_patch"),
+		ToolCategory:    stringPtr("code_edit"),
+		Status:          agentsv1.AgentActivityStatus_AGENT_ACTIVITY_STATUS_SUCCEEDED,
+		StartedAt:       stringPtr(now),
+		FinishedAt:      stringPtr(now),
+		DurationMs:      int64Ptr(120),
+		SafeSummary:     stringPtr("Изменён контракт staff-gateway"),
+		PayloadDigest:   stringPtr("sha256:activity-digest"),
+		BoundedError:    stringPtr(""),
+		SafeRefsJson:    `{"agent_run_ref":"` + runID + `","tool_use_ref":"tool-use-1"}`,
+		SafeDetailsJson: `{"display":"safe summary only"}`,
+		CorrelationId:   stringPtr("corr-1"),
+		IdempotencyKey:  "secret-token-not-returned",
+		Version:         7,
+		CreatedAt:       now,
+		UpdatedAt:       now,
 	}
 }
 

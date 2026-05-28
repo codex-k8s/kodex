@@ -7,6 +7,32 @@ import (
 	"time"
 )
 
+// Defines values for AgentActivityKind.
+const (
+	AgentActivityKindCheckpoint     AgentActivityKind = "checkpoint"
+	AgentActivityKindLifecycle      AgentActivityKind = "lifecycle"
+	AgentActivityKindOther          AgentActivityKind = "other"
+	AgentActivityKindPermission     AgentActivityKind = "permission"
+	AgentActivityKindProviderSignal AgentActivityKind = "provider_signal"
+	AgentActivityKindRuntimeSignal  AgentActivityKind = "runtime_signal"
+	AgentActivityKindToolResult     AgentActivityKind = "tool_result"
+	AgentActivityKindToolUse        AgentActivityKind = "tool_use"
+	AgentActivityKindUnspecified    AgentActivityKind = "unspecified"
+)
+
+// Defines values for AgentActivityStatus.
+const (
+	AgentActivityStatusCancelled   AgentActivityStatus = "cancelled"
+	AgentActivityStatusDenied      AgentActivityStatus = "denied"
+	AgentActivityStatusFailed      AgentActivityStatus = "failed"
+	AgentActivityStatusPlanned     AgentActivityStatus = "planned"
+	AgentActivityStatusSkipped     AgentActivityStatus = "skipped"
+	AgentActivityStatusStarted     AgentActivityStatus = "started"
+	AgentActivityStatusSucceeded   AgentActivityStatus = "succeeded"
+	AgentActivityStatusUnspecified AgentActivityStatus = "unspecified"
+	AgentActivityStatusWaiting     AgentActivityStatus = "waiting"
+)
+
 // Defines values for AgentRunStatus.
 const (
 	AgentRunStatusCancelled   AgentRunStatus = "cancelled"
@@ -167,6 +193,14 @@ const (
 	ActorTypeHeaderUser            ActorTypeHeader = "user"
 )
 
+// Defines values for ListAgentRunActivitiesParamsXKodexActorType.
+const (
+	ListAgentRunActivitiesParamsXKodexActorTypeAgent           ListAgentRunActivitiesParamsXKodexActorType = "agent"
+	ListAgentRunActivitiesParamsXKodexActorTypeExternalAccount ListAgentRunActivitiesParamsXKodexActorType = "external_account"
+	ListAgentRunActivitiesParamsXKodexActorTypeService         ListAgentRunActivitiesParamsXKodexActorType = "service"
+	ListAgentRunActivitiesParamsXKodexActorTypeUser            ListAgentRunActivitiesParamsXKodexActorType = "user"
+)
+
 // Defines values for GetAgentRunRuntimeStatusParamsXKodexActorType.
 const (
 	GetAgentRunRuntimeStatusParamsXKodexActorTypeAgent           GetAgentRunRuntimeStatusParamsXKodexActorType = "agent"
@@ -193,16 +227,60 @@ const (
 
 // Defines values for RespondOwnerInboxItemParamsXKodexActorType.
 const (
-	Agent           RespondOwnerInboxItemParamsXKodexActorType = "agent"
-	ExternalAccount RespondOwnerInboxItemParamsXKodexActorType = "external_account"
-	Service         RespondOwnerInboxItemParamsXKodexActorType = "service"
-	User            RespondOwnerInboxItemParamsXKodexActorType = "user"
+	RespondOwnerInboxItemParamsXKodexActorTypeAgent           RespondOwnerInboxItemParamsXKodexActorType = "agent"
+	RespondOwnerInboxItemParamsXKodexActorTypeExternalAccount RespondOwnerInboxItemParamsXKodexActorType = "external_account"
+	RespondOwnerInboxItemParamsXKodexActorTypeService         RespondOwnerInboxItemParamsXKodexActorType = "service"
+	RespondOwnerInboxItemParamsXKodexActorTypeUser            RespondOwnerInboxItemParamsXKodexActorType = "user"
 )
 
 // ActorRef defines model for ActorRef.
 type ActorRef struct {
 	Ref     string `json:"ref"`
 	RefKind string `json:"ref_kind"`
+}
+
+// AgentActivityKind defines model for AgentActivityKind.
+type AgentActivityKind string
+
+// AgentActivityStatus defines model for AgentActivityStatus.
+type AgentActivityStatus string
+
+// AgentRunActivitiesResponse defines model for AgentRunActivitiesResponse.
+type AgentRunActivitiesResponse struct {
+	Activities    []AgentRunActivity `json:"activities"`
+	CorrelationId *string            `json:"correlation_id,omitempty"`
+	Page          PageInfo           `json:"page"`
+	RequestId     string             `json:"request_id"`
+	RunId         *string            `json:"run_id,omitempty"`
+}
+
+// AgentRunActivity defines model for AgentRunActivity.
+type AgentRunActivity struct {
+	ActivityId    string            `json:"activity_id"`
+	ActivityKind  AgentActivityKind `json:"activity_kind"`
+	BoundedError  *string           `json:"bounded_error,omitempty"`
+	CorrelationId *string           `json:"correlation_id,omitempty"`
+	CreatedAt     time.Time         `json:"created_at"`
+	DurationMs    *int64            `json:"duration_ms,omitempty"`
+	FinishedAt    *time.Time        `json:"finished_at,omitempty"`
+	PayloadDigest *string           `json:"payload_digest,omitempty"`
+	RunId         *string           `json:"run_id,omitempty"`
+
+	// SafeDetailsJson Bounded JSON object with safe display details only.
+	SafeDetailsJson *string `json:"safe_details_json,omitempty"`
+
+	// SafeRefsJson Bounded JSON object with refs only; never raw payload.
+	SafeRefsJson *string             `json:"safe_refs_json,omitempty"`
+	SafeSummary  *string             `json:"safe_summary,omitempty"`
+	SessionId    string              `json:"session_id"`
+	StartedAt    *time.Time          `json:"started_at,omitempty"`
+	Status       AgentActivityStatus `json:"status"`
+	ToolCategory *string             `json:"tool_category,omitempty"`
+	ToolName     *string             `json:"tool_name,omitempty"`
+	ToolUseId    *string             `json:"tool_use_id,omitempty"`
+	TurnId       *string             `json:"turn_id,omitempty"`
+	UpdatedAt    time.Time           `json:"updated_at"`
+	Version      int64               `json:"version"`
 }
 
 // AgentRunRuntimeStatus defines model for AgentRunRuntimeStatus.
@@ -449,6 +527,12 @@ type ActorRefQuery = string
 // ActorTypeHeader defines model for ActorTypeHeader.
 type ActorTypeHeader string
 
+// AgentActivityKindQuery defines model for AgentActivityKindQuery.
+type AgentActivityKindQuery = AgentActivityKind
+
+// AgentActivityStatusQuery defines model for AgentActivityStatusQuery.
+type AgentActivityStatusQuery = AgentActivityStatus
+
 // AssigneeKindQuery defines model for AssigneeKindQuery.
 type AssigneeKindQuery = string
 
@@ -526,6 +610,35 @@ type RateLimited = SafeError
 
 // Unauthorized defines model for Unauthorized.
 type Unauthorized = SafeError
+
+// ListAgentRunActivitiesParams defines parameters for ListAgentRunActivities.
+type ListAgentRunActivitiesParams struct {
+	// ActivityKind Фильтр по виду safe activity entry.
+	ActivityKind *AgentActivityKindQuery `form:"activity_kind,omitempty" json:"activity_kind,omitempty"`
+
+	// Status Фильтр по статусу safe activity entry.
+	Status    *AgentActivityStatusQuery `form:"status,omitempty" json:"status,omitempty"`
+	PageSize  *PageSizeQuery            `form:"page_size,omitempty" json:"page_size,omitempty"`
+	PageToken *PageTokenQuery           `form:"page_token,omitempty" json:"page_token,omitempty"`
+
+	// XKodexRequestId Идентификатор запроса для трассировки. Gateway может заменить невалидное значение.
+	XKodexRequestId *RequestIdHeader `json:"X-Kodex-Request-Id,omitempty"`
+
+	// XKodexTraceId Безопасная ссылка на трассу.
+	XKodexTraceId *TraceIdHeader `json:"X-Kodex-Trace-Id,omitempty"`
+
+	// XKodexSessionId Безопасная ссылка на пользовательскую сессию.
+	XKodexSessionId *SessionIdHeader `json:"X-Kodex-Session-Id,omitempty"`
+
+	// XKodexActorType Тип проверенного субъекта от внешнего auth boundary.
+	XKodexActorType ListAgentRunActivitiesParamsXKodexActorType `json:"X-Kodex-Actor-Type"`
+
+	// XKodexActorId Safe id проверенного субъекта без email и имени.
+	XKodexActorId ActorIdHeader `json:"X-Kodex-Actor-Id"`
+}
+
+// ListAgentRunActivitiesParamsXKodexActorType defines parameters for ListAgentRunActivities.
+type ListAgentRunActivitiesParamsXKodexActorType string
 
 // GetAgentRunRuntimeStatusParams defines parameters for GetAgentRunRuntimeStatus.
 type GetAgentRunRuntimeStatusParams struct {

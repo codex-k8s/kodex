@@ -53,6 +53,25 @@ func (h handlers) getAgentRunRuntimeStatus(w http.ResponseWriter, req *http.Requ
 	handleQuery(w, req, GetAgentRunRuntimeStatusRequest, h.agentManager.GetAgentRunRuntimeStatus, AgentRunRuntimeStatusResponse, agentManagerError)
 }
 
+func (h handlers) listAgentRunActivities(w http.ResponseWriter, req *http.Request) {
+	input, safeErr := ListAgentActivitiesRequest(req)
+	if safeErr != nil {
+		WriteSafeError(w, req, safeErr)
+		return
+	}
+	response, err := h.agentManager.ListAgentActivities(req.Context(), input)
+	if err != nil {
+		WriteSafeError(w, req, agentManagerError(err))
+		return
+	}
+	output, safeErr := AgentRunActivitiesResponse(response, input.GetRunId(), requestIDFromContext(req.Context()))
+	if safeErr != nil {
+		WriteSafeError(w, req, safeErr)
+		return
+	}
+	writeJSON(w, http.StatusOK, output)
+}
+
 func decodeOwnerInboxRespondBody(req *http.Request) (OwnerInboxRespondBody, *SafeError) {
 	var body OwnerInboxRespondBody
 	decoder := json.NewDecoder(req.Body)

@@ -4,7 +4,7 @@ info:
   version: 1.0.0
   description: |
     HTTP-поверхность для операторской консоли сотрудников.
-    Первый срез отдаёт входящие решения владельца из interaction-hub и передаёт безопасный ответ через RecordInteractionResponse.
+    Первый контур отдаёт входящие решения владельца из interaction-hub, runtime summary и safe activity timeline из agent-manager.
   license:
     name: Proprietary
     url: https://github.com/codex-k8s/kodex
@@ -180,6 +180,46 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/DownstreamUnavailable'
+  /v1/agent-runs/{run_id}/activities:
+    get:
+      tags: [agent-runs]
+      operationId: listAgentRunActivities
+      summary: Получить безопасную activity timeline для agent Run.
+      description: |
+        Возвращает безопасные записи `agent-manager.ListAgentActivities` для одного Run.
+        Gateway не читает БД `agent-manager`, не ходит в Kubernetes/runtime/provider и не возвращает raw tool input/output,
+        stdout/stderr, prompt body, transcript, provider payload, workspace paths, secret values или большие логи.
+        Time range в этом endpoint не поддержан, потому что его нет в текущем typed gRPC-контракте.
+      parameters:
+        - $ref: '#/components/parameters/RunIdPath'
+        - $ref: '#/components/parameters/RequestIdHeader'
+        - $ref: '#/components/parameters/TraceIdHeader'
+        - $ref: '#/components/parameters/SessionIdHeader'
+        - $ref: '#/components/parameters/ActorTypeHeader'
+        - $ref: '#/components/parameters/ActorIdHeader'
+        - $ref: '#/components/parameters/AgentActivityKindQuery'
+        - $ref: '#/components/parameters/AgentActivityStatusQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/PageTokenQuery'
+      responses:
+        '200':
+          description: Activity timeline получена.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentRunActivitiesResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/PermissionDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/DownstreamUnavailable'
 components:
   parameters:
     RunIdPath:
@@ -190,6 +230,20 @@ components:
         type: string
         pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
       description: Safe id `AgentRun`.
+    AgentActivityKindQuery:
+      name: activity_kind
+      in: query
+      required: false
+      schema:
+        $ref: '#/components/schemas/AgentActivityKind'
+      description: Фильтр по виду safe activity entry.
+    AgentActivityStatusQuery:
+      name: status
+      in: query
+      required: false
+      schema:
+        $ref: '#/components/schemas/AgentActivityStatus'
+      description: Фильтр по статусу safe activity entry.
     RequestIdPath:
       name: request_id
       in: path
@@ -375,25 +429,25 @@ components:
           schema:
             $ref: '#/components/schemas/SafeError'
     NotFound:
-      description: Входящее решение не найдено или не видно вызывающей стороне.
+      description: Ресурс не найден или не виден вызывающей стороне.
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/SafeError'
     Conflict:
-      description: Конфликт версии, terminal lifecycle или action вне allowed actions.
+      description: Конфликт версии, lifecycle или action вне allowed actions.
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/SafeError'
     RateLimited:
-      description: interaction-hub ограничил частоту запросов.
+      description: Доменный сервис ограничил частоту запросов.
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/SafeError'
     DownstreamUnavailable:
-      description: interaction-hub временно недоступен.
+      description: Доменный сервис временно недоступен.
       content:
         application/json:
           schema:
@@ -493,6 +547,32 @@ components:
         - AgentRuntimeJobStatusFailed
         - AgentRuntimeJobStatusCancelled
         - AgentRuntimeJobStatusTimedOut
+    AgentActivityKind:
+      type: string
+      enum: [unspecified, lifecycle, tool_use, tool_result, permission, provider_signal, runtime_signal, checkpoint, other]
+      x-enum-varnames:
+        - AgentActivityKindUnspecified
+        - AgentActivityKindLifecycle
+        - AgentActivityKindToolUse
+        - AgentActivityKindToolResult
+        - AgentActivityKindPermission
+        - AgentActivityKindProviderSignal
+        - AgentActivityKindRuntimeSignal
+        - AgentActivityKindCheckpoint
+        - AgentActivityKindOther
+    AgentActivityStatus:
+      type: string
+      enum: [unspecified, planned, started, succeeded, failed, denied, waiting, cancelled, skipped]
+      x-enum-varnames:
+        - AgentActivityStatusUnspecified
+        - AgentActivityStatusPlanned
+        - AgentActivityStatusStarted
+        - AgentActivityStatusSucceeded
+        - AgentActivityStatusFailed
+        - AgentActivityStatusDenied
+        - AgentActivityStatusWaiting
+        - AgentActivityStatusCancelled
+        - AgentActivityStatusSkipped
     DeliveryAttemptStatus:
       type: string
       enum: [unspecified, queued, sent, accepted, delivered, failed, cancelled, expired]
@@ -884,3 +964,97 @@ components:
           maxLength: 128
         follow_up_waiting:
           type: boolean
+    AgentRunActivitiesResponse:
+      type: object
+      additionalProperties: false
+      required: [request_id, activities, page]
+      properties:
+        request_id:
+          type: string
+        correlation_id:
+          type: string
+        run_id:
+          type: string
+          pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+        activities:
+          type: array
+          items:
+            $ref: '#/components/schemas/AgentRunActivity'
+        page:
+          $ref: '#/components/schemas/PageInfo'
+    AgentRunActivity:
+      type: object
+      additionalProperties: false
+      required:
+        - activity_id
+        - session_id
+        - activity_kind
+        - status
+        - created_at
+        - updated_at
+        - version
+      properties:
+        activity_id:
+          type: string
+          maxLength: 128
+        session_id:
+          type: string
+          maxLength: 128
+        run_id:
+          type: string
+          pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+        turn_id:
+          type: string
+          maxLength: 128
+        tool_use_id:
+          type: string
+          maxLength: 128
+        activity_kind:
+          $ref: '#/components/schemas/AgentActivityKind'
+        tool_name:
+          type: string
+          maxLength: 128
+        tool_category:
+          type: string
+          maxLength: 128
+        status:
+          $ref: '#/components/schemas/AgentActivityStatus'
+        started_at:
+          type: string
+          format: date-time
+        finished_at:
+          type: string
+          format: date-time
+        duration_ms:
+          type: integer
+          format: int64
+          minimum: 0
+        safe_summary:
+          type: string
+          maxLength: 2000
+        payload_digest:
+          type: string
+          maxLength: 256
+        bounded_error:
+          type: string
+          maxLength: 2000
+        safe_refs_json:
+          type: string
+          maxLength: 8192
+          description: Bounded JSON object with refs only; never raw payload.
+        safe_details_json:
+          type: string
+          maxLength: 8192
+          description: Bounded JSON object with safe display details only.
+        correlation_id:
+          type: string
+          maxLength: 256
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          format: int64
