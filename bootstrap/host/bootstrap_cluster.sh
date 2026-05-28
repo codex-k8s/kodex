@@ -131,6 +131,9 @@ run_preflight() {
     fi
     (cd "$PROJECT_ROOT" && go run ./cmd/bootstrap-preflight "${args[@]}")
   else
+    if [ "$REQUIRE_KUBERNETES" = "true" ]; then
+      die "Go binary is required for strict bootstrap preflight"
+    fi
     log "Go binary is not present; stackinventory render preflight is deferred until host preparation"
   fi
 }

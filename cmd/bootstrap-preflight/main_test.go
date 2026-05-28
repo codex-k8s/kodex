@@ -43,6 +43,36 @@ func TestRunPreflightRendersWithoutPrintingEnvValues(t *testing.T) {
 	}
 }
 
+func TestRunPreflightRejectsNonEmptyRenderDirWithoutDeletingIt(t *testing.T) {
+	clearPreflightEnv(t)
+	repoRoot := createPreflightRepo(t)
+	envFile := filepath.Join(t.TempDir(), "config.env")
+	if err := os.WriteFile(envFile, []byte("OPERATOR_USER='codex'\nKODEX_INTERNAL_REGISTRY_HOST='127.0.0.1:5000'\n"), 0o600); err != nil {
+		t.Fatalf("write env file: %v", err)
+	}
+	renderDir := t.TempDir()
+	markerPath := filepath.Join(renderDir, "keep.txt")
+	if err := os.WriteFile(markerPath, []byte("keep"), 0o600); err != nil {
+		t.Fatalf("write marker: %v", err)
+	}
+
+	err := run(context.Background(), preflightOptions{
+		RepoRoot:           repoRoot,
+		EnvFilePath:        envFile,
+		RenderDir:          renderDir,
+		SkipLiveKubernetes: true,
+	}, ioDiscard{})
+	if err == nil {
+		t.Fatal("expected non-empty render dir error")
+	}
+	if !strings.Contains(err.Error(), "render dir must be empty") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, err := os.ReadFile(markerPath); err != nil || string(got) != "keep" {
+		t.Fatalf("marker file was changed or removed: content=%q err=%v", string(got), err)
+	}
+}
+
 func TestRunPreflightFailsWithoutOperatorUser(t *testing.T) {
 	clearPreflightEnv(t)
 	repoRoot := createPreflightRepo(t)
