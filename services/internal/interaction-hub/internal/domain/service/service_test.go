@@ -702,6 +702,32 @@ func TestServiceRejectsRequestChangesWithoutSafeSummaryOrObject(t *testing.T) {
 	}
 }
 
+func TestServiceRejectsRequestChangesResponseWhenActionNotAllowed(t *testing.T) {
+	t.Parallel()
+
+	repository := newFakeRepository()
+	now := time.Date(2026, 5, 27, 16, 45, 0, 0, time.UTC)
+	requestID := uuid.New()
+	seedInteractionRequest(repository, requestID, now, enum.InteractionRequestStatusWaiting)
+	svc := New(repository)
+
+	_, _, err := svc.RecordInteractionResponse(context.Background(), RecordInteractionResponseInput{
+		Meta:                validVersionedCommandMeta(1),
+		RequestID:           requestID,
+		ResponseAction:      enum.InteractionResponseActionRequestChanges,
+		RespondedByActorRef: "user:owner-1",
+		ResponseSummary:     "needs changes but request does not allow that action",
+		SourceKind:          enum.InteractionResponseSourceKindWebConsole,
+		SourceRef:           "staff-gateway:response-request-changes-not-allowed",
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("RecordInteractionResponse() err = %v, want ErrConflict", err)
+	}
+	if len(repository.responses) != 0 || len(repository.events) != 0 {
+		t.Fatalf("responses=%d events=%d, want no mutation for disallowed request_changes", len(repository.responses), len(repository.events))
+	}
+}
+
 func TestServiceRecordInteractionResponseRejectsStaleVersion(t *testing.T) {
 	t.Parallel()
 
@@ -1761,6 +1787,38 @@ func TestServiceRejectsDeliveryIDOnlyChannelCallbackWithDiagnostic(t *testing.T)
 	}
 	if len(repository.callbacks) != 1 || len(repository.events) != 2 {
 		t.Fatalf("callbacks=%d events=%d, want diagnostic callback write", len(repository.callbacks), len(repository.events))
+	}
+}
+
+func TestServiceRejectsRequestChangesCallbackWhenActionNotAllowed(t *testing.T) {
+	t.Parallel()
+
+	repository := newFakeRepository()
+	now := time.Date(2026, 5, 27, 17, 0, 0, 0, time.UTC)
+	requestID := uuid.New()
+	routeID := uuid.New()
+	seedInteractionRequest(repository, requestID, now, enum.InteractionRequestStatusWaiting)
+	seedDeliveryRoute(repository, routeID, now)
+	svc := NewWithConfig(repository, Config{Clock: fixedClock{now: now.Add(time.Minute)}, UUIDGenerator: &sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New(), uuid.New(), uuid.New()}}})
+	planned, err := svc.PlanDelivery(context.Background(), validPlanDeliveryInput(requestID, routeID))
+	if err != nil {
+		t.Fatalf("PlanDelivery(): %v", err)
+	}
+	input := validRecordChannelCallbackInput(planned.DeliveryID, requestID)
+	input.Callback.Action = string(enum.InteractionResponseActionRequestChanges)
+
+	result, err := svc.RecordChannelCallback(context.Background(), input)
+	if err != nil {
+		t.Fatalf("RecordChannelCallback() disallowed request_changes: %v", err)
+	}
+	if result.Response != nil || result.Callback.ProcessingStatus != enum.CallbackProcessingStatusRejected || result.Callback.ErrorCode != callbackErrorActionNotAllowed {
+		t.Fatalf("result = %+v, want rejected diagnostic callback without response", result)
+	}
+	if storedRequest := repository.requests[requestID]; storedRequest.Status != enum.InteractionRequestStatusWaiting || storedRequest.Version != 1 {
+		t.Fatalf("request = %+v, want unchanged waiting request", storedRequest)
+	}
+	if len(repository.responses) != 0 || len(repository.events) != 2 {
+		t.Fatalf("responses=%d events=%d, want delivery and diagnostic callback only", len(repository.responses), len(repository.events))
 	}
 }
 
