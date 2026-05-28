@@ -59,7 +59,7 @@ type Config struct {
 	OutboxRetryInitialDelay                         time.Duration `env:"KODEX_GOVERNANCE_MANAGER_OUTBOX_RETRY_INITIAL_DELAY" envDefault:"1s"`
 	OutboxRetryMaxDelay                             time.Duration `env:"KODEX_GOVERNANCE_MANAGER_OUTBOX_RETRY_MAX_DELAY" envDefault:"1m"`
 	OutboxFailureLimit                              int           `env:"KODEX_GOVERNANCE_MANAGER_OUTBOX_FAILURE_MESSAGE_LIMIT" envDefault:"512"`
-	ProviderReviewSignalConsumerEnabled             bool          `env:"KODEX_GOVERNANCE_MANAGER_PROVIDER_REVIEW_SIGNAL_CONSUMER_ENABLED" envDefault:"true"`
+	ProviderReviewSignalConsumerEnabled             bool          `env:"KODEX_GOVERNANCE_MANAGER_PROVIDER_REVIEW_SIGNAL_CONSUMER_ENABLED" envDefault:"false"`
 	ProviderReviewSignalConsumerName                string        `env:"KODEX_GOVERNANCE_MANAGER_PROVIDER_REVIEW_SIGNAL_CONSUMER_NAME" envDefault:"governance-manager.provider-review-signal"`
 	ProviderReviewSignalConsumerLeaseOwner          string        `env:"KODEX_GOVERNANCE_MANAGER_PROVIDER_REVIEW_SIGNAL_CONSUMER_LEASE_OWNER"`
 	ProviderReviewSignalConsumerBatchSize           int           `env:"KODEX_GOVERNANCE_MANAGER_PROVIDER_REVIEW_SIGNAL_CONSUMER_BATCH_SIZE" envDefault:"50"`
