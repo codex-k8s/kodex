@@ -870,6 +870,7 @@ type releaseEvidenceUpdateConfig struct {
 	ReasonCode              string
 	SafeSummary             string
 	EnrichIntegrationRefs   bool
+	ReplayReturnsStored     bool
 	NormalizePayload        func([]byte) ([]byte, error)
 	ValidateIntegrationRefs func([]value.ReleaseIntegrationRef) error
 	Merge                   func(entity.ReleaseDecisionPackage, []byte, []value.EvidenceRef, []value.ReleaseIntegrationRef) (entity.ReleaseDecisionPackage, bool, error)
@@ -891,6 +892,7 @@ var (
 		ReasonCode:              "agent_evidence_recorded",
 		SafeSummary:             "agent evidence refs recorded",
 		EnrichIntegrationRefs:   true,
+		ReplayReturnsStored:     true,
 		NormalizePayload:        normalizeAgentReleaseEvidencePayload,
 		ValidateIntegrationRefs: validateAgentReleaseIntegrationRefs,
 		Merge:                   mergeReleaseAgentEvidence,
@@ -921,6 +923,9 @@ func (s *Service) recordReleaseEvidence(ctx context.Context, input releaseEviden
 		replayedPackage, err := s.repository.GetReleaseDecisionPackage(ctx, input.ReleaseDecisionPackageID)
 		if err != nil {
 			return entity.ReleaseDecisionPackage{}, err
+		}
+		if cfg.ReplayReturnsStored {
+			return replayedPackage, nil
 		}
 		mergeInput, err := s.releaseEvidenceMergeInput(ctx, input, cfg)
 		if err != nil {

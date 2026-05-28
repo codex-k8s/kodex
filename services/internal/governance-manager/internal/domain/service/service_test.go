@@ -2289,6 +2289,71 @@ func TestRecordReleaseAgentEvidenceVerifiesGovernanceRefs(t *testing.T) {
 	}
 }
 
+func TestRecordReleaseAgentEvidenceReplayKeepsStoredGovernanceSnapshot(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
+	packageID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+	gateRequestID := uuid.MustParse("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee")
+	commandID := uuid.MustParse("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
+	expectedVersion := int64(3)
+	repository := &fakeRepository{
+		ready: true,
+		releasePackage: entity.ReleaseDecisionPackage{
+			VersionedBase:       entity.VersionedBase{ID: packageID, Version: expectedVersion},
+			ReleaseCandidateRef: "release:v1.0.0",
+			ProjectContext:      value.ProjectContextRef{ProjectRef: "project:alpha"},
+			Status:              enum.ReleaseDecisionPackageStatusReady,
+		},
+		gateRequest: entity.GateRequest{
+			VersionedBase: entity.VersionedBase{ID: gateRequestID, Version: 1, CreatedAt: now.Add(-time.Hour), UpdatedAt: now.Add(-time.Minute)},
+			Target:        value.ExternalRef{Type: "release_candidate", Ref: "release:v1.0.0"},
+			Status:        enum.GateRequestStatusAwaitingDecision,
+		},
+	}
+	service := NewWithConfig(Config{
+		Repository:  repository,
+		Clock:       fixedClock{now: now},
+		IDGenerator: &fixedIDs{ids: []uuid.UUID{uuid.MustParse("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")}},
+		Authorizer:  AllowAllAuthorizer{},
+	})
+	input := RecordReleaseAgentEvidenceInput{
+		ReleaseDecisionPackageID: packageID,
+		IntegrationRefs:          []value.ReleaseIntegrationRef{{Domain: "governance", Kind: "gate_request", Ref: gateRequestID.String()}},
+		Meta: CommandMeta{
+			CommandID:       &commandID,
+			ExpectedVersion: &expectedVersion,
+			Actor:           value.Actor{Type: "service", ID: "agent-manager"},
+		},
+	}
+
+	item, err := service.RecordReleaseAgentEvidence(context.Background(), input)
+	if err != nil {
+		t.Fatalf("RecordReleaseAgentEvidence(): %v", err)
+	}
+	if len(item.IntegrationRefs) != 1 || item.IntegrationRefs[0].Status != string(enum.GateRequestStatusAwaitingDecision) {
+		t.Fatalf("integration refs = %+v, want first authoritative gate snapshot", item.IntegrationRefs)
+	}
+	repository.hasCommandResult = true
+	repository.commandResult = repository.result
+	repository.gateRequest.Status = enum.GateRequestStatusResolved
+	repository.gateRequest.Version = 2
+	repository.gateRequest.UpdatedAt = now
+	mutationCalls := repository.mutationCalls
+	eventCount := len(repository.events)
+
+	replayed, err := service.RecordReleaseAgentEvidence(context.Background(), input)
+	if err != nil {
+		t.Fatalf("RecordReleaseAgentEvidence(replay): %v", err)
+	}
+	if replayed.Version != item.Version || len(replayed.IntegrationRefs) != 1 || replayed.IntegrationRefs[0].Status != string(enum.GateRequestStatusAwaitingDecision) {
+		t.Fatalf("replayed package = %+v, want stored first-write snapshot", replayed)
+	}
+	if repository.mutationCalls != mutationCalls || len(repository.events) != eventCount {
+		t.Fatalf("replay mutations/events = %d/%d, want %d/%d", repository.mutationCalls, len(repository.events), mutationCalls, eventCount)
+	}
+}
+
 func TestRecordReleaseAgentEvidenceDuplicateFingerprintIsIdempotent(t *testing.T) {
 	t.Parallel()
 
