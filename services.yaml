@@ -932,10 +932,11 @@ spec:
         - interaction-hub
       implementation:
         businessState: none
-        description: staff edge for owner inbox decisions and agent run runtime summary
-        firstSurface: owner-inbox-list-detail-respond-runtime-status
+        description: staff edge for owner inbox decisions, agent run runtime summary and activity timeline
+        firstSurface: owner-inbox-list-detail-respond-runtime-status-activity-timeline
         downstreamCalls:
           - agent-manager.GetAgentRunRuntimeStatus
+          - agent-manager.ListAgentActivities
           - interaction-hub.ListOwnerInboxItems
           - interaction-hub.GetOwnerInboxItem
           - interaction-hub.RecordInteractionResponse
