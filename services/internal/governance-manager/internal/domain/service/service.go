@@ -2030,20 +2030,30 @@ func normalizeEventSafeEvidenceRefs(refs []value.EvidenceRef, refName string, su
 }
 
 func normalizeEventSafeEvidenceRef(ref value.EvidenceRef, refName string, summaryName string) (value.EvidenceRef, error) {
+	return normalizeSafeEvidenceRef(ref, refName, summaryName, validateEventSafeRef, validateEventSafeText)
+}
+
+func normalizeSafeEvidenceRef(
+	ref value.EvidenceRef,
+	refName string,
+	summaryName string,
+	validateRef func(string, string, bool) error,
+	validateText func(string, string, int) error,
+) (value.EvidenceRef, error) {
 	normalized := trimEvidenceRef(ref)
 	if normalized.Kind == "" || normalized.Ref == "" {
 		return value.EvidenceRef{}, errs.ErrInvalidArgument
 	}
-	if err := validateEventSafeRef(refName, normalized.Ref, true); err != nil {
+	if err := validateRef(refName, normalized.Ref, true); err != nil {
 		return value.EvidenceRef{}, err
 	}
-	if err := validateEventSafeText(summaryName, normalized.Summary, maxEvaluationFactorSummary); err != nil {
+	if err := validateText(summaryName, normalized.Summary, maxEvaluationFactorSummary); err != nil {
 		return value.EvidenceRef{}, err
 	}
-	if err := validateEventSafeRef("evidence_ref.digest", normalized.Digest, false); err != nil {
+	if err := validateRef("evidence_ref.digest", normalized.Digest, false); err != nil {
 		return value.EvidenceRef{}, err
 	}
-	if err := validateEventSafeRef("evidence_ref.retention_class", normalized.RetentionClass, false); err != nil {
+	if err := validateRef("evidence_ref.retention_class", normalized.RetentionClass, false); err != nil {
 		return value.EvidenceRef{}, err
 	}
 	return normalized, nil

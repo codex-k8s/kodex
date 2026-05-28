@@ -782,17 +782,7 @@ func normalizeEvidenceRefs(refs []value.EvidenceRef) ([]value.EvidenceRef, error
 }
 
 func normalizeEvidenceRef(ref value.EvidenceRef, refName string, summaryName string) (value.EvidenceRef, error) {
-	normalized := trimEvidenceRef(ref)
-	if normalized.Kind == "" || normalized.Ref == "" {
-		return value.EvidenceRef{}, errs.ErrInvalidArgument
-	}
-	if err := validateSafeRef(refName, normalized.Ref, true); err != nil {
-		return value.EvidenceRef{}, err
-	}
-	if err := validateSafeText(summaryName, normalized.Summary, maxEvaluationFactorSummary); err != nil {
-		return value.EvidenceRef{}, err
-	}
-	return normalized, nil
+	return normalizeSafeEvidenceRef(ref, refName, summaryName, validateReleaseSafeRef, validateReleaseSafeText)
 }
 
 func trimEvidenceRef(ref value.EvidenceRef) value.EvidenceRef {

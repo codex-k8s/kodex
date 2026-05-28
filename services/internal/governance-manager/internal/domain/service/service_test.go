@@ -2194,6 +2194,68 @@ func TestRecordReleaseRuntimeEvidenceRejectsConflictingFingerprintAndStaleStatus
 	}
 }
 
+func TestRecordReleaseRuntimeEvidenceRejectsUnsafeEvidenceMetadata(t *testing.T) {
+	t.Parallel()
+
+	packageID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+	expectedVersion := int64(3)
+	baseRepository := &fakeRepository{
+		ready: true,
+		releasePackage: entity.ReleaseDecisionPackage{
+			VersionedBase:       entity.VersionedBase{ID: packageID, Version: expectedVersion},
+			ReleaseCandidateRef: "release:v1.0.0",
+			ProjectContext:      value.ProjectContextRef{ProjectRef: "project:alpha"},
+			Status:              enum.ReleaseDecisionPackageStatusReady,
+		},
+	}
+
+	for _, tc := range []struct {
+		name        string
+		evidenceRef value.EvidenceRef
+	}{
+		{
+			name: "unsafe digest",
+			evidenceRef: value.EvidenceRef{
+				Kind:           "runtime_job",
+				Ref:            "runtime:job:deploy",
+				Summary:        "deploy job status",
+				Digest:         "secret=runtime-token",
+				RetentionClass: "safe_ref",
+			},
+		},
+		{
+			name: "unsafe retention class",
+			evidenceRef: value.EvidenceRef{
+				Kind:           "runtime_job",
+				Ref:            "runtime:job:deploy",
+				Summary:        "deploy job status",
+				Digest:         "sha256:deploy",
+				RetentionClass: "kubeconfig",
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repository := *baseRepository
+			_, err := newTestService(&repository).RecordReleaseRuntimeEvidence(context.Background(), RecordReleaseRuntimeEvidenceInput{
+				ReleaseDecisionPackageID: packageID,
+				EvidenceRefs:             []value.EvidenceRef{tc.evidenceRef},
+				IntegrationRefs:          []value.ReleaseIntegrationRef{{Domain: "runtime", Kind: "job", Ref: "runtime:job:deploy", Status: "running"}},
+				Meta: CommandMeta{
+					CommandID:       ptrUUID(uuid.New()),
+					ExpectedVersion: &expectedVersion,
+					Actor:           value.Actor{Type: "service", ID: "runtime-manager"},
+				},
+			})
+			if !errors.Is(err, errs.ErrInvalidArgument) {
+				t.Fatalf("RecordReleaseRuntimeEvidence() error = %v, want ErrInvalidArgument", err)
+			}
+			if repository.mutationCalls != 0 || len(repository.events) != 0 {
+				t.Fatalf("mutation calls/events = %d/%d, want 0/0", repository.mutationCalls, len(repository.events))
+			}
+		})
+	}
+}
+
 func TestRecordReleaseRuntimeEvidenceRejectsStaleUnknownAndUnsafeInputs(t *testing.T) {
 	t.Parallel()
 
