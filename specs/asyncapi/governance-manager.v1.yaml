@@ -39,6 +39,7 @@ components:
         - $ref: '#/components/schemas/GateCancelledEvent'
         - $ref: '#/components/schemas/GateExpiredEvent'
         - $ref: '#/components/schemas/ReleaseDecisionPackageBuiltEvent'
+        - $ref: '#/components/schemas/ReleaseDecisionPackageRuntimeEvidenceRecordedEvent'
         - $ref: '#/components/schemas/ReleaseDecisionRequestedEvent'
         - $ref: '#/components/schemas/ReleaseDecisionResolvedEvent'
         - $ref: '#/components/schemas/ReleaseSafetyStateChangedEvent'
@@ -167,6 +168,14 @@ components:
       type: object
       properties: {event_type: {type: string, const: governance.release_decision_package.built}, aggregate_type: {type: string, const: release_decision_package}, payload: {$ref: '#/components/schemas/ReleaseDecisionPackageBuiltPayload'}}
       required: [event_type, aggregate_type, payload]
+    ReleaseDecisionPackageRuntimeEvidenceRecordedEvent:
+      allOf:
+        - $ref: '#/components/schemas/GovernanceEventEnvelopeBase'
+        - $ref: '#/components/schemas/ReleaseDecisionPackageRuntimeEvidenceRecordedEventKind'
+    ReleaseDecisionPackageRuntimeEvidenceRecordedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: governance.release_decision_package.runtime_evidence_recorded}, aggregate_type: {type: string, const: release_decision_package}, payload: {$ref: '#/components/schemas/ReleaseDecisionPackageRuntimeEvidenceRecordedPayload'}}
+      required: [event_type, aggregate_type, payload]
 
     ReleaseDecisionRequestedEvent:
       allOf:
@@ -209,6 +218,7 @@ components:
         - governance.gate.cancelled
         - governance.gate.expired
         - governance.release_decision_package.built
+        - governance.release_decision_package.runtime_evidence_recorded
         - governance.release_decision.requested
         - governance.release_decision.resolved
         - governance.release_safety_state.changed
@@ -370,6 +380,11 @@ components:
         - $ref: '#/components/schemas/GovernanceEventPayload'
         - type: object
           required: [release_decision_package_id, release_candidate_ref, project_ref, status, version]
+    ReleaseDecisionPackageRuntimeEvidenceRecordedPayload:
+      allOf:
+        - $ref: '#/components/schemas/GovernanceEventPayload'
+        - type: object
+          required: [release_decision_package_id, release_candidate_ref, project_ref, status, reason_code, version]
     ReleaseDecisionRequestedPayload:
       allOf:
         - $ref: '#/components/schemas/GovernanceEventPayload'

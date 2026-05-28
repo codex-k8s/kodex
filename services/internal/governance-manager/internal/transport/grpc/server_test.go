@@ -134,6 +134,7 @@ func TestBuildReleaseDecisionPackageRoutesIntegrationRefsToDomainService(t *test
 			Digest:     ptrString("sha256:release-pr"),
 			ObservedAt: ptrString("2026-05-27T11:00:00Z"),
 			Version:    ptrString("provider-version:1"),
+			ErrorCode:  ptrString("CHECK_WARNED"),
 		}},
 		Meta: &governancev1.CommandMeta{
 			Actor:     &governancev1.Actor{Type: "service", Id: "agent-manager"},
@@ -148,6 +149,58 @@ func TestBuildReleaseDecisionPackageRoutesIntegrationRefsToDomainService(t *test
 	}
 	if response.GetReleaseDecisionPackage().GetId() != packageID || len(response.GetReleaseDecisionPackage().GetIntegrationRefs()) != 1 {
 		t.Fatalf("response = %+v, want package %s with one integration ref", response.GetReleaseDecisionPackage(), packageID)
+	}
+	if response.GetReleaseDecisionPackage().GetIntegrationRefs()[0].GetErrorCode() != "CHECK_WARNED" {
+		t.Fatalf("error code was not round-tripped")
+	}
+}
+
+func TestRecordReleaseRuntimeEvidenceRoutesToDomainService(t *testing.T) {
+	t.Parallel()
+
+	packageID := "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"
+	expectedVersion := int64(7)
+	service := &fakeBacklogService{}
+	response, err := NewServer(service).RecordReleaseRuntimeEvidence(context.Background(), &governancev1.RecordReleaseRuntimeEvidenceRequest{
+		ReleaseDecisionPackageId: packageID,
+		RuntimeRefs: []*governancev1.RuntimeContextRef{{
+			JobRef:     ptrString("runtime:job:deploy"),
+			SummaryRef: ptrString("runtime:summary:deploy"),
+		}},
+		EvidenceRefs: []*governancev1.EvidenceRef{{
+			Kind:           governancev1.EvidenceKind_EVIDENCE_KIND_RUNTIME_SUMMARY,
+			Ref:            "runtime:job:deploy",
+			Summary:        "deploy status",
+			Digest:         ptrString("sha256:deploy"),
+			RetentionClass: ptrString("safe_ref"),
+		}},
+		IntegrationRefs: []*governancev1.ReleaseIntegrationRef{{
+			Domain:    "runtime",
+			Kind:      "deploy",
+			Ref:       "runtime:job:deploy",
+			Status:    ptrString("failed"),
+			Summary:   ptrString("deploy failed with bounded diagnostic"),
+			Digest:    ptrString("sha256:deploy"),
+			Version:   ptrString("job-version:7"),
+			ErrorCode: ptrString("DEPLOY_HEALTHCHECK_FAILED"),
+		}},
+		Meta: &governancev1.CommandMeta{
+			Actor:           &governancev1.Actor{Type: "service", Id: "runtime-manager"},
+			CommandId:       ptrString("bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb"),
+			ExpectedVersion: &expectedVersion,
+		},
+	})
+	if err != nil {
+		t.Fatalf("RecordReleaseRuntimeEvidence(): %v", err)
+	}
+	if service.recordReleaseRuntimeEvidenceInput.ReleaseDecisionPackageID.String() != packageID || len(service.recordReleaseRuntimeEvidenceInput.IntegrationRefs) != 1 {
+		t.Fatalf("input = %+v, want routed runtime evidence", service.recordReleaseRuntimeEvidenceInput)
+	}
+	if service.recordReleaseRuntimeEvidenceInput.IntegrationRefs[0].ErrorCode != "DEPLOY_HEALTHCHECK_FAILED" {
+		t.Fatalf("input error code = %q, want bounded runtime error code", service.recordReleaseRuntimeEvidenceInput.IntegrationRefs[0].ErrorCode)
+	}
+	if response.GetReleaseDecisionPackage().GetIntegrationRefs()[0].GetErrorCode() != "DEPLOY_HEALTHCHECK_FAILED" {
+		t.Fatalf("response = %+v, want runtime error code", response.GetReleaseDecisionPackage())
 	}
 }
 
@@ -220,13 +273,14 @@ func TestUnaryErrorInterceptorMapsRepositoryDomainErrors(t *testing.T) {
 
 type fakeBacklogService struct {
 	governanceService
-	operation                        enum.Operation
-	reevaluateRiskInput              governanceservice.ReevaluateRiskInput
-	riskAssessmentID                 uuid.UUID
-	riskFactorsInput                 governanceservice.ListRiskFactorsInput
-	reviewSignalsInput               governanceservice.ListReviewSignalsInput
-	buildReleaseDecisionPackageInput governanceservice.BuildReleaseDecisionPackageInput
-	requestReleaseDecisionInput      governanceservice.RequestReleaseDecisionInput
+	operation                         enum.Operation
+	reevaluateRiskInput               governanceservice.ReevaluateRiskInput
+	riskAssessmentID                  uuid.UUID
+	riskFactorsInput                  governanceservice.ListRiskFactorsInput
+	reviewSignalsInput                governanceservice.ListReviewSignalsInput
+	buildReleaseDecisionPackageInput  governanceservice.BuildReleaseDecisionPackageInput
+	recordReleaseRuntimeEvidenceInput governanceservice.RecordReleaseRuntimeEvidenceInput
+	requestReleaseDecisionInput       governanceservice.RequestReleaseDecisionInput
 }
 
 func (service *fakeBacklogService) BacklogOperation(_ context.Context, input governanceservice.BacklogOperationInput) error {
@@ -273,6 +327,18 @@ func (service *fakeBacklogService) BuildReleaseDecisionPackage(_ context.Context
 		VersionedBase:       entity.VersionedBase{ID: uuid.MustParse("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"), Version: 1},
 		ReleaseCandidateRef: input.ReleaseCandidateRef,
 		ProjectContext:      input.ProjectContext,
+		IntegrationRefs:     input.IntegrationRefs,
+		Status:              enum.ReleaseDecisionPackageStatusReady,
+	}, nil
+}
+
+func (service *fakeBacklogService) RecordReleaseRuntimeEvidence(_ context.Context, input governanceservice.RecordReleaseRuntimeEvidenceInput) (entity.ReleaseDecisionPackage, error) {
+	service.recordReleaseRuntimeEvidenceInput = input
+	return entity.ReleaseDecisionPackage{
+		VersionedBase:       entity.VersionedBase{ID: input.ReleaseDecisionPackageID, Version: 2},
+		ReleaseCandidateRef: "release:v1.0.0",
+		RuntimeRefs:         input.RuntimeRefs,
+		EvidenceRefs:        input.EvidenceRefs,
 		IntegrationRefs:     input.IntegrationRefs,
 		Status:              enum.ReleaseDecisionPackageStatusReady,
 	}, nil

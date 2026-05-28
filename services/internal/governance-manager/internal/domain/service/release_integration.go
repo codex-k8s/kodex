@@ -125,6 +125,12 @@ func mergeReleaseIntegrationSnapshot(ref value.ReleaseIntegrationRef, snapshot v
 		}
 		result.Version = snapshot.Version
 	}
+	if snapshot.ErrorCode != "" {
+		if result.ErrorCode != "" && result.ErrorCode != snapshot.ErrorCode {
+			return value.ReleaseIntegrationRef{}, errs.ErrInvalidArgument
+		}
+		result.ErrorCode = snapshot.ErrorCode
+	}
 	return result, nil
 }
 

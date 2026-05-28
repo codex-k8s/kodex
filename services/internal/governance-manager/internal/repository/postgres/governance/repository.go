@@ -51,14 +51,17 @@ type mutationStep struct {
 }
 
 const (
-	operationActivateRiskProfileVersion   = "domain.Repository.ActivateRiskProfileVersion"
-	operationArchiveRiskProfile           = "domain.Repository.ArchiveRiskProfile"
-	operationCreateReleaseDecision        = "domain.Repository.CreateReleaseDecision"
-	operationBuildReleaseDecisionPackage  = "domain.Repository.CreateReleaseDecisionPackage"
-	operationCreateGateRequest            = "domain.Repository.CreateGateRequest"
-	operationCreateRiskAssessment         = "domain.Repository.CreateRiskAssessment"
-	operationCreateRiskProfile            = "domain.Repository.CreateRiskProfile"
-	operationCreateRiskProfileVersion     = "domain.Repository.CreateRiskProfileVersion"
+	operationActivateRiskProfileVersion  = "domain.Repository.ActivateRiskProfileVersion"
+	operationArchiveRiskProfile          = "domain.Repository.ArchiveRiskProfile"
+	operationCreateReleaseDecision       = "domain.Repository.CreateReleaseDecision"
+	operationBuildReleaseDecisionPackage = "domain.Repository.CreateReleaseDecisionPackage"
+	operationCreateGateRequest           = "domain.Repository.CreateGateRequest"
+	operationCreateRiskAssessment        = "domain.Repository.CreateRiskAssessment"
+	operationCreateRiskProfile           = "domain.Repository.CreateRiskProfile"
+	operationCreateRiskProfileVersion    = "domain.Repository.CreateRiskProfileVersion"
+)
+
+const (
 	operationGetBlockingSignal            = "domain.Repository.GetBlockingSignal"
 	operationGetCommandResult             = "domain.Repository.GetCommandResult"
 	operationGetGateDecision              = "domain.Repository.GetGateDecision"
@@ -72,29 +75,39 @@ const (
 	operationGetRiskAssessment            = "domain.Repository.GetRiskAssessment"
 	operationGetRiskProfile               = "domain.Repository.GetRiskProfile"
 	operationGetRiskProfileVersion        = "domain.Repository.GetRiskProfileVersion"
-	operationListBlockingSignals          = "domain.Repository.ListBlockingSignals"
-	operationListGateDecisions            = "domain.Repository.ListGateDecisions"
-	operationListGatePolicies             = "domain.Repository.ListGatePolicies"
-	operationListGateRequests             = "domain.Repository.ListGateRequests"
-	operationListReleaseDecisions         = "domain.Repository.ListReleaseDecisions"
-	operationListReleaseDecisionPackages  = "domain.Repository.ListReleaseDecisionPackages"
-	operationListReviewSignals            = "domain.Repository.ListReviewSignals"
-	operationListRiskAssessments          = "domain.Repository.ListRiskAssessments"
-	operationListRiskFactors              = "domain.Repository.ListRiskFactors"
-	operationListRiskProfiles             = "domain.Repository.ListRiskProfiles"
-	operationListRiskRules                = "domain.Repository.ListRiskRules"
-	operationOutboxClaim                  = "domain.Repository.ClaimOutboxEvents"
-	operationOutboxMarkFailed             = "domain.Repository.MarkOutboxEventFailed"
-	operationOutboxMarkPermanent          = "domain.Repository.MarkOutboxEventPermanentlyFailed"
-	operationOutboxMarkPublished          = "domain.Repository.MarkOutboxEventPublished"
-	operationRecordCommandResult          = "domain.Repository.RecordCommandResult"
-	operationRecordBlockingSignal         = "domain.Repository.RecordBlockingSignal"
-	operationRecordReleaseSafetyState     = "domain.Repository.RecordReleaseSafetyState"
-	operationRecordReviewSignal           = "domain.Repository.RecordReviewSignal"
+)
+
+const (
+	operationListBlockingSignals         = "domain.Repository.ListBlockingSignals"
+	operationListGateDecisions           = "domain.Repository.ListGateDecisions"
+	operationListGatePolicies            = "domain.Repository.ListGatePolicies"
+	operationListGateRequests            = "domain.Repository.ListGateRequests"
+	operationListReleaseDecisions        = "domain.Repository.ListReleaseDecisions"
+	operationListReleaseDecisionPackages = "domain.Repository.ListReleaseDecisionPackages"
+	operationListReviewSignals           = "domain.Repository.ListReviewSignals"
+	operationListRiskAssessments         = "domain.Repository.ListRiskAssessments"
+	operationListRiskFactors             = "domain.Repository.ListRiskFactors"
+	operationListRiskProfiles            = "domain.Repository.ListRiskProfiles"
+	operationListRiskRules               = "domain.Repository.ListRiskRules"
+	operationOutboxClaim                 = "domain.Repository.ClaimOutboxEvents"
+	operationOutboxMarkFailed            = "domain.Repository.MarkOutboxEventFailed"
+	operationOutboxMarkPermanent         = "domain.Repository.MarkOutboxEventPermanentlyFailed"
+	operationOutboxMarkPublished         = "domain.Repository.MarkOutboxEventPublished"
+)
+
+const (
+	operationRecordCommandResult      = "domain.Repository.RecordCommandResult"
+	operationRecordBlockingSignal     = "domain.Repository.RecordBlockingSignal"
+	operationRecordReleaseSafetyState = "domain.Repository.RecordReleaseSafetyState"
+	operationRecordReviewSignal       = "domain.Repository.RecordReviewSignal"
+)
+
+const (
 	operationUpdateBlockingSignal         = "domain.Repository.UpdateBlockingSignal"
 	operationSubmitGateDecision           = "domain.Repository.UpdateGateRequestWithDecision"
 	operationUpdateGateRequestStatus      = "domain.Repository.UpdateGateRequestStatus"
 	operationUpdateReleaseDecision        = "domain.Repository.UpdateReleaseDecision"
+	operationUpdateReleasePackageEvidence = "domain.Repository.UpdateReleaseDecisionPackageEvidence"
 	operationUpdateReleasePackageStatus   = "domain.Repository.UpdateReleaseDecisionPackageStatus"
 	operationUpdateReleaseSafetyState     = "domain.Repository.UpdateReleaseSafetyState"
 	operationUpdateRiskAssessment         = "domain.Repository.UpdateRiskAssessment"
@@ -310,9 +323,19 @@ func (r *Repository) CreateReleaseDecisionPackage(ctx context.Context, item enti
 	return r.mutateWithResult(ctx, operationBuildReleaseDecisionPackage, queryReleaseDecisionPackageCreate, releaseDecisionPackageArgs(item), result, &event)
 }
 
+// UpdateReleaseDecisionPackageEvidence updates runtime/deploy evidence refs.
+func (r *Repository) UpdateReleaseDecisionPackageEvidence(ctx context.Context, item entity.ReleaseDecisionPackage, previousVersion int64, result entity.CommandResult, event entity.OutboxEvent) error {
+	eventToStore := event
+	return r.mutateWithResult(ctx, operationUpdateReleasePackageEvidence, queryReleaseDecisionPackageEvidenceUpdate, releaseDecisionPackageEvidenceUpdateArgs(item, previousVersion), result, &eventToStore)
+}
+
 // UpdateReleaseDecisionPackageStatus updates release package lifecycle status.
 func (r *Repository) UpdateReleaseDecisionPackageStatus(ctx context.Context, item entity.ReleaseDecisionPackage, previousVersion int64, result entity.CommandResult, event entity.OutboxEvent) error {
-	return r.mutateWithResult(ctx, operationUpdateReleasePackageStatus, queryReleaseDecisionPackageUpdate, releaseDecisionPackageUpdateArgs(item, previousVersion), result, &event)
+	return r.updateReleaseDecisionPackage(ctx, operationUpdateReleasePackageStatus, queryReleaseDecisionPackageUpdate, releaseDecisionPackageUpdateArgs(item, previousVersion), result, event)
+}
+
+func (r *Repository) updateReleaseDecisionPackage(ctx context.Context, operation string, statement string, args pgx.NamedArgs, result entity.CommandResult, event entity.OutboxEvent) error {
+	return r.mutateWithResult(ctx, operation, statement, args, result, &event)
 }
 
 // GetReleaseDecisionPackage returns a release decision package by id.

@@ -161,6 +161,14 @@ type GetReleaseDecisionPackageInput struct {
 	Meta                     QueryMeta
 }
 
+type RecordReleaseRuntimeEvidenceInput struct {
+	ReleaseDecisionPackageID uuid.UUID
+	RuntimeRefs              []byte
+	EvidenceRefs             []value.EvidenceRef
+	IntegrationRefs          []value.ReleaseIntegrationRef
+	Meta                     CommandMeta
+}
+
 type RequestReleaseDecisionInput struct {
 	ReleaseDecisionPackageID uuid.UUID
 	RequestGateIfRequired    bool

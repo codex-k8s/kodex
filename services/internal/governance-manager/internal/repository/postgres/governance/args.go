@@ -210,6 +210,18 @@ func releaseDecisionPackageUpdateArgs(item entity.ReleaseDecisionPackage, previo
 	}
 }
 
+func releaseDecisionPackageEvidenceUpdateArgs(item entity.ReleaseDecisionPackage, previousVersion int64) pgx.NamedArgs {
+	return pgx.NamedArgs{
+		"id":               item.ID,
+		"runtime_refs":     jsonArrayPayloadBytes(item.RuntimeRefs),
+		"evidence_refs":    jsonArrayPayload(item.EvidenceRefs),
+		"integration_refs": jsonArrayPayload(item.IntegrationRefs),
+		"version":          item.Version,
+		"updated_at":       item.UpdatedAt,
+		"previous_version": previousVersion,
+	}
+}
+
 func releaseDecisionArgs(item entity.ReleaseDecision) pgx.NamedArgs {
 	return postgreslib.AddBaseArgs(pgx.NamedArgs{
 		"release_decision_package_id": item.ReleaseDecisionPackageID,

@@ -789,6 +789,95 @@ func (s *Service) GetReleaseDecisionPackage(ctx context.Context, input GetReleas
 	return readByID(ctx, input.ReleaseDecisionPackageID, input.Meta, s.authorizeReleaseRead, s.repository.GetReleaseDecisionPackage)
 }
 
+// RecordReleaseRuntimeEvidence appends bounded runtime/deploy refs to an existing release package.
+func (s *Service) RecordReleaseRuntimeEvidence(ctx context.Context, input RecordReleaseRuntimeEvidenceInput) (entity.ReleaseDecisionPackage, error) {
+	if input.ReleaseDecisionPackageID == uuid.Nil {
+		return entity.ReleaseDecisionPackage{}, errs.ErrInvalidArgument
+	}
+	runtimeRefs, err := normalizeReleaseJSONArrayPayload("release.runtime_refs", input.RuntimeRefs)
+	if err != nil {
+		return entity.ReleaseDecisionPackage{}, err
+	}
+	evidenceRefs, err := normalizeEvidenceRefs(input.EvidenceRefs)
+	if err != nil {
+		return entity.ReleaseDecisionPackage{}, err
+	}
+	integrationRefs, err := normalizeReleaseIntegrationRefs(input.IntegrationRefs)
+	if err != nil {
+		return entity.ReleaseDecisionPackage{}, err
+	}
+	if err := validateRuntimeReleaseIntegrationRefs(integrationRefs); err != nil {
+		return entity.ReleaseDecisionPackage{}, err
+	}
+	if len(runtimeRefs) == 0 && len(evidenceRefs) == 0 && len(integrationRefs) == 0 {
+		return entity.ReleaseDecisionPackage{}, errs.ErrInvalidArgument
+	}
+	pkg, err := s.repository.GetReleaseDecisionPackage(ctx, input.ReleaseDecisionPackageID)
+	if err != nil {
+		return entity.ReleaseDecisionPackage{}, err
+	}
+	if err := s.authorizeCommand(ctx, input.Meta, actionReleaseUpdate, releaseDecisionResource(input.ReleaseDecisionPackageID)); err != nil {
+		return entity.ReleaseDecisionPackage{}, err
+	}
+	result, replayed, err := s.replayCommand(ctx, input.Meta, enum.OperationRecordReleaseRuntimeEvidence.String(), governanceevents.AggregateReleaseDecisionPackage)
+	if err != nil {
+		return entity.ReleaseDecisionPackage{}, err
+	}
+	if replayed {
+		if result.AggregateID != input.ReleaseDecisionPackageID {
+			return entity.ReleaseDecisionPackage{}, errs.ErrConflict
+		}
+		replayedPackage, err := s.repository.GetReleaseDecisionPackage(ctx, input.ReleaseDecisionPackageID)
+		if err != nil {
+			return entity.ReleaseDecisionPackage{}, err
+		}
+		if _, changed, err := mergeReleaseRuntimeEvidence(replayedPackage, runtimeRefs, evidenceRefs, integrationRefs); err != nil {
+			return entity.ReleaseDecisionPackage{}, errs.ErrConflict
+		} else if changed {
+			return entity.ReleaseDecisionPackage{}, errs.ErrConflict
+		}
+		return replayedPackage, nil
+	}
+	if pkg.Status == enum.ReleaseDecisionPackageStatusClosed {
+		return entity.ReleaseDecisionPackage{}, errs.ErrPreconditionFailed
+	}
+	previousVersion, err := requireExpectedVersion(input.Meta)
+	if err != nil {
+		return entity.ReleaseDecisionPackage{}, err
+	}
+	if previousVersion != pkg.Version {
+		return entity.ReleaseDecisionPackage{}, errs.ErrPreconditionFailed
+	}
+	updated, changed, err := mergeReleaseRuntimeEvidence(pkg, runtimeRefs, evidenceRefs, integrationRefs)
+	if err != nil {
+		return entity.ReleaseDecisionPackage{}, err
+	}
+	now := s.clock.Now()
+	result = commandResult(input.Meta, enum.OperationRecordReleaseRuntimeEvidence.String(), governanceevents.AggregateReleaseDecisionPackage, pkg.ID, now)
+	if !changed {
+		if err := s.repository.RecordCommandResult(ctx, result); err != nil && !errors.Is(err, errs.ErrAlreadyExists) {
+			return entity.ReleaseDecisionPackage{}, err
+		}
+		return pkg, nil
+	}
+	updated.Version = pkg.Version + 1
+	updated.UpdatedAt = now
+	eventPayload := applyProjectContextRefs(governanceevents.Payload{
+		ReleaseDecisionPackageID: updated.ID.String(),
+		ReleaseCandidateRef:      updated.ReleaseCandidateRef,
+		Status:                   string(updated.Status),
+		ReasonCode:               "runtime_evidence_recorded",
+		SafeSummary:              "runtime/deploy evidence refs recorded",
+		Version:                  updated.Version,
+	}, updated.ProjectContext)
+	eventPayload = applyReleaseIntegrationEventRefs(eventPayload, integrationRefs)
+	event := outboxCommandEvent(s.idGenerator.New(), governanceevents.EventReleaseDecisionPackageRuntimeEvidenceRecorded, governanceevents.AggregateReleaseDecisionPackage, updated.ID, now, input.Meta, enum.OperationRecordReleaseRuntimeEvidence.String(), eventPayload)
+	if err := s.repository.UpdateReleaseDecisionPackageEvidence(ctx, updated, previousVersion, result, event); err != nil {
+		return entity.ReleaseDecisionPackage{}, err
+	}
+	return updated, nil
+}
+
 func (s *Service) ListReleaseDecisionPackages(ctx context.Context, input ListReleaseDecisionPackagesInput) ([]entity.ReleaseDecisionPackage, query.PageResult, error) {
 	return listWithAuthorization(ctx, input.Meta, input.Filter, s.authorizeReleasePackageList, s.repository.ListReleaseDecisionPackages)
 }
@@ -1461,6 +1550,7 @@ func normalizeReleaseIntegrationRefs(refs []value.ReleaseIntegrationRef) ([]valu
 			Digest:     strings.TrimSpace(ref.Digest),
 			ObservedAt: strings.TrimSpace(ref.ObservedAt),
 			Version:    strings.TrimSpace(ref.Version),
+			ErrorCode:  strings.TrimSpace(ref.ErrorCode),
 		}
 		if err := validateReleaseIntegrationRef(normalized); err != nil {
 			return nil, err
@@ -1483,6 +1573,80 @@ func normalizeReleaseIntegrationRefs(refs []value.ReleaseIntegrationRef) ([]valu
 	return result, nil
 }
 
+func validateRuntimeReleaseIntegrationRefs(refs []value.ReleaseIntegrationRef) error {
+	for _, ref := range refs {
+		if ref.Domain != "runtime" {
+			return errs.ErrInvalidArgument
+		}
+	}
+	return nil
+}
+
+func mergeReleaseRuntimeEvidence(pkg entity.ReleaseDecisionPackage, runtimeRefs []byte, evidenceRefs []value.EvidenceRef, integrationRefs []value.ReleaseIntegrationRef) (entity.ReleaseDecisionPackage, bool, error) {
+	mergedRuntimeRefs, err := mergeReleaseJSONArrayPayload("release.runtime_refs", pkg.RuntimeRefs, runtimeRefs)
+	if err != nil {
+		return entity.ReleaseDecisionPackage{}, false, err
+	}
+	mergedEvidenceRefs, err := mergeReleaseEvidenceRefs(pkg.EvidenceRefs, evidenceRefs)
+	if err != nil {
+		return entity.ReleaseDecisionPackage{}, false, err
+	}
+	mergedIntegrationRefs, err := mergeReleaseIntegrationRefs(pkg.IntegrationRefs, integrationRefs)
+	if err != nil {
+		return entity.ReleaseDecisionPackage{}, false, err
+	}
+	changed := string(pkg.RuntimeRefs) != string(mergedRuntimeRefs) ||
+		!sameEvidenceRefs(pkg.EvidenceRefs, mergedEvidenceRefs) ||
+		!sameReleaseIntegrationRefs(pkg.IntegrationRefs, mergedIntegrationRefs)
+	pkg.RuntimeRefs = mergedRuntimeRefs
+	pkg.EvidenceRefs = mergedEvidenceRefs
+	pkg.IntegrationRefs = mergedIntegrationRefs
+	return pkg, changed, nil
+}
+
+func mergeReleaseEvidenceRefs(existing []value.EvidenceRef, additions []value.EvidenceRef) ([]value.EvidenceRef, error) {
+	combined := make([]value.EvidenceRef, 0, len(existing)+len(additions))
+	combined = append(combined, existing...)
+	combined = append(combined, additions...)
+	result := make([]value.EvidenceRef, 0, len(combined))
+	seen := make(map[string]value.EvidenceRef, len(combined))
+	for _, ref := range combined {
+		normalized, err := normalizeEvidenceRef(ref, "evidence_ref.ref", "evidence_ref.summary")
+		if err != nil {
+			return nil, err
+		}
+		key := normalized.Kind + "\x00" + normalized.Ref
+		if existing, ok := seen[key]; ok {
+			if existing != normalized {
+				return nil, errs.ErrInvalidArgument
+			}
+			continue
+		}
+		seen[key] = normalized
+		result = append(result, normalized)
+	}
+	return result, nil
+}
+
+func mergeReleaseIntegrationRefs(existing []value.ReleaseIntegrationRef, additions []value.ReleaseIntegrationRef) ([]value.ReleaseIntegrationRef, error) {
+	combined := make([]value.ReleaseIntegrationRef, 0, len(existing)+len(additions))
+	combined = append(combined, existing...)
+	combined = append(combined, additions...)
+	return normalizeReleaseIntegrationRefs(combined)
+}
+
+func sameReleaseIntegrationRefs(left []value.ReleaseIntegrationRef, right []value.ReleaseIntegrationRef) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if left[index] != right[index] {
+			return false
+		}
+	}
+	return true
+}
+
 func releaseIntegrationRefKey(ref value.ReleaseIntegrationRef) string {
 	return ref.Domain + "\x00" + ref.Kind + "\x00" + ref.Ref
 }
@@ -1492,7 +1656,8 @@ func sameReleaseIntegrationRefSnapshot(left value.ReleaseIntegrationRef, right v
 		left.Summary == right.Summary &&
 		left.Digest == right.Digest &&
 		left.ObservedAt == right.ObservedAt &&
-		left.Version == right.Version
+		left.Version == right.Version &&
+		left.ErrorCode == right.ErrorCode
 }
 
 func validateReleaseIntegrationRef(ref value.ReleaseIntegrationRef) error {
@@ -1518,6 +1683,9 @@ func validateReleaseIntegrationRef(ref value.ReleaseIntegrationRef) error {
 		return err
 	}
 	if err := validateReleaseSafeRef("release.integration_refs.version", ref.Version, false); err != nil {
+		return err
+	}
+	if err := validateReleaseSafeRef("release.integration_refs.error_code", ref.ErrorCode, false); err != nil {
 		return err
 	}
 	if err := validateReleaseSafeRef("release.integration_refs.observed_at", ref.ObservedAt, false); err != nil {
@@ -1584,6 +1752,61 @@ func normalizeReleaseJSONArrayPayload(name string, payload []byte) ([]byte, erro
 		return nil, errs.ErrInvalidArgument
 	}
 	return result, nil
+}
+
+func mergeReleaseJSONArrayPayload(name string, existing []byte, additions []byte) ([]byte, error) {
+	existingValues, err := releaseJSONArrayValues(name, existing)
+	if err != nil {
+		return nil, err
+	}
+	additionValues, err := releaseJSONArrayValues(name, additions)
+	if err != nil {
+		return nil, err
+	}
+	if len(existingValues)+len(additionValues) > maxReleasePackageRefs {
+		return nil, errs.ErrInvalidArgument
+	}
+	result := make([]any, 0, len(existingValues)+len(additionValues))
+	seen := make(map[string]struct{}, len(existingValues)+len(additionValues))
+	for _, item := range append(existingValues, additionValues...) {
+		normalized, err := normalizeReleaseJSONValue(name, item)
+		if err != nil {
+			return nil, err
+		}
+		payload, err := json.Marshal(normalized)
+		if err != nil {
+			return nil, errs.ErrInvalidArgument
+		}
+		key := string(payload)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		result = append(result, normalized)
+	}
+	if len(result) == 0 {
+		return nil, nil
+	}
+	payload, err := json.Marshal(result)
+	if err != nil {
+		return nil, errs.ErrInvalidArgument
+	}
+	return payload, nil
+}
+
+func releaseJSONArrayValues(name string, payload []byte) ([]any, error) {
+	normalized, err := normalizeReleaseJSONArrayPayload(name, payload)
+	if err != nil {
+		return nil, err
+	}
+	if len(normalized) == 0 {
+		return nil, nil
+	}
+	var values []any
+	if err := json.Unmarshal(normalized, &values); err != nil {
+		return nil, errs.ErrInvalidArgument
+	}
+	return values, nil
 }
 
 func normalizeReleaseJSONObjectPayload(name string, payload []byte) ([]byte, error) {

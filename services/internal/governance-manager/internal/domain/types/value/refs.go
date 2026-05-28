@@ -64,6 +64,7 @@ type ReleaseIntegrationRef struct {
 	Digest     string `json:"digest,omitempty"`
 	ObservedAt string `json:"observed_at,omitempty"`
 	Version    string `json:"version,omitempty"`
+	ErrorCode  string `json:"error_code,omitempty"`
 }
 
 // RiskEvaluationSummary carries bounded classifier inputs without raw payloads.

@@ -50,6 +50,7 @@ type governanceService interface {
 	GetGateRequest(context.Context, governanceservice.GetGateRequestInput) (entity.GateRequest, error)
 	ListGateRequests(context.Context, governanceservice.ListGateRequestsInput) ([]entity.GateRequest, query.PageResult, error)
 	BuildReleaseDecisionPackage(context.Context, governanceservice.BuildReleaseDecisionPackageInput) (entity.ReleaseDecisionPackage, error)
+	RecordReleaseRuntimeEvidence(context.Context, governanceservice.RecordReleaseRuntimeEvidenceInput) (entity.ReleaseDecisionPackage, error)
 	GetReleaseDecisionPackage(context.Context, governanceservice.GetReleaseDecisionPackageInput) (entity.ReleaseDecisionPackage, error)
 	ListReleaseDecisionPackages(context.Context, governanceservice.ListReleaseDecisionPackagesInput) ([]entity.ReleaseDecisionPackage, query.PageResult, error)
 	RequestReleaseDecision(context.Context, governanceservice.RequestReleaseDecisionInput) (entity.ReleaseDecision, entity.ReleaseDecisionPackage, error)
@@ -775,6 +776,29 @@ func (server *Server) BuildReleaseDecisionPackage(ctx context.Context, req *gove
 		IntegrationRefs:         releaseIntegrationRefs(req.GetIntegrationRefs()),
 		KnownLimitationsSummary: req.GetKnownLimitationsSummary(),
 		Meta:                    meta,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &governancev1.ReleaseDecisionPackageResponse{ReleaseDecisionPackage: toReleaseDecisionPackage(item)}, nil
+}
+
+// RecordReleaseRuntimeEvidence appends safe runtime/deploy refs to a release package.
+func (server *Server) RecordReleaseRuntimeEvidence(ctx context.Context, req *governancev1.RecordReleaseRuntimeEvidenceRequest) (*governancev1.ReleaseDecisionPackageResponse, error) {
+	meta, packageID, err := commandMetaAndID(req.GetMeta(), req.GetReleaseDecisionPackageId())
+	if err != nil {
+		return nil, err
+	}
+	runtimes, err := runtimeRefs(req.GetRuntimeRefs())
+	if err != nil {
+		return nil, err
+	}
+	item, err := server.service.RecordReleaseRuntimeEvidence(ctx, governanceservice.RecordReleaseRuntimeEvidenceInput{
+		ReleaseDecisionPackageID: packageID,
+		RuntimeRefs:              runtimes,
+		EvidenceRefs:             evidenceRefs(req.GetEvidenceRefs()),
+		IntegrationRefs:          releaseIntegrationRefs(req.GetIntegrationRefs()),
+		Meta:                     meta,
 	})
 	if err != nil {
 		return nil, err

@@ -40,6 +40,7 @@ type Repository interface {
 	ListGateRequests(ctx context.Context, filter query.GateRequestFilter) ([]entity.GateRequest, query.PageResult, error)
 	ListGateDecisions(ctx context.Context, filter query.GateDecisionFilter) ([]entity.GateDecision, query.PageResult, error)
 	CreateReleaseDecisionPackage(ctx context.Context, item entity.ReleaseDecisionPackage, result entity.CommandResult, event entity.OutboxEvent) error
+	UpdateReleaseDecisionPackageEvidence(ctx context.Context, item entity.ReleaseDecisionPackage, previousVersion int64, result entity.CommandResult, event entity.OutboxEvent) error
 	UpdateReleaseDecisionPackageStatus(ctx context.Context, item entity.ReleaseDecisionPackage, previousVersion int64, result entity.CommandResult, event entity.OutboxEvent) error
 	GetReleaseDecisionPackage(ctx context.Context, id uuid.UUID) (entity.ReleaseDecisionPackage, error)
 	ListReleaseDecisionPackages(ctx context.Context, filter query.ReleaseDecisionPackageFilter) ([]entity.ReleaseDecisionPackage, query.PageResult, error)
