@@ -77,6 +77,10 @@ func OutgoingContext(ctx context.Context, meta RequestMetadata) context.Context 
 	return metadata.AppendToOutgoingContext(ctx, values...)
 }
 
+func OutgoingCallContext(ctx context.Context, meta RequestMetadata, timeout time.Duration) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(OutgoingContext(ctx, meta), timeout)
+}
+
 func requireTrimmed(value string, name string) (string, error) {
 	trimmed := strings.TrimSpace(value)
 	if trimmed == "" {

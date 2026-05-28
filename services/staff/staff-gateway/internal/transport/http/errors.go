@@ -83,25 +83,62 @@ func errorBoundary(logger *slog.Logger, next http.Handler) http.Handler {
 }
 
 func interactionHubError(err error) *SafeError {
+	return downstreamError(err, downstreamErrorMessages{
+		InvalidRequest:        "request is invalid",
+		Unauthenticated:       "actor context is not authenticated",
+		PermissionDenied:      "access is denied",
+		NotFound:              "owner inbox item is not found",
+		StaleVersion:          "owner inbox item version is stale",
+		Conflict:              "owner inbox item cannot accept this action",
+		RateLimited:           "interaction-hub rate limit is active",
+		DownstreamUnavailable: "interaction-hub is unavailable",
+	})
+}
+
+func agentManagerError(err error) *SafeError {
+	return downstreamError(err, downstreamErrorMessages{
+		InvalidRequest:        "request is invalid",
+		Unauthenticated:       "actor context is not authenticated",
+		PermissionDenied:      "access is denied",
+		NotFound:              "agent run is not found",
+		StaleVersion:          "agent run status version is stale",
+		Conflict:              "agent run runtime status is conflicted",
+		RateLimited:           "agent-manager rate limit is active",
+		DownstreamUnavailable: "agent-manager is unavailable",
+	})
+}
+
+type downstreamErrorMessages struct {
+	InvalidRequest        string
+	Unauthenticated       string
+	PermissionDenied      string
+	NotFound              string
+	StaleVersion          string
+	Conflict              string
+	RateLimited           string
+	DownstreamUnavailable string
+}
+
+func downstreamError(err error, messages downstreamErrorMessages) *SafeError {
 	switch status.Code(err) {
 	case codes.InvalidArgument:
-		return WrapSafeError(http.StatusBadRequest, CodeInvalidRequest, "request is invalid", false, err)
+		return WrapSafeError(http.StatusBadRequest, CodeInvalidRequest, messages.InvalidRequest, false, err)
 	case codes.Unauthenticated:
-		return WrapSafeError(http.StatusUnauthorized, CodeUnauthenticated, "actor context is not authenticated", false, err)
+		return WrapSafeError(http.StatusUnauthorized, CodeUnauthenticated, messages.Unauthenticated, false, err)
 	case codes.PermissionDenied:
-		return WrapSafeError(http.StatusForbidden, CodePermissionDenied, "access is denied", false, err)
+		return WrapSafeError(http.StatusForbidden, CodePermissionDenied, messages.PermissionDenied, false, err)
 	case codes.NotFound:
-		return WrapSafeError(http.StatusNotFound, CodeNotFound, "owner inbox item is not found", false, err)
+		return WrapSafeError(http.StatusNotFound, CodeNotFound, messages.NotFound, false, err)
 	case codes.Aborted:
-		return WrapSafeError(http.StatusConflict, CodeStaleVersion, "owner inbox item version is stale", false, err)
+		return WrapSafeError(http.StatusConflict, CodeStaleVersion, messages.StaleVersion, false, err)
 	case codes.FailedPrecondition, codes.AlreadyExists:
-		return WrapSafeError(http.StatusConflict, CodeConflict, "owner inbox item cannot accept this action", false, err)
+		return WrapSafeError(http.StatusConflict, CodeConflict, messages.Conflict, false, err)
 	case codes.ResourceExhausted:
-		return WrapSafeError(http.StatusTooManyRequests, CodeRateLimited, "interaction-hub rate limit is active", true, err)
+		return WrapSafeError(http.StatusTooManyRequests, CodeRateLimited, messages.RateLimited, true, err)
 	case codes.DeadlineExceeded, codes.Unavailable:
-		return WrapSafeError(http.StatusServiceUnavailable, CodeDownstreamUnavailable, "interaction-hub is unavailable", true, err)
+		return WrapSafeError(http.StatusServiceUnavailable, CodeDownstreamUnavailable, messages.DownstreamUnavailable, true, err)
 	default:
-		return WrapSafeError(http.StatusServiceUnavailable, CodeDownstreamUnavailable, "interaction-hub is unavailable", true, err)
+		return WrapSafeError(http.StatusServiceUnavailable, CodeDownstreamUnavailable, messages.DownstreamUnavailable, true, err)
 	}
 }
 
