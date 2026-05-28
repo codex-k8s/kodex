@@ -111,13 +111,14 @@ KODEX_PROVIDER_LIVE_SMOKE_REPO=kodex-smoke-provider-20260528-a2 \
 
 - проверяет доступность `KODEX_GITHUB_PAT` или `KODEX_PROVIDER_LIVE_SMOKE_GITHUB_TOKEN` и организации;
 - создаёт или переиспользует приватный тестовый репозиторий с безопасным префиксом `kodex-smoke-provider-*`;
+- перед любым изменяющим GitHub-вызовом отказывает по умолчанию, если организация не равна `codex-k8s`, репозиторий не начинается с `kodex-smoke-provider-*`, ветка — с `kodex/live-smoke-*`, а файл — с `kodex-live-smoke/`;
 - создаёт ветку `kodex/live-smoke-<kind>-<date>-<time>`, безопасный текстовый файл, PR и выполняет merge;
 - собирает настоящий GitHub `pull_request closed + merged` payload во временный файл, не печатая raw payload;
 - при заданных `KODEX_PROVIDER_LIVE_SMOKE_GATEWAY_URL` и `KODEX_PROVIDER_LIVE_SMOKE_WEBHOOK_SECRET` отправляет payload в `integration-gateway`;
 - при заданном `KODEX_PROVIDER_LIVE_SMOKE_PROVIDER_HUB_GRPC_ADDR` проверяет gRPC boundary `provider-hub`;
 - при `KODEX_PROVIDER_LIVE_SMOKE_EXPECT_SIGNAL=true` читает `RepositoryMergeSignal`, если заранее подготовлены provider-hub PR projection, `project_repository_binding` и watermark/operation anchor.
 
-Скрипт не создаёт webhook в GitHub и не удаляет тестовый репозиторий. Ручная очистка выполняется только после отдельного решения владельца, например через `gh repo delete <org>/<repo> --confirm`. В Issue, PR, логах и сообщениях не указывать значения токена, webhook secret, приватные адреса, домены или полный provider payload.
+Скрипт не создаёт webhook в GitHub и не удаляет тестовый репозиторий. Ручная очистка выполняется только после отдельного решения владельца, например через `gh repo delete <org>/<repo> --confirm`. Вывод не печатает значения runtime endpoint, webhook secret, токен, подпись, приватные адреса, домены или полный provider payload.
 
 ### Граница webhook inbox и safe diagnostics
 

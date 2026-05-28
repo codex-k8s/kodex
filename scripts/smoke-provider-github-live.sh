@@ -24,6 +24,10 @@ PROVIDER_HUB_ADDR="${KODEX_PROVIDER_LIVE_SMOKE_PROVIDER_HUB_GRPC_ADDR:-}"
 PROVIDER_HUB_TOKEN="${KODEX_PROVIDER_LIVE_SMOKE_PROVIDER_HUB_GRPC_TOKEN:-${KODEX_PROVIDER_HUB_GRPC_AUTH_TOKEN:-}}"
 EXPECT_SIGNAL="${KODEX_PROVIDER_LIVE_SMOKE_EXPECT_SIGNAL:-false}"
 DELIVERY_ID="${KODEX_PROVIDER_LIVE_SMOKE_DELIVERY_ID:-}"
+SAFE_REPO_PREFIX="${KODEX_PROVIDER_LIVE_SMOKE_SAFE_REPO_PREFIX:-kodex-smoke-provider-}"
+SAFE_BRANCH_PREFIX="${KODEX_PROVIDER_LIVE_SMOKE_SAFE_BRANCH_PREFIX:-kodex/live-smoke-}"
+SAFE_FILE_PREFIX="${KODEX_PROVIDER_LIVE_SMOKE_SAFE_FILE_PREFIX:-kodex-live-smoke/}"
+ALLOW_UNSAFE_TARGET="${KODEX_PROVIDER_LIVE_SMOKE_ALLOW_UNSAFE_TARGET:-false}"
 
 usage() {
   cat <<'USAGE'
@@ -38,6 +42,8 @@ Usage:
   KODEX_PROVIDER_LIVE_SMOKE_REPO=...          Тестовый репозиторий для создания или переиспользования.
   KODEX_PROVIDER_LIVE_SMOKE_KIND=bootstrap    Тип onboarding-сигнала: bootstrap или adoption.
   KODEX_GITHUB_PAT=...                        Токен GitHub для live GitHub операций.
+  KODEX_PROVIDER_LIVE_SMOKE_ALLOW_UNSAFE_TARGET=true
+                                             Явный обход владельца для нестандартной цели.
 
 Опциональные runtime-проверки после создания merged PR:
   KODEX_PROVIDER_LIVE_SMOKE_GATEWAY_URL=http://127.0.0.1:18086
@@ -136,10 +142,10 @@ print_plan() {
   echo "smoke-provider-github-live: GitHub org=${ORG}, repo=${REPO}, kind=${KIND}, branch=${BRANCH}"
   echo "smoke-provider-github-live: план: проверить токен и организацию, создать или переиспользовать репозиторий, создать ветку/PR, выполнить merge PR, собрать safe pull_request closed+merged payload"
   if [[ -n "$GATEWAY_URL" ]]; then
-    echo "smoke-provider-github-live: план: отправить payload в integration-gateway ${GATEWAY_URL%/}/v1/provider-webhooks/github при наличии webhook secret"
+    echo "smoke-provider-github-live: план: цель integration-gateway настроена; значение endpoint не печатается"
   fi
   if [[ -n "$PROVIDER_HUB_ADDR" ]]; then
-    echo "smoke-provider-github-live: план: проверить provider-hub gRPC boundary по адресу ${PROVIDER_HUB_ADDR}"
+    echo "smoke-provider-github-live: план: цель provider-hub gRPC настроена; значение адреса не печатается"
   fi
   echo "smoke-provider-github-live: для реальных изменений задайте --apply или KODEX_PROVIDER_LIVE_SMOKE_APPLY=true"
 }
@@ -157,6 +163,29 @@ check_read_only_access() {
   login="$(github_api user --jq .login)"
   github_api "orgs/${ORG}" --jq .login >/dev/null
   echo "smoke-provider-github-live: GitHub token доступен для login=${login}; организация ${ORG} доступна"
+}
+
+validate_mutable_target() {
+  if is_true "$ALLOW_UNSAFE_TARGET"; then
+    echo "smoke-provider-github-live: явный обход владельца включён; проверка безопасной цели отключена" >&2
+    return
+  fi
+  if [[ "$ORG" != "codex-k8s" ]]; then
+    echo "smoke-provider-github-live: --apply разрешён только для организации codex-k8s без owner override" >&2
+    exit 1
+  fi
+  if [[ "$REPO" != "${SAFE_REPO_PREFIX}"* ]]; then
+    echo "smoke-provider-github-live: --apply разрешён только для репозиториев ${SAFE_REPO_PREFIX}*" >&2
+    exit 1
+  fi
+  if [[ "$BRANCH" != "${SAFE_BRANCH_PREFIX}"* || "$BRANCH" == *".."* || "$BRANCH" == refs/* || "$BRANCH" == /* ]]; then
+    echo "smoke-provider-github-live: --apply разрешён только для веток ${SAFE_BRANCH_PREFIX}*" >&2
+    exit 1
+  fi
+  if [[ "$FILE_PATH" != "${SAFE_FILE_PREFIX}"* || "$FILE_PATH" == *".."* || "$FILE_PATH" == /* ]]; then
+    echo "smoke-provider-github-live: --apply разрешён только для файлов ${SAFE_FILE_PREFIX}*" >&2
+    exit 1
+  fi
 }
 
 ensure_repo() {
@@ -376,18 +405,24 @@ post_gateway() {
     return
   fi
   require_commands curl python3
-  local response_file
+  local response_file curl_error_file
   response_file="$(mktemp)"
+  curl_error_file="$(mktemp)"
   local signature
   signature="$(github_signature "$WEBHOOK_SECRET" "$payload_file")"
   local status
-  status="$(curl -sS -o "$response_file" -w "%{http_code}" \
+  if ! status="$(curl -sS -o "$response_file" -w "%{http_code}" \
     -X POST "${GATEWAY_URL%/}/v1/provider-webhooks/github" \
     -H "Content-Type: application/json" \
     -H "X-GitHub-Delivery: ${delivery_id}" \
     -H "X-GitHub-Event: pull_request" \
     -H "X-Hub-Signature-256: ${signature}" \
-    --data-binary "@${payload_file}")"
+    --data-binary "@${payload_file}" 2>"$curl_error_file")"; then
+    rm -f "$response_file" "$curl_error_file"
+    echo "smoke-provider-github-live: integration-gateway transport_error" >&2
+    exit 1
+  fi
+  rm -f "$curl_error_file"
   if [[ "$status" != "202" ]]; then
     local safe_code
     safe_code="$(jq -r '.error.code // .code // empty' "$response_file" 2>/dev/null || true)"
@@ -436,9 +471,10 @@ check_provider_hub_boundary() {
     echo "smoke-provider-github-live: provider-hub gRPC boundary OK; доменное право ожидаемо отклонено"
     return
   fi
-  cat "$output_file" >&2
+  local safe_code
+  safe_code="$(sed -nE 's/.*Code: ([^ ]*).*/\1/p' "$output_file" | head -n 1)"
   rm -f "$output_file"
-  echo "smoke-provider-github-live: provider-hub gRPC boundary недоступен" >&2
+  echo "smoke-provider-github-live: provider-hub gRPC boundary недоступен${safe_code:+ code=${safe_code}}" >&2
   exit 1
 }
 
@@ -453,17 +489,25 @@ check_merge_signal() {
   fi
   require_commands grpcurl jq
   mapfile -t headers < <(provider_hub_headers)
-  local output_file
+  local output_file grpc_error_file
   output_file="$(mktemp)"
+  grpc_error_file="$(mktemp)"
   local grpc_payload
   grpc_payload="{\"signal_key\":\"${signal_key}\",\"meta\":{\"actor\":{\"type\":\"service\",\"id\":\"smoke-provider-github-live\"},\"request_id\":\"smoke-provider-github-live\",\"request_context\":{\"source\":\"smoke-provider-github-live\"}}}"
-  grpcurl \
+  if ! grpcurl \
     -plaintext \
     -proto "${PROJECT_ROOT}/proto/kodex/providers/v1/provider_hub.proto" \
     "${headers[@]}" \
     -d "$grpc_payload" \
     "$PROVIDER_HUB_ADDR" \
-    kodex.providers.v1.ProviderHubService/GetRepositoryMergeSignal >"$output_file"
+    kodex.providers.v1.ProviderHubService/GetRepositoryMergeSignal >"$output_file" 2>"$grpc_error_file"; then
+    local safe_code
+    safe_code="$(sed -nE 's/.*Code: ([^ ]*).*/\1/p' "$grpc_error_file" | head -n 1)"
+    rm -f "$output_file" "$grpc_error_file"
+    echo "smoke-provider-github-live: RepositoryMergeSignal read failed${safe_code:+ code=${safe_code}}" >&2
+    exit 1
+  fi
+  rm -f "$grpc_error_file"
   if [[ "$(jq -r '.readStatus // empty' "$output_file")" != "PROVIDER_OWNED_DATA_STATUS_READY" ]]; then
     rm -f "$output_file"
     echo "smoke-provider-github-live: RepositoryMergeSignal не готов; проверьте provider-hub PR projection, binding и watermark precondition" >&2
@@ -475,6 +519,7 @@ check_merge_signal() {
 
 run_apply() {
   require_commands gh jq python3 base64
+  validate_mutable_target
   if [[ -z "$GITHUB_TOKEN" ]]; then
     echo "smoke-provider-github-live: для --apply нужен KODEX_GITHUB_PAT или KODEX_PROVIDER_LIVE_SMOKE_GITHUB_TOKEN" >&2
     exit 1
