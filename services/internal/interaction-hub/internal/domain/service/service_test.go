@@ -233,6 +233,74 @@ func TestServiceCreatesInteractionRequestWithOutboxAndIdempotentReplay(t *testin
 	}
 }
 
+func TestServiceAcceptsOwnerActionTaxonomyByRequestKind(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 27, 15, 0, 0, 0, time.UTC)
+	cases := []struct {
+		name    string
+		actions []value.InteractionAction
+		create  func(*Service, InteractionRequestDraftInput) (entity.InteractionRequest, error)
+		want    []string
+	}{
+		{
+			name: "feedback answer",
+			actions: []value.InteractionAction{
+				{ActionKey: string(enum.InteractionResponseActionAnswer), LabelTemplateRef: "interaction.actions.answer", Terminal: true},
+			},
+			create: func(svc *Service, draft InteractionRequestDraftInput) (entity.InteractionRequest, error) {
+				return svc.RequestFeedback(context.Background(), RequestFeedbackInput{Meta: validCommandMeta(), Request: draft})
+			},
+			want: []string{"answer"},
+		},
+		{
+			name: "approval approve reject request changes",
+			actions: []value.InteractionAction{
+				{ActionKey: string(enum.InteractionResponseActionApprove), LabelTemplateRef: "interaction.actions.approve", Terminal: true},
+				{ActionKey: string(enum.InteractionResponseActionReject), LabelTemplateRef: "interaction.actions.reject", Terminal: true},
+				{ActionKey: string(enum.InteractionResponseActionRequestChanges), LabelTemplateRef: "interaction.actions.request_changes", Terminal: true},
+			},
+			create: func(svc *Service, draft InteractionRequestDraftInput) (entity.InteractionRequest, error) {
+				return svc.RequestApproval(context.Background(), RequestApprovalInput{Meta: validCommandMeta(), Request: draft})
+			},
+			want: []string{"approve", "reject", "request_changes"},
+		},
+		{
+			name: "human gate mixed owner decisions",
+			actions: []value.InteractionAction{
+				{ActionKey: string(enum.InteractionResponseActionApprove), LabelTemplateRef: "interaction.actions.approve", Terminal: true},
+				{ActionKey: string(enum.InteractionResponseActionReject), LabelTemplateRef: "interaction.actions.reject", Terminal: true},
+				{ActionKey: string(enum.InteractionResponseActionRequestChanges), LabelTemplateRef: "interaction.actions.request_changes", Terminal: true},
+				{ActionKey: string(enum.InteractionResponseActionAnswer), LabelTemplateRef: "interaction.actions.answer", Terminal: true},
+			},
+			create: func(svc *Service, draft InteractionRequestDraftInput) (entity.InteractionRequest, error) {
+				return svc.RequestHumanGate(context.Background(), RequestHumanGateInput{Meta: validCommandMeta(), Request: draft})
+			},
+			want: []string{"approve", "reject", "request_changes", "answer"},
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			repository := newFakeRepository()
+			svc := NewWithConfig(repository, Config{Clock: fixedClock{now: now}, UUIDGenerator: &sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New()}}})
+			draft := validInteractionRequestDraft(now.Add(time.Hour))
+			draft.AllowedActions = tc.actions
+
+			request, err := tc.create(svc, draft)
+			if err != nil {
+				t.Fatalf("create interaction request: %v", err)
+			}
+			if got := interactionActionKeys(request.AllowedActions); strings.Join(got, ",") != strings.Join(tc.want, ",") {
+				t.Fatalf("allowed actions = %+v, want %+v", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestServiceListsOwnerInboxItemsWithSafeSummaryAndDefaultActiveStatuses(t *testing.T) {
 	t.Parallel()
 
@@ -531,6 +599,106 @@ func TestServiceRecordsInteractionResponseWithTerminalStatusAndIdempotency(t *te
 	_, _, err = svc.RecordInteractionResponse(context.Background(), conflictingInput)
 	if !errors.Is(err, errs.ErrConflict) {
 		t.Fatalf("second response err = %v, want ErrConflict", err)
+	}
+}
+
+func TestServiceRecordsRequestChangesResponseWithSafeSurface(t *testing.T) {
+	t.Parallel()
+
+	repository := newFakeRepository()
+	now := time.Date(2026, 5, 27, 16, 0, 0, 0, time.UTC)
+	requestID := uuid.New()
+	seedInteractionRequest(repository, requestID, now, enum.InteractionRequestStatusWaiting)
+	request := repository.requests[requestID]
+	request.RequestKind = enum.InteractionRequestKindHumanGate
+	request.AllowedActions = []value.InteractionAction{
+		{ActionKey: string(enum.InteractionResponseActionApprove), LabelTemplateRef: "interaction.actions.approve", Terminal: true},
+		{ActionKey: string(enum.InteractionResponseActionReject), LabelTemplateRef: "interaction.actions.reject", Terminal: true},
+		{ActionKey: string(enum.InteractionResponseActionRequestChanges), LabelTemplateRef: "interaction.actions.request_changes", Terminal: true},
+	}
+	repository.requests[requestID] = request
+
+	input := RecordInteractionResponseInput{
+		Meta:                validVersionedCommandMeta(1),
+		RequestID:           requestID,
+		ResponseAction:      enum.InteractionResponseActionRequestChanges,
+		RespondedByActorRef: "user:owner-1",
+		ResponseSummary:     "needs a safer migration rollback plan",
+		SourceKind:          enum.InteractionResponseSourceKindWebConsole,
+		SourceRef:           "staff-gateway:response-request-changes",
+	}
+	svc := NewWithConfig(repository, Config{Clock: fixedClock{now: now.Add(time.Minute)}, UUIDGenerator: &sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New()}}})
+
+	answered, response, err := svc.RecordInteractionResponse(context.Background(), input)
+	if err != nil {
+		t.Fatalf("RecordInteractionResponse(): %v", err)
+	}
+	if answered.Status != enum.InteractionRequestStatusAnswered || response.ResponseAction != enum.InteractionResponseActionRequestChanges {
+		t.Fatalf("answered=%+v response=%+v, want request_changes answer", answered, response)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(repository.events[0].Payload, &payload); err != nil {
+		t.Fatalf("unmarshal outbox payload: %v", err)
+	}
+	if payload["response_action"] != "request_changes" || payload["response_outcome"] != "request_changes" {
+		t.Fatalf("payload = %+v, want request_changes action and outcome", payload)
+	}
+	if _, ok := payload["response_summary"]; ok {
+		t.Fatalf("outbox payload contains response_summary: %+v", payload)
+	}
+	if digest, ok := payload["response_summary_digest"].(string); !ok || !strings.HasPrefix(digest, "sha256:") {
+		t.Fatalf("payload = %+v, want response summary digest", payload)
+	}
+
+	repository.ownerInboxItems = []entity.OwnerInboxItem{{Request: answered, LatestResponse: &response}}
+	item, err := svc.GetOwnerInboxItem(context.Background(), GetOwnerInboxItemInput{
+		RequestID:   requestID,
+		Scope:       answered.Scope,
+		AssigneeRef: value.ActorRef{Kind: "user", Ref: "approver-1"},
+	})
+	if err != nil {
+		t.Fatalf("GetOwnerInboxItem(): %v", err)
+	}
+	if item.LatestResponse == nil || item.LatestResponse.ResponseAction != enum.InteractionResponseActionRequestChanges {
+		t.Fatalf("owner inbox item = %+v, want request_changes response detail", item)
+	}
+	if len(item.Request.AllowedActions) != 0 {
+		t.Fatalf("allowed actions for answered request = %+v, want none", item.Request.AllowedActions)
+	}
+
+	replayedRequest, replayedResponse, err := svc.RecordInteractionResponse(context.Background(), input)
+	if err != nil {
+		t.Fatalf("RecordInteractionResponse() replay: %v", err)
+	}
+	if replayedRequest.ID != answered.ID || replayedResponse.ID != response.ID || len(repository.events) != 1 {
+		t.Fatalf("replay request=%+v response=%+v events=%d, want original response", replayedRequest, replayedResponse, len(repository.events))
+	}
+}
+
+func TestServiceRejectsRequestChangesWithoutSafeSummaryOrObject(t *testing.T) {
+	t.Parallel()
+
+	repository := newFakeRepository()
+	now := time.Date(2026, 5, 27, 16, 30, 0, 0, time.UTC)
+	requestID := uuid.New()
+	seedInteractionRequest(repository, requestID, now, enum.InteractionRequestStatusWaiting)
+	request := repository.requests[requestID]
+	request.AllowedActions = []value.InteractionAction{
+		{ActionKey: string(enum.InteractionResponseActionRequestChanges), LabelTemplateRef: "interaction.actions.request_changes", Terminal: true},
+	}
+	repository.requests[requestID] = request
+	svc := New(repository)
+
+	_, _, err := svc.RecordInteractionResponse(context.Background(), RecordInteractionResponseInput{
+		Meta:                validVersionedCommandMeta(1),
+		RequestID:           requestID,
+		ResponseAction:      enum.InteractionResponseActionRequestChanges,
+		RespondedByActorRef: "user:owner-1",
+		SourceKind:          enum.InteractionResponseSourceKindWebConsole,
+		SourceRef:           "staff-gateway:response-request-changes-empty",
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("RecordInteractionResponse() err = %v, want ErrInvalidArgument", err)
 	}
 }
 
@@ -1363,6 +1531,11 @@ func TestServiceRecordsChannelCallbackWithSafeOutboxAndReplay(t *testing.T) {
 	requestID := uuid.New()
 	routeID := uuid.New()
 	seedInteractionRequest(repository, requestID, now, enum.InteractionRequestStatusWaiting)
+	request := repository.requests[requestID]
+	request.AllowedActions = []value.InteractionAction{
+		{ActionKey: string(enum.InteractionResponseActionRequestChanges), LabelTemplateRef: "interaction.actions.request_changes", Terminal: true},
+	}
+	repository.requests[requestID] = request
 	seedDeliveryRoute(repository, routeID, now)
 	svc := NewWithConfig(repository, Config{Clock: fixedClock{now: now.Add(time.Minute)}, UUIDGenerator: &sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New()}}})
 	planned, err := svc.PlanDelivery(context.Background(), validPlanDeliveryInput(requestID, routeID))
@@ -1370,6 +1543,7 @@ func TestServiceRecordsChannelCallbackWithSafeOutboxAndReplay(t *testing.T) {
 		t.Fatalf("PlanDelivery(): %v", err)
 	}
 	input := validRecordChannelCallbackInput(planned.DeliveryID, requestID)
+	input.Callback.Action = string(enum.InteractionResponseActionRequestChanges)
 	result, err := svc.RecordChannelCallback(context.Background(), input)
 	if err != nil {
 		t.Fatalf("RecordChannelCallback(): %v", err)
@@ -1385,7 +1559,7 @@ func TestServiceRecordsChannelCallbackWithSafeOutboxAndReplay(t *testing.T) {
 		t.Fatal("response is nil, want callback to resolve request")
 	}
 	if result.Response.RequestID != requestID ||
-		result.Response.ResponseAction != enum.InteractionResponseActionApprove ||
+		result.Response.ResponseAction != enum.InteractionResponseActionRequestChanges ||
 		result.Response.SourceKind != enum.InteractionResponseSourceKindChannelCallback ||
 		result.Response.SourceRef != callback.ID.String() {
 		t.Fatalf("response = %+v, want channel callback response", result.Response)
@@ -1955,6 +2129,14 @@ func validRecordChannelCallbackInput(deliveryID string, requestID uuid.UUID) Rec
 
 func ptrTime(value time.Time) *time.Time {
 	return &value
+}
+
+func interactionActionKeys(actions []value.InteractionAction) []string {
+	keys := make([]string, 0, len(actions))
+	for _, action := range actions {
+		keys = append(keys, action.ActionKey)
+	}
+	return keys
 }
 
 func seedInteractionRequest(repository *fakeRepository, requestID uuid.UUID, now time.Time, status enum.InteractionRequestStatus) {

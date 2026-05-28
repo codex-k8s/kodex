@@ -1196,7 +1196,7 @@ func normalizeRecordInteractionResponseInput(input RecordInteractionResponseInpu
 	if input.RequestID == uuid.Nil || !input.ResponseAction.Valid() || blank(input.RespondedByActorRef) || !input.SourceKind.Valid() {
 		return RecordInteractionResponseInput{}, errs.ErrInvalidArgument
 	}
-	if input.ResponseAction == enum.InteractionResponseActionAnswer || input.ResponseAction == enum.InteractionResponseActionCustom {
+	if responseActionRequiresContent(input.ResponseAction) {
 		if blank(input.ResponseSummary) && !hasObjectRef(input.ResponseObject) {
 			return RecordInteractionResponseInput{}, errs.ErrInvalidArgument
 		}
@@ -1648,7 +1648,7 @@ func (s *Service) channelCallbackResponse(callback entity.ChannelCallback, reque
 	if blank(callback.ActorRef) {
 		return nil, entity.InteractionRequest{}, 0, callbackErrorActorRequired
 	}
-	if responseAction == enum.InteractionResponseActionAnswer || responseAction == enum.InteractionResponseActionCustom {
+	if responseActionRequiresContent(responseAction) {
 		if blank(callback.CallbackSummary) && !hasObjectRef(callback.CallbackObject) {
 			return nil, entity.InteractionRequest{}, 0, callbackErrorResponseRequired
 		}
@@ -2106,6 +2106,15 @@ func terminalAllowedAction(actions []value.InteractionAction, action enum.Intera
 	return false
 }
 
+func responseActionRequiresContent(action enum.InteractionResponseAction) bool {
+	switch action {
+	case enum.InteractionResponseActionAnswer, enum.InteractionResponseActionRequestChanges, enum.InteractionResponseActionCustom:
+		return true
+	default:
+		return false
+	}
+}
+
 func normalizeRecordConversationMessageInput(input RecordConversationMessageInput) (RecordConversationMessageInput, error) {
 	input.AuthorRef = strings.TrimSpace(input.AuthorRef)
 	input.BodySummary = strings.TrimSpace(input.BodySummary)
@@ -2514,6 +2523,8 @@ func responseOutcome(action enum.InteractionResponseAction) string {
 		return "approve"
 	case enum.InteractionResponseActionReject:
 		return "reject"
+	case enum.InteractionResponseActionRequestChanges:
+		return "request_changes"
 	case enum.InteractionResponseActionAnswer:
 		return "answer"
 	default:
