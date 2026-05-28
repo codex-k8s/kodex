@@ -15,7 +15,6 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/enum"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/query"
-	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/value"
 	providerclient "github.com/codex-k8s/kodex/services/internal/provider-hub/internal/provider/client"
 )
 
@@ -166,7 +165,7 @@ func (s *Service) IngestWebhookEvent(ctx context.Context, input IngestWebhookEve
 	}
 	webhook.ProcessingStatus = normalization.status
 	webhook.LastError = normalization.lastError
-	webhook, err = webhookForInboxStorage(webhook)
+	webhook, err = webhookForInboxStorage(webhook, normalization.facts)
 	if err != nil {
 		return entity.WebhookEvent{}, err
 	}
@@ -225,8 +224,8 @@ func (s *Service) RetryWebhookEventProcessing(ctx context.Context, input RetryWe
 	default:
 		return entity.WebhookEvent{}, errs.ErrInvalidArgument
 	}
-	if webhookPayloadExpired(webhook) {
-		webhook.LastError = string(value.WebhookPayloadCleanupReasonExpired)
+	if webhookPayloadUnavailableForReprocess(webhook) {
+		webhook.LastError = webhookPayloadUnavailableReason(webhook)
 		return webhook, errs.ErrPreconditionFailed
 	}
 	normalization, err := s.normalizeWebhook(ctx, webhook)
@@ -235,7 +234,7 @@ func (s *Service) RetryWebhookEventProcessing(ctx context.Context, input RetryWe
 	}
 	webhook.ProcessingStatus = normalization.status
 	webhook.LastError = normalization.lastError
-	webhook, err = webhookForInboxStorage(webhook)
+	webhook, err = webhookForInboxStorage(webhook, normalization.facts)
 	if err != nil {
 		return entity.WebhookEvent{}, err
 	}

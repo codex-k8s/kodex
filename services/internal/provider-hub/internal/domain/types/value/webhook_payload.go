@@ -1,18 +1,20 @@
 package value
 
-// WebhookPayloadStorage describes where the full provider webhook payload can be used.
+// WebhookPayloadStorage describes the safe storage state of a provider webhook payload.
 type WebhookPayloadStorage string
 
 const (
-	WebhookPayloadStorageRetained WebhookPayloadStorage = "retained_for_retry"
-	WebhookPayloadStorageRedacted WebhookPayloadStorage = "redacted_after_terminal_processing"
-	WebhookPayloadStorageExpired  WebhookPayloadStorage = "expired_after_retention"
+	WebhookPayloadStorageSafeEnvelope WebhookPayloadStorage = "safe_envelope_only"
+	WebhookPayloadStorageRetained     WebhookPayloadStorage = "retained_for_retry"                 // legacy safe marker
+	WebhookPayloadStorageRedacted     WebhookPayloadStorage = "redacted_after_terminal_processing" // legacy safe marker
+	WebhookPayloadStorageExpired      WebhookPayloadStorage = "expired_after_retention"
 )
 
 // WebhookPayloadCleanupReason classifies why the full payload was removed.
 type WebhookPayloadCleanupReason string
 
 const (
+	WebhookPayloadCleanupReasonRemoved WebhookPayloadCleanupReason = "raw_payload_removed"
 	WebhookPayloadCleanupReasonExpired WebhookPayloadCleanupReason = "payload_expired"
 )
 
@@ -22,6 +24,12 @@ type WebhookPayloadEnvelope struct {
 	DeliveryID           string `json:"delivery_id,omitempty"`
 	EventName            string `json:"event_name,omitempty"`
 	RepositoryProviderID string `json:"repository_provider_id,omitempty"`
+	RepositoryFullName   string `json:"repository_full_name,omitempty"`
+	ProviderWorkItemID   string `json:"provider_work_item_id,omitempty"`
+	ProviderCommentID    string `json:"provider_comment_id,omitempty"`
+	FactKind             string `json:"fact_kind,omitempty"`
+	Kind                 string `json:"kind,omitempty"`
+	Number               int64  `json:"number,omitempty"`
 	PayloadSHA256        string `json:"payload_sha256,omitempty"`
 	PayloadDigestSource  string `json:"payload_digest_source,omitempty"`
 	PayloadStorage       string `json:"payload_storage"`

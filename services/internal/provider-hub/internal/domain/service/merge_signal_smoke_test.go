@@ -286,9 +286,9 @@ func assertSafeMergeSignalOutputsDoNotLeakFixture(t *testing.T, tc mergeSignalSm
 		bytes.Contains(repository.recordedWebhook.PayloadJSON, bytes.TrimSpace(fixture)) {
 		t.Fatalf("terminal webhook inbox payload leaked fixture body: %s", repository.recordedWebhook.PayloadJSON)
 	}
-	if !bytes.Contains(repository.recordedWebhook.PayloadJSON, []byte(value.WebhookPayloadStorageRedacted)) ||
+	if !bytes.Contains(repository.recordedWebhook.PayloadJSON, []byte(value.WebhookPayloadStorageSafeEnvelope)) ||
 		repository.recordedWebhook.PayloadDigest == "" {
-		t.Fatalf("webhook inbox payload = %s digest = %q, want safe redacted envelope", repository.recordedWebhook.PayloadJSON, repository.recordedWebhook.PayloadDigest)
+		t.Fatalf("webhook inbox payload = %s digest = %q, want safe envelope", repository.recordedWebhook.PayloadJSON, repository.recordedWebhook.PayloadDigest)
 	}
 	forbidden := []string{tc.rawSentinel, "payload_json", "\"body\""}
 	checkJSONDoesNotContain(t, "merge signal read result", readResult, forbidden)

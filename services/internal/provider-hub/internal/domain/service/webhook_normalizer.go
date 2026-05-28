@@ -20,6 +20,7 @@ import (
 type webhookNormalizationResult struct {
 	status           enum.WebhookProcessingStatus
 	lastError        string
+	facts            value.ProviderWebhookFacts
 	projectionUpdate providerrepo.ProjectionUpdate
 	providerEvents   []entity.ProviderEvent
 	outboxEvents     []entity.OutboxEvent
@@ -34,7 +35,7 @@ func (s *Service) normalizeWebhook(ctx context.Context, webhook entity.WebhookEv
 	if err != nil {
 		return webhookNormalizationResult{
 			status:       enum.WebhookProcessingStatusFailed,
-			lastError:    err.Error(),
+			lastError:    webhookLastErrorPayloadInvalid,
 			outboxEvents: []entity.OutboxEvent{receivedEvent},
 		}, nil
 	}
@@ -48,7 +49,7 @@ func (s *Service) normalizeWebhook(ctx context.Context, webhook entity.WebhookEv
 	if err != nil {
 		return webhookNormalizationResult{
 			status:       enum.WebhookProcessingStatusFailed,
-			lastError:    err.Error(),
+			lastError:    webhookLastErrorPayloadInvalid,
 			outboxEvents: []entity.OutboxEvent{receivedEvent},
 		}, nil
 	}
@@ -91,6 +92,7 @@ func (s *Service) normalizeWebhook(ctx context.Context, webhook entity.WebhookEv
 	outboxEvents := append([]entity.OutboxEvent{receivedEvent, normalizedOutbox}, projectionOutbox...)
 	return webhookNormalizationResult{
 		status:           enum.WebhookProcessingStatusProcessed,
+		facts:            facts,
 		projectionUpdate: projectionUpdate,
 		providerEvents:   []entity.ProviderEvent{providerEvent},
 		outboxEvents:     outboxEvents,
