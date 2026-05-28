@@ -951,7 +951,7 @@ func sameWebhookEvent(left entity.WebhookEvent, right entity.WebhookEvent) bool 
 	if left.PayloadDigest != "" && right.PayloadDigest != "" && left.PayloadDigest == right.PayloadDigest {
 		samePayload = true
 	}
-	if migratedTerminalWebhookEnvelope(right) {
+	if migratedWebhookEnvelopeReplaysByIdentity(right) {
 		samePayload = true
 	}
 	return left.ProviderSlug == right.ProviderSlug &&
@@ -961,21 +961,33 @@ func sameWebhookEvent(left entity.WebhookEvent, right entity.WebhookEvent) bool 
 		samePayload
 }
 
-func migratedTerminalWebhookEnvelope(event entity.WebhookEvent) bool {
+func migratedWebhookEnvelopeReplaysByIdentity(event entity.WebhookEvent) bool {
 	switch event.ProcessingStatus {
-	case enum.WebhookProcessingStatusProcessed, enum.WebhookProcessingStatusIgnored:
+	case enum.WebhookProcessingStatusProcessed, enum.WebhookProcessingStatusIgnored,
+		enum.WebhookProcessingStatusPending, enum.WebhookProcessingStatusFailed:
 	default:
 		return false
 	}
 	var envelope struct {
-		PayloadDigestSource string `json:"payload_digest_source"`
-		PayloadStorage      string `json:"payload_storage"`
+		PayloadCleanupReason string `json:"payload_cleanup_reason"`
+		PayloadDigestSource  string `json:"payload_digest_source"`
+		PayloadStorage       string `json:"payload_storage"`
 	}
 	if err := json.Unmarshal(event.PayloadJSON, &envelope); err != nil {
 		return false
 	}
-	return envelope.PayloadDigestSource == "postgres_jsonb_text" &&
-		envelope.PayloadStorage == "redacted_after_terminal_processing"
+	if envelope.PayloadDigestSource != "postgres_jsonb_text" {
+		return false
+	}
+	switch event.ProcessingStatus {
+	case enum.WebhookProcessingStatusProcessed, enum.WebhookProcessingStatusIgnored:
+		return envelope.PayloadStorage == "redacted_after_terminal_processing"
+	case enum.WebhookProcessingStatusPending, enum.WebhookProcessingStatusFailed:
+		return envelope.PayloadStorage == "safe_envelope_only" &&
+			envelope.PayloadCleanupReason == "raw_payload_removed"
+	default:
+		return false
+	}
 }
 
 func sameJSON(left []byte, right []byte) bool {

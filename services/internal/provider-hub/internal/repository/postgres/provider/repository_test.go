@@ -853,6 +853,25 @@ func TestRepositoryIntegrationRuntimeStateLimitsAndOperations(t *testing.T) {
 	if storedWebhook.ID != migratedTerminalWebhook.ID {
 		t.Fatalf("migrated terminal replay returned webhook %s, want %s", storedWebhook.ID, migratedTerminalWebhook.ID)
 	}
+	migratedRetryableWebhook := webhookEventForTest(now.Add(6*time.Minute), "delivery-migrated-retryable-1")
+	migratedRetryableWebhook.ProcessingStatus = enum.WebhookProcessingStatusFailed
+	migratedRetryableWebhook.PayloadDigest = strings.Repeat("b", 64)
+	migratedRetryableWebhook.PayloadJSON = []byte(`{"payload_cleanup_reason":"raw_payload_removed","payload_digest_source":"postgres_jsonb_text","payload_sha256":"` + migratedRetryableWebhook.PayloadDigest + `","payload_storage":"safe_envelope_only"}`)
+	if _, _, err := repository.StoreWebhookEvent(ctx, migratedRetryableWebhook, providerrepo.ProjectionUpdate{}, nil, nil); err != nil {
+		t.Fatalf("store migrated retryable webhook event: %v", err)
+	}
+	replayedMigratedRetryable := webhookEventForTest(now.Add(7*time.Minute), "delivery-migrated-retryable-1")
+	replayedMigratedRetryable.ID = uuid.New()
+	if replayedMigratedRetryable.PayloadDigest == migratedRetryableWebhook.PayloadDigest {
+		t.Fatal("test setup produced equal digests, want migrated retryable digest source mismatch")
+	}
+	storedWebhook, _, err = repository.StoreWebhookEvent(ctx, replayedMigratedRetryable, providerrepo.ProjectionUpdate{}, nil, nil)
+	if err != nil {
+		t.Fatalf("replay migrated retryable webhook by identity: %v", err)
+	}
+	if storedWebhook.ID != migratedRetryableWebhook.ID {
+		t.Fatalf("migrated retryable replay returned webhook %s, want %s", storedWebhook.ID, migratedRetryableWebhook.ID)
+	}
 	webhooks, _, err := repository.ListWebhookEvents(ctx, query.WebhookEventFilter{
 		ProviderSlug:       enum.ProviderSlugGitHub,
 		DeliveryID:         "delivery-1",

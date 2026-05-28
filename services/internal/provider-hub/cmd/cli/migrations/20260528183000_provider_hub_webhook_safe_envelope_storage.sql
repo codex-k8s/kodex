@@ -6,6 +6,7 @@ SET payload_json = jsonb_strip_nulls(jsonb_build_object(
     'event_name', event_name,
     'repository_provider_id', NULLIF(repository_provider_id, ''),
     'payload_sha256', payload_sha256,
+    'payload_digest_source', COALESCE(NULLIF(payload_json ->> 'payload_digest_source', ''), 'postgres_jsonb_text'),
     'payload_storage', 'safe_envelope_only',
     'payload_cleanup_reason', CASE
         WHEN processing_status IN ('pending', 'failed') THEN 'raw_payload_removed'

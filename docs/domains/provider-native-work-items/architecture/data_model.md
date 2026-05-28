@@ -75,7 +75,7 @@ approvals:
 - `pending`/`failed` больше не удерживают canonical provider body до TTL; retry/reprocess из такого inbox возможен только для legacy-строк, где payload ещё существовал до privacy-hardening, либо через будущий re-fetch provider adapter;
 - `RetryWebhookEventProcessing` для safe-envelope-only/expired записей безопасно отказывает с причиной `payload_unavailable` или `payload_expired` и не вызывает нормализатор на оболочке;
 - явная cleanup-операция `CleanupExpiredWebhookPayloads` остаётся совместимой с legacy `retained_for_retry` строками и переводит их в safe envelope с `payload_storage=expired_after_retention`, `payload_cleanup_reason=payload_expired`, `payload_sha256`, delivery/source refs и временем очистки;
-- migrated terminal rows с digest source `postgres_jsonb_text` принимают поздний duplicate delivery как replay по provider/delivery identity, потому что raw body уже удалён;
+- migrated rows с digest source `postgres_jsonb_text`, включая `processed`/`ignored` и retryable `raw_payload_removed`, принимают поздний duplicate delivery как replay по provider/delivery identity, потому что raw body уже удалён и старый digest мог быть посчитан от `jsonb::text`;
 - нормализация может идти синхронно при приёме или через отдельный обработчик, но повторная обработка должна быть идемпотентной;
 - если конкурентный повтор уже перевёл событие из `pending` или `failed` в терминальное состояние, команда повторной обработки перечитывает и возвращает это состояние вместо ложного `not found`;
 - `pending` после повторного чтения не считается успешной обработкой и должен возвращаться как конфликт.
