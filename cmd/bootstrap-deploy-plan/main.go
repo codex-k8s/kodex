@@ -51,7 +51,9 @@ type planOptions struct {
 }
 
 type planConfig struct {
-	Namespace string
+	Namespace               string
+	PublicIngressConfigured bool
+	IDPConfigured           bool
 }
 
 type manifestSet struct {
@@ -95,14 +97,16 @@ func run(ctx context.Context, options planOptions, output io.Writer) error {
 		return err
 	}
 	ok(output, "backend deploy env names checked without printing values")
+	restoreRenderEnv := applySafeRenderEnv()
+	defer restoreRenderEnv()
 
 	if err := validateDeployInventory(repoRoot, stack, output); err != nil {
 		return err
 	}
-	if err := renderDeployManifests(ctx, repoRoot, servicesFile, envFile, options.RenderDir, stack, !options.SkipLiveKubernetes, options.RequireKubernetes, output); err != nil {
+	if err := renderDeployManifests(ctx, repoRoot, servicesFile, options.RenderDir, stack, !options.SkipLiveKubernetes, options.RequireKubernetes, output); err != nil {
 		return err
 	}
-	checkExternalRefs(output)
+	checkExternalRefs(config, output)
 	if err := checkKubernetesFoundation(ctx, config, options.RequireKubernetes, options.SkipLiveKubernetes, output); err != nil {
 		return err
 	}
@@ -113,7 +117,9 @@ func run(ctx context.Context, options planOptions, output io.Writer) error {
 
 func loadPlanConfig() (planConfig, error) {
 	config := planConfig{
-		Namespace: stackinventory.EnvOr("KODEX_PRODUCTION_NAMESPACE", "kodex-prod"),
+		Namespace:               stackinventory.EnvOr("KODEX_PRODUCTION_NAMESPACE", "kodex-prod"),
+		PublicIngressConfigured: os.Getenv("KODEX_PRODUCTION_DOMAIN") != "" || os.Getenv("KODEX_PUBLIC_BASE_URL") != "",
+		IDPConfigured:           os.Getenv("KODEX_GITHUB_OAUTH_CLIENT_ID") != "" || os.Getenv("KODEX_GITHUB_OAUTH_CLIENT_SECRET") != "",
 	}
 	if strings.TrimSpace(config.Namespace) == "" {
 		return planConfig{}, errors.New("KODEX_PRODUCTION_NAMESPACE is required")
@@ -123,6 +129,32 @@ func loadPlanConfig() (planConfig, error) {
 		return planConfig{}, fmt.Errorf("KODEX_INTERNAL_REGISTRY_HOST must be host:port")
 	}
 	return config, nil
+}
+
+func applySafeRenderEnv() func() {
+	snapshot := os.Environ()
+	clearKodexEnv()
+	_ = os.Setenv("KODEX_PRODUCTION_NAMESPACE", "kodex-dry-run")
+	_ = os.Setenv("KODEX_INTERNAL_REGISTRY_HOST", "127.0.0.1:5000")
+	return func() {
+		clearKodexEnv()
+		for _, item := range snapshot {
+			key, value, ok := strings.Cut(item, "=")
+			if !ok || !strings.HasPrefix(key, "KODEX_") {
+				continue
+			}
+			_ = os.Setenv(key, value)
+		}
+	}
+}
+
+func clearKodexEnv() {
+	for _, item := range os.Environ() {
+		key, _, ok := strings.Cut(item, "=")
+		if ok && strings.HasPrefix(key, "KODEX_") {
+			_ = os.Unsetenv(key)
+		}
+	}
 }
 
 func validateDeployInventory(repoRoot string, stack stackinventory.Stack, output io.Writer) error {
@@ -206,7 +238,7 @@ func resolveImage(stack stackinventory.Stack, name string) error {
 	return nil
 }
 
-func renderDeployManifests(ctx context.Context, repoRoot, servicesFile, envFile, renderDir string, stack stackinventory.Stack, runKustomize bool, requireKustomize bool, output io.Writer) error {
+func renderDeployManifests(ctx context.Context, repoRoot, servicesFile, renderDir string, stack stackinventory.Stack, runKustomize bool, requireKustomize bool, output io.Writer) error {
 	renderDir, cleanup, err := manifestrender.PrepareOutputRoot(renderDir, "kodex-backend-deploy-plan-*")
 	if err != nil {
 		return err
@@ -217,7 +249,6 @@ func renderDeployManifests(ctx context.Context, repoRoot, servicesFile, envFile,
 		if err := manifestrender.Render(manifestrender.Options{
 			SourcePath:       set.Source,
 			OutputPath:       set.Output,
-			EnvFilePath:      envFile,
 			ServicesFilePath: servicesFile,
 		}); err != nil {
 			return fmt.Errorf("render %s: %w", set.Name, err)
@@ -285,13 +316,13 @@ func kustomize(ctx context.Context, path string) error {
 	return command.Run()
 }
 
-func checkExternalRefs(output io.Writer) {
-	if os.Getenv("KODEX_PRODUCTION_DOMAIN") != "" || os.Getenv("KODEX_PUBLIC_BASE_URL") != "" {
+func checkExternalRefs(config planConfig, output io.Writer) {
+	if config.PublicIngressConfigured {
 		ok(output, "public ingress env refs are configured; values hidden")
 	} else {
 		skip(output, "public ingress env refs are deferred: KODEX_PRODUCTION_DOMAIN/KODEX_PUBLIC_BASE_URL")
 	}
-	if os.Getenv("KODEX_GITHUB_OAUTH_CLIENT_ID") != "" || os.Getenv("KODEX_GITHUB_OAUTH_CLIENT_SECRET") != "" {
+	if config.IDPConfigured {
 		ok(output, "IdP/OAuth env refs are configured; values hidden")
 	} else {
 		skip(output, "IdP/OAuth env refs are deferred: KODEX_GITHUB_OAUTH_CLIENT_ID/KODEX_GITHUB_OAUTH_CLIENT_SECRET")

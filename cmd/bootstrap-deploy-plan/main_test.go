@@ -18,6 +18,10 @@ func TestRunBuildsBackendPlanWithoutPrintingEnvValues(t *testing.T) {
 		"KODEX_PRODUCTION_NAMESPACE='secret-namespace'",
 		"KODEX_PRODUCTION_DOMAIN='secret.example.test'",
 		"KODEX_GITHUB_OAUTH_CLIENT_ID='secret-client'",
+		"KODEX_GITHUB_OAUTH_CLIENT_SECRET='secret-client-secret'",
+		"KODEX_POSTGRES_PASSWORD='secret-postgres-password'",
+		"KODEX_ACCESS_MANAGER_DATABASE_DSN='secret-access-dsn'",
+		"KODEX_ACCESS_MANAGER_GRPC_AUTH_TOKEN='secret-access-token'",
 	}, "\n")), 0o600); err != nil {
 		t.Fatalf("write env file: %v", err)
 	}
@@ -33,7 +37,7 @@ func TestRunBuildsBackendPlanWithoutPrintingEnvValues(t *testing.T) {
 		t.Fatalf("run deploy plan: %v", err)
 	}
 
-	for _, leaked := range []string{"secret.registry.local", "secret-namespace", "secret.example.test", "secret-client"} {
+	for _, leaked := range []string{"secret.registry.local", "secret-namespace", "secret.example.test", "secret-client", "secret-client-secret", "secret-postgres-password", "secret-access-dsn", "secret-access-token"} {
 		if strings.Contains(output.String(), leaked) {
 			t.Fatalf("deploy plan output leaked env value %q: %s", leaked, output.String())
 		}
@@ -51,6 +55,7 @@ func TestRunBuildsBackendPlanWithoutPrintingEnvValues(t *testing.T) {
 	}
 	for _, path := range []string{
 		filepath.Join(renderDir, "postgres", "kustomization.yaml"),
+		filepath.Join(renderDir, "postgres", "secrets.yaml"),
 		filepath.Join(renderDir, "platform-event-log", "migrations.yaml"),
 		filepath.Join(renderDir, "bootstrap-builder-smoke", "kaniko-smoke.yaml"),
 		filepath.Join(renderDir, "access-manager", "access-manager.yaml"),
@@ -60,6 +65,7 @@ func TestRunBuildsBackendPlanWithoutPrintingEnvValues(t *testing.T) {
 			t.Fatalf("expected rendered file %s: %v", path, err)
 		}
 	}
+	assertRenderedTreeDoesNotContain(t, renderDir, "secret-postgres-password", "secret-access-dsn", "secret-access-token", "secret.registry.local", "secret-namespace", "secret-client-secret")
 }
 
 func TestRunFailsWhenDeployableServiceImageIsMissing(t *testing.T) {
@@ -143,7 +149,18 @@ func createDeployPlanRepo(t *testing.T, includeServiceImage bool) string {
 		t.Fatalf("write services.yaml: %v", err)
 	}
 	writeFile(t, repoRoot, "services/internal/access-manager/Dockerfile", "FROM scratch\n")
-	writeFile(t, repoRoot, "deploy/base/postgres/kustomization.yaml.tpl", "resources:\n  - postgres.yaml\n")
+	writeFile(t, repoRoot, "deploy/base/postgres/kustomization.yaml.tpl", "resources:\n  - secrets.yaml\n  - postgres.yaml\n")
+	writeFile(t, repoRoot, "deploy/base/postgres/secrets.yaml.tpl", `apiVersion: v1
+kind: Secret
+metadata:
+  name: kodex-postgres
+  namespace: {{ envOr "KODEX_PRODUCTION_NAMESPACE" "" }}
+type: Opaque
+stringData:
+  KODEX_POSTGRES_PASSWORD: "{{ envOr "KODEX_POSTGRES_PASSWORD" "" }}"
+  KODEX_ACCESS_MANAGER_DATABASE_DSN: "{{ envOr "KODEX_ACCESS_MANAGER_DATABASE_DSN" "" }}"
+  KODEX_ACCESS_MANAGER_GRPC_AUTH_TOKEN: "{{ envOr "KODEX_ACCESS_MANAGER_GRPC_AUTH_TOKEN" "" }}"
+`)
 	writeFile(t, repoRoot, "deploy/base/postgres/postgres.yaml.tpl", "image: {{ image \"postgres\" }}\n")
 	writeFile(t, repoRoot, "deploy/base/platform-event-log/migrations.yaml.tpl", "image: {{ image \"platform-event-log-migrations\" }}\n")
 	writeFile(t, repoRoot, "deploy/base/bootstrap-foundation/kustomization.yaml.tpl", "resources:\n  - registry.yaml\n")
@@ -167,8 +184,38 @@ func writeFile(t *testing.T, repoRoot string, path string, content string) {
 	}
 }
 
+func assertRenderedTreeDoesNotContain(t *testing.T, root string, markers ...string) {
+	t.Helper()
+	if err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		for _, marker := range markers {
+			if strings.Contains(string(content), marker) {
+				t.Fatalf("rendered file %s leaked marker %q", path, marker)
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("walk rendered tree: %v", err)
+	}
+}
+
 func clearDeployPlanEnv(t *testing.T) {
 	t.Helper()
+	for _, item := range os.Environ() {
+		name, _, ok := strings.Cut(item, "=")
+		if ok && strings.HasPrefix(name, "KODEX_") {
+			t.Setenv(name, "")
+		}
+	}
 	for _, name := range []string{
 		"KODEX_INTERNAL_REGISTRY_HOST",
 		"KODEX_PRODUCTION_NAMESPACE",
@@ -176,6 +223,9 @@ func clearDeployPlanEnv(t *testing.T) {
 		"KODEX_PUBLIC_BASE_URL",
 		"KODEX_GITHUB_OAUTH_CLIENT_ID",
 		"KODEX_GITHUB_OAUTH_CLIENT_SECRET",
+		"KODEX_POSTGRES_PASSWORD",
+		"KODEX_ACCESS_MANAGER_DATABASE_DSN",
+		"KODEX_ACCESS_MANAGER_GRPC_AUTH_TOKEN",
 	} {
 		t.Setenv(name, "")
 	}
