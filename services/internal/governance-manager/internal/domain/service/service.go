@@ -794,6 +794,12 @@ func (s *Service) RecordReleaseRuntimeEvidence(ctx context.Context, input Record
 	if input.ReleaseDecisionPackageID == uuid.Nil {
 		return entity.ReleaseDecisionPackage{}, errs.ErrInvalidArgument
 	}
+	if err := requireCommand(input.Meta, enum.OperationRecordReleaseRuntimeEvidence.String()); err != nil {
+		return entity.ReleaseDecisionPackage{}, err
+	}
+	if err := s.authorizeCommand(ctx, input.Meta, actionReleaseUpdate, releaseDecisionResource(input.ReleaseDecisionPackageID)); err != nil {
+		return entity.ReleaseDecisionPackage{}, err
+	}
 	runtimeRefs, err := normalizeReleaseJSONArrayPayload("release.runtime_refs", input.RuntimeRefs)
 	if err != nil {
 		return entity.ReleaseDecisionPackage{}, err
@@ -811,13 +817,6 @@ func (s *Service) RecordReleaseRuntimeEvidence(ctx context.Context, input Record
 	}
 	if len(runtimeRefs) == 0 && len(evidenceRefs) == 0 && len(integrationRefs) == 0 {
 		return entity.ReleaseDecisionPackage{}, errs.ErrInvalidArgument
-	}
-	pkg, err := s.repository.GetReleaseDecisionPackage(ctx, input.ReleaseDecisionPackageID)
-	if err != nil {
-		return entity.ReleaseDecisionPackage{}, err
-	}
-	if err := s.authorizeCommand(ctx, input.Meta, actionReleaseUpdate, releaseDecisionResource(input.ReleaseDecisionPackageID)); err != nil {
-		return entity.ReleaseDecisionPackage{}, err
 	}
 	result, replayed, err := s.replayCommand(ctx, input.Meta, enum.OperationRecordReleaseRuntimeEvidence.String(), governanceevents.AggregateReleaseDecisionPackage)
 	if err != nil {
@@ -837,6 +836,10 @@ func (s *Service) RecordReleaseRuntimeEvidence(ctx context.Context, input Record
 			return entity.ReleaseDecisionPackage{}, errs.ErrConflict
 		}
 		return replayedPackage, nil
+	}
+	pkg, err := s.repository.GetReleaseDecisionPackage(ctx, input.ReleaseDecisionPackageID)
+	if err != nil {
+		return entity.ReleaseDecisionPackage{}, err
 	}
 	if pkg.Status == enum.ReleaseDecisionPackageStatusClosed {
 		return entity.ReleaseDecisionPackage{}, errs.ErrPreconditionFailed

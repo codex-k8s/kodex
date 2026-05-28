@@ -2126,6 +2126,37 @@ func TestRecordReleaseRuntimeEvidenceRejectsStaleUnknownAndUnsafeInputs(t *testi
 	}
 }
 
+func TestRecordReleaseRuntimeEvidenceAccessDeniedBeforeRepositoryRead(t *testing.T) {
+	t.Parallel()
+
+	packageID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+	expectedVersion := int64(3)
+	commandID := uuid.MustParse("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+	repository := &fakeRepository{ready: true}
+	service := NewWithConfig(Config{
+		Repository: repository,
+		Authorizer: authorizerFunc(func(context.Context, AuthorizationRequest) error {
+			return errs.ErrForbidden
+		}),
+	})
+
+	_, err := service.RecordReleaseRuntimeEvidence(context.Background(), RecordReleaseRuntimeEvidenceInput{
+		ReleaseDecisionPackageID: packageID,
+		IntegrationRefs:          []value.ReleaseIntegrationRef{{Domain: "runtime", Kind: "job", Ref: "runtime:job:1"}},
+		Meta: CommandMeta{
+			CommandID:       &commandID,
+			ExpectedVersion: &expectedVersion,
+			Actor:           value.Actor{Type: "service", ID: "runtime-manager"},
+		},
+	})
+	if !errors.Is(err, errs.ErrForbidden) {
+		t.Fatalf("RecordReleaseRuntimeEvidence() error = %v, want ErrForbidden", err)
+	}
+	if repository.commandResultReads != 0 || repository.releasePackageReads != 0 || repository.mutationCalls != 0 {
+		t.Fatalf("repository calls = command:%d package:%d mutation:%d, want 0/0/0 before access allow", repository.commandResultReads, repository.releasePackageReads, repository.mutationCalls)
+	}
+}
+
 func TestReleaseReadAccessDeniedBeforeRepositoryRead(t *testing.T) {
 	t.Parallel()
 
@@ -2394,6 +2425,7 @@ type fakeRepository struct {
 	blockingSignalReads       int
 	blockingSignalListCalls   int
 	result                    entity.CommandResult
+	commandResultReads        int
 	events                    []entity.OutboxEvent
 	mutationCalls             int
 }
@@ -2412,6 +2444,7 @@ func (repository *fakeRepository) Ready() bool {
 }
 
 func (repository *fakeRepository) GetCommandResult(_ context.Context, _ query.CommandIdentity) (entity.CommandResult, error) {
+	repository.commandResultReads++
 	if !repository.hasCommandResult {
 		return entity.CommandResult{}, errs.ErrNotFound
 	}

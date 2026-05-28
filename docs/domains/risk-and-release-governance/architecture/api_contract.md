@@ -149,6 +149,7 @@ MCP-инструменты не должны принимать свободны
 | `governance.gate.cancelled` | Открытый gate request отменён. |
 | `governance.gate.expired` | Открытый gate request истёк. |
 | `governance.release_decision_package.built` | Собран release evidence package. |
+| `governance.release_decision_package.runtime_evidence_recorded` | В существующий release package дозаписаны safe runtime/deploy refs без логов, raw payload и больших details. |
 | `governance.release_decision.requested` | Запрошено релизное решение. |
 | `governance.release_decision.resolved` | Релизное решение принято. |
 | `governance.release_safety_state.changed` | Изменилось состояние release safety-loop. |
@@ -170,7 +171,7 @@ MCP-инструменты не должны принимать свободны
 | Review signal refs | `governance.review_signal.recorded` | `agent-manager`, `provider-hub`, release projections | Когда нужно получить список signals по target/assessment или сверить конкретный signal id. |
 | Gate request/decision | `governance.gate.requested`, `resolved`, `cancelled`, `expired` | `agent-manager` resume, `interaction-hub` delivery correlation, provider write policy, operations projections | Когда нужно прочитать gate request/decision с evidence refs или проверить final decision перед mutating command. |
 | Blocking signals | `governance.blocking_signal.recorded`, `resolved` | release decision consumers, runtime/operations projections | Когда нужен список active/historical blockers по target. |
-| Release package/decision/safety-loop | `governance.release_decision_package.built`, `governance.release_decision.requested`, `resolved`, `governance.release_safety_state.changed` | `agent-manager`, `runtime-manager`, provider write policy, operations projections | Когда нужен authoritative release package snapshot, decision detail или current safety state. |
+| Release package/decision/safety-loop | `governance.release_decision_package.built`, `governance.release_decision_package.runtime_evidence_recorded`, `governance.release_decision.requested`, `resolved`, `governance.release_safety_state.changed` | `agent-manager`, `runtime-manager`, provider write policy, operations projections | Когда нужен authoritative release package snapshot, decision detail или current safety state. |
 
 События служат trigger/read-model основой и не заменяют синхронный gRPC для команд, optimistic concurrency, access checks и точечного authoritative lookup. Соседние сервисы не читают БД `governance-manager`: они реагируют на `platform-event-log` и при необходимости вызывают gRPC reads с текущими правами.
 
