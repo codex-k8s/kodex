@@ -114,24 +114,54 @@ func TestInteractionGateDecisionEventHandlerRecordsRejectedGateDecisionFromOwner
 func TestInteractionGateDecisionEventHandlerIgnoresOtherOwners(t *testing.T) {
 	t.Parallel()
 
-	recorder := &fakeGateDecisionRecorder{}
-	handler := interactionGateDecisionEventHandler{recorder: recorder}
-	result := handler.HandleEvent(context.Background(), eventconsumer.Event{StoredEvent: interactionGateDecisionStoredEvent(t, interactionevents.Payload{
-		RequestID:       "request-1",
-		RequestKind:     interactionGateDecisionRequestKind,
-		ResponseID:      "response-1",
-		ResponseAction:  "approve",
-		ActorRef:        "user:owner",
-		OwnerRequestRef: "agent:human_gate/11111111-1111-4111-8111-111111111111",
-		OwnerService:    "agent_manager",
-		Status:          interactionGateDecisionAnswered,
-		Version:         2,
-	})})
-	if result.Status != eventconsumer.ResultAck {
-		t.Fatalf("HandleEvent() = %+v, want ack", result)
+	cases := []struct {
+		name    string
+		payload interactionevents.Payload
+	}{
+		{
+			name: "agent owner",
+			payload: interactionevents.Payload{
+				RequestID:       "request-1",
+				RequestKind:     interactionGateDecisionRequestKind,
+				ResponseID:      "response-1",
+				ResponseAction:  "approve",
+				ActorRef:        "user:owner",
+				OwnerRequestRef: "agent:human_gate/11111111-1111-4111-8111-111111111111",
+				OwnerService:    "agent_manager",
+				Status:          interactionGateDecisionAnswered,
+				Version:         2,
+			},
+		},
+		{
+			name: "missing explicit owner_service",
+			payload: interactionevents.Payload{
+				RequestID:         "request-1",
+				RequestKind:       interactionGateDecisionRequestKind,
+				ResponseID:        "response-1",
+				ResponseAction:    "approve",
+				ActorRef:          "user:owner",
+				OwnerRequestRef:   "governance:gate/11111111-1111-4111-8111-111111111111",
+				DecisionOwnerKind: interactionGateDecisionOwnerService,
+				Status:            interactionGateDecisionAnswered,
+				Version:           2,
+			},
+		},
 	}
-	if recorder.getInputs != 0 || len(recorder.submitInputs) != 0 {
-		t.Fatalf("calls get=%d submit=%d, want no governance mutation", recorder.getInputs, len(recorder.submitInputs))
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			recorder := &fakeGateDecisionRecorder{}
+			handler := interactionGateDecisionEventHandler{recorder: recorder}
+			result := handler.HandleEvent(context.Background(), eventconsumer.Event{StoredEvent: interactionGateDecisionStoredEvent(t, tc.payload)})
+			if result.Status != eventconsumer.ResultAck {
+				t.Fatalf("HandleEvent() = %+v, want ack", result)
+			}
+			if recorder.getInputs != 0 || len(recorder.submitInputs) != 0 {
+				t.Fatalf("calls get=%d submit=%d, want no governance mutation", recorder.getInputs, len(recorder.submitInputs))
+			}
+		})
 	}
 }
 
@@ -225,6 +255,35 @@ func TestInteractionGateDecisionEventHandlerPoisonsInvalidEventShape(t *testing.
 				RequestKind:              interactionGateDecisionRequestKind,
 				ResponseID:               "response-1",
 				ResponseAction:           "defer",
+				ActorRef:                 "user:owner",
+				GovernanceGateRequestRef: gateRequestID.String(),
+				OwnerService:             interactionGateDecisionOwnerService,
+				Status:                   interactionGateDecisionAnswered,
+			}),
+			code: "unsupported_response_action",
+		},
+		{
+			name: "missing action with approve outcome",
+			event: interactionGateDecisionStoredEvent(t, interactionevents.Payload{
+				RequestID:                "request-1",
+				RequestKind:              interactionGateDecisionRequestKind,
+				ResponseID:               "response-1",
+				ResponseOutcome:          "approve",
+				ActorRef:                 "user:owner",
+				GovernanceGateRequestRef: gateRequestID.String(),
+				OwnerService:             interactionGateDecisionOwnerService,
+				Status:                   interactionGateDecisionAnswered,
+			}),
+			code: "unsupported_response_action",
+		},
+		{
+			name: "mismatched action and outcome",
+			event: interactionGateDecisionStoredEvent(t, interactionevents.Payload{
+				RequestID:                "request-1",
+				RequestKind:              interactionGateDecisionRequestKind,
+				ResponseID:               "response-1",
+				ResponseAction:           "approve",
+				ResponseOutcome:          "reject",
 				ActorRef:                 "user:owner",
 				GovernanceGateRequestRef: gateRequestID.String(),
 				OwnerService:             interactionGateDecisionOwnerService,

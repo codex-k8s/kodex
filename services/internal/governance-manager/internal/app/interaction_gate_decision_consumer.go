@@ -162,20 +162,20 @@ func (h interactionGateDecisionEventHandler) interactionGateDecisionInput(ctx co
 }
 
 func interactionGateDecisionTargetsGovernance(payload interactionevents.Payload) bool {
-	owner := strings.TrimSpace(payload.OwnerService)
-	if owner == "" {
-		owner = strings.TrimSpace(payload.DecisionOwnerKind)
-	}
-	return owner == interactionGateDecisionOwnerService &&
+	return strings.TrimSpace(payload.OwnerService) == interactionGateDecisionOwnerService &&
 		strings.TrimSpace(payload.RequestKind) == interactionGateDecisionRequestKind
 }
 
 func interactionGateDecisionOutcome(action string, outcome string) (enum.GateOutcome, error) {
-	value := strings.TrimSpace(action)
-	if value == "" {
-		value = strings.TrimSpace(outcome)
+	normalizedAction := strings.TrimSpace(action)
+	if normalizedAction == "" {
+		return "", errs.ErrInvalidArgument
 	}
-	switch value {
+	normalizedOutcome := strings.TrimSpace(outcome)
+	if normalizedOutcome != "" && normalizedOutcome != normalizedAction {
+		return "", errs.ErrInvalidArgument
+	}
+	switch normalizedAction {
 	case string(enum.GateOutcomeApprove):
 		return enum.GateOutcomeApprove, nil
 	case string(enum.GateOutcomeReject):
