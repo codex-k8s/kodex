@@ -87,5 +87,10 @@ func validConfig() Config {
 			AuthToken: "governance-manager-token",
 			Timeout:   3 * time.Second,
 		},
+		InteractionHub: OwnerServiceConfig{
+			Enabled:   true,
+			AuthToken: "interaction-hub-token",
+			Timeout:   3 * time.Second,
+		},
 	}
 }

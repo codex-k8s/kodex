@@ -5,8 +5,8 @@ title: kodex — MCP и модель взаимодействий
 status: active
 owner_role: SA
 created_at: 2026-04-26
-updated_at: 2026-05-27
-related_issues: [599, 600, 601, 602, 747, 753, 778, 786, 830, 841, 852, 322, 782]
+updated_at: 2026-05-28
+related_issues: [599, 600, 601, 602, 747, 753, 778, 786, 830, 841, 852, 933, 322, 782]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -20,7 +20,7 @@ approvals:
 
 ## Кратко
 
-Платформенный MCP-сервер является тонкой инструментальной поверхностью для agent-manager, агентов в слотах и будущих интеграций. Он не владеет доменными данными, а проверяет политики, пишет аудит и маршрутизирует вызовы к сервисам-владельцам. Risk/gate/release decisions принадлежат `governance-manager`, а доставка человеку, callbacks, уведомления и внешние каналы принадлежат `interaction-hub`.
+Платформенный MCP-сервер является тонкой инструментальной поверхностью для agent-manager, агентов в слотах и будущих интеграций. Он не владеет доменными данными, а проверяет политики, пишет аудит и маршрутизирует вызовы к сервисам-владельцам. Решения по risk/gate/release принадлежат `governance-manager`, а доставка человеку, callbacks, уведомления и внешние каналы принадлежат `interaction-hub`.
 
 ## Роли MCP-контура
 
@@ -66,18 +66,18 @@ approvals:
 
 | Группа | Владелец маршрута | MVP-смысл |
 |---|---|---|
-| Agent tools | `agent-manager` | Run, session, acceptance, follow-up и ожидание flow только через `agent-manager`. |
-| Governance tools | `governance-manager` | Risk evaluator маршрутизируется через `governance.risk.evaluate/reevaluate/get/list`, gate lifecycle — через `governance.gate.request/get/list/submit_decision/cancel/expire`, release decision lifecycle — через `governance.release.*`; review signals добавляются отдельным governance-срезом. |
+| Agent tools | `agent-manager` | Run, session, session snapshot и Human gate request/get/list только через `agent-manager`; acceptance и follow-up добавляются отдельными срезами. |
+| Governance tools | `governance-manager` | Оценка риска маршрутизируется через `governance.risk.evaluate/reevaluate/get/list`, жизненный цикл gate — через `governance.gate.request/get/list/submit_decision/cancel/expire`, релизные решения — через `governance.release.*`, review signals — через `governance.signal.record_review/list_review`. |
 | Provider tools | `provider-hub` | Read/write операции провайдера через типизированный provider pipeline, без прямого GitHub/GitLab доступа из MCP. |
 | Project/runtime/fleet/package reads | `project-catalog`, `runtime-manager`, `fleet-manager`, `package-hub` | Авторитетные чтения проектной политики, runtime/fleet состояния и пакетных manifest/installations. |
-| Interaction tools | `interaction-hub` | Запросы обратной связи, approval delivery и callbacks, когда готов контракт `interaction-hub`. |
+| Interaction tools | `interaction-hub` | Входящие задачи владельца list/get/respond маршрутизируются через `interaction-hub`; запросы обратной связи, approval delivery и отдельные чтения доставки добавляются после готовности соответствующих сервисных операций. |
 | Diagnostics | `platform-mcp-server` и владельцы маршрутов | Ограниченный статус readiness/dependency/error без секретов, больших логов и сырых данных вызова. |
 
 Codex hook events для MVP: `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PermissionRequest`, `PostToolUse`, `Stop`. Они идут через hook emitter/local sidecar в `codex-hook-ingress`; machine-readable envelope, sanitizer contract и runtime config emitter/sidecar живут в `specs/jsonschema/codex-hook-ingress.v1/**`. Контрольные точки сжатия контекста проектируются отдельно как внутренние события `agent-manager`/`runtime-manager`, а не как Codex hooks.
 
 MCP может быть инструментальной поверхностью для запуска подготовки runtime, но не становится materializer. Для руководящих пакетов MCP передаёт владельцам только refs: `agent-manager` владеет `Run` и замороженными guidance refs, `package-hub` отдаёт package/install/manifest truth, `runtime-manager` материализует источники `guidance_package` и сгенерированный контекст в workspace.
 
-Governance risk, gate и release tools в MCP являются тонкими маршрутами к `governance-manager`: risk evaluate/reevaluate/get/list используют typed governance client, безопасный actor/source/request context, project/provider/agent/runtime refs, bounded evidence refs и safe classifier summary; gate request/get/list/submit/cancel/expire используют typed governance client, безопасный actor/source/request context и bounded refs; release package/decision/blocking/safety-loop tools используют typed refs, bounded summaries, expected version/idempotency/correlation и возвращают только safe refs/status/outcome/state/counts/version/timestamps. MCP не хранит risk assessment, gate request, gate decision, release decision package, release decision, blocking signal, safety-loop или delivery callback state и не подменяет `interaction-hub` для доставки человеку.
+Governance risk, gate, release и review signal tools в MCP являются тонкими маршрутами к `governance-manager`: risk evaluate/reevaluate/get/list используют типизированный governance client, безопасный actor/source/request context, project/provider/agent/runtime refs, ограниченные evidence refs и короткую сводку классификатора; gate request/get/list/submit/cancel/expire используют типизированный governance client, безопасный actor/source/request context и ограниченные refs; release package/decision/blocking/safety-loop tools используют типизированные refs, ограниченные сводки, expected version/idempotency/correlation и возвращают только безопасные ссылки, статусы, outcomes/states, счётчики, версии и timestamps. MCP не хранит risk assessment, gate request, gate decision, release decision package, release decision, blocking signal, safety-loop, review signal или delivery callback state и не подменяет `interaction-hub` для доставки человеку.
 
 Детальная сервисная граница, стратегия контрактов и план поставки живут в `docs/domains/platform-mcp-server/**`. Граница входного контура Codex hooks живёт в `docs/domains/codex-hook-ingress/**`.
 

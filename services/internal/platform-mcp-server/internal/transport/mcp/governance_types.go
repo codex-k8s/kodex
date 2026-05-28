@@ -31,6 +31,9 @@ const (
 	ToolGovernanceReleaseListBlockingSignals    = "governance.release.list_blocking_signals"
 	ToolGovernanceReleaseRecordSafetyState      = "governance.release.record_safety_state"
 	ToolGovernanceReleaseGetSafetyState         = "governance.release.get_safety_state"
+
+	ToolGovernanceSignalRecordReview = "governance.signal.record_review"
+	ToolGovernanceSignalListReview   = "governance.signal.list_review"
 )
 
 // GovernanceManagerClient is the owner route used by governance MCP tools.
@@ -40,6 +43,7 @@ type GovernanceManagerClient interface {
 	GovernanceGateDecisionClient
 	GovernanceGateTerminalClient
 	GovernanceReleaseClient
+	GovernanceReviewSignalClient
 }
 
 // GovernanceRiskAssessmentClient evaluates and reads risk assessments.
@@ -82,6 +86,12 @@ type GovernanceReleaseClient interface {
 	ListBlockingSignals(context.Context, *governancev1.ListBlockingSignalsRequest) (*governancev1.ListBlockingSignalsResponse, error)
 	RecordReleaseSafetyState(context.Context, *governancev1.RecordReleaseSafetyStateRequest) (*governancev1.ReleaseSafetyStateResponse, error)
 	GetReleaseSafetyState(context.Context, *governancev1.GetReleaseSafetyStateRequest) (*governancev1.ReleaseSafetyStateResponse, error)
+}
+
+// GovernanceReviewSignalClient records and reads review signals.
+type GovernanceReviewSignalClient interface {
+	RecordReviewSignal(context.Context, *governancev1.RecordReviewSignalRequest) (*governancev1.ReviewSignalResponse, error)
+	ListReviewSignals(context.Context, *governancev1.ListReviewSignalsRequest) (*governancev1.ListReviewSignalsResponse, error)
 }
 
 // GovernanceCommandMetaInput carries safe command metadata for governance-manager tools.
@@ -372,6 +382,28 @@ type GetGovernanceReleaseSafetyStateInput struct {
 	ReleaseDecisionPackageID string                   `json:"release_decision_package_id" jsonschema:"release decision package identifier"`
 }
 
+type RecordGovernanceReviewSignalInput struct {
+	Meta             GovernanceCommandMetaInput   `json:"meta" jsonschema:"command metadata"`
+	RiskAssessmentID string                       `json:"risk_assessment_id,omitempty" jsonschema:"risk assessment identifier"`
+	Target           GovernanceTargetInput        `json:"target" jsonschema:"review signal target"`
+	RoleKind         string                       `json:"role_kind" jsonschema:"role kind: reviewer, qa, lexical_gatekeeper, risk_gatekeeper, sre, security, owner or custom"`
+	AuthorRef        string                       `json:"author_ref" jsonschema:"safe reviewer, agent run or service principal ref"`
+	Outcome          string                       `json:"outcome" jsonschema:"outcome: pass, pass_with_notes, block, request_changes, raise_risk or informational"`
+	Severity         string                       `json:"severity" jsonschema:"severity: info, warning, blocking or critical"`
+	Confidence       string                       `json:"confidence,omitempty" jsonschema:"confidence: low, medium or high"`
+	EvidenceRefs     []GovernanceEvidenceRefInput `json:"evidence_refs,omitempty" jsonschema:"bounded evidence refs"`
+	Summary          string                       `json:"summary" jsonschema:"short safe review signal summary"`
+}
+
+type ListGovernanceReviewSignalsInput struct {
+	Meta             GovernanceQueryMetaInput `json:"meta" jsonschema:"query metadata"`
+	RiskAssessmentID string                   `json:"risk_assessment_id,omitempty" jsonschema:"risk assessment filter"`
+	Target           GovernanceTargetInput    `json:"target" jsonschema:"target filter and authorization context"`
+	RoleKind         string                   `json:"role_kind,omitempty" jsonschema:"role kind filter"`
+	Outcome          string                   `json:"outcome,omitempty" jsonschema:"outcome filter"`
+	Page             GovernancePageInput      `json:"page,omitempty" jsonschema:"page request"`
+}
+
 // GovernanceRiskAssessmentOutput is a safe risk assessment response.
 type GovernanceRiskAssessmentOutput struct {
 	RiskAssessment    GovernanceRiskAssessmentSummary `json:"risk_assessment" jsonschema:"risk assessment"`
@@ -597,6 +629,15 @@ type GovernanceReleaseSafetyStateOutput struct {
 	ReleaseSafetyState GovernanceReleaseSafetyStateSummary `json:"release_safety_state" jsonschema:"release safety-loop state"`
 }
 
+type GovernanceReviewSignalOutput struct {
+	ReviewSignal GovernanceReviewSignalSummary `json:"review_signal" jsonschema:"review signal"`
+}
+
+type GovernanceReviewSignalListOutput struct {
+	ReviewSignals []GovernanceReviewSignalSummary `json:"review_signals" jsonschema:"review signals"`
+	Page          PageSummary                     `json:"page" jsonschema:"page metadata"`
+}
+
 // GovernanceReleaseSafetyStateSummary is a bounded release safety-loop summary.
 type GovernanceReleaseSafetyStateSummary struct {
 	ID                       string `json:"id" jsonschema:"release safety state identifier"`
@@ -608,4 +649,18 @@ type GovernanceReleaseSafetyStateSummary struct {
 	Version                  int64  `json:"version" jsonschema:"state version"`
 	CreatedAt                string `json:"created_at" jsonschema:"created timestamp"`
 	UpdatedAt                string `json:"updated_at" jsonschema:"updated timestamp"`
+}
+
+type GovernanceReviewSignalSummary struct {
+	ID               string                      `json:"id" jsonschema:"review signal identifier"`
+	RiskAssessmentID string                      `json:"risk_assessment_id,omitempty" jsonschema:"risk assessment identifier"`
+	Target           GovernanceTargetSummary     `json:"target" jsonschema:"signal target"`
+	RoleKind         string                      `json:"role_kind" jsonschema:"role kind"`
+	AuthorRef        string                      `json:"author_ref" jsonschema:"safe author ref"`
+	Outcome          string                      `json:"outcome" jsonschema:"signal outcome"`
+	Severity         string                      `json:"severity" jsonschema:"signal severity"`
+	Confidence       string                      `json:"confidence,omitempty" jsonschema:"signal confidence"`
+	EvidenceRefs     []GovernanceEvidenceSummary `json:"evidence_refs,omitempty" jsonschema:"bounded evidence refs"`
+	Summary          string                      `json:"summary,omitempty" jsonschema:"short safe summary"`
+	CreatedAt        string                      `json:"created_at" jsonschema:"created timestamp"`
 }

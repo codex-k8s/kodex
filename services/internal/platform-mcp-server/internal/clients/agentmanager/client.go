@@ -64,6 +64,21 @@ func (c *Client) RecordSessionStateSnapshot(ctx context.Context, request *agents
 	return callOwner(ctx, c, request, c.client.RecordSessionStateSnapshot)
 }
 
+// RequestHumanGate routes a human gate command to agent-manager.
+func (c *Client) RequestHumanGate(ctx context.Context, request *agentsv1.RequestHumanGateRequest) (*agentsv1.HumanGateRequestResponse, error) {
+	return callOwner(ctx, c, request, c.client.RequestHumanGate)
+}
+
+// GetHumanGateRequest routes a human gate read to agent-manager.
+func (c *Client) GetHumanGateRequest(ctx context.Context, request *agentsv1.GetHumanGateRequestRequest) (*agentsv1.HumanGateRequestResponse, error) {
+	return callOwner(ctx, c, request, c.client.GetHumanGateRequest)
+}
+
+// ListHumanGateRequests routes human gate list reads to agent-manager.
+func (c *Client) ListHumanGateRequests(ctx context.Context, request *agentsv1.ListHumanGateRequestsRequest) (*agentsv1.ListHumanGateRequestsResponse, error) {
+	return callOwner(ctx, c, request, c.client.ListHumanGateRequests)
+}
+
 // GetAgentSession routes a session read to agent-manager.
 func (c *Client) GetAgentSession(ctx context.Context, request *agentsv1.GetAgentSessionRequest) (*agentsv1.AgentSessionResponse, error) {
 	return callOwner(ctx, c, request, c.client.GetAgentSession)

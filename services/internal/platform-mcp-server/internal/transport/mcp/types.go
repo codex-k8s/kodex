@@ -19,6 +19,7 @@ type Config struct {
 	AgentManager      AgentManagerClient
 	ProviderHub       ProviderHubClient
 	GovernanceManager GovernanceManagerClient
+	InteractionHub    InteractionHubClient
 	AuthRequired      bool
 	AuthToken         string
 	AuthScope         string

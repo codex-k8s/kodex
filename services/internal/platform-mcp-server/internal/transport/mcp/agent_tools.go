@@ -16,6 +16,9 @@ const (
 	agentRunStartDescription              = "Запустить роль в рамках агентной сессии через agent-manager."
 	agentRunRecordStateDescription        = "Зафиксировать состояние агентного запуска через agent-manager."
 	agentSessionRecordSnapshotDescription = "Записать ссылку на снимок состояния сессии через agent-manager."
+	agentHumanGateRequestDescription      = "Зафиксировать ожидание решения человека через agent-manager."
+	agentHumanGateGetDescription          = "Прочитать ожидание или результат Human gate через agent-manager."
+	agentHumanGateListDescription         = "Получить список ожиданий Human gate через agent-manager."
 	diagnosticsRunContextReadDescription  = "Прочитать безопасную сводку сессии и агентных запусков через agent-manager без бизнес-состояния в MCP."
 )
 
@@ -70,6 +73,35 @@ var (
 		agentsv1.AgentSessionStatus_AGENT_SESSION_STATUS_FAILED:    "failed",
 		agentsv1.AgentSessionStatus_AGENT_SESSION_STATUS_CANCELLED: "cancelled",
 	}
+	agentHumanGateStatuses = map[string]agentsv1.HumanGateStatus{
+		"requested": agentsv1.HumanGateStatus_HUMAN_GATE_STATUS_REQUESTED,
+		"waiting":   agentsv1.HumanGateStatus_HUMAN_GATE_STATUS_WAITING,
+		"resolved":  agentsv1.HumanGateStatus_HUMAN_GATE_STATUS_RESOLVED,
+		"failed":    agentsv1.HumanGateStatus_HUMAN_GATE_STATUS_FAILED,
+		"cancelled": agentsv1.HumanGateStatus_HUMAN_GATE_STATUS_CANCELLED,
+		"canceled":  agentsv1.HumanGateStatus_HUMAN_GATE_STATUS_CANCELLED,
+	}
+	agentHumanGateStatusNames = map[agentsv1.HumanGateStatus]string{
+		agentsv1.HumanGateStatus_HUMAN_GATE_STATUS_REQUESTED: "requested",
+		agentsv1.HumanGateStatus_HUMAN_GATE_STATUS_WAITING:   "waiting",
+		agentsv1.HumanGateStatus_HUMAN_GATE_STATUS_RESOLVED:  "resolved",
+		agentsv1.HumanGateStatus_HUMAN_GATE_STATUS_FAILED:    "failed",
+		agentsv1.HumanGateStatus_HUMAN_GATE_STATUS_CANCELLED: "cancelled",
+	}
+	agentHumanGateOutcomes = map[string]agentsv1.HumanGateOutcome{
+		"none":            agentsv1.HumanGateOutcome_HUMAN_GATE_OUTCOME_NONE,
+		"approve":         agentsv1.HumanGateOutcome_HUMAN_GATE_OUTCOME_APPROVE,
+		"reject":          agentsv1.HumanGateOutcome_HUMAN_GATE_OUTCOME_REJECT,
+		"request_changes": agentsv1.HumanGateOutcome_HUMAN_GATE_OUTCOME_REQUEST_CHANGES,
+		"answer":          agentsv1.HumanGateOutcome_HUMAN_GATE_OUTCOME_ANSWER,
+	}
+	agentHumanGateOutcomeNames = map[agentsv1.HumanGateOutcome]string{
+		agentsv1.HumanGateOutcome_HUMAN_GATE_OUTCOME_NONE:            "none",
+		agentsv1.HumanGateOutcome_HUMAN_GATE_OUTCOME_APPROVE:         "approve",
+		agentsv1.HumanGateOutcome_HUMAN_GATE_OUTCOME_REJECT:          "reject",
+		agentsv1.HumanGateOutcome_HUMAN_GATE_OUTCOME_REQUEST_CHANGES: "request_changes",
+		agentsv1.HumanGateOutcome_HUMAN_GATE_OUTCOME_ANSWER:          "answer",
+	}
 )
 
 // AgentToolsHandler routes agent MCP tools to agent-manager.
@@ -100,6 +132,21 @@ func (handler *AgentToolsHandler) RecordRunState(ctx context.Context, _ *mcpsdk.
 // RecordSessionSnapshot routes agent.session.record_snapshot to agent-manager.
 func (handler *AgentToolsHandler) RecordSessionSnapshot(ctx context.Context, _ *mcpsdk.CallToolRequest, input RecordSessionSnapshotInput) (*mcpsdk.CallToolResult, AgentSnapshotToolOutput, error) {
 	return routeOwnerTool(ctx, input, recordSessionSnapshotRequest, handler.client.RecordSessionStateSnapshot, agentSnapshotToolOutput, ToolAgentSessionRecordSnapshot)
+}
+
+// RequestHumanGate routes agent.human_gate.request to agent-manager.
+func (handler *AgentToolsHandler) RequestHumanGate(ctx context.Context, _ *mcpsdk.CallToolRequest, input RequestHumanGateInput) (*mcpsdk.CallToolResult, HumanGateToolOutput, error) {
+	return routeOwnerTool(ctx, input, requestHumanGateRequest, handler.client.RequestHumanGate, humanGateToolOutput, ToolAgentHumanGateRequest)
+}
+
+// GetHumanGate routes agent.human_gate.get to agent-manager.
+func (handler *AgentToolsHandler) GetHumanGate(ctx context.Context, _ *mcpsdk.CallToolRequest, input GetHumanGateInput) (*mcpsdk.CallToolResult, HumanGateToolOutput, error) {
+	return routeOwnerTool(ctx, input, getHumanGateRequest, handler.client.GetHumanGateRequest, humanGateToolOutput, ToolAgentHumanGateGet)
+}
+
+// ListHumanGates routes agent.human_gate.list to agent-manager.
+func (handler *AgentToolsHandler) ListHumanGates(ctx context.Context, _ *mcpsdk.CallToolRequest, input ListHumanGatesInput) (*mcpsdk.CallToolResult, HumanGateListOutput, error) {
+	return routeOwnerTool(ctx, input, listHumanGatesRequest, handler.client.ListHumanGateRequests, humanGateListOutput, ToolAgentHumanGateList)
 }
 
 // ReadRunContext returns a bounded diagnostic view of session and run state.
@@ -141,6 +188,17 @@ func agentSnapshotToolOutput(response *agentsv1.AgentSessionStateSnapshotRespons
 	return AgentSnapshotToolOutput{
 		Snapshot: agentSessionSnapshotSummary(response.GetSnapshot()),
 		Session:  agentSessionSummary(response.GetSession(), nil),
+	}
+}
+
+func humanGateToolOutput(response *agentsv1.HumanGateRequestResponse) HumanGateToolOutput {
+	return HumanGateToolOutput{HumanGate: humanGateSummary(response.GetHumanGateRequest())}
+}
+
+func humanGateListOutput(response *agentsv1.ListHumanGateRequestsResponse) HumanGateListOutput {
+	return HumanGateListOutput{
+		HumanGates: humanGateSummaries(response.GetHumanGateRequests()),
+		Page:       pageSummary(response.GetPage()),
 	}
 }
 
@@ -253,10 +311,11 @@ func getAgentSessionRequest(input RunContextReadInput) (*agentsv1.GetAgentSessio
 	if err != nil {
 		return nil, err
 	}
-	if strings.TrimSpace(input.SessionID) == "" {
-		return nil, invalidInput("session_id is required")
+	sessionID, err := requiredTrimmed(input.SessionID, "session_id")
+	if err != nil {
+		return nil, err
 	}
-	return &agentsv1.GetAgentSessionRequest{Meta: meta, SessionId: strings.TrimSpace(input.SessionID)}, nil
+	return &agentsv1.GetAgentSessionRequest{Meta: meta, SessionId: sessionID}, nil
 }
 
 func listAgentRunsRequest(input RunContextReadInput) (*agentsv1.ListAgentRunsRequest, error) {
@@ -274,6 +333,74 @@ func listAgentRunsRequest(input RunContextReadInput) (*agentsv1.ListAgentRunsReq
 		Status:              statusFilter,
 		ProviderWorkItemRef: optionalString(input.ProviderWorkItemRef),
 		Page:                pageRequest(input.Page),
+	}, nil
+}
+
+func requestHumanGateRequest(input RequestHumanGateInput) (*agentsv1.RequestHumanGateRequest, error) {
+	meta, err := commandMeta(input.Meta)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(input.SessionID) == "" {
+		return nil, invalidInput("session_id is required")
+	}
+	if strings.TrimSpace(input.RequestKind) == "" {
+		return nil, invalidInput("request_kind is required")
+	}
+	if strings.TrimSpace(input.ReasonCode) == "" {
+		return nil, invalidInput("reason_code is required")
+	}
+	return &agentsv1.RequestHumanGateRequest{
+		Meta:                     meta,
+		SessionId:                strings.TrimSpace(input.SessionID),
+		RunId:                    optionalString(input.RunID),
+		StageId:                  optionalString(input.StageID),
+		AcceptanceResultId:       optionalString(input.AcceptanceResultID),
+		ProviderTarget:           providerTargetRef(input.ProviderTarget),
+		TargetRef:                optionalString(input.TargetRef),
+		RequestKind:              strings.TrimSpace(input.RequestKind),
+		ReasonCode:               strings.TrimSpace(input.ReasonCode),
+		SafeSummary:              optionalString(input.SafeSummary),
+		InteractionRequestRef:    optionalString(input.InteractionRequestRef),
+		GovernanceGateRequestRef: optionalString(input.GovernanceGateRequestRef),
+	}, nil
+}
+
+func getHumanGateRequest(input GetHumanGateInput) (*agentsv1.GetHumanGateRequestRequest, error) {
+	meta, err := queryMeta(input.Meta)
+	if err != nil {
+		return nil, err
+	}
+	requestID, err := requiredTrimmed(input.HumanGateRequestID, "human_gate_request_id")
+	if err != nil {
+		return nil, err
+	}
+	request := &agentsv1.GetHumanGateRequestRequest{Meta: meta}
+	request.HumanGateRequestId = requestID
+	return request, nil
+}
+
+func listHumanGatesRequest(input ListHumanGatesInput) (*agentsv1.ListHumanGateRequestsRequest, error) {
+	meta, err := queryMeta(input.Meta)
+	if err != nil {
+		return nil, err
+	}
+	statusFilter, err := optionalHumanGateStatus(input.Status)
+	if err != nil {
+		return nil, err
+	}
+	outcomeFilter, err := optionalHumanGateOutcome(input.Outcome)
+	if err != nil {
+		return nil, err
+	}
+	return &agentsv1.ListHumanGateRequestsRequest{
+		Meta:      meta,
+		SessionId: optionalString(input.SessionID),
+		RunId:     optionalString(input.RunID),
+		StageId:   optionalString(input.StageID),
+		Status:    statusFilter,
+		Outcome:   outcomeFilter,
+		Page:      pageRequest(input.Page),
 	}, nil
 }
 
@@ -331,15 +458,15 @@ func actor(input AgentActorInput) (*agentsv1.Actor, error) {
 }
 
 func requestContext(input AgentRequestContextInput) (*agentsv1.RequestContext, error) {
-	source, err := safeRequestSource(input.Source)
+	source, traceID, sessionID, clientIPHash, err := safeRequestContext(input.Source, input.TraceID, input.SessionID, input.ClientIPHash)
 	if err != nil {
 		return nil, err
 	}
 	return &agentsv1.RequestContext{
 		Source:       source,
-		TraceId:      optionalString(input.TraceID),
-		SessionId:    optionalString(input.SessionID),
-		ClientIpHash: optionalString(input.ClientIPHash),
+		TraceId:      traceID,
+		SessionId:    sessionID,
+		ClientIpHash: clientIPHash,
 	}, nil
 }
 
@@ -476,6 +603,38 @@ func agentSessionSnapshotSummary(snapshot *agentsv1.AgentSessionStateSnapshot) A
 	}
 }
 
+func humanGateSummaries(requests []*agentsv1.HumanGateRequest) []HumanGateSummary {
+	return summarizeItems(requests, humanGateSummary)
+}
+
+func humanGateSummary(request *agentsv1.HumanGateRequest) HumanGateSummary {
+	if request == nil {
+		return HumanGateSummary{}
+	}
+	return HumanGateSummary{
+		ID:                       request.GetId(),
+		SessionID:                request.GetSessionId(),
+		RunID:                    request.GetRunId(),
+		StageID:                  request.GetStageId(),
+		AcceptanceResultID:       request.GetAcceptanceResultId(),
+		ProviderTarget:           providerTargetSummary(request.GetProviderTarget()),
+		TargetRef:                request.GetTargetRef(),
+		RequestKind:              request.GetRequestKind(),
+		ReasonCode:               request.GetReasonCode(),
+		SafeSummary:              request.GetSafeSummary(),
+		InteractionRequestRef:    request.GetInteractionRequestRef(),
+		InteractionResponseRef:   request.GetInteractionResponseRef(),
+		GovernanceGateRequestRef: request.GetGovernanceGateRequestRef(),
+		GovernanceDecisionRef:    request.GetGovernanceDecisionRef(),
+		Status:                   humanGateStatusName(request.GetStatus()),
+		Outcome:                  humanGateOutcomeName(request.GetOutcome()),
+		Version:                  request.GetVersion(),
+		CreatedAt:                request.GetCreatedAt(),
+		UpdatedAt:                request.GetUpdatedAt(),
+		ResolvedAt:               request.GetResolvedAt(),
+	}
+}
+
 func scopeSummary(scope *agentsv1.ScopeRef) AgentScopeSummary {
 	if scope == nil {
 		return AgentScopeSummary{}
@@ -541,19 +700,19 @@ func agentRunStatus(value string) (agentsv1.AgentRunStatus, error) {
 }
 
 func optionalAgentRunStatus(value string) (*agentsv1.AgentRunStatus, error) {
-	key := normalizedKey(value)
-	if key == "" {
-		return nil, nil
-	}
-	statusValue, err := requiredEnumValue(key, agentRunStatuses, agentsv1.AgentRunStatus_AGENT_RUN_STATUS_UNSPECIFIED, "status")
-	if err != nil {
-		return nil, err
-	}
-	return &statusValue, err
+	return optionalEnumValue(normalizedKey(value), agentRunStatuses, agentsv1.AgentRunStatus_AGENT_RUN_STATUS_UNSPECIFIED, "status")
 }
 
 func agentSessionSnapshotKind(value string) (agentsv1.AgentSessionSnapshotKind, error) {
 	return requiredEnumValue(normalizedKey(value), agentSessionSnapshotKinds, agentsv1.AgentSessionSnapshotKind_AGENT_SESSION_SNAPSHOT_KIND_UNSPECIFIED, "snapshot_kind")
+}
+
+func optionalHumanGateStatus(value string) (*agentsv1.HumanGateStatus, error) {
+	return optionalEnumValue(normalizedKey(value), agentHumanGateStatuses, agentsv1.HumanGateStatus_HUMAN_GATE_STATUS_UNSPECIFIED, "status")
+}
+
+func optionalHumanGateOutcome(value string) (*agentsv1.HumanGateOutcome, error) {
+	return optionalEnumValue(normalizedKey(value), agentHumanGateOutcomes, agentsv1.HumanGateOutcome_HUMAN_GATE_OUTCOME_UNSPECIFIED, "outcome")
 }
 
 func scopeTypeName(value agentsv1.AgentScopeType) string {
@@ -572,6 +731,14 @@ func snapshotKindName(value agentsv1.AgentSessionSnapshotKind) string {
 	return enumName(value, agentSessionSnapshotKindNames)
 }
 
+func humanGateStatusName(value agentsv1.HumanGateStatus) string {
+	return enumName(value, agentHumanGateStatusNames)
+}
+
+func humanGateOutcomeName(value agentsv1.HumanGateOutcome) string {
+	return enumName(value, agentHumanGateOutcomeNames)
+}
+
 func requiredEnumValue[T comparable](key string, values map[string]T, zero T, field string) (T, error) {
 	if key == "" {
 		return zero, invalidInput(field + " is required")
@@ -583,11 +750,30 @@ func requiredEnumValue[T comparable](key string, values map[string]T, zero T, fi
 	return value, nil
 }
 
+func optionalEnumValue[T comparable](key string, values map[string]T, zero T, field string) (*T, error) {
+	if key == "" {
+		return nil, nil
+	}
+	value, err := requiredEnumValue(key, values, zero, field)
+	if err != nil {
+		return nil, err
+	}
+	return &value, nil
+}
+
 func enumName[T comparable](value T, names map[T]string) string {
 	if name, ok := names[value]; ok {
 		return name
 	}
 	return "unspecified"
+}
+
+func safeRequestContext(sourceInput, traceIDInput, sessionIDInput, clientIPHashInput string) (string, *string, *string, *string, error) {
+	source, err := safeRequestSource(sourceInput)
+	if err != nil {
+		return "", nil, nil, nil, err
+	}
+	return source, optionalString(traceIDInput), optionalString(sessionIDInput), optionalString(clientIPHashInput), nil
 }
 
 func optionalString(value string) *string {

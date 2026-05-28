@@ -10,9 +10,11 @@ import (
 	serviceprocess "github.com/codex-k8s/kodex/libs/go/serviceprocess"
 	agentsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/agents/v1"
 	governancev1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/governance/v1"
+	interactionsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/interactions/v1"
 	providersv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/providers/v1"
 	agentmanagerclient "github.com/codex-k8s/kodex/services/internal/platform-mcp-server/internal/clients/agentmanager"
 	governanceclient "github.com/codex-k8s/kodex/services/internal/platform-mcp-server/internal/clients/governance"
+	interactionhubclient "github.com/codex-k8s/kodex/services/internal/platform-mcp-server/internal/clients/interactionhub"
 	providerhubclient "github.com/codex-k8s/kodex/services/internal/platform-mcp-server/internal/clients/providerhub"
 	mcptransport "github.com/codex-k8s/kodex/services/internal/platform-mcp-server/internal/transport/mcp"
 )
@@ -49,6 +51,13 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	defer func() {
 		_ = governanceConn.Close()
 	}()
+	interactionConn, err := interactionhubclient.NewConnection(cfg.InteractionHubClientConfig())
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = interactionConn.Close()
+	}()
 	agentClient, err := agentmanagerclient.New(agentsv1.NewAgentManagerServiceClient(agentConn), cfg.AgentManagerClientConfig())
 	if err != nil {
 		return err
@@ -61,7 +70,11 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	mcpServer, err := mcptransport.NewServer(cfg.MCPTransportConfig(ownerRoutes, agentClient, providerClient, governanceManagerClient), logger)
+	interactionClient, err := interactionhubclient.New(interactionsv1.NewInteractionHubServiceClient(interactionConn), cfg.InteractionHubClientConfig())
+	if err != nil {
+		return err
+	}
+	mcpServer, err := mcptransport.NewServer(cfg.MCPTransportConfig(ownerRoutes, agentClient, providerClient, governanceManagerClient, interactionClient), logger)
 	if err != nil {
 		return err
 	}

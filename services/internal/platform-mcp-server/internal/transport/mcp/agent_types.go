@@ -11,6 +11,9 @@ const (
 	ToolAgentRunStart              = "agent.run.start"
 	ToolAgentRunRecordState        = "agent.run.record_state"
 	ToolAgentSessionRecordSnapshot = "agent.session.record_snapshot"
+	ToolAgentHumanGateRequest      = "agent.human_gate.request"
+	ToolAgentHumanGateGet          = "agent.human_gate.get"
+	ToolAgentHumanGateList         = "agent.human_gate.list"
 	ToolDiagnosticsRunContextRead  = "diagnostics.run_context.read"
 )
 
@@ -20,6 +23,9 @@ type AgentManagerClient interface {
 	StartAgentRun(context.Context, *agentsv1.StartAgentRunRequest) (*agentsv1.AgentRunResponse, error)
 	RecordRunState(context.Context, *agentsv1.RecordRunStateRequest) (*agentsv1.AgentRunResponse, error)
 	RecordSessionStateSnapshot(context.Context, *agentsv1.RecordSessionStateSnapshotRequest) (*agentsv1.AgentSessionStateSnapshotResponse, error)
+	RequestHumanGate(context.Context, *agentsv1.RequestHumanGateRequest) (*agentsv1.HumanGateRequestResponse, error)
+	GetHumanGateRequest(context.Context, *agentsv1.GetHumanGateRequestRequest) (*agentsv1.HumanGateRequestResponse, error)
+	ListHumanGateRequests(context.Context, *agentsv1.ListHumanGateRequestsRequest) (*agentsv1.ListHumanGateRequestsResponse, error)
 	GetAgentSession(context.Context, *agentsv1.GetAgentSessionRequest) (*agentsv1.AgentSessionResponse, error)
 	ListAgentRuns(context.Context, *agentsv1.ListAgentRunsRequest) (*agentsv1.ListAgentRunsResponse, error)
 }
@@ -154,6 +160,39 @@ type RunContextReadInput struct {
 	Page                AgentPageInput      `json:"page,omitempty" jsonschema:"run list page"`
 }
 
+// RequestHumanGateInput is the MCP input for agent.human_gate.request.
+type RequestHumanGateInput struct {
+	Meta                     AgentCommandMetaInput    `json:"meta" jsonschema:"command metadata"`
+	SessionID                string                   `json:"session_id" jsonschema:"agent session identifier"`
+	RunID                    string                   `json:"run_id,omitempty" jsonschema:"agent run identifier"`
+	StageID                  string                   `json:"stage_id,omitempty" jsonschema:"flow stage identifier"`
+	AcceptanceResultID       string                   `json:"acceptance_result_id,omitempty" jsonschema:"acceptance result identifier"`
+	ProviderTarget           AgentProviderTargetInput `json:"provider_target,omitempty" jsonschema:"provider refs"`
+	TargetRef                string                   `json:"target_ref,omitempty" jsonschema:"owner decision target ref"`
+	RequestKind              string                   `json:"request_kind" jsonschema:"owner decision request kind"`
+	ReasonCode               string                   `json:"reason_code" jsonschema:"machine reason code"`
+	SafeSummary              string                   `json:"safe_summary,omitempty" jsonschema:"short safe summary"`
+	InteractionRequestRef    string                   `json:"interaction_request_ref,omitempty" jsonschema:"interaction-hub request ref"`
+	GovernanceGateRequestRef string                   `json:"governance_gate_request_ref,omitempty" jsonschema:"governance gate request ref"`
+}
+
+// GetHumanGateInput is the MCP input for agent.human_gate.get.
+type GetHumanGateInput struct {
+	Meta               AgentQueryMetaInput `json:"meta" jsonschema:"query metadata"`
+	HumanGateRequestID string              `json:"human_gate_request_id" jsonschema:"human gate request identifier"`
+}
+
+// ListHumanGatesInput is the MCP input for agent.human_gate.list.
+type ListHumanGatesInput struct {
+	Meta      AgentQueryMetaInput `json:"meta" jsonschema:"query metadata"`
+	SessionID string              `json:"session_id,omitempty" jsonschema:"agent session filter"`
+	RunID     string              `json:"run_id,omitempty" jsonschema:"agent run filter"`
+	StageID   string              `json:"stage_id,omitempty" jsonschema:"flow stage filter"`
+	Status    string              `json:"status,omitempty" jsonschema:"status filter: requested, waiting, resolved, failed or cancelled"`
+	Outcome   string              `json:"outcome,omitempty" jsonschema:"outcome filter: none, approve, reject, request_changes or answer"`
+	Page      AgentPageInput      `json:"page,omitempty" jsonschema:"page request"`
+}
+
 // AgentSessionToolOutput is a safe session response.
 type AgentSessionToolOutput struct {
 	Session AgentSessionSummary `json:"session" jsonschema:"agent session"`
@@ -175,6 +214,17 @@ type RunContextOutput struct {
 	Session AgentSessionSummary `json:"session" jsonschema:"agent session"`
 	Runs    []AgentRunSummary   `json:"runs,omitempty" jsonschema:"agent runs"`
 	Page    PageSummary         `json:"page" jsonschema:"page metadata"`
+}
+
+// HumanGateToolOutput is a safe human gate response.
+type HumanGateToolOutput struct {
+	HumanGate HumanGateSummary `json:"human_gate" jsonschema:"human gate request"`
+}
+
+// HumanGateListOutput is a safe human gate list response.
+type HumanGateListOutput struct {
+	HumanGates []HumanGateSummary `json:"human_gates" jsonschema:"human gate requests"`
+	Page       PageSummary        `json:"page" jsonschema:"page metadata"`
 }
 
 // AgentSessionSummary is a value-safe summary of an agent session.
@@ -240,6 +290,30 @@ type AgentRuntimeContextSummary = AgentRuntimeContextInput
 
 // AgentObjectSummary is a safe object storage reference.
 type AgentObjectSummary = AgentObjectInput
+
+// HumanGateSummary is a safe owner-decision wait/result summary.
+type HumanGateSummary struct {
+	ID                       string                     `json:"id" jsonschema:"human gate request identifier"`
+	SessionID                string                     `json:"session_id" jsonschema:"agent session identifier"`
+	RunID                    string                     `json:"run_id,omitempty" jsonschema:"agent run identifier"`
+	StageID                  string                     `json:"stage_id,omitempty" jsonschema:"flow stage identifier"`
+	AcceptanceResultID       string                     `json:"acceptance_result_id,omitempty" jsonschema:"acceptance result identifier"`
+	ProviderTarget           AgentProviderTargetSummary `json:"provider_target" jsonschema:"provider refs"`
+	TargetRef                string                     `json:"target_ref,omitempty" jsonschema:"owner decision target ref"`
+	RequestKind              string                     `json:"request_kind" jsonschema:"request kind"`
+	ReasonCode               string                     `json:"reason_code" jsonschema:"reason code"`
+	SafeSummary              string                     `json:"safe_summary,omitempty" jsonschema:"short safe summary"`
+	InteractionRequestRef    string                     `json:"interaction_request_ref,omitempty" jsonschema:"interaction request ref"`
+	InteractionResponseRef   string                     `json:"interaction_response_ref,omitempty" jsonschema:"interaction response ref"`
+	GovernanceGateRequestRef string                     `json:"governance_gate_request_ref,omitempty" jsonschema:"governance gate request ref"`
+	GovernanceDecisionRef    string                     `json:"governance_decision_ref,omitempty" jsonschema:"governance decision ref"`
+	Status                   string                     `json:"status" jsonschema:"status"`
+	Outcome                  string                     `json:"outcome" jsonschema:"outcome"`
+	Version                  int64                      `json:"version" jsonschema:"version"`
+	CreatedAt                string                     `json:"created_at" jsonschema:"created timestamp"`
+	UpdatedAt                string                     `json:"updated_at" jsonschema:"updated timestamp"`
+	ResolvedAt               string                     `json:"resolved_at,omitempty" jsonschema:"resolved timestamp"`
+}
 
 // PageSummary describes list continuation state.
 type PageSummary struct {

@@ -158,6 +158,16 @@ func (c *Client) GetReleaseSafetyState(ctx context.Context, request *governancev
 	return ownergrpc.Call(ctx, c.callConfig(), request, c.client.GetReleaseSafetyState)
 }
 
+// RecordReviewSignal routes review signal recording to governance-manager.
+func (c *Client) RecordReviewSignal(ctx context.Context, request *governancev1.RecordReviewSignalRequest) (*governancev1.ReviewSignalResponse, error) {
+	return ownergrpc.Call(ctx, c.callConfig(), request, c.client.RecordReviewSignal)
+}
+
+// ListReviewSignals routes review signal reads to governance-manager.
+func (c *Client) ListReviewSignals(ctx context.Context, request *governancev1.ListReviewSignalsRequest) (*governancev1.ListReviewSignalsResponse, error) {
+	return ownergrpc.Call(ctx, c.callConfig(), request, c.client.ListReviewSignals)
+}
+
 func (c *Client) callConfig() ownergrpc.Config {
 	return ownergrpc.Config{Service: serviceName, AuthToken: c.authToken, Timeout: c.timeout}
 }
