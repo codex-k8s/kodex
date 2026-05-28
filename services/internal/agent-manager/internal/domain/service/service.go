@@ -11,6 +11,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/types/value"
 )
 
+type repositoryPort interface{ agentrepo.Repository }
+type clockPort interface{ agentrepo.Clock }
+type idGeneratorPort interface{ agentrepo.IDGenerator }
+
 // Config contains dependencies required by the agent-manager service.
 type Config struct {
 	Repository                 agentrepo.Repository
@@ -19,9 +23,11 @@ type Config struct {
 	GuidanceResolver           GuidanceResolver
 	WorkspacePolicyResolver    WorkspacePolicyResolver
 	RuntimePreparer            RuntimePreparer
+	RuntimeJobCreator          RuntimeJobCreator
 	ProviderFollowUpDispatcher ProviderFollowUpDispatcher
 	HumanGateRequester         HumanGateInteractionRequester
 	RuntimePreparationEnabled  bool
+	RuntimeJobDispatchEnabled  bool
 	HumanGateRequestEnabled    bool
 	// EventPublisher is a future outbox-backed publisher for agent domain events.
 	EventPublisher EventPublisher
@@ -29,17 +35,22 @@ type Config struct {
 
 // Service is the agent-manager domain entry point.
 type Service struct {
-	repository                 agentrepo.Repository
-	clock                      agentrepo.Clock
-	idGenerator                agentrepo.IDGenerator
+	repository repositoryPort
+	clock      clockPort
+
+	idGenerator    idGeneratorPort
+	eventPublisher EventPublisher
+
+	runtimePreparationEnabled bool
+	runtimeJobDispatchEnabled bool
+	humanGateRequestEnabled   bool
+
 	guidanceResolver           GuidanceResolver
 	workspacePolicyResolver    WorkspacePolicyResolver
 	runtimePreparer            RuntimePreparer
+	runtimeJobCreator          RuntimeJobCreator
 	providerFollowUpDispatcher ProviderFollowUpDispatcher
 	humanGateRequester         HumanGateInteractionRequester
-	runtimePreparationEnabled  bool
-	humanGateRequestEnabled    bool
-	eventPublisher             EventPublisher
 }
 
 // GuidanceResolver resolves guidance package selections into safe frozen refs.
@@ -71,6 +82,11 @@ type WorkspacePolicyResolutionInput struct {
 // RuntimePreparer calls runtime-manager to reserve a slot and start workspace preparation.
 type RuntimePreparer interface {
 	PrepareRuntime(context.Context, RuntimePreparationInput) (RuntimePreparationResult, error)
+}
+
+// RuntimeJobCreator вызывает runtime-manager для постановки agent run job.
+type RuntimeJobCreator interface {
+	CreateAgentRunJob(context.Context, RuntimeJobInput) (RuntimeJobResult, error)
 }
 
 // ProviderFollowUpDispatcher calls provider-hub typed follow-up write operations.
@@ -113,6 +129,14 @@ type DisabledRuntimePreparer struct{}
 // PrepareRuntime reports that runtime preparation is unavailable.
 func (DisabledRuntimePreparer) PrepareRuntime(context.Context, RuntimePreparationInput) (RuntimePreparationResult, error) {
 	return RuntimePreparationResult{}, errs.ErrDependencyUnavailable
+}
+
+// DisabledRuntimeJobCreator оставляет runtime job dispatch явным switch на уровне сборки сервиса.
+type DisabledRuntimeJobCreator struct{}
+
+// CreateAgentRunJob сообщает, что постановка runtime job недоступна.
+func (DisabledRuntimeJobCreator) CreateAgentRunJob(context.Context, RuntimeJobInput) (RuntimeJobResult, error) {
+	return RuntimeJobResult{}, errs.ErrDependencyUnavailable
 }
 
 // DisabledProviderFollowUpDispatcher keeps follow-up provider dispatch opt-in at composition time.
@@ -170,6 +194,9 @@ func New(cfg Config) *Service {
 	if cfg.RuntimePreparer == nil {
 		cfg.RuntimePreparer = DisabledRuntimePreparer{}
 	}
+	if cfg.RuntimeJobCreator == nil {
+		cfg.RuntimeJobCreator = DisabledRuntimeJobCreator{}
+	}
 	if cfg.ProviderFollowUpDispatcher == nil {
 		cfg.ProviderFollowUpDispatcher = DisabledProviderFollowUpDispatcher{}
 	}
@@ -190,9 +217,11 @@ func New(cfg Config) *Service {
 	service.guidanceResolver = cfg.GuidanceResolver
 	service.workspacePolicyResolver = cfg.WorkspacePolicyResolver
 	service.runtimePreparer = cfg.RuntimePreparer
+	service.runtimeJobCreator = cfg.RuntimeJobCreator
 	service.providerFollowUpDispatcher = cfg.ProviderFollowUpDispatcher
 	service.humanGateRequester = cfg.HumanGateRequester
 	service.runtimePreparationEnabled = cfg.RuntimePreparationEnabled
+	service.runtimeJobDispatchEnabled = cfg.RuntimeJobDispatchEnabled
 	service.humanGateRequestEnabled = cfg.HumanGateRequestEnabled
 	service.eventPublisher = cfg.EventPublisher
 	return service

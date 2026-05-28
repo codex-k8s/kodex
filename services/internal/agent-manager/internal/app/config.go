@@ -53,6 +53,7 @@ type Config struct {
 	RuntimeManagerGRPCAddr                         string        `env:"KODEX_AGENT_MANAGER_RUNTIME_MANAGER_GRPC_ADDR" envDefault:"runtime-manager:9090"`
 	RuntimeManagerGRPCAuthToken                    string        `env:"KODEX_AGENT_MANAGER_RUNTIME_MANAGER_GRPC_AUTH_TOKEN"`
 	RuntimeManagerPrepareTimeout                   time.Duration `env:"KODEX_AGENT_MANAGER_RUNTIME_MANAGER_PREPARE_TIMEOUT" envDefault:"10s"`
+	RuntimeJobDispatchEnabled                      bool          `env:"KODEX_AGENT_MANAGER_RUNTIME_JOB_DISPATCH_ENABLED" envDefault:"false"`
 	ProviderHubWriteEnabled                        bool          `env:"KODEX_AGENT_MANAGER_PROVIDER_HUB_WRITE_ENABLED" envDefault:"false"`
 	ProviderHubGRPCAddr                            string        `env:"KODEX_AGENT_MANAGER_PROVIDER_HUB_GRPC_ADDR" envDefault:"provider-hub:9090"`
 	ProviderHubGRPCAuthToken                       string        `env:"KODEX_AGENT_MANAGER_PROVIDER_HUB_GRPC_AUTH_TOKEN"`
@@ -132,6 +133,9 @@ func (cfg Config) Validate() error {
 	}
 	if cfg.RuntimePreparationEnabled && strings.TrimSpace(cfg.RuntimeManagerGRPCAuthToken) == "" {
 		return fmt.Errorf("KODEX_AGENT_MANAGER_RUNTIME_MANAGER_GRPC_AUTH_TOKEN is required when runtime preparation is enabled")
+	}
+	if cfg.RuntimeJobDispatchEnabled && !cfg.RuntimePreparationEnabled {
+		return fmt.Errorf("KODEX_AGENT_MANAGER_RUNTIME_PREPARATION_ENABLED is required when runtime job dispatch is enabled")
 	}
 	if cfg.ProviderHubWriteEnabled && strings.TrimSpace(cfg.ProviderHubGRPCAddr) == "" {
 		return fmt.Errorf("KODEX_AGENT_MANAGER_PROVIDER_HUB_GRPC_ADDR is required when provider-hub write integration is enabled")

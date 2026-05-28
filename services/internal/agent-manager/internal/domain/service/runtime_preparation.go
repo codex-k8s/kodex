@@ -23,6 +23,8 @@ import (
 const (
 	runtimePrepareReasonRetryable = "runtime_prepare_retryable"
 	runtimePrepareFailureCode     = "runtime_prepare_failed"
+	runtimeJobReasonRetryable     = "runtime_job_retryable"
+	runtimeJobFailureCode         = "runtime_job_failed"
 	runtimePrepareDefaultMode     = RuntimeModeFullEnv
 	runtimePrepareSummaryLimit    = 512
 )
@@ -50,6 +52,33 @@ func (e *RuntimePreparationError) Error() string {
 // NewRuntimePreparationError creates a classified runtime preparation error with safe text only.
 func NewRuntimePreparationError(retryable bool, code string, safeMessage string) error {
 	return &RuntimePreparationError{
+		Retryable:   retryable,
+		Code:        strings.TrimSpace(code),
+		SafeMessage: safeDiagnosticText(safeMessage),
+	}
+}
+
+// RuntimeJobError переносит безопасную классификацию ошибки через job-порт runtime-manager.
+type RuntimeJobError struct {
+	Retryable   bool
+	Code        string
+	SafeMessage string
+}
+
+func (e *RuntimeJobError) Error() string {
+	if e == nil {
+		return ""
+	}
+	code := strings.TrimSpace(e.Code)
+	if code == "" {
+		code = "runtime_job_failed"
+	}
+	return code
+}
+
+// NewRuntimeJobError создаёт классифицированную ошибку постановки runtime job только с безопасным текстом.
+func NewRuntimeJobError(retryable bool, code string, safeMessage string) error {
+	return &RuntimeJobError{
 		Retryable:   retryable,
 		Code:        strings.TrimSpace(code),
 		SafeMessage: safeDiagnosticText(safeMessage),
@@ -97,6 +126,9 @@ func (s *Service) prepareRuntimeForRun(
 			return run, err
 		}
 		return s.recordRuntimePreparationFailure(ctx, meta, run, err)
+	}
+	if s.runtimeJobDispatchEnabled {
+		return s.dispatchRuntimeJobForRun(ctx, meta, run, result)
 	}
 	return s.recordRuntimePreparationSuccess(ctx, meta, run, result)
 }
@@ -359,6 +391,43 @@ func (s *Service) recordRuntimePreparationSuccess(
 	run entity.AgentRun,
 	result RuntimePreparationResult,
 ) (entity.AgentRun, error) {
+	runtimeContext, err := runtimeContextFromPreparation(result)
+	if err != nil {
+		return s.recordRuntimePreparationFailure(ctx, meta, run, err)
+	}
+	summary := runtimePreparationSuccessSummary(result)
+	return s.recordRuntimePreparationState(ctx, meta, run, enum.AgentRunStatusStarting, runtimeContext, summary, "", "")
+}
+
+func (s *Service) dispatchRuntimeJobForRun(
+	ctx context.Context,
+	meta value.CommandMeta,
+	run entity.AgentRun,
+	result RuntimePreparationResult,
+) (entity.AgentRun, error) {
+	runtimeContext, err := runtimeContextFromPreparation(result)
+	if err != nil {
+		return s.recordRuntimePreparationFailure(ctx, meta, run, err)
+	}
+	if strings.TrimSpace(run.RuntimeContext.JobRef) != "" {
+		runtimeContext.JobRef = strings.TrimSpace(run.RuntimeContext.JobRef)
+		return s.recordRuntimePreparationState(ctx, meta, run, enum.AgentRunStatusStarting, runtimeContext, runtimePreparationSuccessSummary(result), "", "")
+	}
+	job, err := s.runtimeJobCreator.CreateAgentRunJob(ctx, RuntimeJobInput{
+		Meta:       runtimeJobCommandMeta(meta, run.ID),
+		AgentRunID: run.ID,
+		SlotRef:    runtimeContext.SlotRef,
+	})
+	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return run, err
+		}
+		return s.recordRuntimeJobFailure(ctx, meta, run, runtimeContext, err)
+	}
+	return s.recordRuntimeJobSuccess(ctx, meta, run, runtimeContext, result, job)
+}
+
+func runtimeContextFromPreparation(result RuntimePreparationResult) (value.RuntimeContextRef, error) {
 	contextRef := strings.TrimSpace(result.ContextRef)
 	if contextRef == "" {
 		contextRef = strings.TrimSpace(result.MaterializationFingerprint)
@@ -369,10 +438,39 @@ func (s *Service) recordRuntimePreparationSuccess(
 		ContextRef:   contextRef,
 	}
 	if strings.TrimSpace(runtimeContext.SlotRef) == "" {
-		return s.recordRuntimePreparationFailure(ctx, meta, run, errs.ErrDependencyUnavailable)
+		return value.RuntimeContextRef{}, errs.ErrDependencyUnavailable
 	}
-	summary := runtimePreparationSuccessSummary(result)
+	return runtimeContext, nil
+}
+
+func (s *Service) recordRuntimeJobSuccess(
+	ctx context.Context,
+	meta value.CommandMeta,
+	run entity.AgentRun,
+	runtimeContext value.RuntimeContextRef,
+	preparation RuntimePreparationResult,
+	job RuntimeJobResult,
+) (entity.AgentRun, error) {
+	runtimeContext.JobRef = strings.TrimSpace(job.JobRef)
+	if strings.TrimSpace(runtimeContext.JobRef) == "" {
+		return s.recordRuntimeJobFailure(ctx, meta, run, runtimeContext, errs.ErrDependencyUnavailable)
+	}
+	summary := runtimeJobSuccessSummary(preparation, job)
 	return s.recordRuntimePreparationState(ctx, meta, run, enum.AgentRunStatusStarting, runtimeContext, summary, "", "")
+}
+
+func (s *Service) recordRuntimeJobFailure(
+	ctx context.Context,
+	meta value.CommandMeta,
+	run entity.AgentRun,
+	runtimeContext value.RuntimeContextRef,
+	err error,
+) (entity.AgentRun, error) {
+	failure := classifyRuntimeJobFailure(err)
+	if failure.retryable {
+		return s.recordRuntimePreparationState(ctx, meta, run, enum.AgentRunStatusWaiting, runtimeContext, failure.summary(), "", runtimeJobReasonRetryable)
+	}
+	return s.recordRuntimePreparationState(ctx, meta, run, enum.AgentRunStatusFailed, runtimeContext, failure.summary(), runtimeJobFailureCode, "")
 }
 
 func (s *Service) recordRuntimePreparationFailure(
@@ -436,42 +534,97 @@ func (s *Service) recordRuntimePreparationState(
 	return run, s.repository.UpdateAgentRunWithResult(ctx, run, previousVersion, result, event)
 }
 
-type runtimePreparationFailure struct {
+type runtimeOperationFailure struct {
+	operation string
 	retryable bool
 	code      string
 	message   string
 }
 
-func (f runtimePreparationFailure) summary() string {
+func (f runtimeOperationFailure) summary() string {
 	class := "permanent"
 	if f.retryable {
 		class = "retryable"
 	}
-	return fmt.Sprintf("runtime prepare %s: code=%s; message=%s", class, f.code, f.message)
+	return fmt.Sprintf("%s %s: code=%s; message=%s", f.operation, class, f.code, f.message)
 }
 
-func classifyRuntimePreparationFailure(err error) runtimePreparationFailure {
+type runtimeFailureDefaults struct {
+	operation           string
+	defaultCode         string
+	defaultMessage      string
+	dependencyMessage   string
+	conflictMessage     string
+	invalidMessage      string
+	notFoundMessage     string
+	preconditionMessage string
+}
+
+func classifyRuntimePreparationFailure(err error) runtimeOperationFailure {
 	var classified *RuntimePreparationError
 	if errors.As(err, &classified) {
-		return runtimePreparationFailure{
-			retryable: classified.Retryable,
-			code:      fallbackText(classified.Code, "runtime_prepare_failed"),
-			message:   fallbackText(classified.SafeMessage, "workspace preparation failed"),
-		}
+		return classifiedRuntimeFailure(runtimePrepareFailureDefaults(), classified.Retryable, classified.Code, classified.SafeMessage)
 	}
+	return classifyRuntimeFailure(err, runtimePrepareFailureDefaults())
+}
+
+func classifyRuntimeJobFailure(err error) runtimeOperationFailure {
+	var classified *RuntimeJobError
+	if errors.As(err, &classified) {
+		return classifiedRuntimeFailure(runtimeJobFailureDefaults(), classified.Retryable, classified.Code, classified.SafeMessage)
+	}
+	return classifyRuntimeFailure(err, runtimeJobFailureDefaults())
+}
+
+func classifiedRuntimeFailure(defaults runtimeFailureDefaults, retryable bool, code string, message string) runtimeOperationFailure {
+	return runtimeOperationFailure{
+		operation: defaults.operation,
+		retryable: retryable,
+		code:      fallbackText(code, defaults.defaultCode),
+		message:   fallbackText(message, defaults.defaultMessage),
+	}
+}
+
+func classifyRuntimeFailure(err error, defaults runtimeFailureDefaults) runtimeOperationFailure {
 	switch {
 	case errors.Is(err, context.DeadlineExceeded), errors.Is(err, errs.ErrDependencyUnavailable):
-		return runtimePreparationFailure{retryable: true, code: "dependency_unavailable", message: "workspace preparation dependency is temporarily unavailable"}
+		return runtimeOperationFailure{operation: defaults.operation, retryable: true, code: "dependency_unavailable", message: defaults.dependencyMessage}
 	case errors.Is(err, errs.ErrConflict):
-		return runtimePreparationFailure{retryable: true, code: "conflict", message: "workspace preparation is waiting for conflicting state to clear"}
+		return runtimeOperationFailure{operation: defaults.operation, retryable: true, code: "conflict", message: defaults.conflictMessage}
 	case errors.Is(err, errs.ErrInvalidArgument):
-		return runtimePreparationFailure{code: "invalid_argument", message: "workspace preparation request is invalid"}
+		return runtimeOperationFailure{operation: defaults.operation, code: "invalid_argument", message: defaults.invalidMessage}
 	case errors.Is(err, errs.ErrNotFound):
-		return runtimePreparationFailure{code: "not_found", message: "workspace preparation dependency was not found"}
+		return runtimeOperationFailure{operation: defaults.operation, code: "not_found", message: defaults.notFoundMessage}
 	case errors.Is(err, errs.ErrPreconditionFailed):
-		return runtimePreparationFailure{code: "failed_precondition", message: "workspace preparation precondition failed"}
+		return runtimeOperationFailure{operation: defaults.operation, code: "failed_precondition", message: defaults.preconditionMessage}
 	default:
-		return runtimePreparationFailure{retryable: true, code: "runtime_prepare_failed", message: "workspace preparation failed"}
+		return runtimeOperationFailure{operation: defaults.operation, retryable: true, code: defaults.defaultCode, message: defaults.defaultMessage}
+	}
+}
+
+func runtimePrepareFailureDefaults() runtimeFailureDefaults {
+	return runtimeFailureDefaults{
+		operation:           "runtime prepare",
+		defaultCode:         "runtime_prepare_failed",
+		defaultMessage:      "workspace preparation failed",
+		dependencyMessage:   "workspace preparation dependency is temporarily unavailable",
+		conflictMessage:     "workspace preparation is waiting for conflicting state to clear",
+		invalidMessage:      "workspace preparation request is invalid",
+		notFoundMessage:     "workspace preparation dependency was not found",
+		preconditionMessage: "workspace preparation precondition failed",
+	}
+}
+
+func runtimeJobFailureDefaults() runtimeFailureDefaults {
+	return runtimeFailureDefaults{
+		operation:           "runtime job",
+		defaultCode:         "runtime_job_failed",
+		defaultMessage:      "agent run job creation failed",
+		dependencyMessage:   "runtime job dependency is temporarily unavailable",
+		conflictMessage:     "runtime job creation is waiting for conflicting state to clear",
+		invalidMessage:      "runtime job request is invalid",
+		notFoundMessage:     "runtime job dependency was not found",
+		preconditionMessage: "runtime job precondition failed",
 	}
 }
 
@@ -492,9 +645,30 @@ func runtimePreparationSuccessSummary(result RuntimePreparationResult) string {
 	return safeDiagnosticText(strings.Join(parts, "; "))
 }
 
+func runtimeJobSuccessSummary(preparation RuntimePreparationResult, job RuntimeJobResult) string {
+	parts := []string{runtimePreparationSuccessSummary(preparation), "runtime job created"}
+	if ref := strings.TrimSpace(job.JobRef); ref != "" {
+		parts = append(parts, "job="+ref)
+	}
+	if status := strings.TrimSpace(job.Status); status != "" {
+		parts = append(parts, "job_status="+status)
+	}
+	if diagnostic := strings.TrimSpace(job.DiagnosticSummary); diagnostic != "" {
+		parts = append(parts, "job_diagnostic="+diagnostic)
+	}
+	return safeDiagnosticText(strings.Join(parts, "; "))
+}
+
 func runtimePrepareCommandMeta(meta value.CommandMeta, runID uuid.UUID) value.CommandMeta {
 	return value.CommandMeta{
 		CommandID: deterministicUUID("kodex-agent-manager:runtime-prepare:" + runID.String()),
+		Actor:     meta.Actor,
+	}
+}
+
+func runtimeJobCommandMeta(meta value.CommandMeta, runID uuid.UUID) value.CommandMeta {
+	return value.CommandMeta{
+		CommandID: deterministicUUID("kodex-agent-manager:runtime-job:" + runID.String()),
 		Actor:     meta.Actor,
 	}
 }

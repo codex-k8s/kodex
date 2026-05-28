@@ -38,6 +38,9 @@ func TestLoadConfigDefaultsRuntimePreparationDisabledUntilDeployWired(t *testing
 	if cfg.RuntimePreparationEnabled {
 		t.Fatal("RuntimePreparationEnabled = true, want default false")
 	}
+	if cfg.RuntimeJobDispatchEnabled {
+		t.Fatal("RuntimeJobDispatchEnabled = true, want default false")
+	}
 }
 
 func TestValidateRequiresGRPCAuthTokenWhenAuthEnabled(t *testing.T) {
@@ -86,6 +89,17 @@ func TestValidateRequiresRuntimeClientTokensWhenPreparationEnabled(t *testing.T)
 	cfg.RuntimeManagerGRPCAuthToken = ""
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("Validate() err = nil, want runtime-manager auth token error")
+	}
+}
+
+func TestValidateRequiresRuntimePreparationWhenJobDispatchEnabled(t *testing.T) {
+	t.Parallel()
+
+	cfg := validConfig()
+	cfg.RuntimePreparationEnabled = false
+	cfg.RuntimeJobDispatchEnabled = true
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() err = nil, want runtime preparation requirement")
 	}
 }
 
