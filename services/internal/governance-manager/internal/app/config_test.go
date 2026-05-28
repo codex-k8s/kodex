@@ -59,6 +59,17 @@ func TestConfigValidateRequiresEventLogDSNWhenProviderReviewSignalConsumerEnable
 	}
 }
 
+func TestConfigValidateRequiresEventLogDSNWhenInteractionGateDecisionConsumerEnabled(t *testing.T) {
+	t.Parallel()
+
+	cfg := validConfig()
+	cfg.InteractionGateDecisionConsumerEnabled = true
+	cfg.EventLogDatabaseDSN = ""
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "KODEX_GOVERNANCE_MANAGER_EVENT_LOG_DATABASE_DSN") {
+		t.Fatalf("Validate() error = %v, want missing event-log dsn", err)
+	}
+}
+
 func TestProviderReviewSignalConsumerConfigUsesConfiguredLeaseOwner(t *testing.T) {
 	t.Parallel()
 
@@ -68,6 +79,18 @@ func TestProviderReviewSignalConsumerConfigUsesConfiguredLeaseOwner(t *testing.T
 	consumerCfg := cfg.ProviderReviewSignalConsumerConfig()
 	if consumerCfg.ConsumerName != "governance-manager.provider-review-signal" || consumerCfg.LeaseOwner != "test-lease-owner" {
 		t.Fatalf("ProviderReviewSignalConsumerConfig() = %+v, want configured name and lease owner", consumerCfg)
+	}
+}
+
+func TestInteractionGateDecisionConsumerConfigUsesConfiguredLeaseOwner(t *testing.T) {
+	t.Parallel()
+
+	cfg := validConfig()
+	cfg.InteractionGateDecisionConsumerEnabled = true
+	cfg.InteractionGateDecisionConsumerLeaseOwner = "test-interaction-lease-owner"
+	consumerCfg := cfg.InteractionGateDecisionConsumerConfig()
+	if consumerCfg.ConsumerName != "governance-manager.interaction-gate-decision" || consumerCfg.LeaseOwner != "test-interaction-lease-owner" {
+		t.Fatalf("InteractionGateDecisionConsumerConfig() = %+v, want configured name and lease owner", consumerCfg)
 	}
 }
 
@@ -125,5 +148,16 @@ func validConfig() Config {
 		ProviderReviewSignalConsumerFailureMessageLimit: 512,
 		ProviderReviewSignalConsumerConcurrencyLimit:    2,
 		ProviderReviewSignalConsumerMaxAttempts:         5,
+		InteractionGateDecisionConsumerEnabled:          false,
+		InteractionGateDecisionConsumerName:             "governance-manager.interaction-gate-decision",
+		InteractionGateDecisionConsumerBatchSize:        50,
+		InteractionGateDecisionConsumerPollInterval:     time.Second,
+		InteractionGateDecisionConsumerLeaseTTL:         30 * time.Second,
+		InteractionGateDecisionConsumerHandlerTimeout:   10 * time.Second,
+		InteractionGateDecisionConsumerRetryInitial:     time.Second,
+		InteractionGateDecisionConsumerRetryMax:         time.Minute,
+		InteractionGateDecisionConsumerFailureLimit:     512,
+		InteractionGateDecisionConsumerConcurrencyLimit: 2,
+		InteractionGateDecisionConsumerMaxAttempts:      5,
 	}
 }

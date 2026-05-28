@@ -112,7 +112,8 @@ Readiness должна видеть:
 - Проверить `platform-event-log-migrations`.
 - Проверить `KODEX_GOVERNANCE_MANAGER_EVENT_LOG_DATABASE_DSN`.
 - Если события не доходят, проверить локальную outbox-таблицу `governance-manager` и короткую причину последней ошибки публикации.
-- Inbound consumer `provider.comment.synced` выключен по умолчанию; включать его только явным `KODEX_GOVERNANCE_MANAGER_PROVIDER_REVIEW_SIGNAL_CONSUMER_ENABLED=true` после готовности access policy и rollout-плана.
+- Входящий потребитель `provider.comment.synced` выключен по умолчанию; включать его только явным `KODEX_GOVERNANCE_MANAGER_PROVIDER_REVIEW_SIGNAL_CONSUMER_ENABLED=true` после готовности access policy и плана выкладки.
+- Входящий потребитель `interaction.request.response_recorded` для gate decision выключен по умолчанию; включать его только явным `KODEX_GOVERNANCE_MANAGER_INTERACTION_GATE_DECISION_CONSUMER_ENABLED=true` после готовности access policy для service actor `interaction-hub` и согласованного потока Human gate в `interaction-hub`.
 
 ### PostgreSQL
 
