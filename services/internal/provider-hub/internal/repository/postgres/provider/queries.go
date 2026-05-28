@@ -10,6 +10,7 @@ var (
 	queryWebhookEventInsert                    = mustLoadQuery("webhook_event__insert")
 	queryWebhookEventList                      = mustLoadQuery("webhook_event__list")
 	queryWebhookEventUpdateProcessing          = mustLoadQuery("webhook_event__update_processing")
+	queryWebhookEventCleanupExpiredPayloads    = mustLoadQuery("webhook_event__cleanup_expired_payloads")
 	queryProviderEventInsert                   = mustLoadQuery("provider_event__insert")
 	queryProviderEventList                     = mustLoadQuery("provider_event__list")
 	queryWorkItemProjectionGet                 = mustLoadQuery("work_item_projection__get")

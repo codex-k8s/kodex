@@ -18,6 +18,7 @@ type providerService interface {
 	GetWebhookEvent(context.Context, providerservice.GetWebhookEventInput) (entity.WebhookEvent, error)
 	ListWebhookEvents(context.Context, providerservice.ListWebhookEventsInput) (providerservice.ListWebhookEventsResult, error)
 	RetryWebhookEventProcessing(context.Context, providerservice.RetryWebhookEventProcessingInput) (entity.WebhookEvent, error)
+	CleanupExpiredWebhookPayloads(context.Context, providerservice.CleanupExpiredWebhookPayloadsInput) (providerservice.CleanupExpiredWebhookPayloadsResult, error)
 	GetWorkItemProjection(context.Context, providerservice.GetWorkItemProjectionInput) (entity.ProviderWorkItemProjection, error)
 	FindWorkItemByProviderRef(context.Context, providerservice.FindWorkItemByProviderRefInput) (entity.ProviderWorkItemProjection, error)
 	ListWorkItemProjections(context.Context, providerservice.ListWorkItemProjectionsInput) (providerservice.ListWorkItemProjectionsResult, error)
@@ -88,6 +89,11 @@ func (s *Server) ListWebhookEvents(ctx context.Context, request *providersv1.Lis
 // RetryWebhookEventProcessing repeats normalization for a stored webhook.
 func (s *Server) RetryWebhookEventProcessing(ctx context.Context, request *providersv1.RetryWebhookEventProcessingRequest) (*providersv1.WebhookEventResponse, error) {
 	return grpcserver.HandleUnary(ctx, request, grpccasters.RetryWebhookEventProcessingInput, s.service.RetryWebhookEventProcessing, grpccasters.WebhookEventResponse)
+}
+
+// CleanupExpiredWebhookPayloads removes expired retryable payloads from the inbox.
+func (s *Server) CleanupExpiredWebhookPayloads(ctx context.Context, request *providersv1.CleanupExpiredWebhookPayloadsRequest) (*providersv1.CleanupExpiredWebhookPayloadsResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.CleanupExpiredWebhookPayloadsInput, s.service.CleanupExpiredWebhookPayloads, grpccasters.CleanupExpiredWebhookPayloadsResponse)
 }
 
 // GetWorkItemProjection returns a normalized Issue or PR/MR projection.

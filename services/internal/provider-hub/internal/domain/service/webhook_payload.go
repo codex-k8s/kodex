@@ -39,9 +39,17 @@ func webhookProcessingTerminal(status enum.WebhookProcessingStatus) bool {
 }
 
 func webhookPayloadEnvelopeJSON(webhook entity.WebhookEvent, storage value.WebhookPayloadStorage) ([]byte, error) {
+	return webhookPayloadEnvelopeJSONWithCleanup(webhook, storage, "", time.Time{})
+}
+
+func webhookPayloadEnvelopeJSONWithCleanup(webhook entity.WebhookEvent, storage value.WebhookPayloadStorage, reason value.WebhookPayloadCleanupReason, occurredAt time.Time) ([]byte, error) {
 	retainUntil := ""
 	if !webhook.RetainUntil.IsZero() {
 		retainUntil = webhook.RetainUntil.UTC().Format(time.RFC3339Nano)
+	}
+	expiredAt := ""
+	if !occurredAt.IsZero() {
+		expiredAt = occurredAt.UTC().Format(time.RFC3339Nano)
 	}
 	payload, err := json.Marshal(value.WebhookPayloadEnvelope{
 		ProviderSlug:         string(webhook.ProviderSlug),
@@ -50,10 +58,21 @@ func webhookPayloadEnvelopeJSON(webhook entity.WebhookEvent, storage value.Webho
 		RepositoryProviderID: webhook.RepositoryProviderID,
 		PayloadSHA256:        webhook.PayloadDigest,
 		PayloadStorage:       string(storage),
+		PayloadCleanupReason: string(reason),
+		PayloadExpiredAt:     expiredAt,
 		RetainUntil:          retainUntil,
 	})
 	if err != nil {
 		return nil, err
 	}
 	return payload, nil
+}
+
+func webhookPayloadExpired(webhook entity.WebhookEvent) bool {
+	var envelope value.WebhookPayloadEnvelope
+	if err := json.Unmarshal(webhook.PayloadJSON, &envelope); err != nil {
+		return false
+	}
+	return envelope.PayloadStorage == string(value.WebhookPayloadStorageExpired) &&
+		envelope.PayloadCleanupReason == string(value.WebhookPayloadCleanupReasonExpired)
 }

@@ -15,6 +15,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/enum"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/query"
+	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/value"
 	providerclient "github.com/codex-k8s/kodex/services/internal/provider-hub/internal/provider/client"
 )
 
@@ -25,14 +26,16 @@ const (
 
 // Service is the domain entrypoint for provider-native work item workflows.
 type Service struct {
-	repository             providerrepo.Repository
-	clock                  providerrepo.Clock
-	ids                    providerrepo.IDGenerator
-	accountUsage           AccountUsageResolver
-	secretResolver         secretresolver.Resolver
-	providerAdapters       map[enum.ProviderSlug]providerclient.Adapter
-	providerWriteExecutors map[enum.ProviderSlug]providerclient.WriteExecutor
-	webhookNormalizers     map[enum.ProviderSlug]providerrepo.WebhookNormalizer
+	repository                 providerrepo.Repository
+	clock                      providerrepo.Clock
+	ids                        providerrepo.IDGenerator
+	accountUsage               AccountUsageResolver
+	secretResolver             secretresolver.Resolver
+	providerAdapters           map[enum.ProviderSlug]providerclient.Adapter
+	providerWriteExecutors     map[enum.ProviderSlug]providerclient.WriteExecutor
+	webhookNormalizers         map[enum.ProviderSlug]providerrepo.WebhookNormalizer
+	webhookPayloadRetention    time.Duration
+	webhookPayloadCleanupLimit int32
 }
 
 // New creates a provider-hub domain service.
@@ -61,15 +64,23 @@ func NewWithDependencies(deps Dependencies) *Service {
 	if deps.IDGenerator == nil {
 		deps.IDGenerator = uuidGenerator{}
 	}
+	if deps.WebhookPayloadRetention <= 0 {
+		deps.WebhookPayloadRetention = defaultWebhookPayloadRetention
+	}
+	if deps.WebhookPayloadCleanupLimit <= 0 {
+		deps.WebhookPayloadCleanupLimit = defaultWebhookPayloadCleanupLimit
+	}
 	return &Service{
-		repository:             deps.Repository,
-		clock:                  deps.Clock,
-		ids:                    deps.IDGenerator,
-		accountUsage:           deps.AccountUsageResolver,
-		secretResolver:         deps.SecretResolver,
-		providerAdapters:       providerAdapterRegistry(deps.ProviderAdapters),
-		providerWriteExecutors: providerWriteExecutorRegistry(deps.ProviderWriteExecutors),
-		webhookNormalizers:     webhookNormalizerRegistry(deps.WebhookNormalizers),
+		repository:                 deps.Repository,
+		clock:                      deps.Clock,
+		ids:                        deps.IDGenerator,
+		accountUsage:               deps.AccountUsageResolver,
+		secretResolver:             deps.SecretResolver,
+		providerAdapters:           providerAdapterRegistry(deps.ProviderAdapters),
+		providerWriteExecutors:     providerWriteExecutorRegistry(deps.ProviderWriteExecutors),
+		webhookNormalizers:         webhookNormalizerRegistry(deps.WebhookNormalizers),
+		webhookPayloadRetention:    deps.WebhookPayloadRetention,
+		webhookPayloadCleanupLimit: deps.WebhookPayloadCleanupLimit,
 	}
 }
 
@@ -147,7 +158,7 @@ func (s *Service) IngestWebhookEvent(ctx context.Context, input IngestWebhookEve
 		ProcessingStatus:     enum.WebhookProcessingStatusPending,
 		PayloadJSON:          payload,
 		PayloadDigest:        webhookPayloadDigest(payload),
-		RetainUntil:          input.ReceivedAt.UTC().Add(webhookPayloadRetention),
+		RetainUntil:          input.ReceivedAt.UTC().Add(s.webhookPayloadRetention),
 	}
 	normalization, err := s.normalizeWebhook(ctx, webhook)
 	if err != nil {
@@ -214,6 +225,10 @@ func (s *Service) RetryWebhookEventProcessing(ctx context.Context, input RetryWe
 	default:
 		return entity.WebhookEvent{}, errs.ErrInvalidArgument
 	}
+	if webhookPayloadExpired(webhook) {
+		webhook.LastError = string(value.WebhookPayloadCleanupReasonExpired)
+		return webhook, errs.ErrPreconditionFailed
+	}
 	normalization, err := s.normalizeWebhook(ctx, webhook)
 	if err != nil {
 		return entity.WebhookEvent{}, err
@@ -229,6 +244,33 @@ func (s *Service) RetryWebhookEventProcessing(ctx context.Context, input RetryWe
 		return s.currentWebhookAfterConcurrentProcessing(ctx, input.WebhookEventID)
 	}
 	return stored, err
+}
+
+// CleanupExpiredWebhookPayloads replaces expired retryable payloads with safe envelopes.
+func (s *Service) CleanupExpiredWebhookPayloads(ctx context.Context, input CleanupExpiredWebhookPayloadsInput) (CleanupExpiredWebhookPayloadsResult, error) {
+	if !validCommandIdentity(input.Meta) {
+		return CleanupExpiredWebhookPayloadsResult{}, errs.ErrInvalidArgument
+	}
+	now := input.Now.UTC()
+	if now.IsZero() {
+		now = s.clock.Now().UTC()
+	}
+	limit := input.Limit
+	if limit == 0 {
+		limit = s.webhookPayloadCleanupLimit
+	}
+	if limit <= 0 || limit > maxWebhookPayloadCleanupLimit {
+		return CleanupExpiredWebhookPayloadsResult{}, errs.ErrInvalidArgument
+	}
+	webhooks, err := s.repository.CleanupExpiredWebhookPayloads(ctx, now, limit)
+	if err != nil {
+		return CleanupExpiredWebhookPayloadsResult{}, err
+	}
+	return CleanupExpiredWebhookPayloadsResult{
+		CleanedAt:     now,
+		CleanedCount:  int32(len(webhooks)),
+		WebhookEvents: webhooks,
+	}, nil
 }
 
 // GetWorkItemProjection returns one Issue or PR/MR projection by internal id.

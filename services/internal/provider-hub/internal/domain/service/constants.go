@@ -33,6 +33,8 @@ const (
 	providerAggregateRelationship           = providerevents.AggregateRelationship
 	providerAggregateSyncCursor             = providerevents.AggregateSyncCursor
 
-	providerEventSchemaVersion = providerevents.SchemaVersion
-	webhookPayloadRetention    = 30 * 24 * time.Hour
+	providerEventSchemaVersion        = providerevents.SchemaVersion
+	defaultWebhookPayloadRetention    = 7 * 24 * time.Hour
+	defaultWebhookPayloadCleanupLimit = int32(100)
+	maxWebhookPayloadCleanupLimit     = int32(500)
 )

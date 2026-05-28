@@ -10,12 +10,14 @@ option go_package = "github.com/codex-k8s/kodex/proto/gen/go/kodex/providers/v1;
 service ProviderHubService {
   // IngestWebhookEvent stores a verified provider webhook from the edge gateway.
   rpc IngestWebhookEvent(IngestWebhookEventRequest) returns (WebhookEventResponse);
-  // GetWebhookEvent returns a stored raw webhook for diagnostics.
+  // GetWebhookEvent returns safe webhook diagnostics.
   rpc GetWebhookEvent(GetWebhookEventRequest) returns (WebhookEventResponse);
   // ListWebhookEvents returns stored webhooks with operational filters.
   rpc ListWebhookEvents(ListWebhookEventsRequest) returns (ListWebhookEventsResponse);
   // RetryWebhookEventProcessing enqueues a stored webhook for repeated normalization.
   rpc RetryWebhookEventProcessing(RetryWebhookEventProcessingRequest) returns (WebhookEventResponse);
+  // CleanupExpiredWebhookPayloads removes expired retryable provider payloads from the inbox.
+  rpc CleanupExpiredWebhookPayloads(CleanupExpiredWebhookPayloadsRequest) returns (CleanupExpiredWebhookPayloadsResponse);
 
   // GetWorkItemProjection returns a normalized Issue or PR/MR projection.
   rpc GetWorkItemProjection(GetWorkItemProjectionRequest) returns (WorkItemProjectionResponse);
@@ -780,6 +782,26 @@ message RetryWebhookEventProcessingRequest {
   string webhook_event_id = 1;
   // meta carries idempotency, expected version and audit context.
   CommandMeta meta = 2;
+}
+
+// CleanupExpiredWebhookPayloadsRequest removes retained payloads after retention TTL.
+message CleanupExpiredWebhookPayloadsRequest {
+  // limit bounds one explicit cleanup batch; omitted value uses service config.
+  optional int32 limit = 1;
+  // now optionally overrides cleanup time for deterministic operational runs.
+  optional string now = 2;
+  // meta carries idempotency and audit context.
+  CommandMeta meta = 3;
+}
+
+// CleanupExpiredWebhookPayloadsResponse returns safe cleanup diagnostics.
+message CleanupExpiredWebhookPayloadsResponse {
+  // cleaned_count is the number of inbox rows whose payload was removed.
+  int32 cleaned_count = 1;
+  // cleaned_at is cleanup time in RFC3339 format.
+  string cleaned_at = 2;
+  // webhook_events are safe diagnostics for cleaned rows.
+  repeated WebhookEvent webhook_events = 3;
 }
 
 // GetWorkItemProjectionRequest reads a projection by id.

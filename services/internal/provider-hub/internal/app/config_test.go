@@ -20,6 +20,8 @@ func TestLoadConfigAcceptsRequiredEnvironment(t *testing.T) {
 	t.Setenv("KODEX_PROVIDER_HUB_EVENT_LOG_DATABASE_DSN", "postgres://postgres:5432/platform_event_log?sslmode=disable")
 	t.Setenv("KODEX_PROVIDER_HUB_GRPC_AUTH_TOKEN", "test-token")
 	t.Setenv("KODEX_PROVIDER_HUB_ACCESS_MANAGER_GRPC_AUTH_TOKEN", "access-token")
+	t.Setenv("KODEX_PROVIDER_HUB_WEBHOOK_PAYLOAD_RETENTION", "24h")
+	t.Setenv("KODEX_PROVIDER_HUB_WEBHOOK_PAYLOAD_CLEANUP_LIMIT", "50")
 
 	cfg, err := LoadConfig()
 	if err != nil {
@@ -27,6 +29,9 @@ func TestLoadConfigAcceptsRequiredEnvironment(t *testing.T) {
 	}
 	if cfg.DatabaseDSN == "" {
 		t.Fatal("DatabaseDSN is empty")
+	}
+	if cfg.WebhookPayloadRetention != 24*time.Hour || cfg.WebhookPayloadCleanupLimit != 50 {
+		t.Fatalf("webhook payload cleanup config = %s/%d, want 24h/50", cfg.WebhookPayloadRetention, cfg.WebhookPayloadCleanupLimit)
 	}
 }
 
@@ -74,6 +79,30 @@ func TestValidateRejectsInvalidPoolBounds(t *testing.T) {
 	cfg.DatabaseMinConns = cfg.DatabaseMaxConns + 1
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("Validate() err = nil, want pool bounds error")
+	}
+}
+
+func TestValidateRejectsInvalidWebhookPayloadCleanupConfig(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name   string
+		adjust func(*Config)
+	}{
+		{name: "retention", adjust: func(cfg *Config) { cfg.WebhookPayloadRetention = 0 }},
+		{name: "limit zero", adjust: func(cfg *Config) { cfg.WebhookPayloadCleanupLimit = 0 }},
+		{name: "limit too high", adjust: func(cfg *Config) { cfg.WebhookPayloadCleanupLimit = 501 }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := validConfig()
+			tc.adjust(&cfg)
+			if err := cfg.Validate(); err == nil {
+				t.Fatal("Validate() err = nil, want webhook cleanup config error")
+			}
+		})
 	}
 }
 
@@ -132,6 +161,8 @@ func validConfig() Config {
 		AccessManagerGRPCTimeout:   3 * time.Second,
 		GitHubBaseURL:              "https://api.github.com",
 		GitHubUserAgent:            "kodex-provider-hub",
+		WebhookPayloadRetention:    7 * 24 * time.Hour,
+		WebhookPayloadCleanupLimit: 100,
 		SecretMountedRoot:          "/var/run/kodex/secrets",
 		SecretMaxBytes:             1 << 20,
 		DatabaseDSN:                "postgres://postgres:5432/kodex_provider_hub?sslmode=disable",

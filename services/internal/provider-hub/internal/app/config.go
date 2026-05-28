@@ -43,6 +43,8 @@ type Config struct {
 	AccessManagerGRPCTimeout   time.Duration `env:"KODEX_PROVIDER_HUB_ACCESS_MANAGER_GRPC_TIMEOUT" envDefault:"3s"`
 	GitHubBaseURL              string        `env:"KODEX_PROVIDER_HUB_GITHUB_BASE_URL" envDefault:"https://api.github.com"`
 	GitHubUserAgent            string        `env:"KODEX_PROVIDER_HUB_GITHUB_USER_AGENT" envDefault:"kodex-provider-hub"`
+	WebhookPayloadRetention    time.Duration `env:"KODEX_PROVIDER_HUB_WEBHOOK_PAYLOAD_RETENTION" envDefault:"168h"`
+	WebhookPayloadCleanupLimit int32         `env:"KODEX_PROVIDER_HUB_WEBHOOK_PAYLOAD_CLEANUP_LIMIT" envDefault:"100"`
 	SecretMountedRoot          string        `env:"KODEX_PROVIDER_HUB_SECRET_MOUNTED_ROOT" envDefault:"/var/run/kodex/secrets"`
 	SecretMaxBytes             int64         `env:"KODEX_PROVIDER_HUB_SECRET_MAX_BYTES" envDefault:"1048576"`
 	VaultAddr                  string        `env:"KODEX_PROVIDER_HUB_VAULT_ADDR"`
@@ -171,6 +173,12 @@ func (cfg Config) validateProviderIntegrationSettings() error {
 	}
 	if strings.TrimSpace(cfg.GitHubUserAgent) == "" {
 		return fmt.Errorf("KODEX_PROVIDER_HUB_GITHUB_USER_AGENT is required")
+	}
+	if err := requireDuration("KODEX_PROVIDER_HUB_WEBHOOK_PAYLOAD_RETENTION", cfg.WebhookPayloadRetention); err != nil {
+		return err
+	}
+	if cfg.WebhookPayloadCleanupLimit <= 0 || cfg.WebhookPayloadCleanupLimit > 500 {
+		return fmt.Errorf("KODEX_PROVIDER_HUB_WEBHOOK_PAYLOAD_CLEANUP_LIMIT must be between 1 and 500")
 	}
 	if strings.TrimSpace(cfg.SecretMountedRoot) == "" {
 		return fmt.Errorf("KODEX_PROVIDER_HUB_SECRET_MOUNTED_ROOT is required")

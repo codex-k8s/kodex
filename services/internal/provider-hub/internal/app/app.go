@@ -68,10 +68,12 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		DBPool:         dbPool,
 		EventLogDBPool: eventLogPool,
 		ProviderService: providerservice.NewWithDependencies(providerservice.Dependencies{
-			Repository:           providerRepository,
-			AccountUsageResolver: accountUsage,
-			SecretResolver:       secretResolver,
-			ProviderAdapters:     []providerclient.Adapter{githubAdapter},
+			Repository:                 providerRepository,
+			AccountUsageResolver:       accountUsage,
+			SecretResolver:             secretResolver,
+			WebhookPayloadRetention:    cfg.WebhookPayloadRetention,
+			WebhookPayloadCleanupLimit: cfg.WebhookPayloadCleanupLimit,
+			ProviderAdapters:           []providerclient.Adapter{githubAdapter},
 			ProviderWriteExecutors: []providerclient.WriteExecutor{
 				githubAdapter,
 			},

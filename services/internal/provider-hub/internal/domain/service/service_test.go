@@ -435,6 +435,36 @@ func TestIngestWebhookEventStoresFailedKnownWebhookWithBadPayloadShape(t *testin
 	}
 }
 
+func TestIngestWebhookEventUsesConfiguredPayloadRetention(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 28, 9, 0, 0, 0, time.UTC)
+	retention := 2 * time.Hour
+	repository := &fakeRepository{}
+	service := NewWithDependencies(Dependencies{
+		Repository:              repository,
+		Clock:                   fixedClock{now: now},
+		IDGenerator:             &sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New()}},
+		WebhookPayloadRetention: retention,
+		WebhookNormalizers:      []providerrepo.WebhookNormalizer{fakeWebhookNormalizer{ok: false}},
+	})
+
+	_, err := service.IngestWebhookEvent(context.Background(), IngestWebhookEventInput{
+		ProviderSlug: enum.ProviderSlugGitHub,
+		DeliveryID:   "delivery-retention",
+		EventName:    "issues",
+		ReceivedAt:   now,
+		PayloadJSON:  []byte(`{"repository":{"id":101}}`),
+		Meta:         value.CommandMeta{CommandID: uuid.New()},
+	})
+	if err != nil {
+		t.Fatalf("IngestWebhookEvent(): %v", err)
+	}
+	if !repository.recordedWebhook.RetainUntil.Equal(now.Add(retention)) {
+		t.Fatalf("retain until = %s, want %s", repository.recordedWebhook.RetainUntil, now.Add(retention))
+	}
+}
+
 func TestIngestWebhookEventStoresProjectionUpdateFromKnownFacts(t *testing.T) {
 	t.Parallel()
 
@@ -621,7 +651,7 @@ func TestRetryWebhookEventProcessingRedactsPayloadAfterTerminalRetry(t *testing.
 			ReceivedAt:       now,
 			ProcessingStatus: enum.WebhookProcessingStatusFailed,
 			PayloadJSON:      []byte(`{"secret":"do-not-leak","repository":{"id":101},"issue":{"id":55}}`),
-			RetainUntil:      now.Add(webhookPayloadRetention),
+			RetainUntil:      now.Add(defaultWebhookPayloadRetention),
 		},
 	}
 	service := NewWithRuntime(
@@ -653,6 +683,97 @@ func TestRetryWebhookEventProcessingRedactsPayloadAfterTerminalRetry(t *testing.
 	}
 	if !strings.Contains(storedPayload, string(value.WebhookPayloadStorageRedacted)) || repository.recordedWebhook.PayloadDigest == "" {
 		t.Fatalf("retried webhook = %+v, want redacted payload with digest", repository.recordedWebhook)
+	}
+}
+
+func TestRetryWebhookEventProcessingRejectsExpiredPayloadSafely(t *testing.T) {
+	t.Parallel()
+
+	webhookID := uuid.New()
+	now := time.Date(2026, 5, 28, 10, 0, 0, 0, time.UTC)
+	webhook := entity.WebhookEvent{
+		ID:               webhookID,
+		ProviderSlug:     enum.ProviderSlugGitHub,
+		DeliveryID:       "delivery-expired",
+		EventName:        "issues",
+		ReceivedAt:       now.Add(-48 * time.Hour),
+		ProcessingStatus: enum.WebhookProcessingStatusFailed,
+		PayloadDigest:    strings.Repeat("a", 64),
+		LastError:        string(value.WebhookPayloadCleanupReasonExpired),
+		RetainUntil:      now.Add(-24 * time.Hour),
+	}
+	payload, err := webhookPayloadEnvelopeJSONWithCleanup(webhook, value.WebhookPayloadStorageExpired, value.WebhookPayloadCleanupReasonExpired, now.Add(-time.Minute))
+	if err != nil {
+		t.Fatalf("webhookPayloadEnvelopeJSONWithCleanup(): %v", err)
+	}
+	webhook.PayloadJSON = payload
+	repository := &fakeRepository{recordedWebhook: webhook}
+	service := NewWithRuntime(
+		repository,
+		fixedClock{now: now},
+		&sequenceIDs{ids: []uuid.UUID{uuid.New()}},
+		fakeWebhookNormalizer{ok: true, err: errors.New("normalizer should not be called")},
+	)
+
+	_, err = service.RetryWebhookEventProcessing(context.Background(), RetryWebhookEventProcessingInput{
+		WebhookEventID: webhookID,
+		Meta:           value.CommandMeta{CommandID: uuid.New()},
+	})
+	if !errors.Is(err, errs.ErrPreconditionFailed) {
+		t.Fatalf("RetryWebhookEventProcessing() err = %v, want %v", err, errs.ErrPreconditionFailed)
+	}
+	if repository.processWebhookCalls != 0 {
+		t.Fatalf("ProcessWebhookEvent calls = %d, want 0", repository.processWebhookCalls)
+	}
+}
+
+func TestCleanupExpiredWebhookPayloadsUsesConfiguredLimit(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 28, 11, 0, 0, 0, time.UTC)
+	webhook := entity.WebhookEvent{
+		ID:               uuid.New(),
+		ProviderSlug:     enum.ProviderSlugGitHub,
+		DeliveryID:       "delivery-cleanup",
+		EventName:        "issues",
+		ReceivedAt:       now.Add(-48 * time.Hour),
+		ProcessingStatus: enum.WebhookProcessingStatusFailed,
+		PayloadDigest:    strings.Repeat("b", 64),
+		LastError:        string(value.WebhookPayloadCleanupReasonExpired),
+		RetainUntil:      now.Add(-24 * time.Hour),
+	}
+	repository := &fakeRepository{cleanupWebhooks: []entity.WebhookEvent{webhook}}
+	service := NewWithDependencies(Dependencies{
+		Repository:                 repository,
+		Clock:                      fixedClock{now: now},
+		IDGenerator:                &sequenceIDs{ids: []uuid.UUID{uuid.New()}},
+		WebhookPayloadCleanupLimit: 25,
+	})
+
+	result, err := service.CleanupExpiredWebhookPayloads(context.Background(), CleanupExpiredWebhookPayloadsInput{
+		Meta: value.CommandMeta{CommandID: uuid.New()},
+	})
+	if err != nil {
+		t.Fatalf("CleanupExpiredWebhookPayloads(): %v", err)
+	}
+	if !repository.cleanupNow.Equal(now) || repository.cleanupLimit != 25 {
+		t.Fatalf("cleanup args = %s/%d, want %s/25", repository.cleanupNow, repository.cleanupLimit, now)
+	}
+	if result.CleanedCount != 1 || len(result.WebhookEvents) != 1 || result.WebhookEvents[0].ID != webhook.ID {
+		t.Fatalf("cleanup result = %+v, want one cleaned webhook", result)
+	}
+}
+
+func TestCleanupExpiredWebhookPayloadsRejectsInvalidLimit(t *testing.T) {
+	t.Parallel()
+
+	service := New(&fakeRepository{})
+	_, err := service.CleanupExpiredWebhookPayloads(context.Background(), CleanupExpiredWebhookPayloadsInput{
+		Limit: maxWebhookPayloadCleanupLimit + 1,
+		Meta:  value.CommandMeta{CommandID: uuid.New()},
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("CleanupExpiredWebhookPayloads() err = %v, want %v", err, errs.ErrInvalidArgument)
 	}
 }
 
@@ -2779,7 +2900,11 @@ type fakeRepository struct {
 	recordedWebhook               entity.WebhookEvent
 	recordedProjection            providerrepo.ProjectionUpdate
 	processWebhookErr             error
+	processWebhookCalls           int
 	webhookAfterProcess           *entity.WebhookEvent
+	cleanupNow                    time.Time
+	cleanupLimit                  int32
+	cleanupWebhooks               []entity.WebhookEvent
 	recordedProviderEvents        []entity.ProviderEvent
 	recordedOutboxEvents          []entity.OutboxEvent
 	recordedOutboxEventHistory    []entity.OutboxEvent
@@ -2828,6 +2953,7 @@ func (r *fakeRepository) StoreWebhookEvent(_ context.Context, webhook entity.Web
 }
 
 func (r *fakeRepository) ProcessWebhookEvent(_ context.Context, webhook entity.WebhookEvent, projection providerrepo.ProjectionUpdate, providerEvents []entity.ProviderEvent, outboxEvents []entity.OutboxEvent) (entity.WebhookEvent, error) {
+	r.processWebhookCalls++
 	projection, outboxEvents, err := r.applyFakeMergeSignalStore(projection, outboxEvents)
 	if err != nil {
 		return entity.WebhookEvent{}, err
@@ -2919,6 +3045,12 @@ func (r *fakeRepository) GetWebhookEvent(context.Context, uuid.UUID) (entity.Web
 
 func (r *fakeRepository) ListWebhookEvents(context.Context, query.WebhookEventFilter) ([]entity.WebhookEvent, query.PageResult, error) {
 	return nil, query.PageResult{}, r.err
+}
+
+func (r *fakeRepository) CleanupExpiredWebhookPayloads(_ context.Context, now time.Time, limit int32) ([]entity.WebhookEvent, error) {
+	r.cleanupNow = now
+	r.cleanupLimit = limit
+	return r.cleanupWebhooks, r.err
 }
 
 func (r *fakeRepository) ListProviderEvents(context.Context, query.ProviderEventFilter) ([]entity.ProviderEvent, query.PageResult, error) {

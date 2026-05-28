@@ -874,6 +874,61 @@ func TestRepositoryIntegrationRuntimeStateLimitsAndOperations(t *testing.T) {
 	}
 }
 
+func TestRepositoryIntegrationCleanupExpiredWebhookPayloads(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openIntegrationPool(t, ctx)
+	repository := NewRepository(pool)
+	now := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
+	fresh := webhookEventForTest(now.Add(-time.Hour), "delivery-retained-before-ttl")
+	fresh.ProcessingStatus = enum.WebhookProcessingStatusFailed
+	fresh.PayloadJSON = []byte(`{"secret":"keep-before-ttl","repository":{"id":100}}`)
+	fresh.PayloadDigest = testPayloadDigest(fresh.PayloadJSON)
+	fresh.RetainUntil = now.Add(time.Hour)
+	expired := webhookEventForTest(now.Add(-48*time.Hour), "delivery-expired-after-ttl")
+	expired.ProcessingStatus = enum.WebhookProcessingStatusPending
+	expired.PayloadJSON = []byte(`{"secret":"do-not-leak","repository":{"id":100}}`)
+	expired.PayloadDigest = testPayloadDigest(expired.PayloadJSON)
+	expired.RetainUntil = now.Add(-time.Hour)
+	if _, _, err := repository.StoreWebhookEvent(ctx, fresh, providerrepo.ProjectionUpdate{}, nil, nil); err != nil {
+		t.Fatalf("store fresh webhook: %v", err)
+	}
+	if _, _, err := repository.StoreWebhookEvent(ctx, expired, providerrepo.ProjectionUpdate{}, nil, nil); err != nil {
+		t.Fatalf("store expired webhook: %v", err)
+	}
+
+	cleaned, err := repository.CleanupExpiredWebhookPayloads(ctx, now, 10)
+	if err != nil {
+		t.Fatalf("cleanup expired payloads: %v", err)
+	}
+	if len(cleaned) != 1 || cleaned[0].ID != expired.ID {
+		t.Fatalf("cleaned webhooks = %+v, want only expired webhook %s", cleaned, expired.ID)
+	}
+	cleanedPayload := string(cleaned[0].PayloadJSON)
+	if cleaned[0].ProcessingStatus != enum.WebhookProcessingStatusFailed ||
+		cleaned[0].LastError != string(value.WebhookPayloadCleanupReasonExpired) ||
+		strings.Contains(cleanedPayload, "do-not-leak") ||
+		!strings.Contains(cleanedPayload, string(value.WebhookPayloadStorageExpired)) ||
+		!strings.Contains(cleanedPayload, expired.PayloadDigest) {
+		t.Fatalf("cleaned webhook = %+v payload = %s, want safe expired envelope", cleaned[0], cleanedPayload)
+	}
+	loadedFresh, err := repository.GetWebhookEvent(ctx, fresh.ID)
+	if err != nil {
+		t.Fatalf("get fresh webhook: %v", err)
+	}
+	if !strings.Contains(string(loadedFresh.PayloadJSON), "keep-before-ttl") {
+		t.Fatalf("fresh payload = %s, want retained raw payload before TTL", loadedFresh.PayloadJSON)
+	}
+	cleanedAgain, err := repository.CleanupExpiredWebhookPayloads(ctx, now.Add(time.Minute), 10)
+	if err != nil {
+		t.Fatalf("cleanup expired payloads replay: %v", err)
+	}
+	if len(cleanedAgain) != 0 {
+		t.Fatalf("cleaned again = %+v, want idempotent no-op", cleanedAgain)
+	}
+}
+
 func TestRepositoryIntegrationRepositoryMergeSignalIsIdempotentAndRejectsConflict(t *testing.T) {
 	t.Parallel()
 
