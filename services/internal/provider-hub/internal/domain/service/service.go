@@ -31,6 +31,7 @@ type Service struct {
 	accountUsage               AccountUsageResolver
 	secretResolver             secretresolver.Resolver
 	providerAdapters           map[enum.ProviderSlug]providerclient.Adapter
+	providerWebhookRefetchers  map[enum.ProviderSlug]providerclient.WebhookRefetcher
 	providerWriteExecutors     map[enum.ProviderSlug]providerclient.WriteExecutor
 	webhookNormalizers         map[enum.ProviderSlug]providerrepo.WebhookNormalizer
 	webhookPayloadRetention    time.Duration
@@ -76,6 +77,7 @@ func NewWithDependencies(deps Dependencies) *Service {
 		accountUsage:               deps.AccountUsageResolver,
 		secretResolver:             deps.SecretResolver,
 		providerAdapters:           providerAdapterRegistry(deps.ProviderAdapters),
+		providerWebhookRefetchers:  providerWebhookRefetcherRegistry(deps.ProviderAdapters, deps.ProviderWebhookRefetchers),
 		providerWriteExecutors:     providerWriteExecutorRegistry(deps.ProviderWriteExecutors),
 		webhookNormalizers:         webhookNormalizerRegistry(deps.WebhookNormalizers),
 		webhookPayloadRetention:    deps.WebhookPayloadRetention,
@@ -97,6 +99,33 @@ func providerAdapterRegistry(adapters []providerclient.Adapter) map[enum.Provide
 		"provider-hub adapter is required",
 		"provider-hub adapter has invalid provider slug",
 	)
+}
+
+func providerWebhookRefetcherRegistry(adapters []providerclient.Adapter, refetchers []providerclient.WebhookRefetcher) map[enum.ProviderSlug]providerclient.WebhookRefetcher {
+	registry := make(map[enum.ProviderSlug]providerclient.WebhookRefetcher, len(adapters)+len(refetchers))
+	for _, adapter := range adapters {
+		if any(adapter) == nil {
+			continue
+		}
+		refetcher, ok := any(adapter).(providerclient.WebhookRefetcher)
+		if !ok {
+			continue
+		}
+		if !validProviderSlug(refetcher.ProviderSlug()) {
+			panic("provider-hub webhook refetcher has invalid provider slug")
+		}
+		registry[refetcher.ProviderSlug()] = refetcher
+	}
+	for _, refetcher := range refetchers {
+		if any(refetcher) == nil {
+			panic("provider-hub webhook refetcher is required")
+		}
+		if !validProviderSlug(refetcher.ProviderSlug()) {
+			panic("provider-hub webhook refetcher has invalid provider slug")
+		}
+		registry[refetcher.ProviderSlug()] = refetcher
+	}
+	return registry
 }
 
 func providerWriteExecutorRegistry(executors []providerclient.WriteExecutor) map[enum.ProviderSlug]providerclient.WriteExecutor {
@@ -224,25 +253,7 @@ func (s *Service) RetryWebhookEventProcessing(ctx context.Context, input RetryWe
 	default:
 		return entity.WebhookEvent{}, errs.ErrInvalidArgument
 	}
-	if webhookPayloadUnavailableForReprocess(webhook) {
-		webhook.LastError = webhookPayloadUnavailableReason(webhook)
-		return webhook, errs.ErrPreconditionFailed
-	}
-	normalization, err := s.normalizeWebhook(ctx, webhook)
-	if err != nil {
-		return entity.WebhookEvent{}, err
-	}
-	webhook.ProcessingStatus = normalization.status
-	webhook.LastError = normalization.lastError
-	webhook, err = webhookForInboxStorage(webhook, normalization.facts)
-	if err != nil {
-		return entity.WebhookEvent{}, err
-	}
-	stored, err := s.repository.ProcessWebhookEvent(ctx, webhook, normalization.projectionUpdate, normalization.providerEvents, normalization.outboxEvents[1:])
-	if errors.Is(err, errs.ErrNotFound) {
-		return s.currentWebhookAfterConcurrentProcessing(ctx, input.WebhookEventID)
-	}
-	return stored, err
+	return s.retryWebhookFromSafeStorage(ctx, webhook)
 }
 
 // CleanupExpiredWebhookPayloads replaces expired retryable payloads with safe envelopes.

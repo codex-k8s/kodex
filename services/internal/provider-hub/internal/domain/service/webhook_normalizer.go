@@ -32,6 +32,17 @@ func (s *Service) normalizeWebhook(ctx context.Context, webhook entity.WebhookEv
 		return webhookNormalizationResult{}, err
 	}
 	facts, ok, err := s.normalizeProviderPayload(webhook)
+	return s.normalizeWebhookFacts(ctx, webhook, receivedEvent, facts, ok, err)
+}
+
+func (s *Service) normalizeWebhookFacts(
+	ctx context.Context,
+	webhook entity.WebhookEvent,
+	receivedEvent entity.OutboxEvent,
+	facts value.ProviderWebhookFacts,
+	ok bool,
+	err error,
+) (webhookNormalizationResult, error) {
 	if err != nil {
 		return webhookNormalizationResult{
 			status:       enum.WebhookProcessingStatusFailed,

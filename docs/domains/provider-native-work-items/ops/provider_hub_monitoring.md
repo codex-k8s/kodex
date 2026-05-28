@@ -54,7 +54,7 @@ approvals:
 
 - Количество webhook inbox записей по статусам `pending`, `processing`, `processed`, `failed`.
 - Возраст самой старой `pending` и `failed` записи webhook inbox.
-- Количество safe cleanup результатов `payload_expired` и возраст самой старой `pending`/`failed` записи, где `retain_until` уже истёк.
+- Количество safe cleanup/reprocess результатов `payload_unavailable`, `payload_expired`, `refetch_unavailable`, `provider_rate_limited` и возраст самой старой `pending`/`failed` записи, где `retain_until` уже истёк.
 - Количество `sync_cursor` по priority `hot`, `warm`, `cold` и состояниям lease.
 - Возраст самого старого cursor без успешной сверки.
 - Количество `ProviderOperation` по типу операции и статусу.

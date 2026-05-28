@@ -389,12 +389,25 @@ func (s *Service) onboardingMergeOperationAnchor(
 	workItem entity.ProviderWorkItemProjection,
 	signal value.ProviderRepositoryMergeSignalSnapshot,
 ) (string, string, bool, error) {
+	operation, sourceRef, ok, err := s.onboardingMergeOperation(ctx, kind, workItem, signal)
+	if err != nil || !ok {
+		return "", "", ok, err
+	}
+	return "provider-hub:operation:" + operation.ID.String(), sourceRef, true, nil
+}
+
+func (s *Service) onboardingMergeOperation(
+	ctx context.Context,
+	kind enum.RepositoryMergeSignalKind,
+	workItem entity.ProviderWorkItemProjection,
+	signal value.ProviderRepositoryMergeSignalSnapshot,
+) (entity.ProviderOperation, string, bool, error) {
 	if workItem.RepositoryID == nil {
-		return "", "", false, nil
+		return entity.ProviderOperation{}, "", false, nil
 	}
 	operationType, targetKind := onboardingMergeOperationIdentity(kind)
 	if operationType == "" || targetKind == "" {
-		return "", "", false, nil
+		return entity.ProviderOperation{}, "", false, nil
 	}
 	for _, sourceRef := range uniqueNonEmptyStrings(signal.SourceRef, signal.HeadBranch) {
 		targetRef := repositoryTargetRef(workItem.ProviderSlug, workItem.RepositoryID.String()) + "#" + targetKind + ":" + sourceRef
@@ -406,15 +419,15 @@ func (s *Service) onboardingMergeOperationAnchor(
 			Page:           value.PageRequest{PageSize: 2},
 		})
 		if err != nil {
-			return "", "", false, err
+			return entity.ProviderOperation{}, "", false, err
 		}
 		for _, operation := range operations {
 			if onboardingMergeOperationMatches(operation, workItem, signal) {
-				return "provider-hub:operation:" + operation.ID.String(), sourceRef, true, nil
+				return operation, sourceRef, true, nil
 			}
 		}
 	}
-	return "", "", false, nil
+	return entity.ProviderOperation{}, "", false, nil
 }
 
 func onboardingMergeOperationIdentity(kind enum.RepositoryMergeSignalKind) (enum.ProviderOperationType, string) {

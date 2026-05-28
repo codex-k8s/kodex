@@ -47,6 +47,7 @@ type Dependencies struct {
 	AccountUsageResolver       AccountUsageResolver
 	SecretResolver             secretresolver.Resolver
 	ProviderAdapters           []providerclient.Adapter
+	ProviderWebhookRefetchers  []providerclient.WebhookRefetcher
 	ProviderWriteExecutors     []providerclient.WriteExecutor
 	WebhookNormalizers         []providerrepo.WebhookNormalizer
 }

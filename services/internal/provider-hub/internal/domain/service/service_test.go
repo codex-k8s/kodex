@@ -644,7 +644,7 @@ func TestRetryWebhookEventProcessingReturnsCurrentStateAfterConcurrentProcessing
 	}
 }
 
-func TestRetryWebhookEventProcessingRedactsPayloadAfterTerminalRetry(t *testing.T) {
+func TestRetryWebhookEventProcessingDoesNotReplayLegacyRawPayload(t *testing.T) {
 	t.Parallel()
 
 	webhookID := uuid.New()
@@ -665,13 +665,7 @@ func TestRetryWebhookEventProcessingRedactsPayloadAfterTerminalRetry(t *testing.
 		repository,
 		fixedClock{now: now},
 		&sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New(), uuid.New()}},
-		fakeWebhookNormalizer{facts: value.ProviderWebhookFacts{
-			FactKind:             value.ProviderWebhookFactKindWorkItem,
-			ProviderWorkItemID:   "55",
-			Kind:                 "issue",
-			RepositoryProviderID: "101",
-			OccurredAt:           now,
-		}, ok: true},
+		fakeWebhookNormalizer{ok: true, err: errors.New("normalizer should not be called")},
 	)
 
 	webhook, err := service.RetryWebhookEventProcessing(context.Background(), RetryWebhookEventProcessingInput{
@@ -681,19 +675,21 @@ func TestRetryWebhookEventProcessingRedactsPayloadAfterTerminalRetry(t *testing.
 	if err != nil {
 		t.Fatalf("RetryWebhookEventProcessing(): %v", err)
 	}
-	if webhook.ProcessingStatus != enum.WebhookProcessingStatusProcessed {
-		t.Fatalf("status = %s, want processed", webhook.ProcessingStatus)
+	if webhook.ProcessingStatus != enum.WebhookProcessingStatusIgnored || webhook.LastError != webhookLastErrorPayloadUnavailable {
+		t.Fatalf("webhook = %+v, want ignored/%s", webhook, webhookLastErrorPayloadUnavailable)
 	}
 	storedPayload := string(repository.recordedWebhook.PayloadJSON)
 	if strings.Contains(storedPayload, "do-not-leak") || strings.Contains(storedPayload, "\"issue\":") {
 		t.Fatalf("retried webhook payload = %s, want safe envelope without raw provider body", storedPayload)
 	}
-	if !strings.Contains(storedPayload, string(value.WebhookPayloadStorageSafeEnvelope)) || repository.recordedWebhook.PayloadDigest == "" {
+	if !strings.Contains(storedPayload, string(value.WebhookPayloadStorageSafeEnvelope)) ||
+		!strings.Contains(storedPayload, string(value.WebhookPayloadCleanupReasonRemoved)) ||
+		repository.recordedWebhook.PayloadDigest == "" {
 		t.Fatalf("retried webhook = %+v, want safe envelope with digest", repository.recordedWebhook)
 	}
 }
 
-func TestRetryWebhookEventProcessingRejectsUnavailablePayloadSafely(t *testing.T) {
+func TestRetryWebhookEventProcessingTerminalizesUnavailablePayloadSafely(t *testing.T) {
 	t.Parallel()
 
 	webhookID := uuid.New()
@@ -726,18 +722,18 @@ func TestRetryWebhookEventProcessingRejectsUnavailablePayloadSafely(t *testing.T
 		WebhookEventID: webhookID,
 		Meta:           value.CommandMeta{CommandID: uuid.New()},
 	})
-	if !errors.Is(err, errs.ErrPreconditionFailed) {
-		t.Fatalf("RetryWebhookEventProcessing() err = %v, want %v", err, errs.ErrPreconditionFailed)
+	if err != nil {
+		t.Fatalf("RetryWebhookEventProcessing(): %v", err)
 	}
-	if repository.processWebhookCalls != 0 {
-		t.Fatalf("ProcessWebhookEvent calls = %d, want 0", repository.processWebhookCalls)
+	if repository.processWebhookCalls != 1 {
+		t.Fatalf("ProcessWebhookEvent calls = %d, want 1", repository.processWebhookCalls)
 	}
-	if retried.LastError != webhookLastErrorPayloadUnavailable {
-		t.Fatalf("last error = %s, want %s", retried.LastError, webhookLastErrorPayloadUnavailable)
+	if retried.ProcessingStatus != enum.WebhookProcessingStatusIgnored || retried.LastError != webhookLastErrorRefetchUnavailable {
+		t.Fatalf("retried webhook = %+v, want ignored/%s", retried, webhookLastErrorRefetchUnavailable)
 	}
 }
 
-func TestRetryWebhookEventProcessingRejectsExpiredPayloadSafely(t *testing.T) {
+func TestRetryWebhookEventProcessingTerminalizesExpiredPayloadSafely(t *testing.T) {
 	t.Parallel()
 
 	webhookID := uuid.New()
@@ -770,11 +766,148 @@ func TestRetryWebhookEventProcessingRejectsExpiredPayloadSafely(t *testing.T) {
 		WebhookEventID: webhookID,
 		Meta:           value.CommandMeta{CommandID: uuid.New()},
 	})
-	if !errors.Is(err, errs.ErrPreconditionFailed) {
-		t.Fatalf("RetryWebhookEventProcessing() err = %v, want %v", err, errs.ErrPreconditionFailed)
+	if err != nil {
+		t.Fatalf("RetryWebhookEventProcessing(): %v", err)
 	}
-	if repository.processWebhookCalls != 0 {
-		t.Fatalf("ProcessWebhookEvent calls = %d, want 0", repository.processWebhookCalls)
+	if repository.processWebhookCalls != 1 {
+		t.Fatalf("ProcessWebhookEvent calls = %d, want 1", repository.processWebhookCalls)
+	}
+	if repository.recordedWebhook.ProcessingStatus != enum.WebhookProcessingStatusIgnored ||
+		repository.recordedWebhook.LastError != string(value.WebhookPayloadCleanupReasonExpired) {
+		t.Fatalf("stored webhook = %+v, want ignored/%s", repository.recordedWebhook, value.WebhookPayloadCleanupReasonExpired)
+	}
+}
+
+func TestRetryWebhookEventProcessingRefetchesGitHubPullRequestFromSafeEnvelope(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 28, 15, 0, 0, 0, time.UTC)
+	webhookID := uuid.New()
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	externalAccountID := uuid.New()
+	workItemID := stableUUID("work-item", string(enum.ProviderSlugGitHub), "github:codex-k8s/kodex:pull_request:7")
+	webhook := entity.WebhookEvent{
+		ID:                   webhookID,
+		ProviderSlug:         enum.ProviderSlugGitHub,
+		DeliveryID:           "delivery-refetch-pr",
+		EventName:            "pull_request",
+		RepositoryProviderID: "101",
+		ReceivedAt:           now.Add(-time.Hour),
+		ProcessingStatus:     enum.WebhookProcessingStatusFailed,
+		PayloadDigest:        strings.Repeat("c", 64),
+		LastError:            webhookLastErrorPayloadInvalid,
+		RetainUntil:          now.Add(24 * time.Hour),
+	}
+	webhook.PayloadJSON = []byte(`{"provider_slug":"github","delivery_id":"delivery-refetch-pr","event_name":"pull_request","repository_provider_id":"101","repository_full_name":"codex-k8s/kodex","provider_work_item_id":"github:codex-k8s/kodex:pull_request:7","fact_kind":"work_item","kind":"pull_request","number":7,"pull_request_provider_id":"7007","pull_request_url":"https://github.com/codex-k8s/kodex/pull/7","base_branch":"main","head_branch":"kodex/adoption","merge_commit_sha":"merge-sha","source_ref":"kodex/adoption","merged_at":"2026-05-28T14:30:00Z","payload_sha256":"` + webhook.PayloadDigest + `","payload_storage":"safe_envelope_only"}`)
+	repository := &fakeRepository{
+		recordedWebhook: webhook,
+		workItemProjection: entity.ProviderWorkItemProjection{
+			Base:               entity.Base{ID: workItemID, Version: 1, CreatedAt: now, UpdatedAt: now},
+			ProjectID:          &projectID,
+			RepositoryID:       &repositoryID,
+			ProviderSlug:       enum.ProviderSlugGitHub,
+			ProviderWorkItemID: "github:codex-k8s/kodex:pull_request:7",
+			RepositoryFullName: "codex-k8s/kodex",
+			Kind:               enum.WorkItemKindPullRequest,
+			Number:             7,
+			URL:                "https://github.com/codex-k8s/kodex/pull/7",
+			WatermarkStatus:    enum.WorkItemWatermarkStatusValid,
+			WatermarkJSON:      []byte(`{"kind":"pull_request","managed_by":"kodex","work_type":"adoption","source_ref":"kodex/adoption"}`),
+		},
+		relationship: entity.ProviderRelationship{
+			ID:                uuid.New(),
+			SourceWorkItemID:  workItemID,
+			TargetProviderRef: "project-catalog:project:" + projectID.String() + ":repository:" + repositoryID.String(),
+			RelationshipType:  relationshipProjectRepositoryBinding,
+			Source:            enum.RelationshipSourceManual,
+			Confidence:        enum.RelationshipConfidenceConfirmed,
+			CreatedAt:         now,
+		},
+		recordedProviderOperation: entity.ProviderOperation{
+			Base:               entity.Base{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+			ExternalAccountID:  externalAccountID,
+			ProviderSlug:       enum.ProviderSlugGitHub,
+			OperationType:      enum.ProviderOperationCreateAdoptionPullRequest,
+			TargetRef:          repositoryTargetRef(enum.ProviderSlugGitHub, repositoryID.String()) + "#adoption_pull_request:kodex/adoption",
+			Status:             enum.ProviderOperationStatusSucceeded,
+			ResultRef:          "https://github.com/codex-k8s/kodex/pull/7",
+			ProviderObjectID:   "github:codex-k8s/kodex:pull_request:7",
+			RepositoryFullName: "codex-k8s/kodex",
+			StartedAt:          now.Add(-2 * time.Hour),
+		},
+		enforceMergeSignalIdempotency: true,
+	}
+	refetcher := &fakeProviderAdapter{
+		refetchResult: providerclient.WebhookRefetchResult{
+			OK: true,
+			Facts: value.ProviderWebhookFacts{
+				FactKind:             value.ProviderWebhookFactKindWorkItem,
+				ProviderWorkItemID:   "github:codex-k8s/kodex:pull_request:7",
+				Kind:                 string(enum.WorkItemKindPullRequest),
+				Number:               7,
+				RepositoryFullName:   "codex-k8s/kodex",
+				RepositoryProviderID: "101",
+				OccurredAt:           now.Add(-30 * time.Minute),
+				WorkItem: &value.ProviderWorkItemSnapshot{
+					ProviderSlug:       string(enum.ProviderSlugGitHub),
+					ProviderWorkItemID: "github:codex-k8s/kodex:pull_request:7",
+					RepositoryFullName: "codex-k8s/kodex",
+					Kind:               string(enum.WorkItemKindPullRequest),
+					Number:             7,
+					URL:                "https://github.com/codex-k8s/kodex/pull/7",
+					Title:              "Adopt repository",
+					State:              "merged",
+					Body:               "<!-- kodex:artifact v1\nkind: pull_request\nmanaged_by: kodex\nwork_type: adoption\nsource_ref: kodex/adoption\n-->",
+					ProviderUpdatedAt:  now.Add(-30 * time.Minute),
+				},
+				MergeSignal: &value.ProviderRepositoryMergeSignalSnapshot{
+					PullRequestProviderID: "7007",
+					PullRequestURL:        "https://github.com/codex-k8s/kodex/pull/7",
+					BaseBranch:            "main",
+					HeadBranch:            "kodex/adoption",
+					MergeCommitSHA:        "merge-sha",
+					SourceRef:             "kodex/adoption",
+					MergedAt:              now.Add(-30 * time.Minute),
+				},
+			},
+		},
+	}
+	secretResolver := &fakeSecretResolver{secret: secretresolver.NewSecretValue([]byte("read-token"))}
+	service := NewWithDependencies(Dependencies{
+		Repository:                repository,
+		Clock:                     fixedClock{now: now},
+		IDGenerator:               &sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New()}},
+		AccountUsageResolver:      fakeAccountUsageResolver{},
+		SecretResolver:            secretResolver,
+		ProviderWebhookRefetchers: []providerclient.WebhookRefetcher{refetcher},
+	})
+
+	retried, err := service.RetryWebhookEventProcessing(context.Background(), RetryWebhookEventProcessingInput{
+		WebhookEventID: webhookID,
+		Meta:           value.CommandMeta{CommandID: uuid.New()},
+	})
+	if err != nil {
+		t.Fatalf("RetryWebhookEventProcessing(): %v", err)
+	}
+	if retried.ProcessingStatus != enum.WebhookProcessingStatusProcessed || retried.LastError != "" {
+		t.Fatalf("retried webhook = %+v, want processed without error", retried)
+	}
+	if refetcher.refetchCalls != 1 || secretResolver.calls != 1 {
+		t.Fatalf("refetch calls = %d secret calls = %d, want 1/1", refetcher.refetchCalls, secretResolver.calls)
+	}
+	if refetcher.refetchRequest.Credential.ExternalAccountID != externalAccountID {
+		t.Fatalf("refetch account = %s, want %s", refetcher.refetchRequest.Credential.ExternalAccountID, externalAccountID)
+	}
+	if repository.mergeSignal.ID == uuid.Nil || repository.mergeSignal.Kind != enum.RepositoryMergeSignalKindAdoption {
+		t.Fatalf("merge signal = %+v, want adoption signal", repository.mergeSignal)
+	}
+	storedPayload := string(repository.recordedWebhook.PayloadJSON)
+	if strings.Contains(storedPayload, "read-token") || strings.Contains(storedPayload, "\"pull_request\":") {
+		t.Fatalf("stored payload = %s, want safe envelope without token or raw provider body", storedPayload)
+	}
+	if repository.outboxEventCount(providerEventRepositoryAdoptionMerged) != 1 {
+		t.Fatalf("adoption merged outbox count = %d, want 1", repository.outboxEventCount(providerEventRepositoryAdoptionMerged))
 	}
 }
 
@@ -3654,7 +3787,7 @@ func (r fakeAccountUsageResolver) ResolveExternalAccountUsage(_ context.Context,
 		allowedActionKeys = []string{strings.TrimSpace(input.ActionKey)}
 	}
 	return ExternalAccountUsageResult{
-		ExternalAccountID: uuid.NewString(),
+		ExternalAccountID: input.ExternalAccountID.String(),
 		ProviderSlug:      providerSlug,
 		SecretStoreType:   secretresolver.StoreTypeEnv,
 		SecretStoreRef:    "KODEX_TEST_TOKEN",
@@ -3677,9 +3810,13 @@ func (r *fakeSecretResolver) Resolve(context.Context, secretresolver.SecretRef) 
 }
 
 type fakeProviderAdapter struct {
-	result        providerclient.ReconciliationResult
-	err           error
-	observedToken secretresolver.SecretValue
+	result         providerclient.ReconciliationResult
+	err            error
+	observedToken  secretresolver.SecretValue
+	refetchResult  providerclient.WebhookRefetchResult
+	refetchErr     error
+	refetchCalls   int
+	refetchRequest providerclient.WebhookRefetchRequest
 }
 
 func (a *fakeProviderAdapter) ProviderSlug() enum.ProviderSlug {
@@ -3696,6 +3833,15 @@ func (a *fakeProviderAdapter) Reconcile(_ context.Context, request providerclien
 		return providerclient.ReconciliationResult{}, a.err
 	}
 	return a.result, nil
+}
+
+func (a *fakeProviderAdapter) RefetchWebhook(_ context.Context, request providerclient.WebhookRefetchRequest) (providerclient.WebhookRefetchResult, error) {
+	a.refetchCalls++
+	a.refetchRequest = request
+	if a.refetchErr != nil {
+		return providerclient.WebhookRefetchResult{}, a.refetchErr
+	}
+	return a.refetchResult, nil
 }
 
 type fakeWriteExecutor struct {

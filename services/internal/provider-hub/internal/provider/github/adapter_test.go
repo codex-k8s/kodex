@@ -138,6 +138,55 @@ func TestReconcileReadsRepositoryIssues(t *testing.T) {
 	}
 }
 
+func TestRefetchWebhookReadsMergedPullRequestBySafeEnvelope(t *testing.T) {
+	t.Parallel()
+
+	observedAt := time.Date(2026, 5, 28, 15, 0, 0, 0, time.UTC)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/repos/codex-k8s/kodex/pulls/7" {
+			t.Fatalf("path = %s, want pull request refetch", r.URL.Path)
+		}
+		if r.Header.Get("Authorization") != "Bearer token-value" {
+			t.Fatalf("authorization header = %q", r.Header.Get("Authorization"))
+		}
+		_, _ = w.Write([]byte(`{"id":7007,"number":7,"html_url":"https://github.com/codex-k8s/kodex/pull/7","title":"Adopt repository","state":"closed","body":"<!-- kodex:artifact v1\nkind: pull_request\nmanaged_by: kodex\nwork_type: adoption\nsource_ref: kodex/adoption\n-->","merged":true,"merge_commit_sha":"abc123","base":{"ref":"main","sha":"base-sha"},"head":{"ref":"kodex/adoption","sha":"head-sha"},"merged_at":"2026-05-28T14:30:00Z","closed_at":"2026-05-28T14:31:00Z","updated_at":"2026-05-28T14:32:00Z"}`))
+	}))
+	defer server.Close()
+
+	token := secretresolver.NewSecretValue([]byte("token-value"))
+	defer token.Clear()
+	result, err := New(Config{BaseURL: server.URL, HTTPClient: server.Client()}).RefetchWebhook(context.Background(), providerclient.WebhookRefetchRequest{
+		Credential: providerclient.AccountCredential{ExternalAccountID: uuid.New(), ProviderSlug: enum.ProviderSlugGitHub, Token: token},
+		Webhook: entity.WebhookEvent{
+			ProviderSlug: enum.ProviderSlugGitHub,
+			EventName:    "pull_request",
+			ReceivedAt:   observedAt,
+		},
+		Envelope: value.WebhookPayloadEnvelope{
+			RepositoryFullName:   "codex-k8s/kodex",
+			RepositoryProviderID: "101",
+			Kind:                 string(enum.WorkItemKindPullRequest),
+			Number:               7,
+			PayloadStorage:       string(value.WebhookPayloadStorageSafeEnvelope),
+		},
+		ObservedAt: observedAt,
+	})
+	if err != nil {
+		t.Fatalf("RefetchWebhook(): %v", err)
+	}
+	if !result.OK || result.Facts.WorkItem == nil || result.Facts.MergeSignal == nil {
+		t.Fatalf("refetch result = %+v, want work item and merge signal", result)
+	}
+	if result.Facts.WorkItem.ProviderWorkItemID != "github:codex-k8s/kodex:pull_request:7" ||
+		result.Facts.WorkItem.State != "merged" ||
+		result.Facts.MergeSignal.BaseBranch != "main" ||
+		result.Facts.MergeSignal.HeadBranch != "kodex/adoption" ||
+		result.Facts.MergeSignal.MergeCommitSHA != "abc123" ||
+		result.Facts.MergeSignal.SourceRef != "kodex/adoption" {
+		t.Fatalf("refetched facts = %+v, want safe merged PR facts", result.Facts)
+	}
+}
+
 func TestReconcileRepositoryCursorUsesFilteredProviderWatermark(t *testing.T) {
 	t.Parallel()
 
