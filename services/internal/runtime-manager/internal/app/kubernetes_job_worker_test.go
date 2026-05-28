@@ -84,6 +84,103 @@ func TestKubernetesJobWorkerFailsClaimedJobOnExecutorError(t *testing.T) {
 	}
 }
 
+func TestKubernetesJobWorkerLeavesClaimWhenWaitIsInterrupted(t *testing.T) {
+	t.Parallel()
+
+	job := entity.Job{
+		Base:    entity.Base{ID: uuid.MustParse("00000000-0000-0000-0000-000000000103"), Version: 2},
+		JobType: enum.JobTypeHealthCheck,
+		Status:  enum.JobStatusClaimed,
+	}
+	service := &fakeRuntimeJobLifecycle{claim: runtimeservice.ClaimRunnableJobResult{Job: job, LeaseToken: "lease-token"}}
+	executor := fakeKubernetesExecutor{
+		started: runtimekubernetes.StartedJob{
+			RuntimeJobID: job.ID,
+			Namespace:    "runtime-jobs",
+			JobName:      "kodex-rt-test",
+			ExternalRef:  "kubernetes://cluster/namespaces/runtime-jobs/jobs/kodex-rt-test",
+		},
+		result: runtimekubernetes.ExecutionResult{Interrupted: true, ErrorCode: "runtime_worker_stopped"},
+	}
+	worker := testKubernetesJobWorker(service, executor)
+
+	result := worker.claimAndExecute(context.Background())
+
+	if result != kubernetesWorkerProcessed {
+		t.Fatalf("iteration result = %v, want processed", result)
+	}
+	if len(service.reportStatuses) != 1 || service.reportStatuses[0] != enum.JobStepStatusRunning {
+		t.Fatalf("report statuses = %v, want only running", service.reportStatuses)
+	}
+	if service.completeCalls != 0 || service.failCalls != 0 {
+		t.Fatalf("complete/fail calls = %d/%d, want 0/0", service.completeCalls, service.failCalls)
+	}
+}
+
+func TestKubernetesJobWorkerRetriesAfterClaimError(t *testing.T) {
+	t.Parallel()
+
+	service := &fakeRuntimeJobLifecycle{claimErr: context.DeadlineExceeded}
+	worker := testKubernetesJobWorker(service, fakeKubernetesExecutor{})
+
+	result := worker.claimAndExecute(context.Background())
+
+	if result != kubernetesWorkerRetryableError {
+		t.Fatalf("iteration result = %v, want retryable error", result)
+	}
+	if service.claimCalls != 1 {
+		t.Fatalf("claim calls = %d, want 1", service.claimCalls)
+	}
+}
+
+func TestKubernetesJobWorkerDoesNotFailClaimWhenStartIsInterrupted(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	job := entity.Job{
+		Base:    entity.Base{ID: uuid.MustParse("00000000-0000-0000-0000-000000000104"), Version: 2},
+		JobType: enum.JobTypeHealthCheck,
+		Status:  enum.JobStatusClaimed,
+	}
+	service := &fakeRuntimeJobLifecycle{claim: runtimeservice.ClaimRunnableJobResult{Job: job, LeaseToken: "lease-token"}}
+	worker := testKubernetesJobWorker(service, fakeKubernetesExecutor{startErr: context.Canceled})
+
+	result := worker.claimAndExecute(ctx)
+
+	if result != kubernetesWorkerProcessed {
+		t.Fatalf("iteration result = %v, want processed", result)
+	}
+	if service.failCalls != 0 || len(service.reportStatuses) != 0 {
+		t.Fatalf("fail/report = %d/%v, want no lifecycle mutation", service.failCalls, service.reportStatuses)
+	}
+}
+
+func TestKubernetesJobWorkerRetryDelayBounds(t *testing.T) {
+	t.Parallel()
+
+	worker := kubernetesJobWorker{cfg: RuntimeKubernetesWorkerConfig{PollInterval: 10 * time.Millisecond}}
+
+	if got := worker.baseRetryDelay(); got != time.Second {
+		t.Fatalf("base retry delay = %s, want 1s", got)
+	}
+	if got := doubleDuration(20*time.Second, worker.maxRetryDelay()); got != 30*time.Second {
+		t.Fatalf("doubled retry delay = %s, want 30s cap", got)
+	}
+}
+
+func testKubernetesJobWorker(service *fakeRuntimeJobLifecycle, executor fakeKubernetesExecutor) kubernetesJobWorker {
+	return kubernetesJobWorker{
+		service:  service,
+		executor: executor,
+		cfg: RuntimeKubernetesWorkerConfig{
+			WorkerID:      "runtime-manager-kubernetes-executor",
+			PollInterval:  time.Second,
+			ClaimLeaseTTL: time.Minute,
+		},
+	}
+}
+
 type fakeRuntimeJobLifecycle struct {
 	claim          runtimeservice.ClaimRunnableJobResult
 	claimErr       error
