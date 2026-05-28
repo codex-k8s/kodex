@@ -47,6 +47,42 @@ func Render(options Options) error {
 	return renderFile(options.SourcePath, options.OutputPath, sourceInfo.Mode(), stack)
 }
 
+// PrepareOutputRoot returns a safe render output root and cleanup function.
+// Caller-provided paths are created only when absent and must be empty. The
+// function only removes temporary directories it creates itself.
+func PrepareOutputRoot(renderDir string, tempPattern string) (string, func(), error) {
+	if strings.TrimSpace(tempPattern) == "" {
+		tempPattern = "kodex-manifest-render-*"
+	}
+	if strings.TrimSpace(renderDir) == "" {
+		tempDir, err := os.MkdirTemp("", tempPattern)
+		if err != nil {
+			return "", func() {}, fmt.Errorf("create manifest render dir: %w", err)
+		}
+		return tempDir, func() { _ = os.RemoveAll(tempDir) }, nil
+	}
+
+	if info, err := os.Stat(renderDir); err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return "", func() {}, fmt.Errorf("stat render dir: %w", err)
+		}
+		if err := os.MkdirAll(renderDir, 0o755); err != nil {
+			return "", func() {}, fmt.Errorf("create render dir: %w", err)
+		}
+	} else if !info.IsDir() {
+		return "", func() {}, errors.New("render dir must be a directory")
+	}
+
+	entries, err := os.ReadDir(renderDir)
+	if err != nil {
+		return "", func() {}, fmt.Errorf("read render dir: %w", err)
+	}
+	if len(entries) > 0 {
+		return "", func() {}, errors.New("render dir must be empty; manifest render will not remove caller-provided paths")
+	}
+	return renderDir, func() {}, nil
+}
+
 func renderDir(sourceDir, outputDir string, stack stackinventory.Stack) error {
 	return filepath.WalkDir(sourceDir, func(path string, entry os.DirEntry, err error) error {
 		if err != nil {

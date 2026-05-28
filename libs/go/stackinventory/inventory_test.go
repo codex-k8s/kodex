@@ -124,6 +124,49 @@ func TestStackFailsWhenImageIsMissing(t *testing.T) {
 	}
 }
 
+func TestStackParsesDeployInventoryProjection(t *testing.T) {
+	stack := mustParseStack(t, `spec:
+  deployableServices:
+    - name: agent-manager
+      status: foundation
+      zone: internal
+      path: services/internal/agent-manager
+      dockerfile: services/internal/agent-manager/Dockerfile
+      dependencies:
+        - package-hub
+        - platform-event-log
+      deploy:
+        serviceManifest: deploy/base/agent-manager/agent-manager.yaml.tpl
+        migrationsManifest: deploy/base/agent-manager/migrations.yaml.tpl
+        kustomization: deploy/base/agent-manager/kustomization.yaml.tpl
+        health:
+          livez: /health/livez
+          readyz: /health/readyz
+          metrics: /metrics
+  platformDataStores:
+    - name: platform-event-log
+      owner: platform-event-log
+      databaseName: kodex_platform_event_log
+      migrationsImageEnv: KODEX_PLATFORM_EVENT_LOG_MIGRATIONS_IMAGE
+`)
+	if got := len(stack.Spec.DeployableServices); got != 1 {
+		t.Fatalf("unexpected deployable service count: %d", got)
+	}
+	service := stack.Spec.DeployableServices[0]
+	if service.Deploy.Kustomization != "deploy/base/agent-manager/kustomization.yaml.tpl" {
+		t.Fatalf("unexpected service kustomization: %q", service.Deploy.Kustomization)
+	}
+	if strings.Join(service.Dependencies, ",") != "package-hub,platform-event-log" {
+		t.Fatalf("unexpected dependencies: %#v", service.Dependencies)
+	}
+	if got := service.Deploy.Health.Readyz; got != "/health/readyz" {
+		t.Fatalf("unexpected readyz path: %q", got)
+	}
+	if got := stack.Spec.PlatformDataStores[0].MigrationsImageEnv; got != "KODEX_PLATFORM_EVENT_LOG_MIGRATIONS_IMAGE" {
+		t.Fatalf("unexpected datastore migration image env: %q", got)
+	}
+}
+
 func TestLoadEnvFileDoesNotExposeValues(t *testing.T) {
 	t.Setenv("KODEX_STACKINVENTORY_TEST_ONE", "")
 	t.Setenv("KODEX_STACKINVENTORY_TEST_TWO", "")

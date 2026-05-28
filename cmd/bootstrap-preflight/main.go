@@ -164,7 +164,7 @@ func validateStackImages(stack stackinventory.Stack) error {
 }
 
 func renderBootstrapManifests(ctx context.Context, repoRoot, servicesFile, envFile, renderDir string, requireKustomize bool, skipKustomize bool, output io.Writer) error {
-	renderDir, cleanup, err := prepareRenderDir(renderDir)
+	renderDir, cleanup, err := manifestrender.PrepareOutputRoot(renderDir, "kodex-bootstrap-preflight-*")
 	if err != nil {
 		return err
 	}
@@ -211,36 +211,6 @@ func renderBootstrapManifests(ctx context.Context, repoRoot, servicesFile, envFi
 		}
 	}
 	return nil
-}
-
-func prepareRenderDir(renderDir string) (string, func(), error) {
-	if strings.TrimSpace(renderDir) == "" {
-		tempDir, err := os.MkdirTemp("", "kodex-bootstrap-preflight-*")
-		if err != nil {
-			return "", func() {}, fmt.Errorf("create preflight render dir: %w", err)
-		}
-		return tempDir, func() { _ = os.RemoveAll(tempDir) }, nil
-	}
-
-	if info, err := os.Stat(renderDir); err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
-			return "", func() {}, fmt.Errorf("stat render dir: %w", err)
-		}
-		if err := os.MkdirAll(renderDir, 0o755); err != nil {
-			return "", func() {}, fmt.Errorf("create render dir: %w", err)
-		}
-	} else if !info.IsDir() {
-		return "", func() {}, errors.New("render dir must be a directory")
-	}
-
-	entries, err := os.ReadDir(renderDir)
-	if err != nil {
-		return "", func() {}, fmt.Errorf("read render dir: %w", err)
-	}
-	if len(entries) > 0 {
-		return "", func() {}, errors.New("render dir must be empty; preflight will not remove caller-provided paths")
-	}
-	return renderDir, func() {}, nil
 }
 
 func checkKubernetes(ctx context.Context, config preflightConfig, require bool, skip bool, output io.Writer) error {

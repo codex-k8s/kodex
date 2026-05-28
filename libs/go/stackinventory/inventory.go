@@ -32,6 +32,7 @@ type Spec struct {
 	Versions           map[string]VersionSpec  `yaml:"versions"`
 	Images             map[string]ImageSpec    `yaml:"images"`
 	DeployableServices []DeployableServiceSpec `yaml:"deployableServices"`
+	PlatformDataStores []PlatformDataStoreSpec `yaml:"platformDataStores"`
 	ActiveRoots        []string                `yaml:"activeRoots"`
 	RepositorySources  map[string]any          `yaml:"repositorySources"`
 	SourceOfTruth      []string                `yaml:"sourceOfTruth"`
@@ -72,9 +73,43 @@ type DeployableServiceSpec struct {
 	MigrationsImageEnv                   string         `yaml:"migrationsImageEnv"`
 	MigrationsInternalImageRepositoryEnv string         `yaml:"migrationsInternalImageRepositoryEnv"`
 	OwnerDomain                          string         `yaml:"ownerDomain"`
+	Dependencies                         []string       `yaml:"dependencies"`
 	APIContracts                         map[string]any `yaml:"apiContracts"`
 	Database                             map[string]any `yaml:"database"`
-	Deploy                               map[string]any `yaml:"deploy"`
+	Implementation                       map[string]any `yaml:"implementation"`
+	Deploy                               DeploySpec     `yaml:"deploy"`
+}
+
+// DeploySpec is the subset of deploy metadata needed by stack render and
+// dry-run tooling.
+type DeploySpec struct {
+	ServiceManifest    string     `yaml:"serviceManifest"`
+	MigrationsManifest string     `yaml:"migrationsManifest"`
+	Kustomization      string     `yaml:"kustomization"`
+	Health             HealthSpec `yaml:"health"`
+}
+
+// HealthSpec records service probe endpoints published by deploy inventory.
+type HealthSpec struct {
+	Livez   string `yaml:"livez"`
+	Readyz  string `yaml:"readyz"`
+	Metrics string `yaml:"metrics"`
+	OpenAPI string `yaml:"openapi"`
+	MCP     string `yaml:"mcp"`
+}
+
+// PlatformDataStoreSpec is the platform storage projection needed by deploy
+// dry-runs without introducing service-domain deploy policy.
+type PlatformDataStoreSpec struct {
+	Name               string `yaml:"name"`
+	Status             string `yaml:"status"`
+	Owner              string `yaml:"owner"`
+	DatabaseName       string `yaml:"databaseName"`
+	Migrations         string `yaml:"migrations"`
+	Dockerfile         string `yaml:"dockerfile"`
+	MigrationsImageEnv string `yaml:"migrationsImageEnv"`
+	ClientLibrary      string `yaml:"clientLibrary"`
+	Purpose            string `yaml:"purpose"`
 }
 
 var legacyVersionIndexPattern = regexp.MustCompile(`index\s+\.Versions\s+"([^"]+)"`)

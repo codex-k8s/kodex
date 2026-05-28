@@ -3,6 +3,7 @@ package manifestrender
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -102,5 +103,25 @@ func TestRenderUsesStackInventoryTemplateHelpers(t *testing.T) {
 	}
 	if string(rendered) != "version: 0.1.0\nimage: example.local/test-app:override" {
 		t.Fatalf("unexpected rendered file after override: %q", string(rendered))
+	}
+}
+
+func TestPrepareOutputRootRejectsNonEmptyCallerDir(t *testing.T) {
+	renderDir := t.TempDir()
+	markerPath := filepath.Join(renderDir, "keep.txt")
+	if err := os.WriteFile(markerPath, []byte("keep"), 0o600); err != nil {
+		t.Fatalf("write marker: %v", err)
+	}
+
+	_, cleanup, err := PrepareOutputRoot(renderDir, "test-render-*")
+	defer cleanup()
+	if err == nil {
+		t.Fatal("expected non-empty render dir error")
+	}
+	if !strings.Contains(err.Error(), "render dir must be empty") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, err := os.ReadFile(markerPath); err != nil || string(got) != "keep" {
+		t.Fatalf("marker file was changed or removed: content=%q err=%v", string(got), err)
 	}
 }
