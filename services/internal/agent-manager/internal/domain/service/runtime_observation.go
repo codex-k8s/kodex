@@ -86,7 +86,7 @@ func (s *Service) observeRuntimeJob(ctx context.Context, meta value.QueryMeta, r
 
 func runtimeObservationFailureState(failure runtimeOperationFailure) RuntimeObservationState {
 	switch strings.TrimSpace(failure.code) {
-	case "conflict", "failed_precondition":
+	case "conflict", "failed_precondition", "not_found":
 		return RuntimeObservationStateConflict
 	default:
 		return RuntimeObservationStateUnavailable

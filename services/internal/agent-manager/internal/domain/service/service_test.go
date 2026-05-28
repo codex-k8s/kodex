@@ -950,13 +950,13 @@ func TestGetAgentRunRuntimeStatusWithRuntimeJobRefReadsLiveStatus(t *testing.T) 
 		ResultSummary:  "runtime job created",
 	}
 	reader := &fakeRuntimeJobReader{result: RuntimeJobReadResult{
-		JobRef:     "job-1",
-		AgentRunID: runID,
-		CommandRef: "command-1",
-		Status:     RuntimeJobStatusRunning,
-		Version:    7,
-		CreatedAt:  &createdAt,
-		StartedAt:  &startedAt,
+		JobRef:      "job-1",
+		AgentRunID:  runID,
+		CommandRef:  "command-1",
+		Status:      RuntimeJobStatusRunning,
+		Version:     7,
+		CreatedAt:   &createdAt,
+		StartedAt:   &startedAt,
 		SafeSummary: "job_status=running",
 	}}
 	gateID := uuid.MustParse("22222222-dddd-eeee-ffff-111111111111")
@@ -1047,6 +1047,34 @@ func TestGetAgentRunRuntimeStatusMapsRuntimeReadFailureSafely(t *testing.T) {
 		if strings.Contains(status.SafeSummary, forbidden) {
 			t.Fatalf("safe summary contains forbidden marker %q: %s", forbidden, status.SafeSummary)
 		}
+	}
+}
+
+func TestGetAgentRunRuntimeStatusMapsMissingRuntimeJobRefToConflict(t *testing.T) {
+	t.Parallel()
+
+	runID := uuid.MustParse("45454545-aaaa-bbbb-cccc-dddddddddddd")
+	run := entity.AgentRun{
+		VersionedBase:  entity.VersionedBase{ID: runID, Version: 2, UpdatedAt: time.Date(2026, 5, 28, 13, 30, 0, 0, time.UTC)},
+		SessionID:      uuid.MustParse("45454545-bbbb-cccc-dddd-eeeeeeeeeeee"),
+		RuntimeContext: value.RuntimeContextRef{JobRef: "stale-job-ref"},
+		Status:         enum.AgentRunStatusStarting,
+	}
+	service := New(Config{
+		Repository:       &fakeRepository{runByID: map[uuid.UUID]entity.AgentRun{runID: run}},
+		RuntimeJobReader: &fakeRuntimeJobReader{err: errs.ErrNotFound},
+	})
+
+	result, err := service.GetAgentRunRuntimeStatus(context.Background(), GetAgentRunRuntimeStatusInput{Meta: value.QueryMeta{Actor: testActor()}, RunID: runID})
+	if err != nil {
+		t.Fatalf("GetAgentRunRuntimeStatus() err = %v", err)
+	}
+	status := result.RuntimeStatus
+	if status.ObservationState != RuntimeObservationStateConflict || status.SafeErrorCode != "not_found" {
+		t.Fatalf("runtime status = %+v", status)
+	}
+	if !strings.Contains(status.SafeSummary, "code=not_found") {
+		t.Fatalf("safe summary = %q, want not_found code", status.SafeSummary)
 	}
 }
 
