@@ -227,7 +227,7 @@ MCP не владеет доменным состоянием и не подме
 
 ### `governance-manager`
 
-`agent-manager` обращается к `governance-manager` за оценкой риска, записью review signals, созданием gate request и чтением итогового gate/release decision. `agent-manager` хранит только ожидание flow, normalized owner outcome и ссылки на governance request/decision; сами risk/gate/release decisions остаются в governance-контуре.
+`agent-manager` обращается к `governance-manager` за оценкой риска, записью review signals, созданием gate request и чтением итогового gate/release decision. `agent-manager` хранит только ожидание flow, normalized owner outcome и typed refs на `risk_assessment`, `gate_request`, `gate_decision`, `release_decision_package`, `release_decision`, `risk_profile`, `gate_policy` и `release_policy`; сами risk/gate/release decisions и evidence body остаются в governance-контуре.
 
 ### `interaction-hub`
 
@@ -269,7 +269,7 @@ Request-side путь работает через typed gRPC client `interaction
 - `interaction-hub` владеет transport request/response lifecycle и callback delivery;
 - `governance-manager` владеет governance/risk/release decision там, где Human gate связан с policy gate.
 
-`agent-manager` хранит только `interaction_request_ref`, `interaction_response_ref`, `governance_gate_request_ref`, `governance_decision_ref`, provider target refs, safe summary и outcome `approve`/`reject`/`request_changes`/`answer`. Полные сообщения, transport payload, decision body, prompt/transcript/logs/PII и provider payload не копируются в БД `agent-manager`.
+`agent-manager` хранит только `interaction_request_ref`, `interaction_response_ref`, typed `governance_context`, provider target refs, safe summary и outcome `approve`/`reject`/`request_changes`/`answer`. Полные сообщения, transport payload, decision body, release evidence, prompt/transcript/logs/PII и provider payload не копируются в БД `agent-manager`.
 
 ## События
 

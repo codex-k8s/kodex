@@ -665,7 +665,12 @@ func TestAcceptanceHandlersMapRequests(t *testing.T) {
 			if input.SessionID != sessionID || input.RunID == nil || *input.RunID != runID || len(input.CheckKinds) != 1 || input.CheckKinds[0] != enum.AcceptanceCheckKindRoleResult {
 				t.Fatalf("request acceptance input = %+v", input)
 			}
-			return sampleAcceptanceResult(acceptanceID, sessionID, &runID, &stageID, enum.AcceptanceCheckKindRoleResult, enum.AcceptanceStatusPending), nil
+			if input.GovernanceContext.GateRequestRef != "governance:gate/request" {
+				t.Fatalf("request governance context = %+v", input.GovernanceContext)
+			}
+			acceptance := sampleAcceptanceResult(acceptanceID, sessionID, &runID, &stageID, enum.AcceptanceCheckKindRoleResult, enum.AcceptanceStatusPending)
+			acceptance.GovernanceContext = input.GovernanceContext
+			return acceptance, nil
 		},
 		recordAcceptanceResult: func(_ context.Context, input agentservice.RecordAcceptanceResultInput) (entity.AcceptanceResult, error) {
 			if input.AcceptanceResultID != acceptanceID || input.Meta.ExpectedVersion == nil || *input.Meta.ExpectedVersion != expectedVersion || input.Status != enum.AcceptanceStatusPassed {
@@ -674,7 +679,12 @@ func TestAcceptanceHandlersMapRequests(t *testing.T) {
 			if string(input.DetailsJSON) != `{"summary":"ok"}` {
 				t.Fatalf("details_json = %s", input.DetailsJSON)
 			}
-			return sampleAcceptanceResult(acceptanceID, sessionID, &runID, &stageID, enum.AcceptanceCheckKindRoleResult, enum.AcceptanceStatusPassed), nil
+			if input.GovernanceContext.GateDecisionRef != "governance:decision/record" {
+				t.Fatalf("record governance context = %+v", input.GovernanceContext)
+			}
+			acceptance := sampleAcceptanceResult(acceptanceID, sessionID, &runID, &stageID, enum.AcceptanceCheckKindRoleResult, enum.AcceptanceStatusPassed)
+			acceptance.GovernanceContext = input.GovernanceContext
+			return acceptance, nil
 		},
 		getAcceptanceResult: func(_ context.Context, id uuid.UUID) (entity.AcceptanceResult, error) {
 			if id != acceptanceID {
@@ -697,11 +707,14 @@ func TestAcceptanceHandlersMapRequests(t *testing.T) {
 		StageId:    ptr(stageID.String()),
 		CheckKinds: []agentsv1.AcceptanceCheckKind{agentsv1.AcceptanceCheckKind_ACCEPTANCE_CHECK_KIND_ROLE_RESULT},
 		TargetRef:  ptr("artifact:run-summary"),
+		GovernanceContext: &agentsv1.GovernanceContextRef{
+			GateRequestRef: ptr("governance:gate/request"),
+		},
 	})
 	if err != nil {
 		t.Fatalf("RequestAcceptance() error = %v", err)
 	}
-	if requested.GetAcceptanceResult().GetStatus() != agentsv1.AcceptanceStatus_ACCEPTANCE_STATUS_PENDING {
+	if requested.GetAcceptanceResult().GetStatus() != agentsv1.AcceptanceStatus_ACCEPTANCE_STATUS_PENDING || requested.GetAcceptanceResult().GetGovernanceContext().GetGateRequestRef() != "governance:gate/request" {
 		t.Fatalf("requested = %+v", requested.GetAcceptanceResult())
 	}
 	recorded, err := server.RecordAcceptanceResult(context.Background(), &agentsv1.RecordAcceptanceResultRequest{
@@ -709,11 +722,15 @@ func TestAcceptanceHandlersMapRequests(t *testing.T) {
 		AcceptanceResultId: acceptanceID.String(),
 		Status:             agentsv1.AcceptanceStatus_ACCEPTANCE_STATUS_PASSED,
 		DetailsJson:        `{"summary":"ok"}`,
+		GovernanceContext: &agentsv1.GovernanceContextRef{
+			GateRequestRef:  ptr("governance:gate/request"),
+			GateDecisionRef: ptr("governance:decision/record"),
+		},
 	})
 	if err != nil {
 		t.Fatalf("RecordAcceptanceResult() error = %v", err)
 	}
-	if recorded.GetAcceptanceResult().GetStatus() != agentsv1.AcceptanceStatus_ACCEPTANCE_STATUS_PASSED {
+	if recorded.GetAcceptanceResult().GetStatus() != agentsv1.AcceptanceStatus_ACCEPTANCE_STATUS_PASSED || recorded.GetAcceptanceResult().GetGovernanceContext().GetGateDecisionRef() != "governance:decision/record" {
 		t.Fatalf("recorded = %+v", recorded.GetAcceptanceResult())
 	}
 	read, err := server.GetAcceptanceResult(context.Background(), &agentsv1.GetAcceptanceResultRequest{
@@ -762,6 +779,9 @@ func TestCreateFollowUpIntentHandlerMapsRequest(t *testing.T) {
 			if input.ProviderTarget.WorkItemRef != "issue:123" || input.ProviderWorkItemType != "task" || input.SafeTitle != "Follow-up" || input.SafeSummary != "Summary" {
 				t.Fatalf("payload input = %+v", input)
 			}
+			if input.GovernanceContext.RiskAssessmentRef != "governance:risk/follow-up" {
+				t.Fatalf("governance context = %+v", input.GovernanceContext)
+			}
 			now := sampleTime()
 			return entity.FollowUpIntent{
 				VersionedBase:        entity.VersionedBase{ID: intentID, Version: 1, CreatedAt: now, UpdatedAt: now},
@@ -776,6 +796,7 @@ func TestCreateFollowUpIntentHandlerMapsRequest(t *testing.T) {
 				SafeSummary:          input.SafeSummary,
 				RoleHint:             input.RoleHint,
 				StageHint:            input.StageHint,
+				GovernanceContext:    input.GovernanceContext,
 				IdempotencyKey:       "domain.Service.CreateFollowUpIntent:user:operator-1:follow-up",
 				Status:               enum.FollowUpIntentStatusRequested,
 			}, nil
@@ -796,6 +817,9 @@ func TestCreateFollowUpIntentHandlerMapsRequest(t *testing.T) {
 		SafeSummary:          ptr("Summary"),
 		RoleHint:             ptr("worker"),
 		StageHint:            ptr("review"),
+		GovernanceContext: &agentsv1.GovernanceContextRef{
+			RiskAssessmentRef: ptr("governance:risk/follow-up"),
+		},
 	})
 	if err != nil {
 		t.Fatalf("CreateFollowUpIntent() error = %v", err)
@@ -804,7 +828,7 @@ func TestCreateFollowUpIntentHandlerMapsRequest(t *testing.T) {
 	if intent.GetId() != intentID.String() || intent.GetStatus() != agentsv1.FollowUpIntentStatus_FOLLOW_UP_INTENT_STATUS_REQUESTED {
 		t.Fatalf("intent = %+v", intent)
 	}
-	if intent.GetProviderTarget().GetWorkItemRef() != "issue:123" || intent.GetSafeSummary() != "Summary" {
+	if intent.GetProviderTarget().GetWorkItemRef() != "issue:123" || intent.GetSafeSummary() != "Summary" || intent.GetGovernanceContext().GetRiskAssessmentRef() != "governance:risk/follow-up" {
 		t.Fatalf("intent target = %+v", intent)
 	}
 }
@@ -1012,7 +1036,12 @@ func TestHumanGateHandlersMapRequests(t *testing.T) {
 			if input.RequestKind != "owner_decision" || input.InteractionRequestRef != "interaction:request/42" {
 				t.Fatalf("request input = %+v", input)
 			}
-			return sampleHumanGate(gateID, sessionID, &runID, &stageID), nil
+			if input.GovernanceContext.RiskAssessmentRef != "governance:risk/42" || input.GovernanceContext.GateRequestRef != "governance:gate/42" {
+				t.Fatalf("request governance context = %+v", input.GovernanceContext)
+			}
+			gate := sampleHumanGate(gateID, sessionID, &runID, &stageID)
+			gate.GovernanceContext = input.GovernanceContext
+			return gate, nil
 		},
 		recordHumanGateDecision: func(_ context.Context, input agentservice.RecordHumanGateDecisionInput) (entity.HumanGateRequest, error) {
 			if input.HumanGateRequestID != gateID || input.Meta.ExpectedVersion == nil || *input.Meta.ExpectedVersion != expectedVersion {
@@ -1021,10 +1050,15 @@ func TestHumanGateHandlersMapRequests(t *testing.T) {
 			if input.Status != enum.HumanGateStatusResolved || input.Outcome != enum.HumanGateOutcomeApprove || input.InteractionResponseRef != "interaction:response/42" {
 				t.Fatalf("decision input = %+v", input)
 			}
+			if input.GovernanceContext.GateDecisionRef != "governance:decision/42" {
+				t.Fatalf("decision governance context = %+v", input.GovernanceContext)
+			}
 			gate := sampleHumanGate(gateID, sessionID, &runID, &stageID)
 			gate.Status = enum.HumanGateStatusResolved
 			gate.Outcome = enum.HumanGateOutcomeApprove
 			gate.InteractionResponseRef = input.InteractionResponseRef
+			gate.GovernanceContext = input.GovernanceContext
+			gate.GovernanceDecisionRef = input.GovernanceContext.GateDecisionRef
 			gate.Version = 2
 			return gate, nil
 		},
@@ -1058,11 +1092,15 @@ func TestHumanGateHandlersMapRequests(t *testing.T) {
 		SafeSummary:              ptr("Need owner decision"),
 		InteractionRequestRef:    ptr("interaction:request/42"),
 		GovernanceGateRequestRef: ptr("governance:gate/42"),
+		GovernanceContext: &agentsv1.GovernanceContextRef{
+			RiskAssessmentRef: ptr("governance:risk/42"),
+			GateRequestRef:    ptr("governance:gate/42"),
+		},
 	})
 	if err != nil {
 		t.Fatalf("RequestHumanGate() error = %v", err)
 	}
-	if requested.GetHumanGateRequest().GetId() != gateID.String() || requested.GetHumanGateRequest().GetOutcome() != agentsv1.HumanGateOutcome_HUMAN_GATE_OUTCOME_NONE {
+	if requested.GetHumanGateRequest().GetId() != gateID.String() || requested.GetHumanGateRequest().GetOutcome() != agentsv1.HumanGateOutcome_HUMAN_GATE_OUTCOME_NONE || requested.GetHumanGateRequest().GetGovernanceContext().GetRiskAssessmentRef() != "governance:risk/42" {
 		t.Fatalf("requested = %+v", requested.GetHumanGateRequest())
 	}
 	recorded, err := server.RecordHumanGateDecision(context.Background(), &agentsv1.RecordHumanGateDecisionRequest{
@@ -1072,11 +1110,15 @@ func TestHumanGateHandlersMapRequests(t *testing.T) {
 		Outcome:                agentsv1.HumanGateOutcome_HUMAN_GATE_OUTCOME_APPROVE,
 		SafeSummary:            ptr("Approved"),
 		InteractionResponseRef: ptr("interaction:response/42"),
+		GovernanceContext: &agentsv1.GovernanceContextRef{
+			GateRequestRef:  ptr("governance:gate/42"),
+			GateDecisionRef: ptr("governance:decision/42"),
+		},
 	})
 	if err != nil {
 		t.Fatalf("RecordHumanGateDecision() error = %v", err)
 	}
-	if recorded.GetHumanGateRequest().GetStatus() != agentsv1.HumanGateStatus_HUMAN_GATE_STATUS_RESOLVED {
+	if recorded.GetHumanGateRequest().GetStatus() != agentsv1.HumanGateStatus_HUMAN_GATE_STATUS_RESOLVED || recorded.GetHumanGateRequest().GetGovernanceContext().GetGateDecisionRef() != "governance:decision/42" {
 		t.Fatalf("recorded = %+v", recorded.GetHumanGateRequest())
 	}
 	if _, err := server.GetHumanGateRequest(context.Background(), &agentsv1.GetHumanGateRequestRequest{Meta: queryMeta(), HumanGateRequestId: gateID.String()}); err != nil {
@@ -1562,9 +1604,12 @@ func sampleHumanGate(id uuid.UUID, sessionID uuid.UUID, runID *uuid.UUID, stageI
 		SafeSummary:              "Need owner decision",
 		InteractionRequestRef:    "interaction:request/42",
 		GovernanceGateRequestRef: "governance:gate/42",
-		IdempotencyKey:           "domain.Service.RequestHumanGate:user:operator-1:human-gate",
-		Status:                   enum.HumanGateStatusWaiting,
-		Outcome:                  enum.HumanGateOutcomeNone,
+		GovernanceContext: value.GovernanceContextRef{
+			GateRequestRef: "governance:gate/42",
+		},
+		IdempotencyKey: "domain.Service.RequestHumanGate:user:operator-1:human-gate",
+		Status:         enum.HumanGateStatusWaiting,
+		Outcome:        enum.HumanGateOutcomeNone,
 	}
 }
 

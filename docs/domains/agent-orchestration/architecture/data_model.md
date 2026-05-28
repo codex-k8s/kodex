@@ -257,7 +257,7 @@ approvals:
 
 ### AcceptanceCheck и AcceptanceResult
 
-`AcceptanceCheck` описывает тип проверки в policy/flow-контексте, а `AcceptanceResult` является хранимым агрегатом результата. Базовый lifecycle создаёт один pending result на команду `RequestAcceptance`, затем `RecordAcceptanceResult` переводит его в `passed`, `failed`, `waiting` или `skipped` через ожидаемую версию. Для `human_gate` acceptance фиксирует только ожидание `waiting` с безопасной ссылкой на gate/risk/governance; итог owner decision хранится в отдельном `HumanGateRequest` агрегате `agent-manager` как normalized orchestration result.
+`AcceptanceCheck` описывает тип проверки в policy/flow-контексте, а `AcceptanceResult` является хранимым агрегатом результата. Базовый lifecycle создаёт один pending result на команду `RequestAcceptance`, затем `RecordAcceptanceResult` переводит его в `passed`, `failed`, `waiting` или `skipped` через ожидаемую версию. Для `human_gate` acceptance фиксирует только ожидание `waiting` с безопасной ссылкой на gate/risk/governance; итог owner decision хранится в отдельном `HumanGateRequest` агрегате `agent-manager` как normalized orchestration result. `GovernanceContextRef` хранит только typed refs на `governance-manager` факты и policy refs, но не decision body, risk payload или release evidence.
 
 | Поле | Тип | Может быть пустым | Примечание |
 |---|---|---:|---|
@@ -269,14 +269,15 @@ approvals:
 | `status` | enum | нет | `pending`, `passed`, `failed`, `waiting`, `skipped`. |
 | `target_ref` | text | да | Provider/runtime/package/governance/interaction ref: trim, до 512 символов, видимый ASCII safe-ref с namespace (`kind:value`) и без raw/log/secret markers. |
 | `details_json` | jsonb | нет | Bounded JSON-object с безопасными `summary`, `digest`, `artifact_refs`, `risk_ref`, `gate_ref` и другими refs. |
+| `governance_risk_assessment_ref`, `governance_gate_request_ref`, `governance_gate_decision_ref`, `governance_release_decision_package_ref`, `governance_release_decision_ref`, `governance_risk_profile_ref`, `governance_gate_policy_ref`, `governance_release_policy_ref` | text | да | Typed safe refs на governance/risk/release/policy контекст. `gate_decision_ref` допустим только вместе с `gate_request_ref`, а `release_decision_ref` — только вместе с `release_decision_package_ref`. |
 | `version` | bigint | нет | Оптимистичная конкуренция результата приёмки. |
 | `created_at`, `updated_at` | timestamptz | нет | Технические временные метки. |
 
-`details_json` не является отчётом QA runner и не хранит raw provider payload, workspace files, prompt text, flow files, руководящие документы, stdout/stderr/logs, секреты, токены или PII. Если приёмка ждёт Human gate или governance decision, `agent-manager` фиксирует только статус ожидания и безопасные `gate_ref`/`risk_ref`/`governance` refs; normalized результат решения записывается в `HumanGateRequest`, а transport/governance payload остаётся у сервисов-владельцев.
+`details_json` не является отчётом QA runner и не хранит raw provider payload, workspace files, prompt text, flow files, руководящие документы, stdout/stderr/logs, секреты, токены или PII. Если приёмка ждёт Human gate или governance decision, `agent-manager` фиксирует только статус ожидания и typed `governance_*_ref`; normalized результат решения записывается в `HumanGateRequest`, а transport/governance payload остаётся у сервисов-владельцев.
 
 ### HumanGateRequest
 
-`HumanGateRequest` — авторитетная модель ожидания и результата owner decision в `agent-manager`. Она связывает решение с session/run/stage/acceptance и provider-native target refs, но не владеет транспортом сообщения и не хранит governance decision body. Повтор `RequestHumanGate` с тем же command/idempotency key возвращает тот же wait только при совпадении нормализованного payload. `RecordHumanGateDecision` требует expected version, переводит ожидание в `resolved` и сохраняет normalized outcome для следующего шага flow.
+`HumanGateRequest` — авторитетная модель ожидания и результата owner decision в `agent-manager`. Она связывает решение с session/run/stage/acceptance, provider-native target refs и typed `GovernanceContextRef`, но не владеет транспортом сообщения и не хранит governance decision body. Повтор `RequestHumanGate` с тем же command/idempotency key возвращает тот же wait только при совпадении нормализованного payload. `RecordHumanGateDecision` требует expected version, переводит ожидание в `resolved` и сохраняет normalized outcome для следующего шага flow.
 
 Request-side интеграция с `interaction-hub` включается явным runtime switch. В этом режиме `RequestHumanGate` после replay-check создаёт `interaction-hub.RequestHumanGate` с owner-side ref `agent:human_gate/<human_gate_request_id>`, source owner `agent_manager`, decision owner `agent_manager`, safe session/run/stage/provider refs, target actor ref из `AgentSession.created_by_actor_ref`, bounded `safe_summary` и действиями `approve`/`reject`/`request_changes`/`answer`. Если команда повторяется с тем же idempotency trace, `agent-manager` возвращает уже сохранённый wait и не создаёт второй transport request. Если вызов `interaction-hub` временно недоступен, локальный wait не записывается, поэтому retry сохраняет тот же owner ref и идёт с тем же interaction command identity.
 
@@ -295,7 +296,8 @@ Event-driven resume идёт через уже очищенное событие
 | `reason_code` | text | нет | Машинный safe reason для ожидания. |
 | `safe_summary` | text | да | Bounded summary для UI и события; не содержит prompt, transcript, logs, PII или внешние payload. |
 | `interaction_request_ref`, `interaction_response_ref` | text | да | Refs на transport lifecycle `interaction-hub`; request/response payload не копируется. |
-| `governance_gate_request_ref`, `governance_decision_ref` | text | да | Refs на governance/risk/release lifecycle `governance-manager`; decision body не копируется. |
+| `governance_gate_request_ref`, `governance_decision_ref` | text | да | Backward-readable refs на gate request/decision lifecycle `governance-manager`; decision body не копируется. |
+| `governance_risk_assessment_ref`, `governance_release_decision_package_ref`, `governance_release_decision_ref`, `governance_risk_profile_ref`, `governance_gate_policy_ref`, `governance_release_policy_ref` | text | да | Дополнительный typed governance/policy контекст для UI/MCP и последующих consumers без копирования внешних данных. |
 | `status` | enum | нет | `requested`, `waiting`, `resolved`, `failed`, `cancelled`; запись решения переводит ожидание в `resolved`. |
 | `outcome` | enum | нет | `none`, `approve`, `reject`, `request_changes`, `answer`; для `resolved` outcome не может быть `none`. |
 | `idempotency_key` | text | нет | Сохранённый command idempotency trace. |
@@ -318,6 +320,7 @@ Event-driven resume идёт через уже очищенное событие
 | `to_stage_id` | uuid | да | Следующий этап. |
 | `acceptance_result_id` | uuid | да | Положительный результат machine acceptance, если follow-up создаётся по итогам приёмки. Pending/failed/waiting acceptance не может породить intent. |
 | `provider_work_item_ref`, `provider_pull_request_ref`, `provider_comment_ref`, `provider_review_signal_ref` | text | да | Безопасные provider refs. Хотя бы один target ref обязателен; значения имеют safe-ref формат `kind:value`, ограничены по длине и не содержат raw/log/secret markers. |
+| `governance_risk_assessment_ref`, `governance_gate_request_ref`, `governance_gate_decision_ref`, `governance_release_decision_package_ref`, `governance_release_decision_ref`, `governance_risk_profile_ref`, `governance_gate_policy_ref`, `governance_release_policy_ref` | text | да | Optional typed governance refs, если follow-up связан с gate/risk/release policy. Используются только как безопасный контекст; provider-native запись всё равно выполняется через `provider-hub`, а governance decision остаётся у `governance-manager`. |
 | `provider_work_item_type` | text | нет | Тип следующего provider-native work item, например `task`, `bug`, `qa`, `release`; может сверяться с `StageTransition.follow_up_type`. |
 | `provider_operation_ref` | text | да | Safe ref операции `provider-hub` после dispatch или заранее известная ссылка; сам provider payload, response body и raw error не хранятся. |
 | `status` | enum | нет | `planned`, `requested`, `created`, `updated`, `commented`, `review_signaled`, `failed`, `cancelled`. |
@@ -397,7 +400,8 @@ Event-driven resume идёт через уже очищенное событие
 - В `guidance_refs` запрещено хранить `SKILL.md`, scripts, assets, исходники пакета, полный manifest или секреты; для диагностики сохраняется только bounded policy-safe summary.
 - `AgentSessionStateSnapshot` относится к `AgentSession` и опционально к `AgentRun`; `AgentSession.latest_state_snapshot_id` указывает на актуальный снимок.
 - `AgentActivity` относится к `AgentSession` и опционально к `AgentRun`; это authoritative safe timeline для будущего UI, а не копия hook payload.
-- `AcceptanceResult` и `FollowUpIntent` относятся к `AgentSession`, `AgentRun` и `Stage`.
+- `AcceptanceResult` и `FollowUpIntent` относятся к `AgentSession`, `AgentRun` и `Stage` и могут нести typed `GovernanceContextRef` для связи с risk/gate/release policy контекстом.
+- `HumanGateRequest` хранит owner decision wait/result и typed governance refs, чтобы flow мог продолжиться или завершиться без чтения decision body из `governance-manager`.
 - Внутри БД `agent-manager` допустимы внешние ключи между своими таблицами.
 - Ссылки на provider, runtime, package, interaction, project и access домены хранятся как внешние идентификаторы без SQL-связей с чужими БД. Workspace paths, kubeconfig, `job_input_json`, prompt/transcript, логи и raw payload внешних сервисов не хранятся в `agent-manager`.
 

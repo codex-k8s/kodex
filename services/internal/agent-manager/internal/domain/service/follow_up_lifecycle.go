@@ -359,6 +359,10 @@ func (s *Service) normalizeFollowUpIntent(ctx context.Context, session entity.Ag
 	if err != nil {
 		return entity.FollowUpIntent{}, err
 	}
+	governanceContext, err := normalizeGovernanceContext(input.GovernanceContext)
+	if err != nil {
+		return entity.FollowUpIntent{}, err
+	}
 	flowVersionID := session.FlowVersionID
 	if run != nil {
 		flowVersionID = chooseUUID(run.FlowVersionID, flowVersionID)
@@ -382,6 +386,7 @@ func (s *Service) normalizeFollowUpIntent(ctx context.Context, session entity.Ag
 		RoleHint:              roleHint,
 		StageHint:             stageHint,
 		IdempotencyKey:        idempotencyKey,
+		GovernanceContext:     governanceContext,
 		Status:                enum.FollowUpIntentStatusRequested,
 	}, nil
 }
@@ -2161,6 +2166,7 @@ func sameFollowUpIntentRequest(stored entity.FollowUpIntent, expected entity.Fol
 		stored.SafeSummary == expected.SafeSummary &&
 		stored.RoleHint == expected.RoleHint &&
 		stored.StageHint == expected.StageHint &&
+		sameGovernanceContext(stored.GovernanceContext, expected.GovernanceContext) &&
 		stored.IdempotencyKey == expected.IdempotencyKey &&
 		stored.Status == expected.Status
 }

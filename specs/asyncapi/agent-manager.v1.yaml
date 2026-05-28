@@ -361,6 +361,18 @@ components:
           type: string
         governance_decision_ref:
           type: string
+        governance_risk_assessment_ref:
+          type: string
+        governance_release_decision_package_ref:
+          type: string
+        governance_release_decision_ref:
+          type: string
+        governance_risk_profile_ref:
+          type: string
+        governance_gate_policy_ref:
+          type: string
+        governance_release_policy_ref:
+          type: string
         human_gate_outcome:
           type: string
         status:

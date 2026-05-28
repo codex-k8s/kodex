@@ -36,16 +36,30 @@ type humanGateCommandPayload struct {
 }
 
 type humanGateDecision struct {
-	HumanGateRequestID             string `json:"human_gate_request_id"`
-	Status                         string `json:"status"`
-	Outcome                        string `json:"outcome"`
-	SafeSummary                    string `json:"safe_summary,omitempty"`
+	HumanGateRequestID string `json:"human_gate_request_id"`
+	Status             string `json:"status"`
+	Outcome            string `json:"outcome"`
+	SafeSummary        string `json:"safe_summary,omitempty"`
+	humanGateDecisionInteraction
+	humanGateDecisionGovernance
+}
+
+type humanGateDecisionInteraction struct {
 	InteractionRequestRef          string `json:"interaction_request_ref,omitempty"`
 	InteractionResponseRef         string `json:"interaction_response_ref,omitempty"`
 	InteractionResponseFingerprint string `json:"interaction_response_fingerprint,omitempty"`
 	InteractionRequestVersion      int64  `json:"interaction_request_version,omitempty"`
-	GovernanceGateRequestRef       string `json:"governance_gate_request_ref,omitempty"`
-	GovernanceDecisionRef          string `json:"governance_decision_ref,omitempty"`
+}
+
+type humanGateDecisionGovernance struct {
+	GovernanceGateRequestRef     string `json:"governance_gate_request_ref,omitempty"`
+	GovernanceDecisionRef        string `json:"governance_decision_ref,omitempty"`
+	GovernanceRiskAssessmentRef  string `json:"governance_risk_assessment_ref,omitempty"`
+	GovernanceReleasePackageRef  string `json:"governance_release_decision_package_ref,omitempty"`
+	GovernanceReleaseDecisionRef string `json:"governance_release_decision_ref,omitempty"`
+	GovernanceRiskProfileRef     string `json:"governance_risk_profile_ref,omitempty"`
+	GovernanceGatePolicyRef      string `json:"governance_gate_policy_ref,omitempty"`
+	GovernanceReleasePolicyRef   string `json:"governance_release_policy_ref,omitempty"`
 }
 
 func (s *Service) RequestHumanGate(ctx context.Context, input RequestHumanGateInput) (entity.HumanGateRequest, error) {
@@ -158,7 +172,7 @@ func humanGateInteractionRequestInput(meta value.CommandMeta, session entity.Age
 		ContextRefs:              humanGateInteractionContextRefs(session, gate),
 		AllowedActions:           humanGateInteractionActions(),
 		RiskClass:                humanGateRiskClassLow,
-		GovernanceGateRequestRef: gate.GovernanceGateRequestRef,
+		GovernanceGateRequestRef: gate.GovernanceContext.GateRequestRef,
 	}, nil
 }
 
@@ -238,6 +252,12 @@ func humanGateInteractionContextRefs(session entity.AgentSession, gate entity.Hu
 	}
 	if governanceRef := strings.TrimSpace(gate.GovernanceGateRequestRef); governanceRef != "" {
 		refs = append(refs, HumanGateInteractionExternalRef{Kind: "governance_gate_request", Ref: governanceRef})
+	}
+	if governanceRef := strings.TrimSpace(gate.GovernanceContext.RiskAssessmentRef); governanceRef != "" {
+		refs = append(refs, HumanGateInteractionExternalRef{Kind: "governance_risk_assessment", Ref: governanceRef})
+	}
+	if governanceRef := strings.TrimSpace(gate.GovernanceContext.ReleaseDecisionPackageRef); governanceRef != "" {
+		refs = append(refs, HumanGateInteractionExternalRef{Kind: "governance_release_decision_package", Ref: governanceRef})
 	}
 	return refs
 }
@@ -338,6 +358,10 @@ func (s *Service) RecordHumanGateDecision(ctx context.Context, input RecordHuman
 	gate.InteractionResponseRef = chooseString(refs.interactionResponseRef, gate.InteractionResponseRef)
 	gate.GovernanceGateRequestRef = chooseString(refs.governanceGateRequestRef, gate.GovernanceGateRequestRef)
 	gate.GovernanceDecisionRef = chooseString(refs.governanceDecisionRef, gate.GovernanceDecisionRef)
+	gate.GovernanceContext, err = mergeGovernanceContext(gate.GovernanceContext, refs.governanceContext)
+	if err != nil {
+		return entity.HumanGateRequest{}, err
+	}
 	gate.SafeSummary = chooseString(summary, gate.SafeSummary)
 	gate.ResolvedAt = &now
 	gate.Version++
@@ -415,7 +439,7 @@ func (s *Service) normalizeHumanGateRequest(ctx context.Context, session entity.
 	if err != nil {
 		return entity.HumanGateRequest{}, err
 	}
-	governanceGateRequestRef, err := normalizeFollowUpOptionalRef(input.GovernanceGateRequestRef)
+	governanceContext, err := normalizeHumanGateRequestGovernanceContext(input)
 	if err != nil {
 		return entity.HumanGateRequest{}, err
 	}
@@ -430,8 +454,9 @@ func (s *Service) normalizeHumanGateRequest(ctx context.Context, session entity.
 		ReasonCode:               reasonCode,
 		SafeSummary:              summary,
 		InteractionRequestRef:    interactionRequestRef,
-		GovernanceGateRequestRef: governanceGateRequestRef,
+		GovernanceGateRequestRef: governanceContext.GateRequestRef,
 		IdempotencyKey:           idempotencyKey,
+		GovernanceContext:        governanceContext,
 		Status:                   enum.HumanGateStatusWaiting,
 		Outcome:                  enum.HumanGateOutcomeNone,
 	}, nil
@@ -442,6 +467,7 @@ type humanGateDecisionRefs struct {
 	interactionResponseRef   string
 	governanceGateRequestRef string
 	governanceDecisionRef    string
+	governanceContext        value.GovernanceContextRef
 }
 
 func normalizeHumanGateDecisionRefs(input RecordHumanGateDecisionInput) (humanGateDecisionRefs, error) {
@@ -461,29 +487,52 @@ func normalizeHumanGateDecisionRefs(input RecordHumanGateDecisionInput) (humanGa
 	if err != nil {
 		return humanGateDecisionRefs{}, err
 	}
-	if interactionResponseRef == "" && governanceDecisionRef == "" {
+	governanceContext, err := normalizeHumanGateDecisionGovernanceContext(input, governanceGateRequestRef, governanceDecisionRef)
+	if err != nil {
+		return humanGateDecisionRefs{}, err
+	}
+	if interactionResponseRef == "" && governanceContext.GateDecisionRef == "" {
 		return humanGateDecisionRefs{}, errs.ErrInvalidArgument
 	}
 	return humanGateDecisionRefs{
 		interactionRequestRef:    interactionRequestRef,
 		interactionResponseRef:   interactionResponseRef,
-		governanceGateRequestRef: governanceGateRequestRef,
-		governanceDecisionRef:    governanceDecisionRef,
+		governanceGateRequestRef: governanceContext.GateRequestRef,
+		governanceDecisionRef:    governanceContext.GateDecisionRef,
+		governanceContext:        governanceContext,
 	}, nil
+}
+
+func normalizeHumanGateRequestGovernanceContext(input RequestHumanGateInput) (value.GovernanceContextRef, error) {
+	return governanceContextWithGateRefs(input.GovernanceContext, input.GovernanceGateRequestRef, "")
+}
+
+func normalizeHumanGateDecisionGovernanceContext(input RecordHumanGateDecisionInput, gateRequestRef string, gateDecisionRef string) (value.GovernanceContextRef, error) {
+	return governanceContextWithGateRefs(input.GovernanceContext, gateRequestRef, gateDecisionRef)
 }
 
 func humanGateDecisionFromInput(input RecordHumanGateDecisionInput, outcome enum.HumanGateOutcome, refs humanGateDecisionRefs, summary string, fingerprint string) humanGateDecision {
 	return humanGateDecision{
-		HumanGateRequestID:             input.HumanGateRequestID.String(),
-		Status:                         string(input.Status),
-		Outcome:                        string(outcome),
-		SafeSummary:                    summary,
-		InteractionRequestRef:          refs.interactionRequestRef,
-		InteractionResponseRef:         refs.interactionResponseRef,
-		InteractionResponseFingerprint: fingerprint,
-		InteractionRequestVersion:      input.InteractionRequestVersion,
-		GovernanceGateRequestRef:       refs.governanceGateRequestRef,
-		GovernanceDecisionRef:          refs.governanceDecisionRef,
+		HumanGateRequestID: input.HumanGateRequestID.String(),
+		Status:             string(input.Status),
+		Outcome:            string(outcome),
+		SafeSummary:        summary,
+		humanGateDecisionInteraction: humanGateDecisionInteraction{
+			InteractionRequestRef:          refs.interactionRequestRef,
+			InteractionResponseRef:         refs.interactionResponseRef,
+			InteractionResponseFingerprint: fingerprint,
+			InteractionRequestVersion:      input.InteractionRequestVersion,
+		},
+		humanGateDecisionGovernance: humanGateDecisionGovernance{
+			GovernanceGateRequestRef:     refs.governanceGateRequestRef,
+			GovernanceDecisionRef:        refs.governanceDecisionRef,
+			GovernanceRiskAssessmentRef:  refs.governanceContext.RiskAssessmentRef,
+			GovernanceReleasePackageRef:  refs.governanceContext.ReleaseDecisionPackageRef,
+			GovernanceReleaseDecisionRef: refs.governanceContext.ReleaseDecisionRef,
+			GovernanceRiskProfileRef:     refs.governanceContext.RiskProfileRef,
+			GovernanceGatePolicyRef:      refs.governanceContext.GatePolicyRef,
+			GovernanceReleasePolicyRef:   refs.governanceContext.ReleasePolicyRef,
+		},
 	}
 }
 
@@ -492,6 +541,9 @@ func validateHumanGateDecisionBinding(gate entity.HumanGateRequest, refs humanGa
 		return err
 	}
 	if err := validateHumanGateStoredRef(gate.GovernanceGateRequestRef, refs.governanceGateRequestRef); err != nil {
+		return err
+	}
+	if _, err := mergeGovernanceContext(gate.GovernanceContext, refs.governanceContext); err != nil {
 		return err
 	}
 	if refs.interactionResponseRef != "" && gate.InteractionRequestRef != "" && refs.interactionRequestRef == "" {
@@ -623,8 +675,8 @@ func sameHumanGateDecision(left humanGateDecision, right humanGateDecision) bool
 	return true
 }
 
-func humanGateDecisionFields(decision humanGateDecision) [10]string {
-	return [10]string{
+func humanGateDecisionFields(decision humanGateDecision) [16]string {
+	return [16]string{
 		decision.HumanGateRequestID,
 		decision.Status,
 		decision.Outcome,
@@ -635,6 +687,12 @@ func humanGateDecisionFields(decision humanGateDecision) [10]string {
 		strconv.FormatInt(decision.InteractionRequestVersion, 10),
 		decision.GovernanceGateRequestRef,
 		decision.GovernanceDecisionRef,
+		decision.GovernanceRiskAssessmentRef,
+		decision.GovernanceReleasePackageRef,
+		decision.GovernanceReleaseDecisionRef,
+		decision.GovernanceRiskProfileRef,
+		decision.GovernanceGatePolicyRef,
+		decision.GovernanceReleasePolicyRef,
 	}
 }
 
@@ -650,6 +708,7 @@ func sameHumanGateRequest(stored entity.HumanGateRequest, expected entity.HumanG
 		stored.SafeSummary == expected.SafeSummary &&
 		sameHumanGateInteractionRequestRef(stored.InteractionRequestRef, expected.InteractionRequestRef) &&
 		stored.GovernanceGateRequestRef == expected.GovernanceGateRequestRef &&
+		sameGovernanceContext(stored.GovernanceContext, expected.GovernanceContext) &&
 		stored.IdempotencyKey == expected.IdempotencyKey
 }
 

@@ -172,6 +172,26 @@ message ProviderTargetRef {
   optional string review_signal_ref = 4;
 }
 
+// GovernanceContextRef указывает на факты governance-manager без копирования тела решений.
+message GovernanceContextRef {
+  // risk_assessment_ref указывает на состояние оценки риска.
+  optional string risk_assessment_ref = 1;
+  // gate_request_ref указывает на состояние запроса gate.
+  optional string gate_request_ref = 2;
+  // gate_decision_ref указывает на состояние решения gate.
+  optional string gate_decision_ref = 3;
+  // release_decision_package_ref указывает на пакет evidence для release decision.
+  optional string release_decision_package_ref = 4;
+  // release_decision_ref указывает на состояние release decision.
+  optional string release_decision_ref = 5;
+  // risk_profile_ref указывает на risk policy profile, применённый к факту.
+  optional string risk_profile_ref = 6;
+  // gate_policy_ref указывает на gate policy, потребовавшую решение владельца.
+  optional string gate_policy_ref = 7;
+  // release_policy_ref указывает на release policy из project-catalog.
+  optional string release_policy_ref = 8;
+}
+
 // RuntimeContextRef points to runtime state owned by runtime-manager.
 message RuntimeContextRef {
   // slot_ref points to runtime slot state.
@@ -653,6 +673,7 @@ message AcceptanceResult {
   int64 version = 9;
   string created_at = 10;
   string updated_at = 11;
+  GovernanceContextRef governance_context = 12;
 }
 
 // FollowUpIntent is an intent to create or update a provider-native work item.
@@ -684,6 +705,7 @@ message FollowUpIntent {
   optional string stage_hint = 18;
   // idempotency_key is the command idempotency key stored with this intent.
   string idempotency_key = 19;
+  GovernanceContextRef governance_context = 20;
 }
 
 // AgentActivity is a safe persistent timeline entry owned by agent-manager.
@@ -737,6 +759,7 @@ message HumanGateRequest {
   string created_at = 19;
   string updated_at = 20;
   optional string resolved_at = 21;
+  GovernanceContextRef governance_context = 22;
 }
 
 // FlowDefinitionInput is the typed input for immutable flow version creation.
@@ -982,6 +1005,7 @@ message RequestAcceptanceRequest {
   optional string stage_id = 4;
   repeated AcceptanceCheckKind check_kinds = 5;
   optional string target_ref = 6;
+  GovernanceContextRef governance_context = 7;
 }
 
 message RecordAcceptanceResultRequest {
@@ -990,6 +1014,7 @@ message RecordAcceptanceResultRequest {
   AcceptanceStatus status = 3;
   optional string target_ref = 4;
   string details_json = 5;
+  GovernanceContextRef governance_context = 6;
 }
 
 message GetAcceptanceResultRequest {
@@ -1021,6 +1046,7 @@ message CreateFollowUpIntentRequest {
   optional string safe_summary = 12;
   optional string role_hint = 13;
   optional string stage_hint = 14;
+  GovernanceContextRef governance_context = 15;
 }
 
 message DispatchFollowUpIntentRequest {
@@ -1146,6 +1172,7 @@ message RequestHumanGateRequest {
   optional string safe_summary = 10;
   optional string interaction_request_ref = 11;
   optional string governance_gate_request_ref = 12;
+  GovernanceContextRef governance_context = 13;
 }
 
 message RecordHumanGateDecisionRequest {
@@ -1158,6 +1185,7 @@ message RecordHumanGateDecisionRequest {
   optional string interaction_response_ref = 7;
   optional string governance_gate_request_ref = 8;
   optional string governance_decision_ref = 9;
+  GovernanceContextRef governance_context = 10;
 }
 
 message GetHumanGateRequestRequest {

@@ -38,6 +38,17 @@ type ProviderTargetRef struct {
 	ReviewSignalRef string `json:"review_signal_ref,omitempty"`
 }
 
+type GovernanceContextRef struct {
+	RiskAssessmentRef         string `json:"risk_assessment_ref,omitempty"`
+	GateRequestRef            string `json:"gate_request_ref,omitempty"`
+	GateDecisionRef           string `json:"gate_decision_ref,omitempty"`
+	ReleaseDecisionPackageRef string `json:"release_decision_package_ref,omitempty"`
+	ReleaseDecisionRef        string `json:"release_decision_ref,omitempty"`
+	RiskProfileRef            string `json:"risk_profile_ref,omitempty"`
+	GatePolicyRef             string `json:"gate_policy_ref,omitempty"`
+	ReleasePolicyRef          string `json:"release_policy_ref,omitempty"`
+}
+
 type GuidanceRef struct {
 	PackageInstallationRef string `json:"package_installation_ref"`
 	PackageVersionRef      string `json:"package_version_ref"`

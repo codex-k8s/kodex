@@ -42,30 +42,45 @@ func (s *Service) RequestAcceptance(ctx context.Context, input RequestAcceptance
 	if err != nil {
 		return entity.AcceptanceResult{}, err
 	}
-	if replay, ok, err := findReplay(ctx, s, input.Meta, operationRequestAcceptance, enum.CommandAggregateTypeAcceptance, acceptanceFromPayload, verifyAcceptanceReplay(input.SessionID, uuid.Nil, s.repository.GetAcceptanceResult)); ok || err != nil {
-		return replay, err
+	governanceContext, err := normalizeGovernanceContext(input.GovernanceContext)
+	if err != nil {
+		return entity.AcceptanceResult{}, err
 	}
 	session, err := s.repository.GetAgentSession(ctx, input.SessionID)
 	if err != nil {
 		return entity.AcceptanceResult{}, err
 	}
-	if isTerminalSessionStatus(session.Status) {
-		return entity.AcceptanceResult{}, errs.ErrPreconditionFailed
-	}
 	runID, stageID, err := s.acceptanceRefs(ctx, session, input.RunID, input.StageID)
 	if err != nil {
 		return entity.AcceptanceResult{}, err
 	}
+	expectedReplay := entity.AcceptanceResult{
+		SessionID:         session.ID,
+		RunID:             runID,
+		StageID:           stageID,
+		CheckKind:         checkKind,
+		Status:            enum.AcceptanceStatusPending,
+		TargetRef:         targetRef,
+		DetailsJSON:       []byte("{}"),
+		GovernanceContext: governanceContext,
+	}
+	if replay, ok, err := findReplay(ctx, s, input.Meta, operationRequestAcceptance, enum.CommandAggregateTypeAcceptance, acceptanceFromPayload, verifyAcceptanceRequestReplay(expectedReplay, s.repository.GetAcceptanceResult)); ok || err != nil {
+		return replay, err
+	}
+	if isTerminalSessionStatus(session.Status) {
+		return entity.AcceptanceResult{}, errs.ErrPreconditionFailed
+	}
 	now := s.clock.Now()
 	acceptance := entity.AcceptanceResult{
-		VersionedBase: entity.VersionedBase{ID: s.idGenerator.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
-		SessionID:     session.ID,
-		RunID:         runID,
-		StageID:       stageID,
-		CheckKind:     checkKind,
-		Status:        enum.AcceptanceStatusPending,
-		TargetRef:     targetRef,
-		DetailsJSON:   []byte("{}"),
+		VersionedBase:     entity.VersionedBase{ID: s.idGenerator.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		SessionID:         session.ID,
+		RunID:             runID,
+		StageID:           stageID,
+		CheckKind:         checkKind,
+		Status:            enum.AcceptanceStatusPending,
+		TargetRef:         targetRef,
+		DetailsJSON:       []byte("{}"),
+		GovernanceContext: governanceContext,
 	}
 	payload, err := marshalCommandPayload(acceptanceCommandPayload{AcceptanceResult: acceptance})
 	if err != nil {
@@ -104,7 +119,12 @@ func (s *Service) RecordAcceptanceResult(ctx context.Context, input RecordAccept
 	if err != nil {
 		return entity.AcceptanceResult{}, err
 	}
-	if replay, ok, err := findReplay(ctx, s, input.Meta, operationRecordAcceptanceResult, enum.CommandAggregateTypeAcceptance, acceptanceFromPayload, verifyAcceptanceReplay(uuid.Nil, input.AcceptanceResultID, s.repository.GetAcceptanceResult)); ok || err != nil {
+	governanceContext, err := normalizeGovernanceContext(input.GovernanceContext)
+	if err != nil {
+		return entity.AcceptanceResult{}, err
+	}
+	verifyReplay := verifyAcceptanceRecordReplay(input.AcceptanceResultID, input.Status, targetRef, details, governanceContext, s.repository.GetAcceptanceResult)
+	if replay, ok, err := findReplay(ctx, s, input.Meta, operationRecordAcceptanceResult, enum.CommandAggregateTypeAcceptance, acceptanceFromPayload, verifyReplay); ok || err != nil {
 		return replay, err
 	}
 	acceptance, err := s.repository.GetAcceptanceResult(ctx, input.AcceptanceResultID)
@@ -121,7 +141,11 @@ func (s *Service) RecordAcceptanceResult(ctx context.Context, input RecordAccept
 	if targetRef != "" {
 		nextTargetRef = targetRef
 	}
-	if err := validateAcceptanceCheckKindRecord(acceptance.CheckKind, input.Status, nextTargetRef, details); err != nil {
+	nextGovernanceContext, err := mergeGovernanceContext(acceptance.GovernanceContext, governanceContext)
+	if err != nil {
+		return entity.AcceptanceResult{}, err
+	}
+	if err := validateAcceptanceCheckKindRecord(acceptance.CheckKind, input.Status, nextTargetRef, details, nextGovernanceContext); err != nil {
 		return entity.AcceptanceResult{}, err
 	}
 	now := s.clock.Now()
@@ -129,6 +153,7 @@ func (s *Service) RecordAcceptanceResult(ctx context.Context, input RecordAccept
 	acceptance.Status = input.Status
 	acceptance.TargetRef = nextTargetRef
 	acceptance.DetailsJSON = details
+	acceptance.GovernanceContext = nextGovernanceContext
 	acceptance.Version++
 	acceptance.UpdatedAt = now
 	payload, err := marshalCommandPayload(acceptanceCommandPayload{AcceptanceResult: acceptance})
@@ -249,17 +274,23 @@ func validateAcceptanceStatusTransition(current enum.AcceptanceStatus, next enum
 	return errs.ErrPreconditionFailed
 }
 
-func validateAcceptanceCheckKindRecord(kind enum.AcceptanceCheckKind, status enum.AcceptanceStatus, targetRef string, details []byte) error {
+func validateAcceptanceCheckKindRecord(kind enum.AcceptanceCheckKind, status enum.AcceptanceStatus, targetRef string, details []byte, governanceContext value.GovernanceContextRef) error {
 	if kind != enum.AcceptanceCheckKindHumanGate {
 		return nil
 	}
 	if status != enum.AcceptanceStatusWaiting {
 		return errs.ErrPreconditionFailed
 	}
-	if !humanGateOwnerRef(targetRef) && !acceptanceDetailsHasHumanGateOwnerRef(details) {
+	if !humanGateOwnerRef(targetRef) && !acceptanceDetailsHasHumanGateOwnerRef(details) && !acceptanceGovernanceContextHasHumanGateRef(governanceContext) {
 		return errs.ErrInvalidArgument
 	}
 	return nil
+}
+
+func acceptanceGovernanceContextHasHumanGateRef(context value.GovernanceContextRef) bool {
+	return strings.TrimSpace(context.RiskAssessmentRef) != "" ||
+		strings.TrimSpace(context.GateRequestRef) != "" ||
+		strings.TrimSpace(context.ReleaseDecisionPackageRef) != ""
 }
 
 func isTerminalAcceptanceStatus(status enum.AcceptanceStatus) bool {
@@ -455,6 +486,29 @@ func acceptanceFromPayload(payload []byte) (entity.AcceptanceResult, error) {
 	return result.AcceptanceResult, err
 }
 
+func verifyAcceptanceRequestReplay(expected entity.AcceptanceResult, load func(context.Context, uuid.UUID) (entity.AcceptanceResult, error)) func(context.Context, entity.CommandResult, entity.AcceptanceResult) error {
+	return func(ctx context.Context, result entity.CommandResult, replay entity.AcceptanceResult) error {
+		if err := verifyAcceptanceReplay(expected.SessionID, uuid.Nil, load)(ctx, result, replay); err != nil {
+			return err
+		}
+		if !sameAcceptanceRequestPayload(replay, expected) {
+			return errs.ErrConflict
+		}
+		return nil
+	}
+}
+
+func sameAcceptanceRequestPayload(recorded entity.AcceptanceResult, expected entity.AcceptanceResult) bool {
+	return recorded.SessionID == expected.SessionID &&
+		sameOptionalUUID(recorded.RunID, expected.RunID) &&
+		sameOptionalUUID(recorded.StageID, expected.StageID) &&
+		recorded.CheckKind == expected.CheckKind &&
+		recorded.Status == expected.Status &&
+		recorded.TargetRef == expected.TargetRef &&
+		bytes.Equal(recorded.DetailsJSON, expected.DetailsJSON) &&
+		sameGovernanceContext(recorded.GovernanceContext, expected.GovernanceContext)
+}
+
 func verifyAcceptanceReplay(expectedSessionID uuid.UUID, expectedAcceptanceID uuid.UUID, load func(context.Context, uuid.UUID) (entity.AcceptanceResult, error)) func(context.Context, entity.CommandResult, entity.AcceptanceResult) error {
 	return func(ctx context.Context, result entity.CommandResult, replay entity.AcceptanceResult) error {
 		if replay.ID != result.AggregateID {
@@ -472,4 +526,39 @@ func verifyAcceptanceReplay(expectedSessionID uuid.UUID, expectedAcceptanceID uu
 		}
 		return nil
 	}
+}
+
+func verifyAcceptanceRecordReplay(
+	expectedAcceptanceID uuid.UUID,
+	expectedStatus enum.AcceptanceStatus,
+	expectedTargetRef string,
+	expectedDetails []byte,
+	expectedGovernanceContext value.GovernanceContextRef,
+	load func(context.Context, uuid.UUID) (entity.AcceptanceResult, error),
+) func(context.Context, entity.CommandResult, entity.AcceptanceResult) error {
+	return func(ctx context.Context, result entity.CommandResult, replay entity.AcceptanceResult) error {
+		if err := verifyAcceptanceReplay(uuid.Nil, expectedAcceptanceID, load)(ctx, result, replay); err != nil {
+			return err
+		}
+		var payload acceptanceCommandPayload
+		if err := json.Unmarshal(result.ResultPayload, &payload); err != nil {
+			return err
+		}
+		recorded := payload.AcceptanceResult
+		if recorded.ID != expectedAcceptanceID || recorded.Status != expectedStatus || !bytes.Equal(recorded.DetailsJSON, expectedDetails) {
+			return errs.ErrConflict
+		}
+		if strings.TrimSpace(expectedTargetRef) != "" && recorded.TargetRef != expectedTargetRef {
+			return errs.ErrConflict
+		}
+		if !incomingGovernanceContextMatches(recorded.GovernanceContext, expectedGovernanceContext) {
+			return errs.ErrConflict
+		}
+		return nil
+	}
+}
+
+func incomingGovernanceContextMatches(stored value.GovernanceContextRef, incoming value.GovernanceContextRef) bool {
+	merged, err := mergeGovernanceContext(stored, incoming)
+	return err == nil && sameGovernanceContext(merged, stored)
 }

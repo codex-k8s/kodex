@@ -1614,6 +1614,7 @@ func TestRequestAcceptanceReplaysCommandResult(t *testing.T) {
 			AggregateID:   acceptance.ID,
 			ResultPayload: payload,
 		},
+		sessionByID:    map[uuid.UUID]entity.AgentSession{sessionID: {VersionedBase: entity.VersionedBase{ID: sessionID, Version: 1}, Status: enum.AgentSessionStatusOpen}},
 		acceptanceByID: map[uuid.UUID]entity.AcceptanceResult{acceptance.ID: acceptance},
 	}
 	service := New(Config{Repository: repository})
@@ -1631,6 +1632,57 @@ func TestRequestAcceptanceReplaysCommandResult(t *testing.T) {
 	}
 	if repository.createAcceptanceCalled {
 		t.Fatal("CreateAcceptanceResultWithResult called during replay")
+	}
+}
+
+func TestRequestAcceptanceRejectsConflictingGovernanceReplay(t *testing.T) {
+	t.Parallel()
+
+	commandID := uuid.MustParse("30303030-5555-6666-7777-888888888888")
+	sessionID := uuid.MustParse("30303030-6666-7777-8888-999999999999")
+	acceptance := entity.AcceptanceResult{
+		VersionedBase: entity.VersionedBase{ID: uuid.MustParse("30303030-7777-8888-9999-aaaaaaaaaaaa"), Version: 1},
+		SessionID:     sessionID,
+		CheckKind:     enum.AcceptanceCheckKindPolicy,
+		Status:        enum.AcceptanceStatusPending,
+		TargetRef:     "artifact:policy-summary",
+		DetailsJSON:   []byte("{}"),
+		GovernanceContext: value.GovernanceContextRef{
+			GateRequestRef: "governance:gate/request-1",
+		},
+	}
+	payload, err := marshalCommandPayload(acceptanceCommandPayload{AcceptanceResult: acceptance})
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	repository := &fakeRepository{
+		replay: &entity.CommandResult{
+			CommandID:     &commandID,
+			Actor:         testActor(),
+			Operation:     operationRequestAcceptance,
+			AggregateType: enum.CommandAggregateTypeAcceptance,
+			AggregateID:   acceptance.ID,
+			ResultPayload: payload,
+		},
+		sessionByID:    map[uuid.UUID]entity.AgentSession{sessionID: {VersionedBase: entity.VersionedBase{ID: sessionID, Version: 1}, Status: enum.AgentSessionStatusOpen}},
+		acceptanceByID: map[uuid.UUID]entity.AcceptanceResult{acceptance.ID: acceptance},
+	}
+	service := New(Config{Repository: repository})
+
+	_, err = service.RequestAcceptance(context.Background(), RequestAcceptanceInput{
+		Meta:       value.CommandMeta{CommandID: commandID, Actor: testActor()},
+		SessionID:  sessionID,
+		CheckKinds: []enum.AcceptanceCheckKind{enum.AcceptanceCheckKindPolicy},
+		TargetRef:  "artifact:policy-summary",
+		GovernanceContext: value.GovernanceContextRef{
+			GateRequestRef: "governance:gate/request-2",
+		},
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("RequestAcceptance() err = %v, want %v", err, errs.ErrConflict)
+	}
+	if repository.createAcceptanceCalled {
+		t.Fatal("CreateAcceptanceResultWithResult called during conflicting replay")
 	}
 }
 
@@ -1697,6 +1749,14 @@ func TestRecordAcceptanceResultStoresSafeDetailsAndCompletedEvent(t *testing.T) 
 		Status:             enum.AcceptanceStatusPassed,
 		TargetRef:          "artifact:acceptance-summary",
 		DetailsJSON:        []byte(`{"summary":"ok","digest":"sha256:result","artifact_refs":["artifact:1"],"risk_ref":"risk:1","gate_ref":"gate:1"}`),
+		GovernanceContext: value.GovernanceContextRef{
+			RiskAssessmentRef:         "governance:risk/1",
+			GateRequestRef:            "governance:gate/1",
+			ReleaseDecisionPackageRef: "governance:release-package/1",
+			RiskProfileRef:            "governance:risk-profile/default",
+			GatePolicyRef:             "governance:gate-policy/default",
+			ReleasePolicyRef:          "project-policy:release/default",
+		},
 	})
 	if err != nil {
 		t.Fatalf("RecordAcceptanceResult() err = %v", err)
@@ -1707,12 +1767,18 @@ func TestRecordAcceptanceResultStoresSafeDetailsAndCompletedEvent(t *testing.T) 
 	if strings.Contains(string(acceptance.DetailsJSON), "\n") || !strings.Contains(string(acceptance.DetailsJSON), `"artifact_refs"`) {
 		t.Fatalf("details_json = %s", acceptance.DetailsJSON)
 	}
+	if acceptance.GovernanceContext.RiskAssessmentRef != "governance:risk/1" || acceptance.GovernanceContext.GateRequestRef != "governance:gate/1" {
+		t.Fatalf("governance context = %+v", acceptance.GovernanceContext)
+	}
 	if repository.updateAcceptanceResult.AggregateType != enum.CommandAggregateTypeAcceptance || repository.updateAcceptanceEvent == nil || repository.updateAcceptanceEvent.EventType != agentevents.EventAcceptanceCompleted {
 		t.Fatalf("result/event = %s/%+v", repository.updateAcceptanceResult.AggregateType, repository.updateAcceptanceEvent)
 	}
 	payload := decodeAgentPayload(t, *repository.updateAcceptanceEvent)
 	if payload.AcceptanceResultID != acceptanceID.String() || payload.Status != string(enum.AcceptanceStatusPassed) || payload.Version != expectedVersion+1 {
 		t.Fatalf("event payload = %+v", payload)
+	}
+	if payload.GovernanceRiskAssessmentRef != "governance:risk/1" || payload.GovernanceGateRequestRef != "governance:gate/1" || payload.GovernanceReleaseDecisionPackageRef != "governance:release-package/1" {
+		t.Fatalf("event governance refs = %+v", payload)
 	}
 }
 
@@ -1727,6 +1793,9 @@ func TestRecordAcceptanceResultReplaysCommandResult(t *testing.T) {
 		CheckKind:     enum.AcceptanceCheckKindPolicy,
 		Status:        enum.AcceptanceStatusPassed,
 		DetailsJSON:   []byte(`{"summary":"ok"}`),
+		GovernanceContext: value.GovernanceContextRef{
+			GateRequestRef: "governance:gate/replay",
+		},
 	}
 	payload, err := marshalCommandPayload(acceptanceCommandPayload{AcceptanceResult: acceptance})
 	if err != nil {
@@ -1750,6 +1819,9 @@ func TestRecordAcceptanceResultReplaysCommandResult(t *testing.T) {
 		AcceptanceResultID: acceptance.ID,
 		Status:             enum.AcceptanceStatusPassed,
 		DetailsJSON:        []byte(`{"summary":"ok"}`),
+		GovernanceContext: value.GovernanceContextRef{
+			GateRequestRef: "governance:gate/replay",
+		},
 	})
 	if err != nil {
 		t.Fatalf("RecordAcceptanceResult() err = %v", err)
@@ -1854,6 +1926,92 @@ func TestRecordAcceptanceResultRejectsConflictNotFoundAndUnsafePayload(t *testin
 			Status:             enum.AcceptanceStatusFailed,
 			TargetRef:          "logs:raw-provider-stdout",
 			DetailsJSON:        []byte(`{"summary":"not persisted"}`),
+		})
+		if !errors.Is(err, errs.ErrInvalidArgument) {
+			t.Fatalf("RecordAcceptanceResult() err = %v, want %v", err, errs.ErrInvalidArgument)
+		}
+	})
+
+	t.Run("conflicting governance replay", func(t *testing.T) {
+		t.Parallel()
+
+		commandID := uuid.MustParse("60606060-3333-4444-5555-666666666666")
+		expectedVersion := int64(1)
+		acceptanceID := uuid.MustParse("60606060-4444-5555-6666-777777777777")
+		acceptance := entity.AcceptanceResult{
+			VersionedBase: entity.VersionedBase{ID: acceptanceID, Version: expectedVersion + 1},
+			SessionID:     uuid.New(),
+			CheckKind:     enum.AcceptanceCheckKindPolicy,
+			Status:        enum.AcceptanceStatusPassed,
+			DetailsJSON:   []byte(`{"summary":"ok"}`),
+			GovernanceContext: value.GovernanceContextRef{
+				GateRequestRef: "governance:gate/replay",
+			},
+		}
+		payload, err := marshalCommandPayload(acceptanceCommandPayload{AcceptanceResult: acceptance})
+		if err != nil {
+			t.Fatalf("marshal payload: %v", err)
+		}
+		service := New(Config{Repository: &fakeRepository{
+			replay: &entity.CommandResult{
+				CommandID:     &commandID,
+				Actor:         testActor(),
+				Operation:     operationRecordAcceptanceResult,
+				AggregateType: enum.CommandAggregateTypeAcceptance,
+				AggregateID:   acceptanceID,
+				ResultPayload: payload,
+			},
+			acceptanceByID: map[uuid.UUID]entity.AcceptanceResult{acceptanceID: acceptance},
+		}})
+
+		_, err = service.RecordAcceptanceResult(context.Background(), RecordAcceptanceResultInput{
+			Meta:               value.CommandMeta{CommandID: commandID, ExpectedVersion: &expectedVersion, Actor: testActor()},
+			AcceptanceResultID: acceptanceID,
+			Status:             enum.AcceptanceStatusPassed,
+			DetailsJSON:        []byte(`{"summary":"ok"}`),
+			GovernanceContext: value.GovernanceContextRef{
+				GateRequestRef: "governance:gate/other",
+			},
+		})
+		if !errors.Is(err, errs.ErrConflict) {
+			t.Fatalf("RecordAcceptanceResult() err = %v, want %v", err, errs.ErrConflict)
+		}
+	})
+
+	t.Run("missing governance binding ref", func(t *testing.T) {
+		t.Parallel()
+
+		expectedVersion := int64(1)
+		service := New(Config{Repository: &fakeRepository{}})
+
+		_, err := service.RecordAcceptanceResult(context.Background(), RecordAcceptanceResultInput{
+			Meta:               value.CommandMeta{CommandID: uuid.New(), ExpectedVersion: &expectedVersion, Actor: testActor()},
+			AcceptanceResultID: uuid.New(),
+			Status:             enum.AcceptanceStatusPassed,
+			DetailsJSON:        []byte(`{"summary":"ok"}`),
+			GovernanceContext: value.GovernanceContextRef{
+				GateDecisionRef: "governance:decision/1",
+			},
+		})
+		if !errors.Is(err, errs.ErrInvalidArgument) {
+			t.Fatalf("RecordAcceptanceResult() err = %v, want %v", err, errs.ErrInvalidArgument)
+		}
+	})
+
+	t.Run("unsafe governance ref", func(t *testing.T) {
+		t.Parallel()
+
+		expectedVersion := int64(1)
+		service := New(Config{Repository: &fakeRepository{}})
+
+		_, err := service.RecordAcceptanceResult(context.Background(), RecordAcceptanceResultInput{
+			Meta:               value.CommandMeta{CommandID: uuid.New(), ExpectedVersion: &expectedVersion, Actor: testActor()},
+			AcceptanceResultID: uuid.New(),
+			Status:             enum.AcceptanceStatusPassed,
+			DetailsJSON:        []byte(`{"summary":"ok"}`),
+			GovernanceContext: value.GovernanceContextRef{
+				RiskAssessmentRef: "governance:raw_provider_payload/1",
+			},
 		})
 		if !errors.Is(err, errs.ErrInvalidArgument) {
 			t.Fatalf("RecordAcceptanceResult() err = %v, want %v", err, errs.ErrInvalidArgument)
@@ -2056,6 +2214,10 @@ func TestCreateFollowUpIntentStoresSafeIntentAndOutbox(t *testing.T) {
 		SafeSummary:           "Create the next bounded provider-native task.",
 		RoleHint:              "worker",
 		StageHint:             "follow-up",
+		GovernanceContext: value.GovernanceContextRef{
+			GateRequestRef:            "governance:gate/follow-up",
+			ReleaseDecisionPackageRef: "governance:release-package/follow-up",
+		},
 	})
 	if err != nil {
 		t.Fatalf("CreateFollowUpIntent() err = %v", err)
@@ -2072,6 +2234,9 @@ func TestCreateFollowUpIntentStoresSafeIntentAndOutbox(t *testing.T) {
 	if intent.IdempotencyKey != operationCreateFollowUpIntent+":user:owner:follow-up-1" {
 		t.Fatalf("idempotency key = %q", intent.IdempotencyKey)
 	}
+	if intent.GovernanceContext.GateRequestRef != "governance:gate/follow-up" || intent.GovernanceContext.ReleaseDecisionPackageRef != "governance:release-package/follow-up" {
+		t.Fatalf("governance context = %+v", intent.GovernanceContext)
+	}
 	if repository.followUpResult.AggregateType != enum.CommandAggregateTypeFollowUp || repository.followUpEvent.EventType != agentevents.EventFollowUpRequested {
 		t.Fatalf("result/event = %s/%s", repository.followUpResult.AggregateType, repository.followUpEvent.EventType)
 	}
@@ -2081,6 +2246,9 @@ func TestCreateFollowUpIntentStoresSafeIntentAndOutbox(t *testing.T) {
 	}
 	if payload.ProviderWorkItemRef != "issue:123" || payload.ProviderPullRequestRef != "pr:456" || payload.ProviderCommentRef != "comment:789" || payload.Summary != intent.SafeSummary {
 		t.Fatalf("event payload target = %+v", payload)
+	}
+	if payload.GovernanceGateRequestRef != "governance:gate/follow-up" || payload.GovernanceReleaseDecisionPackageRef != "governance:release-package/follow-up" {
+		t.Fatalf("event governance refs = %+v", payload)
 	}
 }
 
@@ -2097,7 +2265,10 @@ func TestCreateFollowUpIntentReplaysAndRejectsConflictingPayload(t *testing.T) {
 		ProviderWorkItemType: "task",
 		SafeTitle:            "Same title",
 		IdempotencyKey:       operationCreateFollowUpIntent + ":user:owner:follow-up-replay",
-		Status:               enum.FollowUpIntentStatusRequested,
+		GovernanceContext: value.GovernanceContextRef{
+			GateRequestRef: "governance:gate/follow-up-replay",
+		},
+		Status: enum.FollowUpIntentStatusRequested,
 	}
 	payload, err := marshalCommandPayload(followUpIntentCommandPayload{FollowUpIntent: intent})
 	if err != nil {
@@ -2129,6 +2300,9 @@ func TestCreateFollowUpIntentReplaysAndRejectsConflictingPayload(t *testing.T) {
 		ProviderTarget:       value.ProviderTargetRef{WorkItemRef: "issue:123"},
 		ProviderWorkItemType: "task",
 		SafeTitle:            "Same title",
+		GovernanceContext: value.GovernanceContextRef{
+			GateRequestRef: "governance:gate/follow-up-replay",
+		},
 	})
 	if err != nil {
 		t.Fatalf("CreateFollowUpIntent() err = %v", err)
@@ -2146,7 +2320,10 @@ func TestCreateFollowUpIntentReplaysAndRejectsConflictingPayload(t *testing.T) {
 		RunID:                &runID,
 		ProviderTarget:       value.ProviderTargetRef{WorkItemRef: "issue:123"},
 		ProviderWorkItemType: "task",
-		SafeTitle:            "Different title",
+		SafeTitle:            "Same title",
+		GovernanceContext: value.GovernanceContextRef{
+			GateRequestRef: "governance:gate/follow-up-other",
+		},
 	})
 	if !errors.Is(err, errs.ErrConflict) {
 		t.Fatalf("CreateFollowUpIntent() err = %v, want %v", err, errs.ErrConflict)
@@ -3269,6 +3446,13 @@ func TestRequestHumanGateStoresWaitAndOutbox(t *testing.T) {
 		SafeSummary:              "Review stage needs owner decision",
 		InteractionRequestRef:    "interaction:request/42",
 		GovernanceGateRequestRef: "governance:gate/42",
+		GovernanceContext: value.GovernanceContextRef{
+			RiskAssessmentRef:         "governance:risk/42",
+			ReleaseDecisionPackageRef: "governance:release-package/42",
+			RiskProfileRef:            "governance:risk-profile/default",
+			GatePolicyRef:             "governance:gate-policy/default",
+			ReleasePolicyRef:          "project-policy:release/default",
+		},
 	})
 	if err != nil {
 		t.Fatalf("RequestHumanGate() err = %v", err)
@@ -3279,6 +3463,9 @@ func TestRequestHumanGateStoresWaitAndOutbox(t *testing.T) {
 	if gate.IdempotencyKey != operationRequestHumanGate+":user:owner:human-gate-1" {
 		t.Fatalf("idempotency key = %q", gate.IdempotencyKey)
 	}
+	if gate.GovernanceContext.GateRequestRef != "governance:gate/42" || gate.GovernanceContext.RiskAssessmentRef != "governance:risk/42" {
+		t.Fatalf("governance context = %+v", gate.GovernanceContext)
+	}
 	if repository.humanGateResult.AggregateType != enum.CommandAggregateTypeHumanGate || repository.humanGateResult.AggregateID != gateID {
 		t.Fatalf("command result = %+v", repository.humanGateResult)
 	}
@@ -3288,6 +3475,9 @@ func TestRequestHumanGateStoresWaitAndOutbox(t *testing.T) {
 	payload := decodeAgentPayload(t, repository.humanGateEvent)
 	if payload.HumanGateRequestID != gateID.String() || payload.InteractionRequestRef != "interaction:request/42" || payload.GovernanceGateRequestRef != "governance:gate/42" {
 		t.Fatalf("payload = %+v", payload)
+	}
+	if payload.GovernanceRiskAssessmentRef != "governance:risk/42" || payload.GovernanceReleaseDecisionPackageRef != "governance:release-package/42" {
+		t.Fatalf("payload governance refs = %+v", payload)
 	}
 }
 
@@ -3328,6 +3518,11 @@ func TestRequestHumanGateCreatesInteractionRequestWhenEnabled(t *testing.T) {
 		RequestKind:    "owner_decision",
 		ReasonCode:     "needs_owner_approval",
 		SafeSummary:    "Review stage needs owner decision",
+		GovernanceContext: value.GovernanceContextRef{
+			RiskAssessmentRef:         "governance:risk/ih-1",
+			GateRequestRef:            "governance:gate/ih-1",
+			ReleaseDecisionPackageRef: "governance:release-package/ih-1",
+		},
 	})
 	if err != nil {
 		t.Fatalf("RequestHumanGate() err = %v", err)
@@ -3346,8 +3541,14 @@ func TestRequestHumanGateCreatesInteractionRequestWhenEnabled(t *testing.T) {
 	}
 	if !hasHumanGateContextRef(requester.last.ContextRefs, "agent_session", sessionID.String()) ||
 		!hasHumanGateContextRef(requester.last.ContextRefs, "agent_run", runID.String()) ||
-		!hasHumanGateContextRef(requester.last.ContextRefs, "provider_work_item", "provider:issue/42") {
+		!hasHumanGateContextRef(requester.last.ContextRefs, "provider_work_item", "provider:issue/42") ||
+		!hasHumanGateContextRef(requester.last.ContextRefs, "governance_risk_assessment", "governance:risk/ih-1") ||
+		!hasHumanGateContextRef(requester.last.ContextRefs, "governance_gate_request", "governance:gate/ih-1") ||
+		!hasHumanGateContextRef(requester.last.ContextRefs, "governance_release_decision_package", "governance:release-package/ih-1") {
 		t.Fatalf("context refs = %+v", requester.last.ContextRefs)
+	}
+	if requester.last.GovernanceGateRequestRef != "governance:gate/ih-1" {
+		t.Fatalf("request governance ref = %q", requester.last.GovernanceGateRequestRef)
 	}
 	for _, action := range []enum.HumanGateOutcome{
 		enum.HumanGateOutcomeApprove,
@@ -3360,7 +3561,7 @@ func TestRequestHumanGateCreatesInteractionRequestWhenEnabled(t *testing.T) {
 		}
 	}
 	payload := decodeAgentPayload(t, repository.humanGateEvent)
-	if payload.InteractionRequestRef != "interaction:request/ih-1" {
+	if payload.InteractionRequestRef != "interaction:request/ih-1" || payload.GovernanceGateRequestRef != "governance:gate/ih-1" {
 		t.Fatalf("event payload = %+v", payload)
 	}
 	resultPayload := string(repository.humanGateResult.ResultPayload)
@@ -3622,14 +3823,19 @@ func TestRecordHumanGateDecisionStoresOutcomeAndOutbox(t *testing.T) {
 	gateID := uuid.MustParse("92929292-2222-3333-4444-555555555555")
 	eventID := uuid.MustParse("92929292-3333-4444-5555-666666666666")
 	gate := entity.HumanGateRequest{
-		VersionedBase:         entity.VersionedBase{ID: gateID, Version: 1},
-		SessionID:             sessionID,
-		RequestKind:           "owner_decision",
-		ReasonCode:            "needs_owner_approval",
-		InteractionRequestRef: "interaction:request/42",
-		IdempotencyKey:        operationRequestHumanGate + ":user:owner:human-gate-decision",
-		Status:                enum.HumanGateStatusWaiting,
-		Outcome:               enum.HumanGateOutcomeNone,
+		VersionedBase:            entity.VersionedBase{ID: gateID, Version: 1},
+		SessionID:                sessionID,
+		RequestKind:              "owner_decision",
+		ReasonCode:               "needs_owner_approval",
+		InteractionRequestRef:    "interaction:request/42",
+		GovernanceGateRequestRef: "governance:gate/42",
+		GovernanceContext: value.GovernanceContextRef{
+			GateRequestRef:    "governance:gate/42",
+			RiskAssessmentRef: "governance:risk/42",
+		},
+		IdempotencyKey: operationRequestHumanGate + ":user:owner:human-gate-decision",
+		Status:         enum.HumanGateStatusWaiting,
+		Outcome:        enum.HumanGateOutcomeNone,
 	}
 	repository := &fakeRepository{humanGateByID: map[uuid.UUID]entity.HumanGateRequest{gateID: gate}}
 	service := New(Config{
@@ -3640,13 +3846,19 @@ func TestRecordHumanGateDecisionStoresOutcomeAndOutbox(t *testing.T) {
 	expectedVersion := int64(1)
 
 	resolved, err := service.RecordHumanGateDecision(context.Background(), RecordHumanGateDecisionInput{
-		Meta:                   value.CommandMeta{IdempotencyKey: "human-gate-decision", ExpectedVersion: &expectedVersion, Actor: testActor()},
-		HumanGateRequestID:     gateID,
-		Status:                 enum.HumanGateStatusResolved,
-		Outcome:                enum.HumanGateOutcomeApprove,
-		SafeSummary:            "Owner approved the next step",
-		InteractionRequestRef:  "interaction:request/42",
-		InteractionResponseRef: "interaction:response/42",
+		Meta:                     value.CommandMeta{IdempotencyKey: "human-gate-decision", ExpectedVersion: &expectedVersion, Actor: testActor()},
+		HumanGateRequestID:       gateID,
+		Status:                   enum.HumanGateStatusResolved,
+		Outcome:                  enum.HumanGateOutcomeApprove,
+		SafeSummary:              "Owner approved the next step",
+		InteractionRequestRef:    "interaction:request/42",
+		InteractionResponseRef:   "interaction:response/42",
+		GovernanceGateRequestRef: "governance:gate/42",
+		GovernanceDecisionRef:    "governance:decision/42",
+		GovernanceContext: value.GovernanceContextRef{
+			RiskAssessmentRef:         "governance:risk/42",
+			ReleaseDecisionPackageRef: "governance:release-package/42",
+		},
 	})
 	if err != nil {
 		t.Fatalf("RecordHumanGateDecision() err = %v", err)
@@ -3657,11 +3869,14 @@ func TestRecordHumanGateDecisionStoresOutcomeAndOutbox(t *testing.T) {
 	if resolved.Version != 2 || repository.updateHumanGateResult.Operation != operationRecordHumanGateDecision {
 		t.Fatalf("update result = %+v", repository.updateHumanGateResult)
 	}
+	if resolved.GovernanceDecisionRef != "governance:decision/42" || resolved.GovernanceContext.ReleaseDecisionPackageRef != "governance:release-package/42" {
+		t.Fatalf("resolved governance context = %+v", resolved.GovernanceContext)
+	}
 	if repository.updateHumanGateEvent == nil || repository.updateHumanGateEvent.EventType != agentevents.EventHumanGateResolved {
 		t.Fatalf("event = %+v", repository.updateHumanGateEvent)
 	}
 	payload := decodeAgentPayload(t, *repository.updateHumanGateEvent)
-	if payload.HumanGateOutcome != string(enum.HumanGateOutcomeApprove) || payload.InteractionResponseRef != "interaction:response/42" {
+	if payload.HumanGateOutcome != string(enum.HumanGateOutcomeApprove) || payload.InteractionResponseRef != "interaction:response/42" || payload.GovernanceDecisionRef != "governance:decision/42" {
 		t.Fatalf("payload = %+v", payload)
 	}
 }
@@ -3682,14 +3897,16 @@ func TestRecordHumanGateDecisionReplaysSameRequestChangesOutcome(t *testing.T) {
 		Outcome:                enum.HumanGateOutcomeRequestChanges,
 	}
 	decision := humanGateDecision{
-		HumanGateRequestID:             gateID.String(),
-		Status:                         string(enum.HumanGateStatusResolved),
-		Outcome:                        string(enum.HumanGateOutcomeRequestChanges),
-		SafeSummary:                    "Owner requested bounded changes",
-		InteractionRequestRef:          "interaction:request/42",
-		InteractionResponseRef:         "interaction:response/42",
-		InteractionResponseFingerprint: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-		InteractionRequestVersion:      2,
+		HumanGateRequestID: gateID.String(),
+		Status:             string(enum.HumanGateStatusResolved),
+		Outcome:            string(enum.HumanGateOutcomeRequestChanges),
+		SafeSummary:        "Owner requested bounded changes",
+		humanGateDecisionInteraction: humanGateDecisionInteraction{
+			InteractionRequestRef:          "interaction:request/42",
+			InteractionResponseRef:         "interaction:response/42",
+			InteractionResponseFingerprint: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			InteractionRequestVersion:      2,
+		},
 	}
 	payload, err := marshalCommandPayload(humanGateCommandPayload{HumanGateRequest: resolved, Decision: &decision})
 	if err != nil {
@@ -3791,6 +4008,25 @@ func TestRecordHumanGateDecisionRejectsMismatchedRequestRefs(t *testing.T) {
 	}
 }
 
+func TestRecordHumanGateDecisionRejectsMissingGovernanceBinding(t *testing.T) {
+	t.Parallel()
+
+	gateID := uuid.MustParse("92929292-6666-7777-8888-999999999999")
+	expectedVersion := int64(1)
+	service := New(Config{Repository: &fakeRepository{}})
+
+	_, err := service.RecordHumanGateDecision(context.Background(), RecordHumanGateDecisionInput{
+		Meta:                  value.CommandMeta{IdempotencyKey: "human-gate-governance-missing", ExpectedVersion: &expectedVersion, Actor: testActor()},
+		HumanGateRequestID:    gateID,
+		Status:                enum.HumanGateStatusResolved,
+		Outcome:               enum.HumanGateOutcomeApprove,
+		GovernanceDecisionRef: "governance:decision/42",
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("RecordHumanGateDecision() err = %v, want %v", err, errs.ErrInvalidArgument)
+	}
+}
+
 func TestRecordHumanGateDecisionRejectsVersionConflict(t *testing.T) {
 	t.Parallel()
 
@@ -3839,12 +4075,14 @@ func TestRecordHumanGateDecisionReplayRejectsConflictingPayload(t *testing.T) {
 		Outcome:                enum.HumanGateOutcomeApprove,
 	}
 	decision := humanGateDecision{
-		HumanGateRequestID:     gateID.String(),
-		Status:                 string(enum.HumanGateStatusResolved),
-		Outcome:                string(enum.HumanGateOutcomeApprove),
-		SafeSummary:            "Owner approved the next step",
-		InteractionRequestRef:  "interaction:request/42",
-		InteractionResponseRef: "interaction:response/42",
+		HumanGateRequestID: gateID.String(),
+		Status:             string(enum.HumanGateStatusResolved),
+		Outcome:            string(enum.HumanGateOutcomeApprove),
+		SafeSummary:        "Owner approved the next step",
+		humanGateDecisionInteraction: humanGateDecisionInteraction{
+			InteractionRequestRef:  "interaction:request/42",
+			InteractionResponseRef: "interaction:response/42",
+		},
 	}
 	payload, err := marshalCommandPayload(humanGateCommandPayload{HumanGateRequest: resolved, Decision: &decision})
 	if err != nil {
@@ -3899,14 +4137,16 @@ func TestRecordHumanGateDecisionReplayRejectsConflictingInteractionFingerprint(t
 		Outcome:                enum.HumanGateOutcomeApprove,
 	}
 	decision := humanGateDecision{
-		HumanGateRequestID:             gateID.String(),
-		Status:                         string(enum.HumanGateStatusResolved),
-		Outcome:                        string(enum.HumanGateOutcomeApprove),
-		SafeSummary:                    "Owner approved the Human gate response",
-		InteractionRequestRef:          "interaction:request/42",
-		InteractionResponseRef:         "interaction:response/42",
-		InteractionResponseFingerprint: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-		InteractionRequestVersion:      2,
+		HumanGateRequestID: gateID.String(),
+		Status:             string(enum.HumanGateStatusResolved),
+		Outcome:            string(enum.HumanGateOutcomeApprove),
+		SafeSummary:        "Owner approved the Human gate response",
+		humanGateDecisionInteraction: humanGateDecisionInteraction{
+			InteractionRequestRef:          "interaction:request/42",
+			InteractionResponseRef:         "interaction:response/42",
+			InteractionResponseFingerprint: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			InteractionRequestVersion:      2,
+		},
 	}
 	payload, err := marshalCommandPayload(humanGateCommandPayload{HumanGateRequest: resolved, Decision: &decision})
 	if err != nil {
