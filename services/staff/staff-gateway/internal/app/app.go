@@ -7,9 +7,12 @@ import (
 	"time"
 
 	serviceprocess "github.com/codex-k8s/kodex/libs/go/serviceprocess"
+	agentsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/agents/v1"
 	interactionsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/interactions/v1"
+	agentmanagerclient "github.com/codex-k8s/kodex/services/staff/staff-gateway/internal/clients/agentmanager"
 	interactionhubclient "github.com/codex-k8s/kodex/services/staff/staff-gateway/internal/clients/interactionhub"
 	httptransport "github.com/codex-k8s/kodex/services/staff/staff-gateway/internal/transport/http"
+	"google.golang.org/grpc"
 )
 
 const serviceName = "staff-gateway"
@@ -18,13 +21,22 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	if err := cfg.Validate(); err != nil {
 		return err
 	}
-	interactionClient, closeInteractionClient, err := buildInteractionHubClient(cfg)
+	interactionClient, closeInteractionClient, err := buildDownstreamClient(cfg.InteractionHubClientConfig(), interactionhubclient.NewConnection, func(conn *grpc.ClientConn, cfg interactionhubclient.Config) (httptransport.InteractionHubClient, error) {
+		return interactionhubclient.New(interactionsv1.NewInteractionHubServiceClient(conn), cfg)
+	})
 	if err != nil {
 		return err
 	}
 	defer closeInteractionClient()
+	agentClient, closeAgentClient, err := buildDownstreamClient(cfg.AgentManagerClientConfig(), agentmanagerclient.NewConnection, func(conn *grpc.ClientConn, cfg agentmanagerclient.Config) (httptransport.AgentManagerClient, error) {
+		return agentmanagerclient.New(agentsv1.NewAgentManagerServiceClient(conn), cfg)
+	})
+	if err != nil {
+		return err
+	}
+	defer closeAgentClient()
 
-	apiHandler, err := httptransport.NewRouter(ctx, cfg.HTTPRouterConfig(), interactionClient, logger)
+	apiHandler, err := httptransport.NewRouter(ctx, cfg.HTTPRouterConfig(), interactionClient, agentClient, logger)
 	if err != nil {
 		return err
 	}
@@ -46,19 +58,23 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	}
 }
 
-func buildInteractionHubClient(cfg Config) (httptransport.InteractionHubClient, func(), error) {
-	clientCfg := cfg.InteractionHubClientConfig()
-	conn, err := interactionhubclient.NewConnection(clientCfg)
+func buildDownstreamClient[C any, T any](
+	cfg C,
+	connect func(C) (*grpc.ClientConn, error),
+	build func(*grpc.ClientConn, C) (T, error),
+) (T, func(), error) {
+	var zero T
+	conn, err := connect(cfg)
 	if err != nil {
-		return nil, nil, err
+		return zero, nil, err
 	}
 	closeFn := func() {
 		_ = conn.Close()
 	}
-	client, err := interactionhubclient.New(interactionsv1.NewInteractionHubServiceClient(conn), clientCfg)
+	client, err := build(conn, cfg)
 	if err != nil {
 		closeFn()
-		return nil, nil, err
+		return zero, nil, err
 	}
 	return client, closeFn, nil
 }

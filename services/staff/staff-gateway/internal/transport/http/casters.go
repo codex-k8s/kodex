@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
+	agentsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/agents/v1"
 	interactionsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/interactions/v1"
 	"github.com/codex-k8s/kodex/services/staff/staff-gateway/internal/transport/http/generated"
 )
@@ -15,6 +16,46 @@ import (
 const defaultPageSize = 25
 
 type OwnerInboxRespondBody = generated.OwnerInboxRespondRequest
+
+var agentRunStatuses = map[agentsv1.AgentRunStatus]generated.AgentRunStatus{
+	agentsv1.AgentRunStatus_AGENT_RUN_STATUS_REQUESTED: generated.AgentRunStatusRequested,
+	agentsv1.AgentRunStatus_AGENT_RUN_STATUS_STARTING:  generated.AgentRunStatusStarting,
+	agentsv1.AgentRunStatus_AGENT_RUN_STATUS_RUNNING:   generated.AgentRunStatusRunning,
+	agentsv1.AgentRunStatus_AGENT_RUN_STATUS_WAITING:   generated.AgentRunStatusWaiting,
+	agentsv1.AgentRunStatus_AGENT_RUN_STATUS_COMPLETED: generated.AgentRunStatusCompleted,
+	agentsv1.AgentRunStatus_AGENT_RUN_STATUS_FAILED:    generated.AgentRunStatusFailed,
+	agentsv1.AgentRunStatus_AGENT_RUN_STATUS_CANCELLED: generated.AgentRunStatusCancelled,
+}
+
+var runtimeObservationStates = map[agentsv1.AgentRunRuntimeObservationState]generated.RuntimeObservationState{
+	agentsv1.AgentRunRuntimeObservationState_AGENT_RUN_RUNTIME_OBSERVATION_STATE_NOT_CREATED: generated.RuntimeObservationStateNotCreated,
+	agentsv1.AgentRunRuntimeObservationState_AGENT_RUN_RUNTIME_OBSERVATION_STATE_STORED_REF:  generated.RuntimeObservationStateStoredRef,
+	agentsv1.AgentRunRuntimeObservationState_AGENT_RUN_RUNTIME_OBSERVATION_STATE_LIVE:        generated.RuntimeObservationStateLive,
+	agentsv1.AgentRunRuntimeObservationState_AGENT_RUN_RUNTIME_OBSERVATION_STATE_UNAVAILABLE: generated.RuntimeObservationStateUnavailable,
+	agentsv1.AgentRunRuntimeObservationState_AGENT_RUN_RUNTIME_OBSERVATION_STATE_CONFLICT:    generated.RuntimeObservationStateConflict,
+}
+
+var agentRuntimeJobStatuses = map[agentsv1.AgentRuntimeJobStatus]generated.AgentRuntimeJobStatus{
+	agentsv1.AgentRuntimeJobStatus_AGENT_RUNTIME_JOB_STATUS_PENDING:   generated.AgentRuntimeJobStatusPending,
+	agentsv1.AgentRuntimeJobStatus_AGENT_RUNTIME_JOB_STATUS_CLAIMED:   generated.AgentRuntimeJobStatusClaimed,
+	agentsv1.AgentRuntimeJobStatus_AGENT_RUNTIME_JOB_STATUS_RUNNING:   generated.AgentRuntimeJobStatusRunning,
+	agentsv1.AgentRuntimeJobStatus_AGENT_RUNTIME_JOB_STATUS_SUCCEEDED: generated.AgentRuntimeJobStatusSucceeded,
+	agentsv1.AgentRuntimeJobStatus_AGENT_RUNTIME_JOB_STATUS_FAILED:    generated.AgentRuntimeJobStatusFailed,
+	agentsv1.AgentRuntimeJobStatus_AGENT_RUNTIME_JOB_STATUS_CANCELLED: generated.AgentRuntimeJobStatusCancelled,
+	agentsv1.AgentRuntimeJobStatus_AGENT_RUNTIME_JOB_STATUS_TIMED_OUT: generated.AgentRuntimeJobStatusTimedOut,
+}
+
+func GetAgentRunRuntimeStatusRequest(req *http.Request) (*agentsv1.GetAgentRunRuntimeStatusRequest, *SafeError) {
+	meta, safeErr := agentQueryMeta(req)
+	if safeErr != nil {
+		return nil, safeErr
+	}
+	runID := strings.TrimSpace(req.PathValue("run_id"))
+	if _, err := uuid.Parse(runID); err != nil {
+		return nil, NewSafeError(http.StatusBadRequest, CodeInvalidRequest, "run id is invalid", false)
+	}
+	return &agentsv1.GetAgentRunRuntimeStatusRequest{Meta: meta, RunId: runID}, nil
+}
 
 func ListOwnerInboxItemsRequest(req *http.Request) (*interactionsv1.ListOwnerInboxItemsRequest, *SafeError) {
 	query := req.URL.Query()
@@ -164,8 +205,23 @@ func OwnerInboxRespondResponse(response *interactionsv1.InteractionResponseRespo
 	return generated.OwnerInboxRespondResponse{RequestId: requestID, CorrelationId: optionalString(requestID), Item: item, Response: summary}, nil
 }
 
+func AgentRunRuntimeStatusResponse(response *agentsv1.AgentRunRuntimeStatusResponse, requestID string) (generated.AgentRunRuntimeStatusResponse, *SafeError) {
+	if response == nil || response.GetRuntimeStatus() == nil {
+		return generated.AgentRunRuntimeStatusResponse{}, NewSafeError(http.StatusServiceUnavailable, CodeDownstreamUnavailable, "agent-manager returned empty runtime status", true)
+	}
+	status, safeErr := agentRunRuntimeStatus(response.GetRuntimeStatus())
+	if safeErr != nil {
+		return generated.AgentRunRuntimeStatusResponse{}, safeErr
+	}
+	return generated.AgentRunRuntimeStatusResponse{
+		RequestId:     requestID,
+		CorrelationId: optionalString(requestID),
+		RuntimeStatus: status,
+	}, nil
+}
+
 func queryMeta(req *http.Request) (*interactionsv1.QueryMeta, *SafeError) {
-	actor, safeErr := actorFromHeaders(req)
+	actor, safeErr := interactionActorFromHeaders(req)
 	if safeErr != nil {
 		return nil, safeErr
 	}
@@ -180,8 +236,24 @@ func queryMeta(req *http.Request) (*interactionsv1.QueryMeta, *SafeError) {
 	}, nil
 }
 
+func agentQueryMeta(req *http.Request) (*agentsv1.QueryMeta, *SafeError) {
+	actorType, actorID, safeErr := actorPartsFromHeaders(req)
+	if safeErr != nil {
+		return nil, safeErr
+	}
+	return &agentsv1.QueryMeta{
+		Actor:     &agentsv1.Actor{Type: actorType, Id: actorID},
+		RequestId: requestIDFromContext(req.Context()),
+		RequestContext: &agentsv1.RequestContext{
+			Source:    "staff-gateway",
+			TraceId:   optionalString(traceID(req)),
+			SessionId: optionalString(req.Header.Get(headerSessionID)),
+		},
+	}, nil
+}
+
 func commandMeta(req *http.Request, body OwnerInboxRespondBody) (*interactionsv1.CommandMeta, *interactionsv1.Actor, *SafeError) {
-	actor, safeErr := actorFromHeaders(req)
+	actor, safeErr := interactionActorFromHeaders(req)
 	if safeErr != nil {
 		return nil, nil, safeErr
 	}
@@ -211,13 +283,21 @@ func commandMeta(req *http.Request, body OwnerInboxRespondBody) (*interactionsv1
 	return meta, actor, nil
 }
 
-func actorFromHeaders(req *http.Request) (*interactionsv1.Actor, *SafeError) {
+func interactionActorFromHeaders(req *http.Request) (*interactionsv1.Actor, *SafeError) {
+	actorType, actorID, safeErr := actorPartsFromHeaders(req)
+	if safeErr != nil {
+		return nil, safeErr
+	}
+	return &interactionsv1.Actor{Type: actorType, Id: actorID}, nil
+}
+
+func actorPartsFromHeaders(req *http.Request) (string, string, *SafeError) {
 	actorType := strings.TrimSpace(req.Header.Get(headerActorType))
 	actorID := strings.TrimSpace(req.Header.Get(headerActorID))
 	if actorID == "" || len(actorID) > 256 || !validActorType(actorType) {
-		return nil, NewSafeError(http.StatusUnauthorized, CodeUnauthenticated, "actor context is required", false)
+		return "", "", NewSafeError(http.StatusUnauthorized, CodeUnauthenticated, "actor context is required", false)
 	}
-	return &interactionsv1.Actor{Type: actorType, Id: actorID}, nil
+	return actorType, actorID, nil
 }
 
 func validActorType(value string) bool {
@@ -479,6 +559,60 @@ func responseItem(request *interactionsv1.InteractionRequest, response *interact
 	return ownerInboxItem(item)
 }
 
+func agentRunRuntimeStatus(status *agentsv1.AgentRunRuntimeStatus) (generated.AgentRunRuntimeStatus, *SafeError) {
+	if _, err := uuid.Parse(status.GetRunId()); err != nil {
+		return generated.AgentRunRuntimeStatus{}, NewSafeError(http.StatusServiceUnavailable, CodeDownstreamUnavailable, "agent-manager returned invalid runtime status", true)
+	}
+	runUpdatedAt, safeErr := requiredTime(status.GetRunUpdatedAt())
+	if safeErr != nil {
+		return generated.AgentRunRuntimeStatus{}, safeErr
+	}
+	return generated.AgentRunRuntimeStatus{
+		RunId:                status.GetRunId(),
+		RunStatus:            agentRunStatus(status.GetRunStatus()),
+		ObservationState:     runtimeObservationState(status.GetObservationState()),
+		RuntimeSlotRef:       optionalString(status.GetRuntimeContext().GetSlotRef()),
+		RuntimeContextRef:    optionalString(status.GetRuntimeContext().GetContextRef()),
+		RuntimeJobRef:        optionalString(status.GetRuntimeJobRef()),
+		RuntimeJobStatus:     agentRuntimeJobStatus(status.GetRuntimeJobStatus()),
+		RuntimeJobCommandRef: optionalString(status.GetRuntimeJobCommandRef()),
+		RuntimeJobVersion:    optionalPositiveInt64(status.GetRuntimeJobVersion()),
+		RuntimeJobCreatedAt:  optionalTime(status.GetRuntimeJobCreatedAt()),
+		RuntimeJobStartedAt:  optionalTime(status.GetRuntimeJobStartedAt()),
+		RuntimeJobFinishedAt: optionalTime(status.GetRuntimeJobFinishedAt()),
+		RuntimeJobUpdatedAt:  optionalTime(status.GetRuntimeJobUpdatedAt()),
+		SafeErrorCode:        optionalString(status.GetSafeErrorCode()),
+		SafeSummary:          optionalString(status.GetSafeSummary()),
+		RunStartedAt:         optionalTime(status.GetRunStartedAt()),
+		RunFinishedAt:        optionalTime(status.GetRunFinishedAt()),
+		RunUpdatedAt:         runUpdatedAt,
+		RunVersion:           status.GetRunVersion(),
+		HumanGateWaiting:     status.GetHumanGateWaiting(),
+		HumanGateRequestRef:  optionalString(status.GetHumanGateRequestRef()),
+		HumanGateReasonCode:  optionalString(status.GetHumanGateReasonCode()),
+		FollowUpWaiting:      status.GetFollowUpWaiting(),
+	}, nil
+}
+
+func agentRunStatus(value agentsv1.AgentRunStatus) generated.AgentRunStatus {
+	return mappedEnum(value, agentRunStatuses, generated.AgentRunStatusUnspecified)
+}
+
+func runtimeObservationState(value agentsv1.AgentRunRuntimeObservationState) generated.RuntimeObservationState {
+	return mappedEnum(value, runtimeObservationStates, generated.RuntimeObservationStateUnspecified)
+}
+
+func agentRuntimeJobStatus(value agentsv1.AgentRuntimeJobStatus) generated.AgentRuntimeJobStatus {
+	return mappedEnum(value, agentRuntimeJobStatuses, generated.AgentRuntimeJobStatusUnspecified)
+}
+
+func mappedEnum[Source comparable, Target ~string](value Source, values map[Source]Target, fallback Target) Target {
+	if mapped, ok := values[value]; ok {
+		return mapped
+	}
+	return fallback
+}
+
 func deliverySummary(summary *interactionsv1.OwnerInboxDeliverySummary) (generated.OwnerInboxDeliverySummary, *SafeError) {
 	if summary == nil {
 		return generated.OwnerInboxDeliverySummary{
@@ -670,6 +804,13 @@ func optionalTime(value string) *time.Time {
 	}
 	result := parsed.UTC()
 	return &result
+}
+
+func optionalPositiveInt64(value int64) *int64 {
+	if value <= 0 {
+		return nil
+	}
+	return &value
 }
 
 func enumName(value string, prefix string) string {

@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 
+	agentsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/agents/v1"
 	interactionsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/interactions/v1"
 	"github.com/codex-k8s/kodex/services/staff/staff-gateway/internal/transport/http/generated"
 	"google.golang.org/grpc/codes"
@@ -358,6 +359,119 @@ func TestRouterMapsDownstreamUnavailable(t *testing.T) {
 	assertErrorCode(t, rec, http.StatusServiceUnavailable, generated.SafeErrorCodeDownstreamUnavailable)
 }
 
+func TestRouterGetAgentRunRuntimeStatus(t *testing.T) {
+	runID := uuid.NewString()
+	client := &fakeInteractionHubClient{runtimeStatusResponse: sampleAgentRunRuntimeStatusResponse(runID)}
+	router := newTestRouter(t, client)
+	req := authenticatedRequest(http.MethodGet, "/v1/agent-runs/"+runID+"/runtime-status", "")
+	req.Header.Set(headerTraceID, "trace-1")
+	req.Header.Set(headerSessionID, "session-1")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	recorded := client.runtimeStatusRequest
+	if recorded.GetRunId() != runID || recorded.GetMeta().GetActor().GetId() != "owner-1" {
+		t.Fatalf("runtime status request = %+v, want run id and actor", recorded)
+	}
+	if recorded.GetMeta().GetRequestContext().GetTraceId() != "trace-1" || recorded.GetMeta().GetRequestContext().GetSessionId() != "session-1" {
+		t.Fatalf("request context = %+v, want trace and session", recorded.GetMeta().GetRequestContext())
+	}
+	var body generated.AgentRunRuntimeStatusResponse
+	decodeJSON(t, rec, &body)
+	if body.RuntimeStatus.RunId != runID || body.RuntimeStatus.RuntimeJobRef == nil || *body.RuntimeStatus.RuntimeJobRef != "runtime-job-1" {
+		t.Fatalf("runtime status = %+v, want run and job refs", body.RuntimeStatus)
+	}
+	if body.RuntimeStatus.RuntimeJobStatus != generated.AgentRuntimeJobStatusRunning || !body.RuntimeStatus.HumanGateWaiting {
+		t.Fatalf("runtime status = %+v, want running job and human gate waiting", body.RuntimeStatus)
+	}
+	for _, forbidden := range []string{"prompt body", "secret-token", "kubeconfig", "workspace/path", "provider_payload", "raw log tail"} {
+		if strings.Contains(rec.Body.String(), forbidden) {
+			t.Fatalf("response leaked %q marker: %s", forbidden, rec.Body.String())
+		}
+	}
+}
+
+func TestRouterGetAgentRunRuntimeStatusUnknownStatusFallsBackToUnspecified(t *testing.T) {
+	runID := uuid.NewString()
+	response := sampleAgentRunRuntimeStatusResponse(runID)
+	response.RuntimeStatus.RunStatus = agentsv1.AgentRunStatus(99)
+	response.RuntimeStatus.ObservationState = agentsv1.AgentRunRuntimeObservationState(99)
+	response.RuntimeStatus.RuntimeJobStatus = agentsv1.AgentRuntimeJobStatus(99)
+	client := &fakeInteractionHubClient{runtimeStatusResponse: response}
+	router := newTestRouter(t, client)
+	req := authenticatedRequest(http.MethodGet, "/v1/agent-runs/"+runID+"/runtime-status", "")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var body generated.AgentRunRuntimeStatusResponse
+	decodeJSON(t, rec, &body)
+	if body.RuntimeStatus.RunStatus != generated.AgentRunStatusUnspecified ||
+		body.RuntimeStatus.ObservationState != generated.RuntimeObservationStateUnspecified ||
+		body.RuntimeStatus.RuntimeJobStatus != generated.AgentRuntimeJobStatusUnspecified {
+		t.Fatalf("runtime status = %+v, want unspecified fallbacks", body.RuntimeStatus)
+	}
+}
+
+func TestRouterGetAgentRunRuntimeStatusErrorMapping(t *testing.T) {
+	cases := map[string]struct {
+		err        error
+		statusCode int
+		code       generated.SafeErrorCode
+	}{
+		"not_found": {
+			err:        status.Error(codes.NotFound, "missing"),
+			statusCode: http.StatusNotFound,
+			code:       generated.SafeErrorCodeNotFound,
+		},
+		"permission_denied": {
+			err:        status.Error(codes.PermissionDenied, "denied"),
+			statusCode: http.StatusForbidden,
+			code:       generated.SafeErrorCodePermissionDenied,
+		},
+		"stale": {
+			err:        status.Error(codes.Aborted, "stale"),
+			statusCode: http.StatusConflict,
+			code:       generated.SafeErrorCodeStaleVersion,
+		},
+		"unavailable": {
+			err:        status.Error(codes.Unavailable, "unavailable"),
+			statusCode: http.StatusServiceUnavailable,
+			code:       generated.SafeErrorCodeDownstreamUnavailable,
+		},
+	}
+	for name, testCase := range cases {
+		t.Run(name, func(t *testing.T) {
+			client := &fakeInteractionHubClient{runtimeStatusErr: testCase.err}
+			router := newTestRouter(t, client)
+			req := authenticatedRequest(http.MethodGet, "/v1/agent-runs/"+uuid.NewString()+"/runtime-status", "")
+			rec := httptest.NewRecorder()
+
+			router.ServeHTTP(rec, req)
+
+			assertErrorCode(t, rec, testCase.statusCode, testCase.code)
+		})
+	}
+}
+
+func TestRouterGetAgentRunRuntimeStatusEmptyDownstreamResponse(t *testing.T) {
+	client := &fakeInteractionHubClient{runtimeStatusResponse: &agentsv1.AgentRunRuntimeStatusResponse{}}
+	router := newTestRouter(t, client)
+	req := authenticatedRequest(http.MethodGet, "/v1/agent-runs/"+uuid.NewString()+"/runtime-status", "")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	assertErrorCode(t, rec, http.StatusServiceUnavailable, generated.SafeErrorCodeDownstreamUnavailable)
+}
+
 func TestRouterRequiresActorContext(t *testing.T) {
 	router := newTestRouter(t, &fakeInteractionHubClient{})
 	req := httptest.NewRequest(http.MethodGet, "/v1/owner-inbox/items?scope_type=project&scope_ref=project-1", nil)
@@ -375,7 +489,7 @@ func newTestRouter(t *testing.T, client *fakeInteractionHubClient) *Router {
 		OpenAPISpecPath: "../../../../../../specs/openapi/staff-gateway.v1.yaml",
 		RequestTimeout:  time.Second,
 		MaxBodyBytes:    65536,
-	}, client, nil)
+	}, client, client, nil)
 	if err != nil {
 		t.Fatalf("NewRouter(): %v", err)
 	}
@@ -413,15 +527,18 @@ func assertErrorCode(t *testing.T, rec *httptest.ResponseRecorder, statusCode in
 }
 
 type fakeInteractionHubClient struct {
-	listRequest    *interactionsv1.ListOwnerInboxItemsRequest
-	getRequest     *interactionsv1.GetOwnerInboxItemRequest
-	recordRequest  *interactionsv1.RecordInteractionResponseRequest
-	listResponse   *interactionsv1.ListOwnerInboxItemsResponse
-	getResponse    *interactionsv1.OwnerInboxItemResponse
-	recordResponse *interactionsv1.InteractionResponseResponse
-	listErr        error
-	getErr         error
-	recordErr      error
+	listRequest           *interactionsv1.ListOwnerInboxItemsRequest
+	getRequest            *interactionsv1.GetOwnerInboxItemRequest
+	recordRequest         *interactionsv1.RecordInteractionResponseRequest
+	runtimeStatusRequest  *agentsv1.GetAgentRunRuntimeStatusRequest
+	listResponse          *interactionsv1.ListOwnerInboxItemsResponse
+	getResponse           *interactionsv1.OwnerInboxItemResponse
+	recordResponse        *interactionsv1.InteractionResponseResponse
+	runtimeStatusResponse *agentsv1.AgentRunRuntimeStatusResponse
+	listErr               error
+	getErr                error
+	recordErr             error
+	runtimeStatusErr      error
 }
 
 func (f *fakeInteractionHubClient) ListOwnerInboxItems(_ context.Context, request *interactionsv1.ListOwnerInboxItemsRequest) (*interactionsv1.ListOwnerInboxItemsResponse, error) {
@@ -437,6 +554,11 @@ func (f *fakeInteractionHubClient) GetOwnerInboxItem(_ context.Context, request 
 func (f *fakeInteractionHubClient) RecordInteractionResponse(_ context.Context, request *interactionsv1.RecordInteractionResponseRequest) (*interactionsv1.InteractionResponseResponse, error) {
 	f.recordRequest = request
 	return f.recordResponse, f.recordErr
+}
+
+func (f *fakeInteractionHubClient) GetAgentRunRuntimeStatus(_ context.Context, request *agentsv1.GetAgentRunRuntimeStatusRequest) (*agentsv1.AgentRunRuntimeStatusResponse, error) {
+	f.runtimeStatusRequest = request
+	return f.runtimeStatusResponse, f.runtimeStatusErr
 }
 
 func sampleOwnerInboxItem(status interactionsv1.InteractionRequestStatus) *interactionsv1.OwnerInboxItem {
@@ -546,6 +668,44 @@ func sampleInteractionResponseResponse(requestID string, action interactionsv1.I
 	}
 }
 
+func sampleAgentRunRuntimeStatusResponse(runID string) *agentsv1.AgentRunRuntimeStatusResponse {
+	now := time.Date(2026, 5, 28, 12, 3, 0, 0, time.UTC).Format(time.RFC3339Nano)
+	return &agentsv1.AgentRunRuntimeStatusResponse{
+		Run: &agentsv1.AgentRun{
+			Id:        runID,
+			SessionId: "session-1",
+			Status:    agentsv1.AgentRunStatus_AGENT_RUN_STATUS_STARTING,
+			Version:   5,
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		RuntimeStatus: &agentsv1.AgentRunRuntimeStatus{
+			RunId:                runID,
+			RunStatus:            agentsv1.AgentRunStatus_AGENT_RUN_STATUS_STARTING,
+			RuntimeContext:       &agentsv1.RuntimeContextRef{SlotRef: stringPtr("slot-1"), WorkspaceRef: stringPtr("workspace/path/hidden"), ContextRef: stringPtr("runtime-context-1")},
+			ObservationState:     agentsv1.AgentRunRuntimeObservationState_AGENT_RUN_RUNTIME_OBSERVATION_STATE_LIVE,
+			RuntimeJobRef:        stringPtr("runtime-job-1"),
+			RuntimeJobStatus:     agentsv1.AgentRuntimeJobStatus_AGENT_RUNTIME_JOB_STATUS_RUNNING,
+			RuntimeJobCommandRef: stringPtr("runtime-command-1"),
+			RuntimeJobVersion:    int64Ptr(8),
+			RuntimeJobCreatedAt:  stringPtr(now),
+			RuntimeJobStartedAt:  stringPtr(now),
+			RuntimeJobUpdatedAt:  stringPtr(now),
+			SafeSummary:          stringPtr("job_status=running"),
+			RunStartedAt:         stringPtr(now),
+			RunUpdatedAt:         now,
+			RunVersion:           5,
+			HumanGateWaiting:     true,
+			HumanGateRequestRef:  stringPtr("human-gate-1"),
+			HumanGateReasonCode:  stringPtr("owner_approval"),
+		},
+	}
+}
+
 func stringPtr(value string) *string {
+	return &value
+}
+
+func int64Ptr(value int64) *int64 {
 	return &value
 }

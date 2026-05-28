@@ -21,6 +21,8 @@
 
 Список `owner inbox` поддерживает scope-фильтр, фильтры по kind/status/source owner/assignee/correlation, `include_diagnostics` и cursor pagination. Сортировку не выбирает клиент: её фиксирует `interaction-hub`, чтобы UI получал стабильный порядок с активными и срочными карточками выше. Карточка решения возвращает безопасные детали request, delivery/callback/response summaries, `allowed_actions`, timestamps и `version`; завершённые request не должны возвращать доступные действия. Ответ владельца отправляется с `expected_version` и `command_id` или `idempotency_key`, а gateway маппит ошибки `interaction-hub` в безопасные HTTP-статусы и коды без раскрытия raw payload.
 
+Для операторского просмотра выполнения `staff-gateway` отдаёт `GET /v1/agent-runs/{run_id}/runtime-status`. Endpoint вызывает `agent-manager.GetAgentRunRuntimeStatus` и возвращает только безопасную сводку: `run_id`, `run_status`, `runtime_job_ref`, `runtime_job_status`, safe error code/summary, timestamps, `run_version`, `human_gate_waiting` и safe refs ожидания. Prompt body, secret values, kubeconfig, workspace paths, raw provider payload и большие логи через gateway не проходят; runtime job lifecycle остаётся у `runtime-manager`, а orchestration state — у `agent-manager`.
+
 ## Карта Issue
 
 - Доменная карта: `docs/delivery/issue-map/domains/console-and-operations-ux.md`.

@@ -9,10 +9,15 @@ import (
 type Router struct {
 	handler http.Handler
 	openAPI *OpenAPIContract
-	client  InteractionHubClient
+	clients routeClients
 }
 
-func NewRouter(ctx context.Context, cfg Config, interactionHub InteractionHubClient, logger *slog.Logger) (*Router, error) {
+type routeClients struct {
+	interactionHub InteractionHubClient
+	agentManager   AgentManagerClient
+}
+
+func NewRouter(ctx context.Context, cfg Config, interactionHub InteractionHubClient, agentManager AgentManagerClient, logger *slog.Logger) (*Router, error) {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -20,11 +25,13 @@ func NewRouter(ctx context.Context, cfg Config, interactionHub InteractionHubCli
 	if err != nil {
 		return nil, err
 	}
-	handlers := newHandlers(interactionHub, contract)
+	clients := routeClients{interactionHub: interactionHub, agentManager: agentManager}
+	handlers := newHandlers(clients, contract)
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v1/owner-inbox/items", handlers.listOwnerInboxItems)
 	mux.HandleFunc("GET /v1/owner-inbox/items/{request_id}", handlers.getOwnerInboxItem)
 	mux.HandleFunc("POST /v1/owner-inbox/items/{request_id}/response", handlers.respondOwnerInboxItem)
+	mux.HandleFunc("GET /v1/agent-runs/{run_id}/runtime-status", handlers.getAgentRunRuntimeStatus)
 	mux.HandleFunc("GET /openapi/staff-gateway.v1.yaml", handlers.openAPISpec)
 
 	handler := RequestIDMiddleware(
@@ -40,7 +47,7 @@ func NewRouter(ctx context.Context, cfg Config, interactionHub InteractionHubCli
 			),
 		),
 	)
-	return &Router{handler: handler, openAPI: contract, client: interactionHub}, nil
+	return &Router{handler: handler, openAPI: contract, clients: clients}, nil
 }
 
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -48,5 +55,5 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 }
 
 func (r *Router) Ready() bool {
-	return r != nil && r.openAPI.Ready() && r.client != nil
+	return r != nil && r.openAPI.Ready() && r.clients.interactionHub != nil && r.clients.agentManager != nil
 }

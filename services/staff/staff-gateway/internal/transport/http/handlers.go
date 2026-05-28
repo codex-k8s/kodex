@@ -9,19 +9,20 @@ import (
 
 type handlers struct {
 	interactionHub InteractionHubClient
+	agentManager   AgentManagerClient
 	openAPI        *OpenAPIContract
 }
 
-func newHandlers(interactionHub InteractionHubClient, openAPI *OpenAPIContract) handlers {
-	return handlers{interactionHub: interactionHub, openAPI: openAPI}
+func newHandlers(clients routeClients, openAPI *OpenAPIContract) handlers {
+	return handlers{interactionHub: clients.interactionHub, agentManager: clients.agentManager, openAPI: openAPI}
 }
 
 func (h handlers) listOwnerInboxItems(w http.ResponseWriter, req *http.Request) {
-	handleOwnerInboxQuery(w, req, ListOwnerInboxItemsRequest, h.interactionHub.ListOwnerInboxItems, ListOwnerInboxItemsResponse)
+	handleQuery(w, req, ListOwnerInboxItemsRequest, h.interactionHub.ListOwnerInboxItems, ListOwnerInboxItemsResponse, interactionHubError)
 }
 
 func (h handlers) getOwnerInboxItem(w http.ResponseWriter, req *http.Request) {
-	handleOwnerInboxQuery(w, req, GetOwnerInboxItemRequest, h.interactionHub.GetOwnerInboxItem, OwnerInboxItemResponse)
+	handleQuery(w, req, GetOwnerInboxItemRequest, h.interactionHub.GetOwnerInboxItem, OwnerInboxItemResponse, interactionHubError)
 }
 
 func (h handlers) respondOwnerInboxItem(w http.ResponseWriter, req *http.Request) {
@@ -46,6 +47,10 @@ func (h handlers) respondOwnerInboxItem(w http.ResponseWriter, req *http.Request
 		return
 	}
 	writeJSON(w, http.StatusOK, output)
+}
+
+func (h handlers) getAgentRunRuntimeStatus(w http.ResponseWriter, req *http.Request) {
+	handleQuery(w, req, GetAgentRunRuntimeStatusRequest, h.agentManager.GetAgentRunRuntimeStatus, AgentRunRuntimeStatusResponse, agentManagerError)
 }
 
 func decodeOwnerInboxRespondBody(req *http.Request) (OwnerInboxRespondBody, *SafeError) {
@@ -73,12 +78,13 @@ func (h handlers) openAPISpec(w http.ResponseWriter, req *http.Request) {
 	_, _ = w.Write(data)
 }
 
-func handleOwnerInboxQuery[Request any, Response any, Output any](
+func handleQuery[Request any, Response any, Output any](
 	w http.ResponseWriter,
 	req *http.Request,
 	build func(*http.Request) (*Request, *SafeError),
 	call func(context.Context, *Request) (*Response, error),
 	cast func(*Response, string) (Output, *SafeError),
+	mapError func(error) *SafeError,
 ) {
 	input, safeErr := build(req)
 	if safeErr != nil {
@@ -87,7 +93,7 @@ func handleOwnerInboxQuery[Request any, Response any, Output any](
 	}
 	response, err := call(req.Context(), input)
 	if err != nil {
-		WriteSafeError(w, req, interactionHubError(err))
+		WriteSafeError(w, req, mapError(err))
 		return
 	}
 	output, safeErr := cast(response, requestIDFromContext(req.Context()))

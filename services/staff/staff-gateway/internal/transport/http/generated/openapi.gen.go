@@ -7,6 +7,30 @@ import (
 	"time"
 )
 
+// Defines values for AgentRunStatus.
+const (
+	AgentRunStatusCancelled   AgentRunStatus = "cancelled"
+	AgentRunStatusCompleted   AgentRunStatus = "completed"
+	AgentRunStatusFailed      AgentRunStatus = "failed"
+	AgentRunStatusRequested   AgentRunStatus = "requested"
+	AgentRunStatusRunning     AgentRunStatus = "running"
+	AgentRunStatusStarting    AgentRunStatus = "starting"
+	AgentRunStatusUnspecified AgentRunStatus = "unspecified"
+	AgentRunStatusWaiting     AgentRunStatus = "waiting"
+)
+
+// Defines values for AgentRuntimeJobStatus.
+const (
+	AgentRuntimeJobStatusCancelled   AgentRuntimeJobStatus = "cancelled"
+	AgentRuntimeJobStatusClaimed     AgentRuntimeJobStatus = "claimed"
+	AgentRuntimeJobStatusFailed      AgentRuntimeJobStatus = "failed"
+	AgentRuntimeJobStatusPending     AgentRuntimeJobStatus = "pending"
+	AgentRuntimeJobStatusRunning     AgentRuntimeJobStatus = "running"
+	AgentRuntimeJobStatusSucceeded   AgentRuntimeJobStatus = "succeeded"
+	AgentRuntimeJobStatusTimedOut    AgentRuntimeJobStatus = "timed_out"
+	AgentRuntimeJobStatusUnspecified AgentRuntimeJobStatus = "unspecified"
+)
+
 // Defines values for CallbackProcessingStatus.
 const (
 	CallbackProcessingStatusAccepted    CallbackProcessingStatus = "accepted"
@@ -93,6 +117,16 @@ const (
 	ResponseSourceKindWebConsole      ResponseSourceKind = "web_console"
 )
 
+// Defines values for RuntimeObservationState.
+const (
+	RuntimeObservationStateConflict    RuntimeObservationState = "conflict"
+	RuntimeObservationStateLive        RuntimeObservationState = "live"
+	RuntimeObservationStateNotCreated  RuntimeObservationState = "not_created"
+	RuntimeObservationStateStoredRef   RuntimeObservationState = "stored_ref"
+	RuntimeObservationStateUnavailable RuntimeObservationState = "unavailable"
+	RuntimeObservationStateUnspecified RuntimeObservationState = "unspecified"
+)
+
 // Defines values for SafeErrorCode.
 const (
 	SafeErrorCodeConflict              SafeErrorCode = "conflict"
@@ -133,6 +167,14 @@ const (
 	ActorTypeHeaderUser            ActorTypeHeader = "user"
 )
 
+// Defines values for GetAgentRunRuntimeStatusParamsXKodexActorType.
+const (
+	GetAgentRunRuntimeStatusParamsXKodexActorTypeAgent           GetAgentRunRuntimeStatusParamsXKodexActorType = "agent"
+	GetAgentRunRuntimeStatusParamsXKodexActorTypeExternalAccount GetAgentRunRuntimeStatusParamsXKodexActorType = "external_account"
+	GetAgentRunRuntimeStatusParamsXKodexActorTypeService         GetAgentRunRuntimeStatusParamsXKodexActorType = "service"
+	GetAgentRunRuntimeStatusParamsXKodexActorTypeUser            GetAgentRunRuntimeStatusParamsXKodexActorType = "user"
+)
+
 // Defines values for ListOwnerInboxItemsParamsXKodexActorType.
 const (
 	ListOwnerInboxItemsParamsXKodexActorTypeAgent           ListOwnerInboxItemsParamsXKodexActorType = "agent"
@@ -151,10 +193,10 @@ const (
 
 // Defines values for RespondOwnerInboxItemParamsXKodexActorType.
 const (
-	RespondOwnerInboxItemParamsXKodexActorTypeAgent           RespondOwnerInboxItemParamsXKodexActorType = "agent"
-	RespondOwnerInboxItemParamsXKodexActorTypeExternalAccount RespondOwnerInboxItemParamsXKodexActorType = "external_account"
-	RespondOwnerInboxItemParamsXKodexActorTypeService         RespondOwnerInboxItemParamsXKodexActorType = "service"
-	RespondOwnerInboxItemParamsXKodexActorTypeUser            RespondOwnerInboxItemParamsXKodexActorType = "user"
+	Agent           RespondOwnerInboxItemParamsXKodexActorType = "agent"
+	ExternalAccount RespondOwnerInboxItemParamsXKodexActorType = "external_account"
+	Service         RespondOwnerInboxItemParamsXKodexActorType = "service"
+	User            RespondOwnerInboxItemParamsXKodexActorType = "user"
 )
 
 // ActorRef defines model for ActorRef.
@@ -162,6 +204,46 @@ type ActorRef struct {
 	Ref     string `json:"ref"`
 	RefKind string `json:"ref_kind"`
 }
+
+// AgentRunRuntimeStatus defines model for AgentRunRuntimeStatus.
+type AgentRunRuntimeStatus struct {
+	FollowUpWaiting      bool                    `json:"follow_up_waiting"`
+	HumanGateReasonCode  *string                 `json:"human_gate_reason_code,omitempty"`
+	HumanGateRequestRef  *string                 `json:"human_gate_request_ref,omitempty"`
+	HumanGateWaiting     bool                    `json:"human_gate_waiting"`
+	ObservationState     RuntimeObservationState `json:"observation_state"`
+	RunFinishedAt        *time.Time              `json:"run_finished_at,omitempty"`
+	RunId                string                  `json:"run_id"`
+	RunStartedAt         *time.Time              `json:"run_started_at,omitempty"`
+	RunStatus            AgentRunStatus          `json:"run_status"`
+	RunUpdatedAt         time.Time               `json:"run_updated_at"`
+	RunVersion           int64                   `json:"run_version"`
+	RuntimeContextRef    *string                 `json:"runtime_context_ref,omitempty"`
+	RuntimeJobCommandRef *string                 `json:"runtime_job_command_ref,omitempty"`
+	RuntimeJobCreatedAt  *time.Time              `json:"runtime_job_created_at,omitempty"`
+	RuntimeJobFinishedAt *time.Time              `json:"runtime_job_finished_at,omitempty"`
+	RuntimeJobRef        *string                 `json:"runtime_job_ref,omitempty"`
+	RuntimeJobStartedAt  *time.Time              `json:"runtime_job_started_at,omitempty"`
+	RuntimeJobStatus     AgentRuntimeJobStatus   `json:"runtime_job_status"`
+	RuntimeJobUpdatedAt  *time.Time              `json:"runtime_job_updated_at,omitempty"`
+	RuntimeJobVersion    *int64                  `json:"runtime_job_version,omitempty"`
+	RuntimeSlotRef       *string                 `json:"runtime_slot_ref,omitempty"`
+	SafeErrorCode        *string                 `json:"safe_error_code,omitempty"`
+	SafeSummary          *string                 `json:"safe_summary,omitempty"`
+}
+
+// AgentRunRuntimeStatusResponse defines model for AgentRunRuntimeStatusResponse.
+type AgentRunRuntimeStatusResponse struct {
+	CorrelationId *string               `json:"correlation_id,omitempty"`
+	RequestId     string                `json:"request_id"`
+	RuntimeStatus AgentRunRuntimeStatus `json:"runtime_status"`
+}
+
+// AgentRunStatus defines model for AgentRunStatus.
+type AgentRunStatus string
+
+// AgentRuntimeJobStatus defines model for AgentRuntimeJobStatus.
+type AgentRuntimeJobStatus string
 
 // CallbackProcessingStatus defines model for CallbackProcessingStatus.
 type CallbackProcessingStatus string
@@ -325,6 +407,9 @@ type ResponseAction string
 // ResponseSourceKind defines model for ResponseSourceKind.
 type ResponseSourceKind string
 
+// RuntimeObservationState defines model for RuntimeObservationState.
+type RuntimeObservationState string
+
 // SafeError defines model for SafeError.
 type SafeError struct {
 	Code          SafeErrorCode `json:"code"`
@@ -400,6 +485,9 @@ type RequestKindsQuery = []RequestKind
 // RequestStatusesQuery defines model for RequestStatusesQuery.
 type RequestStatusesQuery = []RequestStatus
 
+// RunIdPath defines model for RunIdPath.
+type RunIdPath = string
+
 // ScopeRefQuery defines model for ScopeRefQuery.
 type ScopeRefQuery = string
 
@@ -438,6 +526,27 @@ type RateLimited = SafeError
 
 // Unauthorized defines model for Unauthorized.
 type Unauthorized = SafeError
+
+// GetAgentRunRuntimeStatusParams defines parameters for GetAgentRunRuntimeStatus.
+type GetAgentRunRuntimeStatusParams struct {
+	// XKodexRequestId Идентификатор запроса для трассировки. Gateway может заменить невалидное значение.
+	XKodexRequestId *RequestIdHeader `json:"X-Kodex-Request-Id,omitempty"`
+
+	// XKodexTraceId Безопасная ссылка на трассу.
+	XKodexTraceId *TraceIdHeader `json:"X-Kodex-Trace-Id,omitempty"`
+
+	// XKodexSessionId Безопасная ссылка на пользовательскую сессию.
+	XKodexSessionId *SessionIdHeader `json:"X-Kodex-Session-Id,omitempty"`
+
+	// XKodexActorType Тип проверенного субъекта от внешнего auth boundary.
+	XKodexActorType GetAgentRunRuntimeStatusParamsXKodexActorType `json:"X-Kodex-Actor-Type"`
+
+	// XKodexActorId Safe id проверенного субъекта без email и имени.
+	XKodexActorId ActorIdHeader `json:"X-Kodex-Actor-Id"`
+}
+
+// GetAgentRunRuntimeStatusParamsXKodexActorType defines parameters for GetAgentRunRuntimeStatus.
+type GetAgentRunRuntimeStatusParamsXKodexActorType string
 
 // ListOwnerInboxItemsParams defines parameters for ListOwnerInboxItems.
 type ListOwnerInboxItemsParams struct {

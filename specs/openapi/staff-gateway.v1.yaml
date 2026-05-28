@@ -11,7 +11,9 @@ info:
 tags:
   - name: owner-inbox
     description: Входящие решения владельца.
-x-kodex-contract-status: mvp-owner-inbox
+  - name: agent-runs
+    description: Безопасное чтение agent Run для операторского UI.
+x-kodex-contract-status: mvp-staff-gateway
 paths:
   /v1/owner-inbox/items:
     get:
@@ -141,8 +143,53 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/DownstreamUnavailable'
+  /v1/agent-runs/{run_id}/runtime-status:
+    get:
+      tags: [agent-runs]
+      operationId: getAgentRunRuntimeStatus
+      summary: Получить runtime summary для agent Run.
+      description: |
+        Возвращает безопасную сводку `agent-manager.GetAgentRunRuntimeStatus` для одного Run.
+        Gateway не читает БД `agent-manager`, не ходит в Kubernetes и не возвращает prompt body,
+        kubeconfig, workspace paths, raw provider payload, secret values или большие логи.
+      parameters:
+        - $ref: '#/components/parameters/RunIdPath'
+        - $ref: '#/components/parameters/RequestIdHeader'
+        - $ref: '#/components/parameters/TraceIdHeader'
+        - $ref: '#/components/parameters/SessionIdHeader'
+        - $ref: '#/components/parameters/ActorTypeHeader'
+        - $ref: '#/components/parameters/ActorIdHeader'
+      responses:
+        '200':
+          description: Runtime summary получен.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentRunRuntimeStatusResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/PermissionDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/DownstreamUnavailable'
 components:
   parameters:
+    RunIdPath:
+      name: run_id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+      description: Safe id `AgentRun`.
     RequestIdPath:
       name: request_id
       in: path
@@ -412,6 +459,40 @@ components:
     ResponseSourceKind:
       type: string
       enum: [web_console, mcp, channel_callback, system, service]
+    AgentRunStatus:
+      type: string
+      enum: [unspecified, requested, starting, running, waiting, completed, failed, cancelled]
+      x-enum-varnames:
+        - AgentRunStatusUnspecified
+        - AgentRunStatusRequested
+        - AgentRunStatusStarting
+        - AgentRunStatusRunning
+        - AgentRunStatusWaiting
+        - AgentRunStatusCompleted
+        - AgentRunStatusFailed
+        - AgentRunStatusCancelled
+    RuntimeObservationState:
+      type: string
+      enum: [unspecified, not_created, stored_ref, live, unavailable, conflict]
+      x-enum-varnames:
+        - RuntimeObservationStateUnspecified
+        - RuntimeObservationStateNotCreated
+        - RuntimeObservationStateStoredRef
+        - RuntimeObservationStateLive
+        - RuntimeObservationStateUnavailable
+        - RuntimeObservationStateConflict
+    AgentRuntimeJobStatus:
+      type: string
+      enum: [unspecified, pending, claimed, running, succeeded, failed, cancelled, timed_out]
+      x-enum-varnames:
+        - AgentRuntimeJobStatusUnspecified
+        - AgentRuntimeJobStatusPending
+        - AgentRuntimeJobStatusClaimed
+        - AgentRuntimeJobStatusRunning
+        - AgentRuntimeJobStatusSucceeded
+        - AgentRuntimeJobStatusFailed
+        - AgentRuntimeJobStatusCancelled
+        - AgentRuntimeJobStatusTimedOut
     DeliveryAttemptStatus:
       type: string
       enum: [unspecified, queued, sent, accepted, delivered, failed, cancelled, expired]
@@ -715,3 +796,91 @@ components:
           $ref: '#/components/schemas/OwnerInboxItem'
         response:
           $ref: '#/components/schemas/OwnerInboxResponseSummary'
+    AgentRunRuntimeStatusResponse:
+      type: object
+      additionalProperties: false
+      required: [request_id, runtime_status]
+      properties:
+        request_id:
+          type: string
+        correlation_id:
+          type: string
+        runtime_status:
+          $ref: '#/components/schemas/AgentRunRuntimeStatus'
+    AgentRunRuntimeStatus:
+      type: object
+      additionalProperties: false
+      required:
+        - run_id
+        - run_status
+        - observation_state
+        - runtime_job_status
+        - human_gate_waiting
+        - follow_up_waiting
+        - run_updated_at
+        - run_version
+      properties:
+        run_id:
+          type: string
+          pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+        run_status:
+          $ref: '#/components/schemas/AgentRunStatus'
+        observation_state:
+          $ref: '#/components/schemas/RuntimeObservationState'
+        runtime_slot_ref:
+          type: string
+          maxLength: 256
+        runtime_context_ref:
+          type: string
+          maxLength: 256
+        runtime_job_ref:
+          type: string
+          maxLength: 256
+        runtime_job_status:
+          $ref: '#/components/schemas/AgentRuntimeJobStatus'
+        runtime_job_command_ref:
+          type: string
+          maxLength: 256
+        runtime_job_version:
+          type: integer
+          format: int64
+        runtime_job_created_at:
+          type: string
+          format: date-time
+        runtime_job_started_at:
+          type: string
+          format: date-time
+        runtime_job_finished_at:
+          type: string
+          format: date-time
+        runtime_job_updated_at:
+          type: string
+          format: date-time
+        safe_error_code:
+          type: string
+          maxLength: 128
+        safe_summary:
+          type: string
+          maxLength: 2000
+        run_started_at:
+          type: string
+          format: date-time
+        run_finished_at:
+          type: string
+          format: date-time
+        run_updated_at:
+          type: string
+          format: date-time
+        run_version:
+          type: integer
+          format: int64
+        human_gate_waiting:
+          type: boolean
+        human_gate_request_ref:
+          type: string
+          maxLength: 256
+        human_gate_reason_code:
+          type: string
+          maxLength: 128
+        follow_up_waiting:
+          type: boolean

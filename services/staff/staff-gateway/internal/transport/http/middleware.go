@@ -38,7 +38,7 @@ func ActorContextMiddleware(next http.Handler) http.Handler {
 			next.ServeHTTP(w, req)
 			return
 		}
-		if _, safeErr := actorFromHeaders(req); safeErr != nil {
+		if _, _, safeErr := actorPartsFromHeaders(req); safeErr != nil {
 			WriteSafeError(w, req, safeErr)
 			return
 		}

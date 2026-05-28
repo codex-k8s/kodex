@@ -7,6 +7,7 @@ import (
 
 	"github.com/caarlos0/env/v11"
 
+	agentmanagerclient "github.com/codex-k8s/kodex/services/staff/staff-gateway/internal/clients/agentmanager"
 	interactionhubclient "github.com/codex-k8s/kodex/services/staff/staff-gateway/internal/clients/interactionhub"
 	httptransport "github.com/codex-k8s/kodex/services/staff/staff-gateway/internal/transport/http"
 )
@@ -16,6 +17,7 @@ type Config struct {
 	OpenAPISpecPath string               `env:"KODEX_STAFF_GATEWAY_OPENAPI_SPEC_PATH" envDefault:"specs/openapi/staff-gateway.v1.yaml"`
 	HTTP            HTTPConfig           `envPrefix:"KODEX_STAFF_GATEWAY_HTTP_"`
 	InteractionHub  InteractionHubConfig `envPrefix:"KODEX_STAFF_GATEWAY_INTERACTION_HUB_"`
+	AgentManager    AgentManagerConfig   `envPrefix:"KODEX_STAFF_GATEWAY_AGENT_MANAGER_"`
 }
 
 type HTTPConfig struct {
@@ -28,6 +30,12 @@ type HTTPConfig struct {
 
 type InteractionHubConfig struct {
 	GRPCAddr  string        `env:"GRPC_ADDR" envDefault:"interaction-hub:9090"`
+	AuthToken string        `env:"GRPC_AUTH_TOKEN"`
+	Timeout   time.Duration `env:"TIMEOUT" envDefault:"3s"`
+}
+
+type AgentManagerConfig struct {
+	GRPCAddr  string        `env:"GRPC_ADDR" envDefault:"agent-manager:9090"`
 	AuthToken string        `env:"GRPC_AUTH_TOKEN"`
 	Timeout   time.Duration `env:"TIMEOUT" envDefault:"3s"`
 }
@@ -53,7 +61,10 @@ func (cfg Config) Validate() error {
 	if err := cfg.HTTP.validate(); err != nil {
 		return err
 	}
-	return cfg.InteractionHub.validate()
+	if err := cfg.InteractionHub.validate(); err != nil {
+		return err
+	}
+	return cfg.AgentManager.validate(cfg.InteractionHub.AuthToken)
 }
 
 func (cfg Config) HTTPRouterConfig() httptransport.Config {
@@ -70,6 +81,18 @@ func (cfg Config) InteractionHubClientConfig() interactionhubclient.Config {
 		Addr:      cfg.InteractionHub.GRPCAddr,
 		AuthToken: cfg.InteractionHub.AuthToken,
 		Timeout:   cfg.InteractionHub.Timeout,
+	}
+}
+
+func (cfg Config) AgentManagerClientConfig() agentmanagerclient.Config {
+	authToken := strings.TrimSpace(cfg.AgentManager.AuthToken)
+	if authToken == "" {
+		authToken = strings.TrimSpace(cfg.InteractionHub.AuthToken)
+	}
+	return agentmanagerclient.Config{
+		Addr:      cfg.AgentManager.GRPCAddr,
+		AuthToken: authToken,
+		Timeout:   cfg.AgentManager.Timeout,
 	}
 }
 
@@ -102,6 +125,19 @@ func (cfg InteractionHubConfig) validate() error {
 	}
 	if cfg.Timeout <= 0 {
 		return fmt.Errorf("KODEX_STAFF_GATEWAY_INTERACTION_HUB_TIMEOUT is invalid")
+	}
+	return nil
+}
+
+func (cfg AgentManagerConfig) validate(fallbackAuthToken string) error {
+	if strings.TrimSpace(cfg.GRPCAddr) == "" {
+		return fmt.Errorf("KODEX_STAFF_GATEWAY_AGENT_MANAGER_GRPC_ADDR is required")
+	}
+	if strings.TrimSpace(cfg.AuthToken) == "" && strings.TrimSpace(fallbackAuthToken) == "" {
+		return fmt.Errorf("KODEX_STAFF_GATEWAY_AGENT_MANAGER_GRPC_AUTH_TOKEN is required")
+	}
+	if cfg.Timeout <= 0 {
+		return fmt.Errorf("KODEX_STAFF_GATEWAY_AGENT_MANAGER_TIMEOUT is invalid")
 	}
 	return nil
 }

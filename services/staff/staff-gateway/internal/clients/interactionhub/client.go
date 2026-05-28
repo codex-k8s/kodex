@@ -77,12 +77,11 @@ func (c *Client) callContext(ctx context.Context, meta *interactionsv1.QueryMeta
 			correlationID = meta.GetRequestContext().GetTraceId()
 		}
 	}
-	outgoing := clientruntime.OutgoingContext(ctx, clientruntime.RequestMetadata{
+	return clientruntime.OutgoingCallContext(ctx, clientruntime.RequestMetadata{
 		AuthToken:     c.authToken,
 		RequestID:     requestID,
 		CorrelationID: correlationID,
-	})
-	return context.WithTimeout(outgoing, c.timeout)
+	}, c.timeout)
 }
 
 func invokeQuery[Response any](
