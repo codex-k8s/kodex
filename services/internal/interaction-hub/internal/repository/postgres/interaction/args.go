@@ -126,6 +126,7 @@ func requestFilterArgs(filter query.InteractionRequestFilter) pageQueryArgs {
 
 func ownerInboxFilterArgs(filter query.OwnerInboxFilter) pageQueryArgs {
 	return withPage(filter.Page, pgx.NamedArgs{
+		"request_id":          postgreslib.NullableUUID(uuidPtrOrNil(filter.RequestID)),
 		"scope_type":          string(filter.Scope.Type),
 		"scope_ref":           filter.Scope.Ref,
 		"request_kinds":       requestKindValues(filter.RequestKinds),

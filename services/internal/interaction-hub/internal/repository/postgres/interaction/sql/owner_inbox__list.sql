@@ -113,6 +113,7 @@ LEFT JOIN LATERAL (
 ) delivery ON true
 WHERE r.scope_type = @scope_type
   AND r.scope_ref = @scope_ref
+  AND (@request_id::uuid IS NULL OR r.id = @request_id::uuid)
   AND (cardinality(@request_kinds::text[]) = 0 OR r.request_kind = ANY(@request_kinds::text[]))
   AND (
       (cardinality(@statuses::text[]) = 0 AND r.status = ANY(@default_statuses::text[]))

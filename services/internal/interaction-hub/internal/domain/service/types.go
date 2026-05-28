@@ -7,6 +7,7 @@ import (
 
 	"github.com/codex-k8s/kodex/services/internal/interaction-hub/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/interaction-hub/internal/domain/types/enum"
+	"github.com/codex-k8s/kodex/services/internal/interaction-hub/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/interaction-hub/internal/domain/types/value"
 )
 
@@ -125,18 +126,16 @@ type ListInteractionRequestsInput struct {
 }
 
 type ListOwnerInboxItemsInput struct {
+	Meta   value.QueryMeta
+	Filter query.OwnerInboxFilter
+}
+
+type GetOwnerInboxItemInput struct {
 	Meta               value.QueryMeta
+	RequestID          uuid.UUID
 	Scope              value.ScopeRef
-	RequestKinds       []enum.InteractionRequestKind
-	Statuses           []enum.InteractionRequestStatus
-	SourceOwnerKind    enum.SourceOwnerKind
-	SourceOwnerRef     string
 	AssigneeRef        value.ActorRef
-	ActorRef           string
-	CorrelationRef     value.ExternalRef
-	CorrelationID      string
 	IncludeDiagnostics bool
-	Page               value.PageRequest
 }
 
 type RequestNotificationInput struct {

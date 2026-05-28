@@ -94,6 +94,14 @@ func TestServerRoutesAllStableRPCsToDomainUseCases(t *testing.T) {
 			})
 			return err
 		}},
+		{name: "GetOwnerInboxItem", want: enum.OperationGetOwnerInboxItem, call: func(ctx context.Context, s *Server) error {
+			_, err := s.GetOwnerInboxItem(ctx, &interactionsv1.GetOwnerInboxItemRequest{
+				RequestId:   uuid.NewString(),
+				Scope:       &interactionsv1.ScopeRef{Type: interactionsv1.InteractionScopeType_INTERACTION_SCOPE_TYPE_SERVICE, Ref: "agent-manager"},
+				AssigneeRef: &interactionsv1.ActorRef{RefKind: "user", Ref: "approver-1"},
+			})
+			return err
+		}},
 		{name: "RequestNotification", want: enum.OperationRequestNotification, call: func(ctx context.Context, s *Server) error {
 			_, err := s.RequestNotification(ctx, validRequestNotificationRequest())
 			return err
@@ -339,6 +347,24 @@ func (f *fakeInteractionService) ListOwnerInboxItems(context.Context, interactio
 			LatestStatus:     enum.DeliveryAttemptStatusDelivered,
 		},
 	}}, value.PageResult{}, nil
+}
+
+func (f *fakeInteractionService) GetOwnerInboxItem(_ context.Context, input interactionservice.GetOwnerInboxItemInput) (entity.OwnerInboxItem, error) {
+	if err := f.record(enum.OperationGetOwnerInboxItem); err != nil {
+		return entity.OwnerInboxItem{}, err
+	}
+	request := fakeRequest(validInteractionRequestDraftInput(), enum.InteractionRequestKindHumanGate)
+	request.ID = input.RequestID
+	return entity.OwnerInboxItem{
+		Request: request,
+		Title:   "safe title",
+		Summary: "safe summary",
+		DeliverySummary: entity.OwnerInboxDeliverySummary{
+			AttemptCount:     1,
+			LatestDeliveryID: "delivery-1",
+			LatestStatus:     enum.DeliveryAttemptStatusDelivered,
+		},
+	}, nil
 }
 
 func (f *fakeInteractionService) RequestNotification(_ context.Context, input interactionservice.RequestNotificationInput) (entity.Notification, error) {
