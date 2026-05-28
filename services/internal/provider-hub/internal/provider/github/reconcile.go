@@ -686,12 +686,21 @@ func classifyGitHubError(err error) error {
 	var githubErr *githubapi.ErrorResponse
 	if errors.As(err, &githubErr) && githubErr.Response != nil {
 		switch githubErr.Response.StatusCode {
-		case http.StatusUnauthorized, http.StatusForbidden:
+		case http.StatusUnauthorized:
+			return providerError(providerclient.ErrorKindAuthFailed, 0, nil)
+		case http.StatusForbidden:
+			if gitHubErrorLooksRateLimited(githubErr) {
+				return providerError(providerclient.ErrorKindRateLimited, retryAfterGitHubResponse(githubErr.Response), nil)
+			}
 			return providerError(providerclient.ErrorKindAuthFailed, 0, nil)
 		case http.StatusNotFound:
 			return providerError(providerclient.ErrorKindNotFound, 0, nil)
 		case http.StatusTooManyRequests:
-			return providerError(providerclient.ErrorKindRateLimited, retryAfterHeader(githubErr.Response), nil)
+			return providerError(providerclient.ErrorKindRateLimited, retryAfterGitHubResponse(githubErr.Response), nil)
+		case http.StatusConflict, http.StatusPreconditionFailed:
+			return providerError(providerclient.ErrorKindConflict, 0, nil)
+		case http.StatusUnprocessableEntity:
+			return providerError(providerclient.ErrorKindValidation, 0, nil)
 		case http.StatusInternalServerError, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
 			return providerError(providerclient.ErrorKindTransient, retryAfterHeader(githubErr.Response), nil)
 		default:
@@ -699,6 +708,23 @@ func classifyGitHubError(err error) error {
 		}
 	}
 	return providerError(providerclient.ErrorKindTransient, 0, nil)
+}
+
+func gitHubErrorLooksRateLimited(err *githubapi.ErrorResponse) bool {
+	if err == nil {
+		return false
+	}
+	if err.Response != nil {
+		if strings.TrimSpace(err.Response.Header.Get("Retry-After")) != "" {
+			return true
+		}
+		if strings.TrimSpace(err.Response.Header.Get("X-RateLimit-Remaining")) == "0" {
+			return true
+		}
+	}
+	message := strings.ToLower(strings.TrimSpace(err.Message))
+	return strings.Contains(message, "rate limit") ||
+		strings.Contains(message, "abuse detection")
 }
 
 func providerError(kind providerclient.ErrorKind, retryAfter time.Duration, cause error) error {
@@ -729,4 +755,26 @@ func retryAfterHeader(response *http.Response) time.Duration {
 		return 0
 	}
 	return time.Duration(seconds) * time.Second
+}
+
+func retryAfterGitHubResponse(response *http.Response) time.Duration {
+	if retryAfter := retryAfterHeader(response); retryAfter > 0 {
+		return retryAfter
+	}
+	if response == nil {
+		return 0
+	}
+	reset := strings.TrimSpace(response.Header.Get("X-RateLimit-Reset"))
+	if reset == "" {
+		return 0
+	}
+	unixSeconds, err := strconv.ParseInt(reset, 10, 64)
+	if err != nil || unixSeconds <= 0 {
+		return 0
+	}
+	retryAfter := time.Until(time.Unix(unixSeconds, 0))
+	if retryAfter < 0 {
+		return 0
+	}
+	return retryAfter
 }
