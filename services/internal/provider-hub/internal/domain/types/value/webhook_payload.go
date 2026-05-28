@@ -15,6 +15,7 @@ type WebhookPayloadEnvelope struct {
 	EventName            string `json:"event_name,omitempty"`
 	RepositoryProviderID string `json:"repository_provider_id,omitempty"`
 	PayloadSHA256        string `json:"payload_sha256,omitempty"`
+	PayloadDigestSource  string `json:"payload_digest_source,omitempty"`
 	PayloadStorage       string `json:"payload_storage"`
 	RetainUntil          string `json:"retain_until,omitempty"`
 }

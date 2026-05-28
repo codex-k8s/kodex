@@ -72,6 +72,7 @@ approvals:
 - digest canonical payload хранится в `payload_sha256` и используется для replay/conflict после редактирования payload;
 - canonical provider webhook payload хранится во внутреннем поле `payload_json` только пока запись остаётся `pending` или `failed` и нужна для retry/reprocess;
 - после перехода в `processed` или `ignored` поле `payload_json` заменяется safe envelope с `payload_storage`, `payload_sha256`, delivery/source refs и retention metadata без raw provider body;
+- migrated terminal rows с digest source `postgres_jsonb_text` принимают поздний duplicate delivery как replay по provider/delivery identity, потому что raw body уже удалён;
 - нормализация может идти синхронно при приёме или через отдельный обработчик, но повторная обработка должна быть идемпотентной;
 - если конкурентный повтор уже перевёл событие из `pending` или `failed` в терминальное состояние, команда повторной обработки перечитывает и возвращает это состояние вместо ложного `not found`;
 - `pending` после повторного чтения не считается успешной обработкой и должен возвращаться как конфликт.

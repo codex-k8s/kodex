@@ -832,6 +832,24 @@ func TestRepositoryIntegrationRuntimeStateLimitsAndOperations(t *testing.T) {
 	if !errors.Is(err, errs.ErrConflict) {
 		t.Fatalf("store changed redacted duplicate webhook err = %v, want %v", err, errs.ErrConflict)
 	}
+	migratedTerminalWebhook := webhookEventForTest(now.Add(4*time.Minute), "delivery-migrated-terminal-1")
+	migratedTerminalWebhook.PayloadDigest = strings.Repeat("a", 64)
+	migratedTerminalWebhook.PayloadJSON = []byte(`{"payload_digest_source":"postgres_jsonb_text","payload_sha256":"` + migratedTerminalWebhook.PayloadDigest + `","payload_storage":"redacted_after_terminal_processing"}`)
+	if _, _, err := repository.StoreWebhookEvent(ctx, migratedTerminalWebhook, providerrepo.ProjectionUpdate{}, nil, nil); err != nil {
+		t.Fatalf("store migrated terminal webhook event: %v", err)
+	}
+	replayedMigratedWebhook := webhookEventForTest(now.Add(5*time.Minute), "delivery-migrated-terminal-1")
+	replayedMigratedWebhook.ID = uuid.New()
+	if replayedMigratedWebhook.PayloadDigest == migratedTerminalWebhook.PayloadDigest {
+		t.Fatal("test setup produced equal digests, want migrated digest source mismatch")
+	}
+	storedWebhook, _, err = repository.StoreWebhookEvent(ctx, replayedMigratedWebhook, providerrepo.ProjectionUpdate{}, nil, nil)
+	if err != nil {
+		t.Fatalf("replay migrated terminal webhook by identity: %v", err)
+	}
+	if storedWebhook.ID != migratedTerminalWebhook.ID {
+		t.Fatalf("migrated terminal replay returned webhook %s, want %s", storedWebhook.ID, migratedTerminalWebhook.ID)
+	}
 	webhooks, _, err := repository.ListWebhookEvents(ctx, query.WebhookEventFilter{
 		ProviderSlug:       enum.ProviderSlugGitHub,
 		DeliveryID:         "delivery-1",

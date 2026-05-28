@@ -938,11 +938,31 @@ func sameWebhookEvent(left entity.WebhookEvent, right entity.WebhookEvent) bool 
 	if left.PayloadDigest != "" && right.PayloadDigest != "" && left.PayloadDigest == right.PayloadDigest {
 		samePayload = true
 	}
+	if migratedTerminalWebhookEnvelope(right) {
+		samePayload = true
+	}
 	return left.ProviderSlug == right.ProviderSlug &&
 		left.DeliveryID == right.DeliveryID &&
 		left.EventName == right.EventName &&
 		left.RepositoryProviderID == right.RepositoryProviderID &&
 		samePayload
+}
+
+func migratedTerminalWebhookEnvelope(event entity.WebhookEvent) bool {
+	switch event.ProcessingStatus {
+	case enum.WebhookProcessingStatusProcessed, enum.WebhookProcessingStatusIgnored:
+	default:
+		return false
+	}
+	var envelope struct {
+		PayloadDigestSource string `json:"payload_digest_source"`
+		PayloadStorage      string `json:"payload_storage"`
+	}
+	if err := json.Unmarshal(event.PayloadJSON, &envelope); err != nil {
+		return false
+	}
+	return envelope.PayloadDigestSource == "postgres_jsonb_text" &&
+		envelope.PayloadStorage == "redacted_after_terminal_processing"
 }
 
 func sameJSON(left []byte, right []byte) bool {

@@ -2,10 +2,12 @@
 ALTER TABLE provider_hub_webhook_events
     ADD COLUMN payload_sha256 text NOT NULL DEFAULT '';
 
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
+SELECT pg_advisory_xact_lock(hashtext('provider_hub_pgcrypto_extension'));
+
+CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public;
 
 UPDATE provider_hub_webhook_events
-SET payload_sha256 = encode(digest(convert_to(payload_json::text, 'UTF8'), 'sha256'), 'hex')
+SET payload_sha256 = encode(public.digest(convert_to(payload_json::text, 'UTF8'), 'sha256'), 'hex')
 WHERE payload_sha256 = '';
 
 UPDATE provider_hub_webhook_events
@@ -15,6 +17,7 @@ SET payload_json = jsonb_strip_nulls(jsonb_build_object(
     'event_name', event_name,
     'repository_provider_id', NULLIF(repository_provider_id, ''),
     'payload_sha256', payload_sha256,
+    'payload_digest_source', 'postgres_jsonb_text',
     'payload_storage', 'redacted_after_terminal_processing',
     'retain_until', to_char(retain_until AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')
 ))
