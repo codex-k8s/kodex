@@ -24,6 +24,7 @@ import (
 const (
 	runtimePrepareReasonRetryable = "runtime_prepare_retryable"
 	runtimePrepareFailureCode     = "runtime_prepare_failed"
+	runtimeMaterializationPending = "runtime_materialization_pending"
 	runtimeJobReasonRetryable     = "runtime_job_retryable"
 	runtimeJobFailureCode         = "runtime_job_failed"
 	runtimePrepareDefaultMode     = RuntimeModeFullEnv
@@ -101,28 +102,11 @@ func (s *Service) prepareRuntimeForRun(
 	if !s.runtimePreparationEnabled {
 		return run, nil
 	}
-	selection, err := workspacePolicySelection(session.Scope)
-	if err != nil {
-		return s.recordRuntimePreparationFailure(ctx, meta, run, err)
-	}
-	policy, err := s.workspacePolicyResolver.ResolveWorkspacePolicy(ctx, WorkspacePolicyResolutionInput{
-		Meta:                    meta,
-		ProjectID:               selection.ProjectID,
-		RepositoryIDs:           selection.RepositoryIDs,
-		ServiceKeys:             selection.ServiceKeys,
-		IncludeGuidancePackages: true,
-	})
+	request, err := s.runtimePreparationInputForRun(ctx, meta, session, role, promptVersion, run)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
 			return run, err
 		}
-		return s.recordRuntimePreparationFailure(ctx, meta, run, err)
-	}
-	if err := validateGuidanceAllowedByPolicy(policy, run.GuidanceRefs); err != nil {
-		return s.recordRuntimePreparationFailure(ctx, meta, run, err)
-	}
-	request, err := runtimePreparationRequest(meta, session, role, promptVersion, run, policy)
-	if err != nil {
 		return s.recordRuntimePreparationFailure(ctx, meta, run, err)
 	}
 	result, err := s.runtimePreparer.PrepareRuntime(ctx, request)
@@ -136,6 +120,78 @@ func (s *Service) prepareRuntimeForRun(
 		return s.dispatchRuntimeJobForRun(ctx, meta, role, run, result)
 	}
 	return s.recordRuntimePreparationSuccess(ctx, meta, run, result)
+}
+
+func (s *Service) retryRuntimeJobDispatchForReplay(ctx context.Context, meta value.CommandMeta, run entity.AgentRun) (entity.AgentRun, error) {
+	if !s.runtimePreparationEnabled || !s.runtimeJobDispatchEnabled || strings.TrimSpace(run.RuntimeContext.JobRef) != "" || terminalRunStatus(run.Status) {
+		return run, nil
+	}
+	session, role, promptVersion, err := s.runtimeReplayContext(ctx, run)
+	if err != nil {
+		return run, nil
+	}
+	request, err := s.runtimePreparationInputForRun(ctx, meta, session, role, promptVersion, run)
+	if err != nil {
+		return run, nil
+	}
+	result, err := s.runtimePreparer.PrepareRuntime(ctx, request)
+	if err != nil || !runtimePreparationReadyForJob(result) {
+		return run, nil
+	}
+	return s.dispatchRuntimeJobForRun(ctx, meta, role, run, result)
+}
+
+func terminalRunStatus(status enum.AgentRunStatus) bool {
+	switch status {
+	case enum.AgentRunStatusCompleted, enum.AgentRunStatusFailed, enum.AgentRunStatusCancelled:
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *Service) runtimeReplayContext(ctx context.Context, run entity.AgentRun) (entity.AgentSession, entity.RoleProfile, entity.PromptTemplateVersion, error) {
+	session, err := s.repository.GetAgentSession(ctx, run.SessionID)
+	if err != nil {
+		return entity.AgentSession{}, entity.RoleProfile{}, entity.PromptTemplateVersion{}, err
+	}
+	role, err := s.repository.GetRoleProfile(ctx, run.RoleProfileID)
+	if err != nil {
+		return entity.AgentSession{}, entity.RoleProfile{}, entity.PromptTemplateVersion{}, err
+	}
+	promptVersion, err := s.repository.GetPromptTemplateVersion(ctx, run.PromptTemplateVersionID)
+	if err != nil {
+		return entity.AgentSession{}, entity.RoleProfile{}, entity.PromptTemplateVersion{}, err
+	}
+	return session, role, promptVersion, nil
+}
+
+func (s *Service) runtimePreparationInputForRun(
+	ctx context.Context,
+	meta value.CommandMeta,
+	session entity.AgentSession,
+	role entity.RoleProfile,
+	promptVersion entity.PromptTemplateVersion,
+	run entity.AgentRun,
+) (RuntimePreparationInput, error) {
+	selection, err := workspacePolicySelection(session.Scope)
+	if err != nil {
+		return RuntimePreparationInput{}, err
+	}
+	policy, err := s.workspacePolicyResolver.ResolveWorkspacePolicy(ctx, WorkspacePolicyResolutionInput{
+		Meta:                    meta,
+		ProjectID:               selection.ProjectID,
+		RepositoryIDs:           selection.RepositoryIDs,
+		ServiceKeys:             selection.ServiceKeys,
+		IncludeGuidancePackages: true,
+	})
+	if err != nil {
+		return RuntimePreparationInput{}, err
+	}
+	if err := validateGuidanceAllowedByPolicy(policy, run.GuidanceRefs); err != nil {
+		return RuntimePreparationInput{}, err
+	}
+	return runtimePreparationRequest(meta, session, role, promptVersion, run, policy)
 }
 
 type workspacePolicySelectionResult struct {
@@ -420,6 +476,9 @@ func (s *Service) dispatchRuntimeJobForRun(
 		runtimeContext.JobRef = strings.TrimSpace(run.RuntimeContext.JobRef)
 		return s.recordRuntimePreparationState(ctx, meta, run, enum.AgentRunStatusStarting, runtimeContext, runtimePreparationSuccessSummary(result), "", "")
 	}
+	if !runtimePreparationReadyForJob(result) {
+		return s.recordRuntimeMaterializationPending(ctx, meta, run, runtimeContext, result)
+	}
 	spec, err := s.agentRunExecutionSpec(run, role, result)
 	if err != nil {
 		return s.recordRuntimeJobFailure(ctx, meta, run, runtimeContext, err)
@@ -437,6 +496,11 @@ func (s *Service) dispatchRuntimeJobForRun(
 		return s.recordRuntimeJobFailure(ctx, meta, run, runtimeContext, err)
 	}
 	return s.recordRuntimeJobSuccess(ctx, meta, run, runtimeContext, result, job)
+}
+
+func runtimePreparationReadyForJob(result RuntimePreparationResult) bool {
+	return strings.TrimSpace(result.SlotStatus) == RuntimeSlotStatusReady &&
+		strings.TrimSpace(result.WorkspaceMaterializationStatus) == RuntimeWorkspaceMaterializationStatusCompleted
 }
 
 func (s *Service) agentRunExecutionSpec(run entity.AgentRun, role entity.RoleProfile, result RuntimePreparationResult) (AgentRunExecutionSpec, error) {
@@ -655,6 +719,17 @@ func (s *Service) recordRuntimeJobSuccess(
 	}
 	summary := runtimeJobSuccessSummary(preparation, job)
 	return s.recordRuntimePreparationState(ctx, meta, run, enum.AgentRunStatusStarting, runtimeContext, summary, "", "")
+}
+
+func (s *Service) recordRuntimeMaterializationPending(
+	ctx context.Context,
+	meta value.CommandMeta,
+	run entity.AgentRun,
+	runtimeContext value.RuntimeContextRef,
+	preparation RuntimePreparationResult,
+) (entity.AgentRun, error) {
+	summary := safeDiagnosticText(runtimePreparationSuccessSummary(preparation) + "; runtime materialization pending")
+	return s.recordRuntimePreparationState(ctx, meta, run, enum.AgentRunStatusWaiting, runtimeContext, summary, "", runtimeMaterializationPending)
 }
 
 func (s *Service) recordRuntimeJobFailure(

@@ -149,6 +149,10 @@ const (
 
 	RuntimeJobRunnerModeCodexAgent = "codex_agent"
 
+	RuntimeSlotStatusReady = "ready"
+
+	RuntimeWorkspaceMaterializationStatusCompleted = "completed"
+
 	WorkspaceSourceKindCode             = "code"
 	WorkspaceSourceKindDocumentation    = "documentation"
 	WorkspaceSourceKindGuidancePackage  = "guidance_package"
@@ -233,12 +237,14 @@ type RuntimePreparationInput struct {
 }
 
 type RuntimePreparationResult struct {
-	SlotRef                    string
-	WorkspaceRef               string
-	ContextRef                 string
-	ContextDigest              string
-	MaterializationFingerprint string
-	DiagnosticSummary          string
+	SlotRef                        string
+	SlotStatus                     string
+	WorkspaceRef                   string
+	WorkspaceMaterializationStatus string
+	ContextRef                     string
+	ContextDigest                  string
+	MaterializationFingerprint     string
+	DiagnosticSummary              string
 }
 
 type RuntimeJobInput struct {

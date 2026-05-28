@@ -67,7 +67,7 @@ sequenceDiagram
   AM->>AM: RecordRunState(starting/running, runtime_context + runtime_job_ref)
 ```
 
-`StartAgentRun` остаётся авторитетной командой создания `Run`. Подготовка runtime и постановка `JOB_TYPE_AGENT_RUN` могут быть выполнены тем же оркестрационным контуром сразу после создания `Run`, но прямой checkout, workspace materialization, Kubernetes-доступ и выполнение задания из `agent-manager` запрещены. `agent-manager` собирает `AgentRunExecutionSpec`: safe refs на `agent_run_id`, `slot_id`, ожидаемую materialization, workspace mount/PVC/workspace, `.kodex/context/agent-run.json` ref/digest, runner profile/image, фиксированный runner mode, secret refs без значений и reporting target refs. Если `PrepareRuntime` или `CreateJob` временно запускаются внешним оператором или быстрым manager-агентом через MCP, входной набор данных должен быть тем же: замороженный `AgentRun.guidance_refs`, проверенная workspace policy, `agent_run_id`, `slot_ref` и `AgentRunExecutionSpec`.
+`StartAgentRun` остаётся авторитетной командой создания `Run`. Подготовка runtime и постановка `JOB_TYPE_AGENT_RUN` могут быть выполнены тем же оркестрационным контуром, но прямой checkout, workspace materialization, Kubernetes-доступ и выполнение задания из `agent-manager` запрещены. `agent-manager` собирает `AgentRunExecutionSpec`: safe refs на `agent_run_id`, `slot_id`, ожидаемую materialization, workspace mount/PVC/workspace, `.kodex/context/agent-run.json` ref/digest, runner profile/image, фиксированный runner mode, secret refs без значений и reporting target refs. `CreateJob` вызывается только после готовности `slot` и завершённой workspace materialization; до этого `Run` ждёт runtime с reason `runtime_materialization_pending`. Если `PrepareRuntime` или `CreateJob` временно запускаются внешним оператором или быстрым manager-агентом через MCP, входной набор данных должен быть тем же: замороженный `AgentRun.guidance_refs`, проверенная workspace policy, `agent_run_id`, `slot_ref` и `AgentRunExecutionSpec`.
 
 ## Что хранится в БД и что живёт в workspace
 
@@ -139,7 +139,7 @@ Digest сгенерированного контекста передаётся 
 
 - Повтор `StartAgentRun` с тем же `command_id` возвращает тот же `Run` и тот же набор `guidance_refs`.
 - Повтор `PrepareRuntime` должен использовать `agent_run_id` и runtime `command_id`, чтобы не создавать несколько независимых слотов для одного запуска.
-- Повтор постановки `JOB_TYPE_AGENT_RUN` должен использовать `agent_run_id`, `slot_ref` и детерминированный runtime `command_id`; если `runtime_job_ref` уже сохранён в `Run`, `agent-manager` не создаёт новое задание.
+- Повтор постановки `JOB_TYPE_AGENT_RUN` должен использовать `agent_run_id`, `slot_ref` и детерминированный runtime `command_id`; если `runtime_job_ref` уже сохранён в `Run`, `agent-manager` не создаёт новое задание. Если job ещё нет, replay `StartAgentRun` повторно читает idempotent `PrepareRuntime` и создаёт job только после `ready/completed`.
 - Если при постановке `JOB_TYPE_AGENT_RUN` не хватает materialization id, context digest, workspace fingerprint или runner image ref, `agent-manager` фиксирует безопасную классифицированную ошибку и не вызывает `CreateJob` с неполным spec.
 - Если `package-hub` больше не отдаёт установку или manifest после создания `Run`, уже замороженный `Run` остаётся исторически валидным, но новый runtime start должен завершиться безопасной ошибкой зависимости.
 - `package-hub` не создаёт локальные пути и не подготавливает workspace.

@@ -99,10 +99,11 @@ func TestPrepareRuntimeResultExtractsGeneratedContextDigest(t *testing.T) {
 	result, err := prepareRuntimeResult(agentservice.RuntimePreparationInput{
 		WorkspacePolicy: agentservice.RuntimeWorkspacePolicy{PolicyDigest: "sha256:policy"},
 	}, &runtimev1.PrepareRuntimeResponse{
-		Slot: &runtimev1.Slot{SlotId: slotText, Fingerprint: "sha256:slot"},
+		Slot: &runtimev1.Slot{SlotId: slotText, Status: runtimev1.SlotStatus_SLOT_STATUS_READY, Fingerprint: "sha256:slot"},
 		WorkspaceMaterialization: &runtimev1.WorkspaceMaterialization{
 			WorkspaceMaterializationId: materializationID.String(),
 			SlotId:                     slotText,
+			Status:                     runtimev1.WorkspaceMaterializationStatus_WORKSPACE_MATERIALIZATION_STATUS_COMPLETED,
 			Fingerprint:                "sha256:workspace",
 			Sources: []*runtimev1.WorkspaceSource{{
 				Kind:   runtimev1.WorkspaceSourceKind_WORKSPACE_SOURCE_KIND_GENERATED_CONTEXT,
@@ -120,6 +121,10 @@ func TestPrepareRuntimeResultExtractsGeneratedContextDigest(t *testing.T) {
 	if result.ContextDigest != "sha256:agent-run-context" ||
 		result.ContextRef != "runtime://workspace-materializations/"+materializationID.String()+"/context/agent-run.json" {
 		t.Fatalf("context refs = %+v", result)
+	}
+	if result.SlotStatus != agentservice.RuntimeSlotStatusReady ||
+		result.WorkspaceMaterializationStatus != agentservice.RuntimeWorkspaceMaterializationStatusCompleted {
+		t.Fatalf("runtime statuses = %+v", result)
 	}
 }
 

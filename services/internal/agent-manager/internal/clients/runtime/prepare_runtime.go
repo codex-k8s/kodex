@@ -310,12 +310,14 @@ func prepareRuntimeResult(input agentservice.RuntimePreparationInput, response *
 	)
 	contextRef, contextDigest := agentRunContextRefs(materialization)
 	return agentservice.RuntimePreparationResult{
-		SlotRef:                    slotRef,
-		WorkspaceRef:               workspaceRef,
-		ContextRef:                 contextRef,
-		ContextDigest:              contextDigest,
-		MaterializationFingerprint: fingerprint,
-		DiagnosticSummary:          runtimeDiagnosticSummary(slot, materialization),
+		SlotRef:                        slotRef,
+		SlotStatus:                     runtimeSlotStatus(slot.GetStatus()),
+		WorkspaceRef:                   workspaceRef,
+		WorkspaceMaterializationStatus: runtimeWorkspaceMaterializationStatus(materialization.GetStatus()),
+		ContextRef:                     contextRef,
+		ContextDigest:                  contextDigest,
+		MaterializationFingerprint:     fingerprint,
+		DiagnosticSummary:              runtimeDiagnosticSummary(slot, materialization),
 	}, nil
 }
 
@@ -427,8 +429,36 @@ var runtimeJobStatusNames = map[runtimev1.JobStatus]string{
 	runtimev1.JobStatus_JOB_STATUS_TIMED_OUT: "timed_out",
 }
 
+var runtimeSlotStatusNames = map[runtimev1.SlotStatus]string{
+	runtimev1.SlotStatus_SLOT_STATUS_PREWARMED:       "prewarmed",
+	runtimev1.SlotStatus_SLOT_STATUS_RESERVED:        "reserved",
+	runtimev1.SlotStatus_SLOT_STATUS_MATERIALIZING:   "materializing",
+	runtimev1.SlotStatus_SLOT_STATUS_READY:           agentservice.RuntimeSlotStatusReady,
+	runtimev1.SlotStatus_SLOT_STATUS_IN_USE:          "in_use",
+	runtimev1.SlotStatus_SLOT_STATUS_RELEASING:       "releasing",
+	runtimev1.SlotStatus_SLOT_STATUS_FAILED:          "failed",
+	runtimev1.SlotStatus_SLOT_STATUS_CLEANUP_PENDING: "cleanup_pending",
+	runtimev1.SlotStatus_SLOT_STATUS_CLEANED:         "cleaned",
+}
+
+var runtimeWorkspaceMaterializationStatusNames = map[runtimev1.WorkspaceMaterializationStatus]string{
+	runtimev1.WorkspaceMaterializationStatus_WORKSPACE_MATERIALIZATION_STATUS_PENDING:   "pending",
+	runtimev1.WorkspaceMaterializationStatus_WORKSPACE_MATERIALIZATION_STATUS_RUNNING:   "running",
+	runtimev1.WorkspaceMaterializationStatus_WORKSPACE_MATERIALIZATION_STATUS_COMPLETED: agentservice.RuntimeWorkspaceMaterializationStatusCompleted,
+	runtimev1.WorkspaceMaterializationStatus_WORKSPACE_MATERIALIZATION_STATUS_FAILED:    "failed",
+	runtimev1.WorkspaceMaterializationStatus_WORKSPACE_MATERIALIZATION_STATUS_CANCELLED: "cancelled",
+}
+
 func runtimeJobStatus(status runtimev1.JobStatus) string {
 	return runtimeJobStatusNames[status]
+}
+
+func runtimeSlotStatus(status runtimev1.SlotStatus) string {
+	return runtimeSlotStatusNames[status]
+}
+
+func runtimeWorkspaceMaterializationStatus(status runtimev1.WorkspaceMaterializationStatus) string {
+	return runtimeWorkspaceMaterializationStatusNames[status]
 }
 
 func runtimeJobStatusDomain(status runtimev1.JobStatus) agentservice.RuntimeJobStatus {
