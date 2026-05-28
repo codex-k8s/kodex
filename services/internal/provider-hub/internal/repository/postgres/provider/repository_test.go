@@ -875,8 +875,6 @@ func TestRepositoryIntegrationRuntimeStateLimitsAndOperations(t *testing.T) {
 }
 
 func TestRepositoryIntegrationCleanupExpiredWebhookPayloads(t *testing.T) {
-	t.Parallel()
-
 	ctx := context.Background()
 	pool := openIntegrationPool(t, ctx)
 	repository := NewRepository(pool)
