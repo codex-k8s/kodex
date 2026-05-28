@@ -223,6 +223,8 @@ func TestRepositoryIntegrationInteractionRequestResponseLifecycle(t *testing.T) 
 	}
 
 	response := testInteractionResponse(request.ID, now.Add(time.Minute))
+	response.ResponseAction = enum.InteractionResponseActionRequestChanges
+	response.ResponseSummary = "needs changes"
 	answered := storedRequest
 	answered.Status = enum.InteractionRequestStatusAnswered
 	answered.Version = 2
@@ -240,8 +242,11 @@ func TestRepositoryIntegrationInteractionRequestResponseLifecycle(t *testing.T) 
 	if err != nil {
 		t.Fatalf("get response: %v", err)
 	}
-	if storedResponse.ResponseObject.SizeBytes == nil || *storedResponse.ResponseObject.SizeBytes != 256 || storedResponse.OwnerDecisionRef != "decision:1" {
-		t.Fatalf("stored response = %+v, want object ref and decision ref", storedResponse)
+	if storedResponse.ResponseAction != enum.InteractionResponseActionRequestChanges ||
+		storedResponse.ResponseObject.SizeBytes == nil ||
+		*storedResponse.ResponseObject.SizeBytes != 256 ||
+		storedResponse.OwnerDecisionRef != "decision:1" {
+		t.Fatalf("stored response = %+v, want request_changes with object ref and decision ref", storedResponse)
 	}
 	updatedRequest, err := repository.GetInteractionRequest(ctx, request.ID)
 	if err != nil {
