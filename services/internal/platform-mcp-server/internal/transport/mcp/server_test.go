@@ -11,6 +11,7 @@ import (
 
 	agentsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/agents/v1"
 	governancev1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/governance/v1"
+	interactionsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/interactions/v1"
 	providersv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/providers/v1"
 	ownerclients "github.com/codex-k8s/kodex/services/internal/platform-mcp-server/internal/clients/owners"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -43,6 +44,24 @@ func TestToolsListSnapshot(t *testing.T) {
 		t.Fatalf("MarshalIndent(): %v", err)
 	}
 	const expected = `[
+  {
+    "name": "agent.human_gate.get",
+    "description": "Прочитать ожидание или результат Human gate через agent-manager.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
+  {
+    "name": "agent.human_gate.list",
+    "description": "Получить список ожиданий Human gate через agent-manager.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
+  {
+    "name": "agent.human_gate.request",
+    "description": "Зафиксировать ожидание решения человека через agent-manager.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
   {
     "name": "agent.run.record_state",
     "description": "Зафиксировать состояние агентного запуска через agent-manager.",
@@ -208,6 +227,36 @@ func TestToolsListSnapshot(t *testing.T) {
   {
     "name": "governance.risk.reevaluate",
     "description": "Reevaluate an existing risk assessment through governance-manager.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
+  {
+    "name": "governance.signal.list_review",
+    "description": "Прочитать безопасные сводки review signals через governance-manager.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
+  {
+    "name": "governance.signal.record_review",
+    "description": "Записать review signal через governance-manager без хранения состояния в MCP.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
+  {
+    "name": "interaction.owner_inbox.get",
+    "description": "Прочитать входящую задачу владельца через interaction-hub.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
+  {
+    "name": "interaction.owner_inbox.list",
+    "description": "Получить список входящих задач владельца через interaction-hub.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
+  {
+    "name": "interaction.owner_inbox.respond",
+    "description": "Записать ответ владельца через interaction-hub без переноса решения в MCP.",
     "has_input_schema": true,
     "has_output_schema": true
   },
@@ -413,6 +462,78 @@ func TestRunContextReadRoutesToOwner(t *testing.T) {
 	}
 	if !strings.Contains(string(data), "waiting") {
 		t.Fatalf("structured content does not include waiting state: %s", data)
+	}
+}
+
+func TestAgentHumanGateRequestRoutesToOwner(t *testing.T) {
+	t.Parallel()
+
+	agent := newFakeAgentManagerClient()
+	server := newTestServerWithAgent(t, agent)
+	session, cleanup := connectClient(t, server)
+	defer cleanup()
+
+	result, err := session.CallTool(context.Background(), &mcpsdk.CallToolParams{
+		Name: ToolAgentHumanGateRequest,
+		Arguments: map[string]any{
+			"meta":       validCommandMetaArgs(),
+			"session_id": "session-1",
+			"run_id":     "run-1",
+			"stage_id":   "stage-1",
+			"provider_target": map[string]any{
+				"pull_request_ref": "provider:pr:1",
+			},
+			"target_ref":                  "provider:pr:1",
+			"request_kind":                "owner_review",
+			"reason_code":                 "needs_owner_decision",
+			"safe_summary":                "Нужно решение владельца",
+			"interaction_request_ref":     "interaction-request-1",
+			"governance_gate_request_ref": "gate-request-1",
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool(): %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("CallTool() returned tool error: %+v", result.Content)
+	}
+	if agent.requestGateCalls != 1 {
+		t.Fatalf("requestGateCalls = %d, want 1", agent.requestGateCalls)
+	}
+	data, err := json.Marshal(result.StructuredContent)
+	if err != nil {
+		t.Fatalf("Marshal(): %v", err)
+	}
+	if !strings.Contains(string(data), "human-gate-1") || strings.Contains(string(data), "raw") {
+		t.Fatalf("structured content is not safe human gate summary: %s", data)
+	}
+}
+
+func TestAgentHumanGateListRoutesToOwner(t *testing.T) {
+	t.Parallel()
+
+	agent := newFakeAgentManagerClient()
+	server := newTestServerWithAgent(t, agent)
+	session, cleanup := connectClient(t, server)
+	defer cleanup()
+
+	result, err := session.CallTool(context.Background(), &mcpsdk.CallToolParams{
+		Name: ToolAgentHumanGateList,
+		Arguments: map[string]any{
+			"meta":       validQueryMetaArgs(),
+			"session_id": "session-1",
+			"status":     "waiting",
+			"page":       map[string]any{"page_size": 10},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool(): %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("CallTool() returned tool error: %+v", result.Content)
+	}
+	if agent.listGatesCalls != 1 {
+		t.Fatalf("listGatesCalls = %d, want 1", agent.listGatesCalls)
 	}
 }
 
@@ -732,6 +853,87 @@ func TestProviderToolOwnerErrorIsSafe(t *testing.T) {
 	}
 }
 
+func TestInteractionOwnerInboxListRoutesToOwner(t *testing.T) {
+	t.Parallel()
+
+	interaction := newFakeInteractionHubClient()
+	server := newTestServerWithInteraction(t, interaction)
+	session, cleanup := connectClient(t, server)
+	defer cleanup()
+
+	result, err := session.CallTool(context.Background(), &mcpsdk.CallToolParams{
+		Name: ToolInteractionOwnerInboxList,
+		Arguments: map[string]any{
+			"meta": validQueryMetaArgs(),
+			"scope": map[string]any{
+				"type": "project",
+				"ref":  "project-1",
+			},
+			"request_kinds":       []any{"human_gate"},
+			"statuses":            []any{"waiting"},
+			"source_owner_kind":   "agent_manager",
+			"source_owner_ref":    "human-gate-1",
+			"include_diagnostics": true,
+			"page":                map[string]any{"page_size": 10},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool(): %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("CallTool() returned tool error: %+v", result.Content)
+	}
+	if interaction.listInboxCalls != 1 {
+		t.Fatalf("listInboxCalls = %d, want 1", interaction.listInboxCalls)
+	}
+	data, err := json.Marshal(result.StructuredContent)
+	if err != nil {
+		t.Fatalf("Marshal(): %v", err)
+	}
+	if !strings.Contains(string(data), "interaction-request-1") || strings.Contains(string(data), "raw") {
+		t.Fatalf("structured content is not safe owner inbox summary: %s", data)
+	}
+}
+
+func TestInteractionOwnerInboxRespondRoutesToOwner(t *testing.T) {
+	t.Parallel()
+
+	interaction := newFakeInteractionHubClient()
+	server := newTestServerWithInteraction(t, interaction)
+	session, cleanup := connectClient(t, server)
+	defer cleanup()
+
+	result, err := session.CallTool(context.Background(), &mcpsdk.CallToolParams{
+		Name: ToolInteractionOwnerInboxRespond,
+		Arguments: map[string]any{
+			"meta":                   validCommandMetaArgs(),
+			"request_id":             "interaction-request-1",
+			"response_action":        "approve",
+			"responded_by_actor_ref": "user:1",
+			"response_summary":       "approved",
+			"source_kind":            "mcp",
+			"source_ref":             "mcp-call-1",
+			"owner_decision_ref":     "human-gate-decision-1",
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool(): %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("CallTool() returned tool error: %+v", result.Content)
+	}
+	if interaction.respondCalls != 1 {
+		t.Fatalf("respondCalls = %d, want 1", interaction.respondCalls)
+	}
+	data, err := json.Marshal(result.StructuredContent)
+	if err != nil {
+		t.Fatalf("Marshal(): %v", err)
+	}
+	if !strings.Contains(string(data), "interaction-response-1") || strings.Contains(string(data), "secret-token") {
+		t.Fatalf("structured content is not safe owner response summary: %s", data)
+	}
+}
+
 func TestGovernanceRiskEvaluateRoutesToOwner(t *testing.T) {
 	t.Parallel()
 
@@ -986,6 +1188,80 @@ func TestGovernanceRiskOwnerErrorIsSafe(t *testing.T) {
 	}
 	if !strings.Contains(string(data), "owner returned Internal") {
 		t.Fatalf("tool error does not include safe owner code: %s", data)
+	}
+}
+
+func TestGovernanceReviewSignalRecordRoutesToOwner(t *testing.T) {
+	t.Parallel()
+
+	governance := newFakeGovernanceManagerClient()
+	server := newTestServerWithGovernance(t, governance)
+	session, cleanup := connectClient(t, server)
+	defer cleanup()
+
+	result, err := session.CallTool(context.Background(), &mcpsdk.CallToolParams{
+		Name: ToolGovernanceSignalRecordReview,
+		Arguments: map[string]any{
+			"meta":               validGovernanceCommandMetaArgs("record_review_signal", nil),
+			"risk_assessment_id": "risk-assessment-1",
+			"target":             map[string]any{"type": "pull_request", "ref": "provider:pr:1"},
+			"role_kind":          "reviewer",
+			"author_ref":         "agent:reviewer-1",
+			"outcome":            "pass",
+			"severity":           "info",
+			"confidence":         "high",
+			"evidence_refs": []any{map[string]any{
+				"kind":    "provider_review",
+				"ref":     "provider-review-1",
+				"summary": "review summary",
+			}},
+			"summary": "review passed",
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool(): %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("CallTool() returned tool error: %+v", result.Content)
+	}
+	if governance.recordReviewSignalCalls != 1 {
+		t.Fatalf("recordReviewSignalCalls = %d, want 1", governance.recordReviewSignalCalls)
+	}
+	data, err := json.Marshal(result.StructuredContent)
+	if err != nil {
+		t.Fatalf("Marshal(): %v", err)
+	}
+	if !strings.Contains(string(data), "review-signal-1") || strings.Contains(string(data), "provider payload") {
+		t.Fatalf("structured content is not safe review signal summary: %s", data)
+	}
+}
+
+func TestGovernanceReviewSignalListRoutesToOwner(t *testing.T) {
+	t.Parallel()
+
+	governance := newFakeGovernanceManagerClient()
+	server := newTestServerWithGovernance(t, governance)
+	session, cleanup := connectClient(t, server)
+	defer cleanup()
+
+	result, err := session.CallTool(context.Background(), &mcpsdk.CallToolParams{
+		Name: ToolGovernanceSignalListReview,
+		Arguments: map[string]any{
+			"meta":      validGovernanceQueryMetaArgs(),
+			"target":    map[string]any{"type": "pull_request", "ref": "provider:pr:1"},
+			"role_kind": "reviewer",
+			"outcome":   "pass",
+			"page":      map[string]any{"page_size": 10},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool(): %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("CallTool() returned tool error: %+v", result.Content)
+	}
+	if governance.listReviewSignalsCalls != 1 {
+		t.Fatalf("listReviewSignalsCalls = %d, want 1", governance.listReviewSignalsCalls)
 	}
 }
 
@@ -1423,28 +1699,34 @@ type toolSnapshot struct {
 func newTestServer(t *testing.T) *Server {
 	t.Helper()
 
-	return newTestServerWithOwners(t, newFakeAgentManagerClient(), newFakeProviderHubClient(), newFakeGovernanceManagerClient())
+	return newTestServerWithOwners(t, newFakeAgentManagerClient(), newFakeProviderHubClient(), newFakeGovernanceManagerClient(), newFakeInteractionHubClient())
 }
 
 func newTestServerWithAgent(t *testing.T, agentManager AgentManagerClient) *Server {
 	t.Helper()
 
-	return newTestServerWithOwners(t, agentManager, newFakeProviderHubClient(), newFakeGovernanceManagerClient())
+	return newTestServerWithOwners(t, agentManager, newFakeProviderHubClient(), newFakeGovernanceManagerClient(), newFakeInteractionHubClient())
 }
 
 func newTestServerWithProvider(t *testing.T, provider ProviderHubClient) *Server {
 	t.Helper()
 
-	return newTestServerWithOwners(t, newFakeAgentManagerClient(), provider, newFakeGovernanceManagerClient())
+	return newTestServerWithOwners(t, newFakeAgentManagerClient(), provider, newFakeGovernanceManagerClient(), newFakeInteractionHubClient())
 }
 
 func newTestServerWithGovernance(t *testing.T, governance GovernanceManagerClient) *Server {
 	t.Helper()
 
-	return newTestServerWithOwners(t, newFakeAgentManagerClient(), newFakeProviderHubClient(), governance)
+	return newTestServerWithOwners(t, newFakeAgentManagerClient(), newFakeProviderHubClient(), governance, newFakeInteractionHubClient())
 }
 
-func newTestServerWithOwners(t *testing.T, agentManager AgentManagerClient, provider ProviderHubClient, governance GovernanceManagerClient) *Server {
+func newTestServerWithInteraction(t *testing.T, interaction InteractionHubClient) *Server {
+	t.Helper()
+
+	return newTestServerWithOwners(t, newFakeAgentManagerClient(), newFakeProviderHubClient(), newFakeGovernanceManagerClient(), interaction)
+}
+
+func newTestServerWithOwners(t *testing.T, agentManager AgentManagerClient, provider ProviderHubClient, governance GovernanceManagerClient, interaction InteractionHubClient) *Server {
 	t.Helper()
 
 	routes, err := ownerclients.NewCatalog([]ownerclients.RouteConfig{
@@ -1476,6 +1758,13 @@ func newTestServerWithOwners(t *testing.T, agentManager AgentManagerClient, prov
 			Timeout:   3 * time.Second,
 			Enabled:   true,
 		},
+		{
+			Service:   ownerclients.ServiceInteractionHub,
+			GRPCAddr:  "interaction-hub:9090",
+			AuthToken: "secret-token",
+			Timeout:   3 * time.Second,
+			Enabled:   true,
+		},
 	})
 	if err != nil {
 		t.Fatalf("NewCatalog(): %v", err)
@@ -1490,6 +1779,7 @@ func newTestServerWithOwners(t *testing.T, agentManager AgentManagerClient, prov
 		AgentManager:      agentManager,
 		ProviderHub:       provider,
 		GovernanceManager: governance,
+		InteractionHub:    interaction,
 		AuthRequired:      false,
 	}, nil)
 	if err != nil {
@@ -1585,6 +1875,12 @@ func newTestServerWithAuth(t *testing.T) *Server {
 			Timeout:  3 * time.Second,
 			Enabled:  true,
 		},
+		{
+			Service:  ownerclients.ServiceInteractionHub,
+			GRPCAddr: "interaction-hub:9090",
+			Timeout:  3 * time.Second,
+			Enabled:  true,
+		},
 	})
 	if err != nil {
 		t.Fatalf("NewCatalog(): %v", err)
@@ -1599,6 +1895,7 @@ func newTestServerWithAuth(t *testing.T) *Server {
 		AgentManager:      newFakeAgentManagerClient(),
 		ProviderHub:       newFakeProviderHubClient(),
 		GovernanceManager: newFakeGovernanceManagerClient(),
+		InteractionHub:    newFakeInteractionHubClient(),
 		AuthRequired:      true,
 		AuthToken:         "test-token",
 		AuthScope:         "kodex.mcp",
@@ -1635,6 +1932,9 @@ type fakeAgentManagerClient struct {
 	startRunCalls       int
 	recordStateCalls    int
 	recordSnapshotCalls int
+	requestGateCalls    int
+	getGateCalls        int
+	listGatesCalls      int
 	getSessionCalls     int
 	listRunsCalls       int
 	err                 error
@@ -1737,6 +2037,38 @@ func (f *fakeAgentManagerClient) RecordSessionStateSnapshot(_ context.Context, r
 	}, nil
 }
 
+func (f *fakeAgentManagerClient) RequestHumanGate(_ context.Context, request *agentsv1.RequestHumanGateRequest) (*agentsv1.HumanGateRequestResponse, error) {
+	f.requestGateCalls++
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &agentsv1.HumanGateRequestResponse{HumanGateRequest: fakeHumanGateRequest(request.GetSessionId(), agentsv1.HumanGateStatus_HUMAN_GATE_STATUS_WAITING)}, nil
+}
+
+func (f *fakeAgentManagerClient) GetHumanGateRequest(_ context.Context, request *agentsv1.GetHumanGateRequestRequest) (*agentsv1.HumanGateRequestResponse, error) {
+	f.getGateCalls++
+	if f.err != nil {
+		return nil, f.err
+	}
+	gate := fakeHumanGateRequest("session-1", agentsv1.HumanGateStatus_HUMAN_GATE_STATUS_RESOLVED)
+	gate.Id = request.GetHumanGateRequestId()
+	gate.Outcome = agentsv1.HumanGateOutcome_HUMAN_GATE_OUTCOME_APPROVE
+	resolvedAt := "2026-05-22T00:20:00Z"
+	gate.ResolvedAt = &resolvedAt
+	return &agentsv1.HumanGateRequestResponse{HumanGateRequest: gate}, nil
+}
+
+func (f *fakeAgentManagerClient) ListHumanGateRequests(_ context.Context, _ *agentsv1.ListHumanGateRequestsRequest) (*agentsv1.ListHumanGateRequestsResponse, error) {
+	f.listGatesCalls++
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &agentsv1.ListHumanGateRequestsResponse{
+		HumanGateRequests: []*agentsv1.HumanGateRequest{fakeHumanGateRequest("session-1", agentsv1.HumanGateStatus_HUMAN_GATE_STATUS_WAITING)},
+		Page:              &agentsv1.PageResponse{},
+	}, nil
+}
+
 func (f *fakeAgentManagerClient) GetAgentSession(_ context.Context, request *agentsv1.GetAgentSessionRequest) (*agentsv1.AgentSessionResponse, error) {
 	f.getSessionCalls++
 	if f.err != nil {
@@ -1772,6 +2104,144 @@ func (f *fakeAgentManagerClient) ListAgentRuns(_ context.Context, _ *agentsv1.Li
 		}},
 		Page: &agentsv1.PageResponse{},
 	}, nil
+}
+
+func fakeHumanGateRequest(sessionID string, gateStatus agentsv1.HumanGateStatus) *agentsv1.HumanGateRequest {
+	summary := "Нужно решение владельца"
+	return &agentsv1.HumanGateRequest{
+		Id:                       "human-gate-1",
+		SessionId:                sessionID,
+		RunId:                    optionalString("run-1"),
+		StageId:                  optionalString("stage-1"),
+		ProviderTarget:           &agentsv1.ProviderTargetRef{PullRequestRef: optionalString("provider:pr:1")},
+		TargetRef:                optionalString("provider:pr:1"),
+		RequestKind:              "owner_review",
+		ReasonCode:               "needs_owner_decision",
+		SafeSummary:              &summary,
+		InteractionRequestRef:    optionalString("interaction-request-1"),
+		GovernanceGateRequestRef: optionalString("gate-request-1"),
+		Status:                   gateStatus,
+		Outcome:                  agentsv1.HumanGateOutcome_HUMAN_GATE_OUTCOME_NONE,
+		IdempotencyKey:           "human-gate-key",
+		Version:                  1,
+		CreatedAt:                "2026-05-22T00:10:00Z",
+		UpdatedAt:                "2026-05-22T00:10:00Z",
+	}
+}
+
+type fakeInteractionHubClient struct {
+	listInboxCalls int
+	getInboxCalls  int
+	respondCalls   int
+	err            error
+}
+
+func newFakeInteractionHubClient() *fakeInteractionHubClient {
+	return &fakeInteractionHubClient{}
+}
+
+func (f *fakeInteractionHubClient) ListOwnerInboxItems(_ context.Context, _ *interactionsv1.ListOwnerInboxItemsRequest) (*interactionsv1.ListOwnerInboxItemsResponse, error) {
+	f.listInboxCalls++
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &interactionsv1.ListOwnerInboxItemsResponse{
+		Items: []*interactionsv1.OwnerInboxItem{fakeOwnerInboxItem()},
+		Page:  &interactionsv1.PageResponse{},
+	}, nil
+}
+
+func (f *fakeInteractionHubClient) GetOwnerInboxItem(_ context.Context, _ *interactionsv1.GetOwnerInboxItemRequest) (*interactionsv1.OwnerInboxItemResponse, error) {
+	f.getInboxCalls++
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &interactionsv1.OwnerInboxItemResponse{Item: fakeOwnerInboxItem()}, nil
+}
+
+func (f *fakeInteractionHubClient) RecordInteractionResponse(_ context.Context, request *interactionsv1.RecordInteractionResponseRequest) (*interactionsv1.InteractionResponseResponse, error) {
+	f.respondCalls++
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &interactionsv1.InteractionResponseResponse{
+		Request:  fakeInteractionRequest(request.GetRequestId()),
+		Response: fakeInteractionResponse(request),
+	}, nil
+}
+
+func fakeOwnerInboxItem() *interactionsv1.OwnerInboxItem {
+	return &interactionsv1.OwnerInboxItem{
+		RequestId:     "interaction-request-1",
+		RequestKind:   interactionsv1.InteractionRequestKind_INTERACTION_REQUEST_KIND_HUMAN_GATE,
+		RequestStatus: interactionsv1.InteractionRequestStatus_INTERACTION_REQUEST_STATUS_WAITING,
+		Scope:         &interactionsv1.ScopeRef{Type: interactionsv1.InteractionScopeType_INTERACTION_SCOPE_TYPE_PROJECT, Ref: "project-1"},
+		Requester:     &interactionsv1.SourceOwnerRef{Kind: interactionsv1.SourceOwnerKind_SOURCE_OWNER_KIND_AGENT_MANAGER, Ref: optionalString("human-gate-1")},
+		DecisionOwner: &interactionsv1.DecisionOwnerRef{
+			OwnerKind:       interactionsv1.DecisionOwnerKind_DECISION_OWNER_KIND_AGENT_MANAGER,
+			OwnerRequestRef: "human-gate-1",
+		},
+		AssigneeRefs: []*interactionsv1.ActorRef{{RefKind: "user", Ref: "user-1"}},
+		ContextRefs:  []*interactionsv1.ExternalRef{{RefKind: "agent_run", Ref: "run-1"}},
+		Title:        "Owner decision",
+		Summary:      "Нужен ответ владельца",
+		DeliverySummary: &interactionsv1.OwnerInboxDeliverySummary{
+			AttemptCount: 1,
+			LatestStatus: interactionsv1.DeliveryAttemptStatus_DELIVERY_ATTEMPT_STATUS_DELIVERED,
+		},
+		LatestResponse: &interactionsv1.OwnerInboxResponseSummary{
+			ResponseId:             "interaction-response-1",
+			ResponseAction:         interactionsv1.InteractionResponseAction_INTERACTION_RESPONSE_ACTION_APPROVE,
+			RespondedByActorRef:    "user:1",
+			SourceKind:             interactionsv1.InteractionResponseSourceKind_INTERACTION_RESPONSE_SOURCE_KIND_MCP,
+			ResponseSummary:        optionalString("approved"),
+			InteractionResponseRef: optionalString("interaction-response-ref-1"),
+			CreatedAt:              "2026-05-27T00:01:00Z",
+		},
+		AllowedActions: []*interactionsv1.InteractionAction{{
+			ActionKey:  "approve",
+			IsTerminal: true,
+		}},
+		CreatedAt: "2026-05-27T00:00:00Z",
+		UpdatedAt: "2026-05-27T00:01:00Z",
+		Version:   2,
+	}
+}
+
+func fakeInteractionRequest(requestID string) *interactionsv1.InteractionRequest {
+	return &interactionsv1.InteractionRequest{
+		Id:          requestID,
+		RequestKind: interactionsv1.InteractionRequestKind_INTERACTION_REQUEST_KIND_HUMAN_GATE,
+		Scope:       &interactionsv1.ScopeRef{Type: interactionsv1.InteractionScopeType_INTERACTION_SCOPE_TYPE_PROJECT, Ref: "project-1"},
+		SourceOwner: &interactionsv1.SourceOwnerRef{Kind: interactionsv1.SourceOwnerKind_SOURCE_OWNER_KIND_AGENT_MANAGER, Ref: optionalString("human-gate-1")},
+		DecisionOwner: &interactionsv1.DecisionOwnerRef{
+			OwnerKind:       interactionsv1.DecisionOwnerKind_DECISION_OWNER_KIND_AGENT_MANAGER,
+			OwnerRequestRef: "human-gate-1",
+		},
+		TargetRefs:    []*interactionsv1.ActorRef{{RefKind: "user", Ref: "user-1"}},
+		ContextRefs:   []*interactionsv1.ExternalRef{{RefKind: "agent_run", Ref: "run-1"}},
+		PromptSummary: "Нужен ответ владельца",
+		Status:        interactionsv1.InteractionRequestStatus_INTERACTION_REQUEST_STATUS_ANSWERED,
+		Version:       3,
+		CreatedAt:     "2026-05-27T00:00:00Z",
+		UpdatedAt:     "2026-05-27T00:02:00Z",
+		ResolvedAt:    optionalString("2026-05-27T00:02:00Z"),
+	}
+}
+
+func fakeInteractionResponse(request *interactionsv1.RecordInteractionResponseRequest) *interactionsv1.InteractionResponse {
+	return &interactionsv1.InteractionResponse{
+		Id:                  "interaction-response-1",
+		RequestId:           request.GetRequestId(),
+		ResponseAction:      request.GetResponseAction(),
+		RespondedByActorRef: request.GetRespondedByActorRef(),
+		ResponseSummary:     request.ResponseSummary,
+		ResponseObject:      request.GetResponseObject(),
+		SourceKind:          request.GetSourceKind(),
+		SourceRef:           request.SourceRef,
+		OwnerDecisionRef:    request.OwnerDecisionRef,
+		CreatedAt:           "2026-05-27T00:02:00Z",
+	}
 }
 
 type fakeProviderHubClient struct {
@@ -1992,6 +2462,8 @@ type fakeGovernanceManagerClient struct {
 	listBlockingCalls        int
 	recordSafetyCalls        int
 	getSafetyCalls           int
+	recordReviewSignalCalls  int
+	listReviewSignalsCalls   int
 	lastExpectedVersion      *int64
 	err                      error
 }
@@ -2257,6 +2729,29 @@ func (f *fakeGovernanceManagerClient) GetReleaseSafetyState(_ context.Context, _
 	return &governancev1.ReleaseSafetyStateResponse{ReleaseSafetyState: fakeReleaseSafetyState("release-package-1")}, nil
 }
 
+func (f *fakeGovernanceManagerClient) RecordReviewSignal(_ context.Context, request *governancev1.RecordReviewSignalRequest) (*governancev1.ReviewSignalResponse, error) {
+	f.recordReviewSignalCalls++
+	f.lastExpectedVersion = request.GetMeta().ExpectedVersion
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &governancev1.ReviewSignalResponse{ReviewSignal: fakeReviewSignal(request.GetTarget())}, nil
+}
+
+func (f *fakeGovernanceManagerClient) ListReviewSignals(_ context.Context, _ *governancev1.ListReviewSignalsRequest) (*governancev1.ListReviewSignalsResponse, error) {
+	f.listReviewSignalsCalls++
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &governancev1.ListReviewSignalsResponse{
+		ReviewSignals: []*governancev1.ReviewSignal{fakeReviewSignal(&governancev1.TargetRef{
+			Type: governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_PULL_REQUEST,
+			Ref:  "provider:pr:1",
+		})},
+		Page: &governancev1.PageResponse{},
+	}, nil
+}
+
 func fakeRiskAssessmentResponse(target *governancev1.TargetRef) *governancev1.RiskAssessmentResponse {
 	return &governancev1.RiskAssessmentResponse{
 		RiskAssessment: fakeRiskAssessment(target),
@@ -2272,6 +2767,26 @@ func fakeRiskAssessmentResponse(target *governancev1.TargetRef) *governancev1.Ri
 			},
 		},
 		ReviewSignals: []*governancev1.ReviewSignal{{Id: "review-signal-1"}},
+	}
+}
+
+func fakeReviewSignal(target *governancev1.TargetRef) *governancev1.ReviewSignal {
+	return &governancev1.ReviewSignal{
+		Id:               "review-signal-1",
+		RiskAssessmentId: stringPtr("risk-assessment-1"),
+		Target:           target,
+		RoleKind:         governancev1.ReviewRoleKind_REVIEW_ROLE_KIND_REVIEWER,
+		AuthorRef:        "agent:reviewer-1",
+		Outcome:          governancev1.ReviewSignalOutcome_REVIEW_SIGNAL_OUTCOME_PASS,
+		Severity:         governancev1.SignalSeverity_SIGNAL_SEVERITY_INFO,
+		Confidence:       governancev1.Confidence_CONFIDENCE_HIGH.Enum(),
+		EvidenceRefs: []*governancev1.EvidenceRef{{
+			Kind:    governancev1.EvidenceKind_EVIDENCE_KIND_PROVIDER_REVIEW,
+			Ref:     "provider-review-1",
+			Summary: "review summary",
+		}},
+		Summary:   "review passed",
+		CreatedAt: "2026-05-26T00:00:00Z",
 	}
 }
 

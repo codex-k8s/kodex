@@ -37,6 +37,8 @@ func NewServer(cfg Config, logger *slog.Logger) (*Server, error) {
 	registry.addProviderTools(mcpServer, providerTools, cfg.RegistryVersion)
 	governanceTools := NewGovernanceToolsHandler(cfg.GovernanceManager)
 	registry.addGovernanceTools(mcpServer, governanceTools, cfg.RegistryVersion)
+	interactionTools := NewInteractionToolsHandler(cfg.InteractionHub)
+	registry.addInteractionTools(mcpServer, interactionTools, cfg.RegistryVersion)
 	streamable := mcpsdk.NewStreamableHTTPHandler(func(*http.Request) *mcpsdk.Server {
 		return mcpServer
 	}, &mcpsdk.StreamableHTTPOptions{
@@ -87,6 +89,9 @@ func (cfg Config) Validate() error {
 	}
 	if cfg.GovernanceManager == nil {
 		return fmt.Errorf("mcp governance-manager client is required")
+	}
+	if cfg.InteractionHub == nil {
+		return fmt.Errorf("mcp interaction-hub client is required")
 	}
 	return nil
 }

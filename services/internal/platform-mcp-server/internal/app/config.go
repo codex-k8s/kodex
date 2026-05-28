@@ -10,6 +10,7 @@ import (
 
 	agentmanagerclient "github.com/codex-k8s/kodex/services/internal/platform-mcp-server/internal/clients/agentmanager"
 	governanceclient "github.com/codex-k8s/kodex/services/internal/platform-mcp-server/internal/clients/governance"
+	interactionhubclient "github.com/codex-k8s/kodex/services/internal/platform-mcp-server/internal/clients/interactionhub"
 	ownerclients "github.com/codex-k8s/kodex/services/internal/platform-mcp-server/internal/clients/owners"
 	providerhubclient "github.com/codex-k8s/kodex/services/internal/platform-mcp-server/internal/clients/providerhub"
 	mcptransport "github.com/codex-k8s/kodex/services/internal/platform-mcp-server/internal/transport/mcp"
@@ -35,7 +36,7 @@ type Config struct {
 // MCPConfig contains MCP HTTP transport and registry settings.
 type MCPConfig struct {
 	Path            string        `env:"PATH" envDefault:"/mcp"`
-	RegistryVersion string        `env:"REGISTRY_VERSION" envDefault:"mcp-4"`
+	RegistryVersion string        `env:"REGISTRY_VERSION" envDefault:"mcp-4o"`
 	ToolsPageSize   int           `env:"TOOLS_PAGE_SIZE" envDefault:"100"`
 	JSONResponse    bool          `env:"JSON_RESPONSE" envDefault:"true"`
 	SessionTimeout  time.Duration `env:"SESSION_TIMEOUT" envDefault:"30m"`
@@ -113,6 +114,12 @@ func (cfg Config) Validate() error {
 	if strings.TrimSpace(cfg.GovernanceManager.AuthToken) == "" {
 		return fmt.Errorf("KODEX_PLATFORM_MCP_SERVER_GOVERNANCE_MANAGER_GRPC_AUTH_TOKEN is required")
 	}
+	if !cfg.InteractionHub.Enabled {
+		return fmt.Errorf("KODEX_PLATFORM_MCP_SERVER_INTERACTION_HUB_ENABLED must stay enabled for interaction tools")
+	}
+	if strings.TrimSpace(cfg.InteractionHub.AuthToken) == "" {
+		return fmt.Errorf("KODEX_PLATFORM_MCP_SERVER_INTERACTION_HUB_GRPC_AUTH_TOKEN is required")
+	}
 	_, err := cfg.OwnerRouteCatalog()
 	return err
 }
@@ -138,6 +145,7 @@ func (cfg Config) MCPTransportConfig(
 	agentManager mcptransport.AgentManagerClient,
 	providerHub mcptransport.ProviderHubClient,
 	governanceManager mcptransport.GovernanceManagerClient,
+	interactionHub mcptransport.InteractionHubClient,
 ) mcptransport.Config {
 	return mcptransport.Config{
 		ServiceName:       serviceName,
@@ -149,6 +157,7 @@ func (cfg Config) MCPTransportConfig(
 		AgentManager:      agentManager,
 		ProviderHub:       providerHub,
 		GovernanceManager: governanceManager,
+		InteractionHub:    interactionHub,
 		AuthRequired:      cfg.MCP.AuthRequired,
 		AuthToken:         strings.TrimSpace(cfg.MCP.AuthToken),
 		AuthScope:         strings.TrimSpace(cfg.MCP.AuthScope),
@@ -180,6 +189,16 @@ func (cfg Config) ProviderHubClientConfig() providerhubclient.Config {
 func (cfg Config) GovernanceManagerClientConfig() governanceclient.Config {
 	route := cfg.GovernanceManager.route(ownerclients.ServiceGovernanceManager, "governance-manager:9090")
 	return governanceclient.Config{
+		Addr:      route.GRPCAddr,
+		AuthToken: route.AuthToken,
+		Timeout:   route.Timeout,
+	}
+}
+
+// InteractionHubClientConfig returns the owner client settings for interaction-hub.
+func (cfg Config) InteractionHubClientConfig() interactionhubclient.Config {
+	route := cfg.InteractionHub.route(ownerclients.ServiceInteractionHub, "interaction-hub:9090")
+	return interactionhubclient.Config{
 		Addr:      route.GRPCAddr,
 		AuthToken: route.AuthToken,
 		Timeout:   route.Timeout,

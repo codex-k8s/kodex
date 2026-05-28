@@ -63,6 +63,27 @@ func (registry *Registry) addAgentTools(server *mcpsdk.Server, handler *AgentToo
 			},
 		},
 		{
+			name:        ToolAgentHumanGateRequest,
+			description: agentHumanGateRequestDescription,
+			register: func() {
+				mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolAgentHumanGateRequest, Description: agentHumanGateRequestDescription}, handler.RequestHumanGate)
+			},
+		},
+		{
+			name:        ToolAgentHumanGateGet,
+			description: agentHumanGateGetDescription,
+			register: func() {
+				mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolAgentHumanGateGet, Description: agentHumanGateGetDescription}, handler.GetHumanGate)
+			},
+		},
+		{
+			name:        ToolAgentHumanGateList,
+			description: agentHumanGateListDescription,
+			register: func() {
+				mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolAgentHumanGateList, Description: agentHumanGateListDescription}, handler.ListHumanGates)
+			},
+		},
+		{
 			name:        ToolDiagnosticsRunContextRead,
 			description: diagnosticsRunContextReadDescription,
 			register: func() {
@@ -219,9 +240,41 @@ func (registry *Registry) addGovernanceTools(server *mcpsdk.Server, handler *Gov
 		{name: ToolGovernanceReleaseGetSafetyState, register: func(description string) {
 			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolGovernanceReleaseGetSafetyState, Description: description}, handler.GetReleaseSafetyState)
 		}},
+		{name: ToolGovernanceSignalRecordReview, register: func(description string) {
+			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolGovernanceSignalRecordReview, Description: description}, handler.RecordReviewSignal)
+		}},
+		{name: ToolGovernanceSignalListReview, register: func(description string) {
+			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolGovernanceSignalListReview, Description: description}, handler.ListReviewSignals)
+		}},
 	}
 	for _, tool := range tools {
 		description := governanceToolDescriptions[tool.name]
+		tool.register(description)
+		registry.tools = append(registry.tools, ToolDescriptor{
+			Name:        tool.name,
+			Description: description,
+			Version:     version,
+		})
+	}
+}
+
+func (registry *Registry) addInteractionTools(server *mcpsdk.Server, handler *InteractionToolsHandler, version string) {
+	tools := []struct {
+		name     string
+		register func(string)
+	}{
+		{name: ToolInteractionOwnerInboxList, register: func(description string) {
+			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolInteractionOwnerInboxList, Description: description}, handler.ListOwnerInboxItems)
+		}},
+		{name: ToolInteractionOwnerInboxGet, register: func(description string) {
+			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolInteractionOwnerInboxGet, Description: description}, handler.GetOwnerInboxItem)
+		}},
+		{name: ToolInteractionOwnerInboxRespond, register: func(description string) {
+			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolInteractionOwnerInboxRespond, Description: description}, handler.RespondOwnerInboxItem)
+		}},
+	}
+	for _, tool := range tools {
+		description := interactionToolDescriptions[tool.name]
 		tool.register(description)
 		registry.tools = append(registry.tools, ToolDescriptor{
 			Name:        tool.name,

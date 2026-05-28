@@ -38,6 +38,8 @@ var governanceToolDescriptions = map[string]string{
 	ToolGovernanceReleaseListBlockingSignals:    "List safe release blocking signal summaries through governance-manager.",
 	ToolGovernanceReleaseRecordSafetyState:      "Record release safety-loop state through governance-manager.",
 	ToolGovernanceReleaseGetSafetyState:         "Read release safety-loop state through governance-manager.",
+	ToolGovernanceSignalRecordReview:            "Записать review signal через governance-manager без хранения состояния в MCP.",
+	ToolGovernanceSignalListReview:              "Прочитать безопасные сводки review signals через governance-manager.",
 }
 
 var governanceTargetTypes = map[string]governancev1.GovernanceTargetType{
@@ -247,6 +249,55 @@ var governanceSignalSeverityPairs = []governanceEnumPair[governancev1.SignalSeve
 var governanceSignalSeverities = governanceEnumValues(governanceSignalSeverityPairs)
 var governanceSignalSeverityNames = governanceEnumNames(governanceSignalSeverityPairs)
 
+var governanceReviewRoleKinds = map[string]governancev1.ReviewRoleKind{
+	"reviewer":           governancev1.ReviewRoleKind_REVIEW_ROLE_KIND_REVIEWER,
+	"qa":                 governancev1.ReviewRoleKind_REVIEW_ROLE_KIND_QA,
+	"lexical_gatekeeper": governancev1.ReviewRoleKind_REVIEW_ROLE_KIND_LEXICAL_GATEKEEPER,
+	"risk_gatekeeper":    governancev1.ReviewRoleKind_REVIEW_ROLE_KIND_RISK_GATEKEEPER,
+	"sre":                governancev1.ReviewRoleKind_REVIEW_ROLE_KIND_SRE,
+	"security":           governancev1.ReviewRoleKind_REVIEW_ROLE_KIND_SECURITY,
+	"owner":              governancev1.ReviewRoleKind_REVIEW_ROLE_KIND_OWNER,
+	"custom":             governancev1.ReviewRoleKind_REVIEW_ROLE_KIND_CUSTOM,
+}
+
+var governanceReviewRoleKindNames = map[governancev1.ReviewRoleKind]string{
+	governancev1.ReviewRoleKind_REVIEW_ROLE_KIND_REVIEWER:           "reviewer",
+	governancev1.ReviewRoleKind_REVIEW_ROLE_KIND_QA:                 "qa",
+	governancev1.ReviewRoleKind_REVIEW_ROLE_KIND_LEXICAL_GATEKEEPER: "lexical_gatekeeper",
+	governancev1.ReviewRoleKind_REVIEW_ROLE_KIND_RISK_GATEKEEPER:    "risk_gatekeeper",
+	governancev1.ReviewRoleKind_REVIEW_ROLE_KIND_SRE:                "sre",
+	governancev1.ReviewRoleKind_REVIEW_ROLE_KIND_SECURITY:           "security",
+	governancev1.ReviewRoleKind_REVIEW_ROLE_KIND_OWNER:              "owner",
+	governancev1.ReviewRoleKind_REVIEW_ROLE_KIND_CUSTOM:             "custom",
+}
+
+var governanceReviewSignalOutcomes = map[string]governancev1.ReviewSignalOutcome{
+	"pass":            governancev1.ReviewSignalOutcome_REVIEW_SIGNAL_OUTCOME_PASS,
+	"pass_with_notes": governancev1.ReviewSignalOutcome_REVIEW_SIGNAL_OUTCOME_PASS_WITH_NOTES,
+	"block":           governancev1.ReviewSignalOutcome_REVIEW_SIGNAL_OUTCOME_BLOCK,
+	"request_changes": governancev1.ReviewSignalOutcome_REVIEW_SIGNAL_OUTCOME_REQUEST_CHANGES,
+	"raise_risk":      governancev1.ReviewSignalOutcome_REVIEW_SIGNAL_OUTCOME_RAISE_RISK,
+	"informational":   governancev1.ReviewSignalOutcome_REVIEW_SIGNAL_OUTCOME_INFORMATIONAL,
+}
+
+var governanceReviewSignalOutcomeNames = map[governancev1.ReviewSignalOutcome]string{
+	governancev1.ReviewSignalOutcome_REVIEW_SIGNAL_OUTCOME_PASS:            "pass",
+	governancev1.ReviewSignalOutcome_REVIEW_SIGNAL_OUTCOME_PASS_WITH_NOTES: "pass_with_notes",
+	governancev1.ReviewSignalOutcome_REVIEW_SIGNAL_OUTCOME_BLOCK:           "block",
+	governancev1.ReviewSignalOutcome_REVIEW_SIGNAL_OUTCOME_REQUEST_CHANGES: "request_changes",
+	governancev1.ReviewSignalOutcome_REVIEW_SIGNAL_OUTCOME_RAISE_RISK:      "raise_risk",
+	governancev1.ReviewSignalOutcome_REVIEW_SIGNAL_OUTCOME_INFORMATIONAL:   "informational",
+}
+
+var governanceConfidencePairs = []governanceEnumPair[governancev1.Confidence]{
+	{name: "low", value: governancev1.Confidence_CONFIDENCE_LOW},
+	{name: "medium", value: governancev1.Confidence_CONFIDENCE_MEDIUM},
+	{name: "high", value: governancev1.Confidence_CONFIDENCE_HIGH},
+}
+
+var governanceConfidences = governanceEnumValues(governanceConfidencePairs)
+var governanceConfidenceNames = governanceEnumNames(governanceConfidencePairs)
+
 // GovernanceToolsHandler routes governance tools to governance-manager.
 type GovernanceToolsHandler struct {
 	client GovernanceManagerClient
@@ -288,6 +339,14 @@ func (handler *GovernanceToolsHandler) ListRiskAssessments(ctx context.Context, 
 		return nil, empty, err
 	}
 	return nil, governanceRiskAssessmentListOutput(response, factorsByAssessmentID), nil
+}
+
+func (handler *GovernanceToolsHandler) RecordReviewSignal(ctx context.Context, _ *mcpsdk.CallToolRequest, input RecordGovernanceReviewSignalInput) (*mcpsdk.CallToolResult, GovernanceReviewSignalOutput, error) {
+	return routeOwnerTool(ctx, input, recordReviewSignalRequest, handler.client.RecordReviewSignal, governanceReviewSignalOutput, ToolGovernanceSignalRecordReview)
+}
+
+func (handler *GovernanceToolsHandler) ListReviewSignals(ctx context.Context, _ *mcpsdk.CallToolRequest, input ListGovernanceReviewSignalsInput) (*mcpsdk.CallToolResult, GovernanceReviewSignalListOutput, error) {
+	return routeOwnerTool(ctx, input, listReviewSignalsRequest, handler.client.ListReviewSignals, governanceReviewSignalListOutput, ToolGovernanceSignalListReview)
 }
 
 func (handler *GovernanceToolsHandler) RequestGate(ctx context.Context, _ *mcpsdk.CallToolRequest, input RequestGovernanceGateInput) (*mcpsdk.CallToolResult, GovernanceGateOutput, error) {
@@ -542,6 +601,84 @@ func listRiskAssessmentsRequest(input ListGovernanceRiskAssessmentsInput) (*gove
 		Status:             status,
 		Page:               governancePageRequest(input.Page),
 		Meta:               meta,
+	}, nil
+}
+
+func recordReviewSignalRequest(input RecordGovernanceReviewSignalInput) (*governancev1.RecordReviewSignalRequest, error) {
+	meta, err := governanceCommandMeta(input.Meta)
+	if err != nil {
+		return nil, err
+	}
+	target, err := governanceTarget(input.Target, true, "target")
+	if err != nil {
+		return nil, err
+	}
+	roleKind, err := governanceReviewRoleKind(input.RoleKind)
+	if err != nil {
+		return nil, err
+	}
+	authorRef, err := requiredTrimmed(input.AuthorRef, "author_ref")
+	if err != nil {
+		return nil, err
+	}
+	outcome, err := governanceReviewSignalOutcome(input.Outcome)
+	if err != nil {
+		return nil, err
+	}
+	severity, err := governanceSignalSeverity(input.Severity)
+	if err != nil {
+		return nil, err
+	}
+	confidence, err := optionalGovernanceConfidence(input.Confidence)
+	if err != nil {
+		return nil, err
+	}
+	evidenceRefs, err := governanceEvidenceRefs(input.EvidenceRefs)
+	if err != nil {
+		return nil, err
+	}
+	summary, err := requiredTrimmed(input.Summary, "summary")
+	if err != nil {
+		return nil, err
+	}
+	return &governancev1.RecordReviewSignalRequest{
+		RiskAssessmentId: optionalString(input.RiskAssessmentID),
+		Target:           target,
+		RoleKind:         roleKind,
+		AuthorRef:        authorRef,
+		Outcome:          outcome,
+		Severity:         severity,
+		Confidence:       confidence,
+		EvidenceRefs:     evidenceRefs,
+		Summary:          summary,
+		Meta:             meta,
+	}, nil
+}
+
+func listReviewSignalsRequest(input ListGovernanceReviewSignalsInput) (*governancev1.ListReviewSignalsRequest, error) {
+	meta, err := governanceQueryMeta(input.Meta)
+	if err != nil {
+		return nil, err
+	}
+	target, err := governanceTarget(input.Target, true, "target")
+	if err != nil {
+		return nil, err
+	}
+	roleKind, err := optionalGovernanceReviewRoleKind(input.RoleKind)
+	if err != nil {
+		return nil, err
+	}
+	outcome, err := optionalGovernanceReviewSignalOutcome(input.Outcome)
+	if err != nil {
+		return nil, err
+	}
+	return &governancev1.ListReviewSignalsRequest{
+		RiskAssessmentId: optionalString(input.RiskAssessmentID),
+		Target:           target,
+		RoleKind:         roleKind,
+		Outcome:          outcome,
+		Page:             governancePageRequest(input.Page),
+		Meta:             meta,
 	}, nil
 }
 
@@ -1066,15 +1203,15 @@ func governanceActor(input GovernanceActorInput) (*governancev1.Actor, error) {
 }
 
 func governanceRequestContext(input GovernanceRequestContextInput) (*governancev1.RequestContext, error) {
-	source, err := safeRequestSource(input.Source)
+	source, traceID, sessionID, clientIPHash, err := safeRequestContext(input.Source, input.TraceID, input.SessionID, input.ClientIPHash)
 	if err != nil {
 		return nil, err
 	}
 	contextValue := &governancev1.RequestContext{}
 	contextValue.Source = source
-	contextValue.TraceId = optionalString(input.TraceID)
-	contextValue.SessionId = optionalString(input.SessionID)
-	contextValue.ClientIpHash = optionalString(input.ClientIPHash)
+	contextValue.TraceId = traceID
+	contextValue.SessionId = sessionID
+	contextValue.ClientIpHash = clientIPHash
 	return contextValue, nil
 }
 
@@ -1688,6 +1825,46 @@ func governanceReleaseSafetyStateSummary(state *governancev1.ReleaseSafetyState)
 	}
 }
 
+func governanceReviewSignalOutput(response *governancev1.ReviewSignalResponse) GovernanceReviewSignalOutput {
+	if response == nil {
+		return GovernanceReviewSignalOutput{}
+	}
+	return GovernanceReviewSignalOutput{ReviewSignal: governanceReviewSignalSummary(response.GetReviewSignal())}
+}
+
+func governanceReviewSignalListOutput(response *governancev1.ListReviewSignalsResponse) GovernanceReviewSignalListOutput {
+	if response == nil {
+		return GovernanceReviewSignalListOutput{}
+	}
+	return GovernanceReviewSignalListOutput{
+		ReviewSignals: governanceReviewSignalSummaries(response.GetReviewSignals()),
+		Page:          governancePageSummary(response.GetPage()),
+	}
+}
+
+func governanceReviewSignalSummaries(signals []*governancev1.ReviewSignal) []GovernanceReviewSignalSummary {
+	return summarizeItems(signals, governanceReviewSignalSummary)
+}
+
+func governanceReviewSignalSummary(signal *governancev1.ReviewSignal) GovernanceReviewSignalSummary {
+	if signal == nil {
+		return GovernanceReviewSignalSummary{}
+	}
+	return GovernanceReviewSignalSummary{
+		ID:               signal.GetId(),
+		RiskAssessmentID: signal.GetRiskAssessmentId(),
+		Target:           governanceTargetSummary(signal.GetTarget()),
+		RoleKind:         governanceReviewRoleKindName(signal.GetRoleKind()),
+		AuthorRef:        signal.GetAuthorRef(),
+		Outcome:          governanceReviewSignalOutcomeName(signal.GetOutcome()),
+		Severity:         governanceSignalSeverityName(signal.GetSeverity()),
+		Confidence:       governanceConfidenceName(signal.GetConfidence()),
+		EvidenceRefs:     governanceEvidenceSummaries(signal.GetEvidenceRefs()),
+		Summary:          signal.GetSummary(),
+		CreatedAt:        signal.GetCreatedAt(),
+	}
+}
+
 func governanceProjectContextSummary(contextRef *governancev1.ProjectContextRef) GovernanceProjectContextSummary {
 	if contextRef == nil {
 		return GovernanceProjectContextSummary{}
@@ -1864,16 +2041,20 @@ func optionalGovernanceSignalSeverity(value string) (*governancev1.SignalSeverit
 	return optionalGovernanceEnum(value, "severity", governanceSignalSeverities, governancev1.SignalSeverity_SIGNAL_SEVERITY_UNSPECIFIED)
 }
 
+func optionalGovernanceReviewRoleKind(value string) (*governancev1.ReviewRoleKind, error) {
+	return optionalGovernanceEnum(value, "role_kind", governanceReviewRoleKinds, governancev1.ReviewRoleKind_REVIEW_ROLE_KIND_UNSPECIFIED)
+}
+
+func optionalGovernanceReviewSignalOutcome(value string) (*governancev1.ReviewSignalOutcome, error) {
+	return optionalGovernanceEnum(value, "outcome", governanceReviewSignalOutcomes, governancev1.ReviewSignalOutcome_REVIEW_SIGNAL_OUTCOME_UNSPECIFIED)
+}
+
+func optionalGovernanceConfidence(value string) (*governancev1.Confidence, error) {
+	return optionalGovernanceEnum(value, "confidence", governanceConfidences, governancev1.Confidence_CONFIDENCE_UNSPECIFIED)
+}
+
 func optionalGovernanceEnum[Enum comparable](value string, field string, values map[string]Enum, zero Enum) (*Enum, error) {
-	key := governanceEnumKey(value)
-	if key == "" {
-		return nil, nil
-	}
-	enumValue, ok := values[key]
-	if !ok || enumValue == zero {
-		return nil, invalidInput(field + " is invalid")
-	}
-	return &enumValue, nil
+	return optionalEnumValue(governanceEnumKey(value), values, zero, field)
 }
 
 func governanceGateOutcome(value string) (governancev1.GateOutcome, error) {
@@ -1890,6 +2071,14 @@ func governanceBlockingSignalSource(value string) (governancev1.BlockingSignalSo
 
 func governanceSignalSeverity(value string) (governancev1.SignalSeverity, error) {
 	return requiredEnumValue(governanceEnumKey(value), governanceSignalSeverities, governancev1.SignalSeverity_SIGNAL_SEVERITY_UNSPECIFIED, "severity")
+}
+
+func governanceReviewRoleKind(value string) (governancev1.ReviewRoleKind, error) {
+	return requiredEnumValue(governanceEnumKey(value), governanceReviewRoleKinds, governancev1.ReviewRoleKind_REVIEW_ROLE_KIND_UNSPECIFIED, "role_kind")
+}
+
+func governanceReviewSignalOutcome(value string) (governancev1.ReviewSignalOutcome, error) {
+	return requiredEnumValue(governanceEnumKey(value), governanceReviewSignalOutcomes, governancev1.ReviewSignalOutcome_REVIEW_SIGNAL_OUTCOME_UNSPECIFIED, "outcome")
 }
 
 func governanceReleaseSafetyState(value string) (governancev1.ReleaseSafetyStateKind, error) {
@@ -1967,6 +2156,18 @@ func governanceSignalSeverityName(value governancev1.SignalSeverity) string {
 	return enumName(value, governanceSignalSeverityNames)
 }
 
+func governanceReviewRoleKindName(value governancev1.ReviewRoleKind) string {
+	return enumName(value, governanceReviewRoleKindNames)
+}
+
+func governanceReviewSignalOutcomeName(value governancev1.ReviewSignalOutcome) string {
+	return enumName(value, governanceReviewSignalOutcomeNames)
+}
+
+func governanceConfidenceName(value governancev1.Confidence) string {
+	return enumName(value, governanceConfidenceNames)
+}
+
 func governanceEnumValues[Enum comparable](pairs []governanceEnumPair[Enum]) map[string]Enum {
 	result := make(map[string]Enum, len(pairs))
 	for _, pair := range pairs {
@@ -2001,6 +2202,9 @@ func governanceEnumKey(value string) string {
 		"blocking_signal_source_type_",
 		"blocking_signal_status_",
 		"signal_severity_",
+		"review_role_kind_",
+		"review_signal_outcome_",
+		"confidence_",
 	}
 	for _, prefix := range prefixes {
 		key = strings.TrimPrefix(key, prefix)

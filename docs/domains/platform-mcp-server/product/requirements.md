@@ -5,8 +5,8 @@ title: kodex — требования к platform-mcp-server
 status: active
 owner_role: PM
 created_at: 2026-05-14
-updated_at: 2026-05-22
-related_issues: [747, 753, 771, 698, 322]
+updated_at: 2026-05-28
+related_issues: [747, 753, 771, 933, 698, 322]
 related_prs: []
 related_docsets:
   - docs/domains/platform-mcp-server/architecture/design.md
@@ -53,7 +53,7 @@ approvals:
 | MCP-FR-1 | Сервис должен принимать MCP-вызовы инструментов только по MCP-протоколу с явным actor/source/run/session/slot контекстом. Codex hook-события принимает отдельный `codex-hook-ingress`, а не MCP-сервер. | Обязательно |
 | MCP-FR-2 | Сервис должен раскрывать инструменты через MCP discovery и execution: `tools/list` и `tools/call`. | Обязательно |
 | MCP-FR-3 | Операции `Run`, session, flow, role, prompt и ожидания flow должны маршрутизироваться только в `agent-manager`. | Обязательно |
-| MCP-FR-3a | Оценка риска, review signals, gate request/decision и release decision должны маршрутизироваться только в `governance-manager`; MCP не создаёт decision state и не делает `agent-manager` вторым владельцем gate. | Обязательно |
+| MCP-FR-3a | Оценка риска, review signals, gate request/decision и release decision должны маршрутизироваться только в `governance-manager`; MCP не создаёт состояние решений и не делает `agent-manager` вторым владельцем gate. | Обязательно |
 | MCP-FR-4 | Provider-инструменты должны использовать `provider-hub` write/read операции и не должны ходить напрямую в GitHub/GitLab. | Обязательно |
 | MCP-FR-5 | Чтения project/runtime/fleet/package должны идти только к сервисам-владельцам: `project-catalog`, `runtime-manager`, `fleet-manager`, `package-hub`. | Обязательно |
 | MCP-FR-6 | Запросы обратной связи, доставка запросов владельцу, уведомления и callbacks должны маршрутизироваться в `interaction-hub`, когда его контракт готов; само решение риска или релиза хранится у `governance-manager`. | Обязательно |
