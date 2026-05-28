@@ -682,13 +682,14 @@ func (InteractionRequestStatus) EnumDescriptor() ([]byte, []int) {
 type InteractionResponseAction int32
 
 const (
-	InteractionResponseAction_INTERACTION_RESPONSE_ACTION_UNSPECIFIED InteractionResponseAction = 0
-	InteractionResponseAction_INTERACTION_RESPONSE_ACTION_ANSWER      InteractionResponseAction = 1
-	InteractionResponseAction_INTERACTION_RESPONSE_ACTION_APPROVE     InteractionResponseAction = 2
-	InteractionResponseAction_INTERACTION_RESPONSE_ACTION_REJECT      InteractionResponseAction = 3
-	InteractionResponseAction_INTERACTION_RESPONSE_ACTION_DEFER       InteractionResponseAction = 4
-	InteractionResponseAction_INTERACTION_RESPONSE_ACTION_ACKNOWLEDGE InteractionResponseAction = 5
-	InteractionResponseAction_INTERACTION_RESPONSE_ACTION_CUSTOM      InteractionResponseAction = 6
+	InteractionResponseAction_INTERACTION_RESPONSE_ACTION_UNSPECIFIED     InteractionResponseAction = 0
+	InteractionResponseAction_INTERACTION_RESPONSE_ACTION_ANSWER          InteractionResponseAction = 1
+	InteractionResponseAction_INTERACTION_RESPONSE_ACTION_APPROVE         InteractionResponseAction = 2
+	InteractionResponseAction_INTERACTION_RESPONSE_ACTION_REJECT          InteractionResponseAction = 3
+	InteractionResponseAction_INTERACTION_RESPONSE_ACTION_DEFER           InteractionResponseAction = 4
+	InteractionResponseAction_INTERACTION_RESPONSE_ACTION_ACKNOWLEDGE     InteractionResponseAction = 5
+	InteractionResponseAction_INTERACTION_RESPONSE_ACTION_CUSTOM          InteractionResponseAction = 6
+	InteractionResponseAction_INTERACTION_RESPONSE_ACTION_REQUEST_CHANGES InteractionResponseAction = 7
 )
 
 // Enum value maps for InteractionResponseAction.
@@ -701,15 +702,17 @@ var (
 		4: "INTERACTION_RESPONSE_ACTION_DEFER",
 		5: "INTERACTION_RESPONSE_ACTION_ACKNOWLEDGE",
 		6: "INTERACTION_RESPONSE_ACTION_CUSTOM",
+		7: "INTERACTION_RESPONSE_ACTION_REQUEST_CHANGES",
 	}
 	InteractionResponseAction_value = map[string]int32{
-		"INTERACTION_RESPONSE_ACTION_UNSPECIFIED": 0,
-		"INTERACTION_RESPONSE_ACTION_ANSWER":      1,
-		"INTERACTION_RESPONSE_ACTION_APPROVE":     2,
-		"INTERACTION_RESPONSE_ACTION_REJECT":      3,
-		"INTERACTION_RESPONSE_ACTION_DEFER":       4,
-		"INTERACTION_RESPONSE_ACTION_ACKNOWLEDGE": 5,
-		"INTERACTION_RESPONSE_ACTION_CUSTOM":      6,
+		"INTERACTION_RESPONSE_ACTION_UNSPECIFIED":     0,
+		"INTERACTION_RESPONSE_ACTION_ANSWER":          1,
+		"INTERACTION_RESPONSE_ACTION_APPROVE":         2,
+		"INTERACTION_RESPONSE_ACTION_REJECT":          3,
+		"INTERACTION_RESPONSE_ACTION_DEFER":           4,
+		"INTERACTION_RESPONSE_ACTION_ACKNOWLEDGE":     5,
+		"INTERACTION_RESPONSE_ACTION_CUSTOM":          6,
+		"INTERACTION_RESPONSE_ACTION_REQUEST_CHANGES": 7,
 	}
 )
 
@@ -8569,7 +8572,7 @@ const file_kodex_interactions_v1_interaction_hub_proto_rawDesc = "" +
 	"#INTERACTION_REQUEST_STATUS_ANSWERED\x10\x04\x12&\n" +
 	"\"INTERACTION_REQUEST_STATUS_EXPIRED\x10\x05\x12(\n" +
 	"$INTERACTION_REQUEST_STATUS_CANCELLED\x10\x06\x12%\n" +
-	"!INTERACTION_REQUEST_STATUS_FAILED\x10\a*\xbd\x02\n" +
+	"!INTERACTION_REQUEST_STATUS_FAILED\x10\a*\xee\x02\n" +
 	"\x19InteractionResponseAction\x12+\n" +
 	"'INTERACTION_RESPONSE_ACTION_UNSPECIFIED\x10\x00\x12&\n" +
 	"\"INTERACTION_RESPONSE_ACTION_ANSWER\x10\x01\x12'\n" +
@@ -8577,7 +8580,8 @@ const file_kodex_interactions_v1_interaction_hub_proto_rawDesc = "" +
 	"\"INTERACTION_RESPONSE_ACTION_REJECT\x10\x03\x12%\n" +
 	"!INTERACTION_RESPONSE_ACTION_DEFER\x10\x04\x12+\n" +
 	"'INTERACTION_RESPONSE_ACTION_ACKNOWLEDGE\x10\x05\x12&\n" +
-	"\"INTERACTION_RESPONSE_ACTION_CUSTOM\x10\x06*\xbf\x02\n" +
+	"\"INTERACTION_RESPONSE_ACTION_CUSTOM\x10\x06\x12/\n" +
+	"+INTERACTION_RESPONSE_ACTION_REQUEST_CHANGES\x10\a*\xbf\x02\n" +
 	"\x1dInteractionResponseSourceKind\x120\n" +
 	",INTERACTION_RESPONSE_SOURCE_KIND_UNSPECIFIED\x10\x00\x120\n" +
 	",INTERACTION_RESPONSE_SOURCE_KIND_WEB_CONSOLE\x10\x01\x12(\n" +

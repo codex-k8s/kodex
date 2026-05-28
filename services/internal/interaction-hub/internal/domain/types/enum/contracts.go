@@ -218,17 +218,18 @@ func (v InteractionRequestStatus) Terminal() bool {
 type InteractionResponseAction string
 
 const (
-	InteractionResponseActionAnswer      InteractionResponseAction = "answer"
-	InteractionResponseActionApprove     InteractionResponseAction = "approve"
-	InteractionResponseActionReject      InteractionResponseAction = "reject"
-	InteractionResponseActionDefer       InteractionResponseAction = "defer"
-	InteractionResponseActionAcknowledge InteractionResponseAction = "acknowledge"
-	InteractionResponseActionCustom      InteractionResponseAction = "custom"
+	InteractionResponseActionAnswer         InteractionResponseAction = "answer"
+	InteractionResponseActionApprove        InteractionResponseAction = "approve"
+	InteractionResponseActionReject         InteractionResponseAction = "reject"
+	InteractionResponseActionRequestChanges InteractionResponseAction = "request_changes"
+	InteractionResponseActionDefer          InteractionResponseAction = "defer"
+	InteractionResponseActionAcknowledge    InteractionResponseAction = "acknowledge"
+	InteractionResponseActionCustom         InteractionResponseAction = "custom"
 )
 
 func (v InteractionResponseAction) Valid() bool {
 	switch v {
-	case InteractionResponseActionAnswer, InteractionResponseActionApprove, InteractionResponseActionReject, InteractionResponseActionDefer, InteractionResponseActionAcknowledge, InteractionResponseActionCustom:
+	case InteractionResponseActionAnswer, InteractionResponseActionApprove, InteractionResponseActionReject, InteractionResponseActionRequestChanges, InteractionResponseActionDefer, InteractionResponseActionAcknowledge, InteractionResponseActionCustom:
 		return true
 	default:
 		return false

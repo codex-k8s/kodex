@@ -5,8 +5,8 @@ title: kodex — поставка interaction-hub
 status: active
 owner_role: EM
 created_at: 2026-05-22
-updated_at: 2026-05-27
-related_issues: [582, 768, 781, 783, 800, 806, 821, 835, 843, 853, 855, 867, 882, 894, 911, 921]
+updated_at: 2026-05-28
+related_issues: [582, 768, 781, 783, 800, 806, 821, 835, 843, 853, 855, 867, 882, 894, 911, 921, 928]
 related_prs: []
 related_docsets:
   - docs/domains/interaction-hub/product/requirements.md
@@ -56,7 +56,8 @@ approvals:
 | IH-7b | #882 | Response boundary refs готовы: `interaction.request.response_recorded` несёт safe request kind, scope, source owner, decision owner и context refs для downstream owner resume без raw response text и без изменения чужого decision state. |
 | IH-8 | #911 | Human gate response producer/read surface готова: response event и owner inbox отдают safe request/response refs, owner/context refs, normalized outcome, digest/object refs, timestamps, correlation и idempotency digest для owner resume без raw response/callback payload. |
 | IH-9a | #921 | Owner inbox UI-readiness готова: `GetOwnerInboxItem` открывает safe detail по request id/scope/assignee, `OwnerInboxItem` содержит allowed actions и version, а owner action использует существующий `RecordInteractionResponse` с idempotency и expected version. |
-| IH-9b | не назначено | MCP-интеграция готова: `platform-mcp-server` маршрутизирует `interaction.feedback.request`, `interaction.approval.request`, `interaction.human_gate.request`, status reads. |
+| IH-9b | #928 | Таксономия действий владельца готова: `request_changes` закреплён как отдельный `InteractionResponseAction`, owner inbox list/detail показывает его только для активных request, а response lifecycle и callback resolution отличают запрос доработки от `reject` без raw payload. |
+| IH-9c | не назначено | MCP-интеграция готова: `platform-mcp-server` маршрутизирует `interaction.feedback.request`, `interaction.approval.request`, `interaction.human_gate.request`, status reads. |
 | IH-10 | не назначено | Связка с `agent-manager`, `codex-hook-ingress`, `governance-manager` и `provider-hub` готова для PermissionRequest, owner feedback, owner decision refs и событий ответа. |
 | IH-11 | #894 | Эксплуатационный контур готов: Dockerfile, deploy manifests, migration job, runtime env inventory, smoke-проверка, runbook и monitoring docs доступны для первого backend deploy. |
 | IH-12 | не назначено | Проекции для `operations-hub`, operator visibility, dual-surface inbox status и диагностика delivery failures готовы. |
@@ -109,11 +110,11 @@ IH-2 не должен:
 | `RequestFeedback` | Реализовано через PostgreSQL repository, command idempotency и `interaction.feedback.requested` outbox event | IH-4 |
 | `RequestApproval` | Реализовано через PostgreSQL repository, command idempotency и `interaction.approval.requested` outbox event | IH-4 |
 | `RequestHumanGate` | Реализовано через PostgreSQL repository, command idempotency и `interaction.human_gate.requested` outbox event | IH-4 |
-| `RecordInteractionResponse` | Реализовано: безопасная сводка/refs, terminal action, expected version, idempotency и `interaction.request.response_recorded` event с safe request/response/source/owner/context refs, normalized outcome, digest/object refs, timestamps и correlation/idempotency digest; business decision state остаётся у owner service | IH-4/IH-7b/IH-8 |
+| `RecordInteractionResponse` | Реализовано: безопасная сводка/refs, завершающее действие, expected version, idempotency и `interaction.request.response_recorded` event с safe request/response/source/owner/context refs, normalized outcome, digest/object refs, timestamps и correlation/idempotency digest; `request_changes` отличается от `reject`; business decision state остаётся у owner service | IH-4/IH-7b/IH-8/IH-9b |
 | `CancelInteractionRequest` | Реализовано через expected version, terminal status и `interaction.request.cancelled` event | IH-4 |
 | `ExpireInteractionRequests` | Реализовано batch-истечение по scope/deadline с идемпотентным результатом и `interaction.request.expired` events | IH-4 |
 | `GetInteractionRequest` / `ListInteractionRequests` | Реализованы PostgreSQL-чтения по request id и scope/status/kind/source owner/deadline | IH-4 |
-| `ListOwnerInboxItems` / `GetOwnerInboxItem` | Реализовано: domain read surface для pending/active feedback, approval, Human gate и callback diagnostics; list-фильтры по scope/kind/status/source owner/assignee/actor/correlation refs, detail по request id/scope/assignee, safe delivery/callback/response summaries, allowed actions, response summary digest/object refs, request version и deterministic pagination | IH-7/IH-8/IH-9a |
+| `ListOwnerInboxItems` / `GetOwnerInboxItem` | Реализовано: domain read surface для pending/active feedback, approval, Human gate и callback diagnostics; list-фильтры по scope/kind/status/source owner/assignee/actor/correlation refs, detail по request id/scope/assignee, safe delivery/callback/response summaries, allowed actions включая `request_changes` для активных request, response summary digest/object refs, request version и deterministic pagination | IH-7/IH-8/IH-9a/IH-9b |
 | `RequestNotification` | Реализовано: one-way notification/reminder intent, safe title/summary/body preview, source owner refs, channel hints, policy ref, idempotency и `interaction.notification.requested` event | IH-5a |
 | `UpsertSubscription` / `DisableSubscription` / `ListSubscriptions` | Реализовано: create/update/disable/list, optimistic concurrency, command idempotency, source owner/channel hints/policy refs и `interaction.subscription.updated` event | IH-5a |
 | `PlanDelivery` | Реализовано: создаёт delivery attempt для request/notification target, выбирает active route по scope или принимает route ref, пишет safe `interaction.delivery.requested` event и command idempotency | IH-5b |

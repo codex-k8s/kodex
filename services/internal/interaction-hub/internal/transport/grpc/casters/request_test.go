@@ -7,10 +7,22 @@ import (
 
 	"github.com/google/uuid"
 
+	interactionsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/interactions/v1"
 	"github.com/codex-k8s/kodex/services/internal/interaction-hub/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/interaction-hub/internal/domain/types/enum"
 	"github.com/codex-k8s/kodex/services/internal/interaction-hub/internal/domain/types/value"
 )
+
+func TestResponseActionCastsRequestChanges(t *testing.T) {
+	t.Parallel()
+
+	if got := ResponseAction(interactionsv1.InteractionResponseAction_INTERACTION_RESPONSE_ACTION_REQUEST_CHANGES); got != enum.InteractionResponseActionRequestChanges {
+		t.Fatalf("ResponseAction() = %s, want request_changes", got)
+	}
+	if got := ResponseActionProto(enum.InteractionResponseActionRequestChanges); got != interactionsv1.InteractionResponseAction_INTERACTION_RESPONSE_ACTION_REQUEST_CHANGES {
+		t.Fatalf("ResponseActionProto() = %s, want request_changes", got)
+	}
+}
 
 func TestOwnerInboxItemCastsAllowedActionsWithoutRawCallbackPayload(t *testing.T) {
 	t.Parallel()
@@ -28,6 +40,7 @@ func TestOwnerInboxItemCastsAllowedActionsWithoutRawCallbackPayload(t *testing.T
 			AllowedActions: []value.InteractionAction{
 				{ActionKey: "approve", LabelTemplateRef: "interaction.actions.approve", Terminal: true},
 				{ActionKey: "reject", LabelTemplateRef: "interaction.actions.reject", Terminal: true},
+				{ActionKey: "request_changes", LabelTemplateRef: "interaction.actions.request_changes", Terminal: true},
 			},
 			Status:    enum.InteractionRequestStatusWaiting,
 			CreatedAt: now,
@@ -51,7 +64,7 @@ func TestOwnerInboxItemCastsAllowedActionsWithoutRawCallbackPayload(t *testing.T
 		},
 	})
 
-	if len(dto.GetAllowedActions()) != 2 || dto.GetAllowedActions()[0].GetActionKey() != "approve" {
+	if len(dto.GetAllowedActions()) != 3 || dto.GetAllowedActions()[2].GetActionKey() != "request_changes" {
 		t.Fatalf("allowed_actions = %+v, want owner-safe actions", dto.GetAllowedActions())
 	}
 	if strings.Contains(dto.String(), rawCallbackPayload) {

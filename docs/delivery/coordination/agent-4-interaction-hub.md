@@ -37,13 +37,14 @@
 | IH-7b | #882 | готово как response boundary refs | `interaction.request.response_recorded` отдаёт safe request kind, scope, source owner, decision owner и context refs для owner resume без raw response text и без изменения чужого decision state. |
 | IH-8 | #911 | готово как Human gate response surface | Response producer/read surface отдаёт safe request/response refs, source/decision owner refs, agent/provider/governance context refs, normalized outcome, digest/object refs, timestamps, correlation и idempotency digest для owner resume без raw response/callback payload; `agent-manager` consumer не входит. |
 | IH-9a | #921 | готово как owner inbox UI-readiness | `GetOwnerInboxItem` даёт safe detail для будущего `staff-gateway` UI flow `list -> detail -> safe action`: request/source/decision/context refs, delivery/callback/response summaries, allowed actions, timestamps и version; ответ записывается существующим `RecordInteractionResponse`. |
+| IH-9b | #928 | готово как таксономия действий владельца | `request_changes` закреплён как отдельный `InteractionResponseAction`: owner inbox list/detail и callback/response lifecycle отличают запрос доработки от `reject`, а завершённые request не возвращают `allowed_actions`. |
 | IH-11 | #894 | готово как ops deploy contour | Dockerfile, Kubernetes manifests, migration Job, services.yaml inventory, smoke-проверка, runbook и monitoring docs подготовлены для первого backend deploy без новой бизнес-логики. |
 
 ## Текущий бэклог
 
 | Срез | Статус | Почему не завершён |
 |---|---|---|
-| IH-9b+ | ожидает отдельные срезы | MCP, concrete channel packages, runtime worker, gateway/UI-связки и cross-domain inbox aggregation должны поставляться малыми PR. |
+| IH-9c+ | ожидает отдельные срезы | MCP, concrete channel packages, runtime worker, gateway/UI-связки и междоменная inbox aggregation должны поставляться малыми PR. |
 
 ## Блокировки от других доменов
 

@@ -5,8 +5,8 @@ title: kodex — требования домена центра взаимоде
 status: active
 owner_role: PM
 created_at: 2026-05-22
-updated_at: 2026-05-27
-related_issues: [582, 768, 781, 800, 867, 921]
+updated_at: 2026-05-28
+related_issues: [582, 768, 781, 800, 867, 921, 928]
 related_prs: []
 related_docsets:
   - docs/platform/architecture/domain_map.md
@@ -91,7 +91,7 @@ approvals:
 | INT-AC-6 | Если установлен channel package, `interaction-hub` использует его capability и package installation ref, но не меняет установку и не запускает runtime-нагрузку сам. |
 | INT-AC-7 | Если канал возвращает callback повторно, команда идемпотентна и не создаёт второй ответ. |
 | INT-AC-8 | Если UI или operator surface запрашивает входящие решения, `interaction-hub` возвращает только pending/active request и callback diagnostics по своим сущностям; cross-domain aggregation остаётся вне домена. |
-| INT-AC-9 | Если UI или gateway открывает одно входящее решение, `interaction-hub` возвращает safe detail с allowed actions, refs, delivery/callback/response summaries и version; ответ записывается через существующий response lifecycle с idempotency и expected version. |
+| INT-AC-9 | Если UI или gateway открывает одно входящее решение, `interaction-hub` возвращает safe detail с allowed actions, refs, delivery/callback/response summaries и version; ответ записывается через существующий response lifecycle с idempotency и expected version. Действие `request_changes` означает “запросить доработку” и не смешивается с отказом `reject`. |
 | INT-AC-10 | Если запрос истёк, домен публикует событие истечения и соседний сервис-владелец решает, как менять своё состояние. |
 
 ## Что не входит
