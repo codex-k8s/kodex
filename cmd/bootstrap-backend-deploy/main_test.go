@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 
@@ -92,11 +93,11 @@ func TestReadSecretFailsClosedOnKubectlReadError(t *testing.T) {
 }
 
 func TestFirstRingImageBuildsRequireDockerfileAndTarget(t *testing.T) {
-	stack, err := stackinventory.Parse([]byte(testStackInventory()))
+	stack, err := stackinventory.Parse([]byte(testStackInventory(firstRingImageNames)))
 	if err != nil {
 		t.Fatalf("parse stack: %v", err)
 	}
-	builds, err := firstRingImageBuilds(stack)
+	builds, err := ringImageBuilds(stack, []backendRing{firstRing})
 	if err != nil {
 		t.Fatalf("first ring builds: %v", err)
 	}
@@ -107,6 +108,82 @@ func TestFirstRingImageBuildsRequireDockerfileAndTarget(t *testing.T) {
 		if build.Dockerfile == "" || build.Target == "" || build.Destination == "" {
 			t.Fatalf("incomplete build spec: %+v", build)
 		}
+	}
+}
+
+func TestSelectBackendRings(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+		want  []string
+	}{
+		{name: "default", value: "", want: []string{"first"}},
+		{name: "first", value: "first", want: []string{"first"}},
+		{name: "second", value: "second", want: []string{"second"}},
+		{name: "all", value: "all", want: []string{"first", "second"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rings, err := selectBackendRings(tt.value)
+			if err != nil {
+				t.Fatalf("select rings: %v", err)
+			}
+			if got := ringNames(rings); !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("rings mismatch: got %v want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSelectBackendRingsRejectsUnsupportedValue(t *testing.T) {
+	_, err := selectBackendRings("staff")
+	if err == nil {
+		t.Fatal("expected unsupported ring to fail")
+	}
+	if !strings.Contains(err.Error(), "expected first, second, or all") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestSecondRingImageBuildsExcludeStaffGateway(t *testing.T) {
+	stack, err := stackinventory.Parse([]byte(testStackInventory(secondRingImageNames)))
+	if err != nil {
+		t.Fatalf("parse stack: %v", err)
+	}
+	builds, err := ringImageBuilds(stack, []backendRing{secondRing})
+	if err != nil {
+		t.Fatalf("second ring builds: %v", err)
+	}
+	if len(builds) != len(secondRingImageNames) {
+		t.Fatalf("unexpected build count: got %d want %d", len(builds), len(secondRingImageNames))
+	}
+	for _, build := range builds {
+		if build.ImageName == "staff-gateway" {
+			t.Fatal("staff-gateway must not be part of the second backend ring")
+		}
+		if build.Dockerfile == "" || build.Target == "" || build.Destination == "" {
+			t.Fatalf("incomplete build spec: %+v", build)
+		}
+	}
+}
+
+func TestAllRingImageBuildsDeduplicateSharedImages(t *testing.T) {
+	imageNames := append([]string{}, firstRingImageNames...)
+	imageNames = append(imageNames, secondRingImageNames...)
+	stack, err := stackinventory.Parse([]byte(testStackInventory(imageNames)))
+	if err != nil {
+		t.Fatalf("parse stack: %v", err)
+	}
+	builds, err := ringImageBuilds(stack, []backendRing{firstRing, secondRing})
+	if err != nil {
+		t.Fatalf("all ring builds: %v", err)
+	}
+	seen := map[string]int{}
+	for _, build := range builds {
+		seen[build.ImageName]++
+	}
+	if seen["platform-event-log-migrations"] != 1 {
+		t.Fatalf("shared platform-event-log migration image was not deduplicated: %v", seen["platform-event-log-migrations"])
 	}
 }
 
@@ -130,23 +207,30 @@ func TestKanikoBuildJobManifestDoesNotEmbedRuntimeSecrets(t *testing.T) {
 	}
 }
 
-func testStackInventory() string {
-	versions := `spec:
-  versions:
-    platform-event-log:
+func testStackInventory(imageNames []string) string {
+	versionNames := map[string]bool{"platform-event-log": true}
+	for _, image := range imageNames {
+		versionNames[strings.TrimSuffix(image, "-migrations")] = true
+	}
+	versions := "spec:\n  versions:\n"
+	names := make([]string, 0, len(versionNames))
+	for name := range versionNames {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		versions += `    ` + name + `:
       value: "0.1.0"
-    access-manager:
-      value: "0.1.0"
-    project-catalog:
-      value: "0.1.0"
-    package-hub:
-      value: "0.1.0"
-    provider-hub:
-      value: "0.1.0"
-  images:
 `
+	}
+	versions += "  images:\n"
 	images := ""
-	for _, image := range firstRingImageNames {
+	seenImages := map[string]bool{}
+	for _, image := range imageNames {
+		if seenImages[image] {
+			continue
+		}
+		seenImages[image] = true
 		versionName := strings.TrimSuffix(image, "-migrations")
 		if image == "platform-event-log-migrations" {
 			versionName = "platform-event-log"

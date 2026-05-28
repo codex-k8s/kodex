@@ -21,7 +21,7 @@ installer.
 |---|---|
 | `bootstrap/host/bootstrap_cluster.sh` | Единственная активная точка входа: `preflight`, `install`, `--dry-run`. |
 | `bootstrap/host/plan_backend_deploy.sh` | План первого backend deploy только на чтение: инвентарь, рендер, `kubectl kustomize` и проверки кластера без изменений. |
-| `bootstrap/host/deploy_backend_ring.sh` | Реальное применение первого backend-кольца: registry, Kubernetes `Secret`, Kaniko-сборки, PostgreSQL, миграции и первые сервисы. |
+| `bootstrap/host/deploy_backend_ring.sh` | Реальное применение backend-колец: registry, Kubernetes `Secret`, Kaniko-сборки, PostgreSQL, миграции и сервисы выбранного кольца. |
 | `bootstrap/local/install.sh` | Локальный privileged orchestrator install-шагов. |
 | `bootstrap/local/steps/*.sh` | Узкие idempotent host/Kubernetes steps. |
 | `bootstrap/host/smoke_registry_kaniko.sh` | Проверка registry mirror и Kaniko build/push без Docker daemon. |
@@ -183,14 +183,42 @@ bash bootstrap/host/plan_backend_deploy.sh \
 пустой `--render-dir`. Непустой каталог отклоняется; команда не удаляет пути,
 переданные оператором.
 
-## Реальный deploy первого backend-кольца
+## Реальный deploy backend-колец
 
-После успешного preflight и dry-run плана оператор может применить первое
-backend-кольцо:
+После успешного preflight и dry-run плана оператор может применить backend-кольцо.
+Без `--ring` используется первое кольцо, чтобы существующий путь не менял
+поведение:
 
 ```bash
 bash bootstrap/host/deploy_backend_ring.sh --env-file bootstrap/host/config.env
 ```
+
+Второе кольцо запускается явно:
+
+```bash
+bash bootstrap/host/deploy_backend_ring.sh \
+  --env-file bootstrap/host/config.env \
+  --ring second
+```
+
+Для новой установки, где нужно последовательно применить оба кольца одной
+командой, используется:
+
+```bash
+bash bootstrap/host/deploy_backend_ring.sh \
+  --env-file bootstrap/host/config.env \
+  --ring all
+```
+
+Состав колец:
+
+- `first`: `access-manager`, `project-catalog`, `package-hub`, `provider-hub`;
+- `second`: `fleet-manager`, `runtime-manager`, `interaction-hub`,
+  `governance-manager`, `agent-manager`, `integration-gateway`,
+  `codex-hook-ingress`.
+
+`staff-gateway` не входит в backend-кольца, пока для него не принят отдельный
+контур развёртывания.
 
 Команда выполняет изменения в Kubernetes и остаётся идемпотентной:
 
@@ -203,13 +231,12 @@ bash bootstrap/host/deploy_backend_ring.sh --env-file bootstrap/host/config.env
 - нормализует локальные PostgreSQL DSN, если они не соответствуют текущему
   паролю из `kodex-postgres`;
 - рендерит manifests во временный приватный каталог и удаляет его после работы;
-- собирает через Kaniko образы первого кольца и migration-образы без Docker
+- собирает через Kaniko образы выбранного кольца и migration-образы без Docker
   daemon;
 - применяет PostgreSQL foundation, создаёт базы через
   `kodex-postgres-bootstrap-databases`;
 - запускает `platform-event-log` migrations;
-- запускает migrations и deployments для `access-manager`, `project-catalog`,
-  `package-hub`, `provider-hub`;
+- запускает migrations и deployments для сервисов выбранного кольца;
 - ждёт rollout и проверяет `/health/readyz` через локальный `kubectl
   port-forward`.
 
@@ -218,11 +245,13 @@ bash bootstrap/host/deploy_backend_ring.sh --env-file bootstrap/host/config.env
 Kubernetes не упёрся в immutable job spec, и не удаляет кластер, namespace,
 registry PVC, PostgreSQL PVC или базы.
 
-Если образы уже собраны и нужно только повторить apply/migrations/rollout:
+Если образы уже собраны и нужно только повторить apply/migrations/rollout для
+выбранного кольца:
 
 ```bash
 bash bootstrap/host/deploy_backend_ring.sh \
   --env-file bootstrap/host/config.env \
+  --ring second \
   --skip-build
 ```
 
@@ -257,8 +286,9 @@ KODEX_SMOKE_ENV_FILE=bootstrap/host/config.env \
   bash bootstrap/host/smoke_backend_contour.sh
 ```
 
-Frontend и полный backend-набор за пределами первого кольца не входят в этот
-срез.
+Эта обвязка проверяет только первое кольцо. Второе кольцо проверяется через
+`deploy_backend_ring.sh --ring second` и readiness, migration jobs, rollout
+status; `staff-gateway` и frontend в backend-кольца не входят.
 
 Доменные и end-to-end проверки не добавляются как shell smoke scripts в
 `scripts/**`. Их целевой формат — Go tests или отдельный Go integration runner;
