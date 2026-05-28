@@ -1982,6 +1982,7 @@ func TestRecordReleaseAgentEvidenceAppendsRefsAndPublishesSafeEvent(t *testing.T
 
 	now := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
 	packageID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+	reviewSignalID := uuid.MustParse("dddddddd-dddd-4ddd-8ddd-dddddddddddd")
 	eventID := uuid.MustParse("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
 	commandID := uuid.MustParse("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
 	expectedVersion := int64(3)
@@ -1993,6 +1994,12 @@ func TestRecordReleaseAgentEvidenceAppendsRefsAndPublishesSafeEvent(t *testing.T
 			ProjectContext:      value.ProjectContextRef{ProjectRef: "project:alpha", RepositoryRef: "repo:alpha"},
 			AgentContext:        []byte(`{"runRef":"agent:run:reviewer","sessionRef":"agent:session:1"}`),
 			Status:              enum.ReleaseDecisionPackageStatusReady,
+		},
+		reviewSignal: entity.ReviewSignal{
+			ID:        reviewSignalID,
+			Outcome:   enum.ReviewSignalOutcomePass,
+			Severity:  enum.SignalSeverityInfo,
+			CreatedAt: now.Add(-2 * time.Minute),
 		},
 	}
 	service := NewWithConfig(Config{
@@ -2042,9 +2049,7 @@ func TestRecordReleaseAgentEvidenceAppendsRefsAndPublishesSafeEvent(t *testing.T
 			{
 				Domain: "governance",
 				Kind:   "review_signal",
-				Ref:    "governance:review_signal:security",
-				Status: "pass",
-				Digest: "sha256:signal",
+				Ref:    reviewSignalID.String(),
 			},
 		},
 		Meta: CommandMeta{
@@ -2215,6 +2220,72 @@ func TestRecordReleaseRuntimeEvidenceDuplicateFingerprintIsIdempotent(t *testing
 	}
 	if repository.result.AggregateID != packageID || repository.result.CommandID == nil || *repository.result.CommandID != commandID {
 		t.Fatalf("command result = %+v, want idempotent command result for package", repository.result)
+	}
+}
+
+func TestRecordReleaseAgentEvidenceVerifiesGovernanceRefs(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
+	packageID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+	reviewSignalID := uuid.MustParse("dddddddd-dddd-4ddd-8ddd-dddddddddddd")
+	expectedVersion := int64(3)
+	basePackage := entity.ReleaseDecisionPackage{
+		VersionedBase:       entity.VersionedBase{ID: packageID, Version: expectedVersion},
+		ReleaseCandidateRef: "release:v1.0.0",
+		ProjectContext:      value.ProjectContextRef{ProjectRef: "project:alpha"},
+		Status:              enum.ReleaseDecisionPackageStatusReady,
+	}
+
+	for _, tc := range []struct {
+		name       string
+		repository *fakeRepository
+		ref        value.ReleaseIntegrationRef
+		want       error
+	}{
+		{
+			name: "unknown local governance ref",
+			repository: &fakeRepository{
+				ready:           true,
+				releasePackage:  basePackage,
+				reviewSignalErr: errs.ErrNotFound,
+			},
+			ref:  value.ReleaseIntegrationRef{Domain: "governance", Kind: "review_signal", Ref: reviewSignalID.String()},
+			want: errs.ErrNotFound,
+		},
+		{
+			name: "mismatched local governance snapshot",
+			repository: &fakeRepository{
+				ready:          true,
+				releasePackage: basePackage,
+				reviewSignal: entity.ReviewSignal{
+					ID:        reviewSignalID,
+					Outcome:   enum.ReviewSignalOutcomePass,
+					Severity:  enum.SignalSeverityInfo,
+					CreatedAt: now,
+				},
+			},
+			ref:  value.ReleaseIntegrationRef{Domain: "governance", Kind: "review_signal", Ref: reviewSignalID.String(), Status: string(enum.ReviewSignalOutcomeBlock)},
+			want: errs.ErrInvalidArgument,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := newTestService(tc.repository).RecordReleaseAgentEvidence(context.Background(), RecordReleaseAgentEvidenceInput{
+				ReleaseDecisionPackageID: packageID,
+				IntegrationRefs:          []value.ReleaseIntegrationRef{tc.ref},
+				Meta: CommandMeta{
+					CommandID:       ptrUUID(uuid.New()),
+					ExpectedVersion: &expectedVersion,
+					Actor:           value.Actor{Type: "service", ID: "agent-manager"},
+				},
+			})
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("RecordReleaseAgentEvidence() error = %v, want %v", err, tc.want)
+			}
+			if tc.repository.mutationCalls != 0 || len(tc.repository.events) != 0 {
+				t.Fatalf("mutations/events = %d/%d, want none", tc.repository.mutationCalls, len(tc.repository.events))
+			}
+		})
 	}
 }
 
@@ -3016,6 +3087,7 @@ type fakeRepository struct {
 	riskFactorListCalls       int
 	assessmentUpdateCalls     int
 	reviewSignal              entity.ReviewSignal
+	reviewSignalErr           error
 	reviewSignals             []entity.ReviewSignal
 	reviewSignalByFingerprint entity.ReviewSignal
 	reviewSignalListCalls     int
@@ -3153,6 +3225,9 @@ func (repository *fakeRepository) RecordReviewSignal(_ context.Context, signal e
 }
 
 func (repository *fakeRepository) GetReviewSignal(_ context.Context, _ uuid.UUID) (entity.ReviewSignal, error) {
+	if repository.reviewSignalErr != nil {
+		return entity.ReviewSignal{}, repository.reviewSignalErr
+	}
 	return repository.reviewSignal, nil
 }
 

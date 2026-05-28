@@ -869,6 +869,7 @@ type releaseEvidenceUpdateConfig struct {
 	EventType               string
 	ReasonCode              string
 	SafeSummary             string
+	EnrichIntegrationRefs   bool
 	NormalizePayload        func([]byte) ([]byte, error)
 	ValidateIntegrationRefs func([]value.ReleaseIntegrationRef) error
 	Merge                   func(entity.ReleaseDecisionPackage, []byte, []value.EvidenceRef, []value.ReleaseIntegrationRef) (entity.ReleaseDecisionPackage, bool, error)
@@ -889,6 +890,7 @@ var (
 		EventType:               governanceevents.EventReleaseDecisionPackageAgentEvidenceRecorded,
 		ReasonCode:              "agent_evidence_recorded",
 		SafeSummary:             "agent evidence refs recorded",
+		EnrichIntegrationRefs:   true,
 		NormalizePayload:        normalizeAgentReleaseEvidencePayload,
 		ValidateIntegrationRefs: validateAgentReleaseIntegrationRefs,
 		Merge:                   mergeReleaseAgentEvidence,
@@ -920,7 +922,11 @@ func (s *Service) recordReleaseEvidence(ctx context.Context, input releaseEviden
 		if err != nil {
 			return entity.ReleaseDecisionPackage{}, err
 		}
-		if _, changed, err := cfg.Merge(replayedPackage, input.Payload, input.EvidenceRefs, input.IntegrationRefs); err != nil {
+		mergeInput, err := s.releaseEvidenceMergeInput(ctx, input, cfg)
+		if err != nil {
+			return entity.ReleaseDecisionPackage{}, err
+		}
+		if _, changed, err := cfg.Merge(replayedPackage, mergeInput.Payload, mergeInput.EvidenceRefs, mergeInput.IntegrationRefs); err != nil {
 			return entity.ReleaseDecisionPackage{}, errs.ErrConflict
 		} else if changed {
 			return entity.ReleaseDecisionPackage{}, errs.ErrConflict
@@ -941,7 +947,11 @@ func (s *Service) recordReleaseEvidence(ctx context.Context, input releaseEviden
 	if previousVersion != pkg.Version {
 		return entity.ReleaseDecisionPackage{}, errs.ErrPreconditionFailed
 	}
-	updated, changed, err := cfg.Merge(pkg, input.Payload, input.EvidenceRefs, input.IntegrationRefs)
+	mergeInput, err := s.releaseEvidenceMergeInput(ctx, input, cfg)
+	if err != nil {
+		return entity.ReleaseDecisionPackage{}, err
+	}
+	updated, changed, err := cfg.Merge(pkg, mergeInput.Payload, mergeInput.EvidenceRefs, mergeInput.IntegrationRefs)
 	if err != nil {
 		return entity.ReleaseDecisionPackage{}, err
 	}
@@ -963,12 +973,24 @@ func (s *Service) recordReleaseEvidence(ctx context.Context, input releaseEviden
 		SafeSummary:              cfg.SafeSummary,
 		Version:                  updated.Version,
 	}, updated.ProjectContext)
-	eventPayload = applyReleaseIntegrationEventRefs(eventPayload, input.IntegrationRefs)
+	eventPayload = applyReleaseIntegrationEventRefs(eventPayload, mergeInput.IntegrationRefs)
 	event := outboxCommandEvent(s.idGenerator.New(), cfg.EventType, governanceevents.AggregateReleaseDecisionPackage, updated.ID, now, input.Meta, cfg.Operation.String(), eventPayload)
 	if err := s.repository.UpdateReleaseDecisionPackageEvidence(ctx, updated, previousVersion, result, event); err != nil {
 		return entity.ReleaseDecisionPackage{}, err
 	}
 	return updated, nil
+}
+
+func (s *Service) releaseEvidenceMergeInput(ctx context.Context, input releaseEvidenceUpdate, cfg releaseEvidenceUpdateConfig) (releaseEvidenceUpdate, error) {
+	if !cfg.EnrichIntegrationRefs {
+		return input, nil
+	}
+	enriched, err := s.enrichReleaseIntegrationRefs(ctx, input.IntegrationRefs)
+	if err != nil {
+		return releaseEvidenceUpdate{}, err
+	}
+	input.IntegrationRefs = enriched
+	return input, nil
 }
 
 func (s *Service) ListReleaseDecisionPackages(ctx context.Context, input ListReleaseDecisionPackagesInput) ([]entity.ReleaseDecisionPackage, query.PageResult, error) {
