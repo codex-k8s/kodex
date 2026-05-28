@@ -1614,6 +1614,7 @@ func TestRequestAcceptanceReplaysCommandResult(t *testing.T) {
 			AggregateID:   acceptance.ID,
 			ResultPayload: payload,
 		},
+		sessionByID:    map[uuid.UUID]entity.AgentSession{sessionID: {VersionedBase: entity.VersionedBase{ID: sessionID, Version: 1}, Status: enum.AgentSessionStatusOpen}},
 		acceptanceByID: map[uuid.UUID]entity.AcceptanceResult{acceptance.ID: acceptance},
 	}
 	service := New(Config{Repository: repository})
@@ -1631,6 +1632,57 @@ func TestRequestAcceptanceReplaysCommandResult(t *testing.T) {
 	}
 	if repository.createAcceptanceCalled {
 		t.Fatal("CreateAcceptanceResultWithResult called during replay")
+	}
+}
+
+func TestRequestAcceptanceRejectsConflictingGovernanceReplay(t *testing.T) {
+	t.Parallel()
+
+	commandID := uuid.MustParse("30303030-5555-6666-7777-888888888888")
+	sessionID := uuid.MustParse("30303030-6666-7777-8888-999999999999")
+	acceptance := entity.AcceptanceResult{
+		VersionedBase: entity.VersionedBase{ID: uuid.MustParse("30303030-7777-8888-9999-aaaaaaaaaaaa"), Version: 1},
+		SessionID:     sessionID,
+		CheckKind:     enum.AcceptanceCheckKindPolicy,
+		Status:        enum.AcceptanceStatusPending,
+		TargetRef:     "artifact:policy-summary",
+		DetailsJSON:   []byte("{}"),
+		GovernanceContext: value.GovernanceContextRef{
+			GateRequestRef: "governance:gate/request-1",
+		},
+	}
+	payload, err := marshalCommandPayload(acceptanceCommandPayload{AcceptanceResult: acceptance})
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	repository := &fakeRepository{
+		replay: &entity.CommandResult{
+			CommandID:     &commandID,
+			Actor:         testActor(),
+			Operation:     operationRequestAcceptance,
+			AggregateType: enum.CommandAggregateTypeAcceptance,
+			AggregateID:   acceptance.ID,
+			ResultPayload: payload,
+		},
+		sessionByID:    map[uuid.UUID]entity.AgentSession{sessionID: {VersionedBase: entity.VersionedBase{ID: sessionID, Version: 1}, Status: enum.AgentSessionStatusOpen}},
+		acceptanceByID: map[uuid.UUID]entity.AcceptanceResult{acceptance.ID: acceptance},
+	}
+	service := New(Config{Repository: repository})
+
+	_, err = service.RequestAcceptance(context.Background(), RequestAcceptanceInput{
+		Meta:       value.CommandMeta{CommandID: commandID, Actor: testActor()},
+		SessionID:  sessionID,
+		CheckKinds: []enum.AcceptanceCheckKind{enum.AcceptanceCheckKindPolicy},
+		TargetRef:  "artifact:policy-summary",
+		GovernanceContext: value.GovernanceContextRef{
+			GateRequestRef: "governance:gate/request-2",
+		},
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("RequestAcceptance() err = %v, want %v", err, errs.ErrConflict)
+	}
+	if repository.createAcceptanceCalled {
+		t.Fatal("CreateAcceptanceResultWithResult called during conflicting replay")
 	}
 }
 

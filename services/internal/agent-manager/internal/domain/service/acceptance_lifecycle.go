@@ -46,19 +46,29 @@ func (s *Service) RequestAcceptance(ctx context.Context, input RequestAcceptance
 	if err != nil {
 		return entity.AcceptanceResult{}, err
 	}
-	if replay, ok, err := findReplay(ctx, s, input.Meta, operationRequestAcceptance, enum.CommandAggregateTypeAcceptance, acceptanceFromPayload, verifyAcceptanceReplay(input.SessionID, uuid.Nil, s.repository.GetAcceptanceResult)); ok || err != nil {
-		return replay, err
-	}
 	session, err := s.repository.GetAgentSession(ctx, input.SessionID)
 	if err != nil {
 		return entity.AcceptanceResult{}, err
 	}
-	if isTerminalSessionStatus(session.Status) {
-		return entity.AcceptanceResult{}, errs.ErrPreconditionFailed
-	}
 	runID, stageID, err := s.acceptanceRefs(ctx, session, input.RunID, input.StageID)
 	if err != nil {
 		return entity.AcceptanceResult{}, err
+	}
+	expectedReplay := entity.AcceptanceResult{
+		SessionID:         session.ID,
+		RunID:             runID,
+		StageID:           stageID,
+		CheckKind:         checkKind,
+		Status:            enum.AcceptanceStatusPending,
+		TargetRef:         targetRef,
+		DetailsJSON:       []byte("{}"),
+		GovernanceContext: governanceContext,
+	}
+	if replay, ok, err := findReplay(ctx, s, input.Meta, operationRequestAcceptance, enum.CommandAggregateTypeAcceptance, acceptanceFromPayload, verifyAcceptanceRequestReplay(expectedReplay, s.repository.GetAcceptanceResult)); ok || err != nil {
+		return replay, err
+	}
+	if isTerminalSessionStatus(session.Status) {
+		return entity.AcceptanceResult{}, errs.ErrPreconditionFailed
 	}
 	now := s.clock.Now()
 	acceptance := entity.AcceptanceResult{
@@ -474,6 +484,29 @@ func acceptanceFromPayload(payload []byte) (entity.AcceptanceResult, error) {
 	var result acceptanceCommandPayload
 	err := json.Unmarshal(payload, &result)
 	return result.AcceptanceResult, err
+}
+
+func verifyAcceptanceRequestReplay(expected entity.AcceptanceResult, load func(context.Context, uuid.UUID) (entity.AcceptanceResult, error)) func(context.Context, entity.CommandResult, entity.AcceptanceResult) error {
+	return func(ctx context.Context, result entity.CommandResult, replay entity.AcceptanceResult) error {
+		if err := verifyAcceptanceReplay(expected.SessionID, uuid.Nil, load)(ctx, result, replay); err != nil {
+			return err
+		}
+		if !sameAcceptanceRequestPayload(replay, expected) {
+			return errs.ErrConflict
+		}
+		return nil
+	}
+}
+
+func sameAcceptanceRequestPayload(recorded entity.AcceptanceResult, expected entity.AcceptanceResult) bool {
+	return recorded.SessionID == expected.SessionID &&
+		sameOptionalUUID(recorded.RunID, expected.RunID) &&
+		sameOptionalUUID(recorded.StageID, expected.StageID) &&
+		recorded.CheckKind == expected.CheckKind &&
+		recorded.Status == expected.Status &&
+		recorded.TargetRef == expected.TargetRef &&
+		bytes.Equal(recorded.DetailsJSON, expected.DetailsJSON) &&
+		sameGovernanceContext(recorded.GovernanceContext, expected.GovernanceContext)
 }
 
 func verifyAcceptanceReplay(expectedSessionID uuid.UUID, expectedAcceptanceID uuid.UUID, load func(context.Context, uuid.UUID) (entity.AcceptanceResult, error)) func(context.Context, entity.CommandResult, entity.AcceptanceResult) error {
