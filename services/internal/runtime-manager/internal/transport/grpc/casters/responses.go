@@ -155,6 +155,7 @@ func RuntimeContextToProto(context runtimeservice.RuntimeContext) *runtimev1.Run
 
 // JobToProto maps one platform job.
 func JobToProto(job entity.Job) *runtimev1.Job {
+	agentRunExecutionSpec, _ := runtimeservice.AgentRunExecutionSpecFromJobInput(job.JobInputJSON)
 	return &runtimev1.Job{
 		JobId:                 job.ID.String(),
 		CommandId:             job.CommandID,
@@ -184,7 +185,47 @@ func JobToProto(job entity.Job) *runtimev1.Job {
 		FullLogRef:            job.FullLogRef,
 		Version:               job.Version,
 		Steps:                 jobStepsToProto(job.Steps),
+		AgentRunExecutionSpec: agentRunExecutionSpecToProto(agentRunExecutionSpec),
 	}
+}
+
+func agentRunExecutionSpecToProto(spec *runtimeservice.AgentRunExecutionSpecInput) *runtimev1.AgentRunExecutionSpec {
+	if spec == nil {
+		return nil
+	}
+	return &runtimev1.AgentRunExecutionSpec{
+		AgentRunId:                         spec.AgentRunID.String(),
+		SlotId:                             spec.SlotID.String(),
+		ExpectedMaterializationId:          spec.ExpectedMaterializationID.String(),
+		ExpectedMaterializationFingerprint: spec.ExpectedMaterializationFingerprint,
+		WorkspaceRef:                       spec.WorkspaceRef,
+		WorkspaceMountRef:                  spec.WorkspaceMountRef,
+		WorkspacePvcRef:                    spec.WorkspacePVCRef,
+		ContextRef:                         spec.ContextRef,
+		ContextDigest:                      spec.ContextDigest,
+		RunnerProfileRef:                   spec.RunnerProfileRef,
+		RunnerImageRef:                     spec.RunnerImageRef,
+		RunnerMode:                         AgentRunRunnerModeToProto(spec.RunnerMode),
+		AllowedSecretRefs:                  agentRunAllowedSecretRefsToProto(spec.AllowedSecretRefs),
+		ReportingTargetRefs:                agentRunReportingTargetRefsToProto(spec.ReportingTargetRefs),
+	}
+}
+
+func agentRunAllowedSecretRefsToProto(refs []runtimeservice.AgentRunExecutionRefInput) []*runtimev1.AgentRunAllowedSecretRef {
+	result := make([]*runtimev1.AgentRunAllowedSecretRef, len(refs))
+	for index := range refs {
+		ref := refs[index]
+		result[index] = &runtimev1.AgentRunAllowedSecretRef{SecretRef: ref.Ref, Purpose: ref.Kind}
+	}
+	return result
+}
+
+func agentRunReportingTargetRefsToProto(refs []runtimeservice.AgentRunExecutionRefInput) []*runtimev1.AgentRunReportingTargetRef {
+	result := make([]*runtimev1.AgentRunReportingTargetRef, len(refs))
+	for index, ref := range refs {
+		result[index] = &runtimev1.AgentRunReportingTargetRef{Kind: ref.Kind, Ref: ref.Ref}
+	}
+	return result
 }
 
 // JobStepToProto maps one job step.

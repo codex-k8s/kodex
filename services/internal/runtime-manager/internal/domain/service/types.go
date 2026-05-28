@@ -113,7 +113,32 @@ type CreateJobInput struct {
 	PackageInstallationID *uuid.UUID
 	PlacementConstraints  PlacementConstraintsInput
 	JobInputJSON          []byte
+	AgentRunExecutionSpec *AgentRunExecutionSpecInput
 	Meta                  value.CommandMeta
+}
+
+// AgentRunExecutionSpecInput хранит безопасные refs для будущего исполнения agent_run.
+type AgentRunExecutionSpecInput struct {
+	AgentRunID                         uuid.UUID                   `json:"agent_run_id"`
+	SlotID                             uuid.UUID                   `json:"slot_id"`
+	ExpectedMaterializationID          uuid.UUID                   `json:"expected_materialization_id"`
+	ExpectedMaterializationFingerprint string                      `json:"expected_materialization_fingerprint"`
+	WorkspaceRef                       string                      `json:"workspace_ref"`
+	WorkspaceMountRef                  string                      `json:"workspace_mount_ref"`
+	WorkspacePVCRef                    string                      `json:"workspace_pvc_ref,omitempty"`
+	ContextRef                         string                      `json:"context_ref"`
+	ContextDigest                      string                      `json:"context_digest"`
+	RunnerProfileRef                   string                      `json:"runner_profile_ref"`
+	RunnerImageRef                     string                      `json:"runner_image_ref"`
+	RunnerMode                         enum.AgentRunRunnerMode     `json:"runner_mode"`
+	AllowedSecretRefs                  []AgentRunExecutionRefInput `json:"allowed_secret_refs,omitempty"`
+	ReportingTargetRefs                []AgentRunExecutionRefInput `json:"reporting_target_refs,omitempty"`
+}
+
+// AgentRunExecutionRefInput хранит типизированную безопасную ссылку agent_run.
+type AgentRunExecutionRefInput struct {
+	Kind string `json:"kind"`
+	Ref  string `json:"ref"`
 }
 
 // PlacementConstraintsInput contains safe placement hints accepted by runtime-manager callers.

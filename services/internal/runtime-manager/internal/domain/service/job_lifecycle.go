@@ -75,6 +75,11 @@ func (s *Service) CreateJob(ctx context.Context, input CreateJobInput) (entity.J
 		ClusterID:             resolved.ClusterID,
 		RequestedBy:           requestedBy(input.Meta.Actor),
 	}
+	if job.JobType == enum.JobTypeAgentRun && !agentRunJobInputHasExecutionSpec(job.JobInputJSON) {
+		job.LastErrorCode = agentRunExecutionSpecRequiredCode
+		job.LastErrorMessage = agentRunExecutionSpecRequiredMessage
+		job.NextAction = agentRunExecutionSpecRequiredAction
+	}
 	resultPayload, err := createJobCommandPayload(resolved.PlacementFingerprint)
 	if err != nil {
 		return entity.Job{}, err
@@ -391,6 +396,10 @@ func (s *Service) resolveJobCreateInput(ctx context.Context, input CreateJobInpu
 	if err != nil {
 		return resolvedCreateJobInput{}, err
 	}
+	input, jobInputJSON, err = resolveAgentRunJobInput(input, jobInputJSON)
+	if err != nil {
+		return resolvedCreateJobInput{}, err
+	}
 	if err := validateJobTypeSpecificInput(input, jobInputJSON); err != nil {
 		return resolvedCreateJobInput{}, err
 	}
@@ -412,6 +421,11 @@ func (s *Service) resolveJobCreateInput(ctx context.Context, input CreateJobInpu
 		}
 		if input.ProjectID != nil && !sameUUIDPtr(slot.ProjectID, input.ProjectID) {
 			return resolvedCreateJobInput{}, errs.ErrConflict
+		}
+		if input.AgentRunExecutionSpec != nil {
+			if err := s.validateAgentRunExecutionSpecState(ctx, *input.AgentRunExecutionSpec, slot); err != nil {
+				return resolvedCreateJobInput{}, err
+			}
 		}
 		resolved.ProjectID = slot.ProjectID
 		resolved.FleetScopeID = slot.FleetScopeID
@@ -437,7 +451,7 @@ func validateJobTypeSpecificInput(input CreateJobInput, jobInputJSON []byte) err
 		if input.AgentRunID == nil || *input.AgentRunID == uuid.Nil {
 			return errs.ErrInvalidArgument
 		}
-		if !bytes.Equal(jobInputJSON, []byte(`{}`)) {
+		if input.AgentRunExecutionSpec == nil && !bytes.Equal(jobInputJSON, []byte(`{}`)) {
 			return errs.ErrInvalidArgument
 		}
 	}

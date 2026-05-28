@@ -360,6 +360,10 @@ func CreateJobInput(request *runtimev1.CreateJobRequest) (runtimeservice.CreateJ
 	if err != nil {
 		return runtimeservice.CreateJobInput{}, err
 	}
+	agentRunExecutionSpec, err := AgentRunExecutionSpecInputFromProto(request.GetAgentRunExecutionSpec())
+	if err != nil {
+		return runtimeservice.CreateJobInput{}, err
+	}
 	meta, err := CommandMetaFromProto(request.GetMeta())
 	if err != nil {
 		return runtimeservice.CreateJobInput{}, err
@@ -375,8 +379,69 @@ func CreateJobInput(request *runtimev1.CreateJobRequest) (runtimeservice.CreateJ
 		PackageInstallationID: packageInstallationID,
 		PlacementConstraints:  constraints,
 		JobInputJSON:          []byte(strings.TrimSpace(request.GetJobInputJson())),
+		AgentRunExecutionSpec: agentRunExecutionSpec,
 		Meta:                  meta,
 	}, nil
+}
+
+// AgentRunExecutionSpecInputFromProto преобразует typed agent_run execution input из proto.
+func AgentRunExecutionSpecInputFromProto(spec *runtimev1.AgentRunExecutionSpec) (*runtimeservice.AgentRunExecutionSpecInput, error) {
+	if spec == nil {
+		return nil, nil
+	}
+	agentRunID, err := requiredUUID(spec.GetAgentRunId())
+	if err != nil {
+		return nil, err
+	}
+	slotID, err := requiredUUID(spec.GetSlotId())
+	if err != nil {
+		return nil, err
+	}
+	materializationID, err := requiredUUID(spec.GetExpectedMaterializationId())
+	if err != nil {
+		return nil, err
+	}
+	runnerMode, err := AgentRunRunnerModeFromProto(spec.GetRunnerMode())
+	if err != nil {
+		return nil, err
+	}
+	return &runtimeservice.AgentRunExecutionSpecInput{
+		AgentRunID:                         agentRunID,
+		SlotID:                             slotID,
+		ExpectedMaterializationID:          materializationID,
+		ExpectedMaterializationFingerprint: strings.TrimSpace(spec.GetExpectedMaterializationFingerprint()),
+		WorkspaceRef:                       strings.TrimSpace(spec.GetWorkspaceRef()),
+		WorkspaceMountRef:                  strings.TrimSpace(spec.GetWorkspaceMountRef()),
+		WorkspacePVCRef:                    strings.TrimSpace(spec.GetWorkspacePvcRef()),
+		ContextRef:                         strings.TrimSpace(spec.GetContextRef()),
+		ContextDigest:                      strings.TrimSpace(spec.GetContextDigest()),
+		RunnerProfileRef:                   strings.TrimSpace(spec.GetRunnerProfileRef()),
+		RunnerImageRef:                     strings.TrimSpace(spec.GetRunnerImageRef()),
+		RunnerMode:                         runnerMode,
+		AllowedSecretRefs:                  agentRunAllowedSecretRefsFromProto(spec.GetAllowedSecretRefs()),
+		ReportingTargetRefs:                agentRunReportingTargetRefsFromProto(spec.GetReportingTargetRefs()),
+	}, nil
+}
+
+func agentRunAllowedSecretRefsFromProto(refs []*runtimev1.AgentRunAllowedSecretRef) []runtimeservice.AgentRunExecutionRefInput {
+	return agentRunProtoRefs(refs, (*runtimev1.AgentRunAllowedSecretRef).GetPurpose, (*runtimev1.AgentRunAllowedSecretRef).GetSecretRef)
+}
+
+func agentRunReportingTargetRefsFromProto(refs []*runtimev1.AgentRunReportingTargetRef) []runtimeservice.AgentRunExecutionRefInput {
+	return agentRunProtoRefs(refs, (*runtimev1.AgentRunReportingTargetRef).GetKind, (*runtimev1.AgentRunReportingTargetRef).GetRef)
+}
+
+func agentRunProtoRefs[Proto any](refs []*Proto, kind func(*Proto) string, refValue func(*Proto) string) []runtimeservice.AgentRunExecutionRefInput {
+	result := make([]runtimeservice.AgentRunExecutionRefInput, 0, len(refs))
+	for _, ref := range refs {
+		if ref != nil {
+			result = append(result, runtimeservice.AgentRunExecutionRefInput{
+				Kind: strings.TrimSpace(kind(ref)),
+				Ref:  strings.TrimSpace(refValue(ref)),
+			})
+		}
+	}
+	return result
 }
 
 // ClaimRunnableJobInput maps a gRPC worker claim request.
