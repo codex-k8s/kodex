@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -27,6 +28,10 @@ const (
 	runtimeJobFailureCode         = "runtime_job_failed"
 	runtimePrepareDefaultMode     = RuntimeModeFullEnv
 	runtimePrepareSummaryLimit    = 512
+	runtimeJobSafeRefLimit        = 512
+	runtimeJobSafeKindLimit       = 64
+	runtimeJobSecretRefLimit      = 16
+	runtimeJobReportingRefLimit   = 8
 )
 
 var guidanceLocalNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,62}$`)
@@ -128,7 +133,7 @@ func (s *Service) prepareRuntimeForRun(
 		return s.recordRuntimePreparationFailure(ctx, meta, run, err)
 	}
 	if s.runtimeJobDispatchEnabled {
-		return s.dispatchRuntimeJobForRun(ctx, meta, run, result)
+		return s.dispatchRuntimeJobForRun(ctx, meta, role, run, result)
 	}
 	return s.recordRuntimePreparationSuccess(ctx, meta, run, result)
 }
@@ -359,6 +364,7 @@ func generatedContextRuntimeSource(
 		SourceRef:    run.ID.String(),
 		LocalPath:    ".kodex/context/agent-run.json",
 		AccessMode:   WorkspaceSourceAccessRead,
+		Digest:       digestText(metadata),
 		MetadataJSON: metadata,
 	}, nil
 }
@@ -402,6 +408,7 @@ func (s *Service) recordRuntimePreparationSuccess(
 func (s *Service) dispatchRuntimeJobForRun(
 	ctx context.Context,
 	meta value.CommandMeta,
+	role entity.RoleProfile,
 	run entity.AgentRun,
 	result RuntimePreparationResult,
 ) (entity.AgentRun, error) {
@@ -413,10 +420,15 @@ func (s *Service) dispatchRuntimeJobForRun(
 		runtimeContext.JobRef = strings.TrimSpace(run.RuntimeContext.JobRef)
 		return s.recordRuntimePreparationState(ctx, meta, run, enum.AgentRunStatusStarting, runtimeContext, runtimePreparationSuccessSummary(result), "", "")
 	}
+	spec, err := s.agentRunExecutionSpec(run, role, result)
+	if err != nil {
+		return s.recordRuntimeJobFailure(ctx, meta, run, runtimeContext, err)
+	}
 	job, err := s.runtimeJobCreator.CreateAgentRunJob(ctx, RuntimeJobInput{
-		Meta:       runtimeJobCommandMeta(meta, run.ID),
-		AgentRunID: run.ID,
-		SlotRef:    runtimeContext.SlotRef,
+		Meta:          runtimeJobCommandMeta(meta, run.ID),
+		AgentRunID:    run.ID,
+		SlotRef:       runtimeContext.SlotRef,
+		ExecutionSpec: spec,
 	})
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
@@ -425,6 +437,192 @@ func (s *Service) dispatchRuntimeJobForRun(
 		return s.recordRuntimeJobFailure(ctx, meta, run, runtimeContext, err)
 	}
 	return s.recordRuntimeJobSuccess(ctx, meta, run, runtimeContext, result, job)
+}
+
+func (s *Service) agentRunExecutionSpec(run entity.AgentRun, role entity.RoleProfile, result RuntimePreparationResult) (AgentRunExecutionSpec, error) {
+	slotID, err := requiredRuntimeUUID(result.SlotRef)
+	if err != nil {
+		return AgentRunExecutionSpec{}, missingRuntimeJobSpecDependency()
+	}
+	materializationID, err := requiredRuntimeUUID(result.WorkspaceRef)
+	if err != nil {
+		return AgentRunExecutionSpec{}, missingRuntimeJobSpecDependency()
+	}
+	fingerprint := strings.TrimSpace(result.MaterializationFingerprint)
+	contextDigest := strings.TrimSpace(result.ContextDigest)
+	if !safeRuntimeJobRef(fingerprint, true) || !safeRuntimeJobRef(contextDigest, true) {
+		return AgentRunExecutionSpec{}, missingRuntimeJobSpecDependency()
+	}
+	runnerImageRef := strings.TrimSpace(s.runtimeJobRunnerImageRef)
+	if !safeRuntimeJobRef(runnerImageRef, true) {
+		return AgentRunExecutionSpec{}, NewRuntimeJobError(false, "failed_precondition", "agent run runner image ref is not configured")
+	}
+	allowedSecretRefs, err := normalizeRuntimeJobRefs(s.runtimeJobAllowedSecretRefs, runtimeJobSecretRefLimit)
+	if err != nil {
+		return AgentRunExecutionSpec{}, NewRuntimeJobError(false, "failed_precondition", "agent run allowed secret refs are invalid")
+	}
+	spec := AgentRunExecutionSpec{
+		AgentRunID:                         run.ID,
+		SlotID:                             slotID,
+		ExpectedMaterializationID:          materializationID,
+		ExpectedMaterializationFingerprint: fingerprint,
+		WorkspaceRef:                       runtimeWorkspaceRef(materializationID),
+		WorkspaceMountRef:                  runtimeWorkspaceMountRef(slotID),
+		ContextRef:                         runtimeContextFileRef(materializationID),
+		ContextDigest:                      contextDigest,
+		RunnerProfileRef:                   runnerProfileRef(role.RuntimeProfile),
+		RunnerImageRef:                     runnerImageRef,
+		RunnerMode:                         RuntimeJobRunnerModeCodexAgent,
+		AllowedSecretRefs:                  allowedSecretRefs,
+		ReportingTargetRefs:                runtimeJobReportingTargetRefs(run.ID),
+	}
+	if contextRef := strings.TrimSpace(result.ContextRef); contextRef != "" && !strings.HasPrefix(contextRef, "sha256:") {
+		spec.ContextRef = contextRef
+	}
+	if err := validateAgentRunExecutionSpec(spec); err != nil {
+		return AgentRunExecutionSpec{}, err
+	}
+	return spec, nil
+}
+
+func validateAgentRunExecutionSpec(spec AgentRunExecutionSpec) error {
+	if spec.AgentRunID == uuid.Nil || spec.SlotID == uuid.Nil || spec.ExpectedMaterializationID == uuid.Nil {
+		return missingRuntimeJobSpecDependency()
+	}
+	requiredRefs := []string{
+		spec.ExpectedMaterializationFingerprint,
+		spec.WorkspaceRef,
+		spec.WorkspaceMountRef,
+		spec.ContextRef,
+		spec.ContextDigest,
+		spec.RunnerProfileRef,
+		spec.RunnerImageRef,
+	}
+	for _, ref := range requiredRefs {
+		if !safeRuntimeJobRef(ref, true) {
+			return missingRuntimeJobSpecDependency()
+		}
+	}
+	if spec.RunnerMode != RuntimeJobRunnerModeCodexAgent {
+		return NewRuntimeJobError(false, "failed_precondition", "agent run runner mode is invalid")
+	}
+	if _, err := normalizeRuntimeJobRefs(spec.AllowedSecretRefs, runtimeJobSecretRefLimit); err != nil {
+		return NewRuntimeJobError(false, "failed_precondition", "agent run allowed secret refs are invalid")
+	}
+	if _, err := normalizeRuntimeJobRefs(spec.ReportingTargetRefs, runtimeJobReportingRefLimit); err != nil {
+		return missingRuntimeJobSpecDependency()
+	}
+	return nil
+}
+
+func missingRuntimeJobSpecDependency() error {
+	return NewRuntimeJobError(true, "dependency_unavailable", "runtime-manager returned incomplete agent run execution refs")
+}
+
+func requiredRuntimeUUID(ref string) (uuid.UUID, error) {
+	id, err := uuid.Parse(strings.TrimSpace(ref))
+	if err != nil || id == uuid.Nil {
+		return uuid.Nil, errs.ErrInvalidArgument
+	}
+	return id, nil
+}
+
+func runtimeWorkspaceRef(materializationID uuid.UUID) string {
+	return "runtime://workspace-materializations/" + materializationID.String()
+}
+
+func runtimeWorkspaceMountRef(slotID uuid.UUID) string {
+	return "runtime://slots/" + slotID.String() + "/workspace-mount"
+}
+
+func runtimeContextFileRef(materializationID uuid.UUID) string {
+	return "runtime://workspace-materializations/" + materializationID.String() + "/context/agent-run.json"
+}
+
+func runnerProfileRef(runtimeProfile string) string {
+	return "runner-profile://" + strings.TrimSpace(runtimeProfile)
+}
+
+func runtimeJobReportingTargetRefs(runID uuid.UUID) []AgentRunExecutionRef {
+	return []AgentRunExecutionRef{
+		{Kind: "agent_run_state", Ref: "agent-manager://runs/" + runID.String()},
+		{Kind: "agent_activity", Ref: "agent-manager://runs/" + runID.String() + "/activities"},
+	}
+}
+
+func normalizeRuntimeJobRefs(refs []AgentRunExecutionRef, limit int) ([]AgentRunExecutionRef, error) {
+	if len(refs) == 0 {
+		return nil, nil
+	}
+	if len(refs) > limit {
+		return nil, errs.ErrInvalidArgument
+	}
+	normalized := make([]AgentRunExecutionRef, 0, len(refs))
+	for _, ref := range refs {
+		item := AgentRunExecutionRef{Kind: strings.TrimSpace(ref.Kind), Ref: strings.TrimSpace(ref.Ref)}
+		if !safeRuntimeJobKind(item.Kind) || !safeRuntimeJobRef(item.Ref, true) {
+			return nil, errs.ErrInvalidArgument
+		}
+		normalized = append(normalized, item)
+	}
+	sortAgentRunExecutionRefs(normalized)
+	return normalized, nil
+}
+
+func sortAgentRunExecutionRefs(refs []AgentRunExecutionRef) {
+	sort.SliceStable(refs, func(left, right int) bool {
+		return agentRunExecutionRefSortKey(refs[left]) < agentRunExecutionRefSortKey(refs[right])
+	})
+}
+
+func agentRunExecutionRefSortKey(ref AgentRunExecutionRef) string {
+	return ref.Kind + ":" + ref.Ref
+}
+
+func safeRuntimeJobKind(value string) bool {
+	if value == "" || len(value) > runtimeJobSafeKindLimit || !utf8.ValidString(value) || strings.ContainsAny(value, "\r\n\t {}") {
+		return false
+	}
+	return !unsafeRuntimeJobText(value)
+}
+
+func safeRuntimeJobRef(value string, required bool) bool {
+	if value == "" {
+		return !required
+	}
+	if len(value) > runtimeJobSafeRefLimit || !utf8.ValidString(value) || strings.ContainsAny(value, "\r\n\t{}") {
+		return false
+	}
+	return !unsafeRuntimeJobText(value)
+}
+
+func unsafeRuntimeJobText(value string) bool {
+	lower := strings.ToLower(strings.TrimSpace(value))
+	markers := []string{
+		"raw_provider_payload",
+		"provider_payload",
+		"prompt_text",
+		"prompt_template",
+		"transcript",
+		"tool_input",
+		"tool_output",
+		"workspace_path",
+		"kubeconfig",
+		"secret_value",
+		"token=",
+		"authorization",
+		"stdout",
+		"stderr",
+		"large_log",
+		"-----begin",
+		"bearer ",
+	}
+	for _, marker := range markers {
+		if strings.Contains(lower, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func runtimeContextFromPreparation(result RuntimePreparationResult) (value.RuntimeContextRef, error) {
@@ -708,12 +906,18 @@ func normalizeRuntimeSources(sources []RuntimeWorkspaceSource) ([]RuntimeWorkspa
 		}
 		normalized = append(normalized, item)
 	}
-	sort.SliceStable(normalized, func(left, right int) bool {
-		leftKey := normalized[left].Kind + ":" + normalized[left].SourceID
-		rightKey := normalized[right].Kind + ":" + normalized[right].SourceID
-		return leftKey < rightKey
-	})
+	sortRuntimeWorkspaceSources(normalized)
 	return normalized, nil
+}
+
+func sortRuntimeWorkspaceSources(sources []RuntimeWorkspaceSource) {
+	sort.SliceStable(sources, func(left, right int) bool {
+		return runtimeWorkspaceSourceSortKey(sources[left]) < runtimeWorkspaceSourceSortKey(sources[right])
+	})
+}
+
+func runtimeWorkspaceSourceSortKey(source RuntimeWorkspaceSource) string {
+	return source.Kind + ":" + source.SourceID
 }
 
 func runtimeWorkspacePolicyDigest(policy RuntimeWorkspacePolicy) (string, error) {
@@ -729,6 +933,11 @@ func runtimeWorkspacePolicyDigest(policy RuntimeWorkspacePolicy) (string, error)
 	}
 	sum := sha256.Sum256(data)
 	return "sha256:" + hex.EncodeToString(sum[:]), nil
+}
+
+func digestText(text string) string {
+	sum := sha256.Sum256([]byte(strings.TrimSpace(text)))
+	return "sha256:" + hex.EncodeToString(sum[:])
 }
 
 func repositoryIDsFromRuntimeSources(sources []RuntimeWorkspaceSource) []uuid.UUID {

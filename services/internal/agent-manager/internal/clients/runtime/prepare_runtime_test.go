@@ -2,7 +2,9 @@ package runtime
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -41,9 +43,10 @@ func TestCreateAgentRunJobMapsRequestAndResponse(t *testing.T) {
 	}
 
 	result, err := preparer.CreateAgentRunJob(context.Background(), agentservice.RuntimeJobInput{
-		Meta:       value.CommandMeta{CommandID: commandID, Actor: value.Actor{Type: "service", ID: "agent-manager"}},
-		AgentRunID: agentRunID,
-		SlotRef:    slotID.String(),
+		Meta:          value.CommandMeta{CommandID: commandID, Actor: value.Actor{Type: "service", ID: "agent-manager"}},
+		AgentRunID:    agentRunID,
+		SlotRef:       slotID.String(),
+		ExecutionSpec: testAgentRunExecutionSpec(agentRunID, slotID),
 	})
 	if err != nil {
 		t.Fatalf("CreateAgentRunJob() err = %v", err)
@@ -58,8 +61,65 @@ func TestCreateAgentRunJobMapsRequestAndResponse(t *testing.T) {
 	if request.GetSlotId() != slotID.String() || request.GetAgentRunId() != agentRunID.String() || request.GetJobInputJson() != "{}" {
 		t.Fatalf("job refs/input = slot %q run %q input %q", request.GetSlotId(), request.GetAgentRunId(), request.GetJobInputJson())
 	}
+	spec := request.GetAgentRunExecutionSpec()
+	if spec == nil || spec.GetAgentRunId() != agentRunID.String() || spec.GetSlotId() != slotID.String() {
+		t.Fatalf("agent run execution spec = %+v", spec)
+	}
+	if spec.GetRunnerMode() != runtimev1.AgentRunRunnerMode_AGENT_RUN_RUNNER_MODE_CODEX_AGENT ||
+		spec.GetRunnerImageRef() != "image://codex-agent@sha256:runner" ||
+		spec.GetContextDigest() != "sha256:agent-run-context" {
+		t.Fatalf("agent run execution runner/context = %+v", spec)
+	}
+	if len(spec.GetAllowedSecretRefs()) != 1 || spec.GetAllowedSecretRefs()[0].GetSecretRef() != "secret://runtime/agent-token" {
+		t.Fatalf("allowed secret refs = %+v", spec.GetAllowedSecretRefs())
+	}
+	if len(spec.GetReportingTargetRefs()) != 1 || spec.GetReportingTargetRefs()[0].GetKind() != "agent_run_state" {
+		t.Fatalf("reporting target refs = %+v", spec.GetReportingTargetRefs())
+	}
+	requestPayload, err := json.Marshal(request)
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+	for _, forbidden := range []string{"prompt_text", "transcript", "raw_provider_payload", "secret_value", "kubeconfig", "stdout", "stderr"} {
+		if strings.Contains(string(requestPayload), forbidden) {
+			t.Fatalf("request contains forbidden payload marker %q: %s", forbidden, requestPayload)
+		}
+	}
 	if request.GetMeta().GetCommandId() != commandID.String() || request.GetMeta().GetActor().GetId() != "agent-manager" {
 		t.Fatalf("meta = %+v", request.GetMeta())
+	}
+}
+
+func TestPrepareRuntimeResultExtractsGeneratedContextDigest(t *testing.T) {
+	t.Parallel()
+
+	slotID := uuid.MustParse("d1d1d1d1-1111-2222-3333-444444444444")
+	materializationID := uuid.MustParse("d1d1d1d1-2222-3333-4444-555555555555")
+	slotText := slotID.String()
+	result, err := prepareRuntimeResult(agentservice.RuntimePreparationInput{
+		WorkspacePolicy: agentservice.RuntimeWorkspacePolicy{PolicyDigest: "sha256:policy"},
+	}, &runtimev1.PrepareRuntimeResponse{
+		Slot: &runtimev1.Slot{SlotId: slotText, Fingerprint: "sha256:slot"},
+		WorkspaceMaterialization: &runtimev1.WorkspaceMaterialization{
+			WorkspaceMaterializationId: materializationID.String(),
+			SlotId:                     slotText,
+			Fingerprint:                "sha256:workspace",
+			Sources: []*runtimev1.WorkspaceSource{{
+				Kind:   runtimev1.WorkspaceSourceKind_WORKSPACE_SOURCE_KIND_GENERATED_CONTEXT,
+				Digest: optionalString("sha256:agent-run-context"),
+			}},
+		},
+		RuntimeContext: &runtimev1.RuntimeContext{
+			SlotId:                     slotText,
+			MaterializationFingerprint: "sha256:workspace",
+		},
+	})
+	if err != nil {
+		t.Fatalf("prepareRuntimeResult() err = %v", err)
+	}
+	if result.ContextDigest != "sha256:agent-run-context" ||
+		result.ContextRef != "runtime://workspace-materializations/"+materializationID.String()+"/context/agent-run.json" {
+		t.Fatalf("context refs = %+v", result)
 	}
 }
 
@@ -167,6 +227,28 @@ func TestGetAgentRunJobRejectsMismatchedRefs(t *testing.T) {
 	var classified *agentservice.RuntimeJobError
 	if !errors.As(err, &classified) || !classified.Retryable || classified.Code != "conflict" {
 		t.Fatalf("GetAgentRunJob() err = %v, want retryable conflict", err)
+	}
+}
+
+func testAgentRunExecutionSpec(agentRunID uuid.UUID, slotID uuid.UUID) agentservice.AgentRunExecutionSpec {
+	return agentservice.AgentRunExecutionSpec{
+		AgentRunID:                         agentRunID,
+		SlotID:                             slotID,
+		ExpectedMaterializationID:          uuid.MustParse("a1a1a1a1-5555-6666-7777-888888888888"),
+		ExpectedMaterializationFingerprint: "sha256:workspace",
+		WorkspaceRef:                       "runtime://workspace-materializations/a1a1a1a1-5555-6666-7777-888888888888",
+		WorkspaceMountRef:                  "runtime://slots/" + slotID.String() + "/workspace-mount",
+		ContextRef:                         "runtime://workspace-materializations/a1a1a1a1-5555-6666-7777-888888888888/context/agent-run.json",
+		ContextDigest:                      "sha256:agent-run-context",
+		RunnerProfileRef:                   "runner-profile://go-full",
+		RunnerImageRef:                     "image://codex-agent@sha256:runner",
+		RunnerMode:                         agentservice.RuntimeJobRunnerModeCodexAgent,
+		AllowedSecretRefs: []agentservice.AgentRunExecutionRef{
+			{Kind: "runtime_api", Ref: "secret://runtime/agent-token"},
+		},
+		ReportingTargetRefs: []agentservice.AgentRunExecutionRef{
+			{Kind: "agent_run_state", Ref: "agent-manager://runs/" + agentRunID.String()},
+		},
 	}
 }
 

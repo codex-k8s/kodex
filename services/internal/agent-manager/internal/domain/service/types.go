@@ -147,6 +147,8 @@ type StartAgentRunInput struct {
 const (
 	RuntimeModeFullEnv = "full_env"
 
+	RuntimeJobRunnerModeCodexAgent = "codex_agent"
+
 	WorkspaceSourceKindCode             = "code"
 	WorkspaceSourceKindDocumentation    = "documentation"
 	WorkspaceSourceKindGuidancePackage  = "guidance_package"
@@ -234,14 +236,38 @@ type RuntimePreparationResult struct {
 	SlotRef                    string
 	WorkspaceRef               string
 	ContextRef                 string
+	ContextDigest              string
 	MaterializationFingerprint string
 	DiagnosticSummary          string
 }
 
 type RuntimeJobInput struct {
-	Meta       value.CommandMeta
-	AgentRunID uuid.UUID
-	SlotRef    string
+	Meta          value.CommandMeta
+	AgentRunID    uuid.UUID
+	SlotRef       string
+	ExecutionSpec AgentRunExecutionSpec
+}
+
+type AgentRunExecutionSpec struct {
+	AgentRunID                         uuid.UUID
+	SlotID                             uuid.UUID
+	ExpectedMaterializationID          uuid.UUID
+	ExpectedMaterializationFingerprint string
+	WorkspaceRef                       string
+	WorkspaceMountRef                  string
+	WorkspacePVCRef                    string
+	ContextRef                         string
+	ContextDigest                      string
+	RunnerProfileRef                   string
+	RunnerImageRef                     string
+	RunnerMode                         string
+	AllowedSecretRefs                  []AgentRunExecutionRef
+	ReportingTargetRefs                []AgentRunExecutionRef
+}
+
+type AgentRunExecutionRef struct {
+	Kind string
+	Ref  string
 }
 
 type RuntimeJobResult struct {

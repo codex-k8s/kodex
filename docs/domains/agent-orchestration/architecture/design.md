@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-12
 updated_at: 2026-05-28
-related_issues: [733, 753, 698, 322, 782, 795, 820, 834, 842, 862, 866, 937, 954]
+related_issues: [733, 753, 698, 322, 782, 795, 820, 834, 842, 862, 866, 937, 954, 968]
 related_prs: []
 related_adrs: []
 approvals:
@@ -108,7 +108,7 @@ sequenceDiagram
   AM->>AM: freeze role/prompt/guidance refs + create Run
   AM->>R: PrepareRuntime(agent_run_id, workspace policy, runtime profile)
   R-->>AM: slot ref + runtime context
-  AM->>R: CreateJob(job_type=agent_run, slot_ref, agent_run_id)
+  AM->>R: CreateJob(job_type=agent_run, slot_ref, agent_run_id, AgentRunExecutionSpec)
   R-->>AM: runtime_job_ref + job status
   AM->>R: GetJob(runtime_job_ref)
   R-->>AM: безопасный статус job для UI/MCP чтения
@@ -116,6 +116,8 @@ sequenceDiagram
 ```
 
 `agent-manager` не выполняет checkout и не монтирует файлы сам. Он выбирает руководящие пакеты и контекст, а подготовку workspace выполняет runtime-контур по проверенной политике.
+
+При включённом `KODEX_AGENT_MANAGER_RUNTIME_JOB_DISPATCH_ENABLED` постановка runtime job требует `KODEX_AGENT_MANAGER_RUNTIME_JOB_RUNNER_IMAGE_REF`. `agent-manager` собирает `AgentRunExecutionSpec` только из безопасных refs: `agent_run_id`, `slot_id`, workspace materialization id/fingerprint, runtime-owned workspace/context refs, digest `.kodex/context/agent-run.json`, `runner_profile_ref`, `runner_image_ref`, фиксированный `runner_mode=codex_agent`, разрешённые secret refs без значений и reporting targets обратно в `agent-manager`. Если `PrepareRuntime` не вернул обязательные refs или digest, dispatch завершается безопасным retryable отказом и не создаёт некорректный `JOB_TYPE_AGENT_RUN`.
 
 Для UI, MCP и owner-оператора `agent-manager` предоставляет отдельную безопасную поверхность чтения `GetAgentRunRuntimeStatus`. Она берёт сохранённые refs и state из `Run`, а актуальное состояние задания читает только через `runtime-manager.GetJob`. Прямой доступ к Kubernetes, БД `runtime-manager`, shell и логам запрещён; ответ содержит только `runtime_job_ref`, статус job, safe error code/summary, timestamps, версии и признаки ожидания orchestration вроде Human gate.
 
@@ -186,10 +188,12 @@ MVP-путь:
 - `agent_run_id`;
 - runtime profile роли;
 - workspace policy и placement constraints;
-- rendered execution context;
+- generated context source `.kodex/context/agent-run.json` с digest;
 - `AgentRunExecutionSpec` с safe refs на подготовленную materialization, workspace mount/PVC/workspace, `.kodex/context/agent-run.json` ref/digest, runner profile/image, фиксированный runner mode, secret refs без значений и reporting target refs;
 - ссылки на provider-native задачу, stage, role и prompt version.
 - метаданные последнего Codex session snapshot, если runtime продолжает существующую сессию.
+
+Guidance refs не дублируются отдельным сырым payload в `AgentRunExecutionSpec`: они уже заморожены в `AgentRun.guidance_refs`, переданы в workspace policy как `guidance_package` sources и связаны с исполнением через workspace fingerprint и digest generated context. `job_input_json` не содержит prompt body, transcript, raw tool input/output, provider payload, workspace paths, kubeconfig, значения секретов или большие логи.
 
 `runtime-manager` возвращает slot ref, runtime context, runtime job ref и технический статус. `Run` остаётся у `agent-manager`, slot/job и исполнение задания остаются у runtime. Для чтения runtime-наблюдаемости `agent-manager` использует только `runtime-manager.GetJob` и не копирует `job_input_json`, steps, log refs, workspace paths или Kubernetes-детали.
 

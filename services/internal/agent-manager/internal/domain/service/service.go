@@ -17,19 +17,21 @@ type idGeneratorPort interface{ agentrepo.IDGenerator }
 
 // Config contains dependencies required by the agent-manager service.
 type Config struct {
-	Repository                 agentrepo.Repository
-	Clock                      agentrepo.Clock
-	IDGenerator                agentrepo.IDGenerator
-	GuidanceResolver           GuidanceResolver
-	WorkspacePolicyResolver    WorkspacePolicyResolver
-	RuntimePreparer            RuntimePreparer
-	RuntimeJobCreator          RuntimeJobCreator
-	RuntimeJobReader           RuntimeJobReader
-	ProviderFollowUpDispatcher ProviderFollowUpDispatcher
-	HumanGateRequester         HumanGateInteractionRequester
-	RuntimePreparationEnabled  bool
-	RuntimeJobDispatchEnabled  bool
-	HumanGateRequestEnabled    bool
+	Repository                  agentrepo.Repository
+	Clock                       agentrepo.Clock
+	IDGenerator                 agentrepo.IDGenerator
+	GuidanceResolver            GuidanceResolver
+	WorkspacePolicyResolver     WorkspacePolicyResolver
+	RuntimePreparer             RuntimePreparer
+	RuntimeJobCreator           RuntimeJobCreator
+	RuntimeJobReader            RuntimeJobReader
+	RuntimeJobRunnerImageRef    string
+	RuntimeJobAllowedSecretRefs []AgentRunExecutionRef
+	ProviderFollowUpDispatcher  ProviderFollowUpDispatcher
+	HumanGateRequester          HumanGateInteractionRequester
+	RuntimePreparationEnabled   bool
+	RuntimeJobDispatchEnabled   bool
+	HumanGateRequestEnabled     bool
 	// EventPublisher is a future outbox-backed publisher for agent domain events.
 	EventPublisher EventPublisher
 }
@@ -42,9 +44,11 @@ type Service struct {
 	idGenerator    idGeneratorPort
 	eventPublisher EventPublisher
 
-	runtimePreparationEnabled bool
-	runtimeJobDispatchEnabled bool
-	humanGateRequestEnabled   bool
+	runtimePreparationEnabled   bool
+	runtimeJobDispatchEnabled   bool
+	humanGateRequestEnabled     bool
+	runtimeJobRunnerImageRef    string
+	runtimeJobAllowedSecretRefs []AgentRunExecutionRef
 
 	guidanceResolver           GuidanceResolver
 	workspacePolicyResolver    WorkspacePolicyResolver
@@ -242,6 +246,8 @@ func New(cfg Config) *Service {
 	service.runtimePreparationEnabled = cfg.RuntimePreparationEnabled
 	service.runtimeJobDispatchEnabled = cfg.RuntimeJobDispatchEnabled
 	service.humanGateRequestEnabled = cfg.HumanGateRequestEnabled
+	service.runtimeJobRunnerImageRef = cfg.RuntimeJobRunnerImageRef
+	service.runtimeJobAllowedSecretRefs = append([]AgentRunExecutionRef(nil), cfg.RuntimeJobAllowedSecretRefs...)
 	service.eventPublisher = cfg.EventPublisher
 	return service
 }

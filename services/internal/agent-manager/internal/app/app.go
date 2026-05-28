@@ -91,6 +91,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		RuntimePreparer:            runtimePreparer,
 		RuntimeJobCreator:          runtimeJobCreator,
 		RuntimeJobReader:           runtimeJobReader,
+		RuntimeJobRunnerImageRef:   cfg.RuntimeJobRunnerImageRef,
 		ProviderFollowUpDispatcher: providerFollowUpDispatcher,
 		HumanGateRequester:         humanGateRequester,
 		RuntimePreparationEnabled:  cfg.RuntimePreparationEnabled,
