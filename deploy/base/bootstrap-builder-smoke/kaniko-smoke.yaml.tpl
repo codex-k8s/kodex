@@ -40,11 +40,6 @@ spec:
             limits:
               cpu: "{{ envOr "KODEX_KANIKO_CPU_LIMIT" "2" }}"
               memory: "{{ envOr "KODEX_KANIKO_MEMORY_LIMIT" "2Gi" }}"
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop:
-                - ALL
           volumeMounts:
             - name: context
               mountPath: /workspace/context

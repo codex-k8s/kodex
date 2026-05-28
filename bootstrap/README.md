@@ -21,6 +21,7 @@ installer.
 |---|---|
 | `bootstrap/host/bootstrap_cluster.sh` | Единственная активная точка входа: `preflight`, `install`, `--dry-run`. |
 | `bootstrap/host/plan_backend_deploy.sh` | План первого backend deploy только на чтение: инвентарь, рендер, `kubectl kustomize` и проверки кластера без изменений. |
+| `bootstrap/host/deploy_backend_ring.sh` | Реальное применение первого backend-кольца: registry, Kubernetes `Secret`, Kaniko-сборки, PostgreSQL, миграции и первые сервисы. |
 | `bootstrap/local/install.sh` | Локальный privileged orchestrator install-шагов. |
 | `bootstrap/local/steps/*.sh` | Узкие idempotent host/Kubernetes steps. |
 | `bootstrap/host/smoke_registry_kaniko.sh` | Registry mirror + Kaniko build/push smoke без Docker daemon. |
@@ -182,6 +183,49 @@ bash bootstrap/host/plan_backend_deploy.sh \
 пустой `--render-dir`. Непустой каталог отклоняется; команда не удаляет пути,
 переданные оператором.
 
+## Реальный deploy первого backend-кольца
+
+После успешного preflight и dry-run плана оператор может применить первое
+backend-кольцо:
+
+```bash
+bash bootstrap/host/deploy_backend_ring.sh --env-file bootstrap/host/config.env
+```
+
+Команда выполняет изменения в Kubernetes и остаётся идемпотентной:
+
+- создаёт namespace через `kubectl apply`;
+- применяет internal registry foundation и ждёт readiness;
+- читает существующие `kodex-postgres` и `kodex-platform-runtime` `Secret`;
+- генерирует только отсутствующие ключи `Secret` и сохраняет их в Kubernetes до
+  запуска workloads;
+- не перегенерирует уже существующие значения `Secret`;
+- нормализует локальные PostgreSQL DSN, если они не соответствуют текущему
+  паролю из `kodex-postgres`;
+- рендерит manifests во временный приватный каталог и удаляет его после работы;
+- собирает через Kaniko образы первого кольца и migration-образы без Docker
+  daemon;
+- применяет PostgreSQL foundation, создаёт базы через
+  `kodex-postgres-bootstrap-databases`;
+- запускает `platform-event-log` migrations;
+- запускает migrations и deployments для `access-manager`, `project-catalog`,
+  `package-hub`, `provider-hub`;
+- ждёт rollout и проверяет `/health/readyz` через локальный `kubectl
+  port-forward`.
+
+Секреты, DSN, токены, домены, адреса registry и kubeconfig не печатаются.
+Повторный запуск удаляет только одноразовые build/migration `Job`, чтобы
+Kubernetes не упёрся в immutable job spec, и не удаляет кластер, namespace,
+registry PVC, PostgreSQL PVC или базы.
+
+Если образы уже собраны и нужно только повторить apply/migrations/rollout:
+
+```bash
+bash bootstrap/host/deploy_backend_ring.sh \
+  --env-file bootstrap/host/config.env \
+  --skip-build
+```
+
 ## Registry и Kaniko smoke
 
 После установки foundation:
@@ -201,17 +245,33 @@ KODEX_SMOKE_ENV_FILE=bootstrap/host/config.env \
 
 Docker daemon не требуется.
 
-## Backend smoke после подготовки образов
+## Backend smoke после deploy
 
-Когда backend-образы и migration-образы уже доступны во внутреннем registry:
+Когда первое backend-кольцо применено, можно запускать smoke-обёртку. По
+умолчанию она повторяет идемпотентный deploy первого кольца с `--skip-build`:
+проверяет registry, Kubernetes `Secret`, PostgreSQL, migrations, rollout и
+`/health/readyz`, не перезаписывая секреты значениями из env.
 
 ```bash
 KODEX_SMOKE_ENV_FILE=bootstrap/host/config.env \
   bash bootstrap/host/smoke_backend_contour.sh
 ```
 
-Frontend, business services deploy и full runtime build orchestration не входят
-в этот bootstrap foundation-срез.
+Frontend и полный backend-набор за пределами первого кольца не входят в этот
+срез.
+
+Старые service-specific smoke scripts можно вызвать только явно:
+
+```bash
+KODEX_BACKEND_SMOKE_LEGACY_SERVICE_SCRIPTS=true \
+KODEX_BACKEND_SMOKE_SERVICES="access-manager project-catalog package-hub provider-hub" \
+KODEX_SMOKE_ENV_FILE=bootstrap/host/config.env \
+  bash bootstrap/host/smoke_backend_contour.sh
+```
+
+Этот режим предназначен для отладки и может повторно применить manifests из
+env-файла, поэтому штатный путь первого кольца использует
+`deploy_backend_ring.sh --skip-build`.
 
 Чтобы проверить backend smoke wrapper без запуска registry smoke и сервисных
 smoke-команд:
