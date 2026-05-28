@@ -175,6 +175,7 @@ spec:
         - libs/go/serviceprocess
         - libs/go/servicemain
         - proto/kodex/agents/v1
+        - proto/kodex/interactions/v1
         - proto/kodex/packages/v1
         - proto/kodex/projects/v1
         - proto/kodex/providers/v1

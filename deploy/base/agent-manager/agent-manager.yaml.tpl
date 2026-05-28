@@ -175,6 +175,17 @@ spec:
                   key: KODEX_AGENT_MANAGER_PROVIDER_HUB_GRPC_AUTH_TOKEN
             - name: KODEX_AGENT_MANAGER_PROVIDER_HUB_WRITE_TIMEOUT
               value: "{{ envOr "KODEX_AGENT_MANAGER_PROVIDER_HUB_WRITE_TIMEOUT" "10s" }}"
+            - name: KODEX_AGENT_MANAGER_INTERACTION_HUB_REQUEST_ENABLED
+              value: "{{ envOr "KODEX_AGENT_MANAGER_INTERACTION_HUB_REQUEST_ENABLED" "false" }}"
+            - name: KODEX_AGENT_MANAGER_INTERACTION_HUB_GRPC_ADDR
+              value: "{{ envOr "KODEX_AGENT_MANAGER_INTERACTION_HUB_GRPC_ADDR" "interaction-hub:9090" }}"
+            - name: KODEX_AGENT_MANAGER_INTERACTION_HUB_GRPC_AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: kodex-platform-runtime
+                  key: KODEX_INTERACTION_HUB_GRPC_AUTH_TOKEN
+            - name: KODEX_AGENT_MANAGER_INTERACTION_HUB_REQUEST_TIMEOUT
+              value: "{{ envOr "KODEX_AGENT_MANAGER_INTERACTION_HUB_REQUEST_TIMEOUT" "10s" }}"
             - name: KODEX_AGENT_MANAGER_EVENT_LOG_DATABASE_DSN
               valueFrom:
                 secretKeyRef:

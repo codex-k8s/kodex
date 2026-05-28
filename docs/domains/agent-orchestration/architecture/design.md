@@ -226,6 +226,8 @@ MCP не владеет доменным состоянием и не подме
 
 `agent-manager` фиксирует, что flow ждёт обратную связь или owner decision, но не хранит диалоговую ветку, callback body и попытки доставки. Human gate transport request/response принадлежит `interaction-hub`; в `agent-manager` остаются только `interaction_request_ref`, `interaction_response_ref`, safe summary и normalized outcome для orchestration state.
 
+Request-side путь работает через typed gRPC client `interaction-hub.RequestHumanGate`. `agent-manager` сначала выполняет локальный replay-check, затем строит стабильный owner request ref `agent:human_gate/<human_gate_request_id>`, передаёт source/decision owner refs, session/run/stage/provider context refs, target actor ref из `AgentSession.created_by_actor_ref` и bounded `safe_summary`. При успешном ответе сохраняется только `interaction_request_ref`; статус ожидания остаётся orchestration state в `agent-manager`. Если interaction request не создан из-за временной ошибки, локальный wait не записывается, а повтор команды использует тот же deterministic owner ref и не создаёт второй request.
+
 Для автоматического resume `agent-manager` читает из `platform-event-log` только событие `interaction.request.response_recorded`. Событие должно ссылаться на owner-side Human gate через `owner_service=agent_manager`, `request_kind=human_gate` и `owner_request_ref`; `request_id` и `response_id` превращаются в safe refs, `response_action` мапится в normalized outcome, а `version` и digest нормализованного safe snapshot участвуют в идемпотентности. Producer, channel callback, owner inbox и delivery lifecycle остаются в `interaction-hub`.
 
 ## Flow, stage, role и prompt
