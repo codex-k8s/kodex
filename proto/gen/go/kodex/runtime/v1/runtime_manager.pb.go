@@ -1895,7 +1895,7 @@ type AgentRunExecutionSpec struct {
 	WorkspaceRef string `protobuf:"bytes,5,opt,name=workspace_ref,json=workspaceRef,proto3" json:"workspace_ref,omitempty"`
 	// workspace_mount_ref is the mount reference visible to the runner.
 	WorkspaceMountRef string `protobuf:"bytes,6,opt,name=workspace_mount_ref,json=workspaceMountRef,proto3" json:"workspace_mount_ref,omitempty"`
-	// workspace_pvc_ref is an optional Kubernetes PVC reference, never a kubeconfig or secret value.
+	// workspace_pvc_ref is the Kubernetes PVC reference used for execution, never a kubeconfig or secret value.
 	WorkspacePvcRef string `protobuf:"bytes,7,opt,name=workspace_pvc_ref,json=workspacePvcRef,proto3" json:"workspace_pvc_ref,omitempty"`
 	// context_ref points to .kodex/context/agent-run.json or an equivalent runtime-owned reference.
 	ContextRef string `protobuf:"bytes,8,opt,name=context_ref,json=contextRef,proto3" json:"context_ref,omitempty"`

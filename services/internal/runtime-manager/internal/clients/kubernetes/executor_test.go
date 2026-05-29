@@ -17,8 +17,10 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	runtimeapi "k8s.io/apimachinery/pkg/runtime"
 	clientkubernetes "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
+	clienttesting "k8s.io/client-go/testing"
 )
 
 func TestExecutorStartCreatesRestrictedHealthCheckJob(t *testing.T) {
@@ -55,6 +57,104 @@ func TestExecutorStartCreatesRestrictedHealthCheckJob(t *testing.T) {
 	if len(started.ArtifactRefs) != 2 {
 		t.Fatalf("artifact refs = %d, want job and namespace refs", len(started.ArtifactRefs))
 	}
+}
+
+func TestExecutorStartCreatesRestrictedAgentRunJob(t *testing.T) {
+	t.Parallel()
+
+	client := fake.NewClientset()
+	executor := newTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
+	job := testAgentRunJob()
+
+	started, err := executor.Start(context.Background(), job)
+	if err != nil {
+		t.Fatalf("Start(agent_run): %v", err)
+	}
+	if started.Namespace != "runtime-jobs" || started.JobName == "" || started.ExternalRef == "" {
+		t.Fatalf("started agent_run job = %+v, want namespace/name/ref", started)
+	}
+	created, err := client.BatchV1().Jobs("runtime-jobs").Get(context.Background(), started.JobName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("get created Job: %v", err)
+	}
+	podSpec := created.Spec.Template.Spec
+	if podSpec.AutomountServiceAccountToken == nil || *podSpec.AutomountServiceAccountToken {
+		t.Fatalf("automount service account token = %v, want disabled", podSpec.AutomountServiceAccountToken)
+	}
+	container := podSpec.Containers[0]
+	if container.Name != agentRunContainerName || container.Image != "ghcr.io/codex-k8s/agent-runner@sha256:runner" {
+		t.Fatalf("container = %s/%s, want fixed agent runner container/image", container.Name, container.Image)
+	}
+	if strings.Join(container.Command, " ") != agentRunCommand || strings.Join(container.Args, " ") != agentRunCommandKind {
+		t.Fatalf("command/args = %v/%v, want fixed runner command", container.Command, container.Args)
+	}
+	if len(container.VolumeMounts) != 1 || container.VolumeMounts[0].MountPath != agentRunWorkspacePath {
+		t.Fatalf("volume mounts = %+v, want fixed workspace mount", container.VolumeMounts)
+	}
+	if len(podSpec.Volumes) != 1 || podSpec.Volumes[0].PersistentVolumeClaim == nil || podSpec.Volumes[0].PersistentVolumeClaim.ClaimName != "runtime-workspace-549" {
+		t.Fatalf("volumes = %+v, want workspace PVC ref", podSpec.Volumes)
+	}
+	if podSpec.SecurityContext == nil || podSpec.SecurityContext.RunAsNonRoot == nil || !*podSpec.SecurityContext.RunAsNonRoot {
+		t.Fatalf("pod security context = %+v, want runAsNonRoot", podSpec.SecurityContext)
+	}
+	if podSpec.SecurityContext.SeccompProfile == nil || podSpec.SecurityContext.SeccompProfile.Type != corev1.SeccompProfileTypeRuntimeDefault {
+		t.Fatalf("pod seccomp profile = %+v, want RuntimeDefault", podSpec.SecurityContext.SeccompProfile)
+	}
+	if container.SecurityContext == nil {
+		t.Fatalf("container security context is nil, want restricted context")
+	}
+	if container.SecurityContext.AllowPrivilegeEscalation == nil || *container.SecurityContext.AllowPrivilegeEscalation {
+		t.Fatalf("allowPrivilegeEscalation = %+v, want false", container.SecurityContext.AllowPrivilegeEscalation)
+	}
+	if container.SecurityContext.Privileged == nil || *container.SecurityContext.Privileged {
+		t.Fatalf("privileged = %+v, want false", container.SecurityContext.Privileged)
+	}
+	if container.SecurityContext.RunAsNonRoot == nil || !*container.SecurityContext.RunAsNonRoot {
+		t.Fatalf("container runAsNonRoot = %+v, want true", container.SecurityContext.RunAsNonRoot)
+	}
+	if container.SecurityContext.SeccompProfile == nil || container.SecurityContext.SeccompProfile.Type != corev1.SeccompProfileTypeRuntimeDefault {
+		t.Fatalf("container seccomp profile = %+v, want RuntimeDefault", container.SecurityContext.SeccompProfile)
+	}
+	if container.SecurityContext.Capabilities == nil || !hasCapability(container.SecurityContext.Capabilities.Drop, "ALL") {
+		t.Fatalf("container dropped capabilities = %+v, want ALL", container.SecurityContext.Capabilities)
+	}
+	env := envMap(container.Env)
+	if env["KODEX_AGENT_RUN_ID"] == "" || env["KODEX_AGENT_RUN_CONTEXT_PATH"] != agentRunContextPath {
+		t.Fatalf("agent_run env = %v, want safe runner refs", env)
+	}
+	if strings.Contains(env["KODEX_AGENT_RUN_ALLOWED_SECRET_REFS_JSON"], "secret-value") {
+		t.Fatalf("allowed secret refs env contains a secret value: %q", env["KODEX_AGENT_RUN_ALLOWED_SECRET_REFS_JSON"])
+	}
+	if len(created.Annotations) != 0 || len(created.Spec.Template.Annotations) != 0 {
+		t.Fatalf("annotations = %v/%v, want none from agent_run spec", created.Annotations, created.Spec.Template.Annotations)
+	}
+	if len(started.ArtifactRefs) != 3 {
+		t.Fatalf("artifact refs = %d, want job, namespace and image refs", len(started.ArtifactRefs))
+	}
+}
+
+func TestExecutorStartRejectsAgentRunWithoutExecutionSpec(t *testing.T) {
+	t.Parallel()
+
+	executor := newTestExecutor(t, fake.NewClientset(), fakeClusterProvider{access: testClusterAccess()})
+	job := testAgentRunJob()
+	job.JobInputJSON = []byte(`{}`)
+
+	_, err := executor.Start(context.Background(), job)
+
+	assertExecutionCode(t, err, "agent_run_execution_spec_required")
+}
+
+func TestExecutorStartRejectsAgentRunWithoutWorkspacePVCRef(t *testing.T) {
+	t.Parallel()
+
+	executor := newTestExecutor(t, fake.NewClientset(), fakeClusterProvider{access: testClusterAccess()})
+	job := testAgentRunJob()
+	job.JobInputJSON = []byte(`{"agent_run_execution_spec":{"agent_run_id":"00000000-0000-0000-0000-000000000031","slot_id":"00000000-0000-0000-0000-000000000032","expected_materialization_id":"00000000-0000-0000-0000-000000000033","expected_materialization_fingerprint":"sha256:workspace","workspace_ref":"runtime://workspace/31","workspace_mount_ref":"mount://workspace/31","context_ref":"runtime://workspace/31/.kodex/context/agent-run.json","context_digest":"sha256:context","runner_profile_ref":"runner-profile://codex-agent/default","runner_image_ref":"image://ghcr.io/codex-k8s/agent-runner@sha256:runner","runner_mode":"codex_agent"}}`)
+
+	_, err := executor.Start(context.Background(), job)
+
+	assertExecutionCode(t, err, "invalid_agent_run_execution_spec")
 }
 
 func TestExecutorStartReusesExistingManagedJob(t *testing.T) {
@@ -193,6 +293,35 @@ func TestExecutorWaitReportsFailedJob(t *testing.T) {
 	}
 }
 
+func TestExecutorWaitDoesNotCollectAgentRunPodLogs(t *testing.T) {
+	t.Parallel()
+
+	client := fake.NewClientset()
+	client.Fake.PrependReactor("list", "pods", func(clienttesting.Action) (bool, runtimeapi.Object, error) {
+		t.Fatalf("agent_run diagnostics must not list pods for raw log collection")
+		return true, &corev1.PodList{}, nil
+	})
+	executor := newTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
+	started, err := executor.Start(context.Background(), testAgentRunJob())
+	if err != nil {
+		t.Fatalf("Start(agent_run): %v", err)
+	}
+	created, err := client.BatchV1().Jobs(started.Namespace).Get(context.Background(), started.JobName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("get created Job: %v", err)
+	}
+	created.Status.Conditions = []batchv1.JobCondition{{Type: batchv1.JobComplete, Status: corev1.ConditionTrue}}
+	if _, err := client.BatchV1().Jobs(started.Namespace).UpdateStatus(context.Background(), created, metav1.UpdateOptions{}); err != nil {
+		t.Fatalf("update job status: %v", err)
+	}
+
+	result := executor.Wait(context.Background(), started)
+
+	if !result.Succeeded || result.ShortLogTail != "" {
+		t.Fatalf("Wait(agent_run) = %+v, want success without raw log tail", result)
+	}
+}
+
 func TestExecutorWaitReportsDeletedJobAsCancelled(t *testing.T) {
 	t.Parallel()
 
@@ -274,6 +403,40 @@ func testHealthCheckJob() entity.Job {
 		FleetScopeID: &fleetScopeID,
 		ClusterID:    &clusterID,
 	}
+}
+
+func testAgentRunJob() entity.Job {
+	fleetScopeID := uuid.MustParse("00000000-0000-0000-0000-000000000010")
+	clusterID := uuid.MustParse("00000000-0000-0000-0000-000000000011")
+	agentRunID := uuid.MustParse("00000000-0000-0000-0000-000000000031")
+	slotID := uuid.MustParse("00000000-0000-0000-0000-000000000032")
+	return entity.Job{
+		Base:         entity.Base{ID: uuid.MustParse("00000000-0000-0000-0000-000000000034"), Version: 2},
+		JobType:      enum.JobTypeAgentRun,
+		Status:       enum.JobStatusClaimed,
+		AgentRunID:   &agentRunID,
+		SlotID:       &slotID,
+		JobInputJSON: []byte(`{"agent_run_execution_spec":{"agent_run_id":"00000000-0000-0000-0000-000000000031","slot_id":"00000000-0000-0000-0000-000000000032","expected_materialization_id":"00000000-0000-0000-0000-000000000033","expected_materialization_fingerprint":"sha256:workspace","workspace_ref":"runtime://workspace/31","workspace_mount_ref":"mount://workspace/31","workspace_pvc_ref":"pvc://runtime-jobs/runtime-workspace-549","context_ref":"runtime://workspace/31/.kodex/context/agent-run.json","context_digest":"sha256:context","runner_profile_ref":"runner-profile://codex-agent/default","runner_image_ref":"image://ghcr.io/codex-k8s/agent-runner@sha256:runner","runner_mode":"codex_agent","allowed_secret_refs":[{"kind":"runtime_api","ref":"secret://runtime/agent-token"}],"reporting_target_refs":[{"kind":"agent_run_state","ref":"agent-manager://runs/00000000-0000-0000-0000-000000000031"}]}}`),
+		FleetScopeID: &fleetScopeID,
+		ClusterID:    &clusterID,
+	}
+}
+
+func envMap(values []corev1.EnvVar) map[string]string {
+	result := make(map[string]string, len(values))
+	for _, item := range values {
+		result[item.Name] = item.Value
+	}
+	return result
+}
+
+func hasCapability(values []corev1.Capability, want corev1.Capability) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
 
 func testClusterAccess() fleetclient.ClusterAccess {

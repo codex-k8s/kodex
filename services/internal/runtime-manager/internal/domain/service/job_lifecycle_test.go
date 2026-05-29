@@ -348,6 +348,18 @@ func TestAgentRunJobTypeRequiresSafeInput(t *testing.T) {
 			commandID: mustUUID("00000000-0000-0000-0000-000000000539"),
 		},
 		{
+			name:       "typed spec missing workspace pvc ref",
+			agentRunID: &agentRunID,
+			slotID:     &slotID,
+			payload:    []byte(`{}`),
+			spec: func() *AgentRunExecutionSpecInput {
+				copy := spec
+				copy.WorkspacePVCRef = ""
+				return &copy
+			}(),
+			commandID: mustUUID("00000000-0000-0000-0000-000000000530"),
+		},
+		{
 			name:       "typed spec mismatched slot id",
 			agentRunID: &agentRunID,
 			slotID:     uuidPtr(mustUUID("00000000-0000-0000-0000-000000000540")),

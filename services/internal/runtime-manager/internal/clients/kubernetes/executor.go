@@ -32,13 +32,21 @@ import (
 )
 
 const (
-	managedBy              = "runtime-manager"
-	runtimePartOf          = "kodex"
-	runtimeJobLabel        = "kodex.k8s.io/runtime-job-id"
-	runtimeJobTypeLabel    = "kodex.k8s.io/runtime-job-type"
-	defaultContainerName   = "runtime-health-check"
-	defaultImagePullPolicy = "IfNotPresent"
-	maxMetadataItems       = 16
+	managedBy                = "runtime-manager"
+	runtimePartOf            = "kodex"
+	runtimeJobLabel          = "kodex.k8s.io/runtime-job-id"
+	runtimeJobTypeLabel      = "kodex.k8s.io/runtime-job-type"
+	healthCheckContainerName = "runtime-health-check"
+	agentRunContainerName    = "runtime-agent-runner"
+	defaultImagePullPolicy   = "IfNotPresent"
+	maxMetadataItems         = 16
+	maxAgentRunEnvValueBytes = 16 * 1024
+	workspaceVolumeName      = "workspace"
+	agentRunWorkspacePath    = "/workspace"
+	agentRunContextPath      = "/workspace/.kodex/context/agent-run.json"
+	agentRunCommand          = "/kodex/bin/agent-runner"
+	agentRunCommandKind      = "run"
+	agentRunRunnerModeCodex  = "codex_agent"
 )
 
 // Config constrains Kubernetes executor behavior with operator-managed settings.
@@ -93,6 +101,7 @@ type StartedJob struct {
 	client       kubernetes.Interface
 	config       Config
 	selector     labels.Set
+	collectLogs  bool
 }
 
 // ExecutionResult contains a bounded execution result for runtime-manager lifecycle commands.
@@ -133,13 +142,13 @@ func NewExecutorWithClientFactory(clusters ClusterAccessProvider, secrets secret
 
 // Start creates or reuses a deterministic Kubernetes Job for the claimed runtime job.
 func (e *Executor) Start(ctx context.Context, job entity.Job) (StartedJob, error) {
-	if job.JobType != enum.JobTypeHealthCheck {
-		return StartedJob{}, newExecutionError("unsupported_job_type", "Kubernetes executor supports only health_check jobs")
+	if job.JobType != enum.JobTypeHealthCheck && job.JobType != enum.JobTypeAgentRun {
+		return StartedJob{}, newExecutionError("unsupported_job_type", "Kubernetes executor supports only health_check and agent_run jobs")
 	}
 	if job.ClusterID == nil || *job.ClusterID == uuid.Nil {
 		return StartedJob{}, newExecutionError("missing_cluster_ref", "Runtime job does not have a Kubernetes cluster ref")
 	}
-	spec, err := e.executionSpec(job.JobInputJSON)
+	spec, err := e.executionSpec(job)
 	if err != nil {
 		return StartedJob{}, err
 	}
@@ -174,13 +183,11 @@ func (e *Executor) Start(ctx context.Context, job entity.Job) (StartedJob, error
 		Namespace:    spec.Namespace,
 		JobName:      created.GetName(),
 		ExternalRef:  ref,
-		ArtifactRefs: []runtimeservice.RuntimeArtifactRefInput{
-			{ArtifactType: enum.RuntimeArtifactTypeKubernetesJob, ExternalRef: ref, MetadataJSON: []byte(`{}`)},
-			{ArtifactType: enum.RuntimeArtifactTypeNamespace, ExternalRef: namespaceRef(access.ClusterID, spec.Namespace), MetadataJSON: []byte(`{}`)},
-		},
-		client:   client,
-		config:   e.config,
-		selector: selector,
+		ArtifactRefs: runtimeArtifactRefs(access.ClusterID, spec, ref),
+		client:       client,
+		config:       e.config,
+		selector:     selector,
+		collectLogs:  spec.CollectPodLogs,
 	}, nil
 }
 
@@ -300,11 +307,21 @@ func (e *Executor) clientForCluster(ctx context.Context, access fleetclient.Clus
 }
 
 type executionSpec struct {
-	Namespace       string
-	ServiceAccount  string
-	Image           string
-	ImagePullPolicy corev1.PullPolicy
-	Labels          map[string]string
+	Namespace                string
+	ServiceAccount           string
+	Image                    string
+	ImagePullPolicy          corev1.PullPolicy
+	Labels                   map[string]string
+	ContainerName            string
+	Command                  []string
+	Args                     []string
+	Env                      []corev1.EnvVar
+	Volumes                  []corev1.Volume
+	VolumeMounts             []corev1.VolumeMount
+	PodSecurityContext       *corev1.PodSecurityContext
+	ContainerSecurityContext *corev1.SecurityContext
+	ImageArtifactRef         string
+	CollectPodLogs           bool
 }
 
 type restrictedJobInput struct {
@@ -314,7 +331,18 @@ type restrictedJobInput struct {
 	Labels         map[string]string `json:"labels"`
 }
 
-func (e *Executor) executionSpec(payload []byte) (executionSpec, error) {
+func (e *Executor) executionSpec(job entity.Job) (executionSpec, error) {
+	switch job.JobType {
+	case enum.JobTypeHealthCheck:
+		return e.healthCheckExecutionSpec(job.JobInputJSON)
+	case enum.JobTypeAgentRun:
+		return e.agentRunExecutionSpec(job)
+	default:
+		return executionSpec{}, newExecutionError("unsupported_job_type", "Kubernetes executor supports only health_check and agent_run jobs")
+	}
+}
+
+func (e *Executor) healthCheckExecutionSpec(payload []byte) (executionSpec, error) {
 	input, err := parseRestrictedJobInput(payload)
 	if err != nil {
 		return executionSpec{}, err
@@ -325,11 +353,73 @@ func (e *Executor) executionSpec(payload []byte) (executionSpec, error) {
 		Image:           firstNonEmpty(input.Image, e.config.DefaultImage),
 		ImagePullPolicy: corev1.PullPolicy(e.config.ImagePullPolicy),
 		Labels:          input.Labels,
+		ContainerName:   healthCheckContainerName,
+		Command:         []string{"/bin/sh", "-ec"},
+		Args:            []string{"echo kodex runtime health check"},
+		CollectPodLogs:  true,
 	}
 	if err := validateExecutionSpec(spec); err != nil {
 		return executionSpec{}, err
 	}
 	return spec, nil
+}
+
+func (e *Executor) agentRunExecutionSpec(job entity.Job) (executionSpec, error) {
+	spec, ok := runtimeservice.AgentRunExecutionSpecFromJobInput(job.JobInputJSON)
+	if !ok || spec == nil {
+		if agentRunExecutionSpecFieldPresent(job.JobInputJSON) {
+			return executionSpec{}, newExecutionError("invalid_agent_run_execution_spec", "agent_run execution spec is invalid")
+		}
+		return executionSpec{}, newExecutionError("agent_run_execution_spec_required", "agent_run execution spec is required before Kubernetes execution")
+	}
+	if job.AgentRunID == nil || *job.AgentRunID != spec.AgentRunID || job.SlotID == nil || *job.SlotID != spec.SlotID {
+		return executionSpec{}, newExecutionError("agent_run_execution_spec_mismatch", "agent_run execution spec does not match runtime job refs")
+	}
+	pvc, err := parseWorkspacePVCRef(spec.WorkspacePVCRef, e.config.DefaultNamespace)
+	if err != nil {
+		return executionSpec{}, err
+	}
+	image, err := runnerImageFromRef(spec.RunnerImageRef)
+	if err != nil {
+		return executionSpec{}, err
+	}
+	mode, err := agentRunRunnerMode(spec.RunnerMode)
+	if err != nil {
+		return executionSpec{}, err
+	}
+	env, err := agentRunEnv(job, *spec, mode)
+	if err != nil {
+		return executionSpec{}, err
+	}
+	result := executionSpec{
+		Namespace:                pvc.Namespace,
+		ServiceAccount:           e.config.DefaultServiceAccount,
+		Image:                    image,
+		ImagePullPolicy:          corev1.PullPolicy(e.config.ImagePullPolicy),
+		ContainerName:            agentRunContainerName,
+		Command:                  []string{agentRunCommand},
+		Args:                     []string{agentRunCommandKind},
+		Env:                      env,
+		ImageArtifactRef:         spec.RunnerImageRef,
+		PodSecurityContext:       restrictedAgentRunPodSecurityContext(),
+		ContainerSecurityContext: restrictedAgentRunContainerSecurityContext(),
+		CollectPodLogs:           false,
+		Volumes: []corev1.Volume{{
+			Name: workspaceVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: pvc.ClaimName},
+			},
+		}},
+		VolumeMounts: []corev1.VolumeMount{{
+			Name:      workspaceVolumeName,
+			MountPath: agentRunWorkspacePath,
+			ReadOnly:  false,
+		}},
+	}
+	if err := validateExecutionSpec(result); err != nil {
+		return executionSpec{}, err
+	}
+	return result, nil
 }
 
 func parseRestrictedJobInput(payload []byte) (restrictedJobInput, error) {
@@ -350,9 +440,116 @@ func parseRestrictedJobInput(payload []byte) (restrictedJobInput, error) {
 	return input, nil
 }
 
+func agentRunExecutionSpecFieldPresent(payload []byte) bool {
+	var document struct {
+		AgentRunExecutionSpec json.RawMessage `json:"agent_run_execution_spec"`
+	}
+	if err := json.Unmarshal(bytes.TrimSpace(payload), &document); err != nil {
+		return false
+	}
+	trimmed := bytes.TrimSpace(document.AgentRunExecutionSpec)
+	return len(trimmed) > 0 && !bytes.Equal(trimmed, []byte("null"))
+}
+
+type workspacePVCRef struct {
+	Namespace string
+	ClaimName string
+}
+
+func parseWorkspacePVCRef(raw string, defaultNamespace string) (workspacePVCRef, error) {
+	value := strings.TrimSpace(raw)
+	namespace := strings.TrimSpace(defaultNamespace)
+	claimName := ""
+	switch {
+	case value == "":
+		return workspacePVCRef{}, newExecutionError("agent_run_workspace_pvc_ref_required", "agent_run workspace PVC ref is required")
+	case strings.HasPrefix(value, "pvc://"):
+		parts := strings.Split(strings.TrimPrefix(value, "pvc://"), "/")
+		if len(parts) != 2 {
+			return workspacePVCRef{}, newExecutionError("invalid_agent_run_workspace_pvc_ref", "agent_run workspace PVC ref is invalid")
+		}
+		namespace = strings.TrimSpace(parts[0])
+		claimName = strings.TrimSpace(parts[1])
+	case strings.HasPrefix(value, "k8s://pvc/"):
+		claimName = strings.TrimSpace(strings.TrimPrefix(value, "k8s://pvc/"))
+	case !strings.Contains(value, "://"):
+		claimName = value
+	default:
+		return workspacePVCRef{}, newExecutionError("invalid_agent_run_workspace_pvc_ref", "agent_run workspace PVC ref is invalid")
+	}
+	if errs := validation.IsDNS1123Label(namespace); len(errs) > 0 {
+		return workspacePVCRef{}, newExecutionError("invalid_agent_run_workspace_pvc_ref", "agent_run workspace PVC namespace is invalid")
+	}
+	if errs := validation.IsDNS1123Subdomain(claimName); len(errs) > 0 {
+		return workspacePVCRef{}, newExecutionError("invalid_agent_run_workspace_pvc_ref", "agent_run workspace PVC claim name is invalid")
+	}
+	return workspacePVCRef{Namespace: namespace, ClaimName: claimName}, nil
+}
+
+func runnerImageFromRef(raw string) (string, error) {
+	value := strings.TrimSpace(raw)
+	value = strings.TrimPrefix(value, "image://")
+	if strings.TrimSpace(value) == "" || strings.ContainsAny(value, " \t\r\n") || len(value) > 512 {
+		return "", newExecutionError("invalid_agent_run_runner_image_ref", "agent_run runner image ref is invalid")
+	}
+	return value, nil
+}
+
+func agentRunRunnerMode(mode enum.AgentRunRunnerMode) (string, error) {
+	if mode != enum.AgentRunRunnerModeCodexAgent {
+		return "", newExecutionError("unsupported_agent_run_runner_mode", "agent_run runner mode is not supported")
+	}
+	return agentRunRunnerModeCodex, nil
+}
+
+func agentRunEnv(job entity.Job, spec runtimeservice.AgentRunExecutionSpecInput, mode string) ([]corev1.EnvVar, error) {
+	allowedSecretRefs, err := agentRunRefsJSON(spec.AllowedSecretRefs)
+	if err != nil {
+		return nil, err
+	}
+	reportingTargetRefs, err := agentRunRefsJSON(spec.ReportingTargetRefs)
+	if err != nil {
+		return nil, err
+	}
+	return []corev1.EnvVar{
+		{Name: "KODEX_AGENT_RUN_ID", Value: spec.AgentRunID.String()},
+		{Name: "KODEX_RUNTIME_JOB_ID", Value: job.ID.String()},
+		{Name: "KODEX_RUNTIME_SLOT_ID", Value: spec.SlotID.String()},
+		{Name: "KODEX_RUNTIME_MATERIALIZATION_ID", Value: spec.ExpectedMaterializationID.String()},
+		{Name: "KODEX_RUNTIME_MATERIALIZATION_FINGERPRINT", Value: spec.ExpectedMaterializationFingerprint},
+		{Name: "KODEX_RUNTIME_WORKSPACE_REF", Value: spec.WorkspaceRef},
+		{Name: "KODEX_RUNTIME_WORKSPACE_MOUNT_REF", Value: spec.WorkspaceMountRef},
+		{Name: "KODEX_RUNTIME_WORKSPACE_MOUNT_PATH", Value: agentRunWorkspacePath},
+		{Name: "KODEX_AGENT_RUN_CONTEXT_REF", Value: spec.ContextRef},
+		{Name: "KODEX_AGENT_RUN_CONTEXT_DIGEST", Value: spec.ContextDigest},
+		{Name: "KODEX_AGENT_RUN_CONTEXT_PATH", Value: agentRunContextPath},
+		{Name: "KODEX_AGENT_RUNNER_PROFILE_REF", Value: spec.RunnerProfileRef},
+		{Name: "KODEX_AGENT_RUNNER_MODE", Value: mode},
+		{Name: "KODEX_AGENT_RUN_ALLOWED_SECRET_REFS_JSON", Value: allowedSecretRefs},
+		{Name: "KODEX_AGENT_RUN_REPORTING_TARGET_REFS_JSON", Value: reportingTargetRefs},
+	}, nil
+}
+
+func agentRunRefsJSON(refs []runtimeservice.AgentRunExecutionRefInput) (string, error) {
+	if len(refs) == 0 {
+		return "[]", nil
+	}
+	raw, err := json.Marshal(refs)
+	if err != nil {
+		return "", newExecutionError("invalid_agent_run_execution_refs", "agent_run execution refs are invalid")
+	}
+	if len(raw) > maxAgentRunEnvValueBytes {
+		return "", newExecutionError("agent_run_execution_refs_too_large", "agent_run execution refs input is too large")
+	}
+	return string(raw), nil
+}
+
 func validateExecutionSpec(spec executionSpec) error {
 	if errs := validation.IsDNS1123Label(spec.Namespace); len(errs) > 0 {
 		return newExecutionError("invalid_job_input", "Kubernetes executor namespace is invalid")
+	}
+	if errs := validation.IsDNS1123Label(spec.ContainerName); len(errs) > 0 {
+		return newExecutionError("invalid_job_input", "Kubernetes executor container name is invalid")
 	}
 	if strings.TrimSpace(spec.Image) == "" || strings.ContainsAny(spec.Image, " \t\r\n") || len(spec.Image) > 512 {
 		return newExecutionError("invalid_job_input", "Kubernetes executor image ref is invalid")
@@ -402,19 +599,63 @@ func buildJob(job entity.Job, spec executionSpec, cfg Config, name string, selec
 					Labels: metadataLabels,
 				},
 				Spec: corev1.PodSpec{
-					RestartPolicy:      corev1.RestartPolicyNever,
-					ServiceAccountName: spec.ServiceAccount,
+					RestartPolicy:                corev1.RestartPolicyNever,
+					AutomountServiceAccountToken: boolPtr(false),
+					ServiceAccountName:           spec.ServiceAccount,
+					SecurityContext:              spec.PodSecurityContext.DeepCopy(),
+					Volumes:                      append([]corev1.Volume(nil), spec.Volumes...),
 					Containers: []corev1.Container{{
-						Name:            defaultContainerName,
+						Name:            spec.ContainerName,
 						Image:           spec.Image,
 						ImagePullPolicy: spec.ImagePullPolicy,
-						Command:         []string{"/bin/sh", "-ec"},
-						Args:            []string{"echo kodex runtime health check"},
+						Command:         append([]string(nil), spec.Command...),
+						Args:            append([]string(nil), spec.Args...),
+						Env:             append([]corev1.EnvVar(nil), spec.Env...),
+						VolumeMounts:    append([]corev1.VolumeMount(nil), spec.VolumeMounts...),
+						SecurityContext: spec.ContainerSecurityContext.DeepCopy(),
 					}},
 				},
 			},
 		},
 	}
+}
+
+func restrictedAgentRunPodSecurityContext() *corev1.PodSecurityContext {
+	return &corev1.PodSecurityContext{
+		RunAsNonRoot: boolPtr(true),
+		SeccompProfile: &corev1.SeccompProfile{
+			Type: corev1.SeccompProfileTypeRuntimeDefault,
+		},
+	}
+}
+
+func restrictedAgentRunContainerSecurityContext() *corev1.SecurityContext {
+	return &corev1.SecurityContext{
+		AllowPrivilegeEscalation: boolPtr(false),
+		Capabilities: &corev1.Capabilities{
+			Drop: []corev1.Capability{corev1.Capability("ALL")},
+		},
+		Privileged:   boolPtr(false),
+		RunAsNonRoot: boolPtr(true),
+		SeccompProfile: &corev1.SeccompProfile{
+			Type: corev1.SeccompProfileTypeRuntimeDefault,
+		},
+	}
+}
+
+func runtimeArtifactRefs(clusterID uuid.UUID, spec executionSpec, jobRef string) []runtimeservice.RuntimeArtifactRefInput {
+	refs := []runtimeservice.RuntimeArtifactRefInput{
+		{ArtifactType: enum.RuntimeArtifactTypeKubernetesJob, ExternalRef: jobRef, MetadataJSON: []byte(`{}`)},
+		{ArtifactType: enum.RuntimeArtifactTypeNamespace, ExternalRef: namespaceRef(clusterID, spec.Namespace), MetadataJSON: []byte(`{}`)},
+	}
+	if strings.TrimSpace(spec.ImageArtifactRef) != "" {
+		refs = append(refs, runtimeservice.RuntimeArtifactRefInput{
+			ArtifactType: enum.RuntimeArtifactTypeImageRef,
+			ExternalRef:  spec.ImageArtifactRef,
+			MetadataJSON: []byte(`{}`),
+		})
+	}
+	return refs
 }
 
 func managedLabels(job entity.Job, selector labels.Set) map[string]string {
@@ -440,6 +681,9 @@ func isManagedRuntimeJob(job *batchv1.Job, runtimeJob entity.Job) bool {
 }
 
 func (e *Executor) shortLogTail(ctx context.Context, started StartedJob) string {
+	if !started.collectLogs {
+		return ""
+	}
 	pods, err := started.client.CoreV1().Pods(started.Namespace).List(ctx, metav1.ListOptions{LabelSelector: started.selector.String()})
 	if err != nil || len(pods.Items) == 0 {
 		return ""
@@ -540,6 +784,10 @@ func firstNonEmpty(values ...string) string {
 }
 
 func int32Ptr(value int32) *int32 {
+	return &value
+}
+
+func boolPtr(value bool) *bool {
 	return &value
 }
 

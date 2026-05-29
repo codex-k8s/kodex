@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-07
 updated_at: 2026-05-08
-related_issues: [655, 657, 658, 659, 660, 662]
+related_issues: [655, 657, 658, 659, 660, 662, 966]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -117,7 +117,7 @@ approvals:
 | `job_type` | text | no | indexed | `mirror`, `build`, `deploy`, `cleanup`, `health_check`, `housekeeping`, `workspace_materialization`, `agent_run`. |
 | `status` | text | no | indexed | `pending`, `claimed`, `running`, `succeeded`, `failed`, `cancelled`, `timed_out`. |
 | `priority` | text | no | indexed | `low`, `normal`, `high`, `blocking`. |
-| `job_input_json` | jsonb | no | default {} | Ограниченный вход технической операции без секретов; для `agent_run` исполнимый вход хранится только как `agent_run_execution_spec` с refs/digest/fingerprint. |
+| `job_input_json` | jsonb | no | default {} | Ограниченный вход технической операции без секретов; для `agent_run` исполнимый вход хранится только как `agent_run_execution_spec` с refs/digest/fingerprint, обязательным workspace PVC ref, runner image/profile refs и reporting refs. |
 | `lease_owner` | text | no | default '' | Worker или controller, который забрал задание. |
 | `lease_token_hash` | text | no | default '' | Хэш токена, который должен прийти в командах отчёта, завершения и ошибки. |
 | `lease_until` | timestamptz | yes | indexed | Истечение аренды задания. |
