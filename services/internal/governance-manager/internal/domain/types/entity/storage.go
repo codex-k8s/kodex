@@ -205,6 +205,70 @@ type BlockingSignal struct {
 	ResolvedAt *time.Time
 }
 
+// GovernanceSummary is a bounded read model prepared for owner/staff UI.
+type GovernanceSummary struct {
+	Scope              GovernanceSummaryScope
+	PendingDecisions   []GovernanceDecisionSummary
+	CompletedDecisions []GovernanceDecisionSummary
+	EvidenceSummaries  []GovernanceEvidenceSummary
+	Diagnostics        []string
+}
+
+// GovernanceSummaryScope bounds a summary request to a safe local or owner-domain ref.
+type GovernanceSummaryScope struct {
+	Target                   value.ExternalRef
+	ProjectContext           value.ProjectContextRef
+	ReleaseCandidateRef      string
+	ReleaseDecisionPackageID *uuid.UUID
+	IntegrationRef           value.ReleaseIntegrationRef
+}
+
+// GovernanceDecisionSummary is one typed decision or state summary.
+type GovernanceDecisionSummary struct {
+	Kind                     enum.GovernanceDecisionSummaryKind
+	Attention                enum.GovernanceDecisionAttention
+	ID                       string
+	ParentID                 string
+	Target                   value.ExternalRef
+	ProjectContext           value.ProjectContextRef
+	ReleaseCandidateRef      string
+	ReleaseDecisionPackageID string
+	RiskClass                enum.RiskClass
+	ReviewOutcome            enum.ReviewSignalOutcome
+	GateRequestStatus        enum.GateRequestStatus
+	GateOutcome              enum.GateOutcome
+	ReleasePackageStatus     enum.ReleaseDecisionPackageStatus
+	ReleaseDecisionStatus    enum.ReleaseDecisionStatus
+	ReleaseDecisionOutcome   enum.ReleaseDecisionOutcome
+	BlockingSignalStatus     enum.BlockingSignalStatus
+	Severity                 enum.SignalSeverity
+	SafeSummary              string
+	EvidenceRefs             []value.EvidenceRef
+	IntegrationRefs          []value.ReleaseIntegrationRef
+	ProviderRefs             []byte
+	RuntimeRefs              []byte
+	AgentContext             []byte
+	Version                  int64
+	CreatedAt                time.Time
+	UpdatedAt                time.Time
+	ObservedAt               string
+}
+
+// GovernanceEvidenceSummary is one safe evidence/ref summary.
+type GovernanceEvidenceSummary struct {
+	SourceKind      string
+	SourceRef       string
+	Status          string
+	Outcome         string
+	SafeSummary     string
+	ErrorCode       string
+	Digest          string
+	ObservedAt      string
+	Version         string
+	EvidenceRefs    []value.EvidenceRef
+	IntegrationRefs []value.ReleaseIntegrationRef
+}
+
 // CommandResult stores the idempotent command trace.
 type CommandResult struct {
 	Key            string

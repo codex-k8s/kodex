@@ -206,6 +206,40 @@ func releaseIntegrationRefs(items []*governancev1.ReleaseIntegrationRef) []value
 	return result
 }
 
+func governanceSummaryScope(item *governancev1.GovernanceSummaryScope) (entity.GovernanceSummaryScope, error) {
+	if item == nil {
+		return entity.GovernanceSummaryScope{}, nil
+	}
+	packageID, err := optionalUUID(item.GetReleaseDecisionPackageId())
+	if err != nil {
+		return entity.GovernanceSummaryScope{}, err
+	}
+	return entity.GovernanceSummaryScope{
+		Target:                   targetRef(item.GetTarget()),
+		ProjectContext:           projectContext(item.GetProjectContext()),
+		ReleaseCandidateRef:      item.GetReleaseCandidateRef(),
+		ReleaseDecisionPackageID: packageID,
+		IntegrationRef:           releaseIntegrationRef(item.GetIntegrationRef()),
+	}, nil
+}
+
+func releaseIntegrationRef(item *governancev1.ReleaseIntegrationRef) value.ReleaseIntegrationRef {
+	if item == nil {
+		return value.ReleaseIntegrationRef{}
+	}
+	return value.ReleaseIntegrationRef{
+		Domain:     item.GetDomain(),
+		Kind:       item.GetKind(),
+		Ref:        item.GetRef(),
+		Status:     item.GetStatus(),
+		Summary:    item.GetSummary(),
+		Digest:     item.GetDigest(),
+		ObservedAt: item.GetObservedAt(),
+		Version:    item.GetVersion(),
+		ErrorCode:  item.GetErrorCode(),
+	}
+}
+
 func riskEvaluationSummary(item *governancev1.RiskEvaluationSummary) value.RiskEvaluationSummary {
 	if item == nil {
 		return value.RiskEvaluationSummary{}
@@ -558,20 +592,24 @@ func toReleaseDecisionPackage(item entity.ReleaseDecisionPackage) *governancev1.
 func toReleaseIntegrationRefs(items []value.ReleaseIntegrationRef) []*governancev1.ReleaseIntegrationRef {
 	result := make([]*governancev1.ReleaseIntegrationRef, 0, len(items))
 	for _, item := range items {
-		ref := &governancev1.ReleaseIntegrationRef{
-			Domain: item.Domain,
-			Kind:   item.Kind,
-			Ref:    item.Ref,
-		}
-		ref.Status = ptrStringNonEmpty(item.Status)
-		ref.Summary = ptrStringNonEmpty(item.Summary)
-		ref.Digest = ptrStringNonEmpty(item.Digest)
-		ref.ObservedAt = ptrStringNonEmpty(item.ObservedAt)
-		ref.Version = ptrStringNonEmpty(item.Version)
-		ref.ErrorCode = ptrStringNonEmpty(item.ErrorCode)
-		result = append(result, ref)
+		result = append(result, toReleaseIntegrationRef(item))
 	}
 	return result
+}
+
+func toReleaseIntegrationRef(item value.ReleaseIntegrationRef) *governancev1.ReleaseIntegrationRef {
+	ref := &governancev1.ReleaseIntegrationRef{
+		Domain: item.Domain,
+		Kind:   item.Kind,
+		Ref:    item.Ref,
+	}
+	ref.Status = ptrStringNonEmpty(item.Status)
+	ref.Summary = ptrStringNonEmpty(item.Summary)
+	ref.Digest = ptrStringNonEmpty(item.Digest)
+	ref.ObservedAt = ptrStringNonEmpty(item.ObservedAt)
+	ref.Version = ptrStringNonEmpty(item.Version)
+	ref.ErrorCode = ptrStringNonEmpty(item.ErrorCode)
+	return ref
 }
 
 func toReleaseDecisionPackages(items []entity.ReleaseDecisionPackage) []*governancev1.ReleaseDecisionPackage {
@@ -645,6 +683,89 @@ func toBlockingSignals(items []entity.BlockingSignal) []*governancev1.BlockingSi
 	result := make([]*governancev1.BlockingSignal, 0, len(items))
 	for _, item := range items {
 		result = append(result, toBlockingSignal(item))
+	}
+	return result
+}
+
+func toGovernanceSummary(item entity.GovernanceSummary) *governancev1.GovernanceSummary {
+	return &governancev1.GovernanceSummary{
+		Scope:              toGovernanceSummaryScope(item.Scope),
+		PendingDecisions:   toGovernanceDecisionSummaries(item.PendingDecisions),
+		CompletedDecisions: toGovernanceDecisionSummaries(item.CompletedDecisions),
+		EvidenceSummaries:  toGovernanceEvidenceSummaries(item.EvidenceSummaries),
+		Diagnostics:        item.Diagnostics,
+	}
+}
+
+func toGovernanceSummaryScope(item entity.GovernanceSummaryScope) *governancev1.GovernanceSummaryScope {
+	result := &governancev1.GovernanceSummaryScope{
+		Target:         toTargetRef(item.Target),
+		ProjectContext: toProjectContext(item.ProjectContext),
+		IntegrationRef: toReleaseIntegrationRef(item.IntegrationRef),
+	}
+	result.ReleaseCandidateRef = ptrStringNonEmpty(item.ReleaseCandidateRef)
+	if item.ReleaseDecisionPackageID != nil {
+		result.ReleaseDecisionPackageId = ptrString(item.ReleaseDecisionPackageID.String())
+	}
+	return result
+}
+
+func toGovernanceDecisionSummaries(items []entity.GovernanceDecisionSummary) []*governancev1.GovernanceDecisionSummary {
+	result := make([]*governancev1.GovernanceDecisionSummary, 0, len(items))
+	for _, item := range items {
+		result = append(result, toGovernanceDecisionSummary(item))
+	}
+	return result
+}
+
+func toGovernanceDecisionSummary(item entity.GovernanceDecisionSummary) *governancev1.GovernanceDecisionSummary {
+	return &governancev1.GovernanceDecisionSummary{
+		Kind:                     toGovernanceDecisionSummaryKind(item.Kind),
+		Attention:                toGovernanceDecisionAttention(item.Attention),
+		Id:                       item.ID,
+		ParentId:                 ptrStringNonEmpty(item.ParentID),
+		Target:                   toTargetRef(item.Target),
+		ProjectContext:           toProjectContext(item.ProjectContext),
+		ReleaseCandidateRef:      ptrStringNonEmpty(item.ReleaseCandidateRef),
+		ReleaseDecisionPackageId: ptrStringNonEmpty(item.ReleaseDecisionPackageID),
+		RiskClass:                toRiskClass(item.RiskClass),
+		ReviewOutcome:            toReviewSignalOutcome(item.ReviewOutcome),
+		GateRequestStatus:        toGateRequestStatus(item.GateRequestStatus),
+		GateOutcome:              toGateOutcome(item.GateOutcome),
+		ReleasePackageStatus:     toReleaseDecisionPackageStatus(item.ReleasePackageStatus),
+		ReleaseDecisionStatus:    toReleaseDecisionStatus(item.ReleaseDecisionStatus),
+		ReleaseDecisionOutcome:   toReleaseDecisionOutcome(item.ReleaseDecisionOutcome),
+		BlockingSignalStatus:     toBlockingSignalStatus(item.BlockingSignalStatus),
+		Severity:                 toSignalSeverity(item.Severity),
+		SafeSummary:              item.SafeSummary,
+		EvidenceRefs:             toEvidenceRefs(item.EvidenceRefs),
+		IntegrationRefs:          toReleaseIntegrationRefs(item.IntegrationRefs),
+		ProviderRefs:             providerRefsFromJSON(item.ProviderRefs),
+		RuntimeRefs:              runtimeRefsFromJSON(item.RuntimeRefs),
+		AgentContext:             agentContextFromJSON(item.AgentContext),
+		Version:                  item.Version,
+		CreatedAt:                formatTime(item.CreatedAt),
+		UpdatedAt:                formatTime(item.UpdatedAt),
+		ObservedAt:               ptrStringNonEmpty(item.ObservedAt),
+	}
+}
+
+func toGovernanceEvidenceSummaries(items []entity.GovernanceEvidenceSummary) []*governancev1.GovernanceEvidenceSummary {
+	result := make([]*governancev1.GovernanceEvidenceSummary, 0, len(items))
+	for _, item := range items {
+		result = append(result, &governancev1.GovernanceEvidenceSummary{
+			SourceKind:      item.SourceKind,
+			SourceRef:       item.SourceRef,
+			Status:          ptrStringNonEmpty(item.Status),
+			Outcome:         ptrStringNonEmpty(item.Outcome),
+			SafeSummary:     item.SafeSummary,
+			ErrorCode:       ptrStringNonEmpty(item.ErrorCode),
+			Digest:          ptrStringNonEmpty(item.Digest),
+			ObservedAt:      ptrStringNonEmpty(item.ObservedAt),
+			Version:         ptrStringNonEmpty(item.Version),
+			EvidenceRefs:    toEvidenceRefs(item.EvidenceRefs),
+			IntegrationRefs: toReleaseIntegrationRefs(item.IntegrationRefs),
+		})
 	}
 	return result
 }
@@ -1110,4 +1231,12 @@ func blockingSignalStatus(item governancev1.BlockingSignalStatus) enum.BlockingS
 
 func toBlockingSignalStatus(item enum.BlockingSignalStatus) governancev1.BlockingSignalStatus {
 	return domainProtoEnum(item, "BLOCKING_SIGNAL_STATUS_", governancev1.BlockingSignalStatus_BLOCKING_SIGNAL_STATUS_UNSPECIFIED)
+}
+
+func toGovernanceDecisionSummaryKind(item enum.GovernanceDecisionSummaryKind) governancev1.GovernanceDecisionSummaryKind {
+	return domainProtoEnum(item, "GOVERNANCE_DECISION_SUMMARY_KIND_", governancev1.GovernanceDecisionSummaryKind_GOVERNANCE_DECISION_SUMMARY_KIND_UNSPECIFIED)
+}
+
+func toGovernanceDecisionAttention(item enum.GovernanceDecisionAttention) governancev1.GovernanceDecisionAttention {
+	return domainProtoEnum(item, "GOVERNANCE_DECISION_ATTENTION_", governancev1.GovernanceDecisionAttention_GOVERNANCE_DECISION_ATTENTION_UNSPECIFIED)
 }

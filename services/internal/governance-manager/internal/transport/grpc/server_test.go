@@ -358,6 +358,43 @@ func TestGetReleaseDecisionPackageReturnsAgentEvidenceReadSurface(t *testing.T) 
 	}
 }
 
+func TestGetGovernanceSummaryRoutesToDomainService(t *testing.T) {
+	t.Parallel()
+
+	packageID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+	service := &fakeBacklogService{}
+	response, err := NewServer(service).GetGovernanceSummary(context.Background(), &governancev1.GetGovernanceSummaryRequest{
+		Scope: &governancev1.GovernanceSummaryScope{
+			ProjectContext:           &governancev1.ProjectContextRef{ProjectRef: ptrString("project:alpha")},
+			ReleaseCandidateRef:      ptrString("release:v1.2.3"),
+			ReleaseDecisionPackageId: ptrString(packageID.String()),
+			IntegrationRef: &governancev1.ReleaseIntegrationRef{
+				Domain: "agent",
+				Kind:   "run",
+				Ref:    "agent:run:42",
+			},
+		},
+		Meta: &governancev1.QueryMeta{Actor: &governancev1.Actor{Type: "user", Id: "owner"}},
+	})
+	if err != nil {
+		t.Fatalf("GetGovernanceSummary(): %v", err)
+	}
+	if service.getGovernanceSummaryInput.Scope.ReleaseDecisionPackageID == nil || *service.getGovernanceSummaryInput.Scope.ReleaseDecisionPackageID != packageID {
+		t.Fatalf("scope package id = %v, want %s", service.getGovernanceSummaryInput.Scope.ReleaseDecisionPackageID, packageID)
+	}
+	if service.getGovernanceSummaryInput.Scope.IntegrationRef.Domain != "agent" || service.getGovernanceSummaryInput.Scope.IntegrationRef.Ref != "agent:run:42" {
+		t.Fatalf("integration ref = %+v, want agent run", service.getGovernanceSummaryInput.Scope.IntegrationRef)
+	}
+	if len(response.GetSummary().GetPendingDecisions()) != 1 ||
+		response.GetSummary().GetPendingDecisions()[0].GetKind() != governancev1.GovernanceDecisionSummaryKind_GOVERNANCE_DECISION_SUMMARY_KIND_RELEASE_DECISION_PACKAGE ||
+		response.GetSummary().GetPendingDecisions()[0].GetReleaseDecisionPackageId() != packageID.String() {
+		t.Fatalf("summary response = %+v, want release package pending decision", response.GetSummary())
+	}
+	if len(response.GetSummary().GetEvidenceSummaries()) != 1 || response.GetSummary().GetEvidenceSummaries()[0].GetSourceKind() != "agent.run" {
+		t.Fatalf("evidence summaries = %+v, want agent.run evidence", response.GetSummary().GetEvidenceSummaries())
+	}
+}
+
 func TestRequestReleaseDecisionRoutesToDomainService(t *testing.T) {
 	t.Parallel()
 
@@ -438,6 +475,7 @@ type fakeBacklogService struct {
 	getReleaseDecisionPackageInput    governanceservice.GetReleaseDecisionPackageInput
 	listReleaseDecisionPackagesInput  governanceservice.ListReleaseDecisionPackagesInput
 	releasePackage                    entity.ReleaseDecisionPackage
+	getGovernanceSummaryInput         governanceservice.GetGovernanceSummaryInput
 	requestReleaseDecisionInput       governanceservice.RequestReleaseDecisionInput
 }
 
@@ -522,6 +560,28 @@ func (service *fakeBacklogService) GetReleaseDecisionPackage(_ context.Context, 
 func (service *fakeBacklogService) ListReleaseDecisionPackages(_ context.Context, input governanceservice.ListReleaseDecisionPackagesInput) ([]entity.ReleaseDecisionPackage, query.PageResult, error) {
 	service.listReleaseDecisionPackagesInput = input
 	return []entity.ReleaseDecisionPackage{service.releasePackage}, query.PageResult{}, nil
+}
+
+func (service *fakeBacklogService) GetGovernanceSummary(_ context.Context, input governanceservice.GetGovernanceSummaryInput) (entity.GovernanceSummary, error) {
+	service.getGovernanceSummaryInput = input
+	packageID := uuid.Nil
+	if input.Scope.ReleaseDecisionPackageID != nil {
+		packageID = *input.Scope.ReleaseDecisionPackageID
+	}
+	return entity.GovernanceSummary{
+		Scope: input.Scope,
+		PendingDecisions: []entity.GovernanceDecisionSummary{{
+			Kind:                     enum.GovernanceDecisionSummaryKindReleaseDecisionPackage,
+			Attention:                enum.GovernanceDecisionAttentionPending,
+			ID:                       packageID.String(),
+			ReleaseDecisionPackageID: packageID.String(),
+		}},
+		EvidenceSummaries: []entity.GovernanceEvidenceSummary{{
+			SourceKind:      "agent.run",
+			SourceRef:       input.Scope.IntegrationRef.Ref,
+			IntegrationRefs: []value.ReleaseIntegrationRef{input.Scope.IntegrationRef},
+		}},
+	}, nil
 }
 
 func (service *fakeBacklogService) RequestReleaseDecision(_ context.Context, input governanceservice.RequestReleaseDecisionInput) (entity.ReleaseDecision, entity.ReleaseDecisionPackage, error) {

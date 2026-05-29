@@ -338,6 +338,13 @@ func TestRepositoryIntegrationGovernanceStateAndOutbox(t *testing.T) {
 	if len(packages[0].IntegrationRefs) != 1 || packages[0].IntegrationRefs[0].Ref != "provider:pr:1" {
 		t.Fatalf("integration refs = %+v, want persisted provider ref", packages[0].IntegrationRefs)
 	}
+	packages, _, err = repository.ListReleaseDecisionPackages(ctx, query.ReleaseDecisionPackageFilter{IntegrationRef: value.ReleaseIntegrationRef{Domain: "provider", Kind: "pull_request", Ref: "provider:pr:1"}})
+	if err != nil {
+		t.Fatalf("list release packages by integration ref: %v", err)
+	}
+	if len(packages) != 1 || packages[0].ID != releasePackage.ID {
+		t.Fatalf("packages by integration ref = %+v, want release package %s", packages, releasePackage.ID)
+	}
 	releasePackage.RuntimeRefs = []byte(`[{"job_ref":"runtime:job:1"},{"job_ref":"runtime:job:deploy"}]`)
 	releasePackage.EvidenceRefs = []value.EvidenceRef{{
 		Kind:           "runtime_job",

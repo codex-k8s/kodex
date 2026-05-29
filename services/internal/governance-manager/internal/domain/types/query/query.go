@@ -89,6 +89,7 @@ type GateDecisionFilter struct {
 type ReleaseDecisionPackageFilter struct {
 	ProjectContext      value.ProjectContextRef
 	ReleaseCandidateRef string
+	IntegrationRef      value.ReleaseIntegrationRef
 	Status              enum.ReleaseDecisionPackageStatus
 	Page                PageRequest
 }
