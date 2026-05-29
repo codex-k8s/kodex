@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -21,7 +23,21 @@ type agentSessionCommandPayload struct {
 }
 
 type agentRunCommandPayload struct {
-	Run entity.AgentRun `json:"run"`
+	Run          entity.AgentRun               `json:"run"`
+	RunnerReport *runnerRunStateCommandPayload `json:"runner_report,omitempty"`
+}
+
+type runnerRunStateCommandPayload struct {
+	RunID            string `json:"run_id"`
+	SessionID        string `json:"session_id"`
+	RuntimeSlotRef   string `json:"runtime_slot_ref"`
+	RuntimeJobRef    string `json:"runtime_job_ref"`
+	State            string `json:"state"`
+	SafeSummary      string `json:"safe_summary,omitempty"`
+	FailureCode      string `json:"failure_code,omitempty"`
+	DiagnosticDigest string `json:"diagnostic_digest,omitempty"`
+	StartedAt        string `json:"started_at,omitempty"`
+	FinishedAt       string `json:"finished_at,omitempty"`
 }
 
 type sessionSnapshotCommandPayload struct {
@@ -211,48 +227,132 @@ func (s *Service) RecordRunState(ctx context.Context, input RecordRunStateInput)
 	if run.Version != previousVersion {
 		return entity.AgentRun{}, errs.ErrConflict
 	}
-	if err := validateRunStatusTransition(run.Status, input.Status); err != nil {
+
+	return s.recordRunStateUpdate(ctx, input.Meta, operationRecordRunState, run, runStatePatch{
+		Status:         input.Status,
+		RuntimeContext: input.RuntimeContext,
+		ProviderTarget: input.ProviderTarget,
+		ResultSummary:  input.ResultSummary,
+		FailureCode:    input.FailureCode,
+		ReasonCode:     input.ReasonCode,
+		StartedAt:      input.StartedAt,
+		FinishedAt:     input.FinishedAt,
+	})
+}
+
+func (s *Service) ReportAgentRunState(ctx context.Context, input ReportAgentRunStateInput) (entity.AgentRun, error) {
+	if err := s.requireRepository(); err != nil {
+		return entity.AgentRun{}, err
+	}
+	report, err := runnerReportCommandPayload(input)
+	if err != nil {
+		return entity.AgentRun{}, err
+	}
+	previousVersion, err := expectedVersion(input.Meta)
+	if err != nil {
+		return entity.AgentRun{}, err
+	}
+	if replay, ok, err := s.findRunnerReportReplay(ctx, input.Meta, input.RunID, report); ok || err != nil {
+		return replay, err
+	}
+	run, err := s.repository.GetAgentRun(ctx, input.RunID)
+	if err != nil {
+		return entity.AgentRun{}, err
+	}
+	if run.Version != previousVersion {
+		return entity.AgentRun{}, errs.ErrConflict
+	}
+	if err := validateRunnerReportBinding(run, report); err != nil {
+		return entity.AgentRun{}, err
+	}
+	status, err := runnerReportRunStatus(report.State)
+	if err != nil {
+		return entity.AgentRun{}, err
+	}
+	patch := runStatePatch{
+		Status:       status,
+		RunnerReport: &report,
+		StartedAt:    input.StartedAt,
+		FinishedAt:   input.FinishedAt,
+	}
+	if summary := runnerReportSummary(report); summary != "" {
+		patch.ResultSummary = &summary
+	}
+	if report.FailureCode != "" {
+		patch.FailureCode = &report.FailureCode
+	}
+
+	return s.recordRunStateUpdate(ctx, input.Meta, operationReportAgentRunState, run, patch)
+}
+
+type runStatePatch struct {
+	Status         enum.AgentRunStatus
+	RuntimeContext *value.RuntimeContextRef
+	ProviderTarget *value.ProviderTargetRef
+	ResultSummary  *string
+	FailureCode    *string
+	ReasonCode     *string
+	StartedAt      *time.Time
+	FinishedAt     *time.Time
+	RunnerReport   *runnerRunStateCommandPayload
+}
+
+func (s *Service) recordRunStateUpdate(ctx context.Context, meta value.CommandMeta, operation string, run entity.AgentRun, patch runStatePatch) (entity.AgentRun, error) {
+	if err := validateRunStatusTransition(run.Status, patch.Status); err != nil {
 		return entity.AgentRun{}, err
 	}
 	now := s.clock.Now()
+	previousVersion := run.Version
 	previousStatus := string(run.Status)
-	run.Status = input.Status
-	if input.RuntimeContext != nil {
-		run.RuntimeContext = *input.RuntimeContext
+	run.Status = patch.Status
+	if patch.RuntimeContext != nil {
+		runtimeContext, err := mergedRuntimeContext(run.RuntimeContext, *patch.RuntimeContext)
+		if err != nil {
+			return entity.AgentRun{}, err
+		}
+		run.RuntimeContext = runtimeContext
 	}
-	if input.ProviderTarget != nil {
-		run.ProviderTarget = *input.ProviderTarget
+	if patch.ProviderTarget != nil {
+		run.ProviderTarget = *patch.ProviderTarget
 	}
-	if input.ResultSummary != nil {
-		run.ResultSummary = strings.TrimSpace(*input.ResultSummary)
+	if patch.ResultSummary != nil {
+		summary, err := normalizedRunSafeSummary(*patch.ResultSummary)
+		if err != nil {
+			return entity.AgentRun{}, err
+		}
+		run.ResultSummary = summary
 	}
-	if input.FailureCode != nil {
-		run.FailureCode = strings.TrimSpace(*input.FailureCode)
+	if patch.FailureCode != nil {
+		failureCode, err := normalizedRunFailureCode(*patch.FailureCode, run.Status == enum.AgentRunStatusFailed)
+		if err != nil {
+			return entity.AgentRun{}, err
+		}
+		run.FailureCode = failureCode
 	}
-	reasonCode := ""
-	if input.ReasonCode != nil {
-		reasonCode = strings.TrimSpace(*input.ReasonCode)
+	reasonCode, err := normalizedRunReasonCode(patch.ReasonCode)
+	if err != nil {
+		return entity.AgentRun{}, err
 	}
 	if err := validateRunStatePayload(run, reasonCode); err != nil {
 		return entity.AgentRun{}, err
 	}
-	if input.StartedAt != nil {
-		run.StartedAt = input.StartedAt
-	} else if run.StartedAt == nil && (input.Status == enum.AgentRunStatusStarting || input.Status == enum.AgentRunStatusRunning) {
+	if patch.StartedAt != nil {
+		run.StartedAt = patch.StartedAt
+	} else if run.StartedAt == nil && (patch.Status == enum.AgentRunStatusStarting || patch.Status == enum.AgentRunStatusRunning) {
 		run.StartedAt = &now
 	}
-	if input.FinishedAt != nil {
-		run.FinishedAt = input.FinishedAt
-	} else if run.FinishedAt == nil && isTerminalRunStatus(input.Status) {
+	if patch.FinishedAt != nil {
+		run.FinishedAt = patch.FinishedAt
+	} else if run.FinishedAt == nil && isTerminalRunStatus(patch.Status) {
 		run.FinishedAt = &now
 	}
 	run.Version++
 	run.UpdatedAt = now
-	payload, err := marshalCommandPayload(agentRunCommandPayload{Run: run})
+	payload, err := marshalCommandPayload(agentRunCommandPayload{Run: run, RunnerReport: patch.RunnerReport})
 	if err != nil {
 		return entity.AgentRun{}, err
 	}
-	result, err := commandResult(input.Meta, operationRecordRunState, enum.CommandAggregateTypeRun, run.ID, payload, now)
+	result, err := commandResult(meta, operation, enum.CommandAggregateTypeRun, run.ID, payload, now)
 	if err != nil {
 		return entity.AgentRun{}, err
 	}
@@ -427,6 +527,280 @@ func validateRunStatePayload(run entity.AgentRun, reasonCode string) error {
 		}
 	}
 	return nil
+}
+
+func runnerReportCommandPayload(input ReportAgentRunStateInput) (runnerRunStateCommandPayload, error) {
+	if err := validateID(input.RunID); err != nil {
+		return runnerRunStateCommandPayload{}, err
+	}
+	if err := validateID(input.SessionID); err != nil {
+		return runnerRunStateCommandPayload{}, err
+	}
+	state := strings.TrimSpace(string(input.State))
+	if _, err := runnerReportRunStatus(state); err != nil {
+		return runnerRunStateCommandPayload{}, err
+	}
+	slotRef := strings.TrimSpace(input.RuntimeSlotRef)
+	jobRef := strings.TrimSpace(input.RuntimeJobRef)
+	if !safeRuntimeJobRef(slotRef, true) || !safeRuntimeJobRef(jobRef, true) {
+		return runnerRunStateCommandPayload{}, errs.ErrInvalidArgument
+	}
+	summary, err := normalizedRunSafeSummary(optionalStringValue(input.SafeSummary))
+	if err != nil {
+		return runnerRunStateCommandPayload{}, err
+	}
+	failureCode := strings.TrimSpace(optionalStringValue(input.FailureCode))
+	if state != string(RunnerRunStateFailed) && failureCode != "" {
+		return runnerRunStateCommandPayload{}, errs.ErrInvalidArgument
+	}
+	failureCode, err = normalizedRunFailureCode(failureCode, state == string(RunnerRunStateFailed))
+	if err != nil {
+		return runnerRunStateCommandPayload{}, err
+	}
+	diagnosticDigest := strings.TrimSpace(optionalStringValue(input.DiagnosticDigest))
+	if diagnosticDigest != "" && (!safeRuntimeJobRef(diagnosticDigest, false) || unsafeRunnerReportText(diagnosticDigest)) {
+		return runnerRunStateCommandPayload{}, errs.ErrInvalidArgument
+	}
+	if input.StartedAt != nil && input.FinishedAt != nil && input.FinishedAt.Before(*input.StartedAt) {
+		return runnerRunStateCommandPayload{}, errs.ErrInvalidArgument
+	}
+	return runnerRunStateCommandPayload{
+		RunID:            input.RunID.String(),
+		SessionID:        input.SessionID.String(),
+		RuntimeSlotRef:   slotRef,
+		RuntimeJobRef:    jobRef,
+		State:            state,
+		SafeSummary:      summary,
+		FailureCode:      failureCode,
+		DiagnosticDigest: diagnosticDigest,
+		StartedAt:        optionalRunTimeText(input.StartedAt),
+		FinishedAt:       optionalRunTimeText(input.FinishedAt),
+	}, nil
+}
+
+func (s *Service) findRunnerReportReplay(ctx context.Context, meta value.CommandMeta, runID uuid.UUID, expected runnerRunStateCommandPayload) (entity.AgentRun, bool, error) {
+	identity, err := commandIdentity(meta, operationReportAgentRunState)
+	if err != nil {
+		return entity.AgentRun{}, false, err
+	}
+	result, err := s.repository.GetCommandResult(ctx, identity)
+	switch {
+	case errors.Is(err, errs.ErrNotFound):
+		return entity.AgentRun{}, false, nil
+	case err != nil:
+		return entity.AgentRun{}, false, err
+	}
+	if !matchesReplay(result, operationReportAgentRunState, enum.CommandAggregateTypeRun) {
+		return entity.AgentRun{}, true, errs.ErrConflict
+	}
+	var replay agentRunCommandPayload
+	if err := json.Unmarshal(result.ResultPayload, &replay); err != nil {
+		return entity.AgentRun{}, true, err
+	}
+	if result.AggregateID != runID || replay.Run.ID != result.AggregateID || replay.RunnerReport == nil {
+		return entity.AgentRun{}, true, errs.ErrConflict
+	}
+	if !sameRunnerReport(*replay.RunnerReport, expected) {
+		return entity.AgentRun{}, true, errs.ErrConflict
+	}
+	stored, err := s.repository.GetAgentRun(ctx, result.AggregateID)
+	if err != nil {
+		return entity.AgentRun{}, true, err
+	}
+	if stored.ID != replay.Run.ID {
+		return entity.AgentRun{}, true, errs.ErrConflict
+	}
+	return replay.Run, true, nil
+}
+
+func validateRunnerReportBinding(run entity.AgentRun, report runnerRunStateCommandPayload) error {
+	if run.ID.String() != report.RunID || run.SessionID.String() != report.SessionID {
+		return errs.ErrConflict
+	}
+	if strings.TrimSpace(run.RuntimeContext.SlotRef) == "" || strings.TrimSpace(run.RuntimeContext.JobRef) == "" {
+		return errs.ErrPreconditionFailed
+	}
+	if run.RuntimeContext.SlotRef != report.RuntimeSlotRef || run.RuntimeContext.JobRef != report.RuntimeJobRef {
+		return errs.ErrConflict
+	}
+	if !safeRuntimeJobRef(run.RuntimeContext.SlotRef, true) || !safeRuntimeJobRef(run.RuntimeContext.JobRef, true) {
+		return errs.ErrConflict
+	}
+	return nil
+}
+
+func runnerReportRunStatus(state string) (enum.AgentRunStatus, error) {
+	switch RunnerRunState(strings.TrimSpace(state)) {
+	case RunnerRunStateQueued:
+		return enum.AgentRunStatusStarting, nil
+	case RunnerRunStateRunning:
+		return enum.AgentRunStatusRunning, nil
+	case RunnerRunStateCompleted:
+		return enum.AgentRunStatusCompleted, nil
+	case RunnerRunStateFailed:
+		return enum.AgentRunStatusFailed, nil
+	default:
+		return "", errs.ErrInvalidArgument
+	}
+}
+
+func runnerReportSummary(report runnerRunStateCommandPayload) string {
+	parts := make([]string, 0, 2)
+	if report.DiagnosticDigest != "" {
+		parts = append(parts, "diagnostic_digest="+report.DiagnosticDigest)
+	}
+	if report.SafeSummary != "" {
+		parts = append(parts, report.SafeSummary)
+	}
+	return safeDiagnosticText(strings.Join(parts, "; "))
+}
+
+func sameRunnerReport(left runnerRunStateCommandPayload, right runnerRunStateCommandPayload) bool {
+	leftValues := runnerReportReplayFields(left)
+	rightValues := runnerReportReplayFields(right)
+	for index := range leftValues {
+		if leftValues[index] != rightValues[index] {
+			return false
+		}
+	}
+	return true
+}
+
+func runnerReportReplayFields(report runnerRunStateCommandPayload) []string {
+	return []string{
+		report.RunID,
+		report.SessionID,
+		report.RuntimeSlotRef,
+		report.RuntimeJobRef,
+		report.State,
+		report.SafeSummary,
+		report.FailureCode,
+		report.DiagnosticDigest,
+		report.StartedAt,
+		report.FinishedAt,
+	}
+}
+
+func mergedRuntimeContext(existing value.RuntimeContextRef, incoming value.RuntimeContextRef) (value.RuntimeContextRef, error) {
+	merged := existing
+	fields := []struct {
+		current *string
+		next    string
+	}{
+		{current: &merged.SlotRef, next: incoming.SlotRef},
+		{current: &merged.JobRef, next: incoming.JobRef},
+		{current: &merged.WorkspaceRef, next: incoming.WorkspaceRef},
+		{current: &merged.ContextRef, next: incoming.ContextRef},
+	}
+	for _, field := range fields {
+		nextValue := strings.TrimSpace(field.next)
+		if nextValue == "" {
+			continue
+		}
+		if !safeRuntimeJobRef(nextValue, false) {
+			return value.RuntimeContextRef{}, errs.ErrInvalidArgument
+		}
+		if strings.TrimSpace(*field.current) != "" && *field.current != nextValue {
+			return value.RuntimeContextRef{}, errs.ErrConflict
+		}
+		*field.current = nextValue
+	}
+	return merged, nil
+}
+
+func normalizedRunSafeSummary(summary string) (string, error) {
+	trimmed := strings.TrimSpace(summary)
+	if trimmed == "" {
+		return "", nil
+	}
+	if len(trimmed) > runtimePrepareSummaryLimit || !utf8.ValidString(trimmed) || strings.ContainsAny(trimmed, "\r\n\t{}") || unsafeRunnerReportText(trimmed) {
+		return "", errs.ErrInvalidArgument
+	}
+	return safeDiagnosticText(trimmed), nil
+}
+
+func normalizedRunFailureCode(code string, required bool) (string, error) {
+	trimmed := strings.TrimSpace(code)
+	if trimmed == "" {
+		if required {
+			return "", errs.ErrInvalidArgument
+		}
+		return "", nil
+	}
+	if !safeRuntimeJobKind(trimmed) || unsafeRunnerReportText(trimmed) {
+		return "", errs.ErrInvalidArgument
+	}
+	return trimmed, nil
+}
+
+func normalizedRunReasonCode(reasonCode *string) (string, error) {
+	if reasonCode == nil {
+		return "", nil
+	}
+	trimmed := strings.TrimSpace(*reasonCode)
+	if trimmed == "" {
+		return "", nil
+	}
+	if !safeRuntimeJobKind(trimmed) || unsafeRunnerReportText(trimmed) {
+		return "", errs.ErrInvalidArgument
+	}
+	return trimmed, nil
+}
+
+func unsafeRunnerReportText(text string) bool {
+	if unsafeRuntimeJobText(text) {
+		return true
+	}
+	lower := strings.ToLower(strings.TrimSpace(text))
+	if lower == "" {
+		return false
+	}
+	markers := []string{
+		"://",
+		"jdbc:",
+		"dsn=",
+		"database_url",
+		"postgres:",
+		"postgresql:",
+		"mysql:",
+		"mariadb:",
+		"redis:",
+		"mongodb:",
+		"amqp:",
+		"nats:",
+		"localhost",
+		"internal.",
+		".internal",
+		".local",
+		".svc",
+		".cluster.local",
+	}
+	for _, marker := range markers {
+		if strings.Contains(lower, marker) {
+			return true
+		}
+	}
+	for _, pattern := range privateRunnerAddressPatterns {
+		if pattern.MatchString(lower) {
+			return true
+		}
+	}
+	return false
+}
+
+var privateRunnerAddressPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`(^|[^0-9])10\.[0-9]{1,3}\.`),
+	regexp.MustCompile(`(^|[^0-9])127\.`),
+	regexp.MustCompile(`(^|[^0-9])169\.254\.`),
+	regexp.MustCompile(`(^|[^0-9])172\.(1[6-9]|2[0-9]|3[0-1])\.`),
+	regexp.MustCompile(`(^|[^0-9])192\.168\.`),
+}
+
+func optionalRunTimeText(value *time.Time) string {
+	if value == nil {
+		return ""
+	}
+	return value.UTC().Format(time.RFC3339Nano)
 }
 
 func sessionFromPayload(payload []byte) (entity.AgentSession, error) {

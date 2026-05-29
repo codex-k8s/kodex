@@ -1877,6 +1877,315 @@ func TestRecordRunStateRejectsStartedEventWithoutRuntimeSlot(t *testing.T) {
 	}
 }
 
+func TestReportAgentRunStateAcceptsRunnerLifecycleReports(t *testing.T) {
+	t.Parallel()
+
+	sessionID := uuid.MustParse("abababab-1111-2222-3333-444444444444")
+	runID := uuid.MustParse("abababab-2222-3333-4444-555555555555")
+	roleID := uuid.MustParse("abababab-3333-4444-5555-666666666666")
+	promptVersionID := uuid.MustParse("abababab-4444-5555-6666-777777777777")
+	expectedVersion := int64(4)
+
+	cases := []struct {
+		name          string
+		currentStatus enum.AgentRunStatus
+		reportState   RunnerRunState
+		wantStatus    enum.AgentRunStatus
+		failureCode   *string
+		wantEvent     string
+	}{
+		{name: "queued", currentStatus: enum.AgentRunStatusStarting, reportState: RunnerRunStateQueued, wantStatus: enum.AgentRunStatusStarting},
+		{name: "running", currentStatus: enum.AgentRunStatusStarting, reportState: RunnerRunStateRunning, wantStatus: enum.AgentRunStatusRunning, wantEvent: agentevents.EventRunStarted},
+		{name: "completed", currentStatus: enum.AgentRunStatusRunning, reportState: RunnerRunStateCompleted, wantStatus: enum.AgentRunStatusCompleted, wantEvent: agentevents.EventRunCompleted},
+		{name: "failed", currentStatus: enum.AgentRunStatusRunning, reportState: RunnerRunStateFailed, wantStatus: enum.AgentRunStatusFailed, failureCode: ptr("runner_failed"), wantEvent: agentevents.EventRunFailed},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			repository := &fakeRepository{
+				runByID: map[uuid.UUID]entity.AgentRun{
+					runID: {
+						VersionedBase:           entity.VersionedBase{ID: runID, Version: expectedVersion},
+						SessionID:               sessionID,
+						RoleProfileID:           roleID,
+						RoleProfileVersion:      1,
+						RoleProfileDigest:       "sha256:role",
+						PromptTemplateVersionID: promptVersionID,
+						PromptTemplateDigest:    "sha256:prompt",
+						RuntimeContext:          value.RuntimeContextRef{SlotRef: "slot-runner", JobRef: "job-runner"},
+						Status:                  tc.currentStatus,
+					},
+				},
+			}
+			service := New(Config{
+				Repository:  repository,
+				Clock:       fixedClock{now: time.Date(2026, 5, 29, 10, 0, 0, 0, time.UTC)},
+				IDGenerator: &sequenceIDGenerator{ids: []uuid.UUID{uuid.MustParse("abababab-5555-6666-7777-888888888888")}},
+			})
+			summary := "runner status accepted"
+			digest := "sha256:runner-diagnostic"
+
+			run, err := service.ReportAgentRunState(context.Background(), ReportAgentRunStateInput{
+				Meta:             value.CommandMeta{CommandID: uuid.New(), ExpectedVersion: &expectedVersion, Actor: testActor()},
+				RunID:            runID,
+				SessionID:        sessionID,
+				RuntimeSlotRef:   "slot-runner",
+				RuntimeJobRef:    "job-runner",
+				State:            tc.reportState,
+				SafeSummary:      &summary,
+				FailureCode:      tc.failureCode,
+				DiagnosticDigest: &digest,
+			})
+			if err != nil {
+				t.Fatalf("ReportAgentRunState() err = %v", err)
+			}
+			if run.Status != tc.wantStatus || repository.updatedRun.Status != tc.wantStatus {
+				t.Fatalf("status = %s/%s, want %s", run.Status, repository.updatedRun.Status, tc.wantStatus)
+			}
+			if repository.updateRunResult.Operation != operationReportAgentRunState || repository.updateRunResult.AggregateType != enum.CommandAggregateTypeRun {
+				t.Fatalf("command result = %+v", repository.updateRunResult)
+			}
+			if !strings.Contains(run.ResultSummary, "diagnostic_digest=sha256:runner-diagnostic") || !strings.Contains(run.ResultSummary, summary) {
+				t.Fatalf("result summary = %q", run.ResultSummary)
+			}
+			if tc.failureCode != nil && run.FailureCode != *tc.failureCode {
+				t.Fatalf("failure code = %q, want %q", run.FailureCode, *tc.failureCode)
+			}
+			if tc.wantEvent == "" {
+				if repository.updateRunEvent != nil {
+					t.Fatalf("event = %+v, want nil", repository.updateRunEvent)
+				}
+				return
+			}
+			if repository.updateRunEvent == nil || repository.updateRunEvent.EventType != tc.wantEvent {
+				t.Fatalf("event = %+v, want %s", repository.updateRunEvent, tc.wantEvent)
+			}
+			payload := decodeAgentPayload(t, *repository.updateRunEvent)
+			if payload.RunID != runID.String() || payload.RuntimeJobRef != "job-runner" || payload.Status != string(tc.wantStatus) {
+				t.Fatalf("event payload = %+v", payload)
+			}
+			if strings.Contains(payload.FailureCode, "stdout") || strings.Contains(payload.ReasonCode, "workspace_path") {
+				t.Fatalf("unsafe event payload = %+v", payload)
+			}
+		})
+	}
+}
+
+func TestReportAgentRunStateReplaysSameReportAndRejectsConflict(t *testing.T) {
+	t.Parallel()
+
+	commandID := uuid.MustParse("bcbcbcbc-1111-2222-3333-444444444444")
+	sessionID := uuid.MustParse("bcbcbcbc-2222-3333-4444-555555555555")
+	runID := uuid.MustParse("bcbcbcbc-3333-4444-5555-666666666666")
+	expectedVersion := int64(6)
+	summary := "runner running"
+	report := runnerRunStateCommandPayload{
+		RunID:          runID.String(),
+		SessionID:      sessionID.String(),
+		RuntimeSlotRef: "slot-replay",
+		RuntimeJobRef:  "job-replay",
+		State:          string(RunnerRunStateRunning),
+		SafeSummary:    summary,
+	}
+	run := entity.AgentRun{
+		VersionedBase:           entity.VersionedBase{ID: runID, Version: expectedVersion + 1},
+		SessionID:               sessionID,
+		RoleProfileID:           uuid.New(),
+		RoleProfileVersion:      1,
+		RoleProfileDigest:       "sha256:role",
+		PromptTemplateVersionID: uuid.New(),
+		PromptTemplateDigest:    "sha256:prompt",
+		RuntimeContext:          value.RuntimeContextRef{SlotRef: report.RuntimeSlotRef, JobRef: report.RuntimeJobRef},
+		Status:                  enum.AgentRunStatusRunning,
+		ResultSummary:           summary,
+	}
+	payload, err := marshalCommandPayload(agentRunCommandPayload{Run: run, RunnerReport: &report})
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	repository := &fakeRepository{
+		replay: &entity.CommandResult{
+			CommandID:     &commandID,
+			Actor:         testActor(),
+			Operation:     operationReportAgentRunState,
+			AggregateType: enum.CommandAggregateTypeRun,
+			AggregateID:   runID,
+			ResultPayload: payload,
+		},
+		runByID: map[uuid.UUID]entity.AgentRun{runID: run},
+	}
+	service := New(Config{Repository: repository})
+
+	replay, err := service.ReportAgentRunState(context.Background(), ReportAgentRunStateInput{
+		Meta:           value.CommandMeta{CommandID: commandID, ExpectedVersion: &expectedVersion, Actor: testActor()},
+		RunID:          runID,
+		SessionID:      sessionID,
+		RuntimeSlotRef: "slot-replay",
+		RuntimeJobRef:  "job-replay",
+		State:          RunnerRunStateRunning,
+		SafeSummary:    &summary,
+	})
+	if err != nil {
+		t.Fatalf("ReportAgentRunState() replay err = %v", err)
+	}
+	if replay.ID != runID || repository.updatedRun.ID != uuid.Nil {
+		t.Fatalf("replay/update = %+v/%+v", replay, repository.updatedRun)
+	}
+
+	changedSummary := "different summary"
+	_, err = service.ReportAgentRunState(context.Background(), ReportAgentRunStateInput{
+		Meta:           value.CommandMeta{CommandID: commandID, ExpectedVersion: &expectedVersion, Actor: testActor()},
+		RunID:          runID,
+		SessionID:      sessionID,
+		RuntimeSlotRef: "slot-replay",
+		RuntimeJobRef:  "job-replay",
+		State:          RunnerRunStateRunning,
+		SafeSummary:    &changedSummary,
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("conflicting replay err = %v, want %v", err, errs.ErrConflict)
+	}
+
+	otherRunID := uuid.MustParse("bcbcbcbc-4444-5555-6666-777777777777")
+	_, err = service.ReportAgentRunState(context.Background(), ReportAgentRunStateInput{
+		Meta:           value.CommandMeta{CommandID: commandID, ExpectedVersion: &expectedVersion, Actor: testActor()},
+		RunID:          otherRunID,
+		SessionID:      sessionID,
+		RuntimeSlotRef: "slot-replay",
+		RuntimeJobRef:  "job-replay",
+		State:          RunnerRunStateRunning,
+		SafeSummary:    &summary,
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("mismatched run replay err = %v, want %v", err, errs.ErrConflict)
+	}
+}
+
+func TestReportAgentRunStateRejectsStaleVersionBindingAndTransition(t *testing.T) {
+	t.Parallel()
+
+	sessionID := uuid.MustParse("cdcdcdcd-1111-2222-3333-444444444444")
+	runID := uuid.MustParse("cdcdcdcd-2222-3333-4444-555555555555")
+	currentVersion := int64(3)
+	baseRun := entity.AgentRun{
+		VersionedBase:           entity.VersionedBase{ID: runID, Version: currentVersion},
+		SessionID:               sessionID,
+		RoleProfileID:           uuid.New(),
+		RoleProfileVersion:      1,
+		RoleProfileDigest:       "sha256:role",
+		PromptTemplateVersionID: uuid.New(),
+		PromptTemplateDigest:    "sha256:prompt",
+		RuntimeContext:          value.RuntimeContextRef{SlotRef: "slot-bind", JobRef: "job-bind"},
+		Status:                  enum.AgentRunStatusStarting,
+	}
+	report := ReportAgentRunStateInput{
+		Meta:           value.CommandMeta{CommandID: uuid.New(), ExpectedVersion: &currentVersion, Actor: testActor()},
+		RunID:          runID,
+		SessionID:      sessionID,
+		RuntimeSlotRef: "slot-bind",
+		RuntimeJobRef:  "job-bind",
+		State:          RunnerRunStateRunning,
+	}
+
+	t.Run("stale version", func(t *testing.T) {
+		t.Parallel()
+
+		staleVersion := currentVersion - 1
+		input := report
+		input.Meta.ExpectedVersion = &staleVersion
+		service := New(Config{Repository: &fakeRepository{runByID: map[uuid.UUID]entity.AgentRun{runID: baseRun}}})
+		_, err := service.ReportAgentRunState(context.Background(), input)
+		if !errors.Is(err, errs.ErrConflict) {
+			t.Fatalf("ReportAgentRunState() err = %v, want %v", err, errs.ErrConflict)
+		}
+	})
+
+	cases := []struct {
+		name string
+		run  entity.AgentRun
+		edit func(*ReportAgentRunStateInput)
+		want error
+	}{
+		{name: "session mismatch", run: baseRun, edit: func(input *ReportAgentRunStateInput) { input.SessionID = uuid.New() }, want: errs.ErrConflict},
+		{name: "slot mismatch", run: baseRun, edit: func(input *ReportAgentRunStateInput) { input.RuntimeSlotRef = "slot-other" }, want: errs.ErrConflict},
+		{name: "job mismatch", run: baseRun, edit: func(input *ReportAgentRunStateInput) { input.RuntimeJobRef = "job-other" }, want: errs.ErrConflict},
+		{name: "missing job ref", run: agentRunWithRuntimeContext(baseRun, value.RuntimeContextRef{SlotRef: "slot-bind"}), want: errs.ErrPreconditionFailed},
+		{name: "terminal transition", run: agentRunWithStatus(baseRun, enum.AgentRunStatusCompleted), want: errs.ErrPreconditionFailed},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			input := report
+			if tc.edit != nil {
+				tc.edit(&input)
+			}
+			service := New(Config{Repository: &fakeRepository{runByID: map[uuid.UUID]entity.AgentRun{runID: tc.run}}})
+			_, err := service.ReportAgentRunState(context.Background(), input)
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("ReportAgentRunState() err = %v, want %v", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestReportAgentRunStateRejectsUnsafeRunnerPayload(t *testing.T) {
+	t.Parallel()
+
+	sessionID := uuid.MustParse("dededede-1111-2222-3333-444444444444")
+	runID := uuid.MustParse("dededede-2222-3333-4444-555555555555")
+	expectedVersion := int64(2)
+	run := entity.AgentRun{
+		VersionedBase:           entity.VersionedBase{ID: runID, Version: expectedVersion},
+		SessionID:               sessionID,
+		RoleProfileID:           uuid.New(),
+		RoleProfileVersion:      1,
+		RoleProfileDigest:       "sha256:role",
+		PromptTemplateVersionID: uuid.New(),
+		PromptTemplateDigest:    "sha256:prompt",
+		RuntimeContext:          value.RuntimeContextRef{SlotRef: "slot-safe", JobRef: "job-safe"},
+		Status:                  enum.AgentRunStatusRunning,
+	}
+	cases := []struct {
+		name  string
+		input ReportAgentRunStateInput
+	}{
+		{name: "unknown state", input: ReportAgentRunStateInput{State: RunnerRunState("cancelled")}},
+		{name: "raw summary", input: ReportAgentRunStateInput{State: RunnerRunStateCompleted, SafeSummary: ptr("prompt_text: do not store")}},
+		{name: "dsn summary", input: ReportAgentRunStateInput{State: RunnerRunStateCompleted, SafeSummary: ptr("postgres://user:pass@db/kodex")}},
+		{name: "private url summary", input: ReportAgentRunStateInput{State: RunnerRunStateCompleted, SafeSummary: ptr("https://internal.example/path")}},
+		{name: "raw digest", input: ReportAgentRunStateInput{State: RunnerRunStateCompleted, DiagnosticDigest: ptr("workspace_path:/tmp/run")}},
+		{name: "private url digest", input: ReportAgentRunStateInput{State: RunnerRunStateCompleted, DiagnosticDigest: ptr("https://internal.example/path")}},
+		{name: "failure code on non failed", input: ReportAgentRunStateInput{State: RunnerRunStateRunning, FailureCode: ptr("runner_failed")}},
+		{name: "missing failure code", input: ReportAgentRunStateInput{State: RunnerRunStateFailed}},
+		{name: "unsafe failure code", input: ReportAgentRunStateInput{State: RunnerRunStateFailed, FailureCode: ptr("secret_value")}},
+		{name: "dsn failure code", input: ReportAgentRunStateInput{State: RunnerRunStateFailed, FailureCode: ptr("postgres://user:pass@db/kodex")}},
+		{name: "private url failure code", input: ReportAgentRunStateInput{State: RunnerRunStateFailed, FailureCode: ptr("https://internal.example/path")}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			input := tc.input
+			input.Meta = value.CommandMeta{CommandID: uuid.New(), ExpectedVersion: &expectedVersion, Actor: testActor()}
+			input.RunID = runID
+			input.SessionID = sessionID
+			input.RuntimeSlotRef = "slot-safe"
+			input.RuntimeJobRef = "job-safe"
+			repository := &fakeRepository{runByID: map[uuid.UUID]entity.AgentRun{runID: run}}
+			service := New(Config{Repository: repository})
+			_, err := service.ReportAgentRunState(context.Background(), input)
+			if !errors.Is(err, errs.ErrInvalidArgument) {
+				t.Fatalf("ReportAgentRunState() err = %v, want %v", err, errs.ErrInvalidArgument)
+			}
+			if repository.updatedRun.ID != uuid.Nil {
+				t.Fatalf("updated run = %+v", repository.updatedRun)
+			}
+		})
+	}
+}
+
 func TestRecordSessionStateSnapshotUpdatesLatestSnapshot(t *testing.T) {
 	t.Parallel()
 
@@ -5109,6 +5418,20 @@ func (g *sequenceIDGenerator) New() uuid.UUID {
 
 func testActor() value.Actor {
 	return value.Actor{Type: "user", ID: "owner"}
+}
+
+func ptr(value string) *string {
+	return &value
+}
+
+func agentRunWithRuntimeContext(run entity.AgentRun, runtimeContext value.RuntimeContextRef) entity.AgentRun {
+	run.RuntimeContext = runtimeContext
+	return run
+}
+
+func agentRunWithStatus(run entity.AgentRun, status enum.AgentRunStatus) entity.AgentRun {
+	run.Status = status
+	return run
 }
 
 type fakeGuidanceResolver struct {

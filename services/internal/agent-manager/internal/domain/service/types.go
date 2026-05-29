@@ -144,6 +144,29 @@ type StartAgentRunInput struct {
 	GuidanceSelectionHints  []value.GuidanceSelectionHint
 }
 
+type RunnerRunState string
+
+const (
+	RunnerRunStateQueued    RunnerRunState = "queued"
+	RunnerRunStateRunning   RunnerRunState = "running"
+	RunnerRunStateCompleted RunnerRunState = "completed"
+	RunnerRunStateFailed    RunnerRunState = "failed"
+)
+
+type ReportAgentRunStateInput struct {
+	Meta             value.CommandMeta
+	RunID            uuid.UUID
+	SessionID        uuid.UUID
+	RuntimeSlotRef   string
+	RuntimeJobRef    string
+	State            RunnerRunState
+	SafeSummary      *string
+	FailureCode      *string
+	DiagnosticDigest *string
+	StartedAt        *time.Time
+	FinishedAt       *time.Time
+}
+
 const (
 	RuntimeModeFullEnv = "full_env"
 

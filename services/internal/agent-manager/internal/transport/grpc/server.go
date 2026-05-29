@@ -45,6 +45,7 @@ type agentService interface {
 	GetAgentSession(context.Context, uuid.UUID) (entity.AgentSession, error)
 	StartAgentRun(context.Context, agentservice.StartAgentRunInput) (entity.AgentRun, error)
 	RecordRunState(context.Context, agentservice.RecordRunStateInput) (entity.AgentRun, error)
+	ReportAgentRunState(context.Context, agentservice.ReportAgentRunStateInput) (entity.AgentRun, error)
 	GetAgentRunRuntimeStatus(context.Context, agentservice.GetAgentRunRuntimeStatusInput) (agentservice.AgentRunRuntimeStatusResult, error)
 	RecordSessionStateSnapshot(context.Context, agentservice.RecordSessionStateSnapshotInput) (agentservice.SessionSnapshotResult, error)
 	ListAgentRuns(context.Context, agentservice.AgentRunList) ([]entity.AgentRun, value.PageResult, error)
@@ -174,6 +175,11 @@ func (server *Server) StartAgentRun(ctx context.Context, request *agentsv1.Start
 // RecordRunState records a lifecycle transition from runtime, MCP or hook ingress.
 func (server *Server) RecordRunState(ctx context.Context, request *agentsv1.RecordRunStateRequest) (*agentsv1.AgentRunResponse, error) {
 	return grpcserver.HandleUnary(ctx, request, grpccasters.RecordRunStateInput, server.service.RecordRunState, grpccasters.AgentRunResponse)
+}
+
+// ReportAgentRunState records a bounded runner report bound to one runtime job.
+func (server *Server) ReportAgentRunState(ctx context.Context, request *agentsv1.ReportAgentRunStateRequest) (*agentsv1.AgentRunResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.ReportAgentRunStateInput, server.service.ReportAgentRunState, grpccasters.AgentRunResponse)
 }
 
 // GetAgentRunRuntimeStatus возвращает безопасное состояние runtime job для одного run.
