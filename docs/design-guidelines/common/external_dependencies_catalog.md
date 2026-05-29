@@ -56,19 +56,23 @@
 
 | Dependency | Status | Scope | Why |
 |---|---|---|---|
-| `vue` | in use (package.json) | UI framework | staff web-console |
-| `vue-router` | in use (package.json) | Routing | маршрутизация staff UI |
-| `pinia` | in use (package.json) | State management | минимальное состояние UI |
-| `axios` | in use (package.json) | HTTP client | вызовы staff/private API |
-| `vue-i18n` | in use (package.json) | i18n | все пользовательские тексты через i18n ключи |
-| `vue3-cookies` | in use (package.json) | Cookies | хранение UI-настроек (например, язык) и единый cookie-адаптер |
-| `date-fns` | in use (package.json) | Datetime formatting | безопасное форматирование дат/времени без самописных helpers |
-| `vuetify` | in use (package.json, `^3.11.8`) | UI components | единая UI-библиотека и app-shell для staff web-console |
-| `vite-plugin-vuetify` | in use (devDependency, `^2.1.3`) | Build tooling | Vite-интеграция Vuetify (auto-import/стили) |
-| `sass` | in use (devDependency, `^1.97.3`) | Build tooling | сборка Vuetify styles (Sass) в Vite |
+| `vue` | in use (package.json, `^3.5.25`) | UI framework | staff web-console |
+| `typescript` | in use (devDependency, `~5.9.3`) | Типизация | строгая типизация staff web-console |
+| `vite` | in use (devDependency, `^6.4.2`) | Сборка | Vite dev server и production-сборка staff web-console на Node 18+ |
+| `@vitejs/plugin-vue` | in use (devDependency, `^5.2.4`) | Сборка | поддержка Vue SFC в Vite |
+| `vue-tsc` | in use (devDependency, `^2.2.12`) | Проверка типов | проверка Vue SFC и TypeScript без emit |
+| `vue-router` | in use (package.json, `^4.6.3`) | Маршрутизация | маршрутизация staff UI |
+| `pinia` | in use (package.json, `^3.0.4`) | Состояние | минимальное состояние UI |
+| `axios` | in use (package.json, `^1.13.2`) | HTTP-клиент | вызовы staff/private API через сгенерированный OpenAPI-клиент |
+| `vue-i18n` | in use (package.json, `^9.14.5`) | i18n | все пользовательские тексты через i18n ключи; версия выбрана для текущего Node 18-контура |
+| `vue3-cookies` | in use (package.json, `^1.0.6`) | Cookies | будущий единый cookie-адаптер для UI-настроек, без хранения секретов |
+| `date-fns` | in use (package.json, `^4.1.0`) | Datetime formatting | безопасное форматирование дат/времени без самописных helpers |
+| `vuetify` | in use (package.json, `^3.11.8`) | UI-компоненты | единая UI-библиотека и каркас приложения для staff web-console |
+| `vite-plugin-vuetify` | in use (devDependency, `^2.1.3`) | Сборка | Vite-интеграция Vuetify (auto-import/стили) |
+| `sass` | in use (devDependency, `1.69.7`) | Сборка | сборка Vuetify styles (Sass) в Vite на Node 18+ |
 | `@mdi/font` | in use (package.json, `^7.4.47`) | Icons | базовый icon font для Vuetify (Material Design Icons) |
-| `monaco-editor` | in use (package.json, `^0.55.1`) | Editor | markdown и YAML редакторы (и только для них) в staff web-console |
-| `@hey-api/openapi-ts` | in use (devDependency, `v0.92.3`) | OpenAPI codegen (TS) | генерация typed API-клиента для frontend из `api.yaml` |
+| `monaco-editor` | planned | Editor | markdown и YAML редакторы для будущих экранов staff web-console; первый MVP не подключает editor dependency |
+| `@hey-api/openapi-ts` | in use (devDependency, `v0.80.0`) | OpenAPI codegen (TS) | генерация типизированного API-клиента для frontend из `specs/openapi/staff-gateway.v1.yaml` на Node 18+ |
 | `@hey-api/client-axios` | deprecated (bundled in `@hey-api/openapi-ts` since `v0.73.0`) | OpenAPI axios client plugin | отдельная установка не требуется, использовать встроенный плагин через конфиг `openapi-ts` |
 
 ## Infrastructure and CI tools — in use
