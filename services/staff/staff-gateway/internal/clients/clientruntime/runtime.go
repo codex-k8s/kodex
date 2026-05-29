@@ -20,6 +20,12 @@ type RequestMetadata struct {
 	CorrelationID string
 }
 
+type Config struct {
+	Addr      string
+	AuthToken string
+	Timeout   time.Duration
+}
+
 func NewConnection(addr string, serviceName string) (*grpc.ClientConn, error) {
 	target := strings.TrimSpace(addr)
 	if target == "" {

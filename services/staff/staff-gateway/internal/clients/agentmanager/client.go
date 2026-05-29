@@ -10,11 +10,7 @@ import (
 	"google.golang.org/grpc"
 )
 
-type Config struct {
-	Addr      string
-	AuthToken string
-	Timeout   time.Duration
-}
+type Config = clientruntime.Config
 
 type Client struct {
 	client    agentsv1.AgentManagerServiceClient

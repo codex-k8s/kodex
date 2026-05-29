@@ -8,8 +8,10 @@ import (
 
 	serviceprocess "github.com/codex-k8s/kodex/libs/go/serviceprocess"
 	agentsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/agents/v1"
+	governancev1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/governance/v1"
 	interactionsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/interactions/v1"
 	agentmanagerclient "github.com/codex-k8s/kodex/services/staff/staff-gateway/internal/clients/agentmanager"
+	governanceclient "github.com/codex-k8s/kodex/services/staff/staff-gateway/internal/clients/governance"
 	interactionhubclient "github.com/codex-k8s/kodex/services/staff/staff-gateway/internal/clients/interactionhub"
 	httptransport "github.com/codex-k8s/kodex/services/staff/staff-gateway/internal/transport/http"
 	"google.golang.org/grpc"
@@ -35,8 +37,15 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		return err
 	}
 	defer closeAgentClient()
+	governanceClient, closeGovernanceClient, err := buildDownstreamClient(cfg.GovernanceClientConfig(), governanceclient.NewConnection, func(conn *grpc.ClientConn, cfg governanceclient.Config) (httptransport.GovernanceManagerClient, error) {
+		return governanceclient.New(governancev1.NewGovernanceManagerServiceClient(conn), cfg)
+	})
+	if err != nil {
+		return err
+	}
+	defer closeGovernanceClient()
 
-	apiHandler, err := httptransport.NewRouter(ctx, cfg.HTTPRouterConfig(), interactionClient, agentClient, logger)
+	apiHandler, err := httptransport.NewRouter(ctx, cfg.HTTPRouterConfig(), interactionClient, agentClient, governanceClient, logger)
 	if err != nil {
 		return err
 	}

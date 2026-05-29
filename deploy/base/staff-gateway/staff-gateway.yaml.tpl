@@ -100,6 +100,23 @@ spec:
             capabilities:
               drop:
                 - ALL
+        - name: wait-governance-manager
+          image: {{ imageOr "busybox" "KODEX_BUSYBOX_IMAGE" }}
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              until wget -q -T 2 -O - http://governance-manager:8080/health/readyz >/dev/null 2>&1; do
+                sleep 2
+              done
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
       containers:
         - name: staff-gateway
           image: {{ image "staff-gateway" }}
@@ -121,6 +138,11 @@ spec:
                 secretKeyRef:
                   name: kodex-platform-runtime
                   key: KODEX_AGENT_MANAGER_GRPC_AUTH_TOKEN
+            - name: KODEX_STAFF_GATEWAY_GOVERNANCE_MANAGER_GRPC_AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: kodex-platform-runtime
+                  key: KODEX_GOVERNANCE_MANAGER_GRPC_AUTH_TOKEN
           readinessProbe:
             httpGet:
               path: /health/readyz

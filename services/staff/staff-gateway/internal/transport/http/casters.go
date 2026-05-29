@@ -2,6 +2,7 @@ package httptransport
 
 import (
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	agentsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/agents/v1"
+	governancev1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/governance/v1"
 	interactionsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/interactions/v1"
 	"github.com/codex-k8s/kodex/services/staff/staff-gateway/internal/transport/http/generated"
 )
@@ -20,6 +22,10 @@ const (
 	maxActivityRefBytes        = 256
 	maxActivitySafeJSONBytes   = 8192
 	maxActivityIdentifierBytes = 128
+	maxGovernanceKindBytes     = 128
+	maxGovernanceRefBytes      = 256
+	maxGovernanceTextBytes     = 2000
+	maxGovernanceDigestBytes   = 256
 )
 
 type OwnerInboxRespondBody = generated.OwnerInboxRespondRequest
@@ -29,6 +35,19 @@ var validRuntimeObservationStates = enumSet(generated.RuntimeObservationStateNot
 var validAgentRuntimeJobStatuses = enumSet(generated.AgentRuntimeJobStatusPending, generated.AgentRuntimeJobStatusClaimed, generated.AgentRuntimeJobStatusRunning, generated.AgentRuntimeJobStatusSucceeded, generated.AgentRuntimeJobStatusFailed, generated.AgentRuntimeJobStatusCancelled, generated.AgentRuntimeJobStatusTimedOut)
 var validAgentActivityKinds = enumSet(generated.AgentActivityKindLifecycle, generated.AgentActivityKindToolUse, generated.AgentActivityKindToolResult, generated.AgentActivityKindPermission, generated.AgentActivityKindProviderSignal, generated.AgentActivityKindRuntimeSignal, generated.AgentActivityKindCheckpoint, generated.AgentActivityKindOther)
 var validAgentActivityStatuses = enumSet(generated.AgentActivityStatusPlanned, generated.AgentActivityStatusStarted, generated.AgentActivityStatusSucceeded, generated.AgentActivityStatusFailed, generated.AgentActivityStatusDenied, generated.AgentActivityStatusWaiting, generated.AgentActivityStatusCancelled, generated.AgentActivityStatusSkipped)
+var validGovernanceTargetTypes = enumSet(generated.Transition, generated.PullRequest, generated.ReleaseCandidate, generated.RuntimeJob, generated.PolicyChange, generated.Document, generated.Merge, generated.Postdeploy, generated.Rollback)
+var validGovernanceDecisionSummaryKinds = enumSet(generated.GovernanceDecisionSummaryKindRiskAssessment, generated.GovernanceDecisionSummaryKindReviewSignal, generated.GovernanceDecisionSummaryKindGateRequest, generated.GovernanceDecisionSummaryKindGateDecision, generated.GovernanceDecisionSummaryKindReleaseDecisionPackage, generated.GovernanceDecisionSummaryKindReleaseDecision, generated.GovernanceDecisionSummaryKindBlockingSignal, generated.GovernanceDecisionSummaryKindReleaseSafetyState)
+var validGovernanceDecisionAttentions = enumSet(generated.GovernanceDecisionAttentionPending, generated.GovernanceDecisionAttentionCompleted, generated.GovernanceDecisionAttentionBlocked, generated.GovernanceDecisionAttentionInformational)
+var validGovernanceRiskClasses = enumSet(generated.GovernanceRiskClassR0, generated.GovernanceRiskClassR1, generated.GovernanceRiskClassR2, generated.GovernanceRiskClassR3)
+var validGovernanceReviewOutcomes = enumSet(generated.GovernanceReviewOutcomePass, generated.GovernanceReviewOutcomePassWithNotes, generated.GovernanceReviewOutcomeBlock, generated.GovernanceReviewOutcomeRequestChanges, generated.GovernanceReviewOutcomeRaiseRisk, generated.GovernanceReviewOutcomeInformational)
+var validGovernanceGateRequestStatuses = enumSet(generated.GovernanceGateRequestStatusRequested, generated.GovernanceGateRequestStatusDelivering, generated.GovernanceGateRequestStatusAwaitingDecision, generated.GovernanceGateRequestStatusResolved, generated.GovernanceGateRequestStatusExpired, generated.GovernanceGateRequestStatusCancelled)
+var validGovernanceGateOutcomes = enumSet(generated.GovernanceGateOutcomeApprove, generated.GovernanceGateOutcomeApproveWithConditions, generated.GovernanceGateOutcomeRevise, generated.GovernanceGateOutcomeReject, generated.GovernanceGateOutcomeHold, generated.GovernanceGateOutcomeRollback, generated.GovernanceGateOutcomeEscalate)
+var validGovernanceReleasePackageStatuses = enumSet(generated.GovernanceReleasePackageStatusDraft, generated.GovernanceReleasePackageStatusReady, generated.GovernanceReleasePackageStatusDecisionRequested, generated.GovernanceReleasePackageStatusClosed)
+var validGovernanceReleaseDecisionStatuses = enumSet(generated.GovernanceReleaseDecisionStatusRequested, generated.GovernanceReleaseDecisionStatusResolved, generated.GovernanceReleaseDecisionStatusCancelled)
+var validGovernanceReleaseDecisionOutcomes = enumSet(generated.GovernanceReleaseDecisionOutcomeGo, generated.GovernanceReleaseDecisionOutcomeGoWithConditions, generated.GovernanceReleaseDecisionOutcomeNoGo, generated.GovernanceReleaseDecisionOutcomeHold, generated.GovernanceReleaseDecisionOutcomeRollback, generated.GovernanceReleaseDecisionOutcomeFollowUpRequired)
+var validGovernanceBlockingSignalStatuses = enumSet(generated.GovernanceBlockingSignalStatusActive, generated.GovernanceBlockingSignalStatusResolved, generated.GovernanceBlockingSignalStatusDismissed)
+var validGovernanceSignalSeverities = enumSet(generated.GovernanceSignalSeverityInfo, generated.GovernanceSignalSeverityWarning, generated.GovernanceSignalSeverityBlocking, generated.GovernanceSignalSeverityCritical)
+var validGovernanceEvidenceKinds = enumSet(generated.GovernanceEvidenceKindProviderComment, generated.GovernanceEvidenceKindProviderReview, generated.GovernanceEvidenceKindProviderCheck, generated.GovernanceEvidenceKindRuntimeSummary, generated.GovernanceEvidenceKindDocument, generated.GovernanceEvidenceKindRiskFactor, generated.GovernanceEvidenceKindReviewSignal, generated.GovernanceEvidenceKindInteractionCallback, generated.GovernanceEvidenceKindObjectRef, generated.GovernanceEvidenceKindCustom, generated.GovernanceEvidenceKindAgentAcceptance, generated.GovernanceEvidenceKindAgentRun, generated.GovernanceEvidenceKindAgentHumanGate)
 
 func GetAgentRunRuntimeStatusRequest(req *http.Request) (*agentsv1.GetAgentRunRuntimeStatusRequest, *SafeError) {
 	meta, safeErr := agentQueryMeta(req)
@@ -70,6 +89,20 @@ func ListAgentActivitiesRequest(req *http.Request) (*agentsv1.ListAgentActivitie
 		Status:       activityStatus,
 		Page:         page,
 	}, nil
+}
+
+func GetGovernanceSummaryRequest(req *http.Request) (*governancev1.GetGovernanceSummaryRequest, *SafeError) {
+	request := &governancev1.GetGovernanceSummaryRequest{}
+	var safeErr *SafeError
+	request.Meta, safeErr = governanceQueryMeta(req)
+	if safeErr != nil {
+		return nil, safeErr
+	}
+	request.Scope, safeErr = governanceSummaryScopeFromQuery(req)
+	if safeErr != nil {
+		return nil, safeErr
+	}
+	return request, nil
 }
 
 func runIDFromPath(req *http.Request) (string, *SafeError) {
@@ -264,6 +297,20 @@ func AgentRunActivitiesResponse(response *agentsv1.ListAgentActivitiesResponse, 
 	}, nil
 }
 
+func GovernanceSummaryResponse(response *governancev1.GovernanceSummaryResponse, requestID string) (generated.GovernanceSummaryResponse, *SafeError) {
+	if response == nil || response.GetSummary() == nil {
+		return generated.GovernanceSummaryResponse{}, NewSafeError(http.StatusServiceUnavailable, CodeDownstreamUnavailable, "governance-manager returned empty summary", true)
+	}
+	summary, safeErr := governanceSummary(response.GetSummary())
+	if safeErr != nil {
+		return generated.GovernanceSummaryResponse{}, safeErr
+	}
+	output := generated.GovernanceSummaryResponse{Summary: summary}
+	output.RequestId = requestID
+	output.CorrelationId = optionalString(requestID)
+	return output, nil
+}
+
 func queryMeta(req *http.Request) (*interactionsv1.QueryMeta, *SafeError) {
 	actor, safeErr := interactionActorFromHeaders(req)
 	if safeErr != nil {
@@ -294,6 +341,21 @@ func agentQueryMeta(req *http.Request) (*agentsv1.QueryMeta, *SafeError) {
 			SessionId: optionalString(req.Header.Get(headerSessionID)),
 		},
 	}, nil
+}
+
+func governanceQueryMeta(req *http.Request) (*governancev1.QueryMeta, *SafeError) {
+	actorType, actorID, safeErr := actorPartsFromHeaders(req)
+	if safeErr != nil {
+		return nil, safeErr
+	}
+	meta := &governancev1.QueryMeta{Actor: &governancev1.Actor{Type: actorType, Id: actorID}}
+	meta.RequestId = requestIDFromContext(req.Context())
+	meta.RequestContext = &governancev1.RequestContext{
+		Source:    "staff-gateway",
+		TraceId:   optionalString(traceID(req)),
+		SessionId: optionalString(req.Header.Get(headerSessionID)),
+	}
+	return meta, nil
 }
 
 func commandMeta(req *http.Request, body OwnerInboxRespondBody) (*interactionsv1.CommandMeta, *interactionsv1.Actor, *SafeError) {
@@ -391,6 +453,129 @@ func scopeTypeProto(value string) (interactionsv1.InteractionScopeType, *SafeErr
 	default:
 		return interactionsv1.InteractionScopeType_INTERACTION_SCOPE_TYPE_UNSPECIFIED, NewSafeError(http.StatusBadRequest, CodeInvalidRequest, "scope type is invalid", false)
 	}
+}
+
+func governanceSummaryScopeFromQuery(req *http.Request) (*governancev1.GovernanceSummaryScope, *SafeError) {
+	query := req.URL.Query()
+	scope := &governancev1.GovernanceSummaryScope{}
+	selectorCount := 0
+
+	target, safeErr := governanceTargetFromQuery(query.Get("target_type"), query.Get("target_ref"))
+	if safeErr != nil {
+		return nil, safeErr
+	}
+	if target != nil {
+		scope.Target = target
+		selectorCount++
+	}
+
+	projectContext, safeErr := governanceProjectContextFromQuery(query)
+	if safeErr != nil {
+		return nil, safeErr
+	}
+	if projectContext != nil {
+		scope.ProjectContext = projectContext
+		selectorCount++
+	}
+
+	if releaseCandidateRef := strings.TrimSpace(query.Get("release_candidate_ref")); releaseCandidateRef != "" {
+		scope.ReleaseCandidateRef = &releaseCandidateRef
+		selectorCount++
+	}
+	if packageID := strings.TrimSpace(query.Get("release_decision_package_id")); packageID != "" {
+		if _, err := uuid.Parse(packageID); err != nil {
+			return nil, NewSafeError(http.StatusBadRequest, CodeInvalidRequest, "release decision package id is invalid", false)
+		}
+		scope.ReleaseDecisionPackageId = &packageID
+		selectorCount++
+	}
+
+	integrationRef, safeErr := governanceIntegrationRefFromQuery(query.Get("integration_domain"), query.Get("integration_kind"), query.Get("integration_ref"))
+	if safeErr != nil {
+		return nil, safeErr
+	}
+	if integrationRef != nil {
+		scope.IntegrationRef = integrationRef
+		selectorCount++
+	}
+
+	if selectorCount != 1 {
+		return nil, NewSafeError(http.StatusBadRequest, CodeInvalidRequest, "exactly one governance summary selector is required", false)
+	}
+	return scope, nil
+}
+
+func governanceTargetFromQuery(kind string, ref string) (*governancev1.TargetRef, *SafeError) {
+	kind, ref, safeErr := optionalRefParts(kind, ref, "target ref is invalid")
+	if safeErr != nil || kind == "" {
+		return nil, safeErr
+	}
+	targetType, safeErr := governanceTargetTypeProto(kind)
+	if safeErr != nil {
+		return nil, safeErr
+	}
+	return &governancev1.TargetRef{Type: targetType, Ref: ref}, nil
+}
+
+func governanceTargetTypeProto(value string) (governancev1.GovernanceTargetType, *SafeError) {
+	switch strings.TrimSpace(value) {
+	case "transition":
+		return governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_TRANSITION, nil
+	case "pull_request":
+		return governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_PULL_REQUEST, nil
+	case "release_candidate":
+		return governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_RELEASE_CANDIDATE, nil
+	case "runtime_job":
+		return governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_RUNTIME_JOB, nil
+	case "policy_change":
+		return governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_POLICY_CHANGE, nil
+	case "document":
+		return governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_DOCUMENT, nil
+	case "merge":
+		return governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_MERGE, nil
+	case "postdeploy":
+		return governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_POSTDEPLOY, nil
+	case "rollback":
+		return governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_ROLLBACK, nil
+	default:
+		return governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_UNSPECIFIED, NewSafeError(http.StatusBadRequest, CodeInvalidRequest, "target type is invalid", false)
+	}
+}
+
+func governanceProjectContextFromQuery(query url.Values) (*governancev1.ProjectContextRef, *SafeError) {
+	context := &governancev1.ProjectContextRef{
+		ProjectRef:       optionalString(query.Get("project_ref")),
+		RepositoryRef:    optionalString(query.Get("repository_ref")),
+		ServiceRef:       optionalString(query.Get("service_ref")),
+		BranchRulesRef:   optionalString(query.Get("branch_rules_ref")),
+		ReleasePolicyRef: optionalString(query.Get("release_policy_ref")),
+		ReleaseLineRef:   optionalString(query.Get("release_line_ref")),
+	}
+	if context.GetProjectRef() == "" &&
+		context.GetRepositoryRef() == "" &&
+		context.GetServiceRef() == "" &&
+		context.GetBranchRulesRef() == "" &&
+		context.GetReleasePolicyRef() == "" &&
+		context.GetReleaseLineRef() == "" {
+		return nil, nil
+	}
+	if context.GetProjectRef() == "" && context.GetRepositoryRef() == "" {
+		return nil, NewSafeError(http.StatusBadRequest, CodeInvalidRequest, "project or repository ref is required", false)
+	}
+	return context, nil
+}
+
+func governanceIntegrationRefFromQuery(domain string, kind string, ref string) (*governancev1.ReleaseIntegrationRef, *SafeError) {
+	domain = strings.TrimSpace(domain)
+	kind = strings.TrimSpace(kind)
+	ref = strings.TrimSpace(ref)
+	if domain == "" && kind == "" && ref == "" {
+		return nil, nil
+	}
+	if domain == "" || kind == "" || ref == "" {
+		return nil, NewSafeError(http.StatusBadRequest, CodeInvalidRequest, "integration ref is invalid", false)
+	}
+	return &governancev1.ReleaseIntegrationRef{Domain: domain, Kind: kind, Ref: ref}, nil
 }
 
 func requestKindsFromQuery(values []string) ([]interactionsv1.InteractionRequestKind, *SafeError) {
@@ -728,6 +913,226 @@ func agentRunActivity(activity *agentsv1.AgentActivity, runID string) (generated
 	return output, nil
 }
 
+func governanceSummary(input *governancev1.GovernanceSummary) (generated.GovernanceSummary, *SafeError) {
+	return generated.GovernanceSummary{
+		Scope:              governanceSummaryScope(input.GetScope()),
+		PendingDecisions:   governanceDecisionSummaries(input.GetPendingDecisions()),
+		CompletedDecisions: governanceDecisionSummaries(input.GetCompletedDecisions()),
+		EvidenceSummaries:  governanceEvidenceSummaries(input.GetEvidenceSummaries()),
+		Diagnostics:        boundedStrings(input.GetDiagnostics(), maxGovernanceTextBytes),
+	}, nil
+}
+
+func governanceSummaryScope(input *governancev1.GovernanceSummaryScope) generated.GovernanceSummaryScope {
+	output := generated.GovernanceSummaryScope{
+		Target:                   governanceTargetRef(input.GetTarget()),
+		ProjectContext:           governanceProjectContextRef(input.GetProjectContext()),
+		ReleaseCandidateRef:      optionalBoundedString(input.GetReleaseCandidateRef(), maxGovernanceRefBytes),
+		ReleaseDecisionPackageId: optionalBoundedString(input.GetReleaseDecisionPackageId(), maxGovernanceRefBytes),
+	}
+	if ref := governanceReleaseIntegrationRefPtr(input.GetIntegrationRef()); ref != nil {
+		output.IntegrationRef = ref
+	}
+	return output
+}
+
+func governanceDecisionSummaries(input []*governancev1.GovernanceDecisionSummary) []generated.GovernanceDecisionSummary {
+	result := make([]generated.GovernanceDecisionSummary, 0, len(input))
+	for _, item := range input {
+		if item != nil {
+			result = append(result, governanceDecisionSummary(item))
+		}
+	}
+	return result
+}
+
+func governanceDecisionSummary(input *governancev1.GovernanceDecisionSummary) generated.GovernanceDecisionSummary {
+	output := generated.GovernanceDecisionSummary{
+		Kind:                     governanceDecisionSummaryKind(input.GetKind()),
+		Attention:                governanceDecisionAttention(input.GetAttention()),
+		Id:                       boundedString(input.GetId(), maxGovernanceRefBytes),
+		ParentId:                 optionalBoundedString(input.GetParentId(), maxGovernanceRefBytes),
+		Target:                   governanceTargetRef(input.GetTarget()),
+		ProjectContext:           governanceProjectContextRef(input.GetProjectContext()),
+		ReleaseCandidateRef:      optionalBoundedString(input.GetReleaseCandidateRef(), maxGovernanceRefBytes),
+		ReleaseDecisionPackageId: optionalBoundedString(input.GetReleaseDecisionPackageId(), maxGovernanceRefBytes),
+		RiskClass:                optionalGovernanceRiskClass(input.GetRiskClass()),
+		ReviewOutcome:            optionalGovernanceReviewOutcome(input.GetReviewOutcome()),
+		GateRequestStatus:        optionalGovernanceGateRequestStatus(input.GetGateRequestStatus()),
+		GateOutcome:              optionalGovernanceGateOutcome(input.GetGateOutcome()),
+		ReleasePackageStatus:     optionalGovernanceReleasePackageStatus(input.GetReleasePackageStatus()),
+		ReleaseDecisionStatus:    optionalGovernanceReleaseDecisionStatus(input.GetReleaseDecisionStatus()),
+		ReleaseDecisionOutcome:   optionalGovernanceReleaseDecisionOutcome(input.GetReleaseDecisionOutcome()),
+		BlockingSignalStatus:     optionalGovernanceBlockingSignalStatus(input.GetBlockingSignalStatus()),
+		Severity:                 optionalGovernanceSignalSeverity(input.GetSeverity()),
+		SafeSummary:              boundedString(input.GetSafeSummary(), maxGovernanceTextBytes),
+		EvidenceRefs:             governanceEvidenceRefs(input.GetEvidenceRefs()),
+		IntegrationRefs:          governanceReleaseIntegrationRefs(input.GetIntegrationRefs()),
+		ProviderRefs:             governanceProviderContextRefs(input.GetProviderRefs()),
+		RuntimeRefs:              governanceRuntimeContextRefs(input.GetRuntimeRefs()),
+		AgentContext:             governanceAgentContextRef(input.GetAgentContext()),
+		Version:                  input.GetVersion(),
+		CreatedAt:                boundedString(input.GetCreatedAt(), maxGovernanceRefBytes),
+		UpdatedAt:                boundedString(input.GetUpdatedAt(), maxGovernanceRefBytes),
+		ObservedAt:               optionalTime(input.GetObservedAt()),
+	}
+	return output
+}
+
+func governanceEvidenceSummaries(input []*governancev1.GovernanceEvidenceSummary) []generated.GovernanceEvidenceSummary {
+	result := make([]generated.GovernanceEvidenceSummary, 0, len(input))
+	for _, item := range input {
+		if item != nil {
+			result = append(result, generated.GovernanceEvidenceSummary{
+				SourceKind:      boundedString(item.GetSourceKind(), maxGovernanceKindBytes),
+				SourceRef:       boundedString(item.GetSourceRef(), maxGovernanceRefBytes),
+				Status:          optionalBoundedString(item.GetStatus(), maxGovernanceKindBytes),
+				Outcome:         optionalBoundedString(item.GetOutcome(), maxGovernanceKindBytes),
+				SafeSummary:     boundedString(item.GetSafeSummary(), maxGovernanceTextBytes),
+				ErrorCode:       optionalBoundedString(item.GetErrorCode(), maxGovernanceKindBytes),
+				Digest:          optionalBoundedString(item.GetDigest(), maxGovernanceDigestBytes),
+				ObservedAt:      optionalTime(item.GetObservedAt()),
+				Version:         optionalBoundedString(item.GetVersion(), maxGovernanceRefBytes),
+				EvidenceRefs:    governanceEvidenceRefs(item.GetEvidenceRefs()),
+				IntegrationRefs: governanceReleaseIntegrationRefs(item.GetIntegrationRefs()),
+			})
+		}
+	}
+	return result
+}
+
+func governanceTargetRef(input *governancev1.TargetRef) *generated.GovernanceTargetRef {
+	if input == nil || input.GetRef() == "" {
+		return nil
+	}
+	return &generated.GovernanceTargetRef{
+		Type: governanceTargetType(input.GetType()),
+		Ref:  boundedString(input.GetRef(), maxGovernanceRefBytes),
+	}
+}
+
+func governanceProjectContextRef(input *governancev1.ProjectContextRef) *generated.GovernanceProjectContextRef {
+	if input == nil {
+		return nil
+	}
+	output := generated.GovernanceProjectContextRef{}
+	output.ProjectRef = optionalBoundedString(input.GetProjectRef(), maxGovernanceRefBytes)
+	output.RepositoryRef = optionalBoundedString(input.GetRepositoryRef(), maxGovernanceRefBytes)
+	output.ServiceRef = optionalBoundedString(input.GetServiceRef(), maxGovernanceRefBytes)
+	output.BranchRulesRef = optionalBoundedString(input.GetBranchRulesRef(), maxGovernanceRefBytes)
+	output.ReleasePolicyRef = optionalBoundedString(input.GetReleasePolicyRef(), maxGovernanceRefBytes)
+	output.ReleaseLineRef = optionalBoundedString(input.GetReleaseLineRef(), maxGovernanceRefBytes)
+	if output.ProjectRef == nil && output.RepositoryRef == nil && output.ServiceRef == nil &&
+		output.BranchRulesRef == nil && output.ReleasePolicyRef == nil && output.ReleaseLineRef == nil {
+		return nil
+	}
+	return &output
+}
+
+func governanceReleaseIntegrationRefs(input []*governancev1.ReleaseIntegrationRef) []generated.GovernanceReleaseIntegrationRef {
+	result := make([]generated.GovernanceReleaseIntegrationRef, 0, len(input))
+	for _, item := range input {
+		if casted := governanceReleaseIntegrationRefPtr(item); casted != nil {
+			result = append(result, *casted)
+		}
+	}
+	return result
+}
+
+func governanceReleaseIntegrationRefPtr(input *governancev1.ReleaseIntegrationRef) *generated.GovernanceReleaseIntegrationRef {
+	if input == nil || input.GetDomain() == "" || input.GetKind() == "" || input.GetRef() == "" {
+		return nil
+	}
+	return &generated.GovernanceReleaseIntegrationRef{
+		Domain:     boundedString(input.GetDomain(), maxGovernanceKindBytes),
+		Kind:       boundedString(input.GetKind(), maxGovernanceKindBytes),
+		Ref:        boundedString(input.GetRef(), maxGovernanceRefBytes),
+		Status:     optionalBoundedString(input.GetStatus(), maxGovernanceKindBytes),
+		Summary:    optionalBoundedString(input.GetSummary(), maxGovernanceTextBytes),
+		Digest:     optionalBoundedString(input.GetDigest(), maxGovernanceDigestBytes),
+		ObservedAt: optionalTime(input.GetObservedAt()),
+		Version:    optionalBoundedString(input.GetVersion(), maxGovernanceRefBytes),
+		ErrorCode:  optionalBoundedString(input.GetErrorCode(), maxGovernanceKindBytes),
+	}
+}
+
+func governanceEvidenceRefs(input []*governancev1.EvidenceRef) []generated.GovernanceEvidenceRef {
+	result := make([]generated.GovernanceEvidenceRef, 0, len(input))
+	for _, item := range input {
+		if item == nil || item.GetRef() == "" {
+			continue
+		}
+		result = append(result, generated.GovernanceEvidenceRef{
+			Kind:           governanceEvidenceKind(item.GetKind()),
+			Ref:            boundedString(item.GetRef(), maxGovernanceRefBytes),
+			Summary:        optionalBoundedString(item.GetSummary(), maxGovernanceTextBytes),
+			Digest:         optionalBoundedString(item.GetDigest(), maxGovernanceDigestBytes),
+			RetentionClass: optionalBoundedString(item.GetRetentionClass(), maxGovernanceKindBytes),
+		})
+	}
+	return result
+}
+
+func governanceProviderContextRefs(input []*governancev1.ProviderContextRef) []generated.GovernanceProviderContextRef {
+	result := make([]generated.GovernanceProviderContextRef, 0, len(input))
+	for _, item := range input {
+		if item == nil {
+			continue
+		}
+		casted := generated.GovernanceProviderContextRef{
+			WorkItemRef:            optionalBoundedString(item.GetWorkItemRef(), maxGovernanceRefBytes),
+			PullRequestRef:         optionalBoundedString(item.GetPullRequestRef(), maxGovernanceRefBytes),
+			CommentRef:             optionalBoundedString(item.GetCommentRef(), maxGovernanceRefBytes),
+			ReviewSignalRef:        optionalBoundedString(item.GetReviewSignalRef(), maxGovernanceRefBytes),
+			ProviderOperationRef:   optionalBoundedString(item.GetProviderOperationRef(), maxGovernanceRefBytes),
+			ChangedFilesSummaryRef: optionalBoundedString(item.GetChangedFilesSummaryRef(), maxGovernanceRefBytes),
+		}
+		if casted.WorkItemRef != nil || casted.PullRequestRef != nil || casted.CommentRef != nil ||
+			casted.ReviewSignalRef != nil || casted.ProviderOperationRef != nil || casted.ChangedFilesSummaryRef != nil {
+			result = append(result, casted)
+		}
+	}
+	return result
+}
+
+func governanceRuntimeContextRefs(input []*governancev1.RuntimeContextRef) []generated.GovernanceRuntimeContextRef {
+	result := make([]generated.GovernanceRuntimeContextRef, 0, len(input))
+	for _, item := range input {
+		if item == nil {
+			continue
+		}
+		casted := generated.GovernanceRuntimeContextRef{
+			SlotRef:        optionalBoundedString(item.GetSlotRef(), maxGovernanceRefBytes),
+			JobRef:         optionalBoundedString(item.GetJobRef(), maxGovernanceRefBytes),
+			EnvironmentRef: optionalBoundedString(item.GetEnvironmentRef(), maxGovernanceRefBytes),
+			ArtifactRef:    optionalBoundedString(item.GetArtifactRef(), maxGovernanceRefBytes),
+			SummaryRef:     optionalBoundedString(item.GetSummaryRef(), maxGovernanceRefBytes),
+		}
+		if casted.SlotRef != nil || casted.JobRef != nil || casted.EnvironmentRef != nil ||
+			casted.ArtifactRef != nil || casted.SummaryRef != nil {
+			result = append(result, casted)
+		}
+	}
+	return result
+}
+
+func governanceAgentContextRef(input *governancev1.AgentContextRef) *generated.GovernanceAgentContextRef {
+	if input == nil {
+		return nil
+	}
+	output := generated.GovernanceAgentContextRef{}
+	output.SessionRef = optionalBoundedString(input.GetSessionRef(), maxGovernanceRefBytes)
+	output.RunRef = optionalBoundedString(input.GetRunRef(), maxGovernanceRefBytes)
+	output.StageRef = optionalBoundedString(input.GetStageRef(), maxGovernanceRefBytes)
+	output.AcceptanceRef = optionalBoundedString(input.GetAcceptanceRef(), maxGovernanceRefBytes)
+	output.RoleRef = optionalBoundedString(input.GetRoleRef(), maxGovernanceRefBytes)
+	if output.SessionRef == nil && output.RunRef == nil && output.StageRef == nil &&
+		output.AcceptanceRef == nil && output.RoleRef == nil {
+		return nil
+	}
+	return &output
+}
+
 func agentRunStatus(value agentsv1.AgentRunStatus) generated.AgentRunStatus {
 	return protoEnum(value.String(), "AGENT_RUN_STATUS_", generated.AgentRunStatusUnspecified, validAgentRunStatuses)
 }
@@ -746,6 +1151,65 @@ func agentActivityKind(value agentsv1.AgentActivityKind) generated.AgentActivity
 
 func agentActivityStatus(value agentsv1.AgentActivityStatus) generated.AgentActivityStatus {
 	return protoEnum(value.String(), "AGENT_ACTIVITY_STATUS_", generated.AgentActivityStatusUnspecified, validAgentActivityStatuses)
+}
+
+func governanceTargetType(value governancev1.GovernanceTargetType) generated.GovernanceTargetType {
+	return protoEnum(value.String(), "GOVERNANCE_TARGET_TYPE_", generated.Unspecified, validGovernanceTargetTypes)
+}
+
+func governanceDecisionSummaryKind(value governancev1.GovernanceDecisionSummaryKind) generated.GovernanceDecisionSummaryKind {
+	return protoEnum(value.String(), "GOVERNANCE_DECISION_SUMMARY_KIND_", generated.GovernanceDecisionSummaryKindUnspecified, validGovernanceDecisionSummaryKinds)
+}
+
+func governanceDecisionAttention(value governancev1.GovernanceDecisionAttention) generated.GovernanceDecisionAttention {
+	return protoEnum(value.String(), "GOVERNANCE_DECISION_ATTENTION_", generated.GovernanceDecisionAttentionUnspecified, validGovernanceDecisionAttentions)
+}
+
+func optionalGovernanceRiskClass(value governancev1.RiskClass) *generated.GovernanceRiskClass {
+	return optionalEnum(protoEnum(value.String(), "RISK_CLASS_", generated.GovernanceRiskClassUnspecified, validGovernanceRiskClasses), generated.GovernanceRiskClassUnspecified)
+}
+
+func optionalGovernanceReviewOutcome(value governancev1.ReviewSignalOutcome) *generated.GovernanceReviewOutcome {
+	return optionalEnum(protoEnum(value.String(), "REVIEW_SIGNAL_OUTCOME_", generated.GovernanceReviewOutcomeUnspecified, validGovernanceReviewOutcomes), generated.GovernanceReviewOutcomeUnspecified)
+}
+
+func optionalGovernanceGateRequestStatus(value governancev1.GateRequestStatus) *generated.GovernanceGateRequestStatus {
+	return optionalEnum(protoEnum(value.String(), "GATE_REQUEST_STATUS_", generated.GovernanceGateRequestStatusUnspecified, validGovernanceGateRequestStatuses), generated.GovernanceGateRequestStatusUnspecified)
+}
+
+func optionalGovernanceGateOutcome(value governancev1.GateOutcome) *generated.GovernanceGateOutcome {
+	return optionalEnum(protoEnum(value.String(), "GATE_OUTCOME_", generated.GovernanceGateOutcomeUnspecified, validGovernanceGateOutcomes), generated.GovernanceGateOutcomeUnspecified)
+}
+
+func optionalGovernanceReleasePackageStatus(value governancev1.ReleaseDecisionPackageStatus) *generated.GovernanceReleasePackageStatus {
+	return optionalEnum(protoEnum(value.String(), "RELEASE_DECISION_PACKAGE_STATUS_", generated.GovernanceReleasePackageStatusUnspecified, validGovernanceReleasePackageStatuses), generated.GovernanceReleasePackageStatusUnspecified)
+}
+
+func optionalGovernanceReleaseDecisionStatus(value governancev1.ReleaseDecisionStatus) *generated.GovernanceReleaseDecisionStatus {
+	return optionalEnum(protoEnum(value.String(), "RELEASE_DECISION_STATUS_", generated.GovernanceReleaseDecisionStatusUnspecified, validGovernanceReleaseDecisionStatuses), generated.GovernanceReleaseDecisionStatusUnspecified)
+}
+
+func optionalGovernanceReleaseDecisionOutcome(value governancev1.ReleaseDecisionOutcome) *generated.GovernanceReleaseDecisionOutcome {
+	return optionalEnum(protoEnum(value.String(), "RELEASE_DECISION_OUTCOME_", generated.GovernanceReleaseDecisionOutcomeUnspecified, validGovernanceReleaseDecisionOutcomes), generated.GovernanceReleaseDecisionOutcomeUnspecified)
+}
+
+func optionalGovernanceBlockingSignalStatus(value governancev1.BlockingSignalStatus) *generated.GovernanceBlockingSignalStatus {
+	return optionalEnum(protoEnum(value.String(), "BLOCKING_SIGNAL_STATUS_", generated.GovernanceBlockingSignalStatusUnspecified, validGovernanceBlockingSignalStatuses), generated.GovernanceBlockingSignalStatusUnspecified)
+}
+
+func optionalGovernanceSignalSeverity(value governancev1.SignalSeverity) *generated.GovernanceSignalSeverity {
+	return optionalEnum(protoEnum(value.String(), "SIGNAL_SEVERITY_", generated.GovernanceSignalSeverityUnspecified, validGovernanceSignalSeverities), generated.GovernanceSignalSeverityUnspecified)
+}
+
+func governanceEvidenceKind(value governancev1.EvidenceKind) generated.GovernanceEvidenceKind {
+	return protoEnum(value.String(), "EVIDENCE_KIND_", generated.GovernanceEvidenceKindUnspecified, validGovernanceEvidenceKinds)
+}
+
+func optionalEnum[Target comparable](value Target, fallback Target) *Target {
+	if value == fallback {
+		return nil
+	}
+	return &value
 }
 
 func protoEnum[Target ~string](value string, prefix string, fallback Target, valid map[Target]struct{}) Target {
@@ -993,6 +1457,24 @@ func optionalBoundedString(value string, maxBytes int) *string {
 		return nil
 	}
 	return &trimmed
+}
+
+func boundedString(value string, maxBytes int) string {
+	trimmed := strings.TrimSpace(value)
+	if len(trimmed) > maxBytes {
+		return ""
+	}
+	return trimmed
+}
+
+func boundedStrings(values []string, maxBytes int) []string {
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		if bounded := boundedString(value, maxBytes); bounded != "" {
+			result = append(result, bounded)
+		}
+	}
+	return result
 }
 
 func requiredBoundedString(value string, maxBytes int, invalidMessage string) (string, *SafeError) {
