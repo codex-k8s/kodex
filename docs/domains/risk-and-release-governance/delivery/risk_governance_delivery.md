@@ -5,8 +5,8 @@ title: kodex — поставка governance-manager
 status: active
 owner_role: EM
 created_at: 2026-05-22
-updated_at: 2026-05-27
-related_issues: [322, 769, 790, 802, 815, 827, 845, 856, 869, 886, 907, 919, 957]
+updated_at: 2026-05-28
+related_issues: [322, 769, 790, 802, 815, 827, 845, 856, 869, 886, 907, 919, 957, 972]
 related_prs: []
 related_docsets:
   - docs/domains/risk-and-release-governance/product/requirements.md
@@ -56,6 +56,7 @@ approvals:
 | GOV-7f | без отдельного Issue | Runtime/deploy evidence refs принимаются через `RecordReleaseRuntimeEvidence`: release package дозаписывает только безопасные runtime refs, короткие сводки, status/error_code/digest/version, без чтения Kubernetes, БД `runtime-manager` или deploy scripts. |
 | GOV-7g | без отдельного Issue | Поверхность чтения runtime/deploy evidence готова для интерфейса владельца и персонала: `GetReleaseDecisionPackage` и `ListReleaseDecisionPackages` возвращают safe runtime refs, status, summary, `error_code`, timestamps, digest/version и связи с gate и release candidate; повтор с тем же fingerprint идемпотентен, конфликтующий fingerprint и устаревший status отклоняются. |
 | GOV-7h | #957 | Agent evidence refs принимаются через `RecordReleaseAgentEvidence`: release package дозаписывает только безопасные agent session/run/stage/acceptance/human gate refs, runtime job refs и локальные governance review/gate refs с status/summary/digest/timestamp/version, без чтения БД `agent-manager`, prompt/transcript, stdout/stderr, логов и workspace paths. |
+| GOV-7i | #972 | Потребитель agent acceptance evidence готов: `agent.acceptance.completed`/`failed` с явным `governance_release_decision_package_ref` дозаписываются в release package через `RecordReleaseAgentEvidence`; события без package ref подтверждаются без записи, без implicit lookup по project/run и без чтения БД `agent-manager`. |
 | GOV-7 | не назначено | Интеграции с `agent-manager`, `provider-hub`, `interaction-hub`, `runtime-manager`, `project-catalog` и `operations-hub` подключены через согласованные контракты. |
 | GOV-8 | без отдельного Issue | Эксплуатационный контур для первого backend deploy готов: Dockerfile, Kubernetes manifests, migration Job, env/secret inventory, проверка готовности, runbook и monitoring. Operator projections остаются отдельным operations-срезом. |
 | GOV-9 | #907 | Event-driven/read-model основа готова: `governance.*` decision lifecycle события несут safe metadata/refs/summary/idempotency correlation для consumers через `platform-event-log`, а authoritative lookup остаётся через gRPC. |
@@ -87,18 +88,19 @@ approvals:
 | Review signal refs intake | Готов для provider review/comment/check refs, agent run/session/acceptance refs и interaction decision/callback refs через typed `evidence_refs`; `governance-manager` хранит только signal projection metadata, нормализует refs, проверяет access и дедуплицирует повтор по source fingerprint. | GOV-7c |
 | Потребитель provider review signal | Готов для `provider.comment.synced`: approved/changes_requested provider review evidence превращается в локальный `RecordReviewSignal`, остальные review states ack-игнорируются, конфликтующий fingerprint poisonится без retry loop. | GOV-7d |
 | Потребитель interaction gate decision | Готов для `interaction.request.response_recorded`: обрабатываются только answered Human gate responses для `owner_service=governance_manager`, локального gate request ref и `response_action=approve/reject`; остальные владельцы подтверждаются без записи, неподдержанные action получают безопасный permanent diagnostic. | GOV-7e |
+| Потребитель agent acceptance evidence | Готов для `agent.acceptance.completed` и `agent.acceptance.failed`: обрабатываются только terminal acceptance events с явным `governance_release_decision_package_ref`; release package обновляется через `RecordReleaseAgentEvidence`, остальные события подтверждаются без записи. | GOV-7i |
 | Release decision lifecycle и safety-loop | Готовы для package build/read/list, decision request/submit/read/list, blocking signals и текущего safety-loop state на safe refs/summaries. | GOV-6 |
 | Release integration refs | Готовы для project/repository/release line, provider Issue/PR/check/review, agent run/acceptance, runtime job/deploy, local risk assessment и gate refs с bounded summaries/status/digest/timestamps/version; локальные governance refs обогащаются из repository, внешние refs получают safe summary diagnostic при отсутствии owner summary. | GOV-7b |
 | Эксплуатационный контур | Готов для первого backend deploy: service/migrations Dockerfile stages, Kubernetes ServiceAccount/Service/Deployment/Job, runtime env/secret inventory, PostgreSQL database bootstrap, проверка готовности, runbook и monitoring. | GOV-8 |
 | Event-driven/read-model основа | `governance.*` события для risk assessment, review signal, gate, blocking signal, release package/decision и safety-loop публикуют safe ids/refs/status/outcome/reason/safe summary/actor/request/idempotency metadata для consumers через `platform-event-log`. | GOV-9 |
-| Интеграции с `agent-manager`, `provider-hub`, `interaction-hub`, `runtime-manager` и `project-catalog` | Provider review events и interaction Human gate response events подключены как безопасные потребители событий; runtime/deploy и agent acceptance/review/runtime evidence refs принимаются через команды governance, когда вызывающая сторона уже знает release package; чтение release package возвращает безопасный evidence-снимок для интерфейса владельца и персонала; service-client чтения, provider write, delivery callbacks и deploy orchestration не реализованы; governance связывает безопасные refs без владения чужой доменной истиной. | GOV-7 |
+| Интеграции с `agent-manager`, `provider-hub`, `interaction-hub`, `runtime-manager` и `project-catalog` | Provider review events, interaction Human gate response events и agent acceptance terminal events с явной release package ссылкой подключены как безопасные потребители событий; runtime/deploy и agent acceptance/review/runtime evidence refs принимаются через команды governance, когда вызывающая сторона уже знает release package; чтение release package возвращает безопасный evidence-снимок для интерфейса владельца и персонала; service-client чтения, provider write, delivery callbacks и deploy orchestration не реализованы; governance связывает безопасные refs без владения чужой доменной истиной. | GOV-7 |
 
 ## Синхронизация с соседними доменами
 
 | Домен | Когда синхронизироваться | Причина |
 |---|---|---|
 | `projects-and-repositories` | Перед GOV-1 и GOV-5 | Нужны project/repository refs, services policy, branch rules, release policy, release line и risk profile refs без копирования проектной policy. |
-| `agent-orchestration` | Перед GOV-1, GOV-5 и GOV-7 | Нужны run/session/acceptance refs, role signals и ожидание governance decision. Agent evidence в release package принимается explicit refs через `RecordReleaseAgentEvidence`; прямой consumer `agent.acceptance.*` ждёт typed governance outcome. |
+| `agent-orchestration` | Перед GOV-1, GOV-5 и GOV-7 | Нужны run/session/acceptance refs, role signals и ожидание governance decision. Agent evidence в release package принимается explicit refs через `RecordReleaseAgentEvidence`; прямой consumer `agent.acceptance.completed`/`failed` работает только при явном `governance_release_decision_package_ref`, а review/risk signal consumer ждёт typed governance outcome. |
 | `provider-native-work-items` | Перед GOV-4 и GOV-5 | Нужны provider projections, changed file summary, comments/reviews/check refs и gate ref validation для provider writes. |
 | `runtime-and-fleet` | Перед GOV-7 | Runtime/deploy refs принимаются через `RecordReleaseRuntimeEvidence`; прямой consumer для `runtime.job.*` ждёт безопасную привязку события к governance package/gate ref. |
 | `interaction-hub` | Перед GOV-4 | Нужен delivery request/callback контракт для Human gate, reminders и escalation без владения decision state. |

@@ -83,6 +83,18 @@ type Config struct {
 	InteractionGateDecisionConsumerFailureLimit     int           `env:"KODEX_GOVERNANCE_MANAGER_INTERACTION_GATE_DECISION_CONSUMER_FAILURE_MESSAGE_LIMIT" envDefault:"512"`
 	InteractionGateDecisionConsumerConcurrencyLimit int           `env:"KODEX_GOVERNANCE_MANAGER_INTERACTION_GATE_DECISION_CONSUMER_CONCURRENCY_LIMIT" envDefault:"2"`
 	InteractionGateDecisionConsumerMaxAttempts      int           `env:"KODEX_GOVERNANCE_MANAGER_INTERACTION_GATE_DECISION_CONSUMER_MAX_ATTEMPTS" envDefault:"5"`
+	AgentAcceptanceEvidenceConsumerEnabled          bool          `env:"KODEX_GOVERNANCE_MANAGER_AGENT_ACCEPTANCE_EVIDENCE_CONSUMER_ENABLED" envDefault:"false"`
+	AgentAcceptanceEvidenceConsumerName             string        `env:"KODEX_GOVERNANCE_MANAGER_AGENT_ACCEPTANCE_EVIDENCE_CONSUMER_NAME" envDefault:"governance-manager.agent-acceptance-evidence"`
+	AgentAcceptanceEvidenceConsumerLeaseOwner       string        `env:"KODEX_GOVERNANCE_MANAGER_AGENT_ACCEPTANCE_EVIDENCE_CONSUMER_LEASE_OWNER"`
+	AgentAcceptanceEvidenceConsumerBatchSize        int           `env:"KODEX_GOVERNANCE_MANAGER_AGENT_ACCEPTANCE_EVIDENCE_CONSUMER_BATCH_SIZE" envDefault:"50"`
+	AgentAcceptanceEvidenceConsumerPollInterval     time.Duration `env:"KODEX_GOVERNANCE_MANAGER_AGENT_ACCEPTANCE_EVIDENCE_CONSUMER_POLL_INTERVAL" envDefault:"1s"`
+	AgentAcceptanceEvidenceConsumerLeaseTTL         time.Duration `env:"KODEX_GOVERNANCE_MANAGER_AGENT_ACCEPTANCE_EVIDENCE_CONSUMER_LEASE_TTL" envDefault:"30s"`
+	AgentAcceptanceEvidenceConsumerHandlerTimeout   time.Duration `env:"KODEX_GOVERNANCE_MANAGER_AGENT_ACCEPTANCE_EVIDENCE_CONSUMER_HANDLER_TIMEOUT" envDefault:"10s"`
+	AgentAcceptanceEvidenceConsumerRetryInitial     time.Duration `env:"KODEX_GOVERNANCE_MANAGER_AGENT_ACCEPTANCE_EVIDENCE_CONSUMER_RETRY_INITIAL_DELAY" envDefault:"1s"`
+	AgentAcceptanceEvidenceConsumerRetryMax         time.Duration `env:"KODEX_GOVERNANCE_MANAGER_AGENT_ACCEPTANCE_EVIDENCE_CONSUMER_RETRY_MAX_DELAY" envDefault:"1m"`
+	AgentAcceptanceEvidenceConsumerFailureLimit     int           `env:"KODEX_GOVERNANCE_MANAGER_AGENT_ACCEPTANCE_EVIDENCE_CONSUMER_FAILURE_MESSAGE_LIMIT" envDefault:"512"`
+	AgentAcceptanceEvidenceConsumerConcurrencyLimit int           `env:"KODEX_GOVERNANCE_MANAGER_AGENT_ACCEPTANCE_EVIDENCE_CONSUMER_CONCURRENCY_LIMIT" envDefault:"2"`
+	AgentAcceptanceEvidenceConsumerMaxAttempts      int           `env:"KODEX_GOVERNANCE_MANAGER_AGENT_ACCEPTANCE_EVIDENCE_CONSUMER_MAX_ATTEMPTS" envDefault:"5"`
 }
 
 // LoadConfig reads process configuration from environment variables.
@@ -153,6 +165,15 @@ func (cfg Config) Validate() error {
 		{name: "KODEX_GOVERNANCE_MANAGER_INTERACTION_GATE_DECISION_CONSUMER_FAILURE_MESSAGE_LIMIT", valid: cfg.InteractionGateDecisionConsumerFailureLimit > 0},
 		{name: "KODEX_GOVERNANCE_MANAGER_INTERACTION_GATE_DECISION_CONSUMER_CONCURRENCY_LIMIT", valid: cfg.InteractionGateDecisionConsumerConcurrencyLimit > 0},
 		{name: "KODEX_GOVERNANCE_MANAGER_INTERACTION_GATE_DECISION_CONSUMER_MAX_ATTEMPTS", valid: cfg.InteractionGateDecisionConsumerMaxAttempts > 0},
+		{name: "KODEX_GOVERNANCE_MANAGER_AGENT_ACCEPTANCE_EVIDENCE_CONSUMER_BATCH_SIZE", valid: cfg.AgentAcceptanceEvidenceConsumerBatchSize > 0},
+		{name: "KODEX_GOVERNANCE_MANAGER_AGENT_ACCEPTANCE_EVIDENCE_CONSUMER_POLL_INTERVAL", valid: cfg.AgentAcceptanceEvidenceConsumerPollInterval > 0},
+		{name: "KODEX_GOVERNANCE_MANAGER_AGENT_ACCEPTANCE_EVIDENCE_CONSUMER_LEASE_TTL", valid: cfg.AgentAcceptanceEvidenceConsumerLeaseTTL > 0},
+		{name: "KODEX_GOVERNANCE_MANAGER_AGENT_ACCEPTANCE_EVIDENCE_CONSUMER_HANDLER_TIMEOUT", valid: cfg.AgentAcceptanceEvidenceConsumerHandlerTimeout > 0},
+		{name: "KODEX_GOVERNANCE_MANAGER_AGENT_ACCEPTANCE_EVIDENCE_CONSUMER_RETRY_INITIAL_DELAY", valid: cfg.AgentAcceptanceEvidenceConsumerRetryInitial > 0},
+		{name: "KODEX_GOVERNANCE_MANAGER_AGENT_ACCEPTANCE_EVIDENCE_CONSUMER_RETRY_MAX_DELAY", valid: cfg.AgentAcceptanceEvidenceConsumerRetryMax >= cfg.AgentAcceptanceEvidenceConsumerRetryInitial},
+		{name: "KODEX_GOVERNANCE_MANAGER_AGENT_ACCEPTANCE_EVIDENCE_CONSUMER_FAILURE_MESSAGE_LIMIT", valid: cfg.AgentAcceptanceEvidenceConsumerFailureLimit > 0},
+		{name: "KODEX_GOVERNANCE_MANAGER_AGENT_ACCEPTANCE_EVIDENCE_CONSUMER_CONCURRENCY_LIMIT", valid: cfg.AgentAcceptanceEvidenceConsumerConcurrencyLimit > 0},
+		{name: "KODEX_GOVERNANCE_MANAGER_AGENT_ACCEPTANCE_EVIDENCE_CONSUMER_MAX_ATTEMPTS", valid: cfg.AgentAcceptanceEvidenceConsumerMaxAttempts > 0},
 	} {
 		if !item.valid {
 			return fmt.Errorf("%s is invalid", item.name)
@@ -195,6 +216,9 @@ func (cfg Config) Validate() error {
 	if cfg.InteractionGateDecisionConsumerEnabled && strings.TrimSpace(cfg.InteractionGateDecisionConsumerName) == "" {
 		return fmt.Errorf("KODEX_GOVERNANCE_MANAGER_INTERACTION_GATE_DECISION_CONSUMER_NAME is required when interaction gate decision consumer is enabled")
 	}
+	if cfg.AgentAcceptanceEvidenceConsumerEnabled && strings.TrimSpace(cfg.AgentAcceptanceEvidenceConsumerName) == "" {
+		return fmt.Errorf("KODEX_GOVERNANCE_MANAGER_AGENT_ACCEPTANCE_EVIDENCE_CONSUMER_NAME is required when agent acceptance evidence consumer is enabled")
+	}
 	if cfg.needsEventLogDatabase() && strings.TrimSpace(cfg.EventLogDatabaseDSN) == "" {
 		return fmt.Errorf("KODEX_GOVERNANCE_MANAGER_EVENT_LOG_DATABASE_DSN is required for event-log publisher or consumer")
 	}
@@ -210,6 +234,7 @@ func (cfg Config) Validate() error {
 func (cfg Config) needsEventLogDatabase() bool {
 	return cfg.ProviderReviewSignalConsumerEnabled ||
 		cfg.InteractionGateDecisionConsumerEnabled ||
+		cfg.AgentAcceptanceEvidenceConsumerEnabled ||
 		(cfg.OutboxDispatchEnabled && strings.TrimSpace(cfg.OutboxPublisherKind) == outboxlib.PublisherKindPostgresEventLog)
 }
 
@@ -265,11 +290,25 @@ func (cfg Config) interactionGateDecisionConsumerLeaseOwner() string {
 	return leaseOwner
 }
 
+// AgentAcceptanceEvidenceConsumerConfig собирает runtime-настройки shared event consumer.
+func (cfg Config) AgentAcceptanceEvidenceConsumerConfig() eventconsumer.Config {
+	return cfg.eventConsumerConfig(consumerKindAgentAcceptanceEvidence)
+}
+
+func (cfg Config) agentAcceptanceEvidenceConsumerLeaseOwner() string {
+	leaseOwner := strings.TrimSpace(cfg.AgentAcceptanceEvidenceConsumerLeaseOwner)
+	if leaseOwner == "" {
+		return eventconsumer.DefaultLeaseOwner("governance-agent-acceptance-evidence")
+	}
+	return leaseOwner
+}
+
 type governanceConsumerKind string
 
 const (
 	consumerKindProviderReviewSignal    governanceConsumerKind = "provider_review_signal"
 	consumerKindInteractionGateDecision governanceConsumerKind = "interaction_gate_decision"
+	consumerKindAgentAcceptanceEvidence governanceConsumerKind = "agent_acceptance_evidence"
 )
 
 func (cfg Config) eventConsumerConfig(kind governanceConsumerKind) eventconsumer.Config {
@@ -299,6 +338,18 @@ func (cfg Config) eventConsumerConfig(kind governanceConsumerKind) eventconsumer
 		runtime.BatchSize = cfg.InteractionGateDecisionConsumerBatchSize
 		runtime.LeaseOwner = cfg.interactionGateDecisionConsumerLeaseOwner()
 		runtime.Name = strings.TrimSpace(cfg.InteractionGateDecisionConsumerName)
+	case consumerKindAgentAcceptanceEvidence:
+		runtime.Name = strings.TrimSpace(cfg.AgentAcceptanceEvidenceConsumerName)
+		runtime.MaxAttempts = cfg.AgentAcceptanceEvidenceConsumerMaxAttempts
+		runtime.LeaseOwner = cfg.agentAcceptanceEvidenceConsumerLeaseOwner()
+		runtime.ConcurrencyLimit = cfg.AgentAcceptanceEvidenceConsumerConcurrencyLimit
+		runtime.BatchSize = cfg.AgentAcceptanceEvidenceConsumerBatchSize
+		runtime.FailureLimit = cfg.AgentAcceptanceEvidenceConsumerFailureLimit
+		runtime.PollInterval = cfg.AgentAcceptanceEvidenceConsumerPollInterval
+		runtime.RetryMax = cfg.AgentAcceptanceEvidenceConsumerRetryMax
+		runtime.LeaseTTL = cfg.AgentAcceptanceEvidenceConsumerLeaseTTL
+		runtime.RetryInitial = cfg.AgentAcceptanceEvidenceConsumerRetryInitial
+		runtime.HandlerTimeout = cfg.AgentAcceptanceEvidenceConsumerHandlerTimeout
 	}
 	return governanceEventConsumerConfig(runtime.Name, runtime.LeaseOwner, runtime.BatchSize, runtime.PollInterval, runtime.LeaseTTL, runtime.HandlerTimeout, runtime.RetryInitial, runtime.RetryMax, runtime.FailureLimit, runtime.ConcurrencyLimit, runtime.MaxAttempts)
 }

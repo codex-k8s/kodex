@@ -121,12 +121,20 @@
 - Для `agent` refs проверяются известные lifecycle statuses acceptance/run/human gate/session; повтор с тем же fingerprint/digest идемпотентен, конфликтующий fingerprint отклоняется, устаревший status не перезаписывает сохранённый факт, `closed` package не меняется.
 - `governance-manager` не читает БД `agent-manager`, runtime/Kubernetes, provider payload, prompt body, transcript, raw tool input/output, stdout/stderr, workspace paths, секреты и большие логи.
 
+## Завершённый срез потребителя agent acceptance evidence
+
+- Issue: #972.
+- Результат среза: `governance-manager` потребляет `agent.acceptance.completed` и `agent.acceptance.failed` из `agent-manager` через `libs/go/eventconsumer`, когда событие содержит явный `governance_release_decision_package_ref`.
+- Consumer читает только локальный release package для expected version и вызывает существующий `RecordReleaseAgentEvidence`; сохраняются acceptance/session/run/stage refs, runtime job ref, status, короткий `summary`, `digest`, `observed_at`, version и event idempotency fingerprint.
+- Событие без package ref подтверждается без записи; некорректная package ref, status не по типу события, неизвестный package или конфликтующий fingerprint получают безопасный permanent diagnostic без retry storm.
+- `governance-manager` не делает implicit lookup release package по project/repository/run и не читает БД `agent-manager`, runtime/Kubernetes, provider API, prompt/transcript, raw tool input/output, stdout/stderr, workspace paths, секреты или большие логи.
+
 ## Ближайшие зависимости
 
 | Домен | Что нужно согласовать |
 |---|---|
 | `projects-and-repositories` | Project/repository refs, services policy, branch rules, release policy, release line и risk profile refs. |
-| `agent-orchestration` | Run/session/acceptance refs, role review signals и ожидание governance decision; explicit agent evidence refs уже принимаются командой governance, а события `agent.acceptance.*` пока не дают typed governance outcome для прямого review/risk signal. |
+| `agent-orchestration` | Run/session/acceptance refs, role review signals и ожидание governance decision; explicit agent evidence refs уже принимаются командой governance, а `agent.acceptance.completed`/`failed` подключены только как release package evidence при явном package ref. Для прямого review/risk signal нужен typed governance outcome. |
 | `provider-native-work-items` | PR/MR projections, changed file summary, provider review/comment/check refs и validation gate refs для provider write operations. |
 | `runtime-and-fleet` | Runtime/deploy refs уже принимаются командой по известному release package; для прямого consumer нужен owner event с безопасной package/gate привязкой. |
 | `interaction-hub` | Delivery request/callback контракт для Human gate без владения decision state; ответ владельца уже принимается через `interaction.request.response_recorded` только для локального governance gate decision. |
