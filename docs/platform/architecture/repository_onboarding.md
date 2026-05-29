@@ -108,6 +108,16 @@ approvals:
 
 В реализованном project-side контуре пустого репозитория покрыты пять шагов модели C: создание provider-native репозитория с фиксацией `base_branch` в project-owned binding, создание bootstrap PR по уже подготовленному payload, event consumer для safe merge signal, event-driven вызов `ReconcileBootstrapMergeSignal` при наличии checked artifact/payload, импорт проверенной `services.yaml` после merge с активацией binding и project-side журнал результата обработки provider signal. Для существующего репозитория добавлен симметричный project-side import path после adoption merge: lightweight scan остаётся planning-сигналом, а checked artifact/payload из `provider.repository.adoption_merged` запускает `ReconcileAdoptionMergeSignal`, импорт checked projection и активацию или обновление binding. Provider-side контур фиксирует safe merge signal и lightweight snapshot существующего репозитория, отдаёт эти provider-owned данные через gRPC read surface, но выбор и применение шаблона, deep workspace scan/report и adoption decision остаются отдельными шагами модели C.
 
+### Проверочный Go runner через product API
+
+Минимальный проверочный контур onboarding живёт в `cmd/onboarding-runner`. Это отдельный Go runner, а не `shell` smoke и не скрытый consumer. Он использует только публичные gRPC product API `project-catalog` и `provider-hub`, не читает внутренние таблицы, не вызывает GitHub/GitLab напрямую и не собирает сырой `services.yaml`.
+
+Режим по умолчанию — dry-run/plan. Runner проверяет доступность `project-catalog`, `provider-hub`, project/repository binding, provider-owned merge signal read surface, adoption scan read surface и наличие checked input для bootstrap/adoption reconciliation. В этом режиме не выполняются mutating RPC.
+
+Режим apply включается только явным `--apply` или `KODEX_ONBOARDING_RUNNER_APPLY=true` и требует safe target policy: разрешённый provider owner и префикс тестового repository name. Apply вызывает `ReconcileBootstrapMergeSignal` и `ReconcileAdoptionMergeSignal` только при наличии checked scenario input: safe provider merge refs, artifact ref/digest/version, `content_hash`, watermark payload и нормализованный checked `validated_payload_json`. Эти значения передаются в product API как typed input, но runner не печатает сырой YAML, webhook body, provider response, diff, token, DSN, private URL или полный checked payload.
+
+Runner не создаёт реальный GitHub repository/branch/PR и не подменяет подготовку checked artifact. Создание provider repo/PR, подготовка файлов, проверка `services.yaml`, импорт политики и consumer path остаются у сервисов-владельцев. Следующий расширяющий срез может добавить product-API apply для создания тестового repo/PR только при наличии безопасного производителя checked artifact и той же target policy.
+
 ### Существующий репозиторий
 
 1. Пользователь или оператор указывает provider ref существующего репозитория.
