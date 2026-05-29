@@ -119,6 +119,10 @@ func createDeployPlanRepo(t *testing.T, includeServiceImage bool) string {
       value: "pg16"
     platform-event-log:
       value: "0.1.0"
+    traefik:
+      value: "v3"
+    oauth2-proxy:
+      value: "v7"
   images:
     postgres:
       from: 'pgvector/pgvector:{{ version "pgvector" }}'
@@ -133,6 +137,10 @@ func createDeployPlanRepo(t *testing.T, includeServiceImage bool) string {
     platform-event-log-migrations:
       repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/kodex/platform-event-log-migrations'
       tagTemplate: '{{ version "platform-event-log" }}'
+    traefik:
+      from: 'traefik:{{ version "traefik" }}'
+    oauth2-proxy:
+      from: 'oauth2-proxy:{{ version "oauth2-proxy" }}'
 ` + serviceImage + `  deployableServices:
     - name: access-manager
       status: foundation
@@ -167,6 +175,13 @@ stringData:
 	writeFile(t, repoRoot, "deploy/base/bootstrap-foundation/registry.yaml.tpl", "image: {{ image \"registry\" }}\n")
 	writeFile(t, repoRoot, "deploy/base/bootstrap-builder-smoke/kustomization.yaml.tpl", "resources:\n  - kaniko-smoke.yaml\n")
 	writeFile(t, repoRoot, "deploy/base/bootstrap-builder-smoke/kaniko-smoke.yaml.tpl", "image: {{ image \"kaniko-executor\" }}\n")
+	writeFile(t, repoRoot, "deploy/base/web-public-foundation/kustomization.yaml.tpl", "resources:\n  - traefik.yaml\n  - cluster-issuer.yaml\n")
+	writeFile(t, repoRoot, "deploy/base/web-public-foundation/traefik.yaml.tpl", "image: {{ image \"traefik\" }}\n")
+	writeFile(t, repoRoot, "deploy/base/web-public-foundation/cluster-issuer.yaml.tpl", "email: {{ env \"KODEX_LETSENCRYPT_EMAIL\" }}\n")
+	writeFile(t, repoRoot, "deploy/base/web-console-public/kustomization.yaml.tpl", "resources:\n  - oauth2-proxy.yaml\n  - certificate.yaml\n  - ingress.yaml\n")
+	writeFile(t, repoRoot, "deploy/base/web-console-public/oauth2-proxy.yaml.tpl", "image: {{ image \"oauth2-proxy\" }}\n")
+	writeFile(t, repoRoot, "deploy/base/web-console-public/certificate.yaml.tpl", "dns: {{ envOr \"KODEX_PRODUCTION_DOMAIN\" \"platform.kodex.works\" }}\n")
+	writeFile(t, repoRoot, "deploy/base/web-console-public/ingress.yaml.tpl", "host: {{ envOr \"KODEX_PRODUCTION_DOMAIN\" \"platform.kodex.works\" }}\n")
 	writeFile(t, repoRoot, "deploy/base/access-manager/kustomization.yaml.tpl", "resources:\n  - access-manager.yaml\n")
 	writeFile(t, repoRoot, "deploy/base/access-manager/access-manager.yaml.tpl", "image: {{ image \"access-manager\" }}\n")
 	writeFile(t, repoRoot, "deploy/base/access-manager/migrations.yaml.tpl", "image: {{ image \"access-manager-migrations\" }}\n")

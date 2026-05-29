@@ -159,6 +159,8 @@ spec:
       bumpOn:
         - services/staff/web-console
         - deploy/base/web-console
+        - deploy/base/web-public-foundation
+        - deploy/base/web-console-public
         - specs/openapi/staff-gateway.v1.yaml
     runtime-manager:
       value: "0.1.0"
@@ -297,6 +299,12 @@ spec:
       value: "22.13.1-alpine"
     nginx-unprivileged:
       value: "1.27-alpine"
+    traefik:
+      value: "v3.7.1"
+    cert-manager:
+      value: "v1.20.2"
+    oauth2-proxy:
+      value: "v7.15.2"
   images:
     golang-alpine:
       type: external
@@ -330,6 +338,14 @@ spec:
       type: external
       from: 'nginxinc/nginx-unprivileged:{{ version "nginx-unprivileged" }}'
       local: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/kodex/mirror/nginx-unprivileged:{{ version "nginx-unprivileged" }}'
+    traefik:
+      type: external
+      from: 'traefik:{{ version "traefik" }}'
+      local: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/kodex/mirror/traefik:{{ version "traefik" }}'
+    oauth2-proxy:
+      type: external
+      from: 'quay.io/oauth2-proxy/oauth2-proxy:{{ version "oauth2-proxy" }}'
+      local: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/kodex/mirror/oauth2-proxy:{{ version "oauth2-proxy" }}'
     access-manager:
       type: build
       repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_ACCESS_MANAGER_INTERNAL_IMAGE_REPOSITORY" "kodex/access-manager" }}'
@@ -824,7 +840,7 @@ spec:
       implementation:
         businessState: none
         description: staff frontend static bundle served by nginx and proxied to staff-gateway through same-origin /v1
-        ingress: not-selected
+        ingress: public-web-contour-through-oauth2-proxy
         runtimeConfig: nginx ConfigMap proxy only; Vite defaults are build-time and remain non-secret
       deploy:
         serviceManifest: deploy/base/web-console/web-console.yaml.tpl
@@ -1116,6 +1132,28 @@ spec:
         - deploy/base/bootstrap-builder-smoke/kaniko-smoke.yaml.tpl
         - deploy/base/bootstrap-builder-smoke/kaniko-smoke.Dockerfile
         - deploy/base/bootstrap-builder-smoke/kaniko-smoke.marker
+    - name: web-public-foundation
+      path: deploy/base/web-public-foundation/kustomization.yaml.tpl
+      renderMode: kustomize
+      purpose: public-ingress-controller-and-letsencrypt-issuer
+      requires:
+        - cert-manager
+      includes:
+        - deploy/base/web-public-foundation/traefik-public-ingress.yaml.tpl
+        - deploy/base/web-public-foundation/cluster-issuer.yaml.tpl
+    - name: web-console-public
+      path: deploy/base/web-console-public/kustomization.yaml.tpl
+      renderMode: kustomize
+      purpose: public-web-console-oauth2-proxy-ingress-and-tls
+      requires:
+        - web-console
+        - staff-gateway
+        - web-public-foundation
+      includes:
+        - deploy/base/web-console-public/oauth2-proxy.yaml.tpl
+        - deploy/base/web-console-public/certificate.yaml.tpl
+        - deploy/base/web-console-public/ingress.yaml.tpl
+        - deploy/base/web-console-public/authenticated-emails.txt
     - name: postgres-stack
       path: deploy/base/postgres/kustomization.yaml.tpl
       renderMode: kustomize

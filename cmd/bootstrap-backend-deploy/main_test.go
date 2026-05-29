@@ -123,6 +123,7 @@ func TestSelectBackendRings(t *testing.T) {
 		{name: "staff", value: "staff", want: []string{"staff"}},
 		{name: "mcp", value: "mcp", want: []string{"mcp"}},
 		{name: "web", value: "web", want: []string{"web"}},
+		{name: "web-public", value: "web-public", want: []string{"web-public"}},
 		{name: "all", value: "all", want: []string{"first", "second"}},
 	}
 	for _, tt := range tests {
@@ -143,7 +144,7 @@ func TestSelectBackendRingsRejectsUnsupportedValue(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected unsupported ring to fail")
 	}
-	if !strings.Contains(err.Error(), "expected first, second, staff, mcp, web, or all") {
+	if !strings.Contains(err.Error(), "expected first, second, staff, mcp, web, web-public, or all") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -284,8 +285,117 @@ func TestWebRingDoesNotApplyBackendFoundation(t *testing.T) {
 	if requiresBackendFoundation([]backendRing{webRing}) {
 		t.Fatal("web-console deploy must not rerun PostgreSQL foundation or backend migrations")
 	}
+	if requiresWorkloadDeploy([]backendRing{webPublicRing}) {
+		t.Fatal("web-public deploy must not rerun workload build, registry or backend manifests")
+	}
 	if !requiresBackendFoundation([]backendRing{staffRing}) {
 		t.Fatal("existing staff deploy behavior must keep backend foundation checks")
+	}
+}
+
+func TestWebPublicRingHasNoDirectWebConsoleService(t *testing.T) {
+	if !hasPublicWebRing([]backendRing{webPublicRing}) {
+		t.Fatal("web-public ring must be marked as a public web contour")
+	}
+	if len(servicesForRings([]backendRing{webPublicRing})) != 0 {
+		t.Fatal("web-public ring must not deploy web-console workload directly")
+	}
+	if len(imageNamesForRings([]backendRing{webPublicRing})) != 0 {
+		t.Fatal("web-public ring must not build workload images")
+	}
+}
+
+func TestLoadWebPublicConfigRequiresCurrentProductionDomain(t *testing.T) {
+	stack, err := stackinventory.Parse([]byte(testStackInventory(nil)))
+	if err != nil {
+		t.Fatalf("parse stack: %v", err)
+	}
+	t.Setenv("KODEX_PRODUCTION_DOMAIN", "platform.kodex.works")
+	t.Setenv("KODEX_PUBLIC_BASE_URL", "https://platform.kodex.works")
+	t.Setenv("KODEX_LETSENCRYPT_EMAIL", "owner@example.test")
+	config, err := loadWebPublicConfig(stack)
+	if err != nil {
+		t.Fatalf("load public config: %v", err)
+	}
+	if config.Domain != "platform.kodex.works" || config.PublicBaseURL != "https://platform.kodex.works" || config.CertManagerVersion != "v1.20.2" {
+		t.Fatalf("unexpected public config: %+v", config)
+	}
+}
+
+func TestLoadWebPublicConfigRejectsWrongDomain(t *testing.T) {
+	stack, err := stackinventory.Parse([]byte(testStackInventory(nil)))
+	if err != nil {
+		t.Fatalf("parse stack: %v", err)
+	}
+	t.Setenv("KODEX_PRODUCTION_DOMAIN", "example.test")
+	t.Setenv("KODEX_PUBLIC_BASE_URL", "https://platform.kodex.works")
+	t.Setenv("KODEX_LETSENCRYPT_EMAIL", "owner@example.test")
+	_, err = loadWebPublicConfig(stack)
+	if err == nil {
+		t.Fatal("expected domain mismatch to fail")
+	}
+	if !strings.Contains(err.Error(), "KODEX_PRODUCTION_DOMAIN") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestResolveWebPublicOAuthSecretValuesPreservesExistingAndRequiresOAuthSeeds(t *testing.T) {
+	values, generated, err := resolveWebPublicOAuthSecretValues(map[string]string{
+		"KODEX_GITHUB_OAUTH_CLIENT_ID":     "existing-client-id",
+		"KODEX_GITHUB_OAUTH_CLIENT_SECRET": "existing-client-secret",
+		"KODEX_OAUTH2_PROXY_COOKIE_SECRET": "0123456789abcdef0123456789abcdef",
+	}, func(string) (string, bool) { return "", false })
+	if err != nil {
+		t.Fatalf("resolve existing public OAuth secret: %v", err)
+	}
+	if values["KODEX_GITHUB_OAUTH_CLIENT_ID"] != "existing-client-id" || len(generated) != 0 {
+		t.Fatalf("existing values were not preserved: values=%v generated=%v", values, generated)
+	}
+
+	values, generated, err = resolveWebPublicOAuthSecretValues(map[string]string{}, func(key string) (string, bool) {
+		switch key {
+		case "KODEX_GITHUB_OAUTH_CLIENT_ID":
+			return "env-client-id", true
+		case "KODEX_GITHUB_OAUTH_CLIENT_SECRET":
+			return "env-client-secret", true
+		default:
+			return "", false
+		}
+	})
+	if err != nil {
+		t.Fatalf("resolve env public OAuth secret: %v", err)
+	}
+	for _, key := range []string{"KODEX_GITHUB_OAUTH_CLIENT_ID", "KODEX_GITHUB_OAUTH_CLIENT_SECRET", "KODEX_OAUTH2_PROXY_COOKIE_SECRET"} {
+		if values[key] == "" {
+			t.Fatalf("missing resolved key %s", key)
+		}
+	}
+	if len(generated) != 3 {
+		t.Fatalf("expected three created keys, got %v", generated)
+	}
+	if !validOAuth2CookieSecret(values["KODEX_OAUTH2_PROXY_COOKIE_SECRET"]) {
+		t.Fatalf("invalid generated cookie secret length: %d", len(values["KODEX_OAUTH2_PROXY_COOKIE_SECRET"]))
+	}
+
+	_, _, err = resolveWebPublicOAuthSecretValues(map[string]string{}, func(key string) (string, bool) {
+		switch key {
+		case "KODEX_GITHUB_OAUTH_CLIENT_ID":
+			return "env-client-id", true
+		case "KODEX_GITHUB_OAUTH_CLIENT_SECRET":
+			return "env-client-secret", true
+		case "KODEX_OAUTH2_PROXY_COOKIE_SECRET":
+			return "invalid-cookie-secret-length", true
+		default:
+			return "", false
+		}
+	})
+	if err == nil {
+		t.Fatal("expected invalid explicit cookie secret to fail")
+	}
+
+	_, _, err = resolveWebPublicOAuthSecretValues(map[string]string{}, func(string) (string, bool) { return "", false })
+	if err == nil {
+		t.Fatal("expected missing OAuth client seeds to fail")
 	}
 }
 
@@ -335,6 +445,7 @@ func testStackInventory(imageNames []string) string {
 	versionNames["golang-alpine"] = true
 	versionNames["node-alpine"] = true
 	versionNames["nginx-unprivileged"] = true
+	versionNames["cert-manager"] = true
 	versions := "spec:\n  versions:\n"
 	names := make([]string, 0, len(versionNames))
 	for name := range versionNames {
@@ -350,6 +461,8 @@ func testStackInventory(imageNames []string) string {
 			value = "22.13.1-alpine"
 		case "nginx-unprivileged":
 			value = "1.27-alpine"
+		case "cert-manager":
+			value = "v1.20.2"
 		}
 		versions += `    ` + name + `:
       value: "` + value + `"

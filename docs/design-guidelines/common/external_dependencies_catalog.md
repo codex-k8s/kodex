@@ -85,6 +85,9 @@
 | `kaniko` | CI build pipeline | сборка образа внутри кластера |
 | `node` image | frontend build pipeline | сборка Vite bundle для `web-console` внутри Kaniko job; версия фиксируется в `services.yaml` как `node-alpine` |
 | `nginxinc/nginx-unprivileged` image | frontend runtime | non-root runtime для отдачи static bundle `web-console`; версия фиксируется в `services.yaml` как `nginx-unprivileged` |
+| `traefik` image | public web ingress | Kubernetes `IngressClass`/controller для публичного HTTPS-доступа к `web-console`; версия фиксируется в `services.yaml` как `traefik` |
+| `cert-manager` static manifest | TLS certificates | выпуск Let’s Encrypt `Certificate` для публичного web-contour; версия фиксируется в `services.yaml` как `cert-manager` |
+| `oauth2-proxy` image | public web authentication | GitHub OAuth gate перед `web-console`; версия фиксируется в `services.yaml` как `oauth2-proxy` |
 | `goose` (`v3.26.0`) | запуск миграций БД | применение `-- +goose Up/Down` миграций в production-задании миграций |
 | `@openai/codex` (CLI) | `services/jobs/agent-runner` runtime | выполнение `codex exec`/`resume` в агентном Job-контуре Day4 |
 | `github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen` | Make codegen pipeline | генерация Go transport-артефактов из OpenAPI |

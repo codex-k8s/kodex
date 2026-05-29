@@ -1,0 +1,6 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: {{ envOr "KODEX_PRODUCTION_NAMESPACE" "kodex-prod" }}
+resources:
+  - traefik-public-ingress.yaml
+  - cluster-issuer.yaml
