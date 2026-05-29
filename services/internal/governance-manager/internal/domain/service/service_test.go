@@ -3319,6 +3319,41 @@ func TestGetGovernanceSummaryRejectsEmptyScope(t *testing.T) {
 	}
 }
 
+func TestGetGovernanceSummaryRejectsMixedScopeSelectors(t *testing.T) {
+	t.Parallel()
+
+	packageID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+	cases := map[string]entity.GovernanceSummaryScope{
+		"package and integration ref": {
+			ReleaseDecisionPackageID: &packageID,
+			IntegrationRef:           value.ReleaseIntegrationRef{Domain: "agent", Kind: "run", Ref: "agent:run:42"},
+		},
+		"target and project": {
+			Target:         value.ExternalRef{Type: "release_candidate", Ref: "release:v1.2.3"},
+			ProjectContext: value.ProjectContextRef{ProjectRef: "project:other"},
+		},
+		"project and release candidate": {
+			ProjectContext:      value.ProjectContextRef{ProjectRef: "project:alpha"},
+			ReleaseCandidateRef: "release:v1.2.3",
+		},
+	}
+	for name, scope := range cases {
+		name := name
+		scope := scope
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := newTestService(&fakeRepository{ready: true}).GetGovernanceSummary(context.Background(), GetGovernanceSummaryInput{
+				Scope: scope,
+				Meta:  QueryMeta{Actor: value.Actor{Type: "user", ID: "owner"}},
+			})
+			if !errors.Is(err, errs.ErrInvalidArgument) {
+				t.Fatalf("GetGovernanceSummary() error = %v, want ErrInvalidArgument", err)
+			}
+		})
+	}
+}
+
 func summaryHasDecision(items []entity.GovernanceDecisionSummary, kind enum.GovernanceDecisionSummaryKind, id string, attention enum.GovernanceDecisionAttention) bool {
 	for _, item := range items {
 		if item.Kind == kind && item.ID == id && item.Attention == attention {

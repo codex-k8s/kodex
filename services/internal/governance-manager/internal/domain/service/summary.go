@@ -114,14 +114,30 @@ func normalizeGovernanceSummaryScope(scope entity.GovernanceSummaryScope) (entit
 		}
 		result.IntegrationRef = refs[0]
 	}
-	if !externalRefProvided(result.Target) &&
-		!projectContextSummaryFilterProvided(result.ProjectContext) &&
-		result.ReleaseCandidateRef == "" &&
-		result.ReleaseDecisionPackageID == nil &&
-		!releaseIntegrationRefProvided(result.IntegrationRef) {
+	if governanceSummarySelectorCount(result) != 1 {
 		return entity.GovernanceSummaryScope{}, errs.ErrInvalidArgument
 	}
 	return result, nil
+}
+
+func governanceSummarySelectorCount(scope entity.GovernanceSummaryScope) int {
+	count := 0
+	if externalRefProvided(scope.Target) {
+		count++
+	}
+	if projectContextSummaryFilterProvided(scope.ProjectContext) {
+		count++
+	}
+	if strings.TrimSpace(scope.ReleaseCandidateRef) != "" {
+		count++
+	}
+	if scope.ReleaseDecisionPackageID != nil {
+		count++
+	}
+	if releaseIntegrationRefProvided(scope.IntegrationRef) {
+		count++
+	}
+	return count
 }
 
 func (s *Service) appendTargetGovernanceSummary(ctx context.Context, meta QueryMeta, summary *entity.GovernanceSummary, seen *governanceSummarySeen, target value.ExternalRef) error {

@@ -129,10 +129,10 @@
 - Событие без package ref подтверждается без записи; некорректная package ref, status не по типу события, неизвестный package или конфликтующий fingerprint получают безопасный permanent diagnostic без retry storm.
 - `governance-manager` не делает implicit lookup release package по project/repository/run и не читает БД `agent-manager`, runtime/Kubernetes, provider API, prompt/transcript, raw tool input/output, stdout/stderr, workspace paths, секреты или большие логи.
 
-## Завершённый срез срез сводки чтения governance
+## Завершённый срез сводки чтения governance
 
 - Issue: #976.
-- Результат среза: `governance-manager` отдаёт `GetGovernanceSummary` для safe модели чтения по target/project/release/package/integration ref.
+- Результат среза: `governance-manager` отдаёт `GetGovernanceSummary` для safe модели чтения по одному selector: target, project, release, package или integration ref.
 - Summary содержит pending/completed decisions, risk class, review outcome, gate request/decision outcome, release package/decision state, blocking/safety-loop state, linked provider/agent/runtime evidence refs, короткие `safe_summary`, timestamps, digest/version и partial diagnostics.
 - `staff-gateway` и будущий `web-console` получают готовую доменную сводку и не вычисляют governance-правила; gateway endpoint и UI остаются отдельными срезами.
 - Сырые provider payload, prompt/transcript, raw tool input/output, stdout/stderr, runtime logs, workspace paths, секреты и большие детали не возвращаются.
