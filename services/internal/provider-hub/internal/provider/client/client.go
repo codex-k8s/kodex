@@ -140,3 +140,23 @@ type Adapter interface {
 	ProbeAccount(context.Context, AccountProbeRequest) (AccountProbeResult, error)
 	Reconcile(context.Context, ReconciliationRequest) (ReconciliationResult, error)
 }
+
+// WebhookRefetchRequest описывает безопасное повторное чтение provider-факта без raw webhook body.
+type WebhookRefetchRequest struct {
+	Credential AccountCredential
+	Webhook    entity.WebhookEvent
+	Envelope   value.WebhookPayloadEnvelope
+	ObservedAt time.Time
+}
+
+// WebhookRefetchResult возвращает нормализованные safe facts после provider API read.
+type WebhookRefetchResult struct {
+	Facts value.ProviderWebhookFacts
+	OK    bool
+}
+
+// WebhookRefetcher умеет перечитать поддержанный webhook-факт по safe refs.
+type WebhookRefetcher interface {
+	ProviderSlug() enum.ProviderSlug
+	RefetchWebhook(context.Context, WebhookRefetchRequest) (WebhookRefetchResult, error)
+}
