@@ -515,6 +515,28 @@ func TestSessionRunHandlersMapRequests(t *testing.T) {
 			}
 			return run, nil
 		},
+		reportAgentRunState: func(_ context.Context, input agentservice.ReportAgentRunStateInput) (entity.AgentRun, error) {
+			if input.RunID != runID || input.SessionID != sessionID || input.RuntimeSlotRef != "slot-1" || input.RuntimeJobRef != "job-1" {
+				t.Fatalf("report run input = %+v", input)
+			}
+			if input.State != agentservice.RunnerRunStateRunning || input.SafeSummary == nil || *input.SafeSummary != "runner started" {
+				t.Fatalf("runner report = %+v", input)
+			}
+			run := entity.AgentRun{
+				VersionedBase:           entity.VersionedBase{ID: runID, Version: expectedVersion + 2, CreatedAt: sampleTime(), UpdatedAt: sampleTime()},
+				SessionID:               sessionID,
+				RoleProfileID:           roleID,
+				RoleProfileVersion:      1,
+				RoleProfileDigest:       "sha256:role",
+				PromptTemplateVersionID: promptVersionID,
+				PromptTemplateDigest:    "sha256:prompt",
+				RuntimeContext:          value.RuntimeContextRef{SlotRef: input.RuntimeSlotRef, JobRef: input.RuntimeJobRef},
+				ProviderTarget:          value.ProviderTargetRef{WorkItemRef: "github:issue:42"},
+				Status:                  enum.AgentRunStatusRunning,
+				ResultSummary:           *input.SafeSummary,
+			}
+			return run, nil
+		},
 		getAgentRunRuntimeStatus: func(_ context.Context, input agentservice.GetAgentRunRuntimeStatusInput) (agentservice.AgentRunRuntimeStatusResult, error) {
 			if input.RunID != runID || input.Meta.Actor.ID != "operator-1" {
 				t.Fatalf("runtime status input = %+v", input)
@@ -606,6 +628,21 @@ func TestSessionRunHandlersMapRequests(t *testing.T) {
 	}
 	if recordedRun.GetRun().GetRuntimeContext().GetSlotRef() != "slot-1" {
 		t.Fatalf("recorded run = %+v", recordedRun.GetRun())
+	}
+	reportedRun, err := server.ReportAgentRunState(context.Background(), &agentsv1.ReportAgentRunStateRequest{
+		Meta:           commandMeta("11111111-2222-3333-4444-555555555558", "", &expectedVersion),
+		RunId:          runID.String(),
+		SessionId:      sessionID.String(),
+		RuntimeSlotRef: "slot-1",
+		RuntimeJobRef:  "job-1",
+		State:          agentsv1.AgentRunnerRunState_AGENT_RUNNER_RUN_STATE_RUNNING,
+		SafeSummary:    ptr("runner started"),
+	})
+	if err != nil {
+		t.Fatalf("ReportAgentRunState() error = %v", err)
+	}
+	if reportedRun.GetRun().GetRuntimeContext().GetJobRef() != "job-1" || reportedRun.GetRun().GetResultSummary() != "runner started" {
+		t.Fatalf("reported run = %+v", reportedRun.GetRun())
 	}
 	runtimeStatus, err := server.GetAgentRunRuntimeStatus(context.Background(), &agentsv1.GetAgentRunRuntimeStatusRequest{
 		Meta:  queryMeta(),
@@ -1210,6 +1247,7 @@ type fakeAgentService struct {
 	getAgentSession             func(context.Context, uuid.UUID) (entity.AgentSession, error)
 	startAgentRun               func(context.Context, agentservice.StartAgentRunInput) (entity.AgentRun, error)
 	recordRunState              func(context.Context, agentservice.RecordRunStateInput) (entity.AgentRun, error)
+	reportAgentRunState         func(context.Context, agentservice.ReportAgentRunStateInput) (entity.AgentRun, error)
 	getAgentRunRuntimeStatus    func(context.Context, agentservice.GetAgentRunRuntimeStatusInput) (agentservice.AgentRunRuntimeStatusResult, error)
 	recordSessionSnapshot       func(context.Context, agentservice.RecordSessionStateSnapshotInput) (agentservice.SessionSnapshotResult, error)
 	listAgentRuns               func(context.Context, agentservice.AgentRunList) ([]entity.AgentRun, value.PageResult, error)
@@ -1373,6 +1411,13 @@ func (f *fakeAgentService) RecordRunState(ctx context.Context, input agentservic
 		return entity.AgentRun{}, errs.ErrPreconditionFailed
 	}
 	return f.recordRunState(ctx, input)
+}
+
+func (f *fakeAgentService) ReportAgentRunState(ctx context.Context, input agentservice.ReportAgentRunStateInput) (entity.AgentRun, error) {
+	if f.reportAgentRunState == nil {
+		return entity.AgentRun{}, errs.ErrPreconditionFailed
+	}
+	return f.reportAgentRunState(ctx, input)
 }
 
 func (f *fakeAgentService) GetAgentRunRuntimeStatus(ctx context.Context, input agentservice.GetAgentRunRuntimeStatusInput) (agentservice.AgentRunRuntimeStatusResult, error) {

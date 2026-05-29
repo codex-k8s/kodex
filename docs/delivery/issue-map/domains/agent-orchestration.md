@@ -5,7 +5,7 @@ title: kodex — карта Issue домена оркестрации агент
 status: active
 owner_role: KM
 created_at: 2026-04-25
-updated_at: 2026-05-28
+updated_at: 2026-05-29
 ---
 
 # Карта Issue — оркестрация агентов
@@ -46,3 +46,4 @@ updated_at: 2026-05-28
 | #954 | `proto/kodex/agents/v1/agent_manager.proto`, `proto/gen/go/kodex/agents/v1/**`, `services/internal/agent-manager/**`, `docs/domains/agent-orchestration/**`, `docs/delivery/coordination/agent-3-package-hub.md` | AGO-15 | готово | `agent-manager` предоставляет безопасную поверхность чтения runtime job по `Run`: `GetAgentRunRuntimeStatus` возвращает сохранённый `runtime_job_ref`, актуальный статус из `runtime-manager.GetJob`, safe error/summary, timestamps, версии и признак ожидания Human gate без Kubernetes, БД runtime, shell, сырые логи, prompt, provider payload или workspace paths. |
 | #958 | `proto/kodex/agents/v1/agent_manager.proto`, `proto/gen/go/kodex/agents/v1/**`, `specs/asyncapi/agent-manager.v1.yaml`, `libs/go/platformevents/agent/**`, `services/internal/agent-manager/**`, `docs/domains/agent-orchestration/**`, `docs/delivery/coordination/agent-3-package-hub.md` | AGO-16 | готово | `agent-manager` хранит typed governance policy refs в acceptance, follow-up и Human gate state, публикует safe `agent.*` refs и не копирует governance decision body, release evidence, prompt/transcript/logs/PII или provider payload. |
 | #968 | `services/internal/agent-manager/**`, `docs/domains/agent-orchestration/**`, `docs/domains/runtime-and-fleet/**`, `docs/delivery/coordination/agent-3-package-hub.md` | AGO-17 | готово | `agent-manager` заполняет typed `AgentRunExecutionSpec` при постановке `JOB_TYPE_AGENT_RUN`: передаёт safe run/slot/materialization/workspace/context refs, digest/fingerprint, runner profile/image, fixed runner mode, optional secret refs без значений и reporting targets только после ready/completed materialization; pending состояние остаётся waiting до replay, terminal failed/cancelled фиксируется как safe failed state. |
+| #977 | `proto/kodex/agents/v1/agent_manager.proto`, `proto/gen/go/kodex/agents/v1/**`, `services/internal/agent-manager/**`, `docs/domains/agent-orchestration/**`, `docs/domains/runtime-and-fleet/architecture/api_contract.md`, `docs/delivery/coordination/agent-3-package-hub.md` | AGO-18 | готово | `agent-manager` принимает typed runner report `queued`/`running`/`completed`/`failed` через `ReportAgentRunState`, сверяет run/session/slot/job refs и expected version, сохраняет только safe status/summary/digest/failure code и не принимает raw prompt/transcript/tool payload/stdout/stderr/provider payload/workspace paths/secrets. |

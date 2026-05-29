@@ -330,6 +330,46 @@ func RecordRunStateInput(request *agentsv1.RecordRunStateRequest) (service.Recor
 	}, nil
 }
 
+func ReportAgentRunStateInput(request *agentsv1.ReportAgentRunStateRequest) (service.ReportAgentRunStateInput, error) {
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return service.ReportAgentRunStateInput{}, err
+	}
+	runID, err := requiredUUID(request.GetRunId())
+	if err != nil {
+		return service.ReportAgentRunStateInput{}, err
+	}
+	sessionID, err := requiredUUID(request.GetSessionId())
+	if err != nil {
+		return service.ReportAgentRunStateInput{}, err
+	}
+	state, err := AgentRunnerRunStateFromProto(request.GetState())
+	if err != nil {
+		return service.ReportAgentRunStateInput{}, err
+	}
+	startedAt, err := optionalTimeFromProto(request.StartedAt)
+	if err != nil {
+		return service.ReportAgentRunStateInput{}, err
+	}
+	finishedAt, err := optionalTimeFromProto(request.FinishedAt)
+	if err != nil {
+		return service.ReportAgentRunStateInput{}, err
+	}
+	return service.ReportAgentRunStateInput{
+		Meta:             meta,
+		RunID:            runID,
+		SessionID:        sessionID,
+		RuntimeSlotRef:   strings.TrimSpace(request.GetRuntimeSlotRef()),
+		RuntimeJobRef:    strings.TrimSpace(request.GetRuntimeJobRef()),
+		State:            state,
+		SafeSummary:      optionalPresentString(request.SafeSummary),
+		FailureCode:      optionalPresentString(request.FailureCode),
+		DiagnosticDigest: optionalPresentString(request.DiagnosticDigest),
+		StartedAt:        startedAt,
+		FinishedAt:       finishedAt,
+	}, nil
+}
+
 func GetAgentRunRuntimeStatusInput(request *agentsv1.GetAgentRunRuntimeStatusRequest) (service.GetAgentRunRuntimeStatusInput, error) {
 	input, err := idQueryInput(request.GetRunId(), request.GetMeta())
 	if err != nil {

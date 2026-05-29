@@ -25,6 +25,18 @@
 
 Для экрана истории действий `staff-gateway` отдаёт `GET /v1/agent-runs/{run_id}/activities`. Endpoint вызывает `agent-manager.ListAgentActivities` с typed фильтрами `activity_kind`, `status` и cursor pagination; фильтра по временному диапазону нет, потому что текущий gRPC-контракт его не содержит. Ответ содержит safe activity entries: refs/status/timestamps/tool metadata, safe summary, payload digest, bounded error, version и correlation id. Raw tool input/output, stdout/stderr, prompt body, transcript, provider payload, workspace paths, secret values и большие логи через gateway не проходят.
 
+## Web-console MVP
+
+Первый активный `web-console` размещён в `services/staff/web-console` и использует Vue, Vite, TypeScript и Vuetify. Приложение получает типизированный API-клиент из `specs/openapi/staff-gateway.v1.yaml`, вызывает только `staff-gateway` и не обращается напрямую к БД, Kubernetes, внутренним gRPC-сервисам или сервисам-владельцам. Production-сборка не формирует доверенные `X-Kodex-Actor-*`: проверенный actor context добавляет trusted edge или backend-session слой перед `staff-gateway`. Ручные actor headers доступны только в явном local-dev режиме Vite.
+
+Первый набор экранов:
+
+- командный центр: каркас, сводные блоки по доступным данным, отключённый диалоговый ввод и быстрые действия до появления соответствующих HTTP-контрактов;
+- входящие и решения: список, карточка, безопасные детали и действия ответа через owner inbox endpoints;
+- исполнения и среда: runtime summary и activity timeline одного `AgentRun` по введённому `run_id`.
+
+Агрегированная витрина командного центра, список `Run`, создание `Issue`, запуск flow, чат с `agent-manager` и проектные списки не подменяются демо-данными. Пока в `staff-gateway` нет соответствующих HTTP-ручек, интерфейс показывает честные пустые или отключённые состояния.
+
 ## Карта Issue
 
 - Доменная карта: `docs/delivery/issue-map/domains/console-and-operations-ux.md`.

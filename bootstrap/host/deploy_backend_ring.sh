@@ -16,7 +16,7 @@ Usage: bootstrap/host/deploy_backend_ring.sh [options]
 
 Options:
   --env-file PATH  Bootstrap env file. Defaults to bootstrap/host/config.env.
-  --ring NAME      Deploy ring: first, second, staff, or all. Defaults to first.
+  --ring NAME      Deploy ring: first, second, staff, mcp, or all. Defaults to first.
   --skip-build     Do not run Kaniko image build jobs.
   --skip-health    Do not run HTTP readiness checks after rollout.
   -h, --help       Show this help.

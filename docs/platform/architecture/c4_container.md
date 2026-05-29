@@ -52,7 +52,7 @@ System_Ext(models, "Поставщики моделей", "API моделей")
 System_Ext(channels, "Внешние каналы", "Уведомления и обратная связь")
 
 System_Boundary(kodex, "kodex") {
-  Container(web, "web-console", "Vue, PrimeVue", "Операторская и пользовательская консоль")
+  Container(web, "web-console", "Vue, Vuetify", "Операторская и пользовательская консоль")
   Container(userGateway, "user-gateway", "Go", "HTTP-вход для внешних пользователей")
   Container(staffGateway, "staff-gateway", "Go", "HTTP-вход для сотрудников и администраторов")
   Container(integrationGateway, "integration-gateway", "Go", "Webhook и внешние интеграции")
@@ -180,7 +180,7 @@ Rel(interaction, obj, "Хранит ссылки на медиа", "S3 API")
 
 ## Тонкие пограничные компоненты
 
-- `web-console` не принимает доменных решений и не собирает состояние напрямую из БД нескольких сервисов-владельцев.
+- `web-console` не принимает доменных решений, не собирает состояние напрямую из БД нескольких сервисов-владельцев и не утверждает actor identity в production-сборке. Первый активный интерфейсный срез в `services/staff/web-console` вызывает только `staff-gateway`, использует сгенерированный TypeScript-клиент из `specs/openapi/staff-gateway.v1.yaml`, ожидает `X-Kodex-Actor-*` от trusted edge/backend-session слоя и оставляет отсутствующие серверные сценарии как пустые или отключённые состояния.
 - `user-gateway`, `staff-gateway` и `integration-gateway` отвечают за входящий HTTP-трафик по своим направлениям, авторизацию, маршрутизацию, пограничную обработку webhook/callback событий и ограничение частоты запросов на границе, но не хранят доменную правду.
 - Первый активный контур `staff-gateway` обслуживает `web-console` для входящих решений владельца, просмотра runtime summary одного `AgentRun` и safe activity timeline: owner inbox идёт через gRPC-вызовы `interaction-hub`, а runtime summary и activity timeline — через `agent-manager.GetAgentRunRuntimeStatus` и `agent-manager.ListAgentActivities`. Gateway не хранит decision state, не владеет `Run`/runtime job/activity timeline и не агрегирует provider/agent/runtime состояние за пределами явно типизированных safe DTO.
 - `integration-gateway` принимает внешние webhook и callback события, проверяет источник, подпись, размер payload, лимиты и backpressure, затем вызывает сервис-владелец по gRPC. Активные MVP-маршруты — provider webhook -> `provider-hub.IngestWebhookEvent` и generic channel callback -> `interaction-hub.RecordChannelCallback`; бизнес-нормализация, provider inbox и callback lifecycle остаются у сервисов-владельцев.

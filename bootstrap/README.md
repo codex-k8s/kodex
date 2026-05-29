@@ -21,7 +21,7 @@ installer.
 |---|---|
 | `bootstrap/host/bootstrap_cluster.sh` | Единственная активная точка входа: `preflight`, `install`, `--dry-run`. |
 | `bootstrap/host/plan_backend_deploy.sh` | План первого backend deploy только на чтение: инвентарь, рендер, `kubectl kustomize` и проверки кластера без изменений. |
-| `bootstrap/host/deploy_backend_ring.sh` | Реальное применение backend-колец и `staff-gateway`: registry, Kubernetes `Secret`, Kaniko-сборки, PostgreSQL, миграции и сервисы выбранного кольца. |
+| `bootstrap/host/deploy_backend_ring.sh` | Реальное применение backend-колец, `staff-gateway` и `platform-mcp-server`: registry, Kubernetes `Secret`, Kaniko-сборки, PostgreSQL, миграции и сервисы выбранного кольца. |
 | `bootstrap/local/install.sh` | Локальный privileged orchestrator install-шагов. |
 | `bootstrap/local/steps/*.sh` | Узкие idempotent host/Kubernetes steps. |
 | `bootstrap/host/smoke_registry_kaniko.sh` | Проверка registry mirror и Kaniko build/push без Docker daemon. |
@@ -183,7 +183,7 @@ bash bootstrap/host/plan_backend_deploy.sh \
 пустой `--render-dir`. Непустой каталог отклоняется; команда не удаляет пути,
 переданные оператором.
 
-## Реальный deploy backend-колец и staff-gateway
+## Реальный deploy backend-колец, staff-gateway и platform-mcp-server
 
 После успешного preflight и dry-run плана оператор может применить backend-кольцо.
 Без `--ring` используется первое кольцо, чтобы существующий путь не менял
@@ -201,8 +201,9 @@ bash bootstrap/host/deploy_backend_ring.sh \
   --ring second
 ```
 
-Для новой установки, где нужно последовательно применить оба кольца одной
-командой, используется `all`. Этот режим не включает `staff-gateway`:
+Для новой установки, где нужно последовательно применить оба backend-кольца
+одной командой, используется `all`. Этот режим не включает `staff-gateway` и
+`platform-mcp-server`:
 
 ```bash
 bash bootstrap/host/deploy_backend_ring.sh \
@@ -218,6 +219,15 @@ bash bootstrap/host/deploy_backend_ring.sh \
   --ring staff
 ```
 
+После готовности сервисов-владельцев MCP-поверхность запускается отдельным
+контуром:
+
+```bash
+bash bootstrap/host/deploy_backend_ring.sh \
+  --env-file bootstrap/host/config.env \
+  --ring mcp
+```
+
 Состав колец:
 
 - `first`: `access-manager`, `project-catalog`, `package-hub`, `provider-hub`;
@@ -225,9 +235,10 @@ bash bootstrap/host/deploy_backend_ring.sh \
   `governance-manager`, `agent-manager`, `integration-gateway`,
   `codex-hook-ingress`.
 - `staff`: `staff-gateway`.
+- `mcp`: `platform-mcp-server`.
 
-`staff-gateway` не входит в `all`, чтобы повторный backend deploy не менял
-edge-контур без явного выбора оператора.
+`staff-gateway` и `platform-mcp-server` не входят в `all`, чтобы повторный
+backend deploy не менял edge- и MCP-контуры без явного выбора оператора.
 
 Команда выполняет изменения в Kubernetes и остаётся идемпотентной:
 
@@ -298,7 +309,9 @@ KODEX_SMOKE_ENV_FILE=bootstrap/host/config.env \
 Эта обвязка проверяет только первое кольцо. Второе кольцо проверяется через
 `deploy_backend_ring.sh --ring second` и readiness, migration jobs, rollout
 status. `staff-gateway` проверяется через `deploy_backend_ring.sh --ring staff`,
-readiness и rollout status. Frontend в эти контуры не входит.
+readiness, rollout status и OpenAPI endpoint. `platform-mcp-server` проверяется
+через `deploy_backend_ring.sh --ring mcp`, readiness, rollout status, `/metrics`
+и наличие MCP endpoint `/mcp`. Frontend в эти контуры не входит.
 
 Доменные и end-to-end проверки не добавляются как shell smoke scripts в
 `scripts/**`. Их целевой формат — Go tests или отдельный Go integration runner;

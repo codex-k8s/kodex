@@ -337,52 +337,36 @@ func ImportBootstrapServicesPolicyInput(request *projectsv1.ImportBootstrapServi
 }
 
 func ReconcileBootstrapMergeSignalInput(request *projectsv1.ReconcileBootstrapMergeSignalRequest) (projectservice.ReconcileBootstrapMergeSignalInput, error) {
-	meta, err := CommandMetaFromProto(request.GetMeta())
+	projectID, repositoryID, mergeSignal, checkedPolicy, meta, err := repositoryMergeSignalInput(
+		request.GetProjectId(),
+		request.GetRepositoryId(),
+		request.GetMergeSignal(),
+		request.GetCheckedPolicy(),
+		request.GetMeta(),
+	)
 	if err != nil {
 		return projectservice.ReconcileBootstrapMergeSignalInput{}, err
-	}
-	projectID, err := requiredUUID(request.GetProjectId())
-	if err != nil {
-		return projectservice.ReconcileBootstrapMergeSignalInput{}, err
-	}
-	repositoryID, err := requiredUUID(request.GetRepositoryId())
-	if err != nil {
-		return projectservice.ReconcileBootstrapMergeSignalInput{}, err
-	}
-	signal := request.GetMergeSignal()
-	checkedPolicy := request.GetCheckedPolicy()
-	if signal == nil || checkedPolicy == nil || signal.GetProviderTarget() == nil {
-		return projectservice.ReconcileBootstrapMergeSignalInput{}, errs.ErrInvalidArgument
 	}
 	return projectservice.ReconcileBootstrapMergeSignalInput{
-		ProjectID:    projectID,
-		RepositoryID: repositoryID,
-		MergeSignal: projectservice.BootstrapRepositoryMergeSignal{
-			SignalID:                     strings.TrimSpace(signal.GetSignalId()),
-			SignalKey:                    strings.TrimSpace(signal.GetSignalKey()),
-			SignalKind:                   strings.TrimSpace(signal.GetSignalKind()),
-			ProviderTarget:               bootstrapProviderTargetFromProto(signal.GetProviderTarget()),
-			BaseBranch:                   strings.TrimSpace(signal.GetBaseBranch()),
-			SourceRef:                    strings.TrimSpace(signal.GetSourceRef()),
-			MergeCommitSHA:               strings.TrimSpace(signal.GetMergeCommitSha()),
-			SourceBlobSHA:                strings.TrimSpace(signal.GetSourceBlobSha()),
-			WatermarkDigest:              strings.TrimSpace(signal.GetWatermarkDigest()),
-			WatermarkJSON:                []byte(strings.TrimSpace(signal.GetWatermarkJson())),
-			ProviderWorkItemProjectionID: strings.TrimSpace(signal.GetProviderWorkItemProjectionId()),
-			ProviderWebURL:               strings.TrimSpace(signal.GetProviderWebUrl()),
-			ProviderObjectID:             strings.TrimSpace(signal.GetProviderObjectId()),
-			MergeObservedAt:              strings.TrimSpace(signal.GetMergeObservedAt()),
-			MergedAt:                     strings.TrimSpace(signal.GetMergedAt()),
-		},
-		CheckedPolicy: projectservice.CheckedBootstrapServicesPolicyArtifact{
-			ArtifactRef:      strings.TrimSpace(checkedPolicy.GetArtifactRef()),
-			ArtifactDigest:   strings.TrimSpace(checkedPolicy.GetArtifactDigest()),
-			ArtifactVersion:  strings.TrimSpace(checkedPolicy.GetArtifactVersion()),
-			SourcePath:       strings.TrimSpace(checkedPolicy.GetSourcePath()),
-			ContentHash:      strings.TrimSpace(checkedPolicy.GetContentHash()),
-			ValidatedPayload: []byte(strings.TrimSpace(checkedPolicy.GetValidatedPayloadJson())),
-		},
-		Meta: meta,
+		ProjectID:     projectID,
+		RepositoryID:  repositoryID,
+		MergeSignal:   mergeSignal,
+		CheckedPolicy: checkedPolicy,
+		Meta:          meta,
+	}, nil
+}
+
+func ReconcileAdoptionMergeSignalInput(request *projectsv1.ReconcileAdoptionMergeSignalRequest) (projectservice.ReconcileAdoptionMergeSignalInput, error) {
+	projectID, repositoryID, mergeSignal, checkedPolicy, meta, err := repositoryAdoptionMergeSignalInput(request)
+	if err != nil {
+		return projectservice.ReconcileAdoptionMergeSignalInput{}, err
+	}
+	return projectservice.ReconcileAdoptionMergeSignalInput{
+		ProjectID:     projectID,
+		RepositoryID:  repositoryID,
+		MergeSignal:   projectservice.RepositoryAdoptionMergeSignal(mergeSignal),
+		CheckedPolicy: checkedPolicy,
+		Meta:          meta,
 	}, nil
 }
 
@@ -392,6 +376,115 @@ func bootstrapProviderTargetFromProto(target *projectsv1.RepositoryBootstrapProv
 		RepositoryFullName:   strings.TrimSpace(target.GetRepositoryFullName()),
 		ProviderRepositoryID: strings.TrimSpace(target.GetProviderRepositoryId()),
 		WebURL:               strings.TrimSpace(target.GetWebUrl()),
+	}
+}
+
+func repositoryMergeSignalInput(
+	projectIDValue string,
+	repositoryIDValue string,
+	signal *projectsv1.BootstrapRepositoryMergeSignal,
+	checkedPolicy *projectsv1.CheckedBootstrapServicesPolicyArtifact,
+	metaValue *projectsv1.CommandMeta,
+) (uuid.UUID, uuid.UUID, projectservice.BootstrapRepositoryMergeSignal, projectservice.CheckedBootstrapServicesPolicyArtifact, value.CommandMeta, error) {
+	meta, err := CommandMetaFromProto(metaValue)
+	if err != nil {
+		return uuid.Nil, uuid.Nil, projectservice.BootstrapRepositoryMergeSignal{}, projectservice.CheckedBootstrapServicesPolicyArtifact{}, value.CommandMeta{}, err
+	}
+	projectID, err := requiredUUID(projectIDValue)
+	if err != nil {
+		return uuid.Nil, uuid.Nil, projectservice.BootstrapRepositoryMergeSignal{}, projectservice.CheckedBootstrapServicesPolicyArtifact{}, value.CommandMeta{}, err
+	}
+	repositoryID, err := requiredUUID(repositoryIDValue)
+	if err != nil {
+		return uuid.Nil, uuid.Nil, projectservice.BootstrapRepositoryMergeSignal{}, projectservice.CheckedBootstrapServicesPolicyArtifact{}, value.CommandMeta{}, err
+	}
+	if signal == nil || checkedPolicy == nil || signal.GetProviderTarget() == nil {
+		return uuid.Nil, uuid.Nil, projectservice.BootstrapRepositoryMergeSignal{}, projectservice.CheckedBootstrapServicesPolicyArtifact{}, value.CommandMeta{}, errs.ErrInvalidArgument
+	}
+	return projectID, repositoryID, repositoryMergeSignalFromProto(signal), checkedRepositoryServicesPolicyFromProto(
+		checkedPolicy.GetArtifactRef(),
+		checkedPolicy.GetArtifactDigest(),
+		checkedPolicy.GetArtifactVersion(),
+		checkedPolicy.GetSourcePath(),
+		checkedPolicy.GetContentHash(),
+		checkedPolicy.GetValidatedPayloadJson(),
+	), meta, nil
+}
+
+func repositoryAdoptionMergeSignalInput(request *projectsv1.ReconcileAdoptionMergeSignalRequest) (uuid.UUID, uuid.UUID, projectservice.BootstrapRepositoryMergeSignal, projectservice.CheckedBootstrapServicesPolicyArtifact, value.CommandMeta, error) {
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return uuid.Nil, uuid.Nil, projectservice.BootstrapRepositoryMergeSignal{}, projectservice.CheckedBootstrapServicesPolicyArtifact{}, value.CommandMeta{}, err
+	}
+	projectID, err := requiredUUID(request.GetProjectId())
+	if err != nil {
+		return uuid.Nil, uuid.Nil, projectservice.BootstrapRepositoryMergeSignal{}, projectservice.CheckedBootstrapServicesPolicyArtifact{}, value.CommandMeta{}, err
+	}
+	repositoryID, err := requiredUUID(request.GetRepositoryId())
+	if err != nil {
+		return uuid.Nil, uuid.Nil, projectservice.BootstrapRepositoryMergeSignal{}, projectservice.CheckedBootstrapServicesPolicyArtifact{}, value.CommandMeta{}, err
+	}
+	signal := request.GetMergeSignal()
+	checkedPolicy := request.GetCheckedPolicy()
+	if signal == nil || checkedPolicy == nil || signal.GetProviderTarget() == nil {
+		return uuid.Nil, uuid.Nil, projectservice.BootstrapRepositoryMergeSignal{}, projectservice.CheckedBootstrapServicesPolicyArtifact{}, value.CommandMeta{}, errs.ErrInvalidArgument
+	}
+	return projectID, repositoryID, repositoryMergeSignalFromProto(signal), checkedRepositoryServicesPolicyFromProto(
+		checkedPolicy.GetArtifactRef(),
+		checkedPolicy.GetArtifactDigest(),
+		checkedPolicy.GetArtifactVersion(),
+		checkedPolicy.GetSourcePath(),
+		checkedPolicy.GetContentHash(),
+		checkedPolicy.GetValidatedPayloadJson(),
+	), meta, nil
+}
+
+type repositoryMergeSignalProto interface {
+	GetSignalId() string
+	GetSignalKey() string
+	GetSignalKind() string
+	GetProviderTarget() *projectsv1.RepositoryBootstrapProviderTarget
+	GetBaseBranch() string
+	GetSourceRef() string
+	GetMergeCommitSha() string
+	GetSourceBlobSha() string
+	GetWatermarkDigest() string
+	GetWatermarkJson() string
+	GetProviderWorkItemProjectionId() string
+	GetProviderWebUrl() string
+	GetProviderObjectId() string
+	GetMergeObservedAt() string
+	GetMergedAt() string
+}
+
+func repositoryMergeSignalFromProto(signal repositoryMergeSignalProto) projectservice.BootstrapRepositoryMergeSignal {
+	return projectservice.BootstrapRepositoryMergeSignal{
+		SignalID:                     strings.TrimSpace(signal.GetSignalId()),
+		SignalKey:                    strings.TrimSpace(signal.GetSignalKey()),
+		SignalKind:                   strings.TrimSpace(signal.GetSignalKind()),
+		ProviderTarget:               bootstrapProviderTargetFromProto(signal.GetProviderTarget()),
+		BaseBranch:                   strings.TrimSpace(signal.GetBaseBranch()),
+		SourceRef:                    strings.TrimSpace(signal.GetSourceRef()),
+		MergeCommitSHA:               strings.TrimSpace(signal.GetMergeCommitSha()),
+		SourceBlobSHA:                strings.TrimSpace(signal.GetSourceBlobSha()),
+		WatermarkDigest:              strings.TrimSpace(signal.GetWatermarkDigest()),
+		WatermarkJSON:                []byte(strings.TrimSpace(signal.GetWatermarkJson())),
+		ProviderWorkItemProjectionID: strings.TrimSpace(signal.GetProviderWorkItemProjectionId()),
+		ProviderWebURL:               strings.TrimSpace(signal.GetProviderWebUrl()),
+		ProviderObjectID:             strings.TrimSpace(signal.GetProviderObjectId()),
+		MergeObservedAt:              strings.TrimSpace(signal.GetMergeObservedAt()),
+		MergedAt:                     strings.TrimSpace(signal.GetMergedAt()),
+	}
+}
+
+func checkedRepositoryServicesPolicyFromProto(artifactRef string, artifactDigest string, artifactVersion string, sourcePath string, contentHash string, payload string) projectservice.CheckedBootstrapServicesPolicyArtifact {
+	return projectservice.CheckedBootstrapServicesPolicyArtifact{
+		ArtifactRef:      strings.TrimSpace(artifactRef),
+		ArtifactDigest:   strings.TrimSpace(artifactDigest),
+		ArtifactVersion:  strings.TrimSpace(artifactVersion),
+		SourcePath:       strings.TrimSpace(sourcePath),
+		ContentHash:      strings.TrimSpace(contentHash),
+		ValidatedPayload: []byte(strings.TrimSpace(payload)),
 	}
 }
 

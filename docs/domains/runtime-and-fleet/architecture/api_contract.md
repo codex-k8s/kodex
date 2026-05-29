@@ -5,8 +5,8 @@ title: kodex — API-контракт runtime-manager
 status: active
 owner_role: SA
 created_at: 2026-05-07
-updated_at: 2026-05-28
-related_issues: [655, 656, 782, 949, 966]
+updated_at: 2026-05-29
+related_issues: [655, 656, 782, 949, 966, 975]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -94,7 +94,11 @@ Generated execution context передаётся отдельным `WorkspaceSo
 
 Исполнитель Kubernetes в `runtime-manager` обрабатывает ограниченные типы `health_check` и `agent_run`. Он забирает задание через `ClaimRunnableJob`, читает выбранный кластер через `fleet-manager.GetKubernetesCluster`, получает только ссылку `secret_store_type`/`secret_store_ref` и разрешает kubeconfig в памяти через `secretresolver`. Значение kubeconfig, raw Kubernetes objects, events и полный лог не пишутся в БД. Запуск фиксируется через `ReportJobStepProgress` с `RuntimeArtifactRef` на Kubernetes Job и namespace, для `agent_run` дополнительно сохраняется image ref runner-а. Завершение идёт через `CompleteJob` или `FailJob`.
 
+Статус самого `AgentRun` остаётся в `agent-manager`. Runtime job lifecycle показывает состояние задания runtime, а `agent-runner` для продолжения orchestration сообщает bounded `queued`/`running`/`completed`/`failed` через `agent-manager.ReportAgentRunState` с `run_id`, `session_id`, `runtime_slot_ref` и `runtime_job_ref`. `runtime-manager` не пишет `Run` напрямую и не хранит prompt, transcript, raw tool payload, provider payload или значения секретов для runner report.
+
 Для `agent_run` Kubernetes Job создаётся с детерминированным именем runtime job, фиксированным контейнером `runtime-agent-runner`, image из `runner_image_ref`, фиксированной командой `/kodex/bin/agent-runner run`, выключенным automount service account token, PVC mount workspace и ограниченными env со safe refs/digest/fingerprint. `allowed_secret_refs` передаются только как JSON-список ссылок без значений; `runtime-manager` не разрешает эти secret refs и не превращает их в Kubernetes Secret values.
+
+Рабочая нагрузка `services/jobs/agent-runner` является первым исполняемым образом для этой команды. Она читает только `.kodex/context/agent-run.json` из смонтированного workspace, сверяет `context_digest`, `workspace_fingerprint`, `agent_run_id`, `slot_id`, materialization refs и фиксированный `runner_mode=codex_agent`. Связь с `agent-manager` выполняется через существующие команды `GetAgentRunRuntimeStatus`, `RecordRunState` и `RecordAgentActivity`, если сервисный адрес и токен переданы как конфигурация runner-а. Пока контракт фактического запуска Codex-сессии не согласован, runner после успешной проверки контекста завершает job безопасной диагностикой `agent_execution_contract_unavailable`; произвольная shell-команда, prompt body, transcript, raw tool input/output, provider payload, kubeconfig, secret values и полный stdout/stderr не принимаются и не логируются.
 
 `JobInputJSON` для `health_check` не является произвольным manifest. Поддержаны только ограниченные поля `namespace`, `service_account`, `image` и `labels`; значения `env`, annotations, команды контейнера, значения секретов, prompt, transcript, provider payload и большие тексты не принимаются. Команда контейнера остаётся фиксированной проверкой здоровья. Для `agent_run` произвольный `job_input_json` также запрещён: исполнимый payload хранится только как `agent_run_execution_spec`, а runner получает фиксированный набор env и mount. Остальные типы заданий (`build`, `deploy`, нагрузки slot-агента и т.п.) не исполняются этим Kubernetes-исполнителем.
 
