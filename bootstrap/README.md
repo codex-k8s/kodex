@@ -21,7 +21,7 @@ installer.
 |---|---|
 | `bootstrap/host/bootstrap_cluster.sh` | Единственная активная точка входа: `preflight`, `install`, `--dry-run`. |
 | `bootstrap/host/plan_backend_deploy.sh` | План первого backend deploy только на чтение: инвентарь, рендер, `kubectl kustomize` и проверки кластера без изменений. |
-| `bootstrap/host/deploy_backend_ring.sh` | Реальное применение backend-колец: registry, Kubernetes `Secret`, Kaniko-сборки, PostgreSQL, миграции и сервисы выбранного кольца. |
+| `bootstrap/host/deploy_backend_ring.sh` | Реальное применение backend-колец и `staff-gateway`: registry, Kubernetes `Secret`, Kaniko-сборки, PostgreSQL, миграции и сервисы выбранного кольца. |
 | `bootstrap/local/install.sh` | Локальный privileged orchestrator install-шагов. |
 | `bootstrap/local/steps/*.sh` | Узкие idempotent host/Kubernetes steps. |
 | `bootstrap/host/smoke_registry_kaniko.sh` | Проверка registry mirror и Kaniko build/push без Docker daemon. |
@@ -183,7 +183,7 @@ bash bootstrap/host/plan_backend_deploy.sh \
 пустой `--render-dir`. Непустой каталог отклоняется; команда не удаляет пути,
 переданные оператором.
 
-## Реальный deploy backend-колец
+## Реальный deploy backend-колец и staff-gateway
 
 После успешного preflight и dry-run плана оператор может применить backend-кольцо.
 Без `--ring` используется первое кольцо, чтобы существующий путь не менял
@@ -202,12 +202,20 @@ bash bootstrap/host/deploy_backend_ring.sh \
 ```
 
 Для новой установки, где нужно последовательно применить оба кольца одной
-командой, используется:
+командой, используется `all`. Этот режим не включает `staff-gateway`:
 
 ```bash
 bash bootstrap/host/deploy_backend_ring.sh \
   --env-file bootstrap/host/config.env \
   --ring all
+```
+
+После успешного второго кольца `staff-gateway` запускается отдельным контуром:
+
+```bash
+bash bootstrap/host/deploy_backend_ring.sh \
+  --env-file bootstrap/host/config.env \
+  --ring staff
 ```
 
 Состав колец:
@@ -216,9 +224,10 @@ bash bootstrap/host/deploy_backend_ring.sh \
 - `second`: `fleet-manager`, `runtime-manager`, `interaction-hub`,
   `governance-manager`, `agent-manager`, `integration-gateway`,
   `codex-hook-ingress`.
+- `staff`: `staff-gateway`.
 
-`staff-gateway` не входит в backend-кольца, пока для него не принят отдельный
-контур развёртывания.
+`staff-gateway` не входит в `all`, чтобы повторный backend deploy не менял
+edge-контур без явного выбора оператора.
 
 Команда выполняет изменения в Kubernetes и остаётся идемпотентной:
 
@@ -288,7 +297,8 @@ KODEX_SMOKE_ENV_FILE=bootstrap/host/config.env \
 
 Эта обвязка проверяет только первое кольцо. Второе кольцо проверяется через
 `deploy_backend_ring.sh --ring second` и readiness, migration jobs, rollout
-status; `staff-gateway` и frontend в backend-кольца не входят.
+status. `staff-gateway` проверяется через `deploy_backend_ring.sh --ring staff`,
+readiness и rollout status. Frontend в эти контуры не входит.
 
 Доменные и end-to-end проверки не добавляются как shell smoke scripts в
 `scripts/**`. Их целевой формат — Go tests или отдельный Go integration runner;
