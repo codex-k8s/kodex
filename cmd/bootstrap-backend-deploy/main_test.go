@@ -121,6 +121,7 @@ func TestSelectBackendRings(t *testing.T) {
 		{name: "first", value: "first", want: []string{"first"}},
 		{name: "second", value: "second", want: []string{"second"}},
 		{name: "staff", value: "staff", want: []string{"staff"}},
+		{name: "mcp", value: "mcp", want: []string{"mcp"}},
 		{name: "all", value: "all", want: []string{"first", "second"}},
 	}
 	for _, tt := range tests {
@@ -141,7 +142,7 @@ func TestSelectBackendRingsRejectsUnsupportedValue(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected unsupported ring to fail")
 	}
-	if !strings.Contains(err.Error(), "expected first, second, staff, or all") {
+	if !strings.Contains(err.Error(), "expected first, second, staff, mcp, or all") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -216,6 +217,35 @@ func TestAllRingSelectionDoesNotIncludeStaffGateway(t *testing.T) {
 	for _, imageName := range imageNamesForRings(rings) {
 		if imageName == "staff-gateway" {
 			t.Fatal("staff-gateway must be deployed through explicit staff ring, not all")
+		}
+	}
+}
+
+func TestMCPRingImageBuildsOnlyPlatformMCPServer(t *testing.T) {
+	stack, err := stackinventory.Parse([]byte(testStackInventory(mcpRingImageNames)))
+	if err != nil {
+		t.Fatalf("parse stack: %v", err)
+	}
+	builds, err := ringImageBuilds(stack, []backendRing{mcpRing})
+	if err != nil {
+		t.Fatalf("mcp ring builds: %v", err)
+	}
+	if len(builds) != 1 {
+		t.Fatalf("unexpected build count: got %d want 1", len(builds))
+	}
+	if builds[0].ImageName != "platform-mcp-server" {
+		t.Fatalf("unexpected mcp ring image: %s", builds[0].ImageName)
+	}
+}
+
+func TestAllRingSelectionDoesNotIncludeMCPServer(t *testing.T) {
+	rings, err := selectBackendRings("all")
+	if err != nil {
+		t.Fatalf("select all rings: %v", err)
+	}
+	for _, imageName := range imageNamesForRings(rings) {
+		if imageName == "platform-mcp-server" {
+			t.Fatal("platform-mcp-server must be deployed through explicit mcp ring, not all")
 		}
 	}
 }

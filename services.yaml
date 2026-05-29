@@ -235,6 +235,7 @@ spec:
       value: "0.1.0"
       bumpOn:
         - services/internal/platform-mcp-server
+        - deploy/base/platform-mcp-server
         - libs/go/grpcserver
         - libs/go/serviceprocess
         - libs/go/servicemain
@@ -412,6 +413,14 @@ spec:
       target: prod
       context: .
       imageEnv: KODEX_STAFF_GATEWAY_IMAGE
+    platform-mcp-server:
+      type: build
+      repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_PLATFORM_MCP_SERVER_INTERNAL_IMAGE_REPOSITORY" "kodex/platform-mcp-server" }}'
+      tagTemplate: '{{ version "platform-mcp-server" }}'
+      dockerfile: services/internal/platform-mcp-server/Dockerfile
+      target: prod
+      context: .
+      imageEnv: KODEX_PLATFORM_MCP_SERVER_IMAGE
     codex-hook-ingress:
       type: build
       repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_CODEX_HOOK_INGRESS_INTERNAL_IMAGE_REPOSITORY" "kodex/codex-hook-ingress" }}'
@@ -774,6 +783,34 @@ spec:
           readyz: /health/readyz
           metrics: /metrics
           openapi: /openapi/staff-gateway.v1.yaml
+    - name: platform-mcp-server
+      status: foundation
+      zone: internal
+      path: services/internal/platform-mcp-server
+      dockerfile: services/internal/platform-mcp-server/Dockerfile
+      imageEnv: KODEX_PLATFORM_MCP_SERVER_IMAGE
+      internalImageRepositoryEnv: KODEX_PLATFORM_MCP_SERVER_INTERNAL_IMAGE_REPOSITORY
+      ownerDomain: platform-mcp-server
+      apiContracts:
+        mcp: MCP Go SDK tools/list snapshot
+      dependencies:
+        - access-manager
+        - agent-manager
+        - project-catalog
+        - provider-hub
+        - governance-manager
+        - runtime-manager
+        - fleet-manager
+        - package-hub
+        - interaction-hub
+      deploy:
+        serviceManifest: deploy/base/platform-mcp-server/platform-mcp-server.yaml.tpl
+        kustomization: deploy/base/platform-mcp-server/kustomization.yaml.tpl
+        health:
+          livez: /health/livez
+          readyz: /health/readyz
+          metrics: /metrics
+          mcp: /mcp
     - name: runtime-manager
       status: foundation
       zone: internal
@@ -961,29 +998,6 @@ spec:
       migrationsImageEnv: KODEX_AGENT_MANAGER_MIGRATIONS_IMAGE
       purpose: agent-flow-run-session-activity-acceptance-follow-up-human-gate
   serviceScaffolds:
-    - name: platform-mcp-server
-      status: scaffold
-      zone: internal
-      path: services/internal/platform-mcp-server
-      ownerDomain: platform-mcp-server
-      apiContracts:
-        mcp: MCP Go SDK tools/list snapshot
-      dependencies:
-        - access-manager
-        - agent-manager
-        - project-catalog
-        - provider-hub
-        - governance-manager
-        - runtime-manager
-        - fleet-manager
-        - package-hub
-        - interaction-hub
-      deploy:
-        health:
-          livez: /health/livez
-          readyz: /health/readyz
-          metrics: /metrics
-        mcp: /mcp
     - name: governance-manager
       status: scaffold
       zone: internal
