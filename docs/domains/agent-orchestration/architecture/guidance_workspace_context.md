@@ -5,8 +5,8 @@ title: kodex — контекст руководящих пакетов в works
 status: active
 owner_role: SA
 created_at: 2026-05-25
-updated_at: 2026-05-28
-related_issues: [782, 795, 968]
+updated_at: 2026-05-29
+related_issues: [782, 795, 968, 975]
 related_prs: []
 related_docsets:
   - docs/domains/agent-orchestration/architecture/design.md
@@ -129,11 +129,13 @@ sequenceDiagram
 - provider target refs;
 - список локальных путей руководящих пакетов;
 - ссылки на session snapshot, если run продолжает существующую Codex-сессию;
-- список разрешённых MCP tools и runtime profile.
+- список разрешённых MCP tools, runtime profile и `workspace_fingerprint`.
 
 В сгенерированный контекст нельзя включать значения секретов, полный manifest payload, тексты prompt templates, большие логи, сырые provider payload и полные session JSON/JSONL.
 
 Digest сгенерированного контекста передаётся в runtime как `WorkspaceSource.digest`, возвращается в результат подготовки workspace и затем попадает в `AgentRunExecutionSpec.context_digest`. Guidance refs не передаются в runtime job как отдельный текстовый payload: runner получает их через проверенный generated context и материализованные `guidance_package` sources, связанные с workspace fingerprint.
+
+`agent-runner` читает этот файл только из смонтированного workspace по контрактному пути `.kodex/context/agent-run.json`, сверяет digest из `AgentRunExecutionSpec`, `workspace_fingerprint` и `agent_run_id`, а затем сообщает безопасное состояние через `agent-manager.GetAgentRunRuntimeStatus`, `RecordRunState` и `RecordAgentActivity`. Реальный запуск Codex-сессии требует отдельного согласованного контракта исполнения; до него runner завершает job классифицированной диагностикой и не исполняет prompt body, произвольную shell-команду или raw tool payload.
 
 ## Инварианты
 
@@ -152,6 +154,7 @@ Digest сгенерированного контекста передаётся 
 - Доработать runtime materializer до фактической записи `.kodex/context/agent-run.json` и checkout/mount руководящих пакетов по авторитетным refs из `package-hub`.
 - Добавить механизм materialization, который умеет получать guidance package source по `WorkspaceSource.kind=guidance_package`.
 - Добавить проверку формата и конфликтов `safe_local_name` в selected guidance set до подготовки runtime.
+- Согласовать контракт реального исполнения Codex-сессии, который `agent-runner` сможет использовать после проверки контекста без произвольных команд и сырых prompt/log payload.
 
 ## Апрув
 
