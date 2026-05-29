@@ -8,6 +8,16 @@ SELECT
 FROM governance_manager_release_decision_packages
 WHERE (@project_ref::text = '' OR project_ref = @project_ref)
   AND (@release_candidate_ref::text = '' OR release_candidate_ref = @release_candidate_ref)
+  AND (
+    @integration_ref::text = ''
+    OR EXISTS (
+      SELECT 1
+      FROM jsonb_array_elements(integration_refs) AS integration_ref_item
+      WHERE integration_ref_item->>'domain' = @integration_domain
+        AND integration_ref_item->>'kind' = @integration_kind
+        AND integration_ref_item->>'ref' = @integration_ref
+    )
+  )
   AND (@status::text = '' OR status = @status)
 ORDER BY updated_at DESC, id
 LIMIT @limit::integer OFFSET @offset::integer;

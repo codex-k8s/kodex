@@ -228,6 +228,11 @@ type GetReleaseSafetyStateInput struct {
 	Meta                     QueryMeta
 }
 
+type GetGovernanceSummaryInput struct {
+	Scope entity.GovernanceSummaryScope
+	Meta  QueryMeta
+}
+
 type ListRiskProfilesInput struct {
 	Filter query.RiskProfileFilter
 }

@@ -233,6 +233,30 @@ const (
 	BlockingSignalStatusDismissed BlockingSignalStatus = "dismissed"
 )
 
+// GovernanceDecisionSummaryKind classifies a safe owner/staff read-model item.
+type GovernanceDecisionSummaryKind string
+
+const (
+	GovernanceDecisionSummaryKindRiskAssessment         GovernanceDecisionSummaryKind = "risk_assessment"
+	GovernanceDecisionSummaryKindReviewSignal           GovernanceDecisionSummaryKind = "review_signal"
+	GovernanceDecisionSummaryKindGateRequest            GovernanceDecisionSummaryKind = "gate_request"
+	GovernanceDecisionSummaryKindGateDecision           GovernanceDecisionSummaryKind = "gate_decision"
+	GovernanceDecisionSummaryKindReleaseDecisionPackage GovernanceDecisionSummaryKind = "release_decision_package"
+	GovernanceDecisionSummaryKindReleaseDecision        GovernanceDecisionSummaryKind = "release_decision"
+	GovernanceDecisionSummaryKindBlockingSignal         GovernanceDecisionSummaryKind = "blocking_signal"
+	GovernanceDecisionSummaryKindReleaseSafetyState     GovernanceDecisionSummaryKind = "release_safety_state"
+)
+
+// GovernanceDecisionAttention classifies whether a summary item needs owner action.
+type GovernanceDecisionAttention string
+
+const (
+	GovernanceDecisionAttentionPending       GovernanceDecisionAttention = "pending"
+	GovernanceDecisionAttentionCompleted     GovernanceDecisionAttention = "completed"
+	GovernanceDecisionAttentionBlocked       GovernanceDecisionAttention = "blocked"
+	GovernanceDecisionAttentionInformational GovernanceDecisionAttention = "informational"
+)
+
 // DecisionAuditKind classifies audit refs for gate and release decisions.
 type DecisionAuditKind string
 

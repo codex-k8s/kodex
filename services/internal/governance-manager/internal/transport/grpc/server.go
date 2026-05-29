@@ -63,6 +63,7 @@ type governanceService interface {
 	ListBlockingSignals(context.Context, governanceservice.ListBlockingSignalsInput) ([]entity.BlockingSignal, query.PageResult, error)
 	RecordReleaseSafetyState(context.Context, governanceservice.RecordReleaseSafetyStateInput) (entity.ReleaseSafetyState, error)
 	GetReleaseSafetyState(context.Context, governanceservice.GetReleaseSafetyStateInput) (entity.ReleaseSafetyState, error)
+	GetGovernanceSummary(context.Context, governanceservice.GetGovernanceSummaryInput) (entity.GovernanceSummary, error)
 }
 
 // NewServer creates a governance-manager gRPC server boundary.
@@ -1089,4 +1090,21 @@ func (server *Server) GetReleaseSafetyState(ctx context.Context, req *governance
 	response := &governancev1.ReleaseSafetyStateResponse{}
 	response.ReleaseSafetyState = toReleaseSafetyState(state)
 	return response, nil
+}
+
+// GetGovernanceSummary returns a safe owner/staff read model for a scoped governance target.
+func (server *Server) GetGovernanceSummary(ctx context.Context, req *governancev1.GetGovernanceSummaryRequest) (*governancev1.GovernanceSummaryResponse, error) {
+	meta, err := queryMeta(req.GetMeta())
+	if err != nil {
+		return nil, err
+	}
+	scope, err := governanceSummaryScope(req.GetScope())
+	if err != nil {
+		return nil, err
+	}
+	summary, err := server.service.GetGovernanceSummary(ctx, governanceservice.GetGovernanceSummaryInput{Scope: scope, Meta: meta})
+	if err != nil {
+		return nil, err
+	}
+	return &governancev1.GovernanceSummaryResponse{Summary: toGovernanceSummary(summary)}, nil
 }

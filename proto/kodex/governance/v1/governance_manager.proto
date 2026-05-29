@@ -84,6 +84,8 @@ service GovernanceManagerService {
   rpc RecordReleaseSafetyState(RecordReleaseSafetyStateRequest) returns (ReleaseSafetyStateResponse);
   // GetReleaseSafetyState returns current safety-loop state for a release package.
   rpc GetReleaseSafetyState(GetReleaseSafetyStateRequest) returns (ReleaseSafetyStateResponse);
+  // GetGovernanceSummary returns a safe owner/staff read model for a scoped target, release or integration ref.
+  rpc GetGovernanceSummary(GetGovernanceSummaryRequest) returns (GovernanceSummaryResponse);
 }
 
 // CommandMeta is required for every mutating command.
@@ -630,6 +632,118 @@ message BlockingSignal {
   optional string resolved_at = 10;
 }
 
+// GovernanceSummaryScope bounds a staff/owner read model request.
+message GovernanceSummaryScope {
+  // target narrows risk, review, gate and blocking signal facts by governance target.
+  TargetRef target = 1;
+  // project_context narrows risk and release facts by project-catalog refs.
+  ProjectContextRef project_context = 2;
+  // release_candidate_ref narrows release package facts.
+  optional string release_candidate_ref = 3;
+  // release_decision_package_id narrows the summary to one release package.
+  optional string release_decision_package_id = 4;
+  // integration_ref narrows release packages by a safe owner-domain ref stored in integration_refs.
+  optional ReleaseIntegrationRef integration_ref = 5;
+}
+
+// GovernanceDecisionSummary is a bounded decision/state item prepared for gateway/UI mapping.
+message GovernanceDecisionSummary {
+  // kind classifies the governance state represented by the item.
+  GovernanceDecisionSummaryKind kind = 1;
+  // attention tells gateway/UI whether the item needs action, is blocked or is informational.
+  GovernanceDecisionAttention attention = 2;
+  // id is the local governance identifier when one exists.
+  string id = 3;
+  // parent_id links a child decision to a gate request, risk assessment or release package.
+  optional string parent_id = 4;
+  // target identifies the task, PR/MR, runtime job, release candidate or transition.
+  TargetRef target = 5;
+  // project_context carries project/repository/release policy refs.
+  ProjectContextRef project_context = 6;
+  // release_candidate_ref points to the release candidate when known.
+  optional string release_candidate_ref = 7;
+  // release_decision_package_id links release decisions, safety state or evidence back to a package.
+  optional string release_decision_package_id = 8;
+  // risk_class is set for risk assessment summaries.
+  RiskClass risk_class = 9;
+  // review_outcome is set for review signal summaries.
+  ReviewSignalOutcome review_outcome = 10;
+  // gate_request_status is set for gate request summaries.
+  GateRequestStatus gate_request_status = 11;
+  // gate_outcome is set for gate decision summaries.
+  GateOutcome gate_outcome = 12;
+  // release_package_status is set for release package summaries.
+  ReleaseDecisionPackageStatus release_package_status = 13;
+  // release_decision_status is set for release decision summaries.
+  ReleaseDecisionStatus release_decision_status = 14;
+  // release_decision_outcome is set for release decision summaries.
+  ReleaseDecisionOutcome release_decision_outcome = 15;
+  // blocking_signal_status is set for blocking signal summaries.
+  BlockingSignalStatus blocking_signal_status = 16;
+  // severity is set for review and blocking signal summaries.
+  SignalSeverity severity = 17;
+  // safe_summary is a bounded explanation without raw provider, prompt, log or secret payloads.
+  string safe_summary = 18;
+  // evidence_refs are bounded evidence refs included in the item.
+  repeated EvidenceRef evidence_refs = 19;
+  // integration_refs are safe refs from neighboring owner domains.
+  repeated ReleaseIntegrationRef integration_refs = 20;
+  // provider_refs are provider-owned refs embedded in a release package.
+  repeated ProviderContextRef provider_refs = 21;
+  // runtime_refs are runtime-owned refs embedded in a release package.
+  repeated RuntimeContextRef runtime_refs = 22;
+  // agent_context carries safe agent/session/run/acceptance refs.
+  AgentContextRef agent_context = 23;
+  // version is the optimistic concurrency version when the item is versioned.
+  int64 version = 24;
+  // created_at is an RFC3339 timestamp when known.
+  string created_at = 25;
+  // updated_at is an RFC3339 timestamp when known.
+  string updated_at = 26;
+  // observed_at is an owner-domain observation timestamp when known.
+  optional string observed_at = 27;
+}
+
+// GovernanceEvidenceSummary is a safe evidence/read-model item derived from evidence_refs or integration_refs.
+message GovernanceEvidenceSummary {
+  // source_kind is a typed kind such as provider.review, agent.acceptance or runtime.job.
+  string source_kind = 1;
+  // source_ref points to the owner-domain fact.
+  string source_ref = 2;
+  // status is the owner-domain status when supplied.
+  optional string status = 3;
+  // outcome is the governance outcome when supplied.
+  optional string outcome = 4;
+  // safe_summary is a short bounded summary.
+  string safe_summary = 5;
+  // error_code is a bounded machine code without logs or raw payloads.
+  optional string error_code = 6;
+  // digest is a safe fingerprint or version digest.
+  optional string digest = 7;
+  // observed_at is an RFC3339 owner-domain observation timestamp.
+  optional string observed_at = 8;
+  // version is an owner-domain version or etag.
+  optional string version = 9;
+  // evidence_refs preserve bounded evidence refs related to this summary.
+  repeated EvidenceRef evidence_refs = 10;
+  // integration_refs preserve bounded owner-domain refs related to this summary.
+  repeated ReleaseIntegrationRef integration_refs = 11;
+}
+
+// GovernanceSummary is the domain-prepared read model for owner/staff UI.
+message GovernanceSummary {
+  // scope echoes the safe scope used to build the summary.
+  GovernanceSummaryScope scope = 1;
+  // pending_decisions are items that still require action or indicate an active block.
+  repeated GovernanceDecisionSummary pending_decisions = 2;
+  // completed_decisions are terminal, resolved or informational decision facts.
+  repeated GovernanceDecisionSummary completed_decisions = 3;
+  // evidence_summaries contain bounded linked provider, agent, runtime and governance refs.
+  repeated GovernanceEvidenceSummary evidence_summaries = 4;
+  // diagnostics are safe machine-readable notes about partial or missing linked state.
+  repeated string diagnostics = 5;
+}
+
 message RiskRuleDraft {
   RiskRuleKind rule_kind = 1;
   string matcher_json = 2;
@@ -970,6 +1084,11 @@ message GetReleaseSafetyStateRequest {
   QueryMeta meta = 2;
 }
 
+message GetGovernanceSummaryRequest {
+  GovernanceSummaryScope scope = 1;
+  QueryMeta meta = 2;
+}
+
 message RiskProfileResponse {
   RiskProfile risk_profile = 1;
 }
@@ -1068,6 +1187,10 @@ message ListBlockingSignalsResponse {
 
 message ReleaseSafetyStateResponse {
   ReleaseSafetyState release_safety_state = 1;
+}
+
+message GovernanceSummaryResponse {
+  GovernanceSummary summary = 1;
 }
 
 // ReleaseIntegrationRef links release governance to a bounded fact owned by another domain.
@@ -1328,4 +1451,24 @@ enum BlockingSignalStatus {
   BLOCKING_SIGNAL_STATUS_ACTIVE = 1;
   BLOCKING_SIGNAL_STATUS_RESOLVED = 2;
   BLOCKING_SIGNAL_STATUS_DISMISSED = 3;
+}
+
+enum GovernanceDecisionSummaryKind {
+  GOVERNANCE_DECISION_SUMMARY_KIND_UNSPECIFIED = 0;
+  GOVERNANCE_DECISION_SUMMARY_KIND_RISK_ASSESSMENT = 1;
+  GOVERNANCE_DECISION_SUMMARY_KIND_REVIEW_SIGNAL = 2;
+  GOVERNANCE_DECISION_SUMMARY_KIND_GATE_REQUEST = 3;
+  GOVERNANCE_DECISION_SUMMARY_KIND_GATE_DECISION = 4;
+  GOVERNANCE_DECISION_SUMMARY_KIND_RELEASE_DECISION_PACKAGE = 5;
+  GOVERNANCE_DECISION_SUMMARY_KIND_RELEASE_DECISION = 6;
+  GOVERNANCE_DECISION_SUMMARY_KIND_BLOCKING_SIGNAL = 7;
+  GOVERNANCE_DECISION_SUMMARY_KIND_RELEASE_SAFETY_STATE = 8;
+}
+
+enum GovernanceDecisionAttention {
+  GOVERNANCE_DECISION_ATTENTION_UNSPECIFIED = 0;
+  GOVERNANCE_DECISION_ATTENTION_PENDING = 1;
+  GOVERNANCE_DECISION_ATTENTION_COMPLETED = 2;
+  GOVERNANCE_DECISION_ATTENTION_BLOCKED = 3;
+  GOVERNANCE_DECISION_ATTENTION_INFORMATIONAL = 4;
 }

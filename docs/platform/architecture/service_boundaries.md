@@ -5,8 +5,8 @@ title: kodex — границы сервисов
 status: active
 owner_role: SA
 created_at: 2026-04-26
-updated_at: 2026-05-28
-related_issues: [599, 600, 601, 602, 655, 711, 725, 747, 753, 778, 781, 786, 852, 322, 782, 834, 865, 867, 883]
+updated_at: 2026-05-29
+related_issues: [599, 600, 601, 602, 655, 711, 725, 747, 753, 778, 781, 786, 852, 322, 782, 834, 865, 867, 883, 976]
 related_prs: []
 related_adrs: []
 approvals:
@@ -104,7 +104,7 @@ Gateway-сервисы, `web-console`, `platform-mcp-server` и `codex-hook-ingr
 
 Подробный пакет границы: `docs/domains/integration-gateway/**`.
 
-Первый активный контур `staff-gateway` — OpenAPI для входящих решений владельца и безопасного чтения состояния `AgentRun`. Он отдаёт список `owner inbox`, карточку одного решения и принимает безопасный ответ через gRPC-вызовы `interaction-hub`: `ListOwnerInboxItems`, `GetOwnerInboxItem` и `RecordInteractionResponse`. Для runtime summary он вызывает `agent-manager.GetAgentRunRuntimeStatus` и возвращает только safe refs/status/summary/timestamps/version, включая `runtime_job_ref`, `runtime_job_status` и признак ожидания Human gate. Для истории действий Run он вызывает `agent-manager.ListAgentActivities` и отдаёт только safe activity entries: refs/status/timestamps/tool metadata, safe summary, payload digest, bounded error, version и correlation id. Gateway передаёт actor/request context, проверяет HTTP path/query/body по контракту, маппит ошибки в HTTP-статусы и не хранит собственную модель решений, delivery lifecycle, `Run`, session, runtime job, governance decision, provider write, activity timeline или cross-domain inbox. Список использует фильтры и cursor pagination, а порядок карточек остаётся доменной политикой `interaction-hub`, без настраиваемой сортировки в gateway. В ответах остаются только safe refs, статусы, краткие summaries, timestamps и version; raw provider payload, raw tool input/output, stdout/stderr, секреты, полный prompt/transcript, callback payload, kubeconfig, workspace paths и большие логи не возвращаются.
+Первый активный контур `staff-gateway` — OpenAPI для входящих решений владельца и безопасного чтения состояния `AgentRun`. Он отдаёт список `owner inbox`, карточку одного решения и принимает безопасный ответ через gRPC-вызовы `interaction-hub`: `ListOwnerInboxItems`, `GetOwnerInboxItem` и `RecordInteractionResponse`. Для runtime summary он вызывает `agent-manager.GetAgentRunRuntimeStatus` и возвращает только safe refs/status/summary/timestamps/version, включая `runtime_job_ref`, `runtime_job_status` и признак ожидания Human gate. Для истории действий Run он вызывает `agent-manager.ListAgentActivities` и отдаёт только safe activity entries: refs/status/timestamps/tool metadata, safe summary, payload digest, bounded error, version и correlation id. Для governance summary gateway вызывает `governance-manager.GetGovernanceSummary` и только маппит готовые pending/completed decisions, risk class, gate/release outcomes и evidence refs в HTTP-ответ. Gateway передаёт actor/request context, проверяет HTTP path/query/body по контракту, маппит ошибки в HTTP-статусы и не хранит собственную модель решений, delivery lifecycle, `Run`, session, runtime job, governance decision, provider write, activity timeline или cross-domain inbox. Список использует фильтры и cursor pagination, а порядок карточек остаётся доменной политикой `interaction-hub`, без настраиваемой сортировки в gateway. В ответах остаются только safe refs, статусы, краткие summaries, timestamps и version; raw provider payload, raw tool input/output, stdout/stderr, секреты, полный prompt/transcript, callback payload, kubeconfig, workspace paths и большие логи не возвращаются.
 
 ### `platform-mcp-server`
 

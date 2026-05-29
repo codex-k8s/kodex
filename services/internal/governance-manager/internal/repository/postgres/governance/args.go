@@ -396,6 +396,9 @@ func releaseDecisionPackageFilterArgs(filter query.ReleaseDecisionPackageFilter)
 	return withPage(filter.Page, pgx.NamedArgs{
 		"project_ref":           filter.ProjectContext.ProjectRef,
 		"release_candidate_ref": filter.ReleaseCandidateRef,
+		"integration_domain":    filter.IntegrationRef.Domain,
+		"integration_kind":      filter.IntegrationRef.Kind,
+		"integration_ref":       filter.IntegrationRef.Ref,
 		"status":                string(filter.Status),
 	})
 }

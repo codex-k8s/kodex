@@ -57,6 +57,7 @@ const (
 	GovernanceManagerService_ListBlockingSignals_FullMethodName          = "/kodex.governance.v1.GovernanceManagerService/ListBlockingSignals"
 	GovernanceManagerService_RecordReleaseSafetyState_FullMethodName     = "/kodex.governance.v1.GovernanceManagerService/RecordReleaseSafetyState"
 	GovernanceManagerService_GetReleaseSafetyState_FullMethodName        = "/kodex.governance.v1.GovernanceManagerService/GetReleaseSafetyState"
+	GovernanceManagerService_GetGovernanceSummary_FullMethodName         = "/kodex.governance.v1.GovernanceManagerService/GetGovernanceSummary"
 )
 
 // GovernanceManagerServiceClient is the client API for GovernanceManagerService service.
@@ -143,6 +144,8 @@ type GovernanceManagerServiceClient interface {
 	RecordReleaseSafetyState(ctx context.Context, in *RecordReleaseSafetyStateRequest, opts ...grpc.CallOption) (*ReleaseSafetyStateResponse, error)
 	// GetReleaseSafetyState returns current safety-loop state for a release package.
 	GetReleaseSafetyState(ctx context.Context, in *GetReleaseSafetyStateRequest, opts ...grpc.CallOption) (*ReleaseSafetyStateResponse, error)
+	// GetGovernanceSummary returns a safe owner/staff read model for a scoped target, release or integration ref.
+	GetGovernanceSummary(ctx context.Context, in *GetGovernanceSummaryRequest, opts ...grpc.CallOption) (*GovernanceSummaryResponse, error)
 }
 
 type governanceManagerServiceClient struct {
@@ -533,6 +536,16 @@ func (c *governanceManagerServiceClient) GetReleaseSafetyState(ctx context.Conte
 	return out, nil
 }
 
+func (c *governanceManagerServiceClient) GetGovernanceSummary(ctx context.Context, in *GetGovernanceSummaryRequest, opts ...grpc.CallOption) (*GovernanceSummaryResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GovernanceSummaryResponse)
+	err := c.cc.Invoke(ctx, GovernanceManagerService_GetGovernanceSummary_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // GovernanceManagerServiceServer is the server API for GovernanceManagerService service.
 // All implementations must embed UnimplementedGovernanceManagerServiceServer
 // for forward compatibility.
@@ -617,6 +630,8 @@ type GovernanceManagerServiceServer interface {
 	RecordReleaseSafetyState(context.Context, *RecordReleaseSafetyStateRequest) (*ReleaseSafetyStateResponse, error)
 	// GetReleaseSafetyState returns current safety-loop state for a release package.
 	GetReleaseSafetyState(context.Context, *GetReleaseSafetyStateRequest) (*ReleaseSafetyStateResponse, error)
+	// GetGovernanceSummary returns a safe owner/staff read model for a scoped target, release or integration ref.
+	GetGovernanceSummary(context.Context, *GetGovernanceSummaryRequest) (*GovernanceSummaryResponse, error)
 	mustEmbedUnimplementedGovernanceManagerServiceServer()
 }
 
@@ -740,6 +755,9 @@ func (UnimplementedGovernanceManagerServiceServer) RecordReleaseSafetyState(cont
 }
 func (UnimplementedGovernanceManagerServiceServer) GetReleaseSafetyState(context.Context, *GetReleaseSafetyStateRequest) (*ReleaseSafetyStateResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetReleaseSafetyState not implemented")
+}
+func (UnimplementedGovernanceManagerServiceServer) GetGovernanceSummary(context.Context, *GetGovernanceSummaryRequest) (*GovernanceSummaryResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetGovernanceSummary not implemented")
 }
 func (UnimplementedGovernanceManagerServiceServer) mustEmbedUnimplementedGovernanceManagerServiceServer() {
 }
@@ -1447,6 +1465,24 @@ func _GovernanceManagerService_GetReleaseSafetyState_Handler(srv interface{}, ct
 	return interceptor(ctx, in, info, handler)
 }
 
+func _GovernanceManagerService_GetGovernanceSummary_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetGovernanceSummaryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GovernanceManagerServiceServer).GetGovernanceSummary(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GovernanceManagerService_GetGovernanceSummary_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GovernanceManagerServiceServer).GetGovernanceSummary(ctx, req.(*GetGovernanceSummaryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // GovernanceManagerService_ServiceDesc is the grpc.ServiceDesc for GovernanceManagerService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1605,6 +1641,10 @@ var GovernanceManagerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetReleaseSafetyState",
 			Handler:    _GovernanceManagerService_GetReleaseSafetyState_Handler,
+		},
+		{
+			MethodName: "GetGovernanceSummary",
+			Handler:    _GovernanceManagerService_GetGovernanceSummary_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

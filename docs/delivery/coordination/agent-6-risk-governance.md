@@ -129,12 +129,20 @@
 - Событие без package ref подтверждается без записи; некорректная package ref, status не по типу события, неизвестный package или конфликтующий fingerprint получают безопасный permanent diagnostic без retry storm.
 - `governance-manager` не делает implicit lookup release package по project/repository/run и не читает БД `agent-manager`, runtime/Kubernetes, provider API, prompt/transcript, raw tool input/output, stdout/stderr, workspace paths, секреты или большие логи.
 
+## Завершённый срез срез сводки чтения governance
+
+- Issue: #976.
+- Результат среза: `governance-manager` отдаёт `GetGovernanceSummary` для safe модели чтения по target/project/release/package/integration ref.
+- Summary содержит pending/completed decisions, risk class, review outcome, gate request/decision outcome, release package/decision state, blocking/safety-loop state, linked provider/agent/runtime evidence refs, короткие `safe_summary`, timestamps, digest/version и partial diagnostics.
+- `staff-gateway` и будущий `web-console` получают готовую доменную сводку и не вычисляют governance-правила; gateway endpoint и UI остаются отдельными срезами.
+- Сырые provider payload, prompt/transcript, raw tool input/output, stdout/stderr, runtime logs, workspace paths, секреты и большие детали не возвращаются.
+
 ## Ближайшие зависимости
 
 | Домен | Что нужно согласовать |
 |---|---|
 | `projects-and-repositories` | Project/repository refs, services policy, branch rules, release policy, release line и risk profile refs. |
-| `agent-orchestration` | Run/session/acceptance refs, role review signals и ожидание governance decision; explicit agent evidence refs уже принимаются командой governance, а `agent.acceptance.completed`/`failed` подключены только как release package evidence при явном package ref. Для прямого review/risk signal нужен typed governance outcome. |
+| `agent-orchestration` | Run/session/acceptance refs, role review signals и ожидание governance decision; explicit agent evidence refs уже принимаются командой governance, `agent.acceptance.completed`/`failed` подключены только как release package evidence при явном package ref, а summary умеет находить package по сохранённому agent `integration_ref`. Для прямого review/risk signal нужен typed governance outcome. |
 | `provider-native-work-items` | PR/MR projections, changed file summary, provider review/comment/check refs и validation gate refs для provider write operations. |
-| `runtime-and-fleet` | Runtime/deploy refs уже принимаются командой по известному release package; для прямого consumer нужен owner event с безопасной package/gate привязкой. |
+| `runtime-and-fleet` | Runtime/deploy refs уже принимаются командой по известному release package и видны в summary через `integration_refs`; для прямого consumer нужен owner event с безопасной package/gate привязкой. |
 | `interaction-hub` | Delivery request/callback контракт для Human gate без владения decision state; ответ владельца уже принимается через `interaction.request.response_recorded` только для локального governance gate decision. |

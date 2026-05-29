@@ -5,8 +5,8 @@ title: kodex — модель данных домена рисков и рели
 status: active
 owner_role: SA
 created_at: 2026-05-22
-updated_at: 2026-05-27
-related_issues: [322, 769, 815, 827, 845, 856, 869, 886, 957]
+updated_at: 2026-05-29
+related_issues: [322, 769, 815, 827, 845, 856, 869, 886, 957, 976]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -220,6 +220,12 @@ approvals:
 `RecordReleaseAgentEvidence` добавляет agent acceptance/review/runtime evidence к уже созданному release package без новой таблицы: команда обновляет `agent_context`, `evidence_refs` и `integration_refs`, требует `expected_version`, не меняет `closed` package и публикует только безопасное событие `governance.release_decision_package.agent_evidence_recorded`. Для `agent` refs статус ограничен lifecycle-наборами `acceptance`, `run`, `human_gate` и `session`; более старый status-снимок для того же `domain/kind/ref` отклоняется, конфликтующий digest/version/status/summary считается конфликтом, повтор того же fingerprint идемпотентен. `GetReleaseDecisionPackage` и `ListReleaseDecisionPackages` читают тот же безопасный снимок: agent session/run/stage/acceptance/human gate refs, runtime job refs, локальные review/gate refs, status, короткий `summary`, `observed_at`, digest, version и версию package. Prompt body, transcript, raw tool input/output, stdout/stderr, runtime logs, workspace paths, секреты и БД `agent-manager` не попадают в `governance-manager`.
 
 Входящий consumer `agent.acceptance.completed`/`agent.acceptance.failed` является тонким способом вызвать тот же `RecordReleaseAgentEvidence`, когда событие `agent-manager` уже несёт явный `governance_release_decision_package_ref`. Он не создаёт новый тип хранения и не ищет package по project/run: отсутствие package ref подтверждается без записи, некорректная ссылка или конфликтующий fingerprint фиксируется как permanent diagnostic. В release package попадают только acceptance/session/run/stage refs, runtime job ref, status, короткая сводка, digest, `observed_at`, version и event idempotency fingerprint.
+
+### GovernanceSummary
+
+`GovernanceSummary` не является отдельной таблицей. Это безопасная модель чтения, которую `governance-manager` собирает из локальных risk assessment, review signal, gate, release package/decision, blocking signal и safety-loop state. Scope обязателен: `target`, `project_context`, `release_candidate_ref`, `release_decision_package_id` или `integration_ref` из release package. Для `integration_ref` используется уже сохранённый `integration_refs` snapshot, поэтому summary может находить package по provider PR/check, agent run/acceptance или runtime job ref без чтения БД соседних сервисов.
+
+Ответ делится на `pending_decisions`, `completed_decisions` и `evidence_summaries`. В decision item попадают только типизированные статусы и refs: `risk_class`, review outcome/severity, gate request status, gate outcome, release package status, release decision status/outcome, blocking signal status, release candidate/package refs, provider/runtime/agent refs, timestamps, version и короткий `safe_summary`. Evidence summary хранит только `source_kind`, `source_ref`, status/outcome, digest/version, `observed_at`, `error_code` и bounded summary. Если связанный локальный risk/review/gate ref отсутствует, summary возвращает partial response с безопасной диагностикой, а не падает и не делает implicit lookup по project/run/provider payload. Raw diff, provider payload, prompt/transcript, stdout/stderr, workspace paths, Kubernetes payload, секреты и большие логи в эту модель не попадают.
 
 ### ReleaseDecision
 

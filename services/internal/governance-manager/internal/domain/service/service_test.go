@@ -3138,6 +3138,233 @@ func TestReleaseSafetyStateRejectsTerminalRollback(t *testing.T) {
 	}
 }
 
+func TestGetGovernanceSummaryByReleasePackageReturnsSafeOwnerReadModel(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 29, 10, 0, 0, 0, time.UTC)
+	packageID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+	assessmentID := uuid.MustParse("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+	reviewSignalID := uuid.MustParse("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
+	decisionID := uuid.MustParse("dddddddd-dddd-4ddd-8ddd-dddddddddddd")
+	safetyStateID := uuid.MustParse("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee")
+	repository := &fakeRepository{
+		ready: true,
+		releasePackage: entity.ReleaseDecisionPackage{
+			VersionedBase:       entity.VersionedBase{ID: packageID, Version: 5, CreatedAt: now.Add(-2 * time.Hour), UpdatedAt: now.Add(-time.Minute)},
+			ReleaseCandidateRef: "release:v1.2.3",
+			ProjectContext:      value.ProjectContextRef{ProjectRef: "project:alpha", RepositoryRef: "repo:alpha"},
+			RiskAssessmentID:    &assessmentID,
+			ProviderRefs:        []byte(`[{"pull_request_ref":"provider:pr:42"}]`),
+			RuntimeRefs:         []byte(`[{"job_ref":"runtime:job:deploy","summary_ref":"runtime:summary:deploy"}]`),
+			AgentContext:        []byte(`{"run_ref":"agent:run:qa","acceptance_ref":"agent:acceptance:qa"}`),
+			ReviewSignalIDs:     []uuid.UUID{reviewSignalID},
+			EvidenceRefs: []value.EvidenceRef{{
+				Kind:           "agent_acceptance",
+				Ref:            "agent:acceptance:qa",
+				Summary:        "acceptance failed",
+				Digest:         "sha256:acceptance",
+				RetentionClass: "safe_ref",
+			}},
+			IntegrationRefs: []value.ReleaseIntegrationRef{
+				{Domain: "provider", Kind: "pull_request", Ref: "provider:pr:42", Status: "opened", Summary: "PR requires owner decision", Digest: "sha256:provider"},
+				{Domain: "agent", Kind: "acceptance", Ref: "agent:acceptance:qa", Status: "failed", Summary: "acceptance failed", Digest: "sha256:acceptance", ObservedAt: "2026-05-29T09:55:00Z", Version: "acceptance-version:7"},
+				{Domain: "runtime", Kind: "job", Ref: "runtime:job:deploy", Status: "failed", Summary: "deploy job failed with bounded diagnostic", Digest: "sha256:runtime", ErrorCode: "DEPLOY_FAILED"},
+			},
+			KnownLimitationsSummary: "release needs owner decision",
+			Status:                  enum.ReleaseDecisionPackageStatusDecisionRequested,
+		},
+		releaseDecisions: []entity.ReleaseDecision{{
+			VersionedBase:            entity.VersionedBase{ID: decisionID, Version: 1, CreatedAt: now.Add(-time.Hour), UpdatedAt: now.Add(-time.Hour)},
+			ReleaseDecisionPackageID: packageID,
+			Status:                   enum.ReleaseDecisionStatusRequested,
+		}},
+		releaseSafetyState: entity.ReleaseSafetyState{
+			VersionedBase:            entity.VersionedBase{ID: safetyStateID, Version: 2, CreatedAt: now.Add(-30 * time.Minute), UpdatedAt: now.Add(-2 * time.Minute)},
+			ReleaseDecisionPackageID: packageID,
+			CurrentState:             enum.ReleaseSafetyStateKindDeploying,
+			RuntimeJobRef:            "runtime:job:deploy",
+			LastStateReason:          "deploy observation is active",
+		},
+		assessment: entity.RiskAssessment{
+			VersionedBase:      entity.VersionedBase{ID: assessmentID, Version: 3, CreatedAt: now.Add(-3 * time.Hour), UpdatedAt: now.Add(-90 * time.Minute)},
+			Target:             value.ExternalRef{Type: "release_candidate", Ref: "release:v1.2.3"},
+			ProjectContext:     value.ProjectContextRef{ProjectRef: "project:alpha", RepositoryRef: "repo:alpha"},
+			EffectiveRiskClass: enum.RiskClassR3,
+			Status:             enum.RiskAssessmentStatusActive,
+			Explanation:        "production release risk",
+			RequiredGates:      []entity.RequiredGate{{GateKind: enum.GateKindRelease, MinRiskClass: enum.RiskClassR2, Reason: "release approval required"}},
+		},
+		reviewSignal: entity.ReviewSignal{
+			ID:               reviewSignalID,
+			RiskAssessmentID: &assessmentID,
+			Target:           value.ExternalRef{Type: "release_candidate", Ref: "release:v1.2.3"},
+			RoleKind:         enum.ReviewRoleKindQA,
+			Outcome:          enum.ReviewSignalOutcomePass,
+			Severity:         enum.SignalSeverityInfo,
+			Summary:          "QA signal passed",
+			CreatedAt:        now.Add(-80 * time.Minute),
+		},
+	}
+
+	summary, err := newTestService(repository).GetGovernanceSummary(context.Background(), GetGovernanceSummaryInput{
+		Scope: entity.GovernanceSummaryScope{ReleaseDecisionPackageID: &packageID},
+		Meta:  QueryMeta{Actor: value.Actor{Type: "user", ID: "owner"}},
+	})
+	if err != nil {
+		t.Fatalf("GetGovernanceSummary(): %v", err)
+	}
+	if len(summary.PendingDecisions) < 4 {
+		t.Fatalf("pending decisions = %+v, want package, release decision, safety state and R3 risk", summary.PendingDecisions)
+	}
+	if !summaryHasDecision(summary.PendingDecisions, enum.GovernanceDecisionSummaryKindReleaseDecisionPackage, packageID.String(), enum.GovernanceDecisionAttentionPending) {
+		t.Fatalf("pending decisions = %+v, want release package summary", summary.PendingDecisions)
+	}
+	if !summaryHasDecision(summary.PendingDecisions, enum.GovernanceDecisionSummaryKindRiskAssessment, assessmentID.String(), enum.GovernanceDecisionAttentionBlocked) {
+		t.Fatalf("pending decisions = %+v, want blocked risk assessment", summary.PendingDecisions)
+	}
+	if !summaryHasDecision(summary.CompletedDecisions, enum.GovernanceDecisionSummaryKindReviewSignal, reviewSignalID.String(), enum.GovernanceDecisionAttentionCompleted) {
+		t.Fatalf("completed decisions = %+v, want review signal", summary.CompletedDecisions)
+	}
+	if !summaryHasEvidence(summary.EvidenceSummaries, "agent.acceptance", "agent:acceptance:qa") ||
+		!summaryHasEvidence(summary.EvidenceSummaries, "runtime.job", "runtime:job:deploy") ||
+		!summaryHasEvidence(summary.EvidenceSummaries, "provider.pull_request", "provider:pr:42") {
+		t.Fatalf("evidence summaries = %+v, want provider, agent and runtime refs", summary.EvidenceSummaries)
+	}
+	rendered := strings.ToLower(summaryRenderedText(summary))
+	for _, unsafe := range []string{"stdout", "stderr", "workspace", "secret", "raw_diff", "provider payload"} {
+		if strings.Contains(rendered, unsafe) {
+			t.Fatalf("summary leaked unsafe marker %q: %s", unsafe, rendered)
+		}
+	}
+}
+
+func TestGetGovernanceSummaryMissingLinkedRiskIsPartial(t *testing.T) {
+	t.Parallel()
+
+	packageID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+	assessmentID := uuid.MustParse("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+	repository := &fakeRepository{
+		ready: true,
+		releasePackage: entity.ReleaseDecisionPackage{
+			VersionedBase:       entity.VersionedBase{ID: packageID, Version: 1},
+			ReleaseCandidateRef: "release:v1.2.3",
+			ProjectContext:      value.ProjectContextRef{ProjectRef: "project:alpha"},
+			RiskAssessmentID:    &assessmentID,
+			Status:              enum.ReleaseDecisionPackageStatusReady,
+		},
+		assessmentErr: errs.ErrNotFound,
+	}
+
+	summary, err := newTestService(repository).GetGovernanceSummary(context.Background(), GetGovernanceSummaryInput{
+		Scope: entity.GovernanceSummaryScope{ReleaseDecisionPackageID: &packageID},
+		Meta:  QueryMeta{Actor: value.Actor{Type: "user", ID: "owner"}},
+	})
+	if err != nil {
+		t.Fatalf("GetGovernanceSummary(): %v", err)
+	}
+	if !summaryHasDiagnostic(summary.Diagnostics, "missing_risk_assessment_ref") {
+		t.Fatalf("diagnostics = %+v, want missing risk diagnostic", summary.Diagnostics)
+	}
+	if !summaryHasDecision(summary.PendingDecisions, enum.GovernanceDecisionSummaryKindReleaseDecisionPackage, packageID.String(), enum.GovernanceDecisionAttentionPending) {
+		t.Fatalf("pending decisions = %+v, want partial package summary", summary.PendingDecisions)
+	}
+}
+
+func TestGetGovernanceSummaryByIntegrationRefUsesReleasePackageFilter(t *testing.T) {
+	t.Parallel()
+
+	packageID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+	repository := &fakeRepository{
+		ready: true,
+		releasePackages: []entity.ReleaseDecisionPackage{{
+			VersionedBase:       entity.VersionedBase{ID: packageID, Version: 2},
+			ReleaseCandidateRef: "release:v1.2.3",
+			ProjectContext:      value.ProjectContextRef{ProjectRef: "project:alpha"},
+			IntegrationRefs: []value.ReleaseIntegrationRef{{
+				Domain: "agent",
+				Kind:   "run",
+				Ref:    "agent:run:42",
+				Status: "completed",
+				Digest: "sha256:run",
+			}},
+			Status: enum.ReleaseDecisionPackageStatusClosed,
+		}},
+	}
+
+	summary, err := newTestService(repository).GetGovernanceSummary(context.Background(), GetGovernanceSummaryInput{
+		Scope: entity.GovernanceSummaryScope{IntegrationRef: value.ReleaseIntegrationRef{Domain: "AGENT", Kind: "RUN", Ref: "agent:run:42"}},
+		Meta:  QueryMeta{Actor: value.Actor{Type: "user", ID: "owner"}},
+	})
+	if err != nil {
+		t.Fatalf("GetGovernanceSummary(): %v", err)
+	}
+	if repository.releasePackageListFilter.IntegrationRef.Domain != "agent" ||
+		repository.releasePackageListFilter.IntegrationRef.Kind != "run" ||
+		repository.releasePackageListFilter.IntegrationRef.Ref != "agent:run:42" {
+		t.Fatalf("release package filter = %+v, want normalized agent run ref", repository.releasePackageListFilter)
+	}
+	if !summaryHasDecision(summary.CompletedDecisions, enum.GovernanceDecisionSummaryKindReleaseDecisionPackage, packageID.String(), enum.GovernanceDecisionAttentionCompleted) {
+		t.Fatalf("completed decisions = %+v, want closed package summary", summary.CompletedDecisions)
+	}
+}
+
+func TestGetGovernanceSummaryRejectsEmptyScope(t *testing.T) {
+	t.Parallel()
+
+	_, err := newTestService(&fakeRepository{ready: true}).GetGovernanceSummary(context.Background(), GetGovernanceSummaryInput{
+		Meta: QueryMeta{Actor: value.Actor{Type: "user", ID: "owner"}},
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("GetGovernanceSummary() error = %v, want ErrInvalidArgument", err)
+	}
+}
+
+func summaryHasDecision(items []entity.GovernanceDecisionSummary, kind enum.GovernanceDecisionSummaryKind, id string, attention enum.GovernanceDecisionAttention) bool {
+	for _, item := range items {
+		if item.Kind == kind && item.ID == id && item.Attention == attention {
+			return true
+		}
+	}
+	return false
+}
+
+func summaryHasEvidence(items []entity.GovernanceEvidenceSummary, kind string, ref string) bool {
+	for _, item := range items {
+		if item.SourceKind == kind && item.SourceRef == ref {
+			return true
+		}
+	}
+	return false
+}
+
+func summaryHasDiagnostic(items []string, diagnostic string) bool {
+	for _, item := range items {
+		if item == diagnostic {
+			return true
+		}
+	}
+	return false
+}
+
+func summaryRenderedText(summary entity.GovernanceSummary) string {
+	var builder strings.Builder
+	for _, item := range summary.PendingDecisions {
+		builder.WriteString(item.SafeSummary)
+		builder.WriteString("\n")
+	}
+	for _, item := range summary.CompletedDecisions {
+		builder.WriteString(item.SafeSummary)
+		builder.WriteString("\n")
+	}
+	for _, item := range summary.EvidenceSummaries {
+		builder.WriteString(item.SafeSummary)
+		builder.WriteString("\n")
+		builder.WriteString(item.ErrorCode)
+		builder.WriteString("\n")
+	}
+	return builder.String()
+}
+
 type fakeRepository struct {
 	governancerepo.Repository
 	ready                     bool
@@ -3146,6 +3373,8 @@ type fakeRepository struct {
 	profile                   entity.RiskProfile
 	profileVersion            entity.RiskProfileVersion
 	assessment                entity.RiskAssessment
+	assessmentErr             error
+	riskAssessments           []entity.RiskAssessment
 	assessmentReads           int
 	riskFactors               []entity.RiskFactor
 	riskAssessmentListCalls   int
@@ -3158,16 +3387,22 @@ type fakeRepository struct {
 	reviewSignalListCalls     int
 	gateRequest               entity.GateRequest
 	gateRequestErr            error
+	gateRequests              []entity.GateRequest
 	gateRequestReads          int
+	gateRequestListFilter     query.GateRequestFilter
 	gateRequestListCalls      int
 	gateDecision              entity.GateDecision
 	gateDecisionErr           error
+	gateDecisions             []entity.GateDecision
 	gateDecisionReads         int
 	gateDecisionListCalls     int
 	releasePackage            entity.ReleaseDecisionPackage
+	releasePackages           []entity.ReleaseDecisionPackage
 	releasePackageReads       int
+	releasePackageListFilter  query.ReleaseDecisionPackageFilter
 	releasePackageListCalls   int
 	releaseDecision           entity.ReleaseDecision
+	releaseDecisions          []entity.ReleaseDecision
 	releaseDecisionReads      int
 	releaseDecisionListCalls  int
 	releaseSafetyState        entity.ReleaseSafetyState
@@ -3267,11 +3502,17 @@ func (repository *fakeRepository) UpdateRiskAssessment(_ context.Context, assess
 
 func (repository *fakeRepository) GetRiskAssessment(_ context.Context, _ uuid.UUID) (entity.RiskAssessment, error) {
 	repository.assessmentReads++
+	if repository.assessmentErr != nil {
+		return entity.RiskAssessment{}, repository.assessmentErr
+	}
 	return repository.assessment, nil
 }
 
 func (repository *fakeRepository) ListRiskAssessments(_ context.Context, _ query.RiskAssessmentFilter) ([]entity.RiskAssessment, query.PageResult, error) {
 	repository.riskAssessmentListCalls++
+	if len(repository.riskAssessments) > 0 {
+		return repository.riskAssessments, query.PageResult{}, nil
+	}
 	return nil, query.PageResult{}, nil
 }
 
@@ -3349,13 +3590,20 @@ func (repository *fakeRepository) GetGateDecision(_ context.Context, _ uuid.UUID
 	return repository.gateDecision, nil
 }
 
-func (repository *fakeRepository) ListGateRequests(_ context.Context, _ query.GateRequestFilter) ([]entity.GateRequest, query.PageResult, error) {
+func (repository *fakeRepository) ListGateRequests(_ context.Context, filter query.GateRequestFilter) ([]entity.GateRequest, query.PageResult, error) {
+	repository.gateRequestListFilter = filter
 	repository.gateRequestListCalls++
+	if len(repository.gateRequests) > 0 {
+		return repository.gateRequests, query.PageResult{}, nil
+	}
 	return nil, query.PageResult{}, nil
 }
 
 func (repository *fakeRepository) ListGateDecisions(_ context.Context, _ query.GateDecisionFilter) ([]entity.GateDecision, query.PageResult, error) {
 	repository.gateDecisionListCalls++
+	if len(repository.gateDecisions) > 0 {
+		return repository.gateDecisions, query.PageResult{}, nil
+	}
 	return nil, query.PageResult{}, nil
 }
 
@@ -3388,8 +3636,15 @@ func (repository *fakeRepository) GetReleaseDecisionPackage(_ context.Context, _
 	return repository.releasePackage, nil
 }
 
-func (repository *fakeRepository) ListReleaseDecisionPackages(_ context.Context, _ query.ReleaseDecisionPackageFilter) ([]entity.ReleaseDecisionPackage, query.PageResult, error) {
+func (repository *fakeRepository) ListReleaseDecisionPackages(_ context.Context, filter query.ReleaseDecisionPackageFilter) ([]entity.ReleaseDecisionPackage, query.PageResult, error) {
+	repository.releasePackageListFilter = filter
 	repository.releasePackageListCalls++
+	if len(repository.releasePackages) > 0 {
+		return repository.releasePackages, query.PageResult{}, nil
+	}
+	if repository.releasePackage.ID == uuid.Nil {
+		return nil, query.PageResult{}, nil
+	}
 	return []entity.ReleaseDecisionPackage{repository.releasePackage}, query.PageResult{}, nil
 }
 
@@ -3426,6 +3681,12 @@ func (repository *fakeRepository) GetReleaseDecisionByPackage(_ context.Context,
 
 func (repository *fakeRepository) ListReleaseDecisions(_ context.Context, _ query.ReleaseDecisionFilter) ([]entity.ReleaseDecision, query.PageResult, error) {
 	repository.releaseDecisionListCalls++
+	if len(repository.releaseDecisions) > 0 {
+		return repository.releaseDecisions, query.PageResult{}, nil
+	}
+	if repository.releaseDecision.ID == uuid.Nil {
+		return nil, query.PageResult{}, nil
+	}
 	return []entity.ReleaseDecision{repository.releaseDecision}, query.PageResult{}, nil
 }
 

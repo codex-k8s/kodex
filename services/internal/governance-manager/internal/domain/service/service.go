@@ -2563,6 +2563,12 @@ func (s *Service) authorizeReleasePackageList(ctx context.Context, meta QueryMet
 	if strings.TrimSpace(filter.ProjectContext.ProjectRef) != "" {
 		return s.authorizeQuery(ctx, meta, actionReleaseRead, releaseDecisionContextResource(filter.ProjectContext.ProjectRef))
 	}
+	if releaseIntegrationRefProvided(filter.IntegrationRef) {
+		if strings.TrimSpace(filter.IntegrationRef.Domain) == "" || strings.TrimSpace(filter.IntegrationRef.Kind) == "" || strings.TrimSpace(filter.IntegrationRef.Ref) == "" {
+			return errs.ErrInvalidArgument
+		}
+		return s.authorizeQuery(ctx, meta, actionReleaseRead, releaseDecisionContextResource(releaseIntegrationRefResource(filter.IntegrationRef)))
+	}
 	return errs.ErrInvalidArgument
 }
 
