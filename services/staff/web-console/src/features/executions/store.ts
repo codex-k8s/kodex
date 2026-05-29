@@ -50,7 +50,7 @@ export const useExecutionsStore = defineStore('executions', {
           }),
         ]);
         this.runtimeStatus = runtime.runtime_status;
-        this.activities = activities.activities;
+        this.activities = pageToken ? [...this.activities, ...activities.activities] : activities.activities;
         this.nextPageToken = activities.page.next_page_token;
       } catch (error) {
         this.error = error as ApiError;

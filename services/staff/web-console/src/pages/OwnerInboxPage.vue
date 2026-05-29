@@ -6,6 +6,7 @@ import type { RequestKind, RequestStatus, ResponseAction } from '@/shared/api/ge
 import { useOperatorContextStore } from '@/features/operator-context/store';
 import { useOwnerInboxStore, terminalRequestStatuses } from '@/features/owner-inbox/store';
 import { compactRef, formatDateTime, formatRelativeTime } from '@/shared/lib/format';
+import ApiErrorAlert from '@/shared/ui/ApiErrorAlert.vue';
 import EmptyState from '@/shared/ui/EmptyState.vue';
 import StatusChip from '@/shared/ui/StatusChip.vue';
 
@@ -40,6 +41,24 @@ const responseActions: ResponseAction[] = [
 
 const canLoad = computed(() => context.isReady && !inbox.isLoadingList);
 const selectedItem = computed(() => inbox.selectedItem);
+const selectedIsTerminal = computed(
+  () => !!selectedItem.value && terminalRequestStatuses.includes(selectedItem.value.request_status),
+);
+const selectedAllowedActionKeys = computed(
+  () => new Set(inbox.selectedAllowedActions.map((action) => action.action_key)),
+);
+const selectedActionNeedsSummary = computed(() =>
+  ['answer', 'request_changes', 'custom'].includes(selectedAction.value),
+);
+const canSubmitAction = computed(() => {
+  if (inbox.isResponding || !selectedItem.value || selectedIsTerminal.value) {
+    return false;
+  }
+  if (!selectedAllowedActionKeys.value.has(selectedAction.value)) {
+    return false;
+  }
+  return !selectedActionNeedsSummary.value || responseSummary.value.trim().length > 0;
+});
 
 function statusTone(status: RequestStatus): 'neutral' | 'success' | 'warning' | 'error' | 'info' {
   if (status === 'answered') {
@@ -73,7 +92,7 @@ function selectItem(requestId: string) {
 }
 
 function openAction(action: string) {
-  if (!isResponseAction(action)) {
+  if (!isResponseAction(action) || !selectedAllowedActionKeys.value.has(action)) {
     return;
   }
   selectedAction.value = action;
@@ -83,7 +102,7 @@ function openAction(action: string) {
 }
 
 async function submitAction() {
-  if (!context.isReady) {
+  if (!context.isReady || !canSubmitAction.value) {
     return;
   }
   await inbox.respond(
@@ -95,6 +114,17 @@ async function submitAction() {
   if (!inbox.error) {
     actionDialog.value = false;
   }
+}
+
+function reloadCurrent() {
+  if (!context.isReady) {
+    return;
+  }
+  if (selectedItem.value) {
+    void inbox.select(context.asContext, selectedItem.value.request_id);
+    return;
+  }
+  void inbox.load(context.asContext);
 }
 </script>
 
@@ -119,8 +149,9 @@ async function submitAction() {
     <v-alert v-if="!context.isReady" type="warning" variant="tonal">
       {{ t('context.missing') }}
     </v-alert>
-    <v-alert v-if="inbox.error" type="error" variant="tonal">
-      {{ t(inbox.error.messageKey) }}
+    <ApiErrorAlert :error="inbox.error" :retry-label="t('app.retry')" @retry="reloadCurrent" />
+    <v-alert v-if="inbox.latestResponse" type="success" variant="tonal">
+      {{ t('inbox.answered') }} · {{ t(`statuses.${inbox.latestResponse.response_action}`) }}
     </v-alert>
 
     <v-card class="surface-panel pa-4">
@@ -175,37 +206,39 @@ async function submitAction() {
     <section class="inbox-layout">
       <v-card class="surface-panel inbox-list">
         <v-progress-linear v-if="inbox.isLoadingList" indeterminate color="primary" />
-        <v-table v-if="inbox.items.length > 0" density="comfortable">
-          <thead>
-            <tr>
-              <th>{{ t('inbox.kind') }}</th>
-              <th>{{ t('inbox.details') }}</th>
-              <th>{{ t('inbox.status') }}</th>
-              <th>{{ t('inbox.deadline') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="item in inbox.items"
-              :key="item.request_id"
-              :class="{ 'table-row-active': item.request_id === selectedItem?.request_id }"
-              @click="selectItem(item.request_id)"
-            >
-              <td>
-                <StatusChip :label="t(`statuses.${item.request_kind}`)" tone="info" />
-              </td>
-              <td>
-                <div class="item-title">{{ item.title }}</div>
-                <div class="meta-text">{{ item.summary }}</div>
-              </td>
-              <td>
-                <StatusChip :label="t(`statuses.${item.request_status}`)" :tone="statusTone(item.request_status)" />
-              </td>
-              <td>{{ formatRelativeTime(item.deadline_at) }}</td>
-            </tr>
-          </tbody>
-        </v-table>
-        <EmptyState v-else icon="mdi-inbox-outline" :title="t('inbox.empty')" />
+        <div v-if="inbox.items.length > 0" class="table-scroll">
+          <v-table density="comfortable">
+            <thead>
+              <tr>
+                <th>{{ t('inbox.kind') }}</th>
+                <th>{{ t('inbox.details') }}</th>
+                <th>{{ t('inbox.status') }}</th>
+                <th>{{ t('inbox.deadline') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="item in inbox.items"
+                :key="item.request_id"
+                :class="{ 'table-row-active': item.request_id === selectedItem?.request_id }"
+                @click="selectItem(item.request_id)"
+              >
+                <td>
+                  <StatusChip :label="t(`statuses.${item.request_kind}`)" tone="info" />
+                </td>
+                <td>
+                  <div class="item-title">{{ item.title }}</div>
+                  <div class="meta-text">{{ item.summary }}</div>
+                </td>
+                <td>
+                  <StatusChip :label="t(`statuses.${item.request_status}`)" :tone="statusTone(item.request_status)" />
+                </td>
+                <td>{{ formatRelativeTime(item.deadline_at) }}</td>
+              </tr>
+            </tbody>
+          </v-table>
+        </div>
+        <EmptyState v-else icon="mdi-inbox-outline" :title="t('inbox.empty')" :text="t('inbox.noSelectionText')" />
         <div class="list-footer">
           <v-btn
             variant="tonal"
@@ -247,9 +280,26 @@ async function submitAction() {
               <div>{{ formatDateTime(selectedItem.deadline_at) }}</div>
             </div>
             <div>
+              <div class="meta-text">{{ t('inbox.assignees') }}</div>
+              <div>{{ selectedItem.assignee_refs.length }}</div>
+            </div>
+            <div>
               <div class="meta-text">Version</div>
               <div>{{ selectedItem.version }}</div>
             </div>
+          </div>
+
+          <div v-if="selectedItem.context_refs.length > 0" class="ref-chip-row">
+            <v-chip
+              v-for="ref in selectedItem.context_refs"
+              :key="`${ref.ref_kind}:${ref.ref}`"
+              size="small"
+              variant="tonal"
+              color="info"
+              label
+            >
+              {{ ref.ref_kind }} / {{ compactRef(ref.ref) }}
+            </v-chip>
           </div>
 
           <v-divider />
@@ -259,6 +309,9 @@ async function submitAction() {
             <div class="meta-text">
               {{ selectedItem.delivery_summary.latest_status }} ·
               {{ selectedItem.delivery_summary.attempt_count }}
+              <span v-if="selectedItem.delivery_summary.latest_error_code">
+                · {{ selectedItem.delivery_summary.latest_error_code }}
+              </span>
             </div>
           </div>
 
@@ -283,6 +336,9 @@ async function submitAction() {
 
           <div class="detail-section">
             <div class="section-title">{{ t('inbox.allowedActions') }}</div>
+            <v-alert v-if="selectedIsTerminal" type="info" variant="tonal">
+              {{ t('inbox.terminalHint') }}
+            </v-alert>
             <div v-if="inbox.selectedAllowedActions.length > 0" class="action-grid">
               <v-btn
                 v-for="action in inbox.selectedAllowedActions"
@@ -309,6 +365,12 @@ async function submitAction() {
     <v-dialog v-model="actionDialog" max-width="560">
       <v-card class="pa-5">
         <div class="section-title">{{ t(`statuses.${selectedAction}`) }}</div>
+        <p v-if="selectedItem" class="dialog-subtitle">
+          {{ selectedItem.title }} · {{ t('inbox.selectedVersion') }} {{ selectedItem.version }}
+        </p>
+        <v-alert class="mt-3" type="info" variant="tonal">
+          {{ t('inbox.responseHint') }}
+        </v-alert>
         <v-textarea
           v-model="responseSummary"
           class="mt-4"
@@ -323,12 +385,10 @@ async function submitAction() {
           :label="t('inbox.responseReason')"
           maxlength="256"
         />
-        <v-alert v-if="inbox.error" class="mt-3" type="error" variant="tonal">
-          {{ t(inbox.error.messageKey) }}
-        </v-alert>
+        <ApiErrorAlert :error="inbox.error" class="mt-3" :retry-label="t('inbox.reloadAfterConflict')" @retry="reloadCurrent" />
         <div class="dialog-actions">
           <v-btn variant="text" @click="actionDialog = false">{{ t('app.cancel') }}</v-btn>
-          <v-btn color="primary" :loading="inbox.isResponding" @click="submitAction">
+          <v-btn color="primary" :disabled="!canSubmitAction" :loading="inbox.isResponding" @click="submitAction">
             {{ t('inbox.sendAction') }}
           </v-btn>
         </div>
@@ -384,6 +444,10 @@ async function submitAction() {
   cursor: pointer;
 }
 
+.table-scroll {
+  overflow-x: auto;
+}
+
 .item-title {
   color: #121826;
   font-weight: 700;
@@ -422,6 +486,12 @@ async function submitAction() {
   grid-template-columns: 1fr 1fr;
 }
 
+.ref-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .detail-section {
   display: grid;
   gap: 8px;
@@ -441,9 +511,19 @@ async function submitAction() {
   margin-top: 18px;
 }
 
+.dialog-subtitle {
+  color: #667085;
+  line-height: 1.45;
+  margin: 8px 0 0;
+}
+
 @media (max-width: 1180px) {
   .filter-row,
   .inbox-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-grid {
     grid-template-columns: 1fr;
   }
 }

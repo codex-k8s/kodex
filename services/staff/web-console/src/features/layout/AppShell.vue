@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
+import { useDisplay } from 'vuetify';
 
 import { actorTypeOptions, isLocalDevActorHeadersEnabled, scopeTypeOptions } from '@/shared/api/context';
 import { routeNames } from '@/shared/lib/routes';
@@ -12,6 +13,8 @@ const route = useRoute();
 const router = useRouter();
 const context = useOperatorContextStore();
 const localDevActorHeaders = isLocalDevActorHeadersEnabled();
+const { mdAndUp } = useDisplay();
+const drawerOpen = ref(mdAndUp.value);
 
 const navItems = computed(() => [
   {
@@ -38,12 +41,25 @@ const currentTitle = computed(() => {
 
 function goTo(routeName: string) {
   void router.push({ name: routeName });
+  if (!mdAndUp.value) {
+    drawerOpen.value = false;
+  }
 }
+
+watch(mdAndUp, (isDesktop) => {
+  drawerOpen.value = isDesktop;
+});
 </script>
 
 <template>
   <v-app>
-    <v-navigation-drawer class="app-drawer" permanent width="260">
+    <v-navigation-drawer
+      v-model="drawerOpen"
+      class="app-drawer"
+      :permanent="mdAndUp"
+      :temporary="!mdAndUp"
+      width="260"
+    >
       <div class="brand-row">
         <div class="brand-mark">K</div>
         <div class="brand-text">{{ t('app.name') }}</div>
@@ -70,6 +86,7 @@ function goTo(routeName: string) {
     </v-navigation-drawer>
 
     <v-app-bar class="app-bar" flat height="72">
+      <v-app-bar-nav-icon v-if="!mdAndUp" :aria-label="t('navigation.menu')" @click="drawerOpen = true" />
       <div class="app-bar__title">{{ currentTitle }}</div>
       <v-spacer />
       <v-text-field
@@ -166,7 +183,7 @@ function goTo(routeName: string) {
   color: #121826;
   font-size: 1rem;
   font-weight: 700;
-  margin-left: 24px;
+  margin-left: 18px;
 }
 
 .app-bar__search {
@@ -194,5 +211,25 @@ function goTo(routeName: string) {
 
 .app-content {
   padding: 24px;
+}
+
+@media (max-width: 780px) {
+  .app-bar__search {
+    display: none;
+  }
+
+  .context-strip {
+    align-items: stretch;
+    padding: 12px 16px;
+  }
+
+  .toolbar-field {
+    max-width: none;
+    min-width: 100%;
+  }
+
+  .app-content {
+    padding: 16px;
+  }
 }
 </style>
