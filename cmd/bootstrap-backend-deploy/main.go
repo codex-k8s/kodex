@@ -28,7 +28,7 @@ func main() {
 	repoRoot := flag.String("repo-root", ".", "repository root containing services.yaml and deploy/base")
 	envFile := flag.String("env-file", "", "bootstrap env file; values are loaded but never printed")
 	servicesFile := flag.String("services-file", "", "root services.yaml path; defaults to <repo-root>/services.yaml")
-	ring := flag.String("ring", "first", "backend deploy ring: first, second, staff, or all")
+	ring := flag.String("ring", "first", "backend deploy ring: first, second, staff, mcp, or all")
 	skipBuild := flag.Bool("skip-build", false, "skip Kaniko image builds and only apply manifests")
 	skipHealth := flag.Bool("skip-health", false, "skip HTTP readiness checks after rollout")
 	flag.Parse()
@@ -114,6 +114,10 @@ var staffRingServices = []serviceDeploy{
 	{Name: "staff-gateway", Dir: "staff-gateway", ReadyPort: "8080"},
 }
 
+var mcpRingServices = []serviceDeploy{
+	{Name: "platform-mcp-server", Dir: "platform-mcp-server", ReadyPort: "8080"},
+}
+
 var firstRingImageNames = []string{
 	"platform-event-log-migrations",
 	"access-manager",
@@ -146,6 +150,10 @@ var staffRingImageNames = []string{
 	"staff-gateway",
 }
 
+var mcpRingImageNames = []string{
+	"platform-mcp-server",
+}
+
 var (
 	firstRing = backendRing{
 		Name:       "first",
@@ -164,6 +172,12 @@ var (
 		Label:      "staff gateway contour",
 		Services:   staffRingServices,
 		ImageNames: staffRingImageNames,
+	}
+	mcpRing = backendRing{
+		Name:       "mcp",
+		Label:      "platform MCP server contour",
+		Services:   mcpRingServices,
+		ImageNames: mcpRingImageNames,
 	}
 )
 
@@ -258,10 +272,12 @@ func selectBackendRings(value string) ([]backendRing, error) {
 		return []backendRing{secondRing}, nil
 	case "staff", "staff-gateway":
 		return []backendRing{staffRing}, nil
+	case "mcp", "platform-mcp", "platform-mcp-server":
+		return []backendRing{mcpRing}, nil
 	case "all":
 		return []backendRing{firstRing, secondRing}, nil
 	default:
-		return nil, fmt.Errorf("unsupported backend deploy ring %q; expected first, second, staff, or all", value)
+		return nil, fmt.Errorf("unsupported backend deploy ring %q; expected first, second, staff, mcp, or all", value)
 	}
 }
 
@@ -478,6 +494,7 @@ func independentRuntimeSecretKeys() []string {
 		"KODEX_PROVIDER_HUB_VAULT_TOKEN",
 		"KODEX_INTEGRATION_GATEWAY_SECRET_RESOLVER_VAULT_TOKEN",
 		"KODEX_RUNTIME_MANAGER_GRPC_AUTH_TOKEN",
+		"KODEX_PLATFORM_MCP_SERVER_MCP_AUTH_TOKEN",
 	}
 }
 
