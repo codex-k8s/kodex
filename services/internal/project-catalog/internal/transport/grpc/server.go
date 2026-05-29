@@ -30,6 +30,7 @@ type projectService interface {
 	ImportServicesPolicy(context.Context, projectservice.ImportServicesPolicyInput) (entity.ServicesPolicy, error)
 	ImportBootstrapServicesPolicy(context.Context, projectservice.ImportBootstrapServicesPolicyInput) (projectservice.BootstrapServicesPolicyImportResult, error)
 	ReconcileBootstrapMergeSignal(context.Context, projectservice.ReconcileBootstrapMergeSignalInput) (projectservice.BootstrapServicesPolicyImportResult, error)
+	ReconcileAdoptionMergeSignal(context.Context, projectservice.ReconcileAdoptionMergeSignalInput) (projectservice.BootstrapServicesPolicyImportResult, error)
 	GetServicesPolicy(context.Context, projectservice.GetServicesPolicyInput) (entity.ServicesPolicy, error)
 	ListServiceDescriptors(context.Context, projectservice.ListServiceDescriptorsInput) (projectservice.ListServiceDescriptorsResult, error)
 	CreatePolicyEditProposal(context.Context, projectservice.CreatePolicyEditProposalInput) (entity.PolicyEditProposal, error)
@@ -145,6 +146,11 @@ func (s *Server) ImportBootstrapServicesPolicy(ctx context.Context, request *pro
 // ReconcileBootstrapMergeSignal imports checked services.yaml from a safe provider bootstrap merge signal.
 func (s *Server) ReconcileBootstrapMergeSignal(ctx context.Context, request *projectsv1.ReconcileBootstrapMergeSignalRequest) (*projectsv1.BootstrapServicesPolicyImportResponse, error) {
 	return handleUnary(ctx, request, grpccasters.ReconcileBootstrapMergeSignalInput, s.service.ReconcileBootstrapMergeSignal, grpccasters.BootstrapServicesPolicyImportResponse)
+}
+
+// ReconcileAdoptionMergeSignal imports checked services.yaml from a safe provider adoption merge signal.
+func (s *Server) ReconcileAdoptionMergeSignal(ctx context.Context, request *projectsv1.ReconcileAdoptionMergeSignalRequest) (*projectsv1.BootstrapServicesPolicyImportResponse, error) {
+	return handleUnary(ctx, request, grpccasters.ReconcileAdoptionMergeSignalInput, s.service.ReconcileAdoptionMergeSignal, grpccasters.BootstrapServicesPolicyImportResponse)
 }
 
 // GetServicesPolicy returns a checked services.yaml projection.
