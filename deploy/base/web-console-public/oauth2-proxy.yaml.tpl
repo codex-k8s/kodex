@@ -65,7 +65,7 @@ spec:
             - "--upstream=http://web-console:8080/"
             - "--redirect-url=https://platform.kodex.works/oauth2/callback"
             - "--authenticated-emails-file=/etc/oauth2-proxy/authenticated-emails.txt"
-            - "--scope=user:email"
+            - "--scope=user:email read:org"
             - "--cookie-domain=platform.kodex.works"
             - "--cookie-secure=true"
             - "--cookie-httponly=true"
