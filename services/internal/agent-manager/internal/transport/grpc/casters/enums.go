@@ -65,6 +65,13 @@ var promptVersionStatusesFromProto = map[agentsv1.PromptVersionStatus]enum.Promp
 
 var agentRunStatusesFromProto = agentRunStatusValues()
 
+var agentRunnerRunStatesFromProto = enumMap(
+	enumPair(agentsv1.AgentRunnerRunState_AGENT_RUNNER_RUN_STATE_QUEUED, agentservice.RunnerRunStateQueued),
+	enumPair(agentsv1.AgentRunnerRunState_AGENT_RUNNER_RUN_STATE_RUNNING, agentservice.RunnerRunStateRunning),
+	enumPair(agentsv1.AgentRunnerRunState_AGENT_RUNNER_RUN_STATE_COMPLETED, agentservice.RunnerRunStateCompleted),
+	enumPair(agentsv1.AgentRunnerRunState_AGENT_RUNNER_RUN_STATE_FAILED, agentservice.RunnerRunStateFailed),
+)
+
 var agentSessionSnapshotKindsFromProto = map[agentsv1.AgentSessionSnapshotKind]enum.AgentSessionSnapshotKind{
 	agentsv1.AgentSessionSnapshotKind_AGENT_SESSION_SNAPSHOT_KIND_TURN_CHECKPOINT:     enum.AgentSessionSnapshotKindTurnCheckpoint,
 	agentsv1.AgentSessionSnapshotKind_AGENT_SESSION_SNAPSHOT_KIND_RUN_COMPLETION:      enum.AgentSessionSnapshotKindRunCompletion,
@@ -256,6 +263,10 @@ func OptionalAgentRunStatusFromProto(value *agentsv1.AgentRunStatus) (*enum.Agen
 
 func AgentRunStatusToProto(value enum.AgentRunStatus) agentsv1.AgentRunStatus {
 	return enumToProto(value, agentRunStatusesToProto, agentsv1.AgentRunStatus_AGENT_RUN_STATUS_UNSPECIFIED)
+}
+
+func AgentRunnerRunStateFromProto(value agentsv1.AgentRunnerRunState) (agentservice.RunnerRunState, error) {
+	return enumFromProto(value, agentRunnerRunStatesFromProto)
 }
 
 func RuntimeObservationStateToProto(value agentservice.RuntimeObservationState) agentsv1.AgentRunRuntimeObservationState {

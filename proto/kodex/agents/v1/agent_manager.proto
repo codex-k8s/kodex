@@ -46,8 +46,10 @@ service AgentManagerService {
   rpc StartAgentSession(StartAgentSessionRequest) returns (AgentSessionResponse);
   // StartAgentRun creates a role run and records immutable context refs.
   rpc StartAgentRun(StartAgentRunRequest) returns (AgentRunResponse);
-  // RecordRunState records a run lifecycle transition from runtime, MCP or runner.
+  // RecordRunState records a generic run lifecycle transition from runtime, MCP or hook ingress.
   rpc RecordRunState(RecordRunStateRequest) returns (AgentRunResponse);
+  // ReportAgentRunState records a bounded state report from an agent-runner bound to one runtime job.
+  rpc ReportAgentRunState(ReportAgentRunStateRequest) returns (AgentRunResponse);
   // GetAgentRunRuntimeStatus возвращает безопасное состояние runtime для одного run.
   rpc GetAgentRunRuntimeStatus(GetAgentRunRuntimeStatusRequest) returns (AgentRunRuntimeStatusResponse);
   // RecordSessionStateSnapshot records metadata for a Codex session state object.
@@ -356,6 +358,15 @@ enum AgentRunStatus {
   AGENT_RUN_STATUS_COMPLETED = 5;
   AGENT_RUN_STATUS_FAILED = 6;
   AGENT_RUN_STATUS_CANCELLED = 7;
+}
+
+// AgentRunnerRunState is the bounded status vocabulary accepted from agent-runner.
+enum AgentRunnerRunState {
+  AGENT_RUNNER_RUN_STATE_UNSPECIFIED = 0;
+  AGENT_RUNNER_RUN_STATE_QUEUED = 1;
+  AGENT_RUNNER_RUN_STATE_RUNNING = 2;
+  AGENT_RUNNER_RUN_STATE_COMPLETED = 3;
+  AGENT_RUNNER_RUN_STATE_FAILED = 4;
 }
 
 // AgentRunRuntimeObservationState описывает, удалось ли прочитать актуальное состояние runtime.
@@ -986,6 +997,20 @@ message RecordRunStateRequest {
   optional string started_at = 8;
   optional string finished_at = 9;
   optional string reason_code = 10;
+}
+
+message ReportAgentRunStateRequest {
+  CommandMeta meta = 1;
+  string run_id = 2;
+  string session_id = 3;
+  string runtime_slot_ref = 4;
+  string runtime_job_ref = 5;
+  AgentRunnerRunState state = 6;
+  optional string safe_summary = 7;
+  optional string failure_code = 8;
+  optional string diagnostic_digest = 9;
+  optional string started_at = 10;
+  optional string finished_at = 11;
 }
 
 message RecordSessionStateSnapshotRequest {

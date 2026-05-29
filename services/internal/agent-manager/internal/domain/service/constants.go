@@ -13,6 +13,7 @@ const (
 	operationStartAgentSession           = "domain.Service.StartAgentSession"
 	operationStartAgentRun               = "domain.Service.StartAgentRun"
 	operationRecordRunState              = "domain.Service.RecordRunState"
+	operationReportAgentRunState         = "domain.Service.ReportAgentRunState"
 	operationRecordSessionSnapshot       = "domain.Service.RecordSessionStateSnapshot"
 	operationRequestAcceptance           = "domain.Service.RequestAcceptance"
 	operationRecordAcceptanceResult      = "domain.Service.RecordAcceptanceResult"
