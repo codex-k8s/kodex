@@ -604,12 +604,19 @@ func TestStartAgentRunPreparesRuntimeWorkspace(t *testing.T) {
 		t.Fatalf("runtime input = %+v", runtimePreparer.last)
 	}
 	kinds := make(map[string]int)
+	generatedContextDigest := ""
 	for _, source := range runtimePreparer.last.WorkspacePolicy.Sources {
 		kinds[source.Kind]++
+		if source.Kind == WorkspaceSourceKindGeneratedContext {
+			generatedContextDigest = source.Digest
+		}
 	}
 	if kinds[WorkspaceSourceKindCode] != 1 || kinds[WorkspaceSourceKindDocumentation] != 1 ||
 		kinds[WorkspaceSourceKindGuidancePackage] != 1 || kinds[WorkspaceSourceKindGeneratedContext] != 1 {
 		t.Fatalf("workspace source kinds = %+v", kinds)
+	}
+	if generatedContextDigest == "" {
+		t.Fatal("generated context digest is empty")
 	}
 	if runtimePreparer.last.WorkspacePolicy.PolicyDigest == "" {
 		t.Fatal("workspace policy digest is empty")
@@ -625,11 +632,15 @@ func TestStartAgentRunCreatesRuntimeJobAfterPreparation(t *testing.T) {
 
 	fixture := newRuntimePreparationFixture()
 	slotRef := uuid.MustParse("10101010-bbbb-cccc-dddd-eeeeeeeeeeee").String()
+	materializationRef := uuid.MustParse("10101010-cccc-dddd-eeee-ffffffffffff").String()
 	runtimePreparer := &fakeRuntimePreparer{result: RuntimePreparationResult{
-		SlotRef:                    slotRef,
-		WorkspaceRef:               "workspace-456",
-		MaterializationFingerprint: "sha256:workspace",
-		DiagnosticSummary:          "workspace_status=running",
+		SlotRef:                        slotRef,
+		SlotStatus:                     RuntimeSlotStatusReady,
+		WorkspaceRef:                   materializationRef,
+		WorkspaceMaterializationStatus: RuntimeWorkspaceMaterializationStatusCompleted,
+		ContextDigest:                  "sha256:agent-run-context",
+		MaterializationFingerprint:     "sha256:workspace",
+		DiagnosticSummary:              "workspace_status=completed",
 	}}
 	runtimeJobCreator := &fakeRuntimeJobCreator{result: RuntimeJobResult{
 		JobRef:            "runtime-job-123",
@@ -646,6 +657,7 @@ func TestStartAgentRunCreatesRuntimeJobAfterPreparation(t *testing.T) {
 		RuntimeJobCreator:         runtimeJobCreator,
 		RuntimePreparationEnabled: true,
 		RuntimeJobDispatchEnabled: true,
+		RuntimeJobRunnerImageRef:  "image://codex-agent@sha256:runner",
 	})
 
 	run, err := service.StartAgentRun(context.Background(), fixture.input)
@@ -661,12 +673,71 @@ func TestStartAgentRunCreatesRuntimeJobAfterPreparation(t *testing.T) {
 	if runtimeJobCreator.last.AgentRunID != run.ID || runtimeJobCreator.last.SlotRef != slotRef {
 		t.Fatalf("runtime job input = %+v", runtimeJobCreator.last)
 	}
+	spec := runtimeJobCreator.last.ExecutionSpec
+	if spec.AgentRunID != run.ID || spec.SlotID.String() != slotRef || spec.ExpectedMaterializationID.String() != materializationRef {
+		t.Fatalf("runtime job spec refs = %+v", spec)
+	}
+	if spec.ExpectedMaterializationFingerprint != "sha256:workspace" || spec.ContextDigest != "sha256:agent-run-context" {
+		t.Fatalf("runtime job spec digests = %+v", spec)
+	}
+	if spec.RunnerMode != RuntimeJobRunnerModeCodexAgent || spec.RunnerProfileRef != "runner-profile://go-full" || spec.RunnerImageRef != "image://codex-agent@sha256:runner" {
+		t.Fatalf("runtime job runner refs = %+v", spec)
+	}
+	if !hasAgentRunExecutionRef(spec.ReportingTargetRefs, "agent_run_state", "agent-manager://runs/"+run.ID.String()) ||
+		!hasAgentRunExecutionRef(spec.ReportingTargetRefs, "agent_activity", "agent-manager://runs/"+run.ID.String()+"/activities") {
+		t.Fatalf("runtime job reporting refs = %+v", spec.ReportingTargetRefs)
+	}
 	if runtimeJobCreator.last.Meta.CommandID == uuid.Nil || runtimeJobCreator.last.Meta.Actor != testActor() {
 		t.Fatalf("runtime job meta = %+v", runtimeJobCreator.last.Meta)
 	}
 	payload := decodeAgentPayload(t, *fixture.repository.updateRunEvent)
 	if payload.RuntimeJobRef != "runtime-job-123" || payload.RuntimeSlotRef != slotRef {
 		t.Fatalf("event payload runtime refs = %+v", payload)
+	}
+}
+
+func TestStartAgentRunWaitsForRuntimeMaterializationBeforeJobDispatch(t *testing.T) {
+	t.Parallel()
+
+	fixture := newRuntimePreparationFixture()
+	slotRef := uuid.MustParse("10101010-bbbb-cccc-dddd-eeeeeeeeeeee").String()
+	materializationRef := uuid.MustParse("10101010-cccc-dddd-eeee-ffffffffffff").String()
+	runtimePreparer := &fakeRuntimePreparer{result: RuntimePreparationResult{
+		SlotRef:                        slotRef,
+		SlotStatus:                     "materializing",
+		WorkspaceRef:                   materializationRef,
+		WorkspaceMaterializationStatus: "pending",
+		ContextDigest:                  "sha256:agent-run-context",
+		MaterializationFingerprint:     "sha256:workspace",
+		DiagnosticSummary:              "slot_status=materializing;workspace_status=pending",
+	}}
+	runtimeJobCreator := &fakeRuntimeJobCreator{result: RuntimeJobResult{JobRef: "runtime-job-123", Status: "pending"}}
+	service := New(Config{
+		Repository:                fixture.repository,
+		Clock:                     fixedClock{now: fixture.now},
+		IDGenerator:               &sequenceIDGenerator{ids: fixture.ids},
+		GuidanceResolver:          fixture.guidanceResolver,
+		WorkspacePolicyResolver:   fixture.policyResolver,
+		RuntimePreparer:           runtimePreparer,
+		RuntimeJobCreator:         runtimeJobCreator,
+		RuntimePreparationEnabled: true,
+		RuntimeJobDispatchEnabled: true,
+		RuntimeJobRunnerImageRef:  "image://codex-agent@sha256:runner",
+	})
+
+	run, err := service.StartAgentRun(context.Background(), fixture.input)
+	if err != nil {
+		t.Fatalf("StartAgentRun() err = %v", err)
+	}
+	if run.Status != enum.AgentRunStatusWaiting || run.RuntimeContext.SlotRef != slotRef || run.RuntimeContext.JobRef != "" {
+		t.Fatalf("run runtime state = %s/%+v", run.Status, run.RuntimeContext)
+	}
+	if runtimeJobCreator.calls != 0 {
+		t.Fatalf("runtime job calls = %d, want 0", runtimeJobCreator.calls)
+	}
+	payload := decodeAgentPayload(t, *fixture.repository.updateRunEvent)
+	if payload.ReasonCode != runtimeMaterializationPending {
+		t.Fatalf("reason code = %q, want %q", payload.ReasonCode, runtimeMaterializationPending)
 	}
 }
 
@@ -706,10 +777,14 @@ func TestStartAgentRunStoresRetryableRuntimeJobFailureAsWaiting(t *testing.T) {
 
 	fixture := newRuntimePreparationFixture()
 	slotRef := uuid.MustParse("10101010-bbbb-cccc-dddd-eeeeeeeeeeee").String()
+	materializationRef := uuid.MustParse("10101010-cccc-dddd-eeee-ffffffffffff").String()
 	runtimePreparer := &fakeRuntimePreparer{result: RuntimePreparationResult{
-		SlotRef:                    slotRef,
-		WorkspaceRef:               "workspace-456",
-		MaterializationFingerprint: "sha256:workspace",
+		SlotRef:                        slotRef,
+		SlotStatus:                     RuntimeSlotStatusReady,
+		WorkspaceRef:                   materializationRef,
+		WorkspaceMaterializationStatus: RuntimeWorkspaceMaterializationStatusCompleted,
+		ContextDigest:                  "sha256:agent-run-context",
+		MaterializationFingerprint:     "sha256:workspace",
 	}}
 	runtimeJobCreator := &fakeRuntimeJobCreator{err: NewRuntimeJobError(true, "dependency_unavailable", "runtime-manager unavailable")}
 	service := New(Config{
@@ -722,6 +797,7 @@ func TestStartAgentRunStoresRetryableRuntimeJobFailureAsWaiting(t *testing.T) {
 		RuntimeJobCreator:         runtimeJobCreator,
 		RuntimePreparationEnabled: true,
 		RuntimeJobDispatchEnabled: true,
+		RuntimeJobRunnerImageRef:  "image://codex-agent@sha256:runner",
 	})
 
 	run, err := service.StartAgentRun(context.Background(), fixture.input)
@@ -775,10 +851,14 @@ func TestStartAgentRunStoresPermanentRuntimeJobFailureAsFailed(t *testing.T) {
 
 	fixture := newRuntimePreparationFixture()
 	slotRef := uuid.MustParse("10101010-bbbb-cccc-dddd-eeeeeeeeeeee").String()
+	materializationRef := uuid.MustParse("10101010-cccc-dddd-eeee-ffffffffffff").String()
 	runtimePreparer := &fakeRuntimePreparer{result: RuntimePreparationResult{
-		SlotRef:                    slotRef,
-		WorkspaceRef:               "workspace-456",
-		MaterializationFingerprint: "sha256:workspace",
+		SlotRef:                        slotRef,
+		SlotStatus:                     RuntimeSlotStatusReady,
+		WorkspaceRef:                   materializationRef,
+		WorkspaceMaterializationStatus: RuntimeWorkspaceMaterializationStatusCompleted,
+		ContextDigest:                  "sha256:agent-run-context",
+		MaterializationFingerprint:     "sha256:workspace",
 	}}
 	runtimeJobCreator := &fakeRuntimeJobCreator{err: NewRuntimeJobError(false, "failed_precondition", "agent run job rejected")}
 	service := New(Config{
@@ -791,6 +871,7 @@ func TestStartAgentRunStoresPermanentRuntimeJobFailureAsFailed(t *testing.T) {
 		RuntimeJobCreator:         runtimeJobCreator,
 		RuntimePreparationEnabled: true,
 		RuntimeJobDispatchEnabled: true,
+		RuntimeJobRunnerImageRef:  "image://codex-agent@sha256:runner",
 	})
 
 	run, err := service.StartAgentRun(context.Background(), fixture.input)
@@ -805,6 +886,121 @@ func TestStartAgentRunStoresPermanentRuntimeJobFailureAsFailed(t *testing.T) {
 	}
 	if fixture.repository.updateRunEvent == nil || fixture.repository.updateRunEvent.EventType != agentevents.EventRunFailed {
 		t.Fatalf("event = %+v", fixture.repository.updateRunEvent)
+	}
+}
+
+func TestStartAgentRunRuntimeJobDispatchRequiresExecutionSpecRefs(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		result         RuntimePreparationResult
+		runnerImageRef string
+		wantStatus     enum.AgentRunStatus
+	}{
+		{
+			name: "missing materialization ref",
+			result: RuntimePreparationResult{
+				SlotRef:                        uuid.MustParse("10101010-bbbb-cccc-dddd-eeeeeeeeeeee").String(),
+				SlotStatus:                     RuntimeSlotStatusReady,
+				WorkspaceMaterializationStatus: RuntimeWorkspaceMaterializationStatusCompleted,
+				ContextDigest:                  "sha256:agent-run-context",
+				MaterializationFingerprint:     "sha256:workspace",
+			},
+			runnerImageRef: "image://codex-agent@sha256:runner",
+			wantStatus:     enum.AgentRunStatusWaiting,
+		},
+		{
+			name: "missing context digest",
+			result: RuntimePreparationResult{
+				SlotRef:                        uuid.MustParse("10101010-bbbb-cccc-dddd-eeeeeeeeeeee").String(),
+				SlotStatus:                     RuntimeSlotStatusReady,
+				WorkspaceRef:                   uuid.MustParse("10101010-cccc-dddd-eeee-ffffffffffff").String(),
+				WorkspaceMaterializationStatus: RuntimeWorkspaceMaterializationStatusCompleted,
+				MaterializationFingerprint:     "sha256:workspace",
+			},
+			runnerImageRef: "image://codex-agent@sha256:runner",
+			wantStatus:     enum.AgentRunStatusWaiting,
+		},
+		{
+			name: "missing runner image ref",
+			result: RuntimePreparationResult{
+				SlotRef:                        uuid.MustParse("10101010-bbbb-cccc-dddd-eeeeeeeeeeee").String(),
+				SlotStatus:                     RuntimeSlotStatusReady,
+				WorkspaceRef:                   uuid.MustParse("10101010-cccc-dddd-eeee-ffffffffffff").String(),
+				WorkspaceMaterializationStatus: RuntimeWorkspaceMaterializationStatusCompleted,
+				ContextDigest:                  "sha256:agent-run-context",
+				MaterializationFingerprint:     "sha256:workspace",
+			},
+			wantStatus: enum.AgentRunStatusFailed,
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			fixture := newRuntimePreparationFixture()
+			runtimePreparer := &fakeRuntimePreparer{result: tt.result}
+			runtimeJobCreator := &fakeRuntimeJobCreator{result: RuntimeJobResult{JobRef: "runtime-job-123", Status: "pending"}}
+			service := New(Config{
+				Repository:                fixture.repository,
+				Clock:                     fixedClock{now: fixture.now},
+				IDGenerator:               &sequenceIDGenerator{ids: fixture.ids},
+				GuidanceResolver:          fixture.guidanceResolver,
+				WorkspacePolicyResolver:   fixture.policyResolver,
+				RuntimePreparer:           runtimePreparer,
+				RuntimeJobCreator:         runtimeJobCreator,
+				RuntimePreparationEnabled: true,
+				RuntimeJobDispatchEnabled: true,
+				RuntimeJobRunnerImageRef:  tt.runnerImageRef,
+			})
+
+			run, err := service.StartAgentRun(context.Background(), fixture.input)
+			if err != nil {
+				t.Fatalf("StartAgentRun() err = %v", err)
+			}
+			if run.Status != tt.wantStatus || runtimeJobCreator.calls != 0 || run.RuntimeContext.JobRef != "" {
+				t.Fatalf("run/job state = %s/%+v, calls=%d", run.Status, run.RuntimeContext, runtimeJobCreator.calls)
+			}
+			if !strings.Contains(run.ResultSummary, "runtime job") {
+				t.Fatalf("result summary = %q", run.ResultSummary)
+			}
+		})
+	}
+}
+
+func TestStartAgentRunRuntimeJobDispatchRejectsMissingGuidanceRefs(t *testing.T) {
+	t.Parallel()
+
+	fixture := newRuntimePreparationFixture()
+	fixture.guidanceResolver.refs[0].ManifestDigest = ""
+	runtimePreparer := &fakeRuntimePreparer{result: RuntimePreparationResult{
+		SlotRef:                    uuid.MustParse("10101010-bbbb-cccc-dddd-eeeeeeeeeeee").String(),
+		WorkspaceRef:               uuid.MustParse("10101010-cccc-dddd-eeee-ffffffffffff").String(),
+		ContextDigest:              "sha256:agent-run-context",
+		MaterializationFingerprint: "sha256:workspace",
+	}}
+	runtimeJobCreator := &fakeRuntimeJobCreator{result: RuntimeJobResult{JobRef: "runtime-job-123", Status: "pending"}}
+	service := New(Config{
+		Repository:                fixture.repository,
+		Clock:                     fixedClock{now: fixture.now},
+		IDGenerator:               &sequenceIDGenerator{ids: fixture.ids},
+		GuidanceResolver:          fixture.guidanceResolver,
+		WorkspacePolicyResolver:   fixture.policyResolver,
+		RuntimePreparer:           runtimePreparer,
+		RuntimeJobCreator:         runtimeJobCreator,
+		RuntimePreparationEnabled: true,
+		RuntimeJobDispatchEnabled: true,
+		RuntimeJobRunnerImageRef:  "image://codex-agent@sha256:runner",
+	})
+
+	run, err := service.StartAgentRun(context.Background(), fixture.input)
+	if err != nil {
+		t.Fatalf("StartAgentRun() err = %v", err)
+	}
+	if run.Status != enum.AgentRunStatusFailed || runtimePreparer.calls != 0 || runtimeJobCreator.calls != 0 {
+		t.Fatalf("run/preparer/job state = %s/%d/%d", run.Status, runtimePreparer.calls, runtimeJobCreator.calls)
 	}
 }
 
@@ -842,6 +1038,55 @@ func TestStartAgentRunRuntimeRequestDoesNotCarryTextPayloads(t *testing.T) {
 	for _, forbidden := range []string{"SKILL.md", "prompt-template-text", "flow file", "payload_json"} {
 		if strings.Contains(string(requestPayload), forbidden) {
 			t.Fatalf("runtime request contains forbidden payload marker %q: %s", forbidden, requestPayload)
+		}
+	}
+}
+
+func TestStartAgentRunRuntimeJobSpecDoesNotCarryTextPayloads(t *testing.T) {
+	t.Parallel()
+
+	fixture := newRuntimePreparationFixture()
+	fixture.repository.promptVersionByID[fixture.promptVersionID] = entity.PromptTemplateVersion{
+		ID:             fixture.promptVersionID,
+		RoleProfileID:  fixture.roleID,
+		PromptKind:     enum.PromptKindWork,
+		TemplateObject: value.ObjectRef{ObjectURI: "s3://prompt-template-text/payload"},
+		TemplateDigest: "sha256:prompt",
+		Status:         enum.PromptVersionStatusActive,
+	}
+	fixture.guidanceResolver.refs[0].PolicySummaryJSON = `{"payload_json":"SKILL.md prompt template flow file"}`
+	runtimePreparer := &fakeRuntimePreparer{result: RuntimePreparationResult{
+		SlotRef:                        uuid.MustParse("10101010-bbbb-cccc-dddd-eeeeeeeeeeee").String(),
+		SlotStatus:                     RuntimeSlotStatusReady,
+		WorkspaceRef:                   uuid.MustParse("10101010-cccc-dddd-eeee-ffffffffffff").String(),
+		WorkspaceMaterializationStatus: RuntimeWorkspaceMaterializationStatusCompleted,
+		ContextDigest:                  "sha256:agent-run-context",
+		MaterializationFingerprint:     "sha256:workspace",
+	}}
+	runtimeJobCreator := &fakeRuntimeJobCreator{result: RuntimeJobResult{JobRef: "runtime-job-123", Status: "pending"}}
+	service := New(Config{
+		Repository:                fixture.repository,
+		Clock:                     fixedClock{now: fixture.now},
+		IDGenerator:               &sequenceIDGenerator{ids: fixture.ids},
+		GuidanceResolver:          fixture.guidanceResolver,
+		WorkspacePolicyResolver:   fixture.policyResolver,
+		RuntimePreparer:           runtimePreparer,
+		RuntimeJobCreator:         runtimeJobCreator,
+		RuntimePreparationEnabled: true,
+		RuntimeJobDispatchEnabled: true,
+		RuntimeJobRunnerImageRef:  "image://codex-agent@sha256:runner",
+	})
+
+	if _, err := service.StartAgentRun(context.Background(), fixture.input); err != nil {
+		t.Fatalf("StartAgentRun() err = %v", err)
+	}
+	specPayload, err := json.Marshal(runtimeJobCreator.last.ExecutionSpec)
+	if err != nil {
+		t.Fatalf("marshal runtime job spec: %v", err)
+	}
+	for _, forbidden := range []string{"SKILL.md", "prompt-template-text", "flow file", "payload_json", "raw_provider_payload", "secret_value"} {
+		if strings.Contains(string(specPayload), forbidden) {
+			t.Fatalf("runtime job spec contains forbidden payload marker %q: %s", forbidden, specPayload)
 		}
 	}
 }
@@ -900,6 +1145,160 @@ func TestStartAgentRunRuntimeJobDispatchReplayDoesNotCreateDuplicateJob(t *testi
 	}
 	if replay.RuntimeContext.JobRef != "job-frozen" {
 		t.Fatalf("replayed runtime context = %+v", replay.RuntimeContext)
+	}
+}
+
+func TestStartAgentRunReplayDispatchesRuntimeJobAfterMaterializationReady(t *testing.T) {
+	t.Parallel()
+
+	fixture := newRuntimePreparationFixture()
+	slotRef := uuid.MustParse("10101010-bbbb-cccc-dddd-eeeeeeeeeeee").String()
+	materializationRef := uuid.MustParse("10101010-cccc-dddd-eeee-ffffffffffff").String()
+	run := entity.AgentRun{
+		VersionedBase:           entity.VersionedBase{ID: fixture.runID, Version: 2, CreatedAt: fixture.now, UpdatedAt: fixture.now},
+		SessionID:               fixture.sessionID,
+		RoleProfileID:           fixture.roleID,
+		RoleProfileVersion:      1,
+		RoleProfileDigest:       "sha256:role",
+		PromptTemplateVersionID: fixture.promptVersionID,
+		PromptTemplateDigest:    "sha256:prompt",
+		RuntimeContext:          value.RuntimeContextRef{SlotRef: slotRef, WorkspaceRef: materializationRef},
+		GuidanceRefs:            fixture.guidanceResolver.refs,
+		Status:                  enum.AgentRunStatusWaiting,
+		ResultSummary:           "runtime materialization pending",
+	}
+	startedRun := run
+	startedRun.Version = 1
+	startedRun.RuntimeContext = value.RuntimeContextRef{}
+	startedRun.Status = enum.AgentRunStatusRequested
+	startedRun.ResultSummary = ""
+	payload, err := marshalCommandPayload(agentRunCommandPayload{Run: startedRun})
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	commandID := fixture.input.Meta.CommandID
+	fixture.repository.replay = &entity.CommandResult{
+		CommandID:     &commandID,
+		Actor:         testActor(),
+		Operation:     operationStartAgentRun,
+		AggregateType: enum.CommandAggregateTypeRun,
+		AggregateID:   run.ID,
+		ResultPayload: payload,
+	}
+	fixture.repository.runByID = make(map[uuid.UUID]entity.AgentRun)
+	fixture.repository.runByID[run.ID] = run
+	runtimePreparer := &fakeRuntimePreparer{result: RuntimePreparationResult{
+		SlotRef:                        slotRef,
+		SlotStatus:                     RuntimeSlotStatusReady,
+		WorkspaceRef:                   materializationRef,
+		WorkspaceMaterializationStatus: RuntimeWorkspaceMaterializationStatusCompleted,
+		ContextDigest:                  "sha256:agent-run-context",
+		MaterializationFingerprint:     "sha256:workspace",
+	}}
+	runtimeJobCreator := &fakeRuntimeJobCreator{result: RuntimeJobResult{JobRef: "runtime-job-123", Status: "pending"}}
+	service := New(Config{
+		Repository:                fixture.repository,
+		Clock:                     fixedClock{now: fixture.now},
+		IDGenerator:               &sequenceIDGenerator{ids: fixture.ids},
+		GuidanceResolver:          fixture.guidanceResolver,
+		WorkspacePolicyResolver:   fixture.policyResolver,
+		RuntimePreparer:           runtimePreparer,
+		RuntimeJobCreator:         runtimeJobCreator,
+		RuntimePreparationEnabled: true,
+		RuntimeJobDispatchEnabled: true,
+		RuntimeJobRunnerImageRef:  "image://codex-agent@sha256:runner",
+	})
+
+	replay, err := service.StartAgentRun(context.Background(), fixture.input)
+	if err != nil {
+		t.Fatalf("StartAgentRun() err = %v", err)
+	}
+	if fixture.repository.createRunCalled || fixture.guidanceResolver.calls != 0 {
+		t.Fatalf("create/guidance calls = %t/%d", fixture.repository.createRunCalled, fixture.guidanceResolver.calls)
+	}
+	if runtimePreparer.calls != 1 || runtimeJobCreator.calls != 1 {
+		t.Fatalf("preparer/job calls = %d/%d", runtimePreparer.calls, runtimeJobCreator.calls)
+	}
+	if replay.RuntimeContext.JobRef != "runtime-job-123" || replay.Status != enum.AgentRunStatusStarting {
+		t.Fatalf("replayed run = %s/%+v", replay.Status, replay.RuntimeContext)
+	}
+}
+
+func TestStartAgentRunReplayRecordsFailedRuntimeMaterialization(t *testing.T) {
+	t.Parallel()
+
+	fixture := newRuntimePreparationFixture()
+	slotRef := uuid.MustParse("10101010-bbbb-cccc-dddd-eeeeeeeeeeee").String()
+	materializationRef := uuid.MustParse("10101010-cccc-dddd-eeee-ffffffffffff").String()
+	run := entity.AgentRun{
+		VersionedBase:           entity.VersionedBase{ID: fixture.runID, Version: 2, CreatedAt: fixture.now, UpdatedAt: fixture.now},
+		SessionID:               fixture.sessionID,
+		RoleProfileID:           fixture.roleID,
+		RoleProfileVersion:      1,
+		RoleProfileDigest:       "sha256:role",
+		PromptTemplateVersionID: fixture.promptVersionID,
+		PromptTemplateDigest:    "sha256:prompt",
+		RuntimeContext:          value.RuntimeContextRef{SlotRef: slotRef, WorkspaceRef: materializationRef},
+		GuidanceRefs:            fixture.guidanceResolver.refs,
+		Status:                  enum.AgentRunStatusWaiting,
+		ResultSummary:           "runtime materialization pending",
+	}
+	startedRun := run
+	startedRun.Version = 1
+	startedRun.RuntimeContext = value.RuntimeContextRef{}
+	startedRun.Status = enum.AgentRunStatusRequested
+	startedRun.ResultSummary = ""
+	payload, err := marshalCommandPayload(agentRunCommandPayload{Run: startedRun})
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	commandID := fixture.input.Meta.CommandID
+	fixture.repository.replay = &entity.CommandResult{
+		CommandID:     &commandID,
+		Actor:         testActor(),
+		Operation:     operationStartAgentRun,
+		AggregateType: enum.CommandAggregateTypeRun,
+		AggregateID:   run.ID,
+		ResultPayload: payload,
+	}
+	fixture.repository.runByID = map[uuid.UUID]entity.AgentRun{run.ID: run}
+	runtimePreparer := &fakeRuntimePreparer{result: RuntimePreparationResult{
+		SlotRef:                        slotRef,
+		SlotStatus:                     RuntimeSlotStatusReady,
+		WorkspaceRef:                   materializationRef,
+		WorkspaceMaterializationStatus: RuntimeWorkspaceMaterializationStatusFailed,
+		ContextDigest:                  "sha256:agent-run-context",
+		MaterializationFingerprint:     "sha256:workspace",
+	}}
+	runtimeJobCreator := &fakeRuntimeJobCreator{result: RuntimeJobResult{JobRef: "runtime-job-123", Status: "pending"}}
+	service := New(Config{
+		Repository:                fixture.repository,
+		Clock:                     fixedClock{now: fixture.now},
+		IDGenerator:               &sequenceIDGenerator{ids: fixture.ids},
+		GuidanceResolver:          fixture.guidanceResolver,
+		WorkspacePolicyResolver:   fixture.policyResolver,
+		RuntimePreparer:           runtimePreparer,
+		RuntimeJobCreator:         runtimeJobCreator,
+		RuntimePreparationEnabled: true,
+		RuntimeJobDispatchEnabled: true,
+		RuntimeJobRunnerImageRef:  "image://codex-agent@sha256:runner",
+	})
+
+	replay, err := service.StartAgentRun(context.Background(), fixture.input)
+	if err != nil {
+		t.Fatalf("StartAgentRun() err = %v", err)
+	}
+	if runtimePreparer.calls != 1 || runtimeJobCreator.calls != 0 {
+		t.Fatalf("preparer/job calls = %d/%d", runtimePreparer.calls, runtimeJobCreator.calls)
+	}
+	if replay.Status != enum.AgentRunStatusFailed || replay.FailureCode != runtimePrepareFailureCode || replay.RuntimeContext.SlotRef != slotRef {
+		t.Fatalf("replayed run = %s/%q/%+v", replay.Status, replay.FailureCode, replay.RuntimeContext)
+	}
+	if !strings.Contains(replay.ResultSummary, "runtime_materialization_failed") {
+		t.Fatalf("result summary = %q", replay.ResultSummary)
+	}
+	if fixture.repository.updateRunEvent == nil || fixture.repository.updateRunEvent.EventType != agentevents.EventRunFailed {
+		t.Fatalf("event = %+v", fixture.repository.updateRunEvent)
 	}
 }
 
@@ -4296,6 +4695,15 @@ func hasHumanGateContextRef(refs []HumanGateInteractionExternalRef, kind string,
 func hasHumanGateAction(actions []HumanGateInteractionAction, actionKey string) bool {
 	for _, candidate := range actions {
 		if candidate.ActionKey == actionKey && candidate.Terminal {
+			return true
+		}
+	}
+	return false
+}
+
+func hasAgentRunExecutionRef(refs []AgentRunExecutionRef, kind string, ref string) bool {
+	for _, candidate := range refs {
+		if candidate.Kind == kind && candidate.Ref == ref {
 			return true
 		}
 	}

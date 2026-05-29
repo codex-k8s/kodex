@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -23,10 +24,15 @@ import (
 const (
 	runtimePrepareReasonRetryable = "runtime_prepare_retryable"
 	runtimePrepareFailureCode     = "runtime_prepare_failed"
+	runtimeMaterializationPending = "runtime_materialization_pending"
 	runtimeJobReasonRetryable     = "runtime_job_retryable"
 	runtimeJobFailureCode         = "runtime_job_failed"
 	runtimePrepareDefaultMode     = RuntimeModeFullEnv
 	runtimePrepareSummaryLimit    = 512
+	runtimeJobSafeRefLimit        = 512
+	runtimeJobSafeKindLimit       = 64
+	runtimeJobSecretRefLimit      = 16
+	runtimeJobReportingRefLimit   = 8
 )
 
 var guidanceLocalNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,62}$`)
@@ -96,28 +102,11 @@ func (s *Service) prepareRuntimeForRun(
 	if !s.runtimePreparationEnabled {
 		return run, nil
 	}
-	selection, err := workspacePolicySelection(session.Scope)
-	if err != nil {
-		return s.recordRuntimePreparationFailure(ctx, meta, run, err)
-	}
-	policy, err := s.workspacePolicyResolver.ResolveWorkspacePolicy(ctx, WorkspacePolicyResolutionInput{
-		Meta:                    meta,
-		ProjectID:               selection.ProjectID,
-		RepositoryIDs:           selection.RepositoryIDs,
-		ServiceKeys:             selection.ServiceKeys,
-		IncludeGuidancePackages: true,
-	})
+	request, err := s.runtimePreparationInputForRun(ctx, meta, session, role, promptVersion, run)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
 			return run, err
 		}
-		return s.recordRuntimePreparationFailure(ctx, meta, run, err)
-	}
-	if err := validateGuidanceAllowedByPolicy(policy, run.GuidanceRefs); err != nil {
-		return s.recordRuntimePreparationFailure(ctx, meta, run, err)
-	}
-	request, err := runtimePreparationRequest(meta, session, role, promptVersion, run, policy)
-	if err != nil {
 		return s.recordRuntimePreparationFailure(ctx, meta, run, err)
 	}
 	result, err := s.runtimePreparer.PrepareRuntime(ctx, request)
@@ -128,9 +117,98 @@ func (s *Service) prepareRuntimeForRun(
 		return s.recordRuntimePreparationFailure(ctx, meta, run, err)
 	}
 	if s.runtimeJobDispatchEnabled {
-		return s.dispatchRuntimeJobForRun(ctx, meta, run, result)
+		return s.dispatchRuntimeJobForRun(ctx, meta, role, run, result)
 	}
 	return s.recordRuntimePreparationSuccess(ctx, meta, run, result)
+}
+
+func (s *Service) retryRuntimeJobDispatchForReplay(ctx context.Context, meta value.CommandMeta, run entity.AgentRun) (entity.AgentRun, error) {
+	if !s.runtimePreparationEnabled || !s.runtimeJobDispatchEnabled || strings.TrimSpace(run.RuntimeContext.JobRef) != "" || terminalRunStatus(run.Status) {
+		return run, nil
+	}
+	session, role, promptVersion, err := s.runtimeReplayContext(ctx, run)
+	if err != nil {
+		return run, nil
+	}
+	request, err := s.runtimePreparationInputForRun(ctx, meta, session, role, promptVersion, run)
+	if err != nil {
+		return run, nil
+	}
+	result, err := s.runtimePreparer.PrepareRuntime(ctx, request)
+	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return run, err
+		}
+		failure := classifyRuntimePreparationFailure(err)
+		if failure.retryable {
+			return run, nil
+		}
+		return s.recordRuntimePreparationFailure(ctx, meta, run, err)
+	}
+	if !runtimePreparationReadyForJob(result) {
+		if err := runtimePreparationTerminalFailure(result); err != nil {
+			runtimeContext, contextErr := runtimeContextFromPreparation(result)
+			if contextErr != nil {
+				return s.recordRuntimePreparationFailure(ctx, meta, run, err)
+			}
+			return s.recordRuntimePreparationFailureWithContext(ctx, meta, run, runtimeContext, err)
+		}
+		return run, nil
+	}
+	return s.dispatchRuntimeJobForRun(ctx, meta, role, run, result)
+}
+
+func terminalRunStatus(status enum.AgentRunStatus) bool {
+	switch status {
+	case enum.AgentRunStatusCompleted, enum.AgentRunStatusFailed, enum.AgentRunStatusCancelled:
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *Service) runtimeReplayContext(ctx context.Context, run entity.AgentRun) (entity.AgentSession, entity.RoleProfile, entity.PromptTemplateVersion, error) {
+	session, err := s.repository.GetAgentSession(ctx, run.SessionID)
+	if err != nil {
+		return entity.AgentSession{}, entity.RoleProfile{}, entity.PromptTemplateVersion{}, err
+	}
+	role, err := s.repository.GetRoleProfile(ctx, run.RoleProfileID)
+	if err != nil {
+		return entity.AgentSession{}, entity.RoleProfile{}, entity.PromptTemplateVersion{}, err
+	}
+	promptVersion, err := s.repository.GetPromptTemplateVersion(ctx, run.PromptTemplateVersionID)
+	if err != nil {
+		return entity.AgentSession{}, entity.RoleProfile{}, entity.PromptTemplateVersion{}, err
+	}
+	return session, role, promptVersion, nil
+}
+
+func (s *Service) runtimePreparationInputForRun(
+	ctx context.Context,
+	meta value.CommandMeta,
+	session entity.AgentSession,
+	role entity.RoleProfile,
+	promptVersion entity.PromptTemplateVersion,
+	run entity.AgentRun,
+) (RuntimePreparationInput, error) {
+	selection, err := workspacePolicySelection(session.Scope)
+	if err != nil {
+		return RuntimePreparationInput{}, err
+	}
+	policy, err := s.workspacePolicyResolver.ResolveWorkspacePolicy(ctx, WorkspacePolicyResolutionInput{
+		Meta:                    meta,
+		ProjectID:               selection.ProjectID,
+		RepositoryIDs:           selection.RepositoryIDs,
+		ServiceKeys:             selection.ServiceKeys,
+		IncludeGuidancePackages: true,
+	})
+	if err != nil {
+		return RuntimePreparationInput{}, err
+	}
+	if err := validateGuidanceAllowedByPolicy(policy, run.GuidanceRefs); err != nil {
+		return RuntimePreparationInput{}, err
+	}
+	return runtimePreparationRequest(meta, session, role, promptVersion, run, policy)
 }
 
 type workspacePolicySelectionResult struct {
@@ -359,6 +437,7 @@ func generatedContextRuntimeSource(
 		SourceRef:    run.ID.String(),
 		LocalPath:    ".kodex/context/agent-run.json",
 		AccessMode:   WorkspaceSourceAccessRead,
+		Digest:       digestText(metadata),
 		MetadataJSON: metadata,
 	}, nil
 }
@@ -402,6 +481,7 @@ func (s *Service) recordRuntimePreparationSuccess(
 func (s *Service) dispatchRuntimeJobForRun(
 	ctx context.Context,
 	meta value.CommandMeta,
+	role entity.RoleProfile,
 	run entity.AgentRun,
 	result RuntimePreparationResult,
 ) (entity.AgentRun, error) {
@@ -413,18 +493,234 @@ func (s *Service) dispatchRuntimeJobForRun(
 		runtimeContext.JobRef = strings.TrimSpace(run.RuntimeContext.JobRef)
 		return s.recordRuntimePreparationState(ctx, meta, run, enum.AgentRunStatusStarting, runtimeContext, runtimePreparationSuccessSummary(result), "", "")
 	}
+	if err := runtimePreparationTerminalFailure(result); err != nil {
+		return s.recordRuntimePreparationFailureWithContext(ctx, meta, run, runtimeContext, err)
+	}
+	if !runtimePreparationReadyForJob(result) {
+		return s.recordRuntimeMaterializationPending(ctx, meta, run, runtimeContext, result)
+	}
+	spec, err := s.agentRunExecutionSpec(run, role, result)
+	if err != nil {
+		return s.recordRuntimeOperationFailure(ctx, meta, run, runtimeContext, classifyRuntimeJobFailure(err), runtimeJobReasonRetryable, runtimeJobFailureCode)
+	}
 	job, err := s.runtimeJobCreator.CreateAgentRunJob(ctx, RuntimeJobInput{
-		Meta:       runtimeJobCommandMeta(meta, run.ID),
-		AgentRunID: run.ID,
-		SlotRef:    runtimeContext.SlotRef,
+		Meta:          runtimeJobCommandMeta(meta, run.ID),
+		AgentRunID:    run.ID,
+		SlotRef:       runtimeContext.SlotRef,
+		ExecutionSpec: spec,
 	})
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
 			return run, err
 		}
-		return s.recordRuntimeJobFailure(ctx, meta, run, runtimeContext, err)
+		return s.recordRuntimeOperationFailure(ctx, meta, run, runtimeContext, classifyRuntimeJobFailure(err), runtimeJobReasonRetryable, runtimeJobFailureCode)
 	}
 	return s.recordRuntimeJobSuccess(ctx, meta, run, runtimeContext, result, job)
+}
+
+func runtimePreparationReadyForJob(result RuntimePreparationResult) bool {
+	return strings.TrimSpace(result.SlotStatus) == RuntimeSlotStatusReady &&
+		strings.TrimSpace(result.WorkspaceMaterializationStatus) == RuntimeWorkspaceMaterializationStatusCompleted
+}
+
+func runtimePreparationTerminalFailure(result RuntimePreparationResult) error {
+	if strings.TrimSpace(result.SlotStatus) == RuntimeSlotStatusFailed {
+		return NewRuntimePreparationError(false, "runtime_slot_failed", "runtime-manager reported failed runtime slot")
+	}
+	switch strings.TrimSpace(result.WorkspaceMaterializationStatus) {
+	case RuntimeWorkspaceMaterializationStatusFailed:
+		return NewRuntimePreparationError(false, "runtime_materialization_failed", "runtime-manager reported failed workspace materialization")
+	case RuntimeWorkspaceMaterializationStatusCancelled:
+		return NewRuntimePreparationError(false, "runtime_materialization_cancelled", "runtime-manager reported cancelled workspace materialization")
+	default:
+		return nil
+	}
+}
+
+func (s *Service) agentRunExecutionSpec(run entity.AgentRun, role entity.RoleProfile, result RuntimePreparationResult) (AgentRunExecutionSpec, error) {
+	slotID, err := requiredRuntimeUUID(result.SlotRef)
+	if err != nil {
+		return AgentRunExecutionSpec{}, missingRuntimeJobSpecDependency()
+	}
+	materializationID, err := requiredRuntimeUUID(result.WorkspaceRef)
+	if err != nil {
+		return AgentRunExecutionSpec{}, missingRuntimeJobSpecDependency()
+	}
+	fingerprint := strings.TrimSpace(result.MaterializationFingerprint)
+	contextDigest := strings.TrimSpace(result.ContextDigest)
+	if !safeRuntimeJobRef(fingerprint, true) || !safeRuntimeJobRef(contextDigest, true) {
+		return AgentRunExecutionSpec{}, missingRuntimeJobSpecDependency()
+	}
+	runnerImageRef := strings.TrimSpace(s.runtimeJobRunnerImageRef)
+	if !safeRuntimeJobRef(runnerImageRef, true) {
+		return AgentRunExecutionSpec{}, NewRuntimeJobError(false, "failed_precondition", "agent run runner image ref is not configured")
+	}
+	allowedSecretRefs, err := normalizeRuntimeJobRefs(s.runtimeJobAllowedSecretRefs, runtimeJobSecretRefLimit)
+	if err != nil {
+		return AgentRunExecutionSpec{}, NewRuntimeJobError(false, "failed_precondition", "agent run allowed secret refs are invalid")
+	}
+	spec := AgentRunExecutionSpec{
+		AgentRunID:                         run.ID,
+		SlotID:                             slotID,
+		ExpectedMaterializationID:          materializationID,
+		ExpectedMaterializationFingerprint: fingerprint,
+		WorkspaceRef:                       runtimeWorkspaceRef(materializationID),
+		WorkspaceMountRef:                  runtimeWorkspaceMountRef(slotID),
+		ContextRef:                         runtimeContextFileRef(materializationID),
+		ContextDigest:                      contextDigest,
+		RunnerProfileRef:                   runnerProfileRef(role.RuntimeProfile),
+		RunnerImageRef:                     runnerImageRef,
+		RunnerMode:                         RuntimeJobRunnerModeCodexAgent,
+		AllowedSecretRefs:                  allowedSecretRefs,
+		ReportingTargetRefs:                runtimeJobReportingTargetRefs(run.ID),
+	}
+	if contextRef := strings.TrimSpace(result.ContextRef); contextRef != "" && !strings.HasPrefix(contextRef, "sha256:") {
+		spec.ContextRef = contextRef
+	}
+	if err := validateAgentRunExecutionSpec(spec); err != nil {
+		return AgentRunExecutionSpec{}, err
+	}
+	return spec, nil
+}
+
+func validateAgentRunExecutionSpec(spec AgentRunExecutionSpec) error {
+	if spec.AgentRunID == uuid.Nil || spec.SlotID == uuid.Nil || spec.ExpectedMaterializationID == uuid.Nil {
+		return missingRuntimeJobSpecDependency()
+	}
+	requiredRefs := []string{
+		spec.ExpectedMaterializationFingerprint,
+		spec.WorkspaceRef,
+		spec.WorkspaceMountRef,
+		spec.ContextRef,
+		spec.ContextDigest,
+		spec.RunnerProfileRef,
+		spec.RunnerImageRef,
+	}
+	for _, ref := range requiredRefs {
+		if !safeRuntimeJobRef(ref, true) {
+			return missingRuntimeJobSpecDependency()
+		}
+	}
+	if spec.RunnerMode != RuntimeJobRunnerModeCodexAgent {
+		return NewRuntimeJobError(false, "failed_precondition", "agent run runner mode is invalid")
+	}
+	if _, err := normalizeRuntimeJobRefs(spec.AllowedSecretRefs, runtimeJobSecretRefLimit); err != nil {
+		return NewRuntimeJobError(false, "failed_precondition", "agent run allowed secret refs are invalid")
+	}
+	if _, err := normalizeRuntimeJobRefs(spec.ReportingTargetRefs, runtimeJobReportingRefLimit); err != nil {
+		return missingRuntimeJobSpecDependency()
+	}
+	return nil
+}
+
+func missingRuntimeJobSpecDependency() error {
+	return NewRuntimeJobError(true, "dependency_unavailable", "runtime-manager returned incomplete agent run execution refs")
+}
+
+func requiredRuntimeUUID(ref string) (uuid.UUID, error) {
+	id, err := uuid.Parse(strings.TrimSpace(ref))
+	if err != nil || id == uuid.Nil {
+		return uuid.Nil, errs.ErrInvalidArgument
+	}
+	return id, nil
+}
+
+func runtimeWorkspaceRef(materializationID uuid.UUID) string {
+	return "runtime://workspace-materializations/" + materializationID.String()
+}
+
+func runtimeWorkspaceMountRef(slotID uuid.UUID) string {
+	return "runtime://slots/" + slotID.String() + "/workspace-mount"
+}
+
+func runtimeContextFileRef(materializationID uuid.UUID) string {
+	return "runtime://workspace-materializations/" + materializationID.String() + "/context/agent-run.json"
+}
+
+func runnerProfileRef(runtimeProfile string) string {
+	return "runner-profile://" + strings.TrimSpace(runtimeProfile)
+}
+
+func runtimeJobReportingTargetRefs(runID uuid.UUID) []AgentRunExecutionRef {
+	return []AgentRunExecutionRef{
+		{Kind: "agent_run_state", Ref: "agent-manager://runs/" + runID.String()},
+		{Kind: "agent_activity", Ref: "agent-manager://runs/" + runID.String() + "/activities"},
+	}
+}
+
+func normalizeRuntimeJobRefs(refs []AgentRunExecutionRef, limit int) ([]AgentRunExecutionRef, error) {
+	if len(refs) == 0 {
+		return nil, nil
+	}
+	if len(refs) > limit {
+		return nil, errs.ErrInvalidArgument
+	}
+	normalized := make([]AgentRunExecutionRef, 0, len(refs))
+	for _, ref := range refs {
+		item := AgentRunExecutionRef{Kind: strings.TrimSpace(ref.Kind), Ref: strings.TrimSpace(ref.Ref)}
+		if !safeRuntimeJobKind(item.Kind) || !safeRuntimeJobRef(item.Ref, true) {
+			return nil, errs.ErrInvalidArgument
+		}
+		normalized = append(normalized, item)
+	}
+	sortAgentRunExecutionRefs(normalized)
+	return normalized, nil
+}
+
+func sortAgentRunExecutionRefs(refs []AgentRunExecutionRef) {
+	sort.SliceStable(refs, func(left, right int) bool {
+		return agentRunExecutionRefSortKey(refs[left]) < agentRunExecutionRefSortKey(refs[right])
+	})
+}
+
+func agentRunExecutionRefSortKey(ref AgentRunExecutionRef) string {
+	return ref.Kind + ":" + ref.Ref
+}
+
+func safeRuntimeJobKind(value string) bool {
+	if value == "" || len(value) > runtimeJobSafeKindLimit || !utf8.ValidString(value) || strings.ContainsAny(value, "\r\n\t {}") {
+		return false
+	}
+	return !unsafeRuntimeJobText(value)
+}
+
+func safeRuntimeJobRef(value string, required bool) bool {
+	if value == "" {
+		return !required
+	}
+	if len(value) > runtimeJobSafeRefLimit || !utf8.ValidString(value) || strings.ContainsAny(value, "\r\n\t{}") {
+		return false
+	}
+	return !unsafeRuntimeJobText(value)
+}
+
+func unsafeRuntimeJobText(value string) bool {
+	lower := strings.ToLower(strings.TrimSpace(value))
+	markers := []string{
+		"raw_provider_payload",
+		"provider_payload",
+		"prompt_text",
+		"prompt_template",
+		"transcript",
+		"tool_input",
+		"tool_output",
+		"workspace_path",
+		"kubeconfig",
+		"secret_value",
+		"token=",
+		"authorization",
+		"stdout",
+		"stderr",
+		"large_log",
+		"-----begin",
+		"bearer ",
+	}
+	for _, marker := range markers {
+		if strings.Contains(lower, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func runtimeContextFromPreparation(result RuntimePreparationResult) (value.RuntimeContextRef, error) {
@@ -453,24 +749,21 @@ func (s *Service) recordRuntimeJobSuccess(
 ) (entity.AgentRun, error) {
 	runtimeContext.JobRef = strings.TrimSpace(job.JobRef)
 	if strings.TrimSpace(runtimeContext.JobRef) == "" {
-		return s.recordRuntimeJobFailure(ctx, meta, run, runtimeContext, errs.ErrDependencyUnavailable)
+		return s.recordRuntimeOperationFailure(ctx, meta, run, runtimeContext, classifyRuntimeJobFailure(errs.ErrDependencyUnavailable), runtimeJobReasonRetryable, runtimeJobFailureCode)
 	}
 	summary := runtimeJobSuccessSummary(preparation, job)
 	return s.recordRuntimePreparationState(ctx, meta, run, enum.AgentRunStatusStarting, runtimeContext, summary, "", "")
 }
 
-func (s *Service) recordRuntimeJobFailure(
+func (s *Service) recordRuntimeMaterializationPending(
 	ctx context.Context,
 	meta value.CommandMeta,
 	run entity.AgentRun,
 	runtimeContext value.RuntimeContextRef,
-	err error,
+	preparation RuntimePreparationResult,
 ) (entity.AgentRun, error) {
-	failure := classifyRuntimeJobFailure(err)
-	if failure.retryable {
-		return s.recordRuntimePreparationState(ctx, meta, run, enum.AgentRunStatusWaiting, runtimeContext, failure.summary(), "", runtimeJobReasonRetryable)
-	}
-	return s.recordRuntimePreparationState(ctx, meta, run, enum.AgentRunStatusFailed, runtimeContext, failure.summary(), runtimeJobFailureCode, "")
+	summary := safeDiagnosticText(runtimePreparationSuccessSummary(preparation) + "; runtime materialization pending")
+	return s.recordRuntimePreparationState(ctx, meta, run, enum.AgentRunStatusWaiting, runtimeContext, summary, "", runtimeMaterializationPending)
 }
 
 func (s *Service) recordRuntimePreparationFailure(
@@ -479,11 +772,33 @@ func (s *Service) recordRuntimePreparationFailure(
 	run entity.AgentRun,
 	err error,
 ) (entity.AgentRun, error) {
+	return s.recordRuntimePreparationFailureWithContext(ctx, meta, run, value.RuntimeContextRef{}, err)
+}
+
+func (s *Service) recordRuntimePreparationFailureWithContext(
+	ctx context.Context,
+	meta value.CommandMeta,
+	run entity.AgentRun,
+	runtimeContext value.RuntimeContextRef,
+	err error,
+) (entity.AgentRun, error) {
 	failure := classifyRuntimePreparationFailure(err)
+	return s.recordRuntimeOperationFailure(ctx, meta, run, runtimeContext, failure, runtimePrepareReasonRetryable, runtimePrepareFailureCode)
+}
+
+func (s *Service) recordRuntimeOperationFailure(
+	ctx context.Context,
+	meta value.CommandMeta,
+	run entity.AgentRun,
+	runtimeContext value.RuntimeContextRef,
+	failure runtimeOperationFailure,
+	retryReasonCode string,
+	failureCode string,
+) (entity.AgentRun, error) {
 	if failure.retryable {
-		return s.recordRuntimePreparationState(ctx, meta, run, enum.AgentRunStatusWaiting, value.RuntimeContextRef{}, failure.summary(), "", runtimePrepareReasonRetryable)
+		return s.recordRuntimePreparationState(ctx, meta, run, enum.AgentRunStatusWaiting, runtimeContext, failure.summary(), "", retryReasonCode)
 	}
-	return s.recordRuntimePreparationState(ctx, meta, run, enum.AgentRunStatusFailed, value.RuntimeContextRef{}, failure.summary(), runtimePrepareFailureCode, "")
+	return s.recordRuntimePreparationState(ctx, meta, run, enum.AgentRunStatusFailed, runtimeContext, failure.summary(), failureCode, "")
 }
 
 func (s *Service) recordRuntimePreparationState(
@@ -708,12 +1023,18 @@ func normalizeRuntimeSources(sources []RuntimeWorkspaceSource) ([]RuntimeWorkspa
 		}
 		normalized = append(normalized, item)
 	}
-	sort.SliceStable(normalized, func(left, right int) bool {
-		leftKey := normalized[left].Kind + ":" + normalized[left].SourceID
-		rightKey := normalized[right].Kind + ":" + normalized[right].SourceID
-		return leftKey < rightKey
-	})
+	sortRuntimeWorkspaceSources(normalized)
 	return normalized, nil
+}
+
+func sortRuntimeWorkspaceSources(sources []RuntimeWorkspaceSource) {
+	sort.SliceStable(sources, func(left, right int) bool {
+		return runtimeWorkspaceSourceSortKey(sources[left]) < runtimeWorkspaceSourceSortKey(sources[right])
+	})
+}
+
+func runtimeWorkspaceSourceSortKey(source RuntimeWorkspaceSource) string {
+	return source.Kind + ":" + source.SourceID
 }
 
 func runtimeWorkspacePolicyDigest(policy RuntimeWorkspacePolicy) (string, error) {
@@ -729,6 +1050,11 @@ func runtimeWorkspacePolicyDigest(policy RuntimeWorkspacePolicy) (string, error)
 	}
 	sum := sha256.Sum256(data)
 	return "sha256:" + hex.EncodeToString(sum[:]), nil
+}
+
+func digestText(text string) string {
+	sum := sha256.Sum256([]byte(strings.TrimSpace(text)))
+	return "sha256:" + hex.EncodeToString(sum[:])
 }
 
 func repositoryIDsFromRuntimeSources(sources []RuntimeWorkspaceSource) []uuid.UUID {

@@ -107,7 +107,10 @@ func (s *Service) StartAgentRun(ctx context.Context, input StartAgentRunInput) (
 		return entity.AgentRun{}, err
 	}
 	if replay, ok, err := s.findStartAgentRunReplay(ctx, input.Meta, input.SessionID); ok || err != nil {
-		return replay, err
+		if err != nil {
+			return replay, err
+		}
+		return s.retryRuntimeJobDispatchForReplay(ctx, input.Meta, replay)
 	}
 	session, err := s.repository.GetAgentSession(ctx, input.SessionID)
 	if err != nil {

@@ -103,6 +103,18 @@ func TestValidateRequiresRuntimePreparationWhenJobDispatchEnabled(t *testing.T) 
 	}
 }
 
+func TestValidateRequiresRuntimeJobRunnerImageWhenDispatchEnabled(t *testing.T) {
+	t.Parallel()
+
+	cfg := validConfig()
+	cfg.RuntimePreparationEnabled = true
+	cfg.RuntimeJobDispatchEnabled = true
+	cfg.RuntimeJobRunnerImageRef = ""
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() err = nil, want runtime job runner image ref requirement")
+	}
+}
+
 func TestValidateRequiresProviderHubWriteTokenWhenEnabled(t *testing.T) {
 	t.Parallel()
 

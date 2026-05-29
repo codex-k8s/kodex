@@ -138,13 +138,72 @@ func createAgentRunJobRequest(input agentservice.RuntimeJobInput) *runtimev1.Cre
 	agentRunID := input.AgentRunID.String()
 	slotRef := strings.TrimSpace(input.SlotRef)
 	return &runtimev1.CreateJobRequest{
-		JobType:      runtimev1.JobType_JOB_TYPE_AGENT_RUN,
-		Priority:     runtimev1.JobPriority_JOB_PRIORITY_NORMAL,
-		SlotId:       optionalString(slotRef),
-		AgentRunId:   &agentRunID,
-		JobInputJson: "{}",
-		Meta:         commandMeta(input.Meta),
+		JobType:               runtimev1.JobType_JOB_TYPE_AGENT_RUN,
+		Priority:              runtimev1.JobPriority_JOB_PRIORITY_NORMAL,
+		SlotId:                optionalString(slotRef),
+		AgentRunId:            &agentRunID,
+		JobInputJson:          "{}",
+		AgentRunExecutionSpec: agentRunExecutionSpec(input.ExecutionSpec),
+		Meta:                  commandMeta(input.Meta),
 	}
+}
+
+func agentRunExecutionSpec(spec agentservice.AgentRunExecutionSpec) *runtimev1.AgentRunExecutionSpec {
+	if spec.AgentRunID == uuid.Nil || spec.SlotID == uuid.Nil || spec.ExpectedMaterializationID == uuid.Nil {
+		return nil
+	}
+	return &runtimev1.AgentRunExecutionSpec{
+		AgentRunId:                         spec.AgentRunID.String(),
+		SlotId:                             spec.SlotID.String(),
+		ExpectedMaterializationId:          spec.ExpectedMaterializationID.String(),
+		ExpectedMaterializationFingerprint: strings.TrimSpace(spec.ExpectedMaterializationFingerprint),
+		WorkspaceRef:                       strings.TrimSpace(spec.WorkspaceRef),
+		WorkspaceMountRef:                  strings.TrimSpace(spec.WorkspaceMountRef),
+		WorkspacePvcRef:                    strings.TrimSpace(spec.WorkspacePVCRef),
+		ContextRef:                         strings.TrimSpace(spec.ContextRef),
+		ContextDigest:                      strings.TrimSpace(spec.ContextDigest),
+		RunnerProfileRef:                   strings.TrimSpace(spec.RunnerProfileRef),
+		RunnerImageRef:                     strings.TrimSpace(spec.RunnerImageRef),
+		RunnerMode:                         agentRunRunnerMode(spec.RunnerMode),
+		AllowedSecretRefs:                  agentRunAllowedSecretRefs(spec.AllowedSecretRefs),
+		ReportingTargetRefs:                agentRunReportingTargetRefs(spec.ReportingTargetRefs),
+	}
+}
+
+func agentRunRunnerMode(mode string) runtimev1.AgentRunRunnerMode {
+	switch strings.TrimSpace(mode) {
+	case agentservice.RuntimeJobRunnerModeCodexAgent:
+		return runtimev1.AgentRunRunnerMode_AGENT_RUN_RUNNER_MODE_CODEX_AGENT
+	default:
+		return runtimev1.AgentRunRunnerMode_AGENT_RUN_RUNNER_MODE_UNSPECIFIED
+	}
+}
+
+func agentRunAllowedSecretRefs(refs []agentservice.AgentRunExecutionRef) []*runtimev1.AgentRunAllowedSecretRef {
+	return mapAgentRunExecutionRefs(refs, agentRunAllowedSecretRef)
+}
+
+func agentRunReportingTargetRefs(refs []agentservice.AgentRunExecutionRef) []*runtimev1.AgentRunReportingTargetRef {
+	return mapAgentRunExecutionRefs(refs, agentRunReportingTargetRef)
+}
+
+func agentRunAllowedSecretRef(ref agentservice.AgentRunExecutionRef) *runtimev1.AgentRunAllowedSecretRef {
+	return &runtimev1.AgentRunAllowedSecretRef{Purpose: ref.Kind, SecretRef: ref.Ref}
+}
+
+func agentRunReportingTargetRef(ref agentservice.AgentRunExecutionRef) *runtimev1.AgentRunReportingTargetRef {
+	return &runtimev1.AgentRunReportingTargetRef{Kind: ref.Kind, Ref: ref.Ref}
+}
+
+func mapAgentRunExecutionRefs[T any](refs []agentservice.AgentRunExecutionRef, mapRef func(agentservice.AgentRunExecutionRef) T) []T {
+	result := make([]T, 0, len(refs))
+	for _, ref := range refs {
+		result = append(result, mapRef(agentservice.AgentRunExecutionRef{
+			Kind: strings.TrimSpace(ref.Kind),
+			Ref:  strings.TrimSpace(ref.Ref),
+		}))
+	}
+	return result
 }
 
 func getAgentRunJobRequest(input agentservice.RuntimeJobReadInput) *runtimev1.GetJobRequest {
@@ -249,13 +308,34 @@ func prepareRuntimeResult(input agentservice.RuntimePreparationInput, response *
 		slot.GetFingerprint(),
 		input.WorkspacePolicy.PolicyDigest,
 	)
+	contextRef, contextDigest := agentRunContextRefs(materialization)
 	return agentservice.RuntimePreparationResult{
-		SlotRef:                    slotRef,
-		WorkspaceRef:               workspaceRef,
-		ContextRef:                 fingerprint,
-		MaterializationFingerprint: fingerprint,
-		DiagnosticSummary:          runtimeDiagnosticSummary(slot, materialization),
+		SlotRef:                        slotRef,
+		SlotStatus:                     runtimeSlotStatus(slot.GetStatus()),
+		WorkspaceRef:                   workspaceRef,
+		WorkspaceMaterializationStatus: runtimeWorkspaceMaterializationStatus(materialization.GetStatus()),
+		ContextRef:                     contextRef,
+		ContextDigest:                  contextDigest,
+		MaterializationFingerprint:     fingerprint,
+		DiagnosticSummary:              runtimeDiagnosticSummary(slot, materialization),
 	}, nil
+}
+
+func agentRunContextRefs(materialization *runtimev1.WorkspaceMaterialization) (string, string) {
+	if materialization == nil {
+		return "", ""
+	}
+	materializationID := strings.TrimSpace(materialization.GetWorkspaceMaterializationId())
+	if materializationID == "" {
+		return "", ""
+	}
+	contextRef := "runtime://workspace-materializations/" + materializationID + "/context/agent-run.json"
+	for _, source := range materialization.GetSources() {
+		if source.GetKind() == runtimev1.WorkspaceSourceKind_WORKSPACE_SOURCE_KIND_GENERATED_CONTEXT {
+			return contextRef, strings.TrimSpace(source.GetDigest())
+		}
+	}
+	return contextRef, ""
 }
 
 func runtimeJobResult(input agentservice.RuntimeJobInput, response *runtimev1.JobResponse) (agentservice.RuntimeJobResult, error) {
@@ -349,8 +429,36 @@ var runtimeJobStatusNames = map[runtimev1.JobStatus]string{
 	runtimev1.JobStatus_JOB_STATUS_TIMED_OUT: "timed_out",
 }
 
+var runtimeSlotStatusNames = map[runtimev1.SlotStatus]string{
+	runtimev1.SlotStatus_SLOT_STATUS_PREWARMED:       "prewarmed",
+	runtimev1.SlotStatus_SLOT_STATUS_RESERVED:        "reserved",
+	runtimev1.SlotStatus_SLOT_STATUS_MATERIALIZING:   "materializing",
+	runtimev1.SlotStatus_SLOT_STATUS_READY:           agentservice.RuntimeSlotStatusReady,
+	runtimev1.SlotStatus_SLOT_STATUS_IN_USE:          "in_use",
+	runtimev1.SlotStatus_SLOT_STATUS_RELEASING:       "releasing",
+	runtimev1.SlotStatus_SLOT_STATUS_FAILED:          agentservice.RuntimeSlotStatusFailed,
+	runtimev1.SlotStatus_SLOT_STATUS_CLEANUP_PENDING: "cleanup_pending",
+	runtimev1.SlotStatus_SLOT_STATUS_CLEANED:         "cleaned",
+}
+
+var runtimeWorkspaceMaterializationStatusNames = map[runtimev1.WorkspaceMaterializationStatus]string{
+	runtimev1.WorkspaceMaterializationStatus_WORKSPACE_MATERIALIZATION_STATUS_PENDING:   "pending",
+	runtimev1.WorkspaceMaterializationStatus_WORKSPACE_MATERIALIZATION_STATUS_RUNNING:   "running",
+	runtimev1.WorkspaceMaterializationStatus_WORKSPACE_MATERIALIZATION_STATUS_COMPLETED: agentservice.RuntimeWorkspaceMaterializationStatusCompleted,
+	runtimev1.WorkspaceMaterializationStatus_WORKSPACE_MATERIALIZATION_STATUS_FAILED:    agentservice.RuntimeWorkspaceMaterializationStatusFailed,
+	runtimev1.WorkspaceMaterializationStatus_WORKSPACE_MATERIALIZATION_STATUS_CANCELLED: agentservice.RuntimeWorkspaceMaterializationStatusCancelled,
+}
+
 func runtimeJobStatus(status runtimev1.JobStatus) string {
 	return runtimeJobStatusNames[status]
+}
+
+func runtimeSlotStatus(status runtimev1.SlotStatus) string {
+	return runtimeSlotStatusNames[status]
+}
+
+func runtimeWorkspaceMaterializationStatus(status runtimev1.WorkspaceMaterializationStatus) string {
+	return runtimeWorkspaceMaterializationStatusNames[status]
 }
 
 func runtimeJobStatusDomain(status runtimev1.JobStatus) agentservice.RuntimeJobStatus {

@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-12
 updated_at: 2026-05-28
-related_issues: [733, 749, 759, 772, 322, 782, 795, 809, 820, 834, 842, 862, 866, 891, 905, 918, 937, 954]
+related_issues: [733, 749, 759, 772, 322, 782, 795, 809, 820, 834, 842, 862, 866, 891, 905, 918, 937, 954, 968]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -396,7 +396,7 @@ Event-driven resume идёт через уже очищенное событие
 - `StageRoleBinding` связывает `Stage` и `RoleProfile`.
 - `AgentSession` содержит несколько `AgentRun`.
 - `AgentRun` фиксирует `FlowVersion`, `Stage`, `RoleProfile` с `role_profile_version` и `role_profile_digest`, `PromptTemplateVersion` с digest и использованные guidance refs.
-- Guidance refs в `AgentRun` появляются только после разрешения через `package-hub`: стартовая команда может передать selection hints, а `agent-manager` проверяет scope, активность установки, статус версии и состояние manifest. Runtime refs появляются только после подготовки workspace и постановки `JOB_TYPE_AGENT_RUN` в `runtime-manager`; в БД `agent-manager` сохраняются только `runtime_slot_ref`, `runtime_job_ref`, `runtime_context_ref`, `runtime_workspace_ref`, безопасная summary и статус.
+- Guidance refs в `AgentRun` появляются только после разрешения через `package-hub`: стартовая команда может передать selection hints, а `agent-manager` проверяет scope, активность установки, статус версии и состояние manifest. Runtime refs появляются после подготовки workspace, а `runtime_job_ref` появляется только после принятого `JOB_TYPE_AGENT_RUN` в `runtime-manager`; в БД `agent-manager` сохраняются только `runtime_slot_ref`, `runtime_job_ref`, `runtime_context_ref`, `runtime_workspace_ref`, безопасная summary и статус. Typed `AgentRunExecutionSpec` не становится отдельной моделью хранения `agent-manager`: он детерминированно собирается на момент `CreateJob` из уже сохранённых safe refs, результата `PrepareRuntime`, digest generated context и сервисной ссылки на runner image.
 - В `guidance_refs` запрещено хранить `SKILL.md`, scripts, assets, исходники пакета, полный manifest или секреты; для диагностики сохраняется только bounded policy-safe summary.
 - `AgentSessionStateSnapshot` относится к `AgentSession` и опционально к `AgentRun`; `AgentSession.latest_state_snapshot_id` указывает на актуальный снимок.
 - `AgentActivity` относится к `AgentSession` и опционально к `AgentRun`; это authoritative safe timeline для будущего UI, а не копия hook payload.

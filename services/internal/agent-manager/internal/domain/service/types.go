@@ -147,6 +147,15 @@ type StartAgentRunInput struct {
 const (
 	RuntimeModeFullEnv = "full_env"
 
+	RuntimeJobRunnerModeCodexAgent = "codex_agent"
+
+	RuntimeSlotStatusReady  = "ready"
+	RuntimeSlotStatusFailed = "failed"
+
+	RuntimeWorkspaceMaterializationStatusCompleted = "completed"
+	RuntimeWorkspaceMaterializationStatusFailed    = "failed"
+	RuntimeWorkspaceMaterializationStatusCancelled = "cancelled"
+
 	WorkspaceSourceKindCode             = "code"
 	WorkspaceSourceKindDocumentation    = "documentation"
 	WorkspaceSourceKindGuidancePackage  = "guidance_package"
@@ -231,17 +240,43 @@ type RuntimePreparationInput struct {
 }
 
 type RuntimePreparationResult struct {
-	SlotRef                    string
-	WorkspaceRef               string
-	ContextRef                 string
-	MaterializationFingerprint string
-	DiagnosticSummary          string
+	SlotRef                        string
+	SlotStatus                     string
+	WorkspaceRef                   string
+	WorkspaceMaterializationStatus string
+	ContextRef                     string
+	ContextDigest                  string
+	MaterializationFingerprint     string
+	DiagnosticSummary              string
 }
 
 type RuntimeJobInput struct {
-	Meta       value.CommandMeta
-	AgentRunID uuid.UUID
-	SlotRef    string
+	Meta          value.CommandMeta
+	AgentRunID    uuid.UUID
+	SlotRef       string
+	ExecutionSpec AgentRunExecutionSpec
+}
+
+type AgentRunExecutionSpec struct {
+	AgentRunID                         uuid.UUID
+	SlotID                             uuid.UUID
+	ExpectedMaterializationID          uuid.UUID
+	ExpectedMaterializationFingerprint string
+	WorkspaceRef                       string
+	WorkspaceMountRef                  string
+	WorkspacePVCRef                    string
+	ContextRef                         string
+	ContextDigest                      string
+	RunnerProfileRef                   string
+	RunnerImageRef                     string
+	RunnerMode                         string
+	AllowedSecretRefs                  []AgentRunExecutionRef
+	ReportingTargetRefs                []AgentRunExecutionRef
+}
+
+type AgentRunExecutionRef struct {
+	Kind string
+	Ref  string
 }
 
 type RuntimeJobResult struct {
