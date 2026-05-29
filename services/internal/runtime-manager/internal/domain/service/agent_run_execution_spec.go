@@ -22,6 +22,10 @@ const (
 	maxAgentRunSafeRefBytes              = 512
 	maxAgentRunAllowedSecretRefs         = 16
 	maxAgentRunReportingTargetRefs       = 8
+	maxAgentRunExecutionCallbackRefs     = 8
+	maxAgentRunExecutionOutputRefs       = 8
+	maxAgentRunExecutionResultRefs       = 8
+	maxAgentRunExecutionTimeoutSeconds   = 24 * 60 * 60
 	maxAgentRunReportingTargetKindBytes  = 64
 	maxAgentRunAllowedSecretPurposeBytes = 64
 )
@@ -113,6 +117,80 @@ func normalizeAgentRunExecutionSpec(spec AgentRunExecutionSpecInput) (AgentRunEx
 	normalized.ReportingTargetRefs, err = normalizeAgentRunExecutionRefs(spec.ReportingTargetRefs, maxAgentRunReportingTargetKindBytes)
 	if err != nil {
 		return AgentRunExecutionSpecInput{}, errs.ErrInvalidArgument
+	}
+	if spec.CodexSessionExecutionSpec != nil {
+		codexSpec, err := normalizeCodexSessionExecutionSpec(*spec.CodexSessionExecutionSpec, normalized)
+		if err != nil {
+			return AgentRunExecutionSpecInput{}, err
+		}
+		normalized.CodexSessionExecutionSpec = &codexSpec
+	}
+	return normalized, nil
+}
+
+func normalizeCodexSessionExecutionSpec(
+	spec CodexSessionExecutionSpecInput,
+	agentRunSpec AgentRunExecutionSpecInput,
+) (CodexSessionExecutionSpecInput, error) {
+	normalized := CodexSessionExecutionSpecInput{
+		InstructionObjectRef:    strings.TrimSpace(spec.InstructionObjectRef),
+		InstructionObjectDigest: strings.TrimSpace(spec.InstructionObjectDigest),
+		ResultSchemaRef:         strings.TrimSpace(spec.ResultSchemaRef),
+		ResultSchemaDigest:      strings.TrimSpace(spec.ResultSchemaDigest),
+		SessionSnapshotRef:      strings.TrimSpace(spec.SessionSnapshotRef),
+		WorkspaceSnapshotRef:    strings.TrimSpace(spec.WorkspaceSnapshotRef),
+		HookEndpointRef:         strings.TrimSpace(spec.HookEndpointRef),
+		TimeoutSeconds:          spec.TimeoutSeconds,
+		RunnerProfileRef:        strings.TrimSpace(spec.RunnerProfileRef),
+		RunnerMode:              spec.RunnerMode,
+	}
+	requiredRefs := []string{
+		normalized.InstructionObjectRef,
+		normalized.InstructionObjectDigest,
+		normalized.ResultSchemaRef,
+		normalized.ResultSchemaDigest,
+		normalized.HookEndpointRef,
+		normalized.RunnerProfileRef,
+	}
+	for _, ref := range requiredRefs {
+		if !safeAgentRunRef(ref, true) {
+			return CodexSessionExecutionSpecInput{}, errs.ErrInvalidArgument
+		}
+	}
+	if normalized.SessionSnapshotRef == "" && normalized.WorkspaceSnapshotRef == "" {
+		return CodexSessionExecutionSpecInput{}, errs.ErrInvalidArgument
+	}
+	if !safeAgentRunRef(normalized.SessionSnapshotRef, false) || !safeAgentRunRef(normalized.WorkspaceSnapshotRef, false) {
+		return CodexSessionExecutionSpecInput{}, errs.ErrInvalidArgument
+	}
+	if normalized.TimeoutSeconds <= 0 || normalized.TimeoutSeconds > maxAgentRunExecutionTimeoutSeconds {
+		return CodexSessionExecutionSpecInput{}, errs.ErrInvalidArgument
+	}
+	if normalized.RunnerProfileRef != agentRunSpec.RunnerProfileRef || normalized.RunnerMode != enum.AgentRunRunnerModeCodexAgent {
+		return CodexSessionExecutionSpecInput{}, errs.ErrInvalidArgument
+	}
+	if len(spec.CallbackRefs) > maxAgentRunExecutionCallbackRefs ||
+		len(spec.OutputRefs) > maxAgentRunExecutionOutputRefs ||
+		len(spec.ResultRefs) > maxAgentRunExecutionResultRefs ||
+		len(spec.AllowedSecretRefs) > maxAgentRunAllowedSecretRefs {
+		return CodexSessionExecutionSpecInput{}, errs.ErrInvalidArgument
+	}
+	var err error
+	normalized.CallbackRefs, err = normalizeAgentRunExecutionRefs(spec.CallbackRefs, maxAgentRunReportingTargetKindBytes)
+	if err != nil || len(normalized.CallbackRefs) == 0 {
+		return CodexSessionExecutionSpecInput{}, errs.ErrInvalidArgument
+	}
+	normalized.OutputRefs, err = normalizeAgentRunExecutionRefs(spec.OutputRefs, maxAgentRunReportingTargetKindBytes)
+	if err != nil || len(normalized.OutputRefs) == 0 {
+		return CodexSessionExecutionSpecInput{}, errs.ErrInvalidArgument
+	}
+	normalized.ResultRefs, err = normalizeAgentRunExecutionRefs(spec.ResultRefs, maxAgentRunReportingTargetKindBytes)
+	if err != nil || len(normalized.ResultRefs) == 0 {
+		return CodexSessionExecutionSpecInput{}, errs.ErrInvalidArgument
+	}
+	normalized.AllowedSecretRefs, err = normalizeAgentRunExecutionRefs(spec.AllowedSecretRefs, maxAgentRunAllowedSecretPurposeBytes)
+	if err != nil {
+		return CodexSessionExecutionSpecInput{}, errs.ErrInvalidArgument
 	}
 	return normalized, nil
 }

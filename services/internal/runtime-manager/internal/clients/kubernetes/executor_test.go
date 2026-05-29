@@ -125,6 +125,12 @@ func TestExecutorStartCreatesRestrictedAgentRunJob(t *testing.T) {
 	if strings.Contains(env["KODEX_AGENT_RUN_ALLOWED_SECRET_REFS_JSON"], "secret-value") {
 		t.Fatalf("allowed secret refs env contains a secret value: %q", env["KODEX_AGENT_RUN_ALLOWED_SECRET_REFS_JSON"])
 	}
+	if env["KODEX_CODEX_SESSION_EXECUTION_SPEC_JSON"] == "" {
+		t.Fatal("codex session execution spec env is empty, want safe refs")
+	}
+	if strings.Contains(env["KODEX_CODEX_SESSION_EXECUTION_SPEC_JSON"], "prompt_body") || strings.Contains(env["KODEX_CODEX_SESSION_EXECUTION_SPEC_JSON"], "secret-value") {
+		t.Fatalf("codex execution spec env contains unsafe marker: %q", env["KODEX_CODEX_SESSION_EXECUTION_SPEC_JSON"])
+	}
 	if len(created.Annotations) != 0 || len(created.Spec.Template.Annotations) != 0 {
 		t.Fatalf("annotations = %v/%v, want none from agent_run spec", created.Annotations, created.Spec.Template.Annotations)
 	}
@@ -416,7 +422,7 @@ func testAgentRunJob() entity.Job {
 		Status:       enum.JobStatusClaimed,
 		AgentRunID:   &agentRunID,
 		SlotID:       &slotID,
-		JobInputJSON: []byte(`{"agent_run_execution_spec":{"agent_run_id":"00000000-0000-0000-0000-000000000031","slot_id":"00000000-0000-0000-0000-000000000032","expected_materialization_id":"00000000-0000-0000-0000-000000000033","expected_materialization_fingerprint":"sha256:workspace","workspace_ref":"runtime://workspace/31","workspace_mount_ref":"mount://workspace/31","workspace_pvc_ref":"pvc://runtime-jobs/runtime-workspace-549","context_ref":"runtime://workspace/31/.kodex/context/agent-run.json","context_digest":"sha256:context","runner_profile_ref":"runner-profile://codex-agent/default","runner_image_ref":"image://ghcr.io/codex-k8s/agent-runner@sha256:runner","runner_mode":"codex_agent","allowed_secret_refs":[{"kind":"runtime_api","ref":"secret://runtime/agent-token"}],"reporting_target_refs":[{"kind":"agent_run_state","ref":"agent-manager://runs/00000000-0000-0000-0000-000000000031"}]}}`),
+		JobInputJSON: []byte(`{"agent_run_execution_spec":{"agent_run_id":"00000000-0000-0000-0000-000000000031","slot_id":"00000000-0000-0000-0000-000000000032","expected_materialization_id":"00000000-0000-0000-0000-000000000033","expected_materialization_fingerprint":"sha256:workspace","workspace_ref":"runtime://workspace/31","workspace_mount_ref":"mount://workspace/31","workspace_pvc_ref":"pvc://runtime-jobs/runtime-workspace-549","context_ref":"runtime://workspace/31/.kodex/context/agent-run.json","context_digest":"sha256:context","runner_profile_ref":"runner-profile://codex-agent/default","runner_image_ref":"image://ghcr.io/codex-k8s/agent-runner@sha256:runner","runner_mode":"codex_agent","allowed_secret_refs":[{"kind":"runtime_api","ref":"secret://runtime/agent-token"}],"reporting_target_refs":[{"kind":"agent_run_state","ref":"agent-manager://runs/00000000-0000-0000-0000-000000000031"}],"codex_session_execution_spec":{"instruction_object_ref":"object://instructions/31","instruction_object_digest":"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","result_schema_ref":"object://schemas/codex-result-v1","result_schema_digest":"sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff","workspace_snapshot_ref":"runtime://workspace-snapshots/31","hook_endpoint_ref":"hook://codex-hook-ingress/agent-runner","callback_refs":[{"kind":"agent_run_state","ref":"agent-manager://runs/00000000-0000-0000-0000-000000000031"}],"timeout_seconds":1800,"runner_profile_ref":"runner-profile://codex-agent/default","runner_mode":"codex_agent","output_refs":[{"kind":"last_message","ref":"object://codex-output/last-message"}],"result_refs":[{"kind":"result_metadata","ref":"object://codex-output/result-metadata"}],"allowed_secret_refs":[{"kind":"runtime_api","ref":"secret://runtime/agent-token"}]}}}`),
 		FleetScopeID: &fleetScopeID,
 		ClusterID:    &clusterID,
 	}

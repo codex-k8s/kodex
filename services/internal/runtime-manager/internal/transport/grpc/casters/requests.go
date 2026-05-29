@@ -420,6 +420,7 @@ func AgentRunExecutionSpecInputFromProto(spec *runtimev1.AgentRunExecutionSpec) 
 		RunnerMode:                         runnerMode,
 		AllowedSecretRefs:                  agentRunAllowedSecretRefsFromProto(spec.GetAllowedSecretRefs()),
 		ReportingTargetRefs:                agentRunReportingTargetRefsFromProto(spec.GetReportingTargetRefs()),
+		CodexSessionExecutionSpec:          codexSessionExecutionSpecFromProto(spec.GetCodexSessionExecutionSpec()),
 	}, nil
 }
 
@@ -429,6 +430,40 @@ func agentRunAllowedSecretRefsFromProto(refs []*runtimev1.AgentRunAllowedSecretR
 
 func agentRunReportingTargetRefsFromProto(refs []*runtimev1.AgentRunReportingTargetRef) []runtimeservice.AgentRunExecutionRefInput {
 	return agentRunProtoRefs(refs, (*runtimev1.AgentRunReportingTargetRef).GetKind, (*runtimev1.AgentRunReportingTargetRef).GetRef)
+}
+
+func codexSessionExecutionSpecFromProto(spec *runtimev1.CodexSessionExecutionSpec) *runtimeservice.CodexSessionExecutionSpecInput {
+	if spec == nil {
+		return nil
+	}
+	return &runtimeservice.CodexSessionExecutionSpecInput{
+		InstructionObjectRef:    strings.TrimSpace(spec.GetInstructionObjectRef()),
+		InstructionObjectDigest: strings.TrimSpace(spec.GetInstructionObjectDigest()),
+		ResultSchemaRef:         strings.TrimSpace(spec.GetResultSchemaRef()),
+		ResultSchemaDigest:      strings.TrimSpace(spec.GetResultSchemaDigest()),
+		SessionSnapshotRef:      strings.TrimSpace(spec.GetSessionSnapshotRef()),
+		WorkspaceSnapshotRef:    strings.TrimSpace(spec.GetWorkspaceSnapshotRef()),
+		HookEndpointRef:         strings.TrimSpace(spec.GetHookEndpointRef()),
+		CallbackRefs:            agentRunExecutionRefsFromProto(spec.GetCallbackRefs()),
+		TimeoutSeconds:          spec.GetTimeoutSeconds(),
+		RunnerProfileRef:        strings.TrimSpace(spec.GetRunnerProfileRef()),
+		RunnerMode:              mustAgentRunRunnerModeFromProto(spec.GetRunnerMode()),
+		OutputRefs:              agentRunExecutionRefsFromProto(spec.GetOutputRefs()),
+		ResultRefs:              agentRunExecutionRefsFromProto(spec.GetResultRefs()),
+		AllowedSecretRefs:       agentRunAllowedSecretRefsFromProto(spec.GetAllowedSecretRefs()),
+	}
+}
+
+func agentRunExecutionRefsFromProto(refs []*runtimev1.AgentRunExecutionRef) []runtimeservice.AgentRunExecutionRefInput {
+	return agentRunProtoRefs(refs, (*runtimev1.AgentRunExecutionRef).GetKind, (*runtimev1.AgentRunExecutionRef).GetRef)
+}
+
+func mustAgentRunRunnerModeFromProto(value runtimev1.AgentRunRunnerMode) enum.AgentRunRunnerMode {
+	mode, err := AgentRunRunnerModeFromProto(value)
+	if err != nil {
+		return ""
+	}
+	return mode
 }
 
 func agentRunProtoRefs[Proto any](refs []*Proto, kind func(*Proto) string, refValue func(*Proto) string) []runtimeservice.AgentRunExecutionRefInput {

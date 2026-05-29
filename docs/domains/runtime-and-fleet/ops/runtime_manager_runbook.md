@@ -6,7 +6,7 @@ status: active
 owner_role: SRE
 created_at: 2026-05-08
 updated_at: 2026-05-29
-related_issues: [661, 966, 975]
+related_issues: [661, 966, 975, 990]
 related_alerts: []
 approvals:
   required: ["Owner"]
@@ -100,7 +100,7 @@ kubectl -n "$KODEX_PRODUCTION_NAMESPACE" get secret kodex-platform-runtime -o js
 
 Для `agent_run` обязательны safe refs на Run/slot/materialization/workspace/context, `workspace_pvc_ref`, `runner_profile_ref`, `runner_image_ref`, фиксированный `runner_mode`, secret refs без значений и reporting target refs. Первый executor принимает `workspace_pvc_ref` как `pvc://<namespace>/<claim>` или `k8s://pvc/<claim>`. Runner image ref может быть прямой ссылкой на контейнерный образ или typed ref с префиксом `image://`; в Kubernetes Job используется образ без этого префикса. Контейнер запускается фиксированной командой `/kodex/bin/agent-runner run`, workspace монтируется в `/workspace`, automount service account token выключен.
 
-Образ `agent-runner` содержит бинарник `/kodex/bin/agent-runner`. Команда `run` читает `.kodex/context/agent-run.json`, сверяет digest/fingerprint и фиксированный `runner_mode=codex_agent`, затем через существующий `agent-manager` gRPC-контракт фиксирует безопасное начало или ошибку Run, если в окружении задан сервисный адрес и токен. До согласования контракта фактического запуска Codex-сессии диагностический код `agent_execution_contract_unavailable` означает, что контекст проверен, но исполнение не стартует. Значения секретов, kubeconfig, prompt body, transcript, raw tool input/output и полный stdout/stderr не выводятся.
+Образ `agent-runner` содержит бинарник `/kodex/bin/agent-runner`. Команда `run` читает `.kodex/context/agent-run.json`, сверяет digest/fingerprint и фиксированный `runner_mode=codex_agent`, затем через существующий `agent-manager` gRPC-контракт фиксирует безопасное начало или ошибку Run, если в окружении задан сервисный адрес и токен. Для будущего запуска Codex CLI runner валидирует `KODEX_CODEX_SESSION_EXECUTION_SPEC_JSON`: instruction/result schema refs и digest, session/workspace snapshot ref, hook/callback refs, timeout, fixed runner profile, output/result refs и secret refs без значений. Проверенный execution input материализуется отдельно в workspace или объектном хранилище и читается только по ref/digest; его текст не хранится в БД и не входит в `agent-run.json`. Если spec отсутствует или неполон, диагностический код `agent_execution_contract_unavailable` означает, что контекст проверен, но исполнение не стартует. Значения секретов, kubeconfig, prompt body, transcript, raw tool input/output и полный stdout/stderr не выводятся.
 
 Исполнитель создаёт только ограниченный Kubernetes Job, не вызывает `kubectl`, не читает GitHub/GitLab, не хранит kubeconfig и не сохраняет полный лог. В БД попадают статус job, шаг `kubernetes_health_check` или `kubernetes_agent_run`, короткий хвост лога, ссылка на Kubernetes Job, ссылка на namespace и для `agent_run` ссылка на runner image.
 

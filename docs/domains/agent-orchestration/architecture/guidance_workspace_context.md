@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-25
 updated_at: 2026-05-29
-related_issues: [782, 795, 968, 975]
+related_issues: [782, 795, 968, 975, 990]
 related_prs: []
 related_docsets:
   - docs/domains/agent-orchestration/architecture/design.md
@@ -28,6 +28,7 @@ approvals:
 - `agent-manager` не делает checkout, mount или чтение файлов руководящего пакета.
 - `runtime-manager` получает `WorkspaceSource` с видом `guidance_package` и материализует пакет в workspace/PVC.
 - `agent-manager` передаёт в `CreateJob` typed `AgentRunExecutionSpec` с digest generated context и safe runtime refs, но не копирует тексты руководств или prompt.
+- `CodexSessionExecutionSpec` фиксирует будущий запуск Codex-сессии только через безопасные ссылки и digest; проверенный execution input материализуется отдельно от `agent-run.json`.
 - Локальный путь руководящего пакета строится не из сырого `package_slug`, а из проверенного `safe_local_name`.
 - Тексты руководств, `SKILL.md`, шаблоны prompt, flow-файлы, scripts, assets и полный manifest не пишутся в БД `agent-manager`.
 - Slot-агент видит руководящие документы по стабильным локальным путям внутри workspace.
@@ -135,7 +136,20 @@ sequenceDiagram
 
 Digest сгенерированного контекста передаётся в runtime как `WorkspaceSource.digest`, возвращается в результат подготовки workspace и затем попадает в `AgentRunExecutionSpec.context_digest`. Guidance refs не передаются в runtime job как отдельный текстовый payload: runner получает их через проверенный generated context и материализованные `guidance_package` sources, связанные с workspace fingerprint.
 
-`agent-runner` читает этот файл только из смонтированного workspace по контрактному пути `.kodex/context/agent-run.json`, сверяет digest из `AgentRunExecutionSpec`, `workspace_fingerprint` и `agent_run_id`, а затем сообщает безопасное состояние через `agent-manager.GetAgentRunRuntimeStatus`, `RecordRunState` и `RecordAgentActivity`. Реальный запуск Codex-сессии требует отдельного согласованного контракта исполнения; до него runner завершает job классифицированной диагностикой и не исполняет prompt body, произвольную shell-команду или raw tool payload.
+`agent-runner` читает этот файл только из смонтированного workspace по контрактному пути `.kodex/context/agent-run.json`, сверяет digest из `AgentRunExecutionSpec`, `workspace_fingerprint` и `agent_run_id`, а затем сообщает безопасное состояние через `agent-manager.GetAgentRunRuntimeStatus`, `RecordRunState` и `RecordAgentActivity`. Контракт будущего запуска Codex-сессии задаёт `CodexSessionExecutionSpec`; фактический вызов Codex CLI остаётся следующим runtime-срезом и не выполняется без полного spec.
+
+`CodexSessionExecutionSpec` является отдельной typed-частью runtime `AgentRunExecutionSpec`, а не prompt body в `agent-manager` и не расширением текста `agent-run.json`. Spec содержит только:
+
+- `instruction_object_ref` и `instruction_object_digest` на проверенный execution input;
+- `result_schema_ref` и `result_schema_digest`;
+- `session_snapshot_ref` или `workspace_snapshot_ref`;
+- `hook_endpoint_ref` и callback refs;
+- bounded timeout;
+- fixed `runner_profile_ref` и `runner_mode=codex_agent`;
+- output/result refs;
+- allowed secret refs без значений.
+
+Проверенный execution input материализуется runtime-контуром как отдельный объект или файл workspace, например рядом с `.kodex/context/agent-run.json`, и читается `agent-runner` только по ref/digest из `CodexSessionExecutionSpec`. Его содержимое не хранится в БД `agent-manager` или `runtime-manager`, не передаётся как env и не становится частью `agent-run.json`. Пока `CodexSessionExecutionSpec` отсутствует, неполон или не проходит safe-валидацию, `agent-runner` завершает попытку диагностикой `agent_execution_contract_unavailable` и не вызывает `codex exec`.
 
 ## Инварианты
 
@@ -154,7 +168,7 @@ Digest сгенерированного контекста передаётся 
 - Доработать runtime materializer до фактической записи `.kodex/context/agent-run.json` и checkout/mount руководящих пакетов по авторитетным refs из `package-hub`.
 - Добавить механизм materialization, который умеет получать guidance package source по `WorkspaceSource.kind=guidance_package`.
 - Добавить проверку формата и конфликтов `safe_local_name` в selected guidance set до подготовки runtime.
-- Согласовать контракт реального исполнения Codex-сессии, который `agent-runner` сможет использовать после проверки контекста без произвольных команд и сырых prompt/log payload.
+- Реализовать фактический вызов Codex CLI поверх `CodexSessionExecutionSpec`: фиксированный executable/args, чтение execution input только по ref/digest, bounded result handling и запись безопасных lifecycle/status через owner-сервисы.
 
 ## Апрув
 

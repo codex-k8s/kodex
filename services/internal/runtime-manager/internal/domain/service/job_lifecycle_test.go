@@ -513,6 +513,53 @@ func TestAgentRunExecutionSpecRequiresCurrentSlotBinding(t *testing.T) {
 	}
 }
 
+func TestAgentRunExecutionSpecPreservesCodexSessionExecutionSpec(t *testing.T) {
+	t.Parallel()
+
+	agentRunID := mustUUID("00000000-0000-0000-0000-000000000531")
+	slotID := mustUUID("00000000-0000-0000-0000-000000000532")
+	spec := testAgentRunExecutionSpec(agentRunID, slotID)
+	spec.CodexSessionExecutionSpec = &CodexSessionExecutionSpecInput{
+		InstructionObjectRef:    "object://instructions/agent-run-531",
+		InstructionObjectDigest: "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+		ResultSchemaRef:         "object://schemas/codex-result-v1",
+		ResultSchemaDigest:      "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+		WorkspaceSnapshotRef:    "runtime://workspace-snapshots/agent-run-531",
+		HookEndpointRef:         "hook://codex-hook-ingress/agent-runner",
+		CallbackRefs: []AgentRunExecutionRefInput{
+			{Kind: "agent_run_state", Ref: "agent-manager://runs/" + agentRunID.String()},
+		},
+		TimeoutSeconds:   1800,
+		RunnerProfileRef: spec.RunnerProfileRef,
+		RunnerMode:       enum.AgentRunRunnerModeCodexAgent,
+		OutputRefs: []AgentRunExecutionRefInput{
+			{Kind: "last_message", Ref: "object://codex-output/last-message"},
+		},
+		ResultRefs: []AgentRunExecutionRefInput{
+			{Kind: "result_metadata", Ref: "object://codex-output/result-metadata"},
+		},
+		AllowedSecretRefs: []AgentRunExecutionRefInput{
+			{Kind: "runtime_api", Ref: "secret://runtime/agent-token"},
+		},
+	}
+
+	normalized, err := normalizeAgentRunExecutionSpec(spec)
+	if err != nil {
+		t.Fatalf("normalizeAgentRunExecutionSpec() err = %v", err)
+	}
+	payload, err := marshalAgentRunExecutionSpec(normalized)
+	if err != nil {
+		t.Fatalf("marshalAgentRunExecutionSpec() err = %v", err)
+	}
+	extracted, ok := AgentRunExecutionSpecFromJobInput(payload)
+	if !ok || extracted.CodexSessionExecutionSpec == nil {
+		t.Fatalf("AgentRunExecutionSpecFromJobInput() = %+v, %v", extracted, ok)
+	}
+	if extracted.CodexSessionExecutionSpec.InstructionObjectRef != spec.CodexSessionExecutionSpec.InstructionObjectRef {
+		t.Fatalf("InstructionObjectRef = %q, want %q", extracted.CodexSessionExecutionSpec.InstructionObjectRef, spec.CodexSessionExecutionSpec.InstructionObjectRef)
+	}
+}
+
 func TestCreateJobWithSlotReusesSlotPlacementWithoutResolver(t *testing.T) {
 	t.Parallel()
 

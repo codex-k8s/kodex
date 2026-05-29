@@ -370,6 +370,46 @@ message AgentRunReportingTargetRef {
   string ref = 2;
 }
 
+// AgentRunExecutionRef carries a bounded reference for runner execution contracts.
+message AgentRunExecutionRef {
+  // kind classifies the reference purpose.
+  string kind = 1;
+  // ref is the owner-domain or runtime-owned reference.
+  string ref = 2;
+}
+
+// CodexSessionExecutionSpec defines the safe contract for a future Codex CLI session.
+message CodexSessionExecutionSpec {
+  // instruction_object_ref points to the checked execution input object or workspace file.
+  string instruction_object_ref = 1;
+  // instruction_object_digest is the immutable digest of the checked execution input.
+  string instruction_object_digest = 2;
+  // result_schema_ref points to the checked result schema object.
+  string result_schema_ref = 3;
+  // result_schema_digest is the immutable digest of the checked result schema.
+  string result_schema_digest = 4;
+  // session_snapshot_ref points to the previous Codex session snapshot when resuming.
+  optional string session_snapshot_ref = 5;
+  // workspace_snapshot_ref points to the checked workspace snapshot when there is no session snapshot.
+  optional string workspace_snapshot_ref = 6;
+  // hook_endpoint_ref points to the approved Codex hook ingress endpoint reference.
+  string hook_endpoint_ref = 7;
+  // callback_refs list owner callbacks used for safe lifecycle reporting.
+  repeated AgentRunExecutionRef callback_refs = 8;
+  // timeout_seconds bounds one Codex session execution attempt.
+  int32 timeout_seconds = 9;
+  // runner_profile_ref selects the fixed approved runner profile.
+  string runner_profile_ref = 10;
+  // runner_mode selects the fixed runner mode without arbitrary commands.
+  AgentRunRunnerMode runner_mode = 11;
+  // output_refs describe where bounded execution outputs are written.
+  repeated AgentRunExecutionRef output_refs = 12;
+  // result_refs describe where checked result metadata is written.
+  repeated AgentRunExecutionRef result_refs = 13;
+  // allowed_secret_refs lists allowed secret references without values.
+  repeated AgentRunAllowedSecretRef allowed_secret_refs = 14;
+}
+
 // AgentRunExecutionSpec defines the safe contract for future agent Run execution.
 message AgentRunExecutionSpec {
   // agent_run_id is the external agent-manager Run id.
@@ -400,6 +440,8 @@ message AgentRunExecutionSpec {
   repeated AgentRunAllowedSecretRef allowed_secret_refs = 13;
   // reporting_target_refs lists owner-domain targets for safe status reporting.
   repeated AgentRunReportingTargetRef reporting_target_refs = 14;
+  // codex_session_execution_spec carries safe refs for future Codex CLI execution.
+  optional CodexSessionExecutionSpec codex_session_execution_spec = 15;
 }
 
 // Slot is an isolated runtime environment.
