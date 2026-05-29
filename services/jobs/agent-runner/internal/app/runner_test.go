@@ -50,6 +50,17 @@ func TestDecodeContextRejectsRawFieldsAndKeepsDiagnosticSafe(t *testing.T) {
 	}
 }
 
+func TestDecodeContextRejectsTrailingGarbage(t *testing.T) {
+	cfg, raw := validConfigAndContext(t)
+	raw = append(raw, []byte(" trailing-garbage")...)
+	cfg.ContextDigest = SHA256Digest(raw)
+
+	_, diagnostic := DecodeContext(raw, cfg)
+	if diagnostic.Code != "agent_run_context_invalid" {
+		t.Fatalf("DecodeContext() code = %q", diagnostic.Code)
+	}
+}
+
 func TestDecodeContextRejectsLargePayload(t *testing.T) {
 	cfg, _ := validConfigAndContext(t)
 	raw := []byte(strings.Repeat("x", maxContextBytes+1))

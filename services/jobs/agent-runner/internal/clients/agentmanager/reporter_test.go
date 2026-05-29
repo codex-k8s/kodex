@@ -2,6 +2,7 @@ package agentmanager
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -72,6 +73,54 @@ func TestReportFailedRecordsFailureStateAndActivity(t *testing.T) {
 	assertSafeJSON(t, client.activities[0].GetSafeDetailsJson())
 }
 
+func TestReportStartedDoesNotFailWhenActivityWriteFails(t *testing.T) {
+	client := &fakeClient{
+		status:      runtimeStatus(agentsv1.AgentRunStatus_AGENT_RUN_STATUS_REQUESTED, 7),
+		activityErr: errors.New("activity write failed"),
+	}
+	reporter := mustReporter(t, client)
+
+	err := reporter.ReportStarted(context.Background(), reportInput())
+	if err != nil {
+		t.Fatalf("ReportStarted() err = %v", err)
+	}
+	if len(client.runStates) != 1 {
+		t.Fatalf("run state calls = %d, want 1", len(client.runStates))
+	}
+	if client.runStates[0].GetStatus() != agentsv1.AgentRunStatus_AGENT_RUN_STATUS_STARTING {
+		t.Fatalf("status = %s, want STARTING", client.runStates[0].GetStatus())
+	}
+	if len(client.activities) != 1 {
+		t.Fatalf("activity calls = %d, want 1", len(client.activities))
+	}
+}
+
+func TestReportFailedKeepsFinalStateWhenActivityWriteFails(t *testing.T) {
+	client := &fakeClient{
+		status:      runtimeStatus(agentsv1.AgentRunStatus_AGENT_RUN_STATUS_STARTING, 8),
+		activityErr: errors.New("activity write failed"),
+	}
+	reporter := mustReporter(t, client)
+	diagnostic := app.NewDiagnostic("agent_execution_contract_unavailable", "agent execution contract is not enabled", app.ExitFailure)
+
+	err := reporter.ReportFailed(context.Background(), reportInput(), diagnostic)
+	if err != nil {
+		t.Fatalf("ReportFailed() err = %v", err)
+	}
+	if len(client.runStates) != 1 {
+		t.Fatalf("run state calls = %d, want 1", len(client.runStates))
+	}
+	if client.runStates[0].GetStatus() != agentsv1.AgentRunStatus_AGENT_RUN_STATUS_FAILED {
+		t.Fatalf("status = %s, want FAILED", client.runStates[0].GetStatus())
+	}
+	if client.runStates[0].GetFailureCode() != diagnostic.Code {
+		t.Fatalf("failure code = %q, want %q", client.runStates[0].GetFailureCode(), diagnostic.Code)
+	}
+	if len(client.activities) != 1 {
+		t.Fatalf("activity calls = %d, want 1", len(client.activities))
+	}
+}
+
 func TestReportFailedNoopsForTerminalRun(t *testing.T) {
 	client := &fakeClient{status: runtimeStatus(agentsv1.AgentRunStatus_AGENT_RUN_STATUS_FAILED, 9)}
 	reporter := mustReporter(t, client)
@@ -125,9 +174,10 @@ func TestNewReporterFromConfigDisabled(t *testing.T) {
 }
 
 type fakeClient struct {
-	status     *agentsv1.AgentRunRuntimeStatusResponse
-	runStates  []*agentsv1.RecordRunStateRequest
-	activities []*agentsv1.RecordAgentActivityRequest
+	status      *agentsv1.AgentRunRuntimeStatusResponse
+	runStates   []*agentsv1.RecordRunStateRequest
+	activities  []*agentsv1.RecordAgentActivityRequest
+	activityErr error
 }
 
 func (f *fakeClient) GetAgentRunRuntimeStatus(context.Context, *agentsv1.GetAgentRunRuntimeStatusRequest, ...grpc.CallOption) (*agentsv1.AgentRunRuntimeStatusResponse, error) {
@@ -141,6 +191,9 @@ func (f *fakeClient) RecordRunState(_ context.Context, request *agentsv1.RecordR
 
 func (f *fakeClient) RecordAgentActivity(_ context.Context, request *agentsv1.RecordAgentActivityRequest, _ ...grpc.CallOption) (*agentsv1.AgentActivityResponse, error) {
 	f.activities = append(f.activities, request)
+	if f.activityErr != nil {
+		return nil, f.activityErr
+	}
 	return &agentsv1.AgentActivityResponse{}, nil
 }
 

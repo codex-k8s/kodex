@@ -5,6 +5,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -78,8 +80,12 @@ func DecodeContext(raw []byte, cfg Config) (AgentRunContext, Diagnostic) {
 		return AgentRunContext{}, NewDiagnostic("agent_run_context_invalid", "agent_run context JSON is invalid", ExitFailure)
 	}
 	var extra json.RawMessage
-	if err := decoder.Decode(&extra); err == nil {
+	err := decoder.Decode(&extra)
+	if err == nil {
 		return AgentRunContext{}, NewDiagnostic("agent_run_context_invalid", "agent_run context JSON contains multiple values", ExitFailure)
+	}
+	if !errors.Is(err, io.EOF) {
+		return AgentRunContext{}, NewDiagnostic("agent_run_context_invalid", "agent_run context JSON is invalid", ExitFailure)
 	}
 	return validateContext(context, cfg)
 }

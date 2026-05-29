@@ -109,7 +109,8 @@ func (r *Reporter) ReportStarted(ctx context.Context, input app.ReportInput) err
 	if _, err := r.recordRunState(ctx, status, agentsv1.AgentRunStatus_AGENT_RUN_STATUS_STARTING, input, startedReasonCode, startedSummary, nil); err != nil {
 		return err
 	}
-	return r.recordActivity(ctx, status, input, agentsv1.AgentActivityStatus_AGENT_ACTIVITY_STATUS_STARTED, startedReasonCode, startedSummary, nil)
+	_ = r.recordActivity(ctx, status, input, agentsv1.AgentActivityStatus_AGENT_ACTIVITY_STATUS_STARTED, startedReasonCode, startedSummary, nil)
+	return nil
 }
 
 func (r *Reporter) ReportFailed(ctx context.Context, input app.ReportInput, diagnostic app.Diagnostic) error {
@@ -123,7 +124,8 @@ func (r *Reporter) ReportFailed(ctx context.Context, input app.ReportInput, diag
 	if _, err := r.recordRunState(ctx, status, agentsv1.AgentRunStatus_AGENT_RUN_STATUS_FAILED, input, diagnostic.Code, diagnostic.Summary, &diagnostic.Code); err != nil {
 		return err
 	}
-	return r.recordActivity(ctx, status, input, agentsv1.AgentActivityStatus_AGENT_ACTIVITY_STATUS_FAILED, diagnostic.Code, diagnostic.Summary, &diagnostic.Code)
+	_ = r.recordActivity(ctx, status, input, agentsv1.AgentActivityStatus_AGENT_ACTIVITY_STATUS_FAILED, diagnostic.Code, diagnostic.Summary, &diagnostic.Code)
+	return nil
 }
 
 func (r *Reporter) runtimeStatus(ctx context.Context, runID string) (*agentsv1.AgentRunRuntimeStatusResponse, error) {
