@@ -83,6 +83,8 @@
 | `kubectl` | operator diagnostics | ручная диагностика k8s ресурсов и логов вне runtime API |
 | `openssl` | bootstrap scripts | генерация секретов |
 | `kaniko` | CI build pipeline | сборка образа внутри кластера |
+| `node` image | frontend build pipeline | сборка Vite bundle для `web-console` внутри Kaniko job; версия фиксируется в `services.yaml` как `node-alpine` |
+| `nginxinc/nginx-unprivileged` image | frontend runtime | non-root runtime для отдачи static bundle `web-console`; версия фиксируется в `services.yaml` как `nginx-unprivileged` |
 | `goose` (`v3.26.0`) | запуск миграций БД | применение `-- +goose Up/Down` миграций в production-задании миграций |
 | `@openai/codex` (CLI) | `services/jobs/agent-runner` runtime | выполнение `codex exec`/`resume` в агентном Job-контуре Day4 |
 | `github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen` | Make codegen pipeline | генерация Go transport-артефактов из OpenAPI |

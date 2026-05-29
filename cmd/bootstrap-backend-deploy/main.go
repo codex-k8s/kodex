@@ -28,7 +28,7 @@ func main() {
 	repoRoot := flag.String("repo-root", ".", "repository root containing services.yaml and deploy/base")
 	envFile := flag.String("env-file", "", "bootstrap env file; values are loaded but never printed")
 	servicesFile := flag.String("services-file", "", "root services.yaml path; defaults to <repo-root>/services.yaml")
-	ring := flag.String("ring", "first", "backend deploy ring: first, second, staff, mcp, or all")
+	ring := flag.String("ring", "first", "deploy ring: first, second, staff, mcp, web, or all")
 	skipBuild := flag.Bool("skip-build", false, "skip Kaniko image builds and only apply manifests")
 	skipHealth := flag.Bool("skip-health", false, "skip HTTP readiness checks after rollout")
 	flag.Parse()
@@ -70,10 +70,11 @@ type serviceDeploy struct {
 }
 
 type backendRing struct {
-	Name       string
-	Label      string
-	Services   []serviceDeploy
-	ImageNames []string
+	Name                  string
+	Label                 string
+	Services              []serviceDeploy
+	ImageNames            []string
+	UsesBackendFoundation bool
 }
 
 type imageBuild struct {
@@ -82,6 +83,12 @@ type imageBuild struct {
 	Dockerfile  string
 	Target      string
 	Destination string
+}
+
+type buildBaseImages struct {
+	Golang string
+	Node   string
+	Nginx  string
 }
 
 type secretValues struct {
@@ -116,6 +123,10 @@ var staffRingServices = []serviceDeploy{
 
 var mcpRingServices = []serviceDeploy{
 	{Name: "platform-mcp-server", Dir: "platform-mcp-server", ReadyPort: "8080"},
+}
+
+var webRingServices = []serviceDeploy{
+	{Name: "web-console", Dir: "web-console", ReadyPort: "8080"},
 }
 
 var firstRingImageNames = []string{
@@ -154,30 +165,44 @@ var mcpRingImageNames = []string{
 	"platform-mcp-server",
 }
 
+var webRingImageNames = []string{
+	"web-console",
+}
+
 var (
 	firstRing = backendRing{
-		Name:       "first",
-		Label:      "first backend ring",
-		Services:   firstRingServices,
-		ImageNames: firstRingImageNames,
+		Name:                  "first",
+		Label:                 "first backend ring",
+		Services:              firstRingServices,
+		ImageNames:            firstRingImageNames,
+		UsesBackendFoundation: true,
 	}
 	secondRing = backendRing{
-		Name:       "second",
-		Label:      "second backend ring",
-		Services:   secondRingServices,
-		ImageNames: secondRingImageNames,
+		Name:                  "second",
+		Label:                 "second backend ring",
+		Services:              secondRingServices,
+		ImageNames:            secondRingImageNames,
+		UsesBackendFoundation: true,
 	}
 	staffRing = backendRing{
-		Name:       "staff",
-		Label:      "staff gateway contour",
-		Services:   staffRingServices,
-		ImageNames: staffRingImageNames,
+		Name:                  "staff",
+		Label:                 "staff gateway contour",
+		Services:              staffRingServices,
+		ImageNames:            staffRingImageNames,
+		UsesBackendFoundation: true,
 	}
 	mcpRing = backendRing{
-		Name:       "mcp",
-		Label:      "platform MCP server contour",
-		Services:   mcpRingServices,
-		ImageNames: mcpRingImageNames,
+		Name:                  "mcp",
+		Label:                 "platform MCP server contour",
+		Services:              mcpRingServices,
+		ImageNames:            mcpRingImageNames,
+		UsesBackendFoundation: true,
+	}
+	webRing = backendRing{
+		Name:       "web",
+		Label:      "staff web-console contour",
+		Services:   webRingServices,
+		ImageNames: webRingImageNames,
 	}
 )
 
@@ -212,7 +237,7 @@ func run(ctx context.Context, options deployOptions, output io.Writer) error {
 	if err != nil {
 		return err
 	}
-	ok(output, "selected backend deploy rings: "+strings.Join(ringNames(rings), ", "))
+	ok(output, "selected deploy rings: "+strings.Join(ringNames(rings), ", "))
 
 	config, err := loadDeployConfig()
 	if err != nil {
@@ -251,11 +276,15 @@ func run(ctx context.Context, options deployOptions, output io.Writer) error {
 	} else {
 		skip(output, "Kaniko image builds skipped by operator flag")
 	}
-	if err := applyPostgres(ctx, config, renderDir, output); err != nil {
-		return err
-	}
-	if err := applyMigrations(ctx, config, renderDir, rings, output); err != nil {
-		return err
+	if requiresBackendFoundation(rings) {
+		if err := applyPostgres(ctx, config, renderDir, output); err != nil {
+			return err
+		}
+		if err := applyMigrations(ctx, config, renderDir, rings, output); err != nil {
+			return err
+		}
+	} else {
+		skip(output, "PostgreSQL and backend migrations skipped for selected ring")
 	}
 	if err := applyServices(ctx, config, renderDir, rings, !options.SkipHealth, output); err != nil {
 		return err
@@ -274,10 +303,12 @@ func selectBackendRings(value string) ([]backendRing, error) {
 		return []backendRing{staffRing}, nil
 	case "mcp", "platform-mcp", "platform-mcp-server":
 		return []backendRing{mcpRing}, nil
+	case "web", "web-console", "frontend":
+		return []backendRing{webRing}, nil
 	case "all":
 		return []backendRing{firstRing, secondRing}, nil
 	default:
-		return nil, fmt.Errorf("unsupported backend deploy ring %q; expected first, second, staff, mcp, or all", value)
+		return nil, fmt.Errorf("unsupported deploy ring %q; expected first, second, staff, mcp, web, or all", value)
 	}
 }
 
@@ -678,16 +709,16 @@ func buildImages(ctx context.Context, config deployConfig, repoRoot string, stac
 	if err != nil {
 		return fmt.Errorf("resolve Kaniko image: %w", err)
 	}
-	golangImage, err := stack.ImageOr("golang-alpine", "KODEX_GOLANG_IMAGE")
+	baseImages, err := resolveBuildBaseImages(stack)
 	if err != nil {
-		return fmt.Errorf("resolve Go build image: %w", err)
+		return err
 	}
 	for _, build := range builds {
 		jobName := "kodex-build-" + build.Name
 		if err := kubectlQuiet(ctx, "-n", config.Namespace, "delete", "job", jobName, "--ignore-not-found"); err != nil {
 			return fmt.Errorf("delete previous build job %s: %w", jobName, err)
 		}
-		manifest := kanikoBuildJobManifest(config.Namespace, jobName, repoRoot, kanikoImage, golangImage, build)
+		manifest := kanikoBuildJobManifest(config.Namespace, jobName, repoRoot, kanikoImage, baseImages, build)
 		if err := kubectlApply(ctx, manifest); err != nil {
 			return fmt.Errorf("apply build job %s: %w", jobName, err)
 		}
@@ -697,6 +728,26 @@ func buildImages(ctx context.Context, config deployConfig, repoRoot string, stac
 		ok(output, "Kaniko build completed for "+build.Name)
 	}
 	return nil
+}
+
+func resolveBuildBaseImages(stack stackinventory.Stack) (buildBaseImages, error) {
+	golangImage, err := stack.ImageOr("golang-alpine", "KODEX_GOLANG_IMAGE")
+	if err != nil {
+		return buildBaseImages{}, fmt.Errorf("resolve Go build image: %w", err)
+	}
+	nodeImage, err := stack.ImageOr("node-alpine", "KODEX_NODE_IMAGE")
+	if err != nil {
+		return buildBaseImages{}, fmt.Errorf("resolve Node build image: %w", err)
+	}
+	nginxImage, err := stack.ImageOr("nginx-unprivileged", "KODEX_NGINX_IMAGE")
+	if err != nil {
+		return buildBaseImages{}, fmt.Errorf("resolve nginx runtime image: %w", err)
+	}
+	return buildBaseImages{
+		Golang: golangImage,
+		Node:   nodeImage,
+		Nginx:  nginxImage,
+	}, nil
 }
 
 func ringImageBuilds(stack stackinventory.Stack, rings []backendRing) ([]imageBuild, error) {
@@ -755,13 +806,24 @@ func servicesForRings(rings []backendRing) []serviceDeploy {
 	return result
 }
 
-func kanikoBuildJobManifest(namespace, jobName, repoRoot, kanikoImage, golangImage string, build imageBuild) string {
+func requiresBackendFoundation(rings []backendRing) bool {
+	for _, ring := range rings {
+		if ring.UsesBackendFoundation {
+			return true
+		}
+	}
+	return false
+}
+
+func kanikoBuildJobManifest(namespace, jobName, repoRoot, kanikoImage string, baseImages buildBaseImages, build imageBuild) string {
 	args := []string{
 		"--context=dir:///workspace/repo",
 		"--dockerfile=/workspace/repo/" + build.Dockerfile,
 		"--destination=" + build.Destination,
 		"--target=" + build.Target,
-		"--build-arg=GOLANG_IMAGE=" + golangImage,
+		"--build-arg=GOLANG_IMAGE=" + baseImages.Golang,
+		"--build-arg=NODE_IMAGE=" + baseImages.Node,
+		"--build-arg=NGINX_IMAGE=" + baseImages.Nginx,
 		"--insecure",
 		"--skip-tls-verify",
 		"--cache=" + stackinventory.EnvOr("KODEX_KANIKO_CACHE_ENABLED", "false"),

@@ -154,6 +154,12 @@ spec:
         - libs/go/grpcserver
         - libs/go/servicemain
         - libs/go/serviceprocess
+    web-console:
+      value: "0.1.0"
+      bumpOn:
+        - services/staff/web-console
+        - deploy/base/web-console
+        - specs/openapi/staff-gateway.v1.yaml
     runtime-manager:
       value: "0.1.0"
       bumpOn:
@@ -287,6 +293,10 @@ spec:
       value: "debug"
     busybox:
       value: "1.36"
+    node-alpine:
+      value: "22.13.1-alpine"
+    nginx-unprivileged:
+      value: "1.27-alpine"
   images:
     golang-alpine:
       type: external
@@ -312,6 +322,14 @@ spec:
       type: external
       from: 'busybox:{{ version "busybox" }}'
       local: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/kodex/mirror/busybox:{{ version "busybox" }}'
+    node-alpine:
+      type: external
+      from: 'node:{{ version "node-alpine" }}'
+      local: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/kodex/mirror/node:{{ version "node-alpine" }}'
+    nginx-unprivileged:
+      type: external
+      from: 'nginxinc/nginx-unprivileged:{{ version "nginx-unprivileged" }}'
+      local: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/kodex/mirror/nginx-unprivileged:{{ version "nginx-unprivileged" }}'
     access-manager:
       type: build
       repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_ACCESS_MANAGER_INTERNAL_IMAGE_REPOSITORY" "kodex/access-manager" }}'
@@ -413,6 +431,14 @@ spec:
       target: prod
       context: .
       imageEnv: KODEX_STAFF_GATEWAY_IMAGE
+    web-console:
+      type: build
+      repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_WEB_CONSOLE_INTERNAL_IMAGE_REPOSITORY" "kodex/web-console" }}'
+      tagTemplate: '{{ version "web-console" }}'
+      dockerfile: services/staff/web-console/Dockerfile
+      target: prod
+      context: .
+      imageEnv: KODEX_WEB_CONSOLE_IMAGE
     platform-mcp-server:
       type: build
       repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_PLATFORM_MCP_SERVER_INTERNAL_IMAGE_REPOSITORY" "kodex/platform-mcp-server" }}'
@@ -783,6 +809,29 @@ spec:
           readyz: /health/readyz
           metrics: /metrics
           openapi: /openapi/staff-gateway.v1.yaml
+    - name: web-console
+      status: foundation
+      zone: staff
+      path: services/staff/web-console
+      dockerfile: services/staff/web-console/Dockerfile
+      imageEnv: KODEX_WEB_CONSOLE_IMAGE
+      internalImageRepositoryEnv: KODEX_WEB_CONSOLE_INTERNAL_IMAGE_REPOSITORY
+      ownerDomain: console-and-operations-ux
+      apiContracts:
+        staffGatewayOpenAPI: specs/openapi/staff-gateway.v1.yaml
+      dependencies:
+        - staff-gateway
+      implementation:
+        businessState: none
+        description: staff frontend static bundle served by nginx and proxied to staff-gateway through same-origin /v1
+        ingress: not-selected
+        runtimeConfig: nginx ConfigMap proxy only; Vite defaults are build-time and remain non-secret
+      deploy:
+        serviceManifest: deploy/base/web-console/web-console.yaml.tpl
+        kustomization: deploy/base/web-console/kustomization.yaml.tpl
+        health:
+          livez: /health/livez
+          readyz: /health/readyz
     - name: platform-mcp-server
       status: foundation
       zone: internal

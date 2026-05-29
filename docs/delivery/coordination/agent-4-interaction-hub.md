@@ -42,6 +42,7 @@
 | SGW-2 | не назначено | готово как owner inbox API hardening | `staff-gateway` усилил OpenAPI/HTTP-валидацию owner inbox, error mapping, filter/pagination/context/action tests и safe DTO без расширения доменных сценариев. |
 | SGW-3 | не назначено | готово как runtime run summary | `staff-gateway` отдаёт `GET /v1/agent-runs/{run_id}/runtime-status` через `agent-manager.GetAgentRunRuntimeStatus`, возвращая safe Run/runtime job/Human gate waiting summary без чтения БД, Kubernetes, prompt body, workspace paths, provider payload, секретов и больших логов. |
 | SGW-4 | не назначено | готово как activity timeline read surface | `staff-gateway` отдаёт `GET /v1/agent-runs/{run_id}/activities` через `agent-manager.ListAgentActivities`, возвращая safe activity refs/status/timestamps/tool metadata/summary/digest/version/correlation без raw tool input/output, stdout/stderr, prompt, transcript, workspace paths, provider payload, секретов и больших логов. |
+| WCON-DEP | не назначено | готово как web-console deploy contour | `web-console` разворачивается отдельным `--ring web`: Vite bundle отдаётся через nginx, `/v1/**` проксируется к `staff-gateway`, публичный ingress не выбран. |
 | IH-11 | #894 | готово как ops deploy contour | Dockerfile, Kubernetes manifests, migration Job, services.yaml inventory, проверка готовности, runbook и monitoring docs подготовлены для первого backend deploy без новой бизнес-логики. |
 
 ## Текущий бэклог

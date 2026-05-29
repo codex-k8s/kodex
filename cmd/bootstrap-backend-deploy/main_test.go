@@ -122,6 +122,7 @@ func TestSelectBackendRings(t *testing.T) {
 		{name: "second", value: "second", want: []string{"second"}},
 		{name: "staff", value: "staff", want: []string{"staff"}},
 		{name: "mcp", value: "mcp", want: []string{"mcp"}},
+		{name: "web", value: "web", want: []string{"web"}},
 		{name: "all", value: "all", want: []string{"first", "second"}},
 	}
 	for _, tt := range tests {
@@ -138,11 +139,11 @@ func TestSelectBackendRings(t *testing.T) {
 }
 
 func TestSelectBackendRingsRejectsUnsupportedValue(t *testing.T) {
-	_, err := selectBackendRings("web")
+	_, err := selectBackendRings("unknown")
 	if err == nil {
 		t.Fatal("expected unsupported ring to fail")
 	}
-	if !strings.Contains(err.Error(), "expected first, second, staff, mcp, or all") {
+	if !strings.Contains(err.Error(), "expected first, second, staff, mcp, web, or all") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -250,8 +251,64 @@ func TestAllRingSelectionDoesNotIncludeMCPServer(t *testing.T) {
 	}
 }
 
+func TestWebRingImageBuildsOnlyWebConsole(t *testing.T) {
+	stack, err := stackinventory.Parse([]byte(testStackInventory(webRingImageNames)))
+	if err != nil {
+		t.Fatalf("parse stack: %v", err)
+	}
+	builds, err := ringImageBuilds(stack, []backendRing{webRing})
+	if err != nil {
+		t.Fatalf("web ring builds: %v", err)
+	}
+	if len(builds) != 1 {
+		t.Fatalf("unexpected build count: got %d want 1", len(builds))
+	}
+	if builds[0].ImageName != "web-console" {
+		t.Fatalf("unexpected web ring image: %s", builds[0].ImageName)
+	}
+}
+
+func TestAllRingSelectionDoesNotIncludeWebConsole(t *testing.T) {
+	rings, err := selectBackendRings("all")
+	if err != nil {
+		t.Fatalf("select all rings: %v", err)
+	}
+	for _, imageName := range imageNamesForRings(rings) {
+		if imageName == "web-console" {
+			t.Fatal("web-console must be deployed through explicit web ring, not all")
+		}
+	}
+}
+
+func TestWebRingDoesNotApplyBackendFoundation(t *testing.T) {
+	if requiresBackendFoundation([]backendRing{webRing}) {
+		t.Fatal("web-console deploy must not rerun PostgreSQL foundation or backend migrations")
+	}
+	if !requiresBackendFoundation([]backendRing{staffRing}) {
+		t.Fatal("existing staff deploy behavior must keep backend foundation checks")
+	}
+}
+
+func TestResolveBuildBaseImagesIncludesFrontendImages(t *testing.T) {
+	stack, err := stackinventory.Parse([]byte(testStackInventory(nil)))
+	if err != nil {
+		t.Fatalf("parse stack: %v", err)
+	}
+	images, err := resolveBuildBaseImages(stack)
+	if err != nil {
+		t.Fatalf("resolve base images: %v", err)
+	}
+	if images.Golang != "golang:1.25.8-alpine" || images.Node != "node:22.13.1-alpine" || images.Nginx != "nginxinc/nginx-unprivileged:1.27-alpine" {
+		t.Fatalf("unexpected base images: %+v", images)
+	}
+}
+
 func TestKanikoBuildJobManifestDoesNotEmbedRuntimeSecrets(t *testing.T) {
-	manifest := kanikoBuildJobManifest("kodex-test", "kodex-build-access-manager", "/repo", "kaniko:debug", "golang:alpine", imageBuild{
+	manifest := kanikoBuildJobManifest("kodex-test", "kodex-build-access-manager", "/repo", "kaniko:debug", buildBaseImages{
+		Golang: "golang:alpine",
+		Node:   "node:alpine",
+		Nginx:  "nginx:alpine",
+	}, imageBuild{
 		Name:        "access-manager",
 		ImageName:   "access-manager",
 		Dockerfile:  "services/internal/access-manager/Dockerfile",
@@ -263,7 +320,7 @@ func TestKanikoBuildJobManifestDoesNotEmbedRuntimeSecrets(t *testing.T) {
 			t.Fatalf("build job manifest includes runtime secret marker %q: %s", forbidden, manifest)
 		}
 	}
-	for _, expected := range []string{"--target=prod", "--build-arg=GOLANG_IMAGE=golang:alpine", "hostPath"} {
+	for _, expected := range []string{"--target=prod", "--build-arg=GOLANG_IMAGE=golang:alpine", "--build-arg=NODE_IMAGE=node:alpine", "--build-arg=NGINX_IMAGE=nginx:alpine", "hostPath"} {
 		if !strings.Contains(manifest, expected) {
 			t.Fatalf("build job manifest missing %q: %s", expected, manifest)
 		}
@@ -275,6 +332,9 @@ func testStackInventory(imageNames []string) string {
 	for _, image := range imageNames {
 		versionNames[strings.TrimSuffix(image, "-migrations")] = true
 	}
+	versionNames["golang-alpine"] = true
+	versionNames["node-alpine"] = true
+	versionNames["nginx-unprivileged"] = true
 	versions := "spec:\n  versions:\n"
 	names := make([]string, 0, len(versionNames))
 	for name := range versionNames {
@@ -282,12 +342,27 @@ func testStackInventory(imageNames []string) string {
 	}
 	sort.Strings(names)
 	for _, name := range names {
+		value := "0.1.0"
+		switch name {
+		case "golang-alpine":
+			value = "1.25.8-alpine"
+		case "node-alpine":
+			value = "22.13.1-alpine"
+		case "nginx-unprivileged":
+			value = "1.27-alpine"
+		}
 		versions += `    ` + name + `:
-      value: "0.1.0"
+      value: "` + value + `"
 `
 	}
 	versions += "  images:\n"
-	images := ""
+	images := `    golang-alpine:
+      from: 'golang:{{ version "golang-alpine" }}'
+    node-alpine:
+      from: 'node:{{ version "node-alpine" }}'
+    nginx-unprivileged:
+      from: 'nginxinc/nginx-unprivileged:{{ version "nginx-unprivileged" }}'
+`
 	seenImages := map[string]bool{}
 	for _, image := range imageNames {
 		if seenImages[image] {

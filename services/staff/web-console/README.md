@@ -31,6 +31,27 @@
 `staff-gateway`. В local-dev режиме с actor headers также должен быть задан
 local-dev actor.
 
+## Production deploy
+
+Production-контур собирает статический Vite bundle в образ `web-console` и
+отдаёт его через unprivileged nginx на порту `8080`.
+
+В Kubernetes активный путь:
+
+```bash
+bash bootstrap/host/deploy_backend_ring.sh \
+  --env-file bootstrap/host/config.env \
+  --ring web
+```
+
+Публичный ingress для `web-console` не выбран для штатного контура. Kubernetes
+manifest создаёт внутренний `Service` и nginx `ConfigMap`: `/health/livez` и `/health/readyz`
+отвечают без обращения к backend, а `/v1/**` проксируется на
+`staff-gateway:8080` внутри кластера. Поэтому production-сборка оставляет
+`VITE_STAFF_GATEWAY_BASE_URL` пустым и использует same-origin API path. Если
+будущий edge-контур выберет другой публичный маршрут, это должно быть отдельным
+deploy-решением без хардкода домена в frontend bundle.
+
 ## Доступные серверные ручки
 
 - `GET /v1/owner-inbox/items`
