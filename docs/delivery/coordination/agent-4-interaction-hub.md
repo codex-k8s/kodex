@@ -41,13 +41,14 @@
 | SGW-1 | не назначено | готово как первый staff-gateway owner inbox contour | `services/staff/staff-gateway` отдаёт OpenAPI для списка входящих решений, карточки решения и безопасного ответа владельца; внутри вызывает `interaction-hub` gRPC и не хранит собственный decision state. |
 | SGW-2 | не назначено | готово как owner inbox API hardening | `staff-gateway` усилил OpenAPI/HTTP-валидацию owner inbox, error mapping, filter/pagination/context/action tests и safe DTO без расширения доменных сценариев. |
 | SGW-3 | не назначено | готово как runtime run summary | `staff-gateway` отдаёт `GET /v1/agent-runs/{run_id}/runtime-status` через `agent-manager.GetAgentRunRuntimeStatus`, возвращая safe Run/runtime job/Human gate waiting summary без чтения БД, Kubernetes, prompt body, workspace paths, provider payload, секретов и больших логов. |
+| SGW-4 | не назначено | готово как activity timeline read surface | `staff-gateway` отдаёт `GET /v1/agent-runs/{run_id}/activities` через `agent-manager.ListAgentActivities`, возвращая safe activity refs/status/timestamps/tool metadata/summary/digest/version/correlation без raw tool input/output, stdout/stderr, prompt, transcript, workspace paths, provider payload, секретов и больших логов. |
 | IH-11 | #894 | готово как ops deploy contour | Dockerfile, Kubernetes manifests, migration Job, services.yaml inventory, проверка готовности, runbook и monitoring docs подготовлены для первого backend deploy без новой бизнес-логики. |
 
 ## Текущий бэклог
 
 | Срез | Статус | Почему не завершён |
 |---|---|---|
-| IH-9c+ | ожидает отдельные срезы | MCP, concrete channel packages, runtime worker, расширение `staff-gateway` за пределы owner inbox/runtime summary и междоменная inbox aggregation должны поставляться малыми PR. |
+| IH-9c+ | ожидает отдельные срезы | MCP, concrete channel packages, runtime worker, расширение `staff-gateway` за пределы owner inbox/runtime summary/activity timeline и междоменная inbox aggregation должны поставляться малыми PR. |
 
 ## Блокировки от других доменов
 
@@ -64,4 +65,4 @@
 
 ## Рекомендуемый следующий шаг
 
-Следующий рациональный срез — отдельная MCP, runtime или operations aggregation связка: `interaction-hub` уже отдаёт safe owner inbox list/detail и response lifecycle, `staff-gateway` прокидывает owner flow и runtime summary наружу, а cross-domain screen composition, concrete channel packages и runtime worker остаются вне домена.
+Следующий рациональный срез — отдельная MCP, runtime или operations aggregation связка: `interaction-hub` уже отдаёт safe owner inbox list/detail и response lifecycle, `staff-gateway` прокидывает owner flow, runtime summary и activity timeline наружу, а cross-domain screen composition, concrete channel packages и runtime worker остаются вне домена.

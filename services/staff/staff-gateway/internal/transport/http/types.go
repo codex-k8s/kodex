@@ -31,4 +31,5 @@ type ownerInboxResponder interface {
 
 type AgentManagerClient interface {
 	GetAgentRunRuntimeStatus(context.Context, *agentsv1.GetAgentRunRuntimeStatusRequest) (*agentsv1.AgentRunRuntimeStatusResponse, error)
+	ListAgentActivities(context.Context, *agentsv1.ListAgentActivitiesRequest) (*agentsv1.ListAgentActivitiesResponse, error)
 }

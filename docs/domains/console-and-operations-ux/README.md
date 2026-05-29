@@ -23,6 +23,8 @@
 
 Для операторского просмотра выполнения `staff-gateway` отдаёт `GET /v1/agent-runs/{run_id}/runtime-status`. Endpoint вызывает `agent-manager.GetAgentRunRuntimeStatus` и возвращает только безопасную сводку: `run_id`, `run_status`, `runtime_job_ref`, `runtime_job_status`, safe error code/summary, timestamps, `run_version`, `human_gate_waiting` и safe refs ожидания. Prompt body, secret values, kubeconfig, workspace paths, raw provider payload и большие логи через gateway не проходят; runtime job lifecycle остаётся у `runtime-manager`, а orchestration state — у `agent-manager`.
 
+Для экрана истории действий `staff-gateway` отдаёт `GET /v1/agent-runs/{run_id}/activities`. Endpoint вызывает `agent-manager.ListAgentActivities` с typed фильтрами `activity_kind`, `status` и cursor pagination; фильтра по временному диапазону нет, потому что текущий gRPC-контракт его не содержит. Ответ содержит safe activity entries: refs/status/timestamps/tool metadata, safe summary, payload digest, bounded error, version и correlation id. Raw tool input/output, stdout/stderr, prompt body, transcript, provider payload, workspace paths, secret values и большие логи через gateway не проходят.
+
 ## Карта Issue
 
 - Доменная карта: `docs/delivery/issue-map/domains/console-and-operations-ux.md`.
