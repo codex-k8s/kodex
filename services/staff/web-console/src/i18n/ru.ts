@@ -27,11 +27,13 @@ export const ru = {
   },
   context: {
     title: 'Контекст',
-    actorType: 'Actor type',
-    actorId: 'Actor id',
+    localDevActorType: 'Тип actor для local-dev',
+    localDevActorId: 'Id actor для local-dev',
     scopeType: 'Scope type',
     scopeRef: 'Scope ref',
-    missing: 'Укажите actor и scope, чтобы запросить данные через staff-gateway.',
+    trustedActorBoundary: 'Actor задаёт trusted edge',
+    localDevActorBoundary: 'Actor headers для local-dev',
+    missing: 'Укажите scope, а в local-dev режиме также actor, чтобы запросить данные через staff-gateway.',
   },
   commandCenter: {
     title: 'Командный центр',

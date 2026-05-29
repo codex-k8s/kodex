@@ -8,16 +8,22 @@ import {
   type AgentActivityStatus,
   type AgentRunActivitiesResponse,
   type AgentRunRuntimeStatusResponse,
+  type GetAgentRunRuntimeStatusData,
+  type GetOwnerInboxItemData,
+  type ListAgentRunActivitiesData,
+  type ListOwnerInboxItemsData,
   type OwnerInboxItemResponse,
   type OwnerInboxListResponse,
   type OwnerInboxRespondRequest,
   type OwnerInboxRespondResponse,
+  type RespondOwnerInboxItemData,
   type RequestKind,
   type RequestStatus,
 } from './generated';
 import { client as staffGatewayClient } from './generated/client.gen';
-import { type OperatorContext, gatewayHeaders } from './context';
+import { type OperatorContext, operationHeaders } from './context';
 import { normalizeApiError } from './errors';
+import { getAcceptLanguage } from '@/shared/lib/locale';
 
 const defaultBaseURL = import.meta.env.VITE_STAFF_GATEWAY_BASE_URL ?? '';
 const requestTimeoutMs = Number(import.meta.env.VITE_STAFF_GATEWAY_TIMEOUT_MS ?? 15000);
@@ -29,7 +35,7 @@ staffGatewayClient.setConfig({
 });
 
 staffGatewayClient.instance.interceptors.request.use((config) => {
-  config.headers.set('Accept-Language', 'ru');
+  config.headers.set('Accept-Language', getAcceptLanguage());
   return config;
 });
 
@@ -56,7 +62,7 @@ export async function fetchOwnerInboxItems(
     const response = await listOwnerInboxItems({
       client: staffGatewayClient,
       throwOnError: true,
-      headers: gatewayHeaders(context),
+      headers: operationHeaders<ListOwnerInboxItemsData['headers']>(context),
       query: {
         scope_type: context.scopeType,
         scope_ref: context.scopeRef.trim(),
@@ -82,7 +88,7 @@ export async function fetchOwnerInboxItem(
     const response = await getOwnerInboxItem({
       client: staffGatewayClient,
       throwOnError: true,
-      headers: gatewayHeaders(context),
+      headers: operationHeaders<GetOwnerInboxItemData['headers']>(context),
       path: { request_id: requestId },
       query: {
         scope_type: context.scopeType,
@@ -105,7 +111,7 @@ export async function sendOwnerInboxResponse(
     const response = await respondOwnerInboxItem({
       client: staffGatewayClient,
       throwOnError: true,
-      headers: gatewayHeaders(context),
+      headers: operationHeaders<RespondOwnerInboxItemData['headers']>(context),
       path: { request_id: requestId },
       body,
     });
@@ -123,7 +129,7 @@ export async function fetchAgentRunRuntimeStatus(
     const response = await getAgentRunRuntimeStatus({
       client: staffGatewayClient,
       throwOnError: true,
-      headers: gatewayHeaders(context),
+      headers: operationHeaders<GetAgentRunRuntimeStatusData['headers']>(context),
       path: { run_id: runId },
     });
     return response.data;
@@ -141,7 +147,7 @@ export async function fetchAgentRunActivities(
     const response = await listAgentRunActivities({
       client: staffGatewayClient,
       throwOnError: true,
-      headers: gatewayHeaders(context),
+      headers: operationHeaders<ListAgentRunActivitiesData['headers']>(context),
       path: { run_id: runId },
       query: {
         activity_kind: query.activityKind,

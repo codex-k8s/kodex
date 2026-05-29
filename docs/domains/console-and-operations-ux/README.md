@@ -27,7 +27,7 @@
 
 ## Web-console MVP
 
-Первый активный `web-console` размещён в `services/staff/web-console` и использует Vue, Vite, TypeScript и Vuetify. Приложение получает типизированный API-клиент из `specs/openapi/staff-gateway.v1.yaml`, вызывает только `staff-gateway` и не обращается напрямую к БД, Kubernetes, внутренним gRPC-сервисам или сервисам-владельцам.
+Первый активный `web-console` размещён в `services/staff/web-console` и использует Vue, Vite, TypeScript и Vuetify. Приложение получает типизированный API-клиент из `specs/openapi/staff-gateway.v1.yaml`, вызывает только `staff-gateway` и не обращается напрямую к БД, Kubernetes, внутренним gRPC-сервисам или сервисам-владельцам. Production-сборка не формирует доверенные `X-Kodex-Actor-*`: проверенный actor context добавляет trusted edge или backend-session слой перед `staff-gateway`. Ручные actor headers доступны только в явном local-dev режиме Vite.
 
 Первый набор экранов:
 

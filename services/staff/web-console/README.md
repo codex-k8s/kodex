@@ -17,11 +17,19 @@
 
 - `VITE_STAFF_GATEWAY_BASE_URL` — базовый URL `staff-gateway`.
 - `VITE_STAFF_GATEWAY_TIMEOUT_MS` — timeout HTTP-запросов, default `15000`.
-- `VITE_KODEX_ACTOR_TYPE`, `VITE_KODEX_ACTOR_ID` — начальный actor context.
 - `VITE_KODEX_SCOPE_TYPE`, `VITE_KODEX_SCOPE_REF` — начальный scope context.
+- `VITE_KODEX_LOCALE` — начальная локаль, default `ru`.
 
-Если actor или scope не заданы, экраны показывают пустое состояние и не отправляют
-запросы к `staff-gateway`.
+`web-console` не формирует доверенные `X-Kodex-Actor-*` в production-сборке:
+проверенный actor context должен добавлять trusted edge или backend-session слой перед
+`staff-gateway`. Для локальной разработки Vite можно явно включить
+`VITE_ENABLE_LOCAL_DEV_ACTOR_HEADERS=true` и задать
+`VITE_KODEX_LOCAL_DEV_ACTOR_TYPE`, `VITE_KODEX_LOCAL_DEV_ACTOR_ID`; этот режим работает
+только при `import.meta.env.DEV`.
+
+Если scope не задан, экраны показывают пустое состояние и не отправляют запросы к
+`staff-gateway`. В local-dev режиме с actor headers также должен быть задан
+local-dev actor.
 
 ## Доступные серверные ручки
 

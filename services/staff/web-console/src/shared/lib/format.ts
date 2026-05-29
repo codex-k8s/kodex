@@ -1,5 +1,6 @@
 import { format, formatDistanceToNowStrict, parseISO } from 'date-fns';
-import { ru } from 'date-fns/locale/ru';
+
+import { getDateFnsLocale, getDateTimePattern, getDurationLabels } from '@/shared/lib/locale';
 
 export function formatDateTime(value?: string): string {
   if (!value) {
@@ -9,7 +10,7 @@ export function formatDateTime(value?: string): string {
   if (Number.isNaN(date.getTime())) {
     return '—';
   }
-  return format(date, 'dd.MM.yyyy HH:mm', { locale: ru });
+  return format(date, getDateTimePattern(), { locale: getDateFnsLocale() });
 }
 
 export function formatRelativeTime(value?: string): string {
@@ -20,23 +21,26 @@ export function formatRelativeTime(value?: string): string {
   if (Number.isNaN(date.getTime())) {
     return '—';
   }
-  return formatDistanceToNowStrict(date, { addSuffix: true, locale: ru });
+  return formatDistanceToNowStrict(date, { addSuffix: true, locale: getDateFnsLocale() });
 }
 
 export function formatDurationMs(value?: number): string {
   if (value === undefined || value < 0) {
     return '—';
   }
+  const labels = getDurationLabels();
   if (value < 1000) {
-    return `${value} мс`;
+    return `${value} ${labels.millisecond}`;
   }
   const seconds = Math.round(value / 1000);
   if (seconds < 60) {
-    return `${seconds} с`;
+    return `${seconds} ${labels.second}`;
   }
   const minutes = Math.floor(seconds / 60);
   const restSeconds = seconds % 60;
-  return restSeconds > 0 ? `${minutes} мин ${restSeconds} с` : `${minutes} мин`;
+  return restSeconds > 0
+    ? `${minutes} ${labels.minute} ${restSeconds} ${labels.second}`
+    : `${minutes} ${labels.minute}`;
 }
 
 export function compactRef(value?: string): string {

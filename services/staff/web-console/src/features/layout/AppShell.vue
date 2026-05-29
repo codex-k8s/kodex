@@ -3,7 +3,7 @@ import { computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 
-import { actorTypeOptions, scopeTypeOptions } from '@/shared/api/context';
+import { actorTypeOptions, isLocalDevActorHeadersEnabled, scopeTypeOptions } from '@/shared/api/context';
 import { routeNames } from '@/shared/lib/routes';
 import { useOperatorContextStore } from '@/features/operator-context/store';
 
@@ -11,6 +11,7 @@ const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
 const context = useOperatorContextStore();
+const localDevActorHeaders = isLocalDevActorHeadersEnabled();
 
 const navItems = computed(() => [
   {
@@ -87,17 +88,6 @@ function goTo(routeName: string) {
     <v-main>
       <div class="context-strip">
         <v-select
-          v-model="context.actorType"
-          class="toolbar-field"
-          :items="actorTypeOptions"
-          :label="t('context.actorType')"
-        />
-        <v-text-field
-          v-model.trim="context.actorId"
-          class="toolbar-field"
-          :label="t('context.actorId')"
-        />
-        <v-select
           v-model="context.scopeType"
           class="toolbar-field"
           :items="scopeTypeOptions"
@@ -108,6 +98,27 @@ function goTo(routeName: string) {
           class="toolbar-field"
           :label="t('context.scopeRef')"
         />
+        <v-chip v-if="!localDevActorHeaders" class="toolbar-status" color="info" label variant="tonal">
+          <v-icon icon="mdi-shield-account-outline" start />
+          {{ t('context.trustedActorBoundary') }}
+        </v-chip>
+        <template v-else>
+          <v-select
+            v-model="context.localDevActorType"
+            class="toolbar-field"
+            :items="actorTypeOptions"
+            :label="t('context.localDevActorType')"
+          />
+          <v-text-field
+            v-model.trim="context.localDevActorId"
+            class="toolbar-field"
+            :label="t('context.localDevActorId')"
+          />
+          <v-chip class="toolbar-status" color="warning" label variant="tonal">
+            <v-icon icon="mdi-alert-outline" start />
+            {{ t('context.localDevActorBoundary') }}
+          </v-chip>
+        </template>
       </div>
       <div class="app-content">
         <RouterView />
@@ -171,6 +182,14 @@ function goTo(routeName: string) {
   gap: 12px;
   min-height: 72px;
   padding: 14px 24px;
+}
+
+.toolbar-field {
+  max-width: 260px;
+}
+
+.toolbar-status {
+  min-height: 40px;
 }
 
 .app-content {
