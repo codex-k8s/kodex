@@ -2153,10 +2153,15 @@ func TestReportAgentRunStateRejectsUnsafeRunnerPayload(t *testing.T) {
 	}{
 		{name: "unknown state", input: ReportAgentRunStateInput{State: RunnerRunState("cancelled")}},
 		{name: "raw summary", input: ReportAgentRunStateInput{State: RunnerRunStateCompleted, SafeSummary: ptr("prompt_text: do not store")}},
+		{name: "dsn summary", input: ReportAgentRunStateInput{State: RunnerRunStateCompleted, SafeSummary: ptr("postgres://user:pass@db/kodex")}},
+		{name: "private url summary", input: ReportAgentRunStateInput{State: RunnerRunStateCompleted, SafeSummary: ptr("https://internal.example/path")}},
 		{name: "raw digest", input: ReportAgentRunStateInput{State: RunnerRunStateCompleted, DiagnosticDigest: ptr("workspace_path:/tmp/run")}},
+		{name: "private url digest", input: ReportAgentRunStateInput{State: RunnerRunStateCompleted, DiagnosticDigest: ptr("https://internal.example/path")}},
 		{name: "failure code on non failed", input: ReportAgentRunStateInput{State: RunnerRunStateRunning, FailureCode: ptr("runner_failed")}},
 		{name: "missing failure code", input: ReportAgentRunStateInput{State: RunnerRunStateFailed}},
 		{name: "unsafe failure code", input: ReportAgentRunStateInput{State: RunnerRunStateFailed, FailureCode: ptr("secret_value")}},
+		{name: "dsn failure code", input: ReportAgentRunStateInput{State: RunnerRunStateFailed, FailureCode: ptr("postgres://user:pass@db/kodex")}},
+		{name: "private url failure code", input: ReportAgentRunStateInput{State: RunnerRunStateFailed, FailureCode: ptr("https://internal.example/path")}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

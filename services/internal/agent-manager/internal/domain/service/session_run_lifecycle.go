@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -557,7 +558,7 @@ func runnerReportCommandPayload(input ReportAgentRunStateInput) (runnerRunStateC
 		return runnerRunStateCommandPayload{}, err
 	}
 	diagnosticDigest := strings.TrimSpace(optionalStringValue(input.DiagnosticDigest))
-	if diagnosticDigest != "" && !safeRuntimeJobRef(diagnosticDigest, false) {
+	if diagnosticDigest != "" && (!safeRuntimeJobRef(diagnosticDigest, false) || unsafeRunnerReportText(diagnosticDigest)) {
 		return runnerRunStateCommandPayload{}, errs.ErrInvalidArgument
 	}
 	if input.StartedAt != nil && input.FinishedAt != nil && input.FinishedAt.Before(*input.StartedAt) {
@@ -712,7 +713,7 @@ func normalizedRunSafeSummary(summary string) (string, error) {
 	if trimmed == "" {
 		return "", nil
 	}
-	if len(trimmed) > runtimePrepareSummaryLimit || !utf8.ValidString(trimmed) || strings.ContainsAny(trimmed, "\r\n\t{}") || unsafeRuntimeJobText(trimmed) {
+	if len(trimmed) > runtimePrepareSummaryLimit || !utf8.ValidString(trimmed) || strings.ContainsAny(trimmed, "\r\n\t{}") || unsafeRunnerReportText(trimmed) {
 		return "", errs.ErrInvalidArgument
 	}
 	return safeDiagnosticText(trimmed), nil
@@ -726,7 +727,7 @@ func normalizedRunFailureCode(code string, required bool) (string, error) {
 		}
 		return "", nil
 	}
-	if !safeRuntimeJobKind(trimmed) {
+	if !safeRuntimeJobKind(trimmed) || unsafeRunnerReportText(trimmed) {
 		return "", errs.ErrInvalidArgument
 	}
 	return trimmed, nil
@@ -740,10 +741,59 @@ func normalizedRunReasonCode(reasonCode *string) (string, error) {
 	if trimmed == "" {
 		return "", nil
 	}
-	if !safeRuntimeJobKind(trimmed) {
+	if !safeRuntimeJobKind(trimmed) || unsafeRunnerReportText(trimmed) {
 		return "", errs.ErrInvalidArgument
 	}
 	return trimmed, nil
+}
+
+func unsafeRunnerReportText(text string) bool {
+	if unsafeRuntimeJobText(text) {
+		return true
+	}
+	lower := strings.ToLower(strings.TrimSpace(text))
+	if lower == "" {
+		return false
+	}
+	markers := []string{
+		"://",
+		"jdbc:",
+		"dsn=",
+		"database_url",
+		"postgres:",
+		"postgresql:",
+		"mysql:",
+		"mariadb:",
+		"redis:",
+		"mongodb:",
+		"amqp:",
+		"nats:",
+		"localhost",
+		"internal.",
+		".internal",
+		".local",
+		".svc",
+		".cluster.local",
+	}
+	for _, marker := range markers {
+		if strings.Contains(lower, marker) {
+			return true
+		}
+	}
+	for _, pattern := range privateRunnerAddressPatterns {
+		if pattern.MatchString(lower) {
+			return true
+		}
+	}
+	return false
+}
+
+var privateRunnerAddressPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`(^|[^0-9])10\.[0-9]{1,3}\.`),
+	regexp.MustCompile(`(^|[^0-9])127\.`),
+	regexp.MustCompile(`(^|[^0-9])169\.254\.`),
+	regexp.MustCompile(`(^|[^0-9])172\.(1[6-9]|2[0-9]|3[0-1])\.`),
+	regexp.MustCompile(`(^|[^0-9])192\.168\.`),
 }
 
 func optionalRunTimeText(value *time.Time) string {
