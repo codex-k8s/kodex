@@ -677,6 +677,8 @@ type SessionSnapshotResult struct {
 }
 
 type AgentRunList = query.AgentRunFilter
+type AgentSessionSummaryList = query.AgentSessionFilter
+type AgentRunSummaryList = query.AgentRunSummaryFilter
 
 type RequestAcceptanceInput struct {
 	Meta              value.CommandMeta

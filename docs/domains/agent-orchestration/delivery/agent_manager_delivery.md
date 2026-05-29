@@ -5,8 +5,8 @@ title: kodex — поставка agent-manager
 status: active
 owner_role: EM
 created_at: 2026-05-12
-updated_at: 2026-05-28
-related_issues: [733, 739, 744, 749, 755, 759, 772, 322, 782, 795, 809, 820, 834, 842, 862, 866, 891, 897, 905, 918, 937, 946, 954, 968]
+updated_at: 2026-05-29
+related_issues: [733, 739, 744, 749, 755, 759, 772, 322, 782, 795, 809, 820, 834, 842, 862, 866, 891, 897, 905, 918, 937, 946, 954, 968, 984]
 related_prs: []
 related_docsets:
   - docs/domains/agent-orchestration/product/requirements.md
@@ -70,6 +70,7 @@ approvals:
 | AGO-16 | #958 | Связка governance policy refs готова: `AcceptanceResult`, `FollowUpIntent` и `HumanGateRequest` хранят typed `GovernanceContextRef` для risk/gate/release/policy контекста, публикуют safe `agent.*` refs и сохраняют idempotency/expected version без чтения БД governance-manager, governance decision body, release evidence, prompt/transcript/logs/PII или provider payload. |
 | AGO-17 | #968 | Runtime job dispatch заполняет typed `AgentRunExecutionSpec`: `agent-manager` передаёт в `CreateJob` safe refs на run/slot/materialization/workspace/context, digest/fingerprint, runner profile/image, фиксированный runner mode, optional secret refs без значений и reporting targets только после `slot_status=ready` и `workspace_materialization_status=completed`; pending materialization переводит `Run` в waiting, terminal `failed`/`cancelled` фиксирует безопасный failed state, а replay создаёт job после готовности. |
 | AGO-18 | #977 | Runner reporting lifecycle готов: `ReportAgentRunState` принимает bounded status report от `agent-runner` для `queued`/`running`/`completed`/`failed`, сверяет `run_id`, `session_id`, `runtime_slot_ref`, `runtime_job_ref` и expected version, поддерживает idempotent replay/conflict, обновляет `Run` и lifecycle events только safe refs/status/summary/digest/failure code без raw prompt/transcript/tool payload/stdout/stderr/provider payload/workspace paths/secrets. |
+| AGO-19 | #984 | Операторская read surface готова: `ListAgentSessions` и `ListAgentRunSummaries` возвращают безопасные summaries для командного центра и списка исполнений по scope/session/provider/status/role/actor/time filters, показывают session/run refs, сохранённый runtime job ref, safe status/summary/error, Human gate/follow-up flags, latest activity summary, timestamps и version без чтения соседних БД, Kubernetes, provider API или live fan-out в runtime. |
 
 ## Статус операций `AgentManagerService`
 
@@ -92,6 +93,7 @@ approvals:
 | `RecordAgentActivity` / `ListAgentActivities` | Слой хранения, use-case и gRPC handlers готовы; record поддерживает idempotency replay/conflict и safe-storage guards для activity kind/status/tool metadata/timestamps/summary/digest/refs/details; list читает timeline по session/run с фильтрами и cursor pagination | AGO-9b |
 | `RequestHumanGate` / `RecordHumanGateDecision` / `GetHumanGateRequest` / `ListHumanGateRequests` | Слой хранения, use-case и gRPC handlers готовы; request создаёт `waiting` owner decision state с idempotency replay/conflict и refs на interaction/governance request, при включённом request-side switch создаёт transport request через typed `interaction-hub.RequestHumanGate` с действиями `approve`/`reject`/`request_changes`/`answer`, record требует expected version и сохраняет normalized outcome + safe refs/summary без внешних payload; typed governance refs связывают wait/result с risk/gate/release policy контекстом без копирования decision body; event consumer `interaction.request.response_recorded` вызывает тот же lifecycle по safe refs/fingerprint/version; list/get читают ожидания по session/run/stage/status/outcome | AGO-9d, AGO-11, AGO-12, AGO-13, AGO-16 |
 | `GetAgentSession` / `ListAgentRuns` | Слой хранения, use-case и gRPC handlers готовы; `GetAgentSession` возвращает последний снимок при наличии указателя | AGO-4 |
+| `ListAgentSessions` / `ListAgentRunSummaries` | Слой хранения, use-case и gRPC handlers готовы; операции отдают bounded safe summaries для операторского UI, требуют сужающий фильтр, используют локальные session/run/Human gate/follow-up/activity данные и не читают runtime/provider/Kubernetes в списочном пути | AGO-19 |
 
 ## Синхронизация с параллельными доменами
 
@@ -105,7 +107,7 @@ approvals:
 | `codex-hook-ingress` | После AGO-9b | Persistent timeline готова в `agent-manager`; следующий CHI-срез должен маршрутизировать sanitized `PreToolUse`/`PostToolUse` в `RecordAgentActivity`, сохраняя `codex-hook-ingress` как sanitizer/router/realtime ops feed без долгого хранения tool calls. |
 | `project-catalog` | Готово для AGO-7/AGO-10 | `agent-manager` читает проверенную workspace policy и использует project/repository refs без владения проектной политикой; deploy-контур включает project-catalog gRPC secret ref только для runtime preparation. |
 | `access-manager` | Перед открытием команд через gateway/MCP | Действия доступа заведены в AGO-1; текущие gRPC use-case не обходят будущие сервисные проверки, но не реализуют полноценный контур авторизации команд. |
-| `platform-mcp-server` | Перед AGO-5 и далее | MCP-0 зафиксировал границы и MVP-группы инструментов. Для реальных вызовов session, `Run` и gate нужен следующий контрактный и сервисный срез MCP, но `agent-manager` остаётся владельцем состояния. |
+| `platform-mcp-server` | Перед AGO-5 и далее | MCP-0 зафиксировал границы и MVP-группы инструментов. Для реальных вызовов session, `Run`, gate и операторских списков нужен отдельный MCP/gateway срез поверх готовой gRPC-поверхности владельца; `agent-manager` остаётся владельцем состояния. |
 
 ## Критерии начала кода
 

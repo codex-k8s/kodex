@@ -69,11 +69,13 @@ var (
 	operationCreateSession         = repositoryOperation("CreateAgentSessionWithResult")
 	operationUpdateSession         = repositoryOperation("UpdateAgentSessionWithResult")
 	operationGetSession            = repositoryOperation("GetAgentSession")
+	operationListSessionSummaries  = repositoryOperation("ListAgentSessionSummaries")
 	operationFindActiveSession     = repositoryOperation("FindActiveAgentSessionByProviderWorkItem")
 	operationCreateRun             = repositoryOperation("CreateAgentRunWithResult")
 	operationUpdateRun             = repositoryOperation("UpdateAgentRunWithResult")
 	operationGetRun                = repositoryOperation("GetAgentRun")
 	operationListRuns              = repositoryOperation("ListAgentRuns")
+	operationListRunSummaries      = repositoryOperation("ListAgentRunSummaries")
 	operationCreateSnapshot        = repositoryOperation("CreateSessionStateSnapshotWithResult")
 	operationGetSnapshot           = repositoryOperation("GetSessionStateSnapshot")
 	operationCreateAcceptance      = repositoryOperation("CreateAcceptanceResultWithResult")
@@ -223,6 +225,10 @@ func (r *Repository) GetAgentSession(ctx context.Context, id uuid.UUID) (entity.
 	return queryOne(ctx, r.db, operationGetSession, querySessionGet, pgx.NamedArgs{"id": id}, scanAgentSession)
 }
 
+func (r *Repository) ListAgentSessionSummaries(ctx context.Context, filter query.AgentSessionFilter) ([]entity.AgentSessionListItem, value.PageResult, error) {
+	return listReadSurfacePage(ctx, r.db, filter, agentSessionSummaryFilterArgs, operationListSessionSummaries, querySessionSummaryList, scanAgentSessionListItem, agentSessionSummaryPageToken)
+}
+
 func (r *Repository) FindActiveAgentSessionByProviderWorkItem(ctx context.Context, scope value.ScopeRef, providerWorkItemRef string) (entity.AgentSession, error) {
 	return queryOne(ctx, r.db, operationFindActiveSession, querySessionFindActiveByTarget, pgx.NamedArgs{
 		"scope_type":             scope.Type,
@@ -246,6 +252,10 @@ func (r *Repository) GetAgentRun(ctx context.Context, id uuid.UUID) (entity.Agen
 
 func (r *Repository) ListAgentRuns(ctx context.Context, filter query.AgentRunFilter) ([]entity.AgentRun, value.PageResult, error) {
 	return queryPage(ctx, r.db, operationListRuns, queryRunList, agentRunFilterArgs(filter), scanAgentRun)
+}
+
+func (r *Repository) ListAgentRunSummaries(ctx context.Context, filter query.AgentRunSummaryFilter) ([]entity.AgentRunListItem, value.PageResult, error) {
+	return listReadSurfacePage(ctx, r.db, filter, agentRunSummaryFilterArgs, operationListRunSummaries, queryRunSummaryList, scanAgentRunListItem, agentRunSummaryPageToken)
 }
 
 func (r *Repository) CreateSessionStateSnapshotWithResult(ctx context.Context, snapshot entity.AgentSessionStateSnapshot, session entity.AgentSession, previousSessionVersion int64, result entity.CommandResult, event entity.OutboxEvent) error {
@@ -517,11 +527,42 @@ func queryPage[T any](ctx context.Context, db dataRunner, operation string, quer
 	return repositoryPage(items, page, err)
 }
 
+func listReadSurfacePage[T any, F any](
+	ctx context.Context,
+	db dataRunner,
+	filter F,
+	buildArgs func(F) (readSurfacePageQueryArgs, error),
+	operation string,
+	query string,
+	scan func(postgreslib.RowScanner) (T, error),
+	token func(T) string,
+) ([]T, value.PageResult, error) {
+	page, err := buildArgs(filter)
+	if err != nil {
+		return nil, value.PageResult{}, err
+	}
+	items, err := queryMany(ctx, db, operation, query, page.NamedArgs, scan)
+	return repositoryReadSurfacePage(items, page, err, token)
+}
+
 func repositoryPage[T any](items []T, page pageQueryArgs, err error) ([]T, value.PageResult, error) {
 	if err != nil {
 		return nil, value.PageResult{}, err
 	}
 	trimmed, result := pageResult(items, page)
+	return trimmed, result, nil
+}
+
+func repositoryReadSurfacePage[T any](
+	items []T,
+	page readSurfacePageQueryArgs,
+	err error,
+	token func(T) string,
+) ([]T, value.PageResult, error) {
+	if err != nil {
+		return nil, value.PageResult{}, err
+	}
+	trimmed, result := readSurfacePageResult(items, page, token)
 	return trimmed, result, nil
 }
 

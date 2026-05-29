@@ -5,8 +5,8 @@ title: kodex — дизайн домена оркестрации агентов
 status: active
 owner_role: SA
 created_at: 2026-05-12
-updated_at: 2026-05-28
-related_issues: [733, 753, 698, 322, 782, 795, 820, 834, 842, 862, 866, 937, 954, 968]
+updated_at: 2026-05-29
+related_issues: [733, 753, 698, 322, 782, 795, 820, 834, 842, 862, 866, 937, 954, 968, 984]
 related_prs: []
 related_adrs: []
 approvals:
@@ -120,6 +120,8 @@ sequenceDiagram
 При включённом `KODEX_AGENT_MANAGER_RUNTIME_JOB_DISPATCH_ENABLED` постановка runtime job требует `KODEX_AGENT_MANAGER_RUNTIME_JOB_RUNNER_IMAGE_REF`. `agent-manager` собирает `AgentRunExecutionSpec` только из безопасных refs: `agent_run_id`, `slot_id`, workspace materialization id/fingerprint, runtime-owned workspace/context refs, digest `.kodex/context/agent-run.json`, `runner_profile_ref`, `runner_image_ref`, фиксированный `runner_mode=codex_agent`, разрешённые secret refs без значений и reporting targets обратно в `agent-manager`. Для будущего запуска Codex CLI optional `CodexSessionExecutionSpec` добавляет только safe refs и digest: checked instruction object, result schema, session/workspace snapshot, hook/callback refs, timeout, fixed runner profile, output/result refs и secret refs без значений. `CreateJob` вызывается только когда runtime уже подтвердил `slot_status=ready` и `workspace_materialization_status=completed`; если `PrepareRuntime` вернул `materializing/pending`, `Run` переходит в `waiting` с safe reason `runtime_materialization_pending`, а replay той же команды повторно читает idempotent `PrepareRuntime` и ставит job после готовности. Если runtime вернул terminal materialization state `failed`/`cancelled` или failed slot, `agent-manager` фиксирует безопасный `failed` state без создания job. Если обязательных refs или digest нет, dispatch завершается безопасным retryable отказом и не создаёт некорректный `JOB_TYPE_AGENT_RUN`.
 
 Для UI, MCP и owner-оператора `agent-manager` предоставляет отдельную безопасную поверхность чтения `GetAgentRunRuntimeStatus`. Она берёт сохранённые refs и state из `Run`, а актуальное состояние задания читает только через `runtime-manager.GetJob`. Прямой доступ к Kubernetes, БД `runtime-manager`, shell и логам запрещён; ответ содержит только `runtime_job_ref`, статус job, safe error code/summary, timestamps, версии и признаки ожидания orchestration вроде Human gate.
+
+Для командного центра и списка исполнений `agent-manager` отдаёт отдельные read-модели `ListAgentSessions` и `ListAgentRunSummaries`. Эти операции строятся только из локального orchestration state: `AgentSession`, `AgentRun`, Human gate waits, follow-up intents и latest safe activity. Они сортируют активные и ожидающие элементы выше, поддерживают bounded `page_token`, требуют сужающий фильтр по scope/session/provider/actor и не ходят в runtime/provider/Kubernetes за live деталями. Если UI нужен актуальный runtime job status, gateway вызывает `GetAgentRunRuntimeStatus` точечно по выбранному `run_id`.
 
 `agent-runner` сообщает ход выполнения обратно в `agent-manager` через typed команду `ReportAgentRunState`, а не через произвольный result payload. Report принимает только `queued`, `running`, `completed` или `failed`, обязательно сверяет `run_id`, `session_id`, `runtime_slot_ref`, `runtime_job_ref` и expected version с сохранённым `Run`, поддерживает idempotent replay и конфликтует при изменённом payload по тому же `command_id`. В `Run` попадают только безопасный статус, bounded summary, diagnostic digest и failure code; prompt, transcript, raw tool input/output, stdout/stderr, provider payload, kubeconfig, workspace paths и значения секретов не принимаются.
 

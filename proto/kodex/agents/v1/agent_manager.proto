@@ -80,8 +80,12 @@ service AgentManagerService {
   rpc ListHumanGateRequests(ListHumanGateRequestsRequest) returns (ListHumanGateRequestsResponse);
   // GetAgentSession returns authoritative session state.
   rpc GetAgentSession(GetAgentSessionRequest) returns (AgentSessionResponse);
+  // ListAgentSessions returns safe session summaries for operator read surfaces.
+  rpc ListAgentSessions(ListAgentSessionsRequest) returns (ListAgentSessionsResponse);
   // ListAgentRuns returns agent runs by session, role, status or provider target.
   rpc ListAgentRuns(ListAgentRunsRequest) returns (ListAgentRunsResponse);
+  // ListAgentRunSummaries returns safe run summaries for operator read surfaces.
+  rpc ListAgentRunSummaries(ListAgentRunSummariesRequest) returns (ListAgentRunSummariesResponse);
 }
 
 // CommandMeta is required for every mutating command.
@@ -1242,6 +1246,30 @@ message ListAgentRunsRequest {
   PageRequest page = 6;
 }
 
+message ListAgentSessionsRequest {
+  QueryMeta meta = 1;
+  optional ScopeRef scope = 2;
+  optional AgentSessionStatus status = 3;
+  optional string provider_work_item_ref = 4;
+  optional string created_by_actor_ref = 5;
+  optional string created_after = 6;
+  optional string created_before = 7;
+  PageRequest page = 8;
+}
+
+message ListAgentRunSummariesRequest {
+  QueryMeta meta = 1;
+  optional ScopeRef scope = 2;
+  optional string session_id = 3;
+  optional string role_profile_id = 4;
+  optional AgentRunStatus status = 5;
+  optional string provider_work_item_ref = 6;
+  optional string provider_pull_request_ref = 7;
+  optional string created_after = 8;
+  optional string created_before = 9;
+  PageRequest page = 10;
+}
+
 message GetAgentRunRuntimeStatusRequest {
   QueryMeta meta = 1;
   string run_id = 2;
@@ -1286,6 +1314,47 @@ message AgentRunRuntimeStatus {
   bool follow_up_waiting = 22;
 }
 
+message AgentActivitySummary {
+  string activity_id = 1;
+  AgentActivityKind activity_kind = 2;
+  AgentActivityStatus status = 3;
+  optional string tool_name = 4;
+  optional string tool_category = 5;
+  optional string safe_summary = 6;
+  optional string payload_digest = 7;
+  optional string bounded_error = 8;
+  optional string started_at = 9;
+  optional string finished_at = 10;
+  string updated_at = 11;
+  int64 version = 12;
+}
+
+message AgentRunListItem {
+  AgentRun run = 1;
+  optional string runtime_job_ref = 2;
+  AgentRunRuntimeObservationState runtime_observation_state = 3;
+  optional string runtime_safe_error_code = 4;
+  optional string runtime_safe_summary = 5;
+  bool human_gate_waiting = 6;
+  optional string human_gate_request_ref = 7;
+  optional string human_gate_reason_code = 8;
+  bool follow_up_waiting = 9;
+  optional AgentActivitySummary latest_activity = 10;
+}
+
+message AgentSessionListItem {
+  AgentSession session = 1;
+  optional string latest_run_id = 2;
+  optional AgentRunStatus latest_run_status = 3;
+  optional string latest_runtime_job_ref = 4;
+  optional string latest_run_safe_summary = 5;
+  int32 active_run_count = 6;
+  bool human_gate_waiting = 7;
+  optional string human_gate_request_ref = 8;
+  optional string human_gate_reason_code = 9;
+  optional AgentActivitySummary latest_activity = 10;
+}
+
 message AgentSessionStateSnapshotResponse {
   AgentSessionStateSnapshot snapshot = 1;
   AgentSession session = 2;
@@ -1324,5 +1393,15 @@ message ListHumanGateRequestsResponse {
 
 message ListAgentRunsResponse {
   repeated AgentRun runs = 1;
+  PageResponse page = 2;
+}
+
+message ListAgentSessionsResponse {
+  repeated AgentSessionListItem sessions = 1;
+  PageResponse page = 2;
+}
+
+message ListAgentRunSummariesResponse {
+  repeated AgentRunListItem runs = 1;
   PageResponse page = 2;
 }

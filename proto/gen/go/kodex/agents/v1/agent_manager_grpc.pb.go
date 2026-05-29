@@ -54,7 +54,9 @@ const (
 	AgentManagerService_GetHumanGateRequest_FullMethodName           = "/kodex.agents.v1.AgentManagerService/GetHumanGateRequest"
 	AgentManagerService_ListHumanGateRequests_FullMethodName         = "/kodex.agents.v1.AgentManagerService/ListHumanGateRequests"
 	AgentManagerService_GetAgentSession_FullMethodName               = "/kodex.agents.v1.AgentManagerService/GetAgentSession"
+	AgentManagerService_ListAgentSessions_FullMethodName             = "/kodex.agents.v1.AgentManagerService/ListAgentSessions"
 	AgentManagerService_ListAgentRuns_FullMethodName                 = "/kodex.agents.v1.AgentManagerService/ListAgentRuns"
+	AgentManagerService_ListAgentRunSummaries_FullMethodName         = "/kodex.agents.v1.AgentManagerService/ListAgentRunSummaries"
 )
 
 // AgentManagerServiceClient is the client API for AgentManagerService service.
@@ -135,8 +137,12 @@ type AgentManagerServiceClient interface {
 	ListHumanGateRequests(ctx context.Context, in *ListHumanGateRequestsRequest, opts ...grpc.CallOption) (*ListHumanGateRequestsResponse, error)
 	// GetAgentSession returns authoritative session state.
 	GetAgentSession(ctx context.Context, in *GetAgentSessionRequest, opts ...grpc.CallOption) (*AgentSessionResponse, error)
+	// ListAgentSessions returns safe session summaries for operator read surfaces.
+	ListAgentSessions(ctx context.Context, in *ListAgentSessionsRequest, opts ...grpc.CallOption) (*ListAgentSessionsResponse, error)
 	// ListAgentRuns returns agent runs by session, role, status or provider target.
 	ListAgentRuns(ctx context.Context, in *ListAgentRunsRequest, opts ...grpc.CallOption) (*ListAgentRunsResponse, error)
+	// ListAgentRunSummaries returns safe run summaries for operator read surfaces.
+	ListAgentRunSummaries(ctx context.Context, in *ListAgentRunSummariesRequest, opts ...grpc.CallOption) (*ListAgentRunSummariesResponse, error)
 }
 
 type agentManagerServiceClient struct {
@@ -497,10 +503,30 @@ func (c *agentManagerServiceClient) GetAgentSession(ctx context.Context, in *Get
 	return out, nil
 }
 
+func (c *agentManagerServiceClient) ListAgentSessions(ctx context.Context, in *ListAgentSessionsRequest, opts ...grpc.CallOption) (*ListAgentSessionsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListAgentSessionsResponse)
+	err := c.cc.Invoke(ctx, AgentManagerService_ListAgentSessions_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *agentManagerServiceClient) ListAgentRuns(ctx context.Context, in *ListAgentRunsRequest, opts ...grpc.CallOption) (*ListAgentRunsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListAgentRunsResponse)
 	err := c.cc.Invoke(ctx, AgentManagerService_ListAgentRuns_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentManagerServiceClient) ListAgentRunSummaries(ctx context.Context, in *ListAgentRunSummariesRequest, opts ...grpc.CallOption) (*ListAgentRunSummariesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListAgentRunSummariesResponse)
+	err := c.cc.Invoke(ctx, AgentManagerService_ListAgentRunSummaries_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -585,8 +611,12 @@ type AgentManagerServiceServer interface {
 	ListHumanGateRequests(context.Context, *ListHumanGateRequestsRequest) (*ListHumanGateRequestsResponse, error)
 	// GetAgentSession returns authoritative session state.
 	GetAgentSession(context.Context, *GetAgentSessionRequest) (*AgentSessionResponse, error)
+	// ListAgentSessions returns safe session summaries for operator read surfaces.
+	ListAgentSessions(context.Context, *ListAgentSessionsRequest) (*ListAgentSessionsResponse, error)
 	// ListAgentRuns returns agent runs by session, role, status or provider target.
 	ListAgentRuns(context.Context, *ListAgentRunsRequest) (*ListAgentRunsResponse, error)
+	// ListAgentRunSummaries returns safe run summaries for operator read surfaces.
+	ListAgentRunSummaries(context.Context, *ListAgentRunSummariesRequest) (*ListAgentRunSummariesResponse, error)
 	mustEmbedUnimplementedAgentManagerServiceServer()
 }
 
@@ -702,8 +732,14 @@ func (UnimplementedAgentManagerServiceServer) ListHumanGateRequests(context.Cont
 func (UnimplementedAgentManagerServiceServer) GetAgentSession(context.Context, *GetAgentSessionRequest) (*AgentSessionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetAgentSession not implemented")
 }
+func (UnimplementedAgentManagerServiceServer) ListAgentSessions(context.Context, *ListAgentSessionsRequest) (*ListAgentSessionsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListAgentSessions not implemented")
+}
 func (UnimplementedAgentManagerServiceServer) ListAgentRuns(context.Context, *ListAgentRunsRequest) (*ListAgentRunsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListAgentRuns not implemented")
+}
+func (UnimplementedAgentManagerServiceServer) ListAgentRunSummaries(context.Context, *ListAgentRunSummariesRequest) (*ListAgentRunSummariesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListAgentRunSummaries not implemented")
 }
 func (UnimplementedAgentManagerServiceServer) mustEmbedUnimplementedAgentManagerServiceServer() {}
 func (UnimplementedAgentManagerServiceServer) testEmbeddedByValue()                             {}
@@ -1356,6 +1392,24 @@ func _AgentManagerService_GetAgentSession_Handler(srv interface{}, ctx context.C
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentManagerService_ListAgentSessions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListAgentSessionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentManagerServiceServer).ListAgentSessions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentManagerService_ListAgentSessions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentManagerServiceServer).ListAgentSessions(ctx, req.(*ListAgentSessionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AgentManagerService_ListAgentRuns_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListAgentRunsRequest)
 	if err := dec(in); err != nil {
@@ -1370,6 +1424,24 @@ func _AgentManagerService_ListAgentRuns_Handler(srv interface{}, ctx context.Con
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(AgentManagerServiceServer).ListAgentRuns(ctx, req.(*ListAgentRunsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentManagerService_ListAgentRunSummaries_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListAgentRunSummariesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentManagerServiceServer).ListAgentRunSummaries(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentManagerService_ListAgentRunSummaries_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentManagerServiceServer).ListAgentRunSummaries(ctx, req.(*ListAgentRunSummariesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1522,8 +1594,16 @@ var AgentManagerService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _AgentManagerService_GetAgentSession_Handler,
 		},
 		{
+			MethodName: "ListAgentSessions",
+			Handler:    _AgentManagerService_ListAgentSessions_Handler,
+		},
+		{
 			MethodName: "ListAgentRuns",
 			Handler:    _AgentManagerService_ListAgentRuns_Handler,
+		},
+		{
+			MethodName: "ListAgentRunSummaries",
+			Handler:    _AgentManagerService_ListAgentRunSummaries_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
