@@ -103,6 +103,25 @@ func TestOperatorSummaryListSQLUsesKeysetCursor(t *testing.T) {
 	}
 }
 
+func TestSessionSummaryListSQLExposesFollowUpWaitingRef(t *testing.T) {
+	t.Parallel()
+
+	query, err := loadQuery("session_summary__list")
+	if err != nil {
+		t.Fatalf("load session summary list query: %v", err)
+	}
+	for _, expected := range []string{
+		"follow_up.id AS follow_up_ref",
+		"FROM agent_manager_follow_up_intents",
+		"status IN ('planned', 'requested')",
+		"follow_up_ref",
+	} {
+		if !strings.Contains(query, expected) {
+			t.Fatalf("session summary query misses %q:\n%s", expected, query)
+		}
+	}
+}
+
 func TestListAgentActivitiesKeysetPaginationStableUnderConcurrentInsert(t *testing.T) {
 	t.Parallel()
 

@@ -20,6 +20,7 @@ WITH session_items AS (
         COALESCE(active_runs.active_run_count, 0)::int AS active_run_count,
         gate.id AS human_gate_request_ref,
         gate.reason_code AS human_gate_reason_code,
+        follow_up.id AS follow_up_ref,
         activity.id AS latest_activity_id,
         activity.activity_kind AS latest_activity_kind,
         activity.status AS latest_activity_status,
@@ -34,9 +35,10 @@ WITH session_items AS (
         activity.updated_at AS latest_activity_updated_at,
         CASE
             WHEN gate.id IS NOT NULL THEN 0
-            WHEN COALESCE(active_runs.active_run_count, 0) > 0 THEN 1
-            WHEN s.status IN ('open', 'waiting') THEN 2
-            ELSE 3
+            WHEN follow_up.id IS NOT NULL THEN 1
+            WHEN COALESCE(active_runs.active_run_count, 0) > 0 THEN 2
+            WHEN s.status IN ('open', 'waiting') THEN 3
+            ELSE 4
         END AS sort_bucket,
         GREATEST(
             s.updated_at,
@@ -65,6 +67,14 @@ WITH session_items AS (
         ORDER BY updated_at DESC, id DESC
         LIMIT 1
     ) gate ON TRUE
+    LEFT JOIN LATERAL (
+        SELECT id
+        FROM agent_manager_follow_up_intents
+        WHERE session_id = s.id
+          AND status IN ('planned', 'requested')
+        ORDER BY updated_at DESC, id DESC
+        LIMIT 1
+    ) follow_up ON TRUE
     LEFT JOIN LATERAL (
         SELECT
             id,
@@ -112,6 +122,7 @@ SELECT
     active_run_count,
     human_gate_request_ref,
     human_gate_reason_code,
+    follow_up_ref,
     latest_activity_id,
     latest_activity_kind,
     latest_activity_status,

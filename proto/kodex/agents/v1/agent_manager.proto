@@ -1353,6 +1353,8 @@ message AgentSessionListItem {
   optional string human_gate_request_ref = 8;
   optional string human_gate_reason_code = 9;
   optional AgentActivitySummary latest_activity = 10;
+  bool follow_up_waiting = 11;
+  optional string follow_up_ref = 12;
 }
 
 message AgentSessionStateSnapshotResponse {

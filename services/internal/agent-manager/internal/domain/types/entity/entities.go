@@ -241,6 +241,8 @@ type AgentSessionListItem struct {
 	HumanGateRequestRef  string
 	HumanGateReasonCode  string
 	LatestActivity       *AgentActivitySummary
+	FollowUpWaiting      bool
+	FollowUpRef          string
 	SortBucket           int32
 	SortTime             time.Time
 }

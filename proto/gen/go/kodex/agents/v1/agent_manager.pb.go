@@ -9941,6 +9941,8 @@ type AgentSessionListItem struct {
 	HumanGateRequestRef  *string                `protobuf:"bytes,8,opt,name=human_gate_request_ref,json=humanGateRequestRef,proto3,oneof" json:"human_gate_request_ref,omitempty"`
 	HumanGateReasonCode  *string                `protobuf:"bytes,9,opt,name=human_gate_reason_code,json=humanGateReasonCode,proto3,oneof" json:"human_gate_reason_code,omitempty"`
 	LatestActivity       *AgentActivitySummary  `protobuf:"bytes,10,opt,name=latest_activity,json=latestActivity,proto3,oneof" json:"latest_activity,omitempty"`
+	FollowUpWaiting      bool                   `protobuf:"varint,11,opt,name=follow_up_waiting,json=followUpWaiting,proto3" json:"follow_up_waiting,omitempty"`
+	FollowUpRef          *string                `protobuf:"bytes,12,opt,name=follow_up_ref,json=followUpRef,proto3,oneof" json:"follow_up_ref,omitempty"`
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
 }
@@ -10043,6 +10045,20 @@ func (x *AgentSessionListItem) GetLatestActivity() *AgentActivitySummary {
 		return x.LatestActivity
 	}
 	return nil
+}
+
+func (x *AgentSessionListItem) GetFollowUpWaiting() bool {
+	if x != nil {
+		return x.FollowUpWaiting
+	}
+	return false
+}
+
+func (x *AgentSessionListItem) GetFollowUpRef() string {
+	if x != nil && x.FollowUpRef != nil {
+		return *x.FollowUpRef
+	}
+	return ""
 }
 
 type AgentSessionStateSnapshotResponse struct {
@@ -11696,7 +11712,7 @@ const file_kodex_agents_v1_agent_manager_proto_rawDesc = "" +
 	"\x15_runtime_safe_summaryB\x19\n" +
 	"\x17_human_gate_request_refB\x19\n" +
 	"\x17_human_gate_reason_codeB\x12\n" +
-	"\x10_latest_activity\"\x8a\x06\n" +
+	"\x10_latest_activity\"\xf1\x06\n" +
 	"\x14AgentSessionListItem\x127\n" +
 	"\asession\x18\x01 \x01(\v2\x1d.kodex.agents.v1.AgentSessionR\asession\x12'\n" +
 	"\rlatest_run_id\x18\x02 \x01(\tH\x00R\vlatestRunId\x88\x01\x01\x12P\n" +
@@ -11708,14 +11724,17 @@ const file_kodex_agents_v1_agent_manager_proto_rawDesc = "" +
 	"\x16human_gate_request_ref\x18\b \x01(\tH\x04R\x13humanGateRequestRef\x88\x01\x01\x128\n" +
 	"\x16human_gate_reason_code\x18\t \x01(\tH\x05R\x13humanGateReasonCode\x88\x01\x01\x12S\n" +
 	"\x0flatest_activity\x18\n" +
-	" \x01(\v2%.kodex.agents.v1.AgentActivitySummaryH\x06R\x0elatestActivity\x88\x01\x01B\x10\n" +
+	" \x01(\v2%.kodex.agents.v1.AgentActivitySummaryH\x06R\x0elatestActivity\x88\x01\x01\x12*\n" +
+	"\x11follow_up_waiting\x18\v \x01(\bR\x0ffollowUpWaiting\x12'\n" +
+	"\rfollow_up_ref\x18\f \x01(\tH\aR\vfollowUpRef\x88\x01\x01B\x10\n" +
 	"\x0e_latest_run_idB\x14\n" +
 	"\x12_latest_run_statusB\x19\n" +
 	"\x17_latest_runtime_job_refB\x1a\n" +
 	"\x18_latest_run_safe_summaryB\x19\n" +
 	"\x17_human_gate_request_refB\x19\n" +
 	"\x17_human_gate_reason_codeB\x12\n" +
-	"\x10_latest_activity\"\xa4\x01\n" +
+	"\x10_latest_activityB\x10\n" +
+	"\x0e_follow_up_ref\"\xa4\x01\n" +
 	"!AgentSessionStateSnapshotResponse\x12F\n" +
 	"\bsnapshot\x18\x01 \x01(\v2*.kodex.agents.v1.AgentSessionStateSnapshotR\bsnapshot\x127\n" +
 	"\asession\x18\x02 \x01(\v2\x1d.kodex.agents.v1.AgentSessionR\asession\"j\n" +

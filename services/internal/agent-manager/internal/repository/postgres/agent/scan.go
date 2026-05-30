@@ -343,7 +343,7 @@ func scanAgentSessionListItem(row postgreslib.RowScanner) (entity.AgentSessionLi
 	var latestRunStatus pgtype.Text
 	var latestRunRuntimeContext []byte
 	var latestRunSummary, gateReason pgtype.Text
-	var gateRef pgtype.UUID
+	var gateRef, followUpRef pgtype.UUID
 	var activeRunCount pgtype.Int4
 	var sortBucket pgtype.Int4
 	var sortTime pgtype.Timestamptz
@@ -368,6 +368,7 @@ func scanAgentSessionListItem(row postgreslib.RowScanner) (entity.AgentSessionLi
 		&activeRunCount,
 		&gateRef,
 		&gateReason,
+		&followUpRef,
 		&latestActivity.id,
 		&latestActivity.kind,
 		&latestActivity.status,
@@ -400,6 +401,8 @@ func scanAgentSessionListItem(row postgreslib.RowScanner) (entity.AgentSessionLi
 	item.HumanGateRequestRef = uuidTextFromPG(gateRef)
 	item.HumanGateReasonCode = textFromPG(gateReason)
 	item.HumanGateWaiting = item.HumanGateRequestRef != ""
+	item.FollowUpRef = uuidTextFromPG(followUpRef)
+	item.FollowUpWaiting = item.FollowUpRef != ""
 	item.LatestActivity = latestActivity.toEntity()
 	if sortBucket.Valid {
 		item.SortBucket = sortBucket.Int32

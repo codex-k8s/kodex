@@ -413,6 +413,8 @@ func AgentSessionListItemToProto(item entity.AgentSessionListItem) *agentsv1.Age
 		HumanGateRequestRef:  optionalStringPtr(item.HumanGateRequestRef),
 		HumanGateReasonCode:  optionalStringPtr(item.HumanGateReasonCode),
 		LatestActivity:       AgentActivitySummaryToProto(item.LatestActivity),
+		FollowUpWaiting:      item.FollowUpWaiting,
+		FollowUpRef:          optionalStringPtr(item.FollowUpRef),
 	}
 }
 

@@ -76,7 +76,7 @@ approvals:
 | `GetHumanGateRequest` | gRPC query | `agent.session.read` | нет | Читает одно ожидание/решение Human gate. |
 | `ListHumanGateRequests` | gRPC query | `agent.session.read` | cursor | Читает ожидания/решения по session/run/stage/status/outcome. |
 | `GetAgentSession` | gRPC query | `agent.session.read` | нет | Читает сессию. |
-| `ListAgentSessions` | gRPC query | `agent.session.read` | `page_token` | Читает безопасные session summaries для операторского UI по scope/provider/status/инициатору и временному окну: session refs/status, latest run refs, active run count, признак ожидания Human gate, latest activity summary, timestamps и version. |
+| `ListAgentSessions` | gRPC query | `agent.session.read` | `page_token` | Читает безопасные session summaries для операторского UI по scope/provider/status/инициатору и временному окну: session refs/status, latest run refs, active run count, признаки ожидания Human gate/follow-up с safe refs, latest activity summary, timestamps и version. |
 | `ListAgentRuns` | gRPC query | `agent.run.read` | нет | Читает запуски по session/status/provider target. |
 | `ListAgentRunSummaries` | gRPC query | `agent.run.read` | `page_token` | Читает безопасные run summaries по scope/session/provider/status/role и временному окну: run refs/status, runtime job ref из сохранённого `Run`, safe summary/error, Human gate/follow-up flags, latest activity summary, timestamps и version без live runtime fan-out. |
 

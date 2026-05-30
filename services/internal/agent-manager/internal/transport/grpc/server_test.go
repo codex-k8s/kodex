@@ -704,6 +704,8 @@ func TestOperatorReadSurfaceHandlersMapSafeSummaries(t *testing.T) {
 				ActiveRunCount:       1,
 				HumanGateWaiting:     true,
 				HumanGateRequestRef:  "human-gate:1",
+				FollowUpWaiting:      true,
+				FollowUpRef:          "follow-up:1",
 				LatestActivity:       sampleActivitySummary(activityID),
 			}}, value.PageResult{NextPageToken: "sessions-next"}, nil
 		},
@@ -742,7 +744,10 @@ func TestOperatorReadSurfaceHandlersMapSafeSummaries(t *testing.T) {
 		t.Fatalf("ListAgentSessions() error = %v", err)
 	}
 	if len(sessions.GetSessions()) != 1 || sessions.GetSessions()[0].GetLatestRunId() != runID.String() ||
-		!sessions.GetSessions()[0].GetHumanGateWaiting() || sessions.GetPage().GetNextPageToken() != "sessions-next" {
+		!sessions.GetSessions()[0].GetHumanGateWaiting() ||
+		!sessions.GetSessions()[0].GetFollowUpWaiting() ||
+		sessions.GetSessions()[0].GetFollowUpRef() != "follow-up:1" ||
+		sessions.GetPage().GetNextPageToken() != "sessions-next" {
 		t.Fatalf("sessions = %+v", sessions)
 	}
 
