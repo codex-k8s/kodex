@@ -116,10 +116,41 @@ func TestRunApplyReconcilesBootstrapAndAdoptionThroughProductAPIs(t *testing.T) 
 	assertContains(t, output.String(), "adoption reconcile completed")
 }
 
+func TestRunApplyUsesRepositoryBindingForTargetPolicy(t *testing.T) {
+	scenario := checkedPayloadFixture()
+	scenario.RepositoryFullName = ""
+	scenario.ProviderRepositoryID = ""
+	scenarioPath := writeScenario(t, scenario)
+	projectClient := &fakeProjectCatalogClient{repository: repositoryFixture()}
+	clients := runnerClients{
+		ProjectCatalog: projectClient,
+		ProviderHub:    &fakeProviderHubClient{bootstrapSignal: mergeSignalFixture("bootstrap")},
+	}
+
+	err := run(context.Background(), runnerOptions{
+		ScenarioFilePath:     scenarioPath,
+		ProjectID:            "project-1",
+		RepositoryID:         "repo-1",
+		AllowedProviderOwner: "codex-k8s",
+		RepositoryNamePrefix: "kodex-onboarding-",
+		RequestID:            "req-1",
+		Kind:                 "bootstrap",
+		Apply:                true,
+	}, clients, ioDiscard{})
+	if err != nil {
+		t.Fatalf("run apply with binding target: %v", err)
+	}
+	if projectClient.bootstrapReconcileCalls != 1 {
+		t.Fatalf("expected one bootstrap reconcile call, got %d", projectClient.bootstrapReconcileCalls)
+	}
+}
+
 func TestRunApplyRejectsUnsafeRepositoryPrefix(t *testing.T) {
 	scenarioPath := writeScenario(t, checkedPayloadFixture())
+	repository := repositoryFixture()
+	repository.ProviderName = "production-repo"
 	clients := runnerClients{
-		ProjectCatalog: &fakeProjectCatalogClient{repository: repositoryFixture()},
+		ProjectCatalog: &fakeProjectCatalogClient{repository: repository},
 		ProviderHub:    &fakeProviderHubClient{bootstrapSignal: mergeSignalFixture("bootstrap")},
 	}
 
@@ -138,6 +169,98 @@ func TestRunApplyRejectsUnsafeRepositoryPrefix(t *testing.T) {
 		t.Fatal("expected unsafe repository prefix error")
 	}
 	assertContains(t, err.Error(), "must start")
+}
+
+func TestRunRejectsRepositoryBindingMismatch(t *testing.T) {
+	scenarioPath := writeScenario(t, checkedPayloadFixture())
+	repository := repositoryFixture()
+	repository.ProviderName = "other-repository"
+	projectClient := &fakeProjectCatalogClient{repository: repository}
+	clients := runnerClients{
+		ProjectCatalog: projectClient,
+		ProviderHub:    &fakeProviderHubClient{bootstrapSignal: mergeSignalFixture("bootstrap")},
+	}
+
+	err := run(context.Background(), runnerOptions{
+		ScenarioFilePath:     scenarioPath,
+		ProjectID:            "project-1",
+		RepositoryID:         "repo-1",
+		RepositoryFullName:   "codex-k8s/kodex-onboarding-test",
+		AllowedProviderOwner: "codex-k8s",
+		RepositoryNamePrefix: "kodex-onboarding-",
+		RequestID:            "req-1",
+		Kind:                 "bootstrap",
+		Apply:                true,
+	}, clients, ioDiscard{})
+	if err == nil {
+		t.Fatal("expected repository binding mismatch")
+	}
+	assertContains(t, err.Error(), "repository_full_name mismatch")
+	if projectClient.bootstrapReconcileCalls != 0 {
+		t.Fatalf("reconcile must not run after binding mismatch, got %d calls", projectClient.bootstrapReconcileCalls)
+	}
+}
+
+func TestRunRejectsSignalTargetMismatchBySignalKey(t *testing.T) {
+	scenario := checkedPayloadFixture()
+	scenario.Bootstrap.SignalKey = "bootstrap-signal-key"
+	scenarioPath := writeScenario(t, scenario)
+	signal := mergeSignalFixture("bootstrap")
+	signal.RepositoryId = "other-repo"
+	projectClient := &fakeProjectCatalogClient{repository: repositoryFixture()}
+	clients := runnerClients{
+		ProjectCatalog: projectClient,
+		ProviderHub:    &fakeProviderHubClient{bootstrapSignal: signal},
+	}
+
+	err := run(context.Background(), runnerOptions{
+		ScenarioFilePath:     scenarioPath,
+		ProjectID:            "project-1",
+		RepositoryID:         "repo-1",
+		RepositoryFullName:   "codex-k8s/kodex-onboarding-test",
+		AllowedProviderOwner: "codex-k8s",
+		RepositoryNamePrefix: "kodex-onboarding-",
+		RequestID:            "req-1",
+		Kind:                 "bootstrap",
+		Apply:                true,
+	}, clients, ioDiscard{})
+	if err == nil {
+		t.Fatal("expected signal target mismatch")
+	}
+	assertContains(t, err.Error(), "repository_id mismatch")
+	if projectClient.bootstrapReconcileCalls != 0 {
+		t.Fatalf("reconcile must not run after signal mismatch, got %d calls", projectClient.bootstrapReconcileCalls)
+	}
+}
+
+func TestRunRejectsUnmergedSignal(t *testing.T) {
+	scenarioPath := writeScenario(t, checkedPayloadFixture())
+	signal := mergeSignalFixture("bootstrap")
+	signal.Status = providersv1.RepositoryMergeSignalStatus_REPOSITORY_MERGE_SIGNAL_STATUS_UNSPECIFIED
+	projectClient := &fakeProjectCatalogClient{repository: repositoryFixture()}
+	clients := runnerClients{
+		ProjectCatalog: projectClient,
+		ProviderHub:    &fakeProviderHubClient{bootstrapSignal: signal},
+	}
+
+	err := run(context.Background(), runnerOptions{
+		ScenarioFilePath:     scenarioPath,
+		ProjectID:            "project-1",
+		RepositoryID:         "repo-1",
+		RepositoryFullName:   "codex-k8s/kodex-onboarding-test",
+		AllowedProviderOwner: "codex-k8s",
+		RepositoryNamePrefix: "kodex-onboarding-",
+		RequestID:            "req-1",
+		Kind:                 "bootstrap",
+		Apply:                true,
+	}, clients, ioDiscard{})
+	if err == nil {
+		t.Fatal("expected unmerged signal error")
+	}
+	assertContains(t, err.Error(), "not merged")
+	if projectClient.bootstrapReconcileCalls != 0 {
+		t.Fatalf("reconcile must not run for unmerged signal, got %d calls", projectClient.bootstrapReconcileCalls)
+	}
 }
 
 func TestRunReturnsSafeDiagnosticsForDependencyErrors(t *testing.T) {

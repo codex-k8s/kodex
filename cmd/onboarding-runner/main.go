@@ -148,11 +148,6 @@ func run(ctx context.Context, options runnerOptions, clients runnerClients, outp
 	if err := validateOptions(options); err != nil {
 		return err
 	}
-	if options.Apply {
-		if err := validateApplyPolicy(options); err != nil {
-			return err
-		}
-	}
 
 	modeLabel := "dry-run"
 	if options.Apply {
@@ -160,8 +155,18 @@ func run(ctx context.Context, options runnerOptions, clients runnerClients, outp
 	}
 	logLine(output, "PLAN", "mode=%s project_id=%s repository_id=%s provider=%s", modeLabel, safeValue(options.ProjectID), safeValue(options.RepositoryID), safeValue(options.ProviderSlug))
 
-	if err := checkProjectRepository(ctx, clients.ProjectCatalog, options, output); err != nil {
+	repository, err := checkProjectRepository(ctx, clients.ProjectCatalog, options, output)
+	if err != nil {
 		return err
+	}
+	options, err = bindOptionsToRepository(options, repository)
+	if err != nil {
+		return err
+	}
+	if options.Apply {
+		if err := validateApplyPolicy(options); err != nil {
+			return err
+		}
 	}
 	signals, err := readProviderSignals(ctx, clients.ProviderHub, options, scenario, output)
 	if err != nil {
@@ -305,17 +310,17 @@ func loadScenario(path string) (onboardingScenario, error) {
 	return scenario, nil
 }
 
-func checkProjectRepository(ctx context.Context, client projectCatalogAPI, options runnerOptions, output io.Writer) error {
+func checkProjectRepository(ctx context.Context, client projectCatalogAPI, options runnerOptions, output io.Writer) (*projectsv1.Repository, error) {
 	response, err := client.GetRepository(ctx, &projectsv1.GetRepositoryRequest{
 		RepositoryId: options.RepositoryID,
 		Meta:         projectQueryMeta(options),
 	})
 	if err != nil {
-		return safeError("project-catalog GetRepository failed", err)
+		return nil, safeError("project-catalog GetRepository failed", err)
 	}
 	repository := response.GetRepository()
 	if repository == nil {
-		return errors.New("project-catalog GetRepository returned empty repository")
+		return nil, errors.New("project-catalog GetRepository returned empty repository")
 	}
 	logLine(output, "OK", "project repository binding ready status=%s version=%d provider_owner=%s provider_name=%s base_branch=%s",
 		repository.GetStatus().String(),
@@ -324,7 +329,52 @@ func checkProjectRepository(ctx context.Context, client projectCatalogAPI, optio
 		safeValue(repository.GetProviderName()),
 		safeValue(repository.GetDefaultBranch()),
 	)
-	return nil
+	return repository, nil
+}
+
+func bindOptionsToRepository(options runnerOptions, repository *projectsv1.Repository) (runnerOptions, error) {
+	if repository.GetProjectId() != options.ProjectID {
+		return options, fmt.Errorf("repository binding project_id mismatch")
+	}
+	if repository.GetRepositoryId() != options.RepositoryID {
+		return options, fmt.Errorf("repository binding repository_id mismatch")
+	}
+	providerSlug, err := projectRepositoryProviderSlug(repository.GetProvider())
+	if err != nil {
+		return options, err
+	}
+	if providerSlug != options.ProviderSlug {
+		return options, fmt.Errorf("repository binding provider mismatch")
+	}
+	repositoryFullName := repository.GetProviderOwner() + "/" + repository.GetProviderName()
+	if _, _, ok := splitRepositoryFullName(repositoryFullName); !ok {
+		return options, fmt.Errorf("repository binding provider owner/name is incomplete")
+	}
+	if options.RepositoryFullName != "" && options.RepositoryFullName != repositoryFullName {
+		return options, fmt.Errorf("repository binding repository_full_name mismatch")
+	}
+	options.RepositoryFullName = repositoryFullName
+
+	bindingProviderRepositoryID := repository.GetProviderRepositoryId()
+	if options.ProviderRepositoryID != "" && bindingProviderRepositoryID == "" {
+		return options, fmt.Errorf("repository binding provider_repository_id is not available for verification")
+	}
+	if options.ProviderRepositoryID != "" && options.ProviderRepositoryID != bindingProviderRepositoryID {
+		return options, fmt.Errorf("repository binding provider_repository_id mismatch")
+	}
+	options.ProviderRepositoryID = bindingProviderRepositoryID
+	return options, nil
+}
+
+func projectRepositoryProviderSlug(provider projectsv1.RepositoryProvider) (string, error) {
+	switch provider {
+	case projectsv1.RepositoryProvider_REPOSITORY_PROVIDER_GITHUB:
+		return "github", nil
+	case projectsv1.RepositoryProvider_REPOSITORY_PROVIDER_GITLAB:
+		return "gitlab", nil
+	default:
+		return "", fmt.Errorf("repository binding provider is unsupported")
+	}
 }
 
 func readProviderSignals(ctx context.Context, client providerHubAPI, options runnerOptions, scenario onboardingScenario, output io.Writer) (mergeSignalSet, error) {
@@ -368,8 +418,8 @@ func readProviderSignal(ctx context.Context, client providerHubAPI, options runn
 		if response.GetReadStatus() != providersv1.ProviderOwnedDataStatus_PROVIDER_OWNED_DATA_STATUS_READY || response.GetMergeSignal() == nil {
 			return nil, nil
 		}
-		if response.GetMergeSignal().GetKind() != kind {
-			return nil, fmt.Errorf("provider merge signal has unexpected kind")
+		if err := validateProviderSignal(response.GetMergeSignal(), options, kind); err != nil {
+			return nil, err
 		}
 		return response.GetMergeSignal(), nil
 	}
@@ -391,7 +441,33 @@ func readProviderSignal(ctx context.Context, client providerHubAPI, options runn
 	if len(signals) == 0 {
 		return nil, nil
 	}
+	if err := validateProviderSignal(signals[0], options, kind); err != nil {
+		return nil, err
+	}
 	return signals[0], nil
+}
+
+func validateProviderSignal(signal *providersv1.RepositoryMergeSignal, options runnerOptions, kind providersv1.RepositoryMergeSignalKind) error {
+	if signal.GetKind() != kind {
+		return fmt.Errorf("provider merge signal has unexpected kind")
+	}
+	if signal.GetStatus() != providersv1.RepositoryMergeSignalStatus_REPOSITORY_MERGE_SIGNAL_STATUS_MERGED {
+		return fmt.Errorf("provider merge signal is not merged")
+	}
+	for field, values := range map[string][2]string{
+		"project_id":           {signal.GetProjectId(), options.ProjectID},
+		"repository_id":        {signal.GetRepositoryId(), options.RepositoryID},
+		"provider_slug":        {signal.GetProviderSlug(), options.ProviderSlug},
+		"repository_full_name": {signal.GetRepositoryFullName(), options.RepositoryFullName},
+	} {
+		if values[0] != values[1] {
+			return fmt.Errorf("provider merge signal %s mismatch", field)
+		}
+	}
+	if options.ProviderRepositoryID != "" && signal.GetProviderRepositoryId() != options.ProviderRepositoryID {
+		return fmt.Errorf("provider merge signal provider_repository_id mismatch")
+	}
+	return nil
 }
 
 func readAdoptionSnapshots(ctx context.Context, client providerHubAPI, options runnerOptions, output io.Writer) error {
