@@ -163,6 +163,31 @@ func TestExecutorStartRejectsAgentRunWithoutWorkspacePVCRef(t *testing.T) {
 	assertExecutionCode(t, err, "invalid_agent_run_execution_spec")
 }
 
+func TestExecutorStartRejectsUnsafeCodexSessionSpecBeforeCreatingJob(t *testing.T) {
+	t.Parallel()
+
+	client := fake.NewClientset()
+	executor := newTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
+	job := testAgentRunJob()
+	job.JobInputJSON = []byte(strings.Replace(
+		string(job.JobInputJSON),
+		`"instruction_object_ref":"object://instructions/31"`,
+		`"instruction_object_ref":"object://instructions/prompt_body_secret_value"`,
+		1,
+	))
+
+	_, err := executor.Start(context.Background(), job)
+
+	assertExecutionCode(t, err, "invalid_agent_run_execution_spec")
+	jobs, listErr := client.BatchV1().Jobs("runtime-jobs").List(context.Background(), metav1.ListOptions{})
+	if listErr != nil {
+		t.Fatalf("list Jobs: %v", listErr)
+	}
+	if len(jobs.Items) != 0 {
+		t.Fatalf("created Jobs = %d, want none before unsafe spec reaches env", len(jobs.Items))
+	}
+}
+
 func TestExecutorStartReusesExistingManagedJob(t *testing.T) {
 	t.Parallel()
 
