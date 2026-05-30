@@ -18,7 +18,10 @@ const context = useOperatorContextStore();
 const inbox = useOwnerInboxStore();
 const executions = useExecutionsStore();
 
-const runtimeLabel = computed(() => executions.runtimeStatus?.run_status ?? 'unspecified');
+const approvalItemsOnCurrentPage = computed(
+  () => inbox.items.filter((item) => item.request_kind === 'approval').length,
+);
+const lastRunStatus = computed(() => executions.runtimeStatus?.run_status);
 
 onMounted(() => {
   if (context.isReady && inbox.items.length === 0) {
@@ -47,31 +50,34 @@ function openExecutions() {
       <v-card class="surface-panel summary-card">
         <v-icon icon="mdi-alert-circle-outline" color="error" size="34" />
         <div>
-          <div class="meta-text">{{ t('commandCenter.decisions') }}</div>
+          <div class="meta-text">{{ t('commandCenter.decisionsOnPage') }}</div>
           <div class="summary-card__value">{{ inbox.pendingCount }}</div>
+          <div class="summary-card__hint">{{ t('commandCenter.currentInboxPageHint') }}</div>
         </div>
       </v-card>
       <v-card class="surface-panel summary-card">
-        <v-icon icon="mdi-play-circle-outline" color="success" size="34" />
+        <v-icon icon="mdi-inbox-multiple-outline" color="success" size="34" />
         <div>
-          <div class="meta-text">{{ t('commandCenter.activeRuns') }}</div>
-          <div class="summary-card__value">{{ executions.runtimeStatus ? 1 : 0 }}</div>
+          <div class="meta-text">{{ t('commandCenter.itemsOnPage') }}</div>
+          <div class="summary-card__value">{{ inbox.items.length }}</div>
+          <div class="summary-card__hint">{{ t('commandCenter.currentInboxPageHint') }}</div>
         </div>
       </v-card>
       <v-card class="surface-panel summary-card">
         <v-icon icon="mdi-server-outline" color="info" size="34" />
         <div>
-          <div class="meta-text">{{ t('commandCenter.runtime') }}</div>
-          <StatusChip :label="t(`statuses.${runtimeLabel}`)" tone="info" />
+          <div class="meta-text">{{ t('commandCenter.lastRunLookup') }}</div>
+          <StatusChip v-if="lastRunStatus" :label="t(`statuses.${lastRunStatus}`)" tone="info" />
+          <div v-else class="summary-card__placeholder">{{ t('commandCenter.noRunLookup') }}</div>
+          <div class="summary-card__hint">{{ t('commandCenter.lastRunLookupHint') }}</div>
         </div>
       </v-card>
       <v-card class="surface-panel summary-card">
         <v-icon icon="mdi-clock-outline" color="warning" size="34" />
         <div>
-          <div class="meta-text">{{ t('commandCenter.confirmations') }}</div>
-          <div class="summary-card__value">
-            {{ inbox.items.filter((item) => item.request_kind === 'approval').length }}
-          </div>
+          <div class="meta-text">{{ t('commandCenter.approvalsOnPage') }}</div>
+          <div class="summary-card__value">{{ approvalItemsOnCurrentPage }}</div>
+          <div class="summary-card__hint">{{ t('commandCenter.currentInboxPageHint') }}</div>
         </div>
       </v-card>
     </section>
@@ -209,6 +215,17 @@ function openExecutions() {
   color: #121826;
   font-size: 1.7rem;
   font-weight: 800;
+}
+
+.summary-card__hint,
+.summary-card__placeholder {
+  color: #667085;
+  font-size: 0.82rem;
+  margin-top: 4px;
+}
+
+.summary-card__placeholder {
+  font-weight: 700;
 }
 
 .main-grid {
