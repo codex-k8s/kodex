@@ -406,13 +406,7 @@ func prepareCheckedScenarioInput(kind string, scenario *reconcileScenario, signa
 		return scenario, false, fmt.Errorf("%s checked payload producer requires watermark_json in scenario or watermark-json-file", kind)
 	}
 	contentHash := prefixedSHA256([]byte(producer.PayloadJSON))
-	artifactDigest := prefixedSHA256(
-		[]byte("onboarding-runner:checked-artifact:v1"),
-		[]byte(kind),
-		[]byte(producer.SourcePath),
-		[]byte(producer.PayloadJSON),
-		[]byte(watermarkJSON),
-	)
+	artifactDigest := contentHash
 	artifactVersion := firstNonEmpty(producer.ArtifactVersion)
 	if artifactVersion == "" && signal != nil {
 		artifactVersion = signal.GetMergeCommitSha()

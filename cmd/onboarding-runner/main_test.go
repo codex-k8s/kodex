@@ -170,6 +170,9 @@ func TestRunApplyProducesBootstrapCheckedArtifactFromValidatedPayloadFile(t *tes
 	if got := checkedPolicy.GetContentHash(); !strings.HasPrefix(got, "sha256:") {
 		t.Fatalf("expected sha256 content hash, got %q", got)
 	}
+	if checkedPolicy.GetArtifactDigest() != checkedPolicy.GetContentHash() {
+		t.Fatalf("expected artifact digest to match content hash, got digest=%q content_hash=%q", checkedPolicy.GetArtifactDigest(), checkedPolicy.GetContentHash())
+	}
 	assertNotContains(t, output.String(), "raw_services_yaml_secret")
 	assertContains(t, output.String(), "checked artifact input produced")
 	assertContains(t, output.String(), "bootstrap reconcile completed")
