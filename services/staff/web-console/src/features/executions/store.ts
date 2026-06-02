@@ -42,6 +42,7 @@ export const useExecutionsStore = defineStore('executions', {
     filters: {
       pageSize: 25,
     } as ExecutionFilters,
+    detailRequestToken: 0,
     isLoadingList: false,
     isLoading: false,
     unsupportedAgentScope: false,
@@ -121,6 +122,14 @@ export const useExecutionsStore = defineStore('executions', {
       if (!runId) {
         return;
       }
+      const requestToken = this.detailRequestToken + 1;
+      this.detailRequestToken = requestToken;
+      const isInitialLoad = pageToken === undefined;
+      if (isInitialLoad) {
+        this.runtimeStatus = undefined;
+        this.activities = [];
+        this.nextPageToken = undefined;
+      }
       this.isLoading = true;
       this.error = undefined;
       try {
@@ -133,13 +142,20 @@ export const useExecutionsStore = defineStore('executions', {
             pageToken,
           }),
         ]);
+        if (this.detailRequestToken !== requestToken || this.runId.trim() !== runId) {
+          return;
+        }
         this.runtimeStatus = runtime.runtime_status;
         this.activities = pageToken ? [...this.activities, ...activities.activities] : activities.activities;
         this.nextPageToken = activities.page.next_page_token;
       } catch (error) {
-        this.error = error as ApiError;
+        if (this.detailRequestToken === requestToken && this.runId.trim() === runId) {
+          this.error = error as ApiError;
+        }
       } finally {
-        this.isLoading = false;
+        if (this.detailRequestToken === requestToken && this.runId.trim() === runId) {
+          this.isLoading = false;
+        }
       }
     },
   },
