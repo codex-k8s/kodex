@@ -131,6 +131,16 @@ func TestExecutorStartCreatesRestrictedAgentRunJob(t *testing.T) {
 	if strings.Contains(env["KODEX_CODEX_SESSION_EXECUTION_SPEC_JSON"], "prompt_body") || strings.Contains(env["KODEX_CODEX_SESSION_EXECUTION_SPEC_JSON"], "secret-value") {
 		t.Fatalf("codex execution spec env contains unsafe marker: %q", env["KODEX_CODEX_SESSION_EXECUTION_SPEC_JSON"])
 	}
+	if env[agentManagerGRPCAddrEnv] != "agent-manager:9090" || env[agentManagerTimeoutEnv] != "3s" {
+		t.Fatalf("agent-manager reporter env = %v, want addr and timeout", env)
+	}
+	authEnv := envVarByName(container.Env, agentManagerAuthTokenEnv)
+	if authEnv == nil || authEnv.Value != "" || authEnv.ValueFrom == nil || authEnv.ValueFrom.SecretKeyRef == nil {
+		t.Fatalf("agent-manager auth env = %+v, want SecretKeyRef without literal token", authEnv)
+	}
+	if authEnv.ValueFrom.SecretKeyRef.Name != "kodex-platform-runtime" || authEnv.ValueFrom.SecretKeyRef.Key != "KODEX_AGENT_MANAGER_GRPC_AUTH_TOKEN" {
+		t.Fatalf("agent-manager auth SecretKeyRef = %+v, want platform runtime token ref", authEnv.ValueFrom.SecretKeyRef)
+	}
 	if len(created.Annotations) != 0 || len(created.Spec.Template.Annotations) != 0 {
 		t.Fatalf("annotations = %v/%v, want none from agent_run spec", created.Annotations, created.Spec.Template.Annotations)
 	}
@@ -186,6 +196,27 @@ func TestExecutorStartRejectsUnsafeCodexSessionSpecBeforeCreatingJob(t *testing.
 	if len(jobs.Items) != 0 {
 		t.Fatalf("created Jobs = %d, want none before unsafe spec reaches env", len(jobs.Items))
 	}
+}
+
+func TestExecutorStartRejectsIncompleteAgentRunReporterConfig(t *testing.T) {
+	t.Parallel()
+
+	_, err := NewExecutorWithClientFactory(
+		fakeClusterProvider{access: testClusterAccess()},
+		fakeSecretResolver{value: secretresolver.NewSecretValue([]byte("kubeconfig"))},
+		Config{
+			DefaultNamespace:       "runtime-jobs",
+			DefaultImage:           "busybox:1.36",
+			ImagePullPolicy:        "IfNotPresent",
+			JobTimeout:             time.Second,
+			PollInterval:           time.Millisecond,
+			AgentManagerGRPCAddr:   "agent-manager:9090",
+			AgentManagerAuthSecret: SecretKeyRef{Name: "kodex-platform-runtime"},
+		},
+		fakeClientFactory{client: fake.NewClientset()},
+	)
+
+	assertExecutionCode(t, err, "invalid_agent_run_reporter_config")
 }
 
 func TestExecutorStartReusesExistingManagedJob(t *testing.T) {
@@ -416,6 +447,9 @@ func newTestExecutor(t *testing.T, client clientkubernetes.Interface, provider f
 		BackoffLimit:            0,
 		TTLSecondsAfterFinished: 30,
 		LogTailBytes:            1024,
+		AgentManagerGRPCAddr:    "agent-manager:9090",
+		AgentManagerAuthSecret:  SecretKeyRef{Name: "kodex-platform-runtime", Key: "KODEX_AGENT_MANAGER_GRPC_AUTH_TOKEN"},
+		AgentManagerTimeout:     3 * time.Second,
 	}, fakeClientFactory{client: client})
 	if err != nil {
 		t.Fatalf("NewExecutorWithClientFactory(): %v", err)
@@ -459,6 +493,15 @@ func envMap(values []corev1.EnvVar) map[string]string {
 		result[item.Name] = item.Value
 	}
 	return result
+}
+
+func envVarByName(values []corev1.EnvVar, name string) *corev1.EnvVar {
+	for i := range values {
+		if values[i].Name == name {
+			return &values[i]
+		}
+	}
+	return nil
 }
 
 func hasCapability(values []corev1.Capability, want corev1.Capability) bool {

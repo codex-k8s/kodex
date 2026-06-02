@@ -41,12 +41,16 @@ const (
 	defaultImagePullPolicy   = "IfNotPresent"
 	maxMetadataItems         = 16
 	maxAgentRunEnvValueBytes = 16 * 1024
+	maxAgentRunReporterBytes = 512
 	workspaceVolumeName      = "workspace"
 	agentRunWorkspacePath    = "/workspace"
 	agentRunContextPath      = "/workspace/.kodex/context/agent-run.json"
 	agentRunCommand          = "/kodex/bin/agent-runner"
 	agentRunCommandKind      = "run"
 	agentRunRunnerModeCodex  = "codex_agent"
+	agentManagerGRPCAddrEnv  = "KODEX_AGENT_RUNNER_AGENT_MANAGER_GRPC_ADDR"
+	agentManagerAuthTokenEnv = "KODEX_AGENT_RUNNER_AGENT_MANAGER_GRPC_AUTH_TOKEN"
+	agentManagerTimeoutEnv   = "KODEX_AGENT_RUNNER_AGENT_MANAGER_TIMEOUT"
 )
 
 // Config constrains Kubernetes executor behavior with operator-managed settings.
@@ -60,6 +64,15 @@ type Config struct {
 	BackoffLimit            int32
 	TTLSecondsAfterFinished int32
 	LogTailBytes            int64
+	AgentManagerGRPCAddr    string
+	AgentManagerAuthSecret  SecretKeyRef
+	AgentManagerTimeout     time.Duration
+}
+
+// SecretKeyRef points to a Kubernetes Secret key without carrying the secret value.
+type SecretKeyRef struct {
+	Name string
+	Key  string
 }
 
 // ClusterAccessProvider obtains safe cluster secret references through fleet-manager.
@@ -387,7 +400,7 @@ func (e *Executor) agentRunExecutionSpec(job entity.Job) (executionSpec, error) 
 	if err != nil {
 		return executionSpec{}, err
 	}
-	env, err := agentRunEnv(job, *spec, mode)
+	env, err := agentRunEnv(job, *spec, mode, e.config)
 	if err != nil {
 		return executionSpec{}, err
 	}
@@ -502,7 +515,7 @@ func agentRunRunnerMode(mode enum.AgentRunRunnerMode) (string, error) {
 	return agentRunRunnerModeCodex, nil
 }
 
-func agentRunEnv(job entity.Job, spec runtimeservice.AgentRunExecutionSpecInput, mode string) ([]corev1.EnvVar, error) {
+func agentRunEnv(job entity.Job, spec runtimeservice.AgentRunExecutionSpecInput, mode string, cfg Config) ([]corev1.EnvVar, error) {
 	allowedSecretRefs, err := agentRunRefsJSON(spec.AllowedSecretRefs)
 	if err != nil {
 		return nil, err
@@ -534,6 +547,39 @@ func agentRunEnv(job entity.Job, spec runtimeservice.AgentRunExecutionSpecInput,
 			return nil, err
 		}
 		env = append(env, corev1.EnvVar{Name: "KODEX_CODEX_SESSION_EXECUTION_SPEC_JSON", Value: codexSpec})
+	}
+	reporterEnv, err := agentRunReporterEnv(cfg)
+	if err != nil {
+		return nil, err
+	}
+	env = append(env, reporterEnv...)
+	return env, nil
+}
+
+func agentRunReporterEnv(cfg Config) ([]corev1.EnvVar, error) {
+	addr := strings.TrimSpace(cfg.AgentManagerGRPCAddr)
+	secretName := strings.TrimSpace(cfg.AgentManagerAuthSecret.Name)
+	secretKey := strings.TrimSpace(cfg.AgentManagerAuthSecret.Key)
+	if addr == "" && secretName == "" && secretKey == "" {
+		return nil, nil
+	}
+	if addr == "" || secretName == "" || secretKey == "" {
+		return nil, newExecutionError("invalid_agent_run_reporter_config", "agent_run reporter config is incomplete")
+	}
+	env := []corev1.EnvVar{
+		{Name: agentManagerGRPCAddrEnv, Value: addr},
+		{
+			Name: agentManagerAuthTokenEnv,
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{Name: secretName},
+					Key:                  secretKey,
+				},
+			},
+		},
+	}
+	if cfg.AgentManagerTimeout > 0 {
+		env = append(env, corev1.EnvVar{Name: agentManagerTimeoutEnv, Value: cfg.AgentManagerTimeout.String()})
 	}
 	return env, nil
 }
@@ -730,6 +776,11 @@ func normalizeConfig(cfg Config) (Config, error) {
 	cfg.DefaultNamespace = strings.TrimSpace(cfg.DefaultNamespace)
 	cfg.DefaultServiceAccount = strings.TrimSpace(cfg.DefaultServiceAccount)
 	cfg.DefaultImage = strings.TrimSpace(cfg.DefaultImage)
+	cfg.AgentManagerGRPCAddr = strings.TrimSpace(cfg.AgentManagerGRPCAddr)
+	cfg.AgentManagerAuthSecret = SecretKeyRef{
+		Name: strings.TrimSpace(cfg.AgentManagerAuthSecret.Name),
+		Key:  strings.TrimSpace(cfg.AgentManagerAuthSecret.Key),
+	}
 	cfg.ImagePullPolicy = firstNonEmpty(cfg.ImagePullPolicy, defaultImagePullPolicy)
 	if cfg.JobTimeout <= 0 {
 		cfg.JobTimeout = 2 * time.Minute
@@ -748,7 +799,40 @@ func normalizeConfig(cfg Config) (Config, error) {
 	if strings.TrimSpace(cfg.DefaultNamespace) == "" || strings.TrimSpace(cfg.DefaultImage) == "" {
 		return Config{}, newExecutionError("invalid_executor_config", "Kubernetes executor namespace and image must be configured")
 	}
+	if err := validateAgentRunReporterConfig(cfg); err != nil {
+		return Config{}, err
+	}
 	return cfg, nil
+}
+
+func validateAgentRunReporterConfig(cfg Config) error {
+	addr := strings.TrimSpace(cfg.AgentManagerGRPCAddr)
+	secretName := strings.TrimSpace(cfg.AgentManagerAuthSecret.Name)
+	secretKey := strings.TrimSpace(cfg.AgentManagerAuthSecret.Key)
+	if addr == "" && secretName == "" && secretKey == "" {
+		return nil
+	}
+	if !safeAgentRunReporterValue(addr) || secretName == "" || secretKey == "" {
+		return newExecutionError("invalid_agent_run_reporter_config", "agent_run reporter config is incomplete")
+	}
+	if errs := validation.IsDNS1123Subdomain(secretName); len(errs) > 0 {
+		return newExecutionError("invalid_agent_run_reporter_config", "agent_run reporter secret ref is invalid")
+	}
+	if errs := validation.IsConfigMapKey(secretKey); len(errs) > 0 {
+		return newExecutionError("invalid_agent_run_reporter_config", "agent_run reporter secret key is invalid")
+	}
+	if cfg.AgentManagerTimeout < 0 {
+		return newExecutionError("invalid_agent_run_reporter_config", "agent_run reporter timeout is invalid")
+	}
+	return nil
+}
+
+func safeAgentRunReporterValue(value string) bool {
+	trimmed := strings.TrimSpace(value)
+	return trimmed != "" &&
+		len(trimmed) <= maxAgentRunReporterBytes &&
+		utf8.ValidString(trimmed) &&
+		!strings.ContainsAny(trimmed, " \t\r\n{}")
 }
 
 func clusterAccessError(err error) error {

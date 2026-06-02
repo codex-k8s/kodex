@@ -141,6 +141,10 @@ type RuntimeKubernetesWorkerConfig struct {
 	BackoffLimit            int32         `env:"BACKOFF_LIMIT" envDefault:"0"`
 	TTLSecondsAfterFinished int32         `env:"TTL_SECONDS_AFTER_FINISHED" envDefault:"300"`
 	LogTailBytes            int64         `env:"LOG_TAIL_BYTES" envDefault:"16384"`
+	AgentManagerGRPCAddr    string        `env:"AGENT_MANAGER_GRPC_ADDR" envDefault:"agent-manager:9090"`
+	AgentManagerSecretName  string        `env:"AGENT_MANAGER_GRPC_AUTH_SECRET_NAME" envDefault:"kodex-platform-runtime"`
+	AgentManagerSecretKey   string        `env:"AGENT_MANAGER_GRPC_AUTH_SECRET_KEY" envDefault:"KODEX_AGENT_MANAGER_GRPC_AUTH_TOKEN"`
+	AgentManagerTimeout     time.Duration `env:"AGENT_MANAGER_REPORT_TIMEOUT" envDefault:"3s"`
 }
 
 // LoadConfig reads process configuration from environment variables.
@@ -352,6 +356,9 @@ func (cfg Config) validateKubernetesWorkerSettings() error {
 	if !worker.Enabled {
 		return nil
 	}
+	if worker.AgentManagerTimeout <= 0 {
+		return fmt.Errorf("KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_AGENT_MANAGER_REPORT_TIMEOUT is invalid")
+	}
 	if strings.TrimSpace(worker.WorkerID) == "" {
 		return fmt.Errorf("KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_WORKER_ID is required when executor is enabled")
 	}
@@ -360,6 +367,12 @@ func (cfg Config) validateKubernetesWorkerSettings() error {
 	}
 	if strings.TrimSpace(worker.DefaultImage) == "" {
 		return fmt.Errorf("KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_DEFAULT_IMAGE is required when executor is enabled")
+	}
+	if strings.TrimSpace(worker.AgentManagerGRPCAddr) == "" {
+		return fmt.Errorf("KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_AGENT_MANAGER_GRPC_ADDR is required when executor is enabled")
+	}
+	if strings.TrimSpace(worker.AgentManagerSecretName) == "" || strings.TrimSpace(worker.AgentManagerSecretKey) == "" {
+		return fmt.Errorf("KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_AGENT_MANAGER_GRPC_AUTH_SECRET_* is required when executor is enabled")
 	}
 	return nil
 }
