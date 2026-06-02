@@ -168,6 +168,11 @@ func (c *Client) ListReviewSignals(ctx context.Context, request *governancev1.Li
 	return ownergrpc.Call(ctx, c.callConfig(), request, c.client.ListReviewSignals)
 }
 
+// GetGovernanceSummary routes safe owner/staff summary reads to governance-manager.
+func (c *Client) GetGovernanceSummary(ctx context.Context, request *governancev1.GetGovernanceSummaryRequest) (*governancev1.GovernanceSummaryResponse, error) {
+	return ownergrpc.Call(ctx, c.callConfig(), request, c.client.GetGovernanceSummary)
+}
+
 func (c *Client) callConfig() ownergrpc.Config {
 	return ownergrpc.Config{Service: serviceName, AuthToken: c.authToken, Timeout: c.timeout}
 }

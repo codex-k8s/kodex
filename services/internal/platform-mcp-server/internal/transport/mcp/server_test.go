@@ -243,6 +243,12 @@ func TestToolsListSnapshot(t *testing.T) {
     "has_output_schema": true
   },
   {
+    "name": "governance.summary.get",
+    "description": "Прочитать безопасную сводку governance через governance-manager без хранения состояния в MCP.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
+  {
     "name": "interaction.owner_inbox.get",
     "description": "Прочитать входящую задачу владельца через interaction-hub.",
     "has_input_schema": true,
@@ -1262,6 +1268,163 @@ func TestGovernanceReviewSignalListRoutesToOwner(t *testing.T) {
 	}
 	if governance.listReviewSignalsCalls != 1 {
 		t.Fatalf("listReviewSignalsCalls = %d, want 1", governance.listReviewSignalsCalls)
+	}
+}
+
+func TestGovernanceSummaryGetRoutesToOwnerWithIntegrationSelector(t *testing.T) {
+	t.Parallel()
+
+	governance := newFakeGovernanceManagerClient()
+	server := newTestServerWithGovernance(t, governance)
+	session, cleanup := connectClient(t, server)
+	defer cleanup()
+
+	result, err := session.CallTool(context.Background(), &mcpsdk.CallToolParams{
+		Name: ToolGovernanceSummaryGet,
+		Arguments: map[string]any{
+			"meta": validGovernanceQueryMetaArgs(),
+			"integration_ref": map[string]any{
+				"domain": "agent",
+				"kind":   "acceptance",
+				"ref":    "acceptance-1",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool(): %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("CallTool() returned tool error: %+v", result.Content)
+	}
+	if governance.getSummaryCalls != 1 {
+		t.Fatalf("getSummaryCalls = %d, want 1", governance.getSummaryCalls)
+	}
+	if governance.lastSummaryScope.GetIntegrationRef().GetRef() != "acceptance-1" {
+		t.Fatalf("lastSummaryScope integration ref = %+v, want acceptance-1", governance.lastSummaryScope.GetIntegrationRef())
+	}
+	data, err := json.Marshal(result.StructuredContent)
+	if err != nil {
+		t.Fatalf("Marshal(): %v", err)
+	}
+	for _, expected := range []string{"gate-request-1", "release-decision-1", "agent.acceptance", "runtime-job-1"} {
+		if !strings.Contains(string(data), expected) {
+			t.Fatalf("structured content does not include %q: %s", expected, data)
+		}
+	}
+	for _, forbidden := range []string{"raw_provider_payload", "transcript", "stdout", "kubeconfig", "secret-token"} {
+		if strings.Contains(string(data), forbidden) {
+			t.Fatalf("structured content exposes forbidden marker %q: %s", forbidden, data)
+		}
+	}
+}
+
+func TestGovernanceSummaryGetRejectsMixedSelectors(t *testing.T) {
+	t.Parallel()
+
+	governance := newFakeGovernanceManagerClient()
+	server := newTestServerWithGovernance(t, governance)
+	session, cleanup := connectClient(t, server)
+	defer cleanup()
+
+	result, err := session.CallTool(context.Background(), &mcpsdk.CallToolParams{
+		Name: ToolGovernanceSummaryGet,
+		Arguments: map[string]any{
+			"meta":                        validGovernanceQueryMetaArgs(),
+			"release_decision_package_id": "release-package-1",
+			"release_candidate_ref":       "release-candidate:v1.2.3",
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool(): %v", err)
+	}
+	if !result.IsError {
+		t.Fatalf("CallTool() IsError = false, want true")
+	}
+	if governance.getSummaryCalls != 0 {
+		t.Fatalf("getSummaryCalls = %d, want 0", governance.getSummaryCalls)
+	}
+}
+
+func TestGovernanceSummaryGetOwnerErrorIsSafe(t *testing.T) {
+	t.Parallel()
+
+	governance := newFakeGovernanceManagerClient()
+	governance.err = fakeOwnerError()
+	server := newTestServerWithGovernance(t, governance)
+	session, cleanup := connectClient(t, server)
+	defer cleanup()
+
+	result, err := session.CallTool(context.Background(), &mcpsdk.CallToolParams{
+		Name: ToolGovernanceSummaryGet,
+		Arguments: map[string]any{
+			"meta":                        validGovernanceQueryMetaArgs(),
+			"release_decision_package_id": "release-package-1",
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool(): %v", err)
+	}
+	if !result.IsError {
+		t.Fatalf("CallTool() IsError = false, want true")
+	}
+	data, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("Marshal(): %v", err)
+	}
+	if strings.Contains(string(data), "secret-token") {
+		t.Fatalf("tool error exposes owner detail: %s", data)
+	}
+	if !strings.Contains(string(data), "owner returned Internal") {
+		t.Fatalf("tool error does not include safe owner code: %s", data)
+	}
+}
+
+func TestGovernanceSummaryInputSchemaRejectsRawPayload(t *testing.T) {
+	t.Parallel()
+
+	governance := newFakeGovernanceManagerClient()
+	server := newTestServerWithGovernance(t, governance)
+	session, cleanup := connectClient(t, server)
+	defer cleanup()
+
+	tools, err := session.ListTools(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("ListTools(): %v", err)
+	}
+	foundTool := false
+	for _, tool := range tools.Tools {
+		if tool.Name != ToolGovernanceSummaryGet {
+			continue
+		}
+		foundTool = true
+		schema, err := json.Marshal(tool.InputSchema)
+		if err != nil {
+			t.Fatalf("Marshal(input schema): %v", err)
+		}
+		for _, forbidden := range []string{"payload_json", "raw_provider_payload", "transcript", "kubeconfig"} {
+			if strings.Contains(string(schema), forbidden) {
+				t.Fatalf("summary input schema exposes forbidden field %q: %s", forbidden, schema)
+			}
+		}
+		break
+	}
+	if !foundTool {
+		t.Fatalf("%s tool is not registered", ToolGovernanceSummaryGet)
+	}
+
+	result, err := session.CallTool(context.Background(), &mcpsdk.CallToolParams{
+		Name: ToolGovernanceSummaryGet,
+		Arguments: map[string]any{
+			"meta":                        validGovernanceQueryMetaArgs(),
+			"release_decision_package_id": "release-package-1",
+			"raw_provider_payload":        `{"secret":"must not be accepted"}`,
+		},
+	})
+	if err == nil {
+		t.Fatalf("CallTool() err = nil, want schema validation error; result = %+v", result)
+	}
+	if governance.getSummaryCalls != 0 {
+		t.Fatalf("getSummaryCalls = %d, want 0 after invalid raw payload input", governance.getSummaryCalls)
 	}
 }
 
@@ -2464,7 +2627,9 @@ type fakeGovernanceManagerClient struct {
 	getSafetyCalls           int
 	recordReviewSignalCalls  int
 	listReviewSignalsCalls   int
+	getSummaryCalls          int
 	lastExpectedVersion      *int64
+	lastSummaryScope         *governancev1.GovernanceSummaryScope
 	err                      error
 }
 
@@ -2750,6 +2915,77 @@ func (f *fakeGovernanceManagerClient) ListReviewSignals(_ context.Context, _ *go
 		})},
 		Page: &governancev1.PageResponse{},
 	}, nil
+}
+
+func (f *fakeGovernanceManagerClient) GetGovernanceSummary(_ context.Context, request *governancev1.GetGovernanceSummaryRequest) (*governancev1.GovernanceSummaryResponse, error) {
+	f.getSummaryCalls++
+	f.lastSummaryScope = request.GetScope()
+	if f.err != nil {
+		return nil, f.err
+	}
+	return fakeGovernanceSummaryResponse(request.GetScope()), nil
+}
+
+func fakeGovernanceSummaryResponse(scope *governancev1.GovernanceSummaryScope) *governancev1.GovernanceSummaryResponse {
+	return &governancev1.GovernanceSummaryResponse{Summary: &governancev1.GovernanceSummary{
+		Scope: scope,
+		PendingDecisions: []*governancev1.GovernanceDecisionSummary{{
+			Kind:                     governancev1.GovernanceDecisionSummaryKind_GOVERNANCE_DECISION_SUMMARY_KIND_GATE_REQUEST,
+			Attention:                governancev1.GovernanceDecisionAttention_GOVERNANCE_DECISION_ATTENTION_PENDING,
+			Id:                       "gate-request-1",
+			Target:                   &governancev1.TargetRef{Type: governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_PULL_REQUEST, Ref: "provider:pr:1"},
+			ReleaseDecisionPackageId: stringPtr("release-package-1"),
+			GateRequestStatus:        governancev1.GateRequestStatus_GATE_REQUEST_STATUS_AWAITING_DECISION,
+			Severity:                 governancev1.SignalSeverity_SIGNAL_SEVERITY_WARNING,
+			SafeSummary:              "Нужно решение владельца по release gate",
+			EvidenceRefs: []*governancev1.EvidenceRef{{
+				Kind:    governancev1.EvidenceKind_EVIDENCE_KIND_PROVIDER_REVIEW,
+				Ref:     "provider-review-1",
+				Summary: "bounded review summary",
+			}},
+			IntegrationRefs: []*governancev1.ReleaseIntegrationRef{{
+				Domain:  "agent",
+				Kind:    "acceptance",
+				Ref:     "acceptance-1",
+				Status:  stringPtr("passed"),
+				Summary: stringPtr("bounded acceptance summary"),
+			}},
+			AgentContext: &governancev1.AgentContextRef{SessionRef: stringPtr("session-1"), RunRef: stringPtr("run-1"), AcceptanceRef: stringPtr("acceptance-1")},
+			Version:      3,
+			CreatedAt:    "2026-05-29T00:00:00Z",
+			UpdatedAt:    "2026-05-29T00:01:00Z",
+			ObservedAt:   stringPtr("2026-05-29T00:01:00Z"),
+		}},
+		CompletedDecisions: []*governancev1.GovernanceDecisionSummary{{
+			Kind:                     governancev1.GovernanceDecisionSummaryKind_GOVERNANCE_DECISION_SUMMARY_KIND_RELEASE_DECISION,
+			Attention:                governancev1.GovernanceDecisionAttention_GOVERNANCE_DECISION_ATTENTION_COMPLETED,
+			Id:                       "release-decision-1",
+			ReleaseDecisionPackageId: stringPtr("release-package-1"),
+			ReleaseDecisionStatus:    governancev1.ReleaseDecisionStatus_RELEASE_DECISION_STATUS_RESOLVED,
+			ReleaseDecisionOutcome:   governancev1.ReleaseDecisionOutcome_RELEASE_DECISION_OUTCOME_GO_WITH_CONDITIONS,
+			SafeSummary:              "Релиз разрешён с условиями",
+			Version:                  4,
+			UpdatedAt:                "2026-05-29T00:03:00Z",
+		}},
+		EvidenceSummaries: []*governancev1.GovernanceEvidenceSummary{{
+			SourceKind:  "agent.acceptance",
+			SourceRef:   "acceptance-1",
+			Status:      stringPtr("passed"),
+			Outcome:     stringPtr("accepted"),
+			SafeSummary: "bounded agent acceptance summary",
+			Digest:      stringPtr("sha256:acceptance"),
+			ObservedAt:  stringPtr("2026-05-29T00:02:00Z"),
+			Version:     stringPtr("7"),
+			IntegrationRefs: []*governancev1.ReleaseIntegrationRef{{
+				Domain:  "runtime",
+				Kind:    "job",
+				Ref:     "runtime-job-1",
+				Status:  stringPtr("succeeded"),
+				Summary: stringPtr("bounded runtime summary"),
+			}},
+		}},
+		Diagnostics: []string{"partial: provider projection is not loaded by owner domain"},
+	}}
 }
 
 func fakeRiskAssessmentResponse(target *governancev1.TargetRef) *governancev1.RiskAssessmentResponse {

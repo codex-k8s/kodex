@@ -246,6 +246,9 @@ func (registry *Registry) addGovernanceTools(server *mcpsdk.Server, handler *Gov
 		{name: ToolGovernanceSignalListReview, register: func(description string) {
 			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolGovernanceSignalListReview, Description: description}, handler.ListReviewSignals)
 		}},
+		{name: ToolGovernanceSummaryGet, register: func(description string) {
+			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolGovernanceSummaryGet, Description: description}, handler.GetGovernanceSummary)
+		}},
 	}
 	for _, tool := range tools {
 		description := governanceToolDescriptions[tool.name]

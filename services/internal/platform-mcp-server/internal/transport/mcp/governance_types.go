@@ -34,6 +34,8 @@ const (
 
 	ToolGovernanceSignalRecordReview = "governance.signal.record_review"
 	ToolGovernanceSignalListReview   = "governance.signal.list_review"
+
+	ToolGovernanceSummaryGet = "governance.summary.get"
 )
 
 // GovernanceManagerClient is the owner route used by governance MCP tools.
@@ -44,6 +46,7 @@ type GovernanceManagerClient interface {
 	GovernanceGateTerminalClient
 	GovernanceReleaseClient
 	GovernanceReviewSignalClient
+	GovernanceSummaryClient
 }
 
 // GovernanceRiskAssessmentClient evaluates and reads risk assessments.
@@ -92,6 +95,11 @@ type GovernanceReleaseClient interface {
 type GovernanceReviewSignalClient interface {
 	RecordReviewSignal(context.Context, *governancev1.RecordReviewSignalRequest) (*governancev1.ReviewSignalResponse, error)
 	ListReviewSignals(context.Context, *governancev1.ListReviewSignalsRequest) (*governancev1.ListReviewSignalsResponse, error)
+}
+
+// GovernanceSummaryClient reads the owner-prepared governance summary.
+type GovernanceSummaryClient interface {
+	GetGovernanceSummary(context.Context, *governancev1.GetGovernanceSummaryRequest) (*governancev1.GovernanceSummaryResponse, error)
 }
 
 // GovernanceCommandMetaInput carries safe command metadata for governance-manager tools.
@@ -404,6 +412,35 @@ type ListGovernanceReviewSignalsInput struct {
 	Page             GovernancePageInput      `json:"page,omitempty" jsonschema:"page request"`
 }
 
+type GetGovernanceSummaryInput struct {
+	Meta                     GovernanceQueryMetaInput                     `json:"meta" jsonschema:"query metadata"`
+	Target                   GovernanceTargetInput                        `json:"target,omitempty" jsonschema:"target selector"`
+	ProjectContext           GovernanceProjectContextRefInput             `json:"project_context,omitempty" jsonschema:"project or repository selector"`
+	ReleaseCandidateRef      string                                       `json:"release_candidate_ref,omitempty" jsonschema:"release candidate selector"`
+	ReleaseDecisionPackageID string                                       `json:"release_decision_package_id,omitempty" jsonschema:"release decision package selector"`
+	IntegrationRef           GovernanceReleaseIntegrationRefSelectorInput `json:"integration_ref,omitempty" jsonschema:"owner-domain integration ref selector"`
+}
+
+// GovernanceReleaseIntegrationRefSelectorInput points to a safe owner-domain fact.
+type GovernanceReleaseIntegrationRefSelectorInput struct {
+	Domain string `json:"domain" jsonschema:"owner domain: project, provider, agent, runtime or governance"`
+	Kind   string `json:"kind" jsonschema:"safe fact kind in owner domain"`
+	Ref    string `json:"ref" jsonschema:"safe owner-domain reference"`
+}
+
+// GovernanceReleaseIntegrationRefSummary describes a bounded owner-domain fact.
+type GovernanceReleaseIntegrationRefSummary struct {
+	Domain     string `json:"domain" jsonschema:"owner domain: project, provider, agent, runtime or governance"`
+	Kind       string `json:"kind" jsonschema:"safe fact kind in owner domain"`
+	Ref        string `json:"ref" jsonschema:"safe owner-domain reference"`
+	Status     string `json:"status,omitempty" jsonschema:"bounded owner status"`
+	Summary    string `json:"summary,omitempty" jsonschema:"short safe summary"`
+	Digest     string `json:"digest,omitempty" jsonschema:"safe fingerprint or digest"`
+	ObservedAt string `json:"observed_at,omitempty" jsonschema:"RFC3339 observation timestamp"`
+	Version    string `json:"version,omitempty" jsonschema:"owner-domain version or etag"`
+	ErrorCode  string `json:"error_code,omitempty" jsonschema:"bounded machine error code"`
+}
+
 // GovernanceRiskAssessmentOutput is a safe risk assessment response.
 type GovernanceRiskAssessmentOutput struct {
 	RiskAssessment    GovernanceRiskAssessmentSummary `json:"risk_assessment" jsonschema:"risk assessment"`
@@ -663,4 +700,73 @@ type GovernanceReviewSignalSummary struct {
 	EvidenceRefs     []GovernanceEvidenceSummary `json:"evidence_refs,omitempty" jsonschema:"bounded evidence refs"`
 	Summary          string                      `json:"summary,omitempty" jsonschema:"short safe summary"`
 	CreatedAt        string                      `json:"created_at" jsonschema:"created timestamp"`
+}
+
+// GovernanceSummaryOutput is a safe owner/staff read model response.
+type GovernanceSummaryOutput struct {
+	Summary GovernanceSummary `json:"summary" jsonschema:"governance summary"`
+}
+
+// GovernanceSummary is the domain-prepared safe read model.
+type GovernanceSummary struct {
+	Scope              GovernanceSummaryScope            `json:"scope" jsonschema:"summary scope"`
+	PendingDecisions   []GovernanceDecisionSummary       `json:"pending_decisions,omitempty" jsonschema:"pending decisions"`
+	CompletedDecisions []GovernanceDecisionSummary       `json:"completed_decisions,omitempty" jsonschema:"completed decisions"`
+	EvidenceSummaries  []GovernanceLinkedEvidenceSummary `json:"evidence_summaries,omitempty" jsonschema:"linked evidence summaries"`
+	Diagnostics        []string                          `json:"diagnostics,omitempty" jsonschema:"safe partial diagnostics"`
+}
+
+// GovernanceSummaryScope echoes the single selector used by governance-manager.
+type GovernanceSummaryScope struct {
+	Target                   GovernanceTargetSummary                 `json:"target,omitempty" jsonschema:"target selector"`
+	ProjectContext           GovernanceProjectContextSummary         `json:"project_context,omitempty" jsonschema:"project or repository selector"`
+	ReleaseCandidateRef      string                                  `json:"release_candidate_ref,omitempty" jsonschema:"release candidate selector"`
+	ReleaseDecisionPackageID string                                  `json:"release_decision_package_id,omitempty" jsonschema:"release decision package selector"`
+	IntegrationRef           *GovernanceReleaseIntegrationRefSummary `json:"integration_ref,omitempty" jsonschema:"owner-domain integration ref selector"`
+}
+
+// GovernanceDecisionSummary is a bounded decision/state item prepared by governance-manager.
+type GovernanceDecisionSummary struct {
+	Kind                     string                                   `json:"kind" jsonschema:"decision summary kind"`
+	Attention                string                                   `json:"attention" jsonschema:"attention class"`
+	ID                       string                                   `json:"id,omitempty" jsonschema:"local governance identifier"`
+	ParentID                 string                                   `json:"parent_id,omitempty" jsonschema:"parent aggregate identifier"`
+	Target                   GovernanceTargetSummary                  `json:"target,omitempty" jsonschema:"target ref"`
+	ProjectContext           GovernanceProjectContextSummary          `json:"project_context,omitempty" jsonschema:"project-catalog refs"`
+	ReleaseCandidateRef      string                                   `json:"release_candidate_ref,omitempty" jsonschema:"release candidate ref"`
+	ReleaseDecisionPackageID string                                   `json:"release_decision_package_id,omitempty" jsonschema:"release package id"`
+	RiskClass                string                                   `json:"risk_class,omitempty" jsonschema:"risk class"`
+	ReviewOutcome            string                                   `json:"review_outcome,omitempty" jsonschema:"review outcome"`
+	GateRequestStatus        string                                   `json:"gate_request_status,omitempty" jsonschema:"gate request status"`
+	GateOutcome              string                                   `json:"gate_outcome,omitempty" jsonschema:"gate outcome"`
+	ReleasePackageStatus     string                                   `json:"release_package_status,omitempty" jsonschema:"release package status"`
+	ReleaseDecisionStatus    string                                   `json:"release_decision_status,omitempty" jsonschema:"release decision status"`
+	ReleaseDecisionOutcome   string                                   `json:"release_decision_outcome,omitempty" jsonschema:"release decision outcome"`
+	BlockingSignalStatus     string                                   `json:"blocking_signal_status,omitempty" jsonschema:"blocking signal status"`
+	Severity                 string                                   `json:"severity,omitempty" jsonschema:"signal severity"`
+	SafeSummary              string                                   `json:"safe_summary,omitempty" jsonschema:"bounded safe summary"`
+	EvidenceRefs             []GovernanceEvidenceSummary              `json:"evidence_refs,omitempty" jsonschema:"bounded evidence refs"`
+	IntegrationRefs          []GovernanceReleaseIntegrationRefSummary `json:"integration_refs,omitempty" jsonschema:"owner-domain refs"`
+	ProviderRefs             []GovernanceProviderContextSummary       `json:"provider_refs,omitempty" jsonschema:"provider refs"`
+	RuntimeRefs              []GovernanceRuntimeContextSummary        `json:"runtime_refs,omitempty" jsonschema:"runtime refs"`
+	AgentContext             GovernanceAgentContextSummary            `json:"agent_context,omitempty" jsonschema:"agent refs"`
+	Version                  int64                                    `json:"version,omitempty" jsonschema:"optimistic concurrency version"`
+	CreatedAt                string                                   `json:"created_at,omitempty" jsonschema:"created timestamp"`
+	UpdatedAt                string                                   `json:"updated_at,omitempty" jsonschema:"updated timestamp"`
+	ObservedAt               string                                   `json:"observed_at,omitempty" jsonschema:"owner-domain observation timestamp"`
+}
+
+// GovernanceLinkedEvidenceSummary is a safe evidence/read-model item.
+type GovernanceLinkedEvidenceSummary struct {
+	SourceKind      string                                   `json:"source_kind" jsonschema:"typed source kind"`
+	SourceRef       string                                   `json:"source_ref" jsonschema:"safe owner-domain ref"`
+	Status          string                                   `json:"status,omitempty" jsonschema:"bounded owner status"`
+	Outcome         string                                   `json:"outcome,omitempty" jsonschema:"governance outcome"`
+	SafeSummary     string                                   `json:"safe_summary,omitempty" jsonschema:"short safe summary"`
+	ErrorCode       string                                   `json:"error_code,omitempty" jsonschema:"bounded machine error code"`
+	Digest          string                                   `json:"digest,omitempty" jsonschema:"safe fingerprint or digest"`
+	ObservedAt      string                                   `json:"observed_at,omitempty" jsonschema:"observation timestamp"`
+	Version         string                                   `json:"version,omitempty" jsonschema:"owner-domain version or etag"`
+	EvidenceRefs    []GovernanceEvidenceSummary              `json:"evidence_refs,omitempty" jsonschema:"bounded evidence refs"`
+	IntegrationRefs []GovernanceReleaseIntegrationRefSummary `json:"integration_refs,omitempty" jsonschema:"owner-domain refs"`
 }
