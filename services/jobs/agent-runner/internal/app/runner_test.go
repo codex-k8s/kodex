@@ -148,12 +148,12 @@ func TestRunnerStopsWithExecutionContractDiagnostic(t *testing.T) {
 	cfg.WorkspaceMountPath = filepath.Dir(filepath.Dir(filepath.Dir(contextPath)))
 	reporter := &recordingReporter{}
 
-	diagnostic := NewRunnerWithClock(reporter, testLogger(), fixedClock{}).Run(context.Background(), cfg)
+	diagnostic := NewRunnerWithExecutor(reporter, testLogger(), fixedClock{}, &recordingExecutor{}).Run(context.Background(), cfg)
 	if diagnostic.Code != "agent_execution_contract_unavailable" {
 		t.Fatalf("Run() code = %q", diagnostic.Code)
 	}
-	if reporter.started != 1 {
-		t.Fatalf("started reports = %d, want 1", reporter.started)
+	if reporter.started != 0 {
+		t.Fatalf("started reports = %d, want 0", reporter.started)
 	}
 	if reporter.failed != 1 {
 		t.Fatalf("failed reports = %d, want 1", reporter.failed)
@@ -163,23 +163,158 @@ func TestRunnerStopsWithExecutionContractDiagnostic(t *testing.T) {
 	}
 }
 
-func TestRunnerValidatesCodexSessionExecutionSpecButDoesNotExecute(t *testing.T) {
+func TestRunnerExecutesCodexWithCheckedWorkspaceInput(t *testing.T) {
+	t.Setenv("KODEX_AGENT_RUNNER_AGENT_MANAGER_GRPC_AUTH_TOKEN", "secret_value_should_not_reach_codex")
+	t.Setenv("SECRET_VALUE", "secret_value_should_not_reach_codex")
+	cfg, raw := validConfigAndContext(t)
+	contextPath := writeTempContext(t, raw)
+	cfg.ContextPath = contextPath
+	cfg.WorkspaceMountPath = filepath.Dir(filepath.Dir(filepath.Dir(contextPath)))
+	instructionDigest, schemaDigest := writeExecutionInput(t, cfg.WorkspaceMountPath, []byte("checked instruction text"), []byte(`{"type":"object"}`))
+	cfg.CodexSessionExecutionSpecJSON = validWorkspaceCodexSessionExecutionSpecJSON(t, cfg, instructionDigest, schemaDigest, 30)
+	reporter := &recordingReporter{}
+	executor := NewCodexCLIExecutorForTest(writeFakeCodexExecutable(t, fakeCodexSuccess))
+
+	diagnostic := NewRunnerWithExecutor(reporter, testLogger(), fixedClock{}, executor).Run(context.Background(), cfg)
+	if !diagnostic.OK() {
+		t.Fatalf("Run() diagnostic = %+v", diagnostic)
+	}
+	if reporter.started != 1 || reporter.completed != 1 || reporter.failed != 0 {
+		t.Fatalf("reports = started:%d completed:%d failed:%d, want start and completion", reporter.started, reporter.completed, reporter.failed)
+	}
+	if reporter.result.ResultDigest == "" {
+		t.Fatal("result digest is empty")
+	}
+	for _, value := range []string{diagnostic.Summary, reporter.result.SafeSummary} {
+		lower := strings.ToLower(value)
+		if strings.Contains(lower, "prompt") || strings.Contains(lower, "secret") {
+			t.Fatalf("safe result leaked raw output marker: %q", value)
+		}
+	}
+}
+
+func TestRunnerRejectsMissingExecutionInputDigestBeforeCodex(t *testing.T) {
+	cfg, raw := validConfigAndContext(t)
+	contextPath := writeTempContext(t, raw)
+	cfg.ContextPath = contextPath
+	cfg.WorkspaceMountPath = filepath.Dir(filepath.Dir(filepath.Dir(contextPath)))
+	instructionDigest, schemaDigest := writeExecutionInput(t, cfg.WorkspaceMountPath, []byte("checked instruction text"), []byte(`{"type":"object"}`))
+	cfg.CodexSessionExecutionSpecJSON = validWorkspaceCodexSessionExecutionSpecJSON(t, cfg, instructionDigest, schemaDigest, 30)
+	cfg.CodexSessionExecutionSpecJSON = strings.ReplaceAll(cfg.CodexSessionExecutionSpecJSON, instructionDigest, "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+	reporter := &recordingReporter{}
+	executor := &recordingExecutor{}
+
+	diagnostic := NewRunnerWithExecutor(reporter, testLogger(), fixedClock{}, executor).Run(context.Background(), cfg)
+	if diagnostic.Code != "agent_execution_contract_unavailable" {
+		t.Fatalf("Run() code = %q", diagnostic.Code)
+	}
+	if executor.called != 0 {
+		t.Fatalf("executor calls = %d, want none before checked input passes digest", executor.called)
+	}
+	if reporter.started != 0 || reporter.failed != 1 {
+		t.Fatalf("reports = started:%d failed:%d, want only failure", reporter.started, reporter.failed)
+	}
+}
+
+func TestRunnerDoesNotFallbackForObjectExecutionRefs(t *testing.T) {
 	cfg, raw := validConfigAndContext(t)
 	contextPath := writeTempContext(t, raw)
 	cfg.ContextPath = contextPath
 	cfg.WorkspaceMountPath = filepath.Dir(filepath.Dir(filepath.Dir(contextPath)))
 	cfg.CodexSessionExecutionSpecJSON = validCodexSessionExecutionSpecJSON(t, cfg)
 	reporter := &recordingReporter{}
+	executor := &recordingExecutor{}
 
-	diagnostic := NewRunnerWithClock(reporter, testLogger(), fixedClock{}).Run(context.Background(), cfg)
+	diagnostic := NewRunnerWithExecutor(reporter, testLogger(), fixedClock{}, executor).Run(context.Background(), cfg)
 	if diagnostic.Code != "agent_execution_contract_unavailable" {
 		t.Fatalf("Run() code = %q", diagnostic.Code)
 	}
-	if diagnostic.Summary != "codex execution is not enabled for this runner" {
-		t.Fatalf("Run() summary = %q", diagnostic.Summary)
+	if executor.called != 0 {
+		t.Fatalf("executor calls = %d, want none for unsupported object ref", executor.called)
+	}
+}
+
+func TestRunnerRejectsUnsupportedRunnerProfile(t *testing.T) {
+	cfg, raw := validConfigAndContext(t)
+	cfg.RunnerProfileRef = "runner-profile/codex-agent@custom"
+	contextPath := writeTempContext(t, raw)
+	cfg.ContextPath = contextPath
+	cfg.WorkspaceMountPath = filepath.Dir(filepath.Dir(filepath.Dir(contextPath)))
+	instructionDigest, schemaDigest := writeExecutionInput(t, cfg.WorkspaceMountPath, []byte("checked instruction text"), []byte(`{"type":"object"}`))
+	cfg.CodexSessionExecutionSpecJSON = validWorkspaceCodexSessionExecutionSpecJSON(t, cfg, instructionDigest, schemaDigest, 30)
+	reporter := &recordingReporter{}
+
+	diagnostic := NewRunnerWithExecutor(reporter, testLogger(), fixedClock{}, NewCodexCLIExecutorForTest(writeFakeCodexExecutable(t, fakeCodexSuccess))).Run(context.Background(), cfg)
+	if diagnostic.Code != "agent_execution_contract_unavailable" {
+		t.Fatalf("Run() code = %q", diagnostic.Code)
 	}
 	if reporter.started != 1 || reporter.failed != 1 {
-		t.Fatalf("reports = started:%d failed:%d, want one started and one failed", reporter.started, reporter.failed)
+		t.Fatalf("reports = started:%d failed:%d, want start and failure", reporter.started, reporter.failed)
+	}
+}
+
+func TestRunnerReportsCodexNonZeroExitSafely(t *testing.T) {
+	cfg, raw := validConfigAndContext(t)
+	contextPath := writeTempContext(t, raw)
+	cfg.ContextPath = contextPath
+	cfg.WorkspaceMountPath = filepath.Dir(filepath.Dir(filepath.Dir(contextPath)))
+	instructionDigest, schemaDigest := writeExecutionInput(t, cfg.WorkspaceMountPath, []byte("checked instruction text"), []byte(`{"type":"object"}`))
+	cfg.CodexSessionExecutionSpecJSON = validWorkspaceCodexSessionExecutionSpecJSON(t, cfg, instructionDigest, schemaDigest, 30)
+	reporter := &recordingReporter{}
+
+	diagnostic := NewRunnerWithExecutor(reporter, testLogger(), fixedClock{}, NewCodexCLIExecutorForTest(writeFakeCodexExecutable(t, fakeCodexFailure))).Run(context.Background(), cfg)
+	if diagnostic.Code != codeCodexExecutionFailed {
+		t.Fatalf("Run() code = %q", diagnostic.Code)
+	}
+	if strings.Contains(strings.ToLower(diagnostic.Summary), "prompt") || strings.Contains(strings.ToLower(reporter.failure.Summary), "secret") {
+		t.Fatalf("diagnostic leaked raw process output: %+v/%+v", diagnostic, reporter.failure)
+	}
+}
+
+func TestRunnerReportsCodexTimeout(t *testing.T) {
+	cfg, raw := validConfigAndContext(t)
+	contextPath := writeTempContext(t, raw)
+	cfg.ContextPath = contextPath
+	cfg.WorkspaceMountPath = filepath.Dir(filepath.Dir(filepath.Dir(contextPath)))
+	instructionDigest, schemaDigest := writeExecutionInput(t, cfg.WorkspaceMountPath, []byte("checked instruction text"), []byte(`{"type":"object"}`))
+	cfg.CodexSessionExecutionSpecJSON = validWorkspaceCodexSessionExecutionSpecJSON(t, cfg, instructionDigest, schemaDigest, 1)
+	reporter := &recordingReporter{}
+
+	diagnostic := NewRunnerWithExecutor(reporter, testLogger(), fixedClock{}, NewCodexCLIExecutorForTest(writeFakeCodexExecutable(t, fakeCodexTimeout))).Run(context.Background(), cfg)
+	if diagnostic.Code != codeCodexExecutionTimeout {
+		t.Fatalf("Run() code = %q", diagnostic.Code)
+	}
+}
+
+func TestRunnerRejectsOversizedCodexResult(t *testing.T) {
+	cfg, raw := validConfigAndContext(t)
+	contextPath := writeTempContext(t, raw)
+	cfg.ContextPath = contextPath
+	cfg.WorkspaceMountPath = filepath.Dir(filepath.Dir(filepath.Dir(contextPath)))
+	instructionDigest, schemaDigest := writeExecutionInput(t, cfg.WorkspaceMountPath, []byte("checked instruction text"), []byte(`{"type":"object"}`))
+	cfg.CodexSessionExecutionSpecJSON = validWorkspaceCodexSessionExecutionSpecJSON(t, cfg, instructionDigest, schemaDigest, 30)
+	reporter := &recordingReporter{}
+
+	diagnostic := NewRunnerWithExecutor(reporter, testLogger(), fixedClock{}, NewCodexCLIExecutorForTest(writeFakeCodexExecutable(t, fakeCodexLargeResult))).Run(context.Background(), cfg)
+	if diagnostic.Code != codeCodexExecutionResultError {
+		t.Fatalf("Run() code = %q", diagnostic.Code)
+	}
+}
+
+func TestRunnerReportsCodexCancellation(t *testing.T) {
+	cfg, raw := validConfigAndContext(t)
+	contextPath := writeTempContext(t, raw)
+	cfg.ContextPath = contextPath
+	cfg.WorkspaceMountPath = filepath.Dir(filepath.Dir(filepath.Dir(contextPath)))
+	instructionDigest, schemaDigest := writeExecutionInput(t, cfg.WorkspaceMountPath, []byte("checked instruction text"), []byte(`{"type":"object"}`))
+	cfg.CodexSessionExecutionSpecJSON = validWorkspaceCodexSessionExecutionSpecJSON(t, cfg, instructionDigest, schemaDigest, 30)
+	reporter := &recordingReporter{}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	diagnostic := NewRunnerWithExecutor(reporter, testLogger(), fixedClock{}, cancelAwareExecutor{}).Run(ctx, cfg)
+	if diagnostic.Code != codeCodexExecutionCancelled {
+		t.Fatalf("Run() code = %q", diagnostic.Code)
 	}
 }
 
@@ -208,9 +343,11 @@ func TestDiagnosticSanitizesUnsafeSummary(t *testing.T) {
 }
 
 type recordingReporter struct {
-	started int
-	failed  int
-	failure Diagnostic
+	started   int
+	completed int
+	failed    int
+	result    CodexExecutionResult
+	failure   Diagnostic
 }
 
 func (r *recordingReporter) ReportStarted(context.Context, ReportInput) error {
@@ -218,10 +355,45 @@ func (r *recordingReporter) ReportStarted(context.Context, ReportInput) error {
 	return nil
 }
 
+func (r *recordingReporter) ReportCompleted(_ context.Context, _ ReportInput, result CodexExecutionResult) error {
+	r.completed++
+	r.result = result
+	return nil
+}
+
 func (r *recordingReporter) ReportFailed(_ context.Context, _ ReportInput, diagnostic Diagnostic) error {
 	r.failed++
 	r.failure = diagnostic
 	return nil
+}
+
+type recordingExecutor struct {
+	called     int
+	diagnostic Diagnostic
+	result     CodexExecutionResult
+}
+
+func (e *recordingExecutor) Execute(context.Context, CodexExecutionRequest) (CodexExecutionResult, Diagnostic) {
+	e.called++
+	if e.diagnostic.Code != "" && !e.diagnostic.OK() {
+		return CodexExecutionResult{}, e.diagnostic
+	}
+	if e.result.ResultDigest == "" {
+		e.result = CodexExecutionResult{
+			ResultDigest:       "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			ResultSchemaRef:    "workspace://.kodex/execution/result.schema.json",
+			ResultSchemaDigest: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+			SafeSummary:        "codex execution completed",
+		}
+	}
+	return e.result, OKDiagnostic()
+}
+
+type cancelAwareExecutor struct{}
+
+func (cancelAwareExecutor) Execute(ctx context.Context, _ CodexExecutionRequest) (CodexExecutionResult, Diagnostic) {
+	<-ctx.Done()
+	return CodexExecutionResult{}, NewDiagnostic(codeCodexExecutionCancelled, "codex execution was cancelled", ExitFailure)
 }
 
 type fixedClock struct{}
@@ -321,6 +493,42 @@ func validCodexSessionExecutionSpecJSON(t *testing.T, cfg Config) string {
 	return string(raw)
 }
 
+func validWorkspaceCodexSessionExecutionSpecJSON(t *testing.T, cfg Config, instructionDigest string, schemaDigest string, timeoutSeconds int) string {
+	t.Helper()
+	payload := map[string]any{
+		"instruction_object_ref":    "workspace://.kodex/execution/instruction.txt",
+		"instruction_object_digest": instructionDigest,
+		"result_schema_ref":         "workspace://.kodex/execution/result.schema.json",
+		"result_schema_digest":      schemaDigest,
+		"workspace_snapshot_ref":    "runtime://workspace-snapshots/11111111",
+		"hook_endpoint_ref":         "hook://codex-hook-ingress/agent-runner",
+		"callback_refs": []map[string]any{{
+			"kind": "agent_run_state",
+			"ref":  "agent-manager://runs/" + cfg.AgentRunID,
+		}},
+		"timeout_seconds":    timeoutSeconds,
+		"runner_profile_ref": cfg.RunnerProfileRef,
+		"runner_mode":        RunnerModeCodexAgent,
+		"output_refs": []map[string]any{{
+			"kind": "last_message",
+			"ref":  "object://codex-output/last-message",
+		}},
+		"result_refs": []map[string]any{{
+			"kind": "result_metadata",
+			"ref":  "object://codex-output/result-metadata",
+		}},
+		"allowed_secret_refs": []map[string]any{{
+			"kind": "runtime_api",
+			"ref":  "secret://runtime/agent-token",
+		}},
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("Marshal() err = %v", err)
+	}
+	return string(raw)
+}
+
 func writeTempContext(t *testing.T, raw []byte) string {
 	t.Helper()
 	root := t.TempDir()
@@ -333,4 +541,97 @@ func writeTempContext(t *testing.T, raw []byte) string {
 		t.Fatalf("WriteFile() err = %v", err)
 	}
 	return contextPath
+}
+
+func writeExecutionInput(t *testing.T, workspaceRoot string, instruction []byte, schema []byte) (string, string) {
+	t.Helper()
+	executionDir := filepath.Join(workspaceRoot, ".kodex", "execution")
+	if err := os.MkdirAll(executionDir, 0o700); err != nil {
+		t.Fatalf("MkdirAll() err = %v", err)
+	}
+	instructionPath := filepath.Join(executionDir, "instruction.txt")
+	if err := os.WriteFile(instructionPath, instruction, 0o600); err != nil {
+		t.Fatalf("WriteFile(instruction) err = %v", err)
+	}
+	schemaPath := filepath.Join(executionDir, "result.schema.json")
+	if err := os.WriteFile(schemaPath, schema, 0o600); err != nil {
+		t.Fatalf("WriteFile(schema) err = %v", err)
+	}
+	return SHA256Digest(instruction), SHA256Digest(schema)
+}
+
+type fakeCodexBehavior string
+
+const (
+	fakeCodexSuccess     fakeCodexBehavior = "success"
+	fakeCodexFailure     fakeCodexBehavior = "failure"
+	fakeCodexTimeout     fakeCodexBehavior = "timeout"
+	fakeCodexLargeResult fakeCodexBehavior = "large_result"
+)
+
+func writeFakeCodexExecutable(t *testing.T, behavior fakeCodexBehavior) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "codex")
+	script := `#!/bin/sh
+set -eu
+out=""
+schema=""
+cd_dir=""
+sandbox=""
+while [ "$#" -gt 0 ]; do
+	case "$1" in
+		exec|--json|--ephemeral|-)
+			shift
+			;;
+		--output-last-message)
+			out="$2"
+			shift 2
+			;;
+		--output-schema)
+			schema="$2"
+			shift 2
+			;;
+		--cd)
+			cd_dir="$2"
+			shift 2
+			;;
+		--sandbox)
+			sandbox="$2"
+			shift 2
+			;;
+		*)
+			exit 42
+			;;
+	esac
+done
+if [ -z "$out" ] || [ -z "$schema" ] || [ -z "$cd_dir" ] || [ "$sandbox" != "workspace-write" ]; then
+	exit 43
+fi
+if [ ! -f "$schema" ]; then
+	exit 44
+fi
+if [ "${KODEX_AGENT_RUNNER_AGENT_MANAGER_GRPC_AUTH_TOKEN:-}" != "" ] || [ "${SECRET_VALUE:-}" != "" ]; then
+	exit 45
+fi
+cat >/dev/null
+case "` + string(behavior) + `" in
+	success)
+		printf '{"status":"ok","summary":"prompt_body secret_value should not leak"}' > "$out"
+		;;
+	failure)
+		printf 'prompt_body secret_value should not leak\n' >&2
+		exit 7
+		;;
+	timeout)
+		sleep 2
+		;;
+	large_result)
+		dd if=/dev/zero bs=1024 count=65 2>/dev/null | tr '\000' 'x' > "$out"
+		;;
+esac
+`
+	if err := os.WriteFile(path, []byte(script), 0o700); err != nil {
+		t.Fatalf("WriteFile(fake codex) err = %v", err)
+	}
+	return path
 }

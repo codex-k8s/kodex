@@ -21,6 +21,7 @@ type Runner struct {
 	reporter Reporter
 	logger   *slog.Logger
 	clock    Clock
+	executor CodexExecutor
 }
 
 func NewRunner(reporter Reporter, logger *slog.Logger) Runner {
@@ -30,13 +31,21 @@ func NewRunner(reporter Reporter, logger *slog.Logger) Runner {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return Runner{reporter: reporter, logger: logger, clock: systemClock{}}
+	return Runner{reporter: reporter, logger: logger, clock: systemClock{}, executor: NewCodexCLIExecutor()}
 }
 
 func NewRunnerWithClock(reporter Reporter, logger *slog.Logger, clock Clock) Runner {
 	runner := NewRunner(reporter, logger)
 	if clock != nil {
 		runner.clock = clock
+	}
+	return runner
+}
+
+func NewRunnerWithExecutor(reporter Reporter, logger *slog.Logger, clock Clock, executor CodexExecutor) Runner {
+	runner := NewRunnerWithClock(reporter, logger, clock)
+	if executor != nil {
+		runner.executor = executor
 	}
 	return runner
 }
@@ -50,6 +59,14 @@ func (r Runner) Run(ctx context.Context, cfg Config) Diagnostic {
 	if !diagnostic.OK() {
 		return r.reportFailure(ctx, normalized, AgentRunContext{}, diagnostic)
 	}
+	spec, diagnostic := ValidateCodexSessionExecutionSpec(normalized, contextFile)
+	if !diagnostic.OK() {
+		return r.reportFailure(ctx, normalized, contextFile, diagnostic)
+	}
+	executionInput, diagnostic := LoadCodexExecutionInput(normalized, *spec)
+	if !diagnostic.OK() {
+		return r.reportFailure(ctx, normalized, contextFile, diagnostic)
+	}
 	startedAt := r.clock.Now()
 	report := ReportInput{Config: normalized, Context: contextFile, StartedAt: startedAt}
 	if err := r.reporter.ReportStarted(ctx, report); err != nil {
@@ -58,13 +75,24 @@ func (r Runner) Run(ctx context.Context, cfg Config) Diagnostic {
 		}
 		return NewDiagnostic("agent_manager_report_failed", "agent-runner could not report start to agent-manager", ExitFailure)
 	}
-	if _, diagnostic = ValidateCodexSessionExecutionSpec(normalized, contextFile); !diagnostic.OK() {
+	result, diagnostic := r.executor.Execute(ctx, CodexExecutionRequest{
+		Config:  normalized,
+		Context: contextFile,
+		Spec:    *spec,
+		Input:   executionInput,
+	})
+	if !diagnostic.OK() {
 		report.FinishedAt = r.clock.Now()
 		return r.reportFailure(ctx, normalized, contextFile, diagnostic)
 	}
-	diagnostic = executionContractUnavailable("codex execution is not enabled for this runner")
 	report.FinishedAt = r.clock.Now()
-	return r.reportFailure(ctx, normalized, contextFile, diagnostic)
+	if err := r.reporter.ReportCompleted(ctx, report, result); err != nil {
+		if errors.Is(err, context.Canceled) {
+			return NewDiagnostic("agent_runner_cancelled", "agent-runner was cancelled", ExitFailure)
+		}
+		return NewDiagnostic("agent_manager_report_failed", "agent-runner could not report completion to agent-manager", ExitFailure)
+	}
+	return OKDiagnostic()
 }
 
 func (r Runner) reportFailure(ctx context.Context, cfg Config, contextFile AgentRunContext, diagnostic Diagnostic) Diagnostic {

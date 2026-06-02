@@ -21,18 +21,21 @@ func TestReportStartedRecordsStartingStateAndActivity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReportStarted() err = %v", err)
 	}
-	if len(client.runStates) != 1 {
-		t.Fatalf("run state calls = %d, want 1", len(client.runStates))
+	if len(client.runnerStates) != 2 {
+		t.Fatalf("runner state calls = %d, want 2", len(client.runnerStates))
 	}
-	state := client.runStates[0]
-	if state.GetStatus() != agentsv1.AgentRunStatus_AGENT_RUN_STATUS_STARTING {
-		t.Fatalf("status = %s, want STARTING", state.GetStatus())
+	if client.runnerStates[0].GetState() != agentsv1.AgentRunnerRunState_AGENT_RUNNER_RUN_STATE_QUEUED {
+		t.Fatalf("first state = %s, want QUEUED", client.runnerStates[0].GetState())
 	}
-	if state.GetMeta().GetExpectedVersion() != 7 {
-		t.Fatalf("expected version = %d, want 7", state.GetMeta().GetExpectedVersion())
+	state := client.runnerStates[1]
+	if state.GetState() != agentsv1.AgentRunnerRunState_AGENT_RUNNER_RUN_STATE_RUNNING {
+		t.Fatalf("state = %s, want RUNNING", state.GetState())
 	}
-	if state.GetRuntimeContext().GetSlotRef() == "" {
-		t.Fatal("runtime context slot ref is empty")
+	if state.GetMeta().GetExpectedVersion() != 8 {
+		t.Fatalf("expected version = %d, want 8", state.GetMeta().GetExpectedVersion())
+	}
+	if state.GetRuntimeSlotRef() == "" || state.GetRuntimeJobRef() == "" {
+		t.Fatal("runtime binding refs are empty")
 	}
 	if len(client.activities) != 1 {
 		t.Fatalf("activity calls = %d, want 1", len(client.activities))
@@ -54,12 +57,12 @@ func TestReportFailedRecordsFailureStateAndActivity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReportFailed() err = %v", err)
 	}
-	if len(client.runStates) != 1 {
-		t.Fatalf("run state calls = %d, want 1", len(client.runStates))
+	if len(client.runnerStates) != 1 {
+		t.Fatalf("runner state calls = %d, want 1", len(client.runnerStates))
 	}
-	state := client.runStates[0]
-	if state.GetStatus() != agentsv1.AgentRunStatus_AGENT_RUN_STATUS_FAILED {
-		t.Fatalf("status = %s, want FAILED", state.GetStatus())
+	state := client.runnerStates[0]
+	if state.GetState() != agentsv1.AgentRunnerRunState_AGENT_RUNNER_RUN_STATE_FAILED {
+		t.Fatalf("state = %s, want FAILED", state.GetState())
 	}
 	if state.GetFailureCode() != diagnostic.Code {
 		t.Fatalf("failure code = %q, want %q", state.GetFailureCode(), diagnostic.Code)
@@ -73,6 +76,38 @@ func TestReportFailedRecordsFailureStateAndActivity(t *testing.T) {
 	assertSafeJSON(t, client.activities[0].GetSafeDetailsJson())
 }
 
+func TestReportCompletedRecordsCompletedStateAndActivity(t *testing.T) {
+	client := &fakeClient{status: runtimeStatus(agentsv1.AgentRunStatus_AGENT_RUN_STATUS_RUNNING, 9)}
+	reporter := mustReporter(t, client)
+	result := app.CodexExecutionResult{
+		ResultDigest:       "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		ResultSchemaRef:    "workspace://.kodex/execution/result.schema.json",
+		ResultSchemaDigest: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+		SafeSummary:        "codex execution completed",
+	}
+
+	err := reporter.ReportCompleted(context.Background(), reportInput(), result)
+	if err != nil {
+		t.Fatalf("ReportCompleted() err = %v", err)
+	}
+	if len(client.runnerStates) != 1 {
+		t.Fatalf("runner state calls = %d, want 1", len(client.runnerStates))
+	}
+	state := client.runnerStates[0]
+	if state.GetState() != agentsv1.AgentRunnerRunState_AGENT_RUNNER_RUN_STATE_COMPLETED {
+		t.Fatalf("state = %s, want COMPLETED", state.GetState())
+	}
+	if state.GetDiagnosticDigest() != result.ResultDigest {
+		t.Fatalf("diagnostic digest = %q, want result digest", state.GetDiagnosticDigest())
+	}
+	if len(client.activities) != 1 {
+		t.Fatalf("activity calls = %d, want 1", len(client.activities))
+	}
+	if client.activities[0].GetPayloadDigest() != result.ResultDigest {
+		t.Fatalf("payload digest = %q, want result digest", client.activities[0].GetPayloadDigest())
+	}
+}
+
 func TestReportStartedDoesNotFailWhenActivityWriteFails(t *testing.T) {
 	client := &fakeClient{
 		status:      runtimeStatus(agentsv1.AgentRunStatus_AGENT_RUN_STATUS_REQUESTED, 7),
@@ -84,11 +119,11 @@ func TestReportStartedDoesNotFailWhenActivityWriteFails(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReportStarted() err = %v", err)
 	}
-	if len(client.runStates) != 1 {
-		t.Fatalf("run state calls = %d, want 1", len(client.runStates))
+	if len(client.runnerStates) != 2 {
+		t.Fatalf("runner state calls = %d, want 2", len(client.runnerStates))
 	}
-	if client.runStates[0].GetStatus() != agentsv1.AgentRunStatus_AGENT_RUN_STATUS_STARTING {
-		t.Fatalf("status = %s, want STARTING", client.runStates[0].GetStatus())
+	if client.runnerStates[1].GetState() != agentsv1.AgentRunnerRunState_AGENT_RUNNER_RUN_STATE_RUNNING {
+		t.Fatalf("state = %s, want RUNNING", client.runnerStates[1].GetState())
 	}
 	if len(client.activities) != 1 {
 		t.Fatalf("activity calls = %d, want 1", len(client.activities))
@@ -107,14 +142,14 @@ func TestReportFailedKeepsFinalStateWhenActivityWriteFails(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReportFailed() err = %v", err)
 	}
-	if len(client.runStates) != 1 {
-		t.Fatalf("run state calls = %d, want 1", len(client.runStates))
+	if len(client.runnerStates) != 1 {
+		t.Fatalf("runner state calls = %d, want 1", len(client.runnerStates))
 	}
-	if client.runStates[0].GetStatus() != agentsv1.AgentRunStatus_AGENT_RUN_STATUS_FAILED {
-		t.Fatalf("status = %s, want FAILED", client.runStates[0].GetStatus())
+	if client.runnerStates[0].GetState() != agentsv1.AgentRunnerRunState_AGENT_RUNNER_RUN_STATE_FAILED {
+		t.Fatalf("state = %s, want FAILED", client.runnerStates[0].GetState())
 	}
-	if client.runStates[0].GetFailureCode() != diagnostic.Code {
-		t.Fatalf("failure code = %q, want %q", client.runStates[0].GetFailureCode(), diagnostic.Code)
+	if client.runnerStates[0].GetFailureCode() != diagnostic.Code {
+		t.Fatalf("failure code = %q, want %q", client.runnerStates[0].GetFailureCode(), diagnostic.Code)
 	}
 	if len(client.activities) != 1 {
 		t.Fatalf("activity calls = %d, want 1", len(client.activities))
@@ -129,8 +164,8 @@ func TestReportFailedNoopsForTerminalRun(t *testing.T) {
 	if err := reporter.ReportFailed(context.Background(), reportInput(), diagnostic); err != nil {
 		t.Fatalf("ReportFailed() err = %v", err)
 	}
-	if len(client.runStates) != 0 {
-		t.Fatalf("run state calls = %d, want 0", len(client.runStates))
+	if len(client.runnerStates) != 0 {
+		t.Fatalf("runner state calls = %d, want 0", len(client.runnerStates))
 	}
 	if len(client.activities) != 0 {
 		t.Fatalf("activity calls = %d, want 0", len(client.activities))
@@ -174,18 +209,19 @@ func TestNewReporterFromConfigDisabled(t *testing.T) {
 }
 
 type fakeClient struct {
-	status      *agentsv1.AgentRunRuntimeStatusResponse
-	runStates   []*agentsv1.RecordRunStateRequest
-	activities  []*agentsv1.RecordAgentActivityRequest
-	activityErr error
+	status       *agentsv1.AgentRunRuntimeStatusResponse
+	runnerStates []*agentsv1.ReportAgentRunStateRequest
+	activities   []*agentsv1.RecordAgentActivityRequest
+	activityErr  error
 }
 
 func (f *fakeClient) GetAgentRunRuntimeStatus(context.Context, *agentsv1.GetAgentRunRuntimeStatusRequest, ...grpc.CallOption) (*agentsv1.AgentRunRuntimeStatusResponse, error) {
 	return f.status, nil
 }
 
-func (f *fakeClient) RecordRunState(_ context.Context, request *agentsv1.RecordRunStateRequest, _ ...grpc.CallOption) (*agentsv1.AgentRunResponse, error) {
-	f.runStates = append(f.runStates, request)
+func (f *fakeClient) ReportAgentRunState(_ context.Context, request *agentsv1.ReportAgentRunStateRequest, _ ...grpc.CallOption) (*agentsv1.AgentRunResponse, error) {
+	f.runnerStates = append(f.runnerStates, request)
+	f.applyRunnerState(request.GetState())
 	return &agentsv1.AgentRunResponse{Run: f.status.GetRun()}, nil
 }
 
@@ -195,6 +231,25 @@ func (f *fakeClient) RecordAgentActivity(_ context.Context, request *agentsv1.Re
 		return nil, f.activityErr
 	}
 	return &agentsv1.AgentActivityResponse{}, nil
+}
+
+func (f *fakeClient) applyRunnerState(state agentsv1.AgentRunnerRunState) {
+	if f.status == nil || f.status.GetRun() == nil || f.status.GetRuntimeStatus() == nil {
+		return
+	}
+	switch state {
+	case agentsv1.AgentRunnerRunState_AGENT_RUNNER_RUN_STATE_QUEUED:
+		f.status.Run.Status = agentsv1.AgentRunStatus_AGENT_RUN_STATUS_STARTING
+	case agentsv1.AgentRunnerRunState_AGENT_RUNNER_RUN_STATE_RUNNING:
+		f.status.Run.Status = agentsv1.AgentRunStatus_AGENT_RUN_STATUS_RUNNING
+	case agentsv1.AgentRunnerRunState_AGENT_RUNNER_RUN_STATE_COMPLETED:
+		f.status.Run.Status = agentsv1.AgentRunStatus_AGENT_RUN_STATUS_COMPLETED
+	case agentsv1.AgentRunnerRunState_AGENT_RUNNER_RUN_STATE_FAILED:
+		f.status.Run.Status = agentsv1.AgentRunStatus_AGENT_RUN_STATUS_FAILED
+	}
+	f.status.Run.Version++
+	f.status.RuntimeStatus.RunStatus = f.status.Run.Status
+	f.status.RuntimeStatus.RunVersion = f.status.Run.Version
 }
 
 func mustReporter(t *testing.T, client Client) *Reporter {

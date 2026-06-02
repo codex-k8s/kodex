@@ -21,14 +21,18 @@ const (
 	defaultCallTimeout  = 3 * time.Second
 	sourceAgentRunner   = "agent-runner"
 	actorTypeService    = "service"
+	queuedReasonCode    = "agent_runner_queued"
+	queuedSummary       = "agent-runner accepted runtime context"
 	startedReasonCode   = "agent_runner_started"
-	startedSummary      = "agent-runner accepted runtime context"
+	startedSummary      = "agent-runner started Codex execution"
+	completedReasonCode = "agent_runner_completed"
+	completedSummary    = "codex execution completed"
 	maxSafeDetailsBytes = 4096
 )
 
 type Client interface {
 	runtimeStatusReader
-	runStateRecorder
+	runnerStateReporter
 	activityRecorder
 }
 
@@ -36,8 +40,8 @@ type runtimeStatusReader interface {
 	GetAgentRunRuntimeStatus(context.Context, *agentsv1.GetAgentRunRuntimeStatusRequest, ...grpc.CallOption) (*agentsv1.AgentRunRuntimeStatusResponse, error)
 }
 
-type runStateRecorder interface {
-	RecordRunState(context.Context, *agentsv1.RecordRunStateRequest, ...grpc.CallOption) (*agentsv1.AgentRunResponse, error)
+type runnerStateReporter interface {
+	ReportAgentRunState(context.Context, *agentsv1.ReportAgentRunStateRequest, ...grpc.CallOption) (*agentsv1.AgentRunResponse, error)
 }
 
 type activityRecorder interface {
@@ -106,10 +110,42 @@ func (r *Reporter) ReportStarted(ctx context.Context, input app.ReportInput) err
 	if isTerminal(run.GetStatus()) || run.GetStatus() == agentsv1.AgentRunStatus_AGENT_RUN_STATUS_RUNNING {
 		return nil
 	}
-	if _, err := r.recordRunState(ctx, status, agentsv1.AgentRunStatus_AGENT_RUN_STATUS_STARTING, input, startedReasonCode, startedSummary, nil); err != nil {
+	if run.GetStatus() == agentsv1.AgentRunStatus_AGENT_RUN_STATUS_REQUESTED {
+		if _, err := r.reportRunState(ctx, status, agentsv1.AgentRunnerRunState_AGENT_RUNNER_RUN_STATE_QUEUED, input, queuedReasonCode, queuedSummary, nil, nil); err != nil {
+			return err
+		}
+		status, err = r.runtimeStatus(ctx, input.Config.AgentRunID)
+		if err != nil {
+			return err
+		}
+		if isTerminal(status.GetRun().GetStatus()) || status.GetRun().GetStatus() == agentsv1.AgentRunStatus_AGENT_RUN_STATUS_RUNNING {
+			return nil
+		}
+	}
+	if _, err := r.reportRunState(ctx, status, agentsv1.AgentRunnerRunState_AGENT_RUNNER_RUN_STATE_RUNNING, input, startedReasonCode, startedSummary, nil, nil); err != nil {
 		return err
 	}
-	_ = r.recordActivity(ctx, status, input, agentsv1.AgentActivityStatus_AGENT_ACTIVITY_STATUS_STARTED, startedReasonCode, startedSummary, nil)
+	_ = r.recordActivity(ctx, status, input, agentsv1.AgentActivityStatus_AGENT_ACTIVITY_STATUS_STARTED, startedReasonCode, startedSummary, nil, nil)
+	return nil
+}
+
+func (r *Reporter) ReportCompleted(ctx context.Context, input app.ReportInput, result app.CodexExecutionResult) error {
+	status, err := r.runtimeStatus(ctx, input.Config.AgentRunID)
+	if err != nil {
+		return err
+	}
+	if isTerminal(status.GetRun().GetStatus()) {
+		return nil
+	}
+	summary := completedSummary
+	if strings.TrimSpace(result.SafeSummary) != "" {
+		summary = result.SafeSummary
+	}
+	resultDigest := strings.TrimSpace(result.ResultDigest)
+	if _, err := r.reportRunState(ctx, status, agentsv1.AgentRunnerRunState_AGENT_RUNNER_RUN_STATE_COMPLETED, input, completedReasonCode, summary, nil, &resultDigest); err != nil {
+		return err
+	}
+	_ = r.recordActivity(ctx, status, input, agentsv1.AgentActivityStatus_AGENT_ACTIVITY_STATUS_SUCCEEDED, completedReasonCode, summary, nil, &resultDigest)
 	return nil
 }
 
@@ -121,10 +157,10 @@ func (r *Reporter) ReportFailed(ctx context.Context, input app.ReportInput, diag
 	if isTerminal(status.GetRun().GetStatus()) {
 		return nil
 	}
-	if _, err := r.recordRunState(ctx, status, agentsv1.AgentRunStatus_AGENT_RUN_STATUS_FAILED, input, diagnostic.Code, diagnostic.Summary, &diagnostic.Code); err != nil {
+	if _, err := r.reportRunState(ctx, status, agentsv1.AgentRunnerRunState_AGENT_RUNNER_RUN_STATE_FAILED, input, diagnostic.Code, diagnostic.Summary, &diagnostic.Code, nil); err != nil {
 		return err
 	}
-	_ = r.recordActivity(ctx, status, input, agentsv1.AgentActivityStatus_AGENT_ACTIVITY_STATUS_FAILED, diagnostic.Code, diagnostic.Summary, &diagnostic.Code)
+	_ = r.recordActivity(ctx, status, input, agentsv1.AgentActivityStatus_AGENT_ACTIVITY_STATUS_FAILED, diagnostic.Code, diagnostic.Summary, &diagnostic.Code, nil)
 	return nil
 }
 
@@ -144,30 +180,35 @@ func (r *Reporter) runtimeStatus(ctx context.Context, runID string) (*agentsv1.A
 	return response, nil
 }
 
-func (r *Reporter) recordRunState(
+func (r *Reporter) reportRunState(
 	ctx context.Context,
 	status *agentsv1.AgentRunRuntimeStatusResponse,
-	next agentsv1.AgentRunStatus,
+	next agentsv1.AgentRunnerRunState,
 	input app.ReportInput,
 	reasonCode string,
 	summary string,
 	failureCode *string,
+	diagnosticDigest *string,
 ) (*agentsv1.AgentRunResponse, error) {
 	version := status.GetRuntimeStatus().GetRunVersion()
 	if version <= 0 {
 		version = status.GetRun().GetVersion()
 	}
-	request := &agentsv1.RecordRunStateRequest{
-		Meta:           r.commandMeta(input.Config, commandKey(input.Config, "run-state", reasonCode), version, reasonCode),
+	runtime := runtimeContext(status)
+	request := &agentsv1.ReportAgentRunStateRequest{
+		Meta:           r.commandMeta(input.Config, commandKey(input.Config, "runner-state", reasonCode), version, reasonCode),
 		RunId:          input.Config.AgentRunID,
-		Status:         next,
-		RuntimeContext: runtimeContext(status),
-		ProviderTarget: status.GetRun().GetProviderTarget(),
-		ResultSummary:  ptrString(summary),
-		ReasonCode:     ptrString(reasonCode),
+		SessionId:      sessionID(status, input),
+		RuntimeSlotRef: runtime.GetSlotRef(),
+		RuntimeJobRef:  runtime.GetJobRef(),
+		State:          next,
+		SafeSummary:    ptrString(summary),
 	}
 	if failureCode != nil {
 		request.FailureCode = ptrString(*failureCode)
+	}
+	if diagnosticDigest != nil && strings.TrimSpace(*diagnosticDigest) != "" {
+		request.DiagnosticDigest = ptrString(*diagnosticDigest)
 	}
 	if !input.StartedAt.IsZero() {
 		request.StartedAt = ptrString(formatTime(input.StartedAt))
@@ -177,7 +218,7 @@ func (r *Reporter) recordRunState(
 	}
 	callCtx, cancel := context.WithTimeout(r.outgoingContext(ctx), r.timeout)
 	defer cancel()
-	return r.client.RecordRunState(callCtx, request)
+	return r.client.ReportAgentRunState(callCtx, request)
 }
 
 func (r *Reporter) recordActivity(
@@ -188,6 +229,7 @@ func (r *Reporter) recordActivity(
 	reasonCode string,
 	summary string,
 	failureCode *string,
+	payloadDigest *string,
 ) error {
 	run := status.GetRun()
 	sessionID := strings.TrimSpace(run.GetSessionId())
@@ -217,6 +259,9 @@ func (r *Reporter) recordActivity(
 	if failureCode != nil {
 		bounded := *failureCode + ": " + summary
 		request.BoundedError = ptrString(bounded)
+	}
+	if payloadDigest != nil && strings.TrimSpace(*payloadDigest) != "" {
+		request.PayloadDigest = ptrString(*payloadDigest)
 	}
 	callCtx, cancel := context.WithTimeout(r.outgoingContext(ctx), r.timeout)
 	defer cancel()
@@ -296,6 +341,14 @@ func runtimeContext(status *agentsv1.AgentRunRuntimeStatusResponse) *agentsv1.Ru
 		return contextRef
 	}
 	return status.GetRuntimeStatus().GetRuntimeContext()
+}
+
+func sessionID(status *agentsv1.AgentRunRuntimeStatusResponse, input app.ReportInput) string {
+	sessionID := strings.TrimSpace(status.GetRun().GetSessionId())
+	if sessionID != "" {
+		return sessionID
+	}
+	return strings.TrimSpace(input.Context.AgentSessionID)
 }
 
 func safeRefs(input app.ReportInput) map[string]string {

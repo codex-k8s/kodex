@@ -14,12 +14,17 @@ type ReportInput struct {
 
 type Reporter interface {
 	ReportStarted(context.Context, ReportInput) error
+	ReportCompleted(context.Context, ReportInput, CodexExecutionResult) error
 	ReportFailed(context.Context, ReportInput, Diagnostic) error
 }
 
 type NoopReporter struct{}
 
 func (NoopReporter) ReportStarted(context.Context, ReportInput) error {
+	return nil
+}
+
+func (NoopReporter) ReportCompleted(context.Context, ReportInput, CodexExecutionResult) error {
 	return nil
 }
 
