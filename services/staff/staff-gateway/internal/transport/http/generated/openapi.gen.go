@@ -253,16 +253,16 @@ const (
 
 // Defines values for GovernanceTargetType.
 const (
-	Document         GovernanceTargetType = "document"
-	Merge            GovernanceTargetType = "merge"
-	PolicyChange     GovernanceTargetType = "policy_change"
-	Postdeploy       GovernanceTargetType = "postdeploy"
-	PullRequest      GovernanceTargetType = "pull_request"
-	ReleaseCandidate GovernanceTargetType = "release_candidate"
-	Rollback         GovernanceTargetType = "rollback"
-	RuntimeJob       GovernanceTargetType = "runtime_job"
-	Transition       GovernanceTargetType = "transition"
-	Unspecified      GovernanceTargetType = "unspecified"
+	GovernanceTargetTypeDocument         GovernanceTargetType = "document"
+	GovernanceTargetTypeMerge            GovernanceTargetType = "merge"
+	GovernanceTargetTypePolicyChange     GovernanceTargetType = "policy_change"
+	GovernanceTargetTypePostdeploy       GovernanceTargetType = "postdeploy"
+	GovernanceTargetTypePullRequest      GovernanceTargetType = "pull_request"
+	GovernanceTargetTypeReleaseCandidate GovernanceTargetType = "release_candidate"
+	GovernanceTargetTypeRollback         GovernanceTargetType = "rollback"
+	GovernanceTargetTypeRuntimeJob       GovernanceTargetType = "runtime_job"
+	GovernanceTargetTypeTransition       GovernanceTargetType = "transition"
+	GovernanceTargetTypeUnspecified      GovernanceTargetType = "unspecified"
 )
 
 // Defines values for RequestKind.
@@ -274,13 +274,13 @@ const (
 
 // Defines values for RequestStatus.
 const (
-	Answered  RequestStatus = "answered"
-	Cancelled RequestStatus = "cancelled"
-	Created   RequestStatus = "created"
-	Expired   RequestStatus = "expired"
-	Failed    RequestStatus = "failed"
-	Routed    RequestStatus = "routed"
-	Waiting   RequestStatus = "waiting"
+	RequestStatusAnswered  RequestStatus = "answered"
+	RequestStatusCancelled RequestStatus = "cancelled"
+	RequestStatusCreated   RequestStatus = "created"
+	RequestStatusExpired   RequestStatus = "expired"
+	RequestStatusFailed    RequestStatus = "failed"
+	RequestStatusRouted    RequestStatus = "routed"
+	RequestStatusWaiting   RequestStatus = "waiting"
 )
 
 // Defines values for ResponseAction.
@@ -332,6 +332,69 @@ const (
 	ScopeTypeProject      ScopeType = "project"
 	ScopeTypeRepository   ScopeType = "repository"
 	ScopeTypeService      ScopeType = "service"
+)
+
+// Defines values for SelfDeployGovernanceStatus.
+const (
+	SelfDeployGovernanceStatusPending     SelfDeployGovernanceStatus = "pending"
+	SelfDeployGovernanceStatusResolved    SelfDeployGovernanceStatus = "resolved"
+	SelfDeployGovernanceStatusUnavailable SelfDeployGovernanceStatus = "unavailable"
+)
+
+// Defines values for SelfDeployPathCategory.
+const (
+	SelfDeployPathCategoryDeployManifest SelfDeployPathCategory = "deploy_manifest"
+	SelfDeployPathCategoryDocumentation  SelfDeployPathCategory = "documentation"
+	SelfDeployPathCategoryOther          SelfDeployPathCategory = "other"
+	SelfDeployPathCategoryPlatformPolicy SelfDeployPathCategory = "platform_policy"
+	SelfDeployPathCategoryRuntimeConfig  SelfDeployPathCategory = "runtime_config"
+	SelfDeployPathCategoryServiceConfig  SelfDeployPathCategory = "service_config"
+	SelfDeployPathCategoryServiceSource  SelfDeployPathCategory = "service_source"
+	SelfDeployPathCategoryTest           SelfDeployPathCategory = "test"
+	SelfDeployPathCategoryUnspecified    SelfDeployPathCategory = "unspecified"
+)
+
+// Defines values for SelfDeployPlanStatus.
+const (
+	SelfDeployPlanStatusApproved        SelfDeployPlanStatus = "approved"
+	SelfDeployPlanStatusCancelled       SelfDeployPlanStatus = "cancelled"
+	SelfDeployPlanStatusFailed          SelfDeployPlanStatus = "failed"
+	SelfDeployPlanStatusPendingApproval SelfDeployPlanStatus = "pending_approval"
+	SelfDeployPlanStatusRejected        SelfDeployPlanStatus = "rejected"
+	SelfDeployPlanStatusUnavailable     SelfDeployPlanStatus = "unavailable"
+	SelfDeployPlanStatusUnspecified     SelfDeployPlanStatus = "unspecified"
+)
+
+// Defines values for SelfDeployPlanStatusFilter.
+const (
+	SelfDeployPlanStatusFilterApproved        SelfDeployPlanStatusFilter = "approved"
+	SelfDeployPlanStatusFilterCancelled       SelfDeployPlanStatusFilter = "cancelled"
+	SelfDeployPlanStatusFilterFailed          SelfDeployPlanStatusFilter = "failed"
+	SelfDeployPlanStatusFilterPendingApproval SelfDeployPlanStatusFilter = "pending_approval"
+	SelfDeployPlanStatusFilterRejected        SelfDeployPlanStatusFilter = "rejected"
+	SelfDeployPlanStatusFilterUnspecified     SelfDeployPlanStatusFilter = "unspecified"
+)
+
+// Defines values for SelfDeployProviderSignalStatus.
+const (
+	SelfDeployProviderSignalStatusStoredRef   SelfDeployProviderSignalStatus = "stored_ref"
+	SelfDeployProviderSignalStatusUnavailable SelfDeployProviderSignalStatus = "unavailable"
+)
+
+// Defines values for SelfDeployRuntimeStatus.
+const (
+	SelfDeployRuntimeStatusCompleted   SelfDeployRuntimeStatus = "completed"
+	SelfDeployRuntimeStatusFailed      SelfDeployRuntimeStatus = "failed"
+	SelfDeployRuntimeStatusPending     SelfDeployRuntimeStatus = "pending"
+	SelfDeployRuntimeStatusRunning     SelfDeployRuntimeStatus = "running"
+	SelfDeployRuntimeStatusStoredRef   SelfDeployRuntimeStatus = "stored_ref"
+	SelfDeployRuntimeStatusUnavailable SelfDeployRuntimeStatus = "unavailable"
+)
+
+// Defines values for SelfDeploySummaryAvailability.
+const (
+	SelfDeploySummaryAvailabilityReady       SelfDeploySummaryAvailability = "ready"
+	SelfDeploySummaryAvailabilityUnavailable SelfDeploySummaryAvailability = "unavailable"
 )
 
 // Defines values for SourceOwnerKind.
@@ -411,10 +474,18 @@ const (
 
 // Defines values for RespondOwnerInboxItemParamsXKodexActorType.
 const (
-	Agent           RespondOwnerInboxItemParamsXKodexActorType = "agent"
-	ExternalAccount RespondOwnerInboxItemParamsXKodexActorType = "external_account"
-	Service         RespondOwnerInboxItemParamsXKodexActorType = "service"
-	User            RespondOwnerInboxItemParamsXKodexActorType = "user"
+	RespondOwnerInboxItemParamsXKodexActorTypeAgent           RespondOwnerInboxItemParamsXKodexActorType = "agent"
+	RespondOwnerInboxItemParamsXKodexActorTypeExternalAccount RespondOwnerInboxItemParamsXKodexActorType = "external_account"
+	RespondOwnerInboxItemParamsXKodexActorTypeService         RespondOwnerInboxItemParamsXKodexActorType = "service"
+	RespondOwnerInboxItemParamsXKodexActorTypeUser            RespondOwnerInboxItemParamsXKodexActorType = "user"
+)
+
+// Defines values for GetSelfDeploySummaryParamsXKodexActorType.
+const (
+	GetSelfDeploySummaryParamsXKodexActorTypeAgent           GetSelfDeploySummaryParamsXKodexActorType = "agent"
+	GetSelfDeploySummaryParamsXKodexActorTypeExternalAccount GetSelfDeploySummaryParamsXKodexActorType = "external_account"
+	GetSelfDeploySummaryParamsXKodexActorTypeService         GetSelfDeploySummaryParamsXKodexActorType = "service"
+	GetSelfDeploySummaryParamsXKodexActorTypeUser            GetSelfDeploySummaryParamsXKodexActorType = "user"
 )
 
 // ActorRef defines model for ActorRef.
@@ -971,6 +1042,92 @@ type ScopeRef struct {
 // ScopeType defines model for ScopeType.
 type ScopeType string
 
+// SelfDeployGovernanceStatus defines model for SelfDeployGovernanceStatus.
+type SelfDeployGovernanceStatus string
+
+// SelfDeployGovernanceSummary defines model for SelfDeployGovernanceSummary.
+type SelfDeployGovernanceSummary struct {
+	GateDecisionRef           *string                    `json:"gate_decision_ref,omitempty"`
+	GateRequestRef            *string                    `json:"gate_request_ref,omitempty"`
+	ReleaseDecisionPackageRef *string                    `json:"release_decision_package_ref,omitempty"`
+	ReleaseDecisionRef        *string                    `json:"release_decision_ref,omitempty"`
+	Status                    SelfDeployGovernanceStatus `json:"status"`
+}
+
+// SelfDeployPathCategory defines model for SelfDeployPathCategory.
+type SelfDeployPathCategory string
+
+// SelfDeployPlanStatus defines model for SelfDeployPlanStatus.
+type SelfDeployPlanStatus string
+
+// SelfDeployPlanStatusFilter defines model for SelfDeployPlanStatusFilter.
+type SelfDeployPlanStatusFilter string
+
+// SelfDeployPlanSummary defines model for SelfDeployPlanSummary.
+type SelfDeployPlanSummary struct {
+	Status SelfDeployPlanStatus `json:"status"`
+}
+
+// SelfDeployProviderSignalStatus defines model for SelfDeployProviderSignalStatus.
+type SelfDeployProviderSignalStatus string
+
+// SelfDeployProviderSignalSummary defines model for SelfDeployProviderSignalSummary.
+type SelfDeployProviderSignalSummary struct {
+	Ref    *string                        `json:"ref,omitempty"`
+	Status SelfDeployProviderSignalStatus `json:"status"`
+}
+
+// SelfDeployRuntimeStatus defines model for SelfDeployRuntimeStatus.
+type SelfDeployRuntimeStatus string
+
+// SelfDeployRuntimeSummary defines model for SelfDeployRuntimeSummary.
+type SelfDeployRuntimeSummary struct {
+	RuntimeJobRef        *string                 `json:"runtime_job_ref,omitempty"`
+	RuntimeStatusSummary *string                 `json:"runtime_status_summary,omitempty"`
+	Status               SelfDeployRuntimeStatus `json:"status"`
+}
+
+// SelfDeploySafeError defines model for SelfDeploySafeError.
+type SelfDeploySafeError struct {
+	Code    string `json:"code"`
+	Summary string `json:"summary"`
+}
+
+// SelfDeploySummary defines model for SelfDeploySummary.
+type SelfDeploySummary struct {
+	AffectedServiceKeys     []string                        `json:"affected_service_keys"`
+	Availability            SelfDeploySummaryAvailability   `json:"availability"`
+	CreatedAt               *time.Time                      `json:"created_at,omitempty"`
+	DeployPlan              SelfDeployPlanSummary           `json:"deploy_plan"`
+	ExpectedRuntimeJobTypes []string                        `json:"expected_runtime_job_types"`
+	Governance              SelfDeployGovernanceSummary     `json:"governance"`
+	MergeCommitSha          *string                         `json:"merge_commit_sha,omitempty"`
+	PathCategories          []SelfDeployPathCategory        `json:"path_categories"`
+	PlanFingerprint         *string                         `json:"plan_fingerprint,omitempty"`
+	ProjectRef              *string                         `json:"project_ref,omitempty"`
+	ProviderSignal          SelfDeployProviderSignalSummary `json:"provider_signal"`
+	RepositoryRef           *string                         `json:"repository_ref,omitempty"`
+	Runtime                 SelfDeployRuntimeSummary        `json:"runtime"`
+	SafeError               *SelfDeploySafeError            `json:"safe_error,omitempty"`
+	SafeSummary             *string                         `json:"safe_summary,omitempty"`
+	SelfDeployPlanId        *string                         `json:"self_deploy_plan_id,omitempty"`
+	ServicesYamlDigest      *string                         `json:"services_yaml_digest,omitempty"`
+	ServicesYamlRef         *string                         `json:"services_yaml_ref,omitempty"`
+	SourceRef               *string                         `json:"source_ref,omitempty"`
+	UpdatedAt               *time.Time                      `json:"updated_at,omitempty"`
+	Version                 *int64                          `json:"version,omitempty"`
+}
+
+// SelfDeploySummaryAvailability defines model for SelfDeploySummaryAvailability.
+type SelfDeploySummaryAvailability string
+
+// SelfDeploySummaryResponse defines model for SelfDeploySummaryResponse.
+type SelfDeploySummaryResponse struct {
+	CorrelationId *string           `json:"correlation_id,omitempty"`
+	RequestId     string            `json:"request_id"`
+	Summary       SelfDeploySummary `json:"summary"`
+}
+
 // SourceOwnerKind defines model for SourceOwnerKind.
 type SourceOwnerKind string
 
@@ -1111,6 +1268,18 @@ type ScopeRefQuery = string
 
 // ScopeTypeQuery defines model for ScopeTypeQuery.
 type ScopeTypeQuery = ScopeType
+
+// SelfDeployPlanStatusQuery defines model for SelfDeployPlanStatusQuery.
+type SelfDeployPlanStatusQuery = SelfDeployPlanStatusFilter
+
+// SelfDeployProjectRefQuery defines model for SelfDeployProjectRefQuery.
+type SelfDeployProjectRefQuery = string
+
+// SelfDeployProviderSignalRefQuery defines model for SelfDeployProviderSignalRefQuery.
+type SelfDeployProviderSignalRefQuery = string
+
+// SelfDeployRepositoryRefQuery defines model for SelfDeployRepositoryRefQuery.
+type SelfDeployRepositoryRefQuery = string
 
 // SessionIdHeader defines model for SessionIdHeader.
 type SessionIdHeader = string
@@ -1443,6 +1612,45 @@ type RespondOwnerInboxItemParams struct {
 
 // RespondOwnerInboxItemParamsXKodexActorType defines parameters for RespondOwnerInboxItem.
 type RespondOwnerInboxItemParamsXKodexActorType string
+
+// GetSelfDeploySummaryParams defines parameters for GetSelfDeploySummary.
+type GetSelfDeploySummaryParams struct {
+	// ScopeType Тип области `agent-manager`.
+	ScopeType AgentScopeTypeQuery `form:"scope_type" json:"scope_type"`
+
+	// ScopeRef Safe ref области `agent-manager`.
+	ScopeRef AgentScopeRefQuery `form:"scope_ref" json:"scope_ref"`
+
+	// ProjectRef Safe ref проекта для фильтра self-deploy plan.
+	ProjectRef *SelfDeployProjectRefQuery `form:"project_ref,omitempty" json:"project_ref,omitempty"`
+
+	// RepositoryRef Safe ref репозитория для фильтра self-deploy plan.
+	RepositoryRef *SelfDeployRepositoryRefQuery `form:"repository_ref,omitempty" json:"repository_ref,omitempty"`
+
+	// ProviderSignalRef Safe ref provider signal для фильтра self-deploy plan.
+	ProviderSignalRef *SelfDeployProviderSignalRefQuery `form:"provider_signal_ref,omitempty" json:"provider_signal_ref,omitempty"`
+
+	// Status Фильтр self-deploy plan по статусу.
+	Status *SelfDeployPlanStatusQuery `form:"status,omitempty" json:"status,omitempty"`
+
+	// XKodexRequestId Идентификатор запроса для трассировки. Gateway может заменить невалидное значение.
+	XKodexRequestId *RequestIdHeader `json:"X-Kodex-Request-Id,omitempty"`
+
+	// XKodexTraceId Безопасная ссылка на трассу.
+	XKodexTraceId *TraceIdHeader `json:"X-Kodex-Trace-Id,omitempty"`
+
+	// XKodexSessionId Безопасная ссылка на пользовательскую сессию.
+	XKodexSessionId *SessionIdHeader `json:"X-Kodex-Session-Id,omitempty"`
+
+	// XKodexActorType Тип проверенного субъекта от внешнего auth boundary.
+	XKodexActorType GetSelfDeploySummaryParamsXKodexActorType `json:"X-Kodex-Actor-Type"`
+
+	// XKodexActorId Safe id проверенного субъекта без email и имени.
+	XKodexActorId ActorIdHeader `json:"X-Kodex-Actor-Id"`
+}
+
+// GetSelfDeploySummaryParamsXKodexActorType defines parameters for GetSelfDeploySummary.
+type GetSelfDeploySummaryParamsXKodexActorType string
 
 // RespondOwnerInboxItemJSONRequestBody defines body for RespondOwnerInboxItem for application/json ContentType.
 type RespondOwnerInboxItemJSONRequestBody = OwnerInboxRespondRequest
