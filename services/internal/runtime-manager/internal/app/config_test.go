@@ -102,6 +102,20 @@ func TestValidateRequiresKubernetesExecutorDefaultsWhenEnabled(t *testing.T) {
 	}
 }
 
+func TestValidateRequiresKubernetesExecutorAgentManagerReporterWhenEnabled(t *testing.T) {
+	t.Parallel()
+
+	cfg := validConfig()
+	cfg.KubernetesWorker.Enabled = true
+	cfg.KubernetesWorker.DefaultNamespace = "runtime-jobs"
+	cfg.KubernetesWorker.DefaultImage = "busybox:1.36"
+	cfg.KubernetesWorker.AgentManagerSecretKey = ""
+
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() err = nil, want missing agent-manager reporter secret ref error")
+	}
+}
+
 func TestSlotServiceConfigIncludesSlotDefaults(t *testing.T) {
 	t.Parallel()
 
@@ -205,6 +219,10 @@ func validConfig() Config {
 			BackoffLimit:            0,
 			TTLSecondsAfterFinished: 300,
 			LogTailBytes:            16 * 1024,
+			AgentManagerGRPCAddr:    "agent-manager:9090",
+			AgentManagerSecretName:  "kodex-platform-runtime",
+			AgentManagerSecretKey:   "KODEX_AGENT_MANAGER_GRPC_AUTH_TOKEN",
+			AgentManagerTimeout:     3 * time.Second,
 		},
 	}
 }

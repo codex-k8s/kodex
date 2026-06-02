@@ -185,6 +185,12 @@ func newKubernetesExecutor(cfg Config, clusters runtimekubernetes.ClusterAccessP
 		BackoffLimit:            cfg.KubernetesWorker.BackoffLimit,
 		TTLSecondsAfterFinished: cfg.KubernetesWorker.TTLSecondsAfterFinished,
 		LogTailBytes:            cfg.KubernetesWorker.LogTailBytes,
+		AgentManagerGRPCAddr:    cfg.KubernetesWorker.AgentManagerGRPCAddr,
+		AgentManagerAuthSecret: runtimekubernetes.SecretKeyRef{
+			Name: cfg.KubernetesWorker.AgentManagerSecretName,
+			Key:  cfg.KubernetesWorker.AgentManagerSecretKey,
+		},
+		AgentManagerTimeout: cfg.KubernetesWorker.AgentManagerTimeout,
 	})
 }
 
