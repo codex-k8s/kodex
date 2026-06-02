@@ -89,6 +89,8 @@ service AgentManagerService {
   rpc ListAgentRunSummaries(ListAgentRunSummariesRequest) returns (ListAgentRunSummariesResponse);
   // CreateSelfDeployPlan records a safe pending plan for self-deploy orchestration.
   rpc CreateSelfDeployPlan(CreateSelfDeployPlanRequest) returns (SelfDeployPlanResponse);
+  // CreateSelfDeployPlanFromSignal records a pending plan from a safe provider/project signal.
+  rpc CreateSelfDeployPlanFromSignal(CreateSelfDeployPlanFromSignalRequest) returns (SelfDeployPlanResponse);
   // GetSelfDeployPlan returns one safe self-deploy plan.
   rpc GetSelfDeployPlan(GetSelfDeployPlanRequest) returns (SelfDeployPlanResponse);
   // ListSelfDeployPlans returns safe self-deploy plans by project, repository, signal or status.
@@ -1333,6 +1335,23 @@ message CreateSelfDeployPlanRequest {
   string project_ref = 3;
   string repository_ref = 4;
   optional string provider_signal_ref = 5;
+  string source_ref = 6;
+  string merge_commit_sha = 7;
+  optional string services_yaml_ref = 8;
+  string services_yaml_digest = 9;
+  repeated string affected_service_keys = 10;
+  repeated SelfDeployPathCategory path_categories = 11;
+  repeated kodex.runtime.v1.JobType expected_runtime_job_types = 12;
+  GovernanceContextRef governance_context = 13;
+  optional string safe_summary = 14;
+}
+
+message CreateSelfDeployPlanFromSignalRequest {
+  CommandMeta meta = 1;
+  ScopeRef scope = 2;
+  string project_ref = 3;
+  string repository_ref = 4;
+  string provider_signal_ref = 5;
   string source_ref = 6;
   string merge_commit_sha = 7;
   optional string services_yaml_ref = 8;

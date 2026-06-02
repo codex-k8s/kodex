@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-12
 updated_at: 2026-06-02
-related_issues: [733, 749, 759, 772, 322, 782, 795, 809, 820, 834, 842, 862, 866, 891, 905, 918, 937, 954, 968, 984, 994, 1011]
+related_issues: [733, 749, 759, 772, 322, 782, 795, 809, 820, 834, 842, 862, 866, 891, 905, 918, 937, 954, 968, 984, 994, 1011, 1015]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -338,7 +338,7 @@ Event-driven resume идёт через уже очищенное событие
 
 ### SelfDeployPlan
 
-`SelfDeployPlan` — авторитетное pending-состояние `agent-manager` для self-deploy orchestration после safe provider/project signal. Он описывает, какие сервисы и категории путей затронуты после merge/push в `main`, какие runtime job types ожидаются после approval, и какие governance refs нужны для решения владельца. План не создаёт runtime jobs и не переносит в `agent-manager` проектную, provider-native или governance истину.
+`SelfDeployPlan` — авторитетное pending-состояние `agent-manager` для self-deploy orchestration после safe provider/project signal или typed plan input. Он описывает, какие сервисы и категории путей затронуты после merge/push в `main`, какие runtime job types ожидаются после approval, и какие governance refs нужны для решения владельца. План не создаёт runtime jobs и не переносит в `agent-manager` проектную, provider-native или governance истину.
 
 | Поле | Тип | Может быть пустым | Примечание |
 |---|---|---:|---|
@@ -346,7 +346,7 @@ Event-driven resume идёт через уже очищенное событие
 | `scope_type`, `scope_ref` | text | нет | Область plan, обычно repository scope для `codex-k8s/kodex`. |
 | `project_ref` | text | нет | Safe ref проекта из `project-catalog`; project-owned данные и `services.yaml` остаются у `project-catalog`. |
 | `repository_ref` | text | нет | Safe repository ref; provider-native истина остаётся у `provider-hub`. |
-| `provider_signal_ref` | text | да | Safe ref provider/project signal, например merge/push signal без webhook body. |
+| `provider_signal_ref` | text | да | Safe ref provider/project signal, например merge/push signal без webhook body. Для signal-oriented создания поле обязательно и уникально среди непустых значений. |
 | `source_ref` | text | нет | Safe ref ветки/источника, например `main` + commit ref. |
 | `merge_commit_sha` | text | нет | 40- или 64-символьный hex commit id. |
 | `services_yaml_ref` | text | да | Safe ref проверенной версии `services.yaml`; полный YAML не хранится. |
@@ -361,6 +361,8 @@ Event-driven resume идёт через уже очищенное событие
 | `status` | enum | нет | `pending_approval`, далее `approved`, `rejected`, `cancelled`, `failed` для будущего lifecycle. |
 | `version` | bigint | нет | Версия плана для optimistic concurrency будущих переходов. |
 | `created_at`, `updated_at` | timestamptz | нет | Технические временные метки. |
+
+Для непустого `provider_signal_ref` действует уникальный индекс. Повтор того же signal ref с тем же `plan_fingerprint` возвращает уже созданный plan, даже если producer пришёл с новым `command_id`; тот же signal ref с другим fingerprint конфликтует, пока владелец сигнала не выпустит новый безопасный signal ref.
 
 `SelfDeployPlan` запрещает хранение raw webhook body, provider response, полного diff, полного `services.yaml`, prompt, transcript, секретов, токенов, kubeconfig, workspace paths и больших логов. Если нужно создать build/deploy job после approval, следующий срез должен использовать refs/fingerprint плана, governance decision ref и типизированные команды runtime; `agent-manager` не должен создавать deploy автоматически на этапе фиксации плана.
 

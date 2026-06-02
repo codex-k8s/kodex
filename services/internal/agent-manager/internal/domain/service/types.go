@@ -188,6 +188,10 @@ type CreateSelfDeployPlanInput struct {
 	SafeSummary             string
 }
 
+type CreateSelfDeployPlanFromSignalInput struct {
+	CreateSelfDeployPlanInput
+}
+
 const (
 	RuntimeModeFullEnv = "full_env"
 

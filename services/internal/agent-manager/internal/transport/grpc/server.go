@@ -65,6 +65,7 @@ type agentService interface {
 	GetHumanGateRequest(context.Context, uuid.UUID) (entity.HumanGateRequest, error)
 	ListHumanGateRequests(context.Context, agentservice.HumanGateList) ([]entity.HumanGateRequest, value.PageResult, error)
 	CreateSelfDeployPlan(context.Context, agentservice.CreateSelfDeployPlanInput) (entity.SelfDeployPlan, error)
+	CreateSelfDeployPlanFromSignal(context.Context, agentservice.CreateSelfDeployPlanFromSignalInput) (entity.SelfDeployPlan, error)
 	GetSelfDeployPlan(context.Context, uuid.UUID) (entity.SelfDeployPlan, error)
 	ListSelfDeployPlans(context.Context, agentservice.SelfDeployPlanList) ([]entity.SelfDeployPlan, value.PageResult, error)
 }
@@ -275,6 +276,11 @@ func (server *Server) ListHumanGateRequests(ctx context.Context, request *agents
 // CreateSelfDeployPlan records a pending safe self-deploy plan without creating runtime jobs.
 func (server *Server) CreateSelfDeployPlan(ctx context.Context, request *agentsv1.CreateSelfDeployPlanRequest) (*agentsv1.SelfDeployPlanResponse, error) {
 	return grpcserver.HandleUnary(ctx, request, grpccasters.CreateSelfDeployPlanInput, server.service.CreateSelfDeployPlan, grpccasters.SelfDeployPlanResponse)
+}
+
+// CreateSelfDeployPlanFromSignal records a pending safe self-deploy plan from provider/project signal.
+func (server *Server) CreateSelfDeployPlanFromSignal(ctx context.Context, request *agentsv1.CreateSelfDeployPlanFromSignalRequest) (*agentsv1.SelfDeployPlanResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.CreateSelfDeployPlanFromSignalInput, server.service.CreateSelfDeployPlanFromSignal, grpccasters.SelfDeployPlanResponse)
 }
 
 // GetSelfDeployPlan returns one safe self-deploy plan.
