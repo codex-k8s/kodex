@@ -40,6 +40,7 @@ var governanceToolDescriptions = map[string]string{
 	ToolGovernanceReleaseGetSafetyState:         "Read release safety-loop state through governance-manager.",
 	ToolGovernanceSignalRecordReview:            "Записать review signal через governance-manager без хранения состояния в MCP.",
 	ToolGovernanceSignalListReview:              "Прочитать безопасные сводки review signals через governance-manager.",
+	ToolGovernanceSummaryGet:                    "Прочитать безопасную сводку governance через governance-manager без хранения состояния в MCP.",
 }
 
 var governanceTargetTypes = map[string]governancev1.GovernanceTargetType{
@@ -77,6 +78,9 @@ var governanceEvidenceKindPairs = []governanceEnumPair[governancev1.EvidenceKind
 	{name: "interaction_callback", value: governancev1.EvidenceKind_EVIDENCE_KIND_INTERACTION_CALLBACK},
 	{name: "object_ref", value: governancev1.EvidenceKind_EVIDENCE_KIND_OBJECT_REF},
 	{name: "custom", value: governancev1.EvidenceKind_EVIDENCE_KIND_CUSTOM},
+	{name: "agent_acceptance", value: governancev1.EvidenceKind_EVIDENCE_KIND_AGENT_ACCEPTANCE},
+	{name: "agent_run", value: governancev1.EvidenceKind_EVIDENCE_KIND_AGENT_RUN},
+	{name: "agent_human_gate", value: governancev1.EvidenceKind_EVIDENCE_KIND_AGENT_HUMAN_GATE},
 }
 
 var governanceEvidenceKinds = governanceEnumValues(governanceEvidenceKindPairs)
@@ -289,6 +293,24 @@ var governanceReviewSignalOutcomeNames = map[governancev1.ReviewSignalOutcome]st
 	governancev1.ReviewSignalOutcome_REVIEW_SIGNAL_OUTCOME_INFORMATIONAL:   "informational",
 }
 
+var governanceDecisionSummaryKindNames = map[governancev1.GovernanceDecisionSummaryKind]string{
+	governancev1.GovernanceDecisionSummaryKind_GOVERNANCE_DECISION_SUMMARY_KIND_RISK_ASSESSMENT:          "risk_assessment",
+	governancev1.GovernanceDecisionSummaryKind_GOVERNANCE_DECISION_SUMMARY_KIND_REVIEW_SIGNAL:            "review_signal",
+	governancev1.GovernanceDecisionSummaryKind_GOVERNANCE_DECISION_SUMMARY_KIND_GATE_REQUEST:             "gate_request",
+	governancev1.GovernanceDecisionSummaryKind_GOVERNANCE_DECISION_SUMMARY_KIND_GATE_DECISION:            "gate_decision",
+	governancev1.GovernanceDecisionSummaryKind_GOVERNANCE_DECISION_SUMMARY_KIND_RELEASE_DECISION_PACKAGE: "release_decision_package",
+	governancev1.GovernanceDecisionSummaryKind_GOVERNANCE_DECISION_SUMMARY_KIND_RELEASE_DECISION:         "release_decision",
+	governancev1.GovernanceDecisionSummaryKind_GOVERNANCE_DECISION_SUMMARY_KIND_BLOCKING_SIGNAL:          "blocking_signal",
+	governancev1.GovernanceDecisionSummaryKind_GOVERNANCE_DECISION_SUMMARY_KIND_RELEASE_SAFETY_STATE:     "release_safety_state",
+}
+
+var governanceDecisionAttentionNames = map[governancev1.GovernanceDecisionAttention]string{
+	governancev1.GovernanceDecisionAttention_GOVERNANCE_DECISION_ATTENTION_PENDING:       "pending",
+	governancev1.GovernanceDecisionAttention_GOVERNANCE_DECISION_ATTENTION_COMPLETED:     "completed",
+	governancev1.GovernanceDecisionAttention_GOVERNANCE_DECISION_ATTENTION_BLOCKED:       "blocked",
+	governancev1.GovernanceDecisionAttention_GOVERNANCE_DECISION_ATTENTION_INFORMATIONAL: "informational",
+}
+
 var governanceConfidencePairs = []governanceEnumPair[governancev1.Confidence]{
 	{name: "low", value: governancev1.Confidence_CONFIDENCE_LOW},
 	{name: "medium", value: governancev1.Confidence_CONFIDENCE_MEDIUM},
@@ -347,6 +369,10 @@ func (handler *GovernanceToolsHandler) RecordReviewSignal(ctx context.Context, _
 
 func (handler *GovernanceToolsHandler) ListReviewSignals(ctx context.Context, _ *mcpsdk.CallToolRequest, input ListGovernanceReviewSignalsInput) (*mcpsdk.CallToolResult, GovernanceReviewSignalListOutput, error) {
 	return routeOwnerTool(ctx, input, listReviewSignalsRequest, handler.client.ListReviewSignals, governanceReviewSignalListOutput, ToolGovernanceSignalListReview)
+}
+
+func (handler *GovernanceToolsHandler) GetGovernanceSummary(ctx context.Context, _ *mcpsdk.CallToolRequest, input GetGovernanceSummaryInput) (*mcpsdk.CallToolResult, GovernanceSummaryOutput, error) {
+	return routeOwnerTool(ctx, input, getGovernanceSummaryRequest, handler.client.GetGovernanceSummary, governanceSummaryOutput, ToolGovernanceSummaryGet)
 }
 
 func (handler *GovernanceToolsHandler) RequestGate(ctx context.Context, _ *mcpsdk.CallToolRequest, input RequestGovernanceGateInput) (*mcpsdk.CallToolResult, GovernanceGateOutput, error) {
@@ -680,6 +706,18 @@ func listReviewSignalsRequest(input ListGovernanceReviewSignalsInput) (*governan
 		Page:             governancePageRequest(input.Page),
 		Meta:             meta,
 	}, nil
+}
+
+func getGovernanceSummaryRequest(input GetGovernanceSummaryInput) (*governancev1.GetGovernanceSummaryRequest, error) {
+	meta, err := governanceQueryMeta(input.Meta)
+	if err != nil {
+		return nil, err
+	}
+	scope, err := governanceSummaryScope(input)
+	if err != nil {
+		return nil, err
+	}
+	return &governancev1.GetGovernanceSummaryRequest{Scope: scope, Meta: meta}, nil
 }
 
 func requestGateRequest(input RequestGovernanceGateInput) (*governancev1.RequestGateRequest, error) {
@@ -1290,6 +1328,71 @@ func governanceProjectContextHasListScope(input GovernanceProjectContextRefInput
 	return strings.TrimSpace(input.ProjectRef) != "" || strings.TrimSpace(input.RepositoryRef) != ""
 }
 
+func governanceSummaryScope(input GetGovernanceSummaryInput) (*governancev1.GovernanceSummaryScope, error) {
+	scope := &governancev1.GovernanceSummaryScope{}
+	selectorCount := 0
+
+	target, err := governanceTarget(input.Target, false, "target")
+	if err != nil {
+		return nil, err
+	}
+	if target != nil {
+		scope.Target = target
+		selectorCount++
+	}
+
+	if !governanceProjectContextEmpty(input.ProjectContext) {
+		if !governanceProjectContextHasListScope(input.ProjectContext) {
+			return nil, invalidInput("project_context.project_ref or project_context.repository_ref is required")
+		}
+		scope.ProjectContext = governanceProjectContext(input.ProjectContext, false)
+		selectorCount++
+	}
+
+	if releaseCandidateRef := strings.TrimSpace(input.ReleaseCandidateRef); releaseCandidateRef != "" {
+		scope.ReleaseCandidateRef = &releaseCandidateRef
+		selectorCount++
+	}
+	if packageID := strings.TrimSpace(input.ReleaseDecisionPackageID); packageID != "" {
+		scope.ReleaseDecisionPackageId = &packageID
+		selectorCount++
+	}
+
+	integrationRef, err := governanceReleaseIntegrationRefSelector(input.IntegrationRef)
+	if err != nil {
+		return nil, err
+	}
+	if integrationRef != nil {
+		scope.IntegrationRef = integrationRef
+		selectorCount++
+	}
+
+	if selectorCount != 1 {
+		return nil, invalidInput("exactly one governance summary selector is required")
+	}
+	return scope, nil
+}
+
+func governanceReleaseIntegrationRefSelector(input GovernanceReleaseIntegrationRefSelectorInput) (*governancev1.ReleaseIntegrationRef, error) {
+	empty := allBlankValues(input.Domain, input.Kind, input.Ref)
+	if empty {
+		return nil, nil
+	}
+	domain, err := requiredTrimmed(input.Domain, "integration_ref.domain")
+	if err != nil {
+		return nil, err
+	}
+	kind, err := requiredTrimmed(input.Kind, "integration_ref.kind")
+	if err != nil {
+		return nil, err
+	}
+	ref, err := requiredTrimmed(input.Ref, "integration_ref.ref")
+	if err != nil {
+		return nil, err
+	}
+	return &governancev1.ReleaseIntegrationRef{Domain: domain, Kind: kind, Ref: ref}, nil
+}
+
 func governanceProviderContext(input GovernanceProviderContextRefInput) *governancev1.ProviderContextRef {
 	refs := optionalRefValues(
 		input.WorkItemRef,
@@ -1865,6 +1968,101 @@ func governanceReviewSignalSummary(signal *governancev1.ReviewSignal) Governance
 	}
 }
 
+func governanceSummaryOutput(response *governancev1.GovernanceSummaryResponse) GovernanceSummaryOutput {
+	if response == nil {
+		return GovernanceSummaryOutput{}
+	}
+	return GovernanceSummaryOutput{Summary: governanceSummary(response.GetSummary())}
+}
+
+func governanceSummary(summary *governancev1.GovernanceSummary) GovernanceSummary {
+	if summary == nil {
+		return GovernanceSummary{}
+	}
+	return GovernanceSummary{
+		Scope:              governanceSummaryScopeSummary(summary.GetScope()),
+		PendingDecisions:   governanceDecisionSummaries(summary.GetPendingDecisions()),
+		CompletedDecisions: governanceDecisionSummaries(summary.GetCompletedDecisions()),
+		EvidenceSummaries:  governanceLinkedEvidenceSummaries(summary.GetEvidenceSummaries()),
+		Diagnostics:        trimmedStrings(summary.GetDiagnostics()),
+	}
+}
+
+func governanceSummaryScopeSummary(scope *governancev1.GovernanceSummaryScope) GovernanceSummaryScope {
+	if scope == nil {
+		return GovernanceSummaryScope{}
+	}
+	return GovernanceSummaryScope{
+		Target:                   governanceTargetSummary(scope.GetTarget()),
+		ProjectContext:           governanceProjectContextSummary(scope.GetProjectContext()),
+		ReleaseCandidateRef:      scope.GetReleaseCandidateRef(),
+		ReleaseDecisionPackageID: scope.GetReleaseDecisionPackageId(),
+		IntegrationRef:           governanceReleaseIntegrationRefSummaryPtr(scope.GetIntegrationRef()),
+	}
+}
+
+func governanceDecisionSummaries(items []*governancev1.GovernanceDecisionSummary) []GovernanceDecisionSummary {
+	return summarizeItems(items, governanceDecisionSummary)
+}
+
+func governanceDecisionSummary(item *governancev1.GovernanceDecisionSummary) GovernanceDecisionSummary {
+	if item == nil {
+		return GovernanceDecisionSummary{}
+	}
+	return GovernanceDecisionSummary{
+		Kind:                     governanceDecisionSummaryKindName(item.GetKind()),
+		Attention:                governanceDecisionAttentionName(item.GetAttention()),
+		ID:                       item.GetId(),
+		ParentID:                 item.GetParentId(),
+		Target:                   governanceTargetSummary(item.GetTarget()),
+		ProjectContext:           governanceProjectContextSummary(item.GetProjectContext()),
+		ReleaseCandidateRef:      item.GetReleaseCandidateRef(),
+		ReleaseDecisionPackageID: item.GetReleaseDecisionPackageId(),
+		RiskClass:                governanceOptionalRiskClassName(item.GetRiskClass()),
+		ReviewOutcome:            governanceOptionalReviewSignalOutcomeName(item.GetReviewOutcome()),
+		GateRequestStatus:        governanceOptionalGateStatusName(item.GetGateRequestStatus()),
+		GateOutcome:              governanceOptionalGateOutcomeName(item.GetGateOutcome()),
+		ReleasePackageStatus:     governanceOptionalReleasePackageStatusName(item.GetReleasePackageStatus()),
+		ReleaseDecisionStatus:    governanceOptionalReleaseDecisionStatusName(item.GetReleaseDecisionStatus()),
+		ReleaseDecisionOutcome:   governanceOptionalReleaseDecisionOutcomeName(item.GetReleaseDecisionOutcome()),
+		BlockingSignalStatus:     governanceOptionalBlockingSignalStatusName(item.GetBlockingSignalStatus()),
+		Severity:                 governanceOptionalSignalSeverityName(item.GetSeverity()),
+		SafeSummary:              item.GetSafeSummary(),
+		EvidenceRefs:             governanceEvidenceSummaries(item.GetEvidenceRefs()),
+		IntegrationRefs:          governanceReleaseIntegrationRefSummaries(item.GetIntegrationRefs()),
+		ProviderRefs:             governanceProviderContextSummaries(item.GetProviderRefs()),
+		RuntimeRefs:              governanceRuntimeContextSummaries(item.GetRuntimeRefs()),
+		AgentContext:             governanceAgentContextSummary(item.GetAgentContext()),
+		Version:                  item.GetVersion(),
+		CreatedAt:                item.GetCreatedAt(),
+		UpdatedAt:                item.GetUpdatedAt(),
+		ObservedAt:               item.GetObservedAt(),
+	}
+}
+
+func governanceLinkedEvidenceSummaries(items []*governancev1.GovernanceEvidenceSummary) []GovernanceLinkedEvidenceSummary {
+	return summarizeItems(items, governanceLinkedEvidenceSummary)
+}
+
+func governanceLinkedEvidenceSummary(item *governancev1.GovernanceEvidenceSummary) GovernanceLinkedEvidenceSummary {
+	if item == nil {
+		return GovernanceLinkedEvidenceSummary{}
+	}
+	return GovernanceLinkedEvidenceSummary{
+		SourceKind:      item.GetSourceKind(),
+		SourceRef:       item.GetSourceRef(),
+		Status:          item.GetStatus(),
+		Outcome:         item.GetOutcome(),
+		SafeSummary:     item.GetSafeSummary(),
+		ErrorCode:       item.GetErrorCode(),
+		Digest:          item.GetDigest(),
+		ObservedAt:      item.GetObservedAt(),
+		Version:         item.GetVersion(),
+		EvidenceRefs:    governanceEvidenceSummaries(item.GetEvidenceRefs()),
+		IntegrationRefs: governanceReleaseIntegrationRefSummaries(item.GetIntegrationRefs()),
+	}
+}
+
 func governanceProjectContextSummary(contextRef *governancev1.ProjectContextRef) GovernanceProjectContextSummary {
 	if contextRef == nil {
 		return GovernanceProjectContextSummary{}
@@ -1925,6 +2123,35 @@ func governanceRuntimeContextSummary(contextRef *governancev1.RuntimeContextRef)
 
 func governanceRuntimeContextSummaries(contextRefs []*governancev1.RuntimeContextRef) []GovernanceRuntimeContextSummary {
 	return summarizeItems(contextRefs, governanceRuntimeContextSummary)
+}
+
+func governanceReleaseIntegrationRefSummaries(items []*governancev1.ReleaseIntegrationRef) []GovernanceReleaseIntegrationRefSummary {
+	return summarizeItems(items, governanceReleaseIntegrationRefSummary)
+}
+
+func governanceReleaseIntegrationRefSummaryPtr(ref *governancev1.ReleaseIntegrationRef) *GovernanceReleaseIntegrationRefSummary {
+	if ref == nil || strings.TrimSpace(ref.GetDomain()) == "" || strings.TrimSpace(ref.GetKind()) == "" || strings.TrimSpace(ref.GetRef()) == "" {
+		return nil
+	}
+	summary := governanceReleaseIntegrationRefSummary(ref)
+	return &summary
+}
+
+func governanceReleaseIntegrationRefSummary(ref *governancev1.ReleaseIntegrationRef) GovernanceReleaseIntegrationRefSummary {
+	if ref == nil {
+		return GovernanceReleaseIntegrationRefSummary{}
+	}
+	return GovernanceReleaseIntegrationRefSummary{
+		Domain:     ref.GetDomain(),
+		Kind:       ref.GetKind(),
+		Ref:        ref.GetRef(),
+		Status:     ref.GetStatus(),
+		Summary:    ref.GetSummary(),
+		Digest:     ref.GetDigest(),
+		ObservedAt: ref.GetObservedAt(),
+		Version:    ref.GetVersion(),
+		ErrorCode:  ref.GetErrorCode(),
+	}
 }
 
 func governanceTargetSummary(target *governancev1.TargetRef) GovernanceTargetSummary {
@@ -2100,12 +2327,27 @@ func governanceTargetTypeName(value governancev1.GovernanceTargetType) string {
 	return enumName(value, governanceTargetTypeNames)
 }
 
+func governanceDecisionSummaryKindName(value governancev1.GovernanceDecisionSummaryKind) string {
+	return enumName(value, governanceDecisionSummaryKindNames)
+}
+
+func governanceDecisionAttentionName(value governancev1.GovernanceDecisionAttention) string {
+	return enumName(value, governanceDecisionAttentionNames)
+}
+
 func governanceEvidenceKindName(value governancev1.EvidenceKind) string {
 	return enumName(value, governanceEvidenceKindNames)
 }
 
 func governanceRiskClassName(value governancev1.RiskClass) string {
 	return enumName(value, governanceRiskClassNames)
+}
+
+func governanceOptionalRiskClassName(value governancev1.RiskClass) string {
+	if value == governancev1.RiskClass_RISK_CLASS_UNSPECIFIED {
+		return ""
+	}
+	return governanceRiskClassName(value)
 }
 
 func governanceRiskAssessmentStatusName(value governancev1.RiskAssessmentStatus) string {
@@ -2124,20 +2366,55 @@ func governanceGateStatusName(value governancev1.GateRequestStatus) string {
 	return enumName(value, governanceGateStatusNames)
 }
 
+func governanceOptionalGateStatusName(value governancev1.GateRequestStatus) string {
+	if value == governancev1.GateRequestStatus_GATE_REQUEST_STATUS_UNSPECIFIED {
+		return ""
+	}
+	return governanceGateStatusName(value)
+}
+
 func governanceGateOutcomeName(value governancev1.GateOutcome) string {
 	return enumName(value, governanceGateOutcomeNames)
+}
+
+func governanceOptionalGateOutcomeName(value governancev1.GateOutcome) string {
+	if value == governancev1.GateOutcome_GATE_OUTCOME_UNSPECIFIED {
+		return ""
+	}
+	return governanceGateOutcomeName(value)
 }
 
 func governanceReleasePackageStatusName(value governancev1.ReleaseDecisionPackageStatus) string {
 	return enumName(value, governanceReleasePackageStatusNames)
 }
 
+func governanceOptionalReleasePackageStatusName(value governancev1.ReleaseDecisionPackageStatus) string {
+	if value == governancev1.ReleaseDecisionPackageStatus_RELEASE_DECISION_PACKAGE_STATUS_UNSPECIFIED {
+		return ""
+	}
+	return governanceReleasePackageStatusName(value)
+}
+
 func governanceReleaseDecisionStatusName(value governancev1.ReleaseDecisionStatus) string {
 	return enumName(value, governanceReleaseDecisionStatusNames)
 }
 
+func governanceOptionalReleaseDecisionStatusName(value governancev1.ReleaseDecisionStatus) string {
+	if value == governancev1.ReleaseDecisionStatus_RELEASE_DECISION_STATUS_UNSPECIFIED {
+		return ""
+	}
+	return governanceReleaseDecisionStatusName(value)
+}
+
 func governanceReleaseDecisionOutcomeName(value governancev1.ReleaseDecisionOutcome) string {
 	return enumName(value, governanceReleaseDecisionOutcomeNames)
+}
+
+func governanceOptionalReleaseDecisionOutcomeName(value governancev1.ReleaseDecisionOutcome) string {
+	if value == governancev1.ReleaseDecisionOutcome_RELEASE_DECISION_OUTCOME_UNSPECIFIED {
+		return ""
+	}
+	return governanceReleaseDecisionOutcomeName(value)
 }
 
 func governanceReleaseSafetyStateName(value governancev1.ReleaseSafetyStateKind) string {
@@ -2152,8 +2429,22 @@ func governanceBlockingSignalStatusName(value governancev1.BlockingSignalStatus)
 	return enumName(value, governanceBlockingSignalStatusNames)
 }
 
+func governanceOptionalBlockingSignalStatusName(value governancev1.BlockingSignalStatus) string {
+	if value == governancev1.BlockingSignalStatus_BLOCKING_SIGNAL_STATUS_UNSPECIFIED {
+		return ""
+	}
+	return governanceBlockingSignalStatusName(value)
+}
+
 func governanceSignalSeverityName(value governancev1.SignalSeverity) string {
 	return enumName(value, governanceSignalSeverityNames)
+}
+
+func governanceOptionalSignalSeverityName(value governancev1.SignalSeverity) string {
+	if value == governancev1.SignalSeverity_SIGNAL_SEVERITY_UNSPECIFIED {
+		return ""
+	}
+	return governanceSignalSeverityName(value)
 }
 
 func governanceReviewRoleKindName(value governancev1.ReviewRoleKind) string {
@@ -2162,6 +2453,13 @@ func governanceReviewRoleKindName(value governancev1.ReviewRoleKind) string {
 
 func governanceReviewSignalOutcomeName(value governancev1.ReviewSignalOutcome) string {
 	return enumName(value, governanceReviewSignalOutcomeNames)
+}
+
+func governanceOptionalReviewSignalOutcomeName(value governancev1.ReviewSignalOutcome) string {
+	if value == governancev1.ReviewSignalOutcome_REVIEW_SIGNAL_OUTCOME_UNSPECIFIED {
+		return ""
+	}
+	return governanceReviewSignalOutcomeName(value)
 }
 
 func governanceConfidenceName(value governancev1.Confidence) string {
