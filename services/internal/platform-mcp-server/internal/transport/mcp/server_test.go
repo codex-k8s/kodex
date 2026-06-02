@@ -1318,6 +1318,36 @@ func TestGovernanceSummaryGetRoutesToOwnerWithIntegrationSelector(t *testing.T) 
 	}
 }
 
+func TestGovernanceSummaryGetAcceptsSelfDeployPlanTarget(t *testing.T) {
+	t.Parallel()
+
+	governance := newFakeGovernanceManagerClient()
+	server := newTestServerWithGovernance(t, governance)
+	session, cleanup := connectClient(t, server)
+	defer cleanup()
+
+	result, err := session.CallTool(context.Background(), &mcpsdk.CallToolParams{
+		Name: ToolGovernanceSummaryGet,
+		Arguments: map[string]any{
+			"meta":   validGovernanceQueryMetaArgs(),
+			"target": map[string]any{"type": "self_deploy_plan", "ref": "agent:self-deploy-plan:1"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool(): %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("CallTool() returned tool error: %+v", result.Content)
+	}
+	if governance.getSummaryCalls != 1 {
+		t.Fatalf("getSummaryCalls = %d, want 1", governance.getSummaryCalls)
+	}
+	if governance.lastSummaryScope.GetTarget().GetType() != governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_SELF_DEPLOY_PLAN ||
+		governance.lastSummaryScope.GetTarget().GetRef() != "agent:self-deploy-plan:1" {
+		t.Fatalf("target scope = %+v, want self_deploy_plan", governance.lastSummaryScope.GetTarget())
+	}
+}
+
 func TestGovernanceSummaryGetRejectsMixedSelectors(t *testing.T) {
 	t.Parallel()
 

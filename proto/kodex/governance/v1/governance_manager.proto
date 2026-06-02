@@ -56,6 +56,8 @@ service GovernanceManagerService {
   rpc GetGateRequest(GetGateRequestRequest) returns (GateRequestResponse);
   // ListGateRequests returns gate requests by target or assessment, optionally refined by status.
   rpc ListGateRequests(ListGateRequestsRequest) returns (ListGateRequestsResponse);
+  // PrepareSelfDeployPlanGate evaluates a safe SelfDeployPlan and creates or returns the required owner/governance gate.
+  rpc PrepareSelfDeployPlanGate(PrepareSelfDeployPlanGateRequest) returns (SelfDeployPlanGateResponse);
   // BuildReleaseDecisionPackage builds a bounded evidence package for a release candidate.
   rpc BuildReleaseDecisionPackage(BuildReleaseDecisionPackageRequest) returns (ReleaseDecisionPackageResponse);
   // RecordReleaseRuntimeEvidence appends safe runtime/deploy evidence refs to a release package.
@@ -280,6 +282,40 @@ message RiskEvaluationFactor {
   string summary = 3;
   // tags are bounded classifier tags such as auth, production, destructive or migration.
   repeated string tags = 4;
+}
+
+// SelfDeployPlanGateInput carries only safe refs and summaries from agent-manager SelfDeployPlan.
+message SelfDeployPlanGateInput {
+  // self_deploy_plan_ref points to the plan owned by agent-manager.
+  string self_deploy_plan_ref = 1;
+  // project_context carries project/repository/release refs without copying project policy.
+  ProjectContextRef project_context = 2;
+  // provider_signal_ref points to the provider/project signal that produced the plan.
+  optional string provider_signal_ref = 3;
+  // source_ref points to the source branch, merge or provider work item.
+  optional string source_ref = 4;
+  // merge_commit_sha is a bounded commit identifier when available.
+  optional string merge_commit_sha = 5;
+  // services_yaml_ref points to project-catalog or provider summary for services.yaml.
+  optional string services_yaml_ref = 6;
+  // services_yaml_digest identifies the checked services.yaml projection.
+  optional string services_yaml_digest = 7;
+  // affected_service_keys are bounded service identifiers from the plan.
+  repeated string affected_service_keys = 8;
+  // path_categories classify changed paths without storing raw diff or file lists.
+  repeated string path_categories = 9;
+  // expected_runtime_job_types list planned job kinds such as build, deploy or health_check.
+  repeated string expected_runtime_job_types = 10;
+  // changed_files_summary_ref points to a safe provider/agent changed-file summary.
+  optional string changed_files_summary_ref = 11;
+  // safe_summary is a bounded human-readable summary without raw payload.
+  optional string safe_summary = 12;
+  // plan_fingerprint identifies the exact safe plan input for replay/conflict checks.
+  string plan_fingerprint = 13;
+  // evidence_refs point to bounded supporting facts.
+  repeated EvidenceRef evidence_refs = 14;
+  // risk_profile_ref optionally selects a local governance profile.
+  optional string risk_profile_ref = 15;
 }
 
 // RequiredGate describes a gate required by a risk assessment.
@@ -970,6 +1006,11 @@ message ListGateRequestsRequest {
   QueryMeta meta = 5;
 }
 
+message PrepareSelfDeployPlanGateRequest {
+  SelfDeployPlanGateInput plan = 1;
+  CommandMeta meta = 2;
+}
+
 message BuildReleaseDecisionPackageRequest {
   string release_candidate_ref = 1;
   ProjectContextRef project_context = 2;
@@ -1161,6 +1202,14 @@ message ListGateDecisionsResponse {
   PageResponse page = 2;
 }
 
+message SelfDeployPlanGateResponse {
+  SelfDeployPlanGateStatus status = 1;
+  RiskAssessment risk_assessment = 2;
+  GateRequest gate_request = 3;
+  optional GateDecision gate_decision = 4;
+  GovernanceSummary governance_summary = 5;
+}
+
 message ReleaseDecisionPackageResponse {
   ReleaseDecisionPackage release_decision_package = 1;
 }
@@ -1274,6 +1323,7 @@ enum GovernanceTargetType {
   GOVERNANCE_TARGET_TYPE_MERGE = 7;
   GOVERNANCE_TARGET_TYPE_POSTDEPLOY = 8;
   GOVERNANCE_TARGET_TYPE_ROLLBACK = 9;
+  GOVERNANCE_TARGET_TYPE_SELF_DEPLOY_PLAN = 10;
 }
 
 enum RiskClass {
@@ -1428,6 +1478,14 @@ enum GateOutcome {
   GATE_OUTCOME_HOLD = 5;
   GATE_OUTCOME_ROLLBACK = 6;
   GATE_OUTCOME_ESCALATE = 7;
+}
+
+enum SelfDeployPlanGateStatus {
+  SELF_DEPLOY_PLAN_GATE_STATUS_UNSPECIFIED = 0;
+  SELF_DEPLOY_PLAN_GATE_STATUS_PENDING = 1;
+  SELF_DEPLOY_PLAN_GATE_STATUS_APPROVED = 2;
+  SELF_DEPLOY_PLAN_GATE_STATUS_REJECTED = 3;
+  SELF_DEPLOY_PLAN_GATE_STATUS_BLOCKED = 4;
 }
 
 enum ReleaseDecisionPackageStatus {

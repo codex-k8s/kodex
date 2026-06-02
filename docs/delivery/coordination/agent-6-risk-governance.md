@@ -137,6 +137,13 @@
 - `staff-gateway` и будущий `web-console` получают готовую доменную сводку и не вычисляют governance-правила; gateway endpoint и UI остаются отдельными срезами.
 - Сырые provider payload, prompt/transcript, raw tool input/output, stdout/stderr, runtime logs, workspace paths, секреты и большие детали не возвращаются.
 
+## Завершённый срез self-deploy plan gate
+
+- Issue: #380.
+- Результат среза: `governance-manager` принимает safe `SelfDeployPlan` refs через `PrepareSelfDeployPlanGate`, создаёт или находит risk assessment и gate request по target `self_deploy_plan`, сверяет `plan_fingerprint` и учитывает уже записанный gate decision.
+- Команда возвращает `pending`, `approved`, `rejected` или `blocked` summary; runtime build/deploy jobs остаются запрещены до `approved`.
+- Вход хранит только project/repository/source/provider refs, service keys, path categories, expected runtime job types, `services.yaml` ref/digest, changed-file summary ref, bounded summary и fingerprint; raw webhook body, diff, полный YAML, provider response, logs, prompt/transcript, kubeconfig и секреты не принимаются.
+
 ## Ближайшие зависимости
 
 | Домен | Что нужно согласовать |

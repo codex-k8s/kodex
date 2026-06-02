@@ -29,6 +29,7 @@ const (
 	OperationListGateDecisions            Operation = "ListGateDecisions"
 	OperationGetGateRequest               Operation = "GetGateRequest"
 	OperationListGateRequests             Operation = "ListGateRequests"
+	OperationPrepareSelfDeployPlanGate    Operation = "PrepareSelfDeployPlanGate"
 	OperationBuildReleaseDecisionPackage  Operation = "BuildReleaseDecisionPackage"
 	OperationRecordReleaseRuntimeEvidence Operation = "RecordReleaseRuntimeEvidence"
 	OperationRecordReleaseAgentEvidence   Operation = "RecordReleaseAgentEvidence"

@@ -43,6 +43,7 @@ const (
 	aggregateGateDecision       = "gate_decision"
 	aggregateGateRequest        = "gate_request"
 	aggregateRiskProfileVersion = "risk_profile_version"
+	aggregateSelfDeployPlanGate = "self_deploy_plan_gate"
 
 	maxReleasePackageRefs      = 64
 	maxReleasePackageJSONBytes = 16 * 1024
@@ -662,6 +663,11 @@ func (s *Service) ListGateRequests(ctx context.Context, input ListGateRequestsIn
 
 func (s *Service) ListGateDecisions(ctx context.Context, input ListGateDecisionsInput) ([]entity.GateDecision, query.PageResult, error) {
 	return listWithAuthorization(ctx, input.Meta, input.Filter, s.authorizeGateDecisionList, s.repository.ListGateDecisions)
+}
+
+// PrepareSelfDeployPlanGate evaluates a safe self-deploy plan and prepares the required gate.
+func (s *Service) PrepareSelfDeployPlanGate(ctx context.Context, input SelfDeployPlanGateInput) (SelfDeployPlanGateResult, error) {
+	return s.prepareSelfDeployPlanGate(ctx, input)
 }
 
 func listWithAuthorization[Item any, Filter any](

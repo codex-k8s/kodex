@@ -166,6 +166,16 @@ const (
 	GateOutcomeEscalate              GateOutcome = "escalate"
 )
 
+// SelfDeployPlanGateStatus is the summarized gate readiness for a self-deploy plan.
+type SelfDeployPlanGateStatus string
+
+const (
+	SelfDeployPlanGateStatusPending  SelfDeployPlanGateStatus = "pending"
+	SelfDeployPlanGateStatusApproved SelfDeployPlanGateStatus = "approved"
+	SelfDeployPlanGateStatusRejected SelfDeployPlanGateStatus = "rejected"
+	SelfDeployPlanGateStatusBlocked  SelfDeployPlanGateStatus = "blocked"
+)
+
 // ReleaseDecisionPackageStatus is the lifecycle status of a release package.
 type ReleaseDecisionPackageStatus string
 
