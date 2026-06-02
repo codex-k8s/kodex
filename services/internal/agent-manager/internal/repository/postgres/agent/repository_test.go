@@ -83,6 +83,45 @@ func TestAgentActivityListSQLUsesKeysetCursor(t *testing.T) {
 	}
 }
 
+func TestOperatorSummaryListSQLUsesKeysetCursor(t *testing.T) {
+	t.Parallel()
+
+	for _, queryName := range []string{"session_summary__list", "run_summary__list"} {
+		query, err := loadQuery(queryName)
+		if err != nil {
+			t.Fatalf("load %s query: %v", queryName, err)
+		}
+		if strings.Contains(strings.ToUpper(query), "OFFSET") {
+			t.Fatalf("%s must not use OFFSET:\n%s", queryName, query)
+		}
+		if !strings.Contains(query, "@cursor_sort_bucket") ||
+			!strings.Contains(query, "@cursor_sort_time") ||
+			!strings.Contains(query, "@cursor_id") ||
+			!strings.Contains(query, "ORDER BY sort_bucket ASC, sort_time DESC, id DESC") {
+			t.Fatalf("%s must use keyset cursor by sort_bucket/sort_time/id:\n%s", queryName, query)
+		}
+	}
+}
+
+func TestSessionSummaryListSQLExposesFollowUpWaitingRef(t *testing.T) {
+	t.Parallel()
+
+	query, err := loadQuery("session_summary__list")
+	if err != nil {
+		t.Fatalf("load session summary list query: %v", err)
+	}
+	for _, expected := range []string{
+		"follow_up.id AS follow_up_ref",
+		"FROM agent_manager_follow_up_intents",
+		"status IN ('planned', 'requested')",
+		"follow_up_ref",
+	} {
+		if !strings.Contains(query, expected) {
+			t.Fatalf("session summary query misses %q:\n%s", expected, query)
+		}
+	}
+}
+
 func TestListAgentActivitiesKeysetPaginationStableUnderConcurrentInsert(t *testing.T) {
 	t.Parallel()
 

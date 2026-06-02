@@ -32,6 +32,11 @@ type activityPageQueryArgs struct {
 	PageSize int32
 }
 
+type readSurfacePageQueryArgs struct {
+	pgx.NamedArgs
+	PageSize int32
+}
+
 type activityPageCursor struct {
 	StartedAt time.Time
 	ID        uuid.UUID
@@ -40,6 +45,18 @@ type activityPageCursor struct {
 type activityPageToken struct {
 	StartedAt string `json:"started_at"`
 	ID        string `json:"id"`
+}
+
+type readSurfacePageCursor struct {
+	SortBucket int32
+	SortTime   time.Time
+	ID         uuid.UUID
+}
+
+type readSurfacePageToken struct {
+	SortBucket int32  `json:"sort_bucket"`
+	SortTime   string `json:"sort_time"`
+	ID         string `json:"id"`
 }
 
 func flowArgs(flow entity.Flow) pgx.NamedArgs {
@@ -438,6 +455,62 @@ func agentRunFilterArgs(filter query.AgentRunFilter) pageQueryArgs {
 	})
 }
 
+func agentSessionSummaryFilterArgs(filter query.AgentSessionFilter) (readSurfacePageQueryArgs, error) {
+	cursor, err := decodeReadSurfacePageToken(filter.Page.PageToken)
+	if err != nil {
+		return readSurfacePageQueryArgs{}, err
+	}
+	args := pgx.NamedArgs{
+		"scope_type":             optionalString(filter.Scope.Type),
+		"scope_ref":              optionalString(filter.Scope.Ref),
+		"status":                 optionalEnum(filter.Status),
+		"provider_work_item_ref": optionalString(filter.ProviderWorkItemRef),
+		"created_by_actor_ref":   optionalString(filter.CreatedByActorRef),
+		"created_after":          optionalTime(filter.CreatedAfter),
+		"created_before":         optionalTime(filter.CreatedBefore),
+		"cursor_sort_bucket":     nil,
+		"cursor_sort_time":       nil,
+		"cursor_id":              nil,
+	}
+	if cursor != nil {
+		args["cursor_sort_bucket"] = cursor.SortBucket
+		args["cursor_sort_time"] = cursor.SortTime
+		args["cursor_id"] = cursor.ID
+	}
+	limit := pageSize(filter.Page)
+	args["limit"] = limit + 1
+	return readSurfacePageQueryArgs{NamedArgs: args, PageSize: limit}, nil
+}
+
+func agentRunSummaryFilterArgs(filter query.AgentRunSummaryFilter) (readSurfacePageQueryArgs, error) {
+	cursor, err := decodeReadSurfacePageToken(filter.Page.PageToken)
+	if err != nil {
+		return readSurfacePageQueryArgs{}, err
+	}
+	args := pgx.NamedArgs{
+		"scope_type":                optionalString(filter.Scope.Type),
+		"scope_ref":                 optionalString(filter.Scope.Ref),
+		"session_id":                optionalUUID(filter.SessionID),
+		"role_profile_id":           optionalUUID(filter.RoleProfileID),
+		"status":                    optionalEnum(filter.Status),
+		"provider_work_item_ref":    optionalString(filter.ProviderWorkItemRef),
+		"provider_pull_request_ref": optionalString(filter.ProviderPullRequestRef),
+		"created_after":             optionalTime(filter.CreatedAfter),
+		"created_before":            optionalTime(filter.CreatedBefore),
+		"cursor_sort_bucket":        nil,
+		"cursor_sort_time":          nil,
+		"cursor_id":                 nil,
+	}
+	if cursor != nil {
+		args["cursor_sort_bucket"] = cursor.SortBucket
+		args["cursor_sort_time"] = cursor.SortTime
+		args["cursor_id"] = cursor.ID
+	}
+	limit := pageSize(filter.Page)
+	args["limit"] = limit + 1
+	return readSurfacePageQueryArgs{NamedArgs: args, PageSize: limit}, nil
+}
+
 func acceptanceResultFilterArgs(filter query.AcceptanceResultFilter) pageQueryArgs {
 	args := pgx.NamedArgs{}
 	args["session_id"] = optionalUUID(filter.SessionID)
@@ -500,6 +573,24 @@ func activityPageResult(items []entity.AgentActivity, page activityPageQueryArgs
 	return trimmed, value.PageResult{NextPageToken: next}
 }
 
+func agentRunSummaryPageToken(item entity.AgentRunListItem) string {
+	return encodeReadSurfacePageToken(item.SortBucket, item.SortTime, item.Run.ID)
+}
+
+func agentSessionSummaryPageToken(item entity.AgentSessionListItem) string {
+	return encodeReadSurfacePageToken(item.SortBucket, item.SortTime, item.Session.ID)
+}
+
+func readSurfacePageResult[T any](items []T, page readSurfacePageQueryArgs, token func(T) string) ([]T, value.PageResult) {
+	if int32(len(items)) <= page.PageSize {
+		return items, value.PageResult{}
+	}
+	trimmed := items[:int(page.PageSize)]
+	last := trimmed[len(trimmed)-1]
+	next := token(last)
+	return trimmed, value.PageResult{NextPageToken: next}
+}
+
 func pageSize(page value.PageRequest) int32 {
 	limit, _, _ := postgreslib.OffsetPageBounds(page.PageSize, "", defaultPageSize, maxPageSize)
 	return limit
@@ -516,6 +607,21 @@ func encodeActivityPageToken(activity entity.AgentActivity) string {
 	payload, err := json.Marshal(activityPageToken{
 		StartedAt: activity.StartedAt.UTC().Format(time.RFC3339Nano),
 		ID:        activity.ID.String(),
+	})
+	if err != nil {
+		return ""
+	}
+	return base64.RawURLEncoding.EncodeToString(payload)
+}
+
+func encodeReadSurfacePageToken(sortBucket int32, sortTime time.Time, id uuid.UUID) string {
+	if sortTime.IsZero() || id == uuid.Nil {
+		return ""
+	}
+	payload, err := json.Marshal(readSurfacePageToken{
+		SortBucket: sortBucket,
+		SortTime:   sortTime.UTC().Format(time.RFC3339Nano),
+		ID:         id.String(),
 	})
 	if err != nil {
 		return ""
@@ -542,6 +648,13 @@ func optionalInt64(value *int64) any {
 		return nil
 	}
 	return *value
+}
+
+func optionalTime(value *time.Time) any {
+	if value == nil {
+		return nil
+	}
+	return value.UTC()
 }
 
 func optionalEnum[T ~string](value *T) any {
@@ -607,4 +720,27 @@ func decodeActivityPageToken(token string) (*activityPageCursor, error) {
 		return nil, errs.ErrInvalidArgument
 	}
 	return &activityPageCursor{StartedAt: startedAt.UTC(), ID: id}, nil
+}
+
+func decodeReadSurfacePageToken(token string) (*readSurfacePageCursor, error) {
+	if token == "" {
+		return nil, nil
+	}
+	decoded, err := base64.RawURLEncoding.DecodeString(token)
+	if err != nil {
+		return nil, errs.ErrInvalidArgument
+	}
+	var payload readSurfacePageToken
+	if err := json.Unmarshal(decoded, &payload); err != nil {
+		return nil, errs.ErrInvalidArgument
+	}
+	sortTime, err := time.Parse(time.RFC3339Nano, payload.SortTime)
+	if err != nil || sortTime.IsZero() {
+		return nil, errs.ErrInvalidArgument
+	}
+	id, err := uuid.Parse(payload.ID)
+	if err != nil || id == uuid.Nil {
+		return nil, errs.ErrInvalidArgument
+	}
+	return &readSurfacePageCursor{SortBucket: payload.SortBucket, SortTime: sortTime.UTC(), ID: id}, nil
 }

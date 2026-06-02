@@ -4115,6 +4115,94 @@ func TestListAgentActivitiesValidatesFilterAndDelegates(t *testing.T) {
 	}
 }
 
+func TestListAgentSessionSummariesDelegatesScopedEmptyRead(t *testing.T) {
+	t.Parallel()
+
+	scope := value.ScopeRef{Type: "project", Ref: "project:operator"}
+	page := value.PageResult{NextPageToken: "next"}
+	repository := &fakeRepository{sessionSummaryPage: page}
+	service := New(Config{Repository: repository})
+
+	items, result, err := service.ListAgentSessionSummaries(context.Background(), query.AgentSessionFilter{
+		Scope: scope,
+		Page:  value.PageRequest{PageSize: 20},
+	})
+	if err != nil {
+		t.Fatalf("ListAgentSessionSummaries() err = %v", err)
+	}
+	if len(items) != 0 || result.NextPageToken != page.NextPageToken {
+		t.Fatalf("items/page = %v/%+v", items, result)
+	}
+	if repository.sessionSummaryFilter.Scope != scope || repository.sessionSummaryFilter.Page.PageSize != 20 {
+		t.Fatalf("filter = %+v", repository.sessionSummaryFilter)
+	}
+}
+
+func TestListAgentRunSummariesDelegatesSafeRead(t *testing.T) {
+	t.Parallel()
+
+	sessionID := uuid.MustParse("90909090-aaaa-bbbb-cccc-dddddddddddd")
+	runID := uuid.MustParse("90909090-bbbb-cccc-dddd-eeeeeeeeeeee")
+	activityID := uuid.MustParse("90909090-cccc-dddd-eeee-ffffffffffff")
+	repository := &fakeRepository{
+		runSummaryList: []entity.AgentRunListItem{{
+			Run: entity.AgentRun{
+				VersionedBase:  entity.VersionedBase{ID: runID, Version: 3},
+				SessionID:      sessionID,
+				RuntimeContext: value.RuntimeContextRef{JobRef: "runtime-job:123"},
+				Status:         enum.AgentRunStatusRunning,
+				ResultSummary:  "safe runtime summary",
+			},
+			HumanGateWaiting:    true,
+			HumanGateRequestRef: "human-gate:123",
+			LatestActivity: &entity.AgentActivitySummary{
+				ID:           activityID,
+				ActivityKind: enum.AgentActivityKindLifecycle,
+				Status:       enum.AgentActivityStatusStarted,
+				SafeSummary:  "safe activity",
+			},
+		}},
+		runSummaryPage: value.PageResult{NextPageToken: "next"},
+	}
+	service := New(Config{Repository: repository})
+
+	items, page, err := service.ListAgentRunSummaries(context.Background(), query.AgentRunSummaryFilter{
+		SessionID: sessionID,
+		Page:      value.PageRequest{PageSize: 10},
+	})
+	if err != nil {
+		t.Fatalf("ListAgentRunSummaries() err = %v", err)
+	}
+	if len(items) != 1 || items[0].Run.ID != runID || !items[0].HumanGateWaiting || page.NextPageToken != "next" {
+		t.Fatalf("items/page = %+v/%+v", items, page)
+	}
+	if repository.runSummaryFilter.SessionID != sessionID || repository.runSummaryFilter.Page.PageSize != 10 {
+		t.Fatalf("filter = %+v", repository.runSummaryFilter)
+	}
+}
+
+func TestListSummariesRejectBroadOrInvalidRange(t *testing.T) {
+	t.Parallel()
+
+	service := New(Config{Repository: &fakeRepository{}})
+	after := time.Date(2026, 5, 29, 12, 0, 0, 0, time.UTC)
+	before := after.Add(-time.Hour)
+
+	if _, _, err := service.ListAgentSessionSummaries(context.Background(), query.AgentSessionFilter{}); !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("ListAgentSessionSummaries() err = %v, want %v", err, errs.ErrInvalidArgument)
+	}
+	if _, _, err := service.ListAgentRunSummaries(context.Background(), query.AgentRunSummaryFilter{}); !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("ListAgentRunSummaries() err = %v, want %v", err, errs.ErrInvalidArgument)
+	}
+	if _, _, err := service.ListAgentRunSummaries(context.Background(), query.AgentRunSummaryFilter{
+		Scope:         value.ScopeRef{Type: "project", Ref: "project:operator"},
+		CreatedAfter:  &after,
+		CreatedBefore: &before,
+	}); !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("ListAgentRunSummaries() invalid range err = %v, want %v", err, errs.ErrInvalidArgument)
+	}
+}
+
 func TestRequestHumanGateStoresWaitAndOutbox(t *testing.T) {
 	t.Parallel()
 
@@ -4917,6 +5005,12 @@ type fakeRepository struct {
 	activityList           []entity.AgentActivity
 	activityPage           value.PageResult
 	activityFilter         query.AgentActivityFilter
+	sessionSummaryList     []entity.AgentSessionListItem
+	sessionSummaryPage     value.PageResult
+	sessionSummaryFilter   query.AgentSessionFilter
+	runSummaryList         []entity.AgentRunListItem
+	runSummaryPage         value.PageResult
+	runSummaryFilter       query.AgentRunSummaryFilter
 	humanGateByID          map[uuid.UUID]entity.HumanGateRequest
 	humanGateList          []entity.HumanGateRequest
 	humanGatePage          value.PageResult
@@ -5164,6 +5258,11 @@ func (f *fakeRepository) GetAgentSession(_ context.Context, id uuid.UUID) (entit
 	return entity.AgentSession{}, errors.ErrUnsupported
 }
 
+func (f *fakeRepository) ListAgentSessionSummaries(_ context.Context, filter query.AgentSessionFilter) ([]entity.AgentSessionListItem, value.PageResult, error) {
+	f.sessionSummaryFilter = filter
+	return f.sessionSummaryList, f.sessionSummaryPage, nil
+}
+
 func (f *fakeRepository) FindActiveAgentSessionByProviderWorkItem(_ context.Context, scope value.ScopeRef, providerWorkItemRef string) (entity.AgentSession, error) {
 	if f.activeSessionFound && f.activeSession.Scope == scope && f.activeSession.ProviderWorkItemRef == providerWorkItemRef {
 		return f.activeSession, nil
@@ -5203,6 +5302,11 @@ func (f *fakeRepository) GetAgentRun(_ context.Context, id uuid.UUID) (entity.Ag
 
 func (f *fakeRepository) ListAgentRuns(context.Context, query.AgentRunFilter) ([]entity.AgentRun, value.PageResult, error) {
 	return nil, value.PageResult{}, errors.ErrUnsupported
+}
+
+func (f *fakeRepository) ListAgentRunSummaries(_ context.Context, filter query.AgentRunSummaryFilter) ([]entity.AgentRunListItem, value.PageResult, error) {
+	f.runSummaryFilter = filter
+	return f.runSummaryList, f.runSummaryPage, nil
 }
 
 func (f *fakeRepository) CreateSessionStateSnapshotWithResult(_ context.Context, snapshot entity.AgentSessionStateSnapshot, session entity.AgentSession, _ int64, result entity.CommandResult, event entity.OutboxEvent) error {

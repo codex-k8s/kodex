@@ -985,6 +985,78 @@ func ListAgentRunsInput(request *agentsv1.ListAgentRunsRequest) (service.AgentRu
 	}, nil
 }
 
+func ListAgentSessionsInput(request *agentsv1.ListAgentSessionsRequest) (service.AgentSessionSummaryList, error) {
+	if _, err := QueryMetaFromProto(request.GetMeta()); err != nil {
+		return service.AgentSessionSummaryList{}, err
+	}
+	scope, err := optionalScopeFromProto(request.GetScope())
+	if err != nil {
+		return service.AgentSessionSummaryList{}, err
+	}
+	status, err := OptionalAgentSessionStatusFromProto(request.Status)
+	if err != nil {
+		return service.AgentSessionSummaryList{}, err
+	}
+	createdAfter, err := optionalTimeFromProto(request.CreatedAfter)
+	if err != nil {
+		return service.AgentSessionSummaryList{}, err
+	}
+	createdBefore, err := optionalTimeFromProto(request.CreatedBefore)
+	if err != nil {
+		return service.AgentSessionSummaryList{}, err
+	}
+	return service.AgentSessionSummaryList{
+		Scope:               scope,
+		Status:              status,
+		ProviderWorkItemRef: strings.TrimSpace(request.GetProviderWorkItemRef()),
+		CreatedByActorRef:   strings.TrimSpace(request.GetCreatedByActorRef()),
+		CreatedAfter:        createdAfter,
+		CreatedBefore:       createdBefore,
+		Page:                pageRequestFromProto(request.GetPage()),
+	}, nil
+}
+
+func ListAgentRunSummariesInput(request *agentsv1.ListAgentRunSummariesRequest) (service.AgentRunSummaryList, error) {
+	if _, err := QueryMetaFromProto(request.GetMeta()); err != nil {
+		return service.AgentRunSummaryList{}, err
+	}
+	scope, err := optionalScopeFromProto(request.GetScope())
+	if err != nil {
+		return service.AgentRunSummaryList{}, err
+	}
+	sessionID, err := optionalUUIDValue(request.GetSessionId())
+	if err != nil {
+		return service.AgentRunSummaryList{}, err
+	}
+	roleID, err := optionalUUIDValue(request.GetRoleProfileId())
+	if err != nil {
+		return service.AgentRunSummaryList{}, err
+	}
+	status, err := OptionalAgentRunStatusFromProto(request.Status)
+	if err != nil {
+		return service.AgentRunSummaryList{}, err
+	}
+	createdAfter, err := optionalTimeFromProto(request.CreatedAfter)
+	if err != nil {
+		return service.AgentRunSummaryList{}, err
+	}
+	createdBefore, err := optionalTimeFromProto(request.CreatedBefore)
+	if err != nil {
+		return service.AgentRunSummaryList{}, err
+	}
+	return service.AgentRunSummaryList{
+		Scope:                  scope,
+		SessionID:              sessionID,
+		RoleProfileID:          roleID,
+		Status:                 status,
+		ProviderWorkItemRef:    strings.TrimSpace(request.GetProviderWorkItemRef()),
+		ProviderPullRequestRef: strings.TrimSpace(request.GetProviderPullRequestRef()),
+		CreatedAfter:           createdAfter,
+		CreatedBefore:          createdBefore,
+		Page:                   pageRequestFromProto(request.GetPage()),
+	}, nil
+}
+
 func stageInputs(items []*agentsv1.StageInput) ([]service.StageInput, error) {
 	result := make([]service.StageInput, 0, len(items))
 	for _, item := range items {
@@ -1142,6 +1214,13 @@ func scopedListBase(rawMeta *agentsv1.QueryMeta, rawScope *agentsv1.ScopeRef) (v
 		return value.ScopeRef{}, err
 	}
 	return ScopeFromProto(rawScope)
+}
+
+func optionalScopeFromProto(scope *agentsv1.ScopeRef) (value.ScopeRef, error) {
+	if scope == nil {
+		return value.ScopeRef{}, nil
+	}
+	return ScopeFromProto(scope)
 }
 
 func promptListBase(rawMeta *agentsv1.QueryMeta, rawRoleProfileID string, rawKind *agentsv1.PromptKind, rawPage *agentsv1.PageRequest) (uuid.UUID, *enum.PromptKind, value.PageRequest, error) {

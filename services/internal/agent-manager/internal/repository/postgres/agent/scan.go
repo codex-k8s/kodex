@@ -3,6 +3,7 @@ package agent
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -241,11 +242,59 @@ func scanAgentSession(row postgreslib.RowScanner) (entity.AgentSession, error) {
 
 func scanAgentRun(row postgreslib.RowScanner) (entity.AgentRun, error) {
 	var run entity.AgentRun
+	if err := scanAgentRunWithExtra(row, &run); err != nil {
+		return run, err
+	}
+	return run, nil
+}
+
+func scanAgentRunListItem(row postgreslib.RowScanner) (entity.AgentRunListItem, error) {
+	var item entity.AgentRunListItem
+	var gateRef, followUpRef pgtype.UUID
+	var gateReason pgtype.Text
+	var sortBucket pgtype.Int4
+	var sortTime pgtype.Timestamptz
+	var latestActivity agentActivitySummaryRow
+	err := scanAgentRunWithExtra(row, &item.Run,
+		&gateRef,
+		&gateReason,
+		&followUpRef,
+		&latestActivity.id,
+		&latestActivity.kind,
+		&latestActivity.status,
+		&latestActivity.toolName,
+		&latestActivity.toolCategory,
+		&latestActivity.safeSummary,
+		&latestActivity.payloadDigest,
+		&latestActivity.boundedError,
+		&latestActivity.startedAt,
+		&latestActivity.finishedAt,
+		&latestActivity.version,
+		&latestActivity.updatedAt,
+		&sortBucket,
+		&sortTime,
+	)
+	if err != nil {
+		return item, err
+	}
+	item.HumanGateRequestRef = uuidTextFromPG(gateRef)
+	item.HumanGateReasonCode = textFromPG(gateReason)
+	item.HumanGateWaiting = item.HumanGateRequestRef != ""
+	item.FollowUpWaiting = uuidTextFromPG(followUpRef) != ""
+	item.LatestActivity = latestActivity.toEntity()
+	if sortBucket.Valid {
+		item.SortBucket = sortBucket.Int32
+	}
+	item.SortTime = timeFromPG(sortTime)
+	return item, nil
+}
+
+func scanAgentRunWithExtra(row postgreslib.RowScanner, run *entity.AgentRun, extra ...any) error {
 	var flowVersionID, stageID pgtype.UUID
 	var runtimeContext, providerTarget, guidanceRefs []byte
 	var status string
 	var startedAt, finishedAt pgtype.Timestamptz
-	err := row.Scan(
+	base := []any{
 		&run.ID,
 		&run.SessionID,
 		&flowVersionID,
@@ -266,25 +315,100 @@ func scanAgentRun(row postgreslib.RowScanner) (entity.AgentRun, error) {
 		&finishedAt,
 		&run.CreatedAt,
 		&run.UpdatedAt,
-	)
+	}
+	if err := row.Scan(append(base, extra...)...); err != nil {
+		return err
+	}
 	run.FlowVersionID = postgreslib.UUIDPtrFromPG(flowVersionID)
 	run.StageID = postgreslib.UUIDPtrFromPG(stageID)
 	run.Status = enum.AgentRunStatus(status)
 	run.StartedAt = postgreslib.TimePtrFromPG(startedAt)
 	run.FinishedAt = postgreslib.TimePtrFromPG(finishedAt)
-	if err != nil {
-		return run, err
-	}
 	if err := json.Unmarshal(runtimeContext, &run.RuntimeContext); err != nil {
-		return run, fmt.Errorf("scan run runtime_context: %w", err)
+		return fmt.Errorf("scan run runtime_context: %w", err)
 	}
 	if err := json.Unmarshal(providerTarget, &run.ProviderTarget); err != nil {
-		return run, fmt.Errorf("scan run provider_target: %w", err)
+		return fmt.Errorf("scan run provider_target: %w", err)
 	}
 	if err := json.Unmarshal(guidanceRefs, &run.GuidanceRefs); err != nil {
-		return run, fmt.Errorf("scan run guidance_refs: %w", err)
+		return fmt.Errorf("scan run guidance_refs: %w", err)
 	}
-	return run, nil
+	return nil
+}
+
+func scanAgentSessionListItem(row postgreslib.RowScanner) (entity.AgentSessionListItem, error) {
+	var item entity.AgentSessionListItem
+	var flowVersionID, currentStageID, latestSnapshotID, latestRunID pgtype.UUID
+	var status string
+	var latestRunStatus pgtype.Text
+	var latestRunRuntimeContext []byte
+	var latestRunSummary, gateReason pgtype.Text
+	var gateRef, followUpRef pgtype.UUID
+	var activeRunCount pgtype.Int4
+	var sortBucket pgtype.Int4
+	var sortTime pgtype.Timestamptz
+	var latestActivity agentActivitySummaryRow
+	err := row.Scan(
+		&item.Session.ID,
+		&item.Session.Scope.Type,
+		&item.Session.Scope.Ref,
+		&item.Session.ProviderWorkItemRef,
+		&flowVersionID,
+		&currentStageID,
+		&latestSnapshotID,
+		&status,
+		&item.Session.CreatedByActorRef,
+		&item.Session.Version,
+		&item.Session.CreatedAt,
+		&item.Session.UpdatedAt,
+		&latestRunID,
+		&latestRunStatus,
+		&latestRunRuntimeContext,
+		&latestRunSummary,
+		&activeRunCount,
+		&gateRef,
+		&gateReason,
+		&followUpRef,
+		&latestActivity.id,
+		&latestActivity.kind,
+		&latestActivity.status,
+		&latestActivity.toolName,
+		&latestActivity.toolCategory,
+		&latestActivity.safeSummary,
+		&latestActivity.payloadDigest,
+		&latestActivity.boundedError,
+		&latestActivity.startedAt,
+		&latestActivity.finishedAt,
+		&latestActivity.version,
+		&latestActivity.updatedAt,
+		&sortBucket,
+		&sortTime,
+	)
+	if err != nil {
+		return item, err
+	}
+	item.Session.FlowVersionID = postgreslib.UUIDPtrFromPG(flowVersionID)
+	item.Session.CurrentStageID = postgreslib.UUIDPtrFromPG(currentStageID)
+	item.Session.LatestStateSnapshotID = postgreslib.UUIDPtrFromPG(latestSnapshotID)
+	item.Session.Status = enum.AgentSessionStatus(status)
+	item.LatestRunID = postgreslib.UUIDPtrFromPG(latestRunID)
+	item.LatestRunStatus = enum.AgentRunStatus(textFromPG(latestRunStatus))
+	item.LatestRunSafeSummary = textFromPG(latestRunSummary)
+	item.LatestRuntimeJobRef = runtimeJobRefFromPayload(latestRunRuntimeContext)
+	if activeRunCount.Valid {
+		item.ActiveRunCount = activeRunCount.Int32
+	}
+	item.HumanGateRequestRef = uuidTextFromPG(gateRef)
+	item.HumanGateReasonCode = textFromPG(gateReason)
+	item.HumanGateWaiting = item.HumanGateRequestRef != ""
+	item.FollowUpRef = uuidTextFromPG(followUpRef)
+	item.FollowUpWaiting = item.FollowUpRef != ""
+	item.LatestActivity = latestActivity.toEntity()
+	if sortBucket.Valid {
+		item.SortBucket = sortBucket.Int32
+	}
+	item.SortTime = timeFromPG(sortTime)
+	return item, nil
 }
 
 func scanSessionStateSnapshot(row postgreslib.RowScanner) (entity.AgentSessionStateSnapshot, error) {
@@ -531,6 +655,78 @@ func (r commandResultRow) toEntity() entity.CommandResult {
 	result.AggregateType = enum.CommandAggregateType(r.aggregateType)
 	result.ResultPayload = append(result.ResultPayload[:0], r.payload...)
 	return result
+}
+
+type agentActivitySummaryRow struct {
+	id            pgtype.UUID
+	kind          pgtype.Text
+	status        pgtype.Text
+	toolName      pgtype.Text
+	toolCategory  pgtype.Text
+	safeSummary   pgtype.Text
+	payloadDigest pgtype.Text
+	boundedError  pgtype.Text
+	startedAt     pgtype.Timestamptz
+	finishedAt    pgtype.Timestamptz
+	version       pgtype.Int8
+	updatedAt     pgtype.Timestamptz
+}
+
+func (r agentActivitySummaryRow) toEntity() *entity.AgentActivitySummary {
+	id := postgreslib.UUIDPtrFromPG(r.id)
+	if id == nil {
+		return nil
+	}
+	summary := &entity.AgentActivitySummary{
+		ID:            *id,
+		ActivityKind:  enum.AgentActivityKind(textFromPG(r.kind)),
+		Status:        enum.AgentActivityStatus(textFromPG(r.status)),
+		ToolName:      textFromPG(r.toolName),
+		ToolCategory:  textFromPG(r.toolCategory),
+		SafeSummary:   textFromPG(r.safeSummary),
+		PayloadDigest: textFromPG(r.payloadDigest),
+		BoundedError:  textFromPG(r.boundedError),
+		StartedAt:     postgreslib.TimePtrFromPG(r.startedAt),
+		FinishedAt:    postgreslib.TimePtrFromPG(r.finishedAt),
+		UpdatedAt:     timeFromPG(r.updatedAt),
+	}
+	if r.version.Valid {
+		summary.Version = r.version.Int64
+	}
+	return summary
+}
+
+func textFromPG(value pgtype.Text) string {
+	if !value.Valid {
+		return ""
+	}
+	return value.String
+}
+
+func uuidTextFromPG(value pgtype.UUID) string {
+	id := postgreslib.UUIDPtrFromPG(value)
+	if id == nil {
+		return ""
+	}
+	return id.String()
+}
+
+func timeFromPG(value pgtype.Timestamptz) time.Time {
+	if !value.Valid {
+		return time.Time{}
+	}
+	return value.Time
+}
+
+func runtimeJobRefFromPayload(payload []byte) string {
+	if len(payload) == 0 {
+		return ""
+	}
+	var runtimeContext value.RuntimeContextRef
+	if err := json.Unmarshal(payload, &runtimeContext); err != nil {
+		return ""
+	}
+	return runtimeContext.JobRef
 }
 
 func outboxRowToEntity(raw postgreslib.OutboxEventRow) entity.OutboxEvent {

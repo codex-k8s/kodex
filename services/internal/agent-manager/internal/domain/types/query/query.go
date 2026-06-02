@@ -2,6 +2,8 @@
 package query
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 
 	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/types/enum"
@@ -53,6 +55,28 @@ type AgentRunFilter struct {
 	Status              *enum.AgentRunStatus
 	ProviderWorkItemRef string
 	Page                value.PageRequest
+}
+
+type AgentSessionFilter struct {
+	Scope               value.ScopeRef
+	Status              *enum.AgentSessionStatus
+	ProviderWorkItemRef string
+	CreatedByActorRef   string
+	CreatedAfter        *time.Time
+	CreatedBefore       *time.Time
+	Page                value.PageRequest
+}
+
+type AgentRunSummaryFilter struct {
+	Scope                  value.ScopeRef
+	SessionID              uuid.UUID
+	RoleProfileID          uuid.UUID
+	Status                 *enum.AgentRunStatus
+	ProviderWorkItemRef    string
+	ProviderPullRequestRef string
+	CreatedAfter           *time.Time
+	CreatedBefore          *time.Time
+	Page                   value.PageRequest
 }
 
 type AcceptanceResultFilter struct {

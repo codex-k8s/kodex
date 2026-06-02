@@ -671,6 +671,104 @@ func TestSessionRunHandlersMapRequests(t *testing.T) {
 	}
 }
 
+func TestOperatorReadSurfaceHandlersMapSafeSummaries(t *testing.T) {
+	t.Parallel()
+
+	sessionID := uuid.MustParse("bbbbbbbb-1111-2222-3333-444444444444")
+	runID := uuid.MustParse("bbbbbbbb-2222-3333-4444-555555555555")
+	activityID := uuid.MustParse("bbbbbbbb-3333-4444-5555-666666666666")
+	scope := &agentsv1.ScopeRef{Type: agentsv1.AgentScopeType_AGENT_SCOPE_TYPE_PROJECT, Ref: "project:operator"}
+	runStatus := agentsv1.AgentRunStatus_AGENT_RUN_STATUS_RUNNING
+	sessionStatus := agentsv1.AgentSessionStatus_AGENT_SESSION_STATUS_OPEN
+	createdAfter := "2026-05-29T10:00:00Z"
+	createdBefore := "2026-05-30T10:00:00Z"
+
+	server := NewServer(&fakeAgentService{
+		listAgentSessionSummaries: func(_ context.Context, input agentservice.AgentSessionSummaryList) ([]entity.AgentSessionListItem, value.PageResult, error) {
+			if input.Scope.Type != "project" || input.Scope.Ref != "project:operator" || input.Status == nil || *input.Status != enum.AgentSessionStatusOpen ||
+				input.ProviderWorkItemRef != "provider:issue/1" || input.CreatedByActorRef != "user:owner" || input.CreatedAfter == nil || input.CreatedBefore == nil {
+				t.Fatalf("session summary input = %+v", input)
+			}
+			return []entity.AgentSessionListItem{{
+				Session: entity.AgentSession{
+					VersionedBase:       entity.VersionedBase{ID: sessionID, Version: 2},
+					Scope:               value.ScopeRef{Type: "project", Ref: "project:operator"},
+					ProviderWorkItemRef: "provider:issue/1",
+					Status:              enum.AgentSessionStatusOpen,
+					CreatedByActorRef:   "user:owner",
+				},
+				LatestRunID:          &runID,
+				LatestRunStatus:      enum.AgentRunStatusRunning,
+				LatestRuntimeJobRef:  "runtime-job:123",
+				LatestRunSafeSummary: "safe latest run",
+				ActiveRunCount:       1,
+				HumanGateWaiting:     true,
+				HumanGateRequestRef:  "human-gate:1",
+				FollowUpWaiting:      true,
+				FollowUpRef:          "follow-up:1",
+				LatestActivity:       sampleActivitySummary(activityID),
+			}}, value.PageResult{NextPageToken: "sessions-next"}, nil
+		},
+		listAgentRunSummaries: func(_ context.Context, input agentservice.AgentRunSummaryList) ([]entity.AgentRunListItem, value.PageResult, error) {
+			if input.Scope.Type != "project" || input.Scope.Ref != "project:operator" || input.SessionID != sessionID ||
+				input.Status == nil || *input.Status != enum.AgentRunStatusRunning || input.ProviderPullRequestRef != "provider:pr/1" {
+				t.Fatalf("run summary input = %+v", input)
+			}
+			return []entity.AgentRunListItem{{
+				Run: entity.AgentRun{
+					VersionedBase:  entity.VersionedBase{ID: runID, Version: 3},
+					SessionID:      sessionID,
+					RuntimeContext: value.RuntimeContextRef{JobRef: "runtime-job:123"},
+					Status:         enum.AgentRunStatusRunning,
+					ResultSummary:  "safe runtime summary",
+				},
+				HumanGateWaiting:    true,
+				HumanGateRequestRef: "human-gate:1",
+				FollowUpWaiting:     true,
+				LatestActivity:      sampleActivitySummary(activityID),
+			}}, value.PageResult{NextPageToken: "runs-next"}, nil
+		},
+	})
+
+	sessions, err := server.ListAgentSessions(context.Background(), &agentsv1.ListAgentSessionsRequest{
+		Meta:                queryMeta(),
+		Scope:               scope,
+		Status:              &sessionStatus,
+		ProviderWorkItemRef: ptr("provider:issue/1"),
+		CreatedByActorRef:   ptr("user:owner"),
+		CreatedAfter:        &createdAfter,
+		CreatedBefore:       &createdBefore,
+		Page:                &agentsv1.PageRequest{PageSize: 10},
+	})
+	if err != nil {
+		t.Fatalf("ListAgentSessions() error = %v", err)
+	}
+	if len(sessions.GetSessions()) != 1 || sessions.GetSessions()[0].GetLatestRunId() != runID.String() ||
+		!sessions.GetSessions()[0].GetHumanGateWaiting() ||
+		!sessions.GetSessions()[0].GetFollowUpWaiting() ||
+		sessions.GetSessions()[0].GetFollowUpRef() != "follow-up:1" ||
+		sessions.GetPage().GetNextPageToken() != "sessions-next" {
+		t.Fatalf("sessions = %+v", sessions)
+	}
+
+	runs, err := server.ListAgentRunSummaries(context.Background(), &agentsv1.ListAgentRunSummariesRequest{
+		Meta:                   queryMeta(),
+		Scope:                  scope,
+		SessionId:              ptr(sessionID.String()),
+		Status:                 &runStatus,
+		ProviderPullRequestRef: ptr("provider:pr/1"),
+		Page:                   &agentsv1.PageRequest{PageSize: 10},
+	})
+	if err != nil {
+		t.Fatalf("ListAgentRunSummaries() error = %v", err)
+	}
+	if len(runs.GetRuns()) != 1 || runs.GetRuns()[0].GetRuntimeJobRef() != "runtime-job:123" ||
+		runs.GetRuns()[0].GetRuntimeObservationState() != agentsv1.AgentRunRuntimeObservationState_AGENT_RUN_RUNTIME_OBSERVATION_STATE_STORED_REF ||
+		!runs.GetRuns()[0].GetFollowUpWaiting() || runs.GetPage().GetNextPageToken() != "runs-next" {
+		t.Fatalf("runs = %+v", runs)
+	}
+}
+
 func TestGetAgentRunRuntimeStatusRejectsMissingQueryMeta(t *testing.T) {
 	t.Parallel()
 
@@ -1251,6 +1349,8 @@ type fakeAgentService struct {
 	getAgentRunRuntimeStatus    func(context.Context, agentservice.GetAgentRunRuntimeStatusInput) (agentservice.AgentRunRuntimeStatusResult, error)
 	recordSessionSnapshot       func(context.Context, agentservice.RecordSessionStateSnapshotInput) (agentservice.SessionSnapshotResult, error)
 	listAgentRuns               func(context.Context, agentservice.AgentRunList) ([]entity.AgentRun, value.PageResult, error)
+	listAgentSessionSummaries   func(context.Context, agentservice.AgentSessionSummaryList) ([]entity.AgentSessionListItem, value.PageResult, error)
+	listAgentRunSummaries       func(context.Context, agentservice.AgentRunSummaryList) ([]entity.AgentRunListItem, value.PageResult, error)
 	getSessionStateSnapshot     func(context.Context, uuid.UUID) (entity.AgentSessionStateSnapshot, error)
 	requestAcceptance           func(context.Context, agentservice.RequestAcceptanceInput) (entity.AcceptanceResult, error)
 	recordAcceptanceResult      func(context.Context, agentservice.RecordAcceptanceResultInput) (entity.AcceptanceResult, error)
@@ -1439,6 +1539,20 @@ func (f *fakeAgentService) ListAgentRuns(ctx context.Context, input agentservice
 		return nil, value.PageResult{}, errs.ErrPreconditionFailed
 	}
 	return f.listAgentRuns(ctx, input)
+}
+
+func (f *fakeAgentService) ListAgentSessionSummaries(ctx context.Context, input agentservice.AgentSessionSummaryList) ([]entity.AgentSessionListItem, value.PageResult, error) {
+	if f.listAgentSessionSummaries == nil {
+		return nil, value.PageResult{}, errs.ErrPreconditionFailed
+	}
+	return f.listAgentSessionSummaries(ctx, input)
+}
+
+func (f *fakeAgentService) ListAgentRunSummaries(ctx context.Context, input agentservice.AgentRunSummaryList) ([]entity.AgentRunListItem, value.PageResult, error) {
+	if f.listAgentRunSummaries == nil {
+		return nil, value.PageResult{}, errs.ErrPreconditionFailed
+	}
+	return f.listAgentRunSummaries(ctx, input)
 }
 
 func (f *fakeAgentService) GetSessionStateSnapshot(ctx context.Context, id uuid.UUID) (entity.AgentSessionStateSnapshot, error) {
@@ -1655,6 +1769,20 @@ func sampleHumanGate(id uuid.UUID, sessionID uuid.UUID, runID *uuid.UUID, stageI
 		IdempotencyKey: "domain.Service.RequestHumanGate:user:operator-1:human-gate",
 		Status:         enum.HumanGateStatusWaiting,
 		Outcome:        enum.HumanGateOutcomeNone,
+	}
+}
+
+func sampleActivitySummary(id uuid.UUID) *entity.AgentActivitySummary {
+	now := sampleTime()
+	return &entity.AgentActivitySummary{
+		ID:           id,
+		ActivityKind: enum.AgentActivityKindLifecycle,
+		Status:       enum.AgentActivityStatusStarted,
+		ToolName:     "runtime",
+		SafeSummary:  "safe activity",
+		StartedAt:    &now,
+		Version:      1,
+		UpdatedAt:    now,
 	}
 }
 

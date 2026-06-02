@@ -204,6 +204,49 @@ type AgentActivity struct {
 	IdempotencyKey  string
 }
 
+type AgentActivitySummary struct {
+	ID            uuid.UUID
+	ActivityKind  enum.AgentActivityKind
+	Status        enum.AgentActivityStatus
+	ToolName      string
+	ToolCategory  string
+	SafeSummary   string
+	PayloadDigest string
+	BoundedError  string
+	StartedAt     *time.Time
+	FinishedAt    *time.Time
+	Version       int64
+	UpdatedAt     time.Time
+}
+
+type AgentRunListItem struct {
+	Run                 AgentRun
+	HumanGateWaiting    bool
+	HumanGateRequestRef string
+	HumanGateReasonCode string
+	FollowUpWaiting     bool
+	LatestActivity      *AgentActivitySummary
+	SortBucket          int32
+	SortTime            time.Time
+}
+
+type AgentSessionListItem struct {
+	Session              AgentSession
+	LatestRunID          *uuid.UUID
+	LatestRunStatus      enum.AgentRunStatus
+	LatestRuntimeJobRef  string
+	LatestRunSafeSummary string
+	ActiveRunCount       int32
+	HumanGateWaiting     bool
+	HumanGateRequestRef  string
+	HumanGateReasonCode  string
+	LatestActivity       *AgentActivitySummary
+	FollowUpWaiting      bool
+	FollowUpRef          string
+	SortBucket           int32
+	SortTime             time.Time
+}
+
 type HumanGateRequest struct {
 	VersionedBase
 	SessionID                uuid.UUID

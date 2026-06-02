@@ -8,6 +8,7 @@ import (
 	agentsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/agents/v1"
 	agentservice "github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/service"
 	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/types/enum"
 	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/types/value"
 )
 
@@ -35,6 +36,8 @@ type PromptTemplateListOutput = PageOutput[entity.PromptTemplate]
 type PromptTemplateVersionListOutput = PageOutput[entity.PromptTemplateVersion]
 
 type AgentRunListOutput = PageOutput[entity.AgentRun]
+type AgentSessionSummaryListOutput = PageOutput[entity.AgentSessionListItem]
+type AgentRunSummaryListOutput = PageOutput[entity.AgentRunListItem]
 
 type AcceptanceResultListOutput = PageOutput[entity.AcceptanceResult]
 
@@ -166,6 +169,14 @@ func AgentSessionStateSnapshotResponse(output agentservice.SessionSnapshotResult
 
 func ListAgentRunsResponse(output AgentRunListOutput) *agentsv1.ListAgentRunsResponse {
 	return &agentsv1.ListAgentRunsResponse{Runs: protoList(output.Items, AgentRunToProto), Page: pageResponseToProto(output.Page)}
+}
+
+func ListAgentSessionsResponse(output AgentSessionSummaryListOutput) *agentsv1.ListAgentSessionsResponse {
+	return &agentsv1.ListAgentSessionsResponse{Sessions: protoList(output.Items, AgentSessionListItemToProto), Page: pageResponseToProto(output.Page)}
+}
+
+func ListAgentRunSummariesResponse(output AgentRunSummaryListOutput) *agentsv1.ListAgentRunSummariesResponse {
+	return &agentsv1.ListAgentRunSummariesResponse{Runs: protoList(output.Items, AgentRunListItemToProto), Page: pageResponseToProto(output.Page)}
 }
 
 func AcceptanceResultResponse(acceptance entity.AcceptanceResult) *agentsv1.AcceptanceResultResponse {
@@ -374,6 +385,46 @@ func AgentRunToProto(run entity.AgentRun) *agentsv1.AgentRun {
 	}
 }
 
+func AgentRunListItemToProto(item entity.AgentRunListItem) *agentsv1.AgentRunListItem {
+	jobRef := item.Run.RuntimeContext.JobRef
+	return &agentsv1.AgentRunListItem{
+		Run:                     AgentRunToProto(item.Run),
+		RuntimeJobRef:           optionalStringPtr(jobRef),
+		RuntimeObservationState: runtimeObservationStateForJobRef(jobRef),
+		RuntimeSafeErrorCode:    optionalStringPtr(item.Run.FailureCode),
+		RuntimeSafeSummary:      optionalStringPtr(item.Run.ResultSummary),
+		HumanGateWaiting:        item.HumanGateWaiting,
+		HumanGateRequestRef:     optionalStringPtr(item.HumanGateRequestRef),
+		HumanGateReasonCode:     optionalStringPtr(item.HumanGateReasonCode),
+		FollowUpWaiting:         item.FollowUpWaiting,
+		LatestActivity:          AgentActivitySummaryToProto(item.LatestActivity),
+	}
+}
+
+func AgentSessionListItemToProto(item entity.AgentSessionListItem) *agentsv1.AgentSessionListItem {
+	return &agentsv1.AgentSessionListItem{
+		Session:              AgentSessionToProto(item.Session),
+		LatestRunId:          optionalUUIDStringPtr(item.LatestRunID),
+		LatestRunStatus:      optionalAgentRunStatusPtr(item.LatestRunStatus),
+		LatestRuntimeJobRef:  optionalStringPtr(item.LatestRuntimeJobRef),
+		LatestRunSafeSummary: optionalStringPtr(item.LatestRunSafeSummary),
+		ActiveRunCount:       item.ActiveRunCount,
+		HumanGateWaiting:     item.HumanGateWaiting,
+		HumanGateRequestRef:  optionalStringPtr(item.HumanGateRequestRef),
+		HumanGateReasonCode:  optionalStringPtr(item.HumanGateReasonCode),
+		LatestActivity:       AgentActivitySummaryToProto(item.LatestActivity),
+		FollowUpWaiting:      item.FollowUpWaiting,
+		FollowUpRef:          optionalStringPtr(item.FollowUpRef),
+	}
+}
+
+func runtimeObservationStateForJobRef(jobRef string) agentsv1.AgentRunRuntimeObservationState {
+	if jobRef == "" {
+		return agentsv1.AgentRunRuntimeObservationState_AGENT_RUN_RUNTIME_OBSERVATION_STATE_NOT_CREATED
+	}
+	return agentsv1.AgentRunRuntimeObservationState_AGENT_RUN_RUNTIME_OBSERVATION_STATE_STORED_REF
+}
+
 func AgentSessionStateSnapshotToProto(snapshot entity.AgentSessionStateSnapshot) *agentsv1.AgentSessionStateSnapshot {
 	return &agentsv1.AgentSessionStateSnapshot{
 		Id:           snapshot.ID.String(),
@@ -453,6 +504,26 @@ func AgentActivityToProto(activity entity.AgentActivity) *agentsv1.AgentActivity
 		Version:         activity.Version,
 		CreatedAt:       formatTime(activity.CreatedAt),
 		UpdatedAt:       formatTime(activity.UpdatedAt),
+	}
+}
+
+func AgentActivitySummaryToProto(activity *entity.AgentActivitySummary) *agentsv1.AgentActivitySummary {
+	if activity == nil {
+		return nil
+	}
+	return &agentsv1.AgentActivitySummary{
+		ActivityId:    activity.ID.String(),
+		ActivityKind:  AgentActivityKindToProto(activity.ActivityKind),
+		Status:        AgentActivityStatusToProto(activity.Status),
+		ToolName:      optionalStringPtr(activity.ToolName),
+		ToolCategory:  optionalStringPtr(activity.ToolCategory),
+		SafeSummary:   optionalStringPtr(activity.SafeSummary),
+		PayloadDigest: optionalStringPtr(activity.PayloadDigest),
+		BoundedError:  optionalStringPtr(activity.BoundedError),
+		StartedAt:     optionalTimePtr(activity.StartedAt),
+		FinishedAt:    optionalTimePtr(activity.FinishedAt),
+		UpdatedAt:     formatTime(activity.UpdatedAt),
+		Version:       activity.Version,
 	}
 }
 
@@ -585,6 +656,14 @@ func optionalUUIDStringPtr(id *uuid.UUID) *string {
 		return nil
 	}
 	value := id.String()
+	return &value
+}
+
+func optionalAgentRunStatusPtr(status enum.AgentRunStatus) *agentsv1.AgentRunStatus {
+	if status == "" {
+		return nil
+	}
+	value := AgentRunStatusToProto(status)
 	return &value
 }
 

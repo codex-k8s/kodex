@@ -156,6 +156,7 @@ var (
 	promptKindsToProto               = reverseEnumMap(promptKindsFromProto)
 	promptVersionStatusesToProto     = reverseEnumMap(promptVersionStatusesFromProto)
 	agentRunStatusesToProto          = reverseEnumMap(agentRunStatusesFromProto)
+	agentSessionStatusesFromProto    = reverseEnumMap(agentSessionStatusesToProto)
 	agentSessionSnapshotKindsToProto = reverseEnumMap(agentSessionSnapshotKindsFromProto)
 	acceptanceCheckKindsToProto      = reverseEnumMap(acceptanceCheckKindsFromProto)
 	acceptanceStatusesToProto        = reverseEnumMap(acceptanceStatusesFromProto)
@@ -279,6 +280,10 @@ func RuntimeJobStatusToProto(value agentservice.RuntimeJobStatus) agentsv1.Agent
 
 func AgentSessionStatusToProto(value enum.AgentSessionStatus) agentsv1.AgentSessionStatus {
 	return enumToProto(value, agentSessionStatusesToProto, agentsv1.AgentSessionStatus_AGENT_SESSION_STATUS_UNSPECIFIED)
+}
+
+func OptionalAgentSessionStatusFromProto(value *agentsv1.AgentSessionStatus) (*enum.AgentSessionStatus, error) {
+	return optionalEnumFromProto(value, agentSessionStatusesFromProto)
 }
 
 func AgentSessionSnapshotKindFromProto(value agentsv1.AgentSessionSnapshotKind) (enum.AgentSessionSnapshotKind, error) {

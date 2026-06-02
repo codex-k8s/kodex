@@ -49,6 +49,8 @@ type agentService interface {
 	GetAgentRunRuntimeStatus(context.Context, agentservice.GetAgentRunRuntimeStatusInput) (agentservice.AgentRunRuntimeStatusResult, error)
 	RecordSessionStateSnapshot(context.Context, agentservice.RecordSessionStateSnapshotInput) (agentservice.SessionSnapshotResult, error)
 	ListAgentRuns(context.Context, agentservice.AgentRunList) ([]entity.AgentRun, value.PageResult, error)
+	ListAgentSessionSummaries(context.Context, agentservice.AgentSessionSummaryList) ([]entity.AgentSessionListItem, value.PageResult, error)
+	ListAgentRunSummaries(context.Context, agentservice.AgentRunSummaryList) ([]entity.AgentRunListItem, value.PageResult, error)
 	GetSessionStateSnapshot(context.Context, uuid.UUID) (entity.AgentSessionStateSnapshot, error)
 	RequestAcceptance(context.Context, agentservice.RequestAcceptanceInput) (entity.AcceptanceResult, error)
 	RecordAcceptanceResult(context.Context, agentservice.RecordAcceptanceResultInput) (entity.AcceptanceResult, error)
@@ -167,6 +169,11 @@ func (server *Server) GetAgentSession(ctx context.Context, request *agentsv1.Get
 	return grpcserver.HandleUnary(ctx, request, grpccasters.GetAgentSessionInput, server.getAgentSession, grpccasters.AgentSessionResponse)
 }
 
+// ListAgentSessions returns safe session summaries for operator read surfaces.
+func (server *Server) ListAgentSessions(ctx context.Context, request *agentsv1.ListAgentSessionsRequest) (*agentsv1.ListAgentSessionsResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.ListAgentSessionsInput, server.listAgentSessionSummaries, grpccasters.ListAgentSessionsResponse)
+}
+
 // StartAgentRun creates a role run inside an existing session.
 func (server *Server) StartAgentRun(ctx context.Context, request *agentsv1.StartAgentRunRequest) (*agentsv1.AgentRunResponse, error) {
 	return grpcserver.HandleUnary(ctx, request, grpccasters.StartAgentRunInput, server.service.StartAgentRun, grpccasters.AgentRunResponse)
@@ -195,6 +202,11 @@ func (server *Server) RecordSessionStateSnapshot(ctx context.Context, request *a
 // ListAgentRuns returns runs by session, role, status or provider target.
 func (server *Server) ListAgentRuns(ctx context.Context, request *agentsv1.ListAgentRunsRequest) (*agentsv1.ListAgentRunsResponse, error) {
 	return grpcserver.HandleUnary(ctx, request, grpccasters.ListAgentRunsInput, server.listAgentRuns, grpccasters.ListAgentRunsResponse)
+}
+
+// ListAgentRunSummaries returns safe run summaries for operator read surfaces.
+func (server *Server) ListAgentRunSummaries(ctx context.Context, request *agentsv1.ListAgentRunSummariesRequest) (*agentsv1.ListAgentRunSummariesResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.ListAgentRunSummariesInput, server.listAgentRunSummaries, grpccasters.ListAgentRunSummariesResponse)
 }
 
 // RequestAcceptance creates a pending machine acceptance check.
@@ -307,6 +319,14 @@ func (server *Server) agentSessionOutput(ctx context.Context, session entity.Age
 
 func (server *Server) listAgentRuns(ctx context.Context, input agentservice.AgentRunList) (grpccasters.AgentRunListOutput, error) {
 	return listWithPage(ctx, input, server.service.ListAgentRuns)
+}
+
+func (server *Server) listAgentSessionSummaries(ctx context.Context, input agentservice.AgentSessionSummaryList) (grpccasters.AgentSessionSummaryListOutput, error) {
+	return listWithPage(ctx, input, server.service.ListAgentSessionSummaries)
+}
+
+func (server *Server) listAgentRunSummaries(ctx context.Context, input agentservice.AgentRunSummaryList) (grpccasters.AgentRunSummaryListOutput, error) {
+	return listWithPage(ctx, input, server.service.ListAgentRunSummaries)
 }
 
 func (server *Server) getAcceptanceResult(ctx context.Context, input grpccasters.IDQueryInput) (entity.AcceptanceResult, error) {
