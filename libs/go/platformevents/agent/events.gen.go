@@ -13,6 +13,7 @@ const (
 	EventRunWaiting              = "agent.run.waiting"
 	EventRunCompleted            = "agent.run.completed"
 	EventRunFailed               = "agent.run.failed"
+	EventRunCancelled            = "agent.run.cancelled"
 	EventAcceptanceRequested     = "agent.acceptance.requested"
 	EventAcceptanceCompleted     = "agent.acceptance.completed"
 	EventAcceptanceFailed        = "agent.acceptance.failed"

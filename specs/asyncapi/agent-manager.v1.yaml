@@ -35,6 +35,7 @@ components:
         - $ref: '#/components/schemas/RunWaitingEvent'
         - $ref: '#/components/schemas/RunCompletedEvent'
         - $ref: '#/components/schemas/RunFailedEvent'
+        - $ref: '#/components/schemas/RunCancelledEvent'
         - $ref: '#/components/schemas/AcceptanceRequestedEvent'
         - $ref: '#/components/schemas/AcceptanceCompletedEvent'
         - $ref: '#/components/schemas/AcceptanceFailedEvent'
@@ -137,6 +138,14 @@ components:
     RunFailedEventKind:
       type: object
       properties: {event_type: {type: string, const: agent.run.failed}, aggregate_type: {type: string, const: run}, payload: {$ref: '#/components/schemas/RunFailedPayload'}}
+      required: [event_type, aggregate_type, payload]
+    RunCancelledEvent:
+      allOf:
+        - $ref: '#/components/schemas/AgentEventEnvelopeBase'
+        - $ref: '#/components/schemas/RunCancelledEventKind'
+    RunCancelledEventKind:
+      type: object
+      properties: {event_type: {type: string, const: agent.run.cancelled}, aggregate_type: {type: string, const: run}, payload: {$ref: '#/components/schemas/RunCancelledPayload'}}
       required: [event_type, aggregate_type, payload]
 
     AcceptanceRequestedEvent:
@@ -266,6 +275,7 @@ components:
         - agent.run.waiting
         - agent.run.completed
         - agent.run.failed
+        - agent.run.cancelled
         - agent.acceptance.requested
         - agent.acceptance.completed
         - agent.acceptance.failed
@@ -427,6 +437,11 @@ components:
         - $ref: '#/components/schemas/AgentEventPayload'
         - type: object
           required: [session_id, run_id, status, failure_code, version]
+    RunCancelledPayload:
+      allOf:
+        - $ref: '#/components/schemas/AgentEventPayload'
+        - type: object
+          required: [session_id, run_id, status, version]
     AcceptanceRequestedPayload:
       allOf:
         - $ref: '#/components/schemas/AgentEventPayload'

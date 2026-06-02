@@ -65,12 +65,7 @@ var promptVersionStatusesFromProto = map[agentsv1.PromptVersionStatus]enum.Promp
 
 var agentRunStatusesFromProto = agentRunStatusValues()
 
-var agentRunnerRunStatesFromProto = enumMap(
-	enumPair(agentsv1.AgentRunnerRunState_AGENT_RUNNER_RUN_STATE_QUEUED, agentservice.RunnerRunStateQueued),
-	enumPair(agentsv1.AgentRunnerRunState_AGENT_RUNNER_RUN_STATE_RUNNING, agentservice.RunnerRunStateRunning),
-	enumPair(agentsv1.AgentRunnerRunState_AGENT_RUNNER_RUN_STATE_COMPLETED, agentservice.RunnerRunStateCompleted),
-	enumPair(agentsv1.AgentRunnerRunState_AGENT_RUNNER_RUN_STATE_FAILED, agentservice.RunnerRunStateFailed),
-)
+var agentRunnerRunStatesFromProto = agentRunnerRunStateValues()
 
 var agentSessionSnapshotKindsFromProto = map[agentsv1.AgentSessionSnapshotKind]enum.AgentSessionSnapshotKind{
 	agentsv1.AgentSessionSnapshotKind_AGENT_SESSION_SNAPSHOT_KIND_TURN_CHECKPOINT:     enum.AgentSessionSnapshotKindTurnCheckpoint,
@@ -450,6 +445,19 @@ func agentRunStatusValues() map[agentsv1.AgentRunStatus]enum.AgentRunStatus {
 	values[agentsv1.AgentRunStatus_AGENT_RUN_STATUS_COMPLETED] = enum.AgentRunStatusCompleted
 	values[agentsv1.AgentRunStatus_AGENT_RUN_STATUS_FAILED] = enum.AgentRunStatusFailed
 	values[agentsv1.AgentRunStatus_AGENT_RUN_STATUS_CANCELLED] = enum.AgentRunStatusCancelled
+	return values
+}
+
+func agentRunnerRunStateValues() map[agentsv1.AgentRunnerRunState]agentservice.RunnerRunState {
+	values := enumMap(
+		enumPair(agentsv1.AgentRunnerRunState_AGENT_RUNNER_RUN_STATE_QUEUED, agentservice.RunnerRunStateQueued),
+		enumPair(agentsv1.AgentRunnerRunState_AGENT_RUNNER_RUN_STATE_RUNNING, agentservice.RunnerRunStateRunning),
+		enumPair(agentsv1.AgentRunnerRunState_AGENT_RUNNER_RUN_STATE_COMPLETED, agentservice.RunnerRunStateCompleted),
+		enumPair(agentsv1.AgentRunnerRunState_AGENT_RUNNER_RUN_STATE_FAILED, agentservice.RunnerRunStateFailed),
+	)
+	values[agentsv1.AgentRunnerRunState_AGENT_RUNNER_RUN_STATE_STARTED] = agentservice.RunnerRunStateStarted
+	values[agentsv1.AgentRunnerRunState_AGENT_RUNNER_RUN_STATE_CANCELLED] = agentservice.RunnerRunStateCancelled
+	values[agentsv1.AgentRunnerRunState_AGENT_RUNNER_RUN_STATE_TIMED_OUT] = agentservice.RunnerRunStateTimedOut
 	return values
 }
 

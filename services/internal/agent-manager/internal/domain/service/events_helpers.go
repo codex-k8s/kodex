@@ -95,6 +95,8 @@ func runStateEvent(id uuid.UUID, previousStatus string, run entity.AgentRun, rea
 		eventType = agentevents.EventRunCompleted
 	case "failed":
 		eventType = agentevents.EventRunFailed
+	case "cancelled":
+		eventType = agentevents.EventRunCancelled
 	default:
 		return nil, nil
 	}

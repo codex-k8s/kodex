@@ -371,6 +371,9 @@ enum AgentRunnerRunState {
   AGENT_RUNNER_RUN_STATE_RUNNING = 2;
   AGENT_RUNNER_RUN_STATE_COMPLETED = 3;
   AGENT_RUNNER_RUN_STATE_FAILED = 4;
+  AGENT_RUNNER_RUN_STATE_STARTED = 5;
+  AGENT_RUNNER_RUN_STATE_CANCELLED = 6;
+  AGENT_RUNNER_RUN_STATE_TIMED_OUT = 7;
 }
 
 // AgentRunRuntimeObservationState описывает, удалось ли прочитать актуальное состояние runtime.

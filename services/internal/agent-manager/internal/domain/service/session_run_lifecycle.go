@@ -549,11 +549,16 @@ func runnerReportCommandPayload(input ReportAgentRunStateInput) (runnerRunStateC
 	if err != nil {
 		return runnerRunStateCommandPayload{}, err
 	}
+	reportState := RunnerRunState(state)
 	failureCode := strings.TrimSpace(optionalStringValue(input.FailureCode))
-	if state != string(RunnerRunStateFailed) && failureCode != "" {
+	failureRequired := runnerReportFailureCodeRequired(reportState)
+	if !failureRequired && failureCode != "" {
 		return runnerRunStateCommandPayload{}, errs.ErrInvalidArgument
 	}
-	failureCode, err = normalizedRunFailureCode(failureCode, state == string(RunnerRunStateFailed))
+	if failureCode == "" {
+		failureCode = runnerReportDefaultFailureCode(reportState)
+	}
+	failureCode, err = normalizedRunFailureCode(failureCode, failureRequired)
 	if err != nil {
 		return runnerRunStateCommandPayload{}, err
 	}
@@ -633,15 +638,35 @@ func runnerReportRunStatus(state string) (enum.AgentRunStatus, error) {
 	switch RunnerRunState(strings.TrimSpace(state)) {
 	case RunnerRunStateQueued:
 		return enum.AgentRunStatusStarting, nil
-	case RunnerRunStateRunning:
+	case RunnerRunStateStarted, RunnerRunStateRunning:
 		return enum.AgentRunStatusRunning, nil
 	case RunnerRunStateCompleted:
 		return enum.AgentRunStatusCompleted, nil
 	case RunnerRunStateFailed:
 		return enum.AgentRunStatusFailed, nil
+	case RunnerRunStateCancelled:
+		return enum.AgentRunStatusCancelled, nil
+	case RunnerRunStateTimedOut:
+		return enum.AgentRunStatusFailed, nil
 	default:
 		return "", errs.ErrInvalidArgument
 	}
+}
+
+func runnerReportFailureCodeRequired(state RunnerRunState) bool {
+	switch state {
+	case RunnerRunStateFailed, RunnerRunStateTimedOut:
+		return true
+	default:
+		return false
+	}
+}
+
+func runnerReportDefaultFailureCode(state RunnerRunState) string {
+	if state == RunnerRunStateTimedOut {
+		return "runner_timeout"
+	}
+	return ""
 }
 
 func runnerReportSummary(report runnerRunStateCommandPayload) string {

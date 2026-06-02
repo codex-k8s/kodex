@@ -646,7 +646,7 @@ func missingRuntimeJobSpecDependency() error {
 }
 
 func missingCodexSessionExecutionDependency() error {
-	return NewRuntimeJobError(true, "dependency_unavailable", "codex session execution refs are not materialized")
+	return NewRuntimeJobError(true, "execution_input_unavailable", "codex session execution input is unavailable")
 }
 
 func (s *Service) codexSessionExecutionSpec(

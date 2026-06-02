@@ -1119,7 +1119,7 @@ func TestStartAgentRunReplayDispatchesCodexSessionSpecAfterRefsReady(t *testing.
 		RuntimeContext:          value.RuntimeContextRef{SlotRef: slotRef, WorkspaceRef: materializationRef},
 		GuidanceRefs:            fixture.guidanceResolver.refs,
 		Status:                  enum.AgentRunStatusWaiting,
-		ResultSummary:           "runtime job retryable: code=dependency_unavailable; message=codex session execution refs are not materialized",
+		ResultSummary:           "runtime job retryable: code=execution_input_unavailable; message=codex session execution input is unavailable",
 	}
 	startedRun := run
 	startedRun.Version = 1
@@ -2104,12 +2104,16 @@ func TestReportAgentRunStateAcceptsRunnerLifecycleReports(t *testing.T) {
 		reportState   RunnerRunState
 		wantStatus    enum.AgentRunStatus
 		failureCode   *string
+		wantFailure   string
 		wantEvent     string
 	}{
 		{name: "queued", currentStatus: enum.AgentRunStatusStarting, reportState: RunnerRunStateQueued, wantStatus: enum.AgentRunStatusStarting},
 		{name: "running", currentStatus: enum.AgentRunStatusStarting, reportState: RunnerRunStateRunning, wantStatus: enum.AgentRunStatusRunning, wantEvent: agentevents.EventRunStarted},
+		{name: "started", currentStatus: enum.AgentRunStatusStarting, reportState: RunnerRunStateStarted, wantStatus: enum.AgentRunStatusRunning, wantEvent: agentevents.EventRunStarted},
 		{name: "completed", currentStatus: enum.AgentRunStatusRunning, reportState: RunnerRunStateCompleted, wantStatus: enum.AgentRunStatusCompleted, wantEvent: agentevents.EventRunCompleted},
-		{name: "failed", currentStatus: enum.AgentRunStatusRunning, reportState: RunnerRunStateFailed, wantStatus: enum.AgentRunStatusFailed, failureCode: ptr("runner_failed"), wantEvent: agentevents.EventRunFailed},
+		{name: "failed", currentStatus: enum.AgentRunStatusRunning, reportState: RunnerRunStateFailed, wantStatus: enum.AgentRunStatusFailed, failureCode: ptr("runner_failed"), wantFailure: "runner_failed", wantEvent: agentevents.EventRunFailed},
+		{name: "cancelled", currentStatus: enum.AgentRunStatusRunning, reportState: RunnerRunStateCancelled, wantStatus: enum.AgentRunStatusCancelled, wantEvent: agentevents.EventRunCancelled},
+		{name: "timed out", currentStatus: enum.AgentRunStatusRunning, reportState: RunnerRunStateTimedOut, wantStatus: enum.AgentRunStatusFailed, wantFailure: "runner_timeout", wantEvent: agentevents.EventRunFailed},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -2161,8 +2165,8 @@ func TestReportAgentRunStateAcceptsRunnerLifecycleReports(t *testing.T) {
 			if !strings.Contains(run.ResultSummary, "diagnostic_digest=sha256:runner-diagnostic") || !strings.Contains(run.ResultSummary, summary) {
 				t.Fatalf("result summary = %q", run.ResultSummary)
 			}
-			if tc.failureCode != nil && run.FailureCode != *tc.failureCode {
-				t.Fatalf("failure code = %q, want %q", run.FailureCode, *tc.failureCode)
+			if tc.wantFailure != "" && run.FailureCode != tc.wantFailure {
+				t.Fatalf("failure code = %q, want %q", run.FailureCode, tc.wantFailure)
 			}
 			if tc.wantEvent == "" {
 				if repository.updateRunEvent != nil {
@@ -2363,15 +2367,17 @@ func TestReportAgentRunStateRejectsUnsafeRunnerPayload(t *testing.T) {
 		name  string
 		input ReportAgentRunStateInput
 	}{
-		{name: "unknown state", input: ReportAgentRunStateInput{State: RunnerRunState("cancelled")}},
+		{name: "unknown state", input: ReportAgentRunStateInput{State: RunnerRunState("paused")}},
 		{name: "raw summary", input: ReportAgentRunStateInput{State: RunnerRunStateCompleted, SafeSummary: ptr("prompt_text: do not store")}},
 		{name: "dsn summary", input: ReportAgentRunStateInput{State: RunnerRunStateCompleted, SafeSummary: ptr("postgres://user:pass@db/kodex")}},
 		{name: "private url summary", input: ReportAgentRunStateInput{State: RunnerRunStateCompleted, SafeSummary: ptr("https://internal.example/path")}},
 		{name: "raw digest", input: ReportAgentRunStateInput{State: RunnerRunStateCompleted, DiagnosticDigest: ptr("workspace_path:/tmp/run")}},
 		{name: "private url digest", input: ReportAgentRunStateInput{State: RunnerRunStateCompleted, DiagnosticDigest: ptr("https://internal.example/path")}},
 		{name: "failure code on non failed", input: ReportAgentRunStateInput{State: RunnerRunStateRunning, FailureCode: ptr("runner_failed")}},
+		{name: "failure code on cancelled", input: ReportAgentRunStateInput{State: RunnerRunStateCancelled, FailureCode: ptr("runner_failed")}},
 		{name: "missing failure code", input: ReportAgentRunStateInput{State: RunnerRunStateFailed}},
 		{name: "unsafe failure code", input: ReportAgentRunStateInput{State: RunnerRunStateFailed, FailureCode: ptr("secret_value")}},
+		{name: "unsafe timeout failure code", input: ReportAgentRunStateInput{State: RunnerRunStateTimedOut, FailureCode: ptr("secret_value")}},
 		{name: "dsn failure code", input: ReportAgentRunStateInput{State: RunnerRunStateFailed, FailureCode: ptr("postgres://user:pass@db/kodex")}},
 		{name: "private url failure code", input: ReportAgentRunStateInput{State: RunnerRunStateFailed, FailureCode: ptr("https://internal.example/path")}},
 	}
