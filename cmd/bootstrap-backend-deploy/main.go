@@ -28,7 +28,7 @@ func main() {
 	repoRoot := flag.String("repo-root", ".", "repository root containing services.yaml and deploy/base")
 	envFile := flag.String("env-file", "", "bootstrap env file; values are loaded but never printed")
 	servicesFile := flag.String("services-file", "", "root services.yaml path; defaults to <repo-root>/services.yaml")
-	ring := flag.String("ring", "first", "backend deploy ring: first, second, staff, mcp, or all")
+	ring := flag.String("ring", "first", "deploy ring: first, second, staff, mcp, web, web-public, or all")
 	skipBuild := flag.Bool("skip-build", false, "skip Kaniko image builds and only apply manifests")
 	skipHealth := flag.Bool("skip-health", false, "skip HTTP readiness checks after rollout")
 	flag.Parse()
@@ -62,6 +62,13 @@ type deployConfig struct {
 	RolloutTimeout string
 }
 
+type webPublicConfig struct {
+	Domain             string
+	PublicBaseURL      string
+	LetsEncryptEmail   string
+	CertManagerVersion string
+}
+
 type serviceDeploy struct {
 	Name         string
 	Dir          string
@@ -70,10 +77,12 @@ type serviceDeploy struct {
 }
 
 type backendRing struct {
-	Name       string
-	Label      string
-	Services   []serviceDeploy
-	ImageNames []string
+	Name                  string
+	Label                 string
+	Services              []serviceDeploy
+	ImageNames            []string
+	UsesBackendFoundation bool
+	PublicWeb             bool
 }
 
 type imageBuild struct {
@@ -82,6 +91,12 @@ type imageBuild struct {
 	Dockerfile  string
 	Target      string
 	Destination string
+}
+
+type buildBaseImages struct {
+	Golang string
+	Node   string
+	Nginx  string
 }
 
 type secretValues struct {
@@ -116,6 +131,10 @@ var staffRingServices = []serviceDeploy{
 
 var mcpRingServices = []serviceDeploy{
 	{Name: "platform-mcp-server", Dir: "platform-mcp-server", ReadyPort: "8080"},
+}
+
+var webRingServices = []serviceDeploy{
+	{Name: "web-console", Dir: "web-console", ReadyPort: "8080"},
 }
 
 var firstRingImageNames = []string{
@@ -154,30 +173,49 @@ var mcpRingImageNames = []string{
 	"platform-mcp-server",
 }
 
+var webRingImageNames = []string{
+	"web-console",
+}
+
 var (
 	firstRing = backendRing{
-		Name:       "first",
-		Label:      "first backend ring",
-		Services:   firstRingServices,
-		ImageNames: firstRingImageNames,
+		Name:                  "first",
+		Label:                 "first backend ring",
+		Services:              firstRingServices,
+		ImageNames:            firstRingImageNames,
+		UsesBackendFoundation: true,
 	}
 	secondRing = backendRing{
-		Name:       "second",
-		Label:      "second backend ring",
-		Services:   secondRingServices,
-		ImageNames: secondRingImageNames,
+		Name:                  "second",
+		Label:                 "second backend ring",
+		Services:              secondRingServices,
+		ImageNames:            secondRingImageNames,
+		UsesBackendFoundation: true,
 	}
 	staffRing = backendRing{
-		Name:       "staff",
-		Label:      "staff gateway contour",
-		Services:   staffRingServices,
-		ImageNames: staffRingImageNames,
+		Name:                  "staff",
+		Label:                 "staff gateway contour",
+		Services:              staffRingServices,
+		ImageNames:            staffRingImageNames,
+		UsesBackendFoundation: true,
 	}
 	mcpRing = backendRing{
-		Name:       "mcp",
-		Label:      "platform MCP server contour",
-		Services:   mcpRingServices,
-		ImageNames: mcpRingImageNames,
+		Name:                  "mcp",
+		Label:                 "platform MCP server contour",
+		Services:              mcpRingServices,
+		ImageNames:            mcpRingImageNames,
+		UsesBackendFoundation: true,
+	}
+	webRing = backendRing{
+		Name:       "web",
+		Label:      "staff web-console contour",
+		Services:   webRingServices,
+		ImageNames: webRingImageNames,
+	}
+	webPublicRing = backendRing{
+		Name:      "web-public",
+		Label:     "public web-console contour",
+		PublicWeb: true,
 	}
 )
 
@@ -212,11 +250,19 @@ func run(ctx context.Context, options deployOptions, output io.Writer) error {
 	if err != nil {
 		return err
 	}
-	ok(output, "selected backend deploy rings: "+strings.Join(ringNames(rings), ", "))
+	ok(output, "selected deploy rings: "+strings.Join(ringNames(rings), ", "))
 
 	config, err := loadDeployConfig()
 	if err != nil {
 		return err
+	}
+	var publicConfig webPublicConfig
+	if hasPublicWebRing(rings) {
+		publicConfig, err = loadWebPublicConfig(stack)
+		if err != nil {
+			return err
+		}
+		ok(output, "public web contour env names checked without printing values")
 	}
 	if err := requireCommands("go", "kubectl"); err != nil {
 		return err
@@ -228,37 +274,51 @@ func run(ctx context.Context, options deployOptions, output io.Writer) error {
 	}
 	ok(output, "namespace exists")
 
-	renderEnv, cleanupRenderEnv, err := prepareRuntime(ctx, config, output)
-	if err != nil {
-		return err
-	}
-	defer cleanupRenderEnv()
+	if requiresWorkloadDeploy(rings) {
+		renderEnv, cleanupRenderEnv, err := prepareRuntime(ctx, config, output)
+		if err != nil {
+			return err
+		}
+		defer cleanupRenderEnv()
 
-	renderDir, cleanupRenderDir, err := renderBackendRings(repoRoot, servicesFile, renderEnv, rings)
-	if err != nil {
-		return err
-	}
-	defer cleanupRenderDir()
-	ok(output, "backend ring manifests rendered in a private temp dir")
+		renderDir, cleanupRenderDir, err := renderBackendRings(repoRoot, servicesFile, renderEnv, rings)
+		if err != nil {
+			return err
+		}
+		defer cleanupRenderDir()
+		ok(output, "backend ring manifests rendered in a private temp dir")
 
-	if err := applyRegistry(ctx, config, renderDir, output); err != nil {
-		return err
-	}
-	if !options.SkipBuild {
-		if err := buildImages(ctx, config, repoRoot, stack, rings, output); err != nil {
+		if err := applyRegistry(ctx, config, renderDir, output); err != nil {
+			return err
+		}
+		if !options.SkipBuild {
+			if err := buildImages(ctx, config, repoRoot, stack, rings, output); err != nil {
+				return err
+			}
+		} else {
+			skip(output, "Kaniko image builds skipped by operator flag")
+		}
+		if requiresBackendFoundation(rings) {
+			if err := applyPostgres(ctx, config, renderDir, output); err != nil {
+				return err
+			}
+			if err := applyMigrations(ctx, config, renderDir, rings, output); err != nil {
+				return err
+			}
+		} else {
+			skip(output, "PostgreSQL and backend migrations skipped for selected ring")
+		}
+		if err := applyServices(ctx, config, renderDir, rings, !options.SkipHealth, output); err != nil {
 			return err
 		}
 	} else {
-		skip(output, "Kaniko image builds skipped by operator flag")
+		skip(output, "backend workload deploy skipped for selected ring")
 	}
-	if err := applyPostgres(ctx, config, renderDir, output); err != nil {
-		return err
-	}
-	if err := applyMigrations(ctx, config, renderDir, rings, output); err != nil {
-		return err
-	}
-	if err := applyServices(ctx, config, renderDir, rings, !options.SkipHealth, output); err != nil {
-		return err
+
+	if hasPublicWebRing(rings) {
+		if err := deployWebPublicContour(ctx, config, publicConfig, repoRoot, servicesFile, output); err != nil {
+			return err
+		}
 	}
 	ok(output, "backend ring deploy finished")
 	return nil
@@ -274,10 +334,14 @@ func selectBackendRings(value string) ([]backendRing, error) {
 		return []backendRing{staffRing}, nil
 	case "mcp", "platform-mcp", "platform-mcp-server":
 		return []backendRing{mcpRing}, nil
+	case "web", "web-console", "frontend":
+		return []backendRing{webRing}, nil
+	case "web-public", "public-web", "web-contour", "frontend-public":
+		return []backendRing{webPublicRing}, nil
 	case "all":
 		return []backendRing{firstRing, secondRing}, nil
 	default:
-		return nil, fmt.Errorf("unsupported backend deploy ring %q; expected first, second, staff, mcp, or all", value)
+		return nil, fmt.Errorf("unsupported deploy ring %q; expected first, second, staff, mcp, web, web-public, or all", value)
 	}
 }
 
@@ -309,6 +373,40 @@ func loadDeployConfig() (deployConfig, error) {
 		return deployConfig{}, fmt.Errorf("KODEX_ROLLOUT_TIMEOUT must be a duration: %w", err)
 	}
 	return config, nil
+}
+
+func loadWebPublicConfig(stack stackinventory.Stack) (webPublicConfig, error) {
+	const requiredDomain = "platform.kodex.works"
+	const requiredBaseURL = "https://platform.kodex.works"
+
+	domain := strings.TrimSpace(os.Getenv("KODEX_PRODUCTION_DOMAIN"))
+	if domain == "" {
+		return webPublicConfig{}, errors.New("KODEX_PRODUCTION_DOMAIN is required for web-public")
+	}
+	if domain != requiredDomain {
+		return webPublicConfig{}, errors.New("KODEX_PRODUCTION_DOMAIN must match the public web-console domain")
+	}
+	publicBaseURL := strings.TrimRight(strings.TrimSpace(os.Getenv("KODEX_PUBLIC_BASE_URL")), "/")
+	if publicBaseURL == "" {
+		return webPublicConfig{}, errors.New("KODEX_PUBLIC_BASE_URL is required for web-public")
+	}
+	if publicBaseURL != requiredBaseURL {
+		return webPublicConfig{}, errors.New("KODEX_PUBLIC_BASE_URL must match the public web-console base URL")
+	}
+	letsEncryptEmail := strings.TrimSpace(os.Getenv("KODEX_LETSENCRYPT_EMAIL"))
+	if letsEncryptEmail == "" {
+		return webPublicConfig{}, errors.New("KODEX_LETSENCRYPT_EMAIL is required for web-public")
+	}
+	certManagerVersion, err := stack.Version("cert-manager")
+	if err != nil {
+		return webPublicConfig{}, fmt.Errorf("resolve cert-manager version: %w", err)
+	}
+	return webPublicConfig{
+		Domain:             domain,
+		PublicBaseURL:      publicBaseURL,
+		LetsEncryptEmail:   letsEncryptEmail,
+		CertManagerVersion: certManagerVersion,
+	}, nil
 }
 
 func prepareRuntime(ctx context.Context, config deployConfig, output io.Writer) (string, func(), error) {
@@ -576,6 +674,85 @@ func applyRuntimeSecrets(ctx context.Context, namespace string, values secretVal
 	return nil
 }
 
+func applyWebPublicOAuthSecret(ctx context.Context, namespace string, output io.Writer) error {
+	existing, err := readSecret(ctx, namespace, "kodex-web-oauth2-proxy")
+	if err != nil {
+		return err
+	}
+	values, generated, err := resolveWebPublicOAuthSecretValues(existing, os.LookupEnv)
+	if err != nil {
+		return err
+	}
+	if err := kubectlApply(ctx, secretManifest(namespace, "kodex-web-oauth2-proxy", values)); err != nil {
+		return fmt.Errorf("apply web public OAuth secret: %w", err)
+	}
+	if len(generated) > 0 {
+		ok(output, fmt.Sprintf("generated or normalized web public OAuth secret keys: %d", len(generated)))
+	} else {
+		ok(output, "web public OAuth secret keys already present")
+	}
+	return nil
+}
+
+func resolveWebPublicOAuthSecretValues(existing map[string]string, lookup func(string) (string, bool)) (map[string]string, []string, error) {
+	generated := []string{}
+	required := func(key string) (string, error) {
+		if value := strings.TrimSpace(existing[key]); value != "" {
+			return value, nil
+		}
+		if value, ok := lookup(key); ok && strings.TrimSpace(value) != "" {
+			generated = append(generated, key)
+			return value, nil
+		}
+		return "", fmt.Errorf("%s is required for web-public auth secret", key)
+	}
+	cookieSecret := func(key string) (string, error) {
+		if value := strings.TrimSpace(existing[key]); validOAuth2CookieSecret(value) {
+			return value, nil
+		}
+		if value, ok := lookup(key); ok && strings.TrimSpace(value) != "" {
+			value = strings.TrimSpace(value)
+			if !validOAuth2CookieSecret(value) {
+				return "", fmt.Errorf("%s must be 16, 24, or 32 bytes for oauth2-proxy", key)
+			}
+			generated = append(generated, key)
+			return value, nil
+		}
+		value, err := randomCookieSecret()
+		if err != nil {
+			return "", err
+		}
+		generated = append(generated, key)
+		return value, nil
+	}
+
+	values := map[string]string{}
+	var err error
+	values["KODEX_GITHUB_OAUTH_CLIENT_ID"], err = required("KODEX_GITHUB_OAUTH_CLIENT_ID")
+	if err != nil {
+		return nil, nil, err
+	}
+	values["KODEX_GITHUB_OAUTH_CLIENT_SECRET"], err = required("KODEX_GITHUB_OAUTH_CLIENT_SECRET")
+	if err != nil {
+		return nil, nil, err
+	}
+	values["KODEX_OAUTH2_PROXY_COOKIE_SECRET"], err = cookieSecret("KODEX_OAUTH2_PROXY_COOKIE_SECRET")
+	if err != nil {
+		return nil, nil, err
+	}
+	sort.Strings(generated)
+	return values, generated, nil
+}
+
+func validOAuth2CookieSecret(value string) bool {
+	switch len([]byte(value)) {
+	case 16, 24, 32:
+		return true
+	default:
+		return false
+	}
+}
+
 func secretManifest(namespace, name string, values map[string]string) string {
 	keys := make([]string, 0, len(values))
 	for key := range values {
@@ -622,6 +799,114 @@ func writeRenderEnv(values map[string]string) (string, func(), error) {
 		return "", func() {}, fmt.Errorf("close render env: %w", err)
 	}
 	return path, func() { _ = os.Remove(path) }, nil
+}
+
+func deployWebPublicContour(ctx context.Context, config deployConfig, publicConfig webPublicConfig, repoRoot, servicesFile string, output io.Writer) error {
+	if err := applyCertManager(ctx, publicConfig.CertManagerVersion, output); err != nil {
+		return err
+	}
+	if err := waitCertManager(ctx, config, output); err != nil {
+		return err
+	}
+
+	renderDir, cleanupRenderDir, err := renderWebPublicContour(repoRoot, servicesFile)
+	if err != nil {
+		return err
+	}
+	defer cleanupRenderDir()
+	ok(output, "public web manifests rendered in a private temp dir")
+
+	if err := kubectlQuiet(ctx, "apply", "-k", filepath.Join(renderDir, "web-public-foundation")); err != nil {
+		return fmt.Errorf("apply public web foundation: %w", err)
+	}
+	if err := kubectlQuiet(ctx, "-n", config.Namespace, "rollout", "status", "deployment/kodex-public-ingress", "--timeout="+config.RolloutTimeout); err != nil {
+		return fmt.Errorf("wait public ingress rollout: %w", err)
+	}
+	ok(output, "public ingress controller ready")
+	if err := kubectlQuiet(ctx, "wait", "--for=condition=Ready", "clusterissuer/kodex-letsencrypt-production", "--timeout="+config.RolloutTimeout); err != nil {
+		return fmt.Errorf("wait Let's Encrypt ClusterIssuer: %w", err)
+	}
+	ok(output, "Let's Encrypt ClusterIssuer ready")
+
+	if err := applyWebPublicOAuthSecret(ctx, config.Namespace, output); err != nil {
+		return err
+	}
+
+	if err := kubectlQuiet(ctx, "apply", "-k", filepath.Join(renderDir, "web-console-public")); err != nil {
+		return fmt.Errorf("apply web-console public contour: %w", err)
+	}
+	if err := ensurePublicIngressTargetsOAuth2Proxy(ctx, config.Namespace); err != nil {
+		return err
+	}
+	ok(output, "public Ingress targets oauth2-proxy only")
+	if err := kubectlQuiet(ctx, "-n", config.Namespace, "rollout", "status", "deployment/web-console-public-oauth2-proxy", "--timeout="+config.RolloutTimeout); err != nil {
+		return fmt.Errorf("wait oauth2-proxy rollout: %w", err)
+	}
+	ok(output, "oauth2-proxy ready")
+	if err := checkHTTP(ctx, config.Namespace, "web-console-public-oauth2-proxy", "4180", "/ping"); err != nil {
+		return fmt.Errorf("oauth2-proxy ping check: %w", err)
+	}
+	ok(output, "oauth2-proxy ping OK")
+	if err := kubectlQuiet(ctx, "-n", config.Namespace, "wait", "--for=condition=Ready", "certificate/web-console-public-tls", "--timeout="+config.RolloutTimeout); err != nil {
+		return fmt.Errorf("wait public web TLS certificate: %w", err)
+	}
+	ok(output, "public web TLS certificate ready")
+	return nil
+}
+
+func applyCertManager(ctx context.Context, version string, output io.Writer) error {
+	url := "https://github.com/cert-manager/cert-manager/releases/download/" + version + "/cert-manager.yaml"
+	if err := kubectlQuiet(ctx, "apply", "-f", url); err != nil {
+		return fmt.Errorf("apply cert-manager static manifest: %w", err)
+	}
+	ok(output, "cert-manager static manifest applied")
+	return nil
+}
+
+func waitCertManager(ctx context.Context, config deployConfig, output io.Writer) error {
+	for _, crd := range []string{
+		"certificates.cert-manager.io",
+		"clusterissuers.cert-manager.io",
+		"challenges.acme.cert-manager.io",
+		"orders.acme.cert-manager.io",
+	} {
+		if err := kubectlQuiet(ctx, "wait", "--for=condition=Established", "crd/"+crd, "--timeout="+config.RolloutTimeout); err != nil {
+			return fmt.Errorf("wait cert-manager CRD %s: %w", crd, err)
+		}
+	}
+	for _, deployment := range []string{"cert-manager", "cert-manager-cainjector", "cert-manager-webhook"} {
+		if err := kubectlQuiet(ctx, "-n", "cert-manager", "rollout", "status", "deployment/"+deployment, "--timeout="+config.RolloutTimeout); err != nil {
+			return fmt.Errorf("wait cert-manager deployment %s: %w", deployment, err)
+		}
+	}
+	ok(output, "cert-manager ready")
+	return nil
+}
+
+func renderWebPublicContour(repoRoot, servicesFile string) (string, func(), error) {
+	renderDir, err := os.MkdirTemp("", "kodex-web-public-render-*")
+	if err != nil {
+		return "", func() {}, fmt.Errorf("create public web render dir: %w", err)
+	}
+	cleanup := func() { _ = os.RemoveAll(renderDir) }
+	sets := []struct {
+		source string
+		output string
+	}{
+		{source: filepath.Join(repoRoot, "deploy/base/web-public-foundation"), output: filepath.Join(renderDir, "web-public-foundation")},
+		{source: filepath.Join(repoRoot, "deploy/base/web-console-public"), output: filepath.Join(renderDir, "web-console-public")},
+	}
+	for _, set := range sets {
+		if err := manifestrender.Render(manifestrender.Options{
+			SourcePath:       set.source,
+			OutputPath:       set.output,
+			ServicesFilePath: servicesFile,
+		}); err != nil {
+			cleanup()
+			return "", func() {}, err
+		}
+	}
+	return renderDir, cleanup, nil
 }
 
 func renderBackendRings(repoRoot, servicesFile, renderEnv string, rings []backendRing) (string, func(), error) {
@@ -678,16 +963,16 @@ func buildImages(ctx context.Context, config deployConfig, repoRoot string, stac
 	if err != nil {
 		return fmt.Errorf("resolve Kaniko image: %w", err)
 	}
-	golangImage, err := stack.ImageOr("golang-alpine", "KODEX_GOLANG_IMAGE")
+	baseImages, err := resolveBuildBaseImages(stack)
 	if err != nil {
-		return fmt.Errorf("resolve Go build image: %w", err)
+		return err
 	}
 	for _, build := range builds {
 		jobName := "kodex-build-" + build.Name
 		if err := kubectlQuiet(ctx, "-n", config.Namespace, "delete", "job", jobName, "--ignore-not-found"); err != nil {
 			return fmt.Errorf("delete previous build job %s: %w", jobName, err)
 		}
-		manifest := kanikoBuildJobManifest(config.Namespace, jobName, repoRoot, kanikoImage, golangImage, build)
+		manifest := kanikoBuildJobManifest(config.Namespace, jobName, repoRoot, kanikoImage, baseImages, build)
 		if err := kubectlApply(ctx, manifest); err != nil {
 			return fmt.Errorf("apply build job %s: %w", jobName, err)
 		}
@@ -697,6 +982,26 @@ func buildImages(ctx context.Context, config deployConfig, repoRoot string, stac
 		ok(output, "Kaniko build completed for "+build.Name)
 	}
 	return nil
+}
+
+func resolveBuildBaseImages(stack stackinventory.Stack) (buildBaseImages, error) {
+	golangImage, err := stack.ImageOr("golang-alpine", "KODEX_GOLANG_IMAGE")
+	if err != nil {
+		return buildBaseImages{}, fmt.Errorf("resolve Go build image: %w", err)
+	}
+	nodeImage, err := stack.ImageOr("node-alpine", "KODEX_NODE_IMAGE")
+	if err != nil {
+		return buildBaseImages{}, fmt.Errorf("resolve Node build image: %w", err)
+	}
+	nginxImage, err := stack.ImageOr("nginx-unprivileged", "KODEX_NGINX_IMAGE")
+	if err != nil {
+		return buildBaseImages{}, fmt.Errorf("resolve nginx runtime image: %w", err)
+	}
+	return buildBaseImages{
+		Golang: golangImage,
+		Node:   nodeImage,
+		Nginx:  nginxImage,
+	}, nil
 }
 
 func ringImageBuilds(stack stackinventory.Stack, rings []backendRing) ([]imageBuild, error) {
@@ -755,13 +1060,37 @@ func servicesForRings(rings []backendRing) []serviceDeploy {
 	return result
 }
 
-func kanikoBuildJobManifest(namespace, jobName, repoRoot, kanikoImage, golangImage string, build imageBuild) string {
+func requiresBackendFoundation(rings []backendRing) bool {
+	for _, ring := range rings {
+		if ring.UsesBackendFoundation {
+			return true
+		}
+	}
+	return false
+}
+
+func requiresWorkloadDeploy(rings []backendRing) bool {
+	return len(servicesForRings(rings)) > 0 || len(imageNamesForRings(rings)) > 0 || requiresBackendFoundation(rings)
+}
+
+func hasPublicWebRing(rings []backendRing) bool {
+	for _, ring := range rings {
+		if ring.PublicWeb {
+			return true
+		}
+	}
+	return false
+}
+
+func kanikoBuildJobManifest(namespace, jobName, repoRoot, kanikoImage string, baseImages buildBaseImages, build imageBuild) string {
 	args := []string{
 		"--context=dir:///workspace/repo",
 		"--dockerfile=/workspace/repo/" + build.Dockerfile,
 		"--destination=" + build.Destination,
 		"--target=" + build.Target,
-		"--build-arg=GOLANG_IMAGE=" + golangImage,
+		"--build-arg=GOLANG_IMAGE=" + baseImages.Golang,
+		"--build-arg=NODE_IMAGE=" + baseImages.Node,
+		"--build-arg=NGINX_IMAGE=" + baseImages.Nginx,
 		"--insecure",
 		"--skip-tls-verify",
 		"--cache=" + stackinventory.EnvOr("KODEX_KANIKO_CACHE_ENABLED", "false"),
@@ -860,6 +1189,10 @@ func applyServices(ctx context.Context, config deployConfig, renderDir string, r
 }
 
 func checkReadyz(ctx context.Context, namespace, service, targetPort string) error {
+	return checkHTTP(ctx, namespace, service, targetPort, "/health/readyz")
+}
+
+func checkHTTP(ctx context.Context, namespace, service, targetPort, path string) error {
 	localPort, err := freeLocalPort()
 	if err != nil {
 		return err
@@ -877,7 +1210,7 @@ func checkReadyz(ctx context.Context, namespace, service, targetPort string) err
 	client := http.Client{Timeout: 2 * time.Second}
 	deadline := time.Now().Add(60 * time.Second)
 	for time.Now().Before(deadline) {
-		request, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://127.0.0.1:"+localPort+"/health/readyz", nil)
+		request, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://127.0.0.1:"+localPort+path, nil)
 		if err != nil {
 			return err
 		}
@@ -890,7 +1223,51 @@ func checkReadyz(ctx context.Context, namespace, service, targetPort string) err
 		}
 		time.Sleep(time.Second)
 	}
-	return errors.New("readyz did not become healthy")
+	return errors.New("HTTP check did not become healthy")
+}
+
+func ensurePublicIngressTargetsOAuth2Proxy(ctx context.Context, namespace string) error {
+	output, err := kubectlOutput(ctx, "-n", namespace, "get", "ingress", "web-console-public", "-o", "json")
+	if err != nil {
+		return fmt.Errorf("read public web Ingress: %w", err)
+	}
+	var ingress struct {
+		Spec struct {
+			Rules []struct {
+				HTTP struct {
+					Paths []struct {
+						Backend struct {
+							Service struct {
+								Name string `json:"name"`
+							} `json:"service"`
+						} `json:"backend"`
+					} `json:"paths"`
+				} `json:"http"`
+			} `json:"rules"`
+		} `json:"spec"`
+	}
+	if err := json.Unmarshal(output, &ingress); err != nil {
+		return fmt.Errorf("decode public web Ingress: %w", err)
+	}
+	targets := map[string]bool{}
+	for _, rule := range ingress.Spec.Rules {
+		for _, path := range rule.HTTP.Paths {
+			targets[path.Backend.Service.Name] = true
+		}
+	}
+	if len(targets) == 0 {
+		return errors.New("public web Ingress has no service backends")
+	}
+	if targets["web-console"] {
+		return errors.New("public web Ingress must not target web-console directly")
+	}
+	if !targets["web-console-public-oauth2-proxy"] {
+		return errors.New("public web Ingress must target oauth2-proxy")
+	}
+	if len(targets) != 1 {
+		return errors.New("public web Ingress must target only oauth2-proxy")
+	}
+	return nil
 }
 
 func freeLocalPort() (string, error) {
@@ -946,6 +1323,14 @@ func randomHex(bytesCount int) (string, error) {
 		return "", fmt.Errorf("generate secret value: %w", err)
 	}
 	return fmt.Sprintf("%x", data), nil
+}
+
+func randomCookieSecret() (string, error) {
+	data := make([]byte, 24)
+	if _, err := rand.Read(data); err != nil {
+		return "", fmt.Errorf("generate secret value: %w", err)
+	}
+	return base64.RawURLEncoding.EncodeToString(data), nil
 }
 
 func postgresURI(user, password, host, port, database string) string {

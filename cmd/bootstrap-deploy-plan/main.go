@@ -294,6 +294,18 @@ func buildManifestSets(repoRoot string, renderDir string, stack stackinventory.S
 			Output:    filepath.Join(renderDir, "bootstrap-builder-smoke"),
 			Kustomize: true,
 		},
+		{
+			Name:      "public web foundation",
+			Source:    filepath.Join(repoRoot, "deploy/base/web-public-foundation"),
+			Output:    filepath.Join(renderDir, "web-public-foundation"),
+			Kustomize: true,
+		},
+		{
+			Name:      "public web console contour",
+			Source:    filepath.Join(repoRoot, "deploy/base/web-console-public"),
+			Output:    filepath.Join(renderDir, "web-console-public"),
+			Kustomize: true,
+		},
 	}
 	for _, service := range stack.Spec.DeployableServices {
 		sets = append(sets, manifestSet{

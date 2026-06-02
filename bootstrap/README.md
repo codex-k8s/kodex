@@ -21,13 +21,15 @@ installer.
 |---|---|
 | `bootstrap/host/bootstrap_cluster.sh` | Единственная активная точка входа: `preflight`, `install`, `--dry-run`. |
 | `bootstrap/host/plan_backend_deploy.sh` | План первого backend deploy только на чтение: инвентарь, рендер, `kubectl kustomize` и проверки кластера без изменений. |
-| `bootstrap/host/deploy_backend_ring.sh` | Реальное применение backend-колец, `staff-gateway` и `platform-mcp-server`: registry, Kubernetes `Secret`, Kaniko-сборки, PostgreSQL, миграции и сервисы выбранного кольца. |
+| `bootstrap/host/deploy_backend_ring.sh` | Реальное применение backend-колец, `staff-gateway`, `platform-mcp-server`, `web-console` и публичного web-contour: registry, Kubernetes `Secret`, Kaniko-сборки, PostgreSQL, миграции и сервисы выбранного кольца. |
 | `bootstrap/local/install.sh` | Локальный privileged orchestrator install-шагов. |
 | `bootstrap/local/steps/*.sh` | Узкие idempotent host/Kubernetes steps. |
 | `bootstrap/host/smoke_registry_kaniko.sh` | Проверка registry mirror и Kaniko build/push без Docker daemon. |
 | `bootstrap/host/smoke_backend_contour.sh` | Тонкая обвязка проверки над `deploy_backend_ring.sh --skip-build`. |
 | `deploy/base/bootstrap-foundation/**` | Manifests внутреннего registry. |
 | `deploy/base/bootstrap-builder-smoke/**` | Manifests заданий проверки mirror/Kaniko. |
+| `deploy/base/web-public-foundation/**` | Manifests Traefik `IngressClass`/controller и `ClusterIssuer` Let’s Encrypt. |
+| `deploy/base/web-console-public/**` | Manifests `oauth2-proxy`, `Certificate` и публичного `Ingress` для `web-console`. |
 | `cmd/bootstrap-preflight` | Безопасный preflight: имена env, stack inventory, dry-run рендер, kustomize и проверки Kubernetes только на чтение. |
 | `cmd/bootstrap-deploy-plan` | Безопасный план backend deploy: инвентарь MVP-сервисов, PostgreSQL/event-log manifests, service manifests, builder refs и проверки foundation только на чтение. |
 | `cmd/manifest-render` | Stack-aware renderer: читает `services.yaml`, затем применяет env overrides. |
@@ -50,6 +52,8 @@ PR, логах и документации.
 - `OPERATOR_USER`;
 - `KODEX_PRODUCTION_NAMESPACE`;
 - `KODEX_PRODUCTION_DOMAIN`;
+- `KODEX_PUBLIC_BASE_URL`;
+- `KODEX_LETSENCRYPT_EMAIL`;
 - `KODEX_BOOTSTRAP_PUBLIC_HOST`, если DNS нужно сверять с публичным host/IP, а не с локальными адресами сервера;
 - `KODEX_INTERNAL_REGISTRY_*`;
 - `KODEX_SSH_PORT`, если host firewall включён;
@@ -126,7 +130,7 @@ Install выполняет шаги:
 4. установка или проверка k3s;
 5. настройка `/etc/rancher/k3s/registries.yaml` на internal registry;
 6. настройка kubelet image GC и host image prune timer;
-7. проверка network prerequisites без установки ingress/cert-manager;
+7. проверка network prerequisites без установки публичного web-contour;
 8. доставка snapshot репозитория в `/opt/kodex`;
 9. подготовка runtime env без печати секретов;
 10. render/apply internal registry foundation;
@@ -183,7 +187,7 @@ bash bootstrap/host/plan_backend_deploy.sh \
 пустой `--render-dir`. Непустой каталог отклоняется; команда не удаляет пути,
 переданные оператором.
 
-## Реальный deploy backend-колец, staff-gateway и platform-mcp-server
+## Реальный deploy backend-колец, staff-gateway, platform-mcp-server и web-console
 
 После успешного preflight и dry-run плана оператор может применить backend-кольцо.
 Без `--ring` используется первое кольцо, чтобы существующий путь не менял
@@ -202,8 +206,8 @@ bash bootstrap/host/deploy_backend_ring.sh \
 ```
 
 Для новой установки, где нужно последовательно применить оба backend-кольца
-одной командой, используется `all`. Этот режим не включает `staff-gateway` и
-`platform-mcp-server`:
+одной командой, используется `all`. Этот режим не включает `staff-gateway`,
+`platform-mcp-server` и `web-console`:
 
 ```bash
 bash bootstrap/host/deploy_backend_ring.sh \
@@ -228,6 +232,31 @@ bash bootstrap/host/deploy_backend_ring.sh \
   --ring mcp
 ```
 
+После готовности `staff-gateway` фронтенд запускается отдельным контуром:
+
+```bash
+bash bootstrap/host/deploy_backend_ring.sh \
+  --env-file bootstrap/host/config.env \
+  --ring web
+```
+
+Публичный HTTPS-доступ к фронтенду запускается отдельным контуром после
+готовности `web-console` и `staff-gateway`:
+
+```bash
+bash bootstrap/host/deploy_backend_ring.sh \
+  --env-file bootstrap/host/config.env \
+  --ring web-public
+```
+
+`web-public` устанавливает или проверяет `cert-manager`, применяет Traefik
+`IngressClass` `kodex-public`, создаёт `ClusterIssuer` Let’s Encrypt, готовит
+`Secret` `kodex-web-oauth2-proxy`, разворачивает `oauth2-proxy`, выпускает
+`Certificate` для `platform.kodex.works` и создаёт публичный `Ingress` только на
+`oauth2-proxy`. Прямой публичный `Ingress` на `web-console` запрещён: если OAuth
+secret не может быть создан из существующего Kubernetes `Secret` или env
+seed-полей, команда завершается до создания публичного `Ingress`.
+
 Состав колец:
 
 - `first`: `access-manager`, `project-catalog`, `package-hub`, `provider-hub`;
@@ -236,27 +265,36 @@ bash bootstrap/host/deploy_backend_ring.sh \
   `codex-hook-ingress`.
 - `staff`: `staff-gateway`.
 - `mcp`: `platform-mcp-server`.
+- `web`: `web-console`.
+- `web-public`: Traefik/cert-manager foundation и `oauth2-proxy` перед
+  `web-console`.
 
-`staff-gateway` и `platform-mcp-server` не входят в `all`, чтобы повторный
-backend deploy не менял edge- и MCP-контуры без явного выбора оператора.
+`staff-gateway`, `platform-mcp-server`, `web-console` и `web-public` не входят в
+`all`, чтобы повторный backend deploy не менял edge-, MCP-, frontend- и public
+web-contour без явного выбора оператора.
 
 Команда выполняет изменения в Kubernetes и остаётся идемпотентной:
 
 - создаёт namespace через `kubectl apply`;
-- применяет internal registry foundation и ждёт readiness;
-- читает существующие `kodex-postgres` и `kodex-platform-runtime` `Secret`;
+- для workload-колец применяет internal registry foundation и ждёт readiness;
+- для workload-колец читает существующие `kodex-postgres` и
+  `kodex-platform-runtime` `Secret`;
 - генерирует только отсутствующие ключи `Secret` и сохраняет их в Kubernetes до
-  запуска workloads;
+  запуска workloads или публичного `oauth2-proxy`;
 - не перегенерирует уже существующие значения `Secret`;
-- нормализует локальные PostgreSQL DSN, если они не соответствуют текущему
-  паролю из `kodex-postgres`;
+- для workload-колец нормализует локальные PostgreSQL DSN, если они не
+  соответствуют текущему паролю из `kodex-postgres`;
 - рендерит manifests во временный приватный каталог и удаляет его после работы;
 - собирает через Kaniko образы выбранного кольца и migration-образы без Docker
   daemon;
-- применяет PostgreSQL foundation, создаёт базы через
-  `kodex-postgres-bootstrap-databases`;
-- запускает `platform-event-log` migrations;
-- запускает migrations и deployments для сервисов выбранного кольца;
+- для backend/staff/MCP-контуров применяет PostgreSQL foundation, создаёт базы
+  через `kodex-postgres-bootstrap-databases` и запускает `platform-event-log`
+  migrations;
+- для `web` ring не запускает PostgreSQL foundation и backend migrations;
+- для `web-public` ring не запускает registry, Kaniko, PostgreSQL и backend
+  migrations; он применяет только public web-contour;
+- запускает migrations, где они есть, и deployments для сервисов выбранного
+  кольца;
 - ждёт rollout и проверяет `/health/readyz` через локальный `kubectl
   port-forward`.
 
@@ -311,7 +349,12 @@ KODEX_SMOKE_ENV_FILE=bootstrap/host/config.env \
 status. `staff-gateway` проверяется через `deploy_backend_ring.sh --ring staff`,
 readiness, rollout status и OpenAPI endpoint. `platform-mcp-server` проверяется
 через `deploy_backend_ring.sh --ring mcp`, readiness, rollout status, `/metrics`
-и наличие MCP endpoint `/mcp`. Frontend в эти контуры не входит.
+и наличие MCP endpoint `/mcp`. `web-console` проверяется через
+`deploy_backend_ring.sh --ring web`, readiness, rollout status и HTTP `GET /`
+через локальный `kubectl port-forward`. Публичный web-contour проверяется через
+`deploy_backend_ring.sh --ring web-public`, readiness `kodex-public-ingress`,
+готовность `cert-manager`, `ClusterIssuer`, `Certificate`, rollout
+`oauth2-proxy` и HTTPS/OAuth redirect.
 
 Доменные и end-to-end проверки не добавляются как shell smoke scripts в
 `scripts/**`. Их целевой формат — Go tests или отдельный Go integration runner;

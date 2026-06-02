@@ -31,6 +31,40 @@
 `staff-gateway`. В local-dev режиме с actor headers также должен быть задан
 local-dev actor.
 
+## Production deploy
+
+Production-контур собирает статический Vite bundle в образ `web-console` и
+отдаёт его через unprivileged nginx на порту `8080`.
+
+В Kubernetes активный путь:
+
+```bash
+bash bootstrap/host/deploy_backend_ring.sh \
+  --env-file bootstrap/host/config.env \
+  --ring web
+```
+
+Kubernetes manifest создаёт внутренний `Service` и nginx `ConfigMap`:
+`/health/livez` и `/health/readyz` отвечают без обращения к backend, а `/v1/**`
+проксируется на `staff-gateway:8080` внутри кластера. Поэтому production-сборка
+оставляет `VITE_STAFF_GATEWAY_BASE_URL` пустым и использует same-origin API
+path.
+
+Публичный HTTPS-доступ включается отдельным deploy-контуром:
+
+```bash
+bash bootstrap/host/deploy_backend_ring.sh \
+  --env-file bootstrap/host/config.env \
+  --ring web-public
+```
+
+Этот контур готовит `cert-manager`, Traefik `IngressClass` `kodex-public`,
+`ClusterIssuer` Let’s Encrypt, `oauth2-proxy`, `Certificate` для
+`platform.kodex.works` и публичный `Ingress` только на `oauth2-proxy`. Прямого
+публичного `Ingress` на `web-console` нет. GitHub OAuth callback закреплён за
+`https://platform.kodex.works/oauth2/callback`, а доступ ограничен отдельным
+allowlist-файлом для owner email, не общей bootstrap allowlist.
+
 ## Доступные серверные ручки
 
 - `GET /v1/owner-inbox/items`
