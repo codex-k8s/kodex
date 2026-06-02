@@ -27,6 +27,7 @@ type Config struct {
 	RuntimeJobReader            RuntimeJobReader
 	RuntimeJobRunnerImageRef    string
 	RuntimeJobAllowedSecretRefs []AgentRunExecutionRef
+	CodexSessionExecution       CodexSessionExecutionConfig
 	ProviderFollowUpDispatcher  ProviderFollowUpDispatcher
 	HumanGateRequester          HumanGateInteractionRequester
 	RuntimePreparationEnabled   bool
@@ -49,6 +50,7 @@ type Service struct {
 	humanGateRequestEnabled     bool
 	runtimeJobRunnerImageRef    string
 	runtimeJobAllowedSecretRefs []AgentRunExecutionRef
+	codexSessionExecution       CodexSessionExecutionConfig
 
 	guidanceResolver           GuidanceResolver
 	workspacePolicyResolver    WorkspacePolicyResolver
@@ -248,6 +250,7 @@ func New(cfg Config) *Service {
 	service.humanGateRequestEnabled = cfg.HumanGateRequestEnabled
 	service.runtimeJobRunnerImageRef = cfg.RuntimeJobRunnerImageRef
 	service.runtimeJobAllowedSecretRefs = append([]AgentRunExecutionRef(nil), cfg.RuntimeJobAllowedSecretRefs...)
+	service.codexSessionExecution = cfg.CodexSessionExecution
 	service.eventPublisher = cfg.EventPublisher
 	return service
 }

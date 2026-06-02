@@ -76,6 +76,21 @@ func TestCreateAgentRunJobMapsRequestAndResponse(t *testing.T) {
 	if len(spec.GetReportingTargetRefs()) != 1 || spec.GetReportingTargetRefs()[0].GetKind() != "agent_run_state" {
 		t.Fatalf("reporting target refs = %+v", spec.GetReportingTargetRefs())
 	}
+	codexSpec := spec.GetCodexSessionExecutionSpec()
+	if codexSpec == nil ||
+		codexSpec.GetInstructionObjectRef() != "object://instructions/agent-run" ||
+		codexSpec.GetInstructionObjectDigest() != "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" ||
+		codexSpec.GetResultSchemaRef() != "object://schemas/codex-result-v1" ||
+		codexSpec.GetResultSchemaDigest() != "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" ||
+		codexSpec.GetWorkspaceSnapshotRef() != "runtime://workspace-snapshots/agent-run" ||
+		codexSpec.GetHookEndpointRef() != "hook://codex-hook-ingress/agent-runner" ||
+		codexSpec.GetTimeoutSeconds() != 1800 ||
+		codexSpec.GetRunnerMode() != runtimev1.AgentRunRunnerMode_AGENT_RUN_RUNNER_MODE_CODEX_AGENT {
+		t.Fatalf("codex session execution spec = %+v", codexSpec)
+	}
+	if len(codexSpec.GetCallbackRefs()) != 1 || len(codexSpec.GetOutputRefs()) != 1 || len(codexSpec.GetResultRefs()) != 1 {
+		t.Fatalf("codex execution refs = %+v/%+v/%+v", codexSpec.GetCallbackRefs(), codexSpec.GetOutputRefs(), codexSpec.GetResultRefs())
+	}
 	requestPayload, err := json.Marshal(request)
 	if err != nil {
 		t.Fatalf("marshal request: %v", err)
@@ -253,6 +268,33 @@ func testAgentRunExecutionSpec(agentRunID uuid.UUID, slotID uuid.UUID) agentserv
 		},
 		ReportingTargetRefs: []agentservice.AgentRunExecutionRef{
 			{Kind: "agent_run_state", Ref: "agent-manager://runs/" + agentRunID.String()},
+		},
+		CodexSessionExecutionSpec: &agentservice.CodexSessionExecutionSpec{
+			CodexSessionExecutionInputRefs: agentservice.CodexSessionExecutionInputRefs{
+				InstructionObjectRef:    "object://instructions/agent-run",
+				InstructionObjectDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+				ResultSchemaRef:         "object://schemas/codex-result-v1",
+				ResultSchemaDigest:      "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+				WorkspaceSnapshotRef:    "runtime://workspace-snapshots/agent-run",
+				HookEndpointRef:         "hook://codex-hook-ingress/agent-runner",
+				CallbackRefs: []agentservice.AgentRunExecutionRef{
+					{Kind: "agent_run_state", Ref: "agent-manager://runs/" + agentRunID.String()},
+				},
+			},
+			CodexSessionExecutionIORefs: agentservice.CodexSessionExecutionIORefs{
+				TimeoutSeconds:   1800,
+				RunnerProfileRef: "runner-profile://go-full",
+				RunnerMode:       agentservice.RuntimeJobRunnerModeCodexAgent,
+				OutputRefs: []agentservice.AgentRunExecutionRef{
+					{Kind: "codex_output", Ref: "agent-manager://runs/" + agentRunID.String() + "/codex-output"},
+				},
+				ResultRefs: []agentservice.AgentRunExecutionRef{
+					{Kind: "codex_result", Ref: "agent-manager://runs/" + agentRunID.String() + "/codex-result"},
+				},
+				AllowedSecretRefs: []agentservice.AgentRunExecutionRef{
+					{Kind: "runtime_api", Ref: "secret://runtime/agent-token"},
+				},
+			},
 		},
 	}
 }

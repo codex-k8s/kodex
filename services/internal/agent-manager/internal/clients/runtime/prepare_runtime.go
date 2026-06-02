@@ -167,6 +167,7 @@ func agentRunExecutionSpec(spec agentservice.AgentRunExecutionSpec) *runtimev1.A
 		RunnerMode:                         agentRunRunnerMode(spec.RunnerMode),
 		AllowedSecretRefs:                  agentRunAllowedSecretRefs(spec.AllowedSecretRefs),
 		ReportingTargetRefs:                agentRunReportingTargetRefs(spec.ReportingTargetRefs),
+		CodexSessionExecutionSpec:          codexSessionExecutionSpec(spec.CodexSessionExecutionSpec),
 	}
 }
 
@@ -193,6 +194,41 @@ func agentRunAllowedSecretRef(ref agentservice.AgentRunExecutionRef) *runtimev1.
 
 func agentRunReportingTargetRef(ref agentservice.AgentRunExecutionRef) *runtimev1.AgentRunReportingTargetRef {
 	return &runtimev1.AgentRunReportingTargetRef{Kind: ref.Kind, Ref: ref.Ref}
+}
+
+func codexSessionExecutionSpec(spec *agentservice.CodexSessionExecutionSpec) *runtimev1.CodexSessionExecutionSpec {
+	if spec == nil {
+		return nil
+	}
+	result := &runtimev1.CodexSessionExecutionSpec{
+		InstructionObjectRef:    strings.TrimSpace(spec.InstructionObjectRef),
+		InstructionObjectDigest: strings.TrimSpace(spec.InstructionObjectDigest),
+		ResultSchemaRef:         strings.TrimSpace(spec.ResultSchemaRef),
+		ResultSchemaDigest:      strings.TrimSpace(spec.ResultSchemaDigest),
+		HookEndpointRef:         strings.TrimSpace(spec.HookEndpointRef),
+		CallbackRefs:            agentRunExecutionRefs(spec.CallbackRefs),
+		TimeoutSeconds:          spec.TimeoutSeconds,
+		RunnerProfileRef:        strings.TrimSpace(spec.RunnerProfileRef),
+		RunnerMode:              agentRunRunnerMode(spec.RunnerMode),
+		OutputRefs:              agentRunExecutionRefs(spec.OutputRefs),
+		ResultRefs:              agentRunExecutionRefs(spec.ResultRefs),
+		AllowedSecretRefs:       agentRunAllowedSecretRefs(spec.AllowedSecretRefs),
+	}
+	if snapshotRef := strings.TrimSpace(spec.SessionSnapshotRef); snapshotRef != "" {
+		result.SessionSnapshotRef = &snapshotRef
+	}
+	if snapshotRef := strings.TrimSpace(spec.WorkspaceSnapshotRef); snapshotRef != "" {
+		result.WorkspaceSnapshotRef = &snapshotRef
+	}
+	return result
+}
+
+func agentRunExecutionRefs(refs []agentservice.AgentRunExecutionRef) []*runtimev1.AgentRunExecutionRef {
+	return mapAgentRunExecutionRefs(refs, agentRunExecutionRef)
+}
+
+func agentRunExecutionRef(ref agentservice.AgentRunExecutionRef) *runtimev1.AgentRunExecutionRef {
+	return &runtimev1.AgentRunExecutionRef{Kind: ref.Kind, Ref: ref.Ref}
 }
 
 func mapAgentRunExecutionRefs[T any](refs []agentservice.AgentRunExecutionRef, mapRef func(agentservice.AgentRunExecutionRef) T) []T {

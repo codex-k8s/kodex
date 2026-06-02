@@ -5,8 +5,8 @@ title: kodex — дизайн домена runtime и fleet
 status: active
 owner_role: SA
 created_at: 2026-05-07
-updated_at: 2026-05-28
-related_issues: [655, 656, 657, 658, 659, 660, 661, 662, 782, 949, 966, 990]
+updated_at: 2026-06-02
+related_issues: [655, 656, 657, 658, 659, 660, 661, 662, 782, 949, 966, 990, 994]
 related_prs: []
 related_adrs: []
 approvals:
@@ -116,7 +116,7 @@ sequenceDiagram
 
 Тип `agent_run` выделен отдельно для agent Run: `agent-manager` может ставить такое задание через `CreateJob`, а Kubernetes-исполнитель `runtime-manager` забирает его через `ClaimRunnableJob` без обходной подмены на `build`, `deploy` или `housekeeping`. Runtime-manager хранит тип, ссылки, статус и диагностику, но не становится владельцем agent Run.
 
-Перед реальным исполнением `agent_run` должен иметь typed `AgentRunExecutionSpec`; для agent Run его собирает `agent-manager` после `PrepareRuntime`, но передаёт в `CreateJob` только когда slot уже `ready`, а workspace materialization `completed`. В spec попадают только безопасные refs и контрольные значения: `agent_run_id`, `slot_id`, ожидаемая workspace materialization, workspace mount/PVC/workspace refs, `.kodex/context/agent-run.json` ref/digest, `runner_profile_ref`, `runner_image_ref`, фиксированный `runner_mode`, ссылки на разрешённые секреты без значений и цели отчёта runner. Optional `CodexSessionExecutionSpec` описывает будущий запуск Codex CLI: checked instruction object ref/digest, result schema ref/digest, session или workspace snapshot ref, hook endpoint/callback refs, timeout, fixed runner profile, output/result refs и allowed secret refs без значений. `CreateJob` сверяет spec с slot и завершённой materialization; задание без spec остаётся в ожидающем состоянии с безопасной диагностикой и не забирается исполнителем.
+Перед реальным исполнением `agent_run` должен иметь typed `AgentRunExecutionSpec`; для agent Run его собирает `agent-manager` после `PrepareRuntime`, но передаёт в `CreateJob` только когда slot уже `ready`, а workspace materialization `completed`. В spec попадают только безопасные refs и контрольные значения: `agent_run_id`, `slot_id`, ожидаемая workspace materialization, workspace mount/PVC/workspace refs, `.kodex/context/agent-run.json` ref/digest, `runner_profile_ref`, `runner_image_ref`, фиксированный `runner_mode`, ссылки на разрешённые секреты без значений и цели отчёта runner. Вложенный `CodexSessionExecutionSpec` описывает запуск Codex CLI: checked instruction object ref/digest, result schema ref/digest, session или workspace snapshot ref, hook endpoint/callback refs, timeout, фиксированный runner profile, output/result refs и allowed secret refs без значений. `CreateJob` сверяет spec с slot и завершённой materialization; задание без spec или без валидного вложенного execution spec остаётся в ожидающем состоянии с безопасной диагностикой и не забирается исполнителем.
 
 Первый реальный исполнитель Kubernetes находится внутри `runtime-manager` и выключен по умолчанию. После включения он забирает `health_check` job и `agent_run` job с валидным `AgentRunExecutionSpec`, получает `cluster_id` из сохранённого placement, читает через `fleet-manager.GetKubernetesCluster` только безопасную ссылку на kubeconfig/service account secret и создаёт ограниченный Kubernetes Job через `client-go`. Runtime не вызывает `kubectl`, не читает БД `fleet-manager`, не хранит kubeconfig и не пишет полный лог или Kubernetes events в PostgreSQL.
 

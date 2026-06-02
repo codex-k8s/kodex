@@ -295,11 +295,44 @@ type AgentRunExecutionSpec struct {
 	RunnerMode                         string
 	AllowedSecretRefs                  []AgentRunExecutionRef
 	ReportingTargetRefs                []AgentRunExecutionRef
+	CodexSessionExecutionSpec          *CodexSessionExecutionSpec
 }
 
 type AgentRunExecutionRef struct {
 	Kind string
 	Ref  string
+}
+
+type CodexSessionExecutionSpec struct {
+	CodexSessionExecutionInputRefs
+	CodexSessionExecutionIORefs
+}
+
+type CodexSessionExecutionInputRefs struct {
+	InstructionObjectRef    string
+	InstructionObjectDigest string
+	ResultSchemaRef         string
+	ResultSchemaDigest      string
+	SessionSnapshotRef      string
+	WorkspaceSnapshotRef    string
+	HookEndpointRef         string
+	CallbackRefs            []AgentRunExecutionRef
+}
+
+type CodexSessionExecutionIORefs struct {
+	TimeoutSeconds    int32
+	RunnerProfileRef  string
+	RunnerMode        string
+	OutputRefs        []AgentRunExecutionRef
+	ResultRefs        []AgentRunExecutionRef
+	AllowedSecretRefs []AgentRunExecutionRef
+}
+
+type CodexSessionExecutionConfig struct {
+	ResultSchemaRef    string
+	ResultSchemaDigest string
+	HookEndpointRef    string
+	TimeoutSeconds     int32
 }
 
 type RuntimeJobResult struct {
