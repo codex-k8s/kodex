@@ -215,6 +215,183 @@ func TestRunDryRunProducesAdoptionCheckedArtifactWithoutMutations(t *testing.T) 
 	assertContains(t, output.String(), "apply disabled")
 }
 
+func TestRunDryRunPlansBootstrapSetupWithoutMutationsAndRedactsPreparedFiles(t *testing.T) {
+	scenarioPath := writeScenario(t, bootstrapSetupFixture())
+	projectClient := &fakeProjectCatalogClient{}
+	clients := runnerClients{
+		ProjectCatalog: projectClient,
+		ProviderHub:    &fakeProviderHubClient{},
+	}
+
+	var output bytes.Buffer
+	err := run(context.Background(), runnerOptions{
+		ScenarioFilePath: scenarioPath,
+		ProjectID:        "project-1",
+		RequestID:        "req-1",
+		Kind:             "bootstrap",
+	}, clients, &output)
+	if err != nil {
+		t.Fatalf("run dry-run bootstrap setup: %v", err)
+	}
+
+	if projectClient.createRepositoryCalls != 0 || projectClient.bootstrapPullRequestCalls != 0 {
+		t.Fatalf("dry-run called mutating setup methods: create=%d bootstrap_pr=%d", projectClient.createRepositoryCalls, projectClient.bootstrapPullRequestCalls)
+	}
+	assertContains(t, output.String(), "bootstrap repository create ready")
+	assertContains(t, output.String(), "bootstrap pull request ready")
+	assertContains(t, output.String(), "apply disabled")
+	assertNotContains(t, output.String(), "prepared_services_yaml_secret")
+	assertNotContains(t, output.String(), "normalized_payload_secret")
+}
+
+func TestRunApplyCreatesRepositoryAndBootstrapPullRequestThroughProductAPIs(t *testing.T) {
+	scenarioPath := writeScenario(t, bootstrapSetupFixture())
+	projectClient := &fakeProjectCatalogClient{createRepositoryResponse: repositoryCreateResponseFixture()}
+	clients := runnerClients{
+		ProjectCatalog: projectClient,
+		ProviderHub:    &fakeProviderHubClient{},
+	}
+
+	var output bytes.Buffer
+	err := run(context.Background(), runnerOptions{
+		ScenarioFilePath:     scenarioPath,
+		ProjectID:            "project-1",
+		AllowedProviderOwner: "codex-k8s",
+		RepositoryNamePrefix: "kodex-onboarding-",
+		RequestID:            "req-1",
+		Kind:                 "bootstrap",
+		Apply:                true,
+	}, clients, &output)
+	if err != nil {
+		t.Fatalf("run apply bootstrap setup: %v", err)
+	}
+
+	if projectClient.createRepositoryCalls != 1 {
+		t.Fatalf("expected one create repository call, got %d", projectClient.createRepositoryCalls)
+	}
+	if projectClient.bootstrapPullRequestCalls != 1 {
+		t.Fatalf("expected one bootstrap PR call, got %d", projectClient.bootstrapPullRequestCalls)
+	}
+	if projectClient.bootstrapReconcileCalls != 0 {
+		t.Fatalf("expected no reconcile before merge signal, got %d", projectClient.bootstrapReconcileCalls)
+	}
+	createRequest := projectClient.lastCreateRepositoryRequest
+	if createRequest == nil {
+		t.Fatal("expected create repository request")
+	}
+	if got := createRequest.GetProviderOwner() + "/" + createRequest.GetProviderName(); got != "codex-k8s/kodex-onboarding-live" {
+		t.Fatalf("unexpected create target %q", got)
+	}
+	if got := createRequest.GetExternalAccountId(); got != "external-account-1" {
+		t.Fatalf("unexpected external account %q", got)
+	}
+	prRequest := projectClient.lastBootstrapPullRequestRequest
+	if prRequest == nil {
+		t.Fatal("expected bootstrap pull request request")
+	}
+	if got := prRequest.GetRepositoryId(); got != "repo-1" {
+		t.Fatalf("expected repository id from create response, got %q", got)
+	}
+	if got := prRequest.GetServicesPolicy().GetValidatedPayloadJson(); !strings.Contains(got, "normalized_payload_secret") {
+		t.Fatalf("expected checked services policy payload to reach product API")
+	}
+	if got := prRequest.GetFiles()[0].GetContent(); !strings.Contains(got, "prepared_services_yaml_secret") {
+		t.Fatalf("expected prepared file content to reach product API")
+	}
+	assertContains(t, output.String(), "bootstrap repository create completed")
+	assertContains(t, output.String(), "bootstrap pull request completed")
+	assertContains(t, output.String(), "bootstrap reconcile skipped")
+	assertNotContains(t, output.String(), "prepared_services_yaml_secret")
+	assertNotContains(t, output.String(), "normalized_payload_secret")
+}
+
+func TestRunApplyRejectsUnsafeBootstrapSetupTarget(t *testing.T) {
+	scenario := bootstrapSetupFixture()
+	scenario.BootstrapSetup.CreateRepository.ProviderName = "production-repository"
+	scenarioPath := writeScenario(t, scenario)
+	projectClient := &fakeProjectCatalogClient{createRepositoryResponse: repositoryCreateResponseFixture()}
+	clients := runnerClients{
+		ProjectCatalog: projectClient,
+		ProviderHub:    &fakeProviderHubClient{},
+	}
+
+	err := run(context.Background(), runnerOptions{
+		ScenarioFilePath:     scenarioPath,
+		ProjectID:            "project-1",
+		AllowedProviderOwner: "codex-k8s",
+		RepositoryNamePrefix: "kodex-onboarding-",
+		RequestID:            "req-1",
+		Kind:                 "bootstrap",
+		Apply:                true,
+	}, clients, ioDiscard{})
+	if err == nil {
+		t.Fatal("expected unsafe setup target error")
+	}
+	assertContains(t, err.Error(), "must start")
+	if projectClient.createRepositoryCalls != 0 || projectClient.bootstrapPullRequestCalls != 0 {
+		t.Fatalf("unsafe target must not mutate product APIs: create=%d bootstrap_pr=%d", projectClient.createRepositoryCalls, projectClient.bootstrapPullRequestCalls)
+	}
+}
+
+func TestRunApplyRejectsBootstrapCreateRepositoryWhenBindingAlreadyKnown(t *testing.T) {
+	scenario := bootstrapSetupFixture()
+	scenario.RepositoryID = "repo-1"
+	scenario.RepositoryFullName = "codex-k8s/kodex-onboarding-test"
+	scenarioPath := writeScenario(t, scenario)
+	projectClient := &fakeProjectCatalogClient{repository: repositoryFixture()}
+	clients := runnerClients{
+		ProjectCatalog: projectClient,
+		ProviderHub:    &fakeProviderHubClient{},
+	}
+
+	err := run(context.Background(), runnerOptions{
+		ScenarioFilePath:     scenarioPath,
+		ProjectID:            "project-1",
+		RepositoryID:         "repo-1",
+		RepositoryFullName:   "codex-k8s/kodex-onboarding-test",
+		AllowedProviderOwner: "codex-k8s",
+		RepositoryNamePrefix: "kodex-onboarding-",
+		RequestID:            "req-1",
+		Kind:                 "bootstrap",
+		Apply:                true,
+	}, clients, ioDiscard{})
+	if err == nil {
+		t.Fatal("expected known binding create_repository guard error")
+	}
+	assertContains(t, err.Error(), "repository_id to be empty")
+	if projectClient.createRepositoryCalls != 0 || projectClient.bootstrapPullRequestCalls != 0 {
+		t.Fatalf("known binding create_repository guard must not mutate product APIs: create=%d bootstrap_pr=%d", projectClient.createRepositoryCalls, projectClient.bootstrapPullRequestCalls)
+	}
+}
+
+func TestRunApplyRejectsAuthenticatedUserBootstrapCreateRepository(t *testing.T) {
+	scenario := bootstrapSetupFixture()
+	scenario.BootstrapSetup.CreateRepository.OwnerKind = "authenticated_user"
+	scenarioPath := writeScenario(t, scenario)
+	projectClient := &fakeProjectCatalogClient{createRepositoryResponse: repositoryCreateResponseFixture()}
+	clients := runnerClients{
+		ProjectCatalog: projectClient,
+		ProviderHub:    &fakeProviderHubClient{},
+	}
+
+	err := run(context.Background(), runnerOptions{
+		ScenarioFilePath:     scenarioPath,
+		ProjectID:            "project-1",
+		AllowedProviderOwner: "codex-k8s",
+		RepositoryNamePrefix: "kodex-onboarding-",
+		RequestID:            "req-1",
+		Kind:                 "bootstrap",
+		Apply:                true,
+	}, clients, ioDiscard{})
+	if err == nil {
+		t.Fatal("expected authenticated_user owner guard error")
+	}
+	assertContains(t, err.Error(), "owner_kind organization")
+	if projectClient.createRepositoryCalls != 0 || projectClient.bootstrapPullRequestCalls != 0 {
+		t.Fatalf("authenticated_user guard must not mutate product APIs: create=%d bootstrap_pr=%d", projectClient.createRepositoryCalls, projectClient.bootstrapPullRequestCalls)
+	}
+}
+
 func TestRunRejectsCheckedPayloadProducerForBothKinds(t *testing.T) {
 	payloadPath := writeTextFile(t, "validated-payload.json", `{"services":[]}`)
 	clients := runnerClients{
@@ -454,12 +631,19 @@ func TestRunReturnsSafeDiagnosticsForDependencyErrors(t *testing.T) {
 }
 
 type fakeProjectCatalogClient struct {
-	repository              *projectsv1.Repository
-	getRepositoryErr        error
-	bootstrapReconcileCalls int
-	adoptionReconcileCalls  int
-	lastBootstrapRequest    *projectsv1.ReconcileBootstrapMergeSignalRequest
-	lastAdoptionRequest     *projectsv1.ReconcileAdoptionMergeSignalRequest
+	repository                      *projectsv1.Repository
+	createRepositoryResponse        *projectsv1.RepositoryProviderCreateResponse
+	getRepositoryErr                error
+	createRepositoryErr             error
+	bootstrapPullRequestErr         error
+	bootstrapReconcileCalls         int
+	adoptionReconcileCalls          int
+	createRepositoryCalls           int
+	bootstrapPullRequestCalls       int
+	lastBootstrapRequest            *projectsv1.ReconcileBootstrapMergeSignalRequest
+	lastAdoptionRequest             *projectsv1.ReconcileAdoptionMergeSignalRequest
+	lastCreateRepositoryRequest     *projectsv1.CreateProviderRepositoryRequest
+	lastBootstrapPullRequestRequest *projectsv1.CreateRepositoryBootstrapPullRequestRequest
 }
 
 func (f *fakeProjectCatalogClient) GetRepository(context.Context, *projectsv1.GetRepositoryRequest, ...grpc.CallOption) (*projectsv1.RepositoryResponse, error) {
@@ -467,6 +651,41 @@ func (f *fakeProjectCatalogClient) GetRepository(context.Context, *projectsv1.Ge
 		return nil, f.getRepositoryErr
 	}
 	return &projectsv1.RepositoryResponse{Repository: f.repository}, nil
+}
+
+func (f *fakeProjectCatalogClient) CreateProviderRepository(_ context.Context, request *projectsv1.CreateProviderRepositoryRequest, _ ...grpc.CallOption) (*projectsv1.RepositoryProviderCreateResponse, error) {
+	f.createRepositoryCalls++
+	f.lastCreateRepositoryRequest = request
+	if f.createRepositoryErr != nil {
+		return nil, f.createRepositoryErr
+	}
+	if f.createRepositoryResponse != nil {
+		f.repository = f.createRepositoryResponse.GetRepository()
+		return f.createRepositoryResponse, nil
+	}
+	response := repositoryCreateResponseFixture()
+	f.repository = response.GetRepository()
+	return response, nil
+}
+
+func (f *fakeProjectCatalogClient) CreateRepositoryBootstrapPullRequest(_ context.Context, request *projectsv1.CreateRepositoryBootstrapPullRequestRequest, _ ...grpc.CallOption) (*projectsv1.RepositoryBootstrapPullRequestResponse, error) {
+	f.bootstrapPullRequestCalls++
+	f.lastBootstrapPullRequestRequest = request
+	if f.bootstrapPullRequestErr != nil {
+		return nil, f.bootstrapPullRequestErr
+	}
+	repository := f.repository
+	if repository == nil {
+		repository = repositoryFixture()
+	}
+	return &projectsv1.RepositoryBootstrapPullRequestResponse{
+		Repository:                repository,
+		BaseBranch:                request.GetBaseBranch(),
+		BootstrapBranch:           request.GetBootstrapBranch(),
+		ServicesPolicySourcePath:  request.GetServicesPolicy().GetSourcePath(),
+		ServicesPolicyContentHash: request.GetServicesPolicy().GetContentHash(),
+		ProviderOperationId:       stringPtr("provider-operation-bootstrap-pr"),
+	}, nil
 }
 
 func (f *fakeProjectCatalogClient) ReconcileBootstrapMergeSignal(_ context.Context, request *projectsv1.ReconcileBootstrapMergeSignalRequest, _ ...grpc.CallOption) (*projectsv1.BootstrapServicesPolicyImportResponse, error) {
@@ -611,6 +830,60 @@ func checkedPayloadFixture() onboardingScenario {
 				ValidatedPayloadJSON: `{"marker":"provider_payload_secret"}`,
 			},
 		},
+	}
+}
+
+func bootstrapSetupFixture() onboardingScenario {
+	return onboardingScenario{
+		ProjectID:          "project-1",
+		ProviderSlug:       "github",
+		RepositoryFullName: "codex-k8s/kodex-onboarding-live",
+		BootstrapSetup: &bootstrapSetup{
+			CreateRepository: &bootstrapCreateRepositoryScenario{
+				OwnerKind:         "organization",
+				ProviderOwner:     "codex-k8s",
+				ProviderName:      "kodex-onboarding-live",
+				Visibility:        "private",
+				Description:       "safe onboarding runner test repository",
+				ExternalAccountID: "external-account-1",
+			},
+			PullRequest: &bootstrapPullRequestScenario{
+				BaseBranch:      "main",
+				BootstrapBranch: "kodex/bootstrap",
+				CommitMessage:   "Prepare kodex bootstrap",
+				Title:           "Prepare kodex bootstrap",
+				Body:            "Safe bootstrap setup through product API.",
+				Files: []bootstrapPreparedFile{
+					{
+						Path:    "services.yaml",
+						Content: "services:\n  - key: prepared_services_yaml_secret\n",
+					},
+					{
+						Path:    "README.md",
+						Content: "Kodex onboarding test repository\n",
+					},
+				},
+				WatermarkJSON:     `{"kind":"kodex_watermark","managed_by":"kodex","work_type":"repository_bootstrap","source_ref":"refs/heads/kodex/bootstrap"}`,
+				ExternalAccountID: "external-account-1",
+				ServicesPolicy: bootstrapServicesPolicyScenario{
+					SourcePath:           "services.yaml",
+					ContentHash:          "sha256:bootstrap-content",
+					ValidatedPayloadJSON: `{"services":[{"key":"normalized_payload_secret"}]}`,
+				},
+			},
+		},
+	}
+}
+
+func repositoryCreateResponseFixture() *projectsv1.RepositoryProviderCreateResponse {
+	repository := repositoryFixture()
+	repository.ProviderName = "kodex-onboarding-live"
+	repository.ProviderRepositoryId = stringPtr("provider-repo-live")
+	return &projectsv1.RepositoryProviderCreateResponse{
+		Repository:           repository,
+		BaseBranch:           "main",
+		ProviderRepositoryId: stringPtr("provider-repo-live"),
+		ProviderOperationId:  stringPtr("provider-operation-create-repo"),
 	}
 }
 
