@@ -367,6 +367,50 @@ func TestAgentRunJobTypeRequiresSafeInput(t *testing.T) {
 			spec:       &spec,
 			commandID:  mustUUID("00000000-0000-0000-0000-000000000541"),
 		},
+		{
+			name:       "codex spec unsafe instruction ref",
+			agentRunID: &agentRunID,
+			slotID:     &slotID,
+			payload:    []byte(`{}`),
+			spec: func() *AgentRunExecutionSpecInput {
+				copy := spec
+				codexSpec := testCodexSessionExecutionSpec(copy, agentRunID)
+				codexSpec.InstructionObjectRef = "object://instructions/prompt_body_secret_value"
+				copy.CodexSessionExecutionSpec = &codexSpec
+				return &copy
+			}(),
+			commandID: mustUUID("00000000-0000-0000-0000-000000000542"),
+		},
+		{
+			name:       "codex spec unsafe secret ref",
+			agentRunID: &agentRunID,
+			slotID:     &slotID,
+			payload:    []byte(`{}`),
+			spec: func() *AgentRunExecutionSpecInput {
+				copy := spec
+				codexSpec := testCodexSessionExecutionSpec(copy, agentRunID)
+				codexSpec.AllowedSecretRefs = []AgentRunExecutionRefInput{
+					{Kind: "runtime_api", Ref: "secret://runtime/secret-value"},
+				}
+				copy.CodexSessionExecutionSpec = &codexSpec
+				return &copy
+			}(),
+			commandID: mustUUID("00000000-0000-0000-0000-000000000543"),
+		},
+		{
+			name:       "codex spec invalid instruction digest",
+			agentRunID: &agentRunID,
+			slotID:     &slotID,
+			payload:    []byte(`{}`),
+			spec: func() *AgentRunExecutionSpecInput {
+				copy := spec
+				codexSpec := testCodexSessionExecutionSpec(copy, agentRunID)
+				codexSpec.InstructionObjectDigest = "sha256:not-hex"
+				copy.CodexSessionExecutionSpec = &codexSpec
+				return &copy
+			}(),
+			commandID: mustUUID("00000000-0000-0000-0000-000000000544"),
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -510,6 +554,32 @@ func TestAgentRunExecutionSpecRequiresCurrentSlotBinding(t *testing.T) {
 	})
 	if !errors.Is(err, errs.ErrConflict) {
 		t.Fatalf("CreateJob(agent_run failed slot) err = %v, want conflict", err)
+	}
+}
+
+func TestAgentRunExecutionSpecPreservesCodexSessionExecutionSpec(t *testing.T) {
+	t.Parallel()
+
+	agentRunID := mustUUID("00000000-0000-0000-0000-000000000531")
+	slotID := mustUUID("00000000-0000-0000-0000-000000000532")
+	spec := testAgentRunExecutionSpec(agentRunID, slotID)
+	codexSpec := testCodexSessionExecutionSpec(spec, agentRunID)
+	spec.CodexSessionExecutionSpec = &codexSpec
+
+	normalized, err := normalizeAgentRunExecutionSpec(spec)
+	if err != nil {
+		t.Fatalf("normalizeAgentRunExecutionSpec() err = %v", err)
+	}
+	payload, err := marshalAgentRunExecutionSpec(normalized)
+	if err != nil {
+		t.Fatalf("marshalAgentRunExecutionSpec() err = %v", err)
+	}
+	extracted, ok := AgentRunExecutionSpecFromJobInput(payload)
+	if !ok || extracted.CodexSessionExecutionSpec == nil {
+		t.Fatalf("AgentRunExecutionSpecFromJobInput() = %+v, %v", extracted, ok)
+	}
+	if extracted.CodexSessionExecutionSpec.InstructionObjectRef != spec.CodexSessionExecutionSpec.InstructionObjectRef {
+		t.Fatalf("InstructionObjectRef = %q, want %q", extracted.CodexSessionExecutionSpec.InstructionObjectRef, spec.CodexSessionExecutionSpec.InstructionObjectRef)
 	}
 }
 
@@ -770,6 +840,32 @@ func testAgentRunExecutionSpec(agentRunID uuid.UUID, slotID uuid.UUID) AgentRunE
 		},
 		ReportingTargetRefs: []AgentRunExecutionRefInput{
 			{Kind: "agent_run_state", Ref: "agent-manager://runs/" + agentRunID.String()},
+		},
+	}
+}
+
+func testCodexSessionExecutionSpec(spec AgentRunExecutionSpecInput, agentRunID uuid.UUID) CodexSessionExecutionSpecInput {
+	return CodexSessionExecutionSpecInput{
+		InstructionObjectRef:    "object://instructions/agent-run-531",
+		InstructionObjectDigest: "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+		ResultSchemaRef:         "object://schemas/codex-result-v1",
+		ResultSchemaDigest:      "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+		WorkspaceSnapshotRef:    "runtime://workspace-snapshots/agent-run-531",
+		HookEndpointRef:         "hook://codex-hook-ingress/agent-runner",
+		CallbackRefs: []AgentRunExecutionRefInput{
+			{Kind: "agent_run_state", Ref: "agent-manager://runs/" + agentRunID.String()},
+		},
+		TimeoutSeconds:   1800,
+		RunnerProfileRef: spec.RunnerProfileRef,
+		RunnerMode:       enum.AgentRunRunnerModeCodexAgent,
+		OutputRefs: []AgentRunExecutionRefInput{
+			{Kind: "last_message", Ref: "object://codex-output/last-message"},
+		},
+		ResultRefs: []AgentRunExecutionRefInput{
+			{Kind: "result_metadata", Ref: "object://codex-output/result-metadata"},
+		},
+		AllowedSecretRefs: []AgentRunExecutionRefInput{
+			{Kind: "runtime_api", Ref: "secret://runtime/agent-token"},
 		},
 	}
 }

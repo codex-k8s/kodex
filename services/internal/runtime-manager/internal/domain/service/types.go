@@ -119,26 +119,45 @@ type CreateJobInput struct {
 
 // AgentRunExecutionSpecInput contains safe refs for future agent_run execution.
 type AgentRunExecutionSpecInput struct {
-	AgentRunID                         uuid.UUID                   `json:"agent_run_id"`
-	SlotID                             uuid.UUID                   `json:"slot_id"`
-	ExpectedMaterializationID          uuid.UUID                   `json:"expected_materialization_id"`
-	ExpectedMaterializationFingerprint string                      `json:"expected_materialization_fingerprint"`
-	WorkspaceRef                       string                      `json:"workspace_ref"`
-	WorkspaceMountRef                  string                      `json:"workspace_mount_ref"`
-	WorkspacePVCRef                    string                      `json:"workspace_pvc_ref,omitempty"`
-	ContextRef                         string                      `json:"context_ref"`
-	ContextDigest                      string                      `json:"context_digest"`
-	RunnerProfileRef                   string                      `json:"runner_profile_ref"`
-	RunnerImageRef                     string                      `json:"runner_image_ref"`
-	RunnerMode                         enum.AgentRunRunnerMode     `json:"runner_mode"`
-	AllowedSecretRefs                  []AgentRunExecutionRefInput `json:"allowed_secret_refs,omitempty"`
-	ReportingTargetRefs                []AgentRunExecutionRefInput `json:"reporting_target_refs,omitempty"`
+	AgentRunID                         uuid.UUID                       `json:"agent_run_id"`
+	SlotID                             uuid.UUID                       `json:"slot_id"`
+	ExpectedMaterializationID          uuid.UUID                       `json:"expected_materialization_id"`
+	ExpectedMaterializationFingerprint string                          `json:"expected_materialization_fingerprint"`
+	WorkspaceRef                       string                          `json:"workspace_ref"`
+	WorkspaceMountRef                  string                          `json:"workspace_mount_ref"`
+	WorkspacePVCRef                    string                          `json:"workspace_pvc_ref,omitempty"`
+	ContextRef                         string                          `json:"context_ref"`
+	ContextDigest                      string                          `json:"context_digest"`
+	RunnerProfileRef                   string                          `json:"runner_profile_ref"`
+	RunnerImageRef                     string                          `json:"runner_image_ref"`
+	RunnerMode                         enum.AgentRunRunnerMode         `json:"runner_mode"`
+	AllowedSecretRefs                  []AgentRunExecutionRefInput     `json:"allowed_secret_refs,omitempty"`
+	ReportingTargetRefs                []AgentRunExecutionRefInput     `json:"reporting_target_refs,omitempty"`
+	CodexSessionExecutionSpec          *CodexSessionExecutionSpecInput `json:"codex_session_execution_spec,omitempty"`
 }
 
 // AgentRunExecutionRefInput contains a typed safe agent_run reference.
 type AgentRunExecutionRefInput struct {
 	Kind string `json:"kind"`
 	Ref  string `json:"ref"`
+}
+
+// CodexSessionExecutionSpecInput contains safe refs for a future Codex CLI execution attempt.
+type CodexSessionExecutionSpecInput struct {
+	InstructionObjectRef    string                      `json:"instruction_object_ref"`
+	InstructionObjectDigest string                      `json:"instruction_object_digest"`
+	ResultSchemaRef         string                      `json:"result_schema_ref"`
+	ResultSchemaDigest      string                      `json:"result_schema_digest"`
+	SessionSnapshotRef      string                      `json:"session_snapshot_ref,omitempty"`
+	WorkspaceSnapshotRef    string                      `json:"workspace_snapshot_ref,omitempty"`
+	HookEndpointRef         string                      `json:"hook_endpoint_ref"`
+	CallbackRefs            []AgentRunExecutionRefInput `json:"callback_refs,omitempty"`
+	TimeoutSeconds          int32                       `json:"timeout_seconds"`
+	RunnerProfileRef        string                      `json:"runner_profile_ref"`
+	RunnerMode              enum.AgentRunRunnerMode     `json:"runner_mode"`
+	OutputRefs              []AgentRunExecutionRefInput `json:"output_refs,omitempty"`
+	ResultRefs              []AgentRunExecutionRefInput `json:"result_refs,omitempty"`
+	AllowedSecretRefs       []AgentRunExecutionRefInput `json:"allowed_secret_refs,omitempty"`
 }
 
 // PlacementConstraintsInput contains safe placement hints accepted by runtime-manager callers.

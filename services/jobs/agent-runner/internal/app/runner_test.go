@@ -82,6 +82,65 @@ func TestConfigNormalizeRejectsUnsupportedMode(t *testing.T) {
 	}
 }
 
+func TestValidateCodexSessionExecutionSpecAcceptsSafeRefs(t *testing.T) {
+	cfg, raw := validConfigAndContext(t)
+	contextFile, diagnostic := DecodeContext(raw, cfg)
+	if !diagnostic.OK() {
+		t.Fatalf("DecodeContext() diagnostic = %v", diagnostic)
+	}
+	cfg.CodexSessionExecutionSpecJSON = validCodexSessionExecutionSpecJSON(t, cfg)
+
+	spec, diagnostic := ValidateCodexSessionExecutionSpec(cfg, contextFile)
+	if !diagnostic.OK() {
+		t.Fatalf("ValidateCodexSessionExecutionSpec() diagnostic = %v", diagnostic)
+	}
+	if spec.InstructionObjectDigest == "" || len(spec.OutputRefs) != 1 || len(spec.ResultRefs) != 1 {
+		t.Fatalf("spec = %+v, want normalized execution refs", spec)
+	}
+}
+
+func TestValidateCodexSessionExecutionSpecRequiresCompleteSpec(t *testing.T) {
+	cfg, raw := validConfigAndContext(t)
+	contextFile, diagnostic := DecodeContext(raw, cfg)
+	if !diagnostic.OK() {
+		t.Fatalf("DecodeContext() diagnostic = %v", diagnostic)
+	}
+
+	_, diagnostic = ValidateCodexSessionExecutionSpec(cfg, contextFile)
+	if diagnostic.Code != "agent_execution_contract_unavailable" {
+		t.Fatalf("missing spec code = %q", diagnostic.Code)
+	}
+
+	cfg.CodexSessionExecutionSpecJSON = `{"instruction_object_ref":"object://instructions"}`
+	_, diagnostic = ValidateCodexSessionExecutionSpec(cfg, contextFile)
+	if diagnostic.Code != "agent_execution_contract_unavailable" {
+		t.Fatalf("incomplete spec code = %q", diagnostic.Code)
+	}
+}
+
+func TestValidateCodexSessionExecutionSpecRejectsUnsafeRefsWithoutLeak(t *testing.T) {
+	cfg, raw := validConfigAndContext(t)
+	contextFile, diagnostic := DecodeContext(raw, cfg)
+	if !diagnostic.OK() {
+		t.Fatalf("DecodeContext() diagnostic = %v", diagnostic)
+	}
+	cfg.CodexSessionExecutionSpecJSON = validCodexSessionExecutionSpecJSON(t, cfg)
+	cfg.CodexSessionExecutionSpecJSON = strings.ReplaceAll(
+		cfg.CodexSessionExecutionSpecJSON,
+		"object://instructions/11111111",
+		"object://instructions/prompt_body_secret_value",
+	)
+
+	_, diagnostic = ValidateCodexSessionExecutionSpec(cfg, contextFile)
+	if diagnostic.Code != "agent_execution_contract_unavailable" {
+		t.Fatalf("unsafe spec code = %q", diagnostic.Code)
+	}
+	summary := strings.ToLower(diagnostic.Summary)
+	if strings.Contains(summary, "prompt") || strings.Contains(summary, "secret") {
+		t.Fatalf("diagnostic summary leaked raw marker: %q", diagnostic.Summary)
+	}
+}
+
 func TestRunnerStopsWithExecutionContractDiagnostic(t *testing.T) {
 	cfg, raw := validConfigAndContext(t)
 	contextPath := writeTempContext(t, raw)
@@ -101,6 +160,26 @@ func TestRunnerStopsWithExecutionContractDiagnostic(t *testing.T) {
 	}
 	if strings.Contains(strings.ToLower(reporter.failure.Summary), "prompt") {
 		t.Fatalf("failure summary leaked raw marker: %q", reporter.failure.Summary)
+	}
+}
+
+func TestRunnerValidatesCodexSessionExecutionSpecButDoesNotExecute(t *testing.T) {
+	cfg, raw := validConfigAndContext(t)
+	contextPath := writeTempContext(t, raw)
+	cfg.ContextPath = contextPath
+	cfg.WorkspaceMountPath = filepath.Dir(filepath.Dir(filepath.Dir(contextPath)))
+	cfg.CodexSessionExecutionSpecJSON = validCodexSessionExecutionSpecJSON(t, cfg)
+	reporter := &recordingReporter{}
+
+	diagnostic := NewRunnerWithClock(reporter, testLogger(), fixedClock{}).Run(context.Background(), cfg)
+	if diagnostic.Code != "agent_execution_contract_unavailable" {
+		t.Fatalf("Run() code = %q", diagnostic.Code)
+	}
+	if diagnostic.Summary != "codex execution is not enabled for this runner" {
+		t.Fatalf("Run() summary = %q", diagnostic.Summary)
+	}
+	if reporter.started != 1 || reporter.failed != 1 {
+		t.Fatalf("reports = started:%d failed:%d, want one started and one failed", reporter.started, reporter.failed)
 	}
 }
 
@@ -204,6 +283,42 @@ func validConfigAndContext(t *testing.T) (Config, []byte) {
 	}
 	cfg.ContextDigest = SHA256Digest(raw)
 	return cfg, raw
+}
+
+func validCodexSessionExecutionSpecJSON(t *testing.T, cfg Config) string {
+	t.Helper()
+	payload := map[string]any{
+		"instruction_object_ref":    "object://instructions/11111111",
+		"instruction_object_digest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+		"result_schema_ref":         "object://schemas/codex-result-v1",
+		"result_schema_digest":      "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+		"workspace_snapshot_ref":    "runtime://workspace-snapshots/11111111",
+		"hook_endpoint_ref":         "hook://codex-hook-ingress/agent-runner",
+		"callback_refs": []map[string]any{{
+			"kind": "agent_run_state",
+			"ref":  "agent-manager://runs/" + cfg.AgentRunID,
+		}},
+		"timeout_seconds":    1800,
+		"runner_profile_ref": cfg.RunnerProfileRef,
+		"runner_mode":        RunnerModeCodexAgent,
+		"output_refs": []map[string]any{{
+			"kind": "last_message",
+			"ref":  "object://codex-output/last-message",
+		}},
+		"result_refs": []map[string]any{{
+			"kind": "result_metadata",
+			"ref":  "object://codex-output/result-metadata",
+		}},
+		"allowed_secret_refs": []map[string]any{{
+			"kind": "runtime_api",
+			"ref":  "secret://runtime/agent-token",
+		}},
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("Marshal() err = %v", err)
+	}
+	return string(raw)
 }
 
 func writeTempContext(t *testing.T, raw []byte) string {
