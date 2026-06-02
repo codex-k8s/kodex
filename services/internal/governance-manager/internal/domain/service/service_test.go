@@ -3477,6 +3477,105 @@ func TestGetGovernanceSummaryRequiredGateCoveredByExistingGateRequest(t *testing
 	}
 }
 
+func TestGetGovernanceSummaryPackageRiskRequiredGateCoveredByLinkedGateRequest(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	packageID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+	assessmentID := uuid.MustParse("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+	gateRequestID := uuid.MustParse("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
+	integrationRef := value.ReleaseIntegrationRef{Domain: "agent", Kind: "run", Ref: "agent:run:self-deploy"}
+	selectors := []struct {
+		name  string
+		scope entity.GovernanceSummaryScope
+	}{
+		{
+			name:  "release package id",
+			scope: entity.GovernanceSummaryScope{ReleaseDecisionPackageID: &packageID},
+		},
+		{
+			name:  "integration ref",
+			scope: entity.GovernanceSummaryScope{IntegrationRef: integrationRef},
+		},
+	}
+	gateStatuses := []struct {
+		name             string
+		status           enum.GateRequestStatus
+		wantPendingGates int32
+		wantNextAction   string
+	}{
+		{
+			name:             "open gate waits decision",
+			status:           enum.GateRequestStatusAwaitingDecision,
+			wantPendingGates: 1,
+			wantNextAction:   governanceSummaryNextActionRecordGateDecision,
+		},
+		{
+			name:             "resolved gate covers required gate",
+			status:           enum.GateRequestStatusResolved,
+			wantPendingGates: 0,
+			wantNextAction:   governanceSummaryNextActionReviewPendingDecision,
+		},
+	}
+	for _, selector := range selectors {
+		selector := selector
+		t.Run(selector.name, func(t *testing.T) {
+			for _, gateStatus := range gateStatuses {
+				gateStatus := gateStatus
+				t.Run(gateStatus.name, func(t *testing.T) {
+					releasePackage := entity.ReleaseDecisionPackage{
+						VersionedBase:       entity.VersionedBase{ID: packageID, Version: 1, CreatedAt: now.Add(-30 * time.Minute), UpdatedAt: now.Add(-30 * time.Minute)},
+						ReleaseCandidateRef: "release:self-deploy",
+						ProjectContext:      value.ProjectContextRef{ProjectRef: "project:kodex", RepositoryRef: "repo:codex-k8s/kodex", ReleaseLineRef: "self-deploy"},
+						RiskAssessmentID:    &assessmentID,
+						IntegrationRefs:     []value.ReleaseIntegrationRef{integrationRef},
+						Status:              enum.ReleaseDecisionPackageStatusReady,
+					}
+					repository := &fakeRepository{
+						ready:          true,
+						releasePackage: releasePackage,
+						releasePackages: []entity.ReleaseDecisionPackage{
+							releasePackage,
+						},
+						assessment: entity.RiskAssessment{
+							VersionedBase:      entity.VersionedBase{ID: assessmentID, Version: 1, CreatedAt: now.Add(-20 * time.Minute), UpdatedAt: now.Add(-20 * time.Minute)},
+							Target:             value.ExternalRef{Type: "merge", Ref: "provider:merge:codex-main"},
+							ProjectContext:     value.ProjectContextRef{ProjectRef: "project:kodex", RepositoryRef: "repo:codex-k8s/kodex", ReleaseLineRef: "self-deploy"},
+							EffectiveRiskClass: enum.RiskClassR2,
+							Status:             enum.RiskAssessmentStatusActive,
+							Explanation:        "self-deploy plan requires owner gate",
+							RequiredGates:      []entity.RequiredGate{{GateKind: enum.GateKindRelease, MinRiskClass: enum.RiskClassR2, Reason: "self-deploy owner approval required"}},
+						},
+						gateRequests: []entity.GateRequest{{
+							VersionedBase:    entity.VersionedBase{ID: gateRequestID, Version: 1, CreatedAt: now.Add(-10 * time.Minute), UpdatedAt: now.Add(-10 * time.Minute)},
+							RiskAssessmentID: &assessmentID,
+							Target:           value.ExternalRef{Type: "merge", Ref: "provider:merge:codex-main"},
+							EvidenceSummary:  "self-deploy owner gate",
+							Status:           gateStatus.status,
+						}},
+					}
+
+					summary, err := newTestService(repository).GetGovernanceSummary(context.Background(), GetGovernanceSummaryInput{
+						Scope: selector.scope,
+						Meta:  QueryMeta{Actor: value.Actor{Type: "service", ID: "platform-mcp-server"}},
+					})
+					if err != nil {
+						t.Fatalf("GetGovernanceSummary(): %v", err)
+					}
+					if repository.gateRequestListFilter.RiskAssessmentID == nil || *repository.gateRequestListFilter.RiskAssessmentID != assessmentID {
+						t.Fatalf("gate request filter = %+v, want linked risk assessment", repository.gateRequestListFilter)
+					}
+					if summary.Status.PendingRequiredGateCount != 0 ||
+						summary.Status.PendingGateCount != gateStatus.wantPendingGates ||
+						summary.Status.NextActionCode != gateStatus.wantNextAction {
+						t.Fatalf("status = %+v, want linked gate coverage with next action %s", summary.Status, gateStatus.wantNextAction)
+					}
+				})
+			}
+		})
+	}
+}
+
 func TestGetGovernanceSummaryByIntegrationRefUsesReleasePackageFilter(t *testing.T) {
 	t.Parallel()
 
