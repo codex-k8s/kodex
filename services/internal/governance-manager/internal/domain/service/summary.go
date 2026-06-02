@@ -265,12 +265,52 @@ func (s *Service) appendReleasePackageSummary(ctx context.Context, meta QueryMet
 			appendSummaryDiagnostic(summary, "missing_risk_assessment_ref")
 		} else {
 			appendRiskAssessmentSummary(summary, seen, assessment)
+			if err := s.appendGateRequestsByRiskAssessmentID(ctx, meta, summary, seen, assessment.ID); err != nil {
+				return err
+			}
 		}
 	}
 	for _, signalID := range pkg.ReviewSignalIDs {
 		if err := s.appendReviewSignalByID(ctx, meta, summary, seen, signalID); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func (s *Service) appendGateRequestsByRiskAssessmentID(ctx context.Context, meta QueryMeta, summary *entity.GovernanceSummary, seen *governanceSummarySeen, assessmentID uuid.UUID) error {
+	gateRequests, _, err := s.ListGateRequests(ctx, ListGateRequestsInput{
+		Filter: query.GateRequestFilter{RiskAssessmentID: &assessmentID, Page: query.PageRequest{PageSize: governanceSummaryPageSize}},
+		Meta:   meta,
+	})
+	if err != nil {
+		return err
+	}
+	for _, request := range gateRequests {
+		if request.ID == uuid.Nil {
+			continue
+		}
+		appendGateRequestSummary(summary, seen, request)
+		if err := s.appendGateDecisionsByGateRequestID(ctx, meta, summary, seen, request.ID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Service) appendGateDecisionsByGateRequestID(ctx context.Context, meta QueryMeta, summary *entity.GovernanceSummary, seen *governanceSummarySeen, gateRequestID uuid.UUID) error {
+	gateDecisions, _, err := s.ListGateDecisions(ctx, ListGateDecisionsInput{
+		Filter: query.GateDecisionFilter{GateRequestID: &gateRequestID, Page: query.PageRequest{PageSize: governanceSummaryPageSize}},
+		Meta:   meta,
+	})
+	if err != nil {
+		return err
+	}
+	for _, decision := range gateDecisions {
+		if decision.ID == uuid.Nil {
+			continue
+		}
+		appendGateDecisionSummary(summary, seen, decision)
 	}
 	return nil
 }
