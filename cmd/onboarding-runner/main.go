@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"regexp"
 	"strings"
@@ -44,6 +45,7 @@ func main() {
 	flag.StringVar(&options.ExternalAccountID, "external-account-id", os.Getenv("KODEX_ONBOARDING_RUNNER_EXTERNAL_ACCOUNT_ID"), "external account id selected by caller policy")
 	flag.StringVar(&options.AllowedProviderOwner, "allowed-provider-owner", os.Getenv("KODEX_ONBOARDING_RUNNER_ALLOWED_OWNER"), "required owner for apply mode")
 	flag.StringVar(&options.RepositoryNamePrefix, "repository-name-prefix", os.Getenv("KODEX_ONBOARDING_RUNNER_REPOSITORY_PREFIX"), "required repository name prefix for apply mode")
+	flag.StringVar(&options.AllowedProviderRepository, "allowed-provider-repository", os.Getenv("KODEX_ONBOARDING_RUNNER_ALLOWED_REPOSITORY"), "optional exact repository name allowed for apply mode")
 	flag.StringVar(&options.IdempotencyKey, "idempotency-key", "", "optional idempotency key prefix")
 	flag.StringVar(&options.RequestID, "request-id", "", "optional request id")
 	flag.StringVar(&options.ActorID, "actor-id", defaultActorID, "safe actor id")
@@ -77,6 +79,7 @@ func main() {
 }
 
 type projectCatalogAPI interface {
+	AttachRepository(context.Context, *projectsv1.AttachRepositoryRequest, ...grpc.CallOption) (*projectsv1.RepositoryResponse, error)
 	GetRepository(context.Context, *projectsv1.GetRepositoryRequest, ...grpc.CallOption) (*projectsv1.RepositoryResponse, error)
 	CreateProviderRepository(context.Context, *projectsv1.CreateProviderRepositoryRequest, ...grpc.CallOption) (*projectsv1.RepositoryProviderCreateResponse, error)
 	CreateRepositoryBootstrapPullRequest(context.Context, *projectsv1.CreateRepositoryBootstrapPullRequestRequest, ...grpc.CallOption) (*projectsv1.RepositoryBootstrapPullRequestResponse, error)
@@ -96,39 +99,66 @@ type runnerClients struct {
 }
 
 type runnerOptions struct {
-	ProjectCatalogAddr     string
-	ProviderHubAddr        string
-	ScenarioFilePath       string
-	ProjectID              string
-	RepositoryID           string
-	ProviderSlug           string
-	RepositoryFullName     string
-	ProviderRepositoryID   string
-	ExternalAccountID      string
-	AllowedProviderOwner   string
-	RepositoryNamePrefix   string
-	IdempotencyKey         string
-	RequestID              string
-	ActorID                string
-	Kind                   string
-	CheckedPayloadFilePath string
-	WatermarkJSONFilePath  string
-	CheckedSourcePath      string
-	CheckedArtifactRef     string
-	CheckedArtifactVersion string
-	Apply                  bool
-	Timeout                time.Duration
+	ProjectCatalogAddr        string
+	ProviderHubAddr           string
+	ScenarioFilePath          string
+	ProjectID                 string
+	RepositoryID              string
+	ProviderSlug              string
+	RepositoryFullName        string
+	ProviderRepositoryID      string
+	ExternalAccountID         string
+	AllowedProviderOwner      string
+	RepositoryNamePrefix      string
+	AllowedProviderRepository string
+	IdempotencyKey            string
+	RequestID                 string
+	ActorID                   string
+	Kind                      string
+	CheckedPayloadFilePath    string
+	WatermarkJSONFilePath     string
+	CheckedSourcePath         string
+	CheckedArtifactRef        string
+	CheckedArtifactVersion    string
+	Apply                     bool
+	Timeout                   time.Duration
 }
 
 type onboardingScenario struct {
-	ProjectID            string             `json:"project_id,omitempty"`
-	RepositoryID         string             `json:"repository_id,omitempty"`
-	ProviderSlug         string             `json:"provider_slug,omitempty"`
-	RepositoryFullName   string             `json:"repository_full_name,omitempty"`
-	ProviderRepositoryID string             `json:"provider_repository_id,omitempty"`
-	BootstrapSetup       *bootstrapSetup    `json:"bootstrap_setup,omitempty"`
-	Bootstrap            *reconcileScenario `json:"bootstrap,omitempty"`
-	Adoption             *reconcileScenario `json:"adoption,omitempty"`
+	ProjectID            string                     `json:"project_id,omitempty"`
+	RepositoryID         string                     `json:"repository_id,omitempty"`
+	ProviderSlug         string                     `json:"provider_slug,omitempty"`
+	RepositoryFullName   string                     `json:"repository_full_name,omitempty"`
+	ProviderRepositoryID string                     `json:"provider_repository_id,omitempty"`
+	RepositoryBinding    *repositoryBindingScenario `json:"repository_binding,omitempty"`
+	RepositoryChange     *repositoryChangeScenario  `json:"repository_change,omitempty"`
+	BootstrapSetup       *bootstrapSetup            `json:"bootstrap_setup,omitempty"`
+	Bootstrap            *reconcileScenario         `json:"bootstrap,omitempty"`
+	Adoption             *reconcileScenario         `json:"adoption,omitempty"`
+}
+
+type repositoryBindingScenario struct {
+	ProviderOwner        string `json:"provider_owner,omitempty"`
+	ProviderName         string `json:"provider_name,omitempty"`
+	WebURL               string `json:"web_url,omitempty"`
+	DefaultBranch        string `json:"default_branch,omitempty"`
+	ProviderRepositoryID string `json:"provider_repository_id,omitempty"`
+	Status               string `json:"status,omitempty"`
+}
+
+type repositoryChangeScenario struct {
+	EventName    string                          `json:"event_name,omitempty"`
+	Ref          string                          `json:"ref,omitempty"`
+	BaseBranch   string                          `json:"base_branch,omitempty"`
+	CommitSHA    string                          `json:"commit_sha,omitempty"`
+	BeforeSHA    string                          `json:"before_sha,omitempty"`
+	ChangedPaths []repositoryChangedPathScenario `json:"changed_paths,omitempty"`
+}
+
+type repositoryChangedPathScenario struct {
+	Path         string `json:"path"`
+	Action       string `json:"action,omitempty"`
+	ObjectDigest string `json:"object_digest,omitempty"`
 }
 
 type bootstrapSetup struct {
@@ -209,6 +239,17 @@ type bootstrapSetupResult struct {
 	ProviderRepositoryID string
 }
 
+type repositoryChangeSummary struct {
+	EventName             string
+	BaseBranch            string
+	CommitSHA             string
+	ChangeDigest          string
+	TotalPaths            int
+	ServicesPolicyChanged bool
+	DeployRelevantChanged bool
+	Categories            map[string]int
+}
+
 func run(ctx context.Context, options runnerOptions, clients runnerClients, output io.Writer) error {
 	if clients.ProjectCatalog == nil {
 		return errors.New("project-catalog client is required")
@@ -247,15 +288,38 @@ func run(ctx context.Context, options runnerOptions, clients runnerClients, outp
 		if err != nil {
 			return err
 		}
+		if scenario.RepositoryBinding != nil {
+			if err := validateRepositoryBindingMatchesRepository(options, scenario.RepositoryBinding, repository); err != nil {
+				return err
+			}
+		}
+	} else if scenario.RepositoryBinding != nil {
+		if err := describeRepositoryBinding(options, scenario.RepositoryBinding, output); err != nil {
+			return err
+		}
 	} else {
 		logLine(output, "BLOCKED", "project repository binding is not available before bootstrap repository create")
 	}
 	if err := describeBootstrapSetup(options, scenario.BootstrapSetup, output); err != nil {
 		return err
 	}
+	if err := describeRepositoryChange(options, scenario.RepositoryChange, output); err != nil {
+		return err
+	}
 	if options.Apply {
 		if err := validateApplyPolicy(options, scenario); err != nil {
 			return err
+		}
+		if options.RepositoryID == "" && scenario.RepositoryBinding != nil {
+			repository, err = attachRepositoryBinding(ctx, clients.ProjectCatalog, options, scenario.RepositoryBinding, output)
+			if err != nil {
+				return err
+			}
+			options.RepositoryID = repository.GetRepositoryId()
+			options, err = bindOptionsToRepository(options, repository)
+			if err != nil {
+				return err
+			}
 		}
 		setupResult, err := applyBootstrapSetup(ctx, clients.ProjectCatalog, options, scenario.BootstrapSetup, output)
 		if err != nil {
@@ -348,6 +412,7 @@ func normalizeOptions(options runnerOptions) runnerOptions {
 	options.ExternalAccountID = strings.TrimSpace(options.ExternalAccountID)
 	options.AllowedProviderOwner = strings.TrimSpace(options.AllowedProviderOwner)
 	options.RepositoryNamePrefix = strings.TrimSpace(options.RepositoryNamePrefix)
+	options.AllowedProviderRepository = strings.TrimSpace(options.AllowedProviderRepository)
 	options.IdempotencyKey = strings.TrimSpace(options.IdempotencyKey)
 	options.RequestID = defaultString(strings.TrimSpace(options.RequestID), "onboarding-runner-"+time.Now().UTC().Format("20060102T150405Z"))
 	options.ActorID = defaultString(strings.TrimSpace(options.ActorID), defaultActorID)
@@ -379,6 +444,15 @@ func mergeScenarioOptions(options runnerOptions, scenario onboardingScenario) ru
 	if options.ProviderRepositoryID == "" {
 		options.ProviderRepositoryID = strings.TrimSpace(scenario.ProviderRepositoryID)
 	}
+	if options.RepositoryFullName == "" && scenario.RepositoryBinding != nil {
+		binding := scenario.RepositoryBinding
+		if strings.TrimSpace(binding.ProviderOwner) != "" && strings.TrimSpace(binding.ProviderName) != "" {
+			options.RepositoryFullName = strings.TrimSpace(binding.ProviderOwner) + "/" + strings.TrimSpace(binding.ProviderName)
+		}
+	}
+	if options.ProviderRepositoryID == "" && scenario.RepositoryBinding != nil {
+		options.ProviderRepositoryID = strings.TrimSpace(scenario.RepositoryBinding.ProviderRepositoryID)
+	}
 	if options.RepositoryFullName == "" && scenario.BootstrapSetup != nil && scenario.BootstrapSetup.CreateRepository != nil {
 		create := scenario.BootstrapSetup.CreateRepository
 		if strings.TrimSpace(create.ProviderOwner) != "" && strings.TrimSpace(create.ProviderName) != "" {
@@ -400,7 +474,7 @@ func validateOptions(options runnerOptions, scenario onboardingScenario) error {
 	if options.ProjectID == "" {
 		return errors.New("project_id is required")
 	}
-	if options.RepositoryID == "" && !hasBootstrapCreateRepository(scenario) {
+	if options.RepositoryID == "" && !hasBootstrapCreateRepository(scenario) && !hasRepositoryBindingSetup(scenario) {
 		return errors.New("repository_id is required")
 	}
 	if options.ProviderSlug == "" {
@@ -413,6 +487,9 @@ func validateOptions(options runnerOptions, scenario onboardingScenario) error {
 	}
 	if hasBootstrapSetup(scenario) && !wantsKind(options, "bootstrap") {
 		return errors.New("bootstrap_setup requires kind bootstrap or both")
+	}
+	if hasRepositoryBindingSetup(scenario) && hasBootstrapCreateRepository(scenario) {
+		return errors.New("repository_binding cannot be combined with bootstrap_setup.create_repository")
 	}
 	if options.CheckedPayloadFilePath != "" {
 		if options.Kind == "both" {
@@ -557,14 +634,7 @@ func validateApplyPolicy(options runnerOptions, scenario onboardingScenario) err
 	if options.AllowedProviderOwner == "" {
 		return errors.New("apply requires allowed provider owner")
 	}
-	if options.RepositoryNamePrefix == "" {
-		return errors.New("apply requires repository name prefix")
-	}
-	repositoryFullName := options.RepositoryFullName
-	if scenario.BootstrapSetup != nil && scenario.BootstrapSetup.CreateRepository != nil {
-		create := scenario.BootstrapSetup.CreateRepository
-		repositoryFullName = strings.TrimSpace(create.ProviderOwner) + "/" + strings.TrimSpace(create.ProviderName)
-	}
+	repositoryFullName := applyTargetRepositoryFullName(options, scenario)
 	owner, name, ok := splitRepositoryFullName(repositoryFullName)
 	if !ok {
 		return errors.New("apply requires repository_full_name as owner/name")
@@ -572,10 +642,28 @@ func validateApplyPolicy(options runnerOptions, scenario onboardingScenario) err
 	if owner != options.AllowedProviderOwner {
 		return fmt.Errorf("apply target owner %q is not allowed", owner)
 	}
-	if !strings.HasPrefix(name, options.RepositoryNamePrefix) {
+	if options.RepositoryNamePrefix == "" && options.AllowedProviderRepository == "" {
+		return errors.New("apply requires repository name prefix or allowed provider repository")
+	}
+	if options.RepositoryNamePrefix != "" && !strings.HasPrefix(name, options.RepositoryNamePrefix) {
 		return fmt.Errorf("apply target repository must start with %q", options.RepositoryNamePrefix)
 	}
+	if options.AllowedProviderRepository != "" && name != options.AllowedProviderRepository {
+		return fmt.Errorf("apply target repository %q is not allowed", name)
+	}
 	return nil
+}
+
+func applyTargetRepositoryFullName(options runnerOptions, scenario onboardingScenario) string {
+	if scenario.BootstrapSetup != nil && scenario.BootstrapSetup.CreateRepository != nil {
+		create := scenario.BootstrapSetup.CreateRepository
+		return strings.TrimSpace(create.ProviderOwner) + "/" + strings.TrimSpace(create.ProviderName)
+	}
+	if scenario.RepositoryBinding != nil {
+		binding := scenario.RepositoryBinding
+		return strings.TrimSpace(binding.ProviderOwner) + "/" + strings.TrimSpace(binding.ProviderName)
+	}
+	return options.RepositoryFullName
 }
 
 func hasBootstrapSetup(scenario onboardingScenario) bool {
@@ -584,6 +672,10 @@ func hasBootstrapSetup(scenario onboardingScenario) bool {
 
 func hasBootstrapCreateRepository(scenario onboardingScenario) bool {
 	return scenario.BootstrapSetup != nil && scenario.BootstrapSetup.CreateRepository != nil
+}
+
+func hasRepositoryBindingSetup(scenario onboardingScenario) bool {
+	return scenario.RepositoryBinding != nil
 }
 
 func loadScenario(path string) (onboardingScenario, error) {
@@ -655,6 +747,221 @@ func bindOptionsToRepository(options runnerOptions, repository *projectsv1.Repos
 	}
 	options.ProviderRepositoryID = bindingProviderRepositoryID
 	return options, nil
+}
+
+func describeRepositoryBinding(options runnerOptions, binding *repositoryBindingScenario, output io.Writer) error {
+	if binding == nil {
+		return nil
+	}
+	if err := validateRepositoryBindingScenario(options, binding); err != nil {
+		return err
+	}
+	logLine(output, "PLAN", "repository binding attach ready target=%s/%s base=%s provider_repository_id=%s",
+		safeValue(binding.ProviderOwner),
+		safeValue(binding.ProviderName),
+		safeValue(binding.DefaultBranch),
+		safeValue(binding.ProviderRepositoryID),
+	)
+	return nil
+}
+
+func attachRepositoryBinding(ctx context.Context, client projectCatalogAPI, options runnerOptions, scenario *repositoryBindingScenario, output io.Writer) (*projectsv1.Repository, error) {
+	if err := validateRepositoryBindingScenario(options, scenario); err != nil {
+		return nil, err
+	}
+	status, err := repositoryStatusFromString(scenario.Status)
+	if err != nil {
+		return nil, err
+	}
+	target := strings.TrimSpace(scenario.ProviderOwner) + "/" + strings.TrimSpace(scenario.ProviderName)
+	response, err := client.AttachRepository(ctx, &projectsv1.AttachRepositoryRequest{
+		ProjectId:            options.ProjectID,
+		Provider:             projectRepositoryProviderFromSlug(options.ProviderSlug),
+		ProviderOwner:        strings.TrimSpace(scenario.ProviderOwner),
+		ProviderName:         strings.TrimSpace(scenario.ProviderName),
+		WebUrl:               strings.TrimSpace(scenario.WebURL),
+		DefaultBranch:        strings.TrimSpace(scenario.DefaultBranch),
+		ProviderRepositoryId: optionalString(scenario.ProviderRepositoryID),
+		Status:               optionalRepositoryStatus(status),
+		Meta:                 projectStageCommandMeta(options, "repository-binding", target, ""),
+	})
+	if err != nil {
+		return nil, safeError("project-catalog AttachRepository failed", err)
+	}
+	repository := response.GetRepository()
+	if repository == nil {
+		return nil, errors.New("project-catalog AttachRepository returned empty repository")
+	}
+	logLine(output, "OK", "repository binding attached repository_id=%s target=%s/%s base=%s version=%d",
+		safeValue(repository.GetRepositoryId()),
+		safeValue(repository.GetProviderOwner()),
+		safeValue(repository.GetProviderName()),
+		safeValue(repository.GetDefaultBranch()),
+		repository.GetVersion(),
+	)
+	return repository, nil
+}
+
+func validateRepositoryBindingScenario(options runnerOptions, scenario *repositoryBindingScenario) error {
+	if scenario == nil {
+		return nil
+	}
+	if projectRepositoryProviderFromSlug(options.ProviderSlug) == projectsv1.RepositoryProvider_REPOSITORY_PROVIDER_UNSPECIFIED {
+		return fmt.Errorf("repository binding supports provider_slug github")
+	}
+	for name, value := range map[string]string{
+		"provider_owner": scenario.ProviderOwner,
+		"provider_name":  scenario.ProviderName,
+		"default_branch": scenario.DefaultBranch,
+	} {
+		if strings.TrimSpace(value) == "" {
+			return fmt.Errorf("repository binding requires %s", name)
+		}
+	}
+	if _, _, ok := splitRepositoryFullName(strings.TrimSpace(scenario.ProviderOwner) + "/" + strings.TrimSpace(scenario.ProviderName)); !ok {
+		return errors.New("repository binding requires provider owner/name")
+	}
+	if strings.TrimSpace(scenario.WebURL) != "" && !safeProviderURL(scenario.WebURL) {
+		return errors.New("repository binding web_url must be an http(s) URL without credentials")
+	}
+	if _, err := repositoryStatusFromString(scenario.Status); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateRepositoryBindingMatchesRepository(options runnerOptions, scenario *repositoryBindingScenario, repository *projectsv1.Repository) error {
+	if scenario == nil {
+		return nil
+	}
+	if err := validateRepositoryBindingScenario(options, scenario); err != nil {
+		return err
+	}
+	for field, values := range map[string][2]string{
+		"provider_owner": {strings.TrimSpace(scenario.ProviderOwner), repository.GetProviderOwner()},
+		"provider_name":  {strings.TrimSpace(scenario.ProviderName), repository.GetProviderName()},
+		"default_branch": {strings.TrimSpace(scenario.DefaultBranch), repository.GetDefaultBranch()},
+	} {
+		if values[0] != values[1] {
+			return fmt.Errorf("repository binding %s mismatch", field)
+		}
+	}
+	if strings.TrimSpace(scenario.ProviderRepositoryID) != "" && strings.TrimSpace(scenario.ProviderRepositoryID) != repository.GetProviderRepositoryId() {
+		return errors.New("repository binding provider_repository_id mismatch")
+	}
+	return nil
+}
+
+func describeRepositoryChange(_ runnerOptions, scenario *repositoryChangeScenario, output io.Writer) error {
+	if scenario == nil {
+		return nil
+	}
+	summary, err := repositoryChangeSummaryFromScenario(scenario)
+	if err != nil {
+		return err
+	}
+	logLine(output, "PLAN", "repository change ready event=%s base=%s commit=%s paths=%d services_policy_changed=%t deploy_relevant_changed=%t change_digest=%s categories=%s",
+		safeValue(summary.EventName),
+		safeValue(summary.BaseBranch),
+		safeValue(summary.CommitSHA),
+		summary.TotalPaths,
+		summary.ServicesPolicyChanged,
+		summary.DeployRelevantChanged,
+		safeValue(summary.ChangeDigest),
+		safeValue(formatPathCategories(summary.Categories)),
+	)
+	return nil
+}
+
+func repositoryChangeSummaryFromScenario(scenario *repositoryChangeScenario) (repositoryChangeSummary, error) {
+	if scenario == nil {
+		return repositoryChangeSummary{}, nil
+	}
+	eventName := strings.ToLower(strings.TrimSpace(scenario.EventName))
+	if eventName == "" {
+		eventName = "push"
+	}
+	switch eventName {
+	case "push", "merge", "pull_request_merge":
+	default:
+		return repositoryChangeSummary{}, errors.New("repository_change event_name must be push, merge or pull_request_merge")
+	}
+	baseBranch := firstNonEmpty(scenario.BaseBranch, refBranchName(scenario.Ref))
+	if baseBranch == "" {
+		return repositoryChangeSummary{}, errors.New("repository_change requires base_branch or ref")
+	}
+	ref := strings.TrimSpace(scenario.Ref)
+	if ref != "" && ref != "refs/heads/"+baseBranch && ref != baseBranch {
+		return repositoryChangeSummary{}, errors.New("repository_change ref must match base_branch")
+	}
+	commitSHA := strings.ToLower(strings.TrimSpace(scenario.CommitSHA))
+	if commitSHA == "" {
+		commitSHA = strings.ToLower(strings.TrimSpace(scenario.BeforeSHA))
+	}
+	if !validGitCommitSHA(commitSHA) {
+		return repositoryChangeSummary{}, errors.New("repository_change requires commit_sha")
+	}
+	if len(scenario.ChangedPaths) == 0 {
+		return repositoryChangeSummary{}, errors.New("repository_change requires changed_paths")
+	}
+	if len(scenario.ChangedPaths) > 256 {
+		return repositoryChangeSummary{}, errors.New("repository_change changed_paths exceeds 256")
+	}
+	categories := map[string]int{}
+	seen := map[string]struct{}{}
+	hash := sha256.New()
+	_, _ = hash.Write([]byte(eventName))
+	_, _ = hash.Write([]byte{0})
+	_, _ = hash.Write([]byte(baseBranch))
+	_, _ = hash.Write([]byte{0})
+	_, _ = hash.Write([]byte(commitSHA))
+	_, _ = hash.Write([]byte{0})
+	summary := repositoryChangeSummary{
+		EventName:  eventName,
+		BaseBranch: baseBranch,
+		CommitSHA:  commitSHA,
+		TotalPaths: len(scenario.ChangedPaths),
+		Categories: categories,
+	}
+	for _, changed := range scenario.ChangedPaths {
+		path := strings.TrimSpace(changed.Path)
+		if !validRepositoryChangePath(path) {
+			return repositoryChangeSummary{}, fmt.Errorf("repository_change path %q is unsafe", path)
+		}
+		action := repositoryChangeAction(changed.Action)
+		if action == "" {
+			return repositoryChangeSummary{}, errors.New("repository_change action must be added, modified, removed, renamed or changed")
+		}
+		objectDigest := strings.ToLower(strings.TrimSpace(changed.ObjectDigest))
+		if objectDigest != "" && !validSHA256ContentHash(objectDigest) {
+			return repositoryChangeSummary{}, errors.New("repository_change object_digest must be sha256")
+		}
+		identity := path + "\x00" + action
+		if _, ok := seen[identity]; ok {
+			continue
+		}
+		seen[identity] = struct{}{}
+		category := repositoryChangePathCategory(path)
+		categories[category]++
+		if category == "services_policy" {
+			summary.ServicesPolicyChanged = true
+			summary.DeployRelevantChanged = true
+		}
+		if repositoryChangeCategoryDeployRelevant(category) {
+			summary.DeployRelevantChanged = true
+		}
+		_, _ = hash.Write([]byte(path))
+		_, _ = hash.Write([]byte{0})
+		_, _ = hash.Write([]byte(action))
+		_, _ = hash.Write([]byte{0})
+		_, _ = hash.Write([]byte(category))
+		_, _ = hash.Write([]byte{0})
+		_, _ = hash.Write([]byte(objectDigest))
+		_, _ = hash.Write([]byte{0})
+	}
+	summary.TotalPaths = len(seen)
+	summary.ChangeDigest = "sha256:" + hex.EncodeToString(hash.Sum(nil))
+	return summary, nil
 }
 
 func describeBootstrapSetup(options runnerOptions, setup *bootstrapSetup, output io.Writer) error {
@@ -929,6 +1236,28 @@ func repositoryVisibilityFromString(value string) (projectsv1.RepositoryVisibili
 	}
 }
 
+func repositoryStatusFromString(value string) (projectsv1.RepositoryStatus, error) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "":
+		return projectsv1.RepositoryStatus_REPOSITORY_STATUS_UNSPECIFIED, nil
+	case "active":
+		return projectsv1.RepositoryStatus_REPOSITORY_STATUS_ACTIVE, nil
+	case "pending":
+		return projectsv1.RepositoryStatus_REPOSITORY_STATUS_PENDING, nil
+	case "blocked":
+		return projectsv1.RepositoryStatus_REPOSITORY_STATUS_BLOCKED, nil
+	default:
+		return projectsv1.RepositoryStatus_REPOSITORY_STATUS_UNSPECIFIED, fmt.Errorf("repository binding status must be active, pending or blocked")
+	}
+}
+
+func optionalRepositoryStatus(value projectsv1.RepositoryStatus) *projectsv1.RepositoryStatus {
+	if value == projectsv1.RepositoryStatus_REPOSITORY_STATUS_UNSPECIFIED {
+		return nil
+	}
+	return &value
+}
+
 func projectRepositoryProviderFromSlug(value string) projectsv1.RepositoryProvider {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "github":
@@ -936,6 +1265,18 @@ func projectRepositoryProviderFromSlug(value string) projectsv1.RepositoryProvid
 	default:
 		return projectsv1.RepositoryProvider_REPOSITORY_PROVIDER_UNSPECIFIED
 	}
+}
+
+func safeProviderURL(value string) bool {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return true
+	}
+	parsed, err := url.Parse(trimmed)
+	if err != nil || parsed.User != nil || parsed.Host == "" {
+		return false
+	}
+	return parsed.Scheme == "https" || parsed.Scheme == "http"
 }
 
 func projectRepositoryProviderSlug(provider projectsv1.RepositoryProvider) (string, error) {
@@ -1344,6 +1685,121 @@ func deterministicKey(parts ...string) string {
 	}
 	sum := hex.EncodeToString(hash.Sum(nil))
 	return "onboarding-runner-" + sum[:24]
+}
+
+func refBranchName(ref string) string {
+	ref = strings.TrimSpace(ref)
+	if strings.HasPrefix(ref, "refs/heads/") {
+		return strings.TrimPrefix(ref, "refs/heads/")
+	}
+	return ""
+}
+
+func validRepositoryChangePath(value string) bool {
+	path := strings.TrimSpace(value)
+	if path == "" || len(path) > 256 || strings.HasPrefix(path, "/") || strings.HasSuffix(path, "/") {
+		return false
+	}
+	if strings.Contains(path, "\\") || strings.Contains(path, "\x00") {
+		return false
+	}
+	for _, segment := range strings.Split(path, "/") {
+		if segment == "" || segment == "." || segment == ".." {
+			return false
+		}
+	}
+	return true
+}
+
+func repositoryChangeAction(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "changed":
+		return "changed"
+	case "added", "modified", "removed", "renamed":
+		return strings.ToLower(strings.TrimSpace(value))
+	default:
+		return ""
+	}
+}
+
+func repositoryChangePathCategory(path string) string {
+	path = strings.TrimSpace(path)
+	switch {
+	case path == "services.yaml":
+		return "services_policy"
+	case path == "Dockerfile" || strings.HasSuffix(path, "/Dockerfile"):
+		return "deploy_relevant"
+	case path == "go.mod" || path == "go.sum" || path == "Makefile":
+		return "deploy_relevant"
+	case strings.HasPrefix(path, "deploy/") ||
+		strings.HasPrefix(path, "services/") ||
+		strings.HasPrefix(path, "packages/") ||
+		strings.HasPrefix(path, "proto/") ||
+		strings.HasPrefix(path, "specs/"):
+		return "deploy_relevant"
+	case strings.HasPrefix(path, ".github/workflows/"):
+		return "provider_workflow"
+	case strings.HasPrefix(path, "docs/") || path == "AGENTS.md":
+		return "documentation"
+	default:
+		return "other"
+	}
+}
+
+func repositoryChangeCategoryDeployRelevant(category string) bool {
+	switch category {
+	case "services_policy", "deploy_relevant", "provider_workflow":
+		return true
+	default:
+		return false
+	}
+}
+
+func formatPathCategories(categories map[string]int) string {
+	if len(categories) == 0 {
+		return "n/a"
+	}
+	order := []string{"services_policy", "deploy_relevant", "provider_workflow", "documentation", "other"}
+	parts := make([]string, 0, len(categories))
+	for _, category := range order {
+		count := categories[category]
+		if count > 0 {
+			parts = append(parts, fmt.Sprintf("%s:%d", category, count))
+		}
+	}
+	return strings.Join(parts, ",")
+}
+
+func validGitCommitSHA(text string) bool {
+	if len(text) != 40 && len(text) != 64 {
+		return false
+	}
+	for _, char := range text {
+		if (char >= '0' && char <= '9') || (char >= 'a' && char <= 'f') || (char >= 'A' && char <= 'F') {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func validSHA256ContentHash(text string) bool {
+	hash := strings.TrimSpace(strings.ToLower(text))
+	const prefix = "sha256:"
+	if !strings.HasPrefix(hash, prefix) {
+		return false
+	}
+	encoded := strings.TrimPrefix(hash, prefix)
+	if len(encoded) != 64 {
+		return false
+	}
+	for _, char := range encoded {
+		if (char >= '0' && char <= '9') || (char >= 'a' && char <= 'f') {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func splitRepositoryFullName(fullName string) (string, string, bool) {
