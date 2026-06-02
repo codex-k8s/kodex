@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"os"
@@ -114,6 +116,170 @@ func TestRunApplyReconcilesBootstrapAndAdoptionThroughProductAPIs(t *testing.T) 
 	assertNotContains(t, output.String(), "provider_payload_secret")
 	assertContains(t, output.String(), "bootstrap reconcile completed")
 	assertContains(t, output.String(), "adoption reconcile completed")
+}
+
+func TestRunApplyProducesBootstrapCheckedArtifactFromValidatedPayloadFile(t *testing.T) {
+	scenarioPath := writeScenario(t, signalOnlyScenario("bootstrap"))
+	payloadJSON := `{"services":[{"key":"api"}],"marker":"raw_services_yaml_secret"}`
+	payloadPath := writeTextFile(t, "validated-payload.json", payloadJSON)
+	projectClient := &fakeProjectCatalogClient{repository: repositoryFixture()}
+	clients := runnerClients{
+		ProjectCatalog: projectClient,
+		ProviderHub:    &fakeProviderHubClient{bootstrapSignal: mergeSignalFixture("bootstrap")},
+	}
+
+	var output bytes.Buffer
+	err := run(context.Background(), runnerOptions{
+		ScenarioFilePath:       scenarioPath,
+		ProjectID:              "project-1",
+		RepositoryID:           "repo-1",
+		RepositoryFullName:     "codex-k8s/kodex-onboarding-test",
+		AllowedProviderOwner:   "codex-k8s",
+		RepositoryNamePrefix:   "kodex-onboarding-",
+		RequestID:              "req-1",
+		Kind:                   "bootstrap",
+		CheckedPayloadFilePath: payloadPath,
+		CheckedSourcePath:      "services.yaml",
+		CheckedArtifactVersion: "",
+		CheckedArtifactRef:     "",
+		WatermarkJSONFilePath:  "",
+		ProviderRepositoryID:   "provider-repo-1",
+		Apply:                  true,
+	}, clients, &output)
+	if err != nil {
+		t.Fatalf("run apply with produced checked artifact: %v", err)
+	}
+
+	request := projectClient.lastBootstrapRequest
+	if request == nil {
+		t.Fatal("expected bootstrap reconcile request")
+	}
+	checkedPolicy := request.GetCheckedPolicy()
+	if got := checkedPolicy.GetValidatedPayloadJson(); !strings.Contains(got, "raw_services_yaml_secret") {
+		t.Fatalf("checked payload was not passed to product API")
+	}
+	if got := checkedPolicy.GetArtifactVersion(); got != "bootstrap-merge-commit" {
+		t.Fatalf("expected artifact version from merge commit, got %q", got)
+	}
+	if got := checkedPolicy.GetSourcePath(); got != "services.yaml" {
+		t.Fatalf("expected services.yaml source path, got %q", got)
+	}
+	if got := checkedPolicy.GetArtifactRef(); !strings.HasPrefix(got, "checked://onboarding/bootstrap/") {
+		t.Fatalf("expected generated checked artifact ref, got %q", got)
+	}
+	if got := checkedPolicy.GetArtifactDigest(); !strings.HasPrefix(got, "sha256:") {
+		t.Fatalf("expected sha256 artifact digest, got %q", got)
+	}
+	if got := checkedPolicy.GetContentHash(); !strings.HasPrefix(got, "sha256:") {
+		t.Fatalf("expected sha256 content hash, got %q", got)
+	}
+	if checkedPolicy.GetArtifactDigest() != checkedPolicy.GetContentHash() {
+		t.Fatalf("expected artifact digest to match content hash, got digest=%q content_hash=%q", checkedPolicy.GetArtifactDigest(), checkedPolicy.GetContentHash())
+	}
+	if got, want := checkedPolicy.GetContentHash(), expectedContentHash(payloadJSON); got != want {
+		t.Fatalf("expected content hash %q, got %q", want, got)
+	}
+	assertNotContains(t, output.String(), "raw_services_yaml_secret")
+	assertContains(t, output.String(), "checked artifact input produced")
+	assertContains(t, output.String(), "bootstrap reconcile completed")
+}
+
+func TestRunDryRunProducesAdoptionCheckedArtifactWithoutMutations(t *testing.T) {
+	scenarioPath := writeScenario(t, signalOnlyScenario("adoption"))
+	payloadPath := writeTextFile(t, "validated-payload.json", `{"services":[{"key":"api"}],"marker":"provider_payload_secret"}`)
+	projectClient := &fakeProjectCatalogClient{repository: repositoryFixture()}
+	clients := runnerClients{
+		ProjectCatalog: projectClient,
+		ProviderHub:    &fakeProviderHubClient{adoptionSignal: mergeSignalFixture("adoption"), snapshotCount: 1},
+	}
+
+	var output bytes.Buffer
+	err := run(context.Background(), runnerOptions{
+		ScenarioFilePath:       scenarioPath,
+		ProjectID:              "project-1",
+		RepositoryID:           "repo-1",
+		RepositoryFullName:     "codex-k8s/kodex-onboarding-test",
+		RequestID:              "req-1",
+		Kind:                   "adoption",
+		CheckedPayloadFilePath: payloadPath,
+	}, clients, &output)
+	if err != nil {
+		t.Fatalf("run dry-run with produced checked artifact: %v", err)
+	}
+
+	if projectClient.bootstrapReconcileCalls != 0 || projectClient.adoptionReconcileCalls != 0 {
+		t.Fatalf("dry-run called mutating reconcile methods: bootstrap=%d adoption=%d", projectClient.bootstrapReconcileCalls, projectClient.adoptionReconcileCalls)
+	}
+	assertNotContains(t, output.String(), "provider_payload_secret")
+	assertContains(t, output.String(), "adoption checked artifact input produced")
+	assertContains(t, output.String(), "apply disabled")
+}
+
+func TestRunRejectsCheckedPayloadProducerForBothKinds(t *testing.T) {
+	payloadPath := writeTextFile(t, "validated-payload.json", `{"services":[]}`)
+	clients := runnerClients{
+		ProjectCatalog: &fakeProjectCatalogClient{repository: repositoryFixture()},
+		ProviderHub:    &fakeProviderHubClient{},
+	}
+
+	err := run(context.Background(), runnerOptions{
+		ProjectID:              "project-1",
+		RepositoryID:           "repo-1",
+		RepositoryFullName:     "codex-k8s/kodex-onboarding-test",
+		RequestID:              "req-1",
+		Kind:                   "both",
+		CheckedPayloadFilePath: payloadPath,
+	}, clients, ioDiscard{})
+	if err == nil {
+		t.Fatal("expected producer kind error")
+	}
+	assertContains(t, err.Error(), "requires kind bootstrap or adoption")
+}
+
+func TestRunRejectsRawYAMLCheckedPayloadProducerInput(t *testing.T) {
+	payloadPath := writeTextFile(t, "services.yaml", "services:\n  - key: api\n")
+	clients := runnerClients{
+		ProjectCatalog: &fakeProjectCatalogClient{repository: repositoryFixture()},
+		ProviderHub:    &fakeProviderHubClient{},
+	}
+
+	err := run(context.Background(), runnerOptions{
+		ProjectID:              "project-1",
+		RepositoryID:           "repo-1",
+		RepositoryFullName:     "codex-k8s/kodex-onboarding-test",
+		RequestID:              "req-1",
+		Kind:                   "bootstrap",
+		CheckedPayloadFilePath: payloadPath,
+	}, clients, ioDiscard{})
+	if err == nil {
+		t.Fatal("expected invalid checked payload error")
+	}
+	assertContains(t, err.Error(), "must contain valid JSON")
+}
+
+func TestRunRejectsCheckedPayloadProducerWithoutWatermark(t *testing.T) {
+	scenario := signalOnlyScenario("bootstrap")
+	scenario.Bootstrap.WatermarkJSON = ""
+	scenarioPath := writeScenario(t, scenario)
+	payloadPath := writeTextFile(t, "validated-payload.json", `{"services":[]}`)
+	clients := runnerClients{
+		ProjectCatalog: &fakeProjectCatalogClient{repository: repositoryFixture()},
+		ProviderHub:    &fakeProviderHubClient{bootstrapSignal: mergeSignalFixture("bootstrap")},
+	}
+
+	err := run(context.Background(), runnerOptions{
+		ScenarioFilePath:       scenarioPath,
+		ProjectID:              "project-1",
+		RepositoryID:           "repo-1",
+		RepositoryFullName:     "codex-k8s/kodex-onboarding-test",
+		RequestID:              "req-1",
+		Kind:                   "bootstrap",
+		CheckedPayloadFilePath: payloadPath,
+	}, clients, ioDiscard{})
+	if err == nil {
+		t.Fatal("expected missing watermark error")
+	}
+	assertContains(t, err.Error(), "requires watermark_json")
 }
 
 func TestRunApplyUsesRepositoryBindingForTargetPolicy(t *testing.T) {
@@ -448,6 +614,29 @@ func checkedPayloadFixture() onboardingScenario {
 	}
 }
 
+func signalOnlyScenario(kind string) onboardingScenario {
+	scenario := onboardingScenario{
+		ProjectID:            "project-1",
+		RepositoryID:         "repo-1",
+		ProviderSlug:         "github",
+		RepositoryFullName:   "codex-k8s/kodex-onboarding-test",
+		ProviderRepositoryID: "provider-repo-1",
+	}
+	switch kind {
+	case "bootstrap":
+		scenario.Bootstrap = &reconcileScenario{
+			SignalKey:     "bootstrap-signal-key",
+			WatermarkJSON: `{"work_type":"repository_bootstrap","safe":"yes"}`,
+		}
+	case "adoption":
+		scenario.Adoption = &reconcileScenario{
+			SignalKey:     "adoption-signal-key",
+			WatermarkJSON: `{"work_type":"repository_adoption","safe":"yes"}`,
+		}
+	}
+	return scenario
+}
+
 func writeScenario(t *testing.T, scenario onboardingScenario) string {
 	t.Helper()
 	content, err := json.MarshalIndent(scenario, "", "  ")
@@ -459,6 +648,20 @@ func writeScenario(t *testing.T, scenario onboardingScenario) string {
 		t.Fatalf("write scenario: %v", err)
 	}
 	return path
+}
+
+func writeTextFile(t *testing.T, name string, content string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), name)
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("write text file: %v", err)
+	}
+	return path
+}
+
+func expectedContentHash(value string) string {
+	sum := sha256.Sum256([]byte(value))
+	return "sha256:" + hex.EncodeToString(sum[:])
 }
 
 func stringPtr(value string) *string {

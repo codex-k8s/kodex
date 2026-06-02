@@ -5,7 +5,7 @@ title: kodex — поставка provider-hub
 status: active
 owner_role: EM
 created_at: 2026-05-06
-updated_at: 2026-05-28
+updated_at: 2026-06-02
 related_issues: [281, 282, 711, 719, 725, 729, 737, 754, 761, 770, 781, 840, 864, 865, 895, 908, 909, 939]
 related_prs: []
 related_docsets:
@@ -68,7 +68,7 @@ approvals:
 | PRV-8g | Go checks producer path: safe GitHub `pull_request closed + merged` fixture проверяет цепочку edge route -> `IngestWebhookEvent` -> safe merge signal -> producer outbox/event-log readiness без consumer framework. |
 | PRV-8h | Adoption counterpart и producer-side hardening: bootstrap/adoption fixtures проверяют route/ingest/read/outbox, replay не создаёт дубль события, conflict даёт безопасную диагностику, raw/canonical webhook payload не попадает в safe signal/read surface/outbox. |
 | PRV-4 privacy storage | Webhook inbox storage переводится на safe envelope only: новые записи не хранят canonical provider body в `payload_json`, старые retained payload редактируются миграцией, replay/conflict опирается на `payload_sha256`, а reprocess без raw body использует GitHub onboarding `pull_request` refetch или safe terminal diagnostics. |
-| PRV-8i | Shell smoke для live provider path заменён на Go product API runner: dry-run проверяет `project-catalog`/`provider-hub` read surface, apply явно запускает bootstrap/adoption reconcile с checked input и safe target policy. |
+| PRV-8i | Shell smoke для live provider path заменён на Go product API runner: dry-run проверяет `project-catalog`/`provider-hub` read surface, apply явно запускает bootstrap/adoption reconcile с checked input и safe target policy; checked input может готовиться из уже нормализованного JSON payload с обычным SHA-256 `content_hash` и `artifact_digest = content_hash` без raw YAML и provider payload. |
 | PRV-9 | Kubernetes-манифесты, БД, migration job, runbook и документы наблюдаемости готовы; проверка первого кольца идёт через общую bootstrap-обвязку. |
 
 ## Таблица реализации
@@ -151,7 +151,7 @@ approvals:
 - `GetRepositoryMergeSignal`, `ListRepositoryMergeSignals`, `GetRepositoryAdoptionScanSnapshot` и `ListRepositoryAdoptionScanSnapshots` отдают только provider-owned safe refs/status/timestamps/version/etag; checked artifact, checked payload и нормализованный `services.yaml` остаются в `project-catalog`.
 - повтор merge signal с тем же signal key не создаёт второй доменный outbox event, а конфликтующий сигнал с другим commit/source ref безопасно отклоняется; импорт проверенной `services.yaml` и активация binding остаются в `project-catalog`.
 - Go tests проверяют producer-side путь safe bootstrap/adoption fixtures -> `integration-gateway` route wiring -> `provider-hub IngestWebhookEvent` -> `RepositoryMergeSignal` read surface -> локальный outbox event.
-- Проверочный onboarding path живёт в `cmd/onboarding-runner`: dry-run читает provider-owned merge signals/snapshots и project repository binding через gRPC, apply явно вызывает project-side reconcile с checked input и safe target policy. Создание live GitHub repo/branch/PR остаётся следующим расширением через product API и не реализуется в shell.
+- Проверочный onboarding path живёт в `cmd/onboarding-runner`: dry-run читает provider-owned merge signals/snapshots и project repository binding через gRPC, apply явно вызывает project-side reconcile с checked input и safe target policy. Runner может подготовить checked input из уже нормализованного JSON payload, вычислить `content_hash` как обычный SHA-256 от байтов payload, передать совместимый `artifact_digest = content_hash`, сформировать ref/version и связать artifact version с provider merge commit, но не читает сырой `services.yaml` и не создаёт provider repo/branch/PR. Создание live GitHub repo/branch/PR остаётся следующим расширением через product API и не реализуется в shell.
 - эксплуатационный контур `provider-hub`: Dockerfile, `deploy/base/provider-hub/**`, создание БД `kodex_provider_hub` в PostgreSQL bootstrap, runtime Secret refs без значений секретов, migration job, Service/Deployment с HTTP/gRPC ports, readiness/liveness/metrics, requests/limits и runbook/monitoring документы.
 
 Миграция `external_account_id` для очереди сверки явно очищает строки `provider_hub_sync_cursors` и `provider_hub_reconciliation_requests`, созданные предыдущим срезом без знания внешнего аккаунта. Эти строки являются эфемерным состоянием планировщика и пересоздаются повторной постановкой сверки; так тестовые кластеры с уже развёрнутым PRV-6.1 не упираются в `ADD COLUMN ... NOT NULL`.
@@ -173,7 +173,7 @@ approvals:
 
 ## Связь с задачами подключения репозиториев
 
-Задачи #281 и #282 остаются открытыми до полного end-to-end bootstrap/adoption. PRV-8a, PRV-8b, PRV-8c, PRV-8d, PRV-8e, PRV-8f, PRV-8g, PRV-8h и PRV-8i закрывают только provider-side часть создания репозитория, bootstrap/adoption PR, безопасного merge signal, lightweight adoption scan snapshot, чтения этих provider-owned фактов и producer-side Go-проверки диагностики.
+Задачи #281 и #282 остаются открытыми до полного end-to-end bootstrap/adoption. PRV-8a, PRV-8b, PRV-8c, PRV-8d, PRV-8e, PRV-8f, PRV-8g, PRV-8h и PRV-8i закрывают только provider-side часть создания репозитория, bootstrap/adoption PR, безопасного merge signal, lightweight adoption scan snapshot, чтения этих provider-owned фактов, producer-side Go-проверки диагностики и подготовку checked input из нормализованного payload для project-side reconcile с совместимым `artifact_digest = content_hash`.
 
 Решение:
 

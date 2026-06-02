@@ -21,9 +21,12 @@ import (
 )
 
 const (
-	defaultProviderSlug = "github"
-	defaultActorID      = "onboarding-runner"
-	defaultSource       = "cmd/onboarding-runner"
+	defaultProviderSlug      = "github"
+	defaultActorID           = "onboarding-runner"
+	defaultSource            = "cmd/onboarding-runner"
+	defaultCheckedSourcePath = "services.yaml"
+	maxCheckedPayloadBytes   = 256 * 1024
+	maxWatermarkJSONBytes    = 16 * 1024
 )
 
 func main() {
@@ -42,6 +45,11 @@ func main() {
 	flag.StringVar(&options.RequestID, "request-id", "", "optional request id")
 	flag.StringVar(&options.ActorID, "actor-id", defaultActorID, "safe actor id")
 	flag.StringVar(&options.Kind, "kind", "both", "bootstrap, adoption or both")
+	flag.StringVar(&options.CheckedPayloadFilePath, "checked-payload-file", os.Getenv("KODEX_ONBOARDING_RUNNER_CHECKED_PAYLOAD_FILE"), "normalized checked validated_payload_json file; values are never printed")
+	flag.StringVar(&options.WatermarkJSONFilePath, "watermark-json-file", os.Getenv("KODEX_ONBOARDING_RUNNER_WATERMARK_JSON_FILE"), "safe watermark JSON file for checked artifact producer")
+	flag.StringVar(&options.CheckedSourcePath, "checked-source-path", os.Getenv("KODEX_ONBOARDING_RUNNER_CHECKED_SOURCE_PATH"), "source path for checked services policy artifact")
+	flag.StringVar(&options.CheckedArtifactRef, "checked-artifact-ref", os.Getenv("KODEX_ONBOARDING_RUNNER_CHECKED_ARTIFACT_REF"), "optional immutable checked artifact ref")
+	flag.StringVar(&options.CheckedArtifactVersion, "checked-artifact-version", os.Getenv("KODEX_ONBOARDING_RUNNER_CHECKED_ARTIFACT_VERSION"), "optional checked artifact version; defaults to provider merge commit")
 	timeout := flag.Duration("timeout", 30*time.Second, "runner timeout")
 	applyFlag := flag.Bool("apply", false, "execute mutating product API calls")
 	flag.Parse()
@@ -83,22 +91,27 @@ type runnerClients struct {
 }
 
 type runnerOptions struct {
-	ProjectCatalogAddr   string
-	ProviderHubAddr      string
-	ScenarioFilePath     string
-	ProjectID            string
-	RepositoryID         string
-	ProviderSlug         string
-	RepositoryFullName   string
-	ProviderRepositoryID string
-	AllowedProviderOwner string
-	RepositoryNamePrefix string
-	IdempotencyKey       string
-	RequestID            string
-	ActorID              string
-	Kind                 string
-	Apply                bool
-	Timeout              time.Duration
+	ProjectCatalogAddr     string
+	ProviderHubAddr        string
+	ScenarioFilePath       string
+	ProjectID              string
+	RepositoryID           string
+	ProviderSlug           string
+	RepositoryFullName     string
+	ProviderRepositoryID   string
+	AllowedProviderOwner   string
+	RepositoryNamePrefix   string
+	IdempotencyKey         string
+	RequestID              string
+	ActorID                string
+	Kind                   string
+	CheckedPayloadFilePath string
+	WatermarkJSONFilePath  string
+	CheckedSourcePath      string
+	CheckedArtifactRef     string
+	CheckedArtifactVersion string
+	Apply                  bool
+	Timeout                time.Duration
 }
 
 type onboardingScenario struct {
@@ -131,6 +144,20 @@ type mergeSignalSet struct {
 	Adoption  *providersv1.RepositoryMergeSignal
 }
 
+type checkedArtifactProducer struct {
+	Enabled         bool
+	PayloadJSON     string
+	WatermarkJSON   string
+	SourcePath      string
+	ArtifactRef     string
+	ArtifactVersion string
+}
+
+type preparedCheckedInputs struct {
+	Bootstrap bool
+	Adoption  bool
+}
+
 func run(ctx context.Context, options runnerOptions, clients runnerClients, output io.Writer) error {
 	if clients.ProjectCatalog == nil {
 		return errors.New("project-catalog client is required")
@@ -146,6 +173,10 @@ func run(ctx context.Context, options runnerOptions, clients runnerClients, outp
 	}
 	options = mergeScenarioOptions(options, scenario)
 	if err := validateOptions(options); err != nil {
+		return err
+	}
+	producer, err := loadCheckedArtifactProducer(options)
+	if err != nil {
 		return err
 	}
 
@@ -175,6 +206,11 @@ func run(ctx context.Context, options runnerOptions, clients runnerClients, outp
 	if err := readAdoptionSnapshots(ctx, clients.ProviderHub, options, output); err != nil {
 		return err
 	}
+	scenario, prepared, err := prepareCheckedScenarioInputs(options, scenario, signals, producer)
+	if err != nil {
+		return err
+	}
+	describePreparedCheckedInputs(output, prepared)
 
 	if wantsKind(options, "bootstrap") {
 		describeCheckedInput(output, "bootstrap", scenario.Bootstrap)
@@ -232,6 +268,11 @@ func normalizeOptions(options runnerOptions) runnerOptions {
 	options.RequestID = defaultString(strings.TrimSpace(options.RequestID), "onboarding-runner-"+time.Now().UTC().Format("20060102T150405Z"))
 	options.ActorID = defaultString(strings.TrimSpace(options.ActorID), defaultActorID)
 	options.Kind = strings.ToLower(strings.TrimSpace(options.Kind))
+	options.CheckedPayloadFilePath = strings.TrimSpace(options.CheckedPayloadFilePath)
+	options.WatermarkJSONFilePath = strings.TrimSpace(options.WatermarkJSONFilePath)
+	options.CheckedSourcePath = defaultString(strings.TrimSpace(options.CheckedSourcePath), defaultCheckedSourcePath)
+	options.CheckedArtifactRef = strings.TrimSpace(options.CheckedArtifactRef)
+	options.CheckedArtifactVersion = strings.TrimSpace(options.CheckedArtifactVersion)
 	if options.Kind == "" {
 		options.Kind = "both"
 	}
@@ -269,10 +310,146 @@ func validateOptions(options runnerOptions) error {
 	}
 	switch options.Kind {
 	case "bootstrap", "adoption", "both":
-		return nil
 	default:
 		return fmt.Errorf("kind must be bootstrap, adoption or both")
 	}
+	if options.CheckedPayloadFilePath != "" {
+		if options.Kind == "both" {
+			return errors.New("checked payload producer requires kind bootstrap or adoption")
+		}
+		if options.CheckedSourcePath == "" {
+			return errors.New("checked payload producer requires checked source path")
+		}
+	}
+	return nil
+}
+
+func loadCheckedArtifactProducer(options runnerOptions) (checkedArtifactProducer, error) {
+	if options.CheckedPayloadFilePath == "" {
+		return checkedArtifactProducer{}, nil
+	}
+	payloadJSON, err := readBoundedJSONObject(options.CheckedPayloadFilePath, maxCheckedPayloadBytes, "checked payload file")
+	if err != nil {
+		return checkedArtifactProducer{}, err
+	}
+	watermarkJSON := ""
+	if options.WatermarkJSONFilePath != "" {
+		watermarkJSON, err = readBoundedJSONObject(options.WatermarkJSONFilePath, maxWatermarkJSONBytes, "watermark JSON file")
+		if err != nil {
+			return checkedArtifactProducer{}, err
+		}
+	}
+	return checkedArtifactProducer{
+		Enabled:         true,
+		PayloadJSON:     payloadJSON,
+		WatermarkJSON:   watermarkJSON,
+		SourcePath:      options.CheckedSourcePath,
+		ArtifactRef:     options.CheckedArtifactRef,
+		ArtifactVersion: options.CheckedArtifactVersion,
+	}, nil
+}
+
+func readBoundedJSONObject(path string, limit int, label string) (string, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("read %s: %w", label, err)
+	}
+	if len(content) > limit {
+		return "", fmt.Errorf("%s exceeds %d bytes", label, limit)
+	}
+	trimmed := strings.TrimSpace(string(content))
+	if trimmed == "" {
+		return "", fmt.Errorf("%s is empty", label)
+	}
+	if !json.Valid([]byte(trimmed)) {
+		return "", fmt.Errorf("%s must contain valid JSON", label)
+	}
+	if !strings.HasPrefix(trimmed, "{") {
+		return "", fmt.Errorf("%s must contain a JSON object", label)
+	}
+	return trimmed, nil
+}
+
+func prepareCheckedScenarioInputs(options runnerOptions, scenario onboardingScenario, signals mergeSignalSet, producer checkedArtifactProducer) (onboardingScenario, preparedCheckedInputs, error) {
+	if !producer.Enabled {
+		return scenario, preparedCheckedInputs{}, nil
+	}
+	switch options.Kind {
+	case "bootstrap":
+		updated, prepared, err := prepareCheckedScenarioInput("bootstrap", scenario.Bootstrap, signals.Bootstrap, producer)
+		if err != nil {
+			return scenario, preparedCheckedInputs{}, err
+		}
+		scenario.Bootstrap = updated
+		return scenario, preparedCheckedInputs{Bootstrap: prepared}, nil
+	case "adoption":
+		updated, prepared, err := prepareCheckedScenarioInput("adoption", scenario.Adoption, signals.Adoption, producer)
+		if err != nil {
+			return scenario, preparedCheckedInputs{}, err
+		}
+		scenario.Adoption = updated
+		return scenario, preparedCheckedInputs{Adoption: prepared}, nil
+	default:
+		return scenario, preparedCheckedInputs{}, errors.New("checked payload producer requires a single kind")
+	}
+}
+
+func prepareCheckedScenarioInput(kind string, scenario *reconcileScenario, signal *providersv1.RepositoryMergeSignal, producer checkedArtifactProducer) (*reconcileScenario, bool, error) {
+	if scenario == nil {
+		scenario = &reconcileScenario{}
+	}
+	if hasCheckedPolicyValues(scenario.CheckedPolicy) {
+		return scenario, false, fmt.Errorf("%s checked payload producer cannot override existing checked_policy", kind)
+	}
+	watermarkJSON := firstNonEmpty(scenario.WatermarkJSON, producer.WatermarkJSON)
+	if watermarkJSON == "" {
+		return scenario, false, fmt.Errorf("%s checked payload producer requires watermark_json in scenario or watermark-json-file", kind)
+	}
+	contentHash := contentSHA256(producer.PayloadJSON)
+	artifactDigest := contentHash
+	artifactVersion := firstNonEmpty(producer.ArtifactVersion)
+	if artifactVersion == "" && signal != nil {
+		artifactVersion = signal.GetMergeCommitSha()
+	}
+	if artifactVersion == "" {
+		artifactVersion = "pending-provider-merge-signal"
+	}
+	artifactRef := firstNonEmpty(producer.ArtifactRef)
+	if artifactRef == "" {
+		artifactRef = defaultCheckedArtifactRef(kind, artifactDigest)
+	}
+	scenario.WatermarkJSON = watermarkJSON
+	scenario.CheckedPolicy = checkedPolicyScenario{
+		ArtifactRef:          artifactRef,
+		ArtifactDigest:       artifactDigest,
+		ArtifactVersion:      artifactVersion,
+		SourcePath:           producer.SourcePath,
+		ContentHash:          contentHash,
+		ValidatedPayloadJSON: producer.PayloadJSON,
+	}
+	return scenario, true, nil
+}
+
+func hasCheckedPolicyValues(policy checkedPolicyScenario) bool {
+	return strings.TrimSpace(policy.ArtifactRef) != "" ||
+		strings.TrimSpace(policy.ArtifactDigest) != "" ||
+		strings.TrimSpace(policy.ArtifactVersion) != "" ||
+		strings.TrimSpace(policy.SourcePath) != "" ||
+		strings.TrimSpace(policy.ContentHash) != "" ||
+		strings.TrimSpace(policy.ValidatedPayloadJSON) != ""
+}
+
+func contentSHA256(value string) string {
+	sum := sha256.Sum256([]byte(value))
+	return "sha256:" + hex.EncodeToString(sum[:])
+}
+
+func defaultCheckedArtifactRef(kind string, artifactDigest string) string {
+	shortDigest := strings.TrimPrefix(artifactDigest, "sha256:")
+	if len(shortDigest) > 24 {
+		shortDigest = shortDigest[:24]
+	}
+	return "checked://onboarding/" + kind + "/" + shortDigest
 }
 
 func validateApplyPolicy(options runnerOptions) error {
@@ -683,6 +860,15 @@ func describeCheckedInput(output io.Writer, kind string, scenario *reconcileScen
 		safeValue(policy.SourcePath),
 		safeValue(policy.ContentHash),
 	)
+}
+
+func describePreparedCheckedInputs(output io.Writer, prepared preparedCheckedInputs) {
+	if prepared.Bootstrap {
+		logLine(output, "OK", "bootstrap checked artifact input produced from normalized payload checked_input=present_hidden")
+	}
+	if prepared.Adoption {
+		logLine(output, "OK", "adoption checked artifact input produced from normalized payload checked_input=present_hidden")
+	}
 }
 
 func projectQueryMeta(options runnerOptions) *projectsv1.QueryMeta {
