@@ -1364,6 +1364,9 @@ type fakeAgentService struct {
 	recordHumanGateDecision     func(context.Context, agentservice.RecordHumanGateDecisionInput) (entity.HumanGateRequest, error)
 	getHumanGateRequest         func(context.Context, uuid.UUID) (entity.HumanGateRequest, error)
 	listHumanGateRequests       func(context.Context, agentservice.HumanGateList) ([]entity.HumanGateRequest, value.PageResult, error)
+	createSelfDeployPlan        func(context.Context, agentservice.CreateSelfDeployPlanInput) (entity.SelfDeployPlan, error)
+	getSelfDeployPlan           func(context.Context, uuid.UUID) (entity.SelfDeployPlan, error)
+	listSelfDeployPlans         func(context.Context, agentservice.SelfDeployPlanList) ([]entity.SelfDeployPlan, value.PageResult, error)
 }
 
 func (f *fakeAgentService) CreateFlow(ctx context.Context, input agentservice.CreateFlowInput) (entity.Flow, error) {
@@ -1644,6 +1647,27 @@ func (f *fakeAgentService) ListHumanGateRequests(ctx context.Context, input agen
 		return nil, value.PageResult{}, errs.ErrPreconditionFailed
 	}
 	return f.listHumanGateRequests(ctx, input)
+}
+
+func (f *fakeAgentService) CreateSelfDeployPlan(ctx context.Context, input agentservice.CreateSelfDeployPlanInput) (entity.SelfDeployPlan, error) {
+	if f.createSelfDeployPlan == nil {
+		return entity.SelfDeployPlan{}, errs.ErrPreconditionFailed
+	}
+	return f.createSelfDeployPlan(ctx, input)
+}
+
+func (f *fakeAgentService) GetSelfDeployPlan(ctx context.Context, id uuid.UUID) (entity.SelfDeployPlan, error) {
+	if f.getSelfDeployPlan == nil {
+		return entity.SelfDeployPlan{}, errs.ErrPreconditionFailed
+	}
+	return f.getSelfDeployPlan(ctx, id)
+}
+
+func (f *fakeAgentService) ListSelfDeployPlans(ctx context.Context, input agentservice.SelfDeployPlanList) ([]entity.SelfDeployPlan, value.PageResult, error) {
+	if f.listSelfDeployPlans == nil {
+		return nil, value.PageResult{}, errs.ErrPreconditionFailed
+	}
+	return f.listSelfDeployPlans(ctx, input)
 }
 
 func commandMeta(commandID string, idempotencyKey string, expectedVersion *int64) *agentsv1.CommandMeta {

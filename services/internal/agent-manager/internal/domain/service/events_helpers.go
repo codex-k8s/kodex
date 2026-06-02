@@ -317,6 +317,54 @@ func humanGateEvent(id uuid.UUID, eventType string, reasonCode string, gate enti
 	return outboxEvent(id, eventType, agentevents.AggregateHumanGate, gate.ID, payload, occurredAt), nil
 }
 
+func selfDeployPlanRequestedEvent(id uuid.UUID, plan entity.SelfDeployPlan, occurredAt time.Time) (entity.OutboxEvent, error) {
+	payload, err := json.Marshal(agentevents.Payload{
+		SelfDeployPlanID:                    plan.ID.String(),
+		ProjectRef:                          plan.ProjectRef,
+		RepositoryRef:                       plan.RepositoryRef,
+		ProviderSignalRef:                   plan.ProviderSignalRef,
+		SourceRef:                           plan.SourceRef,
+		MergeCommitSHA:                      plan.MergeCommitSHA,
+		ServicesYamlRef:                     plan.ServicesYAMLRef,
+		ServicesYamlDigest:                  plan.ServicesYAMLDigest,
+		AffectedServiceKeys:                 append([]string(nil), plan.AffectedServiceKeys...),
+		PathCategories:                      selfDeployEventPathCategories(plan.PathCategories),
+		ExpectedRuntimeJobTypes:             selfDeployEventRuntimeJobTypes(plan.ExpectedRuntimeJobTypes),
+		GovernanceGateRequestRef:            plan.GovernanceContext.GateRequestRef,
+		GovernanceDecisionRef:               plan.GovernanceContext.GateDecisionRef,
+		GovernanceRiskAssessmentRef:         plan.GovernanceContext.RiskAssessmentRef,
+		GovernanceReleaseDecisionPackageRef: plan.GovernanceContext.ReleaseDecisionPackageRef,
+		GovernanceReleaseDecisionRef:        plan.GovernanceContext.ReleaseDecisionRef,
+		GovernanceRiskProfileRef:            plan.GovernanceContext.RiskProfileRef,
+		GovernanceGatePolicyRef:             plan.GovernanceContext.GatePolicyRef,
+		GovernanceReleasePolicyRef:          plan.GovernanceContext.ReleasePolicyRef,
+		Status:                              string(plan.Status),
+		Summary:                             plan.SafeSummary,
+		PlanFingerprint:                     plan.PlanFingerprint,
+		Version:                             plan.Version,
+	})
+	if err != nil {
+		return entity.OutboxEvent{}, err
+	}
+	return outboxEvent(id, agentevents.EventSelfDeployPlanRequested, agentevents.AggregateSelfDeployPlan, plan.ID, payload, occurredAt), nil
+}
+
+func selfDeployEventPathCategories(values []enum.SelfDeployPathCategory) []string {
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		result = append(result, string(value))
+	}
+	return result
+}
+
+func selfDeployEventRuntimeJobTypes(values []enum.SelfDeployRuntimeJobType) []string {
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		result = append(result, string(value))
+	}
+	return result
+}
+
 func optionalUUIDValue(id *uuid.UUID) string {
 	if id == nil {
 		return ""

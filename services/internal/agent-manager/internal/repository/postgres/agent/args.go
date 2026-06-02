@@ -12,6 +12,7 @@ import (
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
 	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/types/enum"
 	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/types/value"
 )
@@ -365,6 +366,35 @@ func humanGateRequestUpdateArgs(gate entity.HumanGateRequest, previousVersion in
 	return args
 }
 
+func selfDeployPlanArgs(plan entity.SelfDeployPlan) pgx.NamedArgs {
+	return postgreslib.AddBaseArgs(pgx.NamedArgs{
+		"scope_type":                              plan.Scope.Type,
+		"scope_ref":                               plan.Scope.Ref,
+		"project_ref":                             plan.ProjectRef,
+		"repository_ref":                          plan.RepositoryRef,
+		"provider_signal_ref":                     plan.ProviderSignalRef,
+		"source_ref":                              plan.SourceRef,
+		"merge_commit_sha":                        plan.MergeCommitSHA,
+		"services_yaml_ref":                       plan.ServicesYAMLRef,
+		"services_yaml_digest":                    plan.ServicesYAMLDigest,
+		"affected_service_keys":                   jsonArrayPayload(plan.AffectedServiceKeys),
+		"path_categories":                         jsonArrayPayload(selfDeployPathCategoryStrings(plan.PathCategories)),
+		"expected_runtime_job_types":              jsonArrayPayload(selfDeployRuntimeJobTypeStrings(plan.ExpectedRuntimeJobTypes)),
+		"governance_risk_assessment_ref":          plan.GovernanceContext.RiskAssessmentRef,
+		"governance_gate_request_ref":             plan.GovernanceContext.GateRequestRef,
+		"governance_gate_decision_ref":            plan.GovernanceContext.GateDecisionRef,
+		"governance_release_decision_package_ref": plan.GovernanceContext.ReleaseDecisionPackageRef,
+		"governance_release_decision_ref":         plan.GovernanceContext.ReleaseDecisionRef,
+		"governance_risk_profile_ref":             plan.GovernanceContext.RiskProfileRef,
+		"governance_gate_policy_ref":              plan.GovernanceContext.GatePolicyRef,
+		"governance_release_policy_ref":           plan.GovernanceContext.ReleasePolicyRef,
+		"safe_summary":                            plan.SafeSummary,
+		"plan_fingerprint":                        plan.PlanFingerprint,
+		"idempotency_key":                         plan.IdempotencyKey,
+		"status":                                  string(plan.Status),
+	}, plan.ID, plan.Version, plan.CreatedAt, plan.UpdatedAt)
+}
+
 func commandResultArgs(result entity.CommandResult) pgx.NamedArgs {
 	args := pgx.NamedArgs{"key": result.Key}
 	args["command_id"] = postgreslib.NullableUUID(result.CommandID)
@@ -530,6 +560,18 @@ func humanGateRequestFilterArgs(filter query.HumanGateFilter) pageQueryArgs {
 	return withPage(filter.Page, args)
 }
 
+func selfDeployPlanFilterArgs(filter query.SelfDeployPlanFilter) pageQueryArgs {
+	args := pgx.NamedArgs{
+		"scope_type":          optionalString(filter.Scope.Type),
+		"scope_ref":           optionalString(filter.Scope.Ref),
+		"project_ref":         optionalString(filter.ProjectRef),
+		"repository_ref":      optionalString(filter.RepositoryRef),
+		"provider_signal_ref": optionalString(filter.ProviderSignalRef),
+		"status":              optionalEnum(filter.Status),
+	}
+	return withPage(filter.Page, args)
+}
+
 func agentActivityFilterArgs(filter query.AgentActivityFilter) (activityPageQueryArgs, error) {
 	cursor, err := decodeActivityPageToken(filter.Page.PageToken)
 	if err != nil {
@@ -662,6 +704,22 @@ func optionalEnum[T ~string](value *T) any {
 		return nil
 	}
 	return string(*value)
+}
+
+func selfDeployPathCategoryStrings(values []enum.SelfDeployPathCategory) []string {
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		result = append(result, string(value))
+	}
+	return result
+}
+
+func selfDeployRuntimeJobTypeStrings(values []enum.SelfDeployRuntimeJobType) []string {
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		result = append(result, string(value))
+	}
+	return result
 }
 
 func jsonArrayPayload(value any) string {

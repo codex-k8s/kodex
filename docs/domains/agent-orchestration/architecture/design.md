@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-12
 updated_at: 2026-06-02
-related_issues: [733, 753, 698, 322, 782, 795, 820, 834, 842, 862, 866, 937, 954, 968, 984, 994]
+related_issues: [733, 753, 698, 322, 782, 795, 820, 834, 842, 862, 866, 937, 954, 968, 984, 994, 1011]
 related_prs: []
 related_adrs: []
 approvals:
@@ -64,6 +64,7 @@ approvals:
 | История действий агента | Хранит canonical persistent safe timeline по session/run: tool intent/result, lifecycle, permission, runtime/provider signals, bounded summary, digest, refs и timestamps без raw payload. |
 | Движок приёмки | Проверяет артефакты, watermark, статусы provider-native сущностей и условия перехода. |
 | Планировщик follow-up | Формирует авторитетное намерение следующей задачи с safe refs/status/summary и dispatch-командой вызывает typed `provider-hub` операции `CreateIssue`, `UpdateIssue`, `CreateComment`, `UpdateComment`, `UpdatePullRequest` или `CreateReviewSignal`; provider-native истина остаётся у `provider-hub`. |
+| План self-deploy | Фиксирует pending orchestration state для собственного build/deploy после safe provider/project signal: refs, affected service keys, path categories, expected runtime job types, governance refs и fingerprint без автоматического deploy. |
 | Outbox-доставщик | Публикует `agent.*` события через `platform-event-log`. |
 
 ## Основные потоки
@@ -128,6 +129,26 @@ sequenceDiagram
 Codex session state сохраняется как JSON/JSONL-объект в S3-compatible хранилище после каждого значимого turn/checkpoint. `agent-manager` хранит метаданные снимка, digest, размер и указатель на последний актуальный объект; сам большой файл сессии не пишется в PostgreSQL.
 
 Безопасная история действий хранится отдельно от session snapshot. `RecordAgentActivity` фиксирует только kind, safe tool metadata, status, timestamps/duration, bounded summary/error, digest, safe refs/details и correlation trace. Полные `tool_input`, `tool_response`, stdout/stderr, prompt, transcript, session dump, provider payload, kubeconfig, локальные workspace paths и файлы workspace не сохраняются в `agent-manager`.
+
+### План self-deploy без автоматического deploy
+
+```mermaid
+sequenceDiagram
+  participant Provider as provider-hub
+  participant PC as project-catalog
+  participant AM as agent-manager
+  participant GOV as governance-manager
+  participant R as runtime-manager
+  Provider-->>AM: safe merge/push signal ref
+  PC-->>AM: project/repository refs + services.yaml ref/digest
+  AM->>AM: CreateSelfDeployPlan(project refs, source ref, service keys, path categories)
+  AM-->>GOV: refs для gate/release approval
+  Note over AM,R: build/deploy jobs не создаются до approval
+```
+
+`agent-manager` владеет только orchestration state плана: какой safe signal получен, какие service keys/path categories затронуты, какой digest `services.yaml` принят как вход и какие runtime job types ожидаются после approval. `project-catalog` остаётся владельцем проектной декларации и проверенной проекции `services.yaml`, `provider-hub` — владельцем provider signal и provider-native фактов, `governance-manager` — владельцем approval/release decision, `runtime-manager` — владельцем будущих build/deploy jobs и их исполнения.
+
+`CreateSelfDeployPlan` фиксирует статус `pending_approval`, плановый fingerprint и событие `agent.self_deploy.plan_requested`. Команда не вызывает `runtime-manager.CreateJob`, не пишет provider/project payload и не читает Kubernetes. Для будущего перехода к build/deploy следующий срез должен использовать сохранённые refs/fingerprint и typed governance decision ref; автоматический deploy после merge в `main` остаётся запрещённым.
 
 ### Приёмка результата агента
 
@@ -202,6 +223,8 @@ Guidance refs не дублируются отдельным сырым payload 
 
 `runtime-manager` возвращает slot ref, runtime context, runtime job ref и технический статус. `Run` остаётся у `agent-manager`, slot/job и исполнение задания остаются у runtime. Для чтения runtime-наблюдаемости `agent-manager` использует только `runtime-manager.GetJob` и не копирует `job_input_json`, steps, log refs, workspace paths или Kubernetes-детали.
 
+Self-deploy plan не является runtime job request. Он хранит только expected job types `build`, `deploy` и `health_check` как намерение после owner/governance approval; `JOB_TYPE_AGENT_RUN` и runner execution к этому плану не относятся.
+
 ### `provider-hub`
 
 `agent-manager` использует provider-контур для:
@@ -214,6 +237,8 @@ Guidance refs не дублируются отдельным сырым payload 
 - постановки ускоряющей сверки после работы агента.
 
 Если ролевой агент в слоте работает через `gh` или нативный API провайдера, он передаёт платформе сигнал, а `provider-hub` догоняет проекцию webhook/reconciliation.
+
+Для self-deploy `provider-hub` остаётся источником safe merge/push signal ref и provider-native фактов. `agent-manager` не читает raw webhook body, provider response или diff; он принимает только безопасный signal ref и нормализованные refs, достаточные для pending plan.
 
 ### `platform-mcp-server`
 
@@ -238,6 +263,8 @@ MCP не владеет доменным состоянием и не подме
 ### `governance-manager`
 
 `agent-manager` обращается к `governance-manager` за оценкой риска, записью review signals, созданием gate request и чтением итогового gate/release decision. `agent-manager` хранит только ожидание flow, normalized owner outcome и typed refs на `risk_assessment`, `gate_request`, `gate_decision`, `release_decision_package`, `release_decision`, `risk_profile`, `gate_policy` и `release_policy`; сами risk/gate/release decisions и evidence body остаются в governance-контуре.
+
+Self-deploy plan использует те же typed governance refs как approval context. До появления подходящего `gate_decision_ref` или `release_decision_ref` план остаётся `pending_approval` и не создаёт build/deploy задания.
 
 ### `interaction-hub`
 

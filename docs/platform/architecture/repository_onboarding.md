@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-14
 updated_at: 2026-06-02
-related_issues: [281, 282, 761, 794, 810, 818, 840, 864, 865, 881, 883, 917]
+related_issues: [281, 282, 761, 794, 810, 818, 840, 864, 865, 881, 883, 917, 1011]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -57,6 +57,7 @@ approvals:
 - Git submodule не является обязательным механизмом для всех внешних источников.
 - Изменение декларативной политики штатно проходит через PR.
 - После слияния PR с изменением `services.yaml` webhook или сверка передаёт новую версию в `project-catalog`, который валидирует и импортирует проверенную проекцию.
+- После merge/push в `main` для собственного репозитория платформы safe provider/project signal может породить `agent-manager` self-deploy plan: pending state с project/repository refs, source/merge commit refs, affected service keys, path categories, `services.yaml` ref/digest, expected runtime job types и governance refs. Такой план не запускает build/deploy автоматически и ждёт owner/governance approval.
 - Шаблон репозитория является пакетом особого вида: его manifest описывает входные параметры, набор файлов, допустимые операции копирования/рендера, начальные секции `services.yaml`, инструкции для агентов и правила конфликтов.
 - Системные шаблоны поставляются платформой, пользовательские шаблоны подключаются через `package-hub` и проходят те же правила версий, прав, manifest и верификации.
 - Детерминированный исполнитель по шаблону не должен молча перезаписывать существующие файлы: конфликт фиксируется в отчёте, а изменение продолжается только после выбора владельца или через агентную роль.

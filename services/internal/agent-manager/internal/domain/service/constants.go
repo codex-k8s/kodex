@@ -22,4 +22,5 @@ const (
 	operationRecordAgentActivity         = "domain.Service.RecordAgentActivity"
 	operationRequestHumanGate            = "domain.Service.RequestHumanGate"
 	operationRecordHumanGateDecision     = "domain.Service.RecordHumanGateDecision"
+	operationCreateSelfDeployPlan        = "domain.Service.CreateSelfDeployPlan"
 )

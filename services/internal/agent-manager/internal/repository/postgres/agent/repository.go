@@ -92,17 +92,23 @@ var (
 	operationUpdateHumanGate       = repositoryOperation("UpdateHumanGateRequestWithResult")
 	operationGetHumanGate          = repositoryOperation("GetHumanGateRequest")
 	operationListHumanGate         = repositoryOperation("ListHumanGateRequests")
-	operationGetCommandResult      = repositoryOperation("GetCommandResult")
-	operationRecordCommandResult   = repositoryOperation("RecordCommandResult")
-	operationOutboxClaim           = repositoryOperation("ClaimOutboxEvents")
-	operationOutboxMarkFailed      = repositoryOperation("MarkOutboxEventFailed")
-	operationOutboxMarkPermanent   = repositoryOperation("MarkOutboxEventPermanentlyFailed")
-	operationOutboxMarkPublished   = repositoryOperation("MarkOutboxEventPublished")
 )
 
 func repositoryOperation(name string) string {
 	return repositoryOperationPrefix + name
 }
+
+var (
+	operationCreateSelfDeployPlan = repositoryOperation("CreateSelfDeployPlanWithResult")
+	operationGetSelfDeployPlan    = repositoryOperation("GetSelfDeployPlan")
+	operationListSelfDeployPlans  = repositoryOperation("ListSelfDeployPlans")
+	operationGetCommandResult     = repositoryOperation("GetCommandResult")
+	operationRecordCommandResult  = repositoryOperation("RecordCommandResult")
+	operationOutboxClaim          = repositoryOperation("ClaimOutboxEvents")
+	operationOutboxMarkFailed     = repositoryOperation("MarkOutboxEventFailed")
+	operationOutboxMarkPermanent  = repositoryOperation("MarkOutboxEventPermanentlyFailed")
+	operationOutboxMarkPublished  = repositoryOperation("MarkOutboxEventPublished")
+)
 
 func NewRepository(db *pgxpool.Pool) *Repository {
 	return &Repository{db: db}
@@ -350,6 +356,18 @@ func (r *Repository) ListHumanGateRequests(ctx context.Context, filter query.Hum
 
 func (r *Repository) mutateHumanGateRequest(ctx context.Context, args pgx.NamedArgs, result entity.CommandResult, event *entity.OutboxEvent) error {
 	return r.mutateWithResult(ctx, operationUpdateHumanGate, queryHumanGateRequestUpdate, args, result, event)
+}
+
+func (r *Repository) CreateSelfDeployPlanWithResult(ctx context.Context, plan entity.SelfDeployPlan, result entity.CommandResult, event entity.OutboxEvent) error {
+	return r.mutateWithResult(ctx, operationCreateSelfDeployPlan, querySelfDeployPlanCreate, selfDeployPlanArgs(plan), result, &event)
+}
+
+func (r *Repository) GetSelfDeployPlan(ctx context.Context, id uuid.UUID) (entity.SelfDeployPlan, error) {
+	return queryOne(ctx, r.db, operationGetSelfDeployPlan, querySelfDeployPlanGet, pgx.NamedArgs{"id": id}, scanSelfDeployPlan)
+}
+
+func (r *Repository) ListSelfDeployPlans(ctx context.Context, filter query.SelfDeployPlanFilter) ([]entity.SelfDeployPlan, value.PageResult, error) {
+	return queryPage(ctx, r.db, operationListSelfDeployPlans, querySelfDeployPlanList, selfDeployPlanFilterArgs(filter), scanSelfDeployPlan)
 }
 
 func (r *Repository) GetCommandResult(ctx context.Context, identity query.CommandIdentity) (entity.CommandResult, error) {

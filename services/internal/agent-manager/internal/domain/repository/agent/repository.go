@@ -59,6 +59,9 @@ type Repository interface {
 	UpdateHumanGateRequestWithResult(ctx context.Context, gate entity.HumanGateRequest, previousVersion int64, result entity.CommandResult, event *entity.OutboxEvent) error
 	GetHumanGateRequest(ctx context.Context, id uuid.UUID) (entity.HumanGateRequest, error)
 	ListHumanGateRequests(ctx context.Context, filter query.HumanGateFilter) ([]entity.HumanGateRequest, value.PageResult, error)
+	CreateSelfDeployPlanWithResult(ctx context.Context, plan entity.SelfDeployPlan, result entity.CommandResult, event entity.OutboxEvent) error
+	GetSelfDeployPlan(ctx context.Context, id uuid.UUID) (entity.SelfDeployPlan, error)
+	ListSelfDeployPlans(ctx context.Context, filter query.SelfDeployPlanFilter) ([]entity.SelfDeployPlan, value.PageResult, error)
 	GetCommandResult(ctx context.Context, identity query.CommandIdentity) (entity.CommandResult, error)
 	RecordCommandResult(ctx context.Context, result entity.CommandResult) error
 	ClaimOutboxEvents(ctx context.Context, limit int, now time.Time, lockedUntil time.Time) ([]entity.OutboxEvent, error)

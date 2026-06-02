@@ -3,6 +3,7 @@ syntax = "proto3";
 package kodex.agents.v1;
 
 import "kodex/providers/v1/provider_hub.proto";
+import "kodex/runtime/v1/runtime_manager.proto";
 
 option go_package = "github.com/codex-k8s/kodex/proto/gen/go/kodex/agents/v1;agentsv1";
 
@@ -86,6 +87,12 @@ service AgentManagerService {
   rpc ListAgentRuns(ListAgentRunsRequest) returns (ListAgentRunsResponse);
   // ListAgentRunSummaries returns safe run summaries for operator read surfaces.
   rpc ListAgentRunSummaries(ListAgentRunSummariesRequest) returns (ListAgentRunSummariesResponse);
+  // CreateSelfDeployPlan records a safe pending plan for self-deploy orchestration.
+  rpc CreateSelfDeployPlan(CreateSelfDeployPlanRequest) returns (SelfDeployPlanResponse);
+  // GetSelfDeployPlan returns one safe self-deploy plan.
+  rpc GetSelfDeployPlan(GetSelfDeployPlanRequest) returns (SelfDeployPlanResponse);
+  // ListSelfDeployPlans returns safe self-deploy plans by project, repository, signal or status.
+  rpc ListSelfDeployPlans(ListSelfDeployPlansRequest) returns (ListSelfDeployPlansResponse);
 }
 
 // CommandMeta is required for every mutating command.
@@ -498,6 +505,29 @@ enum HumanGateOutcome {
   HUMAN_GATE_OUTCOME_ANSWER = 5;
 }
 
+// SelfDeployPlanStatus is the lifecycle status of a self-deploy orchestration plan.
+enum SelfDeployPlanStatus {
+  SELF_DEPLOY_PLAN_STATUS_UNSPECIFIED = 0;
+  SELF_DEPLOY_PLAN_STATUS_PENDING_APPROVAL = 1;
+  SELF_DEPLOY_PLAN_STATUS_APPROVED = 2;
+  SELF_DEPLOY_PLAN_STATUS_REJECTED = 3;
+  SELF_DEPLOY_PLAN_STATUS_CANCELLED = 4;
+  SELF_DEPLOY_PLAN_STATUS_FAILED = 5;
+}
+
+// SelfDeployPathCategory classifies affected paths without storing a raw diff.
+enum SelfDeployPathCategory {
+  SELF_DEPLOY_PATH_CATEGORY_UNSPECIFIED = 0;
+  SELF_DEPLOY_PATH_CATEGORY_SERVICE_SOURCE = 1;
+  SELF_DEPLOY_PATH_CATEGORY_SERVICE_CONFIG = 2;
+  SELF_DEPLOY_PATH_CATEGORY_DEPLOY_MANIFEST = 3;
+  SELF_DEPLOY_PATH_CATEGORY_RUNTIME_CONFIG = 4;
+  SELF_DEPLOY_PATH_CATEGORY_DOCUMENTATION = 5;
+  SELF_DEPLOY_PATH_CATEGORY_TEST = 6;
+  SELF_DEPLOY_PATH_CATEGORY_PLATFORM_POLICY = 7;
+  SELF_DEPLOY_PATH_CATEGORY_OTHER = 8;
+}
+
 // AutomationTriggerKind classifies automation input.
 enum AutomationTriggerKind {
   AUTOMATION_TRIGGER_KIND_UNSPECIFIED = 0;
@@ -778,6 +808,30 @@ message HumanGateRequest {
   string updated_at = 20;
   optional string resolved_at = 21;
   GovernanceContextRef governance_context = 22;
+}
+
+// SelfDeployPlan is a pending safe plan for building or deploying this platform.
+message SelfDeployPlan {
+  string id = 1;
+  ScopeRef scope = 2;
+  string project_ref = 3;
+  string repository_ref = 4;
+  optional string provider_signal_ref = 5;
+  string source_ref = 6;
+  string merge_commit_sha = 7;
+  optional string services_yaml_ref = 8;
+  string services_yaml_digest = 9;
+  repeated string affected_service_keys = 10;
+  repeated SelfDeployPathCategory path_categories = 11;
+  repeated kodex.runtime.v1.JobType expected_runtime_job_types = 12;
+  GovernanceContextRef governance_context = 13;
+  optional string safe_summary = 14;
+  string plan_fingerprint = 15;
+  string idempotency_key = 16;
+  SelfDeployPlanStatus status = 17;
+  int64 version = 18;
+  string created_at = 19;
+  string updated_at = 20;
 }
 
 // FlowDefinitionInput is the typed input for immutable flow version creation.
@@ -1273,6 +1327,38 @@ message ListAgentRunSummariesRequest {
   PageRequest page = 10;
 }
 
+message CreateSelfDeployPlanRequest {
+  CommandMeta meta = 1;
+  ScopeRef scope = 2;
+  string project_ref = 3;
+  string repository_ref = 4;
+  optional string provider_signal_ref = 5;
+  string source_ref = 6;
+  string merge_commit_sha = 7;
+  optional string services_yaml_ref = 8;
+  string services_yaml_digest = 9;
+  repeated string affected_service_keys = 10;
+  repeated SelfDeployPathCategory path_categories = 11;
+  repeated kodex.runtime.v1.JobType expected_runtime_job_types = 12;
+  GovernanceContextRef governance_context = 13;
+  optional string safe_summary = 14;
+}
+
+message GetSelfDeployPlanRequest {
+  QueryMeta meta = 1;
+  string self_deploy_plan_id = 2;
+}
+
+message ListSelfDeployPlansRequest {
+  QueryMeta meta = 1;
+  optional ScopeRef scope = 2;
+  optional string project_ref = 3;
+  optional string repository_ref = 4;
+  optional string provider_signal_ref = 5;
+  optional SelfDeployPlanStatus status = 6;
+  PageRequest page = 7;
+}
+
 message GetAgentRunRuntimeStatusRequest {
   QueryMeta meta = 1;
   string run_id = 2;
@@ -1393,6 +1479,15 @@ message HumanGateRequestResponse {
 
 message ListHumanGateRequestsResponse {
   repeated HumanGateRequest human_gate_requests = 1;
+  PageResponse page = 2;
+}
+
+message SelfDeployPlanResponse {
+  SelfDeployPlan self_deploy_plan = 1;
+}
+
+message ListSelfDeployPlansResponse {
+  repeated SelfDeployPlan self_deploy_plans = 1;
   PageResponse page = 2;
 }
 

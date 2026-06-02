@@ -1057,6 +1057,67 @@ func ListAgentRunSummariesInput(request *agentsv1.ListAgentRunSummariesRequest) 
 	}, nil
 }
 
+func CreateSelfDeployPlanInput(request *agentsv1.CreateSelfDeployPlanRequest) (service.CreateSelfDeployPlanInput, error) {
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return service.CreateSelfDeployPlanInput{}, err
+	}
+	scope, err := ScopeFromProto(request.GetScope())
+	if err != nil {
+		return service.CreateSelfDeployPlanInput{}, err
+	}
+	categories, err := enumInputList(request.GetPathCategories(), SelfDeployPathCategoryFromProto)
+	if err != nil {
+		return service.CreateSelfDeployPlanInput{}, err
+	}
+	jobTypes, err := enumInputList(request.GetExpectedRuntimeJobTypes(), SelfDeployRuntimeJobTypeFromProto)
+	if err != nil {
+		return service.CreateSelfDeployPlanInput{}, err
+	}
+	return service.CreateSelfDeployPlanInput{
+		Meta:                    meta,
+		Scope:                   scope,
+		ProjectRef:              strings.TrimSpace(request.GetProjectRef()),
+		RepositoryRef:           strings.TrimSpace(request.GetRepositoryRef()),
+		ProviderSignalRef:       strings.TrimSpace(request.GetProviderSignalRef()),
+		SourceRef:               strings.TrimSpace(request.GetSourceRef()),
+		MergeCommitSHA:          strings.TrimSpace(request.GetMergeCommitSha()),
+		ServicesYAMLRef:         strings.TrimSpace(request.GetServicesYamlRef()),
+		ServicesYAMLDigest:      strings.TrimSpace(request.GetServicesYamlDigest()),
+		AffectedServiceKeys:     stringList(request.GetAffectedServiceKeys()),
+		PathCategories:          categories,
+		ExpectedRuntimeJobTypes: jobTypes,
+		GovernanceContext:       GovernanceContextFromProto(request.GetGovernanceContext()),
+		SafeSummary:             strings.TrimSpace(request.GetSafeSummary()),
+	}, nil
+}
+
+func GetSelfDeployPlanInput(request *agentsv1.GetSelfDeployPlanRequest) (IDQueryInput, error) {
+	return idQueryInput(request.GetSelfDeployPlanId(), request.GetMeta())
+}
+
+func ListSelfDeployPlansInput(request *agentsv1.ListSelfDeployPlansRequest) (service.SelfDeployPlanList, error) {
+	if _, err := QueryMetaFromProto(request.GetMeta()); err != nil {
+		return service.SelfDeployPlanList{}, err
+	}
+	scope, err := optionalScopeFromProto(request.GetScope())
+	if err != nil {
+		return service.SelfDeployPlanList{}, err
+	}
+	status, err := OptionalSelfDeployPlanStatusFromProto(request.Status)
+	if err != nil {
+		return service.SelfDeployPlanList{}, err
+	}
+	return service.SelfDeployPlanList{
+		Scope:             scope,
+		ProjectRef:        strings.TrimSpace(request.GetProjectRef()),
+		RepositoryRef:     strings.TrimSpace(request.GetRepositoryRef()),
+		ProviderSignalRef: strings.TrimSpace(request.GetProviderSignalRef()),
+		Status:            status,
+		Page:              pageRequestFromProto(request.GetPage()),
+	}, nil
+}
+
 func stageInputs(items []*agentsv1.StageInput) ([]service.StageInput, error) {
 	result := make([]service.StageInput, 0, len(items))
 	for _, item := range items {
@@ -1118,13 +1179,17 @@ func stageRoleBindingInputs(items []*agentsv1.StageRoleBindingInput) ([]service.
 }
 
 func acceptanceCheckKindsFromProtoList(items []agentsv1.AcceptanceCheckKind) ([]enum.AcceptanceCheckKind, error) {
-	result := make([]enum.AcceptanceCheckKind, 0, len(items))
-	for _, item := range items {
-		kind, err := AcceptanceCheckKindFromProto(item)
+	return enumInputList(items, AcceptanceCheckKindFromProto)
+}
+
+func enumInputList[Proto any, Domain any](items []Proto, cast func(Proto) (Domain, error)) ([]Domain, error) {
+	result := make([]Domain, len(items))
+	for index := range items {
+		converted, err := cast(items[index])
 		if err != nil {
 			return nil, err
 		}
-		result = append(result, kind)
+		result[index] = converted
 	}
 	return result, nil
 }

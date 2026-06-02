@@ -201,6 +201,37 @@ const (
 	HumanGateOutcomeAnswer         HumanGateOutcome = "answer"
 )
 
+type SelfDeployPlanStatus string
+
+const (
+	SelfDeployPlanStatusPendingApproval SelfDeployPlanStatus = "pending_approval"
+	SelfDeployPlanStatusApproved        SelfDeployPlanStatus = "approved"
+	SelfDeployPlanStatusRejected        SelfDeployPlanStatus = "rejected"
+	SelfDeployPlanStatusCancelled       SelfDeployPlanStatus = "cancelled"
+	SelfDeployPlanStatusFailed          SelfDeployPlanStatus = "failed"
+)
+
+type SelfDeployPathCategory string
+
+const (
+	SelfDeployPathCategoryServiceSource  SelfDeployPathCategory = "service_source"
+	SelfDeployPathCategoryServiceConfig  SelfDeployPathCategory = "service_config"
+	SelfDeployPathCategoryDeployManifest SelfDeployPathCategory = "deploy_manifest"
+	SelfDeployPathCategoryRuntimeConfig  SelfDeployPathCategory = "runtime_config"
+	SelfDeployPathCategoryDocumentation  SelfDeployPathCategory = "documentation"
+	SelfDeployPathCategoryTest           SelfDeployPathCategory = "test"
+	SelfDeployPathCategoryPlatformPolicy SelfDeployPathCategory = "platform_policy"
+	SelfDeployPathCategoryOther          SelfDeployPathCategory = "other"
+)
+
+type SelfDeployRuntimeJobType string
+
+const (
+	SelfDeployRuntimeJobTypeBuild       SelfDeployRuntimeJobType = "build"
+	SelfDeployRuntimeJobTypeDeploy      SelfDeployRuntimeJobType = "deploy"
+	SelfDeployRuntimeJobTypeHealthCheck SelfDeployRuntimeJobType = "health_check"
+)
+
 type CommandAggregateType string
 
 const (
@@ -216,4 +247,5 @@ const (
 	CommandAggregateTypeFollowUp              CommandAggregateType = "follow_up"
 	CommandAggregateTypeActivity              CommandAggregateType = "activity"
 	CommandAggregateTypeHumanGate             CommandAggregateType = "human_gate"
+	CommandAggregateTypeSelfDeployPlan        CommandAggregateType = "self_deploy_plan"
 )

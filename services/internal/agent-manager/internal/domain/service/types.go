@@ -118,6 +118,7 @@ type FlowList = query.FlowFilter
 type RoleProfileList = query.RoleProfileFilter
 type PromptTemplateList = query.PromptTemplateFilter
 type PromptTemplateVersionList = query.PromptTemplateVersionFilter
+type SelfDeployPlanList = query.SelfDeployPlanFilter
 
 type FlowVersionResult struct {
 	FlowVersion entity.FlowVersion
@@ -168,6 +169,23 @@ type ReportAgentRunStateInput struct {
 	DiagnosticDigest *string
 	StartedAt        *time.Time
 	FinishedAt       *time.Time
+}
+
+type CreateSelfDeployPlanInput struct {
+	Meta                    value.CommandMeta
+	Scope                   value.ScopeRef
+	ProjectRef              string
+	RepositoryRef           string
+	ProviderSignalRef       string
+	SourceRef               string
+	MergeCommitSHA          string
+	ServicesYAMLRef         string
+	ServicesYAMLDigest      string
+	AffectedServiceKeys     []string
+	PathCategories          []enum.SelfDeployPathCategory
+	ExpectedRuntimeJobTypes []enum.SelfDeployRuntimeJobType
+	GovernanceContext       value.GovernanceContextRef
+	SafeSummary             string
 }
 
 const (
