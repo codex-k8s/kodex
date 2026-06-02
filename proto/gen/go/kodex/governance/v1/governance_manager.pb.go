@@ -4745,9 +4745,11 @@ type GovernanceDecisionSummary struct {
 	// updated_at is an RFC3339 timestamp when known.
 	UpdatedAt string `protobuf:"bytes,26,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
 	// observed_at is an owner-domain observation timestamp when known.
-	ObservedAt    *string `protobuf:"bytes,27,opt,name=observed_at,json=observedAt,proto3,oneof" json:"observed_at,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	ObservedAt *string `protobuf:"bytes,27,opt,name=observed_at,json=observedAt,proto3,oneof" json:"observed_at,omitempty"`
+	// required_gate_count is set for risk summaries when policy requires governance gates.
+	RequiredGateCount int32 `protobuf:"varint,28,opt,name=required_gate_count,json=requiredGateCount,proto3" json:"required_gate_count,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *GovernanceDecisionSummary) Reset() {
@@ -4967,6 +4969,13 @@ func (x *GovernanceDecisionSummary) GetObservedAt() string {
 		return *x.ObservedAt
 	}
 	return ""
+}
+
+func (x *GovernanceDecisionSummary) GetRequiredGateCount() int32 {
+	if x != nil {
+		return x.RequiredGateCount
+	}
+	return 0
 }
 
 // GovernanceEvidenceSummary is a safe evidence/read-model item derived from evidence_refs or integration_refs.
@@ -9554,8 +9563,10 @@ type GovernanceSummaryStatus struct {
 	SummaryCode string `protobuf:"bytes,10,opt,name=summary_code,json=summaryCode,proto3" json:"summary_code,omitempty"`
 	// next_action_code is a bounded machine-readable hint for the next owner action.
 	NextActionCode string `protobuf:"bytes,11,opt,name=next_action_code,json=nextActionCode,proto3" json:"next_action_code,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// pending_required_gate_count counts policy gates that still need a gate request.
+	PendingRequiredGateCount int32 `protobuf:"varint,12,opt,name=pending_required_gate_count,json=pendingRequiredGateCount,proto3" json:"pending_required_gate_count,omitempty"`
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
 }
 
 func (x *GovernanceSummaryStatus) Reset() {
@@ -9663,6 +9674,13 @@ func (x *GovernanceSummaryStatus) GetNextActionCode() string {
 		return x.NextActionCode
 	}
 	return ""
+}
+
+func (x *GovernanceSummaryStatus) GetPendingRequiredGateCount() int32 {
+	if x != nil {
+		return x.PendingRequiredGateCount
+	}
+	return 0
 }
 
 var File_kodex_governance_v1_governance_manager_proto protoreflect.FileDescriptor
@@ -10033,7 +10051,7 @@ const file_kodex_governance_v1_governance_manager_proto_rawDesc = "" +
 	"\x0fintegration_ref\x18\x05 \x01(\v2*.kodex.governance.v1.ReleaseIntegrationRefH\x02R\x0eintegrationRef\x88\x01\x01B\x18\n" +
 	"\x16_release_candidate_refB\x1e\n" +
 	"\x1c_release_decision_package_idB\x12\n" +
-	"\x10_integration_ref\"\xe9\x0e\n" +
+	"\x10_integration_ref\"\x99\x0f\n" +
 	"\x19GovernanceDecisionSummary\x12F\n" +
 	"\x04kind\x18\x01 \x01(\x0e22.kodex.governance.v1.GovernanceDecisionSummaryKindR\x04kind\x12N\n" +
 	"\tattention\x18\x02 \x01(\x0e20.kodex.governance.v1.GovernanceDecisionAttentionR\tattention\x12\x0e\n" +
@@ -10066,7 +10084,8 @@ const file_kodex_governance_v1_governance_manager_proto_rawDesc = "" +
 	"\n" +
 	"updated_at\x18\x1a \x01(\tR\tupdatedAt\x12$\n" +
 	"\vobserved_at\x18\x1b \x01(\tH\x03R\n" +
-	"observedAt\x88\x01\x01B\f\n" +
+	"observedAt\x88\x01\x01\x12.\n" +
+	"\x13required_gate_count\x18\x1c \x01(\x05R\x11requiredGateCountB\f\n" +
 	"\n" +
 	"_parent_idB\x18\n" +
 	"\x16_release_candidate_refB\x1e\n" +
@@ -10481,7 +10500,7 @@ const file_kodex_governance_v1_governance_manager_proto_rawDesc = "" +
 	"\f_observed_atB\n" +
 	"\n" +
 	"\b_versionB\r\n" +
-	"\v_error_code\"\xe3\x04\n" +
+	"\v_error_code\"\xa2\x05\n" +
 	"\x17GovernanceSummaryStatus\x12N\n" +
 	"\tattention\x18\x01 \x01(\x0e20.kodex.governance.v1.GovernanceDecisionAttentionR\tattention\x12D\n" +
 	"\x0emax_risk_class\x18\x02 \x01(\x0e2\x1e.kodex.governance.v1.RiskClassR\fmaxRiskClass\x124\n" +
@@ -10494,7 +10513,8 @@ const file_kodex_governance_v1_governance_manager_proto_rawDesc = "" +
 	"\x10diagnostic_count\x18\t \x01(\x05R\x0fdiagnosticCount\x12!\n" +
 	"\fsummary_code\x18\n" +
 	" \x01(\tR\vsummaryCode\x12(\n" +
-	"\x10next_action_code\x18\v \x01(\tR\x0enextActionCode*\x92\x04\n" +
+	"\x10next_action_code\x18\v \x01(\tR\x0enextActionCode\x12=\n" +
+	"\x1bpending_required_gate_count\x18\f \x01(\x05R\x18pendingRequiredGateCount*\x92\x04\n" +
 	"\x13GovernanceScopeType\x12%\n" +
 	"!GOVERNANCE_SCOPE_TYPE_UNSPECIFIED\x10\x00\x12\"\n" +
 	"\x1eGOVERNANCE_SCOPE_TYPE_PLATFORM\x10\x01\x12&\n" +

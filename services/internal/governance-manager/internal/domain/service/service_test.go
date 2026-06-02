@@ -184,6 +184,100 @@ func TestEvaluateRiskClassifiesSafeFactorsAndPolicyRules(t *testing.T) {
 	}
 }
 
+func TestEvaluateRiskClassifiesSelfDeployGatePolicy(t *testing.T) {
+	t.Parallel()
+
+	commandID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
+	profileID := uuid.MustParse("bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb")
+	gatePolicyID := uuid.MustParse("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
+	activeVersion := int64(1)
+	repository := &fakeRepository{
+		ready: true,
+		profile: entity.RiskProfile{
+			VersionedBase: entity.VersionedBase{ID: profileID, Version: 2},
+			Status:        enum.RiskProfileStatusActive,
+			ActiveVersion: &activeVersion,
+		},
+		profileVersion: entity.RiskProfileVersion{
+			RiskProfileID:  profileID,
+			ProfileVersion: activeVersion,
+			Status:         enum.RiskProfileVersionStatusActive,
+			GatePolicies: []entity.GatePolicy{{
+				ID:           gatePolicyID,
+				GateKind:     enum.GateKindRelease,
+				MinRiskClass: enum.RiskClassR2,
+				Status:       enum.RuleStatusActive,
+			}},
+		},
+	}
+
+	assessment, err := newTestService(repository).EvaluateRisk(context.Background(), EvaluateRiskInput{
+		Target: value.ExternalRef{Type: "merge", Ref: "provider:merge:codex-main"},
+		ProjectContext: value.ProjectContextRef{
+			ProjectRef:     "project:kodex",
+			RepositoryRef:  "repo:codex-k8s/kodex",
+			ReleaseLineRef: "self-deploy",
+		},
+		EvaluationSummary: value.RiskEvaluationSummary{
+			ChangedFilesSummaryRef: "provider-summary:self-deploy-plan",
+			Summary:                "bounded self-deploy plan summary",
+			Factors: []value.RiskEvaluationFactor{{
+				SourceType: string(enum.RiskFactorSourceTypeChangedFile),
+				Ref:        "path-category:services-yaml",
+				Summary:    "project declaration changed",
+				Tags:       []string{"services_yaml", "self_deploy"},
+			}, {
+				SourceType: string(enum.RiskFactorSourceTypeRuntime),
+				Ref:        "path-category:deploy-manifest",
+				Summary:    "deploy manifest changed",
+				Tags:       []string{"deploy_manifest", "runtime_executor"},
+			}},
+		},
+		RiskProfileRef: profileID.String(),
+		Meta:           CommandMeta{CommandID: &commandID, Actor: value.Actor{Type: "service", ID: "provider-hub"}},
+	})
+	if err != nil {
+		t.Fatalf("EvaluateRisk(): %v", err)
+	}
+	if assessment.EffectiveRiskClass != enum.RiskClassR2 {
+		t.Fatalf("effective risk = %s, want R2", assessment.EffectiveRiskClass)
+	}
+	if len(assessment.RequiredGates) != 1 || assessment.RequiredGates[0].GateKind != enum.GateKindRelease {
+		t.Fatalf("required gates = %+v, want release gate", assessment.RequiredGates)
+	}
+}
+
+func TestSelfDeployRiskTagsClassifyBaseline(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		tags []string
+		want enum.RiskClass
+	}{
+		{name: "low risk docs", tags: []string{"documentation", "tests"}, want: enum.RiskClassR1},
+		{name: "owner gate services yaml", tags: []string{"services_yaml"}, want: enum.RiskClassR2},
+		{name: "owner gate deploy manifest", tags: []string{"deploy_manifest", "rbac"}, want: enum.RiskClassR2},
+		{name: "owner gate runtime runner", tags: []string{"runtime_executor", "agent_runner"}, want: enum.RiskClassR2},
+		{name: "blocking secret value", tags: []string{"secret_value"}, want: enum.RiskClassR3},
+		{name: "blocking kubeconfig", tags: []string{"kubeconfig"}, want: enum.RiskClassR3},
+		{name: "blocking auth bypass", tags: []string{"auth_bypass"}, want: enum.RiskClassR3},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := defaultRiskForInputFactor(value.RiskEvaluationFactor{
+				SourceType: string(enum.RiskFactorSourceTypeChangedFile),
+				Ref:        "path-category:self-deploy",
+				Summary:    "bounded factor summary",
+				Tags:       tt.tags,
+			})
+			if got != tt.want {
+				t.Fatalf("risk = %s, want %s", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestEvaluateRiskRejectsUnsafeSummary(t *testing.T) {
 	t.Parallel()
 
@@ -3235,6 +3329,7 @@ func TestGetGovernanceSummaryByReleasePackageReturnsSafeOwnerReadModel(t *testin
 		summary.Status.PendingDecisionCount != int32(len(summary.PendingDecisions)) ||
 		summary.Status.BlockedDecisionCount != 1 ||
 		summary.Status.CompletedDecisionCount != int32(len(summary.CompletedDecisions)) ||
+		summary.Status.PendingRequiredGateCount != 1 ||
 		summary.Status.EvidenceCount != int32(len(summary.EvidenceSummaries)) ||
 		summary.Status.SummaryCode != governanceSummaryCodeBlocked ||
 		summary.Status.NextActionCode != governanceSummaryNextActionReviewBlockingDecision {
@@ -3277,6 +3372,45 @@ func TestGetGovernanceSummaryMissingLinkedRiskIsPartial(t *testing.T) {
 	}
 	if !summaryHasDecision(summary.PendingDecisions, enum.GovernanceDecisionSummaryKindReleaseDecisionPackage, packageID.String(), enum.GovernanceDecisionAttentionPending) {
 		t.Fatalf("pending decisions = %+v, want partial package summary", summary.PendingDecisions)
+	}
+}
+
+func TestGetGovernanceSummaryPendingRiskRequiredGateRequestsGate(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	assessmentID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+	repository := &fakeRepository{
+		ready: true,
+		riskAssessments: []entity.RiskAssessment{{
+			VersionedBase:      entity.VersionedBase{ID: assessmentID, Version: 1, CreatedAt: now.Add(-20 * time.Minute), UpdatedAt: now.Add(-20 * time.Minute)},
+			Target:             value.ExternalRef{Type: "merge", Ref: "provider:merge:codex-main"},
+			ProjectContext:     value.ProjectContextRef{ProjectRef: "project:kodex", RepositoryRef: "repo:codex-k8s/kodex", ReleaseLineRef: "self-deploy"},
+			EffectiveRiskClass: enum.RiskClassR2,
+			Status:             enum.RiskAssessmentStatusActive,
+			Explanation:        "self-deploy plan requires owner gate",
+			RequiredGates:      []entity.RequiredGate{{GateKind: enum.GateKindRelease, MinRiskClass: enum.RiskClassR2, Reason: "self-deploy owner approval required"}},
+		}},
+	}
+
+	summary, err := newTestService(repository).GetGovernanceSummary(context.Background(), GetGovernanceSummaryInput{
+		Scope: entity.GovernanceSummaryScope{Target: value.ExternalRef{Type: "merge", Ref: "provider:merge:codex-main"}},
+		Meta:  QueryMeta{Actor: value.Actor{Type: "service", ID: "platform-mcp-server"}},
+	})
+	if err != nil {
+		t.Fatalf("GetGovernanceSummary(): %v", err)
+	}
+	if !summaryHasDecision(summary.PendingDecisions, enum.GovernanceDecisionSummaryKindRiskAssessment, assessmentID.String(), enum.GovernanceDecisionAttentionPending) {
+		t.Fatalf("pending decisions = %+v, want self-deploy risk assessment", summary.PendingDecisions)
+	}
+	if len(summary.PendingDecisions) != 1 || summary.PendingDecisions[0].RequiredGateCount != 1 {
+		t.Fatalf("pending decisions = %+v, want one required gate", summary.PendingDecisions)
+	}
+	if summary.Status.Attention != enum.GovernanceDecisionAttentionPending ||
+		summary.Status.PendingRequiredGateCount != 1 ||
+		summary.Status.PendingGateCount != 0 ||
+		summary.Status.NextActionCode != governanceSummaryNextActionRequestGate {
+		t.Fatalf("status = %+v, want request governance gate", summary.Status)
 	}
 }
 

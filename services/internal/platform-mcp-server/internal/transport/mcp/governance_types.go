@@ -725,6 +725,7 @@ type GovernanceSummaryStatus struct {
 	BlockedDecisionCount      int32  `json:"blocked_decision_count" jsonschema:"count of decisions currently blocking release or execution"`
 	CompletedDecisionCount    int32  `json:"completed_decision_count" jsonschema:"count of terminal or informational decisions"`
 	PendingGateCount          int32  `json:"pending_gate_count" jsonschema:"count of open governance gates"`
+	PendingRequiredGateCount  int32  `json:"pending_required_gate_count" jsonschema:"count of policy gates that still need a gate request"`
 	ActiveBlockingSignalCount int32  `json:"active_blocking_signal_count" jsonschema:"count of active blocking signals"`
 	EvidenceCount             int32  `json:"evidence_count" jsonschema:"count of bounded evidence summaries"`
 	DiagnosticCount           int32  `json:"diagnostic_count" jsonschema:"count of safe partial response diagnostics"`
@@ -760,6 +761,7 @@ type GovernanceDecisionSummary struct {
 	ReleaseDecisionOutcome   string                                   `json:"release_decision_outcome,omitempty" jsonschema:"release decision outcome"`
 	BlockingSignalStatus     string                                   `json:"blocking_signal_status,omitempty" jsonschema:"blocking signal status"`
 	Severity                 string                                   `json:"severity,omitempty" jsonschema:"signal severity"`
+	RequiredGateCount        int32                                    `json:"required_gate_count,omitempty" jsonschema:"required governance gates for risk summaries"`
 	SafeSummary              string                                   `json:"safe_summary,omitempty" jsonschema:"bounded safe summary"`
 	EvidenceRefs             []GovernanceEvidenceSummary              `json:"evidence_refs,omitempty" jsonschema:"bounded evidence refs"`
 	IntegrationRefs          []GovernanceReleaseIntegrationRefSummary `json:"integration_refs,omitempty" jsonschema:"owner-domain refs"`
