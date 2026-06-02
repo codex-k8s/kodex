@@ -62,6 +62,38 @@ func TestRepositoryLoadsEverySQLFile(t *testing.T) {
 	}
 }
 
+func TestJobClaimQueryRequiresStrictBuildDeploySpecShape(t *testing.T) {
+	t.Parallel()
+
+	disallowed := []string{
+		"job_input_json ? 'build_execution_spec'",
+		"job_input_json ? 'deploy_execution_spec'",
+	}
+	for _, fragment := range disallowed {
+		if strings.Contains(queryJobClaim, fragment) {
+			t.Fatalf("job claim query still uses weak presence guard %q", fragment)
+		}
+	}
+
+	required := []string{
+		"jsonb_typeof(build_spec) = 'object'",
+		"jsonb_typeof(deploy_spec) = 'object'",
+		"build_spec->>'source_ref' <> ''",
+		"(build_spec->>'source_commit_sha') ~* '^([0-9a-f]{40}|[0-9a-f]{64})$'",
+		"(build_spec->>'build_context_digest') ~* '^sha256:[0-9a-f]{64}$'",
+		"(build_spec->>'build_plan_fingerprint') ~* '^sha256:[0-9a-f]{64}$'",
+		"deploy_spec->>'source_ref' <> ''",
+		"(deploy_spec->>'image_digest') ~* '^sha256:[0-9a-f]{64}$'",
+		"(deploy_spec->>'manifest_digest') ~* '^sha256:[0-9a-f]{64}$'",
+		"(deploy_spec->>'deploy_plan_fingerprint') ~* '^sha256:[0-9a-f]{64}$'",
+	}
+	for _, fragment := range required {
+		if !strings.Contains(queryJobClaim, fragment) {
+			t.Fatalf("job claim query is missing strict spec guard %q", fragment)
+		}
+	}
+}
+
 func TestWrapErrorMapsPostgresErrors(t *testing.T) {
 	t.Parallel()
 

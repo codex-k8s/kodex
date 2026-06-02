@@ -80,6 +80,16 @@ func (s *Service) CreateJob(ctx context.Context, input CreateJobInput) (entity.J
 		job.LastErrorMessage = agentRunExecutionSpecRequiredMessage
 		job.NextAction = agentRunExecutionSpecRequiredAction
 	}
+	if job.JobType == enum.JobTypeBuild && !buildJobInputHasExecutionSpec(job.JobInputJSON) {
+		job.LastErrorCode = buildExecutionSpecRequiredCode
+		job.LastErrorMessage = buildExecutionSpecRequiredMessage
+		job.NextAction = buildExecutionSpecRequiredAction
+	}
+	if job.JobType == enum.JobTypeDeploy && !deployJobInputHasExecutionSpec(job.JobInputJSON) {
+		job.LastErrorCode = deployExecutionSpecRequiredCode
+		job.LastErrorMessage = deployExecutionSpecRequiredMessage
+		job.NextAction = deployExecutionSpecRequiredAction
+	}
 	resultPayload, err := createJobCommandPayload(resolved.PlacementFingerprint)
 	if err != nil {
 		return entity.Job{}, err
@@ -400,6 +410,10 @@ func (s *Service) resolveJobCreateInput(ctx context.Context, input CreateJobInpu
 	if err != nil {
 		return resolvedCreateJobInput{}, err
 	}
+	input, jobInputJSON, err = resolveBuildDeployJobInput(input, jobInputJSON)
+	if err != nil {
+		return resolvedCreateJobInput{}, err
+	}
 	if err := validateJobTypeSpecificInput(input, jobInputJSON); err != nil {
 		return resolvedCreateJobInput{}, err
 	}
@@ -452,6 +466,14 @@ func validateJobTypeSpecificInput(input CreateJobInput, jobInputJSON []byte) err
 			return errs.ErrInvalidArgument
 		}
 		if input.AgentRunExecutionSpec == nil && !bytes.Equal(jobInputJSON, []byte(`{}`)) {
+			return errs.ErrInvalidArgument
+		}
+	case enum.JobTypeBuild:
+		if input.BuildExecutionSpec == nil && !bytes.Equal(jobInputJSON, []byte(`{}`)) {
+			return errs.ErrInvalidArgument
+		}
+	case enum.JobTypeDeploy:
+		if input.DeployExecutionSpec == nil && !bytes.Equal(jobInputJSON, []byte(`{}`)) {
 			return errs.ErrInvalidArgument
 		}
 	}

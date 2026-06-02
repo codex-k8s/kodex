@@ -22,12 +22,13 @@ func TestJobLifecycleCreatesClaimsProgressesAndFails(t *testing.T) {
 	resolver := defaultPlacementResolver()
 	svc, repo := newTestServiceWithPlacementResolver(resolver)
 	projectID := mustUUID("00000000-0000-0000-0000-000000000501")
+	buildSpec := testBuildExecutionSpec("access-manager")
 	job, err := svc.CreateJob(context.Background(), CreateJobInput{
-		JobType:      enum.JobTypeBuild,
-		Priority:     enum.JobPriorityHigh,
-		ProjectID:    &projectID,
-		JobInputJSON: []byte(`{"target":"api"}`),
-		Meta:         commandMeta(mustUUID("00000000-0000-0000-0000-000000000502"), 0),
+		JobType:            enum.JobTypeBuild,
+		Priority:           enum.JobPriorityHigh,
+		ProjectID:          &projectID,
+		BuildExecutionSpec: &buildSpec,
+		Meta:               commandMeta(mustUUID("00000000-0000-0000-0000-000000000502"), 0),
 	})
 	if err != nil {
 		t.Fatalf("CreateJob(): %v", err)
@@ -121,11 +122,12 @@ func TestJobLeaseTokenRequiredForWorkerMutations(t *testing.T) {
 	t.Parallel()
 
 	svc, _ := newTestService()
+	deploySpec := testDeployExecutionSpec("access-manager")
 	job, err := svc.CreateJob(context.Background(), CreateJobInput{
-		JobType:      enum.JobTypeDeploy,
-		Priority:     enum.JobPriorityNormal,
-		JobInputJSON: []byte(`{"target":"stage"}`),
-		Meta:         commandMeta(mustUUID("00000000-0000-0000-0000-000000000506"), 0),
+		JobType:             enum.JobTypeDeploy,
+		Priority:            enum.JobPriorityNormal,
+		DeployExecutionSpec: &deploySpec,
+		Meta:                commandMeta(mustUUID("00000000-0000-0000-0000-000000000506"), 0),
 	})
 	if err != nil {
 		t.Fatalf("CreateJob(): %v", err)
@@ -155,11 +157,13 @@ func TestClaimRunnableJobReplayDoesNotClaimAnotherJob(t *testing.T) {
 
 	svc, repo := newTestService()
 	for index, idText := range []string{"00000000-0000-0000-0000-000000000520", "00000000-0000-0000-0000-000000000521"} {
+		buildSpec := testBuildExecutionSpec("access-manager")
+		buildSpec.ImageTag = "0.1." + string(rune('0'+index))
 		_, err := svc.CreateJob(context.Background(), CreateJobInput{
-			JobType:      enum.JobTypeBuild,
-			Priority:     enum.JobPriorityNormal,
-			JobInputJSON: []byte(`{"target":"api"}`),
-			Meta:         commandMeta(mustUUID(idText), 0),
+			JobType:            enum.JobTypeBuild,
+			Priority:           enum.JobPriorityNormal,
+			BuildExecutionSpec: &buildSpec,
+			Meta:               commandMeta(mustUUID(idText), 0),
 		})
 		if err != nil {
 			t.Fatalf("CreateJob(%d): %v", index, err)
@@ -240,6 +244,177 @@ func TestAgentRunJobTypeWithoutExecutionSpecStaysWaiting(t *testing.T) {
 	})
 	if !errors.Is(err, errs.ErrNotFound) {
 		t.Fatalf("ClaimRunnableJob(agent_run without spec) err = %v, want not found", err)
+	}
+}
+
+func TestBuildDeployJobsWithoutExecutionSpecStayWaiting(t *testing.T) {
+	t.Parallel()
+
+	svc, _ := newTestService()
+	tests := []struct {
+		name       string
+		jobType    enum.JobType
+		errorCode  string
+		nextAction string
+		commandID  uuid.UUID
+	}{
+		{
+			name:       "build",
+			jobType:    enum.JobTypeBuild,
+			errorCode:  buildExecutionSpecRequiredCode,
+			nextAction: buildExecutionSpecRequiredAction,
+			commandID:  mustUUID("00000000-0000-0000-0000-000000000550"),
+		},
+		{
+			name:       "deploy",
+			jobType:    enum.JobTypeDeploy,
+			errorCode:  deployExecutionSpecRequiredCode,
+			nextAction: deployExecutionSpecRequiredAction,
+			commandID:  mustUUID("00000000-0000-0000-0000-000000000551"),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			job, err := svc.CreateJob(context.Background(), CreateJobInput{
+				JobType:  tt.jobType,
+				Priority: enum.JobPriorityHigh,
+				Meta:     commandMeta(tt.commandID, 0),
+			})
+			if err != nil {
+				t.Fatalf("CreateJob(%s): %v", tt.jobType, err)
+			}
+			if job.LastErrorCode != tt.errorCode || job.NextAction != tt.nextAction {
+				t.Fatalf("job diagnostic = %q/%q, want %q/%q", job.LastErrorCode, job.NextAction, tt.errorCode, tt.nextAction)
+			}
+		})
+	}
+
+	_, err := svc.ClaimRunnableJob(context.Background(), ClaimRunnableJobInput{
+		JobTypes:   []enum.JobType{enum.JobTypeBuild, enum.JobTypeDeploy},
+		LeaseOwner: "worker/build-deploy",
+		LeaseUntil: testNow.Add(10 * time.Minute),
+		Meta:       commandMeta(mustUUID("00000000-0000-0000-0000-000000000552"), 0),
+	})
+	if !errors.Is(err, errs.ErrNotFound) {
+		t.Fatalf("ClaimRunnableJob(build/deploy without spec) err = %v, want not found", err)
+	}
+}
+
+func TestBuildDeployJobsRequireSafeTypedInput(t *testing.T) {
+	t.Parallel()
+
+	svc, _ := newTestService()
+	buildSpec := testBuildExecutionSpec("access-manager")
+	deploySpec := testDeployExecutionSpec("access-manager")
+	tests := []struct {
+		name       string
+		jobType    enum.JobType
+		payload    []byte
+		buildSpec  *BuildExecutionSpecInput
+		deploySpec *DeployExecutionSpecInput
+		commandID  uuid.UUID
+	}{
+		{
+			name:      "build raw payload",
+			jobType:   enum.JobTypeBuild,
+			payload:   []byte(`{"target":"api"}`),
+			commandID: mustUUID("00000000-0000-0000-0000-000000000553"),
+		},
+		{
+			name:      "deploy raw payload",
+			jobType:   enum.JobTypeDeploy,
+			payload:   []byte(`{"target":"prod"}`),
+			commandID: mustUUID("00000000-0000-0000-0000-000000000554"),
+		},
+		{
+			name:      "build spec with raw payload",
+			jobType:   enum.JobTypeBuild,
+			payload:   []byte(`{"target":"api"}`),
+			buildSpec: &buildSpec,
+			commandID: mustUUID("00000000-0000-0000-0000-000000000555"),
+		},
+		{
+			name:    "build unsafe secret ref",
+			jobType: enum.JobTypeBuild,
+			buildSpec: func() *BuildExecutionSpecInput {
+				copy := buildSpec
+				copy.AllowedSecretRefs = []RuntimeJobExecutionRefInput{{Kind: "registry", Ref: "secret://runtime/secret-value"}}
+				return &copy
+			}(),
+			commandID: mustUUID("00000000-0000-0000-0000-000000000556"),
+		},
+		{
+			name:    "deploy invalid manifest digest",
+			jobType: enum.JobTypeDeploy,
+			deploySpec: func() *DeployExecutionSpecInput {
+				copy := deploySpec
+				copy.ManifestDigest = "sha256:not-hex"
+				return &copy
+			}(),
+			commandID: mustUUID("00000000-0000-0000-0000-000000000557"),
+		},
+		{
+			name:       "deploy spec on build job",
+			jobType:    enum.JobTypeBuild,
+			deploySpec: &deploySpec,
+			commandID:  mustUUID("00000000-0000-0000-0000-000000000558"),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := svc.CreateJob(context.Background(), CreateJobInput{
+				JobType:             tt.jobType,
+				Priority:            enum.JobPriorityHigh,
+				JobInputJSON:        tt.payload,
+				BuildExecutionSpec:  tt.buildSpec,
+				DeployExecutionSpec: tt.deploySpec,
+				Meta:                commandMeta(tt.commandID, 0),
+			})
+			if !errors.Is(err, errs.ErrInvalidArgument) {
+				t.Fatalf("CreateJob(%s unsafe input) err = %v, want invalid argument", tt.jobType, err)
+			}
+		})
+	}
+}
+
+func TestBuildDeployExecutionSpecsArePersistedAsTypedJobInput(t *testing.T) {
+	t.Parallel()
+
+	svc, _ := newTestService()
+	buildSpec := testBuildExecutionSpec("runtime-manager")
+	buildJob, err := svc.CreateJob(context.Background(), CreateJobInput{
+		JobType:            enum.JobTypeBuild,
+		Priority:           enum.JobPriorityHigh,
+		BuildExecutionSpec: &buildSpec,
+		Meta:               commandMeta(mustUUID("00000000-0000-0000-0000-000000000559"), 0),
+	})
+	if err != nil {
+		t.Fatalf("CreateJob(build spec): %v", err)
+	}
+	extractedBuildSpec, ok := BuildExecutionSpecFromJobInput(buildJob.JobInputJSON)
+	if !ok || extractedBuildSpec.ServiceKey != buildSpec.ServiceKey || extractedBuildSpec.BuildContextDigest != buildSpec.BuildContextDigest {
+		t.Fatalf("BuildExecutionSpecFromJobInput() = %+v, %v", extractedBuildSpec, ok)
+	}
+	if buildJob.LastErrorCode != "" || buildJob.NextAction != "" {
+		t.Fatalf("build job diagnostic = %q/%q, want executable typed spec", buildJob.LastErrorCode, buildJob.NextAction)
+	}
+
+	deploySpec := testDeployExecutionSpec("runtime-manager")
+	deployJob, err := svc.CreateJob(context.Background(), CreateJobInput{
+		JobType:             enum.JobTypeDeploy,
+		Priority:            enum.JobPriorityHigh,
+		DeployExecutionSpec: &deploySpec,
+		Meta:                commandMeta(mustUUID("00000000-0000-0000-0000-000000000560"), 0),
+	})
+	if err != nil {
+		t.Fatalf("CreateJob(deploy spec): %v", err)
+	}
+	extractedDeploySpec, ok := DeployExecutionSpecFromJobInput(deployJob.JobInputJSON)
+	if !ok || extractedDeploySpec.ServiceKey != deploySpec.ServiceKey || extractedDeploySpec.DeployPlanFingerprint != deploySpec.DeployPlanFingerprint {
+		t.Fatalf("DeployExecutionSpecFromJobInput() = %+v, %v", extractedDeploySpec, ok)
+	}
+	if deployJob.LastErrorCode != "" || deployJob.NextAction != "" {
+		t.Fatalf("deploy job diagnostic = %q/%q, want executable typed spec", deployJob.LastErrorCode, deployJob.NextAction)
 	}
 }
 
@@ -598,12 +773,13 @@ func TestCreateJobWithSlotReusesSlotPlacementWithoutResolver(t *testing.T) {
 		t.Fatalf("ReserveSlot(): %v", err)
 	}
 	resolver.err = errs.ErrPlacementRejected
+	buildSpec := testBuildExecutionSpec("access-manager")
 	job, err := svc.CreateJob(context.Background(), CreateJobInput{
-		JobType:      enum.JobTypeBuild,
-		Priority:     enum.JobPriorityNormal,
-		SlotID:       &slot.ID,
-		JobInputJSON: []byte(`{"target":"api"}`),
-		Meta:         commandMeta(mustUUID("00000000-0000-0000-0000-000000000541"), 0),
+		JobType:            enum.JobTypeBuild,
+		Priority:           enum.JobPriorityNormal,
+		SlotID:             &slot.ID,
+		BuildExecutionSpec: &buildSpec,
+		Meta:               commandMeta(mustUUID("00000000-0000-0000-0000-000000000541"), 0),
 	})
 	if err != nil {
 		t.Fatalf("CreateJob(): %v", err)
@@ -621,11 +797,12 @@ func TestCreateJobAuthorizesBeforePlacement(t *testing.T) {
 
 	resolver := defaultPlacementResolver()
 	svc, _ := newTestServiceWithAuthorizerAndPlacementResolver(denyAuthorizer{}, resolver)
+	buildSpec := testBuildExecutionSpec("access-manager")
 	_, err := svc.CreateJob(context.Background(), CreateJobInput{
-		JobType:      enum.JobTypeBuild,
-		Priority:     enum.JobPriorityNormal,
-		JobInputJSON: []byte(`{"target":"api"}`),
-		Meta:         commandMeta(mustUUID("00000000-0000-0000-0000-000000000542"), 0),
+		JobType:            enum.JobTypeBuild,
+		Priority:           enum.JobPriorityNormal,
+		BuildExecutionSpec: &buildSpec,
+		Meta:               commandMeta(mustUUID("00000000-0000-0000-0000-000000000542"), 0),
 	})
 	if !errors.Is(err, errs.ErrForbidden) {
 		t.Fatalf("CreateJob() err = %v, want forbidden", err)
@@ -642,12 +819,13 @@ func TestCreateJobReplayRejectsChangedPlacementInput(t *testing.T) {
 	svc, _ := newTestServiceWithPlacementResolver(resolver)
 	projectID := mustUUID("00000000-0000-0000-0000-000000000543")
 	meta := commandMeta(mustUUID("00000000-0000-0000-0000-000000000544"), 0)
+	buildSpec := testBuildExecutionSpec("access-manager")
 
 	_, err := svc.CreateJob(context.Background(), CreateJobInput{
-		JobType:      enum.JobTypeBuild,
-		Priority:     enum.JobPriorityNormal,
-		ProjectID:    &projectID,
-		JobInputJSON: []byte(`{"target":"api"}`),
+		JobType:            enum.JobTypeBuild,
+		Priority:           enum.JobPriorityNormal,
+		ProjectID:          &projectID,
+		BuildExecutionSpec: &buildSpec,
 		PlacementConstraints: PlacementConstraintsInput{
 			RequiredCapabilities: []string{"standard"},
 			MetadataJSON:         []byte(`{"regions":["eu-1"]}`),
@@ -658,10 +836,10 @@ func TestCreateJobReplayRejectsChangedPlacementInput(t *testing.T) {
 		t.Fatalf("first CreateJob(): %v", err)
 	}
 	_, err = svc.CreateJob(context.Background(), CreateJobInput{
-		JobType:      enum.JobTypeBuild,
-		Priority:     enum.JobPriorityNormal,
-		ProjectID:    &projectID,
-		JobInputJSON: []byte(`{"target":"api"}`),
+		JobType:            enum.JobTypeBuild,
+		Priority:           enum.JobPriorityNormal,
+		ProjectID:          &projectID,
+		BuildExecutionSpec: &buildSpec,
 		PlacementConstraints: PlacementConstraintsInput{
 			RequiredCapabilities: []string{"gpu"},
 			MetadataJSON:         []byte(`{"regions":["eu-1"]}`),
@@ -714,11 +892,12 @@ func TestShortLogTailKeepsValidUTF8(t *testing.T) {
 	t.Parallel()
 
 	svc, _ := newTestService()
+	buildSpec := testBuildExecutionSpec("access-manager")
 	job, err := svc.CreateJob(context.Background(), CreateJobInput{
-		JobType:      enum.JobTypeBuild,
-		Priority:     enum.JobPriorityNormal,
-		JobInputJSON: []byte(`{"target":"api"}`),
-		Meta:         commandMeta(mustUUID("00000000-0000-0000-0000-000000000524"), 0),
+		JobType:            enum.JobTypeBuild,
+		Priority:           enum.JobPriorityNormal,
+		BuildExecutionSpec: &buildSpec,
+		Meta:               commandMeta(mustUUID("00000000-0000-0000-0000-000000000524"), 0),
 	})
 	if err != nil {
 		t.Fatalf("CreateJob(): %v", err)
@@ -818,6 +997,53 @@ func TestRecordRuntimeArtifactRefIsIdempotent(t *testing.T) {
 	})
 	if !errors.Is(err, errs.ErrConflict) {
 		t.Fatalf("conflicting replay err = %v, want conflict", err)
+	}
+}
+
+func testBuildExecutionSpec(serviceKey string) BuildExecutionSpecInput {
+	return BuildExecutionSpecInput{
+		SourceRef:            "git://github.com/codex-k8s/kodex",
+		SourceCommitSHA:      "0123456789abcdef0123456789abcdef01234567",
+		ServiceKey:           serviceKey,
+		ImageRef:             "registry.local/kodex/" + serviceKey,
+		ImageTag:             "0.1.0",
+		BuildContextRef:      "stack://services/" + serviceKey + "/context",
+		BuildContextDigest:   "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		DockerfileRef:        "stack://services/" + serviceKey + "/Dockerfile",
+		DockerfileDigest:     "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+		DockerfileTarget:     "prod",
+		BuilderImageRef:      "image://kaniko-executor:1.24.0",
+		BuildPlanFingerprint: "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+		AllowedSecretRefs: []RuntimeJobExecutionRefInput{
+			{Kind: "registry", Ref: "secret://runtime/registry-push"},
+		},
+		OutputRefs: []RuntimeJobExecutionRefInput{
+			{Kind: "image_ref", Ref: "runtime://artifacts/images/" + serviceKey},
+		},
+	}
+}
+
+func testDeployExecutionSpec(serviceKey string) DeployExecutionSpecInput {
+	return DeployExecutionSpecInput{
+		SourceRef:             "git://github.com/codex-k8s/kodex",
+		SourceCommitSHA:       "0123456789abcdef0123456789abcdef01234567",
+		ServiceKey:            serviceKey,
+		ImageRef:              "registry.local/kodex/" + serviceKey,
+		ImageTag:              "0.1.0",
+		ImageDigest:           "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+		ManifestRef:           "manifest://deploy/base/" + serviceKey,
+		ManifestDigest:        "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+		KustomizationRef:      "kustomize://deploy/base/" + serviceKey,
+		KustomizationDigest:   "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+		TargetNamespace:       "kodex",
+		TargetClusterRef:      "fleet://clusters/00000000-0000-0000-0000-000000000777",
+		DeployPlanFingerprint: "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+		AllowedSecretRefs: []RuntimeJobExecutionRefInput{
+			{Kind: "kubernetes", Ref: "secret://fleet/platform-default"},
+		},
+		OutputRefs: []RuntimeJobExecutionRefInput{
+			{Kind: "rollout", Ref: "runtime://artifacts/deploy/" + serviceKey},
+		},
 	}
 }
 
