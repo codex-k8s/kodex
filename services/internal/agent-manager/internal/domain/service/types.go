@@ -151,6 +151,9 @@ const (
 	RunnerRunStateRunning   RunnerRunState = "running"
 	RunnerRunStateCompleted RunnerRunState = "completed"
 	RunnerRunStateFailed    RunnerRunState = "failed"
+	RunnerRunStateStarted   RunnerRunState = "started"
+	RunnerRunStateCancelled RunnerRunState = "cancelled"
+	RunnerRunStateTimedOut  RunnerRunState = "timed_out"
 )
 
 type ReportAgentRunStateInput struct {

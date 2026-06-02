@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-25
 updated_at: 2026-06-02
-related_issues: [782, 795, 968, 975, 990, 994]
+related_issues: [782, 795, 968, 975, 990, 994, 999]
 related_prs: []
 related_docsets:
   - docs/domains/agent-orchestration/architecture/design.md
@@ -65,7 +65,7 @@ sequenceDiagram
   RT-->>AM: runtime context + fingerprint подготовки
   AM->>RT: CreateJob(job_type=JOB_TYPE_AGENT_RUN, slot_ref, agent_run_id, AgentRunExecutionSpec)
   RT-->>AM: runtime_job_ref + job status
-  AM->>AM: ReportAgentRunState(running/completed/failed, runtime_context + runtime_job_ref)
+  AM->>AM: ReportAgentRunState(started/completed/failed/cancelled/timed_out, runtime_context + runtime_job_ref)
 ```
 
 `StartAgentRun` остаётся авторитетной командой создания `Run`. Подготовка runtime и постановка `JOB_TYPE_AGENT_RUN` могут быть выполнены тем же оркестрационным контуром, но прямой checkout, workspace materialization, Kubernetes-доступ и выполнение задания из `agent-manager` запрещены. `agent-manager` собирает `AgentRunExecutionSpec`: safe refs на `agent_run_id`, `slot_id`, ожидаемую materialization, workspace mount/PVC/workspace, `.kodex/context/agent-run.json` ref/digest, runner profile/image, фиксированный runner mode, secret refs без значений и reporting target refs. `CreateJob` вызывается только после готовности `slot` и завершённой workspace materialization; до этого `Run` ждёт runtime с reason `runtime_materialization_pending`. Если `PrepareRuntime` или `CreateJob` временно запускаются внешним оператором или быстрым manager-агентом через MCP, входной набор данных должен быть тем же: замороженный `AgentRun.guidance_refs`, проверенная workspace policy, `agent_run_id`, `slot_ref` и `AgentRunExecutionSpec`.

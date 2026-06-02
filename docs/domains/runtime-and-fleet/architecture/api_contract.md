@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-07
 updated_at: 2026-06-02
-related_issues: [655, 656, 782, 949, 966, 975, 990, 994]
+related_issues: [655, 656, 782, 949, 966, 975, 990, 994, 999]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -94,7 +94,7 @@ Generated execution context передаётся отдельным `WorkspaceSo
 
 Исполнитель Kubernetes в `runtime-manager` обрабатывает ограниченные типы `health_check` и `agent_run`. Он забирает задание через `ClaimRunnableJob`, читает выбранный кластер через `fleet-manager.GetKubernetesCluster`, получает только ссылку `secret_store_type`/`secret_store_ref` и разрешает kubeconfig в памяти через `secretresolver`. Значение kubeconfig, raw Kubernetes objects, events и полный лог не пишутся в БД. Запуск фиксируется через `ReportJobStepProgress` с `RuntimeArtifactRef` на Kubernetes Job и namespace, для `agent_run` дополнительно сохраняется image ref runner-а. Завершение идёт через `CompleteJob` или `FailJob`.
 
-Статус самого `AgentRun` остаётся в `agent-manager`. Runtime job lifecycle показывает состояние задания runtime, а `agent-runner` для продолжения orchestration сообщает bounded `queued`/`running`/`completed`/`failed` через `agent-manager.ReportAgentRunState` с `run_id`, `session_id`, `runtime_slot_ref` и `runtime_job_ref`. `runtime-manager` не пишет `Run` напрямую и не хранит prompt, transcript, raw tool payload, provider payload или значения секретов для runner report.
+Статус самого `AgentRun` остаётся в `agent-manager`. Runtime job lifecycle показывает состояние задания runtime, а `agent-runner` для продолжения orchestration сообщает bounded `queued`/`running`/`started`/`completed`/`failed`/`cancelled`/`timed_out` через `agent-manager.ReportAgentRunState` с `run_id`, `session_id`, `runtime_slot_ref` и `runtime_job_ref`. `timed_out` фиксируется в `agent-manager` как failed run с safe `failure_code`, а `cancelled` как terminal cancelled run. `runtime-manager` не пишет `Run` напрямую и не хранит prompt, transcript, raw tool payload, provider payload или значения секретов для runner report.
 
 Для `agent_run` Kubernetes Job создаётся с детерминированным именем runtime job, фиксированным контейнером `runtime-agent-runner`, image из `runner_image_ref`, фиксированной командой `/kodex/bin/agent-runner run`, выключенным automount service account token, PVC mount workspace и ограниченными env со safe refs/digest/fingerprint. `allowed_secret_refs` передаются только как JSON-список ссылок без значений; `runtime-manager` не разрешает эти secret refs и не превращает их в Kubernetes Secret values.
 
