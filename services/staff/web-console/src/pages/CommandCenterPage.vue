@@ -31,6 +31,33 @@ const visibleRuns = computed(() => {
   return (attentionRuns.length > 0 ? attentionRuns : executions.runs).slice(0, 5);
 });
 
+const selfDeployFields = computed(() => [
+  {
+    label: t('commandCenter.selfDeploy.githubSignal'),
+    value: t('commandCenter.selfDeploy.waitingReadModel'),
+  },
+  {
+    label: t('commandCenter.selfDeploy.repository'),
+    value: t('commandCenter.selfDeploy.waitingSafeRefs'),
+  },
+  {
+    label: t('commandCenter.selfDeploy.branchCommit'),
+    value: t('commandCenter.selfDeploy.waitingSafeRefs'),
+  },
+  {
+    label: t('commandCenter.selfDeploy.changedServices'),
+    value: t('commandCenter.selfDeploy.waitingPlan'),
+  },
+  {
+    label: t('commandCenter.selfDeploy.deployPlan'),
+    value: t('commandCenter.selfDeploy.waitingPlan'),
+  },
+  {
+    label: t('commandCenter.selfDeploy.ownerDecision'),
+    value: t('commandCenter.selfDeploy.waitingDecision'),
+  },
+]);
+
 onMounted(() => {
   if (context.isReady && inbox.items.length === 0) {
     void inbox.load(context.asContext);
@@ -148,6 +175,47 @@ function openRun(runId: string) {
             :status="t('app.disabled')"
             tone="waiting"
           />
+          <SurfaceStateCard
+            icon="mdi-source-branch"
+            :title="t('commandCenter.selfDeploy.readinessTitle')"
+            :text="t('commandCenter.selfDeploy.readinessText')"
+            :status="t('app.waitingEndpoint')"
+            tone="waiting"
+          />
+        </div>
+      </v-card>
+    </section>
+
+    <section>
+      <v-card class="surface-panel self-deploy-panel">
+        <div class="section-header">
+          <div>
+            <div class="section-title">{{ t('commandCenter.selfDeploy.title') }}</div>
+            <p class="self-deploy-panel__subtitle">{{ t('commandCenter.selfDeploy.subtitle') }}</p>
+          </div>
+          <v-chip color="warning" variant="tonal" label>{{ t('app.waitingEndpoint') }}</v-chip>
+        </div>
+        <div class="self-deploy-panel__body">
+          <div class="self-deploy-panel__fields">
+            <div v-for="field in selfDeployFields" :key="field.label" class="self-deploy-field">
+              <span>{{ field.label }}</span>
+              <strong>{{ field.value }}</strong>
+            </div>
+          </div>
+          <v-alert class="self-deploy-panel__notice" type="info" variant="tonal">
+            {{ t('commandCenter.selfDeploy.safeBoundary') }}
+          </v-alert>
+        </div>
+        <div class="self-deploy-panel__actions">
+          <v-btn prepend-icon="mdi-refresh" variant="tonal" disabled>
+            {{ t('commandCenter.selfDeploy.refreshStatus') }}
+          </v-btn>
+          <v-btn prepend-icon="mdi-inbox-arrow-down-outline" variant="tonal" @click="openOwnerInbox">
+            {{ t('commandCenter.selfDeploy.openDecisions') }}
+          </v-btn>
+          <v-btn prepend-icon="mdi-pulse" variant="tonal" @click="openExecutions">
+            {{ t('commandCenter.selfDeploy.openExecutions') }}
+          </v-btn>
         </div>
       </v-card>
     </section>
@@ -326,6 +394,67 @@ function openRun(runId: string) {
   justify-content: space-between;
 }
 
+.self-deploy-panel {
+  display: grid;
+  gap: 18px;
+  padding: 20px;
+}
+
+.self-deploy-panel__subtitle {
+  color: #667085;
+  font-size: 0.94rem;
+  line-height: 1.45;
+  margin: 6px 0 0;
+}
+
+.self-deploy-panel__body {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.8fr);
+}
+
+.self-deploy-panel__fields {
+  border: 1px solid #e4e7ec;
+  border-radius: 8px;
+  display: grid;
+  overflow: hidden;
+}
+
+.self-deploy-field {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(160px, 0.7fr) minmax(0, 1fr);
+  padding: 12px 14px;
+}
+
+.self-deploy-field + .self-deploy-field {
+  border-top: 1px solid #e4e7ec;
+}
+
+.self-deploy-field span {
+  color: #667085;
+  font-size: 0.86rem;
+}
+
+.self-deploy-field strong {
+  color: #182030;
+  font-size: 0.9rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.self-deploy-panel__notice {
+  align-self: stretch;
+}
+
+.self-deploy-panel__actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .compact-list {
   display: grid;
   gap: 8px;
@@ -367,7 +496,8 @@ function openRun(runId: string) {
 @media (max-width: 1180px) {
   .summary-grid,
   .surface-readiness,
-  .main-grid {
+  .main-grid,
+  .self-deploy-panel__body {
     grid-template-columns: 1fr;
   }
 }
