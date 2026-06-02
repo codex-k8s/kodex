@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"os"
@@ -118,7 +120,8 @@ func TestRunApplyReconcilesBootstrapAndAdoptionThroughProductAPIs(t *testing.T) 
 
 func TestRunApplyProducesBootstrapCheckedArtifactFromValidatedPayloadFile(t *testing.T) {
 	scenarioPath := writeScenario(t, signalOnlyScenario("bootstrap"))
-	payloadPath := writeTextFile(t, "validated-payload.json", `{"services":[{"key":"api"}],"marker":"raw_services_yaml_secret"}`)
+	payloadJSON := `{"services":[{"key":"api"}],"marker":"raw_services_yaml_secret"}`
+	payloadPath := writeTextFile(t, "validated-payload.json", payloadJSON)
 	projectClient := &fakeProjectCatalogClient{repository: repositoryFixture()}
 	clients := runnerClients{
 		ProjectCatalog: projectClient,
@@ -172,6 +175,9 @@ func TestRunApplyProducesBootstrapCheckedArtifactFromValidatedPayloadFile(t *tes
 	}
 	if checkedPolicy.GetArtifactDigest() != checkedPolicy.GetContentHash() {
 		t.Fatalf("expected artifact digest to match content hash, got digest=%q content_hash=%q", checkedPolicy.GetArtifactDigest(), checkedPolicy.GetContentHash())
+	}
+	if got, want := checkedPolicy.GetContentHash(), expectedContentHash(payloadJSON); got != want {
+		t.Fatalf("expected content hash %q, got %q", want, got)
 	}
 	assertNotContains(t, output.String(), "raw_services_yaml_secret")
 	assertContains(t, output.String(), "checked artifact input produced")
@@ -651,6 +657,11 @@ func writeTextFile(t *testing.T, name string, content string) string {
 		t.Fatalf("write text file: %v", err)
 	}
 	return path
+}
+
+func expectedContentHash(value string) string {
+	sum := sha256.Sum256([]byte(value))
+	return "sha256:" + hex.EncodeToString(sum[:])
 }
 
 func stringPtr(value string) *string {

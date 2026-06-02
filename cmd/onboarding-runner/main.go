@@ -405,7 +405,7 @@ func prepareCheckedScenarioInput(kind string, scenario *reconcileScenario, signa
 	if watermarkJSON == "" {
 		return scenario, false, fmt.Errorf("%s checked payload producer requires watermark_json in scenario or watermark-json-file", kind)
 	}
-	contentHash := prefixedSHA256([]byte(producer.PayloadJSON))
+	contentHash := contentSHA256(producer.PayloadJSON)
 	artifactDigest := contentHash
 	artifactVersion := firstNonEmpty(producer.ArtifactVersion)
 	if artifactVersion == "" && signal != nil {
@@ -439,13 +439,9 @@ func hasCheckedPolicyValues(policy checkedPolicyScenario) bool {
 		strings.TrimSpace(policy.ValidatedPayloadJSON) != ""
 }
 
-func prefixedSHA256(parts ...[]byte) string {
-	hash := sha256.New()
-	for _, part := range parts {
-		_, _ = hash.Write(part)
-		_, _ = hash.Write([]byte{0})
-	}
-	return "sha256:" + hex.EncodeToString(hash.Sum(nil))
+func contentSHA256(value string) string {
+	sum := sha256.Sum256([]byte(value))
+	return "sha256:" + hex.EncodeToString(sum[:])
 }
 
 func defaultCheckedArtifactRef(kind string, artifactDigest string) string {
