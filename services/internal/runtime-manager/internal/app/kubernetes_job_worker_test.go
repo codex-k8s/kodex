@@ -47,11 +47,52 @@ func TestKubernetesJobWorkerCompletesClaimedHealthCheck(t *testing.T) {
 	if service.claimCalls != 1 {
 		t.Fatalf("claim calls = %d, want 1", service.claimCalls)
 	}
-	if len(service.lastClaimJobTypes) != 2 || service.lastClaimJobTypes[0] != enum.JobTypeHealthCheck || service.lastClaimJobTypes[1] != enum.JobTypeAgentRun {
-		t.Fatalf("claim job types = %v, want health_check and agent_run", service.lastClaimJobTypes)
+	if len(service.lastClaimJobTypes) != 3 ||
+		service.lastClaimJobTypes[0] != enum.JobTypeHealthCheck ||
+		service.lastClaimJobTypes[1] != enum.JobTypeAgentRun ||
+		service.lastClaimJobTypes[2] != enum.JobTypeBuild {
+		t.Fatalf("claim job types = %v, want health_check, agent_run and build", service.lastClaimJobTypes)
 	}
 	if len(service.reportStatuses) != 2 || service.reportStatuses[0] != enum.JobStepStatusRunning || service.reportStatuses[1] != enum.JobStepStatusSucceeded {
 		t.Fatalf("report statuses = %v, want running/succeeded", service.reportStatuses)
+	}
+	if service.completeCalls != 1 || service.failCalls != 0 {
+		t.Fatalf("complete/fail calls = %d/%d, want 1/0", service.completeCalls, service.failCalls)
+	}
+}
+
+func TestKubernetesJobWorkerReportsBuildStepKey(t *testing.T) {
+	t.Parallel()
+
+	job := entity.Job{
+		Base:    entity.Base{ID: uuid.MustParse("00000000-0000-0000-0000-000000000107"), Version: 2},
+		JobType: enum.JobTypeBuild,
+		Status:  enum.JobStatusClaimed,
+	}
+	service := &fakeRuntimeJobLifecycle{claim: runtimeservice.ClaimRunnableJobResult{Job: job, LeaseToken: "lease-token"}}
+	executor := fakeKubernetesExecutor{
+		started: runtimekubernetes.StartedJob{
+			RuntimeJobID: job.ID,
+			Namespace:    "runtime-jobs",
+			JobName:      "kodex-rt-test",
+			ExternalRef:  "kubernetes://cluster/namespaces/runtime-jobs/jobs/kodex-rt-test",
+		},
+		result: runtimekubernetes.ExecutionResult{Succeeded: true, ShortLogTail: "image pushed secret-value provider payload"},
+	}
+	worker := testKubernetesJobWorker(service, executor)
+
+	worker.claimAndExecute(context.Background())
+
+	if len(service.reportStepKeys) != 2 || service.reportStepKeys[0] != kubernetesBuildStepKey || service.reportStepKeys[1] != kubernetesBuildStepKey {
+		t.Fatalf("report step keys = %v, want build step key", service.reportStepKeys)
+	}
+	if service.completeShortLogTail != "image pushed [redacted] [redacted]" {
+		t.Fatalf("complete short log tail = %q, want bounded build tail", service.completeShortLogTail)
+	}
+	for _, tail := range append(service.reportShortLogTails, service.completeShortLogTail) {
+		if strings.Contains(tail, "secret-value") || strings.Contains(tail, "provider payload") {
+			t.Fatalf("reported build short log tail = %q, want redacted diagnostics", tail)
+		}
 	}
 	if service.completeCalls != 1 || service.failCalls != 0 {
 		t.Fatalf("complete/fail calls = %d/%d, want 1/0", service.completeCalls, service.failCalls)

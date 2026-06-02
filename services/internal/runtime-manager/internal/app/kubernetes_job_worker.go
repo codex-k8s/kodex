@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -20,9 +21,19 @@ const (
 	kubernetesWorkerActor        = "runtime-manager-kubernetes-executor"
 	kubernetesHealthCheckStepKey = "kubernetes_health_check"
 	kubernetesAgentRunStepKey    = "kubernetes_agent_run"
+	kubernetesBuildStepKey       = "kubernetes_build"
+	redactedDiagnosticValue      = "[redacted]"
 	minWorkerRetryDelay          = time.Second
 	maxWorkerRetryDelay          = 30 * time.Second
 )
+
+var runtimeBuildLogRedactionMarkers = []string{
+	"secret-value",
+	"provider payload",
+	"kubeconfig",
+	"oauth token",
+	"webhook body",
+}
 
 type kubernetesWorkerIteration int
 
@@ -102,7 +113,7 @@ func (w kubernetesJobWorker) run(ctx context.Context) error {
 
 func (w kubernetesJobWorker) claimAndExecute(ctx context.Context) kubernetesWorkerIteration {
 	claim, err := w.service.ClaimRunnableJob(ctx, runtimeservice.ClaimRunnableJobInput{
-		JobTypes:   []enum.JobType{enum.JobTypeHealthCheck, enum.JobTypeAgentRun},
+		JobTypes:   []enum.JobType{enum.JobTypeHealthCheck, enum.JobTypeAgentRun, enum.JobTypeBuild},
 		WorkerID:   w.cfg.WorkerID,
 		LeaseOwner: w.cfg.WorkerID,
 		LeaseUntil: time.Now().UTC().Add(w.cfg.ClaimLeaseTTL),
@@ -228,17 +239,33 @@ func (w kubernetesJobWorker) failClaimedJob(ctx context.Context, job entity.Job,
 }
 
 func kubernetesStepKey(jobType enum.JobType) string {
-	if jobType == enum.JobTypeAgentRun {
+	switch jobType {
+	case enum.JobTypeAgentRun:
 		return kubernetesAgentRunStepKey
+	case enum.JobTypeBuild:
+		return kubernetesBuildStepKey
+	default:
+		return kubernetesHealthCheckStepKey
 	}
-	return kubernetesHealthCheckStepKey
 }
 
 func safeExecutionShortLogTail(jobType enum.JobType, shortLogTail string) string {
-	if jobType == enum.JobTypeAgentRun {
+	switch jobType {
+	case enum.JobTypeAgentRun:
 		return ""
+	case enum.JobTypeBuild:
+		return redactBuildLogTail(shortLogTail)
+	default:
+		return shortLogTail
 	}
-	return shortLogTail
+}
+
+func redactBuildLogTail(shortLogTail string) string {
+	result := shortLogTail
+	for _, marker := range runtimeBuildLogRedactionMarkers {
+		result = strings.ReplaceAll(result, marker, redactedDiagnosticValue)
+	}
+	return result
 }
 
 func (w kubernetesJobWorker) commandMeta(phase string, expectedVersion *int64) value.CommandMeta {
