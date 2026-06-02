@@ -742,6 +742,8 @@ message GovernanceSummary {
   repeated GovernanceEvidenceSummary evidence_summaries = 4;
   // diagnostics are safe machine-readable notes about partial or missing linked state.
   repeated string diagnostics = 5;
+  // status summarizes live risk, gate and blocking state without raw payloads.
+  GovernanceSummaryStatus status = 6;
 }
 
 message RiskRuleDraft {
@@ -1213,6 +1215,32 @@ message ReleaseIntegrationRef {
   optional string version = 8;
   // error_code is an optional bounded machine error code supplied by the owner domain.
   optional string error_code = 9;
+}
+
+// GovernanceSummaryStatus is an operator-ready rollup for live governance decisions.
+message GovernanceSummaryStatus {
+  // attention is the highest attention level across decisions and diagnostics.
+  GovernanceDecisionAttention attention = 1;
+  // max_risk_class is the highest risk class present in linked risk summaries.
+  RiskClass max_risk_class = 2;
+  // pending_decision_count counts items still requiring action or observation.
+  int32 pending_decision_count = 3;
+  // blocked_decision_count counts items that currently block release or execution.
+  int32 blocked_decision_count = 4;
+  // completed_decision_count counts terminal or informational decision facts.
+  int32 completed_decision_count = 5;
+  // pending_gate_count counts open governance gate requests.
+  int32 pending_gate_count = 6;
+  // active_blocking_signal_count counts active blocking signals.
+  int32 active_blocking_signal_count = 7;
+  // evidence_count counts bounded linked evidence summaries.
+  int32 evidence_count = 8;
+  // diagnostic_count counts safe partial/missing-state diagnostics.
+  int32 diagnostic_count = 9;
+  // summary_code is a bounded machine-readable status for UI and agents.
+  string summary_code = 10;
+  // next_action_code is a bounded machine-readable hint for the next owner action.
+  string next_action_code = 11;
 }
 
 enum GovernanceScopeType {

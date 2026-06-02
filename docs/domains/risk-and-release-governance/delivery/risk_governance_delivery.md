@@ -6,7 +6,7 @@ status: active
 owner_role: EM
 created_at: 2026-05-22
 updated_at: 2026-05-29
-related_issues: [322, 769, 790, 802, 815, 827, 845, 856, 869, 886, 907, 919, 957, 972, 976]
+related_issues: [322, 380, 769, 790, 802, 815, 827, 845, 856, 869, 886, 907, 919, 957, 972, 976]
 related_prs: []
 related_docsets:
   - docs/domains/risk-and-release-governance/product/requirements.md
@@ -59,6 +59,7 @@ approvals:
 | GOV-7i | #972 | Потребитель agent acceptance evidence готов: `agent.acceptance.completed`/`failed` с явным `governance_release_decision_package_ref` дозаписываются в release package через `RecordReleaseAgentEvidence`; события без package ref подтверждаются без записи, без implicit lookup по project/run и без чтения БД `agent-manager`. |
 | GOV-7j | #976 | Сводка чтения governance готова: `GetGovernanceSummary` возвращает безопасную модель чтения для владельца и персонала по target/project/release/package/integration ref с pending/completed decisions, risk class, gate/release outcomes, linked provider/agent/runtime evidence refs и partial diagnostics без доменной логики в gateway. |
 | GOV-MCP-1 | без отдельного Issue | MCP-инструмент `governance.summary.get` готов: `platform-mcp-server` вызывает `GetGovernanceSummary` по одному selector и возвращает безопасную сводку для manager/slot-агентов без хранения governance state. |
+| GOV-SEC-1 | #380 | Live security/governance summary baseline готов: `GetGovernanceSummary.status` отдаёт общий attention, максимальный риск, счётчики pending/blocked/completed решений, открытых gates, активных blocking signals, evidence, diagnostics, `summary_code` и `next_action_code`; `governance.summary.get` возвращает эти поля без вычисления правил в MCP. Сканеры зависимостей, container images и runtime/infra probes остаются следующими срезами #380. |
 | GOV-7 | не назначено | Интеграции с `agent-manager`, `provider-hub`, `interaction-hub`, `runtime-manager`, `project-catalog` и `operations-hub` подключены через согласованные контракты. |
 | GOV-8 | без отдельного Issue | Эксплуатационный контур для первого backend deploy готов: Dockerfile, Kubernetes manifests, migration Job, env/secret inventory, проверка готовности, runbook и monitoring. Operator projections остаются отдельным operations-срезом. |
 | GOV-9 | #907 | Event-driven/read-model основа готова: `governance.*` decision lifecycle события несут safe metadata/refs/summary/idempotency correlation для consumers через `platform-event-log`, а authoritative lookup остаётся через gRPC. |
@@ -93,7 +94,7 @@ approvals:
 | Потребитель agent acceptance evidence | Готов для `agent.acceptance.completed` и `agent.acceptance.failed`: обрабатываются только terminal acceptance events с явным `governance_release_decision_package_ref`; release package обновляется через `RecordReleaseAgentEvidence`, остальные события подтверждаются без записи. | GOV-7i |
 | Release decision lifecycle и safety-loop | Готовы для package build/read/list, decision request/submit/read/list, blocking signals и текущего safety-loop state на safe refs/summaries. | GOV-6 |
 | Release integration refs | Готовы для project/repository/release line, provider Issue/PR/check/review, agent run/acceptance, runtime job/deploy, local risk assessment и gate refs с bounded summaries/status/digest/timestamps/version; локальные governance refs обогащаются из repository, внешние refs получают safe summary diagnostic при отсутствии owner summary. | GOV-7b |
-| Сводка чтения governance | `GetGovernanceSummary` собирает безопасную модель чтения из локальных risk/gate/review/release/blocking/safety-loop фактов по target/project/release/package/integration ref; `staff-gateway` и `platform-mcp-server` получают готовые pending/completed decisions и evidence summaries без вычисления governance-правил. | GOV-7j / GOV-MCP-1 |
+| Сводка чтения governance | `GetGovernanceSummary` собирает безопасную модель чтения из локальных risk/gate/review/release/blocking/safety-loop фактов по target/project/release/package/integration ref; gRPC consumers и `platform-mcp-server` получают готовые `status`, pending/completed decisions и evidence summaries без вычисления governance-правил. HTTP DTO в `staff-gateway` для нового `status` остаётся отдельным срезом `console-and-operations-ux`. | GOV-7j / GOV-MCP-1 / GOV-SEC-1 |
 | Эксплуатационный контур | Готов для первого backend deploy: service/migrations Dockerfile stages, Kubernetes ServiceAccount/Service/Deployment/Job, runtime env/secret inventory, PostgreSQL database bootstrap, проверка готовности, runbook и monitoring. | GOV-8 |
 | Event-driven/read-model основа | `governance.*` события для risk assessment, review signal, gate, blocking signal, release package/decision и safety-loop публикуют safe ids/refs/status/outcome/reason/safe summary/actor/request/idempotency metadata для consumers через `platform-event-log`. | GOV-9 |
 | Интеграции с `agent-manager`, `provider-hub`, `interaction-hub`, `runtime-manager` и `project-catalog` | Provider review events, interaction Human gate response events и agent acceptance terminal events с явной release package ссылкой подключены как безопасные потребители событий; runtime/deploy и agent acceptance/review/runtime evidence refs принимаются через команды governance, когда вызывающая сторона уже знает release package; чтение release package возвращает безопасный evidence-снимок для интерфейса владельца и персонала; service-client чтения, provider write, delivery callbacks и deploy orchestration не реализованы; governance связывает безопасные refs без владения чужой доменной истиной. | GOV-7 |
@@ -108,7 +109,7 @@ approvals:
 | `runtime-and-fleet` | Перед GOV-7 | Runtime/deploy refs принимаются через `RecordReleaseRuntimeEvidence`; прямой consumer для `runtime.job.*` ждёт безопасную привязку события к governance package/gate ref. |
 | `interaction-hub` | Перед GOV-4 | Нужен delivery request/callback контракт для Human gate, reminders и escalation без владения decision state. |
 | `access-and-accounts` | Перед GOV-1 и GOV-4 | Нужны actions и проверки прав для policy management, gate decision и release decision. |
-| `console-and-operations-ux` | После GOV-7j | `staff-gateway` отдаёт `GET /v1/governance/summary` как тонкий HTTP -> gRPC adapter к `GetGovernanceSummary`; подключение экрана в `web-console` остаётся отдельным frontend-срезом. |
+| `console-and-operations-ux` | После GOV-7j | `staff-gateway` отдаёт `GET /v1/governance/summary` как тонкий HTTP -> gRPC adapter к `GetGovernanceSummary`; добавление `status` rollup в HTTP DTO и подключение экрана в `web-console` остаются отдельными frontend/gateway-срезами. |
 | `platform-mcp-server` | После GOV-7j | `governance.summary.get` отдаёт ту же safe summary через MCP для manager/slot-агентов; MCP не хранит state, не читает БД и не подключает frontend. |
 
 ## Критерии начала кода

@@ -212,6 +212,7 @@ type GovernanceSummary struct {
 	CompletedDecisions []GovernanceDecisionSummary
 	EvidenceSummaries  []GovernanceEvidenceSummary
 	Diagnostics        []string
+	Status             GovernanceSummaryStatus
 }
 
 // GovernanceSummaryScope bounds a summary request to a safe local or owner-domain ref.
@@ -267,6 +268,21 @@ type GovernanceEvidenceSummary struct {
 	Version         string
 	EvidenceRefs    []value.EvidenceRef
 	IntegrationRefs []value.ReleaseIntegrationRef
+}
+
+// GovernanceSummaryStatus is the operator-ready rollup for live governance state.
+type GovernanceSummaryStatus struct {
+	Attention                 enum.GovernanceDecisionAttention
+	MaxRiskClass              enum.RiskClass
+	PendingDecisionCount      int32
+	BlockedDecisionCount      int32
+	CompletedDecisionCount    int32
+	PendingGateCount          int32
+	ActiveBlockingSignalCount int32
+	EvidenceCount             int32
+	DiagnosticCount           int32
+	SummaryCode               string
+	NextActionCode            string
 }
 
 // CommandResult stores the idempotent command trace.

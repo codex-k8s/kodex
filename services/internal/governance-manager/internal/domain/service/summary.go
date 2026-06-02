@@ -15,7 +15,22 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/governance-manager/internal/domain/types/value"
 )
 
-const governanceSummaryPageSize = int32(100)
+const (
+	governanceSummaryPageSize = int32(100)
+
+	governanceSummaryCodeBlocked = "blocked_decisions_present"
+	governanceSummaryCodePending = "pending_decisions_present"
+	governanceSummaryCodePartial = "partial_governance_refs"
+	governanceSummaryCodeClear   = "clear"
+
+	governanceSummaryNextActionNone                   = "none"
+	governanceSummaryNextActionResolveBlockingSignal  = "resolve_blocking_signal"
+	governanceSummaryNextActionReviewBlockingDecision = "review_blocking_decision"
+	governanceSummaryNextActionRecordGateDecision     = "record_gate_decision"
+	governanceSummaryNextActionRecordReleaseDecision  = "record_release_decision"
+	governanceSummaryNextActionReviewPendingDecision  = "review_pending_decision"
+	governanceSummaryNextActionReviewPartialRefs      = "review_partial_refs"
+)
 
 type governanceSummarySeen struct {
 	pending   map[string]struct{}
@@ -84,6 +99,7 @@ func (s *Service) GetGovernanceSummary(ctx context.Context, input GetGovernanceS
 		}
 	}
 
+	summary.Status = governanceSummaryStatus(summary)
 	return summary, nil
 }
 
@@ -514,6 +530,77 @@ func appendSummaryDiagnostic(summary *entity.GovernanceSummary, diagnostic strin
 		}
 	}
 	summary.Diagnostics = append(summary.Diagnostics, diagnostic)
+}
+
+func governanceSummaryStatus(summary entity.GovernanceSummary) entity.GovernanceSummaryStatus {
+	status := entity.GovernanceSummaryStatus{
+		Attention:              enum.GovernanceDecisionAttentionCompleted,
+		PendingDecisionCount:   int32(len(summary.PendingDecisions)),
+		CompletedDecisionCount: int32(len(summary.CompletedDecisions)),
+		EvidenceCount:          int32(len(summary.EvidenceSummaries)),
+		DiagnosticCount:        int32(len(summary.Diagnostics)),
+		SummaryCode:            governanceSummaryCodeClear,
+		NextActionCode:         governanceSummaryNextActionNone,
+	}
+	for _, item := range summary.PendingDecisions {
+		applyGovernanceSummaryDecisionStatus(&status, item, true)
+	}
+	for _, item := range summary.CompletedDecisions {
+		applyGovernanceSummaryDecisionStatus(&status, item, false)
+	}
+	if status.BlockedDecisionCount > 0 {
+		status.Attention = enum.GovernanceDecisionAttentionBlocked
+		status.SummaryCode = governanceSummaryCodeBlocked
+		status.NextActionCode = governanceSummaryBlockedNextAction(status)
+		return status
+	}
+	if status.PendingDecisionCount > 0 {
+		status.Attention = enum.GovernanceDecisionAttentionPending
+		status.SummaryCode = governanceSummaryCodePending
+		status.NextActionCode = governanceSummaryPendingNextAction(status)
+		return status
+	}
+	if status.DiagnosticCount > 0 {
+		status.Attention = enum.GovernanceDecisionAttentionInformational
+		status.SummaryCode = governanceSummaryCodePartial
+		status.NextActionCode = governanceSummaryNextActionReviewPartialRefs
+	}
+	return status
+}
+
+func applyGovernanceSummaryDecisionStatus(status *entity.GovernanceSummaryStatus, item entity.GovernanceDecisionSummary, pending bool) {
+	if item.Attention == enum.GovernanceDecisionAttentionBlocked {
+		status.BlockedDecisionCount++
+	}
+	if item.Kind == enum.GovernanceDecisionSummaryKindGateRequest && pending {
+		status.PendingGateCount++
+	}
+	if item.Kind == enum.GovernanceDecisionSummaryKindReleaseDecision && pending {
+		status.NextActionCode = governanceSummaryNextActionRecordReleaseDecision
+	}
+	if item.Kind == enum.GovernanceDecisionSummaryKindBlockingSignal && item.BlockingSignalStatus == enum.BlockingSignalStatusActive {
+		status.ActiveBlockingSignalCount++
+	}
+	if item.RiskClass != "" && (status.MaxRiskClass == "" || riskClassRank(item.RiskClass) > riskClassRank(status.MaxRiskClass)) {
+		status.MaxRiskClass = item.RiskClass
+	}
+}
+
+func governanceSummaryBlockedNextAction(status entity.GovernanceSummaryStatus) string {
+	if status.ActiveBlockingSignalCount > 0 {
+		return governanceSummaryNextActionResolveBlockingSignal
+	}
+	return governanceSummaryNextActionReviewBlockingDecision
+}
+
+func governanceSummaryPendingNextAction(status entity.GovernanceSummaryStatus) string {
+	if status.PendingGateCount > 0 {
+		return governanceSummaryNextActionRecordGateDecision
+	}
+	if status.NextActionCode != "" && status.NextActionCode != governanceSummaryNextActionNone {
+		return status.NextActionCode
+	}
+	return governanceSummaryNextActionReviewPendingDecision
 }
 
 func riskAssessmentOpen(assessment entity.RiskAssessment) bool {

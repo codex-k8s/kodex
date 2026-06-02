@@ -694,6 +694,7 @@ func toGovernanceSummary(item entity.GovernanceSummary) *governancev1.Governance
 		CompletedDecisions: toGovernanceDecisionSummaries(item.CompletedDecisions),
 		EvidenceSummaries:  toGovernanceEvidenceSummaries(item.EvidenceSummaries),
 		Diagnostics:        item.Diagnostics,
+		Status:             toGovernanceSummaryStatus(item.Status),
 	}
 }
 
@@ -768,6 +769,22 @@ func toGovernanceEvidenceSummaries(items []entity.GovernanceEvidenceSummary) []*
 		})
 	}
 	return result
+}
+
+func toGovernanceSummaryStatus(item entity.GovernanceSummaryStatus) *governancev1.GovernanceSummaryStatus {
+	return &governancev1.GovernanceSummaryStatus{
+		Attention:                 toGovernanceDecisionAttention(item.Attention),
+		MaxRiskClass:              toRiskClass(item.MaxRiskClass),
+		PendingDecisionCount:      item.PendingDecisionCount,
+		BlockedDecisionCount:      item.BlockedDecisionCount,
+		CompletedDecisionCount:    item.CompletedDecisionCount,
+		PendingGateCount:          item.PendingGateCount,
+		ActiveBlockingSignalCount: item.ActiveBlockingSignalCount,
+		EvidenceCount:             item.EvidenceCount,
+		DiagnosticCount:           item.DiagnosticCount,
+		SummaryCode:               item.SummaryCode,
+		NextActionCode:            item.NextActionCode,
+	}
 }
 
 func toScopeRef(item value.ExternalRef) *governancev1.ScopeRef {

@@ -1981,10 +1981,30 @@ func governanceSummary(summary *governancev1.GovernanceSummary) GovernanceSummar
 	}
 	return GovernanceSummary{
 		Scope:              governanceSummaryScopeSummary(summary.GetScope()),
+		Status:             governanceSummaryStatus(summary.GetStatus()),
 		PendingDecisions:   governanceDecisionSummaries(summary.GetPendingDecisions()),
 		CompletedDecisions: governanceDecisionSummaries(summary.GetCompletedDecisions()),
 		EvidenceSummaries:  governanceLinkedEvidenceSummaries(summary.GetEvidenceSummaries()),
 		Diagnostics:        trimmedStrings(summary.GetDiagnostics()),
+	}
+}
+
+func governanceSummaryStatus(status *governancev1.GovernanceSummaryStatus) GovernanceSummaryStatus {
+	if status == nil {
+		return GovernanceSummaryStatus{}
+	}
+	return GovernanceSummaryStatus{
+		Attention:                 governanceDecisionAttentionName(status.GetAttention()),
+		MaxRiskClass:              governanceOptionalRiskClassName(status.GetMaxRiskClass()),
+		PendingDecisionCount:      status.GetPendingDecisionCount(),
+		BlockedDecisionCount:      status.GetBlockedDecisionCount(),
+		CompletedDecisionCount:    status.GetCompletedDecisionCount(),
+		PendingGateCount:          status.GetPendingGateCount(),
+		ActiveBlockingSignalCount: status.GetActiveBlockingSignalCount(),
+		EvidenceCount:             status.GetEvidenceCount(),
+		DiagnosticCount:           status.GetDiagnosticCount(),
+		SummaryCode:               status.GetSummaryCode(),
+		NextActionCode:            status.GetNextActionCode(),
 	}
 }
 
