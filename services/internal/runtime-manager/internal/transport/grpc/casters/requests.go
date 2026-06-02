@@ -364,6 +364,14 @@ func CreateJobInput(request *runtimev1.CreateJobRequest) (runtimeservice.CreateJ
 	if err != nil {
 		return runtimeservice.CreateJobInput{}, err
 	}
+	buildExecutionSpec, err := BuildExecutionSpecInputFromProto(request.GetBuildExecutionSpec())
+	if err != nil {
+		return runtimeservice.CreateJobInput{}, err
+	}
+	deployExecutionSpec, err := DeployExecutionSpecInputFromProto(request.GetDeployExecutionSpec())
+	if err != nil {
+		return runtimeservice.CreateJobInput{}, err
+	}
 	meta, err := CommandMetaFromProto(request.GetMeta())
 	if err != nil {
 		return runtimeservice.CreateJobInput{}, err
@@ -380,8 +388,67 @@ func CreateJobInput(request *runtimev1.CreateJobRequest) (runtimeservice.CreateJ
 		PlacementConstraints:  constraints,
 		JobInputJSON:          []byte(strings.TrimSpace(request.GetJobInputJson())),
 		AgentRunExecutionSpec: agentRunExecutionSpec,
+		BuildExecutionSpec:    buildExecutionSpec,
+		DeployExecutionSpec:   deployExecutionSpec,
 		Meta:                  meta,
 	}, nil
+}
+
+// BuildExecutionSpecInputFromProto maps typed build execution input from proto.
+func BuildExecutionSpecInputFromProto(spec *runtimev1.BuildExecutionSpec) (*runtimeservice.BuildExecutionSpecInput, error) {
+	if spec == nil {
+		return nil, nil
+	}
+	return &runtimeservice.BuildExecutionSpecInput{
+		SourceRef:            strings.TrimSpace(spec.GetSourceRef()),
+		SourceCommitSHA:      strings.TrimSpace(spec.GetSourceCommitSha()),
+		ServiceKey:           strings.TrimSpace(spec.GetServiceKey()),
+		ImageRef:             strings.TrimSpace(spec.GetImageRef()),
+		ImageTag:             strings.TrimSpace(spec.GetImageTag()),
+		ImageDigest:          strings.TrimSpace(spec.GetImageDigest()),
+		BuildContextRef:      strings.TrimSpace(spec.GetBuildContextRef()),
+		BuildContextDigest:   strings.TrimSpace(spec.GetBuildContextDigest()),
+		DockerfileRef:        strings.TrimSpace(spec.GetDockerfileRef()),
+		DockerfileDigest:     strings.TrimSpace(spec.GetDockerfileDigest()),
+		DockerfileTarget:     strings.TrimSpace(spec.GetDockerfileTarget()),
+		BuilderImageRef:      strings.TrimSpace(spec.GetBuilderImageRef()),
+		BuildPlanFingerprint: strings.TrimSpace(spec.GetBuildPlanFingerprint()),
+		AllowedSecretRefs:    runtimeJobAllowedSecretRefsFromProto(spec.GetAllowedSecretRefs()),
+		OutputRefs:           runtimeJobOutputRefsFromProto(spec.GetOutputRefs()),
+	}, nil
+}
+
+// DeployExecutionSpecInputFromProto maps typed deploy execution input from proto.
+func DeployExecutionSpecInputFromProto(spec *runtimev1.DeployExecutionSpec) (*runtimeservice.DeployExecutionSpecInput, error) {
+	if spec == nil {
+		return nil, nil
+	}
+	return &runtimeservice.DeployExecutionSpecInput{
+		SourceRef:             strings.TrimSpace(spec.GetSourceRef()),
+		SourceCommitSHA:       strings.TrimSpace(spec.GetSourceCommitSha()),
+		ServiceKey:            strings.TrimSpace(spec.GetServiceKey()),
+		ImageRef:              strings.TrimSpace(spec.GetImageRef()),
+		ImageTag:              strings.TrimSpace(spec.GetImageTag()),
+		ImageDigest:           strings.TrimSpace(spec.GetImageDigest()),
+		ManifestRef:           strings.TrimSpace(spec.GetManifestRef()),
+		ManifestDigest:        strings.TrimSpace(spec.GetManifestDigest()),
+		KustomizationRef:      strings.TrimSpace(spec.GetKustomizationRef()),
+		KustomizationDigest:   strings.TrimSpace(spec.GetKustomizationDigest()),
+		TargetNamespace:       strings.TrimSpace(spec.GetTargetNamespace()),
+		TargetClusterRef:      strings.TrimSpace(spec.GetTargetClusterRef()),
+		TargetSlotID:          strings.TrimSpace(spec.GetTargetSlotId()),
+		DeployPlanFingerprint: strings.TrimSpace(spec.GetDeployPlanFingerprint()),
+		AllowedSecretRefs:     runtimeJobAllowedSecretRefsFromProto(spec.GetAllowedSecretRefs()),
+		OutputRefs:            runtimeJobOutputRefsFromProto(spec.GetOutputRefs()),
+	}, nil
+}
+
+func runtimeJobAllowedSecretRefsFromProto(refs []*runtimev1.RuntimeJobAllowedSecretRef) []runtimeservice.RuntimeJobExecutionRefInput {
+	return agentRunProtoRefs(refs, (*runtimev1.RuntimeJobAllowedSecretRef).GetPurpose, (*runtimev1.RuntimeJobAllowedSecretRef).GetSecretRef)
+}
+
+func runtimeJobOutputRefsFromProto(refs []*runtimev1.RuntimeJobOutputRef) []runtimeservice.RuntimeJobExecutionRefInput {
+	return agentRunProtoRefs(refs, (*runtimev1.RuntimeJobOutputRef).GetKind, (*runtimev1.RuntimeJobOutputRef).GetRef)
 }
 
 // AgentRunExecutionSpecInputFromProto maps typed agent_run execution input from proto.

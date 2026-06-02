@@ -903,7 +903,7 @@ func runnableFakeJob(job entity.Job, filter query.JobClaimFilter) bool {
 	if filter.FleetScopeID != nil && !sameUUIDPtr(job.FleetScopeID, filter.FleetScopeID) {
 		return false
 	}
-	if job.JobType == enum.JobTypeAgentRun && !agentRunJobInputHasExecutionSpec(job.JobInputJSON) {
+	if !buildDeployJobInputHasRequiredExecutionSpec(job.JobType, job.JobInputJSON) {
 		return false
 	}
 	return job.Status == enum.JobStatusPending || ((job.Status == enum.JobStatusClaimed || job.Status == enum.JobStatusRunning) && job.LeaseUntil != nil && !job.LeaseUntil.After(filter.Now))

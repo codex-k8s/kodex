@@ -114,8 +114,52 @@ type CreateJobInput struct {
 	PlacementConstraints  PlacementConstraintsInput
 	JobInputJSON          []byte
 	AgentRunExecutionSpec *AgentRunExecutionSpecInput
+	BuildExecutionSpec    *BuildExecutionSpecInput
+	DeployExecutionSpec   *DeployExecutionSpecInput
 	Meta                  value.CommandMeta
 }
+
+// BuildExecutionSpecInput contains safe refs for future build job execution.
+type BuildExecutionSpecInput struct {
+	SourceRef            string                        `json:"source_ref"`
+	SourceCommitSHA      string                        `json:"source_commit_sha"`
+	ServiceKey           string                        `json:"service_key"`
+	ImageRef             string                        `json:"image_ref"`
+	ImageTag             string                        `json:"image_tag"`
+	ImageDigest          string                        `json:"image_digest,omitempty"`
+	BuildContextRef      string                        `json:"build_context_ref"`
+	BuildContextDigest   string                        `json:"build_context_digest"`
+	DockerfileRef        string                        `json:"dockerfile_ref"`
+	DockerfileDigest     string                        `json:"dockerfile_digest,omitempty"`
+	DockerfileTarget     string                        `json:"dockerfile_target"`
+	BuilderImageRef      string                        `json:"builder_image_ref"`
+	BuildPlanFingerprint string                        `json:"build_plan_fingerprint"`
+	AllowedSecretRefs    []RuntimeJobExecutionRefInput `json:"allowed_secret_refs,omitempty"`
+	OutputRefs           []RuntimeJobExecutionRefInput `json:"output_refs,omitempty"`
+}
+
+// DeployExecutionSpecInput contains safe refs for future deploy job execution.
+type DeployExecutionSpecInput struct {
+	SourceRef             string                        `json:"source_ref"`
+	SourceCommitSHA       string                        `json:"source_commit_sha"`
+	ServiceKey            string                        `json:"service_key"`
+	ImageRef              string                        `json:"image_ref"`
+	ImageTag              string                        `json:"image_tag"`
+	ImageDigest           string                        `json:"image_digest"`
+	ManifestRef           string                        `json:"manifest_ref"`
+	ManifestDigest        string                        `json:"manifest_digest"`
+	KustomizationRef      string                        `json:"kustomization_ref"`
+	KustomizationDigest   string                        `json:"kustomization_digest"`
+	TargetNamespace       string                        `json:"target_namespace"`
+	TargetClusterRef      string                        `json:"target_cluster_ref"`
+	TargetSlotID          string                        `json:"target_slot_id,omitempty"`
+	DeployPlanFingerprint string                        `json:"deploy_plan_fingerprint"`
+	AllowedSecretRefs     []RuntimeJobExecutionRefInput `json:"allowed_secret_refs,omitempty"`
+	OutputRefs            []RuntimeJobExecutionRefInput `json:"output_refs,omitempty"`
+}
+
+// RuntimeJobExecutionRefInput contains a typed safe build/deploy job reference.
+type RuntimeJobExecutionRefInput = AgentRunExecutionRefInput
 
 // AgentRunExecutionSpecInput contains safe refs for future agent_run execution.
 type AgentRunExecutionSpecInput struct {

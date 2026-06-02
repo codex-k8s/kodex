@@ -9,6 +9,8 @@ WITH candidate AS (
       AND (cardinality(@job_types::text[]) = 0 OR job_type = ANY(@job_types::text[]))
       AND (@fleet_scope_id::uuid IS NULL OR fleet_scope_id = @fleet_scope_id::uuid)
       AND (job_type <> 'agent_run' OR job_input_json ? 'agent_run_execution_spec')
+      AND (job_type <> 'build' OR job_input_json ? 'build_execution_spec')
+      AND (job_type <> 'deploy' OR job_input_json ? 'deploy_execution_spec')
     ORDER BY
         CASE priority
             WHEN 'blocking' THEN 4

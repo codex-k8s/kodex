@@ -156,6 +156,8 @@ func RuntimeContextToProto(context runtimeservice.RuntimeContext) *runtimev1.Run
 // JobToProto maps one platform job.
 func JobToProto(job entity.Job) *runtimev1.Job {
 	agentRunExecutionSpec, _ := runtimeservice.AgentRunExecutionSpecFromJobInput(job.JobInputJSON)
+	buildExecutionSpec, _ := runtimeservice.BuildExecutionSpecFromJobInput(job.JobInputJSON)
+	deployExecutionSpec, _ := runtimeservice.DeployExecutionSpecFromJobInput(job.JobInputJSON)
 	return &runtimev1.Job{
 		JobId:                 job.ID.String(),
 		CommandId:             job.CommandID,
@@ -186,7 +188,72 @@ func JobToProto(job entity.Job) *runtimev1.Job {
 		Version:               job.Version,
 		Steps:                 jobStepsToProto(job.Steps),
 		AgentRunExecutionSpec: agentRunExecutionSpecToProto(agentRunExecutionSpec),
+		BuildExecutionSpec:    buildExecutionSpecToProto(buildExecutionSpec),
+		DeployExecutionSpec:   deployExecutionSpecToProto(deployExecutionSpec),
 	}
+}
+
+func buildExecutionSpecToProto(spec *runtimeservice.BuildExecutionSpecInput) *runtimev1.BuildExecutionSpec {
+	if spec == nil {
+		return nil
+	}
+	return &runtimev1.BuildExecutionSpec{
+		SourceRef:            spec.SourceRef,
+		SourceCommitSha:      spec.SourceCommitSHA,
+		ServiceKey:           spec.ServiceKey,
+		ImageRef:             spec.ImageRef,
+		ImageTag:             spec.ImageTag,
+		ImageDigest:          optionalStringPtr(spec.ImageDigest),
+		BuildContextRef:      spec.BuildContextRef,
+		BuildContextDigest:   spec.BuildContextDigest,
+		DockerfileRef:        spec.DockerfileRef,
+		DockerfileDigest:     optionalStringPtr(spec.DockerfileDigest),
+		DockerfileTarget:     spec.DockerfileTarget,
+		BuilderImageRef:      spec.BuilderImageRef,
+		BuildPlanFingerprint: spec.BuildPlanFingerprint,
+		AllowedSecretRefs:    runtimeJobAllowedSecretRefsToProto(spec.AllowedSecretRefs),
+		OutputRefs:           runtimeJobOutputRefsToProto(spec.OutputRefs),
+	}
+}
+
+func deployExecutionSpecToProto(spec *runtimeservice.DeployExecutionSpecInput) *runtimev1.DeployExecutionSpec {
+	if spec == nil {
+		return nil
+	}
+	return &runtimev1.DeployExecutionSpec{
+		SourceRef:             spec.SourceRef,
+		SourceCommitSha:       spec.SourceCommitSHA,
+		ServiceKey:            spec.ServiceKey,
+		ImageRef:              spec.ImageRef,
+		ImageTag:              spec.ImageTag,
+		ImageDigest:           spec.ImageDigest,
+		ManifestRef:           spec.ManifestRef,
+		ManifestDigest:        spec.ManifestDigest,
+		KustomizationRef:      spec.KustomizationRef,
+		KustomizationDigest:   spec.KustomizationDigest,
+		TargetNamespace:       spec.TargetNamespace,
+		TargetClusterRef:      spec.TargetClusterRef,
+		TargetSlotId:          optionalStringPtr(spec.TargetSlotID),
+		DeployPlanFingerprint: spec.DeployPlanFingerprint,
+		AllowedSecretRefs:     runtimeJobAllowedSecretRefsToProto(spec.AllowedSecretRefs),
+		OutputRefs:            runtimeJobOutputRefsToProto(spec.OutputRefs),
+	}
+}
+
+func runtimeJobAllowedSecretRefsToProto(refs []runtimeservice.RuntimeJobExecutionRefInput) []*runtimev1.RuntimeJobAllowedSecretRef {
+	return runtimeRefSliceToProto(refs, runtimeJobAllowedSecretRefToProto)
+}
+
+func runtimeJobOutputRefsToProto(refs []runtimeservice.RuntimeJobExecutionRefInput) []*runtimev1.RuntimeJobOutputRef {
+	return runtimeRefSliceToProto(refs, runtimeJobOutputRefToProto)
+}
+
+func runtimeJobAllowedSecretRefToProto(ref runtimeservice.AgentRunExecutionRefInput) *runtimev1.RuntimeJobAllowedSecretRef {
+	return &runtimev1.RuntimeJobAllowedSecretRef{Purpose: ref.Kind, SecretRef: ref.Ref}
+}
+
+func runtimeJobOutputRefToProto(ref runtimeservice.AgentRunExecutionRefInput) *runtimev1.RuntimeJobOutputRef {
+	return &runtimev1.RuntimeJobOutputRef{Kind: ref.Kind, Ref: ref.Ref}
 }
 
 func agentRunExecutionSpecToProto(spec *runtimeservice.AgentRunExecutionSpecInput) *runtimev1.AgentRunExecutionSpec {
@@ -213,23 +280,19 @@ func agentRunExecutionSpecToProto(spec *runtimeservice.AgentRunExecutionSpecInpu
 }
 
 func agentRunAllowedSecretRefsToProto(refs []runtimeservice.AgentRunExecutionRefInput) []*runtimev1.AgentRunAllowedSecretRef {
-	result := make([]*runtimev1.AgentRunAllowedSecretRef, len(refs))
-	for index := range refs {
-		ref := refs[index]
-		result[index] = &runtimev1.AgentRunAllowedSecretRef{SecretRef: ref.Ref, Purpose: ref.Kind}
-	}
-	return result
+	return runtimeRefSliceToProto(refs, agentRunAllowedSecretRefToProto)
 }
 
 func agentRunReportingTargetRefsToProto(refs []runtimeservice.AgentRunExecutionRefInput) []*runtimev1.AgentRunReportingTargetRef {
-	if len(refs) == 0 {
-		return nil
-	}
-	result := make([]*runtimev1.AgentRunReportingTargetRef, 0, len(refs))
-	for _, ref := range refs {
-		result = append(result, &runtimev1.AgentRunReportingTargetRef{Kind: ref.Kind, Ref: ref.Ref})
-	}
-	return result
+	return runtimeRefSliceToProto(refs, agentRunReportingTargetRefToProto)
+}
+
+func agentRunAllowedSecretRefToProto(ref runtimeservice.AgentRunExecutionRefInput) *runtimev1.AgentRunAllowedSecretRef {
+	return &runtimev1.AgentRunAllowedSecretRef{SecretRef: ref.Ref, Purpose: ref.Kind}
+}
+
+func agentRunReportingTargetRefToProto(ref runtimeservice.AgentRunExecutionRefInput) *runtimev1.AgentRunReportingTargetRef {
+	return &runtimev1.AgentRunReportingTargetRef{Kind: ref.Kind, Ref: ref.Ref}
 }
 
 func codexSessionExecutionSpecToProto(spec *runtimeservice.CodexSessionExecutionSpecInput) *runtimev1.CodexSessionExecutionSpec {
@@ -255,13 +318,23 @@ func codexSessionExecutionSpecToProto(spec *runtimeservice.CodexSessionExecution
 }
 
 func agentRunExecutionRefsToProto(refs []runtimeservice.AgentRunExecutionRefInput) []*runtimev1.AgentRunExecutionRef {
+	return runtimeRefSliceToProto(refs, agentRunExecutionRefToProto)
+}
+
+func agentRunExecutionRefToProto(ref runtimeservice.AgentRunExecutionRefInput) *runtimev1.AgentRunExecutionRef {
+	return &runtimev1.AgentRunExecutionRef{Kind: ref.Kind, Ref: ref.Ref}
+}
+
+func runtimeRefSliceToProto[Proto any](
+	refs []runtimeservice.AgentRunExecutionRefInput,
+	build func(runtimeservice.AgentRunExecutionRefInput) *Proto,
+) []*Proto {
 	if len(refs) == 0 {
 		return nil
 	}
-	result := make([]*runtimev1.AgentRunExecutionRef, len(refs))
+	result := make([]*Proto, len(refs))
 	for index := range refs {
-		ref := refs[index]
-		result[index] = &runtimev1.AgentRunExecutionRef{Kind: ref.Kind, Ref: ref.Ref}
+		result[index] = build(refs[index])
 	}
 	return result
 }
