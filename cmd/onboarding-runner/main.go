@@ -642,6 +642,15 @@ func validateApplyPolicy(options runnerOptions, scenario onboardingScenario) err
 	if owner != options.AllowedProviderOwner {
 		return fmt.Errorf("apply target owner %q is not allowed", owner)
 	}
+	if hasRepositoryBindingSetup(scenario) {
+		if options.AllowedProviderRepository == "" {
+			return errors.New("repository_binding apply requires allowed provider repository")
+		}
+		if name != options.AllowedProviderRepository {
+			return fmt.Errorf("apply target repository %q is not allowed", name)
+		}
+		return nil
+	}
 	if options.RepositoryNamePrefix == "" && options.AllowedProviderRepository == "" {
 		return errors.New("apply requires repository name prefix or allowed provider repository")
 	}

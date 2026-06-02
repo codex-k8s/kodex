@@ -518,6 +518,32 @@ func TestRunApplyRejectsUnsafeSelfRepositoryTargetBeforeAttach(t *testing.T) {
 	}
 }
 
+func TestRunApplyRejectsSelfRepositoryBindingPrefixOnlyPolicyBeforeAttach(t *testing.T) {
+	scenarioPath := writeScenario(t, selfRepositoryScenario())
+	projectClient := &fakeProjectCatalogClient{attachRepositoryResponse: selfRepositoryFixture()}
+	clients := runnerClients{
+		ProjectCatalog: projectClient,
+		ProviderHub:    &fakeProviderHubClient{},
+	}
+
+	err := run(context.Background(), runnerOptions{
+		ScenarioFilePath:     scenarioPath,
+		ProjectID:            "project-1",
+		AllowedProviderOwner: "codex-k8s",
+		RepositoryNamePrefix: "kodex",
+		RequestID:            "req-1",
+		Kind:                 "adoption",
+		Apply:                true,
+	}, clients, ioDiscard{})
+	if err == nil {
+		t.Fatal("expected prefix-only repository_binding guard error")
+	}
+	assertContains(t, err.Error(), "repository_binding apply requires allowed provider repository")
+	if projectClient.attachRepositoryCalls != 0 || projectClient.adoptionReconcileCalls != 0 {
+		t.Fatalf("prefix-only repository_binding guard must not mutate product APIs: attach=%d adoption=%d", projectClient.attachRepositoryCalls, projectClient.adoptionReconcileCalls)
+	}
+}
+
 func TestRunRejectsUnsafeRepositoryChangePath(t *testing.T) {
 	scenario := selfRepositoryScenario()
 	scenario.RepositoryChange.ChangedPaths[0].Path = "../services.yaml"
