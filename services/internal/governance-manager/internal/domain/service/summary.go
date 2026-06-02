@@ -26,6 +26,7 @@ const (
 	governanceSummaryNextActionNone                   = "none"
 	governanceSummaryNextActionResolveBlockingSignal  = "resolve_blocking_signal"
 	governanceSummaryNextActionReviewBlockingDecision = "review_blocking_decision"
+	governanceSummaryNextActionRequestGate            = "request_governance_gate"
 	governanceSummaryNextActionRecordGateDecision     = "record_gate_decision"
 	governanceSummaryNextActionRecordReleaseDecision  = "record_release_decision"
 	governanceSummaryNextActionReviewPendingDecision  = "review_pending_decision"
@@ -301,17 +302,18 @@ func (s *Service) appendReviewSignalByID(ctx context.Context, meta QueryMeta, su
 
 func appendRiskAssessmentSummary(summary *entity.GovernanceSummary, seen *governanceSummarySeen, assessment entity.RiskAssessment) {
 	item := entity.GovernanceDecisionSummary{
-		Kind:           enum.GovernanceDecisionSummaryKindRiskAssessment,
-		Attention:      riskAssessmentAttention(assessment),
-		ID:             assessment.ID.String(),
-		Target:         assessment.Target,
-		ProjectContext: assessment.ProjectContext,
-		RiskClass:      assessment.EffectiveRiskClass,
-		SafeSummary:    firstNonEmpty(assessment.Explanation, assessment.EvaluationSummary.Summary),
-		EvidenceRefs:   assessment.EvidenceRefs,
-		Version:        assessment.Version,
-		CreatedAt:      assessment.CreatedAt,
-		UpdatedAt:      assessment.UpdatedAt,
+		Kind:              enum.GovernanceDecisionSummaryKindRiskAssessment,
+		Attention:         riskAssessmentAttention(assessment),
+		ID:                assessment.ID.String(),
+		Target:            assessment.Target,
+		ProjectContext:    assessment.ProjectContext,
+		RiskClass:         assessment.EffectiveRiskClass,
+		RequiredGateCount: int32(len(assessment.RequiredGates)),
+		SafeSummary:       firstNonEmpty(assessment.Explanation, assessment.EvaluationSummary.Summary),
+		EvidenceRefs:      assessment.EvidenceRefs,
+		Version:           assessment.Version,
+		CreatedAt:         assessment.CreatedAt,
+		UpdatedAt:         assessment.UpdatedAt,
 	}
 	appendEvidenceRefSummaries(summary, seen, assessment.EvidenceRefs)
 	appendSummaryDecision(summary, seen, item, riskAssessmentOpen(assessment))
@@ -542,11 +544,12 @@ func governanceSummaryStatus(summary entity.GovernanceSummary) entity.Governance
 		SummaryCode:            governanceSummaryCodeClear,
 		NextActionCode:         governanceSummaryNextActionNone,
 	}
+	coveredRequiredGates := governanceSummaryGateRequestCoverage(summary)
 	for _, item := range summary.PendingDecisions {
-		applyGovernanceSummaryDecisionStatus(&status, item, true)
+		applyGovernanceSummaryDecisionStatus(&status, item, true, coveredRequiredGates)
 	}
 	for _, item := range summary.CompletedDecisions {
-		applyGovernanceSummaryDecisionStatus(&status, item, false)
+		applyGovernanceSummaryDecisionStatus(&status, item, false, coveredRequiredGates)
 	}
 	if status.BlockedDecisionCount > 0 {
 		status.Attention = enum.GovernanceDecisionAttentionBlocked
@@ -568,12 +571,33 @@ func governanceSummaryStatus(summary entity.GovernanceSummary) entity.Governance
 	return status
 }
 
-func applyGovernanceSummaryDecisionStatus(status *entity.GovernanceSummaryStatus, item entity.GovernanceDecisionSummary, pending bool) {
+func governanceSummaryGateRequestCoverage(summary entity.GovernanceSummary) map[string]int32 {
+	covered := make(map[string]int32)
+	for _, item := range summary.PendingDecisions {
+		applyGovernanceGateRequestCoverage(covered, item)
+	}
+	for _, item := range summary.CompletedDecisions {
+		applyGovernanceGateRequestCoverage(covered, item)
+	}
+	return covered
+}
+
+func applyGovernanceGateRequestCoverage(covered map[string]int32, item entity.GovernanceDecisionSummary) {
+	if item.Kind != enum.GovernanceDecisionSummaryKindGateRequest || strings.TrimSpace(item.ParentID) == "" {
+		return
+	}
+	covered[strings.TrimSpace(item.ParentID)]++
+}
+
+func applyGovernanceSummaryDecisionStatus(status *entity.GovernanceSummaryStatus, item entity.GovernanceDecisionSummary, pending bool, coveredRequiredGates map[string]int32) {
 	if item.Attention == enum.GovernanceDecisionAttentionBlocked {
 		status.BlockedDecisionCount++
 	}
 	if item.Kind == enum.GovernanceDecisionSummaryKindGateRequest && pending {
 		status.PendingGateCount++
+	}
+	if item.Kind == enum.GovernanceDecisionSummaryKindRiskAssessment && pending && item.RequiredGateCount > 0 {
+		status.PendingRequiredGateCount += uncoveredRequiredGateCount(item, coveredRequiredGates)
 	}
 	if item.Kind == enum.GovernanceDecisionSummaryKindReleaseDecision && pending {
 		status.NextActionCode = governanceSummaryNextActionRecordReleaseDecision
@@ -586,6 +610,14 @@ func applyGovernanceSummaryDecisionStatus(status *entity.GovernanceSummaryStatus
 	}
 }
 
+func uncoveredRequiredGateCount(item entity.GovernanceDecisionSummary, coveredRequiredGates map[string]int32) int32 {
+	covered := coveredRequiredGates[strings.TrimSpace(item.ID)]
+	if covered >= item.RequiredGateCount {
+		return 0
+	}
+	return item.RequiredGateCount - covered
+}
+
 func governanceSummaryBlockedNextAction(status entity.GovernanceSummaryStatus) string {
 	if status.ActiveBlockingSignalCount > 0 {
 		return governanceSummaryNextActionResolveBlockingSignal
@@ -596,6 +628,9 @@ func governanceSummaryBlockedNextAction(status entity.GovernanceSummaryStatus) s
 func governanceSummaryPendingNextAction(status entity.GovernanceSummaryStatus) string {
 	if status.PendingGateCount > 0 {
 		return governanceSummaryNextActionRecordGateDecision
+	}
+	if status.PendingRequiredGateCount > 0 {
+		return governanceSummaryNextActionRequestGate
 	}
 	if status.NextActionCode != "" && status.NextActionCode != governanceSummaryNextActionNone {
 		return status.NextActionCode

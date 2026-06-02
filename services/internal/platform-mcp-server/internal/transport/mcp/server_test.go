@@ -1306,7 +1306,7 @@ func TestGovernanceSummaryGetRoutesToOwnerWithIntegrationSelector(t *testing.T) 
 	if err != nil {
 		t.Fatalf("Marshal(): %v", err)
 	}
-	for _, expected := range []string{"gate-request-1", "release-decision-1", "agent.acceptance", "agent_acceptance", "runtime-job-1", "pending_decisions_present", "record_gate_decision"} {
+	for _, expected := range []string{"gate-request-1", "release-decision-1", "agent.acceptance", "agent_acceptance", "runtime-job-1", "pending_decisions_present", "record_gate_decision", "pending_required_gate_count", "required_gate_count"} {
 		if !strings.Contains(string(data), expected) {
 			t.Fatalf("structured content does not include %q: %s", expected, data)
 		}
@@ -2936,6 +2936,7 @@ func fakeGovernanceSummaryResponse(scope *governancev1.GovernanceSummaryScope) *
 			BlockedDecisionCount:      0,
 			CompletedDecisionCount:    1,
 			PendingGateCount:          1,
+			PendingRequiredGateCount:  1,
 			ActiveBlockingSignalCount: 0,
 			EvidenceCount:             2,
 			DiagnosticCount:           1,
@@ -2950,6 +2951,7 @@ func fakeGovernanceSummaryResponse(scope *governancev1.GovernanceSummaryScope) *
 			ReleaseDecisionPackageId: stringPtr("release-package-1"),
 			GateRequestStatus:        governancev1.GateRequestStatus_GATE_REQUEST_STATUS_AWAITING_DECISION,
 			Severity:                 governancev1.SignalSeverity_SIGNAL_SEVERITY_WARNING,
+			RequiredGateCount:        1,
 			SafeSummary:              "Нужно решение владельца по release gate",
 			EvidenceRefs: []*governancev1.EvidenceRef{{
 				Kind:    governancev1.EvidenceKind_EVIDENCE_KIND_PROVIDER_REVIEW,

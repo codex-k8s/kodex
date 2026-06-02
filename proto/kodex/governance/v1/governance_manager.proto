@@ -702,6 +702,8 @@ message GovernanceDecisionSummary {
   string updated_at = 26;
   // observed_at is an owner-domain observation timestamp when known.
   optional string observed_at = 27;
+  // required_gate_count is set for risk summaries when policy requires governance gates.
+  int32 required_gate_count = 28;
 }
 
 // GovernanceEvidenceSummary is a safe evidence/read-model item derived from evidence_refs or integration_refs.
@@ -1241,6 +1243,8 @@ message GovernanceSummaryStatus {
   string summary_code = 10;
   // next_action_code is a bounded machine-readable hint for the next owner action.
   string next_action_code = 11;
+  // pending_required_gate_count counts policy gates that still need a gate request.
+  int32 pending_required_gate_count = 12;
 }
 
 enum GovernanceScopeType {

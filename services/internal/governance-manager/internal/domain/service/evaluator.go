@@ -863,11 +863,16 @@ func defaultRiskForSourceType(sourceType enum.RiskFactorSourceType) enum.RiskCla
 
 func riskForTag(tag string) enum.RiskClass {
 	switch strings.ToLower(strings.TrimSpace(tag)) {
-	case "secret", "secrets", "credential", "credentials", "token_scope", "signing_key", "auth", "oidc", "sso":
+	case "secret", "secrets", "secret_value", "raw_secret", "credential", "credentials", "credential_value", "token_scope",
+		"signing_key", "private_key", "webhook_secret", "kubeconfig", "auth", "auth_bypass", "disable_auth", "oidc", "sso":
 		return enum.RiskClassR3
-	case "production", "prod", "destructive", "delete", "migration", "schema", "backfill", "release", "deploy", "rollback", "runtime":
+	case "production", "prod", "destructive", "delete", "migration", "schema", "backfill", "database", "postgres", "db",
+		"release", "release_policy", "branch_rule", "deploy", "deploy_plan", "deploy_manifest", "kubernetes_manifest", "k8s_manifest",
+		"services_yaml", "services.yaml", "rbac", "service_account", "runtime", "runtime_executor", "runner", "agent_runner",
+		"gateway", "staff_gateway", "mcp_gateway", "provider_write", "webhook", "image", "container", "rollback", "self_deploy",
+		"owner_approval", "manual_review":
 		return enum.RiskClassR2
-	case "api", "service", "worker", "automation":
+	case "api", "service", "worker", "automation", "documentation", "docs", "readme", "test", "tests", "lint":
 		return enum.RiskClassR1
 	default:
 		return enum.RiskClassR0

@@ -243,6 +243,7 @@ type GovernanceDecisionSummary struct {
 	ReleaseDecisionOutcome   enum.ReleaseDecisionOutcome
 	BlockingSignalStatus     enum.BlockingSignalStatus
 	Severity                 enum.SignalSeverity
+	RequiredGateCount        int32
 	SafeSummary              string
 	EvidenceRefs             []value.EvidenceRef
 	IntegrationRefs          []value.ReleaseIntegrationRef
@@ -278,6 +279,7 @@ type GovernanceSummaryStatus struct {
 	BlockedDecisionCount      int32
 	CompletedDecisionCount    int32
 	PendingGateCount          int32
+	PendingRequiredGateCount  int32
 	ActiveBlockingSignalCount int32
 	EvidenceCount             int32
 	DiagnosticCount           int32
