@@ -1306,7 +1306,7 @@ func TestGovernanceSummaryGetRoutesToOwnerWithIntegrationSelector(t *testing.T) 
 	if err != nil {
 		t.Fatalf("Marshal(): %v", err)
 	}
-	for _, expected := range []string{"gate-request-1", "release-decision-1", "agent.acceptance", "runtime-job-1"} {
+	for _, expected := range []string{"gate-request-1", "release-decision-1", "agent.acceptance", "agent_acceptance", "runtime-job-1"} {
 		if !strings.Contains(string(data), expected) {
 			t.Fatalf("structured content does not include %q: %s", expected, data)
 		}
@@ -2942,6 +2942,10 @@ func fakeGovernanceSummaryResponse(scope *governancev1.GovernanceSummaryScope) *
 				Kind:    governancev1.EvidenceKind_EVIDENCE_KIND_PROVIDER_REVIEW,
 				Ref:     "provider-review-1",
 				Summary: "bounded review summary",
+			}, {
+				Kind:    governancev1.EvidenceKind_EVIDENCE_KIND_AGENT_ACCEPTANCE,
+				Ref:     "agent:acceptance/acceptance-1",
+				Summary: "bounded agent acceptance ref",
 			}},
 			IntegrationRefs: []*governancev1.ReleaseIntegrationRef{{
 				Domain:  "agent",

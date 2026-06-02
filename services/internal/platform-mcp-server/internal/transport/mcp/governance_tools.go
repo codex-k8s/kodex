@@ -78,6 +78,9 @@ var governanceEvidenceKindPairs = []governanceEnumPair[governancev1.EvidenceKind
 	{name: "interaction_callback", value: governancev1.EvidenceKind_EVIDENCE_KIND_INTERACTION_CALLBACK},
 	{name: "object_ref", value: governancev1.EvidenceKind_EVIDENCE_KIND_OBJECT_REF},
 	{name: "custom", value: governancev1.EvidenceKind_EVIDENCE_KIND_CUSTOM},
+	{name: "agent_acceptance", value: governancev1.EvidenceKind_EVIDENCE_KIND_AGENT_ACCEPTANCE},
+	{name: "agent_run", value: governancev1.EvidenceKind_EVIDENCE_KIND_AGENT_RUN},
+	{name: "agent_human_gate", value: governancev1.EvidenceKind_EVIDENCE_KIND_AGENT_HUMAN_GATE},
 }
 
 var governanceEvidenceKinds = governanceEnumValues(governanceEvidenceKindPairs)
