@@ -3230,6 +3230,16 @@ func TestGetGovernanceSummaryByReleasePackageReturnsSafeOwnerReadModel(t *testin
 		!summaryHasEvidence(summary.EvidenceSummaries, "provider.pull_request", "provider:pr:42") {
 		t.Fatalf("evidence summaries = %+v, want provider, agent and runtime refs", summary.EvidenceSummaries)
 	}
+	if summary.Status.Attention != enum.GovernanceDecisionAttentionBlocked ||
+		summary.Status.MaxRiskClass != enum.RiskClassR3 ||
+		summary.Status.PendingDecisionCount != int32(len(summary.PendingDecisions)) ||
+		summary.Status.BlockedDecisionCount != 1 ||
+		summary.Status.CompletedDecisionCount != int32(len(summary.CompletedDecisions)) ||
+		summary.Status.EvidenceCount != int32(len(summary.EvidenceSummaries)) ||
+		summary.Status.SummaryCode != governanceSummaryCodeBlocked ||
+		summary.Status.NextActionCode != governanceSummaryNextActionReviewBlockingDecision {
+		t.Fatalf("status = %+v, want blocked live rollup", summary.Status)
+	}
 	rendered := strings.ToLower(summaryRenderedText(summary))
 	for _, unsafe := range []string{"stdout", "stderr", "workspace", "secret", "raw_diff", "provider payload"} {
 		if strings.Contains(rendered, unsafe) {

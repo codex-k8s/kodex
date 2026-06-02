@@ -1306,7 +1306,7 @@ func TestGovernanceSummaryGetRoutesToOwnerWithIntegrationSelector(t *testing.T) 
 	if err != nil {
 		t.Fatalf("Marshal(): %v", err)
 	}
-	for _, expected := range []string{"gate-request-1", "release-decision-1", "agent.acceptance", "agent_acceptance", "runtime-job-1"} {
+	for _, expected := range []string{"gate-request-1", "release-decision-1", "agent.acceptance", "agent_acceptance", "runtime-job-1", "pending_decisions_present", "record_gate_decision"} {
 		if !strings.Contains(string(data), expected) {
 			t.Fatalf("structured content does not include %q: %s", expected, data)
 		}
@@ -2929,6 +2929,19 @@ func (f *fakeGovernanceManagerClient) GetGovernanceSummary(_ context.Context, re
 func fakeGovernanceSummaryResponse(scope *governancev1.GovernanceSummaryScope) *governancev1.GovernanceSummaryResponse {
 	return &governancev1.GovernanceSummaryResponse{Summary: &governancev1.GovernanceSummary{
 		Scope: scope,
+		Status: &governancev1.GovernanceSummaryStatus{
+			Attention:                 governancev1.GovernanceDecisionAttention_GOVERNANCE_DECISION_ATTENTION_PENDING,
+			MaxRiskClass:              governancev1.RiskClass_RISK_CLASS_R2,
+			PendingDecisionCount:      1,
+			BlockedDecisionCount:      0,
+			CompletedDecisionCount:    1,
+			PendingGateCount:          1,
+			ActiveBlockingSignalCount: 0,
+			EvidenceCount:             2,
+			DiagnosticCount:           1,
+			SummaryCode:               "pending_decisions_present",
+			NextActionCode:            "record_gate_decision",
+		},
 		PendingDecisions: []*governancev1.GovernanceDecisionSummary{{
 			Kind:                     governancev1.GovernanceDecisionSummaryKind_GOVERNANCE_DECISION_SUMMARY_KIND_GATE_REQUEST,
 			Attention:                governancev1.GovernanceDecisionAttention_GOVERNANCE_DECISION_ATTENTION_PENDING,

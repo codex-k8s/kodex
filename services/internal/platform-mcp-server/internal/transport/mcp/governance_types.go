@@ -710,10 +710,26 @@ type GovernanceSummaryOutput struct {
 // GovernanceSummary is the domain-prepared safe read model.
 type GovernanceSummary struct {
 	Scope              GovernanceSummaryScope            `json:"scope" jsonschema:"summary scope"`
+	Status             GovernanceSummaryStatus           `json:"status" jsonschema:"operator-ready governance status rollup"`
 	PendingDecisions   []GovernanceDecisionSummary       `json:"pending_decisions,omitempty" jsonschema:"pending decisions"`
 	CompletedDecisions []GovernanceDecisionSummary       `json:"completed_decisions,omitempty" jsonschema:"completed decisions"`
 	EvidenceSummaries  []GovernanceLinkedEvidenceSummary `json:"evidence_summaries,omitempty" jsonschema:"linked evidence summaries"`
 	Diagnostics        []string                          `json:"diagnostics,omitempty" jsonschema:"safe partial diagnostics"`
+}
+
+// GovernanceSummaryStatus is the domain-prepared live status rollup.
+type GovernanceSummaryStatus struct {
+	Attention                 string `json:"attention" jsonschema:"highest attention level"`
+	MaxRiskClass              string `json:"max_risk_class,omitempty" jsonschema:"highest linked risk class"`
+	PendingDecisionCount      int32  `json:"pending_decision_count" jsonschema:"count of decisions requiring action or observation"`
+	BlockedDecisionCount      int32  `json:"blocked_decision_count" jsonschema:"count of decisions currently blocking release or execution"`
+	CompletedDecisionCount    int32  `json:"completed_decision_count" jsonschema:"count of terminal or informational decisions"`
+	PendingGateCount          int32  `json:"pending_gate_count" jsonschema:"count of open governance gates"`
+	ActiveBlockingSignalCount int32  `json:"active_blocking_signal_count" jsonschema:"count of active blocking signals"`
+	EvidenceCount             int32  `json:"evidence_count" jsonschema:"count of bounded evidence summaries"`
+	DiagnosticCount           int32  `json:"diagnostic_count" jsonschema:"count of safe partial response diagnostics"`
+	SummaryCode               string `json:"summary_code" jsonschema:"bounded machine-readable governance status code"`
+	NextActionCode            string `json:"next_action_code" jsonschema:"bounded machine-readable next owner action hint"`
 }
 
 // GovernanceSummaryScope echoes the single selector used by governance-manager.
