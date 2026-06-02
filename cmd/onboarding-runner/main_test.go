@@ -392,6 +392,179 @@ func TestRunApplyRejectsAuthenticatedUserBootstrapCreateRepository(t *testing.T)
 	}
 }
 
+func TestRunDryRunPlansSelfRepositoryBindingAndChangeWithoutMutations(t *testing.T) {
+	scenarioPath := writeScenario(t, selfRepositoryScenario())
+	projectClient := &fakeProjectCatalogClient{}
+	clients := runnerClients{
+		ProjectCatalog: projectClient,
+		ProviderHub:    &fakeProviderHubClient{},
+	}
+
+	var output bytes.Buffer
+	err := run(context.Background(), runnerOptions{
+		ScenarioFilePath: scenarioPath,
+		ProjectID:        "project-1",
+		RequestID:        "req-1",
+		Kind:             "adoption",
+	}, clients, &output)
+	if err != nil {
+		t.Fatalf("run dry-run self repository: %v", err)
+	}
+
+	if projectClient.attachRepositoryCalls != 0 ||
+		projectClient.createRepositoryCalls != 0 ||
+		projectClient.bootstrapPullRequestCalls != 0 ||
+		projectClient.adoptionReconcileCalls != 0 {
+		t.Fatalf("dry-run mutated product APIs: attach=%d create=%d bootstrap_pr=%d adoption=%d",
+			projectClient.attachRepositoryCalls,
+			projectClient.createRepositoryCalls,
+			projectClient.bootstrapPullRequestCalls,
+			projectClient.adoptionReconcileCalls,
+		)
+	}
+	text := output.String()
+	assertContains(t, text, "repository binding attach ready")
+	assertContains(t, text, "target=codex-k8s/kodex")
+	assertContains(t, text, "repository change ready")
+	assertContains(t, text, "services_policy_changed=true")
+	assertContains(t, text, "deploy_relevant_changed=true")
+	assertContains(t, text, "categories=services_policy:1,deploy_relevant:1,documentation:1")
+	assertContains(t, text, "apply disabled")
+	assertNotContains(t, text, "raw_services_yaml_secret")
+}
+
+func TestRunApplyAttachesSelfRepositoryAndReconcilesAdoption(t *testing.T) {
+	scenarioPath := writeScenario(t, selfRepositoryScenario())
+	projectClient := &fakeProjectCatalogClient{attachRepositoryResponse: selfRepositoryFixture()}
+	clients := runnerClients{
+		ProjectCatalog: projectClient,
+		ProviderHub: &fakeProviderHubClient{
+			adoptionSignal: selfRepositoryMergeSignalFixture(),
+			snapshotCount:  1,
+		},
+	}
+
+	var output bytes.Buffer
+	err := run(context.Background(), runnerOptions{
+		ScenarioFilePath:          scenarioPath,
+		ProjectID:                 "project-1",
+		AllowedProviderOwner:      "codex-k8s",
+		AllowedProviderRepository: "kodex",
+		RequestID:                 "req-1",
+		Kind:                      "adoption",
+		Apply:                     true,
+	}, clients, &output)
+	if err != nil {
+		t.Fatalf("run apply self repository: %v", err)
+	}
+
+	if projectClient.attachRepositoryCalls != 1 {
+		t.Fatalf("expected one attach repository call, got %d", projectClient.attachRepositoryCalls)
+	}
+	if projectClient.adoptionReconcileCalls != 1 {
+		t.Fatalf("expected one adoption reconcile call, got %d", projectClient.adoptionReconcileCalls)
+	}
+	attachRequest := projectClient.lastAttachRepositoryRequest
+	if attachRequest == nil {
+		t.Fatal("expected attach repository request")
+	}
+	if attachRequest.GetProviderOwner() != "codex-k8s" ||
+		attachRequest.GetProviderName() != "kodex" ||
+		attachRequest.GetDefaultBranch() != "main" ||
+		attachRequest.GetProviderRepositoryId() != "provider-repo-self" {
+		t.Fatalf("unexpected attach request target: %+v", attachRequest)
+	}
+	reconcileRequest := projectClient.lastAdoptionRequest
+	if reconcileRequest == nil {
+		t.Fatal("expected adoption reconcile request")
+	}
+	if reconcileRequest.GetRepositoryId() != "repo-1" ||
+		reconcileRequest.GetMergeSignal().GetProviderTarget().GetRepositoryFullName() != "codex-k8s/kodex" ||
+		reconcileRequest.GetCheckedPolicy().GetSourcePath() != "services.yaml" {
+		t.Fatalf("unexpected adoption reconcile request: %+v", reconcileRequest)
+	}
+	text := output.String()
+	assertContains(t, text, "repository binding attached")
+	assertContains(t, text, "adoption reconcile completed")
+	assertNotContains(t, text, "raw_services_yaml_secret")
+}
+
+func TestRunApplyRejectsUnsafeSelfRepositoryTargetBeforeAttach(t *testing.T) {
+	scenario := selfRepositoryScenario()
+	scenario.RepositoryBinding.ProviderName = "production"
+	scenario.RepositoryFullName = "codex-k8s/production"
+	scenarioPath := writeScenario(t, scenario)
+	projectClient := &fakeProjectCatalogClient{attachRepositoryResponse: selfRepositoryFixture()}
+	clients := runnerClients{
+		ProjectCatalog: projectClient,
+		ProviderHub:    &fakeProviderHubClient{},
+	}
+
+	err := run(context.Background(), runnerOptions{
+		ScenarioFilePath:          scenarioPath,
+		ProjectID:                 "project-1",
+		AllowedProviderOwner:      "codex-k8s",
+		AllowedProviderRepository: "kodex",
+		RequestID:                 "req-1",
+		Kind:                      "adoption",
+		Apply:                     true,
+	}, clients, ioDiscard{})
+	if err == nil {
+		t.Fatal("expected unsafe self repository target error")
+	}
+	assertContains(t, err.Error(), "is not allowed")
+	if projectClient.attachRepositoryCalls != 0 || projectClient.adoptionReconcileCalls != 0 {
+		t.Fatalf("unsafe target must not mutate product APIs: attach=%d adoption=%d", projectClient.attachRepositoryCalls, projectClient.adoptionReconcileCalls)
+	}
+}
+
+func TestRunApplyRejectsSelfRepositoryBindingPrefixOnlyPolicyBeforeAttach(t *testing.T) {
+	scenarioPath := writeScenario(t, selfRepositoryScenario())
+	projectClient := &fakeProjectCatalogClient{attachRepositoryResponse: selfRepositoryFixture()}
+	clients := runnerClients{
+		ProjectCatalog: projectClient,
+		ProviderHub:    &fakeProviderHubClient{},
+	}
+
+	err := run(context.Background(), runnerOptions{
+		ScenarioFilePath:     scenarioPath,
+		ProjectID:            "project-1",
+		AllowedProviderOwner: "codex-k8s",
+		RepositoryNamePrefix: "kodex",
+		RequestID:            "req-1",
+		Kind:                 "adoption",
+		Apply:                true,
+	}, clients, ioDiscard{})
+	if err == nil {
+		t.Fatal("expected prefix-only repository_binding guard error")
+	}
+	assertContains(t, err.Error(), "repository_binding apply requires allowed provider repository")
+	if projectClient.attachRepositoryCalls != 0 || projectClient.adoptionReconcileCalls != 0 {
+		t.Fatalf("prefix-only repository_binding guard must not mutate product APIs: attach=%d adoption=%d", projectClient.attachRepositoryCalls, projectClient.adoptionReconcileCalls)
+	}
+}
+
+func TestRunRejectsUnsafeRepositoryChangePath(t *testing.T) {
+	scenario := selfRepositoryScenario()
+	scenario.RepositoryChange.ChangedPaths[0].Path = "../services.yaml"
+	scenarioPath := writeScenario(t, scenario)
+	clients := runnerClients{
+		ProjectCatalog: &fakeProjectCatalogClient{},
+		ProviderHub:    &fakeProviderHubClient{},
+	}
+
+	err := run(context.Background(), runnerOptions{
+		ScenarioFilePath: scenarioPath,
+		ProjectID:        "project-1",
+		RequestID:        "req-1",
+		Kind:             "adoption",
+	}, clients, ioDiscard{})
+	if err == nil {
+		t.Fatal("expected unsafe repository change path error")
+	}
+	assertContains(t, err.Error(), "unsafe")
+}
+
 func TestRunRejectsCheckedPayloadProducerForBothKinds(t *testing.T) {
 	payloadPath := writeTextFile(t, "validated-payload.json", `{"services":[]}`)
 	clients := runnerClients{
@@ -632,18 +805,36 @@ func TestRunReturnsSafeDiagnosticsForDependencyErrors(t *testing.T) {
 
 type fakeProjectCatalogClient struct {
 	repository                      *projectsv1.Repository
+	attachRepositoryResponse        *projectsv1.Repository
 	createRepositoryResponse        *projectsv1.RepositoryProviderCreateResponse
 	getRepositoryErr                error
+	attachRepositoryErr             error
 	createRepositoryErr             error
 	bootstrapPullRequestErr         error
+	attachRepositoryCalls           int
 	bootstrapReconcileCalls         int
 	adoptionReconcileCalls          int
 	createRepositoryCalls           int
 	bootstrapPullRequestCalls       int
+	lastAttachRepositoryRequest     *projectsv1.AttachRepositoryRequest
 	lastBootstrapRequest            *projectsv1.ReconcileBootstrapMergeSignalRequest
 	lastAdoptionRequest             *projectsv1.ReconcileAdoptionMergeSignalRequest
 	lastCreateRepositoryRequest     *projectsv1.CreateProviderRepositoryRequest
 	lastBootstrapPullRequestRequest *projectsv1.CreateRepositoryBootstrapPullRequestRequest
+}
+
+func (f *fakeProjectCatalogClient) AttachRepository(_ context.Context, request *projectsv1.AttachRepositoryRequest, _ ...grpc.CallOption) (*projectsv1.RepositoryResponse, error) {
+	f.attachRepositoryCalls++
+	f.lastAttachRepositoryRequest = request
+	if f.attachRepositoryErr != nil {
+		return nil, f.attachRepositoryErr
+	}
+	repository := f.attachRepositoryResponse
+	if repository == nil {
+		repository = selfRepositoryFixture()
+	}
+	f.repository = repository
+	return &projectsv1.RepositoryResponse{Repository: repository}, nil
 }
 
 func (f *fakeProjectCatalogClient) GetRepository(context.Context, *projectsv1.GetRepositoryRequest, ...grpc.CallOption) (*projectsv1.RepositoryResponse, error) {
@@ -772,6 +963,21 @@ func repositoryFixture() *projectsv1.Repository {
 	}
 }
 
+func selfRepositoryFixture() *projectsv1.Repository {
+	return &projectsv1.Repository{
+		RepositoryId:         "repo-1",
+		ProjectId:            "project-1",
+		Provider:             projectsv1.RepositoryProvider_REPOSITORY_PROVIDER_GITHUB,
+		ProviderOwner:        "codex-k8s",
+		ProviderName:         "kodex",
+		WebUrl:               "https://github.com/codex-k8s/kodex",
+		DefaultBranch:        "main",
+		Status:               projectsv1.RepositoryStatus_REPOSITORY_STATUS_ACTIVE,
+		ProviderRepositoryId: stringPtr("provider-repo-self"),
+		Version:              11,
+	}
+}
+
 func mergeSignalFixture(kind string) *providersv1.RepositoryMergeSignal {
 	signalKind := providersv1.RepositoryMergeSignalKind_REPOSITORY_MERGE_SIGNAL_KIND_BOOTSTRAP
 	if kind == "adoption" {
@@ -801,6 +1007,17 @@ func mergeSignalFixture(kind string) *providersv1.RepositoryMergeSignal {
 	}
 }
 
+func selfRepositoryMergeSignalFixture() *providersv1.RepositoryMergeSignal {
+	signal := mergeSignalFixture("adoption")
+	signal.RepositoryFullName = "codex-k8s/kodex"
+	signal.ProviderRepositoryId = "provider-repo-self"
+	signal.HeadBranch = "kodex/self-adoption"
+	signal.SourceRef = "refs/heads/kodex/self-adoption"
+	signal.MergeCommitSha = strings.Repeat("a", 40)
+	signal.SignalKey = "self-adoption-signal-key"
+	return signal
+}
+
 func checkedPayloadFixture() onboardingScenario {
 	return onboardingScenario{
 		ProjectID:            "project-1",
@@ -828,6 +1045,46 @@ func checkedPayloadFixture() onboardingScenario {
 				SourcePath:           "services.yaml",
 				ContentHash:          "sha256:adoption-content",
 				ValidatedPayloadJSON: `{"marker":"provider_payload_secret"}`,
+			},
+		},
+	}
+}
+
+func selfRepositoryScenario() onboardingScenario {
+	return onboardingScenario{
+		ProjectID:            "project-1",
+		ProviderSlug:         "github",
+		RepositoryFullName:   "codex-k8s/kodex",
+		ProviderRepositoryID: "provider-repo-self",
+		RepositoryBinding: &repositoryBindingScenario{
+			ProviderOwner:        "codex-k8s",
+			ProviderName:         "kodex",
+			WebURL:               "https://github.com/codex-k8s/kodex",
+			DefaultBranch:        "main",
+			ProviderRepositoryID: "provider-repo-self",
+			Status:               "active",
+		},
+		RepositoryChange: &repositoryChangeScenario{
+			EventName:  "push",
+			Ref:        "refs/heads/main",
+			BaseBranch: "main",
+			CommitSHA:  strings.Repeat("b", 40),
+			ChangedPaths: []repositoryChangedPathScenario{
+				{Path: "services.yaml", Action: "modified", ObjectDigest: expectedContentHash(`{"kind":"safe"}`)},
+				{Path: "deploy/base/provider-hub/kustomization.yaml", Action: "modified"},
+				{Path: "docs/platform/architecture/repository_onboarding.md", Action: "modified"},
+			},
+		},
+		Adoption: &reconcileScenario{
+			SignalKey:     "self-adoption-signal-key",
+			WatermarkJSON: `{"work_type":"repository_adoption","safe":"yes"}`,
+			CheckedPolicy: checkedPolicyScenario{
+				ArtifactRef:          "artifact://checked/self-adoption/services.yaml",
+				ArtifactDigest:       expectedContentHash(`{"services":[{"key":"project-catalog"}],"marker":"raw_services_yaml_secret"}`),
+				ArtifactVersion:      strings.Repeat("a", 40),
+				SourcePath:           "services.yaml",
+				ContentHash:          expectedContentHash(`{"services":[{"key":"project-catalog"}],"marker":"raw_services_yaml_secret"}`),
+				ValidatedPayloadJSON: `{"services":[{"key":"project-catalog"}],"marker":"raw_services_yaml_secret"}`,
 			},
 		},
 	}
