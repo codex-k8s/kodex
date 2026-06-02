@@ -18,6 +18,20 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/types/value"
 )
 
+const (
+	testInstructionDigest  = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	testResultSchemaDigest = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+)
+
+func testCodexSessionExecutionConfig() CodexSessionExecutionConfig {
+	return CodexSessionExecutionConfig{
+		ResultSchemaRef:    "object://schemas/codex-result-v1",
+		ResultSchemaDigest: testResultSchemaDigest,
+		HookEndpointRef:    "hook://codex-hook-ingress/agent-runner",
+		TimeoutSeconds:     1800,
+	}
+}
+
 func TestCreateFlowStoresCommandResult(t *testing.T) {
 	t.Parallel()
 
@@ -407,6 +421,7 @@ func TestStartAgentRunFreezesRoleAndPrompt(t *testing.T) {
 				ID:             promptVersionID,
 				RoleProfileID:  roleID,
 				PromptKind:     enum.PromptKindWork,
+				TemplateObject: value.ObjectRef{ObjectURI: "object://instructions/work-v1", ObjectDigest: testInstructionDigest},
 				TemplateDigest: "sha256:prompt",
 				Status:         enum.PromptVersionStatusActive,
 			},
@@ -477,6 +492,7 @@ func TestStartAgentRunFreezesGuidanceRefs(t *testing.T) {
 				ID:             promptVersionID,
 				RoleProfileID:  roleID,
 				PromptKind:     enum.PromptKindWork,
+				TemplateObject: value.ObjectRef{ObjectURI: "object://instructions/work-v1", ObjectDigest: testInstructionDigest},
 				TemplateDigest: "sha256:prompt",
 				Status:         enum.PromptVersionStatusActive,
 			},
@@ -658,6 +674,7 @@ func TestStartAgentRunCreatesRuntimeJobAfterPreparation(t *testing.T) {
 		RuntimePreparationEnabled: true,
 		RuntimeJobDispatchEnabled: true,
 		RuntimeJobRunnerImageRef:  "image://codex-agent@sha256:runner",
+		CodexSessionExecution:     testCodexSessionExecutionConfig(),
 	})
 
 	run, err := service.StartAgentRun(context.Background(), fixture.input)
@@ -665,7 +682,7 @@ func TestStartAgentRunCreatesRuntimeJobAfterPreparation(t *testing.T) {
 		t.Fatalf("StartAgentRun() err = %v", err)
 	}
 	if run.Status != enum.AgentRunStatusStarting || run.RuntimeContext.SlotRef != slotRef || run.RuntimeContext.JobRef != "runtime-job-123" {
-		t.Fatalf("run runtime state = %s/%+v", run.Status, run.RuntimeContext)
+		t.Fatalf("run runtime state = %s/%+v summary=%q", run.Status, run.RuntimeContext, run.ResultSummary)
 	}
 	if runtimePreparer.calls != 1 || runtimeJobCreator.calls != 1 {
 		t.Fatalf("preparer/job calls = %d/%d", runtimePreparer.calls, runtimeJobCreator.calls)
@@ -686,6 +703,24 @@ func TestStartAgentRunCreatesRuntimeJobAfterPreparation(t *testing.T) {
 	if !hasAgentRunExecutionRef(spec.ReportingTargetRefs, "agent_run_state", "agent-manager://runs/"+run.ID.String()) ||
 		!hasAgentRunExecutionRef(spec.ReportingTargetRefs, "agent_activity", "agent-manager://runs/"+run.ID.String()+"/activities") {
 		t.Fatalf("runtime job reporting refs = %+v", spec.ReportingTargetRefs)
+	}
+	codexSpec := spec.CodexSessionExecutionSpec
+	if codexSpec == nil {
+		t.Fatal("codex session execution spec is nil")
+	}
+	if codexSpec.InstructionObjectRef != "object://instructions/work-v1" ||
+		codexSpec.InstructionObjectDigest != testInstructionDigest ||
+		codexSpec.ResultSchemaRef != "object://schemas/codex-result-v1" ||
+		codexSpec.ResultSchemaDigest != testResultSchemaDigest {
+		t.Fatalf("codex instruction/schema refs = %+v", codexSpec)
+	}
+	if codexSpec.WorkspaceSnapshotRef == "" || codexSpec.SessionSnapshotRef != "" || codexSpec.TimeoutSeconds != 1800 {
+		t.Fatalf("codex snapshot/timeout = %+v", codexSpec)
+	}
+	if !hasAgentRunExecutionRef(codexSpec.CallbackRefs, "agent_run_state", "agent-manager://runs/"+run.ID.String()) ||
+		!hasAgentRunExecutionRef(codexSpec.OutputRefs, "codex_output", "agent-manager://runs/"+run.ID.String()+"/codex-output") ||
+		!hasAgentRunExecutionRef(codexSpec.ResultRefs, "codex_result", "agent-manager://runs/"+run.ID.String()+"/codex-result") {
+		t.Fatalf("codex callback/output/result refs = %+v/%+v/%+v", codexSpec.CallbackRefs, codexSpec.OutputRefs, codexSpec.ResultRefs)
 	}
 	if runtimeJobCreator.last.Meta.CommandID == uuid.Nil || runtimeJobCreator.last.Meta.Actor != testActor() {
 		t.Fatalf("runtime job meta = %+v", runtimeJobCreator.last.Meta)
@@ -723,6 +758,7 @@ func TestStartAgentRunWaitsForRuntimeMaterializationBeforeJobDispatch(t *testing
 		RuntimePreparationEnabled: true,
 		RuntimeJobDispatchEnabled: true,
 		RuntimeJobRunnerImageRef:  "image://codex-agent@sha256:runner",
+		CodexSessionExecution:     testCodexSessionExecutionConfig(),
 	})
 
 	run, err := service.StartAgentRun(context.Background(), fixture.input)
@@ -798,6 +834,7 @@ func TestStartAgentRunStoresRetryableRuntimeJobFailureAsWaiting(t *testing.T) {
 		RuntimePreparationEnabled: true,
 		RuntimeJobDispatchEnabled: true,
 		RuntimeJobRunnerImageRef:  "image://codex-agent@sha256:runner",
+		CodexSessionExecution:     testCodexSessionExecutionConfig(),
 	})
 
 	run, err := service.StartAgentRun(context.Background(), fixture.input)
@@ -872,6 +909,7 @@ func TestStartAgentRunStoresPermanentRuntimeJobFailureAsFailed(t *testing.T) {
 		RuntimePreparationEnabled: true,
 		RuntimeJobDispatchEnabled: true,
 		RuntimeJobRunnerImageRef:  "image://codex-agent@sha256:runner",
+		CodexSessionExecution:     testCodexSessionExecutionConfig(),
 	})
 
 	run, err := service.StartAgentRun(context.Background(), fixture.input)
@@ -954,6 +992,7 @@ func TestStartAgentRunRuntimeJobDispatchRequiresExecutionSpecRefs(t *testing.T) 
 				RuntimePreparationEnabled: true,
 				RuntimeJobDispatchEnabled: true,
 				RuntimeJobRunnerImageRef:  tt.runnerImageRef,
+				CodexSessionExecution:     testCodexSessionExecutionConfig(),
 			})
 
 			run, err := service.StartAgentRun(context.Background(), fixture.input)
@@ -967,6 +1006,175 @@ func TestStartAgentRunRuntimeJobDispatchRequiresExecutionSpecRefs(t *testing.T) 
 				t.Fatalf("result summary = %q", run.ResultSummary)
 			}
 		})
+	}
+}
+
+func TestStartAgentRunCodexSessionExecutionSpecRequiresMaterializedRefs(t *testing.T) {
+	t.Parallel()
+
+	readyResult := RuntimePreparationResult{
+		SlotRef:                        uuid.MustParse("10101010-bbbb-cccc-dddd-eeeeeeeeeeee").String(),
+		SlotStatus:                     RuntimeSlotStatusReady,
+		WorkspaceRef:                   uuid.MustParse("10101010-cccc-dddd-eeee-ffffffffffff").String(),
+		WorkspaceMaterializationStatus: RuntimeWorkspaceMaterializationStatusCompleted,
+		ContextDigest:                  "sha256:agent-run-context",
+		MaterializationFingerprint:     "sha256:workspace",
+	}
+	tests := []struct {
+		name       string
+		edit       func(*runtimePreparationFixture, *CodexSessionExecutionConfig)
+		wantStatus enum.AgentRunStatus
+		wantReason string
+	}{
+		{
+			name: "missing instruction object waits",
+			edit: func(fixture *runtimePreparationFixture, _ *CodexSessionExecutionConfig) {
+				version := fixture.repository.promptVersionByID[fixture.promptVersionID]
+				version.TemplateObject = value.ObjectRef{}
+				fixture.repository.promptVersionByID[fixture.promptVersionID] = version
+			},
+			wantStatus: enum.AgentRunStatusWaiting,
+			wantReason: "runtime job retryable",
+		},
+		{
+			name: "missing result schema waits",
+			edit: func(_ *runtimePreparationFixture, cfg *CodexSessionExecutionConfig) {
+				cfg.ResultSchemaRef = ""
+				cfg.ResultSchemaDigest = ""
+			},
+			wantStatus: enum.AgentRunStatusWaiting,
+			wantReason: "runtime job retryable",
+		},
+		{
+			name: "invalid schema digest fails",
+			edit: func(_ *runtimePreparationFixture, cfg *CodexSessionExecutionConfig) {
+				cfg.ResultSchemaDigest = "sha256:not-a-digest"
+			},
+			wantStatus: enum.AgentRunStatusFailed,
+			wantReason: "failed_precondition",
+		},
+		{
+			name: "invalid instruction ref fails",
+			edit: func(fixture *runtimePreparationFixture, _ *CodexSessionExecutionConfig) {
+				version := fixture.repository.promptVersionByID[fixture.promptVersionID]
+				version.TemplateObject.ObjectURI = "object://prompt_body/raw"
+				fixture.repository.promptVersionByID[fixture.promptVersionID] = version
+			},
+			wantStatus: enum.AgentRunStatusFailed,
+			wantReason: "failed_precondition",
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			fixture := newRuntimePreparationFixture()
+			codexConfig := testCodexSessionExecutionConfig()
+			tt.edit(&fixture, &codexConfig)
+			runtimePreparer := &fakeRuntimePreparer{result: readyResult}
+			runtimeJobCreator := &fakeRuntimeJobCreator{result: RuntimeJobResult{JobRef: "runtime-job-123", Status: "pending"}}
+			service := New(Config{
+				Repository:                fixture.repository,
+				Clock:                     fixedClock{now: fixture.now},
+				IDGenerator:               &sequenceIDGenerator{ids: fixture.ids},
+				GuidanceResolver:          fixture.guidanceResolver,
+				WorkspacePolicyResolver:   fixture.policyResolver,
+				RuntimePreparer:           runtimePreparer,
+				RuntimeJobCreator:         runtimeJobCreator,
+				RuntimePreparationEnabled: true,
+				RuntimeJobDispatchEnabled: true,
+				RuntimeJobRunnerImageRef:  "image://codex-agent@sha256:runner",
+				CodexSessionExecution:     codexConfig,
+			})
+
+			run, err := service.StartAgentRun(context.Background(), fixture.input)
+			if err != nil {
+				t.Fatalf("StartAgentRun() err = %v", err)
+			}
+			if run.Status != tt.wantStatus || run.RuntimeContext.JobRef != "" || runtimeJobCreator.calls != 0 {
+				t.Fatalf("run/job state = %s/%+v calls=%d", run.Status, run.RuntimeContext, runtimeJobCreator.calls)
+			}
+			if !strings.Contains(run.ResultSummary, tt.wantReason) {
+				t.Fatalf("result summary = %q, want marker %q", run.ResultSummary, tt.wantReason)
+			}
+		})
+	}
+}
+
+func TestStartAgentRunReplayDispatchesCodexSessionSpecAfterRefsReady(t *testing.T) {
+	t.Parallel()
+
+	fixture := newRuntimePreparationFixture()
+	slotRef := uuid.MustParse("10101010-bbbb-cccc-dddd-eeeeeeeeeeee").String()
+	materializationRef := uuid.MustParse("10101010-cccc-dddd-eeee-ffffffffffff").String()
+	run := entity.AgentRun{
+		VersionedBase:           entity.VersionedBase{ID: fixture.runID, Version: 2, CreatedAt: fixture.now, UpdatedAt: fixture.now},
+		SessionID:               fixture.sessionID,
+		RoleProfileID:           fixture.roleID,
+		RoleProfileVersion:      1,
+		RoleProfileDigest:       "sha256:role",
+		PromptTemplateVersionID: fixture.promptVersionID,
+		PromptTemplateDigest:    "sha256:prompt",
+		RuntimeContext:          value.RuntimeContextRef{SlotRef: slotRef, WorkspaceRef: materializationRef},
+		GuidanceRefs:            fixture.guidanceResolver.refs,
+		Status:                  enum.AgentRunStatusWaiting,
+		ResultSummary:           "runtime job retryable: code=dependency_unavailable; message=codex session execution refs are not materialized",
+	}
+	startedRun := run
+	startedRun.Version = 1
+	startedRun.RuntimeContext = value.RuntimeContextRef{}
+	startedRun.Status = enum.AgentRunStatusRequested
+	startedRun.ResultSummary = ""
+	payload, err := marshalCommandPayload(agentRunCommandPayload{Run: startedRun})
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	commandID := fixture.input.Meta.CommandID
+	fixture.repository.replay = &entity.CommandResult{
+		CommandID:     &commandID,
+		Actor:         testActor(),
+		Operation:     operationStartAgentRun,
+		AggregateType: enum.CommandAggregateTypeRun,
+		AggregateID:   run.ID,
+		ResultPayload: payload,
+	}
+	fixture.repository.runByID = map[uuid.UUID]entity.AgentRun{run.ID: run}
+	runtimePreparer := &fakeRuntimePreparer{result: RuntimePreparationResult{
+		SlotRef:                        slotRef,
+		SlotStatus:                     RuntimeSlotStatusReady,
+		WorkspaceRef:                   materializationRef,
+		WorkspaceMaterializationStatus: RuntimeWorkspaceMaterializationStatusCompleted,
+		ContextDigest:                  "sha256:agent-run-context",
+		MaterializationFingerprint:     "sha256:workspace",
+	}}
+	runtimeJobCreator := &fakeRuntimeJobCreator{result: RuntimeJobResult{JobRef: "runtime-job-123", Status: "pending"}}
+	service := New(Config{
+		Repository:                fixture.repository,
+		Clock:                     fixedClock{now: fixture.now},
+		IDGenerator:               &sequenceIDGenerator{ids: fixture.ids},
+		GuidanceResolver:          fixture.guidanceResolver,
+		WorkspacePolicyResolver:   fixture.policyResolver,
+		RuntimePreparer:           runtimePreparer,
+		RuntimeJobCreator:         runtimeJobCreator,
+		RuntimePreparationEnabled: true,
+		RuntimeJobDispatchEnabled: true,
+		RuntimeJobRunnerImageRef:  "image://codex-agent@sha256:runner",
+		CodexSessionExecution:     testCodexSessionExecutionConfig(),
+	})
+
+	replay, err := service.StartAgentRun(context.Background(), fixture.input)
+	if err != nil {
+		t.Fatalf("StartAgentRun() err = %v", err)
+	}
+	if runtimePreparer.calls != 1 || runtimeJobCreator.calls != 1 {
+		t.Fatalf("preparer/job calls = %d/%d", runtimePreparer.calls, runtimeJobCreator.calls)
+	}
+	if replay.RuntimeContext.JobRef != "runtime-job-123" || replay.Status != enum.AgentRunStatusStarting {
+		t.Fatalf("replayed run = %s/%+v", replay.Status, replay.RuntimeContext)
+	}
+	if runtimeJobCreator.last.ExecutionSpec.CodexSessionExecutionSpec == nil {
+		t.Fatal("replay runtime job missing codex session execution spec")
 	}
 }
 
@@ -993,6 +1201,7 @@ func TestStartAgentRunRuntimeJobDispatchRejectsMissingGuidanceRefs(t *testing.T)
 		RuntimePreparationEnabled: true,
 		RuntimeJobDispatchEnabled: true,
 		RuntimeJobRunnerImageRef:  "image://codex-agent@sha256:runner",
+		CodexSessionExecution:     testCodexSessionExecutionConfig(),
 	})
 
 	run, err := service.StartAgentRun(context.Background(), fixture.input)
@@ -1012,7 +1221,7 @@ func TestStartAgentRunRuntimeRequestDoesNotCarryTextPayloads(t *testing.T) {
 		ID:             fixture.promptVersionID,
 		RoleProfileID:  fixture.roleID,
 		PromptKind:     enum.PromptKindWork,
-		TemplateObject: value.ObjectRef{ObjectURI: "s3://prompt-template-text/payload"},
+		TemplateObject: value.ObjectRef{ObjectURI: "object://instructions/safe-work", ObjectDigest: testInstructionDigest},
 		TemplateDigest: "sha256:prompt",
 		Status:         enum.PromptVersionStatusActive,
 	}
@@ -1075,6 +1284,7 @@ func TestStartAgentRunRuntimeJobSpecDoesNotCarryTextPayloads(t *testing.T) {
 		RuntimePreparationEnabled: true,
 		RuntimeJobDispatchEnabled: true,
 		RuntimeJobRunnerImageRef:  "image://codex-agent@sha256:runner",
+		CodexSessionExecution:     testCodexSessionExecutionConfig(),
 	})
 
 	if _, err := service.StartAgentRun(context.Background(), fixture.input); err != nil {
@@ -1207,6 +1417,7 @@ func TestStartAgentRunReplayDispatchesRuntimeJobAfterMaterializationReady(t *tes
 		RuntimePreparationEnabled: true,
 		RuntimeJobDispatchEnabled: true,
 		RuntimeJobRunnerImageRef:  "image://codex-agent@sha256:runner",
+		CodexSessionExecution:     testCodexSessionExecutionConfig(),
 	})
 
 	replay, err := service.StartAgentRun(context.Background(), fixture.input)
@@ -1556,6 +1767,7 @@ func TestStartAgentRunValidatesStageRoleBinding(t *testing.T) {
 				ID:             promptVersionID,
 				RoleProfileID:  roleID,
 				PromptKind:     enum.PromptKindWork,
+				TemplateObject: value.ObjectRef{ObjectURI: "object://instructions/work-v1", ObjectDigest: testInstructionDigest},
 				TemplateDigest: "sha256:prompt",
 				Status:         enum.PromptVersionStatusActive,
 			},
@@ -5602,6 +5814,7 @@ func newRuntimePreparationFixture() runtimePreparationFixture {
 				ID:             promptVersionID,
 				RoleProfileID:  roleID,
 				PromptKind:     enum.PromptKindWork,
+				TemplateObject: value.ObjectRef{ObjectURI: "object://instructions/work-v1", ObjectDigest: testInstructionDigest},
 				TemplateDigest: "sha256:prompt",
 				Status:         enum.PromptVersionStatusActive,
 			},

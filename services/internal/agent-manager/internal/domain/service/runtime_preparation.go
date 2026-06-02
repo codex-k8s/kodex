@@ -35,7 +35,12 @@ const (
 	runtimeJobReportingRefLimit   = 8
 )
 
-var guidanceLocalNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,62}$`)
+var (
+	guidanceLocalNamePattern      = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,62}$`)
+	runtimeJobSHA256DigestPattern = regexp.MustCompile(`(?i)^sha256:[0-9a-f]{64}$`)
+)
+
+const runtimeJobUnsafeMarkerList = "raw_provider_payload|provider_payload|prompt_text|prompt_body|prompt_template|transcript|tool_input|tool_output|workspace_path|kubeconfig|secret_value|token=|authorization|stdout|stderr|large_log|-----begin|bearer "
 
 // RuntimePreparationError carries a safe failure classification across the runtime-manager port.
 type RuntimePreparationError struct {
@@ -117,7 +122,7 @@ func (s *Service) prepareRuntimeForRun(
 		return s.recordRuntimePreparationFailure(ctx, meta, run, err)
 	}
 	if s.runtimeJobDispatchEnabled {
-		return s.dispatchRuntimeJobForRun(ctx, meta, role, run, result)
+		return s.dispatchRuntimeJobForRun(ctx, meta, session, role, promptVersion, run, result)
 	}
 	return s.recordRuntimePreparationSuccess(ctx, meta, run, result)
 }
@@ -155,7 +160,7 @@ func (s *Service) retryRuntimeJobDispatchForReplay(ctx context.Context, meta val
 		}
 		return run, nil
 	}
-	return s.dispatchRuntimeJobForRun(ctx, meta, role, run, result)
+	return s.dispatchRuntimeJobForRun(ctx, meta, session, role, promptVersion, run, result)
 }
 
 func terminalRunStatus(status enum.AgentRunStatus) bool {
@@ -481,7 +486,9 @@ func (s *Service) recordRuntimePreparationSuccess(
 func (s *Service) dispatchRuntimeJobForRun(
 	ctx context.Context,
 	meta value.CommandMeta,
+	session entity.AgentSession,
 	role entity.RoleProfile,
+	promptVersion entity.PromptTemplateVersion,
 	run entity.AgentRun,
 	result RuntimePreparationResult,
 ) (entity.AgentRun, error) {
@@ -499,8 +506,11 @@ func (s *Service) dispatchRuntimeJobForRun(
 	if !runtimePreparationReadyForJob(result) {
 		return s.recordRuntimeMaterializationPending(ctx, meta, run, runtimeContext, result)
 	}
-	spec, err := s.agentRunExecutionSpec(run, role, result)
+	spec, err := s.agentRunExecutionSpec(ctx, session, run, role, promptVersion, result)
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return run, err
+		}
 		return s.recordRuntimeOperationFailure(ctx, meta, run, runtimeContext, classifyRuntimeJobFailure(err), runtimeJobReasonRetryable, runtimeJobFailureCode)
 	}
 	job, err := s.runtimeJobCreator.CreateAgentRunJob(ctx, RuntimeJobInput{
@@ -537,7 +547,14 @@ func runtimePreparationTerminalFailure(result RuntimePreparationResult) error {
 	}
 }
 
-func (s *Service) agentRunExecutionSpec(run entity.AgentRun, role entity.RoleProfile, result RuntimePreparationResult) (AgentRunExecutionSpec, error) {
+func (s *Service) agentRunExecutionSpec(
+	ctx context.Context,
+	session entity.AgentSession,
+	run entity.AgentRun,
+	role entity.RoleProfile,
+	promptVersion entity.PromptTemplateVersion,
+	result RuntimePreparationResult,
+) (AgentRunExecutionSpec, error) {
 	slotID, err := requiredRuntimeUUID(result.SlotRef)
 	if err != nil {
 		return AgentRunExecutionSpec{}, missingRuntimeJobSpecDependency()
@@ -577,6 +594,11 @@ func (s *Service) agentRunExecutionSpec(run entity.AgentRun, role entity.RolePro
 	if contextRef := strings.TrimSpace(result.ContextRef); contextRef != "" && !strings.HasPrefix(contextRef, "sha256:") {
 		spec.ContextRef = contextRef
 	}
+	codexSpec, err := s.codexSessionExecutionSpec(ctx, session, run, promptVersion, materializationID, spec)
+	if err != nil {
+		return AgentRunExecutionSpec{}, err
+	}
+	spec.CodexSessionExecutionSpec = &codexSpec
 	if err := validateAgentRunExecutionSpec(spec); err != nil {
 		return AgentRunExecutionSpec{}, err
 	}
@@ -610,11 +632,142 @@ func validateAgentRunExecutionSpec(spec AgentRunExecutionSpec) error {
 	if _, err := normalizeRuntimeJobRefs(spec.ReportingTargetRefs, runtimeJobReportingRefLimit); err != nil {
 		return missingRuntimeJobSpecDependency()
 	}
+	if spec.CodexSessionExecutionSpec == nil {
+		return missingCodexSessionExecutionDependency()
+	}
+	if err := validateCodexSessionExecutionSpec(*spec.CodexSessionExecutionSpec, spec); err != nil {
+		return err
+	}
 	return nil
 }
 
 func missingRuntimeJobSpecDependency() error {
 	return NewRuntimeJobError(true, "dependency_unavailable", "runtime-manager returned incomplete agent run execution refs")
+}
+
+func missingCodexSessionExecutionDependency() error {
+	return NewRuntimeJobError(true, "dependency_unavailable", "codex session execution refs are not materialized")
+}
+
+func (s *Service) codexSessionExecutionSpec(
+	ctx context.Context,
+	session entity.AgentSession,
+	run entity.AgentRun,
+	promptVersion entity.PromptTemplateVersion,
+	materializationID uuid.UUID,
+	agentRunSpec AgentRunExecutionSpec,
+) (CodexSessionExecutionSpec, error) {
+	cfg := s.codexSessionExecution
+	instructionRef := strings.TrimSpace(promptVersion.TemplateObject.ObjectURI)
+	instructionDigest := strings.TrimSpace(promptVersion.TemplateObject.ObjectDigest)
+	resultSchemaRef := strings.TrimSpace(cfg.ResultSchemaRef)
+	resultSchemaDigest := strings.TrimSpace(cfg.ResultSchemaDigest)
+	hookEndpointRef := strings.TrimSpace(cfg.HookEndpointRef)
+	if instructionRef == "" || instructionDigest == "" || resultSchemaRef == "" || resultSchemaDigest == "" || hookEndpointRef == "" {
+		return CodexSessionExecutionSpec{}, missingCodexSessionExecutionDependency()
+	}
+	sessionSnapshotRef, err := s.codexSessionSnapshotRef(ctx, session)
+	if err != nil {
+		return CodexSessionExecutionSpec{}, err
+	}
+	workspaceSnapshotRef := ""
+	if sessionSnapshotRef == "" {
+		workspaceSnapshotRef = runtimeWorkspaceSnapshotRef(materializationID)
+	}
+	spec := CodexSessionExecutionSpec{
+		CodexSessionExecutionInputRefs: CodexSessionExecutionInputRefs{
+			InstructionObjectRef:    instructionRef,
+			InstructionObjectDigest: instructionDigest,
+			ResultSchemaRef:         resultSchemaRef,
+			ResultSchemaDigest:      resultSchemaDigest,
+			SessionSnapshotRef:      sessionSnapshotRef,
+			WorkspaceSnapshotRef:    workspaceSnapshotRef,
+			HookEndpointRef:         hookEndpointRef,
+			CallbackRefs:            runtimeJobCallbackRefs(run.ID),
+		},
+		CodexSessionExecutionIORefs: CodexSessionExecutionIORefs{
+			TimeoutSeconds:    cfg.TimeoutSeconds,
+			RunnerProfileRef:  agentRunSpec.RunnerProfileRef,
+			RunnerMode:        RuntimeJobRunnerModeCodexAgent,
+			OutputRefs:        runtimeJobOutputRefs(run.ID),
+			ResultRefs:        runtimeJobResultRefs(run.ID),
+			AllowedSecretRefs: append([]AgentRunExecutionRef(nil), agentRunSpec.AllowedSecretRefs...),
+		},
+	}
+	if err := validateCodexSessionExecutionSpec(spec, agentRunSpec); err != nil {
+		return CodexSessionExecutionSpec{}, err
+	}
+	return spec, nil
+}
+
+func (s *Service) codexSessionSnapshotRef(ctx context.Context, session entity.AgentSession) (string, error) {
+	if session.LatestStateSnapshotID == nil {
+		return "", nil
+	}
+	snapshot, err := s.repository.GetSessionStateSnapshot(ctx, *session.LatestStateSnapshotID)
+	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return "", err
+		}
+		return "", missingCodexSessionExecutionDependency()
+	}
+	ref := strings.TrimSpace(snapshot.Object.ObjectURI)
+	if ref == "" {
+		return "", missingCodexSessionExecutionDependency()
+	}
+	if !safeRuntimeJobRef(ref, true) {
+		return "", invalidCodexSessionExecutionSpec()
+	}
+	return ref, nil
+}
+
+func validateCodexSessionExecutionSpec(spec CodexSessionExecutionSpec, agentRunSpec AgentRunExecutionSpec) error {
+	requiredRefs := []string{
+		spec.InstructionObjectRef,
+		spec.ResultSchemaRef,
+		spec.HookEndpointRef,
+		spec.RunnerProfileRef,
+	}
+	for _, ref := range requiredRefs {
+		if !safeRuntimeJobRef(ref, true) {
+			return invalidCodexSessionExecutionSpec()
+		}
+	}
+	if !validRuntimeJobSHA256Digest(spec.InstructionObjectDigest) || !validRuntimeJobSHA256Digest(spec.ResultSchemaDigest) {
+		return invalidCodexSessionExecutionSpec()
+	}
+	if spec.SessionSnapshotRef == "" && spec.WorkspaceSnapshotRef == "" {
+		return missingCodexSessionExecutionDependency()
+	}
+	if !safeRuntimeJobRef(spec.SessionSnapshotRef, false) || !safeRuntimeJobRef(spec.WorkspaceSnapshotRef, false) {
+		return invalidCodexSessionExecutionSpec()
+	}
+	if spec.TimeoutSeconds <= 0 {
+		return missingCodexSessionExecutionDependency()
+	}
+	if spec.TimeoutSeconds > 24*60*60 {
+		return invalidCodexSessionExecutionSpec()
+	}
+	if spec.RunnerProfileRef != agentRunSpec.RunnerProfileRef || spec.RunnerMode != RuntimeJobRunnerModeCodexAgent {
+		return invalidCodexSessionExecutionSpec()
+	}
+	if _, err := normalizeRuntimeJobRefs(spec.CallbackRefs, runtimeJobReportingRefLimit); err != nil || len(spec.CallbackRefs) == 0 {
+		return invalidCodexSessionExecutionSpec()
+	}
+	if _, err := normalizeRuntimeJobRefs(spec.OutputRefs, runtimeJobReportingRefLimit); err != nil || len(spec.OutputRefs) == 0 {
+		return invalidCodexSessionExecutionSpec()
+	}
+	if _, err := normalizeRuntimeJobRefs(spec.ResultRefs, runtimeJobReportingRefLimit); err != nil || len(spec.ResultRefs) == 0 {
+		return invalidCodexSessionExecutionSpec()
+	}
+	if _, err := normalizeRuntimeJobRefs(spec.AllowedSecretRefs, runtimeJobSecretRefLimit); err != nil {
+		return invalidCodexSessionExecutionSpec()
+	}
+	return nil
+}
+
+func invalidCodexSessionExecutionSpec() error {
+	return NewRuntimeJobError(false, "failed_precondition", "codex session execution refs are invalid")
 }
 
 func requiredRuntimeUUID(ref string) (uuid.UUID, error) {
@@ -637,6 +790,10 @@ func runtimeContextFileRef(materializationID uuid.UUID) string {
 	return "runtime://workspace-materializations/" + materializationID.String() + "/context/agent-run.json"
 }
 
+func runtimeWorkspaceSnapshotRef(materializationID uuid.UUID) string {
+	return "runtime://workspace-materializations/" + materializationID.String() + "/snapshots/workspace"
+}
+
 func runnerProfileRef(runtimeProfile string) string {
 	return "runner-profile://" + strings.TrimSpace(runtimeProfile)
 }
@@ -645,6 +802,25 @@ func runtimeJobReportingTargetRefs(runID uuid.UUID) []AgentRunExecutionRef {
 	return []AgentRunExecutionRef{
 		{Kind: "agent_run_state", Ref: "agent-manager://runs/" + runID.String()},
 		{Kind: "agent_activity", Ref: "agent-manager://runs/" + runID.String() + "/activities"},
+	}
+}
+
+func runtimeJobCallbackRefs(runID uuid.UUID) []AgentRunExecutionRef {
+	return []AgentRunExecutionRef{
+		{Kind: "agent_run_state", Ref: "agent-manager://runs/" + runID.String()},
+		{Kind: "agent_activity", Ref: "agent-manager://runs/" + runID.String() + "/activities"},
+	}
+}
+
+func runtimeJobOutputRefs(runID uuid.UUID) []AgentRunExecutionRef {
+	return []AgentRunExecutionRef{
+		{Kind: "codex_output", Ref: "agent-manager://runs/" + runID.String() + "/codex-output"},
+	}
+}
+
+func runtimeJobResultRefs(runID uuid.UUID) []AgentRunExecutionRef {
+	return []AgentRunExecutionRef{
+		{Kind: "codex_result", Ref: "agent-manager://runs/" + runID.String() + "/codex-result"},
 	}
 }
 
@@ -694,28 +870,13 @@ func safeRuntimeJobRef(value string, required bool) bool {
 	return !unsafeRuntimeJobText(value)
 }
 
+func validRuntimeJobSHA256Digest(value string) bool {
+	return runtimeJobSHA256DigestPattern.MatchString(strings.TrimSpace(value))
+}
+
 func unsafeRuntimeJobText(value string) bool {
 	lower := strings.ToLower(strings.TrimSpace(value))
-	markers := []string{
-		"raw_provider_payload",
-		"provider_payload",
-		"prompt_text",
-		"prompt_template",
-		"transcript",
-		"tool_input",
-		"tool_output",
-		"workspace_path",
-		"kubeconfig",
-		"secret_value",
-		"token=",
-		"authorization",
-		"stdout",
-		"stderr",
-		"large_log",
-		"-----begin",
-		"bearer ",
-	}
-	for _, marker := range markers {
+	for _, marker := range strings.Split(runtimeJobUnsafeMarkerList, "|") {
 		if strings.Contains(lower, marker) {
 			return true
 		}

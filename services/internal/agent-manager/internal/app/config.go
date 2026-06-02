@@ -55,6 +55,10 @@ type Config struct {
 	RuntimeManagerPrepareTimeout                   time.Duration `env:"KODEX_AGENT_MANAGER_RUNTIME_MANAGER_PREPARE_TIMEOUT" envDefault:"10s"`
 	RuntimeJobDispatchEnabled                      bool          `env:"KODEX_AGENT_MANAGER_RUNTIME_JOB_DISPATCH_ENABLED" envDefault:"false"`
 	RuntimeJobRunnerImageRef                       string        `env:"KODEX_AGENT_MANAGER_RUNTIME_JOB_RUNNER_IMAGE_REF"`
+	CodexSessionResultSchemaRef                    string        `env:"KODEX_AGENT_MANAGER_CODEX_SESSION_RESULT_SCHEMA_REF"`
+	CodexSessionResultSchemaDigest                 string        `env:"KODEX_AGENT_MANAGER_CODEX_SESSION_RESULT_SCHEMA_DIGEST"`
+	CodexSessionHookEndpointRef                    string        `env:"KODEX_AGENT_MANAGER_CODEX_SESSION_HOOK_ENDPOINT_REF" envDefault:"hook://codex-hook-ingress/agent-runner"`
+	CodexSessionTimeout                            time.Duration `env:"KODEX_AGENT_MANAGER_CODEX_SESSION_TIMEOUT" envDefault:"30m"`
 	ProviderHubWriteEnabled                        bool          `env:"KODEX_AGENT_MANAGER_PROVIDER_HUB_WRITE_ENABLED" envDefault:"false"`
 	ProviderHubGRPCAddr                            string        `env:"KODEX_AGENT_MANAGER_PROVIDER_HUB_GRPC_ADDR" envDefault:"provider-hub:9090"`
 	ProviderHubGRPCAuthToken                       string        `env:"KODEX_AGENT_MANAGER_PROVIDER_HUB_GRPC_AUTH_TOKEN"`
@@ -174,6 +178,7 @@ func (cfg Config) Validate() error {
 		{name: "KODEX_AGENT_MANAGER_PACKAGE_HUB_READ_TIMEOUT", valid: cfg.PackageHubReadTimeout > 0},
 		{name: "KODEX_AGENT_MANAGER_PROJECT_CATALOG_READ_TIMEOUT", valid: cfg.ProjectCatalogReadTimeout > 0},
 		{name: "KODEX_AGENT_MANAGER_RUNTIME_MANAGER_PREPARE_TIMEOUT", valid: cfg.RuntimeManagerPrepareTimeout > 0},
+		{name: "KODEX_AGENT_MANAGER_CODEX_SESSION_TIMEOUT", valid: cfg.CodexSessionTimeout > 0 && cfg.CodexSessionTimeout <= 24*time.Hour},
 		{name: "KODEX_AGENT_MANAGER_PROVIDER_HUB_WRITE_TIMEOUT", valid: cfg.ProviderHubWriteTimeout > 0},
 		{name: "KODEX_AGENT_MANAGER_INTERACTION_HUB_REQUEST_TIMEOUT", valid: cfg.InteractionHubRequestTimeout > 0},
 		{name: "KODEX_AGENT_MANAGER_OUTBOX_BATCH_SIZE", valid: cfg.OutboxBatchSize > 0},

@@ -191,6 +191,7 @@ func validConfig() Config {
 		RuntimeManagerGRPCAddr:                         "runtime-manager:9090",
 		RuntimeManagerGRPCAuthToken:                    "runtime-token",
 		RuntimeManagerPrepareTimeout:                   10 * time.Second,
+		CodexSessionTimeout:                            30 * time.Minute,
 		ProviderHubGRPCAddr:                            "provider-hub:9090",
 		ProviderHubGRPCAuthToken:                       "provider-token",
 		ProviderHubWriteTimeout:                        10 * time.Second,
