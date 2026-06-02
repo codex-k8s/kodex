@@ -306,6 +306,12 @@ func buildManifestSets(repoRoot string, renderDir string, stack stackinventory.S
 			Output:    filepath.Join(renderDir, "web-console-public"),
 			Kustomize: true,
 		},
+		{
+			Name:      "public integration-gateway webhook contour",
+			Source:    filepath.Join(repoRoot, "deploy/base/integration-gateway-public"),
+			Output:    filepath.Join(renderDir, "integration-gateway-public"),
+			Kustomize: true,
+		},
 	}
 	for _, service := range stack.Spec.DeployableServices {
 		sets = append(sets, manifestSet{

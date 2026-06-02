@@ -62,6 +62,29 @@ func TestValidatePublicIngressTargets(t *testing.T) {
 	}
 }
 
+func TestValidateProviderWebhookIngressTargets(t *testing.T) {
+	ingress := providerWebhookIngressWithPaths([]ingressTestPath{
+		{Service: "integration-gateway", Path: providerWebhookPath, PathType: "Exact"},
+	})
+	if err := validateProviderWebhookIngressTargets(ingress); err != nil {
+		t.Fatalf("expected integration-gateway exact webhook ingress to pass: %v", err)
+	}
+
+	ingress = providerWebhookIngressWithPaths([]ingressTestPath{
+		{Service: "web-console-public-oauth2-proxy", Path: providerWebhookPath, PathType: "Exact"},
+	})
+	if err := validateProviderWebhookIngressTargets(ingress); err == nil {
+		t.Fatal("expected oauth2-proxy target to fail")
+	}
+
+	ingress = providerWebhookIngressWithPaths([]ingressTestPath{
+		{Service: "integration-gateway", Path: "/v1/provider-webhooks", PathType: "Prefix"},
+	})
+	if err := validateProviderWebhookIngressTargets(ingress); err == nil {
+		t.Fatal("expected non-exact webhook path to fail")
+	}
+}
+
 func TestValidateGitHubOAuthLocation(t *testing.T) {
 	if err := validateGitHubOAuthLocation("https://github.com/login/oauth/authorize?client_id=redacted"); err != nil {
 		t.Fatalf("expected GitHub OAuth location to pass: %v", err)
@@ -72,12 +95,39 @@ func TestValidateGitHubOAuthLocation(t *testing.T) {
 	}
 }
 
+func TestPublicURLWithPathDropsQuery(t *testing.T) {
+	got, err := publicURLWithPath("https://platform.kodex.works/oauth2/callback?code=redacted", providerWebhookPath)
+	if err != nil {
+		t.Fatalf("public URL with path: %v", err)
+	}
+	want := "https://platform.kodex.works/v1/provider-webhooks/github"
+	if got != want {
+		t.Fatalf("URL = %s, want %s", got, want)
+	}
+}
+
+type ingressTestPath struct {
+	Service  string
+	Path     string
+	PathType string
+}
+
 func ingressWithTargets(targets ...string) ingressObject {
+	paths := make([]ingressTestPath, 0, len(targets))
+	for _, target := range targets {
+		paths = append(paths, ingressTestPath{Service: target})
+	}
+	return providerWebhookIngressWithPaths(paths)
+}
+
+func providerWebhookIngressWithPaths(paths []ingressTestPath) ingressObject {
 	ingress := ingressObject{}
 	ingress.Spec.Rules = append(ingress.Spec.Rules, struct {
 		HTTP struct {
 			Paths []struct {
-				Backend struct {
+				Path     string `json:"path"`
+				PathType string `json:"pathType"`
+				Backend  struct {
 					Service struct {
 						Name string `json:"name"`
 					} `json:"service"`
@@ -85,15 +135,19 @@ func ingressWithTargets(targets ...string) ingressObject {
 			} `json:"paths"`
 		} `json:"http"`
 	}{})
-	for _, target := range targets {
+	for _, item := range paths {
 		path := struct {
-			Backend struct {
+			Path     string `json:"path"`
+			PathType string `json:"pathType"`
+			Backend  struct {
 				Service struct {
 					Name string `json:"name"`
 				} `json:"service"`
 			} `json:"backend"`
 		}{}
-		path.Backend.Service.Name = target
+		path.Path = item.Path
+		path.PathType = item.PathType
+		path.Backend.Service.Name = item.Service
 		ingress.Spec.Rules[0].HTTP.Paths = append(ingress.Spec.Rules[0].HTTP.Paths, path)
 	}
 	return ingress

@@ -51,6 +51,7 @@ approvals:
 | IGW-5 | #829 | Deploy-контур: Dockerfile, manifests, secrets refs, runbook, monitoring и rollback. |
 | IGW-6 | #853 | Первый active callback route: generic `/v1/external-callbacks/{callback_source}` проверяет source binding, HMAC SHA-256 подпись, лимиты и вызывает `interaction-hub.RecordChannelCallback` safe envelope без gateway business state. |
 | Provider merge signal checks | #895, #909 | Go checks на staged fixtures проверяют GitHub provider webhook route wiring до `provider-hub.IngestWebhookEvent` и live HTTP diagnostic mode без переноса provider business state в gateway; bootstrap и adoption fixtures проходят один и тот же thin-edge route. |
+| IGW-7 | #1007 | Публичный HMAC-only endpoint `https://platform.kodex.works/v1/provider-webhooks/github` открыт отдельным `Ingress` на `integration-gateway`, не через OAuth; registration runbook использует только `push` и `pull_request`, а secret берётся из Kubernetes `Secret` без вывода значений. |
 
 ## Зависимости и блокировки
 
@@ -87,7 +88,7 @@ approvals:
 | Область | Состояние |
 |---|---|
 | Image | `services/external/integration-gateway/Dockerfile` собирает `build`, `dev` и `prod` stages; prod содержит бинарник и OpenAPI spec без исходников и секретов. |
-| Manifests | `deploy/base/integration-gateway/**` содержит kustomize base для `ServiceAccount`, `ConfigMap`, `Service`, `Deployment`, probes и metrics scrape annotations. |
+| Manifests | `deploy/base/integration-gateway/**` содержит kustomize base для `ServiceAccount`, `ConfigMap`, `Service`, `Deployment`, probes и metrics scrape annotations; `deploy/base/integration-gateway-public/**` содержит отдельный public HMAC-only webhook `Ingress`. |
 | Secret refs | GitHub webhook secret и provider-hub gRPC token подключаются через `kodex-platform-runtime` keys без значений в manifests/docs/tests. |
 | Config | Route guard, HTTP limits, OpenAPI path, provider-hub address/timeout и secret resolver backends задаются env/config refs. |
 | Проверки | Health/readiness/metrics/OpenAPI и safe negative responses для GitHub route проверяются Go tests или будущим Go integration runner. |

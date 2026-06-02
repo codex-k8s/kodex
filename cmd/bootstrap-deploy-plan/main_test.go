@@ -182,6 +182,8 @@ stringData:
 	writeFile(t, repoRoot, "deploy/base/web-console-public/oauth2-proxy.yaml.tpl", "image: {{ image \"oauth2-proxy\" }}\n")
 	writeFile(t, repoRoot, "deploy/base/web-console-public/certificate.yaml.tpl", "dns: {{ envOr \"KODEX_PRODUCTION_DOMAIN\" \"platform.kodex.works\" }}\n")
 	writeFile(t, repoRoot, "deploy/base/web-console-public/ingress.yaml.tpl", "host: {{ envOr \"KODEX_PRODUCTION_DOMAIN\" \"platform.kodex.works\" }}\n")
+	writeFile(t, repoRoot, "deploy/base/integration-gateway-public/kustomization.yaml.tpl", "resources:\n  - public-webhook-ingress.yaml\n")
+	writeFile(t, repoRoot, "deploy/base/integration-gateway-public/public-webhook-ingress.yaml.tpl", "host: {{ envOr \"KODEX_PRODUCTION_DOMAIN\" \"platform.kodex.works\" }}\n")
 	writeFile(t, repoRoot, "deploy/base/access-manager/kustomization.yaml.tpl", "resources:\n  - access-manager.yaml\n")
 	writeFile(t, repoRoot, "deploy/base/access-manager/access-manager.yaml.tpl", "image: {{ image \"access-manager\" }}\n")
 	writeFile(t, repoRoot, "deploy/base/access-manager/migrations.yaml.tpl", "image: {{ image \"access-manager-migrations\" }}\n")
