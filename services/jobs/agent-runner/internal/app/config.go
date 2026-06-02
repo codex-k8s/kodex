@@ -39,6 +39,7 @@ type Config struct {
 	RunnerMode                         string `env:"KODEX_AGENT_RUNNER_MODE"`
 	AllowedSecretRefsJSON              string `env:"KODEX_AGENT_RUN_ALLOWED_SECRET_REFS_JSON" envDefault:"[]"`
 	ReportingTargetRefsJSON            string `env:"KODEX_AGENT_RUN_REPORTING_TARGET_REFS_JSON" envDefault:"[]"`
+	CodexSessionExecutionSpecJSON      string `env:"KODEX_CODEX_SESSION_EXECUTION_SPEC_JSON"`
 	AgentManager                       ReporterConfig
 	AllowedSecretRefs                  []ExecutionRef `env:"-"`
 	ReportingTargetRefs                []ExecutionRef `env:"-"`
@@ -77,6 +78,7 @@ func (cfg Config) Normalize() (Config, Diagnostic) {
 	cfg.ContextPath = firstNonEmpty(strings.TrimSpace(cfg.ContextPath), defaultContextPath)
 	cfg.RunnerProfileRef = strings.TrimSpace(cfg.RunnerProfileRef)
 	cfg.RunnerMode = strings.TrimSpace(cfg.RunnerMode)
+	cfg.CodexSessionExecutionSpecJSON = strings.TrimSpace(cfg.CodexSessionExecutionSpecJSON)
 	cfg.AgentManager.GRPCAddr = strings.TrimSpace(cfg.AgentManager.GRPCAddr)
 	cfg.AgentManager.AuthToken = strings.TrimSpace(cfg.AgentManager.AuthToken)
 	if cfg.AgentManager.Timeout <= 0 {

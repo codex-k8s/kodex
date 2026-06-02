@@ -3,6 +3,8 @@ package service
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"strings"
 	"unicode/utf8"
@@ -22,8 +24,13 @@ const (
 	maxAgentRunSafeRefBytes              = 512
 	maxAgentRunAllowedSecretRefs         = 16
 	maxAgentRunReportingTargetRefs       = 8
+	maxAgentRunExecutionCallbackRefs     = 8
+	maxAgentRunExecutionOutputRefs       = 8
+	maxAgentRunExecutionResultRefs       = 8
+	maxAgentRunExecutionTimeoutSeconds   = 24 * 60 * 60
 	maxAgentRunReportingTargetKindBytes  = 64
 	maxAgentRunAllowedSecretPurposeBytes = 64
+	unsafeAgentRunMarkerList             = "raw_provider_payload|provider_payload|prompt_text|prompt_body|transcript|tool_input|tool_output|workspace_path|kubeconfig|secret_value|secret-value|token=|authorization|stdout|stderr|large_log|-----begin|bearer "
 )
 
 type agentRunJobInputDocument struct {
@@ -114,6 +121,84 @@ func normalizeAgentRunExecutionSpec(spec AgentRunExecutionSpecInput) (AgentRunEx
 	if err != nil {
 		return AgentRunExecutionSpecInput{}, errs.ErrInvalidArgument
 	}
+	if spec.CodexSessionExecutionSpec != nil {
+		codexSpec, err := normalizeCodexSessionExecutionSpec(*spec.CodexSessionExecutionSpec, normalized)
+		if err != nil {
+			return AgentRunExecutionSpecInput{}, err
+		}
+		normalized.CodexSessionExecutionSpec = &codexSpec
+	}
+	return normalized, nil
+}
+
+func normalizeCodexSessionExecutionSpec(
+	spec CodexSessionExecutionSpecInput,
+	agentRunSpec AgentRunExecutionSpecInput,
+) (CodexSessionExecutionSpecInput, error) {
+	normalized := CodexSessionExecutionSpecInput{
+		InstructionObjectRef:    strings.TrimSpace(spec.InstructionObjectRef),
+		InstructionObjectDigest: strings.TrimSpace(spec.InstructionObjectDigest),
+		ResultSchemaRef:         strings.TrimSpace(spec.ResultSchemaRef),
+		ResultSchemaDigest:      strings.TrimSpace(spec.ResultSchemaDigest),
+		SessionSnapshotRef:      strings.TrimSpace(spec.SessionSnapshotRef),
+		WorkspaceSnapshotRef:    strings.TrimSpace(spec.WorkspaceSnapshotRef),
+		HookEndpointRef:         strings.TrimSpace(spec.HookEndpointRef),
+		TimeoutSeconds:          spec.TimeoutSeconds,
+		RunnerProfileRef:        strings.TrimSpace(spec.RunnerProfileRef),
+		RunnerMode:              spec.RunnerMode,
+	}
+	requiredRefs := []string{
+		normalized.InstructionObjectRef,
+		normalized.InstructionObjectDigest,
+		normalized.ResultSchemaRef,
+		normalized.ResultSchemaDigest,
+		normalized.HookEndpointRef,
+		normalized.RunnerProfileRef,
+	}
+	for _, ref := range requiredRefs {
+		if !safeAgentRunRef(ref, true) {
+			return CodexSessionExecutionSpecInput{}, errs.ErrInvalidArgument
+		}
+	}
+	if !validAgentRunSHA256Digest(normalized.InstructionObjectDigest) ||
+		!validAgentRunSHA256Digest(normalized.ResultSchemaDigest) {
+		return CodexSessionExecutionSpecInput{}, errs.ErrInvalidArgument
+	}
+	if normalized.SessionSnapshotRef == "" && normalized.WorkspaceSnapshotRef == "" {
+		return CodexSessionExecutionSpecInput{}, errs.ErrInvalidArgument
+	}
+	if !safeAgentRunRef(normalized.SessionSnapshotRef, false) || !safeAgentRunRef(normalized.WorkspaceSnapshotRef, false) {
+		return CodexSessionExecutionSpecInput{}, errs.ErrInvalidArgument
+	}
+	if normalized.TimeoutSeconds <= 0 || normalized.TimeoutSeconds > maxAgentRunExecutionTimeoutSeconds {
+		return CodexSessionExecutionSpecInput{}, errs.ErrInvalidArgument
+	}
+	if normalized.RunnerProfileRef != agentRunSpec.RunnerProfileRef || normalized.RunnerMode != enum.AgentRunRunnerModeCodexAgent {
+		return CodexSessionExecutionSpecInput{}, errs.ErrInvalidArgument
+	}
+	if len(spec.CallbackRefs) > maxAgentRunExecutionCallbackRefs ||
+		len(spec.OutputRefs) > maxAgentRunExecutionOutputRefs ||
+		len(spec.ResultRefs) > maxAgentRunExecutionResultRefs ||
+		len(spec.AllowedSecretRefs) > maxAgentRunAllowedSecretRefs {
+		return CodexSessionExecutionSpecInput{}, errs.ErrInvalidArgument
+	}
+	var err error
+	normalized.CallbackRefs, err = normalizeAgentRunExecutionRefs(spec.CallbackRefs, maxAgentRunReportingTargetKindBytes)
+	if err != nil || len(normalized.CallbackRefs) == 0 {
+		return CodexSessionExecutionSpecInput{}, errs.ErrInvalidArgument
+	}
+	normalized.OutputRefs, err = normalizeAgentRunExecutionRefs(spec.OutputRefs, maxAgentRunReportingTargetKindBytes)
+	if err != nil || len(normalized.OutputRefs) == 0 {
+		return CodexSessionExecutionSpecInput{}, errs.ErrInvalidArgument
+	}
+	normalized.ResultRefs, err = normalizeAgentRunExecutionRefs(spec.ResultRefs, maxAgentRunReportingTargetKindBytes)
+	if err != nil || len(normalized.ResultRefs) == 0 {
+		return CodexSessionExecutionSpecInput{}, errs.ErrInvalidArgument
+	}
+	normalized.AllowedSecretRefs, err = normalizeAgentRunExecutionRefs(spec.AllowedSecretRefs, maxAgentRunAllowedSecretPurposeBytes)
+	if err != nil {
+		return CodexSessionExecutionSpecInput{}, errs.ErrInvalidArgument
+	}
 	return normalized, nil
 }
 
@@ -186,18 +271,43 @@ func AgentRunExecutionSpecFromJobInput(payload []byte) (*AgentRunExecutionSpecIn
 }
 
 func safeAgentRunRef(value string, required bool) bool {
-	if value == "" {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
 		return !required
 	}
-	if len(value) > maxAgentRunSafeRefBytes || !utf8.ValidString(value) || strings.ContainsAny(value, "\r\n\t") {
+	if len(trimmed) > maxAgentRunSafeRefBytes || !utf8.ValidString(trimmed) || strings.ContainsAny(trimmed, "\r\n\t") {
 		return false
 	}
-	return !strings.ContainsAny(value, "{}")
+	return !strings.ContainsAny(trimmed, "{}") && !unsafeAgentRunText(trimmed)
 }
 
 func safeAgentRunLabel(value string, maxBytes int) bool {
-	if value == "" || len(value) > maxBytes || !utf8.ValidString(value) || strings.ContainsAny(value, "\r\n\t {}") {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" || len(trimmed) > maxBytes || !utf8.ValidString(trimmed) || strings.ContainsAny(trimmed, "\r\n\t {}") {
 		return false
 	}
-	return true
+	return !unsafeAgentRunText(trimmed)
+}
+
+func validAgentRunSHA256Digest(value string) bool {
+	trimmed := strings.TrimSpace(strings.ToLower(value))
+	if !strings.HasPrefix(trimmed, "sha256:") {
+		return false
+	}
+	hexValue := strings.TrimPrefix(trimmed, "sha256:")
+	if len(hexValue) != sha256.Size*2 {
+		return false
+	}
+	decoded, err := hex.DecodeString(hexValue)
+	return err == nil && len(decoded) == sha256.Size
+}
+
+func unsafeAgentRunText(value string) bool {
+	lower := strings.ToLower(strings.TrimSpace(value))
+	for _, marker := range strings.Split(unsafeAgentRunMarkerList, "|") {
+		if strings.Contains(lower, marker) {
+			return true
+		}
+	}
+	return false
 }

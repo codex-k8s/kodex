@@ -208,6 +208,7 @@ func agentRunExecutionSpecToProto(spec *runtimeservice.AgentRunExecutionSpecInpu
 		RunnerMode:                         AgentRunRunnerModeToProto(spec.RunnerMode),
 		AllowedSecretRefs:                  agentRunAllowedSecretRefsToProto(spec.AllowedSecretRefs),
 		ReportingTargetRefs:                agentRunReportingTargetRefsToProto(spec.ReportingTargetRefs),
+		CodexSessionExecutionSpec:          codexSessionExecutionSpecToProto(spec.CodexSessionExecutionSpec),
 	}
 }
 
@@ -221,9 +222,46 @@ func agentRunAllowedSecretRefsToProto(refs []runtimeservice.AgentRunExecutionRef
 }
 
 func agentRunReportingTargetRefsToProto(refs []runtimeservice.AgentRunExecutionRefInput) []*runtimev1.AgentRunReportingTargetRef {
-	result := make([]*runtimev1.AgentRunReportingTargetRef, len(refs))
-	for index, ref := range refs {
-		result[index] = &runtimev1.AgentRunReportingTargetRef{Kind: ref.Kind, Ref: ref.Ref}
+	if len(refs) == 0 {
+		return nil
+	}
+	result := make([]*runtimev1.AgentRunReportingTargetRef, 0, len(refs))
+	for _, ref := range refs {
+		result = append(result, &runtimev1.AgentRunReportingTargetRef{Kind: ref.Kind, Ref: ref.Ref})
+	}
+	return result
+}
+
+func codexSessionExecutionSpecToProto(spec *runtimeservice.CodexSessionExecutionSpecInput) *runtimev1.CodexSessionExecutionSpec {
+	if spec == nil {
+		return nil
+	}
+	return &runtimev1.CodexSessionExecutionSpec{
+		InstructionObjectRef:    spec.InstructionObjectRef,
+		InstructionObjectDigest: spec.InstructionObjectDigest,
+		ResultSchemaRef:         spec.ResultSchemaRef,
+		ResultSchemaDigest:      spec.ResultSchemaDigest,
+		SessionSnapshotRef:      optionalStringPtr(spec.SessionSnapshotRef),
+		WorkspaceSnapshotRef:    optionalStringPtr(spec.WorkspaceSnapshotRef),
+		HookEndpointRef:         spec.HookEndpointRef,
+		CallbackRefs:            agentRunExecutionRefsToProto(spec.CallbackRefs),
+		TimeoutSeconds:          spec.TimeoutSeconds,
+		RunnerProfileRef:        spec.RunnerProfileRef,
+		RunnerMode:              AgentRunRunnerModeToProto(spec.RunnerMode),
+		OutputRefs:              agentRunExecutionRefsToProto(spec.OutputRefs),
+		ResultRefs:              agentRunExecutionRefsToProto(spec.ResultRefs),
+		AllowedSecretRefs:       agentRunAllowedSecretRefsToProto(spec.AllowedSecretRefs),
+	}
+}
+
+func agentRunExecutionRefsToProto(refs []runtimeservice.AgentRunExecutionRefInput) []*runtimev1.AgentRunExecutionRef {
+	if len(refs) == 0 {
+		return nil
+	}
+	result := make([]*runtimev1.AgentRunExecutionRef, len(refs))
+	for index := range refs {
+		ref := refs[index]
+		result[index] = &runtimev1.AgentRunExecutionRef{Kind: ref.Kind, Ref: ref.Ref}
 	}
 	return result
 }

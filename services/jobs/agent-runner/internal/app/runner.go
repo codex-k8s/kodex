@@ -58,7 +58,11 @@ func (r Runner) Run(ctx context.Context, cfg Config) Diagnostic {
 		}
 		return NewDiagnostic("agent_manager_report_failed", "agent-runner could not report start to agent-manager", ExitFailure)
 	}
-	diagnostic = NewDiagnostic("agent_execution_contract_unavailable", "agent execution contract is not enabled for this runner", ExitFailure)
+	if _, diagnostic = ValidateCodexSessionExecutionSpec(normalized, contextFile); !diagnostic.OK() {
+		report.FinishedAt = r.clock.Now()
+		return r.reportFailure(ctx, normalized, contextFile, diagnostic)
+	}
+	diagnostic = executionContractUnavailable("codex execution is not enabled for this runner")
 	report.FinishedAt = r.clock.Now()
 	return r.reportFailure(ctx, normalized, contextFile, diagnostic)
 }

@@ -511,7 +511,7 @@ func agentRunEnv(job entity.Job, spec runtimeservice.AgentRunExecutionSpecInput,
 	if err != nil {
 		return nil, err
 	}
-	return []corev1.EnvVar{
+	env := []corev1.EnvVar{
 		{Name: "KODEX_AGENT_RUN_ID", Value: spec.AgentRunID.String()},
 		{Name: "KODEX_RUNTIME_JOB_ID", Value: job.ID.String()},
 		{Name: "KODEX_RUNTIME_SLOT_ID", Value: spec.SlotID.String()},
@@ -527,7 +527,15 @@ func agentRunEnv(job entity.Job, spec runtimeservice.AgentRunExecutionSpecInput,
 		{Name: "KODEX_AGENT_RUNNER_MODE", Value: mode},
 		{Name: "KODEX_AGENT_RUN_ALLOWED_SECRET_REFS_JSON", Value: allowedSecretRefs},
 		{Name: "KODEX_AGENT_RUN_REPORTING_TARGET_REFS_JSON", Value: reportingTargetRefs},
-	}, nil
+	}
+	if spec.CodexSessionExecutionSpec != nil {
+		codexSpec, err := agentRunCodexSessionExecutionSpecJSON(*spec.CodexSessionExecutionSpec)
+		if err != nil {
+			return nil, err
+		}
+		env = append(env, corev1.EnvVar{Name: "KODEX_CODEX_SESSION_EXECUTION_SPEC_JSON", Value: codexSpec})
+	}
+	return env, nil
 }
 
 func agentRunRefsJSON(refs []runtimeservice.AgentRunExecutionRefInput) (string, error) {
@@ -540,6 +548,17 @@ func agentRunRefsJSON(refs []runtimeservice.AgentRunExecutionRefInput) (string, 
 	}
 	if len(raw) > maxAgentRunEnvValueBytes {
 		return "", newExecutionError("agent_run_execution_refs_too_large", "agent_run execution refs input is too large")
+	}
+	return string(raw), nil
+}
+
+func agentRunCodexSessionExecutionSpecJSON(spec runtimeservice.CodexSessionExecutionSpecInput) (string, error) {
+	raw, err := json.Marshal(spec)
+	if err != nil {
+		return "", newExecutionError("invalid_codex_session_execution_spec", "codex session execution spec is invalid")
+	}
+	if len(raw) > maxAgentRunEnvValueBytes {
+		return "", newExecutionError("codex_session_execution_spec_too_large", "codex session execution spec input is too large")
 	}
 	return string(raw), nil
 }
