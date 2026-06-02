@@ -83,3 +83,17 @@ body {
   min-width: 0;
   color: #1f2937;
 }
+
+.chat-input input:disabled {
+  color: #667085;
+}
+
+@media (max-width: 780px) {
+  .page-grid {
+    gap: 14px;
+  }
+
+  .chat-input {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+}

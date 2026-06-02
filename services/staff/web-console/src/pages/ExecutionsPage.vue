@@ -6,7 +6,9 @@ import type { AgentActivityKind, AgentActivityStatus } from '@/shared/api/genera
 import { useExecutionsStore } from '@/features/executions/store';
 import { useOperatorContextStore } from '@/features/operator-context/store';
 import { compactRef, formatDateTime, formatDurationMs, prettySafeJSON } from '@/shared/lib/format';
+import ApiErrorAlert from '@/shared/ui/ApiErrorAlert.vue';
 import EmptyState from '@/shared/ui/EmptyState.vue';
+import SurfaceStateCard from '@/shared/ui/SurfaceStateCard.vue';
 import StatusChip from '@/shared/ui/StatusChip.vue';
 
 const { t } = useI18n();
@@ -56,7 +58,7 @@ function statusTone(status?: string): 'neutral' | 'success' | 'warning' | 'error
 }
 
 function loadRun(pageToken?: string) {
-  if (!canLoad.value && !pageToken) {
+  if (!context.isReady || executions.isLoading || executions.runId.trim().length === 0) {
     return;
   }
   void executions.load(context.asContext, pageToken);
@@ -84,9 +86,17 @@ function loadRun(pageToken?: string) {
     <v-alert v-if="!context.isReady" type="warning" variant="tonal">
       {{ t('context.missing') }}
     </v-alert>
-    <v-alert v-if="executions.error" type="error" variant="tonal">
-      {{ t(executions.error.messageKey) }}
-    </v-alert>
+    <ApiErrorAlert :error="executions.error" :retry-label="t('app.retry')" @retry="loadRun()" />
+
+    <v-card class="surface-panel pa-4">
+      <SurfaceStateCard
+        icon="mdi-magnify-scan"
+        :title="t('executions.lookupTitle')"
+        :text="t('executions.lookupText')"
+        :status="t('app.live')"
+        tone="live"
+      />
+    </v-card>
 
     <section class="summary-grid">
       <v-card class="surface-panel summary-card">
@@ -117,6 +127,7 @@ function loadRun(pageToken?: string) {
     </section>
 
     <v-card class="surface-panel pa-4">
+      <div class="section-title mb-3">{{ t('executions.timelineFilters') }}</div>
       <div class="filter-row">
         <v-text-field
           v-model.trim="executions.runId"
@@ -178,6 +189,30 @@ function loadRun(pageToken?: string) {
               <div class="meta-text">Updated</div>
               <div>{{ formatDateTime(runtimeStatus.run_updated_at) }}</div>
             </div>
+            <div>
+              <div class="meta-text">{{ t('executions.followUp') }}</div>
+              <StatusChip
+                :label="runtimeStatus.follow_up_waiting ? t('statuses.waiting') : t('statuses.unspecified')"
+                :tone="runtimeStatus.follow_up_waiting ? 'warning' : 'neutral'"
+              />
+            </div>
+          </div>
+          <div class="detail-section">
+            <div class="section-title">{{ t('executions.runtimeRefs') }}</div>
+            <div class="ref-chip-row">
+              <v-chip v-if="runtimeStatus.runtime_slot_ref" size="small" variant="tonal" color="info" label>
+                slot / {{ compactRef(runtimeStatus.runtime_slot_ref) }}
+              </v-chip>
+              <v-chip v-if="runtimeStatus.runtime_context_ref" size="small" variant="tonal" color="info" label>
+                context / {{ compactRef(runtimeStatus.runtime_context_ref) }}
+              </v-chip>
+              <v-chip v-if="runtimeStatus.runtime_job_command_ref" size="small" variant="tonal" color="info" label>
+                command / {{ compactRef(runtimeStatus.runtime_job_command_ref) }}
+              </v-chip>
+              <v-chip v-if="runtimeStatus.human_gate_request_ref" size="small" variant="tonal" color="warning" label>
+                Human gate / {{ compactRef(runtimeStatus.human_gate_request_ref) }}
+              </v-chip>
+            </div>
           </div>
           <v-alert v-if="runtimeStatus.safe_error_code" class="mt-4" type="error" variant="tonal">
             {{ runtimeStatus.safe_error_code }}
@@ -203,6 +238,9 @@ function loadRun(pageToken?: string) {
                     {{ formatDateTime(activity.started_at ?? activity.created_at) }} ·
                     {{ formatDurationMs(activity.duration_ms) }}
                   </div>
+                  <div class="meta-text">
+                    {{ t('executions.activityDigest') }}: {{ compactRef(activity.payload_digest) }}
+                  </div>
                 </div>
                 <StatusChip :label="t(`statuses.${activity.status}`)" :tone="statusTone(activity.status)" />
               </div>
@@ -214,6 +252,7 @@ function loadRun(pageToken?: string) {
           </article>
         </div>
         <EmptyState v-else icon="mdi-history" :title="t('executions.noActivities')" />
+        <p v-if="executions.activities.length === 0" class="empty-hint">{{ t('executions.noActivitiesText') }}</p>
         <div class="list-footer">
           <v-btn
             variant="tonal"
@@ -289,6 +328,18 @@ function loadRun(pageToken?: string) {
   grid-template-columns: 1fr 1fr;
 }
 
+.detail-section {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.ref-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .safe-summary {
   color: #475467;
   line-height: 1.55;
@@ -346,10 +397,20 @@ function loadRun(pageToken?: string) {
   margin-top: 16px;
 }
 
+.empty-hint {
+  color: #667085;
+  font-size: 0.875rem;
+  margin: 12px 0 0;
+}
+
 @media (max-width: 1180px) {
   .summary-grid,
   .filter-row,
   .execution-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-grid {
     grid-template-columns: 1fr;
   }
 }

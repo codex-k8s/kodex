@@ -57,6 +57,9 @@ export const useOwnerInboxStore = defineStore('owner-inbox', {
     async load(context: OperatorContext, pageToken?: string) {
       this.isLoadingList = true;
       this.error = undefined;
+      if (!pageToken) {
+        this.latestResponse = undefined;
+      }
       try {
         const response = await fetchOwnerInboxItems(context, {
           requestKinds: this.filters.kinds.length > 0 ? this.filters.kinds : undefined,
@@ -83,6 +86,9 @@ export const useOwnerInboxStore = defineStore('owner-inbox', {
     async select(context: OperatorContext, requestId: string) {
       this.isLoadingDetail = true;
       this.error = undefined;
+      if (this.selectedItem?.request_id !== requestId) {
+        this.latestResponse = undefined;
+      }
       try {
         const response = await fetchOwnerInboxItem(
           context,
