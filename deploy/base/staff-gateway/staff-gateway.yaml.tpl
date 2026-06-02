@@ -120,7 +120,7 @@ spec:
       containers:
         - name: staff-gateway
           image: {{ image "staff-gateway" }}
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - name: http
               containerPort: 8080

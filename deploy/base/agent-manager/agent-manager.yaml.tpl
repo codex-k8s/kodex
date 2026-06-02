@@ -88,7 +88,7 @@ spec:
       containers:
         - name: agent-manager
           image: {{ image "agent-manager" }}
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - name: http
               containerPort: 8080

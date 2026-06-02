@@ -88,7 +88,7 @@ spec:
       containers:
         - name: fleet-manager
           image: {{ image "fleet-manager" }}
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - name: http
               containerPort: 8080

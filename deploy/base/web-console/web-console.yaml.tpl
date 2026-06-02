@@ -71,7 +71,7 @@ spec:
       containers:
         - name: web-console
           image: {{ image "web-console" }}
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - name: http
               containerPort: 8080

@@ -88,7 +88,7 @@ spec:
       containers:
         - name: access-manager
           image: {{ image "access-manager" }}
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - name: http
               containerPort: 8080

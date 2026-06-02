@@ -88,7 +88,7 @@ spec:
       containers:
         - name: provider-hub
           image: {{ image "provider-hub" }}
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - name: http
               containerPort: 8080

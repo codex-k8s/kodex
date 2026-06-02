@@ -88,7 +88,7 @@ spec:
       containers:
         - name: project-catalog
           image: {{ image "project-catalog" }}
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - name: http
               containerPort: 8080

@@ -124,7 +124,7 @@ spec:
       containers:
         - name: runtime-manager
           image: {{ image "runtime-manager" }}
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - name: http
               containerPort: 8080

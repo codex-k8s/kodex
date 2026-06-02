@@ -46,7 +46,7 @@ spec:
       containers:
         - name: migrations
           image: {{ image "package-hub-migrations" }}
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           securityContext:
             runAsNonRoot: true
             runAsUser: 10001
