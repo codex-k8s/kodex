@@ -1,4 +1,4 @@
-import type { ActorTypeHeader, ScopeType } from './generated';
+import type { ActorTypeHeader, AgentScopeType, ScopeType } from './generated';
 import { createRequestId } from '@/shared/lib/request';
 
 export type OperatorContext = {
@@ -18,6 +18,7 @@ export type GatewayHeaders = {
 
 export const actorTypeOptions: ActorTypeHeader[] = ['user', 'service', 'agent', 'external_account'];
 export const scopeTypeOptions: ScopeType[] = ['platform', 'organization', 'project', 'repository', 'service'];
+export const agentScopeTypeOptions: AgentScopeType[] = ['platform', 'organization', 'project', 'repository'];
 export const localDevActorHeadersEnabled =
   import.meta.env.DEV && import.meta.env.VITE_ENABLE_LOCAL_DEV_ACTOR_HEADERS === 'true';
 
@@ -41,6 +42,10 @@ export function gatewayHeaders(context: OperatorContext): GatewayHeaders {
     headers['X-Kodex-Actor-Id'] = context.localDevActorId.trim();
   }
   return headers;
+}
+
+export function isAgentScopeType(value: ScopeType): value is AgentScopeType {
+  return agentScopeTypeOptions.includes(value as AgentScopeType);
 }
 
 export function operationHeaders<THeaders extends object>(context: OperatorContext): THeaders {

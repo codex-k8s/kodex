@@ -37,6 +37,14 @@ func (c *Client) GetAgentRunRuntimeStatus(ctx context.Context, request *agentsv1
 	return callQuery(ctx, c, request, c.client.GetAgentRunRuntimeStatus)
 }
 
+func (c *Client) ListAgentSessions(ctx context.Context, request *agentsv1.ListAgentSessionsRequest) (*agentsv1.ListAgentSessionsResponse, error) {
+	return callQuery(ctx, c, request, c.client.ListAgentSessions)
+}
+
+func (c *Client) ListAgentRunSummaries(ctx context.Context, request *agentsv1.ListAgentRunSummariesRequest) (*agentsv1.ListAgentRunSummariesResponse, error) {
+	return callQuery(ctx, c, request, c.client.ListAgentRunSummaries)
+}
+
 func (c *Client) ListAgentActivities(ctx context.Context, request *agentsv1.ListAgentActivitiesRequest) (*agentsv1.ListAgentActivitiesResponse, error) {
 	return callQuery(ctx, c, request, c.client.ListAgentActivities)
 }

@@ -70,6 +70,8 @@ allowlist-файлом для owner email, не общей bootstrap allowlist.
 - `GET /v1/owner-inbox/items`
 - `GET /v1/owner-inbox/items/{request_id}`
 - `POST /v1/owner-inbox/items/{request_id}/response`
+- `GET /v1/agent-sessions`
+- `GET /v1/agent-runs`
 - `GET /v1/agent-runs/{run_id}/runtime-status`
 - `GET /v1/agent-runs/{run_id}/activities`
 
@@ -80,17 +82,23 @@ allowlist-файлом для owner email, не общей bootstrap allowlist.
 - Командный центр явно разделяет работающие зоны и зоны, которые ждут новый
   endpoint `staff-gateway`; быстрые действия и чат отключены без подмены
   production-данных.
-- Верхние карточки командного центра показывают только текущую страницу
-  входящих решений и последний ручной поиск одного `Run`; они не заменяют
-  агрегированную производственную витрину.
+- Верхние карточки командного центра показывают текущую страницу входящих
+  решений и первые страницы списков `AgentSession`/`AgentRun` из
+  `staff-gateway`; они не заменяют агрегированную производственную витрину.
 - Входящие решения используют master-detail паттерн: список выбирает карточку,
   ответ фиксируется только через разрешённые `allowed_actions`, ошибки показываются
   безопасными кодами и request/correlation refs.
-- Экран исполнений работает как поиск одного `Run` по safe id: показывает runtime
-  summary, safe refs, activity timeline и понятное пустое состояние, но не строит
-  список `Run` без backend-контракта.
+- Экран исполнений загружает списки `AgentSession` и `AgentRun`, поддерживает
+  фильтры по safe status, открывает выбранный `Run` и показывает runtime summary,
+  safe refs, activity timeline и понятные пустые состояния.
 
-Агрегированная витрина командного центра, список `Run`, проектные списки,
-создание `Issue`, запуск flow и чат с `agent-manager` пока не имеют HTTP-контракта
-в `staff-gateway`; UI отображает эти места как отключённые состояния без
-подмены демо-данными.
+Агрегированная витрина командного центра, проектные списки, создание `Issue`,
+запуск flow и чат с `agent-manager` пока не имеют HTTP-контракта в
+`staff-gateway`; UI отображает эти места как отключённые состояния без подмены
+демо-данными.
+
+Списки `AgentSession`/`AgentRun` используют scope types, которые поддерживает
+текущий `agent-manager` contract: `platform`, `organization`, `project`,
+`repository`. Если пользователь выбирает `service` scope, `web-console` честно
+показывает неподдержанное состояние для списков исполнений; owner inbox и другие
+поверхности продолжают работать в рамках своих контрактов.

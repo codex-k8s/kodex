@@ -18,20 +18,21 @@ const context = useOperatorContextStore();
 const inbox = useOwnerInboxStore();
 const executions = useExecutionsStore();
 
-const approvalItemsOnCurrentPage = computed(
-  () => inbox.items.filter((item) => item.request_kind === 'approval').length,
-);
-const lastRunStatus = computed(() => executions.runtimeStatus?.run_status);
+const latestRunStatus = computed(() => executions.latestRun?.status ?? 'unspecified');
 
 onMounted(() => {
   if (context.isReady && inbox.items.length === 0) {
     void inbox.load(context.asContext);
+  }
+  if (context.isReady && executions.runs.length === 0) {
+    void executions.loadOverview(context.asContext);
   }
 });
 
 function reloadInbox() {
   if (context.isReady) {
     void inbox.load(context.asContext);
+    void executions.loadOverview(context.asContext);
   }
 }
 
@@ -56,28 +57,28 @@ function openExecutions() {
         </div>
       </v-card>
       <v-card class="surface-panel summary-card">
-        <v-icon icon="mdi-inbox-multiple-outline" color="success" size="34" />
+        <v-icon icon="mdi-account-clock-outline" color="success" size="34" />
         <div>
-          <div class="meta-text">{{ t('commandCenter.itemsOnPage') }}</div>
-          <div class="summary-card__value">{{ inbox.items.length }}</div>
-          <div class="summary-card__hint">{{ t('commandCenter.currentInboxPageHint') }}</div>
+          <div class="meta-text">{{ t('commandCenter.sessionsOnPage') }}</div>
+          <div class="summary-card__value">{{ executions.sessions.length }}</div>
+          <div class="summary-card__hint">{{ t('commandCenter.currentAgentPageHint') }}</div>
         </div>
       </v-card>
       <v-card class="surface-panel summary-card">
         <v-icon icon="mdi-server-outline" color="info" size="34" />
         <div>
-          <div class="meta-text">{{ t('commandCenter.lastRunLookup') }}</div>
-          <StatusChip v-if="lastRunStatus" :label="t(`statuses.${lastRunStatus}`)" tone="info" />
-          <div v-else class="summary-card__placeholder">{{ t('commandCenter.noRunLookup') }}</div>
-          <div class="summary-card__hint">{{ t('commandCenter.lastRunLookupHint') }}</div>
+          <div class="meta-text">{{ t('commandCenter.activeRunsOnPage') }}</div>
+          <div class="summary-card__value">{{ executions.activeRunCount }}</div>
+          <StatusChip :label="t(`statuses.${latestRunStatus}`)" tone="info" />
+          <div class="summary-card__hint">{{ t('commandCenter.currentAgentPageHint') }}</div>
         </div>
       </v-card>
       <v-card class="surface-panel summary-card">
         <v-icon icon="mdi-clock-outline" color="warning" size="34" />
         <div>
-          <div class="meta-text">{{ t('commandCenter.approvalsOnPage') }}</div>
-          <div class="summary-card__value">{{ approvalItemsOnCurrentPage }}</div>
-          <div class="summary-card__hint">{{ t('commandCenter.currentInboxPageHint') }}</div>
+          <div class="meta-text">{{ t('commandCenter.humanGateRunsOnPage') }}</div>
+          <div class="summary-card__value">{{ executions.humanGateRunCount }}</div>
+          <div class="summary-card__hint">{{ t('commandCenter.currentAgentPageHint') }}</div>
         </div>
       </v-card>
     </section>
@@ -97,8 +98,8 @@ function openExecutions() {
           />
           <SurfaceStateCard
             icon="mdi-timeline-clock-outline"
-            :title="t('commandCenter.runLookupLive')"
-            :text="t('commandCenter.runLookupLiveText')"
+            :title="t('commandCenter.runListsLive')"
+            :text="t('commandCenter.runListsLiveText')"
             :status="t('app.live')"
             tone="live"
           />
@@ -158,13 +159,22 @@ function openExecutions() {
         <v-card class="surface-panel pa-5">
           <div class="section-title">{{ t('commandCenter.activeWork') }}</div>
           <v-btn class="mt-4" prepend-icon="mdi-pulse" variant="tonal" @click="openExecutions">
-            {{ t('commandCenter.runLookupLive') }}
+            {{ t('commandCenter.runListsLive') }}
           </v-btn>
-          <EmptyState
-            class="mt-4"
-            icon="mdi-clipboard-text-clock-outline"
-            :title="t('commandCenter.noAggregate')"
-          />
+          <v-progress-linear v-if="executions.isLoadingList" class="mt-4" indeterminate color="primary" />
+          <div v-if="executions.runs.length > 0" class="compact-list">
+            <button
+              v-for="run in executions.runs.slice(0, 5)"
+              :key="run.run_id"
+              class="compact-list__item"
+              type="button"
+              @click="openExecutions"
+            >
+              <span>{{ run.result_summary ?? run.runtime_safe_summary ?? run.run_id }}</span>
+              <StatusChip :label="t(`statuses.${run.status}`)" :tone="run.human_gate_waiting ? 'warning' : 'info'" />
+            </button>
+          </div>
+          <EmptyState v-else class="mt-4" icon="mdi-clipboard-text-clock-outline" :title="t('executions.noRuns')" />
         </v-card>
         <v-card class="surface-panel pa-5">
           <div class="section-header">

@@ -31,7 +31,25 @@ type ownerInboxResponder interface {
 }
 
 type AgentManagerClient interface {
+	agentSessionReader
+	agentRunSummaryReader
+	agentRunRuntimeReader
+	agentActivityReader
+}
+
+type agentSessionReader interface {
+	ListAgentSessions(context.Context, *agentsv1.ListAgentSessionsRequest) (*agentsv1.ListAgentSessionsResponse, error)
+}
+
+type agentRunSummaryReader interface {
+	ListAgentRunSummaries(context.Context, *agentsv1.ListAgentRunSummariesRequest) (*agentsv1.ListAgentRunSummariesResponse, error)
+}
+
+type agentRunRuntimeReader interface {
 	GetAgentRunRuntimeStatus(context.Context, *agentsv1.GetAgentRunRuntimeStatusRequest) (*agentsv1.AgentRunRuntimeStatusResponse, error)
+}
+
+type agentActivityReader interface {
 	ListAgentActivities(context.Context, *agentsv1.ListAgentActivitiesRequest) (*agentsv1.ListAgentActivitiesResponse, error)
 }
 

@@ -11,6 +11,8 @@ info:
 tags:
   - name: owner-inbox
     description: Входящие решения владельца.
+  - name: agent-sessions
+    description: Безопасное чтение agent sessions для командного центра.
   - name: agent-runs
     description: Безопасное чтение agent Run для операторского UI.
   - name: governance
@@ -141,6 +143,93 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/DownstreamUnavailable'
+  /v1/agent-sessions:
+    get:
+      tags: [agent-sessions]
+      operationId: listAgentSessions
+      summary: Получить список agent sessions.
+      description: |
+        Возвращает безопасные summaries `agent-manager.ListAgentSessions` для командного центра.
+        Gateway только валидирует query, передаёт actor/request context и не читает БД `agent-manager`.
+        В ответ не входят prompt body, transcript, tool input/output, stdout/stderr, provider payload,
+        workspace paths, secret values, kubeconfig или большие логи.
+      parameters:
+        - $ref: '#/components/parameters/RequestIdHeader'
+        - $ref: '#/components/parameters/TraceIdHeader'
+        - $ref: '#/components/parameters/SessionIdHeader'
+        - $ref: '#/components/parameters/ActorTypeHeader'
+        - $ref: '#/components/parameters/ActorIdHeader'
+        - $ref: '#/components/parameters/AgentScopeTypeQuery'
+        - $ref: '#/components/parameters/AgentScopeRefQuery'
+        - $ref: '#/components/parameters/AgentSessionStatusQuery'
+        - $ref: '#/components/parameters/ProviderWorkItemRefQuery'
+        - $ref: '#/components/parameters/CreatedByActorRefQuery'
+        - $ref: '#/components/parameters/CreatedAfterQuery'
+        - $ref: '#/components/parameters/CreatedBeforeQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/PageTokenQuery'
+      responses:
+        '200':
+          description: Список agent sessions получен.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentSessionListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/PermissionDenied'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/DownstreamUnavailable'
+  /v1/agent-runs:
+    get:
+      tags: [agent-runs]
+      operationId: listAgentRunSummaries
+      summary: Получить список agent Run summaries.
+      description: |
+        Возвращает безопасные summaries `agent-manager.ListAgentRunSummaries` для экрана исполнений.
+        Gateway не читает БД `agent-manager`, не ходит в Kubernetes/runtime/provider и не делает fan-out
+        за live runtime status; актуальный статус одного job остаётся в `/v1/agent-runs/{run_id}/runtime-status`.
+        В ответ не входят prompt body, transcript, tool input/output, stdout/stderr, provider payload,
+        workspace paths, secret values, kubeconfig или большие логи.
+      parameters:
+        - $ref: '#/components/parameters/RequestIdHeader'
+        - $ref: '#/components/parameters/TraceIdHeader'
+        - $ref: '#/components/parameters/SessionIdHeader'
+        - $ref: '#/components/parameters/ActorTypeHeader'
+        - $ref: '#/components/parameters/ActorIdHeader'
+        - $ref: '#/components/parameters/AgentScopeTypeQuery'
+        - $ref: '#/components/parameters/AgentScopeRefQuery'
+        - $ref: '#/components/parameters/AgentRunSessionIdQuery'
+        - $ref: '#/components/parameters/AgentRoleProfileIdQuery'
+        - $ref: '#/components/parameters/AgentRunStatusQuery'
+        - $ref: '#/components/parameters/ProviderWorkItemRefQuery'
+        - $ref: '#/components/parameters/ProviderPullRequestRefQuery'
+        - $ref: '#/components/parameters/CreatedAfterQuery'
+        - $ref: '#/components/parameters/CreatedBeforeQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/PageTokenQuery'
+      responses:
+        '200':
+          description: Список agent Run summaries получен.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentRunSummaryListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/PermissionDenied'
         '429':
           $ref: '#/components/responses/RateLimited'
         '503':
@@ -281,6 +370,92 @@ components:
         type: string
         pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
       description: Safe id `AgentRun`.
+    AgentScopeTypeQuery:
+      name: scope_type
+      in: query
+      required: true
+      schema:
+        $ref: '#/components/schemas/AgentScopeType'
+      description: Тип области `agent-manager`.
+    AgentScopeRefQuery:
+      name: scope_ref
+      in: query
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 256
+      description: Safe ref области `agent-manager`.
+    AgentSessionStatusQuery:
+      name: status
+      in: query
+      required: false
+      schema:
+        $ref: '#/components/schemas/AgentSessionStatus'
+      description: Фильтр session по lifecycle status.
+    AgentRunStatusQuery:
+      name: status
+      in: query
+      required: false
+      schema:
+        $ref: '#/components/schemas/AgentRunStatus'
+      description: Фильтр Run по lifecycle status.
+    AgentRunSessionIdQuery:
+      name: session_id
+      in: query
+      required: false
+      schema:
+        type: string
+        pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+      description: Safe id `AgentSession`.
+    AgentRoleProfileIdQuery:
+      name: role_profile_id
+      in: query
+      required: false
+      schema:
+        type: string
+        pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+      description: Safe id роли агента.
+    ProviderWorkItemRefQuery:
+      name: provider_work_item_ref
+      in: query
+      required: false
+      schema:
+        type: string
+        maxLength: 256
+      description: Safe ref provider-native work item.
+    ProviderPullRequestRefQuery:
+      name: provider_pull_request_ref
+      in: query
+      required: false
+      schema:
+        type: string
+        maxLength: 256
+      description: Safe ref provider-native PR/MR.
+    CreatedByActorRefQuery:
+      name: created_by_actor_ref
+      in: query
+      required: false
+      schema:
+        type: string
+        maxLength: 256
+      description: Safe ref actor, создавшего session.
+    CreatedAfterQuery:
+      name: created_after
+      in: query
+      required: false
+      schema:
+        type: string
+        format: date-time
+      description: Нижняя граница времени создания.
+    CreatedBeforeQuery:
+      name: created_before
+      in: query
+      required: false
+      schema:
+        type: string
+        format: date-time
+      description: Верхняя граница времени создания.
     AgentActivityKindQuery:
       name: activity_kind
       in: query
@@ -640,6 +815,14 @@ components:
     ScopeType:
       type: string
       enum: [platform, organization, project, repository, service]
+    AgentScopeType:
+      type: string
+      enum: [platform, organization, project, repository]
+      x-enum-varnames:
+        - AgentScopeTypePlatform
+        - AgentScopeTypeOrganization
+        - AgentScopeTypeProject
+        - AgentScopeTypeRepository
     ScopeRef:
       type: object
       additionalProperties: false
@@ -679,6 +862,16 @@ components:
         - AgentRunStatusCompleted
         - AgentRunStatusFailed
         - AgentRunStatusCancelled
+    AgentSessionStatus:
+      type: string
+      enum: [unspecified, open, waiting, completed, failed, cancelled]
+      x-enum-varnames:
+        - AgentSessionStatusUnspecified
+        - AgentSessionStatusOpen
+        - AgentSessionStatusWaiting
+        - AgentSessionStatusCompleted
+        - AgentSessionStatusFailed
+        - AgentSessionStatusCancelled
     RuntimeObservationState:
       type: string
       enum: [unspecified, not_created, stored_ref, live, unavailable, conflict]
@@ -1377,6 +1570,254 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/GovernanceReleaseIntegrationRef'
+    AgentSessionListResponse:
+      type: object
+      additionalProperties: false
+      required: [request_id, sessions, page]
+      properties:
+        request_id:
+          type: string
+        correlation_id:
+          type: string
+        sessions:
+          type: array
+          items:
+            $ref: '#/components/schemas/AgentSessionSummary'
+        page:
+          $ref: '#/components/schemas/PageInfo'
+    AgentSessionSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - session_id
+        - scope
+        - status
+        - created_by_actor_ref
+        - active_run_count
+        - human_gate_waiting
+        - follow_up_waiting
+        - created_at
+        - updated_at
+        - version
+      properties:
+        session_id:
+          type: string
+          pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+        scope:
+          $ref: '#/components/schemas/ScopeRef'
+        provider_work_item_ref:
+          type: string
+          maxLength: 256
+        flow_version_id:
+          type: string
+          maxLength: 128
+        current_stage_id:
+          type: string
+          maxLength: 128
+        latest_state_snapshot_id:
+          type: string
+          maxLength: 128
+        status:
+          $ref: '#/components/schemas/AgentSessionStatus'
+        created_by_actor_ref:
+          type: string
+          maxLength: 256
+        latest_run_id:
+          type: string
+          pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+        latest_run_status:
+          $ref: '#/components/schemas/AgentRunStatus'
+        latest_runtime_job_ref:
+          type: string
+          maxLength: 256
+        latest_run_safe_summary:
+          type: string
+          maxLength: 2000
+        active_run_count:
+          type: integer
+          minimum: 0
+        human_gate_waiting:
+          type: boolean
+        human_gate_request_ref:
+          type: string
+          maxLength: 256
+        human_gate_reason_code:
+          type: string
+          maxLength: 128
+        latest_activity:
+          $ref: '#/components/schemas/AgentActivitySummary'
+        follow_up_waiting:
+          type: boolean
+        follow_up_ref:
+          type: string
+          maxLength: 256
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          format: int64
+    AgentRunSummaryListResponse:
+      type: object
+      additionalProperties: false
+      required: [request_id, runs, page]
+      properties:
+        request_id:
+          type: string
+        correlation_id:
+          type: string
+        runs:
+          type: array
+          items:
+            $ref: '#/components/schemas/AgentRunSummary'
+        page:
+          $ref: '#/components/schemas/PageInfo'
+    AgentRunSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - run_id
+        - session_id
+        - role_profile_id
+        - role_profile_version
+        - status
+        - runtime_observation_state
+        - human_gate_waiting
+        - follow_up_waiting
+        - created_at
+        - updated_at
+        - version
+      properties:
+        run_id:
+          type: string
+          pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+        session_id:
+          type: string
+          pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+        flow_version_id:
+          type: string
+          maxLength: 128
+        stage_id:
+          type: string
+          maxLength: 128
+        role_profile_id:
+          type: string
+          pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+        role_profile_version:
+          type: integer
+          format: int64
+        provider_target:
+          $ref: '#/components/schemas/ProviderTargetRef'
+        runtime_slot_ref:
+          type: string
+          maxLength: 256
+        runtime_context_ref:
+          type: string
+          maxLength: 256
+        runtime_job_ref:
+          type: string
+          maxLength: 256
+        status:
+          $ref: '#/components/schemas/AgentRunStatus'
+        result_summary:
+          type: string
+          maxLength: 2000
+        failure_code:
+          type: string
+          maxLength: 128
+        runtime_observation_state:
+          $ref: '#/components/schemas/RuntimeObservationState'
+        runtime_safe_error_code:
+          type: string
+          maxLength: 128
+        runtime_safe_summary:
+          type: string
+          maxLength: 2000
+        human_gate_waiting:
+          type: boolean
+        human_gate_request_ref:
+          type: string
+          maxLength: 256
+        human_gate_reason_code:
+          type: string
+          maxLength: 128
+        follow_up_waiting:
+          type: boolean
+        latest_activity:
+          $ref: '#/components/schemas/AgentActivitySummary'
+        started_at:
+          type: string
+          format: date-time
+        finished_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          format: int64
+    ProviderTargetRef:
+      type: object
+      additionalProperties: false
+      properties:
+        work_item_ref:
+          type: string
+          maxLength: 256
+        pull_request_ref:
+          type: string
+          maxLength: 256
+        comment_ref:
+          type: string
+          maxLength: 256
+        review_signal_ref:
+          type: string
+          maxLength: 256
+    AgentActivitySummary:
+      type: object
+      additionalProperties: false
+      required: [activity_id, activity_kind, status, updated_at, version]
+      properties:
+        activity_id:
+          type: string
+          maxLength: 128
+        activity_kind:
+          $ref: '#/components/schemas/AgentActivityKind'
+        status:
+          $ref: '#/components/schemas/AgentActivityStatus'
+        tool_name:
+          type: string
+          maxLength: 128
+        tool_category:
+          type: string
+          maxLength: 128
+        safe_summary:
+          type: string
+          maxLength: 2000
+        payload_digest:
+          type: string
+          maxLength: 256
+        bounded_error:
+          type: string
+          maxLength: 2000
+        started_at:
+          type: string
+          format: date-time
+        finished_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          format: int64
     AgentRunRuntimeStatusResponse:
       type: object
       additionalProperties: false

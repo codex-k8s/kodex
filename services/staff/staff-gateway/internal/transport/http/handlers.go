@@ -54,6 +54,14 @@ func (h handlers) getAgentRunRuntimeStatus(w http.ResponseWriter, req *http.Requ
 	handleQuery(w, req, GetAgentRunRuntimeStatusRequest, h.agentManager.GetAgentRunRuntimeStatus, AgentRunRuntimeStatusResponse, agentManagerError)
 }
 
+func (h handlers) listAgentSessions(w http.ResponseWriter, req *http.Request) {
+	handleQuery(w, req, ListAgentSessionsRequest, h.agentManager.ListAgentSessions, AgentSessionListResponse, agentManagerError)
+}
+
+func (h handlers) listAgentRunSummaries(w http.ResponseWriter, req *http.Request) {
+	handleQuery(w, req, ListAgentRunSummariesRequest, h.agentManager.ListAgentRunSummaries, AgentRunSummaryListResponse, agentManagerError)
+}
+
 func (h handlers) listAgentRunActivities(w http.ResponseWriter, req *http.Request) {
 	input, safeErr := ListAgentActivitiesRequest(req)
 	if safeErr != nil {
