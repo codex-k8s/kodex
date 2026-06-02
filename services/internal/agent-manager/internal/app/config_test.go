@@ -115,6 +115,63 @@ func TestValidateRequiresRuntimeJobRunnerImageWhenDispatchEnabled(t *testing.T) 
 	}
 }
 
+func TestValidateRequiresCodexSessionConfigWhenDispatchEnabled(t *testing.T) {
+	t.Parallel()
+
+	valid := runtimeJobDispatchConfig()
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("Validate() err = %v, want nil", err)
+	}
+
+	tests := []struct {
+		name string
+		edit func(*Config)
+	}{
+		{
+			name: "missing schema ref",
+			edit: func(cfg *Config) {
+				cfg.CodexSessionResultSchemaRef = ""
+			},
+		},
+		{
+			name: "unsafe schema ref",
+			edit: func(cfg *Config) {
+				cfg.CodexSessionResultSchemaRef = "object://schemas/{raw_provider_payload}"
+			},
+		},
+		{
+			name: "invalid schema digest",
+			edit: func(cfg *Config) {
+				cfg.CodexSessionResultSchemaDigest = "sha256:not-a-digest"
+			},
+		},
+		{
+			name: "missing hook ref",
+			edit: func(cfg *Config) {
+				cfg.CodexSessionHookEndpointRef = ""
+			},
+		},
+		{
+			name: "unsafe hook ref",
+			edit: func(cfg *Config) {
+				cfg.CodexSessionHookEndpointRef = "hook://codex-hook-ingress/bearer token"
+			},
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := runtimeJobDispatchConfig()
+			tt.edit(&cfg)
+			if err := cfg.Validate(); err == nil {
+				t.Fatal("Validate() err = nil, want codex session config error")
+			}
+		})
+	}
+}
+
 func TestValidateRequiresProviderHubWriteTokenWhenEnabled(t *testing.T) {
 	t.Parallel()
 
@@ -151,6 +208,17 @@ func TestGRPCServerConfigMapsRuntimeLimits(t *testing.T) {
 	if runtime.AuthRequired != cfg.GRPCAuthRequired {
 		t.Fatalf("AuthRequired = %v, want %v", runtime.AuthRequired, cfg.GRPCAuthRequired)
 	}
+}
+
+func runtimeJobDispatchConfig() Config {
+	cfg := validConfig()
+	cfg.RuntimePreparationEnabled = true
+	cfg.RuntimeJobDispatchEnabled = true
+	cfg.RuntimeJobRunnerImageRef = "image://codex-agent@sha256:runner"
+	cfg.CodexSessionResultSchemaRef = "object://schemas/codex-result-v1"
+	cfg.CodexSessionResultSchemaDigest = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	cfg.CodexSessionHookEndpointRef = "hook://codex-hook-ingress/agent-runner"
+	return cfg
 }
 
 func validConfig() Config {

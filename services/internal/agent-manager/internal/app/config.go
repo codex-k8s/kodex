@@ -2,8 +2,10 @@ package app
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/caarlos0/env/v11"
 
@@ -12,6 +14,10 @@ import (
 	outboxlib "github.com/codex-k8s/kodex/libs/go/outbox"
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
 )
+
+var codexSessionSchemaDigestPattern = regexp.MustCompile(`(?i)^sha256:[0-9a-f]{64}$`)
+
+const codexSessionConfigForbiddenMarkers = "raw_provider_payload|provider_payload|prompt_body|transcript|workspace_path|kubeconfig|secret_value|token=|authorization|-----begin|bearer "
 
 // Config contains process-level agent-manager server configuration.
 type Config struct {
@@ -145,6 +151,9 @@ func (cfg Config) Validate() error {
 	if cfg.RuntimeJobDispatchEnabled && strings.TrimSpace(cfg.RuntimeJobRunnerImageRef) == "" {
 		return fmt.Errorf("KODEX_AGENT_MANAGER_RUNTIME_JOB_RUNNER_IMAGE_REF is required when runtime job dispatch is enabled")
 	}
+	if err := cfg.validateCodexSessionExecutionConfig(); err != nil {
+		return err
+	}
 	if cfg.ProviderHubWriteEnabled && strings.TrimSpace(cfg.ProviderHubGRPCAddr) == "" {
 		return fmt.Errorf("KODEX_AGENT_MANAGER_PROVIDER_HUB_GRPC_ADDR is required when provider-hub write integration is enabled")
 	}
@@ -239,6 +248,41 @@ func (cfg Config) Validate() error {
 		return fmt.Errorf("KODEX_AGENT_MANAGER_OUTBOX_PUBLISH_TIMEOUT plus safety margin must be less than KODEX_AGENT_MANAGER_OUTBOX_LOCK_TTL")
 	}
 	return nil
+}
+
+func (cfg Config) validateCodexSessionExecutionConfig() error {
+	if !cfg.RuntimeJobDispatchEnabled {
+		return nil
+	}
+	for _, item := range []struct {
+		name  string
+		value string
+	}{
+		{name: "KODEX_AGENT_MANAGER_CODEX_SESSION_RESULT_SCHEMA_REF", value: cfg.CodexSessionResultSchemaRef},
+		{name: "KODEX_AGENT_MANAGER_CODEX_SESSION_HOOK_ENDPOINT_REF", value: cfg.CodexSessionHookEndpointRef},
+	} {
+		if !safeCodexSessionConfigRef(item.value) {
+			return fmt.Errorf("%s is invalid when runtime job dispatch is enabled", item.name)
+		}
+	}
+	if !codexSessionSchemaDigestPattern.MatchString(strings.TrimSpace(cfg.CodexSessionResultSchemaDigest)) {
+		return fmt.Errorf("KODEX_AGENT_MANAGER_CODEX_SESSION_RESULT_SCHEMA_DIGEST must be sha256:<64 hex> when runtime job dispatch is enabled")
+	}
+	return nil
+}
+
+func safeCodexSessionConfigRef(value string) bool {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" || len(trimmed) > 512 || !utf8.ValidString(trimmed) || strings.ContainsAny(trimmed, "\r\n\t{}") {
+		return false
+	}
+	lower := strings.ToLower(trimmed)
+	for _, marker := range strings.Split(codexSessionConfigForbiddenMarkers, "|") {
+		if strings.Contains(lower, marker) {
+			return false
+		}
+	}
+	return true
 }
 
 func (cfg Config) needsEventLogDatabase() bool {
