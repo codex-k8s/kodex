@@ -7,9 +7,17 @@ import ApiErrorAlert from '@/shared/ui/ApiErrorAlert.vue';
 import EmptyState from '@/shared/ui/EmptyState.vue';
 import SurfaceStateCard from '@/shared/ui/SurfaceStateCard.vue';
 import StatusChip from '@/shared/ui/StatusChip.vue';
+import {
+  runHasProblem,
+  runPrimarySummary,
+  runProblemCode,
+  runWaitingCode,
+  statusTone,
+} from '@/features/executions/observability';
 import { useExecutionsStore } from '@/features/executions/store';
 import { useOperatorContextStore } from '@/features/operator-context/store';
 import { useOwnerInboxStore } from '@/features/owner-inbox/store';
+import { compactRef } from '@/shared/lib/format';
 import { routeNames } from '@/shared/lib/routes';
 
 const { t } = useI18n();
@@ -18,7 +26,10 @@ const context = useOperatorContextStore();
 const inbox = useOwnerInboxStore();
 const executions = useExecutionsStore();
 
-const latestRunStatus = computed(() => executions.latestRun?.status ?? 'unspecified');
+const visibleRuns = computed(() => {
+  const attentionRuns = executions.runs.filter((run) => runHasProblem(run) || runWaitingCode(run));
+  return (attentionRuns.length > 0 ? attentionRuns : executions.runs).slice(0, 5);
+});
 
 onMounted(() => {
   if (context.isReady && inbox.items.length === 0) {
@@ -43,6 +54,14 @@ function openOwnerInbox() {
 function openExecutions() {
   void router.push({ name: routeNames.executions });
 }
+
+function openRun(runId: string) {
+  executions.runId = runId;
+  void router.push({ name: routeNames.executions });
+  if (context.isReady) {
+    void executions.selectRun(context.asContext, runId);
+  }
+}
 </script>
 
 <template>
@@ -57,7 +76,7 @@ function openExecutions() {
         </div>
       </v-card>
       <v-card class="surface-panel summary-card">
-        <v-icon icon="mdi-account-clock-outline" color="success" size="34" />
+        <v-icon icon="mdi-account-clock-outline" color="info" size="34" />
         <div>
           <div class="meta-text">{{ t('commandCenter.sessionsOnPage') }}</div>
           <div class="summary-card__value">{{ executions.sessions.length }}</div>
@@ -65,19 +84,26 @@ function openExecutions() {
         </div>
       </v-card>
       <v-card class="surface-panel summary-card">
-        <v-icon icon="mdi-server-outline" color="info" size="34" />
+        <v-icon icon="mdi-play-circle-outline" color="success" size="34" />
         <div>
-          <div class="meta-text">{{ t('commandCenter.activeRunsOnPage') }}</div>
-          <div class="summary-card__value">{{ executions.activeRunCount }}</div>
-          <StatusChip :label="t(`statuses.${latestRunStatus}`)" tone="info" />
+          <div class="meta-text">{{ t('commandCenter.runningRunsOnPage') }}</div>
+          <div class="summary-card__value">{{ executions.runningRunCount }}</div>
           <div class="summary-card__hint">{{ t('commandCenter.currentAgentPageHint') }}</div>
         </div>
       </v-card>
       <v-card class="surface-panel summary-card">
         <v-icon icon="mdi-clock-outline" color="warning" size="34" />
         <div>
-          <div class="meta-text">{{ t('commandCenter.humanGateRunsOnPage') }}</div>
-          <div class="summary-card__value">{{ executions.humanGateRunCount }}</div>
+          <div class="meta-text">{{ t('commandCenter.waitingRunsOnPage') }}</div>
+          <div class="summary-card__value">{{ executions.waitingRunCount }}</div>
+          <div class="summary-card__hint">{{ t('commandCenter.currentAgentPageHint') }}</div>
+        </div>
+      </v-card>
+      <v-card class="surface-panel summary-card">
+        <v-icon icon="mdi-alert-octagon-outline" color="error" size="34" />
+        <div>
+          <div class="meta-text">{{ t('commandCenter.problemRunsOnPage') }}</div>
+          <div class="summary-card__value summary-card__value--danger">{{ executions.problemRunCount }}</div>
           <div class="summary-card__hint">{{ t('commandCenter.currentAgentPageHint') }}</div>
         </div>
       </v-card>
@@ -162,16 +188,25 @@ function openExecutions() {
             {{ t('commandCenter.runListsLive') }}
           </v-btn>
           <v-progress-linear v-if="executions.isLoadingList" class="mt-4" indeterminate color="primary" />
-          <div v-if="executions.runs.length > 0" class="compact-list">
+          <div v-if="visibleRuns.length > 0" class="compact-list">
             <button
-              v-for="run in executions.runs.slice(0, 5)"
+              v-for="run in visibleRuns"
               :key="run.run_id"
               class="compact-list__item"
               type="button"
-              @click="openExecutions"
+              @click="openRun(run.run_id)"
             >
-              <span>{{ run.result_summary ?? run.runtime_safe_summary ?? run.run_id }}</span>
-              <StatusChip :label="t(`statuses.${run.status}`)" :tone="run.human_gate_waiting ? 'warning' : 'info'" />
+              <span>
+                <strong>{{ compactRef(run.run_id) }}</strong>
+                <small>{{ runPrimarySummary(run) ?? t('executions.noRunSummary') }}</small>
+                <small v-if="runWaitingCode(run)" class="attention-text">
+                  {{ t('executions.waitingReason') }}: {{ runWaitingCode(run) }}
+                </small>
+                <small v-if="runProblemCode(run)" class="error-text">
+                  {{ t('executions.safeError') }}: {{ runProblemCode(run) }}
+                </small>
+              </span>
+              <StatusChip :label="t(`statuses.${run.status}`)" :tone="statusTone(run.status)" />
             </button>
           </div>
           <EmptyState v-else class="mt-4" icon="mdi-clipboard-text-clock-outline" :title="t('executions.noRuns')" />
@@ -225,6 +260,10 @@ function openExecutions() {
   color: #121826;
   font-size: 1.7rem;
   font-weight: 800;
+}
+
+.summary-card__value--danger {
+  color: #b42318;
 }
 
 .summary-card__hint,
@@ -304,6 +343,25 @@ function openExecutions() {
   justify-content: space-between;
   padding: 10px 12px;
   text-align: left;
+}
+
+.compact-list__item span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.compact-list__item small {
+  color: #667085;
+  overflow-wrap: anywhere;
+}
+
+.attention-text {
+  color: #b54708;
+}
+
+.error-text {
+  color: #b42318;
 }
 
 @media (max-width: 1180px) {

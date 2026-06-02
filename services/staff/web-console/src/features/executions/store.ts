@@ -19,6 +19,7 @@ import type {
 } from '@/shared/api/generated';
 import type { OperatorContext } from '@/shared/api/context';
 import type { ApiError } from '@/shared/api/errors';
+import { runHasProblem, runIsCompleted, runIsLive, runIsWaiting } from '@/features/executions/observability';
 
 export type ExecutionFilters = {
   runStatus?: AgentRunStatus;
@@ -41,14 +42,18 @@ export const useExecutionsStore = defineStore('executions', {
     filters: {
       pageSize: 25,
     } as ExecutionFilters,
+    detailRequestToken: 0,
     isLoadingList: false,
     isLoading: false,
     unsupportedAgentScope: false,
     error: undefined as ApiError | undefined,
   }),
   getters: {
-    activeRunCount: (state) =>
-      state.runs.filter((run) => ['requested', 'starting', 'running', 'waiting'].includes(run.status)).length,
+    activeRunCount: (state) => state.runs.filter((run) => runIsLive(run) || runIsWaiting(run)).length,
+    runningRunCount: (state) => state.runs.filter(runIsLive).length,
+    waitingRunCount: (state) => state.runs.filter(runIsWaiting).length,
+    problemRunCount: (state) => state.runs.filter(runHasProblem).length,
+    completedRunCount: (state) => state.runs.filter(runIsCompleted).length,
     waitingSessionCount: (state) =>
       state.sessions.filter((session) => session.status === 'waiting').length,
     humanGateRunCount: (state) =>
@@ -117,6 +122,14 @@ export const useExecutionsStore = defineStore('executions', {
       if (!runId) {
         return;
       }
+      const requestToken = this.detailRequestToken + 1;
+      this.detailRequestToken = requestToken;
+      const isInitialLoad = pageToken === undefined;
+      if (isInitialLoad) {
+        this.runtimeStatus = undefined;
+        this.activities = [];
+        this.nextPageToken = undefined;
+      }
       this.isLoading = true;
       this.error = undefined;
       try {
@@ -129,13 +142,20 @@ export const useExecutionsStore = defineStore('executions', {
             pageToken,
           }),
         ]);
+        if (this.detailRequestToken !== requestToken || this.runId.trim() !== runId) {
+          return;
+        }
         this.runtimeStatus = runtime.runtime_status;
         this.activities = pageToken ? [...this.activities, ...activities.activities] : activities.activities;
         this.nextPageToken = activities.page.next_page_token;
       } catch (error) {
-        this.error = error as ApiError;
+        if (this.detailRequestToken === requestToken && this.runId.trim() === runId) {
+          this.error = error as ApiError;
+        }
       } finally {
-        this.isLoading = false;
+        if (this.detailRequestToken === requestToken && this.runId.trim() === runId) {
+          this.isLoading = false;
+        }
       }
     },
   },

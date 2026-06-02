@@ -84,18 +84,27 @@ allowlist-файлом для owner email, не общей bootstrap allowlist.
   production-данных.
 - Верхние карточки командного центра показывают текущую страницу входящих
   решений и первые страницы списков `AgentSession`/`AgentRun` из
-  `staff-gateway`; они не заменяют агрегированную производственную витрину.
+  `staff-gateway`: выполняющиеся, ожидающие и проблемные `Run` вынесены в
+  отдельные счётчики. Карточки не заменяют агрегированную производственную
+  витрину.
 - Входящие решения используют master-detail паттерн: список выбирает карточку,
   ответ фиксируется только через разрешённые `allowed_actions`, ошибки показываются
   безопасными кодами и request/correlation refs.
 - Экран исполнений загружает списки `AgentSession` и `AgentRun`, поддерживает
   фильтры по safe status, открывает выбранный `Run` и показывает runtime summary,
-  safe refs, activity timeline и понятные пустые состояния.
+  safe refs, activity timeline и понятные пустые состояния. Списки показывают
+  причину ожидания, safe error code/summary, Human gate/follow-up refs,
+  runtime observation и ссылки на session/job/provider refs без raw payload.
 
 Агрегированная витрина командного центра, проектные списки, создание `Issue`,
 запуск flow и чат с `agent-manager` пока не имеют HTTP-контракта в
 `staff-gateway`; UI отображает эти места как отключённые состояния без подмены
 демо-данными.
+
+`runtime_job_status`, включая `timed_out`, показывается в detail выбранного
+`Run` через `GET /v1/agent-runs/{run_id}/runtime-status`. Списки
+`GET /v1/agent-runs` не делают live fan-out в runtime и поэтому показывают
+сохранённые safe refs/status/summary из `agent-manager`.
 
 Списки `AgentSession`/`AgentRun` используют scope types, которые поддерживает
 текущий `agent-manager` contract: `platform`, `organization`, `project`,

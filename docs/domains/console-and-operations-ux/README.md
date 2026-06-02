@@ -42,6 +42,8 @@
 
 Текущая интерфейсная итерация доводит эти экраны до демонстрируемого состояния: shell адаптируется под узкую ширину, командный центр показывает отдельно работающие зоны и зоны, ожидающие подключение frontend или ещё не появившиеся `staff-gateway` endpoints, owner inbox использует master-detail паттерн с безопасными ошибками и ответом только через `allowed_actions`, а экран исполнений строится от списков `AgentSession`/`AgentRun` и сохраняет ручной ввод `run_id` как дополнительный способ открыть конкретный `Run`.
 
+Операторская наблюдаемость `Run/session` строится из безопасных полей `staff-gateway`: статусы running/waiting/completed/failed/cancelled, Human gate/follow-up flags, reason refs/codes, safe error code/summary, runtime observation state, latest activity summary и session/job/provider refs. Командный центр выделяет выполняющиеся, ожидающие и проблемные `Run`, а экран исполнений показывает причину ожидания и где смотреть дальше: session, runtime job, provider-native `Issue`/`PR/MR`, activity timeline и detail выбранного `Run`. `runtime_job_status`, включая `timed_out`, доступен только в detail endpoint `GET /v1/agent-runs/{run_id}/runtime-status`; list endpoints не делают live fan-out в runtime, Kubernetes или provider API.
+
 Агрегированная витрина командного центра, создание `Issue`, запуск flow, чат с `agent-manager`, проектные списки и экран governance summary не подменяются демо-данными. Пока frontend не подключил соответствующий endpoint или в `staff-gateway` нет нужной HTTP-ручки, интерфейс показывает честные пустые или отключённые состояния.
 
 ## Карта Issue
