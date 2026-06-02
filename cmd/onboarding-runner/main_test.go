@@ -333,6 +333,65 @@ func TestRunApplyRejectsUnsafeBootstrapSetupTarget(t *testing.T) {
 	}
 }
 
+func TestRunApplyRejectsBootstrapCreateRepositoryWhenBindingAlreadyKnown(t *testing.T) {
+	scenario := bootstrapSetupFixture()
+	scenario.RepositoryID = "repo-1"
+	scenario.RepositoryFullName = "codex-k8s/kodex-onboarding-test"
+	scenarioPath := writeScenario(t, scenario)
+	projectClient := &fakeProjectCatalogClient{repository: repositoryFixture()}
+	clients := runnerClients{
+		ProjectCatalog: projectClient,
+		ProviderHub:    &fakeProviderHubClient{},
+	}
+
+	err := run(context.Background(), runnerOptions{
+		ScenarioFilePath:     scenarioPath,
+		ProjectID:            "project-1",
+		RepositoryID:         "repo-1",
+		RepositoryFullName:   "codex-k8s/kodex-onboarding-test",
+		AllowedProviderOwner: "codex-k8s",
+		RepositoryNamePrefix: "kodex-onboarding-",
+		RequestID:            "req-1",
+		Kind:                 "bootstrap",
+		Apply:                true,
+	}, clients, ioDiscard{})
+	if err == nil {
+		t.Fatal("expected known binding create_repository guard error")
+	}
+	assertContains(t, err.Error(), "repository_id to be empty")
+	if projectClient.createRepositoryCalls != 0 || projectClient.bootstrapPullRequestCalls != 0 {
+		t.Fatalf("known binding create_repository guard must not mutate product APIs: create=%d bootstrap_pr=%d", projectClient.createRepositoryCalls, projectClient.bootstrapPullRequestCalls)
+	}
+}
+
+func TestRunApplyRejectsAuthenticatedUserBootstrapCreateRepository(t *testing.T) {
+	scenario := bootstrapSetupFixture()
+	scenario.BootstrapSetup.CreateRepository.OwnerKind = "authenticated_user"
+	scenarioPath := writeScenario(t, scenario)
+	projectClient := &fakeProjectCatalogClient{createRepositoryResponse: repositoryCreateResponseFixture()}
+	clients := runnerClients{
+		ProjectCatalog: projectClient,
+		ProviderHub:    &fakeProviderHubClient{},
+	}
+
+	err := run(context.Background(), runnerOptions{
+		ScenarioFilePath:     scenarioPath,
+		ProjectID:            "project-1",
+		AllowedProviderOwner: "codex-k8s",
+		RepositoryNamePrefix: "kodex-onboarding-",
+		RequestID:            "req-1",
+		Kind:                 "bootstrap",
+		Apply:                true,
+	}, clients, ioDiscard{})
+	if err == nil {
+		t.Fatal("expected authenticated_user owner guard error")
+	}
+	assertContains(t, err.Error(), "owner_kind organization")
+	if projectClient.createRepositoryCalls != 0 || projectClient.bootstrapPullRequestCalls != 0 {
+		t.Fatalf("authenticated_user guard must not mutate product APIs: create=%d bootstrap_pr=%d", projectClient.createRepositoryCalls, projectClient.bootstrapPullRequestCalls)
+	}
+}
+
 func TestRunRejectsCheckedPayloadProducerForBothKinds(t *testing.T) {
 	payloadPath := writeTextFile(t, "validated-payload.json", `{"services":[]}`)
 	clients := runnerClients{

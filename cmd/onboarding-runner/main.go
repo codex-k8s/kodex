@@ -802,8 +802,15 @@ func validateBootstrapCreateRepositoryScenario(options runnerOptions, scenario *
 	if projectRepositoryProviderFromSlug(options.ProviderSlug) == projectsv1.RepositoryProvider_REPOSITORY_PROVIDER_UNSPECIFIED {
 		return fmt.Errorf("bootstrap repository create supports provider_slug github")
 	}
-	if _, err := repositoryOwnerKindFromString(scenario.OwnerKind); err != nil {
+	ownerKind, err := repositoryOwnerKindFromString(scenario.OwnerKind)
+	if err != nil {
 		return err
+	}
+	if options.Apply && options.RepositoryID != "" {
+		return errors.New("bootstrap create_repository apply requires repository_id to be empty")
+	}
+	if options.Apply && ownerKind == projectsv1.RepositoryOwnerKind_REPOSITORY_OWNER_KIND_AUTHENTICATED_USER {
+		return errors.New("bootstrap create_repository apply requires owner_kind organization until external account owner identity is verified")
 	}
 	if _, err := repositoryVisibilityFromString(scenario.Visibility); err != nil {
 		return err
