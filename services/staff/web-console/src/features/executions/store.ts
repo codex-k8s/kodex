@@ -19,6 +19,7 @@ import type {
 } from '@/shared/api/generated';
 import type { OperatorContext } from '@/shared/api/context';
 import type { ApiError } from '@/shared/api/errors';
+import { runHasProblem, runIsCompleted, runIsLive, runIsWaiting } from '@/features/executions/observability';
 
 export type ExecutionFilters = {
   runStatus?: AgentRunStatus;
@@ -47,8 +48,11 @@ export const useExecutionsStore = defineStore('executions', {
     error: undefined as ApiError | undefined,
   }),
   getters: {
-    activeRunCount: (state) =>
-      state.runs.filter((run) => ['requested', 'starting', 'running', 'waiting'].includes(run.status)).length,
+    activeRunCount: (state) => state.runs.filter((run) => runIsLive(run) || runIsWaiting(run)).length,
+    runningRunCount: (state) => state.runs.filter(runIsLive).length,
+    waitingRunCount: (state) => state.runs.filter(runIsWaiting).length,
+    problemRunCount: (state) => state.runs.filter(runHasProblem).length,
+    completedRunCount: (state) => state.runs.filter(runIsCompleted).length,
     waitingSessionCount: (state) =>
       state.sessions.filter((session) => session.status === 'waiting').length,
     humanGateRunCount: (state) =>

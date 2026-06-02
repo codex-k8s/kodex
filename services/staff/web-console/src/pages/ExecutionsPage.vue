@@ -3,6 +3,17 @@ import { computed, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 
 import type { AgentActivityKind, AgentActivityStatus, AgentRunStatus, AgentSessionStatus } from '@/shared/api/generated';
+import {
+  runHasProblem,
+  runPrimarySummary,
+  runProblemCode,
+  runWaitingCode,
+  runtimeStatusHasProblem,
+  runtimeStatusIsWaiting,
+  sessionPrimarySummary,
+  sessionWaitingCode,
+  statusTone,
+} from '@/features/executions/observability';
 import { useExecutionsStore } from '@/features/executions/store';
 import { useOperatorContextStore } from '@/features/operator-context/store';
 import { compactRef, formatDateTime, formatDurationMs, prettySafeJSON } from '@/shared/lib/format';
@@ -48,6 +59,7 @@ const sessionStatusOptions: AgentSessionStatus[] = ['open', 'waiting', 'complete
 
 const runtimeStatus = computed(() => executions.runtimeStatus);
 const selectedRun = computed(() => executions.runs.find((run) => run.run_id === executions.runId.trim()));
+const selectedRunProblem = computed(() => selectedRun.value !== undefined && runHasProblem(selectedRun.value));
 const canLoad = computed(
   () => context.isReady && executions.runId.trim().length > 0 && !executions.isLoading,
 );
@@ -58,22 +70,6 @@ onMounted(() => {
     void executions.loadOverview(context.asContext);
   }
 });
-
-function statusTone(status?: string): 'neutral' | 'success' | 'warning' | 'error' | 'info' {
-  if (status === 'succeeded' || status === 'completed') {
-    return 'success';
-  }
-  if (status === 'running' || status === 'started' || status === 'waiting' || status === 'pending') {
-    return 'warning';
-  }
-  if (status === 'failed' || status === 'cancelled' || status === 'timed_out') {
-    return 'error';
-  }
-  if (status === 'requested' || status === 'starting' || status === 'claimed') {
-    return 'info';
-  }
-  return 'neutral';
-}
 
 function loadRun(pageToken?: string) {
   if (!context.isReady || executions.isLoading || executions.runId.trim().length === 0) {
@@ -101,6 +97,11 @@ function selectRun(runId: string) {
     return;
   }
   void executions.selectRun(context.asContext, runId);
+}
+
+function statusColor(status?: string): string | undefined {
+  const tone = statusTone(status);
+  return tone === 'neutral' ? undefined : tone;
 }
 </script>
 
@@ -146,19 +147,20 @@ function selectRun(runId: string) {
         <div class="summary-value">{{ executions.sessions.length }}</div>
       </v-card>
       <v-card class="surface-panel summary-card">
-        <div class="meta-text">{{ t('executions.activeRuns') }}</div>
-        <div class="summary-value">{{ executions.activeRunCount }}</div>
+        <div class="meta-text">{{ t('executions.runningRuns') }}</div>
+        <div class="summary-value">{{ executions.runningRunCount }}</div>
       </v-card>
       <v-card class="surface-panel summary-card">
-        <div class="meta-text">{{ t('executions.latestRun') }}</div>
-        <StatusChip
-          :label="t(`statuses.${executions.latestRun?.status ?? 'unspecified'}`)"
-          :tone="statusTone(executions.latestRun?.status)"
-        />
+        <div class="meta-text">{{ t('executions.waitingRuns') }}</div>
+        <div class="summary-value">{{ executions.waitingRunCount }}</div>
       </v-card>
       <v-card class="surface-panel summary-card">
-        <div class="meta-text">{{ t('executions.humanGate') }}</div>
-        <div class="summary-value">{{ executions.humanGateRunCount }}</div>
+        <div class="meta-text">{{ t('executions.problemRuns') }}</div>
+        <div class="summary-value summary-value--danger">{{ executions.problemRunCount }}</div>
+      </v-card>
+      <v-card class="surface-panel summary-card">
+        <div class="meta-text">{{ t('executions.completedRuns') }}</div>
+        <div class="summary-value">{{ executions.completedRunCount }}</div>
       </v-card>
     </section>
 
@@ -205,13 +207,32 @@ function selectRun(runId: string) {
         <v-progress-linear v-if="executions.isLoadingList" class="mt-4" indeterminate color="primary" />
         <div v-if="executions.sessions.length > 0" class="summary-list">
           <article v-for="session in executions.sessions" :key="session.session_id" class="summary-list__item">
-            <div>
+            <div class="summary-list__main">
               <div class="item-title">{{ compactRef(session.session_id) }}</div>
-              <div class="meta-text">{{ session.latest_run_safe_summary ?? compactRef(session.provider_work_item_ref) }}</div>
+              <div class="meta-text">{{ sessionPrimarySummary(session) ?? t('executions.noSessionSummary') }}</div>
               <div class="meta-text">{{ formatDateTime(session.updated_at) }}</div>
+              <div class="ref-chip-row ref-chip-row--compact">
+                <v-chip size="small" variant="tonal" color="info" label>
+                  {{ t('executions.activeRunsShort') }}: {{ session.active_run_count }}
+                </v-chip>
+                <v-chip v-if="session.latest_run_id" size="small" variant="tonal" color="info" label>
+                  Run / {{ compactRef(session.latest_run_id) }}
+                </v-chip>
+                <v-chip v-if="session.latest_runtime_job_ref" size="small" variant="tonal" color="info" label>
+                  job / {{ compactRef(session.latest_runtime_job_ref) }}
+                </v-chip>
+              </div>
+              <v-alert v-if="sessionWaitingCode(session)" class="mt-2" type="warning" variant="tonal" density="compact">
+                {{ t('executions.waitingReason') }}: {{ sessionWaitingCode(session) }}
+              </v-alert>
             </div>
             <div class="summary-list__actions">
               <StatusChip :label="t(`statuses.${session.status}`)" :tone="statusTone(session.status)" />
+              <StatusChip
+                v-if="session.latest_run_status"
+                :label="t(`statuses.${session.latest_run_status}`)"
+                :tone="statusTone(session.latest_run_status)"
+              />
               <v-chip v-if="session.human_gate_waiting" size="small" color="warning" variant="tonal" label>
                 {{ t('executions.humanGate') }}
               </v-chip>
@@ -233,15 +254,35 @@ function selectRun(runId: string) {
             type="button"
             @click="selectRun(run.run_id)"
           >
-            <div>
+            <div class="summary-list__main">
               <div class="item-title">{{ compactRef(run.run_id) }}</div>
-              <div class="meta-text">{{ run.result_summary ?? run.runtime_safe_summary ?? compactRef(run.runtime_job_ref) }}</div>
+              <div class="meta-text">{{ runPrimarySummary(run) ?? t('executions.noRunSummary') }}</div>
               <div class="meta-text">{{ formatDateTime(run.updated_at) }}</div>
+              <div class="ref-chip-row ref-chip-row--compact">
+                <v-chip size="small" variant="tonal" color="info" label>
+                  session / {{ compactRef(run.session_id) }}
+                </v-chip>
+                <v-chip v-if="run.runtime_job_ref" size="small" variant="tonal" color="info" label>
+                  job / {{ compactRef(run.runtime_job_ref) }}
+                </v-chip>
+                <v-chip size="small" variant="tonal" :color="statusColor(run.runtime_observation_state)" label>
+                  {{ t('executions.observation') }}: {{ t(`statuses.${run.runtime_observation_state}`) }}
+                </v-chip>
+              </div>
+              <v-alert v-if="runWaitingCode(run)" class="mt-2" type="warning" variant="tonal" density="compact">
+                {{ t('executions.waitingReason') }}: {{ runWaitingCode(run) }}
+              </v-alert>
+              <v-alert v-if="runProblemCode(run)" class="mt-2" type="error" variant="tonal" density="compact">
+                {{ t('executions.safeError') }}: {{ runProblemCode(run) }}
+              </v-alert>
             </div>
             <div class="summary-list__actions">
               <StatusChip :label="t(`statuses.${run.status}`)" :tone="statusTone(run.status)" />
               <v-chip v-if="run.human_gate_waiting" size="small" color="warning" variant="tonal" label>
                 {{ t('executions.humanGate') }}
+              </v-chip>
+              <v-chip v-if="runHasProblem(run)" size="small" color="error" variant="tonal" label>
+                {{ t('executions.needsAttention') }}
               </v-chip>
             </div>
           </button>
@@ -306,12 +347,16 @@ function selectRun(runId: string) {
               <div class="meta-text">Run</div>
               <div>{{ compactRef(runtimeStatus.run_id) }}</div>
             </div>
+            <div>
+              <div class="meta-text">{{ t('executions.runStatus') }}</div>
+              <StatusChip :label="t(`statuses.${runtimeStatus.run_status}`)" :tone="statusTone(runtimeStatus.run_status)" />
+            </div>
             <div v-if="selectedRun">
               <div class="meta-text">{{ t('executions.role') }}</div>
               <div>{{ compactRef(selectedRun.role_profile_id) }}</div>
             </div>
             <div>
-              <div class="meta-text">Version</div>
+              <div class="meta-text">{{ t('executions.version') }}</div>
               <div>{{ runtimeStatus.run_version }}</div>
             </div>
             <div>
@@ -319,7 +364,21 @@ function selectRun(runId: string) {
               <div>{{ compactRef(runtimeStatus.runtime_job_ref) }}</div>
             </div>
             <div>
-              <div class="meta-text">Updated</div>
+              <div class="meta-text">{{ t('executions.jobStatus') }}</div>
+              <StatusChip
+                :label="t(`statuses.${runtimeStatus.runtime_job_status}`)"
+                :tone="statusTone(runtimeStatus.runtime_job_status)"
+              />
+            </div>
+            <div>
+              <div class="meta-text">{{ t('executions.observation') }}</div>
+              <StatusChip
+                :label="t(`statuses.${runtimeStatus.observation_state}`)"
+                :tone="statusTone(runtimeStatus.observation_state)"
+              />
+            </div>
+            <div>
+              <div class="meta-text">{{ t('executions.updatedAt') }}</div>
               <div>{{ formatDateTime(runtimeStatus.run_updated_at) }}</div>
             </div>
             <div>
@@ -330,6 +389,15 @@ function selectRun(runId: string) {
               />
             </div>
           </div>
+          <v-alert v-if="runtimeStatusIsWaiting(runtimeStatus)" class="mt-4" type="warning" variant="tonal">
+            {{ t('executions.waitingReason') }}:
+            {{ runtimeStatus.human_gate_reason_code ?? runtimeStatus.human_gate_request_ref ?? t('statuses.waiting') }}
+          </v-alert>
+          <v-alert v-if="runtimeStatusHasProblem(runtimeStatus) || selectedRunProblem" class="mt-4" type="error" variant="tonal">
+            <div class="item-title">{{ runtimeStatus.safe_error_code ?? selectedRun?.failure_code ?? t('executions.safeError') }}</div>
+            <p v-if="runtimeStatus.safe_summary" class="safe-summary">{{ runtimeStatus.safe_summary }}</p>
+            <p v-else-if="selectedRun?.runtime_safe_summary" class="safe-summary">{{ selectedRun.runtime_safe_summary }}</p>
+          </v-alert>
           <div class="detail-section">
             <div class="section-title">{{ t('executions.runtimeRefs') }}</div>
             <div class="ref-chip-row">
@@ -345,12 +413,17 @@ function selectRun(runId: string) {
               <v-chip v-if="runtimeStatus.human_gate_request_ref" size="small" variant="tonal" color="warning" label>
                 Human gate / {{ compactRef(runtimeStatus.human_gate_request_ref) }}
               </v-chip>
+              <v-chip v-if="selectedRun?.session_id" size="small" variant="tonal" color="info" label>
+                session / {{ compactRef(selectedRun.session_id) }}
+              </v-chip>
+              <v-chip v-if="selectedRun?.provider_target?.work_item_ref" size="small" variant="tonal" color="info" label>
+                Issue / {{ compactRef(selectedRun.provider_target.work_item_ref) }}
+              </v-chip>
+              <v-chip v-if="selectedRun?.provider_target?.pull_request_ref" size="small" variant="tonal" color="info" label>
+                PR/MR / {{ compactRef(selectedRun.provider_target.pull_request_ref) }}
+              </v-chip>
             </div>
           </div>
-          <v-alert v-if="runtimeStatus.safe_error_code" class="mt-4" type="error" variant="tonal">
-            {{ runtimeStatus.safe_error_code }}
-          </v-alert>
-          <p v-if="runtimeStatus.safe_summary" class="safe-summary">{{ runtimeStatus.safe_summary }}</p>
         </template>
         <EmptyState v-else icon="mdi-timeline-clock-outline" :title="t('executions.noRun')" />
       </v-card>
@@ -423,7 +496,7 @@ function selectRun(runId: string) {
 .summary-grid {
   display: grid;
   gap: 16px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }
 
 .summary-card {
@@ -436,6 +509,10 @@ function selectRun(runId: string) {
 .summary-value {
   color: #121826;
   font-weight: 700;
+}
+
+.summary-value--danger {
+  color: #b42318;
 }
 
 .filter-row {
@@ -468,6 +545,12 @@ function selectRun(runId: string) {
   padding: 12px;
   text-align: left;
   width: 100%;
+}
+
+.summary-list__main {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
 }
 
 .summary-list__button {
@@ -508,6 +591,11 @@ function selectRun(runId: string) {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.ref-chip-row--compact {
+  gap: 6px;
+  margin-top: 4px;
 }
 
 .safe-summary {
