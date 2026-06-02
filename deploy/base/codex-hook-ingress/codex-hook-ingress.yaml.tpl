@@ -87,7 +87,7 @@ spec:
       containers:
         - name: codex-hook-ingress
           image: {{ image "codex-hook-ingress" }}
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - name: http
               containerPort: 8080

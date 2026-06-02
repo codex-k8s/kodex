@@ -44,6 +44,8 @@ metadata:
 spec:
   replicas: 1
   revisionHistoryLimit: 2
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app.kubernetes.io/name: kodex-registry
@@ -55,6 +57,8 @@ spec:
         app.kubernetes.io/part-of: kodex
         app.kubernetes.io/component: bootstrap-foundation
     spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
       terminationGracePeriodSeconds: 30
       securityContext:
         fsGroup: 1000
@@ -65,8 +69,6 @@ spec:
           ports:
             - name: registry
               containerPort: 5000
-              hostPort: {{ envOr "KODEX_INTERNAL_REGISTRY_PORT" "5000" }}
-              hostIP: 127.0.0.1
           env:
             - name: REGISTRY_HTTP_ADDR
               value: "0.0.0.0:5000"

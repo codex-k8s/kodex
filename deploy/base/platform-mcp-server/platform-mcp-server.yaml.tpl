@@ -77,7 +77,7 @@ spec:
       containers:
         - name: platform-mcp-server
           image: {{ image "platform-mcp-server" }}
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - name: http
               containerPort: 8080

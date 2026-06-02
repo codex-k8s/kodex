@@ -46,7 +46,7 @@ spec:
       containers:
         - name: migrations
           image: {{ image "provider-hub-migrations" }}
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           securityContext:
             runAsNonRoot: true
             runAsUser: 10001

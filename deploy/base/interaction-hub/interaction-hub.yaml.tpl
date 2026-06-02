@@ -88,7 +88,7 @@ spec:
       containers:
         - name: interaction-hub
           image: {{ image "interaction-hub" }}
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - name: http
               containerPort: 8080

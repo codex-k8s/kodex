@@ -99,7 +99,7 @@ spec:
       containers:
         - name: integration-gateway
           image: {{ image "integration-gateway" }}
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - name: http
               containerPort: 8080

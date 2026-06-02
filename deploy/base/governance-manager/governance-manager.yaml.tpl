@@ -88,7 +88,7 @@ spec:
       containers:
         - name: governance-manager
           image: {{ image "governance-manager" }}
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - name: http
               containerPort: 8080

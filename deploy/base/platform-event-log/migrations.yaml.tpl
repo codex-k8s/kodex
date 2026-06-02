@@ -44,7 +44,7 @@ spec:
       containers:
         - name: migrations
           image: {{ image "platform-event-log-migrations" }}
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           securityContext:
             runAsNonRoot: true
             runAsUser: 10001
