@@ -2898,6 +2898,59 @@ func TestGetRepositoryMergeSignalReturnsExplicitReadStatus(t *testing.T) {
 	}
 }
 
+func TestGetRepositoryChangeSignalReturnsProviderOwnedSafeSummary(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 29, 12, 0, 0, 0, time.UTC)
+	repository := &fakeRepository{
+		changeSignal: entity.RepositoryChangeSignal{
+			Base:                 entity.Base{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+			SignalKey:            "provider:github:repository_change:push:codex-k8s/kodex:main:abc123",
+			Kind:                 enum.RepositoryChangeSignalKindPush,
+			ProviderSlug:         enum.ProviderSlugGitHub,
+			RepositoryFullName:   "codex-k8s/kodex",
+			ProviderRepositoryID: "101",
+			Ref:                  "refs/heads/main",
+			BaseBranch:           "main",
+			CommitSHA:            "abc123",
+			BeforeSHA:            "def456",
+			PathSummaryStatus:    enum.RepositoryChangePathSummaryStatusReady,
+			ChangedPathCount:     2,
+			PathDigest:           "sha256:path-digest",
+			PathCategories: []entity.RepositoryChangePathCategoryCount{
+				{Category: enum.RepositoryChangePathCategoryServicesPolicy, Count: 1},
+				{Category: enum.RepositoryChangePathCategoryDeployManifest, Count: 1},
+			},
+			ServicesPolicyChanged: true,
+			DeployRelevantChanged: true,
+			ChangeFingerprint:     "sha256:fingerprint",
+			ObservedAt:            now,
+			Status:                enum.RepositoryChangeSignalStatusObserved,
+		},
+	}
+	service := NewWithRuntime(repository, fixedClock{now: now}, &sequenceIDs{})
+
+	result, err := service.GetRepositoryChangeSignal(context.Background(), GetRepositoryChangeSignalInput{SignalKey: repository.changeSignal.SignalKey})
+	if err != nil {
+		t.Fatalf("GetRepositoryChangeSignal(): %v", err)
+	}
+	if result.Status != enum.ProviderOwnedDataStatusReady ||
+		result.ChangeSignal == nil ||
+		result.ChangeSignal.SignalKey != repository.changeSignal.SignalKey ||
+		!result.ChangeSignal.ServicesPolicyChanged ||
+		!result.ChangeSignal.DeployRelevantChanged {
+		t.Fatalf("result = %+v, want safe repository change signal", result)
+	}
+
+	missing, err := NewWithRuntime(&fakeRepository{}, fixedClock{now: now}, &sequenceIDs{}).GetRepositoryChangeSignal(context.Background(), GetRepositoryChangeSignalInput{SignalKey: "missing"})
+	if err != nil {
+		t.Fatalf("GetRepositoryChangeSignal() missing: %v", err)
+	}
+	if missing.Status != enum.ProviderOwnedDataStatusNotFound || missing.ChangeSignal != nil {
+		t.Fatalf("missing result = %+v, want explicit not_found status", missing)
+	}
+}
+
 func TestListRepositoryAdoptionScanSnapshotsReturnsProviderOwnedData(t *testing.T) {
 	t.Parallel()
 
@@ -3356,6 +3409,7 @@ type fakeRepository struct {
 	recordedProviderOperation     entity.ProviderOperation
 	adoptionScan                  entity.RepositoryAdoptionScanSnapshot
 	mergeSignal                   entity.RepositoryMergeSignal
+	changeSignal                  entity.RepositoryChangeSignal
 	enforceMergeSignalIdempotency bool
 	mergeSignalsByKey             map[string]entity.RepositoryMergeSignal
 	workItemProjection            entity.ProviderWorkItemProjection
@@ -3394,6 +3448,9 @@ func (r *fakeRepository) StoreWebhookEvent(_ context.Context, webhook entity.Web
 	if projection.MergeSignal != nil {
 		r.mergeSignal = *projection.MergeSignal
 	}
+	if projection.ChangeSignal != nil {
+		r.changeSignal = *projection.ChangeSignal
+	}
 	return webhook, providerEvents, nil
 }
 
@@ -3410,6 +3467,9 @@ func (r *fakeRepository) ProcessWebhookEvent(_ context.Context, webhook entity.W
 	r.recordedOutboxEventHistory = append(r.recordedOutboxEventHistory, outboxEvents...)
 	if projection.MergeSignal != nil {
 		r.mergeSignal = *projection.MergeSignal
+	}
+	if projection.ChangeSignal != nil {
+		r.changeSignal = *projection.ChangeSignal
 	}
 	if r.webhookAfterProcess != nil {
 		r.recordedWebhook = *r.webhookAfterProcess
@@ -3645,6 +3705,20 @@ func (r *fakeRepository) ListRepositoryMergeSignals(context.Context, query.Repos
 		return nil, query.PageResult{}, r.err
 	}
 	return []entity.RepositoryMergeSignal{r.mergeSignal}, query.PageResult{}, r.err
+}
+
+func (r *fakeRepository) GetRepositoryChangeSignal(context.Context, query.RepositoryChangeSignalLookup) (entity.RepositoryChangeSignal, error) {
+	if r.changeSignal.ID == uuid.Nil {
+		return entity.RepositoryChangeSignal{}, errs.ErrNotFound
+	}
+	return r.changeSignal, r.err
+}
+
+func (r *fakeRepository) ListRepositoryChangeSignals(context.Context, query.RepositoryChangeSignalFilter) ([]entity.RepositoryChangeSignal, query.PageResult, error) {
+	if r.changeSignal.ID == uuid.Nil {
+		return nil, query.PageResult{}, r.err
+	}
+	return []entity.RepositoryChangeSignal{r.changeSignal}, query.PageResult{}, r.err
 }
 
 func (r *fakeRepository) GetRepositoryAdoptionScan(context.Context, query.RepositoryAdoptionScanLookup) (entity.RepositoryAdoptionScanSnapshot, error) {

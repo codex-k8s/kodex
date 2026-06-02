@@ -21,6 +21,7 @@ const (
 	providerEventRepositoryAdoptionScanCompleted = providerevents.EventRepositoryAdoptionScanCompleted
 	providerEventRepositoryBootstrapMerged       = providerevents.EventRepositoryBootstrapMerged
 	providerEventRepositoryAdoptionMerged        = providerevents.EventRepositoryAdoptionMerged
+	providerEventRepositoryChanged               = providerevents.EventRepositoryChanged
 
 	providerAggregateWebhookEvent           = providerevents.AggregateWebhookEvent
 	providerAggregateProviderEvent          = providerevents.AggregateProviderEvent
@@ -28,6 +29,7 @@ const (
 	providerAggregateRepository             = providerevents.AggregateRepository
 	providerAggregateRepositoryAdoptionScan = providerevents.AggregateRepositoryAdoptionScan
 	providerAggregateRepositoryMergeSignal  = providerevents.AggregateRepositoryMergeSignal
+	providerAggregateRepositoryChangeSignal = providerevents.AggregateRepositoryChangeSignal
 	providerAggregateWorkItem               = providerevents.AggregateWorkItem
 	providerAggregateComment                = providerevents.AggregateComment
 	providerAggregateRelationship           = providerevents.AggregateRelationship

@@ -188,6 +188,31 @@ func TestGetRepositoryMergeSignalMapsNotFoundStatus(t *testing.T) {
 	}
 }
 
+func TestGetRepositoryChangeSignalMapsSafeReadResponse(t *testing.T) {
+	t.Parallel()
+
+	signalKey := "provider:github:repository_change:push:codex-k8s/kodex:main:abc123"
+	response, err := NewServer(fakeService{}).GetRepositoryChangeSignal(context.Background(), &providersv1.GetRepositoryChangeSignalRequest{
+		SignalKey: &signalKey,
+		Meta:      &providersv1.QueryMeta{RequestId: "req-read-change-1"},
+	})
+	if err != nil {
+		t.Fatalf("GetRepositoryChangeSignal(): %v", err)
+	}
+	signal := response.GetChangeSignal()
+	if response.GetReadStatus() != providersv1.ProviderOwnedDataStatus_PROVIDER_OWNED_DATA_STATUS_READY ||
+		signal.GetSignalKey() != signalKey ||
+		signal.GetKind() != providersv1.RepositoryChangeSignalKind_REPOSITORY_CHANGE_SIGNAL_KIND_PUSH ||
+		signal.GetBaseBranch() != "main" ||
+		signal.GetCommitSha() != "abc123" ||
+		!signal.GetServicesPolicyChanged() ||
+		!signal.GetDeployRelevantChanged() ||
+		signal.GetPathSummaryStatus() != providersv1.RepositoryChangePathSummaryStatus_REPOSITORY_CHANGE_PATH_SUMMARY_STATUS_READY ||
+		signal.GetEtag() == "" {
+		t.Fatalf("response = %+v, want ready safe repository change signal", response)
+	}
+}
+
 func TestGetRepositoryAdoptionScanSnapshotMapsSafeReadResponse(t *testing.T) {
 	t.Parallel()
 
@@ -531,6 +556,21 @@ func (fakeService) ListRepositoryMergeSignals(context.Context, providerservice.L
 	}, nil
 }
 
+func (fakeService) GetRepositoryChangeSignal(_ context.Context, input providerservice.GetRepositoryChangeSignalInput) (providerservice.RepositoryChangeSignalResult, error) {
+	if input.SignalKey == "missing" {
+		return providerservice.RepositoryChangeSignalResult{Status: enum.ProviderOwnedDataStatusNotFound}, nil
+	}
+	signal := fakeRepositoryChangeSignal(input.SignalKey)
+	return providerservice.RepositoryChangeSignalResult{Status: enum.ProviderOwnedDataStatusReady, ChangeSignal: &signal}, nil
+}
+
+func (fakeService) ListRepositoryChangeSignals(context.Context, providerservice.ListRepositoryChangeSignalsInput) (providerservice.ListRepositoryChangeSignalsResult, error) {
+	return providerservice.ListRepositoryChangeSignalsResult{
+		ChangeSignals: []entity.RepositoryChangeSignal{fakeRepositoryChangeSignal("provider:github:repository_change:push:codex-k8s/kodex:main:abc123")},
+		Page:          query.PageResult{},
+	}, nil
+}
+
 func (fakeService) GetRepositoryAdoptionScanSnapshot(_ context.Context, input providerservice.GetRepositoryAdoptionScanSnapshotInput) (providerservice.RepositoryAdoptionScanSnapshotResult, error) {
 	if input.SnapshotKey == "missing" {
 		return providerservice.RepositoryAdoptionScanSnapshotResult{Status: enum.ProviderOwnedDataStatusNotFound}, nil
@@ -578,6 +618,34 @@ func fakeRepositoryMergeSignal(signalKey string) entity.RepositoryMergeSignal {
 		ObservedAt:                  now,
 		MergedAt:                    now.Add(-time.Minute),
 		Status:                      enum.RepositoryMergeSignalStatusMerged,
+	}
+}
+
+func fakeRepositoryChangeSignal(signalKey string) entity.RepositoryChangeSignal {
+	now := time.Date(2026, 5, 29, 10, 0, 0, 0, time.UTC)
+	return entity.RepositoryChangeSignal{
+		Base:                 entity.Base{ID: uuid.New(), Version: 2, CreatedAt: now.Add(-time.Minute), UpdatedAt: now},
+		SignalKey:            signalKey,
+		Kind:                 enum.RepositoryChangeSignalKindPush,
+		ProviderSlug:         enum.ProviderSlugGitHub,
+		RepositoryFullName:   "codex-k8s/kodex",
+		ProviderRepositoryID: "101",
+		Ref:                  "refs/heads/main",
+		BaseBranch:           "main",
+		CommitSHA:            "abc123",
+		BeforeSHA:            "def456",
+		PathSummaryStatus:    enum.RepositoryChangePathSummaryStatusReady,
+		ChangedPathCount:     2,
+		PathDigest:           "sha256:path-digest",
+		PathCategories: []entity.RepositoryChangePathCategoryCount{
+			{Category: enum.RepositoryChangePathCategoryServicesPolicy, Count: 1},
+			{Category: enum.RepositoryChangePathCategoryDeployManifest, Count: 1},
+		},
+		ServicesPolicyChanged: true,
+		DeployRelevantChanged: true,
+		ChangeFingerprint:     "sha256:fingerprint",
+		ObservedAt:            now,
+		Status:                enum.RepositoryChangeSignalStatusObserved,
 	}
 }
 

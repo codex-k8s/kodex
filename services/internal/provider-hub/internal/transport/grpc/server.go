@@ -26,6 +26,8 @@ type providerService interface {
 	ListRelationships(context.Context, providerservice.ListRelationshipsInput) (providerservice.ListRelationshipsResult, error)
 	GetRepositoryMergeSignal(context.Context, providerservice.GetRepositoryMergeSignalInput) (providerservice.RepositoryMergeSignalResult, error)
 	ListRepositoryMergeSignals(context.Context, providerservice.ListRepositoryMergeSignalsInput) (providerservice.ListRepositoryMergeSignalsResult, error)
+	GetRepositoryChangeSignal(context.Context, providerservice.GetRepositoryChangeSignalInput) (providerservice.RepositoryChangeSignalResult, error)
+	ListRepositoryChangeSignals(context.Context, providerservice.ListRepositoryChangeSignalsInput) (providerservice.ListRepositoryChangeSignalsResult, error)
 	GetRepositoryAdoptionScanSnapshot(context.Context, providerservice.GetRepositoryAdoptionScanSnapshotInput) (providerservice.RepositoryAdoptionScanSnapshotResult, error)
 	ListRepositoryAdoptionScanSnapshots(context.Context, providerservice.ListRepositoryAdoptionScanSnapshotsInput) (providerservice.ListRepositoryAdoptionScanSnapshotsResult, error)
 	RegisterProviderArtifactSignal(context.Context, providerservice.RegisterProviderArtifactSignalInput) (providerservice.ProviderArtifactSignalResult, error)
@@ -129,6 +131,16 @@ func (s *Server) GetRepositoryMergeSignal(ctx context.Context, request *provider
 // ListRepositoryMergeSignals returns safe provider-owned merge signals by supported filters.
 func (s *Server) ListRepositoryMergeSignals(ctx context.Context, request *providersv1.ListRepositoryMergeSignalsRequest) (*providersv1.ListRepositoryMergeSignalsResponse, error) {
 	return grpcserver.HandleUnary(ctx, request, grpccasters.ListRepositoryMergeSignalsInput, s.service.ListRepositoryMergeSignals, grpccasters.ListRepositoryMergeSignalsResponse)
+}
+
+// GetRepositoryChangeSignal returns one safe provider-owned repository change signal.
+func (s *Server) GetRepositoryChangeSignal(ctx context.Context, request *providersv1.GetRepositoryChangeSignalRequest) (*providersv1.RepositoryChangeSignalResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.GetRepositoryChangeSignalInput, s.service.GetRepositoryChangeSignal, grpccasters.RepositoryChangeSignalResponse)
+}
+
+// ListRepositoryChangeSignals returns safe provider-owned repository change signals by supported filters.
+func (s *Server) ListRepositoryChangeSignals(ctx context.Context, request *providersv1.ListRepositoryChangeSignalsRequest) (*providersv1.ListRepositoryChangeSignalsResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.ListRepositoryChangeSignalsInput, s.service.ListRepositoryChangeSignals, grpccasters.ListRepositoryChangeSignalsResponse)
 }
 
 // GetRepositoryAdoptionScanSnapshot returns one safe provider-side adoption scan snapshot.

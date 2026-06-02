@@ -230,6 +230,66 @@ func ListRepositoryMergeSignalsResponse(result providerservice.ListRepositoryMer
 	}
 }
 
+// RepositoryChangeSignalResponse maps one provider-owned repository change signal read result to gRPC.
+func RepositoryChangeSignalResponse(result providerservice.RepositoryChangeSignalResult) *providersv1.RepositoryChangeSignalResponse {
+	response := &providersv1.RepositoryChangeSignalResponse{
+		ReadStatus: ProviderOwnedDataStatusToProto(result.Status),
+	}
+	if result.ChangeSignal != nil {
+		response.ChangeSignal = RepositoryChangeSignalToProto(*result.ChangeSignal)
+	}
+	return response
+}
+
+func RepositoryChangeSignalToProto(signal entity.RepositoryChangeSignal) *providersv1.RepositoryChangeSignal {
+	return &providersv1.RepositoryChangeSignal{
+		SignalId:              signal.ID.String(),
+		SignalKey:             signal.SignalKey,
+		Kind:                  RepositoryChangeSignalKindToProto(signal.Kind),
+		ProviderSlug:          string(signal.ProviderSlug),
+		ProjectId:             uuidPtrValue(signal.ProjectID),
+		RepositoryId:          uuidPtrValue(signal.RepositoryID),
+		RepositoryFullName:    signal.RepositoryFullName,
+		ProviderRepositoryId:  signal.ProviderRepositoryID,
+		Ref:                   signal.Ref,
+		BaseBranch:            signal.BaseBranch,
+		CommitSha:             signal.CommitSHA,
+		BeforeSha:             signal.BeforeSHA,
+		SourceRef:             signal.SourceRef,
+		PullRequestNumber:     signal.PullRequestNumber,
+		PullRequestProviderId: signal.PullRequestProviderID,
+		PullRequestUrl:        signal.PullRequestURL,
+		PathSummaryStatus:     RepositoryChangePathSummaryStatusToProto(signal.PathSummaryStatus),
+		ChangedPathCount:      signal.ChangedPathCount,
+		PathDigest:            signal.PathDigest,
+		PathCategories:        mapSlice(signal.PathCategories, RepositoryChangePathCategoryCountToProto),
+		ServicesPolicyChanged: signal.ServicesPolicyChanged,
+		DeployRelevantChanged: signal.DeployRelevantChanged,
+		ChangeFingerprint:     signal.ChangeFingerprint,
+		ObservedAt:            formatTime(signal.ObservedAt),
+		Status:                RepositoryChangeSignalStatusToProto(signal.Status),
+		Version:               signal.Version,
+		Etag:                  repositoryChangeSignalETag(signal),
+		CreatedAt:             formatTime(signal.CreatedAt),
+		UpdatedAt:             formatTime(signal.UpdatedAt),
+	}
+}
+
+func RepositoryChangePathCategoryCountToProto(category entity.RepositoryChangePathCategoryCount) *providersv1.RepositoryChangePathCategoryCount {
+	return &providersv1.RepositoryChangePathCategoryCount{
+		Category: RepositoryChangePathCategoryToProto(category.Category),
+		Count:    category.Count,
+	}
+}
+
+// ListRepositoryChangeSignalsResponse maps provider-owned repository change signals to gRPC.
+func ListRepositoryChangeSignalsResponse(result providerservice.ListRepositoryChangeSignalsResult) *providersv1.ListRepositoryChangeSignalsResponse {
+	return &providersv1.ListRepositoryChangeSignalsResponse{
+		ChangeSignals: mapSlice(result.ChangeSignals, RepositoryChangeSignalToProto),
+		Page:          pageResponseToProto(result.Page),
+	}
+}
+
 // RepositoryAdoptionScanSnapshotResponse maps one provider-owned scan snapshot read result to gRPC.
 func RepositoryAdoptionScanSnapshotResponse(result providerservice.RepositoryAdoptionScanSnapshotResult) *providersv1.RepositoryAdoptionScanSnapshotResponse {
 	response := &providersv1.RepositoryAdoptionScanSnapshotResponse{
@@ -251,6 +311,10 @@ func ListRepositoryAdoptionScanSnapshotsResponse(result providerservice.ListRepo
 
 func repositoryMergeSignalETag(signal entity.RepositoryMergeSignal) string {
 	return fmt.Sprintf("repository_merge_signal:%s:%d:%s:%s", signal.ID.String(), signal.Version, signal.MergeCommitSHA, signal.WatermarkDigest)
+}
+
+func repositoryChangeSignalETag(signal entity.RepositoryChangeSignal) string {
+	return fmt.Sprintf("repository_change_signal:%s:%d:%s:%s", signal.ID.String(), signal.Version, signal.CommitSHA, signal.ChangeFingerprint)
 }
 
 func repositoryAdoptionScanETag(snapshot entity.RepositoryAdoptionScanSnapshot) string {

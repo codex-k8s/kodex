@@ -403,6 +403,16 @@ func (r *Repository) ListRepositoryMergeSignals(ctx context.Context, filter quer
 	return queryPage(ctx, r.db, operationListRepositoryMergeSignals, queryRepositoryMergeSignalList, repositoryMergeSignalFilterArgs(filter), scanRepositoryMergeSignal)
 }
 
+// GetRepositoryChangeSignal returns one safe provider-owned repository change signal.
+func (r *Repository) GetRepositoryChangeSignal(ctx context.Context, lookup query.RepositoryChangeSignalLookup) (entity.RepositoryChangeSignal, error) {
+	return queryOne(ctx, r.db, operationGetRepositoryChangeSignal, queryRepositoryChangeSignalGet, repositoryChangeSignalLookupArgs(lookup), scanRepositoryChangeSignal)
+}
+
+// ListRepositoryChangeSignals returns safe provider-owned repository change signals by supported filters.
+func (r *Repository) ListRepositoryChangeSignals(ctx context.Context, filter query.RepositoryChangeSignalFilter) ([]entity.RepositoryChangeSignal, query.PageResult, error) {
+	return queryPage(ctx, r.db, operationListRepositoryChangeSignals, queryRepositoryChangeSignalList, repositoryChangeSignalFilterArgs(filter), scanRepositoryChangeSignal)
+}
+
 // GetRepositoryAdoptionScan returns one safe provider-owned adoption scan snapshot.
 func (r *Repository) GetRepositoryAdoptionScan(ctx context.Context, lookup query.RepositoryAdoptionScanLookup) (entity.RepositoryAdoptionScanSnapshot, error) {
 	return queryOne(ctx, r.db, operationGetRepositoryAdoptionScan, queryRepositoryAdoptionScanGet, repositoryAdoptionScanLookupArgs(lookup), scanRepositoryAdoptionScan)
@@ -478,6 +488,8 @@ const (
 	operationGetProviderOperationByCommand        = "domain.Repository.GetProviderOperationByCommand"
 	operationGetRepositoryMergeSignal             = "domain.Repository.GetRepositoryMergeSignal"
 	operationListRepositoryMergeSignals           = "domain.Repository.ListRepositoryMergeSignals"
+	operationGetRepositoryChangeSignal            = "domain.Repository.GetRepositoryChangeSignal"
+	operationListRepositoryChangeSignals          = "domain.Repository.ListRepositoryChangeSignals"
 	operationGetRepositoryAdoptionScan            = "domain.Repository.GetRepositoryAdoptionScan"
 	operationListRepositoryAdoptionScans          = "domain.Repository.ListRepositoryAdoptionScans"
 	operationGetRepositoryAdoptionScanByOperation = "domain.Repository.GetRepositoryAdoptionScanByOperation"
@@ -563,21 +575,33 @@ func storeProviderArtifactSignal(ctx context.Context, db queryer, operation stri
 }
 
 func storeRepositoryMergeSignal(ctx context.Context, db queryer, operation string, signal entity.RepositoryMergeSignal) (entity.RepositoryMergeSignal, bool, error) {
-	stored, err := queryOne(ctx, db, operation, queryRepositoryMergeSignalInsert, repositoryMergeSignalArgs(signal), scanRepositoryMergeSignal)
-	if errors.Is(err, errs.ErrNotFound) {
-		stored, err = queryOne(ctx, db, operation, queryRepositoryMergeSignalGetByKey, repositoryMergeSignalIdentityArgs(signal), scanRepositoryMergeSignal)
-		if err == nil && !sameRepositoryMergeSignal(signal, stored) {
-			err = errs.ErrConflict
-		}
-		return stored, false, err
-	}
-	if err != nil {
-		return entity.RepositoryMergeSignal{}, false, err
-	}
-	if !sameRepositoryMergeSignal(signal, stored) {
-		return entity.RepositoryMergeSignal{}, false, errs.ErrConflict
-	}
-	return stored, true, nil
+	return storeIdentifiedRecord(
+		ctx,
+		db,
+		operation,
+		queryRepositoryMergeSignalInsert,
+		queryRepositoryMergeSignalGetByKey,
+		repositoryMergeSignalArgs(signal),
+		repositoryMergeSignalIdentityArgs(signal),
+		scanRepositoryMergeSignal,
+		sameRepositoryMergeSignal,
+		signal,
+	)
+}
+
+func storeRepositoryChangeSignal(ctx context.Context, db queryer, operation string, signal entity.RepositoryChangeSignal) (entity.RepositoryChangeSignal, bool, error) {
+	return storeIdentifiedRecord(
+		ctx,
+		db,
+		operation,
+		queryRepositoryChangeSignalInsert,
+		queryRepositoryChangeSignalGetByKey,
+		repositoryChangeSignalArgs(signal),
+		repositoryChangeSignalIdentityArgs(signal),
+		scanRepositoryChangeSignal,
+		sameRepositoryChangeSignal,
+		signal,
+	)
 }
 
 func storeRepositoryAdoptionScan(ctx context.Context, db queryer, operation string, snapshot entity.RepositoryAdoptionScanSnapshot) (entity.RepositoryAdoptionScanSnapshot, bool, error) {
@@ -594,6 +618,36 @@ func storeRepositoryAdoptionScan(ctx context.Context, db queryer, operation stri
 	}
 	if !sameRepositoryAdoptionScan(snapshot, stored) {
 		return entity.RepositoryAdoptionScanSnapshot{}, false, errs.ErrConflict
+	}
+	return stored, true, nil
+}
+
+func storeIdentifiedRecord[T any](
+	ctx context.Context,
+	db queryer,
+	operation string,
+	insertQuery string,
+	lookupQuery string,
+	insertArgs pgx.NamedArgs,
+	lookupArgs pgx.NamedArgs,
+	scan func(postgreslib.RowScanner) (T, error),
+	same func(T, T) bool,
+	expected T,
+) (T, bool, error) {
+	var zero T
+	stored, err := queryOne(ctx, db, operation, insertQuery, insertArgs, scan)
+	if errors.Is(err, errs.ErrNotFound) {
+		stored, err = queryOne(ctx, db, operation, lookupQuery, lookupArgs, scan)
+		if err == nil && !same(expected, stored) {
+			err = errs.ErrConflict
+		}
+		return stored, false, err
+	}
+	if err != nil {
+		return zero, false, err
+	}
+	if !same(expected, stored) {
+		return zero, false, errs.ErrConflict
 	}
 	return stored, true, nil
 }
@@ -650,38 +704,118 @@ func sameProviderArtifactSignal(expected entity.ProviderArtifactSignal, actual e
 		sameJSON(expected.PayloadJSON, actual.PayloadJSON)
 }
 
+type repositorySignalScope struct {
+	signalKey             string
+	kind                  string
+	providerSlug          string
+	projectID             *uuid.UUID
+	repositoryID          *uuid.UUID
+	repositoryFullName    string
+	providerRepositoryID  string
+	pullRequestNumber     int64
+	pullRequestProviderID string
+	pullRequestURL        string
+	status                string
+}
+
+func sameRepositorySignalScope(expected repositorySignalScope, actual repositorySignalScope) bool {
+	return expected.signalKey == actual.signalKey &&
+		expected.kind == actual.kind &&
+		expected.providerSlug == actual.providerSlug &&
+		sameOptionalUUID(expected.projectID, actual.projectID) &&
+		sameOptionalUUID(expected.repositoryID, actual.repositoryID) &&
+		expected.repositoryFullName == actual.repositoryFullName &&
+		expected.providerRepositoryID == actual.providerRepositoryID &&
+		expected.pullRequestNumber == actual.pullRequestNumber &&
+		expected.pullRequestProviderID == actual.pullRequestProviderID &&
+		expected.pullRequestURL == actual.pullRequestURL &&
+		expected.status == actual.status
+}
+
+func repositoryChangeSignalScope(signal entity.RepositoryChangeSignal) repositorySignalScope {
+	return repositorySignalScopeFromFields(signal.SignalKey, string(signal.Kind), string(signal.ProviderSlug), signal.ProjectID, signal.RepositoryID, signal.RepositoryFullName, signal.ProviderRepositoryID, signal.PullRequestNumber, signal.PullRequestProviderID, signal.PullRequestURL, string(signal.Status))
+}
+
+func repositorySignalScopeFromFields(
+	signalKey string,
+	kind string,
+	providerSlug string,
+	projectID *uuid.UUID,
+	repositoryID *uuid.UUID,
+	repositoryFullName string,
+	providerRepositoryID string,
+	pullRequestNumber int64,
+	pullRequestProviderID string,
+	pullRequestURL string,
+	status string,
+) repositorySignalScope {
+	return repositorySignalScope{
+		signalKey:             signalKey,
+		kind:                  kind,
+		providerSlug:          providerSlug,
+		projectID:             projectID,
+		repositoryID:          repositoryID,
+		repositoryFullName:    repositoryFullName,
+		providerRepositoryID:  providerRepositoryID,
+		pullRequestNumber:     pullRequestNumber,
+		pullRequestProviderID: pullRequestProviderID,
+		pullRequestURL:        pullRequestURL,
+		status:                status,
+	}
+}
+
 func sameRepositoryMergeSignal(expected entity.RepositoryMergeSignal, actual entity.RepositoryMergeSignal) bool {
-	return expected.SignalKey == actual.SignalKey &&
-		expected.Kind == actual.Kind &&
-		expected.ProviderSlug == actual.ProviderSlug &&
-		sameOptionalUUID(expected.ProjectID, actual.ProjectID) &&
-		sameOptionalUUID(expected.RepositoryID, actual.RepositoryID) &&
-		expected.RepositoryFullName == actual.RepositoryFullName &&
-		expected.ProviderRepositoryID == actual.ProviderRepositoryID &&
-		expected.WorkItemProjectionID == actual.WorkItemProjectionID &&
-		expected.ProviderWorkItemID == actual.ProviderWorkItemID &&
-		expected.PullRequestNumber == actual.PullRequestNumber &&
-		expected.PullRequestProviderID == actual.PullRequestProviderID &&
-		expected.PullRequestURL == actual.PullRequestURL &&
-		expected.BaseBranch == actual.BaseBranch &&
-		expected.HeadBranch == actual.HeadBranch &&
-		expected.MergeCommitSHA == actual.MergeCommitSHA &&
+	expectedScope := repositorySignalScopeFromFields(expected.SignalKey, string(expected.Kind), string(expected.ProviderSlug), expected.ProjectID, expected.RepositoryID, expected.RepositoryFullName, expected.ProviderRepositoryID, expected.PullRequestNumber, expected.PullRequestProviderID, expected.PullRequestURL, string(expected.Status))
+	actualScope := repositorySignalScopeFromFields(actual.SignalKey, string(actual.Kind), string(actual.ProviderSlug), actual.ProjectID, actual.RepositoryID, actual.RepositoryFullName, actual.ProviderRepositoryID, actual.PullRequestNumber, actual.PullRequestProviderID, actual.PullRequestURL, string(actual.Status))
+	if !sameRepositorySignalScope(expectedScope, actualScope) {
+		return false
+	}
+	if expected.WorkItemProjectionID != actual.WorkItemProjectionID ||
+		expected.ProviderWorkItemID != actual.ProviderWorkItemID ||
+		expected.BaseBranch != actual.BaseBranch ||
+		expected.HeadBranch != actual.HeadBranch {
+		return false
+	}
+	return expected.MergeCommitSHA == actual.MergeCommitSHA &&
 		expected.SourceRef == actual.SourceRef &&
 		expected.RelatedProviderOperationRef == actual.RelatedProviderOperationRef &&
-		expected.WatermarkDigest == actual.WatermarkDigest &&
-		expected.Status == actual.Status
+		expected.WatermarkDigest == actual.WatermarkDigest
+}
+
+func sameRepositoryChangeSignal(expected entity.RepositoryChangeSignal, actual entity.RepositoryChangeSignal) bool {
+	if !sameRepositorySignalScope(repositoryChangeSignalScope(expected), repositoryChangeSignalScope(actual)) {
+		return false
+	}
+	if expected.Ref != actual.Ref ||
+		expected.CommitSHA != actual.CommitSHA ||
+		expected.BeforeSHA != actual.BeforeSHA ||
+		expected.PathSummaryStatus != actual.PathSummaryStatus ||
+		expected.ChangedPathCount != actual.ChangedPathCount ||
+		expected.PathDigest != actual.PathDigest {
+		return false
+	}
+	return expected.BaseBranch == actual.BaseBranch &&
+		expected.SourceRef == actual.SourceRef &&
+		slices.Equal(expected.PathCategories, actual.PathCategories) &&
+		expected.ServicesPolicyChanged == actual.ServicesPolicyChanged &&
+		expected.DeployRelevantChanged == actual.DeployRelevantChanged &&
+		expected.ChangeFingerprint == actual.ChangeFingerprint
 }
 
 func sameRepositoryAdoptionScan(expected entity.RepositoryAdoptionScanSnapshot, actual entity.RepositoryAdoptionScanSnapshot) bool {
-	return expected.SnapshotKey == actual.SnapshotKey &&
-		expected.ProviderOperationID == actual.ProviderOperationID &&
-		expected.ExternalAccountID == actual.ExternalAccountID &&
-		expected.ProviderSlug == actual.ProviderSlug &&
-		expected.RepositoryFullName == actual.RepositoryFullName &&
-		expected.ProviderRepositoryID == actual.ProviderRepositoryID &&
-		expected.RepositoryURL == actual.RepositoryURL &&
-		expected.DefaultBranch == actual.DefaultBranch &&
-		expected.RequestedRef == actual.RequestedRef &&
+	if expected.SnapshotKey != actual.SnapshotKey ||
+		expected.ProviderOperationID != actual.ProviderOperationID ||
+		expected.ExternalAccountID != actual.ExternalAccountID ||
+		expected.ProviderSlug != actual.ProviderSlug {
+		return false
+	}
+	if expected.RepositoryFullName != actual.RepositoryFullName ||
+		expected.ProviderRepositoryID != actual.ProviderRepositoryID ||
+		expected.RepositoryURL != actual.RepositoryURL ||
+		expected.DefaultBranch != actual.DefaultBranch {
+		return false
+	}
+	return expected.RequestedRef == actual.RequestedRef &&
 		expected.ScannedRef == actual.ScannedRef &&
 		expected.HeadSHA == actual.HeadSHA &&
 		expected.Status == actual.Status &&
@@ -711,6 +845,8 @@ type projectionApplyResult struct {
 	workItemProjectionID        uuid.UUID
 	mergeSignalApplied          bool
 	mergeSignalID               uuid.UUID
+	changeSignalApplied         bool
+	changeSignalID              uuid.UUID
 	adoptionScanApplied         bool
 	adoptionScanID              uuid.UUID
 	appliedCommentProjectionIDs map[uuid.UUID]struct{}
@@ -724,7 +860,12 @@ func applyProjectionUpdate(ctx context.Context, db projectionUpdater, operation 
 		appliedCommentProviderIDs:   make(map[string]struct{}),
 		appliedRelationshipIDs:      make(map[uuid.UUID]struct{}),
 	}
-	result.hasProjection = update.WorkItem != nil || len(update.Comments) > 0 || len(update.Relationships) > 0 || update.MergeSignal != nil || update.AdoptionScan != nil
+	result.hasProjection = update.WorkItem != nil ||
+		len(update.Comments) > 0 ||
+		len(update.Relationships) > 0 ||
+		update.MergeSignal != nil ||
+		update.ChangeSignal != nil ||
+		update.AdoptionScan != nil
 	if update.WorkItem != nil {
 		storedWorkItem, workItemApplied, err := upsertFreshWorkItemProjection(ctx, db, operation, *update.WorkItem)
 		if err != nil {
@@ -771,10 +912,36 @@ func applyProjectionUpdate(ctx context.Context, db projectionUpdater, operation 
 			result.mergeSignalApplied = applied
 			result.mergeSignalID = storedSignal.ID
 		}
+		if update.ChangeSignal != nil {
+			signal := *update.ChangeSignal
+			if signal.ProjectID == nil {
+				signal.ProjectID = storedWorkItem.ProjectID
+			}
+			if signal.RepositoryID == nil {
+				signal.RepositoryID = storedWorkItem.RepositoryID
+			}
+			if signal.RepositoryFullName == "" {
+				signal.RepositoryFullName = storedWorkItem.RepositoryFullName
+			}
+			storedSignal, applied, err := storeRepositoryChangeSignal(ctx, db, operation, signal)
+			if err != nil {
+				return result, err
+			}
+			result.changeSignalApplied = applied
+			result.changeSignalID = storedSignal.ID
+		}
 		return result, nil
 	}
 	if err := upsertRelationships(ctx, db, operation, update.Relationships, result.appliedRelationshipIDs); err != nil {
 		return result, err
+	}
+	if update.ChangeSignal != nil {
+		storedSignal, applied, err := storeRepositoryChangeSignal(ctx, db, operation, *update.ChangeSignal)
+		if err != nil {
+			return result, err
+		}
+		result.changeSignalApplied = applied
+		result.changeSignalID = storedSignal.ID
 	}
 	if update.AdoptionScan != nil {
 		storedSnapshot, applied, err := storeRepositoryAdoptionScan(ctx, db, operation, *update.AdoptionScan)
@@ -897,6 +1064,10 @@ func filterProviderEvents(events []entity.ProviderEvent, update providerrepo.Pro
 			if _, ok := result.appliedCommentProviderIDs[event.AggregateID]; ok {
 				filtered = append(filtered, event)
 			}
+		case providerevents.AggregateRepositoryChangeSignal:
+			if result.changeSignalApplied && update.ChangeSignal != nil && event.AggregateID == update.ChangeSignal.SignalKey {
+				filtered = append(filtered, event)
+			}
 		default:
 			filtered = append(filtered, event)
 		}
@@ -933,6 +1104,10 @@ func filterOutboxEvents(events []entity.OutboxEvent, providerEvents []entity.Pro
 			}
 		case providerevents.EventRepositoryBootstrapMerged, providerevents.EventRepositoryAdoptionMerged:
 			if result.mergeSignalApplied && event.AggregateID == result.mergeSignalID {
+				filtered = append(filtered, event)
+			}
+		case providerevents.EventRepositoryChanged:
+			if result.changeSignalApplied && event.AggregateID == result.changeSignalID {
 				filtered = append(filtered, event)
 			}
 		case providerevents.EventRepositoryAdoptionScanCompleted:

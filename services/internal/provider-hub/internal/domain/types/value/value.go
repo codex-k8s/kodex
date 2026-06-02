@@ -62,8 +62,9 @@ type ProviderEventPayload = providerevents.Payload
 type ProviderWebhookFactKind string
 
 const (
-	ProviderWebhookFactKindWorkItem ProviderWebhookFactKind = "work_item"
-	ProviderWebhookFactKindComment  ProviderWebhookFactKind = "comment"
+	ProviderWebhookFactKindWorkItem         ProviderWebhookFactKind = "work_item"
+	ProviderWebhookFactKindComment          ProviderWebhookFactKind = "comment"
+	ProviderWebhookFactKindRepositoryChange ProviderWebhookFactKind = "repository_change"
 )
 
 // ProviderWebhookFacts contains provider-neutral data extracted by a provider adapter.
@@ -79,6 +80,7 @@ type ProviderWebhookFacts struct {
 	WorkItem             *ProviderWorkItemSnapshot
 	Comment              *ProviderCommentSnapshot
 	MergeSignal          *ProviderRepositoryMergeSignalSnapshot
+	RepositoryChange     *ProviderRepositoryChangeSignalSnapshot
 }
 
 // ProviderWorkItemSnapshot is a provider-neutral snapshot extracted from webhook or sync payload.
@@ -122,4 +124,34 @@ type ProviderRepositoryMergeSignalSnapshot struct {
 	MergeCommitSHA        string
 	SourceRef             string
 	MergedAt              time.Time
+}
+
+// ProviderRepositoryChangePathCategoryCount stores one safe path category count.
+type ProviderRepositoryChangePathCategoryCount struct {
+	Category string
+	Count    int64
+}
+
+// ProviderRepositoryChangeSignalSnapshot contains safe provider refs from push or PR merge webhooks.
+type ProviderRepositoryChangeSignalSnapshot struct {
+	SignalKey             string
+	EventKind             string
+	RepositoryFullName    string
+	ProviderRepositoryID  string
+	Ref                   string
+	BaseBranch            string
+	CommitSHA             string
+	BeforeSHA             string
+	SourceRef             string
+	PullRequestNumber     int64
+	PullRequestProviderID string
+	PullRequestURL        string
+	PathSummaryStatus     string
+	ChangedPathCount      int64
+	PathDigest            string
+	PathCategories        []ProviderRepositoryChangePathCategoryCount
+	ServicesPolicyChanged bool
+	DeployRelevantChanged bool
+	ChangeFingerprint     string
+	ObservedAt            time.Time
 }

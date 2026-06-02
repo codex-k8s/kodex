@@ -1,0 +1,32 @@
+-- name: repository_change_signal__get_by_key :one
+SELECT
+    id,
+    signal_key,
+    kind,
+    provider_slug,
+    project_id,
+    repository_id,
+    repository_full_name,
+    provider_repository_id,
+    ref,
+    base_branch,
+    commit_sha,
+    before_sha,
+    source_ref,
+    pull_request_number,
+    pull_request_provider_id,
+    pull_request_url,
+    path_summary_status,
+    changed_path_count,
+    path_digest,
+    path_categories_json,
+    services_policy_changed,
+    deploy_relevant_changed,
+    change_fingerprint,
+    observed_at,
+    status,
+    version,
+    created_at,
+    updated_at
+FROM provider_hub_repository_change_signals
+WHERE signal_key = @signal_key;

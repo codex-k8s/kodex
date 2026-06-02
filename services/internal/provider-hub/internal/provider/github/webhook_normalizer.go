@@ -2,8 +2,11 @@ package github
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -122,6 +125,23 @@ type pullRequestReviewCommentWebhookEnvelope struct {
 	Comment     commentWebhookPayload     `json:"comment"`
 }
 
+type pushWebhookEnvelope struct {
+	Ref        string                   `json:"ref"`
+	Before     string                   `json:"before"`
+	After      string                   `json:"after"`
+	Repository webhookRepositoryPayload `json:"repository"`
+	HeadCommit pushCommitPayload        `json:"head_commit"`
+	Commits    []pushCommitPayload      `json:"commits"`
+}
+
+type pushCommitPayload struct {
+	ID        string   `json:"id"`
+	Timestamp string   `json:"timestamp"`
+	Added     []string `json:"added"`
+	Modified  []string `json:"modified"`
+	Removed   []string `json:"removed"`
+}
+
 type workItemSource struct {
 	repository     webhookRepositoryPayload
 	item           providerWorkItemPayload
@@ -142,6 +162,8 @@ type providerWorkItemPayload struct {
 	updatedAt string
 }
 
+const maxRepositoryChangePaths = 512
+
 // NormalizeWebhook maps GitHub webhook payloads to provider-neutral facts.
 func (a *Adapter) NormalizeWebhook(webhook entity.WebhookEvent) (value.ProviderWebhookFacts, bool, error) {
 	if webhook.ProviderSlug != enum.ProviderSlugGitHub {
@@ -152,6 +174,8 @@ func (a *Adapter) NormalizeWebhook(webhook entity.WebhookEvent) (value.ProviderW
 
 func normalizeWebhookPayload(eventName string, payload []byte, receivedAt time.Time) (value.ProviderWebhookFacts, bool, error) {
 	switch eventName {
+	case "push":
+		return normalizePushWebhook(payload, receivedAt)
 	case "issues":
 		return normalizeWorkItemWebhook[issuesWebhookEnvelope](payload, receivedAt, issueSource)
 	case "pull_request":
@@ -220,8 +244,34 @@ func normalizePullRequestWebhook(payload []byte, receivedAt time.Time) (value.Pr
 	}
 	if pullRequestMerged(envelope) {
 		facts.MergeSignal = pullRequestMergeSignal(envelope.PullRequest, receivedAt)
+		facts.RepositoryChange = pullRequestRepositoryChangeSignal(envelope.Repository, envelope.PullRequest, receivedAt)
 	}
 	return facts, true, nil
+}
+
+func normalizePushWebhook(payload []byte, receivedAt time.Time) (value.ProviderWebhookFacts, bool, error) {
+	var envelope pushWebhookEnvelope
+	if err := decodeProviderPayload(payload, &envelope); err != nil {
+		return webhookFacts{}, true, err
+	}
+	repositoryFullName := strings.TrimSpace(envelope.Repository.FullName)
+	providerRepositoryID := numberString(envelope.Repository.ID)
+	ref := strings.TrimSpace(envelope.Ref)
+	baseBranch := branchNameFromRef(ref)
+	commitSHA := strings.TrimSpace(envelope.After)
+	if repositoryFullName == "" || providerRepositoryID == "" || ref == "" || baseBranch == "" || commitSHA == "" || allZeroSHA(commitSHA) {
+		return webhookFacts{}, true, fmt.Errorf("github push webhook misses repository ref or commit")
+	}
+	observedAt := timeValue(envelope.HeadCommit.Timestamp, receivedAt)
+	change := pushRepositoryChangeSignal(repositoryFullName, providerRepositoryID, ref, baseBranch, commitSHA, strings.TrimSpace(envelope.Before), envelope.Commits, observedAt)
+	return webhookFacts{
+		FactKind:             value.ProviderWebhookFactKindRepositoryChange,
+		Kind:                 "push",
+		RepositoryFullName:   repositoryFullName,
+		RepositoryProviderID: providerRepositoryID,
+		OccurredAt:           observedAt,
+		RepositoryChange:     &change,
+	}, true, nil
 }
 
 func issueSource(envelope issuesWebhookEnvelope) workItemSource {
@@ -352,6 +402,99 @@ func pullRequestMergeSignal(pullRequest pullRequestWebhookPayload, fallback time
 	}
 }
 
+func pullRequestRepositoryChangeSignal(repository webhookRepositoryPayload, pullRequest pullRequestWebhookPayload, fallback time.Time) *value.ProviderRepositoryChangeSignalSnapshot {
+	mergedAt := timeValue(pullRequest.MergedAt, fallback)
+	if strings.TrimSpace(pullRequest.MergedAt) == "" {
+		mergedAt = timeValue(pullRequest.ClosedAt, fallback)
+	}
+	repositoryFullName := strings.TrimSpace(repository.FullName)
+	providerRepositoryID := numberString(repository.ID)
+	baseBranch := strings.TrimSpace(pullRequest.Base.Ref)
+	commitSHA := strings.TrimSpace(pullRequest.MergeCommitSHA)
+	signalKey := repositoryChangeSignalKey(enum.ProviderSlugGitHub, "pull_request_merged", repositoryFullName, baseBranch, commitSHA, pullRequest.Number)
+	fingerprint := repositoryChangeFingerprint(
+		"pull_request_merged",
+		repositoryFullName,
+		providerRepositoryID,
+		baseBranch,
+		commitSHA,
+		"",
+		"",
+		"",
+		false,
+		false,
+		pullRequest.Number,
+	)
+	return &value.ProviderRepositoryChangeSignalSnapshot{
+		SignalKey:             signalKey,
+		EventKind:             "pull_request_merged",
+		RepositoryFullName:    repositoryFullName,
+		ProviderRepositoryID:  providerRepositoryID,
+		Ref:                   "refs/heads/" + baseBranch,
+		BaseBranch:            baseBranch,
+		CommitSHA:             commitSHA,
+		SourceRef:             strings.TrimSpace(pullRequest.Head.Ref),
+		PullRequestNumber:     pullRequest.Number,
+		PullRequestProviderID: numberString(pullRequest.ID),
+		PullRequestURL:        strings.TrimSpace(pullRequest.HTMLURL),
+		PathSummaryStatus:     "unavailable",
+		PathDigest:            emptyRepositoryChangePathDigest(),
+		ChangeFingerprint:     fingerprint,
+		ObservedAt:            mergedAt,
+	}
+}
+
+func pushRepositoryChangeSignal(
+	repositoryFullName string,
+	providerRepositoryID string,
+	ref string,
+	baseBranch string,
+	commitSHA string,
+	beforeSHA string,
+	commits []pushCommitPayload,
+	observedAt time.Time,
+) value.ProviderRepositoryChangeSignalSnapshot {
+	summary := repositoryPathSummary(commits)
+	pathSummaryStatus := "ready"
+	if summary.PathCount == 0 {
+		pathSummaryStatus = "unavailable"
+	} else if summary.PathCount > maxRepositoryChangePaths {
+		pathSummaryStatus = "truncated"
+	}
+	signalKey := repositoryChangeSignalKey(enum.ProviderSlugGitHub, "push", repositoryFullName, baseBranch, commitSHA, 0)
+	fingerprint := repositoryChangeFingerprint(
+		"push",
+		repositoryFullName,
+		providerRepositoryID,
+		baseBranch,
+		commitSHA,
+		beforeSHA,
+		summary.PathDigest,
+		formatRepositoryChangeCategories(summary.Categories),
+		summary.ServicesPolicyChanged,
+		summary.DeployRelevantChanged,
+		0,
+	)
+	return value.ProviderRepositoryChangeSignalSnapshot{
+		SignalKey:             signalKey,
+		EventKind:             "push",
+		RepositoryFullName:    repositoryFullName,
+		ProviderRepositoryID:  providerRepositoryID,
+		Ref:                   ref,
+		BaseBranch:            baseBranch,
+		CommitSHA:             commitSHA,
+		BeforeSHA:             beforeSHA,
+		PathSummaryStatus:     pathSummaryStatus,
+		ChangedPathCount:      summary.PathCount,
+		PathDigest:            summary.PathDigest,
+		PathCategories:        summary.Categories,
+		ServicesPolicyChanged: summary.ServicesPolicyChanged,
+		DeployRelevantChanged: summary.DeployRelevantChanged,
+		ChangeFingerprint:     fingerprint,
+		ObservedAt:            observedAt,
+	}
+}
+
 func issueSnapshot(repository webhookRepositoryPayload, issue issueWebhookPayload, kind string, workItemID string, fallback time.Time) *value.ProviderWorkItemSnapshot {
 	snapshot := workItemSnapshot(repository, issueWorkItem(issue), kind, workItemID, fallback)
 	return &snapshot
@@ -460,6 +603,197 @@ func milestoneTitle(milestone *webhookMilestonePayload) string {
 		return ""
 	}
 	return strings.TrimSpace(milestone.Title)
+}
+
+type repositoryPathSummaryResult struct {
+	PathCount             int64
+	PathDigest            string
+	Categories            []value.ProviderRepositoryChangePathCategoryCount
+	ServicesPolicyChanged bool
+	DeployRelevantChanged bool
+}
+
+func repositoryPathSummary(commits []pushCommitPayload) repositoryPathSummaryResult {
+	changes := map[string]string{}
+	for _, commit := range commits {
+		recordPathChanges(changes, commit.Added, "added")
+		recordPathChanges(changes, commit.Modified, "modified")
+		recordPathChanges(changes, commit.Removed, "removed")
+	}
+	keys := make([]string, 0, len(changes))
+	for path := range changes {
+		keys = append(keys, path)
+	}
+	sort.Strings(keys)
+	if len(keys) == 0 {
+		return repositoryPathSummaryResult{PathDigest: emptyRepositoryChangePathDigest()}
+	}
+	counts := map[string]int64{}
+	hash := sha256.New()
+	for _, path := range keys {
+		action := changes[path]
+		category := repositoryChangePathCategory(path)
+		counts[category]++
+		_, _ = hash.Write([]byte(path))
+		_, _ = hash.Write([]byte{0})
+		_, _ = hash.Write([]byte(action))
+		_, _ = hash.Write([]byte{0})
+		_, _ = hash.Write([]byte(category))
+		_, _ = hash.Write([]byte{0})
+	}
+	categories := make([]value.ProviderRepositoryChangePathCategoryCount, 0, len(counts))
+	for category, count := range counts {
+		categories = append(categories, value.ProviderRepositoryChangePathCategoryCount{Category: category, Count: count})
+	}
+	sort.Slice(categories, func(left, right int) bool {
+		return categories[left].Category < categories[right].Category
+	})
+	servicesChanged := counts[string(enum.RepositoryChangePathCategoryServicesPolicy)] > 0
+	return repositoryPathSummaryResult{
+		PathCount:             int64(len(keys)),
+		PathDigest:            "sha256:" + hex.EncodeToString(hash.Sum(nil)),
+		Categories:            categories,
+		ServicesPolicyChanged: servicesChanged,
+		DeployRelevantChanged: servicesChanged || repositoryChangeDeployRelevant(counts),
+	}
+}
+
+func recordPathChanges(changes map[string]string, paths []string, action string) {
+	for _, path := range paths {
+		path = normalizeRepositoryPath(path)
+		if path == "" {
+			continue
+		}
+		changes[path] = action
+	}
+}
+
+func normalizeRepositoryPath(path string) string {
+	path = strings.TrimSpace(strings.ReplaceAll(path, "\\", "/"))
+	path = strings.TrimPrefix(path, "./")
+	if path == "" ||
+		strings.HasPrefix(path, "/") ||
+		strings.Contains(path, "\x00") ||
+		strings.Contains(path, "../") ||
+		strings.HasPrefix(path, "..") {
+		return ""
+	}
+	return path
+}
+
+func repositoryChangePathCategory(path string) string {
+	lower := strings.ToLower(strings.TrimSpace(path))
+	switch {
+	case lower == "services.yaml":
+		return string(enum.RepositoryChangePathCategoryServicesPolicy)
+	case strings.HasPrefix(lower, "deploy/") ||
+		strings.HasPrefix(lower, "k8s/") ||
+		strings.HasPrefix(lower, "kubernetes/") ||
+		strings.Contains(lower, "/kustomization.yaml"):
+		return string(enum.RepositoryChangePathCategoryDeployManifest)
+	case strings.HasPrefix(lower, "services/") && repositoryConfigPath(lower):
+		return string(enum.RepositoryChangePathCategoryServiceConfig)
+	case strings.HasPrefix(lower, "services/") ||
+		strings.HasPrefix(lower, "libs/") ||
+		strings.HasPrefix(lower, "cmd/"):
+		return string(enum.RepositoryChangePathCategoryServiceSource)
+	case strings.HasPrefix(lower, "proto/") ||
+		strings.HasPrefix(lower, "specs/") ||
+		strings.HasPrefix(lower, "docs/design-guidelines/"):
+		return string(enum.RepositoryChangePathCategoryPlatformPolicy)
+	case strings.HasPrefix(lower, "bootstrap/") ||
+		strings.HasPrefix(lower, "runtime/"):
+		return string(enum.RepositoryChangePathCategoryRuntimeConfig)
+	case strings.HasPrefix(lower, "docs/") ||
+		lower == "readme.md" ||
+		lower == "agents.md":
+		return string(enum.RepositoryChangePathCategoryDocumentation)
+	case strings.Contains(lower, "_test.") ||
+		strings.HasPrefix(lower, "test/") ||
+		strings.HasPrefix(lower, "tests/"):
+		return string(enum.RepositoryChangePathCategoryTest)
+	default:
+		return string(enum.RepositoryChangePathCategoryOther)
+	}
+}
+
+func repositoryConfigPath(path string) bool {
+	for _, suffix := range []string{".yaml", ".yml", ".json", ".toml", ".env.example"} {
+		if strings.HasSuffix(path, suffix) {
+			return true
+		}
+	}
+	return false
+}
+
+func repositoryChangeDeployRelevant(counts map[string]int64) bool {
+	for _, category := range []enum.RepositoryChangePathCategory{
+		enum.RepositoryChangePathCategoryServiceSource,
+		enum.RepositoryChangePathCategoryServiceConfig,
+		enum.RepositoryChangePathCategoryDeployManifest,
+		enum.RepositoryChangePathCategoryRuntimeConfig,
+		enum.RepositoryChangePathCategoryPlatformPolicy,
+	} {
+		if counts[string(category)] > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func formatRepositoryChangeCategories(categories []value.ProviderRepositoryChangePathCategoryCount) string {
+	if len(categories) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(categories))
+	for _, category := range categories {
+		parts = append(parts, fmt.Sprintf("%s:%d", category.Category, category.Count))
+	}
+	sort.Strings(parts)
+	return strings.Join(parts, ",")
+}
+
+func emptyRepositoryChangePathDigest() string {
+	digest := sha256.Sum256(nil)
+	return "sha256:" + hex.EncodeToString(digest[:])
+}
+
+func repositoryChangeSignalKey(providerSlug enum.ProviderSlug, kind string, repositoryFullName string, baseBranch string, commitSHA string, pullRequestNumber int64) string {
+	parts := []string{
+		"provider",
+		string(providerSlug),
+		"repository_change",
+		strings.TrimSpace(kind),
+		strings.TrimSpace(repositoryFullName),
+		strings.TrimSpace(baseBranch),
+		strings.TrimSpace(commitSHA),
+	}
+	if pullRequestNumber > 0 {
+		parts = append(parts, fmt.Sprintf("pull_request:%d", pullRequestNumber))
+	}
+	return strings.Join(parts, ":")
+}
+
+func repositoryChangeFingerprint(parts ...any) string {
+	hash := sha256.New()
+	for _, part := range parts {
+		_, _ = hash.Write([]byte(fmt.Sprint(part)))
+		_, _ = hash.Write([]byte{0})
+	}
+	return "sha256:" + hex.EncodeToString(hash.Sum(nil))
+}
+
+func branchNameFromRef(ref string) string {
+	ref = strings.TrimSpace(ref)
+	if branch, ok := strings.CutPrefix(ref, "refs/heads/"); ok {
+		return strings.TrimSpace(branch)
+	}
+	return ref
+}
+
+func allZeroSHA(value string) bool {
+	value = strings.TrimSpace(value)
+	return value != "" && strings.Trim(value, "0") == ""
 }
 
 func decodeProviderPayload[T any](raw []byte, payload *T) error {

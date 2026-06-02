@@ -236,6 +236,39 @@ type ListRepositoryMergeSignalsResult struct {
 	Page         query.PageResult
 }
 
+// GetRepositoryChangeSignalInput identifies one safe provider-owned repository change signal.
+type GetRepositoryChangeSignalInput = GetRepositoryMergeSignalInput
+
+// RepositoryChangeSignalResult returns a repository change signal with explicit readiness.
+type RepositoryChangeSignalResult struct {
+	Status       enum.ProviderOwnedDataStatus
+	ChangeSignal *entity.RepositoryChangeSignal
+}
+
+// ListRepositoryChangeSignalsInput selects safe provider-owned repository change signals.
+type ListRepositoryChangeSignalsInput struct {
+	ProjectID             *uuid.UUID
+	RepositoryID          *uuid.UUID
+	ProviderSlug          enum.ProviderSlug
+	RepositoryFullName    string
+	ProviderRepositoryID  string
+	Kinds                 []enum.RepositoryChangeSignalKind
+	Statuses              []enum.RepositoryChangeSignalStatus
+	BaseBranch            string
+	CommitSHA             string
+	ServicesPolicyChanged *bool
+	DeployRelevantChanged *bool
+	ObservedSince         *time.Time
+	Page                  value.PageRequest
+	Meta                  value.QueryMeta
+}
+
+// ListRepositoryChangeSignalsResult returns repository change signals and paging metadata.
+type ListRepositoryChangeSignalsResult struct {
+	ChangeSignals []entity.RepositoryChangeSignal
+	Page          query.PageResult
+}
+
 // GetRepositoryAdoptionScanSnapshotInput identifies one safe provider-owned adoption scan snapshot.
 type GetRepositoryAdoptionScanSnapshotInput struct {
 	SnapshotID          *uuid.UUID

@@ -388,24 +388,7 @@ func (s *Service) ListRelationships(ctx context.Context, input ListRelationships
 
 // GetRepositoryMergeSignal returns one safe provider-owned merge signal by stable identity.
 func (s *Service) GetRepositoryMergeSignal(ctx context.Context, input GetRepositoryMergeSignalInput) (RepositoryMergeSignalResult, error) {
-	if input.SignalID != nil && *input.SignalID == uuid.Nil {
-		return RepositoryMergeSignalResult{}, errs.ErrInvalidArgument
-	}
-	signalKey := strings.TrimSpace(input.SignalKey)
-	if input.SignalID == nil && signalKey == "" {
-		return RepositoryMergeSignalResult{}, errs.ErrInvalidArgument
-	}
-	signal, err := s.repository.GetRepositoryMergeSignal(ctx, query.RepositoryMergeSignalLookup{
-		ID:        input.SignalID,
-		SignalKey: signalKey,
-	})
-	if errors.Is(err, errs.ErrNotFound) {
-		return RepositoryMergeSignalResult{Status: enum.ProviderOwnedDataStatusNotFound}, nil
-	}
-	if err != nil {
-		return RepositoryMergeSignalResult{}, err
-	}
-	return RepositoryMergeSignalResult{Status: enum.ProviderOwnedDataStatusReady, MergeSignal: &signal}, nil
+	return repositoryMergeSignalResult(readProviderOwnedSignal(input.SignalID, input.SignalKey, s.repositoryMergeSignalReader(ctx, input.SignalID)))
 }
 
 // ListRepositoryMergeSignals returns safe provider-owned merge signals by repository/project context.
@@ -441,6 +424,109 @@ func (s *Service) ListRepositoryMergeSignals(ctx context.Context, input ListRepo
 		return ListRepositoryMergeSignalsResult{}, err
 	}
 	return ListRepositoryMergeSignalsResult{MergeSignals: signals, Page: page}, nil
+}
+
+// GetRepositoryChangeSignal returns one safe provider-owned repository change signal by stable identity.
+func (s *Service) GetRepositoryChangeSignal(ctx context.Context, input GetRepositoryChangeSignalInput) (RepositoryChangeSignalResult, error) {
+	return repositoryChangeSignalResult(readProviderOwnedSignal(input.SignalID, input.SignalKey, s.repositoryChangeSignalReader(ctx, input.SignalID)))
+}
+
+func (s *Service) repositoryMergeSignalReader(ctx context.Context, signalID *uuid.UUID) func(string) (entity.RepositoryMergeSignal, error) {
+	return func(signalKey string) (entity.RepositoryMergeSignal, error) {
+		return s.repository.GetRepositoryMergeSignal(ctx, query.RepositoryMergeSignalLookup{ID: signalID, SignalKey: signalKey})
+	}
+}
+
+func (s *Service) repositoryChangeSignalReader(ctx context.Context, signalID *uuid.UUID) func(string) (entity.RepositoryChangeSignal, error) {
+	reader := func(signalKey string) (entity.RepositoryChangeSignal, error) {
+		return s.repository.GetRepositoryChangeSignal(ctx, query.RepositoryChangeSignalLookup{ID: signalID, SignalKey: signalKey})
+	}
+	return reader
+}
+
+func repositoryMergeSignalResult(signal entity.RepositoryMergeSignal, status enum.ProviderOwnedDataStatus, err error) (RepositoryMergeSignalResult, error) {
+	if err != nil {
+		return RepositoryMergeSignalResult{}, err
+	}
+	return RepositoryMergeSignalResult{Status: status, MergeSignal: signalPtrWhenReady(signal, status)}, nil
+}
+
+func repositoryChangeSignalResult(signal entity.RepositoryChangeSignal, status enum.ProviderOwnedDataStatus, err error) (RepositoryChangeSignalResult, error) {
+	if err != nil {
+		return RepositoryChangeSignalResult{}, err
+	}
+	return RepositoryChangeSignalResult{Status: status, ChangeSignal: signalPtrWhenReady(signal, status)}, nil
+}
+
+// ListRepositoryChangeSignals returns safe provider-owned repository change signals by repository/project context.
+func (s *Service) ListRepositoryChangeSignals(ctx context.Context, input ListRepositoryChangeSignalsInput) (ListRepositoryChangeSignalsResult, error) {
+	if input.ProjectID != nil && *input.ProjectID == uuid.Nil {
+		return ListRepositoryChangeSignalsResult{}, errs.ErrInvalidArgument
+	}
+	if input.RepositoryID != nil && *input.RepositoryID == uuid.Nil {
+		return ListRepositoryChangeSignalsResult{}, errs.ErrInvalidArgument
+	}
+	if input.ProviderSlug != "" && !validProviderSlug(input.ProviderSlug) {
+		return ListRepositoryChangeSignalsResult{}, errs.ErrInvalidArgument
+	}
+	if !validRepositoryChangeSignalKinds(input.Kinds) || !validRepositoryChangeSignalStatuses(input.Statuses) {
+		return ListRepositoryChangeSignalsResult{}, errs.ErrInvalidArgument
+	}
+	signals, page, err := s.repository.ListRepositoryChangeSignals(ctx, query.RepositoryChangeSignalFilter{
+		ProjectID:             input.ProjectID,
+		RepositoryID:          input.RepositoryID,
+		ProviderSlug:          input.ProviderSlug,
+		RepositoryFullName:    strings.TrimSpace(input.RepositoryFullName),
+		ProviderRepositoryID:  strings.TrimSpace(input.ProviderRepositoryID),
+		Kinds:                 input.Kinds,
+		Statuses:              input.Statuses,
+		BaseBranch:            strings.TrimSpace(input.BaseBranch),
+		CommitSHA:             strings.TrimSpace(input.CommitSHA),
+		ServicesPolicyChanged: input.ServicesPolicyChanged,
+		DeployRelevantChanged: input.DeployRelevantChanged,
+		ObservedSince:         input.ObservedSince,
+		Page:                  input.Page,
+	})
+	if err != nil {
+		return ListRepositoryChangeSignalsResult{}, err
+	}
+	return ListRepositoryChangeSignalsResult{ChangeSignals: signals, Page: page}, nil
+}
+
+func repositorySignalLookupParts(signalID *uuid.UUID, signalKey string) (string, error) {
+	if signalID != nil && *signalID == uuid.Nil {
+		return "", errs.ErrInvalidArgument
+	}
+	trimmedKey := strings.TrimSpace(signalKey)
+	if signalID == nil && trimmedKey == "" {
+		return "", errs.ErrInvalidArgument
+	}
+	return trimmedKey, nil
+}
+
+func readProviderOwnedSignal[T any](signalID *uuid.UUID, signalKeyInput string, read func(string) (T, error)) (T, enum.ProviderOwnedDataStatus, error) {
+	signalKey, err := repositorySignalLookupParts(signalID, signalKeyInput)
+	if err != nil {
+		var zero T
+		return zero, "", errs.ErrInvalidArgument
+	}
+	signal, err := read(signalKey)
+	if errors.Is(err, errs.ErrNotFound) {
+		var zero T
+		return zero, enum.ProviderOwnedDataStatusNotFound, nil
+	}
+	if err != nil {
+		var zero T
+		return zero, "", err
+	}
+	return signal, enum.ProviderOwnedDataStatusReady, nil
+}
+
+func signalPtrWhenReady[T any](signal T, status enum.ProviderOwnedDataStatus) *T {
+	if status != enum.ProviderOwnedDataStatusReady {
+		return nil
+	}
+	return &signal
 }
 
 // GetRepositoryAdoptionScanSnapshot returns one safe provider-owned adoption scan snapshot.
