@@ -47,6 +47,7 @@ components:
         - $ref: '#/components/schemas/FollowUpFailedEvent'
         - $ref: '#/components/schemas/HumanGateRequestedEvent'
         - $ref: '#/components/schemas/HumanGateResolvedEvent'
+        - $ref: '#/components/schemas/SelfDeployPlanRequestedEvent'
         - $ref: '#/components/schemas/FlowVersionActivatedEvent'
         - $ref: '#/components/schemas/RoleVersionActivatedEvent'
         - $ref: '#/components/schemas/PromptVersionActivatedEvent'
@@ -239,6 +240,15 @@ components:
       properties: {event_type: {type: string, const: agent.human_gate.resolved}, aggregate_type: {type: string, const: human_gate}, payload: {$ref: '#/components/schemas/HumanGateResolvedPayload'}}
       required: [event_type, aggregate_type, payload]
 
+    SelfDeployPlanRequestedEvent:
+      allOf:
+        - $ref: '#/components/schemas/AgentEventEnvelopeBase'
+        - $ref: '#/components/schemas/SelfDeployPlanRequestedEventKind'
+    SelfDeployPlanRequestedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: agent.self_deploy.plan_requested}, aggregate_type: {type: string, const: self_deploy_plan}, payload: {$ref: '#/components/schemas/SelfDeployPlanRequestedPayload'}}
+      required: [event_type, aggregate_type, payload]
+
     FlowVersionActivatedEvent:
       allOf:
         - $ref: '#/components/schemas/AgentEventEnvelopeBase'
@@ -287,6 +297,7 @@ components:
         - agent.follow_up.failed
         - agent.human_gate.requested
         - agent.human_gate.resolved
+        - agent.self_deploy.plan_requested
         - agent.flow.version_activated
         - agent.role.version_activated
         - agent.prompt.version_activated
@@ -384,6 +395,37 @@ components:
         governance_release_policy_ref:
           type: string
         human_gate_outcome:
+          type: string
+        self_deploy_plan_id:
+          type: string
+          format: uuid
+        project_ref:
+          type: string
+        repository_ref:
+          type: string
+        provider_signal_ref:
+          type: string
+        source_ref:
+          type: string
+        merge_commit_sha:
+          type: string
+        services_yaml_ref:
+          type: string
+        services_yaml_digest:
+          type: string
+        affected_service_keys:
+          type: array
+          items:
+            type: string
+        path_categories:
+          type: array
+          items:
+            type: string
+        expected_runtime_job_types:
+          type: array
+          items:
+            type: string
+        plan_fingerprint:
           type: string
         status:
           type: string
@@ -497,6 +539,11 @@ components:
         - $ref: '#/components/schemas/AgentEventPayload'
         - type: object
           required: [session_id, human_gate_request_id, status, human_gate_outcome, version]
+    SelfDeployPlanRequestedPayload:
+      allOf:
+        - $ref: '#/components/schemas/AgentEventPayload'
+        - type: object
+          required: [self_deploy_plan_id, project_ref, repository_ref, source_ref, merge_commit_sha, services_yaml_digest, expected_runtime_job_types, plan_fingerprint, status, version]
     FlowVersionActivatedPayload:
       allOf:
         - $ref: '#/components/schemas/AgentEventPayload'

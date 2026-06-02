@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-07
 updated_at: 2026-06-02
-related_issues: [655, 656, 782, 949, 966, 975, 990, 994, 999]
+related_issues: [655, 656, 782, 949, 966, 975, 990, 994, 999, 1011]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -87,6 +87,8 @@ Generated execution context передаётся отдельным `WorkspaceSo
 | `ListJobs` | Список по статусу, типу, проекту, слоту, agent run, release line. | Операторский контур | Read-only. |
 
 `CreateJob` без slot получает `fleet_scope_id` и `cluster_id` через `fleet-manager.ResolvePlacement` с runtime mode `platform_job`. `CreateJob` со slot не вызывает placement повторно и наследует fleet refs из slot.
+
+Self-deploy orchestration plan в `agent-manager` не вызывает `CreateJob`. Он хранит только safe refs, affected service keys, `services.yaml` digest/fingerprint и expected job types `build`, `deploy`, `health_check` как подготовку к owner/governance approval. Реальные runtime jobs для build/deploy должны создаваться отдельным approval-driven срезом через typed `CreateJob`, без raw webhook body, diff, полного `services.yaml`, секретов или token values.
 
 `JOB_TYPE_AGENT_RUN` является каноническим типом задания runtime для запуска agent Run со стороны `agent-manager`. Такое задание можно создать через `CreateJob`, отфильтровать через `ListJobs` и забрать через `ClaimRunnableJob` по отдельному типу без подмены на `build`, `deploy` или `housekeeping`. Kubernetes-исполнитель `runtime-manager` забирает этот тип только при наличии валидного typed `AgentRunExecutionSpec`; задание без spec остаётся ожидающим с безопасной диагностикой `agent_run_execution_spec_required`.
 

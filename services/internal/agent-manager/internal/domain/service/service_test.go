@@ -5198,6 +5198,210 @@ func TestRecordHumanGateDecisionReplayRejectsConflictingInteractionFingerprint(t
 	}
 }
 
+func TestCreateSelfDeployPlanStoresPendingSafePlan(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	planID := uuid.MustParse("5f7f3a10-0001-4000-8000-000000000001")
+	eventID := uuid.MustParse("5f7f3a10-0002-4000-8000-000000000002")
+	repository := &fakeRepository{}
+	service := New(Config{
+		Repository:  repository,
+		Clock:       fixedClock{now: now},
+		IDGenerator: &sequenceIDGenerator{ids: []uuid.UUID{planID, eventID}},
+	})
+
+	plan, err := service.CreateSelfDeployPlan(context.Background(), validSelfDeployPlanInput())
+	if err != nil {
+		t.Fatalf("CreateSelfDeployPlan() err = %v", err)
+	}
+	if !repository.createSelfDeployCalled {
+		t.Fatal("CreateSelfDeployPlanWithResult was not called")
+	}
+	if plan.ID != planID || repository.createdSelfDeploy.ID != planID {
+		t.Fatalf("plan id = %s, stored = %s, want %s", plan.ID, repository.createdSelfDeploy.ID, planID)
+	}
+	if plan.Status != enum.SelfDeployPlanStatusPendingApproval {
+		t.Fatalf("status = %s, want %s", plan.Status, enum.SelfDeployPlanStatusPendingApproval)
+	}
+	if repository.selfDeployResult.AggregateType != enum.CommandAggregateTypeSelfDeployPlan {
+		t.Fatalf("aggregate type = %s, want %s", repository.selfDeployResult.AggregateType, enum.CommandAggregateTypeSelfDeployPlan)
+	}
+	if repository.selfDeployEvent.EventType != agentevents.EventSelfDeployPlanRequested {
+		t.Fatalf("event type = %s, want %s", repository.selfDeployEvent.EventType, agentevents.EventSelfDeployPlanRequested)
+	}
+	payload := decodeAgentPayload(t, repository.selfDeployEvent)
+	if payload.SelfDeployPlanID != planID.String() || payload.Status != string(enum.SelfDeployPlanStatusPendingApproval) {
+		t.Fatalf("event payload = %+v", payload)
+	}
+	if payload.ExpectedRuntimeJobTypes == nil || strings.Contains(strings.Join(payload.ExpectedRuntimeJobTypes, ","), "agent_run") {
+		t.Fatalf("event runtime job types = %v", payload.ExpectedRuntimeJobTypes)
+	}
+	commandPayload := string(repository.selfDeployResult.ResultPayload)
+	for _, forbidden := range []string{"webhook_body", "full_diff", "full_yaml", "raw_provider_payload", "secret_value", "token"} {
+		if strings.Contains(commandPayload, forbidden) || strings.Contains(string(repository.selfDeployEvent.Payload), forbidden) {
+			t.Fatalf("stored self-deploy data contains forbidden marker %q", forbidden)
+		}
+	}
+}
+
+func TestCreateSelfDeployPlanReplaysSameCommand(t *testing.T) {
+	t.Parallel()
+
+	input := validSelfDeployPlanInput()
+	plan := selfDeployPlanFromInputForTest(input, uuid.MustParse("5f7f3a10-0003-4000-8000-000000000003"), "command:"+input.Meta.CommandID.String())
+	payload, err := marshalCommandPayload(selfDeployPlanCommandPayload{SelfDeployPlan: plan})
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	commandID := input.Meta.CommandID
+	repository := &fakeRepository{
+		replay: &entity.CommandResult{
+			CommandID:     &commandID,
+			Actor:         testActor(),
+			Operation:     operationCreateSelfDeployPlan,
+			AggregateType: enum.CommandAggregateTypeSelfDeployPlan,
+			AggregateID:   plan.ID,
+			ResultPayload: payload,
+		},
+		selfDeployByID: map[uuid.UUID]entity.SelfDeployPlan{plan.ID: plan},
+	}
+	service := New(Config{Repository: repository})
+
+	replay, err := service.CreateSelfDeployPlan(context.Background(), input)
+	if err != nil {
+		t.Fatalf("CreateSelfDeployPlan() err = %v", err)
+	}
+	if replay.ID != plan.ID {
+		t.Fatalf("replay id = %s, want %s", replay.ID, plan.ID)
+	}
+	if repository.createSelfDeployCalled {
+		t.Fatal("CreateSelfDeployPlanWithResult called during replay")
+	}
+}
+
+func TestCreateSelfDeployPlanReplayRejectsChangedPayload(t *testing.T) {
+	t.Parallel()
+
+	input := validSelfDeployPlanInput()
+	idempotencyKey := "self-deploy-plan"
+	plan := selfDeployPlanFromInputForTest(input, uuid.MustParse("5f7f3a10-0004-4000-8000-000000000004"), idempotencyKey)
+	payload, err := marshalCommandPayload(selfDeployPlanCommandPayload{SelfDeployPlan: plan})
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	repository := &fakeRepository{
+		replay: &entity.CommandResult{
+			IdempotencyKey: idempotencyKey,
+			Actor:          testActor(),
+			Operation:      operationCreateSelfDeployPlan,
+			AggregateType:  enum.CommandAggregateTypeSelfDeployPlan,
+			AggregateID:    plan.ID,
+			ResultPayload:  payload,
+		},
+		selfDeployByID: map[uuid.UUID]entity.SelfDeployPlan{plan.ID: plan},
+	}
+	service := New(Config{Repository: repository})
+	changed := input
+	changed.Meta.CommandID = uuid.Nil
+	changed.Meta.IdempotencyKey = idempotencyKey
+	changed.AffectedServiceKeys = []string{"agent-manager", "runtime-manager"}
+
+	_, err = service.CreateSelfDeployPlan(context.Background(), changed)
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("CreateSelfDeployPlan() err = %v, want %v", err, errs.ErrConflict)
+	}
+	if repository.createSelfDeployCalled {
+		t.Fatal("CreateSelfDeployPlanWithResult called after rejected replay")
+	}
+}
+
+func TestCreateSelfDeployPlanRejectsUnsafePayload(t *testing.T) {
+	t.Parallel()
+
+	input := validSelfDeployPlanInput()
+	input.SafeSummary = "safe refs plus full_yaml content marker"
+	repository := &fakeRepository{}
+	service := New(Config{Repository: repository})
+
+	_, err := service.CreateSelfDeployPlan(context.Background(), input)
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("CreateSelfDeployPlan() err = %v, want %v", err, errs.ErrInvalidArgument)
+	}
+	if repository.createSelfDeployCalled {
+		t.Fatal("CreateSelfDeployPlanWithResult called for unsafe input")
+	}
+}
+
+func TestCreateSelfDeployPlanRejectsAgentRunJobType(t *testing.T) {
+	t.Parallel()
+
+	input := validSelfDeployPlanInput()
+	input.ExpectedRuntimeJobTypes = []enum.SelfDeployRuntimeJobType{enum.SelfDeployRuntimeJobType("agent_run")}
+	service := New(Config{Repository: &fakeRepository{}})
+
+	_, err := service.CreateSelfDeployPlan(context.Background(), input)
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("CreateSelfDeployPlan() err = %v, want %v", err, errs.ErrInvalidArgument)
+	}
+}
+
+func TestListSelfDeployPlansRequiresBoundedFilter(t *testing.T) {
+	t.Parallel()
+
+	service := New(Config{Repository: &fakeRepository{}})
+	_, _, err := service.ListSelfDeployPlans(context.Background(), query.SelfDeployPlanFilter{})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("ListSelfDeployPlans() err = %v, want %v", err, errs.ErrInvalidArgument)
+	}
+}
+
+func validSelfDeployPlanInput() CreateSelfDeployPlanInput {
+	commandID := uuid.MustParse("5f7f3a10-0100-4000-8000-000000000100")
+	return CreateSelfDeployPlanInput{
+		Meta:               value.CommandMeta{CommandID: commandID, Actor: testActor()},
+		Scope:              value.ScopeRef{Type: string(enum.AgentScopeTypeRepository), Ref: "repository:codex-k8s/kodex"},
+		ProjectRef:         "project:codex",
+		RepositoryRef:      "repository:codex-k8s/kodex",
+		ProviderSignalRef:  "provider-signal:github/push-main/5f7f3a1",
+		SourceRef:          "git:refs/heads/main@5f7f3a10",
+		MergeCommitSHA:     "5f7f3a105f7f3a105f7f3a105f7f3a105f7f3a10",
+		ServicesYAMLRef:    "object://project-catalog/services-yaml/5f7f3a1",
+		ServicesYAMLDigest: testInstructionDigest,
+		AffectedServiceKeys: []string{
+			"runtime-manager",
+			"agent-manager",
+		},
+		PathCategories: []enum.SelfDeployPathCategory{
+			enum.SelfDeployPathCategoryRuntimeConfig,
+			enum.SelfDeployPathCategoryServiceSource,
+		},
+		ExpectedRuntimeJobTypes: []enum.SelfDeployRuntimeJobType{
+			enum.SelfDeployRuntimeJobTypeDeploy,
+			enum.SelfDeployRuntimeJobTypeBuild,
+		},
+		GovernanceContext: value.GovernanceContextRef{
+			GateRequestRef:   "governance:gate-request/self-deploy",
+			GatePolicyRef:    "governance:policy/self-deploy",
+			ReleasePolicyRef: "governance:release-policy/self-deploy",
+		},
+		SafeSummary: "После merge в main затронуты agent-manager и runtime-manager; требуется approval перед build/deploy jobs.",
+	}
+}
+
+func selfDeployPlanFromInputForTest(input CreateSelfDeployPlanInput, id uuid.UUID, idempotencyKey string) entity.SelfDeployPlan {
+	plan, err := normalizeSelfDeployPlanInput(input, idempotencyKey)
+	if err != nil {
+		panic(err)
+	}
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	plan.ID = id
+	plan.Version = 1
+	plan.CreatedAt = now
+	plan.UpdatedAt = now
+	return plan
+}
+
 func decodeAgentPayload(t *testing.T, event entity.OutboxEvent) agentevents.Payload {
 	t.Helper()
 
@@ -5233,6 +5437,10 @@ type fakeRepository struct {
 	humanGateList          []entity.HumanGateRequest
 	humanGatePage          value.PageResult
 	humanGateFilter        query.HumanGateFilter
+	selfDeployByID         map[uuid.UUID]entity.SelfDeployPlan
+	selfDeployList         []entity.SelfDeployPlan
+	selfDeployPage         value.PageResult
+	selfDeployFilter       query.SelfDeployPlanFilter
 	roleByID               map[uuid.UUID]entity.RoleProfile
 	promptVersionByID      map[uuid.UUID]entity.PromptTemplateVersion
 	activeSession          entity.AgentSession
@@ -5272,6 +5480,9 @@ type fakeRepository struct {
 	updatedHumanGate       entity.HumanGateRequest
 	updateHumanGateResult  entity.CommandResult
 	updateHumanGateEvent   *entity.OutboxEvent
+	createdSelfDeploy      entity.SelfDeployPlan
+	selfDeployResult       entity.CommandResult
+	selfDeployEvent        entity.OutboxEvent
 	createFlowCalled       bool
 	createSessionCalled    bool
 	createRunCalled        bool
@@ -5282,6 +5493,7 @@ type fakeRepository struct {
 	createActivityCalled   bool
 	createHumanGateCalled  bool
 	updateHumanGateCalled  bool
+	createSelfDeployCalled bool
 }
 
 type fakeHumanGateRequester struct {
@@ -5687,6 +5899,32 @@ func (f *fakeRepository) GetHumanGateRequest(_ context.Context, id uuid.UUID) (e
 func (f *fakeRepository) ListHumanGateRequests(_ context.Context, filter query.HumanGateFilter) ([]entity.HumanGateRequest, value.PageResult, error) {
 	f.humanGateFilter = filter
 	return f.humanGateList, f.humanGatePage, nil
+}
+
+func (f *fakeRepository) CreateSelfDeployPlanWithResult(_ context.Context, plan entity.SelfDeployPlan, result entity.CommandResult, event entity.OutboxEvent) error {
+	f.createSelfDeployCalled = true
+	f.createdSelfDeploy = plan
+	f.selfDeployResult = result
+	f.selfDeployEvent = event
+	if f.selfDeployByID != nil {
+		f.selfDeployByID[plan.ID] = plan
+	}
+	return nil
+}
+
+func (f *fakeRepository) GetSelfDeployPlan(_ context.Context, id uuid.UUID) (entity.SelfDeployPlan, error) {
+	if f.selfDeployByID != nil {
+		plan, ok := f.selfDeployByID[id]
+		if ok {
+			return plan, nil
+		}
+	}
+	return entity.SelfDeployPlan{}, errors.ErrUnsupported
+}
+
+func (f *fakeRepository) ListSelfDeployPlans(_ context.Context, filter query.SelfDeployPlanFilter) ([]entity.SelfDeployPlan, value.PageResult, error) {
+	f.selfDeployFilter = filter
+	return f.selfDeployList, f.selfDeployPage, nil
 }
 
 func (f *fakeRepository) ClaimOutboxEvents(context.Context, int, time.Time, time.Time) ([]entity.OutboxEvent, error) {

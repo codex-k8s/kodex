@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 
 	agentsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/agents/v1"
+	runtimev1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/runtime/v1"
 	agentservice "github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/service"
 	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/types/enum"
@@ -44,6 +45,8 @@ type AcceptanceResultListOutput = PageOutput[entity.AcceptanceResult]
 type AgentActivityListOutput = PageOutput[entity.AgentActivity]
 
 type HumanGateListOutput = PageOutput[entity.HumanGateRequest]
+
+type SelfDeployPlanListOutput = PageOutput[entity.SelfDeployPlan]
 
 type AgentSessionOutput struct {
 	Session        entity.AgentSession
@@ -205,6 +208,14 @@ func HumanGateRequestResponse(gate entity.HumanGateRequest) *agentsv1.HumanGateR
 
 func ListHumanGateRequestsResponse(output HumanGateListOutput) *agentsv1.ListHumanGateRequestsResponse {
 	return &agentsv1.ListHumanGateRequestsResponse{HumanGateRequests: protoList(output.Items, HumanGateRequestToProto), Page: pageResponseToProto(output.Page)}
+}
+
+func SelfDeployPlanResponse(plan entity.SelfDeployPlan) *agentsv1.SelfDeployPlanResponse {
+	return &agentsv1.SelfDeployPlanResponse{SelfDeployPlan: SelfDeployPlanToProto(plan)}
+}
+
+func ListSelfDeployPlansResponse(output SelfDeployPlanListOutput) *agentsv1.ListSelfDeployPlansResponse {
+	return &agentsv1.ListSelfDeployPlansResponse{SelfDeployPlans: protoList(output.Items, SelfDeployPlanToProto), Page: pageResponseToProto(output.Page)}
 }
 
 func protoList[Domain any, Proto any](items []Domain, cast func(Domain) *Proto) []*Proto {
@@ -552,6 +563,47 @@ func HumanGateRequestToProto(gate entity.HumanGateRequest) *agentsv1.HumanGateRe
 		ResolvedAt:               optionalTimePtr(gate.ResolvedAt),
 		GovernanceContext:        GovernanceContextToProto(gate.GovernanceContext),
 	}
+}
+
+func SelfDeployPlanToProto(plan entity.SelfDeployPlan) *agentsv1.SelfDeployPlan {
+	return &agentsv1.SelfDeployPlan{
+		Id:                      plan.ID.String(),
+		Scope:                   ScopeToProto(plan.Scope),
+		ProjectRef:              plan.ProjectRef,
+		RepositoryRef:           plan.RepositoryRef,
+		ProviderSignalRef:       optionalStringPtr(plan.ProviderSignalRef),
+		SourceRef:               plan.SourceRef,
+		MergeCommitSha:          plan.MergeCommitSHA,
+		ServicesYamlRef:         optionalStringPtr(plan.ServicesYAMLRef),
+		ServicesYamlDigest:      plan.ServicesYAMLDigest,
+		AffectedServiceKeys:     append([]string(nil), plan.AffectedServiceKeys...),
+		PathCategories:          SelfDeployPathCategoriesToProto(plan.PathCategories),
+		ExpectedRuntimeJobTypes: SelfDeployRuntimeJobTypesToProto(plan.ExpectedRuntimeJobTypes),
+		GovernanceContext:       GovernanceContextToProto(plan.GovernanceContext),
+		SafeSummary:             optionalStringPtr(plan.SafeSummary),
+		PlanFingerprint:         plan.PlanFingerprint,
+		IdempotencyKey:          plan.IdempotencyKey,
+		Status:                  SelfDeployPlanStatusToProto(plan.Status),
+		Version:                 plan.Version,
+		CreatedAt:               formatTime(plan.CreatedAt),
+		UpdatedAt:               formatTime(plan.UpdatedAt),
+	}
+}
+
+func SelfDeployPathCategoriesToProto(values []enum.SelfDeployPathCategory) []agentsv1.SelfDeployPathCategory {
+	result := make([]agentsv1.SelfDeployPathCategory, 0, len(values))
+	for _, value := range values {
+		result = append(result, SelfDeployPathCategoryToProto(value))
+	}
+	return result
+}
+
+func SelfDeployRuntimeJobTypesToProto(values []enum.SelfDeployRuntimeJobType) []runtimev1.JobType {
+	result := make([]runtimev1.JobType, 0, len(values))
+	for _, value := range values {
+		result = append(result, SelfDeployRuntimeJobTypeToProto(value))
+	}
+	return result
 }
 
 func ScopeToProto(scope value.ScopeRef) *agentsv1.ScopeRef {

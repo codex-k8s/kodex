@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-12
 updated_at: 2026-06-02
-related_issues: [733, 749, 759, 772, 322, 782, 795, 809, 820, 834, 842, 862, 866, 891, 905, 918, 937, 954, 968, 984, 994]
+related_issues: [733, 749, 759, 772, 322, 782, 795, 809, 820, 834, 842, 862, 866, 891, 905, 918, 937, 954, 968, 984, 994, 1011]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -20,7 +20,7 @@ approvals:
 
 ## TL;DR
 
-- Ключевые сущности: `Flow`, `FlowVersion`, `Stage`, `StageTransition`, `RoleProfile`, `StageRoleBinding`, `PromptTemplate`, `PromptTemplateVersion`, `AgentSession`, `AgentRun`, `AgentSessionStateSnapshot`, `AgentActivity`, `AcceptanceCheck`, `AcceptanceResult`, `FollowUpIntent`, `AutomationBinding`.
+- Ключевые сущности: `Flow`, `FlowVersion`, `Stage`, `StageTransition`, `RoleProfile`, `StageRoleBinding`, `PromptTemplate`, `PromptTemplateVersion`, `AgentSession`, `AgentRun`, `AgentSessionStateSnapshot`, `AgentActivity`, `AcceptanceCheck`, `AcceptanceResult`, `FollowUpIntent`, `HumanGateRequest`, `SelfDeployPlan`, `AutomationBinding`.
 - Технические агрегаты: `CommandResult`, `OutboxEvent`.
 - Основные связи: flow содержит этапы; этапы привязывают роли; роль использует prompt version; сессия содержит agent `Run`; `Run` фиксирует immutable-ссылки и версии flow/stage/role/prompt/guidance, а также ссылки на provider/runtime/package.
 - Риски миграций: нельзя хранить runtime filesystem, provider-native истину, пакетную истину, диалоговые сообщения, секреты и полные логи в БД `agent-manager`.
@@ -336,6 +336,34 @@ Event-driven resume идёт через уже очищенное событие
 
 `FollowUpIntent` не хранит raw prompt, transcript, файлы workspace, большие отчёты, provider response, body будущего `Issue`, тело комментария, тело review signal, inline comment body, тексты руководящих документов, prompt templates или flow files. При dispatch `agent-manager` сначала атомарно резервирует локальный переход bump версии и safe `provider_command:<uuid>` ref, сформированный детерминированно от intent и `FollowUpDispatchKind`. Только после этого формируется bounded safe instruction body для typed вызова `provider-hub.CreateIssue`, `UpdateIssue`, `CreateComment`, `UpdateComment`, `UpdatePullRequest` или `CreateReviewSignal`; в БД остаются `safe_title`, `safe_summary`, digest, статус, `provider_operation_ref`, safe provider result refs и bounded command snapshot без raw body. Для `update_pull_request` target должен совпадать с сохранённым `provider_pull_request_ref`, а команда требует provider expected version. Для `create_review_signal` сохраняется только `provider_review_signal_ref` и статус `review_signaled`; governance approval/release decision остаётся в governance-контуре. Повтор команды с тем же ключом возвращает тот же intent только при совпадении нормализованного payload; отличающийся payload или stale `expected_version` получает безопасный conflict до повторного provider write.
 
+### SelfDeployPlan
+
+`SelfDeployPlan` — авторитетное pending-состояние `agent-manager` для self-deploy orchestration после safe provider/project signal. Он описывает, какие сервисы и категории путей затронуты после merge/push в `main`, какие runtime job types ожидаются после approval, и какие governance refs нужны для решения владельца. План не создаёт runtime jobs и не переносит в `agent-manager` проектную, provider-native или governance истину.
+
+| Поле | Тип | Может быть пустым | Примечание |
+|---|---|---:|---|
+| `id` | uuid | нет | Идентификатор плана. |
+| `scope_type`, `scope_ref` | text | нет | Область plan, обычно repository scope для `codex-k8s/kodex`. |
+| `project_ref` | text | нет | Safe ref проекта из `project-catalog`; project-owned данные и `services.yaml` остаются у `project-catalog`. |
+| `repository_ref` | text | нет | Safe repository ref; provider-native истина остаётся у `provider-hub`. |
+| `provider_signal_ref` | text | да | Safe ref provider/project signal, например merge/push signal без webhook body. |
+| `source_ref` | text | нет | Safe ref ветки/источника, например `main` + commit ref. |
+| `merge_commit_sha` | text | нет | 40- или 64-символьный hex commit id. |
+| `services_yaml_ref` | text | да | Safe ref проверенной версии `services.yaml`; полный YAML не хранится. |
+| `services_yaml_digest` | text | нет | `sha256:<hex>` digest проверенной декларации. |
+| `affected_service_keys` | text[] | нет | Уникальные service keys/path groups; полный diff не хранится. |
+| `path_categories` | enum[] | нет | `service_source`, `service_config`, `deploy_manifest`, `runtime_config`, `documentation`, `test`, `platform_policy`, `other`. |
+| `expected_runtime_job_types` | enum[] | нет | Только `build`, `deploy`, `health_check`; `agent_run` не является self-deploy job type. |
+| `governance_risk_assessment_ref`, `governance_gate_request_ref`, `governance_gate_decision_ref`, `governance_release_decision_package_ref`, `governance_release_decision_ref`, `governance_risk_profile_ref`, `governance_gate_policy_ref`, `governance_release_policy_ref` | text | да | Typed governance refs для approval path без decision body. |
+| `safe_summary` | text | да | Bounded summary для owner/governance review; не содержит raw webhook, diff, YAML, prompt/transcript, логи, секреты или токены. |
+| `plan_fingerprint` | text | нет | Детерминированный fingerprint нормализованного plan input. |
+| `idempotency_key` | text | нет | Command idempotency trace для replay/conflict. |
+| `status` | enum | нет | `pending_approval`, далее `approved`, `rejected`, `cancelled`, `failed` для будущего lifecycle. |
+| `version` | bigint | нет | Версия плана для optimistic concurrency будущих переходов. |
+| `created_at`, `updated_at` | timestamptz | нет | Технические временные метки. |
+
+`SelfDeployPlan` запрещает хранение raw webhook body, provider response, полного diff, полного `services.yaml`, prompt, transcript, секретов, токенов, kubeconfig, workspace paths и больших логов. Если нужно создать build/deploy job после approval, следующий срез должен использовать refs/fingerprint плана, governance decision ref и типизированные команды runtime; `agent-manager` не должен создавать deploy автоматически на этапе фиксации плана.
+
 ### AutomationBinding
 
 `AutomationBinding` связывает flow или роль с событием, расписанием или внешним сигналом.
@@ -364,7 +392,7 @@ Event-driven resume идёт через уже очищенное событие
 | `actor_type` | text | нет | Тип инициатора команды. |
 | `actor_id` | text | нет | Идентификатор инициатора команды. |
 | `operation` | text | нет | Имя операции. |
-| `aggregate_type` | text | нет | `flow`, `flow_version`, `role_profile`, `prompt_template`, `prompt_template_version`, далее `session`, `run`, `session_state_snapshot`, `acceptance`, `follow_up`, `activity`. |
+| `aggregate_type` | text | нет | `flow`, `flow_version`, `role_profile`, `prompt_template`, `prompt_template_version`, далее `session`, `run`, `session_state_snapshot`, `acceptance`, `follow_up`, `activity`, `human_gate`, `self_deploy_plan`. |
 | `aggregate_id` | uuid | нет | Затронутый агрегат. |
 | `result_payload` | jsonb | нет | Безопасный результат повтора. |
 | `created_at` | timestamptz | нет | Время первого выполнения. |
@@ -404,6 +432,7 @@ Event-driven resume идёт через уже очищенное событие
 - `AgentActivity` относится к `AgentSession` и опционально к `AgentRun`; это authoritative safe timeline для будущего UI, а не копия hook payload.
 - `AcceptanceResult` и `FollowUpIntent` относятся к `AgentSession`, `AgentRun` и `Stage` и могут нести typed `GovernanceContextRef` для связи с risk/gate/release policy контекстом.
 - `HumanGateRequest` хранит owner decision wait/result и typed governance refs, чтобы flow мог продолжиться или завершиться без чтения decision body из `governance-manager`.
+- `SelfDeployPlan` относится к project/repository refs и provider/project signal refs. Он хранит pending orchestration state для approval path, но не создаёт runtime jobs и не хранит raw provider/project payload.
 - Внутри БД `agent-manager` допустимы внешние ключи между своими таблицами.
 - Ссылки на provider, runtime, package, interaction, project и access домены хранятся как внешние идентификаторы без SQL-связей с чужими БД. Workspace paths, kubeconfig, `job_input_json`, prompt/transcript, логи и raw payload внешних сервисов не хранятся в `agent-manager`.
 
@@ -418,6 +447,7 @@ Event-driven resume идёт через уже очищенное событие
 | Ожидающие решения или runtime | `(status, updated_at)` для `AgentRun` и `AcceptanceResult`. |
 | История действий по session/run | `(session_id, started_at DESC, id DESC)` и `(run_id, started_at DESC, id DESC)`. |
 | Tool timeline | `(session_id, activity_kind, started_at DESC, id DESC)`, `(run_id, status, started_at DESC, id DESC)` и частичный индекс по `tool_use_id`. |
+| Self-deploy планы | `(project_ref, created_at DESC)`, `(repository_ref, created_at DESC)`, `(provider_signal_ref)` и `(status, created_at DESC)`. |
 | Активная версия flow | `(flow_id, status, version)` |
 | Активные роли по scope | `(scope_type, scope_ref, status, slug)` |
 | Prompt version для роли | `(role_profile_id, prompt_kind, status, version)` |

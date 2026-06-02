@@ -64,6 +64,9 @@ type agentService interface {
 	RecordHumanGateDecision(context.Context, agentservice.RecordHumanGateDecisionInput) (entity.HumanGateRequest, error)
 	GetHumanGateRequest(context.Context, uuid.UUID) (entity.HumanGateRequest, error)
 	ListHumanGateRequests(context.Context, agentservice.HumanGateList) ([]entity.HumanGateRequest, value.PageResult, error)
+	CreateSelfDeployPlan(context.Context, agentservice.CreateSelfDeployPlanInput) (entity.SelfDeployPlan, error)
+	GetSelfDeployPlan(context.Context, uuid.UUID) (entity.SelfDeployPlan, error)
+	ListSelfDeployPlans(context.Context, agentservice.SelfDeployPlanList) ([]entity.SelfDeployPlan, value.PageResult, error)
 }
 
 // NewServer creates an agent-manager gRPC server boundary.
@@ -269,6 +272,21 @@ func (server *Server) ListHumanGateRequests(ctx context.Context, request *agents
 	return grpcserver.HandleUnary(ctx, request, grpccasters.ListHumanGateRequestsInput, server.listHumanGateRequests, grpccasters.ListHumanGateRequestsResponse)
 }
 
+// CreateSelfDeployPlan records a pending safe self-deploy plan without creating runtime jobs.
+func (server *Server) CreateSelfDeployPlan(ctx context.Context, request *agentsv1.CreateSelfDeployPlanRequest) (*agentsv1.SelfDeployPlanResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.CreateSelfDeployPlanInput, server.service.CreateSelfDeployPlan, grpccasters.SelfDeployPlanResponse)
+}
+
+// GetSelfDeployPlan returns one safe self-deploy plan.
+func (server *Server) GetSelfDeployPlan(ctx context.Context, request *agentsv1.GetSelfDeployPlanRequest) (*agentsv1.SelfDeployPlanResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.GetSelfDeployPlanInput, server.getSelfDeployPlan, grpccasters.SelfDeployPlanResponse)
+}
+
+// ListSelfDeployPlans returns safe self-deploy plans by project, repository, signal or status.
+func (server *Server) ListSelfDeployPlans(ctx context.Context, request *agentsv1.ListSelfDeployPlansRequest) (*agentsv1.ListSelfDeployPlansResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.ListSelfDeployPlansInput, server.listSelfDeployPlans, grpccasters.ListSelfDeployPlansResponse)
+}
+
 func (server *Server) getFlow(ctx context.Context, input grpccasters.IDQueryInput) (grpccasters.FlowOutput, error) {
 	return entityOutputByID(ctx, input, server.service.GetFlow, server.flowOutput)
 }
@@ -347,6 +365,14 @@ func (server *Server) getHumanGateRequest(ctx context.Context, input grpccasters
 
 func (server *Server) listHumanGateRequests(ctx context.Context, input agentservice.HumanGateList) (grpccasters.HumanGateListOutput, error) {
 	return listWithPage(ctx, input, server.service.ListHumanGateRequests)
+}
+
+func (server *Server) getSelfDeployPlan(ctx context.Context, input grpccasters.IDQueryInput) (entity.SelfDeployPlan, error) {
+	return server.service.GetSelfDeployPlan(ctx, input.ID)
+}
+
+func (server *Server) listSelfDeployPlans(ctx context.Context, input agentservice.SelfDeployPlanList) (grpccasters.SelfDeployPlanListOutput, error) {
+	return listWithPage(ctx, input, server.service.ListSelfDeployPlans)
 }
 
 func listWithPage[Input any, Item any](

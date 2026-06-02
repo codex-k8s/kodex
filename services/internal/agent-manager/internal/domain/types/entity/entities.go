@@ -269,6 +269,26 @@ type HumanGateRequest struct {
 	ResolvedAt               *time.Time
 }
 
+type SelfDeployPlan struct {
+	VersionedBase
+	Scope                   value.ScopeRef
+	ProjectRef              string
+	RepositoryRef           string
+	ProviderSignalRef       string
+	SourceRef               string
+	MergeCommitSHA          string
+	ServicesYAMLRef         string
+	ServicesYAMLDigest      string
+	AffectedServiceKeys     []string
+	PathCategories          []enum.SelfDeployPathCategory
+	ExpectedRuntimeJobTypes []enum.SelfDeployRuntimeJobType
+	GovernanceContext       value.GovernanceContextRef
+	SafeSummary             string
+	PlanFingerprint         string
+	IdempotencyKey          string
+	Status                  enum.SelfDeployPlanStatus
+}
+
 type CommandResult struct {
 	Key            string
 	CommandID      *uuid.UUID

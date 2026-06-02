@@ -103,3 +103,12 @@ type HumanGateFilter struct {
 	Outcome   *enum.HumanGateOutcome
 	Page      value.PageRequest
 }
+
+type SelfDeployPlanFilter struct {
+	Scope             value.ScopeRef
+	ProjectRef        string
+	RepositoryRef     string
+	ProviderSignalRef string
+	Status            *enum.SelfDeployPlanStatus
+	Page              value.PageRequest
+}

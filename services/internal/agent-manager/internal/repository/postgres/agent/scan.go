@@ -611,6 +611,66 @@ func scanHumanGateRequest(row postgreslib.RowScanner) (entity.HumanGateRequest, 
 	return gate, err
 }
 
+func scanSelfDeployPlan(row postgreslib.RowScanner) (entity.SelfDeployPlan, error) {
+	var plan entity.SelfDeployPlan
+	var affectedServiceKeys, pathCategories, expectedRuntimeJobTypes []byte
+	var status string
+	err := row.Scan(
+		&plan.ID,
+		&plan.Scope.Type,
+		&plan.Scope.Ref,
+		&plan.ProjectRef,
+		&plan.RepositoryRef,
+		&plan.ProviderSignalRef,
+		&plan.SourceRef,
+		&plan.MergeCommitSHA,
+		&plan.ServicesYAMLRef,
+		&plan.ServicesYAMLDigest,
+		&affectedServiceKeys,
+		&pathCategories,
+		&expectedRuntimeJobTypes,
+		&plan.GovernanceContext.RiskAssessmentRef,
+		&plan.GovernanceContext.GateRequestRef,
+		&plan.GovernanceContext.GateDecisionRef,
+		&plan.GovernanceContext.ReleaseDecisionPackageRef,
+		&plan.GovernanceContext.ReleaseDecisionRef,
+		&plan.GovernanceContext.RiskProfileRef,
+		&plan.GovernanceContext.GatePolicyRef,
+		&plan.GovernanceContext.ReleasePolicyRef,
+		&plan.SafeSummary,
+		&plan.PlanFingerprint,
+		&plan.IdempotencyKey,
+		&status,
+		&plan.Version,
+		&plan.CreatedAt,
+		&plan.UpdatedAt,
+	)
+	plan.Status = enum.SelfDeployPlanStatus(status)
+	if err != nil {
+		return plan, err
+	}
+	if err := json.Unmarshal(affectedServiceKeys, &plan.AffectedServiceKeys); err != nil {
+		return plan, fmt.Errorf("scan self deploy affected_service_keys: %w", err)
+	}
+	categories, err := stringSliceFromPayload(pathCategories)
+	if err != nil {
+		return plan, fmt.Errorf("scan self deploy path_categories: %w", err)
+	}
+	plan.PathCategories = make([]enum.SelfDeployPathCategory, 0, len(categories))
+	for _, category := range categories {
+		plan.PathCategories = append(plan.PathCategories, enum.SelfDeployPathCategory(category))
+	}
+	jobTypes, err := stringSliceFromPayload(expectedRuntimeJobTypes)
+	if err != nil {
+		return plan, fmt.Errorf("scan self deploy expected_runtime_job_types: %w", err)
+	}
+	plan.ExpectedRuntimeJobTypes = make([]enum.SelfDeployRuntimeJobType, 0, len(jobTypes))
+	for _, jobType := range jobTypes {
+		plan.ExpectedRuntimeJobTypes = append(plan.ExpectedRuntimeJobTypes, enum.SelfDeployRuntimeJobType(jobType))
+	}
+	return plan, nil
+}
+
 func scanCommandResult(row postgreslib.RowScanner) (entity.CommandResult, error) {
 	var raw commandResultRow
 	if err := raw.scan(row); err != nil {

@@ -2,6 +2,7 @@ package casters
 
 import (
 	agentsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/agents/v1"
+	runtimev1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/runtime/v1"
 	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/errs"
 	agentservice "github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/service"
 	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/types/enum"
@@ -115,6 +116,31 @@ var humanGateOutcomesFromProto = enumMap(
 	enumPair(agentsv1.HumanGateOutcome_HUMAN_GATE_OUTCOME_ANSWER, enum.HumanGateOutcomeAnswer),
 )
 
+var selfDeployPlanStatusesFromProto = enumMap(
+	enumPair(agentsv1.SelfDeployPlanStatus_SELF_DEPLOY_PLAN_STATUS_PENDING_APPROVAL, enum.SelfDeployPlanStatusPendingApproval),
+	enumPair(agentsv1.SelfDeployPlanStatus_SELF_DEPLOY_PLAN_STATUS_APPROVED, enum.SelfDeployPlanStatusApproved),
+	enumPair(agentsv1.SelfDeployPlanStatus_SELF_DEPLOY_PLAN_STATUS_REJECTED, enum.SelfDeployPlanStatusRejected),
+	enumPair(agentsv1.SelfDeployPlanStatus_SELF_DEPLOY_PLAN_STATUS_CANCELLED, enum.SelfDeployPlanStatusCancelled),
+	enumPair(agentsv1.SelfDeployPlanStatus_SELF_DEPLOY_PLAN_STATUS_FAILED, enum.SelfDeployPlanStatusFailed),
+)
+
+var selfDeployPathCategoriesFromProto = map[agentsv1.SelfDeployPathCategory]enum.SelfDeployPathCategory{
+	agentsv1.SelfDeployPathCategory_SELF_DEPLOY_PATH_CATEGORY_SERVICE_SOURCE:  enum.SelfDeployPathCategoryServiceSource,
+	agentsv1.SelfDeployPathCategory_SELF_DEPLOY_PATH_CATEGORY_SERVICE_CONFIG:  enum.SelfDeployPathCategoryServiceConfig,
+	agentsv1.SelfDeployPathCategory_SELF_DEPLOY_PATH_CATEGORY_DEPLOY_MANIFEST: enum.SelfDeployPathCategoryDeployManifest,
+	agentsv1.SelfDeployPathCategory_SELF_DEPLOY_PATH_CATEGORY_RUNTIME_CONFIG:  enum.SelfDeployPathCategoryRuntimeConfig,
+	agentsv1.SelfDeployPathCategory_SELF_DEPLOY_PATH_CATEGORY_DOCUMENTATION:   enum.SelfDeployPathCategoryDocumentation,
+	agentsv1.SelfDeployPathCategory_SELF_DEPLOY_PATH_CATEGORY_TEST:            enum.SelfDeployPathCategoryTest,
+	agentsv1.SelfDeployPathCategory_SELF_DEPLOY_PATH_CATEGORY_PLATFORM_POLICY: enum.SelfDeployPathCategoryPlatformPolicy,
+	agentsv1.SelfDeployPathCategory_SELF_DEPLOY_PATH_CATEGORY_OTHER:           enum.SelfDeployPathCategoryOther,
+}
+
+var selfDeployRuntimeJobTypesFromProto = map[runtimev1.JobType]enum.SelfDeployRuntimeJobType{
+	runtimev1.JobType_JOB_TYPE_BUILD:        enum.SelfDeployRuntimeJobTypeBuild,
+	runtimev1.JobType_JOB_TYPE_DEPLOY:       enum.SelfDeployRuntimeJobTypeDeploy,
+	runtimev1.JobType_JOB_TYPE_HEALTH_CHECK: enum.SelfDeployRuntimeJobTypeHealthCheck,
+}
+
 var runtimeObservationStatesToProto = enumMap(
 	enumPair(agentservice.RuntimeObservationStateNotCreated, agentsv1.AgentRunRuntimeObservationState_AGENT_RUN_RUNTIME_OBSERVATION_STATE_NOT_CREATED),
 	enumPair(agentservice.RuntimeObservationStateStoredRef, agentsv1.AgentRunRuntimeObservationState_AGENT_RUN_RUNTIME_OBSERVATION_STATE_STORED_REF),
@@ -159,6 +185,9 @@ var (
 	agentActivityStatusesToProto     = reverseEnumMap(agentActivityStatusesFromProto)
 	humanGateStatusesToProto         = reverseEnumMap(humanGateStatusesFromProto)
 	humanGateOutcomesToProto         = reverseEnumMap(humanGateOutcomesFromProto)
+	selfDeployPlanStatusesToProto    = reverseEnumMap(selfDeployPlanStatusesFromProto)
+	selfDeployPathCategoriesToProto  = reverseEnumMap(selfDeployPathCategoriesFromProto)
+	selfDeployRuntimeJobTypesToProto = reverseEnumMap(selfDeployRuntimeJobTypesFromProto)
 )
 
 func ScopeTypeFromProto(value agentsv1.AgentScopeType) (enum.AgentScopeType, error) {
@@ -359,6 +388,34 @@ func OptionalHumanGateOutcomeFromProto(value *agentsv1.HumanGateOutcome) (*enum.
 
 func HumanGateOutcomeToProto(value enum.HumanGateOutcome) agentsv1.HumanGateOutcome {
 	return enumToProto(value, humanGateOutcomesToProto, agentsv1.HumanGateOutcome_HUMAN_GATE_OUTCOME_UNSPECIFIED)
+}
+
+func SelfDeployPlanStatusFromProto(value agentsv1.SelfDeployPlanStatus) (enum.SelfDeployPlanStatus, error) {
+	return enumFromProto(value, selfDeployPlanStatusesFromProto)
+}
+
+func OptionalSelfDeployPlanStatusFromProto(value *agentsv1.SelfDeployPlanStatus) (*enum.SelfDeployPlanStatus, error) {
+	return optionalEnumFromProto(value, selfDeployPlanStatusesFromProto)
+}
+
+func SelfDeployPlanStatusToProto(value enum.SelfDeployPlanStatus) agentsv1.SelfDeployPlanStatus {
+	return enumToProto(value, selfDeployPlanStatusesToProto, agentsv1.SelfDeployPlanStatus_SELF_DEPLOY_PLAN_STATUS_UNSPECIFIED)
+}
+
+func SelfDeployPathCategoryFromProto(value agentsv1.SelfDeployPathCategory) (enum.SelfDeployPathCategory, error) {
+	return enumFromProto(value, selfDeployPathCategoriesFromProto)
+}
+
+func SelfDeployPathCategoryToProto(value enum.SelfDeployPathCategory) agentsv1.SelfDeployPathCategory {
+	return enumToProto(value, selfDeployPathCategoriesToProto, agentsv1.SelfDeployPathCategory_SELF_DEPLOY_PATH_CATEGORY_UNSPECIFIED)
+}
+
+func SelfDeployRuntimeJobTypeFromProto(value runtimev1.JobType) (enum.SelfDeployRuntimeJobType, error) {
+	return enumFromProto(value, selfDeployRuntimeJobTypesFromProto)
+}
+
+func SelfDeployRuntimeJobTypeToProto(value enum.SelfDeployRuntimeJobType) runtimev1.JobType {
+	return enumToProto(value, selfDeployRuntimeJobTypesToProto, runtimev1.JobType_JOB_TYPE_UNSPECIFIED)
 }
 
 func enumFromProto[Proto comparable, Domain comparable](value Proto, values map[Proto]Domain) (Domain, error) {
