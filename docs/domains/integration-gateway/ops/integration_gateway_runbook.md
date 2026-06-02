@@ -5,8 +5,8 @@ title: "integration-gateway — runbook: deploy, диагностика и rollb
 status: active
 owner_role: SRE
 created_at: 2026-05-26
-updated_at: 2026-05-28
-related_issues: [829, 853, 895, 909, 939]
+updated_at: 2026-06-02
+related_issues: [829, 853, 895, 909, 939, 1007]
 related_alerts: []
 approvals:
   required: ["Owner"]
@@ -58,6 +58,20 @@ Staged fixtures `pull_request closed + merged` остаются материал
 `integration-gateway` и `provider-hub`; live provider end-to-end проверка
 должна быть отдельным Go integration runner с явной safe-конфигурацией,
 idempotency и cleanup policy.
+
+Публичный GitHub webhook route открыт отдельным `Ingress`
+`integration-gateway-public-webhook` на
+`https://platform.kodex.works/v1/provider-webhooks/github`. Этот route не
+находится за `oauth2-proxy`: он должен вести только на Service
+`integration-gateway`, принимать только точный path
+`/v1/provider-webhooks/github` и отклонять неподписанные запросы как
+`401/signature_invalid`. Проверка публичного route входит в
+`cmd/bootstrap-operational-acceptance`.
+
+Webhook для `codex-k8s/kodex` регистрируется с событиями `push` и
+`pull_request`. Значение `KODEX_GITHUB_WEBHOOK_SECRET` берётся из Kubernetes
+`Secret` `kodex-platform-runtime` и передаётся в GitHub API только как secret
+value процесса; в команды диагностики, Issue, PR и логи значение не выводить.
 
 ## Диагностика rollout и health
 
@@ -128,6 +142,8 @@ Readiness подтверждает, что HTTP router, OpenAPI validator и rou
 - `/health/readyz` возвращает успешный ответ.
 - `/metrics` и OpenAPI endpoint доступны.
 - Неподписанный GitHub webhook получает `401/signature_invalid`.
+- Публичный `Ingress` `integration-gateway-public-webhook` ведёт только на
+  `integration-gateway`, не на `oauth2-proxy` и не на `web-console`.
 - Неподдержанный provider slug получает `400/source_not_allowed`.
 - Выключенный callback route получает `400/source_not_allowed`; включённый route без валидной `X-Kodex-External-Signature` получает `401/signature_invalid`.
 - Go tests HTTP boundary проходят в `make test-go`; live provider сценарии

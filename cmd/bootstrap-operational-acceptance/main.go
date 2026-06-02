@@ -21,6 +21,8 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/stackinventory"
 )
 
+const providerWebhookPath = "/v1/provider-webhooks/github"
+
 func main() {
 	repoRoot := flag.String("repo-root", ".", "repository root containing services.yaml")
 	envFile := flag.String("env-file", "", "bootstrap env file; values are loaded but never printed")
@@ -142,13 +144,17 @@ func run(ctx context.Context, options acceptanceOptions, output io.Writer) error
 	if err := checkPublicContour(ctx, config.Namespace); err != nil {
 		return err
 	}
-	ok(output, "public web contour routes only through oauth2-proxy and certificate is ready")
+	ok(output, "public web and provider webhook contours route to expected services and certificate is ready")
 
 	if !options.SkipPublicHTTP {
 		if err := checkPublicRedirect(config.PublicURL); err != nil {
 			return err
 		}
 		ok(output, "public web root redirects to GitHub OAuth without exposing query values")
+		if err := checkPublicWebhookRejectsUnsigned(config.PublicURL); err != nil {
+			return err
+		}
+		ok(output, "public provider webhook rejects unsigned requests without OAuth redirect")
 	}
 
 	ok(output, "operational acceptance completed")
@@ -443,6 +449,7 @@ func requiredRuntimeSecretKeys() []string {
 		"KODEX_AGENT_MANAGER_GRPC_AUTH_TOKEN",
 		"KODEX_PLATFORM_EVENT_LOG_DATABASE_DSN",
 		"KODEX_EXTERNAL_CALLBACK_SECRET",
+		"KODEX_GITHUB_WEBHOOK_SECRET",
 		"KODEX_PLATFORM_MCP_SERVER_MCP_AUTH_TOKEN",
 	}
 }
@@ -484,6 +491,13 @@ func checkPublicContour(ctx context.Context, namespace string) error {
 		return fmt.Errorf("read public web ingress: %w", err)
 	}
 	if err := validatePublicIngressTargets(ingress); err != nil {
+		return err
+	}
+	var webhookIngress ingressObject
+	if err := getKubernetesJSON(ctx, &webhookIngress, "-n", namespace, "get", "ingress", "integration-gateway-public-webhook", "-o", "json"); err != nil {
+		return fmt.Errorf("read provider webhook public ingress: %w", err)
+	}
+	if err := validateProviderWebhookIngressTargets(webhookIngress); err != nil {
 		return err
 	}
 	if err := checkConditionedResource(ctx, "certificate web-console-public-tls", "-n", namespace, "get", "certificate", "web-console-public-tls", "-o", "json"); err != nil {
@@ -531,6 +545,49 @@ func checkPublicRedirect(rawURL string) error {
 	return nil
 }
 
+func checkPublicWebhookRejectsUnsigned(rawURL string) error {
+	endpoint, err := publicURLWithPath(rawURL, providerWebhookPath)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequest(http.MethodPost, endpoint, strings.NewReader(`{"action":"ping"}`))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-GitHub-Delivery", "operational-acceptance-unsigned")
+	req.Header.Set("X-GitHub-Event", "ping")
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("check public provider webhook: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
+		return fmt.Errorf("public provider webhook redirected instead of rejecting unsigned request")
+	}
+	if resp.StatusCode != http.StatusUnauthorized {
+		return fmt.Errorf("public provider webhook returned HTTP %d instead of HMAC rejection", resp.StatusCode)
+	}
+	return nil
+}
+
+func publicURLWithPath(rawURL string, path string) (string, error) {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return "", fmt.Errorf("parse public URL: %w", err)
+	}
+	parsed.Path = path
+	parsed.RawQuery = ""
+	parsed.Fragment = ""
+	return parsed.String(), nil
+}
+
 func validateGitHubOAuthLocation(location string) error {
 	parsed, err := url.Parse(location)
 	if err != nil {
@@ -562,6 +619,38 @@ func validatePublicIngressTargets(ingress ingressObject) error {
 	}
 	if len(targets) != 1 {
 		return errors.New("public web ingress must target only oauth2-proxy")
+	}
+	return nil
+}
+
+func validateProviderWebhookIngressTargets(ingress ingressObject) error {
+	targets := map[string]bool{}
+	for _, rule := range ingress.Spec.Rules {
+		for _, path := range rule.HTTP.Paths {
+			service := path.Backend.Service.Name
+			if service == "" {
+				continue
+			}
+			targets[service] = true
+			if service == "integration-gateway" && (path.Path != providerWebhookPath || path.PathType != "Exact") {
+				return errors.New("provider webhook public ingress must expose only the exact GitHub webhook path")
+			}
+		}
+	}
+	if len(targets) == 0 {
+		return errors.New("provider webhook public ingress has no service targets")
+	}
+	if targets["web-console-public-oauth2-proxy"] {
+		return errors.New("provider webhook public ingress must not target oauth2-proxy")
+	}
+	if targets["web-console"] {
+		return errors.New("provider webhook public ingress must not target web-console")
+	}
+	if !targets["integration-gateway"] {
+		return errors.New("provider webhook public ingress must target integration-gateway")
+	}
+	if len(targets) != 1 {
+		return errors.New("provider webhook public ingress must target only integration-gateway")
 	}
 	return nil
 }
@@ -725,7 +814,9 @@ type ingressObject struct {
 		Rules []struct {
 			HTTP struct {
 				Paths []struct {
-					Backend struct {
+					Path     string `json:"path"`
+					PathType string `json:"pathType"`
+					Backend  struct {
 						Service struct {
 							Name string `json:"name"`
 						} `json:"service"`

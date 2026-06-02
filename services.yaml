@@ -134,6 +134,7 @@ spec:
       bumpOn:
         - services/external/integration-gateway
         - deploy/base/integration-gateway
+        - deploy/base/integration-gateway-public
         - scripts/build-integration-gateway-images.sh
         - specs/openapi/integration-gateway.v1.yaml
         - proto/kodex/providers/v1
@@ -1158,6 +1159,16 @@ spec:
         - deploy/base/web-console-public/certificate.yaml.tpl
         - deploy/base/web-console-public/ingress.yaml.tpl
         - deploy/base/web-console-public/authenticated-emails.txt
+    - name: integration-gateway-public-webhook
+      path: deploy/base/integration-gateway-public/kustomization.yaml.tpl
+      renderMode: kustomize
+      purpose: public-github-webhook-hmac-only-ingress
+      requires:
+        - integration-gateway
+        - web-public-foundation
+        - web-console-public
+      includes:
+        - deploy/base/integration-gateway-public/public-webhook-ingress.yaml.tpl
     - name: postgres-stack
       path: deploy/base/postgres/kustomization.yaml.tpl
       renderMode: kustomize

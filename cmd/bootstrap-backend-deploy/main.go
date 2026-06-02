@@ -851,6 +851,13 @@ func deployWebPublicContour(ctx context.Context, config deployConfig, publicConf
 		return fmt.Errorf("wait public web TLS certificate: %w", err)
 	}
 	ok(output, "public web TLS certificate ready")
+	if err := kubectlQuiet(ctx, "apply", "-k", filepath.Join(renderDir, "integration-gateway-public")); err != nil {
+		return fmt.Errorf("apply integration-gateway public webhook contour: %w", err)
+	}
+	if err := ensureProviderWebhookIngressTargets(ctx, config.Namespace); err != nil {
+		return err
+	}
+	ok(output, "provider webhook public Ingress targets integration-gateway only")
 	return nil
 }
 
@@ -895,6 +902,7 @@ func renderWebPublicContour(repoRoot, servicesFile string) (string, func(), erro
 	}{
 		{source: filepath.Join(repoRoot, "deploy/base/web-public-foundation"), output: filepath.Join(renderDir, "web-public-foundation")},
 		{source: filepath.Join(repoRoot, "deploy/base/web-console-public"), output: filepath.Join(renderDir, "web-console-public")},
+		{source: filepath.Join(repoRoot, "deploy/base/integration-gateway-public"), output: filepath.Join(renderDir, "integration-gateway-public")},
 	}
 	for _, set := range sets {
 		if err := manifestrender.Render(manifestrender.Options{
@@ -1227,16 +1235,77 @@ func checkHTTP(ctx context.Context, namespace, service, targetPort, path string)
 }
 
 func ensurePublicIngressTargetsOAuth2Proxy(ctx context.Context, namespace string) error {
-	output, err := kubectlOutput(ctx, "-n", namespace, "get", "ingress", "web-console-public", "-o", "json")
+	targets, err := readIngressTargets(ctx, namespace, "web-console-public")
 	if err != nil {
-		return fmt.Errorf("read public web Ingress: %w", err)
+		return err
+	}
+	services := ingressTargetServices(targets)
+	if len(services) == 0 {
+		return errors.New("public web Ingress has no service backends")
+	}
+	if services["web-console"] {
+		return errors.New("public web Ingress must not target web-console directly")
+	}
+	if !services["web-console-public-oauth2-proxy"] {
+		return errors.New("public web Ingress must target oauth2-proxy")
+	}
+	if len(services) != 1 {
+		return errors.New("public web Ingress must target only oauth2-proxy")
+	}
+	return nil
+}
+
+func ensureProviderWebhookIngressTargets(ctx context.Context, namespace string) error {
+	targets, err := readIngressTargets(ctx, namespace, "integration-gateway-public-webhook")
+	if err != nil {
+		return fmt.Errorf("read provider webhook public Ingress: %w", err)
+	}
+	services := ingressTargetServices(targets)
+	if len(services) == 0 {
+		return errors.New("provider webhook public Ingress has no service backends")
+	}
+	if services["web-console-public-oauth2-proxy"] {
+		return errors.New("provider webhook public Ingress must not target oauth2-proxy")
+	}
+	if services["web-console"] {
+		return errors.New("provider webhook public Ingress must not target web-console")
+	}
+	if !services["integration-gateway"] {
+		return errors.New("provider webhook public Ingress must target integration-gateway")
+	}
+	if len(services) != 1 {
+		return errors.New("provider webhook public Ingress must target only integration-gateway")
+	}
+	for _, target := range targets {
+		if target.Service != "integration-gateway" {
+			continue
+		}
+		if target.Path != "/v1/provider-webhooks/github" || target.PathType != "Exact" {
+			return errors.New("provider webhook public Ingress must expose only the exact GitHub webhook path")
+		}
+	}
+	return nil
+}
+
+type ingressTarget struct {
+	Service  string
+	Path     string
+	PathType string
+}
+
+func readIngressTargets(ctx context.Context, namespace, name string) ([]ingressTarget, error) {
+	output, err := kubectlOutput(ctx, "-n", namespace, "get", "ingress", name, "-o", "json")
+	if err != nil {
+		return nil, fmt.Errorf("read Ingress %s: %w", name, err)
 	}
 	var ingress struct {
 		Spec struct {
 			Rules []struct {
 				HTTP struct {
 					Paths []struct {
-						Backend struct {
+						Path     string `json:"path"`
+						PathType string `json:"pathType"`
+						Backend  struct {
 							Service struct {
 								Name string `json:"name"`
 							} `json:"service"`
@@ -1247,27 +1316,30 @@ func ensurePublicIngressTargetsOAuth2Proxy(ctx context.Context, namespace string
 		} `json:"spec"`
 	}
 	if err := json.Unmarshal(output, &ingress); err != nil {
-		return fmt.Errorf("decode public web Ingress: %w", err)
+		return nil, fmt.Errorf("decode Ingress %s: %w", name, err)
 	}
-	targets := map[string]bool{}
+	targets := []ingressTarget{}
 	for _, rule := range ingress.Spec.Rules {
 		for _, path := range rule.HTTP.Paths {
-			targets[path.Backend.Service.Name] = true
+			if path.Backend.Service.Name == "" {
+				continue
+			}
+			targets = append(targets, ingressTarget{
+				Service:  path.Backend.Service.Name,
+				Path:     path.Path,
+				PathType: path.PathType,
+			})
 		}
 	}
-	if len(targets) == 0 {
-		return errors.New("public web Ingress has no service backends")
+	return targets, nil
+}
+
+func ingressTargetServices(targets []ingressTarget) map[string]bool {
+	services := map[string]bool{}
+	for _, target := range targets {
+		services[target.Service] = true
 	}
-	if targets["web-console"] {
-		return errors.New("public web Ingress must not target web-console directly")
-	}
-	if !targets["web-console-public-oauth2-proxy"] {
-		return errors.New("public web Ingress must target oauth2-proxy")
-	}
-	if len(targets) != 1 {
-		return errors.New("public web Ingress must target only oauth2-proxy")
-	}
-	return nil
+	return services
 }
 
 func freeLocalPort() (string, error) {
