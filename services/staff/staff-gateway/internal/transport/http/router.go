@@ -15,9 +15,10 @@ type Router struct {
 type routeClients struct {
 	interactionHub InteractionHubClient
 	agentManager   AgentManagerClient
+	governance     GovernanceManagerClient
 }
 
-func NewRouter(ctx context.Context, cfg Config, interactionHub InteractionHubClient, agentManager AgentManagerClient, logger *slog.Logger) (*Router, error) {
+func NewRouter(ctx context.Context, cfg Config, interactionHub InteractionHubClient, agentManager AgentManagerClient, governance GovernanceManagerClient, logger *slog.Logger) (*Router, error) {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -25,7 +26,7 @@ func NewRouter(ctx context.Context, cfg Config, interactionHub InteractionHubCli
 	if err != nil {
 		return nil, err
 	}
-	clients := routeClients{interactionHub: interactionHub, agentManager: agentManager}
+	clients := routeClients{interactionHub: interactionHub, agentManager: agentManager, governance: governance}
 	handlers := newHandlers(clients, contract)
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v1/owner-inbox/items", handlers.listOwnerInboxItems)
@@ -33,6 +34,7 @@ func NewRouter(ctx context.Context, cfg Config, interactionHub InteractionHubCli
 	mux.HandleFunc("POST /v1/owner-inbox/items/{request_id}/response", handlers.respondOwnerInboxItem)
 	mux.HandleFunc("GET /v1/agent-runs/{run_id}/runtime-status", handlers.getAgentRunRuntimeStatus)
 	mux.HandleFunc("GET /v1/agent-runs/{run_id}/activities", handlers.listAgentRunActivities)
+	mux.HandleFunc("GET /v1/governance/summary", handlers.getGovernanceSummary)
 	mux.HandleFunc("GET /openapi/staff-gateway.v1.yaml", handlers.openAPISpec)
 
 	handler := RequestIDMiddleware(
@@ -56,5 +58,5 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 }
 
 func (r *Router) Ready() bool {
-	return r != nil && r.openAPI.Ready() && r.clients.interactionHub != nil && r.clients.agentManager != nil
+	return r != nil && r.openAPI.Ready() && r.clients.interactionHub != nil && r.clients.agentManager != nil && r.clients.governance != nil
 }

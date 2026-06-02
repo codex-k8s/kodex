@@ -5,6 +5,7 @@ import (
 	"time"
 
 	agentsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/agents/v1"
+	governancev1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/governance/v1"
 	interactionsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/interactions/v1"
 )
 
@@ -32,4 +33,8 @@ type ownerInboxResponder interface {
 type AgentManagerClient interface {
 	GetAgentRunRuntimeStatus(context.Context, *agentsv1.GetAgentRunRuntimeStatusRequest) (*agentsv1.AgentRunRuntimeStatusResponse, error)
 	ListAgentActivities(context.Context, *agentsv1.ListAgentActivitiesRequest) (*agentsv1.ListAgentActivitiesResponse, error)
+}
+
+type GovernanceManagerClient interface {
+	GetGovernanceSummary(context.Context, *governancev1.GetGovernanceSummaryRequest) (*governancev1.GovernanceSummaryResponse, error)
 }

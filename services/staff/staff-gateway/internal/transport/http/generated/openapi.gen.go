@@ -105,6 +105,148 @@ const (
 	DeliveryErrorClassUnspecified DeliveryErrorClass = "unspecified"
 )
 
+// Defines values for GovernanceBlockingSignalStatus.
+const (
+	GovernanceBlockingSignalStatusActive      GovernanceBlockingSignalStatus = "active"
+	GovernanceBlockingSignalStatusDismissed   GovernanceBlockingSignalStatus = "dismissed"
+	GovernanceBlockingSignalStatusResolved    GovernanceBlockingSignalStatus = "resolved"
+	GovernanceBlockingSignalStatusUnspecified GovernanceBlockingSignalStatus = "unspecified"
+)
+
+// Defines values for GovernanceDecisionAttention.
+const (
+	GovernanceDecisionAttentionBlocked       GovernanceDecisionAttention = "blocked"
+	GovernanceDecisionAttentionCompleted     GovernanceDecisionAttention = "completed"
+	GovernanceDecisionAttentionInformational GovernanceDecisionAttention = "informational"
+	GovernanceDecisionAttentionPending       GovernanceDecisionAttention = "pending"
+	GovernanceDecisionAttentionUnspecified   GovernanceDecisionAttention = "unspecified"
+)
+
+// Defines values for GovernanceDecisionSummaryKind.
+const (
+	GovernanceDecisionSummaryKindBlockingSignal         GovernanceDecisionSummaryKind = "blocking_signal"
+	GovernanceDecisionSummaryKindGateDecision           GovernanceDecisionSummaryKind = "gate_decision"
+	GovernanceDecisionSummaryKindGateRequest            GovernanceDecisionSummaryKind = "gate_request"
+	GovernanceDecisionSummaryKindReleaseDecision        GovernanceDecisionSummaryKind = "release_decision"
+	GovernanceDecisionSummaryKindReleaseDecisionPackage GovernanceDecisionSummaryKind = "release_decision_package"
+	GovernanceDecisionSummaryKindReleaseSafetyState     GovernanceDecisionSummaryKind = "release_safety_state"
+	GovernanceDecisionSummaryKindReviewSignal           GovernanceDecisionSummaryKind = "review_signal"
+	GovernanceDecisionSummaryKindRiskAssessment         GovernanceDecisionSummaryKind = "risk_assessment"
+	GovernanceDecisionSummaryKindUnspecified            GovernanceDecisionSummaryKind = "unspecified"
+)
+
+// Defines values for GovernanceEvidenceKind.
+const (
+	GovernanceEvidenceKindAgentAcceptance     GovernanceEvidenceKind = "agent_acceptance"
+	GovernanceEvidenceKindAgentHumanGate      GovernanceEvidenceKind = "agent_human_gate"
+	GovernanceEvidenceKindAgentRun            GovernanceEvidenceKind = "agent_run"
+	GovernanceEvidenceKindCustom              GovernanceEvidenceKind = "custom"
+	GovernanceEvidenceKindDocument            GovernanceEvidenceKind = "document"
+	GovernanceEvidenceKindInteractionCallback GovernanceEvidenceKind = "interaction_callback"
+	GovernanceEvidenceKindObjectRef           GovernanceEvidenceKind = "object_ref"
+	GovernanceEvidenceKindProviderCheck       GovernanceEvidenceKind = "provider_check"
+	GovernanceEvidenceKindProviderComment     GovernanceEvidenceKind = "provider_comment"
+	GovernanceEvidenceKindProviderReview      GovernanceEvidenceKind = "provider_review"
+	GovernanceEvidenceKindReviewSignal        GovernanceEvidenceKind = "review_signal"
+	GovernanceEvidenceKindRiskFactor          GovernanceEvidenceKind = "risk_factor"
+	GovernanceEvidenceKindRuntimeSummary      GovernanceEvidenceKind = "runtime_summary"
+	GovernanceEvidenceKindUnspecified         GovernanceEvidenceKind = "unspecified"
+)
+
+// Defines values for GovernanceGateOutcome.
+const (
+	GovernanceGateOutcomeApprove               GovernanceGateOutcome = "approve"
+	GovernanceGateOutcomeApproveWithConditions GovernanceGateOutcome = "approve_with_conditions"
+	GovernanceGateOutcomeEscalate              GovernanceGateOutcome = "escalate"
+	GovernanceGateOutcomeHold                  GovernanceGateOutcome = "hold"
+	GovernanceGateOutcomeReject                GovernanceGateOutcome = "reject"
+	GovernanceGateOutcomeRevise                GovernanceGateOutcome = "revise"
+	GovernanceGateOutcomeRollback              GovernanceGateOutcome = "rollback"
+	GovernanceGateOutcomeUnspecified           GovernanceGateOutcome = "unspecified"
+)
+
+// Defines values for GovernanceGateRequestStatus.
+const (
+	GovernanceGateRequestStatusAwaitingDecision GovernanceGateRequestStatus = "awaiting_decision"
+	GovernanceGateRequestStatusCancelled        GovernanceGateRequestStatus = "cancelled"
+	GovernanceGateRequestStatusDelivering       GovernanceGateRequestStatus = "delivering"
+	GovernanceGateRequestStatusExpired          GovernanceGateRequestStatus = "expired"
+	GovernanceGateRequestStatusRequested        GovernanceGateRequestStatus = "requested"
+	GovernanceGateRequestStatusResolved         GovernanceGateRequestStatus = "resolved"
+	GovernanceGateRequestStatusUnspecified      GovernanceGateRequestStatus = "unspecified"
+)
+
+// Defines values for GovernanceReleaseDecisionOutcome.
+const (
+	GovernanceReleaseDecisionOutcomeFollowUpRequired GovernanceReleaseDecisionOutcome = "follow_up_required"
+	GovernanceReleaseDecisionOutcomeGo               GovernanceReleaseDecisionOutcome = "go"
+	GovernanceReleaseDecisionOutcomeGoWithConditions GovernanceReleaseDecisionOutcome = "go_with_conditions"
+	GovernanceReleaseDecisionOutcomeHold             GovernanceReleaseDecisionOutcome = "hold"
+	GovernanceReleaseDecisionOutcomeNoGo             GovernanceReleaseDecisionOutcome = "no_go"
+	GovernanceReleaseDecisionOutcomeRollback         GovernanceReleaseDecisionOutcome = "rollback"
+	GovernanceReleaseDecisionOutcomeUnspecified      GovernanceReleaseDecisionOutcome = "unspecified"
+)
+
+// Defines values for GovernanceReleaseDecisionStatus.
+const (
+	GovernanceReleaseDecisionStatusCancelled   GovernanceReleaseDecisionStatus = "cancelled"
+	GovernanceReleaseDecisionStatusRequested   GovernanceReleaseDecisionStatus = "requested"
+	GovernanceReleaseDecisionStatusResolved    GovernanceReleaseDecisionStatus = "resolved"
+	GovernanceReleaseDecisionStatusUnspecified GovernanceReleaseDecisionStatus = "unspecified"
+)
+
+// Defines values for GovernanceReleasePackageStatus.
+const (
+	GovernanceReleasePackageStatusClosed            GovernanceReleasePackageStatus = "closed"
+	GovernanceReleasePackageStatusDecisionRequested GovernanceReleasePackageStatus = "decision_requested"
+	GovernanceReleasePackageStatusDraft             GovernanceReleasePackageStatus = "draft"
+	GovernanceReleasePackageStatusReady             GovernanceReleasePackageStatus = "ready"
+	GovernanceReleasePackageStatusUnspecified       GovernanceReleasePackageStatus = "unspecified"
+)
+
+// Defines values for GovernanceReviewOutcome.
+const (
+	GovernanceReviewOutcomeBlock          GovernanceReviewOutcome = "block"
+	GovernanceReviewOutcomeInformational  GovernanceReviewOutcome = "informational"
+	GovernanceReviewOutcomePass           GovernanceReviewOutcome = "pass"
+	GovernanceReviewOutcomePassWithNotes  GovernanceReviewOutcome = "pass_with_notes"
+	GovernanceReviewOutcomeRaiseRisk      GovernanceReviewOutcome = "raise_risk"
+	GovernanceReviewOutcomeRequestChanges GovernanceReviewOutcome = "request_changes"
+	GovernanceReviewOutcomeUnspecified    GovernanceReviewOutcome = "unspecified"
+)
+
+// Defines values for GovernanceRiskClass.
+const (
+	GovernanceRiskClassR0          GovernanceRiskClass = "r0"
+	GovernanceRiskClassR1          GovernanceRiskClass = "r1"
+	GovernanceRiskClassR2          GovernanceRiskClass = "r2"
+	GovernanceRiskClassR3          GovernanceRiskClass = "r3"
+	GovernanceRiskClassUnspecified GovernanceRiskClass = "unspecified"
+)
+
+// Defines values for GovernanceSignalSeverity.
+const (
+	GovernanceSignalSeverityBlocking    GovernanceSignalSeverity = "blocking"
+	GovernanceSignalSeverityCritical    GovernanceSignalSeverity = "critical"
+	GovernanceSignalSeverityInfo        GovernanceSignalSeverity = "info"
+	GovernanceSignalSeverityUnspecified GovernanceSignalSeverity = "unspecified"
+	GovernanceSignalSeverityWarning     GovernanceSignalSeverity = "warning"
+)
+
+// Defines values for GovernanceTargetType.
+const (
+	Document         GovernanceTargetType = "document"
+	Merge            GovernanceTargetType = "merge"
+	PolicyChange     GovernanceTargetType = "policy_change"
+	Postdeploy       GovernanceTargetType = "postdeploy"
+	PullRequest      GovernanceTargetType = "pull_request"
+	ReleaseCandidate GovernanceTargetType = "release_candidate"
+	Rollback         GovernanceTargetType = "rollback"
+	RuntimeJob       GovernanceTargetType = "runtime_job"
+	Transition       GovernanceTargetType = "transition"
+	Unspecified      GovernanceTargetType = "unspecified"
+)
+
 // Defines values for RequestKind.
 const (
 	Approval  RequestKind = "approval"
@@ -209,6 +351,14 @@ const (
 	GetAgentRunRuntimeStatusParamsXKodexActorTypeUser            GetAgentRunRuntimeStatusParamsXKodexActorType = "user"
 )
 
+// Defines values for GetGovernanceSummaryParamsXKodexActorType.
+const (
+	GetGovernanceSummaryParamsXKodexActorTypeAgent           GetGovernanceSummaryParamsXKodexActorType = "agent"
+	GetGovernanceSummaryParamsXKodexActorTypeExternalAccount GetGovernanceSummaryParamsXKodexActorType = "external_account"
+	GetGovernanceSummaryParamsXKodexActorTypeService         GetGovernanceSummaryParamsXKodexActorType = "service"
+	GetGovernanceSummaryParamsXKodexActorTypeUser            GetGovernanceSummaryParamsXKodexActorType = "user"
+)
+
 // Defines values for ListOwnerInboxItemsParamsXKodexActorType.
 const (
 	ListOwnerInboxItemsParamsXKodexActorTypeAgent           ListOwnerInboxItemsParamsXKodexActorType = "agent"
@@ -227,10 +377,10 @@ const (
 
 // Defines values for RespondOwnerInboxItemParamsXKodexActorType.
 const (
-	RespondOwnerInboxItemParamsXKodexActorTypeAgent           RespondOwnerInboxItemParamsXKodexActorType = "agent"
-	RespondOwnerInboxItemParamsXKodexActorTypeExternalAccount RespondOwnerInboxItemParamsXKodexActorType = "external_account"
-	RespondOwnerInboxItemParamsXKodexActorTypeService         RespondOwnerInboxItemParamsXKodexActorType = "service"
-	RespondOwnerInboxItemParamsXKodexActorTypeUser            RespondOwnerInboxItemParamsXKodexActorType = "user"
+	Agent           RespondOwnerInboxItemParamsXKodexActorType = "agent"
+	ExternalAccount RespondOwnerInboxItemParamsXKodexActorType = "external_account"
+	Service         RespondOwnerInboxItemParamsXKodexActorType = "service"
+	User            RespondOwnerInboxItemParamsXKodexActorType = "user"
 )
 
 // ActorRef defines model for ActorRef.
@@ -350,6 +500,182 @@ type ExternalRef struct {
 	Ref     string `json:"ref"`
 	RefKind string `json:"ref_kind"`
 }
+
+// GovernanceAgentContextRef defines model for GovernanceAgentContextRef.
+type GovernanceAgentContextRef struct {
+	AcceptanceRef *string `json:"acceptance_ref,omitempty"`
+	RoleRef       *string `json:"role_ref,omitempty"`
+	RunRef        *string `json:"run_ref,omitempty"`
+	SessionRef    *string `json:"session_ref,omitempty"`
+	StageRef      *string `json:"stage_ref,omitempty"`
+}
+
+// GovernanceBlockingSignalStatus defines model for GovernanceBlockingSignalStatus.
+type GovernanceBlockingSignalStatus string
+
+// GovernanceDecisionAttention defines model for GovernanceDecisionAttention.
+type GovernanceDecisionAttention string
+
+// GovernanceDecisionSummary defines model for GovernanceDecisionSummary.
+type GovernanceDecisionSummary struct {
+	AgentContext             *GovernanceAgentContextRef        `json:"agent_context,omitempty"`
+	Attention                GovernanceDecisionAttention       `json:"attention"`
+	BlockingSignalStatus     *GovernanceBlockingSignalStatus   `json:"blocking_signal_status,omitempty"`
+	CreatedAt                string                            `json:"created_at"`
+	EvidenceRefs             []GovernanceEvidenceRef           `json:"evidence_refs"`
+	GateOutcome              *GovernanceGateOutcome            `json:"gate_outcome,omitempty"`
+	GateRequestStatus        *GovernanceGateRequestStatus      `json:"gate_request_status,omitempty"`
+	Id                       string                            `json:"id"`
+	IntegrationRefs          []GovernanceReleaseIntegrationRef `json:"integration_refs"`
+	Kind                     GovernanceDecisionSummaryKind     `json:"kind"`
+	ObservedAt               *time.Time                        `json:"observed_at,omitempty"`
+	ParentId                 *string                           `json:"parent_id,omitempty"`
+	ProjectContext           *GovernanceProjectContextRef      `json:"project_context,omitempty"`
+	ProviderRefs             []GovernanceProviderContextRef    `json:"provider_refs"`
+	ReleaseCandidateRef      *string                           `json:"release_candidate_ref,omitempty"`
+	ReleaseDecisionOutcome   *GovernanceReleaseDecisionOutcome `json:"release_decision_outcome,omitempty"`
+	ReleaseDecisionPackageId *string                           `json:"release_decision_package_id,omitempty"`
+	ReleaseDecisionStatus    *GovernanceReleaseDecisionStatus  `json:"release_decision_status,omitempty"`
+	ReleasePackageStatus     *GovernanceReleasePackageStatus   `json:"release_package_status,omitempty"`
+	ReviewOutcome            *GovernanceReviewOutcome          `json:"review_outcome,omitempty"`
+	RiskClass                *GovernanceRiskClass              `json:"risk_class,omitempty"`
+	RuntimeRefs              []GovernanceRuntimeContextRef     `json:"runtime_refs"`
+	SafeSummary              string                            `json:"safe_summary"`
+	Severity                 *GovernanceSignalSeverity         `json:"severity,omitempty"`
+	Target                   *GovernanceTargetRef              `json:"target,omitempty"`
+	UpdatedAt                string                            `json:"updated_at"`
+	Version                  int64                             `json:"version"`
+}
+
+// GovernanceDecisionSummaryKind defines model for GovernanceDecisionSummaryKind.
+type GovernanceDecisionSummaryKind string
+
+// GovernanceEvidenceKind defines model for GovernanceEvidenceKind.
+type GovernanceEvidenceKind string
+
+// GovernanceEvidenceRef defines model for GovernanceEvidenceRef.
+type GovernanceEvidenceRef struct {
+	Digest         *string                `json:"digest,omitempty"`
+	Kind           GovernanceEvidenceKind `json:"kind"`
+	Ref            string                 `json:"ref"`
+	RetentionClass *string                `json:"retention_class,omitempty"`
+	Summary        *string                `json:"summary,omitempty"`
+}
+
+// GovernanceEvidenceSummary defines model for GovernanceEvidenceSummary.
+type GovernanceEvidenceSummary struct {
+	Digest          *string                           `json:"digest,omitempty"`
+	ErrorCode       *string                           `json:"error_code,omitempty"`
+	EvidenceRefs    []GovernanceEvidenceRef           `json:"evidence_refs"`
+	IntegrationRefs []GovernanceReleaseIntegrationRef `json:"integration_refs"`
+	ObservedAt      *time.Time                        `json:"observed_at,omitempty"`
+	Outcome         *string                           `json:"outcome,omitempty"`
+	SafeSummary     string                            `json:"safe_summary"`
+	SourceKind      string                            `json:"source_kind"`
+	SourceRef       string                            `json:"source_ref"`
+	Status          *string                           `json:"status,omitempty"`
+	Version         *string                           `json:"version,omitempty"`
+}
+
+// GovernanceGateOutcome defines model for GovernanceGateOutcome.
+type GovernanceGateOutcome string
+
+// GovernanceGateRequestStatus defines model for GovernanceGateRequestStatus.
+type GovernanceGateRequestStatus string
+
+// GovernanceProjectContextRef defines model for GovernanceProjectContextRef.
+type GovernanceProjectContextRef struct {
+	BranchRulesRef   *string `json:"branch_rules_ref,omitempty"`
+	ProjectRef       *string `json:"project_ref,omitempty"`
+	ReleaseLineRef   *string `json:"release_line_ref,omitempty"`
+	ReleasePolicyRef *string `json:"release_policy_ref,omitempty"`
+	RepositoryRef    *string `json:"repository_ref,omitempty"`
+	ServiceRef       *string `json:"service_ref,omitempty"`
+}
+
+// GovernanceProviderContextRef defines model for GovernanceProviderContextRef.
+type GovernanceProviderContextRef struct {
+	ChangedFilesSummaryRef *string `json:"changed_files_summary_ref,omitempty"`
+	CommentRef             *string `json:"comment_ref,omitempty"`
+	ProviderOperationRef   *string `json:"provider_operation_ref,omitempty"`
+	PullRequestRef         *string `json:"pull_request_ref,omitempty"`
+	ReviewSignalRef        *string `json:"review_signal_ref,omitempty"`
+	WorkItemRef            *string `json:"work_item_ref,omitempty"`
+}
+
+// GovernanceReleaseDecisionOutcome defines model for GovernanceReleaseDecisionOutcome.
+type GovernanceReleaseDecisionOutcome string
+
+// GovernanceReleaseDecisionStatus defines model for GovernanceReleaseDecisionStatus.
+type GovernanceReleaseDecisionStatus string
+
+// GovernanceReleaseIntegrationRef defines model for GovernanceReleaseIntegrationRef.
+type GovernanceReleaseIntegrationRef struct {
+	Digest     *string    `json:"digest,omitempty"`
+	Domain     string     `json:"domain"`
+	ErrorCode  *string    `json:"error_code,omitempty"`
+	Kind       string     `json:"kind"`
+	ObservedAt *time.Time `json:"observed_at,omitempty"`
+	Ref        string     `json:"ref"`
+	Status     *string    `json:"status,omitempty"`
+	Summary    *string    `json:"summary,omitempty"`
+	Version    *string    `json:"version,omitempty"`
+}
+
+// GovernanceReleasePackageStatus defines model for GovernanceReleasePackageStatus.
+type GovernanceReleasePackageStatus string
+
+// GovernanceReviewOutcome defines model for GovernanceReviewOutcome.
+type GovernanceReviewOutcome string
+
+// GovernanceRiskClass defines model for GovernanceRiskClass.
+type GovernanceRiskClass string
+
+// GovernanceRuntimeContextRef defines model for GovernanceRuntimeContextRef.
+type GovernanceRuntimeContextRef struct {
+	ArtifactRef    *string `json:"artifact_ref,omitempty"`
+	EnvironmentRef *string `json:"environment_ref,omitempty"`
+	JobRef         *string `json:"job_ref,omitempty"`
+	SlotRef        *string `json:"slot_ref,omitempty"`
+	SummaryRef     *string `json:"summary_ref,omitempty"`
+}
+
+// GovernanceSignalSeverity defines model for GovernanceSignalSeverity.
+type GovernanceSignalSeverity string
+
+// GovernanceSummary defines model for GovernanceSummary.
+type GovernanceSummary struct {
+	CompletedDecisions []GovernanceDecisionSummary `json:"completed_decisions"`
+	Diagnostics        []string                    `json:"diagnostics"`
+	EvidenceSummaries  []GovernanceEvidenceSummary `json:"evidence_summaries"`
+	PendingDecisions   []GovernanceDecisionSummary `json:"pending_decisions"`
+	Scope              GovernanceSummaryScope      `json:"scope"`
+}
+
+// GovernanceSummaryResponse defines model for GovernanceSummaryResponse.
+type GovernanceSummaryResponse struct {
+	CorrelationId *string           `json:"correlation_id,omitempty"`
+	RequestId     string            `json:"request_id"`
+	Summary       GovernanceSummary `json:"summary"`
+}
+
+// GovernanceSummaryScope defines model for GovernanceSummaryScope.
+type GovernanceSummaryScope struct {
+	IntegrationRef           *GovernanceReleaseIntegrationRef `json:"integration_ref,omitempty"`
+	ProjectContext           *GovernanceProjectContextRef     `json:"project_context,omitempty"`
+	ReleaseCandidateRef      *string                          `json:"release_candidate_ref,omitempty"`
+	ReleaseDecisionPackageId *string                          `json:"release_decision_package_id,omitempty"`
+	Target                   *GovernanceTargetRef             `json:"target,omitempty"`
+}
+
+// GovernanceTargetRef defines model for GovernanceTargetRef.
+type GovernanceTargetRef struct {
+	Ref  string               `json:"ref"`
+	Type GovernanceTargetType `json:"type"`
+}
+
+// GovernanceTargetType defines model for GovernanceTargetType.
+type GovernanceTargetType string
 
 // InteractionAction defines model for InteractionAction.
 type InteractionAction struct {
@@ -548,6 +874,45 @@ type CorrelationKindQuery = string
 // CorrelationRefQuery defines model for CorrelationRefQuery.
 type CorrelationRefQuery = string
 
+// GovernanceBranchRulesRefQuery defines model for GovernanceBranchRulesRefQuery.
+type GovernanceBranchRulesRefQuery = string
+
+// GovernanceIntegrationDomainQuery defines model for GovernanceIntegrationDomainQuery.
+type GovernanceIntegrationDomainQuery = string
+
+// GovernanceIntegrationKindQuery defines model for GovernanceIntegrationKindQuery.
+type GovernanceIntegrationKindQuery = string
+
+// GovernanceIntegrationRefQuery defines model for GovernanceIntegrationRefQuery.
+type GovernanceIntegrationRefQuery = string
+
+// GovernanceProjectRefQuery defines model for GovernanceProjectRefQuery.
+type GovernanceProjectRefQuery = string
+
+// GovernanceReleaseCandidateRefQuery defines model for GovernanceReleaseCandidateRefQuery.
+type GovernanceReleaseCandidateRefQuery = string
+
+// GovernanceReleaseDecisionPackageIdQuery defines model for GovernanceReleaseDecisionPackageIdQuery.
+type GovernanceReleaseDecisionPackageIdQuery = string
+
+// GovernanceReleaseLineRefQuery defines model for GovernanceReleaseLineRefQuery.
+type GovernanceReleaseLineRefQuery = string
+
+// GovernanceReleasePolicyRefQuery defines model for GovernanceReleasePolicyRefQuery.
+type GovernanceReleasePolicyRefQuery = string
+
+// GovernanceRepositoryRefQuery defines model for GovernanceRepositoryRefQuery.
+type GovernanceRepositoryRefQuery = string
+
+// GovernanceServiceRefQuery defines model for GovernanceServiceRefQuery.
+type GovernanceServiceRefQuery = string
+
+// GovernanceTargetRefQuery defines model for GovernanceTargetRefQuery.
+type GovernanceTargetRefQuery = string
+
+// GovernanceTargetTypeQuery defines model for GovernanceTargetTypeQuery.
+type GovernanceTargetTypeQuery = GovernanceTargetType
+
 // IncludeDiagnosticsQuery defines model for IncludeDiagnosticsQuery.
 type IncludeDiagnosticsQuery = bool
 
@@ -660,6 +1025,66 @@ type GetAgentRunRuntimeStatusParams struct {
 
 // GetAgentRunRuntimeStatusParamsXKodexActorType defines parameters for GetAgentRunRuntimeStatus.
 type GetAgentRunRuntimeStatusParamsXKodexActorType string
+
+// GetGovernanceSummaryParams defines parameters for GetGovernanceSummary.
+type GetGovernanceSummaryParams struct {
+	// TargetType Тип governance target. Должен передаваться вместе с `target_ref`.
+	TargetType *GovernanceTargetTypeQuery `form:"target_type,omitempty" json:"target_type,omitempty"`
+
+	// TargetRef Safe ref governance target.
+	TargetRef *GovernanceTargetRefQuery `form:"target_ref,omitempty" json:"target_ref,omitempty"`
+
+	// ProjectRef Safe ref проекта из `project-catalog`.
+	ProjectRef *GovernanceProjectRefQuery `form:"project_ref,omitempty" json:"project_ref,omitempty"`
+
+	// RepositoryRef Safe ref репозитория из `project-catalog`.
+	RepositoryRef *GovernanceRepositoryRefQuery `form:"repository_ref,omitempty" json:"repository_ref,omitempty"`
+
+	// ServiceRef Safe ref сервиса в проектной политике.
+	ServiceRef *GovernanceServiceRefQuery `form:"service_ref,omitempty" json:"service_ref,omitempty"`
+
+	// BranchRulesRef Safe ref branch rules.
+	BranchRulesRef *GovernanceBranchRulesRefQuery `form:"branch_rules_ref,omitempty" json:"branch_rules_ref,omitempty"`
+
+	// ReleasePolicyRef Safe ref release policy.
+	ReleasePolicyRef *GovernanceReleasePolicyRefQuery `form:"release_policy_ref,omitempty" json:"release_policy_ref,omitempty"`
+
+	// ReleaseLineRef Safe ref release line.
+	ReleaseLineRef *GovernanceReleaseLineRefQuery `form:"release_line_ref,omitempty" json:"release_line_ref,omitempty"`
+
+	// ReleaseCandidateRef Safe ref кандидата релиза.
+	ReleaseCandidateRef *GovernanceReleaseCandidateRefQuery `form:"release_candidate_ref,omitempty" json:"release_candidate_ref,omitempty"`
+
+	// ReleaseDecisionPackageId Local id release decision package.
+	ReleaseDecisionPackageId *GovernanceReleaseDecisionPackageIdQuery `form:"release_decision_package_id,omitempty" json:"release_decision_package_id,omitempty"`
+
+	// IntegrationDomain Owner domain safe ref, например `provider`, `agent`, `runtime` или `governance`.
+	IntegrationDomain *GovernanceIntegrationDomainQuery `form:"integration_domain,omitempty" json:"integration_domain,omitempty"`
+
+	// IntegrationKind Тип safe ref внутри owner domain.
+	IntegrationKind *GovernanceIntegrationKindQuery `form:"integration_kind,omitempty" json:"integration_kind,omitempty"`
+
+	// IntegrationRef Safe ref owner-domain факта.
+	IntegrationRef *GovernanceIntegrationRefQuery `form:"integration_ref,omitempty" json:"integration_ref,omitempty"`
+
+	// XKodexRequestId Идентификатор запроса для трассировки. Gateway может заменить невалидное значение.
+	XKodexRequestId *RequestIdHeader `json:"X-Kodex-Request-Id,omitempty"`
+
+	// XKodexTraceId Безопасная ссылка на трассу.
+	XKodexTraceId *TraceIdHeader `json:"X-Kodex-Trace-Id,omitempty"`
+
+	// XKodexSessionId Безопасная ссылка на пользовательскую сессию.
+	XKodexSessionId *SessionIdHeader `json:"X-Kodex-Session-Id,omitempty"`
+
+	// XKodexActorType Тип проверенного субъекта от внешнего auth boundary.
+	XKodexActorType GetGovernanceSummaryParamsXKodexActorType `json:"X-Kodex-Actor-Type"`
+
+	// XKodexActorId Safe id проверенного субъекта без email и имени.
+	XKodexActorId ActorIdHeader `json:"X-Kodex-Actor-Id"`
+}
+
+// GetGovernanceSummaryParamsXKodexActorType defines parameters for GetGovernanceSummary.
+type GetGovernanceSummaryParamsXKodexActorType string
 
 // ListOwnerInboxItemsParams defines parameters for ListOwnerInboxItems.
 type ListOwnerInboxItemsParams struct {

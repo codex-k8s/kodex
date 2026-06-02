@@ -13,6 +13,8 @@ tags:
     description: Входящие решения владельца.
   - name: agent-runs
     description: Безопасное чтение agent Run для операторского UI.
+  - name: governance
+    description: Безопасная сводка governance decisions для операторского UI.
 x-kodex-contract-status: mvp-staff-gateway
 paths:
   /v1/owner-inbox/items:
@@ -220,6 +222,55 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/DownstreamUnavailable'
+  /v1/governance/summary:
+    get:
+      tags: [governance]
+      operationId: getGovernanceSummary
+      summary: Получить безопасную сводку governance decisions.
+      description: |
+        Возвращает подготовленную `governance-manager.GetGovernanceSummary` сводку для одного selector.
+        Gateway только валидирует HTTP-параметры, передаёт actor/request context и маппит safe DTO.
+        Доменная логика risk/gate/release decisions остаётся в `governance-manager`.
+      parameters:
+        - $ref: '#/components/parameters/RequestIdHeader'
+        - $ref: '#/components/parameters/TraceIdHeader'
+        - $ref: '#/components/parameters/SessionIdHeader'
+        - $ref: '#/components/parameters/ActorTypeHeader'
+        - $ref: '#/components/parameters/ActorIdHeader'
+        - $ref: '#/components/parameters/GovernanceTargetTypeQuery'
+        - $ref: '#/components/parameters/GovernanceTargetRefQuery'
+        - $ref: '#/components/parameters/GovernanceProjectRefQuery'
+        - $ref: '#/components/parameters/GovernanceRepositoryRefQuery'
+        - $ref: '#/components/parameters/GovernanceServiceRefQuery'
+        - $ref: '#/components/parameters/GovernanceBranchRulesRefQuery'
+        - $ref: '#/components/parameters/GovernanceReleasePolicyRefQuery'
+        - $ref: '#/components/parameters/GovernanceReleaseLineRefQuery'
+        - $ref: '#/components/parameters/GovernanceReleaseCandidateRefQuery'
+        - $ref: '#/components/parameters/GovernanceReleaseDecisionPackageIdQuery'
+        - $ref: '#/components/parameters/GovernanceIntegrationDomainQuery'
+        - $ref: '#/components/parameters/GovernanceIntegrationKindQuery'
+        - $ref: '#/components/parameters/GovernanceIntegrationRefQuery'
+      responses:
+        '200':
+          description: Governance summary получена.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GovernanceSummaryResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/PermissionDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/DownstreamUnavailable'
 components:
   parameters:
     RunIdPath:
@@ -244,6 +295,109 @@ components:
       schema:
         $ref: '#/components/schemas/AgentActivityStatus'
       description: Фильтр по статусу safe activity entry.
+    GovernanceTargetTypeQuery:
+      name: target_type
+      in: query
+      required: false
+      schema:
+        $ref: '#/components/schemas/GovernanceTargetType'
+      description: Тип governance target. Должен передаваться вместе с `target_ref`.
+    GovernanceTargetRefQuery:
+      name: target_ref
+      in: query
+      required: false
+      schema:
+        type: string
+        maxLength: 256
+      description: Safe ref governance target.
+    GovernanceProjectRefQuery:
+      name: project_ref
+      in: query
+      required: false
+      schema:
+        type: string
+        maxLength: 256
+      description: Safe ref проекта из `project-catalog`.
+    GovernanceRepositoryRefQuery:
+      name: repository_ref
+      in: query
+      required: false
+      schema:
+        type: string
+        maxLength: 256
+      description: Safe ref репозитория из `project-catalog`.
+    GovernanceServiceRefQuery:
+      name: service_ref
+      in: query
+      required: false
+      schema:
+        type: string
+        maxLength: 256
+      description: Safe ref сервиса в проектной политике.
+    GovernanceBranchRulesRefQuery:
+      name: branch_rules_ref
+      in: query
+      required: false
+      schema:
+        type: string
+        maxLength: 256
+      description: Safe ref branch rules.
+    GovernanceReleasePolicyRefQuery:
+      name: release_policy_ref
+      in: query
+      required: false
+      schema:
+        type: string
+        maxLength: 256
+      description: Safe ref release policy.
+    GovernanceReleaseLineRefQuery:
+      name: release_line_ref
+      in: query
+      required: false
+      schema:
+        type: string
+        maxLength: 256
+      description: Safe ref release line.
+    GovernanceReleaseCandidateRefQuery:
+      name: release_candidate_ref
+      in: query
+      required: false
+      schema:
+        type: string
+        maxLength: 256
+      description: Safe ref кандидата релиза.
+    GovernanceReleaseDecisionPackageIdQuery:
+      name: release_decision_package_id
+      in: query
+      required: false
+      schema:
+        type: string
+        pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+      description: Local id release decision package.
+    GovernanceIntegrationDomainQuery:
+      name: integration_domain
+      in: query
+      required: false
+      schema:
+        type: string
+        maxLength: 64
+      description: Owner domain safe ref, например `provider`, `agent`, `runtime` или `governance`.
+    GovernanceIntegrationKindQuery:
+      name: integration_kind
+      in: query
+      required: false
+      schema:
+        type: string
+        maxLength: 64
+      description: Тип safe ref внутри owner domain.
+    GovernanceIntegrationRefQuery:
+      name: integration_ref
+      in: query
+      required: false
+      schema:
+        type: string
+        maxLength: 256
+      description: Safe ref owner-domain факта.
     RequestIdPath:
       name: request_id
       in: path
@@ -573,6 +727,45 @@ components:
         - AgentActivityStatusWaiting
         - AgentActivityStatusCancelled
         - AgentActivityStatusSkipped
+    GovernanceTargetType:
+      type: string
+      enum: [unspecified, transition, pull_request, release_candidate, runtime_job, policy_change, document, merge, postdeploy, rollback]
+    GovernanceDecisionSummaryKind:
+      type: string
+      enum: [unspecified, risk_assessment, review_signal, gate_request, gate_decision, release_decision_package, release_decision, blocking_signal, release_safety_state]
+    GovernanceDecisionAttention:
+      type: string
+      enum: [unspecified, pending, completed, blocked, informational]
+    GovernanceRiskClass:
+      type: string
+      enum: [unspecified, r0, r1, r2, r3]
+    GovernanceReviewOutcome:
+      type: string
+      enum: [unspecified, pass, pass_with_notes, block, request_changes, raise_risk, informational]
+    GovernanceGateRequestStatus:
+      type: string
+      enum: [unspecified, requested, delivering, awaiting_decision, resolved, expired, cancelled]
+    GovernanceGateOutcome:
+      type: string
+      enum: [unspecified, approve, approve_with_conditions, revise, reject, hold, rollback, escalate]
+    GovernanceReleasePackageStatus:
+      type: string
+      enum: [unspecified, draft, ready, decision_requested, closed]
+    GovernanceReleaseDecisionStatus:
+      type: string
+      enum: [unspecified, requested, resolved, cancelled]
+    GovernanceReleaseDecisionOutcome:
+      type: string
+      enum: [unspecified, go, go_with_conditions, no_go, hold, rollback, follow_up_required]
+    GovernanceBlockingSignalStatus:
+      type: string
+      enum: [unspecified, active, resolved, dismissed]
+    GovernanceSignalSeverity:
+      type: string
+      enum: [unspecified, info, warning, blocking, critical]
+    GovernanceEvidenceKind:
+      type: string
+      enum: [unspecified, provider_comment, provider_review, provider_check, runtime_summary, document, risk_factor, review_signal, interaction_callback, object_ref, custom, agent_acceptance, agent_run, agent_human_gate]
     DeliveryAttemptStatus:
       type: string
       enum: [unspecified, queued, sent, accepted, delivered, failed, cancelled, expired]
@@ -876,6 +1069,314 @@ components:
           $ref: '#/components/schemas/OwnerInboxItem'
         response:
           $ref: '#/components/schemas/OwnerInboxResponseSummary'
+    GovernanceSummaryResponse:
+      type: object
+      additionalProperties: false
+      required: [request_id, summary]
+      properties:
+        request_id:
+          type: string
+        correlation_id:
+          type: string
+        summary:
+          $ref: '#/components/schemas/GovernanceSummary'
+    GovernanceSummary:
+      type: object
+      additionalProperties: false
+      required: [scope, pending_decisions, completed_decisions, evidence_summaries, diagnostics]
+      properties:
+        scope:
+          $ref: '#/components/schemas/GovernanceSummaryScope'
+        pending_decisions:
+          type: array
+          items:
+            $ref: '#/components/schemas/GovernanceDecisionSummary'
+        completed_decisions:
+          type: array
+          items:
+            $ref: '#/components/schemas/GovernanceDecisionSummary'
+        evidence_summaries:
+          type: array
+          items:
+            $ref: '#/components/schemas/GovernanceEvidenceSummary'
+        diagnostics:
+          type: array
+          items:
+            type: string
+            maxLength: 256
+    GovernanceSummaryScope:
+      type: object
+      additionalProperties: false
+      properties:
+        target:
+          $ref: '#/components/schemas/GovernanceTargetRef'
+        project_context:
+          $ref: '#/components/schemas/GovernanceProjectContextRef'
+        release_candidate_ref:
+          type: string
+          maxLength: 256
+        release_decision_package_id:
+          type: string
+          pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+        integration_ref:
+          $ref: '#/components/schemas/GovernanceReleaseIntegrationRef'
+    GovernanceTargetRef:
+      type: object
+      additionalProperties: false
+      required: [type, ref]
+      properties:
+        type:
+          $ref: '#/components/schemas/GovernanceTargetType'
+        ref:
+          type: string
+          maxLength: 256
+    GovernanceProjectContextRef:
+      type: object
+      additionalProperties: false
+      properties:
+        project_ref:
+          type: string
+          maxLength: 256
+        repository_ref:
+          type: string
+          maxLength: 256
+        service_ref:
+          type: string
+          maxLength: 256
+        branch_rules_ref:
+          type: string
+          maxLength: 256
+        release_policy_ref:
+          type: string
+          maxLength: 256
+        release_line_ref:
+          type: string
+          maxLength: 256
+    GovernanceReleaseIntegrationRef:
+      type: object
+      additionalProperties: false
+      required: [domain, kind, ref]
+      properties:
+        domain:
+          type: string
+          maxLength: 64
+        kind:
+          type: string
+          maxLength: 64
+        ref:
+          type: string
+          maxLength: 256
+        status:
+          type: string
+          maxLength: 128
+        summary:
+          type: string
+          maxLength: 2000
+        digest:
+          type: string
+          maxLength: 256
+        observed_at:
+          type: string
+          format: date-time
+        version:
+          type: string
+          maxLength: 128
+        error_code:
+          type: string
+          maxLength: 128
+    GovernanceEvidenceRef:
+      type: object
+      additionalProperties: false
+      required: [kind, ref]
+      properties:
+        kind:
+          $ref: '#/components/schemas/GovernanceEvidenceKind'
+        ref:
+          type: string
+          maxLength: 256
+        summary:
+          type: string
+          maxLength: 2000
+        digest:
+          type: string
+          maxLength: 256
+        retention_class:
+          type: string
+          maxLength: 128
+    GovernanceProviderContextRef:
+      type: object
+      additionalProperties: false
+      properties:
+        work_item_ref:
+          type: string
+          maxLength: 256
+        pull_request_ref:
+          type: string
+          maxLength: 256
+        comment_ref:
+          type: string
+          maxLength: 256
+        review_signal_ref:
+          type: string
+          maxLength: 256
+        provider_operation_ref:
+          type: string
+          maxLength: 256
+        changed_files_summary_ref:
+          type: string
+          maxLength: 256
+    GovernanceRuntimeContextRef:
+      type: object
+      additionalProperties: false
+      properties:
+        slot_ref:
+          type: string
+          maxLength: 256
+        job_ref:
+          type: string
+          maxLength: 256
+        environment_ref:
+          type: string
+          maxLength: 256
+        artifact_ref:
+          type: string
+          maxLength: 256
+        summary_ref:
+          type: string
+          maxLength: 256
+    GovernanceAgentContextRef:
+      type: object
+      additionalProperties: false
+      properties:
+        session_ref:
+          type: string
+          maxLength: 256
+        run_ref:
+          type: string
+          maxLength: 256
+        stage_ref:
+          type: string
+          maxLength: 256
+        acceptance_ref:
+          type: string
+          maxLength: 256
+        role_ref:
+          type: string
+          maxLength: 256
+    GovernanceDecisionSummary:
+      type: object
+      additionalProperties: false
+      required: [kind, attention, id, safe_summary, evidence_refs, integration_refs, provider_refs, runtime_refs, version, created_at, updated_at]
+      properties:
+        kind:
+          $ref: '#/components/schemas/GovernanceDecisionSummaryKind'
+        attention:
+          $ref: '#/components/schemas/GovernanceDecisionAttention'
+        id:
+          type: string
+          maxLength: 256
+        parent_id:
+          type: string
+          maxLength: 256
+        target:
+          $ref: '#/components/schemas/GovernanceTargetRef'
+        project_context:
+          $ref: '#/components/schemas/GovernanceProjectContextRef'
+        release_candidate_ref:
+          type: string
+          maxLength: 256
+        release_decision_package_id:
+          type: string
+          maxLength: 256
+        risk_class:
+          $ref: '#/components/schemas/GovernanceRiskClass'
+        review_outcome:
+          $ref: '#/components/schemas/GovernanceReviewOutcome'
+        gate_request_status:
+          $ref: '#/components/schemas/GovernanceGateRequestStatus'
+        gate_outcome:
+          $ref: '#/components/schemas/GovernanceGateOutcome'
+        release_package_status:
+          $ref: '#/components/schemas/GovernanceReleasePackageStatus'
+        release_decision_status:
+          $ref: '#/components/schemas/GovernanceReleaseDecisionStatus'
+        release_decision_outcome:
+          $ref: '#/components/schemas/GovernanceReleaseDecisionOutcome'
+        blocking_signal_status:
+          $ref: '#/components/schemas/GovernanceBlockingSignalStatus'
+        severity:
+          $ref: '#/components/schemas/GovernanceSignalSeverity'
+        safe_summary:
+          type: string
+          maxLength: 2000
+        evidence_refs:
+          type: array
+          items:
+            $ref: '#/components/schemas/GovernanceEvidenceRef'
+        integration_refs:
+          type: array
+          items:
+            $ref: '#/components/schemas/GovernanceReleaseIntegrationRef'
+        provider_refs:
+          type: array
+          items:
+            $ref: '#/components/schemas/GovernanceProviderContextRef'
+        runtime_refs:
+          type: array
+          items:
+            $ref: '#/components/schemas/GovernanceRuntimeContextRef'
+        agent_context:
+          $ref: '#/components/schemas/GovernanceAgentContextRef'
+        version:
+          type: integer
+          format: int64
+        created_at:
+          type: string
+        updated_at:
+          type: string
+        observed_at:
+          type: string
+          format: date-time
+    GovernanceEvidenceSummary:
+      type: object
+      additionalProperties: false
+      required: [source_kind, source_ref, safe_summary, evidence_refs, integration_refs]
+      properties:
+        source_kind:
+          type: string
+          maxLength: 128
+        source_ref:
+          type: string
+          maxLength: 256
+        status:
+          type: string
+          maxLength: 128
+        outcome:
+          type: string
+          maxLength: 128
+        safe_summary:
+          type: string
+          maxLength: 2000
+        error_code:
+          type: string
+          maxLength: 128
+        digest:
+          type: string
+          maxLength: 256
+        observed_at:
+          type: string
+          format: date-time
+        version:
+          type: string
+          maxLength: 128
+        evidence_refs:
+          type: array
+          items:
+            $ref: '#/components/schemas/GovernanceEvidenceRef'
+        integration_refs:
+          type: array
+          items:
+            $ref: '#/components/schemas/GovernanceReleaseIntegrationRef'
     AgentRunRuntimeStatusResponse:
       type: object
       additionalProperties: false

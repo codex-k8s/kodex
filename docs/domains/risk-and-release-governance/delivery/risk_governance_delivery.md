@@ -107,7 +107,7 @@ approvals:
 | `runtime-and-fleet` | Перед GOV-7 | Runtime/deploy refs принимаются через `RecordReleaseRuntimeEvidence`; прямой consumer для `runtime.job.*` ждёт безопасную привязку события к governance package/gate ref. |
 | `interaction-hub` | Перед GOV-4 | Нужен delivery request/callback контракт для Human gate, reminders и escalation без владения decision state. |
 | `access-and-accounts` | Перед GOV-1 и GOV-4 | Нужны actions и проверки прав для policy management, gate decision и release decision. |
-| `console-and-operations-ux` | После GOV-7j | `GetGovernanceSummary` даёт безопасную доменную сводку для интерфейса владельца и персонала; OpenAPI endpoint в gateway и UI остаются отдельными срезами. |
+| `console-and-operations-ux` | После GOV-7j | `staff-gateway` отдаёт `GET /v1/governance/summary` как тонкий HTTP -> gRPC adapter к `GetGovernanceSummary`; подключение экрана в `web-console` остаётся отдельным frontend-срезом. |
 
 ## Критерии начала кода
 

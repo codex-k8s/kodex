@@ -108,6 +108,19 @@ func agentManagerError(err error) *SafeError {
 	})
 }
 
+func governanceManagerError(err error) *SafeError {
+	return downstreamError(err, downstreamErrorMessages{
+		InvalidRequest:        "request is invalid",
+		Unauthenticated:       "actor context is not authenticated",
+		PermissionDenied:      "access is denied",
+		NotFound:              "governance summary is not found",
+		StaleVersion:          "governance summary version is stale",
+		Conflict:              "governance summary scope is conflicted",
+		RateLimited:           "governance-manager rate limit is active",
+		DownstreamUnavailable: "governance-manager is unavailable",
+	})
+}
+
 type downstreamErrorMessages struct {
 	InvalidRequest        string
 	Unauthenticated       string

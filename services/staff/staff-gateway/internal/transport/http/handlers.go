@@ -10,11 +10,12 @@ import (
 type handlers struct {
 	interactionHub InteractionHubClient
 	agentManager   AgentManagerClient
+	governance     GovernanceManagerClient
 	openAPI        *OpenAPIContract
 }
 
 func newHandlers(clients routeClients, openAPI *OpenAPIContract) handlers {
-	return handlers{interactionHub: clients.interactionHub, agentManager: clients.agentManager, openAPI: openAPI}
+	return handlers{interactionHub: clients.interactionHub, agentManager: clients.agentManager, governance: clients.governance, openAPI: openAPI}
 }
 
 func (h handlers) listOwnerInboxItems(w http.ResponseWriter, req *http.Request) {
@@ -70,6 +71,10 @@ func (h handlers) listAgentRunActivities(w http.ResponseWriter, req *http.Reques
 		return
 	}
 	writeJSON(w, http.StatusOK, output)
+}
+
+func (h handlers) getGovernanceSummary(w http.ResponseWriter, req *http.Request) {
+	handleQuery(w, req, GetGovernanceSummaryRequest, h.governance.GetGovernanceSummary, GovernanceSummaryResponse, governanceManagerError)
 }
 
 func decodeOwnerInboxRespondBody(req *http.Request) (OwnerInboxRespondBody, *SafeError) {

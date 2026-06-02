@@ -150,6 +150,7 @@ spec:
         - specs/openapi/staff-gateway.v1.yaml
         - tools/codegen/openapi/staff-gateway.oapi-codegen.yaml
         - proto/kodex/agents/v1
+        - proto/kodex/governance/v1
         - proto/kodex/interactions/v1
         - libs/go/grpcserver
         - libs/go/servicemain
@@ -803,16 +804,19 @@ spec:
         openapi: specs/openapi/staff-gateway.v1.yaml
         ownerInboxGrpcClient: proto/kodex/interactions/v1/interaction_hub.proto
         runtimeStatusGrpcClient: proto/kodex/agents/v1/agent_manager.proto
+        governanceSummaryGrpcClient: proto/kodex/governance/v1/governance_manager.proto
       dependencies:
         - agent-manager
+        - governance-manager
         - interaction-hub
       implementation:
         businessState: none
-        description: staff edge for owner inbox decisions, agent run runtime summary and activity timeline
-        firstSurface: owner-inbox-list-detail-respond-runtime-status-activity-timeline
+        description: staff edge for owner inbox decisions, agent run runtime summary, activity timeline and governance summary
+        firstSurface: owner-inbox-list-detail-respond-runtime-status-activity-timeline-governance-summary
         downstreamCalls:
           - agent-manager.GetAgentRunRuntimeStatus
           - agent-manager.ListAgentActivities
+          - governance-manager.GetGovernanceSummary
           - interaction-hub.ListOwnerInboxItems
           - interaction-hub.GetOwnerInboxItem
           - interaction-hub.RecordInteractionResponse

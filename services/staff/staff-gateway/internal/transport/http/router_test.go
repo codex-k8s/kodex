@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 
 	agentsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/agents/v1"
+	governancev1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/governance/v1"
 	interactionsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/interactions/v1"
 	"github.com/codex-k8s/kodex/services/staff/staff-gateway/internal/transport/http/generated"
 	"google.golang.org/grpc/codes"
@@ -595,6 +596,73 @@ func TestRouterListAgentRunActivitiesErrorMapping(t *testing.T) {
 	}
 }
 
+func TestRouterGetGovernanceSummaryByReleasePackage(t *testing.T) {
+	packageID := uuid.NewString()
+	client := &fakeInteractionHubClient{governanceSummaryResponse: sampleGovernanceSummaryResponse(packageID)}
+	router := newTestRouter(t, client)
+	req := authenticatedRequest(http.MethodGet, "/v1/governance/summary?release_decision_package_id="+packageID, "")
+	req.Header.Set(headerTraceID, "trace-1")
+	req.Header.Set(headerSessionID, "session-1")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	recorded := client.governanceSummaryRequest
+	if recorded.GetScope().GetReleaseDecisionPackageId() != packageID || recorded.GetMeta().GetActor().GetId() != "owner-1" {
+		t.Fatalf("governance request = %+v, want package scope and actor", recorded)
+	}
+	if recorded.GetMeta().GetRequestContext().GetTraceId() != "trace-1" || recorded.GetMeta().GetRequestContext().GetSessionId() != "session-1" {
+		t.Fatalf("request context = %+v, want trace and session", recorded.GetMeta().GetRequestContext())
+	}
+	var body generated.GovernanceSummaryResponse
+	decodeJSON(t, rec, &body)
+	if body.Summary.Scope.ReleaseDecisionPackageId == nil || *body.Summary.Scope.ReleaseDecisionPackageId != packageID {
+		t.Fatalf("scope = %+v, want package id", body.Summary.Scope)
+	}
+	if len(body.Summary.PendingDecisions) != 1 || body.Summary.PendingDecisions[0].Kind != generated.GovernanceDecisionSummaryKindGateRequest {
+		t.Fatalf("pending decisions = %+v, want gate request", body.Summary.PendingDecisions)
+	}
+	if body.Summary.PendingDecisions[0].AgentContext == nil || body.Summary.PendingDecisions[0].AgentContext.RunRef == nil {
+		t.Fatalf("pending decision = %+v, want agent context", body.Summary.PendingDecisions[0])
+	}
+	if len(body.Summary.EvidenceSummaries) != 1 || body.Summary.EvidenceSummaries[0].SourceKind != "agent.acceptance" {
+		t.Fatalf("evidence summaries = %+v, want agent acceptance", body.Summary.EvidenceSummaries)
+	}
+	for _, forbidden := range []string{"raw payload", "secret-token", "prompt body", "workspace/path", "stdout"} {
+		if strings.Contains(rec.Body.String(), forbidden) {
+			t.Fatalf("response leaked %q marker: %s", forbidden, rec.Body.String())
+		}
+	}
+}
+
+func TestRouterGetGovernanceSummaryRejectsMixedSelectors(t *testing.T) {
+	client := &fakeInteractionHubClient{}
+	router := newTestRouter(t, client)
+	req := authenticatedRequest(http.MethodGet, "/v1/governance/summary?release_decision_package_id="+uuid.NewString()+"&target_type=pull_request&target_ref=pr-1", "")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	assertErrorCode(t, rec, http.StatusBadRequest, generated.SafeErrorCodeInvalidRequest)
+	if client.governanceSummaryRequest != nil {
+		t.Fatalf("downstream was called for mixed governance selectors")
+	}
+}
+
+func TestRouterGetGovernanceSummaryMapsDownstreamUnavailable(t *testing.T) {
+	client := &fakeInteractionHubClient{governanceSummaryErr: status.Error(codes.Unavailable, "unavailable")}
+	router := newTestRouter(t, client)
+	req := authenticatedRequest(http.MethodGet, "/v1/governance/summary?release_decision_package_id="+uuid.NewString(), "")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	assertErrorCode(t, rec, http.StatusServiceUnavailable, generated.SafeErrorCodeDownstreamUnavailable)
+}
+
 func TestRouterRequiresActorContext(t *testing.T) {
 	router := newTestRouter(t, &fakeInteractionHubClient{})
 	req := httptest.NewRequest(http.MethodGet, "/v1/owner-inbox/items?scope_type=project&scope_ref=project-1", nil)
@@ -612,7 +680,7 @@ func newTestRouter(t *testing.T, client *fakeInteractionHubClient) *Router {
 		OpenAPISpecPath: "../../../../../../specs/openapi/staff-gateway.v1.yaml",
 		RequestTimeout:  time.Second,
 		MaxBodyBytes:    65536,
-	}, client, client, nil)
+	}, client, client, client, nil)
 	if err != nil {
 		t.Fatalf("NewRouter(): %v", err)
 	}
@@ -650,21 +718,24 @@ func assertErrorCode(t *testing.T, rec *httptest.ResponseRecorder, statusCode in
 }
 
 type fakeInteractionHubClient struct {
-	listRequest           *interactionsv1.ListOwnerInboxItemsRequest
-	getRequest            *interactionsv1.GetOwnerInboxItemRequest
-	recordRequest         *interactionsv1.RecordInteractionResponseRequest
-	runtimeStatusRequest  *agentsv1.GetAgentRunRuntimeStatusRequest
-	activitiesRequest     *agentsv1.ListAgentActivitiesRequest
-	listResponse          *interactionsv1.ListOwnerInboxItemsResponse
-	getResponse           *interactionsv1.OwnerInboxItemResponse
-	recordResponse        *interactionsv1.InteractionResponseResponse
-	runtimeStatusResponse *agentsv1.AgentRunRuntimeStatusResponse
-	activitiesResponse    *agentsv1.ListAgentActivitiesResponse
-	listErr               error
-	getErr                error
-	recordErr             error
-	runtimeStatusErr      error
-	activitiesErr         error
+	listRequest               *interactionsv1.ListOwnerInboxItemsRequest
+	getRequest                *interactionsv1.GetOwnerInboxItemRequest
+	recordRequest             *interactionsv1.RecordInteractionResponseRequest
+	runtimeStatusRequest      *agentsv1.GetAgentRunRuntimeStatusRequest
+	activitiesRequest         *agentsv1.ListAgentActivitiesRequest
+	governanceSummaryRequest  *governancev1.GetGovernanceSummaryRequest
+	listResponse              *interactionsv1.ListOwnerInboxItemsResponse
+	getResponse               *interactionsv1.OwnerInboxItemResponse
+	recordResponse            *interactionsv1.InteractionResponseResponse
+	runtimeStatusResponse     *agentsv1.AgentRunRuntimeStatusResponse
+	activitiesResponse        *agentsv1.ListAgentActivitiesResponse
+	governanceSummaryResponse *governancev1.GovernanceSummaryResponse
+	listErr                   error
+	getErr                    error
+	recordErr                 error
+	runtimeStatusErr          error
+	activitiesErr             error
+	governanceSummaryErr      error
 }
 
 func (f *fakeInteractionHubClient) ListOwnerInboxItems(_ context.Context, request *interactionsv1.ListOwnerInboxItemsRequest) (*interactionsv1.ListOwnerInboxItemsResponse, error) {
@@ -690,6 +761,11 @@ func (f *fakeInteractionHubClient) GetAgentRunRuntimeStatus(_ context.Context, r
 func (f *fakeInteractionHubClient) ListAgentActivities(_ context.Context, request *agentsv1.ListAgentActivitiesRequest) (*agentsv1.ListAgentActivitiesResponse, error) {
 	f.activitiesRequest = request
 	return f.activitiesResponse, f.activitiesErr
+}
+
+func (f *fakeInteractionHubClient) GetGovernanceSummary(_ context.Context, request *governancev1.GetGovernanceSummaryRequest) (*governancev1.GovernanceSummaryResponse, error) {
+	f.governanceSummaryRequest = request
+	return f.governanceSummaryResponse, f.governanceSummaryErr
 }
 
 func sampleOwnerInboxItem(status interactionsv1.InteractionRequestStatus) *interactionsv1.OwnerInboxItem {
@@ -858,6 +934,74 @@ func sampleAgentActivity(runID string) *agentsv1.AgentActivity {
 		Version:         7,
 		CreatedAt:       now,
 		UpdatedAt:       now,
+	}
+}
+
+func sampleGovernanceSummaryResponse(packageID string) *governancev1.GovernanceSummaryResponse {
+	now := time.Date(2026, 5, 28, 12, 5, 0, 0, time.UTC).Format(time.RFC3339Nano)
+	longUnsafeSummary := strings.Repeat("x", maxGovernanceTextBytes+1) + "secret-token raw payload"
+	return &governancev1.GovernanceSummaryResponse{
+		Summary: &governancev1.GovernanceSummary{
+			Scope: &governancev1.GovernanceSummaryScope{ReleaseDecisionPackageId: stringPtr(packageID)},
+			PendingDecisions: []*governancev1.GovernanceDecisionSummary{{
+				Kind:                     governancev1.GovernanceDecisionSummaryKind_GOVERNANCE_DECISION_SUMMARY_KIND_GATE_REQUEST,
+				Attention:                governancev1.GovernanceDecisionAttention_GOVERNANCE_DECISION_ATTENTION_PENDING,
+				Id:                       "gate-request-1",
+				ReleaseDecisionPackageId: stringPtr(packageID),
+				GateRequestStatus:        governancev1.GateRequestStatus_GATE_REQUEST_STATUS_AWAITING_DECISION,
+				SafeSummary:              "Ожидается решение владельца",
+				EvidenceRefs: []*governancev1.EvidenceRef{{
+					Kind:    governancev1.EvidenceKind_EVIDENCE_KIND_AGENT_ACCEPTANCE,
+					Ref:     "agent-acceptance-1",
+					Summary: "Acceptance требует подтверждения владельца",
+					Digest:  stringPtr("sha256:acceptance"),
+				}},
+				IntegrationRefs: []*governancev1.ReleaseIntegrationRef{{
+					Domain:     "agent",
+					Kind:       "acceptance",
+					Ref:        "agent-acceptance-1",
+					Status:     stringPtr("waiting_owner"),
+					Summary:    stringPtr(longUnsafeSummary),
+					Digest:     stringPtr("sha256:integration"),
+					ObservedAt: stringPtr(now),
+					Version:    stringPtr("7"),
+				}},
+				AgentContext: &governancev1.AgentContextRef{
+					SessionRef:    stringPtr("session-1"),
+					RunRef:        stringPtr("run-1"),
+					StageRef:      stringPtr("stage-1"),
+					AcceptanceRef: stringPtr("agent-acceptance-1"),
+				},
+				Version:    4,
+				CreatedAt:  now,
+				UpdatedAt:  now,
+				ObservedAt: stringPtr(now),
+			}},
+			CompletedDecisions: []*governancev1.GovernanceDecisionSummary{{
+				Kind:           governancev1.GovernanceDecisionSummaryKind_GOVERNANCE_DECISION_SUMMARY_KIND_RISK_ASSESSMENT,
+				Attention:      governancev1.GovernanceDecisionAttention_GOVERNANCE_DECISION_ATTENTION_COMPLETED,
+				Id:             "risk-assessment-1",
+				RiskClass:      governancev1.RiskClass_RISK_CLASS_R2,
+				SafeSummary:    "Изменение требует владельческого gate",
+				ProjectContext: &governancev1.ProjectContextRef{ProjectRef: stringPtr("project-1"), RepositoryRef: stringPtr("repo-1")},
+				ProviderRefs:   []*governancev1.ProviderContextRef{{PullRequestRef: stringPtr("provider-pr-1"), ReviewSignalRef: stringPtr("review-signal-1")}},
+				RuntimeRefs:    []*governancev1.RuntimeContextRef{{JobRef: stringPtr("runtime-job-1"), SummaryRef: stringPtr("runtime-summary-1")}},
+				Version:        3,
+				CreatedAt:      now,
+				UpdatedAt:      now,
+			}},
+			EvidenceSummaries: []*governancev1.GovernanceEvidenceSummary{{
+				SourceKind:  "agent.acceptance",
+				SourceRef:   "agent-acceptance-1",
+				Status:      stringPtr("waiting_owner"),
+				Outcome:     stringPtr("needs_owner_decision"),
+				SafeSummary: "Acceptance ожидает решения владельца",
+				Digest:      stringPtr("sha256:evidence"),
+				ObservedAt:  stringPtr(now),
+				Version:     stringPtr("7"),
+			}},
+			Diagnostics: []string{"partial.provider_refs"},
+		},
 	}
 }
 
