@@ -22,6 +22,8 @@ const (
 	maxActivityRefBytes        = 256
 	maxActivitySafeJSONBytes   = 8192
 	maxActivityIdentifierBytes = 128
+	maxAgentSafeTextBytes      = 2000
+	maxAgentIdentifierBytes    = 256
 	maxGovernanceKindBytes     = 128
 	maxGovernanceRefBytes      = 256
 	maxGovernanceTextBytes     = 2000
@@ -31,6 +33,7 @@ const (
 type OwnerInboxRespondBody = generated.OwnerInboxRespondRequest
 
 var validAgentRunStatuses = enumSet(generated.AgentRunStatusRequested, generated.AgentRunStatusStarting, generated.AgentRunStatusRunning, generated.AgentRunStatusWaiting, generated.AgentRunStatusCompleted, generated.AgentRunStatusFailed, generated.AgentRunStatusCancelled)
+var validAgentSessionStatuses = enumSet(generated.AgentSessionStatusOpen, generated.AgentSessionStatusWaiting, generated.AgentSessionStatusCompleted, generated.AgentSessionStatusFailed, generated.AgentSessionStatusCancelled)
 var validRuntimeObservationStates = enumSet(generated.RuntimeObservationStateNotCreated, generated.RuntimeObservationStateStoredRef, generated.RuntimeObservationStateLive, generated.RuntimeObservationStateUnavailable, generated.RuntimeObservationStateConflict)
 var validAgentRuntimeJobStatuses = enumSet(generated.AgentRuntimeJobStatusPending, generated.AgentRuntimeJobStatusClaimed, generated.AgentRuntimeJobStatusRunning, generated.AgentRuntimeJobStatusSucceeded, generated.AgentRuntimeJobStatusFailed, generated.AgentRuntimeJobStatusCancelled, generated.AgentRuntimeJobStatusTimedOut)
 var validAgentActivityKinds = enumSet(generated.AgentActivityKindLifecycle, generated.AgentActivityKindToolUse, generated.AgentActivityKindToolResult, generated.AgentActivityKindPermission, generated.AgentActivityKindProviderSignal, generated.AgentActivityKindRuntimeSignal, generated.AgentActivityKindCheckpoint, generated.AgentActivityKindOther)
@@ -48,6 +51,76 @@ var validGovernanceReleaseDecisionOutcomes = enumSet(generated.GovernanceRelease
 var validGovernanceBlockingSignalStatuses = enumSet(generated.GovernanceBlockingSignalStatusActive, generated.GovernanceBlockingSignalStatusResolved, generated.GovernanceBlockingSignalStatusDismissed)
 var validGovernanceSignalSeverities = enumSet(generated.GovernanceSignalSeverityInfo, generated.GovernanceSignalSeverityWarning, generated.GovernanceSignalSeverityBlocking, generated.GovernanceSignalSeverityCritical)
 var validGovernanceEvidenceKinds = enumSet(generated.GovernanceEvidenceKindProviderComment, generated.GovernanceEvidenceKindProviderReview, generated.GovernanceEvidenceKindProviderCheck, generated.GovernanceEvidenceKindRuntimeSummary, generated.GovernanceEvidenceKindDocument, generated.GovernanceEvidenceKindRiskFactor, generated.GovernanceEvidenceKindReviewSignal, generated.GovernanceEvidenceKindInteractionCallback, generated.GovernanceEvidenceKindObjectRef, generated.GovernanceEvidenceKindCustom, generated.GovernanceEvidenceKindAgentAcceptance, generated.GovernanceEvidenceKindAgentRun, generated.GovernanceEvidenceKindAgentHumanGate)
+
+func ListAgentSessionsRequest(req *http.Request) (*agentsv1.ListAgentSessionsRequest, *SafeError) {
+	meta, safeErr := agentQueryMeta(req)
+	if safeErr != nil {
+		return nil, safeErr
+	}
+	query := req.URL.Query()
+	scope, safeErr := agentScopeFromQuery(req)
+	if safeErr != nil {
+		return nil, safeErr
+	}
+	status, safeErr := agentSessionStatusFromQuery(query.Get("status"))
+	if safeErr != nil {
+		return nil, safeErr
+	}
+	page, safeErr := agentPageFromQuery(req)
+	if safeErr != nil {
+		return nil, safeErr
+	}
+	return &agentsv1.ListAgentSessionsRequest{
+		Meta:                meta,
+		Scope:               scope,
+		Status:              status,
+		ProviderWorkItemRef: optionalString(query.Get("provider_work_item_ref")),
+		CreatedByActorRef:   optionalString(query.Get("created_by_actor_ref")),
+		CreatedAfter:        optionalString(query.Get("created_after")),
+		CreatedBefore:       optionalString(query.Get("created_before")),
+		Page:                page,
+	}, nil
+}
+
+func ListAgentRunSummariesRequest(req *http.Request) (*agentsv1.ListAgentRunSummariesRequest, *SafeError) {
+	meta, safeErr := agentQueryMeta(req)
+	if safeErr != nil {
+		return nil, safeErr
+	}
+	query := req.URL.Query()
+	scope, safeErr := agentScopeFromQuery(req)
+	if safeErr != nil {
+		return nil, safeErr
+	}
+	status, safeErr := agentRunStatusFromQuery(query.Get("status"))
+	if safeErr != nil {
+		return nil, safeErr
+	}
+	sessionID, safeErr := optionalUUIDFromQuery(query.Get("session_id"), "session id is invalid")
+	if safeErr != nil {
+		return nil, safeErr
+	}
+	roleProfileID, safeErr := optionalUUIDFromQuery(query.Get("role_profile_id"), "role profile id is invalid")
+	if safeErr != nil {
+		return nil, safeErr
+	}
+	page, safeErr := agentPageFromQuery(req)
+	if safeErr != nil {
+		return nil, safeErr
+	}
+	return &agentsv1.ListAgentRunSummariesRequest{
+		Meta:                   meta,
+		Scope:                  scope,
+		SessionId:              sessionID,
+		RoleProfileId:          roleProfileID,
+		Status:                 status,
+		ProviderWorkItemRef:    optionalString(query.Get("provider_work_item_ref")),
+		ProviderPullRequestRef: optionalString(query.Get("provider_pull_request_ref")),
+		CreatedAfter:           optionalString(query.Get("created_after")),
+		CreatedBefore:          optionalString(query.Get("created_before")),
+		Page:                   page,
+	}, nil
+}
 
 func GetAgentRunRuntimeStatusRequest(req *http.Request) (*agentsv1.GetAgentRunRuntimeStatusRequest, *SafeError) {
 	meta, safeErr := agentQueryMeta(req)
@@ -216,23 +289,15 @@ func RecordInteractionResponseRequest(req *http.Request, body OwnerInboxRespondB
 }
 
 func ListOwnerInboxItemsResponse(response *interactionsv1.ListOwnerInboxItemsResponse, requestID string) (generated.OwnerInboxListResponse, *SafeError) {
-	if response == nil {
-		return generated.OwnerInboxListResponse{}, NewSafeError(http.StatusServiceUnavailable, CodeDownstreamUnavailable, "interaction-hub returned empty response", true)
-	}
-	items := make([]generated.OwnerInboxItem, 0, len(response.GetItems()))
-	for _, item := range response.GetItems() {
-		casted, safeErr := ownerInboxItem(item)
-		if safeErr != nil {
-			return generated.OwnerInboxListResponse{}, safeErr
-		}
-		items = append(items, casted)
-	}
-	return generated.OwnerInboxListResponse{
-		RequestId:     requestID,
-		CorrelationId: optionalString(requestID),
-		Items:         items,
-		Page:          pageInfo(response.GetPage()),
-	}, nil
+	return castListEnvelope(
+		response,
+		requestID,
+		"interaction-hub returned empty response",
+		ownerInboxItemsOf,
+		ownerInboxListPageOf,
+		ownerInboxItem,
+		ownerInboxListBuild,
+	)
 }
 
 func OwnerInboxItemResponse(response *interactionsv1.OwnerInboxItemResponse, requestID string) (generated.OwnerInboxItemResponse, *SafeError) {
@@ -259,6 +324,98 @@ func OwnerInboxRespondResponse(response *interactionsv1.InteractionResponseRespo
 		return generated.OwnerInboxRespondResponse{}, safeErr
 	}
 	return generated.OwnerInboxRespondResponse{RequestId: requestID, CorrelationId: optionalString(requestID), Item: item, Response: summary}, nil
+}
+
+func castRepeated[In any, Out any](items []In, cast func(In) (Out, *SafeError)) ([]Out, *SafeError) {
+	result := make([]Out, 0, len(items))
+	for _, item := range items {
+		casted, safeErr := cast(item)
+		if safeErr != nil {
+			return nil, safeErr
+		}
+		result = append(result, casted)
+	}
+	return result, nil
+}
+
+func castListEnvelope[Response any, ProtoItem any, HTTPItem any, HTTPResponse any](
+	response *Response,
+	requestID string,
+	emptyMessage string,
+	itemsOf func(*Response) []ProtoItem,
+	pageOf func(*Response) generated.PageInfo,
+	cast func(ProtoItem) (HTTPItem, *SafeError),
+	build func(string, []HTTPItem, generated.PageInfo) HTTPResponse,
+) (HTTPResponse, *SafeError) {
+	var zero HTTPResponse
+	if response == nil {
+		return zero, NewSafeError(http.StatusServiceUnavailable, CodeDownstreamUnavailable, emptyMessage, true)
+	}
+	items, safeErr := castRepeated(itemsOf(response), cast)
+	if safeErr != nil {
+		return zero, safeErr
+	}
+	return build(requestID, items, pageOf(response)), nil
+}
+
+func ownerInboxItemsOf(response *interactionsv1.ListOwnerInboxItemsResponse) []*interactionsv1.OwnerInboxItem {
+	return response.GetItems()
+}
+
+func ownerInboxListPageOf(response *interactionsv1.ListOwnerInboxItemsResponse) generated.PageInfo {
+	return pageInfo(response.GetPage())
+}
+
+func ownerInboxListBuild(requestID string, items []generated.OwnerInboxItem, page generated.PageInfo) generated.OwnerInboxListResponse {
+	return generated.OwnerInboxListResponse{RequestId: requestID, CorrelationId: optionalString(requestID), Items: items, Page: page}
+}
+
+func agentSessionItemsOf(response *agentsv1.ListAgentSessionsResponse) []*agentsv1.AgentSessionListItem {
+	return response.GetSessions()
+}
+
+func agentSessionListPageOf(response *agentsv1.ListAgentSessionsResponse) generated.PageInfo {
+	return agentPageInfo(response.GetPage())
+}
+
+func agentSessionListBuild(requestID string, sessions []generated.AgentSessionSummary, page generated.PageInfo) generated.AgentSessionListResponse {
+	return generated.AgentSessionListResponse{RequestId: requestID, CorrelationId: optionalString(requestID), Sessions: sessions, Page: page}
+}
+
+func agentRunItemsOf(response *agentsv1.ListAgentRunSummariesResponse) []*agentsv1.AgentRunListItem {
+	return response.GetRuns()
+}
+
+func agentRunListPageOf(response *agentsv1.ListAgentRunSummariesResponse) generated.PageInfo {
+	return agentPageInfo(response.GetPage())
+}
+
+func agentRunListBuild(requestID string, runs []generated.AgentRunSummary, page generated.PageInfo) generated.AgentRunSummaryListResponse {
+	return generated.AgentRunSummaryListResponse{RequestId: requestID, CorrelationId: optionalString(requestID), Runs: runs, Page: page}
+}
+
+func AgentSessionListResponse(response *agentsv1.ListAgentSessionsResponse, requestID string) (generated.AgentSessionListResponse, *SafeError) {
+	return castListEnvelope(
+		response,
+		requestID,
+		"agent-manager returned empty session list response",
+		agentSessionItemsOf,
+		agentSessionListPageOf,
+		agentSessionSummary,
+		agentSessionListBuild,
+	)
+}
+
+func AgentRunSummaryListResponse(response *agentsv1.ListAgentRunSummariesResponse, requestID string) (generated.AgentRunSummaryListResponse, *SafeError) {
+	return castListEnvelope(
+		response,
+		requestID,
+		"agent-manager returned empty run summary list response",
+		agentRunItemsOf,
+		agentRunListPageOf,
+		agentRunSummary,
+		agentRunListBuild,
+	)
 }
 
 func AgentRunRuntimeStatusResponse(response *agentsv1.AgentRunRuntimeStatusResponse, requestID string) (generated.AgentRunRuntimeStatusResponse, *SafeError) {
@@ -427,15 +584,32 @@ func traceID(req *http.Request) string {
 }
 
 func scopeFromQuery(req *http.Request) (*interactionsv1.ScopeRef, *SafeError) {
-	scopeType, safeErr := scopeTypeProto(req.URL.Query().Get("scope_type"))
+	return queryScopeRef(req, scopeTypeProto, interactionScopeRefBuild)
+}
+
+func agentScopeFromQuery(req *http.Request) (*agentsv1.ScopeRef, *SafeError) {
+	return queryScopeRef(req, agentScopeTypeProto, agentScopeRefBuild)
+}
+
+func queryScopeRef[ScopeType any, ScopeRef any](req *http.Request, parse func(string) (ScopeType, *SafeError), build func(ScopeType, string) ScopeRef) (ScopeRef, *SafeError) {
+	var zero ScopeRef
+	scopeType, safeErr := parse(req.URL.Query().Get("scope_type"))
 	if safeErr != nil {
-		return nil, safeErr
+		return zero, safeErr
 	}
 	scopeRef := strings.TrimSpace(req.URL.Query().Get("scope_ref"))
 	if scopeRef == "" {
-		return nil, NewSafeError(http.StatusBadRequest, CodeInvalidRequest, "scope ref is required", false)
+		return zero, NewSafeError(http.StatusBadRequest, CodeInvalidRequest, "scope ref is required", false)
 	}
-	return &interactionsv1.ScopeRef{Type: scopeType, Ref: scopeRef}, nil
+	return build(scopeType, scopeRef), nil
+}
+
+func interactionScopeRefBuild(scopeType interactionsv1.InteractionScopeType, scopeRef string) *interactionsv1.ScopeRef {
+	return &interactionsv1.ScopeRef{Type: scopeType, Ref: scopeRef}
+}
+
+func agentScopeRefBuild(scopeType agentsv1.AgentScopeType, scopeRef string) *agentsv1.ScopeRef {
+	return &agentsv1.ScopeRef{Type: scopeType, Ref: scopeRef}
 }
 
 func scopeTypeProto(value string) (interactionsv1.InteractionScopeType, *SafeError) {
@@ -452,6 +626,21 @@ func scopeTypeProto(value string) (interactionsv1.InteractionScopeType, *SafeErr
 		return interactionsv1.InteractionScopeType_INTERACTION_SCOPE_TYPE_SERVICE, nil
 	default:
 		return interactionsv1.InteractionScopeType_INTERACTION_SCOPE_TYPE_UNSPECIFIED, NewSafeError(http.StatusBadRequest, CodeInvalidRequest, "scope type is invalid", false)
+	}
+}
+
+func agentScopeTypeProto(value string) (agentsv1.AgentScopeType, *SafeError) {
+	switch strings.TrimSpace(value) {
+	case "platform":
+		return agentsv1.AgentScopeType_AGENT_SCOPE_TYPE_PLATFORM, nil
+	case "organization":
+		return agentsv1.AgentScopeType_AGENT_SCOPE_TYPE_ORGANIZATION, nil
+	case "project":
+		return agentsv1.AgentScopeType_AGENT_SCOPE_TYPE_PROJECT, nil
+	case "repository":
+		return agentsv1.AgentScopeType_AGENT_SCOPE_TYPE_REPOSITORY, nil
+	default:
+		return agentsv1.AgentScopeType_AGENT_SCOPE_TYPE_UNSPECIFIED, NewSafeError(http.StatusBadRequest, CodeInvalidRequest, "agent scope type is invalid", false)
 	}
 }
 
@@ -617,6 +806,18 @@ func requestStatusesFromQuery(values []string) ([]interactionsv1.InteractionRequ
 	return result, nil
 }
 
+func agentSessionStatusFromQuery(value string) (*agentsv1.AgentSessionStatus, *SafeError) {
+	return optionalAgentListStatus(value, "AGENT_SESSION_STATUS_", "session status is invalid", agentsv1.AgentSessionStatus_value, func(number int32) agentsv1.AgentSessionStatus {
+		return agentsv1.AgentSessionStatus(number)
+	})
+}
+
+func agentRunStatusFromQuery(value string) (*agentsv1.AgentRunStatus, *SafeError) {
+	return optionalAgentListStatus(value, "AGENT_RUN_STATUS_", "run status is invalid", agentsv1.AgentRunStatus_value, func(number int32) agentsv1.AgentRunStatus {
+		return agentsv1.AgentRunStatus(number)
+	})
+}
+
 func activityKindFromQuery(value string) (*agentsv1.AgentActivityKind, *SafeError) {
 	return optionalAgentProtoEnum(value, "AGENT_ACTIVITY_KIND_", "activity kind is invalid", agentsv1.AgentActivityKind_value, func(number int32) agentsv1.AgentActivityKind {
 		return agentsv1.AgentActivityKind(number)
@@ -719,6 +920,24 @@ func optionalAgentProtoEnum[Target ~int32](value string, prefix string, invalidM
 	}
 	item := convert(number)
 	return &item, nil
+}
+
+func optionalAgentListStatus[Target ~int32](value string, prefix string, invalidMessage string, values map[string]int32, convert func(int32) Target) (*Target, *SafeError) {
+	if strings.TrimSpace(value) == "unspecified" {
+		return nil, nil
+	}
+	return optionalAgentProtoEnum(value, prefix, invalidMessage, values, convert)
+}
+
+func optionalUUIDFromQuery(value string, invalidMessage string) (*string, *SafeError) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return nil, nil
+	}
+	if _, err := uuid.Parse(trimmed); err != nil {
+		return nil, NewSafeError(http.StatusBadRequest, CodeInvalidRequest, invalidMessage, false)
+	}
+	return &trimmed, nil
 }
 
 func pageFromQuery(req *http.Request) (*interactionsv1.PageRequest, *SafeError) {
@@ -827,6 +1046,163 @@ func responseItem(request *interactionsv1.InteractionRequest, response *interact
 		LatestResponse:  protoResponseSummary(response),
 	}
 	return ownerInboxItem(item)
+}
+
+func agentSessionSummary(item *agentsv1.AgentSessionListItem) (generated.AgentSessionSummary, *SafeError) {
+	if item == nil || item.GetSession() == nil {
+		return generated.AgentSessionSummary{}, NewSafeError(http.StatusServiceUnavailable, CodeDownstreamUnavailable, "agent-manager returned empty session summary", true)
+	}
+	session := item.GetSession()
+	if _, err := uuid.Parse(session.GetId()); err != nil {
+		return generated.AgentSessionSummary{}, NewSafeError(http.StatusServiceUnavailable, CodeDownstreamUnavailable, "agent-manager returned invalid session id", true)
+	}
+	createdAt, safeErr := requiredTime(session.GetCreatedAt())
+	if safeErr != nil {
+		return generated.AgentSessionSummary{}, safeErr
+	}
+	updatedAt, safeErr := requiredTime(session.GetUpdatedAt())
+	if safeErr != nil {
+		return generated.AgentSessionSummary{}, safeErr
+	}
+	scope, safeErr := agentScopeRef(session.GetScope())
+	if safeErr != nil {
+		return generated.AgentSessionSummary{}, safeErr
+	}
+	createdByActorRef, safeErr := requiredBoundedString(session.GetCreatedByActorRef(), maxAgentIdentifierBytes, "agent-manager returned invalid session actor ref")
+	if safeErr != nil {
+		return generated.AgentSessionSummary{}, safeErr
+	}
+	if item.GetActiveRunCount() < 0 {
+		return generated.AgentSessionSummary{}, NewSafeError(http.StatusServiceUnavailable, CodeDownstreamUnavailable, "agent-manager returned invalid active run count", true)
+	}
+	output := generated.AgentSessionSummary{
+		SessionId:             session.GetId(),
+		Scope:                 scope,
+		ProviderWorkItemRef:   optionalBoundedString(session.GetProviderWorkItemRef(), maxAgentIdentifierBytes),
+		FlowVersionId:         optionalBoundedString(session.GetFlowVersionId(), maxAgentIdentifierBytes),
+		CurrentStageId:        optionalBoundedString(session.GetCurrentStageId(), maxAgentIdentifierBytes),
+		LatestStateSnapshotId: optionalBoundedString(session.GetLatestStateSnapshotId(), maxAgentIdentifierBytes),
+		Status:                agentSessionStatus(session.GetStatus()),
+		CreatedByActorRef:     createdByActorRef,
+		LatestRunId:           optionalUUIDFromDownstream(item.GetLatestRunId()),
+		LatestRuntimeJobRef:   optionalBoundedString(item.GetLatestRuntimeJobRef(), maxAgentIdentifierBytes),
+		LatestRunSafeSummary:  optionalBoundedString(item.GetLatestRunSafeSummary(), maxAgentSafeTextBytes),
+		ActiveRunCount:        int(item.GetActiveRunCount()),
+		HumanGateWaiting:      item.GetHumanGateWaiting(),
+		HumanGateRequestRef:   optionalBoundedString(item.GetHumanGateRequestRef(), maxAgentIdentifierBytes),
+		HumanGateReasonCode:   optionalBoundedString(item.GetHumanGateReasonCode(), maxAgentIdentifierBytes),
+		FollowUpWaiting:       item.GetFollowUpWaiting(),
+		FollowUpRef:           optionalBoundedString(item.GetFollowUpRef(), maxAgentIdentifierBytes),
+		CreatedAt:             createdAt,
+		UpdatedAt:             updatedAt,
+		Version:               session.GetVersion(),
+	}
+	if item.LatestRunStatus != nil {
+		status := agentRunStatus(item.GetLatestRunStatus())
+		output.LatestRunStatus = &status
+	}
+	if latest := agentActivitySummary(item.GetLatestActivity()); latest != nil {
+		output.LatestActivity = latest
+	}
+	return output, nil
+}
+
+func agentRunSummary(item *agentsv1.AgentRunListItem) (generated.AgentRunSummary, *SafeError) {
+	if item == nil || item.GetRun() == nil {
+		return generated.AgentRunSummary{}, NewSafeError(http.StatusServiceUnavailable, CodeDownstreamUnavailable, "agent-manager returned empty run summary", true)
+	}
+	run := item.GetRun()
+	if _, err := uuid.Parse(run.GetId()); err != nil {
+		return generated.AgentRunSummary{}, NewSafeError(http.StatusServiceUnavailable, CodeDownstreamUnavailable, "agent-manager returned invalid run id", true)
+	}
+	if _, err := uuid.Parse(run.GetSessionId()); err != nil {
+		return generated.AgentRunSummary{}, NewSafeError(http.StatusServiceUnavailable, CodeDownstreamUnavailable, "agent-manager returned invalid run session id", true)
+	}
+	roleProfileID, safeErr := requiredBoundedString(run.GetRoleProfileId(), maxAgentIdentifierBytes, "agent-manager returned invalid role profile id")
+	if safeErr != nil {
+		return generated.AgentRunSummary{}, safeErr
+	}
+	createdAt, safeErr := requiredTime(run.GetCreatedAt())
+	if safeErr != nil {
+		return generated.AgentRunSummary{}, safeErr
+	}
+	updatedAt, safeErr := requiredTime(run.GetUpdatedAt())
+	if safeErr != nil {
+		return generated.AgentRunSummary{}, safeErr
+	}
+	output := generated.AgentRunSummary{
+		RunId:                   run.GetId(),
+		SessionId:               run.GetSessionId(),
+		FlowVersionId:           optionalBoundedString(run.GetFlowVersionId(), maxAgentIdentifierBytes),
+		StageId:                 optionalBoundedString(run.GetStageId(), maxAgentIdentifierBytes),
+		RoleProfileId:           roleProfileID,
+		RoleProfileVersion:      run.GetRoleProfileVersion(),
+		ProviderTarget:          agentProviderTarget(run.GetProviderTarget()),
+		RuntimeSlotRef:          optionalBoundedString(run.GetRuntimeContext().GetSlotRef(), maxAgentIdentifierBytes),
+		RuntimeContextRef:       optionalBoundedString(run.GetRuntimeContext().GetContextRef(), maxAgentIdentifierBytes),
+		RuntimeJobRef:           firstBoundedString(maxAgentIdentifierBytes, item.GetRuntimeJobRef(), run.GetRuntimeContext().GetJobRef()),
+		Status:                  agentRunStatus(run.GetStatus()),
+		ResultSummary:           optionalBoundedString(run.GetResultSummary(), maxAgentSafeTextBytes),
+		FailureCode:             optionalBoundedString(run.GetFailureCode(), maxAgentIdentifierBytes),
+		RuntimeObservationState: runtimeObservationState(item.GetRuntimeObservationState()),
+		RuntimeSafeErrorCode:    optionalBoundedString(item.GetRuntimeSafeErrorCode(), maxAgentIdentifierBytes),
+		RuntimeSafeSummary:      optionalBoundedString(item.GetRuntimeSafeSummary(), maxAgentSafeTextBytes),
+		HumanGateWaiting:        item.GetHumanGateWaiting(),
+		HumanGateRequestRef:     optionalBoundedString(item.GetHumanGateRequestRef(), maxAgentIdentifierBytes),
+		HumanGateReasonCode:     optionalBoundedString(item.GetHumanGateReasonCode(), maxAgentIdentifierBytes),
+		FollowUpWaiting:         item.GetFollowUpWaiting(),
+		LatestActivity:          agentActivitySummary(item.GetLatestActivity()),
+		StartedAt:               optionalTime(run.GetStartedAt()),
+		FinishedAt:              optionalTime(run.GetFinishedAt()),
+		CreatedAt:               createdAt,
+		UpdatedAt:               updatedAt,
+		Version:                 run.GetVersion(),
+	}
+	return output, nil
+}
+
+func agentActivitySummary(input *agentsv1.AgentActivitySummary) *generated.AgentActivitySummary {
+	if input == nil {
+		return nil
+	}
+	updatedAt := optionalTime(input.GetUpdatedAt())
+	if updatedAt == nil {
+		return nil
+	}
+	activityID := boundedString(input.GetActivityId(), maxActivityIdentifierBytes)
+	if activityID == "" {
+		return nil
+	}
+	return &generated.AgentActivitySummary{
+		ActivityId:    activityID,
+		ActivityKind:  agentActivityKind(input.GetActivityKind()),
+		Status:        agentActivityStatus(input.GetStatus()),
+		ToolName:      optionalBoundedString(input.GetToolName(), maxActivityIdentifierBytes),
+		ToolCategory:  optionalBoundedString(input.GetToolCategory(), maxActivityIdentifierBytes),
+		SafeSummary:   optionalBoundedString(input.GetSafeSummary(), maxActivitySafeTextBytes),
+		PayloadDigest: optionalBoundedString(input.GetPayloadDigest(), maxActivityDigestBytes),
+		BoundedError:  optionalBoundedString(input.GetBoundedError(), maxActivitySafeTextBytes),
+		StartedAt:     optionalTime(input.GetStartedAt()),
+		FinishedAt:    optionalTime(input.GetFinishedAt()),
+		UpdatedAt:     *updatedAt,
+		Version:       input.GetVersion(),
+	}
+}
+
+func agentProviderTarget(input *agentsv1.ProviderTargetRef) *generated.ProviderTargetRef {
+	if input == nil {
+		return nil
+	}
+	output := generated.ProviderTargetRef{
+		WorkItemRef:     optionalBoundedString(input.GetWorkItemRef(), maxAgentIdentifierBytes),
+		PullRequestRef:  optionalBoundedString(input.GetPullRequestRef(), maxAgentIdentifierBytes),
+		CommentRef:      optionalBoundedString(input.GetCommentRef(), maxAgentIdentifierBytes),
+		ReviewSignalRef: optionalBoundedString(input.GetReviewSignalRef(), maxAgentIdentifierBytes),
+	}
+	if output.WorkItemRef == nil && output.PullRequestRef == nil && output.CommentRef == nil && output.ReviewSignalRef == nil {
+		return nil
+	}
+	return &output
 }
 
 func agentRunRuntimeStatus(status *agentsv1.AgentRunRuntimeStatus) (generated.AgentRunRuntimeStatus, *SafeError) {
@@ -1135,6 +1511,30 @@ func governanceAgentContextRef(input *governancev1.AgentContextRef) *generated.G
 
 func agentRunStatus(value agentsv1.AgentRunStatus) generated.AgentRunStatus {
 	return protoEnum(value.String(), "AGENT_RUN_STATUS_", generated.AgentRunStatusUnspecified, validAgentRunStatuses)
+}
+
+func agentSessionStatus(value agentsv1.AgentSessionStatus) generated.AgentSessionStatus {
+	return protoEnum(value.String(), "AGENT_SESSION_STATUS_", generated.AgentSessionStatusUnspecified, validAgentSessionStatuses)
+}
+
+func agentScopeRef(input *agentsv1.ScopeRef) (generated.ScopeRef, *SafeError) {
+	if input == nil || strings.TrimSpace(input.GetRef()) == "" {
+		return generated.ScopeRef{}, NewSafeError(http.StatusServiceUnavailable, CodeDownstreamUnavailable, "agent-manager returned invalid scope ref", true)
+	}
+	var scopeType generated.ScopeType
+	switch input.GetType() {
+	case agentsv1.AgentScopeType_AGENT_SCOPE_TYPE_PLATFORM:
+		scopeType = generated.ScopeTypePlatform
+	case agentsv1.AgentScopeType_AGENT_SCOPE_TYPE_ORGANIZATION:
+		scopeType = generated.ScopeTypeOrganization
+	case agentsv1.AgentScopeType_AGENT_SCOPE_TYPE_PROJECT:
+		scopeType = generated.ScopeTypeProject
+	case agentsv1.AgentScopeType_AGENT_SCOPE_TYPE_REPOSITORY:
+		scopeType = generated.ScopeTypeRepository
+	default:
+		return generated.ScopeRef{}, NewSafeError(http.StatusServiceUnavailable, CodeDownstreamUnavailable, "agent-manager returned invalid scope type", true)
+	}
+	return generated.ScopeRef{Type: scopeType, Ref: input.GetRef()}, nil
 }
 
 func runtimeObservationState(value agentsv1.AgentRunRuntimeObservationState) generated.RuntimeObservationState {
@@ -1457,6 +1857,26 @@ func optionalBoundedString(value string, maxBytes int) *string {
 		return nil
 	}
 	return &trimmed
+}
+
+func optionalUUIDFromDownstream(value string) *string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return nil
+	}
+	if _, err := uuid.Parse(trimmed); err != nil {
+		return nil
+	}
+	return &trimmed
+}
+
+func firstBoundedString(maxBytes int, values ...string) *string {
+	for _, value := range values {
+		if bounded := optionalBoundedString(value, maxBytes); bounded != nil {
+			return bounded
+		}
+	}
+	return nil
 }
 
 func boundedString(value string, maxBytes int) string {

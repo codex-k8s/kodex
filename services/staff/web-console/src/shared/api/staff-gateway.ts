@@ -2,15 +2,23 @@ import {
   getAgentRunRuntimeStatus,
   getOwnerInboxItem,
   listAgentRunActivities,
+  listAgentRunSummaries,
+  listAgentSessions,
   listOwnerInboxItems,
   respondOwnerInboxItem,
   type AgentActivityKind,
   type AgentActivityStatus,
+  type AgentRunStatus,
   type AgentRunActivitiesResponse,
   type AgentRunRuntimeStatusResponse,
+  type AgentRunSummaryListResponse,
+  type AgentSessionListResponse,
+  type AgentSessionStatus,
   type GetAgentRunRuntimeStatusData,
   type GetOwnerInboxItemData,
   type ListAgentRunActivitiesData,
+  type ListAgentRunSummariesData,
+  type ListAgentSessionsData,
   type ListOwnerInboxItemsData,
   type OwnerInboxItemResponse,
   type OwnerInboxListResponse,
@@ -21,7 +29,7 @@ import {
   type RequestStatus,
 } from './generated';
 import { client as staffGatewayClient } from './generated/client.gen';
-import { type OperatorContext, operationHeaders } from './context';
+import { isAgentScopeType, type OperatorContext, operationHeaders } from './context';
 import { normalizeApiError } from './errors';
 import { getAcceptLanguage } from '@/shared/lib/locale';
 
@@ -53,6 +61,32 @@ export type ActivityTimelineQuery = {
   pageSize?: number;
   pageToken?: string;
 };
+
+export type AgentSessionListQuery = {
+  status?: AgentSessionStatus;
+  providerWorkItemRef?: string;
+  createdByActorRef?: string;
+  createdAfter?: string;
+  createdBefore?: string;
+  pageSize?: number;
+  pageToken?: string;
+};
+
+export type AgentRunSummaryListQuery = {
+  sessionId?: string;
+  roleProfileId?: string;
+  status?: AgentRunStatus;
+  providerWorkItemRef?: string;
+  providerPullRequestRef?: string;
+  createdAfter?: string;
+  createdBefore?: string;
+  pageSize?: number;
+  pageToken?: string;
+};
+
+export function canQueryAgentScope(context: OperatorContext): boolean {
+  return isAgentScopeType(context.scopeType);
+}
 
 export async function fetchOwnerInboxItems(
   context: OperatorContext,
@@ -121,6 +155,68 @@ export async function sendOwnerInboxResponse(
   }
 }
 
+export async function fetchAgentSessions(
+  context: OperatorContext,
+  query: AgentSessionListQuery,
+): Promise<AgentSessionListResponse> {
+  if (!isAgentScopeType(context.scopeType)) {
+    throw unsupportedAgentScopeError();
+  }
+  try {
+    const response = await listAgentSessions({
+      client: staffGatewayClient,
+      throwOnError: true,
+      headers: operationHeaders<ListAgentSessionsData['headers']>(context),
+      query: {
+        scope_type: context.scopeType,
+        scope_ref: context.scopeRef.trim(),
+        status: query.status,
+        provider_work_item_ref: query.providerWorkItemRef,
+        created_by_actor_ref: query.createdByActorRef,
+        created_after: query.createdAfter,
+        created_before: query.createdBefore,
+        page_size: query.pageSize,
+        page_token: query.pageToken,
+      },
+    });
+    return response.data;
+  } catch (error) {
+    throw normalizeApiError(error);
+  }
+}
+
+export async function fetchAgentRunSummaries(
+  context: OperatorContext,
+  query: AgentRunSummaryListQuery,
+): Promise<AgentRunSummaryListResponse> {
+  if (!isAgentScopeType(context.scopeType)) {
+    throw unsupportedAgentScopeError();
+  }
+  try {
+    const response = await listAgentRunSummaries({
+      client: staffGatewayClient,
+      throwOnError: true,
+      headers: operationHeaders<ListAgentRunSummariesData['headers']>(context),
+      query: {
+        scope_type: context.scopeType,
+        scope_ref: context.scopeRef.trim(),
+        session_id: query.sessionId,
+        role_profile_id: query.roleProfileId,
+        status: query.status,
+        provider_work_item_ref: query.providerWorkItemRef,
+        provider_pull_request_ref: query.providerPullRequestRef,
+        created_after: query.createdAfter,
+        created_before: query.createdBefore,
+        page_size: query.pageSize,
+        page_token: query.pageToken,
+      },
+    });
+    return response.data;
+  } catch (error) {
+    throw normalizeApiError(error);
+  }
+}
+
 export async function fetchAgentRunRuntimeStatus(
   context: OperatorContext,
   runId: string,
@@ -136,6 +232,10 @@ export async function fetchAgentRunRuntimeStatus(
   } catch (error) {
     throw normalizeApiError(error);
   }
+}
+
+function unsupportedAgentScopeError(): Error {
+  return new Error('unsupported_agent_scope');
 }
 
 export async function fetchAgentRunActivities(

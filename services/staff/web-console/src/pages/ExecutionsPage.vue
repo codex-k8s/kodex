@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 
-import type { AgentActivityKind, AgentActivityStatus } from '@/shared/api/generated';
+import type { AgentActivityKind, AgentActivityStatus, AgentRunStatus, AgentSessionStatus } from '@/shared/api/generated';
 import { useExecutionsStore } from '@/features/executions/store';
 import { useOperatorContextStore } from '@/features/operator-context/store';
 import { compactRef, formatDateTime, formatDurationMs, prettySafeJSON } from '@/shared/lib/format';
@@ -35,11 +35,29 @@ const activityStatusOptions: AgentActivityStatus[] = [
   'cancelled',
   'skipped',
 ];
+const runStatusOptions: AgentRunStatus[] = [
+  'requested',
+  'starting',
+  'running',
+  'waiting',
+  'completed',
+  'failed',
+  'cancelled',
+];
+const sessionStatusOptions: AgentSessionStatus[] = ['open', 'waiting', 'completed', 'failed', 'cancelled'];
 
 const runtimeStatus = computed(() => executions.runtimeStatus);
+const selectedRun = computed(() => executions.runs.find((run) => run.run_id === executions.runId.trim()));
 const canLoad = computed(
   () => context.isReady && executions.runId.trim().length > 0 && !executions.isLoading,
 );
+const canLoadOverview = computed(() => context.isReady && !executions.isLoadingList);
+
+onMounted(() => {
+  if (context.isReady && executions.runs.length === 0 && !executions.unsupportedAgentScope) {
+    void executions.loadOverview(context.asContext);
+  }
+});
 
 function statusTone(status?: string): 'neutral' | 'success' | 'warning' | 'error' | 'info' {
   if (status === 'succeeded' || status === 'completed') {
@@ -63,6 +81,27 @@ function loadRun(pageToken?: string) {
   }
   void executions.load(context.asContext, pageToken);
 }
+
+function loadOverview() {
+  if (!context.isReady || executions.isLoadingList) {
+    return;
+  }
+  void executions.loadOverview(context.asContext);
+}
+
+function loadMoreRuns() {
+  if (!context.isReady || executions.isLoadingList || !executions.runNextPageToken) {
+    return;
+  }
+  void executions.loadMoreRuns(context.asContext);
+}
+
+function selectRun(runId: string) {
+  if (!context.isReady || executions.isLoading) {
+    return;
+  }
+  void executions.selectRun(context.asContext, runId);
+}
 </script>
 
 <template>
@@ -75,9 +114,9 @@ function loadRun(pageToken?: string) {
       <v-btn
         color="primary"
         prepend-icon="mdi-refresh"
-        :disabled="!canLoad"
-        :loading="executions.isLoading"
-        @click="loadRun()"
+        :disabled="!canLoadOverview"
+        :loading="executions.isLoadingList"
+        @click="loadOverview"
       >
         {{ t('app.refresh') }}
       </v-btn>
@@ -86,13 +125,16 @@ function loadRun(pageToken?: string) {
     <v-alert v-if="!context.isReady" type="warning" variant="tonal">
       {{ t('context.missing') }}
     </v-alert>
-    <ApiErrorAlert :error="executions.error" :retry-label="t('app.retry')" @retry="loadRun()" />
+    <v-alert v-if="executions.unsupportedAgentScope" type="warning" variant="tonal">
+      {{ t('executions.unsupportedScope') }}
+    </v-alert>
+    <ApiErrorAlert :error="executions.error" :retry-label="t('app.retry')" @retry="loadOverview" />
 
     <v-card class="surface-panel pa-4">
       <SurfaceStateCard
-        icon="mdi-magnify-scan"
-        :title="t('executions.lookupTitle')"
-        :text="t('executions.lookupText')"
+        icon="mdi-format-list-bulleted-square"
+        :title="t('executions.listTitle')"
+        :text="t('executions.listText')"
         :status="t('app.live')"
         tone="live"
       />
@@ -100,29 +142,116 @@ function loadRun(pageToken?: string) {
 
     <section class="summary-grid">
       <v-card class="surface-panel summary-card">
-        <div class="meta-text">{{ t('executions.status') }}</div>
-        <StatusChip
-          :label="t(`statuses.${runtimeStatus?.run_status ?? 'unspecified'}`)"
-          :tone="statusTone(runtimeStatus?.run_status)"
-        />
+        <div class="meta-text">{{ t('executions.sessions') }}</div>
+        <div class="summary-value">{{ executions.sessions.length }}</div>
       </v-card>
       <v-card class="surface-panel summary-card">
-        <div class="meta-text">{{ t('executions.job') }}</div>
-        <div class="summary-value">{{ compactRef(runtimeStatus?.runtime_job_ref) }}</div>
+        <div class="meta-text">{{ t('executions.activeRuns') }}</div>
+        <div class="summary-value">{{ executions.activeRunCount }}</div>
       </v-card>
       <v-card class="surface-panel summary-card">
-        <div class="meta-text">{{ t('executions.observation') }}</div>
+        <div class="meta-text">{{ t('executions.latestRun') }}</div>
         <StatusChip
-          :label="t(`statuses.${runtimeStatus?.observation_state ?? 'unspecified'}`)"
-          tone="info"
+          :label="t(`statuses.${executions.latestRun?.status ?? 'unspecified'}`)"
+          :tone="statusTone(executions.latestRun?.status)"
         />
       </v-card>
       <v-card class="surface-panel summary-card">
         <div class="meta-text">{{ t('executions.humanGate') }}</div>
-        <StatusChip
-          :label="runtimeStatus?.human_gate_waiting ? t('statuses.waiting') : t('statuses.unspecified')"
-          :tone="runtimeStatus?.human_gate_waiting ? 'warning' : 'neutral'"
-        />
+        <div class="summary-value">{{ executions.humanGateRunCount }}</div>
+      </v-card>
+    </section>
+
+    <v-card class="surface-panel pa-4">
+      <div class="section-title mb-3">{{ t('executions.listFilters') }}</div>
+      <div class="filter-row">
+        <v-select
+          v-model="executions.filters.sessionStatus"
+          :items="sessionStatusOptions"
+          clearable
+          :label="t('executions.sessionStatus')"
+        >
+          <template #item="{ props, item }">
+            <v-list-item v-bind="props" :title="t(`statuses.${item.value}`)" />
+          </template>
+          <template #selection="{ item }">{{ t(`statuses.${item.value}`) }}</template>
+        </v-select>
+        <v-select
+          v-model="executions.filters.runStatus"
+          :items="runStatusOptions"
+          clearable
+          :label="t('executions.runStatus')"
+        >
+          <template #item="{ props, item }">
+            <v-list-item v-bind="props" :title="t(`statuses.${item.value}`)" />
+          </template>
+          <template #selection="{ item }">{{ t(`statuses.${item.value}`) }}</template>
+        </v-select>
+        <v-btn
+          color="primary"
+          prepend-icon="mdi-format-list-bulleted"
+          :disabled="!canLoadOverview"
+          :loading="executions.isLoadingList"
+          @click="loadOverview"
+        >
+          {{ t('executions.loadLists') }}
+        </v-btn>
+      </div>
+    </v-card>
+
+    <section class="list-layout">
+      <v-card class="surface-panel pa-5">
+        <div class="section-title">{{ t('executions.sessions') }}</div>
+        <v-progress-linear v-if="executions.isLoadingList" class="mt-4" indeterminate color="primary" />
+        <div v-if="executions.sessions.length > 0" class="summary-list">
+          <article v-for="session in executions.sessions" :key="session.session_id" class="summary-list__item">
+            <div>
+              <div class="item-title">{{ compactRef(session.session_id) }}</div>
+              <div class="meta-text">{{ session.latest_run_safe_summary ?? compactRef(session.provider_work_item_ref) }}</div>
+              <div class="meta-text">{{ formatDateTime(session.updated_at) }}</div>
+            </div>
+            <div class="summary-list__actions">
+              <StatusChip :label="t(`statuses.${session.status}`)" :tone="statusTone(session.status)" />
+              <v-chip v-if="session.human_gate_waiting" size="small" color="warning" variant="tonal" label>
+                {{ t('executions.humanGate') }}
+              </v-chip>
+            </div>
+          </article>
+        </div>
+        <EmptyState v-else icon="mdi-account-clock-outline" :title="t('executions.noSessions')" />
+      </v-card>
+
+      <v-card class="surface-panel pa-5">
+        <div class="section-title">{{ t('executions.runs') }}</div>
+        <v-progress-linear v-if="executions.isLoadingList" class="mt-4" indeterminate color="primary" />
+        <div v-if="executions.runs.length > 0" class="summary-list">
+          <button
+            v-for="run in executions.runs"
+            :key="run.run_id"
+            class="summary-list__item summary-list__button"
+            :class="{ 'summary-list__button--selected': run.run_id === executions.runId }"
+            type="button"
+            @click="selectRun(run.run_id)"
+          >
+            <div>
+              <div class="item-title">{{ compactRef(run.run_id) }}</div>
+              <div class="meta-text">{{ run.result_summary ?? run.runtime_safe_summary ?? compactRef(run.runtime_job_ref) }}</div>
+              <div class="meta-text">{{ formatDateTime(run.updated_at) }}</div>
+            </div>
+            <div class="summary-list__actions">
+              <StatusChip :label="t(`statuses.${run.status}`)" :tone="statusTone(run.status)" />
+              <v-chip v-if="run.human_gate_waiting" size="small" color="warning" variant="tonal" label>
+                {{ t('executions.humanGate') }}
+              </v-chip>
+            </div>
+          </button>
+        </div>
+        <EmptyState v-else icon="mdi-clipboard-text-clock-outline" :title="t('executions.noRuns')" />
+        <div class="list-footer">
+          <v-btn variant="tonal" :disabled="!executions.runNextPageToken" @click="loadMoreRuns">
+            {{ t('inbox.nextPage') }}
+          </v-btn>
+        </div>
       </v-card>
     </section>
 
@@ -176,6 +305,10 @@ function loadRun(pageToken?: string) {
             <div>
               <div class="meta-text">Run</div>
               <div>{{ compactRef(runtimeStatus.run_id) }}</div>
+            </div>
+            <div v-if="selectedRun">
+              <div class="meta-text">{{ t('executions.role') }}</div>
+              <div>{{ compactRef(selectedRun.role_profile_id) }}</div>
             </div>
             <div>
               <div class="meta-text">Version</div>
@@ -264,10 +397,6 @@ function loadRun(pageToken?: string) {
         </div>
       </v-card>
     </section>
-
-    <v-alert type="info" variant="tonal">
-      {{ t('executions.listUnavailable') }}
-    </v-alert>
   </div>
 </template>
 
@@ -313,7 +442,48 @@ function loadRun(pageToken?: string) {
   align-items: center;
   display: grid;
   gap: 12px;
-  grid-template-columns: minmax(320px, 1.2fr) minmax(180px, 0.6fr) minmax(180px, 0.6fr) auto;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.list-layout {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(320px, 0.9fr) minmax(0, 1.1fr);
+}
+
+.summary-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.summary-list__item {
+  align-items: flex-start;
+  background: #ffffff;
+  border: 1px solid #e4e7ec;
+  border-radius: 8px;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 12px;
+  text-align: left;
+  width: 100%;
+}
+
+.summary-list__button {
+  cursor: pointer;
+}
+
+.summary-list__button--selected {
+  border-color: #ff5a14;
+  box-shadow: 0 0 0 2px rgb(255 90 20 / 12%);
+}
+
+.summary-list__actions {
+  align-items: flex-end;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .execution-layout {
@@ -405,6 +575,7 @@ function loadRun(pageToken?: string) {
 
 @media (max-width: 1180px) {
   .summary-grid,
+  .list-layout,
   .filter-row,
   .execution-layout {
     grid-template-columns: 1fr;

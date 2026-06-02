@@ -57,6 +57,24 @@ const (
 	AgentRuntimeJobStatusUnspecified AgentRuntimeJobStatus = "unspecified"
 )
 
+// Defines values for AgentScopeType.
+const (
+	AgentScopeTypeOrganization AgentScopeType = "organization"
+	AgentScopeTypePlatform     AgentScopeType = "platform"
+	AgentScopeTypeProject      AgentScopeType = "project"
+	AgentScopeTypeRepository   AgentScopeType = "repository"
+)
+
+// Defines values for AgentSessionStatus.
+const (
+	AgentSessionStatusCancelled   AgentSessionStatus = "cancelled"
+	AgentSessionStatusCompleted   AgentSessionStatus = "completed"
+	AgentSessionStatusFailed      AgentSessionStatus = "failed"
+	AgentSessionStatusOpen        AgentSessionStatus = "open"
+	AgentSessionStatusUnspecified AgentSessionStatus = "unspecified"
+	AgentSessionStatusWaiting     AgentSessionStatus = "waiting"
+)
+
 // Defines values for CallbackProcessingStatus.
 const (
 	CallbackProcessingStatusAccepted    CallbackProcessingStatus = "accepted"
@@ -335,6 +353,14 @@ const (
 	ActorTypeHeaderUser            ActorTypeHeader = "user"
 )
 
+// Defines values for ListAgentRunSummariesParamsXKodexActorType.
+const (
+	ListAgentRunSummariesParamsXKodexActorTypeAgent           ListAgentRunSummariesParamsXKodexActorType = "agent"
+	ListAgentRunSummariesParamsXKodexActorTypeExternalAccount ListAgentRunSummariesParamsXKodexActorType = "external_account"
+	ListAgentRunSummariesParamsXKodexActorTypeService         ListAgentRunSummariesParamsXKodexActorType = "service"
+	ListAgentRunSummariesParamsXKodexActorTypeUser            ListAgentRunSummariesParamsXKodexActorType = "user"
+)
+
 // Defines values for ListAgentRunActivitiesParamsXKodexActorType.
 const (
 	ListAgentRunActivitiesParamsXKodexActorTypeAgent           ListAgentRunActivitiesParamsXKodexActorType = "agent"
@@ -349,6 +375,14 @@ const (
 	GetAgentRunRuntimeStatusParamsXKodexActorTypeExternalAccount GetAgentRunRuntimeStatusParamsXKodexActorType = "external_account"
 	GetAgentRunRuntimeStatusParamsXKodexActorTypeService         GetAgentRunRuntimeStatusParamsXKodexActorType = "service"
 	GetAgentRunRuntimeStatusParamsXKodexActorTypeUser            GetAgentRunRuntimeStatusParamsXKodexActorType = "user"
+)
+
+// Defines values for ListAgentSessionsParamsXKodexActorType.
+const (
+	ListAgentSessionsParamsXKodexActorTypeAgent           ListAgentSessionsParamsXKodexActorType = "agent"
+	ListAgentSessionsParamsXKodexActorTypeExternalAccount ListAgentSessionsParamsXKodexActorType = "external_account"
+	ListAgentSessionsParamsXKodexActorTypeService         ListAgentSessionsParamsXKodexActorType = "service"
+	ListAgentSessionsParamsXKodexActorTypeUser            ListAgentSessionsParamsXKodexActorType = "user"
 )
 
 // Defines values for GetGovernanceSummaryParamsXKodexActorType.
@@ -394,6 +428,22 @@ type AgentActivityKind string
 
 // AgentActivityStatus defines model for AgentActivityStatus.
 type AgentActivityStatus string
+
+// AgentActivitySummary defines model for AgentActivitySummary.
+type AgentActivitySummary struct {
+	ActivityId    string              `json:"activity_id"`
+	ActivityKind  AgentActivityKind   `json:"activity_kind"`
+	BoundedError  *string             `json:"bounded_error,omitempty"`
+	FinishedAt    *time.Time          `json:"finished_at,omitempty"`
+	PayloadDigest *string             `json:"payload_digest,omitempty"`
+	SafeSummary   *string             `json:"safe_summary,omitempty"`
+	StartedAt     *time.Time          `json:"started_at,omitempty"`
+	Status        AgentActivityStatus `json:"status"`
+	ToolCategory  *string             `json:"tool_category,omitempty"`
+	ToolName      *string             `json:"tool_name,omitempty"`
+	UpdatedAt     time.Time           `json:"updated_at"`
+	Version       int64               `json:"version"`
+}
 
 // AgentRunActivitiesResponse defines model for AgentRunActivitiesResponse.
 type AgentRunActivitiesResponse struct {
@@ -470,8 +520,86 @@ type AgentRunRuntimeStatusResponse struct {
 // AgentRunStatus defines model for AgentRunStatus.
 type AgentRunStatus string
 
+// AgentRunSummary defines model for AgentRunSummary.
+type AgentRunSummary struct {
+	CreatedAt               time.Time               `json:"created_at"`
+	FailureCode             *string                 `json:"failure_code,omitempty"`
+	FinishedAt              *time.Time              `json:"finished_at,omitempty"`
+	FlowVersionId           *string                 `json:"flow_version_id,omitempty"`
+	FollowUpWaiting         bool                    `json:"follow_up_waiting"`
+	HumanGateReasonCode     *string                 `json:"human_gate_reason_code,omitempty"`
+	HumanGateRequestRef     *string                 `json:"human_gate_request_ref,omitempty"`
+	HumanGateWaiting        bool                    `json:"human_gate_waiting"`
+	LatestActivity          *AgentActivitySummary   `json:"latest_activity,omitempty"`
+	ProviderTarget          *ProviderTargetRef      `json:"provider_target,omitempty"`
+	ResultSummary           *string                 `json:"result_summary,omitempty"`
+	RoleProfileId           string                  `json:"role_profile_id"`
+	RoleProfileVersion      int64                   `json:"role_profile_version"`
+	RunId                   string                  `json:"run_id"`
+	RuntimeContextRef       *string                 `json:"runtime_context_ref,omitempty"`
+	RuntimeJobRef           *string                 `json:"runtime_job_ref,omitempty"`
+	RuntimeObservationState RuntimeObservationState `json:"runtime_observation_state"`
+	RuntimeSafeErrorCode    *string                 `json:"runtime_safe_error_code,omitempty"`
+	RuntimeSafeSummary      *string                 `json:"runtime_safe_summary,omitempty"`
+	RuntimeSlotRef          *string                 `json:"runtime_slot_ref,omitempty"`
+	SessionId               string                  `json:"session_id"`
+	StageId                 *string                 `json:"stage_id,omitempty"`
+	StartedAt               *time.Time              `json:"started_at,omitempty"`
+	Status                  AgentRunStatus          `json:"status"`
+	UpdatedAt               time.Time               `json:"updated_at"`
+	Version                 int64                   `json:"version"`
+}
+
+// AgentRunSummaryListResponse defines model for AgentRunSummaryListResponse.
+type AgentRunSummaryListResponse struct {
+	CorrelationId *string           `json:"correlation_id,omitempty"`
+	Page          PageInfo          `json:"page"`
+	RequestId     string            `json:"request_id"`
+	Runs          []AgentRunSummary `json:"runs"`
+}
+
 // AgentRuntimeJobStatus defines model for AgentRuntimeJobStatus.
 type AgentRuntimeJobStatus string
+
+// AgentScopeType defines model for AgentScopeType.
+type AgentScopeType string
+
+// AgentSessionListResponse defines model for AgentSessionListResponse.
+type AgentSessionListResponse struct {
+	CorrelationId *string               `json:"correlation_id,omitempty"`
+	Page          PageInfo              `json:"page"`
+	RequestId     string                `json:"request_id"`
+	Sessions      []AgentSessionSummary `json:"sessions"`
+}
+
+// AgentSessionStatus defines model for AgentSessionStatus.
+type AgentSessionStatus string
+
+// AgentSessionSummary defines model for AgentSessionSummary.
+type AgentSessionSummary struct {
+	ActiveRunCount        int                   `json:"active_run_count"`
+	CreatedAt             time.Time             `json:"created_at"`
+	CreatedByActorRef     string                `json:"created_by_actor_ref"`
+	CurrentStageId        *string               `json:"current_stage_id,omitempty"`
+	FlowVersionId         *string               `json:"flow_version_id,omitempty"`
+	FollowUpRef           *string               `json:"follow_up_ref,omitempty"`
+	FollowUpWaiting       bool                  `json:"follow_up_waiting"`
+	HumanGateReasonCode   *string               `json:"human_gate_reason_code,omitempty"`
+	HumanGateRequestRef   *string               `json:"human_gate_request_ref,omitempty"`
+	HumanGateWaiting      bool                  `json:"human_gate_waiting"`
+	LatestActivity        *AgentActivitySummary `json:"latest_activity,omitempty"`
+	LatestRunId           *string               `json:"latest_run_id,omitempty"`
+	LatestRunSafeSummary  *string               `json:"latest_run_safe_summary,omitempty"`
+	LatestRunStatus       *AgentRunStatus       `json:"latest_run_status,omitempty"`
+	LatestRuntimeJobRef   *string               `json:"latest_runtime_job_ref,omitempty"`
+	LatestStateSnapshotId *string               `json:"latest_state_snapshot_id,omitempty"`
+	ProviderWorkItemRef   *string               `json:"provider_work_item_ref,omitempty"`
+	Scope                 ScopeRef              `json:"scope"`
+	SessionId             string                `json:"session_id"`
+	Status                AgentSessionStatus    `json:"status"`
+	UpdatedAt             time.Time             `json:"updated_at"`
+	Version               int64                 `json:"version"`
+}
 
 // CallbackProcessingStatus defines model for CallbackProcessingStatus.
 type CallbackProcessingStatus string
@@ -799,6 +927,14 @@ type PageInfo struct {
 	NextPageToken *string `json:"next_page_token,omitempty"`
 }
 
+// ProviderTargetRef defines model for ProviderTargetRef.
+type ProviderTargetRef struct {
+	CommentRef      *string `json:"comment_ref,omitempty"`
+	PullRequestRef  *string `json:"pull_request_ref,omitempty"`
+	ReviewSignalRef *string `json:"review_signal_ref,omitempty"`
+	WorkItemRef     *string `json:"work_item_ref,omitempty"`
+}
+
 // RequestKind defines model for RequestKind.
 type RequestKind string
 
@@ -859,6 +995,24 @@ type AgentActivityKindQuery = AgentActivityKind
 // AgentActivityStatusQuery defines model for AgentActivityStatusQuery.
 type AgentActivityStatusQuery = AgentActivityStatus
 
+// AgentRoleProfileIdQuery defines model for AgentRoleProfileIdQuery.
+type AgentRoleProfileIdQuery = string
+
+// AgentRunSessionIdQuery defines model for AgentRunSessionIdQuery.
+type AgentRunSessionIdQuery = string
+
+// AgentRunStatusQuery defines model for AgentRunStatusQuery.
+type AgentRunStatusQuery = AgentRunStatus
+
+// AgentScopeRefQuery defines model for AgentScopeRefQuery.
+type AgentScopeRefQuery = string
+
+// AgentScopeTypeQuery defines model for AgentScopeTypeQuery.
+type AgentScopeTypeQuery = AgentScopeType
+
+// AgentSessionStatusQuery defines model for AgentSessionStatusQuery.
+type AgentSessionStatusQuery = AgentSessionStatus
+
 // AssigneeKindQuery defines model for AssigneeKindQuery.
 type AssigneeKindQuery = string
 
@@ -873,6 +1027,15 @@ type CorrelationKindQuery = string
 
 // CorrelationRefQuery defines model for CorrelationRefQuery.
 type CorrelationRefQuery = string
+
+// CreatedAfterQuery defines model for CreatedAfterQuery.
+type CreatedAfterQuery = time.Time
+
+// CreatedBeforeQuery defines model for CreatedBeforeQuery.
+type CreatedBeforeQuery = time.Time
+
+// CreatedByActorRefQuery defines model for CreatedByActorRefQuery.
+type CreatedByActorRefQuery = string
 
 // GovernanceBranchRulesRefQuery defines model for GovernanceBranchRulesRefQuery.
 type GovernanceBranchRulesRefQuery = string
@@ -921,6 +1084,12 @@ type PageSizeQuery = int
 
 // PageTokenQuery defines model for PageTokenQuery.
 type PageTokenQuery = string
+
+// ProviderPullRequestRefQuery defines model for ProviderPullRequestRefQuery.
+type ProviderPullRequestRefQuery = string
+
+// ProviderWorkItemRefQuery defines model for ProviderWorkItemRefQuery.
+type ProviderWorkItemRefQuery = string
 
 // RequestIdHeader defines model for RequestIdHeader.
 type RequestIdHeader = string
@@ -976,6 +1145,56 @@ type RateLimited = SafeError
 // Unauthorized defines model for Unauthorized.
 type Unauthorized = SafeError
 
+// ListAgentRunSummariesParams defines parameters for ListAgentRunSummaries.
+type ListAgentRunSummariesParams struct {
+	// ScopeType Тип области `agent-manager`.
+	ScopeType AgentScopeTypeQuery `form:"scope_type" json:"scope_type"`
+
+	// ScopeRef Safe ref области `agent-manager`.
+	ScopeRef AgentScopeRefQuery `form:"scope_ref" json:"scope_ref"`
+
+	// SessionId Safe id `AgentSession`.
+	SessionId *AgentRunSessionIdQuery `form:"session_id,omitempty" json:"session_id,omitempty"`
+
+	// RoleProfileId Safe id роли агента.
+	RoleProfileId *AgentRoleProfileIdQuery `form:"role_profile_id,omitempty" json:"role_profile_id,omitempty"`
+
+	// Status Фильтр Run по lifecycle status.
+	Status *AgentRunStatusQuery `form:"status,omitempty" json:"status,omitempty"`
+
+	// ProviderWorkItemRef Safe ref provider-native work item.
+	ProviderWorkItemRef *ProviderWorkItemRefQuery `form:"provider_work_item_ref,omitempty" json:"provider_work_item_ref,omitempty"`
+
+	// ProviderPullRequestRef Safe ref provider-native PR/MR.
+	ProviderPullRequestRef *ProviderPullRequestRefQuery `form:"provider_pull_request_ref,omitempty" json:"provider_pull_request_ref,omitempty"`
+
+	// CreatedAfter Нижняя граница времени создания.
+	CreatedAfter *CreatedAfterQuery `form:"created_after,omitempty" json:"created_after,omitempty"`
+
+	// CreatedBefore Верхняя граница времени создания.
+	CreatedBefore *CreatedBeforeQuery `form:"created_before,omitempty" json:"created_before,omitempty"`
+	PageSize      *PageSizeQuery      `form:"page_size,omitempty" json:"page_size,omitempty"`
+	PageToken     *PageTokenQuery     `form:"page_token,omitempty" json:"page_token,omitempty"`
+
+	// XKodexRequestId Идентификатор запроса для трассировки. Gateway может заменить невалидное значение.
+	XKodexRequestId *RequestIdHeader `json:"X-Kodex-Request-Id,omitempty"`
+
+	// XKodexTraceId Безопасная ссылка на трассу.
+	XKodexTraceId *TraceIdHeader `json:"X-Kodex-Trace-Id,omitempty"`
+
+	// XKodexSessionId Безопасная ссылка на пользовательскую сессию.
+	XKodexSessionId *SessionIdHeader `json:"X-Kodex-Session-Id,omitempty"`
+
+	// XKodexActorType Тип проверенного субъекта от внешнего auth boundary.
+	XKodexActorType ListAgentRunSummariesParamsXKodexActorType `json:"X-Kodex-Actor-Type"`
+
+	// XKodexActorId Safe id проверенного субъекта без email и имени.
+	XKodexActorId ActorIdHeader `json:"X-Kodex-Actor-Id"`
+}
+
+// ListAgentRunSummariesParamsXKodexActorType defines parameters for ListAgentRunSummaries.
+type ListAgentRunSummariesParamsXKodexActorType string
+
 // ListAgentRunActivitiesParams defines parameters for ListAgentRunActivities.
 type ListAgentRunActivitiesParams struct {
 	// ActivityKind Фильтр по виду safe activity entry.
@@ -1025,6 +1244,50 @@ type GetAgentRunRuntimeStatusParams struct {
 
 // GetAgentRunRuntimeStatusParamsXKodexActorType defines parameters for GetAgentRunRuntimeStatus.
 type GetAgentRunRuntimeStatusParamsXKodexActorType string
+
+// ListAgentSessionsParams defines parameters for ListAgentSessions.
+type ListAgentSessionsParams struct {
+	// ScopeType Тип области `agent-manager`.
+	ScopeType AgentScopeTypeQuery `form:"scope_type" json:"scope_type"`
+
+	// ScopeRef Safe ref области `agent-manager`.
+	ScopeRef AgentScopeRefQuery `form:"scope_ref" json:"scope_ref"`
+
+	// Status Фильтр session по lifecycle status.
+	Status *AgentSessionStatusQuery `form:"status,omitempty" json:"status,omitempty"`
+
+	// ProviderWorkItemRef Safe ref provider-native work item.
+	ProviderWorkItemRef *ProviderWorkItemRefQuery `form:"provider_work_item_ref,omitempty" json:"provider_work_item_ref,omitempty"`
+
+	// CreatedByActorRef Safe ref actor, создавшего session.
+	CreatedByActorRef *CreatedByActorRefQuery `form:"created_by_actor_ref,omitempty" json:"created_by_actor_ref,omitempty"`
+
+	// CreatedAfter Нижняя граница времени создания.
+	CreatedAfter *CreatedAfterQuery `form:"created_after,omitempty" json:"created_after,omitempty"`
+
+	// CreatedBefore Верхняя граница времени создания.
+	CreatedBefore *CreatedBeforeQuery `form:"created_before,omitempty" json:"created_before,omitempty"`
+	PageSize      *PageSizeQuery      `form:"page_size,omitempty" json:"page_size,omitempty"`
+	PageToken     *PageTokenQuery     `form:"page_token,omitempty" json:"page_token,omitempty"`
+
+	// XKodexRequestId Идентификатор запроса для трассировки. Gateway может заменить невалидное значение.
+	XKodexRequestId *RequestIdHeader `json:"X-Kodex-Request-Id,omitempty"`
+
+	// XKodexTraceId Безопасная ссылка на трассу.
+	XKodexTraceId *TraceIdHeader `json:"X-Kodex-Trace-Id,omitempty"`
+
+	// XKodexSessionId Безопасная ссылка на пользовательскую сессию.
+	XKodexSessionId *SessionIdHeader `json:"X-Kodex-Session-Id,omitempty"`
+
+	// XKodexActorType Тип проверенного субъекта от внешнего auth boundary.
+	XKodexActorType ListAgentSessionsParamsXKodexActorType `json:"X-Kodex-Actor-Type"`
+
+	// XKodexActorId Safe id проверенного субъекта без email и имени.
+	XKodexActorId ActorIdHeader `json:"X-Kodex-Actor-Id"`
+}
+
+// ListAgentSessionsParamsXKodexActorType defines parameters for ListAgentSessions.
+type ListAgentSessionsParamsXKodexActorType string
 
 // GetGovernanceSummaryParams defines parameters for GetGovernanceSummary.
 type GetGovernanceSummaryParams struct {

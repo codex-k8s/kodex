@@ -27,7 +27,7 @@
 
 Для операторской сводки governance `staff-gateway` отдаёт `GET /v1/governance/summary`. Endpoint принимает ровно один safe selector: target, project/repository context, release candidate, release decision package id или integration ref; затем вызывает `governance-manager.GetGovernanceSummary` и возвращает уже подготовленную доменную модель чтения. Gateway не вычисляет risk/gate/release правила, не читает БД соседних сервисов и не обогащает provider/runtime/agent данные. Ответ содержит pending/completed decisions, risk class, gate/release outcomes, linked provider/agent/runtime evidence refs, bounded diagnostics, timestamps и versions; raw prompt, transcript, tool input/output, provider payload, webhook body, stdout/stderr, workspace paths, kubeconfig, secret values и большие детали через gateway не проходят.
 
-Следующая gateway-поверхность для командного центра должна отдать списки `AgentSession` и `AgentRun` без прямого чтения БД: `staff-gateway` вызывает `agent-manager.ListAgentSessions` и `agent-manager.ListAgentRunSummaries`, прокидывает actor/request context и scope/status/provider/time filters, а наружу возвращает только session/run refs, role/stage refs, сохранённый runtime job ref, safe status/summary/error, Human gate/follow-up flags, latest activity summary, timestamps и version. Live runtime job status остаётся точечным `GET /v1/agent-runs/{run_id}/runtime-status`, чтобы список не делал fan-out в runtime, Kubernetes или provider API.
+Для командного центра и экрана исполнений `staff-gateway` отдаёт `GET /v1/agent-sessions` и `GET /v1/agent-runs` без прямого чтения БД. Endpoints вызывают `agent-manager.ListAgentSessions` и `agent-manager.ListAgentRunSummaries`, прокидывают actor/request context и scope/status/provider/time filters, а наружу возвращают только session/run refs, role/stage refs, сохранённый runtime job ref, safe status/summary/error, Human gate/follow-up flags, latest activity summary, timestamps и version. Live runtime job status остаётся точечным `GET /v1/agent-runs/{run_id}/runtime-status`, чтобы список не делал fan-out в runtime, Kubernetes или provider API. Списки используют scope types, доступные в текущем `agent-manager` contract: `platform`, `organization`, `project`, `repository`; `service` scope для этих списков отображается в `web-console` как неподдержанный, пока доменный контракт не расширен.
 
 ## Web-console MVP
 
@@ -35,14 +35,14 @@
 
 Первый набор экранов:
 
-- командный центр: каркас, карточки только по текущей странице входящих и последнему ручному поиску одного `Run`, отключённый диалоговый ввод и быстрые действия до появления соответствующих HTTP-контрактов; списки session/run ждут тонких `staff-gateway` endpoints поверх готовой gRPC-поверхности `agent-manager`;
+- командный центр: каркас, карточки по текущей странице входящих и первым страницам списков `AgentSession`/`AgentRun`, отключённый диалоговый ввод и быстрые действия до появления соответствующих HTTP-контрактов;
 - входящие и решения: список, карточка, безопасные детали и действия ответа через owner inbox endpoints;
-- исполнения и среда: runtime summary и activity timeline одного `AgentRun` по введённому `run_id`;
+- исполнения и среда: списки `AgentSession`/`AgentRun`, выбор `Run`, runtime summary и activity timeline по safe `run_id`;
 - governance: операторская сводка доступна через `staff-gateway`, экран в `web-console` остаётся следующим frontend-срезом.
 
-Текущая интерфейсная итерация доводит эти экраны до демонстрируемого состояния: shell адаптируется под узкую ширину, командный центр показывает отдельно работающие зоны и зоны, ожидающие подключение frontend или ещё не появившиеся `staff-gateway` endpoints, owner inbox использует master-detail паттерн с безопасными ошибками и ответом только через `allowed_actions`, а экран исполнений явно работает как поиск одного `Run` по safe id.
+Текущая интерфейсная итерация доводит эти экраны до демонстрируемого состояния: shell адаптируется под узкую ширину, командный центр показывает отдельно работающие зоны и зоны, ожидающие подключение frontend или ещё не появившиеся `staff-gateway` endpoints, owner inbox использует master-detail паттерн с безопасными ошибками и ответом только через `allowed_actions`, а экран исполнений строится от списков `AgentSession`/`AgentRun` и сохраняет ручной ввод `run_id` как дополнительный способ открыть конкретный `Run`.
 
-Агрегированная витрина командного центра, список `Run`, создание `Issue`, запуск flow, чат с `agent-manager`, проектные списки и экран governance summary не подменяются демо-данными. Пока frontend не подключил соответствующий endpoint или в `staff-gateway` нет нужной HTTP-ручки, включая HTTP-адаптеры для `ListAgentSessions`/`ListAgentRunSummaries`, интерфейс показывает честные пустые или отключённые состояния.
+Агрегированная витрина командного центра, создание `Issue`, запуск flow, чат с `agent-manager`, проектные списки и экран governance summary не подменяются демо-данными. Пока frontend не подключил соответствующий endpoint или в `staff-gateway` нет нужной HTTP-ручки, интерфейс показывает честные пустые или отключённые состояния.
 
 ## Карта Issue
 

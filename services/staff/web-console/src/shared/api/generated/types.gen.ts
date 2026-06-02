@@ -14,6 +14,8 @@ export type PageInfo = {
 
 export type ScopeType = 'platform' | 'organization' | 'project' | 'repository' | 'service';
 
+export type AgentScopeType = 'platform' | 'organization' | 'project' | 'repository';
+
 export type ScopeRef = {
     type: ScopeType;
     ref: string;
@@ -33,6 +35,8 @@ export type ResponseSourceKind = 'web_console' | 'mcp' | 'channel_callback' | 's
 
 export type AgentRunStatus = 'unspecified' | 'requested' | 'starting' | 'running' | 'waiting' | 'completed' | 'failed' | 'cancelled';
 
+export type AgentSessionStatus = 'unspecified' | 'open' | 'waiting' | 'completed' | 'failed' | 'cancelled';
+
 export type RuntimeObservationState = 'unspecified' | 'not_created' | 'stored_ref' | 'live' | 'unavailable' | 'conflict';
 
 export type AgentRuntimeJobStatus = 'unspecified' | 'pending' | 'claimed' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'timed_out';
@@ -40,6 +44,32 @@ export type AgentRuntimeJobStatus = 'unspecified' | 'pending' | 'claimed' | 'run
 export type AgentActivityKind = 'unspecified' | 'lifecycle' | 'tool_use' | 'tool_result' | 'permission' | 'provider_signal' | 'runtime_signal' | 'checkpoint' | 'other';
 
 export type AgentActivityStatus = 'unspecified' | 'planned' | 'started' | 'succeeded' | 'failed' | 'denied' | 'waiting' | 'cancelled' | 'skipped';
+
+export type GovernanceTargetType = 'unspecified' | 'transition' | 'pull_request' | 'release_candidate' | 'runtime_job' | 'policy_change' | 'document' | 'merge' | 'postdeploy' | 'rollback';
+
+export type GovernanceDecisionSummaryKind = 'unspecified' | 'risk_assessment' | 'review_signal' | 'gate_request' | 'gate_decision' | 'release_decision_package' | 'release_decision' | 'blocking_signal' | 'release_safety_state';
+
+export type GovernanceDecisionAttention = 'unspecified' | 'pending' | 'completed' | 'blocked' | 'informational';
+
+export type GovernanceRiskClass = 'unspecified' | 'r0' | 'r1' | 'r2' | 'r3';
+
+export type GovernanceReviewOutcome = 'unspecified' | 'pass' | 'pass_with_notes' | 'block' | 'request_changes' | 'raise_risk' | 'informational';
+
+export type GovernanceGateRequestStatus = 'unspecified' | 'requested' | 'delivering' | 'awaiting_decision' | 'resolved' | 'expired' | 'cancelled';
+
+export type GovernanceGateOutcome = 'unspecified' | 'approve' | 'approve_with_conditions' | 'revise' | 'reject' | 'hold' | 'rollback' | 'escalate';
+
+export type GovernanceReleasePackageStatus = 'unspecified' | 'draft' | 'ready' | 'decision_requested' | 'closed';
+
+export type GovernanceReleaseDecisionStatus = 'unspecified' | 'requested' | 'resolved' | 'cancelled';
+
+export type GovernanceReleaseDecisionOutcome = 'unspecified' | 'go' | 'go_with_conditions' | 'no_go' | 'hold' | 'rollback' | 'follow_up_required';
+
+export type GovernanceBlockingSignalStatus = 'unspecified' | 'active' | 'resolved' | 'dismissed';
+
+export type GovernanceSignalSeverity = 'unspecified' | 'info' | 'warning' | 'blocking' | 'critical';
+
+export type GovernanceEvidenceKind = 'unspecified' | 'provider_comment' | 'provider_review' | 'provider_check' | 'runtime_summary' | 'document' | 'risk_factor' | 'review_signal' | 'interaction_callback' | 'object_ref' | 'custom' | 'agent_acceptance' | 'agent_run' | 'agent_human_gate';
 
 export type DeliveryAttemptStatus = 'unspecified' | 'queued' | 'sent' | 'accepted' | 'delivered' | 'failed' | 'cancelled' | 'expired';
 
@@ -180,6 +210,221 @@ export type OwnerInboxRespondResponse = {
     response: OwnerInboxResponseSummary;
 };
 
+export type GovernanceSummaryResponse = {
+    request_id: string;
+    correlation_id?: string;
+    summary: GovernanceSummary;
+};
+
+export type GovernanceSummary = {
+    scope: GovernanceSummaryScope;
+    pending_decisions: Array<GovernanceDecisionSummary>;
+    completed_decisions: Array<GovernanceDecisionSummary>;
+    evidence_summaries: Array<GovernanceEvidenceSummary>;
+    diagnostics: Array<string>;
+};
+
+export type GovernanceSummaryScope = {
+    target?: GovernanceTargetRef;
+    project_context?: GovernanceProjectContextRef;
+    release_candidate_ref?: string;
+    release_decision_package_id?: string;
+    integration_ref?: GovernanceReleaseIntegrationRef;
+};
+
+export type GovernanceTargetRef = {
+    type: GovernanceTargetType;
+    ref: string;
+};
+
+export type GovernanceProjectContextRef = {
+    project_ref?: string;
+    repository_ref?: string;
+    service_ref?: string;
+    branch_rules_ref?: string;
+    release_policy_ref?: string;
+    release_line_ref?: string;
+};
+
+export type GovernanceReleaseIntegrationRef = {
+    domain: string;
+    kind: string;
+    ref: string;
+    status?: string;
+    summary?: string;
+    digest?: string;
+    observed_at?: string;
+    version?: string;
+    error_code?: string;
+};
+
+export type GovernanceEvidenceRef = {
+    kind: GovernanceEvidenceKind;
+    ref: string;
+    summary?: string;
+    digest?: string;
+    retention_class?: string;
+};
+
+export type GovernanceProviderContextRef = {
+    work_item_ref?: string;
+    pull_request_ref?: string;
+    comment_ref?: string;
+    review_signal_ref?: string;
+    provider_operation_ref?: string;
+    changed_files_summary_ref?: string;
+};
+
+export type GovernanceRuntimeContextRef = {
+    slot_ref?: string;
+    job_ref?: string;
+    environment_ref?: string;
+    artifact_ref?: string;
+    summary_ref?: string;
+};
+
+export type GovernanceAgentContextRef = {
+    session_ref?: string;
+    run_ref?: string;
+    stage_ref?: string;
+    acceptance_ref?: string;
+    role_ref?: string;
+};
+
+export type GovernanceDecisionSummary = {
+    kind: GovernanceDecisionSummaryKind;
+    attention: GovernanceDecisionAttention;
+    id: string;
+    parent_id?: string;
+    target?: GovernanceTargetRef;
+    project_context?: GovernanceProjectContextRef;
+    release_candidate_ref?: string;
+    release_decision_package_id?: string;
+    risk_class?: GovernanceRiskClass;
+    review_outcome?: GovernanceReviewOutcome;
+    gate_request_status?: GovernanceGateRequestStatus;
+    gate_outcome?: GovernanceGateOutcome;
+    release_package_status?: GovernanceReleasePackageStatus;
+    release_decision_status?: GovernanceReleaseDecisionStatus;
+    release_decision_outcome?: GovernanceReleaseDecisionOutcome;
+    blocking_signal_status?: GovernanceBlockingSignalStatus;
+    severity?: GovernanceSignalSeverity;
+    safe_summary: string;
+    evidence_refs: Array<GovernanceEvidenceRef>;
+    integration_refs: Array<GovernanceReleaseIntegrationRef>;
+    provider_refs: Array<GovernanceProviderContextRef>;
+    runtime_refs: Array<GovernanceRuntimeContextRef>;
+    agent_context?: GovernanceAgentContextRef;
+    version: number;
+    created_at: string;
+    updated_at: string;
+    observed_at?: string;
+};
+
+export type GovernanceEvidenceSummary = {
+    source_kind: string;
+    source_ref: string;
+    status?: string;
+    outcome?: string;
+    safe_summary: string;
+    error_code?: string;
+    digest?: string;
+    observed_at?: string;
+    version?: string;
+    evidence_refs: Array<GovernanceEvidenceRef>;
+    integration_refs: Array<GovernanceReleaseIntegrationRef>;
+};
+
+export type AgentSessionListResponse = {
+    request_id: string;
+    correlation_id?: string;
+    sessions: Array<AgentSessionSummary>;
+    page: PageInfo;
+};
+
+export type AgentSessionSummary = {
+    session_id: string;
+    scope: ScopeRef;
+    provider_work_item_ref?: string;
+    flow_version_id?: string;
+    current_stage_id?: string;
+    latest_state_snapshot_id?: string;
+    status: AgentSessionStatus;
+    created_by_actor_ref: string;
+    latest_run_id?: string;
+    latest_run_status?: AgentRunStatus;
+    latest_runtime_job_ref?: string;
+    latest_run_safe_summary?: string;
+    active_run_count: number;
+    human_gate_waiting: boolean;
+    human_gate_request_ref?: string;
+    human_gate_reason_code?: string;
+    latest_activity?: AgentActivitySummary;
+    follow_up_waiting: boolean;
+    follow_up_ref?: string;
+    created_at: string;
+    updated_at: string;
+    version: number;
+};
+
+export type AgentRunSummaryListResponse = {
+    request_id: string;
+    correlation_id?: string;
+    runs: Array<AgentRunSummary>;
+    page: PageInfo;
+};
+
+export type AgentRunSummary = {
+    run_id: string;
+    session_id: string;
+    flow_version_id?: string;
+    stage_id?: string;
+    role_profile_id: string;
+    role_profile_version: number;
+    provider_target?: ProviderTargetRef;
+    runtime_slot_ref?: string;
+    runtime_context_ref?: string;
+    runtime_job_ref?: string;
+    status: AgentRunStatus;
+    result_summary?: string;
+    failure_code?: string;
+    runtime_observation_state: RuntimeObservationState;
+    runtime_safe_error_code?: string;
+    runtime_safe_summary?: string;
+    human_gate_waiting: boolean;
+    human_gate_request_ref?: string;
+    human_gate_reason_code?: string;
+    follow_up_waiting: boolean;
+    latest_activity?: AgentActivitySummary;
+    started_at?: string;
+    finished_at?: string;
+    created_at: string;
+    updated_at: string;
+    version: number;
+};
+
+export type ProviderTargetRef = {
+    work_item_ref?: string;
+    pull_request_ref?: string;
+    comment_ref?: string;
+    review_signal_ref?: string;
+};
+
+export type AgentActivitySummary = {
+    activity_id: string;
+    activity_kind: AgentActivityKind;
+    status: AgentActivityStatus;
+    tool_name?: string;
+    tool_category?: string;
+    safe_summary?: string;
+    payload_digest?: string;
+    bounded_error?: string;
+    started_at?: string;
+    finished_at?: string;
+    updated_at: string;
+    version: number;
+};
+
 export type AgentRunRuntimeStatusResponse = {
     request_id: string;
     correlation_id?: string;
@@ -256,6 +501,61 @@ export type AgentRunActivity = {
 export type RunIdPath = string;
 
 /**
+ * Тип области `agent-manager`.
+ */
+export type AgentScopeTypeQuery = AgentScopeType;
+
+/**
+ * Safe ref области `agent-manager`.
+ */
+export type AgentScopeRefQuery = string;
+
+/**
+ * Фильтр session по lifecycle status.
+ */
+export type AgentSessionStatusQuery = AgentSessionStatus;
+
+/**
+ * Фильтр Run по lifecycle status.
+ */
+export type AgentRunStatusQuery = AgentRunStatus;
+
+/**
+ * Safe id `AgentSession`.
+ */
+export type AgentRunSessionIdQuery = string;
+
+/**
+ * Safe id роли агента.
+ */
+export type AgentRoleProfileIdQuery = string;
+
+/**
+ * Safe ref provider-native work item.
+ */
+export type ProviderWorkItemRefQuery = string;
+
+/**
+ * Safe ref provider-native PR/MR.
+ */
+export type ProviderPullRequestRefQuery = string;
+
+/**
+ * Safe ref actor, создавшего session.
+ */
+export type CreatedByActorRefQuery = string;
+
+/**
+ * Нижняя граница времени создания.
+ */
+export type CreatedAfterQuery = string;
+
+/**
+ * Верхняя граница времени создания.
+ */
+export type CreatedBeforeQuery = string;
+
+/**
  * Фильтр по виду safe activity entry.
  */
 export type AgentActivityKindQuery = AgentActivityKind;
@@ -264,6 +564,71 @@ export type AgentActivityKindQuery = AgentActivityKind;
  * Фильтр по статусу safe activity entry.
  */
 export type AgentActivityStatusQuery = AgentActivityStatus;
+
+/**
+ * Тип governance target. Должен передаваться вместе с `target_ref`.
+ */
+export type GovernanceTargetTypeQuery = GovernanceTargetType;
+
+/**
+ * Safe ref governance target.
+ */
+export type GovernanceTargetRefQuery = string;
+
+/**
+ * Safe ref проекта из `project-catalog`.
+ */
+export type GovernanceProjectRefQuery = string;
+
+/**
+ * Safe ref репозитория из `project-catalog`.
+ */
+export type GovernanceRepositoryRefQuery = string;
+
+/**
+ * Safe ref сервиса в проектной политике.
+ */
+export type GovernanceServiceRefQuery = string;
+
+/**
+ * Safe ref branch rules.
+ */
+export type GovernanceBranchRulesRefQuery = string;
+
+/**
+ * Safe ref release policy.
+ */
+export type GovernanceReleasePolicyRefQuery = string;
+
+/**
+ * Safe ref release line.
+ */
+export type GovernanceReleaseLineRefQuery = string;
+
+/**
+ * Safe ref кандидата релиза.
+ */
+export type GovernanceReleaseCandidateRefQuery = string;
+
+/**
+ * Local id release decision package.
+ */
+export type GovernanceReleaseDecisionPackageIdQuery = string;
+
+/**
+ * Owner domain safe ref, например `provider`, `agent`, `runtime` или `governance`.
+ */
+export type GovernanceIntegrationDomainQuery = string;
+
+/**
+ * Тип safe ref внутри owner domain.
+ */
+export type GovernanceIntegrationKindQuery = string;
+
+/**
+ * Safe ref owner-domain факта.
+ */
+export type GovernanceIntegrationRefQuery = string;
 
 /**
  * Interaction request id.
@@ -588,6 +953,202 @@ export type RespondOwnerInboxItemResponses = {
 
 export type RespondOwnerInboxItemResponse = RespondOwnerInboxItemResponses[keyof RespondOwnerInboxItemResponses];
 
+export type ListAgentSessionsData = {
+    body?: never;
+    headers: {
+        /**
+         * Идентификатор запроса для трассировки. Gateway может заменить невалидное значение.
+         */
+        'X-Kodex-Request-Id'?: string;
+        /**
+         * Безопасная ссылка на трассу.
+         */
+        'X-Kodex-Trace-Id'?: string;
+        /**
+         * Безопасная ссылка на пользовательскую сессию.
+         */
+        'X-Kodex-Session-Id'?: string;
+        /**
+         * Тип проверенного субъекта от внешнего auth boundary.
+         */
+        'X-Kodex-Actor-Type': 'user' | 'service' | 'agent' | 'external_account';
+        /**
+         * Safe id проверенного субъекта без email и имени.
+         */
+        'X-Kodex-Actor-Id': string;
+    };
+    path?: never;
+    query: {
+        /**
+         * Тип области `agent-manager`.
+         */
+        scope_type: AgentScopeType;
+        /**
+         * Safe ref области `agent-manager`.
+         */
+        scope_ref: string;
+        /**
+         * Фильтр session по lifecycle status.
+         */
+        status?: AgentSessionStatus;
+        /**
+         * Safe ref provider-native work item.
+         */
+        provider_work_item_ref?: string;
+        /**
+         * Safe ref actor, создавшего session.
+         */
+        created_by_actor_ref?: string;
+        /**
+         * Нижняя граница времени создания.
+         */
+        created_after?: string;
+        /**
+         * Верхняя граница времени создания.
+         */
+        created_before?: string;
+        page_size?: number;
+        page_token?: string;
+    };
+    url: '/v1/agent-sessions';
+};
+
+export type ListAgentSessionsErrors = {
+    /**
+     * Невалидный запрос.
+     */
+    400: SafeError;
+    /**
+     * Не передан проверенный actor context.
+     */
+    401: SafeError;
+    /**
+     * Доменный сервис отказал в доступе.
+     */
+    403: SafeError;
+    /**
+     * Доменный сервис ограничил частоту запросов.
+     */
+    429: SafeError;
+    /**
+     * Доменный сервис временно недоступен.
+     */
+    503: SafeError;
+};
+
+export type ListAgentSessionsError = ListAgentSessionsErrors[keyof ListAgentSessionsErrors];
+
+export type ListAgentSessionsResponses = {
+    /**
+     * Список agent sessions получен.
+     */
+    200: AgentSessionListResponse;
+};
+
+export type ListAgentSessionsResponse = ListAgentSessionsResponses[keyof ListAgentSessionsResponses];
+
+export type ListAgentRunSummariesData = {
+    body?: never;
+    headers: {
+        /**
+         * Идентификатор запроса для трассировки. Gateway может заменить невалидное значение.
+         */
+        'X-Kodex-Request-Id'?: string;
+        /**
+         * Безопасная ссылка на трассу.
+         */
+        'X-Kodex-Trace-Id'?: string;
+        /**
+         * Безопасная ссылка на пользовательскую сессию.
+         */
+        'X-Kodex-Session-Id'?: string;
+        /**
+         * Тип проверенного субъекта от внешнего auth boundary.
+         */
+        'X-Kodex-Actor-Type': 'user' | 'service' | 'agent' | 'external_account';
+        /**
+         * Safe id проверенного субъекта без email и имени.
+         */
+        'X-Kodex-Actor-Id': string;
+    };
+    path?: never;
+    query: {
+        /**
+         * Тип области `agent-manager`.
+         */
+        scope_type: AgentScopeType;
+        /**
+         * Safe ref области `agent-manager`.
+         */
+        scope_ref: string;
+        /**
+         * Safe id `AgentSession`.
+         */
+        session_id?: string;
+        /**
+         * Safe id роли агента.
+         */
+        role_profile_id?: string;
+        /**
+         * Фильтр Run по lifecycle status.
+         */
+        status?: AgentRunStatus;
+        /**
+         * Safe ref provider-native work item.
+         */
+        provider_work_item_ref?: string;
+        /**
+         * Safe ref provider-native PR/MR.
+         */
+        provider_pull_request_ref?: string;
+        /**
+         * Нижняя граница времени создания.
+         */
+        created_after?: string;
+        /**
+         * Верхняя граница времени создания.
+         */
+        created_before?: string;
+        page_size?: number;
+        page_token?: string;
+    };
+    url: '/v1/agent-runs';
+};
+
+export type ListAgentRunSummariesErrors = {
+    /**
+     * Невалидный запрос.
+     */
+    400: SafeError;
+    /**
+     * Не передан проверенный actor context.
+     */
+    401: SafeError;
+    /**
+     * Доменный сервис отказал в доступе.
+     */
+    403: SafeError;
+    /**
+     * Доменный сервис ограничил частоту запросов.
+     */
+    429: SafeError;
+    /**
+     * Доменный сервис временно недоступен.
+     */
+    503: SafeError;
+};
+
+export type ListAgentRunSummariesError = ListAgentRunSummariesErrors[keyof ListAgentRunSummariesErrors];
+
+export type ListAgentRunSummariesResponses = {
+    /**
+     * Список agent Run summaries получен.
+     */
+    200: AgentRunSummaryListResponse;
+};
+
+export type ListAgentRunSummariesResponse = ListAgentRunSummariesResponses[keyof ListAgentRunSummariesResponses];
+
 export type GetAgentRunRuntimeStatusData = {
     body?: never;
     headers: {
@@ -746,6 +1307,130 @@ export type ListAgentRunActivitiesResponses = {
 };
 
 export type ListAgentRunActivitiesResponse = ListAgentRunActivitiesResponses[keyof ListAgentRunActivitiesResponses];
+
+export type GetGovernanceSummaryData = {
+    body?: never;
+    headers: {
+        /**
+         * Идентификатор запроса для трассировки. Gateway может заменить невалидное значение.
+         */
+        'X-Kodex-Request-Id'?: string;
+        /**
+         * Безопасная ссылка на трассу.
+         */
+        'X-Kodex-Trace-Id'?: string;
+        /**
+         * Безопасная ссылка на пользовательскую сессию.
+         */
+        'X-Kodex-Session-Id'?: string;
+        /**
+         * Тип проверенного субъекта от внешнего auth boundary.
+         */
+        'X-Kodex-Actor-Type': 'user' | 'service' | 'agent' | 'external_account';
+        /**
+         * Safe id проверенного субъекта без email и имени.
+         */
+        'X-Kodex-Actor-Id': string;
+    };
+    path?: never;
+    query?: {
+        /**
+         * Тип governance target. Должен передаваться вместе с `target_ref`.
+         */
+        target_type?: GovernanceTargetType;
+        /**
+         * Safe ref governance target.
+         */
+        target_ref?: string;
+        /**
+         * Safe ref проекта из `project-catalog`.
+         */
+        project_ref?: string;
+        /**
+         * Safe ref репозитория из `project-catalog`.
+         */
+        repository_ref?: string;
+        /**
+         * Safe ref сервиса в проектной политике.
+         */
+        service_ref?: string;
+        /**
+         * Safe ref branch rules.
+         */
+        branch_rules_ref?: string;
+        /**
+         * Safe ref release policy.
+         */
+        release_policy_ref?: string;
+        /**
+         * Safe ref release line.
+         */
+        release_line_ref?: string;
+        /**
+         * Safe ref кандидата релиза.
+         */
+        release_candidate_ref?: string;
+        /**
+         * Local id release decision package.
+         */
+        release_decision_package_id?: string;
+        /**
+         * Owner domain safe ref, например `provider`, `agent`, `runtime` или `governance`.
+         */
+        integration_domain?: string;
+        /**
+         * Тип safe ref внутри owner domain.
+         */
+        integration_kind?: string;
+        /**
+         * Safe ref owner-domain факта.
+         */
+        integration_ref?: string;
+    };
+    url: '/v1/governance/summary';
+};
+
+export type GetGovernanceSummaryErrors = {
+    /**
+     * Невалидный запрос.
+     */
+    400: SafeError;
+    /**
+     * Не передан проверенный actor context.
+     */
+    401: SafeError;
+    /**
+     * Доменный сервис отказал в доступе.
+     */
+    403: SafeError;
+    /**
+     * Ресурс не найден или не виден вызывающей стороне.
+     */
+    404: SafeError;
+    /**
+     * Конфликт версии, lifecycle или action вне allowed actions.
+     */
+    409: SafeError;
+    /**
+     * Доменный сервис ограничил частоту запросов.
+     */
+    429: SafeError;
+    /**
+     * Доменный сервис временно недоступен.
+     */
+    503: SafeError;
+};
+
+export type GetGovernanceSummaryError = GetGovernanceSummaryErrors[keyof GetGovernanceSummaryErrors];
+
+export type GetGovernanceSummaryResponses = {
+    /**
+     * Governance summary получена.
+     */
+    200: GovernanceSummaryResponse;
+};
+
+export type GetGovernanceSummaryResponse = GetGovernanceSummaryResponses[keyof GetGovernanceSummaryResponses];
 
 export type ClientOptions = {
     baseURL: `${string}://${string}` | (string & {});

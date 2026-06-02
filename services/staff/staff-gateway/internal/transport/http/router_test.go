@@ -396,6 +396,128 @@ func TestRouterGetAgentRunRuntimeStatus(t *testing.T) {
 	}
 }
 
+func TestRouterListAgentSessions(t *testing.T) {
+	sessionID := uuid.NewString()
+	runID := uuid.NewString()
+	client := &fakeInteractionHubClient{sessionListResponse: sampleAgentSessionListResponse(sessionID, runID)}
+	router := newTestRouter(t, client)
+	target := "/v1/agent-sessions?scope_type=project&scope_ref=project-1&status=waiting" +
+		"&provider_work_item_ref=issue-1&created_by_actor_ref=user/owner-1" +
+		"&created_after=2026-05-28T11:00:00Z&created_before=2026-05-28T13:00:00Z" +
+		"&page_size=10&page_token=cursor-1"
+	req := authenticatedRequest(http.MethodGet, target, "")
+	req.Header.Set(headerTraceID, "trace-1")
+	req.Header.Set(headerSessionID, "browser-session-1")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	recorded := client.sessionListRequest
+	if recorded.GetScope().GetRef() != "project-1" || recorded.GetStatus() != agentsv1.AgentSessionStatus_AGENT_SESSION_STATUS_WAITING {
+		t.Fatalf("session list request = %+v, want scope and waiting status", recorded)
+	}
+	if recorded.GetProviderWorkItemRef() != "issue-1" || recorded.GetCreatedByActorRef() != "user/owner-1" {
+		t.Fatalf("session filters = %+v, want provider and actor filters", recorded)
+	}
+	if recorded.GetPage().GetPageSize() != 10 || recorded.GetPage().GetPageToken() != "cursor-1" {
+		t.Fatalf("page = %+v, want pagination", recorded.GetPage())
+	}
+	if recorded.GetMeta().GetRequestContext().GetTraceId() != "trace-1" || recorded.GetMeta().GetRequestContext().GetSessionId() != "browser-session-1" {
+		t.Fatalf("request context = %+v, want trace and session", recorded.GetMeta().GetRequestContext())
+	}
+	var body generated.AgentSessionListResponse
+	decodeJSON(t, rec, &body)
+	if len(body.Sessions) != 1 || body.Sessions[0].SessionId != sessionID || body.Sessions[0].LatestRunId == nil || *body.Sessions[0].LatestRunId != runID {
+		t.Fatalf("sessions = %+v, want one session with latest run", body.Sessions)
+	}
+	if body.Sessions[0].LatestActivity == nil || body.Sessions[0].LatestActivity.PayloadDigest == nil {
+		t.Fatalf("session = %+v, want latest safe activity summary", body.Sessions[0])
+	}
+	if body.Page.NextPageToken == nil || *body.Page.NextPageToken != "cursor-2" {
+		t.Fatalf("page = %+v, want next cursor", body.Page)
+	}
+	for _, forbidden := range []string{"raw prompt", "secret-token", "provider_payload", "workspace/path", "stdout", "stderr"} {
+		if strings.Contains(rec.Body.String(), forbidden) {
+			t.Fatalf("response leaked %q marker: %s", forbidden, rec.Body.String())
+		}
+	}
+}
+
+func TestRouterListAgentRunSummaries(t *testing.T) {
+	sessionID := uuid.NewString()
+	runID := uuid.NewString()
+	roleID := uuid.NewString()
+	client := &fakeInteractionHubClient{runSummaryListResponse: sampleAgentRunSummaryListResponse(sessionID, runID, roleID)}
+	router := newTestRouter(t, client)
+	target := "/v1/agent-runs?scope_type=project&scope_ref=project-1&session_id=" + sessionID +
+		"&role_profile_id=" + roleID + "&status=running&provider_work_item_ref=issue-1" +
+		"&provider_pull_request_ref=pr-1&created_after=2026-05-28T11:00:00Z" +
+		"&created_before=2026-05-28T13:00:00Z&page_size=20&page_token=cursor-1"
+	req := authenticatedRequest(http.MethodGet, target, "")
+	req.Header.Set(headerTraceID, "trace-1")
+	req.Header.Set(headerSessionID, "browser-session-1")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	recorded := client.runSummaryListRequest
+	if recorded.GetScope().GetRef() != "project-1" || recorded.GetSessionId() != sessionID || recorded.GetRoleProfileId() != roleID {
+		t.Fatalf("run summary request = %+v, want scope/session/role", recorded)
+	}
+	if recorded.GetStatus() != agentsv1.AgentRunStatus_AGENT_RUN_STATUS_RUNNING ||
+		recorded.GetProviderWorkItemRef() != "issue-1" ||
+		recorded.GetProviderPullRequestRef() != "pr-1" {
+		t.Fatalf("run filters = %+v, want status/provider filters", recorded)
+	}
+	if recorded.GetPage().GetPageSize() != 20 || recorded.GetPage().GetPageToken() != "cursor-1" {
+		t.Fatalf("page = %+v, want pagination", recorded.GetPage())
+	}
+	var body generated.AgentRunSummaryListResponse
+	decodeJSON(t, rec, &body)
+	if len(body.Runs) != 1 || body.Runs[0].RunId != runID || body.Runs[0].RuntimeJobRef == nil {
+		t.Fatalf("runs = %+v, want one run with runtime job ref", body.Runs)
+	}
+	if body.Runs[0].ProviderTarget == nil || body.Runs[0].ProviderTarget.WorkItemRef == nil {
+		t.Fatalf("run = %+v, want provider target refs", body.Runs[0])
+	}
+	for _, forbidden := range []string{"raw prompt", "secret-token", "provider_payload", "workspace/path", "stdout", "stderr"} {
+		if strings.Contains(rec.Body.String(), forbidden) {
+			t.Fatalf("response leaked %q marker: %s", forbidden, rec.Body.String())
+		}
+	}
+}
+
+func TestRouterListAgentRunsRejectsUnsupportedScope(t *testing.T) {
+	client := &fakeInteractionHubClient{}
+	router := newTestRouter(t, client)
+	req := authenticatedRequest(http.MethodGet, "/v1/agent-runs?scope_type=service&scope_ref=service-1", "")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	assertErrorCode(t, rec, http.StatusBadRequest, generated.SafeErrorCodeInvalidRequest)
+	if client.runSummaryListRequest != nil {
+		t.Fatalf("downstream was called for unsupported agent scope")
+	}
+}
+
+func TestRouterListAgentRunSummariesErrorMapping(t *testing.T) {
+	client := &fakeInteractionHubClient{runSummaryListErr: status.Error(codes.Unavailable, "unavailable")}
+	router := newTestRouter(t, client)
+	req := authenticatedRequest(http.MethodGet, "/v1/agent-runs?scope_type=project&scope_ref=project-1", "")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	assertErrorCode(t, rec, http.StatusServiceUnavailable, generated.SafeErrorCodeDownstreamUnavailable)
+}
+
 func TestRouterGetAgentRunRuntimeStatusUnknownStatusFallsBackToUnspecified(t *testing.T) {
 	runID := uuid.NewString()
 	response := sampleAgentRunRuntimeStatusResponse(runID)
@@ -721,18 +843,24 @@ type fakeInteractionHubClient struct {
 	listRequest               *interactionsv1.ListOwnerInboxItemsRequest
 	getRequest                *interactionsv1.GetOwnerInboxItemRequest
 	recordRequest             *interactionsv1.RecordInteractionResponseRequest
+	sessionListRequest        *agentsv1.ListAgentSessionsRequest
+	runSummaryListRequest     *agentsv1.ListAgentRunSummariesRequest
 	runtimeStatusRequest      *agentsv1.GetAgentRunRuntimeStatusRequest
 	activitiesRequest         *agentsv1.ListAgentActivitiesRequest
 	governanceSummaryRequest  *governancev1.GetGovernanceSummaryRequest
 	listResponse              *interactionsv1.ListOwnerInboxItemsResponse
 	getResponse               *interactionsv1.OwnerInboxItemResponse
 	recordResponse            *interactionsv1.InteractionResponseResponse
+	sessionListResponse       *agentsv1.ListAgentSessionsResponse
+	runSummaryListResponse    *agentsv1.ListAgentRunSummariesResponse
 	runtimeStatusResponse     *agentsv1.AgentRunRuntimeStatusResponse
 	activitiesResponse        *agentsv1.ListAgentActivitiesResponse
 	governanceSummaryResponse *governancev1.GovernanceSummaryResponse
 	listErr                   error
 	getErr                    error
 	recordErr                 error
+	sessionListErr            error
+	runSummaryListErr         error
 	runtimeStatusErr          error
 	activitiesErr             error
 	governanceSummaryErr      error
@@ -751,6 +879,16 @@ func (f *fakeInteractionHubClient) GetOwnerInboxItem(_ context.Context, request 
 func (f *fakeInteractionHubClient) RecordInteractionResponse(_ context.Context, request *interactionsv1.RecordInteractionResponseRequest) (*interactionsv1.InteractionResponseResponse, error) {
 	f.recordRequest = request
 	return f.recordResponse, f.recordErr
+}
+
+func (f *fakeInteractionHubClient) ListAgentSessions(_ context.Context, request *agentsv1.ListAgentSessionsRequest) (*agentsv1.ListAgentSessionsResponse, error) {
+	f.sessionListRequest = request
+	return f.sessionListResponse, f.sessionListErr
+}
+
+func (f *fakeInteractionHubClient) ListAgentRunSummaries(_ context.Context, request *agentsv1.ListAgentRunSummariesRequest) (*agentsv1.ListAgentRunSummariesResponse, error) {
+	f.runSummaryListRequest = request
+	return f.runSummaryListResponse, f.runSummaryListErr
 }
 
 func (f *fakeInteractionHubClient) GetAgentRunRuntimeStatus(_ context.Context, request *agentsv1.GetAgentRunRuntimeStatusRequest) (*agentsv1.AgentRunRuntimeStatusResponse, error) {
@@ -909,6 +1047,93 @@ func sampleAgentRunRuntimeStatusResponse(runID string) *agentsv1.AgentRunRuntime
 	}
 }
 
+func sampleAgentSessionListResponse(sessionID string, runID string) *agentsv1.ListAgentSessionsResponse {
+	now := time.Date(2026, 5, 28, 12, 3, 0, 0, time.UTC).Format(time.RFC3339Nano)
+	return &agentsv1.ListAgentSessionsResponse{
+		Sessions: []*agentsv1.AgentSessionListItem{{
+			Session: &agentsv1.AgentSession{
+				Id:                    sessionID,
+				Scope:                 &agentsv1.ScopeRef{Type: agentsv1.AgentScopeType_AGENT_SCOPE_TYPE_PROJECT, Ref: "project-1"},
+				ProviderWorkItemRef:   stringPtr("issue-1"),
+				FlowVersionId:         stringPtr("flow-version-1"),
+				CurrentStageId:        stringPtr("stage-1"),
+				LatestStateSnapshotId: stringPtr("snapshot-1"),
+				Status:                agentsv1.AgentSessionStatus_AGENT_SESSION_STATUS_WAITING,
+				CreatedByActorRef:     "user/owner-1",
+				Version:               6,
+				CreatedAt:             now,
+				UpdatedAt:             now,
+			},
+			LatestRunId:          stringPtr(runID),
+			LatestRunStatus:      agentRunStatusPtr(agentsv1.AgentRunStatus_AGENT_RUN_STATUS_RUNNING),
+			LatestRuntimeJobRef:  stringPtr("runtime-job-1"),
+			LatestRunSafeSummary: stringPtr("Run ожидает владельца"),
+			ActiveRunCount:       1,
+			HumanGateWaiting:     true,
+			HumanGateRequestRef:  stringPtr("human-gate-1"),
+			HumanGateReasonCode:  stringPtr("owner_approval"),
+			LatestActivity:       sampleAgentActivitySummary(),
+			FollowUpWaiting:      true,
+			FollowUpRef:          stringPtr("follow-up-1"),
+		}},
+		Page: &agentsv1.PageResponse{NextPageToken: stringPtr("cursor-2")},
+	}
+}
+
+func sampleAgentRunSummaryListResponse(sessionID string, runID string, roleID string) *agentsv1.ListAgentRunSummariesResponse {
+	now := time.Date(2026, 5, 28, 12, 3, 0, 0, time.UTC).Format(time.RFC3339Nano)
+	return &agentsv1.ListAgentRunSummariesResponse{
+		Runs: []*agentsv1.AgentRunListItem{{
+			Run: &agentsv1.AgentRun{
+				Id:                      runID,
+				SessionId:               sessionID,
+				FlowVersionId:           stringPtr("flow-version-1"),
+				StageId:                 stringPtr("stage-1"),
+				RoleProfileId:           roleID,
+				RoleProfileVersion:      2,
+				RoleProfileDigest:       "sha256:raw prompt secret-token-not-returned",
+				PromptTemplateVersionId: "prompt-version-1",
+				PromptTemplateDigest:    "sha256:prompt body not returned",
+				RuntimeContext:          &agentsv1.RuntimeContextRef{SlotRef: stringPtr("slot-1"), JobRef: stringPtr("runtime-job-from-run"), WorkspaceRef: stringPtr("workspace/path/hidden"), ContextRef: stringPtr("runtime-context-1")},
+				ProviderTarget:          &agentsv1.ProviderTargetRef{WorkItemRef: stringPtr("issue-1"), PullRequestRef: stringPtr("pr-1")},
+				Status:                  agentsv1.AgentRunStatus_AGENT_RUN_STATUS_RUNNING,
+				ResultSummary:           stringPtr("Безопасная сводка Run"),
+				FailureCode:             stringPtr(""),
+				Version:                 7,
+				StartedAt:               stringPtr(now),
+				CreatedAt:               now,
+				UpdatedAt:               now,
+			},
+			RuntimeJobRef:           stringPtr("runtime-job-1"),
+			RuntimeObservationState: agentsv1.AgentRunRuntimeObservationState_AGENT_RUN_RUNTIME_OBSERVATION_STATE_STORED_REF,
+			RuntimeSafeSummary:      stringPtr("runtime ref сохранён"),
+			HumanGateWaiting:        true,
+			HumanGateRequestRef:     stringPtr("human-gate-1"),
+			HumanGateReasonCode:     stringPtr("owner_approval"),
+			FollowUpWaiting:         true,
+			LatestActivity:          sampleAgentActivitySummary(),
+		}},
+		Page: &agentsv1.PageResponse{NextPageToken: stringPtr("cursor-2")},
+	}
+}
+
+func sampleAgentActivitySummary() *agentsv1.AgentActivitySummary {
+	now := time.Date(2026, 5, 28, 12, 4, 0, 0, time.UTC).Format(time.RFC3339Nano)
+	return &agentsv1.AgentActivitySummary{
+		ActivityId:    uuid.NewString(),
+		ActivityKind:  agentsv1.AgentActivityKind_AGENT_ACTIVITY_KIND_TOOL_USE,
+		Status:        agentsv1.AgentActivityStatus_AGENT_ACTIVITY_STATUS_SUCCEEDED,
+		ToolName:      stringPtr("apply_patch"),
+		ToolCategory:  stringPtr("code_edit"),
+		SafeSummary:   stringPtr("Обновлён безопасный контракт"),
+		PayloadDigest: stringPtr("sha256:activity-summary"),
+		StartedAt:     stringPtr(now),
+		FinishedAt:    stringPtr(now),
+		UpdatedAt:     now,
+		Version:       2,
+	}
+}
+
 func sampleAgentActivity(runID string) *agentsv1.AgentActivity {
 	now := time.Date(2026, 5, 28, 12, 4, 0, 0, time.UTC).Format(time.RFC3339Nano)
 	return &agentsv1.AgentActivity{
@@ -1010,5 +1235,9 @@ func stringPtr(value string) *string {
 }
 
 func int64Ptr(value int64) *int64 {
+	return &value
+}
+
+func agentRunStatusPtr(value agentsv1.AgentRunStatus) *agentsv1.AgentRunStatus {
 	return &value
 }
