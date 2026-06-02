@@ -5,7 +5,7 @@ title: kodex — варианты bootstrap/adoption репозитория
 status: active
 owner_role: SA
 created_at: 2026-05-14
-updated_at: 2026-05-29
+updated_at: 2026-06-02
 related_issues: [281, 282, 761, 794, 810, 818, 840, 864, 865, 881, 883, 917]
 related_prs: []
 approvals:
@@ -116,7 +116,9 @@ approvals:
 
 Режим apply включается только явным `--apply` или `KODEX_ONBOARDING_RUNNER_APPLY=true` и требует safe target policy: разрешённый provider owner и префикс тестового repository name. Apply вызывает `ReconcileBootstrapMergeSignal` и `ReconcileAdoptionMergeSignal` только при наличии checked scenario input: safe provider merge refs, artifact ref/digest/version, `content_hash`, watermark payload и нормализованный checked `validated_payload_json`. Эти значения передаются в product API как typed input, но runner не печатает сырой YAML, webhook body, provider response, diff, token, DSN, private URL или полный checked payload.
 
-Runner не создаёт реальный GitHub repository/branch/PR и не подменяет подготовку checked artifact. Создание provider repo/PR, подготовка файлов, проверка `services.yaml`, импорт политики и consumer path остаются у сервисов-владельцев. Следующий расширяющий срез может добавить product-API apply для создания тестового repo/PR только при наличии безопасного производителя checked artifact и той же target policy.
+Runner умеет подготовить checked artifact input из уже нормализованного `validated_payload_json`: проверяет, что вход является JSON-объектом, вычисляет `content_hash`, artifact digest/ref/version, связывает версию с merge commit provider signal или явно переданной версией и добавляет watermark payload из сценария или отдельного безопасного JSON-файла. Этот producer path не валидирует сырой `services.yaml`, не читает файлы репозитория и не печатает checked payload; он нужен только для воспроизводимой проверки typed `ReconcileBootstrapMergeSignal`/`ReconcileAdoptionMergeSignal` через product API.
+
+Runner не создаёт реальный GitHub repository/branch/PR и не является источником prepared files. Создание provider repo/PR, подготовка файлов, проверка `services.yaml`, импорт политики и consumer path остаются у сервисов-владельцев. Следующий расширяющий срез может добавить product-API apply для создания тестового repo/PR только при наличии безопасного источника prepared files и той же target policy.
 
 ### Существующий репозиторий
 
