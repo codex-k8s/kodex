@@ -61,6 +61,7 @@ const (
 	kanikoSnapshotMode       = "redo"
 	kanikoVerbosity          = "info"
 	kanikoRegistrySecretKey  = ".dockerconfigjson"
+	maxStatusSummaryBytes    = 512
 )
 
 // Config constrains Kubernetes executor behavior with operator-managed settings.
@@ -115,26 +116,42 @@ type Executor struct {
 
 // StartedJob describes a Kubernetes Job created for a runtime-manager job.
 type StartedJob struct {
-	RuntimeJobID uuid.UUID
-	ClusterID    uuid.UUID
-	Namespace    string
-	JobName      string
-	ExternalRef  string
-	ArtifactRefs []runtimeservice.RuntimeArtifactRefInput
-	client       kubernetes.Interface
-	config       Config
-	selector     labels.Set
-	collectLogs  bool
+	RuntimeJobID   uuid.UUID
+	RuntimeJobType enum.JobType
+	ClusterID      uuid.UUID
+	Namespace      string
+	JobName        string
+	ExternalRef    string
+	ArtifactRefs   []runtimeservice.RuntimeArtifactRefInput
+	client         kubernetes.Interface
+	config         Config
+	selector       labels.Set
+	collectLogs    bool
 }
 
 // ExecutionResult contains a bounded execution result for runtime-manager lifecycle commands.
 type ExecutionResult struct {
-	Succeeded    bool
-	Interrupted  bool
-	ShortLogTail string
-	ErrorCode    string
-	ErrorMessage string
+	Succeeded     bool
+	Interrupted   bool
+	Phase         ExecutionPhase
+	StatusSummary string
+	ShortLogTail  string
+	ErrorCode     string
+	ErrorMessage  string
 }
+
+// ExecutionPhase is the normalized Kubernetes Job observation phase.
+type ExecutionPhase string
+
+const (
+	ExecutionPhasePending   ExecutionPhase = "pending"
+	ExecutionPhaseRunning   ExecutionPhase = "running"
+	ExecutionPhaseSucceeded ExecutionPhase = "succeeded"
+	ExecutionPhaseFailed    ExecutionPhase = "failed"
+	ExecutionPhaseTimedOut  ExecutionPhase = "timed_out"
+	ExecutionPhaseCancelled ExecutionPhase = "cancelled"
+	ExecutionPhaseUnknown   ExecutionPhase = "unknown"
+)
 
 // ExecutionError contains a classified error suitable for runtime-manager diagnostics.
 type ExecutionError struct {
@@ -201,16 +218,17 @@ func (e *Executor) Start(ctx context.Context, job entity.Job) (StartedJob, error
 	}
 	ref := kubernetesJobRef(access.ClusterID, spec.Namespace, created.GetName())
 	return StartedJob{
-		RuntimeJobID: job.ID,
-		ClusterID:    access.ClusterID,
-		Namespace:    spec.Namespace,
-		JobName:      created.GetName(),
-		ExternalRef:  ref,
-		ArtifactRefs: runtimeArtifactRefs(access.ClusterID, spec, ref),
-		client:       client,
-		config:       e.config,
-		selector:     selector,
-		collectLogs:  spec.CollectPodLogs,
+		RuntimeJobID:   job.ID,
+		RuntimeJobType: job.JobType,
+		ClusterID:      access.ClusterID,
+		Namespace:      spec.Namespace,
+		JobName:        created.GetName(),
+		ExternalRef:    ref,
+		ArtifactRefs:   runtimeArtifactRefs(access.ClusterID, spec, ref),
+		client:         client,
+		config:         e.config,
+		selector:       selector,
+		collectLogs:    spec.CollectPodLogs,
 	}, nil
 }
 
@@ -246,9 +264,11 @@ func (e *Executor) Wait(ctx context.Context, started StartedJob) ExecutionResult
 			tail := e.shortLogTail(logCtx, started)
 			logCancel()
 			return ExecutionResult{
-				ShortLogTail: tail,
-				ErrorCode:    "kubernetes_job_timeout",
-				ErrorMessage: "Kubernetes Job did not finish before timeout",
+				Phase:         ExecutionPhaseTimedOut,
+				StatusSummary: "Kubernetes Job timed out",
+				ShortLogTail:  tail,
+				ErrorCode:     "kubernetes_job_timeout",
+				ErrorMessage:  "Kubernetes Job did not finish before timeout",
 			}
 		case <-ticker.C:
 		}
@@ -265,27 +285,45 @@ func ErrorDiagnostic(err error) (string, string) {
 }
 
 func (e *Executor) observe(ctx context.Context, started StartedJob) (ExecutionResult, bool) {
-	job, err := started.client.BatchV1().Jobs(started.Namespace).Get(ctx, started.JobName, metav1.GetOptions{})
+	job, err := e.lookupStartedJob(ctx, started)
 	if err != nil {
 		if errors.Is(ctx.Err(), context.Canceled) {
 			return interruptedExecutionResult(), true
 		}
+		var executionErr *ExecutionError
+		if errors.As(err, &executionErr) {
+			return executionErrorResult(executionErr), true
+		}
 		if apierrors.IsNotFound(err) {
 			return ExecutionResult{
-				ErrorCode:    "kubernetes_job_cancelled",
-				ErrorMessage: "Kubernetes Job was deleted before completion",
+				Phase:         ExecutionPhaseCancelled,
+				StatusSummary: "Kubernetes Job was deleted before completion",
+				ErrorCode:     "kubernetes_job_cancelled",
+				ErrorMessage:  "Kubernetes Job was deleted before completion",
 			}, true
 		}
 		return ExecutionResult{
-			ErrorCode:    "kubernetes_job_status_unavailable",
-			ErrorMessage: "Kubernetes Job status is unavailable",
+			Phase:         ExecutionPhaseUnknown,
+			StatusSummary: "Kubernetes Job status is unavailable",
+			ErrorCode:     "kubernetes_job_status_unavailable",
+			ErrorMessage:  "Kubernetes Job status is unavailable",
+		}, true
+	}
+	if !isManagedStartedJob(job, started) {
+		return ExecutionResult{
+			Phase:         ExecutionPhaseUnknown,
+			StatusSummary: "Kubernetes Job labels do not match runtime job",
+			ErrorCode:     "kubernetes_job_label_mismatch",
+			ErrorMessage:  "Kubernetes Job labels do not match runtime job",
 		}, true
 	}
 	if job.DeletionTimestamp != nil {
 		return ExecutionResult{
-			ShortLogTail: e.shortLogTail(ctx, started),
-			ErrorCode:    "kubernetes_job_cancelled",
-			ErrorMessage: "Kubernetes Job was deleted before completion",
+			Phase:         ExecutionPhaseCancelled,
+			StatusSummary: "Kubernetes Job was deleted before completion",
+			ShortLogTail:  e.shortLogTail(ctx, started),
+			ErrorCode:     "kubernetes_job_cancelled",
+			ErrorMessage:  "Kubernetes Job was deleted before completion",
 		}, true
 	}
 	for _, condition := range job.Status.Conditions {
@@ -294,23 +332,86 @@ func (e *Executor) observe(ctx context.Context, started StartedJob) (ExecutionRe
 		}
 		switch condition.Type {
 		case batchv1.JobComplete:
-			return ExecutionResult{Succeeded: true, ShortLogTail: e.shortLogTail(ctx, started)}, true
-		case batchv1.JobFailed:
 			return ExecutionResult{
-				ShortLogTail: e.shortLogTail(ctx, started),
-				ErrorCode:    "kubernetes_job_failed",
-				ErrorMessage: "Kubernetes Job failed",
+				Succeeded:     true,
+				Phase:         ExecutionPhaseSucceeded,
+				StatusSummary: "Kubernetes Job succeeded",
+				ShortLogTail:  e.shortLogTail(ctx, started),
 			}, true
+		case batchv1.JobFailed:
+			return e.failedExecutionResult(ctx, started, condition), true
 		}
 	}
-	return ExecutionResult{}, false
+	if job.Status.Active > 0 {
+		return ExecutionResult{
+			Phase:         ExecutionPhaseRunning,
+			StatusSummary: kubernetesJobStatusSummary(job, "Kubernetes Job is running"),
+		}, false
+	}
+	return ExecutionResult{
+		Phase:         ExecutionPhasePending,
+		StatusSummary: kubernetesJobStatusSummary(job, "Kubernetes Job is pending"),
+	}, false
+}
+
+func executionErrorResult(err *ExecutionError) ExecutionResult {
+	return ExecutionResult{
+		Phase:         ExecutionPhaseUnknown,
+		StatusSummary: err.Message,
+		ErrorCode:     err.Code,
+		ErrorMessage:  err.Message,
+	}
+}
+
+func (e *Executor) lookupStartedJob(ctx context.Context, started StartedJob) (*batchv1.Job, error) {
+	job, err := started.client.BatchV1().Jobs(started.Namespace).Get(ctx, started.JobName, metav1.GetOptions{})
+	if err == nil {
+		return job, nil
+	}
+	if !apierrors.IsNotFound(err) {
+		return nil, err
+	}
+	jobs, listErr := started.client.BatchV1().Jobs(started.Namespace).List(ctx, metav1.ListOptions{LabelSelector: started.selector.String()})
+	if listErr != nil {
+		return nil, listErr
+	}
+	switch len(jobs.Items) {
+	case 0:
+		return nil, err
+	case 1:
+		return &jobs.Items[0], nil
+	default:
+		return nil, newExecutionError("kubernetes_job_status_ambiguous", "Kubernetes Job status is ambiguous")
+	}
+}
+
+func (e *Executor) failedExecutionResult(ctx context.Context, started StartedJob, condition batchv1.JobCondition) ExecutionResult {
+	if strings.EqualFold(condition.Reason, "DeadlineExceeded") {
+		return ExecutionResult{
+			Phase:         ExecutionPhaseTimedOut,
+			StatusSummary: "Kubernetes Job timed out",
+			ShortLogTail:  e.shortLogTail(ctx, started),
+			ErrorCode:     "kubernetes_job_timeout",
+			ErrorMessage:  "Kubernetes Job timed out",
+		}
+	}
+	summary := safeKubernetesConditionSummary(condition, "Kubernetes Job failed")
+	return ExecutionResult{
+		Phase:         ExecutionPhaseFailed,
+		StatusSummary: summary,
+		ShortLogTail:  e.shortLogTail(ctx, started),
+		ErrorCode:     "kubernetes_job_failed",
+		ErrorMessage:  summary,
+	}
 }
 
 func interruptedExecutionResult() ExecutionResult {
 	return ExecutionResult{
-		Interrupted:  true,
-		ErrorCode:    "runtime_worker_stopped",
-		ErrorMessage: "Runtime worker stopped before Kubernetes Job reached a terminal state",
+		Interrupted:   true,
+		Phase:         ExecutionPhaseUnknown,
+		StatusSummary: "Runtime worker stopped before Kubernetes Job reached a terminal state",
+		ErrorCode:     "runtime_worker_stopped",
+		ErrorMessage:  "Runtime worker stopped before Kubernetes Job reached a terminal state",
 	}
 }
 
@@ -910,6 +1011,7 @@ func buildJob(job entity.Job, spec executionSpec, cfg Config, name string, selec
 			Labels:    metadataLabels,
 		},
 		Spec: batchv1.JobSpec{
+			ActiveDeadlineSeconds:   int64Ptr(jobTimeoutSeconds(cfg.JobTimeout)),
 			BackoffLimit:            int32Ptr(cfg.BackoffLimit),
 			TTLSecondsAfterFinished: int32Ptr(cfg.TTLSecondsAfterFinished),
 			Template: corev1.PodTemplateSpec{
@@ -1018,6 +1120,89 @@ func isManagedRuntimeJob(job *batchv1.Job, runtimeJob entity.Job) bool {
 	return job.Labels["app.kubernetes.io/managed-by"] == managedBy &&
 		job.Labels[runtimeJobLabel] == runtimeJob.ID.String() &&
 		job.Labels[runtimeJobTypeLabel] == string(runtimeJob.JobType)
+}
+
+func isManagedStartedJob(job *batchv1.Job, started StartedJob) bool {
+	if job == nil {
+		return false
+	}
+	if job.Labels["app.kubernetes.io/managed-by"] != managedBy || job.Labels[runtimeJobLabel] != started.RuntimeJobID.String() {
+		return false
+	}
+	if started.RuntimeJobType != "" && job.Labels[runtimeJobTypeLabel] != string(started.RuntimeJobType) {
+		return false
+	}
+	return true
+}
+
+func kubernetesJobStatusSummary(job *batchv1.Job, fallback string) string {
+	if job == nil {
+		return fallback
+	}
+	return safeDiagnosticText(
+		fmt.Sprintf(
+			"%s: active=%d succeeded=%d failed=%d",
+			fallback,
+			job.Status.Active,
+			job.Status.Succeeded,
+			job.Status.Failed,
+		),
+		fallback,
+	)
+}
+
+func safeKubernetesConditionSummary(condition batchv1.JobCondition, fallback string) string {
+	parts := make([]string, 0, 2)
+	if reason := strings.TrimSpace(condition.Reason); reason != "" {
+		parts = append(parts, reason)
+	}
+	if message := strings.TrimSpace(condition.Message); message != "" {
+		parts = append(parts, message)
+	}
+	if len(parts) == 0 {
+		return fallback
+	}
+	return safeDiagnosticText(strings.Join(parts, ": "), fallback)
+}
+
+func safeDiagnosticText(value string, fallback string) string {
+	trimmed := boundedLogTail(strings.TrimSpace(value), maxStatusSummaryBytes)
+	if trimmed == "" {
+		return fallback
+	}
+	if ContainsUnsafeDiagnosticMarker(trimmed) {
+		return fallback
+	}
+	return trimmed
+}
+
+var unsafeDiagnosticMarkers = []string{
+	"authorization",
+	"bearer",
+	"token=",
+	"token:",
+	"secret-value",
+	"secret_value",
+	"provider payload",
+	"provider response",
+	"kubeconfig",
+	"oauth token",
+	"webhook body",
+	"raw payload",
+	"stdout",
+	"stderr",
+	"-----begin",
+}
+
+// ContainsUnsafeDiagnosticMarker reports whether diagnostic text contains sensitive markers.
+func ContainsUnsafeDiagnosticMarker(value string) bool {
+	normalized := strings.ToLower(value)
+	for _, marker := range unsafeDiagnosticMarkers {
+		if strings.Contains(normalized, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func (e *Executor) shortLogTail(ctx context.Context, started StartedJob) string {
@@ -1165,8 +1350,20 @@ func int32Ptr(value int32) *int32 {
 	return &value
 }
 
+func int64Ptr(value int64) *int64 {
+	return &value
+}
+
 func boolPtr(value bool) *bool {
 	return &value
+}
+
+func jobTimeoutSeconds(value time.Duration) int64 {
+	seconds := int64(value.Seconds())
+	if seconds < 1 {
+		return 1
+	}
+	return seconds
 }
 
 func boundedLogTail(text string, limit int) string {

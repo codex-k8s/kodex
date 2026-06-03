@@ -152,6 +152,50 @@ func TestJobLeaseTokenRequiredForWorkerMutations(t *testing.T) {
 	}
 }
 
+func TestFailJobCanPersistTimedOutStatus(t *testing.T) {
+	t.Parallel()
+
+	svc, repo := newTestService()
+	buildSpec := testBuildExecutionSpec("runtime-manager")
+	job, err := svc.CreateJob(context.Background(), CreateJobInput{
+		JobType:            enum.JobTypeBuild,
+		Priority:           enum.JobPriorityNormal,
+		BuildExecutionSpec: &buildSpec,
+		Meta:               commandMeta(mustUUID("00000000-0000-0000-0000-000000000518"), 0),
+	})
+	if err != nil {
+		t.Fatalf("CreateJob(): %v", err)
+	}
+	claim, err := svc.ClaimRunnableJob(context.Background(), ClaimRunnableJobInput{
+		JobTypes:   []enum.JobType{enum.JobTypeBuild},
+		LeaseOwner: "worker/runtime-timeout",
+		LeaseUntil: testNow.Add(10 * time.Minute),
+		Meta:       commandMeta(mustUUID("00000000-0000-0000-0000-000000000519"), 0),
+	})
+	if err != nil {
+		t.Fatalf("ClaimRunnableJob(): %v", err)
+	}
+
+	timedOut, err := svc.FailJob(context.Background(), FailJobInput{
+		JobID:        job.ID,
+		LeaseToken:   claim.LeaseToken,
+		ErrorCode:    "kubernetes_job_timeout",
+		ErrorMessage: "Kubernetes Job timed out",
+		ShortLogTail: "build did not finish",
+		TimedOut:     true,
+		Meta:         commandMeta(mustUUID("00000000-0000-0000-0000-000000000523"), claim.Job.Version),
+	})
+	if err != nil {
+		t.Fatalf("FailJob(timeout): %v", err)
+	}
+	if timedOut.Status != enum.JobStatusTimedOut || timedOut.LastErrorCode != "kubernetes_job_timeout" {
+		t.Fatalf("timed out job = %#v, want timed_out status and timeout code", timedOut)
+	}
+	if repo.events[len(repo.events)-1].EventType != eventJobFailed {
+		t.Fatalf("last event = %s, want job failed event with timed_out status payload", repo.events[len(repo.events)-1].EventType)
+	}
+}
+
 func TestClaimRunnableJobReplayDoesNotClaimAnotherJob(t *testing.T) {
 	t.Parallel()
 

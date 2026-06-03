@@ -223,10 +223,14 @@ func (s *Service) FailJob(ctx context.Context, input FailJobInput) (entity.Job, 
 	if nextAction == "" {
 		nextAction = defaultJobFailureAction
 	}
+	status := enum.JobStatusFailed
+	if input.TimedOut {
+		status = enum.JobStatusTimedOut
+	}
 	return s.finishJob(ctx, finishJobInput{
 		jobID:        input.JobID,
 		leaseToken:   input.LeaseToken,
-		status:       enum.JobStatusFailed,
+		status:       status,
 		eventType:    eventJobFailed,
 		errorCode:    input.ErrorCode,
 		errorMessage: input.ErrorMessage,

@@ -199,6 +199,42 @@ func TestKubernetesJobWorkerDropsAgentRunLogTailDiagnostics(t *testing.T) {
 	}
 }
 
+func TestKubernetesJobWorkerMarksTimeoutAsTimedOut(t *testing.T) {
+	t.Parallel()
+
+	job := entity.Job{
+		Base:    entity.Base{ID: uuid.MustParse("00000000-0000-0000-0000-000000000108"), Version: 2},
+		JobType: enum.JobTypeBuild,
+		Status:  enum.JobStatusClaimed,
+	}
+	service := &fakeRuntimeJobLifecycle{claim: runtimeservice.ClaimRunnableJobResult{Job: job, LeaseToken: "lease-token"}}
+	executor := fakeKubernetesExecutor{
+		started: runtimekubernetes.StartedJob{
+			RuntimeJobID: job.ID,
+			Namespace:    "runtime-jobs",
+			JobName:      "kodex-rt-test",
+			ExternalRef:  "kubernetes://cluster/namespaces/runtime-jobs/jobs/kodex-rt-test",
+		},
+		result: runtimekubernetes.ExecutionResult{
+			Phase:         runtimekubernetes.ExecutionPhaseTimedOut,
+			StatusSummary: "Kubernetes Job timed out",
+			ErrorCode:     "kubernetes_job_timeout",
+			ErrorMessage:  "Kubernetes Job did not finish before timeout",
+			ShortLogTail:  "build still running",
+		},
+	}
+	worker := testKubernetesJobWorker(service, executor)
+
+	worker.claimAndExecute(context.Background())
+
+	if service.failCalls != 1 || !service.lastFailTimedOut || service.lastFailCode != "kubernetes_job_timeout" {
+		t.Fatalf("fail calls/timedOut/code = %d/%v/%s, want timeout failure", service.failCalls, service.lastFailTimedOut, service.lastFailCode)
+	}
+	if len(service.reportStatuses) != 2 || service.reportStatuses[1] != enum.JobStepStatusFailed {
+		t.Fatalf("report statuses = %v, want running then failed step", service.reportStatuses)
+	}
+}
+
 func TestKubernetesJobWorkerFailsClaimedJobOnExecutorError(t *testing.T) {
 	t.Parallel()
 
@@ -337,6 +373,7 @@ type fakeRuntimeJobLifecycle struct {
 	completeCalls        int
 	failCalls            int
 	lastFailCode         string
+	lastFailTimedOut     bool
 	completeShortLogTail string
 	failShortLogTail     string
 }
@@ -369,6 +406,7 @@ func (s *fakeRuntimeJobLifecycle) CompleteJob(_ context.Context, input runtimese
 func (s *fakeRuntimeJobLifecycle) FailJob(_ context.Context, input runtimeservice.FailJobInput) (entity.Job, error) {
 	s.failCalls++
 	s.lastFailCode = input.ErrorCode
+	s.lastFailTimedOut = input.TimedOut
 	s.failShortLogTail = input.ShortLogTail
 	job := s.claim.Job
 	job.Status = enum.JobStatusFailed
