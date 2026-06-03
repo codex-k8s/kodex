@@ -162,7 +162,10 @@ type providerWorkItemPayload struct {
 	updatedAt string
 }
 
-const maxRepositoryChangePaths = 512
+const (
+	maxRepositoryChangePaths     = 512
+	maxRepositoryChangePathBytes = 512
+)
 
 // NormalizeWebhook maps GitHub webhook payloads to provider-neutral facts.
 func (a *Adapter) NormalizeWebhook(webhook entity.WebhookEvent) (value.ProviderWebhookFacts, bool, error) {
@@ -456,10 +459,10 @@ func pushRepositoryChangeSignal(
 ) value.ProviderRepositoryChangeSignalSnapshot {
 	summary := repositoryPathSummary(commits)
 	pathSummaryStatus := "ready"
-	if summary.PathCount == 0 {
-		pathSummaryStatus = "unavailable"
-	} else if summary.PathCount > maxRepositoryChangePaths {
+	if summary.Truncated {
 		pathSummaryStatus = "truncated"
+	} else if summary.PathCount == 0 {
+		pathSummaryStatus = "unavailable"
 	}
 	signalKey := repositoryChangeSignalKey(enum.ProviderSlugGitHub, "push", repositoryFullName, baseBranch, commitSHA, 0)
 	fingerprint := repositoryChangeFingerprint(
@@ -611,27 +614,37 @@ type repositoryPathSummaryResult struct {
 	Categories            []value.ProviderRepositoryChangePathCategoryCount
 	ServicesPolicyChanged bool
 	DeployRelevantChanged bool
+	Truncated             bool
 }
 
 func repositoryPathSummary(commits []pushCommitPayload) repositoryPathSummaryResult {
-	changes := map[string]string{}
+	accumulator := repositoryPathAccumulator{changes: map[string]string{}}
 	for _, commit := range commits {
-		recordPathChanges(changes, commit.Added, "added")
-		recordPathChanges(changes, commit.Modified, "modified")
-		recordPathChanges(changes, commit.Removed, "removed")
+		accumulator.record(commit.Added, "added")
+		if accumulator.truncated {
+			break
+		}
+		accumulator.record(commit.Modified, "modified")
+		if accumulator.truncated {
+			break
+		}
+		accumulator.record(commit.Removed, "removed")
+		if accumulator.truncated {
+			break
+		}
 	}
-	keys := make([]string, 0, len(changes))
-	for path := range changes {
+	keys := make([]string, 0, len(accumulator.changes))
+	for path := range accumulator.changes {
 		keys = append(keys, path)
 	}
 	sort.Strings(keys)
 	if len(keys) == 0 {
-		return repositoryPathSummaryResult{PathDigest: emptyRepositoryChangePathDigest()}
+		return repositoryPathSummaryResult{PathDigest: emptyRepositoryChangePathDigest(), Truncated: accumulator.truncated}
 	}
 	counts := map[string]int64{}
 	hash := sha256.New()
 	for _, path := range keys {
-		action := changes[path]
+		action := accumulator.changes[path]
 		category := repositoryChangePathCategory(path)
 		counts[category]++
 		_, _ = hash.Write([]byte(path))
@@ -655,30 +668,49 @@ func repositoryPathSummary(commits []pushCommitPayload) repositoryPathSummaryRes
 		Categories:            categories,
 		ServicesPolicyChanged: servicesChanged,
 		DeployRelevantChanged: servicesChanged || repositoryChangeDeployRelevant(counts),
+		Truncated:             accumulator.truncated,
 	}
 }
 
-func recordPathChanges(changes map[string]string, paths []string, action string) {
+type repositoryPathAccumulator struct {
+	changes   map[string]string
+	truncated bool
+}
+
+func (a *repositoryPathAccumulator) record(paths []string, action string) {
 	for _, path := range paths {
-		path = normalizeRepositoryPath(path)
+		path, truncated := normalizeRepositoryPath(path)
+		if truncated {
+			a.truncated = true
+			return
+		}
 		if path == "" {
 			continue
 		}
-		changes[path] = action
+		if len(a.changes) >= maxRepositoryChangePaths {
+			if _, ok := a.changes[path]; !ok {
+				a.truncated = true
+				return
+			}
+		}
+		a.changes[path] = action
 	}
 }
 
-func normalizeRepositoryPath(path string) string {
+func normalizeRepositoryPath(path string) (string, bool) {
 	path = strings.TrimSpace(strings.ReplaceAll(path, "\\", "/"))
 	path = strings.TrimPrefix(path, "./")
+	if len(path) > maxRepositoryChangePathBytes {
+		return "", true
+	}
 	if path == "" ||
 		strings.HasPrefix(path, "/") ||
 		strings.Contains(path, "\x00") ||
 		strings.Contains(path, "../") ||
 		strings.HasPrefix(path, "..") {
-		return ""
+		return "", false
 	}
-	return path
+	return path, false
 }
 
 func repositoryChangePathCategory(path string) string {

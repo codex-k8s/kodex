@@ -1608,6 +1608,65 @@ func TestNormalizeWebhookMapsGitHubPushRepositoryChangeSignal(t *testing.T) {
 	}
 }
 
+func TestNormalizeWebhookBoundsGitHubPushRepositoryChangePaths(t *testing.T) {
+	t.Parallel()
+
+	paths := make([]string, maxRepositoryChangePaths+17)
+	for idx := range paths {
+		paths[idx] = "services/service-" + strconv.Itoa(idx) + "/main.go"
+	}
+	payload, err := json.Marshal(map[string]any{
+		"ref":    "refs/heads/main",
+		"before": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		"after":  "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+		"repository": map[string]any{
+			"id":        101,
+			"full_name": "codex-k8s/kodex",
+		},
+		"head_commit": map[string]any{
+			"id":        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+			"timestamp": "2026-05-29T11:59:00Z",
+		},
+		"commits": []map[string]any{
+			{
+				"id":       "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+				"added":    []string{},
+				"modified": paths,
+				"removed":  []string{},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("marshal push payload: %v", err)
+	}
+	facts, ok, err := New(Config{}).NormalizeWebhook(entity.WebhookEvent{
+		ProviderSlug: enum.ProviderSlugGitHub,
+		EventName:    "push",
+		ReceivedAt:   time.Date(2026, 5, 29, 12, 0, 0, 0, time.UTC),
+		PayloadJSON:  payload,
+	})
+	if err != nil {
+		t.Fatalf("NormalizeWebhook(): %v", err)
+	}
+	if !ok || facts.RepositoryChange == nil {
+		t.Fatalf("NormalizeWebhook() = ok %v facts %+v, want repository change", ok, facts)
+	}
+	change := facts.RepositoryChange
+	if change.PathSummaryStatus != "truncated" || change.ChangedPathCount != maxRepositoryChangePaths {
+		t.Fatalf("repository change = %+v, want truncated bounded path count", change)
+	}
+	if len(change.PathCategories) != 1 ||
+		change.PathCategories[0].Category != string(enum.RepositoryChangePathCategoryServiceSource) ||
+		change.PathCategories[0].Count != maxRepositoryChangePaths {
+		t.Fatalf("path categories = %+v, want bounded service source counter", change.PathCategories)
+	}
+	if !change.DeployRelevantChanged ||
+		!strings.HasPrefix(change.PathDigest, "sha256:") ||
+		!strings.HasPrefix(change.ChangeFingerprint, "sha256:") {
+		t.Fatalf("repository change = %+v, want bounded safe summary", change)
+	}
+}
+
 func TestNormalizeWebhookMapsGitHubPRConversationCommentToPullRequestProjection(t *testing.T) {
 	t.Parallel()
 
