@@ -77,7 +77,7 @@ func TestKubernetesJobWorkerReportsBuildStepKey(t *testing.T) {
 			JobName:      "kodex-rt-test",
 			ExternalRef:  "kubernetes://cluster/namespaces/runtime-jobs/jobs/kodex-rt-test",
 		},
-		result: runtimekubernetes.ExecutionResult{Succeeded: true, ShortLogTail: "image pushed secret-value provider payload"},
+		result: runtimekubernetes.ExecutionResult{Succeeded: true, ShortLogTail: "image pushed Authorization: Bearer secret-token"},
 	}
 	worker := testKubernetesJobWorker(service, executor)
 
@@ -86,16 +86,35 @@ func TestKubernetesJobWorkerReportsBuildStepKey(t *testing.T) {
 	if len(service.reportStepKeys) != 2 || service.reportStepKeys[0] != kubernetesBuildStepKey || service.reportStepKeys[1] != kubernetesBuildStepKey {
 		t.Fatalf("report step keys = %v, want build step key", service.reportStepKeys)
 	}
-	if service.completeShortLogTail != "image pushed [redacted] [redacted]" {
-		t.Fatalf("complete short log tail = %q, want bounded build tail", service.completeShortLogTail)
+	if service.completeShortLogTail != redactedDiagnosticValue {
+		t.Fatalf("complete short log tail = %q, want redacted build tail", service.completeShortLogTail)
 	}
 	for _, tail := range append(service.reportShortLogTails, service.completeShortLogTail) {
-		if strings.Contains(tail, "secret-value") || strings.Contains(tail, "provider payload") {
+		if strings.Contains(strings.ToLower(tail), "authorization") || strings.Contains(strings.ToLower(tail), "bearer") || strings.Contains(tail, "secret-token") {
 			t.Fatalf("reported build short log tail = %q, want redacted diagnostics", tail)
 		}
 	}
 	if service.completeCalls != 1 || service.failCalls != 0 {
 		t.Fatalf("complete/fail calls = %d/%d, want 1/0", service.completeCalls, service.failCalls)
+	}
+}
+
+func TestRedactBuildLogTailRedactsWholeUnsafeTail(t *testing.T) {
+	t.Parallel()
+
+	for _, tail := range []string{
+		"Authorization: Bearer token-value",
+		"kubeconfig: apiVersion: v1 clusters: []",
+		"stdout: prompt body",
+		"registry token=secret_value",
+		"-----BEGIN PRIVATE KEY-----",
+	} {
+		if got := redactBuildLogTail(tail); got != redactedDiagnosticValue {
+			t.Fatalf("redactBuildLogTail(%q) = %q, want %q", tail, got, redactedDiagnosticValue)
+		}
+	}
+	if got := redactBuildLogTail("image pushed to registry"); got != "image pushed to registry" {
+		t.Fatalf("redactBuildLogTail(safe) = %q, want original safe tail", got)
 	}
 }
 

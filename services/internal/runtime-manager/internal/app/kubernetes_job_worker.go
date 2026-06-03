@@ -27,12 +27,22 @@ const (
 	maxWorkerRetryDelay          = 30 * time.Second
 )
 
-var runtimeBuildLogRedactionMarkers = []string{
+var runtimeBuildLogUnsafeMarkers = []string{
+	"authorization",
+	"bearer",
+	"token=",
+	"token:",
 	"secret-value",
+	"secret_value",
 	"provider payload",
+	"provider response",
 	"kubeconfig",
 	"oauth token",
 	"webhook body",
+	"raw payload",
+	"stdout",
+	"stderr",
+	"-----begin",
 }
 
 type kubernetesWorkerIteration int
@@ -261,11 +271,16 @@ func safeExecutionShortLogTail(jobType enum.JobType, shortLogTail string) string
 }
 
 func redactBuildLogTail(shortLogTail string) string {
-	result := shortLogTail
-	for _, marker := range runtimeBuildLogRedactionMarkers {
-		result = strings.ReplaceAll(result, marker, redactedDiagnosticValue)
+	if strings.TrimSpace(shortLogTail) == "" {
+		return ""
 	}
-	return result
+	normalized := strings.ToLower(shortLogTail)
+	for _, marker := range runtimeBuildLogUnsafeMarkers {
+		if strings.Contains(normalized, marker) {
+			return redactedDiagnosticValue
+		}
+	}
+	return shortLogTail
 }
 
 func (w kubernetesJobWorker) commandMeta(phase string, expectedVersion *int64) value.CommandMeta {
