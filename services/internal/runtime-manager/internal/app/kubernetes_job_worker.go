@@ -27,24 +27,6 @@ const (
 	maxWorkerRetryDelay          = 30 * time.Second
 )
 
-var runtimeBuildLogUnsafeMarkers = []string{
-	"authorization",
-	"bearer",
-	"token=",
-	"token:",
-	"secret-value",
-	"secret_value",
-	"provider payload",
-	"provider response",
-	"kubeconfig",
-	"oauth token",
-	"webhook body",
-	"raw payload",
-	"stdout",
-	"stderr",
-	"-----begin",
-}
-
 type kubernetesWorkerIteration int
 
 const (
@@ -182,13 +164,14 @@ func (w kubernetesJobWorker) executeClaim(ctx context.Context, claim runtimeserv
 		return kubernetesWorkerProcessed
 	}
 	shortLogTail := safeExecutionShortLogTail(reported.JobType, result.ShortLogTail)
-	failed, err := w.reportStep(ctx, reported, claim.LeaseToken, enum.JobStepStatusFailed, shortLogTail, started.ExternalRef, result.ErrorCode, result.ErrorMessage, nil)
+	errorMessage := firstNonEmpty(result.StatusSummary, result.ErrorMessage)
+	failed, err := w.reportStep(ctx, reported, claim.LeaseToken, enum.JobStepStatusFailed, shortLogTail, started.ExternalRef, result.ErrorCode, errorMessage, nil)
 	if err != nil {
 		w.log().Warn("runtime-manager Kubernetes job failure step report failed", slog.String("job_id", reported.ID.String()), slog.String("error_code", "report_failed"))
-		w.failClaimedJob(ctx, reported, claim.LeaseToken, shortLogTail, result.ErrorCode, result.ErrorMessage)
+		w.failClaimedJob(ctx, reported, claim.LeaseToken, shortLogTail, result.ErrorCode, errorMessage)
 		return workerResultForContext(ctx)
 	}
-	w.failClaimedJob(ctx, failed, claim.LeaseToken, shortLogTail, result.ErrorCode, result.ErrorMessage)
+	w.failClaimedJob(ctx, failed, claim.LeaseToken, shortLogTail, result.ErrorCode, errorMessage)
 	return kubernetesWorkerProcessed
 }
 
@@ -242,6 +225,7 @@ func (w kubernetesJobWorker) failClaimedJob(ctx context.Context, job entity.Job,
 		ErrorMessage: message,
 		ShortLogTail: shortLogTail,
 		NextAction:   "review_runtime_kubernetes_job",
+		TimedOut:     code == "kubernetes_job_timeout",
 		Meta:         w.commandMeta("fail", &job.Version),
 	}); err != nil {
 		w.log().Warn("runtime-manager Kubernetes job fail failed", slog.String("job_id", job.ID.String()), slog.String("error_code", "fail_failed"))
@@ -274,11 +258,8 @@ func redactBuildLogTail(shortLogTail string) string {
 	if strings.TrimSpace(shortLogTail) == "" {
 		return ""
 	}
-	normalized := strings.ToLower(shortLogTail)
-	for _, marker := range runtimeBuildLogUnsafeMarkers {
-		if strings.Contains(normalized, marker) {
-			return redactedDiagnosticValue
-		}
+	if runtimekubernetes.ContainsUnsafeDiagnosticMarker(shortLogTail) {
+		return redactedDiagnosticValue
 	}
 	return shortLogTail
 }
@@ -331,6 +312,15 @@ func maxDuration(left time.Duration, right time.Duration) time.Duration {
 		return left
 	}
 	return right
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }
 
 func (w kubernetesJobWorker) log() *slog.Logger {

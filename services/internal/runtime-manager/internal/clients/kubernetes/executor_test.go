@@ -77,6 +77,9 @@ func TestExecutorStartCreatesRestrictedAgentRunJob(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get created Job: %v", err)
 	}
+	if created.Spec.ActiveDeadlineSeconds == nil || *created.Spec.ActiveDeadlineSeconds != int64(1) {
+		t.Fatalf("activeDeadlineSeconds = %v, want 1 second from executor config", created.Spec.ActiveDeadlineSeconds)
+	}
 	podSpec := created.Spec.Template.Spec
 	if podSpec.AutomountServiceAccountToken == nil || *podSpec.AutomountServiceAccountToken {
 		t.Fatalf("automount service account token = %v, want disabled", podSpec.AutomountServiceAccountToken)
@@ -166,6 +169,9 @@ func TestExecutorStartCreatesRestrictedKanikoBuildJob(t *testing.T) {
 	created, err := client.BatchV1().Jobs("runtime-jobs").Get(context.Background(), started.JobName, metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("get created Job: %v", err)
+	}
+	if created.Spec.ActiveDeadlineSeconds == nil || *created.Spec.ActiveDeadlineSeconds != int64(1) {
+		t.Fatalf("build activeDeadlineSeconds = %v, want 1 second from executor config", created.Spec.ActiveDeadlineSeconds)
 	}
 	podSpec := created.Spec.Template.Spec
 	if podSpec.AutomountServiceAccountToken == nil || *podSpec.AutomountServiceAccountToken {
@@ -495,6 +501,179 @@ func TestExecutorWaitReportsFailedJob(t *testing.T) {
 
 	if result.Succeeded || result.ErrorCode != "kubernetes_job_failed" {
 		t.Fatalf("Wait() = %+v, want Kubernetes failure", result)
+	}
+}
+
+func TestExecutorObserveReportsBuildRunningStatus(t *testing.T) {
+	t.Parallel()
+
+	client := fake.NewClientset()
+	executor := newTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
+	started, err := executor.Start(context.Background(), testBuildJob())
+	if err != nil {
+		t.Fatalf("Start(build): %v", err)
+	}
+	created, err := client.BatchV1().Jobs(started.Namespace).Get(context.Background(), started.JobName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("get created Job: %v", err)
+	}
+	created.Status.Active = 1
+	if _, err := client.BatchV1().Jobs(started.Namespace).UpdateStatus(context.Background(), created, metav1.UpdateOptions{}); err != nil {
+		t.Fatalf("update job status: %v", err)
+	}
+
+	result, done := executor.observe(context.Background(), started)
+
+	if done || result.Phase != ExecutionPhaseRunning || result.StatusSummary == "" || strings.Contains(result.StatusSummary, "secret") {
+		t.Fatalf("observe(build running) = %+v done=%v, want running safe summary", result, done)
+	}
+}
+
+func TestExecutorObserveFallsBackToRuntimeJobLabels(t *testing.T) {
+	t.Parallel()
+
+	client := fake.NewClientset()
+	executor := newTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
+	started, err := executor.Start(context.Background(), testBuildJob())
+	if err != nil {
+		t.Fatalf("Start(build): %v", err)
+	}
+	created, err := client.BatchV1().Jobs(started.Namespace).Get(context.Background(), started.JobName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("get created Job: %v", err)
+	}
+	if err := client.BatchV1().Jobs(started.Namespace).Delete(context.Background(), started.JobName, metav1.DeleteOptions{}); err != nil {
+		t.Fatalf("delete created Job: %v", err)
+	}
+	created.Name = "kodex-rt-observed-by-label"
+	created.ResourceVersion = ""
+	created.Status.Active = 1
+	if _, err := client.BatchV1().Jobs(started.Namespace).Create(context.Background(), created, metav1.CreateOptions{}); err != nil {
+		t.Fatalf("create label-selected Job: %v", err)
+	}
+
+	result, done := executor.observe(context.Background(), started)
+
+	if done || result.Phase != ExecutionPhaseRunning {
+		t.Fatalf("observe(label fallback) = %+v done=%v, want running from labels", result, done)
+	}
+}
+
+func TestExecutorObserveRejectsAmbiguousRuntimeJobLabels(t *testing.T) {
+	t.Parallel()
+
+	client := fake.NewClientset()
+	executor := newTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
+	started, err := executor.Start(context.Background(), testBuildJob())
+	if err != nil {
+		t.Fatalf("Start(build): %v", err)
+	}
+	created, err := client.BatchV1().Jobs(started.Namespace).Get(context.Background(), started.JobName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("get created Job: %v", err)
+	}
+	if err := client.BatchV1().Jobs(started.Namespace).Delete(context.Background(), started.JobName, metav1.DeleteOptions{}); err != nil {
+		t.Fatalf("delete created Job: %v", err)
+	}
+	for _, name := range []string{"kodex-rt-observed-by-label-a", "kodex-rt-observed-by-label-b"} {
+		clone := created.DeepCopy()
+		clone.Name = name
+		clone.ResourceVersion = ""
+		clone.Status.Active = 1
+		if _, err := client.BatchV1().Jobs(started.Namespace).Create(context.Background(), clone, metav1.CreateOptions{}); err != nil {
+			t.Fatalf("create ambiguous label-selected Job %s: %v", name, err)
+		}
+	}
+
+	result, done := executor.observe(context.Background(), started)
+
+	if !done || result.ErrorCode != "kubernetes_job_status_ambiguous" || result.Phase != ExecutionPhaseUnknown {
+		t.Fatalf("observe(ambiguous labels) = %+v done=%v, want ambiguous status error", result, done)
+	}
+}
+
+func TestExecutorObserveRejectsMismatchedManagedLabels(t *testing.T) {
+	t.Parallel()
+
+	client := fake.NewClientset()
+	executor := newTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
+	started, err := executor.Start(context.Background(), testBuildJob())
+	if err != nil {
+		t.Fatalf("Start(build): %v", err)
+	}
+	created, err := client.BatchV1().Jobs(started.Namespace).Get(context.Background(), started.JobName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("get created Job: %v", err)
+	}
+	created.Labels[runtimeJobTypeLabel] = string(enum.JobTypeHealthCheck)
+	if _, err := client.BatchV1().Jobs(started.Namespace).Update(context.Background(), created, metav1.UpdateOptions{}); err != nil {
+		t.Fatalf("update job labels: %v", err)
+	}
+
+	result, done := executor.observe(context.Background(), started)
+
+	if !done || result.ErrorCode != "kubernetes_job_label_mismatch" || result.Phase != ExecutionPhaseUnknown {
+		t.Fatalf("observe(label mismatch) = %+v done=%v, want label mismatch", result, done)
+	}
+}
+
+func TestExecutorWaitReportsBuildTimeoutCondition(t *testing.T) {
+	t.Parallel()
+
+	client := fake.NewClientset()
+	executor := newTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
+	started, err := executor.Start(context.Background(), testBuildJob())
+	if err != nil {
+		t.Fatalf("Start(build): %v", err)
+	}
+	created, err := client.BatchV1().Jobs(started.Namespace).Get(context.Background(), started.JobName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("get created Job: %v", err)
+	}
+	created.Status.Conditions = []batchv1.JobCondition{{
+		Type:    batchv1.JobFailed,
+		Status:  corev1.ConditionTrue,
+		Reason:  "DeadlineExceeded",
+		Message: "Job exceeded active deadline",
+	}}
+	if _, err := client.BatchV1().Jobs(started.Namespace).UpdateStatus(context.Background(), created, metav1.UpdateOptions{}); err != nil {
+		t.Fatalf("update job status: %v", err)
+	}
+
+	result := executor.Wait(context.Background(), started)
+
+	if result.Succeeded || result.ErrorCode != "kubernetes_job_timeout" || result.Phase != ExecutionPhaseTimedOut {
+		t.Fatalf("Wait(build timeout) = %+v, want timeout", result)
+	}
+}
+
+func TestExecutorWaitRedactsUnsafeBuildFailureSummary(t *testing.T) {
+	t.Parallel()
+
+	client := fake.NewClientset()
+	executor := newTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
+	started, err := executor.Start(context.Background(), testBuildJob())
+	if err != nil {
+		t.Fatalf("Start(build): %v", err)
+	}
+	created, err := client.BatchV1().Jobs(started.Namespace).Get(context.Background(), started.JobName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("get created Job: %v", err)
+	}
+	created.Status.Conditions = []batchv1.JobCondition{{
+		Type:    batchv1.JobFailed,
+		Status:  corev1.ConditionTrue,
+		Reason:  "BackoffLimitExceeded",
+		Message: "registry token=secret-value",
+	}}
+	if _, err := client.BatchV1().Jobs(started.Namespace).UpdateStatus(context.Background(), created, metav1.UpdateOptions{}); err != nil {
+		t.Fatalf("update job status: %v", err)
+	}
+
+	result := executor.Wait(context.Background(), started)
+
+	if result.ErrorCode != "kubernetes_job_failed" || result.ErrorMessage != "Kubernetes Job failed" || strings.Contains(result.StatusSummary, "secret-value") {
+		t.Fatalf("Wait(build unsafe failure) = %+v, want generic safe failure summary", result)
 	}
 }
 

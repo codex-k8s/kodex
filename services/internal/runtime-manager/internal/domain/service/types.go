@@ -290,6 +290,7 @@ type FailJobInput struct {
 	ShortLogTail string
 	FullLogRef   string
 	NextAction   string
+	TimedOut     bool
 	Meta         value.CommandMeta
 }
 
