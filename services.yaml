@@ -807,14 +807,16 @@ spec:
         ownerInboxGrpcClient: proto/kodex/interactions/v1/interaction_hub.proto
         runtimeStatusGrpcClient: proto/kodex/agents/v1/agent_manager.proto
         governanceSummaryGrpcClient: proto/kodex/governance/v1/governance_manager.proto
+        projectCatalogGrpcClient: proto/kodex/projects/v1/project_catalog.proto
       dependencies:
         - agent-manager
         - governance-manager
         - interaction-hub
+        - project-catalog
       implementation:
         businessState: none
-        description: staff edge for owner inbox decisions, agent run runtime summary, activity timeline and governance summary
-        firstSurface: owner-inbox-list-detail-respond-runtime-status-activity-timeline-governance-summary
+        description: staff edge for owner inbox decisions, agent run runtime summary, activity timeline, governance summary and self-deploy status
+        firstSurface: owner-inbox-list-detail-respond-runtime-status-activity-timeline-governance-summary-self-deploy-status
         downstreamCalls:
           - agent-manager.GetAgentRunRuntimeStatus
           - agent-manager.ListAgentActivities
@@ -822,6 +824,8 @@ spec:
           - interaction-hub.ListOwnerInboxItems
           - interaction-hub.GetOwnerInboxItem
           - interaction-hub.RecordInteractionResponse
+          - project-catalog.GetSelfDeploySignal
+          - project-catalog.ListRepositories
         safePayloadsOnly: true
       deploy:
         serviceManifest: deploy/base/staff-gateway/staff-gateway.yaml.tpl

@@ -368,11 +368,13 @@ paths:
       operationId: getSelfDeploySummary
       summary: Получить безопасную self-deploy сводку.
       description: |
-        Возвращает latest visible `agent-manager.ListSelfDeployPlans` summary для командного центра.
-        Gateway не читает БД доменных сервисов, не запускает deploy, не принимает governance decision
-        и не возвращает raw webhook body, provider response, diff, полный YAML, token, OAuth state/cookies,
-        secret values или большие логи. Если доменные данные ещё не появились, ответ остаётся успешным,
-        но содержит `unavailable`/`pending` статусы без фиктивных данных.
+        Возвращает latest visible self-deploy summary для командного центра. Gateway сначала читает
+        `agent-manager.ListSelfDeployPlans`; если plan ещё не создан, но caller передал safe project и
+        provider signal refs, gateway уточняет project-side readiness через `project-catalog.GetSelfDeploySignal`.
+        Gateway не читает БД доменных сервисов, не запускает deploy, не принимает governance decision и не
+        возвращает raw webhook body, provider response, diff, полный YAML, token, OAuth state/cookies,
+        secret values или большие логи. Если доменные данные ещё не появились, ответ остаётся успешным, но
+        содержит `unavailable`/`pending` статусы и явный `chain_status` без фиктивных данных.
       parameters:
         - $ref: '#/components/parameters/RequestIdHeader'
         - $ref: '#/components/parameters/TraceIdHeader'
@@ -1038,6 +1040,32 @@ components:
       x-enum-varnames:
         - SelfDeploySummaryAvailabilityUnavailable
         - SelfDeploySummaryAvailabilityReady
+    SelfDeployChainStatus:
+      type: string
+      enum:
+        - not_configured
+        - project_missing
+        - repository_binding_missing
+        - waiting_for_provider_signal
+        - provider_signal_found
+        - needs_services_policy_reconcile
+        - plan_created
+        - governance_gate_pending
+        - approved_ready_for_build
+        - blocked
+    SelfDeployNextStepCode:
+      type: string
+      enum:
+        - configure_project
+        - restore_project
+        - bind_repository
+        - wait_provider_signal
+        - reconcile_services_policy
+        - wait_self_deploy_plan
+        - review_governance_gate
+        - ready_for_build
+        - inspect_blocker
+        - none
     SelfDeployProviderSignalStatus:
       type: string
       enum: [unavailable, stored_ref]
@@ -1049,7 +1077,7 @@ components:
       enum: [unspecified, pending_approval, approved, rejected, cancelled, failed]
     SelfDeployPathCategory:
       type: string
-      enum: [unspecified, service_source, service_config, deploy_manifest, runtime_config, documentation, test, platform_policy, other]
+      enum: [unspecified, service_source, service_config, deploy_manifest, runtime_config, documentation, test, platform_policy, other, services_policy]
     SelfDeployGovernanceStatus:
       type: string
       enum: [unavailable, pending, resolved]
@@ -1390,12 +1418,18 @@ components:
         - deploy_plan
         - governance
         - runtime
+        - chain_status
+        - next_step
         - affected_service_keys
         - path_categories
         - expected_runtime_job_types
       properties:
         availability:
           $ref: '#/components/schemas/SelfDeploySummaryAvailability'
+        chain_status:
+          $ref: '#/components/schemas/SelfDeployChainStatus'
+        next_step:
+          $ref: '#/components/schemas/SelfDeployNextStep'
         self_deploy_plan_id:
           type: string
           maxLength: 256
@@ -1456,6 +1490,16 @@ components:
         version:
           type: integer
           format: int64
+    SelfDeployNextStep:
+      type: object
+      additionalProperties: false
+      required: [code, summary]
+      properties:
+        code:
+          $ref: '#/components/schemas/SelfDeployNextStepCode'
+        summary:
+          type: string
+          maxLength: 2000
     SelfDeployProviderSignalSummary:
       type: object
       additionalProperties: false

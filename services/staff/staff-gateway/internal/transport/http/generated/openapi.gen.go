@@ -334,11 +334,39 @@ const (
 	ScopeTypeService      ScopeType = "service"
 )
 
+// Defines values for SelfDeployChainStatus.
+const (
+	ApprovedReadyForBuild        SelfDeployChainStatus = "approved_ready_for_build"
+	Blocked                      SelfDeployChainStatus = "blocked"
+	GovernanceGatePending        SelfDeployChainStatus = "governance_gate_pending"
+	NeedsServicesPolicyReconcile SelfDeployChainStatus = "needs_services_policy_reconcile"
+	NotConfigured                SelfDeployChainStatus = "not_configured"
+	PlanCreated                  SelfDeployChainStatus = "plan_created"
+	ProjectMissing               SelfDeployChainStatus = "project_missing"
+	ProviderSignalFound          SelfDeployChainStatus = "provider_signal_found"
+	RepositoryBindingMissing     SelfDeployChainStatus = "repository_binding_missing"
+	WaitingForProviderSignal     SelfDeployChainStatus = "waiting_for_provider_signal"
+)
+
 // Defines values for SelfDeployGovernanceStatus.
 const (
 	SelfDeployGovernanceStatusPending     SelfDeployGovernanceStatus = "pending"
 	SelfDeployGovernanceStatusResolved    SelfDeployGovernanceStatus = "resolved"
 	SelfDeployGovernanceStatusUnavailable SelfDeployGovernanceStatus = "unavailable"
+)
+
+// Defines values for SelfDeployNextStepCode.
+const (
+	BindRepository          SelfDeployNextStepCode = "bind_repository"
+	ConfigureProject        SelfDeployNextStepCode = "configure_project"
+	InspectBlocker          SelfDeployNextStepCode = "inspect_blocker"
+	None                    SelfDeployNextStepCode = "none"
+	ReadyForBuild           SelfDeployNextStepCode = "ready_for_build"
+	ReconcileServicesPolicy SelfDeployNextStepCode = "reconcile_services_policy"
+	RestoreProject          SelfDeployNextStepCode = "restore_project"
+	ReviewGovernanceGate    SelfDeployNextStepCode = "review_governance_gate"
+	WaitProviderSignal      SelfDeployNextStepCode = "wait_provider_signal"
+	WaitSelfDeployPlan      SelfDeployNextStepCode = "wait_self_deploy_plan"
 )
 
 // Defines values for SelfDeployPathCategory.
@@ -350,6 +378,7 @@ const (
 	SelfDeployPathCategoryRuntimeConfig  SelfDeployPathCategory = "runtime_config"
 	SelfDeployPathCategoryServiceConfig  SelfDeployPathCategory = "service_config"
 	SelfDeployPathCategoryServiceSource  SelfDeployPathCategory = "service_source"
+	SelfDeployPathCategoryServicesPolicy SelfDeployPathCategory = "services_policy"
 	SelfDeployPathCategoryTest           SelfDeployPathCategory = "test"
 	SelfDeployPathCategoryUnspecified    SelfDeployPathCategory = "unspecified"
 )
@@ -1042,6 +1071,9 @@ type ScopeRef struct {
 // ScopeType defines model for ScopeType.
 type ScopeType string
 
+// SelfDeployChainStatus defines model for SelfDeployChainStatus.
+type SelfDeployChainStatus string
+
 // SelfDeployGovernanceStatus defines model for SelfDeployGovernanceStatus.
 type SelfDeployGovernanceStatus string
 
@@ -1053,6 +1085,15 @@ type SelfDeployGovernanceSummary struct {
 	ReleaseDecisionRef        *string                    `json:"release_decision_ref,omitempty"`
 	Status                    SelfDeployGovernanceStatus `json:"status"`
 }
+
+// SelfDeployNextStep defines model for SelfDeployNextStep.
+type SelfDeployNextStep struct {
+	Code    SelfDeployNextStepCode `json:"code"`
+	Summary string                 `json:"summary"`
+}
+
+// SelfDeployNextStepCode defines model for SelfDeployNextStepCode.
+type SelfDeployNextStepCode string
 
 // SelfDeployPathCategory defines model for SelfDeployPathCategory.
 type SelfDeployPathCategory string
@@ -1097,11 +1138,13 @@ type SelfDeploySafeError struct {
 type SelfDeploySummary struct {
 	AffectedServiceKeys     []string                        `json:"affected_service_keys"`
 	Availability            SelfDeploySummaryAvailability   `json:"availability"`
+	ChainStatus             SelfDeployChainStatus           `json:"chain_status"`
 	CreatedAt               *time.Time                      `json:"created_at,omitempty"`
 	DeployPlan              SelfDeployPlanSummary           `json:"deploy_plan"`
 	ExpectedRuntimeJobTypes []string                        `json:"expected_runtime_job_types"`
 	Governance              SelfDeployGovernanceSummary     `json:"governance"`
 	MergeCommitSha          *string                         `json:"merge_commit_sha,omitempty"`
+	NextStep                SelfDeployNextStep              `json:"next_step"`
 	PathCategories          []SelfDeployPathCategory        `json:"path_categories"`
 	PlanFingerprint         *string                         `json:"plan_fingerprint,omitempty"`
 	ProjectRef              *string                         `json:"project_ref,omitempty"`

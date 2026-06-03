@@ -85,12 +85,17 @@ allowlist-файлом для owner email, не общей bootstrap allowlist.
   production-данных.
 - Self-deploy наблюдение вынесено в отдельный блок командного центра. Он
   читает `GET /v1/self-deploy/summary` и показывает безопасный owner-facing
-  статус: последний provider signal ref/status, repository/project refs,
-  branch/commit refs, service keys или path categories, `services.yaml`
-  digest/fingerprint, deploy plan status, governance/owner decision refs/status,
-  expected runtime job types и safe error/reason summary. Если доменные данные
-  ещё не готовы, блок показывает `unavailable` или `pending`, а не демо- или фиктивные
-  значения; автоматический deploy и кнопки запуска выкладки недоступны.
+  статус: где остановилась цепочка, следующий безопасный шаг, последний provider
+  signal ref/status, repository/project refs, branch/commit refs, service keys
+  или path categories, `services.yaml` digest/fingerprint, deploy plan status,
+  governance/owner decision refs/status, expected runtime job types и safe
+  error/reason summary. Возможные `chain_status`: `not_configured`,
+  `project_missing`, `repository_binding_missing`, `waiting_for_provider_signal`,
+  `provider_signal_found`, `needs_services_policy_reconcile`, `plan_created`,
+  `governance_gate_pending`, `approved_ready_for_build` и `blocked`. Если
+  доменные данные ещё не готовы, блок показывает `unavailable`, `pending` или
+  конкретный `chain_status`, а не демо- или фиктивные значения; автоматический
+  deploy и кнопки запуска выкладки недоступны.
 - Верхние карточки командного центра показывают текущую страницу входящих
   решений и первые страницы списков `AgentSession`/`AgentRun` из
   `staff-gateway`: выполняющиеся, ожидающие и проблемные `Run` вынесены в

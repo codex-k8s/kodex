@@ -73,13 +73,17 @@ export type GovernanceEvidenceKind = 'unspecified' | 'provider_comment' | 'provi
 
 export type SelfDeploySummaryAvailability = 'unavailable' | 'ready';
 
+export type SelfDeployChainStatus = 'not_configured' | 'project_missing' | 'repository_binding_missing' | 'waiting_for_provider_signal' | 'provider_signal_found' | 'needs_services_policy_reconcile' | 'plan_created' | 'governance_gate_pending' | 'approved_ready_for_build' | 'blocked';
+
+export type SelfDeployNextStepCode = 'configure_project' | 'restore_project' | 'bind_repository' | 'wait_provider_signal' | 'reconcile_services_policy' | 'wait_self_deploy_plan' | 'review_governance_gate' | 'ready_for_build' | 'inspect_blocker' | 'none';
+
 export type SelfDeployProviderSignalStatus = 'unavailable' | 'stored_ref';
 
 export type SelfDeployPlanStatus = 'unavailable' | 'unspecified' | 'pending_approval' | 'approved' | 'rejected' | 'cancelled' | 'failed';
 
 export type SelfDeployPlanStatusFilter = 'unspecified' | 'pending_approval' | 'approved' | 'rejected' | 'cancelled' | 'failed';
 
-export type SelfDeployPathCategory = 'unspecified' | 'service_source' | 'service_config' | 'deploy_manifest' | 'runtime_config' | 'documentation' | 'test' | 'platform_policy' | 'other';
+export type SelfDeployPathCategory = 'unspecified' | 'service_source' | 'service_config' | 'deploy_manifest' | 'runtime_config' | 'documentation' | 'test' | 'platform_policy' | 'other' | 'services_policy';
 
 export type SelfDeployGovernanceStatus = 'unavailable' | 'pending' | 'resolved';
 
@@ -238,6 +242,8 @@ export type SelfDeploySummaryResponse = {
 
 export type SelfDeploySummary = {
     availability: SelfDeploySummaryAvailability;
+    chain_status: SelfDeployChainStatus;
+    next_step: SelfDeployNextStep;
     self_deploy_plan_id?: string;
     project_ref?: string;
     repository_ref?: string;
@@ -258,6 +264,11 @@ export type SelfDeploySummary = {
     created_at?: string;
     updated_at?: string;
     version?: number;
+};
+
+export type SelfDeployNextStep = {
+    code: SelfDeployNextStepCode;
+    summary: string;
 };
 
 export type SelfDeployProviderSignalSummary = {
