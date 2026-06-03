@@ -258,6 +258,30 @@ func TestRepositoryIntegrationGovernanceStateAndOutbox(t *testing.T) {
 	if err := repository.CreateGateRequest(ctx, gateRequest, testCommandResult(uuid.New(), operationCreateGateRequest, "gate_request", gateRequest.ID, now), testEvent("governance.gate.requested", "gate", gateRequest.ID, now)); err != nil {
 		t.Fatalf("create gate request: %v", err)
 	}
+	selfDeployGateRequest := entity.GateRequest{
+		VersionedBase:    entity.VersionedBase{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		RiskAssessmentID: &assessment.ID,
+		Target:           value.ExternalRef{Type: "self_deploy_plan", Ref: "agent:self-deploy-plan:1"},
+		EvidenceRefs: []value.EvidenceRef{{
+			Kind:           "self_deploy_plan",
+			Ref:            "agent:self-deploy-plan:1",
+			Summary:        "self-deploy plan gate input",
+			Digest:         "sha256:self-deploy-plan",
+			RetentionClass: "safe_ref",
+		}},
+		EvidenceSummary: "self-deploy gate input",
+		Status:          enum.GateRequestStatusRequested,
+	}
+	if err := repository.CreateGateRequest(ctx, selfDeployGateRequest, testCommandResult(uuid.New(), operationCreateGateRequest, "gate_request", selfDeployGateRequest.ID, now), testEvent("governance.gate.requested", "gate", selfDeployGateRequest.ID, now)); err != nil {
+		t.Fatalf("create self-deploy gate request without policy: %v", err)
+	}
+	storedSelfDeployGateRequest, err := repository.GetGateRequest(ctx, selfDeployGateRequest.ID)
+	if err != nil {
+		t.Fatalf("get self-deploy gate request without policy: %v", err)
+	}
+	if storedSelfDeployGateRequest.GatePolicyID != nil {
+		t.Fatalf("self-deploy gate policy id = %v, want nil", storedSelfDeployGateRequest.GatePolicyID)
+	}
 	decision := entity.GateDecision{ID: uuid.New(), GateRequestID: gateRequest.ID, DecisionActorRef: "user:owner", Outcome: enum.GateOutcomeApprove, Reason: "safe", DecidedAt: now.Add(time.Minute)}
 	gateRequest.Version = 2
 	gateRequest.Status = enum.GateRequestStatusResolved

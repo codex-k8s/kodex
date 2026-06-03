@@ -910,6 +910,7 @@ const (
 	EvidenceKind_EVIDENCE_KIND_AGENT_ACCEPTANCE     EvidenceKind = 11
 	EvidenceKind_EVIDENCE_KIND_AGENT_RUN            EvidenceKind = 12
 	EvidenceKind_EVIDENCE_KIND_AGENT_HUMAN_GATE     EvidenceKind = 13
+	EvidenceKind_EVIDENCE_KIND_SELF_DEPLOY_PLAN     EvidenceKind = 14
 )
 
 // Enum value maps for EvidenceKind.
@@ -929,6 +930,7 @@ var (
 		11: "EVIDENCE_KIND_AGENT_ACCEPTANCE",
 		12: "EVIDENCE_KIND_AGENT_RUN",
 		13: "EVIDENCE_KIND_AGENT_HUMAN_GATE",
+		14: "EVIDENCE_KIND_SELF_DEPLOY_PLAN",
 	}
 	EvidenceKind_value = map[string]int32{
 		"EVIDENCE_KIND_UNSPECIFIED":          0,
@@ -945,6 +947,7 @@ var (
 		"EVIDENCE_KIND_AGENT_ACCEPTANCE":     11,
 		"EVIDENCE_KIND_AGENT_RUN":            12,
 		"EVIDENCE_KIND_AGENT_HUMAN_GATE":     13,
+		"EVIDENCE_KIND_SELF_DEPLOY_PLAN":     14,
 	}
 )
 
@@ -11032,7 +11035,7 @@ const file_kodex_governance_v1_governance_manager_proto_rawDesc = "" +
 	"\x16CONFIDENCE_UNSPECIFIED\x10\x00\x12\x12\n" +
 	"\x0eCONFIDENCE_LOW\x10\x01\x12\x15\n" +
 	"\x11CONFIDENCE_MEDIUM\x10\x02\x12\x13\n" +
-	"\x0fCONFIDENCE_HIGH\x10\x03*\xda\x03\n" +
+	"\x0fCONFIDENCE_HIGH\x10\x03*\xfe\x03\n" +
 	"\fEvidenceKind\x12\x1d\n" +
 	"\x19EVIDENCE_KIND_UNSPECIFIED\x10\x00\x12\"\n" +
 	"\x1eEVIDENCE_KIND_PROVIDER_COMMENT\x10\x01\x12!\n" +
@@ -11048,7 +11051,8 @@ const file_kodex_governance_v1_governance_manager_proto_rawDesc = "" +
 	"\x12\"\n" +
 	"\x1eEVIDENCE_KIND_AGENT_ACCEPTANCE\x10\v\x12\x1b\n" +
 	"\x17EVIDENCE_KIND_AGENT_RUN\x10\f\x12\"\n" +
-	"\x1eEVIDENCE_KIND_AGENT_HUMAN_GATE\x10\r*\x90\x02\n" +
+	"\x1eEVIDENCE_KIND_AGENT_HUMAN_GATE\x10\r\x12\"\n" +
+	"\x1eEVIDENCE_KIND_SELF_DEPLOY_PLAN\x10\x0e*\x90\x02\n" +
 	"\x11GateRequestStatus\x12#\n" +
 	"\x1fGATE_REQUEST_STATUS_UNSPECIFIED\x10\x00\x12!\n" +
 	"\x1dGATE_REQUEST_STATUS_REQUESTED\x10\x01\x12\"\n" +

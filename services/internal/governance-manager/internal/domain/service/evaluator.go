@@ -28,8 +28,6 @@ const (
 	maxEvaluationFactors       = 64
 )
 
-var selfDeployGatePolicyID = uuid.MustParse("00000000-0000-4000-8000-000000000001")
-
 type evaluationPolicy struct {
 	riskProfileID      *uuid.UUID
 	riskProfileVersion *int64
@@ -677,7 +675,6 @@ func appendDefaultSelfDeployGate(required []entity.RequiredGate, riskClass enum.
 		return required
 	}
 	return append(required, entity.RequiredGate{
-		GatePolicyID: selfDeployGatePolicyID,
 		GateKind:     enum.GateKindRelease,
 		MinRiskClass: enum.RiskClassR2,
 		Reason:       "self-deploy plan requires owner/governance gate",

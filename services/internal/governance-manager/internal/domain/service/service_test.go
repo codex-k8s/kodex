@@ -305,8 +305,14 @@ func TestPrepareSelfDeployPlanGateCreatesAssessmentAndGate(t *testing.T) {
 	if len(result.RiskAssessment.RequiredGates) != 1 || result.RiskAssessment.RequiredGates[0].GateKind != enum.GateKindRelease {
 		t.Fatalf("required gates = %+v, want release owner gate", result.RiskAssessment.RequiredGates)
 	}
+	if result.RiskAssessment.RequiredGates[0].GatePolicyID != uuid.Nil {
+		t.Fatalf("required gate policy id = %s, want empty built-in self-deploy gate policy", result.RiskAssessment.RequiredGates[0].GatePolicyID)
+	}
 	if result.GateRequest.ID == uuid.Nil || result.GateRequest.RiskAssessmentID == nil || *result.GateRequest.RiskAssessmentID != result.RiskAssessment.ID {
 		t.Fatalf("gate request = %+v, want linked assessment", result.GateRequest)
+	}
+	if result.GateRequest.GatePolicyID != nil {
+		t.Fatalf("gate request policy id = %v, want nil built-in self-deploy gate policy", result.GateRequest.GatePolicyID)
 	}
 	if result.GateRequest.Status != enum.GateRequestStatusRequested {
 		t.Fatalf("gate status = %s, want requested", result.GateRequest.Status)

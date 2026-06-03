@@ -431,6 +431,10 @@ func TestPrepareSelfDeployPlanGateRoutesToDomainService(t *testing.T) {
 		response.GetGateRequest().GetStatus() != governancev1.GateRequestStatus_GATE_REQUEST_STATUS_AWAITING_DECISION {
 		t.Fatalf("response = %+v, want pending R2 gate", response)
 	}
+	if len(response.GetRiskAssessment().GetEvidenceRefs()) != 1 ||
+		response.GetRiskAssessment().GetEvidenceRefs()[0].GetKind() != governancev1.EvidenceKind_EVIDENCE_KIND_SELF_DEPLOY_PLAN {
+		t.Fatalf("risk assessment evidence refs = %+v, want typed self_deploy_plan evidence", response.GetRiskAssessment().GetEvidenceRefs())
+	}
 	rendered := response.GetGovernanceSummary().GetPendingDecisions()[0].GetSafeSummary()
 	for _, unsafe := range []string{"raw_diff", "webhook body", "secret=", "kubeconfig", "stdout", "stderr"} {
 		if strings.Contains(rendered, unsafe) {
@@ -642,6 +646,7 @@ func (service *fakeBacklogService) PrepareSelfDeployPlanGate(_ context.Context, 
 			ProjectContext:     input.ProjectContext,
 			EffectiveRiskClass: enum.RiskClassR2,
 			Status:             enum.RiskAssessmentStatusActive,
+			EvidenceRefs:       []value.EvidenceRef{{Kind: "self_deploy_plan", Ref: input.SelfDeployPlanRef, Summary: "self-deploy plan gate input", Digest: input.PlanFingerprint}},
 			RequiredGates:      []entity.RequiredGate{{GateKind: enum.GateKindRelease, MinRiskClass: enum.RiskClassR2, Reason: "self-deploy gate required"}},
 		},
 		GateRequest: entity.GateRequest{

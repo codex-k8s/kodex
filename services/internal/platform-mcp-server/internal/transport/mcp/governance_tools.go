@@ -73,6 +73,7 @@ var governanceEvidenceKindPairs = []governanceEnumPair[governancev1.EvidenceKind
 	{name: "agent_acceptance", value: governancev1.EvidenceKind_EVIDENCE_KIND_AGENT_ACCEPTANCE},
 	{name: "agent_run", value: governancev1.EvidenceKind_EVIDENCE_KIND_AGENT_RUN},
 	{name: "agent_human_gate", value: governancev1.EvidenceKind_EVIDENCE_KIND_AGENT_HUMAN_GATE},
+	{name: "self_deploy_plan", value: governancev1.EvidenceKind_EVIDENCE_KIND_SELF_DEPLOY_PLAN},
 }
 
 var governanceEvidenceKinds = governanceEnumValues(governanceEvidenceKindPairs)
