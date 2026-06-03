@@ -9,6 +9,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -585,6 +586,55 @@ func TestRunApplyReusesExistingProjectAndRepositoryBinding(t *testing.T) {
 	assertContains(t, text, "project_id=project-self")
 }
 
+func TestRunApplyReusesRepositoryBindingAcrossListRepositoryPages(t *testing.T) {
+	scenarioPath := writeScenario(t, selfRepositoryBindingOnlyScenario())
+	project := projectFixture("11111111-1111-1111-1111-111111111111", "kodex", "project-self")
+	otherRepository := selfRepositoryFixture()
+	otherRepository.RepositoryId = "repo-other"
+	otherRepository.ProviderName = "other"
+	repository := selfRepositoryFixture()
+	repository.ProjectId = "project-self"
+	repository.RepositoryId = "repo-self"
+	projectClient := &fakeProjectCatalogClient{
+		projects:        []*projectsv1.Project{project},
+		repositoryPages: [][]*projectsv1.Repository{{otherRepository}, {repository}},
+		repositories:    []*projectsv1.Repository{},
+	}
+	clients := runnerClients{
+		ProjectCatalog: projectClient,
+		ProviderHub:    &fakeProviderHubClient{},
+	}
+
+	var output bytes.Buffer
+	err := run(context.Background(), runnerOptions{
+		ScenarioFilePath:          scenarioPath,
+		OrganizationID:            "11111111-1111-1111-1111-111111111111",
+		ProjectSlug:               "kodex",
+		ProjectDisplayName:        "kodex",
+		AllowedProviderOwner:      "codex-k8s",
+		AllowedProviderRepository: "kodex",
+		RequestID:                 "req-1",
+		Kind:                      "adoption",
+		Apply:                     true,
+	}, clients, &output)
+	if err != nil {
+		t.Fatalf("run apply existing repository across pages: %v", err)
+	}
+
+	if projectClient.listRepositoriesCalls != 2 {
+		t.Fatalf("expected two ListRepositories calls, got %d", projectClient.listRepositoriesCalls)
+	}
+	if projectClient.attachRepositoryCalls != 0 {
+		t.Fatalf("expected no duplicate repository attach, got %d", projectClient.attachRepositoryCalls)
+	}
+	if got := projectClient.lastListRepositoriesRequest.GetPage().GetPageToken(); got != "1" {
+		t.Fatalf("last repository page token = %q, want 1", got)
+	}
+	text := output.String()
+	assertContains(t, text, "repository binding ready repository_id=repo-self")
+	assertContains(t, text, "project_id=project-self")
+}
+
 func TestRunDryRunPlansProjectAndRepositoryBootstrapWithoutProjectID(t *testing.T) {
 	clients := runnerClients{
 		ProjectCatalog: &fakeProjectCatalogClient{},
@@ -960,6 +1010,7 @@ type fakeProjectCatalogClient struct {
 	createProjectResponse           *projectsv1.Project
 	repository                      *projectsv1.Repository
 	repositories                    []*projectsv1.Repository
+	repositoryPages                 [][]*projectsv1.Repository
 	attachRepositoryResponse        *projectsv1.Repository
 	createRepositoryResponse        *projectsv1.RepositoryProviderCreateResponse
 	listProjectsErr                 error
@@ -1037,11 +1088,32 @@ func (f *fakeProjectCatalogClient) ListRepositories(_ context.Context, request *
 	if f.listRepositoriesErr != nil {
 		return nil, f.listRepositoriesErr
 	}
+	if len(f.repositoryPages) > 0 {
+		pageIndex := 0
+		if token := request.GetPage().GetPageToken(); token != "" {
+			parsed, err := strconv.Atoi(token)
+			if err != nil {
+				return &projectsv1.ListRepositoriesResponse{Page: &projectsv1.PageResponse{}}, nil
+			}
+			pageIndex = parsed
+		}
+		if pageIndex < 0 || pageIndex >= len(f.repositoryPages) {
+			return &projectsv1.ListRepositoriesResponse{Page: &projectsv1.PageResponse{}}, nil
+		}
+		nextPageToken := ""
+		if pageIndex+1 < len(f.repositoryPages) {
+			nextPageToken = strconv.Itoa(pageIndex + 1)
+		}
+		return &projectsv1.ListRepositoriesResponse{
+			Repositories: f.repositoryPages[pageIndex],
+			Page:         &projectsv1.PageResponse{NextPageToken: optionalString(nextPageToken)},
+		}, nil
+	}
 	repositories := f.repositories
 	if len(repositories) == 0 && f.repository != nil {
 		repositories = []*projectsv1.Repository{f.repository}
 	}
-	return &projectsv1.ListRepositoriesResponse{Repositories: repositories}, nil
+	return &projectsv1.ListRepositoriesResponse{Repositories: repositories, Page: &projectsv1.PageResponse{}}, nil
 }
 
 func (f *fakeProjectCatalogClient) CreateProviderRepository(_ context.Context, request *projectsv1.CreateProviderRepositoryRequest, _ ...grpc.CallOption) (*projectsv1.RepositoryProviderCreateResponse, error) {

@@ -1087,39 +1087,46 @@ func findRepositoryBinding(ctx context.Context, client projectCatalogAPI, option
 	if err := validateRepositoryBindingScenario(options, scenario); err != nil {
 		return nil, err
 	}
-	response, err := client.ListRepositories(ctx, &projectsv1.ListRepositoriesRequest{
-		ProjectId: options.ProjectID,
-		Statuses: []projectsv1.RepositoryStatus{
-			projectsv1.RepositoryStatus_REPOSITORY_STATUS_ACTIVE,
-			projectsv1.RepositoryStatus_REPOSITORY_STATUS_PENDING,
-			projectsv1.RepositoryStatus_REPOSITORY_STATUS_BLOCKED,
-		},
-		Page: &projectsv1.PageRequest{PageSize: 100},
-		Meta: projectQueryMeta(options),
-	})
-	if err != nil {
-		return nil, safeError("project-catalog ListRepositories failed", err)
-	}
 	targetOwner := strings.TrimSpace(scenario.ProviderOwner)
 	targetName := strings.TrimSpace(scenario.ProviderName)
-	for _, repository := range response.GetRepositories() {
-		if repository.GetProvider() != projectRepositoryProviderFromSlug(options.ProviderSlug) {
-			continue
+	pageToken := ""
+	for {
+		response, err := client.ListRepositories(ctx, &projectsv1.ListRepositoriesRequest{
+			ProjectId: options.ProjectID,
+			Statuses: []projectsv1.RepositoryStatus{
+				projectsv1.RepositoryStatus_REPOSITORY_STATUS_ACTIVE,
+				projectsv1.RepositoryStatus_REPOSITORY_STATUS_PENDING,
+				projectsv1.RepositoryStatus_REPOSITORY_STATUS_BLOCKED,
+			},
+			Page: &projectsv1.PageRequest{PageSize: 100, PageToken: optionalString(pageToken)},
+			Meta: projectQueryMeta(options),
+		})
+		if err != nil {
+			return nil, safeError("project-catalog ListRepositories failed", err)
 		}
-		if repository.GetProviderOwner() != targetOwner || repository.GetProviderName() != targetName {
-			continue
+		for _, repository := range response.GetRepositories() {
+			if repository.GetProvider() != projectRepositoryProviderFromSlug(options.ProviderSlug) {
+				continue
+			}
+			if repository.GetProviderOwner() != targetOwner || repository.GetProviderName() != targetName {
+				continue
+			}
+			if repository.GetStatus() != projectsv1.RepositoryStatus_REPOSITORY_STATUS_ACTIVE {
+				return nil, fmt.Errorf("repository binding exists with status %s, active binding is required", repository.GetStatus().String())
+			}
+			logLine(output, "OK", "repository binding ready repository_id=%s target=%s/%s base=%s version=%d",
+				safeValue(repository.GetRepositoryId()),
+				safeValue(repository.GetProviderOwner()),
+				safeValue(repository.GetProviderName()),
+				safeValue(repository.GetDefaultBranch()),
+				repository.GetVersion(),
+			)
+			return repository, nil
 		}
-		if repository.GetStatus() != projectsv1.RepositoryStatus_REPOSITORY_STATUS_ACTIVE {
-			return nil, fmt.Errorf("repository binding exists with status %s, active binding is required", repository.GetStatus().String())
+		pageToken = response.GetPage().GetNextPageToken()
+		if pageToken == "" {
+			break
 		}
-		logLine(output, "OK", "repository binding ready repository_id=%s target=%s/%s base=%s version=%d",
-			safeValue(repository.GetRepositoryId()),
-			safeValue(repository.GetProviderOwner()),
-			safeValue(repository.GetProviderName()),
-			safeValue(repository.GetDefaultBranch()),
-			repository.GetVersion(),
-		)
-		return repository, nil
 	}
 	return nil, nil
 }
