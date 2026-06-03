@@ -264,6 +264,144 @@ type ReconcileAdoptionMergeSignalInput struct {
 	Meta          value.CommandMeta
 }
 
+// ProviderOwnedDataStatus описывает готовность safe read ответа provider-hub.
+type ProviderOwnedDataStatus string
+
+const (
+	ProviderOwnedDataStatusReady       ProviderOwnedDataStatus = "ready"
+	ProviderOwnedDataStatusNotFound    ProviderOwnedDataStatus = "not_found"
+	ProviderOwnedDataStatusNotVerified ProviderOwnedDataStatus = "not_verified"
+	ProviderOwnedDataStatusStale       ProviderOwnedDataStatus = "stale"
+)
+
+// RepositoryChangePathSummaryStatus отражает готовность safe provider path summary.
+type RepositoryChangePathSummaryStatus string
+
+const (
+	RepositoryChangePathSummaryStatusReady       RepositoryChangePathSummaryStatus = "ready"
+	RepositoryChangePathSummaryStatusUnavailable RepositoryChangePathSummaryStatus = "unavailable"
+	RepositoryChangePathSummaryStatusTruncated   RepositoryChangePathSummaryStatus = "truncated"
+)
+
+// RepositoryChangeSignalReadInput идентифицирует один provider-owned repository change signal.
+type RepositoryChangeSignalReadInput struct {
+	SignalID  string
+	SignalKey string
+	Meta      value.QueryMeta
+}
+
+// RepositoryChangePathCategoryCount содержит safe счётчики provider path categories.
+type RepositoryChangePathCategoryCount struct {
+	Category enum.SelfDeployPathCategory
+	Count    int64
+}
+
+// RepositoryChangeSignal содержит safe provider refs для project-side enrichment.
+type RepositoryChangeSignal struct {
+	SignalID              string
+	SignalKey             string
+	Kind                  string
+	ProviderSlug          string
+	ProjectID             string
+	RepositoryID          string
+	RepositoryFullName    string
+	ProviderRepositoryID  string
+	Ref                   string
+	BaseBranch            string
+	CommitSHA             string
+	BeforeSHA             string
+	SourceRef             string
+	PullRequestNumber     int64
+	PathSummaryStatus     RepositoryChangePathSummaryStatus
+	ChangedPathCount      int64
+	PathDigest            string
+	PathCategories        []RepositoryChangePathCategoryCount
+	ServicesPolicyChanged bool
+	DeployRelevantChanged bool
+	ChangeFingerprint     string
+	ObservedAt            string
+	Status                string
+	Version               int64
+	ETag                  string
+}
+
+// RepositoryChangeSignalReadResult возвращает safe provider signal или явную готовность.
+type RepositoryChangeSignalReadResult struct {
+	Status ProviderOwnedDataStatus
+	Signal RepositoryChangeSignal
+}
+
+// RepositoryChangeSignalReader читает safe repository change signals из provider-hub.
+type RepositoryChangeSignalReader interface {
+	GetRepositoryChangeSignal(context.Context, RepositoryChangeSignalReadInput) (RepositoryChangeSignalReadResult, error)
+}
+
+// GetSelfDeploySignalInput идентифицирует provider/project facts для self-deploy enrichment.
+type GetSelfDeploySignalInput struct {
+	ProjectID         uuid.UUID
+	RepositoryID      *uuid.UUID
+	ProviderSignalID  string
+	ProviderSignalKey string
+	Meta              value.QueryMeta
+}
+
+// SelfDeployServicesYamlProjection описывает checked services.yaml metadata без payload.
+type SelfDeployServicesYamlProjection struct {
+	ServicesYamlRef         string
+	ServicesYamlDigest      string
+	ServicesYamlFingerprint string
+	ServicesPolicyID        uuid.UUID
+	SourceRepositoryID      *uuid.UUID
+	SourcePath              string
+	SourceRef               string
+	SourceCommitSHA         string
+	PolicyVersion           int64
+	ValidationStatus        enum.ServicesPolicyValidationStatus
+	ProjectionStatus        enum.ServicesPolicyProjectionStatus
+	ImportedAt              string
+}
+
+// SelfDeployGovernanceRequirement содержит safe governance hints.
+type SelfDeployGovernanceRequirement struct {
+	GateRequired   bool
+	RiskProfileRef string
+	GatePolicyRef  string
+}
+
+// SelfDeploySignal — project-side safe input для agent-manager SelfDeployPlan.
+type SelfDeploySignal struct {
+	ProviderSignalRef         string
+	ProviderSignalID          string
+	ProviderSignalKey         string
+	ProjectRef                string
+	RepositoryRef             string
+	ProviderSlug              string
+	RepositoryFullName        string
+	ProviderRepositoryID      string
+	SourceRef                 string
+	MergeCommitSHA            string
+	ServicesYaml              SelfDeployServicesYamlProjection
+	AffectedServiceKeys       []string
+	PathCategories            []RepositoryChangePathCategoryCount
+	ServicesYamlChanged       bool
+	DeployRelevantChanged     bool
+	ExpectedRuntimeJobTypes   []enum.SelfDeployExpectedRuntimeJobType
+	GovernanceRequirement     SelfDeployGovernanceRequirement
+	ProviderChangeFingerprint string
+	ProjectSignalFingerprint  string
+	ProviderETag              string
+	SafeSummary               string
+	ObservedAt                string
+	Version                   int64
+}
+
+// SelfDeploySignalResult возвращает готовность и bounded diagnostic reason.
+type SelfDeploySignalResult struct {
+	Status     enum.SelfDeploySignalStatus
+	Signal     SelfDeploySignal
+	SafeReason string
+}
+
 // BootstrapMergeSignalDiagnosticInput records a safe bootstrap merge signal that cannot yet import policy.
 type BootstrapMergeSignalDiagnosticInput struct {
 	ProjectID         uuid.UUID

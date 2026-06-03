@@ -38,6 +38,8 @@ service ProjectCatalogService {
   rpc ReconcileBootstrapMergeSignal(ReconcileBootstrapMergeSignalRequest) returns (BootstrapServicesPolicyImportResponse);
   // ReconcileAdoptionMergeSignal imports checked services.yaml from a safe provider adoption merge signal.
   rpc ReconcileAdoptionMergeSignal(ReconcileAdoptionMergeSignalRequest) returns (BootstrapServicesPolicyImportResponse);
+  // GetSelfDeploySignal возвращает project-side enrichment для safe provider repository change signal.
+  rpc GetSelfDeploySignal(GetSelfDeploySignalRequest) returns (SelfDeploySignalResponse);
   // GetServicesPolicy returns a checked services.yaml projection.
   rpc GetServicesPolicy(GetServicesPolicyRequest) returns (ServicesPolicyResponse);
   // ListServiceDescriptors returns typed service descriptors from active policy.
@@ -200,6 +202,42 @@ enum ServicesPolicyProjectionStatus {
   SERVICES_POLICY_PROJECTION_STATUS_PENDING = 2;
   SERVICES_POLICY_PROJECTION_STATUS_FAILED = 3;
   SERVICES_POLICY_PROJECTION_STATUS_OVERRIDDEN = 4;
+}
+
+// SelfDeploySignalStatus описывает готовность project-side self-deploy input.
+enum SelfDeploySignalStatus {
+  SELF_DEPLOY_SIGNAL_STATUS_UNSPECIFIED = 0;
+  SELF_DEPLOY_SIGNAL_STATUS_READY = 1;
+  SELF_DEPLOY_SIGNAL_STATUS_NEEDS_SERVICES_POLICY_RECONCILE = 2;
+  SELF_DEPLOY_SIGNAL_STATUS_PROVIDER_SIGNAL_NOT_FOUND = 3;
+  SELF_DEPLOY_SIGNAL_STATUS_PROVIDER_SIGNAL_NOT_READY = 4;
+  SELF_DEPLOY_SIGNAL_STATUS_REPOSITORY_BINDING_NOT_FOUND = 5;
+  SELF_DEPLOY_SIGNAL_STATUS_SERVICES_POLICY_NOT_FOUND = 6;
+  SELF_DEPLOY_SIGNAL_STATUS_SERVICES_POLICY_NOT_READY = 7;
+  SELF_DEPLOY_SIGNAL_STATUS_NOT_DEPLOY_RELEVANT = 8;
+  SELF_DEPLOY_SIGNAL_STATUS_NEEDS_REPOSITORY_CHANGE_SUMMARY = 9;
+}
+
+// SelfDeployPathCategory классифицирует изменённые пути без raw paths и diffs.
+enum SelfDeployPathCategory {
+  SELF_DEPLOY_PATH_CATEGORY_UNSPECIFIED = 0;
+  SELF_DEPLOY_PATH_CATEGORY_SERVICES_POLICY = 1;
+  SELF_DEPLOY_PATH_CATEGORY_SERVICE_SOURCE = 2;
+  SELF_DEPLOY_PATH_CATEGORY_SERVICE_CONFIG = 3;
+  SELF_DEPLOY_PATH_CATEGORY_DEPLOY_MANIFEST = 4;
+  SELF_DEPLOY_PATH_CATEGORY_RUNTIME_CONFIG = 5;
+  SELF_DEPLOY_PATH_CATEGORY_DOCUMENTATION = 6;
+  SELF_DEPLOY_PATH_CATEGORY_TEST = 7;
+  SELF_DEPLOY_PATH_CATEGORY_PLATFORM_POLICY = 8;
+  SELF_DEPLOY_PATH_CATEGORY_OTHER = 9;
+}
+
+// SelfDeployExpectedRuntimeJobType задаёт project-side safe подсказку типа runtime job.
+enum SelfDeployExpectedRuntimeJobType {
+  SELF_DEPLOY_EXPECTED_RUNTIME_JOB_TYPE_UNSPECIFIED = 0;
+  SELF_DEPLOY_EXPECTED_RUNTIME_JOB_TYPE_BUILD = 1;
+  SELF_DEPLOY_EXPECTED_RUNTIME_JOB_TYPE_DEPLOY = 2;
+  SELF_DEPLOY_EXPECTED_RUNTIME_JOB_TYPE_HEALTH_CHECK = 3;
 }
 
 // ServiceKind classifies a service described by services.yaml.
@@ -452,6 +490,102 @@ message ServiceDescriptor {
   ServiceStatus status = 11;
   // version is the descriptor version.
   int64 version = 12;
+}
+
+// SelfDeployPathCategoryCount содержит safe счётчики категорий путей без raw paths.
+message SelfDeployPathCategoryCount {
+  // category классифицирует семейство изменённых путей.
+  SelfDeployPathCategory category = 1;
+  // count — bounded provider-side счётчик для категории.
+  int64 count = 2;
+}
+
+// SelfDeployGovernanceRequirement содержит только safe governance hints.
+message SelfDeployGovernanceRequirement {
+  // gate_required сообщает agent-manager, что до runtime jobs нужен owner/governance approval.
+  bool gate_required = 1;
+  // risk_profile_ref опционально указывает на governance policy без копирования решений.
+  optional string risk_profile_ref = 2;
+  // gate_policy_ref опционально указывает на gate policy для оценки.
+  optional string gate_policy_ref = 3;
+}
+
+// SelfDeployServicesYamlProjection описывает checked project-owned проекцию services.yaml.
+message SelfDeployServicesYamlProjection {
+  // services_yaml_ref — safe project-catalog ссылка на checked projection.
+  string services_yaml_ref = 1;
+  // services_yaml_digest — checked normalized services.yaml digest, а не provider path_digest.
+  string services_yaml_digest = 2;
+  // services_yaml_fingerprint — стабильный safe fingerprint checked projection.
+  string services_yaml_fingerprint = 3;
+  // services_policy_id — aggregate id в project-catalog.
+  string services_policy_id = 4;
+  // source_repository_id — repository binding источника projection.
+  optional string source_repository_id = 5;
+  // source_path — путь checked services.yaml.
+  string source_path = 6;
+  // source_ref — branch, tag или provider ref, использованный для import.
+  optional string source_ref = 7;
+  // source_commit_sha — commit checked projection.
+  string source_commit_sha = 8;
+  // policy_version — версия checked projection.
+  int64 policy_version = 9;
+  // validation_status — статус проверки source.
+  ServicesPolicyValidationStatus validation_status = 10;
+  // projection_status — операционный статус projection.
+  ServicesPolicyProjectionStatus projection_status = 11;
+  // imported_at — время import в формате RFC3339.
+  string imported_at = 12;
+}
+
+// SelfDeploySignal — project-side safe input для agent-manager SelfDeployPlan.
+message SelfDeploySignal {
+  // provider_signal_ref — стабильный provider signal idempotency ref.
+  string provider_signal_ref = 1;
+  // provider_signal_id — persisted signal id в provider-hub, если известен.
+  optional string provider_signal_id = 2;
+  // provider_signal_key — idempotency key в provider-hub, если известен.
+  optional string provider_signal_key = 3;
+  // project_ref — project ref в project-catalog.
+  string project_ref = 4;
+  // repository_ref — repository binding ref в project-catalog.
+  string repository_ref = 5;
+  // provider_slug идентифицирует provider adapter.
+  string provider_slug = 6;
+  // repository_full_name — safe provider owner/name.
+  string repository_full_name = 7;
+  // provider_repository_id — provider-native repository id, если известен.
+  optional string provider_repository_id = 8;
+  // source_ref — provider ref, который изменился.
+  string source_ref = 9;
+  // merge_commit_sha — observed head или merge commit sha.
+  string merge_commit_sha = 10;
+  // services_yaml присутствует, когда у project-catalog есть checked projection.
+  SelfDeployServicesYamlProjection services_yaml = 11;
+  // affected_service_keys вычисляются только из checked ServicesPolicy descriptors.
+  repeated string affected_service_keys = 12;
+  // path_categories — safe provider categories, переложенные в project vocabulary.
+  repeated SelfDeployPathCategoryCount path_categories = 13;
+  // services_yaml_changed показывает, видел ли provider-hub изменение root services.yaml.
+  bool services_yaml_changed = 14;
+  // deploy_relevant_changed показывает, видел ли provider-hub deploy-relevant categories.
+  bool deploy_relevant_changed = 15;
+  // expected_runtime_job_types — safe job type hints для agent-manager.
+  repeated SelfDeployExpectedRuntimeJobType expected_runtime_job_types = 16;
+  // governance_requirement показывает, нужен ли owner/governance gate.
+  SelfDeployGovernanceRequirement governance_requirement = 17;
+  // provider_change_fingerprint — provider-owned signal fingerprint.
+  string provider_change_fingerprint = 18;
+  // project_signal_fingerprint — project-side enrichment fingerprint.
+  string project_signal_fingerprint = 19;
+  // provider_etag — provider-hub safe read token, если известен.
+  optional string provider_etag = 20;
+  // safe_summary — bounded diagnostic text без raw payloads.
+  string safe_summary = 21;
+  // observed_at — время provider observation в формате RFC3339.
+  string observed_at = 22;
+  // version — версия project-side signal contract.
+  int64 version = 23;
 }
 
 // DocumentationSource describes one project documentation source.
@@ -1088,6 +1222,30 @@ message BootstrapServicesPolicyImportResponse {
 message ServicesPolicyResponse {
   // services_policy is the returned checked policy.
   ServicesPolicy services_policy = 1;
+}
+
+// GetSelfDeploySignalRequest читает project-side enrichment для provider repository change signal.
+message GetSelfDeploySignalRequest {
+  // project_id задаёт область project-side binding и checked services.yaml projection.
+  string project_id = 1;
+  // repository_id опционально сужает ожидаемый repository binding.
+  optional string repository_id = 2;
+  // provider_signal_id опционально выбирает provider-hub repository change signal id.
+  optional string provider_signal_id = 3;
+  // provider_signal_key опционально выбирает provider-hub repository change signal idempotency key.
+  optional string provider_signal_key = 4;
+  // meta содержит read actor и request context.
+  QueryMeta meta = 5;
+}
+
+// SelfDeploySignalResponse возвращает safe project-side readiness и plan input.
+message SelfDeploySignalResponse {
+  // status описывает готовность сигнала для agent-manager planning.
+  SelfDeploySignalStatus status = 1;
+  // signal присутствует, когда project/provider facts безопасно связаны.
+  SelfDeploySignal signal = 2;
+  // safe_reason объясняет blocked status без raw payloads и секретов.
+  optional string safe_reason = 3;
 }
 
 // GetServicesPolicyRequest reads active or concrete services policy.

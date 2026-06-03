@@ -203,6 +203,79 @@ func TestCreateProviderRepositoryCallsDomainService(t *testing.T) {
 	}
 }
 
+func TestGetSelfDeploySignalMapsDomainResult(t *testing.T) {
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	service := &fakeProjectService{}
+	service.getSelfDeploySignal = func(_ context.Context, input projectservice.GetSelfDeploySignalInput) (projectservice.SelfDeploySignalResult, error) {
+		if input.ProjectID != projectID || input.RepositoryID == nil || *input.RepositoryID != repositoryID || input.ProviderSignalID != "signal-1" {
+			t.Fatalf("input = %+v, want project/repository/provider signal ids", input)
+		}
+		return projectservice.SelfDeploySignalResult{
+			Status: enum.SelfDeploySignalStatusReady,
+			Signal: projectservice.SelfDeploySignal{
+				ProviderSignalRef:    "provider:github:repository_change:push:codex-k8s/kodex:main:abc",
+				ProviderSignalID:     "signal-1",
+				ProviderSignalKey:    "signal-key-1",
+				ProjectRef:           projectID.String(),
+				RepositoryRef:        repositoryID.String(),
+				ProviderSlug:         "github",
+				RepositoryFullName:   "codex-k8s/kodex",
+				ProviderRepositoryID: "R_123",
+				SourceRef:            "refs/heads/main",
+				MergeCommitSHA:       "abcdef0123456789abcdef0123456789abcdef01",
+				ServicesYaml: projectservice.SelfDeployServicesYamlProjection{
+					ServicesYamlRef:         "project-catalog:services-policy:policy-1:services.yaml",
+					ServicesYamlDigest:      "sha256:services-policy",
+					ServicesYamlFingerprint: "sha256:projection",
+					ServicesPolicyID:        uuid.MustParse("22222222-2222-2222-2222-222222222222"),
+					SourceRepositoryID:      &repositoryID,
+					SourcePath:              "services.yaml",
+					SourceRef:               "refs/heads/main",
+					SourceCommitSHA:         "abcdef0123456789abcdef0123456789abcdef01",
+					PolicyVersion:           3,
+					ValidationStatus:        enum.ServicesPolicyValidationValid,
+					ProjectionStatus:        enum.ServicesPolicyProjectionSynced,
+					ImportedAt:              "2026-05-06T12:00:00Z",
+				},
+				AffectedServiceKeys: []string{"api"},
+				PathCategories: []projectservice.RepositoryChangePathCategoryCount{
+					{Category: enum.SelfDeployPathCategoryServiceSource, Count: 2},
+				},
+				ServicesYamlChanged:       true,
+				DeployRelevantChanged:     true,
+				ExpectedRuntimeJobTypes:   []enum.SelfDeployExpectedRuntimeJobType{enum.SelfDeployExpectedRuntimeJobTypeBuild, enum.SelfDeployExpectedRuntimeJobTypeDeploy},
+				GovernanceRequirement:     projectservice.SelfDeployGovernanceRequirement{GateRequired: true, GatePolicyRef: "self_deploy.owner_gate"},
+				ProviderChangeFingerprint: "sha256:provider",
+				ProjectSignalFingerprint:  "sha256:project",
+				ProviderETag:              "etag-1",
+				SafeSummary:               "self-deploy signal ready",
+				ObservedAt:                "2026-05-06T12:00:00Z",
+				Version:                   1,
+			},
+		}, nil
+	}
+	server := NewServer(service)
+
+	response, err := server.GetSelfDeploySignal(context.Background(), &projectsv1.GetSelfDeploySignalRequest{
+		ProjectId:        projectID.String(),
+		RepositoryId:     stringPtr(repositoryID.String()),
+		ProviderSignalId: stringPtr("signal-1"),
+		Meta:             queryMeta(),
+	})
+	if err != nil {
+		t.Fatalf("GetSelfDeploySignal(): %v", err)
+	}
+	signal := response.GetSignal()
+	if response.GetStatus() != projectsv1.SelfDeploySignalStatus_SELF_DEPLOY_SIGNAL_STATUS_READY ||
+		signal.GetServicesYaml().GetServicesYamlDigest() != "sha256:services-policy" ||
+		signal.GetServicesYaml().GetServicesYamlDigest() == "sha256:provider" ||
+		signal.GetAffectedServiceKeys()[0] != "api" ||
+		!signal.GetGovernanceRequirement().GetGateRequired() {
+		t.Fatalf("response = %+v, want safe self-deploy signal", response)
+	}
+}
+
 func TestImportBootstrapServicesPolicyCallsDomainService(t *testing.T) {
 	projectID := uuid.New()
 	repositoryID := uuid.New()
@@ -530,6 +603,23 @@ func commandMeta(commandID string) *projectsv1.CommandMeta {
 	}
 }
 
+func queryMeta() *projectsv1.QueryMeta {
+	return &projectsv1.QueryMeta{
+		Actor: &projectsv1.Actor{
+			Type: "service",
+			Id:   "agent-manager",
+		},
+		RequestId: "read-1",
+		RequestContext: &projectsv1.RequestContext{
+			Source: "test",
+		},
+	}
+}
+
+func stringPtr(value string) *string {
+	return &value
+}
+
 type fakeProjectService struct {
 	unimplementedProjectService
 	createProject            func(context.Context, projectservice.CreateProjectInput) (entity.Project, error)
@@ -538,6 +628,7 @@ type fakeProjectService struct {
 	importBootstrapPolicy    func(context.Context, projectservice.ImportBootstrapServicesPolicyInput) (projectservice.BootstrapServicesPolicyImportResult, error)
 	reconcileBootstrapMerge  func(context.Context, projectservice.ReconcileBootstrapMergeSignalInput) (projectservice.BootstrapServicesPolicyImportResult, error)
 	reconcileAdoptionMerge   func(context.Context, projectservice.ReconcileAdoptionMergeSignalInput) (projectservice.BootstrapServicesPolicyImportResult, error)
+	getSelfDeploySignal      func(context.Context, projectservice.GetSelfDeploySignalInput) (projectservice.SelfDeploySignalResult, error)
 }
 
 func (s *fakeProjectService) CreateProject(ctx context.Context, input projectservice.CreateProjectInput) (entity.Project, error) {
@@ -580,6 +671,13 @@ func (s *fakeProjectService) ReconcileAdoptionMergeSignal(ctx context.Context, i
 		return projectservice.BootstrapServicesPolicyImportResult{}, errs.ErrInvalidArgument
 	}
 	return s.reconcileAdoptionMerge(ctx, input)
+}
+
+func (s *fakeProjectService) GetSelfDeploySignal(ctx context.Context, input projectservice.GetSelfDeploySignalInput) (projectservice.SelfDeploySignalResult, error) {
+	if s.getSelfDeploySignal == nil {
+		return projectservice.SelfDeploySignalResult{}, errs.ErrInvalidArgument
+	}
+	return s.getSelfDeploySignal(ctx, input)
 }
 
 type unimplementedProjectService struct{}
@@ -642,6 +740,10 @@ func (unimplementedProjectService) ReconcileBootstrapMergeSignal(context.Context
 
 func (unimplementedProjectService) ReconcileAdoptionMergeSignal(context.Context, projectservice.ReconcileAdoptionMergeSignalInput) (projectservice.BootstrapServicesPolicyImportResult, error) {
 	return projectservice.BootstrapServicesPolicyImportResult{}, errs.ErrInvalidArgument
+}
+
+func (unimplementedProjectService) GetSelfDeploySignal(context.Context, projectservice.GetSelfDeploySignalInput) (projectservice.SelfDeploySignalResult, error) {
+	return projectservice.SelfDeploySignalResult{}, errs.ErrInvalidArgument
 }
 
 func (unimplementedProjectService) GetServicesPolicy(context.Context, projectservice.GetServicesPolicyInput) (entity.ServicesPolicy, error) {

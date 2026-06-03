@@ -39,6 +39,7 @@ type Bootstrapper struct {
 }
 
 var _ projectservice.BootstrapProvider = (*Bootstrapper)(nil)
+var _ projectservice.RepositoryChangeSignalReader = (*Bootstrapper)(nil)
 
 // NewConnection creates a lazy gRPC client connection to provider-hub.
 func NewConnection(cfg Config) (*grpc.ClientConn, error) {
@@ -120,6 +121,27 @@ func (b *Bootstrapper) callProviderOperation(ctx context.Context, call func(cont
 		return nil, errs.ErrDependencyUnavailable
 	}
 	return response, nil
+}
+
+// GetRepositoryChangeSignal читает один safe provider-owned repository change signal.
+func (b *Bootstrapper) GetRepositoryChangeSignal(ctx context.Context, input projectservice.RepositoryChangeSignalReadInput) (projectservice.RepositoryChangeSignalReadResult, error) {
+	callCtx, cancel := context.WithTimeout(b.outgoingContext(ctx), b.timeout)
+	defer cancel()
+	response, err := b.client.GetRepositoryChangeSignal(callCtx, &providersv1.GetRepositoryChangeSignalRequest{
+		SignalId:  optionalString(input.SignalID, strings.TrimSpace(input.SignalID) != ""),
+		SignalKey: optionalString(input.SignalKey, strings.TrimSpace(input.SignalKey) != ""),
+		Meta:      providerQueryMeta(input.Meta),
+	})
+	if err != nil {
+		return projectservice.RepositoryChangeSignalReadResult{}, mapProviderError(err)
+	}
+	if response == nil {
+		return projectservice.RepositoryChangeSignalReadResult{}, errs.ErrDependencyUnavailable
+	}
+	return projectservice.RepositoryChangeSignalReadResult{
+		Status: providerOwnedDataStatus(response.GetReadStatus()),
+		Signal: providerRepositoryChangeSignal(response.GetChangeSignal()),
+	}, nil
 }
 
 func (b *Bootstrapper) outgoingContext(ctx context.Context) context.Context {
@@ -221,6 +243,137 @@ func providerRequestContext(context value.RequestContext) *providersv1.RequestCo
 		requestContext.ClientIpHash = &clientIPHash
 	}
 	return requestContext
+}
+
+func providerQueryMeta(meta value.QueryMeta) *providersv1.QueryMeta {
+	return &providersv1.QueryMeta{
+		Actor: &providersv1.Actor{
+			Type: strings.TrimSpace(meta.Actor.Type),
+			Id:   strings.TrimSpace(meta.Actor.ID),
+		},
+		RequestId:      strings.TrimSpace(meta.RequestID),
+		RequestContext: providerRequestContext(meta.RequestContext),
+	}
+}
+
+func providerOwnedDataStatus(status providersv1.ProviderOwnedDataStatus) projectservice.ProviderOwnedDataStatus {
+	switch status {
+	case providersv1.ProviderOwnedDataStatus_PROVIDER_OWNED_DATA_STATUS_READY:
+		return projectservice.ProviderOwnedDataStatusReady
+	case providersv1.ProviderOwnedDataStatus_PROVIDER_OWNED_DATA_STATUS_NOT_FOUND:
+		return projectservice.ProviderOwnedDataStatusNotFound
+	case providersv1.ProviderOwnedDataStatus_PROVIDER_OWNED_DATA_STATUS_NOT_VERIFIED:
+		return projectservice.ProviderOwnedDataStatusNotVerified
+	case providersv1.ProviderOwnedDataStatus_PROVIDER_OWNED_DATA_STATUS_STALE:
+		return projectservice.ProviderOwnedDataStatusStale
+	default:
+		return ""
+	}
+}
+
+func providerRepositoryChangeSignal(signal *providersv1.RepositoryChangeSignal) projectservice.RepositoryChangeSignal {
+	if signal == nil {
+		return projectservice.RepositoryChangeSignal{}
+	}
+	return projectservice.RepositoryChangeSignal{
+		SignalID:              strings.TrimSpace(signal.GetSignalId()),
+		SignalKey:             strings.TrimSpace(signal.GetSignalKey()),
+		Kind:                  providerRepositoryChangeSignalKind(signal.GetKind()),
+		ProviderSlug:          strings.TrimSpace(signal.GetProviderSlug()),
+		ProjectID:             strings.TrimSpace(signal.GetProjectId()),
+		RepositoryID:          strings.TrimSpace(signal.GetRepositoryId()),
+		RepositoryFullName:    strings.TrimSpace(signal.GetRepositoryFullName()),
+		ProviderRepositoryID:  strings.TrimSpace(signal.GetProviderRepositoryId()),
+		Ref:                   strings.TrimSpace(signal.GetRef()),
+		BaseBranch:            strings.TrimSpace(signal.GetBaseBranch()),
+		CommitSHA:             strings.TrimSpace(signal.GetCommitSha()),
+		BeforeSHA:             strings.TrimSpace(signal.GetBeforeSha()),
+		SourceRef:             strings.TrimSpace(signal.GetSourceRef()),
+		PullRequestNumber:     signal.GetPullRequestNumber(),
+		PathSummaryStatus:     providerPathSummaryStatus(signal.GetPathSummaryStatus()),
+		ChangedPathCount:      signal.GetChangedPathCount(),
+		PathDigest:            strings.TrimSpace(signal.GetPathDigest()),
+		PathCategories:        providerPathCategories(signal.GetPathCategories()),
+		ServicesPolicyChanged: signal.GetServicesPolicyChanged(),
+		DeployRelevantChanged: signal.GetDeployRelevantChanged(),
+		ChangeFingerprint:     strings.TrimSpace(signal.GetChangeFingerprint()),
+		ObservedAt:            strings.TrimSpace(signal.GetObservedAt()),
+		Status:                providerRepositoryChangeStatus(signal.GetStatus()),
+		Version:               signal.GetVersion(),
+		ETag:                  strings.TrimSpace(signal.GetEtag()),
+	}
+}
+
+func providerRepositoryChangeSignalKind(kind providersv1.RepositoryChangeSignalKind) string {
+	switch kind {
+	case providersv1.RepositoryChangeSignalKind_REPOSITORY_CHANGE_SIGNAL_KIND_PUSH:
+		return "push"
+	case providersv1.RepositoryChangeSignalKind_REPOSITORY_CHANGE_SIGNAL_KIND_PULL_REQUEST_MERGED:
+		return "pull_request_merged"
+	default:
+		return ""
+	}
+}
+
+func providerRepositoryChangeStatus(status providersv1.RepositoryChangeSignalStatus) string {
+	switch status {
+	case providersv1.RepositoryChangeSignalStatus_REPOSITORY_CHANGE_SIGNAL_STATUS_OBSERVED:
+		return "observed"
+	default:
+		return ""
+	}
+}
+
+func providerPathSummaryStatus(status providersv1.RepositoryChangePathSummaryStatus) projectservice.RepositoryChangePathSummaryStatus {
+	switch status {
+	case providersv1.RepositoryChangePathSummaryStatus_REPOSITORY_CHANGE_PATH_SUMMARY_STATUS_READY:
+		return projectservice.RepositoryChangePathSummaryStatusReady
+	case providersv1.RepositoryChangePathSummaryStatus_REPOSITORY_CHANGE_PATH_SUMMARY_STATUS_TRUNCATED:
+		return projectservice.RepositoryChangePathSummaryStatusTruncated
+	case providersv1.RepositoryChangePathSummaryStatus_REPOSITORY_CHANGE_PATH_SUMMARY_STATUS_UNAVAILABLE:
+		return projectservice.RepositoryChangePathSummaryStatusUnavailable
+	default:
+		return ""
+	}
+}
+
+func providerPathCategories(categories []*providersv1.RepositoryChangePathCategoryCount) []projectservice.RepositoryChangePathCategoryCount {
+	result := make([]projectservice.RepositoryChangePathCategoryCount, 0, len(categories))
+	for _, category := range categories {
+		if category == nil {
+			continue
+		}
+		result = append(result, projectservice.RepositoryChangePathCategoryCount{
+			Category: providerPathCategory(category.GetCategory()),
+			Count:    category.GetCount(),
+		})
+	}
+	return result
+}
+
+func providerPathCategory(category providersv1.RepositoryChangePathCategory) enum.SelfDeployPathCategory {
+	switch category {
+	case providersv1.RepositoryChangePathCategory_REPOSITORY_CHANGE_PATH_CATEGORY_SERVICES_POLICY:
+		return enum.SelfDeployPathCategoryServicesPolicy
+	case providersv1.RepositoryChangePathCategory_REPOSITORY_CHANGE_PATH_CATEGORY_SERVICE_SOURCE:
+		return enum.SelfDeployPathCategoryServiceSource
+	case providersv1.RepositoryChangePathCategory_REPOSITORY_CHANGE_PATH_CATEGORY_SERVICE_CONFIG:
+		return enum.SelfDeployPathCategoryServiceConfig
+	case providersv1.RepositoryChangePathCategory_REPOSITORY_CHANGE_PATH_CATEGORY_DEPLOY_MANIFEST:
+		return enum.SelfDeployPathCategoryDeployManifest
+	case providersv1.RepositoryChangePathCategory_REPOSITORY_CHANGE_PATH_CATEGORY_RUNTIME_CONFIG:
+		return enum.SelfDeployPathCategoryRuntimeConfig
+	case providersv1.RepositoryChangePathCategory_REPOSITORY_CHANGE_PATH_CATEGORY_DOCUMENTATION:
+		return enum.SelfDeployPathCategoryDocumentation
+	case providersv1.RepositoryChangePathCategory_REPOSITORY_CHANGE_PATH_CATEGORY_TEST:
+		return enum.SelfDeployPathCategoryTest
+	case providersv1.RepositoryChangePathCategory_REPOSITORY_CHANGE_PATH_CATEGORY_PLATFORM_POLICY:
+		return enum.SelfDeployPathCategoryPlatformPolicy
+	case providersv1.RepositoryChangePathCategory_REPOSITORY_CHANGE_PATH_CATEGORY_OTHER:
+		return enum.SelfDeployPathCategoryOther
+	default:
+		return ""
+	}
 }
 
 func createRepositoryPolicyContext(input projectservice.ProviderRepositoryCreateInput) *providersv1.ProviderOperationPolicyContext {

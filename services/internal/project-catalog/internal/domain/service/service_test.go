@@ -1929,6 +1929,163 @@ func TestReconcileAdoptionMergeSignalRejectsMismatchedWatermark(t *testing.T) {
 	}
 }
 
+func TestGetSelfDeploySignalReturnsReadyProjectSideInput(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	policyID := uuid.New()
+	now := fixedClock{}.Now()
+	commitSHA := "abcdef0123456789abcdef0123456789abcdef01"
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = activeSelfDeployRepository(projectID, repositoryID)
+	store.policies[policyID] = activeSelfDeployPolicy(projectID, repositoryID, policyID, commitSHA, []byte(`{"secret":"must-not-leak"}`))
+	store.serviceDescriptors[policyID] = []entity.ServiceDescriptor{
+		activeSelfDeployDescriptor(projectID, repositoryID, policyID, "api"),
+		activeSelfDeployDescriptor(projectID, repositoryID, policyID, "worker"),
+	}
+	reader := &fakeRepositoryChangeSignalReader{
+		result: RepositoryChangeSignalReadResult{
+			Status: ProviderOwnedDataStatusReady,
+			Signal: RepositoryChangeSignal{
+				SignalID:              "11111111-1111-1111-1111-111111111111",
+				SignalKey:             "provider:github:repository_change:push:codex-k8s/kodex:main:" + commitSHA,
+				Kind:                  "push",
+				ProviderSlug:          "github",
+				ProjectID:             projectID.String(),
+				RepositoryID:          repositoryID.String(),
+				RepositoryFullName:    "codex-k8s/kodex",
+				ProviderRepositoryID:  "R_123",
+				Ref:                   "refs/heads/main",
+				BaseBranch:            "main",
+				CommitSHA:             commitSHA,
+				PathSummaryStatus:     RepositoryChangePathSummaryStatusReady,
+				PathDigest:            "sha256:path-digest-must-not-be-policy",
+				PathCategories:        []RepositoryChangePathCategoryCount{{Category: enum.SelfDeployPathCategoryServiceSource, Count: 3}},
+				ServicesPolicyChanged: true,
+				DeployRelevantChanged: true,
+				ChangeFingerprint:     "sha256:provider-change",
+				ObservedAt:            now.Format(time.RFC3339Nano),
+				Status:                "observed",
+				Version:               2,
+				ETag:                  "etag-1",
+			},
+		},
+	}
+	svc := NewWithConfig(store, fixedClock{}, &sequenceIDs{}, Config{RepositoryChangeSignals: reader})
+
+	result, err := svc.GetSelfDeploySignal(ctx, GetSelfDeploySignalInput{
+		ProjectID:        projectID,
+		RepositoryID:     &repositoryID,
+		ProviderSignalID: "11111111-1111-1111-1111-111111111111",
+		Meta:             queryMeta(),
+	})
+	if err != nil {
+		t.Fatalf("GetSelfDeploySignal(): %v", err)
+	}
+	if result.Status != enum.SelfDeploySignalStatusReady {
+		t.Fatalf("status = %s, want ready, reason=%s", result.Status, result.SafeReason)
+	}
+	if result.Signal.ServicesYaml.ServicesYamlDigest != "sha256:services-policy" ||
+		result.Signal.ServicesYaml.ServicesYamlDigest == "sha256:path-digest-must-not-be-policy" {
+		t.Fatalf("services yaml digest = %q, want checked policy digest only", result.Signal.ServicesYaml.ServicesYamlDigest)
+	}
+	if got := strings.Join(result.Signal.AffectedServiceKeys, ","); got != "api,worker" {
+		t.Fatalf("affected keys = %q, want api,worker", got)
+	}
+	if len(result.Signal.ExpectedRuntimeJobTypes) != 3 || !result.Signal.GovernanceRequirement.GateRequired {
+		t.Fatalf("runtime/governance = %+v/%+v, want build deploy health_check and gate", result.Signal.ExpectedRuntimeJobTypes, result.Signal.GovernanceRequirement)
+	}
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("marshal result: %v", err)
+	}
+	if strings.Contains(string(encoded), "must-not-leak") || strings.Contains(string(encoded), "validated_payload") {
+		t.Fatalf("self-deploy signal leaked checked payload: %s", encoded)
+	}
+}
+
+func TestGetSelfDeploySignalRequiresServicesPolicyReconcileWhenPolicyCommitIsStale(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	policyID := uuid.New()
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = activeSelfDeployRepository(projectID, repositoryID)
+	store.policies[policyID] = activeSelfDeployPolicy(projectID, repositoryID, policyID, "oldcommit0123456789abcdef0123456789abc", []byte(`{"spec":{"services":[{"key":"api"}]}}`))
+	reader := &fakeRepositoryChangeSignalReader{
+		result: RepositoryChangeSignalReadResult{
+			Status: ProviderOwnedDataStatusReady,
+			Signal: RepositoryChangeSignal{
+				SignalID:              "signal-1",
+				SignalKey:             "provider:github:repository_change:push:codex-k8s/kodex:main:new",
+				Kind:                  "push",
+				ProviderSlug:          "github",
+				RepositoryFullName:    "codex-k8s/kodex",
+				Ref:                   "refs/heads/main",
+				BaseBranch:            "main",
+				CommitSHA:             "newcommit0123456789abcdef0123456789abc",
+				PathSummaryStatus:     RepositoryChangePathSummaryStatusReady,
+				ServicesPolicyChanged: true,
+				DeployRelevantChanged: true,
+				ChangeFingerprint:     "sha256:provider-change",
+			},
+		},
+	}
+	svc := NewWithConfig(store, fixedClock{}, &sequenceIDs{}, Config{RepositoryChangeSignals: reader})
+
+	result, err := svc.GetSelfDeploySignal(ctx, GetSelfDeploySignalInput{
+		ProjectID:         projectID,
+		ProviderSignalKey: "provider:github:repository_change:push:codex-k8s/kodex:main:new",
+		Meta:              queryMeta(),
+	})
+	if err != nil {
+		t.Fatalf("GetSelfDeploySignal(): %v", err)
+	}
+	if result.Status != enum.SelfDeploySignalStatusNeedsServicesPolicyReconcile || result.SafeReason != "services_policy_commit_not_reconciled" {
+		t.Fatalf("result = %+v, want services policy reconcile status", result)
+	}
+	if len(result.Signal.AffectedServiceKeys) != 0 {
+		t.Fatalf("affected keys = %+v, want none before checked policy reconcile", result.Signal.AffectedServiceKeys)
+	}
+}
+
+func TestGetSelfDeploySignalBlocksUnavailablePathSummary(t *testing.T) {
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = activeSelfDeployRepository(projectID, repositoryID)
+	reader := &fakeRepositoryChangeSignalReader{
+		result: RepositoryChangeSignalReadResult{
+			Status: ProviderOwnedDataStatusReady,
+			Signal: RepositoryChangeSignal{
+				SignalID:           "signal-1",
+				SignalKey:          "provider:github:repository_change:pull_request_merged:codex-k8s/kodex:main:1",
+				Kind:               "pull_request_merged",
+				ProviderSlug:       "github",
+				RepositoryFullName: "codex-k8s/kodex",
+				BaseBranch:         "main",
+				CommitSHA:          bootstrapMergeCommitSHA,
+				SourceRef:          "feature/self-deploy",
+				PathSummaryStatus:  RepositoryChangePathSummaryStatusUnavailable,
+			},
+		},
+	}
+	svc := NewWithConfig(store, fixedClock{}, &sequenceIDs{}, Config{RepositoryChangeSignals: reader})
+
+	result, err := svc.GetSelfDeploySignal(context.Background(), GetSelfDeploySignalInput{
+		ProjectID:         projectID,
+		RepositoryID:      &repositoryID,
+		ProviderSignalKey: "provider:github:repository_change:pull_request_merged:codex-k8s/kodex:main:1",
+		Meta:              queryMeta(),
+	})
+	if err != nil {
+		t.Fatalf("GetSelfDeploySignal(): %v", err)
+	}
+	if result.Status != enum.SelfDeploySignalStatusNeedsRepositoryChangeSummary || result.SafeReason != "path_summary_unavailable" {
+		t.Fatalf("result = %+v, want path summary unavailable status", result)
+	}
+}
+
 func TestPutDocumentationSourceNormalizesAndPublishesEvent(t *testing.T) {
 	ctx := context.Background()
 	store := newMemoryRepository()
@@ -2036,6 +2193,19 @@ func (p *spyBootstrapProvider) CreateRepositoryBootstrapPullRequest(_ context.Co
 	return p.result, p.err
 }
 
+type fakeRepositoryChangeSignalReader struct {
+	calls  int
+	input  RepositoryChangeSignalReadInput
+	result RepositoryChangeSignalReadResult
+	err    error
+}
+
+func (r *fakeRepositoryChangeSignalReader) GetRepositoryChangeSignal(_ context.Context, input RepositoryChangeSignalReadInput) (RepositoryChangeSignalReadResult, error) {
+	r.calls++
+	r.input = input
+	return r.result, r.err
+}
+
 type fixedClock struct{}
 
 func (fixedClock) Now() time.Time {
@@ -2063,6 +2233,19 @@ func commandMeta(commandID uuid.UUID) value.CommandMeta {
 			ID:   "owner",
 		},
 		RequestID: "req-1",
+		RequestContext: value.RequestContext{
+			Source: "test",
+		},
+	}
+}
+
+func queryMeta() value.QueryMeta {
+	return value.QueryMeta{
+		Actor: value.Actor{
+			Type: "service",
+			ID:   "agent-manager",
+		},
+		RequestID: "read-1",
 		RequestContext: value.RequestContext{
 			Source: "test",
 		},
@@ -2114,6 +2297,45 @@ func pendingBootstrapRepository(projectID uuid.UUID, repositoryID uuid.UUID) ent
 		DefaultBranch:        "main",
 		Status:               enum.RepositoryStatusPending,
 		ProviderRepositoryID: "R_123",
+	}
+}
+
+func activeSelfDeployRepository(projectID uuid.UUID, repositoryID uuid.UUID) entity.RepositoryBinding {
+	repository := pendingBootstrapRepository(projectID, repositoryID)
+	repository.Status = enum.RepositoryStatusActive
+	return repository
+}
+
+func activeSelfDeployPolicy(projectID uuid.UUID, repositoryID uuid.UUID, policyID uuid.UUID, commitSHA string, payload []byte) entity.ServicesPolicy {
+	now := fixedClock{}.Now()
+	return entity.ServicesPolicy{
+		Base:               entity.Base{ID: policyID, Version: 7, CreatedAt: now, UpdatedAt: now},
+		ProjectID:          projectID,
+		SourceRepositoryID: &repositoryID,
+		SourcePath:         "services.yaml",
+		SourceRef:          "refs/heads/main",
+		SourceCommitSHA:    commitSHA,
+		ContentHash:        "sha256:services-policy",
+		ValidatedPayload:   payload,
+		ValidationStatus:   enum.ServicesPolicyValidationValid,
+		ProjectionStatus:   enum.ServicesPolicyProjectionSynced,
+		PolicyVersion:      7,
+		ImportedAt:         now,
+	}
+}
+
+func activeSelfDeployDescriptor(projectID uuid.UUID, repositoryID uuid.UUID, policyID uuid.UUID, key string) entity.ServiceDescriptor {
+	now := fixedClock{}.Now()
+	return entity.ServiceDescriptor{
+		Base:             entity.Base{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		ProjectID:        projectID,
+		ServicesPolicyID: policyID,
+		RepositoryID:     &repositoryID,
+		ServiceKey:       key,
+		DisplayName:      key,
+		Kind:             enum.ServiceKindBackend,
+		RootPath:         "services/" + key,
+		Status:           enum.ServiceStatusActive,
 	}
 }
 
@@ -2510,8 +2732,44 @@ func (r *memoryRepository) GetServicesPolicyBySource(_ context.Context, projectI
 	return latest, nil
 }
 
-func (r *memoryRepository) ListServiceDescriptors(context.Context, query.ServiceDescriptorFilter) ([]entity.ServiceDescriptor, query.PageResult, error) {
-	return nil, query.PageResult{}, nil
+func (r *memoryRepository) ListServiceDescriptors(_ context.Context, filter query.ServiceDescriptorFilter) ([]entity.ServiceDescriptor, query.PageResult, error) {
+	policy, err := r.GetServicesPolicy(context.Background(), filter.ProjectID, nil)
+	if err != nil {
+		return nil, query.PageResult{}, err
+	}
+	descriptors := r.serviceDescriptors[policy.ID]
+	result := make([]entity.ServiceDescriptor, 0, len(descriptors))
+	for _, descriptor := range descriptors {
+		if filter.RepositoryID != nil && (descriptor.RepositoryID == nil || *descriptor.RepositoryID != *filter.RepositoryID) {
+			continue
+		}
+		if len(filter.ServiceKeys) > 0 && !containsString(filter.ServiceKeys, descriptor.ServiceKey) {
+			continue
+		}
+		if len(filter.Statuses) > 0 && !containsServiceStatus(filter.Statuses, descriptor.Status) {
+			continue
+		}
+		result = append(result, descriptor)
+	}
+	return result, query.PageResult{}, nil
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
+
+func containsServiceStatus(values []enum.ServiceStatus, target enum.ServiceStatus) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *memoryRepository) CreatePolicyEditProposal(_ context.Context, proposal entity.PolicyEditProposal, result entity.CommandResult) error {

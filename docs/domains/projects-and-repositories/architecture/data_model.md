@@ -105,6 +105,18 @@ approvals:
 | `observed_at` | timestamptz | нет | Время provider observation или project-side записи. |
 | `completed_at` | timestamptz | да | Когда обработка завершилась success/failure. |
 
+### SelfDeploySignal
+
+`SelfDeploySignal` — составная read model, а не отдельное хранилище. Она строится по запросу `GetSelfDeploySignal` из safe `provider-hub RepositoryChangeSignal`, активного project-owned repository binding, проверенной `ServicesPolicy` и `ServiceDescriptor`.
+
+Правила:
+- `provider-hub` остаётся владельцем webhook, provider refs, commit/ref, path category counters, `path_digest` и provider fingerprint;
+- `project-catalog` добавляет только проверенные project-owned данные: `services_yaml_ref`, `services_yaml_digest`, версию/fingerprint `ServicesPolicy`, affected service keys из активных descriptors и safe readiness status;
+- `path_digest` никогда не используется как `services_yaml_digest`;
+- если root `services.yaml` изменён, а checked projection ещё не импортирована с commit provider signal, read model возвращает `needs_services_policy_reconcile`;
+- если provider path summary недоступен, read model возвращает `needs_repository_change_summary`;
+- raw webhook body, provider response, diff, полный YAML, `validated_payload_json`, токены, секреты и private URL в модель не входят.
+
 ### ServicesPolicy
 
 | Поле | Тип | Может быть пустым | Примечание |
