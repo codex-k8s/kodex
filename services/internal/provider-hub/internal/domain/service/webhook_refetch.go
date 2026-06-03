@@ -28,6 +28,9 @@ func (s *Service) retryWebhookFromSafeStorage(ctx context.Context, webhook entit
 	if webhookEnvelopeExpired(envelope) {
 		return s.completeWebhookReprocessDiagnostic(ctx, webhook, string(value.WebhookPayloadCleanupReasonExpired))
 	}
+	if facts, ok := webhookFactsFromSafeEnvelope(webhook, envelope); ok {
+		return s.retryWebhookWithFacts(ctx, webhook, facts)
+	}
 	facts, ok, err := s.refetchWebhookFacts(ctx, webhook, envelope)
 	if err != nil {
 		return s.completeWebhookRefetchError(ctx, webhook, err)
@@ -35,6 +38,10 @@ func (s *Service) retryWebhookFromSafeStorage(ctx context.Context, webhook entit
 	if !ok {
 		return s.completeWebhookReprocessDiagnostic(ctx, webhook, webhookLastErrorRefetchUnavailable)
 	}
+	return s.retryWebhookWithFacts(ctx, webhook, facts)
+}
+
+func (s *Service) retryWebhookWithFacts(ctx context.Context, webhook entity.WebhookEvent, facts value.ProviderWebhookFacts) (entity.WebhookEvent, error) {
 	receivedEvent, err := s.webhookReceivedOutbox(webhook)
 	if err != nil {
 		return entity.WebhookEvent{}, err
@@ -54,6 +61,50 @@ func (s *Service) retryWebhookFromSafeStorage(ctx context.Context, webhook entit
 		return s.currentWebhookAfterConcurrentProcessing(ctx, webhook.ID)
 	}
 	return stored, err
+}
+
+func webhookFactsFromSafeEnvelope(webhook entity.WebhookEvent, envelope value.WebhookPayloadEnvelope) (value.ProviderWebhookFacts, bool) {
+	if strings.TrimSpace(envelope.SignalKey) == "" ||
+		strings.TrimSpace(envelope.SignalKind) == "" ||
+		strings.TrimSpace(envelope.RepositoryFullName) == "" ||
+		strings.TrimSpace(envelope.RepositoryProviderID) == "" ||
+		strings.TrimSpace(envelope.BaseBranch) == "" ||
+		strings.TrimSpace(envelope.CommitSHA) == "" ||
+		strings.TrimSpace(envelope.PathSummaryStatus) == "" ||
+		strings.TrimSpace(envelope.PathDigest) == "" ||
+		strings.TrimSpace(envelope.ChangeFingerprint) == "" {
+		return value.ProviderWebhookFacts{}, false
+	}
+	observedAt := webhook.ReceivedAt.UTC()
+	return value.ProviderWebhookFacts{
+		FactKind:             value.ProviderWebhookFactKindRepositoryChange,
+		Kind:                 strings.TrimSpace(envelope.SignalKind),
+		RepositoryFullName:   strings.TrimSpace(envelope.RepositoryFullName),
+		RepositoryProviderID: strings.TrimSpace(envelope.RepositoryProviderID),
+		OccurredAt:           observedAt,
+		RepositoryChange: &value.ProviderRepositoryChangeSignalSnapshot{
+			SignalKey:             strings.TrimSpace(envelope.SignalKey),
+			EventKind:             strings.TrimSpace(envelope.SignalKind),
+			RepositoryFullName:    strings.TrimSpace(envelope.RepositoryFullName),
+			ProviderRepositoryID:  strings.TrimSpace(envelope.RepositoryProviderID),
+			Ref:                   strings.TrimSpace(envelope.Ref),
+			BaseBranch:            strings.TrimSpace(envelope.BaseBranch),
+			CommitSHA:             strings.TrimSpace(envelope.CommitSHA),
+			BeforeSHA:             strings.TrimSpace(envelope.BeforeSHA),
+			SourceRef:             strings.TrimSpace(envelope.SourceRef),
+			PullRequestNumber:     envelope.Number,
+			PullRequestProviderID: strings.TrimSpace(envelope.PullRequestProviderID),
+			PullRequestURL:        strings.TrimSpace(envelope.PullRequestURL),
+			PathSummaryStatus:     strings.TrimSpace(envelope.PathSummaryStatus),
+			ChangedPathCount:      envelope.ChangedPathCount,
+			PathDigest:            strings.TrimSpace(envelope.PathDigest),
+			PathCategories:        envelope.PathCategories,
+			ServicesPolicyChanged: envelope.ServicesPolicyChanged,
+			DeployRelevantChanged: envelope.DeployRelevantChanged,
+			ChangeFingerprint:     strings.TrimSpace(envelope.ChangeFingerprint),
+			ObservedAt:            observedAt,
+		},
+	}, true
 }
 
 func webhookEnvelopeExpired(envelope value.WebhookPayloadEnvelope) bool {

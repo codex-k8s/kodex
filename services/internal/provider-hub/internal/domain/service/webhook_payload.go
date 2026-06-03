@@ -77,6 +77,36 @@ func webhookPayloadEnvelopeJSONWithFacts(
 		mergeCommitSHA = strings.TrimSpace(facts.MergeSignal.MergeCommitSHA)
 		sourceRef = strings.TrimSpace(facts.MergeSignal.SourceRef)
 	}
+	signalKey := ""
+	signalKind := ""
+	ref := ""
+	commitSHA := ""
+	beforeSHA := ""
+	pathSummaryStatus := ""
+	changedPathCount := int64(0)
+	pathDigest := ""
+	pathCategories := []value.ProviderRepositoryChangePathCategoryCount(nil)
+	servicesPolicyChanged := false
+	deployRelevantChanged := false
+	changeFingerprint := ""
+	if facts.RepositoryChange != nil {
+		signalKey = strings.TrimSpace(facts.RepositoryChange.SignalKey)
+		signalKind = strings.TrimSpace(facts.RepositoryChange.EventKind)
+		ref = strings.TrimSpace(facts.RepositoryChange.Ref)
+		baseBranch = strings.TrimSpace(facts.RepositoryChange.BaseBranch)
+		commitSHA = strings.TrimSpace(facts.RepositoryChange.CommitSHA)
+		beforeSHA = strings.TrimSpace(facts.RepositoryChange.BeforeSHA)
+		sourceRef = strings.TrimSpace(facts.RepositoryChange.SourceRef)
+		pullRequestProviderID = strings.TrimSpace(facts.RepositoryChange.PullRequestProviderID)
+		pullRequestURL = strings.TrimSpace(facts.RepositoryChange.PullRequestURL)
+		pathSummaryStatus = strings.TrimSpace(facts.RepositoryChange.PathSummaryStatus)
+		changedPathCount = facts.RepositoryChange.ChangedPathCount
+		pathDigest = strings.TrimSpace(facts.RepositoryChange.PathDigest)
+		pathCategories = facts.RepositoryChange.PathCategories
+		servicesPolicyChanged = facts.RepositoryChange.ServicesPolicyChanged
+		deployRelevantChanged = facts.RepositoryChange.DeployRelevantChanged
+		changeFingerprint = strings.TrimSpace(facts.RepositoryChange.ChangeFingerprint)
+	}
 	payload, err := json.Marshal(value.WebhookPayloadEnvelope{
 		ProviderSlug:          string(webhook.ProviderSlug),
 		DeliveryID:            webhook.DeliveryID,
@@ -95,6 +125,18 @@ func webhookPayloadEnvelopeJSONWithFacts(
 		MergeCommitSHA:        mergeCommitSHA,
 		SourceRef:             sourceRef,
 		MergedAt:              mergedAt,
+		SignalKey:             signalKey,
+		SignalKind:            signalKind,
+		Ref:                   ref,
+		CommitSHA:             commitSHA,
+		BeforeSHA:             beforeSHA,
+		PathSummaryStatus:     pathSummaryStatus,
+		ChangedPathCount:      changedPathCount,
+		PathDigest:            pathDigest,
+		PathCategories:        pathCategories,
+		ServicesPolicyChanged: servicesPolicyChanged,
+		DeployRelevantChanged: deployRelevantChanged,
+		ChangeFingerprint:     changeFingerprint,
 		PayloadSHA256:         webhook.PayloadDigest,
 		PayloadStorage:        string(storage),
 		PayloadCleanupReason:  string(reason),

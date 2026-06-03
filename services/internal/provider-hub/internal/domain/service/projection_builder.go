@@ -77,6 +77,18 @@ func (s *Service) projectionUpdateFromFacts(ctx context.Context, webhook entity.
 			}
 		}
 	}
+	if facts.RepositoryChange != nil {
+		changeSignal, err := repositoryChangeSignalFromFacts(webhook, *facts.RepositoryChange, now)
+		if err != nil {
+			return providerrepo.ProjectionUpdate{}, nil, err
+		}
+		update.ChangeSignal = &changeSignal
+		event, err := s.repositoryChangedOutbox(webhook, changeSignal)
+		if err != nil {
+			return providerrepo.ProjectionUpdate{}, nil, err
+		}
+		events = append(events, event)
+	}
 	if facts.Comment != nil && update.WorkItem != nil {
 		comment := commentProjectionFromSnapshot(*facts.Comment, now)
 		update.Comments = append(update.Comments, comment)
@@ -283,6 +295,82 @@ func (s *Service) repositoryMergeSignalFromFacts(ctx context.Context, webhook en
 		Status:                      enum.RepositoryMergeSignalStatusMerged,
 	}
 	return signal, true, nil
+}
+
+func repositoryChangeSignalFromFacts(webhook entity.WebhookEvent, snapshot value.ProviderRepositoryChangeSignalSnapshot, now time.Time) (entity.RepositoryChangeSignal, error) {
+	providerSlug := webhook.ProviderSlug
+	signalKey := strings.TrimSpace(snapshot.SignalKey)
+	kind := enum.RepositoryChangeSignalKind(strings.TrimSpace(snapshot.EventKind))
+	repositoryFullName := strings.TrimSpace(snapshot.RepositoryFullName)
+	providerRepositoryID := strings.TrimSpace(snapshot.ProviderRepositoryID)
+	if providerRepositoryID == "" {
+		providerRepositoryID = strings.TrimSpace(webhook.RepositoryProviderID)
+	}
+	baseBranch := strings.TrimSpace(snapshot.BaseBranch)
+	commitSHA := strings.TrimSpace(snapshot.CommitSHA)
+	pathSummaryStatus := enum.RepositoryChangePathSummaryStatus(strings.TrimSpace(snapshot.PathSummaryStatus))
+	if signalKey == "" ||
+		kind == "" ||
+		repositoryFullName == "" ||
+		providerRepositoryID == "" ||
+		baseBranch == "" ||
+		commitSHA == "" ||
+		pathSummaryStatus == "" ||
+		strings.TrimSpace(snapshot.ChangeFingerprint) == "" {
+		return entity.RepositoryChangeSignal{}, errs.ErrInvalidArgument
+	}
+	observedAt := snapshot.ObservedAt.UTC()
+	if observedAt.IsZero() {
+		observedAt = webhook.ReceivedAt.UTC()
+	}
+	if observedAt.IsZero() {
+		observedAt = now
+	}
+	return entity.RepositoryChangeSignal{
+		Base: entity.Base{
+			ID:        stableUUID("repository-change-signal", signalKey),
+			Version:   1,
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		SignalKey:             signalKey,
+		Kind:                  kind,
+		ProviderSlug:          providerSlug,
+		RepositoryFullName:    repositoryFullName,
+		ProviderRepositoryID:  providerRepositoryID,
+		Ref:                   strings.TrimSpace(snapshot.Ref),
+		BaseBranch:            baseBranch,
+		CommitSHA:             commitSHA,
+		BeforeSHA:             strings.TrimSpace(snapshot.BeforeSHA),
+		SourceRef:             strings.TrimSpace(snapshot.SourceRef),
+		PullRequestNumber:     snapshot.PullRequestNumber,
+		PullRequestProviderID: strings.TrimSpace(snapshot.PullRequestProviderID),
+		PullRequestURL:        strings.TrimSpace(snapshot.PullRequestURL),
+		PathSummaryStatus:     pathSummaryStatus,
+		ChangedPathCount:      snapshot.ChangedPathCount,
+		PathDigest:            strings.TrimSpace(snapshot.PathDigest),
+		PathCategories:        repositoryChangePathCategoriesFromFacts(snapshot.PathCategories),
+		ServicesPolicyChanged: snapshot.ServicesPolicyChanged,
+		DeployRelevantChanged: snapshot.DeployRelevantChanged,
+		ChangeFingerprint:     strings.TrimSpace(snapshot.ChangeFingerprint),
+		ObservedAt:            observedAt,
+		Status:                enum.RepositoryChangeSignalStatusObserved,
+	}, nil
+}
+
+func repositoryChangePathCategoriesFromFacts(categories []value.ProviderRepositoryChangePathCategoryCount) []entity.RepositoryChangePathCategoryCount {
+	result := make([]entity.RepositoryChangePathCategoryCount, 0, len(categories))
+	for _, category := range categories {
+		name := enum.RepositoryChangePathCategory(strings.TrimSpace(category.Category))
+		if name == "" || category.Count <= 0 {
+			continue
+		}
+		result = append(result, entity.RepositoryChangePathCategoryCount{
+			Category: name,
+			Count:    category.Count,
+		})
+	}
+	return result
 }
 
 func (s *Service) onboardingMergeAnchor(ctx context.Context, workItem entity.ProviderWorkItemProjection, signal value.ProviderRepositoryMergeSignalSnapshot) (onboardingMergeAnchor, bool, error) {
@@ -701,6 +789,50 @@ func (s *Service) repositoryMergedOutbox(webhook entity.WebhookEvent, signal ent
 		return entity.OutboxEvent{}, err
 	}
 	return outboxEventRecord(s.ids.New(), eventType, providerAggregateRepositoryMergeSignal, signal.ID, payload, signal.MergedAt), nil
+}
+
+func (s *Service) repositoryChangedOutbox(webhook entity.WebhookEvent, signal entity.RepositoryChangeSignal) (entity.OutboxEvent, error) {
+	projectID := ""
+	if signal.ProjectID != nil {
+		projectID = signal.ProjectID.String()
+	}
+	repositoryID := ""
+	if signal.RepositoryID != nil {
+		repositoryID = signal.RepositoryID.String()
+	}
+	payload, err := marshalProviderEventPayload(value.ProviderEventPayload{
+		ProviderSlug:             string(signal.ProviderSlug),
+		WebhookEventID:           webhook.ID.String(),
+		DeliveryID:               webhook.DeliveryID,
+		EventName:                webhook.EventName,
+		RepositoryChangeSignalID: signal.ID.String(),
+		SignalKey:                signal.SignalKey,
+		SignalKind:               string(signal.Kind),
+		ProjectID:                projectID,
+		RepositoryID:             repositoryID,
+		RepositoryFullName:       signal.RepositoryFullName,
+		ProviderRepositoryID:     signal.ProviderRepositoryID,
+		BaseBranch:               signal.BaseBranch,
+		HeadSHA:                  signal.CommitSHA,
+		MergeCommitSHA:           signal.CommitSHA,
+		SourceRef:                signal.SourceRef,
+		PullRequestProviderID:    signal.PullRequestProviderID,
+		PullRequestURL:           signal.PullRequestURL,
+		Number:                   signal.PullRequestNumber,
+		PathSummaryStatus:        string(signal.PathSummaryStatus),
+		ChangedPathCount:         signal.ChangedPathCount,
+		PathDigest:               signal.PathDigest,
+		ServicesPolicyChanged:    signal.ServicesPolicyChanged,
+		DeployRelevantChanged:    signal.DeployRelevantChanged,
+		ChangeFingerprint:        signal.ChangeFingerprint,
+		ObservedAt:               signal.ObservedAt.Format(time.RFC3339Nano),
+		Status:                   string(signal.Status),
+		Version:                  signal.Version,
+	})
+	if err != nil {
+		return entity.OutboxEvent{}, err
+	}
+	return outboxEventRecord(s.ids.New(), providerEventRepositoryChanged, providerAggregateRepositoryChangeSignal, signal.ID, payload, signal.ObservedAt), nil
 }
 
 func stableUUID(parts ...string) uuid.UUID {

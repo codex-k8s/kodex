@@ -429,6 +429,7 @@ func TestRunDryRunPlansSelfRepositoryBindingAndChangeWithoutMutations(t *testing
 	assertContains(t, text, "services_policy_changed=true")
 	assertContains(t, text, "deploy_relevant_changed=true")
 	assertContains(t, text, "categories=services_policy:1,deploy_relevant:1,documentation:1")
+	assertContains(t, text, "live repository change signal is not available")
 	assertContains(t, text, "apply disabled")
 	assertNotContains(t, text, "raw_services_yaml_secret")
 }
@@ -440,6 +441,7 @@ func TestRunApplyAttachesSelfRepositoryAndReconcilesAdoption(t *testing.T) {
 		ProjectCatalog: projectClient,
 		ProviderHub: &fakeProviderHubClient{
 			adoptionSignal: selfRepositoryMergeSignalFixture(),
+			changeSignal:   selfRepositoryChangeSignalFixture(),
 			snapshotCount:  1,
 		},
 	}
@@ -902,6 +904,7 @@ func (f *fakeProjectCatalogClient) ReconcileAdoptionMergeSignal(_ context.Contex
 type fakeProviderHubClient struct {
 	bootstrapSignal  *providersv1.RepositoryMergeSignal
 	adoptionSignal   *providersv1.RepositoryMergeSignal
+	changeSignal     *providersv1.RepositoryChangeSignal
 	snapshotCount    int
 	listSignalsErr   error
 	listSnapshotsErr error
@@ -936,6 +939,23 @@ func (f *fakeProviderHubClient) ListRepositoryMergeSignals(_ context.Context, re
 		return &providersv1.ListRepositoryMergeSignalsResponse{}, nil
 	}
 	return &providersv1.ListRepositoryMergeSignalsResponse{MergeSignals: []*providersv1.RepositoryMergeSignal{signal}}, nil
+}
+
+func (f *fakeProviderHubClient) GetRepositoryChangeSignal(_ context.Context, request *providersv1.GetRepositoryChangeSignalRequest, _ ...grpc.CallOption) (*providersv1.RepositoryChangeSignalResponse, error) {
+	if f.changeSignal != nil && f.changeSignal.GetSignalKey() == request.GetSignalKey() {
+		return &providersv1.RepositoryChangeSignalResponse{
+			ReadStatus:   providersv1.ProviderOwnedDataStatus_PROVIDER_OWNED_DATA_STATUS_READY,
+			ChangeSignal: f.changeSignal,
+		}, nil
+	}
+	return &providersv1.RepositoryChangeSignalResponse{ReadStatus: providersv1.ProviderOwnedDataStatus_PROVIDER_OWNED_DATA_STATUS_NOT_FOUND}, nil
+}
+
+func (f *fakeProviderHubClient) ListRepositoryChangeSignals(context.Context, *providersv1.ListRepositoryChangeSignalsRequest, ...grpc.CallOption) (*providersv1.ListRepositoryChangeSignalsResponse, error) {
+	if f.changeSignal == nil {
+		return &providersv1.ListRepositoryChangeSignalsResponse{}, nil
+	}
+	return &providersv1.ListRepositoryChangeSignalsResponse{ChangeSignals: []*providersv1.RepositoryChangeSignal{f.changeSignal}}, nil
 }
 
 func (f *fakeProviderHubClient) ListRepositoryAdoptionScanSnapshots(context.Context, *providersv1.ListRepositoryAdoptionScanSnapshotsRequest, ...grpc.CallOption) (*providersv1.ListRepositoryAdoptionScanSnapshotsResponse, error) {
@@ -1016,6 +1036,36 @@ func selfRepositoryMergeSignalFixture() *providersv1.RepositoryMergeSignal {
 	signal.MergeCommitSha = strings.Repeat("a", 40)
 	signal.SignalKey = "self-adoption-signal-key"
 	return signal
+}
+
+func selfRepositoryChangeSignalFixture() *providersv1.RepositoryChangeSignal {
+	return &providersv1.RepositoryChangeSignal{
+		SignalId:             "self-change-signal-id",
+		SignalKey:            "provider:github:repository_change:push:codex-k8s/kodex:main:" + strings.Repeat("b", 40),
+		Kind:                 providersv1.RepositoryChangeSignalKind_REPOSITORY_CHANGE_SIGNAL_KIND_PUSH,
+		ProviderSlug:         "github",
+		RepositoryFullName:   "codex-k8s/kodex",
+		ProviderRepositoryId: "provider-repo-self",
+		Ref:                  "refs/heads/main",
+		BaseBranch:           "main",
+		CommitSha:            strings.Repeat("b", 40),
+		BeforeSha:            strings.Repeat("a", 40),
+		PathSummaryStatus:    providersv1.RepositoryChangePathSummaryStatus_REPOSITORY_CHANGE_PATH_SUMMARY_STATUS_READY,
+		ChangedPathCount:     3,
+		PathDigest:           "sha256:paths",
+		PathCategories: []*providersv1.RepositoryChangePathCategoryCount{
+			{Category: providersv1.RepositoryChangePathCategory_REPOSITORY_CHANGE_PATH_CATEGORY_SERVICES_POLICY, Count: 1},
+			{Category: providersv1.RepositoryChangePathCategory_REPOSITORY_CHANGE_PATH_CATEGORY_DEPLOY_MANIFEST, Count: 1},
+			{Category: providersv1.RepositoryChangePathCategory_REPOSITORY_CHANGE_PATH_CATEGORY_DOCUMENTATION, Count: 1},
+		},
+		ServicesPolicyChanged: true,
+		DeployRelevantChanged: true,
+		ChangeFingerprint:     "sha256:self-change",
+		ObservedAt:            "2026-05-29T00:00:00Z",
+		Status:                providersv1.RepositoryChangeSignalStatus_REPOSITORY_CHANGE_SIGNAL_STATUS_OBSERVED,
+		Version:               1,
+		Etag:                  "self-change-etag",
+	}
 }
 
 func checkedPayloadFixture() onboardingScenario {

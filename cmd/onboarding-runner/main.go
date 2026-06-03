@@ -90,6 +90,8 @@ type projectCatalogAPI interface {
 type providerHubAPI interface {
 	GetRepositoryMergeSignal(context.Context, *providersv1.GetRepositoryMergeSignalRequest, ...grpc.CallOption) (*providersv1.RepositoryMergeSignalResponse, error)
 	ListRepositoryMergeSignals(context.Context, *providersv1.ListRepositoryMergeSignalsRequest, ...grpc.CallOption) (*providersv1.ListRepositoryMergeSignalsResponse, error)
+	GetRepositoryChangeSignal(context.Context, *providersv1.GetRepositoryChangeSignalRequest, ...grpc.CallOption) (*providersv1.RepositoryChangeSignalResponse, error)
+	ListRepositoryChangeSignals(context.Context, *providersv1.ListRepositoryChangeSignalsRequest, ...grpc.CallOption) (*providersv1.ListRepositoryChangeSignalsResponse, error)
 	ListRepositoryAdoptionScanSnapshots(context.Context, *providersv1.ListRepositoryAdoptionScanSnapshotsRequest, ...grpc.CallOption) (*providersv1.ListRepositoryAdoptionScanSnapshotsResponse, error)
 }
 
@@ -147,6 +149,7 @@ type repositoryBindingScenario struct {
 }
 
 type repositoryChangeScenario struct {
+	SignalKey    string                          `json:"signal_key,omitempty"`
 	EventName    string                          `json:"event_name,omitempty"`
 	Ref          string                          `json:"ref,omitempty"`
 	BaseBranch   string                          `json:"base_branch,omitempty"`
@@ -338,6 +341,9 @@ func run(ctx context.Context, options runnerOptions, clients runnerClients, outp
 		if setupResult.ProviderRepositoryID != "" {
 			options.ProviderRepositoryID = setupResult.ProviderRepositoryID
 		}
+	}
+	if err := readRepositoryChangeSignal(ctx, clients.ProviderHub, options, scenario.RepositoryChange, output); err != nil {
+		return err
 	}
 	if options.RepositoryID == "" {
 		if !options.Apply {
@@ -1412,6 +1418,113 @@ func readAdoptionSnapshots(ctx context.Context, client providerHubAPI, options r
 	return nil
 }
 
+func readRepositoryChangeSignal(ctx context.Context, client providerHubAPI, options runnerOptions, scenario *repositoryChangeScenario, output io.Writer) error {
+	if scenario == nil {
+		return nil
+	}
+	signal, err := readProviderRepositoryChangeSignal(ctx, client, options, scenario)
+	if err != nil {
+		return err
+	}
+	if signal == nil {
+		logLine(output, "BLOCKED", "live repository change signal is not available; waiting for provider webhook delivery")
+		return nil
+	}
+	logLine(output, "OK", "repository change signal ready kind=%s base=%s commit=%s path_status=%s paths=%d services_policy_changed=%t deploy_relevant_changed=%t change_fingerprint=%s",
+		safeValue(signal.GetKind().String()),
+		safeValue(signal.GetBaseBranch()),
+		safeValue(signal.GetCommitSha()),
+		safeValue(signal.GetPathSummaryStatus().String()),
+		signal.GetChangedPathCount(),
+		signal.GetServicesPolicyChanged(),
+		signal.GetDeployRelevantChanged(),
+		safeValue(signal.GetChangeFingerprint()),
+	)
+	return nil
+}
+
+func readProviderRepositoryChangeSignal(ctx context.Context, client providerHubAPI, options runnerOptions, scenario *repositoryChangeScenario) (*providersv1.RepositoryChangeSignal, error) {
+	signalKey := strings.TrimSpace(scenario.SignalKey)
+	if signalKey != "" {
+		response, err := client.GetRepositoryChangeSignal(ctx, &providersv1.GetRepositoryChangeSignalRequest{
+			SignalKey: optionalString(signalKey),
+			Meta:      providerQueryMeta(options),
+		})
+		if err != nil {
+			return nil, safeError("provider-hub GetRepositoryChangeSignal failed", err)
+		}
+		if response.GetReadStatus() != providersv1.ProviderOwnedDataStatus_PROVIDER_OWNED_DATA_STATUS_READY || response.GetChangeSignal() == nil {
+			return nil, nil
+		}
+		if err := validateRepositoryChangeSignal(response.GetChangeSignal(), options, scenario); err != nil {
+			return nil, err
+		}
+		return response.GetChangeSignal(), nil
+	}
+	response, err := client.ListRepositoryChangeSignals(ctx, &providersv1.ListRepositoryChangeSignalsRequest{
+		ProviderSlug:          optionalString(options.ProviderSlug),
+		RepositoryFullName:    optionalString(options.RepositoryFullName),
+		ProviderRepositoryId:  optionalString(options.ProviderRepositoryID),
+		Kinds:                 repositoryChangeSignalKinds(scenario),
+		Statuses:              []providersv1.RepositoryChangeSignalStatus{providersv1.RepositoryChangeSignalStatus_REPOSITORY_CHANGE_SIGNAL_STATUS_OBSERVED},
+		BaseBranch:            optionalString(firstNonEmpty(scenario.BaseBranch, refBranchName(scenario.Ref))),
+		DeployRelevantChanged: optionalBool(true),
+		Page:                  &providersv1.PageRequest{PageSize: 1},
+		Meta:                  providerQueryMeta(options),
+	})
+	if err != nil {
+		return nil, safeError("provider-hub ListRepositoryChangeSignals failed", err)
+	}
+	signals := response.GetChangeSignals()
+	if len(signals) == 0 {
+		return nil, nil
+	}
+	if err := validateRepositoryChangeSignal(signals[0], options, scenario); err != nil {
+		return nil, err
+	}
+	return signals[0], nil
+}
+
+func repositoryChangeSignalKinds(scenario *repositoryChangeScenario) []providersv1.RepositoryChangeSignalKind {
+	switch strings.ToLower(strings.TrimSpace(scenario.EventName)) {
+	case "merge", "pull_request_merge":
+		return []providersv1.RepositoryChangeSignalKind{providersv1.RepositoryChangeSignalKind_REPOSITORY_CHANGE_SIGNAL_KIND_PULL_REQUEST_MERGED}
+	default:
+		return []providersv1.RepositoryChangeSignalKind{
+			providersv1.RepositoryChangeSignalKind_REPOSITORY_CHANGE_SIGNAL_KIND_PUSH,
+			providersv1.RepositoryChangeSignalKind_REPOSITORY_CHANGE_SIGNAL_KIND_PULL_REQUEST_MERGED,
+		}
+	}
+}
+
+func validateRepositoryChangeSignal(signal *providersv1.RepositoryChangeSignal, options runnerOptions, scenario *repositoryChangeScenario) error {
+	if signal.GetStatus() != providersv1.RepositoryChangeSignalStatus_REPOSITORY_CHANGE_SIGNAL_STATUS_OBSERVED {
+		return errors.New("provider repository change signal is not observed")
+	}
+	for field, values := range map[string][2]string{
+		"provider_slug":        {signal.GetProviderSlug(), options.ProviderSlug},
+		"repository_full_name": {signal.GetRepositoryFullName(), options.RepositoryFullName},
+	} {
+		if values[0] != values[1] {
+			return fmt.Errorf("provider repository change signal %s mismatch", field)
+		}
+	}
+	if options.ProviderRepositoryID != "" && signal.GetProviderRepositoryId() != options.ProviderRepositoryID {
+		return errors.New("provider repository change signal provider_repository_id mismatch")
+	}
+	baseBranch := firstNonEmpty(scenario.BaseBranch, refBranchName(scenario.Ref))
+	if baseBranch != "" && signal.GetBaseBranch() != baseBranch {
+		return errors.New("provider repository change signal base_branch mismatch")
+	}
+	if commitSHA := strings.TrimSpace(scenario.CommitSHA); commitSHA != "" && signal.GetCommitSha() != strings.ToLower(commitSHA) && signal.GetCommitSha() != commitSHA {
+		return errors.New("provider repository change signal commit_sha mismatch")
+	}
+	if strings.ToLower(strings.TrimSpace(scenario.EventName)) == "push" && signal.GetPathSummaryStatus() == providersv1.RepositoryChangePathSummaryStatus_REPOSITORY_CHANGE_PATH_SUMMARY_STATUS_UNAVAILABLE {
+		return errors.New("provider repository change signal path summary is unavailable")
+	}
+	return nil
+}
+
 func applyReconciliation(ctx context.Context, client projectCatalogAPI, options runnerOptions, scenario onboardingScenario, signals mergeSignalSet, output io.Writer, setupMode bool) error {
 	if wantsKind(options, "bootstrap") {
 		if setupMode && !canReconcile(scenario.Bootstrap, signals.Bootstrap) {
@@ -1824,6 +1937,10 @@ func optionalString(value string) *string {
 	if value == "" {
 		return nil
 	}
+	return &value
+}
+
+func optionalBool(value bool) *bool {
 	return &value
 }
 

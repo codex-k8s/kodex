@@ -9,6 +9,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/errs"
 	providerservice "github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/service"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/enum"
+	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/value"
 )
 
 // IngestWebhookEventInput maps a gRPC request to the domain command input.
@@ -236,20 +237,41 @@ func ListRelationshipsInput(request *providersv1.ListRelationshipsRequest) (prov
 	}, nil
 }
 
+type repositorySignalRequestParts struct {
+	signalID  *uuid.UUID
+	signalKey string
+	meta      value.QueryMeta
+}
+
+func repositorySignalRequestPartsFromProto(meta *providersv1.QueryMeta, signalIDText string, signalKeyText string) (repositorySignalRequestParts, error) {
+	queryMeta, err := QueryMetaFromProto(meta)
+	if err != nil {
+		return repositorySignalRequestParts{}, err
+	}
+	signalID, err := optionalUUIDPtr(signalIDText)
+	if err != nil {
+		return repositorySignalRequestParts{}, err
+	}
+	return repositorySignalRequestParts{
+		signalID:  signalID,
+		signalKey: strings.TrimSpace(signalKeyText),
+		meta:      queryMeta,
+	}, nil
+}
+
 // GetRepositoryMergeSignalInput maps a gRPC request to the provider-owned read input.
 func GetRepositoryMergeSignalInput(request *providersv1.GetRepositoryMergeSignalRequest) (providerservice.GetRepositoryMergeSignalInput, error) {
-	meta, err := QueryMetaFromProto(request.GetMeta())
-	if err != nil {
-		return providerservice.GetRepositoryMergeSignalInput{}, err
-	}
-	signalID, err := optionalUUIDPtr(request.GetSignalId())
+	return repositorySignalInputFromParts(repositorySignalRequestPartsFromProto(request.GetMeta(), request.GetSignalId(), request.GetSignalKey()))
+}
+
+func repositorySignalInputFromParts(parts repositorySignalRequestParts, err error) (providerservice.GetRepositoryMergeSignalInput, error) {
 	if err != nil {
 		return providerservice.GetRepositoryMergeSignalInput{}, err
 	}
 	return providerservice.GetRepositoryMergeSignalInput{
-		SignalID:  signalID,
-		SignalKey: strings.TrimSpace(request.GetSignalKey()),
-		Meta:      meta,
+		SignalID:  parts.signalID,
+		SignalKey: parts.signalKey,
+		Meta:      parts.meta,
 	}, nil
 }
 
@@ -291,6 +313,55 @@ func ListRepositoryMergeSignalsInput(request *providersv1.ListRepositoryMergeSig
 		MergedSince:          mergedSince,
 		Page:                 pageRequestFromProto(request.GetPage()),
 		Meta:                 meta,
+	}, nil
+}
+
+// GetRepositoryChangeSignalInput maps a gRPC request to the provider-owned read input.
+func GetRepositoryChangeSignalInput(request *providersv1.GetRepositoryChangeSignalRequest) (providerservice.GetRepositoryChangeSignalInput, error) {
+	return repositorySignalInputFromParts(repositorySignalRequestPartsFromProto(request.GetMeta(), request.GetSignalId(), request.GetSignalKey()))
+}
+
+// ListRepositoryChangeSignalsInput maps a gRPC request to provider-owned repository change signal filters.
+func ListRepositoryChangeSignalsInput(request *providersv1.ListRepositoryChangeSignalsRequest) (providerservice.ListRepositoryChangeSignalsInput, error) {
+	meta, err := QueryMetaFromProto(request.GetMeta())
+	if err != nil {
+		return providerservice.ListRepositoryChangeSignalsInput{}, err
+	}
+	projectID, err := optionalUUIDPtr(request.GetProjectId())
+	if err != nil {
+		return providerservice.ListRepositoryChangeSignalsInput{}, err
+	}
+	repositoryID, err := optionalUUIDPtr(request.GetRepositoryId())
+	if err != nil {
+		return providerservice.ListRepositoryChangeSignalsInput{}, err
+	}
+	kinds, err := repositoryChangeSignalKindsFromProto(request.GetKinds())
+	if err != nil {
+		return providerservice.ListRepositoryChangeSignalsInput{}, err
+	}
+	statuses, err := repositoryChangeSignalStatusesFromProto(request.GetStatuses())
+	if err != nil {
+		return providerservice.ListRepositoryChangeSignalsInput{}, err
+	}
+	observedSince, err := optionalTimePtr(request.GetObservedSince())
+	if err != nil {
+		return providerservice.ListRepositoryChangeSignalsInput{}, err
+	}
+	return providerservice.ListRepositoryChangeSignalsInput{
+		ProjectID:             projectID,
+		RepositoryID:          repositoryID,
+		ProviderSlug:          providerSlug(request.GetProviderSlug()),
+		RepositoryFullName:    strings.TrimSpace(request.GetRepositoryFullName()),
+		ProviderRepositoryID:  strings.TrimSpace(request.GetProviderRepositoryId()),
+		Kinds:                 kinds,
+		Statuses:              statuses,
+		BaseBranch:            strings.TrimSpace(request.GetBaseBranch()),
+		CommitSHA:             strings.TrimSpace(request.GetCommitSha()),
+		ServicesPolicyChanged: request.ServicesPolicyChanged,
+		DeployRelevantChanged: request.DeployRelevantChanged,
+		ObservedSince:         observedSince,
+		Page:                  pageRequestFromProto(request.GetPage()),
+		Meta:                  meta,
 	}, nil
 }
 

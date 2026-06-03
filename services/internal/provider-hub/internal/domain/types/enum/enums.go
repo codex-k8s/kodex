@@ -227,6 +227,45 @@ const (
 	RepositoryMergeSignalStatusMerged RepositoryMergeSignalStatus = "merged"
 )
 
+// RepositoryChangeSignalKind classifies provider-side repository change signals.
+type RepositoryChangeSignalKind string
+
+const (
+	RepositoryChangeSignalKindPush              RepositoryChangeSignalKind = "push"
+	RepositoryChangeSignalKindPullRequestMerged RepositoryChangeSignalKind = "pull_request_merged"
+)
+
+// RepositoryChangeSignalStatus describes the provider-side repository change lifecycle.
+type RepositoryChangeSignalStatus string
+
+const (
+	RepositoryChangeSignalStatusObserved RepositoryChangeSignalStatus = "observed"
+)
+
+// RepositoryChangePathSummaryStatus describes how much path metadata the provider signal carries.
+type RepositoryChangePathSummaryStatus string
+
+const (
+	RepositoryChangePathSummaryStatusReady       RepositoryChangePathSummaryStatus = "ready"
+	RepositoryChangePathSummaryStatusUnavailable RepositoryChangePathSummaryStatus = "unavailable"
+	RepositoryChangePathSummaryStatusTruncated   RepositoryChangePathSummaryStatus = "truncated"
+)
+
+// RepositoryChangePathCategory classifies changed paths without storing raw diffs or file contents.
+type RepositoryChangePathCategory string
+
+const (
+	RepositoryChangePathCategoryServicesPolicy RepositoryChangePathCategory = "services_policy"
+	RepositoryChangePathCategoryServiceSource  RepositoryChangePathCategory = "service_source"
+	RepositoryChangePathCategoryServiceConfig  RepositoryChangePathCategory = "service_config"
+	RepositoryChangePathCategoryDeployManifest RepositoryChangePathCategory = "deploy_manifest"
+	RepositoryChangePathCategoryRuntimeConfig  RepositoryChangePathCategory = "runtime_config"
+	RepositoryChangePathCategoryDocumentation  RepositoryChangePathCategory = "documentation"
+	RepositoryChangePathCategoryTest           RepositoryChangePathCategory = "test"
+	RepositoryChangePathCategoryPlatformPolicy RepositoryChangePathCategory = "platform_policy"
+	RepositoryChangePathCategoryOther          RepositoryChangePathCategory = "other"
+)
+
 // ProviderOwnedDataStatus describes readiness of provider-owned data for service reads.
 type ProviderOwnedDataStatus string
 

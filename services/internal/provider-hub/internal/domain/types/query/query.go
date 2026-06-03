@@ -116,6 +116,29 @@ type RepositoryMergeSignalFilter struct {
 	Page                 value.PageRequest
 }
 
+// RepositoryChangeSignalLookup selects one provider-owned repository change signal.
+type RepositoryChangeSignalLookup struct {
+	ID        *uuid.UUID
+	SignalKey string
+}
+
+// RepositoryChangeSignalFilter selects provider-owned repository change signals.
+type RepositoryChangeSignalFilter struct {
+	ProjectID             *uuid.UUID
+	RepositoryID          *uuid.UUID
+	ProviderSlug          enum.ProviderSlug
+	RepositoryFullName    string
+	ProviderRepositoryID  string
+	Kinds                 []enum.RepositoryChangeSignalKind
+	Statuses              []enum.RepositoryChangeSignalStatus
+	BaseBranch            string
+	CommitSHA             string
+	ServicesPolicyChanged *bool
+	DeployRelevantChanged *bool
+	ObservedSince         *time.Time
+	Page                  value.PageRequest
+}
+
 // RepositoryAdoptionScanLookup selects one provider-owned adoption scan snapshot.
 type RepositoryAdoptionScanLookup struct {
 	ID                  *uuid.UUID

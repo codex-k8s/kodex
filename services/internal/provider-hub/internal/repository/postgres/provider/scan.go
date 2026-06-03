@@ -302,6 +302,58 @@ func scanRepositoryMergeSignal(row postgreslib.RowScanner) (entity.RepositoryMer
 	return signal, err
 }
 
+func scanRepositoryChangeSignal(row postgreslib.RowScanner) (entity.RepositoryChangeSignal, error) {
+	var signal entity.RepositoryChangeSignal
+	var kind, providerSlug, pathSummaryStatus, status string
+	var projectID, repositoryID pgtype.UUID
+	var categoriesJSON []byte
+	err := row.Scan(
+		&signal.ID,
+		&signal.SignalKey,
+		&kind,
+		&providerSlug,
+		&projectID,
+		&repositoryID,
+		&signal.RepositoryFullName,
+		&signal.ProviderRepositoryID,
+		&signal.Ref,
+		&signal.BaseBranch,
+		&signal.CommitSHA,
+		&signal.BeforeSHA,
+		&signal.SourceRef,
+		&signal.PullRequestNumber,
+		&signal.PullRequestProviderID,
+		&signal.PullRequestURL,
+		&pathSummaryStatus,
+		&signal.ChangedPathCount,
+		&signal.PathDigest,
+		&categoriesJSON,
+		&signal.ServicesPolicyChanged,
+		&signal.DeployRelevantChanged,
+		&signal.ChangeFingerprint,
+		&signal.ObservedAt,
+		&status,
+		&signal.Version,
+		&signal.CreatedAt,
+		&signal.UpdatedAt,
+	)
+	if err != nil {
+		return signal, err
+	}
+	categories, err := scanRepositoryChangePathCategories(categoriesJSON)
+	if err != nil {
+		return entity.RepositoryChangeSignal{}, err
+	}
+	signal.Kind = enum.RepositoryChangeSignalKind(kind)
+	signal.ProviderSlug = enum.ProviderSlug(providerSlug)
+	signal.ProjectID = postgreslib.UUIDPtrFromPG(projectID)
+	signal.RepositoryID = postgreslib.UUIDPtrFromPG(repositoryID)
+	signal.PathSummaryStatus = enum.RepositoryChangePathSummaryStatus(pathSummaryStatus)
+	signal.PathCategories = categories
+	signal.Status = enum.RepositoryChangeSignalStatus(status)
+	return signal, nil
+}
+
 func scanRepositoryAdoptionScan(row postgreslib.RowScanner) (entity.RepositoryAdoptionScanSnapshot, error) {
 	var snapshot entity.RepositoryAdoptionScanSnapshot
 	var providerSlug, status string
@@ -364,6 +416,24 @@ func scanRepositoryAdoptionMarkers(payload []byte) ([]entity.RepositoryAdoptionS
 			Kind:         enum.RepositoryAdoptionMarkerKind(marker.Kind),
 			ObjectDigest: marker.ObjectDigest,
 			SizeBytes:    marker.SizeBytes,
+		})
+	}
+	return result, nil
+}
+
+func scanRepositoryChangePathCategories(payload []byte) ([]entity.RepositoryChangePathCategoryCount, error) {
+	if len(payload) == 0 {
+		payload = []byte("[]")
+	}
+	var raw []repositoryChangePathCategoryJSON
+	if err := json.Unmarshal(payload, &raw); err != nil {
+		return nil, err
+	}
+	result := make([]entity.RepositoryChangePathCategoryCount, 0, len(raw))
+	for _, category := range raw {
+		result = append(result, entity.RepositoryChangePathCategoryCount{
+			Category: enum.RepositoryChangePathCategory(category.Category),
+			Count:    category.Count,
 		})
 	}
 	return result, nil

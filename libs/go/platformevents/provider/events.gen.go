@@ -24,6 +24,7 @@ const (
 	EventRepositoryAdoptionScanCompleted = "provider.repository.adoption_scan_completed"
 	EventRepositoryBootstrapMerged       = "provider.repository.bootstrap_merged"
 	EventRepositoryAdoptionMerged        = "provider.repository.adoption_merged"
+	EventRepositoryChanged               = "provider.repository.changed"
 )
 
 const (
@@ -35,6 +36,7 @@ const (
 	AggregateRelationship           = "relationship"
 	AggregateRepository             = "repository"
 	AggregateRepositoryAdoptionScan = "repository_adoption_scan"
+	AggregateRepositoryChangeSignal = "repository_change_signal"
 	AggregateRepositoryMergeSignal  = "repository_merge_signal"
 	AggregateSyncCursor             = "sync_cursor"
 	AggregateWebhookEvent           = "webhook_event"
@@ -46,6 +48,8 @@ type Payload struct {
 	AdoptionPRRef                    string `json:"adoption_pr_ref,omitempty"`
 	BaseBranch                       string `json:"base_branch,omitempty"`
 	BootstrapMode                    string `json:"bootstrap_mode,omitempty"`
+	ChangeFingerprint                string `json:"change_fingerprint,omitempty"`
+	ChangedPathCount                 int64  `json:"changed_path_count,omitempty"`
 	CheckedArtifactDigest            string `json:"checked_artifact_digest,omitempty"`
 	CheckedArtifactRef               string `json:"checked_artifact_ref,omitempty"`
 	CheckedArtifactVersion           string `json:"checked_artifact_version,omitempty"`
@@ -56,6 +60,7 @@ type Payload struct {
 	CommentProjectionID              string `json:"comment_projection_id,omitempty"`
 	DefaultBranch                    string `json:"default_branch,omitempty"`
 	DeliveryID                       string `json:"delivery_id,omitempty"`
+	DeployRelevantChanged            bool   `json:"deploy_relevant_changed,omitempty"`
 	DriftStatus                      string `json:"drift_status,omitempty"`
 	ErrorCode                        string `json:"error_code,omitempty"`
 	EventName                        string `json:"event_name,omitempty"`
@@ -72,6 +77,8 @@ type Payload struct {
 	Number                           int64  `json:"number,omitempty"`
 	ObservedAt                       string `json:"observed_at,omitempty"`
 	OperationType                    string `json:"operation_type,omitempty"`
+	PathDigest                       string `json:"path_digest,omitempty"`
+	PathSummaryStatus                string `json:"path_summary_status,omitempty"`
 	ProjectID                        string `json:"project_id,omitempty"`
 	ProviderAccountRuntimeStateID    string `json:"provider_account_runtime_state_id,omitempty"`
 	ProviderCommentID                string `json:"provider_comment_id,omitempty"`
@@ -86,6 +93,7 @@ type Payload struct {
 	RelationshipID                   string `json:"relationship_id,omitempty"`
 	RelationshipType                 string `json:"relationship_type,omitempty"`
 	RepositoryAdoptionScanSnapshotID string `json:"repository_adoption_scan_snapshot_id,omitempty"`
+	RepositoryChangeSignalID         string `json:"repository_change_signal_id,omitempty"`
 	RepositoryFullName               string `json:"repository_full_name,omitempty"`
 	RepositoryID                     string `json:"repository_id,omitempty"`
 	RepositoryMergeSignalID          string `json:"repository_merge_signal_id,omitempty"`
@@ -95,6 +103,7 @@ type Payload struct {
 	ScannedRef                       string `json:"scanned_ref,omitempty"`
 	ScopeRef                         string `json:"scope_ref,omitempty"`
 	ScopeType                        string `json:"scope_type,omitempty"`
+	ServicesPolicyChanged            bool   `json:"services_policy_changed,omitempty"`
 	SignalKey                        string `json:"signal_key,omitempty"`
 	SignalKind                       string `json:"signal_kind,omitempty"`
 	SnapshotDigest                   string `json:"snapshot_digest,omitempty"`

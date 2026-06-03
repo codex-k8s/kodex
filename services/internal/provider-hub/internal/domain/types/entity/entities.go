@@ -185,6 +185,41 @@ type RepositoryMergeSignal struct {
 	Status                      enum.RepositoryMergeSignalStatus
 }
 
+// RepositoryChangePathCategoryCount stores one safe changed-path category counter.
+type RepositoryChangePathCategoryCount struct {
+	Category enum.RepositoryChangePathCategory
+	Count    int64
+}
+
+// RepositoryChangeSignal stores a safe provider-side fact that repository contents changed.
+type RepositoryChangeSignal struct {
+	Base
+	SignalKey             string
+	Kind                  enum.RepositoryChangeSignalKind
+	ProviderSlug          enum.ProviderSlug
+	ProjectID             *uuid.UUID
+	RepositoryID          *uuid.UUID
+	RepositoryFullName    string
+	ProviderRepositoryID  string
+	Ref                   string
+	BaseBranch            string
+	CommitSHA             string
+	BeforeSHA             string
+	SourceRef             string
+	PullRequestNumber     int64
+	PullRequestProviderID string
+	PullRequestURL        string
+	PathSummaryStatus     enum.RepositoryChangePathSummaryStatus
+	ChangedPathCount      int64
+	PathDigest            string
+	PathCategories        []RepositoryChangePathCategoryCount
+	ServicesPolicyChanged bool
+	DeployRelevantChanged bool
+	ChangeFingerprint     string
+	ObservedAt            time.Time
+	Status                enum.RepositoryChangeSignalStatus
+}
+
 // RepositoryAdoptionScanMarker stores one safe marker path discovered without file contents.
 type RepositoryAdoptionScanMarker struct {
 	Path         string

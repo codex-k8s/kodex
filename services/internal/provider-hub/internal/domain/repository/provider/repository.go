@@ -45,6 +45,8 @@ type Repository interface {
 	GetProviderOperationByCommand(context.Context, enum.ProviderOperationType, string) (entity.ProviderOperation, error)
 	GetRepositoryMergeSignal(context.Context, query.RepositoryMergeSignalLookup) (entity.RepositoryMergeSignal, error)
 	ListRepositoryMergeSignals(context.Context, query.RepositoryMergeSignalFilter) ([]entity.RepositoryMergeSignal, query.PageResult, error)
+	GetRepositoryChangeSignal(context.Context, query.RepositoryChangeSignalLookup) (entity.RepositoryChangeSignal, error)
+	ListRepositoryChangeSignals(context.Context, query.RepositoryChangeSignalFilter) ([]entity.RepositoryChangeSignal, query.PageResult, error)
 	GetRepositoryAdoptionScan(context.Context, query.RepositoryAdoptionScanLookup) (entity.RepositoryAdoptionScanSnapshot, error)
 	ListRepositoryAdoptionScans(context.Context, query.RepositoryAdoptionScanFilter) ([]entity.RepositoryAdoptionScanSnapshot, query.PageResult, error)
 	GetRepositoryAdoptionScanByOperation(context.Context, uuid.UUID) (entity.RepositoryAdoptionScanSnapshot, error)
@@ -62,6 +64,7 @@ type ProjectionUpdate struct {
 	Comments      []entity.ProviderCommentProjection
 	Relationships []entity.ProviderRelationship
 	MergeSignal   *entity.RepositoryMergeSignal
+	ChangeSignal  *entity.RepositoryChangeSignal
 	AdoptionScan  *entity.RepositoryAdoptionScanSnapshot
 }
 
