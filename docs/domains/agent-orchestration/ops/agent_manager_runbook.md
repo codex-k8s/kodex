@@ -108,7 +108,8 @@ Readiness должна видеть:
 ### self-deploy signal consumer
 
 - Проверить `KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_CONSUMER_ENABLED`.
-- Проверить, что `KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_PROJECT_ID` задан и указывает на self-project scope в `project-catalog`.
+- Перед rollout consumer получить `KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_PROJECT_ID` через `cmd/onboarding-runner`: runner должен найти или создать project `kodex` по `organization_id`, найти или привязать repository binding `codex-k8s/kodex` через публичный `project-catalog` API и напечатать safe `project_id`. Ручные SQL-вставки, ручной UUID и прямой GitHub/GitLab не используются.
+- Проверить, что `KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_PROJECT_ID` задан и указывает на active self-project scope в `project-catalog`.
 - Для provider-owned `provider.repository.changed` без `project_id` consumer использует этот project id как область вызова `project-catalog.GetSelfDeploySignal`; `agent-manager` не вычисляет `services_yaml_digest` или affected service keys сам.
 - Если consumer получает non-ready status от `project-catalog`, plan не создаётся; нужно устранить причину вроде `needs_services_policy_reconcile` или `needs_repository_change_summary`.
 

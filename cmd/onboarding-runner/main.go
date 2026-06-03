@@ -15,32 +15,50 @@ import (
 	"strings"
 	"time"
 
+	grpcserver "github.com/codex-k8s/kodex/libs/go/grpcserver"
 	projectsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/projects/v1"
 	providersv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/providers/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 )
 
 const (
-	defaultProviderSlug      = "github"
-	defaultActorID           = "onboarding-runner"
-	defaultSource            = "cmd/onboarding-runner"
-	defaultCheckedSourcePath = "services.yaml"
-	maxCheckedPayloadBytes   = 256 * 1024
-	maxWatermarkJSONBytes    = 16 * 1024
-	maxBootstrapSetupFiles   = 64
-	maxBootstrapSetupBytes   = 4 * 1024 * 1024
+	defaultProviderSlug                 = "github"
+	defaultProjectSlug                  = "kodex"
+	defaultProjectDisplayName           = "kodex"
+	defaultRepositoryDefaultBranch      = "main"
+	defaultActorID                      = "onboarding-runner"
+	defaultSource                       = "cmd/onboarding-runner"
+	defaultCheckedSourcePath            = "services.yaml"
+	defaultProjectCatalogAuthTokenEnv   = "KODEX_PROJECT_CATALOG_GRPC_AUTH_TOKEN"
+	defaultProviderHubAuthTokenEnv      = "KODEX_PROVIDER_HUB_GRPC_AUTH_TOKEN"
+	defaultProjectCatalogAuthEnvRefName = "KODEX_ONBOARDING_RUNNER_PROJECT_CATALOG_GRPC_AUTH_TOKEN_ENV"
+	defaultProviderHubAuthEnvRefName    = "KODEX_ONBOARDING_RUNNER_PROVIDER_HUB_GRPC_AUTH_TOKEN_ENV"
+	maxCheckedPayloadBytes              = 256 * 1024
+	maxWatermarkJSONBytes               = 16 * 1024
+	maxBootstrapSetupFiles              = 64
+	maxBootstrapSetupBytes              = 4 * 1024 * 1024
 )
 
 func main() {
 	options := runnerOptions{}
 	flag.StringVar(&options.ProjectCatalogAddr, "project-catalog-addr", os.Getenv("KODEX_PROJECT_CATALOG_GRPC_ADDR"), "project-catalog gRPC address")
 	flag.StringVar(&options.ProviderHubAddr, "provider-hub-addr", os.Getenv("KODEX_PROVIDER_HUB_GRPC_ADDR"), "provider-hub gRPC address")
+	flag.StringVar(&options.ProjectCatalogAuthTokenEnv, "project-catalog-auth-token-env", envOr(defaultProjectCatalogAuthEnvRefName, defaultProjectCatalogAuthTokenEnv), "env var name containing project-catalog shared gRPC token; empty disables metadata")
+	flag.StringVar(&options.ProviderHubAuthTokenEnv, "provider-hub-auth-token-env", envOr(defaultProviderHubAuthEnvRefName, defaultProviderHubAuthTokenEnv), "env var name containing provider-hub shared gRPC token; empty disables metadata")
 	flag.StringVar(&options.ScenarioFilePath, "scenario-file", "", "checked onboarding scenario JSON; payload values are never printed")
+	flag.StringVar(&options.OrganizationID, "organization-id", os.Getenv("KODEX_ONBOARDING_RUNNER_ORGANIZATION_ID"), "organization id used when project-id is not provided")
 	flag.StringVar(&options.ProjectID, "project-id", "", "project-catalog project id")
+	flag.StringVar(&options.ProjectSlug, "project-slug", envOr("KODEX_ONBOARDING_RUNNER_PROJECT_SLUG", defaultProjectSlug), "project slug used when project-id is not provided")
+	flag.StringVar(&options.ProjectDisplayName, "project-display-name", envOr("KODEX_ONBOARDING_RUNNER_PROJECT_NAME", defaultProjectDisplayName), "project display name used when project is created")
+	flag.StringVar(&options.ProjectDescription, "project-description", os.Getenv("KODEX_ONBOARDING_RUNNER_PROJECT_DESCRIPTION"), "optional project description")
 	flag.StringVar(&options.RepositoryID, "repository-id", "", "project-catalog repository binding id")
 	flag.StringVar(&options.ProviderSlug, "provider-slug", defaultProviderSlug, "provider slug")
+	flag.StringVar(&options.ProviderOwner, "provider-owner", os.Getenv("KODEX_ONBOARDING_RUNNER_PROVIDER_OWNER"), "provider repository owner used to build repository binding")
+	flag.StringVar(&options.ProviderName, "provider-name", os.Getenv("KODEX_ONBOARDING_RUNNER_PROVIDER_NAME"), "provider repository name used to build repository binding")
 	flag.StringVar(&options.RepositoryFullName, "repository-full-name", "", "provider repository owner/name")
+	flag.StringVar(&options.RepositoryDefaultBranch, "repository-default-branch", envOr("KODEX_ONBOARDING_RUNNER_REPOSITORY_DEFAULT_BRANCH", defaultRepositoryDefaultBranch), "default branch for generated repository binding scenario")
 	flag.StringVar(&options.ProviderRepositoryID, "provider-repository-id", "", "provider-native repository id")
 	flag.StringVar(&options.ExternalAccountID, "external-account-id", os.Getenv("KODEX_ONBOARDING_RUNNER_EXTERNAL_ACCOUNT_ID"), "external account id selected by caller policy")
 	flag.StringVar(&options.AllowedProviderOwner, "allowed-provider-owner", os.Getenv("KODEX_ONBOARDING_RUNNER_ALLOWED_OWNER"), "required owner for apply mode")
@@ -79,8 +97,11 @@ func main() {
 }
 
 type projectCatalogAPI interface {
+	CreateProject(context.Context, *projectsv1.CreateProjectRequest, ...grpc.CallOption) (*projectsv1.ProjectResponse, error)
+	ListProjects(context.Context, *projectsv1.ListProjectsRequest, ...grpc.CallOption) (*projectsv1.ListProjectsResponse, error)
 	AttachRepository(context.Context, *projectsv1.AttachRepositoryRequest, ...grpc.CallOption) (*projectsv1.RepositoryResponse, error)
 	GetRepository(context.Context, *projectsv1.GetRepositoryRequest, ...grpc.CallOption) (*projectsv1.RepositoryResponse, error)
+	ListRepositories(context.Context, *projectsv1.ListRepositoriesRequest, ...grpc.CallOption) (*projectsv1.ListRepositoriesResponse, error)
 	CreateProviderRepository(context.Context, *projectsv1.CreateProviderRepositoryRequest, ...grpc.CallOption) (*projectsv1.RepositoryProviderCreateResponse, error)
 	CreateRepositoryBootstrapPullRequest(context.Context, *projectsv1.CreateRepositoryBootstrapPullRequestRequest, ...grpc.CallOption) (*projectsv1.RepositoryBootstrapPullRequestResponse, error)
 	ReconcileBootstrapMergeSignal(context.Context, *projectsv1.ReconcileBootstrapMergeSignalRequest, ...grpc.CallOption) (*projectsv1.BootstrapServicesPolicyImportResponse, error)
@@ -101,32 +122,45 @@ type runnerClients struct {
 }
 
 type runnerOptions struct {
-	ProjectCatalogAddr        string
-	ProviderHubAddr           string
-	ScenarioFilePath          string
-	ProjectID                 string
-	RepositoryID              string
-	ProviderSlug              string
-	RepositoryFullName        string
-	ProviderRepositoryID      string
-	ExternalAccountID         string
-	AllowedProviderOwner      string
-	RepositoryNamePrefix      string
-	AllowedProviderRepository string
-	IdempotencyKey            string
-	RequestID                 string
-	ActorID                   string
-	Kind                      string
-	CheckedPayloadFilePath    string
-	WatermarkJSONFilePath     string
-	CheckedSourcePath         string
-	CheckedArtifactRef        string
-	CheckedArtifactVersion    string
-	Apply                     bool
-	Timeout                   time.Duration
+	ProjectCatalogAddr         string
+	ProviderHubAddr            string
+	ProjectCatalogAuthTokenEnv string
+	ProviderHubAuthTokenEnv    string
+	ScenarioFilePath           string
+	OrganizationID             string
+	ProjectID                  string
+	ProjectSlug                string
+	ProjectDisplayName         string
+	ProjectDescription         string
+	RepositoryID               string
+	ProviderSlug               string
+	ProviderOwner              string
+	ProviderName               string
+	RepositoryFullName         string
+	RepositoryDefaultBranch    string
+	ProviderRepositoryID       string
+	ExternalAccountID          string
+	AllowedProviderOwner       string
+	RepositoryNamePrefix       string
+	AllowedProviderRepository  string
+	IdempotencyKey             string
+	RequestID                  string
+	ActorID                    string
+	Kind                       string
+	CheckedPayloadFilePath     string
+	WatermarkJSONFilePath      string
+	CheckedSourcePath          string
+	CheckedArtifactRef         string
+	CheckedArtifactVersion     string
+	Apply                      bool
+	Timeout                    time.Duration
 }
 
 type onboardingScenario struct {
+	OrganizationID       string                     `json:"organization_id,omitempty"`
+	ProjectSlug          string                     `json:"project_slug,omitempty"`
+	ProjectDisplayName   string                     `json:"project_display_name,omitempty"`
+	ProjectDescription   string                     `json:"project_description,omitempty"`
 	ProjectID            string                     `json:"project_id,omitempty"`
 	RepositoryID         string                     `json:"repository_id,omitempty"`
 	ProviderSlug         string                     `json:"provider_slug,omitempty"`
@@ -270,6 +304,11 @@ func run(ctx context.Context, options runnerOptions, clients runnerClients, outp
 	if err := validateOptions(options, scenario); err != nil {
 		return err
 	}
+	options, _, err = ensureRunnerProject(ctx, clients.ProjectCatalog, options, output)
+	if err != nil {
+		return err
+	}
+	scenario = ensureRepositoryBindingScenario(options, scenario)
 	producer, err := loadCheckedArtifactProducer(options)
 	if err != nil {
 		return err
@@ -297,8 +336,23 @@ func run(ctx context.Context, options runnerOptions, clients runnerClients, outp
 			}
 		}
 	} else if scenario.RepositoryBinding != nil {
-		if err := describeRepositoryBinding(options, scenario.RepositoryBinding, output); err != nil {
+		repository, err = findRepositoryBinding(ctx, clients.ProjectCatalog, options, scenario.RepositoryBinding, output)
+		if err != nil {
 			return err
+		}
+		if repository != nil {
+			options.RepositoryID = repository.GetRepositoryId()
+			options, err = bindOptionsToRepository(options, repository)
+			if err != nil {
+				return err
+			}
+			if err := validateRepositoryBindingMatchesRepository(options, scenario.RepositoryBinding, repository); err != nil {
+				return err
+			}
+		} else {
+			if err := describeRepositoryBinding(options, scenario.RepositoryBinding, output); err != nil {
+				return err
+			}
 		}
 	} else {
 		logLine(output, "BLOCKED", "project repository binding is not available before bootstrap repository create")
@@ -376,10 +430,10 @@ func run(ctx context.Context, options runnerOptions, clients runnerClients, outp
 		logLine(output, "PLAN", "apply disabled; no mutating product API calls executed")
 		return nil
 	}
-	if err := applyReconciliation(ctx, clients.ProjectCatalog, options, scenario, signals, output, hasBootstrapSetup(scenario)); err != nil {
+	if err := applyReconciliation(ctx, clients.ProjectCatalog, options, scenario, signals, output, hasBootstrapSetup(scenario) || hasRepositoryBindingSetup(scenario)); err != nil {
 		return err
 	}
-	logLine(output, "OK", "onboarding product API path completed")
+	logLine(output, "OK", "onboarding product API path completed project_id=%s repository_id=%s", safeValue(options.ProjectID), safeValue(options.RepositoryID))
 	return nil
 }
 
@@ -390,11 +444,19 @@ func newGRPCClients(options runnerOptions) (runnerClients, func(), error) {
 	if strings.TrimSpace(options.ProviderHubAddr) == "" {
 		return runnerClients{}, func() {}, errors.New("provider-hub gRPC address is required")
 	}
-	projectConn, err := grpc.NewClient(options.ProjectCatalogAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	projectAuthToken, err := tokenFromEnvRef(options.ProjectCatalogAuthTokenEnv, "project-catalog")
+	if err != nil {
+		return runnerClients{}, func() {}, err
+	}
+	providerAuthToken, err := tokenFromEnvRef(options.ProviderHubAuthTokenEnv, "provider-hub")
+	if err != nil {
+		return runnerClients{}, func() {}, err
+	}
+	projectConn, err := grpc.NewClient(options.ProjectCatalogAddr, grpcClientDialOptions(projectAuthToken, options.ActorID)...)
 	if err != nil {
 		return runnerClients{}, func() {}, fmt.Errorf("connect project-catalog: %w", err)
 	}
-	providerConn, err := grpc.NewClient(options.ProviderHubAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	providerConn, err := grpc.NewClient(options.ProviderHubAddr, grpcClientDialOptions(providerAuthToken, options.ActorID)...)
 	if err != nil {
 		_ = projectConn.Close()
 		return runnerClients{}, func() {}, fmt.Errorf("connect provider-hub: %w", err)
@@ -409,11 +471,65 @@ func newGRPCClients(options runnerOptions) (runnerClients, func(), error) {
 	}, closeClients, nil
 }
 
+func grpcClientDialOptions(authToken string, callerID string) []grpc.DialOption {
+	options := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
+	if strings.TrimSpace(authToken) != "" {
+		options = append(options, grpc.WithUnaryInterceptor(outgoingAuthUnaryInterceptor(authToken, callerID)))
+	}
+	return options
+}
+
+func outgoingAuthUnaryInterceptor(authToken string, callerID string) grpc.UnaryClientInterceptor {
+	token := strings.TrimSpace(authToken)
+	caller := defaultString(strings.TrimSpace(callerID), defaultActorID)
+	return func(
+		ctx context.Context,
+		method string,
+		req any,
+		reply any,
+		conn *grpc.ClientConn,
+		invoker grpc.UnaryInvoker,
+		options ...grpc.CallOption,
+	) error {
+		authenticatedCtx := metadata.AppendToOutgoingContext(
+			ctx,
+			grpcserver.MetadataAuthorization,
+			"Bearer "+token,
+			grpcserver.MetadataCallerType,
+			"service",
+			grpcserver.MetadataCallerID,
+			caller,
+		)
+		return invoker(authenticatedCtx, method, req, reply, conn, options...)
+	}
+}
+
+func tokenFromEnvRef(envRef string, service string) (string, error) {
+	envRef = strings.TrimSpace(envRef)
+	if envRef == "" {
+		return "", nil
+	}
+	token := strings.TrimSpace(os.Getenv(envRef))
+	if token == "" {
+		return "", fmt.Errorf("%s auth token env %s is not set", service, envRef)
+	}
+	return token, nil
+}
+
 func normalizeOptions(options runnerOptions) runnerOptions {
+	options.ProjectCatalogAuthTokenEnv = strings.TrimSpace(options.ProjectCatalogAuthTokenEnv)
+	options.ProviderHubAuthTokenEnv = strings.TrimSpace(options.ProviderHubAuthTokenEnv)
+	options.OrganizationID = strings.TrimSpace(options.OrganizationID)
 	options.ProjectID = strings.TrimSpace(options.ProjectID)
+	options.ProjectSlug = defaultString(strings.TrimSpace(options.ProjectSlug), defaultProjectSlug)
+	options.ProjectDisplayName = defaultString(strings.TrimSpace(options.ProjectDisplayName), options.ProjectSlug)
+	options.ProjectDescription = strings.TrimSpace(options.ProjectDescription)
 	options.RepositoryID = strings.TrimSpace(options.RepositoryID)
 	options.ProviderSlug = defaultString(strings.TrimSpace(options.ProviderSlug), defaultProviderSlug)
+	options.ProviderOwner = strings.TrimSpace(options.ProviderOwner)
+	options.ProviderName = strings.TrimSpace(options.ProviderName)
 	options.RepositoryFullName = strings.TrimSpace(options.RepositoryFullName)
+	options.RepositoryDefaultBranch = defaultString(strings.TrimSpace(options.RepositoryDefaultBranch), defaultRepositoryDefaultBranch)
 	options.ProviderRepositoryID = strings.TrimSpace(options.ProviderRepositoryID)
 	options.ExternalAccountID = strings.TrimSpace(options.ExternalAccountID)
 	options.AllowedProviderOwner = strings.TrimSpace(options.AllowedProviderOwner)
@@ -435,8 +551,20 @@ func normalizeOptions(options runnerOptions) runnerOptions {
 }
 
 func mergeScenarioOptions(options runnerOptions, scenario onboardingScenario) runnerOptions {
+	if options.OrganizationID == "" {
+		options.OrganizationID = strings.TrimSpace(scenario.OrganizationID)
+	}
 	if options.ProjectID == "" {
 		options.ProjectID = strings.TrimSpace(scenario.ProjectID)
+	}
+	if options.ProjectSlug == "" || options.ProjectSlug == defaultProjectSlug {
+		options.ProjectSlug = defaultString(strings.TrimSpace(scenario.ProjectSlug), options.ProjectSlug)
+	}
+	if options.ProjectDisplayName == "" || options.ProjectDisplayName == defaultProjectDisplayName {
+		options.ProjectDisplayName = defaultString(strings.TrimSpace(scenario.ProjectDisplayName), options.ProjectDisplayName)
+	}
+	if options.ProjectDescription == "" {
+		options.ProjectDescription = strings.TrimSpace(scenario.ProjectDescription)
 	}
 	if options.RepositoryID == "" {
 		options.RepositoryID = strings.TrimSpace(scenario.RepositoryID)
@@ -449,6 +577,16 @@ func mergeScenarioOptions(options runnerOptions, scenario onboardingScenario) ru
 	}
 	if options.ProviderRepositoryID == "" {
 		options.ProviderRepositoryID = strings.TrimSpace(scenario.ProviderRepositoryID)
+	}
+	if options.ProviderOwner == "" && options.ProviderName == "" && options.RepositoryFullName != "" {
+		owner, name, ok := splitRepositoryFullName(options.RepositoryFullName)
+		if ok {
+			options.ProviderOwner = owner
+			options.ProviderName = name
+		}
+	}
+	if options.RepositoryFullName == "" && options.ProviderOwner != "" && options.ProviderName != "" {
+		options.RepositoryFullName = options.ProviderOwner + "/" + options.ProviderName
 	}
 	if options.RepositoryFullName == "" && scenario.RepositoryBinding != nil {
 		binding := scenario.RepositoryBinding
@@ -478,10 +616,17 @@ func mergeScenarioOptions(options runnerOptions, scenario onboardingScenario) ru
 
 func validateOptions(options runnerOptions, scenario onboardingScenario) error {
 	if options.ProjectID == "" {
-		return errors.New("project_id is required")
+		if options.OrganizationID == "" {
+			return errors.New("organization_id is required when project_id is not provided")
+		}
+		if options.ProjectSlug == "" {
+			return errors.New("project_slug is required when project_id is not provided")
+		}
 	}
 	if options.RepositoryID == "" && !hasBootstrapCreateRepository(scenario) && !hasRepositoryBindingSetup(scenario) {
-		return errors.New("repository_id is required")
+		if options.ProviderOwner == "" || options.ProviderName == "" {
+			return errors.New("repository_id or provider owner/name is required")
+		}
 	}
 	if options.ProviderSlug == "" {
 		return errors.New("provider_slug is required")
@@ -506,6 +651,124 @@ func validateOptions(options runnerOptions, scenario onboardingScenario) error {
 		}
 	}
 	return nil
+}
+
+func ensureRunnerProject(ctx context.Context, client projectCatalogAPI, options runnerOptions, output io.Writer) (runnerOptions, *projectsv1.Project, error) {
+	if options.ProjectID != "" {
+		return options, nil, nil
+	}
+	project, err := findRunnerProject(ctx, client, options)
+	if err != nil {
+		return options, nil, err
+	}
+	if project != nil {
+		options.ProjectID = project.GetProjectId()
+		logLine(output, "OK", "project ready project_id=%s slug=%s status=%s version=%d",
+			safeValue(project.GetProjectId()),
+			safeValue(project.GetSlug()),
+			project.GetStatus().String(),
+			project.GetVersion(),
+		)
+		return options, project, nil
+	}
+	if !options.Apply {
+		logLine(output, "PLAN", "project create ready organization_id=%s slug=%s display_name=%s",
+			safeValue(options.OrganizationID),
+			safeValue(options.ProjectSlug),
+			safeValue(options.ProjectDisplayName),
+		)
+		return options, nil, nil
+	}
+	response, err := client.CreateProject(ctx, &projectsv1.CreateProjectRequest{
+		OrganizationId: options.OrganizationID,
+		Slug:           options.ProjectSlug,
+		DisplayName:    options.ProjectDisplayName,
+		Description:    optionalString(options.ProjectDescription),
+		Status:         optionalProjectStatus(projectsv1.ProjectStatus_PROJECT_STATUS_ACTIVE),
+		Meta:           projectCreateCommandMeta(options),
+	})
+	if err != nil {
+		return options, nil, safeError("project-catalog CreateProject failed", err)
+	}
+	project = response.GetProject()
+	if project == nil {
+		return options, nil, errors.New("project-catalog CreateProject returned empty project")
+	}
+	if project.GetStatus() != projectsv1.ProjectStatus_PROJECT_STATUS_ACTIVE {
+		return options, nil, fmt.Errorf("created project status %s is not active", project.GetStatus().String())
+	}
+	options.ProjectID = project.GetProjectId()
+	logLine(output, "OK", "project created project_id=%s slug=%s version=%d",
+		safeValue(project.GetProjectId()),
+		safeValue(project.GetSlug()),
+		project.GetVersion(),
+	)
+	return options, project, nil
+}
+
+func findRunnerProject(ctx context.Context, client projectCatalogAPI, options runnerOptions) (*projectsv1.Project, error) {
+	pageToken := ""
+	var displayNameMatch *projectsv1.Project
+	for {
+		response, err := client.ListProjects(ctx, &projectsv1.ListProjectsRequest{
+			OrganizationId: optionalString(options.OrganizationID),
+			Page:           &projectsv1.PageRequest{PageSize: 100, PageToken: optionalString(pageToken)},
+			Meta:           projectQueryMeta(options),
+		})
+		if err != nil {
+			return nil, safeError("project-catalog ListProjects failed", err)
+		}
+		for _, project := range response.GetProjects() {
+			if project.GetSlug() == options.ProjectSlug {
+				return activeRunnerProject(project, "slug")
+			}
+			if options.ProjectDisplayName != "" && project.GetDisplayName() == options.ProjectDisplayName {
+				if displayNameMatch != nil {
+					return nil, errors.New("project lookup by display name is ambiguous")
+				}
+				displayNameMatch = project
+			}
+		}
+		pageToken = response.GetPage().GetNextPageToken()
+		if pageToken == "" {
+			break
+		}
+	}
+	if displayNameMatch != nil {
+		return activeRunnerProject(displayNameMatch, "display_name")
+	}
+	return nil, nil
+}
+
+func activeRunnerProject(project *projectsv1.Project, matchedBy string) (*projectsv1.Project, error) {
+	if project.GetStatus() != projectsv1.ProjectStatus_PROJECT_STATUS_ACTIVE {
+		return nil, fmt.Errorf("project matched by %s is %s, active project is required", matchedBy, project.GetStatus().String())
+	}
+	return project, nil
+}
+
+func ensureRepositoryBindingScenario(options runnerOptions, scenario onboardingScenario) onboardingScenario {
+	if scenario.RepositoryBinding != nil || options.RepositoryID != "" || hasBootstrapCreateRepository(scenario) {
+		return scenario
+	}
+	owner := options.ProviderOwner
+	name := options.ProviderName
+	if owner == "" || name == "" {
+		fullOwner, fullName, ok := splitRepositoryFullName(options.RepositoryFullName)
+		if !ok {
+			return scenario
+		}
+		owner = fullOwner
+		name = fullName
+	}
+	scenario.RepositoryBinding = &repositoryBindingScenario{
+		ProviderOwner:        owner,
+		ProviderName:         name,
+		DefaultBranch:        defaultString(options.RepositoryDefaultBranch, defaultRepositoryDefaultBranch),
+		ProviderRepositoryID: options.ProviderRepositoryID,
+		Status:               "active",
+	}
+	return scenario
 }
 
 func loadCheckedArtifactProducer(options runnerOptions) (checkedArtifactProducer, error) {
@@ -815,6 +1078,57 @@ func attachRepositoryBinding(ctx context.Context, client projectCatalogAPI, opti
 		repository.GetVersion(),
 	)
 	return repository, nil
+}
+
+func findRepositoryBinding(ctx context.Context, client projectCatalogAPI, options runnerOptions, scenario *repositoryBindingScenario, output io.Writer) (*projectsv1.Repository, error) {
+	if scenario == nil || options.ProjectID == "" {
+		return nil, nil
+	}
+	if err := validateRepositoryBindingScenario(options, scenario); err != nil {
+		return nil, err
+	}
+	targetOwner := strings.TrimSpace(scenario.ProviderOwner)
+	targetName := strings.TrimSpace(scenario.ProviderName)
+	pageToken := ""
+	for {
+		response, err := client.ListRepositories(ctx, &projectsv1.ListRepositoriesRequest{
+			ProjectId: options.ProjectID,
+			Statuses: []projectsv1.RepositoryStatus{
+				projectsv1.RepositoryStatus_REPOSITORY_STATUS_ACTIVE,
+				projectsv1.RepositoryStatus_REPOSITORY_STATUS_PENDING,
+				projectsv1.RepositoryStatus_REPOSITORY_STATUS_BLOCKED,
+			},
+			Page: &projectsv1.PageRequest{PageSize: 100, PageToken: optionalString(pageToken)},
+			Meta: projectQueryMeta(options),
+		})
+		if err != nil {
+			return nil, safeError("project-catalog ListRepositories failed", err)
+		}
+		for _, repository := range response.GetRepositories() {
+			if repository.GetProvider() != projectRepositoryProviderFromSlug(options.ProviderSlug) {
+				continue
+			}
+			if repository.GetProviderOwner() != targetOwner || repository.GetProviderName() != targetName {
+				continue
+			}
+			if repository.GetStatus() != projectsv1.RepositoryStatus_REPOSITORY_STATUS_ACTIVE {
+				return nil, fmt.Errorf("repository binding exists with status %s, active binding is required", repository.GetStatus().String())
+			}
+			logLine(output, "OK", "repository binding ready repository_id=%s target=%s/%s base=%s version=%d",
+				safeValue(repository.GetRepositoryId()),
+				safeValue(repository.GetProviderOwner()),
+				safeValue(repository.GetProviderName()),
+				safeValue(repository.GetDefaultBranch()),
+				repository.GetVersion(),
+			)
+			return repository, nil
+		}
+		pageToken = response.GetPage().GetNextPageToken()
+		if pageToken == "" {
+			break
+		}
+	}
+	return nil, nil
 }
 
 func validateRepositoryBindingScenario(options runnerOptions, scenario *repositoryBindingScenario) error {
@@ -1268,6 +1582,13 @@ func repositoryStatusFromString(value string) (projectsv1.RepositoryStatus, erro
 
 func optionalRepositoryStatus(value projectsv1.RepositoryStatus) *projectsv1.RepositoryStatus {
 	if value == projectsv1.RepositoryStatus_REPOSITORY_STATUS_UNSPECIFIED {
+		return nil
+	}
+	return &value
+}
+
+func optionalProjectStatus(value projectsv1.ProjectStatus) *projectsv1.ProjectStatus {
+	if value == projectsv1.ProjectStatus_PROJECT_STATUS_UNSPECIFIED {
 		return nil
 	}
 	return &value
@@ -1795,6 +2116,24 @@ func projectStageCommandMeta(options runnerOptions, stage string, target string,
 	}
 }
 
+func projectCreateCommandMeta(options runnerOptions) *projectsv1.CommandMeta {
+	idempotency := options.IdempotencyKey
+	if idempotency == "" {
+		idempotency = deterministicKey(options.OrganizationID, options.ProjectSlug, "project-bootstrap")
+	} else {
+		idempotency = strings.TrimSpace(idempotency) + "-project-bootstrap"
+	}
+	return &projectsv1.CommandMeta{
+		IdempotencyKey: optionalString(idempotency),
+		Actor:          &projectsv1.Actor{Type: "service", Id: options.ActorID},
+		Reason:         "onboarding_product_api_runner",
+		RequestId:      options.RequestID,
+		RequestContext: &projectsv1.RequestContext{
+			Source: defaultSource,
+		},
+	}
+}
+
 func wantsKind(options runnerOptions, kind string) bool {
 	return options.Kind == "both" || options.Kind == kind
 }
@@ -1955,6 +2294,14 @@ func firstNonEmpty(values ...string) string {
 
 func defaultString(value string, fallback string) string {
 	if strings.TrimSpace(value) == "" {
+		return fallback
+	}
+	return value
+}
+
+func envOr(name string, fallback string) string {
+	value := strings.TrimSpace(os.Getenv(name))
+	if value == "" {
 		return fallback
 	}
 	return value
