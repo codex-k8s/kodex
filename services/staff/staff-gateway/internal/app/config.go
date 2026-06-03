@@ -87,7 +87,7 @@ func (cfg Config) Validate() error {
 	if err := cfg.Governance.validate(); err != nil {
 		return err
 	}
-	return cfg.ProjectCatalog.validate(cfg.InteractionHub.AuthToken)
+	return cfg.ProjectCatalog.validate()
 }
 
 func (cfg Config) HTTPRouterConfig() httptransport.Config {
@@ -120,7 +120,11 @@ func (cfg Config) GovernanceClientConfig() governanceclient.Config {
 }
 
 func (cfg Config) ProjectCatalogClientConfig() projectcatalogclient.Config {
-	return fallbackClientConfig(cfg.ProjectCatalog.GRPCAddr, cfg.ProjectCatalog.AuthToken, cfg.InteractionHub.AuthToken, cfg.ProjectCatalog.Timeout)
+	return projectcatalogclient.Config{
+		Addr:      cfg.ProjectCatalog.GRPCAddr,
+		AuthToken: strings.TrimSpace(cfg.ProjectCatalog.AuthToken),
+		Timeout:   cfg.ProjectCatalog.Timeout,
+	}
 }
 
 func fallbackClientConfig(addr string, authToken string, fallbackAuthToken string, timeout time.Duration) clientruntime.Config {
@@ -163,8 +167,8 @@ func (cfg GovernanceConfig) validate() error {
 	return validateRequiredClientConfig("GOVERNANCE_MANAGER", cfg.GRPCAddr, cfg.AuthToken, cfg.Timeout)
 }
 
-func (cfg ProjectCatalogConfig) validate(fallbackAuthToken string) error {
-	return validateFallbackClientConfig("PROJECT_CATALOG", cfg.GRPCAddr, cfg.AuthToken, fallbackAuthToken, cfg.Timeout)
+func (cfg ProjectCatalogConfig) validate() error {
+	return validateRequiredClientConfig("PROJECT_CATALOG", cfg.GRPCAddr, cfg.AuthToken, cfg.Timeout)
 }
 
 func validateFallbackClientConfig(envPrefix string, grpcAddr string, authToken string, fallbackAuthToken string, timeout time.Duration) error {
