@@ -8,6 +8,7 @@ import (
 
 	agentsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/agents/v1"
 	providersv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/providers/v1"
+	runtimev1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/runtime/v1"
 	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/service"
 	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/types/enum"
@@ -1058,6 +1059,35 @@ func ListAgentRunSummariesInput(request *agentsv1.ListAgentRunSummariesRequest) 
 }
 
 func CreateSelfDeployPlanInput(request *agentsv1.CreateSelfDeployPlanRequest) (service.CreateSelfDeployPlanInput, error) {
+	return createSelfDeployPlanInputFromRequest(request)
+}
+
+func CreateSelfDeployPlanFromSignalInput(request *agentsv1.CreateSelfDeployPlanFromSignalRequest) (service.CreateSelfDeployPlanFromSignalInput, error) {
+	input, err := createSelfDeployPlanInputFromRequest(request)
+	if err != nil {
+		return service.CreateSelfDeployPlanFromSignalInput{}, err
+	}
+	return service.CreateSelfDeployPlanFromSignalInput{CreateSelfDeployPlanInput: input}, nil
+}
+
+type selfDeployPlanRequest interface {
+	GetMeta() *agentsv1.CommandMeta
+	GetScope() *agentsv1.ScopeRef
+	GetProjectRef() string
+	GetRepositoryRef() string
+	GetProviderSignalRef() string
+	GetSourceRef() string
+	GetMergeCommitSha() string
+	GetServicesYamlRef() string
+	GetServicesYamlDigest() string
+	GetAffectedServiceKeys() []string
+	GetPathCategories() []agentsv1.SelfDeployPathCategory
+	GetExpectedRuntimeJobTypes() []runtimev1.JobType
+	GetGovernanceContext() *agentsv1.GovernanceContextRef
+	GetSafeSummary() string
+}
+
+func createSelfDeployPlanInputFromRequest(request selfDeployPlanRequest) (service.CreateSelfDeployPlanInput, error) {
 	meta, err := CommandMetaFromProto(request.GetMeta())
 	if err != nil {
 		return service.CreateSelfDeployPlanInput{}, err

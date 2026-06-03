@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-07
 updated_at: 2026-06-02
-related_issues: [655, 656, 782, 949, 966, 975, 990, 994, 999, 1011]
+related_issues: [655, 656, 782, 949, 966, 975, 990, 994, 999, 1011, 1015]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -88,7 +88,7 @@ Generated execution context передаётся отдельным `WorkspaceSo
 
 `CreateJob` без slot получает `fleet_scope_id` и `cluster_id` через `fleet-manager.ResolvePlacement` с runtime mode `platform_job`. `CreateJob` со slot не вызывает placement повторно и наследует fleet refs из slot.
 
-Self-deploy orchestration plan в `agent-manager` не вызывает `CreateJob`. Он хранит только safe refs, affected service keys, `services.yaml` digest/fingerprint и expected job types `build`, `deploy`, `health_check` как подготовку к owner/governance approval. Реальные runtime jobs для build/deploy должны создаваться отдельным approval-driven срезом через typed `CreateJob`, без raw webhook body, diff, полного `services.yaml`, секретов или token values.
+Self-deploy orchestration plan в `agent-manager` не вызывает `CreateJob`, включая путь `CreateSelfDeployPlanFromSignal` от provider/project safe signal. Он хранит только safe refs, affected service keys, `services.yaml` digest/fingerprint и expected job types `build`, `deploy`, `health_check` как подготовку к owner/governance approval. Реальные runtime jobs для build/deploy должны создаваться отдельным approval-driven срезом через typed `CreateJob`, без raw webhook body, diff, полного `services.yaml`, секретов или token values.
 
 `JOB_TYPE_BUILD` и `JOB_TYPE_DEPLOY` являются каноническими типами runtime job для будущего саморазвёртывания после provider merge signal, deploy plan и owner/governance approval. Эти типы не выражают произвольную shell-команду или перенос bootstrap deploy tool внутрь `runtime-manager`: сервис хранит lifecycle/status/artifact refs/short log tail, а исполнимый вход принимает только как типизированный spec. `BuildExecutionSpec` содержит проверенный source ref и commit SHA, `service_key` из проверенного инвентаря стека `services.yaml`, target image ref/tag и optional digest, build context ref/digest, Dockerfile ref/digest, фиксированный Dockerfile target, approved builder image ref, build plan fingerprint, `allowed_secret_refs` без значений и ограниченные `output_refs`. `DeployExecutionSpec` содержит проверенный source ref и commit SHA, `service_key`, image ref/tag/digest, manifest ref/digest, kustomization ref/digest, target namespace, fleet-owned target cluster ref, optional slot ref, deploy plan fingerprint, `allowed_secret_refs` без значений и ограниченные `output_refs`.
 

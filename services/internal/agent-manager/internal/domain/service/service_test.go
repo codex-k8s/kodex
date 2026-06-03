@@ -5316,6 +5316,68 @@ func TestCreateSelfDeployPlanReplayRejectsChangedPayload(t *testing.T) {
 	}
 }
 
+func TestCreateSelfDeployPlanFromSignalReplaysExistingSignal(t *testing.T) {
+	t.Parallel()
+
+	input := validSelfDeployPlanInput()
+	plan := selfDeployPlanFromInputForTest(input, uuid.MustParse("5f7f3a10-0005-4000-8000-000000000005"), "command:"+input.Meta.CommandID.String())
+	repository := &fakeRepository{selfDeployList: []entity.SelfDeployPlan{plan}}
+	service := New(Config{Repository: repository})
+	replayInput := input
+	replayInput.Meta.CommandID = uuid.MustParse("5f7f3a10-0006-4000-8000-000000000006")
+
+	replay, err := service.CreateSelfDeployPlanFromSignal(context.Background(), CreateSelfDeployPlanFromSignalInput{CreateSelfDeployPlanInput: replayInput})
+	if err != nil {
+		t.Fatalf("CreateSelfDeployPlanFromSignal() err = %v", err)
+	}
+	if replay.ID != plan.ID {
+		t.Fatalf("replay id = %s, want %s", replay.ID, plan.ID)
+	}
+	if repository.createSelfDeployCalled {
+		t.Fatal("CreateSelfDeployPlanWithResult called during signal replay")
+	}
+	if repository.selfDeployFilter.ProviderSignalRef != input.ProviderSignalRef {
+		t.Fatalf("provider signal filter = %q, want %q", repository.selfDeployFilter.ProviderSignalRef, input.ProviderSignalRef)
+	}
+}
+
+func TestCreateSelfDeployPlanFromSignalRejectsChangedFingerprint(t *testing.T) {
+	t.Parallel()
+
+	input := validSelfDeployPlanInput()
+	plan := selfDeployPlanFromInputForTest(input, uuid.MustParse("5f7f3a10-0007-4000-8000-000000000007"), "command:"+input.Meta.CommandID.String())
+	repository := &fakeRepository{selfDeployList: []entity.SelfDeployPlan{plan}}
+	service := New(Config{Repository: repository})
+	changed := input
+	changed.Meta.CommandID = uuid.MustParse("5f7f3a10-0008-4000-8000-000000000008")
+	changed.AffectedServiceKeys = []string{"agent-manager"}
+
+	_, err := service.CreateSelfDeployPlanFromSignal(context.Background(), CreateSelfDeployPlanFromSignalInput{CreateSelfDeployPlanInput: changed})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("CreateSelfDeployPlanFromSignal() err = %v, want %v", err, errs.ErrConflict)
+	}
+	if repository.createSelfDeployCalled {
+		t.Fatal("CreateSelfDeployPlanWithResult called after signal conflict")
+	}
+}
+
+func TestCreateSelfDeployPlanFromSignalRequiresProviderSignalRef(t *testing.T) {
+	t.Parallel()
+
+	input := validSelfDeployPlanInput()
+	input.ProviderSignalRef = ""
+	repository := &fakeRepository{}
+	service := New(Config{Repository: repository})
+
+	_, err := service.CreateSelfDeployPlanFromSignal(context.Background(), CreateSelfDeployPlanFromSignalInput{CreateSelfDeployPlanInput: input})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("CreateSelfDeployPlanFromSignal() err = %v, want %v", err, errs.ErrInvalidArgument)
+	}
+	if repository.createSelfDeployCalled {
+		t.Fatal("CreateSelfDeployPlanWithResult called without provider signal ref")
+	}
+}
+
 func TestCreateSelfDeployPlanRejectsUnsafePayload(t *testing.T) {
 	t.Parallel()
 

@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-12
 updated_at: 2026-06-02
-related_issues: [733, 753, 698, 322, 782, 795, 820, 834, 842, 862, 866, 937, 954, 968, 984, 994, 1011]
+related_issues: [733, 753, 698, 322, 782, 795, 820, 834, 842, 862, 866, 937, 954, 968, 984, 994, 1011, 1015]
 related_prs: []
 related_adrs: []
 approvals:
@@ -139,16 +139,16 @@ sequenceDiagram
   participant AM as agent-manager
   participant GOV as governance-manager
   participant R as runtime-manager
-  Provider-->>AM: safe merge/push signal ref
-  PC-->>AM: project/repository refs + services.yaml ref/digest
-  AM->>AM: CreateSelfDeployPlan(project refs, source ref, service keys, path categories)
+  Provider-->>PC: safe merge/push signal ref
+  PC-->>AM: safe project/repository signal + services.yaml ref/digest
+  AM->>AM: CreateSelfDeployPlanFromSignal(signal ref, source ref, service keys, path categories)
   AM-->>GOV: refs для gate/release approval
   Note over AM,R: build/deploy jobs не создаются до approval
 ```
 
 `agent-manager` владеет только orchestration state плана: какой safe signal получен, какие service keys/path categories затронуты, какой digest `services.yaml` принят как вход и какие runtime job types ожидаются после approval. `project-catalog` остаётся владельцем проектной декларации и проверенной проекции `services.yaml`, `provider-hub` — владельцем provider signal и provider-native фактов, `governance-manager` — владельцем approval/release decision, `runtime-manager` — владельцем будущих build/deploy jobs и их исполнения.
 
-`CreateSelfDeployPlan` фиксирует статус `pending_approval`, плановый fingerprint и событие `agent.self_deploy.plan_requested`. Команда не вызывает `runtime-manager.CreateJob`, не пишет provider/project payload и не читает Kubernetes. Для будущего перехода к build/deploy следующий срез должен использовать сохранённые refs/fingerprint и typed governance decision ref; автоматический deploy после merge в `main` остаётся запрещённым.
+`CreateSelfDeployPlanFromSignal` фиксирует статус `pending_approval`, плановый fingerprint и событие `agent.self_deploy.plan_requested` из безопасного provider/project signal. `provider_signal_ref` обязателен: повтор с тем же signal ref и fingerprint возвращает существующий план, а другой fingerprint по тому же signal ref считается конфликтом. `CreateSelfDeployPlan` остаётся typed/manual входом для уже подготовленного plan input. Ни одна команда не вызывает `runtime-manager.CreateJob`, не пишет provider/project payload и не читает Kubernetes. Для будущего перехода к build/deploy следующий срез должен использовать сохранённые refs/fingerprint и typed governance decision ref; автоматический deploy после merge в `main` остаётся запрещённым.
 
 ### Приёмка результата агента
 
@@ -238,7 +238,7 @@ Self-deploy plan не является runtime job request. Он хранит т
 
 Если ролевой агент в слоте работает через `gh` или нативный API провайдера, он передаёт платформе сигнал, а `provider-hub` догоняет проекцию webhook/reconciliation.
 
-Для self-deploy `provider-hub` остаётся источником safe merge/push signal ref и provider-native фактов. `agent-manager` не читает raw webhook body, provider response или diff; он принимает только безопасный signal ref и нормализованные refs, достаточные для pending plan.
+Для self-deploy `provider-hub` остаётся источником safe merge/push signal ref и provider-native фактов, а `project-catalog` — источником project/repository refs и проверенной `services.yaml` проекции. `agent-manager` не читает raw webhook body, provider response или diff; он принимает только безопасный signal ref и нормализованные refs, достаточные для pending plan.
 
 ### `platform-mcp-server`
 
