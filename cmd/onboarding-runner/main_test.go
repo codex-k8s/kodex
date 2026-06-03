@@ -15,6 +15,7 @@ import (
 	projectsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/projects/v1"
 	providersv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/providers/v1"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 )
 
 func TestRunDryRunPlansWithoutMutationsAndRedactsCheckedPayload(t *testing.T) {
@@ -491,6 +492,132 @@ func TestRunApplyAttachesSelfRepositoryAndReconcilesAdoption(t *testing.T) {
 	assertNotContains(t, text, "raw_services_yaml_secret")
 }
 
+func TestRunApplyCreatesProjectAndAttachesSelfRepositoryWhenProjectIDMissing(t *testing.T) {
+	scenarioPath := writeScenario(t, selfRepositoryBindingOnlyScenario())
+	project := projectFixture("11111111-1111-1111-1111-111111111111", "kodex", "project-self")
+	repository := selfRepositoryFixture()
+	repository.ProjectId = "project-self"
+	repository.RepositoryId = "repo-self"
+	projectClient := &fakeProjectCatalogClient{
+		createProjectResponse:    project,
+		attachRepositoryResponse: repository,
+	}
+	clients := runnerClients{
+		ProjectCatalog: projectClient,
+		ProviderHub:    &fakeProviderHubClient{},
+	}
+
+	var output bytes.Buffer
+	err := run(context.Background(), runnerOptions{
+		ScenarioFilePath:          scenarioPath,
+		OrganizationID:            "11111111-1111-1111-1111-111111111111",
+		ProjectSlug:               "kodex",
+		ProjectDisplayName:        "kodex",
+		AllowedProviderOwner:      "codex-k8s",
+		AllowedProviderRepository: "kodex",
+		RequestID:                 "req-1",
+		Kind:                      "adoption",
+		Apply:                     true,
+	}, clients, &output)
+	if err != nil {
+		t.Fatalf("run apply project bootstrap: %v", err)
+	}
+
+	if projectClient.createProjectCalls != 1 || projectClient.attachRepositoryCalls != 1 {
+		t.Fatalf("expected create project and attach repository calls, got create=%d attach=%d", projectClient.createProjectCalls, projectClient.attachRepositoryCalls)
+	}
+	if projectClient.adoptionReconcileCalls != 0 {
+		t.Fatalf("expected no adoption reconcile without checked input, got %d", projectClient.adoptionReconcileCalls)
+	}
+	if got := projectClient.lastCreateProjectRequest.GetSlug(); got != "kodex" {
+		t.Fatalf("project slug = %q, want kodex", got)
+	}
+	if got := projectClient.lastAttachRepositoryRequest.GetProjectId(); got != "project-self" {
+		t.Fatalf("attach project_id = %q, want project-self", got)
+	}
+	text := output.String()
+	assertContains(t, text, "project created")
+	assertContains(t, text, "repository binding attached")
+	assertContains(t, text, "project_id=project-self")
+	assertContains(t, text, "repository_id=repo-self")
+}
+
+func TestRunApplyReusesExistingProjectAndRepositoryBinding(t *testing.T) {
+	scenarioPath := writeScenario(t, selfRepositoryBindingOnlyScenario())
+	project := projectFixture("11111111-1111-1111-1111-111111111111", "kodex", "project-self")
+	repository := selfRepositoryFixture()
+	repository.ProjectId = "project-self"
+	repository.RepositoryId = "repo-self"
+	projectClient := &fakeProjectCatalogClient{
+		projects:     []*projectsv1.Project{project},
+		repositories: []*projectsv1.Repository{repository},
+	}
+	clients := runnerClients{
+		ProjectCatalog: projectClient,
+		ProviderHub:    &fakeProviderHubClient{},
+	}
+
+	var output bytes.Buffer
+	err := run(context.Background(), runnerOptions{
+		ScenarioFilePath:          scenarioPath,
+		OrganizationID:            "11111111-1111-1111-1111-111111111111",
+		ProjectSlug:               "kodex",
+		ProjectDisplayName:        "kodex",
+		AllowedProviderOwner:      "codex-k8s",
+		AllowedProviderRepository: "kodex",
+		RequestID:                 "req-1",
+		Kind:                      "adoption",
+		Apply:                     true,
+	}, clients, &output)
+	if err != nil {
+		t.Fatalf("run apply existing project/repository: %v", err)
+	}
+
+	if projectClient.createProjectCalls != 0 || projectClient.attachRepositoryCalls != 0 {
+		t.Fatalf("expected no duplicate project/repository writes, got create=%d attach=%d", projectClient.createProjectCalls, projectClient.attachRepositoryCalls)
+	}
+	if projectClient.listProjectsCalls != 1 || projectClient.listRepositoriesCalls != 1 {
+		t.Fatalf("expected project/repository reads, got projects=%d repositories=%d", projectClient.listProjectsCalls, projectClient.listRepositoriesCalls)
+	}
+	text := output.String()
+	assertContains(t, text, "project ready project_id=project-self")
+	assertContains(t, text, "repository binding ready repository_id=repo-self")
+	assertContains(t, text, "project_id=project-self")
+}
+
+func TestRunDryRunPlansProjectAndRepositoryBootstrapWithoutProjectID(t *testing.T) {
+	clients := runnerClients{
+		ProjectCatalog: &fakeProjectCatalogClient{},
+		ProviderHub:    &fakeProviderHubClient{},
+	}
+
+	var output bytes.Buffer
+	err := run(context.Background(), runnerOptions{
+		OrganizationID:            "11111111-1111-1111-1111-111111111111",
+		ProjectSlug:               "kodex",
+		ProjectDisplayName:        "kodex",
+		ProviderOwner:             "codex-k8s",
+		ProviderName:              "kodex",
+		ProviderRepositoryID:      "provider-repo-self",
+		AllowedProviderOwner:      "codex-k8s",
+		AllowedProviderRepository: "kodex",
+		RequestID:                 "req-1",
+		Kind:                      "adoption",
+	}, clients, &output)
+	if err != nil {
+		t.Fatalf("run dry-run project bootstrap: %v", err)
+	}
+
+	projectClient := clients.ProjectCatalog.(*fakeProjectCatalogClient)
+	if projectClient.createProjectCalls != 0 || projectClient.attachRepositoryCalls != 0 {
+		t.Fatalf("dry-run mutated project API: create=%d attach=%d", projectClient.createProjectCalls, projectClient.attachRepositoryCalls)
+	}
+	text := output.String()
+	assertContains(t, text, "project create ready")
+	assertContains(t, text, "repository binding attach ready")
+	assertContains(t, text, "apply disabled")
+}
+
 func TestRunApplyRejectsUnsafeSelfRepositoryTargetBeforeAttach(t *testing.T) {
 	scenario := selfRepositoryScenario()
 	scenario.RepositoryBinding.ProviderName = "production"
@@ -805,24 +932,82 @@ func TestRunReturnsSafeDiagnosticsForDependencyErrors(t *testing.T) {
 	assertContains(t, err.Error(), "[hidden]")
 }
 
+func TestOutgoingAuthUnaryInterceptorAddsSharedTokenMetadata(t *testing.T) {
+	interceptor := outgoingAuthUnaryInterceptor("shared-token", "onboarding-runner-test")
+	err := interceptor(context.Background(), "/kodex.projects.v1.ProjectCatalogService/ListProjects", nil, nil, nil, func(ctx context.Context, _ string, _ any, _ any, _ *grpc.ClientConn, _ ...grpc.CallOption) error {
+		md, ok := metadata.FromOutgoingContext(ctx)
+		if !ok {
+			t.Fatal("expected outgoing metadata")
+		}
+		if got := firstMetadata(md, "authorization"); got != "Bearer shared-token" {
+			t.Fatalf("authorization metadata = %q, want bearer token", got)
+		}
+		if got := firstMetadata(md, "x-kodex-caller-type"); got != "service" {
+			t.Fatalf("caller type metadata = %q, want service", got)
+		}
+		if got := firstMetadata(md, "x-kodex-caller-id"); got != "onboarding-runner-test" {
+			t.Fatalf("caller id metadata = %q, want onboarding-runner-test", got)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("interceptor: %v", err)
+	}
+}
+
 type fakeProjectCatalogClient struct {
+	projects                        []*projectsv1.Project
+	createProjectResponse           *projectsv1.Project
 	repository                      *projectsv1.Repository
+	repositories                    []*projectsv1.Repository
 	attachRepositoryResponse        *projectsv1.Repository
 	createRepositoryResponse        *projectsv1.RepositoryProviderCreateResponse
+	listProjectsErr                 error
+	createProjectErr                error
+	listRepositoriesErr             error
 	getRepositoryErr                error
 	attachRepositoryErr             error
 	createRepositoryErr             error
 	bootstrapPullRequestErr         error
+	listProjectsCalls               int
+	createProjectCalls              int
+	listRepositoriesCalls           int
 	attachRepositoryCalls           int
 	bootstrapReconcileCalls         int
 	adoptionReconcileCalls          int
 	createRepositoryCalls           int
 	bootstrapPullRequestCalls       int
+	lastListProjectsRequest         *projectsv1.ListProjectsRequest
+	lastCreateProjectRequest        *projectsv1.CreateProjectRequest
+	lastListRepositoriesRequest     *projectsv1.ListRepositoriesRequest
 	lastAttachRepositoryRequest     *projectsv1.AttachRepositoryRequest
 	lastBootstrapRequest            *projectsv1.ReconcileBootstrapMergeSignalRequest
 	lastAdoptionRequest             *projectsv1.ReconcileAdoptionMergeSignalRequest
 	lastCreateRepositoryRequest     *projectsv1.CreateProviderRepositoryRequest
 	lastBootstrapPullRequestRequest *projectsv1.CreateRepositoryBootstrapPullRequestRequest
+}
+
+func (f *fakeProjectCatalogClient) CreateProject(_ context.Context, request *projectsv1.CreateProjectRequest, _ ...grpc.CallOption) (*projectsv1.ProjectResponse, error) {
+	f.createProjectCalls++
+	f.lastCreateProjectRequest = request
+	if f.createProjectErr != nil {
+		return nil, f.createProjectErr
+	}
+	project := f.createProjectResponse
+	if project == nil {
+		project = projectFixture(request.GetOrganizationId(), request.GetSlug(), "project-1")
+	}
+	f.projects = append(f.projects, project)
+	return &projectsv1.ProjectResponse{Project: project}, nil
+}
+
+func (f *fakeProjectCatalogClient) ListProjects(_ context.Context, request *projectsv1.ListProjectsRequest, _ ...grpc.CallOption) (*projectsv1.ListProjectsResponse, error) {
+	f.listProjectsCalls++
+	f.lastListProjectsRequest = request
+	if f.listProjectsErr != nil {
+		return nil, f.listProjectsErr
+	}
+	return &projectsv1.ListProjectsResponse{Projects: f.projects}, nil
 }
 
 func (f *fakeProjectCatalogClient) AttachRepository(_ context.Context, request *projectsv1.AttachRepositoryRequest, _ ...grpc.CallOption) (*projectsv1.RepositoryResponse, error) {
@@ -844,6 +1029,19 @@ func (f *fakeProjectCatalogClient) GetRepository(context.Context, *projectsv1.Ge
 		return nil, f.getRepositoryErr
 	}
 	return &projectsv1.RepositoryResponse{Repository: f.repository}, nil
+}
+
+func (f *fakeProjectCatalogClient) ListRepositories(_ context.Context, request *projectsv1.ListRepositoriesRequest, _ ...grpc.CallOption) (*projectsv1.ListRepositoriesResponse, error) {
+	f.listRepositoriesCalls++
+	f.lastListRepositoriesRequest = request
+	if f.listRepositoriesErr != nil {
+		return nil, f.listRepositoriesErr
+	}
+	repositories := f.repositories
+	if len(repositories) == 0 && f.repository != nil {
+		repositories = []*projectsv1.Repository{f.repository}
+	}
+	return &projectsv1.ListRepositoriesResponse{Repositories: repositories}, nil
 }
 
 func (f *fakeProjectCatalogClient) CreateProviderRepository(_ context.Context, request *projectsv1.CreateProviderRepositoryRequest, _ ...grpc.CallOption) (*projectsv1.RepositoryProviderCreateResponse, error) {
@@ -967,6 +1165,17 @@ func (f *fakeProviderHubClient) ListRepositoryAdoptionScanSnapshots(context.Cont
 		response.AdoptionScanSnapshots = append(response.AdoptionScanSnapshots, &providersv1.RepositoryAdoptionScanSnapshot{SnapshotId: "snapshot"})
 	}
 	return response, nil
+}
+
+func projectFixture(organizationID string, slug string, projectID string) *projectsv1.Project {
+	return &projectsv1.Project{
+		ProjectId:      projectID,
+		OrganizationId: organizationID,
+		Slug:           slug,
+		DisplayName:    slug,
+		Status:         projectsv1.ProjectStatus_PROJECT_STATUS_ACTIVE,
+		Version:        3,
+	}
 }
 
 func repositoryFixture() *projectsv1.Repository {
@@ -1140,6 +1349,22 @@ func selfRepositoryScenario() onboardingScenario {
 	}
 }
 
+func selfRepositoryBindingOnlyScenario() onboardingScenario {
+	return onboardingScenario{
+		ProviderSlug:         "github",
+		RepositoryFullName:   "codex-k8s/kodex",
+		ProviderRepositoryID: "provider-repo-self",
+		RepositoryBinding: &repositoryBindingScenario{
+			ProviderOwner:        "codex-k8s",
+			ProviderName:         "kodex",
+			WebURL:               "https://github.com/codex-k8s/kodex",
+			DefaultBranch:        "main",
+			ProviderRepositoryID: "provider-repo-self",
+			Status:               "active",
+		},
+	}
+}
+
 func bootstrapSetupFixture() onboardingScenario {
 	return onboardingScenario{
 		ProjectID:          "project-1",
@@ -1260,6 +1485,14 @@ func assertNotContains(t *testing.T, value string, needle string) {
 	if strings.Contains(value, needle) {
 		t.Fatalf("expected %q not to contain %q", value, needle)
 	}
+}
+
+func firstMetadata(md metadata.MD, key string) string {
+	values := md.Get(key)
+	if len(values) == 0 {
+		return ""
+	}
+	return values[0]
 }
 
 type ioDiscard struct{}
