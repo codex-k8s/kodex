@@ -121,6 +121,27 @@ func governanceManagerError(err error) *SafeError {
 	})
 }
 
+func projectCatalogError(err error) *SafeError {
+	return downstreamError(err, downstreamErrorMessages{
+		InvalidRequest:        "project-catalog request is invalid",
+		Unauthenticated:       "actor context is not authenticated",
+		PermissionDenied:      "access is denied",
+		NotFound:              "project-catalog resource is not found",
+		StaleVersion:          "project-catalog read version is stale",
+		Conflict:              "project-catalog read is conflicted",
+		RateLimited:           "project-catalog rate limit is active",
+		DownstreamUnavailable: "project-catalog is unavailable",
+	})
+}
+
+func projectCatalogSelfDeploySignalError(err error) *SafeError {
+	return projectCatalogError(err)
+}
+
+func downstreamNotFound(err error) bool {
+	return status.Code(err) == codes.NotFound
+}
+
 type downstreamErrorMessages struct {
 	InvalidRequest        string
 	Unauthenticated       string

@@ -16,9 +16,10 @@ type routeClients struct {
 	interactionHub InteractionHubClient
 	agentManager   AgentManagerClient
 	governance     GovernanceManagerClient
+	projectCatalog ProjectCatalogClient
 }
 
-func NewRouter(ctx context.Context, cfg Config, interactionHub InteractionHubClient, agentManager AgentManagerClient, governance GovernanceManagerClient, logger *slog.Logger) (*Router, error) {
+func NewRouter(ctx context.Context, cfg Config, interactionHub InteractionHubClient, agentManager AgentManagerClient, governance GovernanceManagerClient, projectCatalog ProjectCatalogClient, logger *slog.Logger) (*Router, error) {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -26,7 +27,7 @@ func NewRouter(ctx context.Context, cfg Config, interactionHub InteractionHubCli
 	if err != nil {
 		return nil, err
 	}
-	clients := routeClients{interactionHub: interactionHub, agentManager: agentManager, governance: governance}
+	clients := routeClients{interactionHub: interactionHub, agentManager: agentManager, governance: governance, projectCatalog: projectCatalog}
 	handlers := newHandlers(clients, contract)
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v1/owner-inbox/items", handlers.listOwnerInboxItems)
@@ -61,5 +62,5 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 }
 
 func (r *Router) Ready() bool {
-	return r != nil && r.openAPI.Ready() && r.clients.interactionHub != nil && r.clients.agentManager != nil && r.clients.governance != nil
+	return r != nil && r.openAPI.Ready() && r.clients.interactionHub != nil && r.clients.agentManager != nil && r.clients.governance != nil && r.clients.projectCatalog != nil
 }

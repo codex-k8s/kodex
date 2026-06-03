@@ -5,17 +5,20 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+
+	agentsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/agents/v1"
 )
 
 type handlers struct {
 	interactionHub InteractionHubClient
 	agentManager   AgentManagerClient
 	governance     GovernanceManagerClient
+	projectCatalog ProjectCatalogClient
 	openAPI        *OpenAPIContract
 }
 
 func newHandlers(clients routeClients, openAPI *OpenAPIContract) handlers {
-	return handlers{interactionHub: clients.interactionHub, agentManager: clients.agentManager, governance: clients.governance, openAPI: openAPI}
+	return handlers{interactionHub: clients.interactionHub, agentManager: clients.agentManager, governance: clients.governance, projectCatalog: clients.projectCatalog, openAPI: openAPI}
 }
 
 func (h handlers) listOwnerInboxItems(w http.ResponseWriter, req *http.Request) {
@@ -86,7 +89,65 @@ func (h handlers) getGovernanceSummary(w http.ResponseWriter, req *http.Request)
 }
 
 func (h handlers) getSelfDeploySummary(w http.ResponseWriter, req *http.Request) {
-	handleQuery(w, req, GetSelfDeploySummaryRequest, h.agentManager.ListSelfDeployPlans, SelfDeploySummaryResponse, agentManagerError)
+	input, safeErr := GetSelfDeploySummaryRequest(req)
+	if safeErr != nil {
+		WriteSafeError(w, req, safeErr)
+		return
+	}
+	plans, err := h.agentManager.ListSelfDeployPlans(req.Context(), input)
+	if err != nil {
+		WriteSafeError(w, req, agentManagerError(err))
+		return
+	}
+	var readiness *projectSelfDeployReadiness
+	if len(plans.GetSelfDeployPlans()) == 0 {
+		readiness, safeErr = h.selfDeployReadiness(req, input)
+		if safeErr != nil {
+			WriteSafeError(w, req, safeErr)
+			return
+		}
+	}
+	output, safeErr := SelfDeploySummaryResponse(plans, readiness, input, requestIDFromContext(req.Context()))
+	if safeErr != nil {
+		WriteSafeError(w, req, safeErr)
+		return
+	}
+	writeJSON(w, http.StatusOK, output)
+}
+
+func (h handlers) selfDeployReadiness(req *http.Request, input *agentsv1.ListSelfDeployPlansRequest) (*projectSelfDeployReadiness, *SafeError) {
+	readiness := &projectSelfDeployReadiness{
+		projectID:         selfDeployProjectCatalogID(input),
+		repositoryID:      input.GetRepositoryRef(),
+		providerSignalRef: input.GetProviderSignalRef(),
+	}
+	signalRequest, safeErr := GetSelfDeploySignalRequest(req, input)
+	if safeErr != nil || signalRequest == nil {
+		repositoriesRequest, safeErr := ListSelfDeployRepositoriesRequest(req, input)
+		if safeErr != nil || repositoriesRequest == nil {
+			return readiness, safeErr
+		}
+		repositories, err := h.projectCatalog.ListRepositories(req.Context(), repositoriesRequest)
+		if err != nil {
+			if downstreamNotFound(err) {
+				readiness.projectMissing = true
+				return readiness, nil
+			}
+			return nil, projectCatalogError(err)
+		}
+		readiness.repositories = repositories
+		return readiness, nil
+	}
+	response, err := h.projectCatalog.GetSelfDeploySignal(req.Context(), signalRequest)
+	if err != nil {
+		if downstreamNotFound(err) {
+			readiness.projectMissing = true
+			return readiness, nil
+		}
+		return nil, projectCatalogSelfDeploySignalError(err)
+	}
+	readiness.signal = response
+	return readiness, nil
 }
 
 func decodeOwnerInboxRespondBody(req *http.Request) (OwnerInboxRespondBody, *SafeError) {

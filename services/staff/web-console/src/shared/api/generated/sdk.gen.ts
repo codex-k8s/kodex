@@ -152,11 +152,13 @@ export const getGovernanceSummary = <ThrowOnError extends boolean = false>(optio
 
 /**
  * Получить безопасную self-deploy сводку.
- * Возвращает latest visible `agent-manager.ListSelfDeployPlans` summary для командного центра.
- * Gateway не читает БД доменных сервисов, не запускает deploy, не принимает governance decision
- * и не возвращает raw webhook body, provider response, diff, полный YAML, token, OAuth state/cookies,
- * secret values или большие логи. Если доменные данные ещё не появились, ответ остаётся успешным,
- * но содержит `unavailable`/`pending` статусы без фиктивных данных.
+ * Возвращает latest visible self-deploy summary для командного центра. Gateway сначала читает
+ * `agent-manager.ListSelfDeployPlans`; если plan ещё не создан, но caller передал safe project и
+ * provider signal refs, gateway уточняет project-side readiness через `project-catalog.GetSelfDeploySignal`.
+ * Gateway не читает БД доменных сервисов, не запускает deploy, не принимает governance decision и не
+ * возвращает raw webhook body, provider response, diff, полный YAML, token, OAuth state/cookies,
+ * secret values или большие логи. Если доменные данные ещё не появились, ответ остаётся успешным, но
+ * содержит `unavailable`/`pending` статусы и явный `chain_status` без фиктивных данных.
  *
  */
 export const getSelfDeploySummary = <ThrowOnError extends boolean = false>(options: Options<GetSelfDeploySummaryData, ThrowOnError>) => {

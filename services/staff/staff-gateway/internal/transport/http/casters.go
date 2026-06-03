@@ -12,6 +12,7 @@ import (
 	agentsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/agents/v1"
 	governancev1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/governance/v1"
 	interactionsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/interactions/v1"
+	projectsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/projects/v1"
 	runtimev1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/runtime/v1"
 	"github.com/codex-k8s/kodex/services/staff/staff-gateway/internal/transport/http/generated"
 )
@@ -36,6 +37,23 @@ const (
 
 type OwnerInboxRespondBody = generated.OwnerInboxRespondRequest
 
+type projectSelfDeployReadiness struct {
+	projectID         string
+	repositoryID      string
+	providerSignalRef string
+	projectMissing    bool
+	signal            *projectsv1.SelfDeploySignalResponse
+	repositories      *projectsv1.ListRepositoriesResponse
+}
+
+type queryMetaParts struct {
+	actorType string
+	actorID   string
+	requestID string
+	traceID   *string
+	sessionID *string
+}
+
 var validAgentRunStatuses = enumSet(generated.AgentRunStatusRequested, generated.AgentRunStatusStarting, generated.AgentRunStatusRunning, generated.AgentRunStatusWaiting, generated.AgentRunStatusCompleted, generated.AgentRunStatusFailed, generated.AgentRunStatusCancelled)
 var validAgentSessionStatuses = enumSet(generated.AgentSessionStatusOpen, generated.AgentSessionStatusWaiting, generated.AgentSessionStatusCompleted, generated.AgentSessionStatusFailed, generated.AgentSessionStatusCancelled)
 var validRuntimeObservationStates = enumSet(generated.RuntimeObservationStateNotCreated, generated.RuntimeObservationStateStoredRef, generated.RuntimeObservationStateLive, generated.RuntimeObservationStateUnavailable, generated.RuntimeObservationStateConflict)
@@ -57,7 +75,7 @@ var validGovernanceSignalSeverities = enumSet(generated.GovernanceSignalSeverity
 var validGovernanceEvidenceKinds = enumSet(generated.GovernanceEvidenceKindProviderComment, generated.GovernanceEvidenceKindProviderReview, generated.GovernanceEvidenceKindProviderCheck, generated.GovernanceEvidenceKindRuntimeSummary, generated.GovernanceEvidenceKindDocument, generated.GovernanceEvidenceKindRiskFactor, generated.GovernanceEvidenceKindReviewSignal, generated.GovernanceEvidenceKindInteractionCallback, generated.GovernanceEvidenceKindObjectRef, generated.GovernanceEvidenceKindCustom, generated.GovernanceEvidenceKindAgentAcceptance, generated.GovernanceEvidenceKindAgentRun, generated.GovernanceEvidenceKindAgentHumanGate)
 var validSelfDeployPlanStatusFilters = enumSet(generated.SelfDeployPlanStatusFilterUnspecified, generated.SelfDeployPlanStatusFilterPendingApproval, generated.SelfDeployPlanStatusFilterApproved, generated.SelfDeployPlanStatusFilterRejected, generated.SelfDeployPlanStatusFilterCancelled, generated.SelfDeployPlanStatusFilterFailed)
 var validSelfDeployPlanStatuses = enumSet(generated.SelfDeployPlanStatusUnspecified, generated.SelfDeployPlanStatusPendingApproval, generated.SelfDeployPlanStatusApproved, generated.SelfDeployPlanStatusRejected, generated.SelfDeployPlanStatusCancelled, generated.SelfDeployPlanStatusFailed)
-var validSelfDeployPathCategories = enumSet(generated.SelfDeployPathCategoryUnspecified, generated.SelfDeployPathCategoryServiceSource, generated.SelfDeployPathCategoryServiceConfig, generated.SelfDeployPathCategoryDeployManifest, generated.SelfDeployPathCategoryRuntimeConfig, generated.SelfDeployPathCategoryDocumentation, generated.SelfDeployPathCategoryTest, generated.SelfDeployPathCategoryPlatformPolicy, generated.SelfDeployPathCategoryOther)
+var validSelfDeployPathCategories = enumSet(generated.SelfDeployPathCategoryUnspecified, generated.SelfDeployPathCategoryServiceSource, generated.SelfDeployPathCategoryServiceConfig, generated.SelfDeployPathCategoryDeployManifest, generated.SelfDeployPathCategoryRuntimeConfig, generated.SelfDeployPathCategoryDocumentation, generated.SelfDeployPathCategoryTest, generated.SelfDeployPathCategoryPlatformPolicy, generated.SelfDeployPathCategoryOther, generated.SelfDeployPathCategoryServicesPolicy)
 
 func ListAgentSessionsRequest(req *http.Request) (*agentsv1.ListAgentSessionsRequest, *SafeError) {
 	meta, safeErr := agentQueryMeta(req)
@@ -208,6 +226,62 @@ func GetSelfDeploySummaryRequest(req *http.Request) (*agentsv1.ListSelfDeployPla
 		Status:            status,
 		Page:              &agentsv1.PageRequest{PageSize: selfDeploySummaryPageSize},
 	}, nil
+}
+
+func GetSelfDeploySignalRequest(req *http.Request, planRequest *agentsv1.ListSelfDeployPlansRequest) (*projectsv1.GetSelfDeploySignalRequest, *SafeError) {
+	projectID := selfDeployProjectCatalogID(planRequest)
+	providerSignalRef := strings.TrimSpace(planRequest.GetProviderSignalRef())
+	if projectID == "" || providerSignalRef == "" {
+		return nil, nil
+	}
+	meta, safeErr := projectQueryMeta(req)
+	if safeErr != nil {
+		return nil, safeErr
+	}
+	return &projectsv1.GetSelfDeploySignalRequest{
+		ProjectId:         projectID,
+		RepositoryId:      optionalString(planRequest.GetRepositoryRef()),
+		ProviderSignalKey: optionalString(providerSignalRef),
+		Meta:              meta,
+	}, nil
+}
+
+func ListSelfDeployRepositoriesRequest(req *http.Request, planRequest *agentsv1.ListSelfDeployPlansRequest) (*projectsv1.ListRepositoriesRequest, *SafeError) {
+	projectID := selfDeployProjectCatalogID(planRequest)
+	if projectID == "" || strings.TrimSpace(planRequest.GetProviderSignalRef()) != "" {
+		return nil, nil
+	}
+	meta, safeErr := projectQueryMeta(req)
+	if safeErr != nil {
+		return nil, safeErr
+	}
+	return &projectsv1.ListRepositoriesRequest{
+		ProjectId: projectID,
+		Statuses:  []projectsv1.RepositoryStatus{projectsv1.RepositoryStatus_REPOSITORY_STATUS_ACTIVE},
+		Page:      &projectsv1.PageRequest{PageSize: 1},
+		Meta:      meta,
+	}, nil
+}
+
+func selfDeployProjectID(planRequest *agentsv1.ListSelfDeployPlansRequest) string {
+	if planRequest == nil {
+		return ""
+	}
+	if projectRef := strings.TrimSpace(planRequest.GetProjectRef()); projectRef != "" {
+		return projectRef
+	}
+	if scope := planRequest.GetScope(); scope.GetType() == agentsv1.AgentScopeType_AGENT_SCOPE_TYPE_PROJECT {
+		return strings.TrimSpace(scope.GetRef())
+	}
+	return ""
+}
+
+func selfDeployProjectCatalogID(planRequest *agentsv1.ListSelfDeployPlansRequest) string {
+	projectID := selfDeployProjectID(planRequest)
+	if _, err := uuid.Parse(projectID); err != nil {
+		return ""
+	}
+	return projectID
 }
 
 func runIDFromPath(req *http.Request) (string, *SafeError) {
@@ -500,11 +574,11 @@ func GovernanceSummaryResponse(response *governancev1.GovernanceSummaryResponse,
 	return output, nil
 }
 
-func SelfDeploySummaryResponse(response *agentsv1.ListSelfDeployPlansResponse, requestID string) (generated.SelfDeploySummaryResponse, *SafeError) {
+func SelfDeploySummaryResponse(response *agentsv1.ListSelfDeployPlansResponse, readiness *projectSelfDeployReadiness, request *agentsv1.ListSelfDeployPlansRequest, requestID string) (generated.SelfDeploySummaryResponse, *SafeError) {
 	if response == nil {
 		return generated.SelfDeploySummaryResponse{}, NewSafeError(http.StatusServiceUnavailable, CodeDownstreamUnavailable, "agent-manager returned empty self-deploy summary response", true)
 	}
-	summary, safeErr := selfDeploySummary(firstSelfDeployPlan(response.GetSelfDeployPlans()))
+	summary, safeErr := selfDeploySummary(firstSelfDeployPlan(response.GetSelfDeployPlans()), readiness, request)
 	if safeErr != nil {
 		return generated.SelfDeploySummaryResponse{}, safeErr
 	}
@@ -539,17 +613,17 @@ func queryMeta(req *http.Request) (*interactionsv1.QueryMeta, *SafeError) {
 }
 
 func agentQueryMeta(req *http.Request) (*agentsv1.QueryMeta, *SafeError) {
-	actorType, actorID, safeErr := actorPartsFromHeaders(req)
+	parts, safeErr := queryMetaPartsFromRequest(req)
 	if safeErr != nil {
 		return nil, safeErr
 	}
 	return &agentsv1.QueryMeta{
-		Actor:     &agentsv1.Actor{Type: actorType, Id: actorID},
-		RequestId: requestIDFromContext(req.Context()),
+		Actor:     &agentsv1.Actor{Type: parts.actorType, Id: parts.actorID},
+		RequestId: parts.requestID,
 		RequestContext: &agentsv1.RequestContext{
 			Source:    "staff-gateway",
-			TraceId:   optionalString(traceID(req)),
-			SessionId: optionalString(req.Header.Get(headerSessionID)),
+			TraceId:   parts.traceID,
+			SessionId: parts.sessionID,
 		},
 	}, nil
 }
@@ -567,6 +641,35 @@ func governanceQueryMeta(req *http.Request) (*governancev1.QueryMeta, *SafeError
 		SessionId: optionalString(req.Header.Get(headerSessionID)),
 	}
 	return meta, nil
+}
+
+func projectQueryMeta(req *http.Request) (*projectsv1.QueryMeta, *SafeError) {
+	parts, safeErr := queryMetaPartsFromRequest(req)
+	if safeErr != nil {
+		return nil, safeErr
+	}
+	meta := &projectsv1.QueryMeta{
+		Actor:          &projectsv1.Actor{Type: parts.actorType, Id: parts.actorID},
+		RequestId:      parts.requestID,
+		RequestContext: &projectsv1.RequestContext{Source: "staff-gateway"},
+	}
+	meta.RequestContext.TraceId = parts.traceID
+	meta.RequestContext.SessionId = parts.sessionID
+	return meta, nil
+}
+
+func queryMetaPartsFromRequest(req *http.Request) (queryMetaParts, *SafeError) {
+	actorType, actorID, safeErr := actorPartsFromHeaders(req)
+	if safeErr != nil {
+		return queryMetaParts{}, safeErr
+	}
+	return queryMetaParts{
+		actorType: actorType,
+		actorID:   actorID,
+		requestID: requestIDFromContext(req.Context()),
+		traceID:   optionalString(traceID(req)),
+		sessionID: optionalString(req.Header.Get(headerSessionID)),
+	}, nil
 }
 
 func commandMeta(req *http.Request, body OwnerInboxRespondBody) (*interactionsv1.CommandMeta, *interactionsv1.Actor, *SafeError) {
@@ -1360,12 +1463,15 @@ func agentRunActivity(activity *agentsv1.AgentActivity, runID string) (generated
 	return output, nil
 }
 
-func selfDeploySummary(plan *agentsv1.SelfDeployPlan) (generated.SelfDeploySummary, *SafeError) {
+func selfDeploySummary(plan *agentsv1.SelfDeployPlan, readiness *projectSelfDeployReadiness, request *agentsv1.ListSelfDeployPlansRequest) (generated.SelfDeploySummary, *SafeError) {
 	if plan == nil {
-		return selfDeployUnavailableSummary(), nil
+		return selfDeployPrePlanSummary(readiness, request), nil
 	}
+	chainStatus, nextStep, safeError := selfDeployPlanChain(plan)
 	return generated.SelfDeploySummary{
 		Availability:            generated.SelfDeploySummaryAvailabilityReady,
+		ChainStatus:             chainStatus,
+		NextStep:                nextStep,
 		SelfDeployPlanId:        optionalBoundedString(plan.GetId(), maxSelfDeployIdentifierBytes),
 		ProjectRef:              optionalBoundedString(plan.GetProjectRef(), maxSelfDeployIdentifierBytes),
 		RepositoryRef:           optionalBoundedString(plan.GetRepositoryRef(), maxSelfDeployIdentifierBytes),
@@ -1382,15 +1488,82 @@ func selfDeploySummary(plan *agentsv1.SelfDeployPlan) (generated.SelfDeploySumma
 		DeployPlan:              generated.SelfDeployPlanSummary{Status: selfDeployPlanStatus(plan.GetStatus())},
 		Governance:              selfDeployGovernanceSummary(plan.GetGovernanceContext()),
 		Runtime:                 selfDeployRuntimeSummary(plan),
+		SafeError:               safeError,
 		CreatedAt:               optionalTime(plan.GetCreatedAt()),
 		UpdatedAt:               optionalTime(plan.GetUpdatedAt()),
 		Version:                 optionalPositiveInt64(plan.GetVersion()),
 	}, nil
 }
 
-func selfDeployUnavailableSummary() generated.SelfDeploySummary {
+func selfDeployPrePlanSummary(readiness *projectSelfDeployReadiness, request *agentsv1.ListSelfDeployPlansRequest) generated.SelfDeploySummary {
+	if readiness != nil {
+		if readiness.projectMissing {
+			return selfDeployUnavailableSummary(readiness.projectID, generated.ProjectMissing, generated.SelfDeployNextStep{
+				Code:    generated.RestoreProject,
+				Summary: "Проект не найден или недоступен для текущего actor context.",
+			}, "project_missing", "Project не найден или недоступен.")
+		}
+		if readiness.signal != nil {
+			return selfDeploySignalSummary(readiness)
+		}
+		if readiness.repositories != nil {
+			return selfDeployRepositoryReadinessSummary(readiness)
+		}
+	}
+	projectID := selfDeployProjectCatalogID(request)
+	if projectID == "" {
+		return selfDeployUnavailableSummary("", generated.NotConfigured, generated.SelfDeployNextStep{
+			Code:    generated.ConfigureProject,
+			Summary: "Project id не передан, поэтому self-deploy chain ещё не привязан к project-catalog project.",
+		}, "self_deploy_project_not_configured", "Project id не задан для self-deploy наблюдения.")
+	}
+	return selfDeployUnavailableSummary(projectID, generated.WaitingForProviderSignal, generated.SelfDeployNextStep{
+		Code:    generated.WaitProviderSignal,
+		Summary: "Project известен, но provider signal ещё не передан в read surface.",
+	}, "provider_signal_unavailable", "Provider signal ещё не найден или не передан в запрос.")
+}
+
+func selfDeploySignalSummary(readiness *projectSelfDeployReadiness) generated.SelfDeploySummary {
+	response := readiness.signal
+	signal := response.GetSignal()
+	summary := generated.SelfDeploySummary{
+		Availability:            generated.SelfDeploySummaryAvailabilityUnavailable,
+		ProjectRef:              firstBoundedString(maxSelfDeployIdentifierBytes, signal.GetProjectRef(), readiness.projectID),
+		RepositoryRef:           firstBoundedString(maxSelfDeployIdentifierBytes, signal.GetRepositoryRef(), readiness.repositoryID),
+		SourceRef:               optionalBoundedString(signal.GetSourceRef(), maxSelfDeployIdentifierBytes),
+		MergeCommitSha:          optionalBoundedString(signal.GetMergeCommitSha(), maxSelfDeployIdentifierBytes),
+		ServicesYamlRef:         optionalBoundedString(signal.GetServicesYaml().GetServicesYamlRef(), maxSelfDeployIdentifierBytes),
+		ServicesYamlDigest:      optionalBoundedString(signal.GetServicesYaml().GetServicesYamlDigest(), maxSelfDeployIdentifierBytes),
+		PlanFingerprint:         optionalBoundedString(signal.GetProjectSignalFingerprint(), maxSelfDeployIdentifierBytes),
+		SafeSummary:             optionalBoundedString(signal.GetSafeSummary(), maxSelfDeploySummaryBytes),
+		AffectedServiceKeys:     boundedStrings(signal.GetAffectedServiceKeys(), maxSelfDeployIdentifierBytes),
+		PathCategories:          selfDeployProjectPathCategories(signal.GetPathCategories()),
+		ExpectedRuntimeJobTypes: selfDeployProjectRuntimeJobTypes(signal.GetExpectedRuntimeJobTypes()),
+		ProviderSignal:          selfDeployProviderSignal(firstNonEmpty(signal.GetProviderSignalRef(), readiness.providerSignalRef)),
+		DeployPlan:              generated.SelfDeployPlanSummary{Status: generated.SelfDeployPlanStatusUnavailable},
+		Governance:              generated.SelfDeployGovernanceSummary{Status: generated.SelfDeployGovernanceStatusUnavailable},
+		Runtime:                 generated.SelfDeployRuntimeSummary{Status: generated.SelfDeployRuntimeStatusUnavailable},
+		UpdatedAt:               optionalTime(signal.GetObservedAt()),
+		Version:                 optionalPositiveInt64(signal.GetVersion()),
+	}
+	summary.ChainStatus, summary.NextStep, summary.SafeError = selfDeploySignalChain(response)
+	return summary
+}
+
+func selfDeployRepositoryReadinessSummary(readiness *projectSelfDeployReadiness) generated.SelfDeploySummary {
+	if len(readiness.repositories.GetRepositories()) == 0 {
+		return selfDeployUnavailableSummary(readiness.projectID, generated.RepositoryBindingMissing, generated.SelfDeployNextStep{
+			Code:    generated.BindRepository,
+			Summary: "У проекта нет active repository binding для self-deploy signal.",
+		}, "repository_binding_missing", "Repository binding не найден для project.")
+	}
+	repository := readiness.repositories.GetRepositories()[0]
 	return generated.SelfDeploySummary{
 		Availability:            generated.SelfDeploySummaryAvailabilityUnavailable,
+		ChainStatus:             generated.WaitingForProviderSignal,
+		NextStep:                generated.SelfDeployNextStep{Code: generated.WaitProviderSignal, Summary: "Active repository binding найден, ожидается safe provider signal."},
+		ProjectRef:              optionalBoundedString(firstNonEmpty(repository.GetProjectId(), readiness.projectID), maxSelfDeployIdentifierBytes),
+		RepositoryRef:           optionalBoundedString(repository.GetRepositoryId(), maxSelfDeployIdentifierBytes),
 		AffectedServiceKeys:     []string{},
 		PathCategories:          []generated.SelfDeployPathCategory{},
 		ExpectedRuntimeJobTypes: []string{},
@@ -1399,9 +1572,92 @@ func selfDeployUnavailableSummary() generated.SelfDeploySummary {
 		Governance:              generated.SelfDeployGovernanceSummary{Status: generated.SelfDeployGovernanceStatusUnavailable},
 		Runtime:                 generated.SelfDeployRuntimeSummary{Status: generated.SelfDeployRuntimeStatusUnavailable},
 		SafeError: &generated.SelfDeploySafeError{
-			Code:    "self_deploy_plan_unavailable",
-			Summary: "Self-deploy plan ещё не создан или недоступен для текущего scope.",
+			Code:    "provider_signal_unavailable",
+			Summary: "Repository binding найден, но provider signal ещё не сохранён или не передан.",
 		},
+		Version: optionalPositiveInt64(repository.GetVersion()),
+	}
+}
+
+func selfDeployUnavailableSummary(projectRef string, chainStatus generated.SelfDeployChainStatus, nextStep generated.SelfDeployNextStep, errorCode string, errorSummary string) generated.SelfDeploySummary {
+	return generated.SelfDeploySummary{
+		Availability:            generated.SelfDeploySummaryAvailabilityUnavailable,
+		ChainStatus:             chainStatus,
+		NextStep:                nextStep,
+		ProjectRef:              optionalBoundedString(projectRef, maxSelfDeployIdentifierBytes),
+		AffectedServiceKeys:     []string{},
+		PathCategories:          []generated.SelfDeployPathCategory{},
+		ExpectedRuntimeJobTypes: []string{},
+		ProviderSignal:          generated.SelfDeployProviderSignalSummary{Status: generated.SelfDeployProviderSignalStatusUnavailable},
+		DeployPlan:              generated.SelfDeployPlanSummary{Status: generated.SelfDeployPlanStatusUnavailable},
+		Governance:              generated.SelfDeployGovernanceSummary{Status: generated.SelfDeployGovernanceStatusUnavailable},
+		Runtime:                 generated.SelfDeployRuntimeSummary{Status: generated.SelfDeployRuntimeStatusUnavailable},
+		SafeError: &generated.SelfDeploySafeError{
+			Code:    boundedString(errorCode, maxSelfDeployIdentifierBytes),
+			Summary: boundedString(errorSummary, maxSelfDeploySummaryBytes),
+		},
+	}
+}
+
+func selfDeployPlanChain(plan *agentsv1.SelfDeployPlan) (generated.SelfDeployChainStatus, generated.SelfDeployNextStep, *generated.SelfDeploySafeError) {
+	switch plan.GetStatus() {
+	case agentsv1.SelfDeployPlanStatus_SELF_DEPLOY_PLAN_STATUS_PENDING_APPROVAL:
+		governance := selfDeployGovernanceSummary(plan.GetGovernanceContext())
+		if governance.Status == generated.SelfDeployGovernanceStatusPending {
+			return generated.GovernanceGatePending, generated.SelfDeployNextStep{
+				Code:    generated.ReviewGovernanceGate,
+				Summary: "Self-deploy plan создан и ожидает governance/owner решение.",
+			}, nil
+		}
+		return generated.PlanCreated, generated.SelfDeployNextStep{
+			Code:    generated.WaitSelfDeployPlan,
+			Summary: "Self-deploy plan создан, ожидается подготовка governance gate или дальнейшая обработка agent-manager.",
+		}, nil
+	case agentsv1.SelfDeployPlanStatus_SELF_DEPLOY_PLAN_STATUS_APPROVED:
+		return generated.ApprovedReadyForBuild, generated.SelfDeployNextStep{
+			Code:    generated.ReadyForBuild,
+			Summary: "Self-deploy plan утверждён; build можно запускать только через отдельный runtime dispatch contract.",
+		}, nil
+	case agentsv1.SelfDeployPlanStatus_SELF_DEPLOY_PLAN_STATUS_FAILED:
+		return generated.Blocked, generated.SelfDeployNextStep{Code: generated.InspectBlocker, Summary: "Self-deploy plan завершился ошибкой; смотри safe summary."}, selfDeploySafeError("self_deploy_plan_failed", plan.GetSafeSummary())
+	case agentsv1.SelfDeployPlanStatus_SELF_DEPLOY_PLAN_STATUS_REJECTED:
+		return generated.Blocked, generated.SelfDeployNextStep{Code: generated.InspectBlocker, Summary: "Self-deploy plan отклонён владельцем или governance decision."}, selfDeploySafeError("self_deploy_plan_rejected", plan.GetSafeSummary())
+	case agentsv1.SelfDeployPlanStatus_SELF_DEPLOY_PLAN_STATUS_CANCELLED:
+		return generated.Blocked, generated.SelfDeployNextStep{Code: generated.InspectBlocker, Summary: "Self-deploy plan отменён."}, selfDeploySafeError("self_deploy_plan_cancelled", plan.GetSafeSummary())
+	default:
+		return generated.PlanCreated, generated.SelfDeployNextStep{
+			Code:    generated.WaitSelfDeployPlan,
+			Summary: "Self-deploy plan создан, но lifecycle status ещё не уточнён.",
+		}, nil
+	}
+}
+
+func selfDeploySignalChain(response *projectsv1.SelfDeploySignalResponse) (generated.SelfDeployChainStatus, generated.SelfDeployNextStep, *generated.SelfDeploySafeError) {
+	reason := response.GetSafeReason()
+	switch response.GetStatus() {
+	case projectsv1.SelfDeploySignalStatus_SELF_DEPLOY_SIGNAL_STATUS_READY:
+		return generated.ProviderSignalFound, generated.SelfDeployNextStep{Code: generated.WaitSelfDeployPlan, Summary: "Provider signal найден и готов для создания self-deploy plan."}, nil
+	case projectsv1.SelfDeploySignalStatus_SELF_DEPLOY_SIGNAL_STATUS_REPOSITORY_BINDING_NOT_FOUND:
+		return generated.RepositoryBindingMissing, generated.SelfDeployNextStep{Code: generated.BindRepository, Summary: "Provider signal найден, но active repository binding не найден или не совпадает."}, selfDeploySafeError("repository_binding_missing", reason)
+	case projectsv1.SelfDeploySignalStatus_SELF_DEPLOY_SIGNAL_STATUS_NEEDS_SERVICES_POLICY_RECONCILE,
+		projectsv1.SelfDeploySignalStatus_SELF_DEPLOY_SIGNAL_STATUS_SERVICES_POLICY_NOT_FOUND,
+		projectsv1.SelfDeploySignalStatus_SELF_DEPLOY_SIGNAL_STATUS_SERVICES_POLICY_NOT_READY:
+		return generated.NeedsServicesPolicyReconcile, generated.SelfDeployNextStep{Code: generated.ReconcileServicesPolicy, Summary: "Нужен reconcile checked services policy перед созданием self-deploy plan."}, selfDeploySafeError("needs_services_policy_reconcile", reason)
+	case projectsv1.SelfDeploySignalStatus_SELF_DEPLOY_SIGNAL_STATUS_PROVIDER_SIGNAL_NOT_FOUND,
+		projectsv1.SelfDeploySignalStatus_SELF_DEPLOY_SIGNAL_STATUS_PROVIDER_SIGNAL_NOT_READY:
+		return generated.WaitingForProviderSignal, generated.SelfDeployNextStep{Code: generated.WaitProviderSignal, Summary: "Provider signal ещё не найден или не готов."}, selfDeploySafeError("provider_signal_unavailable", reason)
+	default:
+		return generated.Blocked, generated.SelfDeployNextStep{Code: generated.InspectBlocker, Summary: "Project-side self-deploy signal не готов; смотри safe reason."}, selfDeploySafeError("self_deploy_signal_blocked", reason)
+	}
+}
+
+func selfDeploySafeError(code string, summary string) *generated.SelfDeploySafeError {
+	if strings.TrimSpace(summary) == "" {
+		summary = "Self-deploy chain остановлена на безопасной диагностике без raw payload."
+	}
+	return &generated.SelfDeploySafeError{
+		Code:    boundedString(code, maxSelfDeployIdentifierBytes),
+		Summary: boundedString(summary, maxSelfDeploySummaryBytes),
 	}
 }
 
@@ -1453,10 +1709,32 @@ func selfDeployPathCategories(values []agentsv1.SelfDeployPathCategory) []genera
 	return result
 }
 
+func selfDeployProjectPathCategories(values []*projectsv1.SelfDeployPathCategoryCount) []generated.SelfDeployPathCategory {
+	result := make([]generated.SelfDeployPathCategory, 0, len(values))
+	for _, value := range values {
+		if value.GetCount() <= 0 {
+			continue
+		}
+		result = append(result, protoEnum(value.GetCategory().String(), "SELF_DEPLOY_PATH_CATEGORY_", generated.SelfDeployPathCategoryUnspecified, validSelfDeployPathCategories))
+	}
+	return result
+}
+
 func selfDeployRuntimeJobTypes(values []runtimev1.JobType) []string {
 	result := make([]string, 0, len(values))
 	for _, value := range values {
 		result = append(result, enumName(value.String(), "JOB_TYPE_"))
+	}
+	return result
+}
+
+func selfDeployProjectRuntimeJobTypes(values []projectsv1.SelfDeployExpectedRuntimeJobType) []string {
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		jobType := enumName(value.String(), "SELF_DEPLOY_EXPECTED_RUNTIME_JOB_TYPE_")
+		if jobType != "unspecified" {
+			result = append(result, jobType)
+		}
 	}
 	return result
 }
@@ -2049,6 +2327,15 @@ func firstBoundedString(maxBytes int, values ...string) *string {
 		}
 	}
 	return nil
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }
 
 func boundedString(value string, maxBytes int) string {

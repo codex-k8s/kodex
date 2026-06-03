@@ -14,6 +14,7 @@ import (
 	agentsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/agents/v1"
 	governancev1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/governance/v1"
 	interactionsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/interactions/v1"
+	projectsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/projects/v1"
 	runtimev1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/runtime/v1"
 	"github.com/codex-k8s/kodex/services/staff/staff-gateway/internal/transport/http/generated"
 	"google.golang.org/grpc/codes"
@@ -819,6 +820,8 @@ func TestRouterGetSelfDeploySummary(t *testing.T) {
 	decodeJSON(t, rec, &body)
 	summary := body.Summary
 	if summary.Availability != generated.SelfDeploySummaryAvailabilityReady ||
+		summary.ChainStatus != generated.GovernanceGatePending ||
+		summary.NextStep.Code != generated.ReviewGovernanceGate ||
 		summary.ProviderSignal.Status != generated.SelfDeployProviderSignalStatusStoredRef ||
 		summary.DeployPlan.Status != generated.SelfDeployPlanStatusPendingApproval ||
 		summary.Governance.Status != generated.SelfDeployGovernanceStatusPending {
@@ -844,7 +847,8 @@ func TestRouterGetSelfDeploySummary(t *testing.T) {
 func TestRouterGetSelfDeploySummaryEmptyReturnsUnavailable(t *testing.T) {
 	client := &fakeInteractionHubClient{selfDeployListResponse: &agentsv1.ListSelfDeployPlansResponse{}}
 	router := newTestRouter(t, client)
-	req := authenticatedRequest(http.MethodGet, "/v1/self-deploy/summary?scope_type=project&scope_ref=project-1", "")
+	projectID := uuid.NewString()
+	req := authenticatedRequest(http.MethodGet, "/v1/self-deploy/summary?scope_type=project&scope_ref="+projectID, "")
 	rec := httptest.NewRecorder()
 
 	router.ServeHTTP(rec, req)
@@ -855,10 +859,122 @@ func TestRouterGetSelfDeploySummaryEmptyReturnsUnavailable(t *testing.T) {
 	var body generated.SelfDeploySummaryResponse
 	decodeJSON(t, rec, &body)
 	if body.Summary.Availability != generated.SelfDeploySummaryAvailabilityUnavailable ||
+		body.Summary.ChainStatus != generated.WaitingForProviderSignal ||
+		body.Summary.NextStep.Code != generated.WaitProviderSignal ||
 		body.Summary.ProviderSignal.Status != generated.SelfDeployProviderSignalStatusUnavailable ||
 		body.Summary.DeployPlan.Status != generated.SelfDeployPlanStatusUnavailable ||
 		body.Summary.SafeError == nil {
 		t.Fatalf("summary = %+v, want unavailable states", body.Summary)
+	}
+}
+
+func TestRouterGetSelfDeploySummaryWithoutProjectIsNotConfigured(t *testing.T) {
+	client := &fakeInteractionHubClient{selfDeployListResponse: &agentsv1.ListSelfDeployPlansResponse{}}
+	router := newTestRouter(t, client)
+	req := authenticatedRequest(http.MethodGet, "/v1/self-deploy/summary?scope_type=organization&scope_ref=org-1", "")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var body generated.SelfDeploySummaryResponse
+	decodeJSON(t, rec, &body)
+	if body.Summary.ChainStatus != generated.NotConfigured ||
+		body.Summary.NextStep.Code != generated.ConfigureProject ||
+		body.Summary.SafeError == nil ||
+		body.Summary.SafeError.Code != "self_deploy_project_not_configured" {
+		t.Fatalf("summary = %+v, want not_configured", body.Summary)
+	}
+}
+
+func TestRouterGetSelfDeploySummaryRepositoryBindingMissing(t *testing.T) {
+	client := &fakeInteractionHubClient{
+		selfDeployListResponse: &agentsv1.ListSelfDeployPlansResponse{},
+		selfDeploySignalResponse: &projectsv1.SelfDeploySignalResponse{
+			Status:     projectsv1.SelfDeploySignalStatus_SELF_DEPLOY_SIGNAL_STATUS_REPOSITORY_BINDING_NOT_FOUND,
+			SafeReason: stringPtr("repository_binding_not_found"),
+		},
+	}
+	router := newTestRouter(t, client)
+	projectID := uuid.NewString()
+	target := "/v1/self-deploy/summary?scope_type=project&scope_ref=" + projectID +
+		"&project_ref=" + projectID + "&provider_signal_ref=provider-signal-1"
+	req := authenticatedRequest(http.MethodGet, target, "")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	if client.selfDeploySignalRequest.GetProjectId() != projectID ||
+		client.selfDeploySignalRequest.GetProviderSignalKey() != "provider-signal-1" {
+		t.Fatalf("signal request = %+v, want project and provider signal key", client.selfDeploySignalRequest)
+	}
+	var body generated.SelfDeploySummaryResponse
+	decodeJSON(t, rec, &body)
+	if body.Summary.ChainStatus != generated.RepositoryBindingMissing ||
+		body.Summary.NextStep.Code != generated.BindRepository ||
+		body.Summary.SafeError == nil ||
+		body.Summary.SafeError.Code != "repository_binding_missing" {
+		t.Fatalf("summary = %+v, want repository_binding_missing", body.Summary)
+	}
+}
+
+func TestRouterGetSelfDeploySummaryNeedsServicesPolicyReconcile(t *testing.T) {
+	projectID := uuid.NewString()
+	repositoryID := uuid.NewString()
+	client := &fakeInteractionHubClient{
+		selfDeployListResponse: &agentsv1.ListSelfDeployPlansResponse{},
+		selfDeploySignalResponse: &projectsv1.SelfDeploySignalResponse{
+			Status:     projectsv1.SelfDeploySignalStatus_SELF_DEPLOY_SIGNAL_STATUS_NEEDS_SERVICES_POLICY_RECONCILE,
+			SafeReason: stringPtr("services_policy_commit_not_reconciled"),
+			Signal: &projectsv1.SelfDeploySignal{
+				ProviderSignalRef:        "provider-signal-1",
+				ProjectRef:               projectID,
+				RepositoryRef:            repositoryID,
+				SourceRef:                "refs/heads/main",
+				MergeCommitSha:           "0123456789abcdef",
+				AffectedServiceKeys:      []string{"staff-gateway"},
+				PathCategories:           []*projectsv1.SelfDeployPathCategoryCount{{Category: projectsv1.SelfDeployPathCategory_SELF_DEPLOY_PATH_CATEGORY_SERVICES_POLICY, Count: 1}},
+				ExpectedRuntimeJobTypes:  []projectsv1.SelfDeployExpectedRuntimeJobType{projectsv1.SelfDeployExpectedRuntimeJobType_SELF_DEPLOY_EXPECTED_RUNTIME_JOB_TYPE_BUILD},
+				ProjectSignalFingerprint: "sha256:project-signal",
+				SafeSummary:              "services.yaml требует reconcile",
+				ServicesYaml: &projectsv1.SelfDeployServicesYamlProjection{
+					ServicesYamlRef:    "project-catalog:services-policy:policy-1:services.yaml",
+					ServicesYamlDigest: "sha256:services",
+				},
+				Version: 2,
+			},
+		},
+	}
+	router := newTestRouter(t, client)
+	target := "/v1/self-deploy/summary?scope_type=project&scope_ref=" + projectID +
+		"&project_ref=" + projectID + "&repository_ref=" + repositoryID + "&provider_signal_ref=provider-signal-1"
+	req := authenticatedRequest(http.MethodGet, target, "")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var body generated.SelfDeploySummaryResponse
+	decodeJSON(t, rec, &body)
+	if body.Summary.ChainStatus != generated.NeedsServicesPolicyReconcile ||
+		body.Summary.NextStep.Code != generated.ReconcileServicesPolicy ||
+		len(body.Summary.PathCategories) != 1 ||
+		body.Summary.PathCategories[0] != generated.SelfDeployPathCategoryServicesPolicy ||
+		body.Summary.ServicesYamlDigest == nil ||
+		*body.Summary.ServicesYamlDigest != "sha256:services" {
+		t.Fatalf("summary = %+v, want services policy reconcile with safe refs", body.Summary)
+	}
+	for _, forbidden := range []string{"raw webhook", "provider response", "full services yaml", "secret-token", "OAuth state", "diff --git"} {
+		if strings.Contains(rec.Body.String(), forbidden) {
+			t.Fatalf("response leaked %q marker: %s", forbidden, rec.Body.String())
+		}
 	}
 }
 
@@ -904,7 +1020,7 @@ func newTestRouter(t *testing.T, client *fakeInteractionHubClient) *Router {
 		OpenAPISpecPath: "../../../../../../specs/openapi/staff-gateway.v1.yaml",
 		RequestTimeout:  time.Second,
 		MaxBodyBytes:    65536,
-	}, client, client, client, nil)
+	}, client, client, client, client, nil)
 	if err != nil {
 		t.Fatalf("NewRouter(): %v", err)
 	}
@@ -950,6 +1066,8 @@ type fakeInteractionHubClient struct {
 	runtimeStatusRequest      *agentsv1.GetAgentRunRuntimeStatusRequest
 	activitiesRequest         *agentsv1.ListAgentActivitiesRequest
 	selfDeployListRequest     *agentsv1.ListSelfDeployPlansRequest
+	selfDeploySignalRequest   *projectsv1.GetSelfDeploySignalRequest
+	repositoryListRequest     *projectsv1.ListRepositoriesRequest
 	governanceSummaryRequest  *governancev1.GetGovernanceSummaryRequest
 	listResponse              *interactionsv1.ListOwnerInboxItemsResponse
 	getResponse               *interactionsv1.OwnerInboxItemResponse
@@ -959,6 +1077,8 @@ type fakeInteractionHubClient struct {
 	runtimeStatusResponse     *agentsv1.AgentRunRuntimeStatusResponse
 	activitiesResponse        *agentsv1.ListAgentActivitiesResponse
 	selfDeployListResponse    *agentsv1.ListSelfDeployPlansResponse
+	selfDeploySignalResponse  *projectsv1.SelfDeploySignalResponse
+	repositoryListResponse    *projectsv1.ListRepositoriesResponse
 	governanceSummaryResponse *governancev1.GovernanceSummaryResponse
 	listErr                   error
 	getErr                    error
@@ -968,6 +1088,8 @@ type fakeInteractionHubClient struct {
 	runtimeStatusErr          error
 	activitiesErr             error
 	selfDeployListErr         error
+	selfDeploySignalErr       error
+	repositoryListErr         error
 	governanceSummaryErr      error
 }
 
@@ -1009,6 +1131,16 @@ func (f *fakeInteractionHubClient) ListAgentActivities(_ context.Context, reques
 func (f *fakeInteractionHubClient) ListSelfDeployPlans(_ context.Context, request *agentsv1.ListSelfDeployPlansRequest) (*agentsv1.ListSelfDeployPlansResponse, error) {
 	f.selfDeployListRequest = request
 	return f.selfDeployListResponse, f.selfDeployListErr
+}
+
+func (f *fakeInteractionHubClient) GetSelfDeploySignal(_ context.Context, request *projectsv1.GetSelfDeploySignalRequest) (*projectsv1.SelfDeploySignalResponse, error) {
+	f.selfDeploySignalRequest = request
+	return f.selfDeploySignalResponse, f.selfDeploySignalErr
+}
+
+func (f *fakeInteractionHubClient) ListRepositories(_ context.Context, request *projectsv1.ListRepositoriesRequest) (*projectsv1.ListRepositoriesResponse, error) {
+	f.repositoryListRequest = request
+	return f.repositoryListResponse, f.repositoryListErr
 }
 
 func (f *fakeInteractionHubClient) GetGovernanceSummary(_ context.Context, request *governancev1.GetGovernanceSummaryRequest) (*governancev1.GovernanceSummaryResponse, error) {

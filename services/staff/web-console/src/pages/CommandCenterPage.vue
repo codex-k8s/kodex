@@ -37,6 +37,14 @@ const selfDeployFields = computed(() => {
   const summary = selfDeploy.summary;
   return [
     {
+      label: t('commandCenter.selfDeploy.chainStatus'),
+      value: summary ? chainStatusLabel(summary.chain_status) : t('app.unavailable'),
+    },
+    {
+      label: t('commandCenter.selfDeploy.nextStep'),
+      value: summary?.next_step.summary ?? t('app.unavailable'),
+    },
+    {
       label: t('commandCenter.selfDeploy.githubSignal'),
       value: providerSignalValue(summary),
     },
@@ -78,20 +86,24 @@ const selfDeployChip = computed(() => {
   if (selfDeploy.isLoading && !selfDeploy.summary) {
     return { color: 'info', label: t('app.loading') };
   }
-  const status = selfDeploy.summary?.deploy_plan.status;
-  if (status === 'approved') {
-    return { color: 'success', label: planStatusLabel(status) };
+  const status = selfDeploy.summary?.chain_status;
+  if (status === 'approved_ready_for_build') {
+    return { color: 'success', label: chainStatusLabel(status) };
   }
-  if (status === 'pending_approval') {
-    return { color: 'warning', label: planStatusLabel(status) };
+  if (
+    status === 'governance_gate_pending' ||
+    status === 'needs_services_policy_reconcile' ||
+    status === 'waiting_for_provider_signal'
+  ) {
+    return { color: 'warning', label: chainStatusLabel(status) };
   }
-  if (status === 'failed' || status === 'rejected' || status === 'cancelled') {
-    return { color: 'error', label: planStatusLabel(status) };
+  if (status === 'blocked' || status === 'project_missing' || status === 'repository_binding_missing') {
+    return { color: 'error', label: chainStatusLabel(status) };
   }
-  if (selfDeploy.summary?.availability === 'ready') {
-    return { color: 'info', label: t('app.live') };
+  if (status === 'provider_signal_found' || status === 'plan_created') {
+    return { color: 'info', label: chainStatusLabel(status) };
   }
-  return { color: 'default', label: t('app.unavailable') };
+  return { color: 'default', label: status ? chainStatusLabel(status) : t('app.unavailable') };
 });
 
 const selfDeployReadiness = computed(() =>
@@ -196,6 +208,10 @@ function refsValue(...values: Array<string | undefined>) {
 
 function planStatusLabel(status: string) {
   return t(`commandCenter.selfDeploy.planStatuses.${status}`);
+}
+
+function chainStatusLabel(status: string) {
+  return t(`commandCenter.selfDeploy.chainStatuses.${status}`);
 }
 
 function providerSignalStatusLabel(status: string) {
@@ -334,7 +350,10 @@ function pathCategoryLabel(category: string) {
         <v-alert v-if="selfDeploy.unsupportedAgentScope" type="warning" variant="tonal">
           {{ t('commandCenter.selfDeploy.unsupportedScopeText') }}
         </v-alert>
-        <v-alert v-else-if="selfDeploy.summary?.safe_error" type="warning" variant="tonal">
+        <v-alert v-else-if="selfDeploy.summary?.next_step" type="info" variant="tonal">
+          {{ selfDeploy.summary.next_step.summary }}
+        </v-alert>
+        <v-alert v-if="!selfDeploy.unsupportedAgentScope && selfDeploy.summary?.safe_error" type="warning" variant="tonal">
           {{ selfDeploy.summary.safe_error.summary }}
         </v-alert>
         <v-progress-linear v-if="selfDeploy.isLoading" indeterminate color="primary" />

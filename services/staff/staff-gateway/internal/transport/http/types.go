@@ -7,6 +7,7 @@ import (
 	agentsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/agents/v1"
 	governancev1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/governance/v1"
 	interactionsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/interactions/v1"
+	projectsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/projects/v1"
 )
 
 type Config struct {
@@ -60,4 +61,9 @@ type selfDeployPlanReader interface {
 
 type GovernanceManagerClient interface {
 	GetGovernanceSummary(context.Context, *governancev1.GetGovernanceSummaryRequest) (*governancev1.GovernanceSummaryResponse, error)
+}
+
+type ProjectCatalogClient interface {
+	GetSelfDeploySignal(context.Context, *projectsv1.GetSelfDeploySignalRequest) (*projectsv1.SelfDeploySignalResponse, error)
+	ListRepositories(context.Context, *projectsv1.ListRepositoriesRequest) (*projectsv1.ListRepositoriesResponse, error)
 }
