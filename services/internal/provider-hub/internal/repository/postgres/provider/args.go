@@ -315,6 +315,79 @@ func repositoryMergeSignalFilterArgs(filter query.RepositoryMergeSignalFilter) p
 	})
 }
 
+func repositoryChangeSignalArgs(signal entity.RepositoryChangeSignal) pgx.NamedArgs {
+	return withBaseArgs(signal.Base, pgx.NamedArgs{
+		"signal_key":               signal.SignalKey,
+		"kind":                     string(signal.Kind),
+		"provider_slug":            string(signal.ProviderSlug),
+		"project_id":               postgreslib.NullableUUID(signal.ProjectID),
+		"repository_id":            postgreslib.NullableUUID(signal.RepositoryID),
+		"repository_full_name":     signal.RepositoryFullName,
+		"provider_repository_id":   signal.ProviderRepositoryID,
+		"ref":                      signal.Ref,
+		"base_branch":              signal.BaseBranch,
+		"commit_sha":               signal.CommitSHA,
+		"before_sha":               signal.BeforeSHA,
+		"source_ref":               signal.SourceRef,
+		"pull_request_number":      signal.PullRequestNumber,
+		"pull_request_provider_id": signal.PullRequestProviderID,
+		"pull_request_url":         signal.PullRequestURL,
+		"path_summary_status":      string(signal.PathSummaryStatus),
+		"changed_path_count":       signal.ChangedPathCount,
+		"path_digest":              signal.PathDigest,
+		"path_categories_json":     jsonStructOrDefault(repositoryChangePathCategoriesJSON(signal.PathCategories), "[]"),
+		"services_policy_changed":  signal.ServicesPolicyChanged,
+		"deploy_relevant_changed":  signal.DeployRelevantChanged,
+		"change_fingerprint":       signal.ChangeFingerprint,
+		"observed_at":              signal.ObservedAt.UTC().Round(time.Microsecond),
+		"status":                   string(signal.Status),
+	})
+}
+
+func repositoryChangeSignalIdentityArgs(signal entity.RepositoryChangeSignal) pgx.NamedArgs {
+	return pgx.NamedArgs{"signal_key": signal.SignalKey}
+}
+
+func repositoryChangeSignalLookupArgs(lookup query.RepositoryChangeSignalLookup) pgx.NamedArgs {
+	return pgx.NamedArgs{
+		"id":         postgreslib.NullableUUID(lookup.ID),
+		"signal_key": strings.TrimSpace(lookup.SignalKey),
+	}
+}
+
+func repositoryChangeSignalFilterArgs(filter query.RepositoryChangeSignalFilter) pageQueryArgs {
+	return withPage(filter.Page, pgx.NamedArgs{
+		"project_id":              postgreslib.NullableUUID(filter.ProjectID),
+		"repository_id":           postgreslib.NullableUUID(filter.RepositoryID),
+		"provider_slug":           string(filter.ProviderSlug),
+		"repository_full_name":    strings.TrimSpace(filter.RepositoryFullName),
+		"provider_repository_id":  strings.TrimSpace(filter.ProviderRepositoryID),
+		"kinds":                   postgreslib.StringValues(filter.Kinds),
+		"statuses":                postgreslib.StringValues(filter.Statuses),
+		"base_branch":             strings.TrimSpace(filter.BaseBranch),
+		"commit_sha":              strings.TrimSpace(filter.CommitSHA),
+		"services_policy_changed": boolPtrValue(filter.ServicesPolicyChanged),
+		"deploy_relevant_changed": boolPtrValue(filter.DeployRelevantChanged),
+		"observed_since":          postgreslib.NullableTime(filter.ObservedSince),
+	})
+}
+
+type repositoryChangePathCategoryJSON struct {
+	Category string `json:"category"`
+	Count    int64  `json:"count"`
+}
+
+func repositoryChangePathCategoriesJSON(categories []entity.RepositoryChangePathCategoryCount) []repositoryChangePathCategoryJSON {
+	result := make([]repositoryChangePathCategoryJSON, 0, len(categories))
+	for _, category := range categories {
+		result = append(result, repositoryChangePathCategoryJSON{
+			Category: string(category.Category),
+			Count:    category.Count,
+		})
+	}
+	return result
+}
+
 func repositoryAdoptionScanArgs(snapshot entity.RepositoryAdoptionScanSnapshot) pgx.NamedArgs {
 	return withBaseArgs(snapshot.Base, pgx.NamedArgs{
 		"snapshot_key":           snapshot.SnapshotKey,
@@ -565,6 +638,13 @@ func withBaseArgs(base entity.Base, args pgx.NamedArgs) pgx.NamedArgs {
 }
 
 func int64PtrValue(value *int64) any {
+	if value == nil {
+		return nil
+	}
+	return *value
+}
+
+func boolPtrValue(value *bool) any {
 	if value == nil {
 		return nil
 	}

@@ -31,6 +31,8 @@ const (
 	ProviderHubService_ListRelationships_FullMethodName                   = "/kodex.providers.v1.ProviderHubService/ListRelationships"
 	ProviderHubService_GetRepositoryMergeSignal_FullMethodName            = "/kodex.providers.v1.ProviderHubService/GetRepositoryMergeSignal"
 	ProviderHubService_ListRepositoryMergeSignals_FullMethodName          = "/kodex.providers.v1.ProviderHubService/ListRepositoryMergeSignals"
+	ProviderHubService_GetRepositoryChangeSignal_FullMethodName           = "/kodex.providers.v1.ProviderHubService/GetRepositoryChangeSignal"
+	ProviderHubService_ListRepositoryChangeSignals_FullMethodName         = "/kodex.providers.v1.ProviderHubService/ListRepositoryChangeSignals"
 	ProviderHubService_GetRepositoryAdoptionScanSnapshot_FullMethodName   = "/kodex.providers.v1.ProviderHubService/GetRepositoryAdoptionScanSnapshot"
 	ProviderHubService_ListRepositoryAdoptionScanSnapshots_FullMethodName = "/kodex.providers.v1.ProviderHubService/ListRepositoryAdoptionScanSnapshots"
 	ProviderHubService_RegisterProviderArtifactSignal_FullMethodName      = "/kodex.providers.v1.ProviderHubService/RegisterProviderArtifactSignal"
@@ -89,6 +91,10 @@ type ProviderHubServiceClient interface {
 	GetRepositoryMergeSignal(ctx context.Context, in *GetRepositoryMergeSignalRequest, opts ...grpc.CallOption) (*RepositoryMergeSignalResponse, error)
 	// ListRepositoryMergeSignals returns safe provider-owned merge signals by repository/project context.
 	ListRepositoryMergeSignals(ctx context.Context, in *ListRepositoryMergeSignalsRequest, opts ...grpc.CallOption) (*ListRepositoryMergeSignalsResponse, error)
+	// GetRepositoryChangeSignal returns one safe provider-owned repository change signal.
+	GetRepositoryChangeSignal(ctx context.Context, in *GetRepositoryChangeSignalRequest, opts ...grpc.CallOption) (*RepositoryChangeSignalResponse, error)
+	// ListRepositoryChangeSignals returns safe provider-owned repository change signals by repository/project context.
+	ListRepositoryChangeSignals(ctx context.Context, in *ListRepositoryChangeSignalsRequest, opts ...grpc.CallOption) (*ListRepositoryChangeSignalsResponse, error)
 	// GetRepositoryAdoptionScanSnapshot returns one safe provider-side adoption scan snapshot.
 	GetRepositoryAdoptionScanSnapshot(ctx context.Context, in *GetRepositoryAdoptionScanSnapshotRequest, opts ...grpc.CallOption) (*RepositoryAdoptionScanSnapshotResponse, error)
 	// ListRepositoryAdoptionScanSnapshots returns safe provider-side adoption scan snapshots by repository context.
@@ -261,6 +267,26 @@ func (c *providerHubServiceClient) ListRepositoryMergeSignals(ctx context.Contex
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListRepositoryMergeSignalsResponse)
 	err := c.cc.Invoke(ctx, ProviderHubService_ListRepositoryMergeSignals_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *providerHubServiceClient) GetRepositoryChangeSignal(ctx context.Context, in *GetRepositoryChangeSignalRequest, opts ...grpc.CallOption) (*RepositoryChangeSignalResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RepositoryChangeSignalResponse)
+	err := c.cc.Invoke(ctx, ProviderHubService_GetRepositoryChangeSignal_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *providerHubServiceClient) ListRepositoryChangeSignals(ctx context.Context, in *ListRepositoryChangeSignalsRequest, opts ...grpc.CallOption) (*ListRepositoryChangeSignalsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListRepositoryChangeSignalsResponse)
+	err := c.cc.Invoke(ctx, ProviderHubService_ListRepositoryChangeSignals_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -539,6 +565,10 @@ type ProviderHubServiceServer interface {
 	GetRepositoryMergeSignal(context.Context, *GetRepositoryMergeSignalRequest) (*RepositoryMergeSignalResponse, error)
 	// ListRepositoryMergeSignals returns safe provider-owned merge signals by repository/project context.
 	ListRepositoryMergeSignals(context.Context, *ListRepositoryMergeSignalsRequest) (*ListRepositoryMergeSignalsResponse, error)
+	// GetRepositoryChangeSignal returns one safe provider-owned repository change signal.
+	GetRepositoryChangeSignal(context.Context, *GetRepositoryChangeSignalRequest) (*RepositoryChangeSignalResponse, error)
+	// ListRepositoryChangeSignals returns safe provider-owned repository change signals by repository/project context.
+	ListRepositoryChangeSignals(context.Context, *ListRepositoryChangeSignalsRequest) (*ListRepositoryChangeSignalsResponse, error)
 	// GetRepositoryAdoptionScanSnapshot returns one safe provider-side adoption scan snapshot.
 	GetRepositoryAdoptionScanSnapshot(context.Context, *GetRepositoryAdoptionScanSnapshotRequest) (*RepositoryAdoptionScanSnapshotResponse, error)
 	// ListRepositoryAdoptionScanSnapshots returns safe provider-side adoption scan snapshots by repository context.
@@ -632,6 +662,12 @@ func (UnimplementedProviderHubServiceServer) GetRepositoryMergeSignal(context.Co
 }
 func (UnimplementedProviderHubServiceServer) ListRepositoryMergeSignals(context.Context, *ListRepositoryMergeSignalsRequest) (*ListRepositoryMergeSignalsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListRepositoryMergeSignals not implemented")
+}
+func (UnimplementedProviderHubServiceServer) GetRepositoryChangeSignal(context.Context, *GetRepositoryChangeSignalRequest) (*RepositoryChangeSignalResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetRepositoryChangeSignal not implemented")
+}
+func (UnimplementedProviderHubServiceServer) ListRepositoryChangeSignals(context.Context, *ListRepositoryChangeSignalsRequest) (*ListRepositoryChangeSignalsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListRepositoryChangeSignals not implemented")
 }
 func (UnimplementedProviderHubServiceServer) GetRepositoryAdoptionScanSnapshot(context.Context, *GetRepositoryAdoptionScanSnapshotRequest) (*RepositoryAdoptionScanSnapshotResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetRepositoryAdoptionScanSnapshot not implemented")
@@ -938,6 +974,42 @@ func _ProviderHubService_ListRepositoryMergeSignals_Handler(srv interface{}, ctx
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ProviderHubServiceServer).ListRepositoryMergeSignals(ctx, req.(*ListRepositoryMergeSignalsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProviderHubService_GetRepositoryChangeSignal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRepositoryChangeSignalRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProviderHubServiceServer).GetRepositoryChangeSignal(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProviderHubService_GetRepositoryChangeSignal_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProviderHubServiceServer).GetRepositoryChangeSignal(ctx, req.(*GetRepositoryChangeSignalRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProviderHubService_ListRepositoryChangeSignals_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListRepositoryChangeSignalsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProviderHubServiceServer).ListRepositoryChangeSignals(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProviderHubService_ListRepositoryChangeSignals_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProviderHubServiceServer).ListRepositoryChangeSignals(ctx, req.(*ListRepositoryChangeSignalsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1428,6 +1500,14 @@ var ProviderHubService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListRepositoryMergeSignals",
 			Handler:    _ProviderHubService_ListRepositoryMergeSignals_Handler,
+		},
+		{
+			MethodName: "GetRepositoryChangeSignal",
+			Handler:    _ProviderHubService_GetRepositoryChangeSignal_Handler,
+		},
+		{
+			MethodName: "ListRepositoryChangeSignals",
+			Handler:    _ProviderHubService_ListRepositoryChangeSignals_Handler,
 		},
 		{
 			MethodName: "GetRepositoryAdoptionScanSnapshot",

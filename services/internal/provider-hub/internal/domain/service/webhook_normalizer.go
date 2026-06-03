@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -67,17 +68,26 @@ func (s *Service) normalizeWebhookFacts(
 
 	providerEventID := s.ids.New()
 	providerEventPayload, err := marshalProviderEventPayload(value.ProviderEventPayload{
-		ProviderSlug:         string(webhook.ProviderSlug),
-		WebhookEventID:       webhook.ID.String(),
-		ProviderEventID:      providerEventID.String(),
-		DeliveryID:           webhook.DeliveryID,
-		EventName:            webhook.EventName,
-		ProviderRepositoryID: facts.RepositoryProviderID,
-		RepositoryFullName:   facts.RepositoryFullName,
-		ProviderWorkItemID:   facts.ProviderWorkItemID,
-		ProviderCommentID:    facts.ProviderCommentID,
-		Kind:                 facts.Kind,
-		Number:               facts.Number,
+		ProviderSlug:          string(webhook.ProviderSlug),
+		WebhookEventID:        webhook.ID.String(),
+		ProviderEventID:       providerEventID.String(),
+		DeliveryID:            webhook.DeliveryID,
+		EventName:             webhook.EventName,
+		ProviderRepositoryID:  facts.RepositoryProviderID,
+		RepositoryFullName:    facts.RepositoryFullName,
+		ProviderWorkItemID:    facts.ProviderWorkItemID,
+		ProviderCommentID:     facts.ProviderCommentID,
+		Kind:                  facts.Kind,
+		Number:                facts.Number,
+		SignalKey:             repositoryChangeSignalKey(facts),
+		SignalKind:            repositoryChangeSignalKind(facts),
+		BaseBranch:            repositoryChangeBaseBranch(facts),
+		HeadSHA:               repositoryChangeCommitSHA(facts),
+		PathSummaryStatus:     repositoryChangePathSummaryStatus(facts),
+		ChangedPathCount:      repositoryChangeChangedPathCount(facts),
+		ServicesPolicyChanged: repositoryChangeServicesPolicyChanged(facts),
+		DeployRelevantChanged: repositoryChangeDeployRelevantChanged(facts),
+		ChangeFingerprint:     repositoryChangeFingerprint(facts),
 	})
 	if err != nil {
 		return webhookNormalizationResult{}, err
@@ -182,9 +192,71 @@ func providerEventShape(facts value.ProviderWebhookFacts) (string, string, strin
 			return "", "", "", fmt.Errorf("provider webhook facts miss provider comment id")
 		}
 		return providerEventCommentSynced, providerAggregateComment, facts.ProviderCommentID, nil
+	case value.ProviderWebhookFactKindRepositoryChange:
+		if facts.RepositoryChange == nil || strings.TrimSpace(facts.RepositoryChange.SignalKey) == "" {
+			return "", "", "", fmt.Errorf("provider webhook facts miss repository change signal key")
+		}
+		return providerEventRepositoryChanged, providerAggregateRepositoryChangeSignal, strings.TrimSpace(facts.RepositoryChange.SignalKey), nil
 	default:
 		return "", "", "", fmt.Errorf("unsupported provider webhook fact kind %q", facts.FactKind)
 	}
+}
+
+func repositoryChangeSignalKey(facts value.ProviderWebhookFacts) string {
+	if facts.RepositoryChange == nil {
+		return ""
+	}
+	return strings.TrimSpace(facts.RepositoryChange.SignalKey)
+}
+
+func repositoryChangeSignalKind(facts value.ProviderWebhookFacts) string {
+	if facts.RepositoryChange == nil {
+		return ""
+	}
+	return strings.TrimSpace(facts.RepositoryChange.EventKind)
+}
+
+func repositoryChangeBaseBranch(facts value.ProviderWebhookFacts) string {
+	if facts.RepositoryChange == nil {
+		return ""
+	}
+	return strings.TrimSpace(facts.RepositoryChange.BaseBranch)
+}
+
+func repositoryChangeCommitSHA(facts value.ProviderWebhookFacts) string {
+	if facts.RepositoryChange == nil {
+		return ""
+	}
+	return strings.TrimSpace(facts.RepositoryChange.CommitSHA)
+}
+
+func repositoryChangePathSummaryStatus(facts value.ProviderWebhookFacts) string {
+	if facts.RepositoryChange == nil {
+		return ""
+	}
+	return strings.TrimSpace(facts.RepositoryChange.PathSummaryStatus)
+}
+
+func repositoryChangeChangedPathCount(facts value.ProviderWebhookFacts) int64 {
+	if facts.RepositoryChange == nil {
+		return 0
+	}
+	return facts.RepositoryChange.ChangedPathCount
+}
+
+func repositoryChangeServicesPolicyChanged(facts value.ProviderWebhookFacts) bool {
+	return facts.RepositoryChange != nil && facts.RepositoryChange.ServicesPolicyChanged
+}
+
+func repositoryChangeDeployRelevantChanged(facts value.ProviderWebhookFacts) bool {
+	return facts.RepositoryChange != nil && facts.RepositoryChange.DeployRelevantChanged
+}
+
+func repositoryChangeFingerprint(facts value.ProviderWebhookFacts) string {
+	if facts.RepositoryChange == nil {
+		return ""
+	}
+	return strings.TrimSpace(facts.RepositoryChange.ChangeFingerprint)
 }
 
 func marshalProviderEventPayload(payload value.ProviderEventPayload) ([]byte, error) {

@@ -293,6 +293,29 @@ func validRepositoryMergeSignalStatuses(statuses []enum.RepositoryMergeSignalSta
 	return true
 }
 
+func validRepositoryChangeSignalKinds(kinds []enum.RepositoryChangeSignalKind) bool {
+	for _, kind := range kinds {
+		switch kind {
+		case enum.RepositoryChangeSignalKindPush,
+			enum.RepositoryChangeSignalKindPullRequestMerged:
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func validRepositoryChangeSignalStatuses(statuses []enum.RepositoryChangeSignalStatus) bool {
+	for _, status := range statuses {
+		switch status {
+		case enum.RepositoryChangeSignalStatusObserved:
+		default:
+			return false
+		}
+	}
+	return true
+}
+
 func validRepositoryAdoptionMarkerKind(kind enum.RepositoryAdoptionMarkerKind) bool {
 	_, ok := repositoryAdoptionMarkerKinds[kind]
 	return ok

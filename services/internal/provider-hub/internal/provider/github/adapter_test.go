@@ -1569,6 +1569,104 @@ func TestNormalizeWebhookMapsGitHubMergedPullRequestSignal(t *testing.T) {
 	}
 }
 
+func TestNormalizeWebhookMapsGitHubPushRepositoryChangeSignal(t *testing.T) {
+	t.Parallel()
+
+	receivedAt := time.Date(2026, 5, 29, 12, 0, 0, 0, time.UTC)
+	facts, ok, err := New(Config{}).NormalizeWebhook(entity.WebhookEvent{
+		ProviderSlug: enum.ProviderSlugGitHub,
+		EventName:    "push",
+		ReceivedAt:   receivedAt,
+		PayloadJSON:  []byte(`{"ref":"refs/heads/main","before":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","after":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","repository":{"id":101,"full_name":"codex-k8s/kodex"},"head_commit":{"id":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","timestamp":"2026-05-29T11:59:00Z"},"commits":[{"id":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","added":[],"modified":["services.yaml","deploy/base/provider-hub/kustomization.yaml","docs/platform/architecture/repository_onboarding.md"],"removed":[]}]}`),
+	})
+	if err != nil {
+		t.Fatalf("NormalizeWebhook(): %v", err)
+	}
+	if !ok {
+		t.Fatal("NormalizeWebhook() ok = false, want true")
+	}
+	if facts.FactKind != value.ProviderWebhookFactKindRepositoryChange || facts.RepositoryChange == nil {
+		t.Fatalf("facts = %+v, want repository change facts", facts)
+	}
+	change := facts.RepositoryChange
+	if change.EventKind != "push" ||
+		change.RepositoryFullName != "codex-k8s/kodex" ||
+		change.ProviderRepositoryID != "101" ||
+		change.Ref != "refs/heads/main" ||
+		change.BaseBranch != "main" ||
+		change.CommitSHA != "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" ||
+		change.PathSummaryStatus != "ready" ||
+		change.ChangedPathCount != 3 ||
+		!change.ServicesPolicyChanged ||
+		!change.DeployRelevantChanged ||
+		!strings.HasPrefix(change.PathDigest, "sha256:") ||
+		!strings.HasPrefix(change.ChangeFingerprint, "sha256:") {
+		t.Fatalf("repository change = %+v, want safe push refs and summary", change)
+	}
+	if len(change.PathCategories) != 3 {
+		t.Fatalf("path categories = %+v, want three safe category counters", change.PathCategories)
+	}
+}
+
+func TestNormalizeWebhookBoundsGitHubPushRepositoryChangePaths(t *testing.T) {
+	t.Parallel()
+
+	paths := make([]string, maxRepositoryChangePaths+17)
+	for idx := range paths {
+		paths[idx] = "services/service-" + strconv.Itoa(idx) + "/main.go"
+	}
+	payload, err := json.Marshal(map[string]any{
+		"ref":    "refs/heads/main",
+		"before": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		"after":  "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+		"repository": map[string]any{
+			"id":        101,
+			"full_name": "codex-k8s/kodex",
+		},
+		"head_commit": map[string]any{
+			"id":        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+			"timestamp": "2026-05-29T11:59:00Z",
+		},
+		"commits": []map[string]any{
+			{
+				"id":       "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+				"added":    []string{},
+				"modified": paths,
+				"removed":  []string{},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("marshal push payload: %v", err)
+	}
+	facts, ok, err := New(Config{}).NormalizeWebhook(entity.WebhookEvent{
+		ProviderSlug: enum.ProviderSlugGitHub,
+		EventName:    "push",
+		ReceivedAt:   time.Date(2026, 5, 29, 12, 0, 0, 0, time.UTC),
+		PayloadJSON:  payload,
+	})
+	if err != nil {
+		t.Fatalf("NormalizeWebhook(): %v", err)
+	}
+	if !ok || facts.RepositoryChange == nil {
+		t.Fatalf("NormalizeWebhook() = ok %v facts %+v, want repository change", ok, facts)
+	}
+	change := facts.RepositoryChange
+	if change.PathSummaryStatus != "truncated" || change.ChangedPathCount != maxRepositoryChangePaths {
+		t.Fatalf("repository change = %+v, want truncated bounded path count", change)
+	}
+	if len(change.PathCategories) != 1 ||
+		change.PathCategories[0].Category != string(enum.RepositoryChangePathCategoryServiceSource) ||
+		change.PathCategories[0].Count != maxRepositoryChangePaths {
+		t.Fatalf("path categories = %+v, want bounded service source counter", change.PathCategories)
+	}
+	if !change.DeployRelevantChanged ||
+		!strings.HasPrefix(change.PathDigest, "sha256:") ||
+		!strings.HasPrefix(change.ChangeFingerprint, "sha256:") {
+		t.Fatalf("repository change = %+v, want bounded safe summary", change)
+	}
+}
+
 func TestNormalizeWebhookMapsGitHubPRConversationCommentToPullRequestProjection(t *testing.T) {
 	t.Parallel()
 

@@ -46,6 +46,7 @@ components:
         - $ref: '#/components/schemas/RepositoryAdoptionScanCompletedEvent'
         - $ref: '#/components/schemas/RepositoryBootstrapMergedEvent'
         - $ref: '#/components/schemas/RepositoryAdoptionMergedEvent'
+        - $ref: '#/components/schemas/RepositoryChangedEvent'
     ProviderEventEnvelopeBase:
       type: object
       additionalProperties: false
@@ -221,6 +222,14 @@ components:
       type: object
       properties: {event_type: {type: string, const: provider.repository.adoption_merged}, aggregate_type: {type: string, const: repository_merge_signal}, payload: {$ref: '#/components/schemas/ProviderEventPayload'}}
       required: [event_type, aggregate_type, payload]
+    RepositoryChangedEvent:
+      allOf:
+        - $ref: '#/components/schemas/ProviderEventEnvelopeBase'
+        - $ref: '#/components/schemas/RepositoryChangedEventKind'
+    RepositoryChangedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: provider.repository.changed}, aggregate_type: {type: string, const: repository_change_signal}, payload: {$ref: '#/components/schemas/ProviderEventPayload'}}
+      required: [event_type, aggregate_type, payload]
 
     ProviderEventType:
       type: string
@@ -244,6 +253,7 @@ components:
         - provider.repository.adoption_scan_completed
         - provider.repository.bootstrap_merged
         - provider.repository.adoption_merged
+        - provider.repository.changed
     ProviderEventPayload:
       type: object
       additionalProperties: false
@@ -278,6 +288,9 @@ components:
         repository_merge_signal_id:
           type: string
           format: uuid
+        repository_change_signal_id:
+          type: string
+          format: uuid
         repository_adoption_scan_snapshot_id:
           type: string
           format: uuid
@@ -296,6 +309,18 @@ components:
         head_branch:
           type: string
         head_sha:
+          type: string
+        path_summary_status:
+          type: string
+        changed_path_count:
+          type: integer
+        path_digest:
+          type: string
+        services_policy_changed:
+          type: boolean
+        deploy_relevant_changed:
+          type: boolean
+        change_fingerprint:
           type: string
         merge_commit_sha:
           type: string

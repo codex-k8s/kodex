@@ -33,6 +33,10 @@ service ProviderHubService {
   rpc GetRepositoryMergeSignal(GetRepositoryMergeSignalRequest) returns (RepositoryMergeSignalResponse);
   // ListRepositoryMergeSignals returns safe provider-owned merge signals by repository/project context.
   rpc ListRepositoryMergeSignals(ListRepositoryMergeSignalsRequest) returns (ListRepositoryMergeSignalsResponse);
+  // GetRepositoryChangeSignal returns one safe provider-owned repository change signal.
+  rpc GetRepositoryChangeSignal(GetRepositoryChangeSignalRequest) returns (RepositoryChangeSignalResponse);
+  // ListRepositoryChangeSignals returns safe provider-owned repository change signals by repository/project context.
+  rpc ListRepositoryChangeSignals(ListRepositoryChangeSignalsRequest) returns (ListRepositoryChangeSignalsResponse);
   // GetRepositoryAdoptionScanSnapshot returns one safe provider-side adoption scan snapshot.
   rpc GetRepositoryAdoptionScanSnapshot(GetRepositoryAdoptionScanSnapshotRequest) returns (RepositoryAdoptionScanSnapshotResponse);
   // ListRepositoryAdoptionScanSnapshots returns safe provider-side adoption scan snapshots by repository context.
@@ -396,6 +400,41 @@ enum RepositoryMergeSignalKind {
 enum RepositoryMergeSignalStatus {
   REPOSITORY_MERGE_SIGNAL_STATUS_UNSPECIFIED = 0;
   REPOSITORY_MERGE_SIGNAL_STATUS_MERGED = 1;
+}
+
+// RepositoryChangeSignalKind classifies provider-side repository content change signals.
+enum RepositoryChangeSignalKind {
+  REPOSITORY_CHANGE_SIGNAL_KIND_UNSPECIFIED = 0;
+  REPOSITORY_CHANGE_SIGNAL_KIND_PUSH = 1;
+  REPOSITORY_CHANGE_SIGNAL_KIND_PULL_REQUEST_MERGED = 2;
+}
+
+// RepositoryChangeSignalStatus describes the provider-side repository change signal lifecycle.
+enum RepositoryChangeSignalStatus {
+  REPOSITORY_CHANGE_SIGNAL_STATUS_UNSPECIFIED = 0;
+  REPOSITORY_CHANGE_SIGNAL_STATUS_OBSERVED = 1;
+}
+
+// RepositoryChangePathSummaryStatus describes how much path metadata the provider signal carries.
+enum RepositoryChangePathSummaryStatus {
+  REPOSITORY_CHANGE_PATH_SUMMARY_STATUS_UNSPECIFIED = 0;
+  REPOSITORY_CHANGE_PATH_SUMMARY_STATUS_READY = 1;
+  REPOSITORY_CHANGE_PATH_SUMMARY_STATUS_UNAVAILABLE = 2;
+  REPOSITORY_CHANGE_PATH_SUMMARY_STATUS_TRUNCATED = 3;
+}
+
+// RepositoryChangePathCategory classifies changed paths without raw diffs or file contents.
+enum RepositoryChangePathCategory {
+  REPOSITORY_CHANGE_PATH_CATEGORY_UNSPECIFIED = 0;
+  REPOSITORY_CHANGE_PATH_CATEGORY_SERVICES_POLICY = 1;
+  REPOSITORY_CHANGE_PATH_CATEGORY_SERVICE_SOURCE = 2;
+  REPOSITORY_CHANGE_PATH_CATEGORY_SERVICE_CONFIG = 3;
+  REPOSITORY_CHANGE_PATH_CATEGORY_DEPLOY_MANIFEST = 4;
+  REPOSITORY_CHANGE_PATH_CATEGORY_RUNTIME_CONFIG = 5;
+  REPOSITORY_CHANGE_PATH_CATEGORY_DOCUMENTATION = 6;
+  REPOSITORY_CHANGE_PATH_CATEGORY_TEST = 7;
+  REPOSITORY_CHANGE_PATH_CATEGORY_PLATFORM_POLICY = 8;
+  REPOSITORY_CHANGE_PATH_CATEGORY_OTHER = 9;
 }
 
 // RepositoryAdoptionMarkerKind classifies safe file markers discovered without reading raw content.
@@ -1454,6 +1493,134 @@ message ListRepositoryMergeSignalsRequest {
 message ListRepositoryMergeSignalsResponse {
   // merge_signals are returned newest first.
   repeated RepositoryMergeSignal merge_signals = 1;
+  // page describes continuation state.
+  PageResponse page = 2;
+}
+
+// RepositoryChangePathCategoryCount stores one safe changed-path category count.
+message RepositoryChangePathCategoryCount {
+  // category is the safe path category.
+  RepositoryChangePathCategory category = 1;
+  // count is the number of changed paths in the category.
+  int64 count = 2;
+}
+
+// RepositoryChangeSignal is a safe provider-owned fact that repository contents changed.
+message RepositoryChangeSignal {
+  // signal_id is the provider-hub persisted signal id.
+  string signal_id = 1;
+  // signal_key is the provider-hub idempotency key for this repository change signal.
+  string signal_key = 2;
+  // kind classifies push or pull_request merged signals.
+  RepositoryChangeSignalKind kind = 3;
+  // provider_slug identifies the provider adapter.
+  string provider_slug = 4;
+  // project_id links project context when provider-hub already knows it.
+  string project_id = 5;
+  // repository_id links repository context when provider-hub already knows it.
+  string repository_id = 6;
+  // repository_full_name is the safe provider owner/name.
+  string repository_full_name = 7;
+  // provider_repository_id is the provider-native repository id when known.
+  string provider_repository_id = 8;
+  // ref is the provider ref that changed, for example refs/heads/main.
+  string ref = 9;
+  // base_branch is the target branch name, for example main.
+  string base_branch = 10;
+  // commit_sha is the observed head or merge commit sha.
+  string commit_sha = 11;
+  // before_sha is the previous head sha for push signals when known.
+  string before_sha = 12;
+  // source_ref is the PR/MR source ref for pull_request merged signals when known.
+  string source_ref = 13;
+  // pull_request_number is set for pull_request merged signals.
+  int64 pull_request_number = 14;
+  // pull_request_provider_id is the provider-native PR/MR id when known.
+  string pull_request_provider_id = 15;
+  // pull_request_url is the safe provider PR/MR URL.
+  string pull_request_url = 16;
+  // path_summary_status tells whether path categories are ready, unavailable or truncated.
+  RepositoryChangePathSummaryStatus path_summary_status = 17;
+  // changed_path_count is a bounded count of unique changed paths seen by provider-hub.
+  int64 changed_path_count = 18;
+  // path_digest is a digest over safe path identities, not a raw path list.
+  string path_digest = 19;
+  // path_categories are safe category counters without raw paths or file contents.
+  repeated RepositoryChangePathCategoryCount path_categories = 20;
+  // services_policy_changed is true when root services.yaml changed.
+  bool services_policy_changed = 21;
+  // deploy_relevant_changed is true when provider-hub saw deploy-relevant path categories.
+  bool deploy_relevant_changed = 22;
+  // change_fingerprint is the provider-hub fingerprint for idempotency/conflict checks.
+  string change_fingerprint = 23;
+  // observed_at is the provider observation time in RFC3339 format.
+  string observed_at = 24;
+  // status is the provider-side repository change signal status.
+  RepositoryChangeSignalStatus status = 25;
+  // version is the provider-hub signal projection version.
+  int64 version = 26;
+  // etag is a stable safe read token based on provider-owned refs/digests/version.
+  string etag = 27;
+  // created_at is the provider-hub signal creation time in RFC3339 format.
+  string created_at = 28;
+  // updated_at is the provider-hub signal update time in RFC3339 format.
+  string updated_at = 29;
+}
+
+// GetRepositoryChangeSignalRequest reads one safe repository change signal by stable provider-hub identity.
+message GetRepositoryChangeSignalRequest {
+  // signal_id optionally selects a provider-hub repository change signal id.
+  optional string signal_id = 1;
+  // signal_key optionally selects a provider-hub repository change signal idempotency key.
+  optional string signal_key = 2;
+  // meta carries read actor and request context.
+  QueryMeta meta = 3;
+}
+
+// RepositoryChangeSignalResponse returns a safe repository change signal or an explicit read status.
+message RepositoryChangeSignalResponse {
+  // read_status describes whether provider-owned data is ready for the caller.
+  ProviderOwnedDataStatus read_status = 1;
+  // change_signal is present when read_status is READY.
+  RepositoryChangeSignal change_signal = 2;
+}
+
+// ListRepositoryChangeSignalsRequest lists safe repository change signals by repository/project context.
+message ListRepositoryChangeSignalsRequest {
+  // project_id optionally filters by project-catalog project context.
+  optional string project_id = 1;
+  // repository_id optionally filters by project-catalog repository context.
+  optional string repository_id = 2;
+  // provider_slug optionally filters provider.
+  optional string provider_slug = 3;
+  // repository_full_name optionally filters provider owner/name.
+  optional string repository_full_name = 4;
+  // provider_repository_id optionally filters provider-native repository id.
+  optional string provider_repository_id = 5;
+  // kinds optionally filter push or pull_request merged signal kind.
+  repeated RepositoryChangeSignalKind kinds = 6;
+  // statuses optionally filter provider-side signal status.
+  repeated RepositoryChangeSignalStatus statuses = 7;
+  // base_branch optionally filters the target branch.
+  optional string base_branch = 8;
+  // commit_sha optionally filters the observed head or merge commit sha.
+  optional string commit_sha = 9;
+  // services_policy_changed optionally filters root services.yaml changes.
+  optional bool services_policy_changed = 10;
+  // deploy_relevant_changed optionally filters deploy-relevant path categories.
+  optional bool deploy_relevant_changed = 11;
+  // observed_since optionally filters lower observation time in RFC3339 format.
+  optional string observed_since = 12;
+  // page limits response size.
+  PageRequest page = 13;
+  // meta carries read actor and request context.
+  QueryMeta meta = 14;
+}
+
+// ListRepositoryChangeSignalsResponse returns safe repository change signals in stable server-defined order.
+message ListRepositoryChangeSignalsResponse {
+  // change_signals are returned newest first.
+  repeated RepositoryChangeSignal change_signals = 1;
   // page describes continuation state.
   PageResponse page = 2;
 }

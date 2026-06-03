@@ -1203,6 +1203,227 @@ func (RepositoryMergeSignalStatus) EnumDescriptor() ([]byte, []int) {
 	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{20}
 }
 
+// RepositoryChangeSignalKind classifies provider-side repository content change signals.
+type RepositoryChangeSignalKind int32
+
+const (
+	RepositoryChangeSignalKind_REPOSITORY_CHANGE_SIGNAL_KIND_UNSPECIFIED         RepositoryChangeSignalKind = 0
+	RepositoryChangeSignalKind_REPOSITORY_CHANGE_SIGNAL_KIND_PUSH                RepositoryChangeSignalKind = 1
+	RepositoryChangeSignalKind_REPOSITORY_CHANGE_SIGNAL_KIND_PULL_REQUEST_MERGED RepositoryChangeSignalKind = 2
+)
+
+// Enum value maps for RepositoryChangeSignalKind.
+var (
+	RepositoryChangeSignalKind_name = map[int32]string{
+		0: "REPOSITORY_CHANGE_SIGNAL_KIND_UNSPECIFIED",
+		1: "REPOSITORY_CHANGE_SIGNAL_KIND_PUSH",
+		2: "REPOSITORY_CHANGE_SIGNAL_KIND_PULL_REQUEST_MERGED",
+	}
+	RepositoryChangeSignalKind_value = map[string]int32{
+		"REPOSITORY_CHANGE_SIGNAL_KIND_UNSPECIFIED":         0,
+		"REPOSITORY_CHANGE_SIGNAL_KIND_PUSH":                1,
+		"REPOSITORY_CHANGE_SIGNAL_KIND_PULL_REQUEST_MERGED": 2,
+	}
+)
+
+func (x RepositoryChangeSignalKind) Enum() *RepositoryChangeSignalKind {
+	p := new(RepositoryChangeSignalKind)
+	*p = x
+	return p
+}
+
+func (x RepositoryChangeSignalKind) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (RepositoryChangeSignalKind) Descriptor() protoreflect.EnumDescriptor {
+	return file_kodex_providers_v1_provider_hub_proto_enumTypes[21].Descriptor()
+}
+
+func (RepositoryChangeSignalKind) Type() protoreflect.EnumType {
+	return &file_kodex_providers_v1_provider_hub_proto_enumTypes[21]
+}
+
+func (x RepositoryChangeSignalKind) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use RepositoryChangeSignalKind.Descriptor instead.
+func (RepositoryChangeSignalKind) EnumDescriptor() ([]byte, []int) {
+	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{21}
+}
+
+// RepositoryChangeSignalStatus describes the provider-side repository change signal lifecycle.
+type RepositoryChangeSignalStatus int32
+
+const (
+	RepositoryChangeSignalStatus_REPOSITORY_CHANGE_SIGNAL_STATUS_UNSPECIFIED RepositoryChangeSignalStatus = 0
+	RepositoryChangeSignalStatus_REPOSITORY_CHANGE_SIGNAL_STATUS_OBSERVED    RepositoryChangeSignalStatus = 1
+)
+
+// Enum value maps for RepositoryChangeSignalStatus.
+var (
+	RepositoryChangeSignalStatus_name = map[int32]string{
+		0: "REPOSITORY_CHANGE_SIGNAL_STATUS_UNSPECIFIED",
+		1: "REPOSITORY_CHANGE_SIGNAL_STATUS_OBSERVED",
+	}
+	RepositoryChangeSignalStatus_value = map[string]int32{
+		"REPOSITORY_CHANGE_SIGNAL_STATUS_UNSPECIFIED": 0,
+		"REPOSITORY_CHANGE_SIGNAL_STATUS_OBSERVED":    1,
+	}
+)
+
+func (x RepositoryChangeSignalStatus) Enum() *RepositoryChangeSignalStatus {
+	p := new(RepositoryChangeSignalStatus)
+	*p = x
+	return p
+}
+
+func (x RepositoryChangeSignalStatus) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (RepositoryChangeSignalStatus) Descriptor() protoreflect.EnumDescriptor {
+	return file_kodex_providers_v1_provider_hub_proto_enumTypes[22].Descriptor()
+}
+
+func (RepositoryChangeSignalStatus) Type() protoreflect.EnumType {
+	return &file_kodex_providers_v1_provider_hub_proto_enumTypes[22]
+}
+
+func (x RepositoryChangeSignalStatus) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use RepositoryChangeSignalStatus.Descriptor instead.
+func (RepositoryChangeSignalStatus) EnumDescriptor() ([]byte, []int) {
+	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{22}
+}
+
+// RepositoryChangePathSummaryStatus describes how much path metadata the provider signal carries.
+type RepositoryChangePathSummaryStatus int32
+
+const (
+	RepositoryChangePathSummaryStatus_REPOSITORY_CHANGE_PATH_SUMMARY_STATUS_UNSPECIFIED RepositoryChangePathSummaryStatus = 0
+	RepositoryChangePathSummaryStatus_REPOSITORY_CHANGE_PATH_SUMMARY_STATUS_READY       RepositoryChangePathSummaryStatus = 1
+	RepositoryChangePathSummaryStatus_REPOSITORY_CHANGE_PATH_SUMMARY_STATUS_UNAVAILABLE RepositoryChangePathSummaryStatus = 2
+	RepositoryChangePathSummaryStatus_REPOSITORY_CHANGE_PATH_SUMMARY_STATUS_TRUNCATED   RepositoryChangePathSummaryStatus = 3
+)
+
+// Enum value maps for RepositoryChangePathSummaryStatus.
+var (
+	RepositoryChangePathSummaryStatus_name = map[int32]string{
+		0: "REPOSITORY_CHANGE_PATH_SUMMARY_STATUS_UNSPECIFIED",
+		1: "REPOSITORY_CHANGE_PATH_SUMMARY_STATUS_READY",
+		2: "REPOSITORY_CHANGE_PATH_SUMMARY_STATUS_UNAVAILABLE",
+		3: "REPOSITORY_CHANGE_PATH_SUMMARY_STATUS_TRUNCATED",
+	}
+	RepositoryChangePathSummaryStatus_value = map[string]int32{
+		"REPOSITORY_CHANGE_PATH_SUMMARY_STATUS_UNSPECIFIED": 0,
+		"REPOSITORY_CHANGE_PATH_SUMMARY_STATUS_READY":       1,
+		"REPOSITORY_CHANGE_PATH_SUMMARY_STATUS_UNAVAILABLE": 2,
+		"REPOSITORY_CHANGE_PATH_SUMMARY_STATUS_TRUNCATED":   3,
+	}
+)
+
+func (x RepositoryChangePathSummaryStatus) Enum() *RepositoryChangePathSummaryStatus {
+	p := new(RepositoryChangePathSummaryStatus)
+	*p = x
+	return p
+}
+
+func (x RepositoryChangePathSummaryStatus) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (RepositoryChangePathSummaryStatus) Descriptor() protoreflect.EnumDescriptor {
+	return file_kodex_providers_v1_provider_hub_proto_enumTypes[23].Descriptor()
+}
+
+func (RepositoryChangePathSummaryStatus) Type() protoreflect.EnumType {
+	return &file_kodex_providers_v1_provider_hub_proto_enumTypes[23]
+}
+
+func (x RepositoryChangePathSummaryStatus) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use RepositoryChangePathSummaryStatus.Descriptor instead.
+func (RepositoryChangePathSummaryStatus) EnumDescriptor() ([]byte, []int) {
+	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{23}
+}
+
+// RepositoryChangePathCategory classifies changed paths without raw diffs or file contents.
+type RepositoryChangePathCategory int32
+
+const (
+	RepositoryChangePathCategory_REPOSITORY_CHANGE_PATH_CATEGORY_UNSPECIFIED     RepositoryChangePathCategory = 0
+	RepositoryChangePathCategory_REPOSITORY_CHANGE_PATH_CATEGORY_SERVICES_POLICY RepositoryChangePathCategory = 1
+	RepositoryChangePathCategory_REPOSITORY_CHANGE_PATH_CATEGORY_SERVICE_SOURCE  RepositoryChangePathCategory = 2
+	RepositoryChangePathCategory_REPOSITORY_CHANGE_PATH_CATEGORY_SERVICE_CONFIG  RepositoryChangePathCategory = 3
+	RepositoryChangePathCategory_REPOSITORY_CHANGE_PATH_CATEGORY_DEPLOY_MANIFEST RepositoryChangePathCategory = 4
+	RepositoryChangePathCategory_REPOSITORY_CHANGE_PATH_CATEGORY_RUNTIME_CONFIG  RepositoryChangePathCategory = 5
+	RepositoryChangePathCategory_REPOSITORY_CHANGE_PATH_CATEGORY_DOCUMENTATION   RepositoryChangePathCategory = 6
+	RepositoryChangePathCategory_REPOSITORY_CHANGE_PATH_CATEGORY_TEST            RepositoryChangePathCategory = 7
+	RepositoryChangePathCategory_REPOSITORY_CHANGE_PATH_CATEGORY_PLATFORM_POLICY RepositoryChangePathCategory = 8
+	RepositoryChangePathCategory_REPOSITORY_CHANGE_PATH_CATEGORY_OTHER           RepositoryChangePathCategory = 9
+)
+
+// Enum value maps for RepositoryChangePathCategory.
+var (
+	RepositoryChangePathCategory_name = map[int32]string{
+		0: "REPOSITORY_CHANGE_PATH_CATEGORY_UNSPECIFIED",
+		1: "REPOSITORY_CHANGE_PATH_CATEGORY_SERVICES_POLICY",
+		2: "REPOSITORY_CHANGE_PATH_CATEGORY_SERVICE_SOURCE",
+		3: "REPOSITORY_CHANGE_PATH_CATEGORY_SERVICE_CONFIG",
+		4: "REPOSITORY_CHANGE_PATH_CATEGORY_DEPLOY_MANIFEST",
+		5: "REPOSITORY_CHANGE_PATH_CATEGORY_RUNTIME_CONFIG",
+		6: "REPOSITORY_CHANGE_PATH_CATEGORY_DOCUMENTATION",
+		7: "REPOSITORY_CHANGE_PATH_CATEGORY_TEST",
+		8: "REPOSITORY_CHANGE_PATH_CATEGORY_PLATFORM_POLICY",
+		9: "REPOSITORY_CHANGE_PATH_CATEGORY_OTHER",
+	}
+	RepositoryChangePathCategory_value = map[string]int32{
+		"REPOSITORY_CHANGE_PATH_CATEGORY_UNSPECIFIED":     0,
+		"REPOSITORY_CHANGE_PATH_CATEGORY_SERVICES_POLICY": 1,
+		"REPOSITORY_CHANGE_PATH_CATEGORY_SERVICE_SOURCE":  2,
+		"REPOSITORY_CHANGE_PATH_CATEGORY_SERVICE_CONFIG":  3,
+		"REPOSITORY_CHANGE_PATH_CATEGORY_DEPLOY_MANIFEST": 4,
+		"REPOSITORY_CHANGE_PATH_CATEGORY_RUNTIME_CONFIG":  5,
+		"REPOSITORY_CHANGE_PATH_CATEGORY_DOCUMENTATION":   6,
+		"REPOSITORY_CHANGE_PATH_CATEGORY_TEST":            7,
+		"REPOSITORY_CHANGE_PATH_CATEGORY_PLATFORM_POLICY": 8,
+		"REPOSITORY_CHANGE_PATH_CATEGORY_OTHER":           9,
+	}
+)
+
+func (x RepositoryChangePathCategory) Enum() *RepositoryChangePathCategory {
+	p := new(RepositoryChangePathCategory)
+	*p = x
+	return p
+}
+
+func (x RepositoryChangePathCategory) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (RepositoryChangePathCategory) Descriptor() protoreflect.EnumDescriptor {
+	return file_kodex_providers_v1_provider_hub_proto_enumTypes[24].Descriptor()
+}
+
+func (RepositoryChangePathCategory) Type() protoreflect.EnumType {
+	return &file_kodex_providers_v1_provider_hub_proto_enumTypes[24]
+}
+
+func (x RepositoryChangePathCategory) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use RepositoryChangePathCategory.Descriptor instead.
+func (RepositoryChangePathCategory) EnumDescriptor() ([]byte, []int) {
+	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{24}
+}
+
 // RepositoryAdoptionMarkerKind classifies safe file markers discovered without reading raw content.
 type RepositoryAdoptionMarkerKind int32
 
@@ -1261,11 +1482,11 @@ func (x RepositoryAdoptionMarkerKind) String() string {
 }
 
 func (RepositoryAdoptionMarkerKind) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_providers_v1_provider_hub_proto_enumTypes[21].Descriptor()
+	return file_kodex_providers_v1_provider_hub_proto_enumTypes[25].Descriptor()
 }
 
 func (RepositoryAdoptionMarkerKind) Type() protoreflect.EnumType {
-	return &file_kodex_providers_v1_provider_hub_proto_enumTypes[21]
+	return &file_kodex_providers_v1_provider_hub_proto_enumTypes[25]
 }
 
 func (x RepositoryAdoptionMarkerKind) Number() protoreflect.EnumNumber {
@@ -1274,7 +1495,7 @@ func (x RepositoryAdoptionMarkerKind) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use RepositoryAdoptionMarkerKind.Descriptor instead.
 func (RepositoryAdoptionMarkerKind) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{21}
+	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{25}
 }
 
 // ReviewSignalKind classifies provider-native review actions.
@@ -1314,11 +1535,11 @@ func (x ReviewSignalKind) String() string {
 }
 
 func (ReviewSignalKind) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_providers_v1_provider_hub_proto_enumTypes[22].Descriptor()
+	return file_kodex_providers_v1_provider_hub_proto_enumTypes[26].Descriptor()
 }
 
 func (ReviewSignalKind) Type() protoreflect.EnumType {
-	return &file_kodex_providers_v1_provider_hub_proto_enumTypes[22]
+	return &file_kodex_providers_v1_provider_hub_proto_enumTypes[26]
 }
 
 func (x ReviewSignalKind) Number() protoreflect.EnumNumber {
@@ -1327,7 +1548,7 @@ func (x ReviewSignalKind) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ReviewSignalKind.Descriptor instead.
 func (ReviewSignalKind) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{22}
+	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{26}
 }
 
 // CommandMeta is required for every mutating command.
@@ -7781,6 +8002,696 @@ func (x *ListRepositoryMergeSignalsResponse) GetPage() *PageResponse {
 	return nil
 }
 
+// RepositoryChangePathCategoryCount stores one safe changed-path category count.
+type RepositoryChangePathCategoryCount struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// category is the safe path category.
+	Category RepositoryChangePathCategory `protobuf:"varint,1,opt,name=category,proto3,enum=kodex.providers.v1.RepositoryChangePathCategory" json:"category,omitempty"`
+	// count is the number of changed paths in the category.
+	Count         int64 `protobuf:"varint,2,opt,name=count,proto3" json:"count,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RepositoryChangePathCategoryCount) Reset() {
+	*x = RepositoryChangePathCategoryCount{}
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[66]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RepositoryChangePathCategoryCount) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RepositoryChangePathCategoryCount) ProtoMessage() {}
+
+func (x *RepositoryChangePathCategoryCount) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[66]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RepositoryChangePathCategoryCount.ProtoReflect.Descriptor instead.
+func (*RepositoryChangePathCategoryCount) Descriptor() ([]byte, []int) {
+	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{66}
+}
+
+func (x *RepositoryChangePathCategoryCount) GetCategory() RepositoryChangePathCategory {
+	if x != nil {
+		return x.Category
+	}
+	return RepositoryChangePathCategory_REPOSITORY_CHANGE_PATH_CATEGORY_UNSPECIFIED
+}
+
+func (x *RepositoryChangePathCategoryCount) GetCount() int64 {
+	if x != nil {
+		return x.Count
+	}
+	return 0
+}
+
+// RepositoryChangeSignal is a safe provider-owned fact that repository contents changed.
+type RepositoryChangeSignal struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// signal_id is the provider-hub persisted signal id.
+	SignalId string `protobuf:"bytes,1,opt,name=signal_id,json=signalId,proto3" json:"signal_id,omitempty"`
+	// signal_key is the provider-hub idempotency key for this repository change signal.
+	SignalKey string `protobuf:"bytes,2,opt,name=signal_key,json=signalKey,proto3" json:"signal_key,omitempty"`
+	// kind classifies push or pull_request merged signals.
+	Kind RepositoryChangeSignalKind `protobuf:"varint,3,opt,name=kind,proto3,enum=kodex.providers.v1.RepositoryChangeSignalKind" json:"kind,omitempty"`
+	// provider_slug identifies the provider adapter.
+	ProviderSlug string `protobuf:"bytes,4,opt,name=provider_slug,json=providerSlug,proto3" json:"provider_slug,omitempty"`
+	// project_id links project context when provider-hub already knows it.
+	ProjectId string `protobuf:"bytes,5,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	// repository_id links repository context when provider-hub already knows it.
+	RepositoryId string `protobuf:"bytes,6,opt,name=repository_id,json=repositoryId,proto3" json:"repository_id,omitempty"`
+	// repository_full_name is the safe provider owner/name.
+	RepositoryFullName string `protobuf:"bytes,7,opt,name=repository_full_name,json=repositoryFullName,proto3" json:"repository_full_name,omitempty"`
+	// provider_repository_id is the provider-native repository id when known.
+	ProviderRepositoryId string `protobuf:"bytes,8,opt,name=provider_repository_id,json=providerRepositoryId,proto3" json:"provider_repository_id,omitempty"`
+	// ref is the provider ref that changed, for example refs/heads/main.
+	Ref string `protobuf:"bytes,9,opt,name=ref,proto3" json:"ref,omitempty"`
+	// base_branch is the target branch name, for example main.
+	BaseBranch string `protobuf:"bytes,10,opt,name=base_branch,json=baseBranch,proto3" json:"base_branch,omitempty"`
+	// commit_sha is the observed head or merge commit sha.
+	CommitSha string `protobuf:"bytes,11,opt,name=commit_sha,json=commitSha,proto3" json:"commit_sha,omitempty"`
+	// before_sha is the previous head sha for push signals when known.
+	BeforeSha string `protobuf:"bytes,12,opt,name=before_sha,json=beforeSha,proto3" json:"before_sha,omitempty"`
+	// source_ref is the PR/MR source ref for pull_request merged signals when known.
+	SourceRef string `protobuf:"bytes,13,opt,name=source_ref,json=sourceRef,proto3" json:"source_ref,omitempty"`
+	// pull_request_number is set for pull_request merged signals.
+	PullRequestNumber int64 `protobuf:"varint,14,opt,name=pull_request_number,json=pullRequestNumber,proto3" json:"pull_request_number,omitempty"`
+	// pull_request_provider_id is the provider-native PR/MR id when known.
+	PullRequestProviderId string `protobuf:"bytes,15,opt,name=pull_request_provider_id,json=pullRequestProviderId,proto3" json:"pull_request_provider_id,omitempty"`
+	// pull_request_url is the safe provider PR/MR URL.
+	PullRequestUrl string `protobuf:"bytes,16,opt,name=pull_request_url,json=pullRequestUrl,proto3" json:"pull_request_url,omitempty"`
+	// path_summary_status tells whether path categories are ready, unavailable or truncated.
+	PathSummaryStatus RepositoryChangePathSummaryStatus `protobuf:"varint,17,opt,name=path_summary_status,json=pathSummaryStatus,proto3,enum=kodex.providers.v1.RepositoryChangePathSummaryStatus" json:"path_summary_status,omitempty"`
+	// changed_path_count is a bounded count of unique changed paths seen by provider-hub.
+	ChangedPathCount int64 `protobuf:"varint,18,opt,name=changed_path_count,json=changedPathCount,proto3" json:"changed_path_count,omitempty"`
+	// path_digest is a digest over safe path identities, not a raw path list.
+	PathDigest string `protobuf:"bytes,19,opt,name=path_digest,json=pathDigest,proto3" json:"path_digest,omitempty"`
+	// path_categories are safe category counters without raw paths or file contents.
+	PathCategories []*RepositoryChangePathCategoryCount `protobuf:"bytes,20,rep,name=path_categories,json=pathCategories,proto3" json:"path_categories,omitempty"`
+	// services_policy_changed is true when root services.yaml changed.
+	ServicesPolicyChanged bool `protobuf:"varint,21,opt,name=services_policy_changed,json=servicesPolicyChanged,proto3" json:"services_policy_changed,omitempty"`
+	// deploy_relevant_changed is true when provider-hub saw deploy-relevant path categories.
+	DeployRelevantChanged bool `protobuf:"varint,22,opt,name=deploy_relevant_changed,json=deployRelevantChanged,proto3" json:"deploy_relevant_changed,omitempty"`
+	// change_fingerprint is the provider-hub fingerprint for idempotency/conflict checks.
+	ChangeFingerprint string `protobuf:"bytes,23,opt,name=change_fingerprint,json=changeFingerprint,proto3" json:"change_fingerprint,omitempty"`
+	// observed_at is the provider observation time in RFC3339 format.
+	ObservedAt string `protobuf:"bytes,24,opt,name=observed_at,json=observedAt,proto3" json:"observed_at,omitempty"`
+	// status is the provider-side repository change signal status.
+	Status RepositoryChangeSignalStatus `protobuf:"varint,25,opt,name=status,proto3,enum=kodex.providers.v1.RepositoryChangeSignalStatus" json:"status,omitempty"`
+	// version is the provider-hub signal projection version.
+	Version int64 `protobuf:"varint,26,opt,name=version,proto3" json:"version,omitempty"`
+	// etag is a stable safe read token based on provider-owned refs/digests/version.
+	Etag string `protobuf:"bytes,27,opt,name=etag,proto3" json:"etag,omitempty"`
+	// created_at is the provider-hub signal creation time in RFC3339 format.
+	CreatedAt string `protobuf:"bytes,28,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	// updated_at is the provider-hub signal update time in RFC3339 format.
+	UpdatedAt     string `protobuf:"bytes,29,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RepositoryChangeSignal) Reset() {
+	*x = RepositoryChangeSignal{}
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[67]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RepositoryChangeSignal) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RepositoryChangeSignal) ProtoMessage() {}
+
+func (x *RepositoryChangeSignal) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[67]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RepositoryChangeSignal.ProtoReflect.Descriptor instead.
+func (*RepositoryChangeSignal) Descriptor() ([]byte, []int) {
+	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{67}
+}
+
+func (x *RepositoryChangeSignal) GetSignalId() string {
+	if x != nil {
+		return x.SignalId
+	}
+	return ""
+}
+
+func (x *RepositoryChangeSignal) GetSignalKey() string {
+	if x != nil {
+		return x.SignalKey
+	}
+	return ""
+}
+
+func (x *RepositoryChangeSignal) GetKind() RepositoryChangeSignalKind {
+	if x != nil {
+		return x.Kind
+	}
+	return RepositoryChangeSignalKind_REPOSITORY_CHANGE_SIGNAL_KIND_UNSPECIFIED
+}
+
+func (x *RepositoryChangeSignal) GetProviderSlug() string {
+	if x != nil {
+		return x.ProviderSlug
+	}
+	return ""
+}
+
+func (x *RepositoryChangeSignal) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *RepositoryChangeSignal) GetRepositoryId() string {
+	if x != nil {
+		return x.RepositoryId
+	}
+	return ""
+}
+
+func (x *RepositoryChangeSignal) GetRepositoryFullName() string {
+	if x != nil {
+		return x.RepositoryFullName
+	}
+	return ""
+}
+
+func (x *RepositoryChangeSignal) GetProviderRepositoryId() string {
+	if x != nil {
+		return x.ProviderRepositoryId
+	}
+	return ""
+}
+
+func (x *RepositoryChangeSignal) GetRef() string {
+	if x != nil {
+		return x.Ref
+	}
+	return ""
+}
+
+func (x *RepositoryChangeSignal) GetBaseBranch() string {
+	if x != nil {
+		return x.BaseBranch
+	}
+	return ""
+}
+
+func (x *RepositoryChangeSignal) GetCommitSha() string {
+	if x != nil {
+		return x.CommitSha
+	}
+	return ""
+}
+
+func (x *RepositoryChangeSignal) GetBeforeSha() string {
+	if x != nil {
+		return x.BeforeSha
+	}
+	return ""
+}
+
+func (x *RepositoryChangeSignal) GetSourceRef() string {
+	if x != nil {
+		return x.SourceRef
+	}
+	return ""
+}
+
+func (x *RepositoryChangeSignal) GetPullRequestNumber() int64 {
+	if x != nil {
+		return x.PullRequestNumber
+	}
+	return 0
+}
+
+func (x *RepositoryChangeSignal) GetPullRequestProviderId() string {
+	if x != nil {
+		return x.PullRequestProviderId
+	}
+	return ""
+}
+
+func (x *RepositoryChangeSignal) GetPullRequestUrl() string {
+	if x != nil {
+		return x.PullRequestUrl
+	}
+	return ""
+}
+
+func (x *RepositoryChangeSignal) GetPathSummaryStatus() RepositoryChangePathSummaryStatus {
+	if x != nil {
+		return x.PathSummaryStatus
+	}
+	return RepositoryChangePathSummaryStatus_REPOSITORY_CHANGE_PATH_SUMMARY_STATUS_UNSPECIFIED
+}
+
+func (x *RepositoryChangeSignal) GetChangedPathCount() int64 {
+	if x != nil {
+		return x.ChangedPathCount
+	}
+	return 0
+}
+
+func (x *RepositoryChangeSignal) GetPathDigest() string {
+	if x != nil {
+		return x.PathDigest
+	}
+	return ""
+}
+
+func (x *RepositoryChangeSignal) GetPathCategories() []*RepositoryChangePathCategoryCount {
+	if x != nil {
+		return x.PathCategories
+	}
+	return nil
+}
+
+func (x *RepositoryChangeSignal) GetServicesPolicyChanged() bool {
+	if x != nil {
+		return x.ServicesPolicyChanged
+	}
+	return false
+}
+
+func (x *RepositoryChangeSignal) GetDeployRelevantChanged() bool {
+	if x != nil {
+		return x.DeployRelevantChanged
+	}
+	return false
+}
+
+func (x *RepositoryChangeSignal) GetChangeFingerprint() string {
+	if x != nil {
+		return x.ChangeFingerprint
+	}
+	return ""
+}
+
+func (x *RepositoryChangeSignal) GetObservedAt() string {
+	if x != nil {
+		return x.ObservedAt
+	}
+	return ""
+}
+
+func (x *RepositoryChangeSignal) GetStatus() RepositoryChangeSignalStatus {
+	if x != nil {
+		return x.Status
+	}
+	return RepositoryChangeSignalStatus_REPOSITORY_CHANGE_SIGNAL_STATUS_UNSPECIFIED
+}
+
+func (x *RepositoryChangeSignal) GetVersion() int64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+func (x *RepositoryChangeSignal) GetEtag() string {
+	if x != nil {
+		return x.Etag
+	}
+	return ""
+}
+
+func (x *RepositoryChangeSignal) GetCreatedAt() string {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return ""
+}
+
+func (x *RepositoryChangeSignal) GetUpdatedAt() string {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return ""
+}
+
+// GetRepositoryChangeSignalRequest reads one safe repository change signal by stable provider-hub identity.
+type GetRepositoryChangeSignalRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// signal_id optionally selects a provider-hub repository change signal id.
+	SignalId *string `protobuf:"bytes,1,opt,name=signal_id,json=signalId,proto3,oneof" json:"signal_id,omitempty"`
+	// signal_key optionally selects a provider-hub repository change signal idempotency key.
+	SignalKey *string `protobuf:"bytes,2,opt,name=signal_key,json=signalKey,proto3,oneof" json:"signal_key,omitempty"`
+	// meta carries read actor and request context.
+	Meta          *QueryMeta `protobuf:"bytes,3,opt,name=meta,proto3" json:"meta,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetRepositoryChangeSignalRequest) Reset() {
+	*x = GetRepositoryChangeSignalRequest{}
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[68]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetRepositoryChangeSignalRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetRepositoryChangeSignalRequest) ProtoMessage() {}
+
+func (x *GetRepositoryChangeSignalRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[68]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetRepositoryChangeSignalRequest.ProtoReflect.Descriptor instead.
+func (*GetRepositoryChangeSignalRequest) Descriptor() ([]byte, []int) {
+	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{68}
+}
+
+func (x *GetRepositoryChangeSignalRequest) GetSignalId() string {
+	if x != nil && x.SignalId != nil {
+		return *x.SignalId
+	}
+	return ""
+}
+
+func (x *GetRepositoryChangeSignalRequest) GetSignalKey() string {
+	if x != nil && x.SignalKey != nil {
+		return *x.SignalKey
+	}
+	return ""
+}
+
+func (x *GetRepositoryChangeSignalRequest) GetMeta() *QueryMeta {
+	if x != nil {
+		return x.Meta
+	}
+	return nil
+}
+
+// RepositoryChangeSignalResponse returns a safe repository change signal or an explicit read status.
+type RepositoryChangeSignalResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// read_status describes whether provider-owned data is ready for the caller.
+	ReadStatus ProviderOwnedDataStatus `protobuf:"varint,1,opt,name=read_status,json=readStatus,proto3,enum=kodex.providers.v1.ProviderOwnedDataStatus" json:"read_status,omitempty"`
+	// change_signal is present when read_status is READY.
+	ChangeSignal  *RepositoryChangeSignal `protobuf:"bytes,2,opt,name=change_signal,json=changeSignal,proto3" json:"change_signal,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RepositoryChangeSignalResponse) Reset() {
+	*x = RepositoryChangeSignalResponse{}
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[69]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RepositoryChangeSignalResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RepositoryChangeSignalResponse) ProtoMessage() {}
+
+func (x *RepositoryChangeSignalResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[69]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RepositoryChangeSignalResponse.ProtoReflect.Descriptor instead.
+func (*RepositoryChangeSignalResponse) Descriptor() ([]byte, []int) {
+	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{69}
+}
+
+func (x *RepositoryChangeSignalResponse) GetReadStatus() ProviderOwnedDataStatus {
+	if x != nil {
+		return x.ReadStatus
+	}
+	return ProviderOwnedDataStatus_PROVIDER_OWNED_DATA_STATUS_UNSPECIFIED
+}
+
+func (x *RepositoryChangeSignalResponse) GetChangeSignal() *RepositoryChangeSignal {
+	if x != nil {
+		return x.ChangeSignal
+	}
+	return nil
+}
+
+// ListRepositoryChangeSignalsRequest lists safe repository change signals by repository/project context.
+type ListRepositoryChangeSignalsRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// project_id optionally filters by project-catalog project context.
+	ProjectId *string `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3,oneof" json:"project_id,omitempty"`
+	// repository_id optionally filters by project-catalog repository context.
+	RepositoryId *string `protobuf:"bytes,2,opt,name=repository_id,json=repositoryId,proto3,oneof" json:"repository_id,omitempty"`
+	// provider_slug optionally filters provider.
+	ProviderSlug *string `protobuf:"bytes,3,opt,name=provider_slug,json=providerSlug,proto3,oneof" json:"provider_slug,omitempty"`
+	// repository_full_name optionally filters provider owner/name.
+	RepositoryFullName *string `protobuf:"bytes,4,opt,name=repository_full_name,json=repositoryFullName,proto3,oneof" json:"repository_full_name,omitempty"`
+	// provider_repository_id optionally filters provider-native repository id.
+	ProviderRepositoryId *string `protobuf:"bytes,5,opt,name=provider_repository_id,json=providerRepositoryId,proto3,oneof" json:"provider_repository_id,omitempty"`
+	// kinds optionally filter push or pull_request merged signal kind.
+	Kinds []RepositoryChangeSignalKind `protobuf:"varint,6,rep,packed,name=kinds,proto3,enum=kodex.providers.v1.RepositoryChangeSignalKind" json:"kinds,omitempty"`
+	// statuses optionally filter provider-side signal status.
+	Statuses []RepositoryChangeSignalStatus `protobuf:"varint,7,rep,packed,name=statuses,proto3,enum=kodex.providers.v1.RepositoryChangeSignalStatus" json:"statuses,omitempty"`
+	// base_branch optionally filters the target branch.
+	BaseBranch *string `protobuf:"bytes,8,opt,name=base_branch,json=baseBranch,proto3,oneof" json:"base_branch,omitempty"`
+	// commit_sha optionally filters the observed head or merge commit sha.
+	CommitSha *string `protobuf:"bytes,9,opt,name=commit_sha,json=commitSha,proto3,oneof" json:"commit_sha,omitempty"`
+	// services_policy_changed optionally filters root services.yaml changes.
+	ServicesPolicyChanged *bool `protobuf:"varint,10,opt,name=services_policy_changed,json=servicesPolicyChanged,proto3,oneof" json:"services_policy_changed,omitempty"`
+	// deploy_relevant_changed optionally filters deploy-relevant path categories.
+	DeployRelevantChanged *bool `protobuf:"varint,11,opt,name=deploy_relevant_changed,json=deployRelevantChanged,proto3,oneof" json:"deploy_relevant_changed,omitempty"`
+	// observed_since optionally filters lower observation time in RFC3339 format.
+	ObservedSince *string `protobuf:"bytes,12,opt,name=observed_since,json=observedSince,proto3,oneof" json:"observed_since,omitempty"`
+	// page limits response size.
+	Page *PageRequest `protobuf:"bytes,13,opt,name=page,proto3" json:"page,omitempty"`
+	// meta carries read actor and request context.
+	Meta          *QueryMeta `protobuf:"bytes,14,opt,name=meta,proto3" json:"meta,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListRepositoryChangeSignalsRequest) Reset() {
+	*x = ListRepositoryChangeSignalsRequest{}
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[70]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListRepositoryChangeSignalsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListRepositoryChangeSignalsRequest) ProtoMessage() {}
+
+func (x *ListRepositoryChangeSignalsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[70]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListRepositoryChangeSignalsRequest.ProtoReflect.Descriptor instead.
+func (*ListRepositoryChangeSignalsRequest) Descriptor() ([]byte, []int) {
+	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{70}
+}
+
+func (x *ListRepositoryChangeSignalsRequest) GetProjectId() string {
+	if x != nil && x.ProjectId != nil {
+		return *x.ProjectId
+	}
+	return ""
+}
+
+func (x *ListRepositoryChangeSignalsRequest) GetRepositoryId() string {
+	if x != nil && x.RepositoryId != nil {
+		return *x.RepositoryId
+	}
+	return ""
+}
+
+func (x *ListRepositoryChangeSignalsRequest) GetProviderSlug() string {
+	if x != nil && x.ProviderSlug != nil {
+		return *x.ProviderSlug
+	}
+	return ""
+}
+
+func (x *ListRepositoryChangeSignalsRequest) GetRepositoryFullName() string {
+	if x != nil && x.RepositoryFullName != nil {
+		return *x.RepositoryFullName
+	}
+	return ""
+}
+
+func (x *ListRepositoryChangeSignalsRequest) GetProviderRepositoryId() string {
+	if x != nil && x.ProviderRepositoryId != nil {
+		return *x.ProviderRepositoryId
+	}
+	return ""
+}
+
+func (x *ListRepositoryChangeSignalsRequest) GetKinds() []RepositoryChangeSignalKind {
+	if x != nil {
+		return x.Kinds
+	}
+	return nil
+}
+
+func (x *ListRepositoryChangeSignalsRequest) GetStatuses() []RepositoryChangeSignalStatus {
+	if x != nil {
+		return x.Statuses
+	}
+	return nil
+}
+
+func (x *ListRepositoryChangeSignalsRequest) GetBaseBranch() string {
+	if x != nil && x.BaseBranch != nil {
+		return *x.BaseBranch
+	}
+	return ""
+}
+
+func (x *ListRepositoryChangeSignalsRequest) GetCommitSha() string {
+	if x != nil && x.CommitSha != nil {
+		return *x.CommitSha
+	}
+	return ""
+}
+
+func (x *ListRepositoryChangeSignalsRequest) GetServicesPolicyChanged() bool {
+	if x != nil && x.ServicesPolicyChanged != nil {
+		return *x.ServicesPolicyChanged
+	}
+	return false
+}
+
+func (x *ListRepositoryChangeSignalsRequest) GetDeployRelevantChanged() bool {
+	if x != nil && x.DeployRelevantChanged != nil {
+		return *x.DeployRelevantChanged
+	}
+	return false
+}
+
+func (x *ListRepositoryChangeSignalsRequest) GetObservedSince() string {
+	if x != nil && x.ObservedSince != nil {
+		return *x.ObservedSince
+	}
+	return ""
+}
+
+func (x *ListRepositoryChangeSignalsRequest) GetPage() *PageRequest {
+	if x != nil {
+		return x.Page
+	}
+	return nil
+}
+
+func (x *ListRepositoryChangeSignalsRequest) GetMeta() *QueryMeta {
+	if x != nil {
+		return x.Meta
+	}
+	return nil
+}
+
+// ListRepositoryChangeSignalsResponse returns safe repository change signals in stable server-defined order.
+type ListRepositoryChangeSignalsResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// change_signals are returned newest first.
+	ChangeSignals []*RepositoryChangeSignal `protobuf:"bytes,1,rep,name=change_signals,json=changeSignals,proto3" json:"change_signals,omitempty"`
+	// page describes continuation state.
+	Page          *PageResponse `protobuf:"bytes,2,opt,name=page,proto3" json:"page,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListRepositoryChangeSignalsResponse) Reset() {
+	*x = ListRepositoryChangeSignalsResponse{}
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[71]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListRepositoryChangeSignalsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListRepositoryChangeSignalsResponse) ProtoMessage() {}
+
+func (x *ListRepositoryChangeSignalsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[71]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListRepositoryChangeSignalsResponse.ProtoReflect.Descriptor instead.
+func (*ListRepositoryChangeSignalsResponse) Descriptor() ([]byte, []int) {
+	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{71}
+}
+
+func (x *ListRepositoryChangeSignalsResponse) GetChangeSignals() []*RepositoryChangeSignal {
+	if x != nil {
+		return x.ChangeSignals
+	}
+	return nil
+}
+
+func (x *ListRepositoryChangeSignalsResponse) GetPage() *PageResponse {
+	if x != nil {
+		return x.Page
+	}
+	return nil
+}
+
 // GetRepositoryAdoptionScanSnapshotRequest reads one safe adoption scan snapshot by stable identity.
 type GetRepositoryAdoptionScanSnapshotRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -7798,7 +8709,7 @@ type GetRepositoryAdoptionScanSnapshotRequest struct {
 
 func (x *GetRepositoryAdoptionScanSnapshotRequest) Reset() {
 	*x = GetRepositoryAdoptionScanSnapshotRequest{}
-	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[66]
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[72]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7810,7 +8721,7 @@ func (x *GetRepositoryAdoptionScanSnapshotRequest) String() string {
 func (*GetRepositoryAdoptionScanSnapshotRequest) ProtoMessage() {}
 
 func (x *GetRepositoryAdoptionScanSnapshotRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[66]
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[72]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7823,7 +8734,7 @@ func (x *GetRepositoryAdoptionScanSnapshotRequest) ProtoReflect() protoreflect.M
 
 // Deprecated: Use GetRepositoryAdoptionScanSnapshotRequest.ProtoReflect.Descriptor instead.
 func (*GetRepositoryAdoptionScanSnapshotRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{66}
+	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{72}
 }
 
 func (x *GetRepositoryAdoptionScanSnapshotRequest) GetSnapshotId() string {
@@ -7867,7 +8778,7 @@ type RepositoryAdoptionScanSnapshotResponse struct {
 
 func (x *RepositoryAdoptionScanSnapshotResponse) Reset() {
 	*x = RepositoryAdoptionScanSnapshotResponse{}
-	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[67]
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[73]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7879,7 +8790,7 @@ func (x *RepositoryAdoptionScanSnapshotResponse) String() string {
 func (*RepositoryAdoptionScanSnapshotResponse) ProtoMessage() {}
 
 func (x *RepositoryAdoptionScanSnapshotResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[67]
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[73]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7892,7 +8803,7 @@ func (x *RepositoryAdoptionScanSnapshotResponse) ProtoReflect() protoreflect.Mes
 
 // Deprecated: Use RepositoryAdoptionScanSnapshotResponse.ProtoReflect.Descriptor instead.
 func (*RepositoryAdoptionScanSnapshotResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{67}
+	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{73}
 }
 
 func (x *RepositoryAdoptionScanSnapshotResponse) GetReadStatus() ProviderOwnedDataStatus {
@@ -7938,7 +8849,7 @@ type ListRepositoryAdoptionScanSnapshotsRequest struct {
 
 func (x *ListRepositoryAdoptionScanSnapshotsRequest) Reset() {
 	*x = ListRepositoryAdoptionScanSnapshotsRequest{}
-	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[68]
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[74]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7950,7 +8861,7 @@ func (x *ListRepositoryAdoptionScanSnapshotsRequest) String() string {
 func (*ListRepositoryAdoptionScanSnapshotsRequest) ProtoMessage() {}
 
 func (x *ListRepositoryAdoptionScanSnapshotsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[68]
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[74]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7963,7 +8874,7 @@ func (x *ListRepositoryAdoptionScanSnapshotsRequest) ProtoReflect() protoreflect
 
 // Deprecated: Use ListRepositoryAdoptionScanSnapshotsRequest.ProtoReflect.Descriptor instead.
 func (*ListRepositoryAdoptionScanSnapshotsRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{68}
+	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{74}
 }
 
 func (x *ListRepositoryAdoptionScanSnapshotsRequest) GetProjectId() string {
@@ -8049,7 +8960,7 @@ type ListRepositoryAdoptionScanSnapshotsResponse struct {
 
 func (x *ListRepositoryAdoptionScanSnapshotsResponse) Reset() {
 	*x = ListRepositoryAdoptionScanSnapshotsResponse{}
-	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[69]
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[75]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8061,7 +8972,7 @@ func (x *ListRepositoryAdoptionScanSnapshotsResponse) String() string {
 func (*ListRepositoryAdoptionScanSnapshotsResponse) ProtoMessage() {}
 
 func (x *ListRepositoryAdoptionScanSnapshotsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[69]
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[75]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8074,7 +8985,7 @@ func (x *ListRepositoryAdoptionScanSnapshotsResponse) ProtoReflect() protoreflec
 
 // Deprecated: Use ListRepositoryAdoptionScanSnapshotsResponse.ProtoReflect.Descriptor instead.
 func (*ListRepositoryAdoptionScanSnapshotsResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{69}
+	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{75}
 }
 
 func (x *ListRepositoryAdoptionScanSnapshotsResponse) GetAdoptionScanSnapshots() []*RepositoryAdoptionScanSnapshot {
@@ -8127,7 +9038,7 @@ type UpdatePullRequestRequest struct {
 
 func (x *UpdatePullRequestRequest) Reset() {
 	*x = UpdatePullRequestRequest{}
-	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[70]
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[76]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8139,7 +9050,7 @@ func (x *UpdatePullRequestRequest) String() string {
 func (*UpdatePullRequestRequest) ProtoMessage() {}
 
 func (x *UpdatePullRequestRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[70]
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[76]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8152,7 +9063,7 @@ func (x *UpdatePullRequestRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdatePullRequestRequest.ProtoReflect.Descriptor instead.
 func (*UpdatePullRequestRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{70}
+	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{76}
 }
 
 func (x *UpdatePullRequestRequest) GetTarget() *ProviderTarget {
@@ -8267,7 +9178,7 @@ type CreateReviewSignalRequest struct {
 
 func (x *CreateReviewSignalRequest) Reset() {
 	*x = CreateReviewSignalRequest{}
-	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[71]
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[77]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8279,7 +9190,7 @@ func (x *CreateReviewSignalRequest) String() string {
 func (*CreateReviewSignalRequest) ProtoMessage() {}
 
 func (x *CreateReviewSignalRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[71]
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[77]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8292,7 +9203,7 @@ func (x *CreateReviewSignalRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateReviewSignalRequest.ProtoReflect.Descriptor instead.
 func (*CreateReviewSignalRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{71}
+	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{77}
 }
 
 func (x *CreateReviewSignalRequest) GetTarget() *ProviderTarget {
@@ -8362,7 +9273,7 @@ type UpdateRelationshipRequest struct {
 
 func (x *UpdateRelationshipRequest) Reset() {
 	*x = UpdateRelationshipRequest{}
-	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[72]
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[78]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8374,7 +9285,7 @@ func (x *UpdateRelationshipRequest) String() string {
 func (*UpdateRelationshipRequest) ProtoMessage() {}
 
 func (x *UpdateRelationshipRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[72]
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[78]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8387,7 +9298,7 @@ func (x *UpdateRelationshipRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateRelationshipRequest.ProtoReflect.Descriptor instead.
 func (*UpdateRelationshipRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{72}
+	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{78}
 }
 
 func (x *UpdateRelationshipRequest) GetSource() *ProviderTarget {
@@ -8469,7 +9380,7 @@ type ProviderOperationCommandResult struct {
 
 func (x *ProviderOperationCommandResult) Reset() {
 	*x = ProviderOperationCommandResult{}
-	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[73]
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[79]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8481,7 +9392,7 @@ func (x *ProviderOperationCommandResult) String() string {
 func (*ProviderOperationCommandResult) ProtoMessage() {}
 
 func (x *ProviderOperationCommandResult) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[73]
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[79]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8494,7 +9405,7 @@ func (x *ProviderOperationCommandResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProviderOperationCommandResult.ProtoReflect.Descriptor instead.
 func (*ProviderOperationCommandResult) Descriptor() ([]byte, []int) {
-	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{73}
+	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{79}
 }
 
 func (x *ProviderOperationCommandResult) GetTarget() *ProviderTarget {
@@ -8567,7 +9478,7 @@ type ProviderOperationResponse struct {
 
 func (x *ProviderOperationResponse) Reset() {
 	*x = ProviderOperationResponse{}
-	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[74]
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[80]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8579,7 +9490,7 @@ func (x *ProviderOperationResponse) String() string {
 func (*ProviderOperationResponse) ProtoMessage() {}
 
 func (x *ProviderOperationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[74]
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[80]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8592,7 +9503,7 @@ func (x *ProviderOperationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProviderOperationResponse.ProtoReflect.Descriptor instead.
 func (*ProviderOperationResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{74}
+	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{80}
 }
 
 func (x *ProviderOperationResponse) GetProviderOperation() *ProviderOperation {
@@ -8654,7 +9565,7 @@ type GetProviderAccountRuntimeStateRequest struct {
 
 func (x *GetProviderAccountRuntimeStateRequest) Reset() {
 	*x = GetProviderAccountRuntimeStateRequest{}
-	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[75]
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[81]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8666,7 +9577,7 @@ func (x *GetProviderAccountRuntimeStateRequest) String() string {
 func (*GetProviderAccountRuntimeStateRequest) ProtoMessage() {}
 
 func (x *GetProviderAccountRuntimeStateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[75]
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[81]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8679,7 +9590,7 @@ func (x *GetProviderAccountRuntimeStateRequest) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use GetProviderAccountRuntimeStateRequest.ProtoReflect.Descriptor instead.
 func (*GetProviderAccountRuntimeStateRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{75}
+	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{81}
 }
 
 func (x *GetProviderAccountRuntimeStateRequest) GetProviderAccountRuntimeStateId() string {
@@ -8721,7 +9632,7 @@ type ProviderAccountRuntimeStateResponse struct {
 
 func (x *ProviderAccountRuntimeStateResponse) Reset() {
 	*x = ProviderAccountRuntimeStateResponse{}
-	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[76]
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[82]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8733,7 +9644,7 @@ func (x *ProviderAccountRuntimeStateResponse) String() string {
 func (*ProviderAccountRuntimeStateResponse) ProtoMessage() {}
 
 func (x *ProviderAccountRuntimeStateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[76]
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[82]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8746,7 +9657,7 @@ func (x *ProviderAccountRuntimeStateResponse) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use ProviderAccountRuntimeStateResponse.ProtoReflect.Descriptor instead.
 func (*ProviderAccountRuntimeStateResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{76}
+	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{82}
 }
 
 func (x *ProviderAccountRuntimeStateResponse) GetRuntimeState() *ProviderAccountRuntimeState {
@@ -8779,7 +9690,7 @@ type ListProviderAccountRuntimeStatesRequest struct {
 
 func (x *ListProviderAccountRuntimeStatesRequest) Reset() {
 	*x = ListProviderAccountRuntimeStatesRequest{}
-	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[77]
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[83]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8791,7 +9702,7 @@ func (x *ListProviderAccountRuntimeStatesRequest) String() string {
 func (*ListProviderAccountRuntimeStatesRequest) ProtoMessage() {}
 
 func (x *ListProviderAccountRuntimeStatesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[77]
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[83]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8804,7 +9715,7 @@ func (x *ListProviderAccountRuntimeStatesRequest) ProtoReflect() protoreflect.Me
 
 // Deprecated: Use ListProviderAccountRuntimeStatesRequest.ProtoReflect.Descriptor instead.
 func (*ListProviderAccountRuntimeStatesRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{77}
+	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{83}
 }
 
 func (x *ListProviderAccountRuntimeStatesRequest) GetProviderSlug() string {
@@ -8869,7 +9780,7 @@ type ListProviderAccountRuntimeStatesResponse struct {
 
 func (x *ListProviderAccountRuntimeStatesResponse) Reset() {
 	*x = ListProviderAccountRuntimeStatesResponse{}
-	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[78]
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[84]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8881,7 +9792,7 @@ func (x *ListProviderAccountRuntimeStatesResponse) String() string {
 func (*ListProviderAccountRuntimeStatesResponse) ProtoMessage() {}
 
 func (x *ListProviderAccountRuntimeStatesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[78]
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[84]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8894,7 +9805,7 @@ func (x *ListProviderAccountRuntimeStatesResponse) ProtoReflect() protoreflect.M
 
 // Deprecated: Use ListProviderAccountRuntimeStatesResponse.ProtoReflect.Descriptor instead.
 func (*ListProviderAccountRuntimeStatesResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{78}
+	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{84}
 }
 
 func (x *ListProviderAccountRuntimeStatesResponse) GetRuntimeStates() []*ProviderAccountRuntimeState {
@@ -8938,7 +9849,7 @@ type RecordProviderLimitSnapshotRequest struct {
 
 func (x *RecordProviderLimitSnapshotRequest) Reset() {
 	*x = RecordProviderLimitSnapshotRequest{}
-	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[79]
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[85]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8950,7 +9861,7 @@ func (x *RecordProviderLimitSnapshotRequest) String() string {
 func (*RecordProviderLimitSnapshotRequest) ProtoMessage() {}
 
 func (x *RecordProviderLimitSnapshotRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[79]
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[85]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8963,7 +9874,7 @@ func (x *RecordProviderLimitSnapshotRequest) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use RecordProviderLimitSnapshotRequest.ProtoReflect.Descriptor instead.
 func (*RecordProviderLimitSnapshotRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{79}
+	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{85}
 }
 
 func (x *RecordProviderLimitSnapshotRequest) GetExternalAccountId() string {
@@ -9040,7 +9951,7 @@ type ProviderLimitSnapshotResponse struct {
 
 func (x *ProviderLimitSnapshotResponse) Reset() {
 	*x = ProviderLimitSnapshotResponse{}
-	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[80]
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[86]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9052,7 +9963,7 @@ func (x *ProviderLimitSnapshotResponse) String() string {
 func (*ProviderLimitSnapshotResponse) ProtoMessage() {}
 
 func (x *ProviderLimitSnapshotResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[80]
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[86]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9065,7 +9976,7 @@ func (x *ProviderLimitSnapshotResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProviderLimitSnapshotResponse.ProtoReflect.Descriptor instead.
 func (*ProviderLimitSnapshotResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{80}
+	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{86}
 }
 
 func (x *ProviderLimitSnapshotResponse) GetLimitSnapshot() *ProviderLimitSnapshot {
@@ -9096,7 +10007,7 @@ type ListProviderLimitSnapshotsRequest struct {
 
 func (x *ListProviderLimitSnapshotsRequest) Reset() {
 	*x = ListProviderLimitSnapshotsRequest{}
-	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[81]
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[87]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9108,7 +10019,7 @@ func (x *ListProviderLimitSnapshotsRequest) String() string {
 func (*ListProviderLimitSnapshotsRequest) ProtoMessage() {}
 
 func (x *ListProviderLimitSnapshotsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[81]
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[87]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9121,7 +10032,7 @@ func (x *ListProviderLimitSnapshotsRequest) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use ListProviderLimitSnapshotsRequest.ProtoReflect.Descriptor instead.
 func (*ListProviderLimitSnapshotsRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{81}
+	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{87}
 }
 
 func (x *ListProviderLimitSnapshotsRequest) GetExternalAccountId() string {
@@ -9179,7 +10090,7 @@ type ListProviderLimitSnapshotsResponse struct {
 
 func (x *ListProviderLimitSnapshotsResponse) Reset() {
 	*x = ListProviderLimitSnapshotsResponse{}
-	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[82]
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[88]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9191,7 +10102,7 @@ func (x *ListProviderLimitSnapshotsResponse) String() string {
 func (*ListProviderLimitSnapshotsResponse) ProtoMessage() {}
 
 func (x *ListProviderLimitSnapshotsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[82]
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[88]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9204,7 +10115,7 @@ func (x *ListProviderLimitSnapshotsResponse) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use ListProviderLimitSnapshotsResponse.ProtoReflect.Descriptor instead.
 func (*ListProviderLimitSnapshotsResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{82}
+	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{88}
 }
 
 func (x *ListProviderLimitSnapshotsResponse) GetLimitSnapshots() []*ProviderLimitSnapshot {
@@ -9246,7 +10157,7 @@ type ListProviderOperationsRequest struct {
 
 func (x *ListProviderOperationsRequest) Reset() {
 	*x = ListProviderOperationsRequest{}
-	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[83]
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[89]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9258,7 +10169,7 @@ func (x *ListProviderOperationsRequest) String() string {
 func (*ListProviderOperationsRequest) ProtoMessage() {}
 
 func (x *ListProviderOperationsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[83]
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[89]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9271,7 +10182,7 @@ func (x *ListProviderOperationsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListProviderOperationsRequest.ProtoReflect.Descriptor instead.
 func (*ListProviderOperationsRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{83}
+	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{89}
 }
 
 func (x *ListProviderOperationsRequest) GetProviderSlug() string {
@@ -9343,7 +10254,7 @@ type ListProviderOperationsResponse struct {
 
 func (x *ListProviderOperationsResponse) Reset() {
 	*x = ListProviderOperationsResponse{}
-	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[84]
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[90]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9355,7 +10266,7 @@ func (x *ListProviderOperationsResponse) String() string {
 func (*ListProviderOperationsResponse) ProtoMessage() {}
 
 func (x *ListProviderOperationsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[84]
+	mi := &file_kodex_providers_v1_provider_hub_proto_msgTypes[90]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9368,7 +10279,7 @@ func (x *ListProviderOperationsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListProviderOperationsResponse.ProtoReflect.Descriptor instead.
 func (*ListProviderOperationsResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{84}
+	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{90}
 }
 
 func (x *ListProviderOperationsResponse) GetProviderOperations() []*ProviderOperation {
@@ -10128,6 +11039,95 @@ const file_kodex_providers_v1_provider_hub_proto_rawDesc = "" +
 	"\r_merged_since\"\xaa\x01\n" +
 	"\"ListRepositoryMergeSignalsResponse\x12N\n" +
 	"\rmerge_signals\x18\x01 \x03(\v2).kodex.providers.v1.RepositoryMergeSignalR\fmergeSignals\x124\n" +
+	"\x04page\x18\x02 \x01(\v2 .kodex.providers.v1.PageResponseR\x04page\"\x87\x01\n" +
+	"!RepositoryChangePathCategoryCount\x12L\n" +
+	"\bcategory\x18\x01 \x01(\x0e20.kodex.providers.v1.RepositoryChangePathCategoryR\bcategory\x12\x14\n" +
+	"\x05count\x18\x02 \x01(\x03R\x05count\"\x98\n" +
+	"\n" +
+	"\x16RepositoryChangeSignal\x12\x1b\n" +
+	"\tsignal_id\x18\x01 \x01(\tR\bsignalId\x12\x1d\n" +
+	"\n" +
+	"signal_key\x18\x02 \x01(\tR\tsignalKey\x12B\n" +
+	"\x04kind\x18\x03 \x01(\x0e2..kodex.providers.v1.RepositoryChangeSignalKindR\x04kind\x12#\n" +
+	"\rprovider_slug\x18\x04 \x01(\tR\fproviderSlug\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x05 \x01(\tR\tprojectId\x12#\n" +
+	"\rrepository_id\x18\x06 \x01(\tR\frepositoryId\x120\n" +
+	"\x14repository_full_name\x18\a \x01(\tR\x12repositoryFullName\x124\n" +
+	"\x16provider_repository_id\x18\b \x01(\tR\x14providerRepositoryId\x12\x10\n" +
+	"\x03ref\x18\t \x01(\tR\x03ref\x12\x1f\n" +
+	"\vbase_branch\x18\n" +
+	" \x01(\tR\n" +
+	"baseBranch\x12\x1d\n" +
+	"\n" +
+	"commit_sha\x18\v \x01(\tR\tcommitSha\x12\x1d\n" +
+	"\n" +
+	"before_sha\x18\f \x01(\tR\tbeforeSha\x12\x1d\n" +
+	"\n" +
+	"source_ref\x18\r \x01(\tR\tsourceRef\x12.\n" +
+	"\x13pull_request_number\x18\x0e \x01(\x03R\x11pullRequestNumber\x127\n" +
+	"\x18pull_request_provider_id\x18\x0f \x01(\tR\x15pullRequestProviderId\x12(\n" +
+	"\x10pull_request_url\x18\x10 \x01(\tR\x0epullRequestUrl\x12e\n" +
+	"\x13path_summary_status\x18\x11 \x01(\x0e25.kodex.providers.v1.RepositoryChangePathSummaryStatusR\x11pathSummaryStatus\x12,\n" +
+	"\x12changed_path_count\x18\x12 \x01(\x03R\x10changedPathCount\x12\x1f\n" +
+	"\vpath_digest\x18\x13 \x01(\tR\n" +
+	"pathDigest\x12^\n" +
+	"\x0fpath_categories\x18\x14 \x03(\v25.kodex.providers.v1.RepositoryChangePathCategoryCountR\x0epathCategories\x126\n" +
+	"\x17services_policy_changed\x18\x15 \x01(\bR\x15servicesPolicyChanged\x126\n" +
+	"\x17deploy_relevant_changed\x18\x16 \x01(\bR\x15deployRelevantChanged\x12-\n" +
+	"\x12change_fingerprint\x18\x17 \x01(\tR\x11changeFingerprint\x12\x1f\n" +
+	"\vobserved_at\x18\x18 \x01(\tR\n" +
+	"observedAt\x12H\n" +
+	"\x06status\x18\x19 \x01(\x0e20.kodex.providers.v1.RepositoryChangeSignalStatusR\x06status\x12\x18\n" +
+	"\aversion\x18\x1a \x01(\x03R\aversion\x12\x12\n" +
+	"\x04etag\x18\x1b \x01(\tR\x04etag\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\x1c \x01(\tR\tcreatedAt\x12\x1d\n" +
+	"\n" +
+	"updated_at\x18\x1d \x01(\tR\tupdatedAt\"\xb8\x01\n" +
+	" GetRepositoryChangeSignalRequest\x12 \n" +
+	"\tsignal_id\x18\x01 \x01(\tH\x00R\bsignalId\x88\x01\x01\x12\"\n" +
+	"\n" +
+	"signal_key\x18\x02 \x01(\tH\x01R\tsignalKey\x88\x01\x01\x121\n" +
+	"\x04meta\x18\x03 \x01(\v2\x1d.kodex.providers.v1.QueryMetaR\x04metaB\f\n" +
+	"\n" +
+	"_signal_idB\r\n" +
+	"\v_signal_key\"\xbf\x01\n" +
+	"\x1eRepositoryChangeSignalResponse\x12L\n" +
+	"\vread_status\x18\x01 \x01(\x0e2+.kodex.providers.v1.ProviderOwnedDataStatusR\n" +
+	"readStatus\x12O\n" +
+	"\rchange_signal\x18\x02 \x01(\v2*.kodex.providers.v1.RepositoryChangeSignalR\fchangeSignal\"\xcb\a\n" +
+	"\"ListRepositoryChangeSignalsRequest\x12\"\n" +
+	"\n" +
+	"project_id\x18\x01 \x01(\tH\x00R\tprojectId\x88\x01\x01\x12(\n" +
+	"\rrepository_id\x18\x02 \x01(\tH\x01R\frepositoryId\x88\x01\x01\x12(\n" +
+	"\rprovider_slug\x18\x03 \x01(\tH\x02R\fproviderSlug\x88\x01\x01\x125\n" +
+	"\x14repository_full_name\x18\x04 \x01(\tH\x03R\x12repositoryFullName\x88\x01\x01\x129\n" +
+	"\x16provider_repository_id\x18\x05 \x01(\tH\x04R\x14providerRepositoryId\x88\x01\x01\x12D\n" +
+	"\x05kinds\x18\x06 \x03(\x0e2..kodex.providers.v1.RepositoryChangeSignalKindR\x05kinds\x12L\n" +
+	"\bstatuses\x18\a \x03(\x0e20.kodex.providers.v1.RepositoryChangeSignalStatusR\bstatuses\x12$\n" +
+	"\vbase_branch\x18\b \x01(\tH\x05R\n" +
+	"baseBranch\x88\x01\x01\x12\"\n" +
+	"\n" +
+	"commit_sha\x18\t \x01(\tH\x06R\tcommitSha\x88\x01\x01\x12;\n" +
+	"\x17services_policy_changed\x18\n" +
+	" \x01(\bH\aR\x15servicesPolicyChanged\x88\x01\x01\x12;\n" +
+	"\x17deploy_relevant_changed\x18\v \x01(\bH\bR\x15deployRelevantChanged\x88\x01\x01\x12*\n" +
+	"\x0eobserved_since\x18\f \x01(\tH\tR\robservedSince\x88\x01\x01\x123\n" +
+	"\x04page\x18\r \x01(\v2\x1f.kodex.providers.v1.PageRequestR\x04page\x121\n" +
+	"\x04meta\x18\x0e \x01(\v2\x1d.kodex.providers.v1.QueryMetaR\x04metaB\r\n" +
+	"\v_project_idB\x10\n" +
+	"\x0e_repository_idB\x10\n" +
+	"\x0e_provider_slugB\x17\n" +
+	"\x15_repository_full_nameB\x19\n" +
+	"\x17_provider_repository_idB\x0e\n" +
+	"\f_base_branchB\r\n" +
+	"\v_commit_shaB\x1a\n" +
+	"\x18_services_policy_changedB\x1a\n" +
+	"\x18_deploy_relevant_changedB\x11\n" +
+	"\x0f_observed_since\"\xae\x01\n" +
+	"#ListRepositoryChangeSignalsResponse\x12Q\n" +
+	"\x0echange_signals\x18\x01 \x03(\v2*.kodex.providers.v1.RepositoryChangeSignalR\rchangeSignals\x124\n" +
 	"\x04page\x18\x02 \x01(\v2 .kodex.providers.v1.PageResponseR\x04page\"\x9f\x02\n" +
 	"(GetRepositoryAdoptionScanSnapshotRequest\x12$\n" +
 	"\vsnapshot_id\x18\x01 \x01(\tH\x00R\n" +
@@ -10433,7 +11433,30 @@ const file_kodex_providers_v1_provider_hub_proto_rawDesc = "" +
 	"%REPOSITORY_MERGE_SIGNAL_KIND_ADOPTION\x10\x02*x\n" +
 	"\x1bRepositoryMergeSignalStatus\x12.\n" +
 	"*REPOSITORY_MERGE_SIGNAL_STATUS_UNSPECIFIED\x10\x00\x12)\n" +
-	"%REPOSITORY_MERGE_SIGNAL_STATUS_MERGED\x10\x01*\x97\x04\n" +
+	"%REPOSITORY_MERGE_SIGNAL_STATUS_MERGED\x10\x01*\xaa\x01\n" +
+	"\x1aRepositoryChangeSignalKind\x12-\n" +
+	")REPOSITORY_CHANGE_SIGNAL_KIND_UNSPECIFIED\x10\x00\x12&\n" +
+	"\"REPOSITORY_CHANGE_SIGNAL_KIND_PUSH\x10\x01\x125\n" +
+	"1REPOSITORY_CHANGE_SIGNAL_KIND_PULL_REQUEST_MERGED\x10\x02*}\n" +
+	"\x1cRepositoryChangeSignalStatus\x12/\n" +
+	"+REPOSITORY_CHANGE_SIGNAL_STATUS_UNSPECIFIED\x10\x00\x12,\n" +
+	"(REPOSITORY_CHANGE_SIGNAL_STATUS_OBSERVED\x10\x01*\xf7\x01\n" +
+	"!RepositoryChangePathSummaryStatus\x125\n" +
+	"1REPOSITORY_CHANGE_PATH_SUMMARY_STATUS_UNSPECIFIED\x10\x00\x12/\n" +
+	"+REPOSITORY_CHANGE_PATH_SUMMARY_STATUS_READY\x10\x01\x125\n" +
+	"1REPOSITORY_CHANGE_PATH_SUMMARY_STATUS_UNAVAILABLE\x10\x02\x123\n" +
+	"/REPOSITORY_CHANGE_PATH_SUMMARY_STATUS_TRUNCATED\x10\x03*\x92\x04\n" +
+	"\x1cRepositoryChangePathCategory\x12/\n" +
+	"+REPOSITORY_CHANGE_PATH_CATEGORY_UNSPECIFIED\x10\x00\x123\n" +
+	"/REPOSITORY_CHANGE_PATH_CATEGORY_SERVICES_POLICY\x10\x01\x122\n" +
+	".REPOSITORY_CHANGE_PATH_CATEGORY_SERVICE_SOURCE\x10\x02\x122\n" +
+	".REPOSITORY_CHANGE_PATH_CATEGORY_SERVICE_CONFIG\x10\x03\x123\n" +
+	"/REPOSITORY_CHANGE_PATH_CATEGORY_DEPLOY_MANIFEST\x10\x04\x122\n" +
+	".REPOSITORY_CHANGE_PATH_CATEGORY_RUNTIME_CONFIG\x10\x05\x121\n" +
+	"-REPOSITORY_CHANGE_PATH_CATEGORY_DOCUMENTATION\x10\x06\x12(\n" +
+	"$REPOSITORY_CHANGE_PATH_CATEGORY_TEST\x10\a\x123\n" +
+	"/REPOSITORY_CHANGE_PATH_CATEGORY_PLATFORM_POLICY\x10\b\x12)\n" +
+	"%REPOSITORY_CHANGE_PATH_CATEGORY_OTHER\x10\t*\x97\x04\n" +
 	"\x1cRepositoryAdoptionMarkerKind\x12/\n" +
 	"+REPOSITORY_ADOPTION_MARKER_KIND_UNSPECIFIED\x10\x00\x126\n" +
 	"2REPOSITORY_ADOPTION_MARKER_KIND_SERVICE_DESCRIPTOR\x10\x01\x12.\n" +
@@ -10451,7 +11474,7 @@ const file_kodex_providers_v1_provider_hub_proto_rawDesc = "" +
 	"\x1eREVIEW_SIGNAL_KIND_UNSPECIFIED\x10\x00\x12\x1e\n" +
 	"\x1aREVIEW_SIGNAL_KIND_COMMENT\x10\x01\x12\x1f\n" +
 	"\x1bREVIEW_SIGNAL_KIND_APPROVAL\x10\x02\x12(\n" +
-	"$REVIEW_SIGNAL_KIND_CHANGES_REQUESTED\x10\x032\xc3#\n" +
+	"$REVIEW_SIGNAL_KIND_CHANGES_REQUESTED\x10\x032\xdc%\n" +
 	"\x12ProviderHubService\x12m\n" +
 	"\x12IngestWebhookEvent\x12-.kodex.providers.v1.IngestWebhookEventRequest\x1a(.kodex.providers.v1.WebhookEventResponse\x12g\n" +
 	"\x0fGetWebhookEvent\x12*.kodex.providers.v1.GetWebhookEventRequest\x1a(.kodex.providers.v1.WebhookEventResponse\x12p\n" +
@@ -10464,7 +11487,9 @@ const file_kodex_providers_v1_provider_hub_proto_rawDesc = "" +
 	"\fListComments\x12'.kodex.providers.v1.ListCommentsRequest\x1a(.kodex.providers.v1.ListCommentsResponse\x12p\n" +
 	"\x11ListRelationships\x12,.kodex.providers.v1.ListRelationshipsRequest\x1a-.kodex.providers.v1.ListRelationshipsResponse\x12\x82\x01\n" +
 	"\x18GetRepositoryMergeSignal\x123.kodex.providers.v1.GetRepositoryMergeSignalRequest\x1a1.kodex.providers.v1.RepositoryMergeSignalResponse\x12\x8b\x01\n" +
-	"\x1aListRepositoryMergeSignals\x125.kodex.providers.v1.ListRepositoryMergeSignalsRequest\x1a6.kodex.providers.v1.ListRepositoryMergeSignalsResponse\x12\x9d\x01\n" +
+	"\x1aListRepositoryMergeSignals\x125.kodex.providers.v1.ListRepositoryMergeSignalsRequest\x1a6.kodex.providers.v1.ListRepositoryMergeSignalsResponse\x12\x85\x01\n" +
+	"\x19GetRepositoryChangeSignal\x124.kodex.providers.v1.GetRepositoryChangeSignalRequest\x1a2.kodex.providers.v1.RepositoryChangeSignalResponse\x12\x8e\x01\n" +
+	"\x1bListRepositoryChangeSignals\x126.kodex.providers.v1.ListRepositoryChangeSignalsRequest\x1a7.kodex.providers.v1.ListRepositoryChangeSignalsResponse\x12\x9d\x01\n" +
 	"!GetRepositoryAdoptionScanSnapshot\x12<.kodex.providers.v1.GetRepositoryAdoptionScanSnapshotRequest\x1a:.kodex.providers.v1.RepositoryAdoptionScanSnapshotResponse\x12\xa6\x01\n" +
 	"#ListRepositoryAdoptionScanSnapshots\x12>.kodex.providers.v1.ListRepositoryAdoptionScanSnapshotsRequest\x1a?.kodex.providers.v1.ListRepositoryAdoptionScanSnapshotsResponse\x12\x8f\x01\n" +
 	"\x1eRegisterProviderArtifactSignal\x129.kodex.providers.v1.RegisterProviderArtifactSignalRequest\x1a2.kodex.providers.v1.ProviderArtifactSignalResponse\x12|\n" +
@@ -10502,8 +11527,8 @@ func file_kodex_providers_v1_provider_hub_proto_rawDescGZIP() []byte {
 	return file_kodex_providers_v1_provider_hub_proto_rawDescData
 }
 
-var file_kodex_providers_v1_provider_hub_proto_enumTypes = make([]protoimpl.EnumInfo, 23)
-var file_kodex_providers_v1_provider_hub_proto_msgTypes = make([]protoimpl.MessageInfo, 85)
+var file_kodex_providers_v1_provider_hub_proto_enumTypes = make([]protoimpl.EnumInfo, 27)
+var file_kodex_providers_v1_provider_hub_proto_msgTypes = make([]protoimpl.MessageInfo, 91)
 var file_kodex_providers_v1_provider_hub_proto_goTypes = []any{
 	(ProviderOperationRiskLevel)(0),                     // 0: kodex.providers.v1.ProviderOperationRiskLevel
 	(WorkItemKind)(0),                                   // 1: kodex.providers.v1.WorkItemKind
@@ -10526,101 +11551,111 @@ var file_kodex_providers_v1_provider_hub_proto_goTypes = []any{
 	(ProviderOwnedDataStatus)(0),                        // 18: kodex.providers.v1.ProviderOwnedDataStatus
 	(RepositoryMergeSignalKind)(0),                      // 19: kodex.providers.v1.RepositoryMergeSignalKind
 	(RepositoryMergeSignalStatus)(0),                    // 20: kodex.providers.v1.RepositoryMergeSignalStatus
-	(RepositoryAdoptionMarkerKind)(0),                   // 21: kodex.providers.v1.RepositoryAdoptionMarkerKind
-	(ReviewSignalKind)(0),                               // 22: kodex.providers.v1.ReviewSignalKind
-	(*CommandMeta)(nil),                                 // 23: kodex.providers.v1.CommandMeta
-	(*QueryMeta)(nil),                                   // 24: kodex.providers.v1.QueryMeta
-	(*RequestContext)(nil),                              // 25: kodex.providers.v1.RequestContext
-	(*ProviderOperationPolicyContext)(nil),              // 26: kodex.providers.v1.ProviderOperationPolicyContext
-	(*ApprovalGateReference)(nil),                       // 27: kodex.providers.v1.ApprovalGateReference
-	(*Actor)(nil),                                       // 28: kodex.providers.v1.Actor
-	(*PageRequest)(nil),                                 // 29: kodex.providers.v1.PageRequest
-	(*PageResponse)(nil),                                // 30: kodex.providers.v1.PageResponse
-	(*StringListPatch)(nil),                             // 31: kodex.providers.v1.StringListPatch
-	(*ReviewInlineComment)(nil),                         // 32: kodex.providers.v1.ReviewInlineComment
-	(*ProviderTarget)(nil),                              // 33: kodex.providers.v1.ProviderTarget
-	(*WebhookEvent)(nil),                                // 34: kodex.providers.v1.WebhookEvent
-	(*ProviderEvent)(nil),                               // 35: kodex.providers.v1.ProviderEvent
-	(*WorkItemProjection)(nil),                          // 36: kodex.providers.v1.WorkItemProjection
-	(*CommentProjection)(nil),                           // 37: kodex.providers.v1.CommentProjection
-	(*ProviderRelationship)(nil),                        // 38: kodex.providers.v1.ProviderRelationship
-	(*SyncCursor)(nil),                                  // 39: kodex.providers.v1.SyncCursor
-	(*ProviderAccountRuntimeState)(nil),                 // 40: kodex.providers.v1.ProviderAccountRuntimeState
-	(*ProviderLimitSnapshot)(nil),                       // 41: kodex.providers.v1.ProviderLimitSnapshot
-	(*ProviderOperation)(nil),                           // 42: kodex.providers.v1.ProviderOperation
-	(*IngestWebhookEventRequest)(nil),                   // 43: kodex.providers.v1.IngestWebhookEventRequest
-	(*WebhookEventResponse)(nil),                        // 44: kodex.providers.v1.WebhookEventResponse
-	(*GetWebhookEventRequest)(nil),                      // 45: kodex.providers.v1.GetWebhookEventRequest
-	(*ListWebhookEventsRequest)(nil),                    // 46: kodex.providers.v1.ListWebhookEventsRequest
-	(*ListWebhookEventsResponse)(nil),                   // 47: kodex.providers.v1.ListWebhookEventsResponse
-	(*RetryWebhookEventProcessingRequest)(nil),          // 48: kodex.providers.v1.RetryWebhookEventProcessingRequest
-	(*CleanupExpiredWebhookPayloadsRequest)(nil),        // 49: kodex.providers.v1.CleanupExpiredWebhookPayloadsRequest
-	(*CleanupExpiredWebhookPayloadsResponse)(nil),       // 50: kodex.providers.v1.CleanupExpiredWebhookPayloadsResponse
-	(*GetWorkItemProjectionRequest)(nil),                // 51: kodex.providers.v1.GetWorkItemProjectionRequest
-	(*FindWorkItemByProviderRefRequest)(nil),            // 52: kodex.providers.v1.FindWorkItemByProviderRefRequest
-	(*WorkItemProjectionResponse)(nil),                  // 53: kodex.providers.v1.WorkItemProjectionResponse
-	(*ListWorkItemProjectionsRequest)(nil),              // 54: kodex.providers.v1.ListWorkItemProjectionsRequest
-	(*ListWorkItemProjectionsResponse)(nil),             // 55: kodex.providers.v1.ListWorkItemProjectionsResponse
-	(*ListCommentsRequest)(nil),                         // 56: kodex.providers.v1.ListCommentsRequest
-	(*ListCommentsResponse)(nil),                        // 57: kodex.providers.v1.ListCommentsResponse
-	(*ListRelationshipsRequest)(nil),                    // 58: kodex.providers.v1.ListRelationshipsRequest
-	(*ListRelationshipsResponse)(nil),                   // 59: kodex.providers.v1.ListRelationshipsResponse
-	(*RegisterProviderArtifactSignalRequest)(nil),       // 60: kodex.providers.v1.RegisterProviderArtifactSignalRequest
-	(*ProviderArtifactSignalResponse)(nil),              // 61: kodex.providers.v1.ProviderArtifactSignalResponse
-	(*EnqueueReconciliationRequest)(nil),                // 62: kodex.providers.v1.EnqueueReconciliationRequest
-	(*ReconciliationRequestResponse)(nil),               // 63: kodex.providers.v1.ReconciliationRequestResponse
-	(*RunReconciliationBatchRequest)(nil),               // 64: kodex.providers.v1.RunReconciliationBatchRequest
-	(*RunReconciliationBatchResponse)(nil),              // 65: kodex.providers.v1.RunReconciliationBatchResponse
-	(*GetSyncCursorRequest)(nil),                        // 66: kodex.providers.v1.GetSyncCursorRequest
-	(*SyncCursorResponse)(nil),                          // 67: kodex.providers.v1.SyncCursorResponse
-	(*ListSyncCursorsRequest)(nil),                      // 68: kodex.providers.v1.ListSyncCursorsRequest
-	(*ListSyncCursorsResponse)(nil),                     // 69: kodex.providers.v1.ListSyncCursorsResponse
-	(*CreateIssueRequest)(nil),                          // 70: kodex.providers.v1.CreateIssueRequest
-	(*UpdateIssueRequest)(nil),                          // 71: kodex.providers.v1.UpdateIssueRequest
-	(*CreateCommentRequest)(nil),                        // 72: kodex.providers.v1.CreateCommentRequest
-	(*UpdateCommentRequest)(nil),                        // 73: kodex.providers.v1.UpdateCommentRequest
-	(*CreatePullRequestRequest)(nil),                    // 74: kodex.providers.v1.CreatePullRequestRequest
-	(*CreateRepositoryRequest)(nil),                     // 75: kodex.providers.v1.CreateRepositoryRequest
-	(*BootstrapFile)(nil),                               // 76: kodex.providers.v1.BootstrapFile
-	(*AdoptionFile)(nil),                                // 77: kodex.providers.v1.AdoptionFile
-	(*CreateBootstrapPullRequestRequest)(nil),           // 78: kodex.providers.v1.CreateBootstrapPullRequestRequest
-	(*CreateAdoptionPullRequestRequest)(nil),            // 79: kodex.providers.v1.CreateAdoptionPullRequestRequest
-	(*RepositoryAdoptionScanOptions)(nil),               // 80: kodex.providers.v1.RepositoryAdoptionScanOptions
-	(*ScanRepositoryForAdoptionRequest)(nil),            // 81: kodex.providers.v1.ScanRepositoryForAdoptionRequest
-	(*RepositoryAdoptionScanMarker)(nil),                // 82: kodex.providers.v1.RepositoryAdoptionScanMarker
-	(*RepositoryAdoptionScanSnapshot)(nil),              // 83: kodex.providers.v1.RepositoryAdoptionScanSnapshot
-	(*RepositoryMergeSignal)(nil),                       // 84: kodex.providers.v1.RepositoryMergeSignal
-	(*GetRepositoryMergeSignalRequest)(nil),             // 85: kodex.providers.v1.GetRepositoryMergeSignalRequest
-	(*RepositoryMergeSignalResponse)(nil),               // 86: kodex.providers.v1.RepositoryMergeSignalResponse
-	(*ListRepositoryMergeSignalsRequest)(nil),           // 87: kodex.providers.v1.ListRepositoryMergeSignalsRequest
-	(*ListRepositoryMergeSignalsResponse)(nil),          // 88: kodex.providers.v1.ListRepositoryMergeSignalsResponse
-	(*GetRepositoryAdoptionScanSnapshotRequest)(nil),    // 89: kodex.providers.v1.GetRepositoryAdoptionScanSnapshotRequest
-	(*RepositoryAdoptionScanSnapshotResponse)(nil),      // 90: kodex.providers.v1.RepositoryAdoptionScanSnapshotResponse
-	(*ListRepositoryAdoptionScanSnapshotsRequest)(nil),  // 91: kodex.providers.v1.ListRepositoryAdoptionScanSnapshotsRequest
-	(*ListRepositoryAdoptionScanSnapshotsResponse)(nil), // 92: kodex.providers.v1.ListRepositoryAdoptionScanSnapshotsResponse
-	(*UpdatePullRequestRequest)(nil),                    // 93: kodex.providers.v1.UpdatePullRequestRequest
-	(*CreateReviewSignalRequest)(nil),                   // 94: kodex.providers.v1.CreateReviewSignalRequest
-	(*UpdateRelationshipRequest)(nil),                   // 95: kodex.providers.v1.UpdateRelationshipRequest
-	(*ProviderOperationCommandResult)(nil),              // 96: kodex.providers.v1.ProviderOperationCommandResult
-	(*ProviderOperationResponse)(nil),                   // 97: kodex.providers.v1.ProviderOperationResponse
-	(*GetProviderAccountRuntimeStateRequest)(nil),       // 98: kodex.providers.v1.GetProviderAccountRuntimeStateRequest
-	(*ProviderAccountRuntimeStateResponse)(nil),         // 99: kodex.providers.v1.ProviderAccountRuntimeStateResponse
-	(*ListProviderAccountRuntimeStatesRequest)(nil),     // 100: kodex.providers.v1.ListProviderAccountRuntimeStatesRequest
-	(*ListProviderAccountRuntimeStatesResponse)(nil),    // 101: kodex.providers.v1.ListProviderAccountRuntimeStatesResponse
-	(*RecordProviderLimitSnapshotRequest)(nil),          // 102: kodex.providers.v1.RecordProviderLimitSnapshotRequest
-	(*ProviderLimitSnapshotResponse)(nil),               // 103: kodex.providers.v1.ProviderLimitSnapshotResponse
-	(*ListProviderLimitSnapshotsRequest)(nil),           // 104: kodex.providers.v1.ListProviderLimitSnapshotsRequest
-	(*ListProviderLimitSnapshotsResponse)(nil),          // 105: kodex.providers.v1.ListProviderLimitSnapshotsResponse
-	(*ListProviderOperationsRequest)(nil),               // 106: kodex.providers.v1.ListProviderOperationsRequest
-	(*ListProviderOperationsResponse)(nil),              // 107: kodex.providers.v1.ListProviderOperationsResponse
+	(RepositoryChangeSignalKind)(0),                     // 21: kodex.providers.v1.RepositoryChangeSignalKind
+	(RepositoryChangeSignalStatus)(0),                   // 22: kodex.providers.v1.RepositoryChangeSignalStatus
+	(RepositoryChangePathSummaryStatus)(0),              // 23: kodex.providers.v1.RepositoryChangePathSummaryStatus
+	(RepositoryChangePathCategory)(0),                   // 24: kodex.providers.v1.RepositoryChangePathCategory
+	(RepositoryAdoptionMarkerKind)(0),                   // 25: kodex.providers.v1.RepositoryAdoptionMarkerKind
+	(ReviewSignalKind)(0),                               // 26: kodex.providers.v1.ReviewSignalKind
+	(*CommandMeta)(nil),                                 // 27: kodex.providers.v1.CommandMeta
+	(*QueryMeta)(nil),                                   // 28: kodex.providers.v1.QueryMeta
+	(*RequestContext)(nil),                              // 29: kodex.providers.v1.RequestContext
+	(*ProviderOperationPolicyContext)(nil),              // 30: kodex.providers.v1.ProviderOperationPolicyContext
+	(*ApprovalGateReference)(nil),                       // 31: kodex.providers.v1.ApprovalGateReference
+	(*Actor)(nil),                                       // 32: kodex.providers.v1.Actor
+	(*PageRequest)(nil),                                 // 33: kodex.providers.v1.PageRequest
+	(*PageResponse)(nil),                                // 34: kodex.providers.v1.PageResponse
+	(*StringListPatch)(nil),                             // 35: kodex.providers.v1.StringListPatch
+	(*ReviewInlineComment)(nil),                         // 36: kodex.providers.v1.ReviewInlineComment
+	(*ProviderTarget)(nil),                              // 37: kodex.providers.v1.ProviderTarget
+	(*WebhookEvent)(nil),                                // 38: kodex.providers.v1.WebhookEvent
+	(*ProviderEvent)(nil),                               // 39: kodex.providers.v1.ProviderEvent
+	(*WorkItemProjection)(nil),                          // 40: kodex.providers.v1.WorkItemProjection
+	(*CommentProjection)(nil),                           // 41: kodex.providers.v1.CommentProjection
+	(*ProviderRelationship)(nil),                        // 42: kodex.providers.v1.ProviderRelationship
+	(*SyncCursor)(nil),                                  // 43: kodex.providers.v1.SyncCursor
+	(*ProviderAccountRuntimeState)(nil),                 // 44: kodex.providers.v1.ProviderAccountRuntimeState
+	(*ProviderLimitSnapshot)(nil),                       // 45: kodex.providers.v1.ProviderLimitSnapshot
+	(*ProviderOperation)(nil),                           // 46: kodex.providers.v1.ProviderOperation
+	(*IngestWebhookEventRequest)(nil),                   // 47: kodex.providers.v1.IngestWebhookEventRequest
+	(*WebhookEventResponse)(nil),                        // 48: kodex.providers.v1.WebhookEventResponse
+	(*GetWebhookEventRequest)(nil),                      // 49: kodex.providers.v1.GetWebhookEventRequest
+	(*ListWebhookEventsRequest)(nil),                    // 50: kodex.providers.v1.ListWebhookEventsRequest
+	(*ListWebhookEventsResponse)(nil),                   // 51: kodex.providers.v1.ListWebhookEventsResponse
+	(*RetryWebhookEventProcessingRequest)(nil),          // 52: kodex.providers.v1.RetryWebhookEventProcessingRequest
+	(*CleanupExpiredWebhookPayloadsRequest)(nil),        // 53: kodex.providers.v1.CleanupExpiredWebhookPayloadsRequest
+	(*CleanupExpiredWebhookPayloadsResponse)(nil),       // 54: kodex.providers.v1.CleanupExpiredWebhookPayloadsResponse
+	(*GetWorkItemProjectionRequest)(nil),                // 55: kodex.providers.v1.GetWorkItemProjectionRequest
+	(*FindWorkItemByProviderRefRequest)(nil),            // 56: kodex.providers.v1.FindWorkItemByProviderRefRequest
+	(*WorkItemProjectionResponse)(nil),                  // 57: kodex.providers.v1.WorkItemProjectionResponse
+	(*ListWorkItemProjectionsRequest)(nil),              // 58: kodex.providers.v1.ListWorkItemProjectionsRequest
+	(*ListWorkItemProjectionsResponse)(nil),             // 59: kodex.providers.v1.ListWorkItemProjectionsResponse
+	(*ListCommentsRequest)(nil),                         // 60: kodex.providers.v1.ListCommentsRequest
+	(*ListCommentsResponse)(nil),                        // 61: kodex.providers.v1.ListCommentsResponse
+	(*ListRelationshipsRequest)(nil),                    // 62: kodex.providers.v1.ListRelationshipsRequest
+	(*ListRelationshipsResponse)(nil),                   // 63: kodex.providers.v1.ListRelationshipsResponse
+	(*RegisterProviderArtifactSignalRequest)(nil),       // 64: kodex.providers.v1.RegisterProviderArtifactSignalRequest
+	(*ProviderArtifactSignalResponse)(nil),              // 65: kodex.providers.v1.ProviderArtifactSignalResponse
+	(*EnqueueReconciliationRequest)(nil),                // 66: kodex.providers.v1.EnqueueReconciliationRequest
+	(*ReconciliationRequestResponse)(nil),               // 67: kodex.providers.v1.ReconciliationRequestResponse
+	(*RunReconciliationBatchRequest)(nil),               // 68: kodex.providers.v1.RunReconciliationBatchRequest
+	(*RunReconciliationBatchResponse)(nil),              // 69: kodex.providers.v1.RunReconciliationBatchResponse
+	(*GetSyncCursorRequest)(nil),                        // 70: kodex.providers.v1.GetSyncCursorRequest
+	(*SyncCursorResponse)(nil),                          // 71: kodex.providers.v1.SyncCursorResponse
+	(*ListSyncCursorsRequest)(nil),                      // 72: kodex.providers.v1.ListSyncCursorsRequest
+	(*ListSyncCursorsResponse)(nil),                     // 73: kodex.providers.v1.ListSyncCursorsResponse
+	(*CreateIssueRequest)(nil),                          // 74: kodex.providers.v1.CreateIssueRequest
+	(*UpdateIssueRequest)(nil),                          // 75: kodex.providers.v1.UpdateIssueRequest
+	(*CreateCommentRequest)(nil),                        // 76: kodex.providers.v1.CreateCommentRequest
+	(*UpdateCommentRequest)(nil),                        // 77: kodex.providers.v1.UpdateCommentRequest
+	(*CreatePullRequestRequest)(nil),                    // 78: kodex.providers.v1.CreatePullRequestRequest
+	(*CreateRepositoryRequest)(nil),                     // 79: kodex.providers.v1.CreateRepositoryRequest
+	(*BootstrapFile)(nil),                               // 80: kodex.providers.v1.BootstrapFile
+	(*AdoptionFile)(nil),                                // 81: kodex.providers.v1.AdoptionFile
+	(*CreateBootstrapPullRequestRequest)(nil),           // 82: kodex.providers.v1.CreateBootstrapPullRequestRequest
+	(*CreateAdoptionPullRequestRequest)(nil),            // 83: kodex.providers.v1.CreateAdoptionPullRequestRequest
+	(*RepositoryAdoptionScanOptions)(nil),               // 84: kodex.providers.v1.RepositoryAdoptionScanOptions
+	(*ScanRepositoryForAdoptionRequest)(nil),            // 85: kodex.providers.v1.ScanRepositoryForAdoptionRequest
+	(*RepositoryAdoptionScanMarker)(nil),                // 86: kodex.providers.v1.RepositoryAdoptionScanMarker
+	(*RepositoryAdoptionScanSnapshot)(nil),              // 87: kodex.providers.v1.RepositoryAdoptionScanSnapshot
+	(*RepositoryMergeSignal)(nil),                       // 88: kodex.providers.v1.RepositoryMergeSignal
+	(*GetRepositoryMergeSignalRequest)(nil),             // 89: kodex.providers.v1.GetRepositoryMergeSignalRequest
+	(*RepositoryMergeSignalResponse)(nil),               // 90: kodex.providers.v1.RepositoryMergeSignalResponse
+	(*ListRepositoryMergeSignalsRequest)(nil),           // 91: kodex.providers.v1.ListRepositoryMergeSignalsRequest
+	(*ListRepositoryMergeSignalsResponse)(nil),          // 92: kodex.providers.v1.ListRepositoryMergeSignalsResponse
+	(*RepositoryChangePathCategoryCount)(nil),           // 93: kodex.providers.v1.RepositoryChangePathCategoryCount
+	(*RepositoryChangeSignal)(nil),                      // 94: kodex.providers.v1.RepositoryChangeSignal
+	(*GetRepositoryChangeSignalRequest)(nil),            // 95: kodex.providers.v1.GetRepositoryChangeSignalRequest
+	(*RepositoryChangeSignalResponse)(nil),              // 96: kodex.providers.v1.RepositoryChangeSignalResponse
+	(*ListRepositoryChangeSignalsRequest)(nil),          // 97: kodex.providers.v1.ListRepositoryChangeSignalsRequest
+	(*ListRepositoryChangeSignalsResponse)(nil),         // 98: kodex.providers.v1.ListRepositoryChangeSignalsResponse
+	(*GetRepositoryAdoptionScanSnapshotRequest)(nil),    // 99: kodex.providers.v1.GetRepositoryAdoptionScanSnapshotRequest
+	(*RepositoryAdoptionScanSnapshotResponse)(nil),      // 100: kodex.providers.v1.RepositoryAdoptionScanSnapshotResponse
+	(*ListRepositoryAdoptionScanSnapshotsRequest)(nil),  // 101: kodex.providers.v1.ListRepositoryAdoptionScanSnapshotsRequest
+	(*ListRepositoryAdoptionScanSnapshotsResponse)(nil), // 102: kodex.providers.v1.ListRepositoryAdoptionScanSnapshotsResponse
+	(*UpdatePullRequestRequest)(nil),                    // 103: kodex.providers.v1.UpdatePullRequestRequest
+	(*CreateReviewSignalRequest)(nil),                   // 104: kodex.providers.v1.CreateReviewSignalRequest
+	(*UpdateRelationshipRequest)(nil),                   // 105: kodex.providers.v1.UpdateRelationshipRequest
+	(*ProviderOperationCommandResult)(nil),              // 106: kodex.providers.v1.ProviderOperationCommandResult
+	(*ProviderOperationResponse)(nil),                   // 107: kodex.providers.v1.ProviderOperationResponse
+	(*GetProviderAccountRuntimeStateRequest)(nil),       // 108: kodex.providers.v1.GetProviderAccountRuntimeStateRequest
+	(*ProviderAccountRuntimeStateResponse)(nil),         // 109: kodex.providers.v1.ProviderAccountRuntimeStateResponse
+	(*ListProviderAccountRuntimeStatesRequest)(nil),     // 110: kodex.providers.v1.ListProviderAccountRuntimeStatesRequest
+	(*ListProviderAccountRuntimeStatesResponse)(nil),    // 111: kodex.providers.v1.ListProviderAccountRuntimeStatesResponse
+	(*RecordProviderLimitSnapshotRequest)(nil),          // 112: kodex.providers.v1.RecordProviderLimitSnapshotRequest
+	(*ProviderLimitSnapshotResponse)(nil),               // 113: kodex.providers.v1.ProviderLimitSnapshotResponse
+	(*ListProviderLimitSnapshotsRequest)(nil),           // 114: kodex.providers.v1.ListProviderLimitSnapshotsRequest
+	(*ListProviderLimitSnapshotsResponse)(nil),          // 115: kodex.providers.v1.ListProviderLimitSnapshotsResponse
+	(*ListProviderOperationsRequest)(nil),               // 116: kodex.providers.v1.ListProviderOperationsRequest
+	(*ListProviderOperationsResponse)(nil),              // 117: kodex.providers.v1.ListProviderOperationsResponse
 }
 var file_kodex_providers_v1_provider_hub_proto_depIdxs = []int32{
-	28,  // 0: kodex.providers.v1.CommandMeta.actor:type_name -> kodex.providers.v1.Actor
-	25,  // 1: kodex.providers.v1.CommandMeta.request_context:type_name -> kodex.providers.v1.RequestContext
-	26,  // 2: kodex.providers.v1.CommandMeta.operation_policy_context:type_name -> kodex.providers.v1.ProviderOperationPolicyContext
-	27,  // 3: kodex.providers.v1.CommandMeta.approval_gate_ref:type_name -> kodex.providers.v1.ApprovalGateReference
-	28,  // 4: kodex.providers.v1.QueryMeta.actor:type_name -> kodex.providers.v1.Actor
-	25,  // 5: kodex.providers.v1.QueryMeta.request_context:type_name -> kodex.providers.v1.RequestContext
+	32,  // 0: kodex.providers.v1.CommandMeta.actor:type_name -> kodex.providers.v1.Actor
+	29,  // 1: kodex.providers.v1.CommandMeta.request_context:type_name -> kodex.providers.v1.RequestContext
+	30,  // 2: kodex.providers.v1.CommandMeta.operation_policy_context:type_name -> kodex.providers.v1.ProviderOperationPolicyContext
+	31,  // 3: kodex.providers.v1.CommandMeta.approval_gate_ref:type_name -> kodex.providers.v1.ApprovalGateReference
+	32,  // 4: kodex.providers.v1.QueryMeta.actor:type_name -> kodex.providers.v1.Actor
+	29,  // 5: kodex.providers.v1.QueryMeta.request_context:type_name -> kodex.providers.v1.RequestContext
 	13,  // 6: kodex.providers.v1.ProviderOperationPolicyContext.operation_type:type_name -> kodex.providers.v1.ProviderOperationType
 	0,   // 7: kodex.providers.v1.ProviderOperationPolicyContext.risk_level:type_name -> kodex.providers.v1.ProviderOperationRiskLevel
 	1,   // 8: kodex.providers.v1.ProviderTarget.work_item_kind:type_name -> kodex.providers.v1.WorkItemKind
@@ -10638,222 +11673,240 @@ var file_kodex_providers_v1_provider_hub_proto_depIdxs = []int32{
 	12,  // 20: kodex.providers.v1.ProviderAccountRuntimeState.status:type_name -> kodex.providers.v1.ProviderAccountRuntimeStatus
 	13,  // 21: kodex.providers.v1.ProviderOperation.operation_type:type_name -> kodex.providers.v1.ProviderOperationType
 	14,  // 22: kodex.providers.v1.ProviderOperation.status:type_name -> kodex.providers.v1.ProviderOperationStatus
-	26,  // 23: kodex.providers.v1.ProviderOperation.operation_policy_context:type_name -> kodex.providers.v1.ProviderOperationPolicyContext
-	27,  // 24: kodex.providers.v1.ProviderOperation.approval_gate_ref:type_name -> kodex.providers.v1.ApprovalGateReference
-	23,  // 25: kodex.providers.v1.IngestWebhookEventRequest.meta:type_name -> kodex.providers.v1.CommandMeta
-	34,  // 26: kodex.providers.v1.WebhookEventResponse.webhook_event:type_name -> kodex.providers.v1.WebhookEvent
-	24,  // 27: kodex.providers.v1.GetWebhookEventRequest.meta:type_name -> kodex.providers.v1.QueryMeta
+	30,  // 23: kodex.providers.v1.ProviderOperation.operation_policy_context:type_name -> kodex.providers.v1.ProviderOperationPolicyContext
+	31,  // 24: kodex.providers.v1.ProviderOperation.approval_gate_ref:type_name -> kodex.providers.v1.ApprovalGateReference
+	27,  // 25: kodex.providers.v1.IngestWebhookEventRequest.meta:type_name -> kodex.providers.v1.CommandMeta
+	38,  // 26: kodex.providers.v1.WebhookEventResponse.webhook_event:type_name -> kodex.providers.v1.WebhookEvent
+	28,  // 27: kodex.providers.v1.GetWebhookEventRequest.meta:type_name -> kodex.providers.v1.QueryMeta
 	2,   // 28: kodex.providers.v1.ListWebhookEventsRequest.processing_statuses:type_name -> kodex.providers.v1.WebhookProcessingStatus
-	29,  // 29: kodex.providers.v1.ListWebhookEventsRequest.page:type_name -> kodex.providers.v1.PageRequest
-	24,  // 30: kodex.providers.v1.ListWebhookEventsRequest.meta:type_name -> kodex.providers.v1.QueryMeta
-	34,  // 31: kodex.providers.v1.ListWebhookEventsResponse.webhook_events:type_name -> kodex.providers.v1.WebhookEvent
-	30,  // 32: kodex.providers.v1.ListWebhookEventsResponse.page:type_name -> kodex.providers.v1.PageResponse
-	23,  // 33: kodex.providers.v1.RetryWebhookEventProcessingRequest.meta:type_name -> kodex.providers.v1.CommandMeta
-	23,  // 34: kodex.providers.v1.CleanupExpiredWebhookPayloadsRequest.meta:type_name -> kodex.providers.v1.CommandMeta
-	34,  // 35: kodex.providers.v1.CleanupExpiredWebhookPayloadsResponse.webhook_events:type_name -> kodex.providers.v1.WebhookEvent
-	24,  // 36: kodex.providers.v1.GetWorkItemProjectionRequest.meta:type_name -> kodex.providers.v1.QueryMeta
-	33,  // 37: kodex.providers.v1.FindWorkItemByProviderRefRequest.target:type_name -> kodex.providers.v1.ProviderTarget
-	24,  // 38: kodex.providers.v1.FindWorkItemByProviderRefRequest.meta:type_name -> kodex.providers.v1.QueryMeta
-	36,  // 39: kodex.providers.v1.WorkItemProjectionResponse.work_item_projection:type_name -> kodex.providers.v1.WorkItemProjection
+	33,  // 29: kodex.providers.v1.ListWebhookEventsRequest.page:type_name -> kodex.providers.v1.PageRequest
+	28,  // 30: kodex.providers.v1.ListWebhookEventsRequest.meta:type_name -> kodex.providers.v1.QueryMeta
+	38,  // 31: kodex.providers.v1.ListWebhookEventsResponse.webhook_events:type_name -> kodex.providers.v1.WebhookEvent
+	34,  // 32: kodex.providers.v1.ListWebhookEventsResponse.page:type_name -> kodex.providers.v1.PageResponse
+	27,  // 33: kodex.providers.v1.RetryWebhookEventProcessingRequest.meta:type_name -> kodex.providers.v1.CommandMeta
+	27,  // 34: kodex.providers.v1.CleanupExpiredWebhookPayloadsRequest.meta:type_name -> kodex.providers.v1.CommandMeta
+	38,  // 35: kodex.providers.v1.CleanupExpiredWebhookPayloadsResponse.webhook_events:type_name -> kodex.providers.v1.WebhookEvent
+	28,  // 36: kodex.providers.v1.GetWorkItemProjectionRequest.meta:type_name -> kodex.providers.v1.QueryMeta
+	37,  // 37: kodex.providers.v1.FindWorkItemByProviderRefRequest.target:type_name -> kodex.providers.v1.ProviderTarget
+	28,  // 38: kodex.providers.v1.FindWorkItemByProviderRefRequest.meta:type_name -> kodex.providers.v1.QueryMeta
+	40,  // 39: kodex.providers.v1.WorkItemProjectionResponse.work_item_projection:type_name -> kodex.providers.v1.WorkItemProjection
 	1,   // 40: kodex.providers.v1.ListWorkItemProjectionsRequest.kinds:type_name -> kodex.providers.v1.WorkItemKind
 	4,   // 41: kodex.providers.v1.ListWorkItemProjectionsRequest.drift_statuses:type_name -> kodex.providers.v1.WorkItemDriftStatus
-	29,  // 42: kodex.providers.v1.ListWorkItemProjectionsRequest.page:type_name -> kodex.providers.v1.PageRequest
-	24,  // 43: kodex.providers.v1.ListWorkItemProjectionsRequest.meta:type_name -> kodex.providers.v1.QueryMeta
-	36,  // 44: kodex.providers.v1.ListWorkItemProjectionsResponse.work_item_projections:type_name -> kodex.providers.v1.WorkItemProjection
-	30,  // 45: kodex.providers.v1.ListWorkItemProjectionsResponse.page:type_name -> kodex.providers.v1.PageResponse
+	33,  // 42: kodex.providers.v1.ListWorkItemProjectionsRequest.page:type_name -> kodex.providers.v1.PageRequest
+	28,  // 43: kodex.providers.v1.ListWorkItemProjectionsRequest.meta:type_name -> kodex.providers.v1.QueryMeta
+	40,  // 44: kodex.providers.v1.ListWorkItemProjectionsResponse.work_item_projections:type_name -> kodex.providers.v1.WorkItemProjection
+	34,  // 45: kodex.providers.v1.ListWorkItemProjectionsResponse.page:type_name -> kodex.providers.v1.PageResponse
 	5,   // 46: kodex.providers.v1.ListCommentsRequest.kinds:type_name -> kodex.providers.v1.CommentKind
-	29,  // 47: kodex.providers.v1.ListCommentsRequest.page:type_name -> kodex.providers.v1.PageRequest
-	24,  // 48: kodex.providers.v1.ListCommentsRequest.meta:type_name -> kodex.providers.v1.QueryMeta
-	37,  // 49: kodex.providers.v1.ListCommentsResponse.comments:type_name -> kodex.providers.v1.CommentProjection
-	30,  // 50: kodex.providers.v1.ListCommentsResponse.page:type_name -> kodex.providers.v1.PageResponse
+	33,  // 47: kodex.providers.v1.ListCommentsRequest.page:type_name -> kodex.providers.v1.PageRequest
+	28,  // 48: kodex.providers.v1.ListCommentsRequest.meta:type_name -> kodex.providers.v1.QueryMeta
+	41,  // 49: kodex.providers.v1.ListCommentsResponse.comments:type_name -> kodex.providers.v1.CommentProjection
+	34,  // 50: kodex.providers.v1.ListCommentsResponse.page:type_name -> kodex.providers.v1.PageResponse
 	8,   // 51: kodex.providers.v1.ListRelationshipsRequest.sources:type_name -> kodex.providers.v1.RelationshipSource
 	7,   // 52: kodex.providers.v1.ListRelationshipsRequest.confidence_levels:type_name -> kodex.providers.v1.RelationshipConfidence
-	29,  // 53: kodex.providers.v1.ListRelationshipsRequest.page:type_name -> kodex.providers.v1.PageRequest
-	24,  // 54: kodex.providers.v1.ListRelationshipsRequest.meta:type_name -> kodex.providers.v1.QueryMeta
-	38,  // 55: kodex.providers.v1.ListRelationshipsResponse.relationships:type_name -> kodex.providers.v1.ProviderRelationship
-	30,  // 56: kodex.providers.v1.ListRelationshipsResponse.page:type_name -> kodex.providers.v1.PageResponse
-	33,  // 57: kodex.providers.v1.RegisterProviderArtifactSignalRequest.target:type_name -> kodex.providers.v1.ProviderTarget
-	23,  // 58: kodex.providers.v1.RegisterProviderArtifactSignalRequest.meta:type_name -> kodex.providers.v1.CommandMeta
-	33,  // 59: kodex.providers.v1.ProviderArtifactSignalResponse.target:type_name -> kodex.providers.v1.ProviderTarget
+	33,  // 53: kodex.providers.v1.ListRelationshipsRequest.page:type_name -> kodex.providers.v1.PageRequest
+	28,  // 54: kodex.providers.v1.ListRelationshipsRequest.meta:type_name -> kodex.providers.v1.QueryMeta
+	42,  // 55: kodex.providers.v1.ListRelationshipsResponse.relationships:type_name -> kodex.providers.v1.ProviderRelationship
+	34,  // 56: kodex.providers.v1.ListRelationshipsResponse.page:type_name -> kodex.providers.v1.PageResponse
+	37,  // 57: kodex.providers.v1.RegisterProviderArtifactSignalRequest.target:type_name -> kodex.providers.v1.ProviderTarget
+	27,  // 58: kodex.providers.v1.RegisterProviderArtifactSignalRequest.meta:type_name -> kodex.providers.v1.CommandMeta
+	37,  // 59: kodex.providers.v1.ProviderArtifactSignalResponse.target:type_name -> kodex.providers.v1.ProviderTarget
 	9,   // 60: kodex.providers.v1.EnqueueReconciliationRequest.scope_type:type_name -> kodex.providers.v1.SyncCursorScopeType
 	10,  // 61: kodex.providers.v1.EnqueueReconciliationRequest.artifact_kinds:type_name -> kodex.providers.v1.SyncArtifactKind
 	11,  // 62: kodex.providers.v1.EnqueueReconciliationRequest.priority:type_name -> kodex.providers.v1.SyncCursorPriority
-	23,  // 63: kodex.providers.v1.EnqueueReconciliationRequest.meta:type_name -> kodex.providers.v1.CommandMeta
-	39,  // 64: kodex.providers.v1.ReconciliationRequestResponse.sync_cursors:type_name -> kodex.providers.v1.SyncCursor
-	23,  // 65: kodex.providers.v1.RunReconciliationBatchRequest.meta:type_name -> kodex.providers.v1.CommandMeta
-	39,  // 66: kodex.providers.v1.RunReconciliationBatchResponse.sync_cursor:type_name -> kodex.providers.v1.SyncCursor
-	24,  // 67: kodex.providers.v1.GetSyncCursorRequest.meta:type_name -> kodex.providers.v1.QueryMeta
-	39,  // 68: kodex.providers.v1.SyncCursorResponse.sync_cursor:type_name -> kodex.providers.v1.SyncCursor
+	27,  // 63: kodex.providers.v1.EnqueueReconciliationRequest.meta:type_name -> kodex.providers.v1.CommandMeta
+	43,  // 64: kodex.providers.v1.ReconciliationRequestResponse.sync_cursors:type_name -> kodex.providers.v1.SyncCursor
+	27,  // 65: kodex.providers.v1.RunReconciliationBatchRequest.meta:type_name -> kodex.providers.v1.CommandMeta
+	43,  // 66: kodex.providers.v1.RunReconciliationBatchResponse.sync_cursor:type_name -> kodex.providers.v1.SyncCursor
+	28,  // 67: kodex.providers.v1.GetSyncCursorRequest.meta:type_name -> kodex.providers.v1.QueryMeta
+	43,  // 68: kodex.providers.v1.SyncCursorResponse.sync_cursor:type_name -> kodex.providers.v1.SyncCursor
 	9,   // 69: kodex.providers.v1.ListSyncCursorsRequest.scope_type:type_name -> kodex.providers.v1.SyncCursorScopeType
 	10,  // 70: kodex.providers.v1.ListSyncCursorsRequest.artifact_kinds:type_name -> kodex.providers.v1.SyncArtifactKind
 	11,  // 71: kodex.providers.v1.ListSyncCursorsRequest.priorities:type_name -> kodex.providers.v1.SyncCursorPriority
-	29,  // 72: kodex.providers.v1.ListSyncCursorsRequest.page:type_name -> kodex.providers.v1.PageRequest
-	24,  // 73: kodex.providers.v1.ListSyncCursorsRequest.meta:type_name -> kodex.providers.v1.QueryMeta
-	39,  // 74: kodex.providers.v1.ListSyncCursorsResponse.sync_cursors:type_name -> kodex.providers.v1.SyncCursor
-	30,  // 75: kodex.providers.v1.ListSyncCursorsResponse.page:type_name -> kodex.providers.v1.PageResponse
-	23,  // 76: kodex.providers.v1.CreateIssueRequest.meta:type_name -> kodex.providers.v1.CommandMeta
-	33,  // 77: kodex.providers.v1.CreateIssueRequest.repository_target:type_name -> kodex.providers.v1.ProviderTarget
-	33,  // 78: kodex.providers.v1.UpdateIssueRequest.target:type_name -> kodex.providers.v1.ProviderTarget
-	31,  // 79: kodex.providers.v1.UpdateIssueRequest.labels:type_name -> kodex.providers.v1.StringListPatch
-	31,  // 80: kodex.providers.v1.UpdateIssueRequest.assignee_provider_logins:type_name -> kodex.providers.v1.StringListPatch
-	23,  // 81: kodex.providers.v1.UpdateIssueRequest.meta:type_name -> kodex.providers.v1.CommandMeta
-	33,  // 82: kodex.providers.v1.CreateCommentRequest.target:type_name -> kodex.providers.v1.ProviderTarget
-	23,  // 83: kodex.providers.v1.CreateCommentRequest.meta:type_name -> kodex.providers.v1.CommandMeta
-	33,  // 84: kodex.providers.v1.UpdateCommentRequest.target:type_name -> kodex.providers.v1.ProviderTarget
-	23,  // 85: kodex.providers.v1.UpdateCommentRequest.meta:type_name -> kodex.providers.v1.CommandMeta
-	23,  // 86: kodex.providers.v1.CreatePullRequestRequest.meta:type_name -> kodex.providers.v1.CommandMeta
-	33,  // 87: kodex.providers.v1.CreatePullRequestRequest.repository_target:type_name -> kodex.providers.v1.ProviderTarget
+	33,  // 72: kodex.providers.v1.ListSyncCursorsRequest.page:type_name -> kodex.providers.v1.PageRequest
+	28,  // 73: kodex.providers.v1.ListSyncCursorsRequest.meta:type_name -> kodex.providers.v1.QueryMeta
+	43,  // 74: kodex.providers.v1.ListSyncCursorsResponse.sync_cursors:type_name -> kodex.providers.v1.SyncCursor
+	34,  // 75: kodex.providers.v1.ListSyncCursorsResponse.page:type_name -> kodex.providers.v1.PageResponse
+	27,  // 76: kodex.providers.v1.CreateIssueRequest.meta:type_name -> kodex.providers.v1.CommandMeta
+	37,  // 77: kodex.providers.v1.CreateIssueRequest.repository_target:type_name -> kodex.providers.v1.ProviderTarget
+	37,  // 78: kodex.providers.v1.UpdateIssueRequest.target:type_name -> kodex.providers.v1.ProviderTarget
+	35,  // 79: kodex.providers.v1.UpdateIssueRequest.labels:type_name -> kodex.providers.v1.StringListPatch
+	35,  // 80: kodex.providers.v1.UpdateIssueRequest.assignee_provider_logins:type_name -> kodex.providers.v1.StringListPatch
+	27,  // 81: kodex.providers.v1.UpdateIssueRequest.meta:type_name -> kodex.providers.v1.CommandMeta
+	37,  // 82: kodex.providers.v1.CreateCommentRequest.target:type_name -> kodex.providers.v1.ProviderTarget
+	27,  // 83: kodex.providers.v1.CreateCommentRequest.meta:type_name -> kodex.providers.v1.CommandMeta
+	37,  // 84: kodex.providers.v1.UpdateCommentRequest.target:type_name -> kodex.providers.v1.ProviderTarget
+	27,  // 85: kodex.providers.v1.UpdateCommentRequest.meta:type_name -> kodex.providers.v1.CommandMeta
+	27,  // 86: kodex.providers.v1.CreatePullRequestRequest.meta:type_name -> kodex.providers.v1.CommandMeta
+	37,  // 87: kodex.providers.v1.CreatePullRequestRequest.repository_target:type_name -> kodex.providers.v1.ProviderTarget
 	15,  // 88: kodex.providers.v1.CreateRepositoryRequest.owner_kind:type_name -> kodex.providers.v1.RepositoryOwnerKind
 	16,  // 89: kodex.providers.v1.CreateRepositoryRequest.visibility:type_name -> kodex.providers.v1.RepositoryVisibility
-	23,  // 90: kodex.providers.v1.CreateRepositoryRequest.meta:type_name -> kodex.providers.v1.CommandMeta
-	33,  // 91: kodex.providers.v1.CreateBootstrapPullRequestRequest.repository_target:type_name -> kodex.providers.v1.ProviderTarget
-	76,  // 92: kodex.providers.v1.CreateBootstrapPullRequestRequest.files:type_name -> kodex.providers.v1.BootstrapFile
-	23,  // 93: kodex.providers.v1.CreateBootstrapPullRequestRequest.meta:type_name -> kodex.providers.v1.CommandMeta
-	33,  // 94: kodex.providers.v1.CreateAdoptionPullRequestRequest.repository_target:type_name -> kodex.providers.v1.ProviderTarget
-	77,  // 95: kodex.providers.v1.CreateAdoptionPullRequestRequest.files:type_name -> kodex.providers.v1.AdoptionFile
-	23,  // 96: kodex.providers.v1.CreateAdoptionPullRequestRequest.meta:type_name -> kodex.providers.v1.CommandMeta
-	33,  // 97: kodex.providers.v1.ScanRepositoryForAdoptionRequest.repository_target:type_name -> kodex.providers.v1.ProviderTarget
-	80,  // 98: kodex.providers.v1.ScanRepositoryForAdoptionRequest.options:type_name -> kodex.providers.v1.RepositoryAdoptionScanOptions
-	23,  // 99: kodex.providers.v1.ScanRepositoryForAdoptionRequest.meta:type_name -> kodex.providers.v1.CommandMeta
-	21,  // 100: kodex.providers.v1.RepositoryAdoptionScanMarker.kind:type_name -> kodex.providers.v1.RepositoryAdoptionMarkerKind
-	33,  // 101: kodex.providers.v1.RepositoryAdoptionScanSnapshot.repository_target:type_name -> kodex.providers.v1.ProviderTarget
+	27,  // 90: kodex.providers.v1.CreateRepositoryRequest.meta:type_name -> kodex.providers.v1.CommandMeta
+	37,  // 91: kodex.providers.v1.CreateBootstrapPullRequestRequest.repository_target:type_name -> kodex.providers.v1.ProviderTarget
+	80,  // 92: kodex.providers.v1.CreateBootstrapPullRequestRequest.files:type_name -> kodex.providers.v1.BootstrapFile
+	27,  // 93: kodex.providers.v1.CreateBootstrapPullRequestRequest.meta:type_name -> kodex.providers.v1.CommandMeta
+	37,  // 94: kodex.providers.v1.CreateAdoptionPullRequestRequest.repository_target:type_name -> kodex.providers.v1.ProviderTarget
+	81,  // 95: kodex.providers.v1.CreateAdoptionPullRequestRequest.files:type_name -> kodex.providers.v1.AdoptionFile
+	27,  // 96: kodex.providers.v1.CreateAdoptionPullRequestRequest.meta:type_name -> kodex.providers.v1.CommandMeta
+	37,  // 97: kodex.providers.v1.ScanRepositoryForAdoptionRequest.repository_target:type_name -> kodex.providers.v1.ProviderTarget
+	84,  // 98: kodex.providers.v1.ScanRepositoryForAdoptionRequest.options:type_name -> kodex.providers.v1.RepositoryAdoptionScanOptions
+	27,  // 99: kodex.providers.v1.ScanRepositoryForAdoptionRequest.meta:type_name -> kodex.providers.v1.CommandMeta
+	25,  // 100: kodex.providers.v1.RepositoryAdoptionScanMarker.kind:type_name -> kodex.providers.v1.RepositoryAdoptionMarkerKind
+	37,  // 101: kodex.providers.v1.RepositoryAdoptionScanSnapshot.repository_target:type_name -> kodex.providers.v1.ProviderTarget
 	17,  // 102: kodex.providers.v1.RepositoryAdoptionScanSnapshot.status:type_name -> kodex.providers.v1.RepositoryAdoptionScanStatus
-	82,  // 103: kodex.providers.v1.RepositoryAdoptionScanSnapshot.markers:type_name -> kodex.providers.v1.RepositoryAdoptionScanMarker
+	86,  // 103: kodex.providers.v1.RepositoryAdoptionScanSnapshot.markers:type_name -> kodex.providers.v1.RepositoryAdoptionScanMarker
 	19,  // 104: kodex.providers.v1.RepositoryMergeSignal.kind:type_name -> kodex.providers.v1.RepositoryMergeSignalKind
 	20,  // 105: kodex.providers.v1.RepositoryMergeSignal.status:type_name -> kodex.providers.v1.RepositoryMergeSignalStatus
-	24,  // 106: kodex.providers.v1.GetRepositoryMergeSignalRequest.meta:type_name -> kodex.providers.v1.QueryMeta
+	28,  // 106: kodex.providers.v1.GetRepositoryMergeSignalRequest.meta:type_name -> kodex.providers.v1.QueryMeta
 	18,  // 107: kodex.providers.v1.RepositoryMergeSignalResponse.read_status:type_name -> kodex.providers.v1.ProviderOwnedDataStatus
-	84,  // 108: kodex.providers.v1.RepositoryMergeSignalResponse.merge_signal:type_name -> kodex.providers.v1.RepositoryMergeSignal
+	88,  // 108: kodex.providers.v1.RepositoryMergeSignalResponse.merge_signal:type_name -> kodex.providers.v1.RepositoryMergeSignal
 	19,  // 109: kodex.providers.v1.ListRepositoryMergeSignalsRequest.kinds:type_name -> kodex.providers.v1.RepositoryMergeSignalKind
 	20,  // 110: kodex.providers.v1.ListRepositoryMergeSignalsRequest.statuses:type_name -> kodex.providers.v1.RepositoryMergeSignalStatus
-	29,  // 111: kodex.providers.v1.ListRepositoryMergeSignalsRequest.page:type_name -> kodex.providers.v1.PageRequest
-	24,  // 112: kodex.providers.v1.ListRepositoryMergeSignalsRequest.meta:type_name -> kodex.providers.v1.QueryMeta
-	84,  // 113: kodex.providers.v1.ListRepositoryMergeSignalsResponse.merge_signals:type_name -> kodex.providers.v1.RepositoryMergeSignal
-	30,  // 114: kodex.providers.v1.ListRepositoryMergeSignalsResponse.page:type_name -> kodex.providers.v1.PageResponse
-	24,  // 115: kodex.providers.v1.GetRepositoryAdoptionScanSnapshotRequest.meta:type_name -> kodex.providers.v1.QueryMeta
-	18,  // 116: kodex.providers.v1.RepositoryAdoptionScanSnapshotResponse.read_status:type_name -> kodex.providers.v1.ProviderOwnedDataStatus
-	83,  // 117: kodex.providers.v1.RepositoryAdoptionScanSnapshotResponse.adoption_scan_snapshot:type_name -> kodex.providers.v1.RepositoryAdoptionScanSnapshot
-	17,  // 118: kodex.providers.v1.ListRepositoryAdoptionScanSnapshotsRequest.statuses:type_name -> kodex.providers.v1.RepositoryAdoptionScanStatus
-	29,  // 119: kodex.providers.v1.ListRepositoryAdoptionScanSnapshotsRequest.page:type_name -> kodex.providers.v1.PageRequest
-	24,  // 120: kodex.providers.v1.ListRepositoryAdoptionScanSnapshotsRequest.meta:type_name -> kodex.providers.v1.QueryMeta
-	83,  // 121: kodex.providers.v1.ListRepositoryAdoptionScanSnapshotsResponse.adoption_scan_snapshots:type_name -> kodex.providers.v1.RepositoryAdoptionScanSnapshot
-	30,  // 122: kodex.providers.v1.ListRepositoryAdoptionScanSnapshotsResponse.page:type_name -> kodex.providers.v1.PageResponse
-	33,  // 123: kodex.providers.v1.UpdatePullRequestRequest.target:type_name -> kodex.providers.v1.ProviderTarget
-	31,  // 124: kodex.providers.v1.UpdatePullRequestRequest.labels:type_name -> kodex.providers.v1.StringListPatch
-	31,  // 125: kodex.providers.v1.UpdatePullRequestRequest.assignee_provider_logins:type_name -> kodex.providers.v1.StringListPatch
-	23,  // 126: kodex.providers.v1.UpdatePullRequestRequest.meta:type_name -> kodex.providers.v1.CommandMeta
-	33,  // 127: kodex.providers.v1.CreateReviewSignalRequest.target:type_name -> kodex.providers.v1.ProviderTarget
-	22,  // 128: kodex.providers.v1.CreateReviewSignalRequest.kind:type_name -> kodex.providers.v1.ReviewSignalKind
-	32,  // 129: kodex.providers.v1.CreateReviewSignalRequest.inline_comments:type_name -> kodex.providers.v1.ReviewInlineComment
-	23,  // 130: kodex.providers.v1.CreateReviewSignalRequest.meta:type_name -> kodex.providers.v1.CommandMeta
-	33,  // 131: kodex.providers.v1.UpdateRelationshipRequest.source:type_name -> kodex.providers.v1.ProviderTarget
-	33,  // 132: kodex.providers.v1.UpdateRelationshipRequest.target:type_name -> kodex.providers.v1.ProviderTarget
-	8,   // 133: kodex.providers.v1.UpdateRelationshipRequest.source_kind:type_name -> kodex.providers.v1.RelationshipSource
-	7,   // 134: kodex.providers.v1.UpdateRelationshipRequest.confidence:type_name -> kodex.providers.v1.RelationshipConfidence
-	23,  // 135: kodex.providers.v1.UpdateRelationshipRequest.meta:type_name -> kodex.providers.v1.CommandMeta
-	33,  // 136: kodex.providers.v1.ProviderOperationCommandResult.target:type_name -> kodex.providers.v1.ProviderTarget
-	42,  // 137: kodex.providers.v1.ProviderOperationResponse.provider_operation:type_name -> kodex.providers.v1.ProviderOperation
-	36,  // 138: kodex.providers.v1.ProviderOperationResponse.work_item_projection:type_name -> kodex.providers.v1.WorkItemProjection
-	37,  // 139: kodex.providers.v1.ProviderOperationResponse.comment_projection:type_name -> kodex.providers.v1.CommentProjection
-	38,  // 140: kodex.providers.v1.ProviderOperationResponse.relationship:type_name -> kodex.providers.v1.ProviderRelationship
-	96,  // 141: kodex.providers.v1.ProviderOperationResponse.result:type_name -> kodex.providers.v1.ProviderOperationCommandResult
-	83,  // 142: kodex.providers.v1.ProviderOperationResponse.adoption_scan_snapshot:type_name -> kodex.providers.v1.RepositoryAdoptionScanSnapshot
-	24,  // 143: kodex.providers.v1.GetProviderAccountRuntimeStateRequest.meta:type_name -> kodex.providers.v1.QueryMeta
-	40,  // 144: kodex.providers.v1.ProviderAccountRuntimeStateResponse.runtime_state:type_name -> kodex.providers.v1.ProviderAccountRuntimeState
-	12,  // 145: kodex.providers.v1.ListProviderAccountRuntimeStatesRequest.statuses:type_name -> kodex.providers.v1.ProviderAccountRuntimeStatus
-	29,  // 146: kodex.providers.v1.ListProviderAccountRuntimeStatesRequest.page:type_name -> kodex.providers.v1.PageRequest
-	24,  // 147: kodex.providers.v1.ListProviderAccountRuntimeStatesRequest.meta:type_name -> kodex.providers.v1.QueryMeta
-	40,  // 148: kodex.providers.v1.ListProviderAccountRuntimeStatesResponse.runtime_states:type_name -> kodex.providers.v1.ProviderAccountRuntimeState
-	30,  // 149: kodex.providers.v1.ListProviderAccountRuntimeStatesResponse.page:type_name -> kodex.providers.v1.PageResponse
-	23,  // 150: kodex.providers.v1.RecordProviderLimitSnapshotRequest.meta:type_name -> kodex.providers.v1.CommandMeta
-	41,  // 151: kodex.providers.v1.ProviderLimitSnapshotResponse.limit_snapshot:type_name -> kodex.providers.v1.ProviderLimitSnapshot
-	29,  // 152: kodex.providers.v1.ListProviderLimitSnapshotsRequest.page:type_name -> kodex.providers.v1.PageRequest
-	24,  // 153: kodex.providers.v1.ListProviderLimitSnapshotsRequest.meta:type_name -> kodex.providers.v1.QueryMeta
-	41,  // 154: kodex.providers.v1.ListProviderLimitSnapshotsResponse.limit_snapshots:type_name -> kodex.providers.v1.ProviderLimitSnapshot
-	30,  // 155: kodex.providers.v1.ListProviderLimitSnapshotsResponse.page:type_name -> kodex.providers.v1.PageResponse
-	13,  // 156: kodex.providers.v1.ListProviderOperationsRequest.operation_types:type_name -> kodex.providers.v1.ProviderOperationType
-	14,  // 157: kodex.providers.v1.ListProviderOperationsRequest.statuses:type_name -> kodex.providers.v1.ProviderOperationStatus
-	29,  // 158: kodex.providers.v1.ListProviderOperationsRequest.page:type_name -> kodex.providers.v1.PageRequest
-	24,  // 159: kodex.providers.v1.ListProviderOperationsRequest.meta:type_name -> kodex.providers.v1.QueryMeta
-	42,  // 160: kodex.providers.v1.ListProviderOperationsResponse.provider_operations:type_name -> kodex.providers.v1.ProviderOperation
-	30,  // 161: kodex.providers.v1.ListProviderOperationsResponse.page:type_name -> kodex.providers.v1.PageResponse
-	43,  // 162: kodex.providers.v1.ProviderHubService.IngestWebhookEvent:input_type -> kodex.providers.v1.IngestWebhookEventRequest
-	45,  // 163: kodex.providers.v1.ProviderHubService.GetWebhookEvent:input_type -> kodex.providers.v1.GetWebhookEventRequest
-	46,  // 164: kodex.providers.v1.ProviderHubService.ListWebhookEvents:input_type -> kodex.providers.v1.ListWebhookEventsRequest
-	48,  // 165: kodex.providers.v1.ProviderHubService.RetryWebhookEventProcessing:input_type -> kodex.providers.v1.RetryWebhookEventProcessingRequest
-	49,  // 166: kodex.providers.v1.ProviderHubService.CleanupExpiredWebhookPayloads:input_type -> kodex.providers.v1.CleanupExpiredWebhookPayloadsRequest
-	51,  // 167: kodex.providers.v1.ProviderHubService.GetWorkItemProjection:input_type -> kodex.providers.v1.GetWorkItemProjectionRequest
-	52,  // 168: kodex.providers.v1.ProviderHubService.FindWorkItemByProviderRef:input_type -> kodex.providers.v1.FindWorkItemByProviderRefRequest
-	54,  // 169: kodex.providers.v1.ProviderHubService.ListWorkItemProjections:input_type -> kodex.providers.v1.ListWorkItemProjectionsRequest
-	56,  // 170: kodex.providers.v1.ProviderHubService.ListComments:input_type -> kodex.providers.v1.ListCommentsRequest
-	58,  // 171: kodex.providers.v1.ProviderHubService.ListRelationships:input_type -> kodex.providers.v1.ListRelationshipsRequest
-	85,  // 172: kodex.providers.v1.ProviderHubService.GetRepositoryMergeSignal:input_type -> kodex.providers.v1.GetRepositoryMergeSignalRequest
-	87,  // 173: kodex.providers.v1.ProviderHubService.ListRepositoryMergeSignals:input_type -> kodex.providers.v1.ListRepositoryMergeSignalsRequest
-	89,  // 174: kodex.providers.v1.ProviderHubService.GetRepositoryAdoptionScanSnapshot:input_type -> kodex.providers.v1.GetRepositoryAdoptionScanSnapshotRequest
-	91,  // 175: kodex.providers.v1.ProviderHubService.ListRepositoryAdoptionScanSnapshots:input_type -> kodex.providers.v1.ListRepositoryAdoptionScanSnapshotsRequest
-	60,  // 176: kodex.providers.v1.ProviderHubService.RegisterProviderArtifactSignal:input_type -> kodex.providers.v1.RegisterProviderArtifactSignalRequest
-	62,  // 177: kodex.providers.v1.ProviderHubService.EnqueueReconciliation:input_type -> kodex.providers.v1.EnqueueReconciliationRequest
-	64,  // 178: kodex.providers.v1.ProviderHubService.RunReconciliationBatch:input_type -> kodex.providers.v1.RunReconciliationBatchRequest
-	66,  // 179: kodex.providers.v1.ProviderHubService.GetSyncCursor:input_type -> kodex.providers.v1.GetSyncCursorRequest
-	68,  // 180: kodex.providers.v1.ProviderHubService.ListSyncCursors:input_type -> kodex.providers.v1.ListSyncCursorsRequest
-	70,  // 181: kodex.providers.v1.ProviderHubService.CreateIssue:input_type -> kodex.providers.v1.CreateIssueRequest
-	71,  // 182: kodex.providers.v1.ProviderHubService.UpdateIssue:input_type -> kodex.providers.v1.UpdateIssueRequest
-	72,  // 183: kodex.providers.v1.ProviderHubService.CreateComment:input_type -> kodex.providers.v1.CreateCommentRequest
-	73,  // 184: kodex.providers.v1.ProviderHubService.UpdateComment:input_type -> kodex.providers.v1.UpdateCommentRequest
-	74,  // 185: kodex.providers.v1.ProviderHubService.CreatePullRequest:input_type -> kodex.providers.v1.CreatePullRequestRequest
-	75,  // 186: kodex.providers.v1.ProviderHubService.CreateRepository:input_type -> kodex.providers.v1.CreateRepositoryRequest
-	78,  // 187: kodex.providers.v1.ProviderHubService.CreateBootstrapPullRequest:input_type -> kodex.providers.v1.CreateBootstrapPullRequestRequest
-	79,  // 188: kodex.providers.v1.ProviderHubService.CreateAdoptionPullRequest:input_type -> kodex.providers.v1.CreateAdoptionPullRequestRequest
-	81,  // 189: kodex.providers.v1.ProviderHubService.ScanRepositoryForAdoption:input_type -> kodex.providers.v1.ScanRepositoryForAdoptionRequest
-	93,  // 190: kodex.providers.v1.ProviderHubService.UpdatePullRequest:input_type -> kodex.providers.v1.UpdatePullRequestRequest
-	94,  // 191: kodex.providers.v1.ProviderHubService.CreateReviewSignal:input_type -> kodex.providers.v1.CreateReviewSignalRequest
-	95,  // 192: kodex.providers.v1.ProviderHubService.UpdateRelationship:input_type -> kodex.providers.v1.UpdateRelationshipRequest
-	98,  // 193: kodex.providers.v1.ProviderHubService.GetProviderAccountRuntimeState:input_type -> kodex.providers.v1.GetProviderAccountRuntimeStateRequest
-	100, // 194: kodex.providers.v1.ProviderHubService.ListProviderAccountRuntimeStates:input_type -> kodex.providers.v1.ListProviderAccountRuntimeStatesRequest
-	102, // 195: kodex.providers.v1.ProviderHubService.RecordProviderLimitSnapshot:input_type -> kodex.providers.v1.RecordProviderLimitSnapshotRequest
-	104, // 196: kodex.providers.v1.ProviderHubService.ListProviderLimitSnapshots:input_type -> kodex.providers.v1.ListProviderLimitSnapshotsRequest
-	106, // 197: kodex.providers.v1.ProviderHubService.ListProviderOperations:input_type -> kodex.providers.v1.ListProviderOperationsRequest
-	44,  // 198: kodex.providers.v1.ProviderHubService.IngestWebhookEvent:output_type -> kodex.providers.v1.WebhookEventResponse
-	44,  // 199: kodex.providers.v1.ProviderHubService.GetWebhookEvent:output_type -> kodex.providers.v1.WebhookEventResponse
-	47,  // 200: kodex.providers.v1.ProviderHubService.ListWebhookEvents:output_type -> kodex.providers.v1.ListWebhookEventsResponse
-	44,  // 201: kodex.providers.v1.ProviderHubService.RetryWebhookEventProcessing:output_type -> kodex.providers.v1.WebhookEventResponse
-	50,  // 202: kodex.providers.v1.ProviderHubService.CleanupExpiredWebhookPayloads:output_type -> kodex.providers.v1.CleanupExpiredWebhookPayloadsResponse
-	53,  // 203: kodex.providers.v1.ProviderHubService.GetWorkItemProjection:output_type -> kodex.providers.v1.WorkItemProjectionResponse
-	53,  // 204: kodex.providers.v1.ProviderHubService.FindWorkItemByProviderRef:output_type -> kodex.providers.v1.WorkItemProjectionResponse
-	55,  // 205: kodex.providers.v1.ProviderHubService.ListWorkItemProjections:output_type -> kodex.providers.v1.ListWorkItemProjectionsResponse
-	57,  // 206: kodex.providers.v1.ProviderHubService.ListComments:output_type -> kodex.providers.v1.ListCommentsResponse
-	59,  // 207: kodex.providers.v1.ProviderHubService.ListRelationships:output_type -> kodex.providers.v1.ListRelationshipsResponse
-	86,  // 208: kodex.providers.v1.ProviderHubService.GetRepositoryMergeSignal:output_type -> kodex.providers.v1.RepositoryMergeSignalResponse
-	88,  // 209: kodex.providers.v1.ProviderHubService.ListRepositoryMergeSignals:output_type -> kodex.providers.v1.ListRepositoryMergeSignalsResponse
-	90,  // 210: kodex.providers.v1.ProviderHubService.GetRepositoryAdoptionScanSnapshot:output_type -> kodex.providers.v1.RepositoryAdoptionScanSnapshotResponse
-	92,  // 211: kodex.providers.v1.ProviderHubService.ListRepositoryAdoptionScanSnapshots:output_type -> kodex.providers.v1.ListRepositoryAdoptionScanSnapshotsResponse
-	61,  // 212: kodex.providers.v1.ProviderHubService.RegisterProviderArtifactSignal:output_type -> kodex.providers.v1.ProviderArtifactSignalResponse
-	63,  // 213: kodex.providers.v1.ProviderHubService.EnqueueReconciliation:output_type -> kodex.providers.v1.ReconciliationRequestResponse
-	65,  // 214: kodex.providers.v1.ProviderHubService.RunReconciliationBatch:output_type -> kodex.providers.v1.RunReconciliationBatchResponse
-	67,  // 215: kodex.providers.v1.ProviderHubService.GetSyncCursor:output_type -> kodex.providers.v1.SyncCursorResponse
-	69,  // 216: kodex.providers.v1.ProviderHubService.ListSyncCursors:output_type -> kodex.providers.v1.ListSyncCursorsResponse
-	97,  // 217: kodex.providers.v1.ProviderHubService.CreateIssue:output_type -> kodex.providers.v1.ProviderOperationResponse
-	97,  // 218: kodex.providers.v1.ProviderHubService.UpdateIssue:output_type -> kodex.providers.v1.ProviderOperationResponse
-	97,  // 219: kodex.providers.v1.ProviderHubService.CreateComment:output_type -> kodex.providers.v1.ProviderOperationResponse
-	97,  // 220: kodex.providers.v1.ProviderHubService.UpdateComment:output_type -> kodex.providers.v1.ProviderOperationResponse
-	97,  // 221: kodex.providers.v1.ProviderHubService.CreatePullRequest:output_type -> kodex.providers.v1.ProviderOperationResponse
-	97,  // 222: kodex.providers.v1.ProviderHubService.CreateRepository:output_type -> kodex.providers.v1.ProviderOperationResponse
-	97,  // 223: kodex.providers.v1.ProviderHubService.CreateBootstrapPullRequest:output_type -> kodex.providers.v1.ProviderOperationResponse
-	97,  // 224: kodex.providers.v1.ProviderHubService.CreateAdoptionPullRequest:output_type -> kodex.providers.v1.ProviderOperationResponse
-	97,  // 225: kodex.providers.v1.ProviderHubService.ScanRepositoryForAdoption:output_type -> kodex.providers.v1.ProviderOperationResponse
-	97,  // 226: kodex.providers.v1.ProviderHubService.UpdatePullRequest:output_type -> kodex.providers.v1.ProviderOperationResponse
-	97,  // 227: kodex.providers.v1.ProviderHubService.CreateReviewSignal:output_type -> kodex.providers.v1.ProviderOperationResponse
-	97,  // 228: kodex.providers.v1.ProviderHubService.UpdateRelationship:output_type -> kodex.providers.v1.ProviderOperationResponse
-	99,  // 229: kodex.providers.v1.ProviderHubService.GetProviderAccountRuntimeState:output_type -> kodex.providers.v1.ProviderAccountRuntimeStateResponse
-	101, // 230: kodex.providers.v1.ProviderHubService.ListProviderAccountRuntimeStates:output_type -> kodex.providers.v1.ListProviderAccountRuntimeStatesResponse
-	103, // 231: kodex.providers.v1.ProviderHubService.RecordProviderLimitSnapshot:output_type -> kodex.providers.v1.ProviderLimitSnapshotResponse
-	105, // 232: kodex.providers.v1.ProviderHubService.ListProviderLimitSnapshots:output_type -> kodex.providers.v1.ListProviderLimitSnapshotsResponse
-	107, // 233: kodex.providers.v1.ProviderHubService.ListProviderOperations:output_type -> kodex.providers.v1.ListProviderOperationsResponse
-	198, // [198:234] is the sub-list for method output_type
-	162, // [162:198] is the sub-list for method input_type
-	162, // [162:162] is the sub-list for extension type_name
-	162, // [162:162] is the sub-list for extension extendee
-	0,   // [0:162] is the sub-list for field type_name
+	33,  // 111: kodex.providers.v1.ListRepositoryMergeSignalsRequest.page:type_name -> kodex.providers.v1.PageRequest
+	28,  // 112: kodex.providers.v1.ListRepositoryMergeSignalsRequest.meta:type_name -> kodex.providers.v1.QueryMeta
+	88,  // 113: kodex.providers.v1.ListRepositoryMergeSignalsResponse.merge_signals:type_name -> kodex.providers.v1.RepositoryMergeSignal
+	34,  // 114: kodex.providers.v1.ListRepositoryMergeSignalsResponse.page:type_name -> kodex.providers.v1.PageResponse
+	24,  // 115: kodex.providers.v1.RepositoryChangePathCategoryCount.category:type_name -> kodex.providers.v1.RepositoryChangePathCategory
+	21,  // 116: kodex.providers.v1.RepositoryChangeSignal.kind:type_name -> kodex.providers.v1.RepositoryChangeSignalKind
+	23,  // 117: kodex.providers.v1.RepositoryChangeSignal.path_summary_status:type_name -> kodex.providers.v1.RepositoryChangePathSummaryStatus
+	93,  // 118: kodex.providers.v1.RepositoryChangeSignal.path_categories:type_name -> kodex.providers.v1.RepositoryChangePathCategoryCount
+	22,  // 119: kodex.providers.v1.RepositoryChangeSignal.status:type_name -> kodex.providers.v1.RepositoryChangeSignalStatus
+	28,  // 120: kodex.providers.v1.GetRepositoryChangeSignalRequest.meta:type_name -> kodex.providers.v1.QueryMeta
+	18,  // 121: kodex.providers.v1.RepositoryChangeSignalResponse.read_status:type_name -> kodex.providers.v1.ProviderOwnedDataStatus
+	94,  // 122: kodex.providers.v1.RepositoryChangeSignalResponse.change_signal:type_name -> kodex.providers.v1.RepositoryChangeSignal
+	21,  // 123: kodex.providers.v1.ListRepositoryChangeSignalsRequest.kinds:type_name -> kodex.providers.v1.RepositoryChangeSignalKind
+	22,  // 124: kodex.providers.v1.ListRepositoryChangeSignalsRequest.statuses:type_name -> kodex.providers.v1.RepositoryChangeSignalStatus
+	33,  // 125: kodex.providers.v1.ListRepositoryChangeSignalsRequest.page:type_name -> kodex.providers.v1.PageRequest
+	28,  // 126: kodex.providers.v1.ListRepositoryChangeSignalsRequest.meta:type_name -> kodex.providers.v1.QueryMeta
+	94,  // 127: kodex.providers.v1.ListRepositoryChangeSignalsResponse.change_signals:type_name -> kodex.providers.v1.RepositoryChangeSignal
+	34,  // 128: kodex.providers.v1.ListRepositoryChangeSignalsResponse.page:type_name -> kodex.providers.v1.PageResponse
+	28,  // 129: kodex.providers.v1.GetRepositoryAdoptionScanSnapshotRequest.meta:type_name -> kodex.providers.v1.QueryMeta
+	18,  // 130: kodex.providers.v1.RepositoryAdoptionScanSnapshotResponse.read_status:type_name -> kodex.providers.v1.ProviderOwnedDataStatus
+	87,  // 131: kodex.providers.v1.RepositoryAdoptionScanSnapshotResponse.adoption_scan_snapshot:type_name -> kodex.providers.v1.RepositoryAdoptionScanSnapshot
+	17,  // 132: kodex.providers.v1.ListRepositoryAdoptionScanSnapshotsRequest.statuses:type_name -> kodex.providers.v1.RepositoryAdoptionScanStatus
+	33,  // 133: kodex.providers.v1.ListRepositoryAdoptionScanSnapshotsRequest.page:type_name -> kodex.providers.v1.PageRequest
+	28,  // 134: kodex.providers.v1.ListRepositoryAdoptionScanSnapshotsRequest.meta:type_name -> kodex.providers.v1.QueryMeta
+	87,  // 135: kodex.providers.v1.ListRepositoryAdoptionScanSnapshotsResponse.adoption_scan_snapshots:type_name -> kodex.providers.v1.RepositoryAdoptionScanSnapshot
+	34,  // 136: kodex.providers.v1.ListRepositoryAdoptionScanSnapshotsResponse.page:type_name -> kodex.providers.v1.PageResponse
+	37,  // 137: kodex.providers.v1.UpdatePullRequestRequest.target:type_name -> kodex.providers.v1.ProviderTarget
+	35,  // 138: kodex.providers.v1.UpdatePullRequestRequest.labels:type_name -> kodex.providers.v1.StringListPatch
+	35,  // 139: kodex.providers.v1.UpdatePullRequestRequest.assignee_provider_logins:type_name -> kodex.providers.v1.StringListPatch
+	27,  // 140: kodex.providers.v1.UpdatePullRequestRequest.meta:type_name -> kodex.providers.v1.CommandMeta
+	37,  // 141: kodex.providers.v1.CreateReviewSignalRequest.target:type_name -> kodex.providers.v1.ProviderTarget
+	26,  // 142: kodex.providers.v1.CreateReviewSignalRequest.kind:type_name -> kodex.providers.v1.ReviewSignalKind
+	36,  // 143: kodex.providers.v1.CreateReviewSignalRequest.inline_comments:type_name -> kodex.providers.v1.ReviewInlineComment
+	27,  // 144: kodex.providers.v1.CreateReviewSignalRequest.meta:type_name -> kodex.providers.v1.CommandMeta
+	37,  // 145: kodex.providers.v1.UpdateRelationshipRequest.source:type_name -> kodex.providers.v1.ProviderTarget
+	37,  // 146: kodex.providers.v1.UpdateRelationshipRequest.target:type_name -> kodex.providers.v1.ProviderTarget
+	8,   // 147: kodex.providers.v1.UpdateRelationshipRequest.source_kind:type_name -> kodex.providers.v1.RelationshipSource
+	7,   // 148: kodex.providers.v1.UpdateRelationshipRequest.confidence:type_name -> kodex.providers.v1.RelationshipConfidence
+	27,  // 149: kodex.providers.v1.UpdateRelationshipRequest.meta:type_name -> kodex.providers.v1.CommandMeta
+	37,  // 150: kodex.providers.v1.ProviderOperationCommandResult.target:type_name -> kodex.providers.v1.ProviderTarget
+	46,  // 151: kodex.providers.v1.ProviderOperationResponse.provider_operation:type_name -> kodex.providers.v1.ProviderOperation
+	40,  // 152: kodex.providers.v1.ProviderOperationResponse.work_item_projection:type_name -> kodex.providers.v1.WorkItemProjection
+	41,  // 153: kodex.providers.v1.ProviderOperationResponse.comment_projection:type_name -> kodex.providers.v1.CommentProjection
+	42,  // 154: kodex.providers.v1.ProviderOperationResponse.relationship:type_name -> kodex.providers.v1.ProviderRelationship
+	106, // 155: kodex.providers.v1.ProviderOperationResponse.result:type_name -> kodex.providers.v1.ProviderOperationCommandResult
+	87,  // 156: kodex.providers.v1.ProviderOperationResponse.adoption_scan_snapshot:type_name -> kodex.providers.v1.RepositoryAdoptionScanSnapshot
+	28,  // 157: kodex.providers.v1.GetProviderAccountRuntimeStateRequest.meta:type_name -> kodex.providers.v1.QueryMeta
+	44,  // 158: kodex.providers.v1.ProviderAccountRuntimeStateResponse.runtime_state:type_name -> kodex.providers.v1.ProviderAccountRuntimeState
+	12,  // 159: kodex.providers.v1.ListProviderAccountRuntimeStatesRequest.statuses:type_name -> kodex.providers.v1.ProviderAccountRuntimeStatus
+	33,  // 160: kodex.providers.v1.ListProviderAccountRuntimeStatesRequest.page:type_name -> kodex.providers.v1.PageRequest
+	28,  // 161: kodex.providers.v1.ListProviderAccountRuntimeStatesRequest.meta:type_name -> kodex.providers.v1.QueryMeta
+	44,  // 162: kodex.providers.v1.ListProviderAccountRuntimeStatesResponse.runtime_states:type_name -> kodex.providers.v1.ProviderAccountRuntimeState
+	34,  // 163: kodex.providers.v1.ListProviderAccountRuntimeStatesResponse.page:type_name -> kodex.providers.v1.PageResponse
+	27,  // 164: kodex.providers.v1.RecordProviderLimitSnapshotRequest.meta:type_name -> kodex.providers.v1.CommandMeta
+	45,  // 165: kodex.providers.v1.ProviderLimitSnapshotResponse.limit_snapshot:type_name -> kodex.providers.v1.ProviderLimitSnapshot
+	33,  // 166: kodex.providers.v1.ListProviderLimitSnapshotsRequest.page:type_name -> kodex.providers.v1.PageRequest
+	28,  // 167: kodex.providers.v1.ListProviderLimitSnapshotsRequest.meta:type_name -> kodex.providers.v1.QueryMeta
+	45,  // 168: kodex.providers.v1.ListProviderLimitSnapshotsResponse.limit_snapshots:type_name -> kodex.providers.v1.ProviderLimitSnapshot
+	34,  // 169: kodex.providers.v1.ListProviderLimitSnapshotsResponse.page:type_name -> kodex.providers.v1.PageResponse
+	13,  // 170: kodex.providers.v1.ListProviderOperationsRequest.operation_types:type_name -> kodex.providers.v1.ProviderOperationType
+	14,  // 171: kodex.providers.v1.ListProviderOperationsRequest.statuses:type_name -> kodex.providers.v1.ProviderOperationStatus
+	33,  // 172: kodex.providers.v1.ListProviderOperationsRequest.page:type_name -> kodex.providers.v1.PageRequest
+	28,  // 173: kodex.providers.v1.ListProviderOperationsRequest.meta:type_name -> kodex.providers.v1.QueryMeta
+	46,  // 174: kodex.providers.v1.ListProviderOperationsResponse.provider_operations:type_name -> kodex.providers.v1.ProviderOperation
+	34,  // 175: kodex.providers.v1.ListProviderOperationsResponse.page:type_name -> kodex.providers.v1.PageResponse
+	47,  // 176: kodex.providers.v1.ProviderHubService.IngestWebhookEvent:input_type -> kodex.providers.v1.IngestWebhookEventRequest
+	49,  // 177: kodex.providers.v1.ProviderHubService.GetWebhookEvent:input_type -> kodex.providers.v1.GetWebhookEventRequest
+	50,  // 178: kodex.providers.v1.ProviderHubService.ListWebhookEvents:input_type -> kodex.providers.v1.ListWebhookEventsRequest
+	52,  // 179: kodex.providers.v1.ProviderHubService.RetryWebhookEventProcessing:input_type -> kodex.providers.v1.RetryWebhookEventProcessingRequest
+	53,  // 180: kodex.providers.v1.ProviderHubService.CleanupExpiredWebhookPayloads:input_type -> kodex.providers.v1.CleanupExpiredWebhookPayloadsRequest
+	55,  // 181: kodex.providers.v1.ProviderHubService.GetWorkItemProjection:input_type -> kodex.providers.v1.GetWorkItemProjectionRequest
+	56,  // 182: kodex.providers.v1.ProviderHubService.FindWorkItemByProviderRef:input_type -> kodex.providers.v1.FindWorkItemByProviderRefRequest
+	58,  // 183: kodex.providers.v1.ProviderHubService.ListWorkItemProjections:input_type -> kodex.providers.v1.ListWorkItemProjectionsRequest
+	60,  // 184: kodex.providers.v1.ProviderHubService.ListComments:input_type -> kodex.providers.v1.ListCommentsRequest
+	62,  // 185: kodex.providers.v1.ProviderHubService.ListRelationships:input_type -> kodex.providers.v1.ListRelationshipsRequest
+	89,  // 186: kodex.providers.v1.ProviderHubService.GetRepositoryMergeSignal:input_type -> kodex.providers.v1.GetRepositoryMergeSignalRequest
+	91,  // 187: kodex.providers.v1.ProviderHubService.ListRepositoryMergeSignals:input_type -> kodex.providers.v1.ListRepositoryMergeSignalsRequest
+	95,  // 188: kodex.providers.v1.ProviderHubService.GetRepositoryChangeSignal:input_type -> kodex.providers.v1.GetRepositoryChangeSignalRequest
+	97,  // 189: kodex.providers.v1.ProviderHubService.ListRepositoryChangeSignals:input_type -> kodex.providers.v1.ListRepositoryChangeSignalsRequest
+	99,  // 190: kodex.providers.v1.ProviderHubService.GetRepositoryAdoptionScanSnapshot:input_type -> kodex.providers.v1.GetRepositoryAdoptionScanSnapshotRequest
+	101, // 191: kodex.providers.v1.ProviderHubService.ListRepositoryAdoptionScanSnapshots:input_type -> kodex.providers.v1.ListRepositoryAdoptionScanSnapshotsRequest
+	64,  // 192: kodex.providers.v1.ProviderHubService.RegisterProviderArtifactSignal:input_type -> kodex.providers.v1.RegisterProviderArtifactSignalRequest
+	66,  // 193: kodex.providers.v1.ProviderHubService.EnqueueReconciliation:input_type -> kodex.providers.v1.EnqueueReconciliationRequest
+	68,  // 194: kodex.providers.v1.ProviderHubService.RunReconciliationBatch:input_type -> kodex.providers.v1.RunReconciliationBatchRequest
+	70,  // 195: kodex.providers.v1.ProviderHubService.GetSyncCursor:input_type -> kodex.providers.v1.GetSyncCursorRequest
+	72,  // 196: kodex.providers.v1.ProviderHubService.ListSyncCursors:input_type -> kodex.providers.v1.ListSyncCursorsRequest
+	74,  // 197: kodex.providers.v1.ProviderHubService.CreateIssue:input_type -> kodex.providers.v1.CreateIssueRequest
+	75,  // 198: kodex.providers.v1.ProviderHubService.UpdateIssue:input_type -> kodex.providers.v1.UpdateIssueRequest
+	76,  // 199: kodex.providers.v1.ProviderHubService.CreateComment:input_type -> kodex.providers.v1.CreateCommentRequest
+	77,  // 200: kodex.providers.v1.ProviderHubService.UpdateComment:input_type -> kodex.providers.v1.UpdateCommentRequest
+	78,  // 201: kodex.providers.v1.ProviderHubService.CreatePullRequest:input_type -> kodex.providers.v1.CreatePullRequestRequest
+	79,  // 202: kodex.providers.v1.ProviderHubService.CreateRepository:input_type -> kodex.providers.v1.CreateRepositoryRequest
+	82,  // 203: kodex.providers.v1.ProviderHubService.CreateBootstrapPullRequest:input_type -> kodex.providers.v1.CreateBootstrapPullRequestRequest
+	83,  // 204: kodex.providers.v1.ProviderHubService.CreateAdoptionPullRequest:input_type -> kodex.providers.v1.CreateAdoptionPullRequestRequest
+	85,  // 205: kodex.providers.v1.ProviderHubService.ScanRepositoryForAdoption:input_type -> kodex.providers.v1.ScanRepositoryForAdoptionRequest
+	103, // 206: kodex.providers.v1.ProviderHubService.UpdatePullRequest:input_type -> kodex.providers.v1.UpdatePullRequestRequest
+	104, // 207: kodex.providers.v1.ProviderHubService.CreateReviewSignal:input_type -> kodex.providers.v1.CreateReviewSignalRequest
+	105, // 208: kodex.providers.v1.ProviderHubService.UpdateRelationship:input_type -> kodex.providers.v1.UpdateRelationshipRequest
+	108, // 209: kodex.providers.v1.ProviderHubService.GetProviderAccountRuntimeState:input_type -> kodex.providers.v1.GetProviderAccountRuntimeStateRequest
+	110, // 210: kodex.providers.v1.ProviderHubService.ListProviderAccountRuntimeStates:input_type -> kodex.providers.v1.ListProviderAccountRuntimeStatesRequest
+	112, // 211: kodex.providers.v1.ProviderHubService.RecordProviderLimitSnapshot:input_type -> kodex.providers.v1.RecordProviderLimitSnapshotRequest
+	114, // 212: kodex.providers.v1.ProviderHubService.ListProviderLimitSnapshots:input_type -> kodex.providers.v1.ListProviderLimitSnapshotsRequest
+	116, // 213: kodex.providers.v1.ProviderHubService.ListProviderOperations:input_type -> kodex.providers.v1.ListProviderOperationsRequest
+	48,  // 214: kodex.providers.v1.ProviderHubService.IngestWebhookEvent:output_type -> kodex.providers.v1.WebhookEventResponse
+	48,  // 215: kodex.providers.v1.ProviderHubService.GetWebhookEvent:output_type -> kodex.providers.v1.WebhookEventResponse
+	51,  // 216: kodex.providers.v1.ProviderHubService.ListWebhookEvents:output_type -> kodex.providers.v1.ListWebhookEventsResponse
+	48,  // 217: kodex.providers.v1.ProviderHubService.RetryWebhookEventProcessing:output_type -> kodex.providers.v1.WebhookEventResponse
+	54,  // 218: kodex.providers.v1.ProviderHubService.CleanupExpiredWebhookPayloads:output_type -> kodex.providers.v1.CleanupExpiredWebhookPayloadsResponse
+	57,  // 219: kodex.providers.v1.ProviderHubService.GetWorkItemProjection:output_type -> kodex.providers.v1.WorkItemProjectionResponse
+	57,  // 220: kodex.providers.v1.ProviderHubService.FindWorkItemByProviderRef:output_type -> kodex.providers.v1.WorkItemProjectionResponse
+	59,  // 221: kodex.providers.v1.ProviderHubService.ListWorkItemProjections:output_type -> kodex.providers.v1.ListWorkItemProjectionsResponse
+	61,  // 222: kodex.providers.v1.ProviderHubService.ListComments:output_type -> kodex.providers.v1.ListCommentsResponse
+	63,  // 223: kodex.providers.v1.ProviderHubService.ListRelationships:output_type -> kodex.providers.v1.ListRelationshipsResponse
+	90,  // 224: kodex.providers.v1.ProviderHubService.GetRepositoryMergeSignal:output_type -> kodex.providers.v1.RepositoryMergeSignalResponse
+	92,  // 225: kodex.providers.v1.ProviderHubService.ListRepositoryMergeSignals:output_type -> kodex.providers.v1.ListRepositoryMergeSignalsResponse
+	96,  // 226: kodex.providers.v1.ProviderHubService.GetRepositoryChangeSignal:output_type -> kodex.providers.v1.RepositoryChangeSignalResponse
+	98,  // 227: kodex.providers.v1.ProviderHubService.ListRepositoryChangeSignals:output_type -> kodex.providers.v1.ListRepositoryChangeSignalsResponse
+	100, // 228: kodex.providers.v1.ProviderHubService.GetRepositoryAdoptionScanSnapshot:output_type -> kodex.providers.v1.RepositoryAdoptionScanSnapshotResponse
+	102, // 229: kodex.providers.v1.ProviderHubService.ListRepositoryAdoptionScanSnapshots:output_type -> kodex.providers.v1.ListRepositoryAdoptionScanSnapshotsResponse
+	65,  // 230: kodex.providers.v1.ProviderHubService.RegisterProviderArtifactSignal:output_type -> kodex.providers.v1.ProviderArtifactSignalResponse
+	67,  // 231: kodex.providers.v1.ProviderHubService.EnqueueReconciliation:output_type -> kodex.providers.v1.ReconciliationRequestResponse
+	69,  // 232: kodex.providers.v1.ProviderHubService.RunReconciliationBatch:output_type -> kodex.providers.v1.RunReconciliationBatchResponse
+	71,  // 233: kodex.providers.v1.ProviderHubService.GetSyncCursor:output_type -> kodex.providers.v1.SyncCursorResponse
+	73,  // 234: kodex.providers.v1.ProviderHubService.ListSyncCursors:output_type -> kodex.providers.v1.ListSyncCursorsResponse
+	107, // 235: kodex.providers.v1.ProviderHubService.CreateIssue:output_type -> kodex.providers.v1.ProviderOperationResponse
+	107, // 236: kodex.providers.v1.ProviderHubService.UpdateIssue:output_type -> kodex.providers.v1.ProviderOperationResponse
+	107, // 237: kodex.providers.v1.ProviderHubService.CreateComment:output_type -> kodex.providers.v1.ProviderOperationResponse
+	107, // 238: kodex.providers.v1.ProviderHubService.UpdateComment:output_type -> kodex.providers.v1.ProviderOperationResponse
+	107, // 239: kodex.providers.v1.ProviderHubService.CreatePullRequest:output_type -> kodex.providers.v1.ProviderOperationResponse
+	107, // 240: kodex.providers.v1.ProviderHubService.CreateRepository:output_type -> kodex.providers.v1.ProviderOperationResponse
+	107, // 241: kodex.providers.v1.ProviderHubService.CreateBootstrapPullRequest:output_type -> kodex.providers.v1.ProviderOperationResponse
+	107, // 242: kodex.providers.v1.ProviderHubService.CreateAdoptionPullRequest:output_type -> kodex.providers.v1.ProviderOperationResponse
+	107, // 243: kodex.providers.v1.ProviderHubService.ScanRepositoryForAdoption:output_type -> kodex.providers.v1.ProviderOperationResponse
+	107, // 244: kodex.providers.v1.ProviderHubService.UpdatePullRequest:output_type -> kodex.providers.v1.ProviderOperationResponse
+	107, // 245: kodex.providers.v1.ProviderHubService.CreateReviewSignal:output_type -> kodex.providers.v1.ProviderOperationResponse
+	107, // 246: kodex.providers.v1.ProviderHubService.UpdateRelationship:output_type -> kodex.providers.v1.ProviderOperationResponse
+	109, // 247: kodex.providers.v1.ProviderHubService.GetProviderAccountRuntimeState:output_type -> kodex.providers.v1.ProviderAccountRuntimeStateResponse
+	111, // 248: kodex.providers.v1.ProviderHubService.ListProviderAccountRuntimeStates:output_type -> kodex.providers.v1.ListProviderAccountRuntimeStatesResponse
+	113, // 249: kodex.providers.v1.ProviderHubService.RecordProviderLimitSnapshot:output_type -> kodex.providers.v1.ProviderLimitSnapshotResponse
+	115, // 250: kodex.providers.v1.ProviderHubService.ListProviderLimitSnapshots:output_type -> kodex.providers.v1.ListProviderLimitSnapshotsResponse
+	117, // 251: kodex.providers.v1.ProviderHubService.ListProviderOperations:output_type -> kodex.providers.v1.ListProviderOperationsResponse
+	214, // [214:252] is the sub-list for method output_type
+	176, // [176:214] is the sub-list for method input_type
+	176, // [176:176] is the sub-list for extension type_name
+	176, // [176:176] is the sub-list for extension extendee
+	0,   // [0:176] is the sub-list for field type_name
 }
 
 func init() { file_kodex_providers_v1_provider_hub_proto_init() }
@@ -10897,23 +11950,25 @@ func file_kodex_providers_v1_provider_hub_proto_init() {
 	file_kodex_providers_v1_provider_hub_proto_msgTypes[57].OneofWrappers = []any{}
 	file_kodex_providers_v1_provider_hub_proto_msgTypes[62].OneofWrappers = []any{}
 	file_kodex_providers_v1_provider_hub_proto_msgTypes[64].OneofWrappers = []any{}
-	file_kodex_providers_v1_provider_hub_proto_msgTypes[66].OneofWrappers = []any{}
 	file_kodex_providers_v1_provider_hub_proto_msgTypes[68].OneofWrappers = []any{}
 	file_kodex_providers_v1_provider_hub_proto_msgTypes[70].OneofWrappers = []any{}
 	file_kodex_providers_v1_provider_hub_proto_msgTypes[72].OneofWrappers = []any{}
-	file_kodex_providers_v1_provider_hub_proto_msgTypes[73].OneofWrappers = []any{}
-	file_kodex_providers_v1_provider_hub_proto_msgTypes[75].OneofWrappers = []any{}
-	file_kodex_providers_v1_provider_hub_proto_msgTypes[77].OneofWrappers = []any{}
+	file_kodex_providers_v1_provider_hub_proto_msgTypes[74].OneofWrappers = []any{}
+	file_kodex_providers_v1_provider_hub_proto_msgTypes[76].OneofWrappers = []any{}
+	file_kodex_providers_v1_provider_hub_proto_msgTypes[78].OneofWrappers = []any{}
 	file_kodex_providers_v1_provider_hub_proto_msgTypes[79].OneofWrappers = []any{}
 	file_kodex_providers_v1_provider_hub_proto_msgTypes[81].OneofWrappers = []any{}
 	file_kodex_providers_v1_provider_hub_proto_msgTypes[83].OneofWrappers = []any{}
+	file_kodex_providers_v1_provider_hub_proto_msgTypes[85].OneofWrappers = []any{}
+	file_kodex_providers_v1_provider_hub_proto_msgTypes[87].OneofWrappers = []any{}
+	file_kodex_providers_v1_provider_hub_proto_msgTypes[89].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_kodex_providers_v1_provider_hub_proto_rawDesc), len(file_kodex_providers_v1_provider_hub_proto_rawDesc)),
-			NumEnums:      23,
-			NumMessages:   85,
+			NumEnums:      27,
+			NumMessages:   91,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
