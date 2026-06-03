@@ -28,10 +28,18 @@ type selfDeployPlanCommandPayload struct {
 }
 
 func (s *Service) CreateSelfDeployPlan(ctx context.Context, input CreateSelfDeployPlanInput) (entity.SelfDeployPlan, error) {
+	return s.createSelfDeployPlan(ctx, input, operationCreateSelfDeployPlan, false)
+}
+
+func (s *Service) CreateSelfDeployPlanFromSignal(ctx context.Context, input CreateSelfDeployPlanFromSignalInput) (entity.SelfDeployPlan, error) {
+	return s.createSelfDeployPlan(ctx, input.CreateSelfDeployPlanInput, operationCreateSelfDeployPlanFromSignal, true)
+}
+
+func (s *Service) createSelfDeployPlan(ctx context.Context, input CreateSelfDeployPlanInput, operation string, requireSignal bool) (entity.SelfDeployPlan, error) {
 	if err := s.requireRepository(); err != nil {
 		return entity.SelfDeployPlan{}, err
 	}
-	idempotencyKey, err := selfDeployPlanIdempotencyKey(input.Meta)
+	idempotencyKey, err := selfDeployPlanIdempotencyKey(input.Meta, operation)
 	if err != nil {
 		return entity.SelfDeployPlan{}, err
 	}
@@ -39,8 +47,14 @@ func (s *Service) CreateSelfDeployPlan(ctx context.Context, input CreateSelfDepl
 	if err != nil {
 		return entity.SelfDeployPlan{}, err
 	}
+	if requireSignal && plan.ProviderSignalRef == "" {
+		return entity.SelfDeployPlan{}, errs.ErrInvalidArgument
+	}
 	verifyReplay := verifyEntityRequestReplay(plan, s.repository.GetSelfDeployPlan, selfDeployPlanID, sameSelfDeployPlanRequest)
-	if replay, ok, err := findReplay(ctx, s, input.Meta, operationCreateSelfDeployPlan, enum.CommandAggregateTypeSelfDeployPlan, selfDeployPlanFromPayload, verifyReplay); ok || err != nil {
+	if replay, ok, err := findReplay(ctx, s, input.Meta, operation, enum.CommandAggregateTypeSelfDeployPlan, selfDeployPlanFromPayload, verifyReplay); ok || err != nil {
+		return replay, err
+	}
+	if replay, ok, err := s.findSelfDeployPlanSignalReplay(ctx, plan); ok || err != nil {
 		return replay, err
 	}
 	now := s.clock.Now()
@@ -52,7 +66,7 @@ func (s *Service) CreateSelfDeployPlan(ctx context.Context, input CreateSelfDepl
 	if err != nil {
 		return entity.SelfDeployPlan{}, err
 	}
-	result, err := commandResult(input.Meta, operationCreateSelfDeployPlan, enum.CommandAggregateTypeSelfDeployPlan, plan.ID, payload, now)
+	result, err := commandResult(input.Meta, operation, enum.CommandAggregateTypeSelfDeployPlan, plan.ID, payload, now)
 	if err != nil {
 		return entity.SelfDeployPlan{}, err
 	}
@@ -61,6 +75,26 @@ func (s *Service) CreateSelfDeployPlan(ctx context.Context, input CreateSelfDepl
 		return entity.SelfDeployPlan{}, err
 	}
 	return plan, s.repository.CreateSelfDeployPlanWithResult(ctx, plan, result, event)
+}
+
+func (s *Service) findSelfDeployPlanSignalReplay(ctx context.Context, plan entity.SelfDeployPlan) (entity.SelfDeployPlan, bool, error) {
+	if plan.ProviderSignalRef == "" {
+		return entity.SelfDeployPlan{}, false, nil
+	}
+	items, _, err := s.repository.ListSelfDeployPlans(ctx, query.SelfDeployPlanFilter{
+		ProviderSignalRef: plan.ProviderSignalRef,
+		Page:              value.PageRequest{PageSize: 2},
+	})
+	if err != nil {
+		return entity.SelfDeployPlan{}, false, err
+	}
+	if len(items) == 0 {
+		return entity.SelfDeployPlan{}, false, nil
+	}
+	if len(items) > 1 || items[0].PlanFingerprint != plan.PlanFingerprint {
+		return entity.SelfDeployPlan{}, true, errs.ErrConflict
+	}
+	return items[0], true, nil
 }
 
 func (s *Service) GetSelfDeployPlan(ctx context.Context, id uuid.UUID) (entity.SelfDeployPlan, error) {
@@ -173,8 +207,8 @@ func validateSelfDeployPlanFilter(filter query.SelfDeployPlanFilter) error {
 	return nil
 }
 
-func selfDeployPlanIdempotencyKey(meta value.CommandMeta) (string, error) {
-	identity, err := commandIdentity(meta, operationCreateSelfDeployPlan)
+func selfDeployPlanIdempotencyKey(meta value.CommandMeta, operation string) (string, error) {
+	identity, err := commandIdentity(meta, operation)
 	if err != nil {
 		return "", err
 	}

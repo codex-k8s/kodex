@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path"
 	"sort"
 	"strings"
 	"time"
@@ -38,11 +39,14 @@ const (
 	runtimeJobTypeLabel      = "kodex.k8s.io/runtime-job-type"
 	healthCheckContainerName = "runtime-health-check"
 	agentRunContainerName    = "runtime-agent-runner"
+	buildContainerName       = "runtime-kaniko-build"
 	defaultImagePullPolicy   = "IfNotPresent"
 	maxMetadataItems         = 16
 	maxAgentRunEnvValueBytes = 16 * 1024
 	maxAgentRunReporterBytes = 512
 	workspaceVolumeName      = "workspace"
+	buildContextVolumeName   = "build-context"
+	registryConfigVolumeName = "registry-config"
 	agentRunWorkspacePath    = "/workspace"
 	agentRunContextPath      = "/workspace/.kodex/context/agent-run.json"
 	agentRunCommand          = "/kodex/bin/agent-runner"
@@ -51,6 +55,12 @@ const (
 	agentManagerGRPCAddrEnv  = "KODEX_AGENT_RUNNER_AGENT_MANAGER_GRPC_ADDR"
 	agentManagerAuthTokenEnv = "KODEX_AGENT_RUNNER_AGENT_MANAGER_GRPC_AUTH_TOKEN"
 	agentManagerTimeoutEnv   = "KODEX_AGENT_RUNNER_AGENT_MANAGER_TIMEOUT"
+	buildContextMountPath    = "/workspace/context"
+	kanikoDockerConfigPath   = "/kaniko/.docker"
+	kanikoCommand            = "/kaniko/executor"
+	kanikoSnapshotMode       = "redo"
+	kanikoVerbosity          = "info"
+	kanikoRegistrySecretKey  = ".dockerconfigjson"
 )
 
 // Config constrains Kubernetes executor behavior with operator-managed settings.
@@ -155,8 +165,8 @@ func NewExecutorWithClientFactory(clusters ClusterAccessProvider, secrets secret
 
 // Start creates or reuses a deterministic Kubernetes Job for the claimed runtime job.
 func (e *Executor) Start(ctx context.Context, job entity.Job) (StartedJob, error) {
-	if job.JobType != enum.JobTypeHealthCheck && job.JobType != enum.JobTypeAgentRun {
-		return StartedJob{}, newExecutionError("unsupported_job_type", "Kubernetes executor supports only health_check and agent_run jobs")
+	if job.JobType != enum.JobTypeHealthCheck && job.JobType != enum.JobTypeAgentRun && job.JobType != enum.JobTypeBuild {
+		return StartedJob{}, newExecutionError("unsupported_job_type", "Kubernetes executor supports only health_check, agent_run and build jobs")
 	}
 	if job.ClusterID == nil || *job.ClusterID == uuid.Nil {
 		return StartedJob{}, newExecutionError("missing_cluster_ref", "Runtime job does not have a Kubernetes cluster ref")
@@ -334,6 +344,7 @@ type executionSpec struct {
 	PodSecurityContext       *corev1.PodSecurityContext
 	ContainerSecurityContext *corev1.SecurityContext
 	ImageArtifactRef         string
+	ImageArtifactDigest      string
 	CollectPodLogs           bool
 }
 
@@ -350,8 +361,10 @@ func (e *Executor) executionSpec(job entity.Job) (executionSpec, error) {
 		return e.healthCheckExecutionSpec(job.JobInputJSON)
 	case enum.JobTypeAgentRun:
 		return e.agentRunExecutionSpec(job)
+	case enum.JobTypeBuild:
+		return e.buildExecutionSpec(job)
 	default:
-		return executionSpec{}, newExecutionError("unsupported_job_type", "Kubernetes executor supports only health_check and agent_run jobs")
+		return executionSpec{}, newExecutionError("unsupported_job_type", "Kubernetes executor supports only health_check, agent_run and build jobs")
 	}
 }
 
@@ -435,6 +448,84 @@ func (e *Executor) agentRunExecutionSpec(job entity.Job) (executionSpec, error) 
 	return result, nil
 }
 
+func (e *Executor) buildExecutionSpec(job entity.Job) (executionSpec, error) {
+	spec, ok := runtimeservice.BuildExecutionSpecFromJobInput(job.JobInputJSON)
+	if !ok || spec == nil {
+		if buildExecutionSpecFieldPresent(job.JobInputJSON) {
+			return executionSpec{}, newExecutionError("invalid_build_execution_spec", "build execution spec is invalid")
+		}
+		return executionSpec{}, newExecutionError("build_execution_spec_required", "build execution spec is required before Kubernetes execution")
+	}
+	pvc, err := parseBuildContextPVCRef(spec.BuildContextRef, e.config.DefaultNamespace)
+	if err != nil {
+		return executionSpec{}, err
+	}
+	builderImage, err := containerImageFromRef(spec.BuilderImageRef, "invalid_build_builder_image_ref", "build builder image ref is invalid")
+	if err != nil {
+		return executionSpec{}, err
+	}
+	destination, err := buildDestinationImageRef(spec.ImageRef, spec.ImageTag)
+	if err != nil {
+		return executionSpec{}, err
+	}
+	dockerfilePath, err := buildDockerfilePath(spec.DockerfileRef)
+	if err != nil {
+		return executionSpec{}, err
+	}
+	registrySecret, err := buildRegistrySecretRef(spec.AllowedSecretRefs)
+	if err != nil {
+		return executionSpec{}, err
+	}
+	volumes := []corev1.Volume{{
+		Name: buildContextVolumeName,
+		VolumeSource: corev1.VolumeSource{
+			PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: pvc.ClaimName, ReadOnly: true},
+		},
+	}}
+	volumeMounts := []corev1.VolumeMount{{
+		Name:      buildContextVolumeName,
+		MountPath: buildContextMountPath,
+		ReadOnly:  true,
+	}}
+	if registrySecret != nil {
+		volumes = append(volumes, corev1.Volume{
+			Name: registryConfigVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: registrySecret.Name,
+					Items:      []corev1.KeyToPath{{Key: registrySecret.Key, Path: "config.json"}},
+				},
+			},
+		})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      registryConfigVolumeName,
+			MountPath: kanikoDockerConfigPath,
+			ReadOnly:  true,
+		})
+	}
+	result := executionSpec{
+		Namespace:                pvc.Namespace,
+		ServiceAccount:           e.config.DefaultServiceAccount,
+		Image:                    builderImage,
+		ImagePullPolicy:          corev1.PullPolicy(e.config.ImagePullPolicy),
+		Labels:                   map[string]string{"kodex.k8s.io/service-key": spec.ServiceKey},
+		ContainerName:            buildContainerName,
+		Command:                  []string{kanikoCommand},
+		Args:                     buildKanikoArgs(dockerfilePath, destination, spec.DockerfileTarget),
+		Volumes:                  volumes,
+		VolumeMounts:             volumeMounts,
+		PodSecurityContext:       restrictedBuildPodSecurityContext(),
+		ContainerSecurityContext: restrictedBuildContainerSecurityContext(),
+		ImageArtifactRef:         destination,
+		ImageArtifactDigest:      spec.ImageDigest,
+		CollectPodLogs:           true,
+	}
+	if err := validateExecutionSpec(result); err != nil {
+		return executionSpec{}, err
+	}
+	return result, nil
+}
+
 func parseRestrictedJobInput(payload []byte) (restrictedJobInput, error) {
 	trimmed := bytes.TrimSpace(payload)
 	if len(trimmed) == 0 {
@@ -454,13 +545,19 @@ func parseRestrictedJobInput(payload []byte) (restrictedJobInput, error) {
 }
 
 func agentRunExecutionSpecFieldPresent(payload []byte) bool {
-	var document struct {
-		AgentRunExecutionSpec json.RawMessage `json:"agent_run_execution_spec"`
-	}
+	return jobInputJSONFieldPresent(payload, "agent_run_execution_spec")
+}
+
+func buildExecutionSpecFieldPresent(payload []byte) bool {
+	return jobInputJSONFieldPresent(payload, "build_execution_spec")
+}
+
+func jobInputJSONFieldPresent(payload []byte, field string) bool {
+	var document map[string]json.RawMessage
 	if err := json.Unmarshal(bytes.TrimSpace(payload), &document); err != nil {
 		return false
 	}
-	trimmed := bytes.TrimSpace(document.AgentRunExecutionSpec)
+	trimmed := bytes.TrimSpace(document[field])
 	return len(trimmed) > 0 && !bytes.Equal(trimmed, []byte("null"))
 }
 
@@ -470,16 +567,51 @@ type workspacePVCRef struct {
 }
 
 func parseWorkspacePVCRef(raw string, defaultNamespace string) (workspacePVCRef, error) {
+	return parsePVCRef(
+		raw,
+		defaultNamespace,
+		"agent_run_workspace_pvc_ref_required",
+		"invalid_agent_run_workspace_pvc_ref",
+		"agent_run workspace PVC ref is required",
+		"agent_run workspace PVC ref is invalid",
+		"agent_run workspace PVC namespace is invalid",
+		"agent_run workspace PVC claim name is invalid",
+	)
+}
+
+func parseBuildContextPVCRef(raw string, defaultNamespace string) (workspacePVCRef, error) {
+	return parsePVCRef(
+		raw,
+		defaultNamespace,
+		"build_context_ref_required",
+		"invalid_build_context_ref",
+		"build context PVC ref is required",
+		"build context PVC ref is invalid",
+		"build context PVC namespace is invalid",
+		"build context PVC claim name is invalid",
+	)
+}
+
+func parsePVCRef(
+	raw string,
+	defaultNamespace string,
+	requiredCode string,
+	invalidCode string,
+	requiredMessage string,
+	invalidMessage string,
+	invalidNamespaceMessage string,
+	invalidClaimMessage string,
+) (workspacePVCRef, error) {
 	value := strings.TrimSpace(raw)
 	namespace := strings.TrimSpace(defaultNamespace)
 	claimName := ""
 	switch {
 	case value == "":
-		return workspacePVCRef{}, newExecutionError("agent_run_workspace_pvc_ref_required", "agent_run workspace PVC ref is required")
+		return workspacePVCRef{}, newExecutionError(requiredCode, requiredMessage)
 	case strings.HasPrefix(value, "pvc://"):
 		parts := strings.Split(strings.TrimPrefix(value, "pvc://"), "/")
 		if len(parts) != 2 {
-			return workspacePVCRef{}, newExecutionError("invalid_agent_run_workspace_pvc_ref", "agent_run workspace PVC ref is invalid")
+			return workspacePVCRef{}, newExecutionError(invalidCode, invalidMessage)
 		}
 		namespace = strings.TrimSpace(parts[0])
 		claimName = strings.TrimSpace(parts[1])
@@ -488,24 +620,145 @@ func parseWorkspacePVCRef(raw string, defaultNamespace string) (workspacePVCRef,
 	case !strings.Contains(value, "://"):
 		claimName = value
 	default:
-		return workspacePVCRef{}, newExecutionError("invalid_agent_run_workspace_pvc_ref", "agent_run workspace PVC ref is invalid")
+		return workspacePVCRef{}, newExecutionError(invalidCode, invalidMessage)
 	}
 	if errs := validation.IsDNS1123Label(namespace); len(errs) > 0 {
-		return workspacePVCRef{}, newExecutionError("invalid_agent_run_workspace_pvc_ref", "agent_run workspace PVC namespace is invalid")
+		return workspacePVCRef{}, newExecutionError(invalidCode, invalidNamespaceMessage)
 	}
 	if errs := validation.IsDNS1123Subdomain(claimName); len(errs) > 0 {
-		return workspacePVCRef{}, newExecutionError("invalid_agent_run_workspace_pvc_ref", "agent_run workspace PVC claim name is invalid")
+		return workspacePVCRef{}, newExecutionError(invalidCode, invalidClaimMessage)
 	}
 	return workspacePVCRef{Namespace: namespace, ClaimName: claimName}, nil
 }
 
 func runnerImageFromRef(raw string) (string, error) {
+	return containerImageFromRef(raw, "invalid_agent_run_runner_image_ref", "agent_run runner image ref is invalid")
+}
+
+func containerImageFromRef(raw string, code string, message string) (string, error) {
 	value := strings.TrimSpace(raw)
 	value = strings.TrimPrefix(value, "image://")
-	if strings.TrimSpace(value) == "" || strings.ContainsAny(value, " \t\r\n") || len(value) > 512 {
-		return "", newExecutionError("invalid_agent_run_runner_image_ref", "agent_run runner image ref is invalid")
+	if value == "" || strings.ContainsAny(value, " \t\r\n") || len(value) > 512 {
+		return "", newExecutionError(code, message)
 	}
 	return value, nil
+}
+
+func buildDestinationImageRef(rawImageRef string, rawTag string) (string, error) {
+	imageRef, err := containerImageFromRef(rawImageRef, "invalid_build_image_ref", "build image ref is invalid")
+	if err != nil {
+		return "", err
+	}
+	if strings.Contains(imageRef, "@") || imageRefHasTag(imageRef) {
+		return "", newExecutionError("invalid_build_image_ref", "build image ref must not include tag or digest")
+	}
+	tag := strings.TrimSpace(rawTag)
+	if !validImageTag(tag) {
+		return "", newExecutionError("invalid_build_image_tag", "build image tag is invalid")
+	}
+	return imageRef + ":" + tag, nil
+}
+
+func imageRefHasTag(value string) bool {
+	lastSlash := strings.LastIndex(value, "/")
+	lastColon := strings.LastIndex(value, ":")
+	return lastColon > lastSlash
+}
+
+func validImageTag(value string) bool {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" || len(trimmed) > 128 {
+		return false
+	}
+	for _, char := range trimmed {
+		if (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || (char >= '0' && char <= '9') || char == '_' || char == '.' || char == '-' {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func buildDockerfilePath(raw string) (string, error) {
+	value := strings.TrimSpace(raw)
+	switch {
+	case strings.HasPrefix(value, "context://"):
+		value = strings.TrimPrefix(value, "context://")
+	case strings.HasPrefix(value, "workspace://"):
+		value = strings.TrimPrefix(value, "workspace://")
+	case strings.Contains(value, "://"):
+		return "", newExecutionError("invalid_build_dockerfile_ref", "build Dockerfile ref must point inside build context")
+	}
+	if strings.HasPrefix(value, "/") || strings.ContainsAny(value, "\\\x00\r\n\t") || len(value) > 256 {
+		return "", newExecutionError("invalid_build_dockerfile_ref", "build Dockerfile ref is invalid")
+	}
+	cleaned := path.Clean(value)
+	if cleaned == "." || cleaned == ".." || strings.HasPrefix(cleaned, "../") {
+		return "", newExecutionError("invalid_build_dockerfile_ref", "build Dockerfile ref must stay inside build context")
+	}
+	return buildContextMountPath + "/" + cleaned, nil
+}
+
+func buildKanikoArgs(dockerfilePath string, destination string, target string) []string {
+	args := []string{
+		"--context=dir://" + buildContextMountPath,
+		"--dockerfile=" + dockerfilePath,
+		"--destination=" + destination,
+		"--target=" + strings.TrimSpace(target),
+		"--cache=false",
+		"--snapshot-mode=" + kanikoSnapshotMode,
+		"--verbosity=" + kanikoVerbosity,
+	}
+	return args
+}
+
+type registrySecretRef struct {
+	Name string
+	Key  string
+}
+
+func buildRegistrySecretRef(refs []runtimeservice.RuntimeJobExecutionRefInput) (*registrySecretRef, error) {
+	var result *registrySecretRef
+	for _, ref := range refs {
+		kind := strings.TrimSpace(ref.Kind)
+		if kind != "registry" && kind != "registry_docker_config" && kind != "docker_config" {
+			continue
+		}
+		if result != nil {
+			return nil, newExecutionError("invalid_build_registry_secret_ref", "build registry secret refs must contain at most one registry config")
+		}
+		parsed, err := parseRegistrySecretRef(ref.Ref)
+		if err != nil {
+			return nil, err
+		}
+		result = &parsed
+	}
+	return result, nil
+}
+
+func parseRegistrySecretRef(raw string) (registrySecretRef, error) {
+	value := strings.TrimSpace(raw)
+	switch {
+	case strings.HasPrefix(value, "secret://runtime/"):
+		value = strings.TrimPrefix(value, "secret://runtime/")
+	case strings.HasPrefix(value, "k8s://secret/"):
+		value = strings.TrimPrefix(value, "k8s://secret/")
+	default:
+		return registrySecretRef{}, newExecutionError("invalid_build_registry_secret_ref", "build registry secret ref is invalid")
+	}
+	key := kanikoRegistrySecretKey
+	if before, after, ok := strings.Cut(value, "#"); ok {
+		value = before
+		key = strings.TrimSpace(after)
+	}
+	name := strings.TrimSpace(value)
+	if errs := validation.IsDNS1123Subdomain(name); len(errs) > 0 {
+		return registrySecretRef{}, newExecutionError("invalid_build_registry_secret_ref", "build registry secret name is invalid")
+	}
+	if errs := validation.IsConfigMapKey(key); len(errs) > 0 {
+		return registrySecretRef{}, newExecutionError("invalid_build_registry_secret_ref", "build registry secret key is invalid")
+	}
+	return registrySecretRef{Name: name, Key: key}, nil
 }
 
 func agentRunRunnerMode(mode enum.AgentRunRunnerMode) (string, error) {
@@ -708,6 +961,27 @@ func restrictedAgentRunContainerSecurityContext() *corev1.SecurityContext {
 	}
 }
 
+func restrictedBuildPodSecurityContext() *corev1.PodSecurityContext {
+	return &corev1.PodSecurityContext{
+		SeccompProfile: &corev1.SeccompProfile{
+			Type: corev1.SeccompProfileTypeRuntimeDefault,
+		},
+	}
+}
+
+func restrictedBuildContainerSecurityContext() *corev1.SecurityContext {
+	return &corev1.SecurityContext{
+		AllowPrivilegeEscalation: boolPtr(false),
+		Capabilities: &corev1.Capabilities{
+			Drop: []corev1.Capability{corev1.Capability("ALL")},
+		},
+		Privileged: boolPtr(false),
+		SeccompProfile: &corev1.SeccompProfile{
+			Type: corev1.SeccompProfileTypeRuntimeDefault,
+		},
+	}
+}
+
 func runtimeArtifactRefs(clusterID uuid.UUID, spec executionSpec, jobRef string) []runtimeservice.RuntimeArtifactRefInput {
 	refs := []runtimeservice.RuntimeArtifactRefInput{
 		{ArtifactType: enum.RuntimeArtifactTypeKubernetesJob, ExternalRef: jobRef, MetadataJSON: []byte(`{}`)},
@@ -717,6 +991,7 @@ func runtimeArtifactRefs(clusterID uuid.UUID, spec executionSpec, jobRef string)
 		refs = append(refs, runtimeservice.RuntimeArtifactRefInput{
 			ArtifactType: enum.RuntimeArtifactTypeImageRef,
 			ExternalRef:  spec.ImageArtifactRef,
+			Digest:       spec.ImageArtifactDigest,
 			MetadataJSON: []byte(`{}`),
 		})
 	}

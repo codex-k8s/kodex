@@ -85,6 +85,10 @@ func (h handlers) getGovernanceSummary(w http.ResponseWriter, req *http.Request)
 	handleQuery(w, req, GetGovernanceSummaryRequest, h.governance.GetGovernanceSummary, GovernanceSummaryResponse, governanceManagerError)
 }
 
+func (h handlers) getSelfDeploySummary(w http.ResponseWriter, req *http.Request) {
+	handleQuery(w, req, GetSelfDeploySummaryRequest, h.agentManager.ListSelfDeployPlans, SelfDeploySummaryResponse, agentManagerError)
+}
+
 func decodeOwnerInboxRespondBody(req *http.Request) (OwnerInboxRespondBody, *SafeError) {
 	var body OwnerInboxRespondBody
 	decoder := json.NewDecoder(req.Body)

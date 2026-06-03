@@ -17,6 +17,8 @@ tags:
     description: Безопасное чтение agent Run для операторского UI.
   - name: governance
     description: Безопасная сводка governance decisions для операторского UI.
+  - name: self-deploy
+    description: Безопасная self-deploy сводка для владельца.
 x-kodex-contract-status: mvp-staff-gateway
 paths:
   /v1/owner-inbox/items:
@@ -360,6 +362,46 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/DownstreamUnavailable'
+  /v1/self-deploy/summary:
+    get:
+      tags: [self-deploy]
+      operationId: getSelfDeploySummary
+      summary: Получить безопасную self-deploy сводку.
+      description: |
+        Возвращает latest visible `agent-manager.ListSelfDeployPlans` summary для командного центра.
+        Gateway не читает БД доменных сервисов, не запускает deploy, не принимает governance decision
+        и не возвращает raw webhook body, provider response, diff, полный YAML, token, OAuth state/cookies,
+        secret values или большие логи. Если доменные данные ещё не появились, ответ остаётся успешным,
+        но содержит `unavailable`/`pending` статусы без фиктивных данных.
+      parameters:
+        - $ref: '#/components/parameters/RequestIdHeader'
+        - $ref: '#/components/parameters/TraceIdHeader'
+        - $ref: '#/components/parameters/SessionIdHeader'
+        - $ref: '#/components/parameters/ActorTypeHeader'
+        - $ref: '#/components/parameters/ActorIdHeader'
+        - $ref: '#/components/parameters/AgentScopeTypeQuery'
+        - $ref: '#/components/parameters/AgentScopeRefQuery'
+        - $ref: '#/components/parameters/SelfDeployProjectRefQuery'
+        - $ref: '#/components/parameters/SelfDeployRepositoryRefQuery'
+        - $ref: '#/components/parameters/SelfDeployProviderSignalRefQuery'
+        - $ref: '#/components/parameters/SelfDeployPlanStatusQuery'
+      responses:
+        '200':
+          description: Self-deploy сводка получена или честно недоступна.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SelfDeploySummaryResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/PermissionDenied'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/DownstreamUnavailable'
 components:
   parameters:
     RunIdPath:
@@ -573,6 +615,37 @@ components:
         type: string
         maxLength: 256
       description: Safe ref owner-domain факта.
+    SelfDeployProjectRefQuery:
+      name: project_ref
+      in: query
+      required: false
+      schema:
+        type: string
+        maxLength: 256
+      description: Safe ref проекта для фильтра self-deploy plan.
+    SelfDeployRepositoryRefQuery:
+      name: repository_ref
+      in: query
+      required: false
+      schema:
+        type: string
+        maxLength: 256
+      description: Safe ref репозитория для фильтра self-deploy plan.
+    SelfDeployProviderSignalRefQuery:
+      name: provider_signal_ref
+      in: query
+      required: false
+      schema:
+        type: string
+        maxLength: 256
+      description: Safe ref provider signal для фильтра self-deploy plan.
+    SelfDeployPlanStatusQuery:
+      name: status
+      in: query
+      required: false
+      schema:
+        $ref: '#/components/schemas/SelfDeployPlanStatusFilter'
+      description: Фильтр self-deploy plan по статусу.
     RequestIdPath:
       name: request_id
       in: path
@@ -959,6 +1032,30 @@ components:
     GovernanceEvidenceKind:
       type: string
       enum: [unspecified, provider_comment, provider_review, provider_check, runtime_summary, document, risk_factor, review_signal, interaction_callback, object_ref, custom, agent_acceptance, agent_run, agent_human_gate]
+    SelfDeploySummaryAvailability:
+      type: string
+      enum: [unavailable, ready]
+      x-enum-varnames:
+        - SelfDeploySummaryAvailabilityUnavailable
+        - SelfDeploySummaryAvailabilityReady
+    SelfDeployProviderSignalStatus:
+      type: string
+      enum: [unavailable, stored_ref]
+    SelfDeployPlanStatus:
+      type: string
+      enum: [unavailable, unspecified, pending_approval, approved, rejected, cancelled, failed]
+    SelfDeployPlanStatusFilter:
+      type: string
+      enum: [unspecified, pending_approval, approved, rejected, cancelled, failed]
+    SelfDeployPathCategory:
+      type: string
+      enum: [unspecified, service_source, service_config, deploy_manifest, runtime_config, documentation, test, platform_policy, other]
+    SelfDeployGovernanceStatus:
+      type: string
+      enum: [unavailable, pending, resolved]
+    SelfDeployRuntimeStatus:
+      type: string
+      enum: [unavailable, pending, stored_ref, running, completed, failed]
     DeliveryAttemptStatus:
       type: string
       enum: [unspecified, queued, sent, accepted, delivered, failed, cancelled, expired]
@@ -1273,6 +1370,152 @@ components:
           type: string
         summary:
           $ref: '#/components/schemas/GovernanceSummary'
+    SelfDeploySummaryResponse:
+      type: object
+      additionalProperties: false
+      required: [request_id, summary]
+      properties:
+        request_id:
+          type: string
+        correlation_id:
+          type: string
+        summary:
+          $ref: '#/components/schemas/SelfDeploySummary'
+    SelfDeploySummary:
+      type: object
+      additionalProperties: false
+      required:
+        - availability
+        - provider_signal
+        - deploy_plan
+        - governance
+        - runtime
+        - affected_service_keys
+        - path_categories
+        - expected_runtime_job_types
+      properties:
+        availability:
+          $ref: '#/components/schemas/SelfDeploySummaryAvailability'
+        self_deploy_plan_id:
+          type: string
+          maxLength: 256
+        project_ref:
+          type: string
+          maxLength: 256
+        repository_ref:
+          type: string
+          maxLength: 256
+        source_ref:
+          type: string
+          maxLength: 256
+        merge_commit_sha:
+          type: string
+          maxLength: 128
+        services_yaml_ref:
+          type: string
+          maxLength: 256
+        services_yaml_digest:
+          type: string
+          maxLength: 256
+        plan_fingerprint:
+          type: string
+          maxLength: 256
+        safe_summary:
+          type: string
+          maxLength: 2000
+        affected_service_keys:
+          type: array
+          items:
+            type: string
+            maxLength: 128
+        path_categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/SelfDeployPathCategory'
+        expected_runtime_job_types:
+          type: array
+          items:
+            type: string
+            maxLength: 128
+        provider_signal:
+          $ref: '#/components/schemas/SelfDeployProviderSignalSummary'
+        deploy_plan:
+          $ref: '#/components/schemas/SelfDeployPlanSummary'
+        governance:
+          $ref: '#/components/schemas/SelfDeployGovernanceSummary'
+        runtime:
+          $ref: '#/components/schemas/SelfDeployRuntimeSummary'
+        safe_error:
+          $ref: '#/components/schemas/SelfDeploySafeError'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          format: int64
+    SelfDeployProviderSignalSummary:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          $ref: '#/components/schemas/SelfDeployProviderSignalStatus'
+        ref:
+          type: string
+          maxLength: 256
+    SelfDeployPlanSummary:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          $ref: '#/components/schemas/SelfDeployPlanStatus'
+    SelfDeployGovernanceSummary:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          $ref: '#/components/schemas/SelfDeployGovernanceStatus'
+        gate_request_ref:
+          type: string
+          maxLength: 256
+        gate_decision_ref:
+          type: string
+          maxLength: 256
+        release_decision_package_ref:
+          type: string
+          maxLength: 256
+        release_decision_ref:
+          type: string
+          maxLength: 256
+    SelfDeployRuntimeSummary:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          $ref: '#/components/schemas/SelfDeployRuntimeStatus'
+        runtime_job_ref:
+          type: string
+          maxLength: 256
+        runtime_status_summary:
+          type: string
+          maxLength: 2000
+    SelfDeploySafeError:
+      type: object
+      additionalProperties: false
+      required: [code, summary]
+      properties:
+        code:
+          type: string
+          maxLength: 128
+        summary:
+          type: string
+          maxLength: 2000
     GovernanceSummary:
       type: object
       additionalProperties: false

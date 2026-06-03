@@ -35,6 +35,7 @@ type AgentManagerClient interface {
 	agentRunSummaryReader
 	agentRunRuntimeReader
 	agentActivityReader
+	selfDeployPlanReader
 }
 
 type agentSessionReader interface {
@@ -51,6 +52,10 @@ type agentRunRuntimeReader interface {
 
 type agentActivityReader interface {
 	ListAgentActivities(context.Context, *agentsv1.ListAgentActivitiesRequest) (*agentsv1.ListAgentActivitiesResponse, error)
+}
+
+type selfDeployPlanReader interface {
+	ListSelfDeployPlans(context.Context, *agentsv1.ListSelfDeployPlansRequest) (*agentsv1.ListSelfDeployPlansResponse, error)
 }
 
 type GovernanceManagerClient interface {

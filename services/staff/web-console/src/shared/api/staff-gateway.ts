@@ -1,5 +1,6 @@
 import {
   getAgentRunRuntimeStatus,
+  getSelfDeploySummary,
   getOwnerInboxItem,
   listAgentRunActivities,
   listAgentRunSummaries,
@@ -15,6 +16,7 @@ import {
   type AgentSessionListResponse,
   type AgentSessionStatus,
   type GetAgentRunRuntimeStatusData,
+  type GetSelfDeploySummaryData,
   type GetOwnerInboxItemData,
   type ListAgentRunActivitiesData,
   type ListAgentRunSummariesData,
@@ -27,6 +29,7 @@ import {
   type RespondOwnerInboxItemData,
   type RequestKind,
   type RequestStatus,
+  type SelfDeploySummaryResponse,
 } from './generated';
 import { client as staffGatewayClient } from './generated/client.gen';
 import { isAgentScopeType, type OperatorContext, operationHeaders } from './context';
@@ -82,6 +85,12 @@ export type AgentRunSummaryListQuery = {
   createdBefore?: string;
   pageSize?: number;
   pageToken?: string;
+};
+
+export type SelfDeploySummaryQuery = {
+  projectRef?: string;
+  repositoryRef?: string;
+  providerSignalRef?: string;
 };
 
 export function canQueryAgentScope(context: OperatorContext): boolean {
@@ -254,6 +263,32 @@ export async function fetchAgentRunActivities(
         status: query.status,
         page_size: query.pageSize,
         page_token: query.pageToken,
+      },
+    });
+    return response.data;
+  } catch (error) {
+    throw normalizeApiError(error);
+  }
+}
+
+export async function fetchSelfDeploySummary(
+  context: OperatorContext,
+  query: SelfDeploySummaryQuery = {},
+): Promise<SelfDeploySummaryResponse> {
+  if (!isAgentScopeType(context.scopeType)) {
+    throw unsupportedAgentScopeError();
+  }
+  try {
+    const response = await getSelfDeploySummary({
+      client: staffGatewayClient,
+      throwOnError: true,
+      headers: operationHeaders<GetSelfDeploySummaryData['headers']>(context),
+      query: {
+        scope_type: context.scopeType,
+        scope_ref: context.scopeRef.trim(),
+        project_ref: query.projectRef,
+        repository_ref: query.repositoryRef,
+        provider_signal_ref: query.providerSignalRef,
       },
     });
     return response.data;
