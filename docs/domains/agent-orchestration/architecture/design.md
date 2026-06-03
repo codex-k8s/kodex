@@ -5,8 +5,8 @@ title: kodex — дизайн домена оркестрации агентов
 status: active
 owner_role: SA
 created_at: 2026-05-12
-updated_at: 2026-06-02
-related_issues: [733, 753, 698, 322, 782, 795, 820, 834, 842, 862, 866, 937, 954, 968, 984, 994, 1011, 1015]
+updated_at: 2026-06-03
+related_issues: [733, 753, 698, 322, 782, 795, 820, 834, 842, 862, 866, 937, 954, 968, 984, 994, 1011, 1015, 1022, 1027]
 related_prs: []
 related_adrs: []
 approvals:
@@ -145,15 +145,17 @@ sequenceDiagram
   AM->>PC: GetSelfDeploySignal(provider signal ref, source refs)
   PC-->>AM: ready safe input или non-ready status
   AM->>AM: CreateSelfDeployPlanFromSignal(signal ref, source ref, service keys, path categories)
-  AM-->>GOV: refs для gate/release approval
-  Note over AM,R: build/deploy jobs не создаются до approval
+  AM->>GOV: PrepareSelfDeployPlanGate(plan refs, services.yaml digest, fingerprint)
+  GOV-->>AM: pending/approved/rejected/blocked + safe gate refs
+  AM->>AM: сохранить governance refs/status
+  Note over AM,R: build/deploy jobs не создаются до approved gate status
 ```
 
 `agent-manager` владеет только orchestration state плана: какой safe signal получен, какие service keys/path categories затронуты, какой digest `services.yaml` принят как вход и какие runtime job types ожидаются после approval. `project-catalog` остаётся владельцем проектной декларации и проверенной проекции `services.yaml`, `provider-hub` — владельцем provider signal и provider-native фактов, `governance-manager` — владельцем approval/release decision, `runtime-manager` — владельцем будущих build/deploy jobs и их исполнения.
 
 Встроенный consumer `agent-manager` читает `provider.repository.changed` только как безопасный trigger с `provider_signal_ref` и source refs. Для live provider-owned signal без project fields consumer использует обязательный `KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_PROJECT_ID`, а затем вызывает `project-catalog.GetSelfDeploySignal`: только статус `ready` превращается в `CreateSelfDeployPlanFromSignal`; статусы `needs_services_policy_reconcile`, `needs_repository_change_summary` и другие non-ready статусы фиксируются как безопасная диагностика ожидания и не создают ложный plan. `agent-manager` не подставляет `path_digest` вместо `services_yaml_digest` и не вычисляет affected service keys.
 
-`CreateSelfDeployPlanFromSignal` фиксирует статус `pending_approval`, плановый fingerprint и событие `agent.self_deploy.plan_requested` из безопасного provider/project signal. `provider_signal_ref` обязателен: повтор с тем же signal ref и fingerprint возвращает существующий план, а другой fingerprint по тому же signal ref считается конфликтом. `CreateSelfDeployPlan` остаётся typed/manual входом для уже подготовленного plan input. Ни одна команда не вызывает `runtime-manager.CreateJob`, не пишет provider/project payload и не читает Kubernetes. Для будущего перехода к build/deploy следующий срез должен использовать сохранённые refs/fingerprint и typed governance decision ref; автоматический deploy после merge в `main` остаётся запрещённым.
+`CreateSelfDeployPlanFromSignal` фиксирует статус `pending_approval`, плановый fingerprint и событие `agent.self_deploy.plan_requested` из безопасного provider/project signal. `provider_signal_ref` обязателен: повтор с тем же signal ref и fingerprint возвращает существующий план, а другой fingerprint по тому же signal ref считается конфликтом. `CreateSelfDeployPlan` остаётся typed/manual входом для уже подготовленного plan input. После ready-плана `agent-manager` вызывает `governance-manager.PrepareSelfDeployPlanGate`, сохраняет только safe `risk_assessment_ref`, `gate_request_ref`, `gate_decision_ref` и status/version; повтор после уже подготовленного gate не создаёт второй gate request. Ни одна команда не вызывает `runtime-manager.CreateJob`, не пишет provider/project payload и не читает Kubernetes. Для будущего перехода к build/deploy следующий срез должен использовать сохранённые refs/fingerprint и `approved` governance status; автоматический deploy после merge в `main` остаётся запрещённым.
 
 ### Приёмка результата агента
 
@@ -269,7 +271,7 @@ MCP не владеет доменным состоянием и не подме
 
 `agent-manager` обращается к `governance-manager` за оценкой риска, записью review signals, созданием gate request и чтением итогового gate/release decision. `agent-manager` хранит только ожидание flow, normalized owner outcome и typed refs на `risk_assessment`, `gate_request`, `gate_decision`, `release_decision_package`, `release_decision`, `risk_profile`, `gate_policy` и `release_policy`; сами risk/gate/release decisions и evidence body остаются в governance-контуре.
 
-Self-deploy plan использует те же typed governance refs как approval context. До появления подходящего `gate_decision_ref` или `release_decision_ref` план остаётся `pending_approval` и не создаёт build/deploy задания.
+Self-deploy plan использует те же typed governance refs как approval context. После ready-плана `agent-manager` готовит локальный risk assessment/gate request через `PrepareSelfDeployPlanGate`; до `approved` governance status план остаётся `pending_approval` или безопасно переходит в `rejected`/`failed`, не создавая build/deploy задания.
 
 ### `interaction-hub`
 

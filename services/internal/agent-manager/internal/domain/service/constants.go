@@ -24,4 +24,5 @@ const (
 	operationRecordHumanGateDecision        = "domain.Service.RecordHumanGateDecision"
 	operationCreateSelfDeployPlan           = "domain.Service.CreateSelfDeployPlan"
 	operationCreateSelfDeployPlanFromSignal = "domain.Service.CreateSelfDeployPlanFromSignal"
+	operationPrepareSelfDeployPlanGate      = "domain.Service.PrepareSelfDeployPlanGate"
 )

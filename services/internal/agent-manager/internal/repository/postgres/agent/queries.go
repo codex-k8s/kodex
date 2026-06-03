@@ -23,6 +23,7 @@ var (
 	querySelfDeployPlanCreate              = mustLoadQuery("self_deploy_plan__create")
 	querySelfDeployPlanGet                 = mustLoadQuery("self_deploy_plan__get")
 	querySelfDeployPlanList                = mustLoadQuery("self_deploy_plan__list")
+	querySelfDeployPlanUpdate              = mustLoadQuery("self_deploy_plan__update")
 	queryFlowCreate                        = mustLoadQuery("flow__create")
 	queryFlowGet                           = mustLoadQuery("flow__get")
 	queryFlowList                          = mustLoadQuery("flow__list")

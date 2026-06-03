@@ -5248,12 +5248,16 @@ func TestCreateSelfDeployPlanStoresPendingSafePlan(t *testing.T) {
 func TestCreateSelfDeployPlanReplaysSameCommand(t *testing.T) {
 	t.Parallel()
 
-	input := validSelfDeployPlanInput()
+	input := validSelfDeployPlanGateInput()
 	plan := selfDeployPlanFromInputForTest(input, uuid.MustParse("5f7f3a10-0003-4000-8000-000000000003"), "command:"+input.Meta.CommandID.String())
 	payload, err := marshalCommandPayload(selfDeployPlanCommandPayload{SelfDeployPlan: plan})
 	if err != nil {
 		t.Fatalf("marshal payload: %v", err)
 	}
+	storedPlan := plan
+	storedPlan.GovernanceContext.RiskAssessmentRef = "governance:risk_assessment/aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"
+	storedPlan.GovernanceContext.GateRequestRef = "governance:gate_request/bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb"
+	storedPlan.Version = 2
 	commandID := input.Meta.CommandID
 	repository := &fakeRepository{
 		replay: &entity.CommandResult{
@@ -5264,9 +5268,14 @@ func TestCreateSelfDeployPlanReplaysSameCommand(t *testing.T) {
 			AggregateID:   plan.ID,
 			ResultPayload: payload,
 		},
-		selfDeployByID: map[uuid.UUID]entity.SelfDeployPlan{plan.ID: plan},
+		selfDeployByID: map[uuid.UUID]entity.SelfDeployPlan{plan.ID: storedPlan},
 	}
-	service := New(Config{Repository: repository})
+	preparer := &fakeSelfDeployGatePreparer{}
+	service := New(Config{
+		Repository:             repository,
+		SelfDeployGatePreparer: preparer,
+		SelfDeployGateEnabled:  true,
+	})
 
 	replay, err := service.CreateSelfDeployPlan(context.Background(), input)
 	if err != nil {
@@ -5275,8 +5284,14 @@ func TestCreateSelfDeployPlanReplaysSameCommand(t *testing.T) {
 	if replay.ID != plan.ID {
 		t.Fatalf("replay id = %s, want %s", replay.ID, plan.ID)
 	}
+	if replay.Version != storedPlan.Version || replay.GovernanceContext.GateRequestRef != storedPlan.GovernanceContext.GateRequestRef {
+		t.Fatalf("replay = %+v, want current stored plan %+v", replay, storedPlan)
+	}
 	if repository.createSelfDeployCalled {
 		t.Fatal("CreateSelfDeployPlanWithResult called during replay")
+	}
+	if preparer.calls != 0 {
+		t.Fatalf("PrepareSelfDeployPlanGate calls = %d, want 0", preparer.calls)
 	}
 }
 
@@ -5338,6 +5353,200 @@ func TestCreateSelfDeployPlanFromSignalReplaysExistingSignal(t *testing.T) {
 	}
 	if repository.selfDeployFilter.ProviderSignalRef != input.ProviderSignalRef {
 		t.Fatalf("provider signal filter = %q, want %q", repository.selfDeployFilter.ProviderSignalRef, input.ProviderSignalRef)
+	}
+}
+
+func TestCreateSelfDeployPlanFromSignalPreparesGovernanceGate(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 6, 3, 10, 0, 0, 0, time.UTC)
+	planID := uuid.MustParse("5f7f3a10-0010-4000-8000-000000000010")
+	createEventID := uuid.MustParse("5f7f3a10-0011-4000-8000-000000000011")
+	updateEventID := uuid.MustParse("5f7f3a10-0012-4000-8000-000000000012")
+	repository := &fakeRepository{selfDeployByID: map[uuid.UUID]entity.SelfDeployPlan{}}
+	preparer := &fakeSelfDeployGatePreparer{
+		result: SelfDeployPlanGatePreparationResult{
+			Status: SelfDeployPlanGateStatusPending,
+			GovernanceContext: value.GovernanceContextRef{
+				RiskAssessmentRef: "governance:risk_assessment/aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa",
+				GateRequestRef:    "governance:gate_request/bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb",
+			},
+			SafeSummary: "owner approval required for self-deploy",
+		},
+	}
+	service := New(Config{
+		Repository:             repository,
+		Clock:                  fixedClock{now: now},
+		IDGenerator:            &sequenceIDGenerator{ids: []uuid.UUID{planID, createEventID, updateEventID}},
+		SelfDeployGatePreparer: preparer,
+		SelfDeployGateEnabled:  true,
+	})
+	input := validSelfDeployPlanGateInput()
+
+	plan, err := service.CreateSelfDeployPlanFromSignal(context.Background(), CreateSelfDeployPlanFromSignalInput{CreateSelfDeployPlanInput: input})
+	if err != nil {
+		t.Fatalf("CreateSelfDeployPlanFromSignal() err = %v", err)
+	}
+	if preparer.calls != 1 {
+		t.Fatalf("PrepareSelfDeployPlanGate calls = %d, want 1", preparer.calls)
+	}
+	if preparer.last.Plan.ID != planID || preparer.last.Meta.IdempotencyKey != "self_deploy_plan_gate:"+planID.String() {
+		t.Fatalf("gate input = %+v", preparer.last)
+	}
+	if !repository.updateSelfDeployCalled {
+		t.Fatal("UpdateSelfDeployPlanWithResult was not called")
+	}
+	if plan.Version != 2 || plan.Status != enum.SelfDeployPlanStatusPendingApproval {
+		t.Fatalf("plan version/status = %d/%s", plan.Version, plan.Status)
+	}
+	if plan.GovernanceContext.GateRequestRef != "governance:gate_request/bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb" {
+		t.Fatalf("gate request ref = %q", plan.GovernanceContext.GateRequestRef)
+	}
+	if repository.updateSelfDeployResult.Operation != operationPrepareSelfDeployPlanGate {
+		t.Fatalf("operation = %q, want %q", repository.updateSelfDeployResult.Operation, operationPrepareSelfDeployPlanGate)
+	}
+	if repository.updateSelfDeployEvent == nil || repository.updateSelfDeployEvent.EventType != agentevents.EventSelfDeployPlanRequested {
+		t.Fatalf("update event = %+v", repository.updateSelfDeployEvent)
+	}
+	payload := decodeAgentPayload(t, *repository.updateSelfDeployEvent)
+	if payload.GovernanceGateRequestRef != plan.GovernanceContext.GateRequestRef ||
+		payload.GovernanceRiskAssessmentRef != plan.GovernanceContext.RiskAssessmentRef ||
+		payload.Status != string(enum.SelfDeployPlanStatusPendingApproval) {
+		t.Fatalf("event payload = %+v", payload)
+	}
+	storedPayload := string(repository.updateSelfDeployResult.ResultPayload) + string(repository.updateSelfDeployEvent.Payload)
+	for _, forbidden := range []string{"webhook_body", "raw_provider_payload", "full_yaml", "secret_value", "token", "validated_payload"} {
+		if strings.Contains(storedPayload, forbidden) {
+			t.Fatalf("stored gate data contains forbidden marker %q", forbidden)
+		}
+	}
+}
+
+func TestCreateSelfDeployPlanFromSignalReusesPreparedGovernanceGate(t *testing.T) {
+	t.Parallel()
+
+	input := validSelfDeployPlanInput()
+	plan := selfDeployPlanFromInputForTest(input, uuid.MustParse("5f7f3a10-0013-4000-8000-000000000013"), "command:"+input.Meta.CommandID.String())
+	plan.GovernanceContext.RiskAssessmentRef = "governance:risk_assessment/aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"
+	plan.GovernanceContext.GateRequestRef = "governance:gate_request/bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb"
+	repository := &fakeRepository{
+		selfDeployByID: map[uuid.UUID]entity.SelfDeployPlan{plan.ID: plan},
+		selfDeployList: []entity.SelfDeployPlan{plan},
+	}
+	preparer := &fakeSelfDeployGatePreparer{}
+	service := New(Config{
+		Repository:             repository,
+		SelfDeployGatePreparer: preparer,
+		SelfDeployGateEnabled:  true,
+	})
+	replayInput := input
+	replayInput.Meta.CommandID = uuid.MustParse("5f7f3a10-0014-4000-8000-000000000014")
+
+	replay, err := service.CreateSelfDeployPlanFromSignal(context.Background(), CreateSelfDeployPlanFromSignalInput{CreateSelfDeployPlanInput: replayInput})
+	if err != nil {
+		t.Fatalf("CreateSelfDeployPlanFromSignal() err = %v", err)
+	}
+	if replay.ID != plan.ID || replay.GovernanceContext.GateRequestRef != plan.GovernanceContext.GateRequestRef {
+		t.Fatalf("replay = %+v, want prepared plan %+v", replay, plan)
+	}
+	if preparer.calls != 0 {
+		t.Fatalf("PrepareSelfDeployPlanGate calls = %d, want 0", preparer.calls)
+	}
+	if repository.updateSelfDeployCalled {
+		t.Fatal("UpdateSelfDeployPlanWithResult called during prepared replay")
+	}
+}
+
+func TestCreateSelfDeployPlanFromSignalReportsGovernanceGateFailure(t *testing.T) {
+	t.Parallel()
+
+	planID := uuid.MustParse("5f7f3a10-0015-4000-8000-000000000015")
+	eventID := uuid.MustParse("5f7f3a10-0016-4000-8000-000000000016")
+	repository := &fakeRepository{selfDeployByID: map[uuid.UUID]entity.SelfDeployPlan{}}
+	preparer := &fakeSelfDeployGatePreparer{err: errs.ErrDependencyUnavailable}
+	service := New(Config{
+		Repository:             repository,
+		IDGenerator:            &sequenceIDGenerator{ids: []uuid.UUID{planID, eventID}},
+		SelfDeployGatePreparer: preparer,
+		SelfDeployGateEnabled:  true,
+	})
+	input := validSelfDeployPlanGateInput()
+
+	_, err := service.CreateSelfDeployPlanFromSignal(context.Background(), CreateSelfDeployPlanFromSignalInput{CreateSelfDeployPlanInput: input})
+	if !errors.Is(err, errs.ErrDependencyUnavailable) {
+		t.Fatalf("CreateSelfDeployPlanFromSignal() err = %v, want %v", err, errs.ErrDependencyUnavailable)
+	}
+	if !repository.createSelfDeployCalled {
+		t.Fatal("CreateSelfDeployPlanWithResult was not called before gate failure")
+	}
+	if repository.updateSelfDeployCalled {
+		t.Fatal("UpdateSelfDeployPlanWithResult called after gate failure")
+	}
+}
+
+func TestCreateSelfDeployPlanMapsApprovedGovernanceGate(t *testing.T) {
+	t.Parallel()
+
+	planID := uuid.MustParse("5f7f3a10-0017-4000-8000-000000000017")
+	createEventID := uuid.MustParse("5f7f3a10-0018-4000-8000-000000000018")
+	updateEventID := uuid.MustParse("5f7f3a10-0019-4000-8000-000000000019")
+	repository := &fakeRepository{selfDeployByID: map[uuid.UUID]entity.SelfDeployPlan{}}
+	preparer := &fakeSelfDeployGatePreparer{
+		result: SelfDeployPlanGatePreparationResult{
+			Status: SelfDeployPlanGateStatusApproved,
+			GovernanceContext: value.GovernanceContextRef{
+				RiskAssessmentRef: "governance:risk_assessment/aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa",
+			},
+		},
+	}
+	service := New(Config{
+		Repository:             repository,
+		IDGenerator:            &sequenceIDGenerator{ids: []uuid.UUID{planID, createEventID, updateEventID}},
+		SelfDeployGatePreparer: preparer,
+		SelfDeployGateEnabled:  true,
+	})
+	input := validSelfDeployPlanGateInput()
+
+	plan, err := service.CreateSelfDeployPlan(context.Background(), input)
+	if err != nil {
+		t.Fatalf("CreateSelfDeployPlan() err = %v", err)
+	}
+	if plan.Status != enum.SelfDeployPlanStatusApproved {
+		t.Fatalf("status = %s, want %s", plan.Status, enum.SelfDeployPlanStatusApproved)
+	}
+	if plan.GovernanceContext.RiskAssessmentRef == "" {
+		t.Fatal("risk assessment ref is empty")
+	}
+}
+
+func TestCreateSelfDeployPlanRejectsPendingGateWithoutGateRef(t *testing.T) {
+	t.Parallel()
+
+	planID := uuid.MustParse("5f7f3a10-0020-4000-8000-000000000020")
+	eventID := uuid.MustParse("5f7f3a10-0021-4000-8000-000000000021")
+	repository := &fakeRepository{selfDeployByID: map[uuid.UUID]entity.SelfDeployPlan{}}
+	preparer := &fakeSelfDeployGatePreparer{
+		result: SelfDeployPlanGatePreparationResult{
+			Status: SelfDeployPlanGateStatusPending,
+			GovernanceContext: value.GovernanceContextRef{
+				RiskAssessmentRef: "governance:risk_assessment/aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa",
+			},
+		},
+	}
+	service := New(Config{
+		Repository:             repository,
+		IDGenerator:            &sequenceIDGenerator{ids: []uuid.UUID{planID, eventID}},
+		SelfDeployGatePreparer: preparer,
+		SelfDeployGateEnabled:  true,
+	})
+	input := validSelfDeployPlanGateInput()
+
+	_, err := service.CreateSelfDeployPlan(context.Background(), input)
+	if !errors.Is(err, errs.ErrDependencyUnavailable) {
+		t.Fatalf("CreateSelfDeployPlan() err = %v, want %v", err, errs.ErrDependencyUnavailable)
+	}
+	if repository.updateSelfDeployCalled {
+		t.Fatal("UpdateSelfDeployPlanWithResult called for incomplete pending gate")
 	}
 }
 
@@ -5451,6 +5660,12 @@ func validSelfDeployPlanInput() CreateSelfDeployPlanInput {
 	}
 }
 
+func validSelfDeployPlanGateInput() CreateSelfDeployPlanInput {
+	input := validSelfDeployPlanInput()
+	input.GovernanceContext.GateRequestRef = ""
+	return input
+}
+
 func selfDeployPlanFromInputForTest(input CreateSelfDeployPlanInput, id uuid.UUID, idempotencyKey string) entity.SelfDeployPlan {
 	plan, err := normalizeSelfDeployPlanInput(input, idempotencyKey)
 	if err != nil {
@@ -5545,6 +5760,9 @@ type fakeRepository struct {
 	createdSelfDeploy      entity.SelfDeployPlan
 	selfDeployResult       entity.CommandResult
 	selfDeployEvent        entity.OutboxEvent
+	updatedSelfDeploy      entity.SelfDeployPlan
+	updateSelfDeployResult entity.CommandResult
+	updateSelfDeployEvent  *entity.OutboxEvent
 	createFlowCalled       bool
 	createSessionCalled    bool
 	createRunCalled        bool
@@ -5556,6 +5774,7 @@ type fakeRepository struct {
 	createHumanGateCalled  bool
 	updateHumanGateCalled  bool
 	createSelfDeployCalled bool
+	updateSelfDeployCalled bool
 }
 
 type fakeHumanGateRequester struct {
@@ -5576,6 +5795,22 @@ func (f *fakeHumanGateRequester) RequestHumanGate(_ context.Context, input Human
 
 func (f *fakeHumanGateRequester) called() bool {
 	return f.calls > 0
+}
+
+type fakeSelfDeployGatePreparer struct {
+	last   SelfDeployPlanGatePreparationInput
+	result SelfDeployPlanGatePreparationResult
+	err    error
+	calls  int
+}
+
+func (f *fakeSelfDeployGatePreparer) PrepareSelfDeployPlanGate(_ context.Context, input SelfDeployPlanGatePreparationInput) (SelfDeployPlanGatePreparationResult, error) {
+	f.calls++
+	f.last = input
+	if f.err != nil {
+		return SelfDeployPlanGatePreparationResult{}, f.err
+	}
+	return f.result, nil
 }
 
 func hasHumanGateContextRef(refs []HumanGateInteractionExternalRef, kind string, ref string) bool {
@@ -5968,6 +6203,24 @@ func (f *fakeRepository) CreateSelfDeployPlanWithResult(_ context.Context, plan 
 	f.createdSelfDeploy = plan
 	f.selfDeployResult = result
 	f.selfDeployEvent = event
+	if f.selfDeployByID != nil {
+		f.selfDeployByID[plan.ID] = plan
+	}
+	return nil
+}
+
+func (f *fakeRepository) UpdateSelfDeployPlanWithResult(_ context.Context, plan entity.SelfDeployPlan, previousVersion int64, result entity.CommandResult, event *entity.OutboxEvent) error {
+	stored, ok := f.selfDeployByID[plan.ID]
+	if !ok {
+		return errs.ErrNotFound
+	}
+	if stored.Version != previousVersion || plan.Version != previousVersion+1 {
+		return errs.ErrConflict
+	}
+	f.updateSelfDeployCalled = true
+	f.updatedSelfDeploy = plan
+	f.updateSelfDeployResult = result
+	f.updateSelfDeployEvent = event
 	if f.selfDeployByID != nil {
 		f.selfDeployByID[plan.ID] = plan
 	}

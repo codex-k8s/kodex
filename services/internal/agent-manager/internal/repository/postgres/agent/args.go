@@ -395,6 +395,12 @@ func selfDeployPlanArgs(plan entity.SelfDeployPlan) pgx.NamedArgs {
 	}, plan.ID, plan.Version, plan.CreatedAt, plan.UpdatedAt)
 }
 
+func selfDeployPlanUpdateArgs(plan entity.SelfDeployPlan, previousVersion int64) pgx.NamedArgs {
+	args := selfDeployPlanArgs(plan)
+	args["previous_version"] = previousVersion
+	return args
+}
+
 func commandResultArgs(result entity.CommandResult) pgx.NamedArgs {
 	args := pgx.NamedArgs{"key": result.Key}
 	args["command_id"] = postgreslib.NullableUUID(result.CommandID)

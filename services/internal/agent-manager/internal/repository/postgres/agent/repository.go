@@ -100,6 +100,7 @@ func repositoryOperation(name string) string {
 
 var (
 	operationCreateSelfDeployPlan = repositoryOperation("CreateSelfDeployPlanWithResult")
+	operationUpdateSelfDeployPlan = repositoryOperation("UpdateSelfDeployPlanWithResult")
 	operationGetSelfDeployPlan    = repositoryOperation("GetSelfDeployPlan")
 	operationListSelfDeployPlans  = repositoryOperation("ListSelfDeployPlans")
 	operationGetCommandResult     = repositoryOperation("GetCommandResult")
@@ -289,7 +290,12 @@ func (r *Repository) CreateAcceptanceResultWithResult(ctx context.Context, accep
 }
 
 func (r *Repository) UpdateAcceptanceResultWithResult(ctx context.Context, acceptance entity.AcceptanceResult, previousVersion int64, result entity.CommandResult, event *entity.OutboxEvent) error {
-	return r.mutateWithResult(ctx, operationUpdateAcceptance, queryAcceptanceResultUpdate, acceptanceResultUpdateArgs(acceptance, previousVersion), result, event)
+	return r.updateAcceptanceResult(ctx, acceptanceUpdateRequest{
+		item:            acceptance,
+		previousVersion: previousVersion,
+		result:          result,
+		event:           event,
+	})
 }
 
 func (r *Repository) GetAcceptanceResult(ctx context.Context, id uuid.UUID) (entity.AcceptanceResult, error) {
@@ -362,12 +368,37 @@ func (r *Repository) CreateSelfDeployPlanWithResult(ctx context.Context, plan en
 	return r.mutateWithResult(ctx, operationCreateSelfDeployPlan, querySelfDeployPlanCreate, selfDeployPlanArgs(plan), result, &event)
 }
 
+func (r *Repository) UpdateSelfDeployPlanWithResult(ctx context.Context, plan entity.SelfDeployPlan, previousVersion int64, result entity.CommandResult, event *entity.OutboxEvent) error {
+	args := selfDeployPlanUpdateArgs(plan, previousVersion)
+	return r.mutateSelfDeployPlan(ctx, args, result, event)
+}
+
 func (r *Repository) GetSelfDeployPlan(ctx context.Context, id uuid.UUID) (entity.SelfDeployPlan, error) {
 	return queryOne(ctx, r.db, operationGetSelfDeployPlan, querySelfDeployPlanGet, pgx.NamedArgs{"id": id}, scanSelfDeployPlan)
 }
 
 func (r *Repository) ListSelfDeployPlans(ctx context.Context, filter query.SelfDeployPlanFilter) ([]entity.SelfDeployPlan, value.PageResult, error) {
 	return queryPage(ctx, r.db, operationListSelfDeployPlans, querySelfDeployPlanList, selfDeployPlanFilterArgs(filter), scanSelfDeployPlan)
+}
+
+type acceptanceUpdateRequest struct {
+	item            entity.AcceptanceResult
+	previousVersion int64
+	result          entity.CommandResult
+	event           *entity.OutboxEvent
+}
+
+func (r *Repository) updateAcceptanceResult(ctx context.Context, request acceptanceUpdateRequest) error {
+	args := acceptanceResultUpdateArgs(request.item, request.previousVersion)
+	return r.mutateAcceptanceResult(ctx, args, request.result, request.event)
+}
+
+func (r *Repository) mutateAcceptanceResult(ctx context.Context, args pgx.NamedArgs, result entity.CommandResult, event *entity.OutboxEvent) error {
+	return r.mutateWithResult(ctx, operationUpdateAcceptance, queryAcceptanceResultUpdate, args, result, event)
+}
+
+func (r *Repository) mutateSelfDeployPlan(ctx context.Context, args pgx.NamedArgs, result entity.CommandResult, event *entity.OutboxEvent) error {
+	return r.mutateWithResult(ctx, operationUpdateSelfDeployPlan, querySelfDeployPlanUpdate, args, result, event)
 }
 
 func (r *Repository) GetCommandResult(ctx context.Context, identity query.CommandIdentity) (entity.CommandResult, error) {

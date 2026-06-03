@@ -201,6 +201,7 @@ spec:
         - proto/kodex/projects/v1
         - proto/kodex/providers/v1
         - proto/kodex/runtime/v1
+        - proto/kodex/governance/v1
         - specs/asyncapi/agent-manager.v1.yaml
         - specs/asyncapi/interaction-hub.v1.yaml
         - deploy/base/agent-manager
@@ -992,6 +993,7 @@ spec:
         - runtime-manager
         - provider-hub
         - interaction-hub
+        - governance-manager
         - platform-event-log
       deploy:
         serviceManifest: deploy/base/agent-manager/agent-manager.yaml.tpl
