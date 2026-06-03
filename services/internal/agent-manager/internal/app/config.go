@@ -8,6 +8,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/caarlos0/env/v11"
+	"github.com/google/uuid"
 
 	eventconsumer "github.com/codex-k8s/kodex/libs/go/eventconsumer"
 	grpcserver "github.com/codex-k8s/kodex/libs/go/grpcserver"
@@ -273,6 +274,12 @@ func (cfg Config) Validate() error {
 	}
 	if cfg.SelfDeploySignalConsumerEnabled && strings.TrimSpace(cfg.SelfDeploySignalConsumerTargetBranch) == "" {
 		return fmt.Errorf("KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_TARGET_BRANCH is required when self-deploy signal consumer is enabled")
+	}
+	if cfg.SelfDeploySignalConsumerEnabled {
+		projectID, err := uuid.Parse(strings.TrimSpace(cfg.SelfDeploySignalConsumerProjectID))
+		if err != nil || projectID == uuid.Nil {
+			return fmt.Errorf("KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_PROJECT_ID must be a non-empty uuid when self-deploy signal consumer is enabled")
+		}
 	}
 	if cfg.needsEventLogDatabase() && strings.TrimSpace(cfg.EventLogDatabaseDSN) == "" {
 		return fmt.Errorf("KODEX_AGENT_MANAGER_EVENT_LOG_DATABASE_DSN is required for event-log publisher or consumer")

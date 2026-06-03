@@ -105,6 +105,13 @@ Readiness должна видеть:
 - Checkout, workspace paths, `.kodex/guidance/*`, `.kodex/context/agent-run.json`, runtime job state и будущий executor остаются у `runtime-manager`; `agent-manager` хранит только safe refs/status/fingerprint/diagnostic summary и `runtime_job_ref`.
 - Если `Run` перешёл в `waiting` с reason `runtime_job_retryable`, проверить доступность `runtime-manager` и повторить orchestration-команду с тем же idempotency/command context. Если `Run` перешёл в `failed` с `runtime_job_failed`, смотреть безопасную summary в `Run` и состояние job/slot в `runtime-manager`.
 
+### self-deploy signal consumer
+
+- Проверить `KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_CONSUMER_ENABLED`.
+- Проверить, что `KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_PROJECT_ID` задан и указывает на self-project scope в `project-catalog`.
+- Для provider-owned `provider.repository.changed` без `project_id` consumer использует этот project id как область вызова `project-catalog.GetSelfDeploySignal`; `agent-manager` не вычисляет `services_yaml_digest` или affected service keys сам.
+- Если consumer получает non-ready status от `project-catalog`, plan не создаётся; нужно устранить причину вроде `needs_services_policy_reconcile` или `needs_repository_change_summary`.
+
 ### provider-hub follow-up dispatch
 
 - Проверить `KODEX_AGENT_MANAGER_PROVIDER_HUB_WRITE_ENABLED`.

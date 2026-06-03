@@ -118,6 +118,17 @@ func TestValidateRequiresProjectCatalogTokenWhenSelfDeploySignalConsumerEnabled(
 	}
 }
 
+func TestValidateRequiresProjectIDWhenSelfDeploySignalConsumerEnabled(t *testing.T) {
+	t.Parallel()
+
+	cfg := validConfig()
+	cfg.SelfDeploySignalConsumerEnabled = true
+	cfg.SelfDeploySignalConsumerProjectID = ""
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() err = nil, want self-deploy signal project id error")
+	}
+}
+
 func TestValidateRequiresRuntimePreparationWhenJobDispatchEnabled(t *testing.T) {
 	t.Parallel()
 
