@@ -1460,7 +1460,7 @@ func (x *Actor) GetId() string {
 // SubjectRef references an access subject.
 type SubjectRef struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// type is one of user, group, organization, external_account, agent, agent_role, flow or package.
+	// type is one of user, group, organization, external_account, service, agent, agent_role, flow or package.
 	Type string `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"`
 	// id is the subject identifier.
 	Id            string `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`

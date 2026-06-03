@@ -137,6 +137,7 @@ const (
 	AccessSubjectGroup           AccessSubjectType = "group"
 	AccessSubjectOrganization    AccessSubjectType = "organization"
 	AccessSubjectExternalAccount AccessSubjectType = "external_account"
+	AccessSubjectService         AccessSubjectType = "service"
 	AccessSubjectAgent           AccessSubjectType = "agent"
 	AccessSubjectAgentRole       AccessSubjectType = "agent_role"
 	AccessSubjectFlow            AccessSubjectType = "flow"

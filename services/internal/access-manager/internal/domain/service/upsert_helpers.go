@@ -145,6 +145,23 @@ func comparableAccessRuleState(rule entity.AccessRule) accessRuleComparableState
 	return state
 }
 
+func validateAccessRuleSubjectType(subjectType enum.AccessSubjectType) error {
+	switch subjectType {
+	case enum.AccessSubjectUser,
+		enum.AccessSubjectGroup,
+		enum.AccessSubjectOrganization,
+		enum.AccessSubjectExternalAccount,
+		enum.AccessSubjectService,
+		enum.AccessSubjectAgent,
+		enum.AccessSubjectAgentRole,
+		enum.AccessSubjectFlow,
+		enum.AccessSubjectPackage:
+		return nil
+	default:
+		return errs.ErrInvalidArgument
+	}
+}
+
 func normalizeExternalAccountOwnerScope(scopeType enum.ExternalAccountScopeType, scopeID string) (enum.ExternalAccountScopeType, string, error) {
 	scopeID = strings.TrimSpace(scopeID)
 	if scopeType == "" {

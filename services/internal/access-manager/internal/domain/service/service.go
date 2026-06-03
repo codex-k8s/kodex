@@ -600,6 +600,7 @@ func (s *Service) PutAccessAction(ctx context.Context, input PutAccessActionInpu
 
 // PutAccessRule creates or updates a policy rule for an active action.
 func (s *Service) PutAccessRule(ctx context.Context, input PutAccessRuleInput) (entity.AccessRule, error) {
+	input.SubjectType = enum.AccessSubjectType(strings.TrimSpace(string(input.SubjectType)))
 	input.SubjectID = strings.TrimSpace(input.SubjectID)
 	input.ActionKey = strings.TrimSpace(input.ActionKey)
 	input.ResourceType = strings.TrimSpace(input.ResourceType)
@@ -608,6 +609,9 @@ func (s *Service) PutAccessRule(ctx context.Context, input PutAccessRuleInput) (
 	input.ScopeID = strings.TrimSpace(input.ScopeID)
 	if input.SubjectID == "" || input.ActionKey == "" || input.ResourceType == "" {
 		return entity.AccessRule{}, errs.ErrInvalidArgument
+	}
+	if err := validateAccessRuleSubjectType(input.SubjectType); err != nil {
+		return entity.AccessRule{}, err
 	}
 	if input.Status == enum.AccessRuleStatusDisabled {
 		return entity.AccessRule{}, errs.ErrInvalidArgument
