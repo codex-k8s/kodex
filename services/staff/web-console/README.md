@@ -74,6 +74,7 @@ allowlist-файлом для owner email, не общей bootstrap allowlist.
 - `GET /v1/agent-runs`
 - `GET /v1/agent-runs/{run_id}/runtime-status`
 - `GET /v1/agent-runs/{run_id}/activities`
+- `GET /v1/self-deploy/summary`
 
 ## Текущий UX-контур
 
@@ -83,12 +84,13 @@ allowlist-файлом для owner email, не общей bootstrap allowlist.
   endpoint `staff-gateway`; быстрые действия и чат отключены без подмены
   production-данных.
 - Self-deploy наблюдение вынесено в отдельный блок командного центра. Он
-  показывает ожидаемый безопасный состав будущего owner-facing статуса: последний
-  GitHub signal, repository/project refs, branch/commit refs, service keys или
-  path categories, deploy plan status, governance/owner decision status и safe
-  error/reason summary. Пока `staff-gateway` не отдаёт единую read-модель этого
-  сценария, значения отображаются как ожидающие backend endpoint; автоматический
-  deploy и кнопки запуска выкладки недоступны.
+  читает `GET /v1/self-deploy/summary` и показывает безопасный owner-facing
+  статус: последний provider signal ref/status, repository/project refs,
+  branch/commit refs, service keys или path categories, `services.yaml`
+  digest/fingerprint, deploy plan status, governance/owner decision refs/status,
+  expected runtime job types и safe error/reason summary. Если доменные данные
+  ещё не готовы, блок показывает `unavailable` или `pending`, а не демо- или фиктивные
+  значения; автоматический deploy и кнопки запуска выкладки недоступны.
 - Верхние карточки командного центра показывают текущую страницу входящих
   решений и первые страницы списков `AgentSession`/`AgentRun` из
   `staff-gateway`: выполняющиеся, ожидающие и проблемные `Run` вынесены в
@@ -104,17 +106,11 @@ allowlist-файлом для owner email, не общей bootstrap allowlist.
   runtime observation и ссылки на session/job/provider refs без raw payload.
 
 Агрегированная витрина командного центра, проектные списки, создание `Issue`,
-запуск flow, чат с `agent-manager` и self-deploy read surface пока не имеют
-полного HTTP-контракта в `staff-gateway`; UI отображает эти места как
-отключённые состояния без подмены демо-данными.
-
-Следующий backend-срез для self-deploy должен отдать через `staff-gateway`
-только безопасные refs/status/summary: webhook/merge signal refs из provider
-контура, связанный repository/project, branch/commit refs, изменённые service
-keys/path categories, read-only deploy plan status, governance/owner decision
-status, safe error/reason summary, timestamps и version. Raw webhook body,
-provider response, diff, полный YAML, tokens, OAuth state/cookies, secrets и
-команды автоматического deploy не должны попадать в frontend.
+запуск flow, чат с `agent-manager` и runtime job refs для self-deploy цепочки
+пока не имеют полного HTTP-контракта в `staff-gateway`; UI отображает эти места
+как отключённые, `unavailable` или `pending` состояния без подмены демо-данными.
+Raw webhook body, provider response, diff, полный YAML, tokens, OAuth
+state/cookies, secrets и команды автоматического deploy не попадают в frontend.
 
 `runtime_job_status`, включая `timed_out`, показывается в detail выбранного
 `Run` через `GET /v1/agent-runs/{run_id}/runtime-status`. Списки

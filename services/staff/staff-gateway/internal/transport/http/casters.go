@@ -12,22 +12,26 @@ import (
 	agentsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/agents/v1"
 	governancev1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/governance/v1"
 	interactionsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/interactions/v1"
+	runtimev1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/runtime/v1"
 	"github.com/codex-k8s/kodex/services/staff/staff-gateway/internal/transport/http/generated"
 )
 
 const defaultPageSize = 25
 const (
-	maxActivitySafeTextBytes   = 2000
-	maxActivityDigestBytes     = 256
-	maxActivityRefBytes        = 256
-	maxActivitySafeJSONBytes   = 8192
-	maxActivityIdentifierBytes = 128
-	maxAgentSafeTextBytes      = 2000
-	maxAgentIdentifierBytes    = 256
-	maxGovernanceKindBytes     = 128
-	maxGovernanceRefBytes      = 256
-	maxGovernanceTextBytes     = 2000
-	maxGovernanceDigestBytes   = 256
+	maxActivitySafeTextBytes     = 2000
+	maxActivityDigestBytes       = 256
+	maxActivityRefBytes          = 256
+	maxActivitySafeJSONBytes     = 8192
+	maxActivityIdentifierBytes   = 128
+	maxAgentSafeTextBytes        = 2000
+	maxAgentIdentifierBytes      = 256
+	maxGovernanceKindBytes       = 128
+	maxGovernanceRefBytes        = 256
+	maxGovernanceTextBytes       = 2000
+	maxGovernanceDigestBytes     = 256
+	maxSelfDeployIdentifierBytes = 256
+	maxSelfDeploySummaryBytes    = 2000
+	selfDeploySummaryPageSize    = 1
 )
 
 type OwnerInboxRespondBody = generated.OwnerInboxRespondRequest
@@ -38,7 +42,7 @@ var validRuntimeObservationStates = enumSet(generated.RuntimeObservationStateNot
 var validAgentRuntimeJobStatuses = enumSet(generated.AgentRuntimeJobStatusPending, generated.AgentRuntimeJobStatusClaimed, generated.AgentRuntimeJobStatusRunning, generated.AgentRuntimeJobStatusSucceeded, generated.AgentRuntimeJobStatusFailed, generated.AgentRuntimeJobStatusCancelled, generated.AgentRuntimeJobStatusTimedOut)
 var validAgentActivityKinds = enumSet(generated.AgentActivityKindLifecycle, generated.AgentActivityKindToolUse, generated.AgentActivityKindToolResult, generated.AgentActivityKindPermission, generated.AgentActivityKindProviderSignal, generated.AgentActivityKindRuntimeSignal, generated.AgentActivityKindCheckpoint, generated.AgentActivityKindOther)
 var validAgentActivityStatuses = enumSet(generated.AgentActivityStatusPlanned, generated.AgentActivityStatusStarted, generated.AgentActivityStatusSucceeded, generated.AgentActivityStatusFailed, generated.AgentActivityStatusDenied, generated.AgentActivityStatusWaiting, generated.AgentActivityStatusCancelled, generated.AgentActivityStatusSkipped)
-var validGovernanceTargetTypes = enumSet(generated.Transition, generated.PullRequest, generated.ReleaseCandidate, generated.RuntimeJob, generated.PolicyChange, generated.Document, generated.Merge, generated.Postdeploy, generated.Rollback)
+var validGovernanceTargetTypes = enumSet(generated.GovernanceTargetTypeTransition, generated.GovernanceTargetTypePullRequest, generated.GovernanceTargetTypeReleaseCandidate, generated.GovernanceTargetTypeRuntimeJob, generated.GovernanceTargetTypePolicyChange, generated.GovernanceTargetTypeDocument, generated.GovernanceTargetTypeMerge, generated.GovernanceTargetTypePostdeploy, generated.GovernanceTargetTypeRollback)
 var validGovernanceDecisionSummaryKinds = enumSet(generated.GovernanceDecisionSummaryKindRiskAssessment, generated.GovernanceDecisionSummaryKindReviewSignal, generated.GovernanceDecisionSummaryKindGateRequest, generated.GovernanceDecisionSummaryKindGateDecision, generated.GovernanceDecisionSummaryKindReleaseDecisionPackage, generated.GovernanceDecisionSummaryKindReleaseDecision, generated.GovernanceDecisionSummaryKindBlockingSignal, generated.GovernanceDecisionSummaryKindReleaseSafetyState)
 var validGovernanceDecisionAttentions = enumSet(generated.GovernanceDecisionAttentionPending, generated.GovernanceDecisionAttentionCompleted, generated.GovernanceDecisionAttentionBlocked, generated.GovernanceDecisionAttentionInformational)
 var validGovernanceRiskClasses = enumSet(generated.GovernanceRiskClassR0, generated.GovernanceRiskClassR1, generated.GovernanceRiskClassR2, generated.GovernanceRiskClassR3)
@@ -51,6 +55,9 @@ var validGovernanceReleaseDecisionOutcomes = enumSet(generated.GovernanceRelease
 var validGovernanceBlockingSignalStatuses = enumSet(generated.GovernanceBlockingSignalStatusActive, generated.GovernanceBlockingSignalStatusResolved, generated.GovernanceBlockingSignalStatusDismissed)
 var validGovernanceSignalSeverities = enumSet(generated.GovernanceSignalSeverityInfo, generated.GovernanceSignalSeverityWarning, generated.GovernanceSignalSeverityBlocking, generated.GovernanceSignalSeverityCritical)
 var validGovernanceEvidenceKinds = enumSet(generated.GovernanceEvidenceKindProviderComment, generated.GovernanceEvidenceKindProviderReview, generated.GovernanceEvidenceKindProviderCheck, generated.GovernanceEvidenceKindRuntimeSummary, generated.GovernanceEvidenceKindDocument, generated.GovernanceEvidenceKindRiskFactor, generated.GovernanceEvidenceKindReviewSignal, generated.GovernanceEvidenceKindInteractionCallback, generated.GovernanceEvidenceKindObjectRef, generated.GovernanceEvidenceKindCustom, generated.GovernanceEvidenceKindAgentAcceptance, generated.GovernanceEvidenceKindAgentRun, generated.GovernanceEvidenceKindAgentHumanGate)
+var validSelfDeployPlanStatusFilters = enumSet(generated.SelfDeployPlanStatusFilterUnspecified, generated.SelfDeployPlanStatusFilterPendingApproval, generated.SelfDeployPlanStatusFilterApproved, generated.SelfDeployPlanStatusFilterRejected, generated.SelfDeployPlanStatusFilterCancelled, generated.SelfDeployPlanStatusFilterFailed)
+var validSelfDeployPlanStatuses = enumSet(generated.SelfDeployPlanStatusUnspecified, generated.SelfDeployPlanStatusPendingApproval, generated.SelfDeployPlanStatusApproved, generated.SelfDeployPlanStatusRejected, generated.SelfDeployPlanStatusCancelled, generated.SelfDeployPlanStatusFailed)
+var validSelfDeployPathCategories = enumSet(generated.SelfDeployPathCategoryUnspecified, generated.SelfDeployPathCategoryServiceSource, generated.SelfDeployPathCategoryServiceConfig, generated.SelfDeployPathCategoryDeployManifest, generated.SelfDeployPathCategoryRuntimeConfig, generated.SelfDeployPathCategoryDocumentation, generated.SelfDeployPathCategoryTest, generated.SelfDeployPathCategoryPlatformPolicy, generated.SelfDeployPathCategoryOther)
 
 func ListAgentSessionsRequest(req *http.Request) (*agentsv1.ListAgentSessionsRequest, *SafeError) {
 	meta, safeErr := agentQueryMeta(req)
@@ -176,6 +183,31 @@ func GetGovernanceSummaryRequest(req *http.Request) (*governancev1.GetGovernance
 		return nil, safeErr
 	}
 	return request, nil
+}
+
+func GetSelfDeploySummaryRequest(req *http.Request) (*agentsv1.ListSelfDeployPlansRequest, *SafeError) {
+	meta, safeErr := agentQueryMeta(req)
+	if safeErr != nil {
+		return nil, safeErr
+	}
+	scope, safeErr := agentScopeFromQuery(req)
+	if safeErr != nil {
+		return nil, safeErr
+	}
+	query := req.URL.Query()
+	status, safeErr := selfDeployPlanStatusFromQuery(query.Get("status"))
+	if safeErr != nil {
+		return nil, safeErr
+	}
+	return &agentsv1.ListSelfDeployPlansRequest{
+		Meta:              meta,
+		Scope:             scope,
+		ProjectRef:        optionalString(query.Get("project_ref")),
+		RepositoryRef:     optionalString(query.Get("repository_ref")),
+		ProviderSignalRef: optionalString(query.Get("provider_signal_ref")),
+		Status:            status,
+		Page:              &agentsv1.PageRequest{PageSize: selfDeploySummaryPageSize},
+	}, nil
 }
 
 func runIDFromPath(req *http.Request) (string, *SafeError) {
@@ -466,6 +498,28 @@ func GovernanceSummaryResponse(response *governancev1.GovernanceSummaryResponse,
 	output.RequestId = requestID
 	output.CorrelationId = optionalString(requestID)
 	return output, nil
+}
+
+func SelfDeploySummaryResponse(response *agentsv1.ListSelfDeployPlansResponse, requestID string) (generated.SelfDeploySummaryResponse, *SafeError) {
+	if response == nil {
+		return generated.SelfDeploySummaryResponse{}, NewSafeError(http.StatusServiceUnavailable, CodeDownstreamUnavailable, "agent-manager returned empty self-deploy summary response", true)
+	}
+	summary, safeErr := selfDeploySummary(firstSelfDeployPlan(response.GetSelfDeployPlans()))
+	if safeErr != nil {
+		return generated.SelfDeploySummaryResponse{}, safeErr
+	}
+	return generated.SelfDeploySummaryResponse{
+		RequestId:     requestID,
+		CorrelationId: optionalString(requestID),
+		Summary:       summary,
+	}, nil
+}
+
+func firstSelfDeployPlan(plans []*agentsv1.SelfDeployPlan) *agentsv1.SelfDeployPlan {
+	if len(plans) == 0 {
+		return nil
+	}
+	return plans[0]
 }
 
 func queryMeta(req *http.Request) (*interactionsv1.QueryMeta, *SafeError) {
@@ -828,6 +882,23 @@ func activityStatusFromQuery(value string) (*agentsv1.AgentActivityStatus, *Safe
 	return optionalAgentProtoEnum(value, "AGENT_ACTIVITY_STATUS_", "activity status is invalid", agentsv1.AgentActivityStatus_value, func(number int32) agentsv1.AgentActivityStatus {
 		return agentsv1.AgentActivityStatus(number)
 	})
+}
+
+func selfDeployPlanStatusFromQuery(value string) (*agentsv1.SelfDeployPlanStatus, *SafeError) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" || trimmed == "unspecified" {
+		return nil, nil
+	}
+	status := generated.SelfDeployPlanStatusFilter(trimmed)
+	if _, ok := validSelfDeployPlanStatusFilters[status]; !ok {
+		return nil, NewSafeError(http.StatusBadRequest, CodeInvalidRequest, "self-deploy plan status is invalid", false)
+	}
+	protoStatus, ok := agentsv1.SelfDeployPlanStatus_value["SELF_DEPLOY_PLAN_STATUS_"+strings.ToUpper(trimmed)]
+	if !ok {
+		return nil, NewSafeError(http.StatusBadRequest, CodeInvalidRequest, "self-deploy plan status is invalid", false)
+	}
+	item := agentsv1.SelfDeployPlanStatus(protoStatus)
+	return &item, nil
 }
 
 func sourceOwnerKindFromQuery(value string) (*interactionsv1.SourceOwnerKind, *SafeError) {
@@ -1289,6 +1360,107 @@ func agentRunActivity(activity *agentsv1.AgentActivity, runID string) (generated
 	return output, nil
 }
 
+func selfDeploySummary(plan *agentsv1.SelfDeployPlan) (generated.SelfDeploySummary, *SafeError) {
+	if plan == nil {
+		return selfDeployUnavailableSummary(), nil
+	}
+	return generated.SelfDeploySummary{
+		Availability:            generated.SelfDeploySummaryAvailabilityReady,
+		SelfDeployPlanId:        optionalBoundedString(plan.GetId(), maxSelfDeployIdentifierBytes),
+		ProjectRef:              optionalBoundedString(plan.GetProjectRef(), maxSelfDeployIdentifierBytes),
+		RepositoryRef:           optionalBoundedString(plan.GetRepositoryRef(), maxSelfDeployIdentifierBytes),
+		SourceRef:               optionalBoundedString(plan.GetSourceRef(), maxSelfDeployIdentifierBytes),
+		MergeCommitSha:          optionalBoundedString(plan.GetMergeCommitSha(), maxSelfDeployIdentifierBytes),
+		ServicesYamlRef:         optionalBoundedString(plan.GetServicesYamlRef(), maxSelfDeployIdentifierBytes),
+		ServicesYamlDigest:      optionalBoundedString(plan.GetServicesYamlDigest(), maxSelfDeployIdentifierBytes),
+		PlanFingerprint:         optionalBoundedString(plan.GetPlanFingerprint(), maxSelfDeployIdentifierBytes),
+		SafeSummary:             optionalBoundedString(plan.GetSafeSummary(), maxSelfDeploySummaryBytes),
+		AffectedServiceKeys:     boundedStrings(plan.GetAffectedServiceKeys(), maxSelfDeployIdentifierBytes),
+		PathCategories:          selfDeployPathCategories(plan.GetPathCategories()),
+		ExpectedRuntimeJobTypes: selfDeployRuntimeJobTypes(plan.GetExpectedRuntimeJobTypes()),
+		ProviderSignal:          selfDeployProviderSignal(plan.GetProviderSignalRef()),
+		DeployPlan:              generated.SelfDeployPlanSummary{Status: selfDeployPlanStatus(plan.GetStatus())},
+		Governance:              selfDeployGovernanceSummary(plan.GetGovernanceContext()),
+		Runtime:                 selfDeployRuntimeSummary(plan),
+		CreatedAt:               optionalTime(plan.GetCreatedAt()),
+		UpdatedAt:               optionalTime(plan.GetUpdatedAt()),
+		Version:                 optionalPositiveInt64(plan.GetVersion()),
+	}, nil
+}
+
+func selfDeployUnavailableSummary() generated.SelfDeploySummary {
+	return generated.SelfDeploySummary{
+		Availability:            generated.SelfDeploySummaryAvailabilityUnavailable,
+		AffectedServiceKeys:     []string{},
+		PathCategories:          []generated.SelfDeployPathCategory{},
+		ExpectedRuntimeJobTypes: []string{},
+		ProviderSignal:          generated.SelfDeployProviderSignalSummary{Status: generated.SelfDeployProviderSignalStatusUnavailable},
+		DeployPlan:              generated.SelfDeployPlanSummary{Status: generated.SelfDeployPlanStatusUnavailable},
+		Governance:              generated.SelfDeployGovernanceSummary{Status: generated.SelfDeployGovernanceStatusUnavailable},
+		Runtime:                 generated.SelfDeployRuntimeSummary{Status: generated.SelfDeployRuntimeStatusUnavailable},
+		SafeError: &generated.SelfDeploySafeError{
+			Code:    "self_deploy_plan_unavailable",
+			Summary: "Self-deploy plan ещё не создан или недоступен для текущего scope.",
+		},
+	}
+}
+
+func selfDeployProviderSignal(providerSignalRef string) generated.SelfDeployProviderSignalSummary {
+	output := generated.SelfDeployProviderSignalSummary{Status: generated.SelfDeployProviderSignalStatusUnavailable}
+	if ref := optionalBoundedString(providerSignalRef, maxSelfDeployIdentifierBytes); ref != nil {
+		output.Status = generated.SelfDeployProviderSignalStatusStoredRef
+		output.Ref = ref
+	}
+	return output
+}
+
+func selfDeployGovernanceSummary(input *agentsv1.GovernanceContextRef) generated.SelfDeployGovernanceSummary {
+	output := generated.SelfDeployGovernanceSummary{Status: generated.SelfDeployGovernanceStatusUnavailable}
+	if input == nil {
+		return output
+	}
+	output.GateRequestRef = optionalBoundedString(input.GetGateRequestRef(), maxSelfDeployIdentifierBytes)
+	output.GateDecisionRef = optionalBoundedString(input.GetGateDecisionRef(), maxSelfDeployIdentifierBytes)
+	output.ReleaseDecisionPackageRef = optionalBoundedString(input.GetReleaseDecisionPackageRef(), maxSelfDeployIdentifierBytes)
+	output.ReleaseDecisionRef = optionalBoundedString(input.GetReleaseDecisionRef(), maxSelfDeployIdentifierBytes)
+	if output.GateDecisionRef != nil || output.ReleaseDecisionRef != nil {
+		output.Status = generated.SelfDeployGovernanceStatusResolved
+	} else if output.GateRequestRef != nil || output.ReleaseDecisionPackageRef != nil {
+		output.Status = generated.SelfDeployGovernanceStatusPending
+	}
+	return output
+}
+
+func selfDeployRuntimeSummary(plan *agentsv1.SelfDeployPlan) generated.SelfDeployRuntimeSummary {
+	if plan.GetStatus() == agentsv1.SelfDeployPlanStatus_SELF_DEPLOY_PLAN_STATUS_APPROVED && len(plan.GetExpectedRuntimeJobTypes()) > 0 {
+		return generated.SelfDeployRuntimeSummary{
+			Status:               generated.SelfDeployRuntimeStatusPending,
+			RuntimeStatusSummary: optionalString("runtime job refs ещё не опубликованы доменным read surface"),
+		}
+	}
+	return generated.SelfDeployRuntimeSummary{Status: generated.SelfDeployRuntimeStatusUnavailable}
+}
+
+func selfDeployPlanStatus(value agentsv1.SelfDeployPlanStatus) generated.SelfDeployPlanStatus {
+	return protoEnum(value.String(), "SELF_DEPLOY_PLAN_STATUS_", generated.SelfDeployPlanStatusUnspecified, validSelfDeployPlanStatuses)
+}
+
+func selfDeployPathCategories(values []agentsv1.SelfDeployPathCategory) []generated.SelfDeployPathCategory {
+	result := make([]generated.SelfDeployPathCategory, 0, len(values))
+	for _, value := range values {
+		result = append(result, protoEnum(value.String(), "SELF_DEPLOY_PATH_CATEGORY_", generated.SelfDeployPathCategoryUnspecified, validSelfDeployPathCategories))
+	}
+	return result
+}
+
+func selfDeployRuntimeJobTypes(values []runtimev1.JobType) []string {
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		result = append(result, enumName(value.String(), "JOB_TYPE_"))
+	}
+	return result
+}
+
 func governanceSummary(input *governancev1.GovernanceSummary) (generated.GovernanceSummary, *SafeError) {
 	return generated.GovernanceSummary{
 		Scope:              governanceSummaryScope(input.GetScope()),
@@ -1554,7 +1726,7 @@ func agentActivityStatus(value agentsv1.AgentActivityStatus) generated.AgentActi
 }
 
 func governanceTargetType(value governancev1.GovernanceTargetType) generated.GovernanceTargetType {
-	return protoEnum(value.String(), "GOVERNANCE_TARGET_TYPE_", generated.Unspecified, validGovernanceTargetTypes)
+	return protoEnum(value.String(), "GOVERNANCE_TARGET_TYPE_", generated.GovernanceTargetTypeUnspecified, validGovernanceTargetTypes)
 }
 
 func governanceDecisionSummaryKind(value governancev1.GovernanceDecisionSummaryKind) generated.GovernanceDecisionSummaryKind {

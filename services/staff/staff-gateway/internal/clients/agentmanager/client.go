@@ -49,6 +49,10 @@ func (c *Client) ListAgentActivities(ctx context.Context, request *agentsv1.List
 	return callQuery(ctx, c, request, c.client.ListAgentActivities)
 }
 
+func (c *Client) ListSelfDeployPlans(ctx context.Context, request *agentsv1.ListSelfDeployPlansRequest) (*agentsv1.ListSelfDeployPlansResponse, error) {
+	return callQuery(ctx, c, request, c.client.ListSelfDeployPlans)
+}
+
 type queryRequest interface {
 	GetMeta() *agentsv1.QueryMeta
 }

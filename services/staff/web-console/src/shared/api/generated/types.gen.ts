@@ -71,6 +71,20 @@ export type GovernanceSignalSeverity = 'unspecified' | 'info' | 'warning' | 'blo
 
 export type GovernanceEvidenceKind = 'unspecified' | 'provider_comment' | 'provider_review' | 'provider_check' | 'runtime_summary' | 'document' | 'risk_factor' | 'review_signal' | 'interaction_callback' | 'object_ref' | 'custom' | 'agent_acceptance' | 'agent_run' | 'agent_human_gate';
 
+export type SelfDeploySummaryAvailability = 'unavailable' | 'ready';
+
+export type SelfDeployProviderSignalStatus = 'unavailable' | 'stored_ref';
+
+export type SelfDeployPlanStatus = 'unavailable' | 'unspecified' | 'pending_approval' | 'approved' | 'rejected' | 'cancelled' | 'failed';
+
+export type SelfDeployPlanStatusFilter = 'unspecified' | 'pending_approval' | 'approved' | 'rejected' | 'cancelled' | 'failed';
+
+export type SelfDeployPathCategory = 'unspecified' | 'service_source' | 'service_config' | 'deploy_manifest' | 'runtime_config' | 'documentation' | 'test' | 'platform_policy' | 'other';
+
+export type SelfDeployGovernanceStatus = 'unavailable' | 'pending' | 'resolved';
+
+export type SelfDeployRuntimeStatus = 'unavailable' | 'pending' | 'stored_ref' | 'running' | 'completed' | 'failed';
+
 export type DeliveryAttemptStatus = 'unspecified' | 'queued' | 'sent' | 'accepted' | 'delivered' | 'failed' | 'cancelled' | 'expired';
 
 export type DeliveryErrorClass = 'unspecified' | 'temporary' | 'permanent' | 'auth' | 'rate_limited' | 'policy';
@@ -214,6 +228,64 @@ export type GovernanceSummaryResponse = {
     request_id: string;
     correlation_id?: string;
     summary: GovernanceSummary;
+};
+
+export type SelfDeploySummaryResponse = {
+    request_id: string;
+    correlation_id?: string;
+    summary: SelfDeploySummary;
+};
+
+export type SelfDeploySummary = {
+    availability: SelfDeploySummaryAvailability;
+    self_deploy_plan_id?: string;
+    project_ref?: string;
+    repository_ref?: string;
+    source_ref?: string;
+    merge_commit_sha?: string;
+    services_yaml_ref?: string;
+    services_yaml_digest?: string;
+    plan_fingerprint?: string;
+    safe_summary?: string;
+    affected_service_keys: Array<string>;
+    path_categories: Array<SelfDeployPathCategory>;
+    expected_runtime_job_types: Array<string>;
+    provider_signal: SelfDeployProviderSignalSummary;
+    deploy_plan: SelfDeployPlanSummary;
+    governance: SelfDeployGovernanceSummary;
+    runtime: SelfDeployRuntimeSummary;
+    safe_error?: SelfDeploySafeError;
+    created_at?: string;
+    updated_at?: string;
+    version?: number;
+};
+
+export type SelfDeployProviderSignalSummary = {
+    status: SelfDeployProviderSignalStatus;
+    ref?: string;
+};
+
+export type SelfDeployPlanSummary = {
+    status: SelfDeployPlanStatus;
+};
+
+export type SelfDeployGovernanceSummary = {
+    status: SelfDeployGovernanceStatus;
+    gate_request_ref?: string;
+    gate_decision_ref?: string;
+    release_decision_package_ref?: string;
+    release_decision_ref?: string;
+};
+
+export type SelfDeployRuntimeSummary = {
+    status: SelfDeployRuntimeStatus;
+    runtime_job_ref?: string;
+    runtime_status_summary?: string;
+};
+
+export type SelfDeploySafeError = {
+    code: string;
+    summary: string;
 };
 
 export type GovernanceSummary = {
@@ -629,6 +701,26 @@ export type GovernanceIntegrationKindQuery = string;
  * Safe ref owner-domain факта.
  */
 export type GovernanceIntegrationRefQuery = string;
+
+/**
+ * Safe ref проекта для фильтра self-deploy plan.
+ */
+export type SelfDeployProjectRefQuery = string;
+
+/**
+ * Safe ref репозитория для фильтра self-deploy plan.
+ */
+export type SelfDeployRepositoryRefQuery = string;
+
+/**
+ * Safe ref provider signal для фильтра self-deploy plan.
+ */
+export type SelfDeployProviderSignalRefQuery = string;
+
+/**
+ * Фильтр self-deploy plan по статусу.
+ */
+export type SelfDeployPlanStatusQuery = SelfDeployPlanStatusFilter;
 
 /**
  * Interaction request id.
@@ -1431,6 +1523,94 @@ export type GetGovernanceSummaryResponses = {
 };
 
 export type GetGovernanceSummaryResponse = GetGovernanceSummaryResponses[keyof GetGovernanceSummaryResponses];
+
+export type GetSelfDeploySummaryData = {
+    body?: never;
+    headers: {
+        /**
+         * Идентификатор запроса для трассировки. Gateway может заменить невалидное значение.
+         */
+        'X-Kodex-Request-Id'?: string;
+        /**
+         * Безопасная ссылка на трассу.
+         */
+        'X-Kodex-Trace-Id'?: string;
+        /**
+         * Безопасная ссылка на пользовательскую сессию.
+         */
+        'X-Kodex-Session-Id'?: string;
+        /**
+         * Тип проверенного субъекта от внешнего auth boundary.
+         */
+        'X-Kodex-Actor-Type': 'user' | 'service' | 'agent' | 'external_account';
+        /**
+         * Safe id проверенного субъекта без email и имени.
+         */
+        'X-Kodex-Actor-Id': string;
+    };
+    path?: never;
+    query: {
+        /**
+         * Тип области `agent-manager`.
+         */
+        scope_type: AgentScopeType;
+        /**
+         * Safe ref области `agent-manager`.
+         */
+        scope_ref: string;
+        /**
+         * Safe ref проекта для фильтра self-deploy plan.
+         */
+        project_ref?: string;
+        /**
+         * Safe ref репозитория для фильтра self-deploy plan.
+         */
+        repository_ref?: string;
+        /**
+         * Safe ref provider signal для фильтра self-deploy plan.
+         */
+        provider_signal_ref?: string;
+        /**
+         * Фильтр self-deploy plan по статусу.
+         */
+        status?: SelfDeployPlanStatusFilter;
+    };
+    url: '/v1/self-deploy/summary';
+};
+
+export type GetSelfDeploySummaryErrors = {
+    /**
+     * Невалидный запрос.
+     */
+    400: SafeError;
+    /**
+     * Не передан проверенный actor context.
+     */
+    401: SafeError;
+    /**
+     * Доменный сервис отказал в доступе.
+     */
+    403: SafeError;
+    /**
+     * Доменный сервис ограничил частоту запросов.
+     */
+    429: SafeError;
+    /**
+     * Доменный сервис временно недоступен.
+     */
+    503: SafeError;
+};
+
+export type GetSelfDeploySummaryError = GetSelfDeploySummaryErrors[keyof GetSelfDeploySummaryErrors];
+
+export type GetSelfDeploySummaryResponses = {
+    /**
+     * Self-deploy сводка получена или честно недоступна.
+     */
+    200: SelfDeploySummaryResponse;
+};
+
+export type GetSelfDeploySummaryResponse = GetSelfDeploySummaryResponses[keyof GetSelfDeploySummaryResponses];
 
 export type ClientOptions = {
     baseURL: `${string}://${string}` | (string & {});

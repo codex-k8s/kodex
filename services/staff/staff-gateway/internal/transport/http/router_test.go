@@ -14,6 +14,7 @@ import (
 	agentsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/agents/v1"
 	governancev1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/governance/v1"
 	interactionsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/interactions/v1"
+	runtimev1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/runtime/v1"
 	"github.com/codex-k8s/kodex/services/staff/staff-gateway/internal/transport/http/generated"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -785,6 +786,107 @@ func TestRouterGetGovernanceSummaryMapsDownstreamUnavailable(t *testing.T) {
 	assertErrorCode(t, rec, http.StatusServiceUnavailable, generated.SafeErrorCodeDownstreamUnavailable)
 }
 
+func TestRouterGetSelfDeploySummary(t *testing.T) {
+	client := &fakeInteractionHubClient{selfDeployListResponse: sampleSelfDeployPlansResponse()}
+	router := newTestRouter(t, client)
+	target := "/v1/self-deploy/summary?scope_type=project&scope_ref=project-1" +
+		"&project_ref=project-1&repository_ref=repo-1&provider_signal_ref=provider-signal-1" +
+		"&status=pending_approval"
+	req := authenticatedRequest(http.MethodGet, target, "")
+	req.Header.Set(headerTraceID, "trace-1")
+	req.Header.Set(headerSessionID, "browser-session-1")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	recorded := client.selfDeployListRequest
+	if recorded.GetScope().GetRef() != "project-1" || recorded.GetProjectRef() != "project-1" || recorded.GetRepositoryRef() != "repo-1" {
+		t.Fatalf("self-deploy request = %+v, want scope/project/repository filters", recorded)
+	}
+	if recorded.GetProviderSignalRef() != "provider-signal-1" ||
+		recorded.GetStatus() != agentsv1.SelfDeployPlanStatus_SELF_DEPLOY_PLAN_STATUS_PENDING_APPROVAL ||
+		recorded.GetPage().GetPageSize() != selfDeploySummaryPageSize {
+		t.Fatalf("self-deploy request = %+v, want signal/status/page", recorded)
+	}
+	if recorded.GetMeta().GetRequestContext().GetTraceId() != "trace-1" ||
+		recorded.GetMeta().GetRequestContext().GetSessionId() != "browser-session-1" {
+		t.Fatalf("request context = %+v, want trace and session", recorded.GetMeta().GetRequestContext())
+	}
+	var body generated.SelfDeploySummaryResponse
+	decodeJSON(t, rec, &body)
+	summary := body.Summary
+	if summary.Availability != generated.SelfDeploySummaryAvailabilityReady ||
+		summary.ProviderSignal.Status != generated.SelfDeployProviderSignalStatusStoredRef ||
+		summary.DeployPlan.Status != generated.SelfDeployPlanStatusPendingApproval ||
+		summary.Governance.Status != generated.SelfDeployGovernanceStatusPending {
+		t.Fatalf("summary = %+v, want ready/stored_ref/pending", summary)
+	}
+	if summary.ProjectRef == nil || *summary.ProjectRef != "project-1" ||
+		summary.RepositoryRef == nil || *summary.RepositoryRef != "repo-1" ||
+		summary.ServicesYamlDigest == nil || *summary.ServicesYamlDigest != "sha256:services-yaml" ||
+		summary.PlanFingerprint == nil || *summary.PlanFingerprint != "sha256:plan-fingerprint" {
+		t.Fatalf("summary refs = %+v, want project/repository/digests", summary)
+	}
+	if len(summary.AffectedServiceKeys) != 2 || len(summary.PathCategories) != 2 ||
+		summary.PathCategories[0] != generated.SelfDeployPathCategoryServiceSource {
+		t.Fatalf("summary = %+v, want affected services and path categories", summary)
+	}
+	for _, forbidden := range []string{"raw webhook", "provider response", "full services yaml", "secret-token", "OAuth state", "diff --git"} {
+		if strings.Contains(rec.Body.String(), forbidden) {
+			t.Fatalf("response leaked %q marker: %s", forbidden, rec.Body.String())
+		}
+	}
+}
+
+func TestRouterGetSelfDeploySummaryEmptyReturnsUnavailable(t *testing.T) {
+	client := &fakeInteractionHubClient{selfDeployListResponse: &agentsv1.ListSelfDeployPlansResponse{}}
+	router := newTestRouter(t, client)
+	req := authenticatedRequest(http.MethodGet, "/v1/self-deploy/summary?scope_type=project&scope_ref=project-1", "")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var body generated.SelfDeploySummaryResponse
+	decodeJSON(t, rec, &body)
+	if body.Summary.Availability != generated.SelfDeploySummaryAvailabilityUnavailable ||
+		body.Summary.ProviderSignal.Status != generated.SelfDeployProviderSignalStatusUnavailable ||
+		body.Summary.DeployPlan.Status != generated.SelfDeployPlanStatusUnavailable ||
+		body.Summary.SafeError == nil {
+		t.Fatalf("summary = %+v, want unavailable states", body.Summary)
+	}
+}
+
+func TestRouterGetSelfDeploySummaryRejectsUnsupportedScope(t *testing.T) {
+	client := &fakeInteractionHubClient{}
+	router := newTestRouter(t, client)
+	req := authenticatedRequest(http.MethodGet, "/v1/self-deploy/summary?scope_type=service&scope_ref=service-1", "")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	assertErrorCode(t, rec, http.StatusBadRequest, generated.SafeErrorCodeInvalidRequest)
+	if client.selfDeployListRequest != nil {
+		t.Fatalf("downstream was called for unsupported agent scope")
+	}
+}
+
+func TestRouterGetSelfDeploySummaryMapsDownstreamUnavailable(t *testing.T) {
+	client := &fakeInteractionHubClient{selfDeployListErr: status.Error(codes.Unavailable, "unavailable")}
+	router := newTestRouter(t, client)
+	req := authenticatedRequest(http.MethodGet, "/v1/self-deploy/summary?scope_type=project&scope_ref=project-1", "")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	assertErrorCode(t, rec, http.StatusServiceUnavailable, generated.SafeErrorCodeDownstreamUnavailable)
+}
+
 func TestRouterRequiresActorContext(t *testing.T) {
 	router := newTestRouter(t, &fakeInteractionHubClient{})
 	req := httptest.NewRequest(http.MethodGet, "/v1/owner-inbox/items?scope_type=project&scope_ref=project-1", nil)
@@ -847,6 +949,7 @@ type fakeInteractionHubClient struct {
 	runSummaryListRequest     *agentsv1.ListAgentRunSummariesRequest
 	runtimeStatusRequest      *agentsv1.GetAgentRunRuntimeStatusRequest
 	activitiesRequest         *agentsv1.ListAgentActivitiesRequest
+	selfDeployListRequest     *agentsv1.ListSelfDeployPlansRequest
 	governanceSummaryRequest  *governancev1.GetGovernanceSummaryRequest
 	listResponse              *interactionsv1.ListOwnerInboxItemsResponse
 	getResponse               *interactionsv1.OwnerInboxItemResponse
@@ -855,6 +958,7 @@ type fakeInteractionHubClient struct {
 	runSummaryListResponse    *agentsv1.ListAgentRunSummariesResponse
 	runtimeStatusResponse     *agentsv1.AgentRunRuntimeStatusResponse
 	activitiesResponse        *agentsv1.ListAgentActivitiesResponse
+	selfDeployListResponse    *agentsv1.ListSelfDeployPlansResponse
 	governanceSummaryResponse *governancev1.GovernanceSummaryResponse
 	listErr                   error
 	getErr                    error
@@ -863,6 +967,7 @@ type fakeInteractionHubClient struct {
 	runSummaryListErr         error
 	runtimeStatusErr          error
 	activitiesErr             error
+	selfDeployListErr         error
 	governanceSummaryErr      error
 }
 
@@ -899,6 +1004,11 @@ func (f *fakeInteractionHubClient) GetAgentRunRuntimeStatus(_ context.Context, r
 func (f *fakeInteractionHubClient) ListAgentActivities(_ context.Context, request *agentsv1.ListAgentActivitiesRequest) (*agentsv1.ListAgentActivitiesResponse, error) {
 	f.activitiesRequest = request
 	return f.activitiesResponse, f.activitiesErr
+}
+
+func (f *fakeInteractionHubClient) ListSelfDeployPlans(_ context.Context, request *agentsv1.ListSelfDeployPlansRequest) (*agentsv1.ListSelfDeployPlansResponse, error) {
+	f.selfDeployListRequest = request
+	return f.selfDeployListResponse, f.selfDeployListErr
 }
 
 func (f *fakeInteractionHubClient) GetGovernanceSummary(_ context.Context, request *governancev1.GetGovernanceSummaryRequest) (*governancev1.GovernanceSummaryResponse, error) {
@@ -1159,6 +1269,38 @@ func sampleAgentActivity(runID string) *agentsv1.AgentActivity {
 		Version:         7,
 		CreatedAt:       now,
 		UpdatedAt:       now,
+	}
+}
+
+func sampleSelfDeployPlansResponse() *agentsv1.ListSelfDeployPlansResponse {
+	now := time.Date(2026, 5, 28, 12, 6, 0, 0, time.UTC).Format(time.RFC3339Nano)
+	return &agentsv1.ListSelfDeployPlansResponse{
+		SelfDeployPlans: []*agentsv1.SelfDeployPlan{{
+			Id:                      "self-deploy-plan-1",
+			Scope:                   &agentsv1.ScopeRef{Type: agentsv1.AgentScopeType_AGENT_SCOPE_TYPE_PROJECT, Ref: "project-1"},
+			ProjectRef:              "project-1",
+			RepositoryRef:           "repo-1",
+			ProviderSignalRef:       stringPtr("provider-signal-1"),
+			SourceRef:               "refs/heads/main",
+			MergeCommitSha:          "0123456789abcdef",
+			ServicesYamlRef:         stringPtr("object/services-yaml-safe-ref"),
+			ServicesYamlDigest:      "sha256:services-yaml",
+			AffectedServiceKeys:     []string{"staff-gateway", "web-console"},
+			PathCategories:          []agentsv1.SelfDeployPathCategory{agentsv1.SelfDeployPathCategory_SELF_DEPLOY_PATH_CATEGORY_SERVICE_SOURCE, agentsv1.SelfDeployPathCategory_SELF_DEPLOY_PATH_CATEGORY_DEPLOY_MANIFEST},
+			ExpectedRuntimeJobTypes: []runtimev1.JobType{runtimev1.JobType_JOB_TYPE_BUILD, runtimev1.JobType_JOB_TYPE_DEPLOY},
+			GovernanceContext: &agentsv1.GovernanceContextRef{
+				GateRequestRef:            stringPtr("gate-request-1"),
+				ReleaseDecisionPackageRef: stringPtr("release-package-1"),
+			},
+			SafeSummary:     stringPtr("Webhook signal сохранён, self-deploy plan ожидает решения владельца."),
+			PlanFingerprint: "sha256:plan-fingerprint",
+			IdempotencyKey:  "secret-token-not-returned",
+			Status:          agentsv1.SelfDeployPlanStatus_SELF_DEPLOY_PLAN_STATUS_PENDING_APPROVAL,
+			Version:         4,
+			CreatedAt:       now,
+			UpdatedAt:       now,
+		}},
+		Page: &agentsv1.PageResponse{},
 	}
 }
 
