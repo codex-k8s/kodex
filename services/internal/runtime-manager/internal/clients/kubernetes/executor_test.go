@@ -149,6 +149,87 @@ func TestExecutorStartCreatesRestrictedAgentRunJob(t *testing.T) {
 	}
 }
 
+func TestExecutorStartCreatesRestrictedKanikoBuildJob(t *testing.T) {
+	t.Parallel()
+
+	client := fake.NewClientset()
+	executor := newTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
+	job := testBuildJob()
+
+	started, err := executor.Start(context.Background(), job)
+	if err != nil {
+		t.Fatalf("Start(build): %v", err)
+	}
+	if started.Namespace != "runtime-jobs" || started.JobName == "" || started.ExternalRef == "" {
+		t.Fatalf("started build job = %+v, want namespace/name/ref", started)
+	}
+	created, err := client.BatchV1().Jobs("runtime-jobs").Get(context.Background(), started.JobName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("get created Job: %v", err)
+	}
+	podSpec := created.Spec.Template.Spec
+	if podSpec.AutomountServiceAccountToken == nil || *podSpec.AutomountServiceAccountToken {
+		t.Fatalf("automount service account token = %v, want disabled", podSpec.AutomountServiceAccountToken)
+	}
+	container := podSpec.Containers[0]
+	if container.Name != buildContainerName || container.Image != "gcr.io/kaniko-project/executor:v1.24.0" {
+		t.Fatalf("container = %s/%s, want Kaniko container/image", container.Name, container.Image)
+	}
+	if strings.Join(container.Command, " ") != kanikoCommand {
+		t.Fatalf("command = %v, want fixed Kaniko executor", container.Command)
+	}
+	wantArgs := []string{
+		"--context=dir:///workspace/context",
+		"--dockerfile=/workspace/context/services/internal/runtime-manager/Dockerfile",
+		"--destination=registry.local:5000/kodex/runtime-manager:0.1.0",
+		"--target=runtime-manager",
+		"--cache=false",
+		"--snapshot-mode=redo",
+		"--verbosity=info",
+	}
+	if strings.Join(container.Args, "\n") != strings.Join(wantArgs, "\n") {
+		t.Fatalf("args = %v, want %v", container.Args, wantArgs)
+	}
+	if len(container.Env) != 0 {
+		t.Fatalf("container env = %v, want no literal build env", container.Env)
+	}
+	if len(podSpec.Volumes) != 2 {
+		t.Fatalf("volumes = %+v, want context PVC and registry config Secret", podSpec.Volumes)
+	}
+	contextVolume := podSpec.Volumes[0]
+	if contextVolume.PersistentVolumeClaim == nil || contextVolume.PersistentVolumeClaim.ClaimName != "runtime-build-context-001" || !contextVolume.PersistentVolumeClaim.ReadOnly {
+		t.Fatalf("context volume = %+v, want read-only build context PVC", contextVolume)
+	}
+	secretVolume := podSpec.Volumes[1]
+	if secretVolume.Secret == nil || secretVolume.Secret.SecretName != "registry-push" {
+		t.Fatalf("registry volume = %+v, want Kubernetes Secret ref", secretVolume)
+	}
+	if len(secretVolume.Secret.Items) != 1 || secretVolume.Secret.Items[0].Key != ".dockerconfigjson" || secretVolume.Secret.Items[0].Path != "config.json" {
+		t.Fatalf("registry secret items = %+v, want docker config mounted as config.json", secretVolume.Secret.Items)
+	}
+	if len(container.VolumeMounts) != 2 || container.VolumeMounts[0].MountPath != buildContextMountPath || !container.VolumeMounts[0].ReadOnly || container.VolumeMounts[1].MountPath != kanikoDockerConfigPath || !container.VolumeMounts[1].ReadOnly {
+		t.Fatalf("volume mounts = %+v, want fixed read-only Kaniko mounts", container.VolumeMounts)
+	}
+	if container.SecurityContext == nil {
+		t.Fatalf("container security context is nil, want restricted context")
+	}
+	if container.SecurityContext.AllowPrivilegeEscalation == nil || *container.SecurityContext.AllowPrivilegeEscalation {
+		t.Fatalf("allowPrivilegeEscalation = %+v, want false", container.SecurityContext.AllowPrivilegeEscalation)
+	}
+	if container.SecurityContext.Privileged == nil || *container.SecurityContext.Privileged {
+		t.Fatalf("privileged = %+v, want false", container.SecurityContext.Privileged)
+	}
+	if container.SecurityContext.Capabilities == nil || !hasCapability(container.SecurityContext.Capabilities.Drop, "ALL") {
+		t.Fatalf("container dropped capabilities = %+v, want ALL", container.SecurityContext.Capabilities)
+	}
+	if strings.Contains(strings.Join(container.Args, " "), "secret-value") || strings.Contains(strings.Join(container.Args, " "), "provider payload") {
+		t.Fatalf("Kaniko args contain unsafe raw marker: %v", container.Args)
+	}
+	if len(started.ArtifactRefs) != 3 || started.ArtifactRefs[2].ExternalRef != "registry.local:5000/kodex/runtime-manager:0.1.0" {
+		t.Fatalf("artifact refs = %+v, want job, namespace and destination image ref", started.ArtifactRefs)
+	}
+}
+
 func TestExecutorStartRejectsAgentRunWithoutExecutionSpec(t *testing.T) {
 	t.Parallel()
 
@@ -217,6 +298,68 @@ func TestExecutorStartRejectsIncompleteAgentRunReporterConfig(t *testing.T) {
 	)
 
 	assertExecutionCode(t, err, "invalid_agent_run_reporter_config")
+}
+
+func TestExecutorStartRejectsBuildWithoutExecutionSpec(t *testing.T) {
+	t.Parallel()
+
+	executor := newTestExecutor(t, fake.NewClientset(), fakeClusterProvider{access: testClusterAccess()})
+	job := testBuildJob()
+	job.JobInputJSON = []byte(`{}`)
+
+	_, err := executor.Start(context.Background(), job)
+
+	assertExecutionCode(t, err, "build_execution_spec_required")
+}
+
+func TestExecutorStartRejectsBuildWithUnsupportedContextRef(t *testing.T) {
+	t.Parallel()
+
+	client := fake.NewClientset()
+	executor := newTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
+	job := testBuildJob()
+	job.JobInputJSON = []byte(strings.Replace(
+		string(job.JobInputJSON),
+		`"build_context_ref":"pvc://runtime-jobs/runtime-build-context-001"`,
+		`"build_context_ref":"stack://services/runtime-manager/context"`,
+		1,
+	))
+
+	_, err := executor.Start(context.Background(), job)
+
+	assertExecutionCode(t, err, "invalid_build_context_ref")
+	jobs, listErr := client.BatchV1().Jobs("runtime-jobs").List(context.Background(), metav1.ListOptions{})
+	if listErr != nil {
+		t.Fatalf("list Jobs: %v", listErr)
+	}
+	if len(jobs.Items) != 0 {
+		t.Fatalf("created Jobs = %d, want none before unsupported build context reaches Kubernetes", len(jobs.Items))
+	}
+}
+
+func TestExecutorStartRejectsBuildWithUnsafeDockerfileRef(t *testing.T) {
+	t.Parallel()
+
+	client := fake.NewClientset()
+	executor := newTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
+	job := testBuildJob()
+	job.JobInputJSON = []byte(strings.Replace(
+		string(job.JobInputJSON),
+		`"dockerfile_ref":"context://services/internal/runtime-manager/Dockerfile"`,
+		`"dockerfile_ref":"context://../secret/Dockerfile"`,
+		1,
+	))
+
+	_, err := executor.Start(context.Background(), job)
+
+	assertExecutionCode(t, err, "invalid_build_dockerfile_ref")
+	jobs, listErr := client.BatchV1().Jobs("runtime-jobs").List(context.Background(), metav1.ListOptions{})
+	if listErr != nil {
+		t.Fatalf("list Jobs: %v", listErr)
+	}
+	if len(jobs.Items) != 0 {
+		t.Fatalf("created Jobs = %d, want none before unsafe Dockerfile ref reaches Kubernetes", len(jobs.Items))
+	}
 }
 
 func TestExecutorStartReusesExistingManagedJob(t *testing.T) {
@@ -482,6 +625,19 @@ func testAgentRunJob() entity.Job {
 		AgentRunID:   &agentRunID,
 		SlotID:       &slotID,
 		JobInputJSON: []byte(`{"agent_run_execution_spec":{"agent_run_id":"00000000-0000-0000-0000-000000000031","slot_id":"00000000-0000-0000-0000-000000000032","expected_materialization_id":"00000000-0000-0000-0000-000000000033","expected_materialization_fingerprint":"sha256:workspace","workspace_ref":"runtime://workspace/31","workspace_mount_ref":"mount://workspace/31","workspace_pvc_ref":"pvc://runtime-jobs/runtime-workspace-549","context_ref":"runtime://workspace/31/.kodex/context/agent-run.json","context_digest":"sha256:context","runner_profile_ref":"runner-profile://codex-agent/default","runner_image_ref":"image://ghcr.io/codex-k8s/agent-runner@sha256:runner","runner_mode":"codex_agent","allowed_secret_refs":[{"kind":"runtime_api","ref":"secret://runtime/agent-token"}],"reporting_target_refs":[{"kind":"agent_run_state","ref":"agent-manager://runs/00000000-0000-0000-0000-000000000031"}],"codex_session_execution_spec":{"instruction_object_ref":"object://instructions/31","instruction_object_digest":"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","result_schema_ref":"object://schemas/codex-result-v1","result_schema_digest":"sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff","workspace_snapshot_ref":"runtime://workspace-snapshots/31","hook_endpoint_ref":"hook://codex-hook-ingress/agent-runner","callback_refs":[{"kind":"agent_run_state","ref":"agent-manager://runs/00000000-0000-0000-0000-000000000031"}],"timeout_seconds":1800,"runner_profile_ref":"runner-profile://codex-agent/default","runner_mode":"codex_agent","output_refs":[{"kind":"last_message","ref":"object://codex-output/last-message"}],"result_refs":[{"kind":"result_metadata","ref":"object://codex-output/result-metadata"}],"allowed_secret_refs":[{"kind":"runtime_api","ref":"secret://runtime/agent-token"}]}}}`),
+		FleetScopeID: &fleetScopeID,
+		ClusterID:    &clusterID,
+	}
+}
+
+func testBuildJob() entity.Job {
+	fleetScopeID := uuid.MustParse("00000000-0000-0000-0000-000000000010")
+	clusterID := uuid.MustParse("00000000-0000-0000-0000-000000000011")
+	return entity.Job{
+		Base:         entity.Base{ID: uuid.MustParse("00000000-0000-0000-0000-000000000044"), Version: 2},
+		JobType:      enum.JobTypeBuild,
+		Status:       enum.JobStatusClaimed,
+		JobInputJSON: []byte(`{"build_execution_spec":{"source_ref":"git://github.com/codex-k8s/kodex","source_commit_sha":"0123456789abcdef0123456789abcdef01234567","service_key":"runtime-manager","image_ref":"image://registry.local:5000/kodex/runtime-manager","image_tag":"0.1.0","build_context_ref":"pvc://runtime-jobs/runtime-build-context-001","build_context_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","dockerfile_ref":"context://services/internal/runtime-manager/Dockerfile","dockerfile_digest":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","dockerfile_target":"runtime-manager","builder_image_ref":"image://gcr.io/kaniko-project/executor:v1.24.0","build_plan_fingerprint":"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","allowed_secret_refs":[{"kind":"registry","ref":"secret://runtime/registry-push"}],"output_refs":[{"kind":"image_ref","ref":"runtime://artifacts/images/runtime-manager"}]}}`),
 		FleetScopeID: &fleetScopeID,
 		ClusterID:    &clusterID,
 	}

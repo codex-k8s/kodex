@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -20,9 +21,29 @@ const (
 	kubernetesWorkerActor        = "runtime-manager-kubernetes-executor"
 	kubernetesHealthCheckStepKey = "kubernetes_health_check"
 	kubernetesAgentRunStepKey    = "kubernetes_agent_run"
+	kubernetesBuildStepKey       = "kubernetes_build"
+	redactedDiagnosticValue      = "[redacted]"
 	minWorkerRetryDelay          = time.Second
 	maxWorkerRetryDelay          = 30 * time.Second
 )
+
+var runtimeBuildLogUnsafeMarkers = []string{
+	"authorization",
+	"bearer",
+	"token=",
+	"token:",
+	"secret-value",
+	"secret_value",
+	"provider payload",
+	"provider response",
+	"kubeconfig",
+	"oauth token",
+	"webhook body",
+	"raw payload",
+	"stdout",
+	"stderr",
+	"-----begin",
+}
 
 type kubernetesWorkerIteration int
 
@@ -102,7 +123,7 @@ func (w kubernetesJobWorker) run(ctx context.Context) error {
 
 func (w kubernetesJobWorker) claimAndExecute(ctx context.Context) kubernetesWorkerIteration {
 	claim, err := w.service.ClaimRunnableJob(ctx, runtimeservice.ClaimRunnableJobInput{
-		JobTypes:   []enum.JobType{enum.JobTypeHealthCheck, enum.JobTypeAgentRun},
+		JobTypes:   []enum.JobType{enum.JobTypeHealthCheck, enum.JobTypeAgentRun, enum.JobTypeBuild},
 		WorkerID:   w.cfg.WorkerID,
 		LeaseOwner: w.cfg.WorkerID,
 		LeaseUntil: time.Now().UTC().Add(w.cfg.ClaimLeaseTTL),
@@ -228,15 +249,36 @@ func (w kubernetesJobWorker) failClaimedJob(ctx context.Context, job entity.Job,
 }
 
 func kubernetesStepKey(jobType enum.JobType) string {
-	if jobType == enum.JobTypeAgentRun {
+	switch jobType {
+	case enum.JobTypeAgentRun:
 		return kubernetesAgentRunStepKey
+	case enum.JobTypeBuild:
+		return kubernetesBuildStepKey
+	default:
+		return kubernetesHealthCheckStepKey
 	}
-	return kubernetesHealthCheckStepKey
 }
 
 func safeExecutionShortLogTail(jobType enum.JobType, shortLogTail string) string {
-	if jobType == enum.JobTypeAgentRun {
+	switch jobType {
+	case enum.JobTypeAgentRun:
 		return ""
+	case enum.JobTypeBuild:
+		return redactBuildLogTail(shortLogTail)
+	default:
+		return shortLogTail
+	}
+}
+
+func redactBuildLogTail(shortLogTail string) string {
+	if strings.TrimSpace(shortLogTail) == "" {
+		return ""
+	}
+	normalized := strings.ToLower(shortLogTail)
+	for _, marker := range runtimeBuildLogUnsafeMarkers {
+		if strings.Contains(normalized, marker) {
+			return redactedDiagnosticValue
+		}
 	}
 	return shortLogTail
 }
