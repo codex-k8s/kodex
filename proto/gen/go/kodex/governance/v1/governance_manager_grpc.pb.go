@@ -43,6 +43,7 @@ const (
 	GovernanceManagerService_ListGateDecisions_FullMethodName            = "/kodex.governance.v1.GovernanceManagerService/ListGateDecisions"
 	GovernanceManagerService_GetGateRequest_FullMethodName               = "/kodex.governance.v1.GovernanceManagerService/GetGateRequest"
 	GovernanceManagerService_ListGateRequests_FullMethodName             = "/kodex.governance.v1.GovernanceManagerService/ListGateRequests"
+	GovernanceManagerService_PrepareSelfDeployPlanGate_FullMethodName    = "/kodex.governance.v1.GovernanceManagerService/PrepareSelfDeployPlanGate"
 	GovernanceManagerService_BuildReleaseDecisionPackage_FullMethodName  = "/kodex.governance.v1.GovernanceManagerService/BuildReleaseDecisionPackage"
 	GovernanceManagerService_RecordReleaseRuntimeEvidence_FullMethodName = "/kodex.governance.v1.GovernanceManagerService/RecordReleaseRuntimeEvidence"
 	GovernanceManagerService_RecordReleaseAgentEvidence_FullMethodName   = "/kodex.governance.v1.GovernanceManagerService/RecordReleaseAgentEvidence"
@@ -116,6 +117,8 @@ type GovernanceManagerServiceClient interface {
 	GetGateRequest(ctx context.Context, in *GetGateRequestRequest, opts ...grpc.CallOption) (*GateRequestResponse, error)
 	// ListGateRequests returns gate requests by target or assessment, optionally refined by status.
 	ListGateRequests(ctx context.Context, in *ListGateRequestsRequest, opts ...grpc.CallOption) (*ListGateRequestsResponse, error)
+	// PrepareSelfDeployPlanGate evaluates a safe SelfDeployPlan and creates or returns the required owner/governance gate.
+	PrepareSelfDeployPlanGate(ctx context.Context, in *PrepareSelfDeployPlanGateRequest, opts ...grpc.CallOption) (*SelfDeployPlanGateResponse, error)
 	// BuildReleaseDecisionPackage builds a bounded evidence package for a release candidate.
 	BuildReleaseDecisionPackage(ctx context.Context, in *BuildReleaseDecisionPackageRequest, opts ...grpc.CallOption) (*ReleaseDecisionPackageResponse, error)
 	// RecordReleaseRuntimeEvidence appends safe runtime/deploy evidence refs to a release package.
@@ -396,6 +399,16 @@ func (c *governanceManagerServiceClient) ListGateRequests(ctx context.Context, i
 	return out, nil
 }
 
+func (c *governanceManagerServiceClient) PrepareSelfDeployPlanGate(ctx context.Context, in *PrepareSelfDeployPlanGateRequest, opts ...grpc.CallOption) (*SelfDeployPlanGateResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SelfDeployPlanGateResponse)
+	err := c.cc.Invoke(ctx, GovernanceManagerService_PrepareSelfDeployPlanGate_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *governanceManagerServiceClient) BuildReleaseDecisionPackage(ctx context.Context, in *BuildReleaseDecisionPackageRequest, opts ...grpc.CallOption) (*ReleaseDecisionPackageResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ReleaseDecisionPackageResponse)
@@ -602,6 +615,8 @@ type GovernanceManagerServiceServer interface {
 	GetGateRequest(context.Context, *GetGateRequestRequest) (*GateRequestResponse, error)
 	// ListGateRequests returns gate requests by target or assessment, optionally refined by status.
 	ListGateRequests(context.Context, *ListGateRequestsRequest) (*ListGateRequestsResponse, error)
+	// PrepareSelfDeployPlanGate evaluates a safe SelfDeployPlan and creates or returns the required owner/governance gate.
+	PrepareSelfDeployPlanGate(context.Context, *PrepareSelfDeployPlanGateRequest) (*SelfDeployPlanGateResponse, error)
 	// BuildReleaseDecisionPackage builds a bounded evidence package for a release candidate.
 	BuildReleaseDecisionPackage(context.Context, *BuildReleaseDecisionPackageRequest) (*ReleaseDecisionPackageResponse, error)
 	// RecordReleaseRuntimeEvidence appends safe runtime/deploy evidence refs to a release package.
@@ -713,6 +728,9 @@ func (UnimplementedGovernanceManagerServiceServer) GetGateRequest(context.Contex
 }
 func (UnimplementedGovernanceManagerServiceServer) ListGateRequests(context.Context, *ListGateRequestsRequest) (*ListGateRequestsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListGateRequests not implemented")
+}
+func (UnimplementedGovernanceManagerServiceServer) PrepareSelfDeployPlanGate(context.Context, *PrepareSelfDeployPlanGateRequest) (*SelfDeployPlanGateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PrepareSelfDeployPlanGate not implemented")
 }
 func (UnimplementedGovernanceManagerServiceServer) BuildReleaseDecisionPackage(context.Context, *BuildReleaseDecisionPackageRequest) (*ReleaseDecisionPackageResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method BuildReleaseDecisionPackage not implemented")
@@ -1213,6 +1231,24 @@ func _GovernanceManagerService_ListGateRequests_Handler(srv interface{}, ctx con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _GovernanceManagerService_PrepareSelfDeployPlanGate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PrepareSelfDeployPlanGateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GovernanceManagerServiceServer).PrepareSelfDeployPlanGate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GovernanceManagerService_PrepareSelfDeployPlanGate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GovernanceManagerServiceServer).PrepareSelfDeployPlanGate(ctx, req.(*PrepareSelfDeployPlanGateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _GovernanceManagerService_BuildReleaseDecisionPackage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(BuildReleaseDecisionPackageRequest)
 	if err := dec(in); err != nil {
@@ -1585,6 +1621,10 @@ var GovernanceManagerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListGateRequests",
 			Handler:    _GovernanceManagerService_ListGateRequests_Handler,
+		},
+		{
+			MethodName: "PrepareSelfDeployPlanGate",
+			Handler:    _GovernanceManagerService_PrepareSelfDeployPlanGate_Handler,
 		},
 		{
 			MethodName: "BuildReleaseDecisionPackage",

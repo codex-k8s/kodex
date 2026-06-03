@@ -49,6 +49,7 @@ type governanceService interface {
 	ListGateDecisions(context.Context, governanceservice.ListGateDecisionsInput) ([]entity.GateDecision, query.PageResult, error)
 	GetGateRequest(context.Context, governanceservice.GetGateRequestInput) (entity.GateRequest, error)
 	ListGateRequests(context.Context, governanceservice.ListGateRequestsInput) ([]entity.GateRequest, query.PageResult, error)
+	PrepareSelfDeployPlanGate(context.Context, governanceservice.SelfDeployPlanGateInput) (governanceservice.SelfDeployPlanGateResult, error)
 	BuildReleaseDecisionPackage(context.Context, governanceservice.BuildReleaseDecisionPackageInput) (entity.ReleaseDecisionPackage, error)
 	RecordReleaseRuntimeEvidence(context.Context, governanceservice.RecordReleaseRuntimeEvidenceInput) (entity.ReleaseDecisionPackage, error)
 	RecordReleaseAgentEvidence(context.Context, governanceservice.RecordReleaseAgentEvidenceInput) (entity.ReleaseDecisionPackage, error)
@@ -737,6 +738,19 @@ func (server *Server) ListGateRequests(ctx context.Context, req *governancev1.Li
 	response := &governancev1.ListGateRequestsResponse{Page: pageResponse(page)}
 	response.GateRequests = toGateRequests(items)
 	return response, nil
+}
+
+// PrepareSelfDeployPlanGate evaluates a safe SelfDeployPlan and prepares the required owner/governance gate.
+func (server *Server) PrepareSelfDeployPlanGate(ctx context.Context, req *governancev1.PrepareSelfDeployPlanGateRequest) (*governancev1.SelfDeployPlanGateResponse, error) {
+	meta, err := commandMeta(req.GetMeta())
+	if err != nil {
+		return nil, err
+	}
+	result, err := server.service.PrepareSelfDeployPlanGate(ctx, selfDeployPlanGateInput(req.GetPlan(), meta))
+	if err != nil {
+		return nil, err
+	}
+	return toSelfDeployPlanGateResponse(result), nil
 }
 
 // BuildReleaseDecisionPackage stores bounded release evidence refs.

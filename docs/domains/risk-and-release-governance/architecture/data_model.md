@@ -229,6 +229,8 @@ approvals:
 
 Для self-deploy summary дополнительно показывает `status.pending_required_gate_count` и `next_action_code=request_governance_gate`, когда risk assessment уже требует owner/governance gate, а локальный gate request ещё не создан. Это позволяет manager-агенту или будущей операторской поверхности показать безопасный следующий шаг без вычисления правил вне `governance-manager`.
 
+Для реального `SelfDeployPlan` используется target `self_deploy_plan` с ref на plan id из `agent-manager`. Команда `PrepareSelfDeployPlanGate` сохраняет risk assessment и gate request на этом target, а `plan_fingerprint` кладётся только как digest safe `EvidenceRef(kind=self_deploy_plan, ref=<plan_ref>)`. Повтор той же доставки с тем же fingerprint возвращает существующие assessment/gate/decision refs, а новый fingerprint для того же `self_deploy_plan` target считается конфликтом. Модель хранит service keys, path categories, expected runtime job types, `services.yaml` digest/ref, provider/source refs и короткую summary как bounded factors/evidence; полный diff, webhook body, provider response, полный `services.yaml`, runtime logs, prompt/transcript, kubeconfig и секреты не принимаются.
+
 ### ReleaseDecision
 
 `ReleaseDecision` фиксирует go/no-go, hold, rollback или follow-up.

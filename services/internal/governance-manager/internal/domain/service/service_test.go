@@ -278,6 +278,263 @@ func TestSelfDeployRiskTagsClassifyBaseline(t *testing.T) {
 	}
 }
 
+func TestPrepareSelfDeployPlanGateCreatesAssessmentAndGate(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	repository := &fakeRepository{ready: true}
+	service := NewWithConfig(Config{
+		Repository:  repository,
+		Clock:       fixedClock{now: now},
+		IDGenerator: uuidGenerator{},
+		Authorizer:  AllowAllAuthorizer{},
+	})
+
+	result, err := service.PrepareSelfDeployPlanGate(context.Background(), selfDeployPlanGateTestInput("sha256:plan"))
+	if err != nil {
+		t.Fatalf("PrepareSelfDeployPlanGate(): %v", err)
+	}
+	if result.Status != enum.SelfDeployPlanGateStatusPending {
+		t.Fatalf("status = %s, want pending", result.Status)
+	}
+	if result.RiskAssessment.Target.Type != "self_deploy_plan" ||
+		result.RiskAssessment.Target.Ref != "agent:self-deploy-plan:1" ||
+		result.RiskAssessment.EffectiveRiskClass != enum.RiskClassR2 {
+		t.Fatalf("assessment = %+v, want self-deploy R2 target", result.RiskAssessment)
+	}
+	if len(result.RiskAssessment.RequiredGates) != 1 || result.RiskAssessment.RequiredGates[0].GateKind != enum.GateKindRelease {
+		t.Fatalf("required gates = %+v, want release owner gate", result.RiskAssessment.RequiredGates)
+	}
+	if result.RiskAssessment.RequiredGates[0].GatePolicyID != uuid.Nil {
+		t.Fatalf("required gate policy id = %s, want empty built-in self-deploy gate policy", result.RiskAssessment.RequiredGates[0].GatePolicyID)
+	}
+	if result.GateRequest.ID == uuid.Nil || result.GateRequest.RiskAssessmentID == nil || *result.GateRequest.RiskAssessmentID != result.RiskAssessment.ID {
+		t.Fatalf("gate request = %+v, want linked assessment", result.GateRequest)
+	}
+	if result.GateRequest.GatePolicyID != nil {
+		t.Fatalf("gate request policy id = %v, want nil built-in self-deploy gate policy", result.GateRequest.GatePolicyID)
+	}
+	if result.GateRequest.Status != enum.GateRequestStatusRequested {
+		t.Fatalf("gate status = %s, want requested", result.GateRequest.Status)
+	}
+	if !selfDeployAssessmentMatchesFingerprint(result.RiskAssessment, normalizedSelfDeployPlanGateInput{SelfDeployPlanRef: "agent:self-deploy-plan:1", PlanFingerprint: "sha256:plan"}) {
+		t.Fatalf("assessment evidence refs = %+v, want plan fingerprint", result.RiskAssessment.EvidenceRefs)
+	}
+	if repository.mutationCalls != 2 {
+		t.Fatalf("mutation calls = %d, want assessment and gate request", repository.mutationCalls)
+	}
+	for _, event := range repository.events {
+		payload := string(event.Payload)
+		for _, unsafe := range []string{"raw_diff", "webhook body", "secret=", "kubeconfig", "stdout", "stderr", "provider response"} {
+			if strings.Contains(payload, unsafe) {
+				t.Fatalf("outbox payload leaked unsafe marker %q: %s", unsafe, payload)
+			}
+		}
+	}
+}
+
+func TestPrepareSelfDeployPlanGateClassifiesR3SafeFactors(t *testing.T) {
+	t.Parallel()
+
+	repository := &fakeRepository{ready: true}
+	input := selfDeployPlanGateTestInput("sha256:r3-plan")
+	input.PathCategories = []string{"auth_bypass"}
+	input.SafeSummary = "bounded self-deploy security-sensitive plan"
+
+	result, err := newTestService(repository).PrepareSelfDeployPlanGate(context.Background(), input)
+	if err != nil {
+		t.Fatalf("PrepareSelfDeployPlanGate(): %v", err)
+	}
+	if result.RiskAssessment.EffectiveRiskClass != enum.RiskClassR3 ||
+		len(result.RiskAssessment.RequiredGates) != 1 ||
+		result.Status != enum.SelfDeployPlanGateStatusPending {
+		t.Fatalf("result = %+v, want pending R3 owner/governance gate", result)
+	}
+	for _, ref := range result.RiskAssessment.EvidenceRefs {
+		if strings.Contains(ref.Summary, "secret=") || strings.Contains(ref.Summary, "kubeconfig:") {
+			t.Fatalf("evidence leaked unsafe detail: %+v", ref)
+		}
+	}
+}
+
+func TestPrepareSelfDeployPlanGateReusesExistingAssessmentAndGate(t *testing.T) {
+	t.Parallel()
+
+	assessmentID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+	gateRequestID := uuid.MustParse("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+	target := value.ExternalRef{Type: "self_deploy_plan", Ref: "agent:self-deploy-plan:1"}
+	repository := &fakeRepository{
+		ready: true,
+		riskAssessments: []entity.RiskAssessment{{
+			VersionedBase:      entity.VersionedBase{ID: assessmentID, Version: 1},
+			Target:             target,
+			ProjectContext:     value.ProjectContextRef{ProjectRef: "project:kodex", RepositoryRef: "repo:codex-k8s/kodex"},
+			EvidenceRefs:       []value.EvidenceRef{{Kind: selfDeployPlanEvidenceKind, Ref: "agent:self-deploy-plan:1", Digest: "sha256:plan", Summary: selfDeployPlanGateEvidenceSummary}},
+			EffectiveRiskClass: enum.RiskClassR2,
+			Status:             enum.RiskAssessmentStatusActive,
+			RequiredGates:      []entity.RequiredGate{{GateKind: enum.GateKindRelease, MinRiskClass: enum.RiskClassR2, Reason: "self-deploy gate required"}},
+		}},
+		gateRequests: []entity.GateRequest{{
+			VersionedBase:    entity.VersionedBase{ID: gateRequestID, Version: 1},
+			RiskAssessmentID: &assessmentID,
+			Target:           target,
+			Status:           enum.GateRequestStatusAwaitingDecision,
+			EvidenceSummary:  "bounded self-deploy plan",
+		}},
+	}
+
+	result, err := newTestService(repository).PrepareSelfDeployPlanGate(context.Background(), selfDeployPlanGateTestInput("sha256:plan"))
+	if err != nil {
+		t.Fatalf("PrepareSelfDeployPlanGate(): %v", err)
+	}
+	if result.Status != enum.SelfDeployPlanGateStatusPending || result.GateRequest.ID != gateRequestID {
+		t.Fatalf("result = %+v, want existing pending gate request", result)
+	}
+	if repository.mutationCalls != 0 {
+		t.Fatalf("mutation calls = %d, want idempotent read-only replay", repository.mutationCalls)
+	}
+}
+
+func TestPrepareSelfDeployPlanGateReplaysCommandResult(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	input := selfDeployPlanGateTestInput("sha256:plan")
+	assessmentID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+	gateRequestID := uuid.MustParse("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+	target := value.ExternalRef{Type: "self_deploy_plan", Ref: "agent:self-deploy-plan:1"}
+	resultPayload := map[string]any{
+		"self_deploy_plan_ref": "agent:self-deploy-plan:1",
+		"plan_fingerprint":     "sha256:plan",
+		"risk_assessment_id":   assessmentID.String(),
+		"gate_request_id":      gateRequestID.String(),
+		"status":               string(enum.SelfDeployPlanGateStatusPending),
+	}
+	repository := &fakeRepository{
+		ready:            true,
+		hasCommandResult: true,
+		commandResult:    commandResultWithPayload(input.Meta, enum.OperationPrepareSelfDeployPlanGate.String(), aggregateSelfDeployPlanGate, assessmentID, now, resultPayload),
+		assessment: entity.RiskAssessment{
+			VersionedBase:      entity.VersionedBase{ID: assessmentID, Version: 1},
+			Target:             target,
+			EvidenceRefs:       []value.EvidenceRef{{Kind: selfDeployPlanEvidenceKind, Ref: "agent:self-deploy-plan:1", Digest: "sha256:plan", Summary: selfDeployPlanGateEvidenceSummary}},
+			EffectiveRiskClass: enum.RiskClassR2,
+			Status:             enum.RiskAssessmentStatusActive,
+			RequiredGates:      []entity.RequiredGate{{GateKind: enum.GateKindRelease, MinRiskClass: enum.RiskClassR2, Reason: "self-deploy gate required"}},
+		},
+		gateRequest: entity.GateRequest{
+			VersionedBase:    entity.VersionedBase{ID: gateRequestID, Version: 1},
+			RiskAssessmentID: &assessmentID,
+			Target:           target,
+			Status:           enum.GateRequestStatusAwaitingDecision,
+			EvidenceSummary:  "bounded self-deploy plan",
+		},
+	}
+
+	result, err := newTestService(repository).PrepareSelfDeployPlanGate(context.Background(), input)
+	if err != nil {
+		t.Fatalf("PrepareSelfDeployPlanGate() replay: %v", err)
+	}
+	if result.Status != enum.SelfDeployPlanGateStatusPending || result.GateRequest.ID != gateRequestID || repository.mutationCalls != 0 {
+		t.Fatalf("replay result = %+v mutation calls = %d, want pending existing gate without writes", result, repository.mutationCalls)
+	}
+
+	input.PlanFingerprint = "sha256:changed"
+	_, err = newTestService(repository).PrepareSelfDeployPlanGate(context.Background(), input)
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("PrepareSelfDeployPlanGate() changed replay error = %v, want ErrConflict", err)
+	}
+}
+
+func TestPrepareSelfDeployPlanGateConflictsOnChangedFingerprint(t *testing.T) {
+	t.Parallel()
+
+	assessmentID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+	target := value.ExternalRef{Type: "self_deploy_plan", Ref: "agent:self-deploy-plan:1"}
+	repository := &fakeRepository{
+		ready: true,
+		riskAssessments: []entity.RiskAssessment{{
+			VersionedBase:      entity.VersionedBase{ID: assessmentID, Version: 1},
+			Target:             target,
+			EvidenceRefs:       []value.EvidenceRef{{Kind: selfDeployPlanEvidenceKind, Ref: "agent:self-deploy-plan:1", Digest: "sha256:old", Summary: selfDeployPlanGateEvidenceSummary}},
+			EffectiveRiskClass: enum.RiskClassR2,
+			Status:             enum.RiskAssessmentStatusActive,
+		}},
+	}
+
+	_, err := newTestService(repository).PrepareSelfDeployPlanGate(context.Background(), selfDeployPlanGateTestInput("sha256:new"))
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("PrepareSelfDeployPlanGate() error = %v, want ErrConflict", err)
+	}
+	if repository.mutationCalls != 0 {
+		t.Fatalf("mutation calls = %d, want no writes on conflict", repository.mutationCalls)
+	}
+}
+
+func TestPrepareSelfDeployPlanGateReturnsApprovedDecision(t *testing.T) {
+	t.Parallel()
+
+	assessmentID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+	gateRequestID := uuid.MustParse("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+	gateDecisionID := uuid.MustParse("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
+	target := value.ExternalRef{Type: "self_deploy_plan", Ref: "agent:self-deploy-plan:1"}
+	repository := &fakeRepository{
+		ready: true,
+		riskAssessments: []entity.RiskAssessment{{
+			VersionedBase:      entity.VersionedBase{ID: assessmentID, Version: 1},
+			Target:             target,
+			EvidenceRefs:       []value.EvidenceRef{{Kind: selfDeployPlanEvidenceKind, Ref: "agent:self-deploy-plan:1", Digest: "sha256:plan", Summary: selfDeployPlanGateEvidenceSummary}},
+			EffectiveRiskClass: enum.RiskClassR2,
+			Status:             enum.RiskAssessmentStatusActive,
+			RequiredGates:      []entity.RequiredGate{{GateKind: enum.GateKindRelease, MinRiskClass: enum.RiskClassR2, Reason: "self-deploy gate required"}},
+		}},
+		gateRequests: []entity.GateRequest{{
+			VersionedBase:    entity.VersionedBase{ID: gateRequestID, Version: 2},
+			RiskAssessmentID: &assessmentID,
+			Target:           target,
+			Status:           enum.GateRequestStatusResolved,
+			EvidenceSummary:  "bounded self-deploy plan",
+		}},
+		gateDecisions: []entity.GateDecision{{
+			ID:               gateDecisionID,
+			GateRequestID:    gateRequestID,
+			DecisionActorRef: "user:owner",
+			Outcome:          enum.GateOutcomeApprove,
+			Reason:           "safe owner approval",
+		}},
+	}
+
+	result, err := newTestService(repository).PrepareSelfDeployPlanGate(context.Background(), selfDeployPlanGateTestInput("sha256:plan"))
+	if err != nil {
+		t.Fatalf("PrepareSelfDeployPlanGate(): %v", err)
+	}
+	if result.Status != enum.SelfDeployPlanGateStatusApproved || result.GateDecision == nil || result.GateDecision.ID != gateDecisionID {
+		t.Fatalf("result = %+v, want approved gate decision", result)
+	}
+}
+
+func selfDeployPlanGateTestInput(fingerprint string) SelfDeployPlanGateInput {
+	return SelfDeployPlanGateInput{
+		SelfDeployPlanRef:       "agent:self-deploy-plan:1",
+		ProjectContext:          value.ProjectContextRef{ProjectRef: "project:kodex", RepositoryRef: "repo:codex-k8s/kodex", ReleaseLineRef: "self-deploy"},
+		ProviderSignalRef:       "provider:signal:merge-main",
+		SourceRef:               "github:pull:1008",
+		MergeCommitSHA:          "abcdef0123456789abcdef0123456789abcdef01",
+		ServicesYAMLDigest:      "sha256:services",
+		AffectedServiceKeys:     []string{"governance-manager"},
+		PathCategories:          []string{"services_yaml"},
+		ExpectedRuntimeJobTypes: []string{"build", "deploy"},
+		ChangedFilesSummaryRef:  "provider:changed-files:1008",
+		SafeSummary:             "bounded self-deploy plan",
+		PlanFingerprint:         fingerprint,
+		Meta: CommandMeta{
+			IdempotencyKey: "agent:self-deploy-plan:1",
+			Actor:          value.Actor{Type: "service", ID: "agent-manager"},
+			RequestID:      "trace-self-deploy-plan",
+		},
+	}
+}
+
 func TestEvaluateRiskRejectsUnsafeSummary(t *testing.T) {
 	t.Parallel()
 

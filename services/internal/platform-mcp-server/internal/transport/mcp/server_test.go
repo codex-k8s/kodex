@@ -1318,6 +1318,43 @@ func TestGovernanceSummaryGetRoutesToOwnerWithIntegrationSelector(t *testing.T) 
 	}
 }
 
+func TestGovernanceSummaryGetAcceptsSelfDeployPlanTarget(t *testing.T) {
+	t.Parallel()
+
+	governance := newFakeGovernanceManagerClient()
+	server := newTestServerWithGovernance(t, governance)
+	session, cleanup := connectClient(t, server)
+	defer cleanup()
+
+	result, err := session.CallTool(context.Background(), &mcpsdk.CallToolParams{
+		Name: ToolGovernanceSummaryGet,
+		Arguments: map[string]any{
+			"meta":   validGovernanceQueryMetaArgs(),
+			"target": map[string]any{"type": "self_deploy_plan", "ref": "agent:self-deploy-plan:1"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool(): %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("CallTool() returned tool error: %+v", result.Content)
+	}
+	if governance.getSummaryCalls != 1 {
+		t.Fatalf("getSummaryCalls = %d, want 1", governance.getSummaryCalls)
+	}
+	if governance.lastSummaryScope.GetTarget().GetType() != governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_SELF_DEPLOY_PLAN ||
+		governance.lastSummaryScope.GetTarget().GetRef() != "agent:self-deploy-plan:1" {
+		t.Fatalf("target scope = %+v, want self_deploy_plan", governance.lastSummaryScope.GetTarget())
+	}
+	data, err := json.Marshal(result.StructuredContent)
+	if err != nil {
+		t.Fatalf("Marshal(): %v", err)
+	}
+	if !strings.Contains(string(data), "self_deploy_plan") {
+		t.Fatalf("structured content does not include self_deploy_plan evidence kind: %s", data)
+	}
+}
+
 func TestGovernanceSummaryGetRejectsMixedSelectors(t *testing.T) {
 	t.Parallel()
 
@@ -2961,6 +2998,10 @@ func fakeGovernanceSummaryResponse(scope *governancev1.GovernanceSummaryScope) *
 				Kind:    governancev1.EvidenceKind_EVIDENCE_KIND_AGENT_ACCEPTANCE,
 				Ref:     "agent:acceptance/acceptance-1",
 				Summary: "bounded agent acceptance ref",
+			}, {
+				Kind:    governancev1.EvidenceKind_EVIDENCE_KIND_SELF_DEPLOY_PLAN,
+				Ref:     "agent:self-deploy-plan:1",
+				Summary: "bounded self-deploy plan ref",
 			}},
 			IntegrationRefs: []*governancev1.ReleaseIntegrationRef{{
 				Domain:  "agent",

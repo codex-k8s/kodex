@@ -395,6 +395,54 @@ func TestGetGovernanceSummaryRoutesToDomainService(t *testing.T) {
 	}
 }
 
+func TestPrepareSelfDeployPlanGateRoutesToDomainService(t *testing.T) {
+	t.Parallel()
+
+	service := &fakeBacklogService{}
+	response, err := NewServer(service).PrepareSelfDeployPlanGate(context.Background(), &governancev1.PrepareSelfDeployPlanGateRequest{
+		Plan: &governancev1.SelfDeployPlanGateInput{
+			SelfDeployPlanRef:       "agent:self-deploy-plan:1",
+			ProjectContext:          &governancev1.ProjectContextRef{ProjectRef: ptrString("project:kodex"), RepositoryRef: ptrString("repo:codex-k8s/kodex")},
+			ProviderSignalRef:       ptrString("provider:signal:merge-main"),
+			SourceRef:               ptrString("github:pull:1008"),
+			ServicesYamlDigest:      ptrString("sha256:services"),
+			AffectedServiceKeys:     []string{"governance-manager"},
+			PathCategories:          []string{"services_yaml"},
+			ExpectedRuntimeJobTypes: []string{"build", "deploy"},
+			ChangedFilesSummaryRef:  ptrString("provider:changed-files:1008"),
+			SafeSummary:             ptrString("bounded self-deploy plan"),
+			PlanFingerprint:         "sha256:plan",
+		},
+		Meta: &governancev1.CommandMeta{
+			Actor:          &governancev1.Actor{Type: "service", Id: "agent-manager"},
+			IdempotencyKey: ptrString("agent:self-deploy-plan:1"),
+		},
+	})
+	if err != nil {
+		t.Fatalf("PrepareSelfDeployPlanGate(): %v", err)
+	}
+	if service.selfDeployPlanGateInput.SelfDeployPlanRef != "agent:self-deploy-plan:1" ||
+		service.selfDeployPlanGateInput.PlanFingerprint != "sha256:plan" ||
+		service.selfDeployPlanGateInput.ExpectedRuntimeJobTypes[1] != "deploy" {
+		t.Fatalf("input = %+v, want safe self-deploy plan refs", service.selfDeployPlanGateInput)
+	}
+	if response.GetStatus() != governancev1.SelfDeployPlanGateStatus_SELF_DEPLOY_PLAN_GATE_STATUS_PENDING ||
+		response.GetRiskAssessment().GetEffectiveRiskClass() != governancev1.RiskClass_RISK_CLASS_R2 ||
+		response.GetGateRequest().GetStatus() != governancev1.GateRequestStatus_GATE_REQUEST_STATUS_AWAITING_DECISION {
+		t.Fatalf("response = %+v, want pending R2 gate", response)
+	}
+	if len(response.GetRiskAssessment().GetEvidenceRefs()) != 1 ||
+		response.GetRiskAssessment().GetEvidenceRefs()[0].GetKind() != governancev1.EvidenceKind_EVIDENCE_KIND_SELF_DEPLOY_PLAN {
+		t.Fatalf("risk assessment evidence refs = %+v, want typed self_deploy_plan evidence", response.GetRiskAssessment().GetEvidenceRefs())
+	}
+	rendered := response.GetGovernanceSummary().GetPendingDecisions()[0].GetSafeSummary()
+	for _, unsafe := range []string{"raw_diff", "webhook body", "secret=", "kubeconfig", "stdout", "stderr"} {
+		if strings.Contains(rendered, unsafe) {
+			t.Fatalf("summary leaked unsafe marker %q: %s", unsafe, rendered)
+		}
+	}
+}
+
 func TestRequestReleaseDecisionRoutesToDomainService(t *testing.T) {
 	t.Parallel()
 
@@ -476,6 +524,7 @@ type fakeBacklogService struct {
 	listReleaseDecisionPackagesInput  governanceservice.ListReleaseDecisionPackagesInput
 	releasePackage                    entity.ReleaseDecisionPackage
 	getGovernanceSummaryInput         governanceservice.GetGovernanceSummaryInput
+	selfDeployPlanGateInput           governanceservice.SelfDeployPlanGateInput
 	requestReleaseDecisionInput       governanceservice.RequestReleaseDecisionInput
 }
 
@@ -581,6 +630,42 @@ func (service *fakeBacklogService) GetGovernanceSummary(_ context.Context, input
 			SourceRef:       input.Scope.IntegrationRef.Ref,
 			IntegrationRefs: []value.ReleaseIntegrationRef{input.Scope.IntegrationRef},
 		}},
+	}, nil
+}
+
+func (service *fakeBacklogService) PrepareSelfDeployPlanGate(_ context.Context, input governanceservice.SelfDeployPlanGateInput) (governanceservice.SelfDeployPlanGateResult, error) {
+	service.selfDeployPlanGateInput = input
+	assessmentID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+	gateRequestID := uuid.MustParse("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+	target := value.ExternalRef{Type: "self_deploy_plan", Ref: input.SelfDeployPlanRef}
+	return governanceservice.SelfDeployPlanGateResult{
+		Status: enum.SelfDeployPlanGateStatusPending,
+		RiskAssessment: entity.RiskAssessment{
+			VersionedBase:      entity.VersionedBase{ID: assessmentID, Version: 1},
+			Target:             target,
+			ProjectContext:     input.ProjectContext,
+			EffectiveRiskClass: enum.RiskClassR2,
+			Status:             enum.RiskAssessmentStatusActive,
+			EvidenceRefs:       []value.EvidenceRef{{Kind: "self_deploy_plan", Ref: input.SelfDeployPlanRef, Summary: "self-deploy plan gate input", Digest: input.PlanFingerprint}},
+			RequiredGates:      []entity.RequiredGate{{GateKind: enum.GateKindRelease, MinRiskClass: enum.RiskClassR2, Reason: "self-deploy gate required"}},
+		},
+		GateRequest: entity.GateRequest{
+			VersionedBase:    entity.VersionedBase{ID: gateRequestID, Version: 1},
+			RiskAssessmentID: &assessmentID,
+			Target:           target,
+			EvidenceSummary:  "bounded self-deploy plan",
+			Status:           enum.GateRequestStatusAwaitingDecision,
+		},
+		GovernanceSummary: entity.GovernanceSummary{
+			Scope: entity.GovernanceSummaryScope{Target: target},
+			PendingDecisions: []entity.GovernanceDecisionSummary{{
+				Kind:        enum.GovernanceDecisionSummaryKindGateRequest,
+				Attention:   enum.GovernanceDecisionAttentionPending,
+				ID:          gateRequestID.String(),
+				Target:      target,
+				SafeSummary: "bounded self-deploy plan",
+			}},
+		},
 	}, nil
 }
 

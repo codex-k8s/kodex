@@ -267,6 +267,30 @@ func riskEvaluationFactors(items []*governancev1.RiskEvaluationFactor) []value.R
 	return result
 }
 
+func selfDeployPlanGateInput(item *governancev1.SelfDeployPlanGateInput, meta governanceservice.CommandMeta) governanceservice.SelfDeployPlanGateInput {
+	if item == nil {
+		return governanceservice.SelfDeployPlanGateInput{Meta: meta}
+	}
+	return governanceservice.SelfDeployPlanGateInput{
+		SelfDeployPlanRef:       item.GetSelfDeployPlanRef(),
+		ProjectContext:          projectContext(item.GetProjectContext()),
+		ProviderSignalRef:       item.GetProviderSignalRef(),
+		SourceRef:               item.GetSourceRef(),
+		MergeCommitSHA:          item.GetMergeCommitSha(),
+		ServicesYAMLRef:         item.GetServicesYamlRef(),
+		ServicesYAMLDigest:      item.GetServicesYamlDigest(),
+		AffectedServiceKeys:     item.GetAffectedServiceKeys(),
+		PathCategories:          item.GetPathCategories(),
+		ExpectedRuntimeJobTypes: item.GetExpectedRuntimeJobTypes(),
+		ChangedFilesSummaryRef:  item.GetChangedFilesSummaryRef(),
+		SafeSummary:             item.GetSafeSummary(),
+		PlanFingerprint:         item.GetPlanFingerprint(),
+		EvidenceRefs:            evidenceRefs(item.GetEvidenceRefs()),
+		RiskProfileRef:          item.GetRiskProfileRef(),
+		Meta:                    meta,
+	}
+}
+
 func riskRuleDrafts(profileID uuid.UUID, profileVersion int64, items []*governancev1.RiskRuleDraft) ([]entity.RiskRule, error) {
 	result := make([]entity.RiskRule, 0, len(items))
 	for _, item := range items {
@@ -563,6 +587,21 @@ func toGateDecisions(items []entity.GateDecision) []*governancev1.GateDecision {
 		result = append(result, toGateDecision(item))
 	}
 	return result
+}
+
+func toSelfDeployPlanGateResponse(item governanceservice.SelfDeployPlanGateResult) *governancev1.SelfDeployPlanGateResponse {
+	response := &governancev1.SelfDeployPlanGateResponse{
+		Status:            toSelfDeployPlanGateStatus(item.Status),
+		RiskAssessment:    toRiskAssessment(item.RiskAssessment),
+		GovernanceSummary: toGovernanceSummary(item.GovernanceSummary),
+	}
+	if item.GateRequest.ID != uuid.Nil {
+		response.GateRequest = toGateRequest(item.GateRequest)
+	}
+	if item.GateDecision != nil {
+		response.GateDecision = toGateDecision(*item.GateDecision)
+	}
+	return response
 }
 
 func toReleaseDecisionPackage(item entity.ReleaseDecisionPackage) *governancev1.ReleaseDecisionPackage {
@@ -1058,6 +1097,8 @@ func targetTypeString(item governancev1.GovernanceTargetType) string {
 		return "postdeploy"
 	case governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_ROLLBACK:
 		return "rollback"
+	case governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_SELF_DEPLOY_PLAN:
+		return "self_deploy_plan"
 	default:
 		return ""
 	}
@@ -1083,6 +1124,8 @@ func toTargetType(item string) governancev1.GovernanceTargetType {
 		return governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_POSTDEPLOY
 	case "rollback":
 		return governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_ROLLBACK
+	case "self_deploy_plan":
+		return governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_SELF_DEPLOY_PLAN
 	default:
 		return governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_UNSPECIFIED
 	}
@@ -1202,6 +1245,10 @@ func gateOutcome(item governancev1.GateOutcome) enum.GateOutcome {
 
 func toGateOutcome(item enum.GateOutcome) governancev1.GateOutcome {
 	return domainProtoEnum(item, "GATE_OUTCOME_", governancev1.GateOutcome_GATE_OUTCOME_UNSPECIFIED)
+}
+
+func toSelfDeployPlanGateStatus(item enum.SelfDeployPlanGateStatus) governancev1.SelfDeployPlanGateStatus {
+	return domainProtoEnum(item, "SELF_DEPLOY_PLAN_GATE_STATUS_", governancev1.SelfDeployPlanGateStatus_SELF_DEPLOY_PLAN_GATE_STATUS_UNSPECIFIED)
 }
 
 func releaseDecisionPackageStatus(item governancev1.ReleaseDecisionPackageStatus) enum.ReleaseDecisionPackageStatus {

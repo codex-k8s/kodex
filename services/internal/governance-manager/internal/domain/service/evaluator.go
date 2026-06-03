@@ -445,6 +445,7 @@ func (s *Service) classifyRisk(ctx context.Context, input evaluationInput) (eval
 	if err != nil {
 		return evaluationOutput{}, err
 	}
+	requiredGates = appendDefaultSelfDeployGate(requiredGates, effectiveRisk, factors)
 	return evaluationOutput{
 		assessmentID:  input.assessmentID,
 		context:       contextValue,
@@ -667,6 +668,36 @@ func addRequiredGate(required *[]entity.RequiredGate, seen map[uuid.UUID]struct{
 	}
 	seen[policy.ID] = struct{}{}
 	*required = append(*required, entity.RequiredGate{GatePolicyID: policy.ID, GateKind: policy.GateKind, MinRiskClass: policy.MinRiskClass, Reason: strings.TrimSpace(reason)})
+}
+
+func appendDefaultSelfDeployGate(required []entity.RequiredGate, riskClass enum.RiskClass, factors []entity.RiskFactor) []entity.RequiredGate {
+	if len(required) > 0 || !riskClassAtLeast(riskClass, enum.RiskClassR2) || !selfDeployGateRequired(factors) {
+		return required
+	}
+	return append(required, entity.RequiredGate{
+		GateKind:     enum.GateKindRelease,
+		MinRiskClass: enum.RiskClassR2,
+		Reason:       "self-deploy plan requires owner/governance gate",
+	})
+}
+
+func selfDeployGateRequired(factors []entity.RiskFactor) bool {
+	for _, factor := range factors {
+		ref := strings.ToLower(strings.TrimSpace(factor.SourceRef))
+		summary := strings.ToLower(strings.TrimSpace(factor.Summary))
+		if strings.Contains(ref, "self-deploy") || strings.Contains(ref, "self_deploy") || strings.Contains(summary, "self-deploy") || strings.Contains(summary, "self_deploy") {
+			return true
+		}
+		for _, marker := range []string{
+			"deploy_plan", "owner_approval", "services_yaml", "services.yaml", "deploy_manifest", "runtime_executor", "agent_runner",
+			"gateway", "provider_write", "release_policy", "branch_rule", "rbac", "service_account", "kubernetes_manifest", "k8s_manifest",
+		} {
+			if strings.Contains(ref, marker) || strings.Contains(summary, marker) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (s *Service) resolveActiveEvaluationPolicy(ctx context.Context, riskProfileRef string) (evaluationPolicy, error) {

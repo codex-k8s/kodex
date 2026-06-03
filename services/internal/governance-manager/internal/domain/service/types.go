@@ -115,6 +115,33 @@ type RequestGateInput struct {
 	Meta                   CommandMeta
 }
 
+type SelfDeployPlanGateInput struct {
+	SelfDeployPlanRef       string
+	ProjectContext          value.ProjectContextRef
+	ProviderSignalRef       string
+	SourceRef               string
+	MergeCommitSHA          string
+	ServicesYAMLRef         string
+	ServicesYAMLDigest      string
+	AffectedServiceKeys     []string
+	PathCategories          []string
+	ExpectedRuntimeJobTypes []string
+	ChangedFilesSummaryRef  string
+	SafeSummary             string
+	PlanFingerprint         string
+	EvidenceRefs            []value.EvidenceRef
+	RiskProfileRef          string
+	Meta                    CommandMeta
+}
+
+type SelfDeployPlanGateResult struct {
+	Status            enum.SelfDeployPlanGateStatus
+	RiskAssessment    entity.RiskAssessment
+	GateRequest       entity.GateRequest
+	GateDecision      *entity.GateDecision
+	GovernanceSummary entity.GovernanceSummary
+}
+
 type SubmitGateDecisionInput struct {
 	GateRequestID          uuid.UUID
 	DecisionActorRef       string

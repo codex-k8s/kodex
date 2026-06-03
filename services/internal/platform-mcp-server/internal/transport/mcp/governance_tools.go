@@ -43,29 +43,21 @@ var governanceToolDescriptions = map[string]string{
 	ToolGovernanceSummaryGet:                    "Прочитать безопасную сводку governance через governance-manager без хранения состояния в MCP.",
 }
 
-var governanceTargetTypes = map[string]governancev1.GovernanceTargetType{
-	"transition":        governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_TRANSITION,
-	"pull_request":      governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_PULL_REQUEST,
-	"release_candidate": governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_RELEASE_CANDIDATE,
-	"runtime_job":       governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_RUNTIME_JOB,
-	"policy_change":     governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_POLICY_CHANGE,
-	"document":          governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_DOCUMENT,
-	"merge":             governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_MERGE,
-	"postdeploy":        governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_POSTDEPLOY,
-	"rollback":          governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_ROLLBACK,
+var governanceTargetTypePairs = []governanceEnumPair[governancev1.GovernanceTargetType]{
+	{name: "transition", value: governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_TRANSITION},
+	{name: "pull_request", value: governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_PULL_REQUEST},
+	{name: "release_candidate", value: governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_RELEASE_CANDIDATE},
+	{name: "runtime_job", value: governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_RUNTIME_JOB},
+	{name: "policy_change", value: governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_POLICY_CHANGE},
+	{name: "document", value: governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_DOCUMENT},
+	{name: "merge", value: governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_MERGE},
+	{name: "postdeploy", value: governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_POSTDEPLOY},
+	{name: "rollback", value: governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_ROLLBACK},
+	{name: "self_deploy_plan", value: governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_SELF_DEPLOY_PLAN},
 }
 
-var governanceTargetTypeNames = map[governancev1.GovernanceTargetType]string{
-	governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_TRANSITION:        "transition",
-	governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_PULL_REQUEST:      "pull_request",
-	governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_RELEASE_CANDIDATE: "release_candidate",
-	governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_RUNTIME_JOB:       "runtime_job",
-	governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_POLICY_CHANGE:     "policy_change",
-	governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_DOCUMENT:          "document",
-	governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_MERGE:             "merge",
-	governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_POSTDEPLOY:        "postdeploy",
-	governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_ROLLBACK:          "rollback",
-}
+var governanceTargetTypes = governanceEnumValues(governanceTargetTypePairs)
+var governanceTargetTypeNames = governanceEnumNames(governanceTargetTypePairs)
 
 var governanceEvidenceKindPairs = []governanceEnumPair[governancev1.EvidenceKind]{
 	{name: "provider_comment", value: governancev1.EvidenceKind_EVIDENCE_KIND_PROVIDER_COMMENT},
@@ -81,6 +73,7 @@ var governanceEvidenceKindPairs = []governanceEnumPair[governancev1.EvidenceKind
 	{name: "agent_acceptance", value: governancev1.EvidenceKind_EVIDENCE_KIND_AGENT_ACCEPTANCE},
 	{name: "agent_run", value: governancev1.EvidenceKind_EVIDENCE_KIND_AGENT_RUN},
 	{name: "agent_human_gate", value: governancev1.EvidenceKind_EVIDENCE_KIND_AGENT_HUMAN_GATE},
+	{name: "self_deploy_plan", value: governancev1.EvidenceKind_EVIDENCE_KIND_SELF_DEPLOY_PLAN},
 }
 
 var governanceEvidenceKinds = governanceEnumValues(governanceEvidenceKindPairs)
