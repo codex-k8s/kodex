@@ -924,6 +924,69 @@ func TestRepositoryIntegrationAccessRuleIdentityIsUnique(t *testing.T) {
 	}
 }
 
+func TestRepositoryIntegrationAccessRuleServiceSubjectConstraint(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openIntegrationPool(t, ctx)
+	repository := NewRepository(pool)
+	now := time.Date(2026, 6, 3, 12, 0, 0, 0, time.UTC)
+	action := entity.AccessAction{
+		Base:         entity.Base{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		Key:          "test.repository.attach",
+		DisplayName:  "Test repository attach",
+		ResourceType: "repository",
+		Status:       enum.AccessActionStatusActive,
+	}
+	if err := repository.PutAccessAction(ctx, action, testEvent("access.access_action.created", "access_action", action.ID, now)); err != nil {
+		t.Fatalf("put action: %v", err)
+	}
+
+	rule := entity.AccessRule{
+		Base:         entity.Base{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		Effect:       enum.AccessEffectAllow,
+		SubjectType:  enum.AccessSubjectService,
+		SubjectID:    "onboarding-runner",
+		ActionKey:    action.Key,
+		ResourceType: "repository",
+		ScopeType:    "global",
+		Status:       enum.AccessRuleStatusActive,
+	}
+	if err := repository.PutAccessRule(ctx, rule, testEvent("access.access_rule.created", "access_rule", rule.ID, now)); err != nil {
+		t.Fatalf("put service rule: %v", err)
+	}
+	stored, err := repository.FindAccessRule(ctx, query.AccessRuleIdentity{
+		Effect:       rule.Effect,
+		SubjectType:  enum.AccessSubjectService,
+		SubjectID:    rule.SubjectID,
+		ActionKey:    rule.ActionKey,
+		ResourceType: rule.ResourceType,
+		ScopeType:    rule.ScopeType,
+	})
+	if err != nil {
+		t.Fatalf("find service rule: %v", err)
+	}
+	if stored.SubjectType != enum.AccessSubjectService || stored.SubjectID != rule.SubjectID {
+		t.Fatalf("stored subject = %s/%s, want service/%s", stored.SubjectType, stored.SubjectID, rule.SubjectID)
+	}
+
+	_, err = pool.Exec(ctx, `
+INSERT INTO access_rules (
+    id, effect, subject_type, subject_id, action_key, resource_type,
+    scope_type, status, version, created_at, updated_at
+) VALUES (
+    $1, 'allow', 'robot', 'robot-1', $2, 'repository',
+    'global', 'active', 1, $3, $3
+)`, uuid.New(), action.Key, now)
+	if err == nil {
+		t.Fatalf("insert invalid subject type succeeded, want check violation")
+	}
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) || pgErr.Code != "23514" {
+		t.Fatalf("err = %v, want check violation", err)
+	}
+}
+
 func TestRepositoryIntegrationAccessDecisionAuditRoundTrip(t *testing.T) {
 	t.Parallel()
 

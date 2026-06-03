@@ -5,7 +5,7 @@ title: kodex — модель данных домена доступа и акк
 status: active
 owner_role: SA
 created_at: 2026-04-26
-updated_at: 2026-05-12
+updated_at: 2026-06-03
 related_issues: [599, 600, 601, 602, 711, 718]
 related_prs: []
 approvals:
@@ -155,8 +155,8 @@ approvals:
 |---|---|---:|---|
 | `id` | UUID | no | Идентификатор правила. |
 | `effect` | enum | no | `allow`, `deny`. |
-| `subject_type` | enum | no | `user`, `group`, `organization`, `external_account`, `agent`, `agent_role`, `flow`, `package`. |
-| `subject_id` | string | no | UUID для субъектов домена доступа или внешний идентификатор для роли, агента, flow и пакета. |
+| `subject_type` | enum | no | `user`, `group`, `organization`, `external_account`, `service`, `agent`, `agent_role`, `flow`, `package`. |
+| `subject_id` | string | no | UUID для субъектов домена доступа или внешний идентификатор для сервиса, роли, агента, flow и пакета. |
 | `action_key` | string | no | Канонический ключ из каталога `AccessAction`. |
 | `resource_type` | string | no | Тип ресурса: `project`, `repository`, `package`, `runtime`, другое. |
 | `resource_id` | string | yes | Внешний идентификатор ресурса. |
@@ -170,6 +170,8 @@ approvals:
 - явный запрет побеждает разрешение, если оба правила применимы к одному действию и ресурсу;
 - правило с `scope_type=global` и пустым `scope_id` применяется ко всем областям;
 - правило можно создать только для активного системного, пользовательского или пакетного действия.
+- `service` в `AccessRule` означает внутренний сервис платформы (`agent-manager`, `onboarding-runner`, `project-catalog` и подобные сервисные субъекты) и не является внешним аккаунтом поставщика; внешний аккаунт поставщика типа `service` остаётся записью `ExternalAccount`.
+- `service` не участвует в `Membership`: это прямой субъект правила с безопасным строковым идентификатором сервиса.
 
 ### `ExternalProvider`
 

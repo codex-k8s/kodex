@@ -608,6 +608,140 @@ func TestCheckAccessExplicitDenyWins(t *testing.T) {
 	}
 }
 
+func TestPutAccessRuleAllowsServiceSubjectAndCheckAccess(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+
+	action, err := svc.PutAccessAction(ctx, PutAccessActionInput{
+		Key: "test.repository.attach", DisplayName: "Привязать репозиторий", ResourceType: "repository",
+	})
+	if err != nil {
+		t.Fatalf("put action: %v", err)
+	}
+	rule, err := svc.PutAccessRule(ctx, PutAccessRuleInput{
+		Effect:       enum.AccessEffectAllow,
+		SubjectType:  enum.AccessSubjectService,
+		SubjectID:    "onboarding-runner",
+		ActionKey:    action.Key,
+		ResourceType: "repository",
+		ScopeType:    "global",
+	})
+	if err != nil {
+		t.Fatalf("put service rule: %v", err)
+	}
+	updated, err := svc.PutAccessRule(ctx, PutAccessRuleInput{
+		Effect:       enum.AccessEffectAllow,
+		SubjectType:  enum.AccessSubjectType(" service "),
+		SubjectID:    "onboarding-runner",
+		ActionKey:    action.Key,
+		ResourceType: "repository",
+		ScopeType:    "global",
+		Priority:     20,
+		Meta:         value.CommandMeta{ExpectedVersion: ptrInt64(rule.Version)},
+	})
+	if err != nil {
+		t.Fatalf("update service rule: %v", err)
+	}
+	if updated.ID != rule.ID || updated.Version != rule.Version+1 {
+		t.Fatalf("updated rule = %s/%d, want %s/%d", updated.ID, updated.Version, rule.ID, rule.Version+1)
+	}
+
+	result, err := svc.CheckAccess(ctx, CheckAccessInput{
+		Subject:   value.SubjectRef{Type: string(enum.AccessSubjectService), ID: "onboarding-runner"},
+		ActionKey: action.Key,
+		Resource:  value.ResourceRef{Type: "repository", ID: "codex-k8s/kodex"},
+		Scope:     value.ScopeRef{Type: "repository", ID: "codex-k8s/kodex"},
+	})
+	if err != nil {
+		t.Fatalf("check access: %v", err)
+	}
+	if result.Decision != enum.AccessDecisionAllow || result.ReasonCode != reasonExplicitAllow {
+		t.Fatalf("decision = %s/%s, want %s/%s", result.Decision, result.ReasonCode, enum.AccessDecisionAllow, reasonExplicitAllow)
+	}
+	if len(result.Explanation.MatchedRules) != 1 {
+		t.Fatalf("matched rules = %d, want 1", len(result.Explanation.MatchedRules))
+	}
+	matched := result.Explanation.MatchedRules[0]
+	if matched.Subject.Type != string(enum.AccessSubjectService) || matched.Subject.ID != "onboarding-runner" {
+		t.Fatalf("matched subject = %+v, want service onboarding-runner", matched.Subject)
+	}
+}
+
+func TestCheckAccessServiceSubjectExplicitDeny(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+
+	action, err := svc.PutAccessAction(ctx, PutAccessActionInput{
+		Key: "test.project.deploy", DisplayName: "Запустить deploy", ResourceType: "project",
+	})
+	if err != nil {
+		t.Fatalf("put action: %v", err)
+	}
+	_, err = svc.PutAccessRule(ctx, PutAccessRuleInput{
+		Effect:       enum.AccessEffectAllow,
+		SubjectType:  enum.AccessSubjectService,
+		SubjectID:    "agent-manager",
+		ActionKey:    action.Key,
+		ResourceType: "project",
+		ScopeType:    "global",
+		Priority:     1,
+	})
+	if err != nil {
+		t.Fatalf("put allow rule: %v", err)
+	}
+	_, err = svc.PutAccessRule(ctx, PutAccessRuleInput{
+		Effect:       enum.AccessEffectDeny,
+		SubjectType:  enum.AccessSubjectService,
+		SubjectID:    "agent-manager",
+		ActionKey:    action.Key,
+		ResourceType: "project",
+		ScopeType:    "global",
+		Priority:     5,
+	})
+	if err != nil {
+		t.Fatalf("put deny rule: %v", err)
+	}
+
+	result, err := svc.CheckAccess(ctx, CheckAccessInput{
+		Subject:   value.SubjectRef{Type: string(enum.AccessSubjectService), ID: "agent-manager"},
+		ActionKey: action.Key,
+		Resource:  value.ResourceRef{Type: "project", ID: "self-deploy"},
+		Scope:     value.ScopeRef{Type: "project", ID: "self-deploy"},
+	})
+	if err != nil {
+		t.Fatalf("check access: %v", err)
+	}
+	if result.Decision != enum.AccessDecisionDeny || result.ReasonCode != reasonExplicitDeny {
+		t.Fatalf("decision = %s/%s, want %s/%s", result.Decision, result.ReasonCode, enum.AccessDecisionDeny, reasonExplicitDeny)
+	}
+}
+
+func TestPutAccessRuleRejectsUnknownSubjectType(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+
+	action, err := svc.PutAccessAction(ctx, PutAccessActionInput{
+		Key: "test.project.read", DisplayName: "Чтение проекта", ResourceType: "project",
+	})
+	if err != nil {
+		t.Fatalf("put action: %v", err)
+	}
+	_, err = svc.PutAccessRule(ctx, PutAccessRuleInput{
+		Effect:       enum.AccessEffectAllow,
+		SubjectType:  enum.AccessSubjectType("robot"),
+		SubjectID:    "robot-1",
+		ActionKey:    action.Key,
+		ResourceType: "project",
+		ScopeType:    "global",
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("err = %v, want %v", err, errs.ErrInvalidArgument)
+	}
+}
+
 func TestPutExternalProviderCreateOnlyRejectsMutation(t *testing.T) {
 	ctx := context.Background()
 	store := newMemoryRepository()

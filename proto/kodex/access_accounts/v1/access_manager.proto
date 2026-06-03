@@ -104,7 +104,7 @@ message Actor {
 
 // SubjectRef references an access subject.
 message SubjectRef {
-  // type is one of user, group, organization, external_account, agent, agent_role, flow or package.
+  // type is one of user, group, organization, external_account, service, agent, agent_role, flow or package.
   string type = 1;
   // id is the subject identifier.
   string id = 2;

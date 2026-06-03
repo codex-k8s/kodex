@@ -5,7 +5,7 @@ title: kodex — дизайн домена доступа и аккаунтов
 status: active
 owner_role: SA
 created_at: 2026-04-26
-updated_at: 2026-05-12
+updated_at: 2026-06-03
 related_issues: [599, 600, 601, 602, 711, 718]
 related_prs: []
 related_adrs: []
@@ -100,6 +100,8 @@ sequenceDiagram
   A->>DB: Записать AccessDecisionAudit
   A-->>S: allow/deny + explanation + policy_version
 ```
+
+Сервис-владелец передаёт в `CheckAccess` реальный субъект действия. Для внутренних межсервисных команд это `subject.type=service` и стабильный `subject.id` сервиса, например `agent-manager` или `onboarding-runner`. Такой субъект проверяется прямыми `AccessRule` и не включается в граф членства. Внешний аккаунт поставщика типа `service` остаётся отдельной сущностью `ExternalAccount` и используется через `ResolveExternalAccountUsage`.
 
 ### Использование внешнего аккаунта
 
