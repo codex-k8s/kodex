@@ -561,11 +561,11 @@ func (s *Service) SubmitGateDecision(ctx context.Context, input SubmitGateDecisi
 		if decision.GateRequestID != input.GateRequestID {
 			return entity.GateDecision{}, entity.GateRequest{}, errs.ErrConflict
 		}
-		if err := validateGateDecisionReplay(result, decision, replayPayload); err != nil {
-			return entity.GateDecision{}, entity.GateRequest{}, err
-		}
 		request, err := s.repository.GetGateRequest(ctx, decision.GateRequestID)
 		if err != nil {
+			return entity.GateDecision{}, entity.GateRequest{}, err
+		}
+		if err := validateGateDecisionReplay(result, decision, request, replayPayload); err != nil {
 			return entity.GateDecision{}, entity.GateRequest{}, err
 		}
 		return decision, request, nil
@@ -658,12 +658,49 @@ func gateDecisionCommandResultPayload(payload gateDecisionCommandPayload) map[st
 	}
 }
 
-func validateGateDecisionReplay(result entity.CommandResult, decision entity.GateDecision, expected gateDecisionCommandPayload) error {
+func validateGateDecisionReplay(result entity.CommandResult, decision entity.GateDecision, request entity.GateRequest, expected gateDecisionCommandPayload) error {
+	fullPayload, err := gateDecisionReplayHasFullPayload(result.ResultPayload)
+	if err != nil {
+		return err
+	}
 	var stored gateDecisionCommandPayload
 	if err := json.Unmarshal(result.ResultPayload, &stored); err != nil {
 		return errs.ErrConflict
 	}
-	for _, pair := range []struct {
+	for _, pair := range gateDecisionReplayPairs(stored, expected) {
+		if fullPayload {
+			if pair.stored != pair.expected {
+				return errs.ErrConflict
+			}
+			continue
+		}
+		if pair.stored != "" && pair.stored != pair.expected {
+			return errs.ErrConflict
+		}
+	}
+	if fullPayload {
+		return nil
+	}
+	if err := validateGateDecisionReplayState(decision, expected); err != nil {
+		return err
+	}
+	return validateGateDecisionReplayInteraction(request.InteractionDeliveryRef, expected)
+}
+
+func gateDecisionReplayHasFullPayload(payload []byte) (bool, error) {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(payload, &raw); err != nil {
+		return false, errs.ErrConflict
+	}
+	_, ok := raw["outcome"]
+	return ok, nil
+}
+
+func gateDecisionReplayPairs(stored gateDecisionCommandPayload, expected gateDecisionCommandPayload) []struct {
+	stored   string
+	expected string
+} {
+	return []struct {
 		stored   string
 		expected string
 	}{
@@ -678,24 +715,45 @@ func validateGateDecisionReplay(result entity.CommandResult, decision entity.Gat
 		{stored.InteractionDeliveryRef, expected.InteractionDeliveryRef},
 		{stored.InteractionCallbackRef, expected.InteractionCallbackRef},
 		{stored.InteractionDecisionRef, expected.InteractionDecisionRef},
-	} {
-		if pair.stored != "" && pair.stored != pair.expected {
-			return errs.ErrConflict
-		}
 	}
-	if expected.DecisionActorRef != "" && decision.DecisionActorRef != "" && decision.DecisionActorRef != expected.DecisionActorRef {
+}
+
+func validateGateDecisionReplayState(decision entity.GateDecision, expected gateDecisionCommandPayload) error {
+	if decision.GateRequestID.String() != expected.GateRequestID {
 		return errs.ErrConflict
 	}
-	if expected.Outcome != "" && decision.Outcome != "" && string(decision.Outcome) != expected.Outcome {
+	if decision.DecisionActorRef != expected.DecisionActorRef {
 		return errs.ErrConflict
 	}
-	if expected.Reason != "" && decision.Reason != "" && decision.Reason != expected.Reason {
+	if decision.DecisionPolicyRef != expected.DecisionPolicyRef {
 		return errs.ErrConflict
 	}
-	if expected.ConditionsSummary != "" && decision.ConditionsSummary != "" && decision.ConditionsSummary != expected.ConditionsSummary {
+	if string(decision.Outcome) != expected.Outcome {
 		return errs.ErrConflict
 	}
-	if expected.SourceRef != "" && decision.SourceRef != "" && decision.SourceRef != expected.SourceRef {
+	if decision.Reason != expected.Reason {
+		return errs.ErrConflict
+	}
+	if decision.ConditionsSummary != expected.ConditionsSummary {
+		return errs.ErrConflict
+	}
+	if decision.SourceRef != expected.SourceRef {
+		return errs.ErrConflict
+	}
+	return nil
+}
+
+func validateGateDecisionReplayInteraction(stored value.InteractionDeliveryRef, expected gateDecisionCommandPayload) error {
+	if strings.TrimSpace(stored.RequestRef) != expected.InteractionRequestRef {
+		return errs.ErrConflict
+	}
+	if strings.TrimSpace(stored.DeliveryRef) != expected.InteractionDeliveryRef {
+		return errs.ErrConflict
+	}
+	if strings.TrimSpace(stored.CallbackRef) != expected.InteractionCallbackRef {
+		return errs.ErrConflict
+	}
+	if strings.TrimSpace(stored.DecisionRef) != expected.InteractionDecisionRef {
 		return errs.ErrConflict
 	}
 	return nil

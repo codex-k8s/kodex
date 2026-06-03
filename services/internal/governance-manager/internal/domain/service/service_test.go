@@ -669,6 +669,103 @@ func TestSubmitGateDecisionReplayRejectsConflictingOutcome(t *testing.T) {
 	}
 }
 
+func TestSubmitGateDecisionReplayRejectsAddedOptionalSafeFields(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 6, 3, 12, 0, 0, 0, time.UTC)
+	gateRequestID := uuid.MustParse("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+	gateDecisionID := uuid.MustParse("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
+	commandID := uuid.MustParse("dddddddd-dddd-4ddd-8ddd-dddddddddddd")
+	meta := CommandMeta{
+		CommandID: &commandID,
+		Actor:     value.Actor{Type: "user", ID: "owner"},
+		RequestID: "trace-gate-decision",
+	}
+	baseInput := SubmitGateDecisionInput{
+		GateRequestID:    gateRequestID,
+		DecisionActorRef: "user:owner",
+		Outcome:          enum.GateOutcomeApprove,
+		Meta:             meta,
+	}
+	for _, tc := range []struct {
+		name   string
+		legacy bool
+		change func(*SubmitGateDecisionInput)
+	}{
+		{
+			name:   "full payload added reason",
+			change: func(input *SubmitGateDecisionInput) { input.Reason = "safe added reason" },
+		},
+		{
+			name:   "full payload added source ref",
+			change: func(input *SubmitGateDecisionInput) { input.SourceRef = "interaction:response:changed" },
+		},
+		{
+			name: "full payload added interaction ref",
+			change: func(input *SubmitGateDecisionInput) {
+				input.InteractionDeliveryRef = value.InteractionDeliveryRef{RequestRef: "interaction:request:changed", DecisionRef: "interaction:decision:changed"}
+			},
+		},
+		{
+			name:   "legacy payload added reason",
+			legacy: true,
+			change: func(input *SubmitGateDecisionInput) { input.Reason = "safe added reason" },
+		},
+		{
+			name:   "legacy payload added source ref",
+			legacy: true,
+			change: func(input *SubmitGateDecisionInput) { input.SourceRef = "interaction:response:changed" },
+		},
+		{
+			name:   "legacy payload added interaction ref",
+			legacy: true,
+			change: func(input *SubmitGateDecisionInput) {
+				input.InteractionDeliveryRef = value.InteractionDeliveryRef{RequestRef: "interaction:request:changed", DecisionRef: "interaction:decision:changed"}
+			},
+		},
+	} {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			payload := map[string]any{"gate_request_id": gateRequestID.String()}
+			if !tc.legacy {
+				payload = gateDecisionCommandResultPayload(gateDecisionReplayPayload(baseInput, "user:owner", "", "", "", "", value.InteractionDeliveryRef{}))
+			}
+			repository := &fakeRepository{
+				ready:            true,
+				hasCommandResult: true,
+				commandResult:    commandResultWithPayload(meta, enum.OperationSubmitGateDecision.String(), aggregateGateDecision, gateDecisionID, now, payload),
+				gateRequest: entity.GateRequest{
+					VersionedBase: entity.VersionedBase{ID: gateRequestID, Version: 2},
+					Target:        value.ExternalRef{Type: "self_deploy_plan", Ref: "agent:self-deploy-plan:1"},
+					Status:        enum.GateRequestStatusResolved,
+				},
+				gateDecision: entity.GateDecision{
+					ID:               gateDecisionID,
+					GateRequestID:    gateRequestID,
+					DecisionActorRef: "user:owner",
+					Outcome:          enum.GateOutcomeApprove,
+					DecidedAt:        now,
+				},
+			}
+			if _, _, err := newTestService(repository).SubmitGateDecision(context.Background(), baseInput); err != nil {
+				t.Fatalf("SubmitGateDecision(base replay): %v", err)
+			}
+
+			changed := baseInput
+			tc.change(&changed)
+			_, _, err := newTestService(repository).SubmitGateDecision(context.Background(), changed)
+			if !errors.Is(err, errs.ErrConflict) {
+				t.Fatalf("SubmitGateDecision(changed replay) error = %v, want ErrConflict", err)
+			}
+			if repository.mutationCalls != 0 || len(repository.events) != 0 {
+				t.Fatalf("changed replay mutations/events = %d/%d, want 0/0", repository.mutationCalls, len(repository.events))
+			}
+		})
+	}
+}
+
 func TestSubmitGateDecisionRecordsRequestChangesEventSafely(t *testing.T) {
 	t.Parallel()
 
