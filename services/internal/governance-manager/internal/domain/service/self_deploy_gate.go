@@ -507,6 +507,8 @@ func selfDeployPlanGateStatus(assessment entity.RiskAssessment, request entity.G
 		switch decision.Outcome {
 		case enum.GateOutcomeApprove, enum.GateOutcomeApproveWithConditions:
 			return enum.SelfDeployPlanGateStatusApproved
+		case enum.GateOutcomeRevise:
+			return enum.SelfDeployPlanGateStatusRequestChanges
 		case enum.GateOutcomeReject:
 			return enum.SelfDeployPlanGateStatusRejected
 		default:

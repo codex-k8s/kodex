@@ -170,10 +170,11 @@ const (
 type SelfDeployPlanGateStatus string
 
 const (
-	SelfDeployPlanGateStatusPending  SelfDeployPlanGateStatus = "pending"
-	SelfDeployPlanGateStatusApproved SelfDeployPlanGateStatus = "approved"
-	SelfDeployPlanGateStatusRejected SelfDeployPlanGateStatus = "rejected"
-	SelfDeployPlanGateStatusBlocked  SelfDeployPlanGateStatus = "blocked"
+	SelfDeployPlanGateStatusPending        SelfDeployPlanGateStatus = "pending"
+	SelfDeployPlanGateStatusApproved       SelfDeployPlanGateStatus = "approved"
+	SelfDeployPlanGateStatusRejected       SelfDeployPlanGateStatus = "rejected"
+	SelfDeployPlanGateStatusBlocked        SelfDeployPlanGateStatus = "blocked"
+	SelfDeployPlanGateStatusRequestChanges SelfDeployPlanGateStatus = "request_changes"
 )
 
 // ReleaseDecisionPackageStatus is the lifecycle status of a release package.

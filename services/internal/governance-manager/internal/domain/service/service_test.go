@@ -513,6 +513,329 @@ func TestPrepareSelfDeployPlanGateReturnsApprovedDecision(t *testing.T) {
 	}
 }
 
+func TestPrepareSelfDeployPlanGateMapsDecisionOutcomes(t *testing.T) {
+	t.Parallel()
+
+	assessmentID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+	gateRequestID := uuid.MustParse("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+	target := value.ExternalRef{Type: "self_deploy_plan", Ref: "agent:self-deploy-plan:1"}
+	for _, tc := range []struct {
+		name    string
+		outcome enum.GateOutcome
+		want    enum.SelfDeployPlanGateStatus
+	}{
+		{name: "approve", outcome: enum.GateOutcomeApprove, want: enum.SelfDeployPlanGateStatusApproved},
+		{name: "reject", outcome: enum.GateOutcomeReject, want: enum.SelfDeployPlanGateStatusRejected},
+		{name: "request changes", outcome: enum.GateOutcomeRevise, want: enum.SelfDeployPlanGateStatusRequestChanges},
+		{name: "hold blocks", outcome: enum.GateOutcomeHold, want: enum.SelfDeployPlanGateStatusBlocked},
+	} {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			gateDecisionID := uuid.New()
+			repository := &fakeRepository{
+				ready: true,
+				riskAssessments: []entity.RiskAssessment{{
+					VersionedBase:      entity.VersionedBase{ID: assessmentID, Version: 1},
+					Target:             target,
+					EvidenceRefs:       []value.EvidenceRef{{Kind: selfDeployPlanEvidenceKind, Ref: "agent:self-deploy-plan:1", Digest: "sha256:plan", Summary: selfDeployPlanGateEvidenceSummary}},
+					EffectiveRiskClass: enum.RiskClassR2,
+					Status:             enum.RiskAssessmentStatusActive,
+					RequiredGates:      []entity.RequiredGate{{GateKind: enum.GateKindRelease, MinRiskClass: enum.RiskClassR2, Reason: "self-deploy gate required"}},
+				}},
+				gateRequests: []entity.GateRequest{{
+					VersionedBase:    entity.VersionedBase{ID: gateRequestID, Version: 2},
+					RiskAssessmentID: &assessmentID,
+					Target:           target,
+					Status:           enum.GateRequestStatusResolved,
+					EvidenceSummary:  "bounded self-deploy plan",
+				}},
+				gateDecisions: []entity.GateDecision{{
+					ID:               gateDecisionID,
+					GateRequestID:    gateRequestID,
+					DecisionActorRef: "user:owner",
+					Outcome:          tc.outcome,
+					Reason:           "safe owner decision",
+				}},
+			}
+
+			result, err := newTestService(repository).PrepareSelfDeployPlanGate(context.Background(), selfDeployPlanGateTestInput("sha256:plan"))
+			if err != nil {
+				t.Fatalf("PrepareSelfDeployPlanGate(): %v", err)
+			}
+			if result.Status != tc.want || result.GateDecision == nil || result.GateDecision.ID != gateDecisionID {
+				t.Fatalf("status/decision = %s/%+v, want %s/%s", result.Status, result.GateDecision, tc.want, gateDecisionID)
+			}
+		})
+	}
+}
+
+func TestSubmitGateDecisionRequiresSupportedOutcome(t *testing.T) {
+	t.Parallel()
+
+	gateRequestID := uuid.MustParse("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+	commandID := uuid.MustParse("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
+	expectedVersion := int64(1)
+	repository := &fakeRepository{
+		ready: true,
+		gateRequest: entity.GateRequest{
+			VersionedBase: entity.VersionedBase{ID: gateRequestID, Version: expectedVersion},
+			Target:        value.ExternalRef{Type: "self_deploy_plan", Ref: "agent:self-deploy-plan:1"},
+			Status:        enum.GateRequestStatusAwaitingDecision,
+		},
+	}
+	_, _, err := newTestService(repository).SubmitGateDecision(context.Background(), SubmitGateDecisionInput{
+		GateRequestID:    gateRequestID,
+		DecisionActorRef: "user:owner",
+		Reason:           "safe owner decision",
+		Meta: CommandMeta{
+			CommandID:       &commandID,
+			ExpectedVersion: &expectedVersion,
+			Actor:           value.Actor{Type: "user", ID: "owner"},
+		},
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("SubmitGateDecision() error = %v, want ErrInvalidArgument", err)
+	}
+	if repository.mutationCalls != 0 || len(repository.events) != 0 {
+		t.Fatalf("mutation calls/events = %d/%d, want 0/0", repository.mutationCalls, len(repository.events))
+	}
+}
+
+func TestSubmitGateDecisionReplayRejectsConflictingOutcome(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 6, 3, 12, 0, 0, 0, time.UTC)
+	gateRequestID := uuid.MustParse("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+	gateDecisionID := uuid.MustParse("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
+	commandID := uuid.MustParse("dddddddd-dddd-4ddd-8ddd-dddddddddddd")
+	meta := CommandMeta{
+		CommandID: &commandID,
+		Actor:     value.Actor{Type: "user", ID: "owner"},
+		RequestID: "trace-gate-decision",
+	}
+	input := SubmitGateDecisionInput{
+		GateRequestID:    gateRequestID,
+		DecisionActorRef: "user:owner",
+		Outcome:          enum.GateOutcomeApprove,
+		Reason:           "safe owner approval",
+		SourceRef:        "interaction:response:1",
+		Meta:             meta,
+	}
+	replayPayload := gateDecisionReplayPayload(
+		input,
+		"user:owner",
+		"",
+		"safe owner approval",
+		"",
+		"interaction:response:1",
+		value.InteractionDeliveryRef{},
+	)
+	repository := &fakeRepository{
+		ready:            true,
+		hasCommandResult: true,
+		commandResult:    commandResultWithPayload(meta, enum.OperationSubmitGateDecision.String(), aggregateGateDecision, gateDecisionID, now, gateDecisionCommandResultPayload(replayPayload)),
+		gateRequest: entity.GateRequest{
+			VersionedBase: entity.VersionedBase{ID: gateRequestID, Version: 2},
+			Target:        value.ExternalRef{Type: "self_deploy_plan", Ref: "agent:self-deploy-plan:1"},
+			Status:        enum.GateRequestStatusResolved,
+		},
+		gateDecision: entity.GateDecision{
+			ID:               gateDecisionID,
+			GateRequestID:    gateRequestID,
+			DecisionActorRef: "user:owner",
+			Outcome:          enum.GateOutcomeApprove,
+			Reason:           "safe owner approval",
+			SourceRef:        "interaction:response:1",
+			DecidedAt:        now,
+		},
+	}
+	decision, request, err := newTestService(repository).SubmitGateDecision(context.Background(), input)
+	if err != nil {
+		t.Fatalf("SubmitGateDecision(replay): %v", err)
+	}
+	if decision.ID != gateDecisionID || request.ID != gateRequestID || repository.mutationCalls != 0 {
+		t.Fatalf("replay result = %s/%s mutations=%d, want stored read-only result", decision.ID, request.ID, repository.mutationCalls)
+	}
+
+	input.Outcome = enum.GateOutcomeReject
+	_, _, err = newTestService(repository).SubmitGateDecision(context.Background(), input)
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("SubmitGateDecision(conflicting replay) error = %v, want ErrConflict", err)
+	}
+	if repository.mutationCalls != 0 || len(repository.events) != 0 {
+		t.Fatalf("conflicting replay mutations/events = %d/%d, want 0/0", repository.mutationCalls, len(repository.events))
+	}
+}
+
+func TestSubmitGateDecisionReplayRejectsAddedOptionalSafeFields(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 6, 3, 12, 0, 0, 0, time.UTC)
+	gateRequestID := uuid.MustParse("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+	gateDecisionID := uuid.MustParse("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
+	commandID := uuid.MustParse("dddddddd-dddd-4ddd-8ddd-dddddddddddd")
+	meta := CommandMeta{
+		CommandID: &commandID,
+		Actor:     value.Actor{Type: "user", ID: "owner"},
+		RequestID: "trace-gate-decision",
+	}
+	baseInput := SubmitGateDecisionInput{
+		GateRequestID:    gateRequestID,
+		DecisionActorRef: "user:owner",
+		Outcome:          enum.GateOutcomeApprove,
+		Meta:             meta,
+	}
+	for _, tc := range []struct {
+		name   string
+		legacy bool
+		change func(*SubmitGateDecisionInput)
+	}{
+		{
+			name:   "full payload added reason",
+			change: func(input *SubmitGateDecisionInput) { input.Reason = "safe added reason" },
+		},
+		{
+			name:   "full payload added source ref",
+			change: func(input *SubmitGateDecisionInput) { input.SourceRef = "interaction:response:changed" },
+		},
+		{
+			name: "full payload added interaction ref",
+			change: func(input *SubmitGateDecisionInput) {
+				input.InteractionDeliveryRef = value.InteractionDeliveryRef{RequestRef: "interaction:request:changed", DecisionRef: "interaction:decision:changed"}
+			},
+		},
+		{
+			name:   "legacy payload added reason",
+			legacy: true,
+			change: func(input *SubmitGateDecisionInput) { input.Reason = "safe added reason" },
+		},
+		{
+			name:   "legacy payload added source ref",
+			legacy: true,
+			change: func(input *SubmitGateDecisionInput) { input.SourceRef = "interaction:response:changed" },
+		},
+		{
+			name:   "legacy payload added interaction ref",
+			legacy: true,
+			change: func(input *SubmitGateDecisionInput) {
+				input.InteractionDeliveryRef = value.InteractionDeliveryRef{RequestRef: "interaction:request:changed", DecisionRef: "interaction:decision:changed"}
+			},
+		},
+	} {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			payload := map[string]any{"gate_request_id": gateRequestID.String()}
+			if !tc.legacy {
+				payload = gateDecisionCommandResultPayload(gateDecisionReplayPayload(baseInput, "user:owner", "", "", "", "", value.InteractionDeliveryRef{}))
+			}
+			repository := &fakeRepository{
+				ready:            true,
+				hasCommandResult: true,
+				commandResult:    commandResultWithPayload(meta, enum.OperationSubmitGateDecision.String(), aggregateGateDecision, gateDecisionID, now, payload),
+				gateRequest: entity.GateRequest{
+					VersionedBase: entity.VersionedBase{ID: gateRequestID, Version: 2},
+					Target:        value.ExternalRef{Type: "self_deploy_plan", Ref: "agent:self-deploy-plan:1"},
+					Status:        enum.GateRequestStatusResolved,
+				},
+				gateDecision: entity.GateDecision{
+					ID:               gateDecisionID,
+					GateRequestID:    gateRequestID,
+					DecisionActorRef: "user:owner",
+					Outcome:          enum.GateOutcomeApprove,
+					DecidedAt:        now,
+				},
+			}
+			if _, _, err := newTestService(repository).SubmitGateDecision(context.Background(), baseInput); err != nil {
+				t.Fatalf("SubmitGateDecision(base replay): %v", err)
+			}
+
+			changed := baseInput
+			tc.change(&changed)
+			_, _, err := newTestService(repository).SubmitGateDecision(context.Background(), changed)
+			if !errors.Is(err, errs.ErrConflict) {
+				t.Fatalf("SubmitGateDecision(changed replay) error = %v, want ErrConflict", err)
+			}
+			if repository.mutationCalls != 0 || len(repository.events) != 0 {
+				t.Fatalf("changed replay mutations/events = %d/%d, want 0/0", repository.mutationCalls, len(repository.events))
+			}
+		})
+	}
+}
+
+func TestSubmitGateDecisionRecordsRequestChangesEventSafely(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 6, 3, 12, 0, 0, 0, time.UTC)
+	gateRequestID := uuid.MustParse("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+	commandID := uuid.MustParse("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
+	expectedVersion := int64(1)
+	repository := &fakeRepository{
+		ready: true,
+		gateRequest: entity.GateRequest{
+			VersionedBase: entity.VersionedBase{ID: gateRequestID, Version: expectedVersion},
+			Target:        value.ExternalRef{Type: "self_deploy_plan", Ref: "agent:self-deploy-plan:1"},
+			Status:        enum.GateRequestStatusAwaitingDecision,
+			EvidenceRefs: []value.EvidenceRef{{
+				Kind:           selfDeployPlanEvidenceKind,
+				Ref:            "agent:self-deploy-plan:1",
+				Digest:         "sha256:plan",
+				Summary:        selfDeployPlanGateEvidenceSummary,
+				RetentionClass: "safe_ref",
+			}},
+		},
+	}
+	service := NewWithConfig(Config{
+		Repository:  repository,
+		Clock:       fixedClock{now: now},
+		IDGenerator: uuidGenerator{},
+		Authorizer:  AllowAllAuthorizer{},
+	})
+
+	decision, request, err := service.SubmitGateDecision(context.Background(), SubmitGateDecisionInput{
+		GateRequestID:    gateRequestID,
+		DecisionActorRef: "user:owner",
+		Outcome:          enum.GateOutcomeRevise,
+		Reason:           "owner requested manifest changes",
+		SourceRef:        "staff-gateway:governance-summary",
+		Meta: CommandMeta{
+			CommandID:       &commandID,
+			ExpectedVersion: &expectedVersion,
+			Actor:           value.Actor{Type: "user", ID: "owner"},
+			RequestID:       "trace-gate-decision",
+		},
+	})
+	if err != nil {
+		t.Fatalf("SubmitGateDecision(): %v", err)
+	}
+	if request.Status != enum.GateRequestStatusResolved || request.Version != expectedVersion+1 {
+		t.Fatalf("request status/version = %s/%d, want resolved/%d", request.Status, request.Version, expectedVersion+1)
+	}
+	if decision.Outcome != enum.GateOutcomeRevise || decision.DecisionActorRef != "user:owner" {
+		t.Fatalf("decision = %+v, want revise by safe actor", decision)
+	}
+	if len(repository.events) != 1 {
+		t.Fatalf("events = %d, want 1", len(repository.events))
+	}
+	payload := string(repository.events[0].Payload)
+	for _, want := range []string{`"outcome":"revise"`, `"target_type":"self_deploy_plan"`, `"target_ref":"agent:self-deploy-plan:1"`} {
+		if !strings.Contains(payload, want) {
+			t.Fatalf("event payload = %s, want %s", payload, want)
+		}
+	}
+	for _, unsafe := range []string{"raw_diff", "webhook body", "secret=", "kubeconfig", "stdout", "stderr", "provider response", "prompt transcript"} {
+		if strings.Contains(payload, unsafe) {
+			t.Fatalf("event payload leaked unsafe marker %q: %s", unsafe, payload)
+		}
+	}
+	if !strings.Contains(string(repository.result.ResultPayload), `"outcome":"revise"`) {
+		t.Fatalf("command result payload = %s, want outcome replay payload", string(repository.result.ResultPayload))
+	}
+}
+
 func selfDeployPlanGateTestInput(fingerprint string) SelfDeployPlanGateInput {
 	return SelfDeployPlanGateInput{
 		SelfDeployPlanRef:       "agent:self-deploy-plan:1",

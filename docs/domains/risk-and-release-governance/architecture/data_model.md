@@ -5,8 +5,8 @@ title: kodex — модель данных домена рисков и рели
 status: active
 owner_role: SA
 created_at: 2026-05-22
-updated_at: 2026-05-29
-related_issues: [322, 769, 815, 827, 845, 856, 869, 886, 957, 976]
+updated_at: 2026-06-03
+related_issues: [322, 380, 769, 815, 827, 845, 856, 869, 886, 957, 976]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -174,7 +174,7 @@ approvals:
 
 ### GateDecision
 
-`GateDecision` фиксирует итог gate.
+`GateDecision` фиксирует итог gate. Для self-deploy outcome `revise` означает `request_changes`: владелец просит исправить безопасно описанные факторы плана, а runtime build/deploy jobs не запускаются.
 
 | Поле | Тип | Может быть пустым | Примечание |
 |---|---|---:|---|
@@ -229,7 +229,7 @@ approvals:
 
 Для self-deploy summary дополнительно показывает `status.pending_required_gate_count` и `next_action_code=request_governance_gate`, когда risk assessment уже требует owner/governance gate, а локальный gate request ещё не создан. Это позволяет manager-агенту или будущей операторской поверхности показать безопасный следующий шаг без вычисления правил вне `governance-manager`.
 
-Для реального `SelfDeployPlan` используется target `self_deploy_plan` с ref на plan id из `agent-manager`. Команда `PrepareSelfDeployPlanGate` сохраняет risk assessment и gate request на этом target, а `plan_fingerprint` кладётся только как digest safe `EvidenceRef(kind=self_deploy_plan, ref=<plan_ref>)`. Повтор той же доставки с тем же fingerprint возвращает существующие assessment/gate/decision refs, а новый fingerprint для того же `self_deploy_plan` target считается конфликтом. Модель хранит service keys, path categories, expected runtime job types, `services.yaml` digest/ref, provider/source refs и короткую summary как bounded factors/evidence; полный diff, webhook body, provider response, полный `services.yaml`, runtime logs, prompt/transcript, kubeconfig и секреты не принимаются.
+Для реального `SelfDeployPlan` используется target `self_deploy_plan` с ref на plan id из `agent-manager`. Команда `PrepareSelfDeployPlanGate` сохраняет risk assessment и gate request на этом target, а `plan_fingerprint` кладётся только как digest safe `EvidenceRef(kind=self_deploy_plan, ref=<plan_ref>)`. Повтор той же доставки с тем же fingerprint возвращает существующие assessment/gate/decision refs, а новый fingerprint для того же `self_deploy_plan` target считается конфликтом. После решения gate summary возвращает `approved`, `rejected`, `request_changes` или `blocked`: `approve` и `approve_with_conditions` разрешают следующий слой оркестрации, `reject` запрещает запуск, `revise` требует изменений, а `hold`/`rollback`/`escalate` остаются блокирующими. Модель хранит service keys, path categories, expected runtime job types, `services.yaml` digest/ref, provider/source refs и короткую summary как bounded factors/evidence; полный diff, webhook body, provider response, полный `services.yaml`, runtime logs, prompt/transcript, kubeconfig и секреты не принимаются.
 
 ### ReleaseDecision
 
@@ -321,7 +321,7 @@ approvals:
 - `RiskProfile` владеет `RiskRule` и версионированными `GatePolicy`.
 - `RiskAssessment` владеет набором `RiskFactor`.
 - `ReviewSignal` может повышать `RiskAssessment` и становиться частью `GateRequest.evidence_package`.
-- `GateRequest` может иметь один финальный `GateDecision`; повторные callbacks записываются через идемпотентность и аудит.
+- `GateRequest` может иметь один финальный `GateDecision`; повторные callbacks возвращают сохранённое решение через идемпотентность, а конфликтующие повторные команды отклоняются без перезаписи аудита.
 - `ReleaseDecisionPackage` связывает `RiskAssessment`, `ReviewSignal`, provider refs, runtime refs и project/release refs.
 - `ReleaseDecision` ссылается на `ReleaseDecisionPackage` и опционально на `GateDecision`.
 - `ReleaseSafetyState` ведёт состояние postdeploy вокруг `ReleaseDecisionPackage`.
