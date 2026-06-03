@@ -352,7 +352,7 @@ Event-driven resume идёт через уже очищенное событие
 | `services_yaml_ref` | text | да | Safe ref проверенной версии `services.yaml`; полный YAML не хранится. |
 | `services_yaml_digest` | text | нет | `sha256:<hex>` digest проверенной декларации. |
 | `affected_service_keys` | text[] | нет | Уникальные service keys/path groups; полный diff не хранится. |
-| `path_categories` | enum[] | нет | `service_source`, `service_config`, `deploy_manifest`, `runtime_config`, `documentation`, `test`, `platform_policy`, `other`. |
+| `path_categories` | enum[] | нет | `services_policy`, `service_source`, `service_config`, `deploy_manifest`, `runtime_config`, `documentation`, `test`, `platform_policy`, `other`. |
 | `expected_runtime_job_types` | enum[] | нет | Только `build`, `deploy`, `health_check`; `agent_run` не является self-deploy job type. |
 | `governance_risk_assessment_ref`, `governance_gate_request_ref`, `governance_gate_decision_ref`, `governance_release_decision_package_ref`, `governance_release_decision_ref`, `governance_risk_profile_ref`, `governance_gate_policy_ref`, `governance_release_policy_ref` | text | да | Typed governance refs для approval path без decision body. |
 | `safe_summary` | text | да | Bounded summary для owner/governance review; не содержит raw webhook, diff, YAML, prompt/transcript, логи, секреты или токены. |
@@ -362,7 +362,7 @@ Event-driven resume идёт через уже очищенное событие
 | `version` | bigint | нет | Версия плана для optimistic concurrency будущих переходов. |
 | `created_at`, `updated_at` | timestamptz | нет | Технические временные метки. |
 
-Для непустого `provider_signal_ref` действует уникальный индекс. Повтор того же signal ref с тем же `plan_fingerprint` возвращает уже созданный plan, даже если producer пришёл с новым `command_id`; тот же signal ref с другим fingerprint конфликтует, пока владелец сигнала не выпустит новый безопасный signal ref.
+Для непустого `provider_signal_ref` действует уникальный индекс. Повтор того же signal ref с тем же `plan_fingerprint` возвращает уже созданный plan, даже если producer пришёл с новым `command_id`; тот же signal ref с другим fingerprint конфликтует, пока владелец сигнала не выпустит новый безопасный signal ref. Автоматический signal path в `agent-manager` создаёт plan только после `project-catalog.GetSelfDeploySignal(status=ready)`; non-ready статусы вроде `needs_services_policy_reconcile` не создают запись `SelfDeployPlan`.
 
 `SelfDeployPlan` запрещает хранение raw webhook body, provider response, полного diff, полного `services.yaml`, prompt, transcript, секретов, токенов, kubeconfig, workspace paths и больших логов. Если нужно создать build/deploy job после approval, следующий срез должен использовать refs/fingerprint плана, governance decision ref и типизированные команды runtime; `agent-manager` не должен создавать deploy автоматически на этапе фиксации плана.
 

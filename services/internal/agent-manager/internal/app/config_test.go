@@ -13,6 +13,7 @@ func TestLoadConfigAllowsMissingConditionalEnvWhenAuthDisabled(t *testing.T) {
 	t.Setenv("KODEX_AGENT_MANAGER_GRPC_AUTH_TOKEN", "")
 	t.Setenv("KODEX_AGENT_MANAGER_PACKAGE_HUB_ENABLED", "false")
 	t.Setenv("KODEX_AGENT_MANAGER_INTERACTION_RESPONSE_CONSUMER_ENABLED", "false")
+	t.Setenv("KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_CONSUMER_ENABLED", "false")
 
 	cfg, err := LoadConfig()
 	if err != nil {
@@ -30,6 +31,7 @@ func TestLoadConfigDefaultsRuntimePreparationDisabledUntilDeployWired(t *testing
 	t.Setenv("KODEX_AGENT_MANAGER_GRPC_AUTH_TOKEN", "agent-token")
 	t.Setenv("KODEX_AGENT_MANAGER_PACKAGE_HUB_GRPC_AUTH_TOKEN", "package-token")
 	t.Setenv("KODEX_AGENT_MANAGER_INTERACTION_RESPONSE_CONSUMER_ENABLED", "false")
+	t.Setenv("KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_CONSUMER_ENABLED", "false")
 
 	cfg, err := LoadConfig()
 	if err != nil {
@@ -76,6 +78,18 @@ func TestValidateRequiresEventLogDSNWhenInteractionResponseConsumerEnabled(t *te
 	}
 }
 
+func TestValidateRequiresEventLogDSNWhenSelfDeploySignalConsumerEnabled(t *testing.T) {
+	t.Parallel()
+
+	cfg := validConfig()
+	cfg.InteractionResponseConsumerEnabled = false
+	cfg.SelfDeploySignalConsumerEnabled = true
+	cfg.EventLogDatabaseDSN = ""
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() err = nil, want event-log database dsn error")
+	}
+}
+
 func TestValidateRequiresRuntimeClientTokensWhenPreparationEnabled(t *testing.T) {
 	t.Parallel()
 
@@ -89,6 +103,18 @@ func TestValidateRequiresRuntimeClientTokensWhenPreparationEnabled(t *testing.T)
 	cfg.RuntimeManagerGRPCAuthToken = ""
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("Validate() err = nil, want runtime-manager auth token error")
+	}
+}
+
+func TestValidateRequiresProjectCatalogTokenWhenSelfDeploySignalConsumerEnabled(t *testing.T) {
+	t.Parallel()
+
+	cfg := validConfig()
+	cfg.RuntimePreparationEnabled = false
+	cfg.SelfDeploySignalConsumerEnabled = true
+	cfg.ProjectCatalogGRPCAuthToken = ""
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() err = nil, want project-catalog auth token error")
 	}
 }
 
@@ -288,5 +314,18 @@ func validConfig() Config {
 		InteractionResponseConsumerFailureMessageLimit: 512,
 		InteractionResponseConsumerConcurrencyLimit:    2,
 		InteractionResponseConsumerMaxAttempts:         5,
+		SelfDeploySignalConsumerEnabled:                true,
+		SelfDeploySignalConsumerName:                   "agent-manager.self-deploy-signal",
+		SelfDeploySignalConsumerProjectID:              "11111111-2222-4333-8444-555555555555",
+		SelfDeploySignalConsumerTargetBranch:           "main",
+		SelfDeploySignalConsumerBatchSize:              20,
+		SelfDeploySignalConsumerPollInterval:           time.Second,
+		SelfDeploySignalConsumerLeaseTTL:               30 * time.Second,
+		SelfDeploySignalConsumerHandlerTimeout:         10 * time.Second,
+		SelfDeploySignalConsumerRetryInitialDelay:      5 * time.Second,
+		SelfDeploySignalConsumerRetryMaxDelay:          5 * time.Minute,
+		SelfDeploySignalConsumerFailureMessageLimit:    512,
+		SelfDeploySignalConsumerConcurrencyLimit:       1,
+		SelfDeploySignalConsumerMaxAttempts:            24,
 	}
 }

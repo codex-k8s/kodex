@@ -52,14 +52,26 @@ func NewWorkspacePolicyResolver(client projectsv1.ProjectCatalogServiceClient, c
 }
 
 func newWorkspacePolicyResolver(client projectCatalogClient, cfg Config) (*WorkspacePolicyResolver, error) {
+	return buildProjectCatalogAdapter(client, cfg, &WorkspacePolicyResolver{client: client})
+}
+
+type projectCatalogReadAdapter interface {
+	applyProjectCatalogSettings(grpcclient.ClientSettings)
+}
+
+func buildProjectCatalogAdapter[T projectCatalogReadAdapter](client any, cfg Config, adapter T) (T, error) {
 	settings, err := grpcclient.RequiredClientSettings(client, cfg.AuthToken, cfg.Timeout, defaultReadTimeout, "project-catalog")
 	if err != nil {
-		return nil, err
+		var zero T
+		return zero, err
 	}
-	resolver := WorkspacePolicyResolver{client: client}
-	resolver.authToken = settings.AuthToken
-	resolver.timeout = settings.Timeout
-	return &resolver, nil
+	adapter.applyProjectCatalogSettings(settings)
+	return adapter, nil
+}
+
+func (r *WorkspacePolicyResolver) applyProjectCatalogSettings(settings grpcclient.ClientSettings) {
+	r.authToken = settings.AuthToken
+	r.timeout = settings.Timeout
 }
 
 // ResolveWorkspacePolicy returns code/documentation source refs without policy payload text.

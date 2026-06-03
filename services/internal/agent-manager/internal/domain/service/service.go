@@ -78,6 +78,11 @@ type WorkspacePolicyResolver interface {
 	ResolveWorkspacePolicy(context.Context, WorkspacePolicyResolutionInput) (WorkspacePolicySnapshot, error)
 }
 
+// SelfDeploySignalReader reads project-side self-deploy signal enrichment.
+type SelfDeploySignalReader interface {
+	GetSelfDeploySignal(context.Context, SelfDeploySignalLookupInput) (SelfDeploySignalReadResult, error)
+}
+
 // WorkspacePolicyResolutionInput selects one checked project workspace policy.
 type WorkspacePolicyResolutionInput struct {
 	Meta                    value.CommandMeta
@@ -134,6 +139,14 @@ type DisabledWorkspacePolicyResolver struct{}
 // ResolveWorkspacePolicy reports that workspace policy reads are unavailable.
 func (DisabledWorkspacePolicyResolver) ResolveWorkspacePolicy(context.Context, WorkspacePolicyResolutionInput) (WorkspacePolicySnapshot, error) {
 	return WorkspacePolicySnapshot{}, errs.ErrDependencyUnavailable
+}
+
+// DisabledSelfDeploySignalReader keeps self-deploy signal consumption opt-in at app wiring time.
+type DisabledSelfDeploySignalReader struct{}
+
+// GetSelfDeploySignal reports that project-side self-deploy signal enrichment is unavailable.
+func (DisabledSelfDeploySignalReader) GetSelfDeploySignal(context.Context, SelfDeploySignalLookupInput) (SelfDeploySignalReadResult, error) {
+	return SelfDeploySignalReadResult{}, errs.ErrDependencyUnavailable
 }
 
 // DisabledRuntimePreparer keeps agent-manager runnable before runtime-manager is wired.

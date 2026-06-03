@@ -1,0 +1,326 @@
+package app
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log/slog"
+	"strings"
+
+	eventconsumer "github.com/codex-k8s/kodex/libs/go/eventconsumer"
+	eventlog "github.com/codex-k8s/kodex/libs/go/eventlog"
+	providerevents "github.com/codex-k8s/kodex/libs/go/platformevents/provider"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/errs"
+	agentservice "github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/service"
+	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/types/enum"
+	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/types/value"
+)
+
+const (
+	selfDeploySignalSourceService = "provider-hub"
+	selfDeploySignalConsumerActor = "provider-hub"
+)
+
+type selfDeploySignalReader interface {
+	GetSelfDeploySignal(context.Context, agentservice.SelfDeploySignalLookupInput) (agentservice.SelfDeploySignalReadResult, error)
+}
+
+type selfDeployPlanCreator interface {
+	CreateSelfDeployPlanFromSignal(context.Context, agentservice.CreateSelfDeployPlanFromSignalInput) (entity.SelfDeployPlan, error)
+}
+
+func startSelfDeploySignalConsumer(
+	ctx context.Context,
+	cfg Config,
+	eventLogPool *pgxpool.Pool,
+	reader selfDeploySignalReader,
+	creator selfDeployPlanCreator,
+	logger *slog.Logger,
+	errCh chan<- error,
+) error {
+	starter := selfDeploySignalConsumerStarter{
+		cfg:          cfg,
+		eventLogPool: eventLogPool,
+		reader:       reader,
+		creator:      creator,
+		logger:       logger,
+		errCh:        errCh,
+	}
+	return starter.start(ctx)
+}
+
+type selfDeploySignalConsumerStarter struct {
+	cfg          Config
+	eventLogPool *pgxpool.Pool
+	reader       selfDeploySignalReader
+	creator      selfDeployPlanCreator
+	logger       *slog.Logger
+	errCh        chan<- error
+}
+
+func (s selfDeploySignalConsumerStarter) start(ctx context.Context) error {
+	starter := managedEventConsumerStarter{}
+	starter.enabled = s.cfg.SelfDeploySignalConsumerEnabled
+	starter.logger = s.logger
+	starter.errCh = s.errCh
+	starter.validate = s.validate
+	starter.runner = s.runner
+	starter.run = runSelfDeploySignalConsumer
+	return startManagedEventConsumer(ctx, starter)
+}
+
+func (s selfDeploySignalConsumerStarter) validate() error {
+	switch {
+	case s.reader == nil:
+		return fmt.Errorf("agent-manager self-deploy signal consumer requires project-catalog reader")
+	case s.creator == nil:
+		return fmt.Errorf("agent-manager self-deploy signal consumer requires self-deploy plan creator")
+	case s.eventLogPool == nil:
+		return fmt.Errorf("agent-manager self-deploy signal consumer requires platform event-log database")
+	default:
+		return nil
+	}
+}
+
+func (s selfDeploySignalConsumerStarter) runner(logger *slog.Logger) (*eventconsumer.Runner, error) {
+	registry, err := eventconsumer.NewRegistry(selfDeploySignalConsumerRegistration(s.cfg, s.reader, s.creator))
+	if err != nil {
+		return nil, err
+	}
+	return eventconsumer.NewRunner(
+		eventlog.NewStore(s.eventLogPool),
+		registry,
+		s.cfg.SelfDeploySignalConsumerConfig(),
+		logger,
+		nil,
+	)
+}
+
+func selfDeploySignalConsumerRegistration(cfg Config, reader selfDeploySignalReader, creator selfDeployPlanCreator) eventconsumer.Registration {
+	return eventconsumer.Registration{
+		EventType:     providerevents.EventRepositoryChanged,
+		SchemaVersion: providerevents.SchemaVersion,
+		Handler: selfDeploySignalEventHandler{
+			cfg:     cfg,
+			reader:  reader,
+			creator: creator,
+		},
+	}
+}
+
+func runSelfDeploySignalConsumer(ctx context.Context, runner *eventconsumer.Runner, logger *slog.Logger, errCh chan<- error) {
+	logger.Info("agent-manager self-deploy signal consumer starting")
+	if err := runner.Run(ctx); err != nil {
+		errCh <- err
+	}
+}
+
+type selfDeploySignalEventHandler struct {
+	cfg     Config
+	reader  selfDeploySignalReader
+	creator selfDeployPlanCreator
+}
+
+func (h selfDeploySignalEventHandler) HandleEvent(ctx context.Context, event eventconsumer.Event) eventconsumer.Result {
+	storedEvent := event.StoredEvent
+	if strings.TrimSpace(storedEvent.SourceService) != selfDeploySignalSourceService {
+		return eventconsumer.Poison("invalid_source_service", "self-deploy signal event source service is not provider-hub")
+	}
+	if strings.TrimSpace(storedEvent.AggregateType) != providerevents.AggregateRepositoryChangeSignal {
+		return eventconsumer.Poison("invalid_aggregate_type", "self-deploy signal aggregate type is not repository_change_signal")
+	}
+	var payload providerevents.Payload
+	if err := json.Unmarshal(storedEvent.Payload, &payload); err != nil {
+		return eventconsumer.Poison("invalid_payload", "self-deploy signal payload is not valid provider json")
+	}
+	if !selfDeploySignalEventRelevant(payload, h.cfg.SelfDeploySignalConsumerTargetBranch) {
+		return eventconsumer.Ack()
+	}
+	lookup, result := h.lookupInput(payload)
+	if result.Status != "" {
+		return result
+	}
+	enriched, err := h.reader.GetSelfDeploySignal(ctx, lookup)
+	if err != nil {
+		return selfDeploySignalConsumerError(err)
+	}
+	if enriched.Status == agentservice.SelfDeploySignalStatusNotDeployRelevant {
+		return eventconsumer.Ack()
+	}
+	if enriched.Status != agentservice.SelfDeploySignalStatusReady {
+		return selfDeploySignalNotReadyResult(enriched)
+	}
+	input, err := selfDeployPlanInputFromSignal(enriched.Signal)
+	if err != nil {
+		return eventconsumer.Poison("invalid_self_deploy_signal", "project self-deploy signal cannot be converted to plan input")
+	}
+	if _, err := h.creator.CreateSelfDeployPlanFromSignal(ctx, input); err != nil {
+		return selfDeploySignalConsumerError(err)
+	}
+	return eventconsumer.Ack()
+}
+
+func (h selfDeploySignalEventHandler) lookupInput(payload providerevents.Payload) (agentservice.SelfDeploySignalLookupInput, eventconsumer.Result) {
+	projectID, err := selfDeploySignalProjectID(payload.ProjectID, h.cfg.SelfDeploySignalConsumerProjectID)
+	if err != nil {
+		return agentservice.SelfDeploySignalLookupInput{}, eventconsumer.Poison("missing_self_deploy_project_ref", "self-deploy signal has no project ref for project-catalog enrichment")
+	}
+	repositoryID, err := optionalSelfDeploySignalUUID(payload.RepositoryID, h.cfg.SelfDeploySignalConsumerRepositoryID)
+	if err != nil {
+		return agentservice.SelfDeploySignalLookupInput{}, eventconsumer.Poison("invalid_self_deploy_repository_ref", "self-deploy signal repository ref is invalid")
+	}
+	signalID := strings.TrimSpace(payload.RepositoryChangeSignalID)
+	signalKey := strings.TrimSpace(payload.SignalKey)
+	if signalID == "" && signalKey == "" {
+		return agentservice.SelfDeploySignalLookupInput{}, eventconsumer.Poison("missing_provider_signal_ref", "self-deploy signal has no provider signal ref")
+	}
+	return agentservice.SelfDeploySignalLookupInput{
+		Meta:              selfDeploySignalCommandMeta(),
+		ProjectID:         projectID,
+		RepositoryID:      repositoryID,
+		ProviderSignalID:  signalID,
+		ProviderSignalKey: signalKey,
+	}, eventconsumer.Result{}
+}
+
+func selfDeploySignalEventRelevant(payload providerevents.Payload, targetBranch string) bool {
+	branch := strings.TrimSpace(payload.BaseBranch)
+	if branch == "" {
+		branch = branchFromRef(payload.SourceRef)
+	}
+	target := strings.TrimSpace(targetBranch)
+	if target != "" && branch != "" && branch != target {
+		return false
+	}
+	return payload.ServicesPolicyChanged || payload.DeployRelevantChanged
+}
+
+func branchFromRef(ref string) string {
+	trimmed := strings.TrimSpace(ref)
+	prefix := "refs/heads/"
+	if strings.HasPrefix(trimmed, prefix) {
+		return strings.TrimSpace(strings.TrimPrefix(trimmed, prefix))
+	}
+	return trimmed
+}
+
+func selfDeploySignalProjectID(eventProjectID string, configuredProjectID string) (uuid.UUID, error) {
+	return firstValidUUID(eventProjectID, configuredProjectID)
+}
+
+func optionalSelfDeploySignalUUID(eventID string, configuredID string) (*uuid.UUID, error) {
+	id, err := firstValidUUID(eventID, configuredID)
+	if err != nil {
+		if strings.TrimSpace(eventID) == "" && strings.TrimSpace(configuredID) == "" {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &id, nil
+}
+
+func firstValidUUID(values ...string) (uuid.UUID, error) {
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			continue
+		}
+		id, err := uuid.Parse(trimmed)
+		if err == nil && id != uuid.Nil {
+			return id, nil
+		}
+		return uuid.Nil, errs.ErrInvalidArgument
+	}
+	return uuid.Nil, errs.ErrInvalidArgument
+}
+
+func selfDeploySignalCommandMeta() value.CommandMeta {
+	return value.CommandMeta{
+		IdempotencyKey: "self_deploy_signal:provider_repository_changed",
+		Actor:          value.Actor{Type: "service", ID: selfDeploySignalConsumerActor},
+	}
+}
+
+func selfDeployPlanInputFromSignal(signal agentservice.SelfDeploySignal) (agentservice.CreateSelfDeployPlanFromSignalInput, error) {
+	input := agentservice.CreateSelfDeployPlanInput{
+		Meta: value.CommandMeta{
+			IdempotencyKey: selfDeploySignalPlanIdempotencyKey(signal.ProviderSignalRef),
+			Actor:          value.Actor{Type: "service", ID: selfDeploySignalConsumerActor},
+		},
+		Scope: value.ScopeRef{
+			Type: string(enum.AgentScopeTypeProject),
+			Ref:  strings.TrimSpace(signal.ProjectRef),
+		},
+		ProjectRef:              strings.TrimSpace(signal.ProjectRef),
+		RepositoryRef:           strings.TrimSpace(signal.RepositoryRef),
+		ProviderSignalRef:       strings.TrimSpace(signal.ProviderSignalRef),
+		SourceRef:               strings.TrimSpace(signal.SourceRef),
+		MergeCommitSHA:          strings.TrimSpace(signal.MergeCommitSHA),
+		ServicesYAMLRef:         strings.TrimSpace(signal.ServicesYAML.Ref),
+		ServicesYAMLDigest:      strings.TrimSpace(signal.ServicesYAML.Digest),
+		AffectedServiceKeys:     append([]string(nil), signal.AffectedServiceKeys...),
+		PathCategories:          append([]enum.SelfDeployPathCategory(nil), signal.PathCategories...),
+		ExpectedRuntimeJobTypes: append([]enum.SelfDeployRuntimeJobType(nil), signal.ExpectedRuntimeJobTypes...),
+		GovernanceContext: value.GovernanceContextRef{
+			RiskProfileRef: strings.TrimSpace(signal.GovernanceRequirement.RiskProfileRef),
+			GatePolicyRef:  strings.TrimSpace(signal.GovernanceRequirement.GatePolicyRef),
+		},
+		SafeSummary: strings.TrimSpace(signal.SafeSummary),
+	}
+	if input.ProviderSignalRef == "" ||
+		input.ProjectRef == "" ||
+		input.RepositoryRef == "" ||
+		input.SourceRef == "" ||
+		input.MergeCommitSHA == "" ||
+		input.ServicesYAMLDigest == "" ||
+		len(input.AffectedServiceKeys) == 0 ||
+		len(input.PathCategories) == 0 ||
+		len(input.ExpectedRuntimeJobTypes) == 0 {
+		return agentservice.CreateSelfDeployPlanFromSignalInput{}, errs.ErrInvalidArgument
+	}
+	return agentservice.CreateSelfDeployPlanFromSignalInput{CreateSelfDeployPlanInput: input}, nil
+}
+
+func selfDeploySignalPlanIdempotencyKey(providerSignalRef string) string {
+	return "self_deploy_signal:" + strings.TrimSpace(providerSignalRef)
+}
+
+func selfDeploySignalNotReadyResult(result agentservice.SelfDeploySignalReadResult) eventconsumer.Result {
+	status := strings.TrimSpace(string(result.Status))
+	if status == "" {
+		status = "unknown"
+	}
+	reason := strings.TrimSpace(result.SafeReason)
+	if reason == "" {
+		reason = status
+	}
+	return eventconsumer.Retry(fmt.Errorf("self-deploy signal is not ready: %s: %s", status, reason))
+}
+
+var selfDeploySignalDomainErrorResults = []struct {
+	target error
+	result eventconsumer.Result
+}{
+	{
+		target: errs.ErrInvalidArgument,
+		result: eventconsumer.Poison("invalid_self_deploy_signal", "self-deploy signal metadata is invalid"),
+	},
+	{
+		target: errs.ErrConflict,
+		result: eventconsumer.Poison("conflicting_self_deploy_plan_signal", "self-deploy signal conflicts with stored plan state"),
+	},
+}
+
+func selfDeploySignalConsumerError(err error) eventconsumer.Result {
+	for _, candidate := range selfDeploySignalDomainErrorResults {
+		if errors.Is(err, candidate.target) {
+			return candidate.result
+		}
+	}
+	return eventconsumer.Retry(err)
+}
