@@ -504,6 +504,28 @@ func GetServicesPolicyInput(request *projectsv1.GetServicesPolicyRequest) (proje
 	return projectservice.GetServicesPolicyInput{ProjectID: projectID, ServicesPolicyID: policyID, Meta: meta}, nil
 }
 
+func GetSelfDeploySignalInput(request *projectsv1.GetSelfDeploySignalRequest) (projectservice.GetSelfDeploySignalInput, error) {
+	meta, err := QueryMetaFromProto(request.GetMeta())
+	if err != nil {
+		return projectservice.GetSelfDeploySignalInput{}, err
+	}
+	projectID, err := requiredUUID(request.GetProjectId())
+	if err != nil {
+		return projectservice.GetSelfDeploySignalInput{}, err
+	}
+	repositoryID, err := optionalUUIDPtr(request.GetRepositoryId())
+	if err != nil {
+		return projectservice.GetSelfDeploySignalInput{}, err
+	}
+	return projectservice.GetSelfDeploySignalInput{
+		ProjectID:         projectID,
+		RepositoryID:      repositoryID,
+		ProviderSignalID:  strings.TrimSpace(request.GetProviderSignalId()),
+		ProviderSignalKey: strings.TrimSpace(request.GetProviderSignalKey()),
+		Meta:              meta,
+	}, nil
+}
+
 func ListServiceDescriptorsInput(request *projectsv1.ListServiceDescriptorsRequest) (projectservice.ListServiceDescriptorsInput, error) {
 	projectID, meta, err := idWithQueryMeta(request.GetProjectId(), request.GetMeta())
 	if err != nil {

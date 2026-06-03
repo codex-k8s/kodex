@@ -59,8 +59,9 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 
 	projectRepository := projectpostgres.NewRepository(dbPool)
 	projectService := projectservice.NewWithConfig(projectRepository, systemClock{}, uuidGenerator{}, projectservice.Config{
-		Authorizer:        authorizer,
-		BootstrapProvider: bootstrapProvider,
+		Authorizer:              authorizer,
+		BootstrapProvider:       bootstrapProvider,
+		RepositoryChangeSignals: bootstrapProvider,
 	})
 	components := processComponents{
 		ProjectService: projectService,
@@ -145,7 +146,7 @@ func newAuthorizer(cfg Config) (projectservice.Authorizer, *grpcruntime.ClientCo
 	return accessclient.NewConnectedAuthorizer(accessConfig)
 }
 
-func newBootstrapProvider(cfg Config) (projectservice.BootstrapProvider, *grpcruntime.ClientConn, error) {
+func newBootstrapProvider(cfg Config) (*providerhubclient.Bootstrapper, *grpcruntime.ClientConn, error) {
 	if !cfg.ProviderHubBootstrapEnabled {
 		return nil, nil, nil
 	}

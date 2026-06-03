@@ -34,6 +34,7 @@ const (
 	ProjectCatalogService_ImportBootstrapServicesPolicy_FullMethodName        = "/kodex.projects.v1.ProjectCatalogService/ImportBootstrapServicesPolicy"
 	ProjectCatalogService_ReconcileBootstrapMergeSignal_FullMethodName        = "/kodex.projects.v1.ProjectCatalogService/ReconcileBootstrapMergeSignal"
 	ProjectCatalogService_ReconcileAdoptionMergeSignal_FullMethodName         = "/kodex.projects.v1.ProjectCatalogService/ReconcileAdoptionMergeSignal"
+	ProjectCatalogService_GetSelfDeploySignal_FullMethodName                  = "/kodex.projects.v1.ProjectCatalogService/GetSelfDeploySignal"
 	ProjectCatalogService_GetServicesPolicy_FullMethodName                    = "/kodex.projects.v1.ProjectCatalogService/GetServicesPolicy"
 	ProjectCatalogService_ListServiceDescriptors_FullMethodName               = "/kodex.projects.v1.ProjectCatalogService/ListServiceDescriptors"
 	ProjectCatalogService_CreatePolicyEditProposal_FullMethodName             = "/kodex.projects.v1.ProjectCatalogService/CreatePolicyEditProposal"
@@ -96,6 +97,8 @@ type ProjectCatalogServiceClient interface {
 	ReconcileBootstrapMergeSignal(ctx context.Context, in *ReconcileBootstrapMergeSignalRequest, opts ...grpc.CallOption) (*BootstrapServicesPolicyImportResponse, error)
 	// ReconcileAdoptionMergeSignal imports checked services.yaml from a safe provider adoption merge signal.
 	ReconcileAdoptionMergeSignal(ctx context.Context, in *ReconcileAdoptionMergeSignalRequest, opts ...grpc.CallOption) (*BootstrapServicesPolicyImportResponse, error)
+	// GetSelfDeploySignal возвращает project-side enrichment для safe provider repository change signal.
+	GetSelfDeploySignal(ctx context.Context, in *GetSelfDeploySignalRequest, opts ...grpc.CallOption) (*SelfDeploySignalResponse, error)
 	// GetServicesPolicy returns a checked services.yaml projection.
 	GetServicesPolicy(ctx context.Context, in *GetServicesPolicyRequest, opts ...grpc.CallOption) (*ServicesPolicyResponse, error)
 	// ListServiceDescriptors returns typed service descriptors from active policy.
@@ -294,6 +297,16 @@ func (c *projectCatalogServiceClient) ReconcileAdoptionMergeSignal(ctx context.C
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(BootstrapServicesPolicyImportResponse)
 	err := c.cc.Invoke(ctx, ProjectCatalogService_ReconcileAdoptionMergeSignal_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectCatalogServiceClient) GetSelfDeploySignal(ctx context.Context, in *GetSelfDeploySignalRequest, opts ...grpc.CallOption) (*SelfDeploySignalResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SelfDeploySignalResponse)
+	err := c.cc.Invoke(ctx, ProjectCatalogService_GetSelfDeploySignal_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -558,6 +571,8 @@ type ProjectCatalogServiceServer interface {
 	ReconcileBootstrapMergeSignal(context.Context, *ReconcileBootstrapMergeSignalRequest) (*BootstrapServicesPolicyImportResponse, error)
 	// ReconcileAdoptionMergeSignal imports checked services.yaml from a safe provider adoption merge signal.
 	ReconcileAdoptionMergeSignal(context.Context, *ReconcileAdoptionMergeSignalRequest) (*BootstrapServicesPolicyImportResponse, error)
+	// GetSelfDeploySignal возвращает project-side enrichment для safe provider repository change signal.
+	GetSelfDeploySignal(context.Context, *GetSelfDeploySignalRequest) (*SelfDeploySignalResponse, error)
 	// GetServicesPolicy returns a checked services.yaml projection.
 	GetServicesPolicy(context.Context, *GetServicesPolicyRequest) (*ServicesPolicyResponse, error)
 	// ListServiceDescriptors returns typed service descriptors from active policy.
@@ -656,6 +671,9 @@ func (UnimplementedProjectCatalogServiceServer) ReconcileBootstrapMergeSignal(co
 }
 func (UnimplementedProjectCatalogServiceServer) ReconcileAdoptionMergeSignal(context.Context, *ReconcileAdoptionMergeSignalRequest) (*BootstrapServicesPolicyImportResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReconcileAdoptionMergeSignal not implemented")
+}
+func (UnimplementedProjectCatalogServiceServer) GetSelfDeploySignal(context.Context, *GetSelfDeploySignalRequest) (*SelfDeploySignalResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetSelfDeploySignal not implemented")
 }
 func (UnimplementedProjectCatalogServiceServer) GetServicesPolicy(context.Context, *GetServicesPolicyRequest) (*ServicesPolicyResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetServicesPolicy not implemented")
@@ -1010,6 +1028,24 @@ func _ProjectCatalogService_ReconcileAdoptionMergeSignal_Handler(srv interface{}
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ProjectCatalogServiceServer).ReconcileAdoptionMergeSignal(ctx, req.(*ReconcileAdoptionMergeSignalRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProjectCatalogService_GetSelfDeploySignal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSelfDeploySignalRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectCatalogServiceServer).GetSelfDeploySignal(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectCatalogService_GetSelfDeploySignal_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectCatalogServiceServer).GetSelfDeploySignal(ctx, req.(*GetSelfDeploySignalRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1476,6 +1512,10 @@ var ProjectCatalogService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReconcileAdoptionMergeSignal",
 			Handler:    _ProjectCatalogService_ReconcileAdoptionMergeSignal_Handler,
+		},
+		{
+			MethodName: "GetSelfDeploySignal",
+			Handler:    _ProjectCatalogService_GetSelfDeploySignal_Handler,
 		},
 		{
 			MethodName: "GetServicesPolicy",

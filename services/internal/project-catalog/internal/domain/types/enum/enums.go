@@ -84,6 +84,45 @@ const (
 	ServicesPolicyProjectionOverridden ServicesPolicyProjectionStatus = "overridden"
 )
 
+// SelfDeploySignalStatus описывает готовность project-side self-deploy input.
+type SelfDeploySignalStatus string
+
+const (
+	SelfDeploySignalStatusReady                        SelfDeploySignalStatus = "ready"
+	SelfDeploySignalStatusNeedsServicesPolicyReconcile SelfDeploySignalStatus = "needs_services_policy_reconcile"
+	SelfDeploySignalStatusProviderSignalNotFound       SelfDeploySignalStatus = "provider_signal_not_found"
+	SelfDeploySignalStatusProviderSignalNotReady       SelfDeploySignalStatus = "provider_signal_not_ready"
+	SelfDeploySignalStatusRepositoryBindingNotFound    SelfDeploySignalStatus = "repository_binding_not_found"
+	SelfDeploySignalStatusServicesPolicyNotFound       SelfDeploySignalStatus = "services_policy_not_found"
+	SelfDeploySignalStatusServicesPolicyNotReady       SelfDeploySignalStatus = "services_policy_not_ready"
+	SelfDeploySignalStatusNotDeployRelevant            SelfDeploySignalStatus = "not_deploy_relevant"
+	SelfDeploySignalStatusNeedsRepositoryChangeSummary SelfDeploySignalStatus = "needs_repository_change_summary"
+)
+
+// SelfDeployPathCategory классифицирует изменённые пути без raw paths и diffs.
+type SelfDeployPathCategory string
+
+const (
+	SelfDeployPathCategoryServicesPolicy SelfDeployPathCategory = "services_policy"
+	SelfDeployPathCategoryServiceSource  SelfDeployPathCategory = "service_source"
+	SelfDeployPathCategoryServiceConfig  SelfDeployPathCategory = "service_config"
+	SelfDeployPathCategoryDeployManifest SelfDeployPathCategory = "deploy_manifest"
+	SelfDeployPathCategoryRuntimeConfig  SelfDeployPathCategory = "runtime_config"
+	SelfDeployPathCategoryDocumentation  SelfDeployPathCategory = "documentation"
+	SelfDeployPathCategoryTest           SelfDeployPathCategory = "test"
+	SelfDeployPathCategoryPlatformPolicy SelfDeployPathCategory = "platform_policy"
+	SelfDeployPathCategoryOther          SelfDeployPathCategory = "other"
+)
+
+// SelfDeployExpectedRuntimeJobType задаёт project-side safe подсказку типа runtime job.
+type SelfDeployExpectedRuntimeJobType string
+
+const (
+	SelfDeployExpectedRuntimeJobTypeBuild       SelfDeployExpectedRuntimeJobType = "build"
+	SelfDeployExpectedRuntimeJobTypeDeploy      SelfDeployExpectedRuntimeJobType = "deploy"
+	SelfDeployExpectedRuntimeJobTypeHealthCheck SelfDeployExpectedRuntimeJobType = "health_check"
+)
+
 // ServiceKind classifies a service descriptor from checked services.yaml.
 type ServiceKind string
 

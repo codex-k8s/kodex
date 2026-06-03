@@ -8,6 +8,7 @@ import (
 	projectsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/projects/v1"
 	projectservice "github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/service"
 	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/types/enum"
 )
 
 // ProjectResponse maps a project aggregate to gRPC.
@@ -99,6 +100,88 @@ func bootstrapProviderTargetToProto(target projectservice.RepositoryBootstrapPro
 
 func ServicesPolicyResponse(policy entity.ServicesPolicy) *projectsv1.ServicesPolicyResponse {
 	return &projectsv1.ServicesPolicyResponse{ServicesPolicy: ServicesPolicyToProto(policy)}
+}
+
+func SelfDeploySignalResponse(result projectservice.SelfDeploySignalResult) *projectsv1.SelfDeploySignalResponse {
+	return &projectsv1.SelfDeploySignalResponse{
+		Status:     SelfDeploySignalStatusToProto(result.Status),
+		Signal:     SelfDeploySignalToProto(result.Signal),
+		SafeReason: optionalStringPtr(result.SafeReason),
+	}
+}
+
+func SelfDeploySignalToProto(signal projectservice.SelfDeploySignal) *projectsv1.SelfDeploySignal {
+	if signal.ProviderSignalRef == "" && signal.ProjectRef == "" && signal.RepositoryRef == "" {
+		return nil
+	}
+	return &projectsv1.SelfDeploySignal{
+		ProviderSignalRef:         signal.ProviderSignalRef,
+		ProviderSignalId:          optionalStringPtr(signal.ProviderSignalID),
+		ProviderSignalKey:         optionalStringPtr(signal.ProviderSignalKey),
+		ProjectRef:                signal.ProjectRef,
+		RepositoryRef:             signal.RepositoryRef,
+		ProviderSlug:              signal.ProviderSlug,
+		RepositoryFullName:        signal.RepositoryFullName,
+		ProviderRepositoryId:      optionalStringPtr(signal.ProviderRepositoryID),
+		SourceRef:                 signal.SourceRef,
+		MergeCommitSha:            signal.MergeCommitSHA,
+		ServicesYaml:              selfDeployServicesYamlToProto(signal.ServicesYaml),
+		AffectedServiceKeys:       signal.AffectedServiceKeys,
+		PathCategories:            mapSlice(signal.PathCategories, selfDeployPathCategoryCountToProto),
+		ServicesYamlChanged:       signal.ServicesYamlChanged,
+		DeployRelevantChanged:     signal.DeployRelevantChanged,
+		ExpectedRuntimeJobTypes:   selfDeployExpectedRuntimeJobTypesToProto(signal.ExpectedRuntimeJobTypes),
+		GovernanceRequirement:     selfDeployGovernanceRequirementToProto(signal.GovernanceRequirement),
+		ProviderChangeFingerprint: signal.ProviderChangeFingerprint,
+		ProjectSignalFingerprint:  signal.ProjectSignalFingerprint,
+		ProviderEtag:              optionalStringPtr(signal.ProviderETag),
+		SafeSummary:               signal.SafeSummary,
+		ObservedAt:                signal.ObservedAt,
+		Version:                   signal.Version,
+	}
+}
+
+func selfDeployServicesYamlToProto(policy projectservice.SelfDeployServicesYamlProjection) *projectsv1.SelfDeployServicesYamlProjection {
+	if policy.ServicesYamlRef == "" && policy.ServicesPolicyID == uuid.Nil {
+		return nil
+	}
+	return &projectsv1.SelfDeployServicesYamlProjection{
+		ServicesYamlRef:         policy.ServicesYamlRef,
+		ServicesYamlDigest:      policy.ServicesYamlDigest,
+		ServicesYamlFingerprint: policy.ServicesYamlFingerprint,
+		ServicesPolicyId:        policy.ServicesPolicyID.String(),
+		SourceRepositoryId:      uuidPtrString(policy.SourceRepositoryID),
+		SourcePath:              policy.SourcePath,
+		SourceRef:               optionalStringPtr(policy.SourceRef),
+		SourceCommitSha:         policy.SourceCommitSHA,
+		PolicyVersion:           policy.PolicyVersion,
+		ValidationStatus:        ValidationStatusToProto(policy.ValidationStatus),
+		ProjectionStatus:        ProjectionStatusToProto(policy.ProjectionStatus),
+		ImportedAt:              policy.ImportedAt,
+	}
+}
+
+func selfDeployPathCategoryCountToProto(category projectservice.RepositoryChangePathCategoryCount) *projectsv1.SelfDeployPathCategoryCount {
+	return &projectsv1.SelfDeployPathCategoryCount{
+		Category: SelfDeployPathCategoryToProto(category.Category),
+		Count:    category.Count,
+	}
+}
+
+func selfDeployExpectedRuntimeJobTypesToProto(jobTypes []enum.SelfDeployExpectedRuntimeJobType) []projectsv1.SelfDeployExpectedRuntimeJobType {
+	result := make([]projectsv1.SelfDeployExpectedRuntimeJobType, 0, len(jobTypes))
+	for _, jobType := range jobTypes {
+		result = append(result, SelfDeployExpectedRuntimeJobTypeToProto(jobType))
+	}
+	return result
+}
+
+func selfDeployGovernanceRequirementToProto(requirement projectservice.SelfDeployGovernanceRequirement) *projectsv1.SelfDeployGovernanceRequirement {
+	return &projectsv1.SelfDeployGovernanceRequirement{
+		GateRequired:   requirement.GateRequired,
+		RiskProfileRef: optionalStringPtr(requirement.RiskProfileRef),
+		GatePolicyRef:  optionalStringPtr(requirement.GatePolicyRef),
+	}
 }
 
 func BootstrapServicesPolicyImportResponse(result projectservice.BootstrapServicesPolicyImportResult) *projectsv1.BootstrapServicesPolicyImportResponse {

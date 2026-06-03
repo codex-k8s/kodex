@@ -7,8 +7,9 @@ import (
 
 // Config contains optional domain service integrations.
 type Config struct {
-	Authorizer        Authorizer
-	BootstrapProvider BootstrapProvider
+	Authorizer              Authorizer
+	BootstrapProvider       BootstrapProvider
+	RepositoryChangeSignals RepositoryChangeSignalReader
 }
 
 // Service coordinates project-catalog domain commands and reads.
@@ -18,6 +19,7 @@ type Service struct {
 	ids               projectrepo.IDGenerator
 	authorizer        Authorizer
 	bootstrapProvider BootstrapProvider
+	changeSignals     RepositoryChangeSignalReader
 }
 
 // New creates a domain service with injected persistence, clock and id generator.
@@ -37,5 +39,6 @@ func NewWithConfig(repository projectrepo.Repository, clock projectrepo.Clock, i
 		ids:               ids,
 		authorizer:        authorizer,
 		bootstrapProvider: cfg.BootstrapProvider,
+		changeSignals:     cfg.RepositoryChangeSignals,
 	}
 }

@@ -177,6 +177,88 @@ func ProjectionStatusToProto(status enum.ServicesPolicyProjectionStatus) project
 	return enumToProto(status, projectsv1.ServicesPolicyProjectionStatus_SERVICES_POLICY_PROJECTION_STATUS_UNSPECIFIED, projectionStatuses)
 }
 
+func SelfDeploySignalStatusToProto(status enum.SelfDeploySignalStatus) projectsv1.SelfDeploySignalStatus {
+	switch status {
+	case enum.SelfDeploySignalStatusReady:
+		return projectsv1.SelfDeploySignalStatus_SELF_DEPLOY_SIGNAL_STATUS_READY
+	case enum.SelfDeploySignalStatusNeedsServicesPolicyReconcile:
+		return projectsv1.SelfDeploySignalStatus_SELF_DEPLOY_SIGNAL_STATUS_NEEDS_SERVICES_POLICY_RECONCILE
+	case enum.SelfDeploySignalStatusProviderSignalNotFound:
+		return projectsv1.SelfDeploySignalStatus_SELF_DEPLOY_SIGNAL_STATUS_PROVIDER_SIGNAL_NOT_FOUND
+	case enum.SelfDeploySignalStatusProviderSignalNotReady:
+		return projectsv1.SelfDeploySignalStatus_SELF_DEPLOY_SIGNAL_STATUS_PROVIDER_SIGNAL_NOT_READY
+	case enum.SelfDeploySignalStatusRepositoryBindingNotFound:
+		return projectsv1.SelfDeploySignalStatus_SELF_DEPLOY_SIGNAL_STATUS_REPOSITORY_BINDING_NOT_FOUND
+	case enum.SelfDeploySignalStatusServicesPolicyNotFound:
+		return projectsv1.SelfDeploySignalStatus_SELF_DEPLOY_SIGNAL_STATUS_SERVICES_POLICY_NOT_FOUND
+	case enum.SelfDeploySignalStatusServicesPolicyNotReady:
+		return projectsv1.SelfDeploySignalStatus_SELF_DEPLOY_SIGNAL_STATUS_SERVICES_POLICY_NOT_READY
+	case enum.SelfDeploySignalStatusNotDeployRelevant:
+		return projectsv1.SelfDeploySignalStatus_SELF_DEPLOY_SIGNAL_STATUS_NOT_DEPLOY_RELEVANT
+	case enum.SelfDeploySignalStatusNeedsRepositoryChangeSummary:
+		return projectsv1.SelfDeploySignalStatus_SELF_DEPLOY_SIGNAL_STATUS_NEEDS_REPOSITORY_CHANGE_SUMMARY
+	default:
+		return projectsv1.SelfDeploySignalStatus_SELF_DEPLOY_SIGNAL_STATUS_UNSPECIFIED
+	}
+}
+
+func SelfDeployPathCategoryToProto(category enum.SelfDeployPathCategory) projectsv1.SelfDeployPathCategory {
+	index := selfDeployPathCategoryIndex(category)
+	if index < 0 {
+		return projectsv1.SelfDeployPathCategory_SELF_DEPLOY_PATH_CATEGORY_UNSPECIFIED
+	}
+	categories := [...]projectsv1.SelfDeployPathCategory{
+		projectsv1.SelfDeployPathCategory_SELF_DEPLOY_PATH_CATEGORY_SERVICES_POLICY,
+		projectsv1.SelfDeployPathCategory_SELF_DEPLOY_PATH_CATEGORY_SERVICE_SOURCE,
+		projectsv1.SelfDeployPathCategory_SELF_DEPLOY_PATH_CATEGORY_SERVICE_CONFIG,
+		projectsv1.SelfDeployPathCategory_SELF_DEPLOY_PATH_CATEGORY_DEPLOY_MANIFEST,
+		projectsv1.SelfDeployPathCategory_SELF_DEPLOY_PATH_CATEGORY_RUNTIME_CONFIG,
+		projectsv1.SelfDeployPathCategory_SELF_DEPLOY_PATH_CATEGORY_DOCUMENTATION,
+		projectsv1.SelfDeployPathCategory_SELF_DEPLOY_PATH_CATEGORY_TEST,
+		projectsv1.SelfDeployPathCategory_SELF_DEPLOY_PATH_CATEGORY_PLATFORM_POLICY,
+		projectsv1.SelfDeployPathCategory_SELF_DEPLOY_PATH_CATEGORY_OTHER,
+	}
+	return categories[index]
+}
+
+func selfDeployPathCategoryIndex(category enum.SelfDeployPathCategory) int {
+	switch category {
+	case enum.SelfDeployPathCategoryServicesPolicy:
+		return 0
+	case enum.SelfDeployPathCategoryServiceSource:
+		return 1
+	case enum.SelfDeployPathCategoryServiceConfig:
+		return 2
+	case enum.SelfDeployPathCategoryDeployManifest:
+		return 3
+	case enum.SelfDeployPathCategoryRuntimeConfig:
+		return 4
+	case enum.SelfDeployPathCategoryDocumentation:
+		return 5
+	case enum.SelfDeployPathCategoryTest:
+		return 6
+	case enum.SelfDeployPathCategoryPlatformPolicy:
+		return 7
+	case enum.SelfDeployPathCategoryOther:
+		return 8
+	default:
+		return -1
+	}
+}
+
+func SelfDeployExpectedRuntimeJobTypeToProto(jobType enum.SelfDeployExpectedRuntimeJobType) projectsv1.SelfDeployExpectedRuntimeJobType {
+	switch jobType {
+	case enum.SelfDeployExpectedRuntimeJobTypeBuild:
+		return projectsv1.SelfDeployExpectedRuntimeJobType_SELF_DEPLOY_EXPECTED_RUNTIME_JOB_TYPE_BUILD
+	case enum.SelfDeployExpectedRuntimeJobTypeDeploy:
+		return projectsv1.SelfDeployExpectedRuntimeJobType_SELF_DEPLOY_EXPECTED_RUNTIME_JOB_TYPE_DEPLOY
+	case enum.SelfDeployExpectedRuntimeJobTypeHealthCheck:
+		return projectsv1.SelfDeployExpectedRuntimeJobType_SELF_DEPLOY_EXPECTED_RUNTIME_JOB_TYPE_HEALTH_CHECK
+	default:
+		return projectsv1.SelfDeployExpectedRuntimeJobType_SELF_DEPLOY_EXPECTED_RUNTIME_JOB_TYPE_UNSPECIFIED
+	}
+}
+
 func serviceKindFromProto(kind projectsv1.ServiceKind) (enum.ServiceKind, error) {
 	return enumFromProto(kind, projectsv1.ServiceKind_SERVICE_KIND_UNSPECIFIED, serviceKinds, false)
 }
