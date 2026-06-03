@@ -231,6 +231,17 @@ func TestValidateRequiresInteractionHubTokenWhenRequestEnabled(t *testing.T) {
 	}
 }
 
+func TestValidateRequiresGovernanceManagerTokenWhenSelfDeployGateEnabled(t *testing.T) {
+	t.Parallel()
+
+	cfg := validConfig()
+	cfg.SelfDeployGovernanceGateEnabled = true
+	cfg.GovernanceManagerGRPCAuthToken = ""
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() err = nil, want governance-manager auth token error")
+	}
+}
+
 func TestGRPCServerConfigMapsRuntimeLimits(t *testing.T) {
 	t.Parallel()
 
@@ -304,6 +315,9 @@ func validConfig() Config {
 		InteractionHubGRPCAddr:                         "interaction-hub:9090",
 		InteractionHubGRPCAuthToken:                    "interaction-token",
 		InteractionHubRequestTimeout:                   10 * time.Second,
+		GovernanceManagerGRPCAddr:                      "governance-manager:9090",
+		GovernanceManagerGRPCAuthToken:                 "governance-token",
+		GovernanceManagerRequestTimeout:                10 * time.Second,
 		OutboxDispatchEnabled:                          false,
 		OutboxPublisherKind:                            "disabled",
 		OutboxBatchSize:                                100,

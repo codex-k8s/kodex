@@ -74,6 +74,10 @@ type Config struct {
 	InteractionHubGRPCAddr                         string        `env:"KODEX_AGENT_MANAGER_INTERACTION_HUB_GRPC_ADDR" envDefault:"interaction-hub:9090"`
 	InteractionHubGRPCAuthToken                    string        `env:"KODEX_AGENT_MANAGER_INTERACTION_HUB_GRPC_AUTH_TOKEN"`
 	InteractionHubRequestTimeout                   time.Duration `env:"KODEX_AGENT_MANAGER_INTERACTION_HUB_REQUEST_TIMEOUT" envDefault:"10s"`
+	SelfDeployGovernanceGateEnabled                bool          `env:"KODEX_AGENT_MANAGER_SELF_DEPLOY_GOVERNANCE_GATE_ENABLED" envDefault:"false"`
+	GovernanceManagerGRPCAddr                      string        `env:"KODEX_AGENT_MANAGER_GOVERNANCE_MANAGER_GRPC_ADDR" envDefault:"governance-manager:9090"`
+	GovernanceManagerGRPCAuthToken                 string        `env:"KODEX_AGENT_MANAGER_GOVERNANCE_MANAGER_GRPC_AUTH_TOKEN"`
+	GovernanceManagerRequestTimeout                time.Duration `env:"KODEX_AGENT_MANAGER_GOVERNANCE_MANAGER_REQUEST_TIMEOUT" envDefault:"10s"`
 	OutboxDispatchEnabled                          bool          `env:"KODEX_AGENT_MANAGER_OUTBOX_DISPATCH_ENABLED" envDefault:"true"`
 	OutboxPublisherKind                            string        `env:"KODEX_AGENT_MANAGER_OUTBOX_PUBLISHER_KIND" envDefault:"postgres-event-log"`
 	OutboxEventLogSource                           string        `env:"KODEX_AGENT_MANAGER_OUTBOX_EVENT_LOG_SOURCE" envDefault:"agent-manager"`
@@ -188,6 +192,12 @@ func (cfg Config) Validate() error {
 	if cfg.InteractionHubRequestEnabled && strings.TrimSpace(cfg.InteractionHubGRPCAuthToken) == "" {
 		return fmt.Errorf("KODEX_AGENT_MANAGER_INTERACTION_HUB_GRPC_AUTH_TOKEN is required when interaction-hub request integration is enabled")
 	}
+	if cfg.SelfDeployGovernanceGateEnabled && strings.TrimSpace(cfg.GovernanceManagerGRPCAddr) == "" {
+		return fmt.Errorf("KODEX_AGENT_MANAGER_GOVERNANCE_MANAGER_GRPC_ADDR is required when self-deploy governance gate integration is enabled")
+	}
+	if cfg.SelfDeployGovernanceGateEnabled && strings.TrimSpace(cfg.GovernanceManagerGRPCAuthToken) == "" {
+		return fmt.Errorf("KODEX_AGENT_MANAGER_GOVERNANCE_MANAGER_GRPC_AUTH_TOKEN is required when self-deploy governance gate integration is enabled")
+	}
 	if err := cfg.GRPCServerConfig().Validate(); err != nil {
 		return err
 	}
@@ -212,6 +222,7 @@ func (cfg Config) Validate() error {
 		{name: "KODEX_AGENT_MANAGER_CODEX_SESSION_TIMEOUT", valid: cfg.CodexSessionTimeout > 0 && cfg.CodexSessionTimeout <= 24*time.Hour},
 		{name: "KODEX_AGENT_MANAGER_PROVIDER_HUB_WRITE_TIMEOUT", valid: cfg.ProviderHubWriteTimeout > 0},
 		{name: "KODEX_AGENT_MANAGER_INTERACTION_HUB_REQUEST_TIMEOUT", valid: cfg.InteractionHubRequestTimeout > 0},
+		{name: "KODEX_AGENT_MANAGER_GOVERNANCE_MANAGER_REQUEST_TIMEOUT", valid: cfg.GovernanceManagerRequestTimeout > 0},
 		{name: "KODEX_AGENT_MANAGER_OUTBOX_BATCH_SIZE", valid: cfg.OutboxBatchSize > 0},
 		{name: "KODEX_AGENT_MANAGER_OUTBOX_POLL_INTERVAL", valid: cfg.OutboxPollInterval > 0},
 		{name: "KODEX_AGENT_MANAGER_OUTBOX_LOCK_TTL", valid: cfg.OutboxLockTTL > 0},

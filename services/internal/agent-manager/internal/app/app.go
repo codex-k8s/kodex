@@ -12,11 +12,13 @@ import (
 	grpcserver "github.com/codex-k8s/kodex/libs/go/grpcserver"
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
 	serviceprocess "github.com/codex-k8s/kodex/libs/go/serviceprocess"
+	governancev1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/governance/v1"
 	interactionsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/interactions/v1"
 	packagesv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/packages/v1"
 	projectsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/projects/v1"
 	providersv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/providers/v1"
 	runtimev1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/runtime/v1"
+	governanceclient "github.com/codex-k8s/kodex/services/internal/agent-manager/internal/clients/governance"
 	interactionhubclient "github.com/codex-k8s/kodex/services/internal/agent-manager/internal/clients/interactionhub"
 	packagehubclient "github.com/codex-k8s/kodex/services/internal/agent-manager/internal/clients/packagehub"
 	projectcatalogclient "github.com/codex-k8s/kodex/services/internal/agent-manager/internal/clients/projectcatalog"
@@ -81,6 +83,13 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	if interactionHubConn != nil {
 		defer func() { _ = interactionHubConn.Close() }()
 	}
+	selfDeployGatePreparer, governanceManagerConn, err := newSelfDeployGatePreparer(cfg)
+	if err != nil {
+		return err
+	}
+	if governanceManagerConn != nil {
+		defer func() { _ = governanceManagerConn.Close() }()
+	}
 	agentRepository := agentpostgres.NewRepository(dbPool)
 	agentService := agentservice.New(agentservice.Config{
 		Repository:               agentRepository,
@@ -100,9 +109,11 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		},
 		ProviderFollowUpDispatcher: providerFollowUpDispatcher,
 		HumanGateRequester:         humanGateRequester,
+		SelfDeployGatePreparer:     selfDeployGatePreparer,
 		RuntimePreparationEnabled:  cfg.RuntimePreparationEnabled,
 		RuntimeJobDispatchEnabled:  cfg.RuntimeJobDispatchEnabled,
 		HumanGateRequestEnabled:    cfg.InteractionHubRequestEnabled,
+		SelfDeployGateEnabled:      cfg.SelfDeployGovernanceGateEnabled,
 		EventPublisher:             agentservice.DisabledEventPublisher{},
 	})
 	httpServer := &http.Server{
@@ -267,27 +278,53 @@ func newProviderFollowUpDispatcher(cfg Config) (agentservice.ProviderFollowUpDis
 }
 
 func newHumanGateRequester(cfg Config) (agentservice.HumanGateInteractionRequester, *grpcruntime.ClientConn, error) {
+	if !cfg.InteractionHubRequestEnabled {
+		return agentservice.DisabledHumanGateInteractionRequester{}, nil, nil
+	}
 	clientConfig := interactionhubclient.Config{Addr: cfg.InteractionHubGRPCAddr, AuthToken: cfg.InteractionHubGRPCAuthToken, Timeout: cfg.InteractionHubRequestTimeout}
-	disabled := agentservice.HumanGateInteractionRequester(agentservice.DisabledHumanGateInteractionRequester{})
-	return optionalOwnerService(cfg.InteractionHubRequestEnabled, disabled, clientConfig, connectHumanGateRequester)
+	conn, err := interactionhubclient.NewConnection(clientConfig)
+	if err != nil {
+		return nil, nil, err
+	}
+	client := interactionsv1.NewInteractionHubServiceClient(conn)
+	requester, err := interactionhubclient.NewHumanGateRequester(client, clientConfig)
+	if err != nil {
+		_ = conn.Close()
+		return nil, nil, err
+	}
+	return requester, conn, nil
 }
 
-func connectHumanGateRequester(clientConfig interactionhubclient.Config) (agentservice.HumanGateInteractionRequester, *grpcruntime.ClientConn, error) {
-	return connectGeneratedOwnerService[agentservice.HumanGateInteractionRequester](clientConfig, interactionhubclient.NewConnection, interactionsv1.NewInteractionHubServiceClient, func(client interactionsv1.InteractionHubServiceClient, clientConfig interactionhubclient.Config) (agentservice.HumanGateInteractionRequester, error) {
-		return interactionhubclient.NewHumanGateRequester(client, clientConfig)
-	})
+func newSelfDeployGatePreparer(cfg Config) (agentservice.SelfDeployGatePreparer, *grpcruntime.ClientConn, error) {
+	clientConfig := governanceclient.Config{
+		Addr:      cfg.GovernanceManagerGRPCAddr,
+		AuthToken: cfg.GovernanceManagerGRPCAuthToken,
+		Timeout:   cfg.GovernanceManagerRequestTimeout,
+	}
+	return optionalGeneratedOwnerService[agentservice.SelfDeployGatePreparer](
+		cfg.SelfDeployGovernanceGateEnabled,
+		agentservice.DisabledSelfDeployGatePreparer{},
+		clientConfig,
+		governanceclient.NewConnection,
+		governancev1.NewGovernanceManagerServiceClient,
+		func(client governancev1.GovernanceManagerServiceClient, clientConfig governanceclient.Config) (agentservice.SelfDeployGatePreparer, error) {
+			return governanceclient.NewSelfDeployGatePreparer(client, clientConfig)
+		},
+	)
 }
 
-func optionalOwnerService[T any, C any](
+func optionalGeneratedOwnerService[T any, C any, P any](
 	enabled bool,
 	disabled T,
 	clientConfig C,
-	connect func(C) (T, *grpcruntime.ClientConn, error),
+	newConnection func(C) (*grpcruntime.ClientConn, error),
+	newGeneratedClient func(grpcruntime.ClientConnInterface) P,
+	newAdapter func(P, C) (T, error),
 ) (T, *grpcruntime.ClientConn, error) {
 	if !enabled {
 		return disabled, nil, nil
 	}
-	return connect(clientConfig)
+	return connectGeneratedOwnerService(clientConfig, newConnection, newGeneratedClient, newAdapter)
 }
 
 func connectGeneratedOwnerService[T any, C any, P any](

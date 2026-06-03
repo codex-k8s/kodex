@@ -192,6 +192,26 @@ type CreateSelfDeployPlanFromSignalInput struct {
 	CreateSelfDeployPlanInput
 }
 
+type SelfDeployPlanGateStatus string
+
+const (
+	SelfDeployPlanGateStatusPending  SelfDeployPlanGateStatus = "pending"
+	SelfDeployPlanGateStatusApproved SelfDeployPlanGateStatus = "approved"
+	SelfDeployPlanGateStatusRejected SelfDeployPlanGateStatus = "rejected"
+	SelfDeployPlanGateStatusBlocked  SelfDeployPlanGateStatus = "blocked"
+)
+
+type SelfDeployPlanGatePreparationInput struct {
+	Meta value.CommandMeta
+	Plan entity.SelfDeployPlan
+}
+
+type SelfDeployPlanGatePreparationResult struct {
+	Status            SelfDeployPlanGateStatus
+	GovernanceContext value.GovernanceContextRef
+	SafeSummary       string
+}
+
 type SelfDeploySignalStatus string
 
 const (

@@ -30,9 +30,11 @@ type Config struct {
 	CodexSessionExecution       CodexSessionExecutionConfig
 	ProviderFollowUpDispatcher  ProviderFollowUpDispatcher
 	HumanGateRequester          HumanGateInteractionRequester
+	SelfDeployGatePreparer      SelfDeployGatePreparer
 	RuntimePreparationEnabled   bool
 	RuntimeJobDispatchEnabled   bool
 	HumanGateRequestEnabled     bool
+	SelfDeployGateEnabled       bool
 	// EventPublisher is a future outbox-backed publisher for agent domain events.
 	EventPublisher EventPublisher
 }
@@ -48,6 +50,7 @@ type Service struct {
 	runtimePreparationEnabled   bool
 	runtimeJobDispatchEnabled   bool
 	humanGateRequestEnabled     bool
+	selfDeployGateEnabled       bool
 	runtimeJobRunnerImageRef    string
 	runtimeJobAllowedSecretRefs []AgentRunExecutionRef
 	codexSessionExecution       CodexSessionExecutionConfig
@@ -59,6 +62,7 @@ type Service struct {
 	runtimeJobReader           RuntimeJobReader
 	providerFollowUpDispatcher ProviderFollowUpDispatcher
 	humanGateRequester         HumanGateInteractionRequester
+	selfDeployGatePreparer     SelfDeployGatePreparer
 }
 
 // GuidanceResolver resolves guidance package selections into safe frozen refs.
@@ -120,6 +124,11 @@ type ProviderFollowUpDispatcher interface {
 // HumanGateInteractionRequester creates owner-visible requests in interaction-hub.
 type HumanGateInteractionRequester interface {
 	RequestHumanGate(context.Context, HumanGateInteractionRequestInput) (HumanGateInteractionRequestResult, error)
+}
+
+// SelfDeployGatePreparer готовит governance gate для self-deploy plan.
+type SelfDeployGatePreparer interface {
+	PrepareSelfDeployPlanGate(context.Context, SelfDeployPlanGatePreparationInput) (SelfDeployPlanGatePreparationResult, error)
 }
 
 // DisabledGuidanceResolver keeps agent-manager runnable before package-hub is wired.
@@ -214,6 +223,14 @@ func (DisabledHumanGateInteractionRequester) RequestHumanGate(context.Context, H
 	return HumanGateInteractionRequestResult{}, errs.ErrDependencyUnavailable
 }
 
+// DisabledSelfDeployGatePreparer оставляет подготовку governance gate явным opt-in.
+type DisabledSelfDeployGatePreparer struct{}
+
+// PrepareSelfDeployPlanGate сообщает, что governance-manager недоступен.
+func (DisabledSelfDeployGatePreparer) PrepareSelfDeployPlanGate(context.Context, SelfDeployPlanGatePreparationInput) (SelfDeployPlanGatePreparationResult, error) {
+	return SelfDeployPlanGatePreparationResult{}, errs.ErrDependencyUnavailable
+}
+
 // New creates an agent-manager service scaffold.
 func New(cfg Config) *Service {
 	if cfg.EventPublisher == nil {
@@ -240,6 +257,9 @@ func New(cfg Config) *Service {
 	if cfg.HumanGateRequester == nil {
 		cfg.HumanGateRequester = DisabledHumanGateInteractionRequester{}
 	}
+	if cfg.SelfDeployGatePreparer == nil {
+		cfg.SelfDeployGatePreparer = DisabledSelfDeployGatePreparer{}
+	}
 	if cfg.Clock == nil {
 		cfg.Clock = systemClock{}
 	}
@@ -258,9 +278,11 @@ func New(cfg Config) *Service {
 	service.runtimeJobReader = cfg.RuntimeJobReader
 	service.providerFollowUpDispatcher = cfg.ProviderFollowUpDispatcher
 	service.humanGateRequester = cfg.HumanGateRequester
+	service.selfDeployGatePreparer = cfg.SelfDeployGatePreparer
 	service.runtimePreparationEnabled = cfg.RuntimePreparationEnabled
 	service.runtimeJobDispatchEnabled = cfg.RuntimeJobDispatchEnabled
 	service.humanGateRequestEnabled = cfg.HumanGateRequestEnabled
+	service.selfDeployGateEnabled = cfg.SelfDeployGateEnabled
 	service.runtimeJobRunnerImageRef = cfg.RuntimeJobRunnerImageRef
 	service.runtimeJobAllowedSecretRefs = append([]AgentRunExecutionRef(nil), cfg.RuntimeJobAllowedSecretRefs...)
 	service.codexSessionExecution = cfg.CodexSessionExecution

@@ -50,12 +50,18 @@ func (s *Service) createSelfDeployPlan(ctx context.Context, input CreateSelfDepl
 	if requireSignal && plan.ProviderSignalRef == "" {
 		return entity.SelfDeployPlan{}, errs.ErrInvalidArgument
 	}
-	verifyReplay := verifyEntityRequestReplay(plan, s.repository.GetSelfDeployPlan, selfDeployPlanID, sameSelfDeployPlanRequest)
+	verifyReplay := verifyEntityRequestReplay(plan, s.repository.GetSelfDeployPlan, selfDeployPlanID, sameSelfDeployPlanCommandReplay)
 	if replay, ok, err := findReplay(ctx, s, input.Meta, operation, enum.CommandAggregateTypeSelfDeployPlan, selfDeployPlanFromPayload, verifyReplay); ok || err != nil {
-		return replay, err
+		if err != nil {
+			return entity.SelfDeployPlan{}, err
+		}
+		return s.prepareSelfDeployPlanGateIfNeeded(ctx, replay)
 	}
 	if replay, ok, err := s.findSelfDeployPlanSignalReplay(ctx, plan); ok || err != nil {
-		return replay, err
+		if err != nil {
+			return entity.SelfDeployPlan{}, err
+		}
+		return s.prepareSelfDeployPlanGateIfNeeded(ctx, replay)
 	}
 	now := s.clock.Now()
 	plan.ID = s.idGenerator.New()
@@ -74,7 +80,92 @@ func (s *Service) createSelfDeployPlan(ctx context.Context, input CreateSelfDepl
 	if err != nil {
 		return entity.SelfDeployPlan{}, err
 	}
-	return plan, s.repository.CreateSelfDeployPlanWithResult(ctx, plan, result, event)
+	if err := s.repository.CreateSelfDeployPlanWithResult(ctx, plan, result, event); err != nil {
+		return entity.SelfDeployPlan{}, err
+	}
+	return s.prepareSelfDeployPlanGateIfNeeded(ctx, plan)
+}
+
+func (s *Service) prepareSelfDeployPlanGateIfNeeded(ctx context.Context, plan entity.SelfDeployPlan) (entity.SelfDeployPlan, error) {
+	if !s.selfDeployGateEnabled {
+		return plan, nil
+	}
+	if err := s.requireRepository(); err != nil {
+		return entity.SelfDeployPlan{}, err
+	}
+	current, err := s.repository.GetSelfDeployPlan(ctx, plan.ID)
+	if err != nil {
+		return entity.SelfDeployPlan{}, err
+	}
+	if selfDeployPlanGatePrepared(current) {
+		return current, nil
+	}
+	meta := selfDeployPlanGateCommandMeta(current)
+	if replay, ok, err := findReplay(ctx, s, meta, operationPrepareSelfDeployPlanGate, enum.CommandAggregateTypeSelfDeployPlan, selfDeployPlanFromPayload, s.verifySelfDeployPlanGateReplay); ok || err != nil {
+		return replay, err
+	}
+	result, err := s.selfDeployGatePreparer.PrepareSelfDeployPlanGate(ctx, SelfDeployPlanGatePreparationInput{
+		Meta: meta,
+		Plan: current,
+	})
+	if err != nil {
+		return entity.SelfDeployPlan{}, err
+	}
+	return s.recordSelfDeployPlanGateResult(ctx, current, meta, result)
+}
+
+func (s *Service) verifySelfDeployPlanGateReplay(ctx context.Context, result entity.CommandResult, replay entity.SelfDeployPlan) error {
+	if replay.ID != result.AggregateID {
+		return errs.ErrConflict
+	}
+	stored, err := s.repository.GetSelfDeployPlan(ctx, result.AggregateID)
+	if err != nil {
+		return err
+	}
+	if !sameSelfDeployPlanStored(stored, replay) {
+		return errs.ErrConflict
+	}
+	return nil
+}
+
+func (s *Service) recordSelfDeployPlanGateResult(ctx context.Context, plan entity.SelfDeployPlan, meta value.CommandMeta, result SelfDeployPlanGatePreparationResult) (entity.SelfDeployPlan, error) {
+	governanceContext, err := normalizeGovernanceContext(result.GovernanceContext)
+	if err != nil {
+		return entity.SelfDeployPlan{}, err
+	}
+	nextContext, err := mergeGovernanceContext(plan.GovernanceContext, governanceContext)
+	if err != nil {
+		return entity.SelfDeployPlan{}, err
+	}
+	status, err := selfDeployPlanStatusFromGate(result.Status, nextContext)
+	if err != nil {
+		return entity.SelfDeployPlan{}, err
+	}
+	now := s.clock.Now()
+	previousVersion := plan.Version
+	plan.GovernanceContext = nextContext
+	plan.Status = status
+	plan.Version++
+	plan.UpdatedAt = now
+	payload, err := marshalCommandPayload(selfDeployPlanCommandPayload{SelfDeployPlan: plan})
+	if err != nil {
+		return entity.SelfDeployPlan{}, err
+	}
+	command, err := commandResult(meta, operationPrepareSelfDeployPlanGate, enum.CommandAggregateTypeSelfDeployPlan, plan.ID, payload, now)
+	if err != nil {
+		return entity.SelfDeployPlan{}, err
+	}
+	event, err := selfDeployPlanRequestedEvent(s.idGenerator.New(), plan, now)
+	if err != nil {
+		return entity.SelfDeployPlan{}, err
+	}
+	if err := s.repository.UpdateSelfDeployPlanWithResult(ctx, plan, previousVersion, command, &event); err != nil {
+		if loaded, loadErr := s.repository.GetSelfDeployPlan(ctx, plan.ID); loadErr == nil && selfDeployPlanGatePrepared(loaded) {
+			return loaded, nil
+		}
+		return entity.SelfDeployPlan{}, err
+	}
+	return plan, nil
 }
 
 func (s *Service) findSelfDeployPlanSignalReplay(ctx context.Context, plan entity.SelfDeployPlan) (entity.SelfDeployPlan, bool, error) {
@@ -205,6 +296,48 @@ func validateSelfDeployPlanFilter(filter query.SelfDeployPlanFilter) error {
 		return errs.ErrInvalidArgument
 	}
 	return nil
+}
+
+func selfDeployPlanGateCommandMeta(plan entity.SelfDeployPlan) value.CommandMeta {
+	return value.CommandMeta{
+		IdempotencyKey: "self_deploy_plan_gate:" + plan.ID.String(),
+		Actor:          value.Actor{Type: "service", ID: "agent-manager"},
+	}
+}
+
+func selfDeployPlanGatePrepared(plan entity.SelfDeployPlan) bool {
+	if plan.GovernanceContext.RiskAssessmentRef != "" ||
+		plan.GovernanceContext.GateRequestRef != "" ||
+		plan.GovernanceContext.GateDecisionRef != "" {
+		return true
+	}
+	switch plan.Status {
+	case enum.SelfDeployPlanStatusApproved,
+		enum.SelfDeployPlanStatusRejected,
+		enum.SelfDeployPlanStatusFailed,
+		enum.SelfDeployPlanStatusCancelled:
+		return true
+	default:
+		return false
+	}
+}
+
+func selfDeployPlanStatusFromGate(status SelfDeployPlanGateStatus, context value.GovernanceContextRef) (enum.SelfDeployPlanStatus, error) {
+	switch status {
+	case SelfDeployPlanGateStatusPending:
+		if context.GateRequestRef == "" {
+			return "", errs.ErrDependencyUnavailable
+		}
+		return enum.SelfDeployPlanStatusPendingApproval, nil
+	case SelfDeployPlanGateStatusApproved:
+		return enum.SelfDeployPlanStatusApproved, nil
+	case SelfDeployPlanGateStatusRejected:
+		return enum.SelfDeployPlanStatusRejected, nil
+	case SelfDeployPlanGateStatusBlocked:
+		return enum.SelfDeployPlanStatusFailed, nil
+	default:
+		return "", errs.ErrDependencyUnavailable
+	}
 }
 
 func selfDeployPlanIdempotencyKey(meta value.CommandMeta, operation string) (string, error) {
@@ -430,7 +563,27 @@ func selfDeployPlanFromPayload(payload []byte) (entity.SelfDeployPlan, error) {
 
 func selfDeployPlanID(plan entity.SelfDeployPlan) uuid.UUID { return plan.ID }
 
+func sameSelfDeployPlanStored(stored entity.SelfDeployPlan, expected entity.SelfDeployPlan) bool {
+	return stored.ID == expected.ID &&
+		stored.Version == expected.Version &&
+		stored.CreatedAt.Equal(expected.CreatedAt) &&
+		stored.UpdatedAt.Equal(expected.UpdatedAt) &&
+		sameSelfDeployPlanRequest(stored, expected)
+}
+
+func sameSelfDeployPlanCommandReplay(stored entity.SelfDeployPlan, expected entity.SelfDeployPlan) bool {
+	return sameSelfDeployPlanRequestRefs(stored, expected) &&
+		incomingGovernanceContextMatches(stored.GovernanceContext, expected.GovernanceContext) &&
+		selfDeployPlanStatusCanReplay(stored.Status, expected.Status)
+}
+
 func sameSelfDeployPlanRequest(stored entity.SelfDeployPlan, expected entity.SelfDeployPlan) bool {
+	return sameSelfDeployPlanRequestRefs(stored, expected) &&
+		sameGovernanceContext(stored.GovernanceContext, expected.GovernanceContext) &&
+		stored.Status == expected.Status
+}
+
+func sameSelfDeployPlanRequestRefs(stored entity.SelfDeployPlan, expected entity.SelfDeployPlan) bool {
 	return sameScope(stored.Scope, expected.Scope) &&
 		stored.ProjectRef == expected.ProjectRef &&
 		stored.RepositoryRef == expected.RepositoryRef &&
@@ -442,11 +595,19 @@ func sameSelfDeployPlanRequest(stored entity.SelfDeployPlan, expected entity.Sel
 		stringSlicesEqual(stored.AffectedServiceKeys, expected.AffectedServiceKeys) &&
 		selfDeployPathCategoriesEqual(stored.PathCategories, expected.PathCategories) &&
 		selfDeployRuntimeJobTypesEqual(stored.ExpectedRuntimeJobTypes, expected.ExpectedRuntimeJobTypes) &&
-		sameGovernanceContext(stored.GovernanceContext, expected.GovernanceContext) &&
 		stored.SafeSummary == expected.SafeSummary &&
 		stored.PlanFingerprint == expected.PlanFingerprint &&
-		stored.IdempotencyKey == expected.IdempotencyKey &&
-		stored.Status == expected.Status
+		stored.IdempotencyKey == expected.IdempotencyKey
+}
+
+func selfDeployPlanStatusCanReplay(stored enum.SelfDeployPlanStatus, expected enum.SelfDeployPlanStatus) bool {
+	if stored == expected {
+		return true
+	}
+	return expected == enum.SelfDeployPlanStatusPendingApproval &&
+		(stored == enum.SelfDeployPlanStatusApproved ||
+			stored == enum.SelfDeployPlanStatusRejected ||
+			stored == enum.SelfDeployPlanStatusFailed)
 }
 
 func stringSlicesEqual(left []string, right []string) bool {
