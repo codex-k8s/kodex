@@ -73,6 +73,9 @@ func (s *Service) GetSelfDeploySignal(ctx context.Context, input GetSelfDeploySi
 	if repository.ProjectID != input.ProjectID || repository.Status != enum.RepositoryStatusActive {
 		return SelfDeploySignalResult{Status: enum.SelfDeploySignalStatusRepositoryBindingNotFound, SafeReason: "repository_binding_not_active"}, nil
 	}
+	if reason := selfDeploySourceBindingMismatchReason(signal, repository); reason != "" {
+		return SelfDeploySignalResult{Status: enum.SelfDeploySignalStatusRepositoryBindingNotFound, SafeReason: reason}, nil
+	}
 	if signal.BaseBranch != "" && repository.DefaultBranch != "" && signal.BaseBranch != repository.DefaultBranch {
 		return SelfDeploySignalResult{Status: enum.SelfDeploySignalStatusRepositoryBindingNotFound, SafeReason: "provider_signal_branch_mismatch"}, nil
 	}
@@ -158,6 +161,29 @@ func (s *Service) selfDeployRepositoryBinding(ctx context.Context, input GetSelf
 		return entity.RepositoryBinding{}, false, err
 	}
 	return repository, true, nil
+}
+
+func selfDeploySourceBindingMismatchReason(signal RepositoryChangeSignal, repository entity.RepositoryBinding) string {
+	providerSlug, err := repositoryProviderSlug(repository.Provider)
+	if err != nil {
+		return "repository_provider_invalid"
+	}
+	if signal.ProviderSlug != providerSlug {
+		return "provider_signal_provider_mismatch"
+	}
+	owner, name := providerOwnerNameFromFullName(signal.RepositoryFullName, "", "")
+	if owner == "" || name == "" {
+		return "provider_signal_repository_ref_missing"
+	}
+	if owner != strings.TrimSpace(repository.ProviderOwner) || name != strings.TrimSpace(repository.ProviderName) {
+		return "provider_signal_repository_ref_mismatch"
+	}
+	if signal.ProviderRepositoryID != "" &&
+		strings.TrimSpace(repository.ProviderRepositoryID) != "" &&
+		signal.ProviderRepositoryID != strings.TrimSpace(repository.ProviderRepositoryID) {
+		return "provider_signal_provider_repository_mismatch"
+	}
+	return ""
 }
 
 func repositoryBindingLookup(signal RepositoryChangeSignal) (enum.RepositoryProvider, string, string, bool) {

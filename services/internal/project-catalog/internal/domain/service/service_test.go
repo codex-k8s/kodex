@@ -2004,6 +2004,94 @@ func TestGetSelfDeploySignalReturnsReadyProjectSideInput(t *testing.T) {
 	}
 }
 
+func TestGetSelfDeploySignalBlocksProviderSourceBindingMismatch(t *testing.T) {
+	ctx := context.Background()
+	cases := []struct {
+		name   string
+		mutate func(*RepositoryChangeSignal)
+		reason string
+	}{
+		{
+			name: "provider slug mismatch",
+			mutate: func(signal *RepositoryChangeSignal) {
+				signal.ProviderSlug = "gitlab"
+			},
+			reason: "provider_signal_provider_mismatch",
+		},
+		{
+			name: "repository full name missing",
+			mutate: func(signal *RepositoryChangeSignal) {
+				signal.RepositoryFullName = ""
+			},
+			reason: "provider_signal_repository_ref_missing",
+		},
+		{
+			name: "repository full name mismatch",
+			mutate: func(signal *RepositoryChangeSignal) {
+				signal.RepositoryFullName = "codex-k8s/other"
+			},
+			reason: "provider_signal_repository_ref_mismatch",
+		},
+		{
+			name: "provider repository id mismatch",
+			mutate: func(signal *RepositoryChangeSignal) {
+				signal.ProviderRepositoryID = "R_other"
+			},
+			reason: "provider_signal_provider_repository_mismatch",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			projectID := uuid.New()
+			repositoryID := uuid.New()
+			policyID := uuid.New()
+			commitSHA := "abcdef0123456789abcdef0123456789abcdef01"
+			store := newMemoryRepository()
+			store.repositories[repositoryID] = activeSelfDeployRepository(projectID, repositoryID)
+			store.policies[policyID] = activeSelfDeployPolicy(projectID, repositoryID, policyID, commitSHA, []byte(`{"spec":{"services":[{"key":"api"}]}}`))
+			store.serviceDescriptors[policyID] = []entity.ServiceDescriptor{
+				activeSelfDeployDescriptor(projectID, repositoryID, policyID, "api"),
+			}
+			signal := RepositoryChangeSignal{
+				SignalID:              "signal-1",
+				SignalKey:             "provider:github:repository_change:push:codex-k8s/kodex:main:" + commitSHA,
+				Kind:                  "push",
+				ProviderSlug:          "github",
+				RepositoryFullName:    "codex-k8s/kodex",
+				ProviderRepositoryID:  "R_123",
+				Ref:                   "refs/heads/main",
+				BaseBranch:            "main",
+				CommitSHA:             commitSHA,
+				PathSummaryStatus:     RepositoryChangePathSummaryStatusReady,
+				PathCategories:        []RepositoryChangePathCategoryCount{{Category: enum.SelfDeployPathCategoryServiceSource, Count: 1}},
+				DeployRelevantChanged: true,
+				ChangeFingerprint:     "sha256:provider-change",
+			}
+			tc.mutate(&signal)
+			reader := &fakeRepositoryChangeSignalReader{
+				result: RepositoryChangeSignalReadResult{
+					Status: ProviderOwnedDataStatusReady,
+					Signal: signal,
+				},
+			}
+			svc := NewWithConfig(store, fixedClock{}, &sequenceIDs{}, Config{RepositoryChangeSignals: reader})
+
+			result, err := svc.GetSelfDeploySignal(ctx, GetSelfDeploySignalInput{
+				ProjectID:         projectID,
+				RepositoryID:      &repositoryID,
+				ProviderSignalKey: signal.SignalKey,
+				Meta:              queryMeta(),
+			})
+			if err != nil {
+				t.Fatalf("GetSelfDeploySignal(): %v", err)
+			}
+			if result.Status != enum.SelfDeploySignalStatusRepositoryBindingNotFound || result.SafeReason != tc.reason {
+				t.Fatalf("result = %+v, want repository binding blocked with reason %q", result, tc.reason)
+			}
+		})
+	}
+}
+
 func TestGetSelfDeploySignalRequiresServicesPolicyReconcileWhenPolicyCommitIsStale(t *testing.T) {
 	ctx := context.Background()
 	projectID := uuid.New()
