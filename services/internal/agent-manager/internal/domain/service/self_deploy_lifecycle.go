@@ -394,7 +394,8 @@ func validSelfDeployPlanStatus(status enum.SelfDeployPlanStatus) bool {
 
 func validSelfDeployPathCategory(category enum.SelfDeployPathCategory) bool {
 	switch category {
-	case enum.SelfDeployPathCategoryServiceSource,
+	case enum.SelfDeployPathCategoryServicesPolicy,
+		enum.SelfDeployPathCategoryServiceSource,
 		enum.SelfDeployPathCategoryServiceConfig,
 		enum.SelfDeployPathCategoryDeployManifest,
 		enum.SelfDeployPathCategoryRuntimeConfig,

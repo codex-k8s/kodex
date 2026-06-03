@@ -135,18 +135,23 @@ Codex session state сохраняется как JSON/JSONL-объект в S3-
 ```mermaid
 sequenceDiagram
   participant Provider as provider-hub
+  participant Log as platform-event-log
   participant PC as project-catalog
   participant AM as agent-manager
   participant GOV as governance-manager
   participant R as runtime-manager
-  Provider-->>PC: safe merge/push signal ref
-  PC-->>AM: safe project/repository signal + services.yaml ref/digest
+  Provider-->>Log: provider.repository.changed
+  AM-->>Log: consume provider signal ref
+  AM->>PC: GetSelfDeploySignal(provider signal ref, source refs)
+  PC-->>AM: ready safe input или non-ready status
   AM->>AM: CreateSelfDeployPlanFromSignal(signal ref, source ref, service keys, path categories)
   AM-->>GOV: refs для gate/release approval
   Note over AM,R: build/deploy jobs не создаются до approval
 ```
 
 `agent-manager` владеет только orchestration state плана: какой safe signal получен, какие service keys/path categories затронуты, какой digest `services.yaml` принят как вход и какие runtime job types ожидаются после approval. `project-catalog` остаётся владельцем проектной декларации и проверенной проекции `services.yaml`, `provider-hub` — владельцем provider signal и provider-native фактов, `governance-manager` — владельцем approval/release decision, `runtime-manager` — владельцем будущих build/deploy jobs и их исполнения.
+
+Встроенный consumer `agent-manager` читает `provider.repository.changed` только как безопасный trigger с `provider_signal_ref` и source refs. Для live provider-owned signal без project fields consumer использует обязательный `KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_PROJECT_ID`, а затем вызывает `project-catalog.GetSelfDeploySignal`: только статус `ready` превращается в `CreateSelfDeployPlanFromSignal`; статусы `needs_services_policy_reconcile`, `needs_repository_change_summary` и другие non-ready статусы фиксируются как безопасная диагностика ожидания и не создают ложный plan. `agent-manager` не подставляет `path_digest` вместо `services_yaml_digest` и не вычисляет affected service keys.
 
 `CreateSelfDeployPlanFromSignal` фиксирует статус `pending_approval`, плановый fingerprint и событие `agent.self_deploy.plan_requested` из безопасного provider/project signal. `provider_signal_ref` обязателен: повтор с тем же signal ref и fingerprint возвращает существующий план, а другой fingerprint по тому же signal ref считается конфликтом. `CreateSelfDeployPlan` остаётся typed/manual входом для уже подготовленного plan input. Ни одна команда не вызывает `runtime-manager.CreateJob`, не пишет provider/project payload и не читает Kubernetes. Для будущего перехода к build/deploy следующий срез должен использовать сохранённые refs/fingerprint и typed governance decision ref; автоматический deploy после merge в `main` остаётся запрещённым.
 
@@ -238,7 +243,7 @@ Self-deploy plan не является runtime job request. Он хранит т
 
 Если ролевой агент в слоте работает через `gh` или нативный API провайдера, он передаёт платформе сигнал, а `provider-hub` догоняет проекцию webhook/reconciliation.
 
-Для self-deploy `provider-hub` остаётся источником safe merge/push signal ref и provider-native фактов, а `project-catalog` — источником project/repository refs и проверенной `services.yaml` проекции. `agent-manager` не читает raw webhook body, provider response или diff; он принимает только безопасный signal ref и нормализованные refs, достаточные для pending plan.
+Для self-deploy `provider-hub` остаётся источником safe merge/push signal ref и provider-native фактов, а `project-catalog` — источником project/repository refs, связи путей с service keys и проверенной `services.yaml` проекции. `agent-manager` не читает raw webhook body, provider response или diff; он вызывает `project-catalog.GetSelfDeploySignal` по provider signal ref и принимает только `ready` safe input, достаточный для pending plan.
 
 ### `platform-mcp-server`
 

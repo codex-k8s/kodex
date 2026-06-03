@@ -124,16 +124,17 @@ var selfDeployPlanStatusesFromProto = enumMap(
 	enumPair(agentsv1.SelfDeployPlanStatus_SELF_DEPLOY_PLAN_STATUS_FAILED, enum.SelfDeployPlanStatusFailed),
 )
 
-var selfDeployPathCategoriesFromProto = map[agentsv1.SelfDeployPathCategory]enum.SelfDeployPathCategory{
-	agentsv1.SelfDeployPathCategory_SELF_DEPLOY_PATH_CATEGORY_SERVICE_SOURCE:  enum.SelfDeployPathCategoryServiceSource,
-	agentsv1.SelfDeployPathCategory_SELF_DEPLOY_PATH_CATEGORY_SERVICE_CONFIG:  enum.SelfDeployPathCategoryServiceConfig,
-	agentsv1.SelfDeployPathCategory_SELF_DEPLOY_PATH_CATEGORY_DEPLOY_MANIFEST: enum.SelfDeployPathCategoryDeployManifest,
-	agentsv1.SelfDeployPathCategory_SELF_DEPLOY_PATH_CATEGORY_RUNTIME_CONFIG:  enum.SelfDeployPathCategoryRuntimeConfig,
-	agentsv1.SelfDeployPathCategory_SELF_DEPLOY_PATH_CATEGORY_DOCUMENTATION:   enum.SelfDeployPathCategoryDocumentation,
-	agentsv1.SelfDeployPathCategory_SELF_DEPLOY_PATH_CATEGORY_TEST:            enum.SelfDeployPathCategoryTest,
-	agentsv1.SelfDeployPathCategory_SELF_DEPLOY_PATH_CATEGORY_PLATFORM_POLICY: enum.SelfDeployPathCategoryPlatformPolicy,
-	agentsv1.SelfDeployPathCategory_SELF_DEPLOY_PATH_CATEGORY_OTHER:           enum.SelfDeployPathCategoryOther,
-}
+var selfDeployPathCategoriesFromProto = enumMap(
+	enumPair(agentsv1.SelfDeployPathCategory_SELF_DEPLOY_PATH_CATEGORY_SERVICES_POLICY, enum.SelfDeployPathCategoryServicesPolicy),
+	enumPair(agentsv1.SelfDeployPathCategory_SELF_DEPLOY_PATH_CATEGORY_SERVICE_SOURCE, enum.SelfDeployPathCategoryServiceSource),
+	enumPair(agentsv1.SelfDeployPathCategory_SELF_DEPLOY_PATH_CATEGORY_SERVICE_CONFIG, enum.SelfDeployPathCategoryServiceConfig),
+	enumPair(agentsv1.SelfDeployPathCategory_SELF_DEPLOY_PATH_CATEGORY_DEPLOY_MANIFEST, enum.SelfDeployPathCategoryDeployManifest),
+	enumPair(agentsv1.SelfDeployPathCategory_SELF_DEPLOY_PATH_CATEGORY_RUNTIME_CONFIG, enum.SelfDeployPathCategoryRuntimeConfig),
+	enumPair(agentsv1.SelfDeployPathCategory_SELF_DEPLOY_PATH_CATEGORY_DOCUMENTATION, enum.SelfDeployPathCategoryDocumentation),
+	enumPair(agentsv1.SelfDeployPathCategory_SELF_DEPLOY_PATH_CATEGORY_TEST, enum.SelfDeployPathCategoryTest),
+	enumPair(agentsv1.SelfDeployPathCategory_SELF_DEPLOY_PATH_CATEGORY_PLATFORM_POLICY, enum.SelfDeployPathCategoryPlatformPolicy),
+	enumPair(agentsv1.SelfDeployPathCategory_SELF_DEPLOY_PATH_CATEGORY_OTHER, enum.SelfDeployPathCategoryOther),
+)
 
 var selfDeployRuntimeJobTypesFromProto = map[runtimev1.JobType]enum.SelfDeployRuntimeJobType{
 	runtimev1.JobType_JOB_TYPE_BUILD:        enum.SelfDeployRuntimeJobTypeBuild,

@@ -63,22 +63,14 @@ type interactionResponseConsumerStarter struct {
 }
 
 func (s interactionResponseConsumerStarter) start(ctx context.Context) error {
-	if !s.cfg.InteractionResponseConsumerEnabled {
-		return nil
-	}
-	logger := s.logger
-	if logger == nil {
-		logger = slog.Default()
-	}
-	if err := s.validate(); err != nil {
-		return err
-	}
-	runner, err := s.runner(logger)
-	if err != nil {
-		return err
-	}
-	go runInteractionResponseConsumer(ctx, runner, logger, s.errCh)
-	return nil
+	return startManagedEventConsumer(ctx, managedEventConsumerStarter{
+		enabled:  s.cfg.InteractionResponseConsumerEnabled,
+		logger:   s.logger,
+		errCh:    s.errCh,
+		validate: s.validate,
+		runner:   s.runner,
+		run:      runInteractionResponseConsumer,
+	})
 }
 
 func (s interactionResponseConsumerStarter) validate() error {

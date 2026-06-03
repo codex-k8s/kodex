@@ -8,6 +8,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/caarlos0/env/v11"
+	"github.com/google/uuid"
 
 	eventconsumer "github.com/codex-k8s/kodex/libs/go/eventconsumer"
 	grpcserver "github.com/codex-k8s/kodex/libs/go/grpcserver"
@@ -97,6 +98,21 @@ type Config struct {
 	InteractionResponseConsumerFailureMessageLimit int           `env:"KODEX_AGENT_MANAGER_INTERACTION_RESPONSE_CONSUMER_FAILURE_MESSAGE_LIMIT" envDefault:"512"`
 	InteractionResponseConsumerConcurrencyLimit    int           `env:"KODEX_AGENT_MANAGER_INTERACTION_RESPONSE_CONSUMER_CONCURRENCY_LIMIT" envDefault:"2"`
 	InteractionResponseConsumerMaxAttempts         int           `env:"KODEX_AGENT_MANAGER_INTERACTION_RESPONSE_CONSUMER_MAX_ATTEMPTS" envDefault:"5"`
+	SelfDeploySignalConsumerEnabled                bool          `env:"KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_CONSUMER_ENABLED" envDefault:"true"`
+	SelfDeploySignalConsumerName                   string        `env:"KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_CONSUMER_NAME" envDefault:"agent-manager.self-deploy-signal"`
+	SelfDeploySignalConsumerLeaseOwner             string        `env:"KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_CONSUMER_LEASE_OWNER"`
+	SelfDeploySignalConsumerProjectID              string        `env:"KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_PROJECT_ID"`
+	SelfDeploySignalConsumerRepositoryID           string        `env:"KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_REPOSITORY_ID"`
+	SelfDeploySignalConsumerTargetBranch           string        `env:"KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_TARGET_BRANCH" envDefault:"main"`
+	SelfDeploySignalConsumerBatchSize              int           `env:"KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_CONSUMER_BATCH_SIZE" envDefault:"20"`
+	SelfDeploySignalConsumerPollInterval           time.Duration `env:"KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_CONSUMER_POLL_INTERVAL" envDefault:"1s"`
+	SelfDeploySignalConsumerLeaseTTL               time.Duration `env:"KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_CONSUMER_LEASE_TTL" envDefault:"30s"`
+	SelfDeploySignalConsumerHandlerTimeout         time.Duration `env:"KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_CONSUMER_HANDLER_TIMEOUT" envDefault:"10s"`
+	SelfDeploySignalConsumerRetryInitialDelay      time.Duration `env:"KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_CONSUMER_RETRY_INITIAL_DELAY" envDefault:"5s"`
+	SelfDeploySignalConsumerRetryMaxDelay          time.Duration `env:"KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_CONSUMER_RETRY_MAX_DELAY" envDefault:"5m"`
+	SelfDeploySignalConsumerFailureMessageLimit    int           `env:"KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_CONSUMER_FAILURE_MESSAGE_LIMIT" envDefault:"512"`
+	SelfDeploySignalConsumerConcurrencyLimit       int           `env:"KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_CONSUMER_CONCURRENCY_LIMIT" envDefault:"1"`
+	SelfDeploySignalConsumerMaxAttempts            int           `env:"KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_CONSUMER_MAX_ATTEMPTS" envDefault:"24"`
 }
 
 // LoadConfig reads process configuration from environment variables.
@@ -138,6 +154,12 @@ func (cfg Config) Validate() error {
 	}
 	if cfg.RuntimePreparationEnabled && strings.TrimSpace(cfg.ProjectCatalogGRPCAuthToken) == "" {
 		return fmt.Errorf("KODEX_AGENT_MANAGER_PROJECT_CATALOG_GRPC_AUTH_TOKEN is required when runtime preparation is enabled")
+	}
+	if cfg.needsProjectCatalogClient() && strings.TrimSpace(cfg.ProjectCatalogGRPCAddr) == "" {
+		return fmt.Errorf("KODEX_AGENT_MANAGER_PROJECT_CATALOG_GRPC_ADDR is required when project-catalog integration is enabled")
+	}
+	if cfg.needsProjectCatalogClient() && strings.TrimSpace(cfg.ProjectCatalogGRPCAuthToken) == "" {
+		return fmt.Errorf("KODEX_AGENT_MANAGER_PROJECT_CATALOG_GRPC_AUTH_TOKEN is required when project-catalog integration is enabled")
 	}
 	if cfg.RuntimePreparationEnabled && strings.TrimSpace(cfg.RuntimeManagerGRPCAddr) == "" {
 		return fmt.Errorf("KODEX_AGENT_MANAGER_RUNTIME_MANAGER_GRPC_ADDR is required when runtime preparation is enabled")
@@ -207,6 +229,15 @@ func (cfg Config) Validate() error {
 		{name: "KODEX_AGENT_MANAGER_INTERACTION_RESPONSE_CONSUMER_FAILURE_MESSAGE_LIMIT", valid: cfg.InteractionResponseConsumerFailureMessageLimit > 0},
 		{name: "KODEX_AGENT_MANAGER_INTERACTION_RESPONSE_CONSUMER_CONCURRENCY_LIMIT", valid: cfg.InteractionResponseConsumerConcurrencyLimit > 0},
 		{name: "KODEX_AGENT_MANAGER_INTERACTION_RESPONSE_CONSUMER_MAX_ATTEMPTS", valid: cfg.InteractionResponseConsumerMaxAttempts > 0},
+		{name: "KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_CONSUMER_BATCH_SIZE", valid: cfg.SelfDeploySignalConsumerBatchSize > 0},
+		{name: "KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_CONSUMER_POLL_INTERVAL", valid: cfg.SelfDeploySignalConsumerPollInterval > 0},
+		{name: "KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_CONSUMER_LEASE_TTL", valid: cfg.SelfDeploySignalConsumerLeaseTTL > 0},
+		{name: "KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_CONSUMER_HANDLER_TIMEOUT", valid: cfg.SelfDeploySignalConsumerHandlerTimeout > 0},
+		{name: "KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_CONSUMER_RETRY_INITIAL_DELAY", valid: cfg.SelfDeploySignalConsumerRetryInitialDelay > 0},
+		{name: "KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_CONSUMER_RETRY_MAX_DELAY", valid: cfg.SelfDeploySignalConsumerRetryMaxDelay >= cfg.SelfDeploySignalConsumerRetryInitialDelay},
+		{name: "KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_CONSUMER_FAILURE_MESSAGE_LIMIT", valid: cfg.SelfDeploySignalConsumerFailureMessageLimit > 0},
+		{name: "KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_CONSUMER_CONCURRENCY_LIMIT", valid: cfg.SelfDeploySignalConsumerConcurrencyLimit > 0},
+		{name: "KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_CONSUMER_MAX_ATTEMPTS", valid: cfg.SelfDeploySignalConsumerMaxAttempts > 0},
 	} {
 		if !item.valid {
 			return fmt.Errorf("%s is invalid", item.name)
@@ -237,6 +268,18 @@ func (cfg Config) Validate() error {
 	}
 	if cfg.InteractionResponseConsumerEnabled && strings.TrimSpace(cfg.InteractionResponseConsumerName) == "" {
 		return fmt.Errorf("KODEX_AGENT_MANAGER_INTERACTION_RESPONSE_CONSUMER_NAME is required when interaction response consumer is enabled")
+	}
+	if cfg.SelfDeploySignalConsumerEnabled && strings.TrimSpace(cfg.SelfDeploySignalConsumerName) == "" {
+		return fmt.Errorf("KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_CONSUMER_NAME is required when self-deploy signal consumer is enabled")
+	}
+	if cfg.SelfDeploySignalConsumerEnabled && strings.TrimSpace(cfg.SelfDeploySignalConsumerTargetBranch) == "" {
+		return fmt.Errorf("KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_TARGET_BRANCH is required when self-deploy signal consumer is enabled")
+	}
+	if cfg.SelfDeploySignalConsumerEnabled {
+		projectID, err := uuid.Parse(strings.TrimSpace(cfg.SelfDeploySignalConsumerProjectID))
+		if err != nil || projectID == uuid.Nil {
+			return fmt.Errorf("KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_PROJECT_ID must be a non-empty uuid when self-deploy signal consumer is enabled")
+		}
 	}
 	if cfg.needsEventLogDatabase() && strings.TrimSpace(cfg.EventLogDatabaseDSN) == "" {
 		return fmt.Errorf("KODEX_AGENT_MANAGER_EVENT_LOG_DATABASE_DSN is required for event-log publisher or consumer")
@@ -286,7 +329,13 @@ func safeCodexSessionConfigRef(value string) bool {
 }
 
 func (cfg Config) needsEventLogDatabase() bool {
-	return cfg.InteractionResponseConsumerEnabled || (cfg.OutboxDispatchEnabled && strings.TrimSpace(cfg.OutboxPublisherKind) == outboxlib.PublisherKindPostgresEventLog)
+	return cfg.InteractionResponseConsumerEnabled ||
+		cfg.SelfDeploySignalConsumerEnabled ||
+		(cfg.OutboxDispatchEnabled && strings.TrimSpace(cfg.OutboxPublisherKind) == outboxlib.PublisherKindPostgresEventLog)
+}
+
+func (cfg Config) needsProjectCatalogClient() bool {
+	return cfg.RuntimePreparationEnabled || cfg.SelfDeploySignalConsumerEnabled
 }
 
 // DatabasePoolSettings converts service env config to the shared pgxpool contract.
@@ -332,7 +381,29 @@ func (cfg Config) OutboxDispatcherConfig() outboxlib.Config {
 
 // InteractionResponseConsumerConfig converts env fields to the shared event consumer runtime.
 func (cfg Config) InteractionResponseConsumerConfig() eventconsumer.Config {
-	runtime := cfg.interactionResponseConsumerRuntime()
+	return eventConsumerConfig(cfg.interactionResponseConsumerRuntime())
+}
+
+// SelfDeploySignalConsumerConfig converts env fields to the shared event consumer runtime.
+func (cfg Config) SelfDeploySignalConsumerConfig() eventconsumer.Config {
+	return eventConsumerConfig(cfg.selfDeploySignalConsumerRuntime())
+}
+
+type eventConsumerRuntime struct {
+	name                string
+	leaseOwner          string
+	batchSize           int
+	pollInterval        time.Duration
+	leaseTTL            time.Duration
+	handlerTimeout      time.Duration
+	retryInitialDelay   time.Duration
+	retryMaxDelay       time.Duration
+	failureMessageLimit int
+	concurrencyLimit    int
+	maxAttempts         int
+}
+
+func eventConsumerConfig(runtime eventConsumerRuntime) eventconsumer.Config {
 	return eventconsumer.ConfigFromRuntimeValues(
 		runtime.name,
 		runtime.leaseOwner,
@@ -348,36 +419,42 @@ func (cfg Config) InteractionResponseConsumerConfig() eventconsumer.Config {
 	)
 }
 
-type interactionResponseConsumerRuntime struct {
-	name                string
-	leaseOwner          string
-	batchSize           int
-	pollInterval        time.Duration
-	leaseTTL            time.Duration
-	handlerTimeout      time.Duration
-	retryInitialDelay   time.Duration
-	retryMaxDelay       time.Duration
-	failureMessageLimit int
-	concurrencyLimit    int
-	maxAttempts         int
+func normalizeEventConsumerRuntime(runtime eventConsumerRuntime, defaultLeaseOwner string) eventConsumerRuntime {
+	trimmedLeaseOwner := strings.TrimSpace(runtime.leaseOwner)
+	if trimmedLeaseOwner == "" {
+		trimmedLeaseOwner = eventconsumer.DefaultLeaseOwner(defaultLeaseOwner)
+	}
+	runtime.leaseOwner = trimmedLeaseOwner
+	return runtime
 }
 
-func (cfg Config) interactionResponseConsumerRuntime() interactionResponseConsumerRuntime {
-	leaseOwner := strings.TrimSpace(cfg.InteractionResponseConsumerLeaseOwner)
-	if leaseOwner == "" {
-		leaseOwner = eventconsumer.DefaultLeaseOwner("agent-manager-human-gate-response")
-	}
-	return interactionResponseConsumerRuntime{
-		name:                cfg.InteractionResponseConsumerName,
-		leaseOwner:          leaseOwner,
-		batchSize:           cfg.InteractionResponseConsumerBatchSize,
-		pollInterval:        cfg.InteractionResponseConsumerPollInterval,
-		leaseTTL:            cfg.InteractionResponseConsumerLeaseTTL,
-		handlerTimeout:      cfg.InteractionResponseConsumerHandlerTimeout,
-		retryInitialDelay:   cfg.InteractionResponseConsumerRetryInitialDelay,
-		retryMaxDelay:       cfg.InteractionResponseConsumerRetryMaxDelay,
-		failureMessageLimit: cfg.InteractionResponseConsumerFailureMessageLimit,
-		concurrencyLimit:    cfg.InteractionResponseConsumerConcurrencyLimit,
-		maxAttempts:         cfg.InteractionResponseConsumerMaxAttempts,
-	}
+func (cfg Config) interactionResponseConsumerRuntime() eventConsumerRuntime {
+	runtime := eventConsumerRuntime{}
+	runtime.name = cfg.InteractionResponseConsumerName
+	runtime.leaseOwner = cfg.InteractionResponseConsumerLeaseOwner
+	runtime.batchSize = cfg.InteractionResponseConsumerBatchSize
+	runtime.pollInterval = cfg.InteractionResponseConsumerPollInterval
+	runtime.leaseTTL = cfg.InteractionResponseConsumerLeaseTTL
+	runtime.handlerTimeout = cfg.InteractionResponseConsumerHandlerTimeout
+	runtime.retryInitialDelay = cfg.InteractionResponseConsumerRetryInitialDelay
+	runtime.retryMaxDelay = cfg.InteractionResponseConsumerRetryMaxDelay
+	runtime.failureMessageLimit = cfg.InteractionResponseConsumerFailureMessageLimit
+	runtime.concurrencyLimit = cfg.InteractionResponseConsumerConcurrencyLimit
+	runtime.maxAttempts = cfg.InteractionResponseConsumerMaxAttempts
+	return normalizeEventConsumerRuntime(runtime, "agent-manager-human-gate-response")
+}
+
+func (cfg Config) selfDeploySignalConsumerRuntime() eventConsumerRuntime {
+	runtime := eventConsumerRuntime{name: cfg.SelfDeploySignalConsumerName}
+	runtime.leaseOwner = cfg.SelfDeploySignalConsumerLeaseOwner
+	runtime.batchSize = cfg.SelfDeploySignalConsumerBatchSize
+	runtime.pollInterval = cfg.SelfDeploySignalConsumerPollInterval
+	runtime.leaseTTL = cfg.SelfDeploySignalConsumerLeaseTTL
+	runtime.handlerTimeout = cfg.SelfDeploySignalConsumerHandlerTimeout
+	runtime.retryInitialDelay = cfg.SelfDeploySignalConsumerRetryInitialDelay
+	runtime.retryMaxDelay = cfg.SelfDeploySignalConsumerRetryMaxDelay
+	runtime.failureMessageLimit = cfg.SelfDeploySignalConsumerFailureMessageLimit
+	runtime.concurrencyLimit = cfg.SelfDeploySignalConsumerConcurrencyLimit
+	runtime.maxAttempts = cfg.SelfDeploySignalConsumerMaxAttempts
+	return normalizeEventConsumerRuntime(runtime, "agent-manager-self-deploy-signal")
 }

@@ -241,6 +241,14 @@ spec:
               value: "{{ envOr "KODEX_AGENT_MANAGER_INTERACTION_RESPONSE_CONSUMER_CONCURRENCY_LIMIT" "2" }}"
             - name: KODEX_AGENT_MANAGER_INTERACTION_RESPONSE_CONSUMER_MAX_ATTEMPTS
               value: "{{ envOr "KODEX_AGENT_MANAGER_INTERACTION_RESPONSE_CONSUMER_MAX_ATTEMPTS" "5" }}"
+            - name: KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_CONSUMER_ENABLED
+              value: "{{ envOr "KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_CONSUMER_ENABLED" "true" }}"
+            - name: KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_PROJECT_ID
+              value: "{{ envOr "KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_PROJECT_ID" "" }}"
+            - name: KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_CONSUMER_NAME
+              value: "{{ envOr "KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_CONSUMER_NAME" "agent-manager.self-deploy-signal" }}"
+            - name: KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_TARGET_BRANCH
+              value: "{{ envOr "KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_TARGET_BRANCH" "main" }}"
           readinessProbe:
             httpGet:
               path: /health/readyz

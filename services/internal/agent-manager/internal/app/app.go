@@ -53,7 +53,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	if packageHubConn != nil {
 		defer func() { _ = packageHubConn.Close() }()
 	}
-	workspacePolicyResolver, projectCatalogConn, err := newWorkspacePolicyResolver(cfg)
+	workspacePolicyResolver, selfDeploySignalReader, projectCatalogConn, err := newProjectCatalogAdapters(cfg)
 	if err != nil {
 		return err
 	}
@@ -155,6 +155,9 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	if err := startInteractionResponseConsumer(ctx, cfg, eventLogPool, agentService, logger, errCh); err != nil {
 		return err
 	}
+	if err := startSelfDeploySignalConsumer(ctx, cfg, eventLogPool, selfDeploySignalReader, agentService, logger, errCh); err != nil {
+		return err
+	}
 
 	select {
 	case <-ctx.Done():
@@ -190,17 +193,39 @@ func connectPackageHubGuidance(clientConfig packagehubclient.Config) (agentservi
 	return resolver, conn, nil
 }
 
-func newWorkspacePolicyResolver(cfg Config) (agentservice.WorkspacePolicyResolver, *grpcruntime.ClientConn, error) {
-	if cfg.RuntimePreparationEnabled {
-		return connectOwnerService[agentservice.WorkspacePolicyResolver](projectcatalogclient.Config{
-			Addr:      cfg.ProjectCatalogGRPCAddr,
-			AuthToken: cfg.ProjectCatalogGRPCAuthToken,
-			Timeout:   cfg.ProjectCatalogReadTimeout,
-		}, projectcatalogclient.NewConnection, func(conn *grpcruntime.ClientConn, clientConfig projectcatalogclient.Config) (agentservice.WorkspacePolicyResolver, error) {
-			return projectcatalogclient.NewWorkspacePolicyResolver(projectsv1.NewProjectCatalogServiceClient(conn), clientConfig)
-		})
+func newProjectCatalogAdapters(cfg Config) (agentservice.WorkspacePolicyResolver, agentservice.SelfDeploySignalReader, *grpcruntime.ClientConn, error) {
+	workspacePolicyResolver := agentservice.WorkspacePolicyResolver(agentservice.DisabledWorkspacePolicyResolver{})
+	selfDeploySignalReader := agentservice.SelfDeploySignalReader(agentservice.DisabledSelfDeploySignalReader{})
+	if !cfg.needsProjectCatalogClient() {
+		return workspacePolicyResolver, selfDeploySignalReader, nil, nil
 	}
-	return agentservice.DisabledWorkspacePolicyResolver{}, nil, nil
+	clientConfig := projectcatalogclient.Config{
+		Addr:      cfg.ProjectCatalogGRPCAddr,
+		AuthToken: cfg.ProjectCatalogGRPCAuthToken,
+		Timeout:   cfg.ProjectCatalogReadTimeout,
+	}
+	conn, err := projectcatalogclient.NewConnection(clientConfig)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	client := projectsv1.NewProjectCatalogServiceClient(conn)
+	if cfg.RuntimePreparationEnabled {
+		resolver, err := projectcatalogclient.NewWorkspacePolicyResolver(client, clientConfig)
+		if err != nil {
+			_ = conn.Close()
+			return nil, nil, nil, err
+		}
+		workspacePolicyResolver = resolver
+	}
+	if cfg.SelfDeploySignalConsumerEnabled {
+		reader, err := projectcatalogclient.NewSelfDeploySignalReader(client, clientConfig)
+		if err != nil {
+			_ = conn.Close()
+			return nil, nil, nil, err
+		}
+		selfDeploySignalReader = reader
+	}
+	return workspacePolicyResolver, selfDeploySignalReader, conn, nil
 }
 
 func newRuntimePreparer(cfg Config) (agentservice.RuntimePreparer, agentservice.RuntimeJobCreator, agentservice.RuntimeJobReader, *grpcruntime.ClientConn, error) {

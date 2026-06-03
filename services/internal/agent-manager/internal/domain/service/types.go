@@ -192,6 +192,66 @@ type CreateSelfDeployPlanFromSignalInput struct {
 	CreateSelfDeployPlanInput
 }
 
+type SelfDeploySignalStatus string
+
+const (
+	SelfDeploySignalStatusReady                        SelfDeploySignalStatus = "ready"
+	SelfDeploySignalStatusNeedsServicesPolicyReconcile SelfDeploySignalStatus = "needs_services_policy_reconcile"
+	SelfDeploySignalStatusProviderSignalNotFound       SelfDeploySignalStatus = "provider_signal_not_found"
+	SelfDeploySignalStatusProviderSignalNotReady       SelfDeploySignalStatus = "provider_signal_not_ready"
+	SelfDeploySignalStatusRepositoryBindingNotFound    SelfDeploySignalStatus = "repository_binding_not_found"
+	SelfDeploySignalStatusServicesPolicyNotFound       SelfDeploySignalStatus = "services_policy_not_found"
+	SelfDeploySignalStatusServicesPolicyNotReady       SelfDeploySignalStatus = "services_policy_not_ready"
+	SelfDeploySignalStatusNotDeployRelevant            SelfDeploySignalStatus = "not_deploy_relevant"
+	SelfDeploySignalStatusNeedsRepositoryChangeSummary SelfDeploySignalStatus = "needs_repository_change_summary"
+)
+
+type SelfDeploySignalLookupInput struct {
+	Meta              value.CommandMeta
+	ProjectID         uuid.UUID
+	RepositoryID      *uuid.UUID
+	ProviderSignalID  string
+	ProviderSignalKey string
+}
+
+type SelfDeploySignalServicesYAML struct {
+	Ref         string
+	Digest      string
+	Fingerprint string
+	Version     int64
+}
+
+type SelfDeployGovernanceRequirement struct {
+	GateRequired   bool
+	RiskProfileRef string
+	GatePolicyRef  string
+}
+
+type SelfDeploySignal struct {
+	ProviderSignalRef         string
+	ProviderSignalID          string
+	ProviderSignalKey         string
+	ProjectRef                string
+	RepositoryRef             string
+	SourceRef                 string
+	MergeCommitSHA            string
+	ServicesYAML              SelfDeploySignalServicesYAML
+	AffectedServiceKeys       []string
+	PathCategories            []enum.SelfDeployPathCategory
+	ExpectedRuntimeJobTypes   []enum.SelfDeployRuntimeJobType
+	GovernanceRequirement     SelfDeployGovernanceRequirement
+	ProviderChangeFingerprint string
+	ProjectSignalFingerprint  string
+	SafeSummary               string
+	Version                   int64
+}
+
+type SelfDeploySignalReadResult struct {
+	Status     SelfDeploySignalStatus
+	Signal     SelfDeploySignal
+	SafeReason string
+}
+
 const (
 	RuntimeModeFullEnv = "full_env"
 

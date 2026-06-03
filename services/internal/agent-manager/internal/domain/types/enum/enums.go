@@ -214,6 +214,7 @@ const (
 type SelfDeployPathCategory string
 
 const (
+	SelfDeployPathCategoryServicesPolicy SelfDeployPathCategory = "services_policy"
 	SelfDeployPathCategoryServiceSource  SelfDeployPathCategory = "service_source"
 	SelfDeployPathCategoryServiceConfig  SelfDeployPathCategory = "service_config"
 	SelfDeployPathCategoryDeployManifest SelfDeployPathCategory = "deploy_manifest"

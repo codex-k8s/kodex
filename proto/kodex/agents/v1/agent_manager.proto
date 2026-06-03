@@ -528,6 +528,7 @@ enum SelfDeployPathCategory {
   SELF_DEPLOY_PATH_CATEGORY_TEST = 6;
   SELF_DEPLOY_PATH_CATEGORY_PLATFORM_POLICY = 7;
   SELF_DEPLOY_PATH_CATEGORY_OTHER = 8;
+  SELF_DEPLOY_PATH_CATEGORY_SERVICES_POLICY = 9;
 }
 
 // AutomationTriggerKind classifies automation input.
