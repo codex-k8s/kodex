@@ -45,7 +45,7 @@ export type AgentActivityKind = 'unspecified' | 'lifecycle' | 'tool_use' | 'tool
 
 export type AgentActivityStatus = 'unspecified' | 'planned' | 'started' | 'succeeded' | 'failed' | 'denied' | 'waiting' | 'cancelled' | 'skipped';
 
-export type GovernanceTargetType = 'unspecified' | 'transition' | 'pull_request' | 'release_candidate' | 'runtime_job' | 'policy_change' | 'document' | 'merge' | 'postdeploy' | 'rollback';
+export type GovernanceTargetType = 'unspecified' | 'transition' | 'pull_request' | 'release_candidate' | 'runtime_job' | 'policy_change' | 'document' | 'merge' | 'postdeploy' | 'rollback' | 'self_deploy_plan';
 
 export type GovernanceDecisionSummaryKind = 'unspecified' | 'risk_assessment' | 'review_signal' | 'gate_request' | 'gate_decision' | 'release_decision_package' | 'release_decision' | 'blocking_signal' | 'release_safety_state';
 
@@ -86,6 +86,8 @@ export type SelfDeployPlanStatusFilter = 'unspecified' | 'pending_approval' | 'a
 export type SelfDeployPathCategory = 'unspecified' | 'service_source' | 'service_config' | 'deploy_manifest' | 'runtime_config' | 'documentation' | 'test' | 'platform_policy' | 'other' | 'services_policy';
 
 export type SelfDeployGovernanceStatus = 'unavailable' | 'pending' | 'resolved';
+
+export type SelfDeployGateDecisionAction = 'approve' | 'reject' | 'request_changes';
 
 export type SelfDeployRuntimeStatus = 'unavailable' | 'pending' | 'stored_ref' | 'running' | 'completed' | 'failed';
 
@@ -240,6 +242,40 @@ export type SelfDeploySummaryResponse = {
     summary: SelfDeploySummary;
 };
 
+export type SelfDeployGateDecisionRequest = {
+    self_deploy_plan_ref: string;
+    action: SelfDeployGateDecisionAction;
+    comment?: string;
+    idempotency_key: string;
+    expected_version: number;
+    expected_status?: SelfDeployGovernanceStatus;
+    decision_policy_ref?: string;
+    interaction_request_ref?: string;
+    interaction_delivery_ref?: string;
+    interaction_callback_ref?: string;
+    interaction_decision_ref?: string;
+};
+
+export type SelfDeployGateDecisionResponse = {
+    request_id: string;
+    correlation_id?: string;
+    decision: SelfDeployGateDecisionSummary;
+};
+
+export type SelfDeployGateDecisionSummary = {
+    self_deploy_plan_ref: string;
+    gate_request_ref: string;
+    gate_request_id?: string;
+    gate_decision_ref?: string;
+    outcome: GovernanceGateOutcome;
+    action: SelfDeployGateDecisionAction;
+    status: SelfDeployGovernanceStatus;
+    gate_request_status?: GovernanceGateRequestStatus;
+    summary: string;
+    decided_at?: string;
+    version?: number;
+};
+
 export type SelfDeploySummary = {
     availability: SelfDeploySummaryAvailability;
     chain_status: SelfDeployChainStatus;
@@ -283,9 +319,13 @@ export type SelfDeployPlanSummary = {
 export type SelfDeployGovernanceSummary = {
     status: SelfDeployGovernanceStatus;
     gate_request_ref?: string;
+    gate_request_id?: string;
     gate_decision_ref?: string;
     release_decision_package_ref?: string;
     release_decision_ref?: string;
+    gate_policy_ref?: string;
+    gate_request_version?: number;
+    allowed_actions?: Array<SelfDeployGateDecisionAction>;
 };
 
 export type SelfDeployRuntimeSummary = {
@@ -732,6 +772,11 @@ export type SelfDeployProviderSignalRefQuery = string;
  * Фильтр self-deploy plan по статусу.
  */
 export type SelfDeployPlanStatusQuery = SelfDeployPlanStatusFilter;
+
+/**
+ * Local id governance gate request.
+ */
+export type GovernanceGateRequestIdPath = string;
 
 /**
  * Interaction request id.
@@ -1622,6 +1667,82 @@ export type GetSelfDeploySummaryResponses = {
 };
 
 export type GetSelfDeploySummaryResponse = GetSelfDeploySummaryResponses[keyof GetSelfDeploySummaryResponses];
+
+export type SubmitSelfDeployGateDecisionData = {
+    body: SelfDeployGateDecisionRequest;
+    headers: {
+        /**
+         * Идентификатор запроса для трассировки. Gateway может заменить невалидное значение.
+         */
+        'X-Kodex-Request-Id'?: string;
+        /**
+         * Безопасная ссылка на трассу.
+         */
+        'X-Kodex-Trace-Id'?: string;
+        /**
+         * Безопасная ссылка на пользовательскую сессию.
+         */
+        'X-Kodex-Session-Id'?: string;
+        /**
+         * Тип проверенного субъекта от внешнего auth boundary.
+         */
+        'X-Kodex-Actor-Type': 'user' | 'service' | 'agent' | 'external_account';
+        /**
+         * Safe id проверенного субъекта без email и имени.
+         */
+        'X-Kodex-Actor-Id': string;
+    };
+    path: {
+        /**
+         * Local id governance gate request.
+         */
+        gate_request_id: string;
+    };
+    query?: never;
+    url: '/v1/self-deploy/gates/{gate_request_id}/decision';
+};
+
+export type SubmitSelfDeployGateDecisionErrors = {
+    /**
+     * Невалидный запрос.
+     */
+    400: SafeError;
+    /**
+     * Не передан проверенный actor context.
+     */
+    401: SafeError;
+    /**
+     * Доменный сервис отказал в доступе.
+     */
+    403: SafeError;
+    /**
+     * Ресурс не найден или не виден вызывающей стороне.
+     */
+    404: SafeError;
+    /**
+     * Конфликт версии, lifecycle или action вне allowed actions.
+     */
+    409: SafeError;
+    /**
+     * Доменный сервис ограничил частоту запросов.
+     */
+    429: SafeError;
+    /**
+     * Доменный сервис временно недоступен.
+     */
+    503: SafeError;
+};
+
+export type SubmitSelfDeployGateDecisionError = SubmitSelfDeployGateDecisionErrors[keyof SubmitSelfDeployGateDecisionErrors];
+
+export type SubmitSelfDeployGateDecisionResponses = {
+    /**
+     * Решение владельца записано или идемпотентно подтверждено.
+     */
+    200: SelfDeployGateDecisionResponse;
+};
+
+export type SubmitSelfDeployGateDecisionResponse = SubmitSelfDeployGateDecisionResponses[keyof SubmitSelfDeployGateDecisionResponses];
 
 export type ClientOptions = {
     baseURL: `${string}://${string}` | (string & {});

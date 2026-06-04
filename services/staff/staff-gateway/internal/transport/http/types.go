@@ -61,6 +61,7 @@ type selfDeployPlanReader interface {
 
 type GovernanceManagerClient interface {
 	GetGovernanceSummary(context.Context, *governancev1.GetGovernanceSummaryRequest) (*governancev1.GovernanceSummaryResponse, error)
+	SubmitGateDecision(context.Context, *governancev1.SubmitGateDecisionRequest) (*governancev1.GateDecisionResponse, error)
 }
 
 type ProjectCatalogClient interface {

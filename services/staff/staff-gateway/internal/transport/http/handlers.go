@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	agentsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/agents/v1"
+	governancev1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/governance/v1"
 )
 
 type handlers struct {
@@ -107,12 +108,53 @@ func (h handlers) getSelfDeploySummary(w http.ResponseWriter, req *http.Request)
 			return
 		}
 	}
-	output, safeErr := SelfDeploySummaryResponse(plans, readiness, input, requestIDFromContext(req.Context()))
+	governanceSummary, safeErr := h.selfDeployGovernanceSummary(req, firstSelfDeployPlan(plans.GetSelfDeployPlans()))
+	if safeErr != nil {
+		WriteSafeError(w, req, safeErr)
+		return
+	}
+	output, safeErr := SelfDeploySummaryResponse(plans, readiness, input, governanceSummary, requestIDFromContext(req.Context()))
 	if safeErr != nil {
 		WriteSafeError(w, req, safeErr)
 		return
 	}
 	writeJSON(w, http.StatusOK, output)
+}
+
+func (h handlers) submitSelfDeployGateDecision(w http.ResponseWriter, req *http.Request) {
+	body, safeErr := decodeSelfDeployGateDecisionBody(req)
+	if safeErr != nil {
+		WriteSafeError(w, req, safeErr)
+		return
+	}
+	input, safeErr := SubmitSelfDeployGateDecisionRequest(req, body)
+	if safeErr != nil {
+		WriteSafeError(w, req, safeErr)
+		return
+	}
+	response, err := h.governance.SubmitGateDecision(req.Context(), input)
+	if err != nil {
+		WriteSafeError(w, req, governanceManagerError(err))
+		return
+	}
+	output, safeErr := SelfDeployGateDecisionResponse(response, body, input.GetGateRequestId(), requestIDFromContext(req.Context()))
+	if safeErr != nil {
+		WriteSafeError(w, req, safeErr)
+		return
+	}
+	writeJSON(w, http.StatusOK, output)
+}
+
+func (h handlers) selfDeployGovernanceSummary(req *http.Request, plan *agentsv1.SelfDeployPlan) (*governancev1.GovernanceSummaryResponse, *SafeError) {
+	input, safeErr := GetSelfDeployGovernanceSummaryRequest(req, plan)
+	if safeErr != nil || input == nil {
+		return nil, safeErr
+	}
+	response, err := h.governance.GetGovernanceSummary(req.Context(), input)
+	if err != nil {
+		return nil, governanceManagerError(err)
+	}
+	return response, nil
 }
 
 func (h handlers) selfDeployReadiness(req *http.Request, input *agentsv1.ListSelfDeployPlansRequest) (*projectSelfDeployReadiness, *SafeError) {
@@ -150,16 +192,24 @@ func (h handlers) selfDeployReadiness(req *http.Request, input *agentsv1.ListSel
 	return readiness, nil
 }
 
+func decodeSelfDeployGateDecisionBody(req *http.Request) (SelfDeployGateDecisionBody, *SafeError) {
+	return decodeJSONBody[SelfDeployGateDecisionBody](req)
+}
+
 func decodeOwnerInboxRespondBody(req *http.Request) (OwnerInboxRespondBody, *SafeError) {
-	var body OwnerInboxRespondBody
+	return decodeJSONBody[OwnerInboxRespondBody](req)
+}
+
+func decodeJSONBody[Body any](req *http.Request) (Body, *SafeError) {
+	var body Body
 	decoder := json.NewDecoder(req.Body)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&body); err != nil {
-		return OwnerInboxRespondBody{}, NewSafeError(http.StatusBadRequest, CodeInvalidRequest, "request body is invalid", false)
+		return body, NewSafeError(http.StatusBadRequest, CodeInvalidRequest, "request body is invalid", false)
 	}
 	var extra json.RawMessage
 	if err := decoder.Decode(&extra); err != io.EOF {
-		return OwnerInboxRespondBody{}, NewSafeError(http.StatusBadRequest, CodeInvalidRequest, "request body must contain one JSON object", false)
+		return body, NewSafeError(http.StatusBadRequest, CodeInvalidRequest, "request body must contain one JSON object", false)
 	}
 	return body, nil
 }

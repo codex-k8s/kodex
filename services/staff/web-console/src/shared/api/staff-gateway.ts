@@ -7,6 +7,7 @@ import {
   listAgentSessions,
   listOwnerInboxItems,
   respondOwnerInboxItem,
+  submitSelfDeployGateDecision,
   type AgentActivityKind,
   type AgentActivityStatus,
   type AgentRunStatus,
@@ -30,6 +31,9 @@ import {
   type RequestKind,
   type RequestStatus,
   type SelfDeploySummaryResponse,
+  type SelfDeployGateDecisionRequest,
+  type SelfDeployGateDecisionResponse,
+  type SubmitSelfDeployGateDecisionData,
 } from './generated';
 import { client as staffGatewayClient } from './generated/client.gen';
 import { isAgentScopeType, type OperatorContext, operationHeaders } from './context';
@@ -290,6 +294,28 @@ export async function fetchSelfDeploySummary(
         repository_ref: query.repositoryRef,
         provider_signal_ref: query.providerSignalRef,
       },
+    });
+    return response.data;
+  } catch (error) {
+    throw normalizeApiError(error);
+  }
+}
+
+export async function sendSelfDeployGateDecision(
+  context: OperatorContext,
+  gateRequestId: string,
+  body: SelfDeployGateDecisionRequest,
+): Promise<SelfDeployGateDecisionResponse> {
+  if (!isAgentScopeType(context.scopeType)) {
+    throw unsupportedAgentScopeError();
+  }
+  try {
+    const response = await submitSelfDeployGateDecision({
+      client: staffGatewayClient,
+      throwOnError: true,
+      headers: operationHeaders<SubmitSelfDeployGateDecisionData['headers']>(context),
+      path: { gate_request_id: gateRequestId },
+      body,
     });
     return response.data;
   } catch (error) {

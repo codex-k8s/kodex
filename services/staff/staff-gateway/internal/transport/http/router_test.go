@@ -788,7 +788,10 @@ func TestRouterGetGovernanceSummaryMapsDownstreamUnavailable(t *testing.T) {
 }
 
 func TestRouterGetSelfDeploySummary(t *testing.T) {
-	client := &fakeInteractionHubClient{selfDeployListResponse: sampleSelfDeployPlansResponse()}
+	client := &fakeInteractionHubClient{
+		selfDeployListResponse:    sampleSelfDeployPlansResponse(),
+		governanceSummaryResponse: sampleSelfDeployGateSummaryResponse(),
+	}
 	router := newTestRouter(t, client)
 	target := "/v1/self-deploy/summary?scope_type=project&scope_ref=project-1" +
 		"&project_ref=project-1&repository_ref=repo-1&provider_signal_ref=provider-signal-1" +
@@ -837,10 +840,88 @@ func TestRouterGetSelfDeploySummary(t *testing.T) {
 		summary.PathCategories[0] != generated.SelfDeployPathCategoryServiceSource {
 		t.Fatalf("summary = %+v, want affected services and path categories", summary)
 	}
+	governanceTarget := client.governanceSummaryRequest.GetScope().GetTarget()
+	if governanceTarget.GetType() != governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_SELF_DEPLOY_PLAN ||
+		governanceTarget.GetRef() != "agent:self-deploy-plan:"+sampleSelfDeployPlanID {
+		t.Fatalf("governance summary target = %+v, want self-deploy plan target", governanceTarget)
+	}
+	if summary.Governance.GateRequestId == nil || *summary.Governance.GateRequestId != sampleSelfDeployGateRequestID ||
+		summary.Governance.GateRequestVersion == nil || *summary.Governance.GateRequestVersion != 8 ||
+		summary.Governance.AllowedActions == nil || len(*summary.Governance.AllowedActions) != 3 {
+		t.Fatalf("governance summary = %+v, want pending gate id/version/actions", summary.Governance)
+	}
 	for _, forbidden := range []string{"raw webhook", "provider response", "full services yaml", "secret-token", "OAuth state", "diff --git"} {
 		if strings.Contains(rec.Body.String(), forbidden) {
 			t.Fatalf("response leaked %q marker: %s", forbidden, rec.Body.String())
 		}
+	}
+}
+
+func TestRouterSubmitSelfDeployGateDecisionRequestChanges(t *testing.T) {
+	client := &fakeInteractionHubClient{
+		gateDecisionResponse: sampleGateDecisionResponse(sampleSelfDeployGateRequestID, governancev1.GateOutcome_GATE_OUTCOME_REVISE),
+	}
+	router := newTestRouter(t, client)
+	req := authenticatedRequest(http.MethodPost, "/v1/self-deploy/gates/"+sampleSelfDeployGateRequestID+"/decision", `{
+		"self_deploy_plan_ref": "`+sampleSelfDeployPlanID+`",
+		"action": "request_changes",
+		"comment": "Нужна доработка before build",
+		"idempotency_key": "self-deploy-decision-1",
+		"expected_version": 8,
+		"expected_status": "pending",
+		"decision_policy_ref": "self_deploy.owner_gate"
+	}`)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	recorded := client.gateDecisionRequest
+	if recorded.GetGateRequestId() != sampleSelfDeployGateRequestID ||
+		recorded.GetOutcome() != governancev1.GateOutcome_GATE_OUTCOME_REVISE ||
+		recorded.GetMeta().GetExpectedVersion() != 8 ||
+		recorded.GetMeta().GetIdempotencyKey() != "self-deploy-decision-1" ||
+		recorded.GetDecisionActorRef() != "user/owner-1" ||
+		recorded.GetDecisionPolicyRef() != "self_deploy.owner_gate" {
+		t.Fatalf("gate decision request = %+v, want revise command with idempotency/version", recorded)
+	}
+	if recorded.GetInteractionDeliveryRef().GetDecisionRef() != "staff-gateway/self-deploy-gate/"+sampleSelfDeployGateRequestID {
+		t.Fatalf("interaction decision ref = %q, want stable staff-gateway ref", recorded.GetInteractionDeliveryRef().GetDecisionRef())
+	}
+	var body generated.SelfDeployGateDecisionResponse
+	decodeJSON(t, rec, &body)
+	if body.Decision.Action != generated.SelfDeployGateDecisionActionRequestChanges ||
+		body.Decision.Outcome != generated.GovernanceGateOutcomeRevise ||
+		body.Decision.Status != generated.SelfDeployGovernanceStatusResolved ||
+		body.Decision.GateRequestRef != sampleSelfDeployGateRequestID {
+		t.Fatalf("decision = %+v, want request_changes resolved summary", body.Decision)
+	}
+	for _, forbidden := range []string{"raw webhook", "provider response", "full services yaml", "secret-token", "OAuth state", "diff --git"} {
+		if strings.Contains(rec.Body.String(), forbidden) {
+			t.Fatalf("response leaked %q marker: %s", forbidden, rec.Body.String())
+		}
+	}
+}
+
+func TestRouterSubmitSelfDeployGateDecisionRejectsStaleExpectedStatus(t *testing.T) {
+	client := &fakeInteractionHubClient{}
+	router := newTestRouter(t, client)
+	req := authenticatedRequest(http.MethodPost, "/v1/self-deploy/gates/"+sampleSelfDeployGateRequestID+"/decision", `{
+		"self_deploy_plan_ref": "`+sampleSelfDeployPlanID+`",
+		"action": "approve",
+		"idempotency_key": "self-deploy-decision-2",
+		"expected_version": 8,
+		"expected_status": "resolved"
+	}`)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	assertErrorCode(t, rec, http.StatusConflict, generated.SafeErrorCodeStaleVersion)
+	if client.gateDecisionRequest != nil {
+		t.Fatalf("downstream was called for stale expected status")
 	}
 }
 
@@ -1057,6 +1138,11 @@ func assertErrorCode(t *testing.T, rec *httptest.ResponseRecorder, statusCode in
 	}
 }
 
+const (
+	sampleSelfDeployPlanID        = "11111111-1111-4111-8111-111111111111"
+	sampleSelfDeployGateRequestID = "22222222-2222-4222-8222-222222222222"
+)
+
 type fakeInteractionHubClient struct {
 	listRequest               *interactionsv1.ListOwnerInboxItemsRequest
 	getRequest                *interactionsv1.GetOwnerInboxItemRequest
@@ -1069,6 +1155,7 @@ type fakeInteractionHubClient struct {
 	selfDeploySignalRequest   *projectsv1.GetSelfDeploySignalRequest
 	repositoryListRequest     *projectsv1.ListRepositoriesRequest
 	governanceSummaryRequest  *governancev1.GetGovernanceSummaryRequest
+	gateDecisionRequest       *governancev1.SubmitGateDecisionRequest
 	listResponse              *interactionsv1.ListOwnerInboxItemsResponse
 	getResponse               *interactionsv1.OwnerInboxItemResponse
 	recordResponse            *interactionsv1.InteractionResponseResponse
@@ -1080,6 +1167,7 @@ type fakeInteractionHubClient struct {
 	selfDeploySignalResponse  *projectsv1.SelfDeploySignalResponse
 	repositoryListResponse    *projectsv1.ListRepositoriesResponse
 	governanceSummaryResponse *governancev1.GovernanceSummaryResponse
+	gateDecisionResponse      *governancev1.GateDecisionResponse
 	listErr                   error
 	getErr                    error
 	recordErr                 error
@@ -1091,6 +1179,7 @@ type fakeInteractionHubClient struct {
 	selfDeploySignalErr       error
 	repositoryListErr         error
 	governanceSummaryErr      error
+	gateDecisionErr           error
 }
 
 func (f *fakeInteractionHubClient) ListOwnerInboxItems(_ context.Context, request *interactionsv1.ListOwnerInboxItemsRequest) (*interactionsv1.ListOwnerInboxItemsResponse, error) {
@@ -1146,6 +1235,11 @@ func (f *fakeInteractionHubClient) ListRepositories(_ context.Context, request *
 func (f *fakeInteractionHubClient) GetGovernanceSummary(_ context.Context, request *governancev1.GetGovernanceSummaryRequest) (*governancev1.GovernanceSummaryResponse, error) {
 	f.governanceSummaryRequest = request
 	return f.governanceSummaryResponse, f.governanceSummaryErr
+}
+
+func (f *fakeInteractionHubClient) SubmitGateDecision(_ context.Context, request *governancev1.SubmitGateDecisionRequest) (*governancev1.GateDecisionResponse, error) {
+	f.gateDecisionRequest = request
+	return f.gateDecisionResponse, f.gateDecisionErr
 }
 
 func sampleOwnerInboxItem(status interactionsv1.InteractionRequestStatus) *interactionsv1.OwnerInboxItem {
@@ -1408,7 +1502,7 @@ func sampleSelfDeployPlansResponse() *agentsv1.ListSelfDeployPlansResponse {
 	now := time.Date(2026, 5, 28, 12, 6, 0, 0, time.UTC).Format(time.RFC3339Nano)
 	return &agentsv1.ListSelfDeployPlansResponse{
 		SelfDeployPlans: []*agentsv1.SelfDeployPlan{{
-			Id:                      "self-deploy-plan-1",
+			Id:                      sampleSelfDeployPlanID,
 			Scope:                   &agentsv1.ScopeRef{Type: agentsv1.AgentScopeType_AGENT_SCOPE_TYPE_PROJECT, Ref: "project-1"},
 			ProjectRef:              "project-1",
 			RepositoryRef:           "repo-1",
@@ -1421,8 +1515,9 @@ func sampleSelfDeployPlansResponse() *agentsv1.ListSelfDeployPlansResponse {
 			PathCategories:          []agentsv1.SelfDeployPathCategory{agentsv1.SelfDeployPathCategory_SELF_DEPLOY_PATH_CATEGORY_SERVICE_SOURCE, agentsv1.SelfDeployPathCategory_SELF_DEPLOY_PATH_CATEGORY_DEPLOY_MANIFEST},
 			ExpectedRuntimeJobTypes: []runtimev1.JobType{runtimev1.JobType_JOB_TYPE_BUILD, runtimev1.JobType_JOB_TYPE_DEPLOY},
 			GovernanceContext: &agentsv1.GovernanceContextRef{
-				GateRequestRef:            stringPtr("gate-request-1"),
-				ReleaseDecisionPackageRef: stringPtr("release-package-1"),
+				GateRequestRef:            stringPtr("governance:gate_request/" + sampleSelfDeployGateRequestID),
+				GatePolicyRef:             stringPtr("self_deploy.owner_gate"),
+				ReleaseDecisionPackageRef: stringPtr("33333333-3333-4333-8333-333333333333"),
 			},
 			SafeSummary:     stringPtr("Webhook signal сохранён, self-deploy plan ожидает решения владельца."),
 			PlanFingerprint: "sha256:plan-fingerprint",
@@ -1500,6 +1595,50 @@ func sampleGovernanceSummaryResponse(packageID string) *governancev1.GovernanceS
 				Version:     stringPtr("7"),
 			}},
 			Diagnostics: []string{"partial.provider_refs"},
+		},
+	}
+}
+
+func sampleSelfDeployGateSummaryResponse() *governancev1.GovernanceSummaryResponse {
+	now := time.Date(2026, 5, 28, 12, 7, 0, 0, time.UTC).Format(time.RFC3339Nano)
+	return &governancev1.GovernanceSummaryResponse{
+		Summary: &governancev1.GovernanceSummary{
+			Scope: &governancev1.GovernanceSummaryScope{
+				Target: &governancev1.TargetRef{
+					Type: governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_SELF_DEPLOY_PLAN,
+					Ref:  "agent:self-deploy-plan:" + sampleSelfDeployPlanID,
+				},
+			},
+			PendingDecisions: []*governancev1.GovernanceDecisionSummary{{
+				Kind:              governancev1.GovernanceDecisionSummaryKind_GOVERNANCE_DECISION_SUMMARY_KIND_GATE_REQUEST,
+				Attention:         governancev1.GovernanceDecisionAttention_GOVERNANCE_DECISION_ATTENTION_PENDING,
+				Id:                sampleSelfDeployGateRequestID,
+				GateRequestStatus: governancev1.GateRequestStatus_GATE_REQUEST_STATUS_AWAITING_DECISION,
+				SafeSummary:       "Self-deploy ожидает решения владельца",
+				Version:           8,
+				CreatedAt:         now,
+				UpdatedAt:         now,
+			}},
+		},
+	}
+}
+
+func sampleGateDecisionResponse(gateRequestID string, outcome governancev1.GateOutcome) *governancev1.GateDecisionResponse {
+	now := time.Date(2026, 5, 28, 12, 8, 0, 0, time.UTC).Format(time.RFC3339Nano)
+	return &governancev1.GateDecisionResponse{
+		GateDecision: &governancev1.GateDecision{
+			Id:            "44444444-4444-4444-8444-444444444444",
+			GateRequestId: gateRequestID,
+			Outcome:       outcome,
+			Reason:        "Нужна доработка before build",
+			DecidedAt:     now,
+		},
+		GateRequest: &governancev1.GateRequest{
+			Id:              gateRequestID,
+			Status:          governancev1.GateRequestStatus_GATE_REQUEST_STATUS_RESOLVED,
+			EvidenceSummary: "Self-deploy gate завершён безопасным решением.",
+			Version:         9,
+			UpdatedAt:       now,
 		},
 	}
 }
