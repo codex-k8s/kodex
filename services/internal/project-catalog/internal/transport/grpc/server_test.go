@@ -3,6 +3,7 @@ package grpc
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -273,6 +274,106 @@ func TestGetSelfDeploySignalMapsDomainResult(t *testing.T) {
 		signal.GetAffectedServiceKeys()[0] != "api" ||
 		!signal.GetGovernanceRequirement().GetGateRequired() {
 		t.Fatalf("response = %+v, want safe self-deploy signal", response)
+	}
+}
+
+func TestGetSelfDeployBuildPlanMapsDomainResult(t *testing.T) {
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	policyID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
+	policyVersion := int64(3)
+	service := &fakeProjectService{}
+	service.getSelfDeployBuildPlan = func(_ context.Context, input projectservice.GetSelfDeployBuildPlanInput) (projectservice.SelfDeployBuildPlanResult, error) {
+		if input.ProjectID != projectID ||
+			input.RepositoryID != repositoryID ||
+			input.ProviderSignalRef != "provider-signal-ref" ||
+			input.ExpectedServicesPolicyDigest != "sha256:services-policy" ||
+			input.ExpectedServicesPolicyVersion == nil ||
+			*input.ExpectedServicesPolicyVersion != policyVersion {
+			t.Fatalf("input = %+v, want build plan request refs", input)
+		}
+		return projectservice.SelfDeployBuildPlanResult{
+			Status: enum.SelfDeployBuildPlanStatusReady,
+			Plan: projectservice.SelfDeployBuildPlan{
+				ProjectRef:        projectID.String(),
+				RepositoryRef:     repositoryID.String(),
+				ProviderSignalRef: "provider-signal-ref",
+				SourceRef:         "refs/heads/main",
+				MergeCommitSHA:    "abcdef0123456789abcdef0123456789abcdef01",
+				ServicesYaml: projectservice.SelfDeployServicesYamlProjection{
+					ServicesYamlRef:         "project-catalog:services-policy:policy-1:services.yaml",
+					ServicesYamlDigest:      "sha256:services-policy",
+					ServicesYamlFingerprint: "sha256:projection",
+					ServicesPolicyID:        policyID,
+					SourceRepositoryID:      &repositoryID,
+					SourcePath:              "services.yaml",
+					SourceRef:               "refs/heads/main",
+					SourceCommitSHA:         "abcdef0123456789abcdef0123456789abcdef01",
+					PolicyVersion:           policyVersion,
+					ValidationStatus:        enum.ServicesPolicyValidationValid,
+					ProjectionStatus:        enum.ServicesPolicyProjectionSynced,
+					ImportedAt:              "2026-05-06T12:00:00Z",
+				},
+				AffectedServiceKeys: []string{"api"},
+				BuildItems: []projectservice.SelfDeployBuildPlanItem{
+					{
+						ServiceKey: "api",
+						ServiceRef: "project-catalog:service-descriptor:service-1:api",
+						BuildExecutionSpec: projectservice.SelfDeployBuildExecutionSpec{
+							SourceRef:            "refs/heads/main",
+							SourceCommitSHA:      "abcdef0123456789abcdef0123456789abcdef01",
+							ServiceKey:           "api",
+							ImageRef:             "registry.example/kodex/api",
+							ImageTag:             "abcdef0",
+							BuildContextRef:      "pvc://runtime/build-context-api",
+							BuildContextDigest:   "sha256:context",
+							DockerfileRef:        "context://services/api/Dockerfile",
+							DockerfileTarget:     "prod",
+							BuilderImageRef:      "gcr.io/kaniko-project/executor:v1.23.2",
+							BuildPlanFingerprint: "sha256:build-plan",
+							AllowedSecretRefs: []projectservice.RuntimeJobAllowedSecretRef{
+								{SecretRef: "secret://runtime/registry", Purpose: "registry_docker_config"},
+							},
+							OutputRefs: []projectservice.RuntimeJobOutputRef{
+								{Kind: "image", Ref: "runtime:image:api"},
+							},
+						},
+						PlanItemFingerprint: "sha256:item",
+					},
+				},
+				PlanFingerprint: "sha256:build-plan",
+				SafeSummary:     "self-deploy build plan ready",
+				Version:         1,
+			},
+		}, nil
+	}
+	server := NewServer(service)
+
+	response, err := server.GetSelfDeployBuildPlan(context.Background(), &projectsv1.GetSelfDeployBuildPlanRequest{
+		ProjectId:                         projectID.String(),
+		RepositoryId:                      repositoryID.String(),
+		SourceRef:                         "refs/heads/main",
+		MergeCommitSha:                    "abcdef0123456789abcdef0123456789abcdef01",
+		ProviderSignalRef:                 stringPtr("provider-signal-ref"),
+		AffectedServiceKeys:               []string{"api"},
+		ExpectedServicesPolicyDigest:      "sha256:services-policy",
+		ExpectedServicesPolicyFingerprint: stringPtr("sha256:projection"),
+		ExpectedServicesPolicyVersion:     &policyVersion,
+		Meta:                              queryMeta(),
+	})
+	if err != nil {
+		t.Fatalf("GetSelfDeployBuildPlan(): %v", err)
+	}
+	spec := response.GetPlan().GetBuildItems()[0].GetBuildExecutionSpec()
+	if response.GetStatus() != projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_READY ||
+		spec.GetServiceKey() != "api" ||
+		spec.GetBuildPlanFingerprint() != "sha256:build-plan" ||
+		spec.GetAllowedSecretRefs()[0].GetSecretRef() != "secret://runtime/registry" ||
+		spec.GetAllowedSecretRefs()[0].GetPurpose() != "registry_docker_config" {
+		t.Fatalf("response = %+v, want safe build plan", response)
+	}
+	if strings.Contains(response.String(), "secret_value") {
+		t.Fatalf("response leaked secret value: %s", response.String())
 	}
 }
 
@@ -629,6 +730,7 @@ type fakeProjectService struct {
 	reconcileBootstrapMerge  func(context.Context, projectservice.ReconcileBootstrapMergeSignalInput) (projectservice.BootstrapServicesPolicyImportResult, error)
 	reconcileAdoptionMerge   func(context.Context, projectservice.ReconcileAdoptionMergeSignalInput) (projectservice.BootstrapServicesPolicyImportResult, error)
 	getSelfDeploySignal      func(context.Context, projectservice.GetSelfDeploySignalInput) (projectservice.SelfDeploySignalResult, error)
+	getSelfDeployBuildPlan   func(context.Context, projectservice.GetSelfDeployBuildPlanInput) (projectservice.SelfDeployBuildPlanResult, error)
 }
 
 func (s *fakeProjectService) CreateProject(ctx context.Context, input projectservice.CreateProjectInput) (entity.Project, error) {
@@ -678,6 +780,13 @@ func (s *fakeProjectService) GetSelfDeploySignal(ctx context.Context, input proj
 		return projectservice.SelfDeploySignalResult{}, errs.ErrInvalidArgument
 	}
 	return s.getSelfDeploySignal(ctx, input)
+}
+
+func (s *fakeProjectService) GetSelfDeployBuildPlan(ctx context.Context, input projectservice.GetSelfDeployBuildPlanInput) (projectservice.SelfDeployBuildPlanResult, error) {
+	if s.getSelfDeployBuildPlan == nil {
+		return projectservice.SelfDeployBuildPlanResult{}, errs.ErrInvalidArgument
+	}
+	return s.getSelfDeployBuildPlan(ctx, input)
 }
 
 type unimplementedProjectService struct{}
@@ -744,6 +853,10 @@ func (unimplementedProjectService) ReconcileAdoptionMergeSignal(context.Context,
 
 func (unimplementedProjectService) GetSelfDeploySignal(context.Context, projectservice.GetSelfDeploySignalInput) (projectservice.SelfDeploySignalResult, error) {
 	return projectservice.SelfDeploySignalResult{}, errs.ErrInvalidArgument
+}
+
+func (unimplementedProjectService) GetSelfDeployBuildPlan(context.Context, projectservice.GetSelfDeployBuildPlanInput) (projectservice.SelfDeployBuildPlanResult, error) {
+	return projectservice.SelfDeployBuildPlanResult{}, errs.ErrInvalidArgument
 }
 
 func (unimplementedProjectService) GetServicesPolicy(context.Context, projectservice.GetServicesPolicyInput) (entity.ServicesPolicy, error) {

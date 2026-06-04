@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 
 	projectsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/projects/v1"
+	runtimev1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/runtime/v1"
 	projectservice "github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/service"
 	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/types/enum"
@@ -182,6 +183,70 @@ func selfDeployGovernanceRequirementToProto(requirement projectservice.SelfDeplo
 		RiskProfileRef: optionalStringPtr(requirement.RiskProfileRef),
 		GatePolicyRef:  optionalStringPtr(requirement.GatePolicyRef),
 	}
+}
+
+func SelfDeployBuildPlanResponse(result projectservice.SelfDeployBuildPlanResult) *projectsv1.SelfDeployBuildPlanResponse {
+	return &projectsv1.SelfDeployBuildPlanResponse{
+		Status:     SelfDeployBuildPlanStatusToProto(result.Status),
+		Plan:       SelfDeployBuildPlanToProto(result.Plan),
+		SafeReason: optionalStringPtr(result.SafeReason),
+	}
+}
+
+func SelfDeployBuildPlanToProto(plan projectservice.SelfDeployBuildPlan) *projectsv1.SelfDeployBuildPlan {
+	if plan.ProjectRef == "" && plan.RepositoryRef == "" {
+		return nil
+	}
+	return &projectsv1.SelfDeployBuildPlan{
+		ProjectRef:          plan.ProjectRef,
+		RepositoryRef:       plan.RepositoryRef,
+		ProviderSignalRef:   optionalStringPtr(plan.ProviderSignalRef),
+		SourceRef:           plan.SourceRef,
+		MergeCommitSha:      plan.MergeCommitSHA,
+		ServicesYaml:        selfDeployServicesYamlToProto(plan.ServicesYaml),
+		AffectedServiceKeys: plan.AffectedServiceKeys,
+		BuildItems:          mapSlice(plan.BuildItems, selfDeployBuildPlanItemToProto),
+		PlanFingerprint:     plan.PlanFingerprint,
+		SafeSummary:         plan.SafeSummary,
+		Version:             plan.Version,
+	}
+}
+
+func selfDeployBuildPlanItemToProto(item projectservice.SelfDeployBuildPlanItem) *projectsv1.SelfDeployBuildPlanItem {
+	return &projectsv1.SelfDeployBuildPlanItem{
+		ServiceKey:          item.ServiceKey,
+		ServiceRef:          item.ServiceRef,
+		BuildExecutionSpec:  buildExecutionSpecToProto(item.BuildExecutionSpec),
+		PlanItemFingerprint: item.PlanItemFingerprint,
+	}
+}
+
+func buildExecutionSpecToProto(spec projectservice.SelfDeployBuildExecutionSpec) *runtimev1.BuildExecutionSpec {
+	return &runtimev1.BuildExecutionSpec{
+		SourceRef:            spec.SourceRef,
+		SourceCommitSha:      spec.SourceCommitSHA,
+		ServiceKey:           spec.ServiceKey,
+		ImageRef:             spec.ImageRef,
+		ImageTag:             spec.ImageTag,
+		ImageDigest:          optionalStringPtr(spec.ImageDigest),
+		BuildContextRef:      spec.BuildContextRef,
+		BuildContextDigest:   spec.BuildContextDigest,
+		DockerfileRef:        spec.DockerfileRef,
+		DockerfileDigest:     optionalStringPtr(spec.DockerfileDigest),
+		DockerfileTarget:     spec.DockerfileTarget,
+		BuilderImageRef:      spec.BuilderImageRef,
+		BuildPlanFingerprint: spec.BuildPlanFingerprint,
+		AllowedSecretRefs:    mapSlice(spec.AllowedSecretRefs, allowedSecretRefToProto),
+		OutputRefs:           mapSlice(spec.OutputRefs, outputRefToProto),
+	}
+}
+
+func allowedSecretRefToProto(ref projectservice.RuntimeJobAllowedSecretRef) *runtimev1.RuntimeJobAllowedSecretRef {
+	return &runtimev1.RuntimeJobAllowedSecretRef{SecretRef: ref.SecretRef, Purpose: ref.Purpose}
+}
+
+func outputRefToProto(ref projectservice.RuntimeJobOutputRef) *runtimev1.RuntimeJobOutputRef {
+	return &runtimev1.RuntimeJobOutputRef{Kind: ref.Kind, Ref: ref.Ref}
 }
 
 func BootstrapServicesPolicyImportResponse(result projectservice.BootstrapServicesPolicyImportResult) *projectsv1.BootstrapServicesPolicyImportResponse {

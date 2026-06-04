@@ -112,6 +112,7 @@ Readiness должна видеть:
 - Проверить, что `KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_PROJECT_ID` задан и указывает на active self-project scope в `project-catalog`.
 - Для provider-owned `provider.repository.changed` без `project_id` consumer использует этот project id как область вызова `project-catalog.GetSelfDeploySignal`; `agent-manager` не вычисляет `services_yaml_digest` или affected service keys сам.
 - Если consumer получает non-ready status от `project-catalog`, plan не создаётся; нужно устранить причину вроде `needs_services_policy_reconcile` или `needs_repository_change_summary`.
+- После owner/governance approval build jobs создаются только если `project-catalog.GetSelfDeployBuildPlan` вернул `ready` для affected service keys и ожидаемой `ServicesPolicy` digest/fingerprint/version. `agent-manager` не парсит `services.yaml`, не подбирает Dockerfile/image refs сам и не передаёт `runtime-manager` значения секретов; non-ready build plan блокирует `JOB_TYPE_BUILD` безопасной причиной.
 
 ### provider-hub follow-up dispatch
 

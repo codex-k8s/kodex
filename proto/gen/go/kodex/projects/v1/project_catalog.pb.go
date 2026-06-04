@@ -7,6 +7,7 @@
 package projectsv1
 
 import (
+	v1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/runtime/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -463,6 +464,65 @@ func (SelfDeploySignalStatus) EnumDescriptor() ([]byte, []int) {
 	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{7}
 }
 
+// SelfDeployBuildPlanStatus описывает готовность проверенного build plan для runtime-manager JOB_TYPE_BUILD.
+type SelfDeployBuildPlanStatus int32
+
+const (
+	SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_UNSPECIFIED            SelfDeployBuildPlanStatus = 0
+	SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_READY                  SelfDeployBuildPlanStatus = 1
+	SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_BUILD_PLAN_UNAVAILABLE SelfDeployBuildPlanStatus = 2
+	SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_POLICY_STALE           SelfDeployBuildPlanStatus = 3
+	SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_SERVICE_NOT_FOUND      SelfDeployBuildPlanStatus = 4
+	SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_INVALID_INPUT          SelfDeployBuildPlanStatus = 5
+)
+
+// Enum value maps for SelfDeployBuildPlanStatus.
+var (
+	SelfDeployBuildPlanStatus_name = map[int32]string{
+		0: "SELF_DEPLOY_BUILD_PLAN_STATUS_UNSPECIFIED",
+		1: "SELF_DEPLOY_BUILD_PLAN_STATUS_READY",
+		2: "SELF_DEPLOY_BUILD_PLAN_STATUS_BUILD_PLAN_UNAVAILABLE",
+		3: "SELF_DEPLOY_BUILD_PLAN_STATUS_POLICY_STALE",
+		4: "SELF_DEPLOY_BUILD_PLAN_STATUS_SERVICE_NOT_FOUND",
+		5: "SELF_DEPLOY_BUILD_PLAN_STATUS_INVALID_INPUT",
+	}
+	SelfDeployBuildPlanStatus_value = map[string]int32{
+		"SELF_DEPLOY_BUILD_PLAN_STATUS_UNSPECIFIED":            0,
+		"SELF_DEPLOY_BUILD_PLAN_STATUS_READY":                  1,
+		"SELF_DEPLOY_BUILD_PLAN_STATUS_BUILD_PLAN_UNAVAILABLE": 2,
+		"SELF_DEPLOY_BUILD_PLAN_STATUS_POLICY_STALE":           3,
+		"SELF_DEPLOY_BUILD_PLAN_STATUS_SERVICE_NOT_FOUND":      4,
+		"SELF_DEPLOY_BUILD_PLAN_STATUS_INVALID_INPUT":          5,
+	}
+)
+
+func (x SelfDeployBuildPlanStatus) Enum() *SelfDeployBuildPlanStatus {
+	p := new(SelfDeployBuildPlanStatus)
+	*p = x
+	return p
+}
+
+func (x SelfDeployBuildPlanStatus) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (SelfDeployBuildPlanStatus) Descriptor() protoreflect.EnumDescriptor {
+	return file_kodex_projects_v1_project_catalog_proto_enumTypes[8].Descriptor()
+}
+
+func (SelfDeployBuildPlanStatus) Type() protoreflect.EnumType {
+	return &file_kodex_projects_v1_project_catalog_proto_enumTypes[8]
+}
+
+func (x SelfDeployBuildPlanStatus) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use SelfDeployBuildPlanStatus.Descriptor instead.
+func (SelfDeployBuildPlanStatus) EnumDescriptor() ([]byte, []int) {
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{8}
+}
+
 // SelfDeployPathCategory классифицирует изменённые пути без raw paths и diffs.
 type SelfDeployPathCategory int32
 
@@ -518,11 +578,11 @@ func (x SelfDeployPathCategory) String() string {
 }
 
 func (SelfDeployPathCategory) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_projects_v1_project_catalog_proto_enumTypes[8].Descriptor()
+	return file_kodex_projects_v1_project_catalog_proto_enumTypes[9].Descriptor()
 }
 
 func (SelfDeployPathCategory) Type() protoreflect.EnumType {
-	return &file_kodex_projects_v1_project_catalog_proto_enumTypes[8]
+	return &file_kodex_projects_v1_project_catalog_proto_enumTypes[9]
 }
 
 func (x SelfDeployPathCategory) Number() protoreflect.EnumNumber {
@@ -531,7 +591,7 @@ func (x SelfDeployPathCategory) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use SelfDeployPathCategory.Descriptor instead.
 func (SelfDeployPathCategory) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{8}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{9}
 }
 
 // SelfDeployExpectedRuntimeJobType задаёт project-side safe подсказку типа runtime job.
@@ -571,11 +631,11 @@ func (x SelfDeployExpectedRuntimeJobType) String() string {
 }
 
 func (SelfDeployExpectedRuntimeJobType) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_projects_v1_project_catalog_proto_enumTypes[9].Descriptor()
+	return file_kodex_projects_v1_project_catalog_proto_enumTypes[10].Descriptor()
 }
 
 func (SelfDeployExpectedRuntimeJobType) Type() protoreflect.EnumType {
-	return &file_kodex_projects_v1_project_catalog_proto_enumTypes[9]
+	return &file_kodex_projects_v1_project_catalog_proto_enumTypes[10]
 }
 
 func (x SelfDeployExpectedRuntimeJobType) Number() protoreflect.EnumNumber {
@@ -584,7 +644,7 @@ func (x SelfDeployExpectedRuntimeJobType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use SelfDeployExpectedRuntimeJobType.Descriptor instead.
 func (SelfDeployExpectedRuntimeJobType) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{9}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{10}
 }
 
 // ServiceKind classifies a service described by services.yaml.
@@ -633,11 +693,11 @@ func (x ServiceKind) String() string {
 }
 
 func (ServiceKind) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_projects_v1_project_catalog_proto_enumTypes[10].Descriptor()
+	return file_kodex_projects_v1_project_catalog_proto_enumTypes[11].Descriptor()
 }
 
 func (ServiceKind) Type() protoreflect.EnumType {
-	return &file_kodex_projects_v1_project_catalog_proto_enumTypes[10]
+	return &file_kodex_projects_v1_project_catalog_proto_enumTypes[11]
 }
 
 func (x ServiceKind) Number() protoreflect.EnumNumber {
@@ -646,7 +706,7 @@ func (x ServiceKind) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ServiceKind.Descriptor instead.
 func (ServiceKind) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{10}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{11}
 }
 
 // ServiceStatus is the closed set of service descriptor statuses.
@@ -686,11 +746,11 @@ func (x ServiceStatus) String() string {
 }
 
 func (ServiceStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_projects_v1_project_catalog_proto_enumTypes[11].Descriptor()
+	return file_kodex_projects_v1_project_catalog_proto_enumTypes[12].Descriptor()
 }
 
 func (ServiceStatus) Type() protoreflect.EnumType {
-	return &file_kodex_projects_v1_project_catalog_proto_enumTypes[11]
+	return &file_kodex_projects_v1_project_catalog_proto_enumTypes[12]
 }
 
 func (x ServiceStatus) Number() protoreflect.EnumNumber {
@@ -699,7 +759,7 @@ func (x ServiceStatus) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ServiceStatus.Descriptor instead.
 func (ServiceStatus) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{11}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{12}
 }
 
 // DocumentationScopeType classifies where documentation source applies.
@@ -742,11 +802,11 @@ func (x DocumentationScopeType) String() string {
 }
 
 func (DocumentationScopeType) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_projects_v1_project_catalog_proto_enumTypes[12].Descriptor()
+	return file_kodex_projects_v1_project_catalog_proto_enumTypes[13].Descriptor()
 }
 
 func (DocumentationScopeType) Type() protoreflect.EnumType {
-	return &file_kodex_projects_v1_project_catalog_proto_enumTypes[12]
+	return &file_kodex_projects_v1_project_catalog_proto_enumTypes[13]
 }
 
 func (x DocumentationScopeType) Number() protoreflect.EnumNumber {
@@ -755,7 +815,7 @@ func (x DocumentationScopeType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use DocumentationScopeType.Descriptor instead.
 func (DocumentationScopeType) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{12}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{13}
 }
 
 // DocumentationAccessMode controls whether an agent may edit a documentation source.
@@ -792,11 +852,11 @@ func (x DocumentationAccessMode) String() string {
 }
 
 func (DocumentationAccessMode) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_projects_v1_project_catalog_proto_enumTypes[13].Descriptor()
+	return file_kodex_projects_v1_project_catalog_proto_enumTypes[14].Descriptor()
 }
 
 func (DocumentationAccessMode) Type() protoreflect.EnumType {
-	return &file_kodex_projects_v1_project_catalog_proto_enumTypes[13]
+	return &file_kodex_projects_v1_project_catalog_proto_enumTypes[14]
 }
 
 func (x DocumentationAccessMode) Number() protoreflect.EnumNumber {
@@ -805,7 +865,7 @@ func (x DocumentationAccessMode) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use DocumentationAccessMode.Descriptor instead.
 func (DocumentationAccessMode) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{13}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{14}
 }
 
 // SourceAccessMode controls whether a workspace source is editable.
@@ -842,11 +902,11 @@ func (x SourceAccessMode) String() string {
 }
 
 func (SourceAccessMode) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_projects_v1_project_catalog_proto_enumTypes[14].Descriptor()
+	return file_kodex_projects_v1_project_catalog_proto_enumTypes[15].Descriptor()
 }
 
 func (SourceAccessMode) Type() protoreflect.EnumType {
-	return &file_kodex_projects_v1_project_catalog_proto_enumTypes[14]
+	return &file_kodex_projects_v1_project_catalog_proto_enumTypes[15]
 }
 
 func (x SourceAccessMode) Number() protoreflect.EnumNumber {
@@ -855,7 +915,7 @@ func (x SourceAccessMode) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use SourceAccessMode.Descriptor instead.
 func (SourceAccessMode) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{14}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{15}
 }
 
 // DocumentationSourceStatus is the closed set of documentation source statuses.
@@ -895,11 +955,11 @@ func (x DocumentationSourceStatus) String() string {
 }
 
 func (DocumentationSourceStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_projects_v1_project_catalog_proto_enumTypes[15].Descriptor()
+	return file_kodex_projects_v1_project_catalog_proto_enumTypes[16].Descriptor()
 }
 
 func (DocumentationSourceStatus) Type() protoreflect.EnumType {
-	return &file_kodex_projects_v1_project_catalog_proto_enumTypes[15]
+	return &file_kodex_projects_v1_project_catalog_proto_enumTypes[16]
 }
 
 func (x DocumentationSourceStatus) Number() protoreflect.EnumNumber {
@@ -908,7 +968,7 @@ func (x DocumentationSourceStatus) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use DocumentationSourceStatus.Descriptor instead.
 func (DocumentationSourceStatus) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{15}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{16}
 }
 
 // MergePolicy is the closed set of merge strategies allowed by branch rules.
@@ -951,11 +1011,11 @@ func (x MergePolicy) String() string {
 }
 
 func (MergePolicy) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_projects_v1_project_catalog_proto_enumTypes[16].Descriptor()
+	return file_kodex_projects_v1_project_catalog_proto_enumTypes[17].Descriptor()
 }
 
 func (MergePolicy) Type() protoreflect.EnumType {
-	return &file_kodex_projects_v1_project_catalog_proto_enumTypes[16]
+	return &file_kodex_projects_v1_project_catalog_proto_enumTypes[17]
 }
 
 func (x MergePolicy) Number() protoreflect.EnumNumber {
@@ -964,7 +1024,7 @@ func (x MergePolicy) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use MergePolicy.Descriptor instead.
 func (MergePolicy) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{16}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{17}
 }
 
 // BranchRulesStatus is the closed set of branch rule statuses.
@@ -1001,11 +1061,11 @@ func (x BranchRulesStatus) String() string {
 }
 
 func (BranchRulesStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_projects_v1_project_catalog_proto_enumTypes[17].Descriptor()
+	return file_kodex_projects_v1_project_catalog_proto_enumTypes[18].Descriptor()
 }
 
 func (BranchRulesStatus) Type() protoreflect.EnumType {
-	return &file_kodex_projects_v1_project_catalog_proto_enumTypes[17]
+	return &file_kodex_projects_v1_project_catalog_proto_enumTypes[18]
 }
 
 func (x BranchRulesStatus) Number() protoreflect.EnumNumber {
@@ -1014,7 +1074,7 @@ func (x BranchRulesStatus) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use BranchRulesStatus.Descriptor instead.
 func (BranchRulesStatus) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{17}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{18}
 }
 
 // RolloutStrategy is the closed set of release rollout strategies.
@@ -1054,11 +1114,11 @@ func (x RolloutStrategy) String() string {
 }
 
 func (RolloutStrategy) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_projects_v1_project_catalog_proto_enumTypes[18].Descriptor()
+	return file_kodex_projects_v1_project_catalog_proto_enumTypes[19].Descriptor()
 }
 
 func (RolloutStrategy) Type() protoreflect.EnumType {
-	return &file_kodex_projects_v1_project_catalog_proto_enumTypes[18]
+	return &file_kodex_projects_v1_project_catalog_proto_enumTypes[19]
 }
 
 func (x RolloutStrategy) Number() protoreflect.EnumNumber {
@@ -1067,7 +1127,7 @@ func (x RolloutStrategy) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use RolloutStrategy.Descriptor instead.
 func (RolloutStrategy) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{18}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{19}
 }
 
 // RollbackPolicy is the closed set of release rollback policies.
@@ -1107,11 +1167,11 @@ func (x RollbackPolicy) String() string {
 }
 
 func (RollbackPolicy) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_projects_v1_project_catalog_proto_enumTypes[19].Descriptor()
+	return file_kodex_projects_v1_project_catalog_proto_enumTypes[20].Descriptor()
 }
 
 func (RollbackPolicy) Type() protoreflect.EnumType {
-	return &file_kodex_projects_v1_project_catalog_proto_enumTypes[19]
+	return &file_kodex_projects_v1_project_catalog_proto_enumTypes[20]
 }
 
 func (x RollbackPolicy) Number() protoreflect.EnumNumber {
@@ -1120,7 +1180,7 @@ func (x RollbackPolicy) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use RollbackPolicy.Descriptor instead.
 func (RollbackPolicy) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{19}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{20}
 }
 
 // ReleasePolicyStatus is the closed set of release policy statuses.
@@ -1160,11 +1220,11 @@ func (x ReleasePolicyStatus) String() string {
 }
 
 func (ReleasePolicyStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_projects_v1_project_catalog_proto_enumTypes[20].Descriptor()
+	return file_kodex_projects_v1_project_catalog_proto_enumTypes[21].Descriptor()
 }
 
 func (ReleasePolicyStatus) Type() protoreflect.EnumType {
-	return &file_kodex_projects_v1_project_catalog_proto_enumTypes[20]
+	return &file_kodex_projects_v1_project_catalog_proto_enumTypes[21]
 }
 
 func (x ReleasePolicyStatus) Number() protoreflect.EnumNumber {
@@ -1173,7 +1233,7 @@ func (x ReleasePolicyStatus) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ReleasePolicyStatus.Descriptor instead.
 func (ReleasePolicyStatus) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{20}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{21}
 }
 
 // PlacementPolicyStatus is the closed set of placement policy statuses.
@@ -1210,11 +1270,11 @@ func (x PlacementPolicyStatus) String() string {
 }
 
 func (PlacementPolicyStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_projects_v1_project_catalog_proto_enumTypes[21].Descriptor()
+	return file_kodex_projects_v1_project_catalog_proto_enumTypes[22].Descriptor()
 }
 
 func (PlacementPolicyStatus) Type() protoreflect.EnumType {
-	return &file_kodex_projects_v1_project_catalog_proto_enumTypes[21]
+	return &file_kodex_projects_v1_project_catalog_proto_enumTypes[22]
 }
 
 func (x PlacementPolicyStatus) Number() protoreflect.EnumNumber {
@@ -1223,7 +1283,7 @@ func (x PlacementPolicyStatus) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use PlacementPolicyStatus.Descriptor instead.
 func (PlacementPolicyStatus) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{21}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{22}
 }
 
 // PolicyOverrideTargetType is the closed set of override target types.
@@ -1272,11 +1332,11 @@ func (x PolicyOverrideTargetType) String() string {
 }
 
 func (PolicyOverrideTargetType) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_projects_v1_project_catalog_proto_enumTypes[22].Descriptor()
+	return file_kodex_projects_v1_project_catalog_proto_enumTypes[23].Descriptor()
 }
 
 func (PolicyOverrideTargetType) Type() protoreflect.EnumType {
-	return &file_kodex_projects_v1_project_catalog_proto_enumTypes[22]
+	return &file_kodex_projects_v1_project_catalog_proto_enumTypes[23]
 }
 
 func (x PolicyOverrideTargetType) Number() protoreflect.EnumNumber {
@@ -1285,7 +1345,7 @@ func (x PolicyOverrideTargetType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use PolicyOverrideTargetType.Descriptor instead.
 func (PolicyOverrideTargetType) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{22}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{23}
 }
 
 // PolicyOverrideStatus is the closed set of override statuses.
@@ -1325,11 +1385,11 @@ func (x PolicyOverrideStatus) String() string {
 }
 
 func (PolicyOverrideStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_projects_v1_project_catalog_proto_enumTypes[23].Descriptor()
+	return file_kodex_projects_v1_project_catalog_proto_enumTypes[24].Descriptor()
 }
 
 func (PolicyOverrideStatus) Type() protoreflect.EnumType {
-	return &file_kodex_projects_v1_project_catalog_proto_enumTypes[23]
+	return &file_kodex_projects_v1_project_catalog_proto_enumTypes[24]
 }
 
 func (x PolicyOverrideStatus) Number() protoreflect.EnumNumber {
@@ -1338,7 +1398,7 @@ func (x PolicyOverrideStatus) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use PolicyOverrideStatus.Descriptor instead.
 func (PolicyOverrideStatus) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{23}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{24}
 }
 
 // CommandMeta is required for every mutating command.
@@ -2987,6 +3047,215 @@ func (x *SelfDeploySignal) GetVersion() int64 {
 	return 0
 }
 
+// SelfDeployBuildPlanItem содержит совместимый с runtime build spec для одного сервиса.
+type SelfDeployBuildPlanItem struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// service_key идентифицирует service descriptor из checked ServicesPolicy.
+	ServiceKey string `protobuf:"bytes,1,opt,name=service_key,json=serviceKey,proto3" json:"service_key,omitempty"`
+	// service_ref — safe ref service descriptor в project-catalog.
+	ServiceRef string `protobuf:"bytes,2,opt,name=service_ref,json=serviceRef,proto3" json:"service_ref,omitempty"`
+	// build_execution_spec совместим с runtime-manager JOB_TYPE_BUILD.
+	BuildExecutionSpec *v1.BuildExecutionSpec `protobuf:"bytes,3,opt,name=build_execution_spec,json=buildExecutionSpec,proto3" json:"build_execution_spec,omitempty"`
+	// plan_item_fingerprint — стабильный fingerprint item без raw YAML.
+	PlanItemFingerprint string `protobuf:"bytes,4,opt,name=plan_item_fingerprint,json=planItemFingerprint,proto3" json:"plan_item_fingerprint,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *SelfDeployBuildPlanItem) Reset() {
+	*x = SelfDeployBuildPlanItem{}
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SelfDeployBuildPlanItem) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SelfDeployBuildPlanItem) ProtoMessage() {}
+
+func (x *SelfDeployBuildPlanItem) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SelfDeployBuildPlanItem.ProtoReflect.Descriptor instead.
+func (*SelfDeployBuildPlanItem) Descriptor() ([]byte, []int) {
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *SelfDeployBuildPlanItem) GetServiceKey() string {
+	if x != nil {
+		return x.ServiceKey
+	}
+	return ""
+}
+
+func (x *SelfDeployBuildPlanItem) GetServiceRef() string {
+	if x != nil {
+		return x.ServiceRef
+	}
+	return ""
+}
+
+func (x *SelfDeployBuildPlanItem) GetBuildExecutionSpec() *v1.BuildExecutionSpec {
+	if x != nil {
+		return x.BuildExecutionSpec
+	}
+	return nil
+}
+
+func (x *SelfDeployBuildPlanItem) GetPlanItemFingerprint() string {
+	if x != nil {
+		return x.PlanItemFingerprint
+	}
+	return ""
+}
+
+// SelfDeployBuildPlan — проверенный project-owned plan для подготовки build jobs.
+type SelfDeployBuildPlan struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// project_ref — project ref в project-catalog.
+	ProjectRef string `protobuf:"bytes,1,opt,name=project_ref,json=projectRef,proto3" json:"project_ref,omitempty"`
+	// repository_ref — repository binding ref в project-catalog.
+	RepositoryRef string `protobuf:"bytes,2,opt,name=repository_ref,json=repositoryRef,proto3" json:"repository_ref,omitempty"`
+	// provider_signal_ref — safe provider/project signal ref, если известен.
+	ProviderSignalRef *string `protobuf:"bytes,3,opt,name=provider_signal_ref,json=providerSignalRef,proto3,oneof" json:"provider_signal_ref,omitempty"`
+	// source_ref — provider/source ref, который послужил trigger.
+	SourceRef string `protobuf:"bytes,4,opt,name=source_ref,json=sourceRef,proto3" json:"source_ref,omitempty"`
+	// merge_commit_sha — commit source snapshot.
+	MergeCommitSha string `protobuf:"bytes,5,opt,name=merge_commit_sha,json=mergeCommitSha,proto3" json:"merge_commit_sha,omitempty"`
+	// services_yaml — checked project-owned policy projection.
+	ServicesYaml *SelfDeployServicesYamlProjection `protobuf:"bytes,6,opt,name=services_yaml,json=servicesYaml,proto3" json:"services_yaml,omitempty"`
+	// affected_service_keys — нормализованный список запрошенных сервисов.
+	AffectedServiceKeys []string `protobuf:"bytes,7,rep,name=affected_service_keys,json=affectedServiceKeys,proto3" json:"affected_service_keys,omitempty"`
+	// build_items — per-service typed build specs.
+	BuildItems []*SelfDeployBuildPlanItem `protobuf:"bytes,8,rep,name=build_items,json=buildItems,proto3" json:"build_items,omitempty"`
+	// plan_fingerprint — стабильный fingerprint всего checked build plan.
+	PlanFingerprint string `protobuf:"bytes,9,opt,name=plan_fingerprint,json=planFingerprint,proto3" json:"plan_fingerprint,omitempty"`
+	// safe_summary — bounded diagnostic summary без raw payloads.
+	SafeSummary string `protobuf:"bytes,10,opt,name=safe_summary,json=safeSummary,proto3" json:"safe_summary,omitempty"`
+	// version — версия build plan contract.
+	Version       int64 `protobuf:"varint,11,opt,name=version,proto3" json:"version,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SelfDeployBuildPlan) Reset() {
+	*x = SelfDeployBuildPlan{}
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SelfDeployBuildPlan) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SelfDeployBuildPlan) ProtoMessage() {}
+
+func (x *SelfDeployBuildPlan) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SelfDeployBuildPlan.ProtoReflect.Descriptor instead.
+func (*SelfDeployBuildPlan) Descriptor() ([]byte, []int) {
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *SelfDeployBuildPlan) GetProjectRef() string {
+	if x != nil {
+		return x.ProjectRef
+	}
+	return ""
+}
+
+func (x *SelfDeployBuildPlan) GetRepositoryRef() string {
+	if x != nil {
+		return x.RepositoryRef
+	}
+	return ""
+}
+
+func (x *SelfDeployBuildPlan) GetProviderSignalRef() string {
+	if x != nil && x.ProviderSignalRef != nil {
+		return *x.ProviderSignalRef
+	}
+	return ""
+}
+
+func (x *SelfDeployBuildPlan) GetSourceRef() string {
+	if x != nil {
+		return x.SourceRef
+	}
+	return ""
+}
+
+func (x *SelfDeployBuildPlan) GetMergeCommitSha() string {
+	if x != nil {
+		return x.MergeCommitSha
+	}
+	return ""
+}
+
+func (x *SelfDeployBuildPlan) GetServicesYaml() *SelfDeployServicesYamlProjection {
+	if x != nil {
+		return x.ServicesYaml
+	}
+	return nil
+}
+
+func (x *SelfDeployBuildPlan) GetAffectedServiceKeys() []string {
+	if x != nil {
+		return x.AffectedServiceKeys
+	}
+	return nil
+}
+
+func (x *SelfDeployBuildPlan) GetBuildItems() []*SelfDeployBuildPlanItem {
+	if x != nil {
+		return x.BuildItems
+	}
+	return nil
+}
+
+func (x *SelfDeployBuildPlan) GetPlanFingerprint() string {
+	if x != nil {
+		return x.PlanFingerprint
+	}
+	return ""
+}
+
+func (x *SelfDeployBuildPlan) GetSafeSummary() string {
+	if x != nil {
+		return x.SafeSummary
+	}
+	return ""
+}
+
+func (x *SelfDeployBuildPlan) GetVersion() int64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
 // DocumentationSource describes one project documentation source.
 type DocumentationSource struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -3014,7 +3283,7 @@ type DocumentationSource struct {
 
 func (x *DocumentationSource) Reset() {
 	*x = DocumentationSource{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[17]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3026,7 +3295,7 @@ func (x *DocumentationSource) String() string {
 func (*DocumentationSource) ProtoMessage() {}
 
 func (x *DocumentationSource) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[17]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3039,7 +3308,7 @@ func (x *DocumentationSource) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DocumentationSource.ProtoReflect.Descriptor instead.
 func (*DocumentationSource) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{17}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *DocumentationSource) GetDocumentationSourceId() string {
@@ -3130,7 +3399,7 @@ type BranchRules struct {
 
 func (x *BranchRules) Reset() {
 	*x = BranchRules{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[18]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3142,7 +3411,7 @@ func (x *BranchRules) String() string {
 func (*BranchRules) ProtoMessage() {}
 
 func (x *BranchRules) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[18]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3155,7 +3424,7 @@ func (x *BranchRules) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BranchRules.ProtoReflect.Descriptor instead.
 func (*BranchRules) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{18}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *BranchRules) GetBranchRulesId() string {
@@ -3241,7 +3510,7 @@ type ReleasePolicy struct {
 
 func (x *ReleasePolicy) Reset() {
 	*x = ReleasePolicy{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[19]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3253,7 +3522,7 @@ func (x *ReleasePolicy) String() string {
 func (*ReleasePolicy) ProtoMessage() {}
 
 func (x *ReleasePolicy) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[19]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3266,7 +3535,7 @@ func (x *ReleasePolicy) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReleasePolicy.ProtoReflect.Descriptor instead.
 func (*ReleasePolicy) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{19}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *ReleasePolicy) GetReleasePolicyId() string {
@@ -3355,7 +3624,7 @@ type ReleaseLine struct {
 
 func (x *ReleaseLine) Reset() {
 	*x = ReleaseLine{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[20]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3367,7 +3636,7 @@ func (x *ReleaseLine) String() string {
 func (*ReleaseLine) ProtoMessage() {}
 
 func (x *ReleaseLine) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[20]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3380,7 +3649,7 @@ func (x *ReleaseLine) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReleaseLine.ProtoReflect.Descriptor instead.
 func (*ReleaseLine) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{20}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *ReleaseLine) GetReleaseLineId() string {
@@ -3455,7 +3724,7 @@ type PlacementPolicy struct {
 
 func (x *PlacementPolicy) Reset() {
 	*x = PlacementPolicy{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[21]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3467,7 +3736,7 @@ func (x *PlacementPolicy) String() string {
 func (*PlacementPolicy) ProtoMessage() {}
 
 func (x *PlacementPolicy) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[21]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3480,7 +3749,7 @@ func (x *PlacementPolicy) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlacementPolicy.ProtoReflect.Descriptor instead.
 func (*PlacementPolicy) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{21}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *PlacementPolicy) GetPlacementPolicyId() string {
@@ -3561,7 +3830,7 @@ type PolicyOverride struct {
 
 func (x *PolicyOverride) Reset() {
 	*x = PolicyOverride{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[22]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3573,7 +3842,7 @@ func (x *PolicyOverride) String() string {
 func (*PolicyOverride) ProtoMessage() {}
 
 func (x *PolicyOverride) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[22]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3586,7 +3855,7 @@ func (x *PolicyOverride) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PolicyOverride.ProtoReflect.Descriptor instead.
 func (*PolicyOverride) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{22}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *PolicyOverride) GetPolicyOverrideId() string {
@@ -3680,7 +3949,7 @@ type WorkspacePolicy struct {
 
 func (x *WorkspacePolicy) Reset() {
 	*x = WorkspacePolicy{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[23]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3692,7 +3961,7 @@ func (x *WorkspacePolicy) String() string {
 func (*WorkspacePolicy) ProtoMessage() {}
 
 func (x *WorkspacePolicy) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[23]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3705,7 +3974,7 @@ func (x *WorkspacePolicy) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkspacePolicy.ProtoReflect.Descriptor instead.
 func (*WorkspacePolicy) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{23}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *WorkspacePolicy) GetProjectId() string {
@@ -3773,7 +4042,7 @@ type WorkspaceCodeSource struct {
 
 func (x *WorkspaceCodeSource) Reset() {
 	*x = WorkspaceCodeSource{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[24]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3785,7 +4054,7 @@ func (x *WorkspaceCodeSource) String() string {
 func (*WorkspaceCodeSource) ProtoMessage() {}
 
 func (x *WorkspaceCodeSource) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[24]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3798,7 +4067,7 @@ func (x *WorkspaceCodeSource) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkspaceCodeSource.ProtoReflect.Descriptor instead.
 func (*WorkspaceCodeSource) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{24}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *WorkspaceCodeSource) GetRepositoryId() string {
@@ -3871,7 +4140,7 @@ type WorkspaceDocumentationSource struct {
 
 func (x *WorkspaceDocumentationSource) Reset() {
 	*x = WorkspaceDocumentationSource{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[25]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3883,7 +4152,7 @@ func (x *WorkspaceDocumentationSource) String() string {
 func (*WorkspaceDocumentationSource) ProtoMessage() {}
 
 func (x *WorkspaceDocumentationSource) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[25]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3896,7 +4165,7 @@ func (x *WorkspaceDocumentationSource) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkspaceDocumentationSource.ProtoReflect.Descriptor instead.
 func (*WorkspaceDocumentationSource) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{25}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *WorkspaceDocumentationSource) GetDocumentationSourceId() string {
@@ -3964,7 +4233,7 @@ type CreateProjectRequest struct {
 
 func (x *CreateProjectRequest) Reset() {
 	*x = CreateProjectRequest{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[26]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3976,7 +4245,7 @@ func (x *CreateProjectRequest) String() string {
 func (*CreateProjectRequest) ProtoMessage() {}
 
 func (x *CreateProjectRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[26]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3989,7 +4258,7 @@ func (x *CreateProjectRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateProjectRequest.ProtoReflect.Descriptor instead.
 func (*CreateProjectRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{26}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *CreateProjectRequest) GetOrganizationId() string {
@@ -4064,7 +4333,7 @@ type UpdateProjectRequest struct {
 
 func (x *UpdateProjectRequest) Reset() {
 	*x = UpdateProjectRequest{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[27]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4076,7 +4345,7 @@ func (x *UpdateProjectRequest) String() string {
 func (*UpdateProjectRequest) ProtoMessage() {}
 
 func (x *UpdateProjectRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[27]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4089,7 +4358,7 @@ func (x *UpdateProjectRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateProjectRequest.ProtoReflect.Descriptor instead.
 func (*UpdateProjectRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{27}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *UpdateProjectRequest) GetProjectId() string {
@@ -4152,7 +4421,7 @@ type ProjectResponse struct {
 
 func (x *ProjectResponse) Reset() {
 	*x = ProjectResponse{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[28]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4164,7 +4433,7 @@ func (x *ProjectResponse) String() string {
 func (*ProjectResponse) ProtoMessage() {}
 
 func (x *ProjectResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[28]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4177,7 +4446,7 @@ func (x *ProjectResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProjectResponse.ProtoReflect.Descriptor instead.
 func (*ProjectResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{28}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *ProjectResponse) GetProject() *Project {
@@ -4200,7 +4469,7 @@ type GetProjectRequest struct {
 
 func (x *GetProjectRequest) Reset() {
 	*x = GetProjectRequest{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[29]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4212,7 +4481,7 @@ func (x *GetProjectRequest) String() string {
 func (*GetProjectRequest) ProtoMessage() {}
 
 func (x *GetProjectRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[29]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4225,7 +4494,7 @@ func (x *GetProjectRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetProjectRequest.ProtoReflect.Descriptor instead.
 func (*GetProjectRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{29}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *GetProjectRequest) GetProjectId() string {
@@ -4259,7 +4528,7 @@ type ListProjectsRequest struct {
 
 func (x *ListProjectsRequest) Reset() {
 	*x = ListProjectsRequest{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[30]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4271,7 +4540,7 @@ func (x *ListProjectsRequest) String() string {
 func (*ListProjectsRequest) ProtoMessage() {}
 
 func (x *ListProjectsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[30]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4284,7 +4553,7 @@ func (x *ListProjectsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListProjectsRequest.ProtoReflect.Descriptor instead.
 func (*ListProjectsRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{30}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *ListProjectsRequest) GetOrganizationId() string {
@@ -4328,7 +4597,7 @@ type ListProjectsResponse struct {
 
 func (x *ListProjectsResponse) Reset() {
 	*x = ListProjectsResponse{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[31]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4340,7 +4609,7 @@ func (x *ListProjectsResponse) String() string {
 func (*ListProjectsResponse) ProtoMessage() {}
 
 func (x *ListProjectsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[31]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4353,7 +4622,7 @@ func (x *ListProjectsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListProjectsResponse.ProtoReflect.Descriptor instead.
 func (*ListProjectsResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{31}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *ListProjectsResponse) GetProjects() []*Project {
@@ -4399,7 +4668,7 @@ type AttachRepositoryRequest struct {
 
 func (x *AttachRepositoryRequest) Reset() {
 	*x = AttachRepositoryRequest{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[32]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4411,7 +4680,7 @@ func (x *AttachRepositoryRequest) String() string {
 func (*AttachRepositoryRequest) ProtoMessage() {}
 
 func (x *AttachRepositoryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[32]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4424,7 +4693,7 @@ func (x *AttachRepositoryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AttachRepositoryRequest.ProtoReflect.Descriptor instead.
 func (*AttachRepositoryRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{32}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *AttachRepositoryRequest) GetProjectId() string {
@@ -4516,7 +4785,7 @@ type UpdateRepositoryRequest struct {
 
 func (x *UpdateRepositoryRequest) Reset() {
 	*x = UpdateRepositoryRequest{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[33]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4528,7 +4797,7 @@ func (x *UpdateRepositoryRequest) String() string {
 func (*UpdateRepositoryRequest) ProtoMessage() {}
 
 func (x *UpdateRepositoryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[33]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4541,7 +4810,7 @@ func (x *UpdateRepositoryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateRepositoryRequest.ProtoReflect.Descriptor instead.
 func (*UpdateRepositoryRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{33}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *UpdateRepositoryRequest) GetRepositoryId() string {
@@ -4592,7 +4861,7 @@ type DetachRepositoryRequest struct {
 
 func (x *DetachRepositoryRequest) Reset() {
 	*x = DetachRepositoryRequest{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[34]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4604,7 +4873,7 @@ func (x *DetachRepositoryRequest) String() string {
 func (*DetachRepositoryRequest) ProtoMessage() {}
 
 func (x *DetachRepositoryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[34]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4617,7 +4886,7 @@ func (x *DetachRepositoryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DetachRepositoryRequest.ProtoReflect.Descriptor instead.
 func (*DetachRepositoryRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{34}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *DetachRepositoryRequest) GetRepositoryId() string {
@@ -4645,7 +4914,7 @@ type RepositoryResponse struct {
 
 func (x *RepositoryResponse) Reset() {
 	*x = RepositoryResponse{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[35]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4657,7 +4926,7 @@ func (x *RepositoryResponse) String() string {
 func (*RepositoryResponse) ProtoMessage() {}
 
 func (x *RepositoryResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[35]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4670,7 +4939,7 @@ func (x *RepositoryResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RepositoryResponse.ProtoReflect.Descriptor instead.
 func (*RepositoryResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{35}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *RepositoryResponse) GetRepository() *Repository {
@@ -4709,7 +4978,7 @@ type CreateProviderRepositoryRequest struct {
 
 func (x *CreateProviderRepositoryRequest) Reset() {
 	*x = CreateProviderRepositoryRequest{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[36]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4721,7 +4990,7 @@ func (x *CreateProviderRepositoryRequest) String() string {
 func (*CreateProviderRepositoryRequest) ProtoMessage() {}
 
 func (x *CreateProviderRepositoryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[36]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4734,7 +5003,7 @@ func (x *CreateProviderRepositoryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateProviderRepositoryRequest.ProtoReflect.Descriptor instead.
 func (*CreateProviderRepositoryRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{36}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *CreateProviderRepositoryRequest) GetProjectId() string {
@@ -4834,7 +5103,7 @@ type RepositoryProviderCreateResponse struct {
 
 func (x *RepositoryProviderCreateResponse) Reset() {
 	*x = RepositoryProviderCreateResponse{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[37]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4846,7 +5115,7 @@ func (x *RepositoryProviderCreateResponse) String() string {
 func (*RepositoryProviderCreateResponse) ProtoMessage() {}
 
 func (x *RepositoryProviderCreateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[37]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4859,7 +5128,7 @@ func (x *RepositoryProviderCreateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RepositoryProviderCreateResponse.ProtoReflect.Descriptor instead.
 func (*RepositoryProviderCreateResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{37}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *RepositoryProviderCreateResponse) GetRepository() *Repository {
@@ -4960,7 +5229,7 @@ type CreateRepositoryBootstrapPullRequestRequest struct {
 
 func (x *CreateRepositoryBootstrapPullRequestRequest) Reset() {
 	*x = CreateRepositoryBootstrapPullRequestRequest{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[38]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4972,7 +5241,7 @@ func (x *CreateRepositoryBootstrapPullRequestRequest) String() string {
 func (*CreateRepositoryBootstrapPullRequestRequest) ProtoMessage() {}
 
 func (x *CreateRepositoryBootstrapPullRequestRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[38]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4985,7 +5254,7 @@ func (x *CreateRepositoryBootstrapPullRequestRequest) ProtoReflect() protoreflec
 
 // Deprecated: Use CreateRepositoryBootstrapPullRequestRequest.ProtoReflect.Descriptor instead.
 func (*CreateRepositoryBootstrapPullRequestRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{38}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *CreateRepositoryBootstrapPullRequestRequest) GetProjectId() string {
@@ -5110,7 +5379,7 @@ type RepositoryBootstrapPullRequestResponse struct {
 
 func (x *RepositoryBootstrapPullRequestResponse) Reset() {
 	*x = RepositoryBootstrapPullRequestResponse{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[39]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5122,7 +5391,7 @@ func (x *RepositoryBootstrapPullRequestResponse) String() string {
 func (*RepositoryBootstrapPullRequestResponse) ProtoMessage() {}
 
 func (x *RepositoryBootstrapPullRequestResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[39]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5135,7 +5404,7 @@ func (x *RepositoryBootstrapPullRequestResponse) ProtoReflect() protoreflect.Mes
 
 // Deprecated: Use RepositoryBootstrapPullRequestResponse.ProtoReflect.Descriptor instead.
 func (*RepositoryBootstrapPullRequestResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{39}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *RepositoryBootstrapPullRequestResponse) GetRepository() *Repository {
@@ -5228,7 +5497,7 @@ type GetRepositoryRequest struct {
 
 func (x *GetRepositoryRequest) Reset() {
 	*x = GetRepositoryRequest{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[40]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5240,7 +5509,7 @@ func (x *GetRepositoryRequest) String() string {
 func (*GetRepositoryRequest) ProtoMessage() {}
 
 func (x *GetRepositoryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[40]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5253,7 +5522,7 @@ func (x *GetRepositoryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRepositoryRequest.ProtoReflect.Descriptor instead.
 func (*GetRepositoryRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{40}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *GetRepositoryRequest) GetRepositoryId() string {
@@ -5287,7 +5556,7 @@ type ListRepositoriesRequest struct {
 
 func (x *ListRepositoriesRequest) Reset() {
 	*x = ListRepositoriesRequest{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[41]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5299,7 +5568,7 @@ func (x *ListRepositoriesRequest) String() string {
 func (*ListRepositoriesRequest) ProtoMessage() {}
 
 func (x *ListRepositoriesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[41]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5312,7 +5581,7 @@ func (x *ListRepositoriesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRepositoriesRequest.ProtoReflect.Descriptor instead.
 func (*ListRepositoriesRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{41}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *ListRepositoriesRequest) GetProjectId() string {
@@ -5356,7 +5625,7 @@ type ListRepositoriesResponse struct {
 
 func (x *ListRepositoriesResponse) Reset() {
 	*x = ListRepositoriesResponse{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[42]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5368,7 +5637,7 @@ func (x *ListRepositoriesResponse) String() string {
 func (*ListRepositoriesResponse) ProtoMessage() {}
 
 func (x *ListRepositoriesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[42]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5381,7 +5650,7 @@ func (x *ListRepositoriesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRepositoriesResponse.ProtoReflect.Descriptor instead.
 func (*ListRepositoriesResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{42}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *ListRepositoriesResponse) GetRepositories() []*Repository {
@@ -5429,7 +5698,7 @@ type ImportServicesPolicyRequest struct {
 
 func (x *ImportServicesPolicyRequest) Reset() {
 	*x = ImportServicesPolicyRequest{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[43]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5441,7 +5710,7 @@ func (x *ImportServicesPolicyRequest) String() string {
 func (*ImportServicesPolicyRequest) ProtoMessage() {}
 
 func (x *ImportServicesPolicyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[43]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5454,7 +5723,7 @@ func (x *ImportServicesPolicyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ImportServicesPolicyRequest.ProtoReflect.Descriptor instead.
 func (*ImportServicesPolicyRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{43}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *ImportServicesPolicyRequest) GetProjectId() string {
@@ -5575,7 +5844,7 @@ type ImportBootstrapServicesPolicyRequest struct {
 
 func (x *ImportBootstrapServicesPolicyRequest) Reset() {
 	*x = ImportBootstrapServicesPolicyRequest{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[44]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5587,7 +5856,7 @@ func (x *ImportBootstrapServicesPolicyRequest) String() string {
 func (*ImportBootstrapServicesPolicyRequest) ProtoMessage() {}
 
 func (x *ImportBootstrapServicesPolicyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[44]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5600,7 +5869,7 @@ func (x *ImportBootstrapServicesPolicyRequest) ProtoReflect() protoreflect.Messa
 
 // Deprecated: Use ImportBootstrapServicesPolicyRequest.ProtoReflect.Descriptor instead.
 func (*ImportBootstrapServicesPolicyRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{44}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *ImportBootstrapServicesPolicyRequest) GetProjectId() string {
@@ -5754,7 +6023,7 @@ type BootstrapRepositoryMergeSignal struct {
 
 func (x *BootstrapRepositoryMergeSignal) Reset() {
 	*x = BootstrapRepositoryMergeSignal{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[45]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5766,7 +6035,7 @@ func (x *BootstrapRepositoryMergeSignal) String() string {
 func (*BootstrapRepositoryMergeSignal) ProtoMessage() {}
 
 func (x *BootstrapRepositoryMergeSignal) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[45]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5779,7 +6048,7 @@ func (x *BootstrapRepositoryMergeSignal) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BootstrapRepositoryMergeSignal.ProtoReflect.Descriptor instead.
 func (*BootstrapRepositoryMergeSignal) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{45}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *BootstrapRepositoryMergeSignal) GetSignalId() string {
@@ -5908,7 +6177,7 @@ type CheckedBootstrapServicesPolicyArtifact struct {
 
 func (x *CheckedBootstrapServicesPolicyArtifact) Reset() {
 	*x = CheckedBootstrapServicesPolicyArtifact{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[46]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5920,7 +6189,7 @@ func (x *CheckedBootstrapServicesPolicyArtifact) String() string {
 func (*CheckedBootstrapServicesPolicyArtifact) ProtoMessage() {}
 
 func (x *CheckedBootstrapServicesPolicyArtifact) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[46]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5933,7 +6202,7 @@ func (x *CheckedBootstrapServicesPolicyArtifact) ProtoReflect() protoreflect.Mes
 
 // Deprecated: Use CheckedBootstrapServicesPolicyArtifact.ProtoReflect.Descriptor instead.
 func (*CheckedBootstrapServicesPolicyArtifact) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{46}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *CheckedBootstrapServicesPolicyArtifact) GetArtifactRef() string {
@@ -5997,7 +6266,7 @@ type ReconcileBootstrapMergeSignalRequest struct {
 
 func (x *ReconcileBootstrapMergeSignalRequest) Reset() {
 	*x = ReconcileBootstrapMergeSignalRequest{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[47]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6009,7 +6278,7 @@ func (x *ReconcileBootstrapMergeSignalRequest) String() string {
 func (*ReconcileBootstrapMergeSignalRequest) ProtoMessage() {}
 
 func (x *ReconcileBootstrapMergeSignalRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[47]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6022,7 +6291,7 @@ func (x *ReconcileBootstrapMergeSignalRequest) ProtoReflect() protoreflect.Messa
 
 // Deprecated: Use ReconcileBootstrapMergeSignalRequest.ProtoReflect.Descriptor instead.
 func (*ReconcileBootstrapMergeSignalRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{47}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *ReconcileBootstrapMergeSignalRequest) GetProjectId() string {
@@ -6099,7 +6368,7 @@ type RepositoryAdoptionMergeSignal struct {
 
 func (x *RepositoryAdoptionMergeSignal) Reset() {
 	*x = RepositoryAdoptionMergeSignal{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[48]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6111,7 +6380,7 @@ func (x *RepositoryAdoptionMergeSignal) String() string {
 func (*RepositoryAdoptionMergeSignal) ProtoMessage() {}
 
 func (x *RepositoryAdoptionMergeSignal) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[48]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6124,7 +6393,7 @@ func (x *RepositoryAdoptionMergeSignal) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RepositoryAdoptionMergeSignal.ProtoReflect.Descriptor instead.
 func (*RepositoryAdoptionMergeSignal) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{48}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *RepositoryAdoptionMergeSignal) GetSignalId() string {
@@ -6253,7 +6522,7 @@ type CheckedAdoptionServicesPolicyArtifact struct {
 
 func (x *CheckedAdoptionServicesPolicyArtifact) Reset() {
 	*x = CheckedAdoptionServicesPolicyArtifact{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[49]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6265,7 +6534,7 @@ func (x *CheckedAdoptionServicesPolicyArtifact) String() string {
 func (*CheckedAdoptionServicesPolicyArtifact) ProtoMessage() {}
 
 func (x *CheckedAdoptionServicesPolicyArtifact) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[49]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6278,7 +6547,7 @@ func (x *CheckedAdoptionServicesPolicyArtifact) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use CheckedAdoptionServicesPolicyArtifact.ProtoReflect.Descriptor instead.
 func (*CheckedAdoptionServicesPolicyArtifact) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{49}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *CheckedAdoptionServicesPolicyArtifact) GetArtifactRef() string {
@@ -6342,7 +6611,7 @@ type ReconcileAdoptionMergeSignalRequest struct {
 
 func (x *ReconcileAdoptionMergeSignalRequest) Reset() {
 	*x = ReconcileAdoptionMergeSignalRequest{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[50]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6354,7 +6623,7 @@ func (x *ReconcileAdoptionMergeSignalRequest) String() string {
 func (*ReconcileAdoptionMergeSignalRequest) ProtoMessage() {}
 
 func (x *ReconcileAdoptionMergeSignalRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[50]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6367,7 +6636,7 @@ func (x *ReconcileAdoptionMergeSignalRequest) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use ReconcileAdoptionMergeSignalRequest.ProtoReflect.Descriptor instead.
 func (*ReconcileAdoptionMergeSignalRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{50}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *ReconcileAdoptionMergeSignalRequest) GetProjectId() string {
@@ -6424,7 +6693,7 @@ type BootstrapServicesPolicyImportResponse struct {
 
 func (x *BootstrapServicesPolicyImportResponse) Reset() {
 	*x = BootstrapServicesPolicyImportResponse{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[51]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6436,7 +6705,7 @@ func (x *BootstrapServicesPolicyImportResponse) String() string {
 func (*BootstrapServicesPolicyImportResponse) ProtoMessage() {}
 
 func (x *BootstrapServicesPolicyImportResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[51]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6449,7 +6718,7 @@ func (x *BootstrapServicesPolicyImportResponse) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use BootstrapServicesPolicyImportResponse.ProtoReflect.Descriptor instead.
 func (*BootstrapServicesPolicyImportResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{51}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *BootstrapServicesPolicyImportResponse) GetRepository() *Repository {
@@ -6498,7 +6767,7 @@ type ServicesPolicyResponse struct {
 
 func (x *ServicesPolicyResponse) Reset() {
 	*x = ServicesPolicyResponse{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[52]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6510,7 +6779,7 @@ func (x *ServicesPolicyResponse) String() string {
 func (*ServicesPolicyResponse) ProtoMessage() {}
 
 func (x *ServicesPolicyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[52]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6523,7 +6792,7 @@ func (x *ServicesPolicyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServicesPolicyResponse.ProtoReflect.Descriptor instead.
 func (*ServicesPolicyResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{52}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *ServicesPolicyResponse) GetServicesPolicy() *ServicesPolicy {
@@ -6552,7 +6821,7 @@ type GetSelfDeploySignalRequest struct {
 
 func (x *GetSelfDeploySignalRequest) Reset() {
 	*x = GetSelfDeploySignalRequest{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[53]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6564,7 +6833,7 @@ func (x *GetSelfDeploySignalRequest) String() string {
 func (*GetSelfDeploySignalRequest) ProtoMessage() {}
 
 func (x *GetSelfDeploySignalRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[53]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6577,7 +6846,7 @@ func (x *GetSelfDeploySignalRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSelfDeploySignalRequest.ProtoReflect.Descriptor instead.
 func (*GetSelfDeploySignalRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{53}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *GetSelfDeploySignalRequest) GetProjectId() string {
@@ -6630,7 +6899,7 @@ type SelfDeploySignalResponse struct {
 
 func (x *SelfDeploySignalResponse) Reset() {
 	*x = SelfDeploySignalResponse{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[54]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6642,7 +6911,7 @@ func (x *SelfDeploySignalResponse) String() string {
 func (*SelfDeploySignalResponse) ProtoMessage() {}
 
 func (x *SelfDeploySignalResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[54]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6655,7 +6924,7 @@ func (x *SelfDeploySignalResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SelfDeploySignalResponse.ProtoReflect.Descriptor instead.
 func (*SelfDeploySignalResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{54}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *SelfDeploySignalResponse) GetStatus() SelfDeploySignalStatus {
@@ -6679,6 +6948,215 @@ func (x *SelfDeploySignalResponse) GetSafeReason() string {
 	return ""
 }
 
+// GetSelfDeployBuildPlanRequest читает проверенный build plan из project-owned ServicesPolicy.
+type GetSelfDeployBuildPlanRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// project_id задаёт область checked ServicesPolicy.
+	ProjectId string `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	// repository_id задаёт repository binding для affected services.
+	RepositoryId string `protobuf:"bytes,2,opt,name=repository_id,json=repositoryId,proto3" json:"repository_id,omitempty"`
+	// source_ref — branch/ref из ready self-deploy signal.
+	SourceRef string `protobuf:"bytes,3,opt,name=source_ref,json=sourceRef,proto3" json:"source_ref,omitempty"`
+	// merge_commit_sha — commit sha из ready self-deploy signal.
+	MergeCommitSha string `protobuf:"bytes,4,opt,name=merge_commit_sha,json=mergeCommitSha,proto3" json:"merge_commit_sha,omitempty"`
+	// provider_signal_ref — stable signal ref из SelfDeployPlan, если известен.
+	ProviderSignalRef *string `protobuf:"bytes,5,opt,name=provider_signal_ref,json=providerSignalRef,proto3,oneof" json:"provider_signal_ref,omitempty"`
+	// provider_signal_id — persisted provider signal id, если известен.
+	ProviderSignalId *string `protobuf:"bytes,6,opt,name=provider_signal_id,json=providerSignalId,proto3,oneof" json:"provider_signal_id,omitempty"`
+	// provider_signal_key — provider signal idempotency key, если известен.
+	ProviderSignalKey *string `protobuf:"bytes,7,opt,name=provider_signal_key,json=providerSignalKey,proto3,oneof" json:"provider_signal_key,omitempty"`
+	// affected_service_keys — service keys из ready self-deploy signal.
+	AffectedServiceKeys []string `protobuf:"bytes,8,rep,name=affected_service_keys,json=affectedServiceKeys,proto3" json:"affected_service_keys,omitempty"`
+	// expected_services_policy_digest — digest checked ServicesPolicy, ожидаемый caller.
+	ExpectedServicesPolicyDigest string `protobuf:"bytes,9,opt,name=expected_services_policy_digest,json=expectedServicesPolicyDigest,proto3" json:"expected_services_policy_digest,omitempty"`
+	// expected_services_policy_fingerprint — fingerprint checked ServicesPolicy, ожидаемый caller.
+	ExpectedServicesPolicyFingerprint *string `protobuf:"bytes,10,opt,name=expected_services_policy_fingerprint,json=expectedServicesPolicyFingerprint,proto3,oneof" json:"expected_services_policy_fingerprint,omitempty"`
+	// expected_services_policy_version — policy version, ожидаемая caller.
+	ExpectedServicesPolicyVersion *int64 `protobuf:"varint,11,opt,name=expected_services_policy_version,json=expectedServicesPolicyVersion,proto3,oneof" json:"expected_services_policy_version,omitempty"`
+	// meta содержит read actor и request context.
+	Meta          *QueryMeta `protobuf:"bytes,12,opt,name=meta,proto3" json:"meta,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetSelfDeployBuildPlanRequest) Reset() {
+	*x = GetSelfDeployBuildPlanRequest{}
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[57]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetSelfDeployBuildPlanRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetSelfDeployBuildPlanRequest) ProtoMessage() {}
+
+func (x *GetSelfDeployBuildPlanRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[57]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetSelfDeployBuildPlanRequest.ProtoReflect.Descriptor instead.
+func (*GetSelfDeployBuildPlanRequest) Descriptor() ([]byte, []int) {
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{57}
+}
+
+func (x *GetSelfDeployBuildPlanRequest) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *GetSelfDeployBuildPlanRequest) GetRepositoryId() string {
+	if x != nil {
+		return x.RepositoryId
+	}
+	return ""
+}
+
+func (x *GetSelfDeployBuildPlanRequest) GetSourceRef() string {
+	if x != nil {
+		return x.SourceRef
+	}
+	return ""
+}
+
+func (x *GetSelfDeployBuildPlanRequest) GetMergeCommitSha() string {
+	if x != nil {
+		return x.MergeCommitSha
+	}
+	return ""
+}
+
+func (x *GetSelfDeployBuildPlanRequest) GetProviderSignalRef() string {
+	if x != nil && x.ProviderSignalRef != nil {
+		return *x.ProviderSignalRef
+	}
+	return ""
+}
+
+func (x *GetSelfDeployBuildPlanRequest) GetProviderSignalId() string {
+	if x != nil && x.ProviderSignalId != nil {
+		return *x.ProviderSignalId
+	}
+	return ""
+}
+
+func (x *GetSelfDeployBuildPlanRequest) GetProviderSignalKey() string {
+	if x != nil && x.ProviderSignalKey != nil {
+		return *x.ProviderSignalKey
+	}
+	return ""
+}
+
+func (x *GetSelfDeployBuildPlanRequest) GetAffectedServiceKeys() []string {
+	if x != nil {
+		return x.AffectedServiceKeys
+	}
+	return nil
+}
+
+func (x *GetSelfDeployBuildPlanRequest) GetExpectedServicesPolicyDigest() string {
+	if x != nil {
+		return x.ExpectedServicesPolicyDigest
+	}
+	return ""
+}
+
+func (x *GetSelfDeployBuildPlanRequest) GetExpectedServicesPolicyFingerprint() string {
+	if x != nil && x.ExpectedServicesPolicyFingerprint != nil {
+		return *x.ExpectedServicesPolicyFingerprint
+	}
+	return ""
+}
+
+func (x *GetSelfDeployBuildPlanRequest) GetExpectedServicesPolicyVersion() int64 {
+	if x != nil && x.ExpectedServicesPolicyVersion != nil {
+		return *x.ExpectedServicesPolicyVersion
+	}
+	return 0
+}
+
+func (x *GetSelfDeployBuildPlanRequest) GetMeta() *QueryMeta {
+	if x != nil {
+		return x.Meta
+	}
+	return nil
+}
+
+// SelfDeployBuildPlanResponse возвращает проверенный build plan или безопасную non-ready reason.
+type SelfDeployBuildPlanResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// status описывает готовность build plan.
+	Status SelfDeployBuildPlanStatus `protobuf:"varint,1,opt,name=status,proto3,enum=kodex.projects.v1.SelfDeployBuildPlanStatus" json:"status,omitempty"`
+	// plan присутствует при ready.
+	Plan *SelfDeployBuildPlan `protobuf:"bytes,2,opt,name=plan,proto3" json:"plan,omitempty"`
+	// safe_reason объясняет non-ready status без raw payloads и секретов.
+	SafeReason    *string `protobuf:"bytes,3,opt,name=safe_reason,json=safeReason,proto3,oneof" json:"safe_reason,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SelfDeployBuildPlanResponse) Reset() {
+	*x = SelfDeployBuildPlanResponse{}
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[58]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SelfDeployBuildPlanResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SelfDeployBuildPlanResponse) ProtoMessage() {}
+
+func (x *SelfDeployBuildPlanResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[58]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SelfDeployBuildPlanResponse.ProtoReflect.Descriptor instead.
+func (*SelfDeployBuildPlanResponse) Descriptor() ([]byte, []int) {
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{58}
+}
+
+func (x *SelfDeployBuildPlanResponse) GetStatus() SelfDeployBuildPlanStatus {
+	if x != nil {
+		return x.Status
+	}
+	return SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_UNSPECIFIED
+}
+
+func (x *SelfDeployBuildPlanResponse) GetPlan() *SelfDeployBuildPlan {
+	if x != nil {
+		return x.Plan
+	}
+	return nil
+}
+
+func (x *SelfDeployBuildPlanResponse) GetSafeReason() string {
+	if x != nil && x.SafeReason != nil {
+		return *x.SafeReason
+	}
+	return ""
+}
+
 // GetServicesPolicyRequest reads active or concrete services policy.
 type GetServicesPolicyRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -6694,7 +7172,7 @@ type GetServicesPolicyRequest struct {
 
 func (x *GetServicesPolicyRequest) Reset() {
 	*x = GetServicesPolicyRequest{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[55]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6706,7 +7184,7 @@ func (x *GetServicesPolicyRequest) String() string {
 func (*GetServicesPolicyRequest) ProtoMessage() {}
 
 func (x *GetServicesPolicyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[55]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6719,7 +7197,7 @@ func (x *GetServicesPolicyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetServicesPolicyRequest.ProtoReflect.Descriptor instead.
 func (*GetServicesPolicyRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{55}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *GetServicesPolicyRequest) GetProjectId() string {
@@ -6764,7 +7242,7 @@ type ListServiceDescriptorsRequest struct {
 
 func (x *ListServiceDescriptorsRequest) Reset() {
 	*x = ListServiceDescriptorsRequest{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[56]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6776,7 +7254,7 @@ func (x *ListServiceDescriptorsRequest) String() string {
 func (*ListServiceDescriptorsRequest) ProtoMessage() {}
 
 func (x *ListServiceDescriptorsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[56]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6789,7 +7267,7 @@ func (x *ListServiceDescriptorsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListServiceDescriptorsRequest.ProtoReflect.Descriptor instead.
 func (*ListServiceDescriptorsRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{56}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{60}
 }
 
 func (x *ListServiceDescriptorsRequest) GetProjectId() string {
@@ -6847,7 +7325,7 @@ type ListServiceDescriptorsResponse struct {
 
 func (x *ListServiceDescriptorsResponse) Reset() {
 	*x = ListServiceDescriptorsResponse{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[57]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6859,7 +7337,7 @@ func (x *ListServiceDescriptorsResponse) String() string {
 func (*ListServiceDescriptorsResponse) ProtoMessage() {}
 
 func (x *ListServiceDescriptorsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[57]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6872,7 +7350,7 @@ func (x *ListServiceDescriptorsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListServiceDescriptorsResponse.ProtoReflect.Descriptor instead.
 func (*ListServiceDescriptorsResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{57}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{61}
 }
 
 func (x *ListServiceDescriptorsResponse) GetServiceDescriptors() []*ServiceDescriptor {
@@ -6908,7 +7386,7 @@ type CreatePolicyEditProposalRequest struct {
 
 func (x *CreatePolicyEditProposalRequest) Reset() {
 	*x = CreatePolicyEditProposalRequest{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[58]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6920,7 +7398,7 @@ func (x *CreatePolicyEditProposalRequest) String() string {
 func (*CreatePolicyEditProposalRequest) ProtoMessage() {}
 
 func (x *CreatePolicyEditProposalRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[58]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6933,7 +7411,7 @@ func (x *CreatePolicyEditProposalRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreatePolicyEditProposalRequest.ProtoReflect.Descriptor instead.
 func (*CreatePolicyEditProposalRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{58}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *CreatePolicyEditProposalRequest) GetProjectId() string {
@@ -6988,7 +7466,7 @@ type PolicyEditProposalResponse struct {
 
 func (x *PolicyEditProposalResponse) Reset() {
 	*x = PolicyEditProposalResponse{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[59]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[63]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7000,7 +7478,7 @@ func (x *PolicyEditProposalResponse) String() string {
 func (*PolicyEditProposalResponse) ProtoMessage() {}
 
 func (x *PolicyEditProposalResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[59]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[63]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7013,7 +7491,7 @@ func (x *PolicyEditProposalResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PolicyEditProposalResponse.ProtoReflect.Descriptor instead.
 func (*PolicyEditProposalResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{59}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{63}
 }
 
 func (x *PolicyEditProposalResponse) GetProposalId() string {
@@ -7065,7 +7543,7 @@ type CreatePolicyOverrideRequest struct {
 
 func (x *CreatePolicyOverrideRequest) Reset() {
 	*x = CreatePolicyOverrideRequest{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[60]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[64]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7077,7 +7555,7 @@ func (x *CreatePolicyOverrideRequest) String() string {
 func (*CreatePolicyOverrideRequest) ProtoMessage() {}
 
 func (x *CreatePolicyOverrideRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[60]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[64]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7090,7 +7568,7 @@ func (x *CreatePolicyOverrideRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreatePolicyOverrideRequest.ProtoReflect.Descriptor instead.
 func (*CreatePolicyOverrideRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{60}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{64}
 }
 
 func (x *CreatePolicyOverrideRequest) GetProjectId() string {
@@ -7148,7 +7626,7 @@ type CancelPolicyOverrideRequest struct {
 
 func (x *CancelPolicyOverrideRequest) Reset() {
 	*x = CancelPolicyOverrideRequest{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[61]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[65]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7160,7 +7638,7 @@ func (x *CancelPolicyOverrideRequest) String() string {
 func (*CancelPolicyOverrideRequest) ProtoMessage() {}
 
 func (x *CancelPolicyOverrideRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[61]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[65]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7173,7 +7651,7 @@ func (x *CancelPolicyOverrideRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelPolicyOverrideRequest.ProtoReflect.Descriptor instead.
 func (*CancelPolicyOverrideRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{61}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{65}
 }
 
 func (x *CancelPolicyOverrideRequest) GetPolicyOverrideId() string {
@@ -7201,7 +7679,7 @@ type PolicyOverrideResponse struct {
 
 func (x *PolicyOverrideResponse) Reset() {
 	*x = PolicyOverrideResponse{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[62]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[66]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7213,7 +7691,7 @@ func (x *PolicyOverrideResponse) String() string {
 func (*PolicyOverrideResponse) ProtoMessage() {}
 
 func (x *PolicyOverrideResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[62]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[66]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7226,7 +7704,7 @@ func (x *PolicyOverrideResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PolicyOverrideResponse.ProtoReflect.Descriptor instead.
 func (*PolicyOverrideResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{62}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{66}
 }
 
 func (x *PolicyOverrideResponse) GetPolicyOverride() *PolicyOverride {
@@ -7259,7 +7737,7 @@ type ListPolicyOverridesRequest struct {
 
 func (x *ListPolicyOverridesRequest) Reset() {
 	*x = ListPolicyOverridesRequest{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[63]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[67]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7271,7 +7749,7 @@ func (x *ListPolicyOverridesRequest) String() string {
 func (*ListPolicyOverridesRequest) ProtoMessage() {}
 
 func (x *ListPolicyOverridesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[63]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[67]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7284,7 +7762,7 @@ func (x *ListPolicyOverridesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPolicyOverridesRequest.ProtoReflect.Descriptor instead.
 func (*ListPolicyOverridesRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{63}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{67}
 }
 
 func (x *ListPolicyOverridesRequest) GetProjectId() string {
@@ -7349,7 +7827,7 @@ type ListPolicyOverridesResponse struct {
 
 func (x *ListPolicyOverridesResponse) Reset() {
 	*x = ListPolicyOverridesResponse{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[64]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[68]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7361,7 +7839,7 @@ func (x *ListPolicyOverridesResponse) String() string {
 func (*ListPolicyOverridesResponse) ProtoMessage() {}
 
 func (x *ListPolicyOverridesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[64]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[68]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7374,7 +7852,7 @@ func (x *ListPolicyOverridesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPolicyOverridesResponse.ProtoReflect.Descriptor instead.
 func (*ListPolicyOverridesResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{64}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{68}
 }
 
 func (x *ListPolicyOverridesResponse) GetPolicyOverrides() []*PolicyOverride {
@@ -7418,7 +7896,7 @@ type PutDocumentationSourceRequest struct {
 
 func (x *PutDocumentationSourceRequest) Reset() {
 	*x = PutDocumentationSourceRequest{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[65]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[69]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7430,7 +7908,7 @@ func (x *PutDocumentationSourceRequest) String() string {
 func (*PutDocumentationSourceRequest) ProtoMessage() {}
 
 func (x *PutDocumentationSourceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[65]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[69]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7443,7 +7921,7 @@ func (x *PutDocumentationSourceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PutDocumentationSourceRequest.ProtoReflect.Descriptor instead.
 func (*PutDocumentationSourceRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{65}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{69}
 }
 
 func (x *PutDocumentationSourceRequest) GetDocumentationSourceId() string {
@@ -7520,7 +7998,7 @@ type DocumentationSourceResponse struct {
 
 func (x *DocumentationSourceResponse) Reset() {
 	*x = DocumentationSourceResponse{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[66]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[70]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7532,7 +8010,7 @@ func (x *DocumentationSourceResponse) String() string {
 func (*DocumentationSourceResponse) ProtoMessage() {}
 
 func (x *DocumentationSourceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[66]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[70]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7545,7 +8023,7 @@ func (x *DocumentationSourceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DocumentationSourceResponse.ProtoReflect.Descriptor instead.
 func (*DocumentationSourceResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{66}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{70}
 }
 
 func (x *DocumentationSourceResponse) GetDocumentationSource() *DocumentationSource {
@@ -7568,7 +8046,7 @@ type GetDocumentationSourceRequest struct {
 
 func (x *GetDocumentationSourceRequest) Reset() {
 	*x = GetDocumentationSourceRequest{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[67]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[71]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7580,7 +8058,7 @@ func (x *GetDocumentationSourceRequest) String() string {
 func (*GetDocumentationSourceRequest) ProtoMessage() {}
 
 func (x *GetDocumentationSourceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[67]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[71]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7593,7 +8071,7 @@ func (x *GetDocumentationSourceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetDocumentationSourceRequest.ProtoReflect.Descriptor instead.
 func (*GetDocumentationSourceRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{67}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{71}
 }
 
 func (x *GetDocumentationSourceRequest) GetDocumentationSourceId() string {
@@ -7633,7 +8111,7 @@ type ListDocumentationSourcesRequest struct {
 
 func (x *ListDocumentationSourcesRequest) Reset() {
 	*x = ListDocumentationSourcesRequest{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[68]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[72]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7645,7 +8123,7 @@ func (x *ListDocumentationSourcesRequest) String() string {
 func (*ListDocumentationSourcesRequest) ProtoMessage() {}
 
 func (x *ListDocumentationSourcesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[68]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[72]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7658,7 +8136,7 @@ func (x *ListDocumentationSourcesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListDocumentationSourcesRequest.ProtoReflect.Descriptor instead.
 func (*ListDocumentationSourcesRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{68}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{72}
 }
 
 func (x *ListDocumentationSourcesRequest) GetProjectId() string {
@@ -7723,7 +8201,7 @@ type ListDocumentationSourcesResponse struct {
 
 func (x *ListDocumentationSourcesResponse) Reset() {
 	*x = ListDocumentationSourcesResponse{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[69]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[73]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7735,7 +8213,7 @@ func (x *ListDocumentationSourcesResponse) String() string {
 func (*ListDocumentationSourcesResponse) ProtoMessage() {}
 
 func (x *ListDocumentationSourcesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[69]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[73]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7748,7 +8226,7 @@ func (x *ListDocumentationSourcesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListDocumentationSourcesResponse.ProtoReflect.Descriptor instead.
 func (*ListDocumentationSourcesResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{69}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{73}
 }
 
 func (x *ListDocumentationSourcesResponse) GetDocumentationSources() []*DocumentationSource {
@@ -7784,7 +8262,7 @@ type GetWorkspacePolicyRequest struct {
 
 func (x *GetWorkspacePolicyRequest) Reset() {
 	*x = GetWorkspacePolicyRequest{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[70]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[74]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7796,7 +8274,7 @@ func (x *GetWorkspacePolicyRequest) String() string {
 func (*GetWorkspacePolicyRequest) ProtoMessage() {}
 
 func (x *GetWorkspacePolicyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[70]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[74]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7809,7 +8287,7 @@ func (x *GetWorkspacePolicyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetWorkspacePolicyRequest.ProtoReflect.Descriptor instead.
 func (*GetWorkspacePolicyRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{70}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{74}
 }
 
 func (x *GetWorkspacePolicyRequest) GetProjectId() string {
@@ -7858,7 +8336,7 @@ type WorkspacePolicyResponse struct {
 
 func (x *WorkspacePolicyResponse) Reset() {
 	*x = WorkspacePolicyResponse{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[71]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[75]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7870,7 +8348,7 @@ func (x *WorkspacePolicyResponse) String() string {
 func (*WorkspacePolicyResponse) ProtoMessage() {}
 
 func (x *WorkspacePolicyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[71]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[75]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7883,7 +8361,7 @@ func (x *WorkspacePolicyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkspacePolicyResponse.ProtoReflect.Descriptor instead.
 func (*WorkspacePolicyResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{71}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{75}
 }
 
 func (x *WorkspacePolicyResponse) GetWorkspacePolicy() *WorkspacePolicy {
@@ -7918,7 +8396,7 @@ type PutBranchRulesRequest struct {
 
 func (x *PutBranchRulesRequest) Reset() {
 	*x = PutBranchRulesRequest{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[72]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[76]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7930,7 +8408,7 @@ func (x *PutBranchRulesRequest) String() string {
 func (*PutBranchRulesRequest) ProtoMessage() {}
 
 func (x *PutBranchRulesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[72]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[76]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7943,7 +8421,7 @@ func (x *PutBranchRulesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PutBranchRulesRequest.ProtoReflect.Descriptor instead.
 func (*PutBranchRulesRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{72}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{76}
 }
 
 func (x *PutBranchRulesRequest) GetBranchRulesId() string {
@@ -8013,7 +8491,7 @@ type BranchRulesResponse struct {
 
 func (x *BranchRulesResponse) Reset() {
 	*x = BranchRulesResponse{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[73]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[77]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8025,7 +8503,7 @@ func (x *BranchRulesResponse) String() string {
 func (*BranchRulesResponse) ProtoMessage() {}
 
 func (x *BranchRulesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[73]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[77]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8038,7 +8516,7 @@ func (x *BranchRulesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BranchRulesResponse.ProtoReflect.Descriptor instead.
 func (*BranchRulesResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{73}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{77}
 }
 
 func (x *BranchRulesResponse) GetBranchRules() *BranchRules {
@@ -8061,7 +8539,7 @@ type GetBranchRulesRequest struct {
 
 func (x *GetBranchRulesRequest) Reset() {
 	*x = GetBranchRulesRequest{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[74]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[78]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8073,7 +8551,7 @@ func (x *GetBranchRulesRequest) String() string {
 func (*GetBranchRulesRequest) ProtoMessage() {}
 
 func (x *GetBranchRulesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[74]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[78]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8086,7 +8564,7 @@ func (x *GetBranchRulesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetBranchRulesRequest.ProtoReflect.Descriptor instead.
 func (*GetBranchRulesRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{74}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{78}
 }
 
 func (x *GetBranchRulesRequest) GetBranchRulesId() string {
@@ -8122,7 +8600,7 @@ type ListBranchRulesRequest struct {
 
 func (x *ListBranchRulesRequest) Reset() {
 	*x = ListBranchRulesRequest{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[75]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[79]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8134,7 +8612,7 @@ func (x *ListBranchRulesRequest) String() string {
 func (*ListBranchRulesRequest) ProtoMessage() {}
 
 func (x *ListBranchRulesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[75]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[79]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8147,7 +8625,7 @@ func (x *ListBranchRulesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListBranchRulesRequest.ProtoReflect.Descriptor instead.
 func (*ListBranchRulesRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{75}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{79}
 }
 
 func (x *ListBranchRulesRequest) GetProjectId() string {
@@ -8198,7 +8676,7 @@ type ListBranchRulesResponse struct {
 
 func (x *ListBranchRulesResponse) Reset() {
 	*x = ListBranchRulesResponse{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[76]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[80]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8210,7 +8688,7 @@ func (x *ListBranchRulesResponse) String() string {
 func (*ListBranchRulesResponse) ProtoMessage() {}
 
 func (x *ListBranchRulesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[76]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[80]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8223,7 +8701,7 @@ func (x *ListBranchRulesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListBranchRulesResponse.ProtoReflect.Descriptor instead.
 func (*ListBranchRulesResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{76}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{80}
 }
 
 func (x *ListBranchRulesResponse) GetBranchRules() []*BranchRules {
@@ -8267,7 +8745,7 @@ type PutReleasePolicyRequest struct {
 
 func (x *PutReleasePolicyRequest) Reset() {
 	*x = PutReleasePolicyRequest{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[77]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[81]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8279,7 +8757,7 @@ func (x *PutReleasePolicyRequest) String() string {
 func (*PutReleasePolicyRequest) ProtoMessage() {}
 
 func (x *PutReleasePolicyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[77]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[81]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8292,7 +8770,7 @@ func (x *PutReleasePolicyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PutReleasePolicyRequest.ProtoReflect.Descriptor instead.
 func (*PutReleasePolicyRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{77}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{81}
 }
 
 func (x *PutReleasePolicyRequest) GetReleasePolicyId() string {
@@ -8369,7 +8847,7 @@ type ReleasePolicyResponse struct {
 
 func (x *ReleasePolicyResponse) Reset() {
 	*x = ReleasePolicyResponse{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[78]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[82]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8381,7 +8859,7 @@ func (x *ReleasePolicyResponse) String() string {
 func (*ReleasePolicyResponse) ProtoMessage() {}
 
 func (x *ReleasePolicyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[78]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[82]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8394,7 +8872,7 @@ func (x *ReleasePolicyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReleasePolicyResponse.ProtoReflect.Descriptor instead.
 func (*ReleasePolicyResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{78}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{82}
 }
 
 func (x *ReleasePolicyResponse) GetReleasePolicy() *ReleasePolicy {
@@ -8417,7 +8895,7 @@ type GetReleasePolicyRequest struct {
 
 func (x *GetReleasePolicyRequest) Reset() {
 	*x = GetReleasePolicyRequest{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[79]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[83]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8429,7 +8907,7 @@ func (x *GetReleasePolicyRequest) String() string {
 func (*GetReleasePolicyRequest) ProtoMessage() {}
 
 func (x *GetReleasePolicyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[79]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[83]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8442,7 +8920,7 @@ func (x *GetReleasePolicyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetReleasePolicyRequest.ProtoReflect.Descriptor instead.
 func (*GetReleasePolicyRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{79}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{83}
 }
 
 func (x *GetReleasePolicyRequest) GetReleasePolicyId() string {
@@ -8476,7 +8954,7 @@ type ListReleasePoliciesRequest struct {
 
 func (x *ListReleasePoliciesRequest) Reset() {
 	*x = ListReleasePoliciesRequest{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[80]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[84]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8488,7 +8966,7 @@ func (x *ListReleasePoliciesRequest) String() string {
 func (*ListReleasePoliciesRequest) ProtoMessage() {}
 
 func (x *ListReleasePoliciesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[80]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[84]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8501,7 +8979,7 @@ func (x *ListReleasePoliciesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListReleasePoliciesRequest.ProtoReflect.Descriptor instead.
 func (*ListReleasePoliciesRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{80}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{84}
 }
 
 func (x *ListReleasePoliciesRequest) GetProjectId() string {
@@ -8545,7 +9023,7 @@ type ListReleasePoliciesResponse struct {
 
 func (x *ListReleasePoliciesResponse) Reset() {
 	*x = ListReleasePoliciesResponse{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[81]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[85]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8557,7 +9035,7 @@ func (x *ListReleasePoliciesResponse) String() string {
 func (*ListReleasePoliciesResponse) ProtoMessage() {}
 
 func (x *ListReleasePoliciesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[81]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[85]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8570,7 +9048,7 @@ func (x *ListReleasePoliciesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListReleasePoliciesResponse.ProtoReflect.Descriptor instead.
 func (*ListReleasePoliciesResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{81}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{85}
 }
 
 func (x *ListReleasePoliciesResponse) GetReleasePolicies() []*ReleasePolicy {
@@ -8610,7 +9088,7 @@ type PutReleaseLineRequest struct {
 
 func (x *PutReleaseLineRequest) Reset() {
 	*x = PutReleaseLineRequest{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[82]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[86]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8622,7 +9100,7 @@ func (x *PutReleaseLineRequest) String() string {
 func (*PutReleaseLineRequest) ProtoMessage() {}
 
 func (x *PutReleaseLineRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[82]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[86]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8635,7 +9113,7 @@ func (x *PutReleaseLineRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PutReleaseLineRequest.ProtoReflect.Descriptor instead.
 func (*PutReleaseLineRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{82}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{86}
 }
 
 func (x *PutReleaseLineRequest) GetReleaseLineId() string {
@@ -8698,7 +9176,7 @@ type ReleaseLineResponse struct {
 
 func (x *ReleaseLineResponse) Reset() {
 	*x = ReleaseLineResponse{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[83]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[87]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8710,7 +9188,7 @@ func (x *ReleaseLineResponse) String() string {
 func (*ReleaseLineResponse) ProtoMessage() {}
 
 func (x *ReleaseLineResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[83]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[87]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8723,7 +9201,7 @@ func (x *ReleaseLineResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReleaseLineResponse.ProtoReflect.Descriptor instead.
 func (*ReleaseLineResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{83}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{87}
 }
 
 func (x *ReleaseLineResponse) GetReleaseLine() *ReleaseLine {
@@ -8746,7 +9224,7 @@ type GetReleaseLineRequest struct {
 
 func (x *GetReleaseLineRequest) Reset() {
 	*x = GetReleaseLineRequest{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[84]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[88]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8758,7 +9236,7 @@ func (x *GetReleaseLineRequest) String() string {
 func (*GetReleaseLineRequest) ProtoMessage() {}
 
 func (x *GetReleaseLineRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[84]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[88]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8771,7 +9249,7 @@ func (x *GetReleaseLineRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetReleaseLineRequest.ProtoReflect.Descriptor instead.
 func (*GetReleaseLineRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{84}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{88}
 }
 
 func (x *GetReleaseLineRequest) GetReleaseLineId() string {
@@ -8807,7 +9285,7 @@ type ListReleaseLinesRequest struct {
 
 func (x *ListReleaseLinesRequest) Reset() {
 	*x = ListReleaseLinesRequest{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[85]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[89]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8819,7 +9297,7 @@ func (x *ListReleaseLinesRequest) String() string {
 func (*ListReleaseLinesRequest) ProtoMessage() {}
 
 func (x *ListReleaseLinesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[85]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[89]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8832,7 +9310,7 @@ func (x *ListReleaseLinesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListReleaseLinesRequest.ProtoReflect.Descriptor instead.
 func (*ListReleaseLinesRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{85}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{89}
 }
 
 func (x *ListReleaseLinesRequest) GetProjectId() string {
@@ -8883,7 +9361,7 @@ type ListReleaseLinesResponse struct {
 
 func (x *ListReleaseLinesResponse) Reset() {
 	*x = ListReleaseLinesResponse{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[86]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[90]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8895,7 +9373,7 @@ func (x *ListReleaseLinesResponse) String() string {
 func (*ListReleaseLinesResponse) ProtoMessage() {}
 
 func (x *ListReleaseLinesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[86]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[90]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8908,7 +9386,7 @@ func (x *ListReleaseLinesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListReleaseLinesResponse.ProtoReflect.Descriptor instead.
 func (*ListReleaseLinesResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{86}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{90}
 }
 
 func (x *ListReleaseLinesResponse) GetReleaseLines() []*ReleaseLine {
@@ -8948,7 +9426,7 @@ type PutPlacementPolicyRequest struct {
 
 func (x *PutPlacementPolicyRequest) Reset() {
 	*x = PutPlacementPolicyRequest{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[87]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[91]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8960,7 +9438,7 @@ func (x *PutPlacementPolicyRequest) String() string {
 func (*PutPlacementPolicyRequest) ProtoMessage() {}
 
 func (x *PutPlacementPolicyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[87]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[91]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8973,7 +9451,7 @@ func (x *PutPlacementPolicyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PutPlacementPolicyRequest.ProtoReflect.Descriptor instead.
 func (*PutPlacementPolicyRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{87}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{91}
 }
 
 func (x *PutPlacementPolicyRequest) GetPlacementPolicyId() string {
@@ -9036,7 +9514,7 @@ type PlacementPolicyResponse struct {
 
 func (x *PlacementPolicyResponse) Reset() {
 	*x = PlacementPolicyResponse{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[88]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[92]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9048,7 +9526,7 @@ func (x *PlacementPolicyResponse) String() string {
 func (*PlacementPolicyResponse) ProtoMessage() {}
 
 func (x *PlacementPolicyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[88]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[92]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9061,7 +9539,7 @@ func (x *PlacementPolicyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlacementPolicyResponse.ProtoReflect.Descriptor instead.
 func (*PlacementPolicyResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{88}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{92}
 }
 
 func (x *PlacementPolicyResponse) GetPlacementPolicy() *PlacementPolicy {
@@ -9084,7 +9562,7 @@ type GetPlacementPolicyRequest struct {
 
 func (x *GetPlacementPolicyRequest) Reset() {
 	*x = GetPlacementPolicyRequest{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[89]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[93]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9096,7 +9574,7 @@ func (x *GetPlacementPolicyRequest) String() string {
 func (*GetPlacementPolicyRequest) ProtoMessage() {}
 
 func (x *GetPlacementPolicyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[89]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[93]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9109,7 +9587,7 @@ func (x *GetPlacementPolicyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPlacementPolicyRequest.ProtoReflect.Descriptor instead.
 func (*GetPlacementPolicyRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{89}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{93}
 }
 
 func (x *GetPlacementPolicyRequest) GetPlacementPolicyId() string {
@@ -9147,7 +9625,7 @@ type ListPlacementPoliciesRequest struct {
 
 func (x *ListPlacementPoliciesRequest) Reset() {
 	*x = ListPlacementPoliciesRequest{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[90]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[94]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9159,7 +9637,7 @@ func (x *ListPlacementPoliciesRequest) String() string {
 func (*ListPlacementPoliciesRequest) ProtoMessage() {}
 
 func (x *ListPlacementPoliciesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[90]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[94]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9172,7 +9650,7 @@ func (x *ListPlacementPoliciesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPlacementPoliciesRequest.ProtoReflect.Descriptor instead.
 func (*ListPlacementPoliciesRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{90}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{94}
 }
 
 func (x *ListPlacementPoliciesRequest) GetProjectId() string {
@@ -9230,7 +9708,7 @@ type ListPlacementPoliciesResponse struct {
 
 func (x *ListPlacementPoliciesResponse) Reset() {
 	*x = ListPlacementPoliciesResponse{}
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[91]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[95]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9242,7 +9720,7 @@ func (x *ListPlacementPoliciesResponse) String() string {
 func (*ListPlacementPoliciesResponse) ProtoMessage() {}
 
 func (x *ListPlacementPoliciesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[91]
+	mi := &file_kodex_projects_v1_project_catalog_proto_msgTypes[95]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9255,7 +9733,7 @@ func (x *ListPlacementPoliciesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPlacementPoliciesResponse.ProtoReflect.Descriptor instead.
 func (*ListPlacementPoliciesResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{91}
+	return file_kodex_projects_v1_project_catalog_proto_rawDescGZIP(), []int{95}
 }
 
 func (x *ListPlacementPoliciesResponse) GetPlacementPolicies() []*PlacementPolicy {
@@ -9276,7 +9754,7 @@ var File_kodex_projects_v1_project_catalog_proto protoreflect.FileDescriptor
 
 const file_kodex_projects_v1_project_catalog_proto_rawDesc = "" +
 	"\n" +
-	"'kodex/projects/v1/project_catalog.proto\x12\x11kodex.projects.v1\"\xfa\x02\n" +
+	"'kodex/projects/v1/project_catalog.proto\x12\x11kodex.projects.v1\x1a&kodex/runtime/v1/runtime_manager.proto\"\xfa\x02\n" +
 	"\vCommandMeta\x12\"\n" +
 	"\n" +
 	"command_id\x18\x01 \x01(\tH\x00R\tcommandId\x88\x01\x01\x12,\n" +
@@ -9463,7 +9941,31 @@ const file_kodex_projects_v1_project_catalog_proto_rawDesc = "" +
 	"\x13_provider_signal_idB\x16\n" +
 	"\x14_provider_signal_keyB\x19\n" +
 	"\x17_provider_repository_idB\x10\n" +
-	"\x0e_provider_etag\"\xeb\x03\n" +
+	"\x0e_provider_etag\"\xe7\x01\n" +
+	"\x17SelfDeployBuildPlanItem\x12\x1f\n" +
+	"\vservice_key\x18\x01 \x01(\tR\n" +
+	"serviceKey\x12\x1f\n" +
+	"\vservice_ref\x18\x02 \x01(\tR\n" +
+	"serviceRef\x12V\n" +
+	"\x14build_execution_spec\x18\x03 \x01(\v2$.kodex.runtime.v1.BuildExecutionSpecR\x12buildExecutionSpec\x122\n" +
+	"\x15plan_item_fingerprint\x18\x04 \x01(\tR\x13planItemFingerprint\"\xb6\x04\n" +
+	"\x13SelfDeployBuildPlan\x12\x1f\n" +
+	"\vproject_ref\x18\x01 \x01(\tR\n" +
+	"projectRef\x12%\n" +
+	"\x0erepository_ref\x18\x02 \x01(\tR\rrepositoryRef\x123\n" +
+	"\x13provider_signal_ref\x18\x03 \x01(\tH\x00R\x11providerSignalRef\x88\x01\x01\x12\x1d\n" +
+	"\n" +
+	"source_ref\x18\x04 \x01(\tR\tsourceRef\x12(\n" +
+	"\x10merge_commit_sha\x18\x05 \x01(\tR\x0emergeCommitSha\x12X\n" +
+	"\rservices_yaml\x18\x06 \x01(\v23.kodex.projects.v1.SelfDeployServicesYamlProjectionR\fservicesYaml\x122\n" +
+	"\x15affected_service_keys\x18\a \x03(\tR\x13affectedServiceKeys\x12K\n" +
+	"\vbuild_items\x18\b \x03(\v2*.kodex.projects.v1.SelfDeployBuildPlanItemR\n" +
+	"buildItems\x12)\n" +
+	"\x10plan_fingerprint\x18\t \x01(\tR\x0fplanFingerprint\x12!\n" +
+	"\fsafe_summary\x18\n" +
+	" \x01(\tR\vsafeSummary\x12\x18\n" +
+	"\aversion\x18\v \x01(\x03R\aversionB\x16\n" +
+	"\x14_provider_signal_ref\"\xeb\x03\n" +
 	"\x13DocumentationSource\x126\n" +
 	"\x17documentation_source_id\x18\x01 \x01(\tR\x15documentationSourceId\x12\x1d\n" +
 	"\n" +
@@ -9892,6 +10394,33 @@ const file_kodex_projects_v1_project_catalog_proto_rawDesc = "" +
 	"\x06signal\x18\x02 \x01(\v2#.kodex.projects.v1.SelfDeploySignalR\x06signal\x12$\n" +
 	"\vsafe_reason\x18\x03 \x01(\tH\x00R\n" +
 	"safeReason\x88\x01\x01B\x0e\n" +
+	"\f_safe_reason\"\xaf\x06\n" +
+	"\x1dGetSelfDeployBuildPlanRequest\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x01 \x01(\tR\tprojectId\x12#\n" +
+	"\rrepository_id\x18\x02 \x01(\tR\frepositoryId\x12\x1d\n" +
+	"\n" +
+	"source_ref\x18\x03 \x01(\tR\tsourceRef\x12(\n" +
+	"\x10merge_commit_sha\x18\x04 \x01(\tR\x0emergeCommitSha\x123\n" +
+	"\x13provider_signal_ref\x18\x05 \x01(\tH\x00R\x11providerSignalRef\x88\x01\x01\x121\n" +
+	"\x12provider_signal_id\x18\x06 \x01(\tH\x01R\x10providerSignalId\x88\x01\x01\x123\n" +
+	"\x13provider_signal_key\x18\a \x01(\tH\x02R\x11providerSignalKey\x88\x01\x01\x122\n" +
+	"\x15affected_service_keys\x18\b \x03(\tR\x13affectedServiceKeys\x12E\n" +
+	"\x1fexpected_services_policy_digest\x18\t \x01(\tR\x1cexpectedServicesPolicyDigest\x12T\n" +
+	"$expected_services_policy_fingerprint\x18\n" +
+	" \x01(\tH\x03R!expectedServicesPolicyFingerprint\x88\x01\x01\x12L\n" +
+	" expected_services_policy_version\x18\v \x01(\x03H\x04R\x1dexpectedServicesPolicyVersion\x88\x01\x01\x120\n" +
+	"\x04meta\x18\f \x01(\v2\x1c.kodex.projects.v1.QueryMetaR\x04metaB\x16\n" +
+	"\x14_provider_signal_refB\x15\n" +
+	"\x13_provider_signal_idB\x16\n" +
+	"\x14_provider_signal_keyB'\n" +
+	"%_expected_services_policy_fingerprintB#\n" +
+	"!_expected_services_policy_version\"\xd5\x01\n" +
+	"\x1bSelfDeployBuildPlanResponse\x12D\n" +
+	"\x06status\x18\x01 \x01(\x0e2,.kodex.projects.v1.SelfDeployBuildPlanStatusR\x06status\x12:\n" +
+	"\x04plan\x18\x02 \x01(\v2&.kodex.projects.v1.SelfDeployBuildPlanR\x04plan\x12$\n" +
+	"\vsafe_reason\x18\x03 \x01(\tH\x00R\n" +
+	"safeReason\x88\x01\x01B\x0e\n" +
 	"\f_safe_reason\"\xb5\x01\n" +
 	"\x18GetServicesPolicyRequest\x12\x1d\n" +
 	"\n" +
@@ -10163,7 +10692,14 @@ const file_kodex_projects_v1_project_catalog_proto_rawDesc = "" +
 	"3SELF_DEPLOY_SIGNAL_STATUS_SERVICES_POLICY_NOT_FOUND\x10\x06\x127\n" +
 	"3SELF_DEPLOY_SIGNAL_STATUS_SERVICES_POLICY_NOT_READY\x10\a\x121\n" +
 	"-SELF_DEPLOY_SIGNAL_STATUS_NOT_DEPLOY_RELEVANT\x10\b\x12=\n" +
-	"9SELF_DEPLOY_SIGNAL_STATUS_NEEDS_REPOSITORY_CHANGE_SUMMARY\x10\t*\xd0\x03\n" +
+	"9SELF_DEPLOY_SIGNAL_STATUS_NEEDS_REPOSITORY_CHANGE_SUMMARY\x10\t*\xc3\x02\n" +
+	"\x19SelfDeployBuildPlanStatus\x12-\n" +
+	")SELF_DEPLOY_BUILD_PLAN_STATUS_UNSPECIFIED\x10\x00\x12'\n" +
+	"#SELF_DEPLOY_BUILD_PLAN_STATUS_READY\x10\x01\x128\n" +
+	"4SELF_DEPLOY_BUILD_PLAN_STATUS_BUILD_PLAN_UNAVAILABLE\x10\x02\x12.\n" +
+	"*SELF_DEPLOY_BUILD_PLAN_STATUS_POLICY_STALE\x10\x03\x123\n" +
+	"/SELF_DEPLOY_BUILD_PLAN_STATUS_SERVICE_NOT_FOUND\x10\x04\x12/\n" +
+	"+SELF_DEPLOY_BUILD_PLAN_STATUS_INVALID_INPUT\x10\x05*\xd0\x03\n" +
 	"\x16SelfDeployPathCategory\x12)\n" +
 	"%SELF_DEPLOY_PATH_CATEGORY_UNSPECIFIED\x10\x00\x12-\n" +
 	")SELF_DEPLOY_PATH_CATEGORY_SERVICES_POLICY\x10\x01\x12,\n" +
@@ -10253,7 +10789,7 @@ const file_kodex_projects_v1_project_catalog_proto_rawDesc = "" +
 	"\"POLICY_OVERRIDE_STATUS_UNSPECIFIED\x10\x00\x12!\n" +
 	"\x1dPOLICY_OVERRIDE_STATUS_ACTIVE\x10\x01\x12\"\n" +
 	"\x1ePOLICY_OVERRIDE_STATUS_EXPIRED\x10\x02\x12$\n" +
-	" POLICY_OVERRIDE_STATUS_CANCELLED\x10\x032\x9e\"\n" +
+	" POLICY_OVERRIDE_STATUS_CANCELLED\x10\x032\x9a#\n" +
 	"\x15ProjectCatalogService\x12\\\n" +
 	"\rCreateProject\x12'.kodex.projects.v1.CreateProjectRequest\x1a\".kodex.projects.v1.ProjectResponse\x12\\\n" +
 	"\rUpdateProject\x12'.kodex.projects.v1.UpdateProjectRequest\x1a\".kodex.projects.v1.ProjectResponse\x12V\n" +
@@ -10271,7 +10807,8 @@ const file_kodex_projects_v1_project_catalog_proto_rawDesc = "" +
 	"\x1dImportBootstrapServicesPolicy\x127.kodex.projects.v1.ImportBootstrapServicesPolicyRequest\x1a8.kodex.projects.v1.BootstrapServicesPolicyImportResponse\x12\x92\x01\n" +
 	"\x1dReconcileBootstrapMergeSignal\x127.kodex.projects.v1.ReconcileBootstrapMergeSignalRequest\x1a8.kodex.projects.v1.BootstrapServicesPolicyImportResponse\x12\x90\x01\n" +
 	"\x1cReconcileAdoptionMergeSignal\x126.kodex.projects.v1.ReconcileAdoptionMergeSignalRequest\x1a8.kodex.projects.v1.BootstrapServicesPolicyImportResponse\x12q\n" +
-	"\x13GetSelfDeploySignal\x12-.kodex.projects.v1.GetSelfDeploySignalRequest\x1a+.kodex.projects.v1.SelfDeploySignalResponse\x12k\n" +
+	"\x13GetSelfDeploySignal\x12-.kodex.projects.v1.GetSelfDeploySignalRequest\x1a+.kodex.projects.v1.SelfDeploySignalResponse\x12z\n" +
+	"\x16GetSelfDeployBuildPlan\x120.kodex.projects.v1.GetSelfDeployBuildPlanRequest\x1a..kodex.projects.v1.SelfDeployBuildPlanResponse\x12k\n" +
 	"\x11GetServicesPolicy\x12+.kodex.projects.v1.GetServicesPolicyRequest\x1a).kodex.projects.v1.ServicesPolicyResponse\x12}\n" +
 	"\x16ListServiceDescriptors\x120.kodex.projects.v1.ListServiceDescriptorsRequest\x1a1.kodex.projects.v1.ListServiceDescriptorsResponse\x12}\n" +
 	"\x18CreatePolicyEditProposal\x122.kodex.projects.v1.CreatePolicyEditProposalRequest\x1a-.kodex.projects.v1.PolicyEditProposalResponse\x12q\n" +
@@ -10307,8 +10844,8 @@ func file_kodex_projects_v1_project_catalog_proto_rawDescGZIP() []byte {
 	return file_kodex_projects_v1_project_catalog_proto_rawDescData
 }
 
-var file_kodex_projects_v1_project_catalog_proto_enumTypes = make([]protoimpl.EnumInfo, 24)
-var file_kodex_projects_v1_project_catalog_proto_msgTypes = make([]protoimpl.MessageInfo, 92)
+var file_kodex_projects_v1_project_catalog_proto_enumTypes = make([]protoimpl.EnumInfo, 25)
+var file_kodex_projects_v1_project_catalog_proto_msgTypes = make([]protoimpl.MessageInfo, 96)
 var file_kodex_projects_v1_project_catalog_proto_goTypes = []any{
 	(ProjectStatus)(0),                                  // 0: kodex.projects.v1.ProjectStatus
 	(RepositoryProvider)(0),                             // 1: kodex.projects.v1.RepositoryProvider
@@ -10318,358 +10855,372 @@ var file_kodex_projects_v1_project_catalog_proto_goTypes = []any{
 	(ServicesPolicyValidationStatus)(0),                 // 5: kodex.projects.v1.ServicesPolicyValidationStatus
 	(ServicesPolicyProjectionStatus)(0),                 // 6: kodex.projects.v1.ServicesPolicyProjectionStatus
 	(SelfDeploySignalStatus)(0),                         // 7: kodex.projects.v1.SelfDeploySignalStatus
-	(SelfDeployPathCategory)(0),                         // 8: kodex.projects.v1.SelfDeployPathCategory
-	(SelfDeployExpectedRuntimeJobType)(0),               // 9: kodex.projects.v1.SelfDeployExpectedRuntimeJobType
-	(ServiceKind)(0),                                    // 10: kodex.projects.v1.ServiceKind
-	(ServiceStatus)(0),                                  // 11: kodex.projects.v1.ServiceStatus
-	(DocumentationScopeType)(0),                         // 12: kodex.projects.v1.DocumentationScopeType
-	(DocumentationAccessMode)(0),                        // 13: kodex.projects.v1.DocumentationAccessMode
-	(SourceAccessMode)(0),                               // 14: kodex.projects.v1.SourceAccessMode
-	(DocumentationSourceStatus)(0),                      // 15: kodex.projects.v1.DocumentationSourceStatus
-	(MergePolicy)(0),                                    // 16: kodex.projects.v1.MergePolicy
-	(BranchRulesStatus)(0),                              // 17: kodex.projects.v1.BranchRulesStatus
-	(RolloutStrategy)(0),                                // 18: kodex.projects.v1.RolloutStrategy
-	(RollbackPolicy)(0),                                 // 19: kodex.projects.v1.RollbackPolicy
-	(ReleasePolicyStatus)(0),                            // 20: kodex.projects.v1.ReleasePolicyStatus
-	(PlacementPolicyStatus)(0),                          // 21: kodex.projects.v1.PlacementPolicyStatus
-	(PolicyOverrideTargetType)(0),                       // 22: kodex.projects.v1.PolicyOverrideTargetType
-	(PolicyOverrideStatus)(0),                           // 23: kodex.projects.v1.PolicyOverrideStatus
-	(*CommandMeta)(nil),                                 // 24: kodex.projects.v1.CommandMeta
-	(*QueryMeta)(nil),                                   // 25: kodex.projects.v1.QueryMeta
-	(*RequestContext)(nil),                              // 26: kodex.projects.v1.RequestContext
-	(*Actor)(nil),                                       // 27: kodex.projects.v1.Actor
-	(*PageRequest)(nil),                                 // 28: kodex.projects.v1.PageRequest
-	(*PageResponse)(nil),                                // 29: kodex.projects.v1.PageResponse
-	(*Project)(nil),                                     // 30: kodex.projects.v1.Project
-	(*Repository)(nil),                                  // 31: kodex.projects.v1.Repository
-	(*RepositoryBootstrapFile)(nil),                     // 32: kodex.projects.v1.RepositoryBootstrapFile
-	(*RepositoryBootstrapServicesPolicy)(nil),           // 33: kodex.projects.v1.RepositoryBootstrapServicesPolicy
-	(*RepositoryBootstrapProviderTarget)(nil),           // 34: kodex.projects.v1.RepositoryBootstrapProviderTarget
-	(*ServicesPolicy)(nil),                              // 35: kodex.projects.v1.ServicesPolicy
-	(*ServiceDescriptor)(nil),                           // 36: kodex.projects.v1.ServiceDescriptor
-	(*SelfDeployPathCategoryCount)(nil),                 // 37: kodex.projects.v1.SelfDeployPathCategoryCount
-	(*SelfDeployGovernanceRequirement)(nil),             // 38: kodex.projects.v1.SelfDeployGovernanceRequirement
-	(*SelfDeployServicesYamlProjection)(nil),            // 39: kodex.projects.v1.SelfDeployServicesYamlProjection
-	(*SelfDeploySignal)(nil),                            // 40: kodex.projects.v1.SelfDeploySignal
-	(*DocumentationSource)(nil),                         // 41: kodex.projects.v1.DocumentationSource
-	(*BranchRules)(nil),                                 // 42: kodex.projects.v1.BranchRules
-	(*ReleasePolicy)(nil),                               // 43: kodex.projects.v1.ReleasePolicy
-	(*ReleaseLine)(nil),                                 // 44: kodex.projects.v1.ReleaseLine
-	(*PlacementPolicy)(nil),                             // 45: kodex.projects.v1.PlacementPolicy
-	(*PolicyOverride)(nil),                              // 46: kodex.projects.v1.PolicyOverride
-	(*WorkspacePolicy)(nil),                             // 47: kodex.projects.v1.WorkspacePolicy
-	(*WorkspaceCodeSource)(nil),                         // 48: kodex.projects.v1.WorkspaceCodeSource
-	(*WorkspaceDocumentationSource)(nil),                // 49: kodex.projects.v1.WorkspaceDocumentationSource
-	(*CreateProjectRequest)(nil),                        // 50: kodex.projects.v1.CreateProjectRequest
-	(*UpdateProjectRequest)(nil),                        // 51: kodex.projects.v1.UpdateProjectRequest
-	(*ProjectResponse)(nil),                             // 52: kodex.projects.v1.ProjectResponse
-	(*GetProjectRequest)(nil),                           // 53: kodex.projects.v1.GetProjectRequest
-	(*ListProjectsRequest)(nil),                         // 54: kodex.projects.v1.ListProjectsRequest
-	(*ListProjectsResponse)(nil),                        // 55: kodex.projects.v1.ListProjectsResponse
-	(*AttachRepositoryRequest)(nil),                     // 56: kodex.projects.v1.AttachRepositoryRequest
-	(*UpdateRepositoryRequest)(nil),                     // 57: kodex.projects.v1.UpdateRepositoryRequest
-	(*DetachRepositoryRequest)(nil),                     // 58: kodex.projects.v1.DetachRepositoryRequest
-	(*RepositoryResponse)(nil),                          // 59: kodex.projects.v1.RepositoryResponse
-	(*CreateProviderRepositoryRequest)(nil),             // 60: kodex.projects.v1.CreateProviderRepositoryRequest
-	(*RepositoryProviderCreateResponse)(nil),            // 61: kodex.projects.v1.RepositoryProviderCreateResponse
-	(*CreateRepositoryBootstrapPullRequestRequest)(nil), // 62: kodex.projects.v1.CreateRepositoryBootstrapPullRequestRequest
-	(*RepositoryBootstrapPullRequestResponse)(nil),      // 63: kodex.projects.v1.RepositoryBootstrapPullRequestResponse
-	(*GetRepositoryRequest)(nil),                        // 64: kodex.projects.v1.GetRepositoryRequest
-	(*ListRepositoriesRequest)(nil),                     // 65: kodex.projects.v1.ListRepositoriesRequest
-	(*ListRepositoriesResponse)(nil),                    // 66: kodex.projects.v1.ListRepositoriesResponse
-	(*ImportServicesPolicyRequest)(nil),                 // 67: kodex.projects.v1.ImportServicesPolicyRequest
-	(*ImportBootstrapServicesPolicyRequest)(nil),        // 68: kodex.projects.v1.ImportBootstrapServicesPolicyRequest
-	(*BootstrapRepositoryMergeSignal)(nil),              // 69: kodex.projects.v1.BootstrapRepositoryMergeSignal
-	(*CheckedBootstrapServicesPolicyArtifact)(nil),      // 70: kodex.projects.v1.CheckedBootstrapServicesPolicyArtifact
-	(*ReconcileBootstrapMergeSignalRequest)(nil),        // 71: kodex.projects.v1.ReconcileBootstrapMergeSignalRequest
-	(*RepositoryAdoptionMergeSignal)(nil),               // 72: kodex.projects.v1.RepositoryAdoptionMergeSignal
-	(*CheckedAdoptionServicesPolicyArtifact)(nil),       // 73: kodex.projects.v1.CheckedAdoptionServicesPolicyArtifact
-	(*ReconcileAdoptionMergeSignalRequest)(nil),         // 74: kodex.projects.v1.ReconcileAdoptionMergeSignalRequest
-	(*BootstrapServicesPolicyImportResponse)(nil),       // 75: kodex.projects.v1.BootstrapServicesPolicyImportResponse
-	(*ServicesPolicyResponse)(nil),                      // 76: kodex.projects.v1.ServicesPolicyResponse
-	(*GetSelfDeploySignalRequest)(nil),                  // 77: kodex.projects.v1.GetSelfDeploySignalRequest
-	(*SelfDeploySignalResponse)(nil),                    // 78: kodex.projects.v1.SelfDeploySignalResponse
-	(*GetServicesPolicyRequest)(nil),                    // 79: kodex.projects.v1.GetServicesPolicyRequest
-	(*ListServiceDescriptorsRequest)(nil),               // 80: kodex.projects.v1.ListServiceDescriptorsRequest
-	(*ListServiceDescriptorsResponse)(nil),              // 81: kodex.projects.v1.ListServiceDescriptorsResponse
-	(*CreatePolicyEditProposalRequest)(nil),             // 82: kodex.projects.v1.CreatePolicyEditProposalRequest
-	(*PolicyEditProposalResponse)(nil),                  // 83: kodex.projects.v1.PolicyEditProposalResponse
-	(*CreatePolicyOverrideRequest)(nil),                 // 84: kodex.projects.v1.CreatePolicyOverrideRequest
-	(*CancelPolicyOverrideRequest)(nil),                 // 85: kodex.projects.v1.CancelPolicyOverrideRequest
-	(*PolicyOverrideResponse)(nil),                      // 86: kodex.projects.v1.PolicyOverrideResponse
-	(*ListPolicyOverridesRequest)(nil),                  // 87: kodex.projects.v1.ListPolicyOverridesRequest
-	(*ListPolicyOverridesResponse)(nil),                 // 88: kodex.projects.v1.ListPolicyOverridesResponse
-	(*PutDocumentationSourceRequest)(nil),               // 89: kodex.projects.v1.PutDocumentationSourceRequest
-	(*DocumentationSourceResponse)(nil),                 // 90: kodex.projects.v1.DocumentationSourceResponse
-	(*GetDocumentationSourceRequest)(nil),               // 91: kodex.projects.v1.GetDocumentationSourceRequest
-	(*ListDocumentationSourcesRequest)(nil),             // 92: kodex.projects.v1.ListDocumentationSourcesRequest
-	(*ListDocumentationSourcesResponse)(nil),            // 93: kodex.projects.v1.ListDocumentationSourcesResponse
-	(*GetWorkspacePolicyRequest)(nil),                   // 94: kodex.projects.v1.GetWorkspacePolicyRequest
-	(*WorkspacePolicyResponse)(nil),                     // 95: kodex.projects.v1.WorkspacePolicyResponse
-	(*PutBranchRulesRequest)(nil),                       // 96: kodex.projects.v1.PutBranchRulesRequest
-	(*BranchRulesResponse)(nil),                         // 97: kodex.projects.v1.BranchRulesResponse
-	(*GetBranchRulesRequest)(nil),                       // 98: kodex.projects.v1.GetBranchRulesRequest
-	(*ListBranchRulesRequest)(nil),                      // 99: kodex.projects.v1.ListBranchRulesRequest
-	(*ListBranchRulesResponse)(nil),                     // 100: kodex.projects.v1.ListBranchRulesResponse
-	(*PutReleasePolicyRequest)(nil),                     // 101: kodex.projects.v1.PutReleasePolicyRequest
-	(*ReleasePolicyResponse)(nil),                       // 102: kodex.projects.v1.ReleasePolicyResponse
-	(*GetReleasePolicyRequest)(nil),                     // 103: kodex.projects.v1.GetReleasePolicyRequest
-	(*ListReleasePoliciesRequest)(nil),                  // 104: kodex.projects.v1.ListReleasePoliciesRequest
-	(*ListReleasePoliciesResponse)(nil),                 // 105: kodex.projects.v1.ListReleasePoliciesResponse
-	(*PutReleaseLineRequest)(nil),                       // 106: kodex.projects.v1.PutReleaseLineRequest
-	(*ReleaseLineResponse)(nil),                         // 107: kodex.projects.v1.ReleaseLineResponse
-	(*GetReleaseLineRequest)(nil),                       // 108: kodex.projects.v1.GetReleaseLineRequest
-	(*ListReleaseLinesRequest)(nil),                     // 109: kodex.projects.v1.ListReleaseLinesRequest
-	(*ListReleaseLinesResponse)(nil),                    // 110: kodex.projects.v1.ListReleaseLinesResponse
-	(*PutPlacementPolicyRequest)(nil),                   // 111: kodex.projects.v1.PutPlacementPolicyRequest
-	(*PlacementPolicyResponse)(nil),                     // 112: kodex.projects.v1.PlacementPolicyResponse
-	(*GetPlacementPolicyRequest)(nil),                   // 113: kodex.projects.v1.GetPlacementPolicyRequest
-	(*ListPlacementPoliciesRequest)(nil),                // 114: kodex.projects.v1.ListPlacementPoliciesRequest
-	(*ListPlacementPoliciesResponse)(nil),               // 115: kodex.projects.v1.ListPlacementPoliciesResponse
+	(SelfDeployBuildPlanStatus)(0),                      // 8: kodex.projects.v1.SelfDeployBuildPlanStatus
+	(SelfDeployPathCategory)(0),                         // 9: kodex.projects.v1.SelfDeployPathCategory
+	(SelfDeployExpectedRuntimeJobType)(0),               // 10: kodex.projects.v1.SelfDeployExpectedRuntimeJobType
+	(ServiceKind)(0),                                    // 11: kodex.projects.v1.ServiceKind
+	(ServiceStatus)(0),                                  // 12: kodex.projects.v1.ServiceStatus
+	(DocumentationScopeType)(0),                         // 13: kodex.projects.v1.DocumentationScopeType
+	(DocumentationAccessMode)(0),                        // 14: kodex.projects.v1.DocumentationAccessMode
+	(SourceAccessMode)(0),                               // 15: kodex.projects.v1.SourceAccessMode
+	(DocumentationSourceStatus)(0),                      // 16: kodex.projects.v1.DocumentationSourceStatus
+	(MergePolicy)(0),                                    // 17: kodex.projects.v1.MergePolicy
+	(BranchRulesStatus)(0),                              // 18: kodex.projects.v1.BranchRulesStatus
+	(RolloutStrategy)(0),                                // 19: kodex.projects.v1.RolloutStrategy
+	(RollbackPolicy)(0),                                 // 20: kodex.projects.v1.RollbackPolicy
+	(ReleasePolicyStatus)(0),                            // 21: kodex.projects.v1.ReleasePolicyStatus
+	(PlacementPolicyStatus)(0),                          // 22: kodex.projects.v1.PlacementPolicyStatus
+	(PolicyOverrideTargetType)(0),                       // 23: kodex.projects.v1.PolicyOverrideTargetType
+	(PolicyOverrideStatus)(0),                           // 24: kodex.projects.v1.PolicyOverrideStatus
+	(*CommandMeta)(nil),                                 // 25: kodex.projects.v1.CommandMeta
+	(*QueryMeta)(nil),                                   // 26: kodex.projects.v1.QueryMeta
+	(*RequestContext)(nil),                              // 27: kodex.projects.v1.RequestContext
+	(*Actor)(nil),                                       // 28: kodex.projects.v1.Actor
+	(*PageRequest)(nil),                                 // 29: kodex.projects.v1.PageRequest
+	(*PageResponse)(nil),                                // 30: kodex.projects.v1.PageResponse
+	(*Project)(nil),                                     // 31: kodex.projects.v1.Project
+	(*Repository)(nil),                                  // 32: kodex.projects.v1.Repository
+	(*RepositoryBootstrapFile)(nil),                     // 33: kodex.projects.v1.RepositoryBootstrapFile
+	(*RepositoryBootstrapServicesPolicy)(nil),           // 34: kodex.projects.v1.RepositoryBootstrapServicesPolicy
+	(*RepositoryBootstrapProviderTarget)(nil),           // 35: kodex.projects.v1.RepositoryBootstrapProviderTarget
+	(*ServicesPolicy)(nil),                              // 36: kodex.projects.v1.ServicesPolicy
+	(*ServiceDescriptor)(nil),                           // 37: kodex.projects.v1.ServiceDescriptor
+	(*SelfDeployPathCategoryCount)(nil),                 // 38: kodex.projects.v1.SelfDeployPathCategoryCount
+	(*SelfDeployGovernanceRequirement)(nil),             // 39: kodex.projects.v1.SelfDeployGovernanceRequirement
+	(*SelfDeployServicesYamlProjection)(nil),            // 40: kodex.projects.v1.SelfDeployServicesYamlProjection
+	(*SelfDeploySignal)(nil),                            // 41: kodex.projects.v1.SelfDeploySignal
+	(*SelfDeployBuildPlanItem)(nil),                     // 42: kodex.projects.v1.SelfDeployBuildPlanItem
+	(*SelfDeployBuildPlan)(nil),                         // 43: kodex.projects.v1.SelfDeployBuildPlan
+	(*DocumentationSource)(nil),                         // 44: kodex.projects.v1.DocumentationSource
+	(*BranchRules)(nil),                                 // 45: kodex.projects.v1.BranchRules
+	(*ReleasePolicy)(nil),                               // 46: kodex.projects.v1.ReleasePolicy
+	(*ReleaseLine)(nil),                                 // 47: kodex.projects.v1.ReleaseLine
+	(*PlacementPolicy)(nil),                             // 48: kodex.projects.v1.PlacementPolicy
+	(*PolicyOverride)(nil),                              // 49: kodex.projects.v1.PolicyOverride
+	(*WorkspacePolicy)(nil),                             // 50: kodex.projects.v1.WorkspacePolicy
+	(*WorkspaceCodeSource)(nil),                         // 51: kodex.projects.v1.WorkspaceCodeSource
+	(*WorkspaceDocumentationSource)(nil),                // 52: kodex.projects.v1.WorkspaceDocumentationSource
+	(*CreateProjectRequest)(nil),                        // 53: kodex.projects.v1.CreateProjectRequest
+	(*UpdateProjectRequest)(nil),                        // 54: kodex.projects.v1.UpdateProjectRequest
+	(*ProjectResponse)(nil),                             // 55: kodex.projects.v1.ProjectResponse
+	(*GetProjectRequest)(nil),                           // 56: kodex.projects.v1.GetProjectRequest
+	(*ListProjectsRequest)(nil),                         // 57: kodex.projects.v1.ListProjectsRequest
+	(*ListProjectsResponse)(nil),                        // 58: kodex.projects.v1.ListProjectsResponse
+	(*AttachRepositoryRequest)(nil),                     // 59: kodex.projects.v1.AttachRepositoryRequest
+	(*UpdateRepositoryRequest)(nil),                     // 60: kodex.projects.v1.UpdateRepositoryRequest
+	(*DetachRepositoryRequest)(nil),                     // 61: kodex.projects.v1.DetachRepositoryRequest
+	(*RepositoryResponse)(nil),                          // 62: kodex.projects.v1.RepositoryResponse
+	(*CreateProviderRepositoryRequest)(nil),             // 63: kodex.projects.v1.CreateProviderRepositoryRequest
+	(*RepositoryProviderCreateResponse)(nil),            // 64: kodex.projects.v1.RepositoryProviderCreateResponse
+	(*CreateRepositoryBootstrapPullRequestRequest)(nil), // 65: kodex.projects.v1.CreateRepositoryBootstrapPullRequestRequest
+	(*RepositoryBootstrapPullRequestResponse)(nil),      // 66: kodex.projects.v1.RepositoryBootstrapPullRequestResponse
+	(*GetRepositoryRequest)(nil),                        // 67: kodex.projects.v1.GetRepositoryRequest
+	(*ListRepositoriesRequest)(nil),                     // 68: kodex.projects.v1.ListRepositoriesRequest
+	(*ListRepositoriesResponse)(nil),                    // 69: kodex.projects.v1.ListRepositoriesResponse
+	(*ImportServicesPolicyRequest)(nil),                 // 70: kodex.projects.v1.ImportServicesPolicyRequest
+	(*ImportBootstrapServicesPolicyRequest)(nil),        // 71: kodex.projects.v1.ImportBootstrapServicesPolicyRequest
+	(*BootstrapRepositoryMergeSignal)(nil),              // 72: kodex.projects.v1.BootstrapRepositoryMergeSignal
+	(*CheckedBootstrapServicesPolicyArtifact)(nil),      // 73: kodex.projects.v1.CheckedBootstrapServicesPolicyArtifact
+	(*ReconcileBootstrapMergeSignalRequest)(nil),        // 74: kodex.projects.v1.ReconcileBootstrapMergeSignalRequest
+	(*RepositoryAdoptionMergeSignal)(nil),               // 75: kodex.projects.v1.RepositoryAdoptionMergeSignal
+	(*CheckedAdoptionServicesPolicyArtifact)(nil),       // 76: kodex.projects.v1.CheckedAdoptionServicesPolicyArtifact
+	(*ReconcileAdoptionMergeSignalRequest)(nil),         // 77: kodex.projects.v1.ReconcileAdoptionMergeSignalRequest
+	(*BootstrapServicesPolicyImportResponse)(nil),       // 78: kodex.projects.v1.BootstrapServicesPolicyImportResponse
+	(*ServicesPolicyResponse)(nil),                      // 79: kodex.projects.v1.ServicesPolicyResponse
+	(*GetSelfDeploySignalRequest)(nil),                  // 80: kodex.projects.v1.GetSelfDeploySignalRequest
+	(*SelfDeploySignalResponse)(nil),                    // 81: kodex.projects.v1.SelfDeploySignalResponse
+	(*GetSelfDeployBuildPlanRequest)(nil),               // 82: kodex.projects.v1.GetSelfDeployBuildPlanRequest
+	(*SelfDeployBuildPlanResponse)(nil),                 // 83: kodex.projects.v1.SelfDeployBuildPlanResponse
+	(*GetServicesPolicyRequest)(nil),                    // 84: kodex.projects.v1.GetServicesPolicyRequest
+	(*ListServiceDescriptorsRequest)(nil),               // 85: kodex.projects.v1.ListServiceDescriptorsRequest
+	(*ListServiceDescriptorsResponse)(nil),              // 86: kodex.projects.v1.ListServiceDescriptorsResponse
+	(*CreatePolicyEditProposalRequest)(nil),             // 87: kodex.projects.v1.CreatePolicyEditProposalRequest
+	(*PolicyEditProposalResponse)(nil),                  // 88: kodex.projects.v1.PolicyEditProposalResponse
+	(*CreatePolicyOverrideRequest)(nil),                 // 89: kodex.projects.v1.CreatePolicyOverrideRequest
+	(*CancelPolicyOverrideRequest)(nil),                 // 90: kodex.projects.v1.CancelPolicyOverrideRequest
+	(*PolicyOverrideResponse)(nil),                      // 91: kodex.projects.v1.PolicyOverrideResponse
+	(*ListPolicyOverridesRequest)(nil),                  // 92: kodex.projects.v1.ListPolicyOverridesRequest
+	(*ListPolicyOverridesResponse)(nil),                 // 93: kodex.projects.v1.ListPolicyOverridesResponse
+	(*PutDocumentationSourceRequest)(nil),               // 94: kodex.projects.v1.PutDocumentationSourceRequest
+	(*DocumentationSourceResponse)(nil),                 // 95: kodex.projects.v1.DocumentationSourceResponse
+	(*GetDocumentationSourceRequest)(nil),               // 96: kodex.projects.v1.GetDocumentationSourceRequest
+	(*ListDocumentationSourcesRequest)(nil),             // 97: kodex.projects.v1.ListDocumentationSourcesRequest
+	(*ListDocumentationSourcesResponse)(nil),            // 98: kodex.projects.v1.ListDocumentationSourcesResponse
+	(*GetWorkspacePolicyRequest)(nil),                   // 99: kodex.projects.v1.GetWorkspacePolicyRequest
+	(*WorkspacePolicyResponse)(nil),                     // 100: kodex.projects.v1.WorkspacePolicyResponse
+	(*PutBranchRulesRequest)(nil),                       // 101: kodex.projects.v1.PutBranchRulesRequest
+	(*BranchRulesResponse)(nil),                         // 102: kodex.projects.v1.BranchRulesResponse
+	(*GetBranchRulesRequest)(nil),                       // 103: kodex.projects.v1.GetBranchRulesRequest
+	(*ListBranchRulesRequest)(nil),                      // 104: kodex.projects.v1.ListBranchRulesRequest
+	(*ListBranchRulesResponse)(nil),                     // 105: kodex.projects.v1.ListBranchRulesResponse
+	(*PutReleasePolicyRequest)(nil),                     // 106: kodex.projects.v1.PutReleasePolicyRequest
+	(*ReleasePolicyResponse)(nil),                       // 107: kodex.projects.v1.ReleasePolicyResponse
+	(*GetReleasePolicyRequest)(nil),                     // 108: kodex.projects.v1.GetReleasePolicyRequest
+	(*ListReleasePoliciesRequest)(nil),                  // 109: kodex.projects.v1.ListReleasePoliciesRequest
+	(*ListReleasePoliciesResponse)(nil),                 // 110: kodex.projects.v1.ListReleasePoliciesResponse
+	(*PutReleaseLineRequest)(nil),                       // 111: kodex.projects.v1.PutReleaseLineRequest
+	(*ReleaseLineResponse)(nil),                         // 112: kodex.projects.v1.ReleaseLineResponse
+	(*GetReleaseLineRequest)(nil),                       // 113: kodex.projects.v1.GetReleaseLineRequest
+	(*ListReleaseLinesRequest)(nil),                     // 114: kodex.projects.v1.ListReleaseLinesRequest
+	(*ListReleaseLinesResponse)(nil),                    // 115: kodex.projects.v1.ListReleaseLinesResponse
+	(*PutPlacementPolicyRequest)(nil),                   // 116: kodex.projects.v1.PutPlacementPolicyRequest
+	(*PlacementPolicyResponse)(nil),                     // 117: kodex.projects.v1.PlacementPolicyResponse
+	(*GetPlacementPolicyRequest)(nil),                   // 118: kodex.projects.v1.GetPlacementPolicyRequest
+	(*ListPlacementPoliciesRequest)(nil),                // 119: kodex.projects.v1.ListPlacementPoliciesRequest
+	(*ListPlacementPoliciesResponse)(nil),               // 120: kodex.projects.v1.ListPlacementPoliciesResponse
+	(*v1.BuildExecutionSpec)(nil),                       // 121: kodex.runtime.v1.BuildExecutionSpec
 }
 var file_kodex_projects_v1_project_catalog_proto_depIdxs = []int32{
-	27,  // 0: kodex.projects.v1.CommandMeta.actor:type_name -> kodex.projects.v1.Actor
-	26,  // 1: kodex.projects.v1.CommandMeta.request_context:type_name -> kodex.projects.v1.RequestContext
-	27,  // 2: kodex.projects.v1.QueryMeta.actor:type_name -> kodex.projects.v1.Actor
-	26,  // 3: kodex.projects.v1.QueryMeta.request_context:type_name -> kodex.projects.v1.RequestContext
+	28,  // 0: kodex.projects.v1.CommandMeta.actor:type_name -> kodex.projects.v1.Actor
+	27,  // 1: kodex.projects.v1.CommandMeta.request_context:type_name -> kodex.projects.v1.RequestContext
+	28,  // 2: kodex.projects.v1.QueryMeta.actor:type_name -> kodex.projects.v1.Actor
+	27,  // 3: kodex.projects.v1.QueryMeta.request_context:type_name -> kodex.projects.v1.RequestContext
 	0,   // 4: kodex.projects.v1.Project.status:type_name -> kodex.projects.v1.ProjectStatus
 	1,   // 5: kodex.projects.v1.Repository.provider:type_name -> kodex.projects.v1.RepositoryProvider
 	2,   // 6: kodex.projects.v1.Repository.status:type_name -> kodex.projects.v1.RepositoryStatus
 	5,   // 7: kodex.projects.v1.ServicesPolicy.validation_status:type_name -> kodex.projects.v1.ServicesPolicyValidationStatus
 	6,   // 8: kodex.projects.v1.ServicesPolicy.projection_status:type_name -> kodex.projects.v1.ServicesPolicyProjectionStatus
-	10,  // 9: kodex.projects.v1.ServiceDescriptor.kind:type_name -> kodex.projects.v1.ServiceKind
-	11,  // 10: kodex.projects.v1.ServiceDescriptor.status:type_name -> kodex.projects.v1.ServiceStatus
-	8,   // 11: kodex.projects.v1.SelfDeployPathCategoryCount.category:type_name -> kodex.projects.v1.SelfDeployPathCategory
+	11,  // 9: kodex.projects.v1.ServiceDescriptor.kind:type_name -> kodex.projects.v1.ServiceKind
+	12,  // 10: kodex.projects.v1.ServiceDescriptor.status:type_name -> kodex.projects.v1.ServiceStatus
+	9,   // 11: kodex.projects.v1.SelfDeployPathCategoryCount.category:type_name -> kodex.projects.v1.SelfDeployPathCategory
 	5,   // 12: kodex.projects.v1.SelfDeployServicesYamlProjection.validation_status:type_name -> kodex.projects.v1.ServicesPolicyValidationStatus
 	6,   // 13: kodex.projects.v1.SelfDeployServicesYamlProjection.projection_status:type_name -> kodex.projects.v1.ServicesPolicyProjectionStatus
-	39,  // 14: kodex.projects.v1.SelfDeploySignal.services_yaml:type_name -> kodex.projects.v1.SelfDeployServicesYamlProjection
-	37,  // 15: kodex.projects.v1.SelfDeploySignal.path_categories:type_name -> kodex.projects.v1.SelfDeployPathCategoryCount
-	9,   // 16: kodex.projects.v1.SelfDeploySignal.expected_runtime_job_types:type_name -> kodex.projects.v1.SelfDeployExpectedRuntimeJobType
-	38,  // 17: kodex.projects.v1.SelfDeploySignal.governance_requirement:type_name -> kodex.projects.v1.SelfDeployGovernanceRequirement
-	12,  // 18: kodex.projects.v1.DocumentationSource.scope_type:type_name -> kodex.projects.v1.DocumentationScopeType
-	13,  // 19: kodex.projects.v1.DocumentationSource.access_mode:type_name -> kodex.projects.v1.DocumentationAccessMode
-	15,  // 20: kodex.projects.v1.DocumentationSource.status:type_name -> kodex.projects.v1.DocumentationSourceStatus
-	16,  // 21: kodex.projects.v1.BranchRules.merge_policy:type_name -> kodex.projects.v1.MergePolicy
-	17,  // 22: kodex.projects.v1.BranchRules.status:type_name -> kodex.projects.v1.BranchRulesStatus
-	18,  // 23: kodex.projects.v1.ReleasePolicy.rollout_strategy:type_name -> kodex.projects.v1.RolloutStrategy
-	19,  // 24: kodex.projects.v1.ReleasePolicy.rollback_policy:type_name -> kodex.projects.v1.RollbackPolicy
-	20,  // 25: kodex.projects.v1.ReleasePolicy.status:type_name -> kodex.projects.v1.ReleasePolicyStatus
-	20,  // 26: kodex.projects.v1.ReleaseLine.status:type_name -> kodex.projects.v1.ReleasePolicyStatus
-	21,  // 27: kodex.projects.v1.PlacementPolicy.status:type_name -> kodex.projects.v1.PlacementPolicyStatus
-	22,  // 28: kodex.projects.v1.PolicyOverride.target_type:type_name -> kodex.projects.v1.PolicyOverrideTargetType
-	23,  // 29: kodex.projects.v1.PolicyOverride.status:type_name -> kodex.projects.v1.PolicyOverrideStatus
-	48,  // 30: kodex.projects.v1.WorkspacePolicy.code_sources:type_name -> kodex.projects.v1.WorkspaceCodeSource
-	49,  // 31: kodex.projects.v1.WorkspacePolicy.documentation_sources:type_name -> kodex.projects.v1.WorkspaceDocumentationSource
-	46,  // 32: kodex.projects.v1.WorkspacePolicy.active_policy_overrides:type_name -> kodex.projects.v1.PolicyOverride
-	1,   // 33: kodex.projects.v1.WorkspaceCodeSource.provider:type_name -> kodex.projects.v1.RepositoryProvider
-	14,  // 34: kodex.projects.v1.WorkspaceCodeSource.access_mode:type_name -> kodex.projects.v1.SourceAccessMode
-	12,  // 35: kodex.projects.v1.WorkspaceDocumentationSource.scope_type:type_name -> kodex.projects.v1.DocumentationScopeType
-	14,  // 36: kodex.projects.v1.WorkspaceDocumentationSource.access_mode:type_name -> kodex.projects.v1.SourceAccessMode
-	0,   // 37: kodex.projects.v1.CreateProjectRequest.status:type_name -> kodex.projects.v1.ProjectStatus
-	24,  // 38: kodex.projects.v1.CreateProjectRequest.meta:type_name -> kodex.projects.v1.CommandMeta
-	0,   // 39: kodex.projects.v1.UpdateProjectRequest.status:type_name -> kodex.projects.v1.ProjectStatus
-	24,  // 40: kodex.projects.v1.UpdateProjectRequest.meta:type_name -> kodex.projects.v1.CommandMeta
-	30,  // 41: kodex.projects.v1.ProjectResponse.project:type_name -> kodex.projects.v1.Project
-	25,  // 42: kodex.projects.v1.GetProjectRequest.meta:type_name -> kodex.projects.v1.QueryMeta
-	0,   // 43: kodex.projects.v1.ListProjectsRequest.statuses:type_name -> kodex.projects.v1.ProjectStatus
-	28,  // 44: kodex.projects.v1.ListProjectsRequest.page:type_name -> kodex.projects.v1.PageRequest
-	25,  // 45: kodex.projects.v1.ListProjectsRequest.meta:type_name -> kodex.projects.v1.QueryMeta
-	30,  // 46: kodex.projects.v1.ListProjectsResponse.projects:type_name -> kodex.projects.v1.Project
-	29,  // 47: kodex.projects.v1.ListProjectsResponse.page:type_name -> kodex.projects.v1.PageResponse
-	1,   // 48: kodex.projects.v1.AttachRepositoryRequest.provider:type_name -> kodex.projects.v1.RepositoryProvider
-	2,   // 49: kodex.projects.v1.AttachRepositoryRequest.status:type_name -> kodex.projects.v1.RepositoryStatus
-	24,  // 50: kodex.projects.v1.AttachRepositoryRequest.meta:type_name -> kodex.projects.v1.CommandMeta
-	2,   // 51: kodex.projects.v1.UpdateRepositoryRequest.status:type_name -> kodex.projects.v1.RepositoryStatus
-	24,  // 52: kodex.projects.v1.UpdateRepositoryRequest.meta:type_name -> kodex.projects.v1.CommandMeta
-	24,  // 53: kodex.projects.v1.DetachRepositoryRequest.meta:type_name -> kodex.projects.v1.CommandMeta
-	31,  // 54: kodex.projects.v1.RepositoryResponse.repository:type_name -> kodex.projects.v1.Repository
-	1,   // 55: kodex.projects.v1.CreateProviderRepositoryRequest.provider:type_name -> kodex.projects.v1.RepositoryProvider
-	3,   // 56: kodex.projects.v1.CreateProviderRepositoryRequest.owner_kind:type_name -> kodex.projects.v1.RepositoryOwnerKind
-	4,   // 57: kodex.projects.v1.CreateProviderRepositoryRequest.visibility:type_name -> kodex.projects.v1.RepositoryVisibility
-	24,  // 58: kodex.projects.v1.CreateProviderRepositoryRequest.meta:type_name -> kodex.projects.v1.CommandMeta
-	31,  // 59: kodex.projects.v1.RepositoryProviderCreateResponse.repository:type_name -> kodex.projects.v1.Repository
-	34,  // 60: kodex.projects.v1.RepositoryProviderCreateResponse.provider_target:type_name -> kodex.projects.v1.RepositoryBootstrapProviderTarget
-	32,  // 61: kodex.projects.v1.CreateRepositoryBootstrapPullRequestRequest.files:type_name -> kodex.projects.v1.RepositoryBootstrapFile
-	33,  // 62: kodex.projects.v1.CreateRepositoryBootstrapPullRequestRequest.services_policy:type_name -> kodex.projects.v1.RepositoryBootstrapServicesPolicy
-	24,  // 63: kodex.projects.v1.CreateRepositoryBootstrapPullRequestRequest.meta:type_name -> kodex.projects.v1.CommandMeta
-	31,  // 64: kodex.projects.v1.RepositoryBootstrapPullRequestResponse.repository:type_name -> kodex.projects.v1.Repository
-	34,  // 65: kodex.projects.v1.RepositoryBootstrapPullRequestResponse.provider_target:type_name -> kodex.projects.v1.RepositoryBootstrapProviderTarget
-	25,  // 66: kodex.projects.v1.GetRepositoryRequest.meta:type_name -> kodex.projects.v1.QueryMeta
-	2,   // 67: kodex.projects.v1.ListRepositoriesRequest.statuses:type_name -> kodex.projects.v1.RepositoryStatus
-	28,  // 68: kodex.projects.v1.ListRepositoriesRequest.page:type_name -> kodex.projects.v1.PageRequest
-	25,  // 69: kodex.projects.v1.ListRepositoriesRequest.meta:type_name -> kodex.projects.v1.QueryMeta
-	31,  // 70: kodex.projects.v1.ListRepositoriesResponse.repositories:type_name -> kodex.projects.v1.Repository
-	29,  // 71: kodex.projects.v1.ListRepositoriesResponse.page:type_name -> kodex.projects.v1.PageResponse
-	36,  // 72: kodex.projects.v1.ImportServicesPolicyRequest.service_descriptors:type_name -> kodex.projects.v1.ServiceDescriptor
-	5,   // 73: kodex.projects.v1.ImportServicesPolicyRequest.validation_status:type_name -> kodex.projects.v1.ServicesPolicyValidationStatus
-	24,  // 74: kodex.projects.v1.ImportServicesPolicyRequest.meta:type_name -> kodex.projects.v1.CommandMeta
-	34,  // 75: kodex.projects.v1.ImportBootstrapServicesPolicyRequest.provider_target:type_name -> kodex.projects.v1.RepositoryBootstrapProviderTarget
-	24,  // 76: kodex.projects.v1.ImportBootstrapServicesPolicyRequest.meta:type_name -> kodex.projects.v1.CommandMeta
-	34,  // 77: kodex.projects.v1.BootstrapRepositoryMergeSignal.provider_target:type_name -> kodex.projects.v1.RepositoryBootstrapProviderTarget
-	69,  // 78: kodex.projects.v1.ReconcileBootstrapMergeSignalRequest.merge_signal:type_name -> kodex.projects.v1.BootstrapRepositoryMergeSignal
-	70,  // 79: kodex.projects.v1.ReconcileBootstrapMergeSignalRequest.checked_policy:type_name -> kodex.projects.v1.CheckedBootstrapServicesPolicyArtifact
-	24,  // 80: kodex.projects.v1.ReconcileBootstrapMergeSignalRequest.meta:type_name -> kodex.projects.v1.CommandMeta
-	34,  // 81: kodex.projects.v1.RepositoryAdoptionMergeSignal.provider_target:type_name -> kodex.projects.v1.RepositoryBootstrapProviderTarget
-	72,  // 82: kodex.projects.v1.ReconcileAdoptionMergeSignalRequest.merge_signal:type_name -> kodex.projects.v1.RepositoryAdoptionMergeSignal
-	73,  // 83: kodex.projects.v1.ReconcileAdoptionMergeSignalRequest.checked_policy:type_name -> kodex.projects.v1.CheckedAdoptionServicesPolicyArtifact
-	24,  // 84: kodex.projects.v1.ReconcileAdoptionMergeSignalRequest.meta:type_name -> kodex.projects.v1.CommandMeta
-	31,  // 85: kodex.projects.v1.BootstrapServicesPolicyImportResponse.repository:type_name -> kodex.projects.v1.Repository
-	35,  // 86: kodex.projects.v1.BootstrapServicesPolicyImportResponse.services_policy:type_name -> kodex.projects.v1.ServicesPolicy
-	35,  // 87: kodex.projects.v1.ServicesPolicyResponse.services_policy:type_name -> kodex.projects.v1.ServicesPolicy
-	25,  // 88: kodex.projects.v1.GetSelfDeploySignalRequest.meta:type_name -> kodex.projects.v1.QueryMeta
-	7,   // 89: kodex.projects.v1.SelfDeploySignalResponse.status:type_name -> kodex.projects.v1.SelfDeploySignalStatus
-	40,  // 90: kodex.projects.v1.SelfDeploySignalResponse.signal:type_name -> kodex.projects.v1.SelfDeploySignal
-	25,  // 91: kodex.projects.v1.GetServicesPolicyRequest.meta:type_name -> kodex.projects.v1.QueryMeta
-	11,  // 92: kodex.projects.v1.ListServiceDescriptorsRequest.statuses:type_name -> kodex.projects.v1.ServiceStatus
-	28,  // 93: kodex.projects.v1.ListServiceDescriptorsRequest.page:type_name -> kodex.projects.v1.PageRequest
-	25,  // 94: kodex.projects.v1.ListServiceDescriptorsRequest.meta:type_name -> kodex.projects.v1.QueryMeta
-	36,  // 95: kodex.projects.v1.ListServiceDescriptorsResponse.service_descriptors:type_name -> kodex.projects.v1.ServiceDescriptor
-	29,  // 96: kodex.projects.v1.ListServiceDescriptorsResponse.page:type_name -> kodex.projects.v1.PageResponse
-	24,  // 97: kodex.projects.v1.CreatePolicyEditProposalRequest.meta:type_name -> kodex.projects.v1.CommandMeta
-	22,  // 98: kodex.projects.v1.CreatePolicyOverrideRequest.target_type:type_name -> kodex.projects.v1.PolicyOverrideTargetType
-	24,  // 99: kodex.projects.v1.CreatePolicyOverrideRequest.meta:type_name -> kodex.projects.v1.CommandMeta
-	24,  // 100: kodex.projects.v1.CancelPolicyOverrideRequest.meta:type_name -> kodex.projects.v1.CommandMeta
-	46,  // 101: kodex.projects.v1.PolicyOverrideResponse.policy_override:type_name -> kodex.projects.v1.PolicyOverride
-	22,  // 102: kodex.projects.v1.ListPolicyOverridesRequest.target_types:type_name -> kodex.projects.v1.PolicyOverrideTargetType
-	23,  // 103: kodex.projects.v1.ListPolicyOverridesRequest.statuses:type_name -> kodex.projects.v1.PolicyOverrideStatus
-	28,  // 104: kodex.projects.v1.ListPolicyOverridesRequest.page:type_name -> kodex.projects.v1.PageRequest
-	25,  // 105: kodex.projects.v1.ListPolicyOverridesRequest.meta:type_name -> kodex.projects.v1.QueryMeta
-	46,  // 106: kodex.projects.v1.ListPolicyOverridesResponse.policy_overrides:type_name -> kodex.projects.v1.PolicyOverride
-	29,  // 107: kodex.projects.v1.ListPolicyOverridesResponse.page:type_name -> kodex.projects.v1.PageResponse
-	12,  // 108: kodex.projects.v1.PutDocumentationSourceRequest.scope_type:type_name -> kodex.projects.v1.DocumentationScopeType
-	13,  // 109: kodex.projects.v1.PutDocumentationSourceRequest.access_mode:type_name -> kodex.projects.v1.DocumentationAccessMode
-	15,  // 110: kodex.projects.v1.PutDocumentationSourceRequest.status:type_name -> kodex.projects.v1.DocumentationSourceStatus
-	24,  // 111: kodex.projects.v1.PutDocumentationSourceRequest.meta:type_name -> kodex.projects.v1.CommandMeta
-	41,  // 112: kodex.projects.v1.DocumentationSourceResponse.documentation_source:type_name -> kodex.projects.v1.DocumentationSource
-	25,  // 113: kodex.projects.v1.GetDocumentationSourceRequest.meta:type_name -> kodex.projects.v1.QueryMeta
-	12,  // 114: kodex.projects.v1.ListDocumentationSourcesRequest.scope_type:type_name -> kodex.projects.v1.DocumentationScopeType
-	15,  // 115: kodex.projects.v1.ListDocumentationSourcesRequest.statuses:type_name -> kodex.projects.v1.DocumentationSourceStatus
-	28,  // 116: kodex.projects.v1.ListDocumentationSourcesRequest.page:type_name -> kodex.projects.v1.PageRequest
-	25,  // 117: kodex.projects.v1.ListDocumentationSourcesRequest.meta:type_name -> kodex.projects.v1.QueryMeta
-	41,  // 118: kodex.projects.v1.ListDocumentationSourcesResponse.documentation_sources:type_name -> kodex.projects.v1.DocumentationSource
-	29,  // 119: kodex.projects.v1.ListDocumentationSourcesResponse.page:type_name -> kodex.projects.v1.PageResponse
-	25,  // 120: kodex.projects.v1.GetWorkspacePolicyRequest.meta:type_name -> kodex.projects.v1.QueryMeta
-	47,  // 121: kodex.projects.v1.WorkspacePolicyResponse.workspace_policy:type_name -> kodex.projects.v1.WorkspacePolicy
-	16,  // 122: kodex.projects.v1.PutBranchRulesRequest.merge_policy:type_name -> kodex.projects.v1.MergePolicy
-	17,  // 123: kodex.projects.v1.PutBranchRulesRequest.status:type_name -> kodex.projects.v1.BranchRulesStatus
-	24,  // 124: kodex.projects.v1.PutBranchRulesRequest.meta:type_name -> kodex.projects.v1.CommandMeta
-	42,  // 125: kodex.projects.v1.BranchRulesResponse.branch_rules:type_name -> kodex.projects.v1.BranchRules
-	25,  // 126: kodex.projects.v1.GetBranchRulesRequest.meta:type_name -> kodex.projects.v1.QueryMeta
-	17,  // 127: kodex.projects.v1.ListBranchRulesRequest.statuses:type_name -> kodex.projects.v1.BranchRulesStatus
-	28,  // 128: kodex.projects.v1.ListBranchRulesRequest.page:type_name -> kodex.projects.v1.PageRequest
-	25,  // 129: kodex.projects.v1.ListBranchRulesRequest.meta:type_name -> kodex.projects.v1.QueryMeta
-	42,  // 130: kodex.projects.v1.ListBranchRulesResponse.branch_rules:type_name -> kodex.projects.v1.BranchRules
-	29,  // 131: kodex.projects.v1.ListBranchRulesResponse.page:type_name -> kodex.projects.v1.PageResponse
-	18,  // 132: kodex.projects.v1.PutReleasePolicyRequest.rollout_strategy:type_name -> kodex.projects.v1.RolloutStrategy
-	19,  // 133: kodex.projects.v1.PutReleasePolicyRequest.rollback_policy:type_name -> kodex.projects.v1.RollbackPolicy
-	20,  // 134: kodex.projects.v1.PutReleasePolicyRequest.status:type_name -> kodex.projects.v1.ReleasePolicyStatus
-	24,  // 135: kodex.projects.v1.PutReleasePolicyRequest.meta:type_name -> kodex.projects.v1.CommandMeta
-	43,  // 136: kodex.projects.v1.ReleasePolicyResponse.release_policy:type_name -> kodex.projects.v1.ReleasePolicy
-	25,  // 137: kodex.projects.v1.GetReleasePolicyRequest.meta:type_name -> kodex.projects.v1.QueryMeta
-	20,  // 138: kodex.projects.v1.ListReleasePoliciesRequest.statuses:type_name -> kodex.projects.v1.ReleasePolicyStatus
-	28,  // 139: kodex.projects.v1.ListReleasePoliciesRequest.page:type_name -> kodex.projects.v1.PageRequest
-	25,  // 140: kodex.projects.v1.ListReleasePoliciesRequest.meta:type_name -> kodex.projects.v1.QueryMeta
-	43,  // 141: kodex.projects.v1.ListReleasePoliciesResponse.release_policies:type_name -> kodex.projects.v1.ReleasePolicy
-	29,  // 142: kodex.projects.v1.ListReleasePoliciesResponse.page:type_name -> kodex.projects.v1.PageResponse
-	20,  // 143: kodex.projects.v1.PutReleaseLineRequest.status:type_name -> kodex.projects.v1.ReleasePolicyStatus
-	24,  // 144: kodex.projects.v1.PutReleaseLineRequest.meta:type_name -> kodex.projects.v1.CommandMeta
-	44,  // 145: kodex.projects.v1.ReleaseLineResponse.release_line:type_name -> kodex.projects.v1.ReleaseLine
-	25,  // 146: kodex.projects.v1.GetReleaseLineRequest.meta:type_name -> kodex.projects.v1.QueryMeta
-	20,  // 147: kodex.projects.v1.ListReleaseLinesRequest.statuses:type_name -> kodex.projects.v1.ReleasePolicyStatus
-	28,  // 148: kodex.projects.v1.ListReleaseLinesRequest.page:type_name -> kodex.projects.v1.PageRequest
-	25,  // 149: kodex.projects.v1.ListReleaseLinesRequest.meta:type_name -> kodex.projects.v1.QueryMeta
-	44,  // 150: kodex.projects.v1.ListReleaseLinesResponse.release_lines:type_name -> kodex.projects.v1.ReleaseLine
-	29,  // 151: kodex.projects.v1.ListReleaseLinesResponse.page:type_name -> kodex.projects.v1.PageResponse
-	21,  // 152: kodex.projects.v1.PutPlacementPolicyRequest.status:type_name -> kodex.projects.v1.PlacementPolicyStatus
-	24,  // 153: kodex.projects.v1.PutPlacementPolicyRequest.meta:type_name -> kodex.projects.v1.CommandMeta
-	45,  // 154: kodex.projects.v1.PlacementPolicyResponse.placement_policy:type_name -> kodex.projects.v1.PlacementPolicy
-	25,  // 155: kodex.projects.v1.GetPlacementPolicyRequest.meta:type_name -> kodex.projects.v1.QueryMeta
-	21,  // 156: kodex.projects.v1.ListPlacementPoliciesRequest.statuses:type_name -> kodex.projects.v1.PlacementPolicyStatus
-	28,  // 157: kodex.projects.v1.ListPlacementPoliciesRequest.page:type_name -> kodex.projects.v1.PageRequest
-	25,  // 158: kodex.projects.v1.ListPlacementPoliciesRequest.meta:type_name -> kodex.projects.v1.QueryMeta
-	45,  // 159: kodex.projects.v1.ListPlacementPoliciesResponse.placement_policies:type_name -> kodex.projects.v1.PlacementPolicy
-	29,  // 160: kodex.projects.v1.ListPlacementPoliciesResponse.page:type_name -> kodex.projects.v1.PageResponse
-	50,  // 161: kodex.projects.v1.ProjectCatalogService.CreateProject:input_type -> kodex.projects.v1.CreateProjectRequest
-	51,  // 162: kodex.projects.v1.ProjectCatalogService.UpdateProject:input_type -> kodex.projects.v1.UpdateProjectRequest
-	53,  // 163: kodex.projects.v1.ProjectCatalogService.GetProject:input_type -> kodex.projects.v1.GetProjectRequest
-	54,  // 164: kodex.projects.v1.ProjectCatalogService.ListProjects:input_type -> kodex.projects.v1.ListProjectsRequest
-	56,  // 165: kodex.projects.v1.ProjectCatalogService.AttachRepository:input_type -> kodex.projects.v1.AttachRepositoryRequest
-	60,  // 166: kodex.projects.v1.ProjectCatalogService.CreateProviderRepository:input_type -> kodex.projects.v1.CreateProviderRepositoryRequest
-	62,  // 167: kodex.projects.v1.ProjectCatalogService.CreateRepositoryBootstrapPullRequest:input_type -> kodex.projects.v1.CreateRepositoryBootstrapPullRequestRequest
-	57,  // 168: kodex.projects.v1.ProjectCatalogService.UpdateRepository:input_type -> kodex.projects.v1.UpdateRepositoryRequest
-	58,  // 169: kodex.projects.v1.ProjectCatalogService.DetachRepository:input_type -> kodex.projects.v1.DetachRepositoryRequest
-	64,  // 170: kodex.projects.v1.ProjectCatalogService.GetRepository:input_type -> kodex.projects.v1.GetRepositoryRequest
-	65,  // 171: kodex.projects.v1.ProjectCatalogService.ListRepositories:input_type -> kodex.projects.v1.ListRepositoriesRequest
-	67,  // 172: kodex.projects.v1.ProjectCatalogService.ImportServicesPolicy:input_type -> kodex.projects.v1.ImportServicesPolicyRequest
-	68,  // 173: kodex.projects.v1.ProjectCatalogService.ImportBootstrapServicesPolicy:input_type -> kodex.projects.v1.ImportBootstrapServicesPolicyRequest
-	71,  // 174: kodex.projects.v1.ProjectCatalogService.ReconcileBootstrapMergeSignal:input_type -> kodex.projects.v1.ReconcileBootstrapMergeSignalRequest
-	74,  // 175: kodex.projects.v1.ProjectCatalogService.ReconcileAdoptionMergeSignal:input_type -> kodex.projects.v1.ReconcileAdoptionMergeSignalRequest
-	77,  // 176: kodex.projects.v1.ProjectCatalogService.GetSelfDeploySignal:input_type -> kodex.projects.v1.GetSelfDeploySignalRequest
-	79,  // 177: kodex.projects.v1.ProjectCatalogService.GetServicesPolicy:input_type -> kodex.projects.v1.GetServicesPolicyRequest
-	80,  // 178: kodex.projects.v1.ProjectCatalogService.ListServiceDescriptors:input_type -> kodex.projects.v1.ListServiceDescriptorsRequest
-	82,  // 179: kodex.projects.v1.ProjectCatalogService.CreatePolicyEditProposal:input_type -> kodex.projects.v1.CreatePolicyEditProposalRequest
-	84,  // 180: kodex.projects.v1.ProjectCatalogService.CreatePolicyOverride:input_type -> kodex.projects.v1.CreatePolicyOverrideRequest
-	85,  // 181: kodex.projects.v1.ProjectCatalogService.CancelPolicyOverride:input_type -> kodex.projects.v1.CancelPolicyOverrideRequest
-	87,  // 182: kodex.projects.v1.ProjectCatalogService.ListPolicyOverrides:input_type -> kodex.projects.v1.ListPolicyOverridesRequest
-	89,  // 183: kodex.projects.v1.ProjectCatalogService.PutDocumentationSource:input_type -> kodex.projects.v1.PutDocumentationSourceRequest
-	91,  // 184: kodex.projects.v1.ProjectCatalogService.GetDocumentationSource:input_type -> kodex.projects.v1.GetDocumentationSourceRequest
-	92,  // 185: kodex.projects.v1.ProjectCatalogService.ListDocumentationSources:input_type -> kodex.projects.v1.ListDocumentationSourcesRequest
-	94,  // 186: kodex.projects.v1.ProjectCatalogService.GetWorkspacePolicy:input_type -> kodex.projects.v1.GetWorkspacePolicyRequest
-	96,  // 187: kodex.projects.v1.ProjectCatalogService.PutBranchRules:input_type -> kodex.projects.v1.PutBranchRulesRequest
-	98,  // 188: kodex.projects.v1.ProjectCatalogService.GetBranchRules:input_type -> kodex.projects.v1.GetBranchRulesRequest
-	99,  // 189: kodex.projects.v1.ProjectCatalogService.ListBranchRules:input_type -> kodex.projects.v1.ListBranchRulesRequest
-	101, // 190: kodex.projects.v1.ProjectCatalogService.PutReleasePolicy:input_type -> kodex.projects.v1.PutReleasePolicyRequest
-	103, // 191: kodex.projects.v1.ProjectCatalogService.GetReleasePolicy:input_type -> kodex.projects.v1.GetReleasePolicyRequest
-	104, // 192: kodex.projects.v1.ProjectCatalogService.ListReleasePolicies:input_type -> kodex.projects.v1.ListReleasePoliciesRequest
-	106, // 193: kodex.projects.v1.ProjectCatalogService.PutReleaseLine:input_type -> kodex.projects.v1.PutReleaseLineRequest
-	108, // 194: kodex.projects.v1.ProjectCatalogService.GetReleaseLine:input_type -> kodex.projects.v1.GetReleaseLineRequest
-	109, // 195: kodex.projects.v1.ProjectCatalogService.ListReleaseLines:input_type -> kodex.projects.v1.ListReleaseLinesRequest
-	111, // 196: kodex.projects.v1.ProjectCatalogService.PutPlacementPolicy:input_type -> kodex.projects.v1.PutPlacementPolicyRequest
-	113, // 197: kodex.projects.v1.ProjectCatalogService.GetPlacementPolicy:input_type -> kodex.projects.v1.GetPlacementPolicyRequest
-	114, // 198: kodex.projects.v1.ProjectCatalogService.ListPlacementPolicies:input_type -> kodex.projects.v1.ListPlacementPoliciesRequest
-	52,  // 199: kodex.projects.v1.ProjectCatalogService.CreateProject:output_type -> kodex.projects.v1.ProjectResponse
-	52,  // 200: kodex.projects.v1.ProjectCatalogService.UpdateProject:output_type -> kodex.projects.v1.ProjectResponse
-	52,  // 201: kodex.projects.v1.ProjectCatalogService.GetProject:output_type -> kodex.projects.v1.ProjectResponse
-	55,  // 202: kodex.projects.v1.ProjectCatalogService.ListProjects:output_type -> kodex.projects.v1.ListProjectsResponse
-	59,  // 203: kodex.projects.v1.ProjectCatalogService.AttachRepository:output_type -> kodex.projects.v1.RepositoryResponse
-	61,  // 204: kodex.projects.v1.ProjectCatalogService.CreateProviderRepository:output_type -> kodex.projects.v1.RepositoryProviderCreateResponse
-	63,  // 205: kodex.projects.v1.ProjectCatalogService.CreateRepositoryBootstrapPullRequest:output_type -> kodex.projects.v1.RepositoryBootstrapPullRequestResponse
-	59,  // 206: kodex.projects.v1.ProjectCatalogService.UpdateRepository:output_type -> kodex.projects.v1.RepositoryResponse
-	59,  // 207: kodex.projects.v1.ProjectCatalogService.DetachRepository:output_type -> kodex.projects.v1.RepositoryResponse
-	59,  // 208: kodex.projects.v1.ProjectCatalogService.GetRepository:output_type -> kodex.projects.v1.RepositoryResponse
-	66,  // 209: kodex.projects.v1.ProjectCatalogService.ListRepositories:output_type -> kodex.projects.v1.ListRepositoriesResponse
-	76,  // 210: kodex.projects.v1.ProjectCatalogService.ImportServicesPolicy:output_type -> kodex.projects.v1.ServicesPolicyResponse
-	75,  // 211: kodex.projects.v1.ProjectCatalogService.ImportBootstrapServicesPolicy:output_type -> kodex.projects.v1.BootstrapServicesPolicyImportResponse
-	75,  // 212: kodex.projects.v1.ProjectCatalogService.ReconcileBootstrapMergeSignal:output_type -> kodex.projects.v1.BootstrapServicesPolicyImportResponse
-	75,  // 213: kodex.projects.v1.ProjectCatalogService.ReconcileAdoptionMergeSignal:output_type -> kodex.projects.v1.BootstrapServicesPolicyImportResponse
-	78,  // 214: kodex.projects.v1.ProjectCatalogService.GetSelfDeploySignal:output_type -> kodex.projects.v1.SelfDeploySignalResponse
-	76,  // 215: kodex.projects.v1.ProjectCatalogService.GetServicesPolicy:output_type -> kodex.projects.v1.ServicesPolicyResponse
-	81,  // 216: kodex.projects.v1.ProjectCatalogService.ListServiceDescriptors:output_type -> kodex.projects.v1.ListServiceDescriptorsResponse
-	83,  // 217: kodex.projects.v1.ProjectCatalogService.CreatePolicyEditProposal:output_type -> kodex.projects.v1.PolicyEditProposalResponse
-	86,  // 218: kodex.projects.v1.ProjectCatalogService.CreatePolicyOverride:output_type -> kodex.projects.v1.PolicyOverrideResponse
-	86,  // 219: kodex.projects.v1.ProjectCatalogService.CancelPolicyOverride:output_type -> kodex.projects.v1.PolicyOverrideResponse
-	88,  // 220: kodex.projects.v1.ProjectCatalogService.ListPolicyOverrides:output_type -> kodex.projects.v1.ListPolicyOverridesResponse
-	90,  // 221: kodex.projects.v1.ProjectCatalogService.PutDocumentationSource:output_type -> kodex.projects.v1.DocumentationSourceResponse
-	90,  // 222: kodex.projects.v1.ProjectCatalogService.GetDocumentationSource:output_type -> kodex.projects.v1.DocumentationSourceResponse
-	93,  // 223: kodex.projects.v1.ProjectCatalogService.ListDocumentationSources:output_type -> kodex.projects.v1.ListDocumentationSourcesResponse
-	95,  // 224: kodex.projects.v1.ProjectCatalogService.GetWorkspacePolicy:output_type -> kodex.projects.v1.WorkspacePolicyResponse
-	97,  // 225: kodex.projects.v1.ProjectCatalogService.PutBranchRules:output_type -> kodex.projects.v1.BranchRulesResponse
-	97,  // 226: kodex.projects.v1.ProjectCatalogService.GetBranchRules:output_type -> kodex.projects.v1.BranchRulesResponse
-	100, // 227: kodex.projects.v1.ProjectCatalogService.ListBranchRules:output_type -> kodex.projects.v1.ListBranchRulesResponse
-	102, // 228: kodex.projects.v1.ProjectCatalogService.PutReleasePolicy:output_type -> kodex.projects.v1.ReleasePolicyResponse
-	102, // 229: kodex.projects.v1.ProjectCatalogService.GetReleasePolicy:output_type -> kodex.projects.v1.ReleasePolicyResponse
-	105, // 230: kodex.projects.v1.ProjectCatalogService.ListReleasePolicies:output_type -> kodex.projects.v1.ListReleasePoliciesResponse
-	107, // 231: kodex.projects.v1.ProjectCatalogService.PutReleaseLine:output_type -> kodex.projects.v1.ReleaseLineResponse
-	107, // 232: kodex.projects.v1.ProjectCatalogService.GetReleaseLine:output_type -> kodex.projects.v1.ReleaseLineResponse
-	110, // 233: kodex.projects.v1.ProjectCatalogService.ListReleaseLines:output_type -> kodex.projects.v1.ListReleaseLinesResponse
-	112, // 234: kodex.projects.v1.ProjectCatalogService.PutPlacementPolicy:output_type -> kodex.projects.v1.PlacementPolicyResponse
-	112, // 235: kodex.projects.v1.ProjectCatalogService.GetPlacementPolicy:output_type -> kodex.projects.v1.PlacementPolicyResponse
-	115, // 236: kodex.projects.v1.ProjectCatalogService.ListPlacementPolicies:output_type -> kodex.projects.v1.ListPlacementPoliciesResponse
-	199, // [199:237] is the sub-list for method output_type
-	161, // [161:199] is the sub-list for method input_type
-	161, // [161:161] is the sub-list for extension type_name
-	161, // [161:161] is the sub-list for extension extendee
-	0,   // [0:161] is the sub-list for field type_name
+	40,  // 14: kodex.projects.v1.SelfDeploySignal.services_yaml:type_name -> kodex.projects.v1.SelfDeployServicesYamlProjection
+	38,  // 15: kodex.projects.v1.SelfDeploySignal.path_categories:type_name -> kodex.projects.v1.SelfDeployPathCategoryCount
+	10,  // 16: kodex.projects.v1.SelfDeploySignal.expected_runtime_job_types:type_name -> kodex.projects.v1.SelfDeployExpectedRuntimeJobType
+	39,  // 17: kodex.projects.v1.SelfDeploySignal.governance_requirement:type_name -> kodex.projects.v1.SelfDeployGovernanceRequirement
+	121, // 18: kodex.projects.v1.SelfDeployBuildPlanItem.build_execution_spec:type_name -> kodex.runtime.v1.BuildExecutionSpec
+	40,  // 19: kodex.projects.v1.SelfDeployBuildPlan.services_yaml:type_name -> kodex.projects.v1.SelfDeployServicesYamlProjection
+	42,  // 20: kodex.projects.v1.SelfDeployBuildPlan.build_items:type_name -> kodex.projects.v1.SelfDeployBuildPlanItem
+	13,  // 21: kodex.projects.v1.DocumentationSource.scope_type:type_name -> kodex.projects.v1.DocumentationScopeType
+	14,  // 22: kodex.projects.v1.DocumentationSource.access_mode:type_name -> kodex.projects.v1.DocumentationAccessMode
+	16,  // 23: kodex.projects.v1.DocumentationSource.status:type_name -> kodex.projects.v1.DocumentationSourceStatus
+	17,  // 24: kodex.projects.v1.BranchRules.merge_policy:type_name -> kodex.projects.v1.MergePolicy
+	18,  // 25: kodex.projects.v1.BranchRules.status:type_name -> kodex.projects.v1.BranchRulesStatus
+	19,  // 26: kodex.projects.v1.ReleasePolicy.rollout_strategy:type_name -> kodex.projects.v1.RolloutStrategy
+	20,  // 27: kodex.projects.v1.ReleasePolicy.rollback_policy:type_name -> kodex.projects.v1.RollbackPolicy
+	21,  // 28: kodex.projects.v1.ReleasePolicy.status:type_name -> kodex.projects.v1.ReleasePolicyStatus
+	21,  // 29: kodex.projects.v1.ReleaseLine.status:type_name -> kodex.projects.v1.ReleasePolicyStatus
+	22,  // 30: kodex.projects.v1.PlacementPolicy.status:type_name -> kodex.projects.v1.PlacementPolicyStatus
+	23,  // 31: kodex.projects.v1.PolicyOverride.target_type:type_name -> kodex.projects.v1.PolicyOverrideTargetType
+	24,  // 32: kodex.projects.v1.PolicyOverride.status:type_name -> kodex.projects.v1.PolicyOverrideStatus
+	51,  // 33: kodex.projects.v1.WorkspacePolicy.code_sources:type_name -> kodex.projects.v1.WorkspaceCodeSource
+	52,  // 34: kodex.projects.v1.WorkspacePolicy.documentation_sources:type_name -> kodex.projects.v1.WorkspaceDocumentationSource
+	49,  // 35: kodex.projects.v1.WorkspacePolicy.active_policy_overrides:type_name -> kodex.projects.v1.PolicyOverride
+	1,   // 36: kodex.projects.v1.WorkspaceCodeSource.provider:type_name -> kodex.projects.v1.RepositoryProvider
+	15,  // 37: kodex.projects.v1.WorkspaceCodeSource.access_mode:type_name -> kodex.projects.v1.SourceAccessMode
+	13,  // 38: kodex.projects.v1.WorkspaceDocumentationSource.scope_type:type_name -> kodex.projects.v1.DocumentationScopeType
+	15,  // 39: kodex.projects.v1.WorkspaceDocumentationSource.access_mode:type_name -> kodex.projects.v1.SourceAccessMode
+	0,   // 40: kodex.projects.v1.CreateProjectRequest.status:type_name -> kodex.projects.v1.ProjectStatus
+	25,  // 41: kodex.projects.v1.CreateProjectRequest.meta:type_name -> kodex.projects.v1.CommandMeta
+	0,   // 42: kodex.projects.v1.UpdateProjectRequest.status:type_name -> kodex.projects.v1.ProjectStatus
+	25,  // 43: kodex.projects.v1.UpdateProjectRequest.meta:type_name -> kodex.projects.v1.CommandMeta
+	31,  // 44: kodex.projects.v1.ProjectResponse.project:type_name -> kodex.projects.v1.Project
+	26,  // 45: kodex.projects.v1.GetProjectRequest.meta:type_name -> kodex.projects.v1.QueryMeta
+	0,   // 46: kodex.projects.v1.ListProjectsRequest.statuses:type_name -> kodex.projects.v1.ProjectStatus
+	29,  // 47: kodex.projects.v1.ListProjectsRequest.page:type_name -> kodex.projects.v1.PageRequest
+	26,  // 48: kodex.projects.v1.ListProjectsRequest.meta:type_name -> kodex.projects.v1.QueryMeta
+	31,  // 49: kodex.projects.v1.ListProjectsResponse.projects:type_name -> kodex.projects.v1.Project
+	30,  // 50: kodex.projects.v1.ListProjectsResponse.page:type_name -> kodex.projects.v1.PageResponse
+	1,   // 51: kodex.projects.v1.AttachRepositoryRequest.provider:type_name -> kodex.projects.v1.RepositoryProvider
+	2,   // 52: kodex.projects.v1.AttachRepositoryRequest.status:type_name -> kodex.projects.v1.RepositoryStatus
+	25,  // 53: kodex.projects.v1.AttachRepositoryRequest.meta:type_name -> kodex.projects.v1.CommandMeta
+	2,   // 54: kodex.projects.v1.UpdateRepositoryRequest.status:type_name -> kodex.projects.v1.RepositoryStatus
+	25,  // 55: kodex.projects.v1.UpdateRepositoryRequest.meta:type_name -> kodex.projects.v1.CommandMeta
+	25,  // 56: kodex.projects.v1.DetachRepositoryRequest.meta:type_name -> kodex.projects.v1.CommandMeta
+	32,  // 57: kodex.projects.v1.RepositoryResponse.repository:type_name -> kodex.projects.v1.Repository
+	1,   // 58: kodex.projects.v1.CreateProviderRepositoryRequest.provider:type_name -> kodex.projects.v1.RepositoryProvider
+	3,   // 59: kodex.projects.v1.CreateProviderRepositoryRequest.owner_kind:type_name -> kodex.projects.v1.RepositoryOwnerKind
+	4,   // 60: kodex.projects.v1.CreateProviderRepositoryRequest.visibility:type_name -> kodex.projects.v1.RepositoryVisibility
+	25,  // 61: kodex.projects.v1.CreateProviderRepositoryRequest.meta:type_name -> kodex.projects.v1.CommandMeta
+	32,  // 62: kodex.projects.v1.RepositoryProviderCreateResponse.repository:type_name -> kodex.projects.v1.Repository
+	35,  // 63: kodex.projects.v1.RepositoryProviderCreateResponse.provider_target:type_name -> kodex.projects.v1.RepositoryBootstrapProviderTarget
+	33,  // 64: kodex.projects.v1.CreateRepositoryBootstrapPullRequestRequest.files:type_name -> kodex.projects.v1.RepositoryBootstrapFile
+	34,  // 65: kodex.projects.v1.CreateRepositoryBootstrapPullRequestRequest.services_policy:type_name -> kodex.projects.v1.RepositoryBootstrapServicesPolicy
+	25,  // 66: kodex.projects.v1.CreateRepositoryBootstrapPullRequestRequest.meta:type_name -> kodex.projects.v1.CommandMeta
+	32,  // 67: kodex.projects.v1.RepositoryBootstrapPullRequestResponse.repository:type_name -> kodex.projects.v1.Repository
+	35,  // 68: kodex.projects.v1.RepositoryBootstrapPullRequestResponse.provider_target:type_name -> kodex.projects.v1.RepositoryBootstrapProviderTarget
+	26,  // 69: kodex.projects.v1.GetRepositoryRequest.meta:type_name -> kodex.projects.v1.QueryMeta
+	2,   // 70: kodex.projects.v1.ListRepositoriesRequest.statuses:type_name -> kodex.projects.v1.RepositoryStatus
+	29,  // 71: kodex.projects.v1.ListRepositoriesRequest.page:type_name -> kodex.projects.v1.PageRequest
+	26,  // 72: kodex.projects.v1.ListRepositoriesRequest.meta:type_name -> kodex.projects.v1.QueryMeta
+	32,  // 73: kodex.projects.v1.ListRepositoriesResponse.repositories:type_name -> kodex.projects.v1.Repository
+	30,  // 74: kodex.projects.v1.ListRepositoriesResponse.page:type_name -> kodex.projects.v1.PageResponse
+	37,  // 75: kodex.projects.v1.ImportServicesPolicyRequest.service_descriptors:type_name -> kodex.projects.v1.ServiceDescriptor
+	5,   // 76: kodex.projects.v1.ImportServicesPolicyRequest.validation_status:type_name -> kodex.projects.v1.ServicesPolicyValidationStatus
+	25,  // 77: kodex.projects.v1.ImportServicesPolicyRequest.meta:type_name -> kodex.projects.v1.CommandMeta
+	35,  // 78: kodex.projects.v1.ImportBootstrapServicesPolicyRequest.provider_target:type_name -> kodex.projects.v1.RepositoryBootstrapProviderTarget
+	25,  // 79: kodex.projects.v1.ImportBootstrapServicesPolicyRequest.meta:type_name -> kodex.projects.v1.CommandMeta
+	35,  // 80: kodex.projects.v1.BootstrapRepositoryMergeSignal.provider_target:type_name -> kodex.projects.v1.RepositoryBootstrapProviderTarget
+	72,  // 81: kodex.projects.v1.ReconcileBootstrapMergeSignalRequest.merge_signal:type_name -> kodex.projects.v1.BootstrapRepositoryMergeSignal
+	73,  // 82: kodex.projects.v1.ReconcileBootstrapMergeSignalRequest.checked_policy:type_name -> kodex.projects.v1.CheckedBootstrapServicesPolicyArtifact
+	25,  // 83: kodex.projects.v1.ReconcileBootstrapMergeSignalRequest.meta:type_name -> kodex.projects.v1.CommandMeta
+	35,  // 84: kodex.projects.v1.RepositoryAdoptionMergeSignal.provider_target:type_name -> kodex.projects.v1.RepositoryBootstrapProviderTarget
+	75,  // 85: kodex.projects.v1.ReconcileAdoptionMergeSignalRequest.merge_signal:type_name -> kodex.projects.v1.RepositoryAdoptionMergeSignal
+	76,  // 86: kodex.projects.v1.ReconcileAdoptionMergeSignalRequest.checked_policy:type_name -> kodex.projects.v1.CheckedAdoptionServicesPolicyArtifact
+	25,  // 87: kodex.projects.v1.ReconcileAdoptionMergeSignalRequest.meta:type_name -> kodex.projects.v1.CommandMeta
+	32,  // 88: kodex.projects.v1.BootstrapServicesPolicyImportResponse.repository:type_name -> kodex.projects.v1.Repository
+	36,  // 89: kodex.projects.v1.BootstrapServicesPolicyImportResponse.services_policy:type_name -> kodex.projects.v1.ServicesPolicy
+	36,  // 90: kodex.projects.v1.ServicesPolicyResponse.services_policy:type_name -> kodex.projects.v1.ServicesPolicy
+	26,  // 91: kodex.projects.v1.GetSelfDeploySignalRequest.meta:type_name -> kodex.projects.v1.QueryMeta
+	7,   // 92: kodex.projects.v1.SelfDeploySignalResponse.status:type_name -> kodex.projects.v1.SelfDeploySignalStatus
+	41,  // 93: kodex.projects.v1.SelfDeploySignalResponse.signal:type_name -> kodex.projects.v1.SelfDeploySignal
+	26,  // 94: kodex.projects.v1.GetSelfDeployBuildPlanRequest.meta:type_name -> kodex.projects.v1.QueryMeta
+	8,   // 95: kodex.projects.v1.SelfDeployBuildPlanResponse.status:type_name -> kodex.projects.v1.SelfDeployBuildPlanStatus
+	43,  // 96: kodex.projects.v1.SelfDeployBuildPlanResponse.plan:type_name -> kodex.projects.v1.SelfDeployBuildPlan
+	26,  // 97: kodex.projects.v1.GetServicesPolicyRequest.meta:type_name -> kodex.projects.v1.QueryMeta
+	12,  // 98: kodex.projects.v1.ListServiceDescriptorsRequest.statuses:type_name -> kodex.projects.v1.ServiceStatus
+	29,  // 99: kodex.projects.v1.ListServiceDescriptorsRequest.page:type_name -> kodex.projects.v1.PageRequest
+	26,  // 100: kodex.projects.v1.ListServiceDescriptorsRequest.meta:type_name -> kodex.projects.v1.QueryMeta
+	37,  // 101: kodex.projects.v1.ListServiceDescriptorsResponse.service_descriptors:type_name -> kodex.projects.v1.ServiceDescriptor
+	30,  // 102: kodex.projects.v1.ListServiceDescriptorsResponse.page:type_name -> kodex.projects.v1.PageResponse
+	25,  // 103: kodex.projects.v1.CreatePolicyEditProposalRequest.meta:type_name -> kodex.projects.v1.CommandMeta
+	23,  // 104: kodex.projects.v1.CreatePolicyOverrideRequest.target_type:type_name -> kodex.projects.v1.PolicyOverrideTargetType
+	25,  // 105: kodex.projects.v1.CreatePolicyOverrideRequest.meta:type_name -> kodex.projects.v1.CommandMeta
+	25,  // 106: kodex.projects.v1.CancelPolicyOverrideRequest.meta:type_name -> kodex.projects.v1.CommandMeta
+	49,  // 107: kodex.projects.v1.PolicyOverrideResponse.policy_override:type_name -> kodex.projects.v1.PolicyOverride
+	23,  // 108: kodex.projects.v1.ListPolicyOverridesRequest.target_types:type_name -> kodex.projects.v1.PolicyOverrideTargetType
+	24,  // 109: kodex.projects.v1.ListPolicyOverridesRequest.statuses:type_name -> kodex.projects.v1.PolicyOverrideStatus
+	29,  // 110: kodex.projects.v1.ListPolicyOverridesRequest.page:type_name -> kodex.projects.v1.PageRequest
+	26,  // 111: kodex.projects.v1.ListPolicyOverridesRequest.meta:type_name -> kodex.projects.v1.QueryMeta
+	49,  // 112: kodex.projects.v1.ListPolicyOverridesResponse.policy_overrides:type_name -> kodex.projects.v1.PolicyOverride
+	30,  // 113: kodex.projects.v1.ListPolicyOverridesResponse.page:type_name -> kodex.projects.v1.PageResponse
+	13,  // 114: kodex.projects.v1.PutDocumentationSourceRequest.scope_type:type_name -> kodex.projects.v1.DocumentationScopeType
+	14,  // 115: kodex.projects.v1.PutDocumentationSourceRequest.access_mode:type_name -> kodex.projects.v1.DocumentationAccessMode
+	16,  // 116: kodex.projects.v1.PutDocumentationSourceRequest.status:type_name -> kodex.projects.v1.DocumentationSourceStatus
+	25,  // 117: kodex.projects.v1.PutDocumentationSourceRequest.meta:type_name -> kodex.projects.v1.CommandMeta
+	44,  // 118: kodex.projects.v1.DocumentationSourceResponse.documentation_source:type_name -> kodex.projects.v1.DocumentationSource
+	26,  // 119: kodex.projects.v1.GetDocumentationSourceRequest.meta:type_name -> kodex.projects.v1.QueryMeta
+	13,  // 120: kodex.projects.v1.ListDocumentationSourcesRequest.scope_type:type_name -> kodex.projects.v1.DocumentationScopeType
+	16,  // 121: kodex.projects.v1.ListDocumentationSourcesRequest.statuses:type_name -> kodex.projects.v1.DocumentationSourceStatus
+	29,  // 122: kodex.projects.v1.ListDocumentationSourcesRequest.page:type_name -> kodex.projects.v1.PageRequest
+	26,  // 123: kodex.projects.v1.ListDocumentationSourcesRequest.meta:type_name -> kodex.projects.v1.QueryMeta
+	44,  // 124: kodex.projects.v1.ListDocumentationSourcesResponse.documentation_sources:type_name -> kodex.projects.v1.DocumentationSource
+	30,  // 125: kodex.projects.v1.ListDocumentationSourcesResponse.page:type_name -> kodex.projects.v1.PageResponse
+	26,  // 126: kodex.projects.v1.GetWorkspacePolicyRequest.meta:type_name -> kodex.projects.v1.QueryMeta
+	50,  // 127: kodex.projects.v1.WorkspacePolicyResponse.workspace_policy:type_name -> kodex.projects.v1.WorkspacePolicy
+	17,  // 128: kodex.projects.v1.PutBranchRulesRequest.merge_policy:type_name -> kodex.projects.v1.MergePolicy
+	18,  // 129: kodex.projects.v1.PutBranchRulesRequest.status:type_name -> kodex.projects.v1.BranchRulesStatus
+	25,  // 130: kodex.projects.v1.PutBranchRulesRequest.meta:type_name -> kodex.projects.v1.CommandMeta
+	45,  // 131: kodex.projects.v1.BranchRulesResponse.branch_rules:type_name -> kodex.projects.v1.BranchRules
+	26,  // 132: kodex.projects.v1.GetBranchRulesRequest.meta:type_name -> kodex.projects.v1.QueryMeta
+	18,  // 133: kodex.projects.v1.ListBranchRulesRequest.statuses:type_name -> kodex.projects.v1.BranchRulesStatus
+	29,  // 134: kodex.projects.v1.ListBranchRulesRequest.page:type_name -> kodex.projects.v1.PageRequest
+	26,  // 135: kodex.projects.v1.ListBranchRulesRequest.meta:type_name -> kodex.projects.v1.QueryMeta
+	45,  // 136: kodex.projects.v1.ListBranchRulesResponse.branch_rules:type_name -> kodex.projects.v1.BranchRules
+	30,  // 137: kodex.projects.v1.ListBranchRulesResponse.page:type_name -> kodex.projects.v1.PageResponse
+	19,  // 138: kodex.projects.v1.PutReleasePolicyRequest.rollout_strategy:type_name -> kodex.projects.v1.RolloutStrategy
+	20,  // 139: kodex.projects.v1.PutReleasePolicyRequest.rollback_policy:type_name -> kodex.projects.v1.RollbackPolicy
+	21,  // 140: kodex.projects.v1.PutReleasePolicyRequest.status:type_name -> kodex.projects.v1.ReleasePolicyStatus
+	25,  // 141: kodex.projects.v1.PutReleasePolicyRequest.meta:type_name -> kodex.projects.v1.CommandMeta
+	46,  // 142: kodex.projects.v1.ReleasePolicyResponse.release_policy:type_name -> kodex.projects.v1.ReleasePolicy
+	26,  // 143: kodex.projects.v1.GetReleasePolicyRequest.meta:type_name -> kodex.projects.v1.QueryMeta
+	21,  // 144: kodex.projects.v1.ListReleasePoliciesRequest.statuses:type_name -> kodex.projects.v1.ReleasePolicyStatus
+	29,  // 145: kodex.projects.v1.ListReleasePoliciesRequest.page:type_name -> kodex.projects.v1.PageRequest
+	26,  // 146: kodex.projects.v1.ListReleasePoliciesRequest.meta:type_name -> kodex.projects.v1.QueryMeta
+	46,  // 147: kodex.projects.v1.ListReleasePoliciesResponse.release_policies:type_name -> kodex.projects.v1.ReleasePolicy
+	30,  // 148: kodex.projects.v1.ListReleasePoliciesResponse.page:type_name -> kodex.projects.v1.PageResponse
+	21,  // 149: kodex.projects.v1.PutReleaseLineRequest.status:type_name -> kodex.projects.v1.ReleasePolicyStatus
+	25,  // 150: kodex.projects.v1.PutReleaseLineRequest.meta:type_name -> kodex.projects.v1.CommandMeta
+	47,  // 151: kodex.projects.v1.ReleaseLineResponse.release_line:type_name -> kodex.projects.v1.ReleaseLine
+	26,  // 152: kodex.projects.v1.GetReleaseLineRequest.meta:type_name -> kodex.projects.v1.QueryMeta
+	21,  // 153: kodex.projects.v1.ListReleaseLinesRequest.statuses:type_name -> kodex.projects.v1.ReleasePolicyStatus
+	29,  // 154: kodex.projects.v1.ListReleaseLinesRequest.page:type_name -> kodex.projects.v1.PageRequest
+	26,  // 155: kodex.projects.v1.ListReleaseLinesRequest.meta:type_name -> kodex.projects.v1.QueryMeta
+	47,  // 156: kodex.projects.v1.ListReleaseLinesResponse.release_lines:type_name -> kodex.projects.v1.ReleaseLine
+	30,  // 157: kodex.projects.v1.ListReleaseLinesResponse.page:type_name -> kodex.projects.v1.PageResponse
+	22,  // 158: kodex.projects.v1.PutPlacementPolicyRequest.status:type_name -> kodex.projects.v1.PlacementPolicyStatus
+	25,  // 159: kodex.projects.v1.PutPlacementPolicyRequest.meta:type_name -> kodex.projects.v1.CommandMeta
+	48,  // 160: kodex.projects.v1.PlacementPolicyResponse.placement_policy:type_name -> kodex.projects.v1.PlacementPolicy
+	26,  // 161: kodex.projects.v1.GetPlacementPolicyRequest.meta:type_name -> kodex.projects.v1.QueryMeta
+	22,  // 162: kodex.projects.v1.ListPlacementPoliciesRequest.statuses:type_name -> kodex.projects.v1.PlacementPolicyStatus
+	29,  // 163: kodex.projects.v1.ListPlacementPoliciesRequest.page:type_name -> kodex.projects.v1.PageRequest
+	26,  // 164: kodex.projects.v1.ListPlacementPoliciesRequest.meta:type_name -> kodex.projects.v1.QueryMeta
+	48,  // 165: kodex.projects.v1.ListPlacementPoliciesResponse.placement_policies:type_name -> kodex.projects.v1.PlacementPolicy
+	30,  // 166: kodex.projects.v1.ListPlacementPoliciesResponse.page:type_name -> kodex.projects.v1.PageResponse
+	53,  // 167: kodex.projects.v1.ProjectCatalogService.CreateProject:input_type -> kodex.projects.v1.CreateProjectRequest
+	54,  // 168: kodex.projects.v1.ProjectCatalogService.UpdateProject:input_type -> kodex.projects.v1.UpdateProjectRequest
+	56,  // 169: kodex.projects.v1.ProjectCatalogService.GetProject:input_type -> kodex.projects.v1.GetProjectRequest
+	57,  // 170: kodex.projects.v1.ProjectCatalogService.ListProjects:input_type -> kodex.projects.v1.ListProjectsRequest
+	59,  // 171: kodex.projects.v1.ProjectCatalogService.AttachRepository:input_type -> kodex.projects.v1.AttachRepositoryRequest
+	63,  // 172: kodex.projects.v1.ProjectCatalogService.CreateProviderRepository:input_type -> kodex.projects.v1.CreateProviderRepositoryRequest
+	65,  // 173: kodex.projects.v1.ProjectCatalogService.CreateRepositoryBootstrapPullRequest:input_type -> kodex.projects.v1.CreateRepositoryBootstrapPullRequestRequest
+	60,  // 174: kodex.projects.v1.ProjectCatalogService.UpdateRepository:input_type -> kodex.projects.v1.UpdateRepositoryRequest
+	61,  // 175: kodex.projects.v1.ProjectCatalogService.DetachRepository:input_type -> kodex.projects.v1.DetachRepositoryRequest
+	67,  // 176: kodex.projects.v1.ProjectCatalogService.GetRepository:input_type -> kodex.projects.v1.GetRepositoryRequest
+	68,  // 177: kodex.projects.v1.ProjectCatalogService.ListRepositories:input_type -> kodex.projects.v1.ListRepositoriesRequest
+	70,  // 178: kodex.projects.v1.ProjectCatalogService.ImportServicesPolicy:input_type -> kodex.projects.v1.ImportServicesPolicyRequest
+	71,  // 179: kodex.projects.v1.ProjectCatalogService.ImportBootstrapServicesPolicy:input_type -> kodex.projects.v1.ImportBootstrapServicesPolicyRequest
+	74,  // 180: kodex.projects.v1.ProjectCatalogService.ReconcileBootstrapMergeSignal:input_type -> kodex.projects.v1.ReconcileBootstrapMergeSignalRequest
+	77,  // 181: kodex.projects.v1.ProjectCatalogService.ReconcileAdoptionMergeSignal:input_type -> kodex.projects.v1.ReconcileAdoptionMergeSignalRequest
+	80,  // 182: kodex.projects.v1.ProjectCatalogService.GetSelfDeploySignal:input_type -> kodex.projects.v1.GetSelfDeploySignalRequest
+	82,  // 183: kodex.projects.v1.ProjectCatalogService.GetSelfDeployBuildPlan:input_type -> kodex.projects.v1.GetSelfDeployBuildPlanRequest
+	84,  // 184: kodex.projects.v1.ProjectCatalogService.GetServicesPolicy:input_type -> kodex.projects.v1.GetServicesPolicyRequest
+	85,  // 185: kodex.projects.v1.ProjectCatalogService.ListServiceDescriptors:input_type -> kodex.projects.v1.ListServiceDescriptorsRequest
+	87,  // 186: kodex.projects.v1.ProjectCatalogService.CreatePolicyEditProposal:input_type -> kodex.projects.v1.CreatePolicyEditProposalRequest
+	89,  // 187: kodex.projects.v1.ProjectCatalogService.CreatePolicyOverride:input_type -> kodex.projects.v1.CreatePolicyOverrideRequest
+	90,  // 188: kodex.projects.v1.ProjectCatalogService.CancelPolicyOverride:input_type -> kodex.projects.v1.CancelPolicyOverrideRequest
+	92,  // 189: kodex.projects.v1.ProjectCatalogService.ListPolicyOverrides:input_type -> kodex.projects.v1.ListPolicyOverridesRequest
+	94,  // 190: kodex.projects.v1.ProjectCatalogService.PutDocumentationSource:input_type -> kodex.projects.v1.PutDocumentationSourceRequest
+	96,  // 191: kodex.projects.v1.ProjectCatalogService.GetDocumentationSource:input_type -> kodex.projects.v1.GetDocumentationSourceRequest
+	97,  // 192: kodex.projects.v1.ProjectCatalogService.ListDocumentationSources:input_type -> kodex.projects.v1.ListDocumentationSourcesRequest
+	99,  // 193: kodex.projects.v1.ProjectCatalogService.GetWorkspacePolicy:input_type -> kodex.projects.v1.GetWorkspacePolicyRequest
+	101, // 194: kodex.projects.v1.ProjectCatalogService.PutBranchRules:input_type -> kodex.projects.v1.PutBranchRulesRequest
+	103, // 195: kodex.projects.v1.ProjectCatalogService.GetBranchRules:input_type -> kodex.projects.v1.GetBranchRulesRequest
+	104, // 196: kodex.projects.v1.ProjectCatalogService.ListBranchRules:input_type -> kodex.projects.v1.ListBranchRulesRequest
+	106, // 197: kodex.projects.v1.ProjectCatalogService.PutReleasePolicy:input_type -> kodex.projects.v1.PutReleasePolicyRequest
+	108, // 198: kodex.projects.v1.ProjectCatalogService.GetReleasePolicy:input_type -> kodex.projects.v1.GetReleasePolicyRequest
+	109, // 199: kodex.projects.v1.ProjectCatalogService.ListReleasePolicies:input_type -> kodex.projects.v1.ListReleasePoliciesRequest
+	111, // 200: kodex.projects.v1.ProjectCatalogService.PutReleaseLine:input_type -> kodex.projects.v1.PutReleaseLineRequest
+	113, // 201: kodex.projects.v1.ProjectCatalogService.GetReleaseLine:input_type -> kodex.projects.v1.GetReleaseLineRequest
+	114, // 202: kodex.projects.v1.ProjectCatalogService.ListReleaseLines:input_type -> kodex.projects.v1.ListReleaseLinesRequest
+	116, // 203: kodex.projects.v1.ProjectCatalogService.PutPlacementPolicy:input_type -> kodex.projects.v1.PutPlacementPolicyRequest
+	118, // 204: kodex.projects.v1.ProjectCatalogService.GetPlacementPolicy:input_type -> kodex.projects.v1.GetPlacementPolicyRequest
+	119, // 205: kodex.projects.v1.ProjectCatalogService.ListPlacementPolicies:input_type -> kodex.projects.v1.ListPlacementPoliciesRequest
+	55,  // 206: kodex.projects.v1.ProjectCatalogService.CreateProject:output_type -> kodex.projects.v1.ProjectResponse
+	55,  // 207: kodex.projects.v1.ProjectCatalogService.UpdateProject:output_type -> kodex.projects.v1.ProjectResponse
+	55,  // 208: kodex.projects.v1.ProjectCatalogService.GetProject:output_type -> kodex.projects.v1.ProjectResponse
+	58,  // 209: kodex.projects.v1.ProjectCatalogService.ListProjects:output_type -> kodex.projects.v1.ListProjectsResponse
+	62,  // 210: kodex.projects.v1.ProjectCatalogService.AttachRepository:output_type -> kodex.projects.v1.RepositoryResponse
+	64,  // 211: kodex.projects.v1.ProjectCatalogService.CreateProviderRepository:output_type -> kodex.projects.v1.RepositoryProviderCreateResponse
+	66,  // 212: kodex.projects.v1.ProjectCatalogService.CreateRepositoryBootstrapPullRequest:output_type -> kodex.projects.v1.RepositoryBootstrapPullRequestResponse
+	62,  // 213: kodex.projects.v1.ProjectCatalogService.UpdateRepository:output_type -> kodex.projects.v1.RepositoryResponse
+	62,  // 214: kodex.projects.v1.ProjectCatalogService.DetachRepository:output_type -> kodex.projects.v1.RepositoryResponse
+	62,  // 215: kodex.projects.v1.ProjectCatalogService.GetRepository:output_type -> kodex.projects.v1.RepositoryResponse
+	69,  // 216: kodex.projects.v1.ProjectCatalogService.ListRepositories:output_type -> kodex.projects.v1.ListRepositoriesResponse
+	79,  // 217: kodex.projects.v1.ProjectCatalogService.ImportServicesPolicy:output_type -> kodex.projects.v1.ServicesPolicyResponse
+	78,  // 218: kodex.projects.v1.ProjectCatalogService.ImportBootstrapServicesPolicy:output_type -> kodex.projects.v1.BootstrapServicesPolicyImportResponse
+	78,  // 219: kodex.projects.v1.ProjectCatalogService.ReconcileBootstrapMergeSignal:output_type -> kodex.projects.v1.BootstrapServicesPolicyImportResponse
+	78,  // 220: kodex.projects.v1.ProjectCatalogService.ReconcileAdoptionMergeSignal:output_type -> kodex.projects.v1.BootstrapServicesPolicyImportResponse
+	81,  // 221: kodex.projects.v1.ProjectCatalogService.GetSelfDeploySignal:output_type -> kodex.projects.v1.SelfDeploySignalResponse
+	83,  // 222: kodex.projects.v1.ProjectCatalogService.GetSelfDeployBuildPlan:output_type -> kodex.projects.v1.SelfDeployBuildPlanResponse
+	79,  // 223: kodex.projects.v1.ProjectCatalogService.GetServicesPolicy:output_type -> kodex.projects.v1.ServicesPolicyResponse
+	86,  // 224: kodex.projects.v1.ProjectCatalogService.ListServiceDescriptors:output_type -> kodex.projects.v1.ListServiceDescriptorsResponse
+	88,  // 225: kodex.projects.v1.ProjectCatalogService.CreatePolicyEditProposal:output_type -> kodex.projects.v1.PolicyEditProposalResponse
+	91,  // 226: kodex.projects.v1.ProjectCatalogService.CreatePolicyOverride:output_type -> kodex.projects.v1.PolicyOverrideResponse
+	91,  // 227: kodex.projects.v1.ProjectCatalogService.CancelPolicyOverride:output_type -> kodex.projects.v1.PolicyOverrideResponse
+	93,  // 228: kodex.projects.v1.ProjectCatalogService.ListPolicyOverrides:output_type -> kodex.projects.v1.ListPolicyOverridesResponse
+	95,  // 229: kodex.projects.v1.ProjectCatalogService.PutDocumentationSource:output_type -> kodex.projects.v1.DocumentationSourceResponse
+	95,  // 230: kodex.projects.v1.ProjectCatalogService.GetDocumentationSource:output_type -> kodex.projects.v1.DocumentationSourceResponse
+	98,  // 231: kodex.projects.v1.ProjectCatalogService.ListDocumentationSources:output_type -> kodex.projects.v1.ListDocumentationSourcesResponse
+	100, // 232: kodex.projects.v1.ProjectCatalogService.GetWorkspacePolicy:output_type -> kodex.projects.v1.WorkspacePolicyResponse
+	102, // 233: kodex.projects.v1.ProjectCatalogService.PutBranchRules:output_type -> kodex.projects.v1.BranchRulesResponse
+	102, // 234: kodex.projects.v1.ProjectCatalogService.GetBranchRules:output_type -> kodex.projects.v1.BranchRulesResponse
+	105, // 235: kodex.projects.v1.ProjectCatalogService.ListBranchRules:output_type -> kodex.projects.v1.ListBranchRulesResponse
+	107, // 236: kodex.projects.v1.ProjectCatalogService.PutReleasePolicy:output_type -> kodex.projects.v1.ReleasePolicyResponse
+	107, // 237: kodex.projects.v1.ProjectCatalogService.GetReleasePolicy:output_type -> kodex.projects.v1.ReleasePolicyResponse
+	110, // 238: kodex.projects.v1.ProjectCatalogService.ListReleasePolicies:output_type -> kodex.projects.v1.ListReleasePoliciesResponse
+	112, // 239: kodex.projects.v1.ProjectCatalogService.PutReleaseLine:output_type -> kodex.projects.v1.ReleaseLineResponse
+	112, // 240: kodex.projects.v1.ProjectCatalogService.GetReleaseLine:output_type -> kodex.projects.v1.ReleaseLineResponse
+	115, // 241: kodex.projects.v1.ProjectCatalogService.ListReleaseLines:output_type -> kodex.projects.v1.ListReleaseLinesResponse
+	117, // 242: kodex.projects.v1.ProjectCatalogService.PutPlacementPolicy:output_type -> kodex.projects.v1.PlacementPolicyResponse
+	117, // 243: kodex.projects.v1.ProjectCatalogService.GetPlacementPolicy:output_type -> kodex.projects.v1.PlacementPolicyResponse
+	120, // 244: kodex.projects.v1.ProjectCatalogService.ListPlacementPolicies:output_type -> kodex.projects.v1.ListPlacementPoliciesResponse
+	206, // [206:245] is the sub-list for method output_type
+	167, // [167:206] is the sub-list for method input_type
+	167, // [167:167] is the sub-list for extension type_name
+	167, // [167:167] is the sub-list for extension extendee
+	0,   // [0:167] is the sub-list for field type_name
 }
 
 func init() { file_kodex_projects_v1_project_catalog_proto_init() }
@@ -10689,46 +11240,49 @@ func file_kodex_projects_v1_project_catalog_proto_init() {
 	file_kodex_projects_v1_project_catalog_proto_msgTypes[14].OneofWrappers = []any{}
 	file_kodex_projects_v1_project_catalog_proto_msgTypes[15].OneofWrappers = []any{}
 	file_kodex_projects_v1_project_catalog_proto_msgTypes[16].OneofWrappers = []any{}
-	file_kodex_projects_v1_project_catalog_proto_msgTypes[17].OneofWrappers = []any{}
 	file_kodex_projects_v1_project_catalog_proto_msgTypes[18].OneofWrappers = []any{}
 	file_kodex_projects_v1_project_catalog_proto_msgTypes[19].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[20].OneofWrappers = []any{}
 	file_kodex_projects_v1_project_catalog_proto_msgTypes[21].OneofWrappers = []any{}
-	file_kodex_projects_v1_project_catalog_proto_msgTypes[22].OneofWrappers = []any{}
-	file_kodex_projects_v1_project_catalog_proto_msgTypes[25].OneofWrappers = []any{}
-	file_kodex_projects_v1_project_catalog_proto_msgTypes[26].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[23].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[24].OneofWrappers = []any{}
 	file_kodex_projects_v1_project_catalog_proto_msgTypes[27].OneofWrappers = []any{}
-	file_kodex_projects_v1_project_catalog_proto_msgTypes[30].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[28].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[29].OneofWrappers = []any{}
 	file_kodex_projects_v1_project_catalog_proto_msgTypes[32].OneofWrappers = []any{}
-	file_kodex_projects_v1_project_catalog_proto_msgTypes[33].OneofWrappers = []any{}
-	file_kodex_projects_v1_project_catalog_proto_msgTypes[36].OneofWrappers = []any{}
-	file_kodex_projects_v1_project_catalog_proto_msgTypes[37].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[34].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[35].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[38].OneofWrappers = []any{}
 	file_kodex_projects_v1_project_catalog_proto_msgTypes[39].OneofWrappers = []any{}
-	file_kodex_projects_v1_project_catalog_proto_msgTypes[43].OneofWrappers = []any{}
-	file_kodex_projects_v1_project_catalog_proto_msgTypes[44].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[41].OneofWrappers = []any{}
 	file_kodex_projects_v1_project_catalog_proto_msgTypes[45].OneofWrappers = []any{}
-	file_kodex_projects_v1_project_catalog_proto_msgTypes[48].OneofWrappers = []any{}
-	file_kodex_projects_v1_project_catalog_proto_msgTypes[53].OneofWrappers = []any{}
-	file_kodex_projects_v1_project_catalog_proto_msgTypes[54].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[46].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[47].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[50].OneofWrappers = []any{}
 	file_kodex_projects_v1_project_catalog_proto_msgTypes[55].OneofWrappers = []any{}
 	file_kodex_projects_v1_project_catalog_proto_msgTypes[56].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[57].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[58].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[59].OneofWrappers = []any{}
 	file_kodex_projects_v1_project_catalog_proto_msgTypes[60].OneofWrappers = []any{}
-	file_kodex_projects_v1_project_catalog_proto_msgTypes[63].OneofWrappers = []any{}
-	file_kodex_projects_v1_project_catalog_proto_msgTypes[65].OneofWrappers = []any{}
-	file_kodex_projects_v1_project_catalog_proto_msgTypes[68].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[64].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[67].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[69].OneofWrappers = []any{}
 	file_kodex_projects_v1_project_catalog_proto_msgTypes[72].OneofWrappers = []any{}
-	file_kodex_projects_v1_project_catalog_proto_msgTypes[75].OneofWrappers = []any{}
-	file_kodex_projects_v1_project_catalog_proto_msgTypes[77].OneofWrappers = []any{}
-	file_kodex_projects_v1_project_catalog_proto_msgTypes[82].OneofWrappers = []any{}
-	file_kodex_projects_v1_project_catalog_proto_msgTypes[85].OneofWrappers = []any{}
-	file_kodex_projects_v1_project_catalog_proto_msgTypes[87].OneofWrappers = []any{}
-	file_kodex_projects_v1_project_catalog_proto_msgTypes[90].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[76].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[79].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[81].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[86].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[89].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[91].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[94].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_kodex_projects_v1_project_catalog_proto_rawDesc), len(file_kodex_projects_v1_project_catalog_proto_rawDesc)),
-			NumEnums:      24,
-			NumMessages:   92,
+			NumEnums:      25,
+			NumMessages:   96,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

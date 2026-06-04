@@ -2174,6 +2174,239 @@ func TestGetSelfDeploySignalBlocksUnavailablePathSummary(t *testing.T) {
 	}
 }
 
+func TestGetSelfDeployBuildPlanReturnsReadyRuntimeCompatibleSpecs(t *testing.T) {
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	policyID := uuid.New()
+	commitSHA := "abcdef0123456789abcdef0123456789abcdef01"
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = activeSelfDeployRepository(projectID, repositoryID)
+	policy := activeSelfDeployPolicy(projectID, repositoryID, policyID, commitSHA, selfDeployBuildPolicyPayload())
+	store.policies[policyID] = policy
+	store.serviceDescriptors[policyID] = []entity.ServiceDescriptor{
+		activeSelfDeployDescriptor(projectID, repositoryID, policyID, "api"),
+	}
+	svc := New(store, fixedClock{}, &sequenceIDs{})
+	input := selfDeployBuildPlanInput(projectID, repositoryID, policy, []string{"api", "api"})
+
+	result, err := svc.GetSelfDeployBuildPlan(context.Background(), input)
+	if err != nil {
+		t.Fatalf("GetSelfDeployBuildPlan(): %v", err)
+	}
+	if result.Status != enum.SelfDeployBuildPlanStatusReady {
+		t.Fatalf("status = %s, want ready, reason=%s", result.Status, result.SafeReason)
+	}
+	if got := strings.Join(result.Plan.AffectedServiceKeys, ","); got != "api" {
+		t.Fatalf("affected keys = %q, want api", got)
+	}
+	if len(result.Plan.BuildItems) != 1 {
+		t.Fatalf("build items = %d, want 1", len(result.Plan.BuildItems))
+	}
+	item := result.Plan.BuildItems[0]
+	spec := item.BuildExecutionSpec
+	if spec.ServiceKey != "api" ||
+		spec.ImageRef != "registry.example/kodex/api" ||
+		spec.ImageTag != "abcdef0" ||
+		spec.ImageDigest != selfDeployBuildImageDigest ||
+		spec.BuildContextRef != "pvc://runtime/build-context-api" ||
+		spec.BuildContextDigest != selfDeployBuildContextDigest ||
+		spec.DockerfileRef != "context://services/api/Dockerfile" ||
+		spec.DockerfileDigest != selfDeployBuildDockerfileDigest ||
+		spec.DockerfileTarget != "prod" ||
+		spec.BuilderImageRef != "gcr.io/kaniko-project/executor:v1.23.2" {
+		t.Fatalf("build spec = %+v, want checked runtime-compatible fields", spec)
+	}
+	if len(spec.AllowedSecretRefs) != 1 ||
+		spec.AllowedSecretRefs[0].SecretRef != "secret://runtime/registry" ||
+		spec.AllowedSecretRefs[0].Purpose != "registry_docker_config" {
+		t.Fatalf("secret refs = %+v, want safe ref without values", spec.AllowedSecretRefs)
+	}
+	if result.Plan.PlanFingerprint == "" ||
+		spec.BuildPlanFingerprint != result.Plan.PlanFingerprint ||
+		item.PlanItemFingerprint == "" {
+		t.Fatalf("fingerprints = plan %q spec %q item %q, want stable fingerprints", result.Plan.PlanFingerprint, spec.BuildPlanFingerprint, item.PlanItemFingerprint)
+	}
+	replayed, err := svc.GetSelfDeployBuildPlan(context.Background(), input)
+	if err != nil {
+		t.Fatalf("replayed GetSelfDeployBuildPlan(): %v", err)
+	}
+	if replayed.Plan.PlanFingerprint != result.Plan.PlanFingerprint ||
+		replayed.Plan.BuildItems[0].PlanItemFingerprint != item.PlanItemFingerprint {
+		t.Fatalf("replayed fingerprints = %+v, want stable %+v", replayed.Plan, result.Plan)
+	}
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("marshal result: %v", err)
+	}
+	if strings.Contains(string(encoded), "secret_value") ||
+		strings.Contains(string(encoded), "validated_payload") ||
+		strings.Contains(string(encoded), "must-not-leak") {
+		t.Fatalf("build plan leaked unsafe payload: %s", encoded)
+	}
+}
+
+func TestGetSelfDeployBuildPlanReturnsPolicyStaleOnDigestMismatch(t *testing.T) {
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	policyID := uuid.New()
+	commitSHA := "abcdef0123456789abcdef0123456789abcdef01"
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = activeSelfDeployRepository(projectID, repositoryID)
+	policy := activeSelfDeployPolicy(projectID, repositoryID, policyID, commitSHA, selfDeployBuildPolicyPayload())
+	store.policies[policyID] = policy
+	store.serviceDescriptors[policyID] = []entity.ServiceDescriptor{
+		activeSelfDeployDescriptor(projectID, repositoryID, policyID, "api"),
+	}
+	svc := New(store, fixedClock{}, &sequenceIDs{})
+	input := selfDeployBuildPlanInput(projectID, repositoryID, policy, []string{"api"})
+	input.ExpectedServicesPolicyDigest = "sha256:old"
+
+	result, err := svc.GetSelfDeployBuildPlan(context.Background(), input)
+	if err != nil {
+		t.Fatalf("GetSelfDeployBuildPlan(): %v", err)
+	}
+	if result.Status != enum.SelfDeployBuildPlanStatusPolicyStale || result.SafeReason != "services_policy_digest_mismatch" {
+		t.Fatalf("result = %+v, want policy stale digest mismatch", result)
+	}
+}
+
+func TestGetSelfDeployBuildPlanReturnsPolicyStaleOnSourceMismatch(t *testing.T) {
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	policyID := uuid.New()
+	commitSHA := "abcdef0123456789abcdef0123456789abcdef01"
+	for _, tt := range []struct {
+		name       string
+		mutate     func(*GetSelfDeployBuildPlanInput)
+		wantReason string
+	}{
+		{
+			name: "source ref",
+			mutate: func(input *GetSelfDeployBuildPlanInput) {
+				input.SourceRef = "refs/heads/release"
+			},
+			wantReason: "services_policy_source_ref_mismatch",
+		},
+		{
+			name: "source commit",
+			mutate: func(input *GetSelfDeployBuildPlanInput) {
+				input.MergeCommitSHA = strings.Repeat("b", 40)
+			},
+			wantReason: "services_policy_source_commit_mismatch",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			store := newMemoryRepository()
+			store.repositories[repositoryID] = activeSelfDeployRepository(projectID, repositoryID)
+			policy := activeSelfDeployPolicy(projectID, repositoryID, policyID, commitSHA, selfDeployBuildPolicyPayload())
+			store.policies[policyID] = policy
+			store.serviceDescriptors[policyID] = []entity.ServiceDescriptor{
+				activeSelfDeployDescriptor(projectID, repositoryID, policyID, "api"),
+			}
+			svc := New(store, fixedClock{}, &sequenceIDs{})
+			input := selfDeployBuildPlanInput(projectID, repositoryID, policy, []string{"api"})
+			tt.mutate(&input)
+
+			result, err := svc.GetSelfDeployBuildPlan(context.Background(), input)
+			if err != nil {
+				t.Fatalf("GetSelfDeployBuildPlan(): %v", err)
+			}
+			if result.Status != enum.SelfDeployBuildPlanStatusPolicyStale || result.SafeReason != tt.wantReason {
+				t.Fatalf("result = %+v, want policy stale %s", result, tt.wantReason)
+			}
+		})
+	}
+}
+
+func TestGetSelfDeployBuildPlanReturnsServiceNotFoundForUnknownAffectedService(t *testing.T) {
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	policyID := uuid.New()
+	commitSHA := "abcdef0123456789abcdef0123456789abcdef01"
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = activeSelfDeployRepository(projectID, repositoryID)
+	policy := activeSelfDeployPolicy(projectID, repositoryID, policyID, commitSHA, selfDeployBuildPolicyPayload())
+	store.policies[policyID] = policy
+	store.serviceDescriptors[policyID] = []entity.ServiceDescriptor{
+		activeSelfDeployDescriptor(projectID, repositoryID, policyID, "api"),
+	}
+	svc := New(store, fixedClock{}, &sequenceIDs{})
+	input := selfDeployBuildPlanInput(projectID, repositoryID, policy, []string{"missing"})
+
+	result, err := svc.GetSelfDeployBuildPlan(context.Background(), input)
+	if err != nil {
+		t.Fatalf("GetSelfDeployBuildPlan(): %v", err)
+	}
+	if result.Status != enum.SelfDeployBuildPlanStatusServiceNotFound || !strings.Contains(result.SafeReason, "service_not_found") {
+		t.Fatalf("result = %+v, want service_not_found", result)
+	}
+}
+
+func TestGetSelfDeployBuildPlanReturnsUnavailableWhenServiceHasNoBuildSpec(t *testing.T) {
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	policyID := uuid.New()
+	commitSHA := "abcdef0123456789abcdef0123456789abcdef01"
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = activeSelfDeployRepository(projectID, repositoryID)
+	policy := activeSelfDeployPolicy(projectID, repositoryID, policyID, commitSHA, []byte(`{"spec":{"services":[{"key":"api","rootPath":"services/api"}]}}`))
+	store.policies[policyID] = policy
+	store.serviceDescriptors[policyID] = []entity.ServiceDescriptor{
+		activeSelfDeployDescriptor(projectID, repositoryID, policyID, "api"),
+	}
+	svc := New(store, fixedClock{}, &sequenceIDs{})
+	input := selfDeployBuildPlanInput(projectID, repositoryID, policy, []string{"api"})
+
+	result, err := svc.GetSelfDeployBuildPlan(context.Background(), input)
+	if err != nil {
+		t.Fatalf("GetSelfDeployBuildPlan(): %v", err)
+	}
+	if result.Status != enum.SelfDeployBuildPlanStatusBuildPlanUnavailable {
+		t.Fatalf("result = %+v, want build_plan_unavailable", result)
+	}
+}
+
+func TestGetSelfDeployBuildPlanReturnsUnavailableForRuntimeIncompatibleBuildSpec(t *testing.T) {
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	policyID := uuid.New()
+	commitSHA := "abcdef0123456789abcdef0123456789abcdef01"
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = activeSelfDeployRepository(projectID, repositoryID)
+	payload := []byte(strings.Replace(string(selfDeployBuildPolicyPayload()), selfDeployBuildContextDigest, "sha256:context", 1))
+	policy := activeSelfDeployPolicy(projectID, repositoryID, policyID, commitSHA, payload)
+	store.policies[policyID] = policy
+	store.serviceDescriptors[policyID] = []entity.ServiceDescriptor{
+		activeSelfDeployDescriptor(projectID, repositoryID, policyID, "api"),
+	}
+	svc := New(store, fixedClock{}, &sequenceIDs{})
+	input := selfDeployBuildPlanInput(projectID, repositoryID, policy, []string{"api"})
+
+	result, err := svc.GetSelfDeployBuildPlan(context.Background(), input)
+	if err != nil {
+		t.Fatalf("GetSelfDeployBuildPlan(): %v", err)
+	}
+	if result.Status != enum.SelfDeployBuildPlanStatusBuildPlanUnavailable || !strings.Contains(result.SafeReason, "service_build_spec_unavailable") {
+		t.Fatalf("result = %+v, want unavailable runtime-incompatible build spec", result)
+	}
+}
+
+func TestGetSelfDeployBuildPlanReturnsInvalidInputForEmptyAffectedServices(t *testing.T) {
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	policy := activeSelfDeployPolicy(projectID, repositoryID, uuid.New(), "abcdef0123456789abcdef0123456789abcdef01", selfDeployBuildPolicyPayload())
+	svc := New(newMemoryRepository(), fixedClock{}, &sequenceIDs{})
+	input := selfDeployBuildPlanInput(projectID, repositoryID, policy, nil)
+
+	result, err := svc.GetSelfDeployBuildPlan(context.Background(), input)
+	if err != nil {
+		t.Fatalf("GetSelfDeployBuildPlan(): %v", err)
+	}
+	if result.Status != enum.SelfDeployBuildPlanStatusInvalidInput {
+		t.Fatalf("result = %+v, want invalid_input", result)
+	}
+}
+
 func TestPutDocumentationSourceNormalizesAndPublishesEvent(t *testing.T) {
 	ctx := context.Background()
 	store := newMemoryRepository()
@@ -2364,6 +2597,12 @@ const bootstrapServicesPolicyPayload = `{"spec":{"services":[{"key":"api","rootP
 
 const bootstrapMergeCommitSHA = "0123456789abcdef0123456789abcdef01234567"
 
+const selfDeployBuildImageDigest = "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+
+const selfDeployBuildContextDigest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
+const selfDeployBuildDockerfileDigest = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+
 func bootstrapServicesPolicy() RepositoryBootstrapServicesPolicy {
 	return bootstrapServicesPolicyForContent(bootstrapServicesPolicyFileContent, []byte(bootstrapServicesPolicyPayload))
 }
@@ -2424,6 +2663,60 @@ func activeSelfDeployDescriptor(projectID uuid.UUID, repositoryID uuid.UUID, pol
 		Kind:             enum.ServiceKindBackend,
 		RootPath:         "services/" + key,
 		Status:           enum.ServiceStatusActive,
+	}
+}
+
+func selfDeployBuildPolicyPayload() []byte {
+	return []byte(`{
+		"spec": {
+			"services": [
+				{
+					"key": "api",
+					"rootPath": "services/api",
+						"build": {
+							"imageRef": "registry.example/kodex/api",
+							"imageTag": "abcdef0",
+							"imageDigest": "` + selfDeployBuildImageDigest + `",
+							"buildContextRef": "pvc://runtime/build-context-api",
+							"buildContextDigest": "` + selfDeployBuildContextDigest + `",
+							"dockerfileRef": "context://services/api/Dockerfile",
+							"dockerfileDigest": "` + selfDeployBuildDockerfileDigest + `",
+							"dockerfileTarget": "prod",
+							"builderImageRef": "gcr.io/kaniko-project/executor:v1.23.2",
+						"allowedSecretRefs": [
+							{
+								"secretRef": "secret://runtime/registry",
+								"purpose": "registry_docker_config",
+								"value": "secret_value"
+							}
+						],
+						"outputRefs": [
+							{
+								"kind": "image",
+								"ref": "runtime:image:api"
+							}
+						],
+						"unsafePayload": "must-not-leak"
+					}
+				}
+			]
+		}
+	}`)
+}
+
+func selfDeployBuildPlanInput(projectID uuid.UUID, repositoryID uuid.UUID, policy entity.ServicesPolicy, serviceKeys []string) GetSelfDeployBuildPlanInput {
+	version := policy.PolicyVersion
+	return GetSelfDeployBuildPlanInput{
+		ProjectID:                         projectID,
+		RepositoryID:                      repositoryID,
+		SourceRef:                         "refs/heads/main",
+		MergeCommitSHA:                    "abcdef0123456789abcdef0123456789abcdef01",
+		ProviderSignalRef:                 "provider:github:repository_change:push:codex-k8s/kodex:main:abcdef",
+		AffectedServiceKeys:               serviceKeys,
+		ExpectedServicesPolicyDigest:      policy.ContentHash,
+		ExpectedServicesPolicyFingerprint: selfDeployServicesYamlFingerprint(policy),
+		ExpectedServicesPolicyVersion:     &version,
+		Meta:                              queryMeta(),
 	}
 }
 

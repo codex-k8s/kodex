@@ -526,6 +526,40 @@ func GetSelfDeploySignalInput(request *projectsv1.GetSelfDeploySignalRequest) (p
 	}, nil
 }
 
+func GetSelfDeployBuildPlanInput(request *projectsv1.GetSelfDeployBuildPlanRequest) (projectservice.GetSelfDeployBuildPlanInput, error) {
+	meta, err := QueryMetaFromProto(request.GetMeta())
+	if err != nil {
+		return projectservice.GetSelfDeployBuildPlanInput{}, err
+	}
+	projectID, err := requiredUUID(request.GetProjectId())
+	if err != nil {
+		return projectservice.GetSelfDeployBuildPlanInput{}, err
+	}
+	repositoryID, err := requiredUUID(request.GetRepositoryId())
+	if err != nil {
+		return projectservice.GetSelfDeployBuildPlanInput{}, err
+	}
+	var expectedVersion *int64
+	if request.ExpectedServicesPolicyVersion != nil {
+		value := request.GetExpectedServicesPolicyVersion()
+		expectedVersion = &value
+	}
+	return projectservice.GetSelfDeployBuildPlanInput{
+		ProjectID:                         projectID,
+		RepositoryID:                      repositoryID,
+		SourceRef:                         strings.TrimSpace(request.GetSourceRef()),
+		MergeCommitSHA:                    strings.TrimSpace(request.GetMergeCommitSha()),
+		ProviderSignalRef:                 strings.TrimSpace(request.GetProviderSignalRef()),
+		ProviderSignalID:                  strings.TrimSpace(request.GetProviderSignalId()),
+		ProviderSignalKey:                 strings.TrimSpace(request.GetProviderSignalKey()),
+		AffectedServiceKeys:               request.GetAffectedServiceKeys(),
+		ExpectedServicesPolicyDigest:      strings.TrimSpace(request.GetExpectedServicesPolicyDigest()),
+		ExpectedServicesPolicyFingerprint: strings.TrimSpace(request.GetExpectedServicesPolicyFingerprint()),
+		ExpectedServicesPolicyVersion:     expectedVersion,
+		Meta:                              meta,
+	}, nil
+}
+
 func ListServiceDescriptorsInput(request *projectsv1.ListServiceDescriptorsRequest) (projectservice.ListServiceDescriptorsInput, error) {
 	projectID, meta, err := idWithQueryMeta(request.GetProjectId(), request.GetMeta())
 	if err != nil {

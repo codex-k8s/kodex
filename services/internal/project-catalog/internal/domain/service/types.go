@@ -402,6 +402,83 @@ type SelfDeploySignalResult struct {
 	SafeReason string
 }
 
+// GetSelfDeployBuildPlanInput идентифицирует запрос checked build plan.
+type GetSelfDeployBuildPlanInput struct {
+	ProjectID                         uuid.UUID
+	RepositoryID                      uuid.UUID
+	SourceRef                         string
+	MergeCommitSHA                    string
+	ProviderSignalRef                 string
+	ProviderSignalID                  string
+	ProviderSignalKey                 string
+	AffectedServiceKeys               []string
+	ExpectedServicesPolicyDigest      string
+	ExpectedServicesPolicyFingerprint string
+	ExpectedServicesPolicyVersion     *int64
+	Meta                              value.QueryMeta
+}
+
+// RuntimeJobAllowedSecretRef несёт только ссылку на секрет и ограниченное назначение.
+type RuntimeJobAllowedSecretRef struct {
+	SecretRef string
+	Purpose   string
+}
+
+// RuntimeJobOutputRef несёт одну ограниченную ссылку на runtime output.
+type RuntimeJobOutputRef struct {
+	Kind string
+	Ref  string
+}
+
+// SelfDeployBuildExecutionSpec повторяет runtime-manager BuildExecutionSpec без transport DTO в домене.
+type SelfDeployBuildExecutionSpec struct {
+	ServiceKey           string
+	ImageRef             string
+	SourceRef            string
+	BuildContextRef      string
+	DockerfileRef        string
+	BuilderImageRef      string
+	BuildPlanFingerprint string
+	AllowedSecretRefs    []RuntimeJobAllowedSecretRef
+	OutputRefs           []RuntimeJobOutputRef
+	SourceCommitSHA      string
+	ImageTag             string
+	ImageDigest          string
+	BuildContextDigest   string
+	DockerfileDigest     string
+	DockerfileTarget     string
+}
+
+// SelfDeployBuildPlanItem содержит build spec одного сервиса.
+type SelfDeployBuildPlanItem struct {
+	ServiceKey          string
+	ServiceRef          string
+	BuildExecutionSpec  SelfDeployBuildExecutionSpec
+	PlanItemFingerprint string
+}
+
+// SelfDeployBuildPlan содержит checked project-owned build inputs.
+type SelfDeployBuildPlan struct {
+	ProjectRef          string
+	RepositoryRef       string
+	ProviderSignalRef   string
+	SourceRef           string
+	MergeCommitSHA      string
+	ServicesYaml        SelfDeployServicesYamlProjection
+	AffectedServiceKeys []string
+	BuildItems          []SelfDeployBuildPlanItem
+	PlanFingerprint     string
+	SafeSummary         string
+	Version             int64
+}
+
+// SelfDeployBuildPlanResult возвращает готовность плана и ограниченную диагностику.
+type SelfDeployBuildPlanResult struct {
+	Status     enum.SelfDeployBuildPlanStatus
+	Plan       SelfDeployBuildPlan
+	SafeReason string
+}
+
 // BootstrapMergeSignalDiagnosticInput records a safe bootstrap merge signal that cannot yet import policy.
 type BootstrapMergeSignalDiagnosticInput struct {
 	ProjectID         uuid.UUID
