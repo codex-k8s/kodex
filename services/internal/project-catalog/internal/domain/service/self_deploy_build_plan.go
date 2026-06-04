@@ -6,8 +6,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"regexp"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -35,7 +37,9 @@ func (s *Service) GetSelfDeployBuildPlan(ctx context.Context, input GetSelfDeplo
 		strings.TrimSpace(input.SourceRef) == "" ||
 		strings.TrimSpace(input.MergeCommitSHA) == "" ||
 		strings.TrimSpace(input.ExpectedServicesPolicyDigest) == "" ||
-		selfDeployBuildPlanProviderSignalRef(input) == "" {
+		selfDeployBuildPlanProviderSignalRef(input) == "" ||
+		!safeBuildPlanRef(input.SourceRef, true) ||
+		!validBuildPlanCommitSHA(input.MergeCommitSHA) {
 		return SelfDeployBuildPlanResult{Status: enum.SelfDeployBuildPlanStatusInvalidInput, SafeReason: "invalid_input"}, nil
 	}
 	if err := s.authorizeProjectQuery(ctx, input.ProjectID, input.Meta, projectActionPolicyRead, projectAggregateServicesPolicy); err != nil {
@@ -119,6 +123,12 @@ func selfDeployBuildPlanProviderSignalRef(input GetSelfDeployBuildPlanInput) str
 }
 
 func selfDeployBuildPolicyStaleReason(input GetSelfDeployBuildPlanInput, policy entity.ServicesPolicy) string {
+	if strings.TrimSpace(input.SourceRef) != strings.TrimSpace(policy.SourceRef) {
+		return "services_policy_source_ref_mismatch"
+	}
+	if !strings.EqualFold(strings.TrimSpace(input.MergeCommitSHA), strings.TrimSpace(policy.SourceCommitSHA)) {
+		return "services_policy_source_commit_mismatch"
+	}
 	if strings.TrimSpace(input.ExpectedServicesPolicyDigest) != strings.TrimSpace(policy.ContentHash) {
 		return "services_policy_digest_mismatch"
 	}
@@ -214,15 +224,15 @@ func selfDeployBuildExecutionSpec(input GetSelfDeployBuildPlanInput, serviceKey 
 	}
 	result := SelfDeployBuildExecutionSpec{
 		SourceRef:          strings.TrimSpace(input.SourceRef),
-		SourceCommitSHA:    strings.TrimSpace(input.MergeCommitSHA),
+		SourceCommitSHA:    strings.ToLower(strings.TrimSpace(input.MergeCommitSHA)),
 		ServiceKey:         strings.TrimSpace(serviceKey),
 		ImageRef:           strings.TrimSpace(spec.ImageRef),
 		ImageTag:           strings.TrimSpace(spec.ImageTag),
-		ImageDigest:        strings.TrimSpace(spec.ImageDigest),
+		ImageDigest:        strings.ToLower(strings.TrimSpace(spec.ImageDigest)),
 		BuildContextRef:    strings.TrimSpace(spec.BuildContextRef),
-		BuildContextDigest: strings.TrimSpace(spec.BuildContextDigest),
+		BuildContextDigest: strings.ToLower(strings.TrimSpace(spec.BuildContextDigest)),
 		DockerfileRef:      strings.TrimSpace(spec.DockerfileRef),
-		DockerfileDigest:   strings.TrimSpace(spec.DockerfileDigest),
+		DockerfileDigest:   strings.ToLower(strings.TrimSpace(spec.DockerfileDigest)),
 		DockerfileTarget:   strings.TrimSpace(spec.DockerfileTarget),
 		BuilderImageRef:    strings.TrimSpace(spec.BuilderImageRef),
 		AllowedSecretRefs:  secretRefs,
@@ -248,22 +258,22 @@ func buildSpecRequiredRefsPresent(spec SelfDeployBuildExecutionSpec) bool {
 }
 
 func buildSpecRefsSafe(spec SelfDeployBuildExecutionSpec) bool {
-	values := []string{
-		spec.SourceRef,
-		spec.SourceCommitSHA,
-		spec.ServiceKey,
-		spec.ImageRef,
-		spec.ImageTag,
-		spec.ImageDigest,
-		spec.BuildContextRef,
-		spec.BuildContextDigest,
-		spec.DockerfileRef,
-		spec.DockerfileDigest,
-		spec.DockerfileTarget,
-		spec.BuilderImageRef,
+	checks := []func() bool{
+		func() bool { return safeBuildPlanRef(spec.SourceRef, true) },
+		func() bool { return validBuildPlanCommitSHA(spec.SourceCommitSHA) },
+		func() bool { return safeBuildPlanLabel(spec.ServiceKey, maxSelfDeployBuildPlanLabelBytes) },
+		func() bool { return safeBuildPlanRef(spec.ImageRef, true) },
+		func() bool { return safeBuildPlanLabel(spec.ImageTag, maxSelfDeployBuildPlanLabelBytes) },
+		func() bool { return safeBuildPlanRef(spec.BuildContextRef, true) },
+		func() bool { return validBuildPlanSHA256Digest(spec.BuildContextDigest) },
+		func() bool { return safeBuildPlanRef(spec.DockerfileRef, true) },
+		func() bool { return safeBuildPlanLabel(spec.DockerfileTarget, maxSelfDeployBuildPlanLabelBytes) },
+		func() bool { return safeBuildPlanRef(spec.BuilderImageRef, true) },
+		func() bool { return spec.ImageDigest == "" || validBuildPlanSHA256Digest(spec.ImageDigest) },
+		func() bool { return spec.DockerfileDigest == "" || validBuildPlanSHA256Digest(spec.DockerfileDigest) },
 	}
-	for _, value := range values {
-		if !safeBuildPlanText(value) {
+	for _, check := range checks {
+		if !check() {
 			return false
 		}
 	}
@@ -271,16 +281,23 @@ func buildSpecRefsSafe(spec SelfDeployBuildExecutionSpec) bool {
 }
 
 func normalizeBuildAllowedSecretRefs(values []value.ServicesPolicyAllowedSecretRef) ([]RuntimeJobAllowedSecretRef, error) {
-	return normalizeTypedBuildRefs(values, buildSecretRefPair, buildAllowedSecretRefFromPair, buildAllowedSecretSortKey)
+	if len(values) > maxSelfDeployBuildPlanExecutionRefs {
+		return nil, errBuildPlanUnavailable
+	}
+	return normalizeTypedBuildRefs(values, buildSecretRefPair, buildAllowedSecretPairSafe, buildAllowedSecretRefFromPair, buildAllowedSecretSortKey)
 }
 
 func normalizeBuildOutputRefs(values []value.ServicesPolicyOutputRef) ([]RuntimeJobOutputRef, error) {
-	return normalizeTypedBuildRefs(values, buildOutputRefPair, buildOutputRefFromPair, buildOutputSortKey)
+	if len(values) > maxSelfDeployBuildPlanExecutionRefs {
+		return nil, errBuildPlanUnavailable
+	}
+	return normalizeTypedBuildRefs(values, buildOutputRefPair, buildOutputPairSafe, buildOutputRefFromPair, buildOutputSortKey)
 }
 
 func normalizeTypedBuildRefs[T any, R any](
 	values []T,
 	extract func(T) (string, string),
+	validate func(buildRefPair) bool,
 	convert func(buildRefPair) R,
 	sortKey func(R) string,
 ) ([]R, error) {
@@ -290,6 +307,9 @@ func normalizeTypedBuildRefs[T any, R any](
 	}
 	result := make([]R, 0, len(pairs))
 	for _, pair := range pairs {
+		if !validate(pair) {
+			return nil, errBuildPlanUnavailable
+		}
 		result = append(result, convert(pair))
 	}
 	sort.Slice(result, func(i, j int) bool {
@@ -306,6 +326,10 @@ func buildAllowedSecretRefFromPair(pair buildRefPair) RuntimeJobAllowedSecretRef
 	return RuntimeJobAllowedSecretRef{SecretRef: pair.Left, Purpose: pair.Right}
 }
 
+func buildAllowedSecretPairSafe(pair buildRefPair) bool {
+	return safeBuildPlanRef(pair.Left, true) && safeBuildPlanLabel(pair.Right, maxSelfDeployBuildPlanRefKindBytes)
+}
+
 func buildAllowedSecretSortKey(ref RuntimeJobAllowedSecretRef) string {
 	return ref.SecretRef + "\x00" + ref.Purpose
 }
@@ -316,6 +340,10 @@ func buildOutputRefPair(value value.ServicesPolicyOutputRef) (string, string) {
 
 func buildOutputRefFromPair(pair buildRefPair) RuntimeJobOutputRef {
 	return RuntimeJobOutputRef{Kind: pair.Left, Ref: pair.Right}
+}
+
+func buildOutputPairSafe(pair buildRefPair) bool {
+	return safeBuildPlanLabel(pair.Left, maxSelfDeployBuildPlanRefKindBytes) && safeBuildPlanRef(pair.Right, true)
 }
 
 func buildOutputSortKey(ref RuntimeJobOutputRef) string {
@@ -333,7 +361,7 @@ func normalizeBuildRefPairs[T any](values []T, extract func(T) (string, string))
 		left, right := extract(value)
 		left = strings.TrimSpace(left)
 		right = strings.TrimSpace(right)
-		if left == "" || right == "" || !safeBuildPlanText(left) || !safeBuildPlanText(right) {
+		if left == "" || right == "" {
 			return nil, errBuildPlanUnavailable
 		}
 		result = append(result, buildRefPair{Left: left, Right: right})
@@ -341,11 +369,65 @@ func normalizeBuildRefPairs[T any](values []T, extract func(T) (string, string))
 	return result, nil
 }
 
-func safeBuildPlanText(value string) bool {
-	if len(value) > 512 {
+const (
+	maxSelfDeployBuildPlanSafeRefBytes  = 512
+	maxSelfDeployBuildPlanLabelBytes    = 128
+	maxSelfDeployBuildPlanRefKindBytes  = 64
+	maxSelfDeployBuildPlanExecutionRefs = 16
+	selfDeployBuildPlanUnsafeMarkers    = "raw_provider_payload|provider_payload|prompt_text|prompt_body|transcript|tool_input|tool_output|workspace_path|kubeconfig|secret_value|secret-value|token=|authorization|stdout|stderr|large_log|-----begin|bearer "
+)
+
+var (
+	selfDeployBuildPlanDigestPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+	selfDeployBuildPlanCommitPattern = regexp.MustCompile(`^([0-9a-f]{40}|[0-9a-f]{64})$`)
+)
+
+func safeBuildPlanRef(value string, required bool) bool {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return !required
+	}
+	if len(trimmed) > maxSelfDeployBuildPlanSafeRefBytes || !utf8.ValidString(trimmed) || strings.ContainsAny(trimmed, "\r\n\t{}") {
 		return false
 	}
-	return !strings.ContainsAny(value, "\r\n\t")
+	return !unsafeBuildPlanText(trimmed)
+}
+
+func safeBuildPlanLabel(value string, maxBytes int) bool {
+	trimmed := strings.TrimSpace(value)
+	checks := []bool{
+		trimmed != "",
+		len(trimmed) <= maxBytes,
+		utf8.ValidString(trimmed),
+		!strings.ContainsAny(trimmed, "\r\n\t {}"),
+		!unsafeBuildPlanText(trimmed),
+	}
+	for _, ok := range checks {
+		if !ok {
+			return false
+		}
+	}
+	return true
+}
+
+func validBuildPlanSHA256Digest(value string) bool {
+	trimmed := strings.ToLower(strings.TrimSpace(value))
+	return selfDeployBuildPlanDigestPattern.MatchString(trimmed)
+}
+
+func validBuildPlanCommitSHA(value string) bool {
+	trimmed := strings.ToLower(strings.TrimSpace(value))
+	return selfDeployBuildPlanCommitPattern.MatchString(trimmed)
+}
+
+func unsafeBuildPlanText(value string) bool {
+	lower := strings.ToLower(strings.TrimSpace(value))
+	for _, marker := range strings.Split(selfDeployBuildPlanUnsafeMarkers, "|") {
+		if strings.Contains(lower, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func selfDeployBuildPlanFingerprint(plan SelfDeployBuildPlan) string {

@@ -2207,9 +2207,11 @@ func TestGetSelfDeployBuildPlanReturnsReadyRuntimeCompatibleSpecs(t *testing.T) 
 	if spec.ServiceKey != "api" ||
 		spec.ImageRef != "registry.example/kodex/api" ||
 		spec.ImageTag != "abcdef0" ||
+		spec.ImageDigest != selfDeployBuildImageDigest ||
 		spec.BuildContextRef != "pvc://runtime/build-context-api" ||
-		spec.BuildContextDigest != "sha256:context" ||
+		spec.BuildContextDigest != selfDeployBuildContextDigest ||
 		spec.DockerfileRef != "context://services/api/Dockerfile" ||
+		spec.DockerfileDigest != selfDeployBuildDockerfileDigest ||
 		spec.DockerfileTarget != "prod" ||
 		spec.BuilderImageRef != "gcr.io/kaniko-project/executor:v1.23.2" {
 		t.Fatalf("build spec = %+v, want checked runtime-compatible fields", spec)
@@ -2268,6 +2270,54 @@ func TestGetSelfDeployBuildPlanReturnsPolicyStaleOnDigestMismatch(t *testing.T) 
 	}
 }
 
+func TestGetSelfDeployBuildPlanReturnsPolicyStaleOnSourceMismatch(t *testing.T) {
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	policyID := uuid.New()
+	commitSHA := "abcdef0123456789abcdef0123456789abcdef01"
+	for _, tt := range []struct {
+		name       string
+		mutate     func(*GetSelfDeployBuildPlanInput)
+		wantReason string
+	}{
+		{
+			name: "source ref",
+			mutate: func(input *GetSelfDeployBuildPlanInput) {
+				input.SourceRef = "refs/heads/release"
+			},
+			wantReason: "services_policy_source_ref_mismatch",
+		},
+		{
+			name: "source commit",
+			mutate: func(input *GetSelfDeployBuildPlanInput) {
+				input.MergeCommitSHA = strings.Repeat("b", 40)
+			},
+			wantReason: "services_policy_source_commit_mismatch",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			store := newMemoryRepository()
+			store.repositories[repositoryID] = activeSelfDeployRepository(projectID, repositoryID)
+			policy := activeSelfDeployPolicy(projectID, repositoryID, policyID, commitSHA, selfDeployBuildPolicyPayload())
+			store.policies[policyID] = policy
+			store.serviceDescriptors[policyID] = []entity.ServiceDescriptor{
+				activeSelfDeployDescriptor(projectID, repositoryID, policyID, "api"),
+			}
+			svc := New(store, fixedClock{}, &sequenceIDs{})
+			input := selfDeployBuildPlanInput(projectID, repositoryID, policy, []string{"api"})
+			tt.mutate(&input)
+
+			result, err := svc.GetSelfDeployBuildPlan(context.Background(), input)
+			if err != nil {
+				t.Fatalf("GetSelfDeployBuildPlan(): %v", err)
+			}
+			if result.Status != enum.SelfDeployBuildPlanStatusPolicyStale || result.SafeReason != tt.wantReason {
+				t.Fatalf("result = %+v, want policy stale %s", result, tt.wantReason)
+			}
+		})
+	}
+}
+
 func TestGetSelfDeployBuildPlanReturnsServiceNotFoundForUnknownAffectedService(t *testing.T) {
 	projectID := uuid.New()
 	repositoryID := uuid.New()
@@ -2313,6 +2363,31 @@ func TestGetSelfDeployBuildPlanReturnsUnavailableWhenServiceHasNoBuildSpec(t *te
 	}
 	if result.Status != enum.SelfDeployBuildPlanStatusBuildPlanUnavailable {
 		t.Fatalf("result = %+v, want build_plan_unavailable", result)
+	}
+}
+
+func TestGetSelfDeployBuildPlanReturnsUnavailableForRuntimeIncompatibleBuildSpec(t *testing.T) {
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	policyID := uuid.New()
+	commitSHA := "abcdef0123456789abcdef0123456789abcdef01"
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = activeSelfDeployRepository(projectID, repositoryID)
+	payload := []byte(strings.Replace(string(selfDeployBuildPolicyPayload()), selfDeployBuildContextDigest, "sha256:context", 1))
+	policy := activeSelfDeployPolicy(projectID, repositoryID, policyID, commitSHA, payload)
+	store.policies[policyID] = policy
+	store.serviceDescriptors[policyID] = []entity.ServiceDescriptor{
+		activeSelfDeployDescriptor(projectID, repositoryID, policyID, "api"),
+	}
+	svc := New(store, fixedClock{}, &sequenceIDs{})
+	input := selfDeployBuildPlanInput(projectID, repositoryID, policy, []string{"api"})
+
+	result, err := svc.GetSelfDeployBuildPlan(context.Background(), input)
+	if err != nil {
+		t.Fatalf("GetSelfDeployBuildPlan(): %v", err)
+	}
+	if result.Status != enum.SelfDeployBuildPlanStatusBuildPlanUnavailable || !strings.Contains(result.SafeReason, "service_build_spec_unavailable") {
+		t.Fatalf("result = %+v, want unavailable runtime-incompatible build spec", result)
 	}
 }
 
@@ -2522,6 +2597,12 @@ const bootstrapServicesPolicyPayload = `{"spec":{"services":[{"key":"api","rootP
 
 const bootstrapMergeCommitSHA = "0123456789abcdef0123456789abcdef01234567"
 
+const selfDeployBuildImageDigest = "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+
+const selfDeployBuildContextDigest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
+const selfDeployBuildDockerfileDigest = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+
 func bootstrapServicesPolicy() RepositoryBootstrapServicesPolicy {
 	return bootstrapServicesPolicyForContent(bootstrapServicesPolicyFileContent, []byte(bootstrapServicesPolicyPayload))
 }
@@ -2592,14 +2673,16 @@ func selfDeployBuildPolicyPayload() []byte {
 				{
 					"key": "api",
 					"rootPath": "services/api",
-					"build": {
-						"imageRef": "registry.example/kodex/api",
-						"imageTag": "abcdef0",
-						"buildContextRef": "pvc://runtime/build-context-api",
-						"buildContextDigest": "sha256:context",
-						"dockerfileRef": "context://services/api/Dockerfile",
-						"dockerfileTarget": "prod",
-						"builderImageRef": "gcr.io/kaniko-project/executor:v1.23.2",
+						"build": {
+							"imageRef": "registry.example/kodex/api",
+							"imageTag": "abcdef0",
+							"imageDigest": "` + selfDeployBuildImageDigest + `",
+							"buildContextRef": "pvc://runtime/build-context-api",
+							"buildContextDigest": "` + selfDeployBuildContextDigest + `",
+							"dockerfileRef": "context://services/api/Dockerfile",
+							"dockerfileDigest": "` + selfDeployBuildDockerfileDigest + `",
+							"dockerfileTarget": "prod",
+							"builderImageRef": "gcr.io/kaniko-project/executor:v1.23.2",
 						"allowedSecretRefs": [
 							{
 								"secretRef": "secret://runtime/registry",
