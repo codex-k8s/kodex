@@ -75,6 +75,7 @@ allowlist-файлом для owner email, не общей bootstrap allowlist.
 - `GET /v1/agent-runs/{run_id}/runtime-status`
 - `GET /v1/agent-runs/{run_id}/activities`
 - `GET /v1/self-deploy/summary`
+- `POST /v1/self-deploy/gates/{gate_request_id}/decision`
 
 ## Текущий UX-контур
 
@@ -93,9 +94,15 @@ allowlist-файлом для owner email, не общей bootstrap allowlist.
   `project_missing`, `repository_binding_missing`, `waiting_for_provider_signal`,
   `provider_signal_found`, `needs_services_policy_reconcile`, `plan_created`,
   `governance_gate_pending`, `approved_ready_for_build` и `blocked`. Если
-  доменные данные ещё не готовы, блок показывает `unavailable`, `pending` или
-  конкретный `chain_status`, а не демо- или фиктивные значения; автоматический
-  deploy и кнопки запуска выкладки недоступны.
+  summary содержит pending `gate_request_id`, `gate_request_version` и
+  `allowed_actions`, блок показывает действия `approve`, `reject` и
+  `request_changes` и отправляет решение через `staff-gateway` в
+  `governance-manager.SubmitGateDecision` с `expected_version` и
+  `idempotency_key`. Если доменные данные ещё не готовы, блок показывает
+  `unavailable`, `pending` или конкретный `chain_status`, а не демо- или
+  фиктивные значения; автоматический deploy и кнопки запуска выкладки
+  недоступны. `approve` только снимает gate, дальнейшее продвижение выполняют
+  `agent-manager` и runtime-контур.
 - Верхние карточки командного центра показывают текущую страницу входящих
   решений и первые страницы списков `AgentSession`/`AgentRun` из
   `staff-gateway`: выполняющиеся, ожидающие и проблемные `Run` вынесены в

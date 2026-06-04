@@ -404,6 +404,50 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/DownstreamUnavailable'
+  /v1/self-deploy/gates/{gate_request_id}/decision:
+    post:
+      tags: [self-deploy]
+      operationId: submitSelfDeployGateDecision
+      summary: Записать решение владельца по self-deploy gate.
+      description: |
+        Передаёт approve, reject или request_changes в `governance-manager.SubmitGateDecision`.
+        Gateway не запускает build/deploy, не читает БД доменных сервисов и не принимает решение
+        вместо владельца. В запросе и ответе допустимы только safe refs, bounded comment,
+        idempotency key и expected version/status.
+      parameters:
+        - $ref: '#/components/parameters/GovernanceGateRequestIdPath'
+        - $ref: '#/components/parameters/RequestIdHeader'
+        - $ref: '#/components/parameters/TraceIdHeader'
+        - $ref: '#/components/parameters/SessionIdHeader'
+        - $ref: '#/components/parameters/ActorTypeHeader'
+        - $ref: '#/components/parameters/ActorIdHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SelfDeployGateDecisionRequest'
+      responses:
+        '200':
+          description: Решение владельца записано или идемпотентно подтверждено.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SelfDeployGateDecisionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/PermissionDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/DownstreamUnavailable'
 components:
   parameters:
     RunIdPath:
@@ -648,6 +692,14 @@ components:
       schema:
         $ref: '#/components/schemas/SelfDeployPlanStatusFilter'
       description: Фильтр self-deploy plan по статусу.
+    GovernanceGateRequestIdPath:
+      name: gate_request_id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+      description: Local id governance gate request.
     RequestIdPath:
       name: request_id
       in: path
@@ -997,7 +1049,7 @@ components:
         - AgentActivityStatusSkipped
     GovernanceTargetType:
       type: string
-      enum: [unspecified, transition, pull_request, release_candidate, runtime_job, policy_change, document, merge, postdeploy, rollback]
+      enum: [unspecified, transition, pull_request, release_candidate, runtime_job, policy_change, document, merge, postdeploy, rollback, self_deploy_plan]
     GovernanceDecisionSummaryKind:
       type: string
       enum: [unspecified, risk_assessment, review_signal, gate_request, gate_decision, release_decision_package, release_decision, blocking_signal, release_safety_state]
@@ -1081,6 +1133,13 @@ components:
     SelfDeployGovernanceStatus:
       type: string
       enum: [unavailable, pending, resolved]
+    SelfDeployGateDecisionAction:
+      type: string
+      enum: [approve, reject, request_changes]
+      x-enum-varnames:
+        - SelfDeployGateDecisionActionApprove
+        - SelfDeployGateDecisionActionReject
+        - SelfDeployGateDecisionActionRequestChanges
     SelfDeployRuntimeStatus:
       type: string
       enum: [unavailable, pending, stored_ref, running, completed, failed]
@@ -1409,6 +1468,90 @@ components:
           type: string
         summary:
           $ref: '#/components/schemas/SelfDeploySummary'
+    SelfDeployGateDecisionRequest:
+      type: object
+      additionalProperties: false
+      required: [self_deploy_plan_ref, action, idempotency_key, expected_version]
+      properties:
+        self_deploy_plan_ref:
+          type: string
+          minLength: 1
+          maxLength: 256
+        action:
+          $ref: '#/components/schemas/SelfDeployGateDecisionAction'
+        comment:
+          type: string
+          maxLength: 2000
+        idempotency_key:
+          type: string
+          minLength: 1
+          maxLength: 256
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 1
+        expected_status:
+          $ref: '#/components/schemas/SelfDeployGovernanceStatus'
+        decision_policy_ref:
+          type: string
+          maxLength: 256
+        interaction_request_ref:
+          type: string
+          maxLength: 256
+        interaction_delivery_ref:
+          type: string
+          maxLength: 256
+        interaction_callback_ref:
+          type: string
+          maxLength: 256
+        interaction_decision_ref:
+          type: string
+          maxLength: 256
+    SelfDeployGateDecisionResponse:
+      type: object
+      additionalProperties: false
+      required: [request_id, decision]
+      properties:
+        request_id:
+          type: string
+        correlation_id:
+          type: string
+        decision:
+          $ref: '#/components/schemas/SelfDeployGateDecisionSummary'
+    SelfDeployGateDecisionSummary:
+      type: object
+      additionalProperties: false
+      required: [self_deploy_plan_ref, gate_request_ref, outcome, action, status, summary]
+      properties:
+        self_deploy_plan_ref:
+          type: string
+          maxLength: 256
+        gate_request_ref:
+          type: string
+          maxLength: 256
+        gate_request_id:
+          type: string
+          maxLength: 256
+        gate_decision_ref:
+          type: string
+          maxLength: 256
+        outcome:
+          $ref: '#/components/schemas/GovernanceGateOutcome'
+        action:
+          $ref: '#/components/schemas/SelfDeployGateDecisionAction'
+        status:
+          $ref: '#/components/schemas/SelfDeployGovernanceStatus'
+        gate_request_status:
+          $ref: '#/components/schemas/GovernanceGateRequestStatus'
+        summary:
+          type: string
+          maxLength: 2000
+        decided_at:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          format: int64
     SelfDeploySummary:
       type: object
       additionalProperties: false
@@ -1527,6 +1670,9 @@ components:
         gate_request_ref:
           type: string
           maxLength: 256
+        gate_request_id:
+          type: string
+          maxLength: 256
         gate_decision_ref:
           type: string
           maxLength: 256
@@ -1536,6 +1682,16 @@ components:
         release_decision_ref:
           type: string
           maxLength: 256
+        gate_policy_ref:
+          type: string
+          maxLength: 256
+        gate_request_version:
+          type: integer
+          format: int64
+        allowed_actions:
+          type: array
+          items:
+            $ref: '#/components/schemas/SelfDeployGateDecisionAction'
     SelfDeployRuntimeSummary:
       type: object
       additionalProperties: false

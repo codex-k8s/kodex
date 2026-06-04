@@ -47,19 +47,40 @@ func governanceSettings(cfg Config) (runtimeSettings, error) {
 }
 
 func (c *Client) GetGovernanceSummary(ctx context.Context, request *governancev1.GetGovernanceSummaryRequest) (*governancev1.GovernanceSummaryResponse, error) {
-	meta := governanceRequestMetadata(c.authToken, request.GetMeta())
-	callCtx, cancel := clientruntime.OutgoingCallContext(ctx, meta, c.timeout)
-	defer cancel()
-	return c.client.GetGovernanceSummary(callCtx, request)
+	summaryMeta := governanceRequestMetadata(request.GetMeta())
+	summaryCall := c.client.GetGovernanceSummary
+	return callGovernance(ctx, c.authToken, c.timeout, summaryMeta, summaryCall, request)
 }
 
-func governanceRequestMetadata(authToken string, meta *governancev1.QueryMeta) clientruntime.RequestMetadata {
-	output := clientruntime.RequestMetadata{AuthToken: authToken}
+func (c *Client) SubmitGateDecision(ctx context.Context, request *governancev1.SubmitGateDecisionRequest) (*governancev1.GateDecisionResponse, error) {
+	meta := governanceCommandMetadata(request.GetMeta())
+	return callGovernance(ctx, c.authToken, c.timeout, meta, c.client.SubmitGateDecision, request)
+}
+
+func callGovernance[Request, Response any](ctx context.Context, authToken string, timeout time.Duration, meta clientruntime.RequestMetadata, call func(context.Context, *Request, ...grpc.CallOption) (*Response, error), request *Request) (*Response, error) {
+	meta.AuthToken = authToken
+	callCtx, cancel := clientruntime.OutgoingCallContext(ctx, meta, timeout)
+	defer cancel()
+	return call(callCtx, request)
+}
+
+func governanceRequestMetadata(meta *governancev1.QueryMeta) clientruntime.RequestMetadata {
 	if meta == nil {
-		return output
+		return clientruntime.RequestMetadata{}
 	}
-	output.RequestID = meta.GetRequestId()
-	if context := meta.GetRequestContext(); context != nil {
+	return governanceMetadata(meta.GetRequestId(), meta.GetRequestContext())
+}
+
+func governanceCommandMetadata(meta *governancev1.CommandMeta) clientruntime.RequestMetadata {
+	if meta == nil {
+		return clientruntime.RequestMetadata{}
+	}
+	return governanceMetadata(meta.GetRequestId(), meta.GetRequestContext())
+}
+
+func governanceMetadata(requestID string, context *governancev1.RequestContext) clientruntime.RequestMetadata {
+	output := clientruntime.RequestMetadata{RequestID: requestID}
+	if context != nil {
 		output.CorrelationID = context.GetTraceId()
 	}
 	return output

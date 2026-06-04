@@ -39,6 +39,7 @@ func NewRouter(ctx context.Context, cfg Config, interactionHub InteractionHubCli
 	mux.HandleFunc("GET /v1/agent-runs/{run_id}/activities", handlers.listAgentRunActivities)
 	mux.HandleFunc("GET /v1/governance/summary", handlers.getGovernanceSummary)
 	mux.HandleFunc("GET /v1/self-deploy/summary", handlers.getSelfDeploySummary)
+	mux.HandleFunc("POST /v1/self-deploy/gates/{gate_request_id}/decision", handlers.submitSelfDeployGateDecision)
 	mux.HandleFunc("GET /openapi/staff-gateway.v1.yaml", handlers.openAPISpec)
 
 	handler := RequestIDMiddleware(

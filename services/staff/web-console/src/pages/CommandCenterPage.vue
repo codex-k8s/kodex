@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 
@@ -20,6 +20,7 @@ import { useOwnerInboxStore } from '@/features/owner-inbox/store';
 import { useSelfDeployStore } from '@/features/self-deploy/store';
 import { compactRef } from '@/shared/lib/format';
 import { routeNames } from '@/shared/lib/routes';
+import type { SelfDeployGateDecisionAction } from '@/shared/api/generated';
 
 const { t } = useI18n();
 const router = useRouter();
@@ -27,6 +28,7 @@ const context = useOperatorContextStore();
 const inbox = useOwnerInboxStore();
 const executions = useExecutionsStore();
 const selfDeploy = useSelfDeployStore();
+const selfDeployDecisionComment = ref('');
 
 const visibleRuns = computed(() => {
   const attentionRuns = executions.runs.filter((run) => runHasProblem(run) || runWaitingCode(run));
@@ -112,6 +114,19 @@ const selfDeployReadiness = computed(() =>
     : { status: t('app.live'), tone: 'live' as const },
 );
 
+const selfDeployAllowedActions = computed(() => selfDeploy.summary?.governance.allowed_actions ?? []);
+const canSubmitSelfDeployDecision = computed(() => {
+  const governance = selfDeploy.summary?.governance;
+  return Boolean(
+    context.isReady &&
+      selfDeploy.summary?.chain_status === 'governance_gate_pending' &&
+      governance?.status === 'pending' &&
+      governance.gate_request_id &&
+      governance.gate_request_version &&
+      selfDeployAllowedActions.value.length > 0,
+  );
+});
+
 onMounted(() => {
   if (context.isReady && inbox.items.length === 0) {
     void inbox.load(context.asContext);
@@ -152,6 +167,18 @@ function reloadSelfDeploy() {
   if (context.isReady) {
     void selfDeploy.load(context.asContext);
   }
+}
+
+function hasSelfDeployAction(action: SelfDeployGateDecisionAction) {
+  return selfDeployAllowedActions.value.includes(action);
+}
+
+function submitSelfDeployDecision(action: SelfDeployGateDecisionAction) {
+  if (!context.isReady || !canSubmitSelfDeployDecision.value) {
+    return;
+  }
+  const comment = selfDeployDecisionComment.value.trim() || undefined;
+  void selfDeploy.submitDecision(context.asContext, action, comment);
 }
 
 function providerSignalValue(summary = selfDeploy.summary) {
@@ -278,6 +305,7 @@ function pathCategoryLabel(category: string) {
 
     <ApiErrorAlert :error="inbox.error" :retry-label="t('app.retry')" @retry="reloadInbox" />
     <ApiErrorAlert :error="selfDeploy.error" :retry-label="t('app.retry')" @retry="reloadSelfDeploy" />
+    <ApiErrorAlert :error="selfDeploy.decisionError" :retry-label="t('app.retry')" @retry="reloadSelfDeploy" />
 
     <section class="surface-readiness">
       <v-card class="surface-panel readiness-panel">
@@ -355,6 +383,68 @@ function pathCategoryLabel(category: string) {
         </v-alert>
         <v-alert v-if="!selfDeploy.unsupportedAgentScope && selfDeploy.summary?.safe_error" type="warning" variant="tonal">
           {{ selfDeploy.summary.safe_error.summary }}
+        </v-alert>
+        <v-alert v-if="selfDeploy.lastDecision" type="success" variant="tonal">
+          {{ t('commandCenter.selfDeploy.decisionRecorded') }}
+        </v-alert>
+        <div v-if="canSubmitSelfDeployDecision" class="self-deploy-decision">
+          <div>
+            <div class="self-deploy-decision__title">{{ t('commandCenter.selfDeploy.decisionTitle') }}</div>
+            <p>{{ t('commandCenter.selfDeploy.decisionText') }}</p>
+          </div>
+          <v-textarea
+            v-model="selfDeployDecisionComment"
+            :label="t('commandCenter.selfDeploy.decisionComment')"
+            :counter="2000"
+            :maxlength="2000"
+            auto-grow
+            rows="2"
+            variant="outlined"
+            density="compact"
+          />
+          <div class="self-deploy-decision__actions">
+            <v-btn
+              v-if="hasSelfDeployAction('approve')"
+              color="success"
+              variant="flat"
+              prepend-icon="mdi-check-circle-outline"
+              :loading="selfDeploy.isSubmittingDecision"
+              :disabled="selfDeploy.isSubmittingDecision"
+              @click="submitSelfDeployDecision('approve')"
+            >
+              {{ t('commandCenter.selfDeploy.actions.approve') }}
+            </v-btn>
+            <v-btn
+              v-if="hasSelfDeployAction('request_changes')"
+              color="warning"
+              variant="tonal"
+              prepend-icon="mdi-file-edit-outline"
+              :loading="selfDeploy.isSubmittingDecision"
+              :disabled="selfDeploy.isSubmittingDecision"
+              @click="submitSelfDeployDecision('request_changes')"
+            >
+              {{ t('commandCenter.selfDeploy.actions.request_changes') }}
+            </v-btn>
+            <v-btn
+              v-if="hasSelfDeployAction('reject')"
+              color="error"
+              variant="tonal"
+              prepend-icon="mdi-close-circle-outline"
+              :loading="selfDeploy.isSubmittingDecision"
+              :disabled="selfDeploy.isSubmittingDecision"
+              @click="submitSelfDeployDecision('reject')"
+            >
+              {{ t('commandCenter.selfDeploy.actions.reject') }}
+            </v-btn>
+          </div>
+          <p class="self-deploy-decision__hint">{{ t('commandCenter.selfDeploy.noAutoDeploy') }}</p>
+        </div>
+        <v-alert
+          v-else-if="selfDeploy.summary?.chain_status === 'governance_gate_pending' && selfDeploy.summary.governance.status === 'pending'"
+          type="warning"
+          variant="tonal"
+        >
+          {{ t('commandCenter.selfDeploy.decisionUnavailable') }}
         </v-alert>
         <v-progress-linear v-if="selfDeploy.isLoading" indeterminate color="primary" />
         <div class="self-deploy-panel__actions">
@@ -603,6 +693,39 @@ function pathCategoryLabel(category: string) {
 
 .self-deploy-panel__notice {
   align-self: stretch;
+}
+
+.self-deploy-decision {
+  background: #f8fafc;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.self-deploy-decision__title {
+  color: #182030;
+  font-size: 0.98rem;
+  font-weight: 800;
+}
+
+.self-deploy-decision p {
+  color: #667085;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  margin: 4px 0 0;
+}
+
+.self-deploy-decision__actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.self-deploy-decision__hint {
+  margin-top: 0 !important;
 }
 
 .self-deploy-panel__actions {

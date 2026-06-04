@@ -261,6 +261,7 @@ const (
 	GovernanceTargetTypeReleaseCandidate GovernanceTargetType = "release_candidate"
 	GovernanceTargetTypeRollback         GovernanceTargetType = "rollback"
 	GovernanceTargetTypeRuntimeJob       GovernanceTargetType = "runtime_job"
+	GovernanceTargetTypeSelfDeployPlan   GovernanceTargetType = "self_deploy_plan"
 	GovernanceTargetTypeTransition       GovernanceTargetType = "transition"
 	GovernanceTargetTypeUnspecified      GovernanceTargetType = "unspecified"
 )
@@ -346,6 +347,13 @@ const (
 	ProviderSignalFound          SelfDeployChainStatus = "provider_signal_found"
 	RepositoryBindingMissing     SelfDeployChainStatus = "repository_binding_missing"
 	WaitingForProviderSignal     SelfDeployChainStatus = "waiting_for_provider_signal"
+)
+
+// Defines values for SelfDeployGateDecisionAction.
+const (
+	SelfDeployGateDecisionActionApprove        SelfDeployGateDecisionAction = "approve"
+	SelfDeployGateDecisionActionReject         SelfDeployGateDecisionAction = "reject"
+	SelfDeployGateDecisionActionRequestChanges SelfDeployGateDecisionAction = "request_changes"
 )
 
 // Defines values for SelfDeployGovernanceStatus.
@@ -509,12 +517,20 @@ const (
 	RespondOwnerInboxItemParamsXKodexActorTypeUser            RespondOwnerInboxItemParamsXKodexActorType = "user"
 )
 
+// Defines values for SubmitSelfDeployGateDecisionParamsXKodexActorType.
+const (
+	SubmitSelfDeployGateDecisionParamsXKodexActorTypeAgent           SubmitSelfDeployGateDecisionParamsXKodexActorType = "agent"
+	SubmitSelfDeployGateDecisionParamsXKodexActorTypeExternalAccount SubmitSelfDeployGateDecisionParamsXKodexActorType = "external_account"
+	SubmitSelfDeployGateDecisionParamsXKodexActorTypeService         SubmitSelfDeployGateDecisionParamsXKodexActorType = "service"
+	SubmitSelfDeployGateDecisionParamsXKodexActorTypeUser            SubmitSelfDeployGateDecisionParamsXKodexActorType = "user"
+)
+
 // Defines values for GetSelfDeploySummaryParamsXKodexActorType.
 const (
-	GetSelfDeploySummaryParamsXKodexActorTypeAgent           GetSelfDeploySummaryParamsXKodexActorType = "agent"
-	GetSelfDeploySummaryParamsXKodexActorTypeExternalAccount GetSelfDeploySummaryParamsXKodexActorType = "external_account"
-	GetSelfDeploySummaryParamsXKodexActorTypeService         GetSelfDeploySummaryParamsXKodexActorType = "service"
-	GetSelfDeploySummaryParamsXKodexActorTypeUser            GetSelfDeploySummaryParamsXKodexActorType = "user"
+	Agent           GetSelfDeploySummaryParamsXKodexActorType = "agent"
+	ExternalAccount GetSelfDeploySummaryParamsXKodexActorType = "external_account"
+	Service         GetSelfDeploySummaryParamsXKodexActorType = "service"
+	User            GetSelfDeploySummaryParamsXKodexActorType = "user"
 )
 
 // ActorRef defines model for ActorRef.
@@ -1074,16 +1090,60 @@ type ScopeType string
 // SelfDeployChainStatus defines model for SelfDeployChainStatus.
 type SelfDeployChainStatus string
 
+// SelfDeployGateDecisionAction defines model for SelfDeployGateDecisionAction.
+type SelfDeployGateDecisionAction string
+
+// SelfDeployGateDecisionRequest defines model for SelfDeployGateDecisionRequest.
+type SelfDeployGateDecisionRequest struct {
+	Action                 SelfDeployGateDecisionAction `json:"action"`
+	Comment                *string                      `json:"comment,omitempty"`
+	DecisionPolicyRef      *string                      `json:"decision_policy_ref,omitempty"`
+	ExpectedStatus         *SelfDeployGovernanceStatus  `json:"expected_status,omitempty"`
+	ExpectedVersion        int64                        `json:"expected_version"`
+	IdempotencyKey         string                       `json:"idempotency_key"`
+	InteractionCallbackRef *string                      `json:"interaction_callback_ref,omitempty"`
+	InteractionDecisionRef *string                      `json:"interaction_decision_ref,omitempty"`
+	InteractionDeliveryRef *string                      `json:"interaction_delivery_ref,omitempty"`
+	InteractionRequestRef  *string                      `json:"interaction_request_ref,omitempty"`
+	SelfDeployPlanRef      string                       `json:"self_deploy_plan_ref"`
+}
+
+// SelfDeployGateDecisionResponse defines model for SelfDeployGateDecisionResponse.
+type SelfDeployGateDecisionResponse struct {
+	CorrelationId *string                       `json:"correlation_id,omitempty"`
+	Decision      SelfDeployGateDecisionSummary `json:"decision"`
+	RequestId     string                        `json:"request_id"`
+}
+
+// SelfDeployGateDecisionSummary defines model for SelfDeployGateDecisionSummary.
+type SelfDeployGateDecisionSummary struct {
+	Action            SelfDeployGateDecisionAction `json:"action"`
+	DecidedAt         *time.Time                   `json:"decided_at,omitempty"`
+	GateDecisionRef   *string                      `json:"gate_decision_ref,omitempty"`
+	GateRequestId     *string                      `json:"gate_request_id,omitempty"`
+	GateRequestRef    string                       `json:"gate_request_ref"`
+	GateRequestStatus *GovernanceGateRequestStatus `json:"gate_request_status,omitempty"`
+	Outcome           GovernanceGateOutcome        `json:"outcome"`
+	SelfDeployPlanRef string                       `json:"self_deploy_plan_ref"`
+	Status            SelfDeployGovernanceStatus   `json:"status"`
+	Summary           string                       `json:"summary"`
+	Version           *int64                       `json:"version,omitempty"`
+}
+
 // SelfDeployGovernanceStatus defines model for SelfDeployGovernanceStatus.
 type SelfDeployGovernanceStatus string
 
 // SelfDeployGovernanceSummary defines model for SelfDeployGovernanceSummary.
 type SelfDeployGovernanceSummary struct {
-	GateDecisionRef           *string                    `json:"gate_decision_ref,omitempty"`
-	GateRequestRef            *string                    `json:"gate_request_ref,omitempty"`
-	ReleaseDecisionPackageRef *string                    `json:"release_decision_package_ref,omitempty"`
-	ReleaseDecisionRef        *string                    `json:"release_decision_ref,omitempty"`
-	Status                    SelfDeployGovernanceStatus `json:"status"`
+	AllowedActions            *[]SelfDeployGateDecisionAction `json:"allowed_actions,omitempty"`
+	GateDecisionRef           *string                         `json:"gate_decision_ref,omitempty"`
+	GatePolicyRef             *string                         `json:"gate_policy_ref,omitempty"`
+	GateRequestId             *string                         `json:"gate_request_id,omitempty"`
+	GateRequestRef            *string                         `json:"gate_request_ref,omitempty"`
+	GateRequestVersion        *int64                          `json:"gate_request_version,omitempty"`
+	ReleaseDecisionPackageRef *string                         `json:"release_decision_package_ref,omitempty"`
+	ReleaseDecisionRef        *string                         `json:"release_decision_ref,omitempty"`
+	Status                    SelfDeployGovernanceStatus      `json:"status"`
 }
 
 // SelfDeployNextStep defines model for SelfDeployNextStep.
@@ -1239,6 +1299,9 @@ type CreatedByActorRefQuery = string
 
 // GovernanceBranchRulesRefQuery defines model for GovernanceBranchRulesRefQuery.
 type GovernanceBranchRulesRefQuery = string
+
+// GovernanceGateRequestIdPath defines model for GovernanceGateRequestIdPath.
+type GovernanceGateRequestIdPath = string
 
 // GovernanceIntegrationDomainQuery defines model for GovernanceIntegrationDomainQuery.
 type GovernanceIntegrationDomainQuery = string
@@ -1656,6 +1719,27 @@ type RespondOwnerInboxItemParams struct {
 // RespondOwnerInboxItemParamsXKodexActorType defines parameters for RespondOwnerInboxItem.
 type RespondOwnerInboxItemParamsXKodexActorType string
 
+// SubmitSelfDeployGateDecisionParams defines parameters for SubmitSelfDeployGateDecision.
+type SubmitSelfDeployGateDecisionParams struct {
+	// XKodexRequestId Идентификатор запроса для трассировки. Gateway может заменить невалидное значение.
+	XKodexRequestId *RequestIdHeader `json:"X-Kodex-Request-Id,omitempty"`
+
+	// XKodexTraceId Безопасная ссылка на трассу.
+	XKodexTraceId *TraceIdHeader `json:"X-Kodex-Trace-Id,omitempty"`
+
+	// XKodexSessionId Безопасная ссылка на пользовательскую сессию.
+	XKodexSessionId *SessionIdHeader `json:"X-Kodex-Session-Id,omitempty"`
+
+	// XKodexActorType Тип проверенного субъекта от внешнего auth boundary.
+	XKodexActorType SubmitSelfDeployGateDecisionParamsXKodexActorType `json:"X-Kodex-Actor-Type"`
+
+	// XKodexActorId Safe id проверенного субъекта без email и имени.
+	XKodexActorId ActorIdHeader `json:"X-Kodex-Actor-Id"`
+}
+
+// SubmitSelfDeployGateDecisionParamsXKodexActorType defines parameters for SubmitSelfDeployGateDecision.
+type SubmitSelfDeployGateDecisionParamsXKodexActorType string
+
 // GetSelfDeploySummaryParams defines parameters for GetSelfDeploySummary.
 type GetSelfDeploySummaryParams struct {
 	// ScopeType Тип области `agent-manager`.
@@ -1697,3 +1781,6 @@ type GetSelfDeploySummaryParamsXKodexActorType string
 
 // RespondOwnerInboxItemJSONRequestBody defines body for RespondOwnerInboxItem for application/json ContentType.
 type RespondOwnerInboxItemJSONRequestBody = OwnerInboxRespondRequest
+
+// SubmitSelfDeployGateDecisionJSONRequestBody defines body for SubmitSelfDeployGateDecision for application/json ContentType.
+type SubmitSelfDeployGateDecisionJSONRequestBody = SelfDeployGateDecisionRequest

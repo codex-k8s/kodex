@@ -96,6 +96,17 @@ export const ru = {
       refreshStatus: 'Обновить статус',
       openDecisions: 'Перейти к решениям',
       openExecutions: 'Открыть исполнения',
+      decisionTitle: 'Решение владельца',
+      decisionText: 'Выберите действие только для текущего pending gate. Gateway зафиксирует решение в governance-manager и не запустит build напрямую.',
+      decisionComment: 'Комментарий без секретов и raw payload',
+      decisionRecorded: 'Решение записано. Сводка обновляется через доменные read surface.',
+      decisionUnavailable: 'Gate ожидает решения, но версия или allowed actions ещё не доступны в безопасной сводке.',
+      noAutoDeploy: 'Утверждение снимает gate, но запуск build/deploy остаётся за agent-manager/runtime цепочкой.',
+      actions: {
+        approve: 'Утвердить',
+        reject: 'Отклонить',
+        request_changes: 'Запросить доработку',
+      },
       unsupportedScope: 'Scope не поддержан',
       unsupportedScopeText: 'Текущий self-deploy read surface доступен для platform, organization, project и repository scope из agent-manager.',
       chainStatuses: {
