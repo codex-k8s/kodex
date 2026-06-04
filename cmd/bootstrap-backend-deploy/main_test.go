@@ -27,6 +27,8 @@ func TestResolveSecretValuesPreservesExistingAndGeneratesMissing(t *testing.T) {
 		switch key {
 		case "KODEX_PROVIDER_HUB_GRPC_AUTH_TOKEN":
 			return "env-provider-token", true
+		case "KODEX_GOVERNANCE_MANAGER_GRPC_AUTH_TOKEN":
+			return "env-governance-token", true
 		case "KODEX_ACCESS_MANAGER_DATABASE_NAME":
 			return "custom_access", true
 		default:
@@ -48,6 +50,9 @@ func TestResolveSecretValuesPreservesExistingAndGeneratesMissing(t *testing.T) {
 	if got := values.Runtime["KODEX_PACKAGE_HUB_ACCESS_MANAGER_GRPC_AUTH_TOKEN"]; got != "existing-access-token" {
 		t.Fatalf("derived access token mismatch: %q", got)
 	}
+	if got := values.Runtime["KODEX_AGENT_MANAGER_GOVERNANCE_MANAGER_GRPC_AUTH_TOKEN"]; got != "env-governance-token" {
+		t.Fatalf("derived agent-manager governance token mismatch: %q", got)
+	}
 	if got := values.RenderEnv["KODEX_ACCESS_MANAGER_DATABASE_NAME"]; got != "custom_access" {
 		t.Fatalf("database name override mismatch: %q", got)
 	}
@@ -59,6 +64,22 @@ func TestResolveSecretValuesPreservesExistingAndGeneratesMissing(t *testing.T) {
 	}
 	if len(values.Generated) == 0 {
 		t.Fatal("expected missing keys to be generated")
+	}
+
+	existing["kodex-platform-runtime"]["KODEX_AGENT_MANAGER_GOVERNANCE_MANAGER_GRPC_AUTH_TOKEN"] = "existing-agent-governance-token"
+	values, err = resolveSecretValues(existing, func(key string) (string, bool) {
+		switch key {
+		case "KODEX_GOVERNANCE_MANAGER_GRPC_AUTH_TOKEN":
+			return "env-governance-token", true
+		default:
+			return "", false
+		}
+	})
+	if err != nil {
+		t.Fatalf("resolve replay secrets: %v", err)
+	}
+	if got := values.Runtime["KODEX_AGENT_MANAGER_GOVERNANCE_MANAGER_GRPC_AUTH_TOKEN"]; got != "existing-agent-governance-token" {
+		t.Fatalf("existing derived agent-manager governance token was not preserved: %q", got)
 	}
 }
 
