@@ -7,7 +7,10 @@ INSERT INTO agent_manager_self_deploy_plans (
     governance_gate_decision_ref, governance_release_decision_package_ref,
     governance_release_decision_ref, governance_risk_profile_ref,
     governance_gate_policy_ref, governance_release_policy_ref,
-    safe_summary, plan_fingerprint, idempotency_key, status, version, created_at, updated_at
+    safe_summary, plan_fingerprint, idempotency_key, status,
+    runtime_build_jobs, runtime_build_status, runtime_build_plan_fingerprint,
+    runtime_build_error_code, runtime_build_summary,
+    version, created_at, updated_at
 ) VALUES (
     @id, @scope_type, @scope_ref, @project_ref, @repository_ref, @provider_signal_ref,
     @source_ref, @merge_commit_sha, @services_yaml_ref, @services_yaml_digest,
@@ -16,5 +19,8 @@ INSERT INTO agent_manager_self_deploy_plans (
     @governance_gate_decision_ref, @governance_release_decision_package_ref,
     @governance_release_decision_ref, @governance_risk_profile_ref,
     @governance_gate_policy_ref, @governance_release_policy_ref,
-    @safe_summary, @plan_fingerprint, @idempotency_key, @status, @version, @created_at, @updated_at
+    @safe_summary, @plan_fingerprint, @idempotency_key, @status,
+    @runtime_build_jobs, @runtime_build_status, @runtime_build_plan_fingerprint,
+    @runtime_build_error_code, @runtime_build_summary,
+    @version, @created_at, @updated_at
 );

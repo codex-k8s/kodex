@@ -10,6 +10,11 @@ SET
     governance_gate_policy_ref = @governance_gate_policy_ref,
     governance_release_policy_ref = @governance_release_policy_ref,
     status = @status,
+    runtime_build_jobs = @runtime_build_jobs,
+    runtime_build_status = @runtime_build_status,
+    runtime_build_plan_fingerprint = @runtime_build_plan_fingerprint,
+    runtime_build_error_code = @runtime_build_error_code,
+    runtime_build_summary = @runtime_build_summary,
     version = @version,
     updated_at = @updated_at
 WHERE id = @id

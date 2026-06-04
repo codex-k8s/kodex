@@ -55,13 +55,13 @@ func (s *Service) createSelfDeployPlan(ctx context.Context, input CreateSelfDepl
 		if err != nil {
 			return entity.SelfDeployPlan{}, err
 		}
-		return s.prepareSelfDeployPlanGateIfNeeded(ctx, replay)
+		return s.advanceSelfDeployPlan(ctx, replay)
 	}
 	if replay, ok, err := s.findSelfDeployPlanSignalReplay(ctx, plan); ok || err != nil {
 		if err != nil {
 			return entity.SelfDeployPlan{}, err
 		}
-		return s.prepareSelfDeployPlanGateIfNeeded(ctx, replay)
+		return s.advanceSelfDeployPlan(ctx, replay)
 	}
 	now := s.clock.Now()
 	plan.ID = s.idGenerator.New()
@@ -83,7 +83,15 @@ func (s *Service) createSelfDeployPlan(ctx context.Context, input CreateSelfDepl
 	if err := s.repository.CreateSelfDeployPlanWithResult(ctx, plan, result, event); err != nil {
 		return entity.SelfDeployPlan{}, err
 	}
-	return s.prepareSelfDeployPlanGateIfNeeded(ctx, plan)
+	return s.advanceSelfDeployPlan(ctx, plan)
+}
+
+func (s *Service) advanceSelfDeployPlan(ctx context.Context, plan entity.SelfDeployPlan) (entity.SelfDeployPlan, error) {
+	prepared, err := s.prepareSelfDeployPlanGateIfNeeded(ctx, plan)
+	if err != nil {
+		return entity.SelfDeployPlan{}, err
+	}
+	return s.dispatchSelfDeployBuildIfApproved(ctx, prepared)
 }
 
 func (s *Service) prepareSelfDeployPlanGateIfNeeded(ctx context.Context, plan entity.SelfDeployPlan) (entity.SelfDeployPlan, error) {
@@ -97,11 +105,23 @@ func (s *Service) prepareSelfDeployPlanGateIfNeeded(ctx context.Context, plan en
 	if err != nil {
 		return entity.SelfDeployPlan{}, err
 	}
-	if selfDeployPlanGatePrepared(current) {
+	if selfDeployPlanGateFinal(current) {
+		return current, nil
+	}
+	if selfDeployPlanGatePrepared(current) && !s.selfDeployBuildDispatchEnabled {
 		return current, nil
 	}
 	meta := selfDeployPlanGateCommandMeta(current)
-	if replay, ok, err := findReplay(ctx, s, meta, operationPrepareSelfDeployPlanGate, enum.CommandAggregateTypeSelfDeployPlan, selfDeployPlanFromPayload, s.verifySelfDeployPlanGateReplay); ok || err != nil {
+	operation := operationPrepareSelfDeployPlanGate
+	if selfDeployPlanGateRefreshNeeded(current) {
+		operation = operationRefreshSelfDeployPlanGate
+	}
+	if !selfDeployPlanGateRefreshNeeded(current) {
+		if replay, ok, err := findReplay(ctx, s, meta, operationPrepareSelfDeployPlanGate, enum.CommandAggregateTypeSelfDeployPlan, selfDeployPlanFromPayload, s.verifySelfDeployPlanGateReplay); ok || err != nil {
+			return replay, err
+		}
+	}
+	if replay, ok, err := findReplay(ctx, s, meta, operation, enum.CommandAggregateTypeSelfDeployPlan, selfDeployPlanFromPayload, s.verifySelfDeployPlanGateReplay); ok || err != nil {
 		return replay, err
 	}
 	result, err := s.selfDeployGatePreparer.PrepareSelfDeployPlanGate(ctx, SelfDeployPlanGatePreparationInput{
@@ -111,7 +131,7 @@ func (s *Service) prepareSelfDeployPlanGateIfNeeded(ctx context.Context, plan en
 	if err != nil {
 		return entity.SelfDeployPlan{}, err
 	}
-	return s.recordSelfDeployPlanGateResult(ctx, current, meta, result)
+	return s.recordSelfDeployPlanGateResult(ctx, current, meta, operation, result)
 }
 
 func (s *Service) verifySelfDeployPlanGateReplay(ctx context.Context, result entity.CommandResult, replay entity.SelfDeployPlan) error {
@@ -128,7 +148,7 @@ func (s *Service) verifySelfDeployPlanGateReplay(ctx context.Context, result ent
 	return nil
 }
 
-func (s *Service) recordSelfDeployPlanGateResult(ctx context.Context, plan entity.SelfDeployPlan, meta value.CommandMeta, result SelfDeployPlanGatePreparationResult) (entity.SelfDeployPlan, error) {
+func (s *Service) recordSelfDeployPlanGateResult(ctx context.Context, plan entity.SelfDeployPlan, meta value.CommandMeta, operation string, result SelfDeployPlanGatePreparationResult) (entity.SelfDeployPlan, error) {
 	governanceContext, err := normalizeGovernanceContext(result.GovernanceContext)
 	if err != nil {
 		return entity.SelfDeployPlan{}, err
@@ -141,6 +161,9 @@ func (s *Service) recordSelfDeployPlanGateResult(ctx context.Context, plan entit
 	if err != nil {
 		return entity.SelfDeployPlan{}, err
 	}
+	if plan.Status == status && sameGovernanceContext(plan.GovernanceContext, nextContext) {
+		return plan, nil
+	}
 	now := s.clock.Now()
 	previousVersion := plan.Version
 	plan.GovernanceContext = nextContext
@@ -151,7 +174,7 @@ func (s *Service) recordSelfDeployPlanGateResult(ctx context.Context, plan entit
 	if err != nil {
 		return entity.SelfDeployPlan{}, err
 	}
-	command, err := commandResult(meta, operationPrepareSelfDeployPlanGate, enum.CommandAggregateTypeSelfDeployPlan, plan.ID, payload, now)
+	command, err := commandResult(meta, operation, enum.CommandAggregateTypeSelfDeployPlan, plan.ID, payload, now)
 	if err != nil {
 		return entity.SelfDeployPlan{}, err
 	}
@@ -267,6 +290,7 @@ func normalizeSelfDeployPlanInput(input CreateSelfDeployPlanInput, idempotencyKe
 		SafeSummary:             summary,
 		IdempotencyKey:          idempotencyKey,
 		Status:                  enum.SelfDeployPlanStatusPendingApproval,
+		RuntimeBuildStatus:      enum.SelfDeployRuntimeBuildStatusNotRequested,
 	}
 	plan.PlanFingerprint, err = selfDeployPlanFingerprint(plan)
 	if err != nil {
@@ -306,9 +330,19 @@ func selfDeployPlanGateCommandMeta(plan entity.SelfDeployPlan) value.CommandMeta
 }
 
 func selfDeployPlanGatePrepared(plan entity.SelfDeployPlan) bool {
+	return selfDeployPlanGateRefreshNeeded(plan) || selfDeployPlanGateFinal(plan)
+}
+
+func selfDeployPlanGateRefreshNeeded(plan entity.SelfDeployPlan) bool {
 	if plan.GovernanceContext.RiskAssessmentRef != "" ||
-		plan.GovernanceContext.GateRequestRef != "" ||
-		plan.GovernanceContext.GateDecisionRef != "" {
+		plan.GovernanceContext.GateRequestRef != "" {
+		return true
+	}
+	return false
+}
+
+func selfDeployPlanGateFinal(plan entity.SelfDeployPlan) bool {
+	if plan.GovernanceContext.GateDecisionRef != "" {
 		return true
 	}
 	switch plan.Status {

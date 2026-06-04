@@ -61,6 +61,7 @@ type Config struct {
 	RuntimeManagerGRPCAuthToken                    string        `env:"KODEX_AGENT_MANAGER_RUNTIME_MANAGER_GRPC_AUTH_TOKEN"`
 	RuntimeManagerPrepareTimeout                   time.Duration `env:"KODEX_AGENT_MANAGER_RUNTIME_MANAGER_PREPARE_TIMEOUT" envDefault:"10s"`
 	RuntimeJobDispatchEnabled                      bool          `env:"KODEX_AGENT_MANAGER_RUNTIME_JOB_DISPATCH_ENABLED" envDefault:"false"`
+	SelfDeployBuildDispatchEnabled                 bool          `env:"KODEX_AGENT_MANAGER_SELF_DEPLOY_BUILD_DISPATCH_ENABLED" envDefault:"false"`
 	RuntimeJobRunnerImageRef                       string        `env:"KODEX_AGENT_MANAGER_RUNTIME_JOB_RUNNER_IMAGE_REF"`
 	CodexSessionResultSchemaRef                    string        `env:"KODEX_AGENT_MANAGER_CODEX_SESSION_RESULT_SCHEMA_REF"`
 	CodexSessionResultSchemaDigest                 string        `env:"KODEX_AGENT_MANAGER_CODEX_SESSION_RESULT_SCHEMA_DIGEST"`
@@ -176,6 +177,15 @@ func (cfg Config) Validate() error {
 	}
 	if cfg.RuntimeJobDispatchEnabled && strings.TrimSpace(cfg.RuntimeJobRunnerImageRef) == "" {
 		return fmt.Errorf("KODEX_AGENT_MANAGER_RUNTIME_JOB_RUNNER_IMAGE_REF is required when runtime job dispatch is enabled")
+	}
+	if cfg.SelfDeployBuildDispatchEnabled && strings.TrimSpace(cfg.RuntimeManagerGRPCAddr) == "" {
+		return fmt.Errorf("KODEX_AGENT_MANAGER_RUNTIME_MANAGER_GRPC_ADDR is required when self-deploy build dispatch is enabled")
+	}
+	if cfg.SelfDeployBuildDispatchEnabled && strings.TrimSpace(cfg.RuntimeManagerGRPCAuthToken) == "" {
+		return fmt.Errorf("KODEX_AGENT_MANAGER_RUNTIME_MANAGER_GRPC_AUTH_TOKEN is required when self-deploy build dispatch is enabled")
+	}
+	if cfg.SelfDeployBuildDispatchEnabled && !cfg.SelfDeployGovernanceGateEnabled {
+		return fmt.Errorf("KODEX_AGENT_MANAGER_SELF_DEPLOY_GOVERNANCE_GATE_ENABLED is required when self-deploy build dispatch is enabled")
 	}
 	if err := cfg.validateCodexSessionExecutionConfig(); err != nil {
 		return err
@@ -346,7 +356,7 @@ func (cfg Config) needsEventLogDatabase() bool {
 }
 
 func (cfg Config) needsProjectCatalogClient() bool {
-	return cfg.RuntimePreparationEnabled || cfg.SelfDeploySignalConsumerEnabled
+	return cfg.RuntimePreparationEnabled || cfg.SelfDeploySignalConsumerEnabled || cfg.SelfDeployBuildDispatchEnabled
 }
 
 // DatabasePoolSettings converts service env config to the shared pgxpool contract.

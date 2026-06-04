@@ -517,6 +517,15 @@ enum SelfDeployPlanStatus {
   SELF_DEPLOY_PLAN_STATUS_FAILED = 5;
 }
 
+// SelfDeployRuntimeBuildStatus describes build job dispatch state for an approved self-deploy plan.
+enum SelfDeployRuntimeBuildStatus {
+  SELF_DEPLOY_RUNTIME_BUILD_STATUS_UNSPECIFIED = 0;
+  SELF_DEPLOY_RUNTIME_BUILD_STATUS_NOT_REQUESTED = 1;
+  SELF_DEPLOY_RUNTIME_BUILD_STATUS_BLOCKED = 2;
+  SELF_DEPLOY_RUNTIME_BUILD_STATUS_REQUESTED = 3;
+  SELF_DEPLOY_RUNTIME_BUILD_STATUS_FAILED = 4;
+}
+
 // SelfDeployPathCategory classifies affected paths without storing a raw diff.
 enum SelfDeployPathCategory {
   SELF_DEPLOY_PATH_CATEGORY_UNSPECIFIED = 0;
@@ -835,6 +844,20 @@ message SelfDeployPlan {
   int64 version = 18;
   string created_at = 19;
   string updated_at = 20;
+  repeated SelfDeployRuntimeBuildJobRef runtime_build_jobs = 21;
+  SelfDeployRuntimeBuildStatus runtime_build_status = 22;
+  optional string runtime_build_plan_fingerprint = 23;
+  optional string runtime_build_error_code = 24;
+  optional string runtime_build_summary = 25;
+}
+
+// SelfDeployRuntimeBuildJobRef stores safe runtime-manager refs for one build job.
+message SelfDeployRuntimeBuildJobRef {
+  string service_key = 1;
+  optional string service_ref = 2;
+  string runtime_job_ref = 3;
+  optional string runtime_job_status = 4;
+  optional string build_plan_item_fingerprint = 5;
 }
 
 // FlowDefinitionInput is the typed input for immutable flow version creation.

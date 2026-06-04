@@ -105,6 +105,81 @@ func TestCreateAgentRunJobMapsRequestAndResponse(t *testing.T) {
 	}
 }
 
+func TestCreateSelfDeployBuildJobMapsRequestAndResponse(t *testing.T) {
+	t.Parallel()
+
+	commandID := uuid.MustParse("b1b1b1b1-1111-2222-3333-444444444444")
+	projectID := uuid.MustParse("b1b1b1b1-2222-3333-4444-555555555555")
+	repositoryID := uuid.MustParse("b1b1b1b1-3333-4444-5555-666666666666")
+	jobID := uuid.MustParse("b1b1b1b1-4444-5555-6666-777777777777")
+	projectText := projectID.String()
+	repositoryText := repositoryID.String()
+	client := &fakeRuntimeManagerClient{
+		jobResponse: &runtimev1.JobResponse{Job: &runtimev1.Job{
+			JobId:        jobID.String(),
+			JobType:      runtimev1.JobType_JOB_TYPE_BUILD,
+			Status:       runtimev1.JobStatus_JOB_STATUS_PENDING,
+			ProjectId:    &projectText,
+			RepositoryId: &repositoryText,
+			NextAction:   "claim_by_build_executor",
+		}},
+	}
+	preparer, err := newPreparer(client, Config{AuthToken: "token", Timeout: time.Second})
+	if err != nil {
+		t.Fatalf("newPreparer() err = %v", err)
+	}
+
+	result, err := preparer.CreateSelfDeployBuildJob(context.Background(), agentservice.SelfDeployBuildJobInput{
+		Meta:                  value.CommandMeta{CommandID: commandID, IdempotencyKey: "self_deploy_build_job:plan:agent-manager", Actor: value.Actor{Type: "service", ID: "agent-manager"}},
+		ProjectID:             projectID,
+		RepositoryID:          repositoryID,
+		PlanID:                uuid.MustParse("b1b1b1b1-5555-6666-7777-888888888888"),
+		ServiceKey:            "agent-manager",
+		ServiceRef:            "project-catalog:service-descriptor:agent-manager",
+		PlanFingerprint:       "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+		PlanItemFingerprint:   "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+		BuildExecutionSpec:    testSelfDeployBuildExecutionSpec(),
+		GovernanceApprovalRef: "governance:gate_decision/approved",
+		GovernanceGateRef:     "governance:gate_request/self-deploy",
+	})
+	if err != nil {
+		t.Fatalf("CreateSelfDeployBuildJob() err = %v", err)
+	}
+	if result.JobRef != jobID.String() || result.Status != "pending" || result.DiagnosticSummary == "" {
+		t.Fatalf("result = %+v", result)
+	}
+	request := client.createJobRequest
+	if request.GetJobType() != runtimev1.JobType_JOB_TYPE_BUILD || request.GetPriority() != runtimev1.JobPriority_JOB_PRIORITY_NORMAL {
+		t.Fatalf("job kind/priority = %s/%s", request.GetJobType(), request.GetPriority())
+	}
+	if request.GetProjectId() != projectID.String() || request.GetRepositoryId() != repositoryID.String() || request.GetJobInputJson() != "{}" {
+		t.Fatalf("job refs/input = project %q repository %q input %q", request.GetProjectId(), request.GetRepositoryId(), request.GetJobInputJson())
+	}
+	spec := request.GetBuildExecutionSpec()
+	if spec == nil ||
+		spec.GetServiceKey() != "agent-manager" ||
+		spec.GetImageRef() != "registry.example/kodex/agent-manager" ||
+		spec.GetBuildContextDigest() != "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd" ||
+		spec.GetBuildPlanFingerprint() != "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" {
+		t.Fatalf("build execution spec = %+v", spec)
+	}
+	if len(spec.GetAllowedSecretRefs()) != 1 || spec.GetAllowedSecretRefs()[0].GetSecretRef() != "secret://runtime/registry" {
+		t.Fatalf("allowed secret refs = %+v", spec.GetAllowedSecretRefs())
+	}
+	requestPayload, err := json.Marshal(request)
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+	for _, forbidden := range []string{"raw_provider_payload", "prompt_text", "transcript", "full_yaml", "full_diff", "secret_value", "kubeconfig"} {
+		if strings.Contains(string(requestPayload), forbidden) {
+			t.Fatalf("request contains forbidden payload marker %q: %s", forbidden, requestPayload)
+		}
+	}
+	if request.GetMeta().GetCommandId() != commandID.String() || request.GetMeta().GetActor().GetId() != "agent-manager" {
+		t.Fatalf("meta = %+v", request.GetMeta())
+	}
+}
+
 func TestPrepareRuntimeResultExtractsGeneratedContextDigest(t *testing.T) {
 	t.Parallel()
 
@@ -297,6 +372,28 @@ func testAgentRunExecutionSpec(agentRunID uuid.UUID, slotID uuid.UUID) agentserv
 			},
 		},
 	}
+}
+
+func testSelfDeployBuildExecutionSpec() agentservice.SelfDeployBuildExecutionSpec {
+	spec := agentservice.SelfDeployBuildExecutionSpec{}
+	spec.SourceRef = "refs/heads/main"
+	spec.SourceCommitSHA = "abcdef0123456789abcdef0123456789abcdef01"
+	spec.ServiceKey = "agent-manager"
+	spec.ImageRef = "registry.example/kodex/agent-manager"
+	spec.ImageTag = "abcdef0"
+	spec.BuildContextRef = "runtime://build-contexts/agent-manager"
+	spec.BuildContextDigest = "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+	spec.DockerfileRef = "runtime://build-contexts/agent-manager/Dockerfile"
+	spec.DockerfileTarget = "prod"
+	spec.BuilderImageRef = "gcr.io/kaniko-project/executor:v1.23.2"
+	spec.BuildPlanFingerprint = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	spec.AllowedSecretRefs = []agentservice.RuntimeJobAllowedSecretRef{
+		{SecretRef: "secret://runtime/registry", Purpose: "registry_docker_config"},
+	}
+	spec.OutputRefs = []agentservice.RuntimeJobOutputRef{
+		{Kind: "image", Ref: "runtime:image:agent-manager"},
+	}
+	return spec
 }
 
 type fakeRuntimeManagerClient struct {

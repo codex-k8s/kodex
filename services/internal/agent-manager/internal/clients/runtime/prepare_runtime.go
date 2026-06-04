@@ -47,6 +47,7 @@ type Preparer struct {
 var _ agentservice.RuntimePreparer = (*Preparer)(nil)
 var _ agentservice.RuntimeJobCreator = (*Preparer)(nil)
 var _ agentservice.RuntimeJobReader = (*Preparer)(nil)
+var _ agentservice.SelfDeployBuildJobCreator = (*Preparer)(nil)
 
 // NewConnection creates a gRPC connection to runtime-manager.
 func NewConnection(cfg Config) (*grpc.ClientConn, error) {
@@ -85,6 +86,11 @@ func (p *Preparer) GetAgentRunJob(ctx context.Context, input agentservice.Runtim
 	return runtimeOperation(ctx, p, input, getAgentRunJobRPC, mapRuntimeJobError, runtimeJobReadResult)
 }
 
+// CreateSelfDeployBuildJob ставит build job для approved self-deploy plan.
+func (p *Preparer) CreateSelfDeployBuildJob(ctx context.Context, input agentservice.SelfDeployBuildJobInput) (agentservice.RuntimeJobResult, error) {
+	return runtimeOperation(ctx, p, input, createSelfDeployBuildJobRPC, mapRuntimeJobError, selfDeployBuildJobResult)
+}
+
 func runtimeOperation[I any, R any, O any](
 	ctx context.Context,
 	p *Preparer,
@@ -112,6 +118,10 @@ func prepareRuntimeRPC(ctx context.Context, client runtimeManagerClient, input a
 
 func createAgentRunJobRPC(ctx context.Context, client runtimeManagerClient, input agentservice.RuntimeJobInput) (*runtimev1.JobResponse, error) {
 	return client.CreateJob(ctx, createAgentRunJobRequest(input))
+}
+
+func createSelfDeployBuildJobRPC(ctx context.Context, client runtimeManagerClient, input agentservice.SelfDeployBuildJobInput) (*runtimev1.JobResponse, error) {
+	return client.CreateJob(ctx, createSelfDeployBuildJobRequest(input))
 }
 
 func getAgentRunJobRPC(ctx context.Context, client runtimeManagerClient, input agentservice.RuntimeJobReadInput) (*runtimev1.JobResponse, error) {
@@ -146,6 +156,67 @@ func createAgentRunJobRequest(input agentservice.RuntimeJobInput) *runtimev1.Cre
 		AgentRunExecutionSpec: agentRunExecutionSpec(input.ExecutionSpec),
 		Meta:                  commandMeta(input.Meta),
 	}
+}
+
+func createSelfDeployBuildJobRequest(input agentservice.SelfDeployBuildJobInput) *runtimev1.CreateJobRequest {
+	projectID := input.ProjectID.String()
+	repositoryID := input.RepositoryID.String()
+	return &runtimev1.CreateJobRequest{
+		JobType:            runtimev1.JobType_JOB_TYPE_BUILD,
+		Priority:           runtimev1.JobPriority_JOB_PRIORITY_NORMAL,
+		ProjectId:          &projectID,
+		RepositoryId:       &repositoryID,
+		JobInputJson:       "{}",
+		BuildExecutionSpec: buildExecutionSpec(input.BuildExecutionSpec),
+		Meta:               commandMeta(input.Meta),
+	}
+}
+
+func buildExecutionSpec(spec agentservice.SelfDeployBuildExecutionSpec) *runtimev1.BuildExecutionSpec {
+	converted := &runtimev1.BuildExecutionSpec{
+		ServiceKey:           strings.TrimSpace(spec.ServiceKey),
+		SourceRef:            strings.TrimSpace(spec.SourceRef),
+		SourceCommitSha:      strings.TrimSpace(spec.SourceCommitSHA),
+		BuildPlanFingerprint: strings.TrimSpace(spec.BuildPlanFingerprint),
+	}
+	converted.ImageRef = strings.TrimSpace(spec.ImageRef)
+	converted.ImageTag = strings.TrimSpace(spec.ImageTag)
+	converted.ImageDigest = optionalString(strings.TrimSpace(spec.ImageDigest))
+	converted.BuildContextRef = strings.TrimSpace(spec.BuildContextRef)
+	converted.BuildContextDigest = strings.TrimSpace(spec.BuildContextDigest)
+	converted.DockerfileRef = strings.TrimSpace(spec.DockerfileRef)
+	converted.DockerfileDigest = optionalString(strings.TrimSpace(spec.DockerfileDigest))
+	converted.DockerfileTarget = strings.TrimSpace(spec.DockerfileTarget)
+	converted.BuilderImageRef = strings.TrimSpace(spec.BuilderImageRef)
+	converted.AllowedSecretRefs = runtimeBuildAllowedSecretRefs(spec.AllowedSecretRefs)
+	converted.OutputRefs = runtimeBuildOutputRefs(spec.OutputRefs)
+	return converted
+}
+
+func runtimeBuildAllowedSecretRefs(refs []agentservice.RuntimeJobAllowedSecretRef) []*runtimev1.RuntimeJobAllowedSecretRef {
+	result := make([]*runtimev1.RuntimeJobAllowedSecretRef, 0, len(refs))
+	for index := range refs {
+		ref := refs[index]
+		result = append(result, &runtimev1.RuntimeJobAllowedSecretRef{
+			SecretRef: strings.TrimSpace(ref.SecretRef),
+			Purpose:   strings.TrimSpace(ref.Purpose),
+		})
+	}
+	return result
+}
+
+func runtimeBuildOutputRefs(refs []agentservice.RuntimeJobOutputRef) []*runtimev1.RuntimeJobOutputRef {
+	if len(refs) == 0 {
+		return nil
+	}
+	result := make([]*runtimev1.RuntimeJobOutputRef, 0, len(refs))
+	for _, ref := range refs {
+		item := &runtimev1.RuntimeJobOutputRef{}
+		item.Kind = strings.TrimSpace(ref.Kind)
+		item.Ref = strings.TrimSpace(ref.Ref)
+		result = append(result, item)
+	}
+	return result
 }
 
 func agentRunExecutionSpec(spec agentservice.AgentRunExecutionSpec) *runtimev1.AgentRunExecutionSpec {
@@ -382,6 +453,25 @@ func runtimeJobResult(input agentservice.RuntimeJobInput, response *runtimev1.Jo
 	jobRef := strings.TrimSpace(job.GetJobId())
 	if jobRef == "" || job.GetJobType() != runtimev1.JobType_JOB_TYPE_AGENT_RUN || strings.TrimSpace(job.GetAgentRunId()) != input.AgentRunID.String() {
 		return agentservice.RuntimeJobResult{}, agentservice.NewRuntimeJobError(true, "dependency_unavailable", "runtime-manager returned incomplete agent run job refs")
+	}
+	return agentservice.RuntimeJobResult{
+		JobRef:            jobRef,
+		Status:            runtimeJobStatus(job.GetStatus()),
+		DiagnosticSummary: runtimeJobDiagnosticSummary(job),
+	}, nil
+}
+
+func selfDeployBuildJobResult(input agentservice.SelfDeployBuildJobInput, response *runtimev1.JobResponse) (agentservice.RuntimeJobResult, error) {
+	if response == nil || response.GetJob() == nil {
+		return agentservice.RuntimeJobResult{}, agentservice.NewRuntimeJobError(true, "dependency_unavailable", "runtime-manager returned an empty build job response")
+	}
+	job := response.GetJob()
+	jobRef := strings.TrimSpace(job.GetJobId())
+	if jobRef == "" ||
+		job.GetJobType() != runtimev1.JobType_JOB_TYPE_BUILD ||
+		strings.TrimSpace(job.GetProjectId()) != input.ProjectID.String() ||
+		strings.TrimSpace(job.GetRepositoryId()) != input.RepositoryID.String() {
+		return agentservice.RuntimeJobResult{}, agentservice.NewRuntimeJobError(true, "dependency_unavailable", "runtime-manager returned incomplete build job refs")
 	}
 	return agentservice.RuntimeJobResult{
 		JobRef:            jobRef,

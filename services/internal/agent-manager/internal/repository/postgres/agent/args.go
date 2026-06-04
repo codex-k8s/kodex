@@ -392,6 +392,11 @@ func selfDeployPlanArgs(plan entity.SelfDeployPlan) pgx.NamedArgs {
 		"plan_fingerprint":                        plan.PlanFingerprint,
 		"idempotency_key":                         plan.IdempotencyKey,
 		"status":                                  string(plan.Status),
+		"runtime_build_jobs":                      jsonArrayPayload(plan.RuntimeBuildJobs),
+		"runtime_build_status":                    string(plan.RuntimeBuildStatus),
+		"runtime_build_plan_fingerprint":          plan.RuntimeBuildFingerprint,
+		"runtime_build_error_code":                plan.RuntimeBuildErrorCode,
+		"runtime_build_summary":                   plan.RuntimeBuildSummary,
 	}, plan.ID, plan.Version, plan.CreatedAt, plan.UpdatedAt)
 }
 

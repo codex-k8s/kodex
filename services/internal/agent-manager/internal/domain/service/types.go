@@ -272,6 +272,102 @@ type SelfDeploySignalReadResult struct {
 	SafeReason string
 }
 
+type SelfDeployBuildPlanStatus string
+
+const (
+	SelfDeployBuildPlanStatusReady                SelfDeployBuildPlanStatus = "ready"
+	SelfDeployBuildPlanStatusBuildPlanUnavailable SelfDeployBuildPlanStatus = "build_plan_unavailable"
+	SelfDeployBuildPlanStatusPolicyStale          SelfDeployBuildPlanStatus = "policy_stale"
+	SelfDeployBuildPlanStatusServiceNotFound      SelfDeployBuildPlanStatus = "service_not_found"
+	SelfDeployBuildPlanStatusInvalidInput         SelfDeployBuildPlanStatus = "invalid_input"
+)
+
+type SelfDeployBuildPlanLookupInput struct {
+	Meta                              value.CommandMeta
+	ProjectID                         uuid.UUID
+	RepositoryID                      uuid.UUID
+	SourceRef                         string
+	MergeCommitSHA                    string
+	ProviderSignalRef                 string
+	ProviderSignalID                  string
+	ProviderSignalKey                 string
+	AffectedServiceKeys               []string
+	ExpectedServicesPolicyDigest      string
+	ExpectedServicesPolicyFingerprint string
+	ExpectedServicesPolicyVersion     *int64
+}
+
+type RuntimeJobAllowedSecretRef struct {
+	SecretRef string
+	Purpose   string
+}
+
+type RuntimeJobOutputRef struct {
+	Kind string
+	Ref  string
+}
+
+type SelfDeployBuildSourceSpec struct {
+	SourceRef       string
+	SourceCommitSHA string
+}
+
+type SelfDeployBuildImageSpec struct {
+	ImageRef    string
+	ImageTag    string
+	ImageDigest string
+}
+
+type SelfDeployBuildContextSpec struct {
+	BuildContextRef      string
+	BuildContextDigest   string
+	BuildPlanFingerprint string
+}
+
+type SelfDeployBuildDockerfileSpec struct {
+	DockerfileRef    string
+	DockerfileDigest string
+	DockerfileTarget string
+}
+
+type SelfDeployBuildExecutionSpec struct {
+	SelfDeployBuildSourceSpec
+	SelfDeployBuildImageSpec
+	SelfDeployBuildContextSpec
+	SelfDeployBuildDockerfileSpec
+	ServiceKey        string
+	BuilderImageRef   string
+	AllowedSecretRefs []RuntimeJobAllowedSecretRef
+	OutputRefs        []RuntimeJobOutputRef
+}
+
+type SelfDeployBuildPlanItem struct {
+	ServiceKey          string
+	ServiceRef          string
+	BuildExecutionSpec  SelfDeployBuildExecutionSpec
+	PlanItemFingerprint string
+}
+
+type SelfDeployBuildPlan struct {
+	ProjectRef          string
+	RepositoryRef       string
+	ProviderSignalRef   string
+	SourceRef           string
+	MergeCommitSHA      string
+	ServicesYAML        SelfDeploySignalServicesYAML
+	AffectedServiceKeys []string
+	BuildItems          []SelfDeployBuildPlanItem
+	PlanFingerprint     string
+	SafeSummary         string
+	Version             int64
+}
+
+type SelfDeployBuildPlanReadResult struct {
+	Status     SelfDeployBuildPlanStatus
+	Plan       SelfDeployBuildPlan
+	SafeReason string
+}
+
 const (
 	RuntimeModeFullEnv = "full_env"
 
@@ -383,6 +479,20 @@ type RuntimeJobInput struct {
 	AgentRunID    uuid.UUID
 	SlotRef       string
 	ExecutionSpec AgentRunExecutionSpec
+}
+
+type SelfDeployBuildJobInput struct {
+	Meta                  value.CommandMeta
+	ProjectID             uuid.UUID
+	RepositoryID          uuid.UUID
+	PlanID                uuid.UUID
+	ServiceKey            string
+	ServiceRef            string
+	PlanFingerprint       string
+	PlanItemFingerprint   string
+	BuildExecutionSpec    SelfDeployBuildExecutionSpec
+	GovernanceApprovalRef string
+	GovernanceGateRef     string
 }
 
 type AgentRunExecutionSpec struct {
