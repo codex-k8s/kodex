@@ -32,6 +32,7 @@ type projectService interface {
 	ReconcileBootstrapMergeSignal(context.Context, projectservice.ReconcileBootstrapMergeSignalInput) (projectservice.BootstrapServicesPolicyImportResult, error)
 	ReconcileAdoptionMergeSignal(context.Context, projectservice.ReconcileAdoptionMergeSignalInput) (projectservice.BootstrapServicesPolicyImportResult, error)
 	GetSelfDeploySignal(context.Context, projectservice.GetSelfDeploySignalInput) (projectservice.SelfDeploySignalResult, error)
+	GetSelfDeployBuildPlan(context.Context, projectservice.GetSelfDeployBuildPlanInput) (projectservice.SelfDeployBuildPlanResult, error)
 	GetServicesPolicy(context.Context, projectservice.GetServicesPolicyInput) (entity.ServicesPolicy, error)
 	ListServiceDescriptors(context.Context, projectservice.ListServiceDescriptorsInput) (projectservice.ListServiceDescriptorsResult, error)
 	CreatePolicyEditProposal(context.Context, projectservice.CreatePolicyEditProposalInput) (entity.PolicyEditProposal, error)
@@ -157,6 +158,11 @@ func (s *Server) ReconcileAdoptionMergeSignal(ctx context.Context, request *proj
 // GetSelfDeploySignal возвращает project-side enrichment для safe provider repository change signal.
 func (s *Server) GetSelfDeploySignal(ctx context.Context, request *projectsv1.GetSelfDeploySignalRequest) (*projectsv1.SelfDeploySignalResponse, error) {
 	return handleUnary(ctx, request, grpccasters.GetSelfDeploySignalInput, s.service.GetSelfDeploySignal, grpccasters.SelfDeploySignalResponse)
+}
+
+// GetSelfDeployBuildPlan возвращает checked build plan для self-deploy runtime jobs.
+func (s *Server) GetSelfDeployBuildPlan(ctx context.Context, request *projectsv1.GetSelfDeployBuildPlanRequest) (*projectsv1.SelfDeployBuildPlanResponse, error) {
+	return handleUnary(ctx, request, grpccasters.GetSelfDeployBuildPlanInput, s.service.GetSelfDeployBuildPlan, grpccasters.SelfDeployBuildPlanResponse)
 }
 
 // GetServicesPolicy returns a checked services.yaml projection.

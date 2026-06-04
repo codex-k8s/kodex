@@ -99,6 +99,17 @@ const (
 	SelfDeploySignalStatusNeedsRepositoryChangeSummary SelfDeploySignalStatus = "needs_repository_change_summary"
 )
 
+// SelfDeployBuildPlanStatus описывает готовность checked build plan.
+type SelfDeployBuildPlanStatus string
+
+const (
+	SelfDeployBuildPlanStatusReady                SelfDeployBuildPlanStatus = "ready"
+	SelfDeployBuildPlanStatusBuildPlanUnavailable SelfDeployBuildPlanStatus = "build_plan_unavailable"
+	SelfDeployBuildPlanStatusPolicyStale          SelfDeployBuildPlanStatus = "policy_stale"
+	SelfDeployBuildPlanStatusServiceNotFound      SelfDeployBuildPlanStatus = "service_not_found"
+	SelfDeployBuildPlanStatusInvalidInput         SelfDeployBuildPlanStatus = "invalid_input"
+)
+
 // SelfDeployPathCategory классифицирует изменённые пути без raw paths и diffs.
 type SelfDeployPathCategory string
 

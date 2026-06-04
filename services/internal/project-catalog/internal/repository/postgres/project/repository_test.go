@@ -202,6 +202,7 @@ func TestRepositoryIntegrationProjectsRepositoriesPoliciesAndOutbox(t *testing.T
 	}
 
 	policy := testServicesPolicy(projectA.ID, repositoryA.ID, now)
+	policy.ValidatedPayload = []byte(`{"spec":{"services":[{"key":"api","rootPath":"services/api","build":{"imageRef":"registry.example/kodex/api","imageTag":"test","buildContextRef":"pvc://runtime/build-context-api","buildContextDigest":"sha256:context","dockerfileRef":"context://services/api/Dockerfile","dockerfileTarget":"prod","builderImageRef":"gcr.io/kaniko-project/executor:v1.23.2","allowedSecretRefs":[{"secretRef":"secret://runtime/registry","purpose":"registry_docker_config"}],"outputRefs":[{"kind":"image","ref":"runtime:image:api"}]}}]}}`)
 	descriptors := []entity.ServiceDescriptor{
 		testServiceDescriptor(projectA.ID, policy.ID, &repositoryA.ID, "api", enum.ServiceKindBackend, now),
 		testServiceDescriptor(projectA.ID, policy.ID, &repositoryB.ID, "worker", enum.ServiceKindWorker, now),
@@ -219,6 +220,9 @@ func TestRepositoryIntegrationProjectsRepositoriesPoliciesAndOutbox(t *testing.T
 	}
 	if activePolicy.ID != policy.ID || activePolicy.SourceCommitSHA == "" {
 		t.Fatalf("active policy = %+v, want %s", activePolicy, policy.ID)
+	}
+	if !strings.Contains(string(activePolicy.ValidatedPayload), `"build"`) || !strings.Contains(string(activePolicy.ValidatedPayload), `"allowedSecretRefs"`) {
+		t.Fatalf("active policy payload = %s, want checked build projection payload preserved", activePolicy.ValidatedPayload)
 	}
 	services, _, err := repository.ListServiceDescriptors(ctx, query.ServiceDescriptorFilter{
 		ProjectID:    projectA.ID,

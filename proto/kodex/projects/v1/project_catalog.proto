@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package kodex.projects.v1;
 
+import "kodex/runtime/v1/runtime_manager.proto";
+
 option go_package = "github.com/codex-k8s/kodex/proto/gen/go/kodex/projects/v1;projectsv1";
 
 // ProjectCatalogService is the stable v1 inter-service contract for the
@@ -40,6 +42,8 @@ service ProjectCatalogService {
   rpc ReconcileAdoptionMergeSignal(ReconcileAdoptionMergeSignalRequest) returns (BootstrapServicesPolicyImportResponse);
   // GetSelfDeploySignal возвращает project-side enrichment для safe provider repository change signal.
   rpc GetSelfDeploySignal(GetSelfDeploySignalRequest) returns (SelfDeploySignalResponse);
+  // GetSelfDeployBuildPlan возвращает проверенный project-side build input для self-deploy runtime jobs.
+  rpc GetSelfDeployBuildPlan(GetSelfDeployBuildPlanRequest) returns (SelfDeployBuildPlanResponse);
   // GetServicesPolicy returns a checked services.yaml projection.
   rpc GetServicesPolicy(GetServicesPolicyRequest) returns (ServicesPolicyResponse);
   // ListServiceDescriptors returns typed service descriptors from active policy.
@@ -216,6 +220,16 @@ enum SelfDeploySignalStatus {
   SELF_DEPLOY_SIGNAL_STATUS_SERVICES_POLICY_NOT_READY = 7;
   SELF_DEPLOY_SIGNAL_STATUS_NOT_DEPLOY_RELEVANT = 8;
   SELF_DEPLOY_SIGNAL_STATUS_NEEDS_REPOSITORY_CHANGE_SUMMARY = 9;
+}
+
+// SelfDeployBuildPlanStatus описывает готовность проверенного build plan для runtime-manager JOB_TYPE_BUILD.
+enum SelfDeployBuildPlanStatus {
+  SELF_DEPLOY_BUILD_PLAN_STATUS_UNSPECIFIED = 0;
+  SELF_DEPLOY_BUILD_PLAN_STATUS_READY = 1;
+  SELF_DEPLOY_BUILD_PLAN_STATUS_BUILD_PLAN_UNAVAILABLE = 2;
+  SELF_DEPLOY_BUILD_PLAN_STATUS_POLICY_STALE = 3;
+  SELF_DEPLOY_BUILD_PLAN_STATUS_SERVICE_NOT_FOUND = 4;
+  SELF_DEPLOY_BUILD_PLAN_STATUS_INVALID_INPUT = 5;
 }
 
 // SelfDeployPathCategory классифицирует изменённые пути без raw paths и diffs.
@@ -586,6 +600,44 @@ message SelfDeploySignal {
   string observed_at = 22;
   // version — версия project-side signal contract.
   int64 version = 23;
+}
+
+// SelfDeployBuildPlanItem содержит совместимый с runtime build spec для одного сервиса.
+message SelfDeployBuildPlanItem {
+  // service_key идентифицирует service descriptor из checked ServicesPolicy.
+  string service_key = 1;
+  // service_ref — safe ref service descriptor в project-catalog.
+  string service_ref = 2;
+  // build_execution_spec совместим с runtime-manager JOB_TYPE_BUILD.
+  kodex.runtime.v1.BuildExecutionSpec build_execution_spec = 3;
+  // plan_item_fingerprint — стабильный fingerprint item без raw YAML.
+  string plan_item_fingerprint = 4;
+}
+
+// SelfDeployBuildPlan — проверенный project-owned plan для подготовки build jobs.
+message SelfDeployBuildPlan {
+  // project_ref — project ref в project-catalog.
+  string project_ref = 1;
+  // repository_ref — repository binding ref в project-catalog.
+  string repository_ref = 2;
+  // provider_signal_ref — safe provider/project signal ref, если известен.
+  optional string provider_signal_ref = 3;
+  // source_ref — provider/source ref, который послужил trigger.
+  string source_ref = 4;
+  // merge_commit_sha — commit source snapshot.
+  string merge_commit_sha = 5;
+  // services_yaml — checked project-owned policy projection.
+  SelfDeployServicesYamlProjection services_yaml = 6;
+  // affected_service_keys — нормализованный список запрошенных сервисов.
+  repeated string affected_service_keys = 7;
+  // build_items — per-service typed build specs.
+  repeated SelfDeployBuildPlanItem build_items = 8;
+  // plan_fingerprint — стабильный fingerprint всего checked build plan.
+  string plan_fingerprint = 9;
+  // safe_summary — bounded diagnostic summary без raw payloads.
+  string safe_summary = 10;
+  // version — версия build plan contract.
+  int64 version = 11;
 }
 
 // DocumentationSource describes one project documentation source.
@@ -1245,6 +1297,44 @@ message SelfDeploySignalResponse {
   // signal присутствует, когда project/provider facts безопасно связаны.
   SelfDeploySignal signal = 2;
   // safe_reason объясняет blocked status без raw payloads и секретов.
+  optional string safe_reason = 3;
+}
+
+// GetSelfDeployBuildPlanRequest читает проверенный build plan из project-owned ServicesPolicy.
+message GetSelfDeployBuildPlanRequest {
+  // project_id задаёт область checked ServicesPolicy.
+  string project_id = 1;
+  // repository_id задаёт repository binding для affected services.
+  string repository_id = 2;
+  // source_ref — branch/ref из ready self-deploy signal.
+  string source_ref = 3;
+  // merge_commit_sha — commit sha из ready self-deploy signal.
+  string merge_commit_sha = 4;
+  // provider_signal_ref — stable signal ref из SelfDeployPlan, если известен.
+  optional string provider_signal_ref = 5;
+  // provider_signal_id — persisted provider signal id, если известен.
+  optional string provider_signal_id = 6;
+  // provider_signal_key — provider signal idempotency key, если известен.
+  optional string provider_signal_key = 7;
+  // affected_service_keys — service keys из ready self-deploy signal.
+  repeated string affected_service_keys = 8;
+  // expected_services_policy_digest — digest checked ServicesPolicy, ожидаемый caller.
+  string expected_services_policy_digest = 9;
+  // expected_services_policy_fingerprint — fingerprint checked ServicesPolicy, ожидаемый caller.
+  optional string expected_services_policy_fingerprint = 10;
+  // expected_services_policy_version — policy version, ожидаемая caller.
+  optional int64 expected_services_policy_version = 11;
+  // meta содержит read actor и request context.
+  QueryMeta meta = 12;
+}
+
+// SelfDeployBuildPlanResponse возвращает проверенный build plan или безопасную non-ready reason.
+message SelfDeployBuildPlanResponse {
+  // status описывает готовность build plan.
+  SelfDeployBuildPlanStatus status = 1;
+  // plan присутствует при ready.
+  SelfDeployBuildPlan plan = 2;
+  // safe_reason объясняет non-ready status без raw payloads и секретов.
   optional string safe_reason = 3;
 }
 

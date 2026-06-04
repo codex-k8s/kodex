@@ -40,6 +40,8 @@ approvals:
 
 Эти ссылки не являются SQL-связями с БД других сервисов. Источник истины остаётся у сервиса-владельца.
 
+Для self-deploy `SelfDeployPlan` хранит только safe project/provider refs, affected service keys, `services.yaml` digest/fingerprint/version, expected runtime job type hints и governance refs. После approval `agent-manager` получает build-вход через `project-catalog.GetSelfDeployBuildPlan`: `project-catalog` связывает affected service keys с checked `ServicesPolicy` и возвращает `BuildExecutionSpec`-совместимые refs для `runtime-manager`. `agent-manager` не читает raw `services.yaml`, не вычисляет Dockerfile/image refs по путям и не хранит значения секретов.
+
 ## Сущности
 
 ### Flow

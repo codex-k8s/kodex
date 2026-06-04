@@ -202,6 +202,21 @@ func SelfDeploySignalStatusToProto(status enum.SelfDeploySignalStatus) projectsv
 	}
 }
 
+func SelfDeployBuildPlanStatusToProto(status enum.SelfDeployBuildPlanStatus) projectsv1.SelfDeployBuildPlanStatus {
+	if status, ok := selfDeployBuildPlanStatusToProto[status]; ok {
+		return status
+	}
+	return projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_UNSPECIFIED
+}
+
+var selfDeployBuildPlanStatusToProto = map[enum.SelfDeployBuildPlanStatus]projectsv1.SelfDeployBuildPlanStatus{
+	enum.SelfDeployBuildPlanStatusReady:                projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_READY,
+	enum.SelfDeployBuildPlanStatusBuildPlanUnavailable: projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_BUILD_PLAN_UNAVAILABLE,
+	enum.SelfDeployBuildPlanStatusPolicyStale:          projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_POLICY_STALE,
+	enum.SelfDeployBuildPlanStatusServiceNotFound:      projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_SERVICE_NOT_FOUND,
+	enum.SelfDeployBuildPlanStatusInvalidInput:         projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_INVALID_INPUT,
+}
+
 func SelfDeployPathCategoryToProto(category enum.SelfDeployPathCategory) projectsv1.SelfDeployPathCategory {
 	index := selfDeployPathCategoryIndex(category)
 	if index < 0 {
