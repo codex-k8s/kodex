@@ -197,6 +197,43 @@ func TestPostgresIntegrationAppendClaimAdvanceAndFanOut(t *testing.T) {
 	}
 }
 
+func TestPostgresIntegrationRepairLegacyCheckpointRetrySchema(t *testing.T) {
+	dsn := os.Getenv("KODEX_EVENTLOG_TEST_DATABASE_DSN")
+	if dsn == "" {
+		t.Skip("KODEX_EVENTLOG_TEST_DATABASE_DSN is empty")
+	}
+
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open postgres pool: %v", err)
+	}
+	defer pool.Close()
+
+	resetEventLogTables(t, ctx, pool)
+	execSQL(t, ctx, pool, legacyEventLogSchemaSQL, "create legacy platform-event-log schema")
+	applyMigrationFile(t, ctx, pool, "migrations/20260605090000_platform_event_log_checkpoint_retry_fields.sql")
+	applyMigrationFile(t, ctx, pool, "migrations/20260605090000_platform_event_log_checkpoint_retry_fields.sql")
+	assertCheckpointRetrySchema(t, ctx, pool)
+
+	var retrySequenceID int64
+	var retryAttempt int
+	var lastError string
+	if err := pool.QueryRow(ctx, `
+		SELECT retry_sequence_id, retry_attempt, last_error
+		FROM platform_event_consumer_checkpoints
+		WHERE consumer_name = 'legacy-consumer'
+	`).Scan(&retrySequenceID, &retryAttempt, &lastError); err != nil {
+		t.Fatalf("read repaired checkpoint row: %v", err)
+	}
+	if retrySequenceID != 0 || retryAttempt != 0 || lastError != "" {
+		t.Fatalf("repaired checkpoint row = (%d, %d, %q), want zero retry state", retrySequenceID, retryAttempt, lastError)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE platform_event_consumer_checkpoints SET retry_attempt = -1 WHERE consumer_name = 'legacy-consumer'`); err == nil {
+		t.Fatal("negative retry_attempt update succeeded, want check violation")
+	}
+}
+
 func testEvent(occurredAt time.Time, eventType string) Event {
 	return Event{
 		ID:            uuid.New(),
@@ -223,22 +260,14 @@ func applyMigrations(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
 		if err != nil {
 			t.Fatalf("read migration %s: %v", files[i], err)
 		}
-		for _, statement := range splitSQLStatements(downMigrationSQL(t, string(content), files[i])) {
-			if _, err := pool.Exec(ctx, statement); err != nil {
-				t.Fatalf("reset migration %s statement %q: %v", files[i], statement, err)
-			}
-		}
+		execSQL(t, ctx, pool, downMigrationSQL(t, string(content), files[i]), "reset migration "+files[i])
 	}
 	for _, file := range files {
 		content, err := os.ReadFile(file)
 		if err != nil {
 			t.Fatalf("read migration %s: %v", file, err)
 		}
-		for _, statement := range splitSQLStatements(upMigrationSQL(t, string(content), file)) {
-			if _, err := pool.Exec(ctx, statement); err != nil {
-				t.Fatalf("apply migration %s statement %q: %v", file, statement, err)
-			}
-		}
+		execSQL(t, ctx, pool, upMigrationSQL(t, string(content), file), "apply migration "+file)
 	}
 }
 
@@ -263,17 +292,128 @@ func downMigrationSQL(t *testing.T, content string, file string) string {
 	return content[downIndex+len("-- +goose Down"):]
 }
 
-func splitSQLStatements(content string) []string {
-	parts := strings.Split(content, ";")
-	statements := make([]string, 0, len(parts))
-	for _, part := range parts {
-		statement := strings.TrimSpace(part)
-		if statement != "" {
-			statements = append(statements, statement)
+func applyMigrationFile(t *testing.T, ctx context.Context, pool *pgxpool.Pool, file string) {
+	t.Helper()
+
+	content, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatalf("read migration %s: %v", file, err)
+	}
+	execSQL(t, ctx, pool, upMigrationSQL(t, string(content), file), "apply migration "+file)
+}
+
+func execSQL(t *testing.T, ctx context.Context, pool *pgxpool.Pool, sql string, label string) {
+	t.Helper()
+
+	if !hasExecutableSQL(sql) {
+		return
+	}
+	if _, err := pool.Exec(ctx, sql, pgx.QueryExecModeSimpleProtocol); err != nil {
+		t.Fatalf("%s: %v", label, err)
+	}
+}
+
+func hasExecutableSQL(content string) bool {
+	for _, line := range strings.Split(content, "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" && !strings.HasPrefix(line, "--") {
+			return true
 		}
 	}
-	return statements
+	return false
 }
+
+func resetEventLogTables(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+	t.Helper()
+
+	execSQL(t, ctx, pool, `
+DROP TABLE IF EXISTS platform_event_consumer_checkpoints;
+DROP TABLE IF EXISTS platform_event_log;
+`, "reset platform-event-log tables")
+}
+
+func assertCheckpointRetrySchema(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+	t.Helper()
+
+	rows, err := pool.Query(ctx, `
+		SELECT column_name, is_nullable, COALESCE(column_default, '')
+		FROM information_schema.columns
+		WHERE table_name = 'platform_event_consumer_checkpoints'
+		  AND column_name IN ('retry_sequence_id', 'retry_attempt', 'last_error')
+	`)
+	if err != nil {
+		t.Fatalf("read checkpoint columns: %v", err)
+	}
+	defer rows.Close()
+
+	type column struct {
+		nullable string
+		def      string
+	}
+	columns := make(map[string]column, 3)
+	for rows.Next() {
+		var name string
+		var c column
+		if err := rows.Scan(&name, &c.nullable, &c.def); err != nil {
+			t.Fatalf("scan checkpoint column: %v", err)
+		}
+		columns[name] = c
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate checkpoint columns: %v", err)
+	}
+	expected := map[string]string{
+		"retry_sequence_id": "0",
+		"retry_attempt":     "0",
+		"last_error":        "''::text",
+	}
+	for name, defaultValue := range expected {
+		c, ok := columns[name]
+		if !ok {
+			t.Fatalf("checkpoint column %s is missing", name)
+		}
+		if c.nullable != "NO" {
+			t.Fatalf("checkpoint column %s nullable = %s, want NO", name, c.nullable)
+		}
+		if c.def != defaultValue {
+			t.Fatalf("checkpoint column %s default = %q, want %q", name, c.def, defaultValue)
+		}
+	}
+}
+
+const legacyEventLogSchemaSQL = `
+CREATE TABLE platform_event_log (
+    sequence_id bigint GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    event_id uuid NOT NULL UNIQUE,
+    source_service text NOT NULL,
+    event_type text NOT NULL,
+    schema_version integer NOT NULL,
+    aggregate_type text NOT NULL,
+    aggregate_id uuid NOT NULL,
+    payload jsonb NOT NULL,
+    occurred_at timestamptz NOT NULL,
+    recorded_at timestamptz NOT NULL,
+    CONSTRAINT platform_event_log_source_service_chk CHECK (source_service <> ''),
+    CONSTRAINT platform_event_log_event_type_chk CHECK (event_type <> ''),
+    CONSTRAINT platform_event_log_schema_version_chk CHECK (schema_version > 0),
+    CONSTRAINT platform_event_log_aggregate_type_chk CHECK (aggregate_type <> '')
+);
+
+CREATE TABLE platform_event_consumer_checkpoints (
+    consumer_name text PRIMARY KEY,
+    last_sequence_id bigint NOT NULL DEFAULT 0,
+    lease_owner text NOT NULL DEFAULT '',
+    locked_until timestamptz,
+    updated_at timestamptz NOT NULL,
+    CONSTRAINT platform_event_consumer_name_chk CHECK (consumer_name <> ''),
+    CONSTRAINT platform_event_consumer_last_sequence_chk CHECK (last_sequence_id >= 0),
+    CONSTRAINT platform_event_consumer_lease_consistency_chk
+        CHECK ((lease_owner = '' AND locked_until IS NULL) OR (lease_owner <> '' AND locked_until IS NOT NULL))
+);
+
+INSERT INTO platform_event_consumer_checkpoints (consumer_name, updated_at)
+VALUES ('legacy-consumer', '2026-06-05 09:00:00+00');
+`
 
 type panicDatabase struct{}
 
