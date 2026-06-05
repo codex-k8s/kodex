@@ -36,6 +36,7 @@
 - Async/webhook payload contracts (если есть): описаны в `specs/asyncapi/<service-name>.v<major>.yaml`, а Go event contracts регенерированы через `make gen-asyncapi-event-contracts`.
 - Стабильные `v1` контракты покрывают весь согласованный объём доменного API, а не только уже реализованный срез.
 - Если стабильный контракт опережает реализацию, документ поставки сервиса содержит таблицу реализованных операций и бэклог по оставшимся операциям.
+- Breaking change в `proto`, OpenAPI или AsyncAPI проверен на live rolling gap: все потребители обновляются в согласованном срезе либо изменение выполнено через staged путь `add -> migrate consumers -> remove`.
 - Если менялись контракты (OpenAPI/proto/AsyncAPI): выполнена регенерация через `make`, и изменения в `**/generated/**` закоммичены.
 
 ## Webhook и процессы
@@ -45,6 +46,7 @@
 
 ## Postgres и SQL
 - Миграции (goose): `services/<zone>/<db-owner-service>/cmd/cli/migrations/*.sql` (timestamp; `-- +goose Up/Down`); история не переписывается.
+- Уже применённые migration-файлы не редактируются; destructive/drop/rename оформлены через `expand -> migrate -> contract`, а live drift исправлен новой миграцией или runbook/deploy шагом.
 - Repo интерфейсы в `internal/domain/repository/<model>/repository.go`; реализации в `internal/repository/postgres/<model>/repository.go`.
 - SQL только в `internal/repository/postgres/<model>/sql/*.sql` + `//go:embed`; SQL-строки в Go запрещены.
 - SQL-запросы именованы комментариями `-- name: <model>__<operation> :one|:many|:exec`.
@@ -58,6 +60,7 @@
 
 ## Безопасность
 - Секреты платформы читаются из env; не хардкодятся и не логируются.
+- Новые обязательные env/secrets/config не ломают старт live deployment: есть staged rollout path, безопасный default/диагностика или явный runbook шаг.
 - Repo-токены и чувствительные данные сохраняются только в шифрованном виде.
 - Значения секретов, полученные по ссылке, представлены безопасным типом вроде `secretresolver.SecretValue`, не сериализуются в JSON/text/fmt, живут только в памяти процесса на время операции и очищаются через `defer value.Clear()` сразу после успешного разрешения.
 - Детали реализации хранилища секретов остаются в resolver-клиенте; доменный код работает с `secret_store_type + secret_store_ref` и не хранит сырые значения.

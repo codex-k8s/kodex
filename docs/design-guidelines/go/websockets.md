@@ -6,6 +6,9 @@
 
 - Контракт WebSocket сообщений описывается в AsyncAPI YAML: `specs/asyncapi/<service-name>.v<major>.yaml`.
 - В AsyncAPI фиксируем каналы, типы сообщений, payload schemas, версии и correlation поля.
+- Для live-кластера breaking change в AsyncAPI допускается только при согласованном обновлении
+  producer/consumer без live rolling gap; иначе новое сообщение/поле добавляется рядом со старым,
+  потребители переводятся, и старая форма удаляется отдельным срезом.
 
 ## Типы сообщений
 

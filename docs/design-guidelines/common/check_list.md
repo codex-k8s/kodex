@@ -17,6 +17,7 @@
 - Внутренние доменные сервисы не публикуют прямые OpenAPI-контракты для бизнес-ручек; внешний HTTP доступ оформляется через gateway.
 - Стабильные `v1` контракты транспорта покрывают весь согласованный объём доменного API; частичный контракт имеет явный предварительный статус.
 - Если контракт создан до полной реализации, документ поставки фиксирует реализованный срез и бэклог, чтобы не считать контрактную готовность кодовой готовностью.
+- Для live-кластера проверен безопасный путь эволюции контрактов: breaking change в `proto`, OpenAPI или AsyncAPI допустим только при согласованном обновлении всех потребителей без live rolling gap; иначе используется staged путь `add -> migrate consumers -> remove`.
 - Модели/типы/DTO размещены по слоям, а не ad-hoc в service/handler/component файлах.
 - Повторяющиеся литералы и ключи вынесены в централизованные константы/enum/type-alias.
 - Повторяемые типы событий, типы агрегатов, scope/action ключи и другие доменные идентификаторы не передаются строковыми литералами в production-коде.
@@ -51,11 +52,15 @@
   `deploy/base/postgres/bootstrap-databases.sh`, `deploy/base/postgres/postgres.yaml.tpl`,
   профильный `deploy/base/<db-owner>/migrations.yaml.tpl`, `bootstrap/host/config.env.example`,
   `bootstrap/host/bootstrap_cluster.sh` и соответствующая архитектурная документация.
+- Уже применённые миграции не редактируются и не переупорядочиваются; схема меняется новой forward-only additive migration, а destructive/drop/rename оформляется отдельным путём `expand -> migrate -> contract`.
+- Live drift исправляется новой миграцией или явным runbook/deploy шагом, а не ручным SQL в production.
 - Источник defaults не размножен: корневой `services.yaml` владеет версиями/образами/deploy inventory,
   Go tooling читает его через `libs/go/stackinventory`, Go config владеет безопасными runtime
   defaults сервиса, Kubernetes templates не дублируют эти defaults через `envOr`, а
   `bootstrap/host/config.env.example` содержит только локальный install-профиль и
   secret/bootstrap seed-поля.
+- Новые обязательные env/secrets/config имеют staged rollout path или безопасную диагностику; изменение не ломает старт уже развёрнутого сервиса без явного runbook шага.
+- Изменения deploy tooling сохраняют последовательное обновление существующего live-кластера: порядок migrations, сервисов, edge и frontend задан явно и проверяем.
 - Вынос общего кода в целевой `libs/*` оправдан (>= 2 потребителя); нет “god-lib”.
 - Если общий код или локальный контракт стал зависимостью deployable-сервиса, `services.yaml` `spec.versions.<service>.bumpOn` синхронно обновлён для всех потребителей, чтобы изменение зависимости поднимало версии и образы сервисов.
 - Новый production-код не размещён внутри устаревших или архивных каталогов.
