@@ -15,6 +15,13 @@
     `services/<zone>/<service>/cmd/cli/migrations/*.sql`.
   - Если БД/схема общая для нескольких сервисов, всё равно должен быть *один владелец*,
     а остальные сервисы обращаются к БД через его API/контракты (shared DB без владельца запрещён).
+- Для live-кластера миграционная история считается применённой историей:
+  - уже применённые миграции не редактировать, не переименовывать и не переупорядочивать;
+  - изменение схемы делать новой forward-only additive migration;
+  - destructive/drop/rename выполнять только через отдельный путь `expand -> migrate -> contract`,
+    где старая и новая форма временно сосуществуют, потребители переведены, и только затем старое
+    удаляется;
+  - live drift исправлять новой миграцией или явным runbook/deploy шагом, а не ручным SQL в production.
 - SQL только в `internal/repository/postgres/<model>/sql/*.sql` + `//go:embed`.
 - Каждый SQL-запрос в repo слое должен иметь имя-комментарий
   `-- name: <model>__<operation> :one|:many|:exec`.
@@ -91,6 +98,12 @@
 - Пользовательские настройки продукта хранятся в БД и управляются через UI.
 - Секреты не коммитим, не логируем и не возвращаем в API-ответах.
 - В логах и теле аудита запрещены ключи и токены в открытом виде.
+- Новые обязательные env/secrets/config для уже развёрнутого сервиса вводятся через staged rollout:
+  сначала deploy inventory и Kubernetes `Secret`/`ConfigMap` получают новое поле или безопасный default,
+  затем код начинает его использовать, а только после этого старый путь удаляется отдельным срезом.
+- Если безопасного default нет, сервис должен выдавать понятную диагностику готовности или runbook
+  должен фиксировать обязательный порядок применения. Нельзя добавлять `required` env так, чтобы
+  существующий live deployment перестал стартовать без подготовительного шага.
 
 ## CI/CD, образы и окружения
 
@@ -105,6 +118,10 @@
 - Корневой `services.yaml` — единый stack inventory deploy-конфигурации в рамках репозитория kodex.
 - Go tools читают root stack inventory через `libs/go/stackinventory`; не добавлять новый YAML parser для тех же версий, образов и deploy inventory.
 - Проектный `services.yaml` пользовательских репозиториев является project policy и принадлежит `project-catalog`, а не bootstrap/render tooling.
+- Изменения deploy tooling и inventory должны сохранять последовательное обновление live-кластера:
+  порядок `stateful dependencies -> migrations -> internal domain services -> edge services -> frontend`
+  не обходится, migration jobs остаются отдельным шагом, а новые зависимости получают readiness/wait
+  контур до включения потребителя.
 - `services.yaml/spec.versions` задаётся только объектным форматом:
   - `service: { value: "0.1.0", bumpOn: ["services/<zone>/<service>", ...] }`.
 - Для Go runtime-сервисов стартовый `resources.limits.cpu` по умолчанию — `2` CPU. Иное значение

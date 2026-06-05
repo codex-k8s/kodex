@@ -62,6 +62,9 @@
 - отдельный versioned API namespace;
 - не выносить в shared common proto бизнес-сущности разных доменов;
 - общие типы держать только для truly-generic вещей: paging, timestamps, health, errors, references.
+- для live-кластера breaking change в `proto`, OpenAPI или AsyncAPI допустим только при согласованном
+  обновлении всех потребителей без live rolling gap; иначе сначала добавляется новое поле или метод,
+  затем переводятся потребители, затем старая форма удаляется отдельным срезом.
 
 Нельзя:
 - делать единый mega-proto по образцу старого ControlPlaneService;
@@ -76,6 +79,11 @@
 - своя rollback strategy;
 - свой runbook на восстановление;
 - своя таблица schema history.
+
+Уже применённые миграции не редактируются и не переупорядочиваются. Изменение схемы выполняется
+новой forward-only additive migration. Destructive/drop/rename проходит через путь
+`expand -> migrate -> contract`; live drift исправляется новой миграцией или явным runbook/deploy
+шагом, а не ручным SQL в production.
 
 В каждом PR на extraction необходимо явно указать:
 - какие таблицы становятся owned этим сервисом;

@@ -14,6 +14,9 @@
 - Процессы: webhook-driven (GitHub webhooks/внутренние события), без workflow-first модели.
 - Хранилище и синхронизация multi-pod: PostgreSQL (`JSONB` + `pgvector`).
 - MCP служебные ручки: реализуются в Go внутри `kodex`.
+- Платформа развёрнута в live-кластере, поэтому активные изменения проектируются как live-safe evolution:
+  миграции, конфиги, секреты, транспортные контракты и deploy tooling должны обновляться
+  последовательными шагами, а не через переписывание истории или одноразовый reset состояния.
 
 ## Структура репозитория
 
@@ -29,12 +32,16 @@
     `kustomize`-слоем из этого файла.
   - Рендер и применение выполняются Go-компонентами новой архитектуры; shell-скрипты
     не являются основным механизмом deploy/sync.
-  - Для production порядок выкладки задаётся по слоям:
-    `stateful dependencies -> migrations -> internal domain services -> edge services -> frontend`.
-    Ожидание зависимостей оформляется через `initContainers` в манифестах сервисов.
-  - Для monorepo multi-service deploy используются раздельные образы/репозитории для каждого
-    deployable-сервиса (шаблон нейминга: `KODEX_<SERVICE>_IMAGE`,
-    `KODEX_<SERVICE>_INTERNAL_IMAGE_REPOSITORY`).
+- Для production порядок выкладки задаётся по слоям:
+  `stateful dependencies -> migrations -> internal domain services -> edge services -> frontend`.
+  Ожидание зависимостей оформляется через `initContainers` в манифестах сервисов.
+- Любое изменение deploy path должно сохранять возможность последовательного обновления существующего
+  live-кластера. Если изменение требует нового обязательного секрета, runtime env или миграции,
+  порядок применения фиксируется в inventory/runbook и не должен ломать старт старой версии до
+  применения следующего шага.
+- Для monorepo multi-service deploy используются раздельные образы/репозитории для каждого
+  deployable-сервиса (шаблон нейминга: `KODEX_<SERVICE>_IMAGE`,
+  `KODEX_<SERVICE>_INTERNAL_IMAGE_REPOSITORY`).
 - `bootstrap/` — скрипты bootstrap (готовый кластер или установка k3s).
 - `docs/` — документация и решения.
 - `tools/` — утилиты и генерация, создаются заново при необходимости.
@@ -64,6 +71,12 @@
 - обновлять `bootstrap/host/config.env.example` и `bootstrap/host/bootstrap_cluster.sh`,
   чтобы env, DSN и image-переменные попали в runtime-секрет синхронно с кодом;
 - обновлять delivery/architecture документы, где описаны владелец БД, миграции и порядок выкладки.
+
+Уже применённые миграции не редактируются и не переупорядочиваются. Изменения существующей схемы
+делаются новой forward-only additive migration. Destructive/drop/rename допускаются только через
+отдельный путь `expand -> migrate -> contract`, где старая и новая схема временно сосуществуют,
+потребители переведены на новую форму, и только затем удаляется старое. Live drift исправляется
+новой миграцией или явно описанным runbook/deploy шагом, а не ручным SQL в production.
 
 ### Источники defaults
 
