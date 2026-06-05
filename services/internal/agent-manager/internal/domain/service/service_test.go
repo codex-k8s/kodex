@@ -5593,6 +5593,77 @@ func TestCreateSelfDeployPlanBlocksBuildWhenProjectBuildPlanNotReady(t *testing.
 	}
 }
 
+func TestCreateSelfDeployPlanFromSignalDispatchesBuildAfterBlockedPlanBecomesReady(t *testing.T) {
+	t.Parallel()
+
+	input := validSelfDeployBuildPlanInput()
+	planID := uuid.MustParse("5f7f3a10-0034-4000-8000-000000000034")
+	repository := &fakeRepository{selfDeployByID: map[uuid.UUID]entity.SelfDeployPlan{}}
+	buildReader := &fakeSelfDeployBuildPlanReader{result: SelfDeployBuildPlanReadResult{
+		Status:     SelfDeployBuildPlanStatusPolicyStale,
+		SafeReason: "services_policy_digest_mismatch",
+	}}
+	buildCreator := &fakeSelfDeployBuildJobCreator{result: RuntimeJobResult{JobRef: "runtime:job/build-agent-manager", Status: "pending"}}
+	service := New(Config{
+		Repository: repository,
+		IDGenerator: &sequenceIDGenerator{ids: []uuid.UUID{
+			planID,
+			uuid.MustParse("5f7f3a10-0035-4000-8000-000000000035"),
+			uuid.MustParse("5f7f3a10-0036-4000-8000-000000000036"),
+			uuid.MustParse("5f7f3a10-0037-4000-8000-000000000037"),
+			uuid.MustParse("5f7f3a10-0038-4000-8000-000000000038"),
+		}},
+		SelfDeployGatePreparer:         approvedSelfDeployGatePreparer(),
+		SelfDeployGateEnabled:          true,
+		SelfDeployBuildPlanReader:      buildReader,
+		SelfDeployBuildJobCreator:      buildCreator,
+		SelfDeployBuildDispatchEnabled: true,
+	})
+
+	blocked, err := service.CreateSelfDeployPlanFromSignal(context.Background(), CreateSelfDeployPlanFromSignalInput{CreateSelfDeployPlanInput: input})
+	if err != nil {
+		t.Fatalf("CreateSelfDeployPlanFromSignal() blocked err = %v", err)
+	}
+	if blocked.RuntimeBuildStatus != enum.SelfDeployRuntimeBuildStatusBlocked {
+		t.Fatalf("runtime build status = %s, want blocked", blocked.RuntimeBuildStatus)
+	}
+	blockedCommandKey := repository.updateSelfDeployResult.IdempotencyKey
+	repository.selfDeployList = []entity.SelfDeployPlan{blocked}
+	repository.updateSelfDeployCalled = false
+
+	sameDiagnosticInput := input
+	sameDiagnosticInput.Meta.CommandID = uuid.MustParse("5f7f3a10-0039-4000-8000-000000000039")
+	sameDiagnostic, err := service.CreateSelfDeployPlanFromSignal(context.Background(), CreateSelfDeployPlanFromSignalInput{CreateSelfDeployPlanInput: sameDiagnosticInput})
+	if err != nil {
+		t.Fatalf("CreateSelfDeployPlanFromSignal() same diagnostic err = %v", err)
+	}
+	if sameDiagnostic.Version != blocked.Version || repository.updateSelfDeployCalled {
+		t.Fatalf("same diagnostic replay version/update = %d/%v, want %d/false", sameDiagnostic.Version, repository.updateSelfDeployCalled, blocked.Version)
+	}
+
+	buildReader.result = readySelfDeployBuildPlanResult()
+	repository.selfDeployList = []entity.SelfDeployPlan{sameDiagnostic}
+	repository.updateSelfDeployCalled = false
+	readyInput := input
+	readyInput.Meta.CommandID = uuid.MustParse("5f7f3a10-0040-4000-8000-000000000040")
+
+	requested, err := service.CreateSelfDeployPlanFromSignal(context.Background(), CreateSelfDeployPlanFromSignalInput{CreateSelfDeployPlanInput: readyInput})
+	if err != nil {
+		t.Fatalf("CreateSelfDeployPlanFromSignal() ready err = %v", err)
+	}
+	if requested.RuntimeBuildStatus != enum.SelfDeployRuntimeBuildStatusRequested ||
+		len(requested.RuntimeBuildJobs) != 1 ||
+		requested.RuntimeBuildJobs[0].RuntimeJobRef != "runtime:job/build-agent-manager" {
+		t.Fatalf("runtime build state = %s/%+v, want requested job", requested.RuntimeBuildStatus, requested.RuntimeBuildJobs)
+	}
+	if buildCreator.calls != 1 {
+		t.Fatalf("build creator calls = %d, want 1", buildCreator.calls)
+	}
+	if repository.updateSelfDeployResult.IdempotencyKey == blockedCommandKey {
+		t.Fatalf("dispatch state idempotency key was reused: %q", blockedCommandKey)
+	}
+}
+
 func TestCreateSelfDeployPlanFromSignalReplaysExistingBuildJob(t *testing.T) {
 	t.Parallel()
 

@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"strings"
 
 	"github.com/google/uuid"
@@ -190,6 +192,9 @@ func (s *Service) recordSelfDeployBuildState(ctx context.Context, plan entity.Se
 	if err != nil {
 		return entity.SelfDeployPlan{}, err
 	}
+	if sameSelfDeployRuntimeBuildState(loaded, plan) {
+		return loaded, nil
+	}
 	if loaded.Version != plan.Version {
 		if selfDeployBuildJobsRequested(loaded) {
 			return loaded, nil
@@ -204,7 +209,7 @@ func (s *Service) recordSelfDeployBuildState(ctx context.Context, plan entity.Se
 	if err != nil {
 		return entity.SelfDeployPlan{}, err
 	}
-	command, err := commandResult(selfDeployBuildCommandMeta(plan.ID), operationDispatchSelfDeployBuild, enum.CommandAggregateTypeSelfDeployPlan, plan.ID, payload, now)
+	command, err := commandResult(selfDeployBuildStateCommandMeta(plan), operationDispatchSelfDeployBuild, enum.CommandAggregateTypeSelfDeployPlan, plan.ID, payload, now)
 	if err != nil {
 		return entity.SelfDeployPlan{}, err
 	}
@@ -213,7 +218,7 @@ func (s *Service) recordSelfDeployBuildState(ctx context.Context, plan entity.Se
 		return entity.SelfDeployPlan{}, err
 	}
 	if err := s.repository.UpdateSelfDeployPlanWithResult(ctx, plan, previousVersion, command, &event); err != nil {
-		return s.resolveSelfDeployBuildUpdateError(ctx, plan.ID, err)
+		return s.resolveSelfDeployBuildUpdateError(ctx, plan, err)
 	}
 	return plan, nil
 }
@@ -237,9 +242,9 @@ func selfDeployBuildPlanMatchesApprovedPlan(plan entity.SelfDeployPlan, buildPla
 	return stringSlicesSetEqual(buildPlan.AffectedServiceKeys, plan.AffectedServiceKeys)
 }
 
-func (s *Service) resolveSelfDeployBuildUpdateError(ctx context.Context, planID uuid.UUID, updateErr error) (entity.SelfDeployPlan, error) {
-	loaded, loadErr := s.repository.GetSelfDeployPlan(ctx, planID)
-	if loadErr == nil && selfDeployBuildJobsRequested(loaded) {
+func (s *Service) resolveSelfDeployBuildUpdateError(ctx context.Context, desired entity.SelfDeployPlan, updateErr error) (entity.SelfDeployPlan, error) {
+	loaded, loadErr := s.repository.GetSelfDeployPlan(ctx, desired.ID)
+	if loadErr == nil && (selfDeployBuildJobsRequested(loaded) || sameSelfDeployRuntimeBuildState(loaded, desired)) {
 		return loaded, nil
 	}
 	return entity.SelfDeployPlan{}, updateErr
@@ -259,6 +264,29 @@ func selfDeployBuildCommandMeta(planID uuid.UUID) value.CommandMeta {
 	}
 }
 
+func selfDeployBuildStateCommandMeta(plan entity.SelfDeployPlan) value.CommandMeta {
+	return value.CommandMeta{
+		IdempotencyKey: strings.Join([]string{
+			"self_deploy_build",
+			plan.ID.String(),
+			string(plan.RuntimeBuildStatus),
+			selfDeployBuildKeyDigest(plan.RuntimeBuildFingerprint),
+			selfDeployBuildKeyDigest(plan.RuntimeBuildErrorCode),
+			selfDeployBuildKeyDigest(plan.RuntimeBuildSummary),
+		}, ":"),
+		Actor: value.Actor{Type: "service", ID: "agent-manager"},
+	}
+}
+
+func selfDeployBuildKeyDigest(value string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return "none"
+	}
+	sum := sha256.Sum256([]byte(trimmed))
+	return hex.EncodeToString(sum[:])
+}
+
 func selfDeployRuntimeBuildCommandMeta(planID uuid.UUID, item SelfDeployBuildPlanItem) value.CommandMeta {
 	serviceKey := strings.TrimSpace(item.ServiceKey)
 	fingerprint := strings.TrimSpace(item.PlanItemFingerprint)
@@ -275,6 +303,30 @@ func selfDeploySafeSummary(value string) string {
 		return "self-deploy build dispatch diagnostic redacted"
 	}
 	return result
+}
+
+func sameSelfDeployRuntimeBuildState(left entity.SelfDeployPlan, right entity.SelfDeployPlan) bool {
+	return left.RuntimeBuildStatus == right.RuntimeBuildStatus &&
+		strings.TrimSpace(left.RuntimeBuildFingerprint) == strings.TrimSpace(right.RuntimeBuildFingerprint) &&
+		strings.TrimSpace(left.RuntimeBuildErrorCode) == strings.TrimSpace(right.RuntimeBuildErrorCode) &&
+		strings.TrimSpace(left.RuntimeBuildSummary) == strings.TrimSpace(right.RuntimeBuildSummary) &&
+		sameSelfDeployRuntimeBuildJobs(left.RuntimeBuildJobs, right.RuntimeBuildJobs)
+}
+
+func sameSelfDeployRuntimeBuildJobs(left []entity.SelfDeployRuntimeBuildJob, right []entity.SelfDeployRuntimeBuildJob) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if strings.TrimSpace(left[index].ServiceKey) != strings.TrimSpace(right[index].ServiceKey) ||
+			strings.TrimSpace(left[index].ServiceRef) != strings.TrimSpace(right[index].ServiceRef) ||
+			strings.TrimSpace(left[index].RuntimeJobRef) != strings.TrimSpace(right[index].RuntimeJobRef) ||
+			strings.TrimSpace(left[index].RuntimeJobStatus) != strings.TrimSpace(right[index].RuntimeJobStatus) ||
+			strings.TrimSpace(left[index].BuildPlanItemFingerprint) != strings.TrimSpace(right[index].BuildPlanItemFingerprint) {
+			return false
+		}
+	}
+	return true
 }
 
 func stringSlicesSetEqual(left []string, right []string) bool {
