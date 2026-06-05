@@ -17,24 +17,27 @@ type idGeneratorPort interface{ agentrepo.IDGenerator }
 
 // Config contains dependencies required by the agent-manager service.
 type Config struct {
-	Repository                  agentrepo.Repository
-	Clock                       agentrepo.Clock
-	IDGenerator                 agentrepo.IDGenerator
-	GuidanceResolver            GuidanceResolver
-	WorkspacePolicyResolver     WorkspacePolicyResolver
-	RuntimePreparer             RuntimePreparer
-	RuntimeJobCreator           RuntimeJobCreator
-	RuntimeJobReader            RuntimeJobReader
-	RuntimeJobRunnerImageRef    string
-	RuntimeJobAllowedSecretRefs []AgentRunExecutionRef
-	CodexSessionExecution       CodexSessionExecutionConfig
-	ProviderFollowUpDispatcher  ProviderFollowUpDispatcher
-	HumanGateRequester          HumanGateInteractionRequester
-	SelfDeployGatePreparer      SelfDeployGatePreparer
-	RuntimePreparationEnabled   bool
-	RuntimeJobDispatchEnabled   bool
-	HumanGateRequestEnabled     bool
-	SelfDeployGateEnabled       bool
+	Repository                     agentrepo.Repository
+	Clock                          agentrepo.Clock
+	IDGenerator                    agentrepo.IDGenerator
+	GuidanceResolver               GuidanceResolver
+	WorkspacePolicyResolver        WorkspacePolicyResolver
+	RuntimePreparer                RuntimePreparer
+	RuntimeJobCreator              RuntimeJobCreator
+	RuntimeJobReader               RuntimeJobReader
+	SelfDeployBuildPlanReader      SelfDeployBuildPlanReader
+	SelfDeployBuildJobCreator      SelfDeployBuildJobCreator
+	RuntimeJobRunnerImageRef       string
+	RuntimeJobAllowedSecretRefs    []AgentRunExecutionRef
+	CodexSessionExecution          CodexSessionExecutionConfig
+	ProviderFollowUpDispatcher     ProviderFollowUpDispatcher
+	HumanGateRequester             HumanGateInteractionRequester
+	SelfDeployGatePreparer         SelfDeployGatePreparer
+	RuntimePreparationEnabled      bool
+	RuntimeJobDispatchEnabled      bool
+	SelfDeployBuildDispatchEnabled bool
+	HumanGateRequestEnabled        bool
+	SelfDeployGateEnabled          bool
 	// EventPublisher is a future outbox-backed publisher for agent domain events.
 	EventPublisher EventPublisher
 }
@@ -47,19 +50,22 @@ type Service struct {
 	idGenerator    idGeneratorPort
 	eventPublisher EventPublisher
 
-	runtimePreparationEnabled   bool
-	runtimeJobDispatchEnabled   bool
-	humanGateRequestEnabled     bool
-	selfDeployGateEnabled       bool
-	runtimeJobRunnerImageRef    string
-	runtimeJobAllowedSecretRefs []AgentRunExecutionRef
-	codexSessionExecution       CodexSessionExecutionConfig
+	runtimePreparationEnabled      bool
+	runtimeJobDispatchEnabled      bool
+	selfDeployBuildDispatchEnabled bool
+	humanGateRequestEnabled        bool
+	selfDeployGateEnabled          bool
+	runtimeJobRunnerImageRef       string
+	runtimeJobAllowedSecretRefs    []AgentRunExecutionRef
+	codexSessionExecution          CodexSessionExecutionConfig
 
 	guidanceResolver           GuidanceResolver
 	workspacePolicyResolver    WorkspacePolicyResolver
 	runtimePreparer            RuntimePreparer
 	runtimeJobCreator          RuntimeJobCreator
 	runtimeJobReader           RuntimeJobReader
+	selfDeployBuildPlanReader  SelfDeployBuildPlanReader
+	selfDeployBuildJobCreator  SelfDeployBuildJobCreator
 	providerFollowUpDispatcher ProviderFollowUpDispatcher
 	humanGateRequester         HumanGateInteractionRequester
 	selfDeployGatePreparer     SelfDeployGatePreparer
@@ -87,6 +93,11 @@ type SelfDeploySignalReader interface {
 	GetSelfDeploySignal(context.Context, SelfDeploySignalLookupInput) (SelfDeploySignalReadResult, error)
 }
 
+// SelfDeployBuildPlanReader reads project-owned checked build inputs.
+type SelfDeployBuildPlanReader interface {
+	GetSelfDeployBuildPlan(context.Context, SelfDeployBuildPlanLookupInput) (SelfDeployBuildPlanReadResult, error)
+}
+
 // WorkspacePolicyResolutionInput selects one checked project workspace policy.
 type WorkspacePolicyResolutionInput struct {
 	Meta                    value.CommandMeta
@@ -104,6 +115,11 @@ type RuntimePreparer interface {
 // RuntimeJobCreator вызывает runtime-manager для постановки agent run job.
 type RuntimeJobCreator interface {
 	CreateAgentRunJob(context.Context, RuntimeJobInput) (RuntimeJobResult, error)
+}
+
+// SelfDeployBuildJobCreator вызывает runtime-manager для постановки build jobs self-deploy.
+type SelfDeployBuildJobCreator interface {
+	CreateSelfDeployBuildJob(context.Context, SelfDeployBuildJobInput) (RuntimeJobResult, error)
 }
 
 // RuntimeJobReader читает безопасное состояние runtime job через runtime-manager.
@@ -158,6 +174,14 @@ func (DisabledSelfDeploySignalReader) GetSelfDeploySignal(context.Context, SelfD
 	return SelfDeploySignalReadResult{}, errs.ErrDependencyUnavailable
 }
 
+// DisabledSelfDeployBuildPlanReader keeps build plan reads opt-in at app wiring time.
+type DisabledSelfDeployBuildPlanReader struct{}
+
+// GetSelfDeployBuildPlan reports that project-side build plan reads are unavailable.
+func (DisabledSelfDeployBuildPlanReader) GetSelfDeployBuildPlan(context.Context, SelfDeployBuildPlanLookupInput) (SelfDeployBuildPlanReadResult, error) {
+	return SelfDeployBuildPlanReadResult{}, errs.ErrDependencyUnavailable
+}
+
 // DisabledRuntimePreparer keeps agent-manager runnable before runtime-manager is wired.
 type DisabledRuntimePreparer struct{}
 
@@ -171,6 +195,14 @@ type DisabledRuntimeJobCreator struct{}
 
 // CreateAgentRunJob сообщает, что постановка runtime job недоступна.
 func (DisabledRuntimeJobCreator) CreateAgentRunJob(context.Context, RuntimeJobInput) (RuntimeJobResult, error) {
+	return RuntimeJobResult{}, errs.ErrDependencyUnavailable
+}
+
+// DisabledSelfDeployBuildJobCreator оставляет self-deploy build dispatch явным switch на уровне сборки сервиса.
+type DisabledSelfDeployBuildJobCreator struct{}
+
+// CreateSelfDeployBuildJob сообщает, что постановка self-deploy build job недоступна.
+func (DisabledSelfDeployBuildJobCreator) CreateSelfDeployBuildJob(context.Context, SelfDeployBuildJobInput) (RuntimeJobResult, error) {
 	return RuntimeJobResult{}, errs.ErrDependencyUnavailable
 }
 
@@ -251,6 +283,12 @@ func New(cfg Config) *Service {
 	if cfg.RuntimeJobReader == nil {
 		cfg.RuntimeJobReader = DisabledRuntimeJobReader{}
 	}
+	if cfg.SelfDeployBuildPlanReader == nil {
+		cfg.SelfDeployBuildPlanReader = DisabledSelfDeployBuildPlanReader{}
+	}
+	if cfg.SelfDeployBuildJobCreator == nil {
+		cfg.SelfDeployBuildJobCreator = DisabledSelfDeployBuildJobCreator{}
+	}
 	if cfg.ProviderFollowUpDispatcher == nil {
 		cfg.ProviderFollowUpDispatcher = DisabledProviderFollowUpDispatcher{}
 	}
@@ -276,11 +314,14 @@ func New(cfg Config) *Service {
 	service.runtimePreparer = cfg.RuntimePreparer
 	service.runtimeJobCreator = cfg.RuntimeJobCreator
 	service.runtimeJobReader = cfg.RuntimeJobReader
+	service.selfDeployBuildPlanReader = cfg.SelfDeployBuildPlanReader
+	service.selfDeployBuildJobCreator = cfg.SelfDeployBuildJobCreator
 	service.providerFollowUpDispatcher = cfg.ProviderFollowUpDispatcher
 	service.humanGateRequester = cfg.HumanGateRequester
 	service.selfDeployGatePreparer = cfg.SelfDeployGatePreparer
 	service.runtimePreparationEnabled = cfg.RuntimePreparationEnabled
 	service.runtimeJobDispatchEnabled = cfg.RuntimeJobDispatchEnabled
+	service.selfDeployBuildDispatchEnabled = cfg.SelfDeployBuildDispatchEnabled
 	service.humanGateRequestEnabled = cfg.HumanGateRequestEnabled
 	service.selfDeployGateEnabled = cfg.SelfDeployGateEnabled
 	service.runtimeJobRunnerImageRef = cfg.RuntimeJobRunnerImageRef

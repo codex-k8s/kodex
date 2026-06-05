@@ -613,8 +613,8 @@ func scanHumanGateRequest(row postgreslib.RowScanner) (entity.HumanGateRequest, 
 
 func scanSelfDeployPlan(row postgreslib.RowScanner) (entity.SelfDeployPlan, error) {
 	var plan entity.SelfDeployPlan
-	var affectedServiceKeys, pathCategories, expectedRuntimeJobTypes []byte
-	var status string
+	var affectedServiceKeys, pathCategories, expectedRuntimeJobTypes, runtimeBuildJobs []byte
+	var status, runtimeBuildStatus string
 	err := row.Scan(
 		&plan.ID,
 		&plan.Scope.Type,
@@ -641,11 +641,17 @@ func scanSelfDeployPlan(row postgreslib.RowScanner) (entity.SelfDeployPlan, erro
 		&plan.PlanFingerprint,
 		&plan.IdempotencyKey,
 		&status,
+		&runtimeBuildJobs,
+		&runtimeBuildStatus,
+		&plan.RuntimeBuildFingerprint,
+		&plan.RuntimeBuildErrorCode,
+		&plan.RuntimeBuildSummary,
 		&plan.Version,
 		&plan.CreatedAt,
 		&plan.UpdatedAt,
 	)
 	plan.Status = enum.SelfDeployPlanStatus(status)
+	plan.RuntimeBuildStatus = enum.SelfDeployRuntimeBuildStatus(runtimeBuildStatus)
 	if err != nil {
 		return plan, err
 	}
@@ -667,6 +673,9 @@ func scanSelfDeployPlan(row postgreslib.RowScanner) (entity.SelfDeployPlan, erro
 	plan.ExpectedRuntimeJobTypes = make([]enum.SelfDeployRuntimeJobType, 0, len(jobTypes))
 	for _, jobType := range jobTypes {
 		plan.ExpectedRuntimeJobTypes = append(plan.ExpectedRuntimeJobTypes, enum.SelfDeployRuntimeJobType(jobType))
+	}
+	if err := json.Unmarshal(runtimeBuildJobs, &plan.RuntimeBuildJobs); err != nil {
+		return plan, fmt.Errorf("scan self deploy runtime_build_jobs: %w", err)
 	}
 	return plan, nil
 }

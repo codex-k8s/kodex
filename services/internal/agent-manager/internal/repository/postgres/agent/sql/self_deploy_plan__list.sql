@@ -25,6 +25,11 @@ SELECT
     plan_fingerprint,
     idempotency_key,
     status,
+    runtime_build_jobs,
+    runtime_build_status,
+    runtime_build_plan_fingerprint,
+    runtime_build_error_code,
+    runtime_build_summary,
     version,
     created_at,
     updated_at

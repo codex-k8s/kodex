@@ -43,6 +43,9 @@ func TestLoadConfigDefaultsRuntimePreparationDisabledUntilDeployWired(t *testing
 	if cfg.RuntimeJobDispatchEnabled {
 		t.Fatal("RuntimeJobDispatchEnabled = true, want default false")
 	}
+	if cfg.SelfDeployBuildDispatchEnabled {
+		t.Fatal("SelfDeployBuildDispatchEnabled = true, want default false")
+	}
 }
 
 func TestValidateRequiresGRPCAuthTokenWhenAuthEnabled(t *testing.T) {
@@ -239,6 +242,25 @@ func TestValidateRequiresGovernanceManagerTokenWhenSelfDeployGateEnabled(t *test
 	cfg.GovernanceManagerGRPCAuthToken = ""
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("Validate() err = nil, want governance-manager auth token error")
+	}
+}
+
+func TestValidateRequiresApprovedGatePathWhenSelfDeployBuildDispatchEnabled(t *testing.T) {
+	t.Parallel()
+
+	cfg := validConfig()
+	cfg.SelfDeployBuildDispatchEnabled = true
+	cfg.SelfDeployGovernanceGateEnabled = false
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() err = nil, want self-deploy governance gate error")
+	}
+
+	cfg = validConfig()
+	cfg.SelfDeployBuildDispatchEnabled = true
+	cfg.SelfDeployGovernanceGateEnabled = true
+	cfg.RuntimeManagerGRPCAuthToken = ""
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() err = nil, want runtime-manager auth token error")
 	}
 }
 

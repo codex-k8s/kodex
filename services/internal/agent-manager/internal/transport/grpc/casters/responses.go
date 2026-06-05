@@ -567,27 +567,46 @@ func HumanGateRequestToProto(gate entity.HumanGateRequest) *agentsv1.HumanGateRe
 
 func SelfDeployPlanToProto(plan entity.SelfDeployPlan) *agentsv1.SelfDeployPlan {
 	return &agentsv1.SelfDeployPlan{
-		Id:                      plan.ID.String(),
-		Scope:                   ScopeToProto(plan.Scope),
-		ProjectRef:              plan.ProjectRef,
-		RepositoryRef:           plan.RepositoryRef,
-		ProviderSignalRef:       optionalStringPtr(plan.ProviderSignalRef),
-		SourceRef:               plan.SourceRef,
-		MergeCommitSha:          plan.MergeCommitSHA,
-		ServicesYamlRef:         optionalStringPtr(plan.ServicesYAMLRef),
-		ServicesYamlDigest:      plan.ServicesYAMLDigest,
-		AffectedServiceKeys:     append([]string(nil), plan.AffectedServiceKeys...),
-		PathCategories:          SelfDeployPathCategoriesToProto(plan.PathCategories),
-		ExpectedRuntimeJobTypes: SelfDeployRuntimeJobTypesToProto(plan.ExpectedRuntimeJobTypes),
-		GovernanceContext:       GovernanceContextToProto(plan.GovernanceContext),
-		SafeSummary:             optionalStringPtr(plan.SafeSummary),
-		PlanFingerprint:         plan.PlanFingerprint,
-		IdempotencyKey:          plan.IdempotencyKey,
-		Status:                  SelfDeployPlanStatusToProto(plan.Status),
-		Version:                 plan.Version,
-		CreatedAt:               formatTime(plan.CreatedAt),
-		UpdatedAt:               formatTime(plan.UpdatedAt),
+		Id:                          plan.ID.String(),
+		Scope:                       ScopeToProto(plan.Scope),
+		ProjectRef:                  plan.ProjectRef,
+		RepositoryRef:               plan.RepositoryRef,
+		ProviderSignalRef:           optionalStringPtr(plan.ProviderSignalRef),
+		SourceRef:                   plan.SourceRef,
+		MergeCommitSha:              plan.MergeCommitSHA,
+		ServicesYamlRef:             optionalStringPtr(plan.ServicesYAMLRef),
+		ServicesYamlDigest:          plan.ServicesYAMLDigest,
+		AffectedServiceKeys:         append([]string(nil), plan.AffectedServiceKeys...),
+		PathCategories:              SelfDeployPathCategoriesToProto(plan.PathCategories),
+		ExpectedRuntimeJobTypes:     SelfDeployRuntimeJobTypesToProto(plan.ExpectedRuntimeJobTypes),
+		GovernanceContext:           GovernanceContextToProto(plan.GovernanceContext),
+		SafeSummary:                 optionalStringPtr(plan.SafeSummary),
+		PlanFingerprint:             plan.PlanFingerprint,
+		IdempotencyKey:              plan.IdempotencyKey,
+		Status:                      SelfDeployPlanStatusToProto(plan.Status),
+		Version:                     plan.Version,
+		CreatedAt:                   formatTime(plan.CreatedAt),
+		UpdatedAt:                   formatTime(plan.UpdatedAt),
+		RuntimeBuildJobs:            SelfDeployRuntimeBuildJobsToProto(plan.RuntimeBuildJobs),
+		RuntimeBuildStatus:          SelfDeployRuntimeBuildStatusToProto(plan.RuntimeBuildStatus),
+		RuntimeBuildPlanFingerprint: optionalStringPtr(plan.RuntimeBuildFingerprint),
+		RuntimeBuildErrorCode:       optionalStringPtr(plan.RuntimeBuildErrorCode),
+		RuntimeBuildSummary:         optionalStringPtr(plan.RuntimeBuildSummary),
 	}
+}
+
+func SelfDeployRuntimeBuildJobsToProto(jobs []entity.SelfDeployRuntimeBuildJob) []*agentsv1.SelfDeployRuntimeBuildJobRef {
+	result := make([]*agentsv1.SelfDeployRuntimeBuildJobRef, 0, len(jobs))
+	for _, job := range jobs {
+		result = append(result, &agentsv1.SelfDeployRuntimeBuildJobRef{
+			ServiceKey:               job.ServiceKey,
+			ServiceRef:               optionalStringPtr(job.ServiceRef),
+			RuntimeJobRef:            job.RuntimeJobRef,
+			RuntimeJobStatus:         optionalStringPtr(job.RuntimeJobStatus),
+			BuildPlanItemFingerprint: optionalStringPtr(job.BuildPlanItemFingerprint),
+		})
+	}
+	return result
 }
 
 func SelfDeployPathCategoriesToProto(values []enum.SelfDeployPathCategory) []agentsv1.SelfDeployPathCategory {

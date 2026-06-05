@@ -233,6 +233,15 @@ const (
 	SelfDeployRuntimeJobTypeHealthCheck SelfDeployRuntimeJobType = "health_check"
 )
 
+type SelfDeployRuntimeBuildStatus string
+
+const (
+	SelfDeployRuntimeBuildStatusNotRequested SelfDeployRuntimeBuildStatus = "not_requested"
+	SelfDeployRuntimeBuildStatusBlocked      SelfDeployRuntimeBuildStatus = "blocked"
+	SelfDeployRuntimeBuildStatusRequested    SelfDeployRuntimeBuildStatus = "requested"
+	SelfDeployRuntimeBuildStatusFailed       SelfDeployRuntimeBuildStatus = "failed"
+)
+
 type CommandAggregateType string
 
 const (

@@ -287,6 +287,19 @@ type SelfDeployPlan struct {
 	PlanFingerprint         string
 	IdempotencyKey          string
 	Status                  enum.SelfDeployPlanStatus
+	RuntimeBuildJobs        []SelfDeployRuntimeBuildJob
+	RuntimeBuildStatus      enum.SelfDeployRuntimeBuildStatus
+	RuntimeBuildFingerprint string
+	RuntimeBuildErrorCode   string
+	RuntimeBuildSummary     string
+}
+
+type SelfDeployRuntimeBuildJob struct {
+	ServiceKey               string `json:"service_key"`
+	ServiceRef               string `json:"service_ref"`
+	RuntimeJobRef            string `json:"runtime_job_ref"`
+	RuntimeJobStatus         string `json:"runtime_job_status"`
+	BuildPlanItemFingerprint string `json:"build_plan_item_fingerprint"`
 }
 
 type CommandResult struct {
