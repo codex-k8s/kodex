@@ -11,12 +11,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/manifestrender"
 	"github.com/codex-k8s/kodex/libs/go/stackinventory"
+	"github.com/google/uuid"
 )
 
 func main() {
@@ -66,8 +66,6 @@ type manifestSet struct {
 }
 
 var errKubectlUnavailable = errors.New("kubectl is not available")
-
-var uuidTextPattern = regexp.MustCompile(`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
 func run(ctx context.Context, options planOptions, output io.Writer) error {
 	repoRoot, err := absolutePath(firstNonEmpty(options.RepoRoot, "."))
@@ -436,9 +434,8 @@ func requiredSelfDeployRuntimeSecretKeys() []string {
 }
 
 func checkSelfDeployReadinessEnv(output io.Writer) error {
-	projectID := strings.TrimSpace(os.Getenv("KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_PROJECT_ID"))
-	if !uuidTextPattern.MatchString(projectID) {
-		return errors.New("KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_PROJECT_ID must be a non-empty uuid for self-deploy readiness")
+	if err := validateSelfDeployProjectID(os.Getenv("KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_PROJECT_ID")); err != nil {
+		return err
 	}
 	for _, item := range requiredSelfDeployBooleanEnv() {
 		enabled, err := boolEnv(item.Name, item.Fallback)
@@ -450,6 +447,14 @@ func checkSelfDeployReadinessEnv(output io.Writer) error {
 		}
 	}
 	ok(output, "agent-manager self-deploy readiness env checked; values hidden")
+	return nil
+}
+
+func validateSelfDeployProjectID(raw string) error {
+	projectID, err := uuid.Parse(strings.TrimSpace(raw))
+	if err != nil || projectID == uuid.Nil {
+		return errors.New("KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_PROJECT_ID must be a valid non-nil uuid for self-deploy readiness")
+	}
 	return nil
 }
 

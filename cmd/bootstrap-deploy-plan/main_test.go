@@ -92,29 +92,44 @@ func TestRunFailsWhenDeployableServiceImageIsMissing(t *testing.T) {
 	}
 }
 
-func TestRunFailsWhenSelfDeployProjectIDIsMissing(t *testing.T) {
-	clearDeployPlanEnv(t)
-	repoRoot := createDeployPlanRepo(t, true)
-	envFile := filepath.Join(t.TempDir(), "config.env")
-	if err := os.WriteFile(envFile, []byte(strings.Join([]string{
-		"KODEX_INTERNAL_REGISTRY_HOST='127.0.0.1:5000'",
-		"KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_CONSUMER_ENABLED='true'",
-		"KODEX_AGENT_MANAGER_SELF_DEPLOY_GOVERNANCE_GATE_ENABLED='true'",
-		"KODEX_AGENT_MANAGER_SELF_DEPLOY_BUILD_DISPATCH_ENABLED='true'",
-	}, "\n")), 0o600); err != nil {
-		t.Fatalf("write env file: %v", err)
-	}
+func TestRunFailsWhenSelfDeployProjectIDIsMissingInvalidOrNil(t *testing.T) {
+	for _, tc := range []struct {
+		Name        string
+		ProjectLine string
+	}{
+		{Name: "missing"},
+		{Name: "invalid", ProjectLine: "KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_PROJECT_ID='not-a-uuid'"},
+		{Name: "nil", ProjectLine: "KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_PROJECT_ID='00000000-0000-0000-0000-000000000000'"},
+	} {
+		t.Run(tc.Name, func(t *testing.T) {
+			clearDeployPlanEnv(t)
+			repoRoot := createDeployPlanRepo(t, true)
+			envFile := filepath.Join(t.TempDir(), "config.env")
+			lines := []string{
+				"KODEX_INTERNAL_REGISTRY_HOST='127.0.0.1:5000'",
+				"KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_CONSUMER_ENABLED='true'",
+				"KODEX_AGENT_MANAGER_SELF_DEPLOY_GOVERNANCE_GATE_ENABLED='true'",
+				"KODEX_AGENT_MANAGER_SELF_DEPLOY_BUILD_DISPATCH_ENABLED='true'",
+			}
+			if tc.ProjectLine != "" {
+				lines = append(lines, tc.ProjectLine)
+			}
+			if err := os.WriteFile(envFile, []byte(strings.Join(lines, "\n")), 0o600); err != nil {
+				t.Fatalf("write env file: %v", err)
+			}
 
-	err := run(context.Background(), planOptions{
-		RepoRoot:           repoRoot,
-		EnvFilePath:        envFile,
-		SkipLiveKubernetes: true,
-	}, discardWriter{})
-	if err == nil {
-		t.Fatal("expected missing self-deploy project id error")
-	}
-	if !strings.Contains(err.Error(), "KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_PROJECT_ID") {
-		t.Fatalf("unexpected error: %v", err)
+			err := run(context.Background(), planOptions{
+				RepoRoot:           repoRoot,
+				EnvFilePath:        envFile,
+				SkipLiveKubernetes: true,
+			}, discardWriter{})
+			if err == nil {
+				t.Fatal("expected self-deploy project id error")
+			}
+			if !strings.Contains(err.Error(), "KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_PROJECT_ID") {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
 	}
 }
 
