@@ -22,7 +22,7 @@ func TestRunBuildsBackendPlanWithoutPrintingEnvValues(t *testing.T) {
 		"KODEX_POSTGRES_PASSWORD='secret-postgres-password'",
 		"KODEX_ACCESS_MANAGER_DATABASE_DSN='secret-access-dsn'",
 		"KODEX_ACCESS_MANAGER_GRPC_AUTH_TOKEN='secret-access-token'",
-	}, "\n")), 0o600); err != nil {
+	}, "\n")+"\n"+strings.Join(selfDeployReadinessEnvLines(), "\n")), 0o600); err != nil {
 		t.Fatalf("write env file: %v", err)
 	}
 	renderDir := filepath.Join(t.TempDir(), "rendered")
@@ -47,6 +47,8 @@ func TestRunBuildsBackendPlanWithoutPrintingEnvValues(t *testing.T) {
 		"PostgreSQL foundation rendered",
 		"platform event-log migrations rendered",
 		"backend service access-manager rendered",
+		"backend service agent-manager rendered",
+		"agent-manager self-deploy rendered manifest surface checked",
 		"live Kubernetes foundation checks skipped",
 	} {
 		if !strings.Contains(output.String(), expected) {
@@ -60,6 +62,7 @@ func TestRunBuildsBackendPlanWithoutPrintingEnvValues(t *testing.T) {
 		filepath.Join(renderDir, "bootstrap-builder-smoke", "kaniko-smoke.yaml"),
 		filepath.Join(renderDir, "access-manager", "access-manager.yaml"),
 		filepath.Join(renderDir, "access-manager", "migrations.yaml"),
+		filepath.Join(renderDir, "agent-manager", "agent-manager.yaml"),
 	} {
 		if _, err := os.Stat(path); err != nil {
 			t.Fatalf("expected rendered file %s: %v", path, err)
@@ -72,7 +75,7 @@ func TestRunFailsWhenDeployableServiceImageIsMissing(t *testing.T) {
 	clearDeployPlanEnv(t)
 	repoRoot := createDeployPlanRepo(t, false)
 	envFile := filepath.Join(t.TempDir(), "config.env")
-	if err := os.WriteFile(envFile, []byte("KODEX_INTERNAL_REGISTRY_HOST='127.0.0.1:5000'\n"), 0o600); err != nil {
+	if err := os.WriteFile(envFile, []byte("KODEX_INTERNAL_REGISTRY_HOST='127.0.0.1:5000'\n"+strings.Join(selfDeployReadinessEnvLines(), "\n")), 0o600); err != nil {
 		t.Fatalf("write env file: %v", err)
 	}
 
@@ -89,6 +92,126 @@ func TestRunFailsWhenDeployableServiceImageIsMissing(t *testing.T) {
 	}
 }
 
+func TestRunFailsWhenSelfDeployProjectIDIsMissingInvalidOrNil(t *testing.T) {
+	for _, tc := range []struct {
+		Name        string
+		ProjectLine string
+	}{
+		{Name: "missing"},
+		{Name: "invalid", ProjectLine: "KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_PROJECT_ID='not-a-uuid'"},
+		{Name: "nil", ProjectLine: "KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_PROJECT_ID='00000000-0000-0000-0000-000000000000'"},
+	} {
+		t.Run(tc.Name, func(t *testing.T) {
+			clearDeployPlanEnv(t)
+			repoRoot := createDeployPlanRepo(t, true)
+			envFile := filepath.Join(t.TempDir(), "config.env")
+			lines := []string{
+				"KODEX_INTERNAL_REGISTRY_HOST='127.0.0.1:5000'",
+				"KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_CONSUMER_ENABLED='true'",
+				"KODEX_AGENT_MANAGER_SELF_DEPLOY_GOVERNANCE_GATE_ENABLED='true'",
+				"KODEX_AGENT_MANAGER_SELF_DEPLOY_BUILD_DISPATCH_ENABLED='true'",
+			}
+			if tc.ProjectLine != "" {
+				lines = append(lines, tc.ProjectLine)
+			}
+			if err := os.WriteFile(envFile, []byte(strings.Join(lines, "\n")), 0o600); err != nil {
+				t.Fatalf("write env file: %v", err)
+			}
+
+			err := run(context.Background(), planOptions{
+				RepoRoot:           repoRoot,
+				EnvFilePath:        envFile,
+				SkipLiveKubernetes: true,
+			}, discardWriter{})
+			if err == nil {
+				t.Fatal("expected self-deploy project id error")
+			}
+			if !strings.Contains(err.Error(), "KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_PROJECT_ID") {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestRunFailsWhenSelfDeployBuildDispatchIsDisabled(t *testing.T) {
+	clearDeployPlanEnv(t)
+	repoRoot := createDeployPlanRepo(t, true)
+	envFile := filepath.Join(t.TempDir(), "config.env")
+	if err := os.WriteFile(envFile, []byte(strings.Join([]string{
+		"KODEX_INTERNAL_REGISTRY_HOST='127.0.0.1:5000'",
+		"KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_PROJECT_ID='63135040-fe44-4ec4-83d5-b0126dc23b32'",
+		"KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_CONSUMER_ENABLED='true'",
+		"KODEX_AGENT_MANAGER_SELF_DEPLOY_GOVERNANCE_GATE_ENABLED='true'",
+		"KODEX_AGENT_MANAGER_SELF_DEPLOY_BUILD_DISPATCH_ENABLED='false'",
+	}, "\n")), 0o600); err != nil {
+		t.Fatalf("write env file: %v", err)
+	}
+
+	err := run(context.Background(), planOptions{
+		RepoRoot:           repoRoot,
+		EnvFilePath:        envFile,
+		SkipLiveKubernetes: true,
+	}, discardWriter{})
+	if err == nil {
+		t.Fatal("expected disabled self-deploy build dispatch error")
+	}
+	if !strings.Contains(err.Error(), "KODEX_AGENT_MANAGER_SELF_DEPLOY_BUILD_DISPATCH_ENABLED") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestCheckRenderedSelfDeploySurfaceRequiresAgentManagerEnv(t *testing.T) {
+	renderDir := t.TempDir()
+	manifestDir := filepath.Join(renderDir, "agent-manager")
+	if err := os.MkdirAll(manifestDir, 0o755); err != nil {
+		t.Fatalf("create rendered manifest dir: %v", err)
+	}
+	content := strings.Join(requiredSelfDeployRenderedManifestFragments(), "\n")
+	if err := os.WriteFile(filepath.Join(manifestDir, "agent-manager.yaml"), []byte(content), 0o644); err != nil {
+		t.Fatalf("write rendered manifest: %v", err)
+	}
+	var output bytes.Buffer
+	if err := checkRenderedSelfDeploySurface(renderDir, &output); err != nil {
+		t.Fatalf("check rendered self-deploy surface: %v", err)
+	}
+
+	missing := "KODEX_AGENT_MANAGER_SELF_DEPLOY_BUILD_DISPATCH_ENABLED"
+	content = strings.ReplaceAll(content, missing, "")
+	if err := os.WriteFile(filepath.Join(manifestDir, "agent-manager.yaml"), []byte(content), 0o644); err != nil {
+		t.Fatalf("rewrite rendered manifest: %v", err)
+	}
+	err := checkRenderedSelfDeploySurface(renderDir, discardWriter{})
+	if err == nil {
+		t.Fatal("expected missing rendered self-deploy surface error")
+	}
+	if !strings.Contains(err.Error(), missing) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRequiredSelfDeployRuntimeSecretKeys(t *testing.T) {
+	keys := strings.Join(requiredSelfDeployRuntimeSecretKeys(), "\n")
+	for _, expected := range []string{
+		"KODEX_AGENT_MANAGER_PROJECT_CATALOG_GRPC_AUTH_TOKEN",
+		"KODEX_AGENT_MANAGER_RUNTIME_MANAGER_GRPC_AUTH_TOKEN",
+		"KODEX_AGENT_MANAGER_GOVERNANCE_MANAGER_GRPC_AUTH_TOKEN",
+		"KODEX_AGENT_MANAGER_EVENT_LOG_DATABASE_DSN",
+	} {
+		if !strings.Contains(keys, expected) {
+			t.Fatalf("required self-deploy runtime secret keys missing %s: %s", expected, keys)
+		}
+	}
+}
+
+func selfDeployReadinessEnvLines() []string {
+	return []string{
+		"KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_PROJECT_ID='63135040-fe44-4ec4-83d5-b0126dc23b32'",
+		"KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_CONSUMER_ENABLED='true'",
+		"KODEX_AGENT_MANAGER_SELF_DEPLOY_GOVERNANCE_GATE_ENABLED='true'",
+		"KODEX_AGENT_MANAGER_SELF_DEPLOY_BUILD_DISPATCH_ENABLED='true'",
+	}
+}
+
 func createDeployPlanRepo(t *testing.T, includeServiceImage bool) string {
 	t.Helper()
 	repoRoot := t.TempDir()
@@ -101,11 +224,16 @@ func createDeployPlanRepo(t *testing.T, includeServiceImage bool) string {
     access-manager-migrations:
       repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/kodex/access-manager-migrations'
       tagTemplate: '{{ version "access-manager" }}'
+    agent-manager:
+      repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/kodex/agent-manager'
+      tagTemplate: '{{ version "agent-manager" }}'
 `
 	}
 	services := `spec:
   versions:
     access-manager:
+      value: "0.1.0"
+    agent-manager:
       value: "0.1.0"
     registry:
       value: "2"
@@ -152,11 +280,21 @@ func createDeployPlanRepo(t *testing.T, includeServiceImage bool) string {
         serviceManifest: deploy/base/access-manager/access-manager.yaml.tpl
         migrationsManifest: deploy/base/access-manager/migrations.yaml.tpl
         kustomization: deploy/base/access-manager/kustomization.yaml.tpl
+    - name: agent-manager
+      status: foundation
+      zone: internal
+      path: services/internal/agent-manager
+      dockerfile: services/internal/agent-manager/Dockerfile
+      ownerDomain: agent-orchestration
+      deploy:
+        serviceManifest: deploy/base/agent-manager/agent-manager.yaml.tpl
+        kustomization: deploy/base/agent-manager/kustomization.yaml.tpl
 `
 	if err := os.WriteFile(filepath.Join(repoRoot, "services.yaml"), []byte(services), 0o644); err != nil {
 		t.Fatalf("write services.yaml: %v", err)
 	}
 	writeFile(t, repoRoot, "services/internal/access-manager/Dockerfile", "FROM scratch\n")
+	writeFile(t, repoRoot, "services/internal/agent-manager/Dockerfile", "FROM scratch\n")
 	writeFile(t, repoRoot, "deploy/base/postgres/kustomization.yaml.tpl", "resources:\n  - secrets.yaml\n  - postgres.yaml\n")
 	writeFile(t, repoRoot, "deploy/base/postgres/secrets.yaml.tpl", `apiVersion: v1
 kind: Secret
@@ -187,6 +325,8 @@ stringData:
 	writeFile(t, repoRoot, "deploy/base/access-manager/kustomization.yaml.tpl", "resources:\n  - access-manager.yaml\n")
 	writeFile(t, repoRoot, "deploy/base/access-manager/access-manager.yaml.tpl", "image: {{ image \"access-manager\" }}\n")
 	writeFile(t, repoRoot, "deploy/base/access-manager/migrations.yaml.tpl", "image: {{ image \"access-manager-migrations\" }}\n")
+	writeFile(t, repoRoot, "deploy/base/agent-manager/kustomization.yaml.tpl", "resources:\n  - agent-manager.yaml\n")
+	writeFile(t, repoRoot, "deploy/base/agent-manager/agent-manager.yaml.tpl", "image: {{ image \"agent-manager\" }}\n"+strings.Join(requiredSelfDeployRenderedManifestFragments(), "\n")+"\n")
 	return repoRoot
 }
 
@@ -243,6 +383,10 @@ func clearDeployPlanEnv(t *testing.T) {
 		"KODEX_POSTGRES_PASSWORD",
 		"KODEX_ACCESS_MANAGER_DATABASE_DSN",
 		"KODEX_ACCESS_MANAGER_GRPC_AUTH_TOKEN",
+		"KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_PROJECT_ID",
+		"KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_CONSUMER_ENABLED",
+		"KODEX_AGENT_MANAGER_SELF_DEPLOY_GOVERNANCE_GATE_ENABLED",
+		"KODEX_AGENT_MANAGER_SELF_DEPLOY_BUILD_DISPATCH_ENABLED",
 	} {
 		t.Setenv(name, "")
 	}

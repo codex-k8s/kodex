@@ -58,6 +58,10 @@ PR, логах и документации.
 - `KODEX_LETSENCRYPT_EMAIL`;
 - `KODEX_BOOTSTRAP_PUBLIC_HOST`, если DNS нужно сверять с публичным host/IP, а не с локальными адресами сервера;
 - `KODEX_INTERNAL_REGISTRY_*`;
+- `KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_PROJECT_ID` после штатного onboarding/adoption self-repo;
+- `KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_CONSUMER_ENABLED=true`;
+- `KODEX_AGENT_MANAGER_SELF_DEPLOY_GOVERNANCE_GATE_ENABLED=true`;
+- `KODEX_AGENT_MANAGER_SELF_DEPLOY_BUILD_DISPATCH_ENABLED=true`;
 - `KODEX_SSH_PORT`, если host firewall включён;
 - пустые runtime secret seeds, которые bootstrap сгенерирует при install.
 
@@ -74,6 +78,13 @@ PR, логах и документации.
 - Go config сервиса задаёт безопасные runtime defaults самого сервиса;
 - Kubernetes templates не повторяют runtime defaults сервиса как `envOr`, если сервис уже имеет такой default;
 - `bootstrap/host/config.env.example` хранит только локальные install-настройки и secret/bootstrap seed-поля.
+
+Готовность `self-deploy` проверяется до `rollout`. `cmd/bootstrap-deploy-plan`
+падает, если у `agent-manager` нет `KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_PROJECT_ID`,
+если выключен signal consumer, governance gate или build dispatch, либо если
+отрендеренный manifest потерял обязательные env/Secret refs. При проверке с
+`--require-kubernetes` дополнительно проверяется наличие нужных ключей в
+`kodex-platform-runtime`; значения ключей не печатаются.
 
 ## Preflight и dry-run
 
