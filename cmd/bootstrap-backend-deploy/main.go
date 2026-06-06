@@ -93,6 +93,17 @@ type imageBuild struct {
 	Destination string
 }
 
+type kubernetesJobStatus struct {
+	Status struct {
+		Conditions []struct {
+			Type    string `json:"type"`
+			Status  string `json:"status"`
+			Reason  string `json:"reason"`
+			Message string `json:"message"`
+		} `json:"conditions"`
+	} `json:"status"`
+}
+
 type buildBaseImages struct {
 	Golang string
 	Node   string
@@ -985,7 +996,7 @@ func buildImages(ctx context.Context, config deployConfig, repoRoot string, stac
 		if err := kubectlApply(ctx, manifest); err != nil {
 			return fmt.Errorf("apply build job %s: %w", jobName, err)
 		}
-		if err := kubectlQuiet(ctx, "-n", config.Namespace, "wait", "--for=condition=complete", "job/"+jobName, "--timeout="+config.RolloutTimeout); err != nil {
+		if err := waitJobComplete(ctx, config.Namespace, jobName, config.RolloutTimeout); err != nil {
 			return fmt.Errorf("wait build job %s: %w", jobName, err)
 		}
 		ok(output, "Kaniko build completed for "+build.Name)
@@ -1139,7 +1150,7 @@ func applyPostgres(ctx context.Context, config deployConfig, renderDir string, o
 	if err := kubectlQuiet(ctx, "-n", config.Namespace, "rollout", "status", "statefulset/postgres", "--timeout="+config.RolloutTimeout); err != nil {
 		return fmt.Errorf("wait PostgreSQL rollout: %w", err)
 	}
-	if err := kubectlQuiet(ctx, "-n", config.Namespace, "wait", "--for=condition=complete", "job/kodex-postgres-bootstrap-databases", "--timeout="+config.RolloutTimeout); err != nil {
+	if err := waitJobComplete(ctx, config.Namespace, "kodex-postgres-bootstrap-databases", config.RolloutTimeout); err != nil {
 		return fmt.Errorf("wait PostgreSQL database bootstrap: %w", err)
 	}
 	ok(output, "PostgreSQL foundation and databases are ready")
@@ -1168,11 +1179,65 @@ func runMigration(ctx context.Context, config deployConfig, manifestPath, jobNam
 	if err := kubectlQuiet(ctx, "apply", "-f", manifestPath); err != nil {
 		return fmt.Errorf("apply migration job %s: %w", jobName, err)
 	}
-	if err := kubectlQuiet(ctx, "-n", config.Namespace, "wait", "--for=condition=complete", "job/"+jobName, "--timeout="+config.RolloutTimeout); err != nil {
+	if err := waitJobComplete(ctx, config.Namespace, jobName, config.RolloutTimeout); err != nil {
 		return fmt.Errorf("wait migration job %s: %w", jobName, err)
 	}
 	ok(output, "migration job completed for "+jobName)
 	return nil
+}
+
+func waitJobComplete(ctx context.Context, namespace string, jobName string, timeoutValue string) error {
+	timeout, err := time.ParseDuration(timeoutValue)
+	if err != nil || timeout <= 0 {
+		timeout = 30 * time.Minute
+	}
+	waitCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+	for {
+		done, err := checkJobComplete(waitCtx, namespace, jobName)
+		if err != nil {
+			return err
+		}
+		if done {
+			return nil
+		}
+		select {
+		case <-waitCtx.Done():
+			return fmt.Errorf("job %s did not complete before timeout", jobName)
+		case <-ticker.C:
+		}
+	}
+}
+
+func checkJobComplete(ctx context.Context, namespace string, jobName string) (bool, error) {
+	output, err := kubectlOutput(ctx, "-n", namespace, "get", "job", jobName, "-o", "json")
+	if err != nil {
+		return false, fmt.Errorf("read job %s status: %w", jobName, err)
+	}
+	var status kubernetesJobStatus
+	if err := json.Unmarshal(output, &status); err != nil {
+		return false, fmt.Errorf("parse job %s status: %w", jobName, err)
+	}
+	return jobCompleteFromStatus(jobName, status)
+}
+
+func jobCompleteFromStatus(jobName string, status kubernetesJobStatus) (bool, error) {
+	for _, condition := range status.Status.Conditions {
+		if condition.Status != "True" {
+			continue
+		}
+		switch condition.Type {
+		case "Complete":
+			return true, nil
+		case "Failed", "FailureTarget":
+			reason := firstNonEmpty(condition.Reason, "failed")
+			return false, fmt.Errorf("job %s failed: %s", jobName, reason)
+		}
+	}
+	return false, nil
 }
 
 func applyServices(ctx context.Context, config deployConfig, renderDir string, rings []backendRing, checkHealth bool, output io.Writer) error {

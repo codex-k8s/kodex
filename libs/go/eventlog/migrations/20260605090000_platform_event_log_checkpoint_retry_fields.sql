@@ -18,6 +18,7 @@ ALTER TABLE platform_event_consumer_checkpoints
     ALTER COLUMN last_error SET DEFAULT '',
     ALTER COLUMN last_error SET NOT NULL;
 
+-- +goose StatementBegin
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -40,6 +41,7 @@ BEGIN
             ADD CONSTRAINT platform_event_consumer_retry_attempt_chk CHECK (retry_attempt >= 0);
     END IF;
 END $$;
+-- +goose StatementEnd
 
 -- +goose Down
 -- Добавочная миграция только вперёд для исправления расхождения живой схемы.
