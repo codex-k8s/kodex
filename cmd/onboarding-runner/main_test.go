@@ -13,6 +13,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/codex-k8s/kodex/libs/go/accesscatalog"
+	accessaccountsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/access_accounts/v1"
 	projectsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/projects/v1"
 	providersv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/providers/v1"
 	"google.golang.org/grpc"
@@ -73,6 +75,30 @@ func TestRunApplyRequiresExplicitSafeTargetPolicy(t *testing.T) {
 		t.Fatal("expected apply policy error")
 	}
 	assertContains(t, err.Error(), "allowed provider owner")
+}
+
+func TestNewGRPCClientsApplyDoesNotRequireAccessManagerAddress(t *testing.T) {
+	clients, closeClients, err := newGRPCClients(runnerOptions{
+		ProjectCatalogAddr:         "127.0.0.1:1",
+		ProviderHubAddr:            "127.0.0.1:2",
+		ProjectCatalogAuthTokenEnv: "",
+		ProviderHubAuthTokenEnv:    "",
+		AccessManagerAuthTokenEnv:  "",
+		RequestID:                  "req-1",
+		ActorID:                    "runner-test",
+		Apply:                      true,
+	})
+	if err != nil {
+		t.Fatalf("newGRPCClients apply without access-manager address: %v", err)
+	}
+	defer closeClients()
+
+	if clients.ProjectCatalog == nil || clients.ProviderHub == nil {
+		t.Fatal("expected project-catalog and provider-hub clients")
+	}
+	if clients.AccessManager != nil {
+		t.Fatal("expected nil access-manager client when address is not configured")
+	}
 }
 
 func TestRunApplyReconcilesBootstrapAndAdoptionThroughProductAPIs(t *testing.T) {
@@ -446,6 +472,7 @@ func TestRunApplyAttachesSelfRepositoryAndReconcilesAdoption(t *testing.T) {
 			changeSignal:   selfRepositoryChangeSignalFixture(),
 			snapshotCount:  1,
 		},
+		AccessManager: &fakeAccessManagerClient{},
 	}
 
 	var output bytes.Buffer
@@ -506,6 +533,7 @@ func TestRunApplyCreatesProjectAndAttachesSelfRepositoryWhenProjectIDMissing(t *
 	clients := runnerClients{
 		ProjectCatalog: projectClient,
 		ProviderHub:    &fakeProviderHubClient{},
+		AccessManager:  &fakeAccessManagerClient{},
 	}
 
 	var output bytes.Buffer
@@ -556,6 +584,7 @@ func TestRunApplyReusesExistingProjectAndRepositoryBinding(t *testing.T) {
 	clients := runnerClients{
 		ProjectCatalog: projectClient,
 		ProviderHub:    &fakeProviderHubClient{},
+		AccessManager:  &fakeAccessManagerClient{},
 	}
 
 	var output bytes.Buffer
@@ -586,6 +615,194 @@ func TestRunApplyReusesExistingProjectAndRepositoryBinding(t *testing.T) {
 	assertContains(t, text, "project_id=project-self")
 }
 
+func TestRunApplyCreatesSelfDeployServiceAccessRules(t *testing.T) {
+	scenarioPath := writeScenario(t, selfRepositoryBindingOnlyScenario())
+	project := projectFixture("11111111-1111-1111-1111-111111111111", "kodex", "project-self")
+	repository := selfRepositoryFixture()
+	repository.ProjectId = "project-self"
+	repository.RepositoryId = "repo-self"
+	accessClient := &fakeAccessManagerClient{}
+	clients := runnerClients{
+		ProjectCatalog: &fakeProjectCatalogClient{
+			projects:     []*projectsv1.Project{project},
+			repositories: []*projectsv1.Repository{repository},
+		},
+		ProviderHub:   &fakeProviderHubClient{},
+		AccessManager: accessClient,
+	}
+
+	var output bytes.Buffer
+	err := run(context.Background(), runnerOptions{
+		ScenarioFilePath:          scenarioPath,
+		OrganizationID:            "11111111-1111-1111-1111-111111111111",
+		ProjectSlug:               "kodex",
+		ProjectDisplayName:        "kodex",
+		AllowedProviderOwner:      "codex-k8s",
+		AllowedProviderRepository: "kodex",
+		RequestID:                 "req-1",
+		Kind:                      "adoption",
+		Apply:                     true,
+	}, clients, &output)
+	if err != nil {
+		t.Fatalf("run apply service access rules: %v", err)
+	}
+
+	if accessClient.createdRuleCount != 2 {
+		t.Fatalf("expected two created access rules, got %d", accessClient.createdRuleCount)
+	}
+	if accessClient.putAccessRuleCalls != 2 || accessClient.checkAccessCalls != 2 {
+		t.Fatalf("expected put/check calls for two services, got put=%d check=%d", accessClient.putAccessRuleCalls, accessClient.checkAccessCalls)
+	}
+	assertSelfDeployAccessRule(t, accessClient.lastPutAccessRuleBySubject["agent-manager"], "project-self")
+	assertSelfDeployAccessCheck(t, accessClient.lastCheckAccessBySubject["agent-manager"], "project-self")
+	assertSelfDeployAccessRule(t, accessClient.lastPutAccessRuleBySubject["staff-gateway"], "project-self")
+	text := output.String()
+	assertContains(t, text, "self-deploy service access ready subject=service/agent-manager")
+	assertContains(t, text, "self-deploy service access ready subject=service/staff-gateway")
+}
+
+func TestRunApplyRequiresSelfDeployAccessManagerBeforeProjectMutation(t *testing.T) {
+	scenarioPath := writeScenario(t, selfRepositoryBindingOnlyScenario())
+	projectClient := &fakeProjectCatalogClient{}
+	clients := runnerClients{
+		ProjectCatalog: projectClient,
+		ProviderHub:    &fakeProviderHubClient{},
+	}
+
+	err := run(context.Background(), runnerOptions{
+		ScenarioFilePath:          scenarioPath,
+		OrganizationID:            "11111111-1111-1111-1111-111111111111",
+		ProjectSlug:               "kodex",
+		ProjectDisplayName:        "kodex",
+		AllowedProviderOwner:      "codex-k8s",
+		AllowedProviderRepository: "kodex",
+		RequestID:                 "req-1",
+		Kind:                      "adoption",
+		Apply:                     true,
+	}, clients, ioDiscard{})
+	if err == nil {
+		t.Fatal("expected self-deploy service access dependency error")
+	}
+	assertContains(t, err.Error(), "access-manager client is required for self-deploy service access apply")
+	if projectClient.createProjectCalls != 0 || projectClient.attachRepositoryCalls != 0 {
+		t.Fatalf("self-deploy access preflight mutated project API: create=%d attach=%d", projectClient.createProjectCalls, projectClient.attachRepositoryCalls)
+	}
+}
+
+func TestRunApplyReusesSelfDeployServiceAccessRules(t *testing.T) {
+	scenarioPath := writeScenario(t, selfRepositoryBindingOnlyScenario())
+	project := projectFixture("11111111-1111-1111-1111-111111111111", "kodex", "project-self")
+	repository := selfRepositoryFixture()
+	repository.ProjectId = "project-self"
+	repository.RepositoryId = "repo-self"
+	accessClient := &fakeAccessManagerClient{}
+	clients := runnerClients{
+		ProjectCatalog: &fakeProjectCatalogClient{
+			projects:     []*projectsv1.Project{project},
+			repositories: []*projectsv1.Repository{repository},
+		},
+		ProviderHub:   &fakeProviderHubClient{},
+		AccessManager: accessClient,
+	}
+	options := runnerOptions{
+		ScenarioFilePath:          scenarioPath,
+		OrganizationID:            "11111111-1111-1111-1111-111111111111",
+		ProjectSlug:               "kodex",
+		ProjectDisplayName:        "kodex",
+		AllowedProviderOwner:      "codex-k8s",
+		AllowedProviderRepository: "kodex",
+		RequestID:                 "req-1",
+		Kind:                      "adoption",
+		Apply:                     true,
+	}
+	if err := run(context.Background(), options, clients, ioDiscard{}); err != nil {
+		t.Fatalf("first run apply service access rules: %v", err)
+	}
+	if err := run(context.Background(), options, clients, ioDiscard{}); err != nil {
+		t.Fatalf("second run apply service access rules: %v", err)
+	}
+
+	if accessClient.createdRuleCount != 2 {
+		t.Fatalf("expected second run to reuse two access rules, created=%d", accessClient.createdRuleCount)
+	}
+	if accessClient.putAccessRuleCalls != 4 || accessClient.checkAccessCalls != 4 {
+		t.Fatalf("expected repeated put/check calls without duplicates, got put=%d check=%d", accessClient.putAccessRuleCalls, accessClient.checkAccessCalls)
+	}
+}
+
+func TestRunApplyReportsSelfDeployServiceAccessConflict(t *testing.T) {
+	scenarioPath := writeScenario(t, selfRepositoryBindingOnlyScenario())
+	project := projectFixture("11111111-1111-1111-1111-111111111111", "kodex", "project-self")
+	repository := selfRepositoryFixture()
+	repository.ProjectId = "project-self"
+	repository.RepositoryId = "repo-self"
+	accessClient := &fakeAccessManagerClient{denySubjects: map[string]string{"agent-manager": "explicit_deny"}}
+	clients := runnerClients{
+		ProjectCatalog: &fakeProjectCatalogClient{
+			projects:     []*projectsv1.Project{project},
+			repositories: []*projectsv1.Repository{repository},
+		},
+		ProviderHub:   &fakeProviderHubClient{},
+		AccessManager: accessClient,
+	}
+
+	err := run(context.Background(), runnerOptions{
+		ScenarioFilePath:          scenarioPath,
+		OrganizationID:            "11111111-1111-1111-1111-111111111111",
+		ProjectSlug:               "kodex",
+		ProjectDisplayName:        "kodex",
+		AllowedProviderOwner:      "codex-k8s",
+		AllowedProviderRepository: "kodex",
+		RequestID:                 "req-1",
+		Kind:                      "adoption",
+		Apply:                     true,
+	}, clients, ioDiscard{})
+	if err == nil {
+		t.Fatal("expected self-deploy service access conflict")
+	}
+	assertContains(t, err.Error(), "self-deploy access check denied")
+	assertContains(t, err.Error(), "explicit_deny")
+	assertNotContains(t, err.Error(), "token=")
+	assertNotContains(t, err.Error(), "webhook_body")
+}
+
+func TestRunApplyRedactsSelfDeployServiceAccessDependencyError(t *testing.T) {
+	scenarioPath := writeScenario(t, selfRepositoryBindingOnlyScenario())
+	project := projectFixture("11111111-1111-1111-1111-111111111111", "kodex", "project-self")
+	repository := selfRepositoryFixture()
+	repository.ProjectId = "project-self"
+	repository.RepositoryId = "repo-self"
+	clients := runnerClients{
+		ProjectCatalog: &fakeProjectCatalogClient{
+			projects:     []*projectsv1.Project{project},
+			repositories: []*projectsv1.Repository{repository},
+		},
+		ProviderHub: &fakeProviderHubClient{},
+		AccessManager: &fakeAccessManagerClient{
+			putAccessRuleErr: errors.New("token=secret-token https://private.example.internal webhook_body=raw-body"),
+		},
+	}
+
+	err := run(context.Background(), runnerOptions{
+		ScenarioFilePath:          scenarioPath,
+		OrganizationID:            "11111111-1111-1111-1111-111111111111",
+		ProjectSlug:               "kodex",
+		ProjectDisplayName:        "kodex",
+		AllowedProviderOwner:      "codex-k8s",
+		AllowedProviderRepository: "kodex",
+		RequestID:                 "req-1",
+		Kind:                      "adoption",
+		Apply:                     true,
+	}, clients, ioDiscard{})
+	if err == nil {
+		t.Fatal("expected access-manager dependency error")
+	}
+	assertNotContains(t, err.Error(), "secret-token")
+	assertNotContains(t, err.Error(), "private.example")
+	assertNotContains(t, err.Error(), "raw-body")
+	assertContains(t, err.Error(), "[hidden]")
+}
+
 func TestRunApplyReusesRepositoryBindingAcrossListRepositoryPages(t *testing.T) {
 	scenarioPath := writeScenario(t, selfRepositoryBindingOnlyScenario())
 	project := projectFixture("11111111-1111-1111-1111-111111111111", "kodex", "project-self")
@@ -603,6 +820,7 @@ func TestRunApplyReusesRepositoryBindingAcrossListRepositoryPages(t *testing.T) 
 	clients := runnerClients{
 		ProjectCatalog: projectClient,
 		ProviderHub:    &fakeProviderHubClient{},
+		AccessManager:  &fakeAccessManagerClient{},
 	}
 
 	var output bytes.Buffer
@@ -1171,6 +1389,107 @@ func (f *fakeProjectCatalogClient) ReconcileAdoptionMergeSignal(_ context.Contex
 	}, nil
 }
 
+type fakeAccessManagerClient struct {
+	rules                      map[string]*accessaccountsv1.AccessRuleResponse
+	denySubjects               map[string]string
+	putAccessRuleErr           error
+	checkAccessErr             error
+	putAccessRuleCalls         int
+	checkAccessCalls           int
+	createdRuleCount           int
+	lastPutAccessRuleBySubject map[string]*accessaccountsv1.PutAccessRuleRequest
+	lastCheckAccessBySubject   map[string]*accessaccountsv1.CheckAccessRequest
+}
+
+func (f *fakeAccessManagerClient) PutAccessRule(_ context.Context, request *accessaccountsv1.PutAccessRuleRequest, _ ...grpc.CallOption) (*accessaccountsv1.AccessRuleResponse, error) {
+	f.putAccessRuleCalls++
+	if f.lastPutAccessRuleBySubject == nil {
+		f.lastPutAccessRuleBySubject = map[string]*accessaccountsv1.PutAccessRuleRequest{}
+	}
+	f.lastPutAccessRuleBySubject[request.GetSubjectId()] = request
+	if f.putAccessRuleErr != nil {
+		return nil, f.putAccessRuleErr
+	}
+	if f.rules == nil {
+		f.rules = map[string]*accessaccountsv1.AccessRuleResponse{}
+	}
+	key := accessRuleIdentityKey(request)
+	if existing := f.rules[key]; existing != nil {
+		return existing, nil
+	}
+	f.createdRuleCount++
+	response := &accessaccountsv1.AccessRuleResponse{
+		AccessRuleId: "rule-" + request.GetSubjectId(),
+		Effect:       request.GetEffect(),
+		SubjectType:  request.GetSubjectType(),
+		SubjectId:    request.GetSubjectId(),
+		ActionKey:    request.GetActionKey(),
+		ResourceType: request.GetResourceType(),
+		ResourceId:   request.GetResourceId(),
+		ScopeType:    request.GetScopeType(),
+		ScopeId:      request.GetScopeId(),
+		Priority:     request.GetPriority(),
+		Status:       request.GetStatus(),
+		Version:      1,
+	}
+	f.rules[key] = response
+	return response, nil
+}
+
+func (f *fakeAccessManagerClient) CheckAccess(_ context.Context, request *accessaccountsv1.CheckAccessRequest, _ ...grpc.CallOption) (*accessaccountsv1.CheckAccessResponse, error) {
+	f.checkAccessCalls++
+	if f.lastCheckAccessBySubject == nil {
+		f.lastCheckAccessBySubject = map[string]*accessaccountsv1.CheckAccessRequest{}
+	}
+	subjectID := request.GetSubject().GetId()
+	f.lastCheckAccessBySubject[subjectID] = request
+	if f.checkAccessErr != nil {
+		return nil, f.checkAccessErr
+	}
+	if reason := f.denySubjects[subjectID]; reason != "" {
+		return &accessaccountsv1.CheckAccessResponse{
+			Decision:   accessaccountsv1.AccessDecision_ACCESS_DECISION_DENY,
+			ReasonCode: reason,
+		}, nil
+	}
+	if f.rules[checkAccessIdentityKey(request)] != nil {
+		return &accessaccountsv1.CheckAccessResponse{
+			Decision:   accessaccountsv1.AccessDecision_ACCESS_DECISION_ALLOW,
+			ReasonCode: "explicit_allow",
+		}, nil
+	}
+	return &accessaccountsv1.CheckAccessResponse{
+		Decision:   accessaccountsv1.AccessDecision_ACCESS_DECISION_DENY,
+		ReasonCode: "no_matching_rule",
+	}, nil
+}
+
+func accessRuleIdentityKey(request *accessaccountsv1.PutAccessRuleRequest) string {
+	return strings.Join([]string{
+		request.GetEffect().String(),
+		request.GetSubjectType(),
+		request.GetSubjectId(),
+		request.GetActionKey(),
+		request.GetResourceType(),
+		request.GetResourceId(),
+		request.GetScopeType(),
+		request.GetScopeId(),
+	}, "\x00")
+}
+
+func checkAccessIdentityKey(request *accessaccountsv1.CheckAccessRequest) string {
+	return strings.Join([]string{
+		accessaccountsv1.AccessEffect_ACCESS_EFFECT_ALLOW.String(),
+		request.GetSubject().GetType(),
+		request.GetSubject().GetId(),
+		request.GetActionKey(),
+		request.GetResource().GetType(),
+		request.GetResource().GetId(),
+		request.GetScope().GetType(),
+		request.GetScope().GetId(),
+	}, "\x00")
+}
+
 type fakeProviderHubClient struct {
 	bootstrapSignal  *providersv1.RepositoryMergeSignal
 	adoptionSignal   *providersv1.RepositoryMergeSignal
@@ -1556,6 +1875,44 @@ func assertNotContains(t *testing.T, value string, needle string) {
 	t.Helper()
 	if strings.Contains(value, needle) {
 		t.Fatalf("expected %q not to contain %q", value, needle)
+	}
+}
+
+func assertSelfDeployAccessRule(t *testing.T, request *accessaccountsv1.PutAccessRuleRequest, projectID string) {
+	t.Helper()
+	if request == nil {
+		t.Fatal("expected self-deploy access rule request")
+	}
+	if request.GetEffect() != accessaccountsv1.AccessEffect_ACCESS_EFFECT_ALLOW ||
+		request.GetSubjectType() != "service" ||
+		request.GetActionKey() != accesscatalog.ActionProjectPolicyRead ||
+		request.GetResourceType() != accesscatalog.ResourceServicesPolicy ||
+		request.GetResourceId() != "" ||
+		request.GetScopeType() != accesscatalog.ScopeProject ||
+		request.GetScopeId() != projectID ||
+		request.GetPriority() != selfDeployServiceAccessPriority ||
+		request.GetStatus() != accessaccountsv1.AccessRuleStatus_ACCESS_RULE_STATUS_ACTIVE {
+		t.Fatalf("unexpected self-deploy access rule request: %+v", request)
+	}
+	if request.GetMeta().GetActor().GetType() != "service" || request.GetMeta().GetActor().GetId() != defaultActorID {
+		t.Fatalf("unexpected access rule actor: %+v", request.GetMeta().GetActor())
+	}
+}
+
+func assertSelfDeployAccessCheck(t *testing.T, request *accessaccountsv1.CheckAccessRequest, projectID string) {
+	t.Helper()
+	if request == nil {
+		t.Fatal("expected self-deploy access check request")
+	}
+	if request.GetSubject().GetType() != "service" ||
+		request.GetSubject().GetId() != "agent-manager" ||
+		request.GetActionKey() != accesscatalog.ActionProjectPolicyRead ||
+		request.GetResource().GetType() != accesscatalog.ResourceServicesPolicy ||
+		request.GetResource().GetId() != "" ||
+		request.GetScope().GetType() != accesscatalog.ScopeProject ||
+		request.GetScope().GetId() != projectID ||
+		!request.GetAudit() {
+		t.Fatalf("unexpected self-deploy access check request: %+v", request)
 	}
 }
 
