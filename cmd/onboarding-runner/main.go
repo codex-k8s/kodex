@@ -321,11 +321,19 @@ func run(ctx context.Context, options runnerOptions, clients runnerClients, outp
 	if err := validateOptions(options, scenario); err != nil {
 		return err
 	}
+	scenario = ensureRepositoryBindingScenario(options, scenario)
+	if options.Apply && shouldEnsureSelfDeployServiceAccess(scenario) {
+		if err := validateApplyPolicy(options, scenario); err != nil {
+			return err
+		}
+		if clients.AccessManager == nil {
+			return errors.New("access-manager client is required for self-deploy service access apply")
+		}
+	}
 	options, _, err = ensureRunnerProject(ctx, clients.ProjectCatalog, options, output)
 	if err != nil {
 		return err
 	}
-	scenario = ensureRepositoryBindingScenario(options, scenario)
 	producer, err := loadCheckedArtifactProducer(options)
 	if err != nil {
 		return err
@@ -465,9 +473,6 @@ func newGRPCClients(options runnerOptions) (runnerClients, func(), error) {
 	}
 	if strings.TrimSpace(options.ProviderHubAddr) == "" {
 		return runnerClients{}, func() {}, errors.New("provider-hub gRPC address is required")
-	}
-	if options.Apply && strings.TrimSpace(options.AccessManagerAddr) == "" {
-		return runnerClients{}, func() {}, errors.New("access-manager gRPC address is required for apply mode")
 	}
 	accessAuthToken := ""
 	if strings.TrimSpace(options.AccessManagerAddr) != "" {

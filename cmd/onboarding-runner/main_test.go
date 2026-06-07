@@ -77,6 +77,30 @@ func TestRunApplyRequiresExplicitSafeTargetPolicy(t *testing.T) {
 	assertContains(t, err.Error(), "allowed provider owner")
 }
 
+func TestNewGRPCClientsApplyDoesNotRequireAccessManagerAddress(t *testing.T) {
+	clients, closeClients, err := newGRPCClients(runnerOptions{
+		ProjectCatalogAddr:         "127.0.0.1:1",
+		ProviderHubAddr:            "127.0.0.1:2",
+		ProjectCatalogAuthTokenEnv: "",
+		ProviderHubAuthTokenEnv:    "",
+		AccessManagerAuthTokenEnv:  "",
+		RequestID:                  "req-1",
+		ActorID:                    "runner-test",
+		Apply:                      true,
+	})
+	if err != nil {
+		t.Fatalf("newGRPCClients apply without access-manager address: %v", err)
+	}
+	defer closeClients()
+
+	if clients.ProjectCatalog == nil || clients.ProviderHub == nil {
+		t.Fatal("expected project-catalog and provider-hub clients")
+	}
+	if clients.AccessManager != nil {
+		t.Fatal("expected nil access-manager client when address is not configured")
+	}
+}
+
 func TestRunApplyReconcilesBootstrapAndAdoptionThroughProductAPIs(t *testing.T) {
 	scenarioPath := writeScenario(t, checkedPayloadFixture())
 	projectClient := &fakeProjectCatalogClient{repository: repositoryFixture()}
@@ -635,6 +659,34 @@ func TestRunApplyCreatesSelfDeployServiceAccessRules(t *testing.T) {
 	text := output.String()
 	assertContains(t, text, "self-deploy service access ready subject=service/agent-manager")
 	assertContains(t, text, "self-deploy service access ready subject=service/staff-gateway")
+}
+
+func TestRunApplyRequiresSelfDeployAccessManagerBeforeProjectMutation(t *testing.T) {
+	scenarioPath := writeScenario(t, selfRepositoryBindingOnlyScenario())
+	projectClient := &fakeProjectCatalogClient{}
+	clients := runnerClients{
+		ProjectCatalog: projectClient,
+		ProviderHub:    &fakeProviderHubClient{},
+	}
+
+	err := run(context.Background(), runnerOptions{
+		ScenarioFilePath:          scenarioPath,
+		OrganizationID:            "11111111-1111-1111-1111-111111111111",
+		ProjectSlug:               "kodex",
+		ProjectDisplayName:        "kodex",
+		AllowedProviderOwner:      "codex-k8s",
+		AllowedProviderRepository: "kodex",
+		RequestID:                 "req-1",
+		Kind:                      "adoption",
+		Apply:                     true,
+	}, clients, ioDiscard{})
+	if err == nil {
+		t.Fatal("expected self-deploy service access dependency error")
+	}
+	assertContains(t, err.Error(), "access-manager client is required for self-deploy service access apply")
+	if projectClient.createProjectCalls != 0 || projectClient.attachRepositoryCalls != 0 {
+		t.Fatalf("self-deploy access preflight mutated project API: create=%d attach=%d", projectClient.createProjectCalls, projectClient.attachRepositoryCalls)
+	}
 }
 
 func TestRunApplyReusesSelfDeployServiceAccessRules(t *testing.T) {
