@@ -15,7 +15,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/accesscatalog"
 	grpcserver "github.com/codex-k8s/kodex/libs/go/grpcserver"
+	accessaccountsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/access_accounts/v1"
 	projectsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/projects/v1"
 	providersv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/providers/v1"
 	"google.golang.org/grpc"
@@ -31,20 +33,27 @@ const (
 	defaultActorID                      = "onboarding-runner"
 	defaultSource                       = "cmd/onboarding-runner"
 	defaultCheckedSourcePath            = "services.yaml"
+	defaultAccessManagerAuthTokenEnv    = "KODEX_ACCESS_MANAGER_GRPC_AUTH_TOKEN"
 	defaultProjectCatalogAuthTokenEnv   = "KODEX_PROJECT_CATALOG_GRPC_AUTH_TOKEN"
 	defaultProviderHubAuthTokenEnv      = "KODEX_PROVIDER_HUB_GRPC_AUTH_TOKEN"
+	defaultAccessManagerAuthEnvRefName  = "KODEX_ONBOARDING_RUNNER_ACCESS_MANAGER_GRPC_AUTH_TOKEN_ENV"
 	defaultProjectCatalogAuthEnvRefName = "KODEX_ONBOARDING_RUNNER_PROJECT_CATALOG_GRPC_AUTH_TOKEN_ENV"
 	defaultProviderHubAuthEnvRefName    = "KODEX_ONBOARDING_RUNNER_PROVIDER_HUB_GRPC_AUTH_TOKEN_ENV"
 	maxCheckedPayloadBytes              = 256 * 1024
 	maxWatermarkJSONBytes               = 16 * 1024
 	maxBootstrapSetupFiles              = 64
 	maxBootstrapSetupBytes              = 4 * 1024 * 1024
+	selfDeployServiceAccessPriority     = 100
 )
+
+var selfDeployServiceAccessSubjects = []string{"agent-manager", "staff-gateway"}
 
 func main() {
 	options := runnerOptions{}
+	flag.StringVar(&options.AccessManagerAddr, "access-manager-addr", os.Getenv("KODEX_ACCESS_MANAGER_GRPC_ADDR"), "access-manager gRPC address")
 	flag.StringVar(&options.ProjectCatalogAddr, "project-catalog-addr", os.Getenv("KODEX_PROJECT_CATALOG_GRPC_ADDR"), "project-catalog gRPC address")
 	flag.StringVar(&options.ProviderHubAddr, "provider-hub-addr", os.Getenv("KODEX_PROVIDER_HUB_GRPC_ADDR"), "provider-hub gRPC address")
+	flag.StringVar(&options.AccessManagerAuthTokenEnv, "access-manager-auth-token-env", envOr(defaultAccessManagerAuthEnvRefName, defaultAccessManagerAuthTokenEnv), "env var name containing access-manager shared gRPC token; empty disables metadata")
 	flag.StringVar(&options.ProjectCatalogAuthTokenEnv, "project-catalog-auth-token-env", envOr(defaultProjectCatalogAuthEnvRefName, defaultProjectCatalogAuthTokenEnv), "env var name containing project-catalog shared gRPC token; empty disables metadata")
 	flag.StringVar(&options.ProviderHubAuthTokenEnv, "provider-hub-auth-token-env", envOr(defaultProviderHubAuthEnvRefName, defaultProviderHubAuthTokenEnv), "env var name containing provider-hub shared gRPC token; empty disables metadata")
 	flag.StringVar(&options.ScenarioFilePath, "scenario-file", "", "checked onboarding scenario JSON; payload values are never printed")
@@ -116,14 +125,22 @@ type providerHubAPI interface {
 	ListRepositoryAdoptionScanSnapshots(context.Context, *providersv1.ListRepositoryAdoptionScanSnapshotsRequest, ...grpc.CallOption) (*providersv1.ListRepositoryAdoptionScanSnapshotsResponse, error)
 }
 
+type accessManagerAPI interface {
+	PutAccessRule(context.Context, *accessaccountsv1.PutAccessRuleRequest, ...grpc.CallOption) (*accessaccountsv1.AccessRuleResponse, error)
+	CheckAccess(context.Context, *accessaccountsv1.CheckAccessRequest, ...grpc.CallOption) (*accessaccountsv1.CheckAccessResponse, error)
+}
+
 type runnerClients struct {
 	ProjectCatalog projectCatalogAPI
 	ProviderHub    providerHubAPI
+	AccessManager  accessManagerAPI
 }
 
 type runnerOptions struct {
+	AccessManagerAddr          string
 	ProjectCatalogAddr         string
 	ProviderHubAddr            string
+	AccessManagerAuthTokenEnv  string
 	ProjectCatalogAuthTokenEnv string
 	ProviderHubAuthTokenEnv    string
 	ScenarioFilePath           string
@@ -406,6 +423,11 @@ func run(ctx context.Context, options runnerOptions, clients runnerClients, outp
 		}
 		return errors.New("repository_id is required after bootstrap repository create")
 	}
+	if shouldEnsureSelfDeployServiceAccess(scenario) {
+		if err := ensureSelfDeployServiceAccess(ctx, clients.AccessManager, options, output); err != nil {
+			return err
+		}
+	}
 	signals, err := readProviderSignals(ctx, clients.ProviderHub, options, scenario, output)
 	if err != nil {
 		return err
@@ -444,6 +466,17 @@ func newGRPCClients(options runnerOptions) (runnerClients, func(), error) {
 	if strings.TrimSpace(options.ProviderHubAddr) == "" {
 		return runnerClients{}, func() {}, errors.New("provider-hub gRPC address is required")
 	}
+	if options.Apply && strings.TrimSpace(options.AccessManagerAddr) == "" {
+		return runnerClients{}, func() {}, errors.New("access-manager gRPC address is required for apply mode")
+	}
+	accessAuthToken := ""
+	if strings.TrimSpace(options.AccessManagerAddr) != "" {
+		var err error
+		accessAuthToken, err = tokenFromEnvRef(options.AccessManagerAuthTokenEnv, "access-manager")
+		if err != nil {
+			return runnerClients{}, func() {}, err
+		}
+	}
 	projectAuthToken, err := tokenFromEnvRef(options.ProjectCatalogAuthTokenEnv, "project-catalog")
 	if err != nil {
 		return runnerClients{}, func() {}, err
@@ -461,13 +494,30 @@ func newGRPCClients(options runnerOptions) (runnerClients, func(), error) {
 		_ = projectConn.Close()
 		return runnerClients{}, func() {}, fmt.Errorf("connect provider-hub: %w", err)
 	}
+	var accessConn *grpc.ClientConn
+	if strings.TrimSpace(options.AccessManagerAddr) != "" {
+		accessConn, err = grpc.NewClient(options.AccessManagerAddr, grpcClientDialOptions(accessAuthToken, options.ActorID)...)
+		if err != nil {
+			_ = providerConn.Close()
+			_ = projectConn.Close()
+			return runnerClients{}, func() {}, fmt.Errorf("connect access-manager: %w", err)
+		}
+	}
 	closeClients := func() {
+		if accessConn != nil {
+			_ = accessConn.Close()
+		}
 		_ = providerConn.Close()
 		_ = projectConn.Close()
+	}
+	var accessClient accessManagerAPI
+	if accessConn != nil {
+		accessClient = accessaccountsv1.NewAccessManagerServiceClient(accessConn)
 	}
 	return runnerClients{
 		ProjectCatalog: projectsv1.NewProjectCatalogServiceClient(projectConn),
 		ProviderHub:    providersv1.NewProviderHubServiceClient(providerConn),
+		AccessManager:  accessClient,
 	}, closeClients, nil
 }
 
@@ -517,8 +567,10 @@ func tokenFromEnvRef(envRef string, service string) (string, error) {
 }
 
 func normalizeOptions(options runnerOptions) runnerOptions {
+	options.AccessManagerAddr = strings.TrimSpace(options.AccessManagerAddr)
 	options.ProjectCatalogAuthTokenEnv = strings.TrimSpace(options.ProjectCatalogAuthTokenEnv)
 	options.ProviderHubAuthTokenEnv = strings.TrimSpace(options.ProviderHubAuthTokenEnv)
+	options.AccessManagerAuthTokenEnv = strings.TrimSpace(options.AccessManagerAuthTokenEnv)
 	options.OrganizationID = strings.TrimSpace(options.OrganizationID)
 	options.ProjectID = strings.TrimSpace(options.ProjectID)
 	options.ProjectSlug = defaultString(strings.TrimSpace(options.ProjectSlug), defaultProjectSlug)
@@ -954,6 +1006,10 @@ func hasBootstrapCreateRepository(scenario onboardingScenario) bool {
 
 func hasRepositoryBindingSetup(scenario onboardingScenario) bool {
 	return scenario.RepositoryBinding != nil
+}
+
+func shouldEnsureSelfDeployServiceAccess(scenario onboardingScenario) bool {
+	return scenario.RepositoryBinding != nil || scenario.RepositoryChange != nil
 }
 
 func loadScenario(path string) (onboardingScenario, error) {
@@ -1623,6 +1679,134 @@ func projectRepositoryProviderSlug(provider projectsv1.RepositoryProvider) (stri
 		return "gitlab", nil
 	default:
 		return "", fmt.Errorf("repository binding provider is unsupported")
+	}
+}
+
+func ensureSelfDeployServiceAccess(ctx context.Context, client accessManagerAPI, options runnerOptions, output io.Writer) error {
+	if options.ProjectID == "" || options.RepositoryID == "" {
+		return nil
+	}
+	if !options.Apply {
+		for _, subjectID := range selfDeployServiceAccessSubjects {
+			logLine(output, "PLAN", "self-deploy service access ready subject=service/%s action=%s resource=%s scope=project:%s",
+				subjectID,
+				accesscatalog.ActionProjectPolicyRead,
+				accesscatalog.ResourceServicesPolicy,
+				safeValue(options.ProjectID),
+			)
+		}
+		return nil
+	}
+	if client == nil {
+		return errors.New("access-manager client is required for self-deploy service access apply")
+	}
+	for _, subjectID := range selfDeployServiceAccessSubjects {
+		rule, err := putSelfDeployServiceAccessRule(ctx, client, options, subjectID)
+		if err != nil {
+			return err
+		}
+		if err := checkSelfDeployServiceAccess(ctx, client, options, subjectID); err != nil {
+			return err
+		}
+		logLine(output, "OK", "self-deploy service access ready subject=service/%s action=%s resource=%s scope=project:%s rule_id=%s version=%d",
+			subjectID,
+			accesscatalog.ActionProjectPolicyRead,
+			accesscatalog.ResourceServicesPolicy,
+			safeValue(options.ProjectID),
+			safeValue(rule.GetAccessRuleId()),
+			rule.GetVersion(),
+		)
+	}
+	return nil
+}
+
+func putSelfDeployServiceAccessRule(ctx context.Context, client accessManagerAPI, options runnerOptions, subjectID string) (*accessaccountsv1.AccessRuleResponse, error) {
+	request := selfDeployServiceAccessRuleRequest(options, subjectID)
+	response, err := client.PutAccessRule(ctx, request)
+	if err != nil {
+		return nil, safeError("access-manager PutAccessRule failed", err)
+	}
+	if !selfDeployAccessRuleMatches(response, request) {
+		return nil, fmt.Errorf("access-manager PutAccessRule returned mismatched self-deploy access rule for service/%s", subjectID)
+	}
+	return response, nil
+}
+
+func checkSelfDeployServiceAccess(ctx context.Context, client accessManagerAPI, options runnerOptions, subjectID string) error {
+	response, err := client.CheckAccess(ctx, selfDeployServiceAccessCheckRequest(options, subjectID))
+	if err != nil {
+		return safeError("access-manager CheckAccess failed", err)
+	}
+	if response.GetDecision() != accessaccountsv1.AccessDecision_ACCESS_DECISION_ALLOW {
+		return fmt.Errorf("self-deploy access check denied for service/%s reason=%s", subjectID, safeValue(response.GetReasonCode()))
+	}
+	return nil
+}
+
+func selfDeployServiceAccessRuleRequest(options runnerOptions, subjectID string) *accessaccountsv1.PutAccessRuleRequest {
+	return &accessaccountsv1.PutAccessRuleRequest{
+		Effect:       accessaccountsv1.AccessEffect_ACCESS_EFFECT_ALLOW,
+		SubjectType:  "service",
+		SubjectId:    strings.TrimSpace(subjectID),
+		ActionKey:    accesscatalog.ActionProjectPolicyRead,
+		ResourceType: accesscatalog.ResourceServicesPolicy,
+		ScopeType:    accesscatalog.ScopeProject,
+		ScopeId:      options.ProjectID,
+		Priority:     selfDeployServiceAccessPriority,
+		Status:       accessaccountsv1.AccessRuleStatus_ACCESS_RULE_STATUS_ACTIVE,
+		Meta:         accessRuleCommandMeta(options, subjectID),
+	}
+}
+
+func selfDeployServiceAccessCheckRequest(options runnerOptions, subjectID string) *accessaccountsv1.CheckAccessRequest {
+	return &accessaccountsv1.CheckAccessRequest{
+		Subject:   &accessaccountsv1.SubjectRef{Type: "service", Id: strings.TrimSpace(subjectID)},
+		ActionKey: accesscatalog.ActionProjectPolicyRead,
+		Resource: &accessaccountsv1.ResourceRef{
+			Type: accesscatalog.ResourceServicesPolicy,
+			Id:   "",
+		},
+		Scope: &accessaccountsv1.ScopeRef{
+			Type: accesscatalog.ScopeProject,
+			Id:   options.ProjectID,
+		},
+		Audit: true,
+		Meta:  accessRuleCheckMeta(options, subjectID),
+	}
+}
+
+func selfDeployAccessRuleMatches(response *accessaccountsv1.AccessRuleResponse, request *accessaccountsv1.PutAccessRuleRequest) bool {
+	if response == nil {
+		return false
+	}
+	return response.GetEffect() == request.GetEffect() &&
+		response.GetSubjectType() == request.GetSubjectType() &&
+		response.GetSubjectId() == request.GetSubjectId() &&
+		response.GetActionKey() == request.GetActionKey() &&
+		response.GetResourceType() == request.GetResourceType() &&
+		response.GetResourceId() == request.GetResourceId() &&
+		response.GetScopeType() == request.GetScopeType() &&
+		response.GetScopeId() == request.GetScopeId() &&
+		response.GetPriority() == request.GetPriority() &&
+		response.GetStatus() == request.GetStatus()
+}
+
+func accessRuleCommandMeta(options runnerOptions, subjectID string) *accessaccountsv1.CommandMeta {
+	return &accessaccountsv1.CommandMeta{
+		IdempotencyKey: deterministicKey(options.ProjectID, options.RepositoryID, "self-deploy-service-access", subjectID, accesscatalog.ActionProjectPolicyRead, accesscatalog.ResourceServicesPolicy),
+		Actor:          &accessaccountsv1.Actor{Type: "service", Id: options.ActorID},
+		Reason:         "self_deploy_service_access_bootstrap",
+		RequestId:      options.RequestID,
+		RequestContext: &accessaccountsv1.RequestContext{Source: defaultSource},
+	}
+}
+
+func accessRuleCheckMeta(options runnerOptions, subjectID string) *accessaccountsv1.CommandMeta {
+	return &accessaccountsv1.CommandMeta{
+		Actor:          &accessaccountsv1.Actor{Type: "service", Id: strings.TrimSpace(subjectID)},
+		Reason:         "self_deploy_service_access_check",
+		RequestId:      options.RequestID,
+		RequestContext: &accessaccountsv1.RequestContext{Source: defaultSource},
 	}
 }
 
