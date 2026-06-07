@@ -113,6 +113,41 @@ func TestReadSecretFailsClosedOnKubectlReadError(t *testing.T) {
 	}
 }
 
+func TestJobCompleteFromStatusDetectsCompleteFailedAndActive(t *testing.T) {
+	complete := kubernetesJobStatus{}
+	complete.Status.Conditions = append(complete.Status.Conditions, struct {
+		Type    string `json:"type"`
+		Status  string `json:"status"`
+		Reason  string `json:"reason"`
+		Message string `json:"message"`
+	}{Type: "Complete", Status: "True"})
+	done, err := jobCompleteFromStatus("test-job", complete)
+	if err != nil || !done {
+		t.Fatalf("complete job status = (%v, %v), want done without error", done, err)
+	}
+
+	failed := kubernetesJobStatus{}
+	failed.Status.Conditions = append(failed.Status.Conditions, struct {
+		Type    string `json:"type"`
+		Status  string `json:"status"`
+		Reason  string `json:"reason"`
+		Message string `json:"message"`
+	}{Type: "FailureTarget", Status: "True", Reason: "BackoffLimitExceeded"})
+	done, err = jobCompleteFromStatus("test-job", failed)
+	if err == nil || done {
+		t.Fatalf("failed job status = (%v, %v), want error without done", done, err)
+	}
+	if !strings.Contains(err.Error(), "BackoffLimitExceeded") {
+		t.Fatalf("failed job error did not include safe reason: %v", err)
+	}
+
+	active := kubernetesJobStatus{}
+	done, err = jobCompleteFromStatus("test-job", active)
+	if err != nil || done {
+		t.Fatalf("active job status = (%v, %v), want pending without error", done, err)
+	}
+}
+
 func TestFirstRingImageBuildsRequireDockerfileAndTarget(t *testing.T) {
 	stack, err := stackinventory.Parse([]byte(testStackInventory(firstRingImageNames)))
 	if err != nil {
