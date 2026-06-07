@@ -90,6 +90,11 @@ func (s *Service) CreateJob(ctx context.Context, input CreateJobInput) (entity.J
 		job.LastErrorMessage = deployExecutionSpecRequiredMessage
 		job.NextAction = deployExecutionSpecRequiredAction
 	}
+	if job.JobType == enum.JobTypeDeploy && deployJobInputHasExecutionSpec(job.JobInputJSON) {
+		job.LastErrorCode = deployExecutorUnavailableCode
+		job.LastErrorMessage = deployExecutorUnavailableMessage
+		job.NextAction = deployExecutorUnavailableAction
+	}
 	resultPayload, err := createJobCommandPayload(resolved.PlacementFingerprint)
 	if err != nil {
 		return entity.Job{}, err

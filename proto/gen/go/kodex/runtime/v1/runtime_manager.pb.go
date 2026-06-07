@@ -3149,7 +3149,7 @@ type Job struct {
 	AgentRunExecutionSpec *AgentRunExecutionSpec `protobuf:"bytes,29,opt,name=agent_run_execution_spec,json=agentRunExecutionSpec,proto3,oneof" json:"agent_run_execution_spec,omitempty"`
 	// build_execution_spec is present only for executable JOB_TYPE_BUILD jobs.
 	BuildExecutionSpec *BuildExecutionSpec `protobuf:"bytes,30,opt,name=build_execution_spec,json=buildExecutionSpec,proto3,oneof" json:"build_execution_spec,omitempty"`
-	// deploy_execution_spec is present only for executable JOB_TYPE_DEPLOY jobs.
+	// deploy_execution_spec is present only for typed JOB_TYPE_DEPLOY jobs.
 	DeployExecutionSpec *DeployExecutionSpec `protobuf:"bytes,31,opt,name=deploy_execution_spec,json=deployExecutionSpec,proto3,oneof" json:"deploy_execution_spec,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
@@ -5136,7 +5136,7 @@ type CreateJobRequest struct {
 	AgentRunExecutionSpec *AgentRunExecutionSpec `protobuf:"bytes,12,opt,name=agent_run_execution_spec,json=agentRunExecutionSpec,proto3,oneof" json:"agent_run_execution_spec,omitempty"`
 	// build_execution_spec is required before a build job can be executed.
 	BuildExecutionSpec *BuildExecutionSpec `protobuf:"bytes,13,opt,name=build_execution_spec,json=buildExecutionSpec,proto3,oneof" json:"build_execution_spec,omitempty"`
-	// deploy_execution_spec is required before a deploy job can be executed.
+	// deploy_execution_spec is required before a deploy job can enter rollout execution.
 	DeployExecutionSpec *DeployExecutionSpec `protobuf:"bytes,14,opt,name=deploy_execution_spec,json=deployExecutionSpec,proto3,oneof" json:"deploy_execution_spec,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache

@@ -16,6 +16,7 @@ candidate AS (
         )
       AND (cardinality(@job_types::text[]) = 0 OR job_type = ANY(@job_types::text[]))
       AND (@fleet_scope_id::uuid IS NULL OR fleet_scope_id = @fleet_scope_id::uuid)
+      AND job_type <> 'deploy'
       AND (job_type <> 'agent_run' OR jsonb_typeof(agent_run_spec) = 'object')
       AND (
             job_type <> 'build'

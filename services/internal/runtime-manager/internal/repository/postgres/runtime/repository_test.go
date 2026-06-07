@@ -77,6 +77,7 @@ func TestJobClaimQueryRequiresStrictBuildDeploySpecShape(t *testing.T) {
 
 	required := []string{
 		"jsonb_typeof(build_spec) = 'object'",
+		"AND job_type <> 'deploy'",
 		"jsonb_typeof(deploy_spec) = 'object'",
 		"build_spec->>'source_ref' <> ''",
 		"(build_spec->>'source_commit_sha') ~* '^([0-9a-f]{40}|[0-9a-f]{64})$'",
