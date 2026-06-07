@@ -122,17 +122,18 @@ func TestJobLeaseTokenRequiredForWorkerMutations(t *testing.T) {
 	t.Parallel()
 
 	svc, _ := newTestService()
-	deploySpec := testDeployExecutionSpec("access-manager")
+	buildSpec := testBuildExecutionSpec("access-manager")
 	job, err := svc.CreateJob(context.Background(), CreateJobInput{
-		JobType:             enum.JobTypeDeploy,
-		Priority:            enum.JobPriorityNormal,
-		DeployExecutionSpec: &deploySpec,
-		Meta:                commandMeta(mustUUID("00000000-0000-0000-0000-000000000506"), 0),
+		JobType:            enum.JobTypeBuild,
+		Priority:           enum.JobPriorityNormal,
+		BuildExecutionSpec: &buildSpec,
+		Meta:               commandMeta(mustUUID("00000000-0000-0000-0000-000000000506"), 0),
 	})
 	if err != nil {
 		t.Fatalf("CreateJob(): %v", err)
 	}
 	claim, err := svc.ClaimRunnableJob(context.Background(), ClaimRunnableJobInput{
+		JobTypes:   []enum.JobType{enum.JobTypeBuild},
 		LeaseOwner: "worker/runtime-2",
 		LeaseUntil: testNow.Add(10 * time.Minute),
 		Meta:       commandMeta(mustUUID("00000000-0000-0000-0000-000000000507"), 0),
@@ -457,8 +458,76 @@ func TestBuildDeployExecutionSpecsArePersistedAsTypedJobInput(t *testing.T) {
 	if !ok || extractedDeploySpec.ServiceKey != deploySpec.ServiceKey || extractedDeploySpec.DeployPlanFingerprint != deploySpec.DeployPlanFingerprint {
 		t.Fatalf("DeployExecutionSpecFromJobInput() = %+v, %v", extractedDeploySpec, ok)
 	}
-	if deployJob.LastErrorCode != "" || deployJob.NextAction != "" {
-		t.Fatalf("deploy job diagnostic = %q/%q, want executable typed spec", deployJob.LastErrorCode, deployJob.NextAction)
+	if deployJob.LastErrorCode != deployExecutorUnavailableCode || deployJob.NextAction != deployExecutorUnavailableAction {
+		t.Fatalf("deploy job diagnostic = %q/%q, want executor unavailable diagnostic", deployJob.LastErrorCode, deployJob.NextAction)
+	}
+}
+
+func TestDeployJobWithExecutionSpecStaysWaitingForExecutor(t *testing.T) {
+	t.Parallel()
+
+	svc, _ := newTestService()
+	deploySpec := testDeployExecutionSpec("runtime-manager")
+	meta := commandMeta(mustUUID("00000000-0000-0000-0000-000000000561"), 0)
+	job, err := svc.CreateJob(context.Background(), CreateJobInput{
+		JobType:             enum.JobTypeDeploy,
+		Priority:            enum.JobPriorityBlocking,
+		DeployExecutionSpec: &deploySpec,
+		Meta:                meta,
+	})
+	if err != nil {
+		t.Fatalf("CreateJob(deploy spec): %v", err)
+	}
+	if job.Status != enum.JobStatusPending || job.LastErrorCode != deployExecutorUnavailableCode || job.NextAction != deployExecutorUnavailableAction {
+		t.Fatalf("deploy job = %#v, want pending executor unavailable diagnostic", job)
+	}
+
+	replay, err := svc.CreateJob(context.Background(), CreateJobInput{
+		JobType:             enum.JobTypeDeploy,
+		Priority:            enum.JobPriorityBlocking,
+		DeployExecutionSpec: &deploySpec,
+		Meta:                meta,
+	})
+	if err != nil {
+		t.Fatalf("CreateJob(deploy replay): %v", err)
+	}
+	if replay.ID != job.ID || replay.Version != job.Version || replay.LastErrorCode != deployExecutorUnavailableCode {
+		t.Fatalf("deploy replay = %#v, want same waiting job", replay)
+	}
+
+	read, err := svc.GetJob(context.Background(), GetJobInput{
+		JobID: job.ID,
+		Meta:  value.QueryMeta{Actor: value.Actor{Type: "service", ID: "agent-manager"}},
+	})
+	if err != nil {
+		t.Fatalf("GetJob(deploy): %v", err)
+	}
+	if read.ID != job.ID || read.JobType != enum.JobTypeDeploy || read.LastErrorCode != deployExecutorUnavailableCode {
+		t.Fatalf("GetJob(deploy) = %#v, want typed waiting deploy job", read)
+	}
+	if extracted, ok := DeployExecutionSpecFromJobInput(read.JobInputJSON); !ok || extracted.DeployPlanFingerprint != deploySpec.DeployPlanFingerprint {
+		t.Fatalf("DeployExecutionSpecFromJobInput(read) = %+v, %v", extracted, ok)
+	}
+
+	list, err := svc.ListJobs(context.Background(), ListJobsInput{
+		JobTypes: []enum.JobType{enum.JobTypeDeploy},
+		Meta:     value.QueryMeta{Actor: value.Actor{Type: "service", ID: "agent-manager"}},
+	})
+	if err != nil {
+		t.Fatalf("ListJobs(deploy): %v", err)
+	}
+	if len(list.Jobs) != 1 || list.Jobs[0].ID != job.ID || list.Jobs[0].LastErrorCode != deployExecutorUnavailableCode {
+		t.Fatalf("ListJobs(deploy) = %#v, want one waiting deploy job", list.Jobs)
+	}
+
+	_, err = svc.ClaimRunnableJob(context.Background(), ClaimRunnableJobInput{
+		JobTypes:   []enum.JobType{enum.JobTypeDeploy},
+		LeaseOwner: "worker/deploy",
+		LeaseUntil: testNow.Add(10 * time.Minute),
+		Meta:       commandMeta(mustUUID("00000000-0000-0000-0000-000000000562"), 0),
+	})
+	if !errors.Is(err, errs.ErrNotFound) {
+		t.Fatalf("ClaimRunnableJob(deploy spec) err = %v, want not found", err)
 	}
 }
 

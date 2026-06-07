@@ -5,7 +5,7 @@ title: kodex — модель данных runtime-manager
 status: active
 owner_role: SA
 created_at: 2026-05-07
-updated_at: 2026-06-02
+updated_at: 2026-06-07
 related_issues: [655, 657, 658, 659, 660, 662, 966, 994]
 related_prs: []
 approvals:
@@ -108,6 +108,7 @@ approvals:
 - job может быть связан со слотом, проектом, release line, пакетом или maintenance policy;
 - идемпотентный след mutating-команд хранится отдельно в `RuntimeManagerCommandResult`;
 - захват задания является короткой арендой с токеном, чтобы поздний исполнитель не мог перезаписать новую попытку;
+- `deploy` с валидным `DeployExecutionSpec` хранится и читается как типизированное задание, но остаётся `pending` с `deploy_executor_unavailable` и не выдаётся в claim до согласования исполнителя выкладки;
 - долгие операции не держат SQL-блокировки.
 
 | Поле | Тип | Nullable | Ограничения | Примечание |

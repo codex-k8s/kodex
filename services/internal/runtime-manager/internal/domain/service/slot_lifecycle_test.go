@@ -888,6 +888,9 @@ func (r *fakeRepository) ReconcilePrewarmPool(_ context.Context, filter query.Pr
 }
 
 func runnableFakeJob(job entity.Job, filter query.JobClaimFilter) bool {
+	if job.JobType == enum.JobTypeDeploy {
+		return false
+	}
 	if len(filter.JobTypes) > 0 {
 		found := false
 		for _, jobType := range filter.JobTypes {

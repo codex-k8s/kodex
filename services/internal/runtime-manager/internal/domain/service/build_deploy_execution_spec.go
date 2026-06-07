@@ -18,6 +18,9 @@ const (
 	deployExecutionSpecRequiredCode    = "deploy_execution_spec_required"
 	deployExecutionSpecRequiredMessage = "deploy execution spec is required before deploy execution"
 	deployExecutionSpecRequiredAction  = "provide_deploy_execution_spec"
+	deployExecutorUnavailableCode      = "deploy_executor_unavailable"
+	deployExecutorUnavailableMessage   = "deploy execution spec is accepted but rollout executor is not available"
+	deployExecutorUnavailableAction    = "wait_for_deploy_executor_contract"
 	maxRuntimeJobServiceKeyBytes       = 128
 	maxRuntimeJobSecretPurposeBytes    = 64
 	maxRuntimeJobOutputKindBytes       = 64

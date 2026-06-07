@@ -662,7 +662,7 @@ message Job {
   optional AgentRunExecutionSpec agent_run_execution_spec = 29;
   // build_execution_spec is present only for executable JOB_TYPE_BUILD jobs.
   optional BuildExecutionSpec build_execution_spec = 30;
-  // deploy_execution_spec is present only for executable JOB_TYPE_DEPLOY jobs.
+  // deploy_execution_spec is present only for typed JOB_TYPE_DEPLOY jobs.
   optional DeployExecutionSpec deploy_execution_spec = 31;
 }
 
@@ -971,7 +971,7 @@ message CreateJobRequest {
   optional AgentRunExecutionSpec agent_run_execution_spec = 12;
   // build_execution_spec is required before a build job can be executed.
   optional BuildExecutionSpec build_execution_spec = 13;
-  // deploy_execution_spec is required before a deploy job can be executed.
+  // deploy_execution_spec is required before a deploy job can enter rollout execution.
   optional DeployExecutionSpec deploy_execution_spec = 14;
 }
 
