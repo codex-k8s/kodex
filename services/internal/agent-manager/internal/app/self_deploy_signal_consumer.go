@@ -147,10 +147,16 @@ func (h selfDeploySignalEventHandler) HandleEvent(ctx context.Context, event eve
 	}
 	enriched, err := h.reader.GetSelfDeploySignal(ctx, lookup)
 	if err != nil {
+		if errors.Is(err, errs.ErrNotFound) {
+			return selfDeploySignalStaleProviderResult()
+		}
 		return selfDeploySignalConsumerError(err)
 	}
 	if enriched.Status == agentservice.SelfDeploySignalStatusNotDeployRelevant {
 		return eventconsumer.Ack()
+	}
+	if enriched.Status == agentservice.SelfDeploySignalStatusProviderSignalNotFound {
+		return selfDeploySignalStaleProviderResult()
 	}
 	if enriched.Status != agentservice.SelfDeploySignalStatusReady {
 		return selfDeploySignalNotReadyResult(enriched)
@@ -300,6 +306,10 @@ func selfDeploySignalNotReadyResult(result agentservice.SelfDeploySignalReadResu
 		reason = status
 	}
 	return eventconsumer.Retry(fmt.Errorf("self-deploy signal is not ready: %s: %s", status, reason))
+}
+
+func selfDeploySignalStaleProviderResult() eventconsumer.Result {
+	return eventconsumer.Poison("stale_provider_signal", "provider repository change signal is unavailable and cannot be enriched")
 }
 
 var selfDeploySignalDomainErrorResults = []struct {

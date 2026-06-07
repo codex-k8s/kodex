@@ -104,6 +104,48 @@ func TestSelfDeploySignalEventHandlerRetriesNonReadyProjectSignal(t *testing.T) 
 	}
 }
 
+func TestSelfDeploySignalEventHandlerSkipsStaleProviderSignal(t *testing.T) {
+	t.Parallel()
+
+	projectID := uuid.New()
+	cases := []struct {
+		name   string
+		reader *fakeSelfDeploySignalReader
+	}{
+		{
+			name: "safe status",
+			reader: &fakeSelfDeploySignalReader{result: agentservice.SelfDeploySignalReadResult{
+				Status:     agentservice.SelfDeploySignalStatusProviderSignalNotFound,
+				SafeReason: "provider_signal_not_found",
+			}},
+		},
+		{
+			name:   "read not found",
+			reader: &fakeSelfDeploySignalReader{err: errs.ErrNotFound},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			creator := &fakeSelfDeployPlanCreator{}
+			handler := selfDeploySignalEventHandler{reader: tc.reader, creator: creator}
+			result := handler.HandleEvent(context.Background(), eventconsumer.Event{StoredEvent: selfDeploySignalStoredEvent(t, providerevents.Payload{
+				SignalKey:             "provider:github:repository_change:push:codex-k8s/kodex:main:stale",
+				ProjectID:             projectID.String(),
+				BaseBranch:            "main",
+				DeployRelevantChanged: true,
+			})})
+			if result.Status != eventconsumer.ResultPoison || result.Code != "stale_provider_signal" {
+				t.Fatalf("HandleEvent() = %+v, want stale provider poison", result)
+			}
+			if len(creator.inputs) != 0 {
+				t.Fatalf("created inputs = %d, want 0", len(creator.inputs))
+			}
+		})
+	}
+}
+
 func TestSelfDeploySignalEventHandlerIgnoresNotDeployRelevantEvent(t *testing.T) {
 	t.Parallel()
 
