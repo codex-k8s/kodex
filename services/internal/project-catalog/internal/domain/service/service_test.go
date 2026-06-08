@@ -2235,6 +2235,7 @@ func TestGetSelfDeploySignalReturnsSafeStatusWhenServicesPolicyMissing(t *testin
 	projectID := uuid.New()
 	repositoryID := uuid.New()
 	store := newMemoryRepository()
+	store.wrapNotFound = true
 	store.repositories[repositoryID] = activeSelfDeployRepository(projectID, repositoryID)
 	reader := &fakeRepositoryChangeSignalReader{
 		result: RepositoryChangeSignalReadResult{
@@ -2266,7 +2267,7 @@ func TestGetSelfDeploySignalReturnsSafeStatusWhenServicesPolicyMissing(t *testin
 		t.Fatalf("GetSelfDeploySignal(): %v", err)
 	}
 	if result.Status != enum.SelfDeploySignalStatusServicesPolicyNotFound || result.SafeReason != "services_policy_not_found" {
-		t.Fatalf("result = %+v, want services policy not found safe status", result)
+		t.Fatalf("result = %+v, want wrapped services policy not found safe status", result)
 	}
 }
 
@@ -2575,6 +2576,27 @@ func TestGetSelfDeployBuildPlanReturnsServiceNotFoundForUnknownAffectedService(t
 	}
 	if result.Status != enum.SelfDeployBuildPlanStatusServiceNotFound || !strings.Contains(result.SafeReason, "service_not_found") {
 		t.Fatalf("result = %+v, want service_not_found", result)
+	}
+}
+
+func TestGetSelfDeployBuildPlanReturnsUnavailableWhenServicesPolicyMissing(t *testing.T) {
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	policyID := uuid.New()
+	commitSHA := "abcdef0123456789abcdef0123456789abcdef01"
+	store := newMemoryRepository()
+	store.wrapNotFound = true
+	store.repositories[repositoryID] = activeSelfDeployRepository(projectID, repositoryID)
+	policy := activeSelfDeployPolicy(projectID, repositoryID, policyID, commitSHA, selfDeployBuildPolicyPayload())
+	svc := New(store, fixedClock{}, &sequenceIDs{})
+	input := selfDeployBuildPlanInput(projectID, repositoryID, policy, []string{"api"})
+
+	result, err := svc.GetSelfDeployBuildPlan(context.Background(), input)
+	if err != nil {
+		t.Fatalf("GetSelfDeployBuildPlan(): %v", err)
+	}
+	if result.Status != enum.SelfDeployBuildPlanStatusBuildPlanUnavailable || result.SafeReason != "services_policy_not_found" {
+		t.Fatalf("result = %+v, want wrapped services policy not found safe status", result)
 	}
 }
 
@@ -3128,6 +3150,7 @@ type memoryRepository struct {
 	policyVersions             map[uuid.UUID]int64
 	commandResults             map[string]entity.CommandResult
 	events                     []entity.OutboxEvent
+	wrapNotFound               bool
 }
 
 func newMemoryRepository() *memoryRepository {
@@ -3178,7 +3201,7 @@ func (r *memoryRepository) UpdateProject(_ context.Context, project entity.Proje
 func (r *memoryRepository) GetProject(_ context.Context, id uuid.UUID) (entity.Project, error) {
 	project, ok := r.projects[id]
 	if !ok {
-		return entity.Project{}, errs.ErrNotFound
+		return entity.Project{}, r.notFound()
 	}
 	return project, nil
 }
@@ -3224,7 +3247,7 @@ func (r *memoryRepository) UpdateRepository(_ context.Context, repository entity
 func (r *memoryRepository) GetRepository(_ context.Context, id uuid.UUID) (entity.RepositoryBinding, error) {
 	repository, ok := r.repositories[id]
 	if !ok {
-		return entity.RepositoryBinding{}, errs.ErrNotFound
+		return entity.RepositoryBinding{}, r.notFound()
 	}
 	return repository, nil
 }
@@ -3238,7 +3261,7 @@ func (r *memoryRepository) GetRepositoryByProviderRef(_ context.Context, provide
 			return repository, nil
 		}
 	}
-	return entity.RepositoryBinding{}, errs.ErrNotFound
+	return entity.RepositoryBinding{}, r.notFound()
 }
 
 func (r *memoryRepository) ListRepositories(context.Context, query.RepositoryFilter) ([]entity.RepositoryBinding, query.PageResult, error) {
@@ -3323,7 +3346,7 @@ func (r *memoryRepository) GetServicesPolicy(_ context.Context, projectID uuid.U
 	if policyID != nil {
 		policy, ok := r.policies[*policyID]
 		if !ok {
-			return entity.ServicesPolicy{}, errs.ErrNotFound
+			return entity.ServicesPolicy{}, r.notFound()
 		}
 		return policy, nil
 	}
@@ -3334,7 +3357,7 @@ func (r *memoryRepository) GetServicesPolicy(_ context.Context, projectID uuid.U
 		}
 	}
 	if latest.ID == uuid.Nil {
-		return entity.ServicesPolicy{}, errs.ErrNotFound
+		return entity.ServicesPolicy{}, r.notFound()
 	}
 	return latest, nil
 }
@@ -3354,9 +3377,16 @@ func (r *memoryRepository) GetServicesPolicyBySource(_ context.Context, projectI
 		}
 	}
 	if latest.ID == uuid.Nil {
-		return entity.ServicesPolicy{}, errs.ErrNotFound
+		return entity.ServicesPolicy{}, r.notFound()
 	}
 	return latest, nil
+}
+
+func (r *memoryRepository) notFound() error {
+	if r.wrapNotFound {
+		return errors.Join(errs.ErrNotFound, errors.New("wrapped not found"))
+	}
+	return errs.ErrNotFound
 }
 
 func (r *memoryRepository) ListServiceDescriptors(_ context.Context, filter query.ServiceDescriptorFilter) ([]entity.ServiceDescriptor, query.PageResult, error) {

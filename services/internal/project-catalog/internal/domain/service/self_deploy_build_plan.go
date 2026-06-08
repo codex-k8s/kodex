@@ -48,7 +48,7 @@ func (s *Service) GetSelfDeployBuildPlan(ctx context.Context, input GetSelfDeplo
 
 	policy, err := s.repository.GetServicesPolicy(ctx, input.ProjectID, nil)
 	if err != nil {
-		if err == errs.ErrNotFound {
+		if errors.Is(err, errs.ErrNotFound) {
 			return SelfDeployBuildPlanResult{Status: enum.SelfDeployBuildPlanStatusBuildPlanUnavailable, SafeReason: "services_policy_not_found"}, nil
 		}
 		return SelfDeployBuildPlanResult{}, err
