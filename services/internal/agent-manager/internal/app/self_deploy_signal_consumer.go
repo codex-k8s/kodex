@@ -253,6 +253,10 @@ func selfDeploySignalCommandMeta() value.CommandMeta {
 }
 
 func selfDeployPlanInputFromSignal(signal agentservice.SelfDeploySignal) (agentservice.CreateSelfDeployPlanFromSignalInput, error) {
+	governanceContext, err := selfDeployGovernanceContextFromSignal(signal.GovernanceRequirement)
+	if err != nil {
+		return agentservice.CreateSelfDeployPlanFromSignalInput{}, err
+	}
 	input := agentservice.CreateSelfDeployPlanInput{
 		Meta: value.CommandMeta{
 			IdempotencyKey: selfDeploySignalPlanIdempotencyKey(signal.ProviderSignalRef),
@@ -272,11 +276,8 @@ func selfDeployPlanInputFromSignal(signal agentservice.SelfDeploySignal) (agents
 		AffectedServiceKeys:     append([]string(nil), signal.AffectedServiceKeys...),
 		PathCategories:          append([]enum.SelfDeployPathCategory(nil), signal.PathCategories...),
 		ExpectedRuntimeJobTypes: append([]enum.SelfDeployRuntimeJobType(nil), signal.ExpectedRuntimeJobTypes...),
-		GovernanceContext: value.GovernanceContextRef{
-			RiskProfileRef: strings.TrimSpace(signal.GovernanceRequirement.RiskProfileRef),
-			GatePolicyRef:  strings.TrimSpace(signal.GovernanceRequirement.GatePolicyRef),
-		},
-		SafeSummary: strings.TrimSpace(signal.SafeSummary),
+		GovernanceContext:       governanceContext,
+		SafeSummary:             strings.TrimSpace(signal.SafeSummary),
 	}
 	if input.ProviderSignalRef == "" ||
 		input.ProjectRef == "" ||
@@ -290,6 +291,111 @@ func selfDeployPlanInputFromSignal(signal agentservice.SelfDeploySignal) (agents
 		return agentservice.CreateSelfDeployPlanFromSignalInput{}, errs.ErrInvalidArgument
 	}
 	return agentservice.CreateSelfDeployPlanFromSignalInput{CreateSelfDeployPlanInput: input}, nil
+}
+
+func selfDeployGovernanceContextFromSignal(requirement agentservice.SelfDeployGovernanceRequirement) (value.GovernanceContextRef, error) {
+	riskProfileRef, err := selfDeployGovernancePolicyRef("risk_profile", requirement.RiskProfileRef)
+	if err != nil {
+		return value.GovernanceContextRef{}, err
+	}
+	gatePolicyRef, err := selfDeployGovernancePolicyRef("gate_policy", requirement.GatePolicyRef)
+	if err != nil {
+		return value.GovernanceContextRef{}, err
+	}
+	return value.GovernanceContextRef{
+		RiskProfileRef: riskProfileRef,
+		GatePolicyRef:  gatePolicyRef,
+	}, nil
+}
+
+func selfDeployGovernancePolicyRef(kind string, raw string) (string, error) {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return "", nil
+	}
+	if strings.Contains(value, ":") {
+		if !safeSelfDeploySignalRef(value) {
+			return "", errs.ErrInvalidArgument
+		}
+		return value, nil
+	}
+	if !safeSelfDeploySignalPolicyKey(value) {
+		return "", errs.ErrInvalidArgument
+	}
+	return "governance:" + kind + "/" + value, nil
+}
+
+func safeSelfDeploySignalPolicyKey(value string) bool {
+	if value == "" || len(value) > 128 || unsafeSelfDeploySignalRef(value) {
+		return false
+	}
+	for index, char := range value {
+		if asciiSelfDeploySignalLetter(char) || asciiSelfDeploySignalDigit(char) || char == '_' || char == '-' || char == '.' || char == '/' {
+			if index == 0 && char == '/' {
+				return false
+			}
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func safeSelfDeploySignalRef(value string) bool {
+	if value == "" || len(value) > 512 || unsafeSelfDeploySignalRef(value) {
+		return false
+	}
+	for _, char := range value {
+		if asciiSelfDeploySignalLetter(char) || asciiSelfDeploySignalDigit(char) {
+			continue
+		}
+		switch char {
+		case '-', '.', '_', ':', '/', '#', '@', '+', '=', ',':
+			continue
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func unsafeSelfDeploySignalRef(value string) bool {
+	lower := strings.ToLower(value)
+	for _, marker := range []string{
+		"raw_provider_payload",
+		"provider_payload",
+		"workspace_file",
+		"workspace_files",
+		"prompt_text",
+		"prompt_template",
+		"flow_file",
+		"transcript",
+		"session_dump",
+		"full_yaml",
+		"full_diff",
+		"secret",
+		"token",
+		"authorization",
+		"stdout",
+		"stderr",
+		"logs",
+		"kubeconfig",
+		"-----begin",
+		"bearer",
+	} {
+		if strings.Contains(lower, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func asciiSelfDeploySignalLetter(char rune) bool {
+	return (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z')
+}
+
+func asciiSelfDeploySignalDigit(char rune) bool {
+	return char >= '0' && char <= '9'
 }
 
 func selfDeploySignalPlanIdempotencyKey(providerSignalRef string) string {
