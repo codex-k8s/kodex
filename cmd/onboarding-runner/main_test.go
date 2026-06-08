@@ -647,16 +647,19 @@ func TestRunApplyCreatesSelfDeployServiceAccessRules(t *testing.T) {
 		t.Fatalf("run apply service access rules: %v", err)
 	}
 
-	if accessClient.createdRuleCount != 2 {
-		t.Fatalf("expected two created access rules, got %d", accessClient.createdRuleCount)
+	if accessClient.createdRuleCount != 3 {
+		t.Fatalf("expected three created access rules, got %d", accessClient.createdRuleCount)
 	}
-	if accessClient.putAccessRuleCalls != 2 || accessClient.checkAccessCalls != 2 {
-		t.Fatalf("expected put/check calls for two services, got put=%d check=%d", accessClient.putAccessRuleCalls, accessClient.checkAccessCalls)
+	if accessClient.putAccessRuleCalls != 3 || accessClient.checkAccessCalls != 3 {
+		t.Fatalf("expected put/check calls for runner and two services, got put=%d check=%d", accessClient.putAccessRuleCalls, accessClient.checkAccessCalls)
 	}
+	assertRunnerRepositoryReadAccessRule(t, accessClient.lastPutAccessRuleByAction[accesscatalog.ActionRepositoryRead], "project-self", "repo-self")
+	assertRunnerRepositoryReadAccessCheck(t, accessClient.lastCheckAccessByAction[accesscatalog.ActionRepositoryRead], "project-self", "repo-self")
 	assertSelfDeployAccessRule(t, accessClient.lastPutAccessRuleBySubject["agent-manager"], "project-self")
 	assertSelfDeployAccessCheck(t, accessClient.lastCheckAccessBySubject["agent-manager"], "project-self")
 	assertSelfDeployAccessRule(t, accessClient.lastPutAccessRuleBySubject["staff-gateway"], "project-self")
 	text := output.String()
+	assertContains(t, text, "onboarding runner repository read access ready subject=service/onboarding-runner")
 	assertContains(t, text, "self-deploy service access ready subject=service/agent-manager")
 	assertContains(t, text, "self-deploy service access ready subject=service/staff-gateway")
 }
@@ -776,15 +779,79 @@ func TestRunApplyImportsSelfRepoServicesPolicyThroughProductAPI(t *testing.T) {
 	if !strings.Contains(request.GetValidatedPayloadJson(), "raw_services_yaml_secret") {
 		t.Fatalf("expected checked payload to reach product API")
 	}
+	assertRunnerRepositoryReadAccessRule(t, accessClient.lastPutAccessRuleByAction[accesscatalog.ActionRepositoryRead], "project-self", "repo-self")
+	assertRunnerRepositoryReadAccessCheck(t, accessClient.lastCheckAccessByAction[accesscatalog.ActionRepositoryRead], "project-self", "repo-self")
 	assertSelfDeployAccessRule(t, accessClient.lastPutAccessRuleBySubject["agent-manager"], "project-self")
-	assertServicesPolicyImportAccessRule(t, accessClient.lastPutAccessRuleBySubject[defaultActorID], "project-self")
-	assertServicesPolicyImportAccessCheck(t, accessClient.lastCheckAccessBySubject[defaultActorID], "project-self")
-	if accessClient.putAccessRuleCalls != 3 || accessClient.checkAccessCalls != 3 {
+	assertServicesPolicyImportAccessRule(t, accessClient.lastPutAccessRuleByAction[accesscatalog.ActionProjectPolicyImport], "project-self")
+	assertServicesPolicyImportAccessCheck(t, accessClient.lastCheckAccessByAction[accesscatalog.ActionProjectPolicyImport], "project-self")
+	if accessClient.putAccessRuleCalls != 4 || accessClient.checkAccessCalls != 4 {
 		t.Fatalf("expected read/import access put/check calls, got put=%d check=%d", accessClient.putAccessRuleCalls, accessClient.checkAccessCalls)
 	}
 	text := output.String()
 	assertContains(t, text, "services policy import completed")
 	assertContains(t, text, "content_hash="+contentHash)
+	assertNotContains(t, text, "raw_services_yaml_secret")
+}
+
+func TestRunApplyEnsuresRepositoryReadAccessBeforeGetRepository(t *testing.T) {
+	policyPath := writeServicesPolicyImportFixture(t)
+	scenario := selfRepositoryBindingOnlyScenario()
+	scenario.ProjectID = "project-self"
+	scenario.RepositoryID = "repo-self"
+	scenario.ServicesPolicyImport = &servicesPolicyImportScenario{
+		FilePath:        policyPath,
+		SourcePath:      "services.yaml",
+		SourceRef:       "refs/heads/main",
+		SourceCommitSHA: strings.Repeat("b", 40),
+	}
+	scenarioPath := writeScenario(t, scenario)
+	repository := selfRepositoryFixture()
+	repository.ProjectId = "project-self"
+	repository.RepositoryId = "repo-self"
+	accessClient := &fakeAccessManagerClient{}
+	projectClient := &fakeProjectCatalogClient{repository: repository}
+	projectClient.getRepositoryHook = func() error {
+		check := runnerRepositoryReadAccessCheckRequest(runnerOptions{
+			ProjectID:    "project-self",
+			RepositoryID: "repo-self",
+			ActorID:      defaultActorID,
+		})
+		if accessClient.rules[checkAccessIdentityKey(check)] == nil {
+			return errors.New("repository.read access is not ready before GetRepository")
+		}
+		return nil
+	}
+	clients := runnerClients{
+		ProjectCatalog: projectClient,
+		ProviderHub:    &fakeProviderHubClient{},
+		AccessManager:  accessClient,
+	}
+
+	var output bytes.Buffer
+	err := run(context.Background(), runnerOptions{
+		ScenarioFilePath:          scenarioPath,
+		AllowedProviderOwner:      "codex-k8s",
+		AllowedProviderRepository: "kodex",
+		RequestID:                 "req-1",
+		Kind:                      "adoption",
+		Apply:                     true,
+	}, clients, &output)
+	if err != nil {
+		t.Fatalf("run apply repository read access before GetRepository: %v", err)
+	}
+
+	if projectClient.getRepositoryCalls != 1 {
+		t.Fatalf("expected one GetRepository call, got %d", projectClient.getRepositoryCalls)
+	}
+	if accessClient.putAccessRuleCalls != 4 || accessClient.checkAccessCalls != 4 {
+		t.Fatalf("expected repository read/import access put/check calls, got put=%d check=%d", accessClient.putAccessRuleCalls, accessClient.checkAccessCalls)
+	}
+	assertRunnerRepositoryReadAccessRule(t, accessClient.lastPutAccessRuleByAction[accesscatalog.ActionRepositoryRead], "project-self", "repo-self")
+	assertRunnerRepositoryReadAccessCheck(t, accessClient.lastCheckAccessByAction[accesscatalog.ActionRepositoryRead], "project-self", "repo-self")
+	assertServicesPolicyImportAccessRule(t, accessClient.lastPutAccessRuleByAction[accesscatalog.ActionProjectPolicyImport], "project-self")
+	assertServicesPolicyImportAccessCheck(t, accessClient.lastCheckAccessByAction[accesscatalog.ActionProjectPolicyImport], "project-self")
+	text := output.String()
+	assertContains(t, text, "onboarding runner repository read access ready")
 	assertNotContains(t, text, "raw_services_yaml_secret")
 }
 
@@ -927,10 +994,10 @@ func TestRunApplyReusesSelfDeployServiceAccessRules(t *testing.T) {
 		t.Fatalf("second run apply service access rules: %v", err)
 	}
 
-	if accessClient.createdRuleCount != 2 {
-		t.Fatalf("expected second run to reuse two access rules, created=%d", accessClient.createdRuleCount)
+	if accessClient.createdRuleCount != 3 {
+		t.Fatalf("expected second run to reuse three access rules, created=%d", accessClient.createdRuleCount)
 	}
-	if accessClient.putAccessRuleCalls != 4 || accessClient.checkAccessCalls != 4 {
+	if accessClient.putAccessRuleCalls != 6 || accessClient.checkAccessCalls != 6 {
 		t.Fatalf("expected repeated put/check calls without duplicates, got put=%d check=%d", accessClient.putAccessRuleCalls, accessClient.checkAccessCalls)
 	}
 }
@@ -1453,8 +1520,10 @@ type fakeProjectCatalogClient struct {
 	importServicesPolicyCalls       int
 	createRepositoryCalls           int
 	bootstrapPullRequestCalls       int
+	getRepositoryCalls              int
 	lastListProjectsRequest         *projectsv1.ListProjectsRequest
 	lastCreateProjectRequest        *projectsv1.CreateProjectRequest
+	lastGetRepositoryRequest        *projectsv1.GetRepositoryRequest
 	lastListRepositoriesRequest     *projectsv1.ListRepositoriesRequest
 	lastAttachRepositoryRequest     *projectsv1.AttachRepositoryRequest
 	lastBootstrapRequest            *projectsv1.ReconcileBootstrapMergeSignalRequest
@@ -1462,6 +1531,7 @@ type fakeProjectCatalogClient struct {
 	lastImportServicesPolicyRequest *projectsv1.ImportServicesPolicyRequest
 	lastCreateRepositoryRequest     *projectsv1.CreateProviderRepositoryRequest
 	lastBootstrapPullRequestRequest *projectsv1.CreateRepositoryBootstrapPullRequestRequest
+	getRepositoryHook               func() error
 }
 
 func (f *fakeProjectCatalogClient) CreateProject(_ context.Context, request *projectsv1.CreateProjectRequest, _ ...grpc.CallOption) (*projectsv1.ProjectResponse, error) {
@@ -1501,7 +1571,14 @@ func (f *fakeProjectCatalogClient) AttachRepository(_ context.Context, request *
 	return &projectsv1.RepositoryResponse{Repository: repository}, nil
 }
 
-func (f *fakeProjectCatalogClient) GetRepository(context.Context, *projectsv1.GetRepositoryRequest, ...grpc.CallOption) (*projectsv1.RepositoryResponse, error) {
+func (f *fakeProjectCatalogClient) GetRepository(_ context.Context, request *projectsv1.GetRepositoryRequest, _ ...grpc.CallOption) (*projectsv1.RepositoryResponse, error) {
+	f.getRepositoryCalls++
+	f.lastGetRepositoryRequest = request
+	if f.getRepositoryHook != nil {
+		if err := f.getRepositoryHook(); err != nil {
+			return nil, err
+		}
+	}
 	if f.getRepositoryErr != nil {
 		return nil, f.getRepositoryErr
 	}
@@ -1631,6 +1708,8 @@ type fakeAccessManagerClient struct {
 	createdRuleCount           int
 	lastPutAccessRuleBySubject map[string]*accessaccountsv1.PutAccessRuleRequest
 	lastCheckAccessBySubject   map[string]*accessaccountsv1.CheckAccessRequest
+	lastPutAccessRuleByAction  map[string]*accessaccountsv1.PutAccessRuleRequest
+	lastCheckAccessByAction    map[string]*accessaccountsv1.CheckAccessRequest
 }
 
 func (f *fakeAccessManagerClient) PutAccessRule(_ context.Context, request *accessaccountsv1.PutAccessRuleRequest, _ ...grpc.CallOption) (*accessaccountsv1.AccessRuleResponse, error) {
@@ -1638,7 +1717,11 @@ func (f *fakeAccessManagerClient) PutAccessRule(_ context.Context, request *acce
 	if f.lastPutAccessRuleBySubject == nil {
 		f.lastPutAccessRuleBySubject = map[string]*accessaccountsv1.PutAccessRuleRequest{}
 	}
+	if f.lastPutAccessRuleByAction == nil {
+		f.lastPutAccessRuleByAction = map[string]*accessaccountsv1.PutAccessRuleRequest{}
+	}
 	f.lastPutAccessRuleBySubject[request.GetSubjectId()] = request
+	f.lastPutAccessRuleByAction[request.GetActionKey()] = request
 	if f.putAccessRuleErr != nil {
 		return nil, f.putAccessRuleErr
 	}
@@ -1673,8 +1756,12 @@ func (f *fakeAccessManagerClient) CheckAccess(_ context.Context, request *access
 	if f.lastCheckAccessBySubject == nil {
 		f.lastCheckAccessBySubject = map[string]*accessaccountsv1.CheckAccessRequest{}
 	}
+	if f.lastCheckAccessByAction == nil {
+		f.lastCheckAccessByAction = map[string]*accessaccountsv1.CheckAccessRequest{}
+	}
 	subjectID := request.GetSubject().GetId()
 	f.lastCheckAccessBySubject[subjectID] = request
+	f.lastCheckAccessByAction[request.GetActionKey()] = request
 	if f.checkAccessErr != nil {
 		return nil, f.checkAccessErr
 	}
@@ -2164,6 +2251,45 @@ func assertSelfDeployAccessCheck(t *testing.T, request *accessaccountsv1.CheckAc
 		request.GetScope().GetId() != projectID ||
 		!request.GetAudit() {
 		t.Fatalf("unexpected self-deploy access check request: %+v", request)
+	}
+}
+
+func assertRunnerRepositoryReadAccessRule(t *testing.T, request *accessaccountsv1.PutAccessRuleRequest, projectID string, repositoryID string) {
+	t.Helper()
+	if request == nil {
+		t.Fatal("expected onboarding runner repository read access rule request")
+	}
+	if request.GetEffect() != accessaccountsv1.AccessEffect_ACCESS_EFFECT_ALLOW ||
+		request.GetSubjectType() != "service" ||
+		request.GetSubjectId() != defaultActorID ||
+		request.GetActionKey() != accesscatalog.ActionRepositoryRead ||
+		request.GetResourceType() != accesscatalog.ResourceRepository ||
+		request.GetResourceId() != repositoryID ||
+		request.GetScopeType() != accesscatalog.ScopeProject ||
+		request.GetScopeId() != projectID ||
+		request.GetPriority() != runnerRepositoryReadAccessPriority ||
+		request.GetStatus() != accessaccountsv1.AccessRuleStatus_ACCESS_RULE_STATUS_ACTIVE {
+		t.Fatalf("unexpected onboarding runner repository read access rule request: %+v", request)
+	}
+	if request.GetMeta().GetActor().GetType() != "service" || request.GetMeta().GetActor().GetId() != defaultActorID {
+		t.Fatalf("unexpected repository read access rule actor: %+v", request.GetMeta().GetActor())
+	}
+}
+
+func assertRunnerRepositoryReadAccessCheck(t *testing.T, request *accessaccountsv1.CheckAccessRequest, projectID string, repositoryID string) {
+	t.Helper()
+	if request == nil {
+		t.Fatal("expected onboarding runner repository read access check request")
+	}
+	if request.GetSubject().GetType() != "service" ||
+		request.GetSubject().GetId() != defaultActorID ||
+		request.GetActionKey() != accesscatalog.ActionRepositoryRead ||
+		request.GetResource().GetType() != accesscatalog.ResourceRepository ||
+		request.GetResource().GetId() != repositoryID ||
+		request.GetScope().GetType() != accesscatalog.ScopeProject ||
+		request.GetScope().GetId() != projectID ||
+		!request.GetAudit() {
+		t.Fatalf("unexpected onboarding runner repository read access check request: %+v", request)
 	}
 }
 
