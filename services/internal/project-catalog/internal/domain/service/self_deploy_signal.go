@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"sort"
 	"strings"
 	"time"
@@ -104,7 +105,7 @@ func (s *Service) GetSelfDeploySignal(ctx context.Context, input GetSelfDeploySi
 
 	policy, err := s.repository.GetServicesPolicy(ctx, input.ProjectID, nil)
 	if err != nil {
-		if err == errs.ErrNotFound {
+		if errors.Is(err, errs.ErrNotFound) {
 			return SelfDeploySignalResult{Status: enum.SelfDeploySignalStatusServicesPolicyNotFound, Signal: baseSignal, SafeReason: "services_policy_not_found"}, nil
 		}
 		return SelfDeploySignalResult{}, err
@@ -146,7 +147,7 @@ func (s *Service) selfDeployRepositoryBinding(ctx context.Context, input GetSelf
 	if input.RepositoryID != nil {
 		repository, err := s.repository.GetRepository(ctx, *input.RepositoryID)
 		if err != nil {
-			if err == errs.ErrNotFound {
+			if errors.Is(err, errs.ErrNotFound) {
 				return entity.RepositoryBinding{}, false, nil
 			}
 			return entity.RepositoryBinding{}, false, err
@@ -160,7 +161,7 @@ func (s *Service) selfDeployRepositoryBinding(ctx context.Context, input GetSelf
 			if err == nil {
 				return repository, true, nil
 			}
-			if err != errs.ErrNotFound {
+			if !errors.Is(err, errs.ErrNotFound) {
 				return entity.RepositoryBinding{}, false, err
 			}
 		}
@@ -171,7 +172,7 @@ func (s *Service) selfDeployRepositoryBinding(ctx context.Context, input GetSelf
 	}
 	repository, err := s.repository.GetRepositoryByProviderRef(ctx, provider, owner, name)
 	if err != nil {
-		if err == errs.ErrNotFound {
+		if errors.Is(err, errs.ErrNotFound) {
 			return entity.RepositoryBinding{}, false, nil
 		}
 		return entity.RepositoryBinding{}, false, err
@@ -210,7 +211,7 @@ func (s *Service) resolveProviderSignalByBinding(ctx context.Context, input GetS
 	}
 	repository, err := s.repository.GetRepository(ctx, *input.RepositoryID)
 	if err != nil {
-		if err == errs.ErrNotFound {
+		if errors.Is(err, errs.ErrNotFound) {
 			return RepositoryChangeSignalReadResult{}, nil, false, "repository_binding_not_found", nil
 		}
 		return RepositoryChangeSignalReadResult{}, nil, false, "", err
