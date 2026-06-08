@@ -23,6 +23,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
+	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -40,10 +41,12 @@ const (
 	defaultProjectCatalogAuthEnvRefName = "KODEX_ONBOARDING_RUNNER_PROJECT_CATALOG_GRPC_AUTH_TOKEN_ENV"
 	defaultProviderHubAuthEnvRefName    = "KODEX_ONBOARDING_RUNNER_PROVIDER_HUB_GRPC_AUTH_TOKEN_ENV"
 	maxCheckedPayloadBytes              = 256 * 1024
+	maxServicesPolicyImportBytes        = 512 * 1024
 	maxWatermarkJSONBytes               = 16 * 1024
 	maxBootstrapSetupFiles              = 64
 	maxBootstrapSetupBytes              = 4 * 1024 * 1024
 	selfDeployServiceAccessPriority     = 100
+	servicesPolicyImportAccessPriority  = 100
 )
 
 var selfDeployServiceAccessSubjects = []string{"agent-manager", "staff-gateway"}
@@ -82,6 +85,11 @@ func main() {
 	flag.StringVar(&options.CheckedSourcePath, "checked-source-path", os.Getenv("KODEX_ONBOARDING_RUNNER_CHECKED_SOURCE_PATH"), "source path for checked services policy artifact")
 	flag.StringVar(&options.CheckedArtifactRef, "checked-artifact-ref", os.Getenv("KODEX_ONBOARDING_RUNNER_CHECKED_ARTIFACT_REF"), "optional immutable checked artifact ref")
 	flag.StringVar(&options.CheckedArtifactVersion, "checked-artifact-version", os.Getenv("KODEX_ONBOARDING_RUNNER_CHECKED_ARTIFACT_VERSION"), "optional checked artifact version; defaults to provider merge commit")
+	flag.StringVar(&options.ServicesPolicyFilePath, "services-policy-file", os.Getenv("KODEX_ONBOARDING_RUNNER_SERVICES_POLICY_FILE"), "local checked services.yaml file for ImportServicesPolicy; values are never printed")
+	flag.StringVar(&options.ServicesPolicySourcePath, "services-policy-source-path", os.Getenv("KODEX_ONBOARDING_RUNNER_SERVICES_POLICY_SOURCE_PATH"), "repository path for imported services policy")
+	flag.StringVar(&options.ServicesPolicySourceRef, "services-policy-source-ref", os.Getenv("KODEX_ONBOARDING_RUNNER_SERVICES_POLICY_SOURCE_REF"), "source ref for imported services policy")
+	flag.StringVar(&options.ServicesPolicySourceCommitSHA, "services-policy-source-commit-sha", os.Getenv("KODEX_ONBOARDING_RUNNER_SERVICES_POLICY_SOURCE_COMMIT_SHA"), "source commit sha for imported services policy")
+	flag.StringVar(&options.ServicesPolicySourceBlobSHA, "services-policy-source-blob-sha", os.Getenv("KODEX_ONBOARDING_RUNNER_SERVICES_POLICY_SOURCE_BLOB_SHA"), "optional source blob sha for imported services policy")
 	timeout := flag.Duration("timeout", 30*time.Second, "runner timeout")
 	applyFlag := flag.Bool("apply", false, "execute mutating product API calls")
 	flag.Parse()
@@ -113,6 +121,7 @@ type projectCatalogAPI interface {
 	ListRepositories(context.Context, *projectsv1.ListRepositoriesRequest, ...grpc.CallOption) (*projectsv1.ListRepositoriesResponse, error)
 	CreateProviderRepository(context.Context, *projectsv1.CreateProviderRepositoryRequest, ...grpc.CallOption) (*projectsv1.RepositoryProviderCreateResponse, error)
 	CreateRepositoryBootstrapPullRequest(context.Context, *projectsv1.CreateRepositoryBootstrapPullRequestRequest, ...grpc.CallOption) (*projectsv1.RepositoryBootstrapPullRequestResponse, error)
+	ImportServicesPolicy(context.Context, *projectsv1.ImportServicesPolicyRequest, ...grpc.CallOption) (*projectsv1.ServicesPolicyResponse, error)
 	ReconcileBootstrapMergeSignal(context.Context, *projectsv1.ReconcileBootstrapMergeSignalRequest, ...grpc.CallOption) (*projectsv1.BootstrapServicesPolicyImportResponse, error)
 	ReconcileAdoptionMergeSignal(context.Context, *projectsv1.ReconcileAdoptionMergeSignalRequest, ...grpc.CallOption) (*projectsv1.BootstrapServicesPolicyImportResponse, error)
 }
@@ -137,57 +146,63 @@ type runnerClients struct {
 }
 
 type runnerOptions struct {
-	AccessManagerAddr          string
-	ProjectCatalogAddr         string
-	ProviderHubAddr            string
-	AccessManagerAuthTokenEnv  string
-	ProjectCatalogAuthTokenEnv string
-	ProviderHubAuthTokenEnv    string
-	ScenarioFilePath           string
-	OrganizationID             string
-	ProjectID                  string
-	ProjectSlug                string
-	ProjectDisplayName         string
-	ProjectDescription         string
-	RepositoryID               string
-	ProviderSlug               string
-	ProviderOwner              string
-	ProviderName               string
-	RepositoryFullName         string
-	RepositoryDefaultBranch    string
-	ProviderRepositoryID       string
-	ExternalAccountID          string
-	AllowedProviderOwner       string
-	RepositoryNamePrefix       string
-	AllowedProviderRepository  string
-	IdempotencyKey             string
-	RequestID                  string
-	ActorID                    string
-	Kind                       string
-	CheckedPayloadFilePath     string
-	WatermarkJSONFilePath      string
-	CheckedSourcePath          string
-	CheckedArtifactRef         string
-	CheckedArtifactVersion     string
-	Apply                      bool
-	Timeout                    time.Duration
+	AccessManagerAddr             string
+	ProjectCatalogAddr            string
+	ProviderHubAddr               string
+	AccessManagerAuthTokenEnv     string
+	ProjectCatalogAuthTokenEnv    string
+	ProviderHubAuthTokenEnv       string
+	ScenarioFilePath              string
+	OrganizationID                string
+	ProjectID                     string
+	ProjectSlug                   string
+	ProjectDisplayName            string
+	ProjectDescription            string
+	RepositoryID                  string
+	ProviderSlug                  string
+	ProviderOwner                 string
+	ProviderName                  string
+	RepositoryFullName            string
+	RepositoryDefaultBranch       string
+	ProviderRepositoryID          string
+	ExternalAccountID             string
+	AllowedProviderOwner          string
+	RepositoryNamePrefix          string
+	AllowedProviderRepository     string
+	IdempotencyKey                string
+	RequestID                     string
+	ActorID                       string
+	Kind                          string
+	CheckedPayloadFilePath        string
+	WatermarkJSONFilePath         string
+	CheckedSourcePath             string
+	CheckedArtifactRef            string
+	CheckedArtifactVersion        string
+	ServicesPolicyFilePath        string
+	ServicesPolicySourcePath      string
+	ServicesPolicySourceRef       string
+	ServicesPolicySourceCommitSHA string
+	ServicesPolicySourceBlobSHA   string
+	Apply                         bool
+	Timeout                       time.Duration
 }
 
 type onboardingScenario struct {
-	OrganizationID       string                     `json:"organization_id,omitempty"`
-	ProjectSlug          string                     `json:"project_slug,omitempty"`
-	ProjectDisplayName   string                     `json:"project_display_name,omitempty"`
-	ProjectDescription   string                     `json:"project_description,omitempty"`
-	ProjectID            string                     `json:"project_id,omitempty"`
-	RepositoryID         string                     `json:"repository_id,omitempty"`
-	ProviderSlug         string                     `json:"provider_slug,omitempty"`
-	RepositoryFullName   string                     `json:"repository_full_name,omitempty"`
-	ProviderRepositoryID string                     `json:"provider_repository_id,omitempty"`
-	RepositoryBinding    *repositoryBindingScenario `json:"repository_binding,omitempty"`
-	RepositoryChange     *repositoryChangeScenario  `json:"repository_change,omitempty"`
-	BootstrapSetup       *bootstrapSetup            `json:"bootstrap_setup,omitempty"`
-	Bootstrap            *reconcileScenario         `json:"bootstrap,omitempty"`
-	Adoption             *reconcileScenario         `json:"adoption,omitempty"`
+	OrganizationID       string                        `json:"organization_id,omitempty"`
+	ProjectSlug          string                        `json:"project_slug,omitempty"`
+	ProjectDisplayName   string                        `json:"project_display_name,omitempty"`
+	ProjectDescription   string                        `json:"project_description,omitempty"`
+	ProjectID            string                        `json:"project_id,omitempty"`
+	RepositoryID         string                        `json:"repository_id,omitempty"`
+	ProviderSlug         string                        `json:"provider_slug,omitempty"`
+	RepositoryFullName   string                        `json:"repository_full_name,omitempty"`
+	ProviderRepositoryID string                        `json:"provider_repository_id,omitempty"`
+	RepositoryBinding    *repositoryBindingScenario    `json:"repository_binding,omitempty"`
+	RepositoryChange     *repositoryChangeScenario     `json:"repository_change,omitempty"`
+	BootstrapSetup       *bootstrapSetup               `json:"bootstrap_setup,omitempty"`
+	Bootstrap            *reconcileScenario            `json:"bootstrap,omitempty"`
+	Adoption             *reconcileScenario            `json:"adoption,omitempty"`
+	ServicesPolicyImport *servicesPolicyImportScenario `json:"services_policy_import,omitempty"`
 }
 
 type repositoryBindingScenario struct {
@@ -260,6 +275,14 @@ type reconcileScenario struct {
 	CheckedPolicy checkedPolicyScenario `json:"checked_policy"`
 }
 
+type servicesPolicyImportScenario struct {
+	FilePath        string `json:"file_path,omitempty"`
+	SourcePath      string `json:"source_path,omitempty"`
+	SourceRef       string `json:"source_ref,omitempty"`
+	SourceCommitSHA string `json:"source_commit_sha,omitempty"`
+	SourceBlobSHA   string `json:"source_blob_sha,omitempty"`
+}
+
 type checkedPolicyScenario struct {
 	ArtifactRef          string `json:"artifact_ref"`
 	ArtifactDigest       string `json:"artifact_digest"`
@@ -304,6 +327,16 @@ type repositoryChangeSummary struct {
 	Categories            map[string]int
 }
 
+type servicesPolicyImportPlan struct {
+	Enabled              bool
+	SourcePath           string
+	SourceRef            string
+	SourceCommitSHA      string
+	SourceBlobSHA        string
+	ContentHash          string
+	ValidatedPayloadJSON string
+}
+
 func run(ctx context.Context, options runnerOptions, clients runnerClients, output io.Writer) error {
 	if clients.ProjectCatalog == nil {
 		return errors.New("project-catalog client is required")
@@ -322,11 +355,17 @@ func run(ctx context.Context, options runnerOptions, clients runnerClients, outp
 		return err
 	}
 	scenario = ensureRepositoryBindingScenario(options, scenario)
-	if options.Apply && shouldEnsureSelfDeployServiceAccess(scenario) {
+	scenario = ensureServicesPolicyImportScenario(options, scenario)
+	needsSelfDeployServiceAccess := shouldEnsureSelfDeployServiceAccess(scenario)
+	needsServicesPolicyImportAccess := shouldEnsureServicesPolicyImportAccess(scenario)
+	if options.Apply && (needsSelfDeployServiceAccess || needsServicesPolicyImportAccess) {
 		if err := validateApplyPolicy(options, scenario); err != nil {
 			return err
 		}
 		if clients.AccessManager == nil {
+			if needsServicesPolicyImportAccess {
+				return errors.New("access-manager client is required for services policy import apply")
+			}
 			return errors.New("access-manager client is required for self-deploy service access apply")
 		}
 	}
@@ -421,7 +460,8 @@ func run(ctx context.Context, options runnerOptions, clients runnerClients, outp
 			options.ProviderRepositoryID = setupResult.ProviderRepositoryID
 		}
 	}
-	if err := readRepositoryChangeSignal(ctx, clients.ProviderHub, options, scenario.RepositoryChange, output); err != nil {
+	repositoryChangeSignal, err := readRepositoryChangeSignal(ctx, clients.ProviderHub, options, scenario.RepositoryChange, output)
+	if err != nil {
 		return err
 	}
 	if options.RepositoryID == "" {
@@ -436,6 +476,16 @@ func run(ctx context.Context, options runnerOptions, clients runnerClients, outp
 			return err
 		}
 	}
+	if shouldEnsureServicesPolicyImportAccess(scenario) {
+		if err := ensureServicesPolicyImportAccess(ctx, clients.AccessManager, options, output); err != nil {
+			return err
+		}
+	}
+	servicesPolicyImportPlan, err := prepareServicesPolicyImportPlan(options, scenario.ServicesPolicyImport, repositoryChangeSignal)
+	if err != nil {
+		return err
+	}
+	describeServicesPolicyImportPlan(output, servicesPolicyImportPlan)
 	signals, err := readProviderSignals(ctx, clients.ProviderHub, options, scenario, output)
 	if err != nil {
 		return err
@@ -459,6 +509,11 @@ func run(ctx context.Context, options runnerOptions, clients runnerClients, outp
 	if !options.Apply {
 		logLine(output, "PLAN", "apply disabled; no mutating product API calls executed")
 		return nil
+	}
+	if servicesPolicyImportPlan.Enabled {
+		if err := applyServicesPolicyImport(ctx, clients.ProjectCatalog, options, servicesPolicyImportPlan, output); err != nil {
+			return err
+		}
 	}
 	if err := applyReconciliation(ctx, clients.ProjectCatalog, options, scenario, signals, output, hasBootstrapSetup(scenario) || hasRepositoryBindingSetup(scenario)); err != nil {
 		return err
@@ -601,6 +656,11 @@ func normalizeOptions(options runnerOptions) runnerOptions {
 	options.CheckedSourcePath = defaultString(strings.TrimSpace(options.CheckedSourcePath), defaultCheckedSourcePath)
 	options.CheckedArtifactRef = strings.TrimSpace(options.CheckedArtifactRef)
 	options.CheckedArtifactVersion = strings.TrimSpace(options.CheckedArtifactVersion)
+	options.ServicesPolicyFilePath = strings.TrimSpace(options.ServicesPolicyFilePath)
+	options.ServicesPolicySourcePath = defaultString(strings.TrimSpace(options.ServicesPolicySourcePath), defaultCheckedSourcePath)
+	options.ServicesPolicySourceRef = strings.TrimSpace(options.ServicesPolicySourceRef)
+	options.ServicesPolicySourceCommitSHA = strings.ToLower(strings.TrimSpace(options.ServicesPolicySourceCommitSHA))
+	options.ServicesPolicySourceBlobSHA = strings.TrimSpace(options.ServicesPolicySourceBlobSHA)
 	if options.Kind == "" {
 		options.Kind = "both"
 	}
@@ -654,6 +714,23 @@ func mergeScenarioOptions(options runnerOptions, scenario onboardingScenario) ru
 	if options.ProviderRepositoryID == "" && scenario.RepositoryBinding != nil {
 		options.ProviderRepositoryID = strings.TrimSpace(scenario.RepositoryBinding.ProviderRepositoryID)
 	}
+	if scenario.ServicesPolicyImport != nil {
+		if options.ServicesPolicyFilePath == "" {
+			options.ServicesPolicyFilePath = strings.TrimSpace(scenario.ServicesPolicyImport.FilePath)
+		}
+		if options.ServicesPolicySourcePath == "" || options.ServicesPolicySourcePath == defaultCheckedSourcePath {
+			options.ServicesPolicySourcePath = defaultString(strings.TrimSpace(scenario.ServicesPolicyImport.SourcePath), options.ServicesPolicySourcePath)
+		}
+		if options.ServicesPolicySourceRef == "" {
+			options.ServicesPolicySourceRef = strings.TrimSpace(scenario.ServicesPolicyImport.SourceRef)
+		}
+		if options.ServicesPolicySourceCommitSHA == "" {
+			options.ServicesPolicySourceCommitSHA = strings.ToLower(strings.TrimSpace(scenario.ServicesPolicyImport.SourceCommitSHA))
+		}
+		if options.ServicesPolicySourceBlobSHA == "" {
+			options.ServicesPolicySourceBlobSHA = strings.TrimSpace(scenario.ServicesPolicyImport.SourceBlobSHA)
+		}
+	}
 	if options.RepositoryFullName == "" && scenario.BootstrapSetup != nil && scenario.BootstrapSetup.CreateRepository != nil {
 		create := scenario.BootstrapSetup.CreateRepository
 		if strings.TrimSpace(create.ProviderOwner) != "" && strings.TrimSpace(create.ProviderName) != "" {
@@ -706,6 +783,9 @@ func validateOptions(options runnerOptions, scenario onboardingScenario) error {
 		if options.CheckedSourcePath == "" {
 			return errors.New("checked payload producer requires checked source path")
 		}
+	}
+	if options.ServicesPolicyFilePath != "" && options.ServicesPolicySourcePath == "" {
+		return errors.New("services policy import requires source path")
 	}
 	return nil
 }
@@ -828,6 +908,20 @@ func ensureRepositoryBindingScenario(options runnerOptions, scenario onboardingS
 	return scenario
 }
 
+func ensureServicesPolicyImportScenario(options runnerOptions, scenario onboardingScenario) onboardingScenario {
+	if scenario.ServicesPolicyImport != nil || options.ServicesPolicyFilePath == "" {
+		return scenario
+	}
+	scenario.ServicesPolicyImport = &servicesPolicyImportScenario{
+		FilePath:        options.ServicesPolicyFilePath,
+		SourcePath:      options.ServicesPolicySourcePath,
+		SourceRef:       options.ServicesPolicySourceRef,
+		SourceCommitSHA: options.ServicesPolicySourceCommitSHA,
+		SourceBlobSHA:   options.ServicesPolicySourceBlobSHA,
+	}
+	return scenario
+}
+
 func loadCheckedArtifactProducer(options runnerOptions) (checkedArtifactProducer, error) {
 	if options.CheckedPayloadFilePath == "" {
 		return checkedArtifactProducer{}, nil
@@ -943,6 +1037,186 @@ func hasCheckedPolicyValues(policy checkedPolicyScenario) bool {
 		strings.TrimSpace(policy.ValidatedPayloadJSON) != ""
 }
 
+func prepareServicesPolicyImportPlan(options runnerOptions, scenario *servicesPolicyImportScenario, signal *providersv1.RepositoryChangeSignal) (servicesPolicyImportPlan, error) {
+	if scenario == nil {
+		return servicesPolicyImportPlan{}, nil
+	}
+	filePath := firstNonEmpty(scenario.FilePath, options.ServicesPolicyFilePath)
+	if strings.TrimSpace(filePath) == "" {
+		return servicesPolicyImportPlan{}, errors.New("services_policy_import requires file_path or --services-policy-file")
+	}
+	sourcePath := defaultString(firstNonEmpty(scenario.SourcePath, options.ServicesPolicySourcePath), defaultCheckedSourcePath)
+	sourceRef := servicesPolicyImportSourceRef(options, scenario, signal)
+	sourceCommitSHA := servicesPolicyImportSourceCommitSHA(options, scenario, signal)
+	if !validGitCommitSHA(sourceCommitSHA) {
+		return servicesPolicyImportPlan{}, errors.New("services_policy_import requires source_commit_sha or repository_change commit_sha")
+	}
+	sourceBlobSHA := firstNonEmpty(scenario.SourceBlobSHA, options.ServicesPolicySourceBlobSHA)
+	payloadJSON, contentHash, err := readServicesPolicyImportPayload(filePath)
+	if err != nil {
+		return servicesPolicyImportPlan{}, err
+	}
+	return servicesPolicyImportPlan{
+		Enabled:              true,
+		SourcePath:           sourcePath,
+		SourceRef:            sourceRef,
+		SourceCommitSHA:      sourceCommitSHA,
+		SourceBlobSHA:        sourceBlobSHA,
+		ContentHash:          contentHash,
+		ValidatedPayloadJSON: payloadJSON,
+	}, nil
+}
+
+func servicesPolicyImportSourceRef(options runnerOptions, scenario *servicesPolicyImportScenario, signal *providersv1.RepositoryChangeSignal) string {
+	value := firstNonEmpty(scenario.SourceRef, options.ServicesPolicySourceRef)
+	if value != "" {
+		return value
+	}
+	if signal != nil && signal.GetRef() != "" {
+		return signal.GetRef()
+	}
+	branch := firstNonEmpty(options.RepositoryDefaultBranch, defaultRepositoryDefaultBranch)
+	return "refs/heads/" + branch
+}
+
+func servicesPolicyImportSourceCommitSHA(options runnerOptions, scenario *servicesPolicyImportScenario, signal *providersv1.RepositoryChangeSignal) string {
+	if commit := strings.ToLower(firstNonEmpty(scenario.SourceCommitSHA, options.ServicesPolicySourceCommitSHA)); commit != "" {
+		return commit
+	}
+	if signal != nil {
+		return strings.ToLower(strings.TrimSpace(signal.GetCommitSha()))
+	}
+	return ""
+}
+
+func readServicesPolicyImportPayload(path string) (string, string, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return "", "", fmt.Errorf("read services policy file: %w", err)
+	}
+	if len(content) > maxServicesPolicyImportBytes {
+		return "", "", fmt.Errorf("services policy file exceeds %d bytes", maxServicesPolicyImportBytes)
+	}
+	if len(strings.TrimSpace(string(content))) == 0 {
+		return "", "", errors.New("services policy file is empty")
+	}
+	var decoded any
+	if err := yaml.Unmarshal(content, &decoded); err != nil {
+		return "", "", fmt.Errorf("parse services policy file: %w", err)
+	}
+	normalized, err := yamlJSONValue(decoded)
+	if err != nil {
+		return "", "", err
+	}
+	if _, ok := normalized.(map[string]any); !ok {
+		return "", "", errors.New("services policy file must contain an object")
+	}
+	payload, err := json.Marshal(normalized)
+	if err != nil {
+		return "", "", fmt.Errorf("normalize services policy file: %w", err)
+	}
+	payloadJSON := string(payload)
+	return payloadJSON, contentSHA256(payloadJSON), nil
+}
+
+func yamlJSONValue(value any) (any, error) {
+	switch typed := value.(type) {
+	case nil, string, bool, int, int64, float64:
+		return typed, nil
+	case map[string]any:
+		result := make(map[string]any, len(typed))
+		for key, nested := range typed {
+			normalized, err := yamlJSONValue(nested)
+			if err != nil {
+				return nil, err
+			}
+			result[key] = normalized
+		}
+		return result, nil
+	case map[any]any:
+		result := make(map[string]any, len(typed))
+		for rawKey, nested := range typed {
+			key, ok := rawKey.(string)
+			if !ok {
+				return nil, errors.New("services policy file contains a non-string key")
+			}
+			normalized, err := yamlJSONValue(nested)
+			if err != nil {
+				return nil, err
+			}
+			result[key] = normalized
+		}
+		return result, nil
+	case []any:
+		result := make([]any, 0, len(typed))
+		for _, nested := range typed {
+			normalized, err := yamlJSONValue(nested)
+			if err != nil {
+				return nil, err
+			}
+			result = append(result, normalized)
+		}
+		return result, nil
+	default:
+		encoded, err := json.Marshal(typed)
+		if err != nil {
+			return nil, errors.New("services policy file contains an unsupported value")
+		}
+		var normalized any
+		if err := json.Unmarshal(encoded, &normalized); err != nil {
+			return nil, errors.New("services policy file contains an unsupported value")
+		}
+		return normalized, nil
+	}
+}
+
+func describeServicesPolicyImportPlan(output io.Writer, plan servicesPolicyImportPlan) {
+	if !plan.Enabled {
+		return
+	}
+	logLine(output, "PLAN", "services policy import ready source_path=%s source_ref=%s commit=%s content_hash=%s checked_input=present_hidden",
+		safeValue(plan.SourcePath),
+		safeValue(plan.SourceRef),
+		safeValue(plan.SourceCommitSHA),
+		safeValue(plan.ContentHash),
+	)
+}
+
+func applyServicesPolicyImport(ctx context.Context, client projectCatalogAPI, options runnerOptions, plan servicesPolicyImportPlan, output io.Writer) error {
+	if !plan.Enabled {
+		return nil
+	}
+	response, err := client.ImportServicesPolicy(ctx, &projectsv1.ImportServicesPolicyRequest{
+		ProjectId:            options.ProjectID,
+		SourceRepositoryId:   optionalString(options.RepositoryID),
+		SourcePath:           plan.SourcePath,
+		SourceRef:            optionalString(plan.SourceRef),
+		SourceCommitSha:      plan.SourceCommitSHA,
+		SourceBlobSha:        optionalString(plan.SourceBlobSHA),
+		ContentHash:          plan.ContentHash,
+		ValidatedPayloadJson: plan.ValidatedPayloadJSON,
+		ValidationStatus:     projectsv1.ServicesPolicyValidationStatus_SERVICES_POLICY_VALIDATION_STATUS_VALID,
+		Meta:                 projectStageCommandMeta(options, "services-policy-import", plan.SourcePath+"@"+plan.SourceCommitSHA, plan.ContentHash),
+	})
+	if err != nil {
+		return safeError("project-catalog ImportServicesPolicy failed", err)
+	}
+	policy := response.GetServicesPolicy()
+	if policy == nil {
+		return errors.New("project-catalog ImportServicesPolicy returned empty services policy")
+	}
+	logLine(output, "OK", "services policy import completed policy_id=%s source_path=%s source_ref=%s commit=%s content_hash=%s version=%d validation_status=%s",
+		safeValue(policy.GetServicesPolicyId()),
+		safeValue(policy.GetSourcePath()),
+		safeValue(policy.GetSourceRef()),
+		safeValue(policy.GetSourceCommitSha()),
+		safeValue(policy.GetContentHash()),
+		policy.GetPolicyVersion(),
+		policy.GetValidationStatus().String(),
+	)
+	return nil
+}
+
 func contentSHA256(value string) string {
 	sum := sha256.Sum256([]byte(value))
 	return "sha256:" + hex.EncodeToString(sum[:])
@@ -1015,6 +1289,10 @@ func hasRepositoryBindingSetup(scenario onboardingScenario) bool {
 
 func shouldEnsureSelfDeployServiceAccess(scenario onboardingScenario) bool {
 	return scenario.RepositoryBinding != nil || scenario.RepositoryChange != nil
+}
+
+func shouldEnsureServicesPolicyImportAccess(scenario onboardingScenario) bool {
+	return scenario.ServicesPolicyImport != nil
 }
 
 func loadScenario(path string) (onboardingScenario, error) {
@@ -1725,6 +2003,40 @@ func ensureSelfDeployServiceAccess(ctx context.Context, client accessManagerAPI,
 	return nil
 }
 
+func ensureServicesPolicyImportAccess(ctx context.Context, client accessManagerAPI, options runnerOptions, output io.Writer) error {
+	if options.ProjectID == "" || options.RepositoryID == "" {
+		return nil
+	}
+	if !options.Apply {
+		logLine(output, "PLAN", "services policy import access ready subject=service/%s action=%s resource=%s scope=project:%s",
+			safeValue(options.ActorID),
+			accesscatalog.ActionProjectPolicyImport,
+			accesscatalog.ResourceServicesPolicy,
+			safeValue(options.ProjectID),
+		)
+		return nil
+	}
+	if client == nil {
+		return errors.New("access-manager client is required for services policy import access apply")
+	}
+	rule, err := putServicesPolicyImportAccessRule(ctx, client, options)
+	if err != nil {
+		return err
+	}
+	if err := checkServicesPolicyImportAccess(ctx, client, options); err != nil {
+		return err
+	}
+	logLine(output, "OK", "services policy import access ready subject=service/%s action=%s resource=%s scope=project:%s rule_id=%s version=%d",
+		safeValue(options.ActorID),
+		accesscatalog.ActionProjectPolicyImport,
+		accesscatalog.ResourceServicesPolicy,
+		safeValue(options.ProjectID),
+		safeValue(rule.GetAccessRuleId()),
+		rule.GetVersion(),
+	)
+	return nil
+}
+
 func putSelfDeployServiceAccessRule(ctx context.Context, client accessManagerAPI, options runnerOptions, subjectID string) (*accessaccountsv1.AccessRuleResponse, error) {
 	request := selfDeployServiceAccessRuleRequest(options, subjectID)
 	response, err := client.PutAccessRule(ctx, request)
@@ -1737,6 +2049,18 @@ func putSelfDeployServiceAccessRule(ctx context.Context, client accessManagerAPI
 	return response, nil
 }
 
+func putServicesPolicyImportAccessRule(ctx context.Context, client accessManagerAPI, options runnerOptions) (*accessaccountsv1.AccessRuleResponse, error) {
+	request := servicesPolicyImportAccessRuleRequest(options)
+	response, err := client.PutAccessRule(ctx, request)
+	if err != nil {
+		return nil, safeError("access-manager PutAccessRule failed", err)
+	}
+	if !selfDeployAccessRuleMatches(response, request) {
+		return nil, fmt.Errorf("access-manager PutAccessRule returned mismatched services policy import access rule for service/%s", options.ActorID)
+	}
+	return response, nil
+}
+
 func checkSelfDeployServiceAccess(ctx context.Context, client accessManagerAPI, options runnerOptions, subjectID string) error {
 	response, err := client.CheckAccess(ctx, selfDeployServiceAccessCheckRequest(options, subjectID))
 	if err != nil {
@@ -1744,6 +2068,17 @@ func checkSelfDeployServiceAccess(ctx context.Context, client accessManagerAPI, 
 	}
 	if response.GetDecision() != accessaccountsv1.AccessDecision_ACCESS_DECISION_ALLOW {
 		return fmt.Errorf("self-deploy access check denied for service/%s reason=%s", subjectID, safeValue(response.GetReasonCode()))
+	}
+	return nil
+}
+
+func checkServicesPolicyImportAccess(ctx context.Context, client accessManagerAPI, options runnerOptions) error {
+	response, err := client.CheckAccess(ctx, servicesPolicyImportAccessCheckRequest(options))
+	if err != nil {
+		return safeError("access-manager CheckAccess failed", err)
+	}
+	if response.GetDecision() != accessaccountsv1.AccessDecision_ACCESS_DECISION_ALLOW {
+		return fmt.Errorf("services policy import access check denied for service/%s reason=%s", options.ActorID, safeValue(response.GetReasonCode()))
 	}
 	return nil
 }
@@ -1763,6 +2098,21 @@ func selfDeployServiceAccessRuleRequest(options runnerOptions, subjectID string)
 	}
 }
 
+func servicesPolicyImportAccessRuleRequest(options runnerOptions) *accessaccountsv1.PutAccessRuleRequest {
+	return &accessaccountsv1.PutAccessRuleRequest{
+		Effect:       accessaccountsv1.AccessEffect_ACCESS_EFFECT_ALLOW,
+		SubjectType:  "service",
+		SubjectId:    strings.TrimSpace(options.ActorID),
+		ActionKey:    accesscatalog.ActionProjectPolicyImport,
+		ResourceType: accesscatalog.ResourceServicesPolicy,
+		ScopeType:    accesscatalog.ScopeProject,
+		ScopeId:      options.ProjectID,
+		Priority:     servicesPolicyImportAccessPriority,
+		Status:       accessaccountsv1.AccessRuleStatus_ACCESS_RULE_STATUS_ACTIVE,
+		Meta:         servicesPolicyImportAccessCommandMeta(options),
+	}
+}
+
 func selfDeployServiceAccessCheckRequest(options runnerOptions, subjectID string) *accessaccountsv1.CheckAccessRequest {
 	return &accessaccountsv1.CheckAccessRequest{
 		Subject:   &accessaccountsv1.SubjectRef{Type: "service", Id: strings.TrimSpace(subjectID)},
@@ -1777,6 +2127,23 @@ func selfDeployServiceAccessCheckRequest(options runnerOptions, subjectID string
 		},
 		Audit: true,
 		Meta:  accessRuleCheckMeta(options, subjectID),
+	}
+}
+
+func servicesPolicyImportAccessCheckRequest(options runnerOptions) *accessaccountsv1.CheckAccessRequest {
+	return &accessaccountsv1.CheckAccessRequest{
+		Subject:   &accessaccountsv1.SubjectRef{Type: "service", Id: strings.TrimSpace(options.ActorID)},
+		ActionKey: accesscatalog.ActionProjectPolicyImport,
+		Resource: &accessaccountsv1.ResourceRef{
+			Type: accesscatalog.ResourceServicesPolicy,
+			Id:   "",
+		},
+		Scope: &accessaccountsv1.ScopeRef{
+			Type: accesscatalog.ScopeProject,
+			Id:   options.ProjectID,
+		},
+		Audit: true,
+		Meta:  servicesPolicyImportAccessCheckMeta(options),
 	}
 }
 
@@ -1806,10 +2173,29 @@ func accessRuleCommandMeta(options runnerOptions, subjectID string) *accessaccou
 	}
 }
 
+func servicesPolicyImportAccessCommandMeta(options runnerOptions) *accessaccountsv1.CommandMeta {
+	return &accessaccountsv1.CommandMeta{
+		IdempotencyKey: deterministicKey(options.ProjectID, options.RepositoryID, "services-policy-import-access", options.ActorID, accesscatalog.ActionProjectPolicyImport, accesscatalog.ResourceServicesPolicy),
+		Actor:          &accessaccountsv1.Actor{Type: "service", Id: options.ActorID},
+		Reason:         "self_repo_services_policy_import_bootstrap",
+		RequestId:      options.RequestID,
+		RequestContext: &accessaccountsv1.RequestContext{Source: defaultSource},
+	}
+}
+
 func accessRuleCheckMeta(options runnerOptions, subjectID string) *accessaccountsv1.CommandMeta {
 	return &accessaccountsv1.CommandMeta{
 		Actor:          &accessaccountsv1.Actor{Type: "service", Id: strings.TrimSpace(subjectID)},
 		Reason:         "self_deploy_service_access_check",
+		RequestId:      options.RequestID,
+		RequestContext: &accessaccountsv1.RequestContext{Source: defaultSource},
+	}
+}
+
+func servicesPolicyImportAccessCheckMeta(options runnerOptions) *accessaccountsv1.CommandMeta {
+	return &accessaccountsv1.CommandMeta{
+		Actor:          &accessaccountsv1.Actor{Type: "service", Id: options.ActorID},
+		Reason:         "self_repo_services_policy_import_access_check",
 		RequestId:      options.RequestID,
 		RequestContext: &accessaccountsv1.RequestContext{Source: defaultSource},
 	}
@@ -1928,17 +2314,17 @@ func readAdoptionSnapshots(ctx context.Context, client providerHubAPI, options r
 	return nil
 }
 
-func readRepositoryChangeSignal(ctx context.Context, client providerHubAPI, options runnerOptions, scenario *repositoryChangeScenario, output io.Writer) error {
+func readRepositoryChangeSignal(ctx context.Context, client providerHubAPI, options runnerOptions, scenario *repositoryChangeScenario, output io.Writer) (*providersv1.RepositoryChangeSignal, error) {
 	if scenario == nil {
-		return nil
+		return nil, nil
 	}
 	signal, err := readProviderRepositoryChangeSignal(ctx, client, options, scenario)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if signal == nil {
 		logLine(output, "BLOCKED", "live repository change signal is not available; waiting for provider webhook delivery")
-		return nil
+		return nil, nil
 	}
 	logLine(output, "OK", "repository change signal ready kind=%s base=%s commit=%s path_status=%s paths=%d services_policy_changed=%t deploy_relevant_changed=%t change_fingerprint=%s",
 		safeValue(signal.GetKind().String()),
@@ -1950,7 +2336,7 @@ func readRepositoryChangeSignal(ctx context.Context, client providerHubAPI, opti
 		signal.GetDeployRelevantChanged(),
 		safeValue(signal.GetChangeFingerprint()),
 	)
-	return nil
+	return signal, nil
 }
 
 func readProviderRepositoryChangeSignal(ctx context.Context, client providerHubAPI, options runnerOptions, scenario *repositoryChangeScenario) (*providersv1.RepositoryChangeSignal, error) {

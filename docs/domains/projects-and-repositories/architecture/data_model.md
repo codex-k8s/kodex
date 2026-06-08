@@ -115,6 +115,7 @@ approvals:
 - provider-owned signal может быть без project/repository refs; при явном repository context read model связывает его с активным binding по canonical provider identity, provider repository id, branch и commit;
 - signal для другого provider/repository, неполная provider identity и отсутствие активного binding выражаются safe reason, а не сырым downstream `NotFound`;
 - `path_digest` никогда не используется как `services_yaml_digest`;
+- если checked `ServicesPolicy` ещё не создан для self-repo, штатный операционный путь вызывает `cmd/onboarding-runner services_policy_import`, который читает локальный `services.yaml` только вне доменного сервиса, нормализует его в checked JSON input и вызывает публичный `ImportServicesPolicy`;
 - если root `services.yaml` изменён, а checked projection ещё не импортирована с commit provider signal, read model возвращает `needs_services_policy_reconcile`;
 - если provider path summary недоступен, read model возвращает `needs_repository_change_summary`;
 - raw webhook body, provider response, diff, полный YAML, `validated_payload_json`, токены, секреты и private URL в модель не входят.

@@ -661,6 +661,211 @@ func TestRunApplyCreatesSelfDeployServiceAccessRules(t *testing.T) {
 	assertContains(t, text, "self-deploy service access ready subject=service/staff-gateway")
 }
 
+func TestRunDryRunPlansServicesPolicyImportWithoutMutation(t *testing.T) {
+	policyPath := writeServicesPolicyImportFixture(t)
+	scenario := selfRepositoryBindingOnlyScenario()
+	scenario.ProjectID = "project-self"
+	scenario.RepositoryID = "repo-self"
+	scenario.ServicesPolicyImport = &servicesPolicyImportScenario{
+		FilePath:        policyPath,
+		SourcePath:      "services.yaml",
+		SourceRef:       "refs/heads/main",
+		SourceCommitSHA: strings.Repeat("b", 40),
+	}
+	scenarioPath := writeScenario(t, scenario)
+	repository := selfRepositoryFixture()
+	repository.ProjectId = "project-self"
+	repository.RepositoryId = "repo-self"
+	projectClient := &fakeProjectCatalogClient{repository: repository}
+	clients := runnerClients{
+		ProjectCatalog: projectClient,
+		ProviderHub:    &fakeProviderHubClient{},
+	}
+
+	var output bytes.Buffer
+	err := run(context.Background(), runnerOptions{
+		ScenarioFilePath: scenarioPath,
+		RequestID:        "req-1",
+		Kind:             "adoption",
+	}, clients, &output)
+	if err != nil {
+		t.Fatalf("run dry-run services policy import: %v", err)
+	}
+
+	if projectClient.importServicesPolicyCalls != 0 {
+		t.Fatalf("dry-run called ImportServicesPolicy %d times", projectClient.importServicesPolicyCalls)
+	}
+	text := output.String()
+	assertContains(t, text, "services policy import ready")
+	assertContains(t, text, "checked_input=present_hidden")
+	assertNotContains(t, text, "raw_services_yaml_secret")
+	assertContains(t, text, "apply disabled")
+}
+
+func TestRunApplyImportsSelfRepoServicesPolicyThroughProductAPI(t *testing.T) {
+	policyPath := writeServicesPolicyImportFixture(t)
+	payloadJSON, contentHash, err := readServicesPolicyImportPayload(policyPath)
+	if err != nil {
+		t.Fatalf("read services policy fixture: %v", err)
+	}
+	scenario := selfRepositoryBindingOnlyScenario()
+	scenario.ServicesPolicyImport = &servicesPolicyImportScenario{
+		FilePath:   policyPath,
+		SourcePath: "services.yaml",
+	}
+	scenario.RepositoryChange = &repositoryChangeScenario{
+		EventName:  "push",
+		Ref:        "refs/heads/main",
+		BaseBranch: "main",
+		CommitSHA:  strings.Repeat("b", 40),
+		ChangedPaths: []repositoryChangedPathScenario{
+			{Path: "services.yaml", Action: "modified", ObjectDigest: contentHash},
+		},
+	}
+	scenarioPath := writeScenario(t, scenario)
+	project := projectFixture("11111111-1111-1111-1111-111111111111", "kodex", "project-self")
+	repository := selfRepositoryFixture()
+	repository.ProjectId = "project-self"
+	repository.RepositoryId = "repo-self"
+	projectClient := &fakeProjectCatalogClient{
+		projects:     []*projectsv1.Project{project},
+		repositories: []*projectsv1.Repository{repository},
+	}
+	accessClient := &fakeAccessManagerClient{}
+	clients := runnerClients{
+		ProjectCatalog: projectClient,
+		ProviderHub:    &fakeProviderHubClient{changeSignal: selfRepositoryChangeSignalFixture()},
+		AccessManager:  accessClient,
+	}
+
+	var output bytes.Buffer
+	err = run(context.Background(), runnerOptions{
+		ScenarioFilePath:          scenarioPath,
+		OrganizationID:            "11111111-1111-1111-1111-111111111111",
+		ProjectSlug:               "kodex",
+		ProjectDisplayName:        "kodex",
+		AllowedProviderOwner:      "codex-k8s",
+		AllowedProviderRepository: "kodex",
+		RequestID:                 "req-1",
+		Kind:                      "adoption",
+		Apply:                     true,
+	}, clients, &output)
+	if err != nil {
+		t.Fatalf("run apply services policy import: %v", err)
+	}
+
+	if projectClient.importServicesPolicyCalls != 1 {
+		t.Fatalf("expected one ImportServicesPolicy call, got %d", projectClient.importServicesPolicyCalls)
+	}
+	request := projectClient.lastImportServicesPolicyRequest
+	if request == nil {
+		t.Fatal("expected ImportServicesPolicy request")
+	}
+	if request.GetProjectId() != "project-self" ||
+		request.GetSourceRepositoryId() != "repo-self" ||
+		request.GetSourcePath() != "services.yaml" ||
+		request.GetSourceRef() != "refs/heads/main" ||
+		request.GetSourceCommitSha() != strings.Repeat("b", 40) ||
+		request.GetContentHash() != contentHash ||
+		request.GetValidationStatus() != projectsv1.ServicesPolicyValidationStatus_SERVICES_POLICY_VALIDATION_STATUS_VALID {
+		t.Fatalf("unexpected ImportServicesPolicy request: %+v", request)
+	}
+	if request.GetValidatedPayloadJson() != payloadJSON {
+		t.Fatalf("unexpected normalized services policy payload")
+	}
+	if !strings.Contains(request.GetValidatedPayloadJson(), "raw_services_yaml_secret") {
+		t.Fatalf("expected checked payload to reach product API")
+	}
+	assertSelfDeployAccessRule(t, accessClient.lastPutAccessRuleBySubject["agent-manager"], "project-self")
+	assertServicesPolicyImportAccessRule(t, accessClient.lastPutAccessRuleBySubject[defaultActorID], "project-self")
+	assertServicesPolicyImportAccessCheck(t, accessClient.lastCheckAccessBySubject[defaultActorID], "project-self")
+	if accessClient.putAccessRuleCalls != 3 || accessClient.checkAccessCalls != 3 {
+		t.Fatalf("expected read/import access put/check calls, got put=%d check=%d", accessClient.putAccessRuleCalls, accessClient.checkAccessCalls)
+	}
+	text := output.String()
+	assertContains(t, text, "services policy import completed")
+	assertContains(t, text, "content_hash="+contentHash)
+	assertNotContains(t, text, "raw_services_yaml_secret")
+}
+
+func TestRunApplyRequiresAccessManagerForServicesPolicyImportBeforeMutation(t *testing.T) {
+	policyPath := writeServicesPolicyImportFixture(t)
+	scenario := selfRepositoryBindingOnlyScenario()
+	scenario.ServicesPolicyImport = &servicesPolicyImportScenario{
+		FilePath:        policyPath,
+		SourcePath:      "services.yaml",
+		SourceCommitSHA: strings.Repeat("b", 40),
+	}
+	scenarioPath := writeScenario(t, scenario)
+	projectClient := &fakeProjectCatalogClient{}
+	clients := runnerClients{
+		ProjectCatalog: projectClient,
+		ProviderHub:    &fakeProviderHubClient{},
+	}
+
+	err := run(context.Background(), runnerOptions{
+		ScenarioFilePath:          scenarioPath,
+		OrganizationID:            "11111111-1111-1111-1111-111111111111",
+		ProjectSlug:               "kodex",
+		ProjectDisplayName:        "kodex",
+		AllowedProviderOwner:      "codex-k8s",
+		AllowedProviderRepository: "kodex",
+		RequestID:                 "req-1",
+		Kind:                      "adoption",
+		Apply:                     true,
+	}, clients, ioDiscard{})
+	if err == nil {
+		t.Fatal("expected services policy import access dependency error")
+	}
+	assertContains(t, err.Error(), "access-manager client is required for services policy import apply")
+	if projectClient.createProjectCalls != 0 || projectClient.attachRepositoryCalls != 0 || projectClient.importServicesPolicyCalls != 0 {
+		t.Fatalf("services policy import access preflight mutated project API: create=%d attach=%d import=%d", projectClient.createProjectCalls, projectClient.attachRepositoryCalls, projectClient.importServicesPolicyCalls)
+	}
+}
+
+func TestRunApplyRedactsServicesPolicyImportError(t *testing.T) {
+	policyPath := writeServicesPolicyImportFixture(t)
+	scenario := selfRepositoryBindingOnlyScenario()
+	scenario.ServicesPolicyImport = &servicesPolicyImportScenario{
+		FilePath:        policyPath,
+		SourcePath:      "services.yaml",
+		SourceCommitSHA: strings.Repeat("b", 40),
+	}
+	scenarioPath := writeScenario(t, scenario)
+	project := projectFixture("11111111-1111-1111-1111-111111111111", "kodex", "project-self")
+	repository := selfRepositoryFixture()
+	repository.ProjectId = "project-self"
+	repository.RepositoryId = "repo-self"
+	clients := runnerClients{
+		ProjectCatalog: &fakeProjectCatalogClient{
+			projects:                []*projectsv1.Project{project},
+			repositories:            []*projectsv1.Repository{repository},
+			importServicesPolicyErr: errors.New(`validated_payload_json={"marker":"raw_services_yaml_secret"} token=secret-token`),
+		},
+		ProviderHub:   &fakeProviderHubClient{},
+		AccessManager: &fakeAccessManagerClient{},
+	}
+
+	err := run(context.Background(), runnerOptions{
+		ScenarioFilePath:          scenarioPath,
+		OrganizationID:            "11111111-1111-1111-1111-111111111111",
+		ProjectSlug:               "kodex",
+		ProjectDisplayName:        "kodex",
+		AllowedProviderOwner:      "codex-k8s",
+		AllowedProviderRepository: "kodex",
+		RequestID:                 "req-1",
+		Kind:                      "adoption",
+		Apply:                     true,
+	}, clients, ioDiscard{})
+	if err == nil {
+		t.Fatal("expected services policy import error")
+	}
+	assertContains(t, err.Error(), "project-catalog ImportServicesPolicy failed")
+	assertContains(t, err.Error(), "validated_payload_json=[hidden]")
+	assertNotContains(t, err.Error(), "raw_services_yaml_secret")
+	assertNotContains(t, err.Error(), "secret-token")
+}
+
 func TestRunApplyRequiresSelfDeployAccessManagerBeforeProjectMutation(t *testing.T) {
 	scenarioPath := writeScenario(t, selfRepositoryBindingOnlyScenario())
 	projectClient := &fakeProjectCatalogClient{}
@@ -1238,12 +1443,14 @@ type fakeProjectCatalogClient struct {
 	attachRepositoryErr             error
 	createRepositoryErr             error
 	bootstrapPullRequestErr         error
+	importServicesPolicyErr         error
 	listProjectsCalls               int
 	createProjectCalls              int
 	listRepositoriesCalls           int
 	attachRepositoryCalls           int
 	bootstrapReconcileCalls         int
 	adoptionReconcileCalls          int
+	importServicesPolicyCalls       int
 	createRepositoryCalls           int
 	bootstrapPullRequestCalls       int
 	lastListProjectsRequest         *projectsv1.ListProjectsRequest
@@ -1252,6 +1459,7 @@ type fakeProjectCatalogClient struct {
 	lastAttachRepositoryRequest     *projectsv1.AttachRepositoryRequest
 	lastBootstrapRequest            *projectsv1.ReconcileBootstrapMergeSignalRequest
 	lastAdoptionRequest             *projectsv1.ReconcileAdoptionMergeSignalRequest
+	lastImportServicesPolicyRequest *projectsv1.ImportServicesPolicyRequest
 	lastCreateRepositoryRequest     *projectsv1.CreateProviderRepositoryRequest
 	lastBootstrapPullRequestRequest *projectsv1.CreateRepositoryBootstrapPullRequestRequest
 }
@@ -1366,6 +1574,30 @@ func (f *fakeProjectCatalogClient) CreateRepositoryBootstrapPullRequest(_ contex
 		ServicesPolicySourcePath:  request.GetServicesPolicy().GetSourcePath(),
 		ServicesPolicyContentHash: request.GetServicesPolicy().GetContentHash(),
 		ProviderOperationId:       stringPtr("provider-operation-bootstrap-pr"),
+	}, nil
+}
+
+func (f *fakeProjectCatalogClient) ImportServicesPolicy(_ context.Context, request *projectsv1.ImportServicesPolicyRequest, _ ...grpc.CallOption) (*projectsv1.ServicesPolicyResponse, error) {
+	f.importServicesPolicyCalls++
+	f.lastImportServicesPolicyRequest = request
+	if f.importServicesPolicyErr != nil {
+		return nil, f.importServicesPolicyErr
+	}
+	return &projectsv1.ServicesPolicyResponse{
+		ServicesPolicy: &projectsv1.ServicesPolicy{
+			ServicesPolicyId:     "policy-self",
+			ProjectId:            request.GetProjectId(),
+			SourceRepositoryId:   optionalString(request.GetSourceRepositoryId()),
+			SourcePath:           request.GetSourcePath(),
+			SourceRef:            optionalString(request.GetSourceRef()),
+			SourceCommitSha:      request.GetSourceCommitSha(),
+			SourceBlobSha:        optionalString(request.GetSourceBlobSha()),
+			ContentHash:          request.GetContentHash(),
+			ValidationStatus:     request.GetValidationStatus(),
+			ProjectionStatus:     projectsv1.ServicesPolicyProjectionStatus_SERVICES_POLICY_PROJECTION_STATUS_SYNCED,
+			PolicyVersion:        int64(f.importServicesPolicyCalls),
+			ValidatedPayloadJson: request.GetValidatedPayloadJson(),
+		},
 	}, nil
 }
 
@@ -1855,6 +2087,25 @@ func writeTextFile(t *testing.T, name string, content string) string {
 	return path
 }
 
+func writeServicesPolicyImportFixture(t *testing.T) string {
+	t.Helper()
+	return writeTextFile(t, "services.yaml", `
+apiVersion: kodex.works/v1alpha1
+kind: ServiceStackDraft
+metadata:
+  name: kodex
+  marker: raw_services_yaml_secret
+spec:
+  deployableServices:
+    - name: project-catalog
+      status: foundation
+      path: services/internal/project-catalog
+    - name: provider-hub
+      status: foundation
+      path: services/internal/provider-hub
+`)
+}
+
 func expectedContentHash(value string) string {
 	sum := sha256.Sum256([]byte(value))
 	return "sha256:" + hex.EncodeToString(sum[:])
@@ -1913,6 +2164,45 @@ func assertSelfDeployAccessCheck(t *testing.T, request *accessaccountsv1.CheckAc
 		request.GetScope().GetId() != projectID ||
 		!request.GetAudit() {
 		t.Fatalf("unexpected self-deploy access check request: %+v", request)
+	}
+}
+
+func assertServicesPolicyImportAccessRule(t *testing.T, request *accessaccountsv1.PutAccessRuleRequest, projectID string) {
+	t.Helper()
+	if request == nil {
+		t.Fatal("expected services policy import access rule request")
+	}
+	if request.GetEffect() != accessaccountsv1.AccessEffect_ACCESS_EFFECT_ALLOW ||
+		request.GetSubjectType() != "service" ||
+		request.GetSubjectId() != defaultActorID ||
+		request.GetActionKey() != accesscatalog.ActionProjectPolicyImport ||
+		request.GetResourceType() != accesscatalog.ResourceServicesPolicy ||
+		request.GetResourceId() != "" ||
+		request.GetScopeType() != accesscatalog.ScopeProject ||
+		request.GetScopeId() != projectID ||
+		request.GetPriority() != servicesPolicyImportAccessPriority ||
+		request.GetStatus() != accessaccountsv1.AccessRuleStatus_ACCESS_RULE_STATUS_ACTIVE {
+		t.Fatalf("unexpected services policy import access rule request: %+v", request)
+	}
+	if request.GetMeta().GetActor().GetType() != "service" || request.GetMeta().GetActor().GetId() != defaultActorID {
+		t.Fatalf("unexpected services policy import access rule actor: %+v", request.GetMeta().GetActor())
+	}
+}
+
+func assertServicesPolicyImportAccessCheck(t *testing.T, request *accessaccountsv1.CheckAccessRequest, projectID string) {
+	t.Helper()
+	if request == nil {
+		t.Fatal("expected services policy import access check request")
+	}
+	if request.GetSubject().GetType() != "service" ||
+		request.GetSubject().GetId() != defaultActorID ||
+		request.GetActionKey() != accesscatalog.ActionProjectPolicyImport ||
+		request.GetResource().GetType() != accesscatalog.ResourceServicesPolicy ||
+		request.GetResource().GetId() != "" ||
+		request.GetScope().GetType() != accesscatalog.ScopeProject ||
+		request.GetScope().GetId() != projectID ||
+		!request.GetAudit() {
+		t.Fatalf("unexpected services policy import access check request: %+v", request)
 	}
 }
 
