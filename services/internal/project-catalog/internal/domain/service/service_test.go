@@ -2004,6 +2004,145 @@ func TestGetSelfDeploySignalReturnsReadyProjectSideInput(t *testing.T) {
 	}
 }
 
+func TestGetSelfDeploySignalResolvesUnboundProviderSignalThroughExplicitBinding(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	policyID := uuid.New()
+	commitSHA := "abcdef0123456789abcdef0123456789abcdef01"
+	signalKey := "provider:github:repository_change:push:codex-k8s/kodex:main:" + commitSHA
+	store := newMemoryRepository()
+	repository := activeSelfDeployRepository(projectID, repositoryID)
+	repository.ProviderOwner = "Codex-K8S"
+	repository.ProviderName = "Kodex"
+	store.repositories[repositoryID] = repository
+	store.policies[policyID] = activeSelfDeployPolicy(projectID, repositoryID, policyID, commitSHA, []byte(`{"spec":{"services":[{"key":"api"}]}}`))
+	store.serviceDescriptors[policyID] = []entity.ServiceDescriptor{
+		activeSelfDeployDescriptor(projectID, repositoryID, policyID, "api"),
+	}
+	reader := &fakeRepositoryChangeSignalReader{
+		result: RepositoryChangeSignalReadResult{Status: ProviderOwnedDataStatusNotFound},
+		listResult: RepositoryChangeSignalListResult{
+			Signals: []RepositoryChangeSignal{{
+				SignalID:              "signal-live",
+				SignalKey:             signalKey,
+				Kind:                  "push",
+				ProviderSlug:          "github",
+				RepositoryFullName:    "codex-k8s/kodex",
+				ProviderRepositoryID:  "R_123",
+				Ref:                   "refs/heads/main",
+				BaseBranch:            "main",
+				CommitSHA:             commitSHA,
+				PathSummaryStatus:     RepositoryChangePathSummaryStatusReady,
+				PathCategories:        []RepositoryChangePathCategoryCount{{Category: enum.SelfDeployPathCategoryServicesPolicy, Count: 1}},
+				ServicesPolicyChanged: true,
+				DeployRelevantChanged: true,
+				ChangeFingerprint:     "sha256:provider-change",
+				Status:                "observed",
+				Version:               1,
+				ETag:                  "etag-live",
+			}},
+		},
+	}
+	svc := NewWithConfig(store, fixedClock{}, &sequenceIDs{}, Config{RepositoryChangeSignals: reader})
+
+	result, err := svc.GetSelfDeploySignal(ctx, GetSelfDeploySignalInput{
+		ProjectID:         projectID,
+		RepositoryID:      &repositoryID,
+		ProviderSignalKey: signalKey,
+		Meta:              queryMeta(),
+	})
+	if err != nil {
+		t.Fatalf("GetSelfDeploySignal(): %v", err)
+	}
+	if result.Status != enum.SelfDeploySignalStatusReady {
+		t.Fatalf("status = %s, reason=%s, want ready", result.Status, result.SafeReason)
+	}
+	if result.Signal.ProjectRef != projectID.String() || result.Signal.RepositoryRef != repositoryID.String() {
+		t.Fatalf("signal refs = %s/%s, want explicit project/repository", result.Signal.ProjectRef, result.Signal.RepositoryRef)
+	}
+	if reader.listCalls != 1 {
+		t.Fatalf("list calls = %d, want fallback list call", reader.listCalls)
+	}
+	if reader.listInput.ProviderSlug != "github" ||
+		reader.listInput.RepositoryFullName != "codex-k8s/kodex" ||
+		reader.listInput.ProviderRepositoryID != "R_123" ||
+		reader.listInput.BaseBranch != "main" ||
+		reader.listInput.CommitSHA != commitSHA ||
+		reader.listInput.Page.PageSize != selfDeploySignalLookupLimit {
+		t.Fatalf("list input = %+v, want canonical binding/commit lookup", reader.listInput)
+	}
+}
+
+func TestGetSelfDeploySignalDoesNotResolveFallbackForOtherRepository(t *testing.T) {
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	commitSHA := "abcdef0123456789abcdef0123456789abcdef01"
+	signalKey := "provider:github:repository_change:push:codex-k8s/kodex:main:" + commitSHA
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = activeSelfDeployRepository(projectID, repositoryID)
+	reader := &fakeRepositoryChangeSignalReader{
+		result: RepositoryChangeSignalReadResult{Status: ProviderOwnedDataStatusNotFound},
+		listResult: RepositoryChangeSignalListResult{
+			Signals: []RepositoryChangeSignal{{
+				SignalID:              "signal-other",
+				SignalKey:             "provider:github:repository_change:push:codex-k8s/other:main:" + commitSHA,
+				Kind:                  "push",
+				ProviderSlug:          "github",
+				RepositoryFullName:    "codex-k8s/other",
+				ProviderRepositoryID:  "R_other",
+				BaseBranch:            "main",
+				CommitSHA:             commitSHA,
+				PathSummaryStatus:     RepositoryChangePathSummaryStatusReady,
+				DeployRelevantChanged: true,
+				ChangeFingerprint:     "sha256:other",
+				Status:                "observed",
+			}},
+		},
+	}
+	svc := NewWithConfig(store, fixedClock{}, &sequenceIDs{}, Config{RepositoryChangeSignals: reader})
+
+	result, err := svc.GetSelfDeploySignal(context.Background(), GetSelfDeploySignalInput{
+		ProjectID:         projectID,
+		RepositoryID:      &repositoryID,
+		ProviderSignalKey: signalKey,
+		Meta:              queryMeta(),
+	})
+	if err != nil {
+		t.Fatalf("GetSelfDeploySignal(): %v", err)
+	}
+	if result.Status != enum.SelfDeploySignalStatusProviderSignalNotFound || result.SafeReason != "provider_signal_not_found" {
+		t.Fatalf("result = %+v, want provider signal not found for non-matching repo", result)
+	}
+}
+
+func TestGetSelfDeploySignalReportsMissingProviderIdentityForFallback(t *testing.T) {
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = activeSelfDeployRepository(projectID, repositoryID)
+	reader := &fakeRepositoryChangeSignalReader{
+		result: RepositoryChangeSignalReadResult{Status: ProviderOwnedDataStatusNotFound},
+	}
+	svc := NewWithConfig(store, fixedClock{}, &sequenceIDs{}, Config{RepositoryChangeSignals: reader})
+
+	result, err := svc.GetSelfDeploySignal(context.Background(), GetSelfDeploySignalInput{
+		ProjectID:         projectID,
+		RepositoryID:      &repositoryID,
+		ProviderSignalKey: "provider:github:repository_change:push",
+		Meta:              queryMeta(),
+	})
+	if err != nil {
+		t.Fatalf("GetSelfDeploySignal(): %v", err)
+	}
+	if result.Status != enum.SelfDeploySignalStatusRepositoryBindingNotFound || result.SafeReason != "provider_signal_identity_unavailable" {
+		t.Fatalf("result = %+v, want missing provider identity safe reason", result)
+	}
+	if reader.listCalls != 0 {
+		t.Fatalf("list calls = %d, want no list call without provider identity", reader.listCalls)
+	}
+}
+
 func TestGetSelfDeploySignalBlocksProviderSourceBindingMismatch(t *testing.T) {
 	ctx := context.Background()
 	cases := []struct {
@@ -2089,6 +2228,103 @@ func TestGetSelfDeploySignalBlocksProviderSourceBindingMismatch(t *testing.T) {
 				t.Fatalf("result = %+v, want repository binding blocked with reason %q", result, tc.reason)
 			}
 		})
+	}
+}
+
+func TestGetSelfDeploySignalReturnsSafeStatusWhenServicesPolicyMissing(t *testing.T) {
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = activeSelfDeployRepository(projectID, repositoryID)
+	reader := &fakeRepositoryChangeSignalReader{
+		result: RepositoryChangeSignalReadResult{
+			Status: ProviderOwnedDataStatusReady,
+			Signal: RepositoryChangeSignal{
+				SignalID:              "signal-1",
+				SignalKey:             "provider:github:repository_change:push:codex-k8s/kodex:main:abcdef",
+				Kind:                  "push",
+				ProviderSlug:          "github",
+				RepositoryFullName:    "codex-k8s/kodex",
+				ProviderRepositoryID:  "R_123",
+				BaseBranch:            "main",
+				CommitSHA:             "abcdef0123456789abcdef0123456789abcdef01",
+				PathSummaryStatus:     RepositoryChangePathSummaryStatusReady,
+				DeployRelevantChanged: true,
+				ChangeFingerprint:     "sha256:provider-change",
+			},
+		},
+	}
+	svc := NewWithConfig(store, fixedClock{}, &sequenceIDs{}, Config{RepositoryChangeSignals: reader})
+
+	result, err := svc.GetSelfDeploySignal(context.Background(), GetSelfDeploySignalInput{
+		ProjectID:         projectID,
+		RepositoryID:      &repositoryID,
+		ProviderSignalKey: "provider:github:repository_change:push:codex-k8s/kodex:main:abcdef",
+		Meta:              queryMeta(),
+	})
+	if err != nil {
+		t.Fatalf("GetSelfDeploySignal(): %v", err)
+	}
+	if result.Status != enum.SelfDeploySignalStatusServicesPolicyNotFound || result.SafeReason != "services_policy_not_found" {
+		t.Fatalf("result = %+v, want services policy not found safe status", result)
+	}
+}
+
+func TestGetSelfDeploySignalReturnsSafeStatusWhenProviderIdentityMissing(t *testing.T) {
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = activeSelfDeployRepository(projectID, repositoryID)
+	reader := &fakeRepositoryChangeSignalReader{
+		result: RepositoryChangeSignalReadResult{
+			Status: ProviderOwnedDataStatusReady,
+			Signal: RepositoryChangeSignal{
+				SignalID:              "signal-1",
+				SignalKey:             "provider:github:repository_change:push:codex-k8s/kodex:main:abcdef",
+				Kind:                  "push",
+				ProviderSlug:          "github",
+				BaseBranch:            "main",
+				CommitSHA:             "abcdef0123456789abcdef0123456789abcdef01",
+				PathSummaryStatus:     RepositoryChangePathSummaryStatusReady,
+				DeployRelevantChanged: true,
+				ChangeFingerprint:     "sha256:provider-change",
+			},
+		},
+	}
+	svc := NewWithConfig(store, fixedClock{}, &sequenceIDs{}, Config{RepositoryChangeSignals: reader})
+
+	result, err := svc.GetSelfDeploySignal(context.Background(), GetSelfDeploySignalInput{
+		ProjectID:         projectID,
+		RepositoryID:      &repositoryID,
+		ProviderSignalKey: "provider:github:repository_change:push:codex-k8s/kodex:main:abcdef",
+		Meta:              queryMeta(),
+	})
+	if err != nil {
+		t.Fatalf("GetSelfDeploySignal(): %v", err)
+	}
+	if result.Status != enum.SelfDeploySignalStatusRepositoryBindingNotFound || result.SafeReason != "provider_signal_repository_ref_missing" {
+		t.Fatalf("result = %+v, want missing provider identity safe reason", result)
+	}
+}
+
+func TestGetSelfDeploySignalDoesNotMaskPermissionDeniedAsNotFound(t *testing.T) {
+	projectID := uuid.New()
+	reader := &fakeRepositoryChangeSignalReader{}
+	svc := NewWithConfig(newMemoryRepository(), fixedClock{}, &sequenceIDs{}, Config{
+		Authorizer:              &spyAuthorizer{err: errs.ErrForbidden},
+		RepositoryChangeSignals: reader,
+	})
+
+	_, err := svc.GetSelfDeploySignal(context.Background(), GetSelfDeploySignalInput{
+		ProjectID:         projectID,
+		ProviderSignalKey: "provider:github:repository_change:push:codex-k8s/kodex:main:abcdef",
+		Meta:              queryMeta(),
+	})
+	if err != errs.ErrForbidden {
+		t.Fatalf("error = %v, want permission denied", err)
+	}
+	if reader.calls != 0 || reader.listCalls != 0 {
+		t.Fatalf("provider reader was called before authorization: get=%d list=%d", reader.calls, reader.listCalls)
 	}
 }
 
@@ -2515,16 +2751,26 @@ func (p *spyBootstrapProvider) CreateRepositoryBootstrapPullRequest(_ context.Co
 }
 
 type fakeRepositoryChangeSignalReader struct {
-	calls  int
-	input  RepositoryChangeSignalReadInput
-	result RepositoryChangeSignalReadResult
-	err    error
+	calls      int
+	input      RepositoryChangeSignalReadInput
+	result     RepositoryChangeSignalReadResult
+	err        error
+	listCalls  int
+	listInput  RepositoryChangeSignalListInput
+	listResult RepositoryChangeSignalListResult
+	listErr    error
 }
 
 func (r *fakeRepositoryChangeSignalReader) GetRepositoryChangeSignal(_ context.Context, input RepositoryChangeSignalReadInput) (RepositoryChangeSignalReadResult, error) {
 	r.calls++
 	r.input = input
 	return r.result, r.err
+}
+
+func (r *fakeRepositoryChangeSignalReader) ListRepositoryChangeSignals(_ context.Context, input RepositoryChangeSignalListInput) (RepositoryChangeSignalListResult, error) {
+	r.listCalls++
+	r.listInput = input
+	return r.listResult, r.listErr
 }
 
 type fixedClock struct{}
