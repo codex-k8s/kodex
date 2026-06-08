@@ -45,6 +45,7 @@ const (
 	maxWatermarkJSONBytes               = 16 * 1024
 	maxBootstrapSetupFiles              = 64
 	maxBootstrapSetupBytes              = 4 * 1024 * 1024
+	runnerRepositoryReadAccessPriority  = 100
 	selfDeployServiceAccessPriority     = 100
 	servicesPolicyImportAccessPriority  = 100
 )
@@ -356,15 +357,19 @@ func run(ctx context.Context, options runnerOptions, clients runnerClients, outp
 	}
 	scenario = ensureRepositoryBindingScenario(options, scenario)
 	scenario = ensureServicesPolicyImportScenario(options, scenario)
+	needsRunnerRepositoryReadAccess := shouldEnsureRunnerRepositoryReadAccess(scenario)
 	needsSelfDeployServiceAccess := shouldEnsureSelfDeployServiceAccess(scenario)
 	needsServicesPolicyImportAccess := shouldEnsureServicesPolicyImportAccess(scenario)
-	if options.Apply && (needsSelfDeployServiceAccess || needsServicesPolicyImportAccess) {
+	if options.Apply && (needsRunnerRepositoryReadAccess || needsSelfDeployServiceAccess || needsServicesPolicyImportAccess) {
 		if err := validateApplyPolicy(options, scenario); err != nil {
 			return err
 		}
 		if clients.AccessManager == nil {
 			if needsServicesPolicyImportAccess {
 				return errors.New("access-manager client is required for services policy import apply")
+			}
+			if needsRunnerRepositoryReadAccess && options.RepositoryID != "" {
+				return errors.New("access-manager client is required for onboarding runner repository read access apply")
 			}
 			return errors.New("access-manager client is required for self-deploy service access apply")
 		}
@@ -385,6 +390,13 @@ func run(ctx context.Context, options runnerOptions, clients runnerClients, outp
 	logLine(output, "PLAN", "mode=%s project_id=%s repository_id=%s provider=%s", modeLabel, safeValue(options.ProjectID), safeValue(options.RepositoryID), safeValue(options.ProviderSlug))
 
 	var repository *projectsv1.Repository
+	runnerRepositoryReadAccessEnsured := false
+	if needsRunnerRepositoryReadAccess && options.RepositoryID != "" {
+		if err := ensureRunnerRepositoryReadAccess(ctx, clients.AccessManager, options, output); err != nil {
+			return err
+		}
+		runnerRepositoryReadAccessEnsured = true
+	}
 	if options.RepositoryID != "" {
 		repository, err = checkProjectRepository(ctx, clients.ProjectCatalog, options, output)
 		if err != nil {
@@ -458,6 +470,11 @@ func run(ctx context.Context, options runnerOptions, clients runnerClients, outp
 		}
 		if setupResult.ProviderRepositoryID != "" {
 			options.ProviderRepositoryID = setupResult.ProviderRepositoryID
+		}
+	}
+	if needsRunnerRepositoryReadAccess && !runnerRepositoryReadAccessEnsured && options.RepositoryID != "" {
+		if err := ensureRunnerRepositoryReadAccess(ctx, clients.AccessManager, options, output); err != nil {
+			return err
 		}
 	}
 	repositoryChangeSignal, err := readRepositoryChangeSignal(ctx, clients.ProviderHub, options, scenario.RepositoryChange, output)
@@ -1295,6 +1312,10 @@ func shouldEnsureServicesPolicyImportAccess(scenario onboardingScenario) bool {
 	return scenario.ServicesPolicyImport != nil
 }
 
+func shouldEnsureRunnerRepositoryReadAccess(scenario onboardingScenario) bool {
+	return scenario.RepositoryBinding != nil || scenario.RepositoryChange != nil || scenario.ServicesPolicyImport != nil
+}
+
 func loadScenario(path string) (onboardingScenario, error) {
 	if strings.TrimSpace(path) == "" {
 		return onboardingScenario{}, nil
@@ -2003,6 +2024,42 @@ func ensureSelfDeployServiceAccess(ctx context.Context, client accessManagerAPI,
 	return nil
 }
 
+func ensureRunnerRepositoryReadAccess(ctx context.Context, client accessManagerAPI, options runnerOptions, output io.Writer) error {
+	if options.ProjectID == "" || options.RepositoryID == "" {
+		return nil
+	}
+	if !options.Apply {
+		logLine(output, "PLAN", "onboarding runner repository read access ready subject=service/%s action=%s resource=%s resource_id=%s scope=project:%s",
+			safeValue(options.ActorID),
+			accesscatalog.ActionRepositoryRead,
+			accesscatalog.ResourceRepository,
+			safeValue(options.RepositoryID),
+			safeValue(options.ProjectID),
+		)
+		return nil
+	}
+	if client == nil {
+		return errors.New("access-manager client is required for onboarding runner repository read access apply")
+	}
+	rule, err := putRunnerRepositoryReadAccessRule(ctx, client, options)
+	if err != nil {
+		return err
+	}
+	if err := checkRunnerRepositoryReadAccess(ctx, client, options); err != nil {
+		return err
+	}
+	logLine(output, "OK", "onboarding runner repository read access ready subject=service/%s action=%s resource=%s resource_id=%s scope=project:%s rule_id=%s version=%d",
+		safeValue(options.ActorID),
+		accesscatalog.ActionRepositoryRead,
+		accesscatalog.ResourceRepository,
+		safeValue(options.RepositoryID),
+		safeValue(options.ProjectID),
+		safeValue(rule.GetAccessRuleId()),
+		rule.GetVersion(),
+	)
+	return nil
+}
+
 func ensureServicesPolicyImportAccess(ctx context.Context, client accessManagerAPI, options runnerOptions, output io.Writer) error {
 	if options.ProjectID == "" || options.RepositoryID == "" {
 		return nil
@@ -2049,6 +2106,18 @@ func putSelfDeployServiceAccessRule(ctx context.Context, client accessManagerAPI
 	return response, nil
 }
 
+func putRunnerRepositoryReadAccessRule(ctx context.Context, client accessManagerAPI, options runnerOptions) (*accessaccountsv1.AccessRuleResponse, error) {
+	request := runnerRepositoryReadAccessRuleRequest(options)
+	response, err := client.PutAccessRule(ctx, request)
+	if err != nil {
+		return nil, safeError("access-manager PutAccessRule failed", err)
+	}
+	if !selfDeployAccessRuleMatches(response, request) {
+		return nil, fmt.Errorf("access-manager PutAccessRule returned mismatched onboarding runner repository read access rule for service/%s", options.ActorID)
+	}
+	return response, nil
+}
+
 func putServicesPolicyImportAccessRule(ctx context.Context, client accessManagerAPI, options runnerOptions) (*accessaccountsv1.AccessRuleResponse, error) {
 	request := servicesPolicyImportAccessRuleRequest(options)
 	response, err := client.PutAccessRule(ctx, request)
@@ -2068,6 +2137,17 @@ func checkSelfDeployServiceAccess(ctx context.Context, client accessManagerAPI, 
 	}
 	if response.GetDecision() != accessaccountsv1.AccessDecision_ACCESS_DECISION_ALLOW {
 		return fmt.Errorf("self-deploy access check denied for service/%s reason=%s", subjectID, safeValue(response.GetReasonCode()))
+	}
+	return nil
+}
+
+func checkRunnerRepositoryReadAccess(ctx context.Context, client accessManagerAPI, options runnerOptions) error {
+	response, err := client.CheckAccess(ctx, runnerRepositoryReadAccessCheckRequest(options))
+	if err != nil {
+		return safeError("access-manager CheckAccess failed", err)
+	}
+	if response.GetDecision() != accessaccountsv1.AccessDecision_ACCESS_DECISION_ALLOW {
+		return fmt.Errorf("onboarding runner repository read access check denied for service/%s reason=%s", options.ActorID, safeValue(response.GetReasonCode()))
 	}
 	return nil
 }
@@ -2095,6 +2175,22 @@ func selfDeployServiceAccessRuleRequest(options runnerOptions, subjectID string)
 		Priority:     selfDeployServiceAccessPriority,
 		Status:       accessaccountsv1.AccessRuleStatus_ACCESS_RULE_STATUS_ACTIVE,
 		Meta:         accessRuleCommandMeta(options, subjectID),
+	}
+}
+
+func runnerRepositoryReadAccessRuleRequest(options runnerOptions) *accessaccountsv1.PutAccessRuleRequest {
+	return &accessaccountsv1.PutAccessRuleRequest{
+		Effect:       accessaccountsv1.AccessEffect_ACCESS_EFFECT_ALLOW,
+		SubjectType:  "service",
+		SubjectId:    strings.TrimSpace(options.ActorID),
+		ActionKey:    accesscatalog.ActionRepositoryRead,
+		ResourceType: accesscatalog.ResourceRepository,
+		ResourceId:   options.RepositoryID,
+		ScopeType:    accesscatalog.ScopeProject,
+		ScopeId:      options.ProjectID,
+		Priority:     runnerRepositoryReadAccessPriority,
+		Status:       accessaccountsv1.AccessRuleStatus_ACCESS_RULE_STATUS_ACTIVE,
+		Meta:         runnerRepositoryReadAccessCommandMeta(options),
 	}
 }
 
@@ -2127,6 +2223,23 @@ func selfDeployServiceAccessCheckRequest(options runnerOptions, subjectID string
 		},
 		Audit: true,
 		Meta:  accessRuleCheckMeta(options, subjectID),
+	}
+}
+
+func runnerRepositoryReadAccessCheckRequest(options runnerOptions) *accessaccountsv1.CheckAccessRequest {
+	return &accessaccountsv1.CheckAccessRequest{
+		Subject:   &accessaccountsv1.SubjectRef{Type: "service", Id: strings.TrimSpace(options.ActorID)},
+		ActionKey: accesscatalog.ActionRepositoryRead,
+		Resource: &accessaccountsv1.ResourceRef{
+			Type: accesscatalog.ResourceRepository,
+			Id:   options.RepositoryID,
+		},
+		Scope: &accessaccountsv1.ScopeRef{
+			Type: accesscatalog.ScopeProject,
+			Id:   options.ProjectID,
+		},
+		Audit: true,
+		Meta:  runnerRepositoryReadAccessCheckMeta(options),
 	}
 }
 
@@ -2173,6 +2286,16 @@ func accessRuleCommandMeta(options runnerOptions, subjectID string) *accessaccou
 	}
 }
 
+func runnerRepositoryReadAccessCommandMeta(options runnerOptions) *accessaccountsv1.CommandMeta {
+	return &accessaccountsv1.CommandMeta{
+		IdempotencyKey: deterministicKey(options.ProjectID, options.RepositoryID, "onboarding-runner-repository-read-access", options.ActorID, accesscatalog.ActionRepositoryRead, accesscatalog.ResourceRepository),
+		Actor:          &accessaccountsv1.Actor{Type: "service", Id: options.ActorID},
+		Reason:         "self_repo_repository_read_bootstrap",
+		RequestId:      options.RequestID,
+		RequestContext: &accessaccountsv1.RequestContext{Source: defaultSource},
+	}
+}
+
 func servicesPolicyImportAccessCommandMeta(options runnerOptions) *accessaccountsv1.CommandMeta {
 	return &accessaccountsv1.CommandMeta{
 		IdempotencyKey: deterministicKey(options.ProjectID, options.RepositoryID, "services-policy-import-access", options.ActorID, accesscatalog.ActionProjectPolicyImport, accesscatalog.ResourceServicesPolicy),
@@ -2187,6 +2310,15 @@ func accessRuleCheckMeta(options runnerOptions, subjectID string) *accessaccount
 	return &accessaccountsv1.CommandMeta{
 		Actor:          &accessaccountsv1.Actor{Type: "service", Id: strings.TrimSpace(subjectID)},
 		Reason:         "self_deploy_service_access_check",
+		RequestId:      options.RequestID,
+		RequestContext: &accessaccountsv1.RequestContext{Source: defaultSource},
+	}
+}
+
+func runnerRepositoryReadAccessCheckMeta(options runnerOptions) *accessaccountsv1.CommandMeta {
+	return &accessaccountsv1.CommandMeta{
+		Actor:          &accessaccountsv1.Actor{Type: "service", Id: options.ActorID},
+		Reason:         "self_repo_repository_read_access_check",
 		RequestId:      options.RequestID,
 		RequestContext: &accessaccountsv1.RequestContext{Source: defaultSource},
 	}
