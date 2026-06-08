@@ -144,6 +144,14 @@
 - Команда возвращает `pending`, `approved`, `rejected` или `blocked` summary; runtime build/deploy jobs остаются запрещены до `approved`.
 - Вход хранит только project/repository/source/provider refs, service keys, path categories, expected runtime job types, `services.yaml` ref/digest, changed-file summary ref, bounded summary и fingerprint; raw webhook body, diff, полный YAML, provider response, logs, prompt/transcript, kubeconfig и секреты не принимаются.
 
+## Live checkpoint self-deploy после rollout #1048
+
+- Webhook и provider-контур сигналов для self-repo работают: новый merge/push в `main` создаёт безопасный `provider.repository.changed` сигнал без raw webhook body, diff или provider response.
+- `project-catalog.GetSelfDeploySignal` для self-repo возвращает `READY`: checked `services.yaml` policy импортирована, latest policy находится в состоянии valid/synced и содержит 14 service descriptors.
+- #1048 обновил live `agent-manager` и исправил ветку `invalid_self_deploy_signal`, но событие #1048 было зафиксировано checkpoint старым кодом до rollout и не является достаточной проверкой обновлённого consumer.
+- Следующий контролируемый merge/push после rollout #1048 проверяет цепочку: fresh provider signal -> `GetSelfDeploySignal=READY` -> `SelfDeployPlan` -> governance gate.
+- Runtime build/deploy jobs не запускаются этим checkpoint: запуск остаётся заблокирован до явного owner/governance decision и отдельной проверки агентом #5.
+
 ## Ближайшие зависимости
 
 | Домен | Что нужно согласовать |
