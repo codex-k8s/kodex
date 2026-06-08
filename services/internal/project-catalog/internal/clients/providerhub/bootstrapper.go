@@ -144,6 +144,37 @@ func (b *Bootstrapper) GetRepositoryChangeSignal(ctx context.Context, input proj
 	}, nil
 }
 
+// ListRepositoryChangeSignals читает safe provider-owned repository change signals по binding context.
+func (b *Bootstrapper) ListRepositoryChangeSignals(ctx context.Context, input projectservice.RepositoryChangeSignalListInput) (projectservice.RepositoryChangeSignalListResult, error) {
+	callCtx, cancel := context.WithTimeout(b.outgoingContext(ctx), b.timeout)
+	defer cancel()
+	response, err := b.client.ListRepositoryChangeSignals(callCtx, &providersv1.ListRepositoryChangeSignalsRequest{
+		ProviderSlug:         optionalString(input.ProviderSlug, strings.TrimSpace(input.ProviderSlug) != ""),
+		RepositoryFullName:   optionalString(input.RepositoryFullName, strings.TrimSpace(input.RepositoryFullName) != ""),
+		ProviderRepositoryId: optionalString(input.ProviderRepositoryID, strings.TrimSpace(input.ProviderRepositoryID) != ""),
+		Kinds:                providerRepositoryChangeSignalKinds(input.Kinds),
+		Statuses:             providerRepositoryChangeSignalStatuses(input.Statuses),
+		BaseBranch:           optionalString(input.BaseBranch, strings.TrimSpace(input.BaseBranch) != ""),
+		CommitSha:            optionalString(input.CommitSHA, strings.TrimSpace(input.CommitSHA) != ""),
+		Page:                 providerPageRequest(input.Page),
+		Meta:                 providerQueryMeta(input.Meta),
+	})
+	if err != nil {
+		return projectservice.RepositoryChangeSignalListResult{}, mapProviderError(err)
+	}
+	if response == nil {
+		return projectservice.RepositoryChangeSignalListResult{}, errs.ErrDependencyUnavailable
+	}
+	signals := make([]projectservice.RepositoryChangeSignal, 0, len(response.GetChangeSignals()))
+	for _, signal := range response.GetChangeSignals() {
+		signals = append(signals, providerRepositoryChangeSignal(signal))
+	}
+	return projectservice.RepositoryChangeSignalListResult{
+		Signals: signals,
+		Page:    value.PageResult{NextPageToken: strings.TrimSpace(response.GetPage().GetNextPageToken())},
+	}, nil
+}
+
 func (b *Bootstrapper) outgoingContext(ctx context.Context) context.Context {
 	return metadata.AppendToOutgoingContext(
 		ctx,
@@ -321,6 +352,40 @@ func providerRepositoryChangeStatus(status providersv1.RepositoryChangeSignalSta
 		return "observed"
 	default:
 		return ""
+	}
+}
+
+func providerRepositoryChangeSignalKinds(kinds []string) []providersv1.RepositoryChangeSignalKind {
+	result := make([]providersv1.RepositoryChangeSignalKind, 0, len(kinds))
+	for _, kind := range kinds {
+		switch strings.TrimSpace(kind) {
+		case "push":
+			result = append(result, providersv1.RepositoryChangeSignalKind_REPOSITORY_CHANGE_SIGNAL_KIND_PUSH)
+		case "pull_request_merged":
+			result = append(result, providersv1.RepositoryChangeSignalKind_REPOSITORY_CHANGE_SIGNAL_KIND_PULL_REQUEST_MERGED)
+		}
+	}
+	return result
+}
+
+func providerRepositoryChangeSignalStatuses(statuses []string) []providersv1.RepositoryChangeSignalStatus {
+	result := make([]providersv1.RepositoryChangeSignalStatus, 0, len(statuses))
+	for _, status := range statuses {
+		switch strings.TrimSpace(status) {
+		case "observed":
+			result = append(result, providersv1.RepositoryChangeSignalStatus_REPOSITORY_CHANGE_SIGNAL_STATUS_OBSERVED)
+		}
+	}
+	return result
+}
+
+func providerPageRequest(page value.PageRequest) *providersv1.PageRequest {
+	if page.PageSize <= 0 && strings.TrimSpace(page.PageToken) == "" {
+		return nil
+	}
+	return &providersv1.PageRequest{
+		PageSize:  page.PageSize,
+		PageToken: optionalString(strings.TrimSpace(page.PageToken), strings.TrimSpace(page.PageToken) != ""),
 	}
 }
 

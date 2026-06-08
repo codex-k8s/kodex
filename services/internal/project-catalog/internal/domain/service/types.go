@@ -331,9 +331,29 @@ type RepositoryChangeSignalReadResult struct {
 	Signal RepositoryChangeSignal
 }
 
+// RepositoryChangeSignalListInput выбирает provider-owned change signals для fallback через binding.
+type RepositoryChangeSignalListInput struct {
+	ProviderSlug         string
+	RepositoryFullName   string
+	ProviderRepositoryID string
+	Kinds                []string
+	Statuses             []string
+	BaseBranch           string
+	CommitSHA            string
+	Page                 value.PageRequest
+	Meta                 value.QueryMeta
+}
+
+// RepositoryChangeSignalListResult возвращает provider-owned change signals и page metadata.
+type RepositoryChangeSignalListResult struct {
+	Signals []RepositoryChangeSignal
+	Page    value.PageResult
+}
+
 // RepositoryChangeSignalReader читает safe repository change signals из provider-hub.
 type RepositoryChangeSignalReader interface {
 	GetRepositoryChangeSignal(context.Context, RepositoryChangeSignalReadInput) (RepositoryChangeSignalReadResult, error)
+	ListRepositoryChangeSignals(context.Context, RepositoryChangeSignalListInput) (RepositoryChangeSignalListResult, error)
 }
 
 // GetSelfDeploySignalInput идентифицирует provider/project facts для self-deploy enrichment.

@@ -19,9 +19,10 @@ import (
 )
 
 const (
-	selfDeployPolicySourcePath = "services.yaml"
-	selfDeploySignalVersion    = int64(1)
-	selfDeployMaxServices      = int32(500)
+	selfDeployPolicySourcePath  = "services.yaml"
+	selfDeploySignalVersion     = int64(1)
+	selfDeployMaxServices       = int32(500)
+	selfDeploySignalLookupLimit = int32(5)
 )
 
 // GetSelfDeploySignal возвращает project-side safe enrichment для provider repository change signal.
@@ -46,10 +47,22 @@ func (s *Service) GetSelfDeploySignal(ctx context.Context, input GetSelfDeploySi
 	if err != nil {
 		return SelfDeploySignalResult{}, err
 	}
+	var preloadedRepository *entity.RepositoryBinding
 	switch providerResult.Status {
 	case ProviderOwnedDataStatusReady:
 	case ProviderOwnedDataStatusNotFound:
-		return SelfDeploySignalResult{Status: enum.SelfDeploySignalStatusProviderSignalNotFound, SafeReason: "provider_signal_not_found"}, nil
+		fallback, repository, ok, safeReason, err := s.resolveProviderSignalByBinding(ctx, input)
+		if err != nil {
+			return SelfDeploySignalResult{}, err
+		}
+		if !ok {
+			if safeReason != "" {
+				return SelfDeploySignalResult{Status: enum.SelfDeploySignalStatusRepositoryBindingNotFound, SafeReason: safeReason}, nil
+			}
+			return SelfDeploySignalResult{Status: enum.SelfDeploySignalStatusProviderSignalNotFound, SafeReason: "provider_signal_not_found"}, nil
+		}
+		providerResult = fallback
+		preloadedRepository = repository
 	case ProviderOwnedDataStatusNotVerified, ProviderOwnedDataStatusStale:
 		return SelfDeploySignalResult{Status: enum.SelfDeploySignalStatusProviderSignalNotReady, SafeReason: "provider_signal_not_ready"}, nil
 	default:
@@ -60,7 +73,7 @@ func (s *Service) GetSelfDeploySignal(ctx context.Context, input GetSelfDeploySi
 	if signal.ProjectID != "" && signal.ProjectID != input.ProjectID.String() {
 		return SelfDeploySignalResult{Status: enum.SelfDeploySignalStatusRepositoryBindingNotFound, SafeReason: "provider_signal_project_mismatch"}, nil
 	}
-	repository, ok, err := s.selfDeployRepositoryBinding(ctx, input, signal)
+	repository, ok, err := s.selfDeployRepositoryBinding(ctx, input, signal, preloadedRepository)
 	if err != nil {
 		return SelfDeploySignalResult{}, err
 	}
@@ -126,7 +139,10 @@ func (s *Service) GetSelfDeploySignal(ctx context.Context, input GetSelfDeploySi
 	return SelfDeploySignalResult{Status: enum.SelfDeploySignalStatusReady, Signal: baseSignal}, nil
 }
 
-func (s *Service) selfDeployRepositoryBinding(ctx context.Context, input GetSelfDeploySignalInput, signal RepositoryChangeSignal) (entity.RepositoryBinding, bool, error) {
+func (s *Service) selfDeployRepositoryBinding(ctx context.Context, input GetSelfDeploySignalInput, signal RepositoryChangeSignal, preloaded *entity.RepositoryBinding) (entity.RepositoryBinding, bool, error) {
+	if preloaded != nil {
+		return *preloaded, true, nil
+	}
 	if input.RepositoryID != nil {
 		repository, err := s.repository.GetRepository(ctx, *input.RepositoryID)
 		if err != nil {
@@ -175,7 +191,9 @@ func selfDeploySourceBindingMismatchReason(signal RepositoryChangeSignal, reposi
 	if owner == "" || name == "" {
 		return "provider_signal_repository_ref_missing"
 	}
-	if owner != strings.TrimSpace(repository.ProviderOwner) || name != strings.TrimSpace(repository.ProviderName) {
+	signalOwner, signalName := canonicalProviderOwnerName(providerSlug, owner, name)
+	bindingOwner, bindingName := canonicalProviderOwnerName(providerSlug, repository.ProviderOwner, repository.ProviderName)
+	if signalOwner != bindingOwner || signalName != bindingName {
 		return "provider_signal_repository_ref_mismatch"
 	}
 	if signal.ProviderRepositoryID != "" &&
@@ -186,9 +204,106 @@ func selfDeploySourceBindingMismatchReason(signal RepositoryChangeSignal, reposi
 	return ""
 }
 
+func (s *Service) resolveProviderSignalByBinding(ctx context.Context, input GetSelfDeploySignalInput) (RepositoryChangeSignalReadResult, *entity.RepositoryBinding, bool, string, error) {
+	if input.RepositoryID == nil {
+		return RepositoryChangeSignalReadResult{}, nil, false, "", nil
+	}
+	repository, err := s.repository.GetRepository(ctx, *input.RepositoryID)
+	if err != nil {
+		if err == errs.ErrNotFound {
+			return RepositoryChangeSignalReadResult{}, nil, false, "repository_binding_not_found", nil
+		}
+		return RepositoryChangeSignalReadResult{}, nil, false, "", err
+	}
+	if repository.ProjectID != input.ProjectID || repository.Status != enum.RepositoryStatusActive {
+		return RepositoryChangeSignalReadResult{}, &repository, false, "repository_binding_not_active", nil
+	}
+	providerSlug, err := repositoryProviderSlug(repository.Provider)
+	if err != nil {
+		return RepositoryChangeSignalReadResult{}, &repository, false, "repository_binding_provider_unsupported", nil
+	}
+	signalKey := strings.TrimSpace(input.ProviderSignalKey)
+	if signalKey == "" {
+		return RepositoryChangeSignalReadResult{}, &repository, false, "", nil
+	}
+	parts, ok := parseRepositoryChangeSignalKey(signalKey)
+	if !ok {
+		return RepositoryChangeSignalReadResult{}, &repository, false, "provider_signal_identity_unavailable", nil
+	}
+	if parts.ProviderSlug != providerSlug {
+		return RepositoryChangeSignalReadResult{}, &repository, false, "provider_signal_provider_mismatch", nil
+	}
+	if parts.Kind == "" || parts.BaseBranch == "" || parts.CommitSHA == "" {
+		return RepositoryChangeSignalReadResult{}, &repository, false, "provider_signal_identity_unavailable", nil
+	}
+	signalOwner, signalName := providerOwnerNameFromFullName(parts.RepositoryFullName, "", "")
+	signalOwner, signalName = canonicalProviderOwnerName(providerSlug, signalOwner, signalName)
+	bindingOwner, bindingName := canonicalProviderOwnerName(providerSlug, repository.ProviderOwner, repository.ProviderName)
+	if signalOwner != bindingOwner || signalName != bindingName {
+		return RepositoryChangeSignalReadResult{}, &repository, false, "provider_signal_repository_ref_mismatch", nil
+	}
+	fullName := bindingOwner + "/" + bindingName
+	result, err := s.changeSignals.ListRepositoryChangeSignals(ctx, RepositoryChangeSignalListInput{
+		ProviderSlug:         providerSlug,
+		RepositoryFullName:   fullName,
+		ProviderRepositoryID: strings.TrimSpace(repository.ProviderRepositoryID),
+		Kinds:                []string{parts.Kind},
+		Statuses:             []string{"observed"},
+		BaseBranch:           parts.BaseBranch,
+		CommitSHA:            parts.CommitSHA,
+		Page:                 value.PageRequest{PageSize: selfDeploySignalLookupLimit},
+		Meta:                 input.Meta,
+	})
+	if err != nil {
+		return RepositoryChangeSignalReadResult{}, &repository, false, "", err
+	}
+	var matched *RepositoryChangeSignal
+	for _, candidate := range result.Signals {
+		candidate = normalizeRepositoryChangeSignal(candidate)
+		if candidate.CommitSHA != parts.CommitSHA || candidate.BaseBranch != parts.BaseBranch || candidate.Kind != parts.Kind {
+			continue
+		}
+		if selfDeploySourceBindingMismatchReason(candidate, repository) != "" {
+			continue
+		}
+		copyCandidate := candidate
+		matched = &copyCandidate
+		break
+	}
+	if matched == nil {
+		return RepositoryChangeSignalReadResult{}, &repository, false, "", nil
+	}
+	return RepositoryChangeSignalReadResult{Status: ProviderOwnedDataStatusReady, Signal: *matched}, &repository, true, "", nil
+}
+
+type repositoryChangeSignalKeyParts struct {
+	ProviderSlug       string
+	Kind               string
+	RepositoryFullName string
+	BaseBranch         string
+	CommitSHA          string
+}
+
+func parseRepositoryChangeSignalKey(signalKey string) (repositoryChangeSignalKeyParts, bool) {
+	parts := strings.Split(strings.TrimSpace(signalKey), ":")
+	if len(parts) < 7 ||
+		parts[0] != "provider" ||
+		parts[2] != "repository_change" {
+		return repositoryChangeSignalKeyParts{}, false
+	}
+	return repositoryChangeSignalKeyParts{
+		ProviderSlug:       strings.TrimSpace(parts[1]),
+		Kind:               strings.TrimSpace(parts[3]),
+		RepositoryFullName: strings.TrimSpace(parts[4]),
+		BaseBranch:         strings.TrimSpace(parts[5]),
+		CommitSHA:          strings.TrimSpace(parts[6]),
+	}, true
+}
+
 func repositoryBindingLookup(signal RepositoryChangeSignal) (enum.RepositoryProvider, string, string, bool) {
 	var provider enum.RepositoryProvider
-	switch strings.TrimSpace(signal.ProviderSlug) {
+	providerSlug := strings.TrimSpace(signal.ProviderSlug)
+	switch providerSlug {
 	case "github":
 		provider = enum.RepositoryProviderGitHub
 	case "gitlab":
@@ -200,7 +315,19 @@ func repositoryBindingLookup(signal RepositoryChangeSignal) (enum.RepositoryProv
 	if owner == "" || name == "" {
 		return "", "", "", false
 	}
+	owner, name = canonicalProviderOwnerName(providerSlug, owner, name)
 	return provider, owner, name, true
+}
+
+func canonicalProviderOwnerName(providerSlug string, owner string, name string) (string, string) {
+	owner = strings.TrimSpace(owner)
+	name = strings.TrimSpace(name)
+	switch strings.TrimSpace(providerSlug) {
+	case "github":
+		return strings.ToLower(owner), strings.ToLower(name)
+	default:
+		return owner, name
+	}
 }
 
 func normalizeRepositoryChangeSignal(signal RepositoryChangeSignal) RepositoryChangeSignal {

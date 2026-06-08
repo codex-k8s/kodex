@@ -5,7 +5,7 @@ title: kodex — модель данных домена проектов и ре
 status: active
 owner_role: SA
 created_at: 2026-05-05
-updated_at: 2026-05-27
+updated_at: 2026-06-08
 related_issues: [628, 629, 630, 631, 632, 633, 818, 881, 917]
 related_prs: []
 approvals:
@@ -112,6 +112,8 @@ approvals:
 Правила:
 - `provider-hub` остаётся владельцем webhook, provider refs, commit/ref, path category counters, `path_digest` и provider fingerprint;
 - `project-catalog` добавляет только проверенные project-owned данные: `services_yaml_ref`, `services_yaml_digest`, версию/fingerprint `ServicesPolicy`, affected service keys из активных descriptors и safe readiness status;
+- provider-owned signal может быть без project/repository refs; при явном repository context read model связывает его с активным binding по canonical provider identity, provider repository id, branch и commit;
+- signal для другого provider/repository, неполная provider identity и отсутствие активного binding выражаются safe reason, а не сырым downstream `NotFound`;
 - `path_digest` никогда не используется как `services_yaml_digest`;
 - если root `services.yaml` изменён, а checked projection ещё не импортирована с commit provider signal, read model возвращает `needs_services_policy_reconcile`;
 - если provider path summary недоступен, read model возвращает `needs_repository_change_summary`;
