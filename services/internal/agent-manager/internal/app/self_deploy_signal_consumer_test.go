@@ -53,8 +53,90 @@ func TestSelfDeploySignalEventHandlerCreatesPlanFromProjectSignal(t *testing.T) 
 	if input.Meta.IdempotencyKey != "self_deploy_signal:"+input.ProviderSignalRef {
 		t.Fatalf("idempotency key = %q", input.Meta.IdempotencyKey)
 	}
-	if input.GovernanceContext.GatePolicyRef != "self_deploy.owner_gate" {
+	if input.GovernanceContext.GatePolicyRef != "governance:gate_policy/self_deploy.owner_gate" {
 		t.Fatalf("gate policy ref = %q", input.GovernanceContext.GatePolicyRef)
+	}
+}
+
+func TestSelfDeploySignalEventHandlerCreatesPlanFromLiveReadySignalShape(t *testing.T) {
+	t.Parallel()
+
+	projectID := uuid.MustParse("63135040-fe44-4ec4-83d5-b0126dc23b32")
+	repositoryID := uuid.MustParse("f287091b-5992-435d-a7d6-b5acb70e8fcc")
+	commitSHA := "3144658f8e2918c8e66086783ed0b496b08c6f48"
+	reader := &fakeSelfDeploySignalReader{result: agentservice.SelfDeploySignalReadResult{
+		Status: agentservice.SelfDeploySignalStatusReady,
+		Signal: agentservice.SelfDeploySignal{
+			ProviderSignalRef:       "provider:github:repository_change:push:codex-k8s/kodex:main:" + commitSHA,
+			ProviderSignalKey:       "provider:github:repository_change:push:codex-k8s/kodex:main:" + commitSHA,
+			ProjectRef:              projectID.String(),
+			RepositoryRef:           repositoryID.String(),
+			SourceRef:               "refs/heads/main",
+			MergeCommitSHA:          commitSHA,
+			ServicesYAML:            agentservice.SelfDeploySignalServicesYAML{Ref: "project-catalog:services-policy/active:services.yaml", Digest: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
+			AffectedServiceKeys:     []string{"agent-manager", "project-catalog", "runtime-manager"},
+			PathCategories:          []enum.SelfDeployPathCategory{enum.SelfDeployPathCategoryDocumentation, enum.SelfDeployPathCategoryOther},
+			ExpectedRuntimeJobTypes: []enum.SelfDeployRuntimeJobType{enum.SelfDeployRuntimeJobTypeBuild, enum.SelfDeployRuntimeJobTypeDeploy, enum.SelfDeployRuntimeJobTypeHealthCheck},
+			GovernanceRequirement:   agentservice.SelfDeployGovernanceRequirement{GateRequired: true, GatePolicyRef: "self_deploy.owner_gate"},
+			SafeSummary:             "self-deploy signal ready; services=agent-manager,project-catalog,runtime-manager; deploy_relevant_changed=true",
+			Version:                 1,
+		},
+	}}
+	creator := &fakeSelfDeployPlanCreator{}
+	handler := selfDeploySignalEventHandler{
+		cfg:     Config{SelfDeploySignalConsumerProjectID: projectID.String(), SelfDeploySignalConsumerRepositoryID: repositoryID.String(), SelfDeploySignalConsumerTargetBranch: "main"},
+		reader:  reader,
+		creator: creator,
+	}
+
+	result := handler.HandleEvent(context.Background(), eventconsumer.Event{StoredEvent: selfDeploySignalStoredEvent(t, providerevents.Payload{
+		SignalKey:             "provider:github:repository_change:push:codex-k8s/kodex:main:" + commitSHA,
+		BaseBranch:            "main",
+		DeployRelevantChanged: true,
+	})})
+	if result.Status != eventconsumer.ResultAck {
+		t.Fatalf("HandleEvent() = %+v, want ack", result)
+	}
+	if len(creator.inputs) != 1 {
+		t.Fatalf("created inputs = %d, want 1", len(creator.inputs))
+	}
+	input := creator.inputs[0].CreateSelfDeployPlanInput
+	if input.ProjectRef != projectID.String() ||
+		input.RepositoryRef != repositoryID.String() ||
+		input.MergeCommitSHA != commitSHA {
+		t.Fatalf("plan refs = project %q repository %q commit %q", input.ProjectRef, input.RepositoryRef, input.MergeCommitSHA)
+	}
+	if len(input.AffectedServiceKeys) != 3 ||
+		len(input.PathCategories) != 2 ||
+		len(input.ExpectedRuntimeJobTypes) != 3 {
+		t.Fatalf("plan classified input = services %v categories %v jobs %v", input.AffectedServiceKeys, input.PathCategories, input.ExpectedRuntimeJobTypes)
+	}
+	if input.GovernanceContext.GatePolicyRef != "governance:gate_policy/self_deploy.owner_gate" {
+		t.Fatalf("gate policy ref = %q", input.GovernanceContext.GatePolicyRef)
+	}
+}
+
+func TestSelfDeploySignalEventHandlerRejectsUnsafeGovernancePolicyKey(t *testing.T) {
+	t.Parallel()
+
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	reader := &fakeSelfDeploySignalReader{result: readySelfDeploySignal(projectID, repositoryID)}
+	reader.result.Signal.GovernanceRequirement.GatePolicyRef = "secret_value"
+	creator := &fakeSelfDeployPlanCreator{}
+	handler := selfDeploySignalEventHandler{reader: reader, creator: creator}
+
+	result := handler.HandleEvent(context.Background(), eventconsumer.Event{StoredEvent: selfDeploySignalStoredEvent(t, providerevents.Payload{
+		SignalKey:             "provider:github:repository_change:push:codex-k8s/kodex:main:abc123",
+		ProjectID:             projectID.String(),
+		BaseBranch:            "main",
+		DeployRelevantChanged: true,
+	})})
+	if result.Status != eventconsumer.ResultPoison || result.Code != "invalid_self_deploy_signal" {
+		t.Fatalf("HandleEvent() = %+v, want invalid poison", result)
+	}
+	if len(creator.inputs) != 0 {
+		t.Fatalf("created inputs = %d, want 0", len(creator.inputs))
 	}
 }
 
