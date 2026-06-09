@@ -85,6 +85,30 @@ else
   mattercodex_log "Mattermost bot/slash token не заданы; bot-service secret не создается"
 fi
 
+GITHUB_TOKEN_VALUE="${MATTERCODEX_GITHUB_TOKEN:-${GITHUB_PAT:-${GIT_BOT_TOKEN:-}}}"
+GITHUB_WEBHOOK_SECRET_VALUE="${MATTERCODEX_GITHUB_WEBHOOK_SECRET:-${GITHUB_WEBHOOK_SECRET:-}}"
+if [ -n "$GITHUB_TOKEN_VALUE" ] || [ -n "$GITHUB_WEBHOOK_SECRET_VALUE" ]; then
+  GITHUB_TOKEN_B64="$(printf '%s' "$GITHUB_TOKEN_VALUE" | base64 | tr -d '\n')"
+  GITHUB_WEBHOOK_SECRET_B64="$(printf '%s' "$GITHUB_WEBHOOK_SECRET_VALUE" | base64 | tr -d '\n')"
+  mattercodex_log "применяется GitHub secret на целевом сервере"
+  cat <<EOF | mattercodex_remote_kubectl_apply_stdin "$APPLY_DRY_RUN_MODE"
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ${MATTERCODEX_GITHUB_SECRET}
+  namespace: ${MATTERCODEX_NAMESPACE}
+  labels:
+    app.kubernetes.io/name: matter-codex-bot-service
+    app.kubernetes.io/component: github-secret
+type: Opaque
+data:
+  github-token: ${GITHUB_TOKEN_B64}
+  github-webhook-secret: ${GITHUB_WEBHOOK_SECRET_B64}
+EOF
+else
+  mattercodex_log "GitHub token/webhook secret не заданы; GitHub secret не создается"
+fi
+
 mattercodex_log "применяются манифесты bot-service на целевом сервере"
 cat "$RENDER_DIR/10-code-configmap.yaml" | mattercodex_remote_kubectl_apply_stdin "$APPLY_DRY_RUN_MODE"
 cat "$RENDER_DIR/20-configmap.yaml" | mattercodex_remote_kubectl_apply_stdin "$APPLY_DRY_RUN_MODE"

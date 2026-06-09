@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
+	providerrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/provider"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
 )
 
@@ -14,6 +15,7 @@ func TestSlashTokenCheck(t *testing.T) {
 		StatusService:         testStatusService(),
 		BotTokenConfigured:    true,
 		SlashTokenConfigured:  true,
+		GitHubTokenConfigured: true,
 		DatabaseConfigured:    true,
 		StorageReady:          true,
 		ChannelManagerEnabled: true,
@@ -22,6 +24,7 @@ func TestSlashTokenCheck(t *testing.T) {
 	for _, want := range []string{
 		"mattermost bot token: configured",
 		"mattermost slash token: configured",
+		"github token: configured",
 		"database dsn: configured",
 		"storage: ready",
 	} {
@@ -59,6 +62,66 @@ func TestSlashRepoAddCreatesChannelAndStoresRepository(t *testing.T) {
 	}
 	if !store.auditRecorded {
 		t.Fatal("audit event was not recorded")
+	}
+}
+
+func TestSlashGitHubCheckUsesProvider(t *testing.T) {
+	store := &fakeAdminStore{}
+	provider := &fakeRepositoryProvider{}
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		StatusService:         testStatusService(),
+		Store:                 store,
+		RepositoryProvider:    provider,
+		GitHubTokenConfigured: true,
+		StorageReady:          true,
+	})
+
+	text := svc.Handle(context.Background(), SlashCommand{Text: "github check codex-k8s/matter-codex", UserName: "owner"})
+
+	if !strings.Contains(text, "matter-codex GitHub repo access") || !strings.Contains(text, "github:codex-k8s/matter-codex") {
+		t.Fatalf("Handle(github check) text = %q", text)
+	}
+	if provider.checkedOwner != "codex-k8s" || provider.checkedName != "matter-codex" {
+		t.Fatalf("unexpected provider call: %#v", provider)
+	}
+	if !store.auditRecorded {
+		t.Fatal("audit event was not recorded")
+	}
+}
+
+func TestSlashGitHubBranchDryRun(t *testing.T) {
+	provider := &fakeRepositoryProvider{}
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		StatusService:         testStatusService(),
+		RepositoryProvider:    provider,
+		GitHubTokenConfigured: true,
+	})
+
+	text := svc.Handle(context.Background(), SlashCommand{Text: "github branch dry-run codex-k8s/matter-codex smoke-branch main"})
+
+	if !strings.Contains(text, "GitHub branch dry-run") || !strings.Contains(text, "changes: none") {
+		t.Fatalf("Handle(github branch dry-run) text = %q", text)
+	}
+	if provider.resolvedBranch != "main" {
+		t.Fatalf("resolvedBranch = %q", provider.resolvedBranch)
+	}
+}
+
+func TestSlashGitHubPRStatus(t *testing.T) {
+	provider := &fakeRepositoryProvider{}
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		StatusService:         testStatusService(),
+		RepositoryProvider:    provider,
+		GitHubTokenConfigured: true,
+	})
+
+	text := svc.Handle(context.Background(), SlashCommand{Text: "github pr status codex-k8s/matter-codex 4"})
+
+	if !strings.Contains(text, "GitHub PR status") || !strings.Contains(text, "`#4`") || !strings.Contains(text, "review: `APPROVED`") {
+		t.Fatalf("Handle(github pr status) text = %q", text)
+	}
+	if provider.prNumber != 4 {
+		t.Fatalf("prNumber = %d", provider.prNumber)
 	}
 }
 
@@ -132,4 +195,93 @@ type fakeChannelManager struct {
 func (manager *fakeChannelManager) EnsureRepositoryChannel(_ context.Context, _ string, channelName string, _ string) (bool, error) {
 	manager.channelName = channelName
 	return true, nil
+}
+
+type fakeRepositoryProvider struct {
+	checkedOwner   string
+	checkedName    string
+	resolvedBranch string
+	createdBranch  string
+	prNumber       int
+}
+
+func (provider *fakeRepositoryProvider) CheckRepository(_ context.Context, owner string, name string) (providerrepo.RepositoryAccess, error) {
+	provider.checkedOwner = owner
+	provider.checkedName = name
+	return providerrepo.RepositoryAccess{
+		Provider:      "github",
+		Owner:         owner,
+		Name:          name,
+		DefaultBranch: "main",
+		Private:       true,
+		CanPull:       true,
+		CanPush:       true,
+	}, nil
+}
+
+func (provider *fakeRepositoryProvider) ResolveBranch(_ context.Context, owner string, name string, branch string) (providerrepo.BranchRef, error) {
+	provider.resolvedBranch = branch
+	return providerrepo.BranchRef{
+		Provider: "github",
+		Owner:    owner,
+		Name:     name,
+		Branch:   branch,
+		SHA:      "1234567890abcdef",
+	}, nil
+}
+
+func (provider *fakeRepositoryProvider) CreateBranch(_ context.Context, owner string, name string, branch string, _ string) (providerrepo.BranchRef, error) {
+	provider.createdBranch = branch
+	return providerrepo.BranchRef{
+		Provider: "github",
+		Owner:    owner,
+		Name:     name,
+		Branch:   branch,
+		SHA:      "1234567890abcdef",
+		Created:  true,
+	}, nil
+}
+
+func (provider *fakeRepositoryProvider) PreviewPullRequest(_ context.Context, input providerrepo.PullRequestInput) (providerrepo.PullRequestPreview, error) {
+	return providerrepo.PullRequestPreview{
+		Provider: "github",
+		Owner:    input.Owner,
+		Name:     input.Name,
+		Head:     input.Head,
+		Base:     input.Base,
+		Title:    input.Title,
+		HeadSHA:  "abcdef1234567890",
+		BaseSHA:  "1234567890abcdef",
+	}, nil
+}
+
+func (provider *fakeRepositoryProvider) CreatePullRequest(_ context.Context, input providerrepo.PullRequestInput) (providerrepo.PullRequestSummary, error) {
+	return providerrepo.PullRequestSummary{
+		Provider: "github",
+		Owner:    input.Owner,
+		Name:     input.Name,
+		Number:   10,
+		Title:    input.Title,
+		State:    "open",
+		URL:      "https://github.example/pr/10",
+		Draft:    true,
+	}, nil
+}
+
+func (provider *fakeRepositoryProvider) GetPullRequest(_ context.Context, owner string, name string, number int) (providerrepo.PullRequestSummary, error) {
+	provider.prNumber = number
+	return providerrepo.PullRequestSummary{
+		Provider:           "github",
+		Owner:              owner,
+		Name:               name,
+		Number:             number,
+		Title:              "test pr",
+		State:              "open",
+		URL:                "https://github.example/pr/4",
+		ReviewCount:        1,
+		ReviewCommentCount: 2,
+		LatestReviews: []providerrepo.PullRequestReview{
+			{State: "APPROVED", Author: "reviewer"},
+		},
+	}, nil
 }
