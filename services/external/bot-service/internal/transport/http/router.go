@@ -9,6 +9,7 @@ import (
 
 	statusservice "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/service"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/value"
+	texti18n "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/i18n"
 	transportmodels "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/transport/http/models"
 	githubapi "github.com/google/go-github/v88/github"
 	mattermostmodel "github.com/mattermost/mattermost/server/public/model"
@@ -29,6 +30,7 @@ const (
 type RouterConfig struct {
 	StatusService         *statusservice.StatusService
 	SlashService          *statusservice.SlashCommandService
+	Localizer             *texti18n.Localizer
 	SlashToken            string
 	GitHubWebhookSecret   string
 	MaxSlashFormBytes     int64
@@ -40,6 +42,7 @@ type RouterConfig struct {
 type Router struct {
 	statusService         *statusservice.StatusService
 	slashService          *statusservice.SlashCommandService
+	localizer             *texti18n.Localizer
 	slashToken            string
 	gitHubWebhookSecret   string
 	maxSlashFormBytes     int64
@@ -54,6 +57,7 @@ func NewRouter(cfg RouterConfig) *Router {
 	router := &Router{
 		statusService:         cfg.StatusService,
 		slashService:          cfg.SlashService,
+		localizer:             cfg.Localizer,
 		slashToken:            cfg.SlashToken,
 		gitHubWebhookSecret:   cfg.GitHubWebhookSecret,
 		maxSlashFormBytes:     cfg.MaxSlashFormBytes,
@@ -111,15 +115,15 @@ func (router *Router) handleAgentsSlash(w http.ResponseWriter, r *http.Request) 
 	r.Body = http.MaxBytesReader(w, r.Body, router.maxSlashFormBytes)
 	if err := r.ParseForm(); err != nil {
 		router.logWarn("invalid slash form", "error", err)
-		writeCommandResponse(w, http.StatusBadRequest, ephemeral("matter-codex: invalid slash request."))
+		writeCommandResponse(w, http.StatusBadRequest, ephemeral(router.t("router.slash.invalid_request", nil)))
 		return
 	}
 	if strings.TrimSpace(router.slashToken) == "" {
-		writeCommandResponse(w, http.StatusServiceUnavailable, ephemeral("matter-codex bot-service запущен, но slash token еще не настроен."))
+		writeCommandResponse(w, http.StatusServiceUnavailable, ephemeral(router.t("router.slash.token_missing", nil)))
 		return
 	}
 	if subtle.ConstantTimeCompare([]byte(r.PostForm.Get("token")), []byte(router.slashToken)) != 1 {
-		writeCommandResponse(w, http.StatusUnauthorized, ephemeral("matter-codex: slash token не прошел проверку."))
+		writeCommandResponse(w, http.StatusUnauthorized, ephemeral(router.t("router.slash.token_invalid", nil)))
 		return
 	}
 
@@ -177,6 +181,10 @@ func (router *Router) logWarn(message string, args ...any) {
 	if router.logger != nil {
 		router.logger.Warn(message, args...)
 	}
+}
+
+func (router *Router) t(messageID string, data map[string]any) string {
+	return router.localizer.T(messageID, data)
 }
 
 func healthResponse(snapshot value.StatusSnapshot) transportmodels.HealthResponse {

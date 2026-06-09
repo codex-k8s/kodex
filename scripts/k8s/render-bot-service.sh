@@ -47,6 +47,7 @@ fi
 tar -C "$REPO_ROOT" -czf "$SOURCE_ARCHIVE" \
   go.mod \
   go.sum \
+  libs/go/i18n \
   services/external/bot-service
 
 {

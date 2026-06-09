@@ -8,11 +8,14 @@ import (
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
 	providerrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/provider"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
+	texti18n "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/i18n"
 )
 
 func TestSlashTokenCheck(t *testing.T) {
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
 	svc := NewSlashCommandService(SlashCommandServiceConfig{
-		StatusService:         testStatusService(),
+		Localizer:             localizer,
+		StatusService:         testStatusService(localizer),
 		BotTokenConfigured:    true,
 		SlashTokenConfigured:  true,
 		GitHubTokenConfigured: true,
@@ -38,8 +41,10 @@ func TestSlashTokenCheck(t *testing.T) {
 func TestSlashRepoAddCreatesChannelAndStoresRepository(t *testing.T) {
 	store := &fakeAdminStore{}
 	channels := &fakeChannelManager{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
 	svc := NewSlashCommandService(SlashCommandServiceConfig{
-		StatusService:         testStatusService(),
+		Localizer:             localizer,
+		StatusService:         testStatusService(localizer),
 		Store:                 store,
 		ChannelManager:        channels,
 		DefaultTeamName:       "agents",
@@ -69,8 +74,10 @@ func TestSlashRepoAddCreatesChannelAndStoresRepository(t *testing.T) {
 func TestSlashRepoAddEnsuresGitHubWebhook(t *testing.T) {
 	store := &fakeAdminStore{}
 	provider := &fakeRepositoryProvider{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
 	svc := NewSlashCommandService(SlashCommandServiceConfig{
-		StatusService:           testStatusService(),
+		Localizer:               localizer,
+		StatusService:           testStatusService(localizer),
 		Store:                   store,
 		RepositoryProvider:      provider,
 		GitHubTokenConfigured:   true,
@@ -91,8 +98,10 @@ func TestSlashRepoAddEnsuresGitHubWebhook(t *testing.T) {
 func TestSlashGitHubCheckUsesProvider(t *testing.T) {
 	store := &fakeAdminStore{}
 	provider := &fakeRepositoryProvider{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
 	svc := NewSlashCommandService(SlashCommandServiceConfig{
-		StatusService:         testStatusService(),
+		Localizer:             localizer,
+		StatusService:         testStatusService(localizer),
 		Store:                 store,
 		RepositoryProvider:    provider,
 		GitHubTokenConfigured: true,
@@ -114,8 +123,10 @@ func TestSlashGitHubCheckUsesProvider(t *testing.T) {
 
 func TestSlashGitHubBranchDryRun(t *testing.T) {
 	provider := &fakeRepositoryProvider{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
 	svc := NewSlashCommandService(SlashCommandServiceConfig{
-		StatusService:         testStatusService(),
+		Localizer:             localizer,
+		StatusService:         testStatusService(localizer),
 		RepositoryProvider:    provider,
 		GitHubTokenConfigured: true,
 	})
@@ -132,8 +143,10 @@ func TestSlashGitHubBranchDryRun(t *testing.T) {
 
 func TestSlashGitHubPRStatus(t *testing.T) {
 	provider := &fakeRepositoryProvider{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
 	svc := NewSlashCommandService(SlashCommandServiceConfig{
-		StatusService:         testStatusService(),
+		Localizer:             localizer,
+		StatusService:         testStatusService(localizer),
 		RepositoryProvider:    provider,
 		GitHubTokenConfigured: true,
 	})
@@ -150,8 +163,10 @@ func TestSlashGitHubPRStatus(t *testing.T) {
 
 func TestSlashGitHubWebhookEnsure(t *testing.T) {
 	provider := &fakeRepositoryProvider{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
 	svc := NewSlashCommandService(SlashCommandServiceConfig{
-		StatusService:           testStatusService(),
+		Localizer:               localizer,
+		StatusService:           testStatusService(localizer),
 		RepositoryProvider:      provider,
 		GitHubTokenConfigured:   true,
 		GitHubWebhookConfigured: true,
@@ -171,8 +186,10 @@ func TestSlashProfileList(t *testing.T) {
 	store := &fakeAdminStore{
 		profiles: []entity.AgentProfile{{Name: "developer", Role: "developer", Description: "dev", Enabled: true}},
 	}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
 	svc := NewSlashCommandService(SlashCommandServiceConfig{
-		StatusService: testStatusService(),
+		Localizer:     localizer,
+		StatusService: testStatusService(localizer),
 		Store:         store,
 		StorageReady:  true,
 	})
@@ -184,8 +201,44 @@ func TestSlashProfileList(t *testing.T) {
 	}
 }
 
-func testStatusService() *StatusService {
+func TestSlashLocaleSetChangesResponses(t *testing.T) {
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:             localizer,
+		StatusService:         testStatusService(localizer),
+		BotTokenConfigured:    true,
+		SlashTokenConfigured:  true,
+		DatabaseConfigured:    true,
+		StorageReady:          true,
+		ChannelManagerEnabled: true,
+	})
+
+	text := svc.Handle(context.Background(), SlashCommand{Text: "locale set ru"})
+	if !strings.Contains(text, "локаль изменена") {
+		t.Fatalf("Handle(locale set ru) text = %q", text)
+	}
+	text = svc.Handle(context.Background(), SlashCommand{Text: "token check"})
+	if !strings.Contains(text, "mattermost bot token: настроен") || !strings.Contains(text, "storage: готов") {
+		t.Fatalf("Handle(token check) text = %q", text)
+	}
+	text = svc.Handle(context.Background(), SlashCommand{Text: "locale set en"})
+	if !strings.Contains(text, "locale changed to `en`") {
+		t.Fatalf("Handle(locale set en) text = %q", text)
+	}
+}
+
+func testLocalizer(t *testing.T, locale string) *texti18n.Localizer {
+	t.Helper()
+	localizer, err := texti18n.New(locale)
+	if err != nil {
+		t.Fatalf("New localizer error = %v", err)
+	}
+	return localizer
+}
+
+func testStatusService(localizer *texti18n.Localizer) *StatusService {
 	return NewStatusService(Config{
+		Localizer:            localizer,
 		ServiceName:          "matter-codex-bot-service",
 		ServiceVersion:       "0.1.0",
 		MattermostConfigured: true,

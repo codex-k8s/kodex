@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	statusservice "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/service"
+	texti18n "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/i18n"
 )
 
 func TestHealthDoesNotExposeTokenValues(t *testing.T) {
@@ -125,7 +126,12 @@ func testRouterWithGitHubWebhook(secret string) *Router {
 }
 
 func testRouterWithConfig(slashToken string, botTokenConfigured bool, gitHubWebhookSecret string) *Router {
+	localizer, err := texti18n.New(texti18n.DefaultLocale)
+	if err != nil {
+		panic(err)
+	}
 	statusSvc := statusservice.NewStatusService(statusservice.Config{
+		Localizer:            localizer,
 		ServiceName:          "matter-codex-bot-service",
 		ServiceVersion:       "0.1.0",
 		MattermostConfigured: true,
@@ -136,6 +142,7 @@ func testRouterWithConfig(slashToken string, botTokenConfigured bool, gitHubWebh
 	})
 	return NewRouter(RouterConfig{
 		StatusService:         statusSvc,
+		Localizer:             localizer,
 		SlashToken:            slashToken,
 		GitHubWebhookSecret:   gitHubWebhookSecret,
 		MaxSlashFormBytes:     65536,

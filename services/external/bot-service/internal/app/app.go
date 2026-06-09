@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	statusservice "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/service"
+	texti18n "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/i18n"
 	githubintegration "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/integration/github"
 	mattermostintegration "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/integration/mattermost"
 	adminpostgres "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/repository/postgres/admin"
@@ -27,7 +28,13 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	}
 	defer closeStorage()
 
+	localizer, err := texti18n.New(cfg.Locale)
+	if err != nil {
+		return fmt.Errorf("open localizer: %w", err)
+	}
+
 	statusSvc := statusservice.NewStatusService(statusservice.Config{
+		Localizer:            localizer,
 		ServiceName:          serviceName,
 		ServiceVersion:       statusservice.Version("0.1.0"),
 		MattermostConfigured: cfg.MattermostSiteURL != "",
@@ -47,6 +54,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		return err
 	}
 	slashSvc := statusservice.NewSlashCommandService(statusservice.SlashCommandServiceConfig{
+		Localizer:               localizer,
 		StatusService:           statusSvc,
 		Store:                   storage,
 		ChannelManager:          channelManager,
@@ -65,6 +73,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	router := httptransport.NewRouter(httptransport.RouterConfig{
 		StatusService:         statusSvc,
 		SlashService:          slashSvc,
+		Localizer:             localizer,
 		SlashToken:            cfg.MattermostSlashToken,
 		GitHubWebhookSecret:   cfg.GitHubWebhookSecret,
 		MaxSlashFormBytes:     cfg.MaxSlashFormBytes,
