@@ -245,8 +245,11 @@ func GetSelfDeployGovernanceSummaryRequest(req *http.Request, plan *agentsv1.Sel
 		return nil, safeErr
 	}
 	return &governancev1.GetGovernanceSummaryRequest{
-		Meta:  meta,
-		Scope: &governancev1.GovernanceSummaryScope{Target: target},
+		Meta: meta,
+		Scope: &governancev1.GovernanceSummaryScope{
+			Target:         target,
+			ProjectContext: selfDeployPlanGovernanceProjectContext(plan),
+		},
 	}, nil
 }
 
@@ -345,6 +348,20 @@ func selfDeployPlanGovernanceTarget(plan *agentsv1.SelfDeployPlan) *governancev1
 		Type: governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_SELF_DEPLOY_PLAN,
 		Ref:  ref,
 	}
+}
+
+func selfDeployPlanGovernanceProjectContext(plan *agentsv1.SelfDeployPlan) *governancev1.ProjectContextRef {
+	if plan == nil {
+		return nil
+	}
+	context := &governancev1.ProjectContextRef{
+		ProjectRef:    optionalString(plan.GetProjectRef()),
+		RepositoryRef: optionalString(plan.GetRepositoryRef()),
+	}
+	if context.GetProjectRef() == "" && context.GetRepositoryRef() == "" {
+		return nil
+	}
+	return context
 }
 
 func selfDeployPlanGovernanceRef(planID string) string {

@@ -66,7 +66,7 @@ func (s *Service) GetGovernanceSummary(ctx context.Context, input GetGovernanceS
 		}
 	}
 
-	if releasePackageSummaryFilterProvided(scope) {
+	if !externalRefProvided(scope.Target) && releasePackageSummaryFilterProvided(scope) {
 		packages, _, err := s.ListReleaseDecisionPackages(ctx, ListReleaseDecisionPackagesInput{
 			Filter: query.ReleaseDecisionPackageFilter{
 				ProjectContext:      scope.ProjectContext,
@@ -90,11 +90,11 @@ func (s *Service) GetGovernanceSummary(ctx context.Context, input GetGovernanceS
 	}
 
 	if externalRefProvided(scope.Target) {
-		if err := s.appendTargetGovernanceSummary(ctx, input.Meta, &summary, &seen, scope.Target); err != nil {
+		if err := s.appendTargetGovernanceSummary(ctx, input.Meta, &summary, &seen, scope.Target, scope.ProjectContext); err != nil {
 			return entity.GovernanceSummary{}, err
 		}
 	}
-	if projectContextSummaryFilterProvided(scope.ProjectContext) {
+	if !externalRefProvided(scope.Target) && projectContextSummaryFilterProvided(scope.ProjectContext) {
 		if err := s.appendProjectGovernanceSummary(ctx, input.Meta, &summary, &seen, scope.ProjectContext); err != nil {
 			return entity.GovernanceSummary{}, err
 		}
@@ -142,7 +142,7 @@ func governanceSummarySelectorCount(scope entity.GovernanceSummaryScope) int {
 	if externalRefProvided(scope.Target) {
 		count++
 	}
-	if projectContextSummaryFilterProvided(scope.ProjectContext) {
+	if !externalRefProvided(scope.Target) && projectContextSummaryFilterProvided(scope.ProjectContext) {
 		count++
 	}
 	if strings.TrimSpace(scope.ReleaseCandidateRef) != "" {
@@ -157,9 +157,9 @@ func governanceSummarySelectorCount(scope entity.GovernanceSummaryScope) int {
 	return count
 }
 
-func (s *Service) appendTargetGovernanceSummary(ctx context.Context, meta QueryMeta, summary *entity.GovernanceSummary, seen *governanceSummarySeen, target value.ExternalRef) error {
+func (s *Service) appendTargetGovernanceSummary(ctx context.Context, meta QueryMeta, summary *entity.GovernanceSummary, seen *governanceSummarySeen, target value.ExternalRef, project value.ProjectContextRef) error {
 	assessments, _, err := s.ListRiskAssessments(ctx, ListRiskAssessmentsInput{
-		Filter: query.RiskAssessmentFilter{Target: target, Page: query.PageRequest{PageSize: governanceSummaryPageSize}},
+		Filter: query.RiskAssessmentFilter{Target: target, ProjectContext: project, Page: query.PageRequest{PageSize: governanceSummaryPageSize}},
 		Meta:   meta,
 	})
 	if err != nil {
@@ -170,7 +170,7 @@ func (s *Service) appendTargetGovernanceSummary(ctx context.Context, meta QueryM
 	}
 
 	reviewSignals, _, err := s.ListReviewSignals(ctx, ListReviewSignalsInput{
-		Filter: query.ReviewSignalFilter{Target: target, Page: query.PageRequest{PageSize: governanceSummaryPageSize}},
+		Filter: query.ReviewSignalFilter{Target: target, ProjectContext: project, Page: query.PageRequest{PageSize: governanceSummaryPageSize}},
 		Meta:   meta,
 	})
 	if err != nil {
@@ -181,7 +181,7 @@ func (s *Service) appendTargetGovernanceSummary(ctx context.Context, meta QueryM
 	}
 
 	gateRequests, _, err := s.ListGateRequests(ctx, ListGateRequestsInput{
-		Filter: query.GateRequestFilter{Target: target, Page: query.PageRequest{PageSize: governanceSummaryPageSize}},
+		Filter: query.GateRequestFilter{Target: target, ProjectContext: project, Page: query.PageRequest{PageSize: governanceSummaryPageSize}},
 		Meta:   meta,
 	})
 	if err != nil {
@@ -192,7 +192,7 @@ func (s *Service) appendTargetGovernanceSummary(ctx context.Context, meta QueryM
 	}
 
 	gateDecisions, _, err := s.ListGateDecisions(ctx, ListGateDecisionsInput{
-		Filter: query.GateDecisionFilter{Target: target, Page: query.PageRequest{PageSize: governanceSummaryPageSize}},
+		Filter: query.GateDecisionFilter{Target: target, ProjectContext: project, Page: query.PageRequest{PageSize: governanceSummaryPageSize}},
 		Meta:   meta,
 	})
 	if err != nil {
@@ -203,7 +203,7 @@ func (s *Service) appendTargetGovernanceSummary(ctx context.Context, meta QueryM
 	}
 
 	blockingSignals, _, err := s.ListBlockingSignals(ctx, ListBlockingSignalsInput{
-		Filter: query.BlockingSignalFilter{Target: target, Page: query.PageRequest{PageSize: governanceSummaryPageSize}},
+		Filter: query.BlockingSignalFilter{Target: target, ProjectContext: project, Page: query.PageRequest{PageSize: governanceSummaryPageSize}},
 		Meta:   meta,
 	})
 	if err != nil {

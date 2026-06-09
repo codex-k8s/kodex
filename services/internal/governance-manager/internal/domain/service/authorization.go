@@ -111,6 +111,14 @@ func gateTargetResource(target value.ExternalRef) resourceRef {
 	return resource
 }
 
+func projectScopedResource(resource resourceRef, project value.ProjectContextRef) resourceRef {
+	if projectRef := strings.TrimSpace(project.ProjectRef); projectRef != "" {
+		resource.ScopeType = accesscatalog.ScopeProject
+		resource.ScopeID = projectRef
+	}
+	return resource
+}
+
 func riskAssessmentResource(id uuid.UUID) resourceRef {
 	resourceID := ""
 	if id != uuid.Nil {
