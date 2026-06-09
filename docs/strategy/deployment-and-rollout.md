@@ -34,9 +34,9 @@
 2. `scripts/remote/bootstrap-host.sh` - SSH preflight целевого host.
 3. `scripts/k8s/install-foundation.sh` - namespace, secrets, ingress/TLS prerequisites.
 4. `scripts/k8s/install-mattermost.sh` - Mattermost + PostgreSQL + file PVC.
-5. `scripts/k8s/install-bot-service.sh` - `matter-codex` deployment/service/ingress.
-6. `scripts/k8s/provision-mattermost.sh` - bot/service account, slash command и дефолтные каналы.
-7. `scripts/k8s/smoke.sh` - readiness, HTTPS, bot `/healthz`, slash-command callback и `/agents status`.
+5. `scripts/remote/install-bot-service.sh` - `matter-codex` deployment/service/ingress на целевом сервере.
+6. `scripts/remote/bootstrap-mattermost-bot.sh` - Mattermost bot token, team, slash command и дефолтные каналы через `mmctl --local`.
+7. `scripts/remote/smoke-bot-service.sh` - readiness и bot `/healthz`.
 
 ## Mattermost install strategy
 

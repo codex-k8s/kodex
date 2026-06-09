@@ -16,6 +16,7 @@ Mattermost-first система управления Codex-агентами дл
 - [PR roadmap](docs/strategy/pr-roadmap.md)
 - [Open decisions](docs/strategy/open-decisions.md)
 - [Mattermost bootstrap runbook](docs/runbooks/mattermost-bootstrap.md)
+- [Bot-service runbook](docs/runbooks/bot-service.md)
 
 ## Mattermost Bootstrap
 
@@ -26,4 +27,19 @@ bash scripts/env/check-env.sh --env-file .env
 bash scripts/remote/k8s-preflight.sh --env-file .env
 bash scripts/remote/install-foundation.sh --env-file .env --dry-run=server
 bash scripts/remote/install-mattermost.sh --env-file .env --dry-run=server
+```
+
+## Bot-Service
+
+Health-only deploy без Mattermost token:
+
+```bash
+bash scripts/remote/install-bot-service.sh --env-file .env --apply --wait
+bash scripts/remote/smoke-bot-service.sh --env-file .env --check-url
+```
+
+Полный Mattermost bootstrap без ручного вывода token:
+
+```bash
+bash scripts/remote/bootstrap-mattermost-bot.sh --env-file .env
 ```

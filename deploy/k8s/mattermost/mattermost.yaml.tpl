@@ -84,6 +84,8 @@ spec:
               value: "${MATTERCODEX_MATTERMOST_SITE_URL}"
             - name: MM_SERVICESETTINGS_LISTENADDRESS
               value: ":8065"
+            - name: MM_SERVICESETTINGS_ALLOWEDUNTRUSTEDINTERNALCONNECTIONS
+              value: "${MATTERCODEX_MATTERMOST_ALLOWED_UNTRUSTED_INTERNAL_CONNECTIONS}"
             - name: MM_SQLSETTINGS_DRIVERNAME
               value: postgres
             - name: MM_SQLSETTINGS_DATASOURCE

@@ -17,3 +17,8 @@
 - Mattermost control surface и создание project/repo channels;
 - структуру репозитория;
 - порядок максимум 10 кодовых PR.
+
+Актуальные runbooks:
+
+- `runbooks/mattermost-bootstrap.md`;
+- `runbooks/bot-service.md`.

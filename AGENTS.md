@@ -8,6 +8,7 @@
 - Секреты из `.env`, kubeconfig, GitHub, OpenAI и Mattermost не выводить в сообщения, логи, PR и prompt.
 - Значения env не документировать. Допустимо документировать только имена ключей и факт, что значение задано.
 - Для актуальной информации по библиотекам использовать Context7 MCP.
+- Для Go-кода и структуры сервисов использовать `docs/design-guidelines/AGENTS.md`, `docs/design-guidelines/common/check_list.md` и `docs/design-guidelines/go/check_list.md`.
 - Для OpenAI и Codex использовать официальные OpenAI docs или Codex manual.
 - Для GitHub-операций использовать соответствующие GitHub skills.
 
