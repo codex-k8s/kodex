@@ -5520,6 +5520,77 @@ func TestEnsureSelfDeployPlanGovernanceGatePreparesExistingPendingPlan(t *testin
 	}
 }
 
+func TestEnsureSelfDeployPlanGovernanceGateReportsRiskEvaluationFailure(t *testing.T) {
+	t.Parallel()
+
+	input := validSelfDeployPlanGateInput()
+	plan := selfDeployPlanFromInputForTest(input, uuid.MustParse("5f7f3a10-0042-4000-8000-000000000042"), "command:"+input.Meta.CommandID.String())
+	plan.Status = enum.SelfDeployPlanStatusPendingApproval
+	plan.GovernanceContext.RiskAssessmentRef = ""
+	plan.GovernanceContext.GateRequestRef = ""
+	repository := &fakeRepository{selfDeployByID: map[uuid.UUID]entity.SelfDeployPlan{plan.ID: plan}}
+	preparer := &fakeSelfDeployGatePreparer{err: errs.ErrDependencyUnavailable}
+	service := New(Config{
+		Repository:             repository,
+		SelfDeployGatePreparer: preparer,
+		SelfDeployGateEnabled:  true,
+	})
+
+	_, err := service.EnsureSelfDeployPlanGovernanceGate(context.Background(), EnsureSelfDeployPlanGovernanceGateInput{
+		Meta:             value.CommandMeta{IdempotencyKey: "recover-existing-self-deploy-gate-risk-failure", Actor: testActor()},
+		SelfDeployPlanID: plan.ID,
+	})
+	if !errors.Is(err, errs.ErrDependencyUnavailable) {
+		t.Fatalf("EnsureSelfDeployPlanGovernanceGate() err = %v, want %v", err, errs.ErrDependencyUnavailable)
+	}
+	if code := SelfDeployGateRecoveryErrorCode(err); code != SelfDeployGateRecoveryCodeRiskEvaluationFailed {
+		t.Fatalf("recovery code = %q, want %q", code, SelfDeployGateRecoveryCodeRiskEvaluationFailed)
+	}
+	if repository.updateSelfDeployCalled {
+		t.Fatal("UpdateSelfDeployPlanWithResult called after risk failure")
+	}
+}
+
+func TestEnsureSelfDeployPlanGovernanceGateReportsPlanRefsUpdateFailure(t *testing.T) {
+	t.Parallel()
+
+	input := validSelfDeployPlanGateInput()
+	plan := selfDeployPlanFromInputForTest(input, uuid.MustParse("5f7f3a10-0043-4000-8000-000000000043"), "command:"+input.Meta.CommandID.String())
+	plan.Status = enum.SelfDeployPlanStatusPendingApproval
+	plan.GovernanceContext.RiskAssessmentRef = ""
+	plan.GovernanceContext.GateRequestRef = ""
+	repository := &fakeRepository{
+		selfDeployByID:      map[uuid.UUID]entity.SelfDeployPlan{plan.ID: plan},
+		updateSelfDeployErr: errs.ErrConflict,
+	}
+	preparer := &fakeSelfDeployGatePreparer{
+		result: SelfDeployPlanGatePreparationResult{
+			Status: SelfDeployPlanGateStatusPending,
+			GovernanceContext: value.GovernanceContextRef{
+				RiskAssessmentRef: "governance:risk_assessment/aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa",
+				GateRequestRef:    "governance:gate_request/bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb",
+			},
+			SafeSummary: "owner approval required for existing self-deploy plan",
+		},
+	}
+	service := New(Config{
+		Repository:             repository,
+		SelfDeployGatePreparer: preparer,
+		SelfDeployGateEnabled:  true,
+	})
+
+	_, err := service.EnsureSelfDeployPlanGovernanceGate(context.Background(), EnsureSelfDeployPlanGovernanceGateInput{
+		Meta:             value.CommandMeta{IdempotencyKey: "recover-existing-self-deploy-gate-update-failure", Actor: testActor()},
+		SelfDeployPlanID: plan.ID,
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("EnsureSelfDeployPlanGovernanceGate() err = %v, want %v", err, errs.ErrConflict)
+	}
+	if code := SelfDeployGateRecoveryErrorCode(err); code != SelfDeployGateRecoveryCodePlanRefsUpdateFailed {
+		t.Fatalf("recovery code = %q, want %q", code, SelfDeployGateRecoveryCodePlanRefsUpdateFailed)
+	}
+}
+
 func TestCreateSelfDeployPlanFromSignalReportsGovernanceGateFailure(t *testing.T) {
 	t.Parallel()
 
@@ -6081,6 +6152,7 @@ type fakeRepository struct {
 	selfDeployList         []entity.SelfDeployPlan
 	selfDeployPage         value.PageResult
 	selfDeployFilter       query.SelfDeployPlanFilter
+	updateSelfDeployErr    error
 	roleByID               map[uuid.UUID]entity.RoleProfile
 	promptVersionByID      map[uuid.UUID]entity.PromptTemplateVersion
 	activeSession          entity.AgentSession
@@ -6605,6 +6677,9 @@ func (f *fakeRepository) CreateSelfDeployPlanWithResult(_ context.Context, plan 
 }
 
 func (f *fakeRepository) UpdateSelfDeployPlanWithResult(_ context.Context, plan entity.SelfDeployPlan, previousVersion int64, result entity.CommandResult, event *entity.OutboxEvent) error {
+	if f.updateSelfDeployErr != nil {
+		return f.updateSelfDeployErr
+	}
 	stored, ok := f.selfDeployByID[plan.ID]
 	if !ok {
 		return errs.ErrNotFound

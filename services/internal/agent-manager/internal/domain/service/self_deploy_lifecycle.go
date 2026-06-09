@@ -50,7 +50,7 @@ func (s *Service) EnsureSelfDeployPlanGovernanceGate(ctx context.Context, input 
 	}
 	plan, err := s.repository.GetSelfDeployPlan(ctx, input.SelfDeployPlanID)
 	if err != nil {
-		return entity.SelfDeployPlan{}, err
+		return entity.SelfDeployPlan{}, selfDeployGateRecoveryErrorf(SelfDeployGateRecoveryCodePlanLookupFailed, err)
 	}
 	if input.Meta.ExpectedVersion != nil && plan.Version != *input.Meta.ExpectedVersion {
 		return entity.SelfDeployPlan{}, errs.ErrConflict
@@ -126,7 +126,7 @@ func (s *Service) prepareSelfDeployPlanGateIfNeeded(ctx context.Context, plan en
 	}
 	current, err := s.repository.GetSelfDeployPlan(ctx, plan.ID)
 	if err != nil {
-		return entity.SelfDeployPlan{}, err
+		return entity.SelfDeployPlan{}, selfDeployGateRecoveryErrorf(SelfDeployGateRecoveryCodePlanLookupFailed, err)
 	}
 	if selfDeployPlanGateFinal(current) {
 		return current, nil
@@ -141,18 +141,18 @@ func (s *Service) prepareSelfDeployPlanGateIfNeeded(ctx context.Context, plan en
 	}
 	if !selfDeployPlanGateRefreshNeeded(current) {
 		if replay, ok, err := findReplay(ctx, s, meta, operationPrepareSelfDeployPlanGate, enum.CommandAggregateTypeSelfDeployPlan, selfDeployPlanFromPayload, s.verifySelfDeployPlanGateReplay); ok || err != nil {
-			return replay, err
+			return replay, selfDeployGateRecoveryErrorf(SelfDeployGateRecoveryCodeGateReplayFailed, err)
 		}
 	}
 	if replay, ok, err := findReplay(ctx, s, meta, operation, enum.CommandAggregateTypeSelfDeployPlan, selfDeployPlanFromPayload, s.verifySelfDeployPlanGateReplay); ok || err != nil {
-		return replay, err
+		return replay, selfDeployGateRecoveryErrorf(SelfDeployGateRecoveryCodeGateReplayFailed, err)
 	}
 	result, err := s.selfDeployGatePreparer.PrepareSelfDeployPlanGate(ctx, SelfDeployPlanGatePreparationInput{
 		Meta: meta,
 		Plan: current,
 	})
 	if err != nil {
-		return entity.SelfDeployPlan{}, err
+		return entity.SelfDeployPlan{}, selfDeployGateRecoveryErrorf(SelfDeployGateRecoveryCodeRiskEvaluationFailed, err)
 	}
 	return s.recordSelfDeployPlanGateResult(ctx, current, meta, operation, result)
 }
@@ -174,15 +174,15 @@ func (s *Service) verifySelfDeployPlanGateReplay(ctx context.Context, result ent
 func (s *Service) recordSelfDeployPlanGateResult(ctx context.Context, plan entity.SelfDeployPlan, meta value.CommandMeta, operation string, result SelfDeployPlanGatePreparationResult) (entity.SelfDeployPlan, error) {
 	governanceContext, err := normalizeGovernanceContext(result.GovernanceContext)
 	if err != nil {
-		return entity.SelfDeployPlan{}, err
+		return entity.SelfDeployPlan{}, selfDeployGateRecoveryErrorf(SelfDeployGateRecoveryCodeGateResponseInvalid, err)
 	}
 	nextContext, err := mergeGovernanceContext(plan.GovernanceContext, governanceContext)
 	if err != nil {
-		return entity.SelfDeployPlan{}, err
+		return entity.SelfDeployPlan{}, selfDeployGateRecoveryErrorf(SelfDeployGateRecoveryCodeGateResponseInvalid, err)
 	}
 	status, err := selfDeployPlanStatusFromGate(result.Status, nextContext)
 	if err != nil {
-		return entity.SelfDeployPlan{}, err
+		return entity.SelfDeployPlan{}, selfDeployGateRecoveryErrorf(SelfDeployGateRecoveryCodeGateResponseInvalid, err)
 	}
 	if plan.Status == status && sameGovernanceContext(plan.GovernanceContext, nextContext) {
 		return plan, nil
@@ -195,21 +195,21 @@ func (s *Service) recordSelfDeployPlanGateResult(ctx context.Context, plan entit
 	plan.UpdatedAt = now
 	payload, err := marshalCommandPayload(selfDeployPlanCommandPayload{SelfDeployPlan: plan})
 	if err != nil {
-		return entity.SelfDeployPlan{}, err
+		return entity.SelfDeployPlan{}, selfDeployGateRecoveryErrorf(SelfDeployGateRecoveryCodePlanRefsUpdateFailed, err)
 	}
 	command, err := commandResult(meta, operation, enum.CommandAggregateTypeSelfDeployPlan, plan.ID, payload, now)
 	if err != nil {
-		return entity.SelfDeployPlan{}, err
+		return entity.SelfDeployPlan{}, selfDeployGateRecoveryErrorf(SelfDeployGateRecoveryCodePlanRefsUpdateFailed, err)
 	}
 	event, err := selfDeployPlanRequestedEvent(s.idGenerator.New(), plan, now)
 	if err != nil {
-		return entity.SelfDeployPlan{}, err
+		return entity.SelfDeployPlan{}, selfDeployGateRecoveryErrorf(SelfDeployGateRecoveryCodePlanRefsUpdateFailed, err)
 	}
 	if err := s.repository.UpdateSelfDeployPlanWithResult(ctx, plan, previousVersion, command, &event); err != nil {
 		if loaded, loadErr := s.repository.GetSelfDeployPlan(ctx, plan.ID); loadErr == nil && selfDeployPlanGatePrepared(loaded) {
 			return loaded, nil
 		}
-		return entity.SelfDeployPlan{}, err
+		return entity.SelfDeployPlan{}, selfDeployGateRecoveryErrorf(SelfDeployGateRecoveryCodePlanRefsUpdateFailed, err)
 	}
 	return plan, nil
 }

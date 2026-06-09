@@ -69,11 +69,42 @@ func TestSelfDeployGatePreparerCallsGovernanceManager(t *testing.T) {
 		request.GetPlan().GetProjectContext().GetRepositoryRef() != "repository:kodex" {
 		t.Fatalf("project context = %+v", request.GetPlan().GetProjectContext())
 	}
+	if request.GetPlan().GetRiskProfileRef() != "" {
+		t.Fatalf("risk profile ref = %q, want empty built-in self-deploy profile", request.GetPlan().GetRiskProfileRef())
+	}
 	encoded := request.String()
 	for _, forbidden := range []string{"webhook_body", "raw_provider_payload", "full_yaml", "secret_value", "token", "workspace_path"} {
 		if strings.Contains(encoded, forbidden) {
 			t.Fatalf("governance request contains forbidden marker %q", forbidden)
 		}
+	}
+}
+
+func TestSelfDeployGatePreparerPassesUUIDRiskProfileRef(t *testing.T) {
+	t.Parallel()
+
+	client := &fakeSelfDeployGateClient{
+		response: &governancev1.SelfDeployPlanGateResponse{
+			Status:         governancev1.SelfDeployPlanGateStatus_SELF_DEPLOY_PLAN_GATE_STATUS_APPROVED,
+			RiskAssessment: &governancev1.RiskAssessment{Id: "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"},
+		},
+	}
+	preparer, err := newSelfDeployGatePreparer(client, Config{AuthToken: "token", Timeout: time.Second})
+	if err != nil {
+		t.Fatalf("newSelfDeployGatePreparer(): %v", err)
+	}
+	plan := validGatePlan()
+	plan.GovernanceContext.RiskProfileRef = "governance:risk_profile/cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+
+	_, err = preparer.PrepareSelfDeployPlanGate(context.Background(), agentservice.SelfDeployPlanGatePreparationInput{
+		Meta: value.CommandMeta{IdempotencyKey: "gate", Actor: value.Actor{Type: "service", ID: "agent-manager"}},
+		Plan: plan,
+	})
+	if err != nil {
+		t.Fatalf("PrepareSelfDeployPlanGate(): %v", err)
+	}
+	if client.request.GetPlan().GetRiskProfileRef() != "governance:risk_profile:cccccccc-cccc-4ccc-8ccc-cccccccccccc" {
+		t.Fatalf("risk profile ref = %q", client.request.GetPlan().GetRiskProfileRef())
 	}
 }
 

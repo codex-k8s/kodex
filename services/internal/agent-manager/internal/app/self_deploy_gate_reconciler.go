@@ -96,7 +96,7 @@ func reconcileSelfDeployPlanGovernanceGates(ctx context.Context, service selfDep
 			Page:       page,
 		})
 		if err != nil {
-			return err
+			return selfDeployGateReconcileError{code: "plan_list_failed", err: err}
 		}
 		for _, plan := range plans {
 			if !selfDeployPlanNeedsGovernanceGateEnsure(plan) {
@@ -127,6 +127,7 @@ func selfDeployPlanNeedsGovernanceGateEnsure(plan entity.SelfDeployPlan) bool {
 }
 
 func selfDeployGateReconcileErrorCode(err error) string {
+	var reconcileErr selfDeployGateReconcileError
 	switch {
 	case err == nil:
 		return ""
@@ -134,7 +135,24 @@ func selfDeployGateReconcileErrorCode(err error) string {
 		return "context_cancelled"
 	case errors.Is(err, context.DeadlineExceeded):
 		return "context_deadline_exceeded"
+	case errors.As(err, &reconcileErr):
+		return reconcileErr.code
+	case agentservice.SelfDeployGateRecoveryErrorCode(err) != "":
+		return agentservice.SelfDeployGateRecoveryErrorCode(err)
 	default:
 		return "reconcile_failed"
 	}
+}
+
+type selfDeployGateReconcileError struct {
+	code string
+	err  error
+}
+
+func (e selfDeployGateReconcileError) Error() string {
+	return e.code
+}
+
+func (e selfDeployGateReconcileError) Unwrap() error {
+	return e.err
 }

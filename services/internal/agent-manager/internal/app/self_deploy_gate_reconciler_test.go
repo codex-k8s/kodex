@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/google/uuid"
@@ -62,6 +63,15 @@ func TestReconcileSelfDeployPlanGovernanceGatesSkipsPreparedPlan(t *testing.T) {
 	}
 	if len(service.ensureInputs) != 0 {
 		t.Fatalf("ensure inputs = %+v, want empty", service.ensureInputs)
+	}
+}
+
+func TestSelfDeployGateReconcileErrorCodeReportsPlanListFailure(t *testing.T) {
+	t.Parallel()
+
+	err := selfDeployGateReconcileError{code: "plan_list_failed", err: errors.New("database unavailable")}
+	if code := selfDeployGateReconcileErrorCode(err); code != "plan_list_failed" {
+		t.Fatalf("error code = %q, want plan_list_failed", code)
 	}
 }
 
