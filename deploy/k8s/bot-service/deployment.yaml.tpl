@@ -18,6 +18,17 @@ spec:
         app.kubernetes.io/name: matter-codex-bot-service
         app.kubernetes.io/component: bot-service
     spec:
+      initContainers:
+        - name: wait-for-postgres
+          image: ${MATTERCODEX_BUSYBOX_IMAGE}
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z mattermost-postgres.${MATTERCODEX_NAMESPACE}.svc.cluster.local 5432; do
+                sleep 2
+              done
       containers:
         - name: bot-service
           image: ${MATTERCODEX_BOT_SERVICE_IMAGE}
@@ -49,6 +60,12 @@ spec:
                 secretKeyRef:
                   name: ${MATTERCODEX_BOT_SERVICE_SECRET}
                   key: mattermost-slash-token
+                  optional: true
+            - name: MATTERCODEX_DATABASE_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: ${MATTERCODEX_POSTGRES_SECRET}
+                  key: mattermost-datasource
                   optional: true
             - name: GOMODCACHE
               value: /tmp/go/pkg/mod

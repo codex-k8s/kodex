@@ -9,6 +9,8 @@ type StatusSnapshot struct {
 	MattermostConfigured bool
 	BotTokenConfigured   bool
 	SlashTokenConfigured bool
+	DatabaseConfigured   bool
+	StorageReady         bool
 	DefaultTeamName      string
 	DefaultChannels      []string
 }

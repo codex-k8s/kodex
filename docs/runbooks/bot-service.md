@@ -9,6 +9,9 @@
 - отвечать на `/healthz`;
 - принимать Mattermost slash callback `/mattermost/slash/agents`;
 - отвечать на `/agents status`;
+- выполнять admin-команды `/agents repo add`, `/agents repo list`, `/agents token check`, `/agents profile list`;
+- применять storage migrations и хранить repository/profile/audit metadata в PostgreSQL;
+- создавать Mattermost repo-channel при добавлении repository;
 - хранить Mattermost bot/slash tokens только в Kubernetes Secret;
 - создавать базовую Mattermost control surface через `mmctl --local` внутри Mattermost pod: team, каналы и slash command.
 
@@ -23,6 +26,8 @@
 - `MATTERCODEX_BOT_SERVICE_INTERNAL_URL` - optional, внутренний callback URL для Mattermost slash command;
 - `MATTERCODEX_MATTERMOST_BOT_TOKEN` - нужен для provisioning Mattermost team/channels/slash command;
 - `MATTERCODEX_MATTERMOST_SLASH_TOKEN` - optional, обычно заполняется provisioning script в Kubernetes Secret;
+- `MATTERCODEX_DATABASE_DSN` - optional, берется из Kubernetes Secret `mattermost-datasource` для storage/admin-команд;
+- `MATTERCODEX_STORAGE_MIGRATIONS_ENABLED` - optional, включает Go migrations на старте;
 - `MATTERCODEX_DEFAULT_TEAM_NAME` - optional, по умолчанию `agents`;
 - `MATTERCODEX_DEFAULT_TEAM_DISPLAY_NAME` - optional;
 - `MATTERCODEX_DEFAULT_CHANNELS` - optional, список `name:Display Name` через запятую.
@@ -61,6 +66,20 @@ bash scripts/remote/smoke-bot-service.sh --env-file .env --check-url
 ```
 
 Ожидаемый результат: Kubernetes objects существуют, Deployment готов, `/healthz` отвечает через HTTPS.
+
+Проверка storage migrations после deploy:
+
+```bash
+set -euo pipefail
+. scripts/lib/env.sh
+mattercodex_load_env_file .env
+mattercodex_validate_base_env
+NAMESPACE_Q="$(mattercodex_shell_quote "$MATTERCODEX_NAMESPACE")"
+REMOTE_KUBECTL="$(mattercodex_remote_kubectl_command)"
+mattercodex_ssh "$REMOTE_KUBECTL -n $NAMESPACE_Q exec statefulset/mattermost-postgres -- psql -U mattermost -d mattermost -Atc 'select version_id, is_applied from goose_db_version order by id;'"
+```
+
+Ожидаемый результат: в выводе есть `1|t`.
 
 ## Mattermost bot bootstrap
 
@@ -105,6 +124,17 @@ bash scripts/remote/bootstrap-mattermost-bot.sh --env-file .env
 ```
 
 Ожидаемый результат: ephemeral ответ `matter-codex: online` без вывода секретов.
+
+Дополнительная проверка storage/admin-команд:
+
+```text
+/agents token check
+/agents profile list
+/agents repo add github codex-k8s/matter-codex main
+/agents repo list
+```
+
+Ожидаемый результат: команды отвечают ephemeral-сообщениями, repository появляется в списке, а Mattermost создаёт/показывает канал `repo-codex-k8s-matter-codex`.
 
 ## Безопасность
 

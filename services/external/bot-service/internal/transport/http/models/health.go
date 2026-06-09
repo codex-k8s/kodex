@@ -7,6 +7,8 @@ type HealthResponse struct {
 	MattermostConfigured bool     `json:"mattermost_configured"`
 	BotTokenConfigured   bool     `json:"bot_token_configured"`
 	SlashTokenConfigured bool     `json:"slash_token_configured"`
+	DatabaseConfigured   bool     `json:"database_configured"`
+	StorageReady         bool     `json:"storage_ready"`
 	DefaultTeam          string   `json:"default_team"`
 	DefaultChannels      []string `json:"default_channels"`
 }

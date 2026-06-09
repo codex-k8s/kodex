@@ -92,9 +92,13 @@ cat "$RENDER_DIR/30-deployment.yaml" | mattercodex_remote_kubectl_apply_stdin "$
 cat "$RENDER_DIR/40-service.yaml" | mattercodex_remote_kubectl_apply_stdin "$APPLY_DRY_RUN_MODE"
 cat "$RENDER_DIR/50-ingress.yaml" | mattercodex_remote_kubectl_apply_stdin "$APPLY_DRY_RUN_MODE"
 
-if [ "$DRY_RUN_MODE" = "none" ] && mattercodex_bool "$WAIT"; then
-  mattercodex_log "ожидание rollout bot-service на целевом сервере"
-  mattercodex_ssh "$REMOTE_KUBECTL -n $NAMESPACE_Q rollout status deployment/matter-codex-bot-service --timeout=300s >/dev/null"
+if [ "$DRY_RUN_MODE" = "none" ]; then
+  mattercodex_log "перезапуск bot-service для применения source ConfigMap на целевом сервере"
+  mattercodex_ssh "$REMOTE_KUBECTL -n $NAMESPACE_Q rollout restart deployment/matter-codex-bot-service >/dev/null"
+  if mattercodex_bool "$WAIT"; then
+    mattercodex_log "ожидание rollout bot-service на целевом сервере"
+    mattercodex_ssh "$REMOTE_KUBECTL -n $NAMESPACE_Q rollout status deployment/matter-codex-bot-service --timeout=300s >/dev/null"
+  fi
 fi
 
 mattercodex_log "remote bot-service install шаг завершен"
