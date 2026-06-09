@@ -112,6 +112,7 @@ fi
 mattercodex_log "применяются манифесты bot-service на целевом сервере"
 cat "$RENDER_DIR/10-code-configmap.yaml" | mattercodex_remote_kubectl_apply_stdin "$APPLY_DRY_RUN_MODE"
 cat "$RENDER_DIR/20-configmap.yaml" | mattercodex_remote_kubectl_apply_stdin "$APPLY_DRY_RUN_MODE"
+cat "$RENDER_DIR/25-rbac.yaml" | mattercodex_remote_kubectl_apply_stdin "$APPLY_DRY_RUN_MODE"
 cat "$RENDER_DIR/30-deployment.yaml" | mattercodex_remote_kubectl_apply_stdin "$APPLY_DRY_RUN_MODE"
 cat "$RENDER_DIR/40-service.yaml" | mattercodex_remote_kubectl_apply_stdin "$APPLY_DRY_RUN_MODE"
 cat "$RENDER_DIR/50-ingress.yaml" | mattercodex_remote_kubectl_apply_stdin "$APPLY_DRY_RUN_MODE"

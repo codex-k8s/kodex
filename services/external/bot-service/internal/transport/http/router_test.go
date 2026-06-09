@@ -137,6 +137,7 @@ func testRouterWithConfig(slashToken string, botTokenConfigured bool, gitHubWebh
 		MattermostConfigured: true,
 		BotTokenConfigured:   botTokenConfigured,
 		SlashTokenConfigured: slashToken != "",
+		RuntimeConfigured:    true,
 		DefaultTeamName:      "agents",
 		DefaultChannels:      []string{"agents-control", "agents-runs", "agent-alerts", "agents-audit"},
 	})

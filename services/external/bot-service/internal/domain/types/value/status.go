@@ -11,6 +11,7 @@ type StatusSnapshot struct {
 	SlashTokenConfigured bool
 	DatabaseConfigured   bool
 	StorageReady         bool
+	RuntimeConfigured    bool
 	DefaultTeamName      string
 	DefaultChannels      []string
 }

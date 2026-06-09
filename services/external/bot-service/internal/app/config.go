@@ -22,6 +22,14 @@ type Config struct {
 	GitHubToken           string        `env:"MATTERCODEX_GITHUB_TOKEN"`
 	GitHubWebhookSecret   string        `env:"MATTERCODEX_GITHUB_WEBHOOK_SECRET"`
 	DatabaseDSN           string        `env:"MATTERCODEX_DATABASE_DSN"`
+	RuntimeEnabled        bool          `env:"MATTERCODEX_RUNTIME_ENABLED" envDefault:"true"`
+	RuntimeNamespace      string        `env:"MATTERCODEX_RUNTIME_NAMESPACE"`
+	RuntimeKubeconfigPath string        `env:"MATTERCODEX_RUNTIME_KUBECONFIG_PATH"`
+	RuntimeSmokeImage     string        `env:"MATTERCODEX_RUNTIME_SMOKE_IMAGE" envDefault:"busybox:1.36"`
+	RuntimeWorkspaceSize  string        `env:"MATTERCODEX_RUNTIME_WORKSPACE_STORAGE_SIZE" envDefault:"1Gi"`
+	RuntimeJobTTLSeconds  int32         `env:"MATTERCODEX_RUNTIME_JOB_TTL_SECONDS" envDefault:"86400"`
+	RuntimeLogTailLines   int64         `env:"MATTERCODEX_RUNTIME_LOG_TAIL_LINES" envDefault:"40"`
+	AgentServiceAccount   string        `env:"MATTERCODEX_AGENT_RUNNER_SERVICE_ACCOUNT" envDefault:"matter-codex-agent-runner"`
 	StorageMigrations     bool          `env:"MATTERCODEX_STORAGE_MIGRATIONS_ENABLED" envDefault:"true"`
 	ReadHeaderTimeout     time.Duration `env:"MATTERCODEX_BOT_SERVICE_READ_HEADER_TIMEOUT" envDefault:"5s"`
 	ShutdownTimeout       time.Duration `env:"MATTERCODEX_BOT_SERVICE_SHUTDOWN_TIMEOUT" envDefault:"10s"`
@@ -55,6 +63,21 @@ func (cfg *Config) Validate() error {
 	}
 	if cfg.MaxGitHubWebhookBytes <= 0 {
 		return fmt.Errorf("MATTERCODEX_BOT_SERVICE_MAX_GITHUB_WEBHOOK_BYTES is invalid")
+	}
+	if cfg.RuntimeJobTTLSeconds <= 0 {
+		return fmt.Errorf("MATTERCODEX_RUNTIME_JOB_TTL_SECONDS is invalid")
+	}
+	if cfg.RuntimeLogTailLines <= 0 {
+		return fmt.Errorf("MATTERCODEX_RUNTIME_LOG_TAIL_LINES is invalid")
+	}
+	if strings.TrimSpace(cfg.RuntimeSmokeImage) == "" {
+		return fmt.Errorf("MATTERCODEX_RUNTIME_SMOKE_IMAGE is required")
+	}
+	if strings.TrimSpace(cfg.RuntimeWorkspaceSize) == "" {
+		return fmt.Errorf("MATTERCODEX_RUNTIME_WORKSPACE_STORAGE_SIZE is required")
+	}
+	if strings.TrimSpace(cfg.AgentServiceAccount) == "" {
+		return fmt.Errorf("MATTERCODEX_AGENT_RUNNER_SERVICE_ACCOUNT is required")
 	}
 	locale, ok := texti18n.ResolveLocale(cfg.Locale)
 	if !ok {

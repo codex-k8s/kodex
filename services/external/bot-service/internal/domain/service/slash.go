@@ -3,13 +3,16 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
 	providerrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/provider"
+	runtimerepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/runtime"
 	texti18n "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/i18n"
 )
 
@@ -31,6 +34,7 @@ type SlashCommandServiceConfig struct {
 	Store                   adminrepo.Repository
 	ChannelManager          MattermostChannelManager
 	RepositoryProvider      providerrepo.RepositoryProvider
+	RuntimeRunner           runtimerepo.Runner
 	DefaultTeamName         string
 	BotTokenConfigured      bool
 	SlashTokenConfigured    bool
@@ -38,6 +42,7 @@ type SlashCommandServiceConfig struct {
 	GitHubWebhookConfigured bool
 	DatabaseConfigured      bool
 	StorageReady            bool
+	RuntimeConfigured       bool
 	MattermostConfigured    bool
 	ChannelManagerEnabled   bool
 }
@@ -65,6 +70,8 @@ func (svc *SlashCommandService) Handle(ctx context.Context, command SlashCommand
 		return svc.handleToken(fields[1:])
 	case "locale":
 		return svc.handleLocale(fields[1:])
+	case "runtime":
+		return svc.handleRuntime(ctx, fields[1:], command)
 	case "profile":
 		return svc.handleProfile(ctx, fields[1:])
 	case "github":
@@ -168,9 +175,116 @@ func (svc *SlashCommandService) handleToken(args []string) string {
 		svc.t("token.check.github_webhook", map[string]any{"Status": configuredLabel(svc.cfg.Localizer, svc.cfg.GitHubWebhookConfigured)}),
 		svc.t("token.check.database", map[string]any{"Status": configuredLabel(svc.cfg.Localizer, svc.cfg.DatabaseConfigured)}),
 		svc.t("token.check.storage", map[string]any{"Status": readyLabel(svc.cfg.Localizer, svc.cfg.StorageReady)}),
+		svc.t("token.check.runtime", map[string]any{"Status": configuredLabel(svc.cfg.Localizer, svc.cfg.RuntimeConfigured)}),
 		svc.t("token.check.channel_manager", map[string]any{"Status": configuredLabel(svc.cfg.Localizer, svc.cfg.ChannelManagerEnabled)}),
 	}
 	return strings.Join(lines, "\n")
+}
+
+func (svc *SlashCommandService) handleRuntime(ctx context.Context, args []string, command SlashCommand) string {
+	if svc.cfg.RuntimeRunner == nil {
+		return svc.t("runtime.not_configured", nil)
+	}
+	if len(args) == 0 {
+		return svc.t("runtime.usage", nil)
+	}
+	switch args[0] {
+	case "smoke":
+		return svc.handleRuntimeSmoke(ctx, args[1:], command)
+	case "status":
+		return svc.handleRuntimeStatus(ctx, args[1:])
+	case "cleanup":
+		return svc.handleRuntimeCleanup(ctx, args[1:], command)
+	default:
+		return svc.t("runtime.unknown_command", nil)
+	}
+}
+
+func (svc *SlashCommandService) handleRuntimeSmoke(ctx context.Context, args []string, command SlashCommand) string {
+	if len(args) > 1 {
+		return svc.t("runtime.smoke.usage", nil)
+	}
+	runID := defaultRuntimeRunID()
+	if len(args) == 1 {
+		runID = args[0]
+	}
+	if !validRuntimeRunID(runID) {
+		return svc.t("runtime.invalid_run_id", nil)
+	}
+	started, err := svc.cfg.RuntimeRunner.StartSmokeRun(ctx, runtimerepo.SmokeRunInput{RunID: runID, Role: "smoke"})
+	if err != nil {
+		return svc.t("runtime.smoke.failed", map[string]any{"Error": safeError(err)})
+	}
+	svc.recordRuntimeAudit(ctx, command, "runtime.smoke_run.started", started.RunID, "kubernetes smoke runner job started from Mattermost slash command")
+	return svc.t("runtime.smoke.started", map[string]any{
+		"RunID":     started.RunID,
+		"Namespace": started.Namespace,
+		"Job":       started.JobName,
+		"PVC":       started.PVCName,
+		"Created":   started.Created,
+	})
+}
+
+func (svc *SlashCommandService) handleRuntimeStatus(ctx context.Context, args []string) string {
+	if len(args) != 1 {
+		return svc.t("runtime.status.usage", nil)
+	}
+	runID := args[0]
+	if !validRuntimeRunID(runID) {
+		return svc.t("runtime.invalid_run_id", nil)
+	}
+	status, err := svc.cfg.RuntimeRunner.GetRunStatus(ctx, runID)
+	if err != nil {
+		return svc.t("runtime.status.failed", map[string]any{"Error": safeError(err)})
+	}
+	if !status.Exists {
+		return svc.t("runtime.status.not_found", map[string]any{"RunID": runID})
+	}
+	lines := []string{
+		svc.t("runtime.status.header", nil),
+		svc.t("runtime.status.identity", map[string]any{
+			"RunID":     status.RunID,
+			"Namespace": status.Namespace,
+			"Job":       status.JobName,
+			"PVC":       status.PVCName,
+		}),
+		svc.t("runtime.status.job", map[string]any{
+			"Active":    status.JobActive,
+			"Succeeded": status.JobSucceeded,
+			"Failed":    status.JobFailed,
+		}),
+	}
+	if status.PodName != "" {
+		lines = append(lines, svc.t("runtime.status.pod", map[string]any{
+			"Pod":   status.PodName,
+			"Phase": emptyAsUnknown(status.PodPhase),
+		}))
+	}
+	if strings.TrimSpace(status.LogTail) != "" {
+		lines = append(lines, svc.t("runtime.status.logs", map[string]any{"Logs": sanitizeLogTail(status.LogTail)}))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func (svc *SlashCommandService) handleRuntimeCleanup(ctx context.Context, args []string, command SlashCommand) string {
+	if len(args) != 1 {
+		return svc.t("runtime.cleanup.usage", nil)
+	}
+	runID := args[0]
+	if !validRuntimeRunID(runID) {
+		return svc.t("runtime.invalid_run_id", nil)
+	}
+	result, err := svc.cfg.RuntimeRunner.CleanupRun(ctx, runID)
+	if err != nil {
+		return svc.t("runtime.cleanup.failed", map[string]any{"Error": safeError(err)})
+	}
+	svc.recordRuntimeAudit(ctx, command, "runtime.run.cleaned", result.RunID, "kubernetes smoke runner resources cleaned from Mattermost slash command")
+	return svc.t("runtime.cleanup.result", map[string]any{
+		"RunID":      result.RunID,
+		"Namespace":  result.Namespace,
+		"JobDeleted": result.JobDeleted,
+		"PVCDeleted": result.PVCDeleted,
+	})
 }
 
 func (svc *SlashCommandService) handleLocale(args []string) string {
@@ -237,6 +351,7 @@ func (svc *SlashCommandService) helpText() string {
 		svc.t("help.token_check", nil),
 		svc.t("help.profile_list", nil),
 		svc.t("help.locale", nil),
+		svc.t("help.runtime", nil),
 	}
 	return svc.t("help.header", nil) + "\n" + strings.Join(commands, "\n")
 }
@@ -587,6 +702,7 @@ func isProvider(value string) bool {
 var (
 	identifierRE = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
 	branchRE     = regexp.MustCompile(`^[A-Za-z0-9_./-]+$`)
+	runtimeRunRE = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]{0,47}[a-z0-9])?$`)
 )
 
 func validIdentifier(value string) bool {
@@ -595,6 +711,10 @@ func validIdentifier(value string) bool {
 
 func validBranch(value string) bool {
 	return branchRE.MatchString(value)
+}
+
+func validRuntimeRunID(value string) bool {
+	return runtimeRunRE.MatchString(value)
 }
 
 func repositoryChannelName(owner string, name string) string {
@@ -637,6 +757,20 @@ func (svc *SlashCommandService) recordGitHubAudit(ctx context.Context, command S
 	})
 }
 
+func (svc *SlashCommandService) recordRuntimeAudit(ctx context.Context, command SlashCommand, eventType string, resourceName string, summary string) {
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return
+	}
+	_ = svc.cfg.Store.RecordAuditEvent(ctx, adminrepo.AuditEventInput{
+		EventType:    eventType,
+		ActorUserID:  command.UserID,
+		ActorUser:    command.UserName,
+		ResourceType: "runtime",
+		ResourceName: resourceName,
+		Summary:      summary,
+	})
+}
+
 func (svc *SlashCommandService) t(messageID string, data map[string]any) string {
 	return svc.cfg.Localizer.T(messageID, data)
 }
@@ -650,6 +784,14 @@ func shortSHA(value string) string {
 		return value
 	}
 	return value[:12]
+}
+
+func defaultRuntimeRunID() string {
+	return fmt.Sprintf("smoke-%d", time.Now().Unix())
+}
+
+func sanitizeLogTail(value string) string {
+	return strings.ReplaceAll(strings.TrimSpace(value), "```", "'''")
 }
 
 func emptyAsUnknown(value string) string {

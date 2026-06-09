@@ -19,6 +19,7 @@ func TestStatusText(t *testing.T) {
 		MattermostConfigured: true,
 		BotTokenConfigured:   true,
 		SlashTokenConfigured: true,
+		RuntimeConfigured:    true,
 		DefaultTeamName:      "agents",
 		DefaultChannels:      []string{"agents-control", "agents-runs"},
 	})
@@ -29,6 +30,7 @@ func TestStatusText(t *testing.T) {
 		"locale: en",
 		"bot token: configured",
 		"slash token: configured",
+		"kubernetes runtime: configured",
 		"default channels: agents-control, agents-runs",
 	} {
 		if !strings.Contains(text, want) {

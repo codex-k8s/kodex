@@ -46,6 +46,15 @@ func TestConfigDefaults(t *testing.T) {
 	if cfg.DatabaseConfigured() {
 		t.Fatal("DatabaseConfigured() = true")
 	}
+	if !cfg.RuntimeEnabled {
+		t.Fatal("RuntimeEnabled = false")
+	}
+	if cfg.RuntimeSmokeImage != "busybox:1.36" {
+		t.Fatalf("RuntimeSmokeImage = %q", cfg.RuntimeSmokeImage)
+	}
+	if cfg.RuntimeWorkspaceSize != "1Gi" {
+		t.Fatalf("RuntimeWorkspaceSize = %q", cfg.RuntimeWorkspaceSize)
+	}
 	if !cfg.StorageMigrations {
 		t.Fatal("StorageMigrations = false")
 	}
@@ -60,6 +69,11 @@ func TestConfigValidationRejectsBadTimeout(t *testing.T) {
 		ShutdownTimeout:       0,
 		MaxSlashFormBytes:     1024,
 		MaxGitHubWebhookBytes: 1024,
+		RuntimeSmokeImage:     "busybox:1.36",
+		RuntimeWorkspaceSize:  "1Gi",
+		RuntimeJobTTLSeconds:  86400,
+		RuntimeLogTailLines:   40,
+		AgentServiceAccount:   "matter-codex-agent-runner",
 	}
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("Validate() error = nil")
@@ -75,6 +89,11 @@ func TestConfigValidationNormalizesLocale(t *testing.T) {
 		ShutdownTimeout:       time.Second,
 		MaxSlashFormBytes:     1024,
 		MaxGitHubWebhookBytes: 1024,
+		RuntimeSmokeImage:     "busybox:1.36",
+		RuntimeWorkspaceSize:  "1Gi",
+		RuntimeJobTTLSeconds:  86400,
+		RuntimeLogTailLines:   40,
+		AgentServiceAccount:   "matter-codex-agent-runner",
 	}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("Validate() error = %v", err)
@@ -93,6 +112,11 @@ func TestConfigValidationRejectsUnsupportedLocale(t *testing.T) {
 		ShutdownTimeout:       time.Second,
 		MaxSlashFormBytes:     1024,
 		MaxGitHubWebhookBytes: 1024,
+		RuntimeSmokeImage:     "busybox:1.36",
+		RuntimeWorkspaceSize:  "1Gi",
+		RuntimeJobTTLSeconds:  86400,
+		RuntimeLogTailLines:   40,
+		AgentServiceAccount:   "matter-codex-agent-runner",
 	}
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("Validate() error = nil")

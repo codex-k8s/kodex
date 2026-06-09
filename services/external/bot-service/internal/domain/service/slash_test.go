@@ -7,6 +7,7 @@ import (
 
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
 	providerrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/provider"
+	runtimerepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/runtime"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
 	texti18n "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/i18n"
 )
@@ -31,6 +32,7 @@ func TestSlashTokenCheck(t *testing.T) {
 		"github webhook secret: missing",
 		"database dsn: configured",
 		"storage: ready",
+		"kubernetes runtime: missing",
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("Handle(token check) missing %q in %q", want, text)
@@ -227,6 +229,53 @@ func TestSlashLocaleSetChangesResponses(t *testing.T) {
 	}
 }
 
+func TestSlashRuntimeSmokeStatusAndCleanup(t *testing.T) {
+	runner := &fakeRuntimeRunner{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:         localizer,
+		StatusService:     testStatusService(localizer),
+		RuntimeRunner:     runner,
+		RuntimeConfigured: true,
+	})
+
+	text := svc.Handle(context.Background(), SlashCommand{Text: "runtime smoke smoke-test"})
+	if !strings.Contains(text, "Kubernetes smoke runner started") || !strings.Contains(text, "`smoke-test`") {
+		t.Fatalf("Handle(runtime smoke) text = %q", text)
+	}
+	if runner.startedRunID != "smoke-test" {
+		t.Fatalf("startedRunID = %q", runner.startedRunID)
+	}
+
+	text = svc.Handle(context.Background(), SlashCommand{Text: "runtime status smoke-test"})
+	if !strings.Contains(text, "Kubernetes run status") || !strings.Contains(text, "phase `Succeeded`") || !strings.Contains(text, "smoke-ok") {
+		t.Fatalf("Handle(runtime status) text = %q", text)
+	}
+
+	text = svc.Handle(context.Background(), SlashCommand{Text: "runtime cleanup smoke-test"})
+	if !strings.Contains(text, "Kubernetes run cleanup") || !strings.Contains(text, "job deleted: `true`") {
+		t.Fatalf("Handle(runtime cleanup) text = %q", text)
+	}
+	if runner.cleanedRunID != "smoke-test" {
+		t.Fatalf("cleanedRunID = %q", runner.cleanedRunID)
+	}
+}
+
+func TestSlashRuntimeRejectsInvalidRunID(t *testing.T) {
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:         localizer,
+		StatusService:     testStatusService(localizer),
+		RuntimeRunner:     &fakeRuntimeRunner{},
+		RuntimeConfigured: true,
+	})
+
+	text := svc.Handle(context.Background(), SlashCommand{Text: "runtime smoke Bad_ID"})
+	if !strings.Contains(text, "run id must be lowercase") {
+		t.Fatalf("Handle(runtime smoke Bad_ID) text = %q", text)
+	}
+}
+
 func testLocalizer(t *testing.T, locale string) *texti18n.Localizer {
 	t.Helper()
 	localizer, err := texti18n.New(locale)
@@ -246,9 +295,50 @@ func testStatusService(localizer *texti18n.Localizer) *StatusService {
 		SlashTokenConfigured: true,
 		DatabaseConfigured:   true,
 		StorageReady:         true,
+		RuntimeConfigured:    true,
 		DefaultTeamName:      "agents",
 		DefaultChannels:      []string{"agents-control"},
 	})
+}
+
+type fakeRuntimeRunner struct {
+	startedRunID string
+	cleanedRunID string
+}
+
+func (runner *fakeRuntimeRunner) StartSmokeRun(_ context.Context, input runtimerepo.SmokeRunInput) (runtimerepo.StartedRun, error) {
+	runner.startedRunID = input.RunID
+	return runtimerepo.StartedRun{
+		RunID:     input.RunID,
+		Namespace: "mattermost",
+		JobName:   "mc-run-" + input.RunID,
+		PVCName:   "mc-ws-" + input.RunID,
+		Created:   true,
+	}, nil
+}
+
+func (runner *fakeRuntimeRunner) GetRunStatus(_ context.Context, runID string) (runtimerepo.RunStatus, error) {
+	return runtimerepo.RunStatus{
+		RunID:        runID,
+		Namespace:    "mattermost",
+		JobName:      "mc-run-" + runID,
+		PVCName:      "mc-ws-" + runID,
+		PodName:      "mc-run-" + runID + "-pod",
+		Exists:       true,
+		JobSucceeded: 1,
+		PodPhase:     "Succeeded",
+		LogTail:      "matter-codex smoke done\nsmoke-ok",
+	}, nil
+}
+
+func (runner *fakeRuntimeRunner) CleanupRun(_ context.Context, runID string) (runtimerepo.CleanupResult, error) {
+	runner.cleanedRunID = runID
+	return runtimerepo.CleanupResult{
+		RunID:      runID,
+		Namespace:  "mattermost",
+		JobDeleted: true,
+		PVCDeleted: true,
+	}, nil
 }
 
 type fakeAdminStore struct {

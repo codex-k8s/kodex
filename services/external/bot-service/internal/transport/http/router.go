@@ -197,6 +197,7 @@ func healthResponse(snapshot value.StatusSnapshot) transportmodels.HealthRespons
 		SlashTokenConfigured: snapshot.SlashTokenConfigured,
 		DatabaseConfigured:   snapshot.DatabaseConfigured,
 		StorageReady:         snapshot.StorageReady,
+		RuntimeConfigured:    snapshot.RuntimeConfigured,
 		DefaultTeam:          snapshot.DefaultTeamName,
 		DefaultChannels:      snapshot.DefaultChannels,
 	}
