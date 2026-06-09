@@ -5457,6 +5457,69 @@ func TestCreateSelfDeployPlanFromSignalReusesPreparedGovernanceGate(t *testing.T
 	}
 }
 
+func TestEnsureSelfDeployPlanGovernanceGatePreparesExistingPendingPlan(t *testing.T) {
+	t.Parallel()
+
+	input := validSelfDeployPlanGateInput()
+	plan := selfDeployPlanFromInputForTest(input, uuid.MustParse("5f7f3a10-0041-4000-8000-000000000041"), "command:"+input.Meta.CommandID.String())
+	plan.Status = enum.SelfDeployPlanStatusPendingApproval
+	plan.GovernanceContext.RiskAssessmentRef = ""
+	plan.GovernanceContext.GateRequestRef = ""
+	repository := &fakeRepository{
+		selfDeployByID: map[uuid.UUID]entity.SelfDeployPlan{plan.ID: plan},
+	}
+	preparer := &fakeSelfDeployGatePreparer{
+		result: SelfDeployPlanGatePreparationResult{
+			Status: SelfDeployPlanGateStatusPending,
+			GovernanceContext: value.GovernanceContextRef{
+				RiskAssessmentRef: "governance:risk_assessment/aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa",
+				GateRequestRef:    "governance:gate_request/bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb",
+			},
+			SafeSummary: "owner approval required for existing self-deploy plan",
+		},
+	}
+	service := New(Config{
+		Repository:             repository,
+		SelfDeployGatePreparer: preparer,
+		SelfDeployGateEnabled:  true,
+	})
+
+	ensured, err := service.EnsureSelfDeployPlanGovernanceGate(context.Background(), EnsureSelfDeployPlanGovernanceGateInput{
+		Meta:             value.CommandMeta{IdempotencyKey: "recover-existing-self-deploy-gate", Actor: testActor()},
+		SelfDeployPlanID: plan.ID,
+	})
+	if err != nil {
+		t.Fatalf("EnsureSelfDeployPlanGovernanceGate() err = %v", err)
+	}
+	if preparer.calls != 1 {
+		t.Fatalf("PrepareSelfDeployPlanGate calls = %d, want 1", preparer.calls)
+	}
+	if !repository.updateSelfDeployCalled {
+		t.Fatal("UpdateSelfDeployPlanWithResult was not called")
+	}
+	if ensured.Version != plan.Version+1 || ensured.GovernanceContext.GateRequestRef == "" || ensured.GovernanceContext.RiskAssessmentRef == "" {
+		t.Fatalf("ensured plan = %+v", ensured)
+	}
+	if repository.updateSelfDeployResult.Operation != operationPrepareSelfDeployPlanGate {
+		t.Fatalf("operation = %q, want %q", repository.updateSelfDeployResult.Operation, operationPrepareSelfDeployPlanGate)
+	}
+
+	repository.updateSelfDeployCalled = false
+	replayed, err := service.EnsureSelfDeployPlanGovernanceGate(context.Background(), EnsureSelfDeployPlanGovernanceGateInput{
+		Meta:             value.CommandMeta{IdempotencyKey: "recover-existing-self-deploy-gate-again", Actor: testActor()},
+		SelfDeployPlanID: plan.ID,
+	})
+	if err != nil {
+		t.Fatalf("EnsureSelfDeployPlanGovernanceGate() replay err = %v", err)
+	}
+	if replayed.GovernanceContext.GateRequestRef != ensured.GovernanceContext.GateRequestRef {
+		t.Fatalf("replayed gate ref = %q, want %q", replayed.GovernanceContext.GateRequestRef, ensured.GovernanceContext.GateRequestRef)
+	}
+	if preparer.calls != 1 || repository.updateSelfDeployCalled {
+		t.Fatalf("replay calls/update = %d/%v, want 1/false", preparer.calls, repository.updateSelfDeployCalled)
+	}
+}
+
 func TestCreateSelfDeployPlanFromSignalReportsGovernanceGateFailure(t *testing.T) {
 	t.Parallel()
 

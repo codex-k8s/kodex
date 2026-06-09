@@ -192,6 +192,11 @@ type CreateSelfDeployPlanFromSignalInput struct {
 	CreateSelfDeployPlanInput
 }
 
+type EnsureSelfDeployPlanGovernanceGateInput struct {
+	Meta             value.CommandMeta
+	SelfDeployPlanID uuid.UUID
+}
+
 type SelfDeployPlanGateStatus string
 
 const (
