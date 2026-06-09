@@ -25,11 +25,16 @@ mattercodex_load_env_file "$ENV_FILE"
 mattercodex_validate_base_env
 mattercodex_require_commands ssh
 
+NAMESPACE_Q="$(mattercodex_shell_quote "$MATTERCODEX_NAMESPACE")"
 REMOTE_KUBECTL="$(mattercodex_remote_kubectl_command)"
 
-mattercodex_log "запуск удаленного preflight без изменений"
+mattercodex_log "проверка Kubernetes на целевом сервере"
 mattercodex_ssh "set -eu
   $REMOTE_KUBECTL version --client=true >/dev/null
   $REMOTE_KUBECTL get --raw=/readyz >/dev/null
-  test -d /etc/rancher || true
-  printf 'удаленный preflight: успешно\n'"
+  $REMOTE_KUBECTL auth can-i create namespaces >/dev/null 2>&1
+  $REMOTE_KUBECTL auth can-i create secrets -n $NAMESPACE_Q >/dev/null 2>&1
+  $REMOTE_KUBECTL auth can-i create statefulsets.apps -n $NAMESPACE_Q >/dev/null 2>&1
+  $REMOTE_KUBECTL auth can-i create deployments.apps -n $NAMESPACE_Q >/dev/null 2>&1
+  $REMOTE_KUBECTL auth can-i create ingresses.networking.k8s.io -n $NAMESPACE_Q >/dev/null 2>&1
+  printf 'удаленный Kubernetes preflight: успешно\n'"

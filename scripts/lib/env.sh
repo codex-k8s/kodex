@@ -41,6 +41,49 @@ mattercodex_require_commands() {
   [ "$missing" -eq 0 ] || mattercodex_die "не найдены обязательные команды"
 }
 
+mattercodex_shell_quote() {
+  local value="$1"
+  printf "'%s'" "$(printf '%s' "$value" | sed "s/'/'\\\\''/g")"
+}
+
+mattercodex_ssh() {
+  ssh \
+    -i "$TARGET_ROOT_SSH_KEY" \
+    -p "$TARGET_PORT" \
+    -o BatchMode=yes \
+    -o StrictHostKeyChecking=accept-new \
+    "$TARGET_ROOT_USER@$TARGET_HOST" \
+    "$@"
+}
+
+mattercodex_remote_kubectl_command() {
+  if [ -n "${MATTERCODEX_REMOTE_KUBECTL:-}" ]; then
+    printf '%s\n' "$MATTERCODEX_REMOTE_KUBECTL"
+    return
+  fi
+
+  mattercodex_ssh 'set -eu
+    if kubectl get --raw=/readyz >/dev/null 2>&1; then
+      printf "kubectl\n"
+    elif command -v sudo >/dev/null 2>&1 && sudo -n k3s kubectl get --raw=/readyz >/dev/null 2>&1; then
+      printf "sudo -n k3s kubectl\n"
+    elif command -v sudo >/dev/null 2>&1 && sudo -n kubectl get --raw=/readyz >/dev/null 2>&1; then
+      printf "sudo -n kubectl\n"
+    else
+      printf "не удалось подобрать remote kubectl с доступом к Kubernetes API\n" >&2
+      exit 1
+    fi' </dev/null
+}
+
+mattercodex_remote_kubectl_apply_stdin() {
+  local dry_run_mode="$1"
+  local dry_run_arg
+  local remote_kubectl
+  dry_run_arg="$(mattercodex_kubectl_dry_run_arg "$dry_run_mode")"
+  remote_kubectl="$(mattercodex_remote_kubectl_command)"
+  mattercodex_ssh "$remote_kubectl apply ${dry_run_arg:+$dry_run_arg }-f -" >/dev/null
+}
+
 mattercodex_require_env() {
   local missing=0
   local name

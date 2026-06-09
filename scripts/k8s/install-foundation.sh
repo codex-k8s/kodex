@@ -42,11 +42,11 @@ DRY_RUN_ARG="$(mattercodex_kubectl_dry_run_arg "$DRY_RUN_MODE")"
 TEMPLATE_DIR="$REPO_ROOT/deploy/k8s/mattermost"
 
 mattercodex_log "применяется манифест namespace"
-mattercodex_render_template "$TEMPLATE_DIR/namespace.yaml.tpl" - | kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f -
+mattercodex_render_template "$TEMPLATE_DIR/namespace.yaml.tpl" - | kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f - >/dev/null
 
 if mattercodex_bool "${MATTERCODEX_CREATE_CLUSTER_ISSUER:-false}"; then
   mattercodex_log "применяется манифест ClusterIssuer"
-  mattercodex_render_template "$TEMPLATE_DIR/cluster-issuer.yaml.tpl" - | kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f -
+  mattercodex_render_template "$TEMPLATE_DIR/cluster-issuer.yaml.tpl" - | kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f - >/dev/null
 fi
 
 if [ "$DRY_RUN_MODE" = "none" ] && kubectl -n "$MATTERCODEX_NAMESPACE" get secret "$MATTERCODEX_POSTGRES_SECRET" >/dev/null 2>&1; then
@@ -64,6 +64,6 @@ kubectl -n "$MATTERCODEX_NAMESPACE" create secret generic "$MATTERCODEX_POSTGRES
   --from-literal=postgres-password="$POSTGRES_PASSWORD" \
   --from-literal=mattermost-datasource="$POSTGRES_DSN" \
   --dry-run=client \
-  -o yaml | kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f -
+  -o yaml | kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f - >/dev/null
 
 mattercodex_log "foundation шаг завершен"

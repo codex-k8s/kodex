@@ -8,14 +8,16 @@
 
 ## Preflight
 
+Локальная проверка `.env`:
+
 ```bash
 bash scripts/env/check-env.sh --env-file .env
 ```
 
-Если нужно проверить наличие локального `kubectl`:
+Проверка Kubernetes выполняется на целевом сервере по SSH:
 
 ```bash
-bash scripts/env/check-env.sh --env-file .env --require-kubernetes
+bash scripts/remote/k8s-preflight.sh --env-file .env
 ```
 
 ## Render без секретов
@@ -33,34 +35,38 @@ bash scripts/k8s/render-mattermost.sh --env-file .env --render-dir /tmp/matter-c
 
 PostgreSQL password и DSN создаются только Kubernetes Secret step-ом.
 
-## Dry-run Kubernetes
+## Remote dry-run Kubernetes
+
+Все Kubernetes-команды ниже выполняются на целевом сервере через SSH. Локальный `kubectl` для этого пути не нужен.
 
 Foundation:
 
 ```bash
-bash scripts/k8s/install-foundation.sh --env-file .env --dry-run=server
+bash scripts/remote/install-foundation.sh --env-file .env --dry-run=server
 ```
 
 Mattermost manifests:
 
 ```bash
-bash scripts/k8s/install-mattermost.sh --env-file .env --dry-run=server
+bash scripts/remote/install-mattermost.sh --env-file .env --dry-run=server
 ```
 
 Если cert-manager уже установлен и нужно создать `ClusterIssuer`, передайте:
 
 ```bash
 MATTERCODEX_CREATE_CLUSTER_ISSUER=true \
-  bash scripts/k8s/install-foundation.sh --env-file .env --dry-run=server
+  bash scripts/remote/install-foundation.sh --env-file .env --dry-run=server
 ```
+
+Если namespace еще не создан, `install-foundation.sh --dry-run=server` проверяет namespace через remote server dry-run, а namespaced Secret через remote client dry-run. После реального `install-foundation.sh --apply` namespaced manifests смогут проходить server dry-run полностью.
 
 ## Реальный install
 
 Мутирующие команды требуют явный `--apply`:
 
 ```bash
-bash scripts/k8s/install-foundation.sh --env-file .env --apply
-bash scripts/k8s/install-mattermost.sh --env-file .env --apply --wait
+bash scripts/remote/install-foundation.sh --env-file .env --apply
+bash scripts/remote/install-mattermost.sh --env-file .env --apply --wait
 ```
 
 Если secret `${MATTERCODEX_POSTGRES_SECRET}` уже существует, `install-foundation.sh --apply` не ротирует пароль.
@@ -68,13 +74,13 @@ bash scripts/k8s/install-mattermost.sh --env-file .env --apply --wait
 ## Read-only smoke
 
 ```bash
-bash scripts/k8s/smoke-mattermost.sh --env-file .env
+bash scripts/remote/smoke-mattermost.sh --env-file .env
 ```
 
 Проверка публичного endpoint:
 
 ```bash
-bash scripts/k8s/smoke-mattermost.sh --env-file .env --check-url
+bash scripts/remote/smoke-mattermost.sh --env-file .env --check-url
 ```
 
 ## Ручная проверка владельцем
@@ -87,5 +93,5 @@ bash scripts/k8s/smoke-mattermost.sh --env-file .env --check-url
 
 - `.env` не коммитится.
 - Render manifests не содержат PostgreSQL password и Mattermost datasource.
-- Bootstrap secret создается через Kubernetes API без вывода значений.
+- Bootstrap secret создается через Kubernetes API на целевом сервере без вывода значений.
 - `MATTERCODEX_POSTGRES_PASSWORD` можно задать заранее, но для MVP допустима генерация при первом `--apply`.

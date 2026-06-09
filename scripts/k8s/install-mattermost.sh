@@ -57,15 +57,15 @@ fi
 DRY_RUN_ARG="$(mattercodex_kubectl_dry_run_arg "$DRY_RUN_MODE")"
 
 mattercodex_log "применяются манифесты Mattermost"
-kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f "$RENDER_DIR/10-postgres.yaml"
-kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f "$RENDER_DIR/20-mattermost.yaml"
-kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f "$RENDER_DIR/30-ingress.yaml"
+kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f "$RENDER_DIR/10-postgres.yaml" >/dev/null
+kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f "$RENDER_DIR/20-mattermost.yaml" >/dev/null
+kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f "$RENDER_DIR/30-ingress.yaml" >/dev/null
 
 if [ "$DRY_RUN_MODE" = "none" ] && mattercodex_bool "$WAIT"; then
   mattercodex_log "ожидание rollout PostgreSQL"
-  kubectl -n "$MATTERCODEX_NAMESPACE" rollout status statefulset/mattermost-postgres --timeout=180s
+  kubectl -n "$MATTERCODEX_NAMESPACE" rollout status statefulset/mattermost-postgres --timeout=180s >/dev/null
   mattercodex_log "ожидание rollout Mattermost"
-  kubectl -n "$MATTERCODEX_NAMESPACE" rollout status deployment/mattermost --timeout=300s
+  kubectl -n "$MATTERCODEX_NAMESPACE" rollout status deployment/mattermost --timeout=300s >/dev/null
 fi
 
 mattercodex_log "Mattermost install шаг завершен"
