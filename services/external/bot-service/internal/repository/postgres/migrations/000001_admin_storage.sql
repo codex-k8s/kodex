@@ -1,3 +1,4 @@
+-- +goose Up
 create table if not exists matter_codex_repositories (
 	id bigserial primary key,
 	provider text not null,
@@ -60,3 +61,10 @@ create table if not exists matter_codex_audit_events (
 	summary text not null default '',
 	created_at timestamptz not null default now()
 );
+
+-- +goose Down
+drop table if exists matter_codex_audit_events;
+drop table if exists matter_codex_openai_accounts;
+drop table if exists matter_codex_credentials;
+drop table if exists matter_codex_agent_profiles;
+drop table if exists matter_codex_repositories;

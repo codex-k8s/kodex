@@ -113,7 +113,7 @@ func openStorage(ctx context.Context, cfg Config, logger *slog.Logger) (*adminpo
 		return nil, nil, fmt.Errorf("ping storage: %w", err)
 	}
 	if cfg.StorageMigrations {
-		if err := migrations.Run(ctx, pool); err != nil {
+		if err := migrations.Run(ctx, cfg.DatabaseDSN); err != nil {
 			closePool()
 			return nil, nil, fmt.Errorf("run storage migrations: %w", err)
 		}

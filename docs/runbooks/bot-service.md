@@ -67,6 +67,20 @@ bash scripts/remote/smoke-bot-service.sh --env-file .env --check-url
 
 Ожидаемый результат: Kubernetes objects существуют, Deployment готов, `/healthz` отвечает через HTTPS.
 
+Проверка storage migrations после deploy:
+
+```bash
+set -euo pipefail
+. scripts/lib/env.sh
+mattercodex_load_env_file .env
+mattercodex_validate_base_env
+NAMESPACE_Q="$(mattercodex_shell_quote "$MATTERCODEX_NAMESPACE")"
+REMOTE_KUBECTL="$(mattercodex_remote_kubectl_command)"
+mattercodex_ssh "$REMOTE_KUBECTL -n $NAMESPACE_Q exec statefulset/mattermost-postgres -- psql -U mattermost -d mattermost -Atc 'select version_id, is_applied from goose_db_version order by id;'"
+```
+
+Ожидаемый результат: в выводе есть `1|t`.
+
 ## Mattermost bot bootstrap
 
 Если `MATTERCODEX_MATTERMOST_BOT_TOKEN` еще не создан, можно выполнить полный bootstrap без пароля администратора через `mmctl --local` внутри Mattermost pod:

@@ -85,9 +85,13 @@ kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f "$RENDER_DIR/30-deployment.yaml" >
 kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f "$RENDER_DIR/40-service.yaml" >/dev/null
 kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f "$RENDER_DIR/50-ingress.yaml" >/dev/null
 
-if [ "$DRY_RUN_MODE" = "none" ] && mattercodex_bool "$WAIT"; then
-  mattercodex_log "ожидание rollout bot-service"
-  kubectl -n "$MATTERCODEX_NAMESPACE" rollout status deployment/matter-codex-bot-service --timeout=300s >/dev/null
+if [ "$DRY_RUN_MODE" = "none" ]; then
+  mattercodex_log "перезапуск bot-service для применения source ConfigMap"
+  kubectl -n "$MATTERCODEX_NAMESPACE" rollout restart deployment/matter-codex-bot-service >/dev/null
+  if mattercodex_bool "$WAIT"; then
+    mattercodex_log "ожидание rollout bot-service"
+    kubectl -n "$MATTERCODEX_NAMESPACE" rollout status deployment/matter-codex-bot-service --timeout=300s >/dev/null
+  fi
 fi
 
 mattercodex_log "bot-service install шаг завершен"
