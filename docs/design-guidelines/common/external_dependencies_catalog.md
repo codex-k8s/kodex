@@ -20,12 +20,14 @@
 | `github.com/nicksnyder/go-i18n/v2` | `v2.6.1` | i18n | runtime `libs/go/i18n` для embedded JSON message catalogs, template variables и locale switching |
 | `github.com/pressly/goose/v3` | `v3.27.1` | PostgreSQL migrations | embedded SQL migrations с `-- +goose Up/Down` вместо самописного migration runner |
 | `github.com/prometheus/client_golang` | `v1.23.2` | Observability | `/metrics`, Go/process collectors и Prometheus HTTP handler |
+| `k8s.io/api` | `v0.36.1` | Kubernetes typed API | typed `batch/v1` Job, `core/v1` Pod/PVC и `PodLogOptions` для runtime adapter |
+| `k8s.io/apimachinery` | `v0.36.1` | Kubernetes API machinery | typed meta/options, labels, resource quantities и Kubernetes API errors |
+| `k8s.io/client-go` | `v0.36.1` | Kubernetes SDK | in-cluster/kubeconfig client, Job/PVC creation, pod status и log tail без shell-first runtime |
 
 ## Backend Go - planned baselines
 
 | Dependency | Status | Scope | Why |
 |---|---|---|---|
-| `k8s.io/client-go` | planned | Kubernetes integration | запуск agent pod/job, PVC, watcher/status через Kubernetes SDK |
 | `github.com/openai/openai-go/v3` | planned | Agent/OpenAI integration | официальный OpenAI Go SDK для будущего runtime-контура |
 
 ## Infrastructure and bootstrap tools - in use
@@ -47,7 +49,7 @@
 | `alpine:3.22` | bot-service prod Dockerfile | минимальный runtime слой для будущей сборки образа |
 | `mattermost/mattermost-team-edition` | Mattermost | self-hosted Mattermost для control surface |
 | `postgres:16-alpine` | Mattermost PostgreSQL | single-server MVP БД Mattermost |
-| `busybox` | init/wait helpers | lightweight init helper в manifests |
+| `busybox` | init/wait helpers, runtime smoke | lightweight init helper в manifests и безопасный smoke image для test runner Job |
 
 ## Процесс изменений каталога
 

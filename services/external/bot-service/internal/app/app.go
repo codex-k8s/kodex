@@ -7,9 +7,11 @@ import (
 	"net/http"
 	"strings"
 
+	runtimerepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/runtime"
 	statusservice "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/service"
 	texti18n "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/i18n"
 	githubintegration "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/integration/github"
+	kubernetesintegration "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/integration/kubernetes"
 	mattermostintegration "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/integration/mattermost"
 	adminpostgres "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/repository/postgres/admin"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/repository/postgres/migrations"
@@ -32,6 +34,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("open localizer: %w", err)
 	}
+	runtimeRunner, runtimeConfigured := openRuntimeRunner(cfg, logger)
 
 	statusSvc := statusservice.NewStatusService(statusservice.Config{
 		Localizer:            localizer,
@@ -42,6 +45,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		SlashTokenConfigured: cfg.SlashTokenConfigured(),
 		DatabaseConfigured:   cfg.DatabaseConfigured(),
 		StorageReady:         storage != nil,
+		RuntimeConfigured:    runtimeConfigured,
 		DefaultTeamName:      cfg.DefaultTeamName,
 		DefaultChannels:      cfg.ChannelNames(),
 	})
@@ -59,6 +63,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		Store:                   storage,
 		ChannelManager:          channelManager,
 		RepositoryProvider:      gitHubProvider,
+		RuntimeRunner:           runtimeRunner,
 		DefaultTeamName:         cfg.DefaultTeamName,
 		BotTokenConfigured:      cfg.BotTokenConfigured(),
 		SlashTokenConfigured:    cfg.SlashTokenConfigured(),
@@ -66,6 +71,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		GitHubWebhookConfigured: cfg.GitHubWebhookConfigured(),
 		DatabaseConfigured:      cfg.DatabaseConfigured(),
 		StorageReady:            storage != nil,
+		RuntimeConfigured:       runtimeConfigured,
 		MattermostConfigured:    cfg.MattermostSiteURL != "",
 		ChannelManagerEnabled:   channelManager != nil,
 	})
@@ -105,6 +111,27 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	case err := <-errCh:
 		return err
 	}
+}
+
+func openRuntimeRunner(cfg Config, logger *slog.Logger) (runtimerepo.Runner, bool) {
+	if !cfg.RuntimeEnabled {
+		logger.Warn("kubernetes runtime disabled: MATTERCODEX_RUNTIME_ENABLED is false")
+		return nil, false
+	}
+	runner, err := kubernetesintegration.NewRunner(kubernetesintegration.Config{
+		Namespace:                 cfg.RuntimeNamespace,
+		KubeconfigPath:            cfg.RuntimeKubeconfigPath,
+		SmokeImage:                cfg.RuntimeSmokeImage,
+		WorkspaceStorageSize:      cfg.RuntimeWorkspaceSize,
+		JobTTLSecondsAfterFinish:  cfg.RuntimeJobTTLSeconds,
+		LogTailLines:              cfg.RuntimeLogTailLines,
+		AgentRunnerServiceAccount: cfg.AgentServiceAccount,
+	})
+	if err != nil {
+		logger.Warn("kubernetes runtime disabled: client-go runner is not configured", "error", err)
+		return nil, false
+	}
+	return runner, true
 }
 
 func openGitHubProvider(cfg Config) (*githubintegration.Provider, error) {

@@ -18,6 +18,7 @@ type Config struct {
 	SlashTokenConfigured bool
 	DatabaseConfigured   bool
 	StorageReady         bool
+	RuntimeConfigured    bool
 	DefaultTeamName      string
 	DefaultChannels      []string
 }
@@ -40,6 +41,7 @@ func (svc *StatusService) Snapshot() value.StatusSnapshot {
 		SlashTokenConfigured: svc.cfg.SlashTokenConfigured,
 		DatabaseConfigured:   svc.cfg.DatabaseConfigured,
 		StorageReady:         svc.cfg.StorageReady,
+		RuntimeConfigured:    svc.cfg.RuntimeConfigured,
 		DefaultTeamName:      svc.cfg.DefaultTeamName,
 		DefaultChannels:      append([]string(nil), svc.cfg.DefaultChannels...),
 	}
@@ -56,6 +58,7 @@ func (svc *StatusService) SlashStatusText() string {
 		"SlashToken":      configuredLabel(svc.cfg.Localizer, snapshot.SlashTokenConfigured),
 		"Database":        configuredLabel(svc.cfg.Localizer, snapshot.DatabaseConfigured),
 		"Storage":         readyLabel(svc.cfg.Localizer, snapshot.StorageReady),
+		"Runtime":         configuredLabel(svc.cfg.Localizer, snapshot.RuntimeConfigured),
 		"DefaultTeamName": snapshot.DefaultTeamName,
 		"DefaultChannels": strings.Join(snapshot.DefaultChannels, ", "),
 	})

@@ -13,6 +13,7 @@
 - выполнять GitHub adapter команды `/agents github check`, `/agents github branch`, `/agents github pr`;
 - принимать GitHub webhook callback `/github/webhook` с HMAC validation;
 - автоматически регистрировать repo webhook при `/agents repo add github owner/name [default-branch]`, если GitHub token имеет hook write permission;
+- выполнять Kubernetes runtime smoke-команды `/agents runtime smoke|status|cleanup` через client-go, Job и PVC;
 - применять storage migrations и хранить repository/profile/audit metadata в PostgreSQL;
 - создавать Mattermost repo-channel при добавлении repository;
 - хранить Mattermost bot/slash tokens только в Kubernetes Secret;
@@ -36,6 +37,13 @@
 - `MATTERCODEX_DATABASE_DSN` - optional, берется из Kubernetes Secret `mattermost-datasource` для storage/admin-команд;
 - `MATTERCODEX_STORAGE_MIGRATIONS_ENABLED` - optional, включает Go migrations на старте;
 - `MATTERCODEX_BOT_SERVICE_MAX_GITHUB_WEBHOOK_BYTES` - optional, лимит размера GitHub webhook payload;
+- `MATTERCODEX_RUNTIME_ENABLED` - optional, включает Kubernetes runtime adapter;
+- `MATTERCODEX_RUNTIME_NAMESPACE` - optional, namespace для Job/PVC runtime-запусков;
+- `MATTERCODEX_RUNTIME_SMOKE_IMAGE` - optional, image для smoke Job;
+- `MATTERCODEX_RUNTIME_WORKSPACE_STORAGE_SIZE` - optional, размер PVC рабочего каталога smoke-запуска;
+- `MATTERCODEX_RUNTIME_JOB_TTL_SECONDS` - optional, TTL завершенных smoke Job;
+- `MATTERCODEX_RUNTIME_LOG_TAIL_LINES` - optional, число последних строк pod log для `/agents runtime status`;
+- `MATTERCODEX_AGENT_RUNNER_SERVICE_ACCOUNT` - optional, ServiceAccount для agent/smoke Job;
 - `MATTERCODEX_DEFAULT_TEAM_NAME` - optional, по умолчанию `agents`;
 - `MATTERCODEX_DEFAULT_TEAM_DISPLAY_NAME` - optional;
 - `MATTERCODEX_DEFAULT_CHANNELS` - optional, список `name:Display Name` через запятую.
@@ -52,6 +60,7 @@ bash scripts/k8s/render-bot-service.sh --env-file .env --render-dir /tmp/matter-
 
 - code ConfigMap с Go source archive (`go.mod`, `go.sum`, `libs/go/i18n`, `services/external/bot-service`);
 - config ConfigMap;
+- ServiceAccount/RBAC для bot-service runtime adapter и agent runner;
 - Deployment;
 - Service;
 - Ingress.
@@ -172,6 +181,22 @@ bash scripts/remote/bootstrap-mattermost-bot.sh --env-file .env
 
 При `/agents repo add github owner/name [default-branch]` bot-service также пытается выполнить webhook ensure автоматически и добавляет строку `webhook: ...` в ответ.
 
+Дополнительная проверка Kubernetes runner foundation:
+
+```text
+/agents token check
+/agents runtime smoke smoke-manual
+/agents runtime status smoke-manual
+/agents runtime cleanup smoke-manual
+```
+
+Ожидаемый результат:
+
+- token check показывает `kubernetes runtime: configured`;
+- runtime smoke возвращает run id, Job и PVC без вывода секретов;
+- runtime status показывает Job/PVC, pod phase и короткий log tail smoke Job;
+- runtime cleanup удаляет Job и PVC.
+
 Проверка webhook reject без корректной подписи:
 
 ```bash
@@ -195,3 +220,5 @@ curl -sS -o /dev/null -w '%{http_code}\n' \
 - GitHub token и webhook secret хранятся в отдельном Kubernetes Secret и не попадают в ConfigMap.
 - Slash token, полученный из Mattermost API, пишется во временный файл с правами `0600`, затем в Kubernetes Secret.
 - Логи provisioning показывают только безопасные статусы `exists/created/updated`.
+- bot-service получает namespace-scoped Role только на создание/чтение/удаление runtime Job/PVC и чтение pod/log.
+- ServiceAccount agent runner создается без automount token; smoke pod также явно отключает automount.

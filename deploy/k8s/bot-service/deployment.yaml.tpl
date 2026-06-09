@@ -18,6 +18,7 @@ spec:
         app.kubernetes.io/name: matter-codex-bot-service
         app.kubernetes.io/component: bot-service
     spec:
+      serviceAccountName: matter-codex-bot-service
       initContainers:
         - name: wait-for-postgres
           image: ${MATTERCODEX_BUSYBOX_IMAGE}

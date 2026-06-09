@@ -9,6 +9,7 @@ type HealthResponse struct {
 	SlashTokenConfigured bool     `json:"slash_token_configured"`
 	DatabaseConfigured   bool     `json:"database_configured"`
 	StorageReady         bool     `json:"storage_ready"`
+	RuntimeConfigured    bool     `json:"runtime_configured"`
 	DefaultTeam          string   `json:"default_team"`
 	DefaultChannels      []string `json:"default_channels"`
 }
