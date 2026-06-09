@@ -15,3 +15,4 @@ Mattermost-first система управления Codex-агентами дл
 - [Deployment and rollout](docs/strategy/deployment-and-rollout.md)
 - [PR roadmap](docs/strategy/pr-roadmap.md)
 - [Open decisions](docs/strategy/open-decisions.md)
+- [Mattermost bootstrap runbook](docs/runbooks/mattermost-bootstrap.md)
