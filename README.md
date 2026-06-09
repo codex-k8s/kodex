@@ -38,7 +38,13 @@ bash scripts/remote/install-bot-service.sh --env-file .env --apply --wait
 bash scripts/remote/smoke-bot-service.sh --env-file .env --check-url
 ```
 
-Полный Mattermost provisioning после добавления `MATTERCODEX_MATTERMOST_BOT_TOKEN` в `.env`:
+Полный Mattermost bootstrap без ручного вывода token:
+
+```bash
+bash scripts/remote/bootstrap-mattermost-bot.sh --env-file .env
+```
+
+Provisioning через уже готовый `MATTERCODEX_MATTERMOST_BOT_TOKEN` в `.env`:
 
 ```bash
 bash scripts/remote/provision-bot-service.sh --env-file .env

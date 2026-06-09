@@ -62,7 +62,27 @@ bash scripts/remote/smoke-bot-service.sh --env-file .env --check-url
 
 Ожидаемый результат: Kubernetes objects существуют, Deployment готов, `/healthz` отвечает через HTTPS.
 
-## Mattermost provisioning
+## Mattermost bot bootstrap
+
+Если `MATTERCODEX_MATTERMOST_BOT_TOKEN` еще не создан, можно выполнить полный bootstrap без пароля администратора через `mmctl --local` внутри Mattermost pod:
+
+```bash
+bash scripts/remote/bootstrap-mattermost-bot.sh --env-file .env
+```
+
+Скрипт:
+
+- включает `ServiceSettings.EnableUserAccessTokens`, если personal access tokens выключены;
+- создает service user `MATTERCODEX_MATTERMOST_BOT_USERNAME`;
+- конвертирует service user в bot;
+- генерирует `MATTERCODEX_MATTERMOST_BOT_TOKEN`;
+- создает team, дефолтные каналы и slash command `/agents`;
+- сохраняет bot token и slash token в Kubernetes Secret;
+- перезапускает bot-service Deployment.
+
+Значения токенов не выводятся.
+
+## Mattermost provisioning через готовый token
 
 После создания Personal Access Token в Mattermost для owner/admin или bot account добавить значение в локальный `.env` как `MATTERCODEX_MATTERMOST_BOT_TOKEN`.
 
