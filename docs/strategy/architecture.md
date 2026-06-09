@@ -1,0 +1,199 @@
+# Архитектура MVP
+
+## Выбранный стартовый подход
+
+MVP реализуется как один backend-сервис `matter-codex`, но с явными внутренними модулями:
+
+- `mattermost` - slash commands, bot posts, interactive actions, thread updates.
+- `orchestrator` - state machine run/step и переходы flow.
+- `runtime` - создание Kubernetes pod/job/PVC для agent run.
+- `github` - операции repository, branch, PR, comments, review status.
+- `credentials` - безопасные metadata и ссылки на Kubernetes Secrets.
+- `openai` - OpenAI account profiles, device-code authorization sessions и routing аккаунтов по agent session.
+- `agents` - agent profiles, prompt templates, `config.toml` overlays, MCP bindings и render контекста.
+- `audit` - журнал действий и безопасных событий.
+
+Такой старт быстрее отдельного набора микросервисов, но не смешивает доменные ответственности.
+
+## Mattermost integration
+
+На первом этапе используется внешний bot-service:
+
+- slash command `/agents`;
+- Mattermost bot account token для REST API;
+- posts в channel/thread через `/api/v4/posts`;
+- interactive message actions/buttons с callback URL в bot-service;
+- delayed responses через `response_url` для долгих команд;
+- interactive dialogs для форм добавления repo/token/profile после базового CLI-синтаксиса;
+- создание дефолтных каналов после установки;
+- создание каналов под project/repository onboarding.
+
+Mattermost server plugin не является обязательным для MVP, потому что нужный первый UX можно закрыть внешним сервисом через REST API и slash/interactions. Plugin остается вариантом расширения, если после первых ручных проверок окажется, что без него неудобно управлять каналами, меню или системными настройками.
+
+## Mattermost channels
+
+После установки система должна подготовить базовый control surface:
+
+- `agents-control` - административные команды, onboarding repo/project, tokens, OpenAI accounts, profiles и flow.
+- `agents-runs` - общая лента run и переходов статусов.
+- `agent-alerts` - ошибки, блокеры, лимиты, падения runner и запросы решения.
+- `agents-audit` - безопасные audit summaries без секретов.
+
+При добавлении repository/project система должна уметь создать один или несколько каналов:
+
+- `repo-<slug>` - основной канал проекта или репозитория;
+- `repo-<slug>-dev` - разработка и developer-review-loop;
+- `repo-<slug>-architecture` - архитектура, системный анализ и discovery;
+- дополнительные каналы по шаблону проекта.
+
+Manager sessions живут thread-ами в соответствующих project/repo channels. Один repository может иметь несколько manager sessions в разных thread, если задачи относятся к разным направлениям.
+
+## State machine
+
+Минимальные состояния run:
+
+- `created`
+- `queued`
+- `developer_running`
+- `developer_failed`
+- `pr_opened`
+- `review_running`
+- `changes_requested`
+- `fix_running`
+- `approved_by_reviewer`
+- `waiting_owner`
+- `owner_approved`
+- `owner_rejected`
+- `merged`
+- `blocked`
+- `cancelled`
+
+Run хранит текущий статус, а step хранит конкретную попытку agent execution. Переходы выполняет orchestrator, а не runner pod.
+
+## Agent runner
+
+Runner запускает `codex exec --json` в Kubernetes pod:
+
+- рабочая директория монтируется из PVC;
+- repository checkout выполняется внутри workspace;
+- `CODEX_HOME` указывает на отдельный путь в PVC;
+- OpenAI account выбирается из agent profile или явно из run/session;
+- runner материализует auth/config выбранного OpenAI account в runtime `CODEX_HOME`;
+- GitHub token передается только агентам, которым он разрешен;
+- MCP credentials передаются только через разрешенные config bindings;
+- stdout JSONL парсится runtime-модулем и превращается в step events;
+- финальное сообщение и ссылки на PR сохраняются как artifact summary.
+
+Базовая команда исполнения должна быть параметризована профилем агента:
+
+```bash
+CODEX_HOME=/workspace/.codex \
+codex exec --json \
+  --cd /workspace/repo \
+  --profile "${CODEX_PROFILE}" \
+  "${PROMPT}"
+```
+
+`CODEX_PROFILE` рендерится системой из agent profile. В него входят модель, sandbox policy, approval policy, MCP servers, env bindings, project instruction discovery и другие безопасные позиции `config.toml`.
+
+`danger-full-access` допускается только как отдельная policy внутри agent profile для полностью изолированного pod и после явного решения владельца.
+
+## OpenAI accounts
+
+OpenAI-доступ настраивается отдельными account profiles:
+
+- администратор запускает device-code authorization flow из Mattermost;
+- bot-service показывает безопасную карточку авторизации без вывода токенов;
+- после подтверждения account сохраняется как credential reference в Kubernetes Secret;
+- account получает имя, статус, допустимые модели, лимиты и разрешенные agent profiles;
+- run/session выбирает account явно или наследует его из agent profile.
+
+Один общий `OPENAI_API_KEY` не является целевой моделью доступа для agent sessions. Такой ключ можно использовать только как bootstrap/smoke fallback, если владелец явно разрешил это для временного этапа.
+
+## Agent profiles and config overlays
+
+Agent profile хранит не только prompt templates, но и runtime-настройки Codex:
+
+- default OpenAI account;
+- model policy;
+- `codex exec` profile name;
+- sandbox и approval policy;
+- разрешенные GitHub credentials;
+- разрешенные MCP servers;
+- `config.toml` overlay;
+- env bindings для MCP/API keys без вывода значений;
+- stop rules, retry limits и финальный report contract.
+
+Пример: Context7 задается как MCP binding в agent profile. Система хранит только ссылку на credential, а runner рендерит `config.toml` и env для конкретного pod.
+
+## Kubernetes runtime
+
+Для каждого agent step создаются:
+
+- Kubernetes Job или Pod;
+- PVC с workspace;
+- ServiceAccount с минимальными правами;
+- env/secret refs только для разрешенных credentials;
+- labels `matter-codex.dev/run-id`, `step-id`, `agent-role`;
+- cleanup policy после завершения run.
+
+PVC живет дольше pod, чтобы developer/reviewer/fix шаги могли работать с одной веткой и логами. Retention задается политикой run.
+
+## GitHub integration
+
+MVP использует bot PAT из secret:
+
+- проверить доступ к repo;
+- создать branch;
+- push commit;
+- открыть PR;
+- читать reviews и comments;
+- оставить review или comment;
+- получить merge status.
+
+GitHub App остается целевым вариантом после MVP, потому что дает лучшую модель permissions, installations и audit.
+
+## Credential policy
+
+Система хранит:
+
+- stable credential id;
+- тип секрета;
+- scope и разрешенные agent profiles;
+- ссылку на Kubernetes Secret;
+- время последней проверки;
+- безопасный статус проверки.
+
+Система не хранит и не показывает значения секретов в Mattermost thread, логах и prompt.
+
+## База данных
+
+Для скорости MVP допустима одна PostgreSQL database с отдельными таблицами и префиксами доменных модулей. Доменные модули не должны полагаться на cross-domain SQL как на бизнес-контракт: связи между ними должны оставаться явными на уровне кода и событий.
+
+Минимальные таблицы:
+
+- repositories;
+- credentials;
+- openai_accounts;
+- openai_authorization_sessions;
+- agent_profiles;
+- agent_config_overlays;
+- prompt_templates;
+- mattermost_channel_bindings;
+- flows;
+- runs;
+- steps;
+- artifacts;
+- audit_events;
+
+## Observability
+
+Первый уровень:
+
+- structured application logs;
+- Mattermost thread status;
+- Kubernetes pod/job status;
+- short tail logs в step artifact;
+- audit events в БД.
+
+Полные pod logs остаются в Kubernetes/runtime и не копируются без retention policy.
