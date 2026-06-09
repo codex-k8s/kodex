@@ -109,6 +109,7 @@ type RequestGateInput struct {
 	RiskAssessmentID       *uuid.UUID
 	GatePolicyID           *uuid.UUID
 	Target                 value.ExternalRef
+	ProjectContext         value.ProjectContextRef
 	InteractionDeliveryRef value.InteractionDeliveryRef
 	EvidenceRefs           []value.EvidenceRef
 	EvidenceSummary        string

@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/codex-k8s/kodex/libs/go/accesscatalog"
 	governanceevents "github.com/codex-k8s/kodex/libs/go/platformevents/governance"
 	"github.com/codex-k8s/kodex/services/internal/governance-manager/internal/domain/errs"
 	governancerepo "github.com/codex-k8s/kodex/services/internal/governance-manager/internal/domain/repository/governance"
@@ -333,6 +334,44 @@ func TestPrepareSelfDeployPlanGateCreatesAssessmentAndGate(t *testing.T) {
 	}
 }
 
+func TestPrepareSelfDeployPlanGateUsesProjectScopedSelfDeployAccess(t *testing.T) {
+	t.Parallel()
+
+	var captured []AuthorizationRequest
+	repository := &fakeRepository{ready: true}
+	service := NewWithConfig(Config{
+		Repository:  repository,
+		Clock:       fixedClock{now: time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)},
+		IDGenerator: uuidGenerator{},
+		Authorizer: authorizerFunc(func(_ context.Context, request AuthorizationRequest) error {
+			captured = append(captured, request)
+			return nil
+		}),
+	})
+
+	if _, err := service.PrepareSelfDeployPlanGate(context.Background(), selfDeployPlanGateTestInput("sha256:plan")); err != nil {
+		t.Fatalf("PrepareSelfDeployPlanGate(): %v", err)
+	}
+	for _, request := range captured {
+		if request.Subject.Type != "service" || request.Subject.ID != "agent-manager" {
+			t.Fatalf("access subject = %+v, want service/agent-manager", request.Subject)
+		}
+		if request.ScopeType != accesscatalog.ScopeProject || request.ScopeID != "project:kodex" {
+			t.Fatalf("access request = %+v, want project scoped self-deploy check", request)
+		}
+		if request.ResourceID != "agent:self-deploy-plan:1" {
+			t.Fatalf("access resource id = %q, want self-deploy plan target", request.ResourceID)
+		}
+		if request.ActionKey == actionGateDecide {
+			t.Fatalf("self-deploy gate preparation must not request decision access: %+v", request)
+		}
+	}
+	assertCapturedGovernanceAccess(t, captured, actionRiskRead, accesscatalog.ResourceGovernanceRiskAssessment)
+	assertCapturedGovernanceAccess(t, captured, actionRiskEvaluate, accesscatalog.ResourceGovernanceRiskAssessment)
+	assertCapturedGovernanceAccess(t, captured, actionGateRead, accesscatalog.ResourceGovernanceGate)
+	assertCapturedGovernanceAccess(t, captured, actionGateRequest, accesscatalog.ResourceGovernanceGate)
+}
+
 func TestPrepareSelfDeployPlanGateClassifiesR3SafeFactors(t *testing.T) {
 	t.Parallel()
 
@@ -414,21 +453,21 @@ func TestPrepareSelfDeployPlanGateReplaysCommandResult(t *testing.T) {
 		ready:            true,
 		hasCommandResult: true,
 		commandResult:    commandResultWithPayload(input.Meta, enum.OperationPrepareSelfDeployPlanGate.String(), aggregateSelfDeployPlanGate, assessmentID, now, resultPayload),
-		assessment: entity.RiskAssessment{
+		riskAssessments: []entity.RiskAssessment{{
 			VersionedBase:      entity.VersionedBase{ID: assessmentID, Version: 1},
 			Target:             target,
 			EvidenceRefs:       []value.EvidenceRef{{Kind: selfDeployPlanEvidenceKind, Ref: "agent:self-deploy-plan:1", Digest: "sha256:plan", Summary: selfDeployPlanGateEvidenceSummary}},
 			EffectiveRiskClass: enum.RiskClassR2,
 			Status:             enum.RiskAssessmentStatusActive,
 			RequiredGates:      []entity.RequiredGate{{GateKind: enum.GateKindRelease, MinRiskClass: enum.RiskClassR2, Reason: "self-deploy gate required"}},
-		},
-		gateRequest: entity.GateRequest{
+		}},
+		gateRequests: []entity.GateRequest{{
 			VersionedBase:    entity.VersionedBase{ID: gateRequestID, Version: 1},
 			RiskAssessmentID: &assessmentID,
 			Target:           target,
 			Status:           enum.GateRequestStatusAwaitingDecision,
 			EvidenceSummary:  "bounded self-deploy plan",
-		},
+		}},
 	}
 
 	result, err := newTestService(repository).PrepareSelfDeployPlanGate(context.Background(), input)
@@ -4214,10 +4253,6 @@ func TestGetGovernanceSummaryRejectsMixedScopeSelectors(t *testing.T) {
 			ReleaseDecisionPackageID: &packageID,
 			IntegrationRef:           value.ReleaseIntegrationRef{Domain: "agent", Kind: "run", Ref: "agent:run:42"},
 		},
-		"target and project": {
-			Target:         value.ExternalRef{Type: "release_candidate", Ref: "release:v1.2.3"},
-			ProjectContext: value.ProjectContextRef{ProjectRef: "project:other"},
-		},
 		"project and release candidate": {
 			ProjectContext:      value.ProjectContextRef{ProjectRef: "project:alpha"},
 			ReleaseCandidateRef: "release:v1.2.3",
@@ -4265,6 +4300,16 @@ func summaryHasDiagnostic(items []string, diagnostic string) bool {
 		}
 	}
 	return false
+}
+
+func assertCapturedGovernanceAccess(t *testing.T, requests []AuthorizationRequest, actionKey string, resourceType string) {
+	t.Helper()
+	for _, request := range requests {
+		if request.ActionKey == actionKey && request.ResourceType == resourceType {
+			return
+		}
+	}
+	t.Fatalf("access requests = %+v, want action=%s resource=%s", requests, actionKey, resourceType)
 }
 
 func summaryRenderedText(summary entity.GovernanceSummary) string {

@@ -102,7 +102,7 @@ func (s *Service) evaluateRisk(ctx context.Context, input EvaluateRiskInput) (en
 	if err := requireCommand(input.Meta, enum.OperationEvaluateRisk.String()); err != nil {
 		return entity.RiskAssessment{}, err
 	}
-	if err := s.authorizeCommand(ctx, input.Meta, actionRiskEvaluate, riskTargetResource(input.Target)); err != nil {
+	if err := s.authorizeCommand(ctx, input.Meta, actionRiskEvaluate, projectScopedResource(riskTargetResource(input.Target), input.ProjectContext)); err != nil {
 		return entity.RiskAssessment{}, err
 	}
 	result, replayed, err := s.replayCommand(ctx, input.Meta, enum.OperationEvaluateRisk.String(), governanceevents.AggregateRiskAssessment)

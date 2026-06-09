@@ -50,7 +50,22 @@ const (
 	servicesPolicyImportAccessPriority  = 100
 )
 
-var selfDeployServiceAccessSubjects = []string{"agent-manager", "staff-gateway"}
+type selfDeployServiceAccessGrant struct {
+	subjectID    string
+	actionKey    string
+	resourceType string
+}
+
+var selfDeployServiceAccessGrants = []selfDeployServiceAccessGrant{
+	{subjectID: "agent-manager", actionKey: accesscatalog.ActionProjectPolicyRead, resourceType: accesscatalog.ResourceServicesPolicy},
+	{subjectID: "agent-manager", actionKey: accesscatalog.ActionGovernanceRiskEvaluate, resourceType: accesscatalog.ResourceGovernanceRiskAssessment},
+	{subjectID: "agent-manager", actionKey: accesscatalog.ActionGovernanceRiskRead, resourceType: accesscatalog.ResourceGovernanceRiskAssessment},
+	{subjectID: "agent-manager", actionKey: accesscatalog.ActionGovernanceGateRequest, resourceType: accesscatalog.ResourceGovernanceGate},
+	{subjectID: "agent-manager", actionKey: accesscatalog.ActionGovernanceGateRead, resourceType: accesscatalog.ResourceGovernanceGate},
+	{subjectID: "staff-gateway", actionKey: accesscatalog.ActionProjectPolicyRead, resourceType: accesscatalog.ResourceServicesPolicy},
+	{subjectID: "staff-gateway", actionKey: accesscatalog.ActionGovernanceRiskRead, resourceType: accesscatalog.ResourceGovernanceRiskAssessment},
+	{subjectID: "staff-gateway", actionKey: accesscatalog.ActionGovernanceGateRead, resourceType: accesscatalog.ResourceGovernanceGate},
+}
 
 func main() {
 	options := runnerOptions{}
@@ -1991,11 +2006,11 @@ func ensureSelfDeployServiceAccess(ctx context.Context, client accessManagerAPI,
 		return nil
 	}
 	if !options.Apply {
-		for _, subjectID := range selfDeployServiceAccessSubjects {
+		for _, grant := range selfDeployServiceAccessGrants {
 			logLine(output, "PLAN", "self-deploy service access ready subject=service/%s action=%s resource=%s scope=project:%s",
-				subjectID,
-				accesscatalog.ActionProjectPolicyRead,
-				accesscatalog.ResourceServicesPolicy,
+				grant.subjectID,
+				grant.actionKey,
+				grant.resourceType,
 				safeValue(options.ProjectID),
 			)
 		}
@@ -2004,18 +2019,18 @@ func ensureSelfDeployServiceAccess(ctx context.Context, client accessManagerAPI,
 	if client == nil {
 		return errors.New("access-manager client is required for self-deploy service access apply")
 	}
-	for _, subjectID := range selfDeployServiceAccessSubjects {
-		rule, err := putSelfDeployServiceAccessRule(ctx, client, options, subjectID)
+	for _, grant := range selfDeployServiceAccessGrants {
+		rule, err := putSelfDeployServiceAccessRule(ctx, client, options, grant)
 		if err != nil {
 			return err
 		}
-		if err := checkSelfDeployServiceAccess(ctx, client, options, subjectID); err != nil {
+		if err := checkSelfDeployServiceAccess(ctx, client, options, grant); err != nil {
 			return err
 		}
 		logLine(output, "OK", "self-deploy service access ready subject=service/%s action=%s resource=%s scope=project:%s rule_id=%s version=%d",
-			subjectID,
-			accesscatalog.ActionProjectPolicyRead,
-			accesscatalog.ResourceServicesPolicy,
+			grant.subjectID,
+			grant.actionKey,
+			grant.resourceType,
 			safeValue(options.ProjectID),
 			safeValue(rule.GetAccessRuleId()),
 			rule.GetVersion(),
@@ -2094,14 +2109,14 @@ func ensureServicesPolicyImportAccess(ctx context.Context, client accessManagerA
 	return nil
 }
 
-func putSelfDeployServiceAccessRule(ctx context.Context, client accessManagerAPI, options runnerOptions, subjectID string) (*accessaccountsv1.AccessRuleResponse, error) {
-	request := selfDeployServiceAccessRuleRequest(options, subjectID)
+func putSelfDeployServiceAccessRule(ctx context.Context, client accessManagerAPI, options runnerOptions, grant selfDeployServiceAccessGrant) (*accessaccountsv1.AccessRuleResponse, error) {
+	request := selfDeployServiceAccessRuleRequest(options, grant)
 	response, err := client.PutAccessRule(ctx, request)
 	if err != nil {
 		return nil, safeError("access-manager PutAccessRule failed", err)
 	}
 	if !selfDeployAccessRuleMatches(response, request) {
-		return nil, fmt.Errorf("access-manager PutAccessRule returned mismatched self-deploy access rule for service/%s", subjectID)
+		return nil, fmt.Errorf("access-manager PutAccessRule returned mismatched self-deploy access rule for service/%s action=%s", grant.subjectID, grant.actionKey)
 	}
 	return response, nil
 }
@@ -2130,13 +2145,13 @@ func putServicesPolicyImportAccessRule(ctx context.Context, client accessManager
 	return response, nil
 }
 
-func checkSelfDeployServiceAccess(ctx context.Context, client accessManagerAPI, options runnerOptions, subjectID string) error {
-	response, err := client.CheckAccess(ctx, selfDeployServiceAccessCheckRequest(options, subjectID))
+func checkSelfDeployServiceAccess(ctx context.Context, client accessManagerAPI, options runnerOptions, grant selfDeployServiceAccessGrant) error {
+	response, err := client.CheckAccess(ctx, selfDeployServiceAccessCheckRequest(options, grant))
 	if err != nil {
 		return safeError("access-manager CheckAccess failed", err)
 	}
 	if response.GetDecision() != accessaccountsv1.AccessDecision_ACCESS_DECISION_ALLOW {
-		return fmt.Errorf("self-deploy access check denied for service/%s reason=%s", subjectID, safeValue(response.GetReasonCode()))
+		return fmt.Errorf("self-deploy access check denied for service/%s action=%s reason=%s", grant.subjectID, grant.actionKey, safeValue(response.GetReasonCode()))
 	}
 	return nil
 }
@@ -2163,18 +2178,18 @@ func checkServicesPolicyImportAccess(ctx context.Context, client accessManagerAP
 	return nil
 }
 
-func selfDeployServiceAccessRuleRequest(options runnerOptions, subjectID string) *accessaccountsv1.PutAccessRuleRequest {
+func selfDeployServiceAccessRuleRequest(options runnerOptions, grant selfDeployServiceAccessGrant) *accessaccountsv1.PutAccessRuleRequest {
 	return &accessaccountsv1.PutAccessRuleRequest{
 		Effect:       accessaccountsv1.AccessEffect_ACCESS_EFFECT_ALLOW,
 		SubjectType:  "service",
-		SubjectId:    strings.TrimSpace(subjectID),
-		ActionKey:    accesscatalog.ActionProjectPolicyRead,
-		ResourceType: accesscatalog.ResourceServicesPolicy,
+		SubjectId:    strings.TrimSpace(grant.subjectID),
+		ActionKey:    grant.actionKey,
+		ResourceType: grant.resourceType,
 		ScopeType:    accesscatalog.ScopeProject,
 		ScopeId:      options.ProjectID,
 		Priority:     selfDeployServiceAccessPriority,
 		Status:       accessaccountsv1.AccessRuleStatus_ACCESS_RULE_STATUS_ACTIVE,
-		Meta:         accessRuleCommandMeta(options, subjectID),
+		Meta:         accessRuleCommandMeta(options, grant.subjectID),
 	}
 }
 
@@ -2209,12 +2224,12 @@ func servicesPolicyImportAccessRuleRequest(options runnerOptions) *accessaccount
 	}
 }
 
-func selfDeployServiceAccessCheckRequest(options runnerOptions, subjectID string) *accessaccountsv1.CheckAccessRequest {
+func selfDeployServiceAccessCheckRequest(options runnerOptions, grant selfDeployServiceAccessGrant) *accessaccountsv1.CheckAccessRequest {
 	return &accessaccountsv1.CheckAccessRequest{
-		Subject:   &accessaccountsv1.SubjectRef{Type: "service", Id: strings.TrimSpace(subjectID)},
-		ActionKey: accesscatalog.ActionProjectPolicyRead,
+		Subject:   &accessaccountsv1.SubjectRef{Type: "service", Id: strings.TrimSpace(grant.subjectID)},
+		ActionKey: grant.actionKey,
 		Resource: &accessaccountsv1.ResourceRef{
-			Type: accesscatalog.ResourceServicesPolicy,
+			Type: grant.resourceType,
 			Id:   "",
 		},
 		Scope: &accessaccountsv1.ScopeRef{
@@ -2222,7 +2237,7 @@ func selfDeployServiceAccessCheckRequest(options runnerOptions, subjectID string
 			Id:   options.ProjectID,
 		},
 		Audit: true,
-		Meta:  accessRuleCheckMeta(options, subjectID),
+		Meta:  accessRuleCheckMeta(options, grant.subjectID),
 	}
 }
 

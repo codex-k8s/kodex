@@ -66,7 +66,7 @@ func (s *Service) GetGovernanceSummary(ctx context.Context, input GetGovernanceS
 		}
 	}
 
-	if releasePackageSummaryFilterProvided(scope) {
+	if !externalRefProvided(scope.Target) && releasePackageSummaryFilterProvided(scope) {
 		packages, _, err := s.ListReleaseDecisionPackages(ctx, ListReleaseDecisionPackagesInput{
 			Filter: query.ReleaseDecisionPackageFilter{
 				ProjectContext:      scope.ProjectContext,
@@ -90,11 +90,11 @@ func (s *Service) GetGovernanceSummary(ctx context.Context, input GetGovernanceS
 	}
 
 	if externalRefProvided(scope.Target) {
-		if err := s.appendTargetGovernanceSummary(ctx, input.Meta, &summary, &seen, scope.Target); err != nil {
+		if err := s.appendTargetGovernanceSummary(ctx, input.Meta, &summary, &seen, scope.Target, scope.ProjectContext); err != nil {
 			return entity.GovernanceSummary{}, err
 		}
 	}
-	if projectContextSummaryFilterProvided(scope.ProjectContext) {
+	if !externalRefProvided(scope.Target) && projectContextSummaryFilterProvided(scope.ProjectContext) {
 		if err := s.appendProjectGovernanceSummary(ctx, input.Meta, &summary, &seen, scope.ProjectContext); err != nil {
 			return entity.GovernanceSummary{}, err
 		}
@@ -142,7 +142,7 @@ func governanceSummarySelectorCount(scope entity.GovernanceSummaryScope) int {
 	if externalRefProvided(scope.Target) {
 		count++
 	}
-	if projectContextSummaryFilterProvided(scope.ProjectContext) {
+	if !externalRefProvided(scope.Target) && projectContextSummaryFilterProvided(scope.ProjectContext) {
 		count++
 	}
 	if strings.TrimSpace(scope.ReleaseCandidateRef) != "" {
@@ -157,7 +157,10 @@ func governanceSummarySelectorCount(scope entity.GovernanceSummaryScope) int {
 	return count
 }
 
-func (s *Service) appendTargetGovernanceSummary(ctx context.Context, meta QueryMeta, summary *entity.GovernanceSummary, seen *governanceSummarySeen, target value.ExternalRef) error {
+func (s *Service) appendTargetGovernanceSummary(ctx context.Context, meta QueryMeta, summary *entity.GovernanceSummary, seen *governanceSummarySeen, target value.ExternalRef, project value.ProjectContextRef) error {
+	if projectContextSummaryFilterProvided(project) {
+		return s.appendProjectScopedTargetGovernanceSummary(ctx, meta, summary, seen, target, project)
+	}
 	assessments, _, err := s.ListRiskAssessments(ctx, ListRiskAssessmentsInput{
 		Filter: query.RiskAssessmentFilter{Target: target, Page: query.PageRequest{PageSize: governanceSummaryPageSize}},
 		Meta:   meta,
@@ -211,6 +214,32 @@ func (s *Service) appendTargetGovernanceSummary(ctx context.Context, meta QueryM
 	}
 	for _, signal := range blockingSignals {
 		appendBlockingSignalSummary(summary, seen, signal)
+	}
+	return nil
+}
+
+func (s *Service) appendProjectScopedTargetGovernanceSummary(ctx context.Context, meta QueryMeta, summary *entity.GovernanceSummary, seen *governanceSummarySeen, target value.ExternalRef, project value.ProjectContextRef) error {
+	assessments, _, err := s.ListRiskAssessments(ctx, ListRiskAssessmentsInput{
+		Filter: query.RiskAssessmentFilter{Target: target, ProjectContext: project, Page: query.PageRequest{PageSize: governanceSummaryPageSize}},
+		Meta:   meta,
+	})
+	if err != nil {
+		return err
+	}
+	if len(assessments) == 0 {
+		return nil
+	}
+	if err := s.authorizeGateTargetReadInProject(ctx, meta, target, project); err != nil {
+		return err
+	}
+	for _, assessment := range assessments {
+		appendRiskAssessmentSummary(summary, seen, assessment)
+		if err := s.appendReviewSignalsByRiskAssessmentID(ctx, summary, seen, assessment.ID); err != nil {
+			return err
+		}
+		if err := s.appendGateRequestsByRiskAssessmentIDAfterTargetAuth(ctx, summary, seen, assessment.ID); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -273,6 +302,56 @@ func (s *Service) appendReleasePackageSummary(ctx context.Context, meta QueryMet
 	for _, signalID := range pkg.ReviewSignalIDs {
 		if err := s.appendReviewSignalByID(ctx, meta, summary, seen, signalID); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+func (s *Service) appendReviewSignalsByRiskAssessmentID(ctx context.Context, summary *entity.GovernanceSummary, seen *governanceSummarySeen, assessmentID uuid.UUID) error {
+	signals, _, err := s.repository.ListReviewSignals(ctx, query.ReviewSignalFilter{
+		RiskAssessmentID: &assessmentID,
+		Page:             query.PageRequest{PageSize: governanceSummaryPageSize},
+	})
+	if err != nil {
+		return err
+	}
+	for _, signal := range signals {
+		appendReviewSignalSummary(summary, seen, signal)
+	}
+	return nil
+}
+
+func (s *Service) appendGateRequestsByRiskAssessmentIDAfterTargetAuth(ctx context.Context, summary *entity.GovernanceSummary, seen *governanceSummarySeen, assessmentID uuid.UUID) error {
+	gateRequests, _, err := s.repository.ListGateRequests(ctx, query.GateRequestFilter{
+		RiskAssessmentID: &assessmentID,
+		Page:             query.PageRequest{PageSize: governanceSummaryPageSize},
+	})
+	if err != nil {
+		return err
+	}
+	for _, request := range gateRequests {
+		if request.ID == uuid.Nil {
+			continue
+		}
+		appendGateRequestSummary(summary, seen, request)
+		if err := s.appendGateDecisionsByGateRequestIDAfterTargetAuth(ctx, summary, seen, request.ID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Service) appendGateDecisionsByGateRequestIDAfterTargetAuth(ctx context.Context, summary *entity.GovernanceSummary, seen *governanceSummarySeen, gateRequestID uuid.UUID) error {
+	gateDecisions, _, err := s.repository.ListGateDecisions(ctx, query.GateDecisionFilter{
+		GateRequestID: &gateRequestID,
+		Page:          query.PageRequest{PageSize: governanceSummaryPageSize},
+	})
+	if err != nil {
+		return err
+	}
+	for _, decision := range gateDecisions {
+		if decision.ID != uuid.Nil {
+			appendGateDecisionSummary(summary, seen, decision)
 		}
 	}
 	return nil

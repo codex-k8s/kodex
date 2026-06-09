@@ -647,17 +647,16 @@ func TestRunApplyCreatesSelfDeployServiceAccessRules(t *testing.T) {
 		t.Fatalf("run apply service access rules: %v", err)
 	}
 
-	if accessClient.createdRuleCount != 3 {
-		t.Fatalf("expected three created access rules, got %d", accessClient.createdRuleCount)
+	expectedAccessRules := 1 + len(selfDeployServiceAccessGrants)
+	if accessClient.createdRuleCount != expectedAccessRules {
+		t.Fatalf("expected %d created access rules, got %d", expectedAccessRules, accessClient.createdRuleCount)
 	}
-	if accessClient.putAccessRuleCalls != 3 || accessClient.checkAccessCalls != 3 {
+	if accessClient.putAccessRuleCalls != expectedAccessRules || accessClient.checkAccessCalls != expectedAccessRules {
 		t.Fatalf("expected put/check calls for runner and two services, got put=%d check=%d", accessClient.putAccessRuleCalls, accessClient.checkAccessCalls)
 	}
 	assertRunnerRepositoryReadAccessRule(t, accessClient.lastPutAccessRuleByAction[accesscatalog.ActionRepositoryRead], "project-self", "repo-self")
 	assertRunnerRepositoryReadAccessCheck(t, accessClient.lastCheckAccessByAction[accesscatalog.ActionRepositoryRead], "project-self", "repo-self")
-	assertSelfDeployAccessRule(t, accessClient.lastPutAccessRuleBySubject["agent-manager"], "project-self")
-	assertSelfDeployAccessCheck(t, accessClient.lastCheckAccessBySubject["agent-manager"], "project-self")
-	assertSelfDeployAccessRule(t, accessClient.lastPutAccessRuleBySubject["staff-gateway"], "project-self")
+	assertSelfDeployAccessRules(t, accessClient, "project-self")
 	text := output.String()
 	assertContains(t, text, "onboarding runner repository read access ready subject=service/onboarding-runner")
 	assertContains(t, text, "self-deploy service access ready subject=service/agent-manager")
@@ -781,10 +780,11 @@ func TestRunApplyImportsSelfRepoServicesPolicyThroughProductAPI(t *testing.T) {
 	}
 	assertRunnerRepositoryReadAccessRule(t, accessClient.lastPutAccessRuleByAction[accesscatalog.ActionRepositoryRead], "project-self", "repo-self")
 	assertRunnerRepositoryReadAccessCheck(t, accessClient.lastCheckAccessByAction[accesscatalog.ActionRepositoryRead], "project-self", "repo-self")
-	assertSelfDeployAccessRule(t, accessClient.lastPutAccessRuleBySubject["agent-manager"], "project-self")
+	assertSelfDeployAccessRules(t, accessClient, "project-self")
 	assertServicesPolicyImportAccessRule(t, accessClient.lastPutAccessRuleByAction[accesscatalog.ActionProjectPolicyImport], "project-self")
 	assertServicesPolicyImportAccessCheck(t, accessClient.lastCheckAccessByAction[accesscatalog.ActionProjectPolicyImport], "project-self")
-	if accessClient.putAccessRuleCalls != 4 || accessClient.checkAccessCalls != 4 {
+	expectedAccessCalls := 2 + len(selfDeployServiceAccessGrants)
+	if accessClient.putAccessRuleCalls != expectedAccessCalls || accessClient.checkAccessCalls != expectedAccessCalls {
 		t.Fatalf("expected read/import access put/check calls, got put=%d check=%d", accessClient.putAccessRuleCalls, accessClient.checkAccessCalls)
 	}
 	text := output.String()
@@ -843,7 +843,8 @@ func TestRunApplyEnsuresRepositoryReadAccessBeforeGetRepository(t *testing.T) {
 	if projectClient.getRepositoryCalls != 1 {
 		t.Fatalf("expected one GetRepository call, got %d", projectClient.getRepositoryCalls)
 	}
-	if accessClient.putAccessRuleCalls != 4 || accessClient.checkAccessCalls != 4 {
+	expectedAccessCalls := 2 + len(selfDeployServiceAccessGrants)
+	if accessClient.putAccessRuleCalls != expectedAccessCalls || accessClient.checkAccessCalls != expectedAccessCalls {
 		t.Fatalf("expected repository read/import access put/check calls, got put=%d check=%d", accessClient.putAccessRuleCalls, accessClient.checkAccessCalls)
 	}
 	assertRunnerRepositoryReadAccessRule(t, accessClient.lastPutAccessRuleByAction[accesscatalog.ActionRepositoryRead], "project-self", "repo-self")
@@ -994,10 +995,12 @@ func TestRunApplyReusesSelfDeployServiceAccessRules(t *testing.T) {
 		t.Fatalf("second run apply service access rules: %v", err)
 	}
 
-	if accessClient.createdRuleCount != 3 {
-		t.Fatalf("expected second run to reuse three access rules, created=%d", accessClient.createdRuleCount)
+	expectedAccessRules := 1 + len(selfDeployServiceAccessGrants)
+	if accessClient.createdRuleCount != expectedAccessRules {
+		t.Fatalf("expected second run to reuse %d access rules, created=%d", expectedAccessRules, accessClient.createdRuleCount)
 	}
-	if accessClient.putAccessRuleCalls != 6 || accessClient.checkAccessCalls != 6 {
+	expectedAccessCalls := 2 * expectedAccessRules
+	if accessClient.putAccessRuleCalls != expectedAccessCalls || accessClient.checkAccessCalls != expectedAccessCalls {
 		t.Fatalf("expected repeated put/check calls without duplicates, got put=%d check=%d", accessClient.putAccessRuleCalls, accessClient.checkAccessCalls)
 	}
 }
@@ -1706,6 +1709,8 @@ type fakeAccessManagerClient struct {
 	putAccessRuleCalls         int
 	checkAccessCalls           int
 	createdRuleCount           int
+	putAccessRuleRequests      []*accessaccountsv1.PutAccessRuleRequest
+	checkAccessRequests        []*accessaccountsv1.CheckAccessRequest
 	lastPutAccessRuleBySubject map[string]*accessaccountsv1.PutAccessRuleRequest
 	lastCheckAccessBySubject   map[string]*accessaccountsv1.CheckAccessRequest
 	lastPutAccessRuleByAction  map[string]*accessaccountsv1.PutAccessRuleRequest
@@ -1722,6 +1727,7 @@ func (f *fakeAccessManagerClient) PutAccessRule(_ context.Context, request *acce
 	}
 	f.lastPutAccessRuleBySubject[request.GetSubjectId()] = request
 	f.lastPutAccessRuleByAction[request.GetActionKey()] = request
+	f.putAccessRuleRequests = append(f.putAccessRuleRequests, request)
 	if f.putAccessRuleErr != nil {
 		return nil, f.putAccessRuleErr
 	}
@@ -1762,6 +1768,7 @@ func (f *fakeAccessManagerClient) CheckAccess(_ context.Context, request *access
 	subjectID := request.GetSubject().GetId()
 	f.lastCheckAccessBySubject[subjectID] = request
 	f.lastCheckAccessByAction[request.GetActionKey()] = request
+	f.checkAccessRequests = append(f.checkAccessRequests, request)
 	if f.checkAccessErr != nil {
 		return nil, f.checkAccessErr
 	}
@@ -1771,7 +1778,7 @@ func (f *fakeAccessManagerClient) CheckAccess(_ context.Context, request *access
 			ReasonCode: reason,
 		}, nil
 	}
-	if f.rules[checkAccessIdentityKey(request)] != nil {
+	if f.rules[checkAccessIdentityKey(request)] != nil || f.rules[checkAccessIdentityKeyWithResourceID(request, "")] != nil {
 		return &accessaccountsv1.CheckAccessResponse{
 			Decision:   accessaccountsv1.AccessDecision_ACCESS_DECISION_ALLOW,
 			ReasonCode: "explicit_allow",
@@ -1797,13 +1804,17 @@ func accessRuleIdentityKey(request *accessaccountsv1.PutAccessRuleRequest) strin
 }
 
 func checkAccessIdentityKey(request *accessaccountsv1.CheckAccessRequest) string {
+	return checkAccessIdentityKeyWithResourceID(request, request.GetResource().GetId())
+}
+
+func checkAccessIdentityKeyWithResourceID(request *accessaccountsv1.CheckAccessRequest, resourceID string) string {
 	return strings.Join([]string{
 		accessaccountsv1.AccessEffect_ACCESS_EFFECT_ALLOW.String(),
 		request.GetSubject().GetType(),
 		request.GetSubject().GetId(),
 		request.GetActionKey(),
 		request.GetResource().GetType(),
-		request.GetResource().GetId(),
+		resourceID,
 		request.GetScope().GetType(),
 		request.GetScope().GetId(),
 	}, "\x00")
@@ -2216,15 +2227,57 @@ func assertNotContains(t *testing.T, value string, needle string) {
 	}
 }
 
-func assertSelfDeployAccessRule(t *testing.T, request *accessaccountsv1.PutAccessRuleRequest, projectID string) {
+func findSelfDeployAccessRule(requests []*accessaccountsv1.PutAccessRuleRequest, grant selfDeployServiceAccessGrant) *accessaccountsv1.PutAccessRuleRequest {
+	for _, request := range requests {
+		if request.GetSubjectId() == grant.subjectID &&
+			request.GetActionKey() == grant.actionKey &&
+			request.GetResourceType() == grant.resourceType {
+			return request
+		}
+	}
+	return nil
+}
+
+func findSelfDeployAccessCheck(requests []*accessaccountsv1.CheckAccessRequest, grant selfDeployServiceAccessGrant) *accessaccountsv1.CheckAccessRequest {
+	for _, request := range requests {
+		if request.GetSubject().GetId() == grant.subjectID &&
+			request.GetActionKey() == grant.actionKey &&
+			request.GetResource().GetType() == grant.resourceType {
+			return request
+		}
+	}
+	return nil
+}
+
+func assertSelfDeployAccessRules(t *testing.T, client *fakeAccessManagerClient, projectID string) {
+	t.Helper()
+	for _, grant := range selfDeployServiceAccessGrants {
+		assertSelfDeployAccessRule(t, findSelfDeployAccessRule(client.putAccessRuleRequests, grant), grant, projectID)
+		assertSelfDeployAccessCheck(t, findSelfDeployAccessCheck(client.checkAccessRequests, grant), grant, projectID)
+	}
+	assertNoSelfDeployOwnerDecisionAccess(t, client.putAccessRuleRequests)
+}
+
+func assertNoSelfDeployOwnerDecisionAccess(t *testing.T, requests []*accessaccountsv1.PutAccessRuleRequest) {
+	t.Helper()
+	for _, request := range requests {
+		switch request.GetActionKey() {
+		case accesscatalog.ActionGovernanceGateDecide, accesscatalog.ActionGovernancePolicyManage, accesscatalog.ActionGovernanceReleaseDecide:
+			t.Fatalf("self-deploy service access must not grant owner/write action: %+v", request)
+		}
+	}
+}
+
+func assertSelfDeployAccessRule(t *testing.T, request *accessaccountsv1.PutAccessRuleRequest, grant selfDeployServiceAccessGrant, projectID string) {
 	t.Helper()
 	if request == nil {
 		t.Fatal("expected self-deploy access rule request")
 	}
 	if request.GetEffect() != accessaccountsv1.AccessEffect_ACCESS_EFFECT_ALLOW ||
 		request.GetSubjectType() != "service" ||
-		request.GetActionKey() != accesscatalog.ActionProjectPolicyRead ||
-		request.GetResourceType() != accesscatalog.ResourceServicesPolicy ||
+		request.GetSubjectId() != grant.subjectID ||
+		request.GetActionKey() != grant.actionKey ||
+		request.GetResourceType() != grant.resourceType ||
 		request.GetResourceId() != "" ||
 		request.GetScopeType() != accesscatalog.ScopeProject ||
 		request.GetScopeId() != projectID ||
@@ -2237,15 +2290,15 @@ func assertSelfDeployAccessRule(t *testing.T, request *accessaccountsv1.PutAcces
 	}
 }
 
-func assertSelfDeployAccessCheck(t *testing.T, request *accessaccountsv1.CheckAccessRequest, projectID string) {
+func assertSelfDeployAccessCheck(t *testing.T, request *accessaccountsv1.CheckAccessRequest, grant selfDeployServiceAccessGrant, projectID string) {
 	t.Helper()
 	if request == nil {
 		t.Fatal("expected self-deploy access check request")
 	}
 	if request.GetSubject().GetType() != "service" ||
-		request.GetSubject().GetId() != "agent-manager" ||
-		request.GetActionKey() != accesscatalog.ActionProjectPolicyRead ||
-		request.GetResource().GetType() != accesscatalog.ResourceServicesPolicy ||
+		request.GetSubject().GetId() != grant.subjectID ||
+		request.GetActionKey() != grant.actionKey ||
+		request.GetResource().GetType() != grant.resourceType ||
 		request.GetResource().GetId() != "" ||
 		request.GetScope().GetType() != accesscatalog.ScopeProject ||
 		request.GetScope().GetId() != projectID ||
