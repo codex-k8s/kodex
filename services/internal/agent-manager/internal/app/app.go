@@ -172,6 +172,9 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	if err := startSelfDeploySignalConsumer(ctx, cfg, eventLogPool, selfDeploySignalReader, agentService, logger, errCh); err != nil {
 		return err
 	}
+	if err := startSelfDeployGateReconciler(ctx, cfg, agentService, logger); err != nil {
+		return err
+	}
 
 	select {
 	case <-ctx.Done():

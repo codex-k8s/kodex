@@ -35,6 +35,29 @@ func (s *Service) CreateSelfDeployPlanFromSignal(ctx context.Context, input Crea
 	return s.createSelfDeployPlan(ctx, input.CreateSelfDeployPlanInput, operationCreateSelfDeployPlanFromSignal, true)
 }
 
+func (s *Service) EnsureSelfDeployPlanGovernanceGate(ctx context.Context, input EnsureSelfDeployPlanGovernanceGateInput) (entity.SelfDeployPlan, error) {
+	if err := s.requireRepository(); err != nil {
+		return entity.SelfDeployPlan{}, err
+	}
+	if input.SelfDeployPlanID == uuid.Nil {
+		return entity.SelfDeployPlan{}, errs.ErrInvalidArgument
+	}
+	if !s.selfDeployGateEnabled {
+		return entity.SelfDeployPlan{}, errs.ErrDependencyUnavailable
+	}
+	if _, err := commandIdentity(input.Meta, operationEnsureSelfDeployPlanGate); err != nil {
+		return entity.SelfDeployPlan{}, err
+	}
+	plan, err := s.repository.GetSelfDeployPlan(ctx, input.SelfDeployPlanID)
+	if err != nil {
+		return entity.SelfDeployPlan{}, err
+	}
+	if input.Meta.ExpectedVersion != nil && plan.Version != *input.Meta.ExpectedVersion {
+		return entity.SelfDeployPlan{}, errs.ErrConflict
+	}
+	return s.prepareSelfDeployPlanGateIfNeeded(ctx, plan)
+}
+
 func (s *Service) createSelfDeployPlan(ctx context.Context, input CreateSelfDeployPlanInput, operation string, requireSignal bool) (entity.SelfDeployPlan, error) {
 	if err := s.requireRepository(); err != nil {
 		return entity.SelfDeployPlan{}, err
