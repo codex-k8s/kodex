@@ -14,4 +14,4 @@ spec:
     solvers:
       - http01:
           ingress:
-            class: ${MATTERCODEX_INGRESS_CLASS}
+            ingressClassName: ${MATTERCODEX_INGRESS_CLASS}

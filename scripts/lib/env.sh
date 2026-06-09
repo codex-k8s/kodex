@@ -108,6 +108,15 @@ mattercodex_host_from_url() {
   printf '%s\n' "$url" | sed -E 's#^[A-Za-z][A-Za-z0-9+.-]*://##; s#/.*$##; s#:.*$##'
 }
 
+mattercodex_parent_domain() {
+  local host="$1"
+  if [ "$host" != "${host#*.}" ]; then
+    printf '%s\n' "${host#*.}"
+    return
+  fi
+  printf '%s\n' "$host"
+}
+
 mattercodex_set_defaults() {
   export MATTERCODEX_NAMESPACE="${MATTERCODEX_NAMESPACE:-${PRODUCTION_NAMESPACE:-mattermost}}"
   export MATTERCODEX_MATTERMOST_SITE_URL="${MATTERCODEX_MATTERMOST_SITE_URL:-${PUBLIC_BASE_URL:-}}"
@@ -128,6 +137,24 @@ mattercodex_set_defaults() {
   export MATTERCODEX_TLS_SECRET="${MATTERCODEX_TLS_SECRET:-mattermost-tls}"
   export MATTERCODEX_CLUSTER_ISSUER="${MATTERCODEX_CLUSTER_ISSUER:-letsencrypt-prod}"
   export MATTERCODEX_ACME_SERVER="${MATTERCODEX_ACME_SERVER:-https://acme-v02.api.letsencrypt.org/directory}"
+
+  export MATTERCODEX_BOT_SERVICE_IMAGE="${MATTERCODEX_BOT_SERVICE_IMAGE:-python:3.12-alpine}"
+  export MATTERCODEX_BOT_SERVICE_PORT="${MATTERCODEX_BOT_SERVICE_PORT:-8080}"
+  export MATTERCODEX_BOT_SERVICE_SECRET="${MATTERCODEX_BOT_SERVICE_SECRET:-matter-codex-bot-service}"
+  export MATTERCODEX_BOT_SERVICE_CODE_CONFIGMAP="${MATTERCODEX_BOT_SERVICE_CODE_CONFIGMAP:-matter-codex-bot-service-code}"
+  export MATTERCODEX_BOT_SERVICE_CONFIG_CONFIGMAP="${MATTERCODEX_BOT_SERVICE_CONFIG_CONFIGMAP:-matter-codex-bot-service-config}"
+  export MATTERCODEX_BOT_SERVICE_TLS_SECRET="${MATTERCODEX_BOT_SERVICE_TLS_SECRET:-matter-codex-bot-service-tls}"
+  if [ -z "${MATTERCODEX_BOT_SERVICE_HOST:-}" ]; then
+    local bot_root_domain
+    bot_root_domain="$(mattercodex_parent_domain "${MATTERCODEX_MATTERMOST_HOST:-${PRODUCTION_DOMAIN:-mattermost.local}}")"
+    MATTERCODEX_BOT_SERVICE_HOST="matter-codex.${bot_root_domain}"
+    export MATTERCODEX_BOT_SERVICE_HOST
+  fi
+  export MATTERCODEX_BOT_SERVICE_SITE_URL="${MATTERCODEX_BOT_SERVICE_SITE_URL:-https://${MATTERCODEX_BOT_SERVICE_HOST}}"
+  export MATTERCODEX_BOT_SERVICE_INTERNAL_URL="${MATTERCODEX_BOT_SERVICE_INTERNAL_URL:-http://matter-codex-bot-service.${MATTERCODEX_NAMESPACE}.svc.cluster.local:${MATTERCODEX_BOT_SERVICE_PORT}}"
+  export MATTERCODEX_DEFAULT_TEAM_NAME="${MATTERCODEX_DEFAULT_TEAM_NAME:-agents}"
+  export MATTERCODEX_DEFAULT_TEAM_DISPLAY_NAME="${MATTERCODEX_DEFAULT_TEAM_DISPLAY_NAME:-Agents}"
+  export MATTERCODEX_DEFAULT_CHANNELS="${MATTERCODEX_DEFAULT_CHANNELS:-agents-control:Agents Control,agents-runs:Agents Runs,agent-alerts:Agent Alerts,agents-audit:Agents Audit}"
 }
 
 mattercodex_validate_base_env() {

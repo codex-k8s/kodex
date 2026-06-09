@@ -49,3 +49,13 @@ mattercodex_log "env-файл: загружен"
 mattercodex_log "обязательные env-ключи: заданы"
 mattercodex_log "namespace: настроен"
 mattercodex_log "Mattermost URL: настроен"
+if [ -n "${MATTERCODEX_MATTERMOST_BOT_TOKEN:-}" ]; then
+  mattercodex_log "Mattermost bot token: задан"
+else
+  mattercodex_log "Mattermost bot token: не задан, bot-service будет работать в health-only режиме"
+fi
+if [ -n "${MATTERCODEX_MATTERMOST_SLASH_TOKEN:-}" ]; then
+  mattercodex_log "Mattermost slash token: задан"
+else
+  mattercodex_log "Mattermost slash token: не задан, provisioning может получить его через Mattermost API"
+fi
