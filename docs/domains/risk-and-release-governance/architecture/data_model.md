@@ -84,7 +84,7 @@ approvals:
 | Поле | Тип | Может быть пустым | Примечание |
 |---|---|---:|---|
 | `id` | uuid | нет | Идентификатор оценки. |
-| `target_type` | enum | нет | `transition`, `pull_request`, `release_candidate`, `runtime_job`, `policy_change`, `document`. |
+| `target_type` | enum | нет | `transition`, `pull_request`, `release_candidate`, `runtime_job`, `policy_change`, `document`, `merge`, `postdeploy`, `rollback`, `self_deploy_plan`. |
 | `target_ref` | text | нет | Внешняя ссылка на оцениваемый объект. |
 | `project_ref` | text | да | Проект, если применимо. |
 | `repository_ref` | text | да | Репозиторий, если применимо. |
@@ -162,7 +162,7 @@ approvals:
 | `id` | uuid | нет | Идентификатор gate. |
 | `risk_assessment_id` | uuid | да | Связанная оценка риска. |
 | `gate_policy_id` | uuid | да | Policy, которая потребовала gate. |
-| `target_type` | enum | нет | `transition`, `merge`, `release`, `postdeploy`, `rollback`, `policy_change`, `document_approval`. |
+| `target_type` | enum | нет | `transition`, `pull_request`, `release_candidate`, `runtime_job`, `policy_change`, `document`, `merge`, `postdeploy`, `rollback`, `self_deploy_plan`. |
 | `target_ref` | text | нет | Что именно ждёт решения. |
 | `interaction_request_ref` | text | да | Ссылка на delivery request в `interaction-hub`. |
 | `evidence_package` | jsonb | нет | Безопасный пакет фактов и refs. |
