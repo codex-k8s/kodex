@@ -25,7 +25,7 @@
 - Для bootstrap/deploy скриптов читать `.env`, но печатать только безопасные статусы проверок.
 - Agent pod получает только необходимые секреты и только через Kubernetes Secret/env/file mount.
 - У каждого agent run должен быть собственный рабочий каталог и PVC.
-- Для MVP выбран один namespace `mattermost`: Mattermost, bot-service, agent pod и PVC живут в нем, если владелец не попросит пересмотреть решение.
+- Для MVP выбран один Mattermost runtime namespace: Mattermost, bot-service, agent pod и PVC живут в нем. Имя берется из `MATTERCODEX_NAMESPACE` или `PRODUCTION_NAMESPACE`, если владелец не попросит пересмотреть решение.
 
 ## Документация
 

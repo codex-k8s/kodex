@@ -6,9 +6,9 @@
 
 ### Принято для MVP
 
-Один namespace `mattermost`.
+Один Mattermost runtime namespace.
 
-Agent pod и PVC создаются в одном namespace `mattermost`.
+Mattermost, bot-service, agent pod и PVC создаются в одном namespace. Фактическое имя задается `MATTERCODEX_NAMESPACE` или `PRODUCTION_NAMESPACE`.
 
 Ограничения для реализации:
 

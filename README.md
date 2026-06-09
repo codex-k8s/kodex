@@ -15,3 +15,15 @@ Mattermost-first система управления Codex-агентами дл
 - [Deployment and rollout](docs/strategy/deployment-and-rollout.md)
 - [PR roadmap](docs/strategy/pr-roadmap.md)
 - [Open decisions](docs/strategy/open-decisions.md)
+- [Mattermost bootstrap runbook](docs/runbooks/mattermost-bootstrap.md)
+
+## Mattermost Bootstrap
+
+Kubernetes-операции выполняются на целевом сервере через SSH по `.env`.
+
+```bash
+bash scripts/env/check-env.sh --env-file .env
+bash scripts/remote/k8s-preflight.sh --env-file .env
+bash scripts/remote/install-foundation.sh --env-file .env --dry-run=server
+bash scripts/remote/install-mattermost.sh --env-file .env --dry-run=server
+```
