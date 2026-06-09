@@ -73,6 +73,7 @@ bash scripts/remote/bootstrap-mattermost-bot.sh --env-file .env
 Скрипт:
 
 - включает `ServiceSettings.EnableUserAccessTokens`, если personal access tokens выключены;
+- Mattermost Deployment должен содержать `MM_SERVICESETTINGS_ALLOWEDUNTRUSTEDINTERNALCONNECTIONS` с host из `MATTERCODEX_BOT_SERVICE_INTERNAL_URL`, иначе Mattermost заблокирует slash callback во внутренний Kubernetes Service;
 - создает service user `MATTERCODEX_MATTERMOST_BOT_USERNAME`;
 - конвертирует service user в bot;
 - генерирует `MATTERCODEX_MATTERMOST_BOT_TOKEN`;
