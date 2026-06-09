@@ -98,7 +98,7 @@ func prepareSelfDeployPlanGateRequest(input agentservice.SelfDeployPlanGatePrepa
 			ExpectedRuntimeJobTypes: selfDeployRuntimeJobTypes(plan.ExpectedRuntimeJobTypes),
 			SafeSummary:             optionalString(plan.SafeSummary),
 			PlanFingerprint:         strings.TrimSpace(plan.PlanFingerprint),
-			RiskProfileRef:          optionalString(plan.GovernanceContext.RiskProfileRef),
+			RiskProfileRef:          optionalString(governanceRiskProfileRef(plan.GovernanceContext.RiskProfileRef)),
 		},
 	}
 }
@@ -188,6 +188,27 @@ func governanceRef(kind string, id string) string {
 		return ""
 	}
 	return "governance:" + kind + "/" + trimmed
+}
+
+func governanceRiskProfileRef(value string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return ""
+	}
+	for _, prefix := range []string{"governance:risk_profile/", "risk_profile/", "governance:risk_profile:", "risk_profile:"} {
+		if suffix, ok := strings.CutPrefix(trimmed, prefix); ok {
+			return governanceRiskProfileUUIDRef(suffix, "governance:risk_profile:")
+		}
+	}
+	return governanceRiskProfileUUIDRef(trimmed, "")
+}
+
+func governanceRiskProfileUUIDRef(value string, prefix string) string {
+	id, err := uuid.Parse(strings.TrimSpace(value))
+	if err != nil || id == uuid.Nil {
+		return ""
+	}
+	return prefix + id.String()
 }
 
 func selfDeployPathCategories(values []enum.SelfDeployPathCategory) []string {
