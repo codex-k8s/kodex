@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/caarlos0/env/v11"
+	texti18n "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/i18n"
 )
 
 // Config contains bot-service process settings.
@@ -13,6 +14,7 @@ type Config struct {
 	HTTPAddr              string        `env:"MATTERCODEX_BOT_SERVICE_HTTP_ADDR" envDefault:":8080"`
 	MattermostSiteURL     string        `env:"MATTERCODEX_MATTERMOST_SITE_URL"`
 	BotServiceSiteURL     string        `env:"MATTERCODEX_BOT_SERVICE_SITE_URL"`
+	Locale                string        `env:"MATTERCODEX_LOCALE" envDefault:"en"`
 	DefaultTeamName       string        `env:"MATTERCODEX_DEFAULT_TEAM_NAME" envDefault:"agents"`
 	DefaultChannels       []string      `env:"MATTERCODEX_DEFAULT_CHANNELS" envDefault:"agents-control:Agents Control,agents-runs:Agents Runs,agent-alerts:Agent Alerts,agents-audit:Agents Audit" envSeparator:","`
 	MattermostBotToken    string        `env:"MATTERCODEX_MATTERMOST_BOT_TOKEN"`
@@ -38,7 +40,7 @@ func LoadConfig() (Config, error) {
 	return cfg, nil
 }
 
-func (cfg Config) Validate() error {
+func (cfg *Config) Validate() error {
 	if strings.TrimSpace(cfg.HTTPAddr) == "" {
 		return fmt.Errorf("MATTERCODEX_BOT_SERVICE_HTTP_ADDR is required")
 	}
@@ -54,6 +56,11 @@ func (cfg Config) Validate() error {
 	if cfg.MaxGitHubWebhookBytes <= 0 {
 		return fmt.Errorf("MATTERCODEX_BOT_SERVICE_MAX_GITHUB_WEBHOOK_BYTES is invalid")
 	}
+	locale, ok := texti18n.ResolveLocale(cfg.Locale)
+	if !ok {
+		return fmt.Errorf("MATTERCODEX_LOCALE must be one of: %s", strings.Join(texti18n.SupportedLocales(), ", "))
+	}
+	cfg.Locale = locale
 	if len(cfg.DefaultChannels) == 0 {
 		return fmt.Errorf("MATTERCODEX_DEFAULT_CHANNELS is required")
 	}

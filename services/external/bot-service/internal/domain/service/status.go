@@ -4,11 +4,13 @@ import (
 	"strings"
 
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/value"
+	texti18n "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/i18n"
 )
 
 type Version = value.ServiceVersion
 
 type Config struct {
+	Localizer            *texti18n.Localizer
 	ServiceName          string
 	ServiceVersion       Version
 	MattermostConfigured bool
@@ -45,29 +47,30 @@ func (svc *StatusService) Snapshot() value.StatusSnapshot {
 
 func (svc *StatusService) SlashStatusText() string {
 	snapshot := svc.Snapshot()
-	return strings.Join([]string{
-		"matter-codex: online",
-		"service: " + snapshot.ServiceName + " " + string(snapshot.ServiceVersion),
-		"mattermost: " + configuredLabel(snapshot.MattermostConfigured),
-		"bot token: " + configuredLabel(snapshot.BotTokenConfigured),
-		"slash token: " + configuredLabel(snapshot.SlashTokenConfigured),
-		"database: " + configuredLabel(snapshot.DatabaseConfigured),
-		"storage: " + readyLabel(snapshot.StorageReady),
-		"default team: " + snapshot.DefaultTeamName,
-		"default channels: " + strings.Join(snapshot.DefaultChannels, ", "),
-	}, "\n")
+	return svc.cfg.Localizer.T("status.text", map[string]any{
+		"ServiceName":     snapshot.ServiceName,
+		"ServiceVersion":  string(snapshot.ServiceVersion),
+		"Locale":          svc.cfg.Localizer.Locale(),
+		"Mattermost":      configuredLabel(svc.cfg.Localizer, snapshot.MattermostConfigured),
+		"BotToken":        configuredLabel(svc.cfg.Localizer, snapshot.BotTokenConfigured),
+		"SlashToken":      configuredLabel(svc.cfg.Localizer, snapshot.SlashTokenConfigured),
+		"Database":        configuredLabel(svc.cfg.Localizer, snapshot.DatabaseConfigured),
+		"Storage":         readyLabel(svc.cfg.Localizer, snapshot.StorageReady),
+		"DefaultTeamName": snapshot.DefaultTeamName,
+		"DefaultChannels": strings.Join(snapshot.DefaultChannels, ", "),
+	})
 }
 
-func configuredLabel(configured bool) string {
+func configuredLabel(localizer *texti18n.Localizer, configured bool) string {
 	if configured {
-		return "configured"
+		return localizer.T("label.configured", nil)
 	}
-	return "missing"
+	return localizer.T("label.missing", nil)
 }
 
-func readyLabel(ready bool) string {
+func readyLabel(localizer *texti18n.Localizer, ready bool) string {
 	if ready {
-		return "ready"
+		return localizer.T("label.ready", nil)
 	}
-	return "not ready"
+	return localizer.T("label.not_ready", nil)
 }

@@ -8,6 +8,7 @@ import (
 func TestConfigDefaults(t *testing.T) {
 	t.Setenv("MATTERCODEX_MATTERMOST_SITE_URL", "")
 	t.Setenv("MATTERCODEX_BOT_SERVICE_SITE_URL", "")
+	t.Setenv("MATTERCODEX_LOCALE", "")
 	t.Setenv("MATTERCODEX_MATTERMOST_BOT_TOKEN", "")
 	t.Setenv("MATTERCODEX_MATTERMOST_SLASH_TOKEN", "")
 	t.Setenv("MATTERCODEX_GITHUB_TOKEN", "")
@@ -23,6 +24,9 @@ func TestConfigDefaults(t *testing.T) {
 	}
 	if cfg.DefaultTeamName != "agents" {
 		t.Fatalf("DefaultTeamName = %q", cfg.DefaultTeamName)
+	}
+	if cfg.Locale != "en" {
+		t.Fatalf("Locale = %q", cfg.Locale)
 	}
 	if len(cfg.ChannelNames()) != 4 {
 		t.Fatalf("ChannelNames() len = %d", len(cfg.ChannelNames()))
@@ -50,9 +54,43 @@ func TestConfigDefaults(t *testing.T) {
 func TestConfigValidationRejectsBadTimeout(t *testing.T) {
 	cfg := Config{
 		HTTPAddr:              ":8080",
+		Locale:                "en",
 		DefaultChannels:       []string{"agents-control:Agents Control"},
 		ReadHeaderTimeout:     time.Second,
 		ShutdownTimeout:       0,
+		MaxSlashFormBytes:     1024,
+		MaxGitHubWebhookBytes: 1024,
+	}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() error = nil")
+	}
+}
+
+func TestConfigValidationNormalizesLocale(t *testing.T) {
+	cfg := Config{
+		HTTPAddr:              ":8080",
+		Locale:                "ru-RU",
+		DefaultChannels:       []string{"agents-control:Agents Control"},
+		ReadHeaderTimeout:     time.Second,
+		ShutdownTimeout:       time.Second,
+		MaxSlashFormBytes:     1024,
+		MaxGitHubWebhookBytes: 1024,
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+	if cfg.Locale != "ru" {
+		t.Fatalf("Locale = %q", cfg.Locale)
+	}
+}
+
+func TestConfigValidationRejectsUnsupportedLocale(t *testing.T) {
+	cfg := Config{
+		HTTPAddr:              ":8080",
+		Locale:                "fr",
+		DefaultChannels:       []string{"agents-control:Agents Control"},
+		ReadHeaderTimeout:     time.Second,
+		ShutdownTimeout:       time.Second,
 		MaxSlashFormBytes:     1024,
 		MaxGitHubWebhookBytes: 1024,
 	}

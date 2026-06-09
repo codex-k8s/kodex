@@ -9,7 +9,7 @@
 - отвечать на `/healthz`;
 - принимать Mattermost slash callback `/mattermost/slash/agents`;
 - отвечать на `/agents status`;
-- выполнять admin-команды `/agents repo add`, `/agents repo list`, `/agents token check`, `/agents profile list`;
+- выполнять admin-команды `/agents repo add`, `/agents repo list`, `/agents token check`, `/agents locale get|set`, `/agents profile list`;
 - выполнять GitHub adapter команды `/agents github check`, `/agents github branch`, `/agents github pr`;
 - принимать GitHub webhook callback `/github/webhook` с HMAC validation;
 - автоматически регистрировать repo webhook при `/agents repo add github owner/name [default-branch]`, если GitHub token имеет hook write permission;
@@ -32,6 +32,7 @@
 - `MATTERCODEX_GITHUB_SECRET` - optional, имя отдельного Kubernetes Secret для GitHub token/webhook secret;
 - `MATTERCODEX_GITHUB_TOKEN` - optional, GitHub token для bot-service; deploy-скрипты также принимают legacy `GITHUB_PAT` или `GIT_BOT_TOKEN`;
 - `MATTERCODEX_GITHUB_WEBHOOK_SECRET` - optional, secret для `/github/webhook`; deploy-скрипты также принимают legacy `GITHUB_WEBHOOK_SECRET`;
+- `MATTERCODEX_LOCALE` - optional, стартовая локаль Mattermost-facing ответов bot-service; Go-дефолт `en`, deploy-скрипты для текущего контура по умолчанию ставят `ru`;
 - `MATTERCODEX_DATABASE_DSN` - optional, берется из Kubernetes Secret `mattermost-datasource` для storage/admin-команд;
 - `MATTERCODEX_STORAGE_MIGRATIONS_ENABLED` - optional, включает Go migrations на старте;
 - `MATTERCODEX_BOT_SERVICE_MAX_GITHUB_WEBHOOK_BYTES` - optional, лимит размера GitHub webhook payload;
@@ -49,7 +50,7 @@ bash scripts/k8s/render-bot-service.sh --env-file .env --render-dir /tmp/matter-
 
 В render directory попадают:
 
-- code ConfigMap с Go source archive (`go.mod`, `go.sum`, `services/external/bot-service`);
+- code ConfigMap с Go source archive (`go.mod`, `go.sum`, `libs/go/i18n`, `services/external/bot-service`);
 - config ConfigMap;
 - Deployment;
 - Service;
@@ -132,18 +133,22 @@ bash scripts/remote/bootstrap-mattermost-bot.sh --env-file .env
 /agents status
 ```
 
-Ожидаемый результат: ephemeral ответ `matter-codex: online` без вывода секретов.
+Ожидаемый результат: ephemeral ответ `matter-codex: online` без вывода секретов. В текущем deploy-контуре ответы по умолчанию русские, потому что `MATTERCODEX_LOCALE` задается как `ru`.
 
 Дополнительная проверка storage/admin-команд:
 
 ```text
 /agents token check
+/agents locale get
+/agents locale set en
+/agents token check
+/agents locale set ru
 /agents profile list
 /agents repo add github codex-k8s/matter-codex main
 /agents repo list
 ```
 
-Ожидаемый результат: команды отвечают ephemeral-сообщениями, repository появляется в списке, а Mattermost создаёт/показывает канал `repo-codex-k8s-matter-codex`.
+Ожидаемый результат: команды отвечают ephemeral-сообщениями, `locale set en` переключает ответы на английский, `locale set ru` возвращает русские ответы, repository появляется в списке, а Mattermost создаёт/показывает канал `repo-codex-k8s-matter-codex`.
 
 Дополнительная проверка GitHub adapter:
 
