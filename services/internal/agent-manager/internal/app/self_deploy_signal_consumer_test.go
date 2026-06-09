@@ -248,6 +248,57 @@ func TestSelfDeploySignalEventHandlerIgnoresNotDeployRelevantEvent(t *testing.T)
 	}
 }
 
+func TestSelfDeploySignalEventHandlerRequiresDeployRelevantTriggerBeforeProjectRead(t *testing.T) {
+	t.Parallel()
+
+	projectID := uuid.MustParse("44444444-5555-4666-8777-888888888888")
+	repositoryID := uuid.MustParse("55555555-6666-4777-8888-999999999999")
+	reader := &fakeSelfDeploySignalReader{result: readySelfDeploySignal(projectID, repositoryID)}
+	creator := &fakeSelfDeployPlanCreator{}
+	handler := selfDeploySignalEventHandler{
+		cfg: Config{
+			SelfDeploySignalConsumerProjectID:    projectID.String(),
+			SelfDeploySignalConsumerRepositoryID: repositoryID.String(),
+			SelfDeploySignalConsumerTargetBranch: "main",
+		},
+		reader:  reader,
+		creator: creator,
+	}
+
+	docsOnly := handler.HandleEvent(context.Background(), eventconsumer.Event{StoredEvent: selfDeploySignalStoredEvent(t, providerevents.Payload{
+		SignalKey:  "provider:github:repository_change:push:codex-k8s/kodex:main:docs-only",
+		BaseBranch: "main",
+	})})
+	if docsOnly.Status != eventconsumer.ResultAck {
+		t.Fatalf("HandleEvent(docs-only) = %+v, want ack", docsOnly)
+	}
+	if len(reader.inputs) != 0 || len(creator.inputs) != 0 {
+		t.Fatalf("docs-only reader inputs = %d, creator inputs = %d, want 0", len(reader.inputs), len(creator.inputs))
+	}
+
+	deployRelevant := handler.HandleEvent(context.Background(), eventconsumer.Event{StoredEvent: selfDeploySignalStoredEvent(t, providerevents.Payload{
+		SignalKey:             "provider:github:repository_change:push:codex-k8s/kodex:main:deploy-relevant",
+		BaseBranch:            "main",
+		DeployRelevantChanged: true,
+	})})
+	if deployRelevant.Status != eventconsumer.ResultAck {
+		t.Fatalf("HandleEvent(deploy-relevant) = %+v, want ack", deployRelevant)
+	}
+	if len(reader.inputs) != 1 || len(creator.inputs) != 1 {
+		t.Fatalf("deploy-relevant reader inputs = %d, creator inputs = %d, want 1", len(reader.inputs), len(creator.inputs))
+	}
+	if reader.inputs[0].ProjectID != projectID {
+		t.Fatalf("lookup project id = %s, want %s", reader.inputs[0].ProjectID, projectID)
+	}
+	if reader.inputs[0].RepositoryID == nil || *reader.inputs[0].RepositoryID != repositoryID {
+		t.Fatalf("lookup repository id = %v, want %s", reader.inputs[0].RepositoryID, repositoryID)
+	}
+	input := creator.inputs[0].CreateSelfDeployPlanInput
+	if input.GovernanceContext.GatePolicyRef != "governance:gate_policy/self_deploy.owner_gate" {
+		t.Fatalf("gate policy ref = %q", input.GovernanceContext.GatePolicyRef)
+	}
+}
+
 func TestSelfDeploySignalEventHandlerPoisonsMissingProjectRef(t *testing.T) {
 	t.Parallel()
 
