@@ -98,6 +98,55 @@ func TestWrapErrorMapsPostgresErrors(t *testing.T) {
 	}
 }
 
+func TestRepositoryIntegrationSelfDeployPlanTargetType(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openIntegrationPool(t, ctx)
+	repository := NewRepository(pool)
+	now := time.Date(2026, 6, 9, 9, 0, 0, 0, time.UTC)
+
+	assessment := testRiskAssessment(now)
+	assessment.Target = value.ExternalRef{Type: "self_deploy_plan", Ref: "agent:self-deploy-plan:target-check"}
+	assessment.Explanation = "self-deploy plan requires owner gate"
+	factor := entity.RiskFactor{
+		ID:               uuid.New(),
+		RiskAssessmentID: assessment.ID,
+		SourceType:       enum.RiskFactorSourceTypePolicy,
+		SourceRef:        "self-deploy:path-category:deploy",
+		RiskClass:        enum.RiskClassR2,
+		Summary:          "self-deploy plan requires gate",
+		CreatedAt:        now,
+	}
+	if err := repository.CreateRiskAssessment(ctx, assessment, []entity.RiskFactor{factor}, testCommandResult(uuid.New(), operationCreateRiskAssessment, "risk_assessment", assessment.ID, now), []entity.OutboxEvent{testEvent("governance.risk_assessment.requested", "risk_assessment", assessment.ID, now)}); err != nil {
+		t.Fatalf("create self-deploy risk assessment: %v", err)
+	}
+
+	request := entity.GateRequest{
+		VersionedBase:    entity.VersionedBase{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		RiskAssessmentID: &assessment.ID,
+		Target:           assessment.Target,
+		EvidenceRefs: []value.EvidenceRef{{
+			Kind:    "self_deploy_plan",
+			Ref:     assessment.Target.Ref,
+			Summary: "self-deploy plan gate input",
+			Digest:  "sha256:self-deploy-plan-target-check",
+		}},
+		EvidenceSummary: "self-deploy plan gate input",
+		Status:          enum.GateRequestStatusRequested,
+	}
+	if err := repository.CreateGateRequest(ctx, request, testCommandResult(uuid.New(), operationCreateGateRequest, "gate_request", request.ID, now), testEvent("governance.gate.requested", "gate", request.ID, now)); err != nil {
+		t.Fatalf("create self-deploy gate request: %v", err)
+	}
+	stored, err := repository.GetGateRequest(ctx, request.ID)
+	if err != nil {
+		t.Fatalf("get self-deploy gate request: %v", err)
+	}
+	if stored.Target.Type != "self_deploy_plan" || stored.RiskAssessmentID == nil || *stored.RiskAssessmentID != assessment.ID {
+		t.Fatalf("stored self-deploy gate request = %+v, want target and assessment link", stored)
+	}
+}
+
 func TestRepositoryIntegrationGovernanceStateAndOutbox(t *testing.T) {
 	t.Parallel()
 
