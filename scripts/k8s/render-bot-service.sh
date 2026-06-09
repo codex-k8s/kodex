@@ -34,10 +34,20 @@ fi
 
 mattercodex_load_env_file "$ENV_FILE"
 mattercodex_validate_base_env
-mattercodex_require_commands envsubst
+mattercodex_require_commands base64 envsubst tar
 
 TEMPLATE_DIR="$REPO_ROOT/deploy/k8s/bot-service"
-APP_FILE="$REPO_ROOT/services/bot-service/app.py"
+SOURCE_ARCHIVE="$(mktemp)"
+trap 'rm -f "$SOURCE_ARCHIVE"' EXIT
+
+if [ ! -f "$REPO_ROOT/go.sum" ]; then
+  mattercodex_die "go.sum не найден; выполните go mod tidy перед render bot-service"
+fi
+
+tar -C "$REPO_ROOT" -czf "$SOURCE_ARCHIVE" \
+  go.mod \
+  go.sum \
+  services/external/bot-service
 
 {
   cat <<EOF
@@ -48,11 +58,11 @@ metadata:
   namespace: ${MATTERCODEX_NAMESPACE}
   labels:
     app.kubernetes.io/name: matter-codex-bot-service
-    app.kubernetes.io/component: bot-service-code
+    app.kubernetes.io/component: bot-service-source
 data:
-  app.py: |
+  source.tar.gz.b64: |
 EOF
-  sed 's/^/    /' "$APP_FILE"
+  base64 "$SOURCE_ARCHIVE" | sed 's/^/    /'
 } > "$RENDER_DIR/10-code-configmap.yaml"
 
 mattercodex_render_template "$TEMPLATE_DIR/configmap.yaml.tpl" "$RENDER_DIR/20-configmap.yaml"

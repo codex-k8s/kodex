@@ -10,7 +10,7 @@
 - принимать Mattermost slash callback `/mattermost/slash/agents`;
 - отвечать на `/agents status`;
 - хранить Mattermost bot/slash tokens только в Kubernetes Secret;
-- создавать базовую Mattermost control surface через API: team, каналы и slash command.
+- создавать базовую Mattermost control surface через `mmctl --local` внутри Mattermost pod: team, каналы и slash command.
 
 ## Env contract
 
@@ -37,7 +37,7 @@ bash scripts/k8s/render-bot-service.sh --env-file .env --render-dir /tmp/matter-
 
 В render directory попадают:
 
-- code ConfigMap с `services/bot-service/app.py`;
+- code ConfigMap с Go source archive (`go.mod`, `go.sum`, `services/external/bot-service`);
 - config ConfigMap;
 - Deployment;
 - Service;
@@ -84,22 +84,13 @@ bash scripts/remote/bootstrap-mattermost-bot.sh --env-file .env
 
 ## Mattermost provisioning через готовый token
 
-После создания Personal Access Token в Mattermost для owner/admin или bot account добавить значение в локальный `.env` как `MATTERCODEX_MATTERMOST_BOT_TOKEN`.
-
-Затем выполнить:
+Отдельный provisioning-скрипт через готовый Personal Access Token удалён вместе с предыдущей реализацией. На текущем Go-срезе поддержан один безопасный bootstrap path через `mmctl --local`:
 
 ```bash
-bash scripts/remote/provision-bot-service.sh --env-file .env
+bash scripts/remote/bootstrap-mattermost-bot.sh --env-file .env
 ```
 
-Скрипт:
-
-- проверяет/создает team;
-- проверяет/создает каналы `agents-control`, `agents-runs`, `agent-alerts`, `agents-audit`;
-- создает или обновляет slash command `/agents`;
-- получает slash command token;
-- записывает bot token и slash token в Kubernetes Secret;
-- перезапускает bot-service Deployment, если он уже установлен.
+Если token уже есть в Kubernetes Secret, повторный deploy bot-service использует существующий Secret и не печатает его значение.
 
 ## Ручная проверка владельцем
 

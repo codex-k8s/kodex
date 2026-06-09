@@ -23,7 +23,7 @@ done
 
 mattercodex_load_env_file "$ENV_FILE"
 mattercodex_validate_base_env
-mattercodex_require_commands ssh base64 python3 openssl
+mattercodex_require_commands ssh base64 sed openssl
 
 NAMESPACE_Q="$(mattercodex_shell_quote "$MATTERCODEX_NAMESPACE")"
 REMOTE_KUBECTL="$(mattercodex_remote_kubectl_command)"
@@ -50,40 +50,23 @@ remote_psql_scalar() {
   mattercodex_ssh "$REMOTE_KUBECTL -n $NAMESPACE_Q exec statefulset/mattermost-postgres -- psql -U mattermost -d mattermost -Atc $query_q"
 }
 
+mattercodex_sql_literal() {
+  local escaped
+  escaped="$(printf '%s' "$1" | sed "s/'/''/g")"
+  printf "'%s'" "$escaped"
+}
+
 parse_mmctl_token() {
-  python3 -c '
-import json, os, re, sys
-raw = os.environ["MMCTL_OUTPUT"]
-try:
-    data = json.loads(raw)
-except json.JSONDecodeError:
-    data = None
-
-def find_token(obj):
-    if isinstance(obj, dict):
-        for key, value in obj.items():
-            if key.lower() == "token" and isinstance(value, str) and value:
-                return value
-        for value in obj.values():
-            found = find_token(value)
-            if found:
-                return found
-    if isinstance(obj, list):
-        for value in obj:
-            found = find_token(value)
-            if found:
-                return found
-    return ""
-
-token = find_token(data) if data is not None else ""
-if not token:
-    match = re.search(r"(?i)token[^A-Za-z0-9_-]+([A-Za-z0-9_-]{20,})", raw)
-    token = match.group(1) if match else ""
-if not token:
-    print("[matter-codex] ОШИБКА: mmctl token output не распознан", file=sys.stderr)
-    raise SystemExit(1)
-print(token)
-'
+  local raw token
+  raw="${MMCTL_OUTPUT:-}"
+  token="$(printf '%s\n' "$raw" | sed -nE 's/.*"token"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' | head -n 1)"
+  if [ -z "$token" ]; then
+    token="$(printf '%s\n' "$raw" | sed -nE 's/.*[Tt]oken[^A-Za-z0-9_-]+([A-Za-z0-9_-]{20,}).*/\1/p' | head -n 1)"
+  fi
+  if [ -z "$token" ]; then
+    mattercodex_die "mmctl token output не распознан"
+  fi
+  printf '%s\n' "$token"
 }
 
 ensure_personal_access_tokens_enabled() {
@@ -100,8 +83,9 @@ ensure_personal_access_tokens_enabled() {
 }
 
 ensure_bot_user() {
-  local user_count bot_count password
-  user_count="$(remote_psql_scalar "select count(*) from users where username='${MATTERCODEX_MATTERMOST_BOT_USERNAME}';")"
+  local user_count bot_count password bot_username_sql
+  bot_username_sql="$(mattercodex_sql_literal "$MATTERCODEX_MATTERMOST_BOT_USERNAME")"
+  user_count="$(remote_psql_scalar "select count(*) from users where username=${bot_username_sql};")"
   if [ "$user_count" = "0" ]; then
     mattercodex_log "Mattermost bot user: создается"
     password="$(mattercodex_generate_password)"
@@ -115,7 +99,7 @@ ensure_bot_user() {
     mattercodex_log "Mattermost bot user: уже существует"
   fi
 
-  bot_count="$(remote_psql_scalar "select count(*) from bots b join users u on u.id=b.userid where u.username='${MATTERCODEX_MATTERMOST_BOT_USERNAME}' and b.deleteat=0;")"
+  bot_count="$(remote_psql_scalar "select count(*) from bots b join users u on u.id=b.userid where u.username=${bot_username_sql} and b.deleteat=0;")"
   if [ "$bot_count" = "0" ]; then
     mattercodex_log "Mattermost bot user: конвертируется в bot"
     remote_mmctl user convert "$MATTERCODEX_MATTERMOST_BOT_USERNAME" --bot >/dev/null
@@ -136,8 +120,9 @@ generate_bot_token() {
 }
 
 ensure_team() {
-  local team_count
-  team_count="$(remote_psql_scalar "select count(*) from teams where name='${MATTERCODEX_DEFAULT_TEAM_NAME}' and deleteat=0;")"
+  local team_count team_name_sql
+  team_name_sql="$(mattercodex_sql_literal "$MATTERCODEX_DEFAULT_TEAM_NAME")"
+  team_count="$(remote_psql_scalar "select count(*) from teams where name=${team_name_sql} and deleteat=0;")"
   if [ "$team_count" = "0" ]; then
     mattercodex_log "Mattermost team ${MATTERCODEX_DEFAULT_TEAM_NAME}: создается"
     remote_mmctl team create --name "$MATTERCODEX_DEFAULT_TEAM_NAME" --display-name "$MATTERCODEX_DEFAULT_TEAM_DISPLAY_NAME" >/dev/null
@@ -147,8 +132,10 @@ ensure_team() {
 }
 
 ensure_bot_team_membership() {
-  local member_count
-  member_count="$(remote_psql_scalar "select count(*) from teammembers tm join teams t on t.id=tm.teamid join users u on u.id=tm.userid where t.name='${MATTERCODEX_DEFAULT_TEAM_NAME}' and u.username='${MATTERCODEX_MATTERMOST_BOT_USERNAME}' and tm.deleteat=0;")"
+  local member_count team_name_sql bot_username_sql
+  team_name_sql="$(mattercodex_sql_literal "$MATTERCODEX_DEFAULT_TEAM_NAME")"
+  bot_username_sql="$(mattercodex_sql_literal "$MATTERCODEX_MATTERMOST_BOT_USERNAME")"
+  member_count="$(remote_psql_scalar "select count(*) from teammembers tm join teams t on t.id=tm.teamid join users u on u.id=tm.userid where t.name=${team_name_sql} and u.username=${bot_username_sql} and tm.deleteat=0;")"
   if [ "$member_count" = "0" ]; then
     mattercodex_log "Mattermost bot user: добавляется в team"
     remote_mmctl team users add "$MATTERCODEX_DEFAULT_TEAM_NAME" "$MATTERCODEX_MATTERMOST_BOT_USERNAME" >/dev/null
@@ -158,8 +145,11 @@ ensure_bot_team_membership() {
 ensure_channel() {
   local name="$1"
   local display_name="$2"
-  local channel_count member_count
-  channel_count="$(remote_psql_scalar "select count(*) from channels c join teams t on t.id=c.teamid where t.name='${MATTERCODEX_DEFAULT_TEAM_NAME}' and c.name='${name}' and c.deleteat=0;")"
+  local channel_count member_count team_name_sql channel_name_sql bot_username_sql
+  team_name_sql="$(mattercodex_sql_literal "$MATTERCODEX_DEFAULT_TEAM_NAME")"
+  channel_name_sql="$(mattercodex_sql_literal "$name")"
+  bot_username_sql="$(mattercodex_sql_literal "$MATTERCODEX_MATTERMOST_BOT_USERNAME")"
+  channel_count="$(remote_psql_scalar "select count(*) from channels c join teams t on t.id=c.teamid where t.name=${team_name_sql} and c.name=${channel_name_sql} and c.deleteat=0;")"
   if [ "$channel_count" = "0" ]; then
     mattercodex_log "Mattermost channel ${name}: создается"
     remote_mmctl channel create --team "$MATTERCODEX_DEFAULT_TEAM_NAME" --name "$name" --display-name "$display_name" >/dev/null
@@ -167,7 +157,7 @@ ensure_channel() {
     mattercodex_log "Mattermost channel ${name}: уже существует"
   fi
 
-  member_count="$(remote_psql_scalar "select count(*) from channelmembers cm join channels c on c.id=cm.channelid join teams t on t.id=c.teamid join users u on u.id=cm.userid where t.name='${MATTERCODEX_DEFAULT_TEAM_NAME}' and c.name='${name}' and u.username='${MATTERCODEX_MATTERMOST_BOT_USERNAME}';")"
+  member_count="$(remote_psql_scalar "select count(*) from channelmembers cm join channels c on c.id=cm.channelid join teams t on t.id=c.teamid join users u on u.id=cm.userid where t.name=${team_name_sql} and c.name=${channel_name_sql} and u.username=${bot_username_sql};")"
   if [ "$member_count" = "0" ]; then
     remote_mmctl channel users add "${MATTERCODEX_DEFAULT_TEAM_NAME}:${name}" "$MATTERCODEX_MATTERMOST_BOT_USERNAME" >/dev/null
   fi
@@ -192,9 +182,10 @@ ensure_default_channels() {
 }
 
 ensure_slash_command() {
-  local command_id callback_url
+  local command_id callback_url team_name_sql
   callback_url="${MATTERCODEX_BOT_SERVICE_INTERNAL_URL%/}/mattermost/slash/agents"
-  command_id="$(remote_psql_scalar "select c.id from commands c join teams t on t.id=c.teamid where t.name='${MATTERCODEX_DEFAULT_TEAM_NAME}' and c.trigger='agents' and c.deleteat=0 order by c.createat desc limit 1;")"
+  team_name_sql="$(mattercodex_sql_literal "$MATTERCODEX_DEFAULT_TEAM_NAME")"
+  command_id="$(remote_psql_scalar "select c.id from commands c join teams t on t.id=c.teamid where t.name=${team_name_sql} and c.trigger='agents' and c.deleteat=0 order by c.createat desc limit 1;")"
   if [ -z "$command_id" ]; then
     mattercodex_log "Mattermost slash command /agents: создается" >&2
     remote_mmctl command create "$MATTERCODEX_DEFAULT_TEAM_NAME" \
@@ -223,7 +214,7 @@ ensure_slash_command() {
       --post >/dev/null
   fi
 
-  remote_psql_scalar "select c.token from commands c join teams t on t.id=c.teamid where t.name='${MATTERCODEX_DEFAULT_TEAM_NAME}' and c.trigger='agents' and c.deleteat=0 order by c.createat desc limit 1;"
+  remote_psql_scalar "select c.token from commands c join teams t on t.id=c.teamid where t.name=${team_name_sql} and c.trigger='agents' and c.deleteat=0 order by c.createat desc limit 1;"
 }
 
 save_secret_and_restart() {
@@ -253,7 +244,7 @@ EOF
     mattercodex_log "bot-service: перезапускается для применения Secret"
     mattercodex_ssh "set -eu
       $REMOTE_KUBECTL -n $NAMESPACE_Q rollout restart deployment/matter-codex-bot-service >/dev/null
-      $REMOTE_KUBECTL -n $NAMESPACE_Q rollout status deployment/matter-codex-bot-service --timeout=180s >/dev/null"
+      $REMOTE_KUBECTL -n $NAMESPACE_Q rollout status deployment/matter-codex-bot-service --timeout=300s >/dev/null"
   fi
 }
 

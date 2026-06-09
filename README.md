@@ -43,9 +43,3 @@ bash scripts/remote/smoke-bot-service.sh --env-file .env --check-url
 ```bash
 bash scripts/remote/bootstrap-mattermost-bot.sh --env-file .env
 ```
-
-Provisioning через уже готовый `MATTERCODEX_MATTERMOST_BOT_TOKEN` в `.env`:
-
-```bash
-bash scripts/remote/provision-bot-service.sh --env-file .env
-```
