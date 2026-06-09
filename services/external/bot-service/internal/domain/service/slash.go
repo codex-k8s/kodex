@@ -25,18 +25,19 @@ type SlashCommand struct {
 }
 
 type SlashCommandServiceConfig struct {
-	StatusService         *StatusService
-	Store                 adminrepo.Repository
-	ChannelManager        MattermostChannelManager
-	RepositoryProvider    providerrepo.RepositoryProvider
-	DefaultTeamName       string
-	BotTokenConfigured    bool
-	SlashTokenConfigured  bool
-	GitHubTokenConfigured bool
-	DatabaseConfigured    bool
-	StorageReady          bool
-	MattermostConfigured  bool
-	ChannelManagerEnabled bool
+	StatusService           *StatusService
+	Store                   adminrepo.Repository
+	ChannelManager          MattermostChannelManager
+	RepositoryProvider      providerrepo.RepositoryProvider
+	DefaultTeamName         string
+	BotTokenConfigured      bool
+	SlashTokenConfigured    bool
+	GitHubTokenConfigured   bool
+	GitHubWebhookConfigured bool
+	DatabaseConfigured      bool
+	StorageReady            bool
+	MattermostConfigured    bool
+	ChannelManagerEnabled   bool
 }
 
 type SlashCommandService struct {
@@ -114,7 +115,13 @@ func (svc *SlashCommandService) handleRepoAdd(ctx context.Context, args []string
 	if created {
 		state = "добавлен"
 	}
-	return fmt.Sprintf("matter-codex: repository %s `%s:%s`.\nchannel: `%s`\ndefault branch: `%s`", state, repo.Provider, repo.FullName(), repo.MattermostChannel, repo.DefaultBranch)
+	lines := []string{
+		fmt.Sprintf("matter-codex: repository %s `%s:%s`.", state, repo.Provider, repo.FullName()),
+		fmt.Sprintf("channel: `%s`", repo.MattermostChannel),
+		fmt.Sprintf("default branch: `%s`", repo.DefaultBranch),
+	}
+	lines = append(lines, svc.ensureRepositoryWebhookLine(ctx, command, repo.Provider, repo.Owner, repo.Name)...)
+	return strings.Join(lines, "\n")
 }
 
 func (svc *SlashCommandService) handleRepoList(ctx context.Context) string {
@@ -144,6 +151,7 @@ func (svc *SlashCommandService) handleToken(args []string) string {
 		"- mattermost bot token: " + configuredLabel(svc.cfg.BotTokenConfigured),
 		"- mattermost slash token: " + configuredLabel(svc.cfg.SlashTokenConfigured),
 		"- github token: " + configuredLabel(svc.cfg.GitHubTokenConfigured),
+		"- github webhook secret: " + configuredLabel(svc.cfg.GitHubWebhookConfigured),
 		"- database dsn: " + configuredLabel(svc.cfg.DatabaseConfigured),
 		"- storage: " + readyLabel(svc.cfg.StorageReady),
 		"- mattermost channel manager: " + configuredLabel(svc.cfg.ChannelManagerEnabled),
@@ -186,6 +194,7 @@ func (svc *SlashCommandService) helpText() string {
 		"`/agents github branch create owner/name branch [base]` - создать branch от base",
 		"`/agents github pr dry-run owner/name head base title...` - проверить параметры PR без создания",
 		"`/agents github pr status owner/name number` - показать PR status/reviews/comments",
+		"`/agents github webhook ensure owner/name` - зарегистрировать repo webhook",
 		"`/agents token check` - показать безопасный статус токенов и storage",
 		"`/agents profile list` - показать seed agent profiles",
 	}
@@ -206,8 +215,10 @@ func (svc *SlashCommandService) handleGitHub(ctx context.Context, args []string,
 		return svc.handleGitHubBranch(ctx, args[1:], command)
 	case "pr":
 		return svc.handleGitHubPR(ctx, args[1:], command)
+	case "webhook":
+		return svc.handleGitHubWebhook(ctx, args[1:], command)
 	default:
-		return "matter-codex: неизвестная github-команда. Доступно: `check`, `branch`, `pr`."
+		return "matter-codex: неизвестная github-команда. Доступно: `check`, `branch`, `pr`, `webhook`."
 	}
 }
 
@@ -285,6 +296,21 @@ func (svc *SlashCommandService) handleGitHubPR(ctx context.Context, args []strin
 	}
 }
 
+func (svc *SlashCommandService) handleGitHubWebhook(ctx context.Context, args []string, command SlashCommand) string {
+	if len(args) != 2 || args[0] != "ensure" {
+		return "matter-codex: нужен формат `/agents github webhook ensure owner/name`."
+	}
+	ref, err := parseRepositoryRef(args[1:], "github webhook ensure")
+	if err != nil {
+		return "matter-codex: " + err.Error()
+	}
+	lines := svc.ensureRepositoryWebhookLine(ctx, command, "github", ref.Owner, ref.Name)
+	if len(lines) == 0 {
+		return "matter-codex: GitHub webhook не зарегистрирован."
+	}
+	return "matter-codex GitHub webhook:\n" + strings.Join(lines, "\n")
+}
+
 func (svc *SlashCommandService) handleGitHubPRDryRun(ctx context.Context, args []string) string {
 	input, err := parsePullRequestInput(args)
 	if err != nil {
@@ -295,6 +321,31 @@ func (svc *SlashCommandService) handleGitHubPRDryRun(ctx context.Context, args [
 		return "matter-codex: GitHub PR dry-run не выполнен: " + safeError(err)
 	}
 	return fmt.Sprintf("matter-codex GitHub PR dry-run:\n- repo: `github:%s/%s`\n- head: `%s` `%s`\n- base: `%s` `%s`\n- title: `%s`\n- changes: none", preview.Owner, preview.Name, preview.Head, shortSHA(preview.HeadSHA), preview.Base, shortSHA(preview.BaseSHA), preview.Title)
+}
+
+func (svc *SlashCommandService) ensureRepositoryWebhookLine(ctx context.Context, command SlashCommand, provider string, owner string, name string) []string {
+	if provider != "github" {
+		return nil
+	}
+	if svc.cfg.RepositoryProvider == nil {
+		return []string{"webhook: skipped, GitHub provider is not configured"}
+	}
+	if !svc.cfg.GitHubWebhookConfigured {
+		return []string{"webhook: skipped, GitHub webhook secret is not configured"}
+	}
+	registration, err := svc.cfg.RepositoryProvider.EnsureRepositoryWebhook(ctx, owner, name)
+	if err != nil {
+		return []string{"webhook: not registered: " + safeError(err)}
+	}
+	svc.recordGitHubAudit(ctx, command, "github.webhook.ensured", owner+"/"+name, "github repository webhook ensured")
+	action := "updated"
+	if registration.Created {
+		action = "created"
+	}
+	return []string{
+		fmt.Sprintf("webhook: `%s` id `%d` active `%t`", action, registration.ID, registration.Active),
+		fmt.Sprintf("webhook events: `%s`", strings.Join(registration.Events, "`, `")),
+	}
 }
 
 func (svc *SlashCommandService) handleGitHubPRCreate(ctx context.Context, args []string, command SlashCommand) string {

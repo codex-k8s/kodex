@@ -25,6 +25,7 @@ func TestSlashTokenCheck(t *testing.T) {
 		"mattermost bot token: configured",
 		"mattermost slash token: configured",
 		"github token: configured",
+		"github webhook secret: missing",
 		"database dsn: configured",
 		"storage: ready",
 	} {
@@ -62,6 +63,28 @@ func TestSlashRepoAddCreatesChannelAndStoresRepository(t *testing.T) {
 	}
 	if !store.auditRecorded {
 		t.Fatal("audit event was not recorded")
+	}
+}
+
+func TestSlashRepoAddEnsuresGitHubWebhook(t *testing.T) {
+	store := &fakeAdminStore{}
+	provider := &fakeRepositoryProvider{}
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		StatusService:           testStatusService(),
+		Store:                   store,
+		RepositoryProvider:      provider,
+		GitHubTokenConfigured:   true,
+		GitHubWebhookConfigured: true,
+		StorageReady:            true,
+	})
+
+	text := svc.Handle(context.Background(), SlashCommand{Text: "repo add github codex-k8s/matter-codex main", UserName: "owner"})
+
+	if !strings.Contains(text, "webhook: `created` id `99` active `true`") {
+		t.Fatalf("Handle(repo add) text = %q", text)
+	}
+	if provider.webhookOwner != "codex-k8s" || provider.webhookName != "matter-codex" {
+		t.Fatalf("webhook target = %s/%s", provider.webhookOwner, provider.webhookName)
 	}
 }
 
@@ -122,6 +145,25 @@ func TestSlashGitHubPRStatus(t *testing.T) {
 	}
 	if provider.prNumber != 4 {
 		t.Fatalf("prNumber = %d", provider.prNumber)
+	}
+}
+
+func TestSlashGitHubWebhookEnsure(t *testing.T) {
+	provider := &fakeRepositoryProvider{}
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		StatusService:           testStatusService(),
+		RepositoryProvider:      provider,
+		GitHubTokenConfigured:   true,
+		GitHubWebhookConfigured: true,
+	})
+
+	text := svc.Handle(context.Background(), SlashCommand{Text: "github webhook ensure codex-k8s/matter-codex"})
+
+	if !strings.Contains(text, "matter-codex GitHub webhook") || !strings.Contains(text, "webhook: `created`") {
+		t.Fatalf("Handle(github webhook ensure) text = %q", text)
+	}
+	if provider.webhookOwner != "codex-k8s" || provider.webhookName != "matter-codex" {
+		t.Fatalf("webhook target = %s/%s", provider.webhookOwner, provider.webhookName)
 	}
 }
 
@@ -203,6 +245,8 @@ type fakeRepositoryProvider struct {
 	resolvedBranch string
 	createdBranch  string
 	prNumber       int
+	webhookOwner   string
+	webhookName    string
 }
 
 func (provider *fakeRepositoryProvider) CheckRepository(_ context.Context, owner string, name string) (providerrepo.RepositoryAccess, error) {
@@ -283,5 +327,20 @@ func (provider *fakeRepositoryProvider) GetPullRequest(_ context.Context, owner 
 		LatestReviews: []providerrepo.PullRequestReview{
 			{State: "APPROVED", Author: "reviewer"},
 		},
+	}, nil
+}
+
+func (provider *fakeRepositoryProvider) EnsureRepositoryWebhook(_ context.Context, owner string, name string) (providerrepo.WebhookRegistration, error) {
+	provider.webhookOwner = owner
+	provider.webhookName = name
+	return providerrepo.WebhookRegistration{
+		Provider: "github",
+		Owner:    owner,
+		Name:     name,
+		ID:       99,
+		URL:      "https://matter-codex.example/github/webhook",
+		Events:   []string{"pull_request", "push"},
+		Created:  true,
+		Active:   true,
 	}, nil
 }

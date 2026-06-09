@@ -12,6 +12,7 @@
 - выполнять admin-команды `/agents repo add`, `/agents repo list`, `/agents token check`, `/agents profile list`;
 - выполнять GitHub adapter команды `/agents github check`, `/agents github branch`, `/agents github pr`;
 - принимать GitHub webhook callback `/github/webhook` с HMAC validation;
+- автоматически регистрировать repo webhook при `/agents repo add github owner/name [default-branch]`, если GitHub token имеет hook write permission;
 - применять storage migrations и хранить repository/profile/audit metadata в PostgreSQL;
 - создавать Mattermost repo-channel при добавлении repository;
 - хранить Mattermost bot/slash tokens только в Kubernetes Secret;
@@ -152,6 +153,7 @@ bash scripts/remote/bootstrap-mattermost-bot.sh --env-file .env
 /agents github branch dry-run codex-k8s/matter-codex matter-codex-smoke main
 /agents github pr dry-run codex-k8s/matter-codex main main Smoke PR dry run
 /agents github pr status codex-k8s/matter-codex 4
+/agents github webhook ensure codex-k8s/matter-codex
 ```
 
 Ожидаемый результат:
@@ -161,6 +163,9 @@ bash scripts/remote/bootstrap-mattermost-bot.sh --env-file .env
 - branch dry-run показывает base sha и `changes: none`;
 - PR dry-run проверяет head/base refs и не создает PR;
 - PR status показывает state, draft/merged, reviews/comments fetched.
+- webhook ensure создает или обновляет repo webhook, если token имеет hook write permission; при нехватке прав команда возвращает безопасную ошибку без вывода token/secret.
+
+При `/agents repo add github owner/name [default-branch]` bot-service также пытается выполнить webhook ensure автоматически и добавляет строку `webhook: ...` в ответ.
 
 Проверка webhook reject без корректной подписи:
 

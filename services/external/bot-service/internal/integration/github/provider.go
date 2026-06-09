@@ -2,6 +2,7 @@ package github
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -11,24 +12,51 @@ import (
 
 const providerName = "github"
 
+var defaultWebhookEvents = []string{
+	"pull_request",
+	"pull_request_review",
+	"pull_request_review_comment",
+	"issue_comment",
+	"push",
+}
+
+type ProviderConfig struct {
+	Token         string
+	WebhookURL    string
+	WebhookSecret string
+	WebhookEvents []string
+}
+
 type Provider struct {
-	client *githubapi.Client
+	client        *githubapi.Client
+	webhookURL    string
+	webhookSecret string
+	webhookEvents []string
 }
 
 var _ providerrepo.RepositoryProvider = (*Provider)(nil)
 
-func NewProvider(token string) (*Provider, error) {
-	client, err := githubapi.NewClient(githubapi.WithAuthToken(strings.TrimSpace(token)))
+func NewProvider(cfg ProviderConfig) (*Provider, error) {
+	client, err := githubapi.NewClient(githubapi.WithAuthToken(strings.TrimSpace(cfg.Token)))
 	if err != nil {
 		return nil, fmt.Errorf("create github client: %w", err)
 	}
-	return &Provider{client: client}, nil
+	events := cfg.WebhookEvents
+	if len(events) == 0 {
+		events = defaultWebhookEvents
+	}
+	return &Provider{
+		client:        client,
+		webhookURL:    strings.TrimSpace(cfg.WebhookURL),
+		webhookSecret: strings.TrimSpace(cfg.WebhookSecret),
+		webhookEvents: append([]string(nil), events...),
+	}, nil
 }
 
 func (provider *Provider) CheckRepository(ctx context.Context, owner string, name string) (providerrepo.RepositoryAccess, error) {
 	repo, _, err := provider.client.Repositories.Get(ctx, owner, name)
 	if err != nil {
-		return providerrepo.RepositoryAccess{}, fmt.Errorf("github repository access: %w", err)
+		return providerrepo.RepositoryAccess{}, githubError("github repository access", err)
 	}
 	permissions := repo.GetPermissions()
 	return providerrepo.RepositoryAccess{
@@ -69,7 +97,7 @@ func (provider *Provider) CreateBranch(ctx context.Context, owner string, name s
 		SHA: baseRef.GetObject().GetSHA(),
 	})
 	if err != nil {
-		return providerrepo.BranchRef{}, fmt.Errorf("github create branch: %w", err)
+		return providerrepo.BranchRef{}, githubError("github create branch", err)
 	}
 	return providerrepo.BranchRef{
 		Provider: providerName,
@@ -111,7 +139,7 @@ func (provider *Provider) CreatePullRequest(ctx context.Context, input providerr
 		Draft: githubapi.Ptr(input.Draft),
 	})
 	if err != nil {
-		return providerrepo.PullRequestSummary{}, fmt.Errorf("github create pull request: %w", err)
+		return providerrepo.PullRequestSummary{}, githubError("github create pull request", err)
 	}
 	return summaryFromPullRequest(input.Owner, input.Name, pullRequest), nil
 }
@@ -119,13 +147,13 @@ func (provider *Provider) CreatePullRequest(ctx context.Context, input providerr
 func (provider *Provider) GetPullRequest(ctx context.Context, owner string, name string, number int) (providerrepo.PullRequestSummary, error) {
 	pullRequest, _, err := provider.client.PullRequests.Get(ctx, owner, name, number)
 	if err != nil {
-		return providerrepo.PullRequestSummary{}, fmt.Errorf("github get pull request: %w", err)
+		return providerrepo.PullRequestSummary{}, githubError("github get pull request", err)
 	}
 	summary := summaryFromPullRequest(owner, name, pullRequest)
 
 	reviews, _, err := provider.client.PullRequests.ListReviews(ctx, owner, name, number, &githubapi.ListOptions{PerPage: 20})
 	if err != nil {
-		return providerrepo.PullRequestSummary{}, fmt.Errorf("github list pull request reviews: %w", err)
+		return providerrepo.PullRequestSummary{}, githubError("github list pull request reviews", err)
 	}
 	summary.ReviewCount = len(reviews)
 	for _, review := range latestReviews(reviews, 5) {
@@ -139,18 +167,89 @@ func (provider *Provider) GetPullRequest(ctx context.Context, owner string, name
 		ListOptions: githubapi.ListOptions{PerPage: 1},
 	})
 	if err != nil {
-		return providerrepo.PullRequestSummary{}, fmt.Errorf("github list pull request comments: %w", err)
+		return providerrepo.PullRequestSummary{}, githubError("github list pull request comments", err)
 	}
 	summary.ReviewCommentCount = len(comments)
 	return summary, nil
 }
 
+func (provider *Provider) EnsureRepositoryWebhook(ctx context.Context, owner string, name string) (providerrepo.WebhookRegistration, error) {
+	if provider.webhookURL == "" || provider.webhookSecret == "" {
+		return providerrepo.WebhookRegistration{}, fmt.Errorf("github webhook config is not complete")
+	}
+	hook := &githubapi.Hook{
+		Config: &githubapi.HookConfig{
+			URL:         githubapi.Ptr(provider.webhookURL),
+			ContentType: githubapi.Ptr("json"),
+			InsecureSSL: githubapi.Ptr("0"),
+			Secret:      githubapi.Ptr(provider.webhookSecret),
+		},
+		Events: append([]string(nil), provider.webhookEvents...),
+		Active: githubapi.Ptr(true),
+	}
+
+	existing, err := provider.findWebhook(ctx, owner, name)
+	if err != nil {
+		return providerrepo.WebhookRegistration{}, err
+	}
+	created := false
+	if existing == nil {
+		existing, _, err = provider.client.Repositories.CreateHook(ctx, owner, name, hook)
+		created = true
+	} else {
+		existing, _, err = provider.client.Repositories.EditHook(ctx, owner, name, existing.GetID(), hook)
+	}
+	if err != nil {
+		return providerrepo.WebhookRegistration{}, githubError("github ensure repository webhook", err)
+	}
+	if _, err := provider.client.Repositories.PingHook(ctx, owner, name, existing.GetID()); err != nil {
+		return providerrepo.WebhookRegistration{}, githubError("github ping repository webhook", err)
+	}
+	return providerrepo.WebhookRegistration{
+		Provider: providerName,
+		Owner:    owner,
+		Name:     name,
+		ID:       existing.GetID(),
+		URL:      provider.webhookURL,
+		Events:   append([]string(nil), provider.webhookEvents...),
+		Created:  created,
+		Active:   existing.GetActive(),
+	}, nil
+}
+
+func (provider *Provider) findWebhook(ctx context.Context, owner string, name string) (*githubapi.Hook, error) {
+	hooks, _, err := provider.client.Repositories.ListHooks(ctx, owner, name, &githubapi.ListOptions{PerPage: 100})
+	if err != nil {
+		return nil, githubError("github list repository webhooks", err)
+	}
+	for _, hook := range hooks {
+		if hook.GetConfig().GetURL() == provider.webhookURL {
+			return hook, nil
+		}
+	}
+	return nil, nil
+}
+
 func (provider *Provider) getBranchRef(ctx context.Context, owner string, name string, branch string) (*githubapi.Reference, error) {
 	ref, _, err := provider.client.Git.GetRef(ctx, owner, name, "heads/"+branch)
 	if err != nil {
-		return nil, fmt.Errorf("github get branch ref: %w", err)
+		return nil, githubError("github get branch ref", err)
 	}
 	return ref, nil
+}
+
+func githubError(operation string, err error) error {
+	var response *githubapi.ErrorResponse
+	if errors.As(err, &response) {
+		message := strings.TrimSpace(response.Message)
+		if message == "" && response.Response != nil {
+			message = response.Response.Status
+		}
+		if message != "" {
+			return fmt.Errorf("%s: %s", operation, message)
+		}
+	}
+	return fmt.Errorf("%s: %w", operation, err)
 }
 
 func summaryFromPullRequest(owner string, name string, pullRequest *githubapi.PullRequest) providerrepo.PullRequestSummary {

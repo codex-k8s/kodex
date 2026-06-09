@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	statusservice "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/service"
 	githubintegration "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/integration/github"
@@ -46,18 +47,19 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		return err
 	}
 	slashSvc := statusservice.NewSlashCommandService(statusservice.SlashCommandServiceConfig{
-		StatusService:         statusSvc,
-		Store:                 storage,
-		ChannelManager:        channelManager,
-		RepositoryProvider:    gitHubProvider,
-		DefaultTeamName:       cfg.DefaultTeamName,
-		BotTokenConfigured:    cfg.BotTokenConfigured(),
-		SlashTokenConfigured:  cfg.SlashTokenConfigured(),
-		GitHubTokenConfigured: cfg.GitHubTokenConfigured(),
-		DatabaseConfigured:    cfg.DatabaseConfigured(),
-		StorageReady:          storage != nil,
-		MattermostConfigured:  cfg.MattermostSiteURL != "",
-		ChannelManagerEnabled: channelManager != nil,
+		StatusService:           statusSvc,
+		Store:                   storage,
+		ChannelManager:          channelManager,
+		RepositoryProvider:      gitHubProvider,
+		DefaultTeamName:         cfg.DefaultTeamName,
+		BotTokenConfigured:      cfg.BotTokenConfigured(),
+		SlashTokenConfigured:    cfg.SlashTokenConfigured(),
+		GitHubTokenConfigured:   cfg.GitHubTokenConfigured(),
+		GitHubWebhookConfigured: cfg.GitHubWebhookConfigured(),
+		DatabaseConfigured:      cfg.DatabaseConfigured(),
+		StorageReady:            storage != nil,
+		MattermostConfigured:    cfg.MattermostSiteURL != "",
+		ChannelManagerEnabled:   channelManager != nil,
 	})
 
 	router := httptransport.NewRouter(httptransport.RouterConfig{
@@ -100,11 +102,23 @@ func openGitHubProvider(cfg Config) (*githubintegration.Provider, error) {
 	if !cfg.GitHubTokenConfigured() {
 		return nil, nil
 	}
-	provider, err := githubintegration.NewProvider(cfg.GitHubToken)
+	provider, err := githubintegration.NewProvider(githubintegration.ProviderConfig{
+		Token:         cfg.GitHubToken,
+		WebhookURL:    gitHubWebhookURL(cfg),
+		WebhookSecret: cfg.GitHubWebhookSecret,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("open github provider: %w", err)
 	}
 	return provider, nil
+}
+
+func gitHubWebhookURL(cfg Config) string {
+	baseURL := strings.TrimRight(strings.TrimSpace(cfg.BotServiceSiteURL), "/")
+	if baseURL == "" {
+		return ""
+	}
+	return baseURL + "/github/webhook"
 }
 
 func newPrometheusRegistry() *prometheus.Registry {

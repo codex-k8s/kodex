@@ -55,6 +55,17 @@ type PullRequestReview struct {
 	Author string
 }
 
+type WebhookRegistration struct {
+	Provider string
+	Owner    string
+	Name     string
+	ID       int64
+	URL      string
+	Events   []string
+	Created  bool
+	Active   bool
+}
+
 type PullRequestInput struct {
 	Owner string
 	Name  string
@@ -72,4 +83,5 @@ type RepositoryProvider interface {
 	PreviewPullRequest(ctx context.Context, input PullRequestInput) (PullRequestPreview, error)
 	CreatePullRequest(ctx context.Context, input PullRequestInput) (PullRequestSummary, error)
 	GetPullRequest(ctx context.Context, owner string, name string, number int) (PullRequestSummary, error)
+	EnsureRepositoryWebhook(ctx context.Context, owner string, name string) (WebhookRegistration, error)
 }
