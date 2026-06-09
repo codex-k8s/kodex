@@ -8,6 +8,9 @@ metadata:
     app.kubernetes.io/component: ingress
   annotations:
     cert-manager.io/cluster-issuer: ${MATTERCODEX_CLUSTER_ISSUER}
+    kubernetes.io/ingress.class: ${MATTERCODEX_INGRESS_CLASS}
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
 spec:
   ingressClassName: ${MATTERCODEX_INGRESS_CLASS}
   tls:
