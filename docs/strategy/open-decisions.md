@@ -1,124 +1,85 @@
-# Open Decisions
+# Decisions
 
-Перед кодовой реализацией нужно выбрать эти решения. Приоритет - не заблокировать быстрый MVP и не сломать будущую совместимость с `kodex`.
+Этот документ фиксирует решения после первичного review. `matter-codex` является самостоятельным продуктом и не проектируется как часть `kodex`. `kodex` может быть первым dogfooding-репозиторием, но не архитектурной зависимостью.
 
 ## 1. Модель изоляции agent run
 
-Есть противоречие:
+### Принято для MVP
 
-- пользовательская установка для этого проекта: каждый агент запускается в своем pod в namespace Mattermost и имеет PVC;
-- каноника `kodex`: slot первой версии - отдельный namespace задачи.
-
-### Вариант A: один namespace `mattermost`
+Один namespace `mattermost`.
 
 Agent pod и PVC создаются в одном namespace `mattermost`.
 
-Плюсы:
-
-- быстрее реализовать;
-- проще bootstrap и диагностика;
-- соответствует текущему запросу;
-- меньше RBAC и cleanup-сложности.
-
-Минусы:
-
-- слабее изоляция между run;
-- больше риск случайного доступа к соседним PVC/Secrets при ошибке RBAC;
-- дальше придется мигрировать к namespace-per-run.
-
-### Вариант B: namespace-per-run
-
-Mattermost и bot-service живут в `mattermost`, каждый agent run получает отдельный namespace.
-
-Плюсы:
-
-- ближе к `kodex`;
-- чище cleanup;
-- лучше security boundary;
-- проще будущий runtime-manager extraction.
-
-Минусы:
-
-- дольше первый rollout;
-- сложнее RBAC;
-- больше Kubernetes-объектов и edge cases.
-
-### Рекомендация
-
-Для самого короткого MVP выбрать вариант A, но:
+Ограничения для реализации:
 
 - создавать отдельный ServiceAccount на run или role;
 - использовать label-based ownership;
 - запрещать mount чужих PVC;
 - не давать agent pod права читать Kubernetes API;
-- оставить runtime interface так, чтобы перейти на namespace-per-run без изменения orchestrator.
+- оставить runtime interface так, чтобы при необходимости перейти на namespace-per-run без изменения orchestrator.
 
 ## 2. Mattermost install path
 
-### Вариант A: official Helm/Operator
+### Принято для MVP
 
-Ближе к официальной документации, но тяжелее для быстрого dogfooding.
+Custom manifests для single-server MVP. HA, managed PostgreSQL/object storage и official Helm/Operator остаются upgrade path после dogfooding.
 
-### Вариант B: custom manifests
+## 3. Mattermost control surface
 
-Быстрее и прозрачнее для одного сервера, но требует собственного upgrade path.
+### Принято для MVP
 
-### Рекомендация
+Стартуем с external bot-service, но он обязан управлять Mattermost control surface:
 
-Вариант B для MVP. Зафиксировать переходный статус и не обещать HA до отдельного PR.
+- создавать дефолтные каналы после установки;
+- создавать project/repo channels при onboarding;
+- поддерживать несколько каналов на project/repo;
+- запускать manager sessions thread-ами в нужном канале;
+- показывать карточки run, actions и blockers в thread.
 
-## 3. Bot-service или Mattermost plugin
-
-### Вариант A: external bot-service
-
-Slash commands, REST API, interactive actions.
-
-### Вариант B: server plugin
-
-Глубже интеграция, но тяжелее rollout и совместимость.
-
-### Рекомендация
-
-Вариант A для MVP. Plugin рассматривать после стабильного workflow.
+Mattermost plugin остается допустимым вариантом, если первые ручные проверки покажут, что REST API, slash commands, interactive dialogs и buttons дают недостаточно удобный UX.
 
 ## 4. GitHub PAT или GitHub App
 
-### Вариант A: bot PAT
+### Принято для MVP
 
-Быстрее старт, уже есть env-ключи.
+Bot PAT для MVP, потому что ключи уже есть и это быстрее. В доменной модели использовать `provider account` и `credential`, чтобы позже перейти на GitHub App без переименования сущностей.
 
-### Вариант B: GitHub App
+## 5. OpenAI accounts
 
-Правильнее для production permissions и installations.
+### Принято для MVP
 
-### Рекомендация
+Авторизация OpenAI accounts должна идти через device-code flow. Система должна позволять:
 
-PAT для MVP, но abstractions назвать provider account/credential, не `pat` в доменной модели.
+- авторизовать несколько OpenAI accounts;
+- дать каждому account безопасное имя и status;
+- ограничивать account по agent profiles, projects и лимитам;
+- выбирать account для каждой agent session;
+- наследовать default account из agent profile.
 
-## 5. Prompt templates в БД или Git
+Raw `OPENAI_API_KEY` не является основной моделью runtime-доступа агентов.
 
-### Вариант A: БД
+## 6. Agent profile config
 
-Соответствует `kodex` target: flow, role и prompt templates канонически живут в БД.
+### Принято для MVP
 
-### Вариант B: Git fixtures
+Agent profile должен управлять не только prompt, но и Codex runtime config:
 
-Проще ревьюить prompt через PR, но хуже runtime-editing.
+- OpenAI account;
+- model policy;
+- sandbox/approval policy;
+- MCP servers;
+- `config.toml` overlay;
+- env bindings для credentials;
+- например Context7 MCP и ссылка на его API key credential.
 
-### Рекомендация
+## 7. Prompt templates в БД или Git
+
+### Принято для MVP
 
 БД как источник правды, Git fixtures только для seed/default templates.
 
-## 6. Один сервис или микросервисы
+## 8. Один сервис или микросервисы
 
-### Вариант A: modular monolith
+### Принято для MVP
 
-Один deployable service с явными модулями.
-
-### Вариант B: сразу owner-services
-
-Архитектурно чище, но не укладывается в быстрый MVP.
-
-### Рекомендация
-
-Modular monolith для MVP. Доменные модули держать совместимыми с будущим разделением.
+Modular monolith: один deployable service с явными внутренними модулями.

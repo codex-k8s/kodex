@@ -6,9 +6,10 @@
 
 1. Mattermost доступен по HTTPS.
 2. `matter-codex` bot-service подключен к Mattermost.
-3. Bot-service умеет отвечать на `/agents status`.
-4. После каждого PR сервис раскатывается в Kubernetes.
-5. Владелец проверяет сценарий и только потом merge.
+3. Существуют дефолтные каналы управления агентной системой.
+4. Bot-service умеет отвечать на `/agents status`.
+5. После каждого PR сервис раскатывается в Kubernetes.
+6. Владелец проверяет сценарий и только потом merge.
 
 ## Доступные env-источники
 
@@ -23,7 +24,7 @@
 - bootstrap allowlist: `BOOTSTRAP_*`;
 - Context7: `CONTEXT7_API_KEY`.
 
-Скрипты должны валидировать наличие ключей и печатать только имена отсутствующих ключей.
+Скрипты должны валидировать наличие ключей и печатать только имена отсутствующих ключей. `OPENAI_API_KEY` считается bootstrap/smoke fallback. Целевая авторизация agent sessions выполняется через OpenAI account profiles и device-code flow.
 
 ## Предлагаемый install path
 
@@ -34,7 +35,8 @@
 3. `scripts/k8s/install-foundation.sh` - namespace, secrets, ingress/TLS prerequisites.
 4. `scripts/k8s/install-mattermost.sh` - Mattermost + PostgreSQL + file PVC.
 5. `scripts/k8s/install-bot-service.sh` - `matter-codex` deployment/service/ingress.
-6. `scripts/k8s/smoke.sh` - readiness, HTTPS, bot `/healthz`, slash-command callback.
+6. `scripts/k8s/provision-mattermost.sh` - bot/service account, slash command и дефолтные каналы.
+7. `scripts/k8s/smoke.sh` - readiness, HTTPS, bot `/healthz`, slash-command callback и `/agents status`.
 
 ## Mattermost install strategy
 
@@ -84,6 +86,7 @@
 - rollout status для измененных workloads;
 - health endpoint сервиса;
 - Mattermost bot smoke или безопасный `/agents status`;
+- наличие дефолтных Mattermost-каналов;
 - отчет в Mattermost/консоль без секретов.
 
 ## Ручная проверка владельцем

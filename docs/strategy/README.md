@@ -6,18 +6,15 @@
 
 - `docs/idea/as-is.md` - ручная модель "manager + DEV/QA пары + PR + owner gate".
 - `docs/idea/to-be.md` - целевая Mattermost-система управления agent run.
-- `/home/s/projects/kodex/AGENTS.md` - правила работы основной платформы.
-- `/home/s/projects/kodex/refactoring/task.md` - Kubernetes-first, provider-first, agent-manager, flow/role/prompt в БД.
-- `/home/s/projects/kodex/refactoring/09-target-architecture.md` - owner-сервисы, `agent-manager`, `runtime-manager`, `provider-hub`, `interaction-hub`.
-- `/home/s/projects/kodex/refactoring/11-data-and-state-model.md` - владение состоянием и database-per-service как целевая модель.
-- `/home/s/projects/kodex/specs/asyncapi/agent-manager.v1.yaml` - события agent lifecycle.
-- `/home/s/projects/kodex/bootstrap/README.md` - live-safe bootstrap/deploy подход.
+- `/home/s/projects/kodex/**` - реальный первый dogfooding-репозиторий и источник требований из текущей ручной работы, но не архитектурная зависимость `matter-codex`.
 
 ## Внешние источники
 
 - Mattermost custom slash commands: https://developers.mattermost.com/integrate/slash-commands/custom/
 - Mattermost interactive messages: https://developers.mattermost.com/integrate/plugins/interactive-messages/
 - Mattermost interactive dialogs: https://developers.mattermost.com/integrate/plugins/interactive-dialogs/
+- Mattermost bot accounts: https://developers.mattermost.com/integrate/reference/bot-accounts/
+- Mattermost API documentation: https://developers.mattermost.com/api-documentation/
 - Mattermost Kubernetes deploy: https://docs.mattermost.com/deployment-guide/server/deploy-kubernetes.html
 - Mattermost Helm charts: https://github.com/mattermost/mattermost-helm
 - Kubernetes client-go: https://github.com/kubernetes/client-go
@@ -56,7 +53,10 @@
 ## Ключевые выводы
 
 - MVP должен быть не "чат-ботом", а малым orchestration контуром: Mattermost thread как карточка run, GitHub как источник PR/review, Kubernetes как runtime.
-- Первый срез лучше делать standalone-сервисом, но с доменными границами `agent-manager`, `runtime-manager`, `provider-hub`, `interaction-hub`, чтобы позже не конфликтовать с `kodex`.
-- Mattermost Plugin откладывается. Для скорости стартуем с внешнего bot-service: slash command, bot account REST API, interactive message actions.
+- `matter-codex` является отдельным продуктом. Он может управлять разработкой `kodex`, но `kodex` не должен зависеть от него кодом, схемами БД, API или runtime-контрактами.
+- Первый срез лучше делать standalone-сервисом с внутренними модулями: Mattermost surface, orchestrator, runtime, GitHub adapter, credentials, OpenAI accounts, agent profiles и audit.
+- Для скорости стартуем с внешнего bot-service поверх slash command, Mattermost REST API и interactive message actions. Mattermost plugin остается расширением, если REST/API не хватит для удобного UX.
+- После установки должны появляться дефолтные каналы управления, а onboarding repo/project должен создавать каналы проекта и привязки к manager sessions.
 - Codex agent запускается через `codex exec --json` в pod. Это дает поток событий, machine-readable статус и совместимость с non-interactive automation.
+- OpenAI-доступ в целевой MVP идет через отдельные OpenAI account profiles с device-code авторизацией, а не через один общий raw API key на все сессии.
 - Секреты не передаются в prompt. Runner получает их только как runtime env/file mount из Kubernetes Secret.

@@ -16,7 +16,7 @@
 Ручная проверка:
 
 - прочитать документы;
-- выбрать open decisions;
+- проверить зафиксированные решения;
 - утвердить структуру проекта и порядок PR.
 
 ## Кодовый PR 1: Mattermost bootstrap
@@ -45,12 +45,14 @@
 - `/healthz`;
 - Mattermost bot token config;
 - `/agents status`;
+- создание дефолтных Mattermost-каналов;
 - Kubernetes manifests для bot-service.
 
 Ручная проверка:
 
 - deploy bot-service;
 - выполнить `/agents status`;
+- проверить наличие `agents-control`, `agents-runs`, `agent-alerts`;
 - увидеть thread-safe ответ от бота.
 
 ## Кодовый PR 3: storage and admin commands
@@ -61,13 +63,18 @@
 - repositories;
 - credentials metadata;
 - OpenAI accounts;
+- device-code authorization session для OpenAI accounts;
 - agent profiles;
+- agent profile `config.toml` overlays;
+- Mattermost project/repo channel bindings;
 - audit events;
-- команды `/agents repo add`, `/agents token check`, `/agents profile list`.
+- команды `/agents repo add`, `/agents token check`, `/agents openai auth`, `/agents profile list`.
 
 Ручная проверка:
 
 - добавить тестовый repo;
+- авторизовать или проверить OpenAI account без вывода токенов;
+- создать канал repo/project;
 - проверить credential status без вывода значений;
 - увидеть audit event.
 
@@ -109,6 +116,9 @@
 
 - runner image с Codex CLI;
 - `codex exec --json`;
+- выбор OpenAI account по agent profile/session;
+- рендер `CODEX_HOME` и `config.toml` overlay;
+- MCP binding smoke на безопасном примере;
 - checkout repo;
 - branch/commit/push/PR prompt contract;
 - artifact parser.
