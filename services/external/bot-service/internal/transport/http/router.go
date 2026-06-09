@@ -10,48 +10,56 @@ import (
 	statusservice "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/service"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/value"
 	transportmodels "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/transport/http/models"
+	githubapi "github.com/google/go-github/v88/github"
 	mattermostmodel "github.com/mattermost/mattermost/server/public/model"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 const (
-	pathHealthz     = "/healthz"
-	pathHealthLivez = "/health/livez"
-	pathHealthReady = "/health/readyz"
-	pathReadyz      = "/readyz"
-	pathMetrics     = "/metrics"
-	pathAgentsSlash = "/mattermost/slash/agents"
+	pathHealthz       = "/healthz"
+	pathHealthLivez   = "/health/livez"
+	pathHealthReady   = "/health/readyz"
+	pathReadyz        = "/readyz"
+	pathMetrics       = "/metrics"
+	pathAgentsSlash   = "/mattermost/slash/agents"
+	pathGitHubWebhook = "/github/webhook"
 )
 
 type RouterConfig struct {
-	StatusService      *statusservice.StatusService
-	SlashService       *statusservice.SlashCommandService
-	SlashToken         string
-	MaxSlashFormBytes  int64
-	PrometheusRegistry *prometheus.Registry
-	Logger             *slog.Logger
+	StatusService         *statusservice.StatusService
+	SlashService          *statusservice.SlashCommandService
+	SlashToken            string
+	GitHubWebhookSecret   string
+	MaxSlashFormBytes     int64
+	MaxGitHubWebhookBytes int64
+	PrometheusRegistry    *prometheus.Registry
+	Logger                *slog.Logger
 }
 
 type Router struct {
-	statusService     *statusservice.StatusService
-	slashService      *statusservice.SlashCommandService
-	slashToken        string
-	maxSlashFormBytes int64
-	logger            *slog.Logger
-	mux               *http.ServeMux
+	statusService         *statusservice.StatusService
+	slashService          *statusservice.SlashCommandService
+	slashToken            string
+	gitHubWebhookSecret   string
+	maxSlashFormBytes     int64
+	maxGitHubWebhookBytes int64
+	logger                *slog.Logger
+	mux                   *http.ServeMux
 }
 
 var _ http.Handler = (*Router)(nil)
 
 func NewRouter(cfg RouterConfig) *Router {
 	router := &Router{
-		statusService:     cfg.StatusService,
-		slashService:      cfg.SlashService,
-		slashToken:        cfg.SlashToken,
-		maxSlashFormBytes: cfg.MaxSlashFormBytes,
-		logger:            cfg.Logger,
-		mux:               http.NewServeMux(),
+		statusService:         cfg.StatusService,
+		slashService:          cfg.SlashService,
+		slashToken:            cfg.SlashToken,
+		gitHubWebhookSecret:   cfg.GitHubWebhookSecret,
+		maxSlashFormBytes:     cfg.MaxSlashFormBytes,
+		maxGitHubWebhookBytes: cfg.MaxGitHubWebhookBytes,
+		logger:                cfg.Logger,
+		mux:                   http.NewServeMux(),
 	}
 	registry := cfg.PrometheusRegistry
 	if registry == nil {
@@ -63,6 +71,7 @@ func NewRouter(cfg RouterConfig) *Router {
 	router.mux.HandleFunc(pathReadyz, router.handleReady)
 	router.mux.Handle(pathMetrics, promhttp.HandlerFor(registry, promhttp.HandlerOpts{Registry: registry, EnableOpenMetrics: true}))
 	router.mux.HandleFunc(pathAgentsSlash, router.handleAgentsSlash)
+	router.mux.HandleFunc(pathGitHubWebhook, router.handleGitHubWebhook)
 	return router
 }
 
@@ -127,6 +136,41 @@ func (router *Router) handleAgentsSlash(w http.ResponseWriter, r *http.Request) 
 		TeamDomain:  strings.TrimSpace(r.PostForm.Get("team_domain")),
 	})
 	writeCommandResponse(w, http.StatusOK, ephemeral(result))
+}
+
+func (router *Router) handleGitHubWebhook(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, transportmodels.ErrorResponse{Error: "method_not_allowed"})
+		return
+	}
+	if strings.TrimSpace(router.gitHubWebhookSecret) == "" {
+		writeJSON(w, http.StatusServiceUnavailable, transportmodels.ErrorResponse{Error: "github_webhook_secret_not_configured"})
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, router.maxGitHubWebhookBytes)
+	payload, err := githubapi.ValidatePayload(r, []byte(router.gitHubWebhookSecret))
+	if err != nil {
+		router.logWarn("invalid github webhook signature", "error", err)
+		writeJSON(w, http.StatusUnauthorized, transportmodels.ErrorResponse{Error: "invalid_github_webhook_signature"})
+		return
+	}
+	eventType := githubapi.WebHookType(r)
+	if strings.TrimSpace(eventType) == "" {
+		writeJSON(w, http.StatusBadRequest, transportmodels.ErrorResponse{Error: "missing_github_webhook_event"})
+		return
+	}
+	if _, err := githubapi.ParseWebHook(eventType, payload); err != nil {
+		router.logWarn("invalid github webhook payload", "event", eventType, "error", err)
+		writeJSON(w, http.StatusBadRequest, transportmodels.ErrorResponse{Error: "invalid_github_webhook_payload"})
+		return
+	}
+	if router.logger != nil {
+		router.logger.Info("github webhook accepted", "event", eventType)
+	}
+	writeJSON(w, http.StatusAccepted, transportmodels.GitHubWebhookResponse{
+		Status: "accepted",
+		Event:  eventType,
+	})
 }
 
 func (router *Router) logWarn(message string, args ...any) {

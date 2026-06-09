@@ -67,6 +67,18 @@ spec:
                   name: ${MATTERCODEX_POSTGRES_SECRET}
                   key: mattermost-datasource
                   optional: true
+            - name: MATTERCODEX_GITHUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: ${MATTERCODEX_GITHUB_SECRET}
+                  key: github-token
+                  optional: true
+            - name: MATTERCODEX_GITHUB_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ${MATTERCODEX_GITHUB_SECRET}
+                  key: github-webhook-secret
+                  optional: true
             - name: GOMODCACHE
               value: /tmp/go/pkg/mod
             - name: GOCACHE

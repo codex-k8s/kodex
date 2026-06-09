@@ -10,18 +10,21 @@ import (
 
 // Config contains bot-service process settings.
 type Config struct {
-	HTTPAddr             string        `env:"MATTERCODEX_BOT_SERVICE_HTTP_ADDR" envDefault:":8080"`
-	MattermostSiteURL    string        `env:"MATTERCODEX_MATTERMOST_SITE_URL"`
-	BotServiceSiteURL    string        `env:"MATTERCODEX_BOT_SERVICE_SITE_URL"`
-	DefaultTeamName      string        `env:"MATTERCODEX_DEFAULT_TEAM_NAME" envDefault:"agents"`
-	DefaultChannels      []string      `env:"MATTERCODEX_DEFAULT_CHANNELS" envDefault:"agents-control:Agents Control,agents-runs:Agents Runs,agent-alerts:Agent Alerts,agents-audit:Agents Audit" envSeparator:","`
-	MattermostBotToken   string        `env:"MATTERCODEX_MATTERMOST_BOT_TOKEN"`
-	MattermostSlashToken string        `env:"MATTERCODEX_MATTERMOST_SLASH_TOKEN"`
-	DatabaseDSN          string        `env:"MATTERCODEX_DATABASE_DSN"`
-	StorageMigrations    bool          `env:"MATTERCODEX_STORAGE_MIGRATIONS_ENABLED" envDefault:"true"`
-	ReadHeaderTimeout    time.Duration `env:"MATTERCODEX_BOT_SERVICE_READ_HEADER_TIMEOUT" envDefault:"5s"`
-	ShutdownTimeout      time.Duration `env:"MATTERCODEX_BOT_SERVICE_SHUTDOWN_TIMEOUT" envDefault:"10s"`
-	MaxSlashFormBytes    int64         `env:"MATTERCODEX_BOT_SERVICE_MAX_SLASH_FORM_BYTES" envDefault:"65536"`
+	HTTPAddr              string        `env:"MATTERCODEX_BOT_SERVICE_HTTP_ADDR" envDefault:":8080"`
+	MattermostSiteURL     string        `env:"MATTERCODEX_MATTERMOST_SITE_URL"`
+	BotServiceSiteURL     string        `env:"MATTERCODEX_BOT_SERVICE_SITE_URL"`
+	DefaultTeamName       string        `env:"MATTERCODEX_DEFAULT_TEAM_NAME" envDefault:"agents"`
+	DefaultChannels       []string      `env:"MATTERCODEX_DEFAULT_CHANNELS" envDefault:"agents-control:Agents Control,agents-runs:Agents Runs,agent-alerts:Agent Alerts,agents-audit:Agents Audit" envSeparator:","`
+	MattermostBotToken    string        `env:"MATTERCODEX_MATTERMOST_BOT_TOKEN"`
+	MattermostSlashToken  string        `env:"MATTERCODEX_MATTERMOST_SLASH_TOKEN"`
+	GitHubToken           string        `env:"MATTERCODEX_GITHUB_TOKEN"`
+	GitHubWebhookSecret   string        `env:"MATTERCODEX_GITHUB_WEBHOOK_SECRET"`
+	DatabaseDSN           string        `env:"MATTERCODEX_DATABASE_DSN"`
+	StorageMigrations     bool          `env:"MATTERCODEX_STORAGE_MIGRATIONS_ENABLED" envDefault:"true"`
+	ReadHeaderTimeout     time.Duration `env:"MATTERCODEX_BOT_SERVICE_READ_HEADER_TIMEOUT" envDefault:"5s"`
+	ShutdownTimeout       time.Duration `env:"MATTERCODEX_BOT_SERVICE_SHUTDOWN_TIMEOUT" envDefault:"10s"`
+	MaxSlashFormBytes     int64         `env:"MATTERCODEX_BOT_SERVICE_MAX_SLASH_FORM_BYTES" envDefault:"65536"`
+	MaxGitHubWebhookBytes int64         `env:"MATTERCODEX_BOT_SERVICE_MAX_GITHUB_WEBHOOK_BYTES" envDefault:"262144"`
 }
 
 func LoadConfig() (Config, error) {
@@ -48,6 +51,9 @@ func (cfg Config) Validate() error {
 	if cfg.MaxSlashFormBytes <= 0 {
 		return fmt.Errorf("MATTERCODEX_BOT_SERVICE_MAX_SLASH_FORM_BYTES is invalid")
 	}
+	if cfg.MaxGitHubWebhookBytes <= 0 {
+		return fmt.Errorf("MATTERCODEX_BOT_SERVICE_MAX_GITHUB_WEBHOOK_BYTES is invalid")
+	}
 	if len(cfg.DefaultChannels) == 0 {
 		return fmt.Errorf("MATTERCODEX_DEFAULT_CHANNELS is required")
 	}
@@ -65,6 +71,14 @@ func (cfg Config) BotTokenConfigured() bool {
 
 func (cfg Config) SlashTokenConfigured() bool {
 	return strings.TrimSpace(cfg.MattermostSlashToken) != ""
+}
+
+func (cfg Config) GitHubTokenConfigured() bool {
+	return strings.TrimSpace(cfg.GitHubToken) != ""
+}
+
+func (cfg Config) GitHubWebhookConfigured() bool {
+	return strings.TrimSpace(cfg.GitHubWebhookSecret) != ""
 }
 
 func (cfg Config) DatabaseConfigured() bool {

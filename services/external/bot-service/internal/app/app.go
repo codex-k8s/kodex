@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	statusservice "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/service"
+	githubintegration "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/integration/github"
 	mattermostintegration "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/integration/mattermost"
 	adminpostgres "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/repository/postgres/admin"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/repository/postgres/migrations"
@@ -40,26 +42,35 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	if cfg.BotTokenConfigured() && cfg.MattermostSiteURL != "" {
 		channelManager = mattermostintegration.NewControlSurface(cfg.MattermostSiteURL, cfg.MattermostBotToken)
 	}
+	gitHubProvider, err := openGitHubProvider(cfg)
+	if err != nil {
+		return err
+	}
 	slashSvc := statusservice.NewSlashCommandService(statusservice.SlashCommandServiceConfig{
-		StatusService:         statusSvc,
-		Store:                 storage,
-		ChannelManager:        channelManager,
-		DefaultTeamName:       cfg.DefaultTeamName,
-		BotTokenConfigured:    cfg.BotTokenConfigured(),
-		SlashTokenConfigured:  cfg.SlashTokenConfigured(),
-		DatabaseConfigured:    cfg.DatabaseConfigured(),
-		StorageReady:          storage != nil,
-		MattermostConfigured:  cfg.MattermostSiteURL != "",
-		ChannelManagerEnabled: channelManager != nil,
+		StatusService:           statusSvc,
+		Store:                   storage,
+		ChannelManager:          channelManager,
+		RepositoryProvider:      gitHubProvider,
+		DefaultTeamName:         cfg.DefaultTeamName,
+		BotTokenConfigured:      cfg.BotTokenConfigured(),
+		SlashTokenConfigured:    cfg.SlashTokenConfigured(),
+		GitHubTokenConfigured:   cfg.GitHubTokenConfigured(),
+		GitHubWebhookConfigured: cfg.GitHubWebhookConfigured(),
+		DatabaseConfigured:      cfg.DatabaseConfigured(),
+		StorageReady:            storage != nil,
+		MattermostConfigured:    cfg.MattermostSiteURL != "",
+		ChannelManagerEnabled:   channelManager != nil,
 	})
 
 	router := httptransport.NewRouter(httptransport.RouterConfig{
-		StatusService:      statusSvc,
-		SlashService:       slashSvc,
-		SlashToken:         cfg.MattermostSlashToken,
-		MaxSlashFormBytes:  cfg.MaxSlashFormBytes,
-		PrometheusRegistry: newPrometheusRegistry(),
-		Logger:             logger,
+		StatusService:         statusSvc,
+		SlashService:          slashSvc,
+		SlashToken:            cfg.MattermostSlashToken,
+		GitHubWebhookSecret:   cfg.GitHubWebhookSecret,
+		MaxSlashFormBytes:     cfg.MaxSlashFormBytes,
+		MaxGitHubWebhookBytes: cfg.MaxGitHubWebhookBytes,
+		PrometheusRegistry:    newPrometheusRegistry(),
+		Logger:                logger,
 	})
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
@@ -85,6 +96,29 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	case err := <-errCh:
 		return err
 	}
+}
+
+func openGitHubProvider(cfg Config) (*githubintegration.Provider, error) {
+	if !cfg.GitHubTokenConfigured() {
+		return nil, nil
+	}
+	provider, err := githubintegration.NewProvider(githubintegration.ProviderConfig{
+		Token:         cfg.GitHubToken,
+		WebhookURL:    gitHubWebhookURL(cfg),
+		WebhookSecret: cfg.GitHubWebhookSecret,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("open github provider: %w", err)
+	}
+	return provider, nil
+}
+
+func gitHubWebhookURL(cfg Config) string {
+	baseURL := strings.TrimRight(strings.TrimSpace(cfg.BotServiceSiteURL), "/")
+	if baseURL == "" {
+		return ""
+	}
+	return baseURL + "/github/webhook"
 }
 
 func newPrometheusRegistry() *prometheus.Registry {

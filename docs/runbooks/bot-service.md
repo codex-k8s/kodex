@@ -10,6 +10,9 @@
 - принимать Mattermost slash callback `/mattermost/slash/agents`;
 - отвечать на `/agents status`;
 - выполнять admin-команды `/agents repo add`, `/agents repo list`, `/agents token check`, `/agents profile list`;
+- выполнять GitHub adapter команды `/agents github check`, `/agents github branch`, `/agents github pr`;
+- принимать GitHub webhook callback `/github/webhook` с HMAC validation;
+- автоматически регистрировать repo webhook при `/agents repo add github owner/name [default-branch]`, если GitHub token имеет hook write permission;
 - применять storage migrations и хранить repository/profile/audit metadata в PostgreSQL;
 - создавать Mattermost repo-channel при добавлении repository;
 - хранить Mattermost bot/slash tokens только в Kubernetes Secret;
@@ -26,8 +29,12 @@
 - `MATTERCODEX_BOT_SERVICE_INTERNAL_URL` - optional, внутренний callback URL для Mattermost slash command;
 - `MATTERCODEX_MATTERMOST_BOT_TOKEN` - нужен для provisioning Mattermost team/channels/slash command;
 - `MATTERCODEX_MATTERMOST_SLASH_TOKEN` - optional, обычно заполняется provisioning script в Kubernetes Secret;
+- `MATTERCODEX_GITHUB_SECRET` - optional, имя отдельного Kubernetes Secret для GitHub token/webhook secret;
+- `MATTERCODEX_GITHUB_TOKEN` - optional, GitHub token для bot-service; deploy-скрипты также принимают legacy `GITHUB_PAT` или `GIT_BOT_TOKEN`;
+- `MATTERCODEX_GITHUB_WEBHOOK_SECRET` - optional, secret для `/github/webhook`; deploy-скрипты также принимают legacy `GITHUB_WEBHOOK_SECRET`;
 - `MATTERCODEX_DATABASE_DSN` - optional, берется из Kubernetes Secret `mattermost-datasource` для storage/admin-команд;
 - `MATTERCODEX_STORAGE_MIGRATIONS_ENABLED` - optional, включает Go migrations на старте;
+- `MATTERCODEX_BOT_SERVICE_MAX_GITHUB_WEBHOOK_BYTES` - optional, лимит размера GitHub webhook payload;
 - `MATTERCODEX_DEFAULT_TEAM_NAME` - optional, по умолчанию `agents`;
 - `MATTERCODEX_DEFAULT_TEAM_DISPLAY_NAME` - optional;
 - `MATTERCODEX_DEFAULT_CHANNELS` - optional, список `name:Display Name` через запятую.
@@ -55,6 +62,8 @@ bash scripts/remote/install-bot-service.sh --env-file .env --dry-run=server
 ```
 
 Если Mattermost token еще не задан, Secret не создается, а Deployment использует optional secret refs.
+
+Если GitHub token или webhook secret заданы, deploy-скрипты создают отдельный Kubernetes Secret. Значения не печатаются.
 
 ## Health-only install
 
@@ -136,9 +145,48 @@ bash scripts/remote/bootstrap-mattermost-bot.sh --env-file .env
 
 Ожидаемый результат: команды отвечают ephemeral-сообщениями, repository появляется в списке, а Mattermost создаёт/показывает канал `repo-codex-k8s-matter-codex`.
 
+Дополнительная проверка GitHub adapter:
+
+```text
+/agents token check
+/agents github check codex-k8s/matter-codex
+/agents github branch dry-run codex-k8s/matter-codex matter-codex-smoke main
+/agents github pr dry-run codex-k8s/matter-codex main main Smoke PR dry run
+/agents github pr status codex-k8s/matter-codex 4
+/agents github webhook ensure codex-k8s/matter-codex
+```
+
+Ожидаемый результат:
+
+- token check показывает `github token: configured`;
+- repo check показывает default branch и безопасные permission-флаги;
+- branch dry-run показывает base sha и `changes: none`;
+- PR dry-run проверяет head/base refs и не создает PR;
+- PR status показывает state, draft/merged, reviews/comments fetched.
+- webhook ensure создает или обновляет repo webhook, если token имеет hook write permission; при нехватке прав команда возвращает безопасную ошибку без вывода token/secret.
+
+При `/agents repo add github owner/name [default-branch]` bot-service также пытается выполнить webhook ensure автоматически и добавляет строку `webhook: ...` в ответ.
+
+Проверка webhook reject без корректной подписи:
+
+```bash
+set -euo pipefail
+. scripts/lib/env.sh
+mattercodex_load_env_file .env
+mattercodex_validate_base_env
+curl -sS -o /dev/null -w '%{http_code}\n' \
+  -H 'Content-Type: application/json' \
+  -H 'X-GitHub-Event: ping' \
+  --data '{}' \
+  "${MATTERCODEX_BOT_SERVICE_SITE_URL%/}/github/webhook"
+```
+
+Ожидаемый результат: `401`.
+
 ## Безопасность
 
 - `.env` не коммитится.
 - Mattermost tokens не попадают в manifests render output.
+- GitHub token и webhook secret хранятся в отдельном Kubernetes Secret и не попадают в ConfigMap.
 - Slash token, полученный из Mattermost API, пишется во временный файл с правами `0600`, затем в Kubernetes Secret.
 - Логи provisioning показывают только безопасные статусы `exists/created/updated`.
