@@ -17,6 +17,8 @@ type Config struct {
 	DefaultChannels      []string      `env:"MATTERCODEX_DEFAULT_CHANNELS" envDefault:"agents-control:Agents Control,agents-runs:Agents Runs,agent-alerts:Agent Alerts,agents-audit:Agents Audit" envSeparator:","`
 	MattermostBotToken   string        `env:"MATTERCODEX_MATTERMOST_BOT_TOKEN"`
 	MattermostSlashToken string        `env:"MATTERCODEX_MATTERMOST_SLASH_TOKEN"`
+	DatabaseDSN          string        `env:"MATTERCODEX_DATABASE_DSN"`
+	StorageMigrations    bool          `env:"MATTERCODEX_STORAGE_MIGRATIONS_ENABLED" envDefault:"true"`
 	ReadHeaderTimeout    time.Duration `env:"MATTERCODEX_BOT_SERVICE_READ_HEADER_TIMEOUT" envDefault:"5s"`
 	ShutdownTimeout      time.Duration `env:"MATTERCODEX_BOT_SERVICE_SHUTDOWN_TIMEOUT" envDefault:"10s"`
 	MaxSlashFormBytes    int64         `env:"MATTERCODEX_BOT_SERVICE_MAX_SLASH_FORM_BYTES" envDefault:"65536"`
@@ -63,6 +65,10 @@ func (cfg Config) BotTokenConfigured() bool {
 
 func (cfg Config) SlashTokenConfigured() bool {
 	return strings.TrimSpace(cfg.MattermostSlashToken) != ""
+}
+
+func (cfg Config) DatabaseConfigured() bool {
+	return strings.TrimSpace(cfg.DatabaseDSN) != ""
 }
 
 func (cfg Config) ChannelNames() []string {

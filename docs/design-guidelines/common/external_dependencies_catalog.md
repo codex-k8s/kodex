@@ -14,6 +14,7 @@
 | Dependency | Version | Scope | Why |
 |---|---:|---|---|
 | `github.com/caarlos0/env/v11` | `v11.3.1` | Config | typed env -> struct parsing без самописного env loader в сервисе |
+| `github.com/jackc/pgx/v5` | `v5.10.0` | PostgreSQL | storage migrations/repositories через `pgxpool` без database/sql wrapper |
 | `github.com/mattermost/mattermost/server/public` | `v0.4.2` | Mattermost SDK/model | typed `CommandResponse` и публичные модели Mattermost вместо ручных JSON-структур |
 | `github.com/prometheus/client_golang` | `v1.23.2` | Observability | `/metrics`, Go/process collectors и Prometheus HTTP handler |
 
@@ -24,7 +25,6 @@
 | `k8s.io/client-go` | planned | Kubernetes integration | запуск agent pod/job, PVC, watcher/status через Kubernetes SDK |
 | `github.com/google/go-github/v82` | planned | Repository provider | GitHub provider adapter без ручной REST-обвязки |
 | `github.com/openai/openai-go/v3` | planned | Agent/OpenAI integration | официальный OpenAI Go SDK для будущего runtime-контура |
-| PostgreSQL driver, likely `github.com/jackc/pgx/v5` | planned | Persistence | основной доступ к PostgreSQL после появления БД платформы |
 
 ## Infrastructure and bootstrap tools - in use
 

@@ -10,6 +10,7 @@ func TestConfigDefaults(t *testing.T) {
 	t.Setenv("MATTERCODEX_BOT_SERVICE_SITE_URL", "")
 	t.Setenv("MATTERCODEX_MATTERMOST_BOT_TOKEN", "")
 	t.Setenv("MATTERCODEX_MATTERMOST_SLASH_TOKEN", "")
+	t.Setenv("MATTERCODEX_DATABASE_DSN", "")
 
 	cfg, err := LoadConfig()
 	if err != nil {
@@ -29,6 +30,12 @@ func TestConfigDefaults(t *testing.T) {
 	}
 	if cfg.SlashTokenConfigured() {
 		t.Fatal("SlashTokenConfigured() = true")
+	}
+	if cfg.DatabaseConfigured() {
+		t.Fatal("DatabaseConfigured() = true")
+	}
+	if !cfg.StorageMigrations {
+		t.Fatal("StorageMigrations = false")
 	}
 }
 

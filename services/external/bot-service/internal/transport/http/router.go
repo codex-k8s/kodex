@@ -26,6 +26,7 @@ const (
 
 type RouterConfig struct {
 	StatusService      *statusservice.StatusService
+	SlashService       *statusservice.SlashCommandService
 	SlashToken         string
 	MaxSlashFormBytes  int64
 	PrometheusRegistry *prometheus.Registry
@@ -34,6 +35,7 @@ type RouterConfig struct {
 
 type Router struct {
 	statusService     *statusservice.StatusService
+	slashService      *statusservice.SlashCommandService
 	slashToken        string
 	maxSlashFormBytes int64
 	logger            *slog.Logger
@@ -45,6 +47,7 @@ var _ http.Handler = (*Router)(nil)
 func NewRouter(cfg RouterConfig) *Router {
 	router := &Router{
 		statusService:     cfg.StatusService,
+		slashService:      cfg.SlashService,
 		slashToken:        cfg.SlashToken,
 		maxSlashFormBytes: cfg.MaxSlashFormBytes,
 		logger:            cfg.Logger,
@@ -112,11 +115,18 @@ func (router *Router) handleAgentsSlash(w http.ResponseWriter, r *http.Request) 
 	}
 
 	text := strings.TrimSpace(r.PostForm.Get("text"))
-	if text == "" || text == "status" {
+	if router.slashService == nil {
 		writeCommandResponse(w, http.StatusOK, ephemeral(router.statusService.SlashStatusText()))
 		return
 	}
-	writeCommandResponse(w, http.StatusOK, ephemeral("matter-codex: доступна команда `/agents status`."))
+	result := router.slashService.Handle(r.Context(), statusservice.SlashCommand{
+		Text:        text,
+		UserID:      strings.TrimSpace(r.PostForm.Get("user_id")),
+		UserName:    strings.TrimSpace(r.PostForm.Get("user_name")),
+		ChannelName: strings.TrimSpace(r.PostForm.Get("channel_name")),
+		TeamDomain:  strings.TrimSpace(r.PostForm.Get("team_domain")),
+	})
+	writeCommandResponse(w, http.StatusOK, ephemeral(result))
 }
 
 func (router *Router) logWarn(message string, args ...any) {
@@ -133,6 +143,8 @@ func healthResponse(snapshot value.StatusSnapshot) transportmodels.HealthRespons
 		MattermostConfigured: snapshot.MattermostConfigured,
 		BotTokenConfigured:   snapshot.BotTokenConfigured,
 		SlashTokenConfigured: snapshot.SlashTokenConfigured,
+		DatabaseConfigured:   snapshot.DatabaseConfigured,
+		StorageReady:         snapshot.StorageReady,
 		DefaultTeam:          snapshot.DefaultTeamName,
 		DefaultChannels:      snapshot.DefaultChannels,
 	}

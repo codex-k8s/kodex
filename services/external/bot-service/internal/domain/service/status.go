@@ -14,6 +14,8 @@ type Config struct {
 	MattermostConfigured bool
 	BotTokenConfigured   bool
 	SlashTokenConfigured bool
+	DatabaseConfigured   bool
+	StorageReady         bool
 	DefaultTeamName      string
 	DefaultChannels      []string
 }
@@ -34,6 +36,8 @@ func (svc *StatusService) Snapshot() value.StatusSnapshot {
 		MattermostConfigured: svc.cfg.MattermostConfigured,
 		BotTokenConfigured:   svc.cfg.BotTokenConfigured,
 		SlashTokenConfigured: svc.cfg.SlashTokenConfigured,
+		DatabaseConfigured:   svc.cfg.DatabaseConfigured,
+		StorageReady:         svc.cfg.StorageReady,
 		DefaultTeamName:      svc.cfg.DefaultTeamName,
 		DefaultChannels:      append([]string(nil), svc.cfg.DefaultChannels...),
 	}
@@ -47,6 +51,8 @@ func (svc *StatusService) SlashStatusText() string {
 		"mattermost: " + configuredLabel(snapshot.MattermostConfigured),
 		"bot token: " + configuredLabel(snapshot.BotTokenConfigured),
 		"slash token: " + configuredLabel(snapshot.SlashTokenConfigured),
+		"database: " + configuredLabel(snapshot.DatabaseConfigured),
+		"storage: " + readyLabel(snapshot.StorageReady),
 		"default team: " + snapshot.DefaultTeamName,
 		"default channels: " + strings.Join(snapshot.DefaultChannels, ", "),
 	}, "\n")
@@ -57,4 +63,11 @@ func configuredLabel(configured bool) string {
 		return "configured"
 	}
 	return "missing"
+}
+
+func readyLabel(ready bool) string {
+	if ready {
+		return "ready"
+	}
+	return "not ready"
 }
