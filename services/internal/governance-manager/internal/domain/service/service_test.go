@@ -370,7 +370,6 @@ func TestPrepareSelfDeployPlanGateUsesProjectScopedSelfDeployAccess(t *testing.T
 	assertCapturedGovernanceAccess(t, captured, actionRiskEvaluate, accesscatalog.ResourceGovernanceRiskAssessment)
 	assertCapturedGovernanceAccess(t, captured, actionGateRead, accesscatalog.ResourceGovernanceGate)
 	assertCapturedGovernanceAccess(t, captured, actionGateRequest, accesscatalog.ResourceGovernanceGate)
-	assertCapturedGovernanceAccess(t, captured, actionSignalRead, accesscatalog.ResourceGovernanceSignal)
 }
 
 func TestPrepareSelfDeployPlanGateClassifiesR3SafeFactors(t *testing.T) {

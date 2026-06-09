@@ -64,7 +64,6 @@ type RiskFactorFilter struct {
 type ReviewSignalFilter struct {
 	RiskAssessmentID *uuid.UUID
 	Target           value.ExternalRef
-	ProjectContext   value.ProjectContextRef
 	RoleKind         enum.ReviewRoleKind
 	Outcome          enum.ReviewSignalOutcome
 	Page             PageRequest
@@ -74,18 +73,16 @@ type ReviewSignalFilter struct {
 type GateRequestFilter struct {
 	RiskAssessmentID *uuid.UUID
 	Target           value.ExternalRef
-	ProjectContext   value.ProjectContextRef
 	Status           enum.GateRequestStatus
 	Page             PageRequest
 }
 
 // GateDecisionFilter filters gate decisions.
 type GateDecisionFilter struct {
-	GateRequestID  *uuid.UUID
-	Target         value.ExternalRef
-	ProjectContext value.ProjectContextRef
-	Outcome        enum.GateOutcome
-	Page           PageRequest
+	GateRequestID *uuid.UUID
+	Target        value.ExternalRef
+	Outcome       enum.GateOutcome
+	Page          PageRequest
 }
 
 // ReleaseDecisionPackageFilter filters release evidence packages.
@@ -108,11 +105,10 @@ type ReleaseDecisionFilter struct {
 
 // BlockingSignalFilter filters blocking signals by target and state.
 type BlockingSignalFilter struct {
-	Target         value.ExternalRef
-	ProjectContext value.ProjectContextRef
-	Status         enum.BlockingSignalStatus
-	Severity       enum.SignalSeverity
-	Page           PageRequest
+	Target   value.ExternalRef
+	Status   enum.BlockingSignalStatus
+	Severity enum.SignalSeverity
+	Page     PageRequest
 }
 
 // CommandIdentity identifies a mutating command for idempotent replay.

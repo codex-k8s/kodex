@@ -2673,10 +2673,7 @@ func (s *Service) authorizeGateTargetRead(ctx context.Context, meta QueryMeta, t
 }
 
 func (s *Service) authorizeGateTargetReadInProject(ctx context.Context, meta QueryMeta, target value.ExternalRef, project value.ProjectContextRef) error {
-	if strings.TrimSpace(target.Type) == "" || strings.TrimSpace(target.Ref) == "" {
-		return errs.ErrInvalidArgument
-	}
-	return s.authorizeQuery(ctx, meta, actionGateRead, projectScopedResource(gateTargetResource(target), project))
+	return s.authorizeTargetReadInProject(ctx, meta, actionGateRead, target, project, gateTargetResource)
 }
 
 func (s *Service) authorizeRiskAssessmentRead(ctx context.Context, meta QueryMeta, riskAssessmentID uuid.UUID) error {
@@ -2685,10 +2682,7 @@ func (s *Service) authorizeRiskAssessmentRead(ctx context.Context, meta QueryMet
 
 func (s *Service) authorizeRiskAssessmentList(ctx context.Context, meta QueryMeta, filter query.RiskAssessmentFilter) error {
 	if externalRefProvided(filter.Target) {
-		if strings.TrimSpace(filter.Target.Type) == "" || strings.TrimSpace(filter.Target.Ref) == "" {
-			return errs.ErrInvalidArgument
-		}
-		return s.authorizeQuery(ctx, meta, actionRiskRead, projectScopedResource(riskTargetResource(filter.Target), filter.ProjectContext))
+		return s.authorizeRiskTargetReadInProject(ctx, meta, filter.Target, filter.ProjectContext)
 	}
 	if resourceID := firstNonEmpty(filter.ProjectContext.ProjectRef, filter.ProjectContext.RepositoryRef); resourceID != "" {
 		return s.authorizeQuery(ctx, meta, actionRiskRead, riskContextResource(resourceID))
@@ -2696,9 +2690,20 @@ func (s *Service) authorizeRiskAssessmentList(ctx context.Context, meta QueryMet
 	return errs.ErrInvalidArgument
 }
 
+func (s *Service) authorizeRiskTargetReadInProject(ctx context.Context, meta QueryMeta, target value.ExternalRef, project value.ProjectContextRef) error {
+	return s.authorizeTargetReadInProject(ctx, meta, actionRiskRead, target, project, riskTargetResource)
+}
+
+func (s *Service) authorizeTargetReadInProject(ctx context.Context, meta QueryMeta, actionKey string, target value.ExternalRef, project value.ProjectContextRef, resource func(value.ExternalRef) resourceRef) error {
+	if strings.TrimSpace(target.Type) == "" || strings.TrimSpace(target.Ref) == "" {
+		return errs.ErrInvalidArgument
+	}
+	return s.authorizeQuery(ctx, meta, actionKey, projectScopedResource(resource(target), project))
+}
+
 func (s *Service) authorizeGateRequestList(ctx context.Context, meta QueryMeta, filter query.GateRequestFilter) error {
 	if externalRefProvided(filter.Target) {
-		return s.authorizeGateTargetReadInProject(ctx, meta, filter.Target, filter.ProjectContext)
+		return s.authorizeGateTargetRead(ctx, meta, filter.Target)
 	}
 	if filter.RiskAssessmentID != nil {
 		return s.authorizeRiskAssessmentRead(ctx, meta, *filter.RiskAssessmentID)
@@ -2711,10 +2716,7 @@ func (s *Service) authorizeReviewSignalList(ctx context.Context, meta QueryMeta,
 		return s.authorizeRiskAssessmentRead(ctx, meta, *filter.RiskAssessmentID)
 	}
 	if externalRefProvided(filter.Target) {
-		if strings.TrimSpace(filter.Target.Type) == "" || strings.TrimSpace(filter.Target.Ref) == "" {
-			return errs.ErrInvalidArgument
-		}
-		return s.authorizeQuery(ctx, meta, actionRiskRead, projectScopedResource(riskTargetResource(filter.Target), filter.ProjectContext))
+		return s.authorizeRiskTargetReadInProject(ctx, meta, filter.Target, value.ProjectContextRef{})
 	}
 	return errs.ErrInvalidArgument
 }
@@ -2724,7 +2726,7 @@ func (s *Service) authorizeGateDecisionList(ctx context.Context, meta QueryMeta,
 		return s.authorizeGateRead(ctx, meta, *filter.GateRequestID)
 	}
 	if externalRefProvided(filter.Target) {
-		return s.authorizeGateTargetReadInProject(ctx, meta, filter.Target, filter.ProjectContext)
+		return s.authorizeGateTargetRead(ctx, meta, filter.Target)
 	}
 	return errs.ErrInvalidArgument
 }
@@ -2766,7 +2768,7 @@ func (s *Service) authorizeBlockingSignalList(ctx context.Context, meta QueryMet
 	if strings.TrimSpace(filter.Target.Type) == "" || strings.TrimSpace(filter.Target.Ref) == "" {
 		return errs.ErrInvalidArgument
 	}
-	return s.authorizeQuery(ctx, meta, actionSignalRead, projectScopedResource(signalTargetResource(filter.Target), filter.ProjectContext))
+	return s.authorizeQuery(ctx, meta, actionSignalRead, signalTargetResource(filter.Target))
 }
 
 func readByID[T any](

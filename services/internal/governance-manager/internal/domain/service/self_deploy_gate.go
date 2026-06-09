@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 
 	"github.com/google/uuid"
@@ -116,7 +117,7 @@ func (s *Service) replayedSelfDeployPlanGateResult(ctx context.Context, result e
 		if err != nil {
 			return SelfDeployPlanGateResult{}, errs.ErrConflict
 		}
-		gateRequest, err = s.findSelfDeployGateRequestByID(ctx, input, target, gateRequestID, meta)
+		gateRequest, err = s.findSelfDeployGateRequestByID(ctx, assessment, gateRequestID, meta)
 		if err != nil {
 			return SelfDeployPlanGateResult{}, err
 		}
@@ -174,31 +175,22 @@ func (s *Service) findSelfDeployRiskAssessmentByID(ctx context.Context, input no
 	if err != nil {
 		return entity.RiskAssessment{}, err
 	}
-	for _, assessment := range assessments {
-		if assessment.ID == id {
-			return assessment, nil
-		}
-	}
-	return entity.RiskAssessment{}, errs.ErrConflict
+	return selectSelfDeployItemByID(assessments, id, func(assessment entity.RiskAssessment) uuid.UUID {
+		return assessment.ID
+	})
 }
 
-func (s *Service) findSelfDeployGateRequestByID(ctx context.Context, input normalizedSelfDeployPlanGateInput, target value.ExternalRef, id uuid.UUID, meta QueryMeta) (entity.GateRequest, error) {
+func (s *Service) findSelfDeployGateRequestByID(ctx context.Context, assessment entity.RiskAssessment, id uuid.UUID, meta QueryMeta) (entity.GateRequest, error) {
 	if id == uuid.Nil {
 		return entity.GateRequest{}, errs.ErrConflict
 	}
-	requests, _, err := s.ListGateRequests(ctx, ListGateRequestsInput{
-		Filter: query.GateRequestFilter{Target: target, ProjectContext: input.ProjectContext, Page: query.PageRequest{PageSize: governanceSummaryPageSize}},
-		Meta:   meta,
-	})
+	requests, err := s.selfDeployGateRequestsByAssessment(ctx, assessment, meta, governanceSummaryPageSize)
 	if err != nil {
 		return entity.GateRequest{}, err
 	}
-	for _, request := range requests {
-		if request.ID == id {
-			return request, nil
-		}
-	}
-	return entity.GateRequest{}, errs.ErrConflict
+	return selectSelfDeployItemByID(requests, id, func(request entity.GateRequest) uuid.UUID {
+		return request.ID
+	})
 }
 
 func (s *Service) findOrCreateSelfDeployRiskAssessment(ctx context.Context, input normalizedSelfDeployPlanGateInput, target value.ExternalRef, meta CommandMeta, queryMeta QueryMeta) (entity.RiskAssessment, error) {
@@ -227,10 +219,7 @@ func (s *Service) findOrCreateSelfDeployRiskAssessment(ctx context.Context, inpu
 
 func (s *Service) findOrCreateSelfDeployGateRequest(ctx context.Context, input normalizedSelfDeployPlanGateInput, target value.ExternalRef, assessment entity.RiskAssessment, meta CommandMeta, queryMeta QueryMeta) (entity.GateRequest, error) {
 	assessmentID := assessment.ID
-	requests, _, err := s.ListGateRequests(ctx, ListGateRequestsInput{
-		Filter: query.GateRequestFilter{Target: target, ProjectContext: input.ProjectContext, Page: query.PageRequest{PageSize: 10}},
-		Meta:   queryMeta,
-	})
+	requests, err := s.selfDeployGateRequestsByAssessment(ctx, assessment, queryMeta, 10)
 	if err != nil {
 		return entity.GateRequest{}, err
 	}
@@ -256,19 +245,51 @@ func (s *Service) selfDeployGateDecision(ctx context.Context, request entity.Gat
 	if request.ID == uuid.Nil {
 		return nil, nil
 	}
-	decisions, _, err := s.ListGateDecisions(ctx, ListGateDecisionsInput{
-		Filter: query.GateDecisionFilter{Target: target, ProjectContext: project, Page: query.PageRequest{PageSize: governanceSummaryPageSize}},
-		Meta:   meta,
+	if err := s.authorizeGateTargetReadInProject(ctx, meta, target, project); err != nil {
+		return nil, err
+	}
+	decisions, _, err := s.repository.ListGateDecisions(ctx, query.GateDecisionFilter{
+		GateRequestID: &request.ID,
+		Page:          query.PageRequest{PageSize: governanceSummaryPageSize},
 	})
 	if err != nil {
 		return nil, err
 	}
-	for _, decision := range decisions {
-		if decision.GateRequestID == request.ID {
-			return &decision, nil
+	decision, err := selectSelfDeployItemByID(decisions, request.ID, func(decision entity.GateDecision) uuid.UUID {
+		return decision.GateRequestID
+	})
+	if errors.Is(err, errs.ErrConflict) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &decision, nil
+}
+
+func (s *Service) selfDeployGateRequestsByAssessment(ctx context.Context, assessment entity.RiskAssessment, meta QueryMeta, pageSize int32) ([]entity.GateRequest, error) {
+	if assessment.ID == uuid.Nil {
+		return nil, errs.ErrConflict
+	}
+	if err := s.authorizeGateTargetReadInProject(ctx, meta, assessment.Target, assessment.ProjectContext); err != nil {
+		return nil, err
+	}
+	assessmentID := assessment.ID
+	requests, _, err := s.repository.ListGateRequests(ctx, query.GateRequestFilter{
+		RiskAssessmentID: &assessmentID,
+		Page:             query.PageRequest{PageSize: pageSize},
+	})
+	return requests, err
+}
+
+func selectSelfDeployItemByID[T any](items []T, id uuid.UUID, itemID func(T) uuid.UUID) (T, error) {
+	var zero T
+	for _, item := range items {
+		if itemID(item) == id {
+			return item, nil
 		}
 	}
-	return nil, nil
+	return zero, errs.ErrConflict
 }
 
 func normalizeSelfDeployPlanGateInput(input SelfDeployPlanGateInput) (normalizedSelfDeployPlanGateInput, error) {

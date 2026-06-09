@@ -62,11 +62,9 @@ var selfDeployServiceAccessGrants = []selfDeployServiceAccessGrant{
 	{subjectID: "agent-manager", actionKey: accesscatalog.ActionGovernanceRiskRead, resourceType: accesscatalog.ResourceGovernanceRiskAssessment},
 	{subjectID: "agent-manager", actionKey: accesscatalog.ActionGovernanceGateRequest, resourceType: accesscatalog.ResourceGovernanceGate},
 	{subjectID: "agent-manager", actionKey: accesscatalog.ActionGovernanceGateRead, resourceType: accesscatalog.ResourceGovernanceGate},
-	{subjectID: "agent-manager", actionKey: accesscatalog.ActionGovernanceSignalRead, resourceType: accesscatalog.ResourceGovernanceSignal},
 	{subjectID: "staff-gateway", actionKey: accesscatalog.ActionProjectPolicyRead, resourceType: accesscatalog.ResourceServicesPolicy},
 	{subjectID: "staff-gateway", actionKey: accesscatalog.ActionGovernanceRiskRead, resourceType: accesscatalog.ResourceGovernanceRiskAssessment},
 	{subjectID: "staff-gateway", actionKey: accesscatalog.ActionGovernanceGateRead, resourceType: accesscatalog.ResourceGovernanceGate},
-	{subjectID: "staff-gateway", actionKey: accesscatalog.ActionGovernanceSignalRead, resourceType: accesscatalog.ResourceGovernanceSignal},
 }
 
 func main() {
