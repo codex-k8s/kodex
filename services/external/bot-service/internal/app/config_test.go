@@ -52,8 +52,17 @@ func TestConfigDefaults(t *testing.T) {
 	if cfg.RuntimeSmokeImage != "busybox:1.36" {
 		t.Fatalf("RuntimeSmokeImage = %q", cfg.RuntimeSmokeImage)
 	}
+	if cfg.AgentRunnerImage != "node:22-alpine" {
+		t.Fatalf("AgentRunnerImage = %q", cfg.AgentRunnerImage)
+	}
+	if cfg.CodexPackage != "@openai/codex@0.138.0" {
+		t.Fatalf("CodexPackage = %q", cfg.CodexPackage)
+	}
 	if cfg.RuntimeWorkspaceSize != "1Gi" {
 		t.Fatalf("RuntimeWorkspaceSize = %q", cfg.RuntimeWorkspaceSize)
+	}
+	if cfg.OpenAISecretName != "matter-codex-openai" {
+		t.Fatalf("OpenAISecretName = %q", cfg.OpenAISecretName)
 	}
 	if !cfg.StorageMigrations {
 		t.Fatal("StorageMigrations = false")
@@ -70,10 +79,14 @@ func TestConfigValidationRejectsBadTimeout(t *testing.T) {
 		MaxSlashFormBytes:     1024,
 		MaxGitHubWebhookBytes: 1024,
 		RuntimeSmokeImage:     "busybox:1.36",
+		AgentRunnerImage:      "node:22-alpine",
+		CodexPackage:          "@openai/codex@0.138.0",
 		RuntimeWorkspaceSize:  "1Gi",
 		RuntimeJobTTLSeconds:  86400,
 		RuntimeLogTailLines:   40,
 		AgentServiceAccount:   "matter-codex-agent-runner",
+		OpenAISecretName:      "matter-codex-openai",
+		GitHubSecretName:      "matter-codex-github",
 	}
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("Validate() error = nil")
@@ -90,10 +103,14 @@ func TestConfigValidationNormalizesLocale(t *testing.T) {
 		MaxSlashFormBytes:     1024,
 		MaxGitHubWebhookBytes: 1024,
 		RuntimeSmokeImage:     "busybox:1.36",
+		AgentRunnerImage:      "node:22-alpine",
+		CodexPackage:          "@openai/codex@0.138.0",
 		RuntimeWorkspaceSize:  "1Gi",
 		RuntimeJobTTLSeconds:  86400,
 		RuntimeLogTailLines:   40,
 		AgentServiceAccount:   "matter-codex-agent-runner",
+		OpenAISecretName:      "matter-codex-openai",
+		GitHubSecretName:      "matter-codex-github",
 	}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("Validate() error = %v", err)
@@ -113,10 +130,14 @@ func TestConfigValidationRejectsUnsupportedLocale(t *testing.T) {
 		MaxSlashFormBytes:     1024,
 		MaxGitHubWebhookBytes: 1024,
 		RuntimeSmokeImage:     "busybox:1.36",
+		AgentRunnerImage:      "node:22-alpine",
+		CodexPackage:          "@openai/codex@0.138.0",
 		RuntimeWorkspaceSize:  "1Gi",
 		RuntimeJobTTLSeconds:  86400,
 		RuntimeLogTailLines:   40,
 		AgentServiceAccount:   "matter-codex-agent-runner",
+		OpenAISecretName:      "matter-codex-openai",
+		GitHubSecretName:      "matter-codex-github",
 	}
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("Validate() error = nil")

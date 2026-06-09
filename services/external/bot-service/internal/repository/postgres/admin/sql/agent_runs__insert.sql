@@ -1,0 +1,54 @@
+-- name: agent_runs__insert :one
+insert into matter_codex_agent_runs(
+	run_id,
+	profile_name,
+	role,
+	provider,
+	owner,
+	name,
+	base_branch,
+	head_branch,
+	status,
+	kubernetes_namespace,
+	job_name,
+	pvc_name,
+	summary
+) values (
+	$1,
+	$2,
+	$3,
+	$4,
+	$5,
+	$6,
+	$7,
+	$8,
+	$9,
+	$10,
+	$11,
+	$12,
+	$13
+)
+on conflict (run_id) do update set
+	status = excluded.status,
+	kubernetes_namespace = excluded.kubernetes_namespace,
+	job_name = excluded.job_name,
+	pvc_name = excluded.pvc_name,
+	updated_at = now()
+returning
+	id,
+	run_id,
+	profile_name,
+	role,
+	provider,
+	owner,
+	name,
+	base_branch,
+	head_branch,
+	status,
+	kubernetes_namespace,
+	job_name,
+	pvc_name,
+	pr_url,
+	summary,
+	created_at,
+	updated_at;

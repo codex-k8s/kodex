@@ -21,15 +21,19 @@ type Config struct {
 	MattermostSlashToken  string        `env:"MATTERCODEX_MATTERMOST_SLASH_TOKEN"`
 	GitHubToken           string        `env:"MATTERCODEX_GITHUB_TOKEN"`
 	GitHubWebhookSecret   string        `env:"MATTERCODEX_GITHUB_WEBHOOK_SECRET"`
+	GitHubSecretName      string        `env:"MATTERCODEX_GITHUB_SECRET" envDefault:"matter-codex-github"`
 	DatabaseDSN           string        `env:"MATTERCODEX_DATABASE_DSN"`
 	RuntimeEnabled        bool          `env:"MATTERCODEX_RUNTIME_ENABLED" envDefault:"true"`
 	RuntimeNamespace      string        `env:"MATTERCODEX_RUNTIME_NAMESPACE"`
 	RuntimeKubeconfigPath string        `env:"MATTERCODEX_RUNTIME_KUBECONFIG_PATH"`
 	RuntimeSmokeImage     string        `env:"MATTERCODEX_RUNTIME_SMOKE_IMAGE" envDefault:"busybox:1.36"`
+	AgentRunnerImage      string        `env:"MATTERCODEX_AGENT_RUNNER_IMAGE" envDefault:"node:22-alpine"`
+	CodexPackage          string        `env:"MATTERCODEX_CODEX_PACKAGE" envDefault:"@openai/codex@0.138.0"`
 	RuntimeWorkspaceSize  string        `env:"MATTERCODEX_RUNTIME_WORKSPACE_STORAGE_SIZE" envDefault:"1Gi"`
 	RuntimeJobTTLSeconds  int32         `env:"MATTERCODEX_RUNTIME_JOB_TTL_SECONDS" envDefault:"86400"`
 	RuntimeLogTailLines   int64         `env:"MATTERCODEX_RUNTIME_LOG_TAIL_LINES" envDefault:"40"`
 	AgentServiceAccount   string        `env:"MATTERCODEX_AGENT_RUNNER_SERVICE_ACCOUNT" envDefault:"matter-codex-agent-runner"`
+	OpenAISecretName      string        `env:"MATTERCODEX_OPENAI_SECRET" envDefault:"matter-codex-openai"`
 	StorageMigrations     bool          `env:"MATTERCODEX_STORAGE_MIGRATIONS_ENABLED" envDefault:"true"`
 	ReadHeaderTimeout     time.Duration `env:"MATTERCODEX_BOT_SERVICE_READ_HEADER_TIMEOUT" envDefault:"5s"`
 	ShutdownTimeout       time.Duration `env:"MATTERCODEX_BOT_SERVICE_SHUTDOWN_TIMEOUT" envDefault:"10s"`
@@ -73,11 +77,23 @@ func (cfg *Config) Validate() error {
 	if strings.TrimSpace(cfg.RuntimeSmokeImage) == "" {
 		return fmt.Errorf("MATTERCODEX_RUNTIME_SMOKE_IMAGE is required")
 	}
+	if strings.TrimSpace(cfg.AgentRunnerImage) == "" {
+		return fmt.Errorf("MATTERCODEX_AGENT_RUNNER_IMAGE is required")
+	}
+	if strings.TrimSpace(cfg.CodexPackage) == "" {
+		return fmt.Errorf("MATTERCODEX_CODEX_PACKAGE is required")
+	}
 	if strings.TrimSpace(cfg.RuntimeWorkspaceSize) == "" {
 		return fmt.Errorf("MATTERCODEX_RUNTIME_WORKSPACE_STORAGE_SIZE is required")
 	}
 	if strings.TrimSpace(cfg.AgentServiceAccount) == "" {
 		return fmt.Errorf("MATTERCODEX_AGENT_RUNNER_SERVICE_ACCOUNT is required")
+	}
+	if strings.TrimSpace(cfg.OpenAISecretName) == "" {
+		return fmt.Errorf("MATTERCODEX_OPENAI_SECRET is required")
+	}
+	if strings.TrimSpace(cfg.GitHubSecretName) == "" {
+		return fmt.Errorf("MATTERCODEX_GITHUB_SECRET is required")
 	}
 	locale, ok := texti18n.ResolveLocale(cfg.Locale)
 	if !ok {

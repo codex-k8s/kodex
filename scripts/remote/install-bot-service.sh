@@ -109,6 +109,27 @@ else
   mattercodex_log "GitHub token/webhook secret не заданы; GitHub secret не создается"
 fi
 
+OPENAI_API_KEY_VALUE="${MATTERCODEX_OPENAI_API_KEY:-${CODEX_API_KEY:-${OPENAI_API_KEY:-}}}"
+if [ -n "$OPENAI_API_KEY_VALUE" ]; then
+  OPENAI_API_KEY_B64="$(printf '%s' "$OPENAI_API_KEY_VALUE" | base64 | tr -d '\n')"
+  mattercodex_log "применяется OpenAI secret на целевом сервере"
+  cat <<EOF | mattercodex_remote_kubectl_apply_stdin "$APPLY_DRY_RUN_MODE"
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ${MATTERCODEX_OPENAI_SECRET}
+  namespace: ${MATTERCODEX_NAMESPACE}
+  labels:
+    app.kubernetes.io/name: matter-codex-agent-runner
+    app.kubernetes.io/component: openai-secret
+type: Opaque
+data:
+  openai-api-key: ${OPENAI_API_KEY_B64}
+EOF
+else
+  mattercodex_log "OpenAI API key не задан; OpenAI secret не создается"
+fi
+
 mattercodex_log "применяются манифесты bot-service на целевом сервере"
 cat "$RENDER_DIR/10-code-configmap.yaml" | mattercodex_remote_kubectl_apply_stdin "$APPLY_DRY_RUN_MODE"
 cat "$RENDER_DIR/20-configmap.yaml" | mattercodex_remote_kubectl_apply_stdin "$APPLY_DRY_RUN_MODE"

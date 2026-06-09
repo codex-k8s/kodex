@@ -13,6 +13,7 @@ import (
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
 	providerrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/provider"
 	runtimerepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/runtime"
+	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
 	texti18n "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/i18n"
 )
 
@@ -72,6 +73,8 @@ func (svc *SlashCommandService) Handle(ctx context.Context, command SlashCommand
 		return svc.handleLocale(fields[1:])
 	case "runtime":
 		return svc.handleRuntime(ctx, fields[1:], command)
+	case "dev":
+		return svc.handleDev(ctx, fields[1:], command)
 	case "profile":
 		return svc.handleProfile(ctx, fields[1:])
 	case "github":
@@ -263,6 +266,9 @@ func (svc *SlashCommandService) handleRuntimeStatus(ctx context.Context, args []
 	if strings.TrimSpace(status.LogTail) != "" {
 		lines = append(lines, svc.t("runtime.status.logs", map[string]any{"Logs": sanitizeLogTail(status.LogTail)}))
 	}
+	for _, artifact := range sortedArtifacts(status.Artifacts) {
+		lines = append(lines, svc.t("runtime.status.artifact", map[string]any{"Key": artifact.key, "Value": artifact.value}))
+	}
 	return strings.Join(lines, "\n")
 }
 
@@ -280,6 +286,181 @@ func (svc *SlashCommandService) handleRuntimeCleanup(ctx context.Context, args [
 	}
 	svc.recordRuntimeAudit(ctx, command, "runtime.run.cleaned", result.RunID, "kubernetes smoke runner resources cleaned from Mattermost slash command")
 	return svc.t("runtime.cleanup.result", map[string]any{
+		"RunID":      result.RunID,
+		"Namespace":  result.Namespace,
+		"JobDeleted": result.JobDeleted,
+		"PVCDeleted": result.PVCDeleted,
+	})
+}
+
+func (svc *SlashCommandService) handleDev(ctx context.Context, args []string, command SlashCommand) string {
+	if svc.cfg.RuntimeRunner == nil {
+		return svc.t("runtime.not_configured", nil)
+	}
+	if len(args) == 0 {
+		return svc.t("dev.usage", nil)
+	}
+	switch args[0] {
+	case "smoke":
+		return svc.handleDevSmoke(ctx, args[1:], command)
+	case "status":
+		return svc.handleDevStatus(ctx, args[1:])
+	case "cleanup":
+		return svc.handleDevCleanup(ctx, args[1:], command)
+	default:
+		return svc.t("dev.unknown_command", nil)
+	}
+}
+
+func (svc *SlashCommandService) handleDevSmoke(ctx context.Context, args []string, command SlashCommand) string {
+	if len(args) < 1 || len(args) > 2 {
+		return svc.t("dev.smoke.usage", nil)
+	}
+	if !svc.cfg.GitHubTokenConfigured {
+		return svc.t("dev.github_not_configured", nil)
+	}
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return svc.t("dev.storage_not_ready", nil)
+	}
+	if !svc.enabledProfile(ctx, "developer") {
+		return svc.t("dev.profile_not_ready", map[string]any{"Profile": "developer"})
+	}
+	ref, err := parseRepositoryRef(args[:1], "dev smoke")
+	if err != nil {
+		return svc.validationErrorText(err)
+	}
+	runID := defaultDeveloperRunID()
+	if len(args) == 2 {
+		runID = args[1]
+	}
+	if !validRuntimeRunID(runID) {
+		return svc.t("runtime.invalid_run_id", nil)
+	}
+	headBranch := developerSmokeBranch(runID)
+	task := developerSmokeTask(runID, ref)
+	started, err := svc.cfg.RuntimeRunner.StartDeveloperRun(ctx, runtimerepo.DeveloperRunInput{
+		RunID:      runID,
+		Profile:    "developer",
+		Provider:   "github",
+		Owner:      ref.Owner,
+		Name:       ref.Name,
+		BaseBranch: "main",
+		HeadBranch: headBranch,
+		Title:      "Matter Codex developer smoke " + runID,
+		Task:       task,
+	})
+	if err != nil {
+		return svc.t("dev.smoke.failed", map[string]any{"Error": safeError(err)})
+	}
+	if _, err := svc.cfg.Store.CreateAgentRun(ctx, adminrepo.CreateAgentRunInput{
+		RunID:               runID,
+		ProfileName:         "developer",
+		Role:                "developer",
+		Provider:            "github",
+		Owner:               ref.Owner,
+		Name:                ref.Name,
+		BaseBranch:          "main",
+		HeadBranch:          headBranch,
+		Status:              "started",
+		KubernetesNamespace: started.Namespace,
+		JobName:             started.JobName,
+		PVCName:             started.PVCName,
+		Summary:             "developer smoke run started from Mattermost slash command",
+	}); err != nil {
+		return svc.t("dev.smoke.store_failed", map[string]any{"RunID": runID, "Error": safeError(err)})
+	}
+	svc.recordRuntimeAudit(ctx, command, "developer.run.started", started.RunID, "developer smoke runner job started from Mattermost slash command")
+	return svc.t("dev.smoke.started", map[string]any{
+		"RunID":      started.RunID,
+		"Repository": ref.Owner + "/" + ref.Name,
+		"Branch":     headBranch,
+		"Namespace":  started.Namespace,
+		"Job":        started.JobName,
+		"PVC":        started.PVCName,
+	})
+}
+
+func (svc *SlashCommandService) handleDevStatus(ctx context.Context, args []string) string {
+	if len(args) != 1 {
+		return svc.t("dev.status.usage", nil)
+	}
+	runID := args[0]
+	if !validRuntimeRunID(runID) {
+		return svc.t("runtime.invalid_run_id", nil)
+	}
+	run, hasRun := svc.agentRun(ctx, runID)
+	status, err := svc.cfg.RuntimeRunner.GetRunStatus(ctx, runID)
+	if err != nil {
+		return svc.t("dev.status.failed", map[string]any{"Error": safeError(err)})
+	}
+	if !status.Exists {
+		return svc.t("runtime.status.not_found", map[string]any{"RunID": runID})
+	}
+	derivedStatus := developerRunStatus(status)
+	if hasRun {
+		prURL := status.Artifacts["pr-url"]
+		if updated, err := svc.cfg.Store.UpdateAgentRunArtifacts(ctx, adminrepo.UpdateAgentRunArtifactsInput{RunID: runID, Status: derivedStatus, PRURL: prURL}); err == nil {
+			run = updated
+		}
+	}
+	lines := []string{svc.t("dev.status.header", nil)}
+	if hasRun {
+		lines = append(lines, svc.t("dev.status.run", map[string]any{
+			"RunID":      run.RunID,
+			"Profile":    run.ProfileName,
+			"Repository": run.FullName(),
+			"Base":       run.BaseBranch,
+			"Branch":     run.HeadBranch,
+			"Status":     run.Status,
+		}))
+	} else {
+		lines = append(lines, svc.t("dev.status.run_without_storage", map[string]any{"RunID": runID, "Status": derivedStatus}))
+	}
+	lines = append(lines,
+		svc.t("runtime.status.identity", map[string]any{
+			"RunID":     status.RunID,
+			"Namespace": status.Namespace,
+			"Job":       status.JobName,
+			"PVC":       status.PVCName,
+		}),
+		svc.t("runtime.status.job", map[string]any{
+			"Active":    status.JobActive,
+			"Succeeded": status.JobSucceeded,
+			"Failed":    status.JobFailed,
+		}),
+	)
+	if status.PodName != "" {
+		lines = append(lines, svc.t("runtime.status.pod", map[string]any{
+			"Pod":   status.PodName,
+			"Phase": emptyAsUnknown(status.PodPhase),
+		}))
+	}
+	for _, artifact := range sortedArtifacts(status.Artifacts) {
+		lines = append(lines, svc.t("dev.status.artifact", map[string]any{"Key": artifact.key, "Value": artifact.value}))
+	}
+	if strings.TrimSpace(status.LogTail) != "" {
+		lines = append(lines, svc.t("runtime.status.logs", map[string]any{"Logs": sanitizeLogTail(status.LogTail)}))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func (svc *SlashCommandService) handleDevCleanup(ctx context.Context, args []string, command SlashCommand) string {
+	if len(args) != 1 {
+		return svc.t("dev.cleanup.usage", nil)
+	}
+	runID := args[0]
+	if !validRuntimeRunID(runID) {
+		return svc.t("runtime.invalid_run_id", nil)
+	}
+	result, err := svc.cfg.RuntimeRunner.CleanupRun(ctx, runID)
+	if err != nil {
+		return svc.t("dev.cleanup.failed", map[string]any{"Error": safeError(err)})
+	}
+	if svc.cfg.StorageReady && svc.cfg.Store != nil {
+		_, _ = svc.cfg.Store.UpdateAgentRunArtifacts(ctx, adminrepo.UpdateAgentRunArtifactsInput{RunID: runID, Status: "cleaned"})
+	}
+	svc.recordRuntimeAudit(ctx, command, "developer.run.cleaned", result.RunID, "developer runner resources cleaned from Mattermost slash command")
+	return svc.t("dev.cleanup.result", map[string]any{
 		"RunID":      result.RunID,
 		"Namespace":  result.Namespace,
 		"JobDeleted": result.JobDeleted,
@@ -352,6 +533,7 @@ func (svc *SlashCommandService) helpText() string {
 		svc.t("help.profile_list", nil),
 		svc.t("help.locale", nil),
 		svc.t("help.runtime", nil),
+		svc.t("help.dev", nil),
 	}
 	return svc.t("help.header", nil) + "\n" + strings.Join(commands, "\n")
 }
@@ -769,6 +951,83 @@ func (svc *SlashCommandService) recordRuntimeAudit(ctx context.Context, command 
 		ResourceName: resourceName,
 		Summary:      summary,
 	})
+}
+
+func (svc *SlashCommandService) enabledProfile(ctx context.Context, name string) bool {
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return false
+	}
+	profiles, err := svc.cfg.Store.ListAgentProfiles(ctx)
+	if err != nil {
+		return false
+	}
+	for _, profile := range profiles {
+		if profile.Name == name && profile.Enabled {
+			return true
+		}
+	}
+	return false
+}
+
+func (svc *SlashCommandService) agentRun(ctx context.Context, runID string) (entity.AgentRun, bool) {
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return entity.AgentRun{}, false
+	}
+	run, err := svc.cfg.Store.GetAgentRun(ctx, runID)
+	if err != nil {
+		return entity.AgentRun{}, false
+	}
+	return run, true
+}
+
+func defaultDeveloperRunID() string {
+	return fmt.Sprintf("dev-%d", time.Now().Unix())
+}
+
+func developerSmokeBranch(runID string) string {
+	return "matter-codex-dev-" + runID
+}
+
+func developerSmokeTask(runID string, ref repositoryRef) string {
+	return fmt.Sprintf("Create or update docs/dogfood/codex-developer-smoke.md with a short Russian note that matter-codex developer smoke run `%s` for `%s/%s` reached the Codex developer agent stage. Keep the change limited to that file.", runID, ref.Owner, ref.Name)
+}
+
+func developerRunStatus(status runtimerepo.RunStatus) string {
+	if status.Artifacts["pr-url"] != "" {
+		return "pr_created"
+	}
+	if status.Artifacts["no-changes"] == "true" {
+		return "completed_no_changes"
+	}
+	if status.JobFailed > 0 {
+		return "failed"
+	}
+	if status.JobSucceeded > 0 {
+		return "succeeded"
+	}
+	if status.JobActive > 0 {
+		return "running"
+	}
+	return "pending"
+}
+
+type artifactPair struct {
+	key   string
+	value string
+}
+
+func sortedArtifacts(artifacts map[string]string) []artifactPair {
+	if len(artifacts) == 0 {
+		return nil
+	}
+	pairs := make([]artifactPair, 0, len(artifacts))
+	for key, value := range artifacts {
+		pairs = append(pairs, artifactPair{key: key, value: value})
+	}
+	sort.Slice(pairs, func(i int, j int) bool {
+		return pairs[i].key < pairs[j].key
+	})
+	return pairs
 }
 
 func (svc *SlashCommandService) t(messageID string, data map[string]any) string {

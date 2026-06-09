@@ -122,10 +122,14 @@ func openRuntimeRunner(cfg Config, logger *slog.Logger) (runtimerepo.Runner, boo
 		Namespace:                 cfg.RuntimeNamespace,
 		KubeconfigPath:            cfg.RuntimeKubeconfigPath,
 		SmokeImage:                cfg.RuntimeSmokeImage,
+		AgentRunnerImage:          cfg.AgentRunnerImage,
+		CodexPackage:              cfg.CodexPackage,
 		WorkspaceStorageSize:      cfg.RuntimeWorkspaceSize,
 		JobTTLSecondsAfterFinish:  cfg.RuntimeJobTTLSeconds,
 		LogTailLines:              cfg.RuntimeLogTailLines,
 		AgentRunnerServiceAccount: cfg.AgentServiceAccount,
+		OpenAISecretName:          cfg.OpenAISecretName,
+		GitHubSecretName:          cfg.GitHubSecretName,
 	})
 	if err != nil {
 		logger.Warn("kubernetes runtime disabled: client-go runner is not configured", "error", err)

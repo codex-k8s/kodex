@@ -276,6 +276,47 @@ func TestSlashRuntimeRejectsInvalidRunID(t *testing.T) {
 	}
 }
 
+func TestSlashDevSmokeStatusAndCleanup(t *testing.T) {
+	store := &fakeAdminStore{
+		profiles: []entity.AgentProfile{{Name: "developer", Role: "developer", Enabled: true}},
+	}
+	runner := &fakeRuntimeRunner{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:             localizer,
+		StatusService:         testStatusService(localizer),
+		Store:                 store,
+		RuntimeRunner:         runner,
+		GitHubTokenConfigured: true,
+		StorageReady:          true,
+		RuntimeConfigured:     true,
+	})
+
+	text := svc.Handle(context.Background(), SlashCommand{Text: "dev smoke codex-k8s/matter-codex dev-test", UserName: "owner"})
+	if !strings.Contains(text, "developer smoke run started") || !strings.Contains(text, "`dev-test`") {
+		t.Fatalf("Handle(dev smoke) text = %q", text)
+	}
+	if runner.startedDeveloperRunID != "dev-test" || runner.developerHeadBranch != "matter-codex-dev-dev-test" {
+		t.Fatalf("runner = %#v", runner)
+	}
+	if store.agentRun.RunID != "dev-test" || store.agentRun.ProfileName != "developer" {
+		t.Fatalf("agentRun = %#v", store.agentRun)
+	}
+
+	text = svc.Handle(context.Background(), SlashCommand{Text: "dev status dev-test"})
+	if !strings.Contains(text, "developer run status") || !strings.Contains(text, "pr-url") || !strings.Contains(text, "https://github.example/pr/10") {
+		t.Fatalf("Handle(dev status) text = %q", text)
+	}
+	if store.updatedRunStatus != "pr_created" || store.updatedPRURL != "https://github.example/pr/10" {
+		t.Fatalf("updated run = %q %q", store.updatedRunStatus, store.updatedPRURL)
+	}
+
+	text = svc.Handle(context.Background(), SlashCommand{Text: "dev cleanup dev-test", UserName: "owner"})
+	if !strings.Contains(text, "developer run cleanup") || !strings.Contains(text, "pvc deleted: `true`") {
+		t.Fatalf("Handle(dev cleanup) text = %q", text)
+	}
+}
+
 func testLocalizer(t *testing.T, locale string) *texti18n.Localizer {
 	t.Helper()
 	localizer, err := texti18n.New(locale)
@@ -302,12 +343,26 @@ func testStatusService(localizer *texti18n.Localizer) *StatusService {
 }
 
 type fakeRuntimeRunner struct {
-	startedRunID string
-	cleanedRunID string
+	startedRunID          string
+	startedDeveloperRunID string
+	developerHeadBranch   string
+	cleanedRunID          string
 }
 
 func (runner *fakeRuntimeRunner) StartSmokeRun(_ context.Context, input runtimerepo.SmokeRunInput) (runtimerepo.StartedRun, error) {
 	runner.startedRunID = input.RunID
+	return runtimerepo.StartedRun{
+		RunID:     input.RunID,
+		Namespace: "mattermost",
+		JobName:   "mc-run-" + input.RunID,
+		PVCName:   "mc-ws-" + input.RunID,
+		Created:   true,
+	}, nil
+}
+
+func (runner *fakeRuntimeRunner) StartDeveloperRun(_ context.Context, input runtimerepo.DeveloperRunInput) (runtimerepo.StartedRun, error) {
+	runner.startedDeveloperRunID = input.RunID
+	runner.developerHeadBranch = input.HeadBranch
 	return runtimerepo.StartedRun{
 		RunID:     input.RunID,
 		Namespace: "mattermost",
@@ -327,7 +382,8 @@ func (runner *fakeRuntimeRunner) GetRunStatus(_ context.Context, runID string) (
 		Exists:       true,
 		JobSucceeded: 1,
 		PodPhase:     "Succeeded",
-		LogTail:      "matter-codex smoke done\nsmoke-ok",
+		LogTail:      "matter-codex smoke done\nmatter-codex artifact pr-url: https://github.example/pr/10\nsmoke-ok",
+		Artifacts:    map[string]string{"pr-url": "https://github.example/pr/10"},
 	}, nil
 }
 
@@ -342,9 +398,12 @@ func (runner *fakeRuntimeRunner) CleanupRun(_ context.Context, runID string) (ru
 }
 
 type fakeAdminStore struct {
-	upsert        adminrepo.UpsertRepositoryInput
-	auditRecorded bool
-	profiles      []entity.AgentProfile
+	upsert           adminrepo.UpsertRepositoryInput
+	auditRecorded    bool
+	profiles         []entity.AgentProfile
+	agentRun         entity.AgentRun
+	updatedRunStatus string
+	updatedPRURL     string
 }
 
 func (store *fakeAdminStore) UpsertRepository(_ context.Context, input adminrepo.UpsertRepositoryInput) (entity.Repository, bool, error) {
@@ -366,6 +425,52 @@ func (store *fakeAdminStore) ListRepositories(context.Context, int) ([]entity.Re
 
 func (store *fakeAdminStore) ListAgentProfiles(context.Context) ([]entity.AgentProfile, error) {
 	return store.profiles, nil
+}
+
+func (store *fakeAdminStore) CreateAgentRun(_ context.Context, input adminrepo.CreateAgentRunInput) (entity.AgentRun, error) {
+	store.agentRun = entity.AgentRun{
+		ID:                  1,
+		RunID:               input.RunID,
+		ProfileName:         input.ProfileName,
+		Role:                input.Role,
+		Provider:            input.Provider,
+		Owner:               input.Owner,
+		Name:                input.Name,
+		BaseBranch:          input.BaseBranch,
+		HeadBranch:          input.HeadBranch,
+		Status:              input.Status,
+		KubernetesNamespace: input.KubernetesNamespace,
+		JobName:             input.JobName,
+		PVCName:             input.PVCName,
+		Summary:             input.Summary,
+	}
+	return store.agentRun, nil
+}
+
+func (store *fakeAdminStore) GetAgentRun(_ context.Context, runID string) (entity.AgentRun, error) {
+	if store.agentRun.RunID == "" {
+		store.agentRun = entity.AgentRun{
+			ID:          1,
+			RunID:       runID,
+			ProfileName: "developer",
+			Role:        "developer",
+			Provider:    "github",
+			Owner:       "codex-k8s",
+			Name:        "matter-codex",
+			BaseBranch:  "main",
+			HeadBranch:  "matter-codex-dev-" + runID,
+			Status:      "started",
+		}
+	}
+	return store.agentRun, nil
+}
+
+func (store *fakeAdminStore) UpdateAgentRunArtifacts(_ context.Context, input adminrepo.UpdateAgentRunArtifactsInput) (entity.AgentRun, error) {
+	store.updatedRunStatus = input.Status
+	store.updatedPRURL = input.PRURL
+	store.agentRun.Status = input.Status
+	store.agentRun.PRURL = input.PRURL
+	return store.agentRun, nil
 }
 
 func (store *fakeAdminStore) RecordAuditEvent(context.Context, adminrepo.AuditEventInput) error {

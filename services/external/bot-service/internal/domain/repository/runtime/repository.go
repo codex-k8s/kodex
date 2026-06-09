@@ -7,6 +7,18 @@ type SmokeRunInput struct {
 	Role  string
 }
 
+type DeveloperRunInput struct {
+	RunID      string
+	Profile    string
+	Provider   string
+	Owner      string
+	Name       string
+	BaseBranch string
+	HeadBranch string
+	Title      string
+	Task       string
+}
+
 type StartedRun struct {
 	RunID     string
 	Namespace string
@@ -27,6 +39,7 @@ type RunStatus struct {
 	JobFailed    int32
 	PodPhase     string
 	LogTail      string
+	Artifacts    map[string]string
 }
 
 type CleanupResult struct {
@@ -38,6 +51,7 @@ type CleanupResult struct {
 
 type Runner interface {
 	StartSmokeRun(ctx context.Context, input SmokeRunInput) (StartedRun, error)
+	StartDeveloperRun(ctx context.Context, input DeveloperRunInput) (StartedRun, error)
 	GetRunStatus(ctx context.Context, runID string) (RunStatus, error)
 	CleanupRun(ctx context.Context, runID string) (CleanupResult, error)
 }

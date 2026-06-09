@@ -102,9 +102,31 @@ else
   mattercodex_log "GitHub token/webhook secret не заданы; GitHub secret не создается"
 fi
 
+OPENAI_API_KEY_VALUE="${MATTERCODEX_OPENAI_API_KEY:-${CODEX_API_KEY:-${OPENAI_API_KEY:-}}}"
+if [ -n "$OPENAI_API_KEY_VALUE" ]; then
+  OPENAI_API_KEY_B64="$(printf '%s' "$OPENAI_API_KEY_VALUE" | base64 | tr -d '\n')"
+  mattercodex_log "применяется OpenAI secret"
+  cat <<EOF | kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f - >/dev/null
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ${MATTERCODEX_OPENAI_SECRET}
+  namespace: ${MATTERCODEX_NAMESPACE}
+  labels:
+    app.kubernetes.io/name: matter-codex-agent-runner
+    app.kubernetes.io/component: openai-secret
+type: Opaque
+data:
+  openai-api-key: ${OPENAI_API_KEY_B64}
+EOF
+else
+  mattercodex_log "OpenAI API key не задан; OpenAI secret не создается"
+fi
+
 mattercodex_log "применяются манифесты bot-service"
 kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f "$RENDER_DIR/10-code-configmap.yaml" >/dev/null
 kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f "$RENDER_DIR/20-configmap.yaml" >/dev/null
+kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f "$RENDER_DIR/25-rbac.yaml" >/dev/null
 kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f "$RENDER_DIR/30-deployment.yaml" >/dev/null
 kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f "$RENDER_DIR/40-service.yaml" >/dev/null
 kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f "$RENDER_DIR/50-ingress.yaml" >/dev/null

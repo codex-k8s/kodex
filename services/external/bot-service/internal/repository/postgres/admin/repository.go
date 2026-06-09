@@ -7,6 +7,7 @@ import (
 
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -112,6 +113,49 @@ func (repo *Repository) ListAgentProfiles(ctx context.Context) ([]entity.AgentPr
 	return items, nil
 }
 
+func (repo *Repository) CreateAgentRun(ctx context.Context, input adminrepo.CreateAgentRunInput) (entity.AgentRun, error) {
+	row := repo.pool.QueryRow(ctx, query("agent_runs__insert.sql"),
+		input.RunID,
+		input.ProfileName,
+		input.Role,
+		input.Provider,
+		input.Owner,
+		input.Name,
+		input.BaseBranch,
+		input.HeadBranch,
+		input.Status,
+		input.KubernetesNamespace,
+		input.JobName,
+		input.PVCName,
+		input.Summary,
+	)
+	item, err := scanAgentRun(row)
+	if err != nil {
+		return entity.AgentRun{}, fmt.Errorf("insert agent run: %w", err)
+	}
+	return item, nil
+}
+
+func (repo *Repository) GetAgentRun(ctx context.Context, runID string) (entity.AgentRun, error) {
+	item, err := scanAgentRun(repo.pool.QueryRow(ctx, query("agent_runs__get.sql"), runID))
+	if err != nil {
+		return entity.AgentRun{}, fmt.Errorf("get agent run: %w", err)
+	}
+	return item, nil
+}
+
+func (repo *Repository) UpdateAgentRunArtifacts(ctx context.Context, input adminrepo.UpdateAgentRunArtifactsInput) (entity.AgentRun, error) {
+	item, err := scanAgentRun(repo.pool.QueryRow(ctx, query("agent_runs__update_artifacts.sql"),
+		input.RunID,
+		input.Status,
+		input.PRURL,
+	))
+	if err != nil {
+		return entity.AgentRun{}, fmt.Errorf("update agent run artifacts: %w", err)
+	}
+	return item, nil
+}
+
 func (repo *Repository) RecordAuditEvent(ctx context.Context, input adminrepo.AuditEventInput) error {
 	if _, err := repo.pool.Exec(ctx, query("audit_events__insert.sql"),
 		input.EventType,
@@ -124,6 +168,32 @@ func (repo *Repository) RecordAuditEvent(ctx context.Context, input adminrepo.Au
 		return fmt.Errorf("insert audit event: %w", err)
 	}
 	return nil
+}
+
+func scanAgentRun(row pgx.Row) (entity.AgentRun, error) {
+	var item entity.AgentRun
+	if err := row.Scan(
+		&item.ID,
+		&item.RunID,
+		&item.ProfileName,
+		&item.Role,
+		&item.Provider,
+		&item.Owner,
+		&item.Name,
+		&item.BaseBranch,
+		&item.HeadBranch,
+		&item.Status,
+		&item.KubernetesNamespace,
+		&item.JobName,
+		&item.PVCName,
+		&item.PRURL,
+		&item.Summary,
+		&item.CreatedAt,
+		&item.UpdatedAt,
+	); err != nil {
+		return entity.AgentRun{}, err
+	}
+	return item, nil
 }
 
 func query(name string) string {

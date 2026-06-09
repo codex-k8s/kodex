@@ -14,6 +14,7 @@
 - принимать GitHub webhook callback `/github/webhook` с HMAC validation;
 - автоматически регистрировать repo webhook при `/agents repo add github owner/name [default-branch]`, если GitHub token имеет hook write permission;
 - выполнять Kubernetes runtime smoke-команды `/agents runtime smoke|status|cleanup` через client-go, Job и PVC;
+- выполнять Codex developer smoke-команды `/agents dev smoke|status|cleanup`, создающие отдельный Job/PVC, branch, commit и draft PR;
 - применять storage migrations и хранить repository/profile/audit metadata в PostgreSQL;
 - создавать Mattermost repo-channel при добавлении repository;
 - хранить Mattermost bot/slash tokens только в Kubernetes Secret;
@@ -40,10 +41,14 @@
 - `MATTERCODEX_RUNTIME_ENABLED` - optional, включает Kubernetes runtime adapter;
 - `MATTERCODEX_RUNTIME_NAMESPACE` - optional, namespace для Job/PVC runtime-запусков;
 - `MATTERCODEX_RUNTIME_SMOKE_IMAGE` - optional, image для smoke Job;
+- `MATTERCODEX_AGENT_RUNNER_IMAGE` - optional, image для Codex developer Job; текущий MVP default использует public Node Alpine image;
+- `MATTERCODEX_CODEX_PACKAGE` - optional, npm package spec Codex CLI для developer Job;
 - `MATTERCODEX_RUNTIME_WORKSPACE_STORAGE_SIZE` - optional, размер PVC рабочего каталога smoke-запуска;
 - `MATTERCODEX_RUNTIME_JOB_TTL_SECONDS` - optional, TTL завершенных smoke Job;
 - `MATTERCODEX_RUNTIME_LOG_TAIL_LINES` - optional, число последних строк pod log для `/agents runtime status`;
 - `MATTERCODEX_AGENT_RUNNER_SERVICE_ACCOUNT` - optional, ServiceAccount для agent/smoke Job;
+- `MATTERCODEX_OPENAI_SECRET` - optional, имя Kubernetes Secret с OpenAI API key для Codex runner;
+- `MATTERCODEX_OPENAI_API_KEY` - optional, OpenAI/Codex API key для deploy-скрипта; deploy-скрипты также принимают `CODEX_API_KEY` и legacy `OPENAI_API_KEY`;
 - `MATTERCODEX_DEFAULT_TEAM_NAME` - optional, по умолчанию `agents`;
 - `MATTERCODEX_DEFAULT_TEAM_DISPLAY_NAME` - optional;
 - `MATTERCODEX_DEFAULT_CHANNELS` - optional, список `name:Display Name` через запятую.
@@ -74,6 +79,8 @@ bash scripts/remote/install-bot-service.sh --env-file .env --dry-run=server
 Если Mattermost token еще не задан, Secret не создается, а Deployment использует optional secret refs.
 
 Если GitHub token или webhook secret заданы, deploy-скрипты создают отдельный Kubernetes Secret. Значения не печатаются.
+
+Если OpenAI API key задан, deploy-скрипты создают отдельный Kubernetes Secret. Значение не печатается и не попадает в ConfigMap.
 
 ## Health-only install
 
@@ -197,6 +204,29 @@ bash scripts/remote/bootstrap-mattermost-bot.sh --env-file .env
 - runtime status показывает Job/PVC, pod phase и короткий log tail smoke Job;
 - runtime cleanup удаляет Job и PVC.
 
+Дополнительная проверка Codex developer agent:
+
+```text
+/agents token check
+/agents dev smoke codex-k8s/matter-codex dev-manual
+/agents dev status dev-manual
+```
+
+Ожидаемый результат:
+
+- developer smoke возвращает run id, branch `matter-codex-dev-dev-manual`, Job и PVC;
+- через некоторое время `dev status` показывает pod phase и artifact `pr-url`;
+- в GitHub появляется draft PR с безопасным документационным изменением `docs/dogfood/codex-developer-smoke.md`;
+- log tail не содержит значений OpenAI/GitHub/Mattermost секретов.
+
+После проверки удалить Kubernetes resources:
+
+```text
+/agents dev cleanup dev-manual
+```
+
+Если smoke run создал draft PR, его надо закрыть/удалить вручную или оставить как проверочный артефакт до решения владельца. Cleanup удаляет только Kubernetes Job/PVC, а не GitHub branch/PR.
+
 Проверка webhook reject без корректной подписи:
 
 ```bash
@@ -222,3 +252,6 @@ curl -sS -o /dev/null -w '%{http_code}\n' \
 - Логи provisioning показывают только безопасные статусы `exists/created/updated`.
 - bot-service получает namespace-scoped Role только на создание/чтение/удаление runtime Job/PVC и чтение pod/log.
 - ServiceAccount agent runner создается без automount token; smoke pod также явно отключает automount.
+- Codex developer Job получает OpenAI/GitHub credentials только через Kubernetes Secret volume mount.
+- `CODEX_HOME/config.toml` задает `shell_environment_policy` с минимальным environment для команд, которые запускает Codex.
+- Developer runner сам выполняет push/PR после `codex exec`; prompt contract запрещает Codex агенту пушить branch или создавать PR напрямую.
