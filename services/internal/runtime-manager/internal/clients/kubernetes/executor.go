@@ -225,6 +225,16 @@ func (e *Executor) Start(ctx context.Context, job entity.Job) (StartedJob, error
 	}
 	jobName := runtimeJobName(job.ID)
 	selector := labels.Set{runtimeJobLabel: job.ID.String()}
+	existing, err := clients.kubernetes.BatchV1().Jobs(spec.Namespace).Get(ctx, jobName, metav1.GetOptions{})
+	if err == nil {
+		if !isManagedRuntimeJob(existing, job) {
+			return StartedJob{}, newExecutionError("kubernetes_job_name_conflict", "Kubernetes Job name is already used by a different object")
+		}
+		return startedJobFromKubernetesJob(access.ClusterID, spec, e.config, selector, clients.kubernetes, existing, job), nil
+	}
+	if !apierrors.IsNotFound(err) {
+		return StartedJob{}, kubernetesJobLookupError(err)
+	}
 	if err := e.preflightExecution(ctx, clients, job.JobType, spec); err != nil {
 		return StartedJob{}, err
 	}
@@ -239,20 +249,24 @@ func (e *Executor) Start(ctx context.Context, job entity.Job) (StartedJob, error
 	if !isManagedRuntimeJob(created, job) {
 		return StartedJob{}, newExecutionError("kubernetes_job_name_conflict", "Kubernetes Job name is already used by a different object")
 	}
-	ref := kubernetesJobRef(access.ClusterID, spec.Namespace, created.GetName())
+	return startedJobFromKubernetesJob(access.ClusterID, spec, e.config, selector, clients.kubernetes, created, job), nil
+}
+
+func startedJobFromKubernetesJob(clusterID uuid.UUID, spec executionSpec, cfg Config, selector labels.Set, client kubernetes.Interface, created *batchv1.Job, job entity.Job) StartedJob {
+	ref := kubernetesJobRef(clusterID, spec.Namespace, created.GetName())
 	return StartedJob{
 		RuntimeJobID:   job.ID,
 		RuntimeJobType: job.JobType,
-		ClusterID:      access.ClusterID,
+		ClusterID:      clusterID,
 		Namespace:      spec.Namespace,
 		JobName:        created.GetName(),
 		ExternalRef:    ref,
-		ArtifactRefs:   runtimeArtifactRefs(access.ClusterID, spec, ref),
-		client:         clients.kubernetes,
-		config:         e.config,
+		ArtifactRefs:   runtimeArtifactRefs(clusterID, spec, ref),
+		client:         client,
+		config:         cfg,
 		selector:       selector,
 		collectLogs:    spec.CollectPodLogs,
-	}, nil
+	}
 }
 
 // Wait waits for a terminal Kubernetes Job status and returns bounded diagnostics.
@@ -313,6 +327,15 @@ func kubernetesJobCreateError(err error) error {
 		return newExecutionError("kubernetes_job_create_access_denied", "Kubernetes Job create access is denied")
 	default:
 		return newExecutionError("kubernetes_job_create_failed", "Kubernetes Job could not be created")
+	}
+}
+
+func kubernetesJobLookupError(err error) error {
+	switch {
+	case apierrors.IsForbidden(err):
+		return newExecutionError("kubernetes_job_status_access_denied", "Kubernetes Job status access is denied")
+	default:
+		return newExecutionError("kubernetes_job_status_unavailable", "Kubernetes Job status is unavailable")
 	}
 }
 

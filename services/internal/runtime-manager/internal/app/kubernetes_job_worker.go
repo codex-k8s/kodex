@@ -329,7 +329,7 @@ func nextActionForKubernetesError(code string) string {
 		return "prepare_build_context_pvc"
 	case "build_registry_secret_ref_required", "build_registry_secret_unavailable", "build_registry_secret_status_unavailable":
 		return "provide_build_registry_secret_ref"
-	case "build_context_pvc_access_denied", "build_registry_secret_access_denied", "kubernetes_service_account_unavailable", "kubernetes_service_account_access_denied", "kubernetes_service_account_status_unavailable", "kubernetes_job_create_access_denied":
+	case "build_context_pvc_access_denied", "build_registry_secret_access_denied", "kubernetes_service_account_unavailable", "kubernetes_service_account_access_denied", "kubernetes_service_account_status_unavailable", "kubernetes_job_create_access_denied", "kubernetes_job_status_access_denied":
 		return "fix_runtime_kubernetes_rbac"
 	default:
 		return "review_runtime_kubernetes_job"

@@ -17,6 +17,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	runtimeapi "k8s.io/apimachinery/pkg/runtime"
 	clientkubernetes "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
@@ -235,6 +236,38 @@ func TestExecutorStartCreatesRestrictedKanikoBuildJob(t *testing.T) {
 	}
 	if len(started.ArtifactRefs) != 3 || started.ArtifactRefs[2].ExternalRef != "registry.local:5000/kodex/runtime-manager:0.1.0" {
 		t.Fatalf("artifact refs = %+v, want job, namespace and destination image ref", started.ArtifactRefs)
+	}
+}
+
+func TestExecutorStartReusesExistingManagedBuildJobBeforePreflight(t *testing.T) {
+	t.Parallel()
+
+	client := fake.NewClientset()
+	executor := newTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
+	job := testBuildJob()
+	spec, err := executor.executionSpec(job)
+	if err != nil {
+		t.Fatalf("executionSpec(build): %v", err)
+	}
+	selector := labels.Set{runtimeJobLabel: job.ID.String()}
+	existing := buildJob(job, spec, executor.config, runtimeJobName(job.ID), selector)
+	if _, err := client.BatchV1().Jobs(spec.Namespace).Create(context.Background(), existing, metav1.CreateOptions{}); err != nil {
+		t.Fatalf("seed existing build Job: %v", err)
+	}
+
+	started, err := executor.Start(context.Background(), job)
+	if err != nil {
+		t.Fatalf("Start(build retry): %v", err)
+	}
+	if started.JobName != existing.Name || started.ExternalRef == "" {
+		t.Fatalf("started = %+v, want existing build Job %s", started, existing.Name)
+	}
+	jobs, err := client.BatchV1().Jobs(spec.Namespace).List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		t.Fatalf("list jobs: %v", err)
+	}
+	if len(jobs.Items) != 1 {
+		t.Fatalf("jobs = %d, want one reused Kubernetes Job", len(jobs.Items))
 	}
 }
 

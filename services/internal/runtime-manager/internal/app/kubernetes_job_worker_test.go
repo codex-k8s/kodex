@@ -311,6 +311,7 @@ func TestNextActionForKubernetesError(t *testing.T) {
 		"kubernetes_service_account_access_denied":      "fix_runtime_kubernetes_rbac",
 		"kubernetes_service_account_status_unavailable": "fix_runtime_kubernetes_rbac",
 		"kubernetes_job_create_access_denied":           "fix_runtime_kubernetes_rbac",
+		"kubernetes_job_status_access_denied":           "fix_runtime_kubernetes_rbac",
 		"cluster_secret_unavailable":                    "review_runtime_kubernetes_job",
 	}
 	for code, want := range tests {
