@@ -202,7 +202,52 @@ func TestSelfDeployGatePreparerRecoversExistingGateRefsWithRiskReadOnly(t *testi
 	}
 }
 
-func TestSelfDeployGatePreparerReportsExistingGateLookupFailure(t *testing.T) {
+func TestSelfDeployGatePreparerRecoversExistingGateRefsWithTargetOnlyRiskLookup(t *testing.T) {
+	t.Parallel()
+
+	riskAssessmentID := "59c67c5d-847b-4296-9afa-25aa3028a313"
+	gateRequestID := "61159123-6947-4864-897b-2eb97980eb6b"
+	plan := validGatePlan()
+	riskResponse, gateResponse := existingSelfDeployGateResponses(plan, riskAssessmentID, gateRequestID)
+	client := &fakeSelfDeployGateClient{
+		err: status.Error(codes.Unavailable, "prepare command replay failed"),
+		riskResponseForRequest: func(request *governancev1.ListRiskAssessmentsRequest) (*governancev1.ListRiskAssessmentsResponse, error) {
+			if request.GetProjectContext().GetRepositoryRef() != "" {
+				return &governancev1.ListRiskAssessmentsResponse{}, nil
+			}
+			return riskResponse, nil
+		},
+		gateResponse: gateResponse,
+	}
+	preparer, err := newSelfDeployGatePreparer(client, Config{AuthToken: "token", Timeout: time.Second})
+	if err != nil {
+		t.Fatalf("newSelfDeployGatePreparer(): %v", err)
+	}
+
+	result, err := preparer.PrepareSelfDeployPlanGate(context.Background(), agentservice.SelfDeployPlanGatePreparationInput{
+		Meta: value.CommandMeta{IdempotencyKey: "gate", Actor: value.Actor{Type: "service", ID: "agent-manager"}},
+		Plan: plan,
+	})
+	if err != nil {
+		t.Fatalf("PrepareSelfDeployPlanGate() err = %v", err)
+	}
+	if result.GovernanceContext.RiskAssessmentRef != "governance:risk_assessment/"+riskAssessmentID ||
+		result.GovernanceContext.GateRequestRef != "governance:gate_request/"+gateRequestID {
+		t.Fatalf("result = %+v, want existing governance refs", result)
+	}
+	if len(client.riskRequests) != 2 {
+		t.Fatalf("risk lookup requests = %d, want project-scoped lookup then target-only fallback", len(client.riskRequests))
+	}
+	if client.riskRequests[0].GetProjectContext().GetRepositoryRef() == "" ||
+		client.riskRequests[1].GetProjectContext().GetRepositoryRef() != "" {
+		t.Fatalf("risk lookup project contexts = %+v / %+v", client.riskRequests[0].GetProjectContext(), client.riskRequests[1].GetProjectContext())
+	}
+	if client.gateRequest.GetRiskAssessmentId() != riskAssessmentID || client.gateRequest.GetTarget().GetRef() != "" {
+		t.Fatalf("gate lookup request = %+v, want assessment-only lookup", client.gateRequest)
+	}
+}
+
+func TestSelfDeployGatePreparerReportsExistingRiskLookupFailure(t *testing.T) {
 	t.Parallel()
 
 	client := &fakeSelfDeployGateClient{
@@ -218,11 +263,137 @@ func TestSelfDeployGatePreparerReportsExistingGateLookupFailure(t *testing.T) {
 		Meta: value.CommandMeta{IdempotencyKey: "gate", Actor: value.Actor{Type: "service", ID: "agent-manager"}},
 		Plan: validGatePlan(),
 	})
+	if code := agentservice.SelfDeployGateRecoveryErrorCode(err); code != agentservice.SelfDeployGateRecoveryCodeExistingRiskLookupFailed {
+		t.Fatalf("recovery code = %q, want %q", code, agentservice.SelfDeployGateRecoveryCodeExistingRiskLookupFailed)
+	}
+	if !errors.Is(err, errs.ErrDependencyUnavailable) {
+		t.Fatalf("PrepareSelfDeployPlanGate() err = %v, want dependency lookup error", err)
+	}
+}
+
+func TestSelfDeployGatePreparerReportsExistingRiskFingerprintMismatch(t *testing.T) {
+	t.Parallel()
+
+	plan := validGatePlan()
+	riskResponse, _ := existingSelfDeployGateResponses(plan, "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa", "bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb")
+	riskResponse.RiskAssessments[0].EvidenceRefs[0].Digest = ptrString("sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc")
+	client := &fakeSelfDeployGateClient{
+		err:          status.Error(codes.Unavailable, "prepare command replay failed"),
+		riskResponse: riskResponse,
+	}
+	preparer, err := newSelfDeployGatePreparer(client, Config{AuthToken: "token", Timeout: time.Second})
+	if err != nil {
+		t.Fatalf("newSelfDeployGatePreparer(): %v", err)
+	}
+
+	_, err = preparer.PrepareSelfDeployPlanGate(context.Background(), agentservice.SelfDeployPlanGatePreparationInput{
+		Meta: value.CommandMeta{IdempotencyKey: "gate", Actor: value.Actor{Type: "service", ID: "agent-manager"}},
+		Plan: plan,
+	})
+	if code := agentservice.SelfDeployGateRecoveryErrorCode(err); code != agentservice.SelfDeployGateRecoveryCodeExistingRiskFingerprintMismatch {
+		t.Fatalf("recovery code = %q, want %q", code, agentservice.SelfDeployGateRecoveryCodeExistingRiskFingerprintMismatch)
+	}
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("PrepareSelfDeployPlanGate() err = %v, want fingerprint conflict", err)
+	}
+}
+
+func TestSelfDeployGatePreparerReportsExistingRiskConflict(t *testing.T) {
+	t.Parallel()
+
+	plan := validGatePlan()
+	riskResponse, _ := existingSelfDeployGateResponses(plan, "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa", "bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb")
+	planRef := "agent:self-deploy-plan:" + plan.ID.String()
+	riskResponse.RiskAssessments = append(riskResponse.RiskAssessments, &governancev1.RiskAssessment{
+		Id: "cccccccc-cccc-4ccc-cccc-cccccccccccc",
+		Target: &governancev1.TargetRef{
+			Type: governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_SELF_DEPLOY_PLAN,
+			Ref:  planRef,
+		},
+		Status: governancev1.RiskAssessmentStatus_RISK_ASSESSMENT_STATUS_ACTIVE,
+		EvidenceRefs: []*governancev1.EvidenceRef{{
+			Kind:   governancev1.EvidenceKind_EVIDENCE_KIND_SELF_DEPLOY_PLAN,
+			Ref:    planRef,
+			Digest: ptrString(plan.PlanFingerprint),
+		}},
+	})
+	client := &fakeSelfDeployGateClient{
+		err:          status.Error(codes.Unavailable, "prepare command replay failed"),
+		riskResponse: riskResponse,
+	}
+	preparer, err := newSelfDeployGatePreparer(client, Config{AuthToken: "token", Timeout: time.Second})
+	if err != nil {
+		t.Fatalf("newSelfDeployGatePreparer(): %v", err)
+	}
+
+	_, err = preparer.PrepareSelfDeployPlanGate(context.Background(), agentservice.SelfDeployPlanGatePreparationInput{
+		Meta: value.CommandMeta{IdempotencyKey: "gate", Actor: value.Actor{Type: "service", ID: "agent-manager"}},
+		Plan: plan,
+	})
+	if code := agentservice.SelfDeployGateRecoveryErrorCode(err); code != agentservice.SelfDeployGateRecoveryCodeExistingRiskConflict {
+		t.Fatalf("recovery code = %q, want %q", code, agentservice.SelfDeployGateRecoveryCodeExistingRiskConflict)
+	}
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("PrepareSelfDeployPlanGate() err = %v, want conflict", err)
+	}
+}
+
+func TestSelfDeployGatePreparerReportsExistingGateLookupFailure(t *testing.T) {
+	t.Parallel()
+
+	plan := validGatePlan()
+	riskResponse, _ := existingSelfDeployGateResponses(plan, "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa", "bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb")
+	client := &fakeSelfDeployGateClient{
+		err:          status.Error(codes.Unavailable, "prepare command replay failed"),
+		riskResponse: riskResponse,
+		gateErr:      status.Error(codes.PermissionDenied, "gate read denied"),
+	}
+	preparer, err := newSelfDeployGatePreparer(client, Config{AuthToken: "token", Timeout: time.Second})
+	if err != nil {
+		t.Fatalf("newSelfDeployGatePreparer(): %v", err)
+	}
+
+	_, err = preparer.PrepareSelfDeployPlanGate(context.Background(), agentservice.SelfDeployPlanGatePreparationInput{
+		Meta: value.CommandMeta{IdempotencyKey: "gate", Actor: value.Actor{Type: "service", ID: "agent-manager"}},
+		Plan: plan,
+	})
 	if code := agentservice.SelfDeployGateRecoveryErrorCode(err); code != agentservice.SelfDeployGateRecoveryCodeExistingGateLookupFailed {
 		t.Fatalf("recovery code = %q, want %q", code, agentservice.SelfDeployGateRecoveryCodeExistingGateLookupFailed)
 	}
 	if !errors.Is(err, errs.ErrDependencyUnavailable) {
 		t.Fatalf("PrepareSelfDeployPlanGate() err = %v, want dependency lookup error", err)
+	}
+}
+
+func TestSelfDeployGatePreparerReportsExistingGateMismatch(t *testing.T) {
+	t.Parallel()
+
+	plan := validGatePlan()
+	riskAssessmentID := "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"
+	riskResponse, gateResponse := existingSelfDeployGateResponses(plan, riskAssessmentID, "bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb")
+	gateResponse.GateRequests[0].Status = governancev1.GateRequestStatus_GATE_REQUEST_STATUS_RESOLVED
+	client := &fakeSelfDeployGateClient{
+		err:          status.Error(codes.Unavailable, "prepare command replay failed"),
+		riskResponse: riskResponse,
+		gateResponse: gateResponse,
+	}
+	preparer, err := newSelfDeployGatePreparer(client, Config{AuthToken: "token", Timeout: time.Second})
+	if err != nil {
+		t.Fatalf("newSelfDeployGatePreparer(): %v", err)
+	}
+
+	_, err = preparer.PrepareSelfDeployPlanGate(context.Background(), agentservice.SelfDeployPlanGatePreparationInput{
+		Meta: value.CommandMeta{IdempotencyKey: "gate", Actor: value.Actor{Type: "service", ID: "agent-manager"}},
+		Plan: plan,
+	})
+	if code := agentservice.SelfDeployGateRecoveryErrorCode(err); code != agentservice.SelfDeployGateRecoveryCodeExistingGateMismatch {
+		t.Fatalf("recovery code = %q, want %q", code, agentservice.SelfDeployGateRecoveryCodeExistingGateMismatch)
+	}
+	if !errors.Is(err, errs.ErrNotFound) {
+		t.Fatalf("PrepareSelfDeployPlanGate() err = %v, want safe non-match error", err)
+	}
+	if client.gateRequest.GetRiskAssessmentId() != riskAssessmentID || client.gateRequest.GetTarget().GetRef() != "" {
+		t.Fatalf("gate lookup request = %+v, want assessment-only lookup", client.gateRequest)
 	}
 }
 
@@ -273,16 +444,18 @@ func validGatePlan() entity.SelfDeployPlan {
 }
 
 type fakeSelfDeployGateClient struct {
-	request          *governancev1.PrepareSelfDeployPlanGateRequest
-	riskRequest      *governancev1.ListRiskAssessmentsRequest
-	gateRequest      *governancev1.ListGateRequestsRequest
-	response         *governancev1.SelfDeployPlanGateResponse
-	riskResponse     *governancev1.ListRiskAssessmentsResponse
-	gateResponse     *governancev1.ListGateRequestsResponse
-	err              error
-	riskErr          error
-	gateErr          error
-	rejectGateTarget bool
+	request                *governancev1.PrepareSelfDeployPlanGateRequest
+	riskRequest            *governancev1.ListRiskAssessmentsRequest
+	riskRequests           []*governancev1.ListRiskAssessmentsRequest
+	gateRequest            *governancev1.ListGateRequestsRequest
+	response               *governancev1.SelfDeployPlanGateResponse
+	riskResponse           *governancev1.ListRiskAssessmentsResponse
+	gateResponse           *governancev1.ListGateRequestsResponse
+	riskResponseForRequest func(*governancev1.ListRiskAssessmentsRequest) (*governancev1.ListRiskAssessmentsResponse, error)
+	err                    error
+	riskErr                error
+	gateErr                error
+	rejectGateTarget       bool
 }
 
 func (f *fakeSelfDeployGateClient) PrepareSelfDeployPlanGate(_ context.Context, request *governancev1.PrepareSelfDeployPlanGateRequest, _ ...grpc.CallOption) (*governancev1.SelfDeployPlanGateResponse, error) {
@@ -295,6 +468,10 @@ func (f *fakeSelfDeployGateClient) PrepareSelfDeployPlanGate(_ context.Context, 
 
 func (f *fakeSelfDeployGateClient) ListRiskAssessments(_ context.Context, request *governancev1.ListRiskAssessmentsRequest, _ ...grpc.CallOption) (*governancev1.ListRiskAssessmentsResponse, error) {
 	f.riskRequest = request
+	f.riskRequests = append(f.riskRequests, request)
+	if f.riskResponseForRequest != nil {
+		return f.riskResponseForRequest(request)
+	}
 	if f.riskErr != nil {
 		return nil, f.riskErr
 	}

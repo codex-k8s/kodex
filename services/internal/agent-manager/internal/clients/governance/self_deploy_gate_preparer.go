@@ -88,7 +88,7 @@ func (preparer *SelfDeployGatePreparer) PrepareSelfDeployPlanGate(ctx context.Co
 	if err != nil {
 		result, ok, lookupErr := preparer.lookupExistingSelfDeployPlanGate(callCtx, input)
 		if lookupErr != nil {
-			return agentservice.SelfDeployPlanGatePreparationResult{}, agentservice.NewSelfDeployGateRecoveryError(agentservice.SelfDeployGateRecoveryCodeExistingGateLookupFailed, lookupErr)
+			return agentservice.SelfDeployPlanGatePreparationResult{}, selfDeployGateLookupError(agentservice.SelfDeployGateRecoveryCodeExistingGateLookupFailed, lookupErr)
 		}
 		if ok {
 			return result, nil
@@ -101,7 +101,7 @@ func (preparer *SelfDeployGatePreparer) PrepareSelfDeployPlanGate(ctx context.Co
 	}
 	result, ok, lookupErr := preparer.lookupExistingSelfDeployPlanGate(callCtx, input)
 	if lookupErr != nil {
-		return agentservice.SelfDeployPlanGatePreparationResult{}, agentservice.NewSelfDeployGateRecoveryError(agentservice.SelfDeployGateRecoveryCodeExistingGateLookupFailed, lookupErr)
+		return agentservice.SelfDeployPlanGatePreparationResult{}, selfDeployGateLookupError(agentservice.SelfDeployGateRecoveryCodeExistingGateLookupFailed, lookupErr)
 	}
 	if ok {
 		return result, nil
@@ -195,11 +195,17 @@ func (preparer *SelfDeployGatePreparer) lookupExistingSelfDeployPlanGate(ctx con
 	}
 	assessment, ok, err := preparer.lookupSelfDeployRiskAssessment(ctx, input, target)
 	if err != nil || !ok {
-		return agentservice.SelfDeployPlanGatePreparationResult{}, ok, err
+		if err != nil {
+			return agentservice.SelfDeployPlanGatePreparationResult{}, false, err
+		}
+		return agentservice.SelfDeployPlanGatePreparationResult{}, false, nil
 	}
 	gate, ok, err := preparer.lookupSelfDeployGateRequest(ctx, input, target, assessment.GetId())
 	if err != nil || !ok {
-		return agentservice.SelfDeployPlanGatePreparationResult{}, ok, err
+		if err != nil {
+			return agentservice.SelfDeployPlanGatePreparationResult{}, false, err
+		}
+		return agentservice.SelfDeployPlanGatePreparationResult{}, false, agentservice.NewSelfDeployGateRecoveryError(agentservice.SelfDeployGateRecoveryCodeExistingGateNotFound, errs.ErrNotFound)
 	}
 	return agentservice.SelfDeployPlanGatePreparationResult{
 		Status: agentservice.SelfDeployPlanGateStatusPending,
@@ -212,31 +218,44 @@ func (preparer *SelfDeployGatePreparer) lookupExistingSelfDeployPlanGate(ctx con
 }
 
 func (preparer *SelfDeployGatePreparer) lookupSelfDeployRiskAssessment(ctx context.Context, input agentservice.SelfDeployPlanGatePreparationInput, target *governancev1.TargetRef) (*governancev1.RiskAssessment, bool, error) {
-	status := governancev1.RiskAssessmentStatus_RISK_ASSESSMENT_STATUS_ACTIVE
-	response, err := preparer.client.ListRiskAssessments(ctx, &governancev1.ListRiskAssessmentsRequest{
-		Target:         target,
-		ProjectContext: projectContext(input.Plan),
-		Status:         &status,
-		Page:           &governancev1.PageRequest{PageSize: 10},
-		Meta:           queryMeta(input.Meta),
-	})
+	context := projectContext(input.Plan)
+	response, err := preparer.listSelfDeployRiskAssessments(ctx, input, target, context)
 	if err != nil {
-		return nil, false, grpcclient.MapReadError(err, "governance-manager self-deploy risk assessment lookup failed")
+		return nil, false, agentservice.NewSelfDeployGateRecoveryError(
+			agentservice.SelfDeployGateRecoveryCodeExistingRiskLookupFailed,
+			grpcclient.MapReadError(err, "governance-manager self-deploy risk assessment lookup failed"),
+		)
 	}
-	var selected *governancev1.RiskAssessment
-	for _, item := range response.GetRiskAssessments() {
-		if !selfDeployRiskAssessmentMatchesPlan(item, target.GetRef(), input.Plan.PlanFingerprint) {
-			continue
+	selected, code, err := selectSelfDeployRiskAssessment(response.GetRiskAssessments(), target.GetRef(), input.Plan.PlanFingerprint)
+	if err != nil {
+		return nil, false, agentservice.NewSelfDeployGateRecoveryError(code, err)
+	}
+	if selected != nil {
+		return selected, true, nil
+	}
+	if code == agentservice.SelfDeployGateRecoveryCodeExistingRiskFingerprintMismatch {
+		return nil, false, agentservice.NewSelfDeployGateRecoveryError(code, errs.ErrConflict)
+	}
+	if projectContextHasRefs(context) {
+		response, err = preparer.listSelfDeployRiskAssessments(ctx, input, target, nil)
+		if err != nil {
+			return nil, false, agentservice.NewSelfDeployGateRecoveryError(
+				agentservice.SelfDeployGateRecoveryCodeExistingRiskLookupFailed,
+				grpcclient.MapReadError(err, "governance-manager self-deploy risk assessment lookup failed"),
+			)
+		}
+		selected, code, err = selectSelfDeployRiskAssessment(response.GetRiskAssessments(), target.GetRef(), input.Plan.PlanFingerprint)
+		if err != nil {
+			return nil, false, agentservice.NewSelfDeployGateRecoveryError(code, err)
 		}
 		if selected != nil {
-			return nil, false, errs.ErrConflict
+			return selected, true, nil
 		}
-		selected = item
+		if code == agentservice.SelfDeployGateRecoveryCodeExistingRiskFingerprintMismatch {
+			return nil, false, agentservice.NewSelfDeployGateRecoveryError(code, errs.ErrConflict)
+		}
 	}
-	if selected == nil {
-		return nil, false, nil
-	}
-	return selected, true, nil
+	return nil, false, nil
 }
 
 func (preparer *SelfDeployGatePreparer) lookupSelfDeployGateRequest(ctx context.Context, input agentservice.SelfDeployPlanGatePreparationInput, target *governancev1.TargetRef, assessmentID string) (*governancev1.GateRequest, bool, error) {
@@ -250,22 +269,38 @@ func (preparer *SelfDeployGatePreparer) lookupSelfDeployGateRequest(ctx context.
 		Meta:             queryMeta(input.Meta),
 	})
 	if err != nil {
-		return nil, false, grpcclient.MapReadError(err, "governance-manager self-deploy gate request lookup failed")
+		return nil, false, agentservice.NewSelfDeployGateRecoveryError(
+			agentservice.SelfDeployGateRecoveryCodeExistingGateLookupFailed,
+			grpcclient.MapReadError(err, "governance-manager self-deploy gate request lookup failed"),
+		)
 	}
-	var selected *governancev1.GateRequest
-	for _, item := range response.GetGateRequests() {
-		if !selfDeployGateRequestMatchesAssessment(item, target.GetRef(), assessmentID) {
-			continue
-		}
-		if selected != nil {
-			return nil, false, errs.ErrConflict
-		}
-		selected = item
+	selected, code, err := selectSelfDeployGateRequest(response.GetGateRequests(), target.GetRef(), assessmentID)
+	if err != nil {
+		return nil, false, agentservice.NewSelfDeployGateRecoveryError(code, err)
 	}
 	if selected == nil {
-		return nil, false, nil
+		if code == "" {
+			code = agentservice.SelfDeployGateRecoveryCodeExistingGateNotFound
+		}
+		return nil, false, agentservice.NewSelfDeployGateRecoveryError(code, errs.ErrNotFound)
 	}
 	return selected, true, nil
+}
+
+func (preparer *SelfDeployGatePreparer) listSelfDeployRiskAssessments(
+	ctx context.Context,
+	input agentservice.SelfDeployPlanGatePreparationInput,
+	target *governancev1.TargetRef,
+	context *governancev1.ProjectContextRef,
+) (*governancev1.ListRiskAssessmentsResponse, error) {
+	status := governancev1.RiskAssessmentStatus_RISK_ASSESSMENT_STATUS_ACTIVE
+	return preparer.client.ListRiskAssessments(ctx, &governancev1.ListRiskAssessmentsRequest{
+		Target:         target,
+		ProjectContext: context,
+		Status:         &status,
+		Page:           &governancev1.PageRequest{PageSize: 10},
+		Meta:           queryMeta(input.Meta),
+	})
 }
 
 func queryMeta(meta value.CommandMeta) *governancev1.QueryMeta {
@@ -283,7 +318,32 @@ func selfDeployPlanTarget(plan entity.SelfDeployPlan) *governancev1.TargetRef {
 	}
 }
 
-func selfDeployRiskAssessmentMatchesPlan(item *governancev1.RiskAssessment, planRef string, fingerprint string) bool {
+func selectSelfDeployRiskAssessment(items []*governancev1.RiskAssessment, planRef string, fingerprint string) (*governancev1.RiskAssessment, string, error) {
+	var selected *governancev1.RiskAssessment
+	fingerprintMismatch := false
+	for _, item := range items {
+		if !selfDeployRiskAssessmentMatchesTarget(item, planRef) {
+			continue
+		}
+		if !selfDeployRiskAssessmentMatchesPlanFingerprint(item, planRef, fingerprint) {
+			fingerprintMismatch = true
+			continue
+		}
+		if selected != nil {
+			return nil, agentservice.SelfDeployGateRecoveryCodeExistingRiskConflict, errs.ErrConflict
+		}
+		selected = item
+	}
+	if selected != nil {
+		return selected, "", nil
+	}
+	if fingerprintMismatch {
+		return nil, agentservice.SelfDeployGateRecoveryCodeExistingRiskFingerprintMismatch, nil
+	}
+	return nil, "", nil
+}
+
+func selfDeployRiskAssessmentMatchesTarget(item *governancev1.RiskAssessment, planRef string) bool {
 	if item == nil || strings.TrimSpace(item.GetId()) == "" {
 		return false
 	}
@@ -291,6 +351,10 @@ func selfDeployRiskAssessmentMatchesPlan(item *governancev1.RiskAssessment, plan
 		strings.TrimSpace(item.GetTarget().GetRef()) != strings.TrimSpace(planRef) {
 		return false
 	}
+	return true
+}
+
+func selfDeployRiskAssessmentMatchesPlanFingerprint(item *governancev1.RiskAssessment, planRef string, fingerprint string) bool {
 	for _, evidence := range item.GetEvidenceRefs() {
 		if evidence.GetKind() == governancev1.EvidenceKind_EVIDENCE_KIND_SELF_DEPLOY_PLAN &&
 			strings.TrimSpace(evidence.GetRef()) == strings.TrimSpace(planRef) &&
@@ -301,7 +365,33 @@ func selfDeployRiskAssessmentMatchesPlan(item *governancev1.RiskAssessment, plan
 	return false
 }
 
-func selfDeployGateRequestMatchesAssessment(item *governancev1.GateRequest, planRef string, assessmentID string) bool {
+func selectSelfDeployGateRequest(items []*governancev1.GateRequest, planRef string, assessmentID string) (*governancev1.GateRequest, string, error) {
+	var selected *governancev1.GateRequest
+	mismatch := false
+	for _, item := range items {
+		if !selfDeployGateRequestMatchesAssessmentAndTarget(item, planRef, assessmentID) {
+			mismatch = mismatch || selfDeployGateRequestMatchesAssessmentID(item, assessmentID)
+			continue
+		}
+		if !selfDeployGateRequestStatusOpen(item.GetStatus()) {
+			mismatch = true
+			continue
+		}
+		if selected != nil {
+			return nil, agentservice.SelfDeployGateRecoveryCodeExistingGateConflict, errs.ErrConflict
+		}
+		selected = item
+	}
+	if selected != nil {
+		return selected, "", nil
+	}
+	if mismatch {
+		return nil, agentservice.SelfDeployGateRecoveryCodeExistingGateMismatch, nil
+	}
+	return nil, "", nil
+}
+
+func selfDeployGateRequestMatchesAssessmentAndTarget(item *governancev1.GateRequest, planRef string, assessmentID string) bool {
 	if item == nil || strings.TrimSpace(item.GetId()) == "" {
 		return false
 	}
@@ -310,7 +400,15 @@ func selfDeployGateRequestMatchesAssessment(item *governancev1.GateRequest, plan
 		strings.TrimSpace(item.GetRiskAssessmentId()) != strings.TrimSpace(assessmentID) {
 		return false
 	}
-	switch item.GetStatus() {
+	return true
+}
+
+func selfDeployGateRequestMatchesAssessmentID(item *governancev1.GateRequest, assessmentID string) bool {
+	return item != nil && strings.TrimSpace(item.GetId()) != "" && strings.TrimSpace(item.GetRiskAssessmentId()) == strings.TrimSpace(assessmentID)
+}
+
+func selfDeployGateRequestStatusOpen(status governancev1.GateRequestStatus) bool {
+	switch status {
 	case governancev1.GateRequestStatus_GATE_REQUEST_STATUS_REQUESTED,
 		governancev1.GateRequestStatus_GATE_REQUEST_STATUS_DELIVERING,
 		governancev1.GateRequestStatus_GATE_REQUEST_STATUS_AWAITING_DECISION:
@@ -318,6 +416,28 @@ func selfDeployGateRequestMatchesAssessment(item *governancev1.GateRequest, plan
 	default:
 		return false
 	}
+}
+
+func selfDeployGateLookupError(defaultCode string, err error) error {
+	if err == nil {
+		return nil
+	}
+	if code := agentservice.SelfDeployGateRecoveryErrorCode(err); code != "" {
+		return err
+	}
+	return agentservice.NewSelfDeployGateRecoveryError(defaultCode, err)
+}
+
+func projectContextHasRefs(context *governancev1.ProjectContextRef) bool {
+	if context == nil {
+		return false
+	}
+	return strings.TrimSpace(context.GetProjectRef()) != "" ||
+		strings.TrimSpace(context.GetRepositoryRef()) != "" ||
+		strings.TrimSpace(context.GetServiceRef()) != "" ||
+		strings.TrimSpace(context.GetBranchRulesRef()) != "" ||
+		strings.TrimSpace(context.GetReleasePolicyRef()) != "" ||
+		strings.TrimSpace(context.GetReleaseLineRef()) != ""
 }
 
 func selfDeployPlanGateStatus(status governancev1.SelfDeployPlanGateStatus) (agentservice.SelfDeployPlanGateStatus, bool) {
