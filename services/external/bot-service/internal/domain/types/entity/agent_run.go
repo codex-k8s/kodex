@@ -5,6 +5,7 @@ import "time"
 type AgentRun struct {
 	ID                  int64
 	RunID               string
+	FlowID              string
 	ProfileName         string
 	Role                string
 	Provider            string

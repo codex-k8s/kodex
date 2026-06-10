@@ -223,9 +223,57 @@ func (repo *Repository) GetGitHubAccount(ctx context.Context, name string) (enti
 	return item, nil
 }
 
+func (repo *Repository) CreateAgentFlow(ctx context.Context, input adminrepo.CreateAgentFlowInput) (entity.AgentFlow, bool, error) {
+	row := repo.pool.QueryRow(ctx, query("agent_flows__insert.sql"),
+		input.FlowID,
+		input.Status,
+		input.Provider,
+		input.Owner,
+		input.Name,
+		input.BaseBranch,
+		input.HeadBranch,
+		input.Title,
+		input.Task,
+		input.Attempt,
+		input.MaxAttempts,
+		input.Summary,
+	)
+	item, created, err := scanAgentFlowWithCreated(row)
+	if err != nil {
+		return entity.AgentFlow{}, false, fmt.Errorf("insert agent flow: %w", err)
+	}
+	return item, created, nil
+}
+
+func (repo *Repository) GetAgentFlow(ctx context.Context, flowID string) (entity.AgentFlow, error) {
+	item, err := scanAgentFlow(repo.pool.QueryRow(ctx, query("agent_flows__get.sql"), flowID))
+	if err != nil {
+		return entity.AgentFlow{}, fmt.Errorf("get agent flow: %w", err)
+	}
+	return item, nil
+}
+
+func (repo *Repository) UpdateAgentFlow(ctx context.Context, input adminrepo.UpdateAgentFlowInput) (entity.AgentFlow, error) {
+	item, err := scanAgentFlow(repo.pool.QueryRow(ctx, query("agent_flows__update.sql"),
+		input.FlowID,
+		input.Status,
+		input.PRURL,
+		input.PRNumber,
+		input.Attempt,
+		input.CurrentDeveloperRunID,
+		input.CurrentReviewerRunID,
+		input.Summary,
+	))
+	if err != nil {
+		return entity.AgentFlow{}, fmt.Errorf("update agent flow: %w", err)
+	}
+	return item, nil
+}
+
 func (repo *Repository) CreateAgentRun(ctx context.Context, input adminrepo.CreateAgentRunInput) (entity.AgentRun, error) {
 	row := repo.pool.QueryRow(ctx, query("agent_runs__insert.sql"),
 		input.RunID,
+		input.FlowID,
 		input.ProfileName,
 		input.Role,
 		input.Provider,
@@ -252,6 +300,27 @@ func (repo *Repository) GetAgentRun(ctx context.Context, runID string) (entity.A
 		return entity.AgentRun{}, fmt.Errorf("get agent run: %w", err)
 	}
 	return item, nil
+}
+
+func (repo *Repository) ListAgentRunsByFlowID(ctx context.Context, flowID string) ([]entity.AgentRun, error) {
+	rows, err := repo.pool.Query(ctx, query("agent_runs__list_by_flow.sql"), flowID)
+	if err != nil {
+		return nil, fmt.Errorf("list agent runs by flow: %w", err)
+	}
+	defer rows.Close()
+
+	var items []entity.AgentRun
+	for rows.Next() {
+		item, err := scanAgentRun(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan agent run: %w", err)
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate agent runs: %w", err)
+	}
+	return items, nil
 }
 
 func (repo *Repository) UpdateAgentRunArtifacts(ctx context.Context, input adminrepo.UpdateAgentRunArtifactsInput) (entity.AgentRun, error) {
@@ -343,6 +412,7 @@ func scanAgentRun(row pgx.Row) (entity.AgentRun, error) {
 	if err := row.Scan(
 		&item.ID,
 		&item.RunID,
+		&item.FlowID,
 		&item.ProfileName,
 		&item.Role,
 		&item.Provider,
@@ -360,6 +430,53 @@ func scanAgentRun(row pgx.Row) (entity.AgentRun, error) {
 		&item.UpdatedAt,
 	); err != nil {
 		return entity.AgentRun{}, err
+	}
+	return item, nil
+}
+
+func scanAgentFlow(row pgx.Row) (entity.AgentFlow, error) {
+	item, err := scanAgentFlowFields(row)
+	if err != nil {
+		return entity.AgentFlow{}, err
+	}
+	return item, nil
+}
+
+func scanAgentFlowWithCreated(row pgx.Row) (entity.AgentFlow, bool, error) {
+	var created bool
+	item, err := scanAgentFlowFields(row, &created)
+	if err != nil {
+		return entity.AgentFlow{}, false, err
+	}
+	return item, created, nil
+}
+
+func scanAgentFlowFields(row pgx.Row, extra ...any) (entity.AgentFlow, error) {
+	var item entity.AgentFlow
+	dest := []any{
+		&item.ID,
+		&item.FlowID,
+		&item.Status,
+		&item.Provider,
+		&item.Owner,
+		&item.Name,
+		&item.BaseBranch,
+		&item.HeadBranch,
+		&item.Title,
+		&item.Task,
+		&item.PRURL,
+		&item.PRNumber,
+		&item.Attempt,
+		&item.MaxAttempts,
+		&item.CurrentDeveloperRunID,
+		&item.CurrentReviewerRunID,
+		&item.Summary,
+		&item.CreatedAt,
+		&item.UpdatedAt,
+	}
+	dest = append(dest, extra...)
+	if err := row.Scan(dest...); err != nil {
+		return entity.AgentFlow{}, err
 	}
 	return item, nil
 }

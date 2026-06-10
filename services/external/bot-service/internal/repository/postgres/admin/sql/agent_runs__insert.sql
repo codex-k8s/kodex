@@ -1,6 +1,7 @@
 -- name: agent_runs__insert :one
 insert into matter_codex_agent_runs(
 	run_id,
+	flow_id,
 	profile_name,
 	role,
 	provider,
@@ -26,9 +27,11 @@ insert into matter_codex_agent_runs(
 	$10,
 	$11,
 	$12,
-	$13
+	$13,
+	$14
 )
 on conflict (run_id) do update set
+	flow_id = excluded.flow_id,
 	status = excluded.status,
 	kubernetes_namespace = excluded.kubernetes_namespace,
 	job_name = excluded.job_name,
@@ -37,6 +40,7 @@ on conflict (run_id) do update set
 returning
 	id,
 	run_id,
+	flow_id,
 	profile_name,
 	role,
 	provider,

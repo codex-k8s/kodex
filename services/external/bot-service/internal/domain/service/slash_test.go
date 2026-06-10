@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"testing"
 
@@ -505,6 +506,215 @@ func TestSlashReviewPRStatusAndCleanup(t *testing.T) {
 	}
 }
 
+func TestSlashFlowStartStartsDeveloperRun(t *testing.T) {
+	store := fakeFlowReadyStore()
+	runner := &fakeRuntimeRunner{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:         localizer,
+		StatusService:     testStatusService(localizer),
+		Store:             store,
+		RuntimeRunner:     runner,
+		StorageReady:      true,
+		RuntimeConfigured: true,
+	})
+
+	text := svc.Handle(context.Background(), SlashCommand{Text: "flow start codex-k8s/matter-codex flow1 Update docs", UserName: "owner"})
+
+	if !strings.Contains(text, "developer-review flow started") || !strings.Contains(text, "`flow1`") {
+		t.Fatalf("Handle(flow start) text = %q", text)
+	}
+	if runner.startedDeveloperRunID != "flow1-d1" || runner.developerHeadBranch != "matter-codex-flow-flow1" {
+		t.Fatalf("runner = %#v", runner)
+	}
+	if len(runner.developerRuns) != 1 {
+		t.Fatalf("developerRuns = %#v", runner.developerRuns)
+	}
+	if runner.developerRuns[0].BaseBranch != "main" || runner.developerRuns[0].HeadBranch != "matter-codex-flow-flow1" {
+		t.Fatalf("developer run input = %#v", runner.developerRuns[0])
+	}
+	flow, err := store.GetAgentFlow(context.Background(), "flow1")
+	if err != nil {
+		t.Fatalf("GetAgentFlow() error = %v", err)
+	}
+	if flow.Status != flowStatusDeveloperRunning || flow.Attempt != 1 || flow.CurrentDeveloperRunID != "flow1-d1" {
+		t.Fatalf("flow = %#v", flow)
+	}
+	run := store.agentRuns["flow1-d1"]
+	if run.FlowID != "flow1" || run.ProfileName != "developer" {
+		t.Fatalf("agent run = %#v", run)
+	}
+}
+
+func TestSlashFlowStatusStartsReviewerAfterDeveloperPR(t *testing.T) {
+	store := fakeFlowReadyStore()
+	runner := &fakeRuntimeRunner{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:         localizer,
+		StatusService:     testStatusService(localizer),
+		Store:             store,
+		RuntimeRunner:     runner,
+		StorageReady:      true,
+		RuntimeConfigured: true,
+	})
+
+	_ = svc.Handle(context.Background(), SlashCommand{Text: "flow start codex-k8s/matter-codex flow1 Update docs", UserName: "owner"})
+	runner.runStatuses = map[string]runtimerepo.RunStatus{
+		"flow1-d1": fakeSucceededStatus("flow1-d1", map[string]string{
+			"pr-url": "https://github.com/codex-k8s/matter-codex/pull/10",
+		}),
+	}
+
+	text := svc.Handle(context.Background(), SlashCommand{Text: "flow status flow1"})
+
+	if !strings.Contains(text, "reviewer run started: flow1-r1") || !strings.Contains(text, "status: `review_running`") {
+		t.Fatalf("Handle(flow status) text = %q", text)
+	}
+	if runner.startedReviewRunID != "flow1-r1" || runner.reviewPRNumber != 10 {
+		t.Fatalf("runner = %#v", runner)
+	}
+	flow, err := store.GetAgentFlow(context.Background(), "flow1")
+	if err != nil {
+		t.Fatalf("GetAgentFlow() error = %v", err)
+	}
+	if flow.Status != flowStatusReviewRunning || flow.PRNumber != 10 || flow.CurrentReviewerRunID != "flow1-r1" {
+		t.Fatalf("flow = %#v", flow)
+	}
+	run := store.agentRuns["flow1-r1"]
+	if run.FlowID != "flow1" || run.ProfileName != "reviewer" {
+		t.Fatalf("review run = %#v", run)
+	}
+}
+
+func TestSlashFlowStatusStartsFixOnRequestChanges(t *testing.T) {
+	store := fakeFlowReadyStore()
+	runner := &fakeRuntimeRunner{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:         localizer,
+		StatusService:     testStatusService(localizer),
+		Store:             store,
+		RuntimeRunner:     runner,
+		StorageReady:      true,
+		RuntimeConfigured: true,
+	})
+
+	_ = svc.Handle(context.Background(), SlashCommand{Text: "flow start codex-k8s/matter-codex flow1 Update docs", UserName: "owner"})
+	runner.runStatuses = map[string]runtimerepo.RunStatus{
+		"flow1-d1": fakeSucceededStatus("flow1-d1", map[string]string{
+			"pr-url": "https://github.com/codex-k8s/matter-codex/pull/10",
+		}),
+	}
+	_ = svc.Handle(context.Background(), SlashCommand{Text: "flow status flow1"})
+	runner.runStatuses["flow1-r1"] = fakeSucceededStatus("flow1-r1", map[string]string{
+		"pr-url":          "https://github.com/codex-k8s/matter-codex/pull/10",
+		"review-decision": "request_changes",
+	})
+
+	text := svc.Handle(context.Background(), SlashCommand{Text: "flow status flow1"})
+
+	if !strings.Contains(text, "fix run started: flow1-d2") || !strings.Contains(text, "status: `fix_running`") {
+		t.Fatalf("Handle(flow status request changes) text = %q", text)
+	}
+	if len(runner.developerRuns) != 2 {
+		t.Fatalf("developerRuns = %#v", runner.developerRuns)
+	}
+	fixRun := runner.developerRuns[1]
+	if fixRun.RunID != "flow1-d2" || fixRun.BaseBranch != "matter-codex-flow-flow1" || fixRun.HeadBranch != "matter-codex-flow-flow1" {
+		t.Fatalf("fix developer run = %#v", fixRun)
+	}
+	flow, err := store.GetAgentFlow(context.Background(), "flow1")
+	if err != nil {
+		t.Fatalf("GetAgentFlow() error = %v", err)
+	}
+	if flow.Status != flowStatusFixRunning || flow.Attempt != 2 || flow.CurrentDeveloperRunID != "flow1-d2" {
+		t.Fatalf("flow = %#v", flow)
+	}
+}
+
+func TestSlashFlowBlocksAfterAttemptLimit(t *testing.T) {
+	store := fakeFlowReadyStore()
+	store.agentFlows = map[string]entity.AgentFlow{
+		"flow1": {
+			FlowID:                "flow1",
+			Status:                flowStatusReviewRunning,
+			Provider:              "github",
+			Owner:                 "codex-k8s",
+			Name:                  "matter-codex",
+			BaseBranch:            "main",
+			HeadBranch:            "matter-codex-flow-flow1",
+			Title:                 "Update docs",
+			Task:                  "Update docs",
+			PRURL:                 "https://github.com/codex-k8s/matter-codex/pull/10",
+			PRNumber:              10,
+			Attempt:               defaultFlowMaxAttempts,
+			MaxAttempts:           defaultFlowMaxAttempts,
+			CurrentDeveloperRunID: "flow1-d3",
+			CurrentReviewerRunID:  "flow1-r3",
+		},
+	}
+	runner := &fakeRuntimeRunner{
+		runStatuses: map[string]runtimerepo.RunStatus{
+			"flow1-r3": fakeSucceededStatus("flow1-r3", map[string]string{
+				"pr-url":          "https://github.com/codex-k8s/matter-codex/pull/10",
+				"review-decision": "request_changes",
+			}),
+		},
+	}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:         localizer,
+		StatusService:     testStatusService(localizer),
+		Store:             store,
+		RuntimeRunner:     runner,
+		StorageReady:      true,
+		RuntimeConfigured: true,
+	})
+
+	text := svc.Handle(context.Background(), SlashCommand{Text: "flow status flow1"})
+
+	if !strings.Contains(text, "status: `blocked`") || !strings.Contains(text, "attempt limit reached") {
+		t.Fatalf("Handle(flow status limit) text = %q", text)
+	}
+	if len(runner.developerRuns) != 0 {
+		t.Fatalf("developerRuns = %#v", runner.developerRuns)
+	}
+	flow, err := store.GetAgentFlow(context.Background(), "flow1")
+	if err != nil {
+		t.Fatalf("GetAgentFlow() error = %v", err)
+	}
+	if flow.Status != flowStatusBlocked || flow.Attempt != defaultFlowMaxAttempts {
+		t.Fatalf("flow = %#v", flow)
+	}
+}
+
+func fakeFlowReadyStore() *fakeAdminStore {
+	return &fakeAdminStore{
+		profiles: []entity.AgentProfile{
+			{Name: "developer", Role: "developer", Enabled: true, OpenAIAccountName: "primary", GitHubAccountName: "agent"},
+			{Name: "reviewer", Role: "reviewer", Enabled: true, OpenAIAccountName: "primary", GitHubAccountName: "primary"},
+		},
+		openAIAccounts: map[string]entity.OpenAIAccount{
+			"primary": {Name: "primary", Status: "authorized", SecretRef: "matter-codex-codex-auth-primary"},
+		},
+	}
+}
+
+func fakeSucceededStatus(runID string, artifacts map[string]string) runtimerepo.RunStatus {
+	return runtimerepo.RunStatus{
+		RunID:        runID,
+		Namespace:    "mattermost",
+		JobName:      "mc-run-" + runID,
+		PVCName:      "mc-ws-" + runID,
+		PodName:      "mc-run-" + runID + "-pod",
+		Exists:       true,
+		JobSucceeded: 1,
+		PodPhase:     "Succeeded",
+		Artifacts:    artifacts,
+	}
+}
+
 func testLocalizer(t *testing.T, locale string) *texti18n.Localizer {
 	t.Helper()
 	localizer, err := texti18n.New(locale)
@@ -533,17 +743,22 @@ func testStatusService(localizer *texti18n.Localizer) *StatusService {
 type fakeRuntimeRunner struct {
 	startedRunID          string
 	startedDeveloperRunID string
+	developerRuns         []runtimerepo.DeveloperRunInput
+	developerBaseBranch   string
 	developerHeadBranch   string
 	developerCodexSecret  string
 	developerGitHubSecret string
 	startedReviewRunID    string
+	reviewRuns            []runtimerepo.ReviewRunInput
 	reviewPRNumber        int
 	reviewCodexSecret     string
 	reviewGitHubSecret    string
 	cleanedRunID          string
+	cleanedRunIDs         []string
 	authAccount           string
 	authSecret            string
 	authReady             bool
+	runStatuses           map[string]runtimerepo.RunStatus
 }
 
 func (runner *fakeRuntimeRunner) StartSmokeRun(_ context.Context, input runtimerepo.SmokeRunInput) (runtimerepo.StartedRun, error) {
@@ -604,6 +819,8 @@ func (runner *fakeRuntimeRunner) CleanupCodexAuthSession(_ context.Context, acco
 
 func (runner *fakeRuntimeRunner) StartDeveloperRun(_ context.Context, input runtimerepo.DeveloperRunInput) (runtimerepo.StartedRun, error) {
 	runner.startedDeveloperRunID = input.RunID
+	runner.developerRuns = append(runner.developerRuns, input)
+	runner.developerBaseBranch = input.BaseBranch
 	runner.developerHeadBranch = input.HeadBranch
 	runner.developerCodexSecret = input.CodexAuthSecretName
 	runner.developerGitHubSecret = input.GitHubSecretName
@@ -621,6 +838,7 @@ func (runner *fakeRuntimeRunner) StartDeveloperRun(_ context.Context, input runt
 
 func (runner *fakeRuntimeRunner) StartReviewRun(_ context.Context, input runtimerepo.ReviewRunInput) (runtimerepo.StartedRun, error) {
 	runner.startedReviewRunID = input.RunID
+	runner.reviewRuns = append(runner.reviewRuns, input)
 	runner.reviewPRNumber = input.PRNumber
 	runner.reviewCodexSecret = input.CodexAuthSecretName
 	runner.reviewGitHubSecret = input.GitHubSecretName
@@ -637,6 +855,9 @@ func (runner *fakeRuntimeRunner) StartReviewRun(_ context.Context, input runtime
 }
 
 func (runner *fakeRuntimeRunner) GetRunStatus(_ context.Context, runID string) (runtimerepo.RunStatus, error) {
+	if status, ok := runner.runStatuses[runID]; ok {
+		return status, nil
+	}
 	artifacts := map[string]string{"pr-url": "https://github.example/pr/10"}
 	logTail := "matter-codex smoke done\nmatter-codex artifact pr-url: https://github.example/pr/10\nsmoke-ok"
 	if strings.HasPrefix(runID, "review-") {
@@ -663,6 +884,7 @@ func (runner *fakeRuntimeRunner) GetRunStatus(_ context.Context, runID string) (
 
 func (runner *fakeRuntimeRunner) CleanupRun(_ context.Context, runID string) (runtimerepo.CleanupResult, error) {
 	runner.cleanedRunID = runID
+	runner.cleanedRunIDs = append(runner.cleanedRunIDs, runID)
 	return runtimerepo.CleanupResult{
 		RunID:      runID,
 		Namespace:  "mattermost",
@@ -679,6 +901,8 @@ type fakeAdminStore struct {
 	githubAccounts   map[string]entity.GitHubAccount
 	promptTemplates  map[string]entity.AgentPromptTemplate
 	agentRun         entity.AgentRun
+	agentRuns        map[string]entity.AgentRun
+	agentFlows       map[string]entity.AgentFlow
 	updatedRunStatus string
 	updatedPRURL     string
 }
@@ -749,8 +973,20 @@ func (store *fakeAdminStore) ensurePromptTemplates() {
 			TemplateKey: developerSmokeTemplateKey,
 			Body:        "Developer task for {{.Repository.FullName}}: {{.Task.Body}}",
 		},
-		promptTemplateMapKey("reviewer", reviewPRTemplateKey): {
+		promptTemplateMapKey("developer", developerImplementTaskKey): {
 			ID:          2,
+			ProfileName: "developer",
+			TemplateKey: developerImplementTaskKey,
+			Body:        "Implement {{.Task.Title}} for {{.Repository.FullName}} on {{.Task.HeadBranch}} using {{.Locale.Language}}",
+		},
+		promptTemplateMapKey("developer", developerFixReviewKey): {
+			ID:          3,
+			ProfileName: "developer",
+			TemplateKey: developerFixReviewKey,
+			Body:        "Fix PR #{{.PullRequest.Number}} on {{.Task.HeadBranch}} using {{.GitHub.TokenEnv}}",
+		},
+		promptTemplateMapKey("reviewer", reviewPRTemplateKey): {
+			ID:          4,
 			ProfileName: "reviewer",
 			TemplateKey: reviewPRTemplateKey,
 			Body:        "DECISION: comment\nReview {{.Repository.FullName}} PR #{{.PullRequest.Number}}",
@@ -824,10 +1060,81 @@ func (store *fakeAdminStore) UpdateOpenAIAccountStatus(_ context.Context, input 
 	return account, nil
 }
 
+func (store *fakeAdminStore) CreateAgentFlow(_ context.Context, input adminrepo.CreateAgentFlowInput) (entity.AgentFlow, bool, error) {
+	store.ensureAgentFlows()
+	if flow, ok := store.agentFlows[input.FlowID]; ok {
+		return flow, false, nil
+	}
+	flow := entity.AgentFlow{
+		ID:          int64(len(store.agentFlows) + 1),
+		FlowID:      input.FlowID,
+		Status:      input.Status,
+		Provider:    input.Provider,
+		Owner:       input.Owner,
+		Name:        input.Name,
+		BaseBranch:  input.BaseBranch,
+		HeadBranch:  input.HeadBranch,
+		Title:       input.Title,
+		Task:        input.Task,
+		Attempt:     input.Attempt,
+		MaxAttempts: input.MaxAttempts,
+		Summary:     input.Summary,
+	}
+	store.agentFlows[flow.FlowID] = flow
+	return flow, true, nil
+}
+
+func (store *fakeAdminStore) GetAgentFlow(_ context.Context, flowID string) (entity.AgentFlow, error) {
+	store.ensureAgentFlows()
+	flow, ok := store.agentFlows[flowID]
+	if !ok {
+		return entity.AgentFlow{}, fmt.Errorf("agent flow not found")
+	}
+	return flow, nil
+}
+
+func (store *fakeAdminStore) UpdateAgentFlow(_ context.Context, input adminrepo.UpdateAgentFlowInput) (entity.AgentFlow, error) {
+	store.ensureAgentFlows()
+	flow, ok := store.agentFlows[input.FlowID]
+	if !ok {
+		return entity.AgentFlow{}, fmt.Errorf("agent flow not found")
+	}
+	if input.Status != "" {
+		flow.Status = input.Status
+	}
+	if input.PRURL != "" {
+		flow.PRURL = input.PRURL
+	}
+	if input.PRNumber > 0 {
+		flow.PRNumber = input.PRNumber
+	}
+	if input.Attempt > 0 {
+		flow.Attempt = input.Attempt
+	}
+	if input.CurrentDeveloperRunID != "" {
+		flow.CurrentDeveloperRunID = input.CurrentDeveloperRunID
+	}
+	if input.CurrentReviewerRunID != "" {
+		flow.CurrentReviewerRunID = input.CurrentReviewerRunID
+	}
+	if input.Summary != "" {
+		flow.Summary = input.Summary
+	}
+	store.agentFlows[flow.FlowID] = flow
+	return flow, nil
+}
+
+func (store *fakeAdminStore) ensureAgentFlows() {
+	if store.agentFlows == nil {
+		store.agentFlows = make(map[string]entity.AgentFlow)
+	}
+}
+
 func (store *fakeAdminStore) CreateAgentRun(_ context.Context, input adminrepo.CreateAgentRunInput) (entity.AgentRun, error) {
 	store.agentRun = entity.AgentRun{
 		ID:                  1,
 		RunID:               input.RunID,
+		FlowID:              input.FlowID,
 		ProfileName:         input.ProfileName,
 		Role:                input.Role,
 		Provider:            input.Provider,
@@ -841,10 +1148,16 @@ func (store *fakeAdminStore) CreateAgentRun(_ context.Context, input adminrepo.C
 		PVCName:             input.PVCName,
 		Summary:             input.Summary,
 	}
+	store.ensureAgentRuns()
+	store.agentRuns[store.agentRun.RunID] = store.agentRun
 	return store.agentRun, nil
 }
 
 func (store *fakeAdminStore) GetAgentRun(_ context.Context, runID string) (entity.AgentRun, error) {
+	store.ensureAgentRuns()
+	if run, ok := store.agentRuns[runID]; ok {
+		return run, nil
+	}
 	if store.agentRun.RunID == "" {
 		store.agentRun = entity.AgentRun{
 			ID:          1,
@@ -859,15 +1172,46 @@ func (store *fakeAdminStore) GetAgentRun(_ context.Context, runID string) (entit
 			Status:      "started",
 		}
 	}
+	store.agentRuns[store.agentRun.RunID] = store.agentRun
 	return store.agentRun, nil
 }
 
+func (store *fakeAdminStore) ListAgentRunsByFlowID(_ context.Context, flowID string) ([]entity.AgentRun, error) {
+	store.ensureAgentRuns()
+	var runs []entity.AgentRun
+	for _, run := range store.agentRuns {
+		if run.FlowID == flowID {
+			runs = append(runs, run)
+		}
+	}
+	sort.Slice(runs, func(i, j int) bool {
+		return runs[i].RunID < runs[j].RunID
+	})
+	return runs, nil
+}
+
+func (store *fakeAdminStore) ensureAgentRuns() {
+	if store.agentRuns == nil {
+		store.agentRuns = make(map[string]entity.AgentRun)
+	}
+}
+
 func (store *fakeAdminStore) UpdateAgentRunArtifacts(_ context.Context, input adminrepo.UpdateAgentRunArtifactsInput) (entity.AgentRun, error) {
+	store.ensureAgentRuns()
 	store.updatedRunStatus = input.Status
 	store.updatedPRURL = input.PRURL
-	store.agentRun.Status = input.Status
-	store.agentRun.PRURL = input.PRURL
-	return store.agentRun, nil
+	run := store.agentRun
+	if stored, ok := store.agentRuns[input.RunID]; ok {
+		run = stored
+	}
+	run.RunID = input.RunID
+	run.Status = input.Status
+	if input.PRURL != "" {
+		run.PRURL = input.PRURL
+	}
+	store.agentRun = run
+	store.agentRuns[input.RunID] = run
+	return run, nil
 }
 
 func (store *fakeAdminStore) RecordAuditEvent(context.Context, adminrepo.AuditEventInput) error {

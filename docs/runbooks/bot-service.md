@@ -16,6 +16,7 @@
 - выполнять Kubernetes runtime smoke-команды `/agents runtime smoke|status|cleanup` через client-go, Job, PVC и подготовленный agent-runner image;
 - выполнять Codex developer smoke-команды `/agents dev smoke|status|cleanup`, создающие отдельный Job/PVC, branch, commit и draft PR через OpenAI account, GitHub account и prompt template из agent profile;
 - выполнять Codex reviewer-команды `/agents review pr|status|cleanup`, запускающие отдельный Job/PVC для review существующего GitHub PR через OpenAI account, GitHub account и prompt template из agent profile;
+- выполнять developer-review flow-команды `/agents flow start|status|cleanup`, которые запускают developer agent, автоматически передают созданный PR reviewer agent, повторяют fix-попытку при `request_changes` и блокируют flow после трех попыток;
 - применять storage migrations и хранить repository/profile/audit metadata в PostgreSQL;
 - создавать Mattermost repo-channel при добавлении repository;
 - хранить Mattermost bot/slash tokens только в Kubernetes Secret;
@@ -140,7 +141,7 @@ REMOTE_KUBECTL="$(mattercodex_remote_kubectl_command)"
 mattercodex_ssh "$REMOTE_KUBECTL -n $NAMESPACE_Q exec statefulset/mattermost-postgres -- psql -U mattermost -d mattermost -Atc 'select version_id, is_applied from goose_db_version order by id;'"
 ```
 
-Ожидаемый результат: в выводе есть примененная версия `5|t`.
+Ожидаемый результат: в выводе есть примененная версия `7|t`.
 
 ## Agent prompt templates
 
@@ -149,6 +150,8 @@ Prompt template относится к профилю агента и храни�
 Базовые templates создаются migration:
 
 - `developer/developer_smoke`;
+- `developer/implement_task`;
+- `developer/fix_review`;
 - `reviewer/review_pr`.
 
 Управление через Mattermost:
@@ -332,6 +335,37 @@ bash scripts/remote/bootstrap-mattermost-bot.sh --env-file .env
 ```
 
 Cleanup удаляет только Kubernetes Job/PVC, а не GitHub review/comment.
+
+Дополнительная проверка developer-review flow:
+
+Перед проверкой нужны authorized OpenAI account для профилей `developer` и `reviewer`, настроенные GitHub accounts `agent` и `primary`, а также доступ bot-service к Kubernetes runtime.
+
+```text
+/agents openai list
+/agents profile list
+/agents prompt render developer implement_task
+/agents prompt render developer fix_review
+/agents prompt render reviewer review_pr
+/agents flow start codex-k8s/matter-codex flow-manual Update docs/dogfood/matter-codex-flow-smoke.md with a short Russian smoke note for developer-review flow
+/agents flow status flow-manual
+```
+
+Ожидаемый результат:
+
+- flow start возвращает branch `matter-codex-flow-flow-manual`, developer run `flow-manual-d1`, Job и PVC;
+- после завершения developer Job повторный `flow status` показывает `pr-url` и автоматически стартует reviewer run `flow-manual-r1`;
+- после завершения reviewer Job повторный `flow status` показывает один из финальных или промежуточных статусов: `approved_by_reviewer`, `waiting_owner`, `fix_running`, `reviewer_failed`, `blocked`;
+- если reviewer вернул `request_changes`, flow стартует developer fix run `flow-manual-d2` на той же ветке `matter-codex-flow-flow-manual`, затем следующий `flow status` снова запускает reviewer run `flow-manual-r2`;
+- после трех попыток с `request_changes` flow переходит в `blocked`;
+- log tail и ответы Mattermost не содержат значений OpenAI/GitHub/Mattermost секретов.
+
+После проверки удалить Kubernetes resources всех run'ов flow:
+
+```text
+/agents flow cleanup flow-manual
+```
+
+Cleanup удаляет только Kubernetes Job/PVC, а не GitHub branch/PR/review comments.
 
 Проверка webhook reject без корректной подписи:
 
