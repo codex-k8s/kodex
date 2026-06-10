@@ -31,6 +31,40 @@
 
 Текущий MVP использует `deploy/k8s/**` и `scripts/**`. Целевое направление - постепенно переносить render/apply/reconcile логику в Go-инструменты, не блокируя быстрые проверяемые PR.
 
+## Agent runner и внешние CLI
+
+Agent runner image содержит нужные инструменты (`codex`, `gh`, `git`, language toolchains) заранее. Runtime Go-код оркестрирует их прямыми вызовами `exec.CommandContext` на границе runner/adapter и передаёт аргументы списком, без shell interpolation.
+
+Допустимо:
+
+- вызвать готовый CLI (`codex`, `gh`, `git`) с явным списком аргументов;
+- подготовить env/file mounts для аккаунтов OpenAI/GitHub через Kubernetes Secret;
+- передать агенту рабочие инструкции через prompt template из БД.
+
+Недопустимо:
+
+- хранить workflow агента как `sh -c`, `bash -c` или многострочный shell-сценарий в Go-коде;
+- устанавливать runtime tools из Go/shell во время agent run вместо сборки нормального образа;
+- зашивать правила PR/review/ответов на comments в Go-строки, если это часть профиля агента и должно редактироваться через Mattermost.
+
+## Deploy templates и shell wrappers
+
+Kubernetes object definitions живут только в YAML templates под `deploy/**`. Shell-скрипты в `scripts/**` являются тонкой обвязкой: читают `.env`, вычисляют значения для render, вызывают `mattercodex_render_template`, применяют уже отрендеренный файл и выполняют readback/smoke команды.
+
+Допустимо в shell:
+
+- вычислять secret data в переменных вида `*_B64` без вывода значений;
+- выбирать dry-run/apply режим;
+- рендерить `deploy/**/*.yaml.tpl` в файл или поток;
+- передавать уже отрендеренный YAML в `kubectl apply` локально или по SSH.
+
+Недопустимо в shell:
+
+- держать `apiVersion`, `kind`, `metadata`, `spec` или другие части Kubernetes manifests в heredoc;
+- генерировать Kubernetes object через `kubectl create ... -o yaml` как основной template path;
+- смешивать в одном shell-блоке бизнес-решение, secret preparation и YAML object definition;
+- добавлять новый deploy object без соответствующего файла `deploy/k8s/**.yaml.tpl`.
+
 ## Зоны сервисов
 
 ### `services/external/`
@@ -66,6 +100,7 @@
 - `build` собирает бинарник из `cmd/<service>/main.go`;
 - `dev` подходит для локального/slot запуска и не является production runtime;
 - `prod` запускает готовый бинарник, не зависит от исходников и инструментов разработки;
+- production Deployment использует собранный image и entrypoint сервиса; исходники не передаются через ConfigMap/Secret, `go run` в pod не используется;
 - порты объявляются в Kubernetes manifests и runtime config, а не через обязательный `EXPOSE`;
 - Kubernetes manifests выбирают runtime явно и не скрывают обязательные env/secrets.
 

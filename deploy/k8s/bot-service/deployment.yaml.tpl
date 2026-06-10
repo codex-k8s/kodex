@@ -34,15 +34,6 @@ spec:
         - name: bot-service
           image: ${MATTERCODEX_BOT_SERVICE_IMAGE}
           imagePullPolicy: IfNotPresent
-          command:
-            - sh
-            - -ec
-            - |
-              mkdir -p /workspace
-              base64 -d /source/source.tar.gz.b64 | tar -xz -C /workspace
-              cd /workspace
-              go mod download
-              exec go run ./services/external/bot-service/cmd/bot-service
           ports:
             - name: http
               containerPort: ${MATTERCODEX_BOT_SERVICE_PORT}
@@ -80,10 +71,6 @@ spec:
                   name: ${MATTERCODEX_GITHUB_SECRET}
                   key: github-webhook-secret
                   optional: true
-            - name: GOMODCACHE
-              value: /tmp/go/pkg/mod
-            - name: GOCACHE
-              value: /tmp/go-build
           startupProbe:
             httpGet:
               path: /healthz
@@ -102,15 +89,3 @@ spec:
               port: http
             initialDelaySeconds: 10
             periodSeconds: 20
-          volumeMounts:
-            - name: bot-service-source
-              mountPath: /source
-              readOnly: true
-            - name: go-cache
-              mountPath: /tmp/go
-      volumes:
-        - name: bot-service-source
-          configMap:
-            name: ${MATTERCODEX_BOT_SERVICE_CODE_CONFIGMAP}
-        - name: go-cache
-          emptyDir: {}

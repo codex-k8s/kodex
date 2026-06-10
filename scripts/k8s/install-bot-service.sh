@@ -11,6 +11,15 @@ ENV_FILE="$REPO_ROOT/.env"
 DRY_RUN_MODE="server"
 WAIT=false
 RENDER_DIR=""
+RENDER_DIR_CREATED=false
+
+cleanup() {
+  if mattercodex_bool "$RENDER_DIR_CREATED"; then
+    rm -rf "$RENDER_DIR"
+  fi
+}
+
+trap cleanup EXIT
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -46,15 +55,23 @@ done
 
 mattercodex_load_env_file "$ENV_FILE"
 mattercodex_validate_base_env
-mattercodex_require_commands kubectl envsubst base64 tar
+mattercodex_require_commands kubectl envsubst base64
 
 if [ -z "$RENDER_DIR" ]; then
   RENDER_DIR="$(mktemp -d)"
+  RENDER_DIR_CREATED=true
 fi
 
 "$SCRIPT_DIR/render-bot-service.sh" --env-file "$ENV_FILE" --render-dir "$RENDER_DIR" >/dev/null
 
 DRY_RUN_ARG="$(mattercodex_kubectl_dry_run_arg "$DRY_RUN_MODE")"
+
+apply_rendered_manifest() {
+  local template="$1"
+  local output="$2"
+  mattercodex_render_template "$template" "$output"
+  kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f "$output" >/dev/null
+}
 
 if [ "$DRY_RUN_MODE" = "none" ] && mattercodex_bool "${MATTERCODEX_AGENT_RUNNER_BUILD_IMAGE:-true}"; then
   mattercodex_require_commands docker
@@ -67,24 +84,24 @@ if [ "$DRY_RUN_MODE" = "none" ] && mattercodex_bool "${MATTERCODEX_AGENT_RUNNER_
     "$REPO_ROOT"
 fi
 
+if [ "$DRY_RUN_MODE" = "none" ] && mattercodex_bool "${MATTERCODEX_BOT_SERVICE_BUILD_IMAGE:-true}"; then
+  mattercodex_require_commands docker
+  mattercodex_log "сборка bot-service image"
+  docker build \
+    --network=host \
+    --target prod \
+    -f "$REPO_ROOT/services/external/bot-service/Dockerfile" \
+    -t "$MATTERCODEX_BOT_SERVICE_IMAGE" \
+    "$REPO_ROOT"
+fi
+
 if [ -n "${MATTERCODEX_MATTERMOST_BOT_TOKEN:-}" ] || [ -n "${MATTERCODEX_MATTERMOST_SLASH_TOKEN:-}" ]; then
+  export BOT_TOKEN_B64
+  export SLASH_TOKEN_B64
   BOT_TOKEN_B64="$(printf '%s' "${MATTERCODEX_MATTERMOST_BOT_TOKEN:-}" | base64 | tr -d '\n')"
   SLASH_TOKEN_B64="$(printf '%s' "${MATTERCODEX_MATTERMOST_SLASH_TOKEN:-}" | base64 | tr -d '\n')"
   mattercodex_log "применяется bot-service secret"
-  cat <<EOF | kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f - >/dev/null
-apiVersion: v1
-kind: Secret
-metadata:
-  name: ${MATTERCODEX_BOT_SERVICE_SECRET}
-  namespace: ${MATTERCODEX_NAMESPACE}
-  labels:
-    app.kubernetes.io/name: matter-codex-bot-service
-    app.kubernetes.io/component: bot-service-secret
-type: Opaque
-data:
-  mattermost-bot-token: ${BOT_TOKEN_B64}
-  mattermost-slash-token: ${SLASH_TOKEN_B64}
-EOF
+  apply_rendered_manifest "$REPO_ROOT/deploy/k8s/bot-service/bot-service-secret.yaml.tpl" "$RENDER_DIR/05-bot-service-secret.yaml"
 else
   mattercodex_log "Mattermost bot/slash token не заданы; bot-service secret не создается"
 fi
@@ -101,27 +118,16 @@ if [ -n "$GITHUB_TOKEN_VALUE" ] || [ -n "$GITHUB_WEBHOOK_SECRET_VALUE" ]; then
     [ -n "$GITHUB_USERNAME_VALUE" ] || mattercodex_die "GitHub username не задан: укажи MATTERCODEX_GITHUB_USERNAME или GITHUB_USERNAME/GITHUB_USER"
     [ -n "$GITHUB_EMAIL_VALUE" ] || mattercodex_die "GitHub email не задан: укажи MATTERCODEX_GITHUB_EMAIL или GITHUB_EMAIL"
   fi
+  export GITHUB_TOKEN_B64
+  export GITHUB_WEBHOOK_SECRET_B64
+  export GITHUB_USERNAME_B64
+  export GITHUB_EMAIL_B64
   GITHUB_TOKEN_B64="$(printf '%s' "$GITHUB_TOKEN_VALUE" | base64 | tr -d '\n')"
   GITHUB_WEBHOOK_SECRET_B64="$(printf '%s' "$GITHUB_WEBHOOK_SECRET_VALUE" | base64 | tr -d '\n')"
   GITHUB_USERNAME_B64="$(printf '%s' "$GITHUB_USERNAME_VALUE" | base64 | tr -d '\n')"
   GITHUB_EMAIL_B64="$(printf '%s' "$GITHUB_EMAIL_VALUE" | base64 | tr -d '\n')"
   mattercodex_log "применяется GitHub secret"
-  cat <<EOF | kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f - >/dev/null
-apiVersion: v1
-kind: Secret
-metadata:
-  name: ${MATTERCODEX_GITHUB_SECRET}
-  namespace: ${MATTERCODEX_NAMESPACE}
-  labels:
-    app.kubernetes.io/name: matter-codex-bot-service
-    app.kubernetes.io/component: github-secret
-type: Opaque
-data:
-  github-token: ${GITHUB_TOKEN_B64}
-  github-webhook-secret: ${GITHUB_WEBHOOK_SECRET_B64}
-  github-username: ${GITHUB_USERNAME_B64}
-  github-email: ${GITHUB_EMAIL_B64}
-EOF
+  apply_rendered_manifest "$REPO_ROOT/deploy/k8s/bot-service/github-secret.yaml.tpl" "$RENDER_DIR/06-github-secret.yaml"
 else
   mattercodex_log "GitHub token/webhook secret не заданы; GitHub secret не создается"
 fi
@@ -135,25 +141,14 @@ fi
 if [ -n "$AGENT_GITHUB_TOKEN_VALUE" ]; then
   [ -n "$AGENT_GITHUB_USERNAME_VALUE" ] || mattercodex_die "agent GitHub username не задан: укажи MATTERCODEX_AGENT_GITHUB_USERNAME или GIT_BOT_USERNAME"
   [ -n "$AGENT_GITHUB_EMAIL_VALUE" ] || mattercodex_die "agent GitHub email не задан: укажи MATTERCODEX_AGENT_GITHUB_EMAIL или GIT_BOT_MAIL/GIT_BOT_EMAIL"
+  export AGENT_GITHUB_TOKEN_B64
+  export AGENT_GITHUB_USERNAME_B64
+  export AGENT_GITHUB_EMAIL_B64
   AGENT_GITHUB_TOKEN_B64="$(printf '%s' "$AGENT_GITHUB_TOKEN_VALUE" | base64 | tr -d '\n')"
   AGENT_GITHUB_USERNAME_B64="$(printf '%s' "$AGENT_GITHUB_USERNAME_VALUE" | base64 | tr -d '\n')"
   AGENT_GITHUB_EMAIL_B64="$(printf '%s' "$AGENT_GITHUB_EMAIL_VALUE" | base64 | tr -d '\n')"
   mattercodex_log "применяется agent GitHub secret"
-  cat <<EOF | kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f - >/dev/null
-apiVersion: v1
-kind: Secret
-metadata:
-  name: ${MATTERCODEX_AGENT_GITHUB_SECRET}
-  namespace: ${MATTERCODEX_NAMESPACE}
-  labels:
-    app.kubernetes.io/name: matter-codex-agent-runner
-    app.kubernetes.io/component: github-agent-secret
-type: Opaque
-data:
-  github-token: ${AGENT_GITHUB_TOKEN_B64}
-  github-username: ${AGENT_GITHUB_USERNAME_B64}
-  github-email: ${AGENT_GITHUB_EMAIL_B64}
-EOF
+  apply_rendered_manifest "$REPO_ROOT/deploy/k8s/bot-service/agent-github-secret.yaml.tpl" "$RENDER_DIR/07-agent-github-secret.yaml"
 else
   mattercodex_log "agent GitHub token не задан; agent GitHub secret не создается"
 fi
@@ -163,36 +158,25 @@ if [ -n "$CODEX_AUTH_JSON_PATH" ]; then
   [ -f "$CODEX_AUTH_JSON_PATH" ] || mattercodex_die "Codex auth.json не найден: $CODEX_AUTH_JSON_PATH"
   CODEX_AUTH_ACCOUNT="${MATTERCODEX_CODEX_AUTH_ACCOUNT:-primary}"
   CODEX_AUTH_SECRET_NAME="${MATTERCODEX_CODEX_AUTH_SECRET}-${CODEX_AUTH_ACCOUNT}"
+  export CODEX_AUTH_ACCOUNT
+  export CODEX_AUTH_SECRET_NAME
+  export CODEX_AUTH_JSON_B64
   CODEX_AUTH_JSON_B64="$(base64 "$CODEX_AUTH_JSON_PATH" | tr -d '\n')"
   mattercodex_log "применяется Codex auth secret"
-  cat <<EOF | kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f - >/dev/null
-apiVersion: v1
-kind: Secret
-metadata:
-  name: ${CODEX_AUTH_SECRET_NAME}
-  namespace: ${MATTERCODEX_NAMESPACE}
-  labels:
-    app.kubernetes.io/name: matter-codex-agent-runner
-    app.kubernetes.io/component: codex-auth-secret
-    matter-codex.dev/openai-account: ${CODEX_AUTH_ACCOUNT}
-type: Opaque
-data:
-  auth.json: ${CODEX_AUTH_JSON_B64}
-EOF
+  apply_rendered_manifest "$REPO_ROOT/deploy/k8s/bot-service/codex-auth-secret.yaml.tpl" "$RENDER_DIR/08-codex-auth-secret.yaml"
 else
   mattercodex_log "Codex auth.json path не задан; Codex auth secret не создается"
 fi
 
 mattercodex_log "применяются манифесты bot-service"
-kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f "$RENDER_DIR/10-code-configmap.yaml" >/dev/null
-kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f "$RENDER_DIR/20-configmap.yaml" >/dev/null
-kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f "$RENDER_DIR/25-rbac.yaml" >/dev/null
+kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f "$RENDER_DIR/10-configmap.yaml" >/dev/null
+kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f "$RENDER_DIR/20-rbac.yaml" >/dev/null
 kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f "$RENDER_DIR/30-deployment.yaml" >/dev/null
 kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f "$RENDER_DIR/40-service.yaml" >/dev/null
 kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f "$RENDER_DIR/50-ingress.yaml" >/dev/null
 
 if [ "$DRY_RUN_MODE" = "none" ]; then
-  mattercodex_log "перезапуск bot-service для применения source ConfigMap"
+  mattercodex_log "перезапуск bot-service для применения image/config"
   kubectl -n "$MATTERCODEX_NAMESPACE" rollout restart deployment/matter-codex-bot-service >/dev/null
   if mattercodex_bool "$WAIT"; then
     mattercodex_log "ожидание rollout bot-service"

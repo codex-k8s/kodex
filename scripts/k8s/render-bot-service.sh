@@ -34,40 +34,12 @@ fi
 
 mattercodex_load_env_file "$ENV_FILE"
 mattercodex_validate_base_env
-mattercodex_require_commands base64 envsubst tar
+mattercodex_require_commands envsubst
 
 TEMPLATE_DIR="$REPO_ROOT/deploy/k8s/bot-service"
-SOURCE_ARCHIVE="$(mktemp)"
-trap 'rm -f "$SOURCE_ARCHIVE"' EXIT
 
-if [ ! -f "$REPO_ROOT/go.sum" ]; then
-  mattercodex_die "go.sum не найден; выполните go mod tidy перед render bot-service"
-fi
-
-tar -C "$REPO_ROOT" -czf "$SOURCE_ARCHIVE" \
-  go.mod \
-  go.sum \
-  libs/go/i18n \
-  services/external/bot-service
-
-{
-  cat <<EOF
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: ${MATTERCODEX_BOT_SERVICE_CODE_CONFIGMAP}
-  namespace: ${MATTERCODEX_NAMESPACE}
-  labels:
-    app.kubernetes.io/name: matter-codex-bot-service
-    app.kubernetes.io/component: bot-service-source
-data:
-  source.tar.gz.b64: |
-EOF
-  base64 "$SOURCE_ARCHIVE" | sed 's/^/    /'
-} > "$RENDER_DIR/10-code-configmap.yaml"
-
-mattercodex_render_template "$TEMPLATE_DIR/configmap.yaml.tpl" "$RENDER_DIR/20-configmap.yaml"
-mattercodex_render_template "$TEMPLATE_DIR/rbac.yaml.tpl" "$RENDER_DIR/25-rbac.yaml"
+mattercodex_render_template "$TEMPLATE_DIR/configmap.yaml.tpl" "$RENDER_DIR/10-configmap.yaml"
+mattercodex_render_template "$TEMPLATE_DIR/rbac.yaml.tpl" "$RENDER_DIR/20-rbac.yaml"
 mattercodex_render_template "$TEMPLATE_DIR/deployment.yaml.tpl" "$RENDER_DIR/30-deployment.yaml"
 mattercodex_render_template "$TEMPLATE_DIR/service.yaml.tpl" "$RENDER_DIR/40-service.yaml"
 mattercodex_render_template "$TEMPLATE_DIR/ingress.yaml.tpl" "$RENDER_DIR/50-ingress.yaml"

@@ -23,7 +23,17 @@ done
 
 mattercodex_load_env_file "$ENV_FILE"
 mattercodex_validate_base_env
-mattercodex_require_commands ssh base64 sed openssl
+mattercodex_require_commands ssh base64 envsubst sed openssl
+TEMP_DIRS=()
+
+cleanup() {
+  local path
+  for path in "${TEMP_DIRS[@]}"; do
+    rm -rf "$path"
+  done
+}
+
+trap cleanup EXIT
 
 NAMESPACE_Q="$(mattercodex_shell_quote "$MATTERCODEX_NAMESPACE")"
 REMOTE_KUBECTL="$(mattercodex_remote_kubectl_command)"
@@ -220,25 +230,17 @@ ensure_slash_command() {
 save_secret_and_restart() {
   local bot_token="$1"
   local slash_token="$2"
-  local bot_token_b64 slash_token_b64
-  bot_token_b64="$(printf '%s' "$bot_token" | base64 | tr -d '\n')"
-  slash_token_b64="$(printf '%s' "$slash_token" | base64 | tr -d '\n')"
+  local render_dir
+  render_dir="$(mktemp -d)"
+  TEMP_DIRS+=("$render_dir")
+  export BOT_TOKEN_B64
+  export SLASH_TOKEN_B64
+  BOT_TOKEN_B64="$(printf '%s' "$bot_token" | base64 | tr -d '\n')"
+  SLASH_TOKEN_B64="$(printf '%s' "$slash_token" | base64 | tr -d '\n')"
 
   mattercodex_log "bot-service tokens: сохраняются в Kubernetes Secret"
-  cat <<EOF | mattercodex_remote_kubectl_apply_stdin "none"
-apiVersion: v1
-kind: Secret
-metadata:
-  name: ${MATTERCODEX_BOT_SERVICE_SECRET}
-  namespace: ${MATTERCODEX_NAMESPACE}
-  labels:
-    app.kubernetes.io/name: matter-codex-bot-service
-    app.kubernetes.io/component: bot-service-secret
-type: Opaque
-data:
-  mattermost-bot-token: ${bot_token_b64}
-  mattermost-slash-token: ${slash_token_b64}
-EOF
+  mattercodex_render_template "$REPO_ROOT/deploy/k8s/bot-service/bot-service-secret.yaml.tpl" "$render_dir/bot-service-secret.yaml"
+  mattercodex_remote_kubectl_apply_stdin "none" < "$render_dir/bot-service-secret.yaml"
 
   if mattercodex_ssh "$REMOTE_KUBECTL -n $NAMESPACE_Q get deployment matter-codex-bot-service >/dev/null 2>&1"; then
     mattercodex_log "bot-service: перезапускается для применения Secret"
@@ -246,6 +248,7 @@ EOF
       $REMOTE_KUBECTL -n $NAMESPACE_Q rollout restart deployment/matter-codex-bot-service >/dev/null
       $REMOTE_KUBECTL -n $NAMESPACE_Q rollout status deployment/matter-codex-bot-service --timeout=300s >/dev/null"
   fi
+  rm -rf "$render_dir"
 }
 
 ensure_personal_access_tokens_enabled

@@ -31,13 +31,11 @@ mattercodex_validate_base_env
 mattercodex_require_commands ssh
 
 NAMESPACE_Q="$(mattercodex_shell_quote "$MATTERCODEX_NAMESPACE")"
-CODE_CONFIG_Q="$(mattercodex_shell_quote "$MATTERCODEX_BOT_SERVICE_CODE_CONFIGMAP")"
 CONFIG_Q="$(mattercodex_shell_quote "$MATTERCODEX_BOT_SERVICE_CONFIG_CONFIGMAP")"
 REMOTE_KUBECTL="$(mattercodex_remote_kubectl_command)"
 
 mattercodex_log "read-only проверка bot-service на целевом сервере"
 mattercodex_ssh "set -eu
-  $REMOTE_KUBECTL -n $NAMESPACE_Q get configmap $CODE_CONFIG_Q >/dev/null
   $REMOTE_KUBECTL -n $NAMESPACE_Q get configmap $CONFIG_Q >/dev/null
   $REMOTE_KUBECTL -n $NAMESPACE_Q get deployment matter-codex-bot-service >/dev/null
   $REMOTE_KUBECTL -n $NAMESPACE_Q get service matter-codex-bot-service >/dev/null
