@@ -1,20 +1,22 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"path"
 	"regexp"
 	"sort"
 	"strings"
+	"text/template"
 	"unicode/utf8"
 
 	"github.com/google/uuid"
 
-	"github.com/codex-k8s/kodex/libs/go/stackinventory"
 	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/types/enum"
@@ -203,7 +205,7 @@ func buildSpecsFromCheckedPolicy(policy entity.ServicesPolicy) (map[string]value
 		}
 		result[key] = *entry.Build
 	}
-	derived := buildSpecsFromStackInventory(document, policy.ValidatedPayload, result)
+	derived := buildSpecsFromCheckedInventory(document, result)
 	for key, spec := range derived {
 		result[key] = spec
 	}
@@ -213,12 +215,8 @@ func buildSpecsFromCheckedPolicy(policy entity.ServicesPolicy) (map[string]value
 	return result, nil
 }
 
-func buildSpecsFromStackInventory(document value.ServicesPolicyDocument, payload []byte, existing map[string]value.ServicesPolicyBuildSpec) map[string]value.ServicesPolicyBuildSpec {
+func buildSpecsFromCheckedInventory(document value.ServicesPolicyDocument, existing map[string]value.ServicesPolicyBuildSpec) map[string]value.ServicesPolicyBuildSpec {
 	if len(document.Spec.Images) == 0 {
-		return nil
-	}
-	stack, err := stackinventory.Parse(payload)
-	if err != nil {
 		return nil
 	}
 	result := map[string]value.ServicesPolicyBuildSpec{}
@@ -234,7 +232,7 @@ func buildSpecsFromStackInventory(document value.ServicesPolicyDocument, payload
 		if !ok || strings.TrimSpace(imageSpec.Type) != "build" {
 			continue
 		}
-		spec, err := stackInventoryBuildSpec(key, imageSpec, stack)
+		spec, err := checkedInventoryBuildSpec(key, imageSpec, document)
 		if err != nil {
 			continue
 		}
@@ -243,18 +241,22 @@ func buildSpecsFromStackInventory(document value.ServicesPolicyDocument, payload
 	return result
 }
 
-func stackInventoryBuildSpec(key string, imageSpec value.ServicesPolicyImageSpec, stack stackinventory.Stack) (value.ServicesPolicyBuildSpec, error) {
-	imageRef, imageTag, err := stackInventoryImageRefAndTag(stack, key)
+func checkedInventoryBuildSpec(key string, imageSpec value.ServicesPolicyImageSpec, document value.ServicesPolicyDocument) (value.ServicesPolicyBuildSpec, error) {
+	imageRef, imageTag, err := checkedInventoryImageRefAndTag(document, key, imageSpec)
 	if err != nil {
 		return value.ServicesPolicyBuildSpec{}, err
 	}
-	dockerfileRef, err := stackInventoryDockerfileRef(imageSpec.Context, imageSpec.Dockerfile)
+	dockerfileRef, err := checkedInventoryDockerfileRef(imageSpec.Context, imageSpec.Dockerfile)
 	if err != nil {
 		return value.ServicesPolicyBuildSpec{}, err
 	}
 	builderImageRef := strings.TrimSpace(imageSpec.BuilderImageRef)
 	if builderImageRef == "" {
-		builderImageRef, err = stack.Image("kaniko-executor")
+		builderSpec, ok := document.Spec.Images["kaniko-executor"]
+		if !ok {
+			return value.ServicesPolicyBuildSpec{}, errBuildPlanUnavailable
+		}
+		builderImageRef, err = checkedInventoryImage(document, "kaniko-executor", builderSpec)
 		if err != nil {
 			return value.ServicesPolicyBuildSpec{}, err
 		}
@@ -273,8 +275,8 @@ func stackInventoryBuildSpec(key string, imageSpec value.ServicesPolicyImageSpec
 	}, nil
 }
 
-func stackInventoryImageRefAndTag(stack stackinventory.Stack, key string) (string, string, error) {
-	image, err := stack.Image(key)
+func checkedInventoryImageRefAndTag(document value.ServicesPolicyDocument, key string, imageSpec value.ServicesPolicyImageSpec) (string, string, error) {
+	image, err := checkedInventoryImage(document, key, imageSpec)
 	if err != nil {
 		return "", "", err
 	}
@@ -283,6 +285,70 @@ func stackInventoryImageRefAndTag(stack stackinventory.Stack, key string) (strin
 		return "", "", errBuildPlanUnavailable
 	}
 	return ref, tag, nil
+}
+
+func checkedInventoryImage(document value.ServicesPolicyDocument, key string, imageSpec value.ServicesPolicyImageSpec) (string, error) {
+	switch {
+	case strings.TrimSpace(imageSpec.From) != "":
+		return renderCheckedInventoryTemplate(document, key, "from", imageSpec.From)
+	case strings.TrimSpace(imageSpec.Repository) != "" && strings.TrimSpace(imageSpec.TagTemplate) != "":
+		repository, err := renderCheckedInventoryTemplate(document, key, "repository", imageSpec.Repository)
+		if err != nil {
+			return "", err
+		}
+		tag, err := renderCheckedInventoryTemplate(document, key, "tagTemplate", imageSpec.TagTemplate)
+		if err != nil {
+			return "", err
+		}
+		if strings.TrimSpace(repository) == "" || strings.TrimSpace(tag) == "" {
+			return "", errBuildPlanUnavailable
+		}
+		return repository + ":" + tag, nil
+	default:
+		return "", errBuildPlanUnavailable
+	}
+}
+
+func renderCheckedInventoryTemplate(document value.ServicesPolicyDocument, imageName string, fieldName string, source string) (string, error) {
+	tpl, err := template.New(imageName + "." + fieldName).Funcs(template.FuncMap{
+		"envOr": func(_ string, fallback string) string {
+			return fallback
+		},
+		"env": func(name string) (string, error) {
+			return "", fmt.Errorf("checked services policy template env %q is unavailable", name)
+		},
+		"version": func(name string) (string, error) {
+			return checkedInventoryVersion(document, name)
+		},
+	}).Parse(source)
+	if err != nil {
+		return "", err
+	}
+	var output bytes.Buffer
+	if err := tpl.Execute(&output, struct {
+		Versions map[string]string
+	}{
+		Versions: checkedInventoryVersionValues(document),
+	}); err != nil {
+		return "", err
+	}
+	return output.String(), nil
+}
+
+func checkedInventoryVersion(document value.ServicesPolicyDocument, key string) (string, error) {
+	version := strings.TrimSpace(document.Spec.Versions[key].Value)
+	if version == "" {
+		return "", errBuildPlanUnavailable
+	}
+	return version, nil
+}
+
+func checkedInventoryVersionValues(document value.ServicesPolicyDocument) map[string]string {
+	result := make(map[string]string, len(document.Spec.Versions))
+	for key, version := range document.Spec.Versions {
+		result[key] = strings.TrimSpace(version.Value)
+	}
+	return result
 }
 
 func splitBuildImageRefAndTag(value string) (string, string, bool) {
@@ -298,7 +364,7 @@ func splitBuildImageRefAndTag(value string) (string, string, bool) {
 	return strings.TrimSpace(trimmed[:lastColon]), strings.TrimSpace(trimmed[lastColon+1:]), true
 }
 
-func stackInventoryDockerfileRef(contextPath string, dockerfile string) (string, error) {
+func checkedInventoryDockerfileRef(contextPath string, dockerfile string) (string, error) {
 	dockerfile = strings.TrimSpace(dockerfile)
 	if dockerfile == "" {
 		return "", errBuildPlanUnavailable

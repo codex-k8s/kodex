@@ -2483,8 +2483,8 @@ func TestGetSelfDeployBuildPlanReturnsReadyRuntimeCompatibleSpecs(t *testing.T) 
 }
 
 func TestGetSelfDeployBuildPlanDerivesSpecsFromStackInventoryImages(t *testing.T) {
-	t.Setenv("KODEX_INTERNAL_REGISTRY_HOST", "")
-	t.Setenv("KODEX_API_IMAGE", "")
+	t.Setenv("KODEX_INTERNAL_REGISTRY_HOST", "private.registry.example")
+	t.Setenv("KODEX_API_IMAGE", "private.registry.example/kodex/api:must-not-leak")
 	projectID := uuid.New()
 	repositoryID := uuid.New()
 	policyID := uuid.New()
@@ -2516,11 +2516,19 @@ func TestGetSelfDeployBuildPlanDerivesSpecsFromStackInventoryImages(t *testing.T
 		spec.BuilderImageRef != "gcr.io/kaniko-project/executor:v1.24.0-debug" {
 		t.Fatalf("build spec = %+v, want derived stack inventory build spec", spec)
 	}
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("marshal result: %v", err)
+	}
+	if strings.Contains(string(encoded), "private.registry.example") ||
+		strings.Contains(string(encoded), "must-not-leak") {
+		t.Fatalf("build plan used process env values: %s", encoded)
+	}
 }
 
 func TestGetSelfDeployBuildPlanReturnsBuildContextUnavailableForStackInventoryWithoutContext(t *testing.T) {
-	t.Setenv("KODEX_INTERNAL_REGISTRY_HOST", "")
-	t.Setenv("KODEX_API_IMAGE", "")
+	t.Setenv("KODEX_INTERNAL_REGISTRY_HOST", "private.registry.example")
+	t.Setenv("KODEX_API_IMAGE", "private.registry.example/kodex/api:must-not-leak")
 	projectID := uuid.New()
 	repositoryID := uuid.New()
 	policyID := uuid.New()
