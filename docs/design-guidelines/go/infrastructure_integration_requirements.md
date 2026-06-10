@@ -73,6 +73,14 @@
 - Shell допустим только как тонкая обвязка bootstrap/deploy или Make target runner. Такая обвязка
   не должна парсить доменные payload, принимать бизнес-решения, хранить секреты или печатать значения
   env/DSN/token.
+- Shell не должен содержать Kubernetes object YAML. Manifest structure (`apiVersion`, `kind`, `metadata`,
+  `spec`, Secret/ConfigMap data keys) оформляется в `deploy/**/*.yaml.tpl`; shell только готовит значения,
+  рендерит template и применяет готовый YAML.
+- Go-код не должен содержать embedded shell workflow: `sh -c`, `bash -c`, heredoc-like scripts или
+  многострочные сценарии в строковых константах. Если агенту нужен `gh`, `git`, `codex` или другой tool,
+  он добавляется в image, а runner вызывает его через `exec.CommandContext` с typed аргументами и явным env.
+  Правила поведения агента, формат PR/review и язык пользовательских сообщений хранятся в prompt templates
+  профиля агента, а не в Go/shell строках.
 - `scripts/test-go-postgres.sh` и `scripts/test-go-postgres-k8s.sh` остаются допустимыми runner для
   `make test-go-postgres`: они поднимают тестовую инфраструктуру и запускают Go integration tests.
 - Для live provider-сценариев целевой формат — Go integration runner с явной safe-конфигурацией,
@@ -115,6 +123,8 @@
   `proto/**`, `libs/go/**`, `GOCACHE=/tmp/.cache/go-build` и поддерживает dev-слоты
   без пересборки production-образа.
 - Стадия `prod` запускает готовый бинарник в минимальном runtime без исходников и инструментов разработки.
+- Kubernetes Deployment для Go-сервиса использует `prod` image. Запрещено доставлять исходники сервиса через
+  ConfigMap/Secret/tar archive и запускать `go run` в production pod.
 - Корневой `services.yaml` — единый stack inventory deploy-конфигурации в рамках репозитория matter-codex.
 - Go tools читают root stack inventory через `libs/go/stackinventory`; не добавлять новый YAML parser для тех же версий, образов и deploy inventory.
 - Проектный `services.yaml` пользовательских репозиториев является project policy и принадлежит `project-catalog`, а не bootstrap/render tooling.

@@ -64,9 +64,9 @@ if [ "$DRY_RUN_MODE" = "server" ] && ! mattercodex_ssh "$REMOTE_KUBECTL get name
 fi
 
 mattercodex_log "применяются манифесты Mattermost на целевом сервере"
-cat "$RENDER_DIR/10-postgres.yaml" | mattercodex_remote_kubectl_apply_stdin "$APPLY_DRY_RUN_MODE"
-cat "$RENDER_DIR/20-mattermost.yaml" | mattercodex_remote_kubectl_apply_stdin "$APPLY_DRY_RUN_MODE"
-cat "$RENDER_DIR/30-ingress.yaml" | mattercodex_remote_kubectl_apply_stdin "$APPLY_DRY_RUN_MODE"
+mattercodex_remote_kubectl_apply_stdin "$APPLY_DRY_RUN_MODE" < "$RENDER_DIR/10-postgres.yaml"
+mattercodex_remote_kubectl_apply_stdin "$APPLY_DRY_RUN_MODE" < "$RENDER_DIR/20-mattermost.yaml"
+mattercodex_remote_kubectl_apply_stdin "$APPLY_DRY_RUN_MODE" < "$RENDER_DIR/30-ingress.yaml"
 
 if [ "$DRY_RUN_MODE" = "none" ] && mattercodex_bool "$WAIT"; then
   mattercodex_log "ожидание rollout на целевом сервере"

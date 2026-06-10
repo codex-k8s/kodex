@@ -9,6 +9,7 @@ type AgentProfile struct {
 	Description       string
 	Enabled           bool
 	OpenAIAccountName string
+	GitHubAccountName string
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
 }

@@ -31,7 +31,6 @@ mattercodex_validate_base_env
 mattercodex_require_commands kubectl
 
 mattercodex_log "проверка Kubernetes-объектов bot-service"
-kubectl -n "$MATTERCODEX_NAMESPACE" get configmap "$MATTERCODEX_BOT_SERVICE_CODE_CONFIGMAP" >/dev/null
 kubectl -n "$MATTERCODEX_NAMESPACE" get configmap "$MATTERCODEX_BOT_SERVICE_CONFIG_CONFIGMAP" >/dev/null
 kubectl -n "$MATTERCODEX_NAMESPACE" get deployment matter-codex-bot-service >/dev/null
 kubectl -n "$MATTERCODEX_NAMESPACE" get service matter-codex-bot-service >/dev/null

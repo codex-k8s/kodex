@@ -21,8 +21,12 @@
 - Для runtime-интеграций используется Go SDK или typed library, если она доступна и уместна.
 - Shell допустим как bootstrap/deploy wrapper на раннем MVP, но доменные сценарии, reconciliation и долгоживущий runtime не пишутся как shell-first логика.
 - Kubernetes манифесты лежат в `deploy/**`, а не встраиваются в production-код.
+- Shell-скрипты не содержат Kubernetes YAML heredoc (`apiVersion`, `kind`, `metadata`, `spec`); они только рендерят `deploy/**/*.yaml.tpl`, вычисляют значения и применяют готовый manifest.
+- Новые Secrets/ConfigMaps/Pods/Jobs/Deployments/Services/Ingress добавляются как YAML template в `deploy/**`, а не через `kubectl create ... -o yaml` или inline heredoc в `scripts/**`.
+- Go-код не содержит embedded shell workflow (`sh -c`, `bash -c`, многострочные shell-сценарии в строках). На границе runner/adapter допустимы только прямые вызовы готовых CLI через `exec.CommandContext` с явным списком аргументов.
 - Изменения deploy tooling сохраняют последовательное обновление live-кластера: stateful dependencies -> migrations -> internal services -> external/jobs.
 - Для каждого deployable-сервиса есть собственный Dockerfile и собственные image vars, если сервис реально собирается отдельным образом.
+- Go deployable-сервис запускается из собранного runtime image; production Deployment не получает исходники через ConfigMap/Secret и не запускает `go run`.
 - Если добавлена внешняя зависимость, обновлён `docs/design-guidelines/common/external_dependencies_catalog.md`.
 
 ## Специфика matter-codex

@@ -36,7 +36,7 @@ done
 
 mattercodex_load_env_file "$ENV_FILE"
 mattercodex_validate_base_env
-mattercodex_require_commands kubectl envsubst
+mattercodex_require_commands kubectl envsubst base64
 
 DRY_RUN_ARG="$(mattercodex_kubectl_dry_run_arg "$DRY_RUN_MODE")"
 TEMPLATE_DIR="$REPO_ROOT/deploy/k8s/mattermost"
@@ -56,14 +56,16 @@ fi
 
 POSTGRES_PASSWORD="${MATTERCODEX_POSTGRES_PASSWORD:-$(mattercodex_generate_password)}"
 POSTGRES_DSN="postgres://${MATTERCODEX_POSTGRES_USER}:${POSTGRES_PASSWORD}@mattermost-postgres.${MATTERCODEX_NAMESPACE}.svc.cluster.local:5432/${MATTERCODEX_POSTGRES_DB}?sslmode=disable&connect_timeout=10"
+export POSTGRES_DB_B64
+export POSTGRES_USER_B64
+export POSTGRES_PASSWORD_B64
+export POSTGRES_DSN_B64
+POSTGRES_DB_B64="$(printf '%s' "$MATTERCODEX_POSTGRES_DB" | base64 | tr -d '\n')"
+POSTGRES_USER_B64="$(printf '%s' "$MATTERCODEX_POSTGRES_USER" | base64 | tr -d '\n')"
+POSTGRES_PASSWORD_B64="$(printf '%s' "$POSTGRES_PASSWORD" | base64 | tr -d '\n')"
+POSTGRES_DSN_B64="$(printf '%s' "$POSTGRES_DSN" | base64 | tr -d '\n')"
 
 mattercodex_log "применяется PostgreSQL secret"
-kubectl -n "$MATTERCODEX_NAMESPACE" create secret generic "$MATTERCODEX_POSTGRES_SECRET" \
-  --from-literal=postgres-db="$MATTERCODEX_POSTGRES_DB" \
-  --from-literal=postgres-user="$MATTERCODEX_POSTGRES_USER" \
-  --from-literal=postgres-password="$POSTGRES_PASSWORD" \
-  --from-literal=mattermost-datasource="$POSTGRES_DSN" \
-  --dry-run=client \
-  -o yaml | kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f - >/dev/null
+mattercodex_render_template "$TEMPLATE_DIR/postgres-secret.yaml.tpl" - | kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f - >/dev/null
 
 mattercodex_log "foundation шаг завершен"

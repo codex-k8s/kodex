@@ -76,6 +76,10 @@ func (svc *SlashCommandService) Handle(ctx context.Context, command SlashCommand
 		return svc.handleRuntime(ctx, fields[1:], command)
 	case "dev":
 		return svc.handleDev(ctx, fields[1:], command)
+	case "review":
+		return svc.handleReview(ctx, fields[1:], command)
+	case "prompt":
+		return svc.handlePrompt(ctx, strings.TrimSpace(strings.TrimPrefix(command.Text, fields[0])), command)
 	case "profile":
 		return svc.handleProfile(ctx, fields[1:])
 	case "openai":
@@ -331,9 +335,6 @@ func (svc *SlashCommandService) handleDevSmoke(ctx context.Context, args []strin
 	if len(args) < 1 || len(args) > 2 {
 		return svc.t("dev.smoke.usage", nil)
 	}
-	if !svc.cfg.GitHubTokenConfigured {
-		return svc.t("dev.github_not_configured", nil)
-	}
 	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
 		return svc.t("dev.storage_not_ready", nil)
 	}
@@ -345,6 +346,11 @@ func (svc *SlashCommandService) handleDevSmoke(ctx context.Context, args []strin
 	account, ok := svc.openAIAccount(ctx, accountName)
 	if !ok || account.Status != "authorized" || strings.TrimSpace(account.SecretRef) == "" {
 		return svc.t("dev.openai_account_not_ready", map[string]any{"Account": accountName})
+	}
+	githubAccountName := defaultString(profile.GitHubAccountName, "primary")
+	githubAccount, ok := svc.githubAccount(ctx, githubAccountName)
+	if !ok || strings.TrimSpace(githubAccount.SecretRef) == "" {
+		return svc.t("dev.github_account_not_ready", map[string]any{"Account": githubAccountName})
 	}
 	ref, err := parseRepositoryRef(args[:1], "dev smoke")
 	if err != nil {
@@ -359,10 +365,40 @@ func (svc *SlashCommandService) handleDevSmoke(ctx context.Context, args []strin
 	}
 	headBranch := developerSmokeBranch(runID)
 	task := developerSmokeTask(runID, ref)
+	prompt, err := svc.renderStoredPromptTemplate(ctx, "developer", developerSmokeTemplateKey, promptTemplateData{
+		Run: promptTemplateRunData{
+			ID:      runID,
+			Profile: "developer",
+			Role:    "developer",
+			Locale:  svc.cfg.Localizer.Locale(),
+		},
+		Agent: promptTemplateAgentData{
+			Profile: "developer",
+			Role:    "developer",
+		},
+		Repository: promptTemplateRepositoryData{
+			Provider: "github",
+			Owner:    ref.Owner,
+			Name:     ref.Name,
+			FullName: ref.Owner + "/" + ref.Name,
+		},
+		Task: promptTemplateTaskData{
+			Title:      "Matter Codex developer smoke " + runID,
+			Body:       task,
+			BaseBranch: "main",
+			HeadBranch: headBranch,
+		},
+		GitHub: promptGitHubData(githubAccountName),
+		Locale: svc.promptTemplateLocaleData(),
+	})
+	if err != nil {
+		return svc.t("prompt.render.failed", map[string]any{"Error": safeError(err)})
+	}
 	started, err := svc.cfg.RuntimeRunner.StartDeveloperRun(ctx, runtimerepo.DeveloperRunInput{
 		RunID:               runID,
 		Profile:             "developer",
 		CodexAuthSecretName: account.SecretRef,
+		GitHubSecretName:    githubAccount.SecretRef,
 		Provider:            "github",
 		Owner:               ref.Owner,
 		Name:                ref.Name,
@@ -370,6 +406,7 @@ func (svc *SlashCommandService) handleDevSmoke(ctx context.Context, args []strin
 		HeadBranch:          headBranch,
 		Title:               "Matter Codex developer smoke " + runID,
 		Task:                task,
+		Prompt:              prompt,
 	})
 	if err != nil {
 		return svc.t("dev.smoke.failed", map[string]any{"Error": safeError(err)})
@@ -491,6 +528,218 @@ func (svc *SlashCommandService) handleDevCleanup(ctx context.Context, args []str
 	})
 }
 
+func (svc *SlashCommandService) handleReview(ctx context.Context, args []string, command SlashCommand) string {
+	if svc.cfg.RuntimeRunner == nil {
+		return svc.t("runtime.not_configured", nil)
+	}
+	if len(args) == 0 {
+		return svc.t("review.usage", nil)
+	}
+	switch args[0] {
+	case "pr":
+		return svc.handleReviewPR(ctx, args[1:], command)
+	case "status":
+		return svc.handleReviewStatus(ctx, args[1:])
+	case "cleanup":
+		return svc.handleReviewCleanup(ctx, args[1:], command)
+	default:
+		return svc.t("review.unknown_command", nil)
+	}
+}
+
+func (svc *SlashCommandService) handleReviewPR(ctx context.Context, args []string, command SlashCommand) string {
+	if len(args) < 2 || len(args) > 3 {
+		return svc.t("review.pr.usage", nil)
+	}
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return svc.t("review.storage_not_ready", nil)
+	}
+	profile, ok := svc.agentProfile(ctx, "reviewer")
+	if !ok || !profile.Enabled {
+		return svc.t("review.profile_not_ready", map[string]any{"Profile": "reviewer"})
+	}
+	accountName := defaultString(profile.OpenAIAccountName, "primary")
+	account, ok := svc.openAIAccount(ctx, accountName)
+	if !ok || account.Status != "authorized" || strings.TrimSpace(account.SecretRef) == "" {
+		return svc.t("review.openai_account_not_ready", map[string]any{"Account": accountName})
+	}
+	githubAccountName := defaultString(profile.GitHubAccountName, "primary")
+	githubAccount, ok := svc.githubAccount(ctx, githubAccountName)
+	if !ok || strings.TrimSpace(githubAccount.SecretRef) == "" {
+		return svc.t("review.github_account_not_ready", map[string]any{"Account": githubAccountName})
+	}
+	ref, err := parseRepositoryRef(args[:1], "review pr")
+	if err != nil {
+		return svc.validationErrorText(err)
+	}
+	number, err := strconv.Atoi(args[1])
+	if err != nil || number <= 0 {
+		return svc.t("review.pr.invalid_number", nil)
+	}
+	runID := defaultReviewRunID()
+	if len(args) == 3 {
+		runID = args[2]
+	}
+	if !validRuntimeRunID(runID) {
+		return svc.t("runtime.invalid_run_id", nil)
+	}
+	prompt, err := svc.renderStoredPromptTemplate(ctx, "reviewer", reviewPRTemplateKey, promptTemplateData{
+		Run: promptTemplateRunData{
+			ID:      runID,
+			Profile: "reviewer",
+			Role:    "reviewer",
+			Locale:  svc.cfg.Localizer.Locale(),
+		},
+		Agent: promptTemplateAgentData{
+			Profile: "reviewer",
+			Role:    "reviewer",
+		},
+		Repository: promptTemplateRepositoryData{
+			Provider: "github",
+			Owner:    ref.Owner,
+			Name:     ref.Name,
+			FullName: ref.Owner + "/" + ref.Name,
+		},
+		PullRequest: promptTemplatePullRequestData{
+			Number: number,
+		},
+		GitHub: promptGitHubData(githubAccountName),
+		Locale: svc.promptTemplateLocaleData(),
+	})
+	if err != nil {
+		return svc.t("prompt.render.failed", map[string]any{"Error": safeError(err)})
+	}
+	started, err := svc.cfg.RuntimeRunner.StartReviewRun(ctx, runtimerepo.ReviewRunInput{
+		RunID:               runID,
+		Profile:             "reviewer",
+		CodexAuthSecretName: account.SecretRef,
+		GitHubSecretName:    githubAccount.SecretRef,
+		Provider:            "github",
+		Owner:               ref.Owner,
+		Name:                ref.Name,
+		PRNumber:            number,
+		Prompt:              prompt,
+	})
+	if err != nil {
+		return svc.t("review.pr.failed", map[string]any{"Error": safeError(err)})
+	}
+	if _, err := svc.cfg.Store.CreateAgentRun(ctx, adminrepo.CreateAgentRunInput{
+		RunID:               runID,
+		ProfileName:         "reviewer",
+		Role:                "reviewer",
+		Provider:            "github",
+		Owner:               ref.Owner,
+		Name:                ref.Name,
+		BaseBranch:          "pr",
+		HeadBranch:          fmt.Sprintf("pr-%d", number),
+		Status:              "started",
+		KubernetesNamespace: started.Namespace,
+		JobName:             started.JobName,
+		PVCName:             started.PVCName,
+		Summary:             "review run started from Mattermost slash command",
+	}); err != nil {
+		return svc.t("review.pr.store_failed", map[string]any{"RunID": runID, "Error": safeError(err)})
+	}
+	svc.recordRuntimeAudit(ctx, command, "reviewer.run.started", started.RunID, "reviewer runner job started from Mattermost slash command")
+	return svc.t("review.pr.started", map[string]any{
+		"RunID":      started.RunID,
+		"Repository": ref.Owner + "/" + ref.Name,
+		"PR":         number,
+		"Account":    account.Name,
+		"Namespace":  started.Namespace,
+		"Job":        started.JobName,
+		"PVC":        started.PVCName,
+	})
+}
+
+func (svc *SlashCommandService) handleReviewStatus(ctx context.Context, args []string) string {
+	if len(args) != 1 {
+		return svc.t("review.status.usage", nil)
+	}
+	runID := args[0]
+	if !validRuntimeRunID(runID) {
+		return svc.t("runtime.invalid_run_id", nil)
+	}
+	run, hasRun := svc.agentRun(ctx, runID)
+	status, err := svc.cfg.RuntimeRunner.GetRunStatus(ctx, runID)
+	if err != nil {
+		return svc.t("review.status.failed", map[string]any{"Error": safeError(err)})
+	}
+	if !status.Exists {
+		return svc.t("runtime.status.not_found", map[string]any{"RunID": runID})
+	}
+	derivedStatus := reviewerRunStatus(status)
+	if hasRun {
+		prURL := status.Artifacts["pr-url"]
+		if updated, err := svc.cfg.Store.UpdateAgentRunArtifacts(ctx, adminrepo.UpdateAgentRunArtifactsInput{RunID: runID, Status: derivedStatus, PRURL: prURL}); err == nil {
+			run = updated
+		}
+	}
+	lines := []string{svc.t("review.status.header", nil)}
+	if hasRun {
+		lines = append(lines, svc.t("review.status.run", map[string]any{
+			"RunID":      run.RunID,
+			"Profile":    run.ProfileName,
+			"Repository": run.FullName(),
+			"Base":       run.BaseBranch,
+			"Branch":     run.HeadBranch,
+			"Status":     run.Status,
+		}))
+	} else {
+		lines = append(lines, svc.t("review.status.run_without_storage", map[string]any{"RunID": runID, "Status": derivedStatus}))
+	}
+	lines = append(lines,
+		svc.t("runtime.status.identity", map[string]any{
+			"RunID":     status.RunID,
+			"Namespace": status.Namespace,
+			"Job":       status.JobName,
+			"PVC":       status.PVCName,
+		}),
+		svc.t("runtime.status.job", map[string]any{
+			"Active":    status.JobActive,
+			"Succeeded": status.JobSucceeded,
+			"Failed":    status.JobFailed,
+		}),
+	)
+	if status.PodName != "" {
+		lines = append(lines, svc.t("runtime.status.pod", map[string]any{
+			"Pod":   status.PodName,
+			"Phase": emptyAsUnknown(status.PodPhase),
+		}))
+	}
+	for _, artifact := range sortedArtifacts(status.Artifacts) {
+		lines = append(lines, svc.t("review.status.artifact", map[string]any{"Key": artifact.key, "Value": artifact.value}))
+	}
+	if strings.TrimSpace(status.LogTail) != "" {
+		lines = append(lines, svc.t("runtime.status.logs", map[string]any{"Logs": sanitizeLogTail(status.LogTail)}))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func (svc *SlashCommandService) handleReviewCleanup(ctx context.Context, args []string, command SlashCommand) string {
+	if len(args) != 1 {
+		return svc.t("review.cleanup.usage", nil)
+	}
+	runID := args[0]
+	if !validRuntimeRunID(runID) {
+		return svc.t("runtime.invalid_run_id", nil)
+	}
+	result, err := svc.cfg.RuntimeRunner.CleanupRun(ctx, runID)
+	if err != nil {
+		return svc.t("review.cleanup.failed", map[string]any{"Error": safeError(err)})
+	}
+	if svc.cfg.StorageReady && svc.cfg.Store != nil {
+		_, _ = svc.cfg.Store.UpdateAgentRunArtifacts(ctx, adminrepo.UpdateAgentRunArtifactsInput{RunID: runID, Status: "cleaned"})
+	}
+	svc.recordRuntimeAudit(ctx, command, "reviewer.run.cleaned", result.RunID, "reviewer runner resources cleaned from Mattermost slash command")
+	return svc.t("review.cleanup.result", map[string]any{
+		"RunID":      result.RunID,
+		"Namespace":  result.Namespace,
+		"JobDeleted": result.JobDeleted,
+		"PVCDeleted": result.PVCDeleted,
+	})
+}
+
 func (svc *SlashCommandService) handleLocale(args []string) string {
 	if len(args) == 1 && args[0] == "get" {
 		return svc.t("locale.get", map[string]any{
@@ -536,10 +785,151 @@ func (svc *SlashCommandService) handleProfile(ctx context.Context, args []string
 			"Role":        profile.Role,
 			"Enabled":     enabled,
 			"Account":     defaultString(profile.OpenAIAccountName, "primary"),
+			"GitHub":      defaultString(profile.GitHubAccountName, "primary"),
 			"Description": profile.Description,
 		}))
 	}
 	return strings.Join(lines, "\n")
+}
+
+func (svc *SlashCommandService) handlePrompt(ctx context.Context, raw string, command SlashCommand) string {
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return svc.t("prompt.storage_not_ready", nil)
+	}
+	action, rest := consumeToken(raw)
+	switch action {
+	case "":
+		return svc.t("prompt.usage", nil)
+	case "help":
+		return svc.handlePromptHelp(rest)
+	case "list":
+		return svc.handlePromptList(ctx, rest)
+	case "show":
+		return svc.handlePromptShow(ctx, rest)
+	case "render":
+		return svc.handlePromptRender(ctx, rest)
+	case "set":
+		return svc.handlePromptSet(ctx, rest, command)
+	default:
+		return svc.t("prompt.unknown_command", nil)
+	}
+}
+
+func (svc *SlashCommandService) handlePromptHelp(raw string) string {
+	profileName, rest := consumeToken(raw)
+	templateKey, _ := consumeToken(rest)
+	if profileName == "" {
+		profileName = "reviewer"
+	}
+	if templateKey == "" {
+		templateKey = reviewPRTemplateKey
+	}
+	return svc.t("prompt.help", map[string]any{
+		"Profile":     profileName,
+		"TemplateKey": templateKey,
+		"Reference":   svc.t("prompt.help.reference", promptTemplateReferenceData()),
+	})
+}
+
+func (svc *SlashCommandService) handlePromptList(ctx context.Context, raw string) string {
+	profileName, rest := consumeToken(raw)
+	if strings.TrimSpace(rest) != "" {
+		return svc.t("prompt.list.usage", nil)
+	}
+	templates, err := svc.cfg.Store.ListAgentPromptTemplates(ctx, profileName)
+	if err != nil {
+		return svc.t("prompt.list.failed", map[string]any{"Error": safeError(err)})
+	}
+	if len(templates) == 0 {
+		return svc.t("prompt.list.empty", nil)
+	}
+	lines := []string{svc.t("prompt.list.header", nil)}
+	for _, item := range templates {
+		lines = append(lines, svc.t("prompt.list.item", map[string]any{
+			"Profile":     item.ProfileName,
+			"TemplateKey": item.TemplateKey,
+			"Bytes":       len(item.Body),
+		}))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func (svc *SlashCommandService) handlePromptShow(ctx context.Context, raw string) string {
+	profileName, templateKey, body, ok := parsePromptTemplateCommand(raw)
+	if !ok || body != "" {
+		return svc.t("prompt.show.usage", nil)
+	}
+	if !validPromptTemplateID(profileName) || !validPromptTemplateID(templateKey) {
+		return svc.t("prompt.invalid_id", nil)
+	}
+	item, err := svc.cfg.Store.GetAgentPromptTemplate(ctx, profileName, templateKey)
+	if err != nil {
+		return svc.t("prompt.show.failed", map[string]any{"Error": safeError(err)})
+	}
+	return svc.t("prompt.show.result", map[string]any{
+		"Profile":     item.ProfileName,
+		"TemplateKey": item.TemplateKey,
+		"Body":        sanitizeLogTail(item.Body),
+	})
+}
+
+func (svc *SlashCommandService) handlePromptRender(ctx context.Context, raw string) string {
+	profileName, templateKey, body, ok := parsePromptTemplateCommand(raw)
+	if !ok {
+		return svc.t("prompt.render.usage", nil)
+	}
+	if !validPromptTemplateID(profileName) || !validPromptTemplateID(templateKey) {
+		return svc.t("prompt.invalid_id", nil)
+	}
+	if body == "" {
+		item, err := svc.cfg.Store.GetAgentPromptTemplate(ctx, profileName, templateKey)
+		if err != nil {
+			return svc.t("prompt.render.failed", map[string]any{"Error": safeError(err)})
+		}
+		body = item.Body
+	}
+	rendered, err := renderAgentPromptTemplate(body, samplePromptTemplateData(profileName, templateKey, svc.promptTemplateLocaleData()))
+	if err != nil {
+		return svc.t("prompt.render.failed", map[string]any{"Error": safeError(err)})
+	}
+	return svc.t("prompt.render.result", map[string]any{
+		"Profile":     profileName,
+		"TemplateKey": templateKey,
+		"Rendered":    sanitizeLogTail(rendered),
+	})
+}
+
+func (svc *SlashCommandService) handlePromptSet(ctx context.Context, raw string, command SlashCommand) string {
+	profileName, templateKey, body, ok := parsePromptTemplateCommand(raw)
+	if !ok || strings.TrimSpace(body) == "" {
+		return svc.t("prompt.set.usage", nil)
+	}
+	if !validPromptTemplateID(profileName) || !validPromptTemplateID(templateKey) {
+		return svc.t("prompt.invalid_id", nil)
+	}
+	rendered, err := renderAgentPromptTemplate(body, samplePromptTemplateData(profileName, templateKey, svc.promptTemplateLocaleData()))
+	if err != nil {
+		return svc.t("prompt.set.render_failed", map[string]any{"Error": safeError(err)})
+	}
+	item, created, err := svc.cfg.Store.UpsertAgentPromptTemplate(ctx, adminrepo.UpsertAgentPromptTemplateInput{
+		ProfileName: profileName,
+		TemplateKey: templateKey,
+		Body:        body,
+	})
+	if err != nil {
+		return svc.t("prompt.set.failed", map[string]any{"Error": safeError(err)})
+	}
+	svc.recordPromptAudit(ctx, command, "agent_prompt_template.upserted", item.ProfileName+"/"+item.TemplateKey, "agent prompt template upserted from Mattermost slash command")
+	state := svc.t("label.updated", nil)
+	if created {
+		state = svc.t("label.created", nil)
+	}
+	return svc.t("prompt.set.result", map[string]any{
+		"State":       state,
+		"Profile":     item.ProfileName,
+		"TemplateKey": item.TemplateKey,
+		"Rendered":    sanitizeLogTail(rendered),
+	})
 }
 
 func (svc *SlashCommandService) handleOpenAI(ctx context.Context, args []string, command SlashCommand) string {
@@ -719,9 +1109,11 @@ func (svc *SlashCommandService) helpText() string {
 		svc.t("help.token_check", nil),
 		svc.t("help.openai", nil),
 		svc.t("help.profile_list", nil),
+		svc.t("help.prompt", nil),
 		svc.t("help.locale", nil),
 		svc.t("help.runtime", nil),
 		svc.t("help.dev", nil),
+		svc.t("help.review", nil),
 	}
 	return svc.t("help.header", nil) + "\n" + strings.Join(commands, "\n")
 }
@@ -1068,6 +1460,15 @@ func parseOpenAIAccountName(value string) (string, error) {
 	return name, nil
 }
 
+func parsePromptTemplateCommand(raw string) (string, string, string, bool) {
+	profileName, rest := consumeToken(raw)
+	templateKey, body := consumeToken(rest)
+	if profileName == "" || templateKey == "" {
+		return "", "", "", false
+	}
+	return strings.ToLower(profileName), strings.ToLower(templateKey), strings.TrimSpace(body), true
+}
+
 func isProvider(value string) bool {
 	switch value {
 	case "github", "gitlab":
@@ -1078,9 +1479,10 @@ func isProvider(value string) bool {
 }
 
 var (
-	identifierRE = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
-	branchRE     = regexp.MustCompile(`^[A-Za-z0-9_./-]+$`)
-	runtimeRunRE = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]{0,47}[a-z0-9])?$`)
+	identifierRE       = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
+	branchRE           = regexp.MustCompile(`^[A-Za-z0-9_./-]+$`)
+	promptTemplateIDRE = regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]{0,63}$`)
+	runtimeRunRE       = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]{0,47}[a-z0-9])?$`)
 )
 
 func validIdentifier(value string) bool {
@@ -1093,6 +1495,10 @@ func validBranch(value string) bool {
 
 func validRuntimeRunID(value string) bool {
 	return runtimeRunRE.MatchString(value)
+}
+
+func validPromptTemplateID(value string) bool {
+	return promptTemplateIDRE.MatchString(value)
 }
 
 func repositoryChannelName(owner string, name string) string {
@@ -1163,6 +1569,20 @@ func (svc *SlashCommandService) recordOpenAIAudit(ctx context.Context, command S
 	})
 }
 
+func (svc *SlashCommandService) recordPromptAudit(ctx context.Context, command SlashCommand, eventType string, resourceName string, summary string) {
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return
+	}
+	_ = svc.cfg.Store.RecordAuditEvent(ctx, adminrepo.AuditEventInput{
+		EventType:    eventType,
+		ActorUserID:  command.UserID,
+		ActorUser:    command.UserName,
+		ResourceType: "prompt",
+		ResourceName: resourceName,
+		Summary:      summary,
+	})
+}
+
 func (svc *SlashCommandService) enabledProfile(ctx context.Context, name string) bool {
 	profile, ok := svc.agentProfile(ctx, name)
 	return ok && profile.Enabled
@@ -1195,6 +1615,33 @@ func (svc *SlashCommandService) openAIAccount(ctx context.Context, name string) 
 	return account, true
 }
 
+func (svc *SlashCommandService) githubAccount(ctx context.Context, name string) (entity.GitHubAccount, bool) {
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return entity.GitHubAccount{}, false
+	}
+	account, err := svc.cfg.Store.GetGitHubAccount(ctx, name)
+	if err != nil {
+		return entity.GitHubAccount{}, false
+	}
+	return account, true
+}
+
+func promptGitHubData(accountName string) promptTemplateGitHubData {
+	return promptTemplateGitHubData{
+		Account:     defaultString(accountName, "primary"),
+		TokenEnv:    "GH_TOKEN / GITHUB_TOKEN",
+		UsernameEnv: "GITHUB_USERNAME / GITHUB_USER",
+		EmailEnv:    "GITHUB_EMAIL",
+	}
+}
+
+func (svc *SlashCommandService) promptTemplateLocaleData() promptTemplateLocaleData {
+	return promptTemplateLocaleData{
+		Code:     svc.cfg.Localizer.Locale(),
+		Language: svc.t("prompt.template.language_name", nil),
+	}
+}
+
 func (svc *SlashCommandService) agentRun(ctx context.Context, runID string) (entity.AgentRun, bool) {
 	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
 		return entity.AgentRun{}, false
@@ -1208,6 +1655,10 @@ func (svc *SlashCommandService) agentRun(ctx context.Context, runID string) (ent
 
 func defaultDeveloperRunID() string {
 	return fmt.Sprintf("dev-%d", time.Now().Unix())
+}
+
+func defaultReviewRunID() string {
+	return fmt.Sprintf("review-%d", time.Now().Unix())
 }
 
 func developerSmokeBranch(runID string) string {
@@ -1224,6 +1675,30 @@ func developerRunStatus(status runtimerepo.RunStatus) string {
 	}
 	if status.Artifacts["no-changes"] == "true" {
 		return "completed_no_changes"
+	}
+	if status.JobFailed > 0 {
+		return "failed"
+	}
+	if status.JobSucceeded > 0 {
+		return "succeeded"
+	}
+	if status.JobActive > 0 {
+		return "running"
+	}
+	return "pending"
+}
+
+func reviewerRunStatus(status runtimerepo.RunStatus) string {
+	switch status.Artifacts["review-decision"] {
+	case "approve":
+		return "approved"
+	case "request_changes":
+		return "changes_requested"
+	case "comment":
+		return "review_comment"
+	}
+	if status.Artifacts["review-submitted"] == "true" {
+		return "review_submitted"
 	}
 	if status.JobFailed > 0 {
 		return "failed"

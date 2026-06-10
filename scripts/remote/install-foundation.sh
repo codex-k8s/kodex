@@ -70,23 +70,12 @@ POSTGRES_DB_B64="$(printf '%s' "$MATTERCODEX_POSTGRES_DB" | base64 | tr -d '\n')
 POSTGRES_USER_B64="$(printf '%s' "$MATTERCODEX_POSTGRES_USER" | base64 | tr -d '\n')"
 POSTGRES_PASSWORD_B64="$(printf '%s' "$POSTGRES_PASSWORD" | base64 | tr -d '\n')"
 POSTGRES_DSN_B64="$(printf '%s' "$POSTGRES_DSN" | base64 | tr -d '\n')"
+export POSTGRES_DB_B64
+export POSTGRES_USER_B64
+export POSTGRES_PASSWORD_B64
+export POSTGRES_DSN_B64
 
 mattercodex_log "применяется PostgreSQL secret на целевом сервере"
-cat <<EOF | mattercodex_remote_kubectl_apply_stdin "$SECRET_DRY_RUN_MODE"
-apiVersion: v1
-kind: Secret
-metadata:
-  name: ${MATTERCODEX_POSTGRES_SECRET}
-  namespace: ${MATTERCODEX_NAMESPACE}
-  labels:
-    app.kubernetes.io/name: mattermost-postgres
-    app.kubernetes.io/component: database
-type: Opaque
-data:
-  postgres-db: ${POSTGRES_DB_B64}
-  postgres-user: ${POSTGRES_USER_B64}
-  postgres-password: ${POSTGRES_PASSWORD_B64}
-  mattermost-datasource: ${POSTGRES_DSN_B64}
-EOF
+mattercodex_render_template "$TEMPLATE_DIR/postgres-secret.yaml.tpl" - | mattercodex_remote_kubectl_apply_stdin "$SECRET_DRY_RUN_MODE"
 
 mattercodex_log "remote foundation шаг завершен"

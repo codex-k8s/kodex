@@ -33,7 +33,9 @@ ENTRYPOINT ["/usr/local/bin/bot-service"]
 
 FROM alpine:3.22 AS prod
 
-RUN addgroup -S -g 10001 app && adduser -S -D -H -u 10001 -G app app
+RUN apk add --no-cache ca-certificates \
+	&& addgroup -S -g 10001 app \
+	&& adduser -S -D -H -u 10001 -G app app
 
 COPY --from=build /out/bot-service /usr/local/bin/bot-service
 
