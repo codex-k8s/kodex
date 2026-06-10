@@ -19,10 +19,22 @@ spec:
         app.kubernetes.io/component: bot-service
     spec:
       serviceAccountName: matter-codex-bot-service
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
         - name: wait-for-postgres
           image: ${MATTERCODEX_BUSYBOX_IMAGE}
           imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
           command:
             - sh
             - -c
@@ -30,10 +42,23 @@ spec:
               until nc -z mattermost-postgres.${MATTERCODEX_NAMESPACE}.svc.cluster.local 5432; do
                 sleep 2
               done
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 50m
+              memory: 64Mi
       containers:
         - name: bot-service
           image: ${MATTERCODEX_BOT_SERVICE_IMAGE}
           imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
           ports:
             - name: http
               containerPort: ${MATTERCODEX_BOT_SERVICE_PORT}
@@ -89,3 +114,10 @@ spec:
               port: http
             initialDelaySeconds: 10
             periodSeconds: 20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi

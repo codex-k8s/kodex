@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	runtimerepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/runtime"
 	batchv1 "k8s.io/api/batch/v1"
@@ -252,6 +253,102 @@ func TestCleanupRunDeletesJobAndPVC(t *testing.T) {
 	}
 }
 
+func TestCleanupExpiredRunsDryRunDoesNotDelete(t *testing.T) {
+	now := time.Date(2026, 6, 10, 12, 0, 0, 0, time.UTC)
+	oldCompleted := metav1.NewTime(now.Add(-48 * time.Hour))
+	client := fake.NewSimpleClientset(
+		&batchv1.Job{
+			ObjectMeta: metav1.ObjectMeta{Name: "mc-run-old-run", Namespace: "mattermost", Labels: runnerLabels("old-run", "smoke"), CreationTimestamp: oldCompleted},
+			Status:     batchv1.JobStatus{Succeeded: 1, CompletionTime: &oldCompleted},
+		},
+		&corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: "mc-ws-old-run", Namespace: "mattermost", Labels: runnerLabels("old-run", "smoke"), CreationTimestamp: oldCompleted}},
+		&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "mc-prompt-old-run", Namespace: "mattermost", Labels: runnerLabels("old-run", "smoke"), CreationTimestamp: oldCompleted}},
+	)
+	runner, err := NewRunnerWithClient(client, Config{Namespace: "mattermost"})
+	if err != nil {
+		t.Fatalf("NewRunnerWithClient() error = %v", err)
+	}
+
+	result, err := runner.CleanupExpiredRuns(context.Background(), runtimerepo.RetentionCleanupInput{
+		OlderThan: 24 * time.Hour,
+		Now:       now,
+		DryRun:    true,
+	})
+	if err != nil {
+		t.Fatalf("CleanupExpiredRuns() error = %v", err)
+	}
+	if !result.DryRun || result.RunsMatched != 1 || result.JobsMatched != 1 || result.PVCsMatched != 1 || result.ConfigMapsMatched != 1 {
+		t.Fatalf("result = %#v", result)
+	}
+	if result.JobsDeleted != 0 || result.PVCsDeleted != 0 || result.ConfigMapsDeleted != 0 {
+		t.Fatalf("dry-run deleted resources: %#v", result)
+	}
+	if _, err := client.BatchV1().Jobs("mattermost").Get(context.Background(), "mc-run-old-run", metav1.GetOptions{}); err != nil {
+		t.Fatalf("dry-run deleted job: %v", err)
+	}
+}
+
+func TestCleanupExpiredRunsDeletesFinishedAndOrphanResources(t *testing.T) {
+	now := time.Date(2026, 6, 10, 12, 0, 0, 0, time.UTC)
+	oldCompleted := metav1.NewTime(now.Add(-48 * time.Hour))
+	activeCreated := metav1.NewTime(now.Add(-48 * time.Hour))
+	orphanCreated := metav1.NewTime(now.Add(-72 * time.Hour))
+	recentCompleted := metav1.NewTime(now.Add(-10 * time.Minute))
+	client := fake.NewSimpleClientset(
+		&batchv1.Job{
+			ObjectMeta: metav1.ObjectMeta{Name: "mc-run-old-run", Namespace: "mattermost", Labels: runnerLabels("old-run", "smoke"), CreationTimestamp: oldCompleted},
+			Status:     batchv1.JobStatus{Succeeded: 1, CompletionTime: &oldCompleted},
+		},
+		&batchv1.Job{
+			ObjectMeta: metav1.ObjectMeta{Name: "mc-run-active-run", Namespace: "mattermost", Labels: runnerLabels("active-run", "smoke"), CreationTimestamp: activeCreated},
+			Status:     batchv1.JobStatus{Active: 1},
+		},
+		&batchv1.Job{
+			ObjectMeta: metav1.ObjectMeta{Name: "mc-run-recent-run", Namespace: "mattermost", Labels: runnerLabels("recent-run", "smoke"), CreationTimestamp: recentCompleted},
+			Status:     batchv1.JobStatus{Succeeded: 1, CompletionTime: &recentCompleted},
+		},
+		&corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: "mc-ws-old-run", Namespace: "mattermost", Labels: runnerLabels("old-run", "smoke"), CreationTimestamp: oldCompleted}},
+		&corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: "mc-ws-orphan-run", Namespace: "mattermost", Labels: runnerLabels("orphan-run", "smoke"), CreationTimestamp: orphanCreated}},
+		&corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: "mc-ws-active-run", Namespace: "mattermost", Labels: runnerLabels("active-run", "smoke"), CreationTimestamp: activeCreated}},
+		&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "mc-prompt-old-run", Namespace: "mattermost", Labels: runnerLabels("old-run", "smoke"), CreationTimestamp: oldCompleted}},
+		&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "mc-prompt-orphan-run", Namespace: "mattermost", Labels: runnerLabels("orphan-run", "smoke"), CreationTimestamp: orphanCreated}},
+		&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "mc-prompt-active-run", Namespace: "mattermost", Labels: runnerLabels("active-run", "smoke"), CreationTimestamp: activeCreated}},
+	)
+	runner, err := NewRunnerWithClient(client, Config{Namespace: "mattermost"})
+	if err != nil {
+		t.Fatalf("NewRunnerWithClient() error = %v", err)
+	}
+
+	result, err := runner.CleanupExpiredRuns(context.Background(), runtimerepo.RetentionCleanupInput{
+		OlderThan: 24 * time.Hour,
+		Now:       now,
+		DryRun:    false,
+	})
+	if err != nil {
+		t.Fatalf("CleanupExpiredRuns() error = %v", err)
+	}
+	if result.RunsMatched != 2 || result.JobsDeleted != 1 || result.PVCsDeleted != 2 || result.ConfigMapsDeleted != 2 || result.SkippedActiveJobs != 1 {
+		t.Fatalf("result = %#v", result)
+	}
+	if strings.Join(result.MatchedRunIDs, ",") != "old-run,orphan-run" {
+		t.Fatalf("MatchedRunIDs = %#v", result.MatchedRunIDs)
+	}
+	for _, name := range []string{"mc-run-old-run", "mc-ws-old-run", "mc-ws-orphan-run", "mc-prompt-old-run", "mc-prompt-orphan-run"} {
+		if resourceStillExists(ctxResourceGetters{client: client, namespace: "mattermost"}, name) {
+			t.Fatalf("%s still exists", name)
+		}
+	}
+	if _, err := client.BatchV1().Jobs("mattermost").Get(context.Background(), "mc-run-active-run", metav1.GetOptions{}); err != nil {
+		t.Fatalf("active job was deleted: %v", err)
+	}
+	if _, err := client.CoreV1().PersistentVolumeClaims("mattermost").Get(context.Background(), "mc-ws-active-run", metav1.GetOptions{}); err != nil {
+		t.Fatalf("active pvc was deleted: %v", err)
+	}
+	if _, err := client.BatchV1().Jobs("mattermost").Get(context.Background(), "mc-run-recent-run", metav1.GetOptions{}); err != nil {
+		t.Fatalf("recent job was deleted: %v", err)
+	}
+}
+
 func envValue(env []corev1.EnvVar, name string) string {
 	for _, item := range env {
 		if item.Name == name {
@@ -267,4 +364,26 @@ func secretItemKeys(items []corev1.KeyToPath) string {
 		keys = append(keys, item.Key)
 	}
 	return strings.Join(keys, ",")
+}
+
+type ctxResourceGetters struct {
+	client    *fake.Clientset
+	namespace string
+}
+
+func resourceStillExists(getters ctxResourceGetters, name string) bool {
+	ctx := context.Background()
+	if strings.HasPrefix(name, "mc-run-") {
+		_, err := getters.client.BatchV1().Jobs(getters.namespace).Get(ctx, name, metav1.GetOptions{})
+		return err == nil
+	}
+	if strings.HasPrefix(name, "mc-ws-") {
+		_, err := getters.client.CoreV1().PersistentVolumeClaims(getters.namespace).Get(ctx, name, metav1.GetOptions{})
+		return err == nil
+	}
+	if strings.HasPrefix(name, "mc-prompt-") {
+		_, err := getters.client.CoreV1().ConfigMaps(getters.namespace).Get(ctx, name, metav1.GetOptions{})
+		return err == nil
+	}
+	return false
 }

@@ -1,6 +1,9 @@
 package runtime
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 type SmokeRunInput struct {
 	RunID string
@@ -112,6 +115,27 @@ type CleanupResult struct {
 	PVCDeleted bool
 }
 
+type RetentionCleanupInput struct {
+	OlderThan time.Duration
+	Now       time.Time
+	DryRun    bool
+}
+
+type RetentionCleanupResult struct {
+	Namespace         string
+	DryRun            bool
+	OlderThan         time.Duration
+	RunsMatched       int
+	SkippedActiveJobs int
+	JobsMatched       int
+	JobsDeleted       int
+	PVCsMatched       int
+	PVCsDeleted       int
+	ConfigMapsMatched int
+	ConfigMapsDeleted int
+	MatchedRunIDs     []string
+}
+
 type Runner interface {
 	StartSmokeRun(ctx context.Context, input SmokeRunInput) (StartedRun, error)
 	StartCodexAuthSession(ctx context.Context, input CodexAuthSessionInput) (CodexAuthSession, error)
@@ -122,4 +146,5 @@ type Runner interface {
 	StartReviewRun(ctx context.Context, input ReviewRunInput) (StartedRun, error)
 	GetRunStatus(ctx context.Context, runID string) (RunStatus, error)
 	CleanupRun(ctx context.Context, runID string) (CleanupResult, error)
+	CleanupExpiredRuns(ctx context.Context, input RetentionCleanupInput) (RetentionCleanupResult, error)
 }

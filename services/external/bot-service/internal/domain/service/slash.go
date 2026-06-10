@@ -276,6 +276,8 @@ func (svc *SlashCommandService) handleRuntime(ctx context.Context, args []string
 		return svc.handleRuntimeStatus(ctx, args[1:])
 	case "cleanup":
 		return svc.handleRuntimeCleanup(ctx, args[1:], command)
+	case "prune":
+		return svc.handleRuntimePrune(ctx, args[1:], command)
 	default:
 		return svc.t("runtime.unknown_command", nil)
 	}
@@ -368,6 +370,44 @@ func (svc *SlashCommandService) handleRuntimeCleanup(ctx context.Context, args [
 		"Namespace":  result.Namespace,
 		"JobDeleted": result.JobDeleted,
 		"PVCDeleted": result.PVCDeleted,
+	})
+}
+
+func (svc *SlashCommandService) handleRuntimePrune(ctx context.Context, args []string, command SlashCommand) string {
+	olderThan, dryRun, err := parseRuntimePruneArgs(args)
+	if err != nil {
+		return svc.t("runtime.prune.usage", nil)
+	}
+	result, err := svc.cfg.RuntimeRunner.CleanupExpiredRuns(ctx, runtimerepo.RetentionCleanupInput{
+		OlderThan: olderThan,
+		Now:       time.Now().UTC(),
+		DryRun:    dryRun,
+	})
+	if err != nil {
+		return svc.t("runtime.prune.failed", map[string]any{"Error": safeError(err)})
+	}
+	modeID := "runtime.prune.mode_dry_run"
+	eventType := "runtime.retention.checked"
+	eventSummary := "runtime retention cleanup dry-run requested from Mattermost slash command"
+	if !result.DryRun {
+		modeID = "runtime.prune.mode_apply"
+		eventType = "runtime.retention.cleaned"
+		eventSummary = "runtime retention cleanup applied from Mattermost slash command"
+	}
+	svc.recordRuntimeAudit(ctx, command, eventType, "agent-runner", eventSummary)
+	return svc.t("runtime.prune.result", map[string]any{
+		"Mode":              svc.t(modeID, nil),
+		"OlderThan":         result.OlderThan.String(),
+		"Namespace":         result.Namespace,
+		"RunsMatched":       result.RunsMatched,
+		"RunIDs":            formatRunIDList(result.MatchedRunIDs, 12),
+		"SkippedActiveJobs": result.SkippedActiveJobs,
+		"JobsMatched":       result.JobsMatched,
+		"JobsDeleted":       result.JobsDeleted,
+		"PVCsMatched":       result.PVCsMatched,
+		"PVCsDeleted":       result.PVCsDeleted,
+		"ConfigMapsMatched": result.ConfigMapsMatched,
+		"ConfigMapsDeleted": result.ConfigMapsDeleted,
 	})
 }
 
@@ -2419,6 +2459,45 @@ func validFlowAction(value string) bool {
 	default:
 		return false
 	}
+}
+
+func parseRuntimePruneArgs(args []string) (time.Duration, bool, error) {
+	olderThan := 24 * time.Hour
+	dryRun := true
+	durationSet := false
+	for _, arg := range args {
+		arg = strings.TrimSpace(arg)
+		if arg == "" {
+			continue
+		}
+		switch arg {
+		case "--dry-run":
+			dryRun = true
+		case "--apply":
+			dryRun = false
+		default:
+			if durationSet {
+				return 0, true, fmt.Errorf("only one duration is allowed")
+			}
+			parsed, err := time.ParseDuration(arg)
+			if err != nil || parsed <= 0 {
+				return 0, true, fmt.Errorf("invalid retention duration")
+			}
+			olderThan = parsed
+			durationSet = true
+		}
+	}
+	return olderThan, dryRun, nil
+}
+
+func formatRunIDList(runIDs []string, limit int) string {
+	if len(runIDs) == 0 {
+		return "-"
+	}
+	if limit <= 0 || len(runIDs) <= limit {
+		return strings.Join(runIDs, ", ")
+	}
+	return strings.Join(runIDs[:limit], ", ") + fmt.Sprintf(" ... +%d", len(runIDs)-limit)
 }
 
 func flowOwnerTerminal(status string) bool {
