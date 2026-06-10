@@ -246,7 +246,6 @@ func (preparer *SelfDeployGatePreparer) lookupSelfDeployGateRequest(ctx context.
 	}
 	response, err := preparer.client.ListGateRequests(ctx, &governancev1.ListGateRequestsRequest{
 		RiskAssessmentId: &assessmentID,
-		Target:           target,
 		Page:             &governancev1.PageRequest{PageSize: 10},
 		Meta:             queryMeta(input.Meta),
 	})
