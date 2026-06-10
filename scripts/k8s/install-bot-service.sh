@@ -176,6 +176,9 @@ kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f "$RENDER_DIR/40-service.yaml" >/de
 kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f "$RENDER_DIR/50-ingress.yaml" >/dev/null
 
 if [ "$DRY_RUN_MODE" = "none" ]; then
+  LEGACY_CODE_CONFIGMAP="${MATTERCODEX_BOT_SERVICE_CODE_CONFIGMAP:-matter-codex-bot-service-code}"
+  mattercodex_log "удаляется legacy bot-service source ConfigMap, если он остался"
+  kubectl -n "$MATTERCODEX_NAMESPACE" delete configmap "$LEGACY_CODE_CONFIGMAP" --ignore-not-found >/dev/null
   mattercodex_log "перезапуск bot-service для применения image/config"
   kubectl -n "$MATTERCODEX_NAMESPACE" rollout restart deployment/matter-codex-bot-service >/dev/null
   if mattercodex_bool "$WAIT"; then
