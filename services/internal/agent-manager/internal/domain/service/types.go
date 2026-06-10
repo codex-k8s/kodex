@@ -280,11 +280,12 @@ type SelfDeploySignalReadResult struct {
 type SelfDeployBuildPlanStatus string
 
 const (
-	SelfDeployBuildPlanStatusReady                SelfDeployBuildPlanStatus = "ready"
-	SelfDeployBuildPlanStatusBuildPlanUnavailable SelfDeployBuildPlanStatus = "build_plan_unavailable"
-	SelfDeployBuildPlanStatusPolicyStale          SelfDeployBuildPlanStatus = "policy_stale"
-	SelfDeployBuildPlanStatusServiceNotFound      SelfDeployBuildPlanStatus = "service_not_found"
-	SelfDeployBuildPlanStatusInvalidInput         SelfDeployBuildPlanStatus = "invalid_input"
+	SelfDeployBuildPlanStatusReady                   SelfDeployBuildPlanStatus = "ready"
+	SelfDeployBuildPlanStatusBuildPlanUnavailable    SelfDeployBuildPlanStatus = "build_plan_unavailable"
+	SelfDeployBuildPlanStatusPolicyStale             SelfDeployBuildPlanStatus = "policy_stale"
+	SelfDeployBuildPlanStatusServiceNotFound         SelfDeployBuildPlanStatus = "service_not_found"
+	SelfDeployBuildPlanStatusInvalidInput            SelfDeployBuildPlanStatus = "invalid_input"
+	SelfDeployBuildPlanStatusBuildContextUnavailable SelfDeployBuildPlanStatus = "build_context_unavailable"
 )
 
 type SelfDeployBuildPlanLookupInput struct {

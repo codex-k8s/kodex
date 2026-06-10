@@ -18,9 +18,47 @@ type ServicesPolicyMetadata struct {
 
 // ServicesPolicySpec stores the policy body used by project-catalog.
 type ServicesPolicySpec struct {
-	Services             []ServicesPolicyService             `json:"services,omitempty" yaml:"services,omitempty"`
-	DeployableServices   []ServicesPolicyService             `json:"deployableServices,omitempty" yaml:"deployableServices,omitempty"`
-	DocumentationSources []ServicesPolicyDocumentationSource `json:"documentationSources,omitempty" yaml:"documentationSources,omitempty"`
+	Services             []ServicesPolicyService              `json:"services,omitempty" yaml:"services,omitempty"`
+	DeployableServices   []ServicesPolicyService              `json:"deployableServices,omitempty" yaml:"deployableServices,omitempty"`
+	Versions             map[string]ServicesPolicyVersionSpec `json:"versions,omitempty" yaml:"versions,omitempty"`
+	Images               map[string]ServicesPolicyImageSpec   `json:"images,omitempty" yaml:"images,omitempty"`
+	DocumentationSources []ServicesPolicyDocumentationSource  `json:"documentationSources,omitempty" yaml:"documentationSources,omitempty"`
+}
+
+// ServicesPolicyVersionSpec describes one version entry from services.yaml.
+type ServicesPolicyVersionSpec struct {
+	Value  string   `json:"value,omitempty" yaml:"value,omitempty"`
+	BumpOn []string `json:"bumpOn,omitempty" yaml:"bumpOn,omitempty"`
+}
+
+// ServicesPolicyImageSpec describes one image build entry from services.yaml.
+type ServicesPolicyImageSpec struct {
+	ServicesPolicyImageSourceSpec
+	ServicesPolicyImageBuildContextSpec
+}
+
+// ServicesPolicyImageSourceSpec is the stack image source projection.
+type ServicesPolicyImageSourceSpec struct {
+	Type             string `json:"type,omitempty" yaml:"type,omitempty"`
+	From             string `json:"from,omitempty" yaml:"from,omitempty"`
+	Local            string `json:"local,omitempty" yaml:"local,omitempty"`
+	Repository       string `json:"repository,omitempty" yaml:"repository,omitempty"`
+	TagTemplate      string `json:"tagTemplate,omitempty" yaml:"tagTemplate,omitempty"`
+	Dockerfile       string `json:"dockerfile,omitempty" yaml:"dockerfile,omitempty"`
+	Target           string `json:"target,omitempty" yaml:"target,omitempty"`
+	Context          string `json:"context,omitempty" yaml:"context,omitempty"`
+	ImageEnv         string `json:"imageEnv,omitempty" yaml:"imageEnv,omitempty"`
+	MigratesDatabase string `json:"migratesDatabase,omitempty" yaml:"migratesDatabase,omitempty"`
+}
+
+// ServicesPolicyImageBuildContextSpec carries checked runtime build context refs.
+type ServicesPolicyImageBuildContextSpec struct {
+	BuildContextRef    string                           `json:"buildContextRef,omitempty" yaml:"buildContextRef,omitempty"`
+	BuildContextDigest string                           `json:"buildContextDigest,omitempty" yaml:"buildContextDigest,omitempty"`
+	DockerfileDigest   string                           `json:"dockerfileDigest,omitempty" yaml:"dockerfileDigest,omitempty"`
+	BuilderImageRef    string                           `json:"builderImageRef,omitempty" yaml:"builderImageRef,omitempty"`
+	AllowedSecretRefs  []ServicesPolicyAllowedSecretRef `json:"allowedSecretRefs,omitempty" yaml:"allowedSecretRefs,omitempty"`
+	OutputRefs         []ServicesPolicyOutputRef        `json:"outputRefs,omitempty" yaml:"outputRefs,omitempty"`
 }
 
 // ServicesPolicyService describes one service entry from normalized services.yaml.

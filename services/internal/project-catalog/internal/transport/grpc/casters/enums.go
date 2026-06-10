@@ -210,11 +210,12 @@ func SelfDeployBuildPlanStatusToProto(status enum.SelfDeployBuildPlanStatus) pro
 }
 
 var selfDeployBuildPlanStatusToProto = map[enum.SelfDeployBuildPlanStatus]projectsv1.SelfDeployBuildPlanStatus{
-	enum.SelfDeployBuildPlanStatusReady:                projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_READY,
-	enum.SelfDeployBuildPlanStatusBuildPlanUnavailable: projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_BUILD_PLAN_UNAVAILABLE,
-	enum.SelfDeployBuildPlanStatusPolicyStale:          projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_POLICY_STALE,
-	enum.SelfDeployBuildPlanStatusServiceNotFound:      projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_SERVICE_NOT_FOUND,
-	enum.SelfDeployBuildPlanStatusInvalidInput:         projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_INVALID_INPUT,
+	enum.SelfDeployBuildPlanStatusReady:                   projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_READY,
+	enum.SelfDeployBuildPlanStatusBuildPlanUnavailable:    projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_BUILD_PLAN_UNAVAILABLE,
+	enum.SelfDeployBuildPlanStatusPolicyStale:             projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_POLICY_STALE,
+	enum.SelfDeployBuildPlanStatusServiceNotFound:         projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_SERVICE_NOT_FOUND,
+	enum.SelfDeployBuildPlanStatusInvalidInput:            projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_INVALID_INPUT,
+	enum.SelfDeployBuildPlanStatusBuildContextUnavailable: projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_BUILD_CONTEXT_UNAVAILABLE,
 }
 
 func SelfDeployPathCategoryToProto(category enum.SelfDeployPathCategory) projectsv1.SelfDeployPathCategory {
