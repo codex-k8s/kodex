@@ -5520,7 +5520,7 @@ func TestEnsureSelfDeployPlanGovernanceGatePreparesExistingPendingPlan(t *testin
 	}
 }
 
-func TestEnsureSelfDeployPlanGovernanceGateReportsRiskEvaluationFailure(t *testing.T) {
+func TestEnsureSelfDeployPlanGovernanceGateReportsGatePrepareFailure(t *testing.T) {
 	t.Parallel()
 
 	input := validSelfDeployPlanGateInput()
@@ -5543,15 +5543,15 @@ func TestEnsureSelfDeployPlanGovernanceGateReportsRiskEvaluationFailure(t *testi
 	if !errors.Is(err, errs.ErrDependencyUnavailable) {
 		t.Fatalf("EnsureSelfDeployPlanGovernanceGate() err = %v, want %v", err, errs.ErrDependencyUnavailable)
 	}
-	if code := SelfDeployGateRecoveryErrorCode(err); code != SelfDeployGateRecoveryCodeRiskEvaluationFailed {
-		t.Fatalf("recovery code = %q, want %q", code, SelfDeployGateRecoveryCodeRiskEvaluationFailed)
+	if code := SelfDeployGateRecoveryErrorCode(err); code != SelfDeployGateRecoveryCodeGatePrepareFailed {
+		t.Fatalf("recovery code = %q, want %q", code, SelfDeployGateRecoveryCodeGatePrepareFailed)
 	}
 	if repository.updateSelfDeployCalled {
 		t.Fatal("UpdateSelfDeployPlanWithResult called after risk failure")
 	}
 }
 
-func TestEnsureSelfDeployPlanGovernanceGateReportsPlanRefsUpdateFailure(t *testing.T) {
+func TestEnsureSelfDeployPlanGovernanceGateReportsPlanGovernanceRefsUpdateFailure(t *testing.T) {
 	t.Parallel()
 
 	input := validSelfDeployPlanGateInput()
@@ -5586,8 +5586,8 @@ func TestEnsureSelfDeployPlanGovernanceGateReportsPlanRefsUpdateFailure(t *testi
 	if !errors.Is(err, errs.ErrConflict) {
 		t.Fatalf("EnsureSelfDeployPlanGovernanceGate() err = %v, want %v", err, errs.ErrConflict)
 	}
-	if code := SelfDeployGateRecoveryErrorCode(err); code != SelfDeployGateRecoveryCodePlanRefsUpdateFailed {
-		t.Fatalf("recovery code = %q, want %q", code, SelfDeployGateRecoveryCodePlanRefsUpdateFailed)
+	if code := SelfDeployGateRecoveryErrorCode(err); code != SelfDeployGateRecoveryCodePlanGovernanceRefsUpdateFailed {
+		t.Fatalf("recovery code = %q, want %q", code, SelfDeployGateRecoveryCodePlanGovernanceRefsUpdateFailed)
 	}
 }
 

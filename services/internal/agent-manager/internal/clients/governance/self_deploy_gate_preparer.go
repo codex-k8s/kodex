@@ -30,7 +30,17 @@ type Config struct {
 }
 
 type selfDeployGateClient interface {
+	selfDeployGateCommandClient
+	selfDeployGateReadClient
+}
+
+type selfDeployGateCommandClient interface {
 	PrepareSelfDeployPlanGate(context.Context, *governancev1.PrepareSelfDeployPlanGateRequest, ...grpc.CallOption) (*governancev1.SelfDeployPlanGateResponse, error)
+}
+
+type selfDeployGateReadClient interface {
+	ListRiskAssessments(context.Context, *governancev1.ListRiskAssessmentsRequest, ...grpc.CallOption) (*governancev1.ListRiskAssessmentsResponse, error)
+	ListGateRequests(context.Context, *governancev1.ListGateRequestsRequest, ...grpc.CallOption) (*governancev1.ListGateRequestsResponse, error)
 }
 
 // SelfDeployGatePreparer вызывает governance-manager PrepareSelfDeployPlanGate.
@@ -76,9 +86,27 @@ func (preparer *SelfDeployGatePreparer) PrepareSelfDeployPlanGate(ctx context.Co
 	defer cancel()
 	response, err := preparer.client.PrepareSelfDeployPlanGate(callCtx, prepareSelfDeployPlanGateRequest(input))
 	if err != nil {
+		result, ok, lookupErr := preparer.lookupExistingSelfDeployPlanGate(callCtx, input)
+		if lookupErr != nil {
+			return agentservice.SelfDeployPlanGatePreparationResult{}, agentservice.NewSelfDeployGateRecoveryError(agentservice.SelfDeployGateRecoveryCodeExistingGateLookupFailed, lookupErr)
+		}
+		if ok {
+			return result, nil
+		}
 		return agentservice.SelfDeployPlanGatePreparationResult{}, grpcclient.MapReadError(err, "governance-manager self-deploy gate command failed")
 	}
-	return selfDeployPlanGateResult(response)
+	result, err := selfDeployPlanGateResult(response)
+	if err == nil {
+		return result, nil
+	}
+	result, ok, lookupErr := preparer.lookupExistingSelfDeployPlanGate(callCtx, input)
+	if lookupErr != nil {
+		return agentservice.SelfDeployPlanGatePreparationResult{}, agentservice.NewSelfDeployGateRecoveryError(agentservice.SelfDeployGateRecoveryCodeExistingGateLookupFailed, lookupErr)
+	}
+	if ok {
+		return result, nil
+	}
+	return agentservice.SelfDeployPlanGatePreparationResult{}, agentservice.NewSelfDeployGateRecoveryError(agentservice.SelfDeployGateRecoveryCodeGateResponseInvalid, err)
 }
 
 func prepareSelfDeployPlanGateRequest(input agentservice.SelfDeployPlanGatePreparationInput) *governancev1.PrepareSelfDeployPlanGateRequest {
@@ -158,6 +186,139 @@ func selfDeployPlanGateResult(response *governancev1.SelfDeployPlanGateResponse)
 		GovernanceContext: context,
 		SafeSummary:       strings.TrimSpace(response.GetRiskAssessment().GetExplanation()),
 	}, nil
+}
+
+func (preparer *SelfDeployGatePreparer) lookupExistingSelfDeployPlanGate(ctx context.Context, input agentservice.SelfDeployPlanGatePreparationInput) (agentservice.SelfDeployPlanGatePreparationResult, bool, error) {
+	target := selfDeployPlanTarget(input.Plan)
+	if target.GetRef() == "" || strings.TrimSpace(input.Plan.PlanFingerprint) == "" {
+		return agentservice.SelfDeployPlanGatePreparationResult{}, false, nil
+	}
+	assessment, ok, err := preparer.lookupSelfDeployRiskAssessment(ctx, input, target)
+	if err != nil || !ok {
+		return agentservice.SelfDeployPlanGatePreparationResult{}, ok, err
+	}
+	gate, ok, err := preparer.lookupSelfDeployGateRequest(ctx, input, target, assessment.GetId())
+	if err != nil || !ok {
+		return agentservice.SelfDeployPlanGatePreparationResult{}, ok, err
+	}
+	return agentservice.SelfDeployPlanGatePreparationResult{
+		Status: agentservice.SelfDeployPlanGateStatusPending,
+		GovernanceContext: value.GovernanceContextRef{
+			RiskAssessmentRef: governanceRef("risk_assessment", assessment.GetId()),
+			GateRequestRef:    governanceRef("gate_request", gate.GetId()),
+		},
+		SafeSummary: strings.TrimSpace(assessment.GetExplanation()),
+	}, true, nil
+}
+
+func (preparer *SelfDeployGatePreparer) lookupSelfDeployRiskAssessment(ctx context.Context, input agentservice.SelfDeployPlanGatePreparationInput, target *governancev1.TargetRef) (*governancev1.RiskAssessment, bool, error) {
+	status := governancev1.RiskAssessmentStatus_RISK_ASSESSMENT_STATUS_ACTIVE
+	response, err := preparer.client.ListRiskAssessments(ctx, &governancev1.ListRiskAssessmentsRequest{
+		Target:         target,
+		ProjectContext: projectContext(input.Plan),
+		Status:         &status,
+		Page:           &governancev1.PageRequest{PageSize: 10},
+		Meta:           queryMeta(input.Meta),
+	})
+	if err != nil {
+		return nil, false, grpcclient.MapReadError(err, "governance-manager self-deploy risk assessment lookup failed")
+	}
+	var selected *governancev1.RiskAssessment
+	for _, item := range response.GetRiskAssessments() {
+		if !selfDeployRiskAssessmentMatchesPlan(item, target.GetRef(), input.Plan.PlanFingerprint) {
+			continue
+		}
+		if selected != nil {
+			return nil, false, errs.ErrConflict
+		}
+		selected = item
+	}
+	if selected == nil {
+		return nil, false, nil
+	}
+	return selected, true, nil
+}
+
+func (preparer *SelfDeployGatePreparer) lookupSelfDeployGateRequest(ctx context.Context, input agentservice.SelfDeployPlanGatePreparationInput, target *governancev1.TargetRef, assessmentID string) (*governancev1.GateRequest, bool, error) {
+	assessmentID = strings.TrimSpace(assessmentID)
+	if assessmentID == "" {
+		return nil, false, nil
+	}
+	response, err := preparer.client.ListGateRequests(ctx, &governancev1.ListGateRequestsRequest{
+		RiskAssessmentId: &assessmentID,
+		Target:           target,
+		Page:             &governancev1.PageRequest{PageSize: 10},
+		Meta:             queryMeta(input.Meta),
+	})
+	if err != nil {
+		return nil, false, grpcclient.MapReadError(err, "governance-manager self-deploy gate request lookup failed")
+	}
+	var selected *governancev1.GateRequest
+	for _, item := range response.GetGateRequests() {
+		if !selfDeployGateRequestMatchesAssessment(item, target.GetRef(), assessmentID) {
+			continue
+		}
+		if selected != nil {
+			return nil, false, errs.ErrConflict
+		}
+		selected = item
+	}
+	if selected == nil {
+		return nil, false, nil
+	}
+	return selected, true, nil
+}
+
+func queryMeta(meta value.CommandMeta) *governancev1.QueryMeta {
+	return &governancev1.QueryMeta{
+		Actor:          actor(meta.Actor),
+		RequestId:      firstNonEmpty(strings.TrimSpace(meta.IdempotencyKey), "self-deploy-plan-gate-read"),
+		RequestContext: &governancev1.RequestContext{Source: callerID},
+	}
+}
+
+func selfDeployPlanTarget(plan entity.SelfDeployPlan) *governancev1.TargetRef {
+	return &governancev1.TargetRef{
+		Type: governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_SELF_DEPLOY_PLAN,
+		Ref:  selfDeployPlanRef(plan.ID),
+	}
+}
+
+func selfDeployRiskAssessmentMatchesPlan(item *governancev1.RiskAssessment, planRef string, fingerprint string) bool {
+	if item == nil || strings.TrimSpace(item.GetId()) == "" {
+		return false
+	}
+	if item.GetTarget().GetType() != governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_SELF_DEPLOY_PLAN ||
+		strings.TrimSpace(item.GetTarget().GetRef()) != strings.TrimSpace(planRef) {
+		return false
+	}
+	for _, evidence := range item.GetEvidenceRefs() {
+		if evidence.GetKind() == governancev1.EvidenceKind_EVIDENCE_KIND_SELF_DEPLOY_PLAN &&
+			strings.TrimSpace(evidence.GetRef()) == strings.TrimSpace(planRef) &&
+			strings.TrimSpace(evidence.GetDigest()) == strings.TrimSpace(fingerprint) {
+			return true
+		}
+	}
+	return false
+}
+
+func selfDeployGateRequestMatchesAssessment(item *governancev1.GateRequest, planRef string, assessmentID string) bool {
+	if item == nil || strings.TrimSpace(item.GetId()) == "" {
+		return false
+	}
+	if item.GetTarget().GetType() != governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_SELF_DEPLOY_PLAN ||
+		strings.TrimSpace(item.GetTarget().GetRef()) != strings.TrimSpace(planRef) ||
+		strings.TrimSpace(item.GetRiskAssessmentId()) != strings.TrimSpace(assessmentID) {
+		return false
+	}
+	switch item.GetStatus() {
+	case governancev1.GateRequestStatus_GATE_REQUEST_STATUS_REQUESTED,
+		governancev1.GateRequestStatus_GATE_REQUEST_STATUS_DELIVERING,
+		governancev1.GateRequestStatus_GATE_REQUEST_STATUS_AWAITING_DECISION:
+		return true
+	default:
+		return false
+	}
 }
 
 func selfDeployPlanGateStatus(status governancev1.SelfDeployPlanGateStatus) (agentservice.SelfDeployPlanGateStatus, bool) {

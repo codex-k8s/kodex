@@ -3,11 +3,14 @@ package service
 import "errors"
 
 const (
-	SelfDeployGateRecoveryCodePlanLookupFailed     = "plan_lookup_failed"
-	SelfDeployGateRecoveryCodeGateReplayFailed     = "gate_replay_failed"
-	SelfDeployGateRecoveryCodeRiskEvaluationFailed = "risk_evaluation_failed"
-	SelfDeployGateRecoveryCodeGateResponseInvalid  = "gate_response_invalid"
-	SelfDeployGateRecoveryCodePlanRefsUpdateFailed = "plan_refs_update_failed"
+	SelfDeployGateRecoveryCodePlanLookupFailed               = "plan_lookup_failed"
+	SelfDeployGateRecoveryCodeGateReplayFailed               = "gate_replay_failed"
+	SelfDeployGateRecoveryCodeGatePrepareFailed              = "gate_prepare_failed"
+	SelfDeployGateRecoveryCodeRiskEvaluationFailed           = "risk_evaluation_failed"
+	SelfDeployGateRecoveryCodeGateResponseInvalid            = "gate_response_invalid"
+	SelfDeployGateRecoveryCodeExistingGateLookupFailed       = "existing_gate_lookup_failed"
+	SelfDeployGateRecoveryCodePlanRefsUpdateFailed           = "plan_refs_update_failed"
+	SelfDeployGateRecoveryCodePlanGovernanceRefsUpdateFailed = "plan_governance_refs_update_failed"
 )
 
 type selfDeployGateRecoveryError struct {
@@ -28,6 +31,10 @@ func selfDeployGateRecoveryErrorf(code string, err error) error {
 		return nil
 	}
 	return selfDeployGateRecoveryError{code: code, err: err}
+}
+
+func NewSelfDeployGateRecoveryError(code string, err error) error {
+	return selfDeployGateRecoveryErrorf(code, err)
 }
 
 func SelfDeployGateRecoveryErrorCode(err error) string {
