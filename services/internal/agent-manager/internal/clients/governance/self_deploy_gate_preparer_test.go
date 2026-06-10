@@ -138,31 +138,11 @@ func TestSelfDeployGatePreparerRecoversExistingGateRefsAfterPrepareError(t *test
 	gateRequestID := "bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb"
 	plan := validGatePlan()
 	planRef := "agent:self-deploy-plan:" + plan.ID.String()
+	riskResponse, gateResponse := existingSelfDeployGateResponses(plan, riskAssessmentID, gateRequestID)
 	client := &fakeSelfDeployGateClient{
-		err: status.Error(codes.Unavailable, "prepare command replay failed"),
-		riskResponse: &governancev1.ListRiskAssessmentsResponse{RiskAssessments: []*governancev1.RiskAssessment{{
-			Id: riskAssessmentID,
-			Target: &governancev1.TargetRef{
-				Type: governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_SELF_DEPLOY_PLAN,
-				Ref:  planRef,
-			},
-			Status: governancev1.RiskAssessmentStatus_RISK_ASSESSMENT_STATUS_ACTIVE,
-			EvidenceRefs: []*governancev1.EvidenceRef{{
-				Kind:   governancev1.EvidenceKind_EVIDENCE_KIND_SELF_DEPLOY_PLAN,
-				Ref:    planRef,
-				Digest: ptrString(plan.PlanFingerprint),
-			}},
-			Explanation: "owner approval required",
-		}}},
-		gateResponse: &governancev1.ListGateRequestsResponse{GateRequests: []*governancev1.GateRequest{{
-			Id:               gateRequestID,
-			RiskAssessmentId: ptrString(riskAssessmentID),
-			Target: &governancev1.TargetRef{
-				Type: governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_SELF_DEPLOY_PLAN,
-				Ref:  planRef,
-			},
-			Status: governancev1.GateRequestStatus_GATE_REQUEST_STATUS_REQUESTED,
-		}}},
+		err:          status.Error(codes.Unavailable, "prepare command replay failed"),
+		riskResponse: riskResponse,
+		gateResponse: gateResponse,
 	}
 	preparer, err := newSelfDeployGatePreparer(client, Config{AuthToken: "token", Timeout: time.Second})
 	if err != nil {
@@ -182,8 +162,43 @@ func TestSelfDeployGatePreparerRecoversExistingGateRefsAfterPrepareError(t *test
 		t.Fatalf("result = %+v, want existing governance refs", result)
 	}
 	if client.riskRequest.GetTarget().GetRef() != planRef ||
-		client.gateRequest.GetRiskAssessmentId() != riskAssessmentID {
+		client.gateRequest.GetRiskAssessmentId() != riskAssessmentID ||
+		client.gateRequest.GetTarget().GetRef() != "" {
 		t.Fatalf("lookup requests = %+v / %+v", client.riskRequest, client.gateRequest)
+	}
+}
+
+func TestSelfDeployGatePreparerRecoversExistingGateRefsWithRiskReadOnly(t *testing.T) {
+	t.Parallel()
+
+	riskAssessmentID := "59c67c5d-847b-4296-9afa-25aa3028a313"
+	gateRequestID := "61159123-6947-4864-897b-2eb97980eb6b"
+	plan := validGatePlan()
+	riskResponse, gateResponse := existingSelfDeployGateResponses(plan, riskAssessmentID, gateRequestID)
+	client := &fakeSelfDeployGateClient{
+		err:              status.Error(codes.Unavailable, "prepare command replay failed"),
+		riskResponse:     riskResponse,
+		gateResponse:     gateResponse,
+		rejectGateTarget: true,
+	}
+	preparer, err := newSelfDeployGatePreparer(client, Config{AuthToken: "token", Timeout: time.Second})
+	if err != nil {
+		t.Fatalf("newSelfDeployGatePreparer(): %v", err)
+	}
+
+	result, err := preparer.PrepareSelfDeployPlanGate(context.Background(), agentservice.SelfDeployPlanGatePreparationInput{
+		Meta: value.CommandMeta{IdempotencyKey: "gate", Actor: value.Actor{Type: "service", ID: "agent-manager"}},
+		Plan: plan,
+	})
+	if err != nil {
+		t.Fatalf("PrepareSelfDeployPlanGate() err = %v", err)
+	}
+	if result.GovernanceContext.RiskAssessmentRef != "governance:risk_assessment/"+riskAssessmentID ||
+		result.GovernanceContext.GateRequestRef != "governance:gate_request/"+gateRequestID {
+		t.Fatalf("result = %+v, want existing governance refs", result)
+	}
+	if client.gateRequest.GetRiskAssessmentId() != riskAssessmentID || client.gateRequest.GetTarget().GetRef() != "" {
+		t.Fatalf("gate lookup request = %+v, want assessment-only lookup", client.gateRequest)
 	}
 }
 
@@ -258,15 +273,16 @@ func validGatePlan() entity.SelfDeployPlan {
 }
 
 type fakeSelfDeployGateClient struct {
-	request      *governancev1.PrepareSelfDeployPlanGateRequest
-	riskRequest  *governancev1.ListRiskAssessmentsRequest
-	gateRequest  *governancev1.ListGateRequestsRequest
-	response     *governancev1.SelfDeployPlanGateResponse
-	riskResponse *governancev1.ListRiskAssessmentsResponse
-	gateResponse *governancev1.ListGateRequestsResponse
-	err          error
-	riskErr      error
-	gateErr      error
+	request          *governancev1.PrepareSelfDeployPlanGateRequest
+	riskRequest      *governancev1.ListRiskAssessmentsRequest
+	gateRequest      *governancev1.ListGateRequestsRequest
+	response         *governancev1.SelfDeployPlanGateResponse
+	riskResponse     *governancev1.ListRiskAssessmentsResponse
+	gateResponse     *governancev1.ListGateRequestsResponse
+	err              error
+	riskErr          error
+	gateErr          error
+	rejectGateTarget bool
 }
 
 func (f *fakeSelfDeployGateClient) PrepareSelfDeployPlanGate(_ context.Context, request *governancev1.PrepareSelfDeployPlanGateRequest, _ ...grpc.CallOption) (*governancev1.SelfDeployPlanGateResponse, error) {
@@ -287,10 +303,41 @@ func (f *fakeSelfDeployGateClient) ListRiskAssessments(_ context.Context, reques
 
 func (f *fakeSelfDeployGateClient) ListGateRequests(_ context.Context, request *governancev1.ListGateRequestsRequest, _ ...grpc.CallOption) (*governancev1.ListGateRequestsResponse, error) {
 	f.gateRequest = request
+	if f.rejectGateTarget && request.GetTarget().GetRef() != "" {
+		return nil, status.Error(codes.PermissionDenied, "target read denied")
+	}
 	if f.gateErr != nil {
 		return nil, f.gateErr
 	}
 	return f.gateResponse, nil
+}
+
+func existingSelfDeployGateResponses(plan entity.SelfDeployPlan, riskAssessmentID string, gateRequestID string) (*governancev1.ListRiskAssessmentsResponse, *governancev1.ListGateRequestsResponse) {
+	planRef := "agent:self-deploy-plan:" + plan.ID.String()
+	riskResponse := &governancev1.ListRiskAssessmentsResponse{RiskAssessments: []*governancev1.RiskAssessment{{
+		Id: riskAssessmentID,
+		Target: &governancev1.TargetRef{
+			Type: governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_SELF_DEPLOY_PLAN,
+			Ref:  planRef,
+		},
+		Status: governancev1.RiskAssessmentStatus_RISK_ASSESSMENT_STATUS_ACTIVE,
+		EvidenceRefs: []*governancev1.EvidenceRef{{
+			Kind:   governancev1.EvidenceKind_EVIDENCE_KIND_SELF_DEPLOY_PLAN,
+			Ref:    planRef,
+			Digest: ptrString(plan.PlanFingerprint),
+		}},
+		Explanation: "owner approval required",
+	}}}
+	gateResponse := &governancev1.ListGateRequestsResponse{GateRequests: []*governancev1.GateRequest{{
+		Id:               gateRequestID,
+		RiskAssessmentId: ptrString(riskAssessmentID),
+		Target: &governancev1.TargetRef{
+			Type: governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_SELF_DEPLOY_PLAN,
+			Ref:  planRef,
+		},
+		Status: governancev1.GateRequestStatus_GATE_REQUEST_STATUS_REQUESTED,
+	}}}
+	return riskResponse, gateResponse
 }
 
 func ptrString(value string) *string {
