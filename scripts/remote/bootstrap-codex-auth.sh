@@ -11,6 +11,7 @@ ENV_FILE="$REPO_ROOT/.env"
 AUTH_JSON_PATH=""
 TIMEOUT_SECONDS=600
 POD_NAME="matter-codex-codex-device-auth"
+ACCOUNT_NAME=""
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -20,6 +21,10 @@ while [ "$#" -gt 0 ]; do
       ;;
     --auth-json)
       AUTH_JSON_PATH="$2"
+      shift 2
+      ;;
+    --account)
+      ACCOUNT_NAME="$2"
       shift 2
       ;;
     --timeout)
@@ -35,6 +40,8 @@ done
 mattercodex_load_env_file "$ENV_FILE"
 mattercodex_validate_base_env
 mattercodex_require_commands ssh base64
+ACCOUNT_NAME="${ACCOUNT_NAME:-${MATTERCODEX_CODEX_AUTH_ACCOUNT:-primary}}"
+CODEX_AUTH_SECRET_NAME="${MATTERCODEX_CODEX_AUTH_SECRET}-${ACCOUNT_NAME}"
 
 NAMESPACE_Q="$(mattercodex_shell_quote "$MATTERCODEX_NAMESPACE")"
 REMOTE_KUBECTL="$(mattercodex_remote_kubectl_command)"
@@ -45,11 +52,12 @@ mattercodex_apply_codex_auth_secret() {
 apiVersion: v1
 kind: Secret
 metadata:
-  name: ${MATTERCODEX_CODEX_AUTH_SECRET}
+  name: ${CODEX_AUTH_SECRET_NAME}
   namespace: ${MATTERCODEX_NAMESPACE}
   labels:
     app.kubernetes.io/name: matter-codex-agent-runner
     app.kubernetes.io/component: codex-auth-secret
+    matter-codex.dev/openai-account: ${ACCOUNT_NAME}
 type: Opaque
 data:
   auth.json: ${auth_json_b64}

@@ -9,12 +9,12 @@
 - отвечать на `/healthz`;
 - принимать Mattermost slash callback `/mattermost/slash/agents`;
 - отвечать на `/agents status`;
-- выполнять admin-команды `/agents repo add`, `/agents repo list`, `/agents token check`, `/agents locale get|set`, `/agents profile list`;
+- выполнять admin-команды `/agents repo add`, `/agents repo list`, `/agents token check`, `/agents locale get|set`, `/agents profile list`, `/agents openai auth|status|list|cleanup`;
 - выполнять GitHub adapter команды `/agents github check`, `/agents github branch`, `/agents github pr`;
 - принимать GitHub webhook callback `/github/webhook` с HMAC validation;
 - автоматически регистрировать repo webhook при `/agents repo add github owner/name [default-branch]`, если GitHub token имеет hook write permission;
 - выполнять Kubernetes runtime smoke-команды `/agents runtime smoke|status|cleanup` через client-go, Job и PVC;
-- выполнять Codex developer smoke-команды `/agents dev smoke|status|cleanup`, создающие отдельный Job/PVC, branch, commit и draft PR;
+- выполнять Codex developer smoke-команды `/agents dev smoke|status|cleanup`, создающие отдельный Job/PVC, branch, commit и draft PR через OpenAI account из agent profile;
 - применять storage migrations и хранить repository/profile/audit metadata в PostgreSQL;
 - создавать Mattermost repo-channel при добавлении repository;
 - хранить Mattermost bot/slash tokens только в Kubernetes Secret;
@@ -47,8 +47,7 @@
 - `MATTERCODEX_RUNTIME_JOB_TTL_SECONDS` - optional, TTL завершенных smoke Job;
 - `MATTERCODEX_RUNTIME_LOG_TAIL_LINES` - optional, число последних строк pod log для `/agents runtime status`;
 - `MATTERCODEX_AGENT_RUNNER_SERVICE_ACCOUNT` - optional, ServiceAccount для agent/smoke Job;
-- `MATTERCODEX_CODEX_AUTH_SECRET` - optional, имя Kubernetes Secret с `auth.json` для Codex CLI;
-- `MATTERCODEX_CODEX_AUTH_JSON_PATH` - optional, путь к локальному Codex `auth.json`, если secret надо создать без device-code pod;
+- `MATTERCODEX_CODEX_AUTH_SECRET` - optional, base name для Kubernetes Secrets с Codex `auth.json`; для account `primary` будет создан secret `${MATTERCODEX_CODEX_AUTH_SECRET}-primary`;
 - `MATTERCODEX_DEFAULT_TEAM_NAME` - optional, по умолчанию `agents`;
 - `MATTERCODEX_DEFAULT_TEAM_DISPLAY_NAME` - optional;
 - `MATTERCODEX_DEFAULT_CHANNELS` - optional, список `name:Display Name` через запятую.
@@ -80,30 +79,36 @@ bash scripts/remote/install-bot-service.sh --env-file .env --dry-run=server
 
 Если GitHub token или webhook secret заданы, deploy-скрипты создают отдельный Kubernetes Secret. Значения не печатаются.
 
-Если `MATTERCODEX_CODEX_AUTH_JSON_PATH` задан, deploy-скрипты создают отдельный Kubernetes Secret с Codex `auth.json`. Значение не печатается и не попадает в ConfigMap. Основной путь для первого получения `auth.json` - device-code bootstrap ниже.
+Codex/OpenAI account authorization не выполняется deploy-скриптом. Основной путь - Mattermost команды ниже.
 
-## Codex device-code bootstrap
+## Codex/OpenAI account authorization
 
-Developer runner не использует raw API key. Для Codex CLI создается Kubernetes Secret с `auth.json`, полученным через device-code авторизацию:
+Developer runner не использует raw API key. Для Codex CLI создается Kubernetes Secret с `auth.json`, полученным через device-code авторизацию из Mattermost.
 
-```bash
-bash scripts/remote/bootstrap-codex-auth.sh --env-file .env
+Первичная авторизация account `primary`:
+
+```text
+/agents openai auth primary
+/agents openai status primary
 ```
 
-Скрипт:
+Ожидаемый результат:
 
-- подключается к целевому Kubernetes через SSH-настройки из `.env`;
-- создает временный pod с Codex CLI;
-- выводит device-code инструкции Codex;
-- после подтверждения в браузере копирует только `auth.json` в Kubernetes Secret `MATTERCODEX_CODEX_AUTH_SECRET`;
-- удаляет временный pod;
-- не выводит содержимое `auth.json`.
+- `auth primary` создает metadata для OpenAI account и временный Kubernetes Job `mc-codex-auth-primary`;
+- `status primary` показывает ссылку `https://auth.openai.com/codex/device` и одноразовый code;
+- владелец открывает ссылку в браузере, вводит code и подтверждает account;
+- повторный `/agents openai status primary` сохраняет `auth.json` в Secret `${MATTERCODEX_CODEX_AUTH_SECRET}-primary`, помечает account как `authorized` и удаляет auth Job;
+- содержимое `auth.json` не выводится в Mattermost, логи, PR или prompt.
 
-Если `auth.json` уже получен отдельно, можно применить его без временного pod:
+Несколько аккаунтов поддерживаются через разные имена:
 
-```bash
-bash scripts/remote/bootstrap-codex-auth.sh --env-file .env --auth-json ~/.codex/auth.json
+```text
+/agents openai auth reviewer-plus
+/agents openai status reviewer-plus
+/agents openai list
 ```
+
+Agent profile хранит `openai_account_name`; seed profile `developer` использует `primary`. Developer Job монтирует только Secret выбранного account.
 
 ## Health-only install
 
@@ -128,7 +133,7 @@ REMOTE_KUBECTL="$(mattercodex_remote_kubectl_command)"
 mattercodex_ssh "$REMOTE_KUBECTL -n $NAMESPACE_Q exec statefulset/mattermost-postgres -- psql -U mattermost -d mattermost -Atc 'select version_id, is_applied from goose_db_version order by id;'"
 ```
 
-Ожидаемый результат: в выводе есть `1|t`.
+Ожидаемый результат: в выводе есть примененная версия `3|t`.
 
 ## Mattermost bot bootstrap
 
@@ -183,11 +188,12 @@ bash scripts/remote/bootstrap-mattermost-bot.sh --env-file .env
 /agents token check
 /agents locale set ru
 /agents profile list
+/agents openai list
 /agents repo add github codex-k8s/matter-codex main
 /agents repo list
 ```
 
-Ожидаемый результат: команды отвечают ephemeral-сообщениями, `locale set en` переключает ответы на английский, `locale set ru` возвращает русские ответы, repository появляется в списке, а Mattermost создаёт/показывает канал `repo-codex-k8s-matter-codex`.
+Ожидаемый результат: команды отвечают ephemeral-сообщениями, `locale set en` переключает ответы на английский, `locale set ru` возвращает русские ответы, profile list показывает OpenAI account для профиля, repository появляется в списке, а Mattermost создаёт/показывает канал `repo-codex-k8s-matter-codex`.
 
 Дополнительная проверка GitHub adapter:
 
@@ -229,12 +235,21 @@ bash scripts/remote/bootstrap-mattermost-bot.sh --env-file .env
 
 Дополнительная проверка Codex developer agent:
 
-Перед первой проверкой убедиться, что Codex auth secret создан:
+Перед первой проверкой авторизовать OpenAI account из Mattermost:
 
-```bash
-bash scripts/remote/bootstrap-codex-auth.sh --env-file .env
-bash scripts/remote/install-bot-service.sh --env-file .env --apply --wait
+```text
+/agents openai auth primary
+/agents openai status primary
 ```
+
+После получения ссылки и кода открыть ссылку в браузере, ввести code, затем снова выполнить:
+
+```text
+/agents openai status primary
+/agents openai list
+```
+
+Ожидаемый результат: account `primary` имеет status `authorized`.
 
 ```text
 /agents token check
@@ -245,6 +260,7 @@ bash scripts/remote/install-bot-service.sh --env-file .env --apply --wait
 Ожидаемый результат:
 
 - developer smoke возвращает run id, branch `matter-codex-dev-dev-manual`, Job и PVC;
+- в ответе developer smoke указан OpenAI account `primary`;
 - через некоторое время `dev status` показывает pod phase и artifact `pr-url`;
 - в GitHub появляется draft PR с безопасным документационным изменением `docs/dogfood/codex-developer-smoke.md`;
 - log tail не содержит значений OpenAI/GitHub/Mattermost секретов.
@@ -280,8 +296,9 @@ curl -sS -o /dev/null -w '%{http_code}\n' \
 - GitHub token и webhook secret хранятся в отдельном Kubernetes Secret и не попадают в ConfigMap.
 - Slash token, полученный из Mattermost API, пишется во временный файл с правами `0600`, затем в Kubernetes Secret.
 - Логи provisioning показывают только безопасные статусы `exists/created/updated`.
-- bot-service получает namespace-scoped Role только на создание/чтение/удаление runtime Job/PVC и чтение pod/log.
+- bot-service получает namespace-scoped Role на создание/чтение/удаление runtime Job/PVC, чтение pod/log, `pods/exec` для чтения готового `auth.json` из auth Job и create/update Secret для account-specific Codex auth.
 - ServiceAccount agent runner создается без automount token; smoke pod также явно отключает automount.
-- Codex developer Job получает Codex `auth.json` и GitHub token только через Kubernetes Secret volume mount.
+- Codex auth Job и developer Job запускаются без automount service account token.
+- Codex developer Job получает Codex `auth.json` выбранного OpenAI account и GitHub token только через Kubernetes Secret volume mount.
 - `CODEX_HOME/config.toml` задает `shell_environment_policy` с минимальным environment для команд, которые запускает Codex.
 - Developer runner сам выполняет push/PR после `codex exec`; prompt contract запрещает Codex агенту пушить branch или создавать PR напрямую.

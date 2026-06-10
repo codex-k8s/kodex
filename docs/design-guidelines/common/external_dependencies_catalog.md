@@ -22,7 +22,7 @@
 | `github.com/prometheus/client_golang` | `v1.23.2` | Observability | `/metrics`, Go/process collectors и Prometheus HTTP handler |
 | `k8s.io/api` | `v0.36.1` | Kubernetes typed API | typed `batch/v1` Job, `core/v1` Pod/PVC и `PodLogOptions` для runtime adapter |
 | `k8s.io/apimachinery` | `v0.36.1` | Kubernetes API machinery | typed meta/options, labels, resource quantities и Kubernetes API errors |
-| `k8s.io/client-go` | `v0.36.1` | Kubernetes SDK | in-cluster/kubeconfig client, Job/PVC creation, pod status и log tail без shell-first runtime |
+| `k8s.io/client-go` | `v0.36.1` | Kubernetes SDK | in-cluster/kubeconfig client, Job/PVC/Secret operations, pod status/log tail и `remotecommand` exec для Codex auth handoff без shell-first runtime |
 
 ## Backend Go - planned baselines
 

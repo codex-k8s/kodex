@@ -105,17 +105,20 @@ fi
 CODEX_AUTH_JSON_PATH="${MATTERCODEX_CODEX_AUTH_JSON_PATH:-${CODEX_AUTH_JSON_PATH:-}}"
 if [ -n "$CODEX_AUTH_JSON_PATH" ]; then
   [ -f "$CODEX_AUTH_JSON_PATH" ] || mattercodex_die "Codex auth.json не найден: $CODEX_AUTH_JSON_PATH"
+  CODEX_AUTH_ACCOUNT="${MATTERCODEX_CODEX_AUTH_ACCOUNT:-primary}"
+  CODEX_AUTH_SECRET_NAME="${MATTERCODEX_CODEX_AUTH_SECRET}-${CODEX_AUTH_ACCOUNT}"
   CODEX_AUTH_JSON_B64="$(base64 "$CODEX_AUTH_JSON_PATH" | tr -d '\n')"
   mattercodex_log "применяется Codex auth secret"
   cat <<EOF | kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f - >/dev/null
 apiVersion: v1
 kind: Secret
 metadata:
-  name: ${MATTERCODEX_CODEX_AUTH_SECRET}
+  name: ${CODEX_AUTH_SECRET_NAME}
   namespace: ${MATTERCODEX_NAMESPACE}
   labels:
     app.kubernetes.io/name: matter-codex-agent-runner
     app.kubernetes.io/component: codex-auth-secret
+    matter-codex.dev/openai-account: ${CODEX_AUTH_ACCOUNT}
 type: Opaque
 data:
   auth.json: ${CODEX_AUTH_JSON_B64}

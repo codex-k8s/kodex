@@ -65,6 +65,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		RepositoryProvider:      gitHubProvider,
 		RuntimeRunner:           runtimeRunner,
 		DefaultTeamName:         cfg.DefaultTeamName,
+		CodexAuthSecretName:     cfg.CodexAuthSecretName,
 		BotTokenConfigured:      cfg.BotTokenConfigured(),
 		SlashTokenConfigured:    cfg.SlashTokenConfigured(),
 		GitHubTokenConfigured:   cfg.GitHubTokenConfigured(),

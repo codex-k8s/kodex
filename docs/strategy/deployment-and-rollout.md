@@ -20,7 +20,7 @@
 - production namespace/domain/base URL: `PRODUCTION_NAMESPACE`, `PRODUCTION_DOMAIN`, `PUBLIC_BASE_URL`;
 - TLS: `LETSENCRYPT_EMAIL`;
 - GitHub: `GITHUB_*`, `GIT_BOT_*`;
-- Codex account auth: device-code flow, затем Kubernetes Secret с `auth.json`;
+- Codex/OpenAI account auth: Mattermost device-code flow, затем per-account Kubernetes Secret с `auth.json`;
 - bootstrap allowlist: `BOOTSTRAP_*`;
 - Context7: `CONTEXT7_API_KEY`.
 
@@ -36,7 +36,7 @@
 4. `scripts/k8s/install-mattermost.sh` - Mattermost + PostgreSQL + file PVC.
 5. `scripts/remote/install-bot-service.sh` - `matter-codex` deployment/service/ingress на целевом сервере.
 6. `scripts/remote/bootstrap-mattermost-bot.sh` - Mattermost bot token, team, slash command и дефолтные каналы через `mmctl --local`.
-7. `scripts/remote/bootstrap-codex-auth.sh` - Codex device-code authorization и Secret с `auth.json`.
+7. Mattermost `/agents openai auth|status account` - Codex device-code authorization и per-account Secret с `auth.json`.
 8. `scripts/remote/smoke-bot-service.sh` - readiness и bot `/healthz`.
 
 ## Mattermost install strategy
