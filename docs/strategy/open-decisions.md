@@ -56,7 +56,7 @@ Bot PAT для MVP, потому что ключи уже есть и это б�
 - выбирать account для каждой agent session;
 - наследовать default account из agent profile.
 
-Raw `OPENAI_API_KEY` не является основной моделью runtime-доступа агентов.
+Raw API key не является runtime-моделью доступа агентов.
 
 ## 6. Agent profile config
 

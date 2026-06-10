@@ -128,7 +128,7 @@ func openRuntimeRunner(cfg Config, logger *slog.Logger) (runtimerepo.Runner, boo
 		JobTTLSecondsAfterFinish:  cfg.RuntimeJobTTLSeconds,
 		LogTailLines:              cfg.RuntimeLogTailLines,
 		AgentRunnerServiceAccount: cfg.AgentServiceAccount,
-		OpenAISecretName:          cfg.OpenAISecretName,
+		CodexAuthSecretName:       cfg.CodexAuthSecretName,
 		GitHubSecretName:          cfg.GitHubSecretName,
 	})
 	if err != nil {

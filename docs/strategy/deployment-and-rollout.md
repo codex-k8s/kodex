@@ -20,11 +20,11 @@
 - production namespace/domain/base URL: `PRODUCTION_NAMESPACE`, `PRODUCTION_DOMAIN`, `PUBLIC_BASE_URL`;
 - TLS: `LETSENCRYPT_EMAIL`;
 - GitHub: `GITHUB_*`, `GIT_BOT_*`;
-- OpenAI: `OPENAI_API_KEY`;
+- Codex account auth: device-code flow, затем Kubernetes Secret с `auth.json`;
 - bootstrap allowlist: `BOOTSTRAP_*`;
 - Context7: `CONTEXT7_API_KEY`.
 
-Скрипты должны валидировать наличие ключей и печатать только имена отсутствующих ключей. `OPENAI_API_KEY` считается bootstrap/smoke fallback. Целевая авторизация agent sessions выполняется через OpenAI account profiles и device-code flow.
+Скрипты должны валидировать наличие ключей и печатать только имена отсутствующих ключей. Agent sessions авторизуются через Codex/OpenAI account profiles и device-code flow, а не через raw API key.
 
 ## Предлагаемый install path
 
@@ -36,7 +36,8 @@
 4. `scripts/k8s/install-mattermost.sh` - Mattermost + PostgreSQL + file PVC.
 5. `scripts/remote/install-bot-service.sh` - `matter-codex` deployment/service/ingress на целевом сервере.
 6. `scripts/remote/bootstrap-mattermost-bot.sh` - Mattermost bot token, team, slash command и дефолтные каналы через `mmctl --local`.
-7. `scripts/remote/smoke-bot-service.sh` - readiness и bot `/healthz`.
+7. `scripts/remote/bootstrap-codex-auth.sh` - Codex device-code authorization и Secret с `auth.json`.
+8. `scripts/remote/smoke-bot-service.sh` - readiness и bot `/healthz`.
 
 ## Mattermost install strategy
 

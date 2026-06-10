@@ -53,7 +53,7 @@ func TestStartDeveloperRunCreatesPVCAndJob(t *testing.T) {
 		CodexPackage:              "@openai/codex@0.138.0",
 		WorkspaceStorageSize:      "1Gi",
 		AgentRunnerServiceAccount: "matter-codex-agent-runner",
-		OpenAISecretName:          "matter-codex-openai",
+		CodexAuthSecretName:       "matter-codex-codex-auth",
 		GitHubSecretName:          "matter-codex-github",
 	})
 	if err != nil {
@@ -94,8 +94,11 @@ func TestStartDeveloperRunCreatesPVCAndJob(t *testing.T) {
 	if len(podSpec.Volumes) != 3 {
 		t.Fatalf("volumes len = %d", len(podSpec.Volumes))
 	}
-	if podSpec.Volumes[1].Secret.SecretName != "matter-codex-openai" || podSpec.Volumes[2].Secret.SecretName != "matter-codex-github" {
+	if podSpec.Volumes[1].Secret.SecretName != "matter-codex-codex-auth" || podSpec.Volumes[2].Secret.SecretName != "matter-codex-github" {
 		t.Fatalf("secret volumes = %#v", podSpec.Volumes)
+	}
+	if podSpec.Volumes[1].Secret.Items[0].Key != "auth.json" {
+		t.Fatalf("codex auth secret items = %#v", podSpec.Volumes[1].Secret.Items)
 	}
 }
 

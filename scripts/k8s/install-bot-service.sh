@@ -102,25 +102,26 @@ else
   mattercodex_log "GitHub token/webhook secret не заданы; GitHub secret не создается"
 fi
 
-OPENAI_API_KEY_VALUE="${MATTERCODEX_OPENAI_API_KEY:-${CODEX_API_KEY:-${OPENAI_API_KEY:-}}}"
-if [ -n "$OPENAI_API_KEY_VALUE" ]; then
-  OPENAI_API_KEY_B64="$(printf '%s' "$OPENAI_API_KEY_VALUE" | base64 | tr -d '\n')"
-  mattercodex_log "применяется OpenAI secret"
+CODEX_AUTH_JSON_PATH="${MATTERCODEX_CODEX_AUTH_JSON_PATH:-${CODEX_AUTH_JSON_PATH:-}}"
+if [ -n "$CODEX_AUTH_JSON_PATH" ]; then
+  [ -f "$CODEX_AUTH_JSON_PATH" ] || mattercodex_die "Codex auth.json не найден: $CODEX_AUTH_JSON_PATH"
+  CODEX_AUTH_JSON_B64="$(base64 "$CODEX_AUTH_JSON_PATH" | tr -d '\n')"
+  mattercodex_log "применяется Codex auth secret"
   cat <<EOF | kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f - >/dev/null
 apiVersion: v1
 kind: Secret
 metadata:
-  name: ${MATTERCODEX_OPENAI_SECRET}
+  name: ${MATTERCODEX_CODEX_AUTH_SECRET}
   namespace: ${MATTERCODEX_NAMESPACE}
   labels:
     app.kubernetes.io/name: matter-codex-agent-runner
-    app.kubernetes.io/component: openai-secret
+    app.kubernetes.io/component: codex-auth-secret
 type: Opaque
 data:
-  openai-api-key: ${OPENAI_API_KEY_B64}
+  auth.json: ${CODEX_AUTH_JSON_B64}
 EOF
 else
-  mattercodex_log "OpenAI API key не задан; OpenAI secret не создается"
+  mattercodex_log "Codex auth.json path не задан; Codex auth secret не создается"
 fi
 
 mattercodex_log "применяются манифесты bot-service"

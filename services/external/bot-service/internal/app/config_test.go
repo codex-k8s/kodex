@@ -61,8 +61,8 @@ func TestConfigDefaults(t *testing.T) {
 	if cfg.RuntimeWorkspaceSize != "1Gi" {
 		t.Fatalf("RuntimeWorkspaceSize = %q", cfg.RuntimeWorkspaceSize)
 	}
-	if cfg.OpenAISecretName != "matter-codex-openai" {
-		t.Fatalf("OpenAISecretName = %q", cfg.OpenAISecretName)
+	if cfg.CodexAuthSecretName != "matter-codex-codex-auth" {
+		t.Fatalf("CodexAuthSecretName = %q", cfg.CodexAuthSecretName)
 	}
 	if !cfg.StorageMigrations {
 		t.Fatal("StorageMigrations = false")
@@ -85,7 +85,7 @@ func TestConfigValidationRejectsBadTimeout(t *testing.T) {
 		RuntimeJobTTLSeconds:  86400,
 		RuntimeLogTailLines:   40,
 		AgentServiceAccount:   "matter-codex-agent-runner",
-		OpenAISecretName:      "matter-codex-openai",
+		CodexAuthSecretName:   "matter-codex-codex-auth",
 		GitHubSecretName:      "matter-codex-github",
 	}
 	if err := cfg.Validate(); err == nil {
@@ -109,7 +109,7 @@ func TestConfigValidationNormalizesLocale(t *testing.T) {
 		RuntimeJobTTLSeconds:  86400,
 		RuntimeLogTailLines:   40,
 		AgentServiceAccount:   "matter-codex-agent-runner",
-		OpenAISecretName:      "matter-codex-openai",
+		CodexAuthSecretName:   "matter-codex-codex-auth",
 		GitHubSecretName:      "matter-codex-github",
 	}
 	if err := cfg.Validate(); err != nil {
@@ -136,7 +136,7 @@ func TestConfigValidationRejectsUnsupportedLocale(t *testing.T) {
 		RuntimeJobTTLSeconds:  86400,
 		RuntimeLogTailLines:   40,
 		AgentServiceAccount:   "matter-codex-agent-runner",
-		OpenAISecretName:      "matter-codex-openai",
+		CodexAuthSecretName:   "matter-codex-codex-auth",
 		GitHubSecretName:      "matter-codex-github",
 	}
 	if err := cfg.Validate(); err == nil {

@@ -21,12 +21,12 @@ import (
 )
 
 const (
-	defaultNamespaceFile = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
-	runnerComponent      = "agent-run"
-	labelRunID           = "matter-codex.dev/run-id"
-	labelAgentRole       = "matter-codex.dev/agent-role"
-	openAISecretVolume   = "openai-secret"
-	gitHubSecretVolume   = "github-secret"
+	defaultNamespaceFile  = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+	runnerComponent       = "agent-run"
+	labelRunID            = "matter-codex.dev/run-id"
+	labelAgentRole        = "matter-codex.dev/agent-role"
+	codexAuthSecretVolume = "codex-auth-secret"
+	gitHubSecretVolume    = "github-secret"
 )
 
 type Config struct {
@@ -39,7 +39,7 @@ type Config struct {
 	JobTTLSecondsAfterFinish  int32
 	LogTailLines              int64
 	AgentRunnerServiceAccount string
-	OpenAISecretName          string
+	CodexAuthSecretName       string
 	GitHubSecretName          string
 }
 
@@ -53,7 +53,7 @@ type Runner struct {
 	jobTTLSecondsAfterFinish  int32
 	logTailLines              int64
 	agentRunnerServiceAccount string
-	openAISecretName          string
+	codexAuthSecretName       string
 	gitHubSecretName          string
 }
 
@@ -93,7 +93,7 @@ func NewRunnerWithClient(client kubernetes.Interface, cfg Config) (*Runner, erro
 		jobTTLSecondsAfterFinish:  defaultInt32(cfg.JobTTLSecondsAfterFinish, 86400),
 		logTailLines:              defaultInt64(cfg.LogTailLines, 40),
 		agentRunnerServiceAccount: defaultString(cfg.AgentRunnerServiceAccount, "matter-codex-agent-runner"),
-		openAISecretName:          defaultString(cfg.OpenAISecretName, "matter-codex-openai"),
+		codexAuthSecretName:       defaultString(cfg.CodexAuthSecretName, "matter-codex-codex-auth"),
 		gitHubSecretName:          defaultString(cfg.GitHubSecretName, "matter-codex-github"),
 	}, nil
 }
@@ -333,7 +333,7 @@ func (runner *Runner) developerJob(input runtimerepo.DeveloperRunInput) *batchv1
 							},
 							VolumeMounts: []corev1.VolumeMount{
 								{Name: "workspace", MountPath: "/workspace"},
-								{Name: openAISecretVolume, MountPath: "/var/run/secrets/matter-codex-openai", ReadOnly: true},
+								{Name: codexAuthSecretVolume, MountPath: "/var/run/secrets/matter-codex-codex", ReadOnly: true},
 								{Name: gitHubSecretVolume, MountPath: "/var/run/secrets/matter-codex-github", ReadOnly: true},
 							},
 						},
@@ -348,12 +348,12 @@ func (runner *Runner) developerJob(input runtimerepo.DeveloperRunInput) *batchv1
 							},
 						},
 						{
-							Name: openAISecretVolume,
+							Name: codexAuthSecretVolume,
 							VolumeSource: corev1.VolumeSource{
 								Secret: &corev1.SecretVolumeSource{
-									SecretName: runner.openAISecretName,
+									SecretName: runner.codexAuthSecretName,
 									Items: []corev1.KeyToPath{
-										{Key: "openai-api-key", Path: "openai-api-key"},
+										{Key: "auth.json", Path: "auth.json"},
 									},
 								},
 							},
@@ -495,6 +495,9 @@ func developerScript() string {
 		`args = ["-y", "@upstash/context7-mcp"]`,
 		`startup_timeout_sec = 20`,
 		`EOF`,
+		`cp /var/run/secrets/matter-codex-codex/auth.json /workspace/codex-home/auth.json`,
+		`chmod 600 /workspace/codex-home/auth.json`,
+		`CODEX_HOME=/workspace/codex-home codex login status >/workspace/artifacts/codex-login-status.log 2>&1`,
 		`CODEX_HOME=/workspace/codex-home codex mcp list >/workspace/artifacts/mcp-list.log 2>&1 || true`,
 		`cat >/workspace/git-askpass.sh <<'EOF'`,
 		`#!/bin/sh`,
@@ -526,7 +529,7 @@ func developerScript() string {
 		`Task:`,
 		`EOF`,
 		`printf '%s\n' "$MATTERCODEX_TASK_PROMPT" >>/workspace/artifacts/prompt.txt`,
-		`CODEX_API_KEY="$(cat /var/run/secrets/matter-codex-openai/openai-api-key)" CODEX_HOME=/workspace/codex-home codex exec --json --cd /workspace/repo --sandbox workspace-write --output-last-message /workspace/artifacts/codex-final.md - < /workspace/artifacts/prompt.txt >/workspace/artifacts/codex-events.jsonl 2>/workspace/artifacts/codex-stderr.log`,
+		`CODEX_HOME=/workspace/codex-home codex exec --json --cd /workspace/repo --sandbox workspace-write --output-last-message /workspace/artifacts/codex-final.md - < /workspace/artifacts/prompt.txt >/workspace/artifacts/codex-events.jsonl 2>/workspace/artifacts/codex-stderr.log`,
 		`if [ -z "$(git status --porcelain)" ]; then`,
 		`  printf 'matter-codex artifact no-changes: true\n'`,
 		`  printf 'matter-codex developer run done\n'`,

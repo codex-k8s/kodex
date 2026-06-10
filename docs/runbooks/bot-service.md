@@ -47,8 +47,8 @@
 - `MATTERCODEX_RUNTIME_JOB_TTL_SECONDS` - optional, TTL завершенных smoke Job;
 - `MATTERCODEX_RUNTIME_LOG_TAIL_LINES` - optional, число последних строк pod log для `/agents runtime status`;
 - `MATTERCODEX_AGENT_RUNNER_SERVICE_ACCOUNT` - optional, ServiceAccount для agent/smoke Job;
-- `MATTERCODEX_OPENAI_SECRET` - optional, имя Kubernetes Secret с OpenAI API key для Codex runner;
-- `MATTERCODEX_OPENAI_API_KEY` - optional, OpenAI/Codex API key для deploy-скрипта; deploy-скрипты также принимают `CODEX_API_KEY` и legacy `OPENAI_API_KEY`;
+- `MATTERCODEX_CODEX_AUTH_SECRET` - optional, имя Kubernetes Secret с `auth.json` для Codex CLI;
+- `MATTERCODEX_CODEX_AUTH_JSON_PATH` - optional, путь к локальному Codex `auth.json`, если secret надо создать без device-code pod;
 - `MATTERCODEX_DEFAULT_TEAM_NAME` - optional, по умолчанию `agents`;
 - `MATTERCODEX_DEFAULT_TEAM_DISPLAY_NAME` - optional;
 - `MATTERCODEX_DEFAULT_CHANNELS` - optional, список `name:Display Name` через запятую.
@@ -80,7 +80,30 @@ bash scripts/remote/install-bot-service.sh --env-file .env --dry-run=server
 
 Если GitHub token или webhook secret заданы, deploy-скрипты создают отдельный Kubernetes Secret. Значения не печатаются.
 
-Если OpenAI API key задан, deploy-скрипты создают отдельный Kubernetes Secret. Значение не печатается и не попадает в ConfigMap.
+Если `MATTERCODEX_CODEX_AUTH_JSON_PATH` задан, deploy-скрипты создают отдельный Kubernetes Secret с Codex `auth.json`. Значение не печатается и не попадает в ConfigMap. Основной путь для первого получения `auth.json` - device-code bootstrap ниже.
+
+## Codex device-code bootstrap
+
+Developer runner не использует raw API key. Для Codex CLI создается Kubernetes Secret с `auth.json`, полученным через device-code авторизацию:
+
+```bash
+bash scripts/remote/bootstrap-codex-auth.sh --env-file .env
+```
+
+Скрипт:
+
+- подключается к целевому Kubernetes через SSH-настройки из `.env`;
+- создает временный pod с Codex CLI;
+- выводит device-code инструкции Codex;
+- после подтверждения в браузере копирует только `auth.json` в Kubernetes Secret `MATTERCODEX_CODEX_AUTH_SECRET`;
+- удаляет временный pod;
+- не выводит содержимое `auth.json`.
+
+Если `auth.json` уже получен отдельно, можно применить его без временного pod:
+
+```bash
+bash scripts/remote/bootstrap-codex-auth.sh --env-file .env --auth-json ~/.codex/auth.json
+```
 
 ## Health-only install
 
@@ -206,6 +229,13 @@ bash scripts/remote/bootstrap-mattermost-bot.sh --env-file .env
 
 Дополнительная проверка Codex developer agent:
 
+Перед первой проверкой убедиться, что Codex auth secret создан:
+
+```bash
+bash scripts/remote/bootstrap-codex-auth.sh --env-file .env
+bash scripts/remote/install-bot-service.sh --env-file .env --apply --wait
+```
+
 ```text
 /agents token check
 /agents dev smoke codex-k8s/matter-codex dev-manual
@@ -252,6 +282,6 @@ curl -sS -o /dev/null -w '%{http_code}\n' \
 - Логи provisioning показывают только безопасные статусы `exists/created/updated`.
 - bot-service получает namespace-scoped Role только на создание/чтение/удаление runtime Job/PVC и чтение pod/log.
 - ServiceAccount agent runner создается без automount token; smoke pod также явно отключает automount.
-- Codex developer Job получает OpenAI/GitHub credentials только через Kubernetes Secret volume mount.
+- Codex developer Job получает Codex `auth.json` и GitHub token только через Kubernetes Secret volume mount.
 - `CODEX_HOME/config.toml` задает `shell_environment_policy` с минимальным environment для команд, которые запускает Codex.
 - Developer runner сам выполняет push/PR после `codex exec`; prompt contract запрещает Codex агенту пушить branch или создавать PR напрямую.

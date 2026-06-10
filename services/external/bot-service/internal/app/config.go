@@ -33,7 +33,7 @@ type Config struct {
 	RuntimeJobTTLSeconds  int32         `env:"MATTERCODEX_RUNTIME_JOB_TTL_SECONDS" envDefault:"86400"`
 	RuntimeLogTailLines   int64         `env:"MATTERCODEX_RUNTIME_LOG_TAIL_LINES" envDefault:"40"`
 	AgentServiceAccount   string        `env:"MATTERCODEX_AGENT_RUNNER_SERVICE_ACCOUNT" envDefault:"matter-codex-agent-runner"`
-	OpenAISecretName      string        `env:"MATTERCODEX_OPENAI_SECRET" envDefault:"matter-codex-openai"`
+	CodexAuthSecretName   string        `env:"MATTERCODEX_CODEX_AUTH_SECRET" envDefault:"matter-codex-codex-auth"`
 	StorageMigrations     bool          `env:"MATTERCODEX_STORAGE_MIGRATIONS_ENABLED" envDefault:"true"`
 	ReadHeaderTimeout     time.Duration `env:"MATTERCODEX_BOT_SERVICE_READ_HEADER_TIMEOUT" envDefault:"5s"`
 	ShutdownTimeout       time.Duration `env:"MATTERCODEX_BOT_SERVICE_SHUTDOWN_TIMEOUT" envDefault:"10s"`
@@ -89,8 +89,8 @@ func (cfg *Config) Validate() error {
 	if strings.TrimSpace(cfg.AgentServiceAccount) == "" {
 		return fmt.Errorf("MATTERCODEX_AGENT_RUNNER_SERVICE_ACCOUNT is required")
 	}
-	if strings.TrimSpace(cfg.OpenAISecretName) == "" {
-		return fmt.Errorf("MATTERCODEX_OPENAI_SECRET is required")
+	if strings.TrimSpace(cfg.CodexAuthSecretName) == "" {
+		return fmt.Errorf("MATTERCODEX_CODEX_AUTH_SECRET is required")
 	}
 	if strings.TrimSpace(cfg.GitHubSecretName) == "" {
 		return fmt.Errorf("MATTERCODEX_GITHUB_SECRET is required")
