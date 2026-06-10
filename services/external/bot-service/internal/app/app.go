@@ -50,8 +50,11 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		DefaultChannels:      cfg.ChannelNames(),
 	})
 	var channelManager statusservice.MattermostChannelManager
+	var flowCardPublisher statusservice.FlowCardPublisher
 	if cfg.BotTokenConfigured() && cfg.MattermostSiteURL != "" {
-		channelManager = mattermostintegration.NewControlSurface(cfg.MattermostSiteURL, cfg.MattermostBotToken)
+		controlSurface := mattermostintegration.NewControlSurface(cfg.MattermostSiteURL, cfg.MattermostBotToken)
+		channelManager = controlSurface
+		flowCardPublisher = controlSurface
 	}
 	gitHubProvider, err := openGitHubProvider(cfg)
 	if err != nil {
@@ -62,10 +65,12 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		StatusService:           statusSvc,
 		Store:                   storage,
 		ChannelManager:          channelManager,
+		FlowCardPublisher:       flowCardPublisher,
 		RepositoryProvider:      gitHubProvider,
 		RuntimeRunner:           runtimeRunner,
 		DefaultTeamName:         cfg.DefaultTeamName,
 		CodexAuthSecretName:     cfg.CodexAuthSecretName,
+		FlowActionURL:           flowActionURL(cfg),
 		BotTokenConfigured:      cfg.BotTokenConfigured(),
 		SlashTokenConfigured:    cfg.SlashTokenConfigured(),
 		GitHubTokenConfigured:   cfg.GitHubTokenConfigured(),
@@ -160,6 +165,17 @@ func gitHubWebhookURL(cfg Config) string {
 		return ""
 	}
 	return baseURL + "/github/webhook"
+}
+
+func flowActionURL(cfg Config) string {
+	baseURL := strings.TrimRight(strings.TrimSpace(cfg.BotServiceInternalURL), "/")
+	if baseURL == "" {
+		baseURL = strings.TrimRight(strings.TrimSpace(cfg.BotServiceSiteURL), "/")
+	}
+	if baseURL == "" {
+		return ""
+	}
+	return baseURL + "/mattermost/actions/flow"
 }
 
 func newPrometheusRegistry() *prometheus.Registry {

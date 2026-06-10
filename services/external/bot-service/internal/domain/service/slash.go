@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"regexp"
@@ -21,12 +23,65 @@ type MattermostChannelManager interface {
 	EnsureRepositoryChannel(ctx context.Context, teamName string, channelName string, displayName string) (bool, error)
 }
 
+type FlowCardPublisher interface {
+	UpsertFlowCard(ctx context.Context, card FlowCard) (FlowCardPost, error)
+}
+
+type FlowCard struct {
+	ChannelID string
+	PostID    string
+	ActionURL string
+	Message   string
+	Color     string
+	Title     string
+	Text      string
+	Fields    []FlowCardField
+	Actions   []FlowCardAction
+}
+
+type FlowCardField struct {
+	Title string
+	Value string
+	Short bool
+}
+
+type FlowCardAction struct {
+	ID       string
+	Name     string
+	Tooltip  string
+	Style    string
+	Disabled bool
+	Context  map[string]any
+}
+
+type FlowCardPost struct {
+	ChannelID string
+	PostID    string
+}
+
 type SlashCommand struct {
 	Text        string
 	UserID      string
 	UserName    string
+	ChannelID   string
 	ChannelName string
+	TeamID      string
 	TeamDomain  string
+}
+
+type FlowActionCommand struct {
+	FlowID    string
+	Action    string
+	Token     string
+	UserID    string
+	UserName  string
+	ChannelID string
+	PostID    string
+}
+
+type FlowActionResult struct {
+	EphemeralText string
+	StatusCode    int
 }
 
 type SlashCommandServiceConfig struct {
@@ -34,10 +89,12 @@ type SlashCommandServiceConfig struct {
 	StatusService           *StatusService
 	Store                   adminrepo.Repository
 	ChannelManager          MattermostChannelManager
+	FlowCardPublisher       FlowCardPublisher
 	RepositoryProvider      providerrepo.RepositoryProvider
 	RuntimeRunner           runtimerepo.Runner
 	DefaultTeamName         string
 	CodexAuthSecretName     string
+	FlowActionURL           string
 	BotTokenConfigured      bool
 	SlashTokenConfigured    bool
 	GitHubTokenConfigured   bool
@@ -743,9 +800,6 @@ func (svc *SlashCommandService) handleReviewCleanup(ctx context.Context, args []
 }
 
 func (svc *SlashCommandService) handleFlow(ctx context.Context, args []string, command SlashCommand) string {
-	if svc.cfg.RuntimeRunner == nil {
-		return svc.t("runtime.not_configured", nil)
-	}
 	if len(args) == 0 {
 		return svc.t("flow.usage", nil)
 	}
@@ -754,6 +808,8 @@ func (svc *SlashCommandService) handleFlow(ctx context.Context, args []string, c
 		return svc.handleFlowStart(ctx, args[1:], command)
 	case "status":
 		return svc.handleFlowStatus(ctx, args[1:])
+	case "card":
+		return svc.handleFlowCard(ctx, args[1:], command)
 	case "cleanup":
 		return svc.handleFlowCleanup(ctx, args[1:], command)
 	default:
@@ -762,6 +818,9 @@ func (svc *SlashCommandService) handleFlow(ctx context.Context, args []string, c
 }
 
 func (svc *SlashCommandService) handleFlowStart(ctx context.Context, args []string, command SlashCommand) string {
+	if svc.cfg.RuntimeRunner == nil {
+		return svc.t("runtime.not_configured", nil)
+	}
 	if len(args) < 3 {
 		return svc.t("flow.start.usage", nil)
 	}
@@ -798,6 +857,9 @@ func (svc *SlashCommandService) handleFlowStart(ctx context.Context, args []stri
 		Task:        title,
 		Attempt:     1,
 		MaxAttempts: defaultFlowMaxAttempts,
+		OwnerUserID: strings.TrimSpace(command.UserID),
+		OwnerUser:   strings.TrimSpace(command.UserName),
+		ActionToken: newFlowActionToken(),
 		Summary:     "developer-review flow created from Mattermost slash command",
 	})
 	if err != nil {
@@ -811,6 +873,16 @@ func (svc *SlashCommandService) handleFlowStart(ctx context.Context, args []stri
 		_, _ = svc.cfg.Store.UpdateAgentFlow(ctx, adminrepo.UpdateAgentFlowInput{FlowID: flow.FlowID, Status: flowStatusBlocked, Summary: safeError(err)})
 		return svc.t("flow.start.failed", map[string]any{"Error": safeError(err)})
 	}
+	cardLine := svc.t("flow.start.card_skipped", nil)
+	if command.ChannelID != "" && svc.cfg.FlowCardPublisher != nil && svc.cfg.FlowActionURL != "" {
+		updated, post, err := svc.publishFlowCard(ctx, flow, command)
+		if err != nil {
+			cardLine = svc.t("flow.start.card_failed", map[string]any{"Error": safeError(err)})
+		} else {
+			flow = updated
+			cardLine = svc.t("flow.start.card_posted", map[string]any{"PostID": post.PostID})
+		}
+	}
 	svc.recordFlowAudit(ctx, command, "flow.started", flow.FlowID, "developer-review flow started from Mattermost slash command")
 	return svc.t("flow.start.started", map[string]any{
 		"FlowID":      flow.FlowID,
@@ -822,10 +894,14 @@ func (svc *SlashCommandService) handleFlowStart(ctx context.Context, args []stri
 		"Namespace":   started.Namespace,
 		"Job":         started.JobName,
 		"PVC":         started.PVCName,
+		"Card":        cardLine,
 	})
 }
 
 func (svc *SlashCommandService) handleFlowStatus(ctx context.Context, args []string) string {
+	if svc.cfg.RuntimeRunner == nil {
+		return svc.t("runtime.not_configured", nil)
+	}
 	if len(args) != 1 {
 		return svc.t("flow.status.usage", nil)
 	}
@@ -844,7 +920,37 @@ func (svc *SlashCommandService) handleFlowStatus(ctx context.Context, args []str
 	return svc.flowStatusText(flow, events)
 }
 
+func (svc *SlashCommandService) handleFlowCard(ctx context.Context, args []string, command SlashCommand) string {
+	if len(args) != 1 {
+		return svc.t("flow.card.usage", nil)
+	}
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return svc.t("flow.storage_not_ready", nil)
+	}
+	flowID := strings.ToLower(strings.TrimSpace(args[0]))
+	if !validFlowID(flowID) {
+		return svc.t("runtime.invalid_run_id", nil)
+	}
+	flow, err := svc.cfg.Store.GetAgentFlow(ctx, flowID)
+	if err != nil {
+		return svc.t("flow.card.failed", map[string]any{"Error": safeError(err)})
+	}
+	flow, post, err := svc.publishFlowCard(ctx, flow, command)
+	if err != nil {
+		return svc.t("flow.card.failed", map[string]any{"Error": safeError(err)})
+	}
+	svc.recordFlowAudit(ctx, command, "flow.card_published", flow.FlowID, "developer-review flow Mattermost card published")
+	return svc.t("flow.card.result", map[string]any{
+		"FlowID":  flow.FlowID,
+		"PostID":  post.PostID,
+		"Channel": post.ChannelID,
+	})
+}
+
 func (svc *SlashCommandService) handleFlowCleanup(ctx context.Context, args []string, command SlashCommand) string {
+	if svc.cfg.RuntimeRunner == nil {
+		return svc.t("runtime.not_configured", nil)
+	}
 	if len(args) != 1 {
 		return svc.t("flow.cleanup.usage", nil)
 	}
@@ -886,6 +992,225 @@ func (svc *SlashCommandService) handleFlowCleanup(ctx context.Context, args []st
 		"JobsDeleted": deletedJobs,
 		"PVCsDeleted": deletedPVCs,
 	})
+}
+
+func (svc *SlashCommandService) HandleFlowAction(ctx context.Context, command FlowActionCommand) FlowActionResult {
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return FlowActionResult{StatusCode: 503, EphemeralText: svc.t("flow.action.storage_not_ready", nil)}
+	}
+	flowID := strings.ToLower(strings.TrimSpace(command.FlowID))
+	if !validFlowID(flowID) {
+		return FlowActionResult{StatusCode: 400, EphemeralText: svc.t("runtime.invalid_run_id", nil)}
+	}
+	action := strings.ToLower(strings.TrimSpace(command.Action))
+	if !validFlowAction(action) {
+		return FlowActionResult{StatusCode: 400, EphemeralText: svc.t("flow.action.invalid", nil)}
+	}
+	flow, err := svc.cfg.Store.GetAgentFlow(ctx, flowID)
+	if err != nil {
+		return FlowActionResult{StatusCode: 404, EphemeralText: svc.t("flow.action.failed", map[string]any{"Error": safeError(err)})}
+	}
+	if strings.TrimSpace(flow.ActionToken) == "" || command.Token != flow.ActionToken {
+		return FlowActionResult{StatusCode: 401, EphemeralText: svc.t("flow.action.unauthorized", nil)}
+	}
+	if strings.TrimSpace(flow.OwnerUserID) != "" && strings.TrimSpace(command.UserID) != flow.OwnerUserID {
+		return FlowActionResult{StatusCode: 200, EphemeralText: svc.t("flow.action.owner_only", nil)}
+	}
+
+	switch action {
+	case flowActionApprove:
+		return svc.handleFlowOwnerDecision(ctx, flow, command, flowStatusOwnerApproved, flowOwnerDecisionApproved, "flow.owner_approved", "flow.action.approved")
+	case flowActionReject:
+		return svc.handleFlowOwnerDecision(ctx, flow, command, flowStatusOwnerRejected, flowOwnerDecisionRejected, "flow.owner_rejected", "flow.action.rejected")
+	case flowActionStop:
+		return svc.handleFlowOwnerDecision(ctx, flow, command, flowStatusStopped, flowOwnerDecisionStopped, "flow.stopped", "flow.action.stopped")
+	case flowActionRerun:
+		return svc.handleFlowOwnerRerun(ctx, flow, command)
+	default:
+		return FlowActionResult{StatusCode: 400, EphemeralText: svc.t("flow.action.invalid", nil)}
+	}
+}
+
+func (svc *SlashCommandService) handleFlowOwnerDecision(ctx context.Context, flow entity.AgentFlow, command FlowActionCommand, status string, decision string, eventType string, messageID string) FlowActionResult {
+	if flowOwnerTerminal(flow.Status) {
+		return FlowActionResult{StatusCode: 200, EphemeralText: svc.t("flow.action.already_final", nil)}
+	}
+	updated, err := svc.cfg.Store.UpdateAgentFlow(ctx, adminrepo.UpdateAgentFlowInput{
+		FlowID:        flow.FlowID,
+		Status:        status,
+		OwnerDecision: decision,
+		Summary:       "owner decision: " + decision,
+	})
+	if err != nil {
+		return FlowActionResult{StatusCode: 500, EphemeralText: svc.t("flow.action.failed", map[string]any{"Error": safeError(err)})}
+	}
+	svc.recordFlowAudit(ctx, SlashCommand{UserID: command.UserID, UserName: command.UserName, ChannelID: command.ChannelID}, eventType, updated.FlowID, "owner decision from Mattermost action: "+decision)
+	if err := svc.refreshFlowCard(ctx, updated); err != nil {
+		return FlowActionResult{StatusCode: 200, EphemeralText: svc.t("flow.action.card_failed", map[string]any{"Message": svc.t(messageID, nil), "Error": safeError(err)})}
+	}
+	return FlowActionResult{StatusCode: 200, EphemeralText: svc.t(messageID, nil)}
+}
+
+func (svc *SlashCommandService) handleFlowOwnerRerun(ctx context.Context, flow entity.AgentFlow, command FlowActionCommand) FlowActionResult {
+	if flowOwnerTerminal(flow.Status) {
+		return FlowActionResult{StatusCode: 200, EphemeralText: svc.t("flow.action.already_final", nil)}
+	}
+	if flow.PRNumber <= 0 {
+		return FlowActionResult{StatusCode: 200, EphemeralText: svc.t("flow.action.rerun_no_pr", nil)}
+	}
+	if !flowCanOwnerRerun(flow) {
+		return FlowActionResult{StatusCode: 200, EphemeralText: svc.t("flow.action.rerun_not_ready", nil)}
+	}
+	if svc.cfg.RuntimeRunner == nil {
+		return FlowActionResult{StatusCode: 503, EphemeralText: svc.t("runtime.not_configured", nil)}
+	}
+	runID := flowOwnerRerunReviewerRunID(flow.FlowID, time.Now().UTC())
+	updated, started, err := svc.startFlowReviewerWithRunID(ctx, flow, runID, "flow reviewer rerun started by owner")
+	if err != nil {
+		return FlowActionResult{StatusCode: 500, EphemeralText: svc.t("flow.action.failed", map[string]any{"Error": safeError(err)})}
+	}
+	updated, err = svc.cfg.Store.UpdateAgentFlow(ctx, adminrepo.UpdateAgentFlowInput{
+		FlowID:        updated.FlowID,
+		OwnerDecision: flowOwnerDecisionRerun,
+		Summary:       "owner requested reviewer rerun",
+	})
+	if err != nil {
+		return FlowActionResult{StatusCode: 500, EphemeralText: svc.t("flow.action.failed", map[string]any{"Error": safeError(err)})}
+	}
+	svc.recordFlowAudit(ctx, SlashCommand{UserID: command.UserID, UserName: command.UserName, ChannelID: command.ChannelID}, "flow.rerun_requested", updated.FlowID, "owner requested reviewer rerun from Mattermost action")
+	if err := svc.refreshFlowCard(ctx, updated); err != nil {
+		return FlowActionResult{StatusCode: 200, EphemeralText: svc.t("flow.action.card_failed", map[string]any{"Message": svc.t("flow.action.rerun_started", map[string]any{"RunID": started.RunID}), "Error": safeError(err)})}
+	}
+	return FlowActionResult{StatusCode: 200, EphemeralText: svc.t("flow.action.rerun_started", map[string]any{"RunID": started.RunID})}
+}
+
+func (svc *SlashCommandService) publishFlowCard(ctx context.Context, flow entity.AgentFlow, command SlashCommand) (entity.AgentFlow, FlowCardPost, error) {
+	if svc.cfg.FlowCardPublisher == nil {
+		return flow, FlowCardPost{}, fmt.Errorf("Mattermost flow card publisher is not configured")
+	}
+	if strings.TrimSpace(svc.cfg.FlowActionURL) == "" {
+		return flow, FlowCardPost{}, fmt.Errorf("Mattermost flow action URL is not configured")
+	}
+	channelID := strings.TrimSpace(flow.ControlChannelID)
+	if channelID == "" {
+		channelID = strings.TrimSpace(command.ChannelID)
+	}
+	if channelID == "" {
+		return flow, FlowCardPost{}, fmt.Errorf("Mattermost channel id is required")
+	}
+	update := adminrepo.UpdateAgentFlowInput{FlowID: flow.FlowID}
+	if strings.TrimSpace(flow.ActionToken) == "" {
+		update.ActionToken = newFlowActionToken()
+	}
+	if strings.TrimSpace(flow.OwnerUserID) == "" && strings.TrimSpace(command.UserID) != "" {
+		update.OwnerUserID = strings.TrimSpace(command.UserID)
+		update.OwnerUser = strings.TrimSpace(command.UserName)
+	}
+	if strings.TrimSpace(flow.ControlChannelID) == "" {
+		update.ControlChannelID = channelID
+	}
+	if update.ActionToken != "" || update.OwnerUserID != "" || update.ControlChannelID != "" {
+		updated, err := svc.cfg.Store.UpdateAgentFlow(ctx, update)
+		if err != nil {
+			return flow, FlowCardPost{}, err
+		}
+		flow = updated
+	}
+	card := svc.flowCard(flow, channelID)
+	post, err := svc.cfg.FlowCardPublisher.UpsertFlowCard(ctx, card)
+	if err != nil {
+		return flow, FlowCardPost{}, err
+	}
+	if flow.ControlPostID == "" || flow.ControlChannelID == "" {
+		updated, err := svc.cfg.Store.UpdateAgentFlow(ctx, adminrepo.UpdateAgentFlowInput{
+			FlowID:           flow.FlowID,
+			ControlChannelID: post.ChannelID,
+			ControlPostID:    post.PostID,
+		})
+		if err != nil {
+			return flow, post, err
+		}
+		flow = updated
+	}
+	return flow, post, nil
+}
+
+func (svc *SlashCommandService) refreshFlowCard(ctx context.Context, flow entity.AgentFlow) error {
+	if svc.cfg.FlowCardPublisher == nil || svc.cfg.FlowActionURL == "" || flow.ControlChannelID == "" || flow.ControlPostID == "" {
+		return nil
+	}
+	_, err := svc.cfg.FlowCardPublisher.UpsertFlowCard(ctx, svc.flowCard(flow, flow.ControlChannelID))
+	return err
+}
+
+func (svc *SlashCommandService) flowCard(flow entity.AgentFlow, channelID string) FlowCard {
+	return FlowCard{
+		ChannelID: channelID,
+		PostID:    flow.ControlPostID,
+		ActionURL: svc.cfg.FlowActionURL,
+		Message:   svc.t("flow.card.message", map[string]any{"FlowID": flow.FlowID}),
+		Color:     flowCardColor(flow.Status),
+		Title:     svc.t("flow.card.title", map[string]any{"FlowID": flow.FlowID, "Repository": flow.FullName()}),
+		Text:      svc.flowCardText(flow),
+		Fields:    svc.flowCardFields(flow),
+		Actions:   svc.flowCardActions(flow),
+	}
+}
+
+func (svc *SlashCommandService) flowCardText(flow entity.AgentFlow) string {
+	lines := []string{
+		svc.t("flow.card.text.status", map[string]any{"Status": flow.Status, "Summary": svc.flowSummaryText(flow)}),
+		svc.t("flow.card.text.branch", map[string]any{"Branch": flow.HeadBranch}),
+		svc.t("flow.card.text.attempt", map[string]any{"Attempt": flow.Attempt, "MaxAttempts": flow.MaxAttempts}),
+	}
+	if flow.PRNumber > 0 || strings.TrimSpace(flow.PRURL) != "" {
+		lines = append(lines, svc.t("flow.card.text.pr", map[string]any{"PR": flow.PRNumber, "URL": flow.PRURL}))
+	}
+	if flow.OwnerDecision != "" {
+		lines = append(lines, svc.t("flow.card.text.owner_decision", map[string]any{"Decision": flow.OwnerDecision}))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func (svc *SlashCommandService) flowCardFields(flow entity.AgentFlow) []FlowCardField {
+	fields := []FlowCardField{
+		{Title: svc.t("flow.card.field.developer", nil), Value: emptyAsUnknown(flow.CurrentDeveloperRunID), Short: true},
+		{Title: svc.t("flow.card.field.reviewer", nil), Value: emptyAsUnknown(flow.CurrentReviewerRunID), Short: true},
+	}
+	owner := emptyAsUnknown(flow.OwnerUser)
+	if flow.OwnerUserID != "" {
+		owner = flow.OwnerUserID
+		if flow.OwnerUser != "" {
+			owner = flow.OwnerUser + " (" + flow.OwnerUserID + ")"
+		}
+	}
+	fields = append(fields, FlowCardField{Title: svc.t("flow.card.field.owner", nil), Value: owner, Short: false})
+	return fields
+}
+
+func (svc *SlashCommandService) flowCardActions(flow entity.AgentFlow) []FlowCardAction {
+	token := flow.ActionToken
+	return []FlowCardAction{
+		svc.flowCardAction(flow, flowActionApprove, "flow.card.action.approve", "flow.card.action.approve.tooltip", "success", token, !flowCanOwnerDecide(flow)),
+		svc.flowCardAction(flow, flowActionReject, "flow.card.action.reject", "flow.card.action.reject.tooltip", "danger", token, !flowCanOwnerDecide(flow)),
+		svc.flowCardAction(flow, flowActionRerun, "flow.card.action.rerun", "flow.card.action.rerun.tooltip", "primary", token, !flowCanOwnerRerun(flow)),
+		svc.flowCardAction(flow, flowActionStop, "flow.card.action.stop", "flow.card.action.stop.tooltip", "warning", token, flowOwnerTerminal(flow.Status)),
+	}
+}
+
+func (svc *SlashCommandService) flowCardAction(flow entity.AgentFlow, action string, nameID string, tooltipID string, style string, token string, disabled bool) FlowCardAction {
+	return FlowCardAction{
+		ID:       action,
+		Name:     svc.t(nameID, nil),
+		Tooltip:  svc.t(tooltipID, nil),
+		Style:    style,
+		Disabled: disabled,
+		Context: map[string]any{
+			"flow_id": flow.FlowID,
+			"action":  action,
+			"token":   token,
+		},
+	}
 }
 
 type flowRuntimeAccount struct {
@@ -1012,11 +1337,14 @@ func (svc *SlashCommandService) startFlowDeveloperAttempt(ctx context.Context, f
 }
 
 func (svc *SlashCommandService) startFlowReviewer(ctx context.Context, flow entity.AgentFlow) (entity.AgentFlow, runtimerepo.StartedRun, error) {
+	return svc.startFlowReviewerWithRunID(ctx, flow, flowReviewerRunID(flow.FlowID, flow.Attempt), "flow reviewer attempt started")
+}
+
+func (svc *SlashCommandService) startFlowReviewerWithRunID(ctx context.Context, flow entity.AgentFlow, runID string, summary string) (entity.AgentFlow, runtimerepo.StartedRun, error) {
 	account, message, ok := svc.flowAgentRuntime(ctx, "reviewer")
 	if !ok {
 		return flow, runtimerepo.StartedRun{}, errors.New(message)
 	}
-	runID := flowReviewerRunID(flow.FlowID, flow.Attempt)
 	prompt, err := svc.renderStoredPromptTemplate(ctx, "reviewer", reviewPRTemplateKey, promptTemplateData{
 		Run: promptTemplateRunData{
 			ID:      runID,
@@ -1075,7 +1403,7 @@ func (svc *SlashCommandService) startFlowReviewer(ctx context.Context, flow enti
 		KubernetesNamespace: started.Namespace,
 		JobName:             started.JobName,
 		PVCName:             started.PVCName,
-		Summary:             "flow reviewer attempt started",
+		Summary:             summary,
 	}); err != nil {
 		return flow, started, err
 	}
@@ -1083,7 +1411,7 @@ func (svc *SlashCommandService) startFlowReviewer(ctx context.Context, flow enti
 		FlowID:               flow.FlowID,
 		Status:               flowStatusReviewRunning,
 		CurrentReviewerRunID: runID,
-		Summary:              "flow reviewer attempt started",
+		Summary:              summary,
 	})
 	if err != nil {
 		return flow, started, err
@@ -1243,12 +1571,18 @@ func (svc *SlashCommandService) flowSummaryText(flow entity.AgentFlow) string {
 		return svc.t("flow.summary.developer_running", nil)
 	case flowStatusFixRunning:
 		return svc.t("flow.summary.fix_running", nil)
+	case flowStatusOwnerApproved:
+		return svc.t("flow.summary.owner_approved", nil)
+	case flowStatusOwnerRejected:
+		return svc.t("flow.summary.owner_rejected", nil)
 	case flowStatusPROpened:
 		return svc.t("flow.summary.pr_opened", nil)
 	case flowStatusReviewerFailed:
 		return svc.t("flow.summary.reviewer_failed", nil)
 	case flowStatusReviewRunning:
 		return svc.t("flow.summary.review_running", nil)
+	case flowStatusStopped:
+		return svc.t("flow.summary.stopped", nil)
 	case flowStatusWaitingOwner:
 		return svc.t("flow.summary.waiting_owner", nil)
 	default:
@@ -2014,10 +2348,23 @@ const (
 	flowStatusDeveloperFailed    = "developer_failed"
 	flowStatusDeveloperRunning   = "developer_running"
 	flowStatusFixRunning         = "fix_running"
+	flowStatusOwnerApproved      = "owner_approved"
+	flowStatusOwnerRejected      = "owner_rejected"
 	flowStatusPROpened           = "pr_opened"
 	flowStatusReviewerFailed     = "reviewer_failed"
 	flowStatusReviewRunning      = "review_running"
+	flowStatusStopped            = "stopped"
 	flowStatusWaitingOwner       = "waiting_owner"
+
+	flowActionApprove = "approve"
+	flowActionReject  = "reject"
+	flowActionRerun   = "rerun"
+	flowActionStop    = "stop"
+
+	flowOwnerDecisionApproved = "approved"
+	flowOwnerDecisionRejected = "rejected"
+	flowOwnerDecisionRerun    = "rerun"
+	flowOwnerDecisionStopped  = "stopped"
 )
 
 func validIdentifier(value string) bool {
@@ -2050,6 +2397,82 @@ func flowDeveloperRunID(flowID string, attempt int) string {
 
 func flowReviewerRunID(flowID string, attempt int) string {
 	return fmt.Sprintf("%s-r%d", flowID, attempt)
+}
+
+func flowOwnerRerunReviewerRunID(flowID string, now time.Time) string {
+	suffix := "-rr-" + strconv.FormatInt(now.Unix(), 36)
+	maxPrefix := 48 - len(suffix)
+	prefix := flowID
+	if len(prefix) > maxPrefix {
+		prefix = strings.TrimRight(prefix[:maxPrefix], "-")
+	}
+	if prefix == "" {
+		prefix = "flow"
+	}
+	return prefix + suffix
+}
+
+func validFlowAction(value string) bool {
+	switch value {
+	case flowActionApprove, flowActionReject, flowActionRerun, flowActionStop:
+		return true
+	default:
+		return false
+	}
+}
+
+func flowOwnerTerminal(status string) bool {
+	switch status {
+	case flowStatusOwnerApproved, flowStatusOwnerRejected, flowStatusStopped, flowStatusCleaned:
+		return true
+	default:
+		return false
+	}
+}
+
+func flowCanOwnerDecide(flow entity.AgentFlow) bool {
+	if flowOwnerTerminal(flow.Status) {
+		return false
+	}
+	switch flow.Status {
+	case flowStatusApprovedByReviewer, flowStatusWaitingOwner, flowStatusBlocked:
+		return flow.PRNumber > 0 || strings.TrimSpace(flow.PRURL) != ""
+	default:
+		return false
+	}
+}
+
+func flowCanOwnerRerun(flow entity.AgentFlow) bool {
+	if flowOwnerTerminal(flow.Status) || flow.PRNumber <= 0 {
+		return false
+	}
+	switch flow.Status {
+	case flowStatusApprovedByReviewer, flowStatusWaitingOwner, flowStatusBlocked, flowStatusReviewerFailed:
+		return true
+	default:
+		return false
+	}
+}
+
+func flowCardColor(status string) string {
+	switch status {
+	case flowStatusOwnerApproved, flowStatusApprovedByReviewer:
+		return "#2f9e44"
+	case flowStatusOwnerRejected, flowStatusStopped, flowStatusBlocked, flowStatusDeveloperFailed, flowStatusReviewerFailed:
+		return "#c92a2a"
+	case flowStatusReviewRunning, flowStatusDeveloperRunning, flowStatusFixRunning:
+		return "#1c7ed6"
+	default:
+		return "#868e96"
+	}
+}
+
+func newFlowActionToken() string {
+	var raw [18]byte
+	if _, err := rand.Read(raw[:]); err != nil {
+		return strconv.FormatInt(time.Now().UnixNano(), 36)
+	}
+	return base64.RawURLEncoding.EncodeToString(raw[:])
 }
 
 func pullRequestNumberFromURL(value string) int {

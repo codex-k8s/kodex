@@ -3,6 +3,7 @@ package http
 import (
 	"crypto/subtle"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -24,6 +25,7 @@ const (
 	pathReadyz        = "/readyz"
 	pathMetrics       = "/metrics"
 	pathAgentsSlash   = "/mattermost/slash/agents"
+	pathFlowAction    = "/mattermost/actions/flow"
 	pathGitHubWebhook = "/github/webhook"
 )
 
@@ -75,6 +77,7 @@ func NewRouter(cfg RouterConfig) *Router {
 	router.mux.HandleFunc(pathReadyz, router.handleReady)
 	router.mux.Handle(pathMetrics, promhttp.HandlerFor(registry, promhttp.HandlerOpts{Registry: registry, EnableOpenMetrics: true}))
 	router.mux.HandleFunc(pathAgentsSlash, router.handleAgentsSlash)
+	router.mux.HandleFunc(pathFlowAction, router.handleFlowAction)
 	router.mux.HandleFunc(pathGitHubWebhook, router.handleGitHubWebhook)
 	return router
 }
@@ -136,10 +139,46 @@ func (router *Router) handleAgentsSlash(w http.ResponseWriter, r *http.Request) 
 		Text:        text,
 		UserID:      strings.TrimSpace(r.PostForm.Get("user_id")),
 		UserName:    strings.TrimSpace(r.PostForm.Get("user_name")),
+		ChannelID:   strings.TrimSpace(r.PostForm.Get("channel_id")),
 		ChannelName: strings.TrimSpace(r.PostForm.Get("channel_name")),
+		TeamID:      strings.TrimSpace(r.PostForm.Get("team_id")),
 		TeamDomain:  strings.TrimSpace(r.PostForm.Get("team_domain")),
 	})
 	writeCommandResponse(w, http.StatusOK, ephemeral(result))
+}
+
+func (router *Router) handleFlowAction(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, transportmodels.ErrorResponse{Error: "method_not_allowed"})
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, router.maxSlashFormBytes)
+	var request mattermostmodel.PostActionIntegrationRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		router.logWarn("invalid Mattermost flow action", "error", err)
+		writeJSON(w, http.StatusBadRequest, transportmodels.ErrorResponse{Error: "invalid_flow_action"})
+		return
+	}
+	if router.slashService == nil {
+		writeJSON(w, http.StatusServiceUnavailable, transportmodels.ErrorResponse{Error: "slash_service_not_configured"})
+		return
+	}
+	result := router.slashService.HandleFlowAction(r.Context(), statusservice.FlowActionCommand{
+		FlowID:    contextString(request.Context, "flow_id"),
+		Action:    contextString(request.Context, "action"),
+		Token:     contextString(request.Context, "token"),
+		UserID:    strings.TrimSpace(request.UserId),
+		UserName:  strings.TrimSpace(request.UserName),
+		ChannelID: strings.TrimSpace(request.ChannelId),
+		PostID:    strings.TrimSpace(request.PostId),
+	})
+	status := result.StatusCode
+	if status == 0 {
+		status = http.StatusOK
+	}
+	writeJSON(w, status, &mattermostmodel.PostActionIntegrationResponse{
+		EphemeralText: result.EphemeralText,
+	})
 }
 
 func (router *Router) handleGitHubWebhook(w http.ResponseWriter, r *http.Request) {
@@ -223,4 +262,15 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
 	_, _ = w.Write(body)
+}
+
+func contextString(context map[string]any, key string) string {
+	value, ok := context[key]
+	if !ok || value == nil {
+		return ""
+	}
+	if text, ok := value.(string); ok {
+		return strings.TrimSpace(text)
+	}
+	return strings.TrimSpace(fmt.Sprint(value))
 }

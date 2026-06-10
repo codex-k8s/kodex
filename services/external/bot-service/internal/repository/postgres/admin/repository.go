@@ -236,6 +236,9 @@ func (repo *Repository) CreateAgentFlow(ctx context.Context, input adminrepo.Cre
 		input.Task,
 		input.Attempt,
 		input.MaxAttempts,
+		input.OwnerUserID,
+		input.OwnerUser,
+		input.ActionToken,
 		input.Summary,
 	)
 	item, created, err := scanAgentFlowWithCreated(row)
@@ -262,6 +265,12 @@ func (repo *Repository) UpdateAgentFlow(ctx context.Context, input adminrepo.Upd
 		input.Attempt,
 		input.CurrentDeveloperRunID,
 		input.CurrentReviewerRunID,
+		input.OwnerUserID,
+		input.OwnerUser,
+		input.ControlChannelID,
+		input.ControlPostID,
+		input.ActionToken,
+		input.OwnerDecision,
 		input.Summary,
 	))
 	if err != nil {
@@ -470,6 +479,12 @@ func scanAgentFlowFields(row pgx.Row, extra ...any) (entity.AgentFlow, error) {
 		&item.MaxAttempts,
 		&item.CurrentDeveloperRunID,
 		&item.CurrentReviewerRunID,
+		&item.OwnerUserID,
+		&item.OwnerUser,
+		&item.ControlChannelID,
+		&item.ControlPostID,
+		&item.ActionToken,
+		&item.OwnerDecision,
 		&item.Summary,
 		&item.CreatedAt,
 		&item.UpdatedAt,

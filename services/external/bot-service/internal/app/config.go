@@ -14,6 +14,7 @@ type Config struct {
 	HTTPAddr              string        `env:"MATTERCODEX_BOT_SERVICE_HTTP_ADDR" envDefault:":8080"`
 	MattermostSiteURL     string        `env:"MATTERCODEX_MATTERMOST_SITE_URL"`
 	BotServiceSiteURL     string        `env:"MATTERCODEX_BOT_SERVICE_SITE_URL"`
+	BotServiceInternalURL string        `env:"MATTERCODEX_BOT_SERVICE_INTERNAL_URL"`
 	Locale                string        `env:"MATTERCODEX_LOCALE" envDefault:"en"`
 	DefaultTeamName       string        `env:"MATTERCODEX_DEFAULT_TEAM_NAME" envDefault:"agents"`
 	DefaultChannels       []string      `env:"MATTERCODEX_DEFAULT_CHANNELS" envDefault:"agents-control:Agents Control,agents-runs:Agents Runs,agent-alerts:Agent Alerts,agents-audit:Agents Audit" envSeparator:","`
