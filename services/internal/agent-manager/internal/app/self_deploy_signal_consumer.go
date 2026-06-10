@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	eventconsumer "github.com/codex-k8s/kodex/libs/go/eventconsumer"
-	eventlog "github.com/codex-k8s/kodex/libs/go/eventlog"
 	providerevents "github.com/codex-k8s/kodex/libs/go/platformevents/provider"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -64,14 +63,7 @@ type selfDeploySignalConsumerStarter struct {
 }
 
 func (s selfDeploySignalConsumerStarter) start(ctx context.Context) error {
-	starter := managedEventConsumerStarter{}
-	starter.enabled = s.cfg.SelfDeploySignalConsumerEnabled
-	starter.logger = s.logger
-	starter.errCh = s.errCh
-	starter.validate = s.validate
-	starter.runner = s.runner
-	starter.run = runSelfDeploySignalConsumer
-	return startManagedEventConsumer(ctx, starter)
+	return startManagedEventConsumerWithParts(ctx, s.cfg.SelfDeploySignalConsumerEnabled, s.logger, s.errCh, s.validate, s.runner, runSelfDeploySignalConsumer)
 }
 
 func (s selfDeploySignalConsumerStarter) validate() error {
@@ -88,17 +80,7 @@ func (s selfDeploySignalConsumerStarter) validate() error {
 }
 
 func (s selfDeploySignalConsumerStarter) runner(logger *slog.Logger) (*eventconsumer.Runner, error) {
-	registry, err := eventconsumer.NewRegistry(selfDeploySignalConsumerRegistration(s.cfg, s.reader, s.creator))
-	if err != nil {
-		return nil, err
-	}
-	return eventconsumer.NewRunner(
-		eventlog.NewStore(s.eventLogPool),
-		registry,
-		s.cfg.SelfDeploySignalConsumerConfig(),
-		logger,
-		nil,
-	)
+	return newEventConsumerRunner(s.eventLogPool, selfDeploySignalConsumerRegistration(s.cfg, s.reader, s.creator), s.cfg.SelfDeploySignalConsumerConfig(), logger)
 }
 
 func selfDeploySignalConsumerRegistration(cfg Config, reader selfDeploySignalReader, creator selfDeployPlanCreator) eventconsumer.Registration {
@@ -418,25 +400,10 @@ func selfDeploySignalStaleProviderResult() eventconsumer.Result {
 	return eventconsumer.Poison("stale_provider_signal", "provider repository change signal is unavailable and cannot be enriched")
 }
 
-var selfDeploySignalDomainErrorResults = []struct {
-	target error
-	result eventconsumer.Result
-}{
-	{
-		target: errs.ErrInvalidArgument,
-		result: eventconsumer.Poison("invalid_self_deploy_signal", "self-deploy signal metadata is invalid"),
-	},
-	{
-		target: errs.ErrConflict,
-		result: eventconsumer.Poison("conflicting_self_deploy_plan_signal", "self-deploy signal conflicts with stored plan state"),
-	},
-}
-
 func selfDeploySignalConsumerError(err error) eventconsumer.Result {
-	for _, candidate := range selfDeploySignalDomainErrorResults {
-		if errors.Is(err, candidate.target) {
-			return candidate.result
-		}
-	}
-	return eventconsumer.Retry(err)
+	return invalidConflictEventConsumerDomainError(
+		err,
+		eventconsumer.Poison("invalid_self_deploy_signal", "self-deploy signal metadata is invalid"),
+		eventconsumer.Poison("conflicting_self_deploy_plan_signal", "self-deploy signal conflicts with stored plan state"),
+	)
 }

@@ -197,6 +197,15 @@ type EnsureSelfDeployPlanGovernanceGateInput struct {
 	SelfDeployPlanID uuid.UUID
 }
 
+type RecordSelfDeployPlanGateDecisionInput struct {
+	Meta             value.CommandMeta
+	SelfDeployPlanID uuid.UUID
+	GateRequestRef   string
+	GateDecisionRef  string
+	Outcome          SelfDeployPlanGateDecisionOutcome
+	SafeSummary      string
+}
+
 type SelfDeployPlanGateStatus string
 
 const (
@@ -204,6 +213,19 @@ const (
 	SelfDeployPlanGateStatusApproved SelfDeployPlanGateStatus = "approved"
 	SelfDeployPlanGateStatusRejected SelfDeployPlanGateStatus = "rejected"
 	SelfDeployPlanGateStatusBlocked  SelfDeployPlanGateStatus = "blocked"
+)
+
+type SelfDeployPlanGateDecisionOutcome string
+
+const (
+	SelfDeployPlanGateDecisionOutcomeApprove               SelfDeployPlanGateDecisionOutcome = "approve"
+	SelfDeployPlanGateDecisionOutcomeApproveWithConditions SelfDeployPlanGateDecisionOutcome = "approve_with_conditions"
+	SelfDeployPlanGateDecisionOutcomeReject                SelfDeployPlanGateDecisionOutcome = "reject"
+	SelfDeployPlanGateDecisionOutcomeRevise                SelfDeployPlanGateDecisionOutcome = "revise"
+	SelfDeployPlanGateDecisionOutcomeRequestChanges        SelfDeployPlanGateDecisionOutcome = "request_changes"
+	SelfDeployPlanGateDecisionOutcomeHold                  SelfDeployPlanGateDecisionOutcome = "hold"
+	SelfDeployPlanGateDecisionOutcomeRollback              SelfDeployPlanGateDecisionOutcome = "rollback"
+	SelfDeployPlanGateDecisionOutcomeEscalate              SelfDeployPlanGateDecisionOutcome = "escalate"
 )
 
 type SelfDeployPlanGatePreparationInput struct {

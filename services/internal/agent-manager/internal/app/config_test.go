@@ -93,6 +93,19 @@ func TestValidateRequiresEventLogDSNWhenSelfDeploySignalConsumerEnabled(t *testi
 	}
 }
 
+func TestValidateRequiresEventLogDSNWhenSelfDeployGateDecisionConsumerEnabled(t *testing.T) {
+	t.Parallel()
+
+	cfg := validConfig()
+	cfg.InteractionResponseConsumerEnabled = false
+	cfg.SelfDeploySignalConsumerEnabled = false
+	cfg.SelfDeployGateDecisionConsumerEnabled = true
+	cfg.EventLogDatabaseDSN = ""
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() err = nil, want event-log database dsn error")
+	}
+}
+
 func TestValidateRequiresRuntimeClientTokensWhenPreparationEnabled(t *testing.T) {
 	t.Parallel()
 
@@ -374,5 +387,16 @@ func validConfig() Config {
 		SelfDeploySignalConsumerFailureMessageLimit:    512,
 		SelfDeploySignalConsumerConcurrencyLimit:       1,
 		SelfDeploySignalConsumerMaxAttempts:            24,
+		SelfDeployGateDecisionConsumerEnabled:          false,
+		SelfDeployGateDecisionConsumerName:             "agent-manager.self-deploy-gate-decision",
+		SelfDeployGateDecisionConsumerBatchSize:        20,
+		SelfDeployGateDecisionConsumerPollInterval:     time.Second,
+		SelfDeployGateDecisionConsumerLeaseTTL:         30 * time.Second,
+		SelfDeployGateDecisionConsumerHandlerTimeout:   10 * time.Second,
+		SelfDeployGateDecisionConsumerRetryInitial:     5 * time.Second,
+		SelfDeployGateDecisionConsumerRetryMax:         5 * time.Minute,
+		SelfDeployGateDecisionConsumerFailureLimit:     512,
+		SelfDeployGateDecisionConsumerConcurrencyLimit: 1,
+		SelfDeployGateDecisionConsumerMaxAttempts:      24,
 	}
 }
