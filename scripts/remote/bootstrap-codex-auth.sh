@@ -94,20 +94,8 @@ spec:
     - name: codex-device-auth
       image: ${MATTERCODEX_AGENT_RUNNER_IMAGE}
       imagePullPolicy: IfNotPresent
-      command: ["sh", "-ec"]
-      env:
-        - name: MATTERCODEX_CODEX_PACKAGE
-          value: "${MATTERCODEX_CODEX_PACKAGE}"
-      args:
-        - |
-          set -eu
-          mkdir -p /codex-home
-          if ! command -v codex >/dev/null 2>&1; then
-            npm install -g "\$MATTERCODEX_CODEX_PACKAGE"
-          fi
-          CODEX_HOME=/codex-home codex login --device-auth
-          touch /codex-home/.auth-ready
-          sleep 600
+      command: ["matter-codex-agent-runner"]
+      args: ["codex-auth"]
 EOF
 
 mattercodex_log "ждем запуск pod и выводим device-code инструкции Codex"
@@ -119,7 +107,7 @@ trap 'kill "$LOG_PID" >/dev/null 2>&1 || true' EXIT
 
 deadline=$((SECONDS + TIMEOUT_SECONDS))
 while [ "$SECONDS" -lt "$deadline" ]; do
-  if mattercodex_ssh "$REMOTE_KUBECTL -n $NAMESPACE_Q exec pod/${POD_NAME} -- sh -ec 'test -s /codex-home/auth.json && test -f /codex-home/.auth-ready'" >/dev/null 2>&1; then
+  if mattercodex_ssh "$REMOTE_KUBECTL -n $NAMESPACE_Q exec pod/${POD_NAME} -- matter-codex-agent-runner auth-ready-check" >/dev/null 2>&1; then
     break
   fi
   sleep 5
@@ -128,12 +116,12 @@ done
 kill "$LOG_PID" >/dev/null 2>&1 || true
 trap - EXIT
 
-if ! mattercodex_ssh "$REMOTE_KUBECTL -n $NAMESPACE_Q exec pod/${POD_NAME} -- sh -ec 'test -s /codex-home/auth.json && test -f /codex-home/.auth-ready'" >/dev/null 2>&1; then
+if ! mattercodex_ssh "$REMOTE_KUBECTL -n $NAMESPACE_Q exec pod/${POD_NAME} -- matter-codex-agent-runner auth-ready-check" >/dev/null 2>&1; then
   mattercodex_ssh "$REMOTE_KUBECTL -n $NAMESPACE_Q delete pod $POD_NAME_Q --ignore-not-found >/dev/null"
   mattercodex_die "Codex device-code авторизация не завершилась за ${TIMEOUT_SECONDS}s"
 fi
 
-CODEX_AUTH_JSON_B64="$(mattercodex_ssh "$REMOTE_KUBECTL -n $NAMESPACE_Q exec pod/${POD_NAME} -- sh -ec 'base64 /codex-home/auth.json | tr -d \"\\n\"'")"
+CODEX_AUTH_JSON_B64="$(mattercodex_ssh "$REMOTE_KUBECTL -n $NAMESPACE_Q exec pod/${POD_NAME} -- matter-codex-agent-runner print-auth-json")"
 mattercodex_log "сохраняется Codex auth secret на целевом сервере"
 mattercodex_apply_codex_auth_secret "$CODEX_AUTH_JSON_B64"
 mattercodex_ssh "$REMOTE_KUBECTL -n $NAMESPACE_Q delete pod $POD_NAME_Q --ignore-not-found >/dev/null"

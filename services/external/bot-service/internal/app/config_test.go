@@ -52,7 +52,7 @@ func TestConfigDefaults(t *testing.T) {
 	if cfg.RuntimeSmokeImage != "busybox:1.36" {
 		t.Fatalf("RuntimeSmokeImage = %q", cfg.RuntimeSmokeImage)
 	}
-	if cfg.AgentRunnerImage != "node:22-alpine" {
+	if cfg.AgentRunnerImage != "matter-codex-agent-runner:dev" {
 		t.Fatalf("AgentRunnerImage = %q", cfg.AgentRunnerImage)
 	}
 	if cfg.CodexPackage != "@openai/codex@0.138.0" {
@@ -79,7 +79,7 @@ func TestConfigValidationRejectsBadTimeout(t *testing.T) {
 		MaxSlashFormBytes:     1024,
 		MaxGitHubWebhookBytes: 1024,
 		RuntimeSmokeImage:     "busybox:1.36",
-		AgentRunnerImage:      "node:22-alpine",
+		AgentRunnerImage:      "matter-codex-agent-runner:dev",
 		CodexPackage:          "@openai/codex@0.138.0",
 		RuntimeWorkspaceSize:  "1Gi",
 		RuntimeJobTTLSeconds:  86400,
@@ -103,7 +103,7 @@ func TestConfigValidationNormalizesLocale(t *testing.T) {
 		MaxSlashFormBytes:     1024,
 		MaxGitHubWebhookBytes: 1024,
 		RuntimeSmokeImage:     "busybox:1.36",
-		AgentRunnerImage:      "node:22-alpine",
+		AgentRunnerImage:      "matter-codex-agent-runner:dev",
 		CodexPackage:          "@openai/codex@0.138.0",
 		RuntimeWorkspaceSize:  "1Gi",
 		RuntimeJobTTLSeconds:  86400,
@@ -130,7 +130,7 @@ func TestConfigValidationRejectsUnsupportedLocale(t *testing.T) {
 		MaxSlashFormBytes:     1024,
 		MaxGitHubWebhookBytes: 1024,
 		RuntimeSmokeImage:     "busybox:1.36",
-		AgentRunnerImage:      "node:22-alpine",
+		AgentRunnerImage:      "matter-codex-agent-runner:dev",
 		CodexPackage:          "@openai/codex@0.138.0",
 		RuntimeWorkspaceSize:  "1Gi",
 		RuntimeJobTTLSeconds:  86400,

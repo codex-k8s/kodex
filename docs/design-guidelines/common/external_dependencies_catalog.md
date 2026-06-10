@@ -37,16 +37,18 @@
 | `ssh` | remote deploy wrapper | выполнение Kubernetes операций непосредственно на целевом сервере |
 | `kubectl` | bootstrap/deploy wrapper | применение manifests и rollout/smoke diagnostics в MVP |
 | `envsubst` | manifest render | шаблонизация YAML до появления Go deploy renderer |
-| `base64`, `tar` | source ConfigMap render | временная упаковка Go source для быстрого MVP deploy без CI image pipeline |
+| `base64`, `tar` | source ConfigMap render и agent-runner image build context | временная упаковка Go source для быстрого MVP deploy без CI image pipeline |
 | `mmctl` | Mattermost bootstrap | локальное администрирование Mattermost pod без вывода секретов |
 | `openssl` | bootstrap secrets | генерация bootstrap секретов |
+| `docker` или `nerdctl` | agent-runner image build | сборка подготовленного image с Go runner binary, `gh`, `git` и Codex CLI на MVP-контуре без registry pipeline |
 
 ## Agent runner tools - in use
 
 | Tool | Version | Scope | Why |
 |---|---:|---|---|
-| `@openai/codex` | `0.138.0` | Codex developer agent | `codex exec --json`, MCP config smoke и non-interactive developer run внутри Kubernetes Job |
-| `github-cli` / `gh` | distro package | Agent PR publish | создание draft PR после Codex run без ручного REST wrapper в shell |
+| `@openai/codex` | `0.138.0` | Codex developer/reviewer agent | `codex exec --json`, MCP config smoke и non-interactive developer/reviewer run внутри Kubernetes Job |
+| `github-cli` / `gh` | distro package | Agent PR publish/review | подготовленный agent-runner image вызывает `gh` из Go runner binary для создания draft PR и отправки PR review |
+| `git` | distro package | Agent checkout/push | подготовленный agent-runner image выполняет clone/branch/commit/push из Go runner binary без shell-скриптов в bot-service |
 
 ## Runtime images - in use
 
@@ -54,10 +56,11 @@
 |---|---|---|
 | `golang:1.26-alpine` | bot-service MVP runtime | быстрый запуск Go-сервиса из source ConfigMap до image pipeline |
 | `alpine:3.22` | bot-service prod Dockerfile | минимальный runtime слой для будущей сборки образа |
-| `node:22-alpine` | agent runner MVP runtime | временный public base image для Codex developer Job до появления registry/image pipeline |
+| `node:22-alpine` | agent-runner Dockerfile base | runtime слой с npm для установки Codex CLI при сборке подготовленного agent-runner image |
+| `matter-codex-agent-runner:dev` | agent runner MVP runtime | локально собранный image с `matter-codex-agent-runner`, `gh`, `git` и Codex CLI для smoke/developer/reviewer/auth Job |
 | `mattermost/mattermost-team-edition` | Mattermost | self-hosted Mattermost для control surface |
 | `postgres:16-alpine` | Mattermost PostgreSQL | single-server MVP БД Mattermost |
-| `busybox` | init/wait helpers, runtime smoke | lightweight init helper в manifests и безопасный smoke image для test runner Job |
+| `busybox` | init/wait helpers | lightweight init helper в manifests; legacy smoke image setting сохраняется для совместимости config |
 
 ## Процесс изменений каталога
 

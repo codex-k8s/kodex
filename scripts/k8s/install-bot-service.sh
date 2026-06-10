@@ -46,7 +46,7 @@ done
 
 mattercodex_load_env_file "$ENV_FILE"
 mattercodex_validate_base_env
-mattercodex_require_commands kubectl envsubst base64
+mattercodex_require_commands kubectl envsubst base64 tar
 
 if [ -z "$RENDER_DIR" ]; then
   RENDER_DIR="$(mktemp -d)"
@@ -55,6 +55,17 @@ fi
 "$SCRIPT_DIR/render-bot-service.sh" --env-file "$ENV_FILE" --render-dir "$RENDER_DIR" >/dev/null
 
 DRY_RUN_ARG="$(mattercodex_kubectl_dry_run_arg "$DRY_RUN_MODE")"
+
+if [ "$DRY_RUN_MODE" = "none" ] && mattercodex_bool "${MATTERCODEX_AGENT_RUNNER_BUILD_IMAGE:-true}"; then
+  mattercodex_require_commands docker
+  mattercodex_log "сборка agent-runner image"
+  docker build \
+    --network=host \
+    --build-arg "MATTERCODEX_CODEX_PACKAGE=$MATTERCODEX_CODEX_PACKAGE" \
+    -f "$REPO_ROOT/services/jobs/agent-runner/Dockerfile" \
+    -t "$MATTERCODEX_AGENT_RUNNER_IMAGE" \
+    "$REPO_ROOT"
+fi
 
 if [ -n "${MATTERCODEX_MATTERMOST_BOT_TOKEN:-}" ] || [ -n "${MATTERCODEX_MATTERMOST_SLASH_TOKEN:-}" ]; then
   BOT_TOKEN_B64="$(printf '%s' "${MATTERCODEX_MATTERMOST_BOT_TOKEN:-}" | base64 | tr -d '\n')"

@@ -9,12 +9,13 @@
 - отвечать на `/healthz`;
 - принимать Mattermost slash callback `/mattermost/slash/agents`;
 - отвечать на `/agents status`;
-- выполнять admin-команды `/agents repo add`, `/agents repo list`, `/agents token check`, `/agents locale get|set`, `/agents profile list`, `/agents openai auth|status|list|cleanup`;
+- выполнять admin-команды `/agents repo add`, `/agents repo list`, `/agents token check`, `/agents locale get|set`, `/agents profile list`, `/agents prompt help|list|show|render|set`, `/agents openai auth|status|list|cleanup`;
 - выполнять GitHub adapter команды `/agents github check`, `/agents github branch`, `/agents github pr`;
 - принимать GitHub webhook callback `/github/webhook` с HMAC validation;
 - автоматически регистрировать repo webhook при `/agents repo add github owner/name [default-branch]`, если GitHub token имеет hook write permission;
-- выполнять Kubernetes runtime smoke-команды `/agents runtime smoke|status|cleanup` через client-go, Job и PVC;
-- выполнять Codex developer smoke-команды `/agents dev smoke|status|cleanup`, создающие отдельный Job/PVC, branch, commit и draft PR через OpenAI account из agent profile;
+- выполнять Kubernetes runtime smoke-команды `/agents runtime smoke|status|cleanup` через client-go, Job, PVC и подготовленный agent-runner image;
+- выполнять Codex developer smoke-команды `/agents dev smoke|status|cleanup`, создающие отдельный Job/PVC, branch, commit и draft PR через OpenAI account из agent profile и prompt template из БД;
+- выполнять Codex reviewer-команды `/agents review pr|status|cleanup`, запускающие отдельный Job/PVC для review существующего GitHub PR через OpenAI account из agent profile и prompt template из БД;
 - применять storage migrations и хранить repository/profile/audit metadata в PostgreSQL;
 - создавать Mattermost repo-channel при добавлении repository;
 - хранить Mattermost bot/slash tokens только в Kubernetes Secret;
@@ -40,9 +41,10 @@
 - `MATTERCODEX_BOT_SERVICE_MAX_GITHUB_WEBHOOK_BYTES` - optional, лимит размера GitHub webhook payload;
 - `MATTERCODEX_RUNTIME_ENABLED` - optional, включает Kubernetes runtime adapter;
 - `MATTERCODEX_RUNTIME_NAMESPACE` - optional, namespace для Job/PVC runtime-запусков;
-- `MATTERCODEX_RUNTIME_SMOKE_IMAGE` - optional, image для smoke Job;
-- `MATTERCODEX_AGENT_RUNNER_IMAGE` - optional, image для Codex developer Job; текущий MVP default использует public Node Alpine image;
-- `MATTERCODEX_CODEX_PACKAGE` - optional, npm package spec Codex CLI для developer Job;
+- `MATTERCODEX_RUNTIME_SMOKE_IMAGE` - optional, legacy image setting; текущий smoke Job запускается через `MATTERCODEX_AGENT_RUNNER_IMAGE`;
+- `MATTERCODEX_AGENT_RUNNER_IMAGE` - optional, image для smoke/developer/reviewer/auth Job; текущий MVP default `matter-codex-agent-runner:dev`;
+- `MATTERCODEX_AGENT_RUNNER_BUILD_IMAGE` - optional, при `true` install script собирает agent-runner image на целевом сервере перед deploy;
+- `MATTERCODEX_CODEX_PACKAGE` - optional, npm package spec Codex CLI, который устанавливается в agent-runner image при сборке;
 - `MATTERCODEX_RUNTIME_WORKSPACE_STORAGE_SIZE` - optional, размер PVC рабочего каталога smoke-запуска;
 - `MATTERCODEX_RUNTIME_JOB_TTL_SECONDS` - optional, TTL завершенных smoke Job;
 - `MATTERCODEX_RUNTIME_LOG_TAIL_LINES` - optional, число последних строк pod log для `/agents runtime status`;
@@ -68,6 +70,8 @@ bash scripts/k8s/render-bot-service.sh --env-file .env --render-dir /tmp/matter-
 - Deployment;
 - Service;
 - Ingress.
+
+Agent runner image не попадает в render directory. При `--apply` deploy script по умолчанию собирает отдельный image из `services/jobs/agent-runner/Dockerfile`. Если на целевом сервере есть `docker` или `nerdctl`, сборка идет там; если builder'а на сервере нет, но доступен remote `k3s ctr`/`ctr` import и локальный Docker, script собирает image локально и импортирует его в Kubernetes runtime по SSH.
 
 ## Remote dry-run
 
@@ -108,7 +112,7 @@ Developer runner не использует raw API key. Для Codex CLI соз�
 /agents openai list
 ```
 
-Agent profile хранит `openai_account_name`; seed profile `developer` использует `primary`. Developer Job монтирует только Secret выбранного account.
+Agent profile хранит `openai_account_name`; seed profiles `developer` и `reviewer` используют `primary`. Agent Job монтирует только Secret выбранного account.
 
 ## Health-only install
 
@@ -133,7 +137,32 @@ REMOTE_KUBECTL="$(mattercodex_remote_kubectl_command)"
 mattercodex_ssh "$REMOTE_KUBECTL -n $NAMESPACE_Q exec statefulset/mattermost-postgres -- psql -U mattermost -d mattermost -Atc 'select version_id, is_applied from goose_db_version order by id;'"
 ```
 
-Ожидаемый результат: в выводе есть примененная версия `3|t`.
+Ожидаемый результат: в выводе есть примененная версия `4|t`.
+
+## Agent prompt templates
+
+Prompt template относится к профилю агента и хранится в PostgreSQL. Bot-service рендерит template перед созданием Job и передает готовый Markdown prompt в agent pod через ConfigMap. Agent runner не содержит prompt-текстов в Go-коде.
+
+Базовые templates создаются migration:
+
+- `developer/developer_smoke`;
+- `reviewer/review_pr`.
+
+Управление через Mattermost:
+
+```text
+/agents prompt help reviewer review_pr
+/agents prompt list
+/agents prompt show reviewer review_pr
+/agents prompt render reviewer review_pr
+/agents prompt set reviewer review_pr <markdown template>
+```
+
+Ожидаемый результат:
+
+- `prompt help` показывает доступные placeholders и template-функции;
+- `prompt set` ожидает Markdown с Go `text/template` placeholders, test-render'ит его на sample data и сохраняет только если render успешен;
+- `prompt render` позволяет проверить сохраненный или переданный inline template без запуска agent Job.
 
 ## Mattermost bot bootstrap
 
@@ -188,12 +217,14 @@ bash scripts/remote/bootstrap-mattermost-bot.sh --env-file .env
 /agents token check
 /agents locale set ru
 /agents profile list
+/agents prompt help reviewer review_pr
+/agents prompt render reviewer review_pr
 /agents openai list
 /agents repo add github codex-k8s/matter-codex main
 /agents repo list
 ```
 
-Ожидаемый результат: команды отвечают ephemeral-сообщениями, `locale set en` переключает ответы на английский, `locale set ru` возвращает русские ответы, profile list показывает OpenAI account для профиля, repository появляется в списке, а Mattermost создаёт/показывает канал `repo-codex-k8s-matter-codex`.
+Ожидаемый результат: команды отвечают ephemeral-сообщениями, `locale set en` переключает ответы на английский, `locale set ru` возвращает русские ответы, profile list показывает OpenAI account для профиля, prompt render показывает sample-render без сохранения секретов, repository появляется в списке, а Mattermost создаёт/показывает канал `repo-codex-k8s-matter-codex`.
 
 Дополнительная проверка GitHub adapter:
 
@@ -229,7 +260,7 @@ bash scripts/remote/bootstrap-mattermost-bot.sh --env-file .env
 Ожидаемый результат:
 
 - token check показывает `kubernetes runtime: configured`;
-- runtime smoke возвращает run id, Job и PVC без вывода секретов;
+- runtime smoke возвращает run id, Job и PVC без вывода секретов; Job использует `matter-codex-agent-runner`;
 - runtime status показывает Job/PVC, pod phase и короткий log tail smoke Job;
 - runtime cleanup удаляет Job и PVC.
 
@@ -273,6 +304,32 @@ bash scripts/remote/bootstrap-mattermost-bot.sh --env-file .env
 
 Если smoke run создал draft PR, его надо закрыть/удалить вручную или оставить как проверочный артефакт до решения владельца. Cleanup удаляет только Kubernetes Job/PVC, а не GitHub branch/PR.
 
+Дополнительная проверка Codex reviewer agent:
+
+Перед проверкой нужен authorized OpenAI account из профиля `reviewer` и существующий открытый GitHub PR. Для текущего seed-профиля это account `primary`.
+
+```text
+/agents openai list
+/agents review pr codex-k8s/matter-codex <pr-number> review-manual
+/agents review status review-manual
+```
+
+Ожидаемый результат:
+
+- review pr возвращает run id, PR number, Job и PVC;
+- в ответе review pr указан OpenAI account `primary`;
+- через некоторое время `review status` показывает pod phase и artifacts `pr-url`, `review-decision`, `review-submitted`;
+- в GitHub PR появляется review от GitHub token пользователя/бота, чаще всего comment review; если Codex уверенно выберет `approve` или `request_changes`, runner попробует отправить соответствующий review state, а при запрете GitHub fallback-ом оставит comment;
+- log tail не содержит значений OpenAI/GitHub/Mattermost секретов.
+
+После проверки удалить Kubernetes resources:
+
+```text
+/agents review cleanup review-manual
+```
+
+Cleanup удаляет только Kubernetes Job/PVC, а не GitHub review/comment.
+
 Проверка webhook reject без корректной подписи:
 
 ```bash
@@ -298,7 +355,10 @@ curl -sS -o /dev/null -w '%{http_code}\n' \
 - Логи provisioning показывают только безопасные статусы `exists/created/updated`.
 - bot-service получает namespace-scoped Role на создание/чтение/удаление runtime Job/PVC, чтение pod/log, `pods/exec` для чтения готового `auth.json` из auth Job и create/update Secret для account-specific Codex auth.
 - ServiceAccount agent runner создается без automount token; smoke pod также явно отключает automount.
-- Codex auth Job и developer Job запускаются без automount service account token.
-- Codex developer Job получает Codex `auth.json` выбранного OpenAI account и GitHub token только через Kubernetes Secret volume mount.
+- Codex auth Job и developer/reviewer Job запускаются без automount service account token.
+- Codex developer/reviewer Job получает Codex `auth.json` выбранного OpenAI account и GitHub token только через Kubernetes Secret volume mount.
+- Developer/reviewer prompt templates хранятся в PostgreSQL, редактируются через Mattermost и передаются agent pod как отрендеренный Markdown через ConfigMap.
 - `CODEX_HOME/config.toml` задает `shell_environment_policy` с минимальным environment для команд, которые запускает Codex.
-- Developer runner сам выполняет push/PR после `codex exec`; prompt contract запрещает Codex агенту пушить branch или создавать PR напрямую.
+- Codex agent внутри isolated Kubernetes Job запускается с `sandbox_mode = "danger-full-access"`, потому что `workspace-write` требует `bubblewrap`, который в текущем Kubernetes pod падает до выполнения shell-команд. Изоляционная граница MVP для agent run: отдельный pod, отдельный PVC, отключенный automount service account token и минимальные Secret volume mounts.
+- Developer runner реализован отдельным Go binary в подготовленном image и сам выполняет push/PR после `codex exec`; prompt contract запрещает Codex агенту пушить branch или создавать PR напрямую.
+- Reviewer runner реализован отдельным Go binary в подготовленном image и сам отправляет GitHub review после `codex exec`; prompt contract запрещает Codex агенту изменять файлы, пушить branch или создавать PR напрямую.

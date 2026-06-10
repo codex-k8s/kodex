@@ -114,6 +114,48 @@ func (repo *Repository) ListAgentProfiles(ctx context.Context) ([]entity.AgentPr
 	return items, nil
 }
 
+func (repo *Repository) ListAgentPromptTemplates(ctx context.Context, profileName string) ([]entity.AgentPromptTemplate, error) {
+	rows, err := repo.pool.Query(ctx, query("agent_prompt_templates__list.sql"), profileName)
+	if err != nil {
+		return nil, fmt.Errorf("list agent prompt templates: %w", err)
+	}
+	defer rows.Close()
+
+	var items []entity.AgentPromptTemplate
+	for rows.Next() {
+		item, err := scanAgentPromptTemplate(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan agent prompt template: %w", err)
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate agent prompt templates: %w", err)
+	}
+	return items, nil
+}
+
+func (repo *Repository) GetAgentPromptTemplate(ctx context.Context, profileName string, templateKey string) (entity.AgentPromptTemplate, error) {
+	item, err := scanAgentPromptTemplate(repo.pool.QueryRow(ctx, query("agent_prompt_templates__get.sql"), profileName, templateKey))
+	if err != nil {
+		return entity.AgentPromptTemplate{}, fmt.Errorf("get agent prompt template: %w", err)
+	}
+	return item, nil
+}
+
+func (repo *Repository) UpsertAgentPromptTemplate(ctx context.Context, input adminrepo.UpsertAgentPromptTemplateInput) (entity.AgentPromptTemplate, bool, error) {
+	var created bool
+	item, err := scanAgentPromptTemplateWithCreated(repo.pool.QueryRow(ctx, query("agent_prompt_templates__upsert.sql"),
+		input.ProfileName,
+		input.TemplateKey,
+		input.Body,
+	), &created)
+	if err != nil {
+		return entity.AgentPromptTemplate{}, false, fmt.Errorf("upsert agent prompt template: %w", err)
+	}
+	return item, created, nil
+}
+
 func (repo *Repository) UpsertOpenAIAccount(ctx context.Context, input adminrepo.UpsertOpenAIAccountInput) (entity.OpenAIAccount, bool, error) {
 	row := repo.pool.QueryRow(ctx, query("openai_accounts__upsert.sql"),
 		input.Name,
@@ -291,6 +333,41 @@ func scanAgentRun(row pgx.Row) (entity.AgentRun, error) {
 		&item.UpdatedAt,
 	); err != nil {
 		return entity.AgentRun{}, err
+	}
+	return item, nil
+}
+
+type promptTemplateRow interface {
+	Scan(dest ...any) error
+}
+
+func scanAgentPromptTemplate(row promptTemplateRow) (entity.AgentPromptTemplate, error) {
+	var item entity.AgentPromptTemplate
+	if err := row.Scan(
+		&item.ID,
+		&item.ProfileName,
+		&item.TemplateKey,
+		&item.Body,
+		&item.CreatedAt,
+		&item.UpdatedAt,
+	); err != nil {
+		return entity.AgentPromptTemplate{}, err
+	}
+	return item, nil
+}
+
+func scanAgentPromptTemplateWithCreated(row pgx.Row, created *bool) (entity.AgentPromptTemplate, error) {
+	var item entity.AgentPromptTemplate
+	if err := row.Scan(
+		&item.ID,
+		&item.ProfileName,
+		&item.TemplateKey,
+		&item.Body,
+		&item.CreatedAt,
+		&item.UpdatedAt,
+		created,
+	); err != nil {
+		return entity.AgentPromptTemplate{}, err
 	}
 	return item, nil
 }

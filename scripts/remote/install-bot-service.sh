@@ -46,7 +46,7 @@ done
 
 mattercodex_load_env_file "$ENV_FILE"
 mattercodex_validate_base_env
-mattercodex_require_commands ssh envsubst base64
+mattercodex_require_commands ssh envsubst base64 tar
 
 if [ -z "$RENDER_DIR" ]; then
   RENDER_DIR="$(mktemp -d)"
@@ -61,6 +61,60 @@ REMOTE_KUBECTL="$(mattercodex_remote_kubectl_command)"
 if [ "$DRY_RUN_MODE" = "server" ] && ! mattercodex_ssh "$REMOTE_KUBECTL get namespace $NAMESPACE_Q >/dev/null 2>&1"; then
   mattercodex_log "namespace еще не создан; bot-service manifests проверяются через remote client dry-run"
   APPLY_DRY_RUN_MODE="client"
+fi
+
+if [ "$DRY_RUN_MODE" = "none" ] && mattercodex_bool "${MATTERCODEX_AGENT_RUNNER_BUILD_IMAGE:-true}"; then
+  mattercodex_log "сборка agent-runner image на целевом сервере"
+  AGENT_RUNNER_ARCHIVE="$(mktemp)"
+  trap 'rm -f "${AGENT_RUNNER_ARCHIVE:-}"' EXIT
+  tar -C "$REPO_ROOT" -czf "$AGENT_RUNNER_ARCHIVE" \
+    services/jobs/agent-runner
+  REMOTE_AGENT_RUNNER_DIR="/tmp/matter-codex-agent-runner-build"
+  REMOTE_AGENT_RUNNER_DIR_Q="$(mattercodex_shell_quote "$REMOTE_AGENT_RUNNER_DIR")"
+  AGENT_RUNNER_IMAGE_Q="$(mattercodex_shell_quote "$MATTERCODEX_AGENT_RUNNER_IMAGE")"
+  CODEX_PACKAGE_Q="$(mattercodex_shell_quote "$MATTERCODEX_CODEX_PACKAGE")"
+  REMOTE_AGENT_RUNNER_BUILDER="$(mattercodex_ssh 'set -eu
+    if command -v docker >/dev/null 2>&1; then
+      printf "docker\n"
+    elif command -v nerdctl >/dev/null 2>&1; then
+      printf "nerdctl\n"
+    else
+      printf "none\n"
+    fi' </dev/null)"
+  REMOTE_AGENT_RUNNER_IMPORT="$(mattercodex_ssh 'set -eu
+    if command -v sudo >/dev/null 2>&1 && sudo -n k3s ctr images ls >/dev/null 2>&1; then
+      printf "sudo -n k3s ctr images import -\n"
+    elif command -v sudo >/dev/null 2>&1 && sudo -n ctr -n k8s.io images ls >/dev/null 2>&1; then
+      printf "sudo -n ctr -n k8s.io images import -\n"
+    else
+      printf "none\n"
+    fi' </dev/null)"
+  if [ "$REMOTE_AGENT_RUNNER_BUILDER" = "docker" ] || [ "$REMOTE_AGENT_RUNNER_BUILDER" = "nerdctl" ]; then
+    mattercodex_ssh "rm -rf $REMOTE_AGENT_RUNNER_DIR_Q && mkdir -p $REMOTE_AGENT_RUNNER_DIR_Q && tar -xzf - -C $REMOTE_AGENT_RUNNER_DIR_Q" < "$AGENT_RUNNER_ARCHIVE"
+    mattercodex_ssh "set -eu
+      cd $REMOTE_AGENT_RUNNER_DIR_Q
+      image=$AGENT_RUNNER_IMAGE_Q
+      codex_package=$CODEX_PACKAGE_Q
+      if [ '$REMOTE_AGENT_RUNNER_BUILDER' = 'docker' ]; then
+        docker build --build-arg MATTERCODEX_CODEX_PACKAGE=\"\$codex_package\" -f services/jobs/agent-runner/Dockerfile -t \"\$image\" .
+        if [ '$REMOTE_AGENT_RUNNER_IMPORT' != 'none' ]; then
+          docker save \"\$image\" | $REMOTE_AGENT_RUNNER_IMPORT
+        fi
+      else
+        nerdctl -n k8s.io build --build-arg MATTERCODEX_CODEX_PACKAGE=\"\$codex_package\" -f services/jobs/agent-runner/Dockerfile -t \"\$image\" .
+      fi" </dev/null
+  elif [ "$REMOTE_AGENT_RUNNER_IMPORT" != "none" ] && command -v docker >/dev/null 2>&1; then
+    mattercodex_log "на сервере нет docker/nerdctl; сборка agent-runner image локально и импорт в Kubernetes runtime"
+    docker build \
+      --network=host \
+      --build-arg "MATTERCODEX_CODEX_PACKAGE=$MATTERCODEX_CODEX_PACKAGE" \
+      -f "$REPO_ROOT/services/jobs/agent-runner/Dockerfile" \
+      -t "$MATTERCODEX_AGENT_RUNNER_IMAGE" \
+      "$REPO_ROOT" >/dev/null
+    docker save "$MATTERCODEX_AGENT_RUNNER_IMAGE" | mattercodex_ssh "$REMOTE_AGENT_RUNNER_IMPORT"
+  else
+    mattercodex_die "не найден способ собрать или импортировать agent-runner image: нужен docker/nerdctl на сервере либо локальный docker и remote k3s/ctr import"
+  fi
 fi
 
 if [ -n "${MATTERCODEX_MATTERMOST_BOT_TOKEN:-}" ] || [ -n "${MATTERCODEX_MATTERMOST_SLASH_TOKEN:-}" ]; then

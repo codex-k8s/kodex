@@ -18,6 +18,18 @@ type DeveloperRunInput struct {
 	HeadBranch          string
 	Title               string
 	Task                string
+	Prompt              string
+}
+
+type ReviewRunInput struct {
+	RunID               string
+	Profile             string
+	CodexAuthSecretName string
+	Provider            string
+	Owner               string
+	Name                string
+	PRNumber            int
+	Prompt              string
 }
 
 type CodexAuthSessionInput struct {
@@ -105,6 +117,7 @@ type Runner interface {
 	CompleteCodexAuthSession(ctx context.Context, input CodexAuthCompleteInput) (CodexAuthCompleteResult, error)
 	CleanupCodexAuthSession(ctx context.Context, accountName string) (CodexAuthCleanupResult, error)
 	StartDeveloperRun(ctx context.Context, input DeveloperRunInput) (StartedRun, error)
+	StartReviewRun(ctx context.Context, input ReviewRunInput) (StartedRun, error)
 	GetRunStatus(ctx context.Context, runID string) (RunStatus, error)
 	CleanupRun(ctx context.Context, runID string) (CleanupResult, error)
 }

@@ -58,10 +58,19 @@ type UpdateOpenAIAccountStatusInput struct {
 	Status    string
 }
 
+type UpsertAgentPromptTemplateInput struct {
+	ProfileName string
+	TemplateKey string
+	Body        string
+}
+
 type Repository interface {
 	UpsertRepository(ctx context.Context, input UpsertRepositoryInput) (entity.Repository, bool, error)
 	ListRepositories(ctx context.Context, limit int) ([]entity.Repository, error)
 	ListAgentProfiles(ctx context.Context) ([]entity.AgentProfile, error)
+	ListAgentPromptTemplates(ctx context.Context, profileName string) ([]entity.AgentPromptTemplate, error)
+	GetAgentPromptTemplate(ctx context.Context, profileName string, templateKey string) (entity.AgentPromptTemplate, error)
+	UpsertAgentPromptTemplate(ctx context.Context, input UpsertAgentPromptTemplateInput) (entity.AgentPromptTemplate, bool, error)
 	UpsertOpenAIAccount(ctx context.Context, input UpsertOpenAIAccountInput) (entity.OpenAIAccount, bool, error)
 	ListOpenAIAccounts(ctx context.Context, limit int) ([]entity.OpenAIAccount, error)
 	GetOpenAIAccount(ctx context.Context, name string) (entity.OpenAIAccount, error)
