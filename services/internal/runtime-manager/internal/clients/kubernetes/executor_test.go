@@ -20,6 +20,8 @@ import (
 	runtimeapi "k8s.io/apimachinery/pkg/runtime"
 	clientkubernetes "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/metadata"
+	metadatafake "k8s.io/client-go/metadata/fake"
 	clienttesting "k8s.io/client-go/testing"
 )
 
@@ -27,7 +29,7 @@ func TestExecutorStartCreatesRestrictedHealthCheckJob(t *testing.T) {
 	t.Parallel()
 
 	client := fake.NewClientset()
-	executor := newTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
+	executor := newBuildReadyTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
 	job := testHealthCheckJob()
 	job.JobInputJSON = []byte(`{"labels":{"runtime.kodex.io/test":"true"}}`)
 
@@ -63,7 +65,7 @@ func TestExecutorStartCreatesRestrictedAgentRunJob(t *testing.T) {
 	t.Parallel()
 
 	client := fake.NewClientset()
-	executor := newTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
+	executor := newBuildReadyTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
 	job := testAgentRunJob()
 
 	started, err := executor.Start(context.Background(), job)
@@ -156,7 +158,7 @@ func TestExecutorStartCreatesRestrictedKanikoBuildJob(t *testing.T) {
 	t.Parallel()
 
 	client := fake.NewClientset()
-	executor := newTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
+	executor := newBuildReadyTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
 	job := testBuildJob()
 
 	started, err := executor.Start(context.Background(), job)
@@ -264,7 +266,7 @@ func TestExecutorStartRejectsUnsafeCodexSessionSpecBeforeCreatingJob(t *testing.
 	t.Parallel()
 
 	client := fake.NewClientset()
-	executor := newTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
+	executor := newBuildReadyTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
 	job := testAgentRunJob()
 	job.JobInputJSON = []byte(strings.Replace(
 		string(job.JobInputJSON),
@@ -322,7 +324,7 @@ func TestExecutorStartRejectsBuildWithUnsupportedContextRef(t *testing.T) {
 	t.Parallel()
 
 	client := fake.NewClientset()
-	executor := newTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
+	executor := newBuildReadyTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
 	job := testBuildJob()
 	job.JobInputJSON = []byte(strings.Replace(
 		string(job.JobInputJSON),
@@ -343,11 +345,68 @@ func TestExecutorStartRejectsBuildWithUnsupportedContextRef(t *testing.T) {
 	}
 }
 
+func TestExecutorStartRejectsBuildWhenContextPVCIsMissing(t *testing.T) {
+	t.Parallel()
+
+	client := fake.NewClientset()
+	executor := newBuildReadyTestExecutorWithoutPVC(t, client, fakeClusterProvider{access: testClusterAccess()})
+
+	_, err := executor.Start(context.Background(), testBuildJob())
+
+	assertExecutionCode(t, err, "build_context_pvc_unavailable")
+	assertNoCreatedJobs(t, client, "runtime-jobs")
+}
+
+func TestExecutorStartRejectsBuildWhenContextPVCIsNotBound(t *testing.T) {
+	t.Parallel()
+
+	client := fake.NewClientset()
+	seedBuildContextPVC(t, client, "runtime-jobs", "runtime-build-context-001", corev1.ClaimPending)
+	executor := newBuildReadyTestExecutorWithoutPVC(t, client, fakeClusterProvider{access: testClusterAccess()})
+
+	_, err := executor.Start(context.Background(), testBuildJob())
+
+	assertExecutionCode(t, err, "build_context_pvc_not_ready")
+	assertNoCreatedJobs(t, client, "runtime-jobs")
+}
+
+func TestExecutorStartRejectsBuildWhenRegistrySecretIsMissing(t *testing.T) {
+	t.Parallel()
+
+	client := fake.NewClientset()
+	seedBuildContextPVC(t, client, "runtime-jobs", "runtime-build-context-001", corev1.ClaimBound)
+	executor := newTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
+
+	_, err := executor.Start(context.Background(), testBuildJob())
+
+	assertExecutionCode(t, err, "build_registry_secret_unavailable")
+	assertNoCreatedJobs(t, client, "runtime-jobs")
+}
+
+func TestExecutorStartRejectsBuildWithoutRegistrySecretRef(t *testing.T) {
+	t.Parallel()
+
+	client := fake.NewClientset()
+	executor := newBuildReadyTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
+	job := testBuildJob()
+	job.JobInputJSON = []byte(strings.Replace(
+		string(job.JobInputJSON),
+		`,"allowed_secret_refs":[{"kind":"registry","ref":"secret://runtime/registry-push"}]`,
+		``,
+		1,
+	))
+
+	_, err := executor.Start(context.Background(), job)
+
+	assertExecutionCode(t, err, "build_registry_secret_ref_required")
+	assertNoCreatedJobs(t, client, "runtime-jobs")
+}
+
 func TestExecutorStartRejectsBuildWithUnsafeDockerfileRef(t *testing.T) {
 	t.Parallel()
 
 	client := fake.NewClientset()
-	executor := newTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
+	executor := newBuildReadyTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
 	job := testBuildJob()
 	job.JobInputJSON = []byte(strings.Replace(
 		string(job.JobInputJSON),
@@ -372,7 +431,7 @@ func TestExecutorStartReusesExistingManagedJob(t *testing.T) {
 	t.Parallel()
 
 	client := fake.NewClientset()
-	executor := newTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
+	executor := newBuildReadyTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
 	job := testHealthCheckJob()
 
 	first, err := executor.Start(context.Background(), job)
@@ -399,7 +458,7 @@ func TestExecutorStartRejectsNameConflict(t *testing.T) {
 	t.Parallel()
 
 	client := fake.NewClientset()
-	executor := newTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
+	executor := newBuildReadyTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
 	job := testHealthCheckJob()
 	_, err := client.BatchV1().Jobs("runtime-jobs").Create(context.Background(), &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
@@ -459,7 +518,7 @@ func TestExecutorWaitReportsCompletedJob(t *testing.T) {
 	t.Parallel()
 
 	client := fake.NewClientset()
-	executor := newTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
+	executor := newBuildReadyTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
 	started, err := executor.Start(context.Background(), testHealthCheckJob())
 	if err != nil {
 		t.Fatalf("Start(): %v", err)
@@ -483,7 +542,7 @@ func TestExecutorWaitReportsFailedJob(t *testing.T) {
 	t.Parallel()
 
 	client := fake.NewClientset()
-	executor := newTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
+	executor := newBuildReadyTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
 	started, err := executor.Start(context.Background(), testHealthCheckJob())
 	if err != nil {
 		t.Fatalf("Start(): %v", err)
@@ -508,7 +567,7 @@ func TestExecutorObserveReportsBuildRunningStatus(t *testing.T) {
 	t.Parallel()
 
 	client := fake.NewClientset()
-	executor := newTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
+	executor := newBuildReadyTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
 	started, err := executor.Start(context.Background(), testBuildJob())
 	if err != nil {
 		t.Fatalf("Start(build): %v", err)
@@ -533,7 +592,7 @@ func TestExecutorObserveFallsBackToRuntimeJobLabels(t *testing.T) {
 	t.Parallel()
 
 	client := fake.NewClientset()
-	executor := newTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
+	executor := newBuildReadyTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
 	started, err := executor.Start(context.Background(), testBuildJob())
 	if err != nil {
 		t.Fatalf("Start(build): %v", err)
@@ -563,7 +622,7 @@ func TestExecutorObserveRejectsAmbiguousRuntimeJobLabels(t *testing.T) {
 	t.Parallel()
 
 	client := fake.NewClientset()
-	executor := newTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
+	executor := newBuildReadyTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
 	started, err := executor.Start(context.Background(), testBuildJob())
 	if err != nil {
 		t.Fatalf("Start(build): %v", err)
@@ -596,7 +655,7 @@ func TestExecutorObserveRejectsMismatchedManagedLabels(t *testing.T) {
 	t.Parallel()
 
 	client := fake.NewClientset()
-	executor := newTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
+	executor := newBuildReadyTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
 	started, err := executor.Start(context.Background(), testBuildJob())
 	if err != nil {
 		t.Fatalf("Start(build): %v", err)
@@ -621,7 +680,7 @@ func TestExecutorWaitReportsBuildTimeoutCondition(t *testing.T) {
 	t.Parallel()
 
 	client := fake.NewClientset()
-	executor := newTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
+	executor := newBuildReadyTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
 	started, err := executor.Start(context.Background(), testBuildJob())
 	if err != nil {
 		t.Fatalf("Start(build): %v", err)
@@ -651,7 +710,7 @@ func TestExecutorWaitRedactsUnsafeBuildFailureSummary(t *testing.T) {
 	t.Parallel()
 
 	client := fake.NewClientset()
-	executor := newTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
+	executor := newBuildReadyTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
 	started, err := executor.Start(context.Background(), testBuildJob())
 	if err != nil {
 		t.Fatalf("Start(build): %v", err)
@@ -758,7 +817,23 @@ func TestBoundedLogTailLimitsBytesAndPreservesUTF8(t *testing.T) {
 	}
 }
 
+func newBuildReadyTestExecutor(t *testing.T, client clientkubernetes.Interface, provider fakeClusterProvider) *Executor {
+	t.Helper()
+	seedBuildContextPVC(t, client, "runtime-jobs", "runtime-build-context-001", corev1.ClaimBound)
+	return newBuildReadyTestExecutorWithoutPVC(t, client, provider)
+}
+
+func newBuildReadyTestExecutorWithoutPVC(t *testing.T, client clientkubernetes.Interface, provider fakeClusterProvider) *Executor {
+	t.Helper()
+	return newTestExecutorWithMetadata(t, client, newTestMetadataClient(t, registrySecretMetadata()), provider)
+}
+
 func newTestExecutor(t *testing.T, client clientkubernetes.Interface, provider fakeClusterProvider) *Executor {
+	t.Helper()
+	return newTestExecutorWithMetadata(t, client, newTestMetadataClient(t), provider)
+}
+
+func newTestExecutorWithMetadata(t *testing.T, client clientkubernetes.Interface, metadataClient metadata.Interface, provider fakeClusterProvider) *Executor {
 	t.Helper()
 	executor, err := NewExecutorWithClientFactory(provider, fakeSecretResolver{value: secretresolver.NewSecretValue([]byte("kubeconfig"))}, Config{
 		DefaultNamespace:        "runtime-jobs",
@@ -772,11 +847,55 @@ func newTestExecutor(t *testing.T, client clientkubernetes.Interface, provider f
 		AgentManagerGRPCAddr:    "agent-manager:9090",
 		AgentManagerAuthSecret:  SecretKeyRef{Name: "kodex-platform-runtime", Key: "KODEX_AGENT_MANAGER_GRPC_AUTH_TOKEN"},
 		AgentManagerTimeout:     3 * time.Second,
-	}, fakeClientFactory{client: client})
+	}, fakeClientFactory{client: client, metadataClient: metadataClient})
 	if err != nil {
 		t.Fatalf("NewExecutorWithClientFactory(): %v", err)
 	}
 	return executor
+}
+
+func newTestMetadataClient(t *testing.T, objects ...runtimeapi.Object) metadata.Interface {
+	t.Helper()
+	scheme := metadatafake.NewTestScheme()
+	if err := metav1.AddMetaToScheme(scheme); err != nil {
+		t.Fatalf("add metadata scheme: %v", err)
+	}
+	return metadatafake.NewSimpleMetadataClient(scheme, objects...)
+}
+
+func registrySecretMetadata() *metav1.PartialObjectMetadata {
+	return &metav1.PartialObjectMetadata{
+		TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "Secret"},
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "runtime-jobs",
+			Name:      "registry-push",
+		},
+	}
+}
+
+func seedBuildContextPVC(t *testing.T, client clientkubernetes.Interface, namespace string, name string, phase corev1.PersistentVolumeClaimPhase) {
+	t.Helper()
+	_, err := client.CoreV1().PersistentVolumeClaims(namespace).Create(context.Background(), &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespace,
+			Name:      name,
+		},
+		Status: corev1.PersistentVolumeClaimStatus{Phase: phase},
+	}, metav1.CreateOptions{})
+	if err != nil {
+		t.Fatalf("seed build context PVC: %v", err)
+	}
+}
+
+func assertNoCreatedJobs(t *testing.T, client clientkubernetes.Interface, namespace string) {
+	t.Helper()
+	jobs, err := client.BatchV1().Jobs(namespace).List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		t.Fatalf("list Jobs: %v", err)
+	}
+	if len(jobs.Items) != 0 {
+		t.Fatalf("created Jobs = %d, want none before build preflight passes", len(jobs.Items))
+	}
 }
 
 func testHealthCheckJob() entity.Job {
@@ -894,9 +1013,10 @@ func (r fakeSecretResolver) Resolve(context.Context, secretresolver.SecretRef) (
 }
 
 type fakeClientFactory struct {
-	client clientkubernetes.Interface
+	client         clientkubernetes.Interface
+	metadataClient metadata.Interface
 }
 
-func (f fakeClientFactory) NewForKubeconfig([]byte) (clientkubernetes.Interface, error) {
-	return f.client, nil
+func (f fakeClientFactory) NewForKubeconfig([]byte) (clusterClients, error) {
+	return clusterClients{kubernetes: f.client, metadata: f.metadataClient}, nil
 }

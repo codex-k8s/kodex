@@ -224,7 +224,7 @@ func (w kubernetesJobWorker) failClaimedJob(ctx context.Context, job entity.Job,
 		ErrorCode:    code,
 		ErrorMessage: message,
 		ShortLogTail: shortLogTail,
-		NextAction:   "review_runtime_kubernetes_job",
+		NextAction:   nextActionForKubernetesError(code),
 		TimedOut:     code == "kubernetes_job_timeout",
 		Meta:         w.commandMeta("fail", &job.Version),
 	}); err != nil {
@@ -321,6 +321,19 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func nextActionForKubernetesError(code string) string {
+	switch strings.TrimSpace(code) {
+	case "build_context_ref_required", "build_context_pvc_unavailable", "build_context_pvc_not_ready", "build_context_pvc_status_unavailable":
+		return "prepare_build_context_pvc"
+	case "build_registry_secret_ref_required", "build_registry_secret_unavailable", "build_registry_secret_status_unavailable":
+		return "provide_build_registry_secret_ref"
+	case "build_context_pvc_access_denied", "build_registry_secret_access_denied", "kubernetes_service_account_unavailable", "kubernetes_service_account_access_denied", "kubernetes_service_account_status_unavailable", "kubernetes_job_create_access_denied":
+		return "fix_runtime_kubernetes_rbac"
+	default:
+		return "review_runtime_kubernetes_job"
+	}
 }
 
 func (w kubernetesJobWorker) log() *slog.Logger {

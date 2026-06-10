@@ -260,8 +260,68 @@ func TestKubernetesJobWorkerFailsClaimedJobOnExecutorError(t *testing.T) {
 	if service.failCalls != 1 || service.lastFailCode != "cluster_secret_unavailable" {
 		t.Fatalf("fail calls/code = %d/%s, want one cluster_secret_unavailable", service.failCalls, service.lastFailCode)
 	}
+	if service.lastFailNextAction != "review_runtime_kubernetes_job" {
+		t.Fatalf("next action = %q, want review_runtime_kubernetes_job", service.lastFailNextAction)
+	}
 	if len(service.reportStatuses) != 0 {
 		t.Fatalf("report statuses = %v, want none before executor start", service.reportStatuses)
+	}
+}
+
+func TestKubernetesJobWorkerMapsBuildPreflightNextAction(t *testing.T) {
+	t.Parallel()
+
+	job := entity.Job{
+		Base:    entity.Base{ID: uuid.MustParse("00000000-0000-0000-0000-000000000109"), Version: 2},
+		JobType: enum.JobTypeBuild,
+		Status:  enum.JobStatusClaimed,
+	}
+	service := &fakeRuntimeJobLifecycle{claim: runtimeservice.ClaimRunnableJobResult{Job: job, LeaseToken: "lease-token"}}
+	worker := testKubernetesJobWorker(service, fakeKubernetesExecutor{
+		startErr: &runtimekubernetes.ExecutionError{Code: "build_context_pvc_not_ready", Message: "build context PVC is not bound"},
+	})
+
+	worker.claimAndExecute(context.Background())
+
+	if service.failCalls != 1 || service.lastFailCode != "build_context_pvc_not_ready" {
+		t.Fatalf("fail calls/code = %d/%s, want build context preflight failure", service.failCalls, service.lastFailCode)
+	}
+	if service.lastFailNextAction != "prepare_build_context_pvc" {
+		t.Fatalf("next action = %q, want prepare_build_context_pvc", service.lastFailNextAction)
+	}
+	if len(service.reportStatuses) != 0 {
+		t.Fatalf("report statuses = %v, want none before executor start", service.reportStatuses)
+	}
+}
+
+func TestNextActionForKubernetesError(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]string{
+		"build_context_ref_required":                    "prepare_build_context_pvc",
+		"build_context_pvc_unavailable":                 "prepare_build_context_pvc",
+		"build_context_pvc_not_ready":                   "prepare_build_context_pvc",
+		"build_context_pvc_status_unavailable":          "prepare_build_context_pvc",
+		"build_registry_secret_ref_required":            "provide_build_registry_secret_ref",
+		"build_registry_secret_unavailable":             "provide_build_registry_secret_ref",
+		"build_registry_secret_status_unavailable":      "provide_build_registry_secret_ref",
+		"build_context_pvc_access_denied":               "fix_runtime_kubernetes_rbac",
+		"build_registry_secret_access_denied":           "fix_runtime_kubernetes_rbac",
+		"kubernetes_service_account_unavailable":        "fix_runtime_kubernetes_rbac",
+		"kubernetes_service_account_access_denied":      "fix_runtime_kubernetes_rbac",
+		"kubernetes_service_account_status_unavailable": "fix_runtime_kubernetes_rbac",
+		"kubernetes_job_create_access_denied":           "fix_runtime_kubernetes_rbac",
+		"cluster_secret_unavailable":                    "review_runtime_kubernetes_job",
+	}
+	for code, want := range tests {
+		code := code
+		want := want
+		t.Run(code, func(t *testing.T) {
+			t.Parallel()
+			if got := nextActionForKubernetesError(code); got != want {
+				t.Fatalf("next action = %q, want %q", got, want)
+			}
+		})
 	}
 }
 
@@ -374,6 +434,7 @@ type fakeRuntimeJobLifecycle struct {
 	failCalls            int
 	lastFailCode         string
 	lastFailTimedOut     bool
+	lastFailNextAction   string
 	completeShortLogTail string
 	failShortLogTail     string
 }
@@ -407,6 +468,7 @@ func (s *fakeRuntimeJobLifecycle) FailJob(_ context.Context, input runtimeservic
 	s.failCalls++
 	s.lastFailCode = input.ErrorCode
 	s.lastFailTimedOut = input.TimedOut
+	s.lastFailNextAction = input.NextAction
 	s.failShortLogTail = input.ShortLogTail
 	job := s.claim.Job
 	job.Status = enum.JobStatusFailed
