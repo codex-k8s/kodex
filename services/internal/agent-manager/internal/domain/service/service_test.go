@@ -5591,6 +5591,197 @@ func TestEnsureSelfDeployPlanGovernanceGateReportsPlanGovernanceRefsUpdateFailur
 	}
 }
 
+func TestRecordSelfDeployPlanGateDecisionApprovesAndDispatchesBuild(t *testing.T) {
+	t.Parallel()
+
+	input := validSelfDeployBuildPlanInput()
+	plan := selfDeployPlanFromInputForTest(input, uuid.MustParse("5f7f3a10-0044-4000-8000-000000000044"), "command:"+input.Meta.CommandID.String())
+	plan.GovernanceContext.RiskAssessmentRef = "governance:risk_assessment/aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"
+	plan.GovernanceContext.GateRequestRef = "governance:gate_request/bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb"
+	repository := &fakeRepository{selfDeployByID: map[uuid.UUID]entity.SelfDeployPlan{plan.ID: plan}}
+	buildReader := &fakeSelfDeployBuildPlanReader{result: readySelfDeployBuildPlanResult()}
+	buildCreator := &fakeSelfDeployBuildJobCreator{result: RuntimeJobResult{JobRef: "runtime:job/build-agent-manager", Status: "pending"}}
+	service := New(Config{
+		Repository:                     repository,
+		SelfDeployBuildPlanReader:      buildReader,
+		SelfDeployBuildJobCreator:      buildCreator,
+		SelfDeployBuildDispatchEnabled: true,
+	})
+	expectedVersion := plan.Version
+
+	approved, err := service.RecordSelfDeployPlanGateDecision(context.Background(), RecordSelfDeployPlanGateDecisionInput{
+		Meta: value.CommandMeta{
+			IdempotencyKey:  "gate-decision-approved",
+			ExpectedVersion: &expectedVersion,
+			Actor:           testActor(),
+		},
+		SelfDeployPlanID: plan.ID,
+		GateRequestRef:   plan.GovernanceContext.GateRequestRef,
+		GateDecisionRef:  "governance:gate_decision/cccccccc-cccc-4ccc-cccc-cccccccccccc",
+		Outcome:          SelfDeployPlanGateDecisionOutcomeApprove,
+		SafeSummary:      "owner approved self-deploy build",
+	})
+	if err != nil {
+		t.Fatalf("RecordSelfDeployPlanGateDecision() err = %v", err)
+	}
+	if approved.Status != enum.SelfDeployPlanStatusApproved || approved.RuntimeBuildStatus != enum.SelfDeployRuntimeBuildStatusRequested {
+		t.Fatalf("statuses = %s/%s, want approved/requested", approved.Status, approved.RuntimeBuildStatus)
+	}
+	if approved.GovernanceContext.GateDecisionRef != "governance:gate_decision/cccccccc-cccc-4ccc-cccc-cccccccccccc" {
+		t.Fatalf("gate decision ref = %q", approved.GovernanceContext.GateDecisionRef)
+	}
+	if len(approved.RuntimeBuildJobs) != 1 || approved.RuntimeBuildJobs[0].RuntimeJobRef != "runtime:job/build-agent-manager" {
+		t.Fatalf("runtime build jobs = %+v", approved.RuntimeBuildJobs)
+	}
+	if buildReader.calls != 1 || buildCreator.calls != 1 {
+		t.Fatalf("build reader/creator calls = %d/%d, want 1/1", buildReader.calls, buildCreator.calls)
+	}
+	if strings.Contains(approved.SafeSummary+approved.RuntimeBuildSummary, "raw_provider_payload") {
+		t.Fatalf("stored summaries leaked unsafe marker: %q / %q", approved.SafeSummary, approved.RuntimeBuildSummary)
+	}
+}
+
+func TestRecordSelfDeployPlanGateDecisionRejectsWithoutBuild(t *testing.T) {
+	t.Parallel()
+
+	input := validSelfDeployBuildPlanInput()
+	plan := selfDeployPlanFromInputForTest(input, uuid.MustParse("5f7f3a10-0045-4000-8000-000000000045"), "command:"+input.Meta.CommandID.String())
+	plan.GovernanceContext.RiskAssessmentRef = "governance:risk_assessment/aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"
+	plan.GovernanceContext.GateRequestRef = "governance:gate_request/bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb"
+	repository := &fakeRepository{selfDeployByID: map[uuid.UUID]entity.SelfDeployPlan{plan.ID: plan}}
+	buildReader := &fakeSelfDeployBuildPlanReader{result: readySelfDeployBuildPlanResult()}
+	buildCreator := &fakeSelfDeployBuildJobCreator{result: RuntimeJobResult{JobRef: "runtime:job/build-agent-manager", Status: "pending"}}
+	service := New(Config{
+		Repository:                     repository,
+		SelfDeployBuildPlanReader:      buildReader,
+		SelfDeployBuildJobCreator:      buildCreator,
+		SelfDeployBuildDispatchEnabled: true,
+	})
+
+	rejected, err := service.RecordSelfDeployPlanGateDecision(context.Background(), RecordSelfDeployPlanGateDecisionInput{
+		Meta:             value.CommandMeta{IdempotencyKey: "gate-decision-rejected", Actor: testActor()},
+		SelfDeployPlanID: plan.ID,
+		GateRequestRef:   plan.GovernanceContext.GateRequestRef,
+		GateDecisionRef:  "governance:gate_decision/dddddddd-dddd-4ddd-dddd-dddddddddddd",
+		Outcome:          SelfDeployPlanGateDecisionOutcomeReject,
+		SafeSummary:      "owner rejected self-deploy plan",
+	})
+	if err != nil {
+		t.Fatalf("RecordSelfDeployPlanGateDecision() err = %v", err)
+	}
+	if rejected.Status != enum.SelfDeployPlanStatusRejected || rejected.RuntimeBuildStatus != enum.SelfDeployRuntimeBuildStatusNotRequested {
+		t.Fatalf("statuses = %s/%s, want rejected/not_requested", rejected.Status, rejected.RuntimeBuildStatus)
+	}
+	if buildReader.calls != 0 || buildCreator.calls != 0 {
+		t.Fatalf("build reader/creator calls = %d/%d, want 0/0", buildReader.calls, buildCreator.calls)
+	}
+	if rejected.SafeSummary != "owner rejected self-deploy plan" {
+		t.Fatalf("safe summary = %q", rejected.SafeSummary)
+	}
+}
+
+func TestRecordSelfDeployPlanGateDecisionRequestChangesFailsClosed(t *testing.T) {
+	t.Parallel()
+
+	input := validSelfDeployBuildPlanInput()
+	plan := selfDeployPlanFromInputForTest(input, uuid.MustParse("5f7f3a10-0046-4000-8000-000000000046"), "command:"+input.Meta.CommandID.String())
+	plan.GovernanceContext.RiskAssessmentRef = "governance:risk_assessment/aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"
+	plan.GovernanceContext.GateRequestRef = "governance:gate_request/bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb"
+	repository := &fakeRepository{selfDeployByID: map[uuid.UUID]entity.SelfDeployPlan{plan.ID: plan}}
+	buildCreator := &fakeSelfDeployBuildJobCreator{result: RuntimeJobResult{JobRef: "runtime:job/build-agent-manager", Status: "pending"}}
+	service := New(Config{
+		Repository:                     repository,
+		SelfDeployBuildPlanReader:      &fakeSelfDeployBuildPlanReader{result: readySelfDeployBuildPlanResult()},
+		SelfDeployBuildJobCreator:      buildCreator,
+		SelfDeployBuildDispatchEnabled: true,
+	})
+
+	changes, err := service.RecordSelfDeployPlanGateDecision(context.Background(), RecordSelfDeployPlanGateDecisionInput{
+		Meta:             value.CommandMeta{IdempotencyKey: "gate-decision-request-changes", Actor: testActor()},
+		SelfDeployPlanID: plan.ID,
+		GateRequestRef:   plan.GovernanceContext.GateRequestRef,
+		GateDecisionRef:  "governance:gate_decision/eeeeeeee-eeee-4eee-eeee-eeeeeeeeeeee",
+		Outcome:          SelfDeployPlanGateDecisionOutcomeRequestChanges,
+		SafeSummary:      "owner requested bounded changes",
+	})
+	if err != nil {
+		t.Fatalf("RecordSelfDeployPlanGateDecision() err = %v", err)
+	}
+	if changes.Status != enum.SelfDeployPlanStatusRejected || changes.RuntimeBuildStatus != enum.SelfDeployRuntimeBuildStatusNotRequested {
+		t.Fatalf("statuses = %s/%s, want terminal non-approved without build", changes.Status, changes.RuntimeBuildStatus)
+	}
+	if buildCreator.calls != 0 {
+		t.Fatalf("build creator calls = %d, want 0", buildCreator.calls)
+	}
+	if changes.SafeSummary != "owner requested bounded changes" {
+		t.Fatalf("safe summary = %q", changes.SafeSummary)
+	}
+}
+
+func TestRecordSelfDeployPlanGateDecisionReplaysExistingDecision(t *testing.T) {
+	t.Parallel()
+
+	input := validSelfDeployBuildPlanInput()
+	plan := selfDeployPlanFromInputForTest(input, uuid.MustParse("5f7f3a10-0047-4000-8000-000000000047"), "command:"+input.Meta.CommandID.String())
+	plan.Status = enum.SelfDeployPlanStatusApproved
+	plan.GovernanceContext.RiskAssessmentRef = "governance:risk_assessment/aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"
+	plan.GovernanceContext.GateRequestRef = "governance:gate_request/bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb"
+	plan.GovernanceContext.GateDecisionRef = "governance:gate_decision/cccccccc-cccc-4ccc-cccc-cccccccccccc"
+	plan.RuntimeBuildStatus = enum.SelfDeployRuntimeBuildStatusRequested
+	plan.RuntimeBuildJobs = []entity.SelfDeployRuntimeBuildJob{{ServiceKey: "agent-manager", RuntimeJobRef: "runtime:job/existing-build"}}
+	repository := &fakeRepository{selfDeployByID: map[uuid.UUID]entity.SelfDeployPlan{plan.ID: plan}}
+	service := New(Config{
+		Repository:                     repository,
+		SelfDeployBuildPlanReader:      &fakeSelfDeployBuildPlanReader{result: readySelfDeployBuildPlanResult()},
+		SelfDeployBuildJobCreator:      &fakeSelfDeployBuildJobCreator{result: RuntimeJobResult{JobRef: "runtime:job/new-build", Status: "pending"}},
+		SelfDeployBuildDispatchEnabled: true,
+	})
+
+	replayed, err := service.RecordSelfDeployPlanGateDecision(context.Background(), RecordSelfDeployPlanGateDecisionInput{
+		Meta:             value.CommandMeta{IdempotencyKey: "gate-decision-approved-replay", Actor: testActor()},
+		SelfDeployPlanID: plan.ID,
+		GateRequestRef:   plan.GovernanceContext.GateRequestRef,
+		GateDecisionRef:  plan.GovernanceContext.GateDecisionRef,
+		Outcome:          SelfDeployPlanGateDecisionOutcomeApprove,
+		SafeSummary:      "owner approved self-deploy build",
+	})
+	if err != nil {
+		t.Fatalf("RecordSelfDeployPlanGateDecision() err = %v", err)
+	}
+	if replayed.RuntimeBuildJobs[0].RuntimeJobRef != "runtime:job/existing-build" {
+		t.Fatalf("runtime build jobs = %+v, want existing", replayed.RuntimeBuildJobs)
+	}
+	if repository.updateSelfDeployCalled {
+		t.Fatal("UpdateSelfDeployPlanWithResult called during replay")
+	}
+}
+
+func TestRecordSelfDeployPlanGateDecisionRejectsMismatchedGateRequest(t *testing.T) {
+	t.Parallel()
+
+	input := validSelfDeployBuildPlanInput()
+	plan := selfDeployPlanFromInputForTest(input, uuid.MustParse("5f7f3a10-0048-4000-8000-000000000048"), "command:"+input.Meta.CommandID.String())
+	plan.GovernanceContext.RiskAssessmentRef = "governance:risk_assessment/aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"
+	plan.GovernanceContext.GateRequestRef = "governance:gate_request/bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb"
+	repository := &fakeRepository{selfDeployByID: map[uuid.UUID]entity.SelfDeployPlan{plan.ID: plan}}
+	service := New(Config{Repository: repository})
+
+	_, err := service.RecordSelfDeployPlanGateDecision(context.Background(), RecordSelfDeployPlanGateDecisionInput{
+		Meta:             value.CommandMeta{IdempotencyKey: "gate-decision-mismatch", Actor: testActor()},
+		SelfDeployPlanID: plan.ID,
+		GateRequestRef:   "governance:gate_request/ffffffff-ffff-4fff-ffff-ffffffffffff",
+		GateDecisionRef:  "governance:gate_decision/cccccccc-cccc-4ccc-cccc-cccccccccccc",
+		Outcome:          SelfDeployPlanGateDecisionOutcomeApprove,
+		SafeSummary:      "owner approved self-deploy build",
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("RecordSelfDeployPlanGateDecision() err = %v, want %v", err, errs.ErrConflict)
+	}
+	if repository.updateSelfDeployCalled {
+		t.Fatal("UpdateSelfDeployPlanWithResult called for mismatched gate request")
+	}
+}
+
 func TestCreateSelfDeployPlanFromSignalReportsGovernanceGateFailure(t *testing.T) {
 	t.Parallel()
 

@@ -262,6 +262,10 @@ spec:
               value: "{{ envOr "KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_CONSUMER_NAME" "agent-manager.self-deploy-signal" }}"
             - name: KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_TARGET_BRANCH
               value: "{{ envOr "KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_TARGET_BRANCH" "main" }}"
+            - name: KODEX_AGENT_MANAGER_SELF_DEPLOY_GATE_DECISION_CONSUMER_ENABLED
+              value: "{{ envOr "KODEX_AGENT_MANAGER_SELF_DEPLOY_GATE_DECISION_CONSUMER_ENABLED" "true" }}"
+            - name: KODEX_AGENT_MANAGER_SELF_DEPLOY_GATE_DECISION_CONSUMER_NAME
+              value: "{{ envOr "KODEX_AGENT_MANAGER_SELF_DEPLOY_GATE_DECISION_CONSUMER_NAME" "agent-manager.self-deploy-gate-decision" }}"
           readinessProbe:
             httpGet:
               path: /health/readyz

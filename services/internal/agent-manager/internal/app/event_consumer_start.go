@@ -34,3 +34,14 @@ func startManagedEventConsumer(ctx context.Context, starter managedEventConsumer
 	go starter.run(ctx, runner, logger, starter.errCh)
 	return nil
 }
+
+func startManagedEventConsumerWithParts(ctx context.Context, enabled bool, logger *slog.Logger, errCh chan<- error, validate func() error, runner func(*slog.Logger) (*eventconsumer.Runner, error), run func(context.Context, *eventconsumer.Runner, *slog.Logger, chan<- error)) error {
+	return startManagedEventConsumer(ctx, managedEventConsumerStarter{
+		enabled:  enabled,
+		logger:   logger,
+		errCh:    errCh,
+		validate: validate,
+		runner:   runner,
+		run:      run,
+	})
+}

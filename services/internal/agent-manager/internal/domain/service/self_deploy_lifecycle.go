@@ -58,6 +58,49 @@ func (s *Service) EnsureSelfDeployPlanGovernanceGate(ctx context.Context, input 
 	return s.prepareSelfDeployPlanGateIfNeeded(ctx, plan)
 }
 
+func (s *Service) RecordSelfDeployPlanGateDecision(ctx context.Context, input RecordSelfDeployPlanGateDecisionInput) (entity.SelfDeployPlan, error) {
+	if err := s.requireRepository(); err != nil {
+		return entity.SelfDeployPlan{}, err
+	}
+	if input.SelfDeployPlanID == uuid.Nil {
+		return entity.SelfDeployPlan{}, errs.ErrInvalidArgument
+	}
+	if _, err := commandIdentity(input.Meta, operationRecordSelfDeployGateDecision); err != nil {
+		return entity.SelfDeployPlan{}, err
+	}
+	result, err := selfDeployGateDecisionResult(input)
+	if err != nil {
+		return entity.SelfDeployPlan{}, err
+	}
+	if replay, ok, err := findReplay(ctx, s, input.Meta, operationRecordSelfDeployGateDecision, enum.CommandAggregateTypeSelfDeployPlan, selfDeployPlanFromPayload, s.verifySelfDeployPlanGateReplay); ok || err != nil {
+		if err != nil {
+			return entity.SelfDeployPlan{}, err
+		}
+		return s.dispatchSelfDeployBuildIfApproved(ctx, replay)
+	}
+	plan, err := s.repository.GetSelfDeployPlan(ctx, input.SelfDeployPlanID)
+	if err != nil {
+		return entity.SelfDeployPlan{}, err
+	}
+	if err := validateSelfDeployGateDecisionBinding(plan, input.GateRequestRef, input.GateDecisionRef); err != nil {
+		return entity.SelfDeployPlan{}, err
+	}
+	if selfDeployPlanDecisionAlreadyRecorded(plan, result) {
+		return s.dispatchSelfDeployBuildIfApproved(ctx, plan)
+	}
+	if input.Meta.ExpectedVersion != nil && plan.Version != *input.Meta.ExpectedVersion {
+		return entity.SelfDeployPlan{}, errs.ErrConflict
+	}
+	if selfDeployPlanGateFinal(plan) {
+		return entity.SelfDeployPlan{}, errs.ErrPreconditionFailed
+	}
+	recorded, err := s.recordSelfDeployPlanGateResult(ctx, plan, input.Meta, operationRecordSelfDeployGateDecision, result)
+	if err != nil {
+		return entity.SelfDeployPlan{}, err
+	}
+	return s.dispatchSelfDeployBuildIfApproved(ctx, recorded)
+}
+
 func (s *Service) createSelfDeployPlan(ctx context.Context, input CreateSelfDeployPlanInput, operation string, requireSignal bool) (entity.SelfDeployPlan, error) {
 	if err := s.requireRepository(); err != nil {
 		return entity.SelfDeployPlan{}, err
@@ -188,13 +231,21 @@ func (s *Service) recordSelfDeployPlanGateResult(ctx context.Context, plan entit
 	if err != nil {
 		return entity.SelfDeployPlan{}, selfDeployGateRecoveryErrorf(SelfDeployGateRecoveryCodeGateResponseInvalid, err)
 	}
-	if plan.Status == status && sameGovernanceContext(plan.GovernanceContext, nextContext) {
+	summary := plan.SafeSummary
+	if strings.TrimSpace(result.SafeSummary) != "" {
+		summary, err = normalizeSelfDeployText(result.SafeSummary, selfDeploySummaryLimit, false)
+		if err != nil {
+			return entity.SelfDeployPlan{}, selfDeployGateRecoveryErrorf(SelfDeployGateRecoveryCodeGateResponseInvalid, err)
+		}
+	}
+	if plan.Status == status && sameGovernanceContext(plan.GovernanceContext, nextContext) && plan.SafeSummary == summary {
 		return plan, nil
 	}
 	now := s.clock.Now()
 	previousVersion := plan.Version
 	plan.GovernanceContext = nextContext
 	plan.Status = status
+	plan.SafeSummary = summary
 	plan.Version++
 	plan.UpdatedAt = now
 	payload, err := marshalCommandPayload(selfDeployPlanCommandPayload{SelfDeployPlan: plan})
@@ -399,6 +450,87 @@ func selfDeployPlanStatusFromGate(status SelfDeployPlanGateStatus, context value
 	default:
 		return "", errs.ErrDependencyUnavailable
 	}
+}
+
+func selfDeployGateDecisionResult(input RecordSelfDeployPlanGateDecisionInput) (SelfDeployPlanGatePreparationResult, error) {
+	gateRequestRef, err := normalizeGovernanceRef(input.GateRequestRef)
+	if err != nil || gateRequestRef == "" {
+		return SelfDeployPlanGatePreparationResult{}, errs.ErrInvalidArgument
+	}
+	gateDecisionRef, err := normalizeGovernanceRef(input.GateDecisionRef)
+	if err != nil || gateDecisionRef == "" {
+		return SelfDeployPlanGatePreparationResult{}, errs.ErrInvalidArgument
+	}
+	status, err := selfDeployGateStatusFromDecisionOutcome(input.Outcome)
+	if err != nil {
+		return SelfDeployPlanGatePreparationResult{}, err
+	}
+	summary, err := normalizeSelfDeployText(input.SafeSummary, selfDeploySummaryLimit, false)
+	if err != nil {
+		return SelfDeployPlanGatePreparationResult{}, err
+	}
+	return SelfDeployPlanGatePreparationResult{
+		Status: status,
+		GovernanceContext: value.GovernanceContextRef{
+			GateRequestRef:  gateRequestRef,
+			GateDecisionRef: gateDecisionRef,
+		},
+		SafeSummary: summary,
+	}, nil
+}
+
+func selfDeployGateStatusFromDecisionOutcome(outcome SelfDeployPlanGateDecisionOutcome) (SelfDeployPlanGateStatus, error) {
+	switch strings.TrimSpace(string(outcome)) {
+	case string(SelfDeployPlanGateDecisionOutcomeApprove),
+		string(SelfDeployPlanGateDecisionOutcomeApproveWithConditions):
+		return SelfDeployPlanGateStatusApproved, nil
+	case string(SelfDeployPlanGateDecisionOutcomeReject),
+		string(SelfDeployPlanGateDecisionOutcomeRevise),
+		string(SelfDeployPlanGateDecisionOutcomeRequestChanges):
+		return SelfDeployPlanGateStatusRejected, nil
+	case string(SelfDeployPlanGateDecisionOutcomeHold),
+		string(SelfDeployPlanGateDecisionOutcomeRollback),
+		string(SelfDeployPlanGateDecisionOutcomeEscalate):
+		return SelfDeployPlanGateStatusBlocked, nil
+	default:
+		return "", errs.ErrInvalidArgument
+	}
+}
+
+func validateSelfDeployGateDecisionBinding(plan entity.SelfDeployPlan, gateRequestRef string, gateDecisionRef string) error {
+	if strings.TrimSpace(plan.GovernanceContext.GateRequestRef) == "" {
+		return errs.ErrPreconditionFailed
+	}
+	normalizedGateRequestRef, err := normalizeGovernanceRef(gateRequestRef)
+	if err != nil || normalizedGateRequestRef == "" {
+		return errs.ErrInvalidArgument
+	}
+	normalizedGateDecisionRef, err := normalizeGovernanceRef(gateDecisionRef)
+	if err != nil || normalizedGateDecisionRef == "" {
+		return errs.ErrInvalidArgument
+	}
+	if strings.TrimSpace(plan.GovernanceContext.GateRequestRef) != normalizedGateRequestRef {
+		return errs.ErrConflict
+	}
+	if strings.TrimSpace(plan.GovernanceContext.GateDecisionRef) != "" &&
+		strings.TrimSpace(plan.GovernanceContext.GateDecisionRef) != normalizedGateDecisionRef {
+		return errs.ErrConflict
+	}
+	return nil
+}
+
+func selfDeployPlanDecisionAlreadyRecorded(plan entity.SelfDeployPlan, result SelfDeployPlanGatePreparationResult) bool {
+	nextContext, err := mergeGovernanceContext(plan.GovernanceContext, result.GovernanceContext)
+	if err != nil {
+		return false
+	}
+	status, err := selfDeployPlanStatusFromGate(result.Status, nextContext)
+	if err != nil {
+		return false
+	}
+	return plan.Status == status &&
+		sameGovernanceContext(plan.GovernanceContext, nextContext) &&
+		(selfDeployPlanGateFinal(plan) || plan.GovernanceContext.GateDecisionRef != "")
 }
 
 func selfDeployPlanIdempotencyKey(meta value.CommandMeta, operation string) (string, error) {

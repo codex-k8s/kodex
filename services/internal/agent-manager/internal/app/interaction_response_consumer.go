@@ -5,13 +5,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
 
 	eventconsumer "github.com/codex-k8s/kodex/libs/go/eventconsumer"
-	eventlog "github.com/codex-k8s/kodex/libs/go/eventlog"
 	interactionevents "github.com/codex-k8s/kodex/libs/go/platformevents/interaction"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -44,14 +42,7 @@ func startInteractionResponseConsumer(
 	logger *slog.Logger,
 	errCh chan<- error,
 ) error {
-	starter := interactionResponseConsumerStarter{
-		cfg:          cfg,
-		eventLogPool: eventLogPool,
-		recorder:     recorder,
-		logger:       logger,
-		errCh:        errCh,
-	}
-	return starter.start(ctx)
+	return interactionResponseConsumerStarter{cfg: cfg, eventLogPool: eventLogPool, recorder: recorder, logger: logger, errCh: errCh}.start(ctx)
 }
 
 type interactionResponseConsumerStarter struct {
@@ -63,14 +54,7 @@ type interactionResponseConsumerStarter struct {
 }
 
 func (s interactionResponseConsumerStarter) start(ctx context.Context) error {
-	return startManagedEventConsumer(ctx, managedEventConsumerStarter{
-		enabled:  s.cfg.InteractionResponseConsumerEnabled,
-		logger:   s.logger,
-		errCh:    s.errCh,
-		validate: s.validate,
-		runner:   s.runner,
-		run:      runInteractionResponseConsumer,
-	})
+	return startManagedEventConsumerWithParts(ctx, s.cfg.InteractionResponseConsumerEnabled, s.logger, s.errCh, s.validate, s.runner, runInteractionResponseConsumer)
 }
 
 func (s interactionResponseConsumerStarter) validate() error {
@@ -85,17 +69,7 @@ func (s interactionResponseConsumerStarter) validate() error {
 }
 
 func (s interactionResponseConsumerStarter) runner(logger *slog.Logger) (*eventconsumer.Runner, error) {
-	registry, err := eventconsumer.NewRegistry(interactionResponseConsumerRegistration(s.recorder))
-	if err != nil {
-		return nil, err
-	}
-	return eventconsumer.NewRunner(
-		eventlog.NewStore(s.eventLogPool),
-		registry,
-		s.cfg.InteractionResponseConsumerConfig(),
-		logger,
-		nil,
-	)
+	return newEventConsumerRunner(s.eventLogPool, interactionResponseConsumerRegistration(s.recorder), s.cfg.InteractionResponseConsumerConfig(), logger)
 }
 
 func interactionResponseConsumerRegistration(recorder humanGateResponseRecorder) eventconsumer.Registration {
@@ -117,29 +91,16 @@ type interactionResponseEventHandler struct {
 	recorder humanGateResponseRecorder
 }
 
+var interactionResponseDecodeConfig = typedEventDecodeConfig{
+	sourceService:    interactionResponseSourceService,
+	invalidSource:    eventconsumer.Poison("invalid_source_service", "interaction response event source service is not interaction-hub"),
+	aggregateType:    interactionevents.AggregateRequest,
+	invalidAggregate: eventconsumer.Poison("invalid_aggregate_type", "interaction response event aggregate type is not request"),
+	invalidPayload:   eventconsumer.Poison("invalid_payload", "interaction response event payload is not valid interaction json"),
+}
+
 func (h interactionResponseEventHandler) HandleEvent(ctx context.Context, event eventconsumer.Event) eventconsumer.Result {
-	storedEvent := event.StoredEvent
-	if strings.TrimSpace(storedEvent.SourceService) != interactionResponseSourceService {
-		return eventconsumer.Poison("invalid_source_service", "interaction response event source service is not interaction-hub")
-	}
-	if strings.TrimSpace(storedEvent.AggregateType) != interactionevents.AggregateRequest {
-		return eventconsumer.Poison("invalid_aggregate_type", "interaction response event aggregate type is not request")
-	}
-	var payload interactionevents.Payload
-	if err := json.Unmarshal(storedEvent.Payload, &payload); err != nil {
-		return eventconsumer.Poison("invalid_payload", "interaction response event payload is not valid interaction json")
-	}
-	if !interactionResponseTargetsAgentHumanGate(payload) {
-		return eventconsumer.Ack()
-	}
-	input, result := h.interactionResponseDecisionInput(ctx, payload)
-	if result.Status != "" {
-		return result
-	}
-	if _, err := h.recorder.RecordHumanGateDecision(ctx, input); err != nil {
-		return interactionResponseConsumerError(err)
-	}
-	return eventconsumer.Ack()
+	return handleTypedEventCommand(ctx, event, interactionResponseDecodeConfig, interactionResponseTargetsAgentHumanGate, h.interactionResponseDecisionInput, h.recordHumanGateDecision, interactionResponseConsumerError)
 }
 
 func (h interactionResponseEventHandler) interactionResponseDecisionInput(ctx context.Context, payload interactionevents.Payload) (agentservice.RecordHumanGateDecisionInput, eventconsumer.Result) {
@@ -272,33 +233,17 @@ type interactionResponseFingerprintPayload struct {
 	Version          int64  `json:"version"`
 }
 
-var interactionResponseDomainErrorResults = []struct {
-	target error
-	result eventconsumer.Result
-}{
-	{
-		target: errs.ErrInvalidArgument,
-		result: eventconsumer.Poison("invalid_human_gate_response", "interaction response metadata is invalid"),
-	},
-	{
-		target: errs.ErrConflict,
-		result: eventconsumer.Poison("conflicting_human_gate_response", "interaction response conflicts with stored human gate state"),
-	},
-	{
-		target: errs.ErrNotFound,
-		result: eventconsumer.Poison("unknown_human_gate", "interaction response references an unknown human gate"),
-	},
-	{
-		target: errs.ErrPreconditionFailed,
-		result: eventconsumer.Poison("stale_human_gate_response", "interaction response cannot resolve current human gate state"),
-	},
+func (h interactionResponseEventHandler) recordHumanGateDecision(ctx context.Context, input agentservice.RecordHumanGateDecisionInput) error {
+	_, err := h.recorder.RecordHumanGateDecision(ctx, input)
+	return err
 }
 
 func interactionResponseConsumerError(err error) eventconsumer.Result {
-	for _, candidate := range interactionResponseDomainErrorResults {
-		if errors.Is(err, candidate.target) {
-			return candidate.result
-		}
-	}
-	return eventconsumer.Retry(err)
+	return commonEventConsumerDomainError(
+		err,
+		eventconsumer.Poison("invalid_human_gate_response", "interaction response metadata is invalid"),
+		eventconsumer.Poison("conflicting_human_gate_response", "interaction response conflicts with stored human gate state"),
+		eventconsumer.Poison("unknown_human_gate", "interaction response references an unknown human gate"),
+		eventconsumer.Poison("stale_human_gate_response", "interaction response cannot resolve current human gate state"),
+	)
 }
