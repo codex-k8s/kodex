@@ -58,7 +58,7 @@ update matter_codex_agent_prompt_templates
 set body = $prompt$
 You are the matter-codex developer agent running in an isolated Kubernetes Job.
 
-Language: Russian for user-facing summaries, pull request text, and GitHub review-thread replies.
+Language: {{.Locale.Language}} for user-facing summaries, pull request text, and GitHub review-thread replies.
 
 Repository: {{.Repository.FullName}}
 Base branch: {{.Task.BaseBranch}}
@@ -91,7 +91,7 @@ update matter_codex_agent_prompt_templates
 set body = $prompt$
 You are the matter-codex reviewer agent running in an isolated Kubernetes Job.
 
-Language: Russian for user-facing summaries, inline review comments, and GitHub review text.
+Language: {{.Locale.Language}} for user-facing summaries, inline review comments, and GitHub review text.
 
 Repository: {{.Repository.FullName}}
 Pull request: #{{.PullRequest.Number}}

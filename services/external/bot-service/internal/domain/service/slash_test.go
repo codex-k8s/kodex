@@ -284,6 +284,54 @@ func TestSlashPromptSetRenderShowAndList(t *testing.T) {
 	}
 }
 
+func TestSlashPromptHelpUsesLocale(t *testing.T) {
+	localizer := testLocalizer(t, texti18n.RussianLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:     localizer,
+		StatusService: testStatusService(localizer),
+		Store:         &fakeAdminStore{},
+		StorageReady:  true,
+	})
+
+	text := svc.Handle(context.Background(), SlashCommand{Text: "prompt help reviewer review_pr"})
+	if !strings.Contains(text, "Доступные placeholders") || !strings.Contains(text, "{{.Repository.FullName}}") || !strings.Contains(text, "{{now}}") {
+		t.Fatalf("Handle(prompt help) text = %q", text)
+	}
+}
+
+func TestSlashPromptRenderUsesSelectedLocale(t *testing.T) {
+	store := &fakeAdminStore{
+		promptTemplates: map[string]entity.AgentPromptTemplate{
+			promptTemplateMapKey("reviewer", reviewPRTemplateKey): {
+				ID:          1,
+				ProfileName: "reviewer",
+				TemplateKey: reviewPRTemplateKey,
+				Body:        "Language: {{.Locale.Language}}\nLocale: {{.Locale.Code}}",
+			},
+		},
+	}
+	localizer := testLocalizer(t, texti18n.RussianLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:     localizer,
+		StatusService: testStatusService(localizer),
+		Store:         store,
+		StorageReady:  true,
+	})
+
+	text := svc.Handle(context.Background(), SlashCommand{Text: "prompt render reviewer review_pr"})
+	if !strings.Contains(text, "Language: Russian") || !strings.Contains(text, "Locale: ru") {
+		t.Fatalf("Handle(prompt render ru) text = %q", text)
+	}
+
+	if _, err := localizer.SetLocale(texti18n.DefaultLocale); err != nil {
+		t.Fatalf("SetLocale(en) error = %v", err)
+	}
+	text = svc.Handle(context.Background(), SlashCommand{Text: "prompt render reviewer review_pr"})
+	if !strings.Contains(text, "Language: English") || !strings.Contains(text, "Locale: en") {
+		t.Fatalf("Handle(prompt render en) text = %q", text)
+	}
+}
+
 func TestSlashLocaleSetChangesResponses(t *testing.T) {
 	localizer := testLocalizer(t, texti18n.DefaultLocale)
 	svc := NewSlashCommandService(SlashCommandServiceConfig{

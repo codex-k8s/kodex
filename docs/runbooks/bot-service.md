@@ -144,7 +144,7 @@ mattercodex_ssh "$REMOTE_KUBECTL -n $NAMESPACE_Q exec statefulset/mattermost-pos
 
 ## Agent prompt templates
 
-Prompt template относится к профилю агента и хранится в PostgreSQL. Bot-service рендерит template перед созданием Job и передает готовый Markdown prompt в agent pod через ConfigMap. Agent runner не содержит prompt-текстов в Go-коде. В prompt доступны placeholders GitHub account/env contract, чтобы агент знал, что `gh` авторизован через `GH_TOKEN`/`GITHUB_TOKEN`, login доступен через `GITHUB_USERNAME`/`GITHUB_USER`, email - через `GITHUB_EMAIL`.
+Prompt template относится к профилю агента и хранится в PostgreSQL. Bot-service рендерит template перед созданием Job с текущей Mattermost locale и передает готовый Markdown prompt в agent pod через ConfigMap. Agent runner не содержит prompt-текстов в Go-коде. В prompt доступны placeholders locale contract (`.Locale.Code`, `.Locale.Language`) и GitHub account/env contract, чтобы агент знал, что `gh` авторизован через `GH_TOKEN`/`GITHUB_TOKEN`, login доступен через `GITHUB_USERNAME`/`GITHUB_USER`, email - через `GITHUB_EMAIL`.
 
 Базовые templates создаются migration:
 
@@ -165,7 +165,7 @@ Prompt template относится к профилю агента и храни�
 
 - `prompt help` показывает доступные placeholders и template-функции;
 - `prompt set` ожидает Markdown с Go `text/template` placeholders, test-render'ит его на sample data и сохраняет только если render успешен;
-- `prompt render` позволяет проверить сохраненный или переданный inline template без запуска agent Job.
+- `prompt render` позволяет проверить сохраненный или переданный inline template без запуска agent Job; строка `Language: {{.Locale.Language}} ...` должна меняться при `/agents locale set en|ru`.
 
 ## Mattermost bot bootstrap
 

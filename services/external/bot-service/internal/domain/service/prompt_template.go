@@ -56,6 +56,11 @@ type promptTemplateGitHubData struct {
 	EmailEnv    string
 }
 
+type promptTemplateLocaleData struct {
+	Code     string
+	Language string
+}
+
 type promptTemplateData struct {
 	Run         promptTemplateRunData
 	Agent       promptTemplateAgentData
@@ -63,6 +68,7 @@ type promptTemplateData struct {
 	Task        promptTemplateTaskData
 	PullRequest promptTemplatePullRequestData
 	GitHub      promptTemplateGitHubData
+	Locale      promptTemplateLocaleData
 }
 
 func renderAgentPromptTemplate(body string, data promptTemplateData) (string, error) {
@@ -115,35 +121,37 @@ func promptTemplateFuncMap() template.FuncMap {
 	}
 }
 
-func promptTemplateReferenceMarkdown() string {
-	return strings.TrimSpace(`Доступные placeholders:
-
-- {{.Run.ID}}, {{.Run.Profile}}, {{.Run.Role}}, {{.Run.Locale}}
-- {{.Agent.Profile}}, {{.Agent.Role}}
-- {{.Repository.Provider}}, {{.Repository.Owner}}, {{.Repository.Name}}, {{.Repository.FullName}}
-- {{.Task.Title}}, {{.Task.Body}}, {{.Task.BaseBranch}}, {{.Task.HeadBranch}}
-- {{.PullRequest.Number}}, {{.PullRequest.URL}}, {{.PullRequest.Title}}, {{.PullRequest.BaseBranch}}, {{.PullRequest.HeadBranch}}
-- {{.GitHub.Account}}, {{.GitHub.TokenEnv}}, {{.GitHub.UsernameEnv}}, {{.GitHub.EmailEnv}}
-
-Доступные функции:
-
-- {{default "fallback" .Task.Title}}
-- {{lower .Repository.FullName}}
-- {{upper .Run.Role}}
-- {{trim .Task.Body}}
-- {{join ", " .SomeStringSlice}}
-- {{now}}
-
-Бот ждет Markdown-шаблон на Go text/template. Перед сохранением шаблон парсится и тестово рендерится на sample context.`)
+func promptTemplateReferenceData() map[string]any {
+	return map[string]any{
+		"RunPlaceholders":         "{{.Run.ID}}, {{.Run.Profile}}, {{.Run.Role}}, {{.Run.Locale}}",
+		"AgentPlaceholders":       "{{.Agent.Profile}}, {{.Agent.Role}}",
+		"RepositoryPlaceholders":  "{{.Repository.Provider}}, {{.Repository.Owner}}, {{.Repository.Name}}, {{.Repository.FullName}}",
+		"TaskPlaceholders":        "{{.Task.Title}}, {{.Task.Body}}, {{.Task.BaseBranch}}, {{.Task.HeadBranch}}",
+		"PullRequestPlaceholders": "{{.PullRequest.Number}}, {{.PullRequest.URL}}, {{.PullRequest.Title}}, {{.PullRequest.BaseBranch}}, {{.PullRequest.HeadBranch}}",
+		"GitHubPlaceholders":      "{{.GitHub.Account}}, {{.GitHub.TokenEnv}}, {{.GitHub.UsernameEnv}}, {{.GitHub.EmailEnv}}",
+		"LocalePlaceholders":      "{{.Locale.Code}}, {{.Locale.Language}}",
+		"DefaultFuncExample":      `{{default "fallback" .Task.Title}}`,
+		"LowerFuncExample":        "{{lower .Repository.FullName}}",
+		"UpperFuncExample":        "{{upper .Run.Role}}",
+		"TrimFuncExample":         "{{trim .Task.Body}}",
+		"JoinFuncExample":         `{{join ", " .SomeStringSlice}}`,
+		"NowFuncExample":          "{{now}}",
+	}
 }
 
-func samplePromptTemplateData(profileName string, templateKey string, locale string) promptTemplateData {
+func samplePromptTemplateData(profileName string, templateKey string, locale promptTemplateLocaleData) promptTemplateData {
+	if strings.TrimSpace(locale.Code) == "" {
+		locale.Code = "en"
+	}
+	if strings.TrimSpace(locale.Language) == "" {
+		locale.Language = "English"
+	}
 	data := promptTemplateData{
 		Run: promptTemplateRunData{
 			ID:      "sample-run",
 			Profile: profileName,
 			Role:    profileName,
-			Locale:  locale,
+			Locale:  locale.Code,
 		},
 		Agent: promptTemplateAgentData{
 			Profile: profileName,
@@ -174,6 +182,7 @@ func samplePromptTemplateData(profileName string, templateKey string, locale str
 			UsernameEnv: "GITHUB_USERNAME / GITHUB_USER",
 			EmailEnv:    "GITHUB_EMAIL",
 		},
+		Locale: locale,
 	}
 	if templateKey == reviewPRTemplateKey {
 		data.Run.Role = "reviewer"

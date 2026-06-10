@@ -389,6 +389,7 @@ func (svc *SlashCommandService) handleDevSmoke(ctx context.Context, args []strin
 			HeadBranch: headBranch,
 		},
 		GitHub: promptGitHubData(githubAccountName),
+		Locale: svc.promptTemplateLocaleData(),
 	})
 	if err != nil {
 		return svc.t("prompt.render.failed", map[string]any{"Error": safeError(err)})
@@ -603,6 +604,7 @@ func (svc *SlashCommandService) handleReviewPR(ctx context.Context, args []strin
 			Number: number,
 		},
 		GitHub: promptGitHubData(githubAccountName),
+		Locale: svc.promptTemplateLocaleData(),
 	})
 	if err != nil {
 		return svc.t("prompt.render.failed", map[string]any{"Error": safeError(err)})
@@ -825,7 +827,7 @@ func (svc *SlashCommandService) handlePromptHelp(raw string) string {
 	return svc.t("prompt.help", map[string]any{
 		"Profile":     profileName,
 		"TemplateKey": templateKey,
-		"Reference":   promptTemplateReferenceMarkdown(),
+		"Reference":   svc.t("prompt.help.reference", promptTemplateReferenceData()),
 	})
 }
 
@@ -886,7 +888,7 @@ func (svc *SlashCommandService) handlePromptRender(ctx context.Context, raw stri
 		}
 		body = item.Body
 	}
-	rendered, err := renderAgentPromptTemplate(body, samplePromptTemplateData(profileName, templateKey, svc.cfg.Localizer.Locale()))
+	rendered, err := renderAgentPromptTemplate(body, samplePromptTemplateData(profileName, templateKey, svc.promptTemplateLocaleData()))
 	if err != nil {
 		return svc.t("prompt.render.failed", map[string]any{"Error": safeError(err)})
 	}
@@ -905,7 +907,7 @@ func (svc *SlashCommandService) handlePromptSet(ctx context.Context, raw string,
 	if !validPromptTemplateID(profileName) || !validPromptTemplateID(templateKey) {
 		return svc.t("prompt.invalid_id", nil)
 	}
-	rendered, err := renderAgentPromptTemplate(body, samplePromptTemplateData(profileName, templateKey, svc.cfg.Localizer.Locale()))
+	rendered, err := renderAgentPromptTemplate(body, samplePromptTemplateData(profileName, templateKey, svc.promptTemplateLocaleData()))
 	if err != nil {
 		return svc.t("prompt.set.render_failed", map[string]any{"Error": safeError(err)})
 	}
@@ -1630,6 +1632,13 @@ func promptGitHubData(accountName string) promptTemplateGitHubData {
 		TokenEnv:    "GH_TOKEN / GITHUB_TOKEN",
 		UsernameEnv: "GITHUB_USERNAME / GITHUB_USER",
 		EmailEnv:    "GITHUB_EMAIL",
+	}
+}
+
+func (svc *SlashCommandService) promptTemplateLocaleData() promptTemplateLocaleData {
+	return promptTemplateLocaleData{
+		Code:     svc.cfg.Localizer.Locale(),
+		Language: svc.t("prompt.template.language_name", nil),
 	}
 }
 

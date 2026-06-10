@@ -1,23 +1,9 @@
 -- +goose Up
-create table if not exists matter_codex_agent_prompt_templates (
-	id bigserial primary key,
-	profile_name text not null,
-	template_key text not null,
-	body text not null,
-	created_at timestamptz not null default now(),
-	updated_at timestamptz not null default now(),
-	unique (profile_name, template_key)
-);
-
-create index if not exists matter_codex_agent_prompt_templates_profile_idx
-	on matter_codex_agent_prompt_templates(profile_name);
-
-insert into matter_codex_agent_prompt_templates(profile_name, template_key, body)
-values
-	('developer', 'developer_smoke', $prompt$
+update matter_codex_agent_prompt_templates
+set body = $prompt$
 You are the matter-codex developer agent running in an isolated Kubernetes Job.
 
-Language: {{.Locale.Language}} for user-facing summaries and pull request text.
+Language: {{.Locale.Language}} for user-facing summaries, pull request text, and GitHub review-thread replies.
 
 Repository: {{.Repository.FullName}}
 Base branch: {{.Task.BaseBranch}}
@@ -34,7 +20,6 @@ Rules:
 - Work only inside the checked out repository.
 - Use `gh` for GitHub context when needed: PR metadata, review comments, threads, and comment replies.
 - If the task is to address review feedback, inspect inline review comments with `gh api repos/{{.Repository.FullName}}/pulls/<pr-number>/comments`, fix the code, and reply to the relevant inline comments from the agent account after the fix is committed.
-- Do not print, read, or exfiltrate secrets.
 - Do not push branches and do not create pull requests; the runner does that after you finish.
 - Keep the change minimal and directly related to the requested task.
 - Leave the working tree with the intended changes staged or unstaged; both are acceptable.
@@ -43,11 +28,15 @@ Rules:
 Task:
 
 {{.Task.Body}}
-$prompt$),
-	('reviewer', 'review_pr', $prompt$
+$prompt$,
+	updated_at = now()
+where profile_name = 'developer' and template_key = 'developer_smoke';
+
+update matter_codex_agent_prompt_templates
+set body = $prompt$
 You are the matter-codex reviewer agent running in an isolated Kubernetes Job.
 
-Language: {{.Locale.Language}} for user-facing summaries and GitHub review text.
+Language: {{.Locale.Language}} for user-facing summaries, inline review comments, and GitHub review text.
 
 Repository: {{.Repository.FullName}}
 Pull request: #{{.PullRequest.Number}}
@@ -64,8 +53,6 @@ Useful commands:
 - `gh pr view {{.PullRequest.Number}} --repo {{.Repository.FullName}} --json title,body,author,headRefName,headRefOid,baseRefName,url,state,isDraft,comments,reviews,files`
 - `gh pr diff {{.PullRequest.Number}} --repo {{.Repository.FullName}}`
 - `gh api repos/{{.Repository.FullName}}/pulls/{{.PullRequest.Number}}/comments`
-
-Follow repository instructions such as AGENTS.md and docs/design-guidelines when they are relevant.
 
 Preferred review format follows the product pattern:
 
@@ -98,8 +85,13 @@ Ordered findings with file paths and line references when available, or "No bloc
 CHECKS:
 Checks you ran or "Not run".
 ```
-$prompt$)
-on conflict (profile_name, template_key) do nothing;
+$prompt$,
+	updated_at = now()
+where profile_name = 'reviewer' and template_key = 'review_pr';
 
 -- +goose Down
-drop table if exists matter_codex_agent_prompt_templates;
+update matter_codex_agent_prompt_templates
+set body = replace(body, 'Language: {{.Locale.Language}}', 'Language: Russian'),
+	updated_at = now()
+where (profile_name = 'developer' and template_key = 'developer_smoke')
+	or (profile_name = 'reviewer' and template_key = 'review_pr');
