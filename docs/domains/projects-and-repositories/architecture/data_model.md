@@ -120,6 +120,19 @@ approvals:
 - если provider path summary недоступен, read model возвращает `needs_repository_change_summary`;
 - raw webhook body, provider response, diff, полный YAML, `validated_payload_json`, токены, секреты и private URL в модель не входят.
 
+### SelfDeployBuildPlan
+
+`SelfDeployBuildPlan` — составная read model для approved self-deploy build dispatch, а не отдельное хранилище. Она строится по запросу `GetSelfDeployBuildPlan` из активной checked `ServicesPolicy`, `ServiceDescriptor` и входных refs утверждённого `SelfDeployPlan`.
+
+Правила:
+- `project-catalog` остаётся владельцем проекции `services.yaml` и возвращает только safe `BuildExecutionSpec`-совместимые refs;
+- текущий корневой инвентарь платформы хранит build source of truth в `spec.images`/`spec.versions`: image repository/tag policy, Dockerfile path/target и builder image ref выводятся из этих секций, без дублирования тех же полей в каждом `deployableServices` entry;
+- вложенный `service.build` остаётся поддержанным явным checked spec для сервисов, которым нужен полностью заданный build input;
+- checked build context не вычисляется из root paths и не создаётся в `project-catalog`; для статуса `ready` нужны `buildContextRef` на подготовленный PVC/runtime context и `buildContextDigest`;
+- если image/Dockerfile policy есть, но checked build context ещё не подготовлен, read model возвращает `build_context_unavailable` с safe reason по service key;
+- `agent-manager` блокирует постановку `JOB_TYPE_BUILD` при любом non-ready статусе и не парсит `services.yaml` сам;
+- raw webhook body, provider response, diff, полный YAML, env values, токены, секреты и private URL в модель не входят.
+
 ### ServicesPolicy
 
 | Поле | Тип | Может быть пустым | Примечание |

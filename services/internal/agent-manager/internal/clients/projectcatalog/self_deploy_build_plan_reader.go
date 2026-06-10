@@ -185,14 +185,21 @@ func selfDeployOutputRefs(refs []*runtimev1.RuntimeJobOutputRef) []agentservice.
 	return result
 }
 
-var selfDeployBuildPlanStatusByProto = map[projectsv1.SelfDeployBuildPlanStatus]agentservice.SelfDeployBuildPlanStatus{
-	projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_READY:                  agentservice.SelfDeployBuildPlanStatusReady,
-	projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_BUILD_PLAN_UNAVAILABLE: agentservice.SelfDeployBuildPlanStatusBuildPlanUnavailable,
-	projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_POLICY_STALE:           agentservice.SelfDeployBuildPlanStatusPolicyStale,
-	projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_SERVICE_NOT_FOUND:      agentservice.SelfDeployBuildPlanStatusServiceNotFound,
-	projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_INVALID_INPUT:          agentservice.SelfDeployBuildPlanStatusInvalidInput,
-}
-
 func selfDeployBuildPlanStatus(status projectsv1.SelfDeployBuildPlanStatus) agentservice.SelfDeployBuildPlanStatus {
-	return selfDeployBuildPlanStatusByProto[status]
+	switch status {
+	case projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_READY:
+		return agentservice.SelfDeployBuildPlanStatusReady
+	case projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_BUILD_PLAN_UNAVAILABLE:
+		return agentservice.SelfDeployBuildPlanStatusBuildPlanUnavailable
+	case projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_POLICY_STALE:
+		return agentservice.SelfDeployBuildPlanStatusPolicyStale
+	case projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_SERVICE_NOT_FOUND:
+		return agentservice.SelfDeployBuildPlanStatusServiceNotFound
+	case projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_INVALID_INPUT:
+		return agentservice.SelfDeployBuildPlanStatusInvalidInput
+	case projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_BUILD_CONTEXT_UNAVAILABLE:
+		return agentservice.SelfDeployBuildPlanStatusBuildContextUnavailable
+	default:
+		return ""
+	}
 }

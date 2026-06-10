@@ -102,8 +102,8 @@ func TestSelfDeployBuildPlanReaderMapsNotReadyStatus(t *testing.T) {
 
 	reader, err := newSelfDeployBuildPlanReader(&fakeSelfDeployBuildPlanClient{
 		response: &projectsv1.SelfDeployBuildPlanResponse{
-			Status:     projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_POLICY_STALE,
-			SafeReason: stringPtr("services_policy_digest_mismatch"),
+			Status:     projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_BUILD_CONTEXT_UNAVAILABLE,
+			SafeReason: stringPtr("build_context_unavailable:agent-manager"),
 		},
 	}, Config{AuthToken: "token", Timeout: time.Second})
 	if err != nil {
@@ -117,7 +117,7 @@ func TestSelfDeployBuildPlanReaderMapsNotReadyStatus(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetSelfDeployBuildPlan(): %v", err)
 	}
-	if result.Status != agentservice.SelfDeployBuildPlanStatusPolicyStale || result.SafeReason != "services_policy_digest_mismatch" {
+	if result.Status != agentservice.SelfDeployBuildPlanStatusBuildContextUnavailable || result.SafeReason != "build_context_unavailable:agent-manager" {
 		t.Fatalf("result = %+v", result)
 	}
 }

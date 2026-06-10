@@ -2482,6 +2482,79 @@ func TestGetSelfDeployBuildPlanReturnsReadyRuntimeCompatibleSpecs(t *testing.T) 
 	}
 }
 
+func TestGetSelfDeployBuildPlanDerivesSpecsFromStackInventoryImages(t *testing.T) {
+	t.Setenv("KODEX_INTERNAL_REGISTRY_HOST", "private.registry.example")
+	t.Setenv("KODEX_API_IMAGE", "private.registry.example/kodex/api:must-not-leak")
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	policyID := uuid.New()
+	commitSHA := "abcdef0123456789abcdef0123456789abcdef01"
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = activeSelfDeployRepository(projectID, repositoryID)
+	policy := activeSelfDeployPolicy(projectID, repositoryID, policyID, commitSHA, selfDeployStackInventoryBuildPolicyPayload(true))
+	store.policies[policyID] = policy
+	store.serviceDescriptors[policyID] = []entity.ServiceDescriptor{
+		activeSelfDeployDescriptor(projectID, repositoryID, policyID, "api"),
+	}
+	svc := New(store, fixedClock{}, &sequenceIDs{})
+	input := selfDeployBuildPlanInput(projectID, repositoryID, policy, []string{"api"})
+
+	result, err := svc.GetSelfDeployBuildPlan(context.Background(), input)
+	if err != nil {
+		t.Fatalf("GetSelfDeployBuildPlan(): %v", err)
+	}
+	if result.Status != enum.SelfDeployBuildPlanStatusReady {
+		t.Fatalf("status = %s, want ready, reason=%s", result.Status, result.SafeReason)
+	}
+	spec := result.Plan.BuildItems[0].BuildExecutionSpec
+	if spec.ImageRef != "127.0.0.1:5000/kodex/api" ||
+		spec.ImageTag != "0.1.0" ||
+		spec.BuildContextRef != "pvc://runtime-jobs/runtime-build-context-api" ||
+		spec.BuildContextDigest != selfDeployBuildContextDigest ||
+		spec.DockerfileRef != "context://services/api/Dockerfile" ||
+		spec.DockerfileTarget != "prod" ||
+		spec.BuilderImageRef != "gcr.io/kaniko-project/executor:v1.24.0-debug" {
+		t.Fatalf("build spec = %+v, want derived stack inventory build spec", spec)
+	}
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("marshal result: %v", err)
+	}
+	if strings.Contains(string(encoded), "private.registry.example") ||
+		strings.Contains(string(encoded), "must-not-leak") {
+		t.Fatalf("build plan used process env values: %s", encoded)
+	}
+}
+
+func TestGetSelfDeployBuildPlanReturnsBuildContextUnavailableForStackInventoryWithoutContext(t *testing.T) {
+	t.Setenv("KODEX_INTERNAL_REGISTRY_HOST", "private.registry.example")
+	t.Setenv("KODEX_API_IMAGE", "private.registry.example/kodex/api:must-not-leak")
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	policyID := uuid.New()
+	commitSHA := "abcdef0123456789abcdef0123456789abcdef01"
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = activeSelfDeployRepository(projectID, repositoryID)
+	policy := activeSelfDeployPolicy(projectID, repositoryID, policyID, commitSHA, selfDeployStackInventoryBuildPolicyPayload(false))
+	store.policies[policyID] = policy
+	store.serviceDescriptors[policyID] = []entity.ServiceDescriptor{
+		activeSelfDeployDescriptor(projectID, repositoryID, policyID, "api"),
+	}
+	svc := New(store, fixedClock{}, &sequenceIDs{})
+	input := selfDeployBuildPlanInput(projectID, repositoryID, policy, []string{"api"})
+
+	result, err := svc.GetSelfDeployBuildPlan(context.Background(), input)
+	if err != nil {
+		t.Fatalf("GetSelfDeployBuildPlan(): %v", err)
+	}
+	if result.Status != enum.SelfDeployBuildPlanStatusBuildContextUnavailable || result.SafeReason != "build_context_unavailable:api" {
+		t.Fatalf("result = %+v, want build_context_unavailable", result)
+	}
+	if len(result.Plan.BuildItems) != 0 {
+		t.Fatalf("build items = %+v, want none before checked build context", result.Plan.BuildItems)
+	}
+}
+
 func TestGetSelfDeployBuildPlanReturnsPolicyStaleOnDigestMismatch(t *testing.T) {
 	projectID := uuid.New()
 	repositoryID := uuid.New()
@@ -2631,7 +2704,7 @@ func TestGetSelfDeployBuildPlanReturnsUnavailableForRuntimeIncompatibleBuildSpec
 	commitSHA := "abcdef0123456789abcdef0123456789abcdef01"
 	store := newMemoryRepository()
 	store.repositories[repositoryID] = activeSelfDeployRepository(projectID, repositoryID)
-	payload := []byte(strings.Replace(string(selfDeployBuildPolicyPayload()), selfDeployBuildContextDigest, "sha256:context", 1))
+	payload := []byte(strings.Replace(string(selfDeployBuildPolicyPayload()), `"imageTag": "abcdef0"`, `"imageTag": "bad tag"`, 1))
 	policy := activeSelfDeployPolicy(projectID, repositoryID, policyID, commitSHA, payload)
 	store.policies[policyID] = policy
 	store.serviceDescriptors[policyID] = []entity.ServiceDescriptor{
@@ -2966,6 +3039,64 @@ func selfDeployBuildPolicyPayload() []byte {
 						],
 						"unsafePayload": "must-not-leak"
 					}
+				}
+			]
+		}
+	}`)
+}
+
+func selfDeployStackInventoryBuildPolicyPayload(withContext bool) []byte {
+	contextFields := ""
+	if withContext {
+		contextFields = `,
+				"buildContextRef": "pvc://runtime-jobs/runtime-build-context-api",
+				"buildContextDigest": "` + selfDeployBuildContextDigest + `",
+				"dockerfileDigest": "` + selfDeployBuildDockerfileDigest + `",
+				"allowedSecretRefs": [
+					{
+						"secretRef": "secret://runtime/registry-push",
+						"purpose": "registry"
+					}
+				],
+				"outputRefs": [
+					{
+						"kind": "image_ref",
+						"ref": "runtime://artifacts/images/api"
+					}
+				]`
+	}
+	return []byte(`{
+		"spec": {
+			"versions": {
+				"api": {
+					"value": "0.1.0"
+				},
+				"kaniko-executor": {
+					"value": "v1.24.0-debug"
+				}
+			},
+			"images": {
+				"kaniko-executor": {
+					"type": "external",
+					"from": "gcr.io/kaniko-project/executor:{{ version \"kaniko-executor\" }}"
+				},
+				"api": {
+					"type": "build",
+					"repository": "{{ envOr \"KODEX_INTERNAL_REGISTRY_HOST\" \"127.0.0.1:5000\" }}/kodex/api",
+					"tagTemplate": "{{ version \"api\" }}",
+					"dockerfile": "services/api/Dockerfile",
+					"target": "prod",
+					"context": ".",
+					"imageEnv": "KODEX_API_IMAGE"` + contextFields + `
+				}
+			},
+			"deployableServices": [
+				{
+					"name": "api",
+					"status": "foundation",
+					"path": "services/api",
+					"dockerfile": "services/api/Dockerfile",
+					"imageEnv": "KODEX_API_IMAGE"
 				}
 			]
 		}

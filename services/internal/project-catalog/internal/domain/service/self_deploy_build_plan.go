@@ -1,14 +1,18 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"path"
 	"regexp"
 	"sort"
 	"strings"
+	"text/template"
 	"unicode/utf8"
 
 	"github.com/google/uuid"
@@ -22,7 +26,10 @@ import (
 
 const selfDeployBuildPlanVersion = int64(1)
 
-var errBuildPlanUnavailable = errors.New("build plan unavailable")
+var (
+	errBuildPlanUnavailable    = errors.New("build plan unavailable")
+	errBuildContextUnavailable = errors.New("build context unavailable")
+)
 
 // GetSelfDeployBuildPlan возвращает checked project-owned build specs для self-deploy.
 func (s *Service) GetSelfDeployBuildPlan(ctx context.Context, input GetSelfDeployBuildPlanInput) (SelfDeployBuildPlanResult, error) {
@@ -91,6 +98,9 @@ func (s *Service) GetSelfDeployBuildPlan(ctx context.Context, input GetSelfDeplo
 		}
 		item, err := selfDeployBuildPlanItem(input, descriptorsByKey[key], spec)
 		if err != nil {
+			if errors.Is(err, errBuildContextUnavailable) {
+				return SelfDeployBuildPlanResult{Status: enum.SelfDeployBuildPlanStatusBuildContextUnavailable, Plan: plan, SafeReason: "build_context_unavailable:" + key}, nil
+			}
 			return SelfDeployBuildPlanResult{Status: enum.SelfDeployBuildPlanStatusBuildPlanUnavailable, Plan: plan, SafeReason: "service_build_spec_unavailable:" + key}, nil
 		}
 		items = append(items, item)
@@ -195,10 +205,189 @@ func buildSpecsFromCheckedPolicy(policy entity.ServicesPolicy) (map[string]value
 		}
 		result[key] = *entry.Build
 	}
+	derived := buildSpecsFromCheckedInventory(document, result)
+	for key, spec := range derived {
+		result[key] = spec
+	}
 	if len(result) == 0 {
 		return nil, errBuildPlanUnavailable
 	}
 	return result, nil
+}
+
+func buildSpecsFromCheckedInventory(document value.ServicesPolicyDocument, existing map[string]value.ServicesPolicyBuildSpec) map[string]value.ServicesPolicyBuildSpec {
+	if len(document.Spec.Images) == 0 {
+		return nil
+	}
+	result := map[string]value.ServicesPolicyBuildSpec{}
+	for _, entry := range serviceEntries(document) {
+		key := serviceKey(entry)
+		if key == "" {
+			continue
+		}
+		if _, ok := existing[key]; ok {
+			continue
+		}
+		imageSpec, ok := document.Spec.Images[key]
+		if !ok || strings.TrimSpace(imageSpec.Type) != "build" {
+			continue
+		}
+		spec, err := checkedInventoryBuildSpec(key, imageSpec, document)
+		if err != nil {
+			continue
+		}
+		result[key] = spec
+	}
+	return result
+}
+
+func checkedInventoryBuildSpec(key string, imageSpec value.ServicesPolicyImageSpec, document value.ServicesPolicyDocument) (value.ServicesPolicyBuildSpec, error) {
+	imageRef, imageTag, err := checkedInventoryImageRefAndTag(document, key, imageSpec)
+	if err != nil {
+		return value.ServicesPolicyBuildSpec{}, err
+	}
+	dockerfileRef, err := checkedInventoryDockerfileRef(imageSpec.Context, imageSpec.Dockerfile)
+	if err != nil {
+		return value.ServicesPolicyBuildSpec{}, err
+	}
+	builderImageRef := strings.TrimSpace(imageSpec.BuilderImageRef)
+	if builderImageRef == "" {
+		builderSpec, ok := document.Spec.Images["kaniko-executor"]
+		if !ok {
+			return value.ServicesPolicyBuildSpec{}, errBuildPlanUnavailable
+		}
+		builderImageRef, err = checkedInventoryImage(document, "kaniko-executor", builderSpec)
+		if err != nil {
+			return value.ServicesPolicyBuildSpec{}, err
+		}
+	}
+	return value.ServicesPolicyBuildSpec{
+		ImageRef:           imageRef,
+		ImageTag:           imageTag,
+		BuildContextRef:    strings.TrimSpace(imageSpec.BuildContextRef),
+		BuildContextDigest: strings.ToLower(strings.TrimSpace(imageSpec.BuildContextDigest)),
+		DockerfileRef:      dockerfileRef,
+		DockerfileDigest:   strings.ToLower(strings.TrimSpace(imageSpec.DockerfileDigest)),
+		DockerfileTarget:   strings.TrimSpace(imageSpec.Target),
+		BuilderImageRef:    builderImageRef,
+		AllowedSecretRefs:  append([]value.ServicesPolicyAllowedSecretRef(nil), imageSpec.AllowedSecretRefs...),
+		OutputRefs:         append([]value.ServicesPolicyOutputRef(nil), imageSpec.OutputRefs...),
+	}, nil
+}
+
+func checkedInventoryImageRefAndTag(document value.ServicesPolicyDocument, key string, imageSpec value.ServicesPolicyImageSpec) (string, string, error) {
+	image, err := checkedInventoryImage(document, key, imageSpec)
+	if err != nil {
+		return "", "", err
+	}
+	ref, tag, ok := splitBuildImageRefAndTag(image)
+	if !ok {
+		return "", "", errBuildPlanUnavailable
+	}
+	return ref, tag, nil
+}
+
+func checkedInventoryImage(document value.ServicesPolicyDocument, key string, imageSpec value.ServicesPolicyImageSpec) (string, error) {
+	switch {
+	case strings.TrimSpace(imageSpec.From) != "":
+		return renderCheckedInventoryTemplate(document, key, "from", imageSpec.From)
+	case strings.TrimSpace(imageSpec.Repository) != "" && strings.TrimSpace(imageSpec.TagTemplate) != "":
+		repository, err := renderCheckedInventoryTemplate(document, key, "repository", imageSpec.Repository)
+		if err != nil {
+			return "", err
+		}
+		tag, err := renderCheckedInventoryTemplate(document, key, "tagTemplate", imageSpec.TagTemplate)
+		if err != nil {
+			return "", err
+		}
+		if strings.TrimSpace(repository) == "" || strings.TrimSpace(tag) == "" {
+			return "", errBuildPlanUnavailable
+		}
+		return repository + ":" + tag, nil
+	default:
+		return "", errBuildPlanUnavailable
+	}
+}
+
+func renderCheckedInventoryTemplate(document value.ServicesPolicyDocument, imageName string, fieldName string, source string) (string, error) {
+	tpl, err := template.New(imageName + "." + fieldName).Funcs(template.FuncMap{
+		"envOr": func(_ string, fallback string) string {
+			return fallback
+		},
+		"env": func(name string) (string, error) {
+			return "", fmt.Errorf("checked services policy template env %q is unavailable", name)
+		},
+		"version": func(name string) (string, error) {
+			return checkedInventoryVersion(document, name)
+		},
+	}).Parse(source)
+	if err != nil {
+		return "", err
+	}
+	var output bytes.Buffer
+	if err := tpl.Execute(&output, struct {
+		Versions map[string]string
+	}{
+		Versions: checkedInventoryVersionValues(document),
+	}); err != nil {
+		return "", err
+	}
+	return output.String(), nil
+}
+
+func checkedInventoryVersion(document value.ServicesPolicyDocument, key string) (string, error) {
+	version := strings.TrimSpace(document.Spec.Versions[key].Value)
+	if version == "" {
+		return "", errBuildPlanUnavailable
+	}
+	return version, nil
+}
+
+func checkedInventoryVersionValues(document value.ServicesPolicyDocument) map[string]string {
+	result := make(map[string]string, len(document.Spec.Versions))
+	for key, version := range document.Spec.Versions {
+		result[key] = strings.TrimSpace(version.Value)
+	}
+	return result
+}
+
+func splitBuildImageRefAndTag(value string) (string, string, bool) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" || strings.Contains(trimmed, "@") {
+		return "", "", false
+	}
+	lastSlash := strings.LastIndex(trimmed, "/")
+	lastColon := strings.LastIndex(trimmed, ":")
+	if lastColon <= lastSlash || lastColon == len(trimmed)-1 {
+		return "", "", false
+	}
+	return strings.TrimSpace(trimmed[:lastColon]), strings.TrimSpace(trimmed[lastColon+1:]), true
+}
+
+func checkedInventoryDockerfileRef(contextPath string, dockerfile string) (string, error) {
+	dockerfile = strings.TrimSpace(dockerfile)
+	if dockerfile == "" {
+		return "", errBuildPlanUnavailable
+	}
+	if strings.HasPrefix(dockerfile, "context://") {
+		dockerfile = strings.TrimPrefix(dockerfile, "context://")
+	} else if strings.Contains(dockerfile, "://") {
+		return "", errBuildPlanUnavailable
+	}
+	contextPath = strings.TrimSpace(contextPath)
+	switch contextPath {
+	case "", ".":
+		// Dockerfile path is already relative to repository root build context.
+	default:
+		if !strings.HasPrefix(dockerfile, contextPath+"/") {
+			dockerfile = path.Join(contextPath, dockerfile)
+		}
+	}
+	normalized, err := normalizeWorkspacePath(dockerfile)
+	if err != nil {
+		return "", err
+	}
+	return "context://" + normalized, nil
 }
 
 func selfDeployBuildPlanItem(input GetSelfDeployBuildPlanInput, descriptor entity.ServiceDescriptor, spec value.ServicesPolicyBuildSpec) (SelfDeployBuildPlanItem, error) {
@@ -238,10 +427,20 @@ func selfDeployBuildExecutionSpec(input GetSelfDeployBuildPlanInput, serviceKey 
 		AllowedSecretRefs:  secretRefs,
 		OutputRefs:         outputRefs,
 	}
+	if !buildSpecContextReady(result) {
+		return SelfDeployBuildExecutionSpec{}, errBuildContextUnavailable
+	}
 	if !buildSpecRequiredRefsPresent(result) || !buildSpecRefsSafe(result) {
 		return SelfDeployBuildExecutionSpec{}, errBuildPlanUnavailable
 	}
 	return result, nil
+}
+
+func buildSpecContextReady(spec SelfDeployBuildExecutionSpec) bool {
+	return spec.BuildContextRef != "" &&
+		spec.BuildContextDigest != "" &&
+		safeBuildPlanRef(spec.BuildContextRef, true) &&
+		validBuildPlanSHA256Digest(spec.BuildContextDigest)
 }
 
 func buildSpecRequiredRefsPresent(spec SelfDeployBuildExecutionSpec) bool {
