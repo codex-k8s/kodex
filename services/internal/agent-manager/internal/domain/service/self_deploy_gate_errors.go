@@ -3,14 +3,21 @@ package service
 import "errors"
 
 const (
-	SelfDeployGateRecoveryCodePlanLookupFailed               = "plan_lookup_failed"
-	SelfDeployGateRecoveryCodeGateReplayFailed               = "gate_replay_failed"
-	SelfDeployGateRecoveryCodeGatePrepareFailed              = "gate_prepare_failed"
-	SelfDeployGateRecoveryCodeRiskEvaluationFailed           = "risk_evaluation_failed"
-	SelfDeployGateRecoveryCodeGateResponseInvalid            = "gate_response_invalid"
-	SelfDeployGateRecoveryCodeExistingGateLookupFailed       = "existing_gate_lookup_failed"
-	SelfDeployGateRecoveryCodePlanRefsUpdateFailed           = "plan_refs_update_failed"
-	SelfDeployGateRecoveryCodePlanGovernanceRefsUpdateFailed = "plan_governance_refs_update_failed"
+	SelfDeployGateRecoveryCodePlanLookupFailed                = "plan_lookup_failed"
+	SelfDeployGateRecoveryCodeGateReplayFailed                = "gate_replay_failed"
+	SelfDeployGateRecoveryCodeGatePrepareFailed               = "gate_prepare_failed"
+	SelfDeployGateRecoveryCodeRiskEvaluationFailed            = "risk_evaluation_failed"
+	SelfDeployGateRecoveryCodeGateResponseInvalid             = "gate_response_invalid"
+	SelfDeployGateRecoveryCodeExistingRiskLookupFailed        = "existing_risk_lookup_failed"
+	SelfDeployGateRecoveryCodeExistingRiskNotFound            = "existing_risk_not_found"
+	SelfDeployGateRecoveryCodeExistingRiskFingerprintMismatch = "existing_risk_fingerprint_mismatch"
+	SelfDeployGateRecoveryCodeExistingRiskConflict            = "existing_risk_conflict"
+	SelfDeployGateRecoveryCodeExistingGateLookupFailed        = "existing_gate_lookup_failed"
+	SelfDeployGateRecoveryCodeExistingGateNotFound            = "existing_gate_not_found"
+	SelfDeployGateRecoveryCodeExistingGateMismatch            = "existing_gate_mismatch"
+	SelfDeployGateRecoveryCodeExistingGateConflict            = "existing_gate_conflict"
+	SelfDeployGateRecoveryCodePlanRefsUpdateFailed            = "plan_refs_update_failed"
+	SelfDeployGateRecoveryCodePlanGovernanceRefsUpdateFailed  = "plan_governance_refs_update_failed"
 )
 
 type selfDeployGateRecoveryError struct {
