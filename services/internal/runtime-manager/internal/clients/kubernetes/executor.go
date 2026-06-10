@@ -27,8 +27,10 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/metadata"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
@@ -64,6 +66,11 @@ const (
 	maxStatusSummaryBytes    = 512
 )
 
+var (
+	secretResourceGVR = schema.GroupVersionResource{Version: "v1", Resource: "secrets"}
+	serviceAccountGVR = schema.GroupVersionResource{Version: "v1", Resource: "serviceaccounts"}
+)
+
 // Config constrains Kubernetes executor behavior with operator-managed settings.
 type Config struct {
 	DefaultNamespace        string
@@ -92,18 +99,31 @@ type ClusterAccessProvider interface {
 }
 
 type clientFactory interface {
-	NewForKubeconfig(kubeconfig []byte) (kubernetes.Interface, error)
+	NewForKubeconfig(kubeconfig []byte) (clusterClients, error)
 }
 
 type realClientFactory struct{}
 
-func (realClientFactory) NewForKubeconfig(kubeconfig []byte) (kubernetes.Interface, error) {
+type clusterClients struct {
+	kubernetes kubernetes.Interface
+	metadata   metadata.Interface
+}
+
+func (realClientFactory) NewForKubeconfig(kubeconfig []byte) (clusterClients, error) {
 	config, err := clientcmd.RESTConfigFromKubeConfig(kubeconfig)
 	if err != nil {
-		return nil, err
+		return clusterClients{}, err
 	}
 	config.UserAgent = "kodex-runtime-manager"
-	return kubernetes.NewForConfig(config)
+	kubernetesClient, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return clusterClients{}, err
+	}
+	metadataClient, err := metadata.NewForConfig(config)
+	if err != nil {
+		return clusterClients{}, err
+	}
+	return clusterClients{kubernetes: kubernetesClient, metadata: metadataClient}, nil
 }
 
 // Executor creates and observes bounded Kubernetes Jobs for runtime-manager jobs.
@@ -199,37 +219,54 @@ func (e *Executor) Start(ctx context.Context, job entity.Job) (StartedJob, error
 	if job.FleetScopeID != nil && *job.FleetScopeID != access.FleetScopeID {
 		return StartedJob{}, newExecutionError("cluster_scope_mismatch", "Runtime job fleet scope does not match Kubernetes cluster scope")
 	}
-	client, err := e.clientForCluster(ctx, access)
+	clients, err := e.clientForCluster(ctx, access)
 	if err != nil {
 		return StartedJob{}, err
 	}
 	jobName := runtimeJobName(job.ID)
 	selector := labels.Set{runtimeJobLabel: job.ID.String()}
+	existing, err := clients.kubernetes.BatchV1().Jobs(spec.Namespace).Get(ctx, jobName, metav1.GetOptions{})
+	if err == nil {
+		if !isManagedRuntimeJob(existing, job) {
+			return StartedJob{}, newExecutionError("kubernetes_job_name_conflict", "Kubernetes Job name is already used by a different object")
+		}
+		return startedJobFromKubernetesJob(access.ClusterID, spec, e.config, selector, clients.kubernetes, existing, job), nil
+	}
+	if !apierrors.IsNotFound(err) {
+		return StartedJob{}, kubernetesJobLookupError(err)
+	}
+	if err := e.preflightExecution(ctx, clients, job.JobType, spec); err != nil {
+		return StartedJob{}, err
+	}
 	kubernetesJob := buildJob(job, spec, e.config, jobName, selector)
-	created, err := client.BatchV1().Jobs(spec.Namespace).Create(ctx, kubernetesJob, metav1.CreateOptions{})
+	created, err := clients.kubernetes.BatchV1().Jobs(spec.Namespace).Create(ctx, kubernetesJob, metav1.CreateOptions{})
 	if apierrors.IsAlreadyExists(err) {
-		created, err = client.BatchV1().Jobs(spec.Namespace).Get(ctx, jobName, metav1.GetOptions{})
+		created, err = clients.kubernetes.BatchV1().Jobs(spec.Namespace).Get(ctx, jobName, metav1.GetOptions{})
 	}
 	if err != nil {
-		return StartedJob{}, newExecutionError("kubernetes_job_create_failed", "Kubernetes Job could not be created")
+		return StartedJob{}, kubernetesJobCreateError(err)
 	}
 	if !isManagedRuntimeJob(created, job) {
 		return StartedJob{}, newExecutionError("kubernetes_job_name_conflict", "Kubernetes Job name is already used by a different object")
 	}
-	ref := kubernetesJobRef(access.ClusterID, spec.Namespace, created.GetName())
+	return startedJobFromKubernetesJob(access.ClusterID, spec, e.config, selector, clients.kubernetes, created, job), nil
+}
+
+func startedJobFromKubernetesJob(clusterID uuid.UUID, spec executionSpec, cfg Config, selector labels.Set, client kubernetes.Interface, created *batchv1.Job, job entity.Job) StartedJob {
+	ref := kubernetesJobRef(clusterID, spec.Namespace, created.GetName())
 	return StartedJob{
 		RuntimeJobID:   job.ID,
 		RuntimeJobType: job.JobType,
-		ClusterID:      access.ClusterID,
+		ClusterID:      clusterID,
 		Namespace:      spec.Namespace,
 		JobName:        created.GetName(),
 		ExternalRef:    ref,
-		ArtifactRefs:   runtimeArtifactRefs(access.ClusterID, spec, ref),
+		ArtifactRefs:   runtimeArtifactRefs(clusterID, spec, ref),
 		client:         client,
-		config:         e.config,
+		config:         cfg,
 		selector:       selector,
 		collectLogs:    spec.CollectPodLogs,
-	}, nil
+	}
 }
 
 // Wait waits for a terminal Kubernetes Job status and returns bounded diagnostics.
@@ -282,6 +319,24 @@ func ErrorDiagnostic(err error) (string, string) {
 		return executionErr.Code, executionErr.Message
 	}
 	return "runtime_kubernetes_error", "Kubernetes executor failed"
+}
+
+func kubernetesJobCreateError(err error) error {
+	switch {
+	case apierrors.IsForbidden(err):
+		return newExecutionError("kubernetes_job_create_access_denied", "Kubernetes Job create access is denied")
+	default:
+		return newExecutionError("kubernetes_job_create_failed", "Kubernetes Job could not be created")
+	}
+}
+
+func kubernetesJobLookupError(err error) error {
+	switch {
+	case apierrors.IsForbidden(err):
+		return newExecutionError("kubernetes_job_status_access_denied", "Kubernetes Job status access is denied")
+	default:
+		return newExecutionError("kubernetes_job_status_unavailable", "Kubernetes Job status is unavailable")
+	}
 }
 
 func (e *Executor) observe(ctx context.Context, started StartedJob) (ExecutionResult, bool) {
@@ -415,19 +470,22 @@ func interruptedExecutionResult() ExecutionResult {
 	}
 }
 
-func (e *Executor) clientForCluster(ctx context.Context, access fleetclient.ClusterAccess) (kubernetes.Interface, error) {
+func (e *Executor) clientForCluster(ctx context.Context, access fleetclient.ClusterAccess) (clusterClients, error) {
 	secret, err := e.secrets.Resolve(ctx, secretresolver.SecretRef{StoreType: access.SecretStoreType, StoreRef: access.SecretStoreRef})
 	if err != nil {
-		return nil, secretResolverError(err)
+		return clusterClients{}, secretResolverError(err)
 	}
 	defer secret.Clear()
 	kubeconfig := secret.Bytes()
 	defer clear(kubeconfig)
-	client, err := e.clients.NewForKubeconfig(kubeconfig)
+	clients, err := e.clients.NewForKubeconfig(kubeconfig)
 	if err != nil {
-		return nil, newExecutionError("kubernetes_client_init_failed", "Kubernetes client could not be initialized")
+		return clusterClients{}, newExecutionError("kubernetes_client_init_failed", "Kubernetes client could not be initialized")
 	}
-	return client, nil
+	if clients.kubernetes == nil || clients.metadata == nil {
+		return clusterClients{}, newExecutionError("kubernetes_client_init_failed", "Kubernetes client could not be initialized")
+	}
+	return clients, nil
 }
 
 type executionSpec struct {
@@ -447,6 +505,8 @@ type executionSpec struct {
 	ImageArtifactRef         string
 	ImageArtifactDigest      string
 	CollectPodLogs           bool
+	BuildContextPVC          *workspacePVCRef
+	RegistrySecret           *registrySecretRef
 }
 
 type restrictedJobInput struct {
@@ -577,6 +637,9 @@ func (e *Executor) buildExecutionSpec(job entity.Job) (executionSpec, error) {
 	if err != nil {
 		return executionSpec{}, err
 	}
+	if registrySecret == nil {
+		return executionSpec{}, newExecutionError("build_registry_secret_ref_required", "build registry secret ref is required before Kubernetes execution")
+	}
 	volumes := []corev1.Volume{{
 		Name: buildContextVolumeName,
 		VolumeSource: corev1.VolumeSource{
@@ -620,11 +683,108 @@ func (e *Executor) buildExecutionSpec(job entity.Job) (executionSpec, error) {
 		ImageArtifactRef:         destination,
 		ImageArtifactDigest:      spec.ImageDigest,
 		CollectPodLogs:           true,
+		BuildContextPVC:          &pvc,
+		RegistrySecret:           registrySecret,
 	}
 	if err := validateExecutionSpec(result); err != nil {
 		return executionSpec{}, err
 	}
 	return result, nil
+}
+
+func (e *Executor) preflightExecution(ctx context.Context, clients clusterClients, jobType enum.JobType, spec executionSpec) error {
+	if strings.TrimSpace(spec.ServiceAccount) != "" {
+		if err := preflightMetadataObject(
+			ctx,
+			clients.metadata,
+			serviceAccountGVR,
+			spec.Namespace,
+			spec.ServiceAccount,
+			"kubernetes_service_account_unavailable",
+			"kubernetes_service_account_access_denied",
+			"kubernetes_service_account_status_unavailable",
+			"Kubernetes service account is unavailable",
+			"Kubernetes service account access is denied",
+			"Kubernetes service account status is unavailable",
+		); err != nil {
+			return err
+		}
+	}
+	if jobType != enum.JobTypeBuild {
+		return nil
+	}
+	if spec.BuildContextPVC == nil {
+		return newExecutionError("build_context_ref_required", "build context PVC ref is required")
+	}
+	if err := preflightBuildContextPVC(ctx, clients.kubernetes, *spec.BuildContextPVC); err != nil {
+		return err
+	}
+	if spec.RegistrySecret == nil {
+		return newExecutionError("build_registry_secret_ref_required", "build registry secret ref is required before Kubernetes execution")
+	}
+	return preflightMetadataObject(
+		ctx,
+		clients.metadata,
+		secretResourceGVR,
+		spec.Namespace,
+		spec.RegistrySecret.Name,
+		"build_registry_secret_unavailable",
+		"build_registry_secret_access_denied",
+		"build_registry_secret_status_unavailable",
+		"build registry secret is unavailable",
+		"build registry secret access is denied",
+		"build registry secret status is unavailable",
+	)
+}
+
+func preflightBuildContextPVC(ctx context.Context, client kubernetes.Interface, pvc workspacePVCRef) error {
+	if client == nil {
+		return newExecutionError("kubernetes_client_init_failed", "Kubernetes client could not be initialized")
+	}
+	claim, err := client.CoreV1().PersistentVolumeClaims(pvc.Namespace).Get(ctx, pvc.ClaimName, metav1.GetOptions{})
+	if err != nil {
+		switch {
+		case apierrors.IsNotFound(err):
+			return newExecutionError("build_context_pvc_unavailable", "build context PVC is unavailable")
+		case apierrors.IsForbidden(err):
+			return newExecutionError("build_context_pvc_access_denied", "build context PVC access is denied")
+		default:
+			return newExecutionError("build_context_pvc_status_unavailable", "build context PVC status is unavailable")
+		}
+	}
+	if claim.Status.Phase != corev1.ClaimBound {
+		return newExecutionError("build_context_pvc_not_ready", "build context PVC is not bound")
+	}
+	return nil
+}
+
+func preflightMetadataObject(
+	ctx context.Context,
+	client metadata.Interface,
+	resource schema.GroupVersionResource,
+	namespace string,
+	name string,
+	unavailableCode string,
+	accessDeniedCode string,
+	statusUnavailableCode string,
+	unavailableMessage string,
+	accessDeniedMessage string,
+	statusUnavailableMessage string,
+) error {
+	if client == nil {
+		return newExecutionError("kubernetes_client_init_failed", "Kubernetes client could not be initialized")
+	}
+	if _, err := client.Resource(resource).Namespace(namespace).Get(ctx, name, metav1.GetOptions{}); err != nil {
+		switch {
+		case apierrors.IsNotFound(err):
+			return newExecutionError(unavailableCode, unavailableMessage)
+		case apierrors.IsForbidden(err):
+			return newExecutionError(accessDeniedCode, accessDeniedMessage)
+		default:
+			return newExecutionError(statusUnavailableCode, statusUnavailableMessage)
+		}
+	}
+	return nil
 }
 
 func parseRestrictedJobInput(payload []byte) (restrictedJobInput, error) {
