@@ -5756,6 +5756,92 @@ func TestRecordSelfDeployPlanGateDecisionReplaysExistingDecision(t *testing.T) {
 	}
 }
 
+func TestRecordSelfDeployPlanGateDecisionReplayRejectsChangedPayload(t *testing.T) {
+	t.Parallel()
+
+	input := validSelfDeployBuildPlanInput()
+	plan := selfDeployPlanFromInputForTest(input, uuid.MustParse("5f7f3a10-0050-4000-8000-000000000050"), "command:"+input.Meta.CommandID.String())
+	plan.Status = enum.SelfDeployPlanStatusApproved
+	plan.GovernanceContext.RiskAssessmentRef = "governance:risk_assessment/aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"
+	plan.GovernanceContext.GateRequestRef = "governance:gate_request/bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb"
+	plan.GovernanceContext.GateDecisionRef = "governance:gate_decision/cccccccc-cccc-4ccc-cccc-cccccccccccc"
+	plan.RuntimeBuildStatus = enum.SelfDeployRuntimeBuildStatusRequested
+	plan.RuntimeBuildJobs = []entity.SelfDeployRuntimeBuildJob{{ServiceKey: "agent-manager", RuntimeJobRef: "runtime:job/existing-build"}}
+	replayInput := RecordSelfDeployPlanGateDecisionInput{
+		Meta:             value.CommandMeta{IdempotencyKey: "gate-decision-conflicting-replay", Actor: testActor()},
+		SelfDeployPlanID: plan.ID,
+		GateRequestRef:   plan.GovernanceContext.GateRequestRef,
+		GateDecisionRef:  plan.GovernanceContext.GateDecisionRef,
+		Outcome:          SelfDeployPlanGateDecisionOutcomeApprove,
+		SafeSummary:      "owner approved self-deploy build",
+	}
+	replayResult, err := selfDeployGateDecisionResult(replayInput)
+	if err != nil {
+		t.Fatalf("selfDeployGateDecisionResult() err = %v", err)
+	}
+	replayDecision, err := selfDeployGateDecisionCommand(replayInput, replayResult)
+	if err != nil {
+		t.Fatalf("selfDeployGateDecisionCommand() err = %v", err)
+	}
+	payload, err := marshalCommandPayload(selfDeployPlanCommandPayload{SelfDeployPlan: plan, GateDecision: &replayDecision})
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+
+	for _, tc := range []struct {
+		name   string
+		change func(*RecordSelfDeployPlanGateDecisionInput)
+	}{
+		{
+			name: "changed outcome",
+			change: func(input *RecordSelfDeployPlanGateDecisionInput) {
+				input.Outcome = SelfDeployPlanGateDecisionOutcomeReject
+				input.SafeSummary = "owner rejected self-deploy plan"
+			},
+		},
+		{
+			name: "changed target",
+			change: func(input *RecordSelfDeployPlanGateDecisionInput) {
+				input.SelfDeployPlanID = uuid.MustParse("5f7f3a10-0051-4000-8000-000000000051")
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repository := &fakeRepository{
+				replay: &entity.CommandResult{
+					IdempotencyKey: replayInput.Meta.IdempotencyKey,
+					Actor:          testActor(),
+					Operation:      operationRecordSelfDeployGateDecision,
+					AggregateType:  enum.CommandAggregateTypeSelfDeployPlan,
+					AggregateID:    plan.ID,
+					ResultPayload:  payload,
+				},
+				selfDeployByID: map[uuid.UUID]entity.SelfDeployPlan{plan.ID: plan},
+			}
+			buildCreator := &fakeSelfDeployBuildJobCreator{result: RuntimeJobResult{JobRef: "runtime:job/new-build", Status: "pending"}}
+			service := New(Config{
+				Repository:                     repository,
+				SelfDeployBuildPlanReader:      &fakeSelfDeployBuildPlanReader{result: readySelfDeployBuildPlanResult()},
+				SelfDeployBuildJobCreator:      buildCreator,
+				SelfDeployBuildDispatchEnabled: true,
+			})
+			conflicting := replayInput
+			tc.change(&conflicting)
+
+			_, err := service.RecordSelfDeployPlanGateDecision(context.Background(), conflicting)
+			if !errors.Is(err, errs.ErrConflict) {
+				t.Fatalf("RecordSelfDeployPlanGateDecision() err = %v, want %v", err, errs.ErrConflict)
+			}
+			if repository.updateSelfDeployCalled {
+				t.Fatal("UpdateSelfDeployPlanWithResult called for conflicting replay")
+			}
+			if buildCreator.calls != 0 {
+				t.Fatalf("build creator calls = %d, want 0", buildCreator.calls)
+			}
+		})
+	}
+}
+
 func TestRecordSelfDeployPlanGateDecisionRejectsMismatchedGateRequest(t *testing.T) {
 	t.Parallel()
 
