@@ -101,6 +101,7 @@ func (repo *Repository) ListAgentProfiles(ctx context.Context) ([]entity.AgentPr
 			&item.Description,
 			&item.Enabled,
 			&item.OpenAIAccountName,
+			&item.GitHubAccountName,
 			&item.CreatedAt,
 			&item.UpdatedAt,
 		); err != nil {
@@ -214,6 +215,14 @@ func (repo *Repository) UpdateOpenAIAccountStatus(ctx context.Context, input adm
 	return item, nil
 }
 
+func (repo *Repository) GetGitHubAccount(ctx context.Context, name string) (entity.GitHubAccount, error) {
+	item, err := scanGitHubAccount(repo.pool.QueryRow(ctx, query("github_accounts__get.sql"), name))
+	if err != nil {
+		return entity.GitHubAccount{}, fmt.Errorf("get github account: %w", err)
+	}
+	return item, nil
+}
+
 func (repo *Repository) CreateAgentRun(ctx context.Context, input adminrepo.CreateAgentRunInput) (entity.AgentRun, error) {
 	row := repo.pool.QueryRow(ctx, query("agent_runs__insert.sql"),
 		input.RunID,
@@ -309,6 +318,24 @@ func scanOpenAIAccountWithCreated(row pgx.Row) (entity.OpenAIAccount, bool, erro
 		return entity.OpenAIAccount{}, false, err
 	}
 	return item, created, nil
+}
+
+func scanGitHubAccount(row pgx.Row) (entity.GitHubAccount, error) {
+	var item entity.GitHubAccount
+	if err := row.Scan(
+		&item.ID,
+		&item.Name,
+		&item.CredentialID,
+		&item.SecretRef,
+		&item.Username,
+		&item.Email,
+		&item.Status,
+		&item.CreatedAt,
+		&item.UpdatedAt,
+	); err != nil {
+		return entity.GitHubAccount{}, err
+	}
+	return item, nil
 }
 
 func scanAgentRun(row pgx.Row) (entity.AgentRun, error) {

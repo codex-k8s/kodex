@@ -11,6 +11,7 @@ type DeveloperRunInput struct {
 	RunID               string
 	Profile             string
 	CodexAuthSecretName string
+	GitHubSecretName    string
 	Provider            string
 	Owner               string
 	Name                string
@@ -25,6 +26,7 @@ type ReviewRunInput struct {
 	RunID               string
 	Profile             string
 	CodexAuthSecretName string
+	GitHubSecretName    string
 	Provider            string
 	Owner               string
 	Name                string

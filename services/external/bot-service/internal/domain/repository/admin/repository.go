@@ -75,6 +75,7 @@ type Repository interface {
 	ListOpenAIAccounts(ctx context.Context, limit int) ([]entity.OpenAIAccount, error)
 	GetOpenAIAccount(ctx context.Context, name string) (entity.OpenAIAccount, error)
 	UpdateOpenAIAccountStatus(ctx context.Context, input UpdateOpenAIAccountStatusInput) (entity.OpenAIAccount, error)
+	GetGitHubAccount(ctx context.Context, name string) (entity.GitHubAccount, error)
 	CreateAgentRun(ctx context.Context, input CreateAgentRunInput) (entity.AgentRun, error)
 	GetAgentRun(ctx context.Context, runID string) (entity.AgentRun, error)
 	UpdateAgentRunArtifacts(ctx context.Context, input UpdateAgentRunArtifactsInput) (entity.AgentRun, error)

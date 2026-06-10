@@ -49,12 +49,20 @@ type promptTemplatePullRequestData struct {
 	HeadBranch string
 }
 
+type promptTemplateGitHubData struct {
+	Account     string
+	TokenEnv    string
+	UsernameEnv string
+	EmailEnv    string
+}
+
 type promptTemplateData struct {
 	Run         promptTemplateRunData
 	Agent       promptTemplateAgentData
 	Repository  promptTemplateRepositoryData
 	Task        promptTemplateTaskData
 	PullRequest promptTemplatePullRequestData
+	GitHub      promptTemplateGitHubData
 }
 
 func renderAgentPromptTemplate(body string, data promptTemplateData) (string, error) {
@@ -115,6 +123,7 @@ func promptTemplateReferenceMarkdown() string {
 - {{.Repository.Provider}}, {{.Repository.Owner}}, {{.Repository.Name}}, {{.Repository.FullName}}
 - {{.Task.Title}}, {{.Task.Body}}, {{.Task.BaseBranch}}, {{.Task.HeadBranch}}
 - {{.PullRequest.Number}}, {{.PullRequest.URL}}, {{.PullRequest.Title}}, {{.PullRequest.BaseBranch}}, {{.PullRequest.HeadBranch}}
+- {{.GitHub.Account}}, {{.GitHub.TokenEnv}}, {{.GitHub.UsernameEnv}}, {{.GitHub.EmailEnv}}
 
 Доступные функции:
 
@@ -159,10 +168,20 @@ func samplePromptTemplateData(profileName string, templateKey string, locale str
 			BaseBranch: "main",
 			HeadBranch: "feature/sample",
 		},
+		GitHub: promptTemplateGitHubData{
+			Account:     "primary",
+			TokenEnv:    "GH_TOKEN / GITHUB_TOKEN",
+			UsernameEnv: "GITHUB_USERNAME / GITHUB_USER",
+			EmailEnv:    "GITHUB_EMAIL",
+		},
 	}
 	if templateKey == reviewPRTemplateKey {
 		data.Run.Role = "reviewer"
 		data.Agent.Role = "reviewer"
+		data.GitHub.Account = "primary"
+	}
+	if templateKey == developerSmokeTemplateKey {
+		data.GitHub.Account = "agent"
 	}
 	return data
 }

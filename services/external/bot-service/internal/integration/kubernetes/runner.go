@@ -530,6 +530,7 @@ func (runner *Runner) smokeJob(runID string, role string) *batchv1.Job {
 func (runner *Runner) developerJob(input runtimerepo.DeveloperRunInput) *batchv1.Job {
 	backoffLimit := int32(0)
 	codexAuthSecretName := defaultString(input.CodexAuthSecretName, runner.codexAuthSecretName)
+	gitHubSecretName := defaultString(input.GitHubSecretName, runner.gitHubSecretName)
 	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   runnerJobName(input.RunID),
@@ -593,9 +594,11 @@ func (runner *Runner) developerJob(input runtimerepo.DeveloperRunInput) *batchv1
 							Name: gitHubSecretVolume,
 							VolumeSource: corev1.VolumeSource{
 								Secret: &corev1.SecretVolumeSource{
-									SecretName: runner.gitHubSecretName,
+									SecretName: gitHubSecretName,
 									Items: []corev1.KeyToPath{
 										{Key: "github-token", Path: "github-token"},
+										{Key: "github-username", Path: "github-username"},
+										{Key: "github-email", Path: "github-email"},
 									},
 								},
 							},
@@ -621,6 +624,7 @@ func (runner *Runner) developerJob(input runtimerepo.DeveloperRunInput) *batchv1
 func (runner *Runner) reviewJob(input runtimerepo.ReviewRunInput) *batchv1.Job {
 	backoffLimit := int32(0)
 	codexAuthSecretName := defaultString(input.CodexAuthSecretName, runner.codexAuthSecretName)
+	gitHubSecretName := defaultString(input.GitHubSecretName, runner.gitHubSecretName)
 	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   runnerJobName(input.RunID),
@@ -682,9 +686,11 @@ func (runner *Runner) reviewJob(input runtimerepo.ReviewRunInput) *batchv1.Job {
 							Name: gitHubSecretVolume,
 							VolumeSource: corev1.VolumeSource{
 								Secret: &corev1.SecretVolumeSource{
-									SecretName: runner.gitHubSecretName,
+									SecretName: gitHubSecretName,
 									Items: []corev1.KeyToPath{
 										{Key: "github-token", Path: "github-token"},
+										{Key: "github-username", Path: "github-username"},
+										{Key: "github-email", Path: "github-email"},
 									},
 								},
 							},
@@ -907,6 +913,7 @@ func normalizeDeveloperRunInput(input runtimerepo.DeveloperRunInput) runtimerepo
 	input.RunID = strings.TrimSpace(input.RunID)
 	input.Profile = defaultString(input.Profile, "developer")
 	input.CodexAuthSecretName = strings.TrimSpace(input.CodexAuthSecretName)
+	input.GitHubSecretName = strings.TrimSpace(input.GitHubSecretName)
 	input.Provider = defaultString(input.Provider, "github")
 	input.Owner = strings.TrimSpace(input.Owner)
 	input.Name = strings.TrimSpace(input.Name)
@@ -921,6 +928,7 @@ func normalizeReviewRunInput(input runtimerepo.ReviewRunInput) runtimerepo.Revie
 	input.RunID = strings.TrimSpace(input.RunID)
 	input.Profile = defaultString(input.Profile, "reviewer")
 	input.CodexAuthSecretName = strings.TrimSpace(input.CodexAuthSecretName)
+	input.GitHubSecretName = strings.TrimSpace(input.GitHubSecretName)
 	input.Provider = defaultString(input.Provider, "github")
 	input.Owner = strings.TrimSpace(input.Owner)
 	input.Name = strings.TrimSpace(input.Name)

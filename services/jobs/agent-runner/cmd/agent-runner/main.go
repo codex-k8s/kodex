@@ -21,11 +21,19 @@ const (
 	promptPath       = "/var/run/matter-codex-prompt/prompt.md"
 	codexAuthPath    = "/var/run/secrets/matter-codex-codex/auth.json"
 	gitHubTokenPath  = "/var/run/secrets/matter-codex-github/github-token"
+	gitHubUserPath   = "/var/run/secrets/matter-codex-github/github-username"
+	gitHubEmailPath  = "/var/run/secrets/matter-codex-github/github-email"
 	runnerBinaryPath = "/usr/local/bin/matter-codex-agent-runner"
 )
 
 type runner struct {
 	failureLogs []string
+}
+
+type githubAccount struct {
+	Token    string
+	Username string
+	Email    string
 }
 
 func main() {
@@ -126,24 +134,24 @@ func (r *runner) runDeveloper(ctx context.Context) error {
 	if err := r.prepareCodexHome(ctx); err != nil {
 		return err
 	}
-	gitEnv := gitAskPassEnv()
-	ghEnv, err := githubTokenEnv()
+	account, err := readGitHubAccount()
 	if err != nil {
 		return err
 	}
-	if err := r.runLogged(ctx, "", gitEnv, "git-clone.log", "git", "clone", "https://github.com/"+repo+".git", repoDir); err != nil {
+	githubEnv := account.env()
+	if err := r.runLogged(ctx, "", githubEnv, "git-clone.log", "git", "clone", "https://github.com/"+repo+".git", repoDir); err != nil {
 		return err
 	}
-	if err := r.runLogged(ctx, repoDir, gitEnv, "git-checkout.log", "git", "checkout", "-B", headBranch, "origin/"+baseBranch); err != nil {
+	if err := r.runLogged(ctx, repoDir, githubEnv, "git-checkout.log", "git", "checkout", "-B", headBranch, "origin/"+baseBranch); err != nil {
 		return err
 	}
-	if err := r.runLogged(ctx, repoDir, nil, "git-config-name.log", "git", "config", "user.name", "matter-codex developer agent"); err != nil {
+	if err := r.runLogged(ctx, repoDir, githubEnv, "git-config-name.log", "git", "config", "user.name", account.Username); err != nil {
 		return err
 	}
-	if err := r.runLogged(ctx, repoDir, nil, "git-config-email.log", "git", "config", "user.email", "matter-codex-agent@local.invalid"); err != nil {
+	if err := r.runLogged(ctx, repoDir, githubEnv, "git-config-email.log", "git", "config", "user.email", account.Email); err != nil {
 		return err
 	}
-	if err := r.runCodexExec(ctx, "codex-final.md"); err != nil {
+	if err := r.runCodexExec(ctx, "codex-final.md", githubEnv); err != nil {
 		return err
 	}
 	changed, err := r.gitHasChanges(ctx)
@@ -155,22 +163,22 @@ func (r *runner) runDeveloper(ctx context.Context) error {
 		fmt.Println("matter-codex developer run done")
 		return nil
 	}
-	if err := r.runLogged(ctx, repoDir, nil, "git-add.log", "git", "add", "-A"); err != nil {
+	if err := r.runLogged(ctx, repoDir, githubEnv, "git-add.log", "git", "add", "-A"); err != nil {
 		return err
 	}
-	if err := r.runLogged(ctx, repoDir, nil, "git-commit.log", "git", "commit", "-m", "Apply matter-codex developer run "+runID); err != nil {
+	if err := r.runLogged(ctx, repoDir, githubEnv, "git-commit.log", "git", "commit", "-m", "Apply matter-codex developer run "+runID); err != nil {
 		return err
 	}
-	if err := r.runLogged(ctx, repoDir, gitEnv, "git-push.log", "git", "push", "origin", headBranch); err != nil {
+	if err := r.runLogged(ctx, repoDir, githubEnv, "git-push.log", "git", "push", "origin", headBranch); err != nil {
 		return err
 	}
 	bodyPath, err := r.writeDeveloperPRBody(runID, profile, baseBranch, headBranch)
 	if err != nil {
 		return err
 	}
-	prURL, err := r.capture(ctx, repoDir, ghEnv, "gh-pr-view.log", "gh", "pr", "view", headBranch, "--repo", repo, "--json", "url", "--jq", ".url")
+	prURL, err := r.capture(ctx, repoDir, githubEnv, "gh-pr-view.log", "gh", "pr", "view", headBranch, "--repo", repo, "--json", "url", "--jq", ".url")
 	if err != nil {
-		prURL, err = r.capture(ctx, repoDir, ghEnv, "gh-pr-create.log", "gh", "pr", "create", "--repo", repo, "--base", baseBranch, "--head", headBranch, "--title", prTitle, "--body-file", bodyPath, "--draft")
+		prURL, err = r.capture(ctx, repoDir, githubEnv, "gh-pr-create.log", "gh", "pr", "create", "--repo", repo, "--base", baseBranch, "--head", headBranch, "--title", prTitle, "--body-file", bodyPath, "--draft")
 		if err != nil {
 			return err
 		}
@@ -204,51 +212,48 @@ func (r *runner) runReviewer(ctx context.Context) error {
 	if err := r.prepareCodexHome(ctx); err != nil {
 		return err
 	}
-	gitEnv := gitAskPassEnv()
-	ghEnv, err := githubTokenEnv()
+	account, err := readGitHubAccount()
 	if err != nil {
 		return err
 	}
-	if err := r.writeOutput(ctx, "", ghEnv, "pr.json", "gh-pr-view-stderr.log", "gh", "pr", "view", prNumber, "--repo", repo, "--json", "title,body,author,headRefName,baseRefName,url,state,isDraft", "--jq", "."); err != nil {
-		return err
-	}
-	if err := r.writeOutput(ctx, "", ghEnv, "pr.diff", "gh-pr-diff-stderr.log", "gh", "pr", "diff", prNumber, "--repo", repo); err != nil {
-		return err
-	}
-	prURL, err := r.capture(ctx, "", ghEnv, "gh-pr-url.log", "gh", "pr", "view", prNumber, "--repo", repo, "--json", "url", "--jq", ".url")
+	githubEnv := account.env()
+	prURL, err := r.capture(ctx, "", githubEnv, "gh-pr-url.log", "gh", "pr", "view", prNumber, "--repo", repo, "--json", "url", "--jq", ".url")
 	if err != nil {
 		return err
 	}
-	if err := r.runLogged(ctx, "", gitEnv, "git-clone.log", "git", "clone", "https://github.com/"+repo+".git", repoDir); err != nil {
+	if err := r.runLogged(ctx, "", githubEnv, "git-clone.log", "git", "clone", "https://github.com/"+repo+".git", repoDir); err != nil {
 		return err
 	}
 	branchName := "review-pr-" + prNumber
-	if err := r.runLogged(ctx, repoDir, gitEnv, "git-fetch.log", "git", "fetch", "origin", "pull/"+prNumber+"/head:"+branchName); err != nil {
+	if err := r.runLogged(ctx, repoDir, githubEnv, "git-fetch.log", "git", "fetch", "origin", "pull/"+prNumber+"/head:"+branchName); err != nil {
 		return err
 	}
 	if err := r.runLogged(ctx, repoDir, nil, "git-checkout.log", "git", "checkout", branchName); err != nil {
 		return err
 	}
-	if err := r.runCodexExec(ctx, "review-final.md"); err != nil {
+	if err := r.runCodexExec(ctx, "review-final.md", githubEnv); err != nil {
 		return err
 	}
 	decision := normalizeDecision(readDecision(filepath.Join(artifactsDir, "review-final.md")))
+	submittedByAgent := readReviewSubmitted(filepath.Join(artifactsDir, "review-final.md"))
 	bodyPath, err := r.writeReviewBody(runID, prNumber, "review-final.md")
 	if err != nil {
 		return err
 	}
-	flag := reviewFlag(decision)
-	if err := r.runLogged(ctx, repoDir, ghEnv, "gh-pr-review.log", "gh", "pr", "review", prNumber, "--repo", repo, flag, "--body-file", bodyPath); err != nil {
-		if flag == "--comment" {
-			return err
-		}
-		decision = "comment"
-		fallbackPath, fallbackErr := r.writeReviewFallbackBody(runID, prNumber, flag, "review-final.md")
-		if fallbackErr != nil {
-			return fallbackErr
-		}
-		if err := r.runLogged(ctx, repoDir, ghEnv, "gh-pr-review-fallback.log", "gh", "pr", "review", prNumber, "--repo", repo, "--comment", "--body-file", fallbackPath); err != nil {
-			return err
+	if !submittedByAgent {
+		flag := reviewFlag(decision)
+		if err := r.runLogged(ctx, repoDir, githubEnv, "gh-pr-review.log", "gh", "pr", "review", prNumber, "--repo", repo, flag, "--body-file", bodyPath); err != nil {
+			if flag == "--comment" {
+				return err
+			}
+			decision = "comment"
+			fallbackPath, fallbackErr := r.writeReviewFallbackBody(runID, prNumber, flag, "review-final.md")
+			if fallbackErr != nil {
+				return fallbackErr
+			}
+			if err := r.runLogged(ctx, repoDir, githubEnv, "gh-pr-review-fallback.log", "gh", "pr", "review", prNumber, "--repo", repo, "--comment", "--body-file", fallbackPath); err != nil {
+				return err
+			}
 		}
 	}
 	artifact("pr-url", strings.TrimSpace(prURL))
@@ -285,7 +290,7 @@ func (r *runner) prepareCodexHome(ctx context.Context) error {
 	return nil
 }
 
-func (r *runner) runCodexExec(ctx context.Context, finalFile string) error {
+func (r *runner) runCodexExec(ctx context.Context, finalFile string, extraEnv []string) error {
 	promptFile, err := os.Open(promptPath)
 	if err != nil {
 		return err
@@ -303,7 +308,7 @@ func (r *runner) runCodexExec(ctx context.Context, finalFile string) error {
 	defer stderr.Close()
 	r.failureLogs = append(r.failureLogs, filepath.Join(artifactsDir, "codex-stderr.log"))
 	cmd := exec.CommandContext(ctx, "codex", "exec", "--json", "--cd", repoDir, "--sandbox", "danger-full-access", "--output-last-message", filepath.Join(artifactsDir, finalFile), "-")
-	cmd.Env = mergeEnv(os.Environ(), "CODEX_HOME="+codexHomeDir)
+	cmd.Env = mergeEnv(os.Environ(), append(extraEnv, "CODEX_HOME="+codexHomeDir)...)
 	cmd.Stdin = promptFile
 	cmd.Stdout = events
 	cmd.Stderr = stderr
@@ -344,28 +349,6 @@ func (r *runner) capture(ctx context.Context, dir string, extraEnv []string, log
 		return "", err
 	}
 	return stdout.String(), nil
-}
-
-func (r *runner) writeOutput(ctx context.Context, dir string, extraEnv []string, outputName string, logName string, name string, args ...string) error {
-	outputPath := filepath.Join(artifactsDir, outputName)
-	outputFile, err := os.Create(outputPath)
-	if err != nil {
-		return err
-	}
-	defer outputFile.Close()
-	logPath := filepath.Join(artifactsDir, logName)
-	logFile, err := os.Create(logPath)
-	if err != nil {
-		return err
-	}
-	defer logFile.Close()
-	r.failureLogs = append(r.failureLogs, logPath)
-	cmd := exec.CommandContext(ctx, name, args...)
-	cmd.Dir = dir
-	cmd.Env = mergeEnv(os.Environ(), extraEnv...)
-	cmd.Stdout = outputFile
-	cmd.Stderr = logFile
-	return cmd.Run()
 }
 
 func (r *runner) gitHasChanges(ctx context.Context) (bool, error) {
@@ -413,7 +396,7 @@ disable_response_storage = true
 
 [shell_environment_policy]
 inherit = "none"
-include_only = ["PATH", "HOME"]
+include_only = ["PATH", "HOME", "GH_TOKEN", "GITHUB_TOKEN", "GITHUB_USERNAME", "GITHUB_USER", "GITHUB_EMAIL", "GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL", "GIT_ASKPASS", "GIT_TERMINAL_PROMPT", "MATTERCODEX_GITHUB_TOKEN_FILE"]
 
 [mcp_servers.context7]
 command = "npx"
@@ -475,20 +458,45 @@ func printAuthJSON() error {
 	return err
 }
 
-func githubTokenEnv() ([]string, error) {
-	token, err := os.ReadFile(gitHubTokenPath)
+func readGitHubAccount() (githubAccount, error) {
+	token, err := readRequiredSecretFile(gitHubTokenPath, "github token")
 	if err != nil {
-		return nil, err
+		return githubAccount{}, err
 	}
-	value := strings.TrimSpace(string(token))
-	if value == "" {
-		return nil, fmt.Errorf("github token is empty")
+	username, err := readRequiredSecretFile(gitHubUserPath, "github username")
+	if err != nil {
+		return githubAccount{}, err
 	}
-	return []string{"GH_TOKEN=" + value, "GITHUB_TOKEN=" + value}, nil
+	email, err := readRequiredSecretFile(gitHubEmailPath, "github email")
+	if err != nil {
+		return githubAccount{}, err
+	}
+	return githubAccount{Token: token, Username: username, Email: email}, nil
 }
 
-func gitAskPassEnv() []string {
+func readRequiredSecretFile(path string, label string) (string, error) {
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	value := strings.TrimSpace(string(body))
+	if value == "" {
+		return "", fmt.Errorf("%s is empty", label)
+	}
+	return value, nil
+}
+
+func (account githubAccount) env() []string {
 	return []string{
+		"GH_TOKEN=" + account.Token,
+		"GITHUB_TOKEN=" + account.Token,
+		"GITHUB_USERNAME=" + account.Username,
+		"GITHUB_USER=" + account.Username,
+		"GITHUB_EMAIL=" + account.Email,
+		"GIT_AUTHOR_NAME=" + account.Username,
+		"GIT_AUTHOR_EMAIL=" + account.Email,
+		"GIT_COMMITTER_NAME=" + account.Username,
+		"GIT_COMMITTER_EMAIL=" + account.Email,
 		"GIT_ASKPASS=" + runnerBinaryPath,
 		"MATTERCODEX_GIT_ASKPASS=1",
 		"MATTERCODEX_GITHUB_TOKEN_FILE=" + gitHubTokenPath,
@@ -529,6 +537,21 @@ func readDecision(path string) string {
 		}
 	}
 	return ""
+}
+
+func readReviewSubmitted(path string) bool {
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	for _, line := range strings.Split(string(body), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(strings.ToLower(line), "review_submitted:") {
+			_, value, _ := strings.Cut(line, ":")
+			return strings.EqualFold(strings.TrimSpace(value), "true")
+		}
+	}
+	return false
 }
 
 func normalizeDecision(value string) string {

@@ -47,7 +47,7 @@
 | Tool | Version | Scope | Why |
 |---|---:|---|---|
 | `@openai/codex` | `0.138.0` | Codex developer/reviewer agent | `codex exec --json`, MCP config smoke и non-interactive developer/reviewer run внутри Kubernetes Job |
-| `github-cli` / `gh` | distro package | Agent PR publish/review | подготовленный agent-runner image вызывает `gh` из Go runner binary для создания draft PR и отправки PR review |
+| `github-cli` / `gh` | distro package | Agent PR publish/review | подготовленный agent-runner image вызывает `gh` из Go runner binary, а Codex agent получает `gh` для inline review comments и review-thread replies |
 | `git` | distro package | Agent checkout/push | подготовленный agent-runner image выполняет clone/branch/commit/push из Go runner binary без shell-скриптов в bot-service |
 
 ## Runtime images - in use

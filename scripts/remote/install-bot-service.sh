@@ -141,9 +141,20 @@ fi
 
 GITHUB_TOKEN_VALUE="${MATTERCODEX_GITHUB_TOKEN:-${GITHUB_PAT:-${GIT_BOT_TOKEN:-}}}"
 GITHUB_WEBHOOK_SECRET_VALUE="${MATTERCODEX_GITHUB_WEBHOOK_SECRET:-${GITHUB_WEBHOOK_SECRET:-}}"
+GITHUB_USERNAME_VALUE="${MATTERCODEX_GITHUB_USERNAME:-${GITHUB_USERNAME:-${GITHUB_USER:-}}}"
+GITHUB_EMAIL_VALUE="${MATTERCODEX_GITHUB_EMAIL:-${GITHUB_EMAIL:-}}"
+if [ -z "$GITHUB_EMAIL_VALUE" ] && [ -n "$GITHUB_USERNAME_VALUE" ]; then
+  GITHUB_EMAIL_VALUE="${GITHUB_USERNAME_VALUE}@users.noreply.github.com"
+fi
 if [ -n "$GITHUB_TOKEN_VALUE" ] || [ -n "$GITHUB_WEBHOOK_SECRET_VALUE" ]; then
+  if [ -n "$GITHUB_TOKEN_VALUE" ]; then
+    [ -n "$GITHUB_USERNAME_VALUE" ] || mattercodex_die "GitHub username не задан: укажи MATTERCODEX_GITHUB_USERNAME или GITHUB_USERNAME/GITHUB_USER"
+    [ -n "$GITHUB_EMAIL_VALUE" ] || mattercodex_die "GitHub email не задан: укажи MATTERCODEX_GITHUB_EMAIL или GITHUB_EMAIL"
+  fi
   GITHUB_TOKEN_B64="$(printf '%s' "$GITHUB_TOKEN_VALUE" | base64 | tr -d '\n')"
   GITHUB_WEBHOOK_SECRET_B64="$(printf '%s' "$GITHUB_WEBHOOK_SECRET_VALUE" | base64 | tr -d '\n')"
+  GITHUB_USERNAME_B64="$(printf '%s' "$GITHUB_USERNAME_VALUE" | base64 | tr -d '\n')"
+  GITHUB_EMAIL_B64="$(printf '%s' "$GITHUB_EMAIL_VALUE" | base64 | tr -d '\n')"
   mattercodex_log "применяется GitHub secret на целевом сервере"
   cat <<EOF | mattercodex_remote_kubectl_apply_stdin "$APPLY_DRY_RUN_MODE"
 apiVersion: v1
@@ -158,9 +169,43 @@ type: Opaque
 data:
   github-token: ${GITHUB_TOKEN_B64}
   github-webhook-secret: ${GITHUB_WEBHOOK_SECRET_B64}
+  github-username: ${GITHUB_USERNAME_B64}
+  github-email: ${GITHUB_EMAIL_B64}
 EOF
 else
   mattercodex_log "GitHub token/webhook secret не заданы; GitHub secret не создается"
+fi
+
+AGENT_GITHUB_TOKEN_VALUE="${MATTERCODEX_AGENT_GITHUB_TOKEN:-${GIT_BOT_TOKEN:-}}"
+AGENT_GITHUB_USERNAME_VALUE="${MATTERCODEX_AGENT_GITHUB_USERNAME:-${GIT_BOT_USERNAME:-}}"
+AGENT_GITHUB_EMAIL_VALUE="${MATTERCODEX_AGENT_GITHUB_EMAIL:-${GIT_BOT_MAIL:-${GIT_BOT_EMAIL:-}}}"
+if [ -z "$AGENT_GITHUB_EMAIL_VALUE" ] && [ -n "$AGENT_GITHUB_USERNAME_VALUE" ]; then
+  AGENT_GITHUB_EMAIL_VALUE="${AGENT_GITHUB_USERNAME_VALUE}@users.noreply.github.com"
+fi
+if [ -n "$AGENT_GITHUB_TOKEN_VALUE" ]; then
+  [ -n "$AGENT_GITHUB_USERNAME_VALUE" ] || mattercodex_die "agent GitHub username не задан: укажи MATTERCODEX_AGENT_GITHUB_USERNAME или GIT_BOT_USERNAME"
+  [ -n "$AGENT_GITHUB_EMAIL_VALUE" ] || mattercodex_die "agent GitHub email не задан: укажи MATTERCODEX_AGENT_GITHUB_EMAIL или GIT_BOT_MAIL/GIT_BOT_EMAIL"
+  AGENT_GITHUB_TOKEN_B64="$(printf '%s' "$AGENT_GITHUB_TOKEN_VALUE" | base64 | tr -d '\n')"
+  AGENT_GITHUB_USERNAME_B64="$(printf '%s' "$AGENT_GITHUB_USERNAME_VALUE" | base64 | tr -d '\n')"
+  AGENT_GITHUB_EMAIL_B64="$(printf '%s' "$AGENT_GITHUB_EMAIL_VALUE" | base64 | tr -d '\n')"
+  mattercodex_log "применяется agent GitHub secret на целевом сервере"
+  cat <<EOF | mattercodex_remote_kubectl_apply_stdin "$APPLY_DRY_RUN_MODE"
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ${MATTERCODEX_AGENT_GITHUB_SECRET}
+  namespace: ${MATTERCODEX_NAMESPACE}
+  labels:
+    app.kubernetes.io/name: matter-codex-agent-runner
+    app.kubernetes.io/component: github-agent-secret
+type: Opaque
+data:
+  github-token: ${AGENT_GITHUB_TOKEN_B64}
+  github-username: ${AGENT_GITHUB_USERNAME_B64}
+  github-email: ${AGENT_GITHUB_EMAIL_B64}
+EOF
+else
+  mattercodex_log "agent GitHub token не задан; agent GitHub secret не создается"
 fi
 
 CODEX_AUTH_JSON_PATH="${MATTERCODEX_CODEX_AUTH_JSON_PATH:-${CODEX_AUTH_JSON_PATH:-}}"

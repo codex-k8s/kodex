@@ -335,9 +335,6 @@ func (svc *SlashCommandService) handleDevSmoke(ctx context.Context, args []strin
 	if len(args) < 1 || len(args) > 2 {
 		return svc.t("dev.smoke.usage", nil)
 	}
-	if !svc.cfg.GitHubTokenConfigured {
-		return svc.t("dev.github_not_configured", nil)
-	}
 	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
 		return svc.t("dev.storage_not_ready", nil)
 	}
@@ -349,6 +346,11 @@ func (svc *SlashCommandService) handleDevSmoke(ctx context.Context, args []strin
 	account, ok := svc.openAIAccount(ctx, accountName)
 	if !ok || account.Status != "authorized" || strings.TrimSpace(account.SecretRef) == "" {
 		return svc.t("dev.openai_account_not_ready", map[string]any{"Account": accountName})
+	}
+	githubAccountName := defaultString(profile.GitHubAccountName, "primary")
+	githubAccount, ok := svc.githubAccount(ctx, githubAccountName)
+	if !ok || strings.TrimSpace(githubAccount.SecretRef) == "" {
+		return svc.t("dev.github_account_not_ready", map[string]any{"Account": githubAccountName})
 	}
 	ref, err := parseRepositoryRef(args[:1], "dev smoke")
 	if err != nil {
@@ -386,6 +388,7 @@ func (svc *SlashCommandService) handleDevSmoke(ctx context.Context, args []strin
 			BaseBranch: "main",
 			HeadBranch: headBranch,
 		},
+		GitHub: promptGitHubData(githubAccountName),
 	})
 	if err != nil {
 		return svc.t("prompt.render.failed", map[string]any{"Error": safeError(err)})
@@ -394,6 +397,7 @@ func (svc *SlashCommandService) handleDevSmoke(ctx context.Context, args []strin
 		RunID:               runID,
 		Profile:             "developer",
 		CodexAuthSecretName: account.SecretRef,
+		GitHubSecretName:    githubAccount.SecretRef,
 		Provider:            "github",
 		Owner:               ref.Owner,
 		Name:                ref.Name,
@@ -546,9 +550,6 @@ func (svc *SlashCommandService) handleReviewPR(ctx context.Context, args []strin
 	if len(args) < 2 || len(args) > 3 {
 		return svc.t("review.pr.usage", nil)
 	}
-	if !svc.cfg.GitHubTokenConfigured {
-		return svc.t("review.github_not_configured", nil)
-	}
 	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
 		return svc.t("review.storage_not_ready", nil)
 	}
@@ -560,6 +561,11 @@ func (svc *SlashCommandService) handleReviewPR(ctx context.Context, args []strin
 	account, ok := svc.openAIAccount(ctx, accountName)
 	if !ok || account.Status != "authorized" || strings.TrimSpace(account.SecretRef) == "" {
 		return svc.t("review.openai_account_not_ready", map[string]any{"Account": accountName})
+	}
+	githubAccountName := defaultString(profile.GitHubAccountName, "primary")
+	githubAccount, ok := svc.githubAccount(ctx, githubAccountName)
+	if !ok || strings.TrimSpace(githubAccount.SecretRef) == "" {
+		return svc.t("review.github_account_not_ready", map[string]any{"Account": githubAccountName})
 	}
 	ref, err := parseRepositoryRef(args[:1], "review pr")
 	if err != nil {
@@ -596,6 +602,7 @@ func (svc *SlashCommandService) handleReviewPR(ctx context.Context, args []strin
 		PullRequest: promptTemplatePullRequestData{
 			Number: number,
 		},
+		GitHub: promptGitHubData(githubAccountName),
 	})
 	if err != nil {
 		return svc.t("prompt.render.failed", map[string]any{"Error": safeError(err)})
@@ -604,6 +611,7 @@ func (svc *SlashCommandService) handleReviewPR(ctx context.Context, args []strin
 		RunID:               runID,
 		Profile:             "reviewer",
 		CodexAuthSecretName: account.SecretRef,
+		GitHubSecretName:    githubAccount.SecretRef,
 		Provider:            "github",
 		Owner:               ref.Owner,
 		Name:                ref.Name,
@@ -775,6 +783,7 @@ func (svc *SlashCommandService) handleProfile(ctx context.Context, args []string
 			"Role":        profile.Role,
 			"Enabled":     enabled,
 			"Account":     defaultString(profile.OpenAIAccountName, "primary"),
+			"GitHub":      defaultString(profile.GitHubAccountName, "primary"),
 			"Description": profile.Description,
 		}))
 	}
@@ -1602,6 +1611,26 @@ func (svc *SlashCommandService) openAIAccount(ctx context.Context, name string) 
 		return entity.OpenAIAccount{}, false
 	}
 	return account, true
+}
+
+func (svc *SlashCommandService) githubAccount(ctx context.Context, name string) (entity.GitHubAccount, bool) {
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return entity.GitHubAccount{}, false
+	}
+	account, err := svc.cfg.Store.GetGitHubAccount(ctx, name)
+	if err != nil {
+		return entity.GitHubAccount{}, false
+	}
+	return account, true
+}
+
+func promptGitHubData(accountName string) promptTemplateGitHubData {
+	return promptTemplateGitHubData{
+		Account:     defaultString(accountName, "primary"),
+		TokenEnv:    "GH_TOKEN / GITHUB_TOKEN",
+		UsernameEnv: "GITHUB_USERNAME / GITHUB_USER",
+		EmailEnv:    "GITHUB_EMAIL",
+	}
 }
 
 func (svc *SlashCommandService) agentRun(ctx context.Context, runID string) (entity.AgentRun, bool) {

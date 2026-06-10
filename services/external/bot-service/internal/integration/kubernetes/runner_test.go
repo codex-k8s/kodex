@@ -2,6 +2,7 @@ package kubernetes
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	runtimerepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/runtime"
@@ -61,16 +62,17 @@ func TestStartDeveloperRunCreatesPVCAndJob(t *testing.T) {
 	}
 
 	started, err := runner.StartDeveloperRun(context.Background(), runtimerepo.DeveloperRunInput{
-		RunID:      "dev-test",
-		Profile:    "developer",
-		Provider:   "github",
-		Owner:      "codex-k8s",
-		Name:       "matter-codex",
-		BaseBranch: "main",
-		HeadBranch: "matter-codex-dev-test",
-		Title:      "Matter Codex developer smoke",
-		Task:       "Update a safe smoke document.",
-		Prompt:     "Developer prompt",
+		RunID:            "dev-test",
+		Profile:          "developer",
+		GitHubSecretName: "matter-codex-github-agent",
+		Provider:         "github",
+		Owner:            "codex-k8s",
+		Name:             "matter-codex",
+		BaseBranch:       "main",
+		HeadBranch:       "matter-codex-dev-test",
+		Title:            "Matter Codex developer smoke",
+		Task:             "Update a safe smoke document.",
+		Prompt:           "Developer prompt",
 	})
 	if err != nil {
 		t.Fatalf("StartDeveloperRun() error = %v", err)
@@ -101,7 +103,7 @@ func TestStartDeveloperRunCreatesPVCAndJob(t *testing.T) {
 	if len(podSpec.Volumes) != 4 {
 		t.Fatalf("volumes len = %d", len(podSpec.Volumes))
 	}
-	if podSpec.Volumes[1].Secret.SecretName != "matter-codex-codex-auth" || podSpec.Volumes[2].Secret.SecretName != "matter-codex-github" {
+	if podSpec.Volumes[1].Secret.SecretName != "matter-codex-codex-auth" || podSpec.Volumes[2].Secret.SecretName != "matter-codex-github-agent" {
 		t.Fatalf("secret volumes = %#v", podSpec.Volumes)
 	}
 	if podSpec.Volumes[3].ConfigMap.Name != "mc-prompt-dev-test" {
@@ -109,6 +111,9 @@ func TestStartDeveloperRunCreatesPVCAndJob(t *testing.T) {
 	}
 	if podSpec.Volumes[1].Secret.Items[0].Key != "auth.json" {
 		t.Fatalf("codex auth secret items = %#v", podSpec.Volumes[1].Secret.Items)
+	}
+	if got := secretItemKeys(podSpec.Volumes[2].Secret.Items); got != "github-token,github-username,github-email" {
+		t.Fatalf("github secret items = %q", got)
 	}
 	configMap, err := client.CoreV1().ConfigMaps("mattermost").Get(context.Background(), "mc-prompt-dev-test", metav1.GetOptions{})
 	if err != nil {
@@ -138,6 +143,7 @@ func TestStartReviewRunCreatesPVCAndJob(t *testing.T) {
 		RunID:               "review-test",
 		Profile:             "reviewer",
 		CodexAuthSecretName: "matter-codex-codex-auth-primary",
+		GitHubSecretName:    "matter-codex-github",
 		Provider:            "github",
 		Owner:               "codex-k8s",
 		Name:                "matter-codex",
@@ -253,4 +259,12 @@ func envValue(env []corev1.EnvVar, name string) string {
 		}
 	}
 	return ""
+}
+
+func secretItemKeys(items []corev1.KeyToPath) string {
+	keys := make([]string, 0, len(items))
+	for _, item := range items {
+		keys = append(keys, item.Key)
+	}
+	return strings.Join(keys, ",")
 }

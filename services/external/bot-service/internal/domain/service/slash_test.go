@@ -187,7 +187,7 @@ func TestSlashGitHubWebhookEnsure(t *testing.T) {
 
 func TestSlashProfileList(t *testing.T) {
 	store := &fakeAdminStore{
-		profiles: []entity.AgentProfile{{Name: "developer", Role: "developer", Description: "dev", Enabled: true, OpenAIAccountName: "primary"}},
+		profiles: []entity.AgentProfile{{Name: "developer", Role: "developer", Description: "dev", Enabled: true, OpenAIAccountName: "primary", GitHubAccountName: "agent"}},
 	}
 	localizer := testLocalizer(t, texti18n.DefaultLocale)
 	svc := NewSlashCommandService(SlashCommandServiceConfig{
@@ -199,7 +199,7 @@ func TestSlashProfileList(t *testing.T) {
 
 	text := svc.Handle(context.Background(), SlashCommand{Text: "profile list"})
 
-	if !strings.Contains(text, "`developer` role `developer` openai `primary` enabled") {
+	if !strings.Contains(text, "`developer` role `developer` openai `primary` github `agent` enabled") {
 		t.Fatalf("Handle(profile list) text = %q", text)
 	}
 }
@@ -359,7 +359,7 @@ func TestSlashRuntimeRejectsInvalidRunID(t *testing.T) {
 
 func TestSlashDevSmokeStatusAndCleanup(t *testing.T) {
 	store := &fakeAdminStore{
-		profiles: []entity.AgentProfile{{Name: "developer", Role: "developer", Enabled: true, OpenAIAccountName: "primary"}},
+		profiles: []entity.AgentProfile{{Name: "developer", Role: "developer", Enabled: true, OpenAIAccountName: "primary", GitHubAccountName: "agent"}},
 		openAIAccounts: map[string]entity.OpenAIAccount{
 			"primary": {Name: "primary", Status: "authorized", SecretRef: "matter-codex-codex-auth-primary"},
 		},
@@ -386,6 +386,9 @@ func TestSlashDevSmokeStatusAndCleanup(t *testing.T) {
 	if runner.developerCodexSecret != "matter-codex-codex-auth-primary" {
 		t.Fatalf("developerCodexSecret = %q", runner.developerCodexSecret)
 	}
+	if runner.developerGitHubSecret != "matter-codex-github-agent" {
+		t.Fatalf("developerGitHubSecret = %q", runner.developerGitHubSecret)
+	}
 	if store.agentRun.RunID != "dev-test" || store.agentRun.ProfileName != "developer" {
 		t.Fatalf("agentRun = %#v", store.agentRun)
 	}
@@ -406,7 +409,7 @@ func TestSlashDevSmokeStatusAndCleanup(t *testing.T) {
 
 func TestSlashReviewPRStatusAndCleanup(t *testing.T) {
 	store := &fakeAdminStore{
-		profiles: []entity.AgentProfile{{Name: "reviewer", Role: "reviewer", Enabled: true, OpenAIAccountName: "primary"}},
+		profiles: []entity.AgentProfile{{Name: "reviewer", Role: "reviewer", Enabled: true, OpenAIAccountName: "primary", GitHubAccountName: "primary"}},
 		openAIAccounts: map[string]entity.OpenAIAccount{
 			"primary": {Name: "primary", Status: "authorized", SecretRef: "matter-codex-codex-auth-primary"},
 		},
@@ -432,6 +435,9 @@ func TestSlashReviewPRStatusAndCleanup(t *testing.T) {
 	}
 	if runner.reviewCodexSecret != "matter-codex-codex-auth-primary" {
 		t.Fatalf("reviewCodexSecret = %q", runner.reviewCodexSecret)
+	}
+	if runner.reviewGitHubSecret != "matter-codex-github" {
+		t.Fatalf("reviewGitHubSecret = %q", runner.reviewGitHubSecret)
 	}
 	if store.agentRun.RunID != "review-test" || store.agentRun.ProfileName != "reviewer" || store.agentRun.HeadBranch != "pr-12" {
 		t.Fatalf("agentRun = %#v", store.agentRun)
@@ -481,9 +487,11 @@ type fakeRuntimeRunner struct {
 	startedDeveloperRunID string
 	developerHeadBranch   string
 	developerCodexSecret  string
+	developerGitHubSecret string
 	startedReviewRunID    string
 	reviewPRNumber        int
 	reviewCodexSecret     string
+	reviewGitHubSecret    string
 	cleanedRunID          string
 	authAccount           string
 	authSecret            string
@@ -550,6 +558,7 @@ func (runner *fakeRuntimeRunner) StartDeveloperRun(_ context.Context, input runt
 	runner.startedDeveloperRunID = input.RunID
 	runner.developerHeadBranch = input.HeadBranch
 	runner.developerCodexSecret = input.CodexAuthSecretName
+	runner.developerGitHubSecret = input.GitHubSecretName
 	if strings.TrimSpace(input.Prompt) == "" {
 		return runtimerepo.StartedRun{}, fmt.Errorf("prompt is required")
 	}
@@ -566,6 +575,7 @@ func (runner *fakeRuntimeRunner) StartReviewRun(_ context.Context, input runtime
 	runner.startedReviewRunID = input.RunID
 	runner.reviewPRNumber = input.PRNumber
 	runner.reviewCodexSecret = input.CodexAuthSecretName
+	runner.reviewGitHubSecret = input.GitHubSecretName
 	if strings.TrimSpace(input.Prompt) == "" {
 		return runtimerepo.StartedRun{}, fmt.Errorf("prompt is required")
 	}
@@ -618,6 +628,7 @@ type fakeAdminStore struct {
 	auditRecorded    bool
 	profiles         []entity.AgentProfile
 	openAIAccounts   map[string]entity.OpenAIAccount
+	githubAccounts   map[string]entity.GitHubAccount
 	promptTemplates  map[string]entity.AgentPromptTemplate
 	agentRun         entity.AgentRun
 	updatedRunStatus string
@@ -731,6 +742,24 @@ func (store *fakeAdminStore) GetOpenAIAccount(_ context.Context, name string) (e
 		return account, nil
 	}
 	return entity.OpenAIAccount{}, fmt.Errorf("openai account not found")
+}
+
+func (store *fakeAdminStore) GetGitHubAccount(_ context.Context, name string) (entity.GitHubAccount, error) {
+	store.ensureGitHubAccounts()
+	if account, ok := store.githubAccounts[name]; ok {
+		return account, nil
+	}
+	return entity.GitHubAccount{}, fmt.Errorf("github account not found")
+}
+
+func (store *fakeAdminStore) ensureGitHubAccounts() {
+	if store.githubAccounts != nil {
+		return
+	}
+	store.githubAccounts = map[string]entity.GitHubAccount{
+		"primary": {Name: "primary", SecretRef: "matter-codex-github", Status: "configured"},
+		"agent":   {Name: "agent", SecretRef: "matter-codex-github-agent", Status: "configured"},
+	}
 }
 
 func (store *fakeAdminStore) UpdateOpenAIAccountStatus(_ context.Context, input adminrepo.UpdateOpenAIAccountStatusInput) (entity.OpenAIAccount, error) {
