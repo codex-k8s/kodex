@@ -12,6 +12,8 @@ import (
 
 const (
 	developerSmokeTemplateKey = "developer_smoke"
+	developerImplementTaskKey = "implement_task"
+	developerFixReviewKey     = "fix_review"
 	reviewPRTemplateKey       = "review_pr"
 )
 
@@ -189,8 +191,15 @@ func samplePromptTemplateData(profileName string, templateKey string, locale pro
 		data.Agent.Role = "reviewer"
 		data.GitHub.Account = "primary"
 	}
-	if templateKey == developerSmokeTemplateKey {
+	if templateKey == developerSmokeTemplateKey || templateKey == developerImplementTaskKey || templateKey == developerFixReviewKey {
+		data.Run.Role = "developer"
+		data.Agent.Role = "developer"
 		data.GitHub.Account = "agent"
+	}
+	if templateKey == developerFixReviewKey {
+		data.PullRequest.Number = 10
+		data.PullRequest.URL = "https://github.com/codex-k8s/matter-codex/pull/10"
+		data.Task.HeadBranch = "matter-codex-flow-sample-run"
 	}
 	return data
 }

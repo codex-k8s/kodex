@@ -8,6 +8,7 @@ where run_id = $1
 returning
 	id,
 	run_id,
+	flow_id,
 	profile_name,
 	role,
 	provider,

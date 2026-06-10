@@ -78,6 +78,8 @@ func (svc *SlashCommandService) Handle(ctx context.Context, command SlashCommand
 		return svc.handleDev(ctx, fields[1:], command)
 	case "review":
 		return svc.handleReview(ctx, fields[1:], command)
+	case "flow":
+		return svc.handleFlow(ctx, fields[1:], command)
 	case "prompt":
 		return svc.handlePrompt(ctx, strings.TrimSpace(strings.TrimPrefix(command.Text, fields[0])), command)
 	case "profile":
@@ -740,6 +742,520 @@ func (svc *SlashCommandService) handleReviewCleanup(ctx context.Context, args []
 	})
 }
 
+func (svc *SlashCommandService) handleFlow(ctx context.Context, args []string, command SlashCommand) string {
+	if svc.cfg.RuntimeRunner == nil {
+		return svc.t("runtime.not_configured", nil)
+	}
+	if len(args) == 0 {
+		return svc.t("flow.usage", nil)
+	}
+	switch args[0] {
+	case "start":
+		return svc.handleFlowStart(ctx, args[1:], command)
+	case "status":
+		return svc.handleFlowStatus(ctx, args[1:])
+	case "cleanup":
+		return svc.handleFlowCleanup(ctx, args[1:], command)
+	default:
+		return svc.t("flow.unknown_command", nil)
+	}
+}
+
+func (svc *SlashCommandService) handleFlowStart(ctx context.Context, args []string, command SlashCommand) string {
+	if len(args) < 3 {
+		return svc.t("flow.start.usage", nil)
+	}
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return svc.t("flow.storage_not_ready", nil)
+	}
+	ref, err := parseRepositoryRef(args[:1], "flow start")
+	if err != nil {
+		return svc.validationErrorText(err)
+	}
+	flowID := strings.ToLower(strings.TrimSpace(args[1]))
+	if !validFlowID(flowID) {
+		return svc.t("runtime.invalid_run_id", nil)
+	}
+	title := strings.TrimSpace(strings.Join(args[2:], " "))
+	if title == "" {
+		return svc.t("flow.start.usage", nil)
+	}
+	if _, message, ok := svc.flowAgentRuntime(ctx, "developer"); !ok {
+		return message
+	}
+	if _, message, ok := svc.flowAgentRuntime(ctx, "reviewer"); !ok {
+		return message
+	}
+	flow, created, err := svc.cfg.Store.CreateAgentFlow(ctx, adminrepo.CreateAgentFlowInput{
+		FlowID:      flowID,
+		Status:      flowStatusCreated,
+		Provider:    "github",
+		Owner:       ref.Owner,
+		Name:        ref.Name,
+		BaseBranch:  "main",
+		HeadBranch:  flowHeadBranch(flowID),
+		Title:       title,
+		Task:        title,
+		Attempt:     1,
+		MaxAttempts: defaultFlowMaxAttempts,
+		Summary:     "developer-review flow created from Mattermost slash command",
+	})
+	if err != nil {
+		return svc.t("flow.start.store_failed", map[string]any{"Error": safeError(err)})
+	}
+	if !created {
+		return svc.t("flow.start.exists", map[string]any{"FlowID": flow.FlowID, "Status": flow.Status})
+	}
+	flow, started, err := svc.startFlowDeveloperAttempt(ctx, flow, false)
+	if err != nil {
+		_, _ = svc.cfg.Store.UpdateAgentFlow(ctx, adminrepo.UpdateAgentFlowInput{FlowID: flow.FlowID, Status: flowStatusBlocked, Summary: safeError(err)})
+		return svc.t("flow.start.failed", map[string]any{"Error": safeError(err)})
+	}
+	svc.recordFlowAudit(ctx, command, "flow.started", flow.FlowID, "developer-review flow started from Mattermost slash command")
+	return svc.t("flow.start.started", map[string]any{
+		"FlowID":      flow.FlowID,
+		"Repository":  flow.FullName(),
+		"Branch":      flow.HeadBranch,
+		"Attempt":     flow.Attempt,
+		"MaxAttempts": flow.MaxAttempts,
+		"RunID":       started.RunID,
+		"Namespace":   started.Namespace,
+		"Job":         started.JobName,
+		"PVC":         started.PVCName,
+	})
+}
+
+func (svc *SlashCommandService) handleFlowStatus(ctx context.Context, args []string) string {
+	if len(args) != 1 {
+		return svc.t("flow.status.usage", nil)
+	}
+	flowID := strings.ToLower(strings.TrimSpace(args[0]))
+	if !validFlowID(flowID) {
+		return svc.t("runtime.invalid_run_id", nil)
+	}
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return svc.t("flow.storage_not_ready", nil)
+	}
+	flow, err := svc.cfg.Store.GetAgentFlow(ctx, flowID)
+	if err != nil {
+		return svc.t("flow.status.failed", map[string]any{"Error": safeError(err)})
+	}
+	flow, events := svc.advanceFlow(ctx, flow)
+	return svc.flowStatusText(flow, events)
+}
+
+func (svc *SlashCommandService) handleFlowCleanup(ctx context.Context, args []string, command SlashCommand) string {
+	if len(args) != 1 {
+		return svc.t("flow.cleanup.usage", nil)
+	}
+	flowID := strings.ToLower(strings.TrimSpace(args[0]))
+	if !validFlowID(flowID) {
+		return svc.t("runtime.invalid_run_id", nil)
+	}
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return svc.t("flow.storage_not_ready", nil)
+	}
+	flow, err := svc.cfg.Store.GetAgentFlow(ctx, flowID)
+	if err != nil {
+		return svc.t("flow.cleanup.failed", map[string]any{"Error": safeError(err)})
+	}
+	runs, err := svc.cfg.Store.ListAgentRunsByFlowID(ctx, flow.FlowID)
+	if err != nil {
+		return svc.t("flow.cleanup.failed", map[string]any{"Error": safeError(err)})
+	}
+	deletedJobs := 0
+	deletedPVCs := 0
+	for _, run := range runs {
+		result, err := svc.cfg.RuntimeRunner.CleanupRun(ctx, run.RunID)
+		if err != nil {
+			return svc.t("flow.cleanup.failed", map[string]any{"Error": safeError(err)})
+		}
+		if result.JobDeleted {
+			deletedJobs++
+		}
+		if result.PVCDeleted {
+			deletedPVCs++
+		}
+		_, _ = svc.cfg.Store.UpdateAgentRunArtifacts(ctx, adminrepo.UpdateAgentRunArtifactsInput{RunID: run.RunID, Status: "cleaned"})
+	}
+	flow, _ = svc.cfg.Store.UpdateAgentFlow(ctx, adminrepo.UpdateAgentFlowInput{FlowID: flow.FlowID, Status: flowStatusCleaned, Summary: "flow runtime resources cleaned"})
+	svc.recordFlowAudit(ctx, command, "flow.cleaned", flow.FlowID, "developer-review flow resources cleaned from Mattermost slash command")
+	return svc.t("flow.cleanup.result", map[string]any{
+		"FlowID":      flow.FlowID,
+		"Runs":        len(runs),
+		"JobsDeleted": deletedJobs,
+		"PVCsDeleted": deletedPVCs,
+	})
+}
+
+type flowRuntimeAccount struct {
+	Profile       entity.AgentProfile
+	OpenAIAccount entity.OpenAIAccount
+	GitHubAccount entity.GitHubAccount
+}
+
+func (svc *SlashCommandService) flowAgentRuntime(ctx context.Context, profileName string) (flowRuntimeAccount, string, bool) {
+	profile, ok := svc.agentProfile(ctx, profileName)
+	if !ok || !profile.Enabled {
+		return flowRuntimeAccount{}, svc.t("flow.profile_not_ready", map[string]any{"Profile": profileName}), false
+	}
+	accountName := defaultString(profile.OpenAIAccountName, "primary")
+	account, ok := svc.openAIAccount(ctx, accountName)
+	if !ok || account.Status != "authorized" || strings.TrimSpace(account.SecretRef) == "" {
+		return flowRuntimeAccount{}, svc.t("flow.openai_account_not_ready", map[string]any{"Account": accountName}), false
+	}
+	githubAccountName := defaultString(profile.GitHubAccountName, "primary")
+	githubAccount, ok := svc.githubAccount(ctx, githubAccountName)
+	if !ok || strings.TrimSpace(githubAccount.SecretRef) == "" {
+		return flowRuntimeAccount{}, svc.t("flow.github_account_not_ready", map[string]any{"Account": githubAccountName}), false
+	}
+	return flowRuntimeAccount{Profile: profile, OpenAIAccount: account, GitHubAccount: githubAccount}, "", true
+}
+
+func (svc *SlashCommandService) startFlowDeveloperAttempt(ctx context.Context, flow entity.AgentFlow, fix bool) (entity.AgentFlow, runtimerepo.StartedRun, error) {
+	account, message, ok := svc.flowAgentRuntime(ctx, "developer")
+	if !ok {
+		return flow, runtimerepo.StartedRun{}, errors.New(message)
+	}
+	runID := flowDeveloperRunID(flow.FlowID, flow.Attempt)
+	templateKey := developerImplementTaskKey
+	baseBranch := flow.BaseBranch
+	status := flowStatusDeveloperRunning
+	summary := "flow developer attempt started"
+	if fix {
+		templateKey = developerFixReviewKey
+		baseBranch = flow.HeadBranch
+		status = flowStatusFixRunning
+		summary = "flow developer fix attempt started"
+	}
+	prompt, err := svc.renderStoredPromptTemplate(ctx, "developer", templateKey, promptTemplateData{
+		Run: promptTemplateRunData{
+			ID:      runID,
+			Profile: "developer",
+			Role:    "developer",
+			Locale:  svc.cfg.Localizer.Locale(),
+		},
+		Agent: promptTemplateAgentData{
+			Profile: "developer",
+			Role:    "developer",
+		},
+		Repository: promptTemplateRepositoryData{
+			Provider: flow.Provider,
+			Owner:    flow.Owner,
+			Name:     flow.Name,
+			FullName: flow.FullName(),
+		},
+		Task: promptTemplateTaskData{
+			Title:      flow.Title,
+			Body:       flow.Task,
+			BaseBranch: baseBranch,
+			HeadBranch: flow.HeadBranch,
+		},
+		PullRequest: promptTemplatePullRequestData{
+			Number:     flow.PRNumber,
+			URL:        flow.PRURL,
+			Title:      flow.Title,
+			BaseBranch: flow.BaseBranch,
+			HeadBranch: flow.HeadBranch,
+		},
+		GitHub: promptGitHubData(defaultString(account.Profile.GitHubAccountName, "agent")),
+		Locale: svc.promptTemplateLocaleData(),
+	})
+	if err != nil {
+		return flow, runtimerepo.StartedRun{}, err
+	}
+	started, err := svc.cfg.RuntimeRunner.StartDeveloperRun(ctx, runtimerepo.DeveloperRunInput{
+		RunID:               runID,
+		Profile:             "developer",
+		CodexAuthSecretName: account.OpenAIAccount.SecretRef,
+		GitHubSecretName:    account.GitHubAccount.SecretRef,
+		Provider:            flow.Provider,
+		Owner:               flow.Owner,
+		Name:                flow.Name,
+		BaseBranch:          baseBranch,
+		HeadBranch:          flow.HeadBranch,
+		Title:               flow.Title,
+		Task:                flow.Task,
+		Prompt:              prompt,
+	})
+	if err != nil {
+		return flow, runtimerepo.StartedRun{}, err
+	}
+	if _, err := svc.cfg.Store.CreateAgentRun(ctx, adminrepo.CreateAgentRunInput{
+		RunID:               runID,
+		FlowID:              flow.FlowID,
+		ProfileName:         "developer",
+		Role:                "developer",
+		Provider:            flow.Provider,
+		Owner:               flow.Owner,
+		Name:                flow.Name,
+		BaseBranch:          baseBranch,
+		HeadBranch:          flow.HeadBranch,
+		Status:              "started",
+		KubernetesNamespace: started.Namespace,
+		JobName:             started.JobName,
+		PVCName:             started.PVCName,
+		Summary:             summary,
+	}); err != nil {
+		return flow, started, err
+	}
+	flow, err = svc.cfg.Store.UpdateAgentFlow(ctx, adminrepo.UpdateAgentFlowInput{
+		FlowID:                flow.FlowID,
+		Status:                status,
+		CurrentDeveloperRunID: runID,
+		Summary:               summary,
+	})
+	if err != nil {
+		return flow, started, err
+	}
+	return flow, started, nil
+}
+
+func (svc *SlashCommandService) startFlowReviewer(ctx context.Context, flow entity.AgentFlow) (entity.AgentFlow, runtimerepo.StartedRun, error) {
+	account, message, ok := svc.flowAgentRuntime(ctx, "reviewer")
+	if !ok {
+		return flow, runtimerepo.StartedRun{}, errors.New(message)
+	}
+	runID := flowReviewerRunID(flow.FlowID, flow.Attempt)
+	prompt, err := svc.renderStoredPromptTemplate(ctx, "reviewer", reviewPRTemplateKey, promptTemplateData{
+		Run: promptTemplateRunData{
+			ID:      runID,
+			Profile: "reviewer",
+			Role:    "reviewer",
+			Locale:  svc.cfg.Localizer.Locale(),
+		},
+		Agent: promptTemplateAgentData{
+			Profile: "reviewer",
+			Role:    "reviewer",
+		},
+		Repository: promptTemplateRepositoryData{
+			Provider: flow.Provider,
+			Owner:    flow.Owner,
+			Name:     flow.Name,
+			FullName: flow.FullName(),
+		},
+		PullRequest: promptTemplatePullRequestData{
+			Number:     flow.PRNumber,
+			URL:        flow.PRURL,
+			Title:      flow.Title,
+			BaseBranch: flow.BaseBranch,
+			HeadBranch: flow.HeadBranch,
+		},
+		GitHub: promptGitHubData(defaultString(account.Profile.GitHubAccountName, "primary")),
+		Locale: svc.promptTemplateLocaleData(),
+	})
+	if err != nil {
+		return flow, runtimerepo.StartedRun{}, err
+	}
+	started, err := svc.cfg.RuntimeRunner.StartReviewRun(ctx, runtimerepo.ReviewRunInput{
+		RunID:               runID,
+		Profile:             "reviewer",
+		CodexAuthSecretName: account.OpenAIAccount.SecretRef,
+		GitHubSecretName:    account.GitHubAccount.SecretRef,
+		Provider:            flow.Provider,
+		Owner:               flow.Owner,
+		Name:                flow.Name,
+		PRNumber:            flow.PRNumber,
+		Prompt:              prompt,
+	})
+	if err != nil {
+		return flow, runtimerepo.StartedRun{}, err
+	}
+	if _, err := svc.cfg.Store.CreateAgentRun(ctx, adminrepo.CreateAgentRunInput{
+		RunID:               runID,
+		FlowID:              flow.FlowID,
+		ProfileName:         "reviewer",
+		Role:                "reviewer",
+		Provider:            flow.Provider,
+		Owner:               flow.Owner,
+		Name:                flow.Name,
+		BaseBranch:          flow.BaseBranch,
+		HeadBranch:          flow.HeadBranch,
+		Status:              "started",
+		KubernetesNamespace: started.Namespace,
+		JobName:             started.JobName,
+		PVCName:             started.PVCName,
+		Summary:             "flow reviewer attempt started",
+	}); err != nil {
+		return flow, started, err
+	}
+	flow, err = svc.cfg.Store.UpdateAgentFlow(ctx, adminrepo.UpdateAgentFlowInput{
+		FlowID:               flow.FlowID,
+		Status:               flowStatusReviewRunning,
+		CurrentReviewerRunID: runID,
+		Summary:              "flow reviewer attempt started",
+	})
+	if err != nil {
+		return flow, started, err
+	}
+	return flow, started, nil
+}
+
+func (svc *SlashCommandService) advanceFlow(ctx context.Context, flow entity.AgentFlow) (entity.AgentFlow, []string) {
+	var events []string
+	switch flow.Status {
+	case flowStatusDeveloperRunning, flowStatusFixRunning:
+		return svc.advanceFlowDeveloper(ctx, flow, events)
+	case flowStatusReviewRunning:
+		return svc.advanceFlowReviewer(ctx, flow, events)
+	default:
+		return flow, events
+	}
+}
+
+func (svc *SlashCommandService) advanceFlowDeveloper(ctx context.Context, flow entity.AgentFlow, events []string) (entity.AgentFlow, []string) {
+	if flow.CurrentDeveloperRunID == "" {
+		flow = svc.updateFlowBestEffort(ctx, adminrepo.UpdateAgentFlowInput{FlowID: flow.FlowID, Status: flowStatusBlocked, Summary: "developer run id is missing"})
+		return flow, append(events, svc.flowEvent("flow.event.blocked_developer_run_missing", nil))
+	}
+	status, err := svc.cfg.RuntimeRunner.GetRunStatus(ctx, flow.CurrentDeveloperRunID)
+	if err != nil {
+		return flow, append(events, svc.flowEvent("flow.event.developer_status_failed", map[string]any{"Error": safeError(err)}))
+	}
+	derivedStatus := developerRunStatus(status)
+	_, _ = svc.cfg.Store.UpdateAgentRunArtifacts(ctx, adminrepo.UpdateAgentRunArtifactsInput{RunID: flow.CurrentDeveloperRunID, Status: derivedStatus, PRURL: status.Artifacts["pr-url"]})
+	switch derivedStatus {
+	case "running", "pending":
+		return flow, append(events, svc.flowEvent("flow.event.developer_running", nil))
+	case "failed":
+		flow = svc.updateFlowBestEffort(ctx, adminrepo.UpdateAgentFlowInput{FlowID: flow.FlowID, Status: flowStatusDeveloperFailed, Summary: "developer run failed"})
+		return flow, append(events, svc.flowEvent("flow.event.developer_failed", nil))
+	case "completed_no_changes":
+		flow = svc.updateFlowBestEffort(ctx, adminrepo.UpdateAgentFlowInput{FlowID: flow.FlowID, Status: flowStatusBlocked, Summary: "developer finished without changes"})
+		return flow, append(events, svc.flowEvent("flow.event.developer_no_changes", nil))
+	}
+	prURL := strings.TrimSpace(status.Artifacts["pr-url"])
+	prNumber := pullRequestNumberFromURL(prURL)
+	if prURL == "" || prNumber == 0 {
+		flow = svc.updateFlowBestEffort(ctx, adminrepo.UpdateAgentFlowInput{FlowID: flow.FlowID, Status: flowStatusBlocked, Summary: "developer finished without pull request artifact"})
+		return flow, append(events, svc.flowEvent("flow.event.developer_no_pr", nil))
+	}
+	flow = svc.updateFlowBestEffort(ctx, adminrepo.UpdateAgentFlowInput{FlowID: flow.FlowID, Status: flowStatusPROpened, PRURL: prURL, PRNumber: prNumber, Summary: "developer opened or updated pull request"})
+	events = append(events, svc.flowEvent("flow.event.developer_pr_reviewer_starting", nil))
+	updated, started, err := svc.startFlowReviewer(ctx, flow)
+	if err != nil {
+		flow = svc.updateFlowBestEffort(ctx, adminrepo.UpdateAgentFlowInput{FlowID: flow.FlowID, Status: flowStatusBlocked, Summary: safeError(err)})
+		return flow, append(events, svc.flowEvent("flow.event.reviewer_start_failed", map[string]any{"Error": safeError(err)}))
+	}
+	return updated, append(events, svc.flowEvent("flow.event.reviewer_started", map[string]any{"RunID": started.RunID}))
+}
+
+func (svc *SlashCommandService) advanceFlowReviewer(ctx context.Context, flow entity.AgentFlow, events []string) (entity.AgentFlow, []string) {
+	if flow.CurrentReviewerRunID == "" {
+		flow = svc.updateFlowBestEffort(ctx, adminrepo.UpdateAgentFlowInput{FlowID: flow.FlowID, Status: flowStatusBlocked, Summary: "reviewer run id is missing"})
+		return flow, append(events, svc.flowEvent("flow.event.blocked_reviewer_run_missing", nil))
+	}
+	status, err := svc.cfg.RuntimeRunner.GetRunStatus(ctx, flow.CurrentReviewerRunID)
+	if err != nil {
+		return flow, append(events, svc.flowEvent("flow.event.reviewer_status_failed", map[string]any{"Error": safeError(err)}))
+	}
+	derivedStatus := reviewerRunStatus(status)
+	_, _ = svc.cfg.Store.UpdateAgentRunArtifacts(ctx, adminrepo.UpdateAgentRunArtifactsInput{RunID: flow.CurrentReviewerRunID, Status: derivedStatus, PRURL: status.Artifacts["pr-url"]})
+	switch derivedStatus {
+	case "running", "pending":
+		return flow, append(events, svc.flowEvent("flow.event.reviewer_running", nil))
+	case "failed":
+		flow = svc.updateFlowBestEffort(ctx, adminrepo.UpdateAgentFlowInput{FlowID: flow.FlowID, Status: flowStatusReviewerFailed, Summary: "reviewer run failed"})
+		return flow, append(events, svc.flowEvent("flow.event.reviewer_failed", nil))
+	case "approved":
+		flow = svc.updateFlowBestEffort(ctx, adminrepo.UpdateAgentFlowInput{FlowID: flow.FlowID, Status: flowStatusApprovedByReviewer, Summary: "reviewer approved pull request"})
+		return flow, append(events, svc.flowEvent("flow.event.reviewer_approved", nil))
+	case "changes_requested":
+		if flow.Attempt >= flow.MaxAttempts {
+			flow = svc.updateFlowBestEffort(ctx, adminrepo.UpdateAgentFlowInput{FlowID: flow.FlowID, Status: flowStatusBlocked, Summary: "reviewer requested changes and attempt limit reached"})
+			return flow, append(events, svc.flowEvent("flow.event.blocked_attempt_limit", nil))
+		}
+		nextAttempt := flow.Attempt + 1
+		flow = svc.updateFlowBestEffort(ctx, adminrepo.UpdateAgentFlowInput{FlowID: flow.FlowID, Status: flowStatusChangesRequested, Attempt: nextAttempt, Summary: "reviewer requested changes; starting fix attempt"})
+		updated, started, err := svc.startFlowDeveloperAttempt(ctx, flow, true)
+		if err != nil {
+			flow = svc.updateFlowBestEffort(ctx, adminrepo.UpdateAgentFlowInput{FlowID: flow.FlowID, Status: flowStatusBlocked, Summary: safeError(err)})
+			return flow, append(events, svc.flowEvent("flow.event.fix_start_failed", map[string]any{"Error": safeError(err)}))
+		}
+		return updated, append(events, svc.flowEvent("flow.event.fix_started", map[string]any{"RunID": started.RunID}))
+	case "review_comment", "review_submitted", "succeeded":
+		flow = svc.updateFlowBestEffort(ctx, adminrepo.UpdateAgentFlowInput{FlowID: flow.FlowID, Status: flowStatusWaitingOwner, Summary: "reviewer completed with a non-approval decision"})
+		return flow, append(events, svc.flowEvent("flow.event.waiting_owner", nil))
+	default:
+		return flow, append(events, svc.flowEvent("flow.event.reviewer_status", map[string]any{"Status": derivedStatus}))
+	}
+}
+
+func (svc *SlashCommandService) updateFlowBestEffort(ctx context.Context, input adminrepo.UpdateAgentFlowInput) entity.AgentFlow {
+	flow, err := svc.cfg.Store.UpdateAgentFlow(ctx, input)
+	if err == nil {
+		return flow
+	}
+	existing, getErr := svc.cfg.Store.GetAgentFlow(ctx, input.FlowID)
+	if getErr == nil {
+		return existing
+	}
+	return entity.AgentFlow{FlowID: input.FlowID, Status: input.Status, Summary: safeError(err)}
+}
+
+func (svc *SlashCommandService) flowStatusText(flow entity.AgentFlow, events []string) string {
+	lines := []string{
+		svc.t("flow.status.header", nil),
+		svc.t("flow.status.flow", map[string]any{
+			"FlowID":      flow.FlowID,
+			"Status":      flow.Status,
+			"Repository":  flow.FullName(),
+			"Branch":      flow.HeadBranch,
+			"Attempt":     flow.Attempt,
+			"MaxAttempts": flow.MaxAttempts,
+		}),
+	}
+	if flow.PRNumber > 0 || strings.TrimSpace(flow.PRURL) != "" {
+		lines = append(lines, svc.t("flow.status.pr", map[string]any{"PR": flow.PRNumber, "URL": flow.PRURL}))
+	}
+	if flow.CurrentDeveloperRunID != "" {
+		lines = append(lines, svc.t("flow.status.developer", map[string]any{"RunID": flow.CurrentDeveloperRunID}))
+	}
+	if flow.CurrentReviewerRunID != "" {
+		lines = append(lines, svc.t("flow.status.reviewer", map[string]any{"RunID": flow.CurrentReviewerRunID}))
+	}
+	if summary := svc.flowSummaryText(flow); summary != "" {
+		lines = append(lines, svc.t("flow.status.summary", map[string]any{"Summary": summary}))
+	}
+	lines = append(lines, events...)
+	return strings.Join(lines, "\n")
+}
+
+func (svc *SlashCommandService) flowEvent(messageID string, data map[string]any) string {
+	return svc.t("flow.status.event", map[string]any{"Event": svc.t(messageID, data)})
+}
+
+func (svc *SlashCommandService) flowSummaryText(flow entity.AgentFlow) string {
+	switch flow.Status {
+	case flowStatusApprovedByReviewer:
+		return svc.t("flow.summary.approved_by_reviewer", nil)
+	case flowStatusBlocked:
+		return svc.t("flow.summary.blocked", nil)
+	case flowStatusChangesRequested:
+		return svc.t("flow.summary.changes_requested", nil)
+	case flowStatusCleaned:
+		return svc.t("flow.summary.cleaned", nil)
+	case flowStatusCreated:
+		return svc.t("flow.summary.created", nil)
+	case flowStatusDeveloperFailed:
+		return svc.t("flow.summary.developer_failed", nil)
+	case flowStatusDeveloperRunning:
+		return svc.t("flow.summary.developer_running", nil)
+	case flowStatusFixRunning:
+		return svc.t("flow.summary.fix_running", nil)
+	case flowStatusPROpened:
+		return svc.t("flow.summary.pr_opened", nil)
+	case flowStatusReviewerFailed:
+		return svc.t("flow.summary.reviewer_failed", nil)
+	case flowStatusReviewRunning:
+		return svc.t("flow.summary.review_running", nil)
+	case flowStatusWaitingOwner:
+		return svc.t("flow.summary.waiting_owner", nil)
+	default:
+		return sanitizeLogTail(flow.Summary)
+	}
+}
+
 func (svc *SlashCommandService) handleLocale(args []string) string {
 	if len(args) == 1 && args[0] == "get" {
 		return svc.t("locale.get", map[string]any{
@@ -1114,6 +1630,7 @@ func (svc *SlashCommandService) helpText() string {
 		svc.t("help.runtime", nil),
 		svc.t("help.dev", nil),
 		svc.t("help.review", nil),
+		svc.t("help.flow", nil),
 	}
 	return svc.t("help.header", nil) + "\n" + strings.Join(commands, "\n")
 }
@@ -1483,6 +2000,24 @@ var (
 	branchRE           = regexp.MustCompile(`^[A-Za-z0-9_./-]+$`)
 	promptTemplateIDRE = regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]{0,63}$`)
 	runtimeRunRE       = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]{0,47}[a-z0-9])?$`)
+	githubPRURLRE      = regexp.MustCompile(`/pull/([0-9]+)(?:$|[/?#])`)
+)
+
+const (
+	defaultFlowMaxAttempts = 3
+
+	flowStatusApprovedByReviewer = "approved_by_reviewer"
+	flowStatusBlocked            = "blocked"
+	flowStatusChangesRequested   = "changes_requested"
+	flowStatusCleaned            = "cleaned"
+	flowStatusCreated            = "created"
+	flowStatusDeveloperFailed    = "developer_failed"
+	flowStatusDeveloperRunning   = "developer_running"
+	flowStatusFixRunning         = "fix_running"
+	flowStatusPROpened           = "pr_opened"
+	flowStatusReviewerFailed     = "reviewer_failed"
+	flowStatusReviewRunning      = "review_running"
+	flowStatusWaitingOwner       = "waiting_owner"
 )
 
 func validIdentifier(value string) bool {
@@ -1497,8 +2032,36 @@ func validRuntimeRunID(value string) bool {
 	return runtimeRunRE.MatchString(value)
 }
 
+func validFlowID(value string) bool {
+	return validRuntimeRunID(value) && len(value) <= 44
+}
+
 func validPromptTemplateID(value string) bool {
 	return promptTemplateIDRE.MatchString(value)
+}
+
+func flowHeadBranch(flowID string) string {
+	return "matter-codex-flow-" + flowID
+}
+
+func flowDeveloperRunID(flowID string, attempt int) string {
+	return fmt.Sprintf("%s-d%d", flowID, attempt)
+}
+
+func flowReviewerRunID(flowID string, attempt int) string {
+	return fmt.Sprintf("%s-r%d", flowID, attempt)
+}
+
+func pullRequestNumberFromURL(value string) int {
+	matches := githubPRURLRE.FindStringSubmatch(strings.TrimSpace(value))
+	if len(matches) != 2 {
+		return 0
+	}
+	number, err := strconv.Atoi(matches[1])
+	if err != nil || number <= 0 {
+		return 0
+	}
+	return number
 }
 
 func repositoryChannelName(owner string, name string) string {
@@ -1578,6 +2141,20 @@ func (svc *SlashCommandService) recordPromptAudit(ctx context.Context, command S
 		ActorUserID:  command.UserID,
 		ActorUser:    command.UserName,
 		ResourceType: "prompt",
+		ResourceName: resourceName,
+		Summary:      summary,
+	})
+}
+
+func (svc *SlashCommandService) recordFlowAudit(ctx context.Context, command SlashCommand, eventType string, resourceName string, summary string) {
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return
+	}
+	_ = svc.cfg.Store.RecordAuditEvent(ctx, adminrepo.AuditEventInput{
+		EventType:    eventType,
+		ActorUserID:  command.UserID,
+		ActorUser:    command.UserName,
+		ResourceType: "flow",
 		ResourceName: resourceName,
 		Summary:      summary,
 	})
