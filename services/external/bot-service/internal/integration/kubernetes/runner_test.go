@@ -45,6 +45,63 @@ func TestStartSmokeRunCreatesPVCAndJob(t *testing.T) {
 	}
 }
 
+func TestStartDeveloperRunCreatesPVCAndJob(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	runner, err := NewRunnerWithClient(client, Config{
+		Namespace:                 "mattermost",
+		AgentRunnerImage:          "matter-codex-agent-runner:test",
+		CodexPackage:              "@openai/codex@0.138.0",
+		WorkspaceStorageSize:      "1Gi",
+		AgentRunnerServiceAccount: "matter-codex-agent-runner",
+		CodexAuthSecretName:       "matter-codex-codex-auth",
+		GitHubSecretName:          "matter-codex-github",
+	})
+	if err != nil {
+		t.Fatalf("NewRunnerWithClient() error = %v", err)
+	}
+
+	started, err := runner.StartDeveloperRun(context.Background(), runtimerepo.DeveloperRunInput{
+		RunID:      "dev-test",
+		Profile:    "developer",
+		Provider:   "github",
+		Owner:      "codex-k8s",
+		Name:       "matter-codex",
+		BaseBranch: "main",
+		HeadBranch: "matter-codex-dev-test",
+		Title:      "Matter Codex developer smoke",
+		Task:       "Update a safe smoke document.",
+	})
+	if err != nil {
+		t.Fatalf("StartDeveloperRun() error = %v", err)
+	}
+	if !started.Created || started.JobName != "mc-run-dev-test" || started.PVCName != "mc-ws-dev-test" {
+		t.Fatalf("started = %#v", started)
+	}
+	job, err := client.BatchV1().Jobs("mattermost").Get(context.Background(), "mc-run-dev-test", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("Get job error = %v", err)
+	}
+	podSpec := job.Spec.Template.Spec
+	if podSpec.ServiceAccountName != "matter-codex-agent-runner" {
+		t.Fatalf("ServiceAccountName = %q", podSpec.ServiceAccountName)
+	}
+	if podSpec.AutomountServiceAccountToken == nil || *podSpec.AutomountServiceAccountToken {
+		t.Fatal("developer job should not automount service account token")
+	}
+	if got := podSpec.Containers[0].Image; got != "matter-codex-agent-runner:test" {
+		t.Fatalf("runner image = %q", got)
+	}
+	if len(podSpec.Volumes) != 3 {
+		t.Fatalf("volumes len = %d", len(podSpec.Volumes))
+	}
+	if podSpec.Volumes[1].Secret.SecretName != "matter-codex-codex-auth" || podSpec.Volumes[2].Secret.SecretName != "matter-codex-github" {
+		t.Fatalf("secret volumes = %#v", podSpec.Volumes)
+	}
+	if podSpec.Volumes[1].Secret.Items[0].Key != "auth.json" {
+		t.Fatalf("codex auth secret items = %#v", podSpec.Volumes[1].Secret.Items)
+	}
+}
+
 func TestGetRunStatusReadsJobAndPodStatus(t *testing.T) {
 	client := fake.NewSimpleClientset(
 		&batchv1.Job{
@@ -67,6 +124,13 @@ func TestGetRunStatusReadsJobAndPodStatus(t *testing.T) {
 	}
 	if !status.Exists || status.JobSucceeded != 1 || status.PodName != "mc-run-smoke-test-pod" || status.PodPhase != "Succeeded" {
 		t.Fatalf("status = %#v", status)
+	}
+}
+
+func TestParseArtifacts(t *testing.T) {
+	artifacts := parseArtifacts("line\nmatter-codex artifact pr-url: https://github.com/codex-k8s/matter-codex/pull/8\nmatter-codex artifact branch: smoke\n")
+	if artifacts["pr-url"] != "https://github.com/codex-k8s/matter-codex/pull/8" || artifacts["branch"] != "smoke" {
+		t.Fatalf("artifacts = %#v", artifacts)
 	}
 }
 

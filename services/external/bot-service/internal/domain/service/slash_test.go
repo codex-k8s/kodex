@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -186,7 +187,7 @@ func TestSlashGitHubWebhookEnsure(t *testing.T) {
 
 func TestSlashProfileList(t *testing.T) {
 	store := &fakeAdminStore{
-		profiles: []entity.AgentProfile{{Name: "developer", Role: "developer", Description: "dev", Enabled: true}},
+		profiles: []entity.AgentProfile{{Name: "developer", Role: "developer", Description: "dev", Enabled: true, OpenAIAccountName: "primary"}},
 	}
 	localizer := testLocalizer(t, texti18n.DefaultLocale)
 	svc := NewSlashCommandService(SlashCommandServiceConfig{
@@ -198,8 +199,51 @@ func TestSlashProfileList(t *testing.T) {
 
 	text := svc.Handle(context.Background(), SlashCommand{Text: "profile list"})
 
-	if !strings.Contains(text, "`developer` role `developer` enabled") {
+	if !strings.Contains(text, "`developer` role `developer` openai `primary` enabled") {
 		t.Fatalf("Handle(profile list) text = %q", text)
+	}
+}
+
+func TestSlashOpenAIAuthStatusAndList(t *testing.T) {
+	store := &fakeAdminStore{}
+	runner := &fakeRuntimeRunner{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:           localizer,
+		StatusService:       testStatusService(localizer),
+		Store:               store,
+		RuntimeRunner:       runner,
+		CodexAuthSecretName: "matter-codex-codex-auth",
+		StorageReady:        true,
+		RuntimeConfigured:   true,
+	})
+
+	text := svc.Handle(context.Background(), SlashCommand{Text: "openai auth primary", UserName: "owner"})
+	if !strings.Contains(text, "OpenAI account created") || !strings.Contains(text, "`primary`") {
+		t.Fatalf("Handle(openai auth) text = %q", text)
+	}
+	if runner.authAccount != "primary" || runner.authSecret != "matter-codex-codex-auth-primary" {
+		t.Fatalf("auth session = %q %q", runner.authAccount, runner.authSecret)
+	}
+
+	text = svc.Handle(context.Background(), SlashCommand{Text: "openai status primary", UserName: "owner"})
+	if !strings.Contains(text, "https://auth.openai.com/codex/device") || !strings.Contains(text, "`ABCD-12345`") {
+		t.Fatalf("Handle(openai status) text = %q", text)
+	}
+
+	runner.authReady = true
+	text = svc.Handle(context.Background(), SlashCommand{Text: "openai status primary", UserName: "owner"})
+	if !strings.Contains(text, "OpenAI account authorized") || !strings.Contains(text, "matter-codex-codex-auth-primary") {
+		t.Fatalf("Handle(openai status ready) text = %q", text)
+	}
+	account, ok := store.openAIAccounts["primary"]
+	if !ok || account.Status != "authorized" {
+		t.Fatalf("account = %#v ok=%v", account, ok)
+	}
+
+	text = svc.Handle(context.Background(), SlashCommand{Text: "openai list"})
+	if !strings.Contains(text, "`primary` status `authorized`") {
+		t.Fatalf("Handle(openai list) text = %q", text)
 	}
 }
 
@@ -276,6 +320,53 @@ func TestSlashRuntimeRejectsInvalidRunID(t *testing.T) {
 	}
 }
 
+func TestSlashDevSmokeStatusAndCleanup(t *testing.T) {
+	store := &fakeAdminStore{
+		profiles: []entity.AgentProfile{{Name: "developer", Role: "developer", Enabled: true, OpenAIAccountName: "primary"}},
+		openAIAccounts: map[string]entity.OpenAIAccount{
+			"primary": {Name: "primary", Status: "authorized", SecretRef: "matter-codex-codex-auth-primary"},
+		},
+	}
+	runner := &fakeRuntimeRunner{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:             localizer,
+		StatusService:         testStatusService(localizer),
+		Store:                 store,
+		RuntimeRunner:         runner,
+		GitHubTokenConfigured: true,
+		StorageReady:          true,
+		RuntimeConfigured:     true,
+	})
+
+	text := svc.Handle(context.Background(), SlashCommand{Text: "dev smoke codex-k8s/matter-codex dev-test", UserName: "owner"})
+	if !strings.Contains(text, "developer smoke run started") || !strings.Contains(text, "`dev-test`") {
+		t.Fatalf("Handle(dev smoke) text = %q", text)
+	}
+	if runner.startedDeveloperRunID != "dev-test" || runner.developerHeadBranch != "matter-codex-dev-dev-test" {
+		t.Fatalf("runner = %#v", runner)
+	}
+	if runner.developerCodexSecret != "matter-codex-codex-auth-primary" {
+		t.Fatalf("developerCodexSecret = %q", runner.developerCodexSecret)
+	}
+	if store.agentRun.RunID != "dev-test" || store.agentRun.ProfileName != "developer" {
+		t.Fatalf("agentRun = %#v", store.agentRun)
+	}
+
+	text = svc.Handle(context.Background(), SlashCommand{Text: "dev status dev-test"})
+	if !strings.Contains(text, "developer run status") || !strings.Contains(text, "pr-url") || !strings.Contains(text, "https://github.example/pr/10") {
+		t.Fatalf("Handle(dev status) text = %q", text)
+	}
+	if store.updatedRunStatus != "pr_created" || store.updatedPRURL != "https://github.example/pr/10" {
+		t.Fatalf("updated run = %q %q", store.updatedRunStatus, store.updatedPRURL)
+	}
+
+	text = svc.Handle(context.Background(), SlashCommand{Text: "dev cleanup dev-test", UserName: "owner"})
+	if !strings.Contains(text, "developer run cleanup") || !strings.Contains(text, "pvc deleted: `true`") {
+		t.Fatalf("Handle(dev cleanup) text = %q", text)
+	}
+}
+
 func testLocalizer(t *testing.T, locale string) *texti18n.Localizer {
 	t.Helper()
 	localizer, err := texti18n.New(locale)
@@ -302,12 +393,76 @@ func testStatusService(localizer *texti18n.Localizer) *StatusService {
 }
 
 type fakeRuntimeRunner struct {
-	startedRunID string
-	cleanedRunID string
+	startedRunID          string
+	startedDeveloperRunID string
+	developerHeadBranch   string
+	developerCodexSecret  string
+	cleanedRunID          string
+	authAccount           string
+	authSecret            string
+	authReady             bool
 }
 
 func (runner *fakeRuntimeRunner) StartSmokeRun(_ context.Context, input runtimerepo.SmokeRunInput) (runtimerepo.StartedRun, error) {
 	runner.startedRunID = input.RunID
+	return runtimerepo.StartedRun{
+		RunID:     input.RunID,
+		Namespace: "mattermost",
+		JobName:   "mc-run-" + input.RunID,
+		PVCName:   "mc-ws-" + input.RunID,
+		Created:   true,
+	}, nil
+}
+
+func (runner *fakeRuntimeRunner) StartCodexAuthSession(_ context.Context, input runtimerepo.CodexAuthSessionInput) (runtimerepo.CodexAuthSession, error) {
+	runner.authAccount = input.AccountName
+	runner.authSecret = input.SecretName
+	return runtimerepo.CodexAuthSession{
+		AccountName: input.AccountName,
+		SecretName:  input.SecretName,
+		Namespace:   "mattermost",
+		JobName:     "mc-codex-auth-" + input.AccountName,
+		Created:     true,
+	}, nil
+}
+
+func (runner *fakeRuntimeRunner) GetCodexAuthStatus(_ context.Context, accountName string, secretName string) (runtimerepo.CodexAuthStatus, error) {
+	return runtimerepo.CodexAuthStatus{
+		AccountName: accountName,
+		SecretName:  secretName,
+		Namespace:   "mattermost",
+		JobName:     "mc-codex-auth-" + accountName,
+		PodName:     "mc-codex-auth-" + accountName + "-pod",
+		Exists:      true,
+		JobActive:   1,
+		PodPhase:    "Running",
+		DeviceURL:   "https://auth.openai.com/codex/device",
+		DeviceCode:  "ABCD-12345",
+		AuthReady:   runner.authReady,
+	}, nil
+}
+
+func (runner *fakeRuntimeRunner) CompleteCodexAuthSession(_ context.Context, input runtimerepo.CodexAuthCompleteInput) (runtimerepo.CodexAuthCompleteResult, error) {
+	return runtimerepo.CodexAuthCompleteResult{
+		AccountName: input.AccountName,
+		SecretName:  input.SecretName,
+		Namespace:   "mattermost",
+		Saved:       true,
+	}, nil
+}
+
+func (runner *fakeRuntimeRunner) CleanupCodexAuthSession(_ context.Context, accountName string) (runtimerepo.CodexAuthCleanupResult, error) {
+	return runtimerepo.CodexAuthCleanupResult{
+		AccountName: accountName,
+		Namespace:   "mattermost",
+		JobDeleted:  true,
+	}, nil
+}
+
+func (runner *fakeRuntimeRunner) StartDeveloperRun(_ context.Context, input runtimerepo.DeveloperRunInput) (runtimerepo.StartedRun, error) {
+	runner.startedDeveloperRunID = input.RunID
+	runner.developerHeadBranch = input.HeadBranch
+	runner.developerCodexSecret = input.CodexAuthSecretName
 	return runtimerepo.StartedRun{
 		RunID:     input.RunID,
 		Namespace: "mattermost",
@@ -327,7 +482,8 @@ func (runner *fakeRuntimeRunner) GetRunStatus(_ context.Context, runID string) (
 		Exists:       true,
 		JobSucceeded: 1,
 		PodPhase:     "Succeeded",
-		LogTail:      "matter-codex smoke done\nsmoke-ok",
+		LogTail:      "matter-codex smoke done\nmatter-codex artifact pr-url: https://github.example/pr/10\nsmoke-ok",
+		Artifacts:    map[string]string{"pr-url": "https://github.example/pr/10"},
 	}, nil
 }
 
@@ -342,9 +498,13 @@ func (runner *fakeRuntimeRunner) CleanupRun(_ context.Context, runID string) (ru
 }
 
 type fakeAdminStore struct {
-	upsert        adminrepo.UpsertRepositoryInput
-	auditRecorded bool
-	profiles      []entity.AgentProfile
+	upsert           adminrepo.UpsertRepositoryInput
+	auditRecorded    bool
+	profiles         []entity.AgentProfile
+	openAIAccounts   map[string]entity.OpenAIAccount
+	agentRun         entity.AgentRun
+	updatedRunStatus string
+	updatedPRURL     string
 }
 
 func (store *fakeAdminStore) UpsertRepository(_ context.Context, input adminrepo.UpsertRepositoryInput) (entity.Repository, bool, error) {
@@ -366,6 +526,96 @@ func (store *fakeAdminStore) ListRepositories(context.Context, int) ([]entity.Re
 
 func (store *fakeAdminStore) ListAgentProfiles(context.Context) ([]entity.AgentProfile, error) {
 	return store.profiles, nil
+}
+
+func (store *fakeAdminStore) UpsertOpenAIAccount(_ context.Context, input adminrepo.UpsertOpenAIAccountInput) (entity.OpenAIAccount, bool, error) {
+	if store.openAIAccounts == nil {
+		store.openAIAccounts = make(map[string]entity.OpenAIAccount)
+	}
+	_, exists := store.openAIAccounts[input.Name]
+	account := entity.OpenAIAccount{
+		ID:        1,
+		Name:      input.Name,
+		SecretRef: input.SecretRef,
+		Status:    input.Status,
+	}
+	store.openAIAccounts[input.Name] = account
+	return account, !exists, nil
+}
+
+func (store *fakeAdminStore) ListOpenAIAccounts(context.Context, int) ([]entity.OpenAIAccount, error) {
+	accounts := make([]entity.OpenAIAccount, 0, len(store.openAIAccounts))
+	for _, account := range store.openAIAccounts {
+		accounts = append(accounts, account)
+	}
+	return accounts, nil
+}
+
+func (store *fakeAdminStore) GetOpenAIAccount(_ context.Context, name string) (entity.OpenAIAccount, error) {
+	if account, ok := store.openAIAccounts[name]; ok {
+		return account, nil
+	}
+	return entity.OpenAIAccount{}, fmt.Errorf("openai account not found")
+}
+
+func (store *fakeAdminStore) UpdateOpenAIAccountStatus(_ context.Context, input adminrepo.UpdateOpenAIAccountStatusInput) (entity.OpenAIAccount, error) {
+	if store.openAIAccounts == nil {
+		store.openAIAccounts = make(map[string]entity.OpenAIAccount)
+	}
+	account := store.openAIAccounts[input.Name]
+	account.Name = input.Name
+	if input.SecretRef != "" {
+		account.SecretRef = input.SecretRef
+	}
+	account.Status = input.Status
+	store.openAIAccounts[input.Name] = account
+	return account, nil
+}
+
+func (store *fakeAdminStore) CreateAgentRun(_ context.Context, input adminrepo.CreateAgentRunInput) (entity.AgentRun, error) {
+	store.agentRun = entity.AgentRun{
+		ID:                  1,
+		RunID:               input.RunID,
+		ProfileName:         input.ProfileName,
+		Role:                input.Role,
+		Provider:            input.Provider,
+		Owner:               input.Owner,
+		Name:                input.Name,
+		BaseBranch:          input.BaseBranch,
+		HeadBranch:          input.HeadBranch,
+		Status:              input.Status,
+		KubernetesNamespace: input.KubernetesNamespace,
+		JobName:             input.JobName,
+		PVCName:             input.PVCName,
+		Summary:             input.Summary,
+	}
+	return store.agentRun, nil
+}
+
+func (store *fakeAdminStore) GetAgentRun(_ context.Context, runID string) (entity.AgentRun, error) {
+	if store.agentRun.RunID == "" {
+		store.agentRun = entity.AgentRun{
+			ID:          1,
+			RunID:       runID,
+			ProfileName: "developer",
+			Role:        "developer",
+			Provider:    "github",
+			Owner:       "codex-k8s",
+			Name:        "matter-codex",
+			BaseBranch:  "main",
+			HeadBranch:  "matter-codex-dev-" + runID,
+			Status:      "started",
+		}
+	}
+	return store.agentRun, nil
+}
+
+func (store *fakeAdminStore) UpdateAgentRunArtifacts(_ context.Context, input adminrepo.UpdateAgentRunArtifactsInput) (entity.AgentRun, error) {
+	store.updatedRunStatus = input.Status
+	store.updatedPRURL = input.PRURL
+	store.agentRun.Status = input.Status
+	store.agentRun.PRURL = input.PRURL
+	return store.agentRun, nil
 }
 
 func (store *fakeAdminStore) RecordAuditEvent(context.Context, adminrepo.AuditEventInput) error {

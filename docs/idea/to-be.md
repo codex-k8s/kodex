@@ -67,7 +67,7 @@ Mattermost используется как основной интерфейс:
 
 - GitHub user token;
 - GitHub bot token;
-- OpenAI API key;
+- Codex/OpenAI account auth reference;
 - Mattermost bot token;
 - webhook secret;
 - deploy token.

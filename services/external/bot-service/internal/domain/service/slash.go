@@ -13,6 +13,7 @@ import (
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
 	providerrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/provider"
 	runtimerepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/runtime"
+	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
 	texti18n "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/i18n"
 )
 
@@ -36,6 +37,7 @@ type SlashCommandServiceConfig struct {
 	RepositoryProvider      providerrepo.RepositoryProvider
 	RuntimeRunner           runtimerepo.Runner
 	DefaultTeamName         string
+	CodexAuthSecretName     string
 	BotTokenConfigured      bool
 	SlashTokenConfigured    bool
 	GitHubTokenConfigured   bool
@@ -67,13 +69,17 @@ func (svc *SlashCommandService) Handle(ctx context.Context, command SlashCommand
 	case "repo":
 		return svc.handleRepo(ctx, fields[1:], command)
 	case "token":
-		return svc.handleToken(fields[1:])
+		return svc.handleToken(ctx, fields[1:])
 	case "locale":
 		return svc.handleLocale(fields[1:])
 	case "runtime":
 		return svc.handleRuntime(ctx, fields[1:], command)
+	case "dev":
+		return svc.handleDev(ctx, fields[1:], command)
 	case "profile":
 		return svc.handleProfile(ctx, fields[1:])
+	case "openai":
+		return svc.handleOpenAI(ctx, fields[1:], command)
 	case "github":
 		return svc.handleGitHub(ctx, fields[1:], command)
 	default:
@@ -163,7 +169,7 @@ func (svc *SlashCommandService) handleRepoList(ctx context.Context) string {
 	return strings.Join(lines, "\n")
 }
 
-func (svc *SlashCommandService) handleToken(args []string) string {
+func (svc *SlashCommandService) handleToken(ctx context.Context, args []string) string {
 	if len(args) != 1 || args[0] != "check" {
 		return svc.t("token.usage", nil)
 	}
@@ -177,6 +183,18 @@ func (svc *SlashCommandService) handleToken(args []string) string {
 		svc.t("token.check.storage", map[string]any{"Status": readyLabel(svc.cfg.Localizer, svc.cfg.StorageReady)}),
 		svc.t("token.check.runtime", map[string]any{"Status": configuredLabel(svc.cfg.Localizer, svc.cfg.RuntimeConfigured)}),
 		svc.t("token.check.channel_manager", map[string]any{"Status": configuredLabel(svc.cfg.Localizer, svc.cfg.ChannelManagerEnabled)}),
+	}
+	if svc.cfg.StorageReady && svc.cfg.Store != nil {
+		accounts, err := svc.cfg.Store.ListOpenAIAccounts(ctx, 100)
+		if err == nil {
+			authorized := 0
+			for _, account := range accounts {
+				if account.Status == "authorized" {
+					authorized++
+				}
+			}
+			lines = append(lines, svc.t("token.check.openai_accounts", map[string]any{"Authorized": authorized, "Total": len(accounts)}))
+		}
 	}
 	return strings.Join(lines, "\n")
 }
@@ -263,6 +281,9 @@ func (svc *SlashCommandService) handleRuntimeStatus(ctx context.Context, args []
 	if strings.TrimSpace(status.LogTail) != "" {
 		lines = append(lines, svc.t("runtime.status.logs", map[string]any{"Logs": sanitizeLogTail(status.LogTail)}))
 	}
+	for _, artifact := range sortedArtifacts(status.Artifacts) {
+		lines = append(lines, svc.t("runtime.status.artifact", map[string]any{"Key": artifact.key, "Value": artifact.value}))
+	}
 	return strings.Join(lines, "\n")
 }
 
@@ -280,6 +301,189 @@ func (svc *SlashCommandService) handleRuntimeCleanup(ctx context.Context, args [
 	}
 	svc.recordRuntimeAudit(ctx, command, "runtime.run.cleaned", result.RunID, "kubernetes smoke runner resources cleaned from Mattermost slash command")
 	return svc.t("runtime.cleanup.result", map[string]any{
+		"RunID":      result.RunID,
+		"Namespace":  result.Namespace,
+		"JobDeleted": result.JobDeleted,
+		"PVCDeleted": result.PVCDeleted,
+	})
+}
+
+func (svc *SlashCommandService) handleDev(ctx context.Context, args []string, command SlashCommand) string {
+	if svc.cfg.RuntimeRunner == nil {
+		return svc.t("runtime.not_configured", nil)
+	}
+	if len(args) == 0 {
+		return svc.t("dev.usage", nil)
+	}
+	switch args[0] {
+	case "smoke":
+		return svc.handleDevSmoke(ctx, args[1:], command)
+	case "status":
+		return svc.handleDevStatus(ctx, args[1:])
+	case "cleanup":
+		return svc.handleDevCleanup(ctx, args[1:], command)
+	default:
+		return svc.t("dev.unknown_command", nil)
+	}
+}
+
+func (svc *SlashCommandService) handleDevSmoke(ctx context.Context, args []string, command SlashCommand) string {
+	if len(args) < 1 || len(args) > 2 {
+		return svc.t("dev.smoke.usage", nil)
+	}
+	if !svc.cfg.GitHubTokenConfigured {
+		return svc.t("dev.github_not_configured", nil)
+	}
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return svc.t("dev.storage_not_ready", nil)
+	}
+	profile, ok := svc.agentProfile(ctx, "developer")
+	if !ok || !profile.Enabled {
+		return svc.t("dev.profile_not_ready", map[string]any{"Profile": "developer"})
+	}
+	accountName := defaultString(profile.OpenAIAccountName, "primary")
+	account, ok := svc.openAIAccount(ctx, accountName)
+	if !ok || account.Status != "authorized" || strings.TrimSpace(account.SecretRef) == "" {
+		return svc.t("dev.openai_account_not_ready", map[string]any{"Account": accountName})
+	}
+	ref, err := parseRepositoryRef(args[:1], "dev smoke")
+	if err != nil {
+		return svc.validationErrorText(err)
+	}
+	runID := defaultDeveloperRunID()
+	if len(args) == 2 {
+		runID = args[1]
+	}
+	if !validRuntimeRunID(runID) {
+		return svc.t("runtime.invalid_run_id", nil)
+	}
+	headBranch := developerSmokeBranch(runID)
+	task := developerSmokeTask(runID, ref)
+	started, err := svc.cfg.RuntimeRunner.StartDeveloperRun(ctx, runtimerepo.DeveloperRunInput{
+		RunID:               runID,
+		Profile:             "developer",
+		CodexAuthSecretName: account.SecretRef,
+		Provider:            "github",
+		Owner:               ref.Owner,
+		Name:                ref.Name,
+		BaseBranch:          "main",
+		HeadBranch:          headBranch,
+		Title:               "Matter Codex developer smoke " + runID,
+		Task:                task,
+	})
+	if err != nil {
+		return svc.t("dev.smoke.failed", map[string]any{"Error": safeError(err)})
+	}
+	if _, err := svc.cfg.Store.CreateAgentRun(ctx, adminrepo.CreateAgentRunInput{
+		RunID:               runID,
+		ProfileName:         "developer",
+		Role:                "developer",
+		Provider:            "github",
+		Owner:               ref.Owner,
+		Name:                ref.Name,
+		BaseBranch:          "main",
+		HeadBranch:          headBranch,
+		Status:              "started",
+		KubernetesNamespace: started.Namespace,
+		JobName:             started.JobName,
+		PVCName:             started.PVCName,
+		Summary:             "developer smoke run started from Mattermost slash command",
+	}); err != nil {
+		return svc.t("dev.smoke.store_failed", map[string]any{"RunID": runID, "Error": safeError(err)})
+	}
+	svc.recordRuntimeAudit(ctx, command, "developer.run.started", started.RunID, "developer smoke runner job started from Mattermost slash command")
+	return svc.t("dev.smoke.started", map[string]any{
+		"RunID":      started.RunID,
+		"Repository": ref.Owner + "/" + ref.Name,
+		"Branch":     headBranch,
+		"Account":    account.Name,
+		"Namespace":  started.Namespace,
+		"Job":        started.JobName,
+		"PVC":        started.PVCName,
+	})
+}
+
+func (svc *SlashCommandService) handleDevStatus(ctx context.Context, args []string) string {
+	if len(args) != 1 {
+		return svc.t("dev.status.usage", nil)
+	}
+	runID := args[0]
+	if !validRuntimeRunID(runID) {
+		return svc.t("runtime.invalid_run_id", nil)
+	}
+	run, hasRun := svc.agentRun(ctx, runID)
+	status, err := svc.cfg.RuntimeRunner.GetRunStatus(ctx, runID)
+	if err != nil {
+		return svc.t("dev.status.failed", map[string]any{"Error": safeError(err)})
+	}
+	if !status.Exists {
+		return svc.t("runtime.status.not_found", map[string]any{"RunID": runID})
+	}
+	derivedStatus := developerRunStatus(status)
+	if hasRun {
+		prURL := status.Artifacts["pr-url"]
+		if updated, err := svc.cfg.Store.UpdateAgentRunArtifacts(ctx, adminrepo.UpdateAgentRunArtifactsInput{RunID: runID, Status: derivedStatus, PRURL: prURL}); err == nil {
+			run = updated
+		}
+	}
+	lines := []string{svc.t("dev.status.header", nil)}
+	if hasRun {
+		lines = append(lines, svc.t("dev.status.run", map[string]any{
+			"RunID":      run.RunID,
+			"Profile":    run.ProfileName,
+			"Repository": run.FullName(),
+			"Base":       run.BaseBranch,
+			"Branch":     run.HeadBranch,
+			"Status":     run.Status,
+		}))
+	} else {
+		lines = append(lines, svc.t("dev.status.run_without_storage", map[string]any{"RunID": runID, "Status": derivedStatus}))
+	}
+	lines = append(lines,
+		svc.t("runtime.status.identity", map[string]any{
+			"RunID":     status.RunID,
+			"Namespace": status.Namespace,
+			"Job":       status.JobName,
+			"PVC":       status.PVCName,
+		}),
+		svc.t("runtime.status.job", map[string]any{
+			"Active":    status.JobActive,
+			"Succeeded": status.JobSucceeded,
+			"Failed":    status.JobFailed,
+		}),
+	)
+	if status.PodName != "" {
+		lines = append(lines, svc.t("runtime.status.pod", map[string]any{
+			"Pod":   status.PodName,
+			"Phase": emptyAsUnknown(status.PodPhase),
+		}))
+	}
+	for _, artifact := range sortedArtifacts(status.Artifacts) {
+		lines = append(lines, svc.t("dev.status.artifact", map[string]any{"Key": artifact.key, "Value": artifact.value}))
+	}
+	if strings.TrimSpace(status.LogTail) != "" {
+		lines = append(lines, svc.t("runtime.status.logs", map[string]any{"Logs": sanitizeLogTail(status.LogTail)}))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func (svc *SlashCommandService) handleDevCleanup(ctx context.Context, args []string, command SlashCommand) string {
+	if len(args) != 1 {
+		return svc.t("dev.cleanup.usage", nil)
+	}
+	runID := args[0]
+	if !validRuntimeRunID(runID) {
+		return svc.t("runtime.invalid_run_id", nil)
+	}
+	result, err := svc.cfg.RuntimeRunner.CleanupRun(ctx, runID)
+	if err != nil {
+		return svc.t("dev.cleanup.failed", map[string]any{"Error": safeError(err)})
+	}
+	if svc.cfg.StorageReady && svc.cfg.Store != nil {
+		_, _ = svc.cfg.Store.UpdateAgentRunArtifacts(ctx, adminrepo.UpdateAgentRunArtifactsInput{RunID: runID, Status: "cleaned"})
+	}
+	svc.recordRuntimeAudit(ctx, command, "developer.run.cleaned", result.RunID, "developer runner resources cleaned from Mattermost slash command")
+	return svc.t("dev.cleanup.result", map[string]any{
 		"RunID":      result.RunID,
 		"Namespace":  result.Namespace,
 		"JobDeleted": result.JobDeleted,
@@ -331,10 +535,174 @@ func (svc *SlashCommandService) handleProfile(ctx context.Context, args []string
 			"Name":        profile.Name,
 			"Role":        profile.Role,
 			"Enabled":     enabled,
+			"Account":     defaultString(profile.OpenAIAccountName, "primary"),
 			"Description": profile.Description,
 		}))
 	}
 	return strings.Join(lines, "\n")
+}
+
+func (svc *SlashCommandService) handleOpenAI(ctx context.Context, args []string, command SlashCommand) string {
+	if len(args) == 0 {
+		return svc.t("openai.usage", nil)
+	}
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return svc.t("openai.storage_not_ready", nil)
+	}
+	switch args[0] {
+	case "auth":
+		return svc.handleOpenAIAuth(ctx, args[1:], command)
+	case "status":
+		return svc.handleOpenAIStatus(ctx, args[1:], command)
+	case "list":
+		return svc.handleOpenAIList(ctx)
+	case "cleanup":
+		return svc.handleOpenAICleanup(ctx, args[1:], command)
+	default:
+		return svc.t("openai.unknown_command", nil)
+	}
+}
+
+func (svc *SlashCommandService) handleOpenAIAuth(ctx context.Context, args []string, command SlashCommand) string {
+	if svc.cfg.RuntimeRunner == nil {
+		return svc.t("runtime.not_configured", nil)
+	}
+	if len(args) != 1 {
+		return svc.t("openai.auth.usage", nil)
+	}
+	accountName, err := parseOpenAIAccountName(args[0])
+	if err != nil {
+		return svc.validationErrorText(err)
+	}
+	secretName := codexAuthSecretName(svc.cfg.CodexAuthSecretName, accountName)
+	account, created, err := svc.cfg.Store.UpsertOpenAIAccount(ctx, adminrepo.UpsertOpenAIAccountInput{
+		Name:           accountName,
+		CredentialName: openAICredentialName(accountName),
+		SecretRef:      secretName,
+		Status:         "auth_pending",
+	})
+	if err != nil {
+		return svc.t("openai.auth.store_failed", map[string]any{"Error": safeError(err)})
+	}
+	session, err := svc.cfg.RuntimeRunner.StartCodexAuthSession(ctx, runtimerepo.CodexAuthSessionInput{AccountName: account.Name, SecretName: account.SecretRef})
+	if err != nil {
+		_, _ = svc.cfg.Store.UpdateOpenAIAccountStatus(ctx, adminrepo.UpdateOpenAIAccountStatusInput{Name: accountName, SecretRef: secretName, Status: "auth_failed"})
+		return svc.t("openai.auth.failed", map[string]any{"Error": safeError(err)})
+	}
+	svc.recordOpenAIAudit(ctx, command, "openai.account.auth_started", account.Name, "openai account device-code auth session started from Mattermost slash command")
+	state := svc.t("label.updated", nil)
+	if created {
+		state = svc.t("label.created", nil)
+	}
+	return svc.t("openai.auth.started", map[string]any{
+		"State":     state,
+		"Account":   account.Name,
+		"Secret":    account.SecretRef,
+		"Namespace": session.Namespace,
+		"Job":       session.JobName,
+		"Created":   session.Created,
+	})
+}
+
+func (svc *SlashCommandService) handleOpenAIStatus(ctx context.Context, args []string, command SlashCommand) string {
+	if svc.cfg.RuntimeRunner == nil {
+		return svc.t("runtime.not_configured", nil)
+	}
+	if len(args) != 1 {
+		return svc.t("openai.status.usage", nil)
+	}
+	accountName, err := parseOpenAIAccountName(args[0])
+	if err != nil {
+		return svc.validationErrorText(err)
+	}
+	account, ok := svc.openAIAccount(ctx, accountName)
+	if !ok {
+		return svc.t("openai.status.account_not_found", map[string]any{"Account": accountName})
+	}
+	status, err := svc.cfg.RuntimeRunner.GetCodexAuthStatus(ctx, account.Name, account.SecretRef)
+	if err != nil {
+		return svc.t("openai.status.failed", map[string]any{"Error": safeError(err)})
+	}
+	if !status.Exists {
+		return svc.t("openai.status.session_not_found", map[string]any{"Account": account.Name, "Status": account.Status})
+	}
+	if status.AuthReady {
+		completed, err := svc.cfg.RuntimeRunner.CompleteCodexAuthSession(ctx, runtimerepo.CodexAuthCompleteInput{AccountName: account.Name, SecretName: account.SecretRef})
+		if err != nil {
+			return svc.t("openai.status.complete_failed", map[string]any{"Error": safeError(err)})
+		}
+		account, _ = svc.cfg.Store.UpdateOpenAIAccountStatus(ctx, adminrepo.UpdateOpenAIAccountStatusInput{Name: account.Name, SecretRef: completed.SecretName, Status: "authorized"})
+		_, _ = svc.cfg.RuntimeRunner.CleanupCodexAuthSession(ctx, account.Name)
+		svc.recordOpenAIAudit(ctx, command, "openai.account.authorized", account.Name, "openai account auth.json saved to Kubernetes Secret")
+		return svc.t("openai.status.authorized", map[string]any{
+			"Account": account.Name,
+			"Secret":  completed.SecretName,
+			"Saved":   completed.Saved,
+		})
+	}
+	if status.DeviceURL != "" && status.DeviceCode != "" {
+		_, _ = svc.cfg.Store.UpdateOpenAIAccountStatus(ctx, adminrepo.UpdateOpenAIAccountStatusInput{Name: account.Name, SecretRef: account.SecretRef, Status: "awaiting_user"})
+		return svc.t("openai.status.device_code", map[string]any{
+			"Account": account.Name,
+			"URL":     status.DeviceURL,
+			"Code":    status.DeviceCode,
+			"Job":     status.JobName,
+			"Pod":     emptyAsUnknown(status.PodName),
+			"Phase":   emptyAsUnknown(status.PodPhase),
+		})
+	}
+	if status.JobFailed > 0 {
+		_, _ = svc.cfg.Store.UpdateOpenAIAccountStatus(ctx, adminrepo.UpdateOpenAIAccountStatusInput{Name: account.Name, SecretRef: account.SecretRef, Status: "auth_failed"})
+		return svc.t("openai.status.job_failed", map[string]any{"Account": account.Name, "Job": status.JobName})
+	}
+	return svc.t("openai.status.waiting", map[string]any{
+		"Account": account.Name,
+		"Job":     status.JobName,
+		"Pod":     emptyAsUnknown(status.PodName),
+		"Phase":   emptyAsUnknown(status.PodPhase),
+	})
+}
+
+func (svc *SlashCommandService) handleOpenAIList(ctx context.Context) string {
+	accounts, err := svc.cfg.Store.ListOpenAIAccounts(ctx, 100)
+	if err != nil {
+		return svc.t("openai.list.failed", map[string]any{"Error": safeError(err)})
+	}
+	if len(accounts) == 0 {
+		return svc.t("openai.list.empty", nil)
+	}
+	lines := []string{svc.t("openai.list.header", nil)}
+	for _, account := range accounts {
+		lines = append(lines, svc.t("openai.list.item", map[string]any{
+			"Account": account.Name,
+			"Status":  account.Status,
+			"Secret":  account.SecretRef,
+		}))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func (svc *SlashCommandService) handleOpenAICleanup(ctx context.Context, args []string, command SlashCommand) string {
+	if svc.cfg.RuntimeRunner == nil {
+		return svc.t("runtime.not_configured", nil)
+	}
+	if len(args) != 1 {
+		return svc.t("openai.cleanup.usage", nil)
+	}
+	accountName, err := parseOpenAIAccountName(args[0])
+	if err != nil {
+		return svc.validationErrorText(err)
+	}
+	result, err := svc.cfg.RuntimeRunner.CleanupCodexAuthSession(ctx, accountName)
+	if err != nil {
+		return svc.t("openai.cleanup.failed", map[string]any{"Error": safeError(err)})
+	}
+	svc.recordOpenAIAudit(ctx, command, "openai.account.auth_cleanup", accountName, "openai account auth job cleaned from Mattermost slash command")
+	return svc.t("openai.cleanup.result", map[string]any{
+		"Account":    result.AccountName,
+		"Namespace":  result.Namespace,
+		"JobDeleted": result.JobDeleted,
+	})
 }
 
 func (svc *SlashCommandService) helpText() string {
@@ -349,9 +717,11 @@ func (svc *SlashCommandService) helpText() string {
 		svc.t("help.github_pr_status", nil),
 		svc.t("help.github_webhook", nil),
 		svc.t("help.token_check", nil),
+		svc.t("help.openai", nil),
 		svc.t("help.profile_list", nil),
 		svc.t("help.locale", nil),
 		svc.t("help.runtime", nil),
+		svc.t("help.dev", nil),
 	}
 	return svc.t("help.header", nil) + "\n" + strings.Join(commands, "\n")
 }
@@ -690,6 +1060,14 @@ func parsePullRequestInput(args []string) (providerrepo.PullRequestInput, error)
 	}, nil
 }
 
+func parseOpenAIAccountName(value string) (string, error) {
+	name := strings.ToLower(strings.TrimSpace(value))
+	if !validRuntimeRunID(name) {
+		return "", validationError("parse.openai_account.invalid", nil)
+	}
+	return name, nil
+}
+
 func isProvider(value string) bool {
 	switch value {
 	case "github", "gitlab":
@@ -769,6 +1147,136 @@ func (svc *SlashCommandService) recordRuntimeAudit(ctx context.Context, command 
 		ResourceName: resourceName,
 		Summary:      summary,
 	})
+}
+
+func (svc *SlashCommandService) recordOpenAIAudit(ctx context.Context, command SlashCommand, eventType string, resourceName string, summary string) {
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return
+	}
+	_ = svc.cfg.Store.RecordAuditEvent(ctx, adminrepo.AuditEventInput{
+		EventType:    eventType,
+		ActorUserID:  command.UserID,
+		ActorUser:    command.UserName,
+		ResourceType: "openai",
+		ResourceName: resourceName,
+		Summary:      summary,
+	})
+}
+
+func (svc *SlashCommandService) enabledProfile(ctx context.Context, name string) bool {
+	profile, ok := svc.agentProfile(ctx, name)
+	return ok && profile.Enabled
+}
+
+func (svc *SlashCommandService) agentProfile(ctx context.Context, name string) (entity.AgentProfile, bool) {
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return entity.AgentProfile{}, false
+	}
+	profiles, err := svc.cfg.Store.ListAgentProfiles(ctx)
+	if err != nil {
+		return entity.AgentProfile{}, false
+	}
+	for _, profile := range profiles {
+		if profile.Name == name {
+			return profile, true
+		}
+	}
+	return entity.AgentProfile{}, false
+}
+
+func (svc *SlashCommandService) openAIAccount(ctx context.Context, name string) (entity.OpenAIAccount, bool) {
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return entity.OpenAIAccount{}, false
+	}
+	account, err := svc.cfg.Store.GetOpenAIAccount(ctx, name)
+	if err != nil {
+		return entity.OpenAIAccount{}, false
+	}
+	return account, true
+}
+
+func (svc *SlashCommandService) agentRun(ctx context.Context, runID string) (entity.AgentRun, bool) {
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return entity.AgentRun{}, false
+	}
+	run, err := svc.cfg.Store.GetAgentRun(ctx, runID)
+	if err != nil {
+		return entity.AgentRun{}, false
+	}
+	return run, true
+}
+
+func defaultDeveloperRunID() string {
+	return fmt.Sprintf("dev-%d", time.Now().Unix())
+}
+
+func developerSmokeBranch(runID string) string {
+	return "matter-codex-dev-" + runID
+}
+
+func developerSmokeTask(runID string, ref repositoryRef) string {
+	return fmt.Sprintf("Create or update docs/dogfood/codex-developer-smoke.md with a short Russian note that matter-codex developer smoke run `%s` for `%s/%s` reached the Codex developer agent stage. Keep the change limited to that file.", runID, ref.Owner, ref.Name)
+}
+
+func developerRunStatus(status runtimerepo.RunStatus) string {
+	if status.Artifacts["pr-url"] != "" {
+		return "pr_created"
+	}
+	if status.Artifacts["no-changes"] == "true" {
+		return "completed_no_changes"
+	}
+	if status.JobFailed > 0 {
+		return "failed"
+	}
+	if status.JobSucceeded > 0 {
+		return "succeeded"
+	}
+	if status.JobActive > 0 {
+		return "running"
+	}
+	return "pending"
+}
+
+func openAICredentialName(accountName string) string {
+	return "openai:" + accountName
+}
+
+func defaultString(value string, fallback string) string {
+	if strings.TrimSpace(value) == "" {
+		return fallback
+	}
+	return strings.TrimSpace(value)
+}
+
+func codexAuthSecretName(baseName string, accountName string) string {
+	baseName = strings.Trim(strings.TrimSpace(baseName), "-")
+	if baseName == "" {
+		baseName = "matter-codex-codex-auth"
+	}
+	accountName = strings.Trim(strings.TrimSpace(accountName), "-")
+	if accountName == "" {
+		accountName = "primary"
+	}
+	return baseName + "-" + accountName
+}
+
+type artifactPair struct {
+	key   string
+	value string
+}
+
+func sortedArtifacts(artifacts map[string]string) []artifactPair {
+	if len(artifacts) == 0 {
+		return nil
+	}
+	pairs := make([]artifactPair, 0, len(artifacts))
+	for key, value := range artifacts {
+		pairs = append(pairs, artifactPair{key: key, value: value})
+	}
+	sort.Slice(pairs, func(i int, j int) bool {
+		return pairs[i].key < pairs[j].key
+	})
+	return pairs
 }
 
 func (svc *SlashCommandService) t(messageID string, data map[string]any) string {

@@ -108,7 +108,7 @@ OpenAI-доступ настраивается отдельными account prof
 - account получает имя, статус, допустимые модели, лимиты и разрешенные agent profiles;
 - run/session выбирает account явно или наследует его из agent profile.
 
-Один общий `OPENAI_API_KEY` не является целевой моделью доступа для agent sessions. Такой ключ можно использовать только как bootstrap/smoke fallback, если владелец явно разрешил это для временного этапа.
+Один общий raw API key не является моделью доступа для agent sessions. Для текущего MVP runner получает Codex `auth.json`, сохраненный как Kubernetes Secret после device-code авторизации.
 
 ## Agent profiles and config overlays
 

@@ -39,7 +39,6 @@
 - `GIT_BOT_TOKEN`
 - `GIT_BOT_USERNAME`
 - `LETSENCRYPT_EMAIL`
-- `OPENAI_API_KEY`
 - `OPERATOR_SSH_PUBKEY_PATH`
 - `OPERATOR_USER`
 - `PRODUCTION_DOMAIN`
@@ -58,5 +57,5 @@
 - Для скорости стартуем с внешнего bot-service поверх slash command, Mattermost REST API и interactive message actions. Mattermost plugin остается расширением, если REST/API не хватит для удобного UX.
 - После установки должны появляться дефолтные каналы управления, а onboarding repo/project должен создавать каналы проекта и привязки к manager sessions.
 - Codex agent запускается через `codex exec --json` в pod. Это дает поток событий, machine-readable статус и совместимость с non-interactive automation.
-- OpenAI-доступ в целевой MVP идет через отдельные OpenAI account profiles с device-code авторизацией, а не через один общий raw API key на все сессии.
+- OpenAI/Codex-доступ в целевой MVP идет через отдельные account profiles с device-code авторизацией и Kubernetes Secret с `auth.json`, а не через один общий raw API key на все сессии.
 - Секреты не передаются в prompt. Runner получает их только как runtime env/file mount из Kubernetes Secret.

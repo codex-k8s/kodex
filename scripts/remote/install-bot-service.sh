@@ -109,6 +109,31 @@ else
   mattercodex_log "GitHub token/webhook secret не заданы; GitHub secret не создается"
 fi
 
+CODEX_AUTH_JSON_PATH="${MATTERCODEX_CODEX_AUTH_JSON_PATH:-${CODEX_AUTH_JSON_PATH:-}}"
+if [ -n "$CODEX_AUTH_JSON_PATH" ]; then
+  [ -f "$CODEX_AUTH_JSON_PATH" ] || mattercodex_die "Codex auth.json не найден: $CODEX_AUTH_JSON_PATH"
+  CODEX_AUTH_ACCOUNT="${MATTERCODEX_CODEX_AUTH_ACCOUNT:-primary}"
+  CODEX_AUTH_SECRET_NAME="${MATTERCODEX_CODEX_AUTH_SECRET}-${CODEX_AUTH_ACCOUNT}"
+  CODEX_AUTH_JSON_B64="$(base64 "$CODEX_AUTH_JSON_PATH" | tr -d '\n')"
+  mattercodex_log "применяется Codex auth secret на целевом сервере"
+  cat <<EOF | mattercodex_remote_kubectl_apply_stdin "$APPLY_DRY_RUN_MODE"
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ${CODEX_AUTH_SECRET_NAME}
+  namespace: ${MATTERCODEX_NAMESPACE}
+  labels:
+    app.kubernetes.io/name: matter-codex-agent-runner
+    app.kubernetes.io/component: codex-auth-secret
+    matter-codex.dev/openai-account: ${CODEX_AUTH_ACCOUNT}
+type: Opaque
+data:
+  auth.json: ${CODEX_AUTH_JSON_B64}
+EOF
+else
+  mattercodex_log "Codex auth.json path не задан; Codex auth secret не создается"
+fi
+
 mattercodex_log "применяются манифесты bot-service на целевом сервере"
 cat "$RENDER_DIR/10-code-configmap.yaml" | mattercodex_remote_kubectl_apply_stdin "$APPLY_DRY_RUN_MODE"
 cat "$RENDER_DIR/20-configmap.yaml" | mattercodex_remote_kubectl_apply_stdin "$APPLY_DRY_RUN_MODE"

@@ -7,6 +7,67 @@ type SmokeRunInput struct {
 	Role  string
 }
 
+type DeveloperRunInput struct {
+	RunID               string
+	Profile             string
+	CodexAuthSecretName string
+	Provider            string
+	Owner               string
+	Name                string
+	BaseBranch          string
+	HeadBranch          string
+	Title               string
+	Task                string
+}
+
+type CodexAuthSessionInput struct {
+	AccountName string
+	SecretName  string
+}
+
+type CodexAuthSession struct {
+	AccountName string
+	SecretName  string
+	Namespace   string
+	JobName     string
+	Created     bool
+}
+
+type CodexAuthStatus struct {
+	AccountName  string
+	SecretName   string
+	Namespace    string
+	JobName      string
+	PodName      string
+	Exists       bool
+	JobActive    int32
+	JobSucceeded int32
+	JobFailed    int32
+	PodPhase     string
+	DeviceURL    string
+	DeviceCode   string
+	AuthReady    bool
+	LogTail      string
+}
+
+type CodexAuthCompleteInput struct {
+	AccountName string
+	SecretName  string
+}
+
+type CodexAuthCompleteResult struct {
+	AccountName string
+	SecretName  string
+	Namespace   string
+	Saved       bool
+}
+
+type CodexAuthCleanupResult struct {
+	AccountName string
+	Namespace   string
+	JobDeleted  bool
+}
+
 type StartedRun struct {
 	RunID     string
 	Namespace string
@@ -27,6 +88,7 @@ type RunStatus struct {
 	JobFailed    int32
 	PodPhase     string
 	LogTail      string
+	Artifacts    map[string]string
 }
 
 type CleanupResult struct {
@@ -38,6 +100,11 @@ type CleanupResult struct {
 
 type Runner interface {
 	StartSmokeRun(ctx context.Context, input SmokeRunInput) (StartedRun, error)
+	StartCodexAuthSession(ctx context.Context, input CodexAuthSessionInput) (CodexAuthSession, error)
+	GetCodexAuthStatus(ctx context.Context, accountName string, secretName string) (CodexAuthStatus, error)
+	CompleteCodexAuthSession(ctx context.Context, input CodexAuthCompleteInput) (CodexAuthCompleteResult, error)
+	CleanupCodexAuthSession(ctx context.Context, accountName string) (CodexAuthCleanupResult, error)
+	StartDeveloperRun(ctx context.Context, input DeveloperRunInput) (StartedRun, error)
 	GetRunStatus(ctx context.Context, runID string) (RunStatus, error)
 	CleanupRun(ctx context.Context, runID string) (CleanupResult, error)
 }

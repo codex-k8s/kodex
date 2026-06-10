@@ -22,7 +22,7 @@
 | `github.com/prometheus/client_golang` | `v1.23.2` | Observability | `/metrics`, Go/process collectors и Prometheus HTTP handler |
 | `k8s.io/api` | `v0.36.1` | Kubernetes typed API | typed `batch/v1` Job, `core/v1` Pod/PVC и `PodLogOptions` для runtime adapter |
 | `k8s.io/apimachinery` | `v0.36.1` | Kubernetes API machinery | typed meta/options, labels, resource quantities и Kubernetes API errors |
-| `k8s.io/client-go` | `v0.36.1` | Kubernetes SDK | in-cluster/kubeconfig client, Job/PVC creation, pod status и log tail без shell-first runtime |
+| `k8s.io/client-go` | `v0.36.1` | Kubernetes SDK | in-cluster/kubeconfig client, Job/PVC/Secret operations, pod status/log tail и `remotecommand` exec для Codex auth handoff без shell-first runtime |
 
 ## Backend Go - planned baselines
 
@@ -41,12 +41,20 @@
 | `mmctl` | Mattermost bootstrap | локальное администрирование Mattermost pod без вывода секретов |
 | `openssl` | bootstrap secrets | генерация bootstrap секретов |
 
+## Agent runner tools - in use
+
+| Tool | Version | Scope | Why |
+|---|---:|---|---|
+| `@openai/codex` | `0.138.0` | Codex developer agent | `codex exec --json`, MCP config smoke и non-interactive developer run внутри Kubernetes Job |
+| `github-cli` / `gh` | distro package | Agent PR publish | создание draft PR после Codex run без ручного REST wrapper в shell |
+
 ## Runtime images - in use
 
 | Image | Scope | Why |
 |---|---|---|
 | `golang:1.26-alpine` | bot-service MVP runtime | быстрый запуск Go-сервиса из source ConfigMap до image pipeline |
 | `alpine:3.22` | bot-service prod Dockerfile | минимальный runtime слой для будущей сборки образа |
+| `node:22-alpine` | agent runner MVP runtime | временный public base image для Codex developer Job до появления registry/image pipeline |
 | `mattermost/mattermost-team-edition` | Mattermost | self-hosted Mattermost для control surface |
 | `postgres:16-alpine` | Mattermost PostgreSQL | single-server MVP БД Mattermost |
 | `busybox` | init/wait helpers, runtime smoke | lightweight init helper в manifests и безопасный smoke image для test runner Job |
