@@ -71,6 +71,32 @@ func TestSlashRejectsWrongToken(t *testing.T) {
 	}
 }
 
+func TestFlowActionRejectsInvalidJSON(t *testing.T) {
+	router := testRouter("expected-token", true)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/mattermost/actions/flow", strings.NewReader(`{`))
+	request.Header.Set("Content-Type", "application/json")
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestFlowActionRejectsMissingService(t *testing.T) {
+	router := testRouter("expected-token", true)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/mattermost/actions/flow", strings.NewReader(`{"user_id":"owner","context":{"flow_id":"flow1","action":"approve","token":"token"}}`))
+	request.Header.Set("Content-Type", "application/json")
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body.String())
+	}
+}
+
 func TestGitHubWebhookRejectsMissingSecret(t *testing.T) {
 	router := testRouter("expected-token", true)
 	recorder := httptest.NewRecorder()

@@ -546,6 +546,82 @@ func TestSlashFlowStartStartsDeveloperRun(t *testing.T) {
 	}
 }
 
+func TestSlashFlowStartPublishesOwnerCard(t *testing.T) {
+	store := fakeFlowReadyStore()
+	runner := &fakeRuntimeRunner{}
+	publisher := &fakeFlowCardPublisher{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:         localizer,
+		StatusService:     testStatusService(localizer),
+		Store:             store,
+		RuntimeRunner:     runner,
+		FlowCardPublisher: publisher,
+		FlowActionURL:     "http://matter-codex-bot-service/mattermost/actions/flow",
+		StorageReady:      true,
+		RuntimeConfigured: true,
+	})
+
+	text := svc.Handle(context.Background(), SlashCommand{
+		Text:      "flow start codex-k8s/matter-codex flow1 Update docs",
+		UserID:    "owner-id",
+		UserName:  "owner",
+		ChannelID: "channel-id",
+	})
+
+	if !strings.Contains(text, "card: posted `post-1`") {
+		t.Fatalf("Handle(flow start card) text = %q", text)
+	}
+	flow, err := store.GetAgentFlow(context.Background(), "flow1")
+	if err != nil {
+		t.Fatalf("GetAgentFlow() error = %v", err)
+	}
+	if flow.OwnerUserID != "owner-id" || flow.OwnerUser != "owner" || flow.ControlChannelID != "channel-id" || flow.ControlPostID != "post-1" || flow.ActionToken == "" {
+		t.Fatalf("flow card fields = %#v", flow)
+	}
+	if publisher.lastCard.ActionURL != "http://matter-codex-bot-service/mattermost/actions/flow" || publisher.lastCard.ChannelID != "channel-id" {
+		t.Fatalf("last card = %#v", publisher.lastCard)
+	}
+	if len(publisher.lastCard.Actions) != 4 {
+		t.Fatalf("actions = %#v", publisher.lastCard.Actions)
+	}
+	contextToken, _ := publisher.lastCard.Actions[0].Context["token"].(string)
+	if contextToken == "" || contextToken != flow.ActionToken {
+		t.Fatalf("action token was not passed through context")
+	}
+}
+
+func TestSlashFlowCardUpdatesExistingPostChannel(t *testing.T) {
+	store := fakeFlowReadyStore()
+	store.agentFlows = map[string]entity.AgentFlow{
+		"flow1": fakeActionFlow(flowStatusWaitingOwner),
+	}
+	publisher := &fakeFlowCardPublisher{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:         localizer,
+		StatusService:     testStatusService(localizer),
+		Store:             store,
+		FlowCardPublisher: publisher,
+		FlowActionURL:     "http://matter-codex-bot-service/mattermost/actions/flow",
+		StorageReady:      true,
+	})
+
+	text := svc.Handle(context.Background(), SlashCommand{
+		Text:      "flow card flow1",
+		UserID:    "owner-id",
+		UserName:  "owner",
+		ChannelID: "different-channel",
+	})
+
+	if !strings.Contains(text, "flow card published") {
+		t.Fatalf("Handle(flow card) text = %q", text)
+	}
+	if publisher.lastCard.ChannelID != "channel-id" || publisher.lastCard.PostID != "post-1" {
+		t.Fatalf("last card = %#v", publisher.lastCard)
+	}
+}
+
 func TestSlashFlowStatusStartsReviewerAfterDeveloperPR(t *testing.T) {
 	store := fakeFlowReadyStore()
 	runner := &fakeRuntimeRunner{}
@@ -689,6 +765,121 @@ func TestSlashFlowBlocksAfterAttemptLimit(t *testing.T) {
 	}
 }
 
+func TestFlowActionApproveUpdatesFlowAndCard(t *testing.T) {
+	store := fakeFlowReadyStore()
+	store.agentFlows = map[string]entity.AgentFlow{
+		"flow1": fakeActionFlow(flowStatusWaitingOwner),
+	}
+	publisher := &fakeFlowCardPublisher{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:         localizer,
+		StatusService:     testStatusService(localizer),
+		Store:             store,
+		FlowCardPublisher: publisher,
+		FlowActionURL:     "http://matter-codex-bot-service/mattermost/actions/flow",
+		StorageReady:      true,
+	})
+
+	result := svc.HandleFlowAction(context.Background(), FlowActionCommand{
+		FlowID:   "flow1",
+		Action:   flowActionApprove,
+		Token:    "action-token",
+		UserID:   "owner-id",
+		UserName: "owner",
+	})
+
+	if result.StatusCode != 200 || !strings.Contains(result.EphemeralText, "flow approved by owner") {
+		t.Fatalf("result = %#v", result)
+	}
+	flow, err := store.GetAgentFlow(context.Background(), "flow1")
+	if err != nil {
+		t.Fatalf("GetAgentFlow() error = %v", err)
+	}
+	if flow.Status != flowStatusOwnerApproved || flow.OwnerDecision != flowOwnerDecisionApproved {
+		t.Fatalf("flow = %#v", flow)
+	}
+	if publisher.lastCard.PostID != "post-1" || publisher.lastCard.Actions[0].Disabled != true {
+		t.Fatalf("last card = %#v", publisher.lastCard)
+	}
+	if !store.auditRecorded {
+		t.Fatal("audit event was not recorded")
+	}
+}
+
+func TestFlowActionRejectsNonOwner(t *testing.T) {
+	store := fakeFlowReadyStore()
+	store.agentFlows = map[string]entity.AgentFlow{
+		"flow1": fakeActionFlow(flowStatusWaitingOwner),
+	}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:     localizer,
+		StatusService: testStatusService(localizer),
+		Store:         store,
+		StorageReady:  true,
+	})
+
+	result := svc.HandleFlowAction(context.Background(), FlowActionCommand{
+		FlowID: "flow1",
+		Action: flowActionReject,
+		Token:  "action-token",
+		UserID: "someone-else",
+	})
+
+	if result.StatusCode != 200 || !strings.Contains(result.EphemeralText, "only the flow owner") {
+		t.Fatalf("result = %#v", result)
+	}
+	flow, err := store.GetAgentFlow(context.Background(), "flow1")
+	if err != nil {
+		t.Fatalf("GetAgentFlow() error = %v", err)
+	}
+	if flow.Status != flowStatusWaitingOwner || flow.OwnerDecision != "" {
+		t.Fatalf("flow = %#v", flow)
+	}
+}
+
+func TestFlowActionRerunStartsReviewer(t *testing.T) {
+	store := fakeFlowReadyStore()
+	store.agentFlows = map[string]entity.AgentFlow{
+		"flow1": fakeActionFlow(flowStatusWaitingOwner),
+	}
+	runner := &fakeRuntimeRunner{}
+	publisher := &fakeFlowCardPublisher{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:         localizer,
+		StatusService:     testStatusService(localizer),
+		Store:             store,
+		RuntimeRunner:     runner,
+		FlowCardPublisher: publisher,
+		FlowActionURL:     "http://matter-codex-bot-service/mattermost/actions/flow",
+		StorageReady:      true,
+		RuntimeConfigured: true,
+	})
+
+	result := svc.HandleFlowAction(context.Background(), FlowActionCommand{
+		FlowID: "flow1",
+		Action: flowActionRerun,
+		Token:  "action-token",
+		UserID: "owner-id",
+	})
+
+	if result.StatusCode != 200 || !strings.Contains(result.EphemeralText, "reviewer rerun started") {
+		t.Fatalf("result = %#v", result)
+	}
+	if len(runner.reviewRuns) != 1 || !strings.Contains(runner.reviewRuns[0].RunID, "-rr-") {
+		t.Fatalf("reviewRuns = %#v", runner.reviewRuns)
+	}
+	flow, err := store.GetAgentFlow(context.Background(), "flow1")
+	if err != nil {
+		t.Fatalf("GetAgentFlow() error = %v", err)
+	}
+	if flow.Status != flowStatusReviewRunning || flow.OwnerDecision != flowOwnerDecisionRerun || flow.CurrentReviewerRunID != runner.reviewRuns[0].RunID {
+		t.Fatalf("flow = %#v", flow)
+	}
+}
+
 func fakeFlowReadyStore() *fakeAdminStore {
 	return &fakeAdminStore{
 		profiles: []entity.AgentProfile{
@@ -698,6 +889,31 @@ func fakeFlowReadyStore() *fakeAdminStore {
 		openAIAccounts: map[string]entity.OpenAIAccount{
 			"primary": {Name: "primary", Status: "authorized", SecretRef: "matter-codex-codex-auth-primary"},
 		},
+	}
+}
+
+func fakeActionFlow(status string) entity.AgentFlow {
+	return entity.AgentFlow{
+		FlowID:                "flow1",
+		Status:                status,
+		Provider:              "github",
+		Owner:                 "codex-k8s",
+		Name:                  "matter-codex",
+		BaseBranch:            "main",
+		HeadBranch:            "matter-codex-flow-flow1",
+		Title:                 "Update docs",
+		Task:                  "Update docs",
+		PRURL:                 "https://github.com/codex-k8s/matter-codex/pull/10",
+		PRNumber:              10,
+		Attempt:               1,
+		MaxAttempts:           defaultFlowMaxAttempts,
+		CurrentDeveloperRunID: "flow1-d1",
+		CurrentReviewerRunID:  "flow1-r1",
+		OwnerUserID:           "owner-id",
+		OwnerUser:             "owner",
+		ControlChannelID:      "channel-id",
+		ControlPostID:         "post-1",
+		ActionToken:           "action-token",
 	}
 }
 
@@ -893,6 +1109,21 @@ func (runner *fakeRuntimeRunner) CleanupRun(_ context.Context, runID string) (ru
 	}, nil
 }
 
+type fakeFlowCardPublisher struct {
+	lastCard FlowCard
+	nextID   int
+}
+
+func (publisher *fakeFlowCardPublisher) UpsertFlowCard(_ context.Context, card FlowCard) (FlowCardPost, error) {
+	publisher.lastCard = card
+	if card.PostID == "" {
+		publisher.nextID++
+		card.PostID = fmt.Sprintf("post-%d", publisher.nextID)
+		publisher.lastCard.PostID = card.PostID
+	}
+	return FlowCardPost{ChannelID: card.ChannelID, PostID: card.PostID}, nil
+}
+
 type fakeAdminStore struct {
 	upsert           adminrepo.UpsertRepositoryInput
 	auditRecorded    bool
@@ -1078,6 +1309,9 @@ func (store *fakeAdminStore) CreateAgentFlow(_ context.Context, input adminrepo.
 		Task:        input.Task,
 		Attempt:     input.Attempt,
 		MaxAttempts: input.MaxAttempts,
+		OwnerUserID: input.OwnerUserID,
+		OwnerUser:   input.OwnerUser,
+		ActionToken: input.ActionToken,
 		Summary:     input.Summary,
 	}
 	store.agentFlows[flow.FlowID] = flow
@@ -1116,6 +1350,24 @@ func (store *fakeAdminStore) UpdateAgentFlow(_ context.Context, input adminrepo.
 	}
 	if input.CurrentReviewerRunID != "" {
 		flow.CurrentReviewerRunID = input.CurrentReviewerRunID
+	}
+	if input.OwnerUserID != "" {
+		flow.OwnerUserID = input.OwnerUserID
+	}
+	if input.OwnerUser != "" {
+		flow.OwnerUser = input.OwnerUser
+	}
+	if input.ControlChannelID != "" {
+		flow.ControlChannelID = input.ControlChannelID
+	}
+	if input.ControlPostID != "" {
+		flow.ControlPostID = input.ControlPostID
+	}
+	if input.ActionToken != "" {
+		flow.ActionToken = input.ActionToken
+	}
+	if input.OwnerDecision != "" {
+		flow.OwnerDecision = input.OwnerDecision
 	}
 	if input.Summary != "" {
 		flow.Summary = input.Summary

@@ -52,6 +52,9 @@ type CreateAgentFlowInput struct {
 	Task        string
 	Attempt     int
 	MaxAttempts int
+	OwnerUserID string
+	OwnerUser   string
+	ActionToken string
 	Summary     string
 }
 
@@ -63,6 +66,12 @@ type UpdateAgentFlowInput struct {
 	Attempt               int
 	CurrentDeveloperRunID string
 	CurrentReviewerRunID  string
+	OwnerUserID           string
+	OwnerUser             string
+	ControlChannelID      string
+	ControlPostID         string
+	ActionToken           string
+	OwnerDecision         string
 	Summary               string
 }
 

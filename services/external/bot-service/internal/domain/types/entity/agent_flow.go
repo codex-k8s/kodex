@@ -19,6 +19,12 @@ type AgentFlow struct {
 	MaxAttempts           int
 	CurrentDeveloperRunID string
 	CurrentReviewerRunID  string
+	OwnerUserID           string
+	OwnerUser             string
+	ControlChannelID      string
+	ControlPostID         string
+	ActionToken           string
+	OwnerDecision         string
 	Summary               string
 	CreatedAt             time.Time
 	UpdatedAt             time.Time

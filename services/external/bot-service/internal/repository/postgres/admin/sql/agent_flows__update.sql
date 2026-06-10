@@ -7,7 +7,13 @@ set
 	attempt = case when $5 > 0 then $5 else attempt end,
 	current_developer_run_id = coalesce(nullif($6, ''), current_developer_run_id),
 	current_reviewer_run_id = coalesce(nullif($7, ''), current_reviewer_run_id),
-	summary = coalesce(nullif($8, ''), summary),
+	owner_user_id = coalesce(nullif($8, ''), owner_user_id),
+	owner_user = coalesce(nullif($9, ''), owner_user),
+	control_channel_id = coalesce(nullif($10, ''), control_channel_id),
+	control_post_id = coalesce(nullif($11, ''), control_post_id),
+	action_token = coalesce(nullif($12, ''), action_token),
+	owner_decision = coalesce(nullif($13, ''), owner_decision),
+	summary = coalesce(nullif($14, ''), summary),
 	updated_at = now()
 where flow_id = $1
 returning
@@ -27,6 +33,12 @@ returning
 	max_attempts,
 	current_developer_run_id,
 	current_reviewer_run_id,
+	owner_user_id,
+	owner_user,
+	control_channel_id,
+	control_post_id,
+	action_token,
+	owner_decision,
 	summary,
 	created_at,
 	updated_at;
