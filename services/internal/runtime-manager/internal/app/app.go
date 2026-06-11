@@ -185,6 +185,7 @@ func newKubernetesExecutor(cfg Config, clusters runtimekubernetes.ClusterAccessP
 	return runtimekubernetes.NewExecutor(clusters, resolver, runtimekubernetes.Config{
 		DefaultNamespace:        cfg.KubernetesWorker.DefaultNamespace,
 		DefaultServiceAccount:   cfg.KubernetesWorker.DefaultServiceAccount,
+		DeployServiceAccount:    cfg.KubernetesWorker.DeployServiceAccount,
 		DefaultImage:            cfg.KubernetesWorker.DefaultImage,
 		ImagePullPolicy:         cfg.KubernetesWorker.ImagePullPolicy,
 		JobTimeout:              cfg.KubernetesWorker.JobTimeout,

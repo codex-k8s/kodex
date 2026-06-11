@@ -375,7 +375,6 @@ func selfDeployRuntimeBuildContextsFromResult(buildPlan SelfDeployBuildPlan, res
 			RuntimeBuildContextStatus:  result.RuntimeBuildContextStatus,
 			BuildContextRef:            contextRef,
 			BuildContextDigest:         contextDigest,
-			DockerfileDigest:           result.SourceSnapshotDigest,
 			MaterializationFingerprint: result.MaterializationFingerprint,
 			BuildPlanItemFingerprint:   item.PlanItemFingerprint,
 		})

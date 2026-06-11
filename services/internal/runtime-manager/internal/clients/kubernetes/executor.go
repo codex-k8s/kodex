@@ -82,6 +82,7 @@ var (
 type Config struct {
 	DefaultNamespace         string
 	DefaultServiceAccount    string
+	DeployServiceAccount     string
 	DefaultImage             string
 	ImagePullPolicy          string
 	JobTimeout               time.Duration
@@ -501,6 +502,7 @@ func (e *Executor) clientForCluster(ctx context.Context, access fleetclient.Clus
 type executionSpec struct {
 	Namespace                string
 	ServiceAccount           string
+	AutomountServiceAccount  bool
 	Image                    string
 	ImagePullPolicy          corev1.PullPolicy
 	Labels                   map[string]string
@@ -720,14 +722,19 @@ func (e *Executor) deployExecutionSpec(job entity.Job) (executionSpec, error) {
 	if err != nil {
 		return executionSpec{}, err
 	}
+	deployServiceAccount := strings.TrimSpace(e.config.DeployServiceAccount)
+	if deployServiceAccount == "" {
+		return executionSpec{}, newExecutionError("deploy_service_account_required", "deploy service account is required before Kubernetes execution")
+	}
 	imageRef, err := buildDestinationImageRef(spec.ImageRef, spec.ImageTag)
 	if err != nil {
 		return executionSpec{}, err
 	}
-	args := deployerArgs(*spec, path.Join(deployManifestMountPath, bundlePath), imageRef)
+	args := deployerArgs(*spec, path.Join(deployManifestMountPath, bundlePath))
 	result := executionSpec{
 		Namespace:                pvc.Namespace,
-		ServiceAccount:           e.config.DefaultServiceAccount,
+		ServiceAccount:           deployServiceAccount,
+		AutomountServiceAccount:  true,
 		Image:                    image,
 		ImagePullPolicy:          corev1.PullPolicy(e.config.ImagePullPolicy),
 		Labels:                   map[string]string{"kodex.k8s.io/service-key": spec.ServiceKey},
@@ -1067,14 +1074,20 @@ func buildKanikoArgs(dockerfilePath string, destination string, target string) [
 	return args
 }
 
-func deployerArgs(spec runtimeservice.DeployExecutionSpecInput, bundlePath string, imageRef string) []string {
+func deployerArgs(spec runtimeservice.DeployExecutionSpecInput, bundlePath string) []string {
 	args := []string{
 		"apply",
 		"--bundle-path", bundlePath,
 		"--bundle-digest", strings.TrimSpace(spec.ManifestBundleDigest),
 		"--target-namespace", strings.TrimSpace(spec.TargetNamespace),
 		"--service-key", strings.TrimSpace(spec.ServiceKey),
-		"--expected-image", imageRef,
+	}
+	for _, ref := range spec.ExpectedImageRefs {
+		args = append(args, "--expected-image", strings.Join([]string{
+			strings.TrimSpace(ref.ContainerName),
+			strings.TrimSpace(ref.ImageRef),
+			strings.TrimSpace(ref.ImageDigest),
+		}, "|"))
 	}
 	for _, target := range spec.RolloutTargets {
 		args = append(args, "--rollout-target", strings.Join([]string{
@@ -1293,7 +1306,7 @@ func buildJob(job entity.Job, spec executionSpec, cfg Config, name string, selec
 				},
 				Spec: corev1.PodSpec{
 					RestartPolicy:                corev1.RestartPolicyNever,
-					AutomountServiceAccountToken: boolPtr(false),
+					AutomountServiceAccountToken: boolPtr(spec.AutomountServiceAccount),
 					ServiceAccountName:           spec.ServiceAccount,
 					SecurityContext:              spec.PodSecurityContext.DeepCopy(),
 					Volumes:                      append([]corev1.Volume(nil), spec.Volumes...),
@@ -1508,6 +1521,7 @@ func (e *Executor) shortLogTail(ctx context.Context, started StartedJob) string 
 func normalizeConfig(cfg Config) (Config, error) {
 	cfg.DefaultNamespace = strings.TrimSpace(cfg.DefaultNamespace)
 	cfg.DefaultServiceAccount = strings.TrimSpace(cfg.DefaultServiceAccount)
+	cfg.DeployServiceAccount = strings.TrimSpace(cfg.DeployServiceAccount)
 	cfg.DefaultImage = strings.TrimSpace(cfg.DefaultImage)
 	cfg.AgentManagerGRPCAddr = strings.TrimSpace(cfg.AgentManagerGRPCAddr)
 	cfg.AgentManagerAuthSecret = SecretKeyRef{

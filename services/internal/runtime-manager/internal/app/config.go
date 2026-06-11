@@ -132,6 +132,7 @@ type RuntimeKubernetesWorkerConfig struct {
 	WorkerID                 string        `env:"WORKER_ID" envDefault:"runtime-manager-kubernetes-executor"`
 	DefaultNamespace         string        `env:"DEFAULT_NAMESPACE"`
 	DefaultServiceAccount    string        `env:"DEFAULT_SERVICE_ACCOUNT"`
+	DeployServiceAccount     string        `env:"DEPLOY_SERVICE_ACCOUNT" envDefault:"runtime-deployer"`
 	DefaultImage             string        `env:"DEFAULT_IMAGE"`
 	ImagePullPolicy          string        `env:"IMAGE_PULL_POLICY" envDefault:"IfNotPresent"`
 	PollInterval             time.Duration `env:"POLL_INTERVAL" envDefault:"5s"`
@@ -371,6 +372,9 @@ func (cfg Config) validateKubernetesWorkerSettings() error {
 	}
 	if strings.TrimSpace(worker.DefaultImage) == "" {
 		return fmt.Errorf("KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_DEFAULT_IMAGE is required when executor is enabled")
+	}
+	if strings.TrimSpace(worker.DeployServiceAccount) == "" {
+		return fmt.Errorf("KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_DEPLOY_SERVICE_ACCOUNT is required when executor is enabled")
 	}
 	if strings.TrimSpace(worker.AgentManagerGRPCAddr) == "" {
 		return fmt.Errorf("KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_AGENT_MANAGER_GRPC_ADDR is required when executor is enabled")

@@ -97,6 +97,7 @@ func TestValidateRequiresKubernetesExecutorDefaultsWhenEnabled(t *testing.T) {
 
 	cfg.KubernetesWorker.DefaultNamespace = "runtime-jobs"
 	cfg.KubernetesWorker.DefaultImage = "busybox:1.36"
+	cfg.KubernetesWorker.DeployServiceAccount = "runtime-deployer"
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("Validate() with executor defaults: %v", err)
 	}

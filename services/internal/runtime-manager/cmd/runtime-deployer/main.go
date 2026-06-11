@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"flag"
 	"fmt"
@@ -10,6 +12,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -44,8 +47,14 @@ type config struct {
 	bundleDigest    string
 	targetNamespace string
 	serviceKey      string
-	expectedImage   string
+	expectedImages  []expectedImage
 	rolloutTargets  []string
+}
+
+type expectedImage struct {
+	ContainerName string
+	ImageRef      string
+	ImageDigest   string
 }
 
 func main() {
@@ -62,6 +71,19 @@ func run(ctx context.Context, args []string) error {
 	}
 	cfg, err := parseConfig(args[1:])
 	if err != nil {
+		return err
+	}
+	objects, actualDigest, err := readBundle(cfg.bundlePath)
+	if err != nil {
+		return err
+	}
+	if actualDigest != strings.ToLower(strings.TrimSpace(cfg.bundleDigest)) {
+		return errors.New("deploy manifest bundle digest mismatch")
+	}
+	if len(objects) == 0 {
+		return errors.New("deploy manifest bundle is empty")
+	}
+	if err := validateExpectedImages(objects, cfg.expectedImages); err != nil {
 		return err
 	}
 	restConfig, err := rest.InClusterConfig()
@@ -81,13 +103,6 @@ func run(ctx context.Context, args []string) error {
 		return errors.New("kubernetes typed client unavailable")
 	}
 	mapper := restmapper.NewDeferredDiscoveryRESTMapper(memory.NewMemCacheClient(discoveryClient))
-	objects, err := readObjects(cfg.bundlePath)
-	if err != nil {
-		return err
-	}
-	if len(objects) == 0 {
-		return errors.New("deploy manifest bundle is empty")
-	}
 	for index := range objects {
 		if err := applyObject(ctx, dynamicClient, mapper, cfg.targetNamespace, &objects[index]); err != nil {
 			return err
@@ -101,21 +116,23 @@ func parseConfig(args []string) (config, error) {
 	flags.SetOutput(io.Discard)
 	cfg := config{}
 	var rolloutTargets multiValue
+	var expectedImages expectedImageValues
 	flags.StringVar(&cfg.bundlePath, "bundle-path", "", "")
 	flags.StringVar(&cfg.bundleDigest, "bundle-digest", "", "")
 	flags.StringVar(&cfg.targetNamespace, "target-namespace", "", "")
 	flags.StringVar(&cfg.serviceKey, "service-key", "", "")
-	flags.StringVar(&cfg.expectedImage, "expected-image", "", "")
+	flags.Var(&expectedImages, "expected-image", "")
 	flags.Var(&rolloutTargets, "rollout-target", "")
 	if err := flags.Parse(args); err != nil {
 		return config{}, errors.New("invalid deploy arguments")
 	}
 	cfg.rolloutTargets = rolloutTargets
+	cfg.expectedImages = expectedImages
 	if !safePath(cfg.bundlePath) ||
 		!safeDigest(cfg.bundleDigest) ||
 		len(validation.IsDNS1123Label(cfg.targetNamespace)) > 0 ||
 		!safeLabel(cfg.serviceKey) ||
-		!safeImageRef(cfg.expectedImage) ||
+		len(cfg.expectedImages) == 0 ||
 		len(cfg.rolloutTargets) == 0 {
 		return config{}, errors.New("invalid deploy input")
 	}
@@ -140,8 +157,51 @@ func (m *multiValue) Set(value string) error {
 	return nil
 }
 
-func readObjects(root string) ([]unstructured.Unstructured, error) {
+type expectedImageValues []expectedImage
+
+func (e *expectedImageValues) String() string {
+	values := make([]string, 0, len(*e))
+	for _, value := range *e {
+		values = append(values, strings.Join([]string{value.ContainerName, value.ImageRef, value.ImageDigest}, "|"))
+	}
+	return strings.Join(values, ",")
+}
+
+func (e *expectedImageValues) Set(value string) error {
+	parsed, err := parseExpectedImage(value)
+	if err != nil {
+		return err
+	}
+	*e = append(*e, parsed)
+	return nil
+}
+
+func parseExpectedImage(value string) (expectedImage, error) {
+	parts := strings.Split(strings.TrimSpace(value), "|")
+	if len(parts) != 3 {
+		return expectedImage{}, errors.New("invalid expected image")
+	}
+	result := expectedImage{
+		ContainerName: strings.TrimSpace(parts[0]),
+		ImageRef:      strings.TrimSpace(parts[1]),
+		ImageDigest:   strings.ToLower(strings.TrimSpace(parts[2])),
+	}
+	if len(validation.IsDNS1123Label(result.ContainerName)) > 0 ||
+		!safeImageRef(result.ImageRef) ||
+		(result.ImageDigest != "" && !safeDigest(result.ImageDigest)) {
+		return expectedImage{}, errors.New("invalid expected image")
+	}
+	return result, nil
+}
+
+type manifestFile struct {
+	Relative string
+	Raw      []byte
+}
+
+func readBundle(root string) ([]unstructured.Unstructured, string, error) {
 	objects := []unstructured.Unstructured{}
+	files := []manifestFile{}
 	totalBytes := int64(0)
 	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
@@ -169,17 +229,35 @@ func readObjects(root string) ([]unstructured.Unstructured, error) {
 		if err != nil {
 			return errors.New("deploy manifest file cannot be read")
 		}
+		relative, err := filepath.Rel(root, path)
+		if err != nil {
+			return errors.New("deploy manifest file cannot be read")
+		}
 		decoded, err := decodeManifestObjects(raw)
 		if err != nil {
 			return err
 		}
+		files = append(files, manifestFile{Relative: filepath.ToSlash(relative), Raw: raw})
 		objects = append(objects, decoded...)
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	return objects, nil
+	return objects, digestManifestFiles(files), nil
+}
+
+func digestManifestFiles(files []manifestFile) string {
+	sort.Slice(files, func(i, j int) bool {
+		return files[i].Relative < files[j].Relative
+	})
+	hash := sha256.New()
+	for _, file := range files {
+		fmt.Fprintf(hash, "%s\x00%d\x00", file.Relative, len(file.Raw))
+		_, _ = hash.Write(file.Raw)
+		_, _ = hash.Write([]byte("\n"))
+	}
+	return "sha256:" + hex.EncodeToString(hash.Sum(nil))
 }
 
 func decodeManifestObjects(raw []byte) ([]unstructured.Unstructured, error) {
@@ -205,6 +283,81 @@ func decodeManifestObjects(raw []byte) ([]unstructured.Unstructured, error) {
 	return result, nil
 }
 
+func validateExpectedImages(objects []unstructured.Unstructured, expected []expectedImage) error {
+	if len(expected) == 0 {
+		return errors.New("deploy expected image refs are required")
+	}
+	seen := make(map[string]struct{}, len(expected))
+	for index := range objects {
+		containers, ok, err := workloadContainers(&objects[index])
+		if err != nil {
+			return err
+		}
+		if !ok {
+			continue
+		}
+		imagesByContainer := make(map[string]string, len(containers))
+		for _, container := range containers {
+			containerMap, ok := container.(map[string]any)
+			if !ok {
+				return errors.New("deploy workload containers unavailable")
+			}
+			name, _ := containerMap["name"].(string)
+			image, _ := containerMap["image"].(string)
+			if name != "" && image != "" {
+				imagesByContainer[name] = image
+			}
+		}
+		for _, ref := range expected {
+			image, ok := imagesByContainer[ref.ContainerName]
+			if !ok {
+				continue
+			}
+			if !expectedImageMatches(image, ref) {
+				return errors.New("deploy expected image mismatch")
+			}
+			seen[ref.ContainerName] = struct{}{}
+		}
+	}
+	for _, ref := range expected {
+		if _, ok := seen[ref.ContainerName]; !ok {
+			return errors.New("deploy expected image not found")
+		}
+	}
+	return nil
+}
+
+func workloadContainers(object *unstructured.Unstructured) ([]any, bool, error) {
+	switch strings.ToLower(object.GetKind()) {
+	case "deployment", "statefulset", "daemonset", "job":
+		containers, found, err := unstructured.NestedSlice(object.Object, "spec", "template", "spec", "containers")
+		return containers, found, containerListError(err, found)
+	case "cronjob":
+		containers, found, err := unstructured.NestedSlice(object.Object, "spec", "jobTemplate", "spec", "template", "spec", "containers")
+		return containers, found, containerListError(err, found)
+	default:
+		return nil, false, nil
+	}
+}
+
+func containerListError(err error, found bool) error {
+	if err != nil || !found {
+		return errors.New("deploy workload containers unavailable")
+	}
+	return nil
+}
+
+func expectedImageMatches(actual string, expected expectedImage) bool {
+	image := strings.TrimSpace(actual)
+	if image == expected.ImageRef {
+		return true
+	}
+	if expected.ImageDigest == "" {
+		return false
+	}
+	return image == expected.ImageRef+"@"+expected.ImageDigest || strings.HasSuffix(image, "@"+expected.ImageDigest)
+}
+
 type restMapping interface {
 	RESTMapping(gk schema.GroupKind, versions ...string) (*apiMeta.RESTMapping, error)
 }
@@ -215,24 +368,20 @@ func applyObject(ctx context.Context, client dynamic.Interface, mapper restMappi
 	if err != nil {
 		return errors.New("deploy manifest mapping unavailable")
 	}
+	if mapping.Scope.Name() != apiMeta.RESTScopeNameNamespace {
+		return errors.New("deploy manifest cluster scoped object rejected")
+	}
 	namespace := object.GetNamespace()
-	if mapping.Scope.Name() == apiMeta.RESTScopeNameNamespace {
-		if namespace == "" {
-			namespace = targetNamespace
-			object.SetNamespace(namespace)
-		}
-		if namespace != targetNamespace {
-			return errors.New("deploy manifest namespace mismatch")
-		}
+	if namespace == "" {
+		namespace = targetNamespace
+		object.SetNamespace(namespace)
+	}
+	if namespace != targetNamespace {
+		return errors.New("deploy manifest namespace mismatch")
 	}
 	options := metav1.ApplyOptions{FieldManager: fieldManager, Force: true}
 	resource := client.Resource(mapping.Resource)
-	var applyErr error
-	if namespace != "" {
-		_, applyErr = resource.Namespace(namespace).Apply(ctx, object.GetName(), object, options)
-	} else {
-		_, applyErr = resource.Apply(ctx, object.GetName(), object, options)
-	}
+	_, applyErr := resource.Namespace(namespace).Apply(ctx, object.GetName(), object, options)
 	if applyErr != nil {
 		if apierrors.IsForbidden(applyErr) {
 			return errors.New("deploy apply access denied")
@@ -356,7 +505,7 @@ func safeLabel(value string) bool {
 
 func safeImageRef(value string) bool {
 	trimmed := strings.TrimSpace(value)
-	return trimmed != "" && len(trimmed) <= 512 && !strings.ContainsAny(trimmed, " \t\r\n")
+	return trimmed != "" && len(trimmed) <= 512 && !strings.ContainsAny(trimmed, " \t\r\n|")
 }
 
 func safeDiagnostic(value string) string {

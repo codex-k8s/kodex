@@ -7,6 +7,15 @@ metadata:
     app.kubernetes.io/name: runtime-manager
     app.kubernetes.io/part-of: kodex
 ---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: runtime-deployer
+  namespace: {{ envOr "KODEX_PRODUCTION_NAMESPACE" "" }}
+  labels:
+    app.kubernetes.io/name: runtime-deployer
+    app.kubernetes.io/part-of: kodex
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -45,6 +54,45 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: runtime-manager-kubernetes-executor
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: runtime-deployer
+  namespace: {{ envOr "KODEX_PRODUCTION_NAMESPACE" "" }}
+  labels:
+    app.kubernetes.io/name: runtime-deployer
+    app.kubernetes.io/part-of: kodex
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps", "services", "serviceaccounts"]
+    verbs: ["get", "list", "watch", "create", "patch", "update"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets", "daemonsets"]
+    verbs: ["get", "list", "watch", "create", "patch", "update"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "watch", "create", "patch", "update"]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles", "rolebindings"]
+    verbs: ["get", "list", "watch", "create", "patch", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: runtime-deployer
+  namespace: {{ envOr "KODEX_PRODUCTION_NAMESPACE" "" }}
+  labels:
+    app.kubernetes.io/name: runtime-deployer
+    app.kubernetes.io/part-of: kodex
+subjects:
+  - kind: ServiceAccount
+    name: runtime-deployer
+    namespace: {{ envOr "KODEX_PRODUCTION_NAMESPACE" "" }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: runtime-deployer
 ---
 apiVersion: v1
 kind: Service
@@ -216,6 +264,8 @@ spec:
               value: "{{ envOr "KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_DEFAULT_NAMESPACE" (envOr "KODEX_PRODUCTION_NAMESPACE" "") }}"
             - name: KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_DEFAULT_SERVICE_ACCOUNT
               value: "{{ envOr "KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_DEFAULT_SERVICE_ACCOUNT" "" }}"
+            - name: KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_DEPLOY_SERVICE_ACCOUNT
+              value: "{{ envOr "KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_DEPLOY_SERVICE_ACCOUNT" "runtime-deployer" }}"
             - name: KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_DEFAULT_IMAGE
               value: "{{ envOr "KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_DEFAULT_IMAGE" "" }}"
             - name: KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_IMAGE_PULL_POLICY
