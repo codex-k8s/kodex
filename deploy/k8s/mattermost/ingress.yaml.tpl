@@ -25,6 +25,6 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: mattermost
+                name: ${MATTERCODEX_MATTERMOST_INGRESS_SERVICE_NAME}
                 port:
-                  name: http
+                  name: ${MATTERCODEX_MATTERMOST_INGRESS_SERVICE_PORT_NAME}

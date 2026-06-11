@@ -8,6 +8,8 @@
 
 По умолчанию Ingress рендерится для публичного Traefik class `kodex-public`. Если целевой кластер использует другой class, задайте `MATTERCODEX_INGRESS_CLASS` в `.env`.
 
+Mattermost public URL по умолчанию закрывается `oauth2-proxy` с Google provider. Ingress направляет внешний трафик в OAuth2 proxy, а proxy уже ходит во внутренний Mattermost Service. Allowlist email задается через `MATTERCODEX_MATTERMOST_OAUTH2_PROXY_AUTHENTICATED_EMAILS`.
+
 ## Preflight
 
 Локальная проверка `.env`:
@@ -33,9 +35,11 @@ bash scripts/k8s/render-mattermost.sh --env-file .env --render-dir /tmp/matter-c
 - namespace;
 - PostgreSQL StatefulSet/Service;
 - Mattermost PVC/Deployment/Service;
+- OAuth2 proxy ServiceAccount/ConfigMap/Service/Deployment;
 - Ingress.
 
 PostgreSQL password и DSN создаются только Kubernetes Secret step-ом.
+OAuth2 proxy credentials в render output не попадают: Deployment содержит только `secretKeyRef`.
 
 ## Remote dry-run Kubernetes
 
@@ -52,6 +56,14 @@ Mattermost manifests:
 ```bash
 bash scripts/remote/install-mattermost.sh --env-file .env --dry-run=server
 ```
+
+При включенном `MATTERCODEX_MATTERMOST_OAUTH2_PROXY_ENABLED` remote install синхронизирует target secret `MATTERCODEX_MATTERMOST_OAUTH2_PROXY_SECRET` в namespace Mattermost. Client id/secret берутся из `MATTERCODEX_MATTERMOST_OAUTH2_PROXY_CLIENT_ID`/`MATTERCODEX_MATTERMOST_OAUTH2_PROXY_CLIENT_SECRET` или из внешних `OAUTH_CLIENT_ID`/`OAUTH_CLIENT_SECRET`, если они переданы процессу deploy. Уже существующий cookie secret сохраняется.
+
+- `OAUTH_CLIENT_ID`;
+- `OAUTH_CLIENT_SECRET`;
+- `KODEX_OAUTH2_PROXY_COOKIE_SECRET`.
+
+Значения ключей не печатаются. Если client id/secret не переданы в env, install сохранит уже существующие значения в Kubernetes Secret; для первого install эти ключи должны быть переданы явно.
 
 Если cert-manager уже установлен и нужно создать `ClusterIssuer`, передайте:
 
@@ -85,15 +97,21 @@ bash scripts/remote/smoke-mattermost.sh --env-file .env
 bash scripts/remote/smoke-mattermost.sh --env-file .env --check-url
 ```
 
+Если OAuth2 proxy включен, публичная проверка ожидает redirect/auth status и падает, если `/api/v4/system/ping` доступен анонимно с HTTP 200.
+
 ## Ручная проверка владельцем
 
 1. Открыть Mattermost URL из `PUBLIC_BASE_URL` или `MATTERCODEX_MATTERMOST_SITE_URL`.
-2. Создать первого пользователя или войти существующим администратором.
-3. Убедиться, что `/api/v4/system/ping` отвечает через HTTPS.
+2. Убедиться, что сначала открывается Google OAuth flow.
+3. Авторизоваться Google-аккаунтом, email которого есть в OAuth allowlist.
+4. После OAuth gate войти в Mattermost существующим пользователем.
+5. Открыть `/api/v4/system/ping` без активной OAuth cookie в приватном окне и убедиться, что прямого HTTP 200 нет.
 
 ## Безопасность
 
 - `.env` не коммитится.
 - Render manifests не содержат PostgreSQL password и Mattermost datasource.
+- Render manifests не содержат OAuth client secret и cookie secret.
 - Bootstrap secret создается через Kubernetes API на целевом сервере без вывода значений.
+- OAuth2 proxy secret синхронизируется в Kubernetes namespace Mattermost без вывода значений.
 - `MATTERCODEX_POSTGRES_PASSWORD` можно задать заранее, но для MVP допустима генерация при первом `--apply`.

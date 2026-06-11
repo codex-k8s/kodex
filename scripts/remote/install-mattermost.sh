@@ -46,7 +46,7 @@ done
 
 mattercodex_load_env_file "$ENV_FILE"
 mattercodex_validate_base_env
-mattercodex_require_commands ssh envsubst
+mattercodex_require_commands ssh envsubst base64
 
 if [ -z "$RENDER_DIR" ]; then
   RENDER_DIR="$(mktemp -d)"
@@ -66,6 +66,84 @@ fi
 mattercodex_log "применяются манифесты Mattermost на целевом сервере"
 mattercodex_remote_kubectl_apply_stdin "$APPLY_DRY_RUN_MODE" < "$RENDER_DIR/10-postgres.yaml"
 mattercodex_remote_kubectl_apply_stdin "$APPLY_DRY_RUN_MODE" < "$RENDER_DIR/20-mattermost.yaml"
+
+if mattercodex_bool "$MATTERCODEX_MATTERMOST_OAUTH2_PROXY_ENABLED"; then
+  mattercodex_log "синхронизируется OAuth2 proxy secret на целевом сервере"
+  TARGET_SECRET_Q="$(mattercodex_shell_quote "$MATTERCODEX_MATTERMOST_OAUTH2_PROXY_SECRET")"
+  APPLY_ARG="$(mattercodex_kubectl_dry_run_arg "$APPLY_DRY_RUN_MODE")"
+  SECRET_APPLY_EXTRA=""
+  if [ "$APPLY_DRY_RUN_MODE" != "client" ]; then
+    SECRET_APPLY_EXTRA="--server-side"
+  fi
+  CLIENT_ID_B64=""
+  CLIENT_SECRET_B64=""
+  COOKIE_SECRET_B64=""
+  if [ -n "${MATTERCODEX_MATTERMOST_OAUTH2_PROXY_CLIENT_ID:-}" ]; then
+    CLIENT_ID_B64="$(printf '%s' "$MATTERCODEX_MATTERMOST_OAUTH2_PROXY_CLIENT_ID" | base64 | tr -d '\n')"
+  fi
+  if [ -n "${MATTERCODEX_MATTERMOST_OAUTH2_PROXY_CLIENT_SECRET:-}" ]; then
+    CLIENT_SECRET_B64="$(printf '%s' "$MATTERCODEX_MATTERMOST_OAUTH2_PROXY_CLIENT_SECRET" | base64 | tr -d '\n')"
+  fi
+  if [ -z "${MATTERCODEX_MATTERMOST_OAUTH2_PROXY_COOKIE_SECRET:-}" ]; then
+    MATTERCODEX_MATTERMOST_OAUTH2_PROXY_COOKIE_SECRET="$(mattercodex_generate_oauth2_cookie_secret)"
+  fi
+  COOKIE_SECRET_B64="$(printf '%s' "$MATTERCODEX_MATTERMOST_OAUTH2_PROXY_COOKIE_SECRET" | base64 | tr -d '\n')"
+  CLIENT_ID_B64_Q="$(mattercodex_shell_quote "$CLIENT_ID_B64")"
+  CLIENT_SECRET_B64_Q="$(mattercodex_shell_quote "$CLIENT_SECRET_B64")"
+  COOKIE_SECRET_B64_Q="$(mattercodex_shell_quote "$COOKIE_SECRET_B64")"
+  mattercodex_ssh "set -eu
+    command -v jq >/dev/null
+    EXISTING_JSON=\"\$($REMOTE_KUBECTL -n $NAMESPACE_Q get secret $TARGET_SECRET_Q -o json 2>/dev/null || printf '{\"data\":{}}')\"
+    printf '%s' \"\$EXISTING_JSON\" |
+      jq \
+        --arg name $TARGET_SECRET_Q \
+        --arg namespace $NAMESPACE_Q \
+        --arg client_id_b64 $CLIENT_ID_B64_Q \
+        --arg client_secret_b64 $CLIENT_SECRET_B64_Q \
+        --arg cookie_secret_b64 $COOKIE_SECRET_B64_Q '
+        def provided_or_existing(\$provided; \$existing):
+          if \$provided != \"\" then \$provided
+          elif (\$existing != null and \$existing != \"\") then \$existing
+          else null end;
+        def existing_or_provided(\$provided; \$existing):
+          if (\$existing != null and \$existing != \"\") then \$existing
+          elif \$provided != \"\" then \$provided
+          else null end;
+        .data.OAUTH_CLIENT_ID as \$existing_client_id |
+        .data.OAUTH_CLIENT_SECRET as \$existing_client_secret |
+        .data.KODEX_OAUTH2_PROXY_COOKIE_SECRET as \$existing_cookie_secret |
+        provided_or_existing(\$client_id_b64; \$existing_client_id) as \$client_id |
+        provided_or_existing(\$client_secret_b64; \$existing_client_secret) as \$client_secret |
+        existing_or_provided(\$cookie_secret_b64; \$existing_cookie_secret) as \$cookie_secret |
+        if (\$client_id == null or \$client_secret == null or \$cookie_secret == null) then
+          error(\"OAuth2 secret misses required keys\")
+        else
+          {
+            apiVersion: \"v1\",
+            kind: \"Secret\",
+            type: \"Opaque\",
+            metadata: {
+              name: \$name,
+              namespace: \$namespace,
+              labels: {
+                \"app.kubernetes.io/name\": \"mattermost-oauth2-proxy\",
+                \"app.kubernetes.io/component\": \"oauth2-proxy\"
+              }
+            },
+            data: {
+              OAUTH_CLIENT_ID: \$client_id,
+              OAUTH_CLIENT_SECRET: \$client_secret,
+              KODEX_OAUTH2_PROXY_COOKIE_SECRET: \$cookie_secret
+            }
+          }
+        end' |
+      $REMOTE_KUBECTL apply ${SECRET_APPLY_EXTRA:+$SECRET_APPLY_EXTRA }${APPLY_ARG:+$APPLY_ARG }-f - >/dev/null
+    if [ '$APPLY_DRY_RUN_MODE' = 'none' ]; then
+      $REMOTE_KUBECTL -n $NAMESPACE_Q annotate secret $TARGET_SECRET_Q kubectl.kubernetes.io/last-applied-configuration- --overwrite >/dev/null 2>&1 || true
+    fi"
+  mattercodex_remote_kubectl_apply_stdin "$APPLY_DRY_RUN_MODE" < "$RENDER_DIR/25-oauth2-proxy.yaml"
+fi
+
 mattercodex_remote_kubectl_apply_stdin "$APPLY_DRY_RUN_MODE" < "$RENDER_DIR/30-ingress.yaml"
 
 if [ "$DRY_RUN_MODE" = "none" ] && mattercodex_bool "$WAIT"; then
@@ -73,6 +151,9 @@ if [ "$DRY_RUN_MODE" = "none" ] && mattercodex_bool "$WAIT"; then
   mattercodex_ssh "set -eu
     $REMOTE_KUBECTL -n $NAMESPACE_Q rollout status statefulset/mattermost-postgres --timeout=180s >/dev/null
     $REMOTE_KUBECTL -n $NAMESPACE_Q rollout status deployment/mattermost --timeout=300s >/dev/null"
+  if mattercodex_bool "$MATTERCODEX_MATTERMOST_OAUTH2_PROXY_ENABLED"; then
+    mattercodex_ssh "$REMOTE_KUBECTL -n $NAMESPACE_Q rollout status deployment/mattermost-oauth2-proxy --timeout=180s >/dev/null"
+  fi
 fi
 
 mattercodex_log "remote Mattermost install шаг завершен"

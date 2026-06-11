@@ -49,6 +49,16 @@ mattercodex_log "env-файл: загружен"
 mattercodex_log "обязательные env-ключи: заданы"
 mattercodex_log "namespace: настроен"
 mattercodex_log "Mattermost URL: настроен"
+if mattercodex_bool "$MATTERCODEX_MATTERMOST_OAUTH2_PROXY_ENABLED"; then
+  mattercodex_log "Mattermost OAuth2 proxy: включен"
+  if [ -n "${MATTERCODEX_MATTERMOST_OAUTH2_PROXY_CLIENT_ID:-}" ] && [ -n "${MATTERCODEX_MATTERMOST_OAUTH2_PROXY_CLIENT_SECRET:-}" ]; then
+    mattercodex_log "Mattermost OAuth2 client env: задан"
+  else
+    mattercodex_log "Mattermost OAuth2 client env: не задан, remote install сохранит существующий Kubernetes Secret"
+  fi
+else
+  mattercodex_log "Mattermost OAuth2 proxy: выключен"
+fi
 if [ -n "${MATTERCODEX_MATTERMOST_BOT_TOKEN:-}" ]; then
   mattercodex_log "Mattermost bot token: задан"
 else

@@ -59,6 +59,9 @@ DRY_RUN_ARG="$(mattercodex_kubectl_dry_run_arg "$DRY_RUN_MODE")"
 mattercodex_log "применяются манифесты Mattermost"
 kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f "$RENDER_DIR/10-postgres.yaml" >/dev/null
 kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f "$RENDER_DIR/20-mattermost.yaml" >/dev/null
+if mattercodex_bool "$MATTERCODEX_MATTERMOST_OAUTH2_PROXY_ENABLED"; then
+  kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f "$RENDER_DIR/25-oauth2-proxy.yaml" >/dev/null
+fi
 kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f "$RENDER_DIR/30-ingress.yaml" >/dev/null
 
 if [ "$DRY_RUN_MODE" = "none" ] && mattercodex_bool "$WAIT"; then
@@ -66,6 +69,10 @@ if [ "$DRY_RUN_MODE" = "none" ] && mattercodex_bool "$WAIT"; then
   kubectl -n "$MATTERCODEX_NAMESPACE" rollout status statefulset/mattermost-postgres --timeout=180s >/dev/null
   mattercodex_log "ожидание rollout Mattermost"
   kubectl -n "$MATTERCODEX_NAMESPACE" rollout status deployment/mattermost --timeout=300s >/dev/null
+  if mattercodex_bool "$MATTERCODEX_MATTERMOST_OAUTH2_PROXY_ENABLED"; then
+    mattercodex_log "ожидание rollout Mattermost OAuth2 proxy"
+    kubectl -n "$MATTERCODEX_NAMESPACE" rollout status deployment/mattermost-oauth2-proxy --timeout=180s >/dev/null
+  fi
 fi
 
 mattercodex_log "Mattermost install шаг завершен"
