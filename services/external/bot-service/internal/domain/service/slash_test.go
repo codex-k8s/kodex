@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
 	providerrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/provider"
@@ -403,6 +404,75 @@ func TestSlashRuntimeRejectsInvalidRunID(t *testing.T) {
 	text := svc.Handle(context.Background(), SlashCommand{Text: "runtime smoke Bad_ID"})
 	if !strings.Contains(text, "run id must be lowercase") {
 		t.Fatalf("Handle(runtime smoke Bad_ID) text = %q", text)
+	}
+}
+
+func TestSlashRuntimePruneDefaultsToDryRun(t *testing.T) {
+	runner := &fakeRuntimeRunner{
+		retentionResult: runtimerepo.RetentionCleanupResult{
+			Namespace:         "mattermost",
+			DryRun:            true,
+			OlderThan:         2 * time.Hour,
+			RunsMatched:       1,
+			JobsMatched:       1,
+			PVCsMatched:       1,
+			ConfigMapsMatched: 1,
+			MatchedRunIDs:     []string{"old-run"},
+		},
+	}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:         localizer,
+		StatusService:     testStatusService(localizer),
+		Store:             &fakeAdminStore{},
+		RuntimeRunner:     runner,
+		StorageReady:      true,
+		RuntimeConfigured: true,
+	})
+
+	text := svc.Handle(context.Background(), SlashCommand{Text: "runtime prune 2h", UserName: "owner"})
+
+	if !strings.Contains(text, "runtime retention cleanup") || !strings.Contains(text, "mode: `dry-run`") || !strings.Contains(text, "old-run") {
+		t.Fatalf("Handle(runtime prune) text = %q", text)
+	}
+	if runner.retentionInput.OlderThan != 2*time.Hour || !runner.retentionInput.DryRun {
+		t.Fatalf("retentionInput = %#v", runner.retentionInput)
+	}
+}
+
+func TestSlashRuntimePruneApply(t *testing.T) {
+	runner := &fakeRuntimeRunner{
+		retentionResult: runtimerepo.RetentionCleanupResult{
+			Namespace:         "mattermost",
+			DryRun:            false,
+			OlderThan:         time.Hour,
+			RunsMatched:       1,
+			JobsMatched:       1,
+			JobsDeleted:       1,
+			PVCsMatched:       1,
+			PVCsDeleted:       1,
+			ConfigMapsMatched: 1,
+			ConfigMapsDeleted: 1,
+			MatchedRunIDs:     []string{"old-run"},
+		},
+	}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:         localizer,
+		StatusService:     testStatusService(localizer),
+		Store:             &fakeAdminStore{},
+		RuntimeRunner:     runner,
+		StorageReady:      true,
+		RuntimeConfigured: true,
+	})
+
+	text := svc.Handle(context.Background(), SlashCommand{Text: "runtime prune 1h --apply", UserName: "owner"})
+
+	if !strings.Contains(text, "mode: `apply`") || !strings.Contains(text, "jobs matched/deleted: `1`/`1`") {
+		t.Fatalf("Handle(runtime prune apply) text = %q", text)
+	}
+	if runner.retentionInput.OlderThan != time.Hour || runner.retentionInput.DryRun {
+		t.Fatalf("retentionInput = %#v", runner.retentionInput)
 	}
 }
 
@@ -971,6 +1041,8 @@ type fakeRuntimeRunner struct {
 	reviewGitHubSecret    string
 	cleanedRunID          string
 	cleanedRunIDs         []string
+	retentionInput        runtimerepo.RetentionCleanupInput
+	retentionResult       runtimerepo.RetentionCleanupResult
 	authAccount           string
 	authSecret            string
 	authReady             bool
@@ -1107,6 +1179,19 @@ func (runner *fakeRuntimeRunner) CleanupRun(_ context.Context, runID string) (ru
 		JobDeleted: true,
 		PVCDeleted: true,
 	}, nil
+}
+
+func (runner *fakeRuntimeRunner) CleanupExpiredRuns(_ context.Context, input runtimerepo.RetentionCleanupInput) (runtimerepo.RetentionCleanupResult, error) {
+	runner.retentionInput = input
+	result := runner.retentionResult
+	if result.Namespace == "" {
+		result.Namespace = "mattermost"
+	}
+	if result.OlderThan == 0 {
+		result.OlderThan = input.OlderThan
+	}
+	result.DryRun = input.DryRun
+	return result, nil
 }
 
 type fakeFlowCardPublisher struct {

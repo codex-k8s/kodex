@@ -7,6 +7,7 @@
 - `docs/idea/as-is.md` - ручная модель "manager + DEV/QA пары + PR + owner gate".
 - `docs/idea/to-be.md` - целевая Mattermost-система управления agent run.
 - `/home/s/projects/kodex/**` - реальный первый dogfooding-репозиторий и источник требований из текущей ручной работы, но не архитектурная зависимость `matter-codex`.
+- `docs/strategy/production-gaps.md` - явные ограничения после MVP dogfooding-среза и следующий hardening backlog.
 
 ## Внешние источники
 

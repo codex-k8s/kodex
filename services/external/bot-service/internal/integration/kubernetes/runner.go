@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	runtimerepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/runtime"
 	batchv1 "k8s.io/api/batch/v1"
@@ -447,6 +448,106 @@ func (runner *Runner) CleanupRun(ctx context.Context, runID string) (runtimerepo
 	if err := runner.client.CoreV1().ConfigMaps(runner.namespace).Delete(ctx, promptConfigMapName(runID), metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
 		return runtimerepo.CleanupResult{}, fmt.Errorf("delete prompt configmap: %w", err)
 	}
+	return result, nil
+}
+
+func (runner *Runner) CleanupExpiredRuns(ctx context.Context, input runtimerepo.RetentionCleanupInput) (runtimerepo.RetentionCleanupResult, error) {
+	if input.OlderThan <= 0 {
+		return runtimerepo.RetentionCleanupResult{}, fmt.Errorf("retention duration must be positive")
+	}
+	now := input.Now
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	cutoff := now.Add(-input.OlderThan)
+	result := runtimerepo.RetentionCleanupResult{
+		Namespace: runner.namespace,
+		DryRun:    input.DryRun,
+		OlderThan: input.OlderThan,
+	}
+
+	jobs, err := runner.client.BatchV1().Jobs(runner.namespace).List(ctx, metav1.ListOptions{LabelSelector: runnerLabelSelector()})
+	if err != nil {
+		return runtimerepo.RetentionCleanupResult{}, fmt.Errorf("list runner jobs: %w", err)
+	}
+	jobByRunID := make(map[string]batchv1.Job, len(jobs.Items))
+	matchedRunIDs := make(map[string]struct{})
+	background := metav1.DeletePropagationBackground
+	for _, job := range jobs.Items {
+		runID := job.Labels[labelRunID]
+		if runID == "" {
+			continue
+		}
+		jobByRunID[runID] = job
+		if job.Status.Active > 0 {
+			result.SkippedActiveJobs++
+			continue
+		}
+		if job.Status.Succeeded == 0 && job.Status.Failed == 0 {
+			continue
+		}
+		if !olderThan(jobCompletedOrCreatedAt(job), cutoff) {
+			continue
+		}
+		result.JobsMatched++
+		matchedRunIDs[runID] = struct{}{}
+		if input.DryRun {
+			continue
+		}
+		if err := runner.client.BatchV1().Jobs(runner.namespace).Delete(ctx, job.Name, metav1.DeleteOptions{PropagationPolicy: &background}); err != nil {
+			if !apierrors.IsNotFound(err) {
+				return runtimerepo.RetentionCleanupResult{}, fmt.Errorf("delete runner job %s: %w", job.Name, err)
+			}
+		} else {
+			result.JobsDeleted++
+		}
+	}
+
+	pvcs, err := runner.client.CoreV1().PersistentVolumeClaims(runner.namespace).List(ctx, metav1.ListOptions{LabelSelector: runnerLabelSelector()})
+	if err != nil {
+		return runtimerepo.RetentionCleanupResult{}, fmt.Errorf("list runner pvcs: %w", err)
+	}
+	for _, pvc := range pvcs.Items {
+		if !runnerRetentionResourceExpired(pvc.Labels[labelRunID], pvc.CreationTimestamp.Time, cutoff, jobByRunID, matchedRunIDs) {
+			continue
+		}
+		result.PVCsMatched++
+		matchedRunIDs[pvc.Labels[labelRunID]] = struct{}{}
+		if input.DryRun {
+			continue
+		}
+		if err := runner.client.CoreV1().PersistentVolumeClaims(runner.namespace).Delete(ctx, pvc.Name, metav1.DeleteOptions{}); err != nil {
+			if !apierrors.IsNotFound(err) {
+				return runtimerepo.RetentionCleanupResult{}, fmt.Errorf("delete workspace pvc %s: %w", pvc.Name, err)
+			}
+		} else {
+			result.PVCsDeleted++
+		}
+	}
+
+	configMaps, err := runner.client.CoreV1().ConfigMaps(runner.namespace).List(ctx, metav1.ListOptions{LabelSelector: runnerLabelSelector()})
+	if err != nil {
+		return runtimerepo.RetentionCleanupResult{}, fmt.Errorf("list runner configmaps: %w", err)
+	}
+	for _, configMap := range configMaps.Items {
+		if !runnerRetentionResourceExpired(configMap.Labels[labelRunID], configMap.CreationTimestamp.Time, cutoff, jobByRunID, matchedRunIDs) {
+			continue
+		}
+		result.ConfigMapsMatched++
+		matchedRunIDs[configMap.Labels[labelRunID]] = struct{}{}
+		if input.DryRun {
+			continue
+		}
+		if err := runner.client.CoreV1().ConfigMaps(runner.namespace).Delete(ctx, configMap.Name, metav1.DeleteOptions{}); err != nil {
+			if !apierrors.IsNotFound(err) {
+				return runtimerepo.RetentionCleanupResult{}, fmt.Errorf("delete prompt configmap %s: %w", configMap.Name, err)
+			}
+		} else {
+			result.ConfigMapsDeleted++
+		}
+	}
+	result.MatchedRunIDs = sortedRunIDs(matchedRunIDs)
+	result.RunsMatched = len(result.MatchedRunIDs)
 	return result, nil
 }
 
@@ -891,6 +992,58 @@ func runnerLabels(runID string, role string) map[string]string {
 		labelRunID:                    runID,
 		labelAgentRole:                role,
 	}
+}
+
+func runnerLabelSelector() string {
+	return labels.SelectorFromSet(labels.Set{
+		"app.kubernetes.io/name":      "matter-codex-agent-runner",
+		"app.kubernetes.io/component": runnerComponent,
+	}).String()
+}
+
+func jobCompletedOrCreatedAt(job batchv1.Job) time.Time {
+	if job.Status.CompletionTime != nil && !job.Status.CompletionTime.IsZero() {
+		return job.Status.CompletionTime.Time
+	}
+	return job.CreationTimestamp.Time
+}
+
+func olderThan(value time.Time, cutoff time.Time) bool {
+	return !value.IsZero() && value.Before(cutoff)
+}
+
+func runnerRetentionResourceExpired(runID string, createdAt time.Time, cutoff time.Time, jobByRunID map[string]batchv1.Job, matchedRunIDs map[string]struct{}) bool {
+	if runID == "" {
+		return false
+	}
+	if _, ok := matchedRunIDs[runID]; ok {
+		return true
+	}
+	job, ok := jobByRunID[runID]
+	if !ok {
+		return olderThan(createdAt, cutoff)
+	}
+	if job.Status.Active > 0 {
+		return false
+	}
+	if job.Status.Succeeded == 0 && job.Status.Failed == 0 {
+		return false
+	}
+	return olderThan(jobCompletedOrCreatedAt(job), cutoff)
+}
+
+func sortedRunIDs(values map[string]struct{}) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	runIDs := make([]string, 0, len(values))
+	for runID := range values {
+		if runID != "" {
+			runIDs = append(runIDs, runID)
+		}
+	}
+	sort.Strings(runIDs)
+	return runIDs
 }
 
 func runnerJobName(runID string) string {

@@ -14,7 +14,7 @@
 - выполнять GitHub adapter команды `/agents github check`, `/agents github branch`, `/agents github pr`;
 - принимать GitHub webhook callback `/github/webhook` с HMAC validation;
 - автоматически регистрировать repo webhook при `/agents repo add github owner/name [default-branch]`, если GitHub token имеет hook write permission;
-- выполнять Kubernetes runtime smoke-команды `/agents runtime smoke|status|cleanup` через client-go, Job, PVC и подготовленный agent-runner image;
+- выполнять Kubernetes runtime smoke-команды `/agents runtime smoke|status|cleanup|prune` через client-go, Job, PVC и подготовленный agent-runner image;
 - выполнять Codex developer smoke-команды `/agents dev smoke|status|cleanup`, создающие отдельный Job/PVC, branch, commit и draft PR через OpenAI account, GitHub account и prompt template из agent profile;
 - выполнять Codex reviewer-команды `/agents review pr|status|cleanup`, запускающие отдельный Job/PVC для review существующего GitHub PR через OpenAI account, GitHub account и prompt template из agent profile;
 - выполнять developer-review flow-команды `/agents flow start|status|card|cleanup`, которые запускают developer agent, автоматически передают созданный PR reviewer agent, повторяют fix-попытку при `request_changes`, блокируют flow после трех попыток и публикуют Mattermost card с owner buttons;
@@ -262,6 +262,7 @@ bash scripts/remote/bootstrap-mattermost-bot.sh --env-file .env
 /agents runtime smoke smoke-manual
 /agents runtime status smoke-manual
 /agents runtime cleanup smoke-manual
+/agents runtime prune 24h
 ```
 
 Ожидаемый результат:
@@ -270,6 +271,24 @@ bash scripts/remote/bootstrap-mattermost-bot.sh --env-file .env
 - runtime smoke возвращает run id, Job и PVC без вывода секретов; Job использует `matter-codex-agent-runner`;
 - runtime status показывает Job/PVC, pod phase и короткий log tail smoke Job;
 - runtime cleanup удаляет Job и PVC.
+- runtime prune по умолчанию работает в dry-run режиме и показывает старые завершенные Job/PVC/ConfigMap, которые будут удалены retention cleanup.
+
+Проверка apply-режима retention cleanup на завершенном smoke run:
+
+```text
+/agents runtime smoke prune-manual
+/agents runtime status prune-manual
+/agents runtime prune 1s
+/agents runtime prune 1s --apply
+/agents runtime status prune-manual
+```
+
+Ожидаемый результат:
+
+- первый `runtime prune 1s` показывает `mode: dry-run` и не удаляет ресурсы;
+- `runtime prune 1s --apply` удаляет завершенный Job/PVC/ConfigMap только если run уже завершен;
+- активные Job не удаляются и учитываются как skipped;
+- после apply `runtime status prune-manual` возвращает, что run не найден.
 
 Дополнительная проверка Codex developer agent:
 
@@ -398,6 +417,7 @@ curl -sS -o /dev/null -w '%{http_code}\n' \
 - GitHub token, username, email и webhook secret хранятся в Kubernetes Secret и не попадают в ConfigMap.
 - Slash token, полученный из Mattermost API, пишется во временный файл с правами `0600`, затем в Kubernetes Secret.
 - Логи provisioning показывают только безопасные статусы `exists/created/updated`.
+- bot-service Deployment запускается non-root, с dropped Linux capabilities, `allowPrivilegeEscalation: false`, `readOnlyRootFilesystem: true`, `seccompProfile: RuntimeDefault` и базовыми resource requests/limits.
 - bot-service получает namespace-scoped Role на создание/чтение/удаление runtime Job/PVC, чтение pod/log, `pods/exec` для чтения готового `auth.json` из auth Job и create/update Secret для account-specific Codex auth.
 - ServiceAccount agent runner создается без automount token; smoke pod также явно отключает automount.
 - Codex auth Job и developer/reviewer Job запускаются без automount service account token.
@@ -408,3 +428,7 @@ curl -sS -o /dev/null -w '%{http_code}\n' \
 - Codex agent внутри isolated Kubernetes Job запускается с `sandbox_mode = "danger-full-access"`, потому что `workspace-write` требует `bubblewrap`, который в текущем Kubernetes pod падает до выполнения shell-команд. Изоляционная граница MVP для agent run: отдельный pod, отдельный PVC, отключенный automount service account token и минимальные Secret volume mounts.
 - Developer runner реализован отдельным Go binary в подготовленном image и сам выполняет push/PR после `codex exec`; prompt contract запрещает Codex агенту пушить branch или создавать PR напрямую, но разрешает отвечать на review threads через `gh` при соответствующей задаче.
 - Reviewer runner реализован отдельным Go binary в подготовленном image и дает Codex reviewer доступ к `gh` для inline review comments; если Codex не отправил review сам, runner отправляет fallback summary review после `codex exec`.
+
+## Production gaps после MVP
+
+Актуальный список production gaps ведется в `docs/strategy/production-gaps.md`.
