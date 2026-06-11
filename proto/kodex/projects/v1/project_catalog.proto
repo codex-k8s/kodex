@@ -231,6 +231,17 @@ enum SelfDeployBuildPlanStatus {
   SELF_DEPLOY_BUILD_PLAN_STATUS_SERVICE_NOT_FOUND = 4;
   SELF_DEPLOY_BUILD_PLAN_STATUS_INVALID_INPUT = 5;
   SELF_DEPLOY_BUILD_PLAN_STATUS_BUILD_CONTEXT_UNAVAILABLE = 6;
+  SELF_DEPLOY_BUILD_PLAN_STATUS_BUILD_CONTEXT_REQUIRED = 7;
+  SELF_DEPLOY_BUILD_PLAN_STATUS_BUILD_CONTEXT_INVALID = 8;
+}
+
+// SelfDeployBuildPlanItemStatus описывает готовность build item одного сервиса.
+enum SelfDeployBuildPlanItemStatus {
+  SELF_DEPLOY_BUILD_PLAN_ITEM_STATUS_UNSPECIFIED = 0;
+  SELF_DEPLOY_BUILD_PLAN_ITEM_STATUS_READY = 1;
+  SELF_DEPLOY_BUILD_PLAN_ITEM_STATUS_BUILD_CONTEXT_REQUIRED = 2;
+  SELF_DEPLOY_BUILD_PLAN_ITEM_STATUS_BUILD_CONTEXT_INVALID = 3;
+  SELF_DEPLOY_BUILD_PLAN_ITEM_STATUS_BUILD_PLAN_UNAVAILABLE = 4;
 }
 
 // SelfDeployPathCategory классифицирует изменённые пути без raw paths и diffs.
@@ -603,16 +614,62 @@ message SelfDeploySignal {
   int64 version = 23;
 }
 
-// SelfDeployBuildPlanItem содержит совместимый с runtime build spec для одного сервиса.
+// SelfDeployBuildRecipe содержит статический проверенный рецепт сборки из ServicesPolicy.
+message SelfDeployBuildRecipe {
+  // image_ref — целевой image repository/ref без digest.
+  string image_ref = 1;
+  // image_tag — checked tag policy для build результата.
+  string image_tag = 2;
+  // image_digest заполняется только если checked policy уже содержит безопасный digest.
+  optional string image_digest = 3;
+  // dockerfile_ref — путь Dockerfile внутри будущего build context.
+  string dockerfile_ref = 4;
+  // dockerfile_target — фиксированный Dockerfile target.
+  string dockerfile_target = 5;
+  // builder_image_ref — approved builder image.
+  string builder_image_ref = 6;
+  // allowed_secret_refs — refs секретов без значений.
+  repeated kodex.runtime.v1.RuntimeJobAllowedSecretRef allowed_secret_refs = 7;
+  // output_refs — refs ожидаемых build outputs.
+  repeated kodex.runtime.v1.RuntimeJobOutputRef output_refs = 8;
+  // recipe_fingerprint — стабильный fingerprint рецепта без runtime context.
+  string recipe_fingerprint = 9;
+}
+
+// SelfDeployMaterializedBuildContext содержит build context, подготовленный runtime-manager.
+message SelfDeployMaterializedBuildContext {
+  // service_key связывает context с affected service key.
+  string service_key = 1;
+  // plan_item_fingerprint опционально связывает context с ранее выданным item рецепта.
+  optional string plan_item_fingerprint = 2;
+  // build_context_ref — ref подготовленного context.
+  string build_context_ref = 3;
+  // build_context_digest — digest подготовленного context.
+  string build_context_digest = 4;
+  // dockerfile_digest — digest Dockerfile внутри context, если runtime его посчитал.
+  optional string dockerfile_digest = 5;
+  // materialization_ref — safe ref runtime materialization attempt.
+  optional string materialization_ref = 6;
+  // materialization_fingerprint — safe fingerprint runtime materialization result.
+  optional string materialization_fingerprint = 7;
+}
+
+// SelfDeployBuildPlanItem содержит рецепт и, когда context готов, runtime build spec для одного сервиса.
 message SelfDeployBuildPlanItem {
   // service_key идентифицирует service descriptor из checked ServicesPolicy.
   string service_key = 1;
   // service_ref — safe ref service descriptor в project-catalog.
   string service_ref = 2;
-  // build_execution_spec совместим с runtime-manager JOB_TYPE_BUILD.
+  // build_execution_spec совместим с runtime-manager JOB_TYPE_BUILD и присутствует только для ready item.
   kodex.runtime.v1.BuildExecutionSpec build_execution_spec = 3;
   // plan_item_fingerprint — стабильный fingerprint item без raw YAML.
   string plan_item_fingerprint = 4;
+  // status описывает готовность item.
+  SelfDeployBuildPlanItemStatus status = 5;
+  // build_recipe содержит статический проверенный рецепт без runtime context.
+  SelfDeployBuildRecipe build_recipe = 6;
+  // safe_reason объясняет non-ready item без raw payloads и секретов.
+  optional string safe_reason = 7;
 }
 
 // SelfDeployBuildPlan — проверенный project-owned plan для подготовки build jobs.
@@ -1327,6 +1384,10 @@ message GetSelfDeployBuildPlanRequest {
   optional int64 expected_services_policy_version = 11;
   // meta содержит read actor и request context.
   QueryMeta meta = 12;
+  // materialized_build_contexts передаёт context refs/digests от runtime-manager для affected services.
+  repeated SelfDeployMaterializedBuildContext materialized_build_contexts = 13;
+  // expected_build_plan_fingerprint позволяет вызывающей стороне сверить повтор с ранее выданным recipe/plan.
+  optional string expected_build_plan_fingerprint = 14;
 }
 
 // SelfDeployBuildPlanResponse возвращает проверенный build plan или безопасную non-ready reason.

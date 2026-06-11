@@ -556,8 +556,29 @@ func GetSelfDeployBuildPlanInput(request *projectsv1.GetSelfDeployBuildPlanReque
 		ExpectedServicesPolicyDigest:      strings.TrimSpace(request.GetExpectedServicesPolicyDigest()),
 		ExpectedServicesPolicyFingerprint: strings.TrimSpace(request.GetExpectedServicesPolicyFingerprint()),
 		ExpectedServicesPolicyVersion:     expectedVersion,
+		ExpectedBuildPlanFingerprint:      strings.TrimSpace(request.GetExpectedBuildPlanFingerprint()),
+		MaterializedBuildContexts:         materializedBuildContextsFromProto(request.GetMaterializedBuildContexts()),
 		Meta:                              meta,
 	}, nil
+}
+
+func materializedBuildContextsFromProto(values []*projectsv1.SelfDeployMaterializedBuildContext) []projectservice.SelfDeployMaterializedBuildContext {
+	result := make([]projectservice.SelfDeployMaterializedBuildContext, 0, len(values))
+	for _, value := range values {
+		if value == nil {
+			continue
+		}
+		context := projectservice.SelfDeployMaterializedBuildContext{}
+		context.ServiceKey = strings.TrimSpace(value.GetServiceKey())
+		context.PlanItemFingerprint = strings.TrimSpace(value.GetPlanItemFingerprint())
+		context.BuildContextRef = strings.TrimSpace(value.GetBuildContextRef())
+		context.BuildContextDigest = strings.TrimSpace(value.GetBuildContextDigest())
+		context.DockerfileDigest = strings.TrimSpace(value.GetDockerfileDigest())
+		context.MaterializationRef = strings.TrimSpace(value.GetMaterializationRef())
+		context.MaterializationFingerprint = strings.TrimSpace(value.GetMaterializationFingerprint())
+		result = append(result, context)
+	}
+	return result
 }
 
 func ListServiceDescriptorsInput(request *projectsv1.ListServiceDescriptorsRequest) (projectservice.ListServiceDescriptorsInput, error) {

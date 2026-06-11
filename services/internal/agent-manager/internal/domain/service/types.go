@@ -308,6 +308,8 @@ const (
 	SelfDeployBuildPlanStatusServiceNotFound         SelfDeployBuildPlanStatus = "service_not_found"
 	SelfDeployBuildPlanStatusInvalidInput            SelfDeployBuildPlanStatus = "invalid_input"
 	SelfDeployBuildPlanStatusBuildContextUnavailable SelfDeployBuildPlanStatus = "build_context_unavailable"
+	SelfDeployBuildPlanStatusBuildContextRequired    SelfDeployBuildPlanStatus = "build_context_required"
+	SelfDeployBuildPlanStatusBuildContextInvalid     SelfDeployBuildPlanStatus = "build_context_invalid"
 )
 
 type SelfDeployBuildPlanLookupInput struct {
@@ -323,6 +325,18 @@ type SelfDeployBuildPlanLookupInput struct {
 	ExpectedServicesPolicyDigest      string
 	ExpectedServicesPolicyFingerprint string
 	ExpectedServicesPolicyVersion     *int64
+	ExpectedBuildPlanFingerprint      string
+	MaterializedBuildContexts         []SelfDeployMaterializedBuildContext
+}
+
+type SelfDeployMaterializedBuildContext struct {
+	ServiceKey                 string
+	PlanItemFingerprint        string
+	BuildContextRef            string
+	BuildContextDigest         string
+	DockerfileDigest           string
+	MaterializationRef         string
+	MaterializationFingerprint string
 }
 
 type RuntimeJobAllowedSecretRef struct {

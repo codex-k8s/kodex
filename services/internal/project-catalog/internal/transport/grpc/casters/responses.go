@@ -218,10 +218,46 @@ func selfDeployBuildPlanItemToProto(item projectservice.SelfDeployBuildPlanItem)
 		ServiceRef:          item.ServiceRef,
 		BuildExecutionSpec:  buildExecutionSpecToProto(item.BuildExecutionSpec),
 		PlanItemFingerprint: item.PlanItemFingerprint,
+		Status:              selfDeployBuildPlanItemStatusToProto(item.Status),
+		BuildRecipe:         selfDeployBuildRecipeToProto(item.BuildRecipe),
+		SafeReason:          optionalStringPtr(item.SafeReason),
+	}
+}
+
+func selfDeployBuildPlanItemStatusToProto(status projectservice.SelfDeployBuildPlanItemStatus) projectsv1.SelfDeployBuildPlanItemStatus {
+	statuses := map[projectservice.SelfDeployBuildPlanItemStatus]projectsv1.SelfDeployBuildPlanItemStatus{
+		projectservice.SelfDeployBuildPlanItemStatusReady:                projectsv1.SelfDeployBuildPlanItemStatus_SELF_DEPLOY_BUILD_PLAN_ITEM_STATUS_READY,
+		projectservice.SelfDeployBuildPlanItemStatusBuildContextRequired: projectsv1.SelfDeployBuildPlanItemStatus_SELF_DEPLOY_BUILD_PLAN_ITEM_STATUS_BUILD_CONTEXT_REQUIRED,
+		projectservice.SelfDeployBuildPlanItemStatusBuildContextInvalid:  projectsv1.SelfDeployBuildPlanItemStatus_SELF_DEPLOY_BUILD_PLAN_ITEM_STATUS_BUILD_CONTEXT_INVALID,
+		projectservice.SelfDeployBuildPlanItemStatusBuildPlanUnavailable: projectsv1.SelfDeployBuildPlanItemStatus_SELF_DEPLOY_BUILD_PLAN_ITEM_STATUS_BUILD_PLAN_UNAVAILABLE,
+	}
+	if protoStatus, ok := statuses[status]; ok {
+		return protoStatus
+	}
+	return projectsv1.SelfDeployBuildPlanItemStatus_SELF_DEPLOY_BUILD_PLAN_ITEM_STATUS_UNSPECIFIED
+}
+
+func selfDeployBuildRecipeToProto(recipe projectservice.SelfDeployBuildRecipe) *projectsv1.SelfDeployBuildRecipe {
+	if recipe.ImageRef == "" && recipe.DockerfileRef == "" {
+		return nil
+	}
+	return &projectsv1.SelfDeployBuildRecipe{
+		ImageRef:          recipe.ImageRef,
+		ImageTag:          recipe.ImageTag,
+		ImageDigest:       optionalStringPtr(recipe.ImageDigest),
+		DockerfileRef:     recipe.DockerfileRef,
+		DockerfileTarget:  recipe.DockerfileTarget,
+		BuilderImageRef:   recipe.BuilderImageRef,
+		AllowedSecretRefs: mapSlice(recipe.AllowedSecretRefs, allowedSecretRefToProto),
+		OutputRefs:        mapSlice(recipe.OutputRefs, outputRefToProto),
+		RecipeFingerprint: recipe.RecipeFingerprint,
 	}
 }
 
 func buildExecutionSpecToProto(spec projectservice.SelfDeployBuildExecutionSpec) *runtimev1.BuildExecutionSpec {
+	if spec.ServiceKey == "" && spec.BuildContextRef == "" {
+		return nil
+	}
 	return &runtimev1.BuildExecutionSpec{
 		SourceRef:            spec.SourceRef,
 		SourceCommitSha:      spec.SourceCommitSHA,

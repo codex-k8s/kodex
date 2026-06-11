@@ -96,20 +96,76 @@ func (s *Service) GetSelfDeployBuildPlan(ctx context.Context, input GetSelfDeplo
 		if !ok {
 			return SelfDeployBuildPlanResult{Status: enum.SelfDeployBuildPlanStatusBuildPlanUnavailable, Plan: plan, SafeReason: "service_build_spec_unavailable:" + key}, nil
 		}
-		item, err := selfDeployBuildPlanItem(input, descriptorsByKey[key], spec)
+		item, err := selfDeployBuildPlanRecipeItem(descriptorsByKey[key], spec)
 		if err != nil {
-			if errors.Is(err, errBuildContextUnavailable) {
-				return SelfDeployBuildPlanResult{Status: enum.SelfDeployBuildPlanStatusBuildContextUnavailable, Plan: plan, SafeReason: "build_context_unavailable:" + key}, nil
-			}
 			return SelfDeployBuildPlanResult{Status: enum.SelfDeployBuildPlanStatusBuildPlanUnavailable, Plan: plan, SafeReason: "service_build_spec_unavailable:" + key}, nil
 		}
+		item.PlanItemFingerprint = selfDeployBuildPlanItemFingerprint(item)
 		items = append(items, item)
 	}
 	plan.BuildItems = items
 	plan.PlanFingerprint = selfDeployBuildPlanFingerprint(plan)
+	if reason := selfDeployBuildPlanExpectedFingerprintMismatch(input.ExpectedBuildPlanFingerprint, plan.PlanFingerprint); reason != "" {
+		plan.SafeSummary = selfDeployBuildPlanContextRequiredSummary(plan)
+		return SelfDeployBuildPlanResult{Status: enum.SelfDeployBuildPlanStatusBuildContextInvalid, Plan: plan, SafeReason: reason}, nil
+	}
+	if len(input.MaterializedBuildContexts) == 0 {
+		plan.SafeSummary = selfDeployBuildPlanContextRequiredSummary(plan)
+		return SelfDeployBuildPlanResult{Status: enum.SelfDeployBuildPlanStatusBuildContextRequired, Plan: plan, SafeReason: "build_context_required:" + keys[0]}, nil
+	}
+	contexts, reason := normalizeSelfDeployMaterializedBuildContexts(input.MaterializedBuildContexts, keys)
+	if reason != "" {
+		plan.SafeSummary = selfDeployBuildPlanContextRequiredSummary(plan)
+		return SelfDeployBuildPlanResult{Status: enum.SelfDeployBuildPlanStatusBuildContextInvalid, Plan: plan, SafeReason: reason}, nil
+	}
+	status := enum.SelfDeployBuildPlanStatusReady
+	safeReason := ""
 	for i := range plan.BuildItems {
-		plan.BuildItems[i].BuildExecutionSpec.BuildPlanFingerprint = plan.PlanFingerprint
+		item := plan.BuildItems[i]
+		context, ok := contexts[item.ServiceKey]
+		if !ok {
+			item.Status = SelfDeployBuildPlanItemStatusBuildContextRequired
+			item.SafeReason = "build_context_required:" + item.ServiceKey
+			if status == enum.SelfDeployBuildPlanStatusReady {
+				status = enum.SelfDeployBuildPlanStatusBuildContextRequired
+				safeReason = item.SafeReason
+			}
+			plan.BuildItems[i] = item
+			continue
+		}
+		if context.PlanItemFingerprint != "" && context.PlanItemFingerprint != item.PlanItemFingerprint {
+			item.Status = SelfDeployBuildPlanItemStatusBuildContextInvalid
+			item.SafeReason = "build_context_fingerprint_mismatch:" + item.ServiceKey
+			status = enum.SelfDeployBuildPlanStatusBuildContextInvalid
+			if safeReason == "" {
+				safeReason = item.SafeReason
+			}
+			plan.BuildItems[i] = item
+			continue
+		}
+		ready, err := selfDeployReadyBuildPlanItem(input, item, context)
+		if err != nil {
+			item.Status = SelfDeployBuildPlanItemStatusBuildContextInvalid
+			item.SafeReason = "build_context_invalid:" + item.ServiceKey
+			status = enum.SelfDeployBuildPlanStatusBuildContextInvalid
+			if safeReason == "" {
+				safeReason = item.SafeReason
+			}
+			plan.BuildItems[i] = item
+			continue
+		}
+		plan.BuildItems[i] = ready
+	}
+	plan.PlanFingerprint = selfDeployBuildPlanFingerprint(plan)
+	for i := range plan.BuildItems {
+		if plan.BuildItems[i].Status == SelfDeployBuildPlanItemStatusReady {
+			plan.BuildItems[i].BuildExecutionSpec.BuildPlanFingerprint = plan.PlanFingerprint
+		}
 		plan.BuildItems[i].PlanItemFingerprint = selfDeployBuildPlanItemFingerprint(plan.BuildItems[i])
+	}
+	if status != enum.SelfDeployBuildPlanStatusReady {
+		plan.SafeSummary = selfDeployBuildPlanContextRequiredSummary(plan)
+		return SelfDeployBuildPlanResult{Status: status, Plan: plan, SafeReason: safeReason}, nil
 	}
 	plan.SafeSummary = selfDeployBuildPlanReadySummary(plan)
 	return SelfDeployBuildPlanResult{Status: enum.SelfDeployBuildPlanStatusReady, Plan: plan}, nil
@@ -390,42 +446,73 @@ func checkedInventoryDockerfileRef(contextPath string, dockerfile string) (strin
 	return "context://" + normalized, nil
 }
 
-func selfDeployBuildPlanItem(input GetSelfDeployBuildPlanInput, descriptor entity.ServiceDescriptor, spec value.ServicesPolicyBuildSpec) (SelfDeployBuildPlanItem, error) {
-	executionSpec, err := selfDeployBuildExecutionSpec(input, descriptor.ServiceKey, spec)
+func selfDeployBuildPlanRecipeItem(descriptor entity.ServiceDescriptor, spec value.ServicesPolicyBuildSpec) (SelfDeployBuildPlanItem, error) {
+	recipe, err := selfDeployBuildRecipe(spec)
 	if err != nil {
 		return SelfDeployBuildPlanItem{}, err
 	}
+	recipe.RecipeFingerprint = selfDeployBuildRecipeFingerprint(recipe)
 	return SelfDeployBuildPlanItem{
-		ServiceKey:         descriptor.ServiceKey,
-		ServiceRef:         "project-catalog:service-descriptor:" + descriptor.ID.String() + ":" + descriptor.ServiceKey,
-		BuildExecutionSpec: executionSpec,
+		ServiceKey:  descriptor.ServiceKey,
+		ServiceRef:  "project-catalog:service-descriptor:" + descriptor.ID.String() + ":" + descriptor.ServiceKey,
+		Status:      SelfDeployBuildPlanItemStatusBuildContextRequired,
+		BuildRecipe: recipe,
+		SafeReason:  "build_context_required:" + descriptor.ServiceKey,
 	}, nil
 }
 
-func selfDeployBuildExecutionSpec(input GetSelfDeployBuildPlanInput, serviceKey string, spec value.ServicesPolicyBuildSpec) (SelfDeployBuildExecutionSpec, error) {
+func selfDeployBuildRecipe(spec value.ServicesPolicyBuildSpec) (SelfDeployBuildRecipe, error) {
 	secretRefs, err := normalizeBuildAllowedSecretRefs(spec.AllowedSecretRefs)
 	if err != nil {
-		return SelfDeployBuildExecutionSpec{}, err
+		return SelfDeployBuildRecipe{}, err
 	}
 	outputRefs, err := normalizeBuildOutputRefs(spec.OutputRefs)
 	if err != nil {
-		return SelfDeployBuildExecutionSpec{}, err
+		return SelfDeployBuildRecipe{}, err
 	}
+	result := SelfDeployBuildRecipe{
+		ImageRef:          strings.TrimSpace(spec.ImageRef),
+		ImageTag:          strings.TrimSpace(spec.ImageTag),
+		ImageDigest:       strings.ToLower(strings.TrimSpace(spec.ImageDigest)),
+		DockerfileRef:     strings.TrimSpace(spec.DockerfileRef),
+		DockerfileTarget:  strings.TrimSpace(spec.DockerfileTarget),
+		BuilderImageRef:   strings.TrimSpace(spec.BuilderImageRef),
+		AllowedSecretRefs: secretRefs,
+		OutputRefs:        outputRefs,
+	}
+	if !buildRecipeRequiredRefsPresent(result) || !buildRecipeRefsSafe(result) {
+		return SelfDeployBuildRecipe{}, errBuildPlanUnavailable
+	}
+	return result, nil
+}
+
+func selfDeployReadyBuildPlanItem(input GetSelfDeployBuildPlanInput, item SelfDeployBuildPlanItem, context SelfDeployMaterializedBuildContext) (SelfDeployBuildPlanItem, error) {
+	executionSpec, err := selfDeployBuildExecutionSpec(input, item.ServiceKey, item.BuildRecipe, context)
+	if err != nil {
+		return SelfDeployBuildPlanItem{}, err
+	}
+	item.Status = SelfDeployBuildPlanItemStatusReady
+	item.SafeReason = ""
+	item.BuildExecutionSpec = executionSpec
+	return item, nil
+}
+
+func selfDeployBuildExecutionSpec(input GetSelfDeployBuildPlanInput, serviceKey string, recipe SelfDeployBuildRecipe, context SelfDeployMaterializedBuildContext) (SelfDeployBuildExecutionSpec, error) {
 	result := SelfDeployBuildExecutionSpec{
 		SourceRef:          strings.TrimSpace(input.SourceRef),
 		SourceCommitSHA:    strings.ToLower(strings.TrimSpace(input.MergeCommitSHA)),
 		ServiceKey:         strings.TrimSpace(serviceKey),
-		ImageRef:           strings.TrimSpace(spec.ImageRef),
-		ImageTag:           strings.TrimSpace(spec.ImageTag),
-		ImageDigest:        strings.ToLower(strings.TrimSpace(spec.ImageDigest)),
-		BuildContextRef:    strings.TrimSpace(spec.BuildContextRef),
-		BuildContextDigest: strings.ToLower(strings.TrimSpace(spec.BuildContextDigest)),
-		DockerfileRef:      strings.TrimSpace(spec.DockerfileRef),
-		DockerfileDigest:   strings.ToLower(strings.TrimSpace(spec.DockerfileDigest)),
-		DockerfileTarget:   strings.TrimSpace(spec.DockerfileTarget),
-		BuilderImageRef:    strings.TrimSpace(spec.BuilderImageRef),
-		AllowedSecretRefs:  secretRefs,
-		OutputRefs:         outputRefs,
+		ImageRef:           recipe.ImageRef,
+		ImageTag:           recipe.ImageTag,
+		ImageDigest:        recipe.ImageDigest,
+		BuildContextRef:    strings.TrimSpace(context.BuildContextRef),
+		BuildContextDigest: strings.ToLower(strings.TrimSpace(context.BuildContextDigest)),
+		DockerfileRef:      recipe.DockerfileRef,
+		DockerfileDigest:   strings.ToLower(strings.TrimSpace(context.DockerfileDigest)),
+		DockerfileTarget:   recipe.DockerfileTarget,
+		BuilderImageRef:    recipe.BuilderImageRef,
+		AllowedSecretRefs:  append([]RuntimeJobAllowedSecretRef(nil), recipe.AllowedSecretRefs...),
+		OutputRefs:         append([]RuntimeJobOutputRef(nil), recipe.OutputRefs...),
 	}
 	if !buildSpecContextReady(result) {
 		return SelfDeployBuildExecutionSpec{}, errBuildContextUnavailable
@@ -434,6 +521,31 @@ func selfDeployBuildExecutionSpec(input GetSelfDeployBuildPlanInput, serviceKey 
 		return SelfDeployBuildExecutionSpec{}, errBuildPlanUnavailable
 	}
 	return result, nil
+}
+
+func buildRecipeRequiredRefsPresent(recipe SelfDeployBuildRecipe) bool {
+	return recipe.ImageRef != "" &&
+		recipe.ImageTag != "" &&
+		recipe.DockerfileRef != "" &&
+		recipe.DockerfileTarget != "" &&
+		recipe.BuilderImageRef != ""
+}
+
+func buildRecipeRefsSafe(recipe SelfDeployBuildRecipe) bool {
+	checks := []func() bool{
+		func() bool { return safeBuildPlanRef(recipe.ImageRef, true) },
+		func() bool { return safeBuildPlanLabel(recipe.ImageTag, maxSelfDeployBuildPlanLabelBytes) },
+		func() bool { return safeBuildPlanRef(recipe.DockerfileRef, true) },
+		func() bool { return safeBuildPlanLabel(recipe.DockerfileTarget, maxSelfDeployBuildPlanLabelBytes) },
+		func() bool { return safeBuildPlanRef(recipe.BuilderImageRef, true) },
+		func() bool { return recipe.ImageDigest == "" || validBuildPlanSHA256Digest(recipe.ImageDigest) },
+	}
+	for _, check := range checks {
+		if !check() {
+			return false
+		}
+	}
+	return true
 }
 
 func buildSpecContextReady(spec SelfDeployBuildExecutionSpec) bool {
@@ -477,6 +589,73 @@ func buildSpecRefsSafe(spec SelfDeployBuildExecutionSpec) bool {
 		}
 	}
 	return true
+}
+
+func normalizeSelfDeployMaterializedBuildContexts(values []SelfDeployMaterializedBuildContext, affectedServiceKeys []string) (map[string]SelfDeployMaterializedBuildContext, string) {
+	allowed := make(map[string]struct{}, len(affectedServiceKeys))
+	for _, key := range affectedServiceKeys {
+		allowed[key] = struct{}{}
+	}
+	result := make(map[string]SelfDeployMaterializedBuildContext, len(values))
+	for _, value := range values {
+		context := normalizeSelfDeployMaterializedBuildContext(value)
+		if !selfDeployMaterializedBuildContextSafe(context) {
+			return nil, "build_context_invalid:" + firstNonEmpty(context.ServiceKey, "unknown")
+		}
+		if _, ok := allowed[context.ServiceKey]; !ok {
+			return nil, "build_context_unexpected:" + context.ServiceKey
+		}
+		if existing, ok := result[context.ServiceKey]; ok {
+			if selfDeployMaterializedBuildContextFingerprint(existing) != selfDeployMaterializedBuildContextFingerprint(context) {
+				return nil, "build_context_conflict:" + context.ServiceKey
+			}
+			continue
+		}
+		result[context.ServiceKey] = context
+	}
+	return result, ""
+}
+
+func normalizeSelfDeployMaterializedBuildContext(value SelfDeployMaterializedBuildContext) SelfDeployMaterializedBuildContext {
+	return SelfDeployMaterializedBuildContext{
+		ServiceKey:                 strings.TrimSpace(value.ServiceKey),
+		PlanItemFingerprint:        strings.ToLower(strings.TrimSpace(value.PlanItemFingerprint)),
+		BuildContextRef:            strings.TrimSpace(value.BuildContextRef),
+		BuildContextDigest:         strings.ToLower(strings.TrimSpace(value.BuildContextDigest)),
+		DockerfileDigest:           strings.ToLower(strings.TrimSpace(value.DockerfileDigest)),
+		MaterializationRef:         strings.TrimSpace(value.MaterializationRef),
+		MaterializationFingerprint: strings.ToLower(strings.TrimSpace(value.MaterializationFingerprint)),
+	}
+}
+
+func selfDeployMaterializedBuildContextSafe(context SelfDeployMaterializedBuildContext) bool {
+	return serviceKeyPattern.MatchString(context.ServiceKey) &&
+		safeBuildPlanRef(context.BuildContextRef, true) &&
+		validBuildPlanSHA256Digest(context.BuildContextDigest) &&
+		(context.PlanItemFingerprint == "" || validBuildPlanSHA256Digest(context.PlanItemFingerprint)) &&
+		(context.DockerfileDigest == "" || validBuildPlanSHA256Digest(context.DockerfileDigest)) &&
+		safeBuildPlanRef(context.MaterializationRef, false) &&
+		(context.MaterializationFingerprint == "" || validBuildPlanSHA256Digest(context.MaterializationFingerprint))
+}
+
+func selfDeployMaterializedBuildContextFingerprint(context SelfDeployMaterializedBuildContext) string {
+	encoded, _ := json.Marshal(context)
+	sum := sha256.Sum256(encoded)
+	return "sha256:" + hex.EncodeToString(sum[:])
+}
+
+func selfDeployBuildPlanExpectedFingerprintMismatch(expected string, actual string) string {
+	expected = strings.ToLower(strings.TrimSpace(expected))
+	if expected == "" {
+		return ""
+	}
+	if !validBuildPlanSHA256Digest(expected) {
+		return "build_plan_fingerprint_invalid"
+	}
+	if expected != actual {
+		return "build_plan_fingerprint_mismatch"
+	}
+	return ""
 }
 
 func normalizeBuildAllowedSecretRefs(values []value.ServicesPolicyAllowedSecretRef) ([]RuntimeJobAllowedSecretRef, error) {
@@ -663,6 +842,8 @@ func selfDeployBuildPlanFingerprint(plan SelfDeployBuildPlan) string {
 type SelfDeployBuildPlanFingerprintItem struct {
 	ServiceKey         string
 	ServiceRef         string
+	Status             SelfDeployBuildPlanItemStatus
+	BuildRecipe        SelfDeployBuildRecipe
 	BuildExecutionSpec SelfDeployBuildExecutionSpec
 }
 
@@ -672,12 +853,23 @@ func selfDeployBuildPlanFingerprintItem(item SelfDeployBuildPlanItem) SelfDeploy
 	return SelfDeployBuildPlanFingerprintItem{
 		ServiceKey:         item.ServiceKey,
 		ServiceRef:         item.ServiceRef,
+		Status:             item.Status,
+		BuildRecipe:        item.BuildRecipe,
 		BuildExecutionSpec: spec,
 	}
 }
 
 func selfDeployBuildPlanItemFingerprint(item SelfDeployBuildPlanItem) string {
+	item.SafeReason = ""
+	item.PlanItemFingerprint = ""
 	encoded, _ := json.Marshal(item)
+	sum := sha256.Sum256(encoded)
+	return "sha256:" + hex.EncodeToString(sum[:])
+}
+
+func selfDeployBuildRecipeFingerprint(recipe SelfDeployBuildRecipe) string {
+	recipe.RecipeFingerprint = ""
+	encoded, _ := json.Marshal(recipe)
 	sum := sha256.Sum256(encoded)
 	return "sha256:" + hex.EncodeToString(sum[:])
 }
@@ -687,5 +879,14 @@ func selfDeployBuildPlanReadySummary(plan SelfDeployBuildPlan) string {
 		"self-deploy build plan ready",
 		"services=" + strings.Join(plan.AffectedServiceKeys, ","),
 		"commit=" + plan.MergeCommitSHA,
+	}, "; ")
+}
+
+func selfDeployBuildPlanContextRequiredSummary(plan SelfDeployBuildPlan) string {
+	return strings.Join([]string{
+		"self-deploy build recipe ready",
+		"services=" + strings.Join(plan.AffectedServiceKeys, ","),
+		"commit=" + plan.MergeCommitSHA,
+		"runtime build context required",
 	}, "; ")
 }

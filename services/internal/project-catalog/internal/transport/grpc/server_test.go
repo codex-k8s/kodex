@@ -289,7 +289,10 @@ func TestGetSelfDeployBuildPlanMapsDomainResult(t *testing.T) {
 			input.ProviderSignalRef != "provider-signal-ref" ||
 			input.ExpectedServicesPolicyDigest != "sha256:services-policy" ||
 			input.ExpectedServicesPolicyVersion == nil ||
-			*input.ExpectedServicesPolicyVersion != policyVersion {
+			*input.ExpectedServicesPolicyVersion != policyVersion ||
+			input.ExpectedBuildPlanFingerprint != "sha256:recipe-plan" ||
+			len(input.MaterializedBuildContexts) != 1 ||
+			input.MaterializedBuildContexts[0].BuildContextRef != "pvc://runtime/build-context-api" {
 			t.Fatalf("input = %+v, want build plan request refs", input)
 		}
 		return projectservice.SelfDeployBuildPlanResult{
@@ -319,6 +322,21 @@ func TestGetSelfDeployBuildPlanMapsDomainResult(t *testing.T) {
 					{
 						ServiceKey: "api",
 						ServiceRef: "project-catalog:service-descriptor:service-1:api",
+						Status:     projectservice.SelfDeployBuildPlanItemStatusReady,
+						BuildRecipe: projectservice.SelfDeployBuildRecipe{
+							ImageRef:          "registry.example/kodex/api",
+							ImageTag:          "abcdef0",
+							DockerfileRef:     "context://services/api/Dockerfile",
+							DockerfileTarget:  "prod",
+							BuilderImageRef:   "gcr.io/kaniko-project/executor:v1.23.2",
+							RecipeFingerprint: "sha256:recipe",
+							AllowedSecretRefs: []projectservice.RuntimeJobAllowedSecretRef{
+								{SecretRef: "secret://runtime/registry", Purpose: "registry_docker_config"},
+							},
+							OutputRefs: []projectservice.RuntimeJobOutputRef{
+								{Kind: "image", Ref: "runtime:image:api"},
+							},
+						},
 						BuildExecutionSpec: projectservice.SelfDeployBuildExecutionSpec{
 							SourceRef:            "refs/heads/main",
 							SourceCommitSHA:      "abcdef0123456789abcdef0123456789abcdef01",
@@ -359,13 +377,26 @@ func TestGetSelfDeployBuildPlanMapsDomainResult(t *testing.T) {
 		ExpectedServicesPolicyDigest:      "sha256:services-policy",
 		ExpectedServicesPolicyFingerprint: stringPtr("sha256:projection"),
 		ExpectedServicesPolicyVersion:     &policyVersion,
-		Meta:                              queryMeta(),
+		ExpectedBuildPlanFingerprint:      stringPtr("sha256:recipe-plan"),
+		MaterializedBuildContexts: []*projectsv1.SelfDeployMaterializedBuildContext{
+			{
+				ServiceKey:         "api",
+				BuildContextRef:    "pvc://runtime/build-context-api",
+				BuildContextDigest: "sha256:context",
+				DockerfileDigest:   stringPtr("sha256:dockerfile"),
+				MaterializationRef: stringPtr("runtime://workspace-materialization/api"),
+			},
+		},
+		Meta: queryMeta(),
 	})
 	if err != nil {
 		t.Fatalf("GetSelfDeployBuildPlan(): %v", err)
 	}
-	spec := response.GetPlan().GetBuildItems()[0].GetBuildExecutionSpec()
+	item := response.GetPlan().GetBuildItems()[0]
+	spec := item.GetBuildExecutionSpec()
 	if response.GetStatus() != projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_READY ||
+		item.GetStatus() != projectsv1.SelfDeployBuildPlanItemStatus_SELF_DEPLOY_BUILD_PLAN_ITEM_STATUS_READY ||
+		item.GetBuildRecipe().GetRecipeFingerprint() != "sha256:recipe" ||
 		spec.GetServiceKey() != "api" ||
 		spec.GetBuildPlanFingerprint() != "sha256:build-plan" ||
 		spec.GetAllowedSecretRefs()[0].GetSecretRef() != "secret://runtime/registry" ||

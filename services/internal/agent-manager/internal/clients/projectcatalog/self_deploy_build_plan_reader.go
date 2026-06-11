@@ -71,8 +71,26 @@ func selfDeployBuildPlanRequest(input agentservice.SelfDeployBuildPlanLookupInpu
 		ExpectedServicesPolicyDigest:      strings.TrimSpace(input.ExpectedServicesPolicyDigest),
 		ExpectedServicesPolicyFingerprint: optionalString(input.ExpectedServicesPolicyFingerprint),
 		ExpectedServicesPolicyVersion:     input.ExpectedServicesPolicyVersion,
+		ExpectedBuildPlanFingerprint:      optionalString(input.ExpectedBuildPlanFingerprint),
+		MaterializedBuildContexts:         selfDeployMaterializedBuildContexts(input.MaterializedBuildContexts),
 		Meta:                              queryMeta(input.Meta),
 	}
+}
+
+func selfDeployMaterializedBuildContexts(values []agentservice.SelfDeployMaterializedBuildContext) []*projectsv1.SelfDeployMaterializedBuildContext {
+	result := make([]*projectsv1.SelfDeployMaterializedBuildContext, 0, len(values))
+	for _, value := range values {
+		result = append(result, &projectsv1.SelfDeployMaterializedBuildContext{
+			ServiceKey:                 strings.TrimSpace(value.ServiceKey),
+			PlanItemFingerprint:        optionalString(value.PlanItemFingerprint),
+			BuildContextRef:            strings.TrimSpace(value.BuildContextRef),
+			BuildContextDigest:         strings.TrimSpace(value.BuildContextDigest),
+			DockerfileDigest:           optionalString(value.DockerfileDigest),
+			MaterializationRef:         optionalString(value.MaterializationRef),
+			MaterializationFingerprint: optionalString(value.MaterializationFingerprint),
+		})
+	}
+	return result
 }
 
 func selfDeployBuildPlanReadResult(response *projectsv1.SelfDeployBuildPlanResponse) (agentservice.SelfDeployBuildPlanReadResult, error) {
@@ -118,9 +136,13 @@ func selfDeployBuildPlanItems(items []*projectsv1.SelfDeployBuildPlanItem) ([]ag
 		if item == nil {
 			continue
 		}
-		spec, err := selfDeployBuildExecutionSpec(item.GetBuildExecutionSpec())
-		if err != nil {
-			return nil, err
+		spec := agentservice.SelfDeployBuildExecutionSpec{}
+		if item.GetBuildExecutionSpec() != nil {
+			converted, err := selfDeployBuildExecutionSpec(item.GetBuildExecutionSpec())
+			if err != nil {
+				return nil, err
+			}
+			spec = converted
 		}
 		result = append(result, agentservice.SelfDeployBuildPlanItem{
 			ServiceKey:          strings.TrimSpace(item.GetServiceKey()),
@@ -199,6 +221,10 @@ func selfDeployBuildPlanStatus(status projectsv1.SelfDeployBuildPlanStatus) agen
 		return agentservice.SelfDeployBuildPlanStatusInvalidInput
 	case projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_BUILD_CONTEXT_UNAVAILABLE:
 		return agentservice.SelfDeployBuildPlanStatusBuildContextUnavailable
+	case projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_BUILD_CONTEXT_REQUIRED:
+		return agentservice.SelfDeployBuildPlanStatusBuildContextRequired
+	case projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_BUILD_CONTEXT_INVALID:
+		return agentservice.SelfDeployBuildPlanStatusBuildContextInvalid
 	default:
 		return ""
 	}

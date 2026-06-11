@@ -2425,6 +2425,9 @@ func TestGetSelfDeployBuildPlanReturnsReadyRuntimeCompatibleSpecs(t *testing.T) 
 	}
 	svc := New(store, fixedClock{}, &sequenceIDs{})
 	input := selfDeployBuildPlanInput(projectID, repositoryID, policy, []string{"api", "api"})
+	input.MaterializedBuildContexts = []SelfDeployMaterializedBuildContext{
+		selfDeployMaterializedBuildContext("api"),
+	}
 
 	result, err := svc.GetSelfDeployBuildPlan(context.Background(), input)
 	if err != nil {
@@ -2440,6 +2443,9 @@ func TestGetSelfDeployBuildPlanReturnsReadyRuntimeCompatibleSpecs(t *testing.T) 
 		t.Fatalf("build items = %d, want 1", len(result.Plan.BuildItems))
 	}
 	item := result.Plan.BuildItems[0]
+	if item.Status != SelfDeployBuildPlanItemStatusReady || item.BuildRecipe.RecipeFingerprint == "" {
+		t.Fatalf("item = %+v, want ready item with recipe fingerprint", item)
+	}
 	spec := item.BuildExecutionSpec
 	if spec.ServiceKey != "api" ||
 		spec.ImageRef != "registry.example/kodex/api" ||
@@ -2498,6 +2504,9 @@ func TestGetSelfDeployBuildPlanDerivesSpecsFromStackInventoryImages(t *testing.T
 	}
 	svc := New(store, fixedClock{}, &sequenceIDs{})
 	input := selfDeployBuildPlanInput(projectID, repositoryID, policy, []string{"api"})
+	input.MaterializedBuildContexts = []SelfDeployMaterializedBuildContext{
+		selfDeployMaterializedBuildContext("api"),
+	}
 
 	result, err := svc.GetSelfDeployBuildPlan(context.Background(), input)
 	if err != nil {
@@ -2509,7 +2518,7 @@ func TestGetSelfDeployBuildPlanDerivesSpecsFromStackInventoryImages(t *testing.T
 	spec := result.Plan.BuildItems[0].BuildExecutionSpec
 	if spec.ImageRef != "127.0.0.1:5000/kodex/api" ||
 		spec.ImageTag != "0.1.0" ||
-		spec.BuildContextRef != "pvc://runtime-jobs/runtime-build-context-api" ||
+		spec.BuildContextRef != "pvc://runtime/build-context-api" ||
 		spec.BuildContextDigest != selfDeployBuildContextDigest ||
 		spec.DockerfileRef != "context://services/api/Dockerfile" ||
 		spec.DockerfileTarget != "prod" ||
@@ -2526,7 +2535,7 @@ func TestGetSelfDeployBuildPlanDerivesSpecsFromStackInventoryImages(t *testing.T
 	}
 }
 
-func TestGetSelfDeployBuildPlanReturnsBuildContextUnavailableForStackInventoryWithoutContext(t *testing.T) {
+func TestGetSelfDeployBuildPlanReturnsBuildContextRequiredForStackInventoryWithoutRuntimeContext(t *testing.T) {
 	t.Setenv("KODEX_INTERNAL_REGISTRY_HOST", "private.registry.example")
 	t.Setenv("KODEX_API_IMAGE", "private.registry.example/kodex/api:must-not-leak")
 	projectID := uuid.New()
@@ -2535,7 +2544,7 @@ func TestGetSelfDeployBuildPlanReturnsBuildContextUnavailableForStackInventoryWi
 	commitSHA := "abcdef0123456789abcdef0123456789abcdef01"
 	store := newMemoryRepository()
 	store.repositories[repositoryID] = activeSelfDeployRepository(projectID, repositoryID)
-	policy := activeSelfDeployPolicy(projectID, repositoryID, policyID, commitSHA, selfDeployStackInventoryBuildPolicyPayload(false))
+	policy := activeSelfDeployPolicy(projectID, repositoryID, policyID, commitSHA, selfDeployStackInventoryBuildPolicyPayload(true))
 	store.policies[policyID] = policy
 	store.serviceDescriptors[policyID] = []entity.ServiceDescriptor{
 		activeSelfDeployDescriptor(projectID, repositoryID, policyID, "api"),
@@ -2547,11 +2556,45 @@ func TestGetSelfDeployBuildPlanReturnsBuildContextUnavailableForStackInventoryWi
 	if err != nil {
 		t.Fatalf("GetSelfDeployBuildPlan(): %v", err)
 	}
-	if result.Status != enum.SelfDeployBuildPlanStatusBuildContextUnavailable || result.SafeReason != "build_context_unavailable:api" {
-		t.Fatalf("result = %+v, want build_context_unavailable", result)
+	if result.Status != enum.SelfDeployBuildPlanStatusBuildContextRequired || result.SafeReason != "build_context_required:api" {
+		t.Fatalf("result = %+v, want build_context_required", result)
 	}
-	if len(result.Plan.BuildItems) != 0 {
-		t.Fatalf("build items = %+v, want none before checked build context", result.Plan.BuildItems)
+	if len(result.Plan.BuildItems) != 1 {
+		t.Fatalf("build items = %d, want recipe item before runtime context", len(result.Plan.BuildItems))
+	}
+	item := result.Plan.BuildItems[0]
+	if item.Status != SelfDeployBuildPlanItemStatusBuildContextRequired ||
+		item.BuildRecipe.ImageRef != "127.0.0.1:5000/kodex/api" ||
+		item.BuildRecipe.RecipeFingerprint == "" ||
+		item.BuildExecutionSpec.BuildContextRef != "" {
+		t.Fatalf("item = %+v, want recipe-only context-required item", item)
+	}
+}
+
+func TestGetSelfDeployBuildPlanReturnsBuildContextInvalidForBadRuntimeContext(t *testing.T) {
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	policyID := uuid.New()
+	commitSHA := "abcdef0123456789abcdef0123456789abcdef01"
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = activeSelfDeployRepository(projectID, repositoryID)
+	policy := activeSelfDeployPolicy(projectID, repositoryID, policyID, commitSHA, selfDeployBuildPolicyPayload())
+	store.policies[policyID] = policy
+	store.serviceDescriptors[policyID] = []entity.ServiceDescriptor{
+		activeSelfDeployDescriptor(projectID, repositoryID, policyID, "api"),
+	}
+	svc := New(store, fixedClock{}, &sequenceIDs{})
+	input := selfDeployBuildPlanInput(projectID, repositoryID, policy, []string{"api"})
+	materializedContext := selfDeployMaterializedBuildContext("api")
+	materializedContext.BuildContextDigest = "sha256:bad"
+	input.MaterializedBuildContexts = []SelfDeployMaterializedBuildContext{materializedContext}
+
+	result, err := svc.GetSelfDeployBuildPlan(context.Background(), input)
+	if err != nil {
+		t.Fatalf("GetSelfDeployBuildPlan(): %v", err)
+	}
+	if result.Status != enum.SelfDeployBuildPlanStatusBuildContextInvalid || result.SafeReason != "build_context_invalid:api" {
+		t.Fatalf("result = %+v, want build_context_invalid", result)
 	}
 }
 
@@ -3116,6 +3159,16 @@ func selfDeployBuildPlanInput(projectID uuid.UUID, repositoryID uuid.UUID, polic
 		ExpectedServicesPolicyFingerprint: selfDeployServicesYamlFingerprint(policy),
 		ExpectedServicesPolicyVersion:     &version,
 		Meta:                              queryMeta(),
+	}
+}
+
+func selfDeployMaterializedBuildContext(serviceKey string) SelfDeployMaterializedBuildContext {
+	return SelfDeployMaterializedBuildContext{
+		ServiceKey:         serviceKey,
+		BuildContextRef:    "pvc://runtime/build-context-" + serviceKey,
+		BuildContextDigest: selfDeployBuildContextDigest,
+		DockerfileDigest:   selfDeployBuildDockerfileDigest,
+		MaterializationRef: "runtime://workspace-materialization/" + serviceKey,
 	}
 }
 

@@ -209,13 +209,27 @@ func SelfDeployBuildPlanStatusToProto(status enum.SelfDeployBuildPlanStatus) pro
 	return projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_UNSPECIFIED
 }
 
-var selfDeployBuildPlanStatusToProto = map[enum.SelfDeployBuildPlanStatus]projectsv1.SelfDeployBuildPlanStatus{
-	enum.SelfDeployBuildPlanStatusReady:                   projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_READY,
-	enum.SelfDeployBuildPlanStatusBuildPlanUnavailable:    projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_BUILD_PLAN_UNAVAILABLE,
-	enum.SelfDeployBuildPlanStatusPolicyStale:             projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_POLICY_STALE,
-	enum.SelfDeployBuildPlanStatusServiceNotFound:         projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_SERVICE_NOT_FOUND,
-	enum.SelfDeployBuildPlanStatusInvalidInput:            projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_INVALID_INPUT,
-	enum.SelfDeployBuildPlanStatusBuildContextUnavailable: projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_BUILD_CONTEXT_UNAVAILABLE,
+var selfDeployBuildPlanStatusToProto = newSelfDeployBuildPlanStatusToProto()
+
+func newSelfDeployBuildPlanStatusToProto() map[enum.SelfDeployBuildPlanStatus]projectsv1.SelfDeployBuildPlanStatus {
+	pairs := []struct {
+		domain enum.SelfDeployBuildPlanStatus
+		proto  projectsv1.SelfDeployBuildPlanStatus
+	}{
+		{enum.SelfDeployBuildPlanStatusReady, projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_READY},
+		{enum.SelfDeployBuildPlanStatusBuildPlanUnavailable, projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_BUILD_PLAN_UNAVAILABLE},
+		{enum.SelfDeployBuildPlanStatusPolicyStale, projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_POLICY_STALE},
+		{enum.SelfDeployBuildPlanStatusServiceNotFound, projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_SERVICE_NOT_FOUND},
+		{enum.SelfDeployBuildPlanStatusInvalidInput, projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_INVALID_INPUT},
+		{enum.SelfDeployBuildPlanStatusBuildContextUnavailable, projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_BUILD_CONTEXT_UNAVAILABLE},
+		{enum.SelfDeployBuildPlanStatusBuildContextRequired, projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_BUILD_CONTEXT_REQUIRED},
+		{enum.SelfDeployBuildPlanStatusBuildContextInvalid, projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_BUILD_CONTEXT_INVALID},
+	}
+	result := make(map[enum.SelfDeployBuildPlanStatus]projectsv1.SelfDeployBuildPlanStatus, len(pairs))
+	for _, pair := range pairs {
+		result[pair.domain] = pair.proto
+	}
+	return result
 }
 
 func SelfDeployPathCategoryToProto(category enum.SelfDeployPathCategory) projectsv1.SelfDeployPathCategory {

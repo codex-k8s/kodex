@@ -77,7 +77,18 @@ func TestSelfDeployBuildPlanReaderMapsReadyBuildPlan(t *testing.T) {
 		ProviderSignalRef:            "provider-signal-ref",
 		AffectedServiceKeys:          []string{"agent-manager"},
 		ExpectedServicesPolicyDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-		Meta:                         value.CommandMeta{Actor: value.Actor{Type: "service", ID: "agent-manager"}},
+		ExpectedBuildPlanFingerprint: "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+		MaterializedBuildContexts: []agentservice.SelfDeployMaterializedBuildContext{
+			{
+				ServiceKey:          "agent-manager",
+				PlanItemFingerprint: "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+				BuildContextRef:     "runtime://build-contexts/agent-manager",
+				BuildContextDigest:  "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+				DockerfileDigest:    "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+				MaterializationRef:  "runtime://workspace-materialization/agent-manager",
+			},
+		},
+		Meta: value.CommandMeta{Actor: value.Actor{Type: "service", ID: "agent-manager"}},
 	})
 	if err != nil {
 		t.Fatalf("GetSelfDeployBuildPlan(): %v", err)
@@ -86,7 +97,10 @@ func TestSelfDeployBuildPlanReaderMapsReadyBuildPlan(t *testing.T) {
 		t.Fatalf("status = %s, want ready", result.Status)
 	}
 	if client.request.GetExpectedServicesPolicyDigest() != "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" ||
-		len(client.request.GetAffectedServiceKeys()) != 1 {
+		client.request.GetExpectedBuildPlanFingerprint() != "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff" ||
+		len(client.request.GetAffectedServiceKeys()) != 1 ||
+		len(client.request.GetMaterializedBuildContexts()) != 1 ||
+		client.request.GetMaterializedBuildContexts()[0].GetBuildContextRef() != "runtime://build-contexts/agent-manager" {
 		t.Fatalf("request = %+v", client.request)
 	}
 	item := result.Plan.BuildItems[0]
@@ -102,8 +116,22 @@ func TestSelfDeployBuildPlanReaderMapsNotReadyStatus(t *testing.T) {
 
 	reader, err := newSelfDeployBuildPlanReader(&fakeSelfDeployBuildPlanClient{
 		response: &projectsv1.SelfDeployBuildPlanResponse{
-			Status:     projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_BUILD_CONTEXT_UNAVAILABLE,
-			SafeReason: stringPtr("build_context_unavailable:agent-manager"),
+			Status: projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_BUILD_CONTEXT_REQUIRED,
+			Plan: &projectsv1.SelfDeployBuildPlan{
+				ProjectRef:          uuid.NewString(),
+				RepositoryRef:       uuid.NewString(),
+				AffectedServiceKeys: []string{"agent-manager"},
+				BuildItems: []*projectsv1.SelfDeployBuildPlanItem{
+					{
+						ServiceKey:          "agent-manager",
+						ServiceRef:          "project-catalog:service-descriptor:agent-manager",
+						Status:              projectsv1.SelfDeployBuildPlanItemStatus_SELF_DEPLOY_BUILD_PLAN_ITEM_STATUS_BUILD_CONTEXT_REQUIRED,
+						PlanItemFingerprint: "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+					},
+				},
+				PlanFingerprint: "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+			},
+			SafeReason: stringPtr("build_context_required:agent-manager"),
 		},
 	}, Config{AuthToken: "token", Timeout: time.Second})
 	if err != nil {
@@ -117,8 +145,13 @@ func TestSelfDeployBuildPlanReaderMapsNotReadyStatus(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetSelfDeployBuildPlan(): %v", err)
 	}
-	if result.Status != agentservice.SelfDeployBuildPlanStatusBuildContextUnavailable || result.SafeReason != "build_context_unavailable:agent-manager" {
+	if result.Status != agentservice.SelfDeployBuildPlanStatusBuildContextRequired || result.SafeReason != "build_context_required:agent-manager" {
 		t.Fatalf("result = %+v", result)
+	}
+	if result.Plan.PlanFingerprint != "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff" ||
+		len(result.Plan.BuildItems) != 1 ||
+		result.Plan.BuildItems[0].BuildExecutionSpec.ServiceKey != "" {
+		t.Fatalf("plan = %+v, want non-ready recipe-only plan without build spec error", result.Plan)
 	}
 }
 
