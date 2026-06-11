@@ -237,7 +237,37 @@ func deployExecutionSpecToProto(spec *runtimeservice.DeployExecutionSpecInput) *
 		DeployPlanFingerprint: spec.DeployPlanFingerprint,
 		AllowedSecretRefs:     runtimeJobAllowedSecretRefsToProto(spec.AllowedSecretRefs),
 		OutputRefs:            runtimeJobOutputRefsToProto(spec.OutputRefs),
+		ManifestBundleRef:     spec.ManifestBundleRef,
+		ManifestBundleDigest:  spec.ManifestBundleDigest,
+		RolloutTargets:        deployRolloutTargetsToProto(spec.RolloutTargets),
+		ExpectedImageRefs:     deployExpectedImageRefsToProto(spec.ExpectedImageRefs),
 	}
+}
+
+func deployRolloutTargetsToProto(targets []runtimeservice.DeployRolloutTargetInput) []*runtimev1.DeployRolloutTarget {
+	result := make([]*runtimev1.DeployRolloutTarget, 0, len(targets))
+	for _, target := range targets {
+		result = append(result, &runtimev1.DeployRolloutTarget{
+			Kind:      target.Kind,
+			Ref:       target.Ref,
+			Namespace: target.Namespace,
+			Name:      target.Name,
+			Digest:    optionalStringPtr(target.Digest),
+		})
+	}
+	return result
+}
+
+func deployExpectedImageRefsToProto(refs []runtimeservice.DeployExpectedImageRefInput) []*runtimev1.DeployExpectedImageRef {
+	result := make([]*runtimev1.DeployExpectedImageRef, 0, len(refs))
+	for _, ref := range refs {
+		result = append(result, &runtimev1.DeployExpectedImageRef{
+			ContainerName: ref.ContainerName,
+			ImageRef:      ref.ImageRef,
+			ImageDigest:   ref.ImageDigest,
+		})
+	}
+	return result
 }
 
 func runtimeJobAllowedSecretRefsToProto(refs []runtimeservice.RuntimeJobExecutionRefInput) []*runtimev1.RuntimeJobAllowedSecretRef {

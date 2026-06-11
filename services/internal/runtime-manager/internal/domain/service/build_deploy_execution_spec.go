@@ -26,6 +26,8 @@ const (
 	maxRuntimeJobOutputKindBytes       = 64
 	maxRuntimeJobAllowedSecretRefs     = 16
 	maxRuntimeJobOutputRefs            = 16
+	maxRuntimeJobRolloutTargets        = 16
+	maxRuntimeJobExpectedImageRefs     = 32
 )
 
 type buildDeployJobInputDocument struct {
@@ -144,6 +146,8 @@ func normalizeDeployExecutionSpec(spec DeployExecutionSpecInput) (DeployExecutio
 		TargetClusterRef:      strings.TrimSpace(spec.TargetClusterRef),
 		TargetSlotID:          strings.TrimSpace(spec.TargetSlotID),
 		DeployPlanFingerprint: strings.TrimSpace(strings.ToLower(spec.DeployPlanFingerprint)),
+		ManifestBundleRef:     strings.TrimSpace(spec.ManifestBundleRef),
+		ManifestBundleDigest:  strings.TrimSpace(strings.ToLower(spec.ManifestBundleDigest)),
 	}
 	if !safeAgentRunRef(normalized.SourceRef, true) ||
 		!validRuntimeJobCommitSHA(normalized.SourceCommitSHA) ||
@@ -157,11 +161,21 @@ func normalizeDeployExecutionSpec(spec DeployExecutionSpecInput) (DeployExecutio
 		!validAgentRunSHA256Digest(normalized.KustomizationDigest) ||
 		!safeRuntimeJobNamespace(normalized.TargetNamespace) ||
 		!safeAgentRunRef(normalized.TargetClusterRef, true) ||
+		!safeAgentRunRef(normalized.ManifestBundleRef, true) ||
+		!validAgentRunSHA256Digest(normalized.ManifestBundleDigest) ||
 		!validAgentRunSHA256Digest(normalized.DeployPlanFingerprint) {
 		return DeployExecutionSpecInput{}, errs.ErrInvalidArgument
 	}
 	if !safeAgentRunRef(normalized.TargetSlotID, false) {
 		return DeployExecutionSpecInput{}, errs.ErrInvalidArgument
+	}
+	rolloutTargets, err := normalizeDeployRolloutTargets(spec.RolloutTargets)
+	if err != nil {
+		return DeployExecutionSpecInput{}, err
+	}
+	expectedImageRefs, err := normalizeDeployExpectedImageRefs(spec.ExpectedImageRefs)
+	if err != nil {
+		return DeployExecutionSpecInput{}, err
 	}
 	allowedSecretRefs, outputRefs, err := normalizeRuntimeJobExecutionRefs(spec.AllowedSecretRefs, spec.OutputRefs)
 	if err != nil {
@@ -169,6 +183,56 @@ func normalizeDeployExecutionSpec(spec DeployExecutionSpecInput) (DeployExecutio
 	}
 	normalized.AllowedSecretRefs = allowedSecretRefs
 	normalized.OutputRefs = outputRefs
+	normalized.RolloutTargets = rolloutTargets
+	normalized.ExpectedImageRefs = expectedImageRefs
+	return normalized, nil
+}
+
+func normalizeDeployRolloutTargets(targets []DeployRolloutTargetInput) ([]DeployRolloutTargetInput, error) {
+	if len(targets) == 0 || len(targets) > maxRuntimeJobRolloutTargets {
+		return nil, errs.ErrInvalidArgument
+	}
+	normalized := make([]DeployRolloutTargetInput, 0, len(targets))
+	for _, target := range targets {
+		item := DeployRolloutTargetInput{
+			Kind:      strings.TrimSpace(target.Kind),
+			Ref:       strings.TrimSpace(target.Ref),
+			Namespace: strings.TrimSpace(target.Namespace),
+			Name:      strings.TrimSpace(target.Name),
+			Digest:    strings.TrimSpace(strings.ToLower(target.Digest)),
+		}
+		if !safeAgentRunLabel(item.Kind, maxRuntimeJobOutputKindBytes) ||
+			!safeAgentRunRef(item.Ref, true) ||
+			!safeRuntimeJobNamespace(item.Namespace) ||
+			!safeAgentRunLabel(item.Name, maxRuntimeJobServiceKeyBytes) {
+			return nil, errs.ErrInvalidArgument
+		}
+		if item.Digest != "" && !validAgentRunSHA256Digest(item.Digest) {
+			return nil, errs.ErrInvalidArgument
+		}
+		normalized = append(normalized, item)
+	}
+	return normalized, nil
+}
+
+func normalizeDeployExpectedImageRefs(refs []DeployExpectedImageRefInput) ([]DeployExpectedImageRefInput, error) {
+	if len(refs) == 0 || len(refs) > maxRuntimeJobExpectedImageRefs {
+		return nil, errs.ErrInvalidArgument
+	}
+	normalized := make([]DeployExpectedImageRefInput, 0, len(refs))
+	for _, ref := range refs {
+		item := DeployExpectedImageRefInput{
+			ContainerName: strings.TrimSpace(ref.ContainerName),
+			ImageRef:      strings.TrimSpace(ref.ImageRef),
+			ImageDigest:   strings.TrimSpace(strings.ToLower(ref.ImageDigest)),
+		}
+		if !safeAgentRunLabel(item.ContainerName, maxRuntimeJobServiceKeyBytes) ||
+			!safeAgentRunRef(item.ImageRef, true) ||
+			!validAgentRunSHA256Digest(item.ImageDigest) {
+			return nil, errs.ErrInvalidArgument
+		}
+		normalized = append(normalized, item)
+	}
 	return normalized, nil
 }
 
