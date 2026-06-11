@@ -3,6 +3,7 @@ package admin
 import (
 	"context"
 	"embed"
+	"errors"
 	"fmt"
 
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
@@ -50,6 +51,27 @@ func (repo *Repository) UpsertRepository(ctx context.Context, input adminrepo.Up
 	return item, created, nil
 }
 
+func (repo *Repository) GetRepository(ctx context.Context, provider string, owner string, name string) (entity.Repository, error) {
+	var item entity.Repository
+	if err := repo.pool.QueryRow(ctx, query("repositories__get.sql"), provider, owner, name).Scan(
+		&item.ID,
+		&item.Provider,
+		&item.Owner,
+		&item.Name,
+		&item.DefaultBranch,
+		&item.Status,
+		&item.MattermostChannel,
+		&item.CreatedAt,
+		&item.UpdatedAt,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.Repository{}, adminrepo.ErrNotFound
+		}
+		return entity.Repository{}, fmt.Errorf("get repository: %w", err)
+	}
+	return item, nil
+}
+
 func (repo *Repository) ListRepositories(ctx context.Context, limit int) ([]entity.Repository, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 20
@@ -82,6 +104,27 @@ func (repo *Repository) ListRepositories(ctx context.Context, limit int) ([]enti
 		return nil, fmt.Errorf("iterate repositories: %w", err)
 	}
 	return items, nil
+}
+
+func (repo *Repository) DeleteRepository(ctx context.Context, provider string, owner string, name string) (entity.Repository, error) {
+	var item entity.Repository
+	if err := repo.pool.QueryRow(ctx, query("repositories__delete.sql"), provider, owner, name).Scan(
+		&item.ID,
+		&item.Provider,
+		&item.Owner,
+		&item.Name,
+		&item.DefaultBranch,
+		&item.Status,
+		&item.MattermostChannel,
+		&item.CreatedAt,
+		&item.UpdatedAt,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.Repository{}, adminrepo.ErrNotFound
+		}
+		return entity.Repository{}, fmt.Errorf("delete repository: %w", err)
+	}
+	return item, nil
 }
 
 func (repo *Repository) ListAgentProfiles(ctx context.Context) ([]entity.AgentProfile, error) {

@@ -216,6 +216,191 @@ func TestMenuSectionsUseCommandButtons(t *testing.T) {
 	}
 }
 
+func TestRepositoriesMenuUsesDialogButtons(t *testing.T) {
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:       localizer,
+		StatusService:   testStatusService(localizer),
+		MenuActionURL:   "http://bot-service/mattermost/actions/agents",
+		DialogSubmitURL: "http://bot-service/mattermost/dialogs/agents",
+	})
+
+	result := svc.HandleMenuAction(context.Background(), MenuActionCommand{View: menuViewRepositories})
+
+	if result.Card == nil {
+		t.Fatal("card is nil")
+	}
+	for _, tc := range []struct {
+		action string
+		dialog string
+	}{
+		{action: "dialogrepoadd", dialog: menuDialogRepositoryAdd},
+		{action: "dialogrepoedit", dialog: menuDialogRepositoryEdit},
+		{action: "dialogrepodelete", dialog: menuDialogRepositoryDelete},
+	} {
+		action, ok := mattermostActionByID(result.Card.Actions, tc.action)
+		if !ok {
+			t.Fatalf("%s action is missing: %#v", tc.action, result.Card.Actions)
+		}
+		if action.Context["dialog"] != tc.dialog {
+			t.Fatalf("%s dialog context = %#v", tc.action, action.Context)
+		}
+	}
+}
+
+func TestMenuActionReturnsRepositoryDialog(t *testing.T) {
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:       localizer,
+		StatusService:   testStatusService(localizer),
+		MenuActionURL:   "http://bot-service/mattermost/actions/agents",
+		DialogSubmitURL: "http://bot-service/mattermost/dialogs/agents",
+	})
+
+	result := svc.HandleMenuAction(context.Background(), MenuActionCommand{
+		View:      menuViewRepositories,
+		Dialog:    menuDialogRepositoryAdd,
+		UserName:  "owner",
+		ChannelID: "channel-1",
+		PostID:    "post-1",
+	})
+
+	if result.StatusCode != 200 {
+		t.Fatalf("status = %d", result.StatusCode)
+	}
+	if result.Dialog == nil {
+		t.Fatal("dialog is nil")
+	}
+	if result.Dialog.SubmitURL != "http://bot-service/mattermost/dialogs/agents" || result.Dialog.CallbackID != dialogCallbackRepositoryAdd {
+		t.Fatalf("dialog = %#v", result.Dialog)
+	}
+	if result.Dialog.Title != "Add repo" || len(result.Dialog.Elements) != 3 {
+		t.Fatalf("dialog content = %#v", result.Dialog)
+	}
+	state, err := decodeDialogState(result.Dialog.State)
+	if err != nil {
+		t.Fatalf("decodeDialogState() error = %v", err)
+	}
+	if state.ChannelID != "channel-1" || state.PostID != "post-1" || state.UserName != "owner" {
+		t.Fatalf("state = %#v", state)
+	}
+}
+
+func TestRepositoryDialogSubmissionAddsRepository(t *testing.T) {
+	store := &fakeAdminStore{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:             localizer,
+		StatusService:         testStatusService(localizer),
+		Store:                 store,
+		DefaultTeamName:       "agents",
+		MenuActionURL:         "http://bot-service/mattermost/actions/agents",
+		DialogSubmitURL:       "http://bot-service/mattermost/dialogs/agents",
+		StorageReady:          true,
+		ChannelManagerEnabled: true,
+	})
+	state := encodeDialogState(MenuActionCommand{View: menuViewRepositories, ChannelID: "channel-1", PostID: "post-1", UserName: "owner"})
+
+	result := svc.HandleDialogSubmission(context.Background(), DialogSubmissionCommand{
+		CallbackID: dialogCallbackRepositoryAdd,
+		State:      state,
+		UserID:     "owner-id",
+		Submission: map[string]any{
+			dialogFieldProvider:      "github",
+			dialogFieldRepository:    "codex-k8s/matter-codex",
+			dialogFieldDefaultBranch: "main",
+		},
+	})
+
+	if result.Error != "" || len(result.Errors) > 0 {
+		t.Fatalf("dialog errors = %q %#v", result.Error, result.Errors)
+	}
+	if store.upsert.Provider != "github" || store.upsert.Owner != "codex-k8s" || store.upsert.Name != "matter-codex" {
+		t.Fatalf("upsert = %#v", store.upsert)
+	}
+	if !store.auditRecorded {
+		t.Fatal("audit event was not recorded")
+	}
+	if result.Card == nil || result.Card.ChannelID != "channel-1" || result.Card.PostID != "post-1" {
+		t.Fatalf("card = %#v", result.Card)
+	}
+	if !strings.Contains(result.Card.Text, "github:codex-k8s/matter-codex") {
+		t.Fatalf("card text = %q", result.Card.Text)
+	}
+}
+
+func TestRepositoryDialogSubmissionDeletesRepository(t *testing.T) {
+	store := &fakeAdminStore{
+		repositories: map[string]entity.Repository{
+			repositoryStoreKey("github", "codex-k8s", "matter-codex"): {
+				Provider:          "github",
+				Owner:             "codex-k8s",
+				Name:              "matter-codex",
+				DefaultBranch:     "main",
+				Status:            "active",
+				MattermostChannel: "repo-codex-k8s-matter-codex",
+			},
+		},
+	}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:       localizer,
+		StatusService:   testStatusService(localizer),
+		Store:           store,
+		MenuActionURL:   "http://bot-service/mattermost/actions/agents",
+		DialogSubmitURL: "http://bot-service/mattermost/dialogs/agents",
+		StorageReady:    true,
+	})
+
+	result := svc.HandleDialogSubmission(context.Background(), DialogSubmissionCommand{
+		CallbackID: dialogCallbackRepositoryDelete,
+		State:      encodeDialogState(MenuActionCommand{View: menuViewRepositories}),
+		Submission: map[string]any{
+			dialogFieldProvider:   "github",
+			dialogFieldRepository: "codex-k8s/matter-codex",
+			dialogFieldConfirm:    "delete",
+		},
+	})
+
+	if result.Error != "" || len(result.Errors) > 0 {
+		t.Fatalf("dialog errors = %q %#v", result.Error, result.Errors)
+	}
+	if store.deletedRepo.FullName() != "codex-k8s/matter-codex" {
+		t.Fatalf("deletedRepo = %#v", store.deletedRepo)
+	}
+	if !store.auditRecorded {
+		t.Fatal("audit event was not recorded")
+	}
+	if result.Card == nil || !strings.Contains(result.Card.Text, "metadata deleted") {
+		t.Fatalf("card = %#v", result.Card)
+	}
+}
+
+func TestRepositoryDialogDeleteRequiresConfirmation(t *testing.T) {
+	store := &fakeAdminStore{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:     localizer,
+		StatusService: testStatusService(localizer),
+		Store:         store,
+		StorageReady:  true,
+	})
+
+	result := svc.HandleDialogSubmission(context.Background(), DialogSubmissionCommand{
+		CallbackID: dialogCallbackRepositoryDelete,
+		State:      encodeDialogState(MenuActionCommand{View: menuViewRepositories}),
+		Submission: map[string]any{
+			dialogFieldProvider:   "github",
+			dialogFieldRepository: "codex-k8s/matter-codex",
+			dialogFieldConfirm:    "DELETE",
+		},
+	})
+
+	if result.Errors[dialogFieldConfirm] == "" {
+		t.Fatalf("confirm error is missing: %#v", result.Errors)
+	}
+}
+
 func TestHelpMenuDoesNotExposeTypedHelpButton(t *testing.T) {
 	localizer := testLocalizer(t, texti18n.DefaultLocale)
 	svc := NewSlashCommandService(SlashCommandServiceConfig{
@@ -1562,6 +1747,8 @@ func (publisher *fakeFlowCardPublisher) UpsertFlowCard(_ context.Context, card F
 type fakeAdminStore struct {
 	upsert           adminrepo.UpsertRepositoryInput
 	auditRecorded    bool
+	repositories     map[string]entity.Repository
+	deletedRepo      entity.Repository
 	profiles         []entity.AgentProfile
 	openAIAccounts   map[string]entity.OpenAIAccount
 	githubAccounts   map[string]entity.GitHubAccount
@@ -1575,7 +1762,10 @@ type fakeAdminStore struct {
 
 func (store *fakeAdminStore) UpsertRepository(_ context.Context, input adminrepo.UpsertRepositoryInput) (entity.Repository, bool, error) {
 	store.upsert = input
-	return entity.Repository{
+	store.ensureRepositories()
+	key := repositoryStoreKey(input.Provider, input.Owner, input.Name)
+	_, exists := store.repositories[key]
+	item := entity.Repository{
 		ID:                1,
 		Provider:          input.Provider,
 		Owner:             input.Owner,
@@ -1583,11 +1773,49 @@ func (store *fakeAdminStore) UpsertRepository(_ context.Context, input adminrepo
 		DefaultBranch:     input.DefaultBranch,
 		Status:            "active",
 		MattermostChannel: input.MattermostChannel,
-	}, true, nil
+	}
+	store.repositories[key] = item
+	return item, !exists, nil
+}
+
+func (store *fakeAdminStore) GetRepository(_ context.Context, provider string, owner string, name string) (entity.Repository, error) {
+	store.ensureRepositories()
+	item, ok := store.repositories[repositoryStoreKey(provider, owner, name)]
+	if !ok {
+		return entity.Repository{}, adminrepo.ErrNotFound
+	}
+	return item, nil
 }
 
 func (store *fakeAdminStore) ListRepositories(context.Context, int) ([]entity.Repository, error) {
-	return []entity.Repository{}, nil
+	store.ensureRepositories()
+	items := make([]entity.Repository, 0, len(store.repositories))
+	for _, item := range store.repositories {
+		items = append(items, item)
+	}
+	return items, nil
+}
+
+func (store *fakeAdminStore) DeleteRepository(_ context.Context, provider string, owner string, name string) (entity.Repository, error) {
+	store.ensureRepositories()
+	key := repositoryStoreKey(provider, owner, name)
+	item, ok := store.repositories[key]
+	if !ok {
+		return entity.Repository{}, adminrepo.ErrNotFound
+	}
+	delete(store.repositories, key)
+	store.deletedRepo = item
+	return item, nil
+}
+
+func (store *fakeAdminStore) ensureRepositories() {
+	if store.repositories == nil {
+		store.repositories = map[string]entity.Repository{}
+	}
+}
+
+func repositoryStoreKey(provider string, owner string, name string) string {
+	return provider + ":" + owner + "/" + name
 }
 
 func (store *fakeAdminStore) ListAgentProfiles(context.Context) ([]entity.AgentProfile, error) {

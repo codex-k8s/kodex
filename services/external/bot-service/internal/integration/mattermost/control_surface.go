@@ -55,6 +55,48 @@ func (surface *ControlSurface) UpsertFlowCard(ctx context.Context, card statusse
 	return statusservice.FlowCardPost{ChannelID: updated.ChannelId, PostID: updated.Id}, nil
 }
 
+func (surface *ControlSurface) OpenDialog(ctx context.Context, triggerID string, dialog statusservice.MattermostDialog) error {
+	elements := make([]mattermostmodel.DialogElement, 0, len(dialog.Elements))
+	for _, element := range dialog.Elements {
+		options := make([]*mattermostmodel.PostActionOptions, 0, len(element.Options))
+		for _, option := range element.Options {
+			options = append(options, &mattermostmodel.PostActionOptions{
+				Text:  option.Text,
+				Value: option.Value,
+			})
+		}
+		elements = append(elements, mattermostmodel.DialogElement{
+			DisplayName: element.DisplayName,
+			Name:        element.Name,
+			Type:        element.Type,
+			SubType:     element.SubType,
+			Default:     element.Default,
+			Placeholder: element.Placeholder,
+			HelpText:    element.HelpText,
+			Optional:    element.Optional,
+			MinLength:   element.MinLength,
+			MaxLength:   element.MaxLength,
+			Options:     options,
+		})
+	}
+	_, err := surface.client.OpenInteractiveDialog(ctx, mattermostmodel.OpenDialogRequest{
+		TriggerId: triggerID,
+		URL:       dialog.SubmitURL,
+		Dialog: mattermostmodel.Dialog{
+			CallbackId:       dialog.CallbackID,
+			Title:            dialog.Title,
+			IntroductionText: dialog.IntroductionText,
+			Elements:         elements,
+			SubmitLabel:      dialog.SubmitLabel,
+			State:            dialog.State,
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("open Mattermost dialog: %w", err)
+	}
+	return nil
+}
+
 func flowCardPost(card statusservice.FlowCard) *mattermostmodel.Post {
 	post := &mattermostmodel.Post{
 		Id:        card.PostID,

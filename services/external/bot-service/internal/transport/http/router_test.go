@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -227,6 +228,58 @@ func TestAgentsActionExecutesCommandButton(t *testing.T) {
 	}
 }
 
+func TestAgentsActionOpensDialog(t *testing.T) {
+	opener := &fakeDialogOpener{}
+	router := testRouterWithDialogService(opener)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/mattermost/actions/agents", strings.NewReader(`{"user_id":"owner","user_name":"owner","channel_id":"channel-1","post_id":"post-1","trigger_id":"trigger-1","context":{"kind":"agents_menu","view":"repositories","dialog":"repo_add"}}`))
+	request.Header.Set("Content-Type", "application/json")
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body.String())
+	}
+	if opener.triggerID != "trigger-1" {
+		t.Fatalf("triggerID = %q", opener.triggerID)
+	}
+	if opener.dialog.CallbackID != "agents_repo_add" || opener.dialog.SubmitURL != "http://bot-service/mattermost/dialogs/agents" {
+		t.Fatalf("dialog = %#v", opener.dialog)
+	}
+	var payload struct {
+		EphemeralText string `json:"ephemeral_text"`
+		Update        any    `json:"update"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if payload.Update != nil {
+		t.Fatalf("dialog action should not return post update: %#v", payload.Update)
+	}
+}
+
+func TestAgentsDialogReturnsFieldErrors(t *testing.T) {
+	router := testRouterWithDialogService(&fakeDialogOpener{})
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/mattermost/dialogs/agents", strings.NewReader(`{"callback_id":"agents_repo_add","state":"{\"view\":\"repositories\"}","submission":{"provider":"github","repository":"bad value","default_branch":"main"}}`))
+	request.Header.Set("Content-Type", "application/json")
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body.String())
+	}
+	var payload struct {
+		Errors map[string]string `json:"errors"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if payload.Errors["repository"] == "" {
+		t.Fatalf("repository field error is missing: %#v", payload.Errors)
+	}
+}
+
 func attachmentContainsSlashCommand(attachment map[string]any) bool {
 	for _, key := range []string{"title", "text"} {
 		value, _ := attachment[key].(string)
@@ -349,6 +402,7 @@ func testRouterWithSlashService() *Router {
 		Localizer:         localizer,
 		StatusService:     statusSvc,
 		MenuActionURL:     "http://bot-service/mattermost/actions/agents",
+		DialogSubmitURL:   "http://bot-service/mattermost/dialogs/agents",
 		StorageReady:      true,
 		RuntimeConfigured: true,
 	})
@@ -360,6 +414,53 @@ func testRouterWithSlashService() *Router {
 		MaxSlashFormBytes:     65536,
 		MaxGitHubWebhookBytes: 262144,
 	})
+}
+
+func testRouterWithDialogService(opener *fakeDialogOpener) *Router {
+	localizer, err := texti18n.New(texti18n.DefaultLocale)
+	if err != nil {
+		panic(err)
+	}
+	statusSvc := statusservice.NewStatusService(statusservice.Config{
+		Localizer:            localizer,
+		ServiceName:          "matter-codex-bot-service",
+		ServiceVersion:       "0.1.0",
+		MattermostConfigured: true,
+		BotTokenConfigured:   true,
+		SlashTokenConfigured: true,
+		DatabaseConfigured:   true,
+		StorageReady:         true,
+		RuntimeConfigured:    true,
+		DefaultTeamName:      "agents",
+		DefaultChannels:      []string{"agents-control"},
+	})
+	slashSvc := statusservice.NewSlashCommandService(statusservice.SlashCommandServiceConfig{
+		Localizer:       localizer,
+		StatusService:   statusSvc,
+		MenuActionURL:   "http://bot-service/mattermost/actions/agents",
+		DialogSubmitURL: "http://bot-service/mattermost/dialogs/agents",
+		StorageReady:    true,
+	})
+	return NewRouter(RouterConfig{
+		StatusService:         statusSvc,
+		SlashService:          slashSvc,
+		DialogOpener:          opener,
+		Localizer:             localizer,
+		SlashToken:            "expected-token",
+		MaxSlashFormBytes:     65536,
+		MaxGitHubWebhookBytes: 262144,
+	})
+}
+
+type fakeDialogOpener struct {
+	triggerID string
+	dialog    statusservice.MattermostDialog
+}
+
+func (opener *fakeDialogOpener) OpenDialog(_ context.Context, triggerID string, dialog statusservice.MattermostDialog) error {
+	opener.triggerID = triggerID
+	opener.dialog = dialog
+	return nil
 }
 
 func testRouterWithConfig(slashToken string, botTokenConfigured bool, gitHubWebhookSecret string) *Router {

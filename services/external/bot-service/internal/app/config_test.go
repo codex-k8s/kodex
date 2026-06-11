@@ -167,3 +167,15 @@ func TestAgentsActionURLPrefersSiteURL(t *testing.T) {
 		t.Fatalf("agentsActionURL() = %q, want %q", got, want)
 	}
 }
+
+func TestAgentsDialogURLPrefersSiteURL(t *testing.T) {
+	cfg := Config{
+		BotServiceSiteURL:     "https://matter-codex.example.com",
+		BotServiceInternalURL: "http://matter-codex-bot-service.mattermost.svc.cluster.local:8080",
+	}
+	got := agentsDialogURL(cfg)
+	want := "https://matter-codex.example.com/mattermost/dialogs/agents"
+	if got != want {
+		t.Fatalf("agentsDialogURL() = %q, want %q", got, want)
+	}
+}
