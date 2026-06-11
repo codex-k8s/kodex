@@ -42,8 +42,50 @@ func TestStartSmokeRunCreatesPVCAndJob(t *testing.T) {
 	if job.Spec.Template.Spec.AutomountServiceAccountToken == nil || *job.Spec.Template.Spec.AutomountServiceAccountToken {
 		t.Fatal("agent job should not automount service account token")
 	}
+	assertRunnerPodSecurity(t, job.Spec.Template.Spec)
 	if _, err := client.CoreV1().PersistentVolumeClaims("mattermost").Get(context.Background(), "mc-ws-smoke-test", metav1.GetOptions{}); err != nil {
 		t.Fatalf("Get pvc error = %v", err)
+	}
+}
+
+func TestStartCodexAuthSessionCreatesHardenedJob(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	runner, err := NewRunnerWithClient(client, Config{
+		Namespace:                 "mattermost",
+		AgentRunnerImage:          "matter-codex-agent-runner:test",
+		AgentRunnerServiceAccount: "matter-codex-agent-runner",
+	})
+	if err != nil {
+		t.Fatalf("NewRunnerWithClient() error = %v", err)
+	}
+
+	session, err := runner.StartCodexAuthSession(context.Background(), runtimerepo.CodexAuthSessionInput{
+		AccountName: "primary",
+		SecretName:  "matter-codex-codex-auth-primary",
+	})
+	if err != nil {
+		t.Fatalf("StartCodexAuthSession() error = %v", err)
+	}
+	if !session.Created || session.JobName != "mc-codex-auth-primary" {
+		t.Fatalf("session = %#v", session)
+	}
+	job, err := client.BatchV1().Jobs("mattermost").Get(context.Background(), "mc-codex-auth-primary", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("Get job error = %v", err)
+	}
+	podSpec := job.Spec.Template.Spec
+	assertRunnerPodSecurity(t, podSpec)
+	if got := podSpec.Containers[0].Args[0]; got != "codex-auth" {
+		t.Fatalf("args = %q", got)
+	}
+	if len(podSpec.Volumes) != 3 {
+		t.Fatalf("volumes len = %d", len(podSpec.Volumes))
+	}
+	if !hasVolume(podSpec.Volumes, "codex-home") {
+		t.Fatalf("codex-home volume missing: %#v", podSpec.Volumes)
+	}
+	if !hasVolumeMount(podSpec.Containers[0].VolumeMounts, "codex-home", "/codex-home") {
+		t.Fatalf("codex-home volume mount missing: %#v", podSpec.Containers[0].VolumeMounts)
 	}
 }
 
@@ -92,6 +134,7 @@ func TestStartDeveloperRunCreatesPVCAndJob(t *testing.T) {
 	if podSpec.AutomountServiceAccountToken == nil || *podSpec.AutomountServiceAccountToken {
 		t.Fatal("developer job should not automount service account token")
 	}
+	assertRunnerPodSecurity(t, podSpec)
 	if got := podSpec.Containers[0].Image; got != "matter-codex-agent-runner:test" {
 		t.Fatalf("runner image = %q", got)
 	}
@@ -101,7 +144,7 @@ func TestStartDeveloperRunCreatesPVCAndJob(t *testing.T) {
 	if got := podSpec.Containers[0].Args[0]; got != "developer" {
 		t.Fatalf("args = %q", got)
 	}
-	if len(podSpec.Volumes) != 4 {
+	if len(podSpec.Volumes) != 6 {
 		t.Fatalf("volumes len = %d", len(podSpec.Volumes))
 	}
 	if podSpec.Volumes[1].Secret.SecretName != "matter-codex-codex-auth" || podSpec.Volumes[2].Secret.SecretName != "matter-codex-github-agent" {
@@ -177,10 +220,11 @@ func TestStartReviewRunCreatesPVCAndJob(t *testing.T) {
 	if got := podSpec.Containers[0].Args[0]; got != "reviewer" {
 		t.Fatalf("args = %q", got)
 	}
+	assertRunnerPodSecurity(t, podSpec)
 	if got := envValue(podSpec.Containers[0].Env, "MATTERCODEX_PR_NUMBER"); got != "12" {
 		t.Fatalf("MATTERCODEX_PR_NUMBER = %q", got)
 	}
-	if len(podSpec.Volumes) != 4 {
+	if len(podSpec.Volumes) != 6 {
 		t.Fatalf("volumes len = %d", len(podSpec.Volumes))
 	}
 	if podSpec.Volumes[1].Secret.SecretName != "matter-codex-codex-auth-primary" || podSpec.Volumes[2].Secret.SecretName != "matter-codex-github" {
@@ -364,6 +408,88 @@ func secretItemKeys(items []corev1.KeyToPath) string {
 		keys = append(keys, item.Key)
 	}
 	return strings.Join(keys, ",")
+}
+
+func assertRunnerPodSecurity(t *testing.T, podSpec corev1.PodSpec) {
+	t.Helper()
+	if podSpec.SecurityContext == nil {
+		t.Fatal("pod securityContext is nil")
+	}
+	if podSpec.SecurityContext.RunAsNonRoot == nil || !*podSpec.SecurityContext.RunAsNonRoot {
+		t.Fatal("pod should run as non-root")
+	}
+	if podSpec.SecurityContext.RunAsUser == nil || *podSpec.SecurityContext.RunAsUser != runnerUID {
+		t.Fatalf("pod RunAsUser = %v", podSpec.SecurityContext.RunAsUser)
+	}
+	if podSpec.SecurityContext.RunAsGroup == nil || *podSpec.SecurityContext.RunAsGroup != runnerGID {
+		t.Fatalf("pod RunAsGroup = %v", podSpec.SecurityContext.RunAsGroup)
+	}
+	if podSpec.SecurityContext.FSGroup == nil || *podSpec.SecurityContext.FSGroup != runnerGID {
+		t.Fatalf("pod FSGroup = %v", podSpec.SecurityContext.FSGroup)
+	}
+	if podSpec.SecurityContext.FSGroupChangePolicy == nil || *podSpec.SecurityContext.FSGroupChangePolicy != corev1.FSGroupChangeOnRootMismatch {
+		t.Fatalf("pod FSGroupChangePolicy = %v", podSpec.SecurityContext.FSGroupChangePolicy)
+	}
+	if podSpec.SecurityContext.SeccompProfile == nil || podSpec.SecurityContext.SeccompProfile.Type != corev1.SeccompProfileTypeRuntimeDefault {
+		t.Fatalf("pod SeccompProfile = %#v", podSpec.SecurityContext.SeccompProfile)
+	}
+	if len(podSpec.Containers) != 1 {
+		t.Fatalf("containers len = %d", len(podSpec.Containers))
+	}
+	container := podSpec.Containers[0]
+	if container.SecurityContext == nil {
+		t.Fatal("container securityContext is nil")
+	}
+	if container.SecurityContext.RunAsNonRoot == nil || !*container.SecurityContext.RunAsNonRoot {
+		t.Fatal("container should run as non-root")
+	}
+	if container.SecurityContext.RunAsUser == nil || *container.SecurityContext.RunAsUser != runnerUID {
+		t.Fatalf("container RunAsUser = %v", container.SecurityContext.RunAsUser)
+	}
+	if container.SecurityContext.RunAsGroup == nil || *container.SecurityContext.RunAsGroup != runnerGID {
+		t.Fatalf("container RunAsGroup = %v", container.SecurityContext.RunAsGroup)
+	}
+	if container.SecurityContext.AllowPrivilegeEscalation == nil || *container.SecurityContext.AllowPrivilegeEscalation {
+		t.Fatal("container should disallow privilege escalation")
+	}
+	if container.SecurityContext.ReadOnlyRootFilesystem == nil || !*container.SecurityContext.ReadOnlyRootFilesystem {
+		t.Fatal("container should use read-only root filesystem")
+	}
+	if got := strings.Join(capabilitiesToStrings(container.SecurityContext.Capabilities.Drop), ","); got != "ALL" {
+		t.Fatalf("dropped capabilities = %q", got)
+	}
+	if !hasVolume(podSpec.Volumes, runnerHomeVolume) || !hasVolume(podSpec.Volumes, runnerTmpVolume) {
+		t.Fatalf("writable volumes missing: %#v", podSpec.Volumes)
+	}
+	if !hasVolumeMount(container.VolumeMounts, runnerHomeVolume, runnerHomePath) || !hasVolumeMount(container.VolumeMounts, runnerTmpVolume, runnerTmpPath) {
+		t.Fatalf("writable volume mounts missing: %#v", container.VolumeMounts)
+	}
+}
+
+func capabilitiesToStrings(values []corev1.Capability) []string {
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		result = append(result, string(value))
+	}
+	return result
+}
+
+func hasVolume(volumes []corev1.Volume, name string) bool {
+	for _, volume := range volumes {
+		if volume.Name == name && volume.EmptyDir != nil {
+			return true
+		}
+	}
+	return false
+}
+
+func hasVolumeMount(mounts []corev1.VolumeMount, name string, path string) bool {
+	for _, mount := range mounts {
+		if mount.Name == name && mount.MountPath == path {
+			return true
+		}
+	}
+	return false
 }
 
 type ctxResourceGetters struct {

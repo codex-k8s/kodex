@@ -36,6 +36,12 @@ const (
 	codexAuthSecretVolume = "codex-auth-secret"
 	gitHubSecretVolume    = "github-secret"
 	promptVolume          = "agent-prompt"
+	runnerHomeVolume      = "runner-home"
+	runnerTmpVolume       = "runner-tmp"
+	runnerHomePath        = "/home/matter-codex"
+	runnerTmpPath         = "/tmp"
+	runnerUID             = int64(10001)
+	runnerGID             = int64(10001)
 )
 
 var codexDeviceCodeRE = regexp.MustCompile(`\b[A-Z0-9]{4}-[A-Z0-9]{5}\b`)
@@ -595,6 +601,7 @@ func (runner *Runner) smokeJob(runID string, role string) *batchv1.Job {
 				Spec: corev1.PodSpec{
 					ServiceAccountName:           runner.agentRunnerServiceAccount,
 					AutomountServiceAccountToken: boolPtr(false),
+					SecurityContext:              runnerPodSecurityContext(),
 					RestartPolicy:                corev1.RestartPolicyNever,
 					Containers: []corev1.Container{
 						{
@@ -603,16 +610,17 @@ func (runner *Runner) smokeJob(runID string, role string) *batchv1.Job {
 							Command:         []string{"matter-codex-agent-runner"},
 							Args:            []string{"smoke"},
 							ImagePullPolicy: corev1.PullIfNotPresent,
+							SecurityContext: runnerContainerSecurityContext(),
 							Env: []corev1.EnvVar{
 								{Name: "MATTERCODEX_RUN_ID", Value: runID},
 								{Name: "MATTERCODEX_AGENT_ROLE", Value: role},
 							},
-							VolumeMounts: []corev1.VolumeMount{
+							VolumeMounts: append([]corev1.VolumeMount{
 								{Name: "workspace", MountPath: "/workspace"},
-							},
+							}, runnerWritableVolumeMounts()...),
 						},
 					},
-					Volumes: []corev1.Volume{
+					Volumes: append([]corev1.Volume{
 						{
 							Name: "workspace",
 							VolumeSource: corev1.VolumeSource{
@@ -621,7 +629,7 @@ func (runner *Runner) smokeJob(runID string, role string) *batchv1.Job {
 								},
 							},
 						},
-					},
+					}, runnerWritableVolumes()...),
 				},
 			},
 		},
@@ -645,6 +653,7 @@ func (runner *Runner) developerJob(input runtimerepo.DeveloperRunInput) *batchv1
 				Spec: corev1.PodSpec{
 					ServiceAccountName:           runner.agentRunnerServiceAccount,
 					AutomountServiceAccountToken: boolPtr(false),
+					SecurityContext:              runnerPodSecurityContext(),
 					RestartPolicy:                corev1.RestartPolicyNever,
 					Containers: []corev1.Container{
 						{
@@ -653,6 +662,7 @@ func (runner *Runner) developerJob(input runtimerepo.DeveloperRunInput) *batchv1
 							Command:         []string{"matter-codex-agent-runner"},
 							Args:            []string{"developer"},
 							ImagePullPolicy: corev1.PullIfNotPresent,
+							SecurityContext: runnerContainerSecurityContext(),
 							Env: []corev1.EnvVar{
 								{Name: "MATTERCODEX_RUN_ID", Value: input.RunID},
 								{Name: "MATTERCODEX_AGENT_PROFILE", Value: input.Profile},
@@ -663,15 +673,15 @@ func (runner *Runner) developerJob(input runtimerepo.DeveloperRunInput) *batchv1
 								{Name: "MATTERCODEX_HEAD_BRANCH", Value: input.HeadBranch},
 								{Name: "MATTERCODEX_PR_TITLE", Value: input.Title},
 							},
-							VolumeMounts: []corev1.VolumeMount{
+							VolumeMounts: append([]corev1.VolumeMount{
 								{Name: "workspace", MountPath: "/workspace"},
 								{Name: codexAuthSecretVolume, MountPath: "/var/run/secrets/matter-codex-codex", ReadOnly: true},
 								{Name: gitHubSecretVolume, MountPath: "/var/run/secrets/matter-codex-github", ReadOnly: true},
 								{Name: promptVolume, MountPath: "/var/run/matter-codex-prompt", ReadOnly: true},
-							},
+							}, runnerWritableVolumeMounts()...),
 						},
 					},
-					Volumes: []corev1.Volume{
+					Volumes: append([]corev1.Volume{
 						{
 							Name: "workspace",
 							VolumeSource: corev1.VolumeSource{
@@ -715,7 +725,7 @@ func (runner *Runner) developerJob(input runtimerepo.DeveloperRunInput) *batchv1
 								},
 							},
 						},
-					},
+					}, runnerWritableVolumes()...),
 				},
 			},
 		},
@@ -739,6 +749,7 @@ func (runner *Runner) reviewJob(input runtimerepo.ReviewRunInput) *batchv1.Job {
 				Spec: corev1.PodSpec{
 					ServiceAccountName:           runner.agentRunnerServiceAccount,
 					AutomountServiceAccountToken: boolPtr(false),
+					SecurityContext:              runnerPodSecurityContext(),
 					RestartPolicy:                corev1.RestartPolicyNever,
 					Containers: []corev1.Container{
 						{
@@ -747,6 +758,7 @@ func (runner *Runner) reviewJob(input runtimerepo.ReviewRunInput) *batchv1.Job {
 							Command:         []string{"matter-codex-agent-runner"},
 							Args:            []string{"reviewer"},
 							ImagePullPolicy: corev1.PullIfNotPresent,
+							SecurityContext: runnerContainerSecurityContext(),
 							Env: []corev1.EnvVar{
 								{Name: "MATTERCODEX_RUN_ID", Value: input.RunID},
 								{Name: "MATTERCODEX_AGENT_PROFILE", Value: input.Profile},
@@ -755,15 +767,15 @@ func (runner *Runner) reviewJob(input runtimerepo.ReviewRunInput) *batchv1.Job {
 								{Name: "MATTERCODEX_REPO_NAME", Value: input.Name},
 								{Name: "MATTERCODEX_PR_NUMBER", Value: strconv.Itoa(input.PRNumber)},
 							},
-							VolumeMounts: []corev1.VolumeMount{
+							VolumeMounts: append([]corev1.VolumeMount{
 								{Name: "workspace", MountPath: "/workspace"},
 								{Name: codexAuthSecretVolume, MountPath: "/var/run/secrets/matter-codex-codex", ReadOnly: true},
 								{Name: gitHubSecretVolume, MountPath: "/var/run/secrets/matter-codex-github", ReadOnly: true},
 								{Name: promptVolume, MountPath: "/var/run/matter-codex-prompt", ReadOnly: true},
-							},
+							}, runnerWritableVolumeMounts()...),
 						},
 					},
-					Volumes: []corev1.Volume{
+					Volumes: append([]corev1.Volume{
 						{
 							Name: "workspace",
 							VolumeSource: corev1.VolumeSource{
@@ -807,7 +819,7 @@ func (runner *Runner) reviewJob(input runtimerepo.ReviewRunInput) *batchv1.Job {
 								},
 							},
 						},
-					},
+					}, runnerWritableVolumes()...),
 				},
 			},
 		},
@@ -830,6 +842,7 @@ func (runner *Runner) codexAuthJob(accountName string, secretName string) *batch
 				Spec: corev1.PodSpec{
 					ServiceAccountName:           runner.agentRunnerServiceAccount,
 					AutomountServiceAccountToken: boolPtr(false),
+					SecurityContext:              runnerPodSecurityContext(),
 					RestartPolicy:                corev1.RestartPolicyNever,
 					Containers: []corev1.Container{
 						{
@@ -838,23 +851,24 @@ func (runner *Runner) codexAuthJob(accountName string, secretName string) *batch
 							Command:         []string{"matter-codex-agent-runner"},
 							Args:            []string{"codex-auth"},
 							ImagePullPolicy: corev1.PullIfNotPresent,
+							SecurityContext: runnerContainerSecurityContext(),
 							Env: []corev1.EnvVar{
 								{Name: "MATTERCODEX_OPENAI_ACCOUNT", Value: accountName},
 								{Name: "MATTERCODEX_CODEX_AUTH_SECRET", Value: secretName},
 							},
-							VolumeMounts: []corev1.VolumeMount{
+							VolumeMounts: append([]corev1.VolumeMount{
 								{Name: "codex-home", MountPath: "/codex-home"},
-							},
+							}, runnerWritableVolumeMounts()...),
 						},
 					},
-					Volumes: []corev1.Volume{
+					Volumes: append([]corev1.Volume{
 						{
 							Name: "codex-home",
 							VolumeSource: corev1.VolumeSource{
 								EmptyDir: &corev1.EmptyDirVolumeSource{},
 							},
 						},
-					},
+					}, runnerWritableVolumes()...),
 				},
 			},
 		},
@@ -1164,6 +1178,47 @@ func defaultInt64(value int64, fallback int64) int64 {
 		return fallback
 	}
 	return value
+}
+
+func runnerPodSecurityContext() *corev1.PodSecurityContext {
+	fsGroupChangePolicy := corev1.FSGroupChangeOnRootMismatch
+	return &corev1.PodSecurityContext{
+		RunAsNonRoot:        boolPtr(true),
+		RunAsUser:           int64Ptr(runnerUID),
+		RunAsGroup:          int64Ptr(runnerGID),
+		FSGroup:             int64Ptr(runnerGID),
+		FSGroupChangePolicy: &fsGroupChangePolicy,
+		SeccompProfile:      &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
+	}
+}
+
+func runnerContainerSecurityContext() *corev1.SecurityContext {
+	return &corev1.SecurityContext{
+		RunAsNonRoot:             boolPtr(true),
+		RunAsUser:                int64Ptr(runnerUID),
+		RunAsGroup:               int64Ptr(runnerGID),
+		AllowPrivilegeEscalation: boolPtr(false),
+		ReadOnlyRootFilesystem:   boolPtr(true),
+		Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
+	}
+}
+
+func runnerWritableVolumeMounts() []corev1.VolumeMount {
+	return []corev1.VolumeMount{
+		{Name: runnerHomeVolume, MountPath: runnerHomePath},
+		{Name: runnerTmpVolume, MountPath: runnerTmpPath},
+	}
+}
+
+func runnerWritableVolumes() []corev1.Volume {
+	return []corev1.Volume{
+		{Name: runnerHomeVolume, VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+		{Name: runnerTmpVolume, VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+	}
+}
+
+func int64Ptr(value int64) *int64 {
+	return &value
 }
 
 func boolPtr(value bool) *bool {
