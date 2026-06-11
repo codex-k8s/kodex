@@ -37,48 +37,48 @@ type DialogOpener interface {
 }
 
 type RouterConfig struct {
-	StatusService         *statusservice.StatusService
-	SlashService          *statusservice.SlashCommandService
-	DialogOpener          DialogOpener
-	CardPublisher         statusservice.FlowCardPublisher
-	Localizer             *texti18n.Localizer
-	SlashToken            string
-	GitHubWebhookSecret   string
-	MaxSlashFormBytes     int64
-	MaxGitHubWebhookBytes int64
-	PrometheusRegistry    *prometheus.Registry
-	Logger                *slog.Logger
+	StatusService          *statusservice.StatusService
+	SlashService           *statusservice.SlashCommandService
+	DialogOpener           DialogOpener
+	EphemeralCardPublisher statusservice.EphemeralCardPublisher
+	Localizer              *texti18n.Localizer
+	SlashToken             string
+	GitHubWebhookSecret    string
+	MaxSlashFormBytes      int64
+	MaxGitHubWebhookBytes  int64
+	PrometheusRegistry     *prometheus.Registry
+	Logger                 *slog.Logger
 }
 
 type Router struct {
-	statusService         *statusservice.StatusService
-	slashService          *statusservice.SlashCommandService
-	dialogOpener          DialogOpener
-	cardPublisher         statusservice.FlowCardPublisher
-	localizer             *texti18n.Localizer
-	slashToken            string
-	gitHubWebhookSecret   string
-	maxSlashFormBytes     int64
-	maxGitHubWebhookBytes int64
-	logger                *slog.Logger
-	mux                   *http.ServeMux
+	statusService          *statusservice.StatusService
+	slashService           *statusservice.SlashCommandService
+	dialogOpener           DialogOpener
+	ephemeralCardPublisher statusservice.EphemeralCardPublisher
+	localizer              *texti18n.Localizer
+	slashToken             string
+	gitHubWebhookSecret    string
+	maxSlashFormBytes      int64
+	maxGitHubWebhookBytes  int64
+	logger                 *slog.Logger
+	mux                    *http.ServeMux
 }
 
 var _ http.Handler = (*Router)(nil)
 
 func NewRouter(cfg RouterConfig) *Router {
 	router := &Router{
-		statusService:         cfg.StatusService,
-		slashService:          cfg.SlashService,
-		dialogOpener:          cfg.DialogOpener,
-		cardPublisher:         cfg.CardPublisher,
-		localizer:             cfg.Localizer,
-		slashToken:            cfg.SlashToken,
-		gitHubWebhookSecret:   cfg.GitHubWebhookSecret,
-		maxSlashFormBytes:     cfg.MaxSlashFormBytes,
-		maxGitHubWebhookBytes: cfg.MaxGitHubWebhookBytes,
-		logger:                cfg.Logger,
-		mux:                   http.NewServeMux(),
+		statusService:          cfg.StatusService,
+		slashService:           cfg.SlashService,
+		dialogOpener:           cfg.DialogOpener,
+		ephemeralCardPublisher: cfg.EphemeralCardPublisher,
+		localizer:              cfg.Localizer,
+		slashToken:             cfg.SlashToken,
+		gitHubWebhookSecret:    cfg.GitHubWebhookSecret,
+		maxSlashFormBytes:      cfg.MaxSlashFormBytes,
+		maxGitHubWebhookBytes:  cfg.MaxGitHubWebhookBytes,
+		logger:                 cfg.Logger,
+		mux:                    http.NewServeMux(),
 	}
 	registry := cfg.PrometheusRegistry
 	if registry == nil {
@@ -260,11 +260,13 @@ func (router *Router) handleAgentsDialog(w http.ResponseWriter, r *http.Request)
 		})
 		return
 	}
-	if result.Card != nil && router.cardPublisher != nil {
-		if _, err := router.cardPublisher.UpsertFlowCard(r.Context(), *result.Card); err != nil {
-			router.logWarn("update Mattermost menu card after dialog failed", "error", err)
-			writeJSON(w, http.StatusBadGateway, mattermostmodel.SubmitDialogResponse{Error: router.t("router.dialog.update_failed", nil)})
-			return
+	if result.Card != nil {
+		if router.ephemeralCardPublisher != nil && strings.TrimSpace(request.UserId) != "" {
+			if err := router.ephemeralCardPublisher.PostEphemeralCard(r.Context(), strings.TrimSpace(request.UserId), *result.Card); err != nil {
+				router.logWarn("post Mattermost ephemeral dialog result failed", "error", err)
+			}
+		} else {
+			router.logWarn("Mattermost ephemeral dialog result skipped", "publisher_configured", router.ephemeralCardPublisher != nil, "user_id_present", strings.TrimSpace(request.UserId) != "")
 		}
 	}
 	writeJSON(w, status, mattermostmodel.SubmitDialogResponse{Type: string(mattermostmodel.SubmitDialogResponseTypeOK)})

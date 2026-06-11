@@ -28,6 +28,10 @@ type FlowCardPublisher interface {
 	UpsertFlowCard(ctx context.Context, card FlowCard) (FlowCardPost, error)
 }
 
+type EphemeralCardPublisher interface {
+	PostEphemeralCard(ctx context.Context, userID string, card FlowCard) error
+}
+
 type MattermostCard struct {
 	ChannelID string
 	PostID    string

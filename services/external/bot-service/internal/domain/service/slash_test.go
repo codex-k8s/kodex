@@ -13,6 +13,7 @@ import (
 	runtimerepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/runtime"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
 	texti18n "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/i18n"
+	mattermostmodel "github.com/mattermost/mattermost/server/public/model"
 )
 
 func TestSlashTokenCheck(t *testing.T) {
@@ -283,6 +284,29 @@ func TestMenuActionReturnsRepositoryDialog(t *testing.T) {
 	}
 	if state.ChannelID != "channel-1" || state.PostID != "post-1" || state.UserName != "owner" {
 		t.Fatalf("state = %#v", state)
+	}
+}
+
+func TestRepositoryDialogTitlesFitMattermostLimit(t *testing.T) {
+	for _, locale := range []string{texti18n.DefaultLocale, "ru"} {
+		localizer := testLocalizer(t, locale)
+		svc := NewSlashCommandService(SlashCommandServiceConfig{
+			Localizer:       localizer,
+			StatusService:   testStatusService(localizer),
+			DialogSubmitURL: "http://bot-service/mattermost/dialogs/agents",
+		})
+		for _, dialog := range []string{menuDialogRepositoryAdd, menuDialogRepositoryEdit, menuDialogRepositoryDelete} {
+			result := svc.HandleMenuAction(context.Background(), MenuActionCommand{
+				View:   menuViewRepositories,
+				Dialog: dialog,
+			})
+			if result.Dialog == nil {
+				t.Fatalf("dialog %q for locale %q is nil", dialog, locale)
+			}
+			if len(result.Dialog.Title) > mattermostmodel.DialogTitleMaxLength {
+				t.Fatalf("dialog %q title %q for locale %q length = %d, want <= %d", dialog, result.Dialog.Title, locale, len(result.Dialog.Title), mattermostmodel.DialogTitleMaxLength)
+			}
+		}
 	}
 }
 
