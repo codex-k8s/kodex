@@ -43,6 +43,334 @@ func TestSlashTokenCheck(t *testing.T) {
 	}
 }
 
+func TestSlashEmptyTextReturnsMenuCard(t *testing.T) {
+	store := &fakeAdminStore{
+		openAIAccounts: map[string]entity.OpenAIAccount{
+			"primary": {Name: "primary", Status: "authorized"},
+		},
+		githubAccounts: map[string]entity.GitHubAccount{
+			"agent":   {Name: "agent", Status: "configured"},
+			"primary": {Name: "primary", Status: "unknown"},
+		},
+	}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:             localizer,
+		StatusService:         testStatusService(localizer),
+		Store:                 store,
+		MenuActionURL:         "http://bot-service/mattermost/actions/agents",
+		GitHubTokenConfigured: true,
+		StorageReady:          true,
+		RuntimeConfigured:     true,
+	})
+
+	result := svc.HandleResponse(context.Background(), SlashCommand{})
+
+	if !strings.Contains(result.Text, "control menu") {
+		t.Fatalf("HandleResponse(empty) text = %q", result.Text)
+	}
+	if result.Card == nil {
+		t.Fatal("HandleResponse(empty) card is nil")
+	}
+	if !result.ChannelVisible {
+		t.Fatal("HandleResponse(empty) should be channel-visible")
+	}
+	if result.Card.Title != "Main menu" {
+		t.Fatalf("card title = %q", result.Card.Title)
+	}
+	if result.Card.ActionURL != "http://bot-service/mattermost/actions/agents" {
+		t.Fatalf("card action URL = %q", result.Card.ActionURL)
+	}
+	if len(result.Card.Actions) == 0 {
+		t.Fatal("card actions are empty")
+	}
+	if got := cardFieldValue(result.Card.Fields, "GitHub"); got != "`1/2`" {
+		t.Fatalf("GitHub field = %q", got)
+	}
+	if got := cardFieldValue(result.Card.Fields, "OpenAI"); got != "`1/1`" {
+		t.Fatalf("OpenAI field = %q", got)
+	}
+	if result.Card.Actions[0].ID != "menustartflow" {
+		t.Fatalf("first action id = %q", result.Card.Actions[0].ID)
+	}
+	if result.Card.Actions[0].Context["view"] != menuViewStartFlow {
+		t.Fatalf("first action context = %#v", result.Card.Actions[0].Context)
+	}
+}
+
+func cardFieldValue(fields []MattermostCardField, title string) string {
+	for _, field := range fields {
+		if field.Title == title {
+			return field.Value
+		}
+	}
+	return ""
+}
+
+func TestMenuActionReturnsSubmenuCard(t *testing.T) {
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:     localizer,
+		StatusService: testStatusService(localizer),
+		MenuActionURL: "http://bot-service/mattermost/actions/agents",
+	})
+
+	result := svc.HandleMenuAction(context.Background(), MenuActionCommand{
+		View:      "runtime",
+		ChannelID: "channel-1",
+		PostID:    "post-1",
+	})
+
+	if result.StatusCode != 200 {
+		t.Fatalf("status = %d", result.StatusCode)
+	}
+	if result.Card == nil {
+		t.Fatal("card is nil")
+	}
+	if result.Card.ChannelID != "channel-1" || result.Card.PostID != "post-1" {
+		t.Fatalf("card identity = %#v", result.Card)
+	}
+	if result.Card.Title != "Runtime" || !strings.Contains(result.Card.Text, "Kubernetes Job/PVC") {
+		t.Fatalf("card content = %#v", result.Card)
+	}
+	action, ok := mattermostActionByID(result.Card.Actions, "cmdruntimesmoke")
+	if !ok || action.Context["command"] != "runtime smoke" {
+		t.Fatalf("runtime smoke action = %#v", result.Card.Actions)
+	}
+	if !strings.Contains(result.EphemeralText, "opened") {
+		t.Fatalf("ephemeral text = %q", result.EphemeralText)
+	}
+}
+
+func TestMenuCardsDoNotExposeTypedCommandBlocks(t *testing.T) {
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:     localizer,
+		StatusService: testStatusService(localizer),
+		MenuActionURL: "http://bot-service/mattermost/actions/agents",
+	})
+	views := []string{
+		menuViewMain,
+		menuViewStartFlow,
+		menuViewPending,
+		menuViewRepositories,
+		menuViewAccounts,
+		menuViewOpenAI,
+		menuViewGitHub,
+		menuViewProfiles,
+		menuViewPrompts,
+		menuViewRuntime,
+		menuViewSystem,
+		menuViewHelp,
+	}
+
+	for _, view := range views {
+		result := svc.HandleMenuAction(context.Background(), MenuActionCommand{View: view})
+		if result.Card == nil {
+			t.Fatalf("%s card is nil", view)
+		}
+		if strings.Contains(result.Card.Text, "/agents ") {
+			t.Fatalf("%s card still exposes typed command text: %q", view, result.Card.Text)
+		}
+	}
+}
+
+func TestMenuSectionsUseCommandButtons(t *testing.T) {
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:     localizer,
+		StatusService: testStatusService(localizer),
+		MenuActionURL: "http://bot-service/mattermost/actions/agents",
+	})
+	cases := []struct {
+		view    string
+		action  string
+		command string
+	}{
+		{view: menuViewRepositories, action: "cmdrepolist", command: "repo list"},
+		{view: menuViewRepositories, action: "cmdgithubcheckrepo", command: "github check codex-k8s/matter-codex"},
+		{view: menuViewProfiles, action: "cmdprofilelist", command: "profile list"},
+		{view: menuViewPrompts, action: "cmdpromptlist", command: "prompt list"},
+		{view: menuViewPrompts, action: "cmdprompthelpreviewer", command: "prompt help reviewer review_pr"},
+		{view: menuViewRuntime, action: "cmdruntimesmoke", command: "runtime smoke"},
+		{view: menuViewRuntime, action: "cmdruntimeprunedryrun", command: "runtime prune 24h"},
+		{view: menuViewSystem, action: "cmdstatus", command: "status"},
+		{view: menuViewSystem, action: "cmdtokencheck", command: "token check"},
+		{view: menuViewSystem, action: "cmdlocaleget", command: "locale get"},
+		{view: menuViewSystem, action: "cmdlocalesetru", command: "locale set ru"},
+		{view: menuViewSystem, action: "cmdlocaleseten", command: "locale set en"},
+	}
+
+	for _, tc := range cases {
+		result := svc.HandleMenuAction(context.Background(), MenuActionCommand{View: tc.view})
+		if result.Card == nil {
+			t.Fatalf("%s card is nil", tc.view)
+		}
+		action, ok := mattermostActionByID(result.Card.Actions, tc.action)
+		if !ok {
+			t.Fatalf("%s action %s is missing: %#v", tc.view, tc.action, result.Card.Actions)
+		}
+		if action.Context["command"] != tc.command {
+			t.Fatalf("%s command context = %#v", tc.action, action.Context)
+		}
+	}
+}
+
+func TestHelpMenuDoesNotExposeTypedHelpButton(t *testing.T) {
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:     localizer,
+		StatusService: testStatusService(localizer),
+		MenuActionURL: "http://bot-service/mattermost/actions/agents",
+	})
+
+	result := svc.HandleMenuAction(context.Background(), MenuActionCommand{View: menuViewHelp})
+
+	if result.Card == nil {
+		t.Fatal("card is nil")
+	}
+	if _, ok := mattermostActionByID(result.Card.Actions, "cmdhelp"); ok {
+		t.Fatalf("help menu still exposes typed help action: %#v", result.Card.Actions)
+	}
+	for _, action := range result.Card.Actions {
+		if _, ok := action.Context["command"]; ok {
+			t.Fatalf("help menu action exposes command context: %#v", action)
+		}
+	}
+	if _, ok := mattermostActionByID(result.Card.Actions, "menuaccounts"); !ok {
+		t.Fatalf("help menu should link to accounts: %#v", result.Card.Actions)
+	}
+}
+
+func TestMenuOpenAISectionUsesCommandButtons(t *testing.T) {
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:     localizer,
+		StatusService: testStatusService(localizer),
+		MenuActionURL: "http://bot-service/mattermost/actions/agents",
+	})
+
+	result := svc.HandleMenuAction(context.Background(), MenuActionCommand{View: menuViewOpenAI})
+
+	if result.Card == nil {
+		t.Fatal("card is nil")
+	}
+	if result.Card.Title != "OpenAI accounts" {
+		t.Fatalf("card title = %q", result.Card.Title)
+	}
+	action, ok := mattermostActionByID(result.Card.Actions, "cmdopenailist")
+	if !ok {
+		t.Fatalf("cmdopenailist action is missing: %#v", result.Card.Actions)
+	}
+	if action.Context["command"] != "openai list" {
+		t.Fatalf("command context = %#v", action.Context)
+	}
+	if strings.Contains(result.Card.Text, "/agents openai") {
+		t.Fatalf("OpenAI card still leads with typed commands: %q", result.Card.Text)
+	}
+}
+
+func TestMenuCommandActionExecutesOpenAIList(t *testing.T) {
+	store := &fakeAdminStore{
+		openAIAccounts: map[string]entity.OpenAIAccount{
+			"primary": {Name: "primary", Status: "authorized", SecretRef: "matter-codex-codex-auth-primary"},
+		},
+	}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:     localizer,
+		StatusService: testStatusService(localizer),
+		Store:         store,
+		MenuActionURL: "http://bot-service/mattermost/actions/agents",
+		StorageReady:  true,
+	})
+
+	result := svc.HandleMenuAction(context.Background(), MenuActionCommand{
+		View:      menuViewOpenAI,
+		Command:   "openai list",
+		ChannelID: "channel-1",
+		PostID:    "post-1",
+	})
+
+	if result.StatusCode != 200 {
+		t.Fatalf("status = %d", result.StatusCode)
+	}
+	if !strings.Contains(result.EphemeralText, "`primary` status `authorized`") {
+		t.Fatalf("ephemeral text = %q", result.EphemeralText)
+	}
+	if result.Card == nil || result.Card.Title != "Result - OpenAI accounts" {
+		t.Fatalf("card = %#v", result.Card)
+	}
+	if !strings.Contains(result.Card.Text, "`primary` status `authorized`") {
+		t.Fatalf("card text = %q", result.Card.Text)
+	}
+	if result.Card.ChannelID != "channel-1" || result.Card.PostID != "post-1" {
+		t.Fatalf("card identity = %#v", result.Card)
+	}
+	assertCardDoesNotExposeSlashCommand(t, result.Card)
+}
+
+func TestMenuCommandActionKeepsOpenAIDeviceCodePrivate(t *testing.T) {
+	store := &fakeAdminStore{
+		openAIAccounts: map[string]entity.OpenAIAccount{
+			"primary": {Name: "primary", Status: "awaiting_user", SecretRef: "matter-codex-codex-auth-primary"},
+		},
+	}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:         localizer,
+		StatusService:     testStatusService(localizer),
+		Store:             store,
+		RuntimeRunner:     &fakeRuntimeRunner{},
+		MenuActionURL:     "http://bot-service/mattermost/actions/agents",
+		StorageReady:      true,
+		RuntimeConfigured: true,
+	})
+
+	result := svc.HandleMenuAction(context.Background(), MenuActionCommand{
+		View:    menuViewOpenAI,
+		Command: "openai status primary",
+	})
+
+	if !strings.Contains(result.EphemeralText, "ABCD-12345") {
+		t.Fatalf("ephemeral text = %q", result.EphemeralText)
+	}
+	if result.Card == nil || result.Card.Title != "Result - OpenAI accounts" {
+		t.Fatalf("card = %#v", result.Card)
+	}
+	if strings.Contains(result.Card.Text, "ABCD-12345") || strings.Contains(result.Card.Text, "https://auth.openai.com") {
+		t.Fatalf("card exposes device-code result: %q", result.Card.Text)
+	}
+	if !strings.Contains(result.Card.Text, "private Mattermost response") {
+		t.Fatalf("card text = %q", result.Card.Text)
+	}
+	assertCardDoesNotExposeSlashCommand(t, result.Card)
+}
+
+func mattermostActionByID(actions []MattermostCardAction, id string) (MattermostCardAction, bool) {
+	for _, action := range actions {
+		if action.ID == id {
+			return action, true
+		}
+	}
+	return MattermostCardAction{}, false
+}
+
+func assertCardDoesNotExposeSlashCommand(t *testing.T, card *MattermostCard) {
+	t.Helper()
+	if card == nil {
+		t.Fatal("card is nil")
+	}
+	if strings.Contains(card.Title, "/agents ") || strings.Contains(card.Text, "/agents ") {
+		t.Fatalf("card exposes slash command: %#v", card)
+	}
+	for _, field := range card.Fields {
+		if strings.Contains(field.Title, "/agents ") || strings.Contains(field.Value, "/agents ") {
+			t.Fatalf("card field exposes slash command: %#v", field)
+		}
+	}
+}
+
 func TestSlashRepoAddCreatesChannelAndStoresRepository(t *testing.T) {
 	store := &fakeAdminStore{}
 	channels := &fakeChannelManager{}
@@ -184,6 +512,28 @@ func TestSlashGitHubWebhookEnsure(t *testing.T) {
 	}
 	if provider.webhookOwner != "codex-k8s" || provider.webhookName != "matter-codex" {
 		t.Fatalf("webhook target = %s/%s", provider.webhookOwner, provider.webhookName)
+	}
+}
+
+func TestSlashGitHubAccountListUsesStorage(t *testing.T) {
+	store := &fakeAdminStore{
+		githubAccounts: map[string]entity.GitHubAccount{
+			"agent":   {Name: "agent", SecretRef: "matter-codex-github-agent", Status: "configured", Username: "agent-bot", Email: "agent@example.invalid"},
+			"primary": {Name: "primary", SecretRef: "matter-codex-github", Status: "configured", Username: "owner", Email: "owner@example.invalid"},
+		},
+	}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:     localizer,
+		StatusService: testStatusService(localizer),
+		Store:         store,
+		StorageReady:  true,
+	})
+
+	text := svc.Handle(context.Background(), SlashCommand{Text: "github account list"})
+
+	if !strings.Contains(text, "matter-codex GitHub accounts:") || !strings.Contains(text, "`agent` status `configured`") || !strings.Contains(text, "`primary` status `configured`") {
+		t.Fatalf("Handle(github account list) text = %q", text)
 	}
 }
 
@@ -1350,6 +1700,18 @@ func (store *fakeAdminStore) GetGitHubAccount(_ context.Context, name string) (e
 		return account, nil
 	}
 	return entity.GitHubAccount{}, fmt.Errorf("github account not found")
+}
+
+func (store *fakeAdminStore) ListGitHubAccounts(context.Context, int) ([]entity.GitHubAccount, error) {
+	store.ensureGitHubAccounts()
+	accounts := make([]entity.GitHubAccount, 0, len(store.githubAccounts))
+	for _, account := range store.githubAccounts {
+		accounts = append(accounts, account)
+	}
+	sort.Slice(accounts, func(i int, j int) bool {
+		return accounts[i].Name < accounts[j].Name
+	})
+	return accounts, nil
 }
 
 func (store *fakeAdminStore) ensureGitHubAccounts() {

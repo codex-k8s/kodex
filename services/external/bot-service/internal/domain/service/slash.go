@@ -27,7 +27,7 @@ type FlowCardPublisher interface {
 	UpsertFlowCard(ctx context.Context, card FlowCard) (FlowCardPost, error)
 }
 
-type FlowCard struct {
+type MattermostCard struct {
 	ChannelID string
 	PostID    string
 	ActionURL string
@@ -35,17 +35,17 @@ type FlowCard struct {
 	Color     string
 	Title     string
 	Text      string
-	Fields    []FlowCardField
-	Actions   []FlowCardAction
+	Fields    []MattermostCardField
+	Actions   []MattermostCardAction
 }
 
-type FlowCardField struct {
+type MattermostCardField struct {
 	Title string
 	Value string
 	Short bool
 }
 
-type FlowCardAction struct {
+type MattermostCardAction struct {
 	ID       string
 	Name     string
 	Tooltip  string
@@ -54,9 +54,19 @@ type FlowCardAction struct {
 	Context  map[string]any
 }
 
+type FlowCard = MattermostCard
+type FlowCardField = MattermostCardField
+type FlowCardAction = MattermostCardAction
+
 type FlowCardPost struct {
 	ChannelID string
 	PostID    string
+}
+
+type SlashResponse struct {
+	Text           string
+	Card           *MattermostCard
+	ChannelVisible bool
 }
 
 type SlashCommand struct {
@@ -67,6 +77,21 @@ type SlashCommand struct {
 	ChannelName string
 	TeamID      string
 	TeamDomain  string
+}
+
+type MenuActionCommand struct {
+	View      string
+	Command   string
+	UserID    string
+	UserName  string
+	ChannelID string
+	PostID    string
+}
+
+type MenuActionResult struct {
+	Card          *MattermostCard
+	EphemeralText string
+	StatusCode    int
 }
 
 type FlowActionCommand struct {
@@ -94,6 +119,7 @@ type SlashCommandServiceConfig struct {
 	RuntimeRunner           runtimerepo.Runner
 	DefaultTeamName         string
 	CodexAuthSecretName     string
+	MenuActionURL           string
 	FlowActionURL           string
 	BotTokenConfigured      bool
 	SlashTokenConfigured    bool
@@ -115,8 +141,23 @@ func NewSlashCommandService(cfg SlashCommandServiceConfig) *SlashCommandService 
 }
 
 func (svc *SlashCommandService) Handle(ctx context.Context, command SlashCommand) string {
+	return svc.HandleResponse(ctx, command).Text
+}
+
+func (svc *SlashCommandService) HandleResponse(ctx context.Context, command SlashCommand) SlashResponse {
 	fields := strings.Fields(command.Text)
-	if len(fields) == 0 || fields[0] == "status" {
+	if len(fields) == 0 {
+		return SlashResponse{
+			Text:           svc.t("menu.response", nil),
+			Card:           svc.menuCard(ctx, menuViewMain),
+			ChannelVisible: true,
+		}
+	}
+	return SlashResponse{Text: svc.handleText(ctx, command, fields)}
+}
+
+func (svc *SlashCommandService) handleText(ctx context.Context, command SlashCommand, fields []string) string {
+	if fields[0] == "status" {
 		return svc.cfg.StatusService.SlashStatusText()
 	}
 
@@ -2009,12 +2050,298 @@ func (svc *SlashCommandService) helpText() string {
 	return svc.t("help.header", nil) + "\n" + strings.Join(commands, "\n")
 }
 
-func (svc *SlashCommandService) handleGitHub(ctx context.Context, args []string, command SlashCommand) string {
-	if svc.cfg.RepositoryProvider == nil {
-		return svc.t("github.provider_not_configured", nil)
+func (svc *SlashCommandService) HandleMenuAction(ctx context.Context, command MenuActionCommand) MenuActionResult {
+	view := normalizeMenuView(command.View)
+	card := svc.menuCard(ctx, view)
+	card.ChannelID = strings.TrimSpace(command.ChannelID)
+	card.PostID = strings.TrimSpace(command.PostID)
+	if textCommand := strings.TrimSpace(command.Command); textCommand != "" {
+		fields := strings.Fields(textCommand)
+		if len(fields) == 0 {
+			return MenuActionResult{StatusCode: 200, EphemeralText: svc.t("slash.unknown_command", nil), Card: card}
+		}
+		text := svc.handleText(ctx, SlashCommand{
+			Text:      textCommand,
+			UserID:    command.UserID,
+			UserName:  command.UserName,
+			ChannelID: command.ChannelID,
+		}, fields)
+		card = svc.menuCommandResultCard(ctx, view, textCommand, text)
+		card.ChannelID = strings.TrimSpace(command.ChannelID)
+		card.PostID = strings.TrimSpace(command.PostID)
+		return MenuActionResult{
+			StatusCode:    200,
+			EphemeralText: text,
+			Card:          card,
+		}
 	}
+	return MenuActionResult{
+		StatusCode:    200,
+		EphemeralText: svc.t("menu.action.opened", map[string]any{"Title": card.Title}),
+		Card:          card,
+	}
+}
+
+func (svc *SlashCommandService) menuCard(ctx context.Context, view string) *MattermostCard {
+	view = normalizeMenuView(view)
+	card := &MattermostCard{
+		ActionURL: svc.cfg.MenuActionURL,
+		Message:   svc.t("menu.message", nil),
+		Color:     "#1c58d9",
+		Title:     svc.t("menu."+view+".title", nil),
+		Text:      svc.menuText(view),
+		Fields:    svc.menuFields(ctx, view),
+		Actions:   svc.menuActions(view),
+	}
+	if view != menuViewMain {
+		card.Color = "#5b667a"
+	}
+	return card
+}
+
+func (svc *SlashCommandService) menuCommandResultCard(ctx context.Context, view string, command string, resultText string) *MattermostCard {
+	view = normalizeMenuView(view)
+	text := resultText
+	if menuCommandPrivateOutput(command) {
+		text = svc.t("menu.command_result.private_text", nil)
+	}
+	return &MattermostCard{
+		ActionURL: svc.cfg.MenuActionURL,
+		Message:   svc.t("menu.message", nil),
+		Color:     "#227a55",
+		Title: svc.t("menu.command_result.title", map[string]any{
+			"Section": svc.t("menu."+view+".title", nil),
+		}),
+		Text: text,
+		Fields: []MattermostCardField{
+			{Title: svc.t("menu.field.current", nil), Value: svc.t("menu."+view+".breadcrumb", nil), Short: true},
+		},
+		Actions: []MattermostCardAction{
+			svc.menuAction(view, "menu.action.back", "menu.action.back.tooltip", "default"),
+			svc.menuAction(menuViewMain, "menu.action.main", "menu.action.main.tooltip", "default"),
+		},
+	}
+}
+
+func menuCommandPrivateOutput(command string) bool {
+	command = strings.TrimSpace(command)
+	return strings.HasPrefix(command, "openai auth ") || strings.HasPrefix(command, "openai status ")
+}
+
+func (svc *SlashCommandService) menuText(view string) string {
+	switch view {
+	case menuViewStartFlow:
+		return svc.t("menu.start_flow.text", nil)
+	case menuViewPending:
+		return svc.t("menu.pending.text", nil)
+	case menuViewRepositories:
+		return svc.t("menu.repositories.text", nil)
+	case menuViewAccounts:
+		return svc.t("menu.accounts.text", nil)
+	case menuViewOpenAI:
+		return svc.t("menu.openai.text", nil)
+	case menuViewGitHub:
+		return svc.t("menu.github.text", nil)
+	case menuViewProfiles:
+		return svc.t("menu.profiles.text", nil)
+	case menuViewPrompts:
+		return svc.t("menu.prompts.text", nil)
+	case menuViewRuntime:
+		return svc.t("menu.runtime.text", nil)
+	case menuViewSystem:
+		return svc.t("menu.system.text", nil)
+	case menuViewHelp:
+		return svc.t("menu.help.text", nil)
+	default:
+		return svc.t("menu.main.text", nil)
+	}
+}
+
+func (svc *SlashCommandService) menuFields(ctx context.Context, view string) []MattermostCardField {
+	if view != menuViewMain {
+		return []MattermostCardField{
+			{Title: svc.t("menu.field.current", nil), Value: svc.t("menu."+view+".breadcrumb", nil), Short: true},
+			{Title: svc.t("menu.field.next", nil), Value: svc.t("menu."+view+".next", nil), Short: true},
+		}
+	}
+	return []MattermostCardField{
+		{Title: svc.t("menu.field.storage", nil), Value: readyLabel(svc.cfg.Localizer, svc.cfg.StorageReady), Short: true},
+		{Title: svc.t("menu.field.runtime", nil), Value: configuredLabel(svc.cfg.Localizer, svc.cfg.RuntimeConfigured), Short: true},
+		{Title: svc.t("menu.field.github", nil), Value: svc.githubAccountsStatusText(ctx), Short: true},
+		{Title: svc.t("menu.field.openai", nil), Value: svc.openAIAccountsStatusText(ctx), Short: true},
+		{Title: svc.t("menu.field.locale", nil), Value: "`" + svc.cfg.Localizer.Locale() + "`", Short: true},
+	}
+}
+
+func (svc *SlashCommandService) githubAccountsStatusText(ctx context.Context) string {
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return configuredLabel(svc.cfg.Localizer, svc.cfg.GitHubTokenConfigured)
+	}
+	accounts, err := svc.cfg.Store.ListGitHubAccounts(ctx, 100)
+	if err != nil {
+		return readyLabel(svc.cfg.Localizer, false)
+	}
+	configured := 0
+	for _, account := range accounts {
+		if account.Status == "configured" {
+			configured++
+		}
+	}
+	return fmt.Sprintf("`%d/%d`", configured, len(accounts))
+}
+
+func (svc *SlashCommandService) openAIAccountsStatusText(ctx context.Context) string {
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return readyLabel(svc.cfg.Localizer, false)
+	}
+	accounts, err := svc.cfg.Store.ListOpenAIAccounts(ctx, 100)
+	if err != nil {
+		return readyLabel(svc.cfg.Localizer, false)
+	}
+	authorized := 0
+	for _, account := range accounts {
+		if account.Status == "authorized" {
+			authorized++
+		}
+	}
+	return fmt.Sprintf("`%d/%d`", authorized, len(accounts))
+}
+
+func (svc *SlashCommandService) menuActions(view string) []MattermostCardAction {
+	switch view {
+	case menuViewMain:
+		return []MattermostCardAction{
+			svc.menuAction(menuViewStartFlow, "menu.action.start_flow", "menu.action.start_flow.tooltip", "primary"),
+			svc.menuAction(menuViewPending, "menu.action.pending", "menu.action.pending.tooltip", "warning"),
+			svc.menuAction(menuViewRepositories, "menu.action.repositories", "menu.action.repositories.tooltip", "default"),
+			svc.menuAction(menuViewAccounts, "menu.action.accounts", "menu.action.accounts.tooltip", "default"),
+			svc.menuAction(menuViewProfiles, "menu.action.profiles", "menu.action.profiles.tooltip", "default"),
+			svc.menuAction(menuViewPrompts, "menu.action.prompts", "menu.action.prompts.tooltip", "default"),
+			svc.menuAction(menuViewRuntime, "menu.action.runtime", "menu.action.runtime.tooltip", "default"),
+			svc.menuAction(menuViewSystem, "menu.action.system", "menu.action.system.tooltip", "default"),
+			svc.menuAction(menuViewHelp, "menu.action.help", "menu.action.help.tooltip", "default"),
+		}
+	case menuViewAccounts:
+		return []MattermostCardAction{
+			svc.menuAction(menuViewOpenAI, "menu.action.openai", "menu.action.openai.tooltip", "primary"),
+			svc.menuAction(menuViewGitHub, "menu.action.github", "menu.action.github.tooltip", "primary"),
+			svc.menuAction(menuViewSystem, "menu.action.system", "menu.action.system.tooltip", "default"),
+			svc.menuAction(menuViewMain, "menu.action.back", "menu.action.back.tooltip", "default"),
+		}
+	case menuViewOpenAI:
+		return []MattermostCardAction{
+			svc.menuCommandAction(menuViewOpenAI, "cmdopenailist", "openai list", "menu.action.openai_list", "menu.action.openai_list.tooltip", "primary"),
+			svc.menuCommandAction(menuViewOpenAI, "cmdopenaiauthprimary", "openai auth primary", "menu.action.openai_auth_primary", "menu.action.openai_auth_primary.tooltip", "default"),
+			svc.menuCommandAction(menuViewOpenAI, "cmdopenaistatusprimary", "openai status primary", "menu.action.openai_status_primary", "menu.action.openai_status_primary.tooltip", "default"),
+			svc.menuAction(menuViewAccounts, "menu.action.back", "menu.action.back.tooltip", "default"),
+		}
+	case menuViewGitHub:
+		return []MattermostCardAction{
+			svc.menuCommandAction(menuViewGitHub, "cmdgithubaccountlist", "github account list", "menu.action.github_account_list", "menu.action.github_account_list.tooltip", "primary"),
+			svc.menuCommandAction(menuViewGitHub, "cmdgithubcheckmattercodex", "github check codex-k8s/matter-codex", "menu.action.github_check_mattercodex", "menu.action.github_check_mattercodex.tooltip", "default"),
+			svc.menuCommandAction(menuViewGitHub, "cmdgithubwebhookmattercodex", "github webhook ensure codex-k8s/matter-codex", "menu.action.github_webhook_mattercodex", "menu.action.github_webhook_mattercodex.tooltip", "default"),
+			svc.menuAction(menuViewAccounts, "menu.action.back", "menu.action.back.tooltip", "default"),
+		}
+	case menuViewStartFlow:
+		return []MattermostCardAction{
+			svc.menuAction(menuViewPending, "menu.action.pending", "menu.action.pending.tooltip", "warning"),
+			svc.menuAction(menuViewRepositories, "menu.action.repositories", "menu.action.repositories.tooltip", "default"),
+			svc.menuAction(menuViewProfiles, "menu.action.profiles", "menu.action.profiles.tooltip", "default"),
+			svc.menuAction(menuViewMain, "menu.action.back", "menu.action.back.tooltip", "default"),
+		}
+	case menuViewPending:
+		return []MattermostCardAction{
+			svc.menuAction(menuViewStartFlow, "menu.action.start_flow", "menu.action.start_flow.tooltip", "primary"),
+			svc.menuAction(menuViewRepositories, "menu.action.repositories", "menu.action.repositories.tooltip", "default"),
+			svc.menuAction(menuViewProfiles, "menu.action.profiles", "menu.action.profiles.tooltip", "default"),
+			svc.menuAction(menuViewMain, "menu.action.back", "menu.action.back.tooltip", "default"),
+		}
+	case menuViewRepositories:
+		return []MattermostCardAction{
+			svc.menuCommandAction(menuViewRepositories, "cmdrepolist", "repo list", "menu.action.repo_list", "menu.action.repo_list.tooltip", "primary"),
+			svc.menuCommandAction(menuViewRepositories, "cmdgithubcheckrepo", "github check codex-k8s/matter-codex", "menu.action.github_check_mattercodex", "menu.action.github_check_mattercodex.tooltip", "default"),
+			svc.menuCommandAction(menuViewRepositories, "cmdgithubwebhookrepo", "github webhook ensure codex-k8s/matter-codex", "menu.action.github_webhook_mattercodex", "menu.action.github_webhook_mattercodex.tooltip", "default"),
+			svc.menuAction(menuViewMain, "menu.action.back", "menu.action.back.tooltip", "default"),
+		}
+	case menuViewProfiles:
+		return []MattermostCardAction{
+			svc.menuCommandAction(menuViewProfiles, "cmdprofilelist", "profile list", "menu.action.profile_list", "menu.action.profile_list.tooltip", "primary"),
+			svc.menuAction(menuViewOpenAI, "menu.action.openai", "menu.action.openai.tooltip", "default"),
+			svc.menuAction(menuViewGitHub, "menu.action.github", "menu.action.github.tooltip", "default"),
+			svc.menuAction(menuViewPrompts, "menu.action.prompts", "menu.action.prompts.tooltip", "default"),
+			svc.menuAction(menuViewMain, "menu.action.back", "menu.action.back.tooltip", "default"),
+		}
+	case menuViewPrompts:
+		return []MattermostCardAction{
+			svc.menuCommandAction(menuViewPrompts, "cmdpromptlist", "prompt list", "menu.action.prompt_list", "menu.action.prompt_list.tooltip", "primary"),
+			svc.menuCommandAction(menuViewPrompts, "cmdprompthelpreviewer", "prompt help reviewer review_pr", "menu.action.prompt_help_reviewer", "menu.action.prompt_help_reviewer.tooltip", "default"),
+			svc.menuCommandAction(menuViewPrompts, "cmdpromptrenderreviewer", "prompt render reviewer review_pr", "menu.action.prompt_render_reviewer", "menu.action.prompt_render_reviewer.tooltip", "default"),
+			svc.menuAction(menuViewProfiles, "menu.action.profiles", "menu.action.profiles.tooltip", "default"),
+			svc.menuAction(menuViewMain, "menu.action.back", "menu.action.back.tooltip", "default"),
+		}
+	case menuViewRuntime:
+		return []MattermostCardAction{
+			svc.menuCommandAction(menuViewRuntime, "cmdruntimesmoke", "runtime smoke", "menu.action.runtime_smoke", "menu.action.runtime_smoke.tooltip", "primary"),
+			svc.menuCommandAction(menuViewRuntime, "cmdruntimeprunedryrun", "runtime prune 24h", "menu.action.runtime_prune_dry_run", "menu.action.runtime_prune_dry_run.tooltip", "default"),
+			svc.menuAction(menuViewSystem, "menu.action.system", "menu.action.system.tooltip", "default"),
+			svc.menuAction(menuViewMain, "menu.action.back", "menu.action.back.tooltip", "default"),
+		}
+	case menuViewSystem:
+		return []MattermostCardAction{
+			svc.menuCommandAction(menuViewSystem, "cmdstatus", "status", "menu.action.status", "menu.action.status.tooltip", "primary"),
+			svc.menuCommandAction(menuViewSystem, "cmdtokencheck", "token check", "menu.action.token_check", "menu.action.token_check.tooltip", "default"),
+			svc.menuCommandAction(menuViewSystem, "cmdlocaleget", "locale get", "menu.action.locale_get", "menu.action.locale_get.tooltip", "default"),
+			svc.menuCommandAction(menuViewSystem, "cmdlocalesetru", "locale set ru", "menu.action.locale_set_ru", "menu.action.locale_set_ru.tooltip", "default"),
+			svc.menuCommandAction(menuViewSystem, "cmdlocaleseten", "locale set en", "menu.action.locale_set_en", "menu.action.locale_set_en.tooltip", "default"),
+			svc.menuAction(menuViewMain, "menu.action.back", "menu.action.back.tooltip", "default"),
+		}
+	case menuViewHelp:
+		return []MattermostCardAction{
+			svc.menuAction(menuViewStartFlow, "menu.action.start_flow", "menu.action.start_flow.tooltip", "default"),
+			svc.menuAction(menuViewAccounts, "menu.action.accounts", "menu.action.accounts.tooltip", "default"),
+			svc.menuAction(menuViewRuntime, "menu.action.runtime", "menu.action.runtime.tooltip", "default"),
+			svc.menuAction(menuViewSystem, "menu.action.system", "menu.action.system.tooltip", "default"),
+			svc.menuAction(menuViewMain, "menu.action.back", "menu.action.back.tooltip", "default"),
+		}
+	default:
+		return []MattermostCardAction{
+			svc.menuAction(menuViewMain, "menu.action.back", "menu.action.back.tooltip", "default"),
+			svc.menuAction(menuViewStartFlow, "menu.action.start_flow", "menu.action.start_flow.tooltip", "primary"),
+			svc.menuAction(menuViewPending, "menu.action.pending", "menu.action.pending.tooltip", "warning"),
+			svc.menuAction(menuViewSystem, "menu.action.system", "menu.action.system.tooltip", "default"),
+		}
+	}
+}
+
+func (svc *SlashCommandService) menuCommandAction(view string, actionID string, command string, nameID string, tooltipID string, style string) MattermostCardAction {
+	action := svc.menuAction(view, nameID, tooltipID, style)
+	action.ID = actionID
+	action.Context["command"] = command
+	return action
+}
+
+func (svc *SlashCommandService) menuAction(view string, nameID string, tooltipID string, style string) MattermostCardAction {
+	return MattermostCardAction{
+		ID:      "menu" + strings.ReplaceAll(view, "_", ""),
+		Name:    svc.t(nameID, nil),
+		Tooltip: svc.t(tooltipID, nil),
+		Style:   style,
+		Context: map[string]any{
+			"kind": "agents_menu",
+			"view": view,
+		},
+	}
+}
+
+func (svc *SlashCommandService) handleGitHub(ctx context.Context, args []string, command SlashCommand) string {
 	if len(args) == 0 {
 		return svc.t("github.usage", nil)
+	}
+	if args[0] == "account" {
+		return svc.handleGitHubAccount(ctx, args[1:])
+	}
+	if svc.cfg.RepositoryProvider == nil {
+		return svc.t("github.provider_not_configured", nil)
 	}
 	switch args[0] {
 	case "check":
@@ -2028,6 +2355,42 @@ func (svc *SlashCommandService) handleGitHub(ctx context.Context, args []string,
 	default:
 		return svc.t("github.unknown_command", nil)
 	}
+}
+
+func (svc *SlashCommandService) handleGitHubAccount(ctx context.Context, args []string) string {
+	if len(args) == 0 {
+		return svc.t("github.account.usage", nil)
+	}
+	switch args[0] {
+	case "list":
+		return svc.handleGitHubAccountList(ctx)
+	default:
+		return svc.t("github.account.unknown_command", nil)
+	}
+}
+
+func (svc *SlashCommandService) handleGitHubAccountList(ctx context.Context) string {
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return svc.t("github.account.list.storage_not_ready", nil)
+	}
+	accounts, err := svc.cfg.Store.ListGitHubAccounts(ctx, 100)
+	if err != nil {
+		return svc.t("github.account.list.failed", map[string]any{"Error": safeError(err)})
+	}
+	if len(accounts) == 0 {
+		return svc.t("github.account.list.empty", nil)
+	}
+	lines := []string{svc.t("github.account.list.header", nil)}
+	for _, account := range accounts {
+		lines = append(lines, svc.t("github.account.list.item", map[string]any{
+			"Account":  account.Name,
+			"Status":   account.Status,
+			"Secret":   account.SecretRef,
+			"Username": emptyAsUnknown(account.Username),
+			"Email":    emptyAsUnknown(account.Email),
+		}))
+	}
+	return strings.Join(lines, "\n")
 }
 
 func (svc *SlashCommandService) handleGitHubCheck(ctx context.Context, args []string, command SlashCommand) string {
@@ -2378,6 +2741,19 @@ var (
 )
 
 const (
+	menuViewMain         = "main"
+	menuViewStartFlow    = "start_flow"
+	menuViewPending      = "pending"
+	menuViewRepositories = "repositories"
+	menuViewAccounts     = "accounts"
+	menuViewOpenAI       = "openai"
+	menuViewGitHub       = "github"
+	menuViewProfiles     = "profiles"
+	menuViewPrompts      = "prompts"
+	menuViewRuntime      = "runtime"
+	menuViewSystem       = "system"
+	menuViewHelp         = "help"
+
 	defaultFlowMaxAttempts = 3
 
 	flowStatusApprovedByReviewer = "approved_by_reviewer"
@@ -2417,6 +2793,35 @@ func validBranch(value string) bool {
 
 func validRuntimeRunID(value string) bool {
 	return runtimeRunRE.MatchString(value)
+}
+
+func normalizeMenuView(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case menuViewStartFlow:
+		return menuViewStartFlow
+	case menuViewPending:
+		return menuViewPending
+	case menuViewRepositories:
+		return menuViewRepositories
+	case menuViewAccounts:
+		return menuViewAccounts
+	case menuViewOpenAI:
+		return menuViewOpenAI
+	case menuViewGitHub:
+		return menuViewGitHub
+	case menuViewProfiles:
+		return menuViewProfiles
+	case menuViewPrompts:
+		return menuViewPrompts
+	case menuViewRuntime:
+		return menuViewRuntime
+	case menuViewSystem:
+		return menuViewSystem
+	case menuViewHelp:
+		return menuViewHelp
+	default:
+		return menuViewMain
+	}
 }
 
 func validFlowID(value string) bool {

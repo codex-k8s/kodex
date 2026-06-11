@@ -25,6 +25,7 @@ const (
 	pathReadyz        = "/readyz"
 	pathMetrics       = "/metrics"
 	pathAgentsSlash   = "/mattermost/slash/agents"
+	pathAgentsAction  = "/mattermost/actions/agents"
 	pathFlowAction    = "/mattermost/actions/flow"
 	pathGitHubWebhook = "/github/webhook"
 )
@@ -77,6 +78,7 @@ func NewRouter(cfg RouterConfig) *Router {
 	router.mux.HandleFunc(pathReadyz, router.handleReady)
 	router.mux.Handle(pathMetrics, promhttp.HandlerFor(registry, promhttp.HandlerOpts{Registry: registry, EnableOpenMetrics: true}))
 	router.mux.HandleFunc(pathAgentsSlash, router.handleAgentsSlash)
+	router.mux.HandleFunc(pathAgentsAction, router.handleAgentsAction)
 	router.mux.HandleFunc(pathFlowAction, router.handleFlowAction)
 	router.mux.HandleFunc(pathGitHubWebhook, router.handleGitHubWebhook)
 	return router
@@ -135,7 +137,7 @@ func (router *Router) handleAgentsSlash(w http.ResponseWriter, r *http.Request) 
 		writeCommandResponse(w, http.StatusOK, ephemeral(router.statusService.SlashStatusText()))
 		return
 	}
-	result := router.slashService.Handle(r.Context(), statusservice.SlashCommand{
+	result := router.slashService.HandleResponse(r.Context(), statusservice.SlashCommand{
 		Text:        text,
 		UserID:      strings.TrimSpace(r.PostForm.Get("user_id")),
 		UserName:    strings.TrimSpace(r.PostForm.Get("user_name")),
@@ -144,7 +146,44 @@ func (router *Router) handleAgentsSlash(w http.ResponseWriter, r *http.Request) 
 		TeamID:      strings.TrimSpace(r.PostForm.Get("team_id")),
 		TeamDomain:  strings.TrimSpace(r.PostForm.Get("team_domain")),
 	})
-	writeCommandResponse(w, http.StatusOK, ephemeral(result))
+	writeCommandResponse(w, http.StatusOK, slashResponse(result))
+}
+
+func (router *Router) handleAgentsAction(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, transportmodels.ErrorResponse{Error: "method_not_allowed"})
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, router.maxSlashFormBytes)
+	var request mattermostmodel.PostActionIntegrationRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		router.logWarn("invalid Mattermost agents action", "error", err)
+		writeJSON(w, http.StatusBadRequest, transportmodels.ErrorResponse{Error: "invalid_agents_action"})
+		return
+	}
+	if router.slashService == nil {
+		writeJSON(w, http.StatusServiceUnavailable, transportmodels.ErrorResponse{Error: "slash_service_not_configured"})
+		return
+	}
+	result := router.slashService.HandleMenuAction(r.Context(), statusservice.MenuActionCommand{
+		View:      contextString(request.Context, "view"),
+		Command:   contextString(request.Context, "command"),
+		UserID:    strings.TrimSpace(request.UserId),
+		UserName:  strings.TrimSpace(request.UserName),
+		ChannelID: strings.TrimSpace(request.ChannelId),
+		PostID:    strings.TrimSpace(request.PostId),
+	})
+	status := result.StatusCode
+	if status == 0 {
+		status = http.StatusOK
+	}
+	response := &mattermostmodel.PostActionIntegrationResponse{
+		EphemeralText: result.EphemeralText,
+	}
+	if result.Card != nil {
+		response.Update = cardPost(*result.Card)
+	}
+	writeJSON(w, status, response)
 }
 
 func (router *Router) handleFlowAction(w http.ResponseWriter, r *http.Request) {
@@ -246,6 +285,67 @@ func ephemeral(text string) *mattermostmodel.CommandResponse {
 	return &mattermostmodel.CommandResponse{
 		ResponseType: mattermostmodel.CommandResponseTypeEphemeral,
 		Text:         text,
+	}
+}
+
+func slashResponse(result statusservice.SlashResponse) *mattermostmodel.CommandResponse {
+	response := ephemeral(result.Text)
+	if result.ChannelVisible {
+		response.ResponseType = mattermostmodel.CommandResponseTypeInChannel
+	}
+	if result.Card != nil {
+		response.Attachments = []*mattermostmodel.MessageAttachment{
+			cardAttachment(*result.Card),
+		}
+	}
+	return response
+}
+
+func cardPost(card statusservice.MattermostCard) *mattermostmodel.Post {
+	post := &mattermostmodel.Post{
+		Id:        card.PostID,
+		ChannelId: card.ChannelID,
+		Message:   card.Message,
+	}
+	post.SetProps(mattermostmodel.StringInterface{
+		"attachments": []*mattermostmodel.MessageAttachment{
+			cardAttachment(card),
+		},
+	})
+	return post
+}
+
+func cardAttachment(card statusservice.MattermostCard) *mattermostmodel.MessageAttachment {
+	fields := make([]*mattermostmodel.MessageAttachmentField, 0, len(card.Fields))
+	for _, field := range card.Fields {
+		fields = append(fields, &mattermostmodel.MessageAttachmentField{
+			Title: field.Title,
+			Value: field.Value,
+			Short: mattermostmodel.SlackCompatibleBool(field.Short),
+		})
+	}
+	actions := make([]*mattermostmodel.PostAction, 0, len(card.Actions))
+	for _, action := range card.Actions {
+		actions = append(actions, &mattermostmodel.PostAction{
+			Id:       action.ID,
+			Type:     mattermostmodel.PostActionTypeButton,
+			Name:     action.Name,
+			Tooltip:  action.Tooltip,
+			Style:    action.Style,
+			Disabled: action.Disabled,
+			Integration: &mattermostmodel.PostActionIntegration{
+				URL:     card.ActionURL,
+				Context: action.Context,
+			},
+		})
+	}
+	return &mattermostmodel.MessageAttachment{
+		Fallback: card.Title,
+		Color:    card.Color,
+		Title:    card.Title,
+		Text:     card.Text,
+		Fields:   fields,
+		Actions:  actions,
 	}
 }
 

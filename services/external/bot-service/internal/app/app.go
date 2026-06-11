@@ -70,6 +70,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		RuntimeRunner:           runtimeRunner,
 		DefaultTeamName:         cfg.DefaultTeamName,
 		CodexAuthSecretName:     cfg.CodexAuthSecretName,
+		MenuActionURL:           agentsActionURL(cfg),
 		FlowActionURL:           flowActionURL(cfg),
 		BotTokenConfigured:      cfg.BotTokenConfigured(),
 		SlashTokenConfigured:    cfg.SlashTokenConfigured(),
@@ -176,6 +177,17 @@ func flowActionURL(cfg Config) string {
 		return ""
 	}
 	return baseURL + "/mattermost/actions/flow"
+}
+
+func agentsActionURL(cfg Config) string {
+	baseURL := strings.TrimRight(strings.TrimSpace(cfg.BotServiceSiteURL), "/")
+	if baseURL == "" {
+		baseURL = strings.TrimRight(strings.TrimSpace(cfg.BotServiceInternalURL), "/")
+	}
+	if baseURL == "" {
+		return ""
+	}
+	return baseURL + "/mattermost/actions/agents"
 }
 
 func newPrometheusRegistry() *prometheus.Registry {
