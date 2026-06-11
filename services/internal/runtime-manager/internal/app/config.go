@@ -128,23 +128,27 @@ type RuntimeSecretConfig struct {
 
 // RuntimeKubernetesWorkerConfig controls the explicitly enabled Kubernetes job executor.
 type RuntimeKubernetesWorkerConfig struct {
-	Enabled                 bool          `env:"ENABLED" envDefault:"false"`
-	WorkerID                string        `env:"WORKER_ID" envDefault:"runtime-manager-kubernetes-executor"`
-	DefaultNamespace        string        `env:"DEFAULT_NAMESPACE"`
-	DefaultServiceAccount   string        `env:"DEFAULT_SERVICE_ACCOUNT"`
-	DefaultImage            string        `env:"DEFAULT_IMAGE"`
-	ImagePullPolicy         string        `env:"IMAGE_PULL_POLICY" envDefault:"IfNotPresent"`
-	PollInterval            time.Duration `env:"POLL_INTERVAL" envDefault:"5s"`
-	ClaimLeaseTTL           time.Duration `env:"CLAIM_LEASE_TTL" envDefault:"5m"`
-	JobTimeout              time.Duration `env:"JOB_TIMEOUT" envDefault:"2m"`
-	KubernetesPollInterval  time.Duration `env:"KUBERNETES_POLL_INTERVAL" envDefault:"2s"`
-	BackoffLimit            int32         `env:"BACKOFF_LIMIT" envDefault:"0"`
-	TTLSecondsAfterFinished int32         `env:"TTL_SECONDS_AFTER_FINISHED" envDefault:"300"`
-	LogTailBytes            int64         `env:"LOG_TAIL_BYTES" envDefault:"16384"`
-	AgentManagerGRPCAddr    string        `env:"AGENT_MANAGER_GRPC_ADDR" envDefault:"agent-manager:9090"`
-	AgentManagerSecretName  string        `env:"AGENT_MANAGER_GRPC_AUTH_SECRET_NAME" envDefault:"kodex-platform-runtime"`
-	AgentManagerSecretKey   string        `env:"AGENT_MANAGER_GRPC_AUTH_SECRET_KEY" envDefault:"KODEX_AGENT_MANAGER_GRPC_AUTH_TOKEN"`
-	AgentManagerTimeout     time.Duration `env:"AGENT_MANAGER_REPORT_TIMEOUT" envDefault:"3s"`
+	Enabled                  bool          `env:"ENABLED" envDefault:"false"`
+	WorkerID                 string        `env:"WORKER_ID" envDefault:"runtime-manager-kubernetes-executor"`
+	DefaultNamespace         string        `env:"DEFAULT_NAMESPACE"`
+	DefaultServiceAccount    string        `env:"DEFAULT_SERVICE_ACCOUNT"`
+	DefaultImage             string        `env:"DEFAULT_IMAGE"`
+	ImagePullPolicy          string        `env:"IMAGE_PULL_POLICY" envDefault:"IfNotPresent"`
+	PollInterval             time.Duration `env:"POLL_INTERVAL" envDefault:"5s"`
+	ClaimLeaseTTL            time.Duration `env:"CLAIM_LEASE_TTL" envDefault:"5m"`
+	JobTimeout               time.Duration `env:"JOB_TIMEOUT" envDefault:"2m"`
+	KubernetesPollInterval   time.Duration `env:"KUBERNETES_POLL_INTERVAL" envDefault:"2s"`
+	BackoffLimit             int32         `env:"BACKOFF_LIMIT" envDefault:"0"`
+	TTLSecondsAfterFinished  int32         `env:"TTL_SECONDS_AFTER_FINISHED" envDefault:"300"`
+	LogTailBytes             int64         `env:"LOG_TAIL_BYTES" envDefault:"16384"`
+	AgentManagerGRPCAddr     string        `env:"AGENT_MANAGER_GRPC_ADDR" envDefault:"agent-manager:9090"`
+	AgentManagerSecretName   string        `env:"AGENT_MANAGER_GRPC_AUTH_SECRET_NAME" envDefault:"kodex-platform-runtime"`
+	AgentManagerSecretKey    string        `env:"AGENT_MANAGER_GRPC_AUTH_SECRET_KEY" envDefault:"KODEX_AGENT_MANAGER_GRPC_AUTH_TOKEN"`
+	AgentManagerTimeout      time.Duration `env:"AGENT_MANAGER_REPORT_TIMEOUT" envDefault:"3s"`
+	SourceAuthSecretName     string        `env:"SOURCE_AUTH_SECRET_NAME" envDefault:""`
+	SourceAuthSecretKey      string        `env:"SOURCE_AUTH_SECRET_KEY" envDefault:""`
+	BuildContextStorageSize  string        `env:"BUILD_CONTEXT_STORAGE_SIZE" envDefault:"2Gi"`
+	BuildContextStorageClass string        `env:"BUILD_CONTEXT_STORAGE_CLASS" envDefault:""`
 }
 
 // LoadConfig reads process configuration from environment variables.

@@ -359,6 +359,10 @@ func normalizeSelfDeployPlanInput(input CreateSelfDeployPlanInput, idempotencyKe
 	if err != nil {
 		return entity.SelfDeployPlan{}, err
 	}
+	providerSlug, repositoryFullName, providerRepositoryID, err := normalizeSelfDeployProviderIdentity(input.ProviderSlug, input.RepositoryFullName, input.ProviderRepositoryID)
+	if err != nil {
+		return entity.SelfDeployPlan{}, err
+	}
 	sourceRef, err := normalizeSelfDeployRef(input.SourceRef, true)
 	if err != nil {
 		return entity.SelfDeployPlan{}, err
@@ -400,6 +404,9 @@ func normalizeSelfDeployPlanInput(input CreateSelfDeployPlanInput, idempotencyKe
 		ProjectRef:              projectRef,
 		RepositoryRef:           repositoryRef,
 		ProviderSignalRef:       providerSignalRef,
+		ProviderSlug:            providerSlug,
+		RepositoryFullName:      repositoryFullName,
+		ProviderRepositoryID:    providerRepositoryID,
 		SourceRef:               sourceRef,
 		MergeCommitSHA:          commit,
 		ServicesYAMLRef:         servicesYAMLRef,
@@ -412,6 +419,7 @@ func normalizeSelfDeployPlanInput(input CreateSelfDeployPlanInput, idempotencyKe
 		IdempotencyKey:          idempotencyKey,
 		Status:                  enum.SelfDeployPlanStatusPendingApproval,
 		RuntimeBuildStatus:      enum.SelfDeployRuntimeBuildStatusNotRequested,
+		RuntimeDeployStatus:     enum.SelfDeployRuntimeDeployStatusNotRequested,
 	}
 	plan.PlanFingerprint, err = selfDeployPlanFingerprint(plan)
 	if err != nil {
@@ -656,6 +664,9 @@ func selfDeployPlanFingerprint(plan entity.SelfDeployPlan) (string, error) {
 		ProjectRef              string                          `json:"project_ref"`
 		RepositoryRef           string                          `json:"repository_ref"`
 		ProviderSignalRef       string                          `json:"provider_signal_ref,omitempty"`
+		ProviderSlug            string                          `json:"provider_slug"`
+		RepositoryFullName      string                          `json:"repository_full_name"`
+		ProviderRepositoryID    string                          `json:"provider_repository_id,omitempty"`
 		SourceRef               string                          `json:"source_ref"`
 		MergeCommitSHA          string                          `json:"merge_commit_sha"`
 		ServicesYAMLRef         string                          `json:"services_yaml_ref,omitempty"`
@@ -670,6 +681,9 @@ func selfDeployPlanFingerprint(plan entity.SelfDeployPlan) (string, error) {
 		ProjectRef:              plan.ProjectRef,
 		RepositoryRef:           plan.RepositoryRef,
 		ProviderSignalRef:       plan.ProviderSignalRef,
+		ProviderSlug:            plan.ProviderSlug,
+		RepositoryFullName:      plan.RepositoryFullName,
+		ProviderRepositoryID:    plan.ProviderRepositoryID,
 		SourceRef:               plan.SourceRef,
 		MergeCommitSHA:          plan.MergeCommitSHA,
 		ServicesYAMLRef:         plan.ServicesYAMLRef,
@@ -690,6 +704,51 @@ func selfDeployPlanFingerprint(plan entity.SelfDeployPlan) (string, error) {
 	}
 	sum := sha256.Sum256(compact.Bytes())
 	return "sha256:" + hex.EncodeToString(sum[:]), nil
+}
+
+func normalizeSelfDeployProviderIdentity(providerSlug string, repositoryFullName string, providerRepositoryID string) (string, string, string, error) {
+	slug := strings.TrimSpace(strings.ToLower(providerSlug))
+	fullName := strings.TrimSpace(repositoryFullName)
+	repositoryID := strings.TrimSpace(providerRepositoryID)
+	if slug == "" || fullName == "" || len(slug) > 64 || len(fullName) > 256 || len(repositoryID) > 128 {
+		return "", "", "", errs.ErrInvalidArgument
+	}
+	if unsafeSelfDeployText(slug) || unsafeSelfDeployText(fullName) || unsafeSelfDeployText(repositoryID) {
+		return "", "", "", errs.ErrInvalidArgument
+	}
+	for _, char := range slug {
+		if asciiLetter(char) || asciiDigit(char) || char == '-' || char == '_' || char == '.' {
+			continue
+		}
+		return "", "", "", errs.ErrInvalidArgument
+	}
+	parts := strings.Split(fullName, "/")
+	if len(parts) != 2 || !safeSelfDeployProviderNamePart(parts[0]) || !safeSelfDeployProviderNamePart(parts[1]) {
+		return "", "", "", errs.ErrInvalidArgument
+	}
+	if repositoryID != "" {
+		for _, char := range repositoryID {
+			if asciiLetter(char) || asciiDigit(char) || char == '-' || char == '_' || char == '.' || char == ':' {
+				continue
+			}
+			return "", "", "", errs.ErrInvalidArgument
+		}
+	}
+	return slug, fullName, repositoryID, nil
+}
+
+func safeSelfDeployProviderNamePart(value string) bool {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" || len(trimmed) > 128 || unsafeSelfDeployText(trimmed) {
+		return false
+	}
+	for _, char := range trimmed {
+		if asciiLetter(char) || asciiDigit(char) || char == '-' || char == '_' || char == '.' {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func normalizeSelfDeployRef(value string, required bool) (string, error) {
@@ -923,6 +982,9 @@ func sameSelfDeployPlanRequestRefs(stored entity.SelfDeployPlan, expected entity
 		stored.ProjectRef == expected.ProjectRef &&
 		stored.RepositoryRef == expected.RepositoryRef &&
 		stored.ProviderSignalRef == expected.ProviderSignalRef &&
+		stored.ProviderSlug == expected.ProviderSlug &&
+		stored.RepositoryFullName == expected.RepositoryFullName &&
+		stored.ProviderRepositoryID == expected.ProviderRepositoryID &&
 		stored.SourceRef == expected.SourceRef &&
 		stored.MergeCommitSHA == expected.MergeCommitSHA &&
 		stored.ServicesYAMLRef == expected.ServicesYAMLRef &&

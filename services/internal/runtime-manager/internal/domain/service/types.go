@@ -184,7 +184,7 @@ type DeployExecutionSpecInput struct {
 	ServiceKey            string                        `json:"service_key"`
 	ImageRef              string                        `json:"image_ref"`
 	ImageTag              string                        `json:"image_tag"`
-	ImageDigest           string                        `json:"image_digest"`
+	ImageDigest           string                        `json:"image_digest,omitempty"`
 	ManifestRef           string                        `json:"manifest_ref"`
 	ManifestDigest        string                        `json:"manifest_digest"`
 	KustomizationRef      string                        `json:"kustomization_ref"`
@@ -214,7 +214,7 @@ type DeployRolloutTargetInput struct {
 type DeployExpectedImageRefInput struct {
 	ContainerName string `json:"container_name"`
 	ImageRef      string `json:"image_ref"`
-	ImageDigest   string `json:"image_digest"`
+	ImageDigest   string `json:"image_digest,omitempty"`
 }
 
 // RuntimeJobExecutionRefInput contains a typed safe build/deploy job reference.

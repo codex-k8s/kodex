@@ -25,6 +25,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -35,35 +36,41 @@ import (
 )
 
 const (
-	managedBy                = "runtime-manager"
-	runtimePartOf            = "kodex"
-	runtimeJobLabel          = "kodex.k8s.io/runtime-job-id"
-	runtimeJobTypeLabel      = "kodex.k8s.io/runtime-job-type"
-	healthCheckContainerName = "runtime-health-check"
-	agentRunContainerName    = "runtime-agent-runner"
-	buildContainerName       = "runtime-kaniko-build"
-	defaultImagePullPolicy   = "IfNotPresent"
-	maxMetadataItems         = 16
-	maxAgentRunEnvValueBytes = 16 * 1024
-	maxAgentRunReporterBytes = 512
-	workspaceVolumeName      = "workspace"
-	buildContextVolumeName   = "build-context"
-	registryConfigVolumeName = "registry-config"
-	agentRunWorkspacePath    = "/workspace"
-	agentRunContextPath      = "/workspace/.kodex/context/agent-run.json"
-	agentRunCommand          = "/kodex/bin/agent-runner"
-	agentRunCommandKind      = "run"
-	agentRunRunnerModeCodex  = "codex_agent"
-	agentManagerGRPCAddrEnv  = "KODEX_AGENT_RUNNER_AGENT_MANAGER_GRPC_ADDR"
-	agentManagerAuthTokenEnv = "KODEX_AGENT_RUNNER_AGENT_MANAGER_GRPC_AUTH_TOKEN"
-	agentManagerTimeoutEnv   = "KODEX_AGENT_RUNNER_AGENT_MANAGER_TIMEOUT"
-	buildContextMountPath    = "/workspace/context"
-	kanikoDockerConfigPath   = "/kaniko/.docker"
-	kanikoCommand            = "/kaniko/executor"
-	kanikoSnapshotMode       = "redo"
-	kanikoVerbosity          = "info"
-	kanikoRegistrySecretKey  = ".dockerconfigjson"
-	maxStatusSummaryBytes    = 512
+	managedBy                 = "runtime-manager"
+	runtimePartOf             = "kodex"
+	runtimeJobLabel           = "kodex.k8s.io/runtime-job-id"
+	runtimeJobTypeLabel       = "kodex.k8s.io/runtime-job-type"
+	healthCheckContainerName  = "runtime-health-check"
+	agentRunContainerName     = "runtime-agent-runner"
+	buildContainerName        = "runtime-kaniko-build"
+	deployContainerName       = "runtime-deployer"
+	defaultImagePullPolicy    = "IfNotPresent"
+	maxMetadataItems          = 16
+	maxAgentRunEnvValueBytes  = 16 * 1024
+	maxAgentRunReporterBytes  = 512
+	workspaceVolumeName       = "workspace"
+	buildContextVolumeName    = "build-context"
+	registryConfigVolumeName  = "registry-config"
+	agentRunWorkspacePath     = "/workspace"
+	agentRunContextPath       = "/workspace/.kodex/context/agent-run.json"
+	agentRunCommand           = "/kodex/bin/agent-runner"
+	agentRunCommandKind       = "run"
+	agentRunRunnerModeCodex   = "codex_agent"
+	agentManagerGRPCAddrEnv   = "KODEX_AGENT_RUNNER_AGENT_MANAGER_GRPC_ADDR"
+	agentManagerAuthTokenEnv  = "KODEX_AGENT_RUNNER_AGENT_MANAGER_GRPC_AUTH_TOKEN"
+	agentManagerTimeoutEnv    = "KODEX_AGENT_RUNNER_AGENT_MANAGER_TIMEOUT"
+	buildContextMountPath     = "/workspace/context"
+	kanikoDockerConfigPath    = "/kaniko/.docker"
+	kanikoCommand             = "/kaniko/executor"
+	kanikoSnapshotMode        = "redo"
+	kanikoVerbosity           = "info"
+	kanikoRegistrySecretKey   = ".dockerconfigjson"
+	deployManifestMountPath   = "/workspace/manifests"
+	deployerCommand           = "/usr/local/bin/runtime-deployer"
+	materializerCommand       = "/usr/local/bin/runtime-materializer"
+	materializerContainerName = "runtime-build-context-materializer"
+	materializerResultPath    = "/workspace/context/.kodex-build-context-result.json"
+	maxStatusSummaryBytes     = 512
 )
 
 var (
@@ -73,18 +80,21 @@ var (
 
 // Config constrains Kubernetes executor behavior with operator-managed settings.
 type Config struct {
-	DefaultNamespace        string
-	DefaultServiceAccount   string
-	DefaultImage            string
-	ImagePullPolicy         string
-	JobTimeout              time.Duration
-	PollInterval            time.Duration
-	BackoffLimit            int32
-	TTLSecondsAfterFinished int32
-	LogTailBytes            int64
-	AgentManagerGRPCAddr    string
-	AgentManagerAuthSecret  SecretKeyRef
-	AgentManagerTimeout     time.Duration
+	DefaultNamespace         string
+	DefaultServiceAccount    string
+	DefaultImage             string
+	ImagePullPolicy          string
+	JobTimeout               time.Duration
+	PollInterval             time.Duration
+	BackoffLimit             int32
+	TTLSecondsAfterFinished  int32
+	LogTailBytes             int64
+	AgentManagerGRPCAddr     string
+	AgentManagerAuthSecret   SecretKeyRef
+	AgentManagerTimeout      time.Duration
+	SourceAuthSecret         SecretKeyRef
+	BuildContextStorageSize  string
+	BuildContextStorageClass string
 }
 
 // SecretKeyRef points to a Kubernetes Secret key without carrying the secret value.
@@ -202,8 +212,8 @@ func NewExecutorWithClientFactory(clusters ClusterAccessProvider, secrets secret
 
 // Start creates or reuses a deterministic Kubernetes Job for the claimed runtime job.
 func (e *Executor) Start(ctx context.Context, job entity.Job) (StartedJob, error) {
-	if job.JobType != enum.JobTypeHealthCheck && job.JobType != enum.JobTypeAgentRun && job.JobType != enum.JobTypeBuild {
-		return StartedJob{}, newExecutionError("unsupported_job_type", "Kubernetes executor supports only health_check, agent_run and build jobs")
+	if job.JobType != enum.JobTypeHealthCheck && job.JobType != enum.JobTypeAgentRun && job.JobType != enum.JobTypeBuild && job.JobType != enum.JobTypeDeploy {
+		return StartedJob{}, newExecutionError("unsupported_job_type", "Kubernetes executor supports only health_check, agent_run, build and deploy jobs")
 	}
 	if job.ClusterID == nil || *job.ClusterID == uuid.Nil {
 		return StartedJob{}, newExecutionError("missing_cluster_ref", "Runtime job does not have a Kubernetes cluster ref")
@@ -524,8 +534,10 @@ func (e *Executor) executionSpec(job entity.Job) (executionSpec, error) {
 		return e.agentRunExecutionSpec(job)
 	case enum.JobTypeBuild:
 		return e.buildExecutionSpec(job)
+	case enum.JobTypeDeploy:
+		return e.deployExecutionSpec(job)
 	default:
-		return executionSpec{}, newExecutionError("unsupported_job_type", "Kubernetes executor supports only health_check, agent_run and build jobs")
+		return executionSpec{}, newExecutionError("unsupported_job_type", "Kubernetes executor supports only health_check, agent_run, build and deploy jobs")
 	}
 }
 
@@ -692,6 +704,51 @@ func (e *Executor) buildExecutionSpec(job entity.Job) (executionSpec, error) {
 	return result, nil
 }
 
+func (e *Executor) deployExecutionSpec(job entity.Job) (executionSpec, error) {
+	spec, ok := runtimeservice.DeployExecutionSpecFromJobInput(job.JobInputJSON)
+	if !ok || spec == nil {
+		if jobInputJSONFieldPresent(job.JobInputJSON, "deploy_execution_spec") {
+			return executionSpec{}, newExecutionError("invalid_deploy_execution_spec", "deploy execution spec is invalid")
+		}
+		return executionSpec{}, newExecutionError("deploy_execution_spec_required", "deploy execution spec is required before Kubernetes execution")
+	}
+	pvc, bundlePath, err := parseManifestBundlePVCRef(spec.ManifestBundleRef, e.config.DefaultNamespace)
+	if err != nil {
+		return executionSpec{}, err
+	}
+	image, err := containerImageFromRef(e.config.DefaultImage, "invalid_deployer_image_ref", "deploy executor image ref is invalid")
+	if err != nil {
+		return executionSpec{}, err
+	}
+	imageRef, err := buildDestinationImageRef(spec.ImageRef, spec.ImageTag)
+	if err != nil {
+		return executionSpec{}, err
+	}
+	args := deployerArgs(*spec, path.Join(deployManifestMountPath, bundlePath), imageRef)
+	result := executionSpec{
+		Namespace:                pvc.Namespace,
+		ServiceAccount:           e.config.DefaultServiceAccount,
+		Image:                    image,
+		ImagePullPolicy:          corev1.PullPolicy(e.config.ImagePullPolicy),
+		Labels:                   map[string]string{"kodex.k8s.io/service-key": spec.ServiceKey},
+		ContainerName:            deployContainerName,
+		Command:                  []string{deployerCommand},
+		Args:                     args,
+		Volumes:                  []corev1.Volume{{Name: buildContextVolumeName, VolumeSource: corev1.VolumeSource{PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: pvc.ClaimName, ReadOnly: true}}}},
+		VolumeMounts:             []corev1.VolumeMount{{Name: buildContextVolumeName, MountPath: deployManifestMountPath, ReadOnly: true}},
+		PodSecurityContext:       restrictedBuildPodSecurityContext(),
+		ContainerSecurityContext: restrictedBuildContainerSecurityContext(),
+		ImageArtifactRef:         imageRef,
+		ImageArtifactDigest:      spec.ImageDigest,
+		CollectPodLogs:           true,
+		BuildContextPVC:          &pvc,
+	}
+	if err := validateExecutionSpec(result); err != nil {
+		return executionSpec{}, err
+	}
+	return result, nil
+}
+
 func (e *Executor) preflightExecution(ctx context.Context, clients clusterClients, jobType enum.JobType, spec executionSpec) error {
 	if strings.TrimSpace(spec.ServiceAccount) != "" {
 		if err := preflightMetadataObject(
@@ -710,14 +767,17 @@ func (e *Executor) preflightExecution(ctx context.Context, clients clusterClient
 			return err
 		}
 	}
-	if jobType != enum.JobTypeBuild {
+	if jobType != enum.JobTypeBuild && jobType != enum.JobTypeDeploy {
 		return nil
 	}
 	if spec.BuildContextPVC == nil {
-		return newExecutionError("build_context_ref_required", "build context PVC ref is required")
+		return newExecutionError("build_context_ref_required", "build or deploy context PVC ref is required")
 	}
 	if err := preflightBuildContextPVC(ctx, clients.kubernetes, *spec.BuildContextPVC); err != nil {
 		return err
+	}
+	if jobType == enum.JobTypeDeploy {
+		return nil
 	}
 	if spec.RegistrySecret == nil {
 		return newExecutionError("build_registry_secret_ref_required", "build registry secret ref is required before Kubernetes execution")
@@ -853,6 +913,40 @@ func parseBuildContextPVCRef(raw string, defaultNamespace string) (workspacePVCR
 	)
 }
 
+func parseManifestBundlePVCRef(raw string, defaultNamespace string) (workspacePVCRef, string, error) {
+	value := strings.TrimSpace(raw)
+	if !strings.HasPrefix(value, "pvc://") {
+		pvc, err := parseBuildContextPVCRef(value, defaultNamespace)
+		return pvc, ".", err
+	}
+	parts := strings.Split(strings.TrimPrefix(value, "pvc://"), "/")
+	if len(parts) < 2 {
+		return workspacePVCRef{}, "", newExecutionError("invalid_deploy_manifest_bundle_ref", "deploy manifest bundle ref is invalid")
+	}
+	pvc, err := parsePVCRef(
+		"pvc://"+parts[0]+"/"+parts[1],
+		defaultNamespace,
+		"deploy_manifest_bundle_ref_required",
+		"invalid_deploy_manifest_bundle_ref",
+		"deploy manifest bundle PVC ref is required",
+		"deploy manifest bundle PVC ref is invalid",
+		"deploy manifest bundle namespace is invalid",
+		"deploy manifest bundle claim name is invalid",
+	)
+	if err != nil {
+		return workspacePVCRef{}, "", err
+	}
+	bundlePath := "."
+	if len(parts) > 2 {
+		bundlePath = strings.Join(parts[2:], "/")
+	}
+	cleaned := path.Clean(bundlePath)
+	if cleaned == "." || cleaned == ".." || strings.HasPrefix(cleaned, "../") || strings.HasPrefix(cleaned, "/") || strings.ContainsAny(cleaned, "\\\x00\r\n\t") || len(cleaned) > 512 {
+		return workspacePVCRef{}, "", newExecutionError("invalid_deploy_manifest_bundle_ref", "deploy manifest bundle path is invalid")
+	}
+	return pvc, cleaned, nil
+}
+
 func parsePVCRef(
 	raw string,
 	defaultNamespace string,
@@ -969,6 +1063,25 @@ func buildKanikoArgs(dockerfilePath string, destination string, target string) [
 		"--cache=false",
 		"--snapshot-mode=" + kanikoSnapshotMode,
 		"--verbosity=" + kanikoVerbosity,
+	}
+	return args
+}
+
+func deployerArgs(spec runtimeservice.DeployExecutionSpecInput, bundlePath string, imageRef string) []string {
+	args := []string{
+		"apply",
+		"--bundle-path", bundlePath,
+		"--bundle-digest", strings.TrimSpace(spec.ManifestBundleDigest),
+		"--target-namespace", strings.TrimSpace(spec.TargetNamespace),
+		"--service-key", strings.TrimSpace(spec.ServiceKey),
+		"--expected-image", imageRef,
+	}
+	for _, target := range spec.RolloutTargets {
+		args = append(args, "--rollout-target", strings.Join([]string{
+			strings.TrimSpace(target.Kind),
+			strings.TrimSpace(target.Namespace),
+			strings.TrimSpace(target.Name),
+		}, "/"))
 	}
 	return args
 }
@@ -1401,6 +1514,12 @@ func normalizeConfig(cfg Config) (Config, error) {
 		Name: strings.TrimSpace(cfg.AgentManagerAuthSecret.Name),
 		Key:  strings.TrimSpace(cfg.AgentManagerAuthSecret.Key),
 	}
+	cfg.SourceAuthSecret = SecretKeyRef{
+		Name: strings.TrimSpace(cfg.SourceAuthSecret.Name),
+		Key:  strings.TrimSpace(cfg.SourceAuthSecret.Key),
+	}
+	cfg.BuildContextStorageSize = firstNonEmpty(strings.TrimSpace(cfg.BuildContextStorageSize), "2Gi")
+	cfg.BuildContextStorageClass = strings.TrimSpace(cfg.BuildContextStorageClass)
 	cfg.ImagePullPolicy = firstNonEmpty(cfg.ImagePullPolicy, defaultImagePullPolicy)
 	if cfg.JobTimeout <= 0 {
 		cfg.JobTimeout = 2 * time.Minute
@@ -1420,6 +1539,9 @@ func normalizeConfig(cfg Config) (Config, error) {
 		return Config{}, newExecutionError("invalid_executor_config", "Kubernetes executor namespace and image must be configured")
 	}
 	if err := validateAgentRunReporterConfig(cfg); err != nil {
+		return Config{}, err
+	}
+	if err := validateBuildContextMaterializerConfig(cfg); err != nil {
 		return Config{}, err
 	}
 	return cfg, nil
@@ -1443,6 +1565,32 @@ func validateAgentRunReporterConfig(cfg Config) error {
 	}
 	if cfg.AgentManagerTimeout < 0 {
 		return newExecutionError("invalid_agent_run_reporter_config", "agent_run reporter timeout is invalid")
+	}
+	return nil
+}
+
+func validateBuildContextMaterializerConfig(cfg Config) error {
+	if _, err := resource.ParseQuantity(cfg.BuildContextStorageSize); err != nil {
+		return newExecutionError("invalid_build_context_materializer_config", "build context PVC storage request is invalid")
+	}
+	secretName := strings.TrimSpace(cfg.SourceAuthSecret.Name)
+	secretKey := strings.TrimSpace(cfg.SourceAuthSecret.Key)
+	if secretName == "" && secretKey == "" {
+		return nil
+	}
+	if secretName == "" || secretKey == "" {
+		return newExecutionError("invalid_build_context_materializer_config", "build context source auth secret ref is incomplete")
+	}
+	if errs := validation.IsDNS1123Subdomain(secretName); len(errs) > 0 {
+		return newExecutionError("invalid_build_context_materializer_config", "build context source auth secret name is invalid")
+	}
+	if errs := validation.IsConfigMapKey(secretKey); len(errs) > 0 {
+		return newExecutionError("invalid_build_context_materializer_config", "build context source auth secret key is invalid")
+	}
+	if cfg.BuildContextStorageClass != "" {
+		if errs := validation.IsDNS1123Subdomain(cfg.BuildContextStorageClass); len(errs) > 0 {
+			return newExecutionError("invalid_build_context_materializer_config", "build context storage class is invalid")
+		}
 	}
 	return nil
 }

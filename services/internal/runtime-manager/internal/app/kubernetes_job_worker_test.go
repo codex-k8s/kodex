@@ -47,11 +47,12 @@ func TestKubernetesJobWorkerCompletesClaimedHealthCheck(t *testing.T) {
 	if service.claimCalls != 1 {
 		t.Fatalf("claim calls = %d, want 1", service.claimCalls)
 	}
-	if len(service.lastClaimJobTypes) != 3 ||
+	if len(service.lastClaimJobTypes) != 4 ||
 		service.lastClaimJobTypes[0] != enum.JobTypeHealthCheck ||
 		service.lastClaimJobTypes[1] != enum.JobTypeAgentRun ||
-		service.lastClaimJobTypes[2] != enum.JobTypeBuild {
-		t.Fatalf("claim job types = %v, want health_check, agent_run and build", service.lastClaimJobTypes)
+		service.lastClaimJobTypes[2] != enum.JobTypeBuild ||
+		service.lastClaimJobTypes[3] != enum.JobTypeDeploy {
+		t.Fatalf("claim job types = %v, want health_check, agent_run, build and deploy", service.lastClaimJobTypes)
 	}
 	if len(service.reportStatuses) != 2 || service.reportStatuses[0] != enum.JobStepStatusRunning || service.reportStatuses[1] != enum.JobStepStatusSucceeded {
 		t.Fatalf("report statuses = %v, want running/succeeded", service.reportStatuses)

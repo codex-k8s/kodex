@@ -189,22 +189,14 @@ func selfDeployBuildPlanProviderSignalRef(input GetSelfDeployBuildPlanInput) str
 }
 
 func selfDeployBuildPolicyStaleReason(input GetSelfDeployBuildPlanInput, policy entity.ServicesPolicy) string {
-	if strings.TrimSpace(input.SourceRef) != strings.TrimSpace(policy.SourceRef) {
-		return "services_policy_source_ref_mismatch"
-	}
-	if !strings.EqualFold(strings.TrimSpace(input.MergeCommitSHA), strings.TrimSpace(policy.SourceCommitSHA)) {
-		return "services_policy_source_commit_mismatch"
-	}
-	if strings.TrimSpace(input.ExpectedServicesPolicyDigest) != strings.TrimSpace(policy.ContentHash) {
-		return "services_policy_digest_mismatch"
-	}
-	if expected := strings.TrimSpace(input.ExpectedServicesPolicyFingerprint); expected != "" && expected != selfDeployServicesYamlFingerprint(policy) {
-		return "services_policy_fingerprint_mismatch"
-	}
-	if input.ExpectedServicesPolicyVersion != nil && *input.ExpectedServicesPolicyVersion != policy.PolicyVersion {
-		return "services_policy_version_mismatch"
-	}
-	return ""
+	return selfDeployServicesPolicyStaleReason(
+		input.SourceRef,
+		input.MergeCommitSHA,
+		input.ExpectedServicesPolicyDigest,
+		input.ExpectedServicesPolicyFingerprint,
+		input.ExpectedServicesPolicyVersion,
+		policy,
+	)
 }
 
 func normalizeBuildPlanServiceKeys(values []string) ([]string, error) {

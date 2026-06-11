@@ -134,6 +134,17 @@ approvals:
 - `agent-manager` блокирует постановку `JOB_TYPE_BUILD` при любом статусе неготовности и не парсит `services.yaml` сам;
 - raw webhook body, provider response, diff, полный YAML, env values, токены, секреты и private URL в модель не входят.
 
+### SelfDeployDeployPlan
+
+`SelfDeployDeployPlan` — составная read model для self-deploy deploy dispatch после successful build. Она строится по запросу `GetSelfDeployDeployPlan` из активной checked `ServicesPolicy`, affected service keys, materialized build context refs и safe build outputs, которые `agent-manager` получил от runtime build jobs.
+
+Правила:
+- `project-catalog` остаётся владельцем checked связи service key -> manifest bundle -> rollout target и возвращает только `DeployExecutionSpec`-совместимые refs/digests;
+- manifest bundle ref/digest, manifest/kustomization refs, target namespace/cluster ref, rollout targets и expected image refs берутся только из проверенной policy и controlled deploy inventory;
+- image digest может быть пустым в MVP, если runtime build executor ещё не сообщил проверенный digest; commit-based image tag остаётся обязательным immutable safe ref;
+- если build output, checked policy digest/fingerprint/version или manifest bundle refs не совпадают с ожидаемыми значениями, read model возвращает typed safe status и не отдаёт executable deploy spec;
+- `project-catalog` не читает Kubernetes, GitHub/GitLab, raw manifests или runtime logs, а `agent-manager` не выводит deploy refs самостоятельно.
+
 ### ServicesPolicy
 
 | Поле | Тип | Может быть пустым | Примечание |

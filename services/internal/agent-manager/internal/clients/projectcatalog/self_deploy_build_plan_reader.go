@@ -10,7 +10,6 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/clients/grpcclient"
 	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/errs"
 	agentservice "github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/service"
-	"github.com/google/uuid"
 	"google.golang.org/grpc"
 )
 
@@ -43,17 +42,14 @@ func (r *SelfDeployBuildPlanReader) applyProjectCatalogSettings(settings grpccli
 
 // GetSelfDeployBuildPlan returns checked runtime build specs for an approved self-deploy plan.
 func (r *SelfDeployBuildPlanReader) GetSelfDeployBuildPlan(ctx context.Context, input agentservice.SelfDeployBuildPlanLookupInput) (agentservice.SelfDeployBuildPlanReadResult, error) {
-	if r == nil || r.client == nil {
+	if r == nil {
 		return agentservice.SelfDeployBuildPlanReadResult{}, errs.ErrDependencyUnavailable
 	}
-	if input.ProjectID == uuid.Nil || input.RepositoryID == uuid.Nil {
-		return agentservice.SelfDeployBuildPlanReadResult{}, errs.ErrInvalidArgument
-	}
-	callCtx, cancel := context.WithTimeout(grpcclient.OutgoingContext(ctx, r.authToken, callerID), r.timeout)
-	defer cancel()
-	response, err := r.client.GetSelfDeployBuildPlan(callCtx, selfDeployBuildPlanRequest(input))
+	response, err := readSelfDeployProjectPlan(ctx, r.authToken, r.timeout, r.client, input.ProjectID, input.RepositoryID, func(callCtx context.Context) (*projectsv1.SelfDeployBuildPlanResponse, error) {
+		return r.client.GetSelfDeployBuildPlan(callCtx, selfDeployBuildPlanRequest(input))
+	})
 	if err != nil {
-		return agentservice.SelfDeployBuildPlanReadResult{}, mapProjectCatalogError(err)
+		return agentservice.SelfDeployBuildPlanReadResult{}, err
 	}
 	return selfDeployBuildPlanReadResult(response)
 }
@@ -115,19 +111,59 @@ func selfDeployBuildPlan(plan *projectsv1.SelfDeployBuildPlan) (agentservice.Sel
 	if err != nil {
 		return agentservice.SelfDeployBuildPlan{}, err
 	}
+	header := selfDeployProjectPlanHeader(
+		plan.GetProjectRef(),
+		plan.GetRepositoryRef(),
+		plan.GetProviderSignalRef(),
+		plan.GetSourceRef(),
+		plan.GetMergeCommitSha(),
+		plan.GetServicesYaml(),
+		plan.GetAffectedServiceKeys(),
+		plan.GetPlanFingerprint(),
+		plan.GetSafeSummary(),
+		plan.GetVersion(),
+	)
 	return agentservice.SelfDeployBuildPlan{
-		ProjectRef:          strings.TrimSpace(plan.GetProjectRef()),
-		RepositoryRef:       strings.TrimSpace(plan.GetRepositoryRef()),
-		ProviderSignalRef:   strings.TrimSpace(plan.GetProviderSignalRef()),
-		SourceRef:           strings.TrimSpace(plan.GetSourceRef()),
-		MergeCommitSHA:      strings.TrimSpace(plan.GetMergeCommitSha()),
-		ServicesYAML:        selfDeployServicesYAML(plan.GetServicesYaml()),
-		AffectedServiceKeys: trimmedStrings(plan.GetAffectedServiceKeys()),
+		ProjectRef:          header.projectRef,
+		RepositoryRef:       header.repositoryRef,
+		ProviderSignalRef:   header.providerSignalRef,
+		SourceRef:           header.sourceRef,
+		MergeCommitSHA:      header.mergeCommitSHA,
+		ServicesYAML:        header.servicesYAML,
+		AffectedServiceKeys: header.affectedServiceKeys,
 		BuildItems:          items,
-		PlanFingerprint:     strings.TrimSpace(plan.GetPlanFingerprint()),
-		SafeSummary:         strings.TrimSpace(plan.GetSafeSummary()),
-		Version:             plan.GetVersion(),
+		PlanFingerprint:     header.planFingerprint,
+		SafeSummary:         header.safeSummary,
+		Version:             header.version,
 	}, nil
+}
+
+type selfDeployProjectPlanHeaderFields struct {
+	projectRef          string
+	repositoryRef       string
+	providerSignalRef   string
+	sourceRef           string
+	mergeCommitSHA      string
+	servicesYAML        agentservice.SelfDeploySignalServicesYAML
+	affectedServiceKeys []string
+	planFingerprint     string
+	safeSummary         string
+	version             int64
+}
+
+func selfDeployProjectPlanHeader(projectRef string, repositoryRef string, providerSignalRef string, sourceRef string, mergeCommitSHA string, servicesYAML *projectsv1.SelfDeployServicesYamlProjection, affectedServiceKeys []string, planFingerprint string, safeSummary string, version int64) selfDeployProjectPlanHeaderFields {
+	return selfDeployProjectPlanHeaderFields{
+		projectRef:          strings.TrimSpace(projectRef),
+		repositoryRef:       strings.TrimSpace(repositoryRef),
+		providerSignalRef:   strings.TrimSpace(providerSignalRef),
+		sourceRef:           strings.TrimSpace(sourceRef),
+		mergeCommitSHA:      strings.TrimSpace(mergeCommitSHA),
+		servicesYAML:        selfDeployServicesYAML(servicesYAML),
+		affectedServiceKeys: trimmedStrings(affectedServiceKeys),
+		planFingerprint:     strings.TrimSpace(planFingerprint),
+		safeSummary:         strings.TrimSpace(safeSummary),
+		version:             version,
+	}
 }
 
 func selfDeployBuildPlanItems(items []*projectsv1.SelfDeployBuildPlanItem) ([]agentservice.SelfDeployBuildPlanItem, error) {

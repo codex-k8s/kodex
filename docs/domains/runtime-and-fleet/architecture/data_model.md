@@ -106,7 +106,7 @@ approvals:
 
 - build context не хранится в `services.yaml`, потому что ref/PVC/digest зависят от конкретного merge commit;
 - запись идемпотентна по `context_fingerprint`, который строится из project/repository/provider/source refs, source commit SHA, affected service keys и `build_plan_fingerprint`;
-- `pending` с `source_snapshot_unavailable` означает ожидание checked source snapshot ref/digest от provider/project/source-artifact контура, а не ошибку Kaniko;
+- `pending` с `source_snapshot_unavailable` означает ожидание materializer-а или checked source snapshot ref/digest, а не ошибку Kaniko; для self-repo Kubernetes materializer получает source auth только через `SecretRef`, проверяет commit и переводит запись в `ready` после подготовки PVC/context digest;
 - `ready` допустим только при наличии `build_context_ref` и `build_context_digest`;
 - БД хранит только refs, digest, status, безопасную ошибку, `next_action` и timestamps; содержимое snapshot/context, raw webhook body, diff, provider response, полный YAML, kubeconfig и значения секретов не сохраняются.
 
@@ -147,7 +147,7 @@ approvals:
 - job может быть связан со слотом, проектом, release line, пакетом или maintenance policy;
 - идемпотентный след mutating-команд хранится отдельно в `RuntimeManagerCommandResult`;
 - захват задания является короткой арендой с токеном, чтобы поздний исполнитель не мог перезаписать новую попытку;
-- `deploy` с валидным `DeployExecutionSpec` хранится и читается как типизированное задание, но spec обязан ссылаться на checked manifest bundle, rollout targets и expected image refs; задание остаётся `pending` с `deploy_executor_unavailable` и не выдаётся в claim до реализации исполнителя выкладки;
+- `deploy` с валидным `DeployExecutionSpec` хранится и читается как типизированное задание, spec обязан ссылаться на checked manifest bundle, rollout targets и expected image refs, а Kubernetes worker забирает его в claim и исполняет controlled deploy executor без raw manifest/provider payload;
 - долгие операции не держат SQL-блокировки.
 
 | Поле | Тип | Nullable | Ограничения | Примечание |

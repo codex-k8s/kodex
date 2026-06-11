@@ -762,6 +762,7 @@ type fakeProjectService struct {
 	reconcileAdoptionMerge   func(context.Context, projectservice.ReconcileAdoptionMergeSignalInput) (projectservice.BootstrapServicesPolicyImportResult, error)
 	getSelfDeploySignal      func(context.Context, projectservice.GetSelfDeploySignalInput) (projectservice.SelfDeploySignalResult, error)
 	getSelfDeployBuildPlan   func(context.Context, projectservice.GetSelfDeployBuildPlanInput) (projectservice.SelfDeployBuildPlanResult, error)
+	getSelfDeployDeployPlan  func(context.Context, projectservice.GetSelfDeployDeployPlanInput) (projectservice.SelfDeployDeployPlanResult, error)
 }
 
 func (s *fakeProjectService) CreateProject(ctx context.Context, input projectservice.CreateProjectInput) (entity.Project, error) {
@@ -818,6 +819,13 @@ func (s *fakeProjectService) GetSelfDeployBuildPlan(ctx context.Context, input p
 		return projectservice.SelfDeployBuildPlanResult{}, errs.ErrInvalidArgument
 	}
 	return s.getSelfDeployBuildPlan(ctx, input)
+}
+
+func (s *fakeProjectService) GetSelfDeployDeployPlan(ctx context.Context, input projectservice.GetSelfDeployDeployPlanInput) (projectservice.SelfDeployDeployPlanResult, error) {
+	if s.getSelfDeployDeployPlan == nil {
+		return projectservice.SelfDeployDeployPlanResult{}, errs.ErrInvalidArgument
+	}
+	return s.getSelfDeployDeployPlan(ctx, input)
 }
 
 type unimplementedProjectService struct{}
@@ -888,6 +896,10 @@ func (unimplementedProjectService) GetSelfDeploySignal(context.Context, projects
 
 func (unimplementedProjectService) GetSelfDeployBuildPlan(context.Context, projectservice.GetSelfDeployBuildPlanInput) (projectservice.SelfDeployBuildPlanResult, error) {
 	return projectservice.SelfDeployBuildPlanResult{}, errs.ErrInvalidArgument
+}
+
+func (unimplementedProjectService) GetSelfDeployDeployPlan(context.Context, projectservice.GetSelfDeployDeployPlanInput) (projectservice.SelfDeployDeployPlanResult, error) {
+	return projectservice.SelfDeployDeployPlanResult{}, errs.ErrInvalidArgument
 }
 
 func (unimplementedProjectService) GetServicesPolicy(context.Context, projectservice.GetServicesPolicyInput) (entity.ServicesPolicy, error) {

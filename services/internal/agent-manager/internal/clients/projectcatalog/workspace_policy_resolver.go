@@ -69,6 +69,34 @@ func buildProjectCatalogAdapter[T projectCatalogReadAdapter](client any, cfg Con
 	return adapter, nil
 }
 
+func selfDeployPlanReadContext(ctx context.Context, authToken string, timeout time.Duration) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(grpcclient.OutgoingContext(ctx, authToken, callerID), timeout)
+}
+
+func validateSelfDeployPlanLookup(client any, projectID uuid.UUID, repositoryID uuid.UUID) error {
+	if client == nil {
+		return errs.ErrDependencyUnavailable
+	}
+	if projectID == uuid.Nil || repositoryID == uuid.Nil {
+		return errs.ErrInvalidArgument
+	}
+	return nil
+}
+
+func readSelfDeployProjectPlan[T any](ctx context.Context, authToken string, timeout time.Duration, client any, projectID uuid.UUID, repositoryID uuid.UUID, call func(context.Context) (T, error)) (T, error) {
+	var zero T
+	if err := validateSelfDeployPlanLookup(client, projectID, repositoryID); err != nil {
+		return zero, err
+	}
+	callCtx, cancel := selfDeployPlanReadContext(ctx, authToken, timeout)
+	defer cancel()
+	result, err := call(callCtx)
+	if err != nil {
+		return zero, mapProjectCatalogError(err)
+	}
+	return result, nil
+}
+
 func (r *WorkspacePolicyResolver) applyProjectCatalogSettings(settings grpcclient.ClientSettings) {
 	r.authToken = settings.AuthToken
 	r.timeout = settings.Timeout

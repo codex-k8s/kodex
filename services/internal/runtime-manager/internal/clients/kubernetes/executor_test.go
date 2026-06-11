@@ -239,6 +239,59 @@ func TestExecutorStartCreatesRestrictedKanikoBuildJob(t *testing.T) {
 	}
 }
 
+func TestBuildContextMaterializerStartCreatesPVCAndControlledJob(t *testing.T) {
+	t.Parallel()
+
+	client := fake.NewClientset()
+	executor := newTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
+	materializer, err := NewBuildContextMaterializer(executor, testClusterAccess().ClusterID)
+	if err != nil {
+		t.Fatalf("NewBuildContextMaterializer(): %v", err)
+	}
+	buildContext := entity.BuildContext{
+		Base:                 entity.Base{ID: uuid.MustParse("00000000-0000-0000-0000-000000000055"), Version: 2},
+		Provider:             "github",
+		ProviderOwner:        "codex-k8s",
+		ProviderName:         "kodex",
+		SourceRef:            "refs/heads/main",
+		SourceCommitSHA:      "0123456789abcdef0123456789abcdef01234567",
+		BuildPlanFingerprint: "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+		ContextFingerprint:   "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+		AffectedServiceKeys:  []string{"runtime-manager"},
+	}
+
+	started, err := materializer.start(context.Background(), buildContext)
+	if err != nil {
+		t.Fatalf("start materializer: %v", err)
+	}
+	if started.Namespace != "runtime-jobs" || started.ExternalRef == "" {
+		t.Fatalf("started materializer = %+v, want safe namespace/ref", started)
+	}
+	pvcName := buildContextPVCName(buildContext.ID)
+	if _, err := client.CoreV1().PersistentVolumeClaims("runtime-jobs").Get(context.Background(), pvcName, metav1.GetOptions{}); err != nil {
+		t.Fatalf("get materializer PVC: %v", err)
+	}
+	job, err := client.BatchV1().Jobs("runtime-jobs").Get(context.Background(), buildContextMaterializerJobName(buildContext.ID), metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("get materializer Job: %v", err)
+	}
+	container := job.Spec.Template.Spec.Containers[0]
+	if container.Name != materializerContainerName || strings.Join(container.Command, " ") != materializerCommand {
+		t.Fatalf("materializer container = %s/%v, want fixed command", container.Name, container.Command)
+	}
+	args := strings.Join(container.Args, " ")
+	if !strings.Contains(args, "--owner codex-k8s") || !strings.Contains(args, "--commit 0123456789abcdef0123456789abcdef01234567") {
+		t.Fatalf("materializer args = %v, want typed source refs", container.Args)
+	}
+	if strings.Contains(args, "secret-value") || strings.Contains(args, "provider payload") {
+		t.Fatalf("materializer args contain unsafe marker: %v", container.Args)
+	}
+	authEnv := envVarByName(container.Env, "GITHUB_TOKEN")
+	if authEnv == nil || authEnv.Value != "" || authEnv.ValueFrom == nil || authEnv.ValueFrom.SecretKeyRef == nil {
+		t.Fatalf("materializer auth env = %+v, want SecretKeyRef without literal token", authEnv)
+	}
+}
+
 func TestExecutorStartReusesExistingManagedBuildJobBeforePreflight(t *testing.T) {
 	t.Parallel()
 
@@ -880,6 +933,7 @@ func newTestExecutorWithMetadata(t *testing.T, client clientkubernetes.Interface
 		AgentManagerGRPCAddr:    "agent-manager:9090",
 		AgentManagerAuthSecret:  SecretKeyRef{Name: "kodex-platform-runtime", Key: "KODEX_AGENT_MANAGER_GRPC_AUTH_TOKEN"},
 		AgentManagerTimeout:     3 * time.Second,
+		SourceAuthSecret:        SecretKeyRef{Name: "kodex-platform-runtime", Key: "KODEX_GIT_BOT_TOKEN"},
 	}, fakeClientFactory{client: client, metadataClient: metadataClient})
 	if err != nil {
 		t.Fatalf("NewExecutorWithClientFactory(): %v", err)

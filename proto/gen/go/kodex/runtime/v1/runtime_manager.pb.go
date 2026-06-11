@@ -2286,8 +2286,8 @@ type DeployExecutionSpec struct {
 	ImageRef string `protobuf:"bytes,4,opt,name=image_ref,json=imageRef,proto3" json:"image_ref,omitempty"`
 	// image_tag is the target image tag selected by the deploy plan.
 	ImageTag string `protobuf:"bytes,5,opt,name=image_tag,json=imageTag,proto3" json:"image_tag,omitempty"`
-	// image_digest is the immutable image digest required for rollout.
-	ImageDigest string `protobuf:"bytes,6,opt,name=image_digest,json=imageDigest,proto3" json:"image_digest,omitempty"`
+	// image_digest is reported when the build executor can provide it; MVP may rely on immutable image_tag.
+	ImageDigest *string `protobuf:"bytes,6,opt,name=image_digest,json=imageDigest,proto3,oneof" json:"image_digest,omitempty"`
 	// manifest_ref points to the checked rendered manifest or manifest set.
 	ManifestRef string `protobuf:"bytes,7,opt,name=manifest_ref,json=manifestRef,proto3" json:"manifest_ref,omitempty"`
 	// manifest_digest is the immutable digest of the checked manifest set.
@@ -2386,8 +2386,8 @@ func (x *DeployExecutionSpec) GetImageTag() string {
 }
 
 func (x *DeployExecutionSpec) GetImageDigest() string {
-	if x != nil {
-		return x.ImageDigest
+	if x != nil && x.ImageDigest != nil {
+		return *x.ImageDigest
 	}
 	return ""
 }
@@ -7666,8 +7666,8 @@ type DeployExpectedImageRef struct {
 	ContainerName string `protobuf:"bytes,1,opt,name=container_name,json=containerName,proto3" json:"container_name,omitempty"`
 	// image_ref is the expected image repository/ref without raw registry credentials.
 	ImageRef string `protobuf:"bytes,2,opt,name=image_ref,json=imageRef,proto3" json:"image_ref,omitempty"`
-	// image_digest pins the expected immutable image digest.
-	ImageDigest   string `protobuf:"bytes,3,opt,name=image_digest,json=imageDigest,proto3" json:"image_digest,omitempty"`
+	// image_digest pins the expected immutable image digest when available.
+	ImageDigest   *string `protobuf:"bytes,3,opt,name=image_digest,json=imageDigest,proto3,oneof" json:"image_digest,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -7717,8 +7717,8 @@ func (x *DeployExpectedImageRef) GetImageRef() string {
 }
 
 func (x *DeployExpectedImageRef) GetImageDigest() string {
-	if x != nil {
-		return x.ImageDigest
+	if x != nil && x.ImageDigest != nil {
+		return *x.ImageDigest
 	}
 	return ""
 }
@@ -7860,7 +7860,7 @@ const file_kodex_runtime_v1_runtime_manager_proto_rawDesc = "" +
 	"\voutput_refs\x18\x0f \x03(\v2%.kodex.runtime.v1.RuntimeJobOutputRefR\n" +
 	"outputRefsB\x0f\n" +
 	"\r_image_digestB\x14\n" +
-	"\x12_dockerfile_digest\"\x8f\b\n" +
+	"\x12_dockerfile_digest\"\xa5\b\n" +
 	"\x13DeployExecutionSpec\x12\x1d\n" +
 	"\n" +
 	"source_ref\x18\x01 \x01(\tR\tsourceRef\x12*\n" +
@@ -7868,8 +7868,8 @@ const file_kodex_runtime_v1_runtime_manager_proto_rawDesc = "" +
 	"\vservice_key\x18\x03 \x01(\tR\n" +
 	"serviceKey\x12\x1b\n" +
 	"\timage_ref\x18\x04 \x01(\tR\bimageRef\x12\x1b\n" +
-	"\timage_tag\x18\x05 \x01(\tR\bimageTag\x12!\n" +
-	"\fimage_digest\x18\x06 \x01(\tR\vimageDigest\x12!\n" +
+	"\timage_tag\x18\x05 \x01(\tR\bimageTag\x12&\n" +
+	"\fimage_digest\x18\x06 \x01(\tH\x00R\vimageDigest\x88\x01\x01\x12!\n" +
 	"\fmanifest_ref\x18\a \x01(\tR\vmanifestRef\x12'\n" +
 	"\x0fmanifest_digest\x18\b \x01(\tR\x0emanifestDigest\x12+\n" +
 	"\x11kustomization_ref\x18\t \x01(\tR\x10kustomizationRef\x121\n" +
@@ -7877,7 +7877,7 @@ const file_kodex_runtime_v1_runtime_manager_proto_rawDesc = "" +
 	" \x01(\tR\x13kustomizationDigest\x12)\n" +
 	"\x10target_namespace\x18\v \x01(\tR\x0ftargetNamespace\x12,\n" +
 	"\x12target_cluster_ref\x18\f \x01(\tR\x10targetClusterRef\x12)\n" +
-	"\x0etarget_slot_id\x18\r \x01(\tH\x00R\ftargetSlotId\x88\x01\x01\x126\n" +
+	"\x0etarget_slot_id\x18\r \x01(\tH\x01R\ftargetSlotId\x88\x01\x01\x126\n" +
 	"\x17deploy_plan_fingerprint\x18\x0e \x01(\tR\x15deployPlanFingerprint\x12\\\n" +
 	"\x13allowed_secret_refs\x18\x0f \x03(\v2,.kodex.runtime.v1.RuntimeJobAllowedSecretRefR\x11allowedSecretRefs\x12F\n" +
 	"\voutput_refs\x18\x10 \x03(\v2%.kodex.runtime.v1.RuntimeJobOutputRefR\n" +
@@ -7885,7 +7885,8 @@ const file_kodex_runtime_v1_runtime_manager_proto_rawDesc = "" +
 	"\x13manifest_bundle_ref\x18\x11 \x01(\tR\x11manifestBundleRef\x124\n" +
 	"\x16manifest_bundle_digest\x18\x12 \x01(\tR\x14manifestBundleDigest\x12N\n" +
 	"\x0frollout_targets\x18\x13 \x03(\v2%.kodex.runtime.v1.DeployRolloutTargetR\x0erolloutTargets\x12X\n" +
-	"\x13expected_image_refs\x18\x14 \x03(\v2(.kodex.runtime.v1.DeployExpectedImageRefR\x11expectedImageRefsB\x11\n" +
+	"\x13expected_image_refs\x18\x14 \x03(\v2(.kodex.runtime.v1.DeployExpectedImageRefR\x11expectedImageRefsB\x0f\n" +
+	"\r_image_digestB\x11\n" +
 	"\x0f_target_slot_id\"\x96\a\n" +
 	"\x19CodexSessionExecutionSpec\x124\n" +
 	"\x16instruction_object_ref\x18\x01 \x01(\tR\x14instructionObjectRef\x12:\n" +
@@ -8490,11 +8491,12 @@ const file_kodex_runtime_v1_runtime_manager_proto_rawDesc = "" +
 	"\tnamespace\x18\x03 \x01(\tR\tnamespace\x12\x12\n" +
 	"\x04name\x18\x04 \x01(\tR\x04name\x12\x1b\n" +
 	"\x06digest\x18\x05 \x01(\tH\x00R\x06digest\x88\x01\x01B\t\n" +
-	"\a_digest\"\x7f\n" +
+	"\a_digest\"\x95\x01\n" +
 	"\x16DeployExpectedImageRef\x12%\n" +
 	"\x0econtainer_name\x18\x01 \x01(\tR\rcontainerName\x12\x1b\n" +
-	"\timage_ref\x18\x02 \x01(\tR\bimageRef\x12!\n" +
-	"\fimage_digest\x18\x03 \x01(\tR\vimageDigest*\x89\x01\n" +
+	"\timage_ref\x18\x02 \x01(\tR\bimageRef\x12&\n" +
+	"\fimage_digest\x18\x03 \x01(\tH\x00R\vimageDigest\x88\x01\x01B\x0f\n" +
+	"\r_image_digest*\x89\x01\n" +
 	"\vRuntimeMode\x12\x1c\n" +
 	"\x18RUNTIME_MODE_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16RUNTIME_MODE_CODE_ONLY\x10\x01\x12\x19\n" +
@@ -8967,6 +8969,7 @@ func file_kodex_runtime_v1_runtime_manager_proto_init() {
 	file_kodex_runtime_v1_runtime_manager_proto_msgTypes[65].OneofWrappers = []any{}
 	file_kodex_runtime_v1_runtime_manager_proto_msgTypes[67].OneofWrappers = []any{}
 	file_kodex_runtime_v1_runtime_manager_proto_msgTypes[70].OneofWrappers = []any{}
+	file_kodex_runtime_v1_runtime_manager_proto_msgTypes[71].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

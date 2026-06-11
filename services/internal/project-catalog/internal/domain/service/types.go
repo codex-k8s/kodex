@@ -440,6 +440,24 @@ type GetSelfDeployBuildPlanInput struct {
 	Meta                              value.QueryMeta
 }
 
+// GetSelfDeployDeployPlanInput идентифицирует запрос checked deploy plan.
+type GetSelfDeployDeployPlanInput struct {
+	ProjectID                         uuid.UUID
+	RepositoryID                      uuid.UUID
+	SourceRef                         string
+	MergeCommitSHA                    string
+	ProviderSignalRef                 string
+	AffectedServiceKeys               []string
+	ExpectedServicesPolicyDigest      string
+	ExpectedServicesPolicyFingerprint string
+	ExpectedServicesPolicyVersion     *int64
+	ExpectedBuildPlanFingerprint      string
+	ExpectedDeployPlanFingerprint     string
+	BuildOutputs                      []SelfDeployBuildOutput
+	MaterializedBuildContexts         []SelfDeployMaterializedBuildContext
+	Meta                              value.QueryMeta
+}
+
 // SelfDeployMaterializedBuildContext содержит refs контекста сборки, подготовленного runtime-manager.
 type SelfDeployMaterializedBuildContext struct {
 	ServiceKey                 string
@@ -480,6 +498,46 @@ type SelfDeployBuildExecutionSpec struct {
 	BuildContextDigest   string
 	DockerfileDigest     string
 	DockerfileTarget     string
+}
+
+// SelfDeployDeployExecutionSpec повторяет runtime-manager DeployExecutionSpec без transport DTO в домене.
+type SelfDeployDeployExecutionSpec struct {
+	ServiceKey            string
+	SourceRef             string
+	SourceCommitSHA       string
+	ImageRef              string
+	ImageTag              string
+	ImageDigest           string
+	ManifestBundleRef     string
+	ManifestBundleDigest  string
+	ManifestRef           string
+	ManifestDigest        string
+	KustomizationRef      string
+	KustomizationDigest   string
+	TargetNamespace       string
+	TargetClusterRef      string
+	TargetSlotID          string
+	DeployPlanFingerprint string
+	AllowedSecretRefs     []RuntimeJobAllowedSecretRef
+	OutputRefs            []RuntimeJobOutputRef
+	RolloutTargets        []SelfDeployDeployRolloutTarget
+	ExpectedImageRefs     []SelfDeployDeployExpectedImageRef
+}
+
+// SelfDeployDeployRolloutTarget описывает один ожидаемый rollout target.
+type SelfDeployDeployRolloutTarget struct {
+	Kind      string
+	Ref       string
+	Namespace string
+	Name      string
+	Digest    string
+}
+
+// SelfDeployDeployExpectedImageRef описывает ожидаемый image ref без обязательного digest.
+type SelfDeployDeployExpectedImageRef struct {
+	ContainerName string
+	ImageRef      string
+	ImageDigest   string
 }
 
 // SelfDeployBuildPlanItemStatus описывает готовность build item одного сервиса.
@@ -535,6 +593,61 @@ type SelfDeployBuildPlan struct {
 type SelfDeployBuildPlanResult struct {
 	Status     enum.SelfDeployBuildPlanStatus
 	Plan       SelfDeployBuildPlan
+	SafeReason string
+}
+
+// SelfDeployBuildOutput содержит safe результат successful build job.
+type SelfDeployBuildOutput struct {
+	ServiceKey               string
+	RuntimeJobRef            string
+	ImageRef                 string
+	ImageTag                 string
+	ImageDigest              string
+	BuildPlanItemFingerprint string
+	BuildPlanFingerprint     string
+	BuildContextRef          string
+	BuildContextDigest       string
+}
+
+// SelfDeployDeployPlanItemStatus описывает готовность deploy item одного сервиса.
+type SelfDeployDeployPlanItemStatus string
+
+const (
+	SelfDeployDeployPlanItemStatusReady                 SelfDeployDeployPlanItemStatus = "ready"
+	SelfDeployDeployPlanItemStatusBuildNotReady         SelfDeployDeployPlanItemStatus = "build_not_ready"
+	SelfDeployDeployPlanItemStatusBuildOutputInvalid    SelfDeployDeployPlanItemStatus = "build_output_invalid"
+	SelfDeployDeployPlanItemStatusDeployPlanUnavailable SelfDeployDeployPlanItemStatus = "deploy_plan_unavailable"
+)
+
+// SelfDeployDeployPlanItem содержит checked deploy spec одного сервиса.
+type SelfDeployDeployPlanItem struct {
+	ServiceKey          string
+	ServiceRef          string
+	DeployExecutionSpec SelfDeployDeployExecutionSpec
+	PlanItemFingerprint string
+	Status              SelfDeployDeployPlanItemStatus
+	SafeReason          string
+}
+
+// SelfDeployDeployPlan содержит checked project-owned deploy inputs.
+type SelfDeployDeployPlan struct {
+	ProjectRef          string
+	RepositoryRef       string
+	ProviderSignalRef   string
+	SourceRef           string
+	MergeCommitSHA      string
+	ServicesYaml        SelfDeployServicesYamlProjection
+	AffectedServiceKeys []string
+	DeployItems         []SelfDeployDeployPlanItem
+	PlanFingerprint     string
+	SafeSummary         string
+	Version             int64
+}
+
+// SelfDeployDeployPlanResult возвращает готовность плана и ограниченную диагностику.
+type SelfDeployDeployPlanResult struct {
+	Status     enum.SelfDeployDeployPlanStatus
+	Plan       SelfDeployDeployPlan
 	SafeReason string
 }
 

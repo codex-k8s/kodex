@@ -8,6 +8,7 @@ var (
 	queryBuildContextGet                  = mustLoadQuery("build_context__get")
 	queryBuildContextGetByFingerprint     = mustLoadQuery("build_context__get_by_fingerprint")
 	queryBuildContextInsert               = mustLoadQuery("build_context__insert")
+	queryBuildContextListRunnable         = mustLoadQuery("build_context__list_runnable")
 	queryBuildContextUpdate               = mustLoadQuery("build_context__update")
 	queryCleanupPolicyGet                 = mustLoadQuery("cleanup_policy__get")
 	queryCleanupPolicyInsert              = mustLoadQuery("cleanup_policy__insert")

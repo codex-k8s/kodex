@@ -29,4 +29,5 @@ const (
 	operationRefreshSelfDeployPlanGate      = "domain.Service.RefreshSelfDeployPlanGate"
 	operationRecordSelfDeployGateDecision   = "domain.Service.RecordSelfDeployPlanGateDecision"
 	operationDispatchSelfDeployBuild        = "domain.Service.DispatchSelfDeployBuild"
+	operationDispatchSelfDeployDeploy       = "domain.Service.DispatchSelfDeployDeploy"
 )

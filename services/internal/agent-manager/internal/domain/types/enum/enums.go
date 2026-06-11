@@ -241,6 +241,17 @@ const (
 	SelfDeployRuntimeBuildStatusBlocked          SelfDeployRuntimeBuildStatus = "blocked"
 	SelfDeployRuntimeBuildStatusRequested        SelfDeployRuntimeBuildStatus = "requested"
 	SelfDeployRuntimeBuildStatusFailed           SelfDeployRuntimeBuildStatus = "failed"
+	SelfDeployRuntimeBuildStatusSucceeded        SelfDeployRuntimeBuildStatus = "succeeded"
+)
+
+type SelfDeployRuntimeDeployStatus string
+
+const (
+	SelfDeployRuntimeDeployStatusNotRequested SelfDeployRuntimeDeployStatus = "not_requested"
+	SelfDeployRuntimeDeployStatusBlocked      SelfDeployRuntimeDeployStatus = "blocked"
+	SelfDeployRuntimeDeployStatusRequested    SelfDeployRuntimeDeployStatus = "requested"
+	SelfDeployRuntimeDeployStatusFailed       SelfDeployRuntimeDeployStatus = "failed"
+	SelfDeployRuntimeDeployStatusSucceeded    SelfDeployRuntimeDeployStatus = "succeeded"
 )
 
 type CommandAggregateType string

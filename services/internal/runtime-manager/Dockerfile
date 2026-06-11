@@ -12,6 +12,8 @@ COPY services/internal/runtime-manager/ services/internal/runtime-manager/
 RUN go mod download
 RUN go install github.com/githubnemo/CompileDaemon@v1.4.0
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o /out/runtime-manager ./services/internal/runtime-manager/cmd/runtime-manager
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o /out/runtime-deployer ./services/internal/runtime-manager/cmd/runtime-deployer
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o /out/runtime-materializer ./services/internal/runtime-manager/cmd/runtime-materializer
 
 FROM ${GOLANG_IMAGE} AS migration-tools
 
@@ -26,6 +28,8 @@ WORKDIR /workspace
 COPY --from=build /go/pkg/mod /go/pkg/mod
 COPY --from=build /go/bin/CompileDaemon /usr/local/bin/CompileDaemon
 COPY --from=build /out/runtime-manager /usr/local/bin/runtime-manager
+COPY --from=build /out/runtime-deployer /usr/local/bin/runtime-deployer
+COPY --from=build /out/runtime-materializer /usr/local/bin/runtime-materializer
 COPY --from=build /root/.cache/go-build /tmp/.cache/go-build
 COPY --from=build /workspace/go.mod /workspace/go.sum ./
 COPY --from=build /workspace/libs/go/ libs/go/
@@ -56,6 +60,8 @@ FROM ${GOLANG_IMAGE} AS prod
 RUN addgroup -S -g 10001 app && adduser -S -D -H -u 10001 -G app app
 
 COPY --from=build /out/runtime-manager /usr/local/bin/runtime-manager
+COPY --from=build /out/runtime-deployer /usr/local/bin/runtime-deployer
+COPY --from=build /out/runtime-materializer /usr/local/bin/runtime-materializer
 
 USER 10001:10001
 

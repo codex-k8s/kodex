@@ -261,7 +261,7 @@ func deployExecutionSpecToProto(spec *runtimeservice.DeployExecutionSpecInput) *
 		ServiceKey:            spec.ServiceKey,
 		ImageRef:              spec.ImageRef,
 		ImageTag:              spec.ImageTag,
-		ImageDigest:           spec.ImageDigest,
+		ImageDigest:           optionalStringPtr(spec.ImageDigest),
 		ManifestRef:           spec.ManifestRef,
 		ManifestDigest:        spec.ManifestDigest,
 		KustomizationRef:      spec.KustomizationRef,
@@ -299,7 +299,7 @@ func deployExpectedImageRefsToProto(refs []runtimeservice.DeployExpectedImageRef
 		result = append(result, &runtimev1.DeployExpectedImageRef{
 			ContainerName: ref.ContainerName,
 			ImageRef:      ref.ImageRef,
-			ImageDigest:   ref.ImageDigest,
+			ImageDigest:   optionalStringPtr(ref.ImageDigest),
 		})
 	}
 	return result

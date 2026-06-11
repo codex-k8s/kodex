@@ -1076,6 +1076,9 @@ type selfDeployPlanRequest interface {
 	GetProjectRef() string
 	GetRepositoryRef() string
 	GetProviderSignalRef() string
+	GetProviderSlug() string
+	GetRepositoryFullName() string
+	GetProviderRepositoryId() string
 	GetSourceRef() string
 	GetMergeCommitSha() string
 	GetServicesYamlRef() string
@@ -1110,6 +1113,9 @@ func createSelfDeployPlanInputFromRequest(request selfDeployPlanRequest) (servic
 		ProjectRef:              strings.TrimSpace(request.GetProjectRef()),
 		RepositoryRef:           strings.TrimSpace(request.GetRepositoryRef()),
 		ProviderSignalRef:       strings.TrimSpace(request.GetProviderSignalRef()),
+		ProviderSlug:            strings.TrimSpace(request.GetProviderSlug()),
+		RepositoryFullName:      strings.TrimSpace(request.GetRepositoryFullName()),
+		ProviderRepositoryID:    strings.TrimSpace(request.GetProviderRepositoryId()),
 		SourceRef:               strings.TrimSpace(request.GetSourceRef()),
 		MergeCommitSHA:          strings.TrimSpace(request.GetMergeCommitSha()),
 		ServicesYAMLRef:         strings.TrimSpace(request.GetServicesYamlRef()),

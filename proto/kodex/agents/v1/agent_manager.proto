@@ -526,6 +526,17 @@ enum SelfDeployRuntimeBuildStatus {
   SELF_DEPLOY_RUNTIME_BUILD_STATUS_FAILED = 4;
   // PREPARING_CONTEXT means governance approved the plan, but runtime-owned build context refs are not ready yet.
   SELF_DEPLOY_RUNTIME_BUILD_STATUS_PREPARING_CONTEXT = 5;
+  SELF_DEPLOY_RUNTIME_BUILD_STATUS_SUCCEEDED = 6;
+}
+
+// SelfDeployRuntimeDeployStatus describes deploy job dispatch state for an approved self-deploy plan.
+enum SelfDeployRuntimeDeployStatus {
+  SELF_DEPLOY_RUNTIME_DEPLOY_STATUS_UNSPECIFIED = 0;
+  SELF_DEPLOY_RUNTIME_DEPLOY_STATUS_NOT_REQUESTED = 1;
+  SELF_DEPLOY_RUNTIME_DEPLOY_STATUS_BLOCKED = 2;
+  SELF_DEPLOY_RUNTIME_DEPLOY_STATUS_REQUESTED = 3;
+  SELF_DEPLOY_RUNTIME_DEPLOY_STATUS_FAILED = 4;
+  SELF_DEPLOY_RUNTIME_DEPLOY_STATUS_SUCCEEDED = 5;
 }
 
 // SelfDeployPathCategory classifies affected paths without storing a raw diff.
@@ -851,6 +862,15 @@ message SelfDeployPlan {
   optional string runtime_build_plan_fingerprint = 23;
   optional string runtime_build_error_code = 24;
   optional string runtime_build_summary = 25;
+  optional string provider_slug = 26;
+  optional string repository_full_name = 27;
+  optional string provider_repository_id = 28;
+  repeated SelfDeployRuntimeBuildContextRef runtime_build_contexts = 29;
+  repeated SelfDeployRuntimeDeployJobRef runtime_deploy_jobs = 30;
+  SelfDeployRuntimeDeployStatus runtime_deploy_status = 31;
+  optional string runtime_deploy_plan_fingerprint = 32;
+  optional string runtime_deploy_error_code = 33;
+  optional string runtime_deploy_summary = 34;
 }
 
 // SelfDeployRuntimeBuildJobRef stores safe runtime-manager refs for one build job.
@@ -860,6 +880,27 @@ message SelfDeployRuntimeBuildJobRef {
   string runtime_job_ref = 3;
   optional string runtime_job_status = 4;
   optional string build_plan_item_fingerprint = 5;
+}
+
+// SelfDeployRuntimeBuildContextRef stores safe runtime-manager refs for one materialized build context.
+message SelfDeployRuntimeBuildContextRef {
+  string service_key = 1;
+  optional string runtime_build_context_ref = 2;
+  optional string runtime_build_context_status = 3;
+  optional string build_context_ref = 4;
+  optional string build_context_digest = 5;
+  optional string dockerfile_digest = 6;
+  optional string materialization_fingerprint = 7;
+  optional string build_plan_item_fingerprint = 8;
+}
+
+// SelfDeployRuntimeDeployJobRef stores safe runtime-manager refs for one deploy job.
+message SelfDeployRuntimeDeployJobRef {
+  string service_key = 1;
+  optional string service_ref = 2;
+  string runtime_job_ref = 3;
+  optional string runtime_job_status = 4;
+  optional string deploy_plan_item_fingerprint = 5;
 }
 
 // FlowDefinitionInput is the typed input for immutable flow version creation.
@@ -1370,6 +1411,9 @@ message CreateSelfDeployPlanRequest {
   repeated kodex.runtime.v1.JobType expected_runtime_job_types = 12;
   GovernanceContextRef governance_context = 13;
   optional string safe_summary = 14;
+  optional string provider_slug = 15;
+  optional string repository_full_name = 16;
+  optional string provider_repository_id = 17;
 }
 
 message CreateSelfDeployPlanFromSignalRequest {
@@ -1387,6 +1431,9 @@ message CreateSelfDeployPlanFromSignalRequest {
   repeated kodex.runtime.v1.JobType expected_runtime_job_types = 12;
   GovernanceContextRef governance_context = 13;
   optional string safe_summary = 14;
+  optional string provider_slug = 15;
+  optional string repository_full_name = 16;
+  optional string provider_repository_id = 17;
 }
 
 message GetSelfDeployPlanRequest {

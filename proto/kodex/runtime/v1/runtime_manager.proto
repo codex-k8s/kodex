@@ -455,8 +455,8 @@ message DeployExecutionSpec {
   string image_ref = 4;
   // image_tag is the target image tag selected by the deploy plan.
   string image_tag = 5;
-  // image_digest is the immutable image digest required for rollout.
-  string image_digest = 6;
+  // image_digest is reported when the build executor can provide it; MVP may rely on immutable image_tag.
+  optional string image_digest = 6;
   // manifest_ref points to the checked rendered manifest or manifest set.
   string manifest_ref = 7;
   // manifest_digest is the immutable digest of the checked manifest set.
@@ -1381,6 +1381,6 @@ message DeployExpectedImageRef {
   string container_name = 1;
   // image_ref is the expected image repository/ref without raw registry credentials.
   string image_ref = 2;
-  // image_digest pins the expected immutable image digest.
-  string image_digest = 3;
+  // image_digest pins the expected immutable image digest when available.
+  optional string image_digest = 3;
 }

@@ -45,6 +45,8 @@ type Repository interface {
 	GetBuildContext(ctx context.Context, id uuid.UUID) (entity.BuildContext, error)
 	// GetBuildContextByFingerprint returns one build context by deterministic context fingerprint.
 	GetBuildContextByFingerprint(ctx context.Context, fingerprint string) (entity.BuildContext, error)
+	// ListRunnableBuildContexts returns non-terminal build contexts ready for runtime-owned materialization.
+	ListRunnableBuildContexts(ctx context.Context, limit int) ([]entity.BuildContext, error)
 	// CreateJob stores a new platform job, its event and command result atomically.
 	CreateJob(ctx context.Context, job entity.Job, event entity.OutboxEvent, result entity.CommandResult) error
 	// ClaimRunnableJob atomically leases one runnable job and stores its start event and command result.

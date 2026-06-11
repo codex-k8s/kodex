@@ -55,14 +55,14 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	if packageHubConn != nil {
 		defer func() { _ = packageHubConn.Close() }()
 	}
-	workspacePolicyResolver, selfDeploySignalReader, selfDeployBuildPlanReader, projectCatalogConn, err := newProjectCatalogAdapters(cfg)
+	workspacePolicyResolver, selfDeploySignalReader, selfDeployBuildPlanReader, selfDeployDeployPlanReader, projectCatalogConn, err := newProjectCatalogAdapters(cfg)
 	if err != nil {
 		return err
 	}
 	if projectCatalogConn != nil {
 		defer func() { _ = projectCatalogConn.Close() }()
 	}
-	runtimePreparer, runtimeJobCreator, runtimeJobReader, selfDeployBuildJobCreator, runtimeManagerConn, err := newRuntimePreparer(cfg)
+	runtimePreparer, runtimeJobCreator, runtimeJobReader, selfDeployBuildContextPreparer, selfDeployRuntimeJobReader, selfDeployBuildJobCreator, selfDeployDeployJobCreator, runtimeManagerConn, err := newRuntimePreparer(cfg)
 	if err != nil {
 		return err
 	}
@@ -92,17 +92,21 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	}
 	agentRepository := agentpostgres.NewRepository(dbPool)
 	agentService := agentservice.New(agentservice.Config{
-		Repository:                agentRepository,
-		Clock:                     systemClock{},
-		IDGenerator:               uuidGenerator{},
-		GuidanceResolver:          guidanceResolver,
-		WorkspacePolicyResolver:   workspacePolicyResolver,
-		RuntimePreparer:           runtimePreparer,
-		RuntimeJobCreator:         runtimeJobCreator,
-		RuntimeJobReader:          runtimeJobReader,
-		SelfDeployBuildPlanReader: selfDeployBuildPlanReader,
-		SelfDeployBuildJobCreator: selfDeployBuildJobCreator,
-		RuntimeJobRunnerImageRef:  cfg.RuntimeJobRunnerImageRef,
+		Repository:                     agentRepository,
+		Clock:                          systemClock{},
+		IDGenerator:                    uuidGenerator{},
+		GuidanceResolver:               guidanceResolver,
+		WorkspacePolicyResolver:        workspacePolicyResolver,
+		RuntimePreparer:                runtimePreparer,
+		RuntimeJobCreator:              runtimeJobCreator,
+		RuntimeJobReader:               runtimeJobReader,
+		SelfDeployBuildPlanReader:      selfDeployBuildPlanReader,
+		SelfDeployDeployPlanReader:     selfDeployDeployPlanReader,
+		SelfDeployBuildContextPreparer: selfDeployBuildContextPreparer,
+		SelfDeployRuntimeJobReader:     selfDeployRuntimeJobReader,
+		SelfDeployBuildJobCreator:      selfDeployBuildJobCreator,
+		SelfDeployDeployJobCreator:     selfDeployDeployJobCreator,
+		RuntimeJobRunnerImageRef:       cfg.RuntimeJobRunnerImageRef,
 		CodexSessionExecution: agentservice.CodexSessionExecutionConfig{
 			ResultSchemaRef:    cfg.CodexSessionResultSchemaRef,
 			ResultSchemaDigest: cfg.CodexSessionResultSchemaDigest,
@@ -214,12 +218,13 @@ func connectPackageHubGuidance(clientConfig packagehubclient.Config) (agentservi
 	return resolver, conn, nil
 }
 
-func newProjectCatalogAdapters(cfg Config) (agentservice.WorkspacePolicyResolver, agentservice.SelfDeploySignalReader, agentservice.SelfDeployBuildPlanReader, *grpcruntime.ClientConn, error) {
+func newProjectCatalogAdapters(cfg Config) (agentservice.WorkspacePolicyResolver, agentservice.SelfDeploySignalReader, agentservice.SelfDeployBuildPlanReader, agentservice.SelfDeployDeployPlanReader, *grpcruntime.ClientConn, error) {
 	workspacePolicyResolver := agentservice.WorkspacePolicyResolver(agentservice.DisabledWorkspacePolicyResolver{})
 	selfDeploySignalReader := agentservice.SelfDeploySignalReader(agentservice.DisabledSelfDeploySignalReader{})
 	selfDeployBuildPlanReader := agentservice.SelfDeployBuildPlanReader(agentservice.DisabledSelfDeployBuildPlanReader{})
+	selfDeployDeployPlanReader := agentservice.SelfDeployDeployPlanReader(agentservice.DisabledSelfDeployDeployPlanReader{})
 	if !cfg.needsProjectCatalogClient() {
-		return workspacePolicyResolver, selfDeploySignalReader, selfDeployBuildPlanReader, nil, nil
+		return workspacePolicyResolver, selfDeploySignalReader, selfDeployBuildPlanReader, selfDeployDeployPlanReader, nil, nil
 	}
 	clientConfig := projectcatalogclient.Config{
 		Addr:      cfg.ProjectCatalogGRPCAddr,
@@ -228,14 +233,14 @@ func newProjectCatalogAdapters(cfg Config) (agentservice.WorkspacePolicyResolver
 	}
 	conn, err := projectcatalogclient.NewConnection(clientConfig)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
 	client := projectsv1.NewProjectCatalogServiceClient(conn)
 	if cfg.RuntimePreparationEnabled {
 		resolver, err := projectcatalogclient.NewWorkspacePolicyResolver(client, clientConfig)
 		if err != nil {
 			_ = conn.Close()
-			return nil, nil, nil, nil, err
+			return nil, nil, nil, nil, nil, err
 		}
 		workspacePolicyResolver = resolver
 	}
@@ -243,7 +248,7 @@ func newProjectCatalogAdapters(cfg Config) (agentservice.WorkspacePolicyResolver
 		reader, err := projectcatalogclient.NewSelfDeploySignalReader(client, clientConfig)
 		if err != nil {
 			_ = conn.Close()
-			return nil, nil, nil, nil, err
+			return nil, nil, nil, nil, nil, err
 		}
 		selfDeploySignalReader = reader
 	}
@@ -251,20 +256,29 @@ func newProjectCatalogAdapters(cfg Config) (agentservice.WorkspacePolicyResolver
 		reader, err := projectcatalogclient.NewSelfDeployBuildPlanReader(client, clientConfig)
 		if err != nil {
 			_ = conn.Close()
-			return nil, nil, nil, nil, err
+			return nil, nil, nil, nil, nil, err
 		}
 		selfDeployBuildPlanReader = reader
+		deployReader, err := projectcatalogclient.NewSelfDeployDeployPlanReader(client, clientConfig)
+		if err != nil {
+			_ = conn.Close()
+			return nil, nil, nil, nil, nil, err
+		}
+		selfDeployDeployPlanReader = deployReader
 	}
-	return workspacePolicyResolver, selfDeploySignalReader, selfDeployBuildPlanReader, conn, nil
+	return workspacePolicyResolver, selfDeploySignalReader, selfDeployBuildPlanReader, selfDeployDeployPlanReader, conn, nil
 }
 
-func newRuntimePreparer(cfg Config) (agentservice.RuntimePreparer, agentservice.RuntimeJobCreator, agentservice.RuntimeJobReader, agentservice.SelfDeployBuildJobCreator, *grpcruntime.ClientConn, error) {
+func newRuntimePreparer(cfg Config) (agentservice.RuntimePreparer, agentservice.RuntimeJobCreator, agentservice.RuntimeJobReader, agentservice.SelfDeployBuildContextPreparer, agentservice.SelfDeployRuntimeJobReader, agentservice.SelfDeployBuildJobCreator, agentservice.SelfDeployDeployJobCreator, *grpcruntime.ClientConn, error) {
 	if !cfg.RuntimePreparationEnabled && !cfg.SelfDeployBuildDispatchEnabled {
 		disabled := agentservice.DisabledRuntimePreparer{}
 		disabledJob := agentservice.DisabledRuntimeJobCreator{}
 		disabledReader := agentservice.DisabledRuntimeJobReader{}
+		disabledBuildContext := agentservice.DisabledSelfDeployBuildContextPreparer{}
+		disabledSelfDeployJobReader := agentservice.DisabledSelfDeployRuntimeJobReader{}
 		disabledBuild := agentservice.DisabledSelfDeployBuildJobCreator{}
-		return disabled, disabledJob, disabledReader, disabledBuild, nil, nil
+		disabledDeploy := agentservice.DisabledSelfDeployDeployJobCreator{}
+		return disabled, disabledJob, disabledReader, disabledBuildContext, disabledSelfDeployJobReader, disabledBuild, disabledDeploy, nil, nil
 	}
 	clientConfig := runtimeclient.Config{
 		Addr:      cfg.RuntimeManagerGRPCAddr,
@@ -275,19 +289,25 @@ func newRuntimePreparer(cfg Config) (agentservice.RuntimePreparer, agentservice.
 		return runtimeclient.NewPreparer(runtimev1.NewRuntimeManagerServiceClient(conn), clientConfig)
 	})
 	if err != nil {
-		return nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, nil, nil, err
 	}
+	selfDeployBuildContextPreparer := agentservice.SelfDeployBuildContextPreparer(agentservice.DisabledSelfDeployBuildContextPreparer{})
+	selfDeployRuntimeJobReader := agentservice.SelfDeployRuntimeJobReader(agentservice.DisabledSelfDeployRuntimeJobReader{})
 	selfDeployBuildJobCreator := agentservice.SelfDeployBuildJobCreator(agentservice.DisabledSelfDeployBuildJobCreator{})
+	selfDeployDeployJobCreator := agentservice.SelfDeployDeployJobCreator(agentservice.DisabledSelfDeployDeployJobCreator{})
 	if cfg.SelfDeployBuildDispatchEnabled {
+		selfDeployBuildContextPreparer = preparer
+		selfDeployRuntimeJobReader = preparer
 		selfDeployBuildJobCreator = preparer
+		selfDeployDeployJobCreator = preparer
 	}
 	if !cfg.RuntimePreparationEnabled {
-		return agentservice.DisabledRuntimePreparer{}, agentservice.DisabledRuntimeJobCreator{}, agentservice.DisabledRuntimeJobReader{}, selfDeployBuildJobCreator, conn, nil
+		return agentservice.DisabledRuntimePreparer{}, agentservice.DisabledRuntimeJobCreator{}, agentservice.DisabledRuntimeJobReader{}, selfDeployBuildContextPreparer, selfDeployRuntimeJobReader, selfDeployBuildJobCreator, selfDeployDeployJobCreator, conn, nil
 	}
 	if !cfg.RuntimeJobDispatchEnabled {
-		return preparer, agentservice.DisabledRuntimeJobCreator{}, preparer, selfDeployBuildJobCreator, conn, nil
+		return preparer, agentservice.DisabledRuntimeJobCreator{}, preparer, selfDeployBuildContextPreparer, selfDeployRuntimeJobReader, selfDeployBuildJobCreator, selfDeployDeployJobCreator, conn, nil
 	}
-	return preparer, preparer, preparer, selfDeployBuildJobCreator, conn, nil
+	return preparer, preparer, preparer, selfDeployBuildContextPreparer, selfDeployRuntimeJobReader, selfDeployBuildJobCreator, selfDeployDeployJobCreator, conn, nil
 }
 
 func newProviderFollowUpDispatcher(cfg Config) (agentservice.ProviderFollowUpDispatcher, *grpcruntime.ClientConn, error) {

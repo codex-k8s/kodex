@@ -483,12 +483,12 @@ func TestBuildDeployExecutionSpecsArePersistedAsTypedJobInput(t *testing.T) {
 		len(extractedDeploySpec.ExpectedImageRefs) != 1 {
 		t.Fatalf("DeployExecutionSpecFromJobInput() = %+v, %v", extractedDeploySpec, ok)
 	}
-	if deployJob.LastErrorCode != deployExecutorUnavailableCode || deployJob.NextAction != deployExecutorUnavailableAction {
-		t.Fatalf("deploy job diagnostic = %q/%q, want executor unavailable diagnostic", deployJob.LastErrorCode, deployJob.NextAction)
+	if deployJob.LastErrorCode != "" || deployJob.NextAction != "" {
+		t.Fatalf("deploy job diagnostic = %q/%q, want executable typed spec", deployJob.LastErrorCode, deployJob.NextAction)
 	}
 }
 
-func TestDeployJobWithExecutionSpecStaysWaitingForExecutor(t *testing.T) {
+func TestDeployJobWithExecutionSpecStaysPendingForExecutorClaim(t *testing.T) {
 	t.Parallel()
 
 	svc, _ := newTestService()
@@ -503,8 +503,8 @@ func TestDeployJobWithExecutionSpecStaysWaitingForExecutor(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateJob(deploy spec): %v", err)
 	}
-	if job.Status != enum.JobStatusPending || job.LastErrorCode != deployExecutorUnavailableCode || job.NextAction != deployExecutorUnavailableAction {
-		t.Fatalf("deploy job = %#v, want pending executor unavailable diagnostic", job)
+	if job.Status != enum.JobStatusPending || job.LastErrorCode != "" || job.NextAction != "" {
+		t.Fatalf("deploy job = %#v, want pending executable job", job)
 	}
 
 	replay, err := svc.CreateJob(context.Background(), CreateJobInput{
@@ -516,7 +516,7 @@ func TestDeployJobWithExecutionSpecStaysWaitingForExecutor(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateJob(deploy replay): %v", err)
 	}
-	if replay.ID != job.ID || replay.Version != job.Version || replay.LastErrorCode != deployExecutorUnavailableCode {
+	if replay.ID != job.ID || replay.Version != job.Version || replay.LastErrorCode != "" {
 		t.Fatalf("deploy replay = %#v, want same waiting job", replay)
 	}
 
@@ -527,7 +527,7 @@ func TestDeployJobWithExecutionSpecStaysWaitingForExecutor(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetJob(deploy): %v", err)
 	}
-	if read.ID != job.ID || read.JobType != enum.JobTypeDeploy || read.LastErrorCode != deployExecutorUnavailableCode {
+	if read.ID != job.ID || read.JobType != enum.JobTypeDeploy || read.LastErrorCode != "" {
 		t.Fatalf("GetJob(deploy) = %#v, want typed waiting deploy job", read)
 	}
 	if extracted, ok := DeployExecutionSpecFromJobInput(read.JobInputJSON); !ok || extracted.DeployPlanFingerprint != deploySpec.DeployPlanFingerprint {
@@ -541,7 +541,7 @@ func TestDeployJobWithExecutionSpecStaysWaitingForExecutor(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListJobs(deploy): %v", err)
 	}
-	if len(list.Jobs) != 1 || list.Jobs[0].ID != job.ID || list.Jobs[0].LastErrorCode != deployExecutorUnavailableCode {
+	if len(list.Jobs) != 1 || list.Jobs[0].ID != job.ID || list.Jobs[0].LastErrorCode != "" {
 		t.Fatalf("ListJobs(deploy) = %#v, want one waiting deploy job", list.Jobs)
 	}
 

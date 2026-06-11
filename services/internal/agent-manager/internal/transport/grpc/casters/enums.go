@@ -124,12 +124,14 @@ var selfDeployPlanStatusesFromProto = enumMap(
 	enumPair(agentsv1.SelfDeployPlanStatus_SELF_DEPLOY_PLAN_STATUS_FAILED, enum.SelfDeployPlanStatusFailed),
 )
 
-var selfDeployRuntimeBuildStatusesFromProto = enumMap(
-	enumPair(agentsv1.SelfDeployRuntimeBuildStatus_SELF_DEPLOY_RUNTIME_BUILD_STATUS_NOT_REQUESTED, enum.SelfDeployRuntimeBuildStatusNotRequested),
-	enumPair(agentsv1.SelfDeployRuntimeBuildStatus_SELF_DEPLOY_RUNTIME_BUILD_STATUS_PREPARING_CONTEXT, enum.SelfDeployRuntimeBuildStatusPreparingContext),
-	enumPair(agentsv1.SelfDeployRuntimeBuildStatus_SELF_DEPLOY_RUNTIME_BUILD_STATUS_BLOCKED, enum.SelfDeployRuntimeBuildStatusBlocked),
-	enumPair(agentsv1.SelfDeployRuntimeBuildStatus_SELF_DEPLOY_RUNTIME_BUILD_STATUS_REQUESTED, enum.SelfDeployRuntimeBuildStatusRequested),
-	enumPair(agentsv1.SelfDeployRuntimeBuildStatus_SELF_DEPLOY_RUNTIME_BUILD_STATUS_FAILED, enum.SelfDeployRuntimeBuildStatusFailed),
+var selfDeployRuntimeBuildStatusesFromProto = selfDeployRuntimeBuildStatusValues()
+
+var selfDeployRuntimeDeployStatusesFromProto = enumMap(
+	enumPair(agentsv1.SelfDeployRuntimeDeployStatus_SELF_DEPLOY_RUNTIME_DEPLOY_STATUS_NOT_REQUESTED, enum.SelfDeployRuntimeDeployStatusNotRequested),
+	enumPair(agentsv1.SelfDeployRuntimeDeployStatus_SELF_DEPLOY_RUNTIME_DEPLOY_STATUS_BLOCKED, enum.SelfDeployRuntimeDeployStatusBlocked),
+	enumPair(agentsv1.SelfDeployRuntimeDeployStatus_SELF_DEPLOY_RUNTIME_DEPLOY_STATUS_REQUESTED, enum.SelfDeployRuntimeDeployStatusRequested),
+	enumPair(agentsv1.SelfDeployRuntimeDeployStatus_SELF_DEPLOY_RUNTIME_DEPLOY_STATUS_FAILED, enum.SelfDeployRuntimeDeployStatusFailed),
+	enumPair(agentsv1.SelfDeployRuntimeDeployStatus_SELF_DEPLOY_RUNTIME_DEPLOY_STATUS_SUCCEEDED, enum.SelfDeployRuntimeDeployStatusSucceeded),
 )
 
 var selfDeployPathCategoriesFromProto = enumMap(
@@ -177,27 +179,28 @@ var agentSessionStatusesToProto = enumMap(
 )
 
 var (
-	scopeTypesToProto                     = reverseEnumMap(scopeTypesFromProto)
-	flowStatusesToProto                   = reverseEnumMap(flowStatusesFromProto)
-	stageTypesToProto                     = reverseEnumMap(stageTypesFromProto)
-	stageRoleBindingKindsToProto          = reverseEnumMap(stageRoleBindingKindsFromProto)
-	roleKindsToProto                      = reverseEnumMap(roleKindsFromProto)
-	roleStatusesToProto                   = reverseEnumMap(roleStatusesFromProto)
-	promptKindsToProto                    = reverseEnumMap(promptKindsFromProto)
-	promptVersionStatusesToProto          = reverseEnumMap(promptVersionStatusesFromProto)
-	agentRunStatusesToProto               = reverseEnumMap(agentRunStatusesFromProto)
-	agentSessionStatusesFromProto         = reverseEnumMap(agentSessionStatusesToProto)
-	agentSessionSnapshotKindsToProto      = reverseEnumMap(agentSessionSnapshotKindsFromProto)
-	acceptanceCheckKindsToProto           = reverseEnumMap(acceptanceCheckKindsFromProto)
-	acceptanceStatusesToProto             = reverseEnumMap(acceptanceStatusesFromProto)
-	agentActivityKindsToProto             = reverseEnumMap(agentActivityKindsFromProto)
-	agentActivityStatusesToProto          = reverseEnumMap(agentActivityStatusesFromProto)
-	humanGateStatusesToProto              = reverseEnumMap(humanGateStatusesFromProto)
-	humanGateOutcomesToProto              = reverseEnumMap(humanGateOutcomesFromProto)
-	selfDeployPlanStatusesToProto         = reverseEnumMap(selfDeployPlanStatusesFromProto)
-	selfDeployRuntimeBuildStatusesToProto = reverseEnumMap(selfDeployRuntimeBuildStatusesFromProto)
-	selfDeployPathCategoriesToProto       = reverseEnumMap(selfDeployPathCategoriesFromProto)
-	selfDeployRuntimeJobTypesToProto      = reverseEnumMap(selfDeployRuntimeJobTypesFromProto)
+	scopeTypesToProto                      = reverseEnumMap(scopeTypesFromProto)
+	flowStatusesToProto                    = reverseEnumMap(flowStatusesFromProto)
+	stageTypesToProto                      = reverseEnumMap(stageTypesFromProto)
+	stageRoleBindingKindsToProto           = reverseEnumMap(stageRoleBindingKindsFromProto)
+	roleKindsToProto                       = reverseEnumMap(roleKindsFromProto)
+	roleStatusesToProto                    = reverseEnumMap(roleStatusesFromProto)
+	promptKindsToProto                     = reverseEnumMap(promptKindsFromProto)
+	promptVersionStatusesToProto           = reverseEnumMap(promptVersionStatusesFromProto)
+	agentRunStatusesToProto                = reverseEnumMap(agentRunStatusesFromProto)
+	agentSessionStatusesFromProto          = reverseEnumMap(agentSessionStatusesToProto)
+	agentSessionSnapshotKindsToProto       = reverseEnumMap(agentSessionSnapshotKindsFromProto)
+	acceptanceCheckKindsToProto            = reverseEnumMap(acceptanceCheckKindsFromProto)
+	acceptanceStatusesToProto              = reverseEnumMap(acceptanceStatusesFromProto)
+	agentActivityKindsToProto              = reverseEnumMap(agentActivityKindsFromProto)
+	agentActivityStatusesToProto           = reverseEnumMap(agentActivityStatusesFromProto)
+	humanGateStatusesToProto               = reverseEnumMap(humanGateStatusesFromProto)
+	humanGateOutcomesToProto               = reverseEnumMap(humanGateOutcomesFromProto)
+	selfDeployPlanStatusesToProto          = reverseEnumMap(selfDeployPlanStatusesFromProto)
+	selfDeployRuntimeBuildStatusesToProto  = reverseEnumMap(selfDeployRuntimeBuildStatusesFromProto)
+	selfDeployRuntimeDeployStatusesToProto = reverseEnumMap(selfDeployRuntimeDeployStatusesFromProto)
+	selfDeployPathCategoriesToProto        = reverseEnumMap(selfDeployPathCategoriesFromProto)
+	selfDeployRuntimeJobTypesToProto       = reverseEnumMap(selfDeployRuntimeJobTypesFromProto)
 )
 
 func ScopeTypeFromProto(value agentsv1.AgentScopeType) (enum.AgentScopeType, error) {
@@ -416,6 +419,10 @@ func SelfDeployRuntimeBuildStatusToProto(value enum.SelfDeployRuntimeBuildStatus
 	return enumToProto(value, selfDeployRuntimeBuildStatusesToProto, agentsv1.SelfDeployRuntimeBuildStatus_SELF_DEPLOY_RUNTIME_BUILD_STATUS_UNSPECIFIED)
 }
 
+func SelfDeployRuntimeDeployStatusToProto(value enum.SelfDeployRuntimeDeployStatus) agentsv1.SelfDeployRuntimeDeployStatus {
+	return enumToProto(value, selfDeployRuntimeDeployStatusesToProto, agentsv1.SelfDeployRuntimeDeployStatus_SELF_DEPLOY_RUNTIME_DEPLOY_STATUS_UNSPECIFIED)
+}
+
 func SelfDeployPathCategoryFromProto(value agentsv1.SelfDeployPathCategory) (enum.SelfDeployPathCategory, error) {
 	return enumFromProto(value, selfDeployPathCategoriesFromProto)
 }
@@ -608,6 +615,25 @@ func acceptanceCheckKindValues() map[agentsv1.AcceptanceCheckKind]enum.Acceptanc
 	values := make(map[agentsv1.AcceptanceCheckKind]enum.AcceptanceCheckKind, len(protoValues))
 	for idx, protoValue := range protoValues {
 		values[protoValue] = domainValues[idx]
+	}
+	return values
+}
+
+func selfDeployRuntimeBuildStatusValues() map[agentsv1.SelfDeployRuntimeBuildStatus]enum.SelfDeployRuntimeBuildStatus {
+	pairs := []struct {
+		proto  agentsv1.SelfDeployRuntimeBuildStatus
+		domain enum.SelfDeployRuntimeBuildStatus
+	}{
+		{agentsv1.SelfDeployRuntimeBuildStatus_SELF_DEPLOY_RUNTIME_BUILD_STATUS_NOT_REQUESTED, enum.SelfDeployRuntimeBuildStatusNotRequested},
+		{agentsv1.SelfDeployRuntimeBuildStatus_SELF_DEPLOY_RUNTIME_BUILD_STATUS_PREPARING_CONTEXT, enum.SelfDeployRuntimeBuildStatusPreparingContext},
+		{agentsv1.SelfDeployRuntimeBuildStatus_SELF_DEPLOY_RUNTIME_BUILD_STATUS_BLOCKED, enum.SelfDeployRuntimeBuildStatusBlocked},
+		{agentsv1.SelfDeployRuntimeBuildStatus_SELF_DEPLOY_RUNTIME_BUILD_STATUS_REQUESTED, enum.SelfDeployRuntimeBuildStatusRequested},
+		{agentsv1.SelfDeployRuntimeBuildStatus_SELF_DEPLOY_RUNTIME_BUILD_STATUS_FAILED, enum.SelfDeployRuntimeBuildStatusFailed},
+		{agentsv1.SelfDeployRuntimeBuildStatus_SELF_DEPLOY_RUNTIME_BUILD_STATUS_SUCCEEDED, enum.SelfDeployRuntimeBuildStatusSucceeded},
+	}
+	values := make(map[agentsv1.SelfDeployRuntimeBuildStatus]enum.SelfDeployRuntimeBuildStatus, len(pairs))
+	for _, pair := range pairs {
+		values[pair.proto] = pair.domain
 	}
 	return values
 }

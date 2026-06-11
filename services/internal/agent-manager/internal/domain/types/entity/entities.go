@@ -271,27 +271,47 @@ type HumanGateRequest struct {
 
 type SelfDeployPlan struct {
 	VersionedBase
-	Scope                   value.ScopeRef
-	ProjectRef              string
-	RepositoryRef           string
-	ProviderSignalRef       string
-	SourceRef               string
-	MergeCommitSHA          string
-	ServicesYAMLRef         string
-	ServicesYAMLDigest      string
-	AffectedServiceKeys     []string
-	PathCategories          []enum.SelfDeployPathCategory
-	ExpectedRuntimeJobTypes []enum.SelfDeployRuntimeJobType
-	GovernanceContext       value.GovernanceContextRef
-	SafeSummary             string
-	PlanFingerprint         string
-	IdempotencyKey          string
-	Status                  enum.SelfDeployPlanStatus
-	RuntimeBuildJobs        []SelfDeployRuntimeBuildJob
-	RuntimeBuildStatus      enum.SelfDeployRuntimeBuildStatus
-	RuntimeBuildFingerprint string
-	RuntimeBuildErrorCode   string
-	RuntimeBuildSummary     string
+	Scope                    value.ScopeRef
+	ProjectRef               string
+	RepositoryRef            string
+	ProviderSignalRef        string
+	ProviderSlug             string
+	RepositoryFullName       string
+	ProviderRepositoryID     string
+	SourceRef                string
+	MergeCommitSHA           string
+	ServicesYAMLRef          string
+	ServicesYAMLDigest       string
+	AffectedServiceKeys      []string
+	PathCategories           []enum.SelfDeployPathCategory
+	ExpectedRuntimeJobTypes  []enum.SelfDeployRuntimeJobType
+	GovernanceContext        value.GovernanceContextRef
+	SafeSummary              string
+	PlanFingerprint          string
+	IdempotencyKey           string
+	Status                   enum.SelfDeployPlanStatus
+	RuntimeBuildContexts     []SelfDeployRuntimeBuildContext
+	RuntimeBuildJobs         []SelfDeployRuntimeBuildJob
+	RuntimeBuildStatus       enum.SelfDeployRuntimeBuildStatus
+	RuntimeBuildFingerprint  string
+	RuntimeBuildErrorCode    string
+	RuntimeBuildSummary      string
+	RuntimeDeployJobs        []SelfDeployRuntimeDeployJob
+	RuntimeDeployStatus      enum.SelfDeployRuntimeDeployStatus
+	RuntimeDeployFingerprint string
+	RuntimeDeployErrorCode   string
+	RuntimeDeploySummary     string
+}
+
+type SelfDeployRuntimeBuildContext struct {
+	ServiceKey                 string `json:"service_key"`
+	RuntimeBuildContextRef     string `json:"runtime_build_context_ref"`
+	RuntimeBuildContextStatus  string `json:"runtime_build_context_status"`
+	BuildContextRef            string `json:"build_context_ref"`
+	BuildContextDigest         string `json:"build_context_digest"`
+	DockerfileDigest           string `json:"dockerfile_digest"`
+	MaterializationFingerprint string `json:"materialization_fingerprint"`
+	BuildPlanItemFingerprint   string `json:"build_plan_item_fingerprint"`
 }
 
 type SelfDeployRuntimeBuildJob struct {
@@ -300,6 +320,14 @@ type SelfDeployRuntimeBuildJob struct {
 	RuntimeJobRef            string `json:"runtime_job_ref"`
 	RuntimeJobStatus         string `json:"runtime_job_status"`
 	BuildPlanItemFingerprint string `json:"build_plan_item_fingerprint"`
+}
+
+type SelfDeployRuntimeDeployJob struct {
+	ServiceKey                string `json:"service_key"`
+	ServiceRef                string `json:"service_ref"`
+	RuntimeJobRef             string `json:"runtime_job_ref"`
+	RuntimeJobStatus          string `json:"runtime_job_status"`
+	DeployPlanItemFingerprint string `json:"deploy_plan_item_fingerprint"`
 }
 
 type CommandResult struct {

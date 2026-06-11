@@ -209,7 +209,15 @@ func SelfDeployBuildPlanStatusToProto(status enum.SelfDeployBuildPlanStatus) pro
 	return projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_UNSPECIFIED
 }
 
+func SelfDeployDeployPlanStatusToProto(status enum.SelfDeployDeployPlanStatus) projectsv1.SelfDeployDeployPlanStatus {
+	if status, ok := selfDeployDeployPlanStatusToProto[status]; ok {
+		return status
+	}
+	return projectsv1.SelfDeployDeployPlanStatus_SELF_DEPLOY_DEPLOY_PLAN_STATUS_UNSPECIFIED
+}
+
 var selfDeployBuildPlanStatusToProto = newSelfDeployBuildPlanStatusToProto()
+var selfDeployDeployPlanStatusToProto = newSelfDeployDeployPlanStatusToProto()
 
 func newSelfDeployBuildPlanStatusToProto() map[enum.SelfDeployBuildPlanStatus]projectsv1.SelfDeployBuildPlanStatus {
 	pairs := []struct {
@@ -226,6 +234,26 @@ func newSelfDeployBuildPlanStatusToProto() map[enum.SelfDeployBuildPlanStatus]pr
 		{enum.SelfDeployBuildPlanStatusBuildContextInvalid, projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_BUILD_CONTEXT_INVALID},
 	}
 	result := make(map[enum.SelfDeployBuildPlanStatus]projectsv1.SelfDeployBuildPlanStatus, len(pairs))
+	for _, pair := range pairs {
+		result[pair.domain] = pair.proto
+	}
+	return result
+}
+
+func newSelfDeployDeployPlanStatusToProto() map[enum.SelfDeployDeployPlanStatus]projectsv1.SelfDeployDeployPlanStatus {
+	pairs := []struct {
+		domain enum.SelfDeployDeployPlanStatus
+		proto  projectsv1.SelfDeployDeployPlanStatus
+	}{
+		{enum.SelfDeployDeployPlanStatusReady, projectsv1.SelfDeployDeployPlanStatus_SELF_DEPLOY_DEPLOY_PLAN_STATUS_READY},
+		{enum.SelfDeployDeployPlanStatusDeployPlanUnavailable, projectsv1.SelfDeployDeployPlanStatus_SELF_DEPLOY_DEPLOY_PLAN_STATUS_DEPLOY_PLAN_UNAVAILABLE},
+		{enum.SelfDeployDeployPlanStatusPolicyStale, projectsv1.SelfDeployDeployPlanStatus_SELF_DEPLOY_DEPLOY_PLAN_STATUS_POLICY_STALE},
+		{enum.SelfDeployDeployPlanStatusServiceNotFound, projectsv1.SelfDeployDeployPlanStatus_SELF_DEPLOY_DEPLOY_PLAN_STATUS_SERVICE_NOT_FOUND},
+		{enum.SelfDeployDeployPlanStatusInvalidInput, projectsv1.SelfDeployDeployPlanStatus_SELF_DEPLOY_DEPLOY_PLAN_STATUS_INVALID_INPUT},
+		{enum.SelfDeployDeployPlanStatusBuildNotReady, projectsv1.SelfDeployDeployPlanStatus_SELF_DEPLOY_DEPLOY_PLAN_STATUS_BUILD_NOT_READY},
+		{enum.SelfDeployDeployPlanStatusBuildOutputInvalid, projectsv1.SelfDeployDeployPlanStatus_SELF_DEPLOY_DEPLOY_PLAN_STATUS_BUILD_OUTPUT_INVALID},
+	}
+	result := make(map[enum.SelfDeployDeployPlanStatus]projectsv1.SelfDeployDeployPlanStatus, len(pairs))
 	for _, pair := range pairs {
 		result[pair.domain] = pair.proto
 	}

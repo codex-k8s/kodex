@@ -251,6 +251,9 @@ func selfDeployPlanInputFromSignal(signal agentservice.SelfDeploySignal) (agents
 		ProjectRef:              strings.TrimSpace(signal.ProjectRef),
 		RepositoryRef:           strings.TrimSpace(signal.RepositoryRef),
 		ProviderSignalRef:       strings.TrimSpace(signal.ProviderSignalRef),
+		ProviderSlug:            strings.TrimSpace(signal.ProviderSlug),
+		RepositoryFullName:      strings.TrimSpace(signal.RepositoryFullName),
+		ProviderRepositoryID:    strings.TrimSpace(signal.ProviderRepositoryID),
 		SourceRef:               strings.TrimSpace(signal.SourceRef),
 		MergeCommitSHA:          strings.TrimSpace(signal.MergeCommitSHA),
 		ServicesYAMLRef:         strings.TrimSpace(signal.ServicesYAML.Ref),
@@ -264,6 +267,8 @@ func selfDeployPlanInputFromSignal(signal agentservice.SelfDeploySignal) (agents
 	if input.ProviderSignalRef == "" ||
 		input.ProjectRef == "" ||
 		input.RepositoryRef == "" ||
+		input.ProviderSlug == "" ||
+		input.RepositoryFullName == "" ||
 		input.SourceRef == "" ||
 		input.MergeCommitSHA == "" ||
 		input.ServicesYAMLDigest == "" ||

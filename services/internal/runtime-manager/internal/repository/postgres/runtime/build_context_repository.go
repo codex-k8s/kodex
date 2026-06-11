@@ -76,6 +76,19 @@ func (r *Repository) GetBuildContextByFingerprint(ctx context.Context, fingerpri
 	return r.getBuildContext(ctx, operationGetBuildContextByFingerprint, queryBuildContextGetByFingerprint, pgx.NamedArgs{"context_fingerprint": fingerprint})
 }
 
+// ListRunnableBuildContexts returns pending/running build contexts for the runtime-owned materializer.
+func (r *Repository) ListRunnableBuildContexts(ctx context.Context, limit int) ([]entity.BuildContext, error) {
+	if limit <= 0 {
+		limit = 1
+	}
+	rows, err := r.db.Query(ctx, queryBuildContextListRunnable, pgx.NamedArgs{"limit": limit})
+	if err != nil {
+		return nil, wrapError(operationGetBuildContext, err)
+	}
+	items, err := postgreslib.ScanRows(rows, scanBuildContext)
+	return items, wrapError(operationGetBuildContext, err)
+}
+
 func (r *Repository) getBuildContext(ctx context.Context, operation string, sql string, args pgx.NamedArgs) (entity.BuildContext, error) {
 	buildContext, err := queryOne(ctx, r.db, sql, args, scanBuildContext)
 	return buildContext, wrapError(operation, err)

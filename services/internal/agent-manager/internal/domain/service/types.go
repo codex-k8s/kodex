@@ -177,6 +177,9 @@ type CreateSelfDeployPlanInput struct {
 	ProjectRef              string
 	RepositoryRef           string
 	ProviderSignalRef       string
+	ProviderSlug            string
+	RepositoryFullName      string
+	ProviderRepositoryID    string
 	SourceRef               string
 	MergeCommitSHA          string
 	ServicesYAMLRef         string
@@ -280,6 +283,9 @@ type SelfDeploySignal struct {
 	ProviderSignalKey         string
 	ProjectRef                string
 	RepositoryRef             string
+	ProviderSlug              string
+	RepositoryFullName        string
+	ProviderRepositoryID      string
 	SourceRef                 string
 	MergeCommitSHA            string
 	ServicesYAML              SelfDeploySignalServicesYAML
@@ -327,6 +333,96 @@ type SelfDeployBuildPlanLookupInput struct {
 	ExpectedServicesPolicyVersion     *int64
 	ExpectedBuildPlanFingerprint      string
 	MaterializedBuildContexts         []SelfDeployMaterializedBuildContext
+}
+
+type SelfDeployBuildContextInput struct {
+	Meta                              value.CommandMeta
+	ProjectID                         uuid.UUID
+	RepositoryID                      uuid.UUID
+	ProviderSlug                      string
+	RepositoryFullName                string
+	SourceRef                         string
+	MergeCommitSHA                    string
+	AffectedServiceKeys               []string
+	ExpectedBuildPlanFingerprint      string
+	ExpectedServicesPolicyDigest      string
+	ExpectedServicesPolicyFingerprint string
+}
+
+type SelfDeployBuildContextReadInput struct {
+	Meta               value.QueryMeta
+	BuildContextRef    string
+	ContextFingerprint string
+}
+
+type SelfDeployBuildContextResult struct {
+	RuntimeBuildContextRef     string
+	RuntimeBuildContextStatus  string
+	BuildContextRef            string
+	BuildContextDigest         string
+	SourceSnapshotRef          string
+	SourceSnapshotDigest       string
+	MaterializationFingerprint string
+	SafeErrorCode              string
+	SafeSummary                string
+	Version                    int64
+}
+
+type SelfDeployDeployPlanStatus string
+
+const (
+	SelfDeployDeployPlanStatusReady                 SelfDeployDeployPlanStatus = "ready"
+	SelfDeployDeployPlanStatusDeployPlanUnavailable SelfDeployDeployPlanStatus = "deploy_plan_unavailable"
+	SelfDeployDeployPlanStatusPolicyStale           SelfDeployDeployPlanStatus = "policy_stale"
+	SelfDeployDeployPlanStatusServiceNotFound       SelfDeployDeployPlanStatus = "service_not_found"
+	SelfDeployDeployPlanStatusInvalidInput          SelfDeployDeployPlanStatus = "invalid_input"
+	SelfDeployDeployPlanStatusBuildNotReady         SelfDeployDeployPlanStatus = "build_not_ready"
+	SelfDeployDeployPlanStatusBuildOutputInvalid    SelfDeployDeployPlanStatus = "build_output_invalid"
+)
+
+type SelfDeployDeployPlanLookupInput struct {
+	Meta                              value.CommandMeta
+	ProjectID                         uuid.UUID
+	RepositoryID                      uuid.UUID
+	SourceRef                         string
+	MergeCommitSHA                    string
+	ProviderSignalRef                 string
+	AffectedServiceKeys               []string
+	ExpectedServicesPolicyDigest      string
+	ExpectedServicesPolicyFingerprint string
+	ExpectedServicesPolicyVersion     *int64
+	ExpectedBuildPlanFingerprint      string
+	ExpectedDeployPlanFingerprint     string
+	BuildOutputs                      []SelfDeployBuildOutput
+	MaterializedBuildContexts         []SelfDeployMaterializedBuildContext
+}
+
+type SelfDeployBuildOutput struct {
+	ServiceKey               string
+	RuntimeJobRef            string
+	ImageRef                 string
+	ImageTag                 string
+	ImageDigest              string
+	BuildPlanItemFingerprint string
+	BuildPlanFingerprint     string
+	BuildContextRef          string
+	BuildContextDigest       string
+}
+
+type SelfDeployRuntimeJobReadInput struct {
+	Meta    value.QueryMeta
+	JobRef  string
+	JobType enum.SelfDeployRuntimeJobType
+}
+
+type SelfDeployRuntimeJobReadResult struct {
+	JobRef           string
+	JobType          enum.SelfDeployRuntimeJobType
+	Status           RuntimeJobStatus
+	Version          int64
+	SafeErrorCode    string
+	SafeErrorSummary string
+	SafeSummary      string
 }
 
 type SelfDeployMaterializedBuildContext struct {
@@ -392,6 +488,59 @@ type SelfDeployBuildExecutionSpec struct {
 	OutputRefs        []RuntimeJobOutputRef
 }
 
+type SelfDeployDeploySourceSpec struct {
+	SourceRef       string
+	SourceCommitSHA string
+}
+
+type SelfDeployDeployImageSpec struct {
+	ImageRef          string
+	ImageTag          string
+	ImageDigest       string
+	ExpectedImageRefs []SelfDeployDeployExpectedImageRef
+}
+
+type SelfDeployDeployManifestSpec struct {
+	ManifestBundleRef    string
+	ManifestBundleDigest string
+	ManifestRef          string
+	ManifestDigest       string
+	KustomizationRef     string
+	KustomizationDigest  string
+}
+
+type SelfDeployDeployTargetSpec struct {
+	TargetNamespace  string
+	TargetClusterRef string
+	TargetSlotID     string
+	RolloutTargets   []SelfDeployDeployRolloutTarget
+}
+
+type SelfDeployDeployExecutionSpec struct {
+	SelfDeployDeploySourceSpec
+	SelfDeployDeployImageSpec
+	SelfDeployDeployManifestSpec
+	SelfDeployDeployTargetSpec
+	ServiceKey            string
+	DeployPlanFingerprint string
+	AllowedSecretRefs     []RuntimeJobAllowedSecretRef
+	OutputRefs            []RuntimeJobOutputRef
+}
+
+type SelfDeployDeployRolloutTarget struct {
+	Kind      string
+	Ref       string
+	Namespace string
+	Name      string
+	Digest    string
+}
+
+type SelfDeployDeployExpectedImageRef struct {
+	ContainerName string
+	ImageRef      string
+	ImageDigest   string
+}
+
 type SelfDeployBuildRecipe struct {
 	SelfDeployBuildImageSpec
 	DockerfileRef     string
@@ -429,6 +578,44 @@ type SelfDeployBuildPlan struct {
 type SelfDeployBuildPlanReadResult struct {
 	Status     SelfDeployBuildPlanStatus
 	Plan       SelfDeployBuildPlan
+	SafeReason string
+}
+
+type SelfDeployDeployPlanItemStatus string
+
+const (
+	SelfDeployDeployPlanItemStatusReady                 SelfDeployDeployPlanItemStatus = "ready"
+	SelfDeployDeployPlanItemStatusBuildNotReady         SelfDeployDeployPlanItemStatus = "build_not_ready"
+	SelfDeployDeployPlanItemStatusBuildOutputInvalid    SelfDeployDeployPlanItemStatus = "build_output_invalid"
+	SelfDeployDeployPlanItemStatusDeployPlanUnavailable SelfDeployDeployPlanItemStatus = "deploy_plan_unavailable"
+)
+
+type SelfDeployDeployPlanItem struct {
+	ServiceKey          string
+	ServiceRef          string
+	Status              SelfDeployDeployPlanItemStatus
+	DeployExecutionSpec SelfDeployDeployExecutionSpec
+	PlanItemFingerprint string
+	SafeReason          string
+}
+
+type SelfDeployDeployPlan struct {
+	ProjectRef          string
+	RepositoryRef       string
+	ProviderSignalRef   string
+	SourceRef           string
+	MergeCommitSHA      string
+	ServicesYAML        SelfDeploySignalServicesYAML
+	AffectedServiceKeys []string
+	DeployItems         []SelfDeployDeployPlanItem
+	PlanFingerprint     string
+	SafeSummary         string
+	Version             int64
+}
+
+type SelfDeployDeployPlanReadResult struct {
+	Status     SelfDeployDeployPlanStatus
+	Plan       SelfDeployDeployPlan
 	SafeReason string
 }
 
@@ -545,7 +732,7 @@ type RuntimeJobInput struct {
 	ExecutionSpec AgentRunExecutionSpec
 }
 
-type SelfDeployBuildJobInput struct {
+type SelfDeployRuntimeJobInput struct {
 	Meta                  value.CommandMeta
 	ProjectID             uuid.UUID
 	RepositoryID          uuid.UUID
@@ -554,9 +741,18 @@ type SelfDeployBuildJobInput struct {
 	ServiceRef            string
 	PlanFingerprint       string
 	PlanItemFingerprint   string
-	BuildExecutionSpec    SelfDeployBuildExecutionSpec
 	GovernanceApprovalRef string
 	GovernanceGateRef     string
+}
+
+type SelfDeployBuildJobInput struct {
+	SelfDeployRuntimeJobInput
+	BuildExecutionSpec SelfDeployBuildExecutionSpec
+}
+
+type SelfDeployDeployJobInput struct {
+	SelfDeployRuntimeJobInput
+	DeployExecutionSpec SelfDeployDeployExecutionSpec
 }
 
 type AgentRunExecutionSpec struct {
