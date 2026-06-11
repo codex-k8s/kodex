@@ -65,6 +65,25 @@ func TestPrepareBuildContextReusesFingerprintAcrossCommands(t *testing.T) {
 	}
 }
 
+func TestPrepareBuildContextNormalizesAffectedServiceKeys(t *testing.T) {
+	t.Parallel()
+
+	svc, _ := newTestService()
+	input := testPrepareBuildContextInput()
+	input.AffectedServiceKeys = []string{" runtime-manager ", "", "access-manager", "runtime-manager"}
+	input.Meta = commandMeta(mustUUID("00000000-0000-0000-0000-000000001112"), 0)
+
+	buildContext, err := svc.PrepareBuildContext(context.Background(), input)
+	if err != nil {
+		t.Fatalf("PrepareBuildContext(): %v", err)
+	}
+
+	want := []string{"access-manager", "runtime-manager"}
+	if !sameStringSlices(buildContext.AffectedServiceKeys, want) {
+		t.Fatalf("affected service keys = %#v, want normalized %#v", buildContext.AffectedServiceKeys, want)
+	}
+}
+
 func TestBuildContextProgressRequiresCheckedSnapshotBeforeReady(t *testing.T) {
 	t.Parallel()
 
