@@ -26,6 +26,9 @@ type runtimeService interface {
 	ReportWorkspaceMaterializationProgress(context.Context, runtimeservice.ReportWorkspaceMaterializationProgressInput) (entity.WorkspaceMaterialization, error)
 	GetWorkspaceMaterialization(context.Context, runtimeservice.GetWorkspaceMaterializationInput) (entity.WorkspaceMaterialization, error)
 	ListWorkspaceMaterializations(context.Context, runtimeservice.ListWorkspaceMaterializationsInput) (runtimeservice.ListWorkspaceMaterializationsResult, error)
+	PrepareBuildContext(context.Context, runtimeservice.PrepareBuildContextInput) (entity.BuildContext, error)
+	ReportBuildContextProgress(context.Context, runtimeservice.ReportBuildContextProgressInput) (entity.BuildContext, error)
+	GetBuildContext(context.Context, runtimeservice.GetBuildContextInput) (entity.BuildContext, error)
 	CreateJob(context.Context, runtimeservice.CreateJobInput) (entity.Job, error)
 	ClaimRunnableJob(context.Context, runtimeservice.ClaimRunnableJobInput) (runtimeservice.ClaimRunnableJobResult, error)
 	ReportJobStepProgress(context.Context, runtimeservice.ReportJobStepProgressInput) (entity.Job, error)
@@ -114,6 +117,21 @@ func (s *Server) GetWorkspaceMaterialization(ctx context.Context, request *runti
 // ListWorkspaceMaterializations returns materialization attempts by slot or agent run.
 func (s *Server) ListWorkspaceMaterializations(ctx context.Context, request *runtimev1.ListWorkspaceMaterializationsRequest) (*runtimev1.ListWorkspaceMaterializationsResponse, error) {
 	return grpcserver.HandleUnary(ctx, request, grpccasters.ListWorkspaceMaterializationsInput, s.service.ListWorkspaceMaterializations, grpccasters.ListWorkspaceMaterializationsResponse)
+}
+
+// PrepareBuildContext records a runtime-owned build context request.
+func (s *Server) PrepareBuildContext(ctx context.Context, request *runtimev1.PrepareBuildContextRequest) (*runtimev1.BuildContextResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.PrepareBuildContextInput, s.service.PrepareBuildContext, grpccasters.BuildContextResponse)
+}
+
+// ReportBuildContextProgress updates build context materialization status.
+func (s *Server) ReportBuildContextProgress(ctx context.Context, request *runtimev1.ReportBuildContextProgressRequest) (*runtimev1.BuildContextResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.ReportBuildContextProgressInput, s.service.ReportBuildContextProgress, grpccasters.BuildContextResponse)
+}
+
+// GetBuildContext returns one build context materialization attempt.
+func (s *Server) GetBuildContext(ctx context.Context, request *runtimev1.GetBuildContextRequest) (*runtimev1.BuildContextResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.GetBuildContextInput, s.service.GetBuildContext, grpccasters.BuildContextResponse)
 }
 
 // CreateJob creates a platform technical job.

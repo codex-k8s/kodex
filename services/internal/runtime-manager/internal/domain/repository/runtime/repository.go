@@ -37,6 +37,14 @@ type Repository interface {
 	GetWorkspaceMaterialization(ctx context.Context, id uuid.UUID) (entity.WorkspaceMaterialization, error)
 	// ListWorkspaceMaterializations returns materialization attempts matching the filter and page.
 	ListWorkspaceMaterializations(ctx context.Context, filter query.WorkspaceMaterializationFilter) ([]entity.WorkspaceMaterialization, query.PageResult, error)
+	// PrepareBuildContext stores or reuses a build context request and records command idempotency.
+	PrepareBuildContext(ctx context.Context, buildContext entity.BuildContext, resultFactory BuildContextCommandResultFactory) (entity.BuildContext, error)
+	// UpdateBuildContext stores build context progress and command result atomically.
+	UpdateBuildContext(ctx context.Context, buildContext entity.BuildContext, previousVersion int64, result entity.CommandResult) error
+	// GetBuildContext returns one build context by id.
+	GetBuildContext(ctx context.Context, id uuid.UUID) (entity.BuildContext, error)
+	// GetBuildContextByFingerprint returns one build context by deterministic context fingerprint.
+	GetBuildContextByFingerprint(ctx context.Context, fingerprint string) (entity.BuildContext, error)
 	// CreateJob stores a new platform job, its event and command result atomically.
 	CreateJob(ctx context.Context, job entity.Job, event entity.OutboxEvent, result entity.CommandResult) error
 	// ClaimRunnableJob atomically leases one runnable job and stores its start event and command result.
@@ -94,6 +102,9 @@ type JobClaimRecordFactory func(entity.Job) (entity.OutboxEvent, entity.CommandR
 
 // SlotReuseRecordFactory builds event and command result for the concrete slot claimed inside repository transaction.
 type SlotReuseRecordFactory func(entity.Slot) (entity.OutboxEvent, entity.CommandResult, error)
+
+// BuildContextCommandResultFactory builds a command result for the concrete build context persisted by repository.
+type BuildContextCommandResultFactory func(entity.BuildContext) (entity.CommandResult, error)
 
 // CleanupBatchResult describes actual cleanup mutations done by repository.
 type CleanupBatchResult struct {

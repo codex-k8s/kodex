@@ -98,6 +98,45 @@ approvals:
 | `updated_at` | timestamptz | no | indexed | Внутреннее persistence-поле; в текущий read contract не входит. |
 | `version` | bigint | no | monotonic | Версия попытки. |
 
+### `BuildContext`
+
+Назначение: runtime-owned запрос подготовки build context для self-deploy build.
+
+Важные инварианты:
+
+- build context не хранится в `services.yaml`, потому что ref/PVC/digest зависят от конкретного merge commit;
+- запись идемпотентна по `context_fingerprint`, который строится из project/repository/provider/source refs, source commit SHA, affected service keys и `build_plan_fingerprint`;
+- `pending` с `source_snapshot_unavailable` означает ожидание checked source snapshot ref/digest от provider/project/source-artifact контура, а не ошибку Kaniko;
+- `ready` допустим только при наличии `build_context_ref` и `build_context_digest`;
+- БД хранит только refs, digest, status, безопасную ошибку, `next_action` и timestamps; содержимое snapshot/context, raw webhook body, diff, provider response, полный YAML, kubeconfig и значения секретов не сохраняются.
+
+| Поле | Тип | Nullable | Ограничения | Примечание |
+|---|---|---:|---|---|
+| `id` | UUID | no | primary key | Идентификатор запроса подготовки. |
+| `status` | text | no | indexed | `pending`, `running`, `ready`, `failed`. |
+| `project_id` | UUID | no | indexed | Внешняя ссылка на проект. |
+| `repository_id` | UUID | no | indexed | Внешняя ссылка на repository binding. |
+| `provider` | text | no |  | Ключ провайдера. |
+| `provider_owner` | text | no |  | Безопасная ссылка на owner/group. |
+| `provider_name` | text | no |  | Безопасная ссылка на repository name. |
+| `source_ref` | text | no |  | Branch/tag/provider ref. |
+| `source_commit_sha` | text | no | indexed | Commit, для которого готовится context. |
+| `affected_service_keys_json` | jsonb | no | array | Отсортированный список service keys из checked build plan. |
+| `build_plan_fingerprint` | text | no |  | Fingerprint проверенного build plan. |
+| `context_fingerprint` | text | no | unique | Идемпотентный fingerprint запроса. |
+| `source_snapshot_ref` | text | no | default '' | Checked source snapshot ref, когда он доступен. |
+| `source_snapshot_digest` | text | no | default '' | Digest checked source snapshot. |
+| `build_context_ref` | text | no | default '' | Runtime-owned prepared context ref, например PVC ref. |
+| `build_context_digest` | text | no | default '' | Digest prepared context. |
+| `started_at` | timestamptz | yes |  | Начало подготовки. |
+| `finished_at` | timestamptz | yes |  | Завершение подготовки. |
+| `last_error_code` | text | no | default '' | Классификация последней безопасной ошибки. |
+| `last_error_message` | text | no | default '' | Короткая сводка без секрета. |
+| `next_action` | text | no | default '' | Ближайшее действие автоматизации или оператора. |
+| `created_at` | timestamptz | no | indexed | Создание. |
+| `updated_at` | timestamptz | no | indexed | Последнее изменение. |
+| `version` | bigint | no | monotonic | Оптимистичная конкуренция. |
+
 ### `Job`
 
 Назначение: техническая операция платформы.
