@@ -120,6 +120,59 @@ func TestBuildContextProgressRequiresCheckedSnapshotBeforeReady(t *testing.T) {
 	}
 }
 
+func TestBuildContextProgressRejectsUnsafeDiagnostics(t *testing.T) {
+	t.Parallel()
+
+	svc, _ := newTestService()
+	input := testPrepareBuildContextInput()
+	input.Meta = commandMeta(mustUUID("00000000-0000-0000-0000-000000001108"), 0)
+	buildContext, err := svc.PrepareBuildContext(context.Background(), input)
+	if err != nil {
+		t.Fatalf("PrepareBuildContext(): %v", err)
+	}
+
+	_, err = svc.ReportBuildContextProgress(context.Background(), ReportBuildContextProgressInput{
+		BuildContextID: buildContext.ID,
+		Status:         enum.BuildContextStatusFailed,
+		ErrorCode:      "materializer_failed",
+		ErrorMessage:   repeatString("x", maxBuildContextDiagnosticBytes+1),
+		NextAction:     buildContextFailureAction,
+		Meta:           commandMeta(mustUUID("00000000-0000-0000-0000-000000001109"), buildContext.Version),
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("ReportBuildContextProgress(oversized diagnostic) err = %v, want invalid argument", err)
+	}
+
+	_, err = svc.ReportBuildContextProgress(context.Background(), ReportBuildContextProgressInput{
+		BuildContextID: buildContext.ID,
+		Status:         enum.BuildContextStatusFailed,
+		ErrorCode:      "materializer_failed",
+		ErrorMessage:   "raw_provider_payload contains token=secret",
+		NextAction:     buildContextFailureAction,
+		Meta:           commandMeta(mustUUID("00000000-0000-0000-0000-000000001110"), buildContext.Version),
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("ReportBuildContextProgress(raw diagnostic) err = %v, want invalid argument", err)
+	}
+
+	failed, err := svc.ReportBuildContextProgress(context.Background(), ReportBuildContextProgressInput{
+		BuildContextID: buildContext.ID,
+		Status:         enum.BuildContextStatusFailed,
+		ErrorCode:      "MATERIALIZER_FAILED",
+		ErrorMessage:   "source snapshot artifact is not available",
+		NextAction:     buildContextFailureAction,
+		Meta:           commandMeta(mustUUID("00000000-0000-0000-0000-000000001111"), buildContext.Version),
+	})
+	if err != nil {
+		t.Fatalf("ReportBuildContextProgress(safe diagnostic): %v", err)
+	}
+	if failed.LastErrorCode != "materializer_failed" ||
+		failed.LastErrorMessage != "source snapshot artifact is not available" ||
+		failed.NextAction != buildContextFailureAction {
+		t.Fatalf("failed build context diagnostics = %q/%q/%q, want normalized safe diagnostics", failed.LastErrorCode, failed.LastErrorMessage, failed.NextAction)
+	}
+}
+
 func testPrepareBuildContextInput() PrepareBuildContextInput {
 	return PrepareBuildContextInput{
 		ProjectID:            mustUUID("00000000-0000-0000-0000-000000001001"),

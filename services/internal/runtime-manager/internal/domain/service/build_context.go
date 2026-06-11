@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -26,6 +27,9 @@ const (
 	buildContextFailureAction                    = "review_build_context_materialization"
 	maxBuildContextProviderBytes                 = 64
 	maxBuildContextServiceKeys                   = 64
+	maxBuildContextErrorCodeBytes                = 64
+	maxBuildContextDiagnosticBytes               = 512
+	maxBuildContextNextActionBytes               = 128
 )
 
 // PrepareBuildContext records or reuses a runtime-owned build context request.
@@ -155,6 +159,18 @@ func normalizeReportBuildContextProgressInput(input ReportBuildContextProgressIn
 	if _, err := commandIdentity(input.Meta, operationReportBuildCtx); err != nil {
 		return ReportBuildContextProgressInput{}, err
 	}
+	errorCode, err := normalizeBuildContextErrorCode(input.ErrorCode)
+	if err != nil {
+		return ReportBuildContextProgressInput{}, err
+	}
+	errorMessage, err := normalizeBuildContextDiagnosticSummary(input.ErrorMessage)
+	if err != nil {
+		return ReportBuildContextProgressInput{}, err
+	}
+	nextAction, err := normalizeBuildContextNextAction(input.NextAction)
+	if err != nil {
+		return ReportBuildContextProgressInput{}, err
+	}
 	normalized := ReportBuildContextProgressInput{
 		BuildContextID:       input.BuildContextID,
 		Status:               input.Status,
@@ -164,9 +180,9 @@ func normalizeReportBuildContextProgressInput(input ReportBuildContextProgressIn
 		BuildContextDigest:   strings.TrimSpace(strings.ToLower(input.BuildContextDigest)),
 		StartedAt:            input.StartedAt,
 		FinishedAt:           input.FinishedAt,
-		ErrorCode:            strings.TrimSpace(input.ErrorCode),
-		ErrorMessage:         strings.TrimSpace(input.ErrorMessage),
-		NextAction:           strings.TrimSpace(input.NextAction),
+		ErrorCode:            errorCode,
+		ErrorMessage:         errorMessage,
+		NextAction:           nextAction,
 		Meta:                 input.Meta,
 	}
 	if err := validateOptionalSourceSnapshot(normalized.SourceSnapshotRef, normalized.SourceSnapshotDigest); err != nil {
@@ -218,6 +234,42 @@ func validateOptionalSourceSnapshot(ref string, digest string) error {
 		return errs.ErrInvalidArgument
 	}
 	return nil
+}
+
+func normalizeBuildContextErrorCode(value string) (string, error) {
+	code := strings.TrimSpace(strings.ToLower(value))
+	if code == "" {
+		return "", nil
+	}
+	if !safeAgentRunLabel(code, maxBuildContextErrorCodeBytes) {
+		return "", errs.ErrInvalidArgument
+	}
+	return code, nil
+}
+
+func normalizeBuildContextDiagnosticSummary(value string) (string, error) {
+	summary := strings.TrimSpace(value)
+	if summary == "" {
+		return "", nil
+	}
+	if len(summary) > maxBuildContextDiagnosticBytes ||
+		!utf8.ValidString(summary) ||
+		strings.ContainsAny(summary, "\r\n\t{}") ||
+		unsafeAgentRunText(summary) {
+		return "", errs.ErrInvalidArgument
+	}
+	return summary, nil
+}
+
+func normalizeBuildContextNextAction(value string) (string, error) {
+	action := strings.TrimSpace(strings.ToLower(value))
+	if action == "" {
+		return "", nil
+	}
+	if !safeAgentRunLabel(action, maxBuildContextNextActionBytes) {
+		return "", errs.ErrInvalidArgument
+	}
+	return action, nil
 }
 
 func newBuildContext(id uuid.UUID, input PrepareBuildContextInput, now time.Time) entity.BuildContext {
