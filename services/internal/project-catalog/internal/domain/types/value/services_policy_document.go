@@ -51,7 +51,8 @@ type ServicesPolicyImageSourceSpec struct {
 	MigratesDatabase string `json:"migratesDatabase,omitempty" yaml:"migratesDatabase,omitempty"`
 }
 
-// ServicesPolicyImageBuildContextSpec carries checked runtime build context refs.
+// ServicesPolicyImageBuildContextSpec хранит совместимые поля старых checked payload.
+// Self-deploy build получает динамические context refs из GetSelfDeployBuildPlan input.
 type ServicesPolicyImageBuildContextSpec struct {
 	BuildContextRef    string                           `json:"buildContextRef,omitempty" yaml:"buildContextRef,omitempty"`
 	BuildContextDigest string                           `json:"buildContextDigest,omitempty" yaml:"buildContextDigest,omitempty"`
@@ -78,7 +79,8 @@ type ServicesPolicyService struct {
 	Build                *ServicesPolicyBuildSpec `json:"build,omitempty" yaml:"build,omitempty"`
 }
 
-// ServicesPolicyBuildSpec описывает проверенный build-вход одного сервиса.
+// ServicesPolicyBuildSpec описывает проверенный рецепт сборки одного сервиса.
+// Динамические build context refs передаются отдельно контуром runtime-manager.
 type ServicesPolicyBuildSpec struct {
 	ImageRef           string                           `json:"imageRef,omitempty" yaml:"imageRef,omitempty"`
 	ImageTag           string                           `json:"imageTag,omitempty" yaml:"imageTag,omitempty"`

@@ -48,8 +48,8 @@ func (s *Service) dispatchSelfDeployBuildIfApproved(ctx context.Context, plan en
 	if err != nil {
 		return s.recordSelfDeployBuildFailure(ctx, current, classifyRuntimeJobFailure(err), "")
 	}
-	if read.Status == SelfDeployBuildPlanStatusBuildContextUnavailable {
-		return s.recordSelfDeployBuildPreparingContext(ctx, current, selfDeployBuildPlanBlockedSummary(read), read.Plan.PlanFingerprint)
+	if selfDeployBuildPlanNeedsContext(read.Status) {
+		return s.recordSelfDeployBuildPreparingContext(ctx, current, read.Status, selfDeployBuildPlanBlockedSummary(read), read.Plan.PlanFingerprint)
 	}
 	if read.Status != SelfDeployBuildPlanStatusReady {
 		return s.recordSelfDeployBuildBlocked(ctx, current, string(read.Status), selfDeployBuildPlanBlockedSummary(read), read.Plan.PlanFingerprint)
@@ -78,6 +78,11 @@ func selfDeployPlanExpectsBuild(plan entity.SelfDeployPlan) bool {
 		}
 	}
 	return false
+}
+
+func selfDeployBuildPlanNeedsContext(status SelfDeployBuildPlanStatus) bool {
+	return status == SelfDeployBuildPlanStatusBuildContextRequired ||
+		status == SelfDeployBuildPlanStatusBuildContextUnavailable
 }
 
 func selfDeployBuildPlanLookupInput(plan entity.SelfDeployPlan) (SelfDeployBuildPlanLookupInput, error) {
@@ -235,17 +240,17 @@ func (s *Service) recordSelfDeployBuildRequested(ctx context.Context, plan entit
 }
 
 func (s *Service) recordSelfDeployBuildBlocked(ctx context.Context, plan entity.SelfDeployPlan, code string, summary string, fingerprint string) (entity.SelfDeployPlan, error) {
-	plan.RuntimeBuildStatus = enum.SelfDeployRuntimeBuildStatusBlocked
-	plan.RuntimeBuildFingerprint = strings.TrimSpace(fingerprint)
-	plan.RuntimeBuildErrorCode = selfDeploySafeSummary(code)
-	plan.RuntimeBuildSummary = selfDeploySafeSummary(summary)
-	return s.recordSelfDeployBuildState(ctx, plan)
+	return s.recordSelfDeployBuildDiagnostic(ctx, plan, enum.SelfDeployRuntimeBuildStatusBlocked, code, summary, fingerprint)
 }
 
-func (s *Service) recordSelfDeployBuildPreparingContext(ctx context.Context, plan entity.SelfDeployPlan, summary string, fingerprint string) (entity.SelfDeployPlan, error) {
-	plan.RuntimeBuildStatus = enum.SelfDeployRuntimeBuildStatusPreparingContext
+func (s *Service) recordSelfDeployBuildPreparingContext(ctx context.Context, plan entity.SelfDeployPlan, code SelfDeployBuildPlanStatus, summary string, fingerprint string) (entity.SelfDeployPlan, error) {
+	return s.recordSelfDeployBuildDiagnostic(ctx, plan, enum.SelfDeployRuntimeBuildStatusPreparingContext, string(code), summary, fingerprint)
+}
+
+func (s *Service) recordSelfDeployBuildDiagnostic(ctx context.Context, plan entity.SelfDeployPlan, status enum.SelfDeployRuntimeBuildStatus, code string, summary string, fingerprint string) (entity.SelfDeployPlan, error) {
+	plan.RuntimeBuildStatus = status
 	plan.RuntimeBuildFingerprint = strings.TrimSpace(fingerprint)
-	plan.RuntimeBuildErrorCode = string(SelfDeployBuildPlanStatusBuildContextUnavailable)
+	plan.RuntimeBuildErrorCode = selfDeploySafeSummary(code)
 	plan.RuntimeBuildSummary = selfDeploySafeSummary(summary)
 	return s.recordSelfDeployBuildState(ctx, plan)
 }

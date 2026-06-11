@@ -308,6 +308,8 @@ const (
 	SelfDeployBuildPlanStatusServiceNotFound         SelfDeployBuildPlanStatus = "service_not_found"
 	SelfDeployBuildPlanStatusInvalidInput            SelfDeployBuildPlanStatus = "invalid_input"
 	SelfDeployBuildPlanStatusBuildContextUnavailable SelfDeployBuildPlanStatus = "build_context_unavailable"
+	SelfDeployBuildPlanStatusBuildContextRequired    SelfDeployBuildPlanStatus = "build_context_required"
+	SelfDeployBuildPlanStatusBuildContextInvalid     SelfDeployBuildPlanStatus = "build_context_invalid"
 )
 
 type SelfDeployBuildPlanLookupInput struct {
@@ -323,6 +325,18 @@ type SelfDeployBuildPlanLookupInput struct {
 	ExpectedServicesPolicyDigest      string
 	ExpectedServicesPolicyFingerprint string
 	ExpectedServicesPolicyVersion     *int64
+	ExpectedBuildPlanFingerprint      string
+	MaterializedBuildContexts         []SelfDeployMaterializedBuildContext
+}
+
+type SelfDeployMaterializedBuildContext struct {
+	ServiceKey                 string
+	PlanItemFingerprint        string
+	BuildContextRef            string
+	BuildContextDigest         string
+	DockerfileDigest           string
+	MaterializationRef         string
+	MaterializationFingerprint string
 }
 
 type RuntimeJobAllowedSecretRef struct {
@@ -334,6 +348,15 @@ type RuntimeJobOutputRef struct {
 	Kind string
 	Ref  string
 }
+
+type SelfDeployBuildPlanItemStatus string
+
+const (
+	SelfDeployBuildPlanItemStatusReady                SelfDeployBuildPlanItemStatus = "ready"
+	SelfDeployBuildPlanItemStatusBuildContextRequired SelfDeployBuildPlanItemStatus = "build_context_required"
+	SelfDeployBuildPlanItemStatusBuildContextInvalid  SelfDeployBuildPlanItemStatus = "build_context_invalid"
+	SelfDeployBuildPlanItemStatusBuildPlanUnavailable SelfDeployBuildPlanItemStatus = "build_plan_unavailable"
+)
 
 type SelfDeployBuildSourceSpec struct {
 	SourceRef       string
@@ -369,11 +392,24 @@ type SelfDeployBuildExecutionSpec struct {
 	OutputRefs        []RuntimeJobOutputRef
 }
 
+type SelfDeployBuildRecipe struct {
+	SelfDeployBuildImageSpec
+	DockerfileRef     string
+	DockerfileTarget  string
+	BuilderImageRef   string
+	AllowedSecretRefs []RuntimeJobAllowedSecretRef
+	OutputRefs        []RuntimeJobOutputRef
+	RecipeFingerprint string
+}
+
 type SelfDeployBuildPlanItem struct {
 	ServiceKey          string
 	ServiceRef          string
+	Status              SelfDeployBuildPlanItemStatus
+	BuildRecipe         SelfDeployBuildRecipe
 	BuildExecutionSpec  SelfDeployBuildExecutionSpec
 	PlanItemFingerprint string
+	SafeReason          string
 }
 
 type SelfDeployBuildPlan struct {

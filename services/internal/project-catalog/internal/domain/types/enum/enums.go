@@ -109,6 +109,8 @@ const (
 	SelfDeployBuildPlanStatusServiceNotFound         SelfDeployBuildPlanStatus = "service_not_found"
 	SelfDeployBuildPlanStatusInvalidInput            SelfDeployBuildPlanStatus = "invalid_input"
 	SelfDeployBuildPlanStatusBuildContextUnavailable SelfDeployBuildPlanStatus = "build_context_unavailable"
+	SelfDeployBuildPlanStatusBuildContextRequired    SelfDeployBuildPlanStatus = "build_context_required"
+	SelfDeployBuildPlanStatusBuildContextInvalid     SelfDeployBuildPlanStatus = "build_context_invalid"
 )
 
 // SelfDeployPathCategory классифицирует изменённые пути без raw paths и diffs.

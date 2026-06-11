@@ -6048,7 +6048,7 @@ func TestCreateSelfDeployPlanFromSignalDispatchesBuildAfterBuildContextBecomesRe
 	planID := uuid.MustParse("5f7f3a10-0034-4000-8000-000000000034")
 	repository := &fakeRepository{selfDeployByID: map[uuid.UUID]entity.SelfDeployPlan{}}
 	buildReader := &fakeSelfDeployBuildPlanReader{result: SelfDeployBuildPlanReadResult{
-		Status:     SelfDeployBuildPlanStatusBuildContextUnavailable,
+		Status:     SelfDeployBuildPlanStatusBuildContextRequired,
 		SafeReason: "runtime build context is not materialized yet",
 		Plan:       SelfDeployBuildPlan{PlanFingerprint: "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"},
 	}}
@@ -6074,7 +6074,7 @@ func TestCreateSelfDeployPlanFromSignalDispatchesBuildAfterBuildContextBecomesRe
 		t.Fatalf("CreateSelfDeployPlanFromSignal() waiting err = %v", err)
 	}
 	if waiting.RuntimeBuildStatus != enum.SelfDeployRuntimeBuildStatusPreparingContext ||
-		waiting.RuntimeBuildErrorCode != string(SelfDeployBuildPlanStatusBuildContextUnavailable) ||
+		waiting.RuntimeBuildErrorCode != string(SelfDeployBuildPlanStatusBuildContextRequired) ||
 		!strings.Contains(waiting.RuntimeBuildSummary, "runtime build context is not materialized yet") {
 		t.Fatalf("runtime build diagnostic = %s/%s/%s", waiting.RuntimeBuildStatus, waiting.RuntimeBuildErrorCode, waiting.RuntimeBuildSummary)
 	}

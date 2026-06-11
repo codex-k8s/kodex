@@ -435,7 +435,20 @@ type GetSelfDeployBuildPlanInput struct {
 	ExpectedServicesPolicyDigest      string
 	ExpectedServicesPolicyFingerprint string
 	ExpectedServicesPolicyVersion     *int64
+	ExpectedBuildPlanFingerprint      string
+	MaterializedBuildContexts         []SelfDeployMaterializedBuildContext
 	Meta                              value.QueryMeta
+}
+
+// SelfDeployMaterializedBuildContext содержит refs контекста сборки, подготовленного runtime-manager.
+type SelfDeployMaterializedBuildContext struct {
+	ServiceKey                 string
+	PlanItemFingerprint        string
+	BuildContextRef            string
+	BuildContextDigest         string
+	DockerfileDigest           string
+	MaterializationRef         string
+	MaterializationFingerprint string
 }
 
 // RuntimeJobAllowedSecretRef несёт только ссылку на секрет и ограниченное назначение.
@@ -469,12 +482,38 @@ type SelfDeployBuildExecutionSpec struct {
 	DockerfileTarget     string
 }
 
-// SelfDeployBuildPlanItem содержит build spec одного сервиса.
+// SelfDeployBuildPlanItemStatus описывает готовность build item одного сервиса.
+type SelfDeployBuildPlanItemStatus string
+
+const (
+	SelfDeployBuildPlanItemStatusReady                SelfDeployBuildPlanItemStatus = "ready"
+	SelfDeployBuildPlanItemStatusBuildContextRequired SelfDeployBuildPlanItemStatus = "build_context_required"
+	SelfDeployBuildPlanItemStatusBuildContextInvalid  SelfDeployBuildPlanItemStatus = "build_context_invalid"
+	SelfDeployBuildPlanItemStatusBuildPlanUnavailable SelfDeployBuildPlanItemStatus = "build_plan_unavailable"
+)
+
+// SelfDeployBuildRecipe содержит статический проверенный рецепт сборки без runtime context.
+type SelfDeployBuildRecipe struct {
+	ImageRef          string
+	ImageTag          string
+	ImageDigest       string
+	DockerfileRef     string
+	DockerfileTarget  string
+	BuilderImageRef   string
+	AllowedSecretRefs []RuntimeJobAllowedSecretRef
+	OutputRefs        []RuntimeJobOutputRef
+	RecipeFingerprint string
+}
+
+// SelfDeployBuildPlanItem содержит рецепт и, когда context готов, build spec одного сервиса.
 type SelfDeployBuildPlanItem struct {
 	ServiceKey          string
 	ServiceRef          string
 	BuildExecutionSpec  SelfDeployBuildExecutionSpec
 	PlanItemFingerprint string
+	Status              SelfDeployBuildPlanItemStatus
+	BuildRecipe         SelfDeployBuildRecipe
+	SafeReason          string
 }
 
 // SelfDeployBuildPlan содержит checked project-owned build inputs.

@@ -37,6 +37,21 @@ func TestSelfDeployBuildPlanReaderMapsReadyBuildPlan(t *testing.T) {
 				BuildItems: []*projectsv1.SelfDeployBuildPlanItem{{
 					ServiceKey: "agent-manager",
 					ServiceRef: "project-catalog:service-descriptor:agent-manager",
+					Status:     projectsv1.SelfDeployBuildPlanItemStatus_SELF_DEPLOY_BUILD_PLAN_ITEM_STATUS_READY,
+					BuildRecipe: &projectsv1.SelfDeployBuildRecipe{
+						ImageRef:          "registry.example/kodex/agent-manager",
+						ImageTag:          "abcdef0",
+						DockerfileRef:     "context://services/internal/agent-manager/Dockerfile",
+						DockerfileTarget:  "prod",
+						BuilderImageRef:   "gcr.io/kaniko-project/executor:v1.23.2",
+						RecipeFingerprint: "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+						AllowedSecretRefs: []*runtimev1.RuntimeJobAllowedSecretRef{
+							{SecretRef: "secret://runtime/registry", Purpose: "registry_docker_config"},
+						},
+						OutputRefs: []*runtimev1.RuntimeJobOutputRef{
+							{Kind: "image", Ref: "runtime:image:agent-manager"},
+						},
+					},
 					BuildExecutionSpec: &runtimev1.BuildExecutionSpec{
 						SourceRef:            "refs/heads/main",
 						SourceCommitSha:      "abcdef0123456789abcdef0123456789abcdef01",
@@ -77,7 +92,18 @@ func TestSelfDeployBuildPlanReaderMapsReadyBuildPlan(t *testing.T) {
 		ProviderSignalRef:            "provider-signal-ref",
 		AffectedServiceKeys:          []string{"agent-manager"},
 		ExpectedServicesPolicyDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-		Meta:                         value.CommandMeta{Actor: value.Actor{Type: "service", ID: "agent-manager"}},
+		ExpectedBuildPlanFingerprint: "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+		MaterializedBuildContexts: []agentservice.SelfDeployMaterializedBuildContext{
+			{
+				ServiceKey:          "agent-manager",
+				PlanItemFingerprint: "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+				BuildContextRef:     "runtime://build-contexts/agent-manager",
+				BuildContextDigest:  "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+				DockerfileDigest:    "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+				MaterializationRef:  "runtime://workspace-materialization/agent-manager",
+			},
+		},
+		Meta: value.CommandMeta{Actor: value.Actor{Type: "service", ID: "agent-manager"}},
 	})
 	if err != nil {
 		t.Fatalf("GetSelfDeployBuildPlan(): %v", err)
@@ -86,11 +112,17 @@ func TestSelfDeployBuildPlanReaderMapsReadyBuildPlan(t *testing.T) {
 		t.Fatalf("status = %s, want ready", result.Status)
 	}
 	if client.request.GetExpectedServicesPolicyDigest() != "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" ||
-		len(client.request.GetAffectedServiceKeys()) != 1 {
+		client.request.GetExpectedBuildPlanFingerprint() != "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff" ||
+		len(client.request.GetAffectedServiceKeys()) != 1 ||
+		len(client.request.GetMaterializedBuildContexts()) != 1 ||
+		client.request.GetMaterializedBuildContexts()[0].GetBuildContextRef() != "runtime://build-contexts/agent-manager" {
 		t.Fatalf("request = %+v", client.request)
 	}
 	item := result.Plan.BuildItems[0]
-	if item.BuildExecutionSpec.ImageRef != "registry.example/kodex/agent-manager" ||
+	if item.Status != agentservice.SelfDeployBuildPlanItemStatusReady ||
+		item.BuildRecipe.RecipeFingerprint != "sha256:9999999999999999999999999999999999999999999999999999999999999999" ||
+		item.BuildRecipe.AllowedSecretRefs[0].SecretRef != "secret://runtime/registry" ||
+		item.BuildExecutionSpec.ImageRef != "registry.example/kodex/agent-manager" ||
 		item.BuildExecutionSpec.AllowedSecretRefs[0].SecretRef != "secret://runtime/registry" ||
 		item.PlanItemFingerprint != "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" {
 		t.Fatalf("mapped item = %+v", item)
@@ -102,8 +134,37 @@ func TestSelfDeployBuildPlanReaderMapsNotReadyStatus(t *testing.T) {
 
 	reader, err := newSelfDeployBuildPlanReader(&fakeSelfDeployBuildPlanClient{
 		response: &projectsv1.SelfDeployBuildPlanResponse{
-			Status:     projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_BUILD_CONTEXT_UNAVAILABLE,
-			SafeReason: stringPtr("build_context_unavailable:agent-manager"),
+			Status: projectsv1.SelfDeployBuildPlanStatus_SELF_DEPLOY_BUILD_PLAN_STATUS_BUILD_CONTEXT_REQUIRED,
+			Plan: &projectsv1.SelfDeployBuildPlan{
+				ProjectRef:          uuid.NewString(),
+				RepositoryRef:       uuid.NewString(),
+				AffectedServiceKeys: []string{"agent-manager"},
+				BuildItems: []*projectsv1.SelfDeployBuildPlanItem{
+					{
+						ServiceKey: "agent-manager",
+						ServiceRef: "project-catalog:service-descriptor:agent-manager",
+						Status:     projectsv1.SelfDeployBuildPlanItemStatus_SELF_DEPLOY_BUILD_PLAN_ITEM_STATUS_BUILD_CONTEXT_REQUIRED,
+						BuildRecipe: &projectsv1.SelfDeployBuildRecipe{
+							ImageRef:          "registry.example/kodex/agent-manager",
+							ImageTag:          "abcdef0",
+							DockerfileRef:     "context://services/internal/agent-manager/Dockerfile",
+							DockerfileTarget:  "prod",
+							BuilderImageRef:   "gcr.io/kaniko-project/executor:v1.23.2",
+							RecipeFingerprint: "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+							AllowedSecretRefs: []*runtimev1.RuntimeJobAllowedSecretRef{
+								{SecretRef: "secret://runtime/registry", Purpose: "registry_docker_config"},
+							},
+							OutputRefs: []*runtimev1.RuntimeJobOutputRef{
+								{Kind: "image", Ref: "runtime:image:agent-manager"},
+							},
+						},
+						PlanItemFingerprint: "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+						SafeReason:          stringPtr("build_context_required:agent-manager"),
+					},
+				},
+				PlanFingerprint: "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+			},
+			SafeReason: stringPtr("build_context_required:agent-manager"),
 		},
 	}, Config{AuthToken: "token", Timeout: time.Second})
 	if err != nil {
@@ -117,8 +178,17 @@ func TestSelfDeployBuildPlanReaderMapsNotReadyStatus(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetSelfDeployBuildPlan(): %v", err)
 	}
-	if result.Status != agentservice.SelfDeployBuildPlanStatusBuildContextUnavailable || result.SafeReason != "build_context_unavailable:agent-manager" {
+	if result.Status != agentservice.SelfDeployBuildPlanStatusBuildContextRequired || result.SafeReason != "build_context_required:agent-manager" {
 		t.Fatalf("result = %+v", result)
+	}
+	if result.Plan.PlanFingerprint != "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff" ||
+		len(result.Plan.BuildItems) != 1 ||
+		result.Plan.BuildItems[0].BuildExecutionSpec.ServiceKey != "" ||
+		result.Plan.BuildItems[0].Status != agentservice.SelfDeployBuildPlanItemStatusBuildContextRequired ||
+		result.Plan.BuildItems[0].BuildRecipe.RecipeFingerprint != "sha256:9999999999999999999999999999999999999999999999999999999999999999" ||
+		result.Plan.BuildItems[0].BuildRecipe.OutputRefs[0].Ref != "runtime:image:agent-manager" ||
+		result.Plan.BuildItems[0].SafeReason != "build_context_required:agent-manager" {
+		t.Fatalf("plan = %+v, want non-ready recipe-only plan without build spec error", result.Plan)
 	}
 }
 
