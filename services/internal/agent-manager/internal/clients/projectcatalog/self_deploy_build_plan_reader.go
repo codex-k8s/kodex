@@ -147,11 +147,44 @@ func selfDeployBuildPlanItems(items []*projectsv1.SelfDeployBuildPlanItem) ([]ag
 		result = append(result, agentservice.SelfDeployBuildPlanItem{
 			ServiceKey:          strings.TrimSpace(item.GetServiceKey()),
 			ServiceRef:          strings.TrimSpace(item.GetServiceRef()),
+			Status:              selfDeployBuildPlanItemStatus(item.GetStatus()),
+			BuildRecipe:         selfDeployBuildRecipe(item.GetBuildRecipe()),
 			BuildExecutionSpec:  spec,
 			PlanItemFingerprint: strings.TrimSpace(item.GetPlanItemFingerprint()),
+			SafeReason:          strings.TrimSpace(item.GetSafeReason()),
 		})
 	}
 	return result, nil
+}
+
+func selfDeployBuildPlanItemStatus(status projectsv1.SelfDeployBuildPlanItemStatus) agentservice.SelfDeployBuildPlanItemStatus {
+	statuses := map[projectsv1.SelfDeployBuildPlanItemStatus]agentservice.SelfDeployBuildPlanItemStatus{
+		projectsv1.SelfDeployBuildPlanItemStatus_SELF_DEPLOY_BUILD_PLAN_ITEM_STATUS_READY:                  agentservice.SelfDeployBuildPlanItemStatusReady,
+		projectsv1.SelfDeployBuildPlanItemStatus_SELF_DEPLOY_BUILD_PLAN_ITEM_STATUS_BUILD_CONTEXT_REQUIRED: agentservice.SelfDeployBuildPlanItemStatusBuildContextRequired,
+		projectsv1.SelfDeployBuildPlanItemStatus_SELF_DEPLOY_BUILD_PLAN_ITEM_STATUS_BUILD_CONTEXT_INVALID:  agentservice.SelfDeployBuildPlanItemStatusBuildContextInvalid,
+		projectsv1.SelfDeployBuildPlanItemStatus_SELF_DEPLOY_BUILD_PLAN_ITEM_STATUS_BUILD_PLAN_UNAVAILABLE: agentservice.SelfDeployBuildPlanItemStatusBuildPlanUnavailable,
+	}
+	if converted, ok := statuses[status]; ok {
+		return converted
+	}
+	return ""
+}
+
+func selfDeployBuildRecipe(recipe *projectsv1.SelfDeployBuildRecipe) agentservice.SelfDeployBuildRecipe {
+	if recipe == nil {
+		return agentservice.SelfDeployBuildRecipe{}
+	}
+	converted := agentservice.SelfDeployBuildRecipe{}
+	converted.ImageRef = strings.TrimSpace(recipe.GetImageRef())
+	converted.ImageTag = strings.TrimSpace(recipe.GetImageTag())
+	converted.ImageDigest = strings.TrimSpace(recipe.GetImageDigest())
+	converted.DockerfileRef = strings.TrimSpace(recipe.GetDockerfileRef())
+	converted.DockerfileTarget = strings.TrimSpace(recipe.GetDockerfileTarget())
+	converted.BuilderImageRef = strings.TrimSpace(recipe.GetBuilderImageRef())
+	converted.AllowedSecretRefs = selfDeployAllowedSecretRefs(recipe.GetAllowedSecretRefs())
+	converted.OutputRefs = selfDeployOutputRefs(recipe.GetOutputRefs())
+	converted.RecipeFingerprint = strings.TrimSpace(recipe.GetRecipeFingerprint())
+	return converted
 }
 
 func selfDeployBuildExecutionSpec(spec *runtimev1.BuildExecutionSpec) (agentservice.SelfDeployBuildExecutionSpec, error) {
