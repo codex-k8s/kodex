@@ -41,6 +41,7 @@ TEMPLATE_DIR="$REPO_ROOT/deploy/k8s/mattermost"
 mattercodex_render_template "$TEMPLATE_DIR/namespace.yaml.tpl" "$RENDER_DIR/00-namespace.yaml"
 mattercodex_render_template "$TEMPLATE_DIR/postgres.yaml.tpl" "$RENDER_DIR/10-postgres.yaml"
 mattercodex_render_template "$TEMPLATE_DIR/mattermost.yaml.tpl" "$RENDER_DIR/20-mattermost.yaml"
+mattercodex_render_template "$TEMPLATE_DIR/oauth2-proxy.yaml.tpl" "$RENDER_DIR/25-oauth2-proxy.yaml"
 mattercodex_render_template "$TEMPLATE_DIR/ingress.yaml.tpl" "$RENDER_DIR/30-ingress.yaml"
 
 if mattercodex_bool "${MATTERCODEX_CREATE_CLUSTER_ISSUER:-false}"; then

@@ -33,7 +33,7 @@
 1. `scripts/env/check-env.sh` - локальная проверка `.env` без вывода значений.
 2. `scripts/remote/bootstrap-host.sh` - SSH preflight целевого host.
 3. `scripts/k8s/install-foundation.sh` - namespace, secrets, ingress/TLS prerequisites.
-4. `scripts/k8s/install-mattermost.sh` - Mattermost + PostgreSQL + file PVC.
+4. `scripts/k8s/install-mattermost.sh` - Mattermost + PostgreSQL + file PVC + OAuth2 proxy для публичного gate.
 5. `scripts/remote/install-bot-service.sh` - `matter-codex` deployment/service/ingress на целевом сервере.
 6. `scripts/remote/bootstrap-mattermost-bot.sh` - Mattermost bot token, team, slash command и дефолтные каналы через `mmctl --local`.
 7. Mattermost `/agents openai auth|status account` - Codex device-code authorization и per-account Secret с `auth.json`.
@@ -85,6 +85,7 @@
 - render manifests без секретов в output;
 - `kubectl apply --dry-run=server`, если кластер доступен;
 - rollout status для измененных workloads;
+- OAuth2 gate для публичного Mattermost URL;
 - health endpoint сервиса;
 - Mattermost bot smoke или безопасный `/agents status`;
 - наличие дефолтных Mattermost-каналов;
