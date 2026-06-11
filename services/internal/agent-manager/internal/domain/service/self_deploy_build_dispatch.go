@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"strings"
 
 	"github.com/google/uuid"
@@ -47,10 +48,16 @@ func (s *Service) dispatchSelfDeployBuildIfApproved(ctx context.Context, plan en
 	if err != nil {
 		return s.recordSelfDeployBuildFailure(ctx, current, classifyRuntimeJobFailure(err), "")
 	}
+	if selfDeployBuildPlanNeedsContext(read.Status) {
+		return s.recordSelfDeployBuildPreparingContext(ctx, current, read.Status, selfDeployBuildPlanBlockedSummary(read), read.Plan.PlanFingerprint)
+	}
 	if read.Status != SelfDeployBuildPlanStatusReady {
 		return s.recordSelfDeployBuildBlocked(ctx, current, string(read.Status), selfDeployBuildPlanBlockedSummary(read), read.Plan.PlanFingerprint)
 	}
 	if err := validateSelfDeployBuildPlan(current, read.Plan); err != nil {
+		if errors.Is(err, errs.ErrDependencyUnavailable) || errors.Is(err, errs.ErrInvalidArgument) {
+			return s.recordSelfDeployBuildBlocked(ctx, current, "invalid_build_execution_spec", "project-catalog returned a ready build plan without safe runtime build context refs or digests", read.Plan.PlanFingerprint)
+		}
 		return s.recordSelfDeployBuildBlocked(ctx, current, "build_plan_conflict", "project-catalog returned a build plan that does not match the approved self-deploy plan", read.Plan.PlanFingerprint)
 	}
 	jobs, err := s.createSelfDeployBuildJobs(ctx, current, read.Plan)
@@ -71,6 +78,11 @@ func selfDeployPlanExpectsBuild(plan entity.SelfDeployPlan) bool {
 		}
 	}
 	return false
+}
+
+func selfDeployBuildPlanNeedsContext(status SelfDeployBuildPlanStatus) bool {
+	return status == SelfDeployBuildPlanStatusBuildContextRequired ||
+		status == SelfDeployBuildPlanStatusBuildContextUnavailable
 }
 
 func selfDeployBuildPlanLookupInput(plan entity.SelfDeployPlan) (SelfDeployBuildPlanLookupInput, error) {
@@ -111,6 +123,62 @@ func validateSelfDeployBuildPlan(plan entity.SelfDeployPlan, buildPlan SelfDeplo
 			strings.TrimSpace(item.ServiceKey) != strings.TrimSpace(item.BuildExecutionSpec.ServiceKey) ||
 			strings.TrimSpace(item.BuildExecutionSpec.BuildPlanFingerprint) != planFingerprint {
 			return errs.ErrDependencyUnavailable
+		}
+		if err := validateSelfDeployBuildExecutionSpec(item.BuildExecutionSpec, planFingerprint); err != nil {
+			return errs.ErrDependencyUnavailable
+		}
+	}
+	return nil
+}
+
+func validateSelfDeployBuildExecutionSpec(spec SelfDeployBuildExecutionSpec, planFingerprint string) error {
+	for _, ref := range []string{spec.SourceRef, spec.ImageRef, spec.BuildContextRef, spec.DockerfileRef, spec.BuilderImageRef} {
+		if _, err := normalizeSelfDeployRef(ref, true); err != nil {
+			return err
+		}
+	}
+	if _, err := normalizeSelfDeployCommit(spec.SourceCommitSHA); err != nil {
+		return err
+	}
+	if err := validateSelfDeployServiceKey(spec.ServiceKey); err != nil {
+		return err
+	}
+	if err := validateSelfDeployServiceKey(spec.ImageTag); err != nil {
+		return err
+	}
+	if err := validateSelfDeployServiceKey(spec.DockerfileTarget); err != nil {
+		return err
+	}
+	if digest, err := normalizeSHA256Digest(spec.BuildContextDigest); err != nil || digest == "" {
+		return errs.ErrInvalidArgument
+	}
+	if digest, err := normalizeSHA256Digest(spec.BuildPlanFingerprint); err != nil || digest != planFingerprint {
+		return errs.ErrInvalidArgument
+	}
+	if spec.ImageDigest != "" {
+		if _, err := normalizeSHA256Digest(spec.ImageDigest); err != nil {
+			return err
+		}
+	}
+	if spec.DockerfileDigest != "" {
+		if _, err := normalizeSHA256Digest(spec.DockerfileDigest); err != nil {
+			return err
+		}
+	}
+	for _, ref := range spec.AllowedSecretRefs {
+		if _, err := normalizeSelfDeployRef(ref.SecretRef, true); err != nil {
+			return err
+		}
+		if err := validateSelfDeployServiceKey(ref.Purpose); err != nil {
+			return err
+		}
+	}
+	for _, ref := range spec.OutputRefs {
+		if err := validateSelfDeployServiceKey(ref.Kind); err != nil {
+			return err
+		}
+		if _, err := normalizeSelfDeployRef(ref.Ref, true); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -172,7 +240,15 @@ func (s *Service) recordSelfDeployBuildRequested(ctx context.Context, plan entit
 }
 
 func (s *Service) recordSelfDeployBuildBlocked(ctx context.Context, plan entity.SelfDeployPlan, code string, summary string, fingerprint string) (entity.SelfDeployPlan, error) {
-	plan.RuntimeBuildStatus = enum.SelfDeployRuntimeBuildStatusBlocked
+	return s.recordSelfDeployBuildDiagnostic(ctx, plan, enum.SelfDeployRuntimeBuildStatusBlocked, code, summary, fingerprint)
+}
+
+func (s *Service) recordSelfDeployBuildPreparingContext(ctx context.Context, plan entity.SelfDeployPlan, code SelfDeployBuildPlanStatus, summary string, fingerprint string) (entity.SelfDeployPlan, error) {
+	return s.recordSelfDeployBuildDiagnostic(ctx, plan, enum.SelfDeployRuntimeBuildStatusPreparingContext, string(code), summary, fingerprint)
+}
+
+func (s *Service) recordSelfDeployBuildDiagnostic(ctx context.Context, plan entity.SelfDeployPlan, status enum.SelfDeployRuntimeBuildStatus, code string, summary string, fingerprint string) (entity.SelfDeployPlan, error) {
+	plan.RuntimeBuildStatus = status
 	plan.RuntimeBuildFingerprint = strings.TrimSpace(fingerprint)
 	plan.RuntimeBuildErrorCode = selfDeploySafeSummary(code)
 	plan.RuntimeBuildSummary = selfDeploySafeSummary(summary)

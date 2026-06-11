@@ -87,6 +87,10 @@ func TestJobClaimQueryRequiresStrictBuildDeploySpecShape(t *testing.T) {
 		"(deploy_spec->>'image_digest') ~* '^sha256:[0-9a-f]{64}$'",
 		"(deploy_spec->>'manifest_digest') ~* '^sha256:[0-9a-f]{64}$'",
 		"(deploy_spec->>'deploy_plan_fingerprint') ~* '^sha256:[0-9a-f]{64}$'",
+		"deploy_spec->>'manifest_bundle_ref' <> ''",
+		"(deploy_spec->>'manifest_bundle_digest') ~* '^sha256:[0-9a-f]{64}$'",
+		"jsonb_array_length(deploy_spec->'rollout_targets') > 0",
+		"jsonb_array_length(deploy_spec->'expected_image_refs') > 0",
 	}
 	for _, fragment := range required {
 		if !strings.Contains(queryJobClaim, fragment) {

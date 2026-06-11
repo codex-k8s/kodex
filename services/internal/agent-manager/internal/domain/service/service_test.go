@@ -6004,15 +6004,53 @@ func TestCreateSelfDeployPlanBlocksBuildWhenProjectBuildPlanNotReady(t *testing.
 	}
 }
 
-func TestCreateSelfDeployPlanFromSignalDispatchesBuildAfterBlockedPlanBecomesReady(t *testing.T) {
+func TestCreateSelfDeployPlanBlocksReadyBuildPlanWithoutContextRefs(t *testing.T) {
+	t.Parallel()
+
+	planID := uuid.MustParse("5f7f3a10-003c-4000-8000-00000000003c")
+	repository := &fakeRepository{selfDeployByID: map[uuid.UUID]entity.SelfDeployPlan{}}
+	readResult := readySelfDeployBuildPlanResult()
+	readResult.Plan.BuildItems[0].BuildExecutionSpec.BuildContextRef = ""
+	buildCreator := &fakeSelfDeployBuildJobCreator{result: RuntimeJobResult{JobRef: "runtime:job/build-agent-manager", Status: "pending"}}
+	service := New(Config{
+		Repository:                     repository,
+		IDGenerator:                    &sequenceIDGenerator{ids: []uuid.UUID{planID, uuid.New(), uuid.New(), uuid.New()}},
+		SelfDeployGatePreparer:         approvedSelfDeployGatePreparer(),
+		SelfDeployGateEnabled:          true,
+		SelfDeployBuildPlanReader:      &fakeSelfDeployBuildPlanReader{result: readResult},
+		SelfDeployBuildJobCreator:      buildCreator,
+		SelfDeployBuildDispatchEnabled: true,
+	})
+
+	plan, err := service.CreateSelfDeployPlan(context.Background(), validSelfDeployBuildPlanInput())
+	if err != nil {
+		t.Fatalf("CreateSelfDeployPlan() err = %v", err)
+	}
+	if plan.RuntimeBuildStatus != enum.SelfDeployRuntimeBuildStatusBlocked ||
+		plan.RuntimeBuildErrorCode != "invalid_build_execution_spec" ||
+		!strings.Contains(plan.RuntimeBuildSummary, "without safe runtime build context refs or digests") {
+		t.Fatalf("runtime build diagnostic = %s/%s/%s", plan.RuntimeBuildStatus, plan.RuntimeBuildErrorCode, plan.RuntimeBuildSummary)
+	}
+	if buildCreator.calls != 0 {
+		t.Fatalf("build creator calls = %d, want 0", buildCreator.calls)
+	}
+	for _, forbidden := range []string{"raw_provider_payload", "token", "kubeconfig"} {
+		if strings.Contains(plan.RuntimeBuildSummary, forbidden) {
+			t.Fatalf("runtime build summary contains forbidden marker %q: %s", forbidden, plan.RuntimeBuildSummary)
+		}
+	}
+}
+
+func TestCreateSelfDeployPlanFromSignalDispatchesBuildAfterBuildContextBecomesReady(t *testing.T) {
 	t.Parallel()
 
 	input := validSelfDeployBuildPlanInput()
 	planID := uuid.MustParse("5f7f3a10-0034-4000-8000-000000000034")
 	repository := &fakeRepository{selfDeployByID: map[uuid.UUID]entity.SelfDeployPlan{}}
 	buildReader := &fakeSelfDeployBuildPlanReader{result: SelfDeployBuildPlanReadResult{
-		Status:     SelfDeployBuildPlanStatusPolicyStale,
-		SafeReason: "services_policy_digest_mismatch",
+		Status:     SelfDeployBuildPlanStatusBuildContextRequired,
+		SafeReason: "runtime build context is not materialized yet",
+		Plan:       SelfDeployBuildPlan{PlanFingerprint: "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"},
 	}}
 	buildCreator := &fakeSelfDeployBuildJobCreator{result: RuntimeJobResult{JobRef: "runtime:job/build-agent-manager", Status: "pending"}}
 	service := New(Config{
@@ -6031,15 +6069,17 @@ func TestCreateSelfDeployPlanFromSignalDispatchesBuildAfterBlockedPlanBecomesRea
 		SelfDeployBuildDispatchEnabled: true,
 	})
 
-	blocked, err := service.CreateSelfDeployPlanFromSignal(context.Background(), CreateSelfDeployPlanFromSignalInput{CreateSelfDeployPlanInput: input})
+	waiting, err := service.CreateSelfDeployPlanFromSignal(context.Background(), CreateSelfDeployPlanFromSignalInput{CreateSelfDeployPlanInput: input})
 	if err != nil {
-		t.Fatalf("CreateSelfDeployPlanFromSignal() blocked err = %v", err)
+		t.Fatalf("CreateSelfDeployPlanFromSignal() waiting err = %v", err)
 	}
-	if blocked.RuntimeBuildStatus != enum.SelfDeployRuntimeBuildStatusBlocked {
-		t.Fatalf("runtime build status = %s, want blocked", blocked.RuntimeBuildStatus)
+	if waiting.RuntimeBuildStatus != enum.SelfDeployRuntimeBuildStatusPreparingContext ||
+		waiting.RuntimeBuildErrorCode != string(SelfDeployBuildPlanStatusBuildContextRequired) ||
+		!strings.Contains(waiting.RuntimeBuildSummary, "runtime build context is not materialized yet") {
+		t.Fatalf("runtime build diagnostic = %s/%s/%s", waiting.RuntimeBuildStatus, waiting.RuntimeBuildErrorCode, waiting.RuntimeBuildSummary)
 	}
-	blockedCommandKey := repository.updateSelfDeployResult.IdempotencyKey
-	repository.selfDeployList = []entity.SelfDeployPlan{blocked}
+	waitingCommandKey := repository.updateSelfDeployResult.IdempotencyKey
+	repository.selfDeployList = []entity.SelfDeployPlan{waiting}
 	repository.updateSelfDeployCalled = false
 
 	sameDiagnosticInput := input
@@ -6048,8 +6088,8 @@ func TestCreateSelfDeployPlanFromSignalDispatchesBuildAfterBlockedPlanBecomesRea
 	if err != nil {
 		t.Fatalf("CreateSelfDeployPlanFromSignal() same diagnostic err = %v", err)
 	}
-	if sameDiagnostic.Version != blocked.Version || repository.updateSelfDeployCalled {
-		t.Fatalf("same diagnostic replay version/update = %d/%v, want %d/false", sameDiagnostic.Version, repository.updateSelfDeployCalled, blocked.Version)
+	if sameDiagnostic.Version != waiting.Version || repository.updateSelfDeployCalled {
+		t.Fatalf("same diagnostic replay version/update = %d/%v, want %d/false", sameDiagnostic.Version, repository.updateSelfDeployCalled, waiting.Version)
 	}
 
 	buildReader.result = readySelfDeployBuildPlanResult()
@@ -6070,8 +6110,8 @@ func TestCreateSelfDeployPlanFromSignalDispatchesBuildAfterBlockedPlanBecomesRea
 	if buildCreator.calls != 1 {
 		t.Fatalf("build creator calls = %d, want 1", buildCreator.calls)
 	}
-	if repository.updateSelfDeployResult.IdempotencyKey == blockedCommandKey {
-		t.Fatalf("dispatch state idempotency key was reused: %q", blockedCommandKey)
+	if repository.updateSelfDeployResult.IdempotencyKey == waitingCommandKey {
+		t.Fatalf("dispatch state idempotency key was reused: %q", waitingCommandKey)
 	}
 }
 
