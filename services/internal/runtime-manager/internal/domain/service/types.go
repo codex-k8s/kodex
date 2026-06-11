@@ -101,6 +101,45 @@ type ListWorkspaceMaterializationsResult struct {
 	Page                      value.PageResult
 }
 
+// PrepareBuildContextInput describes a self-deploy build context materialization request.
+type PrepareBuildContextInput struct {
+	ProjectID            uuid.UUID
+	RepositoryID         uuid.UUID
+	Provider             string
+	ProviderOwner        string
+	ProviderName         string
+	SourceRef            string
+	SourceCommitSHA      string
+	AffectedServiceKeys  []string
+	BuildPlanFingerprint string
+	SourceSnapshotRef    string
+	SourceSnapshotDigest string
+	Meta                 value.CommandMeta
+}
+
+// ReportBuildContextProgressInput describes a trusted build context status update.
+type ReportBuildContextProgressInput struct {
+	BuildContextID       uuid.UUID
+	Status               enum.BuildContextStatus
+	SourceSnapshotRef    string
+	SourceSnapshotDigest string
+	BuildContextRef      string
+	BuildContextDigest   string
+	StartedAt            *time.Time
+	FinishedAt           *time.Time
+	ErrorCode            string
+	ErrorMessage         string
+	NextAction           string
+	Meta                 value.CommandMeta
+}
+
+// GetBuildContextInput describes a build context read request.
+type GetBuildContextInput struct {
+	BuildContextID     uuid.UUID
+	ContextFingerprint string
+	Meta               value.QueryMeta
+}
+
 // CreateJobInput describes a request to create a platform technical job.
 type CreateJobInput struct {
 	JobType               enum.JobType

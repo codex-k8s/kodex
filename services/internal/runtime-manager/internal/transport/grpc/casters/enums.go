@@ -36,6 +36,14 @@ var (
 	}
 	workspaceMaterializationStatusToProto = invertEnumMap(workspaceMaterializationStatusFromProto)
 
+	buildContextStatusFromProto = map[runtimev1.BuildContextStatus]enum.BuildContextStatus{
+		runtimev1.BuildContextStatus_BUILD_CONTEXT_STATUS_PENDING: enum.BuildContextStatusPending,
+		runtimev1.BuildContextStatus_BUILD_CONTEXT_STATUS_RUNNING: enum.BuildContextStatusRunning,
+		runtimev1.BuildContextStatus_BUILD_CONTEXT_STATUS_READY:   enum.BuildContextStatusReady,
+		runtimev1.BuildContextStatus_BUILD_CONTEXT_STATUS_FAILED:  enum.BuildContextStatusFailed,
+	}
+	buildContextStatusToProto = invertEnumMap(buildContextStatusFromProto)
+
 	workspaceSourceKindFromProto = map[runtimev1.WorkspaceSourceKind]enum.WorkspaceSourceKind{
 		runtimev1.WorkspaceSourceKind_WORKSPACE_SOURCE_KIND_CODE:              enum.WorkspaceSourceKindCode,
 		runtimev1.WorkspaceSourceKind_WORKSPACE_SOURCE_KIND_DOCUMENTATION:     enum.WorkspaceSourceKindDocumentation,
@@ -211,6 +219,16 @@ func WorkspaceMaterializationStatusFromProto(status runtimev1.WorkspaceMateriali
 // WorkspaceMaterializationStatusToProto maps materialization status.
 func WorkspaceMaterializationStatusToProto(status enum.WorkspaceMaterializationStatus) runtimev1.WorkspaceMaterializationStatus {
 	return enumToProto(status, workspaceMaterializationStatusToProto, runtimev1.WorkspaceMaterializationStatus_WORKSPACE_MATERIALIZATION_STATUS_UNSPECIFIED)
+}
+
+// BuildContextStatusFromProto maps build context status.
+func BuildContextStatusFromProto(status runtimev1.BuildContextStatus) (enum.BuildContextStatus, error) {
+	return enumFromProto(status, buildContextStatusFromProto)
+}
+
+// BuildContextStatusToProto maps build context status.
+func BuildContextStatusToProto(status enum.BuildContextStatus) runtimev1.BuildContextStatus {
+	return enumToProto(status, buildContextStatusToProto, runtimev1.BuildContextStatus_BUILD_CONTEXT_STATUS_UNSPECIFIED)
 }
 
 // WorkspaceSourceKindFromProto maps a workspace source kind.

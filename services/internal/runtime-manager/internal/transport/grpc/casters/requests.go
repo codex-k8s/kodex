@@ -192,6 +192,108 @@ func ListWorkspaceMaterializationsInput(request *runtimev1.ListWorkspaceMaterial
 	}, nil
 }
 
+// PrepareBuildContextInput maps a gRPC build context request.
+func PrepareBuildContextInput(request *runtimev1.PrepareBuildContextRequest) (runtimeservice.PrepareBuildContextInput, error) {
+	if request == nil {
+		return runtimeservice.PrepareBuildContextInput{}, errs.ErrInvalidArgument
+	}
+	projectID, err := requiredUUID(request.GetProjectId())
+	if err != nil {
+		return runtimeservice.PrepareBuildContextInput{}, err
+	}
+	repositoryID, err := requiredUUID(request.GetRepositoryId())
+	if err != nil {
+		return runtimeservice.PrepareBuildContextInput{}, err
+	}
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return runtimeservice.PrepareBuildContextInput{}, err
+	}
+	return runtimeservice.PrepareBuildContextInput{
+		ProjectID:            projectID,
+		RepositoryID:         repositoryID,
+		Provider:             strings.TrimSpace(request.GetProvider()),
+		ProviderOwner:        strings.TrimSpace(request.GetProviderOwner()),
+		ProviderName:         strings.TrimSpace(request.GetProviderName()),
+		SourceRef:            strings.TrimSpace(request.GetSourceRef()),
+		SourceCommitSHA:      strings.TrimSpace(request.GetSourceCommitSha()),
+		AffectedServiceKeys:  append([]string(nil), request.GetAffectedServiceKeys()...),
+		BuildPlanFingerprint: strings.TrimSpace(request.GetBuildPlanFingerprint()),
+		SourceSnapshotRef:    strings.TrimSpace(request.GetSourceSnapshotRef()),
+		SourceSnapshotDigest: strings.TrimSpace(request.GetSourceSnapshotDigest()),
+		Meta:                 meta,
+	}, nil
+}
+
+// ReportBuildContextProgressInput maps a gRPC build context progress request.
+func ReportBuildContextProgressInput(request *runtimev1.ReportBuildContextProgressRequest) (runtimeservice.ReportBuildContextProgressInput, error) {
+	if request == nil {
+		return runtimeservice.ReportBuildContextProgressInput{}, errs.ErrInvalidArgument
+	}
+	buildContextID, err := requiredUUID(request.GetBuildContextId())
+	if err != nil {
+		return runtimeservice.ReportBuildContextProgressInput{}, err
+	}
+	status, err := BuildContextStatusFromProto(request.GetStatus())
+	if err != nil {
+		return runtimeservice.ReportBuildContextProgressInput{}, err
+	}
+	startedAt, err := optionalTime(request.GetStartedAt())
+	if err != nil {
+		return runtimeservice.ReportBuildContextProgressInput{}, err
+	}
+	finishedAt, err := optionalTime(request.GetFinishedAt())
+	if err != nil {
+		return runtimeservice.ReportBuildContextProgressInput{}, err
+	}
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return runtimeservice.ReportBuildContextProgressInput{}, err
+	}
+	return runtimeservice.ReportBuildContextProgressInput{
+		BuildContextID:       buildContextID,
+		Status:               status,
+		SourceSnapshotRef:    strings.TrimSpace(request.GetSourceSnapshotRef()),
+		SourceSnapshotDigest: strings.TrimSpace(request.GetSourceSnapshotDigest()),
+		BuildContextRef:      strings.TrimSpace(request.GetBuildContextRef()),
+		BuildContextDigest:   strings.TrimSpace(request.GetBuildContextDigest()),
+		StartedAt:            startedAt,
+		FinishedAt:           finishedAt,
+		ErrorCode:            strings.TrimSpace(request.GetErrorCode()),
+		ErrorMessage:         strings.TrimSpace(request.GetErrorMessage()),
+		NextAction:           strings.TrimSpace(request.GetNextAction()),
+		Meta:                 meta,
+	}, nil
+}
+
+// GetBuildContextInput maps a build context read request.
+func GetBuildContextInput(request *runtimev1.GetBuildContextRequest) (runtimeservice.GetBuildContextInput, error) {
+	if request == nil {
+		return runtimeservice.GetBuildContextInput{}, errs.ErrInvalidArgument
+	}
+	input := runtimeservice.GetBuildContextInput{
+		ContextFingerprint: strings.TrimSpace(request.GetContextFingerprint()),
+	}
+	if err := fillBuildContextReadInput(request, &input); err != nil {
+		return runtimeservice.GetBuildContextInput{}, err
+	}
+	return input, nil
+}
+
+func fillBuildContextReadInput(request *runtimev1.GetBuildContextRequest, input *runtimeservice.GetBuildContextInput) error {
+	buildContextID, err := optionalUUIDValue(request.GetBuildContextId())
+	if err != nil {
+		return err
+	}
+	meta, err := QueryMetaFromProto(request.GetMeta())
+	if err != nil {
+		return err
+	}
+	input.BuildContextID = buildContextID
+	input.Meta = meta
+	return nil
+}
+
 // WorkspacePolicyInputFromProto maps a checked workspace policy to the domain model.
 func WorkspacePolicyInputFromProto(policy *runtimev1.WorkspacePolicyInput) (runtimeservice.WorkspacePolicyInput, error) {
 	if policy == nil {

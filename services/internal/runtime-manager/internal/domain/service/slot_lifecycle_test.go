@@ -326,6 +326,7 @@ func TestReserveSlotAuthorizesBeforeReplay(t *testing.T) {
 	repo := &fakeRepository{
 		slots:                     make(map[uuid.UUID]entity.Slot),
 		workspaceMaterializations: make(map[uuid.UUID]entity.WorkspaceMaterialization),
+		buildContexts:             make(map[uuid.UUID]entity.BuildContext),
 		jobs:                      make(map[uuid.UUID]entity.Job),
 		runtimeArtifactRefs:       make(map[uuid.UUID]entity.RuntimeArtifactRef),
 		cleanupPolicies:           make(map[uuid.UUID]entity.CleanupPolicy),
@@ -474,6 +475,7 @@ func (g *sequenceIDs) New() uuid.UUID {
 type fakeRepository struct {
 	slots                     map[uuid.UUID]entity.Slot
 	workspaceMaterializations map[uuid.UUID]entity.WorkspaceMaterialization
+	buildContexts             map[uuid.UUID]entity.BuildContext
 	jobs                      map[uuid.UUID]entity.Job
 	runtimeArtifactRefs       map[uuid.UUID]entity.RuntimeArtifactRef
 	cleanupPolicies           map[uuid.UUID]entity.CleanupPolicy
@@ -615,6 +617,72 @@ func (r *fakeRepository) ListWorkspaceMaterializations(context.Context, query.Wo
 		items = append(items, materialization)
 	}
 	return items, query.PageResult{}, nil
+}
+
+func (r *fakeRepository) PrepareBuildContext(_ context.Context, buildContext entity.BuildContext, resultFactory runtimerepo.BuildContextCommandResultFactory) (entity.BuildContext, error) {
+	if r.buildContexts == nil {
+		r.buildContexts = make(map[uuid.UUID]entity.BuildContext)
+	}
+	if r.results == nil {
+		r.results = make(map[string]entity.CommandResult)
+	}
+	for _, existing := range r.buildContexts {
+		if existing.ContextFingerprint != buildContext.ContextFingerprint {
+			continue
+		}
+		result, err := resultFactory(existing)
+		if err != nil {
+			return entity.BuildContext{}, err
+		}
+		r.results[result.Key] = result
+		return existing, nil
+	}
+	result, err := resultFactory(buildContext)
+	if err != nil {
+		return entity.BuildContext{}, err
+	}
+	r.buildContexts[buildContext.ID] = buildContext
+	r.results[result.Key] = result
+	return buildContext, nil
+}
+
+func (r *fakeRepository) UpdateBuildContext(_ context.Context, buildContext entity.BuildContext, previousVersion int64, result entity.CommandResult) error {
+	if r.buildContexts == nil {
+		return errs.ErrNotFound
+	}
+	current, ok := r.buildContexts[buildContext.ID]
+	if !ok {
+		return errs.ErrNotFound
+	}
+	if current.Version != previousVersion {
+		return errs.ErrConflict
+	}
+	r.buildContexts[buildContext.ID] = buildContext
+	r.results[result.Key] = result
+	return nil
+}
+
+func (r *fakeRepository) GetBuildContext(_ context.Context, id uuid.UUID) (entity.BuildContext, error) {
+	if r.buildContexts == nil {
+		return entity.BuildContext{}, errs.ErrNotFound
+	}
+	buildContext, ok := r.buildContexts[id]
+	if !ok {
+		return entity.BuildContext{}, errs.ErrNotFound
+	}
+	return buildContext, nil
+}
+
+func (r *fakeRepository) GetBuildContextByFingerprint(_ context.Context, fingerprint string) (entity.BuildContext, error) {
+	if r.buildContexts == nil {
+		return entity.BuildContext{}, errs.ErrNotFound
+	}
+	for _, buildContext := range r.buildContexts {
+		if buildContext.ContextFingerprint == fingerprint {
+			return buildContext, nil
+		}
+	}
+	return entity.BuildContext{}, errs.ErrNotFound
 }
 
 func (r *fakeRepository) UpdateSlot(_ context.Context, slot entity.Slot, previousVersion int64, event entity.OutboxEvent, result *entity.CommandResult) error {
