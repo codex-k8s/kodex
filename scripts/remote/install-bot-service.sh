@@ -78,6 +78,7 @@ fi
 
 APPLY_DRY_RUN_MODE="$DRY_RUN_MODE"
 NAMESPACE_Q="$(mattercodex_shell_quote "$MATTERCODEX_NAMESPACE")"
+RUNTIME_NAMESPACE_Q="$(mattercodex_shell_quote "$MATTERCODEX_RUNTIME_NAMESPACE")"
 REMOTE_KUBECTL="$(mattercodex_remote_kubectl_command)"
 
 apply_rendered_manifest_remote() {
@@ -87,7 +88,10 @@ apply_rendered_manifest_remote() {
   mattercodex_remote_kubectl_apply_stdin "$APPLY_DRY_RUN_MODE" < "$output"
 }
 
-if [ "$DRY_RUN_MODE" = "server" ] && ! mattercodex_ssh "$REMOTE_KUBECTL get namespace $NAMESPACE_Q >/dev/null 2>&1"; then
+if [ "$DRY_RUN_MODE" = "server" ] && {
+  ! mattercodex_ssh "$REMOTE_KUBECTL get namespace $NAMESPACE_Q >/dev/null 2>&1" ||
+  ! mattercodex_ssh "$REMOTE_KUBECTL get namespace $RUNTIME_NAMESPACE_Q >/dev/null 2>&1"
+}; then
   mattercodex_log "namespace еще не создан; bot-service manifests проверяются через remote client dry-run"
   APPLY_DRY_RUN_MODE="client"
 fi
@@ -267,11 +271,17 @@ else
 fi
 
 mattercodex_log "применяются манифесты bot-service на целевом сервере"
-mattercodex_remote_kubectl_apply_stdin "$APPLY_DRY_RUN_MODE" < "$RENDER_DIR/10-configmap.yaml"
-mattercodex_remote_kubectl_apply_stdin "$APPLY_DRY_RUN_MODE" < "$RENDER_DIR/20-rbac.yaml"
-mattercodex_remote_kubectl_apply_stdin "$APPLY_DRY_RUN_MODE" < "$RENDER_DIR/30-deployment.yaml"
-mattercodex_remote_kubectl_apply_stdin "$APPLY_DRY_RUN_MODE" < "$RENDER_DIR/40-service.yaml"
-mattercodex_remote_kubectl_apply_stdin "$APPLY_DRY_RUN_MODE" < "$RENDER_DIR/50-ingress.yaml"
+for manifest in \
+  "$RENDER_DIR/10-configmap.yaml" \
+  "$RENDER_DIR/15-runtime-limits.yaml" \
+  "$RENDER_DIR/20-rbac.yaml" \
+  "$RENDER_DIR/30-deployment.yaml" \
+  "$RENDER_DIR/40-service.yaml" \
+  "$RENDER_DIR/50-ingress.yaml"; do
+  if [ -f "$manifest" ]; then
+    mattercodex_remote_kubectl_apply_stdin "$APPLY_DRY_RUN_MODE" < "$manifest"
+  fi
+done
 
 if [ "$DRY_RUN_MODE" = "none" ]; then
   LEGACY_CODE_CONFIGMAP="${MATTERCODEX_BOT_SERVICE_CODE_CONFIGMAP:-matter-codex-bot-service-code}"

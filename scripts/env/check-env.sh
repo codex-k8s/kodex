@@ -69,3 +69,8 @@ if [ -n "${MATTERCODEX_MATTERMOST_SLASH_TOKEN:-}" ]; then
 else
   mattercodex_log "Mattermost slash token: не задан, provisioning может получить его через Mattermost API"
 fi
+if mattercodex_bool "$MATTERCODEX_RUNTIME_ENABLED" && mattercodex_bool "$MATTERCODEX_RUNTIME_LIMITS_ENABLED"; then
+  mattercodex_log "runtime ResourceQuota/LimitRange: включены"
+else
+  mattercodex_log "runtime ResourceQuota/LimitRange: выключены"
+fi

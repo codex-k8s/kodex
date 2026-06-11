@@ -38,7 +38,12 @@ mattercodex_require_commands envsubst
 
 TEMPLATE_DIR="$REPO_ROOT/deploy/k8s/bot-service"
 
+rm -f "$RENDER_DIR/15-runtime-limits.yaml"
+
 mattercodex_render_template "$TEMPLATE_DIR/configmap.yaml.tpl" "$RENDER_DIR/10-configmap.yaml"
+if mattercodex_bool "$MATTERCODEX_RUNTIME_ENABLED" && mattercodex_bool "$MATTERCODEX_RUNTIME_LIMITS_ENABLED"; then
+  mattercodex_render_template "$TEMPLATE_DIR/runtime-limits.yaml.tpl" "$RENDER_DIR/15-runtime-limits.yaml"
+fi
 mattercodex_render_template "$TEMPLATE_DIR/rbac.yaml.tpl" "$RENDER_DIR/20-rbac.yaml"
 mattercodex_render_template "$TEMPLATE_DIR/deployment.yaml.tpl" "$RENDER_DIR/30-deployment.yaml"
 mattercodex_render_template "$TEMPLATE_DIR/service.yaml.tpl" "$RENDER_DIR/40-service.yaml"
