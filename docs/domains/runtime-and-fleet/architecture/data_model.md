@@ -5,7 +5,7 @@ title: kodex — модель данных runtime-manager
 status: active
 owner_role: SA
 created_at: 2026-05-07
-updated_at: 2026-06-07
+updated_at: 2026-06-11
 related_issues: [655, 657, 658, 659, 660, 662, 966, 994]
 related_prs: []
 approvals:
@@ -108,7 +108,7 @@ approvals:
 - job может быть связан со слотом, проектом, release line, пакетом или maintenance policy;
 - идемпотентный след mutating-команд хранится отдельно в `RuntimeManagerCommandResult`;
 - захват задания является короткой арендой с токеном, чтобы поздний исполнитель не мог перезаписать новую попытку;
-- `deploy` с валидным `DeployExecutionSpec` хранится и читается как типизированное задание, но остаётся `pending` с `deploy_executor_unavailable` и не выдаётся в claim до согласования исполнителя выкладки;
+- `deploy` с валидным `DeployExecutionSpec` хранится и читается как типизированное задание, но spec обязан ссылаться на checked manifest bundle, rollout targets и expected image refs; задание остаётся `pending` с `deploy_executor_unavailable` и не выдаётся в claim до реализации исполнителя выкладки;
 - долгие операции не держат SQL-блокировки.
 
 | Поле | Тип | Nullable | Ограничения | Примечание |
@@ -118,7 +118,7 @@ approvals:
 | `job_type` | text | no | indexed | `mirror`, `build`, `deploy`, `cleanup`, `health_check`, `housekeeping`, `workspace_materialization`, `agent_run`. |
 | `status` | text | no | indexed | `pending`, `claimed`, `running`, `succeeded`, `failed`, `cancelled`, `timed_out`. |
 | `priority` | text | no | indexed | `low`, `normal`, `high`, `blocking`. |
-| `job_input_json` | jsonb | no | default {} | Ограниченный вход технической операции без секретов; для `agent_run` исполнимый вход хранится только как `agent_run_execution_spec` с refs/digest/fingerprint, обязательным workspace PVC ref, runner image/profile refs, reporting refs и вложенным `CodexSessionExecutionSpec` с проверенными instruction/result refs без raw prompt text. Для `build` исполнимый вход хранится только как `build_execution_spec`: source ref/commit SHA, `service_key`, image ref/tag/optional digest, build context ref/digest, Dockerfile ref/digest, target, builder image ref, build plan fingerprint и refs без значений секретов. Для `deploy` исполнимый вход хранится только как `deploy_execution_spec`: source ref/commit SHA, `service_key`, image ref/tag/digest, manifest/kustomization refs/digests, target namespace/cluster ref, optional slot ref, deploy plan fingerprint и refs без значений секретов. |
+| `job_input_json` | jsonb | no | default {} | Ограниченный вход технической операции без секретов; для `agent_run` исполнимый вход хранится только как `agent_run_execution_spec` с refs/digest/fingerprint, обязательным workspace PVC ref, runner image/profile refs, reporting refs и вложенным `CodexSessionExecutionSpec` с проверенными instruction/result refs без raw prompt text. Для `build` исполнимый вход хранится только как `build_execution_spec`: source ref/commit SHA, `service_key`, image ref/tag/optional digest, build context ref/digest, Dockerfile ref/digest, target, builder image ref, build plan fingerprint и refs без значений секретов. Для `deploy` исполнимый вход хранится только как `deploy_execution_spec`: source ref/commit SHA, `service_key`, image ref/tag/digest, manifest/kustomization refs/digests, checked `manifest_bundle_ref`/`manifest_bundle_digest`, rollout targets, expected image refs, target namespace/cluster ref, optional slot ref, deploy plan fingerprint и refs без значений секретов. |
 | `lease_owner` | text | no | default '' | Worker или controller, который забрал задание. |
 | `lease_token_hash` | text | no | default '' | Хэш токена, который должен прийти в командах отчёта, завершения и ошибки. |
 | `lease_until` | timestamptz | yes | indexed | Истечение аренды задания. |
