@@ -155,3 +155,15 @@ func TestFlowActionURLPrefersInternalURL(t *testing.T) {
 		t.Fatalf("flowActionURL() = %q, want %q", got, want)
 	}
 }
+
+func TestAgentsActionURLPrefersSiteURL(t *testing.T) {
+	cfg := Config{
+		BotServiceSiteURL:     "https://matter-codex.example.com",
+		BotServiceInternalURL: "http://matter-codex-bot-service.mattermost.svc.cluster.local:8080",
+	}
+	got := agentsActionURL(cfg)
+	want := "https://matter-codex.example.com/mattermost/actions/agents"
+	if got != want {
+		t.Fatalf("agentsActionURL() = %q, want %q", got, want)
+	}
+}

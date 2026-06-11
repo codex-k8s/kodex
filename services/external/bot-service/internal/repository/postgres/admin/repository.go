@@ -215,6 +215,30 @@ func (repo *Repository) UpdateOpenAIAccountStatus(ctx context.Context, input adm
 	return item, nil
 }
 
+func (repo *Repository) ListGitHubAccounts(ctx context.Context, limit int) ([]entity.GitHubAccount, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	rows, err := repo.pool.Query(ctx, query("github_accounts__list.sql"), limit)
+	if err != nil {
+		return nil, fmt.Errorf("list github accounts: %w", err)
+	}
+	defer rows.Close()
+
+	var items []entity.GitHubAccount
+	for rows.Next() {
+		item, err := scanGitHubAccount(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan github account: %w", err)
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate github accounts: %w", err)
+	}
+	return items, nil
+}
+
 func (repo *Repository) GetGitHubAccount(ctx context.Context, name string) (entity.GitHubAccount, error) {
 	item, err := scanGitHubAccount(repo.pool.QueryRow(ctx, query("github_accounts__get.sql"), name))
 	if err != nil {

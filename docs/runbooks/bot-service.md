@@ -8,10 +8,12 @@
 
 - отвечать на `/healthz`;
 - принимать Mattermost slash callback `/mattermost/slash/agents`;
+- показывать Mattermost menu card по пустому `/agents`;
+- принимать Mattermost menu action callback `/mattermost/actions/agents` для кнопок menu card;
 - принимать Mattermost interactive action callback `/mattermost/actions/flow`;
 - отвечать на `/agents status`;
 - выполнять admin-команды `/agents repo add`, `/agents repo list`, `/agents token check`, `/agents locale get|set`, `/agents profile list`, `/agents prompt help|list|show|render|set`, `/agents openai auth|status|list|cleanup`;
-- выполнять GitHub adapter команды `/agents github check`, `/agents github branch`, `/agents github pr`;
+- выполнять GitHub adapter/account команды `/agents github account list`, `/agents github check`, `/agents github branch`, `/agents github pr`;
 - принимать GitHub webhook callback `/github/webhook` с HMAC validation;
 - автоматически регистрировать repo webhook при `/agents repo add github owner/name [default-branch]`, если GitHub token имеет hook write permission;
 - выполнять Kubernetes runtime smoke-команды `/agents runtime smoke|status|cleanup|prune` через client-go, Job, PVC и подготовленный agent-runner image;
@@ -218,6 +220,19 @@ bash scripts/remote/bootstrap-mattermost-bot.sh --env-file .env
 2. Перейти в team `agents`.
 3. Проверить каналы `agents-control`, `agents-runs`, `agent-alerts`, `agents-audit`.
 4. В канале `agents-control` выполнить:
+
+```text
+/agents
+```
+
+Ожидаемый результат: channel-visible menu card с кнопками `Запуск flow`, `Pending`, `Репозитории`, `Аккаунты`, `Профили`, `Prompts`, `Runtime`, `System`, `Help`. Нажатия по кнопкам должны обновлять эту же карточку на выбранный раздел и показывать короткий ephemeral-статус. Кнопка `Назад` возвращает главное меню. В главном меню поля OpenAI и GitHub показывают счетчик готовых accounts в формате `готово/всего`.
+
+Проверка account menu:
+
+- `Аккаунты` -> `OpenAI`: карточка должна показать кнопки `Список accounts`, `Auth primary`, `Status primary`, `Назад`; нажатия по первым трем кнопкам возвращают ephemeral-ответы соответствующих действий.
+- `Аккаунты` -> `GitHub`: карточка должна показать кнопки `GitHub accounts`, `Check matter-codex`, `Webhook matter-codex`, `Назад`; `GitHub accounts` возвращает список GitHub accounts из storage.
+
+Typed-команды остаются fallback-интерфейсом для точной ручной проверки:
 
 ```text
 /agents status
