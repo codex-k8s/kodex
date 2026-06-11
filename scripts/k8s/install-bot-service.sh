@@ -169,11 +169,17 @@ else
 fi
 
 mattercodex_log "применяются манифесты bot-service"
-kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f "$RENDER_DIR/10-configmap.yaml" >/dev/null
-kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f "$RENDER_DIR/20-rbac.yaml" >/dev/null
-kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f "$RENDER_DIR/30-deployment.yaml" >/dev/null
-kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f "$RENDER_DIR/40-service.yaml" >/dev/null
-kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f "$RENDER_DIR/50-ingress.yaml" >/dev/null
+for manifest in \
+  "$RENDER_DIR/10-configmap.yaml" \
+  "$RENDER_DIR/15-runtime-limits.yaml" \
+  "$RENDER_DIR/20-rbac.yaml" \
+  "$RENDER_DIR/30-deployment.yaml" \
+  "$RENDER_DIR/40-service.yaml" \
+  "$RENDER_DIR/50-ingress.yaml"; do
+  if [ -f "$manifest" ]; then
+    kubectl apply ${DRY_RUN_ARG:+$DRY_RUN_ARG} -f "$manifest" >/dev/null
+  fi
+done
 
 if [ "$DRY_RUN_MODE" = "none" ]; then
   LEGACY_CODE_CONFIGMAP="${MATTERCODEX_BOT_SERVICE_CODE_CONFIGMAP:-matter-codex-bot-service-code}"

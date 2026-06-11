@@ -53,6 +53,11 @@
 - `MATTERCODEX_RUNTIME_WORKSPACE_STORAGE_SIZE` - optional, размер PVC рабочего каталога smoke-запуска;
 - `MATTERCODEX_RUNTIME_JOB_TTL_SECONDS` - optional, TTL завершенных smoke Job;
 - `MATTERCODEX_RUNTIME_LOG_TAIL_LINES` - optional, число последних строк pod log для `/agents runtime status`;
+- `MATTERCODEX_RUNTIME_LIMITS_ENABLED` - optional, включает render/apply namespace `ResourceQuota` и `LimitRange` для runtime namespace; default `true`;
+- `MATTERCODEX_RUNTIME_QUOTA_PODS`, `MATTERCODEX_RUNTIME_QUOTA_JOBS`, `MATTERCODEX_RUNTIME_QUOTA_PVCS` - optional, object count quota для pod, batch Job и PVC в runtime namespace;
+- `MATTERCODEX_RUNTIME_QUOTA_REQUESTS_STORAGE` - optional, суммарная quota на requested PVC storage в runtime namespace;
+- `MATTERCODEX_RUNTIME_QUOTA_REQUESTS_CPU`, `MATTERCODEX_RUNTIME_QUOTA_REQUESTS_MEMORY`, `MATTERCODEX_RUNTIME_QUOTA_LIMITS_CPU`, `MATTERCODEX_RUNTIME_QUOTA_LIMITS_MEMORY` - optional, namespace quota на compute requests/limits;
+- `MATTERCODEX_RUNTIME_LIMIT_DEFAULT_CPU`, `MATTERCODEX_RUNTIME_LIMIT_DEFAULT_MEMORY`, `MATTERCODEX_RUNTIME_LIMIT_DEFAULT_REQUEST_CPU`, `MATTERCODEX_RUNTIME_LIMIT_DEFAULT_REQUEST_MEMORY` - optional, container defaults для pod без явных resources;
 - `MATTERCODEX_AGENT_RUNNER_SERVICE_ACCOUNT` - optional, ServiceAccount для agent/smoke Job;
 - `MATTERCODEX_CODEX_AUTH_SECRET` - optional, base name для Kubernetes Secrets с Codex `auth.json`; для account `primary` будет создан secret `${MATTERCODEX_CODEX_AUTH_SECRET}-primary`;
 - `MATTERCODEX_DEFAULT_TEAM_NAME` - optional, по умолчанию `agents`;
@@ -71,6 +76,7 @@ bash scripts/k8s/render-bot-service.sh --env-file .env --render-dir /tmp/matter-
 
 - code ConfigMap с Go source archive (`go.mod`, `go.sum`, `libs/go/i18n`, `services/external/bot-service`);
 - config ConfigMap;
+- ResourceQuota/LimitRange для runtime namespace, если `MATTERCODEX_RUNTIME_LIMITS_ENABLED=true`;
 - ServiceAccount/RBAC для bot-service runtime adapter и agent runner;
 - Deployment;
 - Service;
@@ -79,6 +85,8 @@ bash scripts/k8s/render-bot-service.sh --env-file .env --render-dir /tmp/matter-
 Agent runner image не попадает в render directory. При `--apply` deploy script по умолчанию собирает отдельный image из `services/jobs/agent-runner/Dockerfile`. Если на целевом сервере есть `docker` или `nerdctl`, сборка идет там; если builder'а на сервере нет, но доступен remote `k3s ctr`/`ctr` import и локальный Docker, script собирает image локально и импортирует его в Kubernetes runtime по SSH.
 
 Agent runner image содержит явный non-root user UID/GID `10001`. Runtime Job дополнительно задает pod/container `securityContext`: `runAsNonRoot`, `runAsUser`, `runAsGroup`, `fsGroup`, `seccompProfile: RuntimeDefault`, dropped capabilities, `allowPrivilegeEscalation: false`, `readOnlyRootFilesystem: true`. Writable paths отдаются через volumes: `/workspace` для run PVC, `/codex-home` для device-code auth, `/home/matter-codex` для `gh`/npm/cache и `/tmp` для временных файлов.
+
+Runtime namespace получает `ResourceQuota` `matter-codex-runtime-quota` и `LimitRange` `matter-codex-runtime-container-defaults`. Quota ограничивает общее число pods, batch Jobs, PVC, суммарный requested storage и суммарные cpu/memory requests/limits. LimitRange задает cpu/memory defaults для containers без явных resources, чтобы quota admission не отклоняла agent Job.
 
 ## Remote dry-run
 
@@ -275,6 +283,16 @@ bash scripts/remote/bootstrap-mattermost-bot.sh --env-file .env
 - runtime cleanup удаляет Job и PVC.
 - runtime prune по умолчанию работает в dry-run режиме и показывает старые завершенные Job/PVC/ConfigMap, которые будут удалены retention cleanup.
 
+Проверка runtime quota/limits после deploy:
+
+```text
+/agents runtime smoke quota-manual
+/agents runtime status quota-manual
+/agents runtime cleanup quota-manual
+```
+
+На кластере `kubectl -n <namespace> get resourcequota matter-codex-runtime-quota` и `kubectl -n <namespace> get limitrange matter-codex-runtime-container-defaults` должны показывать примененные объекты. Runtime smoke должен проходить с `smoke-ok`; это подтверждает, что defaults и quota не блокируют agent Job.
+
 Проверка apply-режима retention cleanup на завершенном smoke run:
 
 ```text
@@ -421,6 +439,7 @@ curl -sS -o /dev/null -w '%{http_code}\n' \
 - Логи provisioning показывают только безопасные статусы `exists/created/updated`.
 - bot-service Deployment запускается non-root, с dropped Linux capabilities, `allowPrivilegeEscalation: false`, `readOnlyRootFilesystem: true`, `seccompProfile: RuntimeDefault` и базовыми resource requests/limits.
 - bot-service получает namespace-scoped Role на создание/чтение/удаление runtime Job/PVC, чтение pod/log, `pods/exec` для чтения готового `auth.json` из auth Job и create/update Secret для account-specific Codex auth.
+- Runtime namespace получает namespace-level ResourceQuota/LimitRange с conservative defaults и env overrides, потому что MVP namespace общий для Mattermost, bot-service и agent Job.
 - ServiceAccount agent runner создается без automount token; smoke pod также явно отключает automount.
 - Codex smoke/auth/developer/reviewer Job запускаются без automount service account token и с non-root securityContext.
 - Codex developer/reviewer Job получает Codex `auth.json` выбранного OpenAI account и GitHub token/username/email выбранного GitHub account только через Kubernetes Secret volume mount.
