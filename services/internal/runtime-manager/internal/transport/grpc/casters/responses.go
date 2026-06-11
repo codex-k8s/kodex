@@ -31,6 +31,11 @@ func WorkspaceMaterializationResponse(materialization entity.WorkspaceMaterializ
 	return &runtimev1.WorkspaceMaterializationResponse{WorkspaceMaterialization: WorkspaceMaterializationToProto(materialization)}
 }
 
+// BuildContextResponse maps a domain build context to a gRPC response.
+func BuildContextResponse(buildContext entity.BuildContext) *runtimev1.BuildContextResponse {
+	return &runtimev1.BuildContextResponse{BuildContext: BuildContextToProto(buildContext)}
+}
+
 // JobResponse maps a domain job to a gRPC response.
 func JobResponse(job entity.Job) *runtimev1.JobResponse {
 	return &runtimev1.JobResponse{Job: JobToProto(job)}
@@ -136,6 +141,36 @@ func WorkspaceMaterializationToProto(materialization entity.WorkspaceMaterializa
 		LastErrorCode:              materialization.LastErrorCode,
 		LastErrorMessage:           materialization.LastErrorMessage,
 		Version:                    materialization.Version,
+	}
+}
+
+// BuildContextToProto maps one domain build context request.
+func BuildContextToProto(buildContext entity.BuildContext) *runtimev1.BuildContext {
+	return &runtimev1.BuildContext{
+		BuildContextId:       buildContext.ID.String(),
+		Status:               BuildContextStatusToProto(buildContext.Status),
+		ProjectId:            buildContext.ProjectID.String(),
+		RepositoryId:         buildContext.RepositoryID.String(),
+		Provider:             buildContext.Provider,
+		ProviderOwner:        buildContext.ProviderOwner,
+		ProviderName:         buildContext.ProviderName,
+		SourceRef:            buildContext.SourceRef,
+		SourceCommitSha:      buildContext.SourceCommitSHA,
+		AffectedServiceKeys:  append([]string(nil), buildContext.AffectedServiceKeys...),
+		BuildPlanFingerprint: buildContext.BuildPlanFingerprint,
+		ContextFingerprint:   buildContext.ContextFingerprint,
+		SourceSnapshotRef:    buildContext.SourceSnapshotRef,
+		SourceSnapshotDigest: buildContext.SourceSnapshotDigest,
+		BuildContextRef:      buildContext.BuildContextRef,
+		BuildContextDigest:   buildContext.BuildContextDigest,
+		StartedAt:            timeStringPtr(buildContext.StartedAt),
+		FinishedAt:           timeStringPtr(buildContext.FinishedAt),
+		LastErrorCode:        buildContext.LastErrorCode,
+		LastErrorMessage:     buildContext.LastErrorMessage,
+		NextAction:           buildContext.NextAction,
+		CreatedAt:            buildContext.CreatedAt.UTC().Format(time.RFC3339Nano),
+		UpdatedAt:            buildContext.UpdatedAt.UTC().Format(time.RFC3339Nano),
+		Version:              buildContext.Version,
 	}
 }
 

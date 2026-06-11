@@ -17,6 +17,9 @@ const (
 	operationReportWorkspace  = "domain.Service.ReportWorkspaceMaterializationProgress"
 	operationGetWorkspace     = "domain.Service.GetWorkspaceMaterialization"
 	operationListWorkspaces   = "domain.Service.ListWorkspaceMaterializations"
+	operationPrepareBuildCtx  = "domain.Service.PrepareBuildContext"
+	operationReportBuildCtx   = "domain.Service.ReportBuildContextProgress"
+	operationGetBuildCtx      = "domain.Service.GetBuildContext"
 	operationCreateJob        = "domain.Service.CreateJob"
 	operationClaimJob         = "domain.Service.ClaimRunnableJob"
 	operationReportJobStep    = "domain.Service.ReportJobStepProgress"
@@ -33,6 +36,7 @@ const (
 	operationReconcilePool    = "domain.Service.ReconcilePrewarmPool"
 	aggregateTypeSlot         = runtimeevents.AggregateSlot
 	aggregateTypeWorkspace    = runtimeevents.AggregateWorkspaceMaterialization
+	aggregateTypeBuildContext = "runtime_build_context"
 	aggregateTypeJob          = runtimeevents.AggregateJob
 	aggregateTypeCleanup      = runtimeevents.AggregateCleanupPolicy
 	aggregateTypePrewarmPool  = runtimeevents.AggregatePrewarmPool
@@ -63,6 +67,9 @@ const (
 	actionWorkspaceReport     = accesscatalog.ActionRuntimeWorkspaceMaterializationReport
 	actionWorkspaceRead       = accesscatalog.ActionRuntimeWorkspaceMaterializationRead
 	actionWorkspaceList       = accesscatalog.ActionRuntimeWorkspaceMaterializationList
+	actionBuildContextPrepare = accesscatalog.ActionRuntimeBuildContextPrepare
+	actionBuildContextReport  = accesscatalog.ActionRuntimeBuildContextReport
+	actionBuildContextRead    = accesscatalog.ActionRuntimeBuildContextRead
 	actionJobCreate           = accesscatalog.ActionRuntimeJobCreate
 	actionJobClaim            = accesscatalog.ActionRuntimeJobClaim
 	actionJobStepReport       = accesscatalog.ActionRuntimeJobStepReport

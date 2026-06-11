@@ -46,6 +46,7 @@ const (
 	ResourceProviderReconciliation       = "provider_reconciliation"
 	ResourceRuntimeSlot                  = "runtime_slot"
 	ResourceRuntimeWorkspace             = "runtime_workspace_materialization"
+	ResourceRuntimeBuildContext          = "runtime_build_context"
 	ResourceRuntimeJob                   = "runtime_job"
 	ResourceRuntimeArtifactRef           = "runtime_artifact_ref"
 	ResourceRuntimeCleanupPolicy         = "runtime_cleanup_policy"
@@ -141,6 +142,9 @@ const (
 	ActionRuntimeWorkspaceMaterializationReport = "runtime.workspace.materialization.report"
 	ActionRuntimeWorkspaceMaterializationRead   = "runtime.workspace.materialization.read"
 	ActionRuntimeWorkspaceMaterializationList   = "runtime.workspace.materialization.list"
+	ActionRuntimeBuildContextPrepare            = "runtime.build_context.prepare"
+	ActionRuntimeBuildContextReport             = "runtime.build_context.report"
+	ActionRuntimeBuildContextRead               = "runtime.build_context.read"
 	ActionRuntimeJobCreate                      = "runtime.job.create"
 	ActionRuntimeJobClaim                       = "runtime.job.claim"
 	ActionRuntimeJobStepReport                  = "runtime.job.step.report"
@@ -303,32 +307,49 @@ func ProviderHubActions() []ActionDescriptor {
 
 // RuntimeManagerActions returns system actions owned by the runtime-and-fleet domain.
 func RuntimeManagerActions() []ActionDescriptor {
-	return []ActionDescriptor{
-		{Key: ActionRuntimeSlotReserve, ResourceType: ResourceRuntimeSlot},
-		{Key: ActionRuntimeSlotExtendLease, ResourceType: ResourceRuntimeSlot},
-		{Key: ActionRuntimeSlotRelease, ResourceType: ResourceRuntimeSlot},
-		{Key: ActionRuntimeSlotFail, ResourceType: ResourceRuntimeSlot},
-		{Key: ActionRuntimeSlotRead, ResourceType: ResourceRuntimeSlot},
-		{Key: ActionRuntimeSlotList, ResourceType: ResourceRuntimeSlot},
-		{Key: ActionRuntimeWorkspaceMaterializationStart, ResourceType: ResourceRuntimeWorkspace},
-		{Key: ActionRuntimeWorkspaceMaterializationReport, ResourceType: ResourceRuntimeWorkspace},
-		{Key: ActionRuntimeWorkspaceMaterializationRead, ResourceType: ResourceRuntimeWorkspace},
-		{Key: ActionRuntimeWorkspaceMaterializationList, ResourceType: ResourceRuntimeWorkspace},
-		{Key: ActionRuntimeJobCreate, ResourceType: ResourceRuntimeJob},
-		{Key: ActionRuntimeJobClaim, ResourceType: ResourceRuntimeJob},
-		{Key: ActionRuntimeJobStepReport, ResourceType: ResourceRuntimeJob},
-		{Key: ActionRuntimeJobComplete, ResourceType: ResourceRuntimeJob},
-		{Key: ActionRuntimeJobFail, ResourceType: ResourceRuntimeJob},
-		{Key: ActionRuntimeJobCancel, ResourceType: ResourceRuntimeJob},
-		{Key: ActionRuntimeJobRead, ResourceType: ResourceRuntimeJob},
-		{Key: ActionRuntimeJobList, ResourceType: ResourceRuntimeJob},
-		{Key: ActionRuntimeArtifactRefRecord, ResourceType: ResourceRuntimeArtifactRef},
-		{Key: ActionRuntimeArtifactRefList, ResourceType: ResourceRuntimeArtifactRef},
-		{Key: ActionRuntimeCleanupPolicyUpsert, ResourceType: ResourceRuntimeCleanupPolicy},
-		{Key: ActionRuntimeCleanupRun, ResourceType: ResourceRuntimeCleanupPolicy},
-		{Key: ActionRuntimePrewarmPoolUpsert, ResourceType: ResourceRuntimePrewarmPool},
-		{Key: ActionRuntimePrewarmPoolReconcile, ResourceType: ResourceRuntimePrewarmPool},
-	}
+	actions := make([]ActionDescriptor, 0, 27)
+	actions = append(actions, actionDescriptorsForResource(ResourceRuntimeSlot,
+		ActionRuntimeSlotReserve,
+		ActionRuntimeSlotExtendLease,
+		ActionRuntimeSlotRelease,
+		ActionRuntimeSlotFail,
+		ActionRuntimeSlotRead,
+		ActionRuntimeSlotList,
+	)...)
+	actions = append(actions, actionDescriptorsForResource(ResourceRuntimeWorkspace,
+		ActionRuntimeWorkspaceMaterializationStart,
+		ActionRuntimeWorkspaceMaterializationReport,
+		ActionRuntimeWorkspaceMaterializationRead,
+		ActionRuntimeWorkspaceMaterializationList,
+	)...)
+	actions = append(actions, actionDescriptorsForResource(ResourceRuntimeBuildContext,
+		ActionRuntimeBuildContextPrepare,
+		ActionRuntimeBuildContextReport,
+		ActionRuntimeBuildContextRead,
+	)...)
+	actions = append(actions, actionDescriptorsForResource(ResourceRuntimeJob,
+		ActionRuntimeJobCreate,
+		ActionRuntimeJobClaim,
+		ActionRuntimeJobStepReport,
+		ActionRuntimeJobComplete,
+		ActionRuntimeJobFail,
+		ActionRuntimeJobCancel,
+		ActionRuntimeJobRead,
+		ActionRuntimeJobList,
+	)...)
+	actions = append(actions, actionDescriptorsForResource(ResourceRuntimeArtifactRef,
+		ActionRuntimeArtifactRefRecord,
+		ActionRuntimeArtifactRefList,
+	)...)
+	actions = append(actions, actionDescriptorsForResource(ResourceRuntimeCleanupPolicy,
+		ActionRuntimeCleanupPolicyUpsert,
+		ActionRuntimeCleanupRun,
+	)...)
+	actions = append(actions, actionDescriptorsForResource(ResourceRuntimePrewarmPool,
+		ActionRuntimePrewarmPoolUpsert,
+		ActionRuntimePrewarmPoolReconcile,
+	)...)
+	return actions
 }
 
 // FleetManagerActions returns system actions owned by the runtime-and-fleet domain.

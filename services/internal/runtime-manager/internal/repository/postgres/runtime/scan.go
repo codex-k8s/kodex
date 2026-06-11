@@ -101,6 +101,48 @@ func scanWorkspaceMaterialization(row postgreslib.RowScanner) (entity.WorkspaceM
 	return materialization, nil
 }
 
+func scanBuildContext(row postgreslib.RowScanner) (entity.BuildContext, error) {
+	var buildContext entity.BuildContext
+	var affectedServiceKeysJSON []byte
+	var startedAt pgtype.Timestamptz
+	var finishedAt pgtype.Timestamptz
+	err := row.Scan(
+		&buildContext.ID,
+		&buildContext.Status,
+		&buildContext.ProjectID,
+		&buildContext.RepositoryID,
+		&buildContext.Provider,
+		&buildContext.ProviderOwner,
+		&buildContext.ProviderName,
+		&buildContext.SourceRef,
+		&buildContext.SourceCommitSHA,
+		&affectedServiceKeysJSON,
+		&buildContext.BuildPlanFingerprint,
+		&buildContext.ContextFingerprint,
+		&buildContext.SourceSnapshotRef,
+		&buildContext.SourceSnapshotDigest,
+		&buildContext.BuildContextRef,
+		&buildContext.BuildContextDigest,
+		&startedAt,
+		&finishedAt,
+		&buildContext.LastErrorCode,
+		&buildContext.LastErrorMessage,
+		&buildContext.NextAction,
+		&buildContext.Version,
+		&buildContext.CreatedAt,
+		&buildContext.UpdatedAt,
+	)
+	if err != nil {
+		return entity.BuildContext{}, err
+	}
+	if err := json.Unmarshal(affectedServiceKeysJSON, &buildContext.AffectedServiceKeys); err != nil {
+		return entity.BuildContext{}, err
+	}
+	buildContext.StartedAt = postgreslib.TimePtrFromPG(startedAt)
+	buildContext.FinishedAt = postgreslib.TimePtrFromPG(finishedAt)
+	return buildContext, nil
+}
+
 func scanJob(row postgreslib.RowScanner) (entity.Job, error) {
 	var job entity.Job
 	var leaseUntil pgtype.Timestamptz

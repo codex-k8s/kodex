@@ -37,6 +37,16 @@ const (
 	WorkspaceMaterializationStatusCancelled WorkspaceMaterializationStatus = "cancelled"
 )
 
+// BuildContextStatus is the self-deploy build context preparation status.
+type BuildContextStatus string
+
+const (
+	BuildContextStatusPending BuildContextStatus = "pending"
+	BuildContextStatusRunning BuildContextStatus = "running"
+	BuildContextStatusReady   BuildContextStatus = "ready"
+	BuildContextStatusFailed  BuildContextStatus = "failed"
+)
+
 // WorkspaceSourceKind classifies one materialized source.
 type WorkspaceSourceKind string
 

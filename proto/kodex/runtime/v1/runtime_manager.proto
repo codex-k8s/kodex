@@ -30,6 +30,12 @@ service RuntimeManagerService {
   rpc GetWorkspaceMaterialization(GetWorkspaceMaterializationRequest) returns (WorkspaceMaterializationResponse);
   // ListWorkspaceMaterializations returns materialization attempts by slot or agent run.
   rpc ListWorkspaceMaterializations(ListWorkspaceMaterializationsRequest) returns (ListWorkspaceMaterializationsResponse);
+  // PrepareBuildContext records a runtime-owned build context materialization request.
+  rpc PrepareBuildContext(PrepareBuildContextRequest) returns (BuildContextResponse);
+  // ReportBuildContextProgress updates build context materialization status from a trusted controller.
+  rpc ReportBuildContextProgress(ReportBuildContextProgressRequest) returns (BuildContextResponse);
+  // GetBuildContext returns one build context materialization attempt.
+  rpc GetBuildContext(GetBuildContextRequest) returns (BuildContextResponse);
   // CreateJob creates a platform technical job.
   rpc CreateJob(CreateJobRequest) returns (JobResponse);
   // ClaimRunnableJob claims a runnable job with a short lease and returns a lease token.
@@ -168,6 +174,15 @@ enum WorkspaceMaterializationStatus {
   WORKSPACE_MATERIALIZATION_STATUS_COMPLETED = 3;
   WORKSPACE_MATERIALIZATION_STATUS_FAILED = 4;
   WORKSPACE_MATERIALIZATION_STATUS_CANCELLED = 5;
+}
+
+// BuildContextStatus is the self-deploy build context lifecycle status.
+enum BuildContextStatus {
+  BUILD_CONTEXT_STATUS_UNSPECIFIED = 0;
+  BUILD_CONTEXT_STATUS_PENDING = 1;
+  BUILD_CONTEXT_STATUS_RUNNING = 2;
+  BUILD_CONTEXT_STATUS_READY = 3;
+  BUILD_CONTEXT_STATUS_FAILED = 4;
 }
 
 // JobType classifies platform technical jobs.
@@ -608,6 +623,58 @@ message WorkspaceMaterialization {
   int64 version = 11;
 }
 
+// BuildContext is a runtime-owned checked build context artifact request.
+message BuildContext {
+  // build_context_id is the materialization aggregate id.
+  string build_context_id = 1;
+  // status is the build context lifecycle status.
+  BuildContextStatus status = 2;
+  // project_id links the context to project-catalog project state.
+  string project_id = 3;
+  // repository_id links the context to project-catalog repository binding.
+  string repository_id = 4;
+  // provider is the repository provider key.
+  string provider = 5;
+  // provider_owner is the safe repository owner or group.
+  string provider_owner = 6;
+  // provider_name is the safe repository name.
+  string provider_name = 7;
+  // source_ref is the branch, tag or provider ref requested for materialization.
+  string source_ref = 8;
+  // source_commit_sha is the immutable merge or source commit.
+  string source_commit_sha = 9;
+  // affected_service_keys identifies the services selected by the checked build plan.
+  repeated string affected_service_keys = 10;
+  // build_plan_fingerprint identifies the checked build plan.
+  string build_plan_fingerprint = 11;
+  // context_fingerprint identifies the idempotent build context request.
+  string context_fingerprint = 12;
+  // source_snapshot_ref points to a checked source snapshot artifact when available.
+  string source_snapshot_ref = 13;
+  // source_snapshot_digest is the immutable digest of the checked source snapshot.
+  string source_snapshot_digest = 14;
+  // build_context_ref points to the prepared runtime build context.
+  string build_context_ref = 15;
+  // build_context_digest is the immutable digest of the prepared build context.
+  string build_context_digest = 16;
+  // started_at is start time in RFC3339 format.
+  optional string started_at = 17;
+  // finished_at is finish time in RFC3339 format.
+  optional string finished_at = 18;
+  // last_error_code is the last classified safe error code.
+  string last_error_code = 19;
+  // last_error_message is the last safe error summary without secrets.
+  string last_error_message = 20;
+  // next_action describes the next automation or operator action.
+  string next_action = 21;
+  // created_at is creation time in RFC3339 format.
+  string created_at = 22;
+  // updated_at is update time in RFC3339 format.
+  string updated_at = 23;
+  // version is the aggregate version.
+  int64 version = 24;
+}
+
 // Job is a technical platform operation owned by runtime-manager.
 message Job {
   // job_id is the job aggregate id.
@@ -950,6 +1017,74 @@ message ListWorkspaceMaterializationsResponse {
   repeated WorkspaceMaterialization workspace_materializations = 1;
   // page describes continuation state.
   PageResponse page = 2;
+}
+
+message PrepareBuildContextRequest {
+  // project_id links the request to project-catalog project state.
+  string project_id = 1;
+  // repository_id links the request to project-catalog repository binding.
+  string repository_id = 2;
+  // provider is the repository provider key.
+  string provider = 3;
+  // provider_owner is the safe repository owner or group.
+  string provider_owner = 4;
+  // provider_name is the safe repository name.
+  string provider_name = 5;
+  // source_ref is the branch, tag or provider ref requested for materialization.
+  string source_ref = 6;
+  // source_commit_sha is the immutable merge or source commit.
+  string source_commit_sha = 7;
+  // affected_service_keys identifies services selected by the checked build plan.
+  repeated string affected_service_keys = 8;
+  // build_plan_fingerprint identifies the checked build plan.
+  string build_plan_fingerprint = 9;
+  // source_snapshot_ref points to a checked source snapshot artifact when available.
+  optional string source_snapshot_ref = 10;
+  // source_snapshot_digest is the immutable digest of the checked source snapshot.
+  optional string source_snapshot_digest = 11;
+  // meta carries idempotency and audit context.
+  CommandMeta meta = 12;
+}
+
+message ReportBuildContextProgressRequest {
+  // build_context_id is the materialization aggregate id.
+  string build_context_id = 1;
+  // status is the new build context lifecycle status.
+  BuildContextStatus status = 2;
+  // source_snapshot_ref points to the checked source snapshot artifact.
+  optional string source_snapshot_ref = 3;
+  // source_snapshot_digest is the immutable digest of the checked source snapshot.
+  optional string source_snapshot_digest = 4;
+  // build_context_ref points to the prepared runtime build context.
+  optional string build_context_ref = 5;
+  // build_context_digest is the immutable digest of the prepared build context.
+  optional string build_context_digest = 6;
+  // started_at is start time in RFC3339 format.
+  optional string started_at = 7;
+  // finished_at is finish time in RFC3339 format.
+  optional string finished_at = 8;
+  // error_code is a classified safe failure code.
+  string error_code = 9;
+  // error_message is a safe failure summary without secrets.
+  string error_message = 10;
+  // next_action describes the next automation or operator action.
+  string next_action = 11;
+  // meta carries idempotency, expected version and audit context.
+  CommandMeta meta = 12;
+}
+
+message BuildContextResponse {
+  // build_context is the returned materialization state.
+  BuildContext build_context = 1;
+}
+
+message GetBuildContextRequest {
+  // build_context_id is the aggregate id. Either id or context_fingerprint is required.
+  optional string build_context_id = 1;
+  // context_fingerprint is the deterministic request fingerprint.
+  optional string context_fingerprint = 2;
+  // meta carries read actor and request context.
+  QueryMeta meta = 3;
 }
 
 message CreateJobRequest {

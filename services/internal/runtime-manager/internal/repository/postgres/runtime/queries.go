@@ -5,6 +5,10 @@ import "fmt"
 var (
 	queryCommandResultGet                 = mustLoadQuery("command_result__get")
 	queryCommandResultInsert              = mustLoadQuery("command_result__insert")
+	queryBuildContextGet                  = mustLoadQuery("build_context__get")
+	queryBuildContextGetByFingerprint     = mustLoadQuery("build_context__get_by_fingerprint")
+	queryBuildContextInsert               = mustLoadQuery("build_context__insert")
+	queryBuildContextUpdate               = mustLoadQuery("build_context__update")
 	queryCleanupPolicyGet                 = mustLoadQuery("cleanup_policy__get")
 	queryCleanupPolicyInsert              = mustLoadQuery("cleanup_policy__insert")
 	queryCleanupPolicyListActive          = mustLoadQuery("cleanup_policy__list_active")
