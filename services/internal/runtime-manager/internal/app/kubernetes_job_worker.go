@@ -7,8 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
-
 	runtimekubernetes "github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/clients/kubernetes"
 	"github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/errs"
 	runtimeservice "github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/service"
@@ -22,6 +20,7 @@ const (
 	kubernetesHealthCheckStepKey = "kubernetes_health_check"
 	kubernetesAgentRunStepKey    = "kubernetes_agent_run"
 	kubernetesBuildStepKey       = "kubernetes_build"
+	kubernetesDeployStepKey      = "kubernetes_deploy"
 	redactedDiagnosticValue      = "[redacted]"
 	minWorkerRetryDelay          = time.Second
 	maxWorkerRetryDelay          = 30 * time.Second
@@ -105,7 +104,7 @@ func (w kubernetesJobWorker) run(ctx context.Context) error {
 
 func (w kubernetesJobWorker) claimAndExecute(ctx context.Context) kubernetesWorkerIteration {
 	claim, err := w.service.ClaimRunnableJob(ctx, runtimeservice.ClaimRunnableJobInput{
-		JobTypes:   []enum.JobType{enum.JobTypeHealthCheck, enum.JobTypeAgentRun, enum.JobTypeBuild},
+		JobTypes:   []enum.JobType{enum.JobTypeHealthCheck, enum.JobTypeAgentRun, enum.JobTypeBuild, enum.JobTypeDeploy},
 		WorkerID:   w.cfg.WorkerID,
 		LeaseOwner: w.cfg.WorkerID,
 		LeaseUntil: time.Now().UTC().Add(w.cfg.ClaimLeaseTTL),
@@ -238,6 +237,8 @@ func kubernetesStepKey(jobType enum.JobType) string {
 		return kubernetesAgentRunStepKey
 	case enum.JobTypeBuild:
 		return kubernetesBuildStepKey
+	case enum.JobTypeDeploy:
+		return kubernetesDeployStepKey
 	default:
 		return kubernetesHealthCheckStepKey
 	}
@@ -247,7 +248,7 @@ func safeExecutionShortLogTail(jobType enum.JobType, shortLogTail string) string
 	switch jobType {
 	case enum.JobTypeAgentRun:
 		return ""
-	case enum.JobTypeBuild:
+	case enum.JobTypeBuild, enum.JobTypeDeploy:
 		return redactBuildLogTail(shortLogTail)
 	default:
 		return shortLogTail
@@ -265,14 +266,7 @@ func redactBuildLogTail(shortLogTail string) string {
 }
 
 func (w kubernetesJobWorker) commandMeta(phase string, expectedVersion *int64) value.CommandMeta {
-	return value.CommandMeta{
-		CommandID:       uuid.New(),
-		ExpectedVersion: expectedVersion,
-		Actor:           value.Actor{Type: "service", ID: kubernetesWorkerActor},
-		Reason:          "runtime Kubernetes job " + phase,
-		RequestID:       kubernetesWorkerActor + "-" + phase,
-		RequestContext:  value.RequestContext{Source: kubernetesWorkerActor},
-	}
+	return workerCommandMeta(kubernetesWorkerActor, "runtime Kubernetes job", phase, expectedVersion)
 }
 
 func (w kubernetesJobWorker) pollDelay() time.Duration {

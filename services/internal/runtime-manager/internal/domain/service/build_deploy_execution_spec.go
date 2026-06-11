@@ -154,7 +154,6 @@ func normalizeDeployExecutionSpec(spec DeployExecutionSpecInput) (DeployExecutio
 		!safeAgentRunLabel(normalized.ServiceKey, maxRuntimeJobServiceKeyBytes) ||
 		!safeAgentRunRef(normalized.ImageRef, true) ||
 		!safeAgentRunLabel(normalized.ImageTag, maxRuntimeJobServiceKeyBytes) ||
-		!validAgentRunSHA256Digest(normalized.ImageDigest) ||
 		!safeAgentRunRef(normalized.ManifestRef, true) ||
 		!validAgentRunSHA256Digest(normalized.ManifestDigest) ||
 		!safeAgentRunRef(normalized.KustomizationRef, true) ||
@@ -164,6 +163,9 @@ func normalizeDeployExecutionSpec(spec DeployExecutionSpecInput) (DeployExecutio
 		!safeAgentRunRef(normalized.ManifestBundleRef, true) ||
 		!validAgentRunSHA256Digest(normalized.ManifestBundleDigest) ||
 		!validAgentRunSHA256Digest(normalized.DeployPlanFingerprint) {
+		return DeployExecutionSpecInput{}, errs.ErrInvalidArgument
+	}
+	if normalized.ImageDigest != "" && !validAgentRunSHA256Digest(normalized.ImageDigest) {
 		return DeployExecutionSpecInput{}, errs.ErrInvalidArgument
 	}
 	if !safeAgentRunRef(normalized.TargetSlotID, false) {
@@ -227,8 +229,10 @@ func normalizeDeployExpectedImageRefs(refs []DeployExpectedImageRefInput) ([]Dep
 			ImageDigest:   strings.TrimSpace(strings.ToLower(ref.ImageDigest)),
 		}
 		if !safeAgentRunLabel(item.ContainerName, maxRuntimeJobServiceKeyBytes) ||
-			!safeAgentRunRef(item.ImageRef, true) ||
-			!validAgentRunSHA256Digest(item.ImageDigest) {
+			!safeAgentRunRef(item.ImageRef, true) {
+			return nil, errs.ErrInvalidArgument
+		}
+		if item.ImageDigest != "" && !validAgentRunSHA256Digest(item.ImageDigest) {
 			return nil, errs.ErrInvalidArgument
 		}
 		normalized = append(normalized, item)

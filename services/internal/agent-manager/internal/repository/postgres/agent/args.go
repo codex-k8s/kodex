@@ -373,6 +373,9 @@ func selfDeployPlanArgs(plan entity.SelfDeployPlan) pgx.NamedArgs {
 		"project_ref":                             plan.ProjectRef,
 		"repository_ref":                          plan.RepositoryRef,
 		"provider_signal_ref":                     plan.ProviderSignalRef,
+		"provider_slug":                           plan.ProviderSlug,
+		"repository_full_name":                    plan.RepositoryFullName,
+		"provider_repository_id":                  plan.ProviderRepositoryID,
 		"source_ref":                              plan.SourceRef,
 		"merge_commit_sha":                        plan.MergeCommitSHA,
 		"services_yaml_ref":                       plan.ServicesYAMLRef,
@@ -397,6 +400,12 @@ func selfDeployPlanArgs(plan entity.SelfDeployPlan) pgx.NamedArgs {
 		"runtime_build_plan_fingerprint":          plan.RuntimeBuildFingerprint,
 		"runtime_build_error_code":                plan.RuntimeBuildErrorCode,
 		"runtime_build_summary":                   plan.RuntimeBuildSummary,
+		"runtime_build_contexts":                  jsonArrayPayload(plan.RuntimeBuildContexts),
+		"runtime_deploy_jobs":                     jsonArrayPayload(plan.RuntimeDeployJobs),
+		"runtime_deploy_status":                   string(plan.RuntimeDeployStatus),
+		"runtime_deploy_plan_fingerprint":         plan.RuntimeDeployFingerprint,
+		"runtime_deploy_error_code":               plan.RuntimeDeployErrorCode,
+		"runtime_deploy_summary":                  plan.RuntimeDeploySummary,
 	}, plan.ID, plan.Version, plan.CreatedAt, plan.UpdatedAt)
 }
 

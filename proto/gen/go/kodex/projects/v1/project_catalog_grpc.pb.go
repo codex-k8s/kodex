@@ -36,6 +36,7 @@ const (
 	ProjectCatalogService_ReconcileAdoptionMergeSignal_FullMethodName         = "/kodex.projects.v1.ProjectCatalogService/ReconcileAdoptionMergeSignal"
 	ProjectCatalogService_GetSelfDeploySignal_FullMethodName                  = "/kodex.projects.v1.ProjectCatalogService/GetSelfDeploySignal"
 	ProjectCatalogService_GetSelfDeployBuildPlan_FullMethodName               = "/kodex.projects.v1.ProjectCatalogService/GetSelfDeployBuildPlan"
+	ProjectCatalogService_GetSelfDeployDeployPlan_FullMethodName              = "/kodex.projects.v1.ProjectCatalogService/GetSelfDeployDeployPlan"
 	ProjectCatalogService_GetServicesPolicy_FullMethodName                    = "/kodex.projects.v1.ProjectCatalogService/GetServicesPolicy"
 	ProjectCatalogService_ListServiceDescriptors_FullMethodName               = "/kodex.projects.v1.ProjectCatalogService/ListServiceDescriptors"
 	ProjectCatalogService_CreatePolicyEditProposal_FullMethodName             = "/kodex.projects.v1.ProjectCatalogService/CreatePolicyEditProposal"
@@ -102,6 +103,8 @@ type ProjectCatalogServiceClient interface {
 	GetSelfDeploySignal(ctx context.Context, in *GetSelfDeploySignalRequest, opts ...grpc.CallOption) (*SelfDeploySignalResponse, error)
 	// GetSelfDeployBuildPlan возвращает проверенный project-side build input для self-deploy runtime jobs.
 	GetSelfDeployBuildPlan(ctx context.Context, in *GetSelfDeployBuildPlanRequest, opts ...grpc.CallOption) (*SelfDeployBuildPlanResponse, error)
+	// GetSelfDeployDeployPlan возвращает проверенный project-side deploy input после успешных build jobs.
+	GetSelfDeployDeployPlan(ctx context.Context, in *GetSelfDeployDeployPlanRequest, opts ...grpc.CallOption) (*SelfDeployDeployPlanResponse, error)
 	// GetServicesPolicy returns a checked services.yaml projection.
 	GetServicesPolicy(ctx context.Context, in *GetServicesPolicyRequest, opts ...grpc.CallOption) (*ServicesPolicyResponse, error)
 	// ListServiceDescriptors returns typed service descriptors from active policy.
@@ -320,6 +323,16 @@ func (c *projectCatalogServiceClient) GetSelfDeployBuildPlan(ctx context.Context
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SelfDeployBuildPlanResponse)
 	err := c.cc.Invoke(ctx, ProjectCatalogService_GetSelfDeployBuildPlan_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectCatalogServiceClient) GetSelfDeployDeployPlan(ctx context.Context, in *GetSelfDeployDeployPlanRequest, opts ...grpc.CallOption) (*SelfDeployDeployPlanResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SelfDeployDeployPlanResponse)
+	err := c.cc.Invoke(ctx, ProjectCatalogService_GetSelfDeployDeployPlan_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -588,6 +601,8 @@ type ProjectCatalogServiceServer interface {
 	GetSelfDeploySignal(context.Context, *GetSelfDeploySignalRequest) (*SelfDeploySignalResponse, error)
 	// GetSelfDeployBuildPlan возвращает проверенный project-side build input для self-deploy runtime jobs.
 	GetSelfDeployBuildPlan(context.Context, *GetSelfDeployBuildPlanRequest) (*SelfDeployBuildPlanResponse, error)
+	// GetSelfDeployDeployPlan возвращает проверенный project-side deploy input после успешных build jobs.
+	GetSelfDeployDeployPlan(context.Context, *GetSelfDeployDeployPlanRequest) (*SelfDeployDeployPlanResponse, error)
 	// GetServicesPolicy returns a checked services.yaml projection.
 	GetServicesPolicy(context.Context, *GetServicesPolicyRequest) (*ServicesPolicyResponse, error)
 	// ListServiceDescriptors returns typed service descriptors from active policy.
@@ -692,6 +707,9 @@ func (UnimplementedProjectCatalogServiceServer) GetSelfDeploySignal(context.Cont
 }
 func (UnimplementedProjectCatalogServiceServer) GetSelfDeployBuildPlan(context.Context, *GetSelfDeployBuildPlanRequest) (*SelfDeployBuildPlanResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSelfDeployBuildPlan not implemented")
+}
+func (UnimplementedProjectCatalogServiceServer) GetSelfDeployDeployPlan(context.Context, *GetSelfDeployDeployPlanRequest) (*SelfDeployDeployPlanResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetSelfDeployDeployPlan not implemented")
 }
 func (UnimplementedProjectCatalogServiceServer) GetServicesPolicy(context.Context, *GetServicesPolicyRequest) (*ServicesPolicyResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetServicesPolicy not implemented")
@@ -1082,6 +1100,24 @@ func _ProjectCatalogService_GetSelfDeployBuildPlan_Handler(srv interface{}, ctx 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ProjectCatalogServiceServer).GetSelfDeployBuildPlan(ctx, req.(*GetSelfDeployBuildPlanRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProjectCatalogService_GetSelfDeployDeployPlan_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSelfDeployDeployPlanRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectCatalogServiceServer).GetSelfDeployDeployPlan(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectCatalogService_GetSelfDeployDeployPlan_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectCatalogServiceServer).GetSelfDeployDeployPlan(ctx, req.(*GetSelfDeployDeployPlanRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1556,6 +1592,10 @@ var ProjectCatalogService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetSelfDeployBuildPlan",
 			Handler:    _ProjectCatalogService_GetSelfDeployBuildPlan_Handler,
+		},
+		{
+			MethodName: "GetSelfDeployDeployPlan",
+			Handler:    _ProjectCatalogService_GetSelfDeployDeployPlan_Handler,
 		},
 		{
 			MethodName: "GetServicesPolicy",

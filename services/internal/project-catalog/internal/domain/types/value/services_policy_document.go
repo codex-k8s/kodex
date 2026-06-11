@@ -22,6 +22,7 @@ type ServicesPolicySpec struct {
 	DeployableServices   []ServicesPolicyService              `json:"deployableServices,omitempty" yaml:"deployableServices,omitempty"`
 	Versions             map[string]ServicesPolicyVersionSpec `json:"versions,omitempty" yaml:"versions,omitempty"`
 	Images               map[string]ServicesPolicyImageSpec   `json:"images,omitempty" yaml:"images,omitempty"`
+	DeployManifests      []ServicesPolicyDeployManifest       `json:"deployManifests,omitempty" yaml:"deployManifests,omitempty"`
 	DocumentationSources []ServicesPolicyDocumentationSource  `json:"documentationSources,omitempty" yaml:"documentationSources,omitempty"`
 }
 
@@ -64,19 +65,20 @@ type ServicesPolicyImageBuildContextSpec struct {
 
 // ServicesPolicyService describes one service entry from normalized services.yaml.
 type ServicesPolicyService struct {
-	Key                  string                   `json:"key,omitempty" yaml:"key,omitempty"`
-	Name                 string                   `json:"name,omitempty" yaml:"name,omitempty"`
-	DisplayName          string                   `json:"displayName,omitempty" yaml:"displayName,omitempty"`
-	Kind                 string                   `json:"kind,omitempty" yaml:"kind,omitempty"`
-	Type                 string                   `json:"type,omitempty" yaml:"type,omitempty"`
-	RootPath             string                   `json:"rootPath,omitempty" yaml:"rootPath,omitempty"`
-	Path                 string                   `json:"path,omitempty" yaml:"path,omitempty"`
-	RepositoryID         string                   `json:"repositoryId,omitempty" yaml:"repositoryId,omitempty"`
-	DocumentationScopeID string                   `json:"documentationScopeId,omitempty" yaml:"documentationScopeId,omitempty"`
-	DependsOn            []string                 `json:"dependsOn,omitempty" yaml:"dependsOn,omitempty"`
-	DependsOnServiceKeys []string                 `json:"dependsOnServiceKeys,omitempty" yaml:"dependsOnServiceKeys,omitempty"`
-	Status               string                   `json:"status,omitempty" yaml:"status,omitempty"`
-	Build                *ServicesPolicyBuildSpec `json:"build,omitempty" yaml:"build,omitempty"`
+	Key                  string                    `json:"key,omitempty" yaml:"key,omitempty"`
+	Name                 string                    `json:"name,omitempty" yaml:"name,omitempty"`
+	DisplayName          string                    `json:"displayName,omitempty" yaml:"displayName,omitempty"`
+	Kind                 string                    `json:"kind,omitempty" yaml:"kind,omitempty"`
+	Type                 string                    `json:"type,omitempty" yaml:"type,omitempty"`
+	RootPath             string                    `json:"rootPath,omitempty" yaml:"rootPath,omitempty"`
+	Path                 string                    `json:"path,omitempty" yaml:"path,omitempty"`
+	RepositoryID         string                    `json:"repositoryId,omitempty" yaml:"repositoryId,omitempty"`
+	DocumentationScopeID string                    `json:"documentationScopeId,omitempty" yaml:"documentationScopeId,omitempty"`
+	DependsOn            []string                  `json:"dependsOn,omitempty" yaml:"dependsOn,omitempty"`
+	DependsOnServiceKeys []string                  `json:"dependsOnServiceKeys,omitempty" yaml:"dependsOnServiceKeys,omitempty"`
+	Status               string                    `json:"status,omitempty" yaml:"status,omitempty"`
+	Build                *ServicesPolicyBuildSpec  `json:"build,omitempty" yaml:"build,omitempty"`
+	Deploy               *ServicesPolicyDeploySpec `json:"deploy,omitempty" yaml:"deploy,omitempty"`
 }
 
 // ServicesPolicyBuildSpec описывает проверенный рецепт сборки одного сервиса.
@@ -105,6 +107,40 @@ type ServicesPolicyAllowedSecretRef struct {
 type ServicesPolicyOutputRef struct {
 	Kind string `json:"kind,omitempty" yaml:"kind,omitempty"`
 	Ref  string `json:"ref,omitempty" yaml:"ref,omitempty"`
+}
+
+// ServicesPolicyDeploySpec описывает проверенный рецепт rollout одного сервиса.
+type ServicesPolicyDeploySpec struct {
+	ServiceManifest      string                              `json:"serviceManifest,omitempty" yaml:"serviceManifest,omitempty"`
+	MigrationsManifest   string                              `json:"migrationsManifest,omitempty" yaml:"migrationsManifest,omitempty"`
+	Kustomization        string                              `json:"kustomization,omitempty" yaml:"kustomization,omitempty"`
+	ManifestBundleRef    string                              `json:"manifestBundleRef,omitempty" yaml:"manifestBundleRef,omitempty"`
+	ManifestBundleDigest string                              `json:"manifestBundleDigest,omitempty" yaml:"manifestBundleDigest,omitempty"`
+	TargetNamespace      string                              `json:"targetNamespace,omitempty" yaml:"targetNamespace,omitempty"`
+	TargetClusterRef     string                              `json:"targetClusterRef,omitempty" yaml:"targetClusterRef,omitempty"`
+	TargetSlotID         string                              `json:"targetSlotId,omitempty" yaml:"targetSlotId,omitempty"`
+	RolloutTargets       []ServicesPolicyDeployRolloutTarget `json:"rolloutTargets,omitempty" yaml:"rolloutTargets,omitempty"`
+	AllowedSecretRefs    []ServicesPolicyAllowedSecretRef    `json:"allowedSecretRefs,omitempty" yaml:"allowedSecretRefs,omitempty"`
+	OutputRefs           []ServicesPolicyOutputRef           `json:"outputRefs,omitempty" yaml:"outputRefs,omitempty"`
+}
+
+// ServicesPolicyDeployRolloutTarget describes one bounded Kubernetes rollout target.
+type ServicesPolicyDeployRolloutTarget struct {
+	Kind      string `json:"kind,omitempty" yaml:"kind,omitempty"`
+	Ref       string `json:"ref,omitempty" yaml:"ref,omitempty"`
+	Namespace string `json:"namespace,omitempty" yaml:"namespace,omitempty"`
+	Name      string `json:"name,omitempty" yaml:"name,omitempty"`
+	Digest    string `json:"digest,omitempty" yaml:"digest,omitempty"`
+}
+
+// ServicesPolicyDeployManifest describes one checked manifest bundle entry.
+type ServicesPolicyDeployManifest struct {
+	Name       string   `json:"name,omitempty" yaml:"name,omitempty"`
+	Path       string   `json:"path,omitempty" yaml:"path,omitempty"`
+	RenderMode string   `json:"renderMode,omitempty" yaml:"renderMode,omitempty"`
+	Purpose    string   `json:"purpose,omitempty" yaml:"purpose,omitempty"`
+	Includes   []string `json:"includes,omitempty" yaml:"includes,omitempty"`
+	Requires   []string `json:"requires,omitempty" yaml:"requires,omitempty"`
 }
 
 // ServicesPolicyDocumentationSource describes one documentation source from normalized services.yaml.

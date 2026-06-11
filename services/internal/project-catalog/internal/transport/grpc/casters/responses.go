@@ -197,18 +197,19 @@ func SelfDeployBuildPlanToProto(plan projectservice.SelfDeployBuildPlan) *projec
 	if plan.ProjectRef == "" && plan.RepositoryRef == "" {
 		return nil
 	}
+	common := selfDeployPlanProtoCommon(plan.ProjectRef, plan.RepositoryRef, plan.ProviderSignalRef, plan.SourceRef, plan.MergeCommitSHA, plan.ServicesYaml, plan.AffectedServiceKeys, plan.PlanFingerprint, plan.SafeSummary, plan.Version)
 	return &projectsv1.SelfDeployBuildPlan{
-		ProjectRef:          plan.ProjectRef,
-		RepositoryRef:       plan.RepositoryRef,
-		ProviderSignalRef:   optionalStringPtr(plan.ProviderSignalRef),
-		SourceRef:           plan.SourceRef,
-		MergeCommitSha:      plan.MergeCommitSHA,
-		ServicesYaml:        selfDeployServicesYamlToProto(plan.ServicesYaml),
-		AffectedServiceKeys: plan.AffectedServiceKeys,
+		ProjectRef:          common.projectRef,
+		RepositoryRef:       common.repositoryRef,
+		ProviderSignalRef:   common.providerSignalRef,
+		SourceRef:           common.sourceRef,
+		MergeCommitSha:      common.mergeCommitSHA,
+		ServicesYaml:        common.servicesYAML,
+		AffectedServiceKeys: common.affectedServiceKeys,
 		BuildItems:          mapSlice(plan.BuildItems, selfDeployBuildPlanItemToProto),
-		PlanFingerprint:     plan.PlanFingerprint,
-		SafeSummary:         plan.SafeSummary,
-		Version:             plan.Version,
+		PlanFingerprint:     common.planFingerprint,
+		SafeSummary:         common.safeSummary,
+		Version:             common.version,
 	}
 }
 
@@ -283,6 +284,136 @@ func allowedSecretRefToProto(ref projectservice.RuntimeJobAllowedSecretRef) *run
 
 func outputRefToProto(ref projectservice.RuntimeJobOutputRef) *runtimev1.RuntimeJobOutputRef {
 	return &runtimev1.RuntimeJobOutputRef{Kind: ref.Kind, Ref: ref.Ref}
+}
+
+func SelfDeployDeployPlanResponse(result projectservice.SelfDeployDeployPlanResult) *projectsv1.SelfDeployDeployPlanResponse {
+	return &projectsv1.SelfDeployDeployPlanResponse{
+		Status:     SelfDeployDeployPlanStatusToProto(result.Status),
+		Plan:       SelfDeployDeployPlanToProto(result.Plan),
+		SafeReason: optionalStringPtr(result.SafeReason),
+	}
+}
+
+func SelfDeployDeployPlanToProto(plan projectservice.SelfDeployDeployPlan) *projectsv1.SelfDeployDeployPlan {
+	if plan.ProjectRef == "" && plan.RepositoryRef == "" {
+		return nil
+	}
+	common := selfDeployPlanProtoCommon(plan.ProjectRef, plan.RepositoryRef, plan.ProviderSignalRef, plan.SourceRef, plan.MergeCommitSHA, plan.ServicesYaml, plan.AffectedServiceKeys, plan.PlanFingerprint, plan.SafeSummary, plan.Version)
+	converted := &projectsv1.SelfDeployDeployPlan{}
+	converted.ProjectRef = common.projectRef
+	converted.RepositoryRef = common.repositoryRef
+	converted.ProviderSignalRef = common.providerSignalRef
+	converted.SourceRef = common.sourceRef
+	converted.MergeCommitSha = common.mergeCommitSHA
+	converted.ServicesYaml = common.servicesYAML
+	converted.AffectedServiceKeys = common.affectedServiceKeys
+	converted.DeployItems = mapSlice(plan.DeployItems, selfDeployDeployPlanItemToProto)
+	converted.PlanFingerprint = common.planFingerprint
+	converted.SafeSummary = common.safeSummary
+	converted.Version = common.version
+	return converted
+}
+
+type selfDeployPlanProtoCommonFields struct {
+	projectRef          string
+	repositoryRef       string
+	providerSignalRef   *string
+	sourceRef           string
+	mergeCommitSHA      string
+	servicesYAML        *projectsv1.SelfDeployServicesYamlProjection
+	affectedServiceKeys []string
+	planFingerprint     string
+	safeSummary         string
+	version             int64
+}
+
+func selfDeployPlanProtoCommon(projectRef string, repositoryRef string, providerSignalRef string, sourceRef string, mergeCommitSHA string, servicesYAML projectservice.SelfDeployServicesYamlProjection, affectedServiceKeys []string, planFingerprint string, safeSummary string, version int64) selfDeployPlanProtoCommonFields {
+	return selfDeployPlanProtoCommonFields{
+		projectRef:          projectRef,
+		repositoryRef:       repositoryRef,
+		providerSignalRef:   optionalStringPtr(providerSignalRef),
+		sourceRef:           sourceRef,
+		mergeCommitSHA:      mergeCommitSHA,
+		servicesYAML:        selfDeployServicesYamlToProto(servicesYAML),
+		affectedServiceKeys: affectedServiceKeys,
+		planFingerprint:     planFingerprint,
+		safeSummary:         safeSummary,
+		version:             version,
+	}
+}
+
+func selfDeployDeployPlanItemToProto(item projectservice.SelfDeployDeployPlanItem) *projectsv1.SelfDeployDeployPlanItem {
+	return &projectsv1.SelfDeployDeployPlanItem{
+		ServiceKey:          item.ServiceKey,
+		ServiceRef:          optionalStringPtr(item.ServiceRef),
+		DeployExecutionSpec: deployExecutionSpecToProto(item.DeployExecutionSpec),
+		PlanItemFingerprint: item.PlanItemFingerprint,
+		Status:              selfDeployDeployPlanItemStatusToProto(item.Status),
+		SafeReason:          optionalStringPtr(item.SafeReason),
+	}
+}
+
+func selfDeployDeployPlanItemStatusToProto(status projectservice.SelfDeployDeployPlanItemStatus) projectsv1.SelfDeployDeployPlanItemStatus {
+	statuses := selfDeployDeployPlanItemStatusValues()
+	if value, ok := statuses[status]; ok {
+		return value
+	}
+	return projectsv1.SelfDeployDeployPlanItemStatus_SELF_DEPLOY_DEPLOY_PLAN_ITEM_STATUS_UNSPECIFIED
+}
+
+func selfDeployDeployPlanItemStatusValues() map[projectservice.SelfDeployDeployPlanItemStatus]projectsv1.SelfDeployDeployPlanItemStatus {
+	values := make(map[projectservice.SelfDeployDeployPlanItemStatus]projectsv1.SelfDeployDeployPlanItemStatus, 4)
+	values[projectservice.SelfDeployDeployPlanItemStatusReady] = projectsv1.SelfDeployDeployPlanItemStatus_SELF_DEPLOY_DEPLOY_PLAN_ITEM_STATUS_READY
+	values[projectservice.SelfDeployDeployPlanItemStatusBuildNotReady] = projectsv1.SelfDeployDeployPlanItemStatus_SELF_DEPLOY_DEPLOY_PLAN_ITEM_STATUS_BUILD_NOT_READY
+	values[projectservice.SelfDeployDeployPlanItemStatusBuildOutputInvalid] = projectsv1.SelfDeployDeployPlanItemStatus_SELF_DEPLOY_DEPLOY_PLAN_ITEM_STATUS_BUILD_OUTPUT_INVALID
+	values[projectservice.SelfDeployDeployPlanItemStatusDeployPlanUnavailable] = projectsv1.SelfDeployDeployPlanItemStatus_SELF_DEPLOY_DEPLOY_PLAN_ITEM_STATUS_DEPLOY_PLAN_UNAVAILABLE
+	return values
+}
+
+func deployExecutionSpecToProto(spec projectservice.SelfDeployDeployExecutionSpec) *runtimev1.DeployExecutionSpec {
+	if spec.ServiceKey == "" && spec.ManifestBundleRef == "" {
+		return nil
+	}
+	return &runtimev1.DeployExecutionSpec{
+		SourceRef:             spec.SourceRef,
+		SourceCommitSha:       spec.SourceCommitSHA,
+		ServiceKey:            spec.ServiceKey,
+		ImageRef:              spec.ImageRef,
+		ImageTag:              spec.ImageTag,
+		ImageDigest:           optionalStringPtr(spec.ImageDigest),
+		ManifestRef:           spec.ManifestRef,
+		ManifestDigest:        spec.ManifestDigest,
+		KustomizationRef:      spec.KustomizationRef,
+		KustomizationDigest:   spec.KustomizationDigest,
+		TargetNamespace:       spec.TargetNamespace,
+		TargetClusterRef:      spec.TargetClusterRef,
+		TargetSlotId:          optionalStringPtr(spec.TargetSlotID),
+		DeployPlanFingerprint: spec.DeployPlanFingerprint,
+		AllowedSecretRefs:     mapSlice(spec.AllowedSecretRefs, allowedSecretRefToProto),
+		OutputRefs:            mapSlice(spec.OutputRefs, outputRefToProto),
+		ManifestBundleRef:     spec.ManifestBundleRef,
+		ManifestBundleDigest:  spec.ManifestBundleDigest,
+		RolloutTargets:        mapSlice(spec.RolloutTargets, rolloutTargetToProto),
+		ExpectedImageRefs:     mapSlice(spec.ExpectedImageRefs, expectedImageRefToProto),
+	}
+}
+
+func rolloutTargetToProto(target projectservice.SelfDeployDeployRolloutTarget) *runtimev1.DeployRolloutTarget {
+	return &runtimev1.DeployRolloutTarget{
+		Kind:      target.Kind,
+		Ref:       target.Ref,
+		Namespace: target.Namespace,
+		Name:      target.Name,
+		Digest:    optionalStringPtr(target.Digest),
+	}
+}
+
+func expectedImageRefToProto(ref projectservice.SelfDeployDeployExpectedImageRef) *runtimev1.DeployExpectedImageRef {
+	return &runtimev1.DeployExpectedImageRef{
+		ContainerName: ref.ContainerName,
+		ImageRef:      ref.ImageRef,
+		ImageDigest:   optionalStringPtr(ref.ImageDigest),
+	}
 }
 
 func BootstrapServicesPolicyImportResponse(result projectservice.BootstrapServicesPolicyImportResult) *projectsv1.BootstrapServicesPolicyImportResponse {

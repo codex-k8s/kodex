@@ -26,7 +26,11 @@ type Config struct {
 	RuntimeJobCreator              RuntimeJobCreator
 	RuntimeJobReader               RuntimeJobReader
 	SelfDeployBuildPlanReader      SelfDeployBuildPlanReader
+	SelfDeployDeployPlanReader     SelfDeployDeployPlanReader
+	SelfDeployBuildContextPreparer SelfDeployBuildContextPreparer
+	SelfDeployRuntimeJobReader     SelfDeployRuntimeJobReader
 	SelfDeployBuildJobCreator      SelfDeployBuildJobCreator
+	SelfDeployDeployJobCreator     SelfDeployDeployJobCreator
 	RuntimeJobRunnerImageRef       string
 	RuntimeJobAllowedSecretRefs    []AgentRunExecutionRef
 	CodexSessionExecution          CodexSessionExecutionConfig
@@ -59,16 +63,20 @@ type Service struct {
 	runtimeJobAllowedSecretRefs    []AgentRunExecutionRef
 	codexSessionExecution          CodexSessionExecutionConfig
 
-	guidanceResolver           GuidanceResolver
-	workspacePolicyResolver    WorkspacePolicyResolver
-	runtimePreparer            RuntimePreparer
-	runtimeJobCreator          RuntimeJobCreator
-	runtimeJobReader           RuntimeJobReader
-	selfDeployBuildPlanReader  SelfDeployBuildPlanReader
-	selfDeployBuildJobCreator  SelfDeployBuildJobCreator
-	providerFollowUpDispatcher ProviderFollowUpDispatcher
-	humanGateRequester         HumanGateInteractionRequester
-	selfDeployGatePreparer     SelfDeployGatePreparer
+	guidanceResolver               GuidanceResolver
+	workspacePolicyResolver        WorkspacePolicyResolver
+	runtimePreparer                RuntimePreparer
+	runtimeJobCreator              RuntimeJobCreator
+	runtimeJobReader               RuntimeJobReader
+	selfDeployBuildPlanReader      SelfDeployBuildPlanReader
+	selfDeployDeployPlanReader     SelfDeployDeployPlanReader
+	selfDeployBuildContextPreparer SelfDeployBuildContextPreparer
+	selfDeployRuntimeJobReader     SelfDeployRuntimeJobReader
+	selfDeployBuildJobCreator      SelfDeployBuildJobCreator
+	selfDeployDeployJobCreator     SelfDeployDeployJobCreator
+	providerFollowUpDispatcher     ProviderFollowUpDispatcher
+	humanGateRequester             HumanGateInteractionRequester
+	selfDeployGatePreparer         SelfDeployGatePreparer
 }
 
 // GuidanceResolver resolves guidance package selections into safe frozen refs.
@@ -98,6 +106,11 @@ type SelfDeployBuildPlanReader interface {
 	GetSelfDeployBuildPlan(context.Context, SelfDeployBuildPlanLookupInput) (SelfDeployBuildPlanReadResult, error)
 }
 
+// SelfDeployDeployPlanReader reads project-owned checked deploy inputs.
+type SelfDeployDeployPlanReader interface {
+	GetSelfDeployDeployPlan(context.Context, SelfDeployDeployPlanLookupInput) (SelfDeployDeployPlanReadResult, error)
+}
+
 // WorkspacePolicyResolutionInput selects one checked project workspace policy.
 type WorkspacePolicyResolutionInput struct {
 	Meta                    value.CommandMeta
@@ -120,6 +133,22 @@ type RuntimeJobCreator interface {
 // SelfDeployBuildJobCreator вызывает runtime-manager для постановки build jobs self-deploy.
 type SelfDeployBuildJobCreator interface {
 	CreateSelfDeployBuildJob(context.Context, SelfDeployBuildJobInput) (RuntimeJobResult, error)
+}
+
+// SelfDeployDeployJobCreator вызывает runtime-manager для постановки deploy jobs self-deploy.
+type SelfDeployDeployJobCreator interface {
+	CreateSelfDeployDeployJob(context.Context, SelfDeployDeployJobInput) (RuntimeJobResult, error)
+}
+
+// SelfDeployBuildContextPreparer вызывает runtime-manager для подготовки build context self-deploy.
+type SelfDeployBuildContextPreparer interface {
+	PrepareSelfDeployBuildContext(context.Context, SelfDeployBuildContextInput) (SelfDeployBuildContextResult, error)
+	GetSelfDeployBuildContext(context.Context, SelfDeployBuildContextReadInput) (SelfDeployBuildContextResult, error)
+}
+
+// SelfDeployRuntimeJobReader читает build/deploy runtime jobs self-deploy.
+type SelfDeployRuntimeJobReader interface {
+	GetSelfDeployRuntimeJob(context.Context, SelfDeployRuntimeJobReadInput) (SelfDeployRuntimeJobReadResult, error)
 }
 
 // RuntimeJobReader читает безопасное состояние runtime job через runtime-manager.
@@ -182,6 +211,14 @@ func (DisabledSelfDeployBuildPlanReader) GetSelfDeployBuildPlan(context.Context,
 	return SelfDeployBuildPlanReadResult{}, errs.ErrDependencyUnavailable
 }
 
+// DisabledSelfDeployDeployPlanReader keeps deploy plan reads opt-in at app wiring time.
+type DisabledSelfDeployDeployPlanReader struct{}
+
+// GetSelfDeployDeployPlan reports that project-side deploy plan reads are unavailable.
+func (DisabledSelfDeployDeployPlanReader) GetSelfDeployDeployPlan(context.Context, SelfDeployDeployPlanLookupInput) (SelfDeployDeployPlanReadResult, error) {
+	return SelfDeployDeployPlanReadResult{}, errs.ErrDependencyUnavailable
+}
+
 // DisabledRuntimePreparer keeps agent-manager runnable before runtime-manager is wired.
 type DisabledRuntimePreparer struct{}
 
@@ -204,6 +241,35 @@ type DisabledSelfDeployBuildJobCreator struct{}
 // CreateSelfDeployBuildJob сообщает, что постановка self-deploy build job недоступна.
 func (DisabledSelfDeployBuildJobCreator) CreateSelfDeployBuildJob(context.Context, SelfDeployBuildJobInput) (RuntimeJobResult, error) {
 	return RuntimeJobResult{}, errs.ErrDependencyUnavailable
+}
+
+// DisabledSelfDeployDeployJobCreator оставляет self-deploy deploy dispatch явным switch на уровне сборки сервиса.
+type DisabledSelfDeployDeployJobCreator struct{}
+
+// CreateSelfDeployDeployJob сообщает, что постановка self-deploy deploy job недоступна.
+func (DisabledSelfDeployDeployJobCreator) CreateSelfDeployDeployJob(context.Context, SelfDeployDeployJobInput) (RuntimeJobResult, error) {
+	return RuntimeJobResult{}, errs.ErrDependencyUnavailable
+}
+
+// DisabledSelfDeployBuildContextPreparer оставляет build context materialization явным switch.
+type DisabledSelfDeployBuildContextPreparer struct{}
+
+// PrepareSelfDeployBuildContext сообщает, что build context preparation недоступна.
+func (DisabledSelfDeployBuildContextPreparer) PrepareSelfDeployBuildContext(context.Context, SelfDeployBuildContextInput) (SelfDeployBuildContextResult, error) {
+	return SelfDeployBuildContextResult{}, errs.ErrDependencyUnavailable
+}
+
+// GetSelfDeployBuildContext сообщает, что build context read недоступен.
+func (DisabledSelfDeployBuildContextPreparer) GetSelfDeployBuildContext(context.Context, SelfDeployBuildContextReadInput) (SelfDeployBuildContextResult, error) {
+	return SelfDeployBuildContextResult{}, errs.ErrDependencyUnavailable
+}
+
+// DisabledSelfDeployRuntimeJobReader оставляет build/deploy job read явным switch.
+type DisabledSelfDeployRuntimeJobReader struct{}
+
+// GetSelfDeployRuntimeJob сообщает, что build/deploy job read недоступен.
+func (DisabledSelfDeployRuntimeJobReader) GetSelfDeployRuntimeJob(context.Context, SelfDeployRuntimeJobReadInput) (SelfDeployRuntimeJobReadResult, error) {
+	return SelfDeployRuntimeJobReadResult{}, errs.ErrDependencyUnavailable
 }
 
 // DisabledRuntimeJobReader оставляет чтение runtime job явным на уровне сборки сервиса.
@@ -286,8 +352,20 @@ func New(cfg Config) *Service {
 	if cfg.SelfDeployBuildPlanReader == nil {
 		cfg.SelfDeployBuildPlanReader = DisabledSelfDeployBuildPlanReader{}
 	}
+	if cfg.SelfDeployDeployPlanReader == nil {
+		cfg.SelfDeployDeployPlanReader = DisabledSelfDeployDeployPlanReader{}
+	}
+	if cfg.SelfDeployBuildContextPreparer == nil {
+		cfg.SelfDeployBuildContextPreparer = DisabledSelfDeployBuildContextPreparer{}
+	}
+	if cfg.SelfDeployRuntimeJobReader == nil {
+		cfg.SelfDeployRuntimeJobReader = DisabledSelfDeployRuntimeJobReader{}
+	}
 	if cfg.SelfDeployBuildJobCreator == nil {
 		cfg.SelfDeployBuildJobCreator = DisabledSelfDeployBuildJobCreator{}
+	}
+	if cfg.SelfDeployDeployJobCreator == nil {
+		cfg.SelfDeployDeployJobCreator = DisabledSelfDeployDeployJobCreator{}
 	}
 	if cfg.ProviderFollowUpDispatcher == nil {
 		cfg.ProviderFollowUpDispatcher = DisabledProviderFollowUpDispatcher{}
@@ -315,7 +393,11 @@ func New(cfg Config) *Service {
 	service.runtimeJobCreator = cfg.RuntimeJobCreator
 	service.runtimeJobReader = cfg.RuntimeJobReader
 	service.selfDeployBuildPlanReader = cfg.SelfDeployBuildPlanReader
+	service.selfDeployDeployPlanReader = cfg.SelfDeployDeployPlanReader
+	service.selfDeployBuildContextPreparer = cfg.SelfDeployBuildContextPreparer
+	service.selfDeployRuntimeJobReader = cfg.SelfDeployRuntimeJobReader
 	service.selfDeployBuildJobCreator = cfg.SelfDeployBuildJobCreator
+	service.selfDeployDeployJobCreator = cfg.SelfDeployDeployJobCreator
 	service.providerFollowUpDispatcher = cfg.ProviderFollowUpDispatcher
 	service.humanGateRequester = cfg.HumanGateRequester
 	service.selfDeployGatePreparer = cfg.SelfDeployGatePreparer

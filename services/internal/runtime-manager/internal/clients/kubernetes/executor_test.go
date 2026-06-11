@@ -239,6 +239,107 @@ func TestExecutorStartCreatesRestrictedKanikoBuildJob(t *testing.T) {
 	}
 }
 
+func TestExecutorStartCreatesRestrictedDeployJobWithServiceAccountToken(t *testing.T) {
+	t.Parallel()
+
+	client := fake.NewClientset()
+	executor := newDeployReadyTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
+	job := testDeployJob()
+
+	started, err := executor.Start(context.Background(), job)
+	if err != nil {
+		t.Fatalf("Start(deploy): %v", err)
+	}
+	created, err := client.BatchV1().Jobs("runtime-jobs").Get(context.Background(), started.JobName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("get created deploy Job: %v", err)
+	}
+	podSpec := created.Spec.Template.Spec
+	if podSpec.ServiceAccountName != "runtime-deployer" {
+		t.Fatalf("serviceAccountName = %q, want runtime-deployer", podSpec.ServiceAccountName)
+	}
+	if podSpec.AutomountServiceAccountToken == nil || !*podSpec.AutomountServiceAccountToken {
+		t.Fatalf("automount service account token = %v, want enabled for deployer", podSpec.AutomountServiceAccountToken)
+	}
+	container := podSpec.Containers[0]
+	if container.Name != deployContainerName || container.Image != "busybox:1.36" {
+		t.Fatalf("container = %s/%s, want deployer container/image", container.Name, container.Image)
+	}
+	args := strings.Join(container.Args, "\n")
+	if !strings.Contains(args, "--expected-image\nruntime-manager|registry.local/kodex/runtime-manager:0.1.0|sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd") {
+		t.Fatalf("deployer args = %v, want typed expected image ref with container and digest", container.Args)
+	}
+	if strings.Contains(args, "secret-value") || strings.Contains(args, "provider payload") {
+		t.Fatalf("deployer args contain unsafe marker: %v", container.Args)
+	}
+}
+
+func TestExecutorStartRejectsDeployWithoutServiceAccount(t *testing.T) {
+	t.Parallel()
+
+	client := fake.NewClientset()
+	executor := newDeployReadyTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
+	executor.config.DeployServiceAccount = ""
+
+	_, err := executor.Start(context.Background(), testDeployJob())
+
+	assertExecutionCode(t, err, "deploy_service_account_required")
+	assertNoCreatedJobs(t, client, "runtime-jobs")
+}
+
+func TestBuildContextMaterializerStartCreatesPVCAndControlledJob(t *testing.T) {
+	t.Parallel()
+
+	client := fake.NewClientset()
+	executor := newTestExecutor(t, client, fakeClusterProvider{access: testClusterAccess()})
+	materializer, err := NewBuildContextMaterializer(executor, testClusterAccess().ClusterID)
+	if err != nil {
+		t.Fatalf("NewBuildContextMaterializer(): %v", err)
+	}
+	buildContext := entity.BuildContext{
+		Base:                 entity.Base{ID: uuid.MustParse("00000000-0000-0000-0000-000000000055"), Version: 2},
+		Provider:             "github",
+		ProviderOwner:        "codex-k8s",
+		ProviderName:         "kodex",
+		SourceRef:            "refs/heads/main",
+		SourceCommitSHA:      "0123456789abcdef0123456789abcdef01234567",
+		BuildPlanFingerprint: "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+		ContextFingerprint:   "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+		AffectedServiceKeys:  []string{"runtime-manager"},
+	}
+
+	started, err := materializer.start(context.Background(), buildContext)
+	if err != nil {
+		t.Fatalf("start materializer: %v", err)
+	}
+	if started.Namespace != "runtime-jobs" || started.ExternalRef == "" {
+		t.Fatalf("started materializer = %+v, want safe namespace/ref", started)
+	}
+	pvcName := buildContextPVCName(buildContext.ID)
+	if _, err := client.CoreV1().PersistentVolumeClaims("runtime-jobs").Get(context.Background(), pvcName, metav1.GetOptions{}); err != nil {
+		t.Fatalf("get materializer PVC: %v", err)
+	}
+	job, err := client.BatchV1().Jobs("runtime-jobs").Get(context.Background(), buildContextMaterializerJobName(buildContext.ID), metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("get materializer Job: %v", err)
+	}
+	container := job.Spec.Template.Spec.Containers[0]
+	if container.Name != materializerContainerName || strings.Join(container.Command, " ") != materializerCommand {
+		t.Fatalf("materializer container = %s/%v, want fixed command", container.Name, container.Command)
+	}
+	args := strings.Join(container.Args, " ")
+	if !strings.Contains(args, "--owner codex-k8s") || !strings.Contains(args, "--commit 0123456789abcdef0123456789abcdef01234567") {
+		t.Fatalf("materializer args = %v, want typed source refs", container.Args)
+	}
+	if strings.Contains(args, "secret-value") || strings.Contains(args, "provider payload") {
+		t.Fatalf("materializer args contain unsafe marker: %v", container.Args)
+	}
+	authEnv := envVarByName(container.Env, "GITHUB_TOKEN")
+	if authEnv == nil || authEnv.Value != "" || authEnv.ValueFrom == nil || authEnv.ValueFrom.SecretKeyRef == nil {
+		t.Fatalf("materializer auth env = %+v, want SecretKeyRef without literal token", authEnv)
+	}
+}
+
 func TestExecutorStartReusesExistingManagedBuildJobBeforePreflight(t *testing.T) {
 	t.Parallel()
 
@@ -856,6 +957,12 @@ func newBuildReadyTestExecutor(t *testing.T, client clientkubernetes.Interface, 
 	return newBuildReadyTestExecutorWithoutPVC(t, client, provider)
 }
 
+func newDeployReadyTestExecutor(t *testing.T, client clientkubernetes.Interface, provider fakeClusterProvider) *Executor {
+	t.Helper()
+	seedBuildContextPVC(t, client, "runtime-jobs", "runtime-build-context-001", corev1.ClaimBound)
+	return newTestExecutorWithMetadata(t, client, newTestMetadataClient(t, serviceAccountMetadata("runtime-deployer")), provider)
+}
+
 func newBuildReadyTestExecutorWithoutPVC(t *testing.T, client clientkubernetes.Interface, provider fakeClusterProvider) *Executor {
 	t.Helper()
 	return newTestExecutorWithMetadata(t, client, newTestMetadataClient(t, registrySecretMetadata()), provider)
@@ -870,6 +977,7 @@ func newTestExecutorWithMetadata(t *testing.T, client clientkubernetes.Interface
 	t.Helper()
 	executor, err := NewExecutorWithClientFactory(provider, fakeSecretResolver{value: secretresolver.NewSecretValue([]byte("kubeconfig"))}, Config{
 		DefaultNamespace:        "runtime-jobs",
+		DeployServiceAccount:    "runtime-deployer",
 		DefaultImage:            "busybox:1.36",
 		ImagePullPolicy:         "IfNotPresent",
 		JobTimeout:              time.Second,
@@ -880,6 +988,7 @@ func newTestExecutorWithMetadata(t *testing.T, client clientkubernetes.Interface
 		AgentManagerGRPCAddr:    "agent-manager:9090",
 		AgentManagerAuthSecret:  SecretKeyRef{Name: "kodex-platform-runtime", Key: "KODEX_AGENT_MANAGER_GRPC_AUTH_TOKEN"},
 		AgentManagerTimeout:     3 * time.Second,
+		SourceAuthSecret:        SecretKeyRef{Name: "kodex-platform-runtime", Key: "KODEX_GIT_BOT_TOKEN"},
 	}, fakeClientFactory{client: client, metadataClient: metadataClient})
 	if err != nil {
 		t.Fatalf("NewExecutorWithClientFactory(): %v", err)
@@ -902,6 +1011,16 @@ func registrySecretMetadata() *metav1.PartialObjectMetadata {
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "runtime-jobs",
 			Name:      "registry-push",
+		},
+	}
+}
+
+func serviceAccountMetadata(name string) *metav1.PartialObjectMetadata {
+	return &metav1.PartialObjectMetadata{
+		TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ServiceAccount"},
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "runtime-jobs",
+			Name:      name,
 		},
 	}
 }
@@ -969,6 +1088,19 @@ func testBuildJob() entity.Job {
 		JobType:      enum.JobTypeBuild,
 		Status:       enum.JobStatusClaimed,
 		JobInputJSON: []byte(`{"build_execution_spec":{"source_ref":"git://github.com/codex-k8s/kodex","source_commit_sha":"0123456789abcdef0123456789abcdef01234567","service_key":"runtime-manager","image_ref":"image://registry.local:5000/kodex/runtime-manager","image_tag":"0.1.0","build_context_ref":"pvc://runtime-jobs/runtime-build-context-001","build_context_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","dockerfile_ref":"context://services/internal/runtime-manager/Dockerfile","dockerfile_digest":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","dockerfile_target":"runtime-manager","builder_image_ref":"image://gcr.io/kaniko-project/executor:v1.24.0","build_plan_fingerprint":"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","allowed_secret_refs":[{"kind":"registry","ref":"secret://runtime/registry-push"}],"output_refs":[{"kind":"image_ref","ref":"runtime://artifacts/images/runtime-manager"}]}}`),
+		FleetScopeID: &fleetScopeID,
+		ClusterID:    &clusterID,
+	}
+}
+
+func testDeployJob() entity.Job {
+	fleetScopeID := uuid.MustParse("00000000-0000-0000-0000-000000000010")
+	clusterID := uuid.MustParse("00000000-0000-0000-0000-000000000011")
+	return entity.Job{
+		Base:         entity.Base{ID: uuid.MustParse("00000000-0000-0000-0000-000000000045"), Version: 2},
+		JobType:      enum.JobTypeDeploy,
+		Status:       enum.JobStatusClaimed,
+		JobInputJSON: []byte(`{"deploy_execution_spec":{"source_ref":"git://github.com/codex-k8s/kodex","source_commit_sha":"0123456789abcdef0123456789abcdef01234567","service_key":"runtime-manager","image_ref":"image://registry.local/kodex/runtime-manager","image_tag":"0.1.0","image_digest":"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd","manifest_ref":"context://deploy/base/runtime-manager","manifest_digest":"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","kustomization_ref":"context://deploy/base/runtime-manager/kustomization.yaml","kustomization_digest":"sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff","target_namespace":"kodex","target_cluster_ref":"fleet://clusters/00000000-0000-0000-0000-000000000777","deploy_plan_fingerprint":"sha256:9999999999999999999999999999999999999999999999999999999999999999","manifest_bundle_ref":"pvc://runtime-jobs/runtime-build-context-001/deploy/base/runtime-manager","manifest_bundle_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","rollout_targets":[{"kind":"deployment","ref":"k8s://deployments/runtime-manager","namespace":"kodex","name":"runtime-manager","digest":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}],"expected_image_refs":[{"container_name":"runtime-manager","image_ref":"registry.local/kodex/runtime-manager:0.1.0","image_digest":"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"}],"allowed_secret_refs":[{"kind":"kubernetes","ref":"secret://fleet/platform-default"}],"output_refs":[{"kind":"rollout","ref":"runtime://artifacts/deploy/runtime-manager"}]}}`),
 		FleetScopeID: &fleetScopeID,
 		ClusterID:    &clusterID,
 	}

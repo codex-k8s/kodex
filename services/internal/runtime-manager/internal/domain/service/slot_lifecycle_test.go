@@ -685,6 +685,23 @@ func (r *fakeRepository) GetBuildContextByFingerprint(_ context.Context, fingerp
 	return entity.BuildContext{}, errs.ErrNotFound
 }
 
+func (r *fakeRepository) ListRunnableBuildContexts(_ context.Context, limit int) ([]entity.BuildContext, error) {
+	if r.buildContexts == nil {
+		return nil, nil
+	}
+	result := make([]entity.BuildContext, 0, limit)
+	for _, buildContext := range r.buildContexts {
+		if buildContext.Status != enum.BuildContextStatusPending && buildContext.Status != enum.BuildContextStatusRunning {
+			continue
+		}
+		result = append(result, buildContext)
+		if limit > 0 && len(result) >= limit {
+			break
+		}
+	}
+	return result, nil
+}
+
 func (r *fakeRepository) UpdateSlot(_ context.Context, slot entity.Slot, previousVersion int64, event entity.OutboxEvent, result *entity.CommandResult) error {
 	current, ok := r.slots[slot.ID]
 	if !ok {

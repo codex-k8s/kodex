@@ -119,18 +119,19 @@ type PrepareBuildContextInput struct {
 
 // ReportBuildContextProgressInput describes a trusted build context status update.
 type ReportBuildContextProgressInput struct {
-	BuildContextID       uuid.UUID
-	Status               enum.BuildContextStatus
-	SourceSnapshotRef    string
-	SourceSnapshotDigest string
-	BuildContextRef      string
-	BuildContextDigest   string
-	StartedAt            *time.Time
-	FinishedAt           *time.Time
-	ErrorCode            string
-	ErrorMessage         string
-	NextAction           string
-	Meta                 value.CommandMeta
+	BuildContextID        uuid.UUID
+	Status                enum.BuildContextStatus
+	SourceSnapshotRef     string
+	SourceSnapshotDigest  string
+	BuildContextRef       string
+	BuildContextDigest    string
+	ManifestBundleDigests map[string]string
+	StartedAt             *time.Time
+	FinishedAt            *time.Time
+	ErrorCode             string
+	ErrorMessage          string
+	NextAction            string
+	Meta                  value.CommandMeta
 }
 
 // GetBuildContextInput describes a build context read request.
@@ -184,7 +185,7 @@ type DeployExecutionSpecInput struct {
 	ServiceKey            string                        `json:"service_key"`
 	ImageRef              string                        `json:"image_ref"`
 	ImageTag              string                        `json:"image_tag"`
-	ImageDigest           string                        `json:"image_digest"`
+	ImageDigest           string                        `json:"image_digest,omitempty"`
 	ManifestRef           string                        `json:"manifest_ref"`
 	ManifestDigest        string                        `json:"manifest_digest"`
 	KustomizationRef      string                        `json:"kustomization_ref"`
@@ -214,7 +215,7 @@ type DeployRolloutTargetInput struct {
 type DeployExpectedImageRefInput struct {
 	ContainerName string `json:"container_name"`
 	ImageRef      string `json:"image_ref"`
-	ImageDigest   string `json:"image_digest"`
+	ImageDigest   string `json:"image_digest,omitempty"`
 }
 
 // RuntimeJobExecutionRefInput contains a typed safe build/deploy job reference.

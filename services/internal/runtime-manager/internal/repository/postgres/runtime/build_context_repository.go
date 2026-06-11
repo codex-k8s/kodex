@@ -76,6 +76,19 @@ func (r *Repository) GetBuildContextByFingerprint(ctx context.Context, fingerpri
 	return r.getBuildContext(ctx, operationGetBuildContextByFingerprint, queryBuildContextGetByFingerprint, pgx.NamedArgs{"context_fingerprint": fingerprint})
 }
 
+// ListRunnableBuildContexts returns pending/running build contexts for the runtime-owned materializer.
+func (r *Repository) ListRunnableBuildContexts(ctx context.Context, limit int) ([]entity.BuildContext, error) {
+	if limit <= 0 {
+		limit = 1
+	}
+	rows, err := r.db.Query(ctx, queryBuildContextListRunnable, pgx.NamedArgs{"limit": limit})
+	if err != nil {
+		return nil, wrapError(operationGetBuildContext, err)
+	}
+	items, err := postgreslib.ScanRows(rows, scanBuildContext)
+	return items, wrapError(operationGetBuildContext, err)
+}
+
 func (r *Repository) getBuildContext(ctx context.Context, operation string, sql string, args pgx.NamedArgs) (entity.BuildContext, error) {
 	buildContext, err := queryOne(ctx, r.db, sql, args, scanBuildContext)
 	return buildContext, wrapError(operation, err)
@@ -86,30 +99,35 @@ func buildContextArgs(buildContext entity.BuildContext) (pgx.NamedArgs, error) {
 	if err != nil {
 		return nil, err
 	}
+	manifestBundleDigestsJSON, err := json.Marshal(buildContext.ManifestBundleDigests)
+	if err != nil {
+		return nil, err
+	}
 	return pgx.NamedArgs{
-		"id":                         buildContext.ID,
-		"status":                     string(buildContext.Status),
-		"project_id":                 buildContext.ProjectID,
-		"repository_id":              buildContext.RepositoryID,
-		"provider":                   buildContext.Provider,
-		"provider_owner":             buildContext.ProviderOwner,
-		"provider_name":              buildContext.ProviderName,
-		"source_ref":                 buildContext.SourceRef,
-		"source_commit_sha":          buildContext.SourceCommitSHA,
-		"affected_service_keys_json": string(affectedServiceKeysJSON),
-		"build_plan_fingerprint":     buildContext.BuildPlanFingerprint,
-		"context_fingerprint":        buildContext.ContextFingerprint,
-		"source_snapshot_ref":        buildContext.SourceSnapshotRef,
-		"source_snapshot_digest":     buildContext.SourceSnapshotDigest,
-		"build_context_ref":          buildContext.BuildContextRef,
-		"build_context_digest":       buildContext.BuildContextDigest,
-		"started_at":                 postgreslib.NullableTime(buildContext.StartedAt),
-		"finished_at":                postgreslib.NullableTime(buildContext.FinishedAt),
-		"last_error_code":            buildContext.LastErrorCode,
-		"last_error_message":         buildContext.LastErrorMessage,
-		"next_action":                buildContext.NextAction,
-		"version":                    buildContext.Version,
-		"created_at":                 buildContext.CreatedAt,
-		"updated_at":                 buildContext.UpdatedAt,
+		"id":                           buildContext.ID,
+		"status":                       string(buildContext.Status),
+		"project_id":                   buildContext.ProjectID,
+		"repository_id":                buildContext.RepositoryID,
+		"provider":                     buildContext.Provider,
+		"provider_owner":               buildContext.ProviderOwner,
+		"provider_name":                buildContext.ProviderName,
+		"source_ref":                   buildContext.SourceRef,
+		"source_commit_sha":            buildContext.SourceCommitSHA,
+		"affected_service_keys_json":   string(affectedServiceKeysJSON),
+		"build_plan_fingerprint":       buildContext.BuildPlanFingerprint,
+		"context_fingerprint":          buildContext.ContextFingerprint,
+		"source_snapshot_ref":          buildContext.SourceSnapshotRef,
+		"source_snapshot_digest":       buildContext.SourceSnapshotDigest,
+		"build_context_ref":            buildContext.BuildContextRef,
+		"build_context_digest":         buildContext.BuildContextDigest,
+		"manifest_bundle_digests_json": string(manifestBundleDigestsJSON),
+		"started_at":                   postgreslib.NullableTime(buildContext.StartedAt),
+		"finished_at":                  postgreslib.NullableTime(buildContext.FinishedAt),
+		"last_error_code":              buildContext.LastErrorCode,
+		"last_error_message":           buildContext.LastErrorMessage,
+		"next_action":                  buildContext.NextAction,
+		"version":                      buildContext.Version,
+		"created_at":                   buildContext.CreatedAt,
+		"updated_at":                   buildContext.UpdatedAt,
 	}, nil
 }

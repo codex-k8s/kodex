@@ -15,6 +15,12 @@ SET
     runtime_build_plan_fingerprint = @runtime_build_plan_fingerprint,
     runtime_build_error_code = @runtime_build_error_code,
     runtime_build_summary = @runtime_build_summary,
+    runtime_build_contexts = @runtime_build_contexts,
+    runtime_deploy_jobs = @runtime_deploy_jobs,
+    runtime_deploy_status = @runtime_deploy_status,
+    runtime_deploy_plan_fingerprint = @runtime_deploy_plan_fingerprint,
+    runtime_deploy_error_code = @runtime_deploy_error_code,
+    runtime_deploy_summary = @runtime_deploy_summary,
     version = @version,
     updated_at = @updated_at
 WHERE id = @id

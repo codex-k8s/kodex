@@ -44,6 +44,8 @@ service ProjectCatalogService {
   rpc GetSelfDeploySignal(GetSelfDeploySignalRequest) returns (SelfDeploySignalResponse);
   // GetSelfDeployBuildPlan возвращает проверенный project-side build input для self-deploy runtime jobs.
   rpc GetSelfDeployBuildPlan(GetSelfDeployBuildPlanRequest) returns (SelfDeployBuildPlanResponse);
+  // GetSelfDeployDeployPlan возвращает проверенный project-side deploy input после успешных build jobs.
+  rpc GetSelfDeployDeployPlan(GetSelfDeployDeployPlanRequest) returns (SelfDeployDeployPlanResponse);
   // GetServicesPolicy returns a checked services.yaml projection.
   rpc GetServicesPolicy(GetServicesPolicyRequest) returns (ServicesPolicyResponse);
   // ListServiceDescriptors returns typed service descriptors from active policy.
@@ -242,6 +244,27 @@ enum SelfDeployBuildPlanItemStatus {
   SELF_DEPLOY_BUILD_PLAN_ITEM_STATUS_BUILD_CONTEXT_REQUIRED = 2;
   SELF_DEPLOY_BUILD_PLAN_ITEM_STATUS_BUILD_CONTEXT_INVALID = 3;
   SELF_DEPLOY_BUILD_PLAN_ITEM_STATUS_BUILD_PLAN_UNAVAILABLE = 4;
+}
+
+// SelfDeployDeployPlanStatus описывает готовность checked deploy plan для runtime-manager JOB_TYPE_DEPLOY.
+enum SelfDeployDeployPlanStatus {
+  SELF_DEPLOY_DEPLOY_PLAN_STATUS_UNSPECIFIED = 0;
+  SELF_DEPLOY_DEPLOY_PLAN_STATUS_READY = 1;
+  SELF_DEPLOY_DEPLOY_PLAN_STATUS_DEPLOY_PLAN_UNAVAILABLE = 2;
+  SELF_DEPLOY_DEPLOY_PLAN_STATUS_POLICY_STALE = 3;
+  SELF_DEPLOY_DEPLOY_PLAN_STATUS_SERVICE_NOT_FOUND = 4;
+  SELF_DEPLOY_DEPLOY_PLAN_STATUS_INVALID_INPUT = 5;
+  SELF_DEPLOY_DEPLOY_PLAN_STATUS_BUILD_NOT_READY = 6;
+  SELF_DEPLOY_DEPLOY_PLAN_STATUS_BUILD_OUTPUT_INVALID = 7;
+}
+
+// SelfDeployDeployPlanItemStatus описывает готовность deploy item одного сервиса.
+enum SelfDeployDeployPlanItemStatus {
+  SELF_DEPLOY_DEPLOY_PLAN_ITEM_STATUS_UNSPECIFIED = 0;
+  SELF_DEPLOY_DEPLOY_PLAN_ITEM_STATUS_READY = 1;
+  SELF_DEPLOY_DEPLOY_PLAN_ITEM_STATUS_BUILD_NOT_READY = 2;
+  SELF_DEPLOY_DEPLOY_PLAN_ITEM_STATUS_BUILD_OUTPUT_INVALID = 3;
+  SELF_DEPLOY_DEPLOY_PLAN_ITEM_STATUS_DEPLOY_PLAN_UNAVAILABLE = 4;
 }
 
 // SelfDeployPathCategory классифицирует изменённые пути без raw paths и diffs.
@@ -652,6 +675,8 @@ message SelfDeployMaterializedBuildContext {
   optional string materialization_ref = 6;
   // materialization_fingerprint — safe fingerprint runtime materialization result.
   optional string materialization_fingerprint = 7;
+  // manifest_bundle_digest — actual YAML bundle digest prepared by runtime-manager.
+  optional string manifest_bundle_digest = 8;
 }
 
 // SelfDeployBuildPlanItem содержит рецепт и, когда context готов, runtime build spec для одного сервиса.
@@ -695,6 +720,44 @@ message SelfDeployBuildPlan {
   // safe_summary — bounded diagnostic summary без raw payloads.
   string safe_summary = 10;
   // version — версия build plan contract.
+  int64 version = 11;
+}
+
+// SelfDeployBuildOutput содержит safe результат успешной build job для deploy planning.
+message SelfDeployBuildOutput {
+  string service_key = 1;
+  optional string runtime_job_ref = 2;
+  string image_ref = 3;
+  string image_tag = 4;
+  optional string image_digest = 5;
+  optional string build_plan_item_fingerprint = 6;
+  optional string build_plan_fingerprint = 7;
+  optional string build_context_ref = 8;
+  optional string build_context_digest = 9;
+}
+
+// SelfDeployDeployPlanItem содержит checked deploy spec одного сервиса.
+message SelfDeployDeployPlanItem {
+  string service_key = 1;
+  optional string service_ref = 2;
+  kodex.runtime.v1.DeployExecutionSpec deploy_execution_spec = 3;
+  string plan_item_fingerprint = 4;
+  SelfDeployDeployPlanItemStatus status = 5;
+  optional string safe_reason = 6;
+}
+
+// SelfDeployDeployPlan содержит checked project-owned deploy inputs.
+message SelfDeployDeployPlan {
+  string project_ref = 1;
+  string repository_ref = 2;
+  optional string provider_signal_ref = 3;
+  string source_ref = 4;
+  string merge_commit_sha = 5;
+  SelfDeployServicesYamlProjection services_yaml = 6;
+  repeated string affected_service_keys = 7;
+  repeated SelfDeployDeployPlanItem deploy_items = 8;
+  string plan_fingerprint = 9;
+  string safe_summary = 10;
   int64 version = 11;
 }
 
@@ -1396,6 +1459,48 @@ message SelfDeployBuildPlanResponse {
   SelfDeployBuildPlanStatus status = 1;
   // plan присутствует при ready.
   SelfDeployBuildPlan plan = 2;
+  // safe_reason объясняет non-ready status без raw payloads и секретов.
+  optional string safe_reason = 3;
+}
+
+// GetSelfDeployDeployPlanRequest читает проверенный deploy plan из project-owned ServicesPolicy.
+message GetSelfDeployDeployPlanRequest {
+  // project_id задаёт область checked ServicesPolicy.
+  string project_id = 1;
+  // repository_id задаёт repository binding для affected services.
+  string repository_id = 2;
+  // source_ref — branch/ref из approved self-deploy plan.
+  string source_ref = 3;
+  // merge_commit_sha — commit sha из approved self-deploy plan.
+  string merge_commit_sha = 4;
+  // provider_signal_ref — stable signal ref из SelfDeployPlan, если известен.
+  optional string provider_signal_ref = 5;
+  // affected_service_keys — service keys из approved self-deploy plan.
+  repeated string affected_service_keys = 6;
+  // expected_services_policy_digest — digest checked ServicesPolicy, ожидаемый caller.
+  string expected_services_policy_digest = 7;
+  // expected_services_policy_fingerprint — fingerprint checked ServicesPolicy, ожидаемый caller.
+  optional string expected_services_policy_fingerprint = 8;
+  // expected_services_policy_version — policy version, ожидаемая caller.
+  optional int64 expected_services_policy_version = 9;
+  // build_outputs передают только safe refs успешных build jobs.
+  repeated SelfDeployBuildOutput build_outputs = 10;
+  // expected_build_plan_fingerprint связывает deploy с ранее проверенным build plan.
+  optional string expected_build_plan_fingerprint = 11;
+  // expected_deploy_plan_fingerprint позволяет вызывающей стороне сверить replay.
+  optional string expected_deploy_plan_fingerprint = 12;
+  // materialized_build_contexts передаёт context refs для manifest bundle refs без provider fetch.
+  repeated SelfDeployMaterializedBuildContext materialized_build_contexts = 13;
+  // meta содержит read actor и request context.
+  QueryMeta meta = 14;
+}
+
+// SelfDeployDeployPlanResponse возвращает проверенный deploy plan или безопасную non-ready reason.
+message SelfDeployDeployPlanResponse {
+  // status описывает готовность deploy plan.
+  SelfDeployDeployPlanStatus status = 1;
+  // plan присутствует при ready.
+  SelfDeployDeployPlan plan = 2;
   // safe_reason объясняет non-ready status без raw payloads и секретов.
   optional string safe_reason = 3;
 }

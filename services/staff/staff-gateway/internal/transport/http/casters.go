@@ -1838,7 +1838,7 @@ func selfDeployPlanChain(plan *agentsv1.SelfDeployPlan) (generated.SelfDeployCha
 	case agentsv1.SelfDeployPlanStatus_SELF_DEPLOY_PLAN_STATUS_APPROVED:
 		return generated.ApprovedReadyForBuild, generated.SelfDeployNextStep{
 			Code:    generated.ReadyForBuild,
-			Summary: "Self-deploy plan утверждён; build можно запускать только через отдельный runtime dispatch contract.",
+			Summary: "Self-deploy plan утверждён; agent-manager продвигает chain через build context, build job и deploy job.",
 		}, nil
 	case agentsv1.SelfDeployPlanStatus_SELF_DEPLOY_PLAN_STATUS_FAILED:
 		return generated.Blocked, generated.SelfDeployNextStep{Code: generated.InspectBlocker, Summary: "Self-deploy plan завершился ошибкой; смотри safe summary."}, selfDeploySafeError("self_deploy_plan_failed", plan.GetSafeSummary())
@@ -1988,13 +1988,100 @@ func governanceLocalRefID(value *string) string {
 }
 
 func selfDeployRuntimeSummary(plan *agentsv1.SelfDeployPlan) generated.SelfDeployRuntimeSummary {
-	if plan.GetStatus() == agentsv1.SelfDeployPlanStatus_SELF_DEPLOY_PLAN_STATUS_APPROVED && len(plan.GetExpectedRuntimeJobTypes()) > 0 {
+	if plan == nil {
+		return generated.SelfDeployRuntimeSummary{Status: generated.SelfDeployRuntimeStatusUnavailable}
+	}
+	status := generated.SelfDeployRuntimeStatusUnavailable
+	switch {
+	case plan.GetRuntimeDeployStatus() == agentsv1.SelfDeployRuntimeDeployStatus_SELF_DEPLOY_RUNTIME_DEPLOY_STATUS_SUCCEEDED:
+		status = generated.SelfDeployRuntimeStatusCompleted
+	case plan.GetRuntimeBuildStatus() == agentsv1.SelfDeployRuntimeBuildStatus_SELF_DEPLOY_RUNTIME_BUILD_STATUS_SUCCEEDED && !selfDeployExpectsRuntimeJob(plan, runtimev1.JobType_JOB_TYPE_DEPLOY):
+		status = generated.SelfDeployRuntimeStatusCompleted
+	case plan.GetRuntimeDeployStatus() == agentsv1.SelfDeployRuntimeDeployStatus_SELF_DEPLOY_RUNTIME_DEPLOY_STATUS_FAILED ||
+		plan.GetRuntimeDeployStatus() == agentsv1.SelfDeployRuntimeDeployStatus_SELF_DEPLOY_RUNTIME_DEPLOY_STATUS_BLOCKED ||
+		plan.GetRuntimeBuildStatus() == agentsv1.SelfDeployRuntimeBuildStatus_SELF_DEPLOY_RUNTIME_BUILD_STATUS_FAILED ||
+		plan.GetRuntimeBuildStatus() == agentsv1.SelfDeployRuntimeBuildStatus_SELF_DEPLOY_RUNTIME_BUILD_STATUS_BLOCKED:
+		status = generated.SelfDeployRuntimeStatusFailed
+	case plan.GetRuntimeDeployStatus() == agentsv1.SelfDeployRuntimeDeployStatus_SELF_DEPLOY_RUNTIME_DEPLOY_STATUS_REQUESTED ||
+		plan.GetRuntimeBuildStatus() == agentsv1.SelfDeployRuntimeBuildStatus_SELF_DEPLOY_RUNTIME_BUILD_STATUS_REQUESTED:
+		status = generated.SelfDeployRuntimeStatusRunning
+	case plan.GetRuntimeBuildStatus() == agentsv1.SelfDeployRuntimeBuildStatus_SELF_DEPLOY_RUNTIME_BUILD_STATUS_PREPARING_CONTEXT:
+		status = generated.SelfDeployRuntimeStatusPending
+	case plan.GetRuntimeBuildStatus() == agentsv1.SelfDeployRuntimeBuildStatus_SELF_DEPLOY_RUNTIME_BUILD_STATUS_SUCCEEDED ||
+		len(plan.GetRuntimeBuildJobs()) > 0 ||
+		len(plan.GetRuntimeDeployJobs()) > 0 ||
+		len(plan.GetRuntimeBuildContexts()) > 0:
+		status = generated.SelfDeployRuntimeStatusStoredRef
+	case plan.GetStatus() == agentsv1.SelfDeployPlanStatus_SELF_DEPLOY_PLAN_STATUS_APPROVED && len(plan.GetExpectedRuntimeJobTypes()) > 0:
+		status = generated.SelfDeployRuntimeStatusPending
+	}
+	if status != generated.SelfDeployRuntimeStatusUnavailable {
 		return generated.SelfDeployRuntimeSummary{
-			Status:               generated.SelfDeployRuntimeStatusPending,
-			RuntimeStatusSummary: optionalString("runtime job refs ещё не опубликованы доменным read surface"),
+			Status:               status,
+			RuntimeJobRef:        optionalBoundedString(selfDeployLatestRuntimeJobRef(plan), maxSelfDeployIdentifierBytes),
+			RuntimeStatusSummary: optionalBoundedString(selfDeployRuntimeStageSummary(plan), maxSelfDeploySummaryBytes),
 		}
 	}
 	return generated.SelfDeployRuntimeSummary{Status: generated.SelfDeployRuntimeStatusUnavailable}
+}
+
+func selfDeployExpectsRuntimeJob(plan *agentsv1.SelfDeployPlan, want runtimev1.JobType) bool {
+	for _, item := range plan.GetExpectedRuntimeJobTypes() {
+		if item == want {
+			return true
+		}
+	}
+	return false
+}
+
+func selfDeployLatestRuntimeJobRef(plan *agentsv1.SelfDeployPlan) string {
+	deployJobs := plan.GetRuntimeDeployJobs()
+	if len(deployJobs) > 0 {
+		return deployJobs[len(deployJobs)-1].GetRuntimeJobRef()
+	}
+	buildJobs := plan.GetRuntimeBuildJobs()
+	if len(buildJobs) > 0 {
+		return buildJobs[len(buildJobs)-1].GetRuntimeJobRef()
+	}
+	contexts := plan.GetRuntimeBuildContexts()
+	if len(contexts) > 0 {
+		return contexts[len(contexts)-1].GetRuntimeBuildContextRef()
+	}
+	return ""
+}
+
+func selfDeployRuntimeStageSummary(plan *agentsv1.SelfDeployPlan) string {
+	buildContextStatus := "not_requested"
+	if contexts := plan.GetRuntimeBuildContexts(); len(contexts) > 0 {
+		buildContextStatus = firstNonEmpty(contexts[len(contexts)-1].GetRuntimeBuildContextStatus(), "pending")
+	}
+	buildStatus := strings.TrimPrefix(plan.GetRuntimeBuildStatus().String(), "SELF_DEPLOY_RUNTIME_BUILD_STATUS_")
+	deployStatus := strings.TrimPrefix(plan.GetRuntimeDeployStatus().String(), "SELF_DEPLOY_RUNTIME_DEPLOY_STATUS_")
+	healthStatus := "unavailable"
+	return boundedString(strings.ToLower(strings.Join([]string{
+		"signal=stored",
+		"plan=" + strings.TrimPrefix(plan.GetStatus().String(), "SELF_DEPLOY_PLAN_STATUS_"),
+		"gate=" + selfDeployGateStage(plan.GetGovernanceContext()),
+		"approval=" + selfDeployApprovalStage(plan.GetGovernanceContext()),
+		"build_context=" + buildContextStatus,
+		"build=" + buildStatus,
+		"deploy=" + deployStatus,
+		"health=" + healthStatus,
+	}, " ")), maxSelfDeploySummaryBytes)
+}
+
+func selfDeployGateStage(context *agentsv1.GovernanceContextRef) string {
+	if context == nil || strings.TrimSpace(context.GetGateRequestRef()) == "" {
+		return "unavailable"
+	}
+	return "linked"
+}
+
+func selfDeployApprovalStage(context *agentsv1.GovernanceContextRef) string {
+	if context == nil || strings.TrimSpace(context.GetGateDecisionRef()) == "" {
+		return "pending"
+	}
+	return "approved_or_resolved"
 }
 
 func selfDeployPlanStatus(value agentsv1.SelfDeployPlanStatus) generated.SelfDeployPlanStatus {

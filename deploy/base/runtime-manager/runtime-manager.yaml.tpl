@@ -7,6 +7,15 @@ metadata:
     app.kubernetes.io/name: runtime-manager
     app.kubernetes.io/part-of: kodex
 ---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: runtime-deployer
+  namespace: {{ envOr "KODEX_PRODUCTION_NAMESPACE" "" }}
+  labels:
+    app.kubernetes.io/name: runtime-deployer
+    app.kubernetes.io/part-of: kodex
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -45,6 +54,45 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: runtime-manager-kubernetes-executor
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: runtime-deployer
+  namespace: {{ envOr "KODEX_PRODUCTION_NAMESPACE" "" }}
+  labels:
+    app.kubernetes.io/name: runtime-deployer
+    app.kubernetes.io/part-of: kodex
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps", "services", "serviceaccounts"]
+    verbs: ["get", "list", "watch", "create", "patch", "update"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets", "daemonsets"]
+    verbs: ["get", "list", "watch", "create", "patch", "update"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "watch", "create", "patch", "update"]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles", "rolebindings"]
+    verbs: ["get", "list", "watch", "create", "patch", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: runtime-deployer
+  namespace: {{ envOr "KODEX_PRODUCTION_NAMESPACE" "" }}
+  labels:
+    app.kubernetes.io/name: runtime-deployer
+    app.kubernetes.io/part-of: kodex
+subjects:
+  - kind: ServiceAccount
+    name: runtime-deployer
+    namespace: {{ envOr "KODEX_PRODUCTION_NAMESPACE" "" }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: runtime-deployer
 ---
 apiVersion: v1
 kind: Service
@@ -216,6 +264,8 @@ spec:
               value: "{{ envOr "KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_DEFAULT_NAMESPACE" (envOr "KODEX_PRODUCTION_NAMESPACE" "") }}"
             - name: KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_DEFAULT_SERVICE_ACCOUNT
               value: "{{ envOr "KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_DEFAULT_SERVICE_ACCOUNT" "" }}"
+            - name: KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_DEPLOY_SERVICE_ACCOUNT
+              value: "{{ envOr "KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_DEPLOY_SERVICE_ACCOUNT" "runtime-deployer" }}"
             - name: KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_DEFAULT_IMAGE
               value: "{{ envOr "KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_DEFAULT_IMAGE" "" }}"
             - name: KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_IMAGE_PULL_POLICY
@@ -242,6 +292,14 @@ spec:
               value: "{{ envOr "KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_AGENT_MANAGER_GRPC_AUTH_SECRET_KEY" "KODEX_AGENT_MANAGER_GRPC_AUTH_TOKEN" }}"
             - name: KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_AGENT_MANAGER_REPORT_TIMEOUT
               value: "{{ envOr "KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_AGENT_MANAGER_REPORT_TIMEOUT" "3s" }}"
+            - name: KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_SOURCE_AUTH_SECRET_NAME
+              value: "{{ envOr "KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_SOURCE_AUTH_SECRET_NAME" "kodex-platform-runtime" }}"
+            - name: KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_SOURCE_AUTH_SECRET_KEY
+              value: "{{ envOr "KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_SOURCE_AUTH_SECRET_KEY" "KODEX_GIT_BOT_TOKEN" }}"
+            - name: KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_BUILD_CONTEXT_STORAGE_SIZE
+              value: "{{ envOr "KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_BUILD_CONTEXT_STORAGE_SIZE" "2Gi" }}"
+            - name: KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_BUILD_CONTEXT_STORAGE_CLASS
+              value: "{{ envOr "KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_BUILD_CONTEXT_STORAGE_CLASS" "" }}"
             - name: KODEX_RUNTIME_MANAGER_EVENT_LOG_DATABASE_DSN
               valueFrom:
                 secretKeyRef:

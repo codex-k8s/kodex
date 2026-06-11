@@ -613,8 +613,8 @@ func scanHumanGateRequest(row postgreslib.RowScanner) (entity.HumanGateRequest, 
 
 func scanSelfDeployPlan(row postgreslib.RowScanner) (entity.SelfDeployPlan, error) {
 	var plan entity.SelfDeployPlan
-	var affectedServiceKeys, pathCategories, expectedRuntimeJobTypes, runtimeBuildJobs []byte
-	var status, runtimeBuildStatus string
+	var affectedServiceKeys, pathCategories, expectedRuntimeJobTypes, runtimeBuildJobs, runtimeBuildContexts, runtimeDeployJobs []byte
+	var status, runtimeBuildStatus, runtimeDeployStatus string
 	err := row.Scan(
 		&plan.ID,
 		&plan.Scope.Type,
@@ -622,6 +622,9 @@ func scanSelfDeployPlan(row postgreslib.RowScanner) (entity.SelfDeployPlan, erro
 		&plan.ProjectRef,
 		&plan.RepositoryRef,
 		&plan.ProviderSignalRef,
+		&plan.ProviderSlug,
+		&plan.RepositoryFullName,
+		&plan.ProviderRepositoryID,
 		&plan.SourceRef,
 		&plan.MergeCommitSHA,
 		&plan.ServicesYAMLRef,
@@ -646,12 +649,19 @@ func scanSelfDeployPlan(row postgreslib.RowScanner) (entity.SelfDeployPlan, erro
 		&plan.RuntimeBuildFingerprint,
 		&plan.RuntimeBuildErrorCode,
 		&plan.RuntimeBuildSummary,
+		&runtimeBuildContexts,
+		&runtimeDeployJobs,
+		&runtimeDeployStatus,
+		&plan.RuntimeDeployFingerprint,
+		&plan.RuntimeDeployErrorCode,
+		&plan.RuntimeDeploySummary,
 		&plan.Version,
 		&plan.CreatedAt,
 		&plan.UpdatedAt,
 	)
 	plan.Status = enum.SelfDeployPlanStatus(status)
 	plan.RuntimeBuildStatus = enum.SelfDeployRuntimeBuildStatus(runtimeBuildStatus)
+	plan.RuntimeDeployStatus = enum.SelfDeployRuntimeDeployStatus(runtimeDeployStatus)
 	if err != nil {
 		return plan, err
 	}
@@ -676,6 +686,12 @@ func scanSelfDeployPlan(row postgreslib.RowScanner) (entity.SelfDeployPlan, erro
 	}
 	if err := json.Unmarshal(runtimeBuildJobs, &plan.RuntimeBuildJobs); err != nil {
 		return plan, fmt.Errorf("scan self deploy runtime_build_jobs: %w", err)
+	}
+	if err := json.Unmarshal(runtimeBuildContexts, &plan.RuntimeBuildContexts); err != nil {
+		return plan, fmt.Errorf("scan self deploy runtime_build_contexts: %w", err)
+	}
+	if err := json.Unmarshal(runtimeDeployJobs, &plan.RuntimeDeployJobs); err != nil {
+		return plan, fmt.Errorf("scan self deploy runtime_deploy_jobs: %w", err)
 	}
 	return plan, nil
 }

@@ -130,17 +130,19 @@ func TestCreateSelfDeployBuildJobMapsRequestAndResponse(t *testing.T) {
 	}
 
 	result, err := preparer.CreateSelfDeployBuildJob(context.Background(), agentservice.SelfDeployBuildJobInput{
-		Meta:                  value.CommandMeta{CommandID: commandID, IdempotencyKey: "self_deploy_build_job:plan:agent-manager", Actor: value.Actor{Type: "service", ID: "agent-manager"}},
-		ProjectID:             projectID,
-		RepositoryID:          repositoryID,
-		PlanID:                uuid.MustParse("b1b1b1b1-5555-6666-7777-888888888888"),
-		ServiceKey:            "agent-manager",
-		ServiceRef:            "project-catalog:service-descriptor:agent-manager",
-		PlanFingerprint:       "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-		PlanItemFingerprint:   "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-		BuildExecutionSpec:    testSelfDeployBuildExecutionSpec(),
-		GovernanceApprovalRef: "governance:gate_decision/approved",
-		GovernanceGateRef:     "governance:gate_request/self-deploy",
+		SelfDeployRuntimeJobInput: agentservice.SelfDeployRuntimeJobInput{
+			Meta:                  value.CommandMeta{CommandID: commandID, IdempotencyKey: "self_deploy_build_job:plan:agent-manager", Actor: value.Actor{Type: "service", ID: "agent-manager"}},
+			ProjectID:             projectID,
+			RepositoryID:          repositoryID,
+			PlanID:                uuid.MustParse("b1b1b1b1-5555-6666-7777-888888888888"),
+			ServiceKey:            "agent-manager",
+			ServiceRef:            "project-catalog:service-descriptor:agent-manager",
+			PlanFingerprint:       "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+			PlanItemFingerprint:   "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+			GovernanceApprovalRef: "governance:gate_decision/approved",
+			GovernanceGateRef:     "governance:gate_request/self-deploy",
+		},
+		BuildExecutionSpec: testSelfDeployBuildExecutionSpec(),
 	})
 	if err != nil {
 		t.Fatalf("CreateSelfDeployBuildJob() err = %v", err)
@@ -397,14 +399,33 @@ func testSelfDeployBuildExecutionSpec() agentservice.SelfDeployBuildExecutionSpe
 }
 
 type fakeRuntimeManagerClient struct {
-	createJobRequest *runtimev1.CreateJobRequest
-	getJobRequest    *runtimev1.GetJobRequest
-	jobResponse      *runtimev1.JobResponse
-	err              error
+	createJobRequest           *runtimev1.CreateJobRequest
+	getJobRequest              *runtimev1.GetJobRequest
+	prepareBuildContextRequest *runtimev1.PrepareBuildContextRequest
+	getBuildContextRequest     *runtimev1.GetBuildContextRequest
+	jobResponse                *runtimev1.JobResponse
+	buildContextResponse       *runtimev1.BuildContextResponse
+	err                        error
 }
 
 func (f *fakeRuntimeManagerClient) PrepareRuntime(context.Context, *runtimev1.PrepareRuntimeRequest, ...grpc.CallOption) (*runtimev1.PrepareRuntimeResponse, error) {
 	return nil, errors.New("PrepareRuntime should not be called")
+}
+
+func (f *fakeRuntimeManagerClient) PrepareBuildContext(_ context.Context, request *runtimev1.PrepareBuildContextRequest, _ ...grpc.CallOption) (*runtimev1.BuildContextResponse, error) {
+	f.prepareBuildContextRequest = request
+	if f.err != nil {
+		return nil, f.err
+	}
+	return f.buildContextResponse, nil
+}
+
+func (f *fakeRuntimeManagerClient) GetBuildContext(_ context.Context, request *runtimev1.GetBuildContextRequest, _ ...grpc.CallOption) (*runtimev1.BuildContextResponse, error) {
+	f.getBuildContextRequest = request
+	if f.err != nil {
+		return nil, f.err
+	}
+	return f.buildContextResponse, nil
 }
 
 func (f *fakeRuntimeManagerClient) CreateJob(_ context.Context, request *runtimev1.CreateJobRequest, _ ...grpc.CallOption) (*runtimev1.JobResponse, error) {

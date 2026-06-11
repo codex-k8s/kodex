@@ -455,8 +455,8 @@ message DeployExecutionSpec {
   string image_ref = 4;
   // image_tag is the target image tag selected by the deploy plan.
   string image_tag = 5;
-  // image_digest is the immutable image digest required for rollout.
-  string image_digest = 6;
+  // image_digest is reported when the build executor can provide it; MVP may rely on immutable image_tag.
+  optional string image_digest = 6;
   // manifest_ref points to the checked rendered manifest or manifest set.
   string manifest_ref = 7;
   // manifest_digest is the immutable digest of the checked manifest set.
@@ -657,6 +657,9 @@ message BuildContext {
   string build_context_ref = 15;
   // build_context_digest is the immutable digest of the prepared build context.
   string build_context_digest = 16;
+  // manifest_bundle_digests maps service keys to actual YAML bundle digests
+  // prepared inside the build context.
+  map<string, string> manifest_bundle_digests = 25;
   // started_at is start time in RFC3339 format.
   optional string started_at = 17;
   // finished_at is finish time in RFC3339 format.
@@ -1059,6 +1062,9 @@ message ReportBuildContextProgressRequest {
   optional string build_context_ref = 5;
   // build_context_digest is the immutable digest of the prepared build context.
   optional string build_context_digest = 6;
+  // manifest_bundle_digests maps service keys to actual YAML bundle digests
+  // prepared inside the build context.
+  map<string, string> manifest_bundle_digests = 13;
   // started_at is start time in RFC3339 format.
   optional string started_at = 7;
   // finished_at is finish time in RFC3339 format.
@@ -1381,6 +1387,6 @@ message DeployExpectedImageRef {
   string container_name = 1;
   // image_ref is the expected image repository/ref without raw registry credentials.
   string image_ref = 2;
-  // image_digest pins the expected immutable image digest.
-  string image_digest = 3;
+  // image_digest pins the expected immutable image digest when available.
+  optional string image_digest = 3;
 }

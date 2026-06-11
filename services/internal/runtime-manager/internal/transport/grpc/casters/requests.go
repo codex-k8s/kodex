@@ -251,18 +251,19 @@ func ReportBuildContextProgressInput(request *runtimev1.ReportBuildContextProgre
 		return runtimeservice.ReportBuildContextProgressInput{}, err
 	}
 	return runtimeservice.ReportBuildContextProgressInput{
-		BuildContextID:       buildContextID,
-		Status:               status,
-		SourceSnapshotRef:    strings.TrimSpace(request.GetSourceSnapshotRef()),
-		SourceSnapshotDigest: strings.TrimSpace(request.GetSourceSnapshotDigest()),
-		BuildContextRef:      strings.TrimSpace(request.GetBuildContextRef()),
-		BuildContextDigest:   strings.TrimSpace(request.GetBuildContextDigest()),
-		StartedAt:            startedAt,
-		FinishedAt:           finishedAt,
-		ErrorCode:            strings.TrimSpace(request.GetErrorCode()),
-		ErrorMessage:         strings.TrimSpace(request.GetErrorMessage()),
-		NextAction:           strings.TrimSpace(request.GetNextAction()),
-		Meta:                 meta,
+		BuildContextID:        buildContextID,
+		Status:                status,
+		SourceSnapshotRef:     strings.TrimSpace(request.GetSourceSnapshotRef()),
+		SourceSnapshotDigest:  strings.TrimSpace(request.GetSourceSnapshotDigest()),
+		BuildContextRef:       strings.TrimSpace(request.GetBuildContextRef()),
+		BuildContextDigest:    strings.TrimSpace(request.GetBuildContextDigest()),
+		ManifestBundleDigests: cloneStringMap(request.GetManifestBundleDigests()),
+		StartedAt:             startedAt,
+		FinishedAt:            finishedAt,
+		ErrorCode:             strings.TrimSpace(request.GetErrorCode()),
+		ErrorMessage:          strings.TrimSpace(request.GetErrorMessage()),
+		NextAction:            strings.TrimSpace(request.GetNextAction()),
+		Meta:                  meta,
 	}, nil
 }
 
@@ -1232,6 +1233,17 @@ func jobStatusesFromProto(statuses []runtimev1.JobStatus) ([]enum.JobStatus, err
 
 func runtimeArtifactTypesFromProto(artifactTypes []runtimev1.RuntimeArtifactType) ([]enum.RuntimeArtifactType, error) {
 	return repeatedEnumsFromProto(artifactTypes, RuntimeArtifactTypeFromProto)
+}
+
+func cloneStringMap(values map[string]string) map[string]string {
+	if len(values) == 0 {
+		return nil
+	}
+	result := make(map[string]string, len(values))
+	for key, value := range values {
+		result[key] = value
+	}
+	return result
 }
 
 func repeatedEnumsFromProto[Proto any, Domain any](statuses []Proto, convert func(Proto) (Domain, error)) ([]Domain, error) {

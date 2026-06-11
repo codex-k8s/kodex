@@ -576,7 +576,65 @@ func materializedBuildContextsFromProto(values []*projectsv1.SelfDeployMateriali
 		context.DockerfileDigest = strings.TrimSpace(value.GetDockerfileDigest())
 		context.MaterializationRef = strings.TrimSpace(value.GetMaterializationRef())
 		context.MaterializationFingerprint = strings.TrimSpace(value.GetMaterializationFingerprint())
+		context.ManifestBundleDigest = strings.TrimSpace(value.GetManifestBundleDigest())
 		result = append(result, context)
+	}
+	return result
+}
+
+func GetSelfDeployDeployPlanInput(request *projectsv1.GetSelfDeployDeployPlanRequest) (projectservice.GetSelfDeployDeployPlanInput, error) {
+	meta, err := QueryMetaFromProto(request.GetMeta())
+	if err != nil {
+		return projectservice.GetSelfDeployDeployPlanInput{}, err
+	}
+	projectID, err := requiredUUID(request.GetProjectId())
+	if err != nil {
+		return projectservice.GetSelfDeployDeployPlanInput{}, err
+	}
+	repositoryID, err := requiredUUID(request.GetRepositoryId())
+	if err != nil {
+		return projectservice.GetSelfDeployDeployPlanInput{}, err
+	}
+	var expectedVersion *int64
+	if request.ExpectedServicesPolicyVersion != nil {
+		value := request.GetExpectedServicesPolicyVersion()
+		expectedVersion = &value
+	}
+	return projectservice.GetSelfDeployDeployPlanInput{
+		ProjectID:                         projectID,
+		RepositoryID:                      repositoryID,
+		SourceRef:                         strings.TrimSpace(request.GetSourceRef()),
+		MergeCommitSHA:                    strings.TrimSpace(request.GetMergeCommitSha()),
+		ProviderSignalRef:                 strings.TrimSpace(request.GetProviderSignalRef()),
+		AffectedServiceKeys:               request.GetAffectedServiceKeys(),
+		ExpectedServicesPolicyDigest:      strings.TrimSpace(request.GetExpectedServicesPolicyDigest()),
+		ExpectedServicesPolicyFingerprint: strings.TrimSpace(request.GetExpectedServicesPolicyFingerprint()),
+		ExpectedServicesPolicyVersion:     expectedVersion,
+		ExpectedBuildPlanFingerprint:      strings.TrimSpace(request.GetExpectedBuildPlanFingerprint()),
+		ExpectedDeployPlanFingerprint:     strings.TrimSpace(request.GetExpectedDeployPlanFingerprint()),
+		BuildOutputs:                      buildOutputsFromProto(request.GetBuildOutputs()),
+		MaterializedBuildContexts:         materializedBuildContextsFromProto(request.GetMaterializedBuildContexts()),
+		Meta:                              meta,
+	}, nil
+}
+
+func buildOutputsFromProto(values []*projectsv1.SelfDeployBuildOutput) []projectservice.SelfDeployBuildOutput {
+	result := make([]projectservice.SelfDeployBuildOutput, 0, len(values))
+	for _, value := range values {
+		if value == nil {
+			continue
+		}
+		result = append(result, projectservice.SelfDeployBuildOutput{
+			ServiceKey:               strings.TrimSpace(value.GetServiceKey()),
+			RuntimeJobRef:            strings.TrimSpace(value.GetRuntimeJobRef()),
+			ImageRef:                 strings.TrimSpace(value.GetImageRef()),
+			ImageTag:                 strings.TrimSpace(value.GetImageTag()),
+			ImageDigest:              strings.TrimSpace(value.GetImageDigest()),
+			BuildPlanItemFingerprint: strings.TrimSpace(value.GetBuildPlanItemFingerprint()),
+			BuildPlanFingerprint:     strings.TrimSpace(value.GetBuildPlanFingerprint()),
+			BuildContextRef:          strings.TrimSpace(value.GetBuildContextRef()),
+			BuildContextDigest:       strings.TrimSpace(value.GetBuildContextDigest()),
+		})
 	}
 	return result
 }

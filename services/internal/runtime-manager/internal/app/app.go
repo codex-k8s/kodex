@@ -68,6 +68,10 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
+	buildContextMaterializer, err := newBuildContextMaterializer(cfg, kubernetesExecutor)
+	if err != nil {
+		return err
+	}
 	httpServer := &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           serviceprocess.NewHealthMux(readinessChecks(runtimeRepository, eventLogPool), 2*time.Second),
@@ -116,6 +120,9 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		return err
 	}
 	if err := startKubernetesJobWorker(ctx, cfg, runtimeService, kubernetesExecutor, logger, errCh); err != nil {
+		return err
+	}
+	if err := startBuildContextMaterializerWorker(ctx, cfg, runtimeRepository, runtimeService, buildContextMaterializer, logger, errCh); err != nil {
 		return err
 	}
 
@@ -178,6 +185,7 @@ func newKubernetesExecutor(cfg Config, clusters runtimekubernetes.ClusterAccessP
 	return runtimekubernetes.NewExecutor(clusters, resolver, runtimekubernetes.Config{
 		DefaultNamespace:        cfg.KubernetesWorker.DefaultNamespace,
 		DefaultServiceAccount:   cfg.KubernetesWorker.DefaultServiceAccount,
+		DeployServiceAccount:    cfg.KubernetesWorker.DeployServiceAccount,
 		DefaultImage:            cfg.KubernetesWorker.DefaultImage,
 		ImagePullPolicy:         cfg.KubernetesWorker.ImagePullPolicy,
 		JobTimeout:              cfg.KubernetesWorker.JobTimeout,
@@ -191,7 +199,24 @@ func newKubernetesExecutor(cfg Config, clusters runtimekubernetes.ClusterAccessP
 			Key:  cfg.KubernetesWorker.AgentManagerSecretKey,
 		},
 		AgentManagerTimeout: cfg.KubernetesWorker.AgentManagerTimeout,
+		SourceAuthSecret: runtimekubernetes.SecretKeyRef{
+			Name: cfg.KubernetesWorker.SourceAuthSecretName,
+			Key:  cfg.KubernetesWorker.SourceAuthSecretKey,
+		},
+		BuildContextStorageSize:  cfg.KubernetesWorker.BuildContextStorageSize,
+		BuildContextStorageClass: cfg.KubernetesWorker.BuildContextStorageClass,
 	})
+}
+
+func newBuildContextMaterializer(cfg Config, executor *runtimekubernetes.Executor) (*runtimekubernetes.BuildContextMaterializer, error) {
+	if !cfg.KubernetesWorker.Enabled {
+		return nil, nil
+	}
+	clusterID, err := parseRequiredUUID("KODEX_RUNTIME_MANAGER_SLOT_DEFAULT_CLUSTER_ID", cfg.Slot.DefaultClusterID)
+	if err != nil {
+		return nil, err
+	}
+	return runtimekubernetes.NewBuildContextMaterializer(executor, clusterID)
 }
 
 func readinessChecks(runtime runtimeStore, eventLog pingStore) []serviceprocess.ReadinessCheck {

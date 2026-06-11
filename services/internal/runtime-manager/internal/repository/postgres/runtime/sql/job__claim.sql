@@ -16,7 +16,6 @@ candidate AS (
         )
       AND (cardinality(@job_types::text[]) = 0 OR job_type = ANY(@job_types::text[]))
       AND (@fleet_scope_id::uuid IS NULL OR fleet_scope_id = @fleet_scope_id::uuid)
-      AND job_type <> 'deploy'
       AND (job_type <> 'agent_run' OR jsonb_typeof(agent_run_spec) = 'object')
       AND (
             job_type <> 'build'
@@ -68,7 +67,12 @@ candidate AS (
                 AND deploy_spec->>'image_ref' <> ''
                 AND jsonb_typeof(deploy_spec->'image_tag') = 'string'
                 AND deploy_spec->>'image_tag' <> ''
-                AND (deploy_spec->>'image_digest') ~* '^sha256:[0-9a-f]{64}$'
+                AND (
+                    deploy_spec->'image_digest' IS NULL
+                    OR jsonb_typeof(deploy_spec->'image_digest') = 'null'
+                    OR deploy_spec->>'image_digest' = ''
+                    OR (deploy_spec->>'image_digest') ~* '^sha256:[0-9a-f]{64}$'
+                )
                 AND jsonb_typeof(deploy_spec->'manifest_ref') = 'string'
                 AND deploy_spec->>'manifest_ref' <> ''
                 AND (deploy_spec->>'manifest_digest') ~* '^sha256:[0-9a-f]{64}$'

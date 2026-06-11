@@ -104,6 +104,7 @@ func scanWorkspaceMaterialization(row postgreslib.RowScanner) (entity.WorkspaceM
 func scanBuildContext(row postgreslib.RowScanner) (entity.BuildContext, error) {
 	var buildContext entity.BuildContext
 	var affectedServiceKeysJSON []byte
+	var manifestBundleDigestsJSON []byte
 	var startedAt pgtype.Timestamptz
 	var finishedAt pgtype.Timestamptz
 	err := row.Scan(
@@ -123,6 +124,7 @@ func scanBuildContext(row postgreslib.RowScanner) (entity.BuildContext, error) {
 		&buildContext.SourceSnapshotDigest,
 		&buildContext.BuildContextRef,
 		&buildContext.BuildContextDigest,
+		&manifestBundleDigestsJSON,
 		&startedAt,
 		&finishedAt,
 		&buildContext.LastErrorCode,
@@ -137,6 +139,11 @@ func scanBuildContext(row postgreslib.RowScanner) (entity.BuildContext, error) {
 	}
 	if err := json.Unmarshal(affectedServiceKeysJSON, &buildContext.AffectedServiceKeys); err != nil {
 		return entity.BuildContext{}, err
+	}
+	if len(manifestBundleDigestsJSON) > 0 {
+		if err := json.Unmarshal(manifestBundleDigestsJSON, &buildContext.ManifestBundleDigests); err != nil {
+			return entity.BuildContext{}, err
+		}
 	}
 	buildContext.StartedAt = postgreslib.TimePtrFromPG(startedAt)
 	buildContext.FinishedAt = postgreslib.TimePtrFromPG(finishedAt)

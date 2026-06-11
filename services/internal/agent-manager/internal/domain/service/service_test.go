@@ -5601,9 +5601,11 @@ func TestRecordSelfDeployPlanGateDecisionApprovesAndDispatchesBuild(t *testing.T
 	repository := &fakeRepository{selfDeployByID: map[uuid.UUID]entity.SelfDeployPlan{plan.ID: plan}}
 	buildReader := &fakeSelfDeployBuildPlanReader{result: readySelfDeployBuildPlanResult()}
 	buildCreator := &fakeSelfDeployBuildJobCreator{result: RuntimeJobResult{JobRef: "runtime:job/build-agent-manager", Status: "pending"}}
+	runtimeReader := &fakeSelfDeployRuntimeJobReader{result: SelfDeployRuntimeJobReadResult{JobRef: "runtime:job/existing-build", JobType: enum.SelfDeployRuntimeJobTypeBuild, Status: RuntimeJobStatusPending}}
 	service := New(Config{
 		Repository:                     repository,
 		SelfDeployBuildPlanReader:      buildReader,
+		SelfDeployRuntimeJobReader:     runtimeReader,
 		SelfDeployBuildJobCreator:      buildCreator,
 		SelfDeployBuildDispatchEnabled: true,
 	})
@@ -5728,11 +5730,13 @@ func TestRecordSelfDeployPlanGateDecisionReplaysExistingDecision(t *testing.T) {
 	plan.GovernanceContext.GateRequestRef = "governance:gate_request/bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb"
 	plan.GovernanceContext.GateDecisionRef = "governance:gate_decision/cccccccc-cccc-4ccc-cccc-cccccccccccc"
 	plan.RuntimeBuildStatus = enum.SelfDeployRuntimeBuildStatusRequested
-	plan.RuntimeBuildJobs = []entity.SelfDeployRuntimeBuildJob{{ServiceKey: "agent-manager", RuntimeJobRef: "runtime:job/existing-build"}}
+	plan.RuntimeBuildJobs = []entity.SelfDeployRuntimeBuildJob{{ServiceKey: "agent-manager", RuntimeJobRef: "runtime:job/existing-build", RuntimeJobStatus: "pending"}}
 	repository := &fakeRepository{selfDeployByID: map[uuid.UUID]entity.SelfDeployPlan{plan.ID: plan}}
+	runtimeReader := &fakeSelfDeployRuntimeJobReader{result: SelfDeployRuntimeJobReadResult{JobRef: "runtime:job/existing-build", JobType: enum.SelfDeployRuntimeJobTypeBuild, Status: RuntimeJobStatusPending}}
 	service := New(Config{
 		Repository:                     repository,
 		SelfDeployBuildPlanReader:      &fakeSelfDeployBuildPlanReader{result: readySelfDeployBuildPlanResult()},
+		SelfDeployRuntimeJobReader:     runtimeReader,
 		SelfDeployBuildJobCreator:      &fakeSelfDeployBuildJobCreator{result: RuntimeJobResult{JobRef: "runtime:job/new-build", Status: "pending"}},
 		SelfDeployBuildDispatchEnabled: true,
 	})
@@ -5943,6 +5947,7 @@ func TestCreateSelfDeployPlanDispatchesBuildAfterApprovedGate(t *testing.T) {
 		SelfDeployGatePreparer:         approvedSelfDeployGatePreparer(),
 		SelfDeployGateEnabled:          true,
 		SelfDeployBuildPlanReader:      buildReader,
+		SelfDeployBuildContextPreparer: &fakeSelfDeployBuildContextPreparer{result: SelfDeployBuildContextResult{RuntimeBuildContextRef: "runtime:build-context/ready", RuntimeBuildContextStatus: "ready", BuildContextRef: "runtime://build-contexts/agent-manager", BuildContextDigest: "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", ManifestBundleDigests: map[string]string{"agent-manager": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"}, SourceSnapshotDigest: "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", MaterializationFingerprint: "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}},
 		SelfDeployBuildJobCreator:      buildCreator,
 		SelfDeployBuildDispatchEnabled: true,
 	})
@@ -5986,6 +5991,7 @@ func TestCreateSelfDeployPlanBlocksBuildWhenProjectBuildPlanNotReady(t *testing.
 		SelfDeployGatePreparer:         approvedSelfDeployGatePreparer(),
 		SelfDeployGateEnabled:          true,
 		SelfDeployBuildPlanReader:      buildReader,
+		SelfDeployBuildContextPreparer: &fakeSelfDeployBuildContextPreparer{result: SelfDeployBuildContextResult{RuntimeBuildContextRef: "runtime:build-context/pending", RuntimeBuildContextStatus: "pending", MaterializationFingerprint: "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}},
 		SelfDeployBuildJobCreator:      buildCreator,
 		SelfDeployBuildDispatchEnabled: true,
 	})
@@ -6065,6 +6071,7 @@ func TestCreateSelfDeployPlanFromSignalDispatchesBuildAfterBuildContextBecomesRe
 		SelfDeployGatePreparer:         approvedSelfDeployGatePreparer(),
 		SelfDeployGateEnabled:          true,
 		SelfDeployBuildPlanReader:      buildReader,
+		SelfDeployBuildContextPreparer: &fakeSelfDeployBuildContextPreparer{result: SelfDeployBuildContextResult{RuntimeBuildContextRef: "runtime:build-context/pending", RuntimeBuildContextStatus: "pending", MaterializationFingerprint: "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}},
 		SelfDeployBuildJobCreator:      buildCreator,
 		SelfDeployBuildDispatchEnabled: true,
 	})
@@ -6144,6 +6151,7 @@ func TestCreateSelfDeployPlanFromSignalReplaysExistingBuildJob(t *testing.T) {
 		SelfDeployGatePreparer:         approvedSelfDeployGatePreparer(),
 		SelfDeployGateEnabled:          true,
 		SelfDeployBuildPlanReader:      buildReader,
+		SelfDeployRuntimeJobReader:     &fakeSelfDeployRuntimeJobReader{result: SelfDeployRuntimeJobReadResult{JobRef: "runtime:job/existing-build", JobType: enum.SelfDeployRuntimeJobTypeBuild, Status: RuntimeJobStatusPending}},
 		SelfDeployBuildJobCreator:      buildCreator,
 		SelfDeployBuildDispatchEnabled: true,
 	})
@@ -6308,6 +6316,8 @@ func validSelfDeployPlanInput() CreateSelfDeployPlanInput {
 		ProjectRef:         "project:codex",
 		RepositoryRef:      "repository:codex-k8s/kodex",
 		ProviderSignalRef:  "provider-signal:github/push-main/5f7f3a1",
+		ProviderSlug:       "github",
+		RepositoryFullName: "codex-k8s/kodex",
 		SourceRef:          "git:refs/heads/main@5f7f3a10",
 		MergeCommitSHA:     "5f7f3a105f7f3a105f7f3a105f7f3a105f7f3a10",
 		ServicesYAMLRef:    "object://project-catalog/services-yaml/5f7f3a1",
@@ -6579,6 +6589,55 @@ func (f *fakeSelfDeployBuildPlanReader) GetSelfDeployBuildPlan(_ context.Context
 		return SelfDeployBuildPlanReadResult{}, f.err
 	}
 	return f.result, nil
+}
+
+type fakeSelfDeployBuildContextPreparer struct {
+	lastPrepare SelfDeployBuildContextInput
+	lastGet     SelfDeployBuildContextReadInput
+	result      SelfDeployBuildContextResult
+	err         error
+	calls       int
+}
+
+func (f *fakeSelfDeployBuildContextPreparer) PrepareSelfDeployBuildContext(_ context.Context, input SelfDeployBuildContextInput) (SelfDeployBuildContextResult, error) {
+	f.calls++
+	f.lastPrepare = input
+	if f.err != nil {
+		return SelfDeployBuildContextResult{}, f.err
+	}
+	return f.result, nil
+}
+
+func (f *fakeSelfDeployBuildContextPreparer) GetSelfDeployBuildContext(_ context.Context, input SelfDeployBuildContextReadInput) (SelfDeployBuildContextResult, error) {
+	f.calls++
+	f.lastGet = input
+	if f.err != nil {
+		return SelfDeployBuildContextResult{}, f.err
+	}
+	return f.result, nil
+}
+
+type fakeSelfDeployRuntimeJobReader struct {
+	last   SelfDeployRuntimeJobReadInput
+	result SelfDeployRuntimeJobReadResult
+	err    error
+	calls  int
+}
+
+func (f *fakeSelfDeployRuntimeJobReader) GetSelfDeployRuntimeJob(_ context.Context, input SelfDeployRuntimeJobReadInput) (SelfDeployRuntimeJobReadResult, error) {
+	f.calls++
+	f.last = input
+	if f.err != nil {
+		return SelfDeployRuntimeJobReadResult{}, f.err
+	}
+	result := f.result
+	if result.JobRef == "" {
+		result.JobRef = input.JobRef
+	}
+	if result.JobType == "" {
+		result.JobType = input.JobType
+	}
+	return result, nil
 }
 
 type fakeSelfDeployBuildJobCreator struct {

@@ -113,6 +113,19 @@ const (
 	SelfDeployBuildPlanStatusBuildContextInvalid     SelfDeployBuildPlanStatus = "build_context_invalid"
 )
 
+// SelfDeployDeployPlanStatus описывает готовность checked deploy plan.
+type SelfDeployDeployPlanStatus string
+
+const (
+	SelfDeployDeployPlanStatusReady                 SelfDeployDeployPlanStatus = "ready"
+	SelfDeployDeployPlanStatusDeployPlanUnavailable SelfDeployDeployPlanStatus = "deploy_plan_unavailable"
+	SelfDeployDeployPlanStatusPolicyStale           SelfDeployDeployPlanStatus = "policy_stale"
+	SelfDeployDeployPlanStatusServiceNotFound       SelfDeployDeployPlanStatus = "service_not_found"
+	SelfDeployDeployPlanStatusInvalidInput          SelfDeployDeployPlanStatus = "invalid_input"
+	SelfDeployDeployPlanStatusBuildNotReady         SelfDeployDeployPlanStatus = "build_not_ready"
+	SelfDeployDeployPlanStatusBuildOutputInvalid    SelfDeployDeployPlanStatus = "build_output_invalid"
+)
+
 // SelfDeployPathCategory классифицирует изменённые пути без raw paths и diffs.
 type SelfDeployPathCategory string
 
