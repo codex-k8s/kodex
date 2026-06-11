@@ -51,7 +51,11 @@ mattercodex_log "namespace: настроен"
 mattercodex_log "Mattermost URL: настроен"
 if mattercodex_bool "$MATTERCODEX_MATTERMOST_OAUTH2_PROXY_ENABLED"; then
   mattercodex_log "Mattermost OAuth2 proxy: включен"
-  mattercodex_log "Mattermost OAuth2 source secret: настроен"
+  if [ -n "${MATTERCODEX_MATTERMOST_OAUTH2_PROXY_CLIENT_ID:-}" ] && [ -n "${MATTERCODEX_MATTERMOST_OAUTH2_PROXY_CLIENT_SECRET:-}" ]; then
+    mattercodex_log "Mattermost OAuth2 client env: задан"
+  else
+    mattercodex_log "Mattermost OAuth2 client env: не задан, remote install сохранит существующий Kubernetes Secret"
+  fi
 else
   mattercodex_log "Mattermost OAuth2 proxy: выключен"
 fi

@@ -59,7 +59,7 @@
 | `matter-codex-bot-service:dev` | bot-service MVP runtime | локально/удаленно собранный image с готовым `bot-service` binary |
 | `node:22-alpine` | agent-runner Dockerfile base | runtime слой с npm для установки Codex CLI при сборке подготовленного agent-runner image |
 | `matter-codex-agent-runner:dev` | agent runner MVP runtime | локально собранный image с `matter-codex-agent-runner`, `gh`, `git` и Codex CLI для smoke/developer/reviewer/auth Job |
-| `quay.io/oauth2-proxy/oauth2-proxy` | Mattermost public gate | GitHub OAuth allowlist перед публичным Mattermost URL без встраивания OAuth-логики в Mattermost manifests |
+| `quay.io/oauth2-proxy/oauth2-proxy` | Mattermost public gate | Google OAuth allowlist перед публичным Mattermost URL без встраивания OAuth-логики в Mattermost manifests |
 | `mattermost/mattermost-team-edition` | Mattermost | self-hosted Mattermost для control surface |
 | `postgres:16-alpine` | Mattermost PostgreSQL | single-server MVP БД Mattermost |
 | `busybox` | init/wait helpers | lightweight init helper в manifests; legacy smoke image setting сохраняется для совместимости config |

@@ -50,6 +50,9 @@ mattercodex_ssh "set -eu
   $REMOTE_KUBECTL -n $NAMESPACE_Q get service mattermost >/dev/null
   if [ '$OAUTH2_PROXY_ENABLED' = 'true' ]; then
     $REMOTE_KUBECTL -n $NAMESPACE_Q get secret $OAUTH2_PROXY_SECRET_Q >/dev/null
+    $REMOTE_KUBECTL -n $NAMESPACE_Q get secret $OAUTH2_PROXY_SECRET_Q -o jsonpath='{.data.OAUTH_CLIENT_ID}' | grep -q .
+    $REMOTE_KUBECTL -n $NAMESPACE_Q get secret $OAUTH2_PROXY_SECRET_Q -o jsonpath='{.data.OAUTH_CLIENT_SECRET}' | grep -q .
+    $REMOTE_KUBECTL -n $NAMESPACE_Q get secret $OAUTH2_PROXY_SECRET_Q -o jsonpath='{.data.KODEX_OAUTH2_PROXY_COOKIE_SECRET}' | grep -q .
     $REMOTE_KUBECTL -n $NAMESPACE_Q get configmap mattermost-oauth2-proxy >/dev/null
     $REMOTE_KUBECTL -n $NAMESPACE_Q get deployment mattermost-oauth2-proxy >/dev/null
     $REMOTE_KUBECTL -n $NAMESPACE_Q get service mattermost-oauth2-proxy >/dev/null

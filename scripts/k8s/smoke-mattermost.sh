@@ -42,6 +42,9 @@ kubectl -n "$MATTERCODEX_NAMESPACE" get deployment mattermost >/dev/null
 kubectl -n "$MATTERCODEX_NAMESPACE" get service mattermost >/dev/null
 if mattercodex_bool "$MATTERCODEX_MATTERMOST_OAUTH2_PROXY_ENABLED"; then
   kubectl -n "$MATTERCODEX_NAMESPACE" get secret "$MATTERCODEX_MATTERMOST_OAUTH2_PROXY_SECRET" >/dev/null
+  kubectl -n "$MATTERCODEX_NAMESPACE" get secret "$MATTERCODEX_MATTERMOST_OAUTH2_PROXY_SECRET" -o jsonpath='{.data.OAUTH_CLIENT_ID}' | grep -q .
+  kubectl -n "$MATTERCODEX_NAMESPACE" get secret "$MATTERCODEX_MATTERMOST_OAUTH2_PROXY_SECRET" -o jsonpath='{.data.OAUTH_CLIENT_SECRET}' | grep -q .
+  kubectl -n "$MATTERCODEX_NAMESPACE" get secret "$MATTERCODEX_MATTERMOST_OAUTH2_PROXY_SECRET" -o jsonpath='{.data.KODEX_OAUTH2_PROXY_COOKIE_SECRET}' | grep -q .
   kubectl -n "$MATTERCODEX_NAMESPACE" get configmap mattermost-oauth2-proxy >/dev/null
   kubectl -n "$MATTERCODEX_NAMESPACE" get deployment mattermost-oauth2-proxy >/dev/null
   kubectl -n "$MATTERCODEX_NAMESPACE" get service mattermost-oauth2-proxy >/dev/null

@@ -68,12 +68,12 @@ spec:
           image: ${MATTERCODEX_MATTERMOST_OAUTH2_PROXY_IMAGE}
           imagePullPolicy: IfNotPresent
           args:
-            - "--provider=github"
+            - "--provider=google"
             - "--http-address=0.0.0.0:4180"
             - "--upstream=http://mattermost.${MATTERCODEX_NAMESPACE}.svc.cluster.local:8065/"
             - "--redirect-url=https://${MATTERCODEX_MATTERMOST_HOST}/oauth2/callback"
             - "--authenticated-emails-file=/etc/oauth2-proxy/authenticated-emails.txt"
-            - "--scope=user:email read:org"
+            - "--scope=openid email profile"
             - "--cookie-name=_mattercodex_mattermost_oauth2"
             - "--cookie-domain=${MATTERCODEX_MATTERMOST_HOST}"
             - "--whitelist-domain=${MATTERCODEX_MATTERMOST_HOST}"
@@ -96,12 +96,12 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: ${MATTERCODEX_MATTERMOST_OAUTH2_PROXY_SECRET}
-                  key: KODEX_GITHUB_OAUTH_CLIENT_ID
+                  key: OAUTH_CLIENT_ID
             - name: OAUTH2_PROXY_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
                   name: ${MATTERCODEX_MATTERMOST_OAUTH2_PROXY_SECRET}
-                  key: KODEX_GITHUB_OAUTH_CLIENT_SECRET
+                  key: OAUTH_CLIENT_SECRET
             - name: OAUTH2_PROXY_COOKIE_SECRET
               valueFrom:
                 secretKeyRef:
