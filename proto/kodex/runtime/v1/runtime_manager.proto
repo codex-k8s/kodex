@@ -657,6 +657,9 @@ message BuildContext {
   string build_context_ref = 15;
   // build_context_digest is the immutable digest of the prepared build context.
   string build_context_digest = 16;
+  // manifest_bundle_digests maps service keys to actual YAML bundle digests
+  // prepared inside the build context.
+  map<string, string> manifest_bundle_digests = 25;
   // started_at is start time in RFC3339 format.
   optional string started_at = 17;
   // finished_at is finish time in RFC3339 format.
@@ -1059,6 +1062,9 @@ message ReportBuildContextProgressRequest {
   optional string build_context_ref = 5;
   // build_context_digest is the immutable digest of the prepared build context.
   optional string build_context_digest = 6;
+  // manifest_bundle_digests maps service keys to actual YAML bundle digests
+  // prepared inside the build context.
+  map<string, string> manifest_bundle_digests = 13;
   // started_at is start time in RFC3339 format.
   optional string started_at = 7;
   // finished_at is finish time in RFC3339 format.

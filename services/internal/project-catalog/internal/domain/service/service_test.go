@@ -2535,6 +2535,55 @@ func TestGetSelfDeployBuildPlanDerivesSpecsFromStackInventoryImages(t *testing.T
 	}
 }
 
+func TestGetSelfDeployDeployPlanUsesRuntimeManifestBundleDigest(t *testing.T) {
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	policyID := uuid.New()
+	commitSHA := "abcdef0123456789abcdef0123456789abcdef01"
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = activeSelfDeployRepository(projectID, repositoryID)
+	policy := activeSelfDeployPolicy(projectID, repositoryID, policyID, commitSHA, selfDeployBuildDeployPolicyPayload())
+	store.policies[policyID] = policy
+	store.serviceDescriptors[policyID] = []entity.ServiceDescriptor{
+		activeSelfDeployDescriptor(projectID, repositoryID, policyID, "api"),
+	}
+	svc := New(store, fixedClock{}, &sequenceIDs{})
+	input := selfDeployDeployPlanInput(projectID, repositoryID, policy, []string{"api"})
+	input.BuildOutputs = []SelfDeployBuildOutput{selfDeployBuildOutput("api")}
+	input.MaterializedBuildContexts = []SelfDeployMaterializedBuildContext{selfDeployMaterializedBuildContext("api")}
+
+	result, err := svc.GetSelfDeployDeployPlan(context.Background(), input)
+	if err != nil {
+		t.Fatalf("GetSelfDeployDeployPlan(): %v", err)
+	}
+	if result.Status != enum.SelfDeployDeployPlanStatusReady {
+		t.Fatalf("status = %s, want ready, reason=%s", result.Status, result.SafeReason)
+	}
+	if len(result.Plan.DeployItems) != 1 {
+		t.Fatalf("deploy items = %d, want 1", len(result.Plan.DeployItems))
+	}
+	spec := result.Plan.DeployItems[0].DeployExecutionSpec
+	if spec.ManifestBundleRef != "pvc://runtime/build-context-api/deploy/base/api" ||
+		spec.ManifestBundleDigest != selfDeployManifestBundleDigest {
+		t.Fatalf("manifest bundle = %q/%q, want runtime materialized digest", spec.ManifestBundleRef, spec.ManifestBundleDigest)
+	}
+	if synthetic := checkedDeployDigest("bundle", spec.ManifestBundleRef, selfDeployBuildContextDigest); synthetic == spec.ManifestBundleDigest {
+		t.Fatalf("manifest bundle digest = %q, want actual runtime digest not synthetic checked digest", spec.ManifestBundleDigest)
+	}
+}
+
+func TestCheckedDeployManifestBundleRejectsDifferentBundlePath(t *testing.T) {
+	t.Parallel()
+
+	_, _, err := checkedDeployManifestBundle(value.ServicesPolicyDeploySpec{
+		Kustomization: "deploy/overlays/prod/api/kustomization.yaml",
+	}, selfDeployMaterializedBuildContext("api"))
+
+	if !errors.Is(err, errDeployPlanUnavailable) {
+		t.Fatalf("checkedDeployManifestBundle() err = %v, want deploy plan unavailable", err)
+	}
+}
+
 func TestGetSelfDeployBuildPlanReturnsBuildContextRequiredForStackInventoryWithoutRuntimeContext(t *testing.T) {
 	t.Setenv("KODEX_INTERNAL_REGISTRY_HOST", "private.registry.example")
 	t.Setenv("KODEX_API_IMAGE", "private.registry.example/kodex/api:must-not-leak")
@@ -2987,6 +3036,8 @@ const selfDeployBuildContextDigest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 
 const selfDeployBuildDockerfileDigest = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 
+const selfDeployManifestBundleDigest = "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+
 func bootstrapServicesPolicy() RepositoryBootstrapServicesPolicy {
 	return bootstrapServicesPolicyForContent(bootstrapServicesPolicyFileContent, []byte(bootstrapServicesPolicyPayload))
 }
@@ -3088,6 +3139,42 @@ func selfDeployBuildPolicyPayload() []byte {
 	}`)
 }
 
+func selfDeployBuildDeployPolicyPayload() []byte {
+	return []byte(`{
+		"spec": {
+			"services": [
+				{
+					"key": "api",
+					"rootPath": "services/api",
+					"build": {
+						"imageRef": "registry.example/kodex/api",
+						"imageTag": "abcdef0",
+						"imageDigest": "` + selfDeployBuildImageDigest + `",
+						"dockerfileRef": "context://services/api/Dockerfile",
+						"dockerfileDigest": "` + selfDeployBuildDockerfileDigest + `",
+						"dockerfileTarget": "prod",
+						"builderImageRef": "gcr.io/kaniko-project/executor:v1.23.2"
+					},
+					"deploy": {
+						"serviceManifest": "deploy/base/api/deployment.yaml",
+						"kustomization": "deploy/base/api/kustomization.yaml",
+						"targetNamespace": "kodex",
+						"targetClusterRef": "fleet://cluster/default",
+						"rolloutTargets": [
+							{
+								"kind": "deployment",
+								"ref": "kubernetes://deployment/api",
+								"namespace": "kodex",
+								"name": "api"
+							}
+						]
+					}
+				}
+			]
+		}
+	}`)
+}
+
 func selfDeployStackInventoryBuildPolicyPayload(withContext bool) []byte {
 	contextFields := ""
 	if withContext {
@@ -3162,13 +3249,45 @@ func selfDeployBuildPlanInput(projectID uuid.UUID, repositoryID uuid.UUID, polic
 	}
 }
 
+func selfDeployDeployPlanInput(projectID uuid.UUID, repositoryID uuid.UUID, policy entity.ServicesPolicy, serviceKeys []string) GetSelfDeployDeployPlanInput {
+	version := policy.PolicyVersion
+	return GetSelfDeployDeployPlanInput{
+		ProjectID:                         projectID,
+		RepositoryID:                      repositoryID,
+		SourceRef:                         "refs/heads/main",
+		MergeCommitSHA:                    "abcdef0123456789abcdef0123456789abcdef01",
+		ProviderSignalRef:                 "provider:github:repository_change:push:codex-k8s/kodex:main:abcdef",
+		AffectedServiceKeys:               serviceKeys,
+		ExpectedServicesPolicyDigest:      policy.ContentHash,
+		ExpectedServicesPolicyFingerprint: selfDeployServicesYamlFingerprint(policy),
+		ExpectedServicesPolicyVersion:     &version,
+		ExpectedBuildPlanFingerprint:      "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+		Meta:                              queryMeta(),
+	}
+}
+
+func selfDeployBuildOutput(serviceKey string) SelfDeployBuildOutput {
+	return SelfDeployBuildOutput{
+		ServiceKey:               serviceKey,
+		RuntimeJobRef:            "runtime://job/build-" + serviceKey,
+		ImageRef:                 "registry.example/kodex/" + serviceKey,
+		ImageTag:                 "abcdef0",
+		ImageDigest:              selfDeployBuildImageDigest,
+		BuildPlanItemFingerprint: "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+		BuildPlanFingerprint:     "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+		BuildContextRef:          "pvc://runtime/build-context-" + serviceKey,
+		BuildContextDigest:       selfDeployBuildContextDigest,
+	}
+}
+
 func selfDeployMaterializedBuildContext(serviceKey string) SelfDeployMaterializedBuildContext {
 	return SelfDeployMaterializedBuildContext{
-		ServiceKey:         serviceKey,
-		BuildContextRef:    "pvc://runtime/build-context-" + serviceKey,
-		BuildContextDigest: selfDeployBuildContextDigest,
-		DockerfileDigest:   selfDeployBuildDockerfileDigest,
-		MaterializationRef: "runtime://workspace-materialization/" + serviceKey,
+		ServiceKey:           serviceKey,
+		BuildContextRef:      "pvc://runtime/build-context-" + serviceKey,
+		BuildContextDigest:   selfDeployBuildContextDigest,
+		DockerfileDigest:     selfDeployBuildDockerfileDigest,
+		MaterializationRef:   "runtime://workspace-materialization/" + serviceKey,
+		ManifestBundleDigest: selfDeployManifestBundleDigest,
 	}
 }
 

@@ -310,6 +310,7 @@ type SelfDeployRuntimeBuildContext struct {
 	BuildContextRef            string `json:"build_context_ref"`
 	BuildContextDigest         string `json:"build_context_digest"`
 	DockerfileDigest           string `json:"dockerfile_digest"`
+	ManifestBundleDigest       string `json:"manifest_bundle_digest"`
 	MaterializationFingerprint string `json:"materialization_fingerprint"`
 	BuildPlanItemFingerprint   string `json:"build_plan_item_fingerprint"`
 }

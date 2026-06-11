@@ -3368,8 +3368,10 @@ type SelfDeployMaterializedBuildContext struct {
 	MaterializationRef *string `protobuf:"bytes,6,opt,name=materialization_ref,json=materializationRef,proto3,oneof" json:"materialization_ref,omitempty"`
 	// materialization_fingerprint — safe fingerprint runtime materialization result.
 	MaterializationFingerprint *string `protobuf:"bytes,7,opt,name=materialization_fingerprint,json=materializationFingerprint,proto3,oneof" json:"materialization_fingerprint,omitempty"`
-	unknownFields              protoimpl.UnknownFields
-	sizeCache                  protoimpl.SizeCache
+	// manifest_bundle_digest — actual YAML bundle digest prepared by runtime-manager.
+	ManifestBundleDigest *string `protobuf:"bytes,8,opt,name=manifest_bundle_digest,json=manifestBundleDigest,proto3,oneof" json:"manifest_bundle_digest,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *SelfDeployMaterializedBuildContext) Reset() {
@@ -3447,6 +3449,13 @@ func (x *SelfDeployMaterializedBuildContext) GetMaterializationRef() string {
 func (x *SelfDeployMaterializedBuildContext) GetMaterializationFingerprint() string {
 	if x != nil && x.MaterializationFingerprint != nil {
 		return *x.MaterializationFingerprint
+	}
+	return ""
+}
+
+func (x *SelfDeployMaterializedBuildContext) GetManifestBundleDigest() string {
+	if x != nil && x.ManifestBundleDigest != nil {
+		return *x.ManifestBundleDigest
 	}
 	return ""
 }
@@ -10948,7 +10957,7 @@ const file_kodex_projects_v1_project_catalog_proto_rawDesc = "" +
 	"\voutput_refs\x18\b \x03(\v2%.kodex.runtime.v1.RuntimeJobOutputRefR\n" +
 	"outputRefs\x12-\n" +
 	"\x12recipe_fingerprint\x18\t \x01(\tR\x11recipeFingerprintB\x0f\n" +
-	"\r_image_digest\"\xf2\x03\n" +
+	"\r_image_digest\"\xc8\x04\n" +
 	"\"SelfDeployMaterializedBuildContext\x12\x1f\n" +
 	"\vservice_key\x18\x01 \x01(\tR\n" +
 	"serviceKey\x127\n" +
@@ -10957,11 +10966,13 @@ const file_kodex_projects_v1_project_catalog_proto_rawDesc = "" +
 	"\x14build_context_digest\x18\x04 \x01(\tR\x12buildContextDigest\x120\n" +
 	"\x11dockerfile_digest\x18\x05 \x01(\tH\x01R\x10dockerfileDigest\x88\x01\x01\x124\n" +
 	"\x13materialization_ref\x18\x06 \x01(\tH\x02R\x12materializationRef\x88\x01\x01\x12D\n" +
-	"\x1bmaterialization_fingerprint\x18\a \x01(\tH\x03R\x1amaterializationFingerprint\x88\x01\x01B\x18\n" +
+	"\x1bmaterialization_fingerprint\x18\a \x01(\tH\x03R\x1amaterializationFingerprint\x88\x01\x01\x129\n" +
+	"\x16manifest_bundle_digest\x18\b \x01(\tH\x04R\x14manifestBundleDigest\x88\x01\x01B\x18\n" +
 	"\x16_plan_item_fingerprintB\x14\n" +
 	"\x12_dockerfile_digestB\x16\n" +
 	"\x14_materialization_refB\x1e\n" +
-	"\x1c_materialization_fingerprint\"\xb4\x03\n" +
+	"\x1c_materialization_fingerprintB\x19\n" +
+	"\x17_manifest_bundle_digest\"\xb4\x03\n" +
 	"\x17SelfDeployBuildPlanItem\x12\x1f\n" +
 	"\vservice_key\x18\x01 \x01(\tR\n" +
 	"serviceKey\x12\x1f\n" +

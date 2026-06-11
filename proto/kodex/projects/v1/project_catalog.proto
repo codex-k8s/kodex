@@ -675,6 +675,8 @@ message SelfDeployMaterializedBuildContext {
   optional string materialization_ref = 6;
   // materialization_fingerprint — safe fingerprint runtime materialization result.
   optional string materialization_fingerprint = 7;
+  // manifest_bundle_digest — actual YAML bundle digest prepared by runtime-manager.
+  optional string manifest_bundle_digest = 8;
 }
 
 // SelfDeployBuildPlanItem содержит рецепт и, когда context готов, runtime build spec для одного сервиса.

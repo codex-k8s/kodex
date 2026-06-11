@@ -15,6 +15,7 @@ func TestSelfDeployRuntimeBuildContextsFromResultDoesNotInventDockerfileDigest(t
 		RuntimeBuildContextStatus:  "ready",
 		BuildContextRef:            "runtime://build-contexts/agent-manager",
 		BuildContextDigest:         "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		ManifestBundleDigests:      map[string]string{"agent-manager": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"},
 		SourceSnapshotDigest:       "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
 		MaterializationFingerprint: "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
 	})
@@ -24,7 +25,9 @@ func TestSelfDeployRuntimeBuildContextsFromResultDoesNotInventDockerfileDigest(t
 	if len(contexts) != 1 {
 		t.Fatalf("contexts = %d, want 1", len(contexts))
 	}
-	if contexts[0].BuildContextDigest == "" || contexts[0].DockerfileDigest != "" {
-		t.Fatalf("context = %+v, want build context digest without synthetic Dockerfile digest", contexts[0])
+	if contexts[0].BuildContextDigest == "" ||
+		contexts[0].DockerfileDigest != "" ||
+		contexts[0].ManifestBundleDigest != "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" {
+		t.Fatalf("context = %+v, want build context and manifest bundle digests without synthetic Dockerfile digest", contexts[0])
 	}
 }

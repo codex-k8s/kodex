@@ -154,13 +154,14 @@ func (w buildContextMaterializerWorker) reportRunning(ctx context.Context, build
 
 func (w buildContextMaterializerWorker) reportReady(ctx context.Context, buildContext entity.BuildContext, result runtimekubernetes.BuildContextMaterializationResult) (entity.BuildContext, error) {
 	return w.service.ReportBuildContextProgress(ctx, runtimeservice.ReportBuildContextProgressInput{
-		BuildContextID:       buildContext.ID,
-		Status:               enum.BuildContextStatusReady,
-		SourceSnapshotRef:    result.SourceSnapshotRef,
-		SourceSnapshotDigest: result.SourceSnapshotDigest,
-		BuildContextRef:      result.BuildContextRef,
-		BuildContextDigest:   result.BuildContextDigest,
-		Meta:                 w.commandMeta("ready", &buildContext.Version),
+		BuildContextID:        buildContext.ID,
+		Status:                enum.BuildContextStatusReady,
+		SourceSnapshotRef:     result.SourceSnapshotRef,
+		SourceSnapshotDigest:  result.SourceSnapshotDigest,
+		BuildContextRef:       result.BuildContextRef,
+		BuildContextDigest:    result.BuildContextDigest,
+		ManifestBundleDigests: result.ManifestBundleDigests,
+		Meta:                  w.commandMeta("ready", &buildContext.Version),
 	})
 }
 

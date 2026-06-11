@@ -271,13 +271,20 @@ func checkedDeployManifestBundle(spec value.ServicesPolicyDeploySpec, context Se
 	if context.BuildContextRef == "" || context.BuildContextDigest == "" {
 		return "", "", errDeployPlanUnavailable
 	}
+	digest := strings.ToLower(strings.TrimSpace(context.ManifestBundleDigest))
+	if !validBuildPlanSHA256Digest(digest) {
+		return "", "", errDeployPlanUnavailable
+	}
 	kustomization, err := normalizeWorkspacePath(spec.Kustomization)
 	if err != nil || kustomization == "" {
 		return "", "", errDeployPlanUnavailable
 	}
 	bundlePath := path.Dir(kustomization)
+	if bundlePath != "deploy/base/"+strings.TrimSpace(context.ServiceKey) {
+		return "", "", errDeployPlanUnavailable
+	}
 	ref := strings.TrimRight(context.BuildContextRef, "/") + "/" + bundlePath
-	return ref, checkedDeployDigest("bundle", ref, context.BuildContextDigest), nil
+	return ref, digest, nil
 }
 
 func normalizeSelfDeployBuildOutputs(values []SelfDeployBuildOutput, affectedServiceKeys []string) (map[string]SelfDeployBuildOutput, string) {

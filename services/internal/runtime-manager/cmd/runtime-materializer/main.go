@@ -25,12 +25,15 @@ const (
 	maxArchiveBytes       = 512 * 1024 * 1024
 	maxExtractedFiles     = 32768
 	maxExtractedFileBytes = 128 * 1024 * 1024
+	maxManifestFiles      = 128
+	maxManifestBytes      = 8 * 1024 * 1024
 )
 
 type report struct {
-	SourceSnapshotRef    string `json:"source_snapshot_ref"`
-	SourceSnapshotDigest string `json:"source_snapshot_digest"`
-	BuildContextDigest   string `json:"build_context_digest"`
+	SourceSnapshotRef     string            `json:"source_snapshot_ref"`
+	SourceSnapshotDigest  string            `json:"source_snapshot_digest"`
+	BuildContextDigest    string            `json:"build_context_digest"`
+	ManifestBundleDigests map[string]string `json:"manifest_bundle_digests,omitempty"`
 }
 
 func main() {
@@ -53,6 +56,7 @@ func run(ctx context.Context, args []string) error {
 	var commit string
 	var output string
 	var resultPath string
+	var serviceKeys multiValue
 	fs.StringVar(&provider, "provider", "", "provider slug")
 	fs.StringVar(&owner, "owner", "", "repository owner")
 	fs.StringVar(&repo, "repo", "", "repository name")
@@ -60,10 +64,11 @@ func run(ctx context.Context, args []string) error {
 	fs.StringVar(&commit, "commit", "", "commit sha")
 	fs.StringVar(&output, "output", "", "output directory")
 	fs.StringVar(&resultPath, "result", "", "result file")
+	fs.Var(&serviceKeys, "service-key", "affected service key")
 	if err := fs.Parse(args[1:]); err != nil {
 		return errors.New("invalid materializer arguments")
 	}
-	input, err := normalizeInput(provider, owner, repo, sourceRef, commit, output, resultPath)
+	input, err := normalizeInput(provider, owner, repo, sourceRef, commit, output, resultPath, serviceKeys)
 	if err != nil {
 		return err
 	}
@@ -84,12 +89,17 @@ func run(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
+	manifestBundleDigests, err := digestManifestBundles(input.output, input.serviceKeys)
+	if err != nil {
+		return err
+	}
 	sourceRefValue := fmt.Sprintf("github://github.com/%s/%s#%s", input.owner, input.repo, input.commit)
 	sourceDigest := digestString(strings.Join([]string{input.provider, input.owner, input.repo, input.sourceRef, input.commit}, "\x00"))
 	result := report{
-		SourceSnapshotRef:    sourceRefValue,
-		SourceSnapshotDigest: sourceDigest,
-		BuildContextDigest:   digest,
+		SourceSnapshotRef:     sourceRefValue,
+		SourceSnapshotDigest:  sourceDigest,
+		BuildContextDigest:    digest,
+		ManifestBundleDigests: manifestBundleDigests,
 	}
 	if err := writeReport(input.resultPath, result); err != nil {
 		return err
@@ -100,16 +110,17 @@ func run(ctx context.Context, args []string) error {
 }
 
 type materializerInput struct {
-	provider   string
-	owner      string
-	repo       string
-	sourceRef  string
-	commit     string
-	output     string
-	resultPath string
+	provider    string
+	owner       string
+	repo        string
+	sourceRef   string
+	commit      string
+	output      string
+	resultPath  string
+	serviceKeys []string
 }
 
-func normalizeInput(provider string, owner string, repo string, sourceRef string, commit string, output string, resultPath string) (materializerInput, error) {
+func normalizeInput(provider string, owner string, repo string, sourceRef string, commit string, output string, resultPath string, serviceKeys []string) (materializerInput, error) {
 	input := materializerInput{
 		provider:   strings.ToLower(strings.TrimSpace(provider)),
 		owner:      strings.TrimSpace(owner),
@@ -119,6 +130,11 @@ func normalizeInput(provider string, owner string, repo string, sourceRef string
 		output:     filepath.Clean(strings.TrimSpace(output)),
 		resultPath: filepath.Clean(strings.TrimSpace(resultPath)),
 	}
+	normalizedKeys, err := normalizeServiceKeys(serviceKeys)
+	if err != nil {
+		return materializerInput{}, err
+	}
+	input.serviceKeys = normalizedKeys
 	if input.provider != "github" ||
 		!safePathToken(input.owner, 128) ||
 		!safePathToken(input.repo, 128) ||
@@ -130,6 +146,42 @@ func normalizeInput(provider string, owner string, repo string, sourceRef string
 		return materializerInput{}, errors.New("invalid materializer input")
 	}
 	return input, nil
+}
+
+type multiValue []string
+
+func (m *multiValue) String() string {
+	return strings.Join(*m, ",")
+}
+
+func (m *multiValue) Set(value string) error {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return errors.New("empty service key")
+	}
+	*m = append(*m, trimmed)
+	return nil
+}
+
+func normalizeServiceKeys(values []string) ([]string, error) {
+	seen := make(map[string]struct{}, len(values))
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		key := strings.TrimSpace(value)
+		if key == "" {
+			continue
+		}
+		if !safePathToken(key, 128) {
+			return nil, errors.New("invalid service key")
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		result = append(result, key)
+	}
+	sort.Strings(result)
+	return result, nil
 }
 
 func downloadArchive(ctx context.Context, input materializerInput, destination string) error {
@@ -291,6 +343,99 @@ func digestFile(pathValue string) (string, int64, error) {
 		return "", 0, errors.New("materialized context file size is invalid")
 	}
 	return "sha256:" + hex.EncodeToString(hash.Sum(nil)), size, nil
+}
+
+type manifestFile struct {
+	Relative string
+	Raw      []byte
+}
+
+func digestManifestBundles(root string, serviceKeys []string) (map[string]string, error) {
+	if len(serviceKeys) == 0 {
+		return nil, nil
+	}
+	result := make(map[string]string, len(serviceKeys))
+	for _, serviceKey := range serviceKeys {
+		digest, ok, err := digestManifestBundle(filepath.Join(root, "deploy", "base", serviceKey))
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			result[serviceKey] = digest
+		}
+	}
+	if len(result) == 0 {
+		return nil, nil
+	}
+	return result, nil
+}
+
+func digestManifestBundle(root string) (string, bool, error) {
+	info, err := os.Stat(root)
+	if errors.Is(err, os.ErrNotExist) {
+		return "", false, nil
+	}
+	if err != nil || !info.IsDir() {
+		return "", false, errors.New("deploy manifest bundle cannot be read")
+	}
+	files := []manifestFile{}
+	totalBytes := int64(0)
+	if err := filepath.WalkDir(root, func(pathValue string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return errors.New("deploy manifest bundle cannot be read")
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		ext := strings.ToLower(filepath.Ext(entry.Name()))
+		if ext != ".yaml" && ext != ".yml" {
+			return nil
+		}
+		if len(files) >= maxManifestFiles {
+			return errors.New("deploy manifest bundle has too many files")
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return errors.New("deploy manifest file cannot be read")
+		}
+		totalBytes += info.Size()
+		if totalBytes > maxManifestBytes {
+			return errors.New("deploy manifest bundle is too large")
+		}
+		raw, err := os.ReadFile(pathValue)
+		if err != nil {
+			return errors.New("deploy manifest file cannot be read")
+		}
+		relative, err := filepath.Rel(root, pathValue)
+		if err != nil {
+			return errors.New("deploy manifest file cannot be read")
+		}
+		files = append(files, manifestFile{Relative: filepath.ToSlash(relative), Raw: raw})
+		return nil
+	}); err != nil {
+		return "", false, err
+	}
+	if len(files) == 0 {
+		return "", false, nil
+	}
+	return digestManifestFiles(files), true, nil
+}
+
+func digestManifestFiles(files []manifestFile) string {
+	sort.Slice(files, func(i, j int) bool {
+		return files[i].Relative < files[j].Relative
+	})
+	digest := sha256.New()
+	for _, file := range files {
+		writeManifestDigestEntry(digest, file)
+	}
+	return "sha256:" + hex.EncodeToString(digest.Sum(nil))
+}
+
+func writeManifestDigestEntry(writer io.Writer, file manifestFile) {
+	fmt.Fprintf(writer, "%s\x00%d\x00", file.Relative, len(file.Raw))
+	_, _ = writer.Write(file.Raw)
+	_, _ = writer.Write([]byte("\n"))
 }
 
 func writeReport(pathValue string, result report) error {

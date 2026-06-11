@@ -347,6 +347,7 @@ func (s *Service) refreshSelfDeployBuildContexts(ctx context.Context, contexts [
 		result[index].RuntimeBuildContextStatus = read.RuntimeBuildContextStatus
 		result[index].BuildContextRef = read.BuildContextRef
 		result[index].BuildContextDigest = read.BuildContextDigest
+		result[index].ManifestBundleDigest = selfDeployManifestBundleDigestForService(read.ManifestBundleDigests, result[index].ServiceKey)
 		result[index].MaterializationFingerprint = read.MaterializationFingerprint
 	}
 	return result, nil
@@ -369,12 +370,19 @@ func selfDeployRuntimeBuildContextsFromResult(buildPlan SelfDeployBuildPlan, res
 	}
 	contexts := make([]entity.SelfDeployRuntimeBuildContext, 0, len(buildPlan.BuildItems))
 	for _, item := range buildPlan.BuildItems {
+		manifestBundleDigest := selfDeployManifestBundleDigestForService(result.ManifestBundleDigests, item.ServiceKey)
+		if manifestBundleDigest != "" {
+			if _, err := normalizeSHA256Digest(manifestBundleDigest); err != nil {
+				return nil, selfDeployRuntimeRefError()
+			}
+		}
 		contexts = append(contexts, entity.SelfDeployRuntimeBuildContext{
 			ServiceKey:                 item.ServiceKey,
 			RuntimeBuildContextRef:     runtimeRef,
 			RuntimeBuildContextStatus:  result.RuntimeBuildContextStatus,
 			BuildContextRef:            contextRef,
 			BuildContextDigest:         contextDigest,
+			ManifestBundleDigest:       manifestBundleDigest,
 			MaterializationFingerprint: result.MaterializationFingerprint,
 			BuildPlanItemFingerprint:   item.PlanItemFingerprint,
 		})
@@ -410,9 +418,17 @@ func selfDeployMaterializedContextsFromRuntime(contexts []entity.SelfDeployRunti
 			DockerfileDigest:           context.DockerfileDigest,
 			MaterializationRef:         context.RuntimeBuildContextRef,
 			MaterializationFingerprint: context.MaterializationFingerprint,
+			ManifestBundleDigest:       context.ManifestBundleDigest,
 		})
 	}
 	return result
+}
+
+func selfDeployManifestBundleDigestForService(values map[string]string, serviceKey string) string {
+	if len(values) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(strings.ToLower(values[strings.TrimSpace(serviceKey)]))
 }
 
 func selfDeployBuildOutputsFromPlan(plan entity.SelfDeployPlan, buildPlan SelfDeployBuildPlan) ([]SelfDeployBuildOutput, error) {
@@ -1099,6 +1115,7 @@ func sameSelfDeployRuntimeBuildContexts(left []entity.SelfDeployRuntimeBuildCont
 			strings.TrimSpace(left[index].RuntimeBuildContextStatus) != strings.TrimSpace(right[index].RuntimeBuildContextStatus) ||
 			strings.TrimSpace(left[index].BuildContextRef) != strings.TrimSpace(right[index].BuildContextRef) ||
 			strings.TrimSpace(left[index].BuildContextDigest) != strings.TrimSpace(right[index].BuildContextDigest) ||
+			strings.TrimSpace(left[index].ManifestBundleDigest) != strings.TrimSpace(right[index].ManifestBundleDigest) ||
 			strings.TrimSpace(left[index].MaterializationFingerprint) != strings.TrimSpace(right[index].MaterializationFingerprint) ||
 			strings.TrimSpace(left[index].BuildPlanItemFingerprint) != strings.TrimSpace(right[index].BuildPlanItemFingerprint) {
 			return false

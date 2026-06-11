@@ -654,6 +654,7 @@ func selfDeployBuildContextResultFromResponse(response *runtimev1.BuildContextRe
 		RuntimeBuildContextStatus:  runtimeBuildContextStatus(buildContext.GetStatus()),
 		BuildContextRef:            strings.TrimSpace(buildContext.GetBuildContextRef()),
 		BuildContextDigest:         strings.TrimSpace(buildContext.GetBuildContextDigest()),
+		ManifestBundleDigests:      cloneStringMap(buildContext.GetManifestBundleDigests()),
 		SourceSnapshotRef:          strings.TrimSpace(buildContext.GetSourceSnapshotRef()),
 		SourceSnapshotDigest:       strings.TrimSpace(buildContext.GetSourceSnapshotDigest()),
 		MaterializationFingerprint: strings.TrimSpace(buildContext.GetContextFingerprint()),
@@ -969,6 +970,17 @@ func trimmedStrings(values []string) []string {
 		if trimmed != "" {
 			result = append(result, trimmed)
 		}
+	}
+	return result
+}
+
+func cloneStringMap(values map[string]string) map[string]string {
+	if len(values) == 0 {
+		return nil
+	}
+	result := make(map[string]string, len(values))
+	for key, value := range values {
+		result[key] = value
 	}
 	return result
 }

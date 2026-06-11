@@ -617,6 +617,7 @@ func normalizeSelfDeployMaterializedBuildContext(value SelfDeployMaterializedBui
 		DockerfileDigest:           strings.ToLower(strings.TrimSpace(value.DockerfileDigest)),
 		MaterializationRef:         strings.TrimSpace(value.MaterializationRef),
 		MaterializationFingerprint: strings.ToLower(strings.TrimSpace(value.MaterializationFingerprint)),
+		ManifestBundleDigest:       strings.ToLower(strings.TrimSpace(value.ManifestBundleDigest)),
 	}
 }
 
@@ -626,6 +627,7 @@ func selfDeployMaterializedBuildContextSafe(context SelfDeployMaterializedBuildC
 		validBuildPlanSHA256Digest(context.BuildContextDigest) &&
 		(context.PlanItemFingerprint == "" || validBuildPlanSHA256Digest(context.PlanItemFingerprint)) &&
 		(context.DockerfileDigest == "" || validBuildPlanSHA256Digest(context.DockerfileDigest)) &&
+		(context.ManifestBundleDigest == "" || validBuildPlanSHA256Digest(context.ManifestBundleDigest)) &&
 		safeBuildPlanRef(context.MaterializationRef, false) &&
 		(context.MaterializationFingerprint == "" || validBuildPlanSHA256Digest(context.MaterializationFingerprint))
 }

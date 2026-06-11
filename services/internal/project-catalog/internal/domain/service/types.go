@@ -467,6 +467,7 @@ type SelfDeployMaterializedBuildContext struct {
 	DockerfileDigest           string
 	MaterializationRef         string
 	MaterializationFingerprint string
+	ManifestBundleDigest       string
 }
 
 // RuntimeJobAllowedSecretRef несёт только ссылку на секрет и ограниченное назначение.

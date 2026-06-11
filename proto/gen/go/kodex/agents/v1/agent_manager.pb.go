@@ -5273,6 +5273,7 @@ type SelfDeployRuntimeBuildContextRef struct {
 	DockerfileDigest           *string                `protobuf:"bytes,6,opt,name=dockerfile_digest,json=dockerfileDigest,proto3,oneof" json:"dockerfile_digest,omitempty"`
 	MaterializationFingerprint *string                `protobuf:"bytes,7,opt,name=materialization_fingerprint,json=materializationFingerprint,proto3,oneof" json:"materialization_fingerprint,omitempty"`
 	BuildPlanItemFingerprint   *string                `protobuf:"bytes,8,opt,name=build_plan_item_fingerprint,json=buildPlanItemFingerprint,proto3,oneof" json:"build_plan_item_fingerprint,omitempty"`
+	ManifestBundleDigest       *string                `protobuf:"bytes,9,opt,name=manifest_bundle_digest,json=manifestBundleDigest,proto3,oneof" json:"manifest_bundle_digest,omitempty"`
 	unknownFields              protoimpl.UnknownFields
 	sizeCache                  protoimpl.SizeCache
 }
@@ -5359,6 +5360,13 @@ func (x *SelfDeployRuntimeBuildContextRef) GetMaterializationFingerprint() strin
 func (x *SelfDeployRuntimeBuildContextRef) GetBuildPlanItemFingerprint() string {
 	if x != nil && x.BuildPlanItemFingerprint != nil {
 		return *x.BuildPlanItemFingerprint
+	}
+	return ""
+}
+
+func (x *SelfDeployRuntimeBuildContextRef) GetManifestBundleDigest() string {
+	if x != nil && x.ManifestBundleDigest != nil {
+		return *x.ManifestBundleDigest
 	}
 	return ""
 }
@@ -12517,7 +12525,7 @@ const file_kodex_agents_v1_agent_manager_proto_rawDesc = "" +
 	"\x1bbuild_plan_item_fingerprint\x18\x05 \x01(\tH\x02R\x18buildPlanItemFingerprint\x88\x01\x01B\x0e\n" +
 	"\f_service_refB\x15\n" +
 	"\x13_runtime_job_statusB\x1e\n" +
-	"\x1c_build_plan_item_fingerprint\"\xb1\x05\n" +
+	"\x1c_build_plan_item_fingerprint\"\x87\x06\n" +
 	" SelfDeployRuntimeBuildContextRef\x12\x1f\n" +
 	"\vservice_key\x18\x01 \x01(\tR\n" +
 	"serviceKey\x12>\n" +
@@ -12527,14 +12535,16 @@ const file_kodex_agents_v1_agent_manager_proto_rawDesc = "" +
 	"\x14build_context_digest\x18\x05 \x01(\tH\x03R\x12buildContextDigest\x88\x01\x01\x120\n" +
 	"\x11dockerfile_digest\x18\x06 \x01(\tH\x04R\x10dockerfileDigest\x88\x01\x01\x12D\n" +
 	"\x1bmaterialization_fingerprint\x18\a \x01(\tH\x05R\x1amaterializationFingerprint\x88\x01\x01\x12B\n" +
-	"\x1bbuild_plan_item_fingerprint\x18\b \x01(\tH\x06R\x18buildPlanItemFingerprint\x88\x01\x01B\x1c\n" +
+	"\x1bbuild_plan_item_fingerprint\x18\b \x01(\tH\x06R\x18buildPlanItemFingerprint\x88\x01\x01\x129\n" +
+	"\x16manifest_bundle_digest\x18\t \x01(\tH\aR\x14manifestBundleDigest\x88\x01\x01B\x1c\n" +
 	"\x1a_runtime_build_context_refB\x1f\n" +
 	"\x1d_runtime_build_context_statusB\x14\n" +
 	"\x12_build_context_refB\x17\n" +
 	"\x15_build_context_digestB\x14\n" +
 	"\x12_dockerfile_digestB\x1e\n" +
 	"\x1c_materialization_fingerprintB\x1e\n" +
-	"\x1c_build_plan_item_fingerprint\"\xcf\x02\n" +
+	"\x1c_build_plan_item_fingerprintB\x19\n" +
+	"\x17_manifest_bundle_digest\"\xcf\x02\n" +
 	"\x1dSelfDeployRuntimeDeployJobRef\x12\x1f\n" +
 	"\vservice_key\x18\x01 \x01(\tR\n" +
 	"serviceKey\x12$\n" +

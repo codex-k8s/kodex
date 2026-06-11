@@ -119,18 +119,19 @@ type PrepareBuildContextInput struct {
 
 // ReportBuildContextProgressInput describes a trusted build context status update.
 type ReportBuildContextProgressInput struct {
-	BuildContextID       uuid.UUID
-	Status               enum.BuildContextStatus
-	SourceSnapshotRef    string
-	SourceSnapshotDigest string
-	BuildContextRef      string
-	BuildContextDigest   string
-	StartedAt            *time.Time
-	FinishedAt           *time.Time
-	ErrorCode            string
-	ErrorMessage         string
-	NextAction           string
-	Meta                 value.CommandMeta
+	BuildContextID        uuid.UUID
+	Status                enum.BuildContextStatus
+	SourceSnapshotRef     string
+	SourceSnapshotDigest  string
+	BuildContextRef       string
+	BuildContextDigest    string
+	ManifestBundleDigests map[string]string
+	StartedAt             *time.Time
+	FinishedAt            *time.Time
+	ErrorCode             string
+	ErrorMessage          string
+	NextAction            string
+	Meta                  value.CommandMeta
 }
 
 // GetBuildContextInput describes a build context read request.

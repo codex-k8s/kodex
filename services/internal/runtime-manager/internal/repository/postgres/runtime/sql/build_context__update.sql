@@ -6,6 +6,7 @@ SET
     source_snapshot_digest = @source_snapshot_digest,
     build_context_ref = @build_context_ref,
     build_context_digest = @build_context_digest,
+    manifest_bundle_digests_json = @manifest_bundle_digests_json,
     started_at = @started_at,
     finished_at = @finished_at,
     last_error_code = @last_error_code,

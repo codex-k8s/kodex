@@ -102,11 +102,12 @@ func TestBuildContextProgressRequiresCheckedSnapshotBeforeReady(t *testing.T) {
 	}
 
 	ready, err := svc.ReportBuildContextProgress(context.Background(), ReportBuildContextProgressInput{
-		BuildContextID:     buildContext.ID,
-		Status:             enum.BuildContextStatusReady,
-		BuildContextRef:    "pvc://runtime/build-context-runtime-manager",
-		BuildContextDigest: testDigest("d"),
-		Meta:               commandMeta(mustUUID("00000000-0000-0000-0000-000000001107"), running.Version),
+		BuildContextID:        buildContext.ID,
+		Status:                enum.BuildContextStatusReady,
+		BuildContextRef:       "pvc://runtime/build-context-runtime-manager",
+		BuildContextDigest:    testDigest("d"),
+		ManifestBundleDigests: map[string]string{"runtime-manager": testDigest("e")},
+		Meta:                  commandMeta(mustUUID("00000000-0000-0000-0000-000000001107"), running.Version),
 	})
 	if err != nil {
 		t.Fatalf("ReportBuildContextProgress(ready): %v", err)
@@ -114,6 +115,7 @@ func TestBuildContextProgressRequiresCheckedSnapshotBeforeReady(t *testing.T) {
 	if ready.Status != enum.BuildContextStatusReady ||
 		ready.BuildContextRef == "" ||
 		ready.BuildContextDigest == "" ||
+		ready.ManifestBundleDigests["runtime-manager"] != testDigest("e") ||
 		ready.LastErrorCode != "" ||
 		ready.FinishedAt == nil {
 		t.Fatalf("ready build context = %#v, want ready safe refs without errors", ready)

@@ -84,6 +84,7 @@ func selfDeployMaterializedBuildContexts(values []agentservice.SelfDeployMateria
 			DockerfileDigest:           optionalString(value.DockerfileDigest),
 			MaterializationRef:         optionalString(value.MaterializationRef),
 			MaterializationFingerprint: optionalString(value.MaterializationFingerprint),
+			ManifestBundleDigest:       optionalString(value.ManifestBundleDigest),
 		})
 	}
 	return result

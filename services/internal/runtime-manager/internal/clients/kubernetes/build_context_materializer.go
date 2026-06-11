@@ -30,13 +30,14 @@ type BuildContextMaterializer struct {
 
 // BuildContextMaterializationResult is the safe materialization outcome stored by runtime-manager.
 type BuildContextMaterializationResult struct {
-	Succeeded            bool
-	SourceSnapshotRef    string
-	SourceSnapshotDigest string
-	BuildContextRef      string
-	BuildContextDigest   string
-	ErrorCode            string
-	ErrorMessage         string
+	Succeeded             bool
+	SourceSnapshotRef     string
+	SourceSnapshotDigest  string
+	BuildContextRef       string
+	BuildContextDigest    string
+	ManifestBundleDigests map[string]string
+	ErrorCode             string
+	ErrorMessage          string
 }
 
 // NewBuildContextMaterializer reuses executor cluster access and Kubernetes clients.
@@ -76,12 +77,17 @@ func (m *BuildContextMaterializer) Materialize(ctx context.Context, buildContext
 	if !validMaterializerDigest(report.BuildContextDigest) {
 		return BuildContextMaterializationResult{ErrorCode: "build_context_materializer_report_invalid", ErrorMessage: "build context materializer digest is invalid"}
 	}
+	manifestBundleDigests := normalizeMaterializerManifestBundleDigests(report.ManifestBundleDigests, buildContext.AffectedServiceKeys)
+	if len(report.ManifestBundleDigests) > 0 && len(manifestBundleDigests) != len(report.ManifestBundleDigests) {
+		return BuildContextMaterializationResult{ErrorCode: "build_context_materializer_report_invalid", ErrorMessage: "build context materializer manifest bundle digest is invalid"}
+	}
 	return BuildContextMaterializationResult{
-		Succeeded:            true,
-		SourceSnapshotRef:    sourceRef,
-		SourceSnapshotDigest: sourceDigest,
-		BuildContextRef:      contextRef,
-		BuildContextDigest:   report.BuildContextDigest,
+		Succeeded:             true,
+		SourceSnapshotRef:     sourceRef,
+		SourceSnapshotDigest:  sourceDigest,
+		BuildContextRef:       contextRef,
+		BuildContextDigest:    report.BuildContextDigest,
+		ManifestBundleDigests: manifestBundleDigests,
 	}
 }
 
@@ -234,7 +240,7 @@ func buildContextMaterializerJob(buildContext entity.BuildContext, cfg Config, n
 }
 
 func buildContextMaterializerArgs(buildContext entity.BuildContext) []string {
-	return []string{
+	args := []string{
 		"github-archive",
 		"--provider", buildContext.Provider,
 		"--owner", buildContext.ProviderOwner,
@@ -244,6 +250,10 @@ func buildContextMaterializerArgs(buildContext entity.BuildContext) []string {
 		"--output", buildContextMountPath,
 		"--result", materializerResultPath,
 	}
+	for _, key := range buildContext.AffectedServiceKeys {
+		args = append(args, "--service-key", key)
+	}
+	return args
 }
 
 func isManagedBuildContextMaterializerJob(job *batchv1.Job, id uuid.UUID) bool {
@@ -265,9 +275,10 @@ func validateBuildContextMaterializerInput(buildContext entity.BuildContext) err
 }
 
 type materializerReport struct {
-	SourceSnapshotRef    string `json:"source_snapshot_ref"`
-	SourceSnapshotDigest string `json:"source_snapshot_digest"`
-	BuildContextDigest   string `json:"build_context_digest"`
+	SourceSnapshotRef     string            `json:"source_snapshot_ref"`
+	SourceSnapshotDigest  string            `json:"source_snapshot_digest"`
+	BuildContextDigest    string            `json:"build_context_digest"`
+	ManifestBundleDigests map[string]string `json:"manifest_bundle_digests"`
 }
 
 func parseMaterializerReport(logTail string) (materializerReport, error) {
@@ -316,6 +327,26 @@ func buildContextMaterializerJobName(id uuid.UUID) string {
 
 func namespaceSafeName(value string) string {
 	return strings.Trim(strings.ToLower(strings.TrimSpace(value)), "-")
+}
+
+func normalizeMaterializerManifestBundleDigests(values map[string]string, affectedServiceKeys []string) map[string]string {
+	if len(values) == 0 {
+		return nil
+	}
+	allowed := make(map[string]struct{}, len(affectedServiceKeys))
+	for _, key := range affectedServiceKeys {
+		allowed[strings.TrimSpace(key)] = struct{}{}
+	}
+	result := make(map[string]string, len(values))
+	for rawKey, rawDigest := range values {
+		key := strings.TrimSpace(rawKey)
+		digest := strings.TrimSpace(strings.ToLower(rawDigest))
+		if _, ok := allowed[key]; !ok || !validMaterializerDigest(digest) {
+			continue
+		}
+		result[key] = digest
+	}
+	return result
 }
 
 func validMaterializerDigest(value string) bool {

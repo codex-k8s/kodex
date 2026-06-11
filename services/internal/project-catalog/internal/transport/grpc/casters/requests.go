@@ -576,6 +576,7 @@ func materializedBuildContextsFromProto(values []*projectsv1.SelfDeployMateriali
 		context.DockerfileDigest = strings.TrimSpace(value.GetDockerfileDigest())
 		context.MaterializationRef = strings.TrimSpace(value.GetMaterializationRef())
 		context.MaterializationFingerprint = strings.TrimSpace(value.GetMaterializationFingerprint())
+		context.ManifestBundleDigest = strings.TrimSpace(value.GetManifestBundleDigest())
 		result = append(result, context)
 	}
 	return result

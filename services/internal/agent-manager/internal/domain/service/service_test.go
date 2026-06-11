@@ -5947,7 +5947,7 @@ func TestCreateSelfDeployPlanDispatchesBuildAfterApprovedGate(t *testing.T) {
 		SelfDeployGatePreparer:         approvedSelfDeployGatePreparer(),
 		SelfDeployGateEnabled:          true,
 		SelfDeployBuildPlanReader:      buildReader,
-		SelfDeployBuildContextPreparer: &fakeSelfDeployBuildContextPreparer{result: SelfDeployBuildContextResult{RuntimeBuildContextRef: "runtime:build-context/ready", RuntimeBuildContextStatus: "ready", BuildContextRef: "runtime://build-contexts/agent-manager", BuildContextDigest: "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", SourceSnapshotDigest: "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", MaterializationFingerprint: "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}},
+		SelfDeployBuildContextPreparer: &fakeSelfDeployBuildContextPreparer{result: SelfDeployBuildContextResult{RuntimeBuildContextRef: "runtime:build-context/ready", RuntimeBuildContextStatus: "ready", BuildContextRef: "runtime://build-contexts/agent-manager", BuildContextDigest: "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", ManifestBundleDigests: map[string]string{"agent-manager": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"}, SourceSnapshotDigest: "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", MaterializationFingerprint: "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}},
 		SelfDeployBuildJobCreator:      buildCreator,
 		SelfDeployBuildDispatchEnabled: true,
 	})

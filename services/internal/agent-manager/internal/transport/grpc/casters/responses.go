@@ -627,6 +627,7 @@ func SelfDeployRuntimeBuildContextsToProto(contexts []entity.SelfDeployRuntimeBu
 			BuildContextDigest:         optionalStringPtr(context.BuildContextDigest),
 			MaterializationFingerprint: optionalStringPtr(context.MaterializationFingerprint),
 			BuildPlanItemFingerprint:   optionalStringPtr(context.BuildPlanItemFingerprint),
+			ManifestBundleDigest:       optionalStringPtr(context.ManifestBundleDigest),
 		})
 	}
 	return result

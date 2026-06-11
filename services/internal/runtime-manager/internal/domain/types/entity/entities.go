@@ -58,26 +58,27 @@ type WorkspaceMaterialization struct {
 // BuildContext is one runtime-owned self-deploy build context request.
 type BuildContext struct {
 	Base
-	Status               enum.BuildContextStatus
-	ProjectID            uuid.UUID
-	RepositoryID         uuid.UUID
-	Provider             string
-	ProviderOwner        string
-	ProviderName         string
-	SourceRef            string
-	SourceCommitSHA      string
-	AffectedServiceKeys  []string
-	BuildPlanFingerprint string
-	ContextFingerprint   string
-	SourceSnapshotRef    string
-	SourceSnapshotDigest string
-	BuildContextRef      string
-	BuildContextDigest   string
-	StartedAt            *time.Time
-	FinishedAt           *time.Time
-	LastErrorCode        string
-	LastErrorMessage     string
-	NextAction           string
+	Status                enum.BuildContextStatus
+	ProjectID             uuid.UUID
+	RepositoryID          uuid.UUID
+	Provider              string
+	ProviderOwner         string
+	ProviderName          string
+	SourceRef             string
+	SourceCommitSHA       string
+	AffectedServiceKeys   []string
+	BuildPlanFingerprint  string
+	ContextFingerprint    string
+	SourceSnapshotRef     string
+	SourceSnapshotDigest  string
+	BuildContextRef       string
+	BuildContextDigest    string
+	ManifestBundleDigests map[string]string
+	StartedAt             *time.Time
+	FinishedAt            *time.Time
+	LastErrorCode         string
+	LastErrorMessage      string
+	NextAction            string
 }
 
 // CommandResult stores idempotency trail for mutating runtime-manager commands.

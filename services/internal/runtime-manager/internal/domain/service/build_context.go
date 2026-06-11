@@ -171,19 +171,24 @@ func normalizeReportBuildContextProgressInput(input ReportBuildContextProgressIn
 	if err != nil {
 		return ReportBuildContextProgressInput{}, err
 	}
+	manifestBundleDigests, err := normalizeBuildContextManifestBundleDigests(input.ManifestBundleDigests)
+	if err != nil {
+		return ReportBuildContextProgressInput{}, err
+	}
 	normalized := ReportBuildContextProgressInput{
-		BuildContextID:       input.BuildContextID,
-		Status:               input.Status,
-		SourceSnapshotRef:    strings.TrimSpace(input.SourceSnapshotRef),
-		SourceSnapshotDigest: strings.TrimSpace(strings.ToLower(input.SourceSnapshotDigest)),
-		BuildContextRef:      strings.TrimSpace(input.BuildContextRef),
-		BuildContextDigest:   strings.TrimSpace(strings.ToLower(input.BuildContextDigest)),
-		StartedAt:            input.StartedAt,
-		FinishedAt:           input.FinishedAt,
-		ErrorCode:            errorCode,
-		ErrorMessage:         errorMessage,
-		NextAction:           nextAction,
-		Meta:                 input.Meta,
+		BuildContextID:        input.BuildContextID,
+		Status:                input.Status,
+		SourceSnapshotRef:     strings.TrimSpace(input.SourceSnapshotRef),
+		SourceSnapshotDigest:  strings.TrimSpace(strings.ToLower(input.SourceSnapshotDigest)),
+		BuildContextRef:       strings.TrimSpace(input.BuildContextRef),
+		BuildContextDigest:    strings.TrimSpace(strings.ToLower(input.BuildContextDigest)),
+		ManifestBundleDigests: manifestBundleDigests,
+		StartedAt:             input.StartedAt,
+		FinishedAt:            input.FinishedAt,
+		ErrorCode:             errorCode,
+		ErrorMessage:          errorMessage,
+		NextAction:            nextAction,
+		Meta:                  input.Meta,
 	}
 	if err := validateOptionalSourceSnapshot(normalized.SourceSnapshotRef, normalized.SourceSnapshotDigest); err != nil {
 		return ReportBuildContextProgressInput{}, err
@@ -234,6 +239,25 @@ func validateOptionalSourceSnapshot(ref string, digest string) error {
 		return errs.ErrInvalidArgument
 	}
 	return nil
+}
+
+func normalizeBuildContextManifestBundleDigests(values map[string]string) (map[string]string, error) {
+	if len(values) == 0 {
+		return nil, nil
+	}
+	result := make(map[string]string, len(values))
+	for rawKey, rawDigest := range values {
+		key := strings.TrimSpace(rawKey)
+		digest := strings.TrimSpace(strings.ToLower(rawDigest))
+		if !safeAgentRunLabel(key, maxRuntimeJobServiceKeyBytes) || !validAgentRunSHA256Digest(digest) {
+			return nil, errs.ErrInvalidArgument
+		}
+		if existing, ok := result[key]; ok && existing != digest {
+			return nil, errs.ErrInvalidArgument
+		}
+		result[key] = digest
+	}
+	return result, nil
 }
 
 func normalizeBuildContextErrorCode(value string) (string, error) {
@@ -308,6 +332,9 @@ func updateBuildContextProgress(buildContext *entity.BuildContext, input ReportB
 		buildContext.BuildContextRef = input.BuildContextRef
 		buildContext.BuildContextDigest = input.BuildContextDigest
 	}
+	if len(input.ManifestBundleDigests) > 0 {
+		buildContext.ManifestBundleDigests = cloneStringMap(input.ManifestBundleDigests)
+	}
 	if input.StartedAt != nil {
 		buildContext.StartedAt = input.StartedAt
 	} else if input.Status == enum.BuildContextStatusRunning && buildContext.StartedAt == nil {
@@ -356,6 +383,20 @@ func validateBuildContextProgressScope(buildContext entity.BuildContext, input R
 	if input.BuildContextRef != "" && buildContext.BuildContextRef != "" &&
 		(buildContext.BuildContextRef != input.BuildContextRef || buildContext.BuildContextDigest != input.BuildContextDigest) {
 		return errs.ErrConflict
+	}
+	if len(input.ManifestBundleDigests) > 0 {
+		allowed := make(map[string]struct{}, len(buildContext.AffectedServiceKeys))
+		for _, key := range buildContext.AffectedServiceKeys {
+			allowed[key] = struct{}{}
+		}
+		for key, digest := range input.ManifestBundleDigests {
+			if _, ok := allowed[key]; !ok {
+				return errs.ErrInvalidArgument
+			}
+			if existing, ok := buildContext.ManifestBundleDigests[key]; ok && existing != digest {
+				return errs.ErrConflict
+			}
+		}
 	}
 	return nil
 }
@@ -461,4 +502,15 @@ func sameStringSlices(left []string, right []string) bool {
 		}
 	}
 	return true
+}
+
+func cloneStringMap(values map[string]string) map[string]string {
+	if len(values) == 0 {
+		return nil
+	}
+	result := make(map[string]string, len(values))
+	for key, value := range values {
+		result[key] = value
+	}
+	return result
 }

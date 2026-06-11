@@ -360,6 +360,7 @@ type SelfDeployBuildContextResult struct {
 	RuntimeBuildContextStatus  string
 	BuildContextRef            string
 	BuildContextDigest         string
+	ManifestBundleDigests      map[string]string
 	SourceSnapshotRef          string
 	SourceSnapshotDigest       string
 	MaterializationFingerprint string
@@ -433,6 +434,7 @@ type SelfDeployMaterializedBuildContext struct {
 	DockerfileDigest           string
 	MaterializationRef         string
 	MaterializationFingerprint string
+	ManifestBundleDigest       string
 }
 
 type RuntimeJobAllowedSecretRef struct {

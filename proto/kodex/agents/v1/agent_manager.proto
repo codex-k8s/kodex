@@ -892,6 +892,7 @@ message SelfDeployRuntimeBuildContextRef {
   optional string dockerfile_digest = 6;
   optional string materialization_fingerprint = 7;
   optional string build_plan_item_fingerprint = 8;
+  optional string manifest_bundle_digest = 9;
 }
 
 // SelfDeployRuntimeDeployJobRef stores safe runtime-manager refs for one deploy job.
