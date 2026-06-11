@@ -5,7 +5,7 @@ title: kodex — дизайн домена оркестрации агентов
 status: active
 owner_role: SA
 created_at: 2026-05-12
-updated_at: 2026-06-03
+updated_at: 2026-06-11
 related_issues: [733, 753, 698, 322, 782, 795, 820, 834, 842, 862, 866, 937, 954, 968, 984, 994, 1011, 1015, 1022, 1027]
 related_prs: []
 related_adrs: []
@@ -155,6 +155,8 @@ sequenceDiagram
       AM->>R: CreateJob(JOB_TYPE_BUILD, BuildExecutionSpec) для service key
       R-->>AM: runtime job ref/status
       AM->>AM: сохранить runtime build job refs/status
+    else build context не готов
+      AM->>AM: сохранить preparing_context diagnostic без runtime job
     else build plan non-ready
       AM->>AM: сохранить blocked diagnostic
     end
@@ -171,7 +173,7 @@ sequenceDiagram
 
 Если plan уже сохранён в `pending_approval`, но ещё не содержит `governance_risk_assessment_ref` или `governance_gate_request_ref`, `agent-manager` штатно доводит его через тот же идемпотентный жизненный цикл подготовки gate. При старте сервиса включённый self-deploy signal consumer выполняет ограниченную сверку по настроенному self-project и вызывает `EnsureSelfDeployPlanGovernanceGate` только для таких неполных pending plans. Этот путь не двигает checkpoint event-log, не читает raw provider payload и не требует ручного SQL. Если `governance-manager` уже содержит active risk assessment и requested/awaiting gate request для target `self_deploy_plan` с тем же fingerprint, `agent-manager` сначала находит risk assessment по target/project/fingerprint, а если project-scoped фильтр не вернул запись, выполняет target-only read и всё равно локально требует совпадения target и evidence fingerprint. Затем он читает gate requests по найденному `risk_assessment_id` и локально сверяет target/status. Так recovery не создаёт дублей и записывает недостающие refs в plan, даже если старая governance-запись была сохранена с неполным project context. Ошибки сверки классифицируются безопасными stage codes вроде `gate_prepare_failed`, `existing_risk_lookup_failed`, `existing_risk_fingerprint_mismatch`, `existing_gate_lookup_failed`, `existing_gate_mismatch` или `plan_governance_refs_update_failed`, без raw payload и секретов.
 
-Если gate уже `approved` и включён `KODEX_AGENT_MANAGER_SELF_DEPLOY_BUILD_DISPATCH_ENABLED`, `agent-manager` сначала подготавливает runtime-owned build context через `runtime-manager.PrepareBuildContext` по refs плана, affected service keys, source commit SHA и build plan fingerprint. Если checked source snapshot ref/digest ещё не передан, runtime возвращает `source_snapshot_unavailable`, а build dispatch остаётся `blocked` без постановки runtime job. После `ReportBuildContextProgress(ready)` отдельный build-plan enrichment передаёт готовые `build_context_ref`/`build_context_digest` в `project-catalog.GetSelfDeployBuildPlan`; только статус `ready` даёт per-service build items с `BuildExecutionSpec`-совместимыми refs. Для ready build plan `agent-manager` создаёт `runtime-manager.CreateJob(JOB_TYPE_BUILD)` с typed `BuildExecutionSpec` и пустым `job_input_json`, сохраняет `runtime_job_ref`/status/fingerprint по каждому service key и не читает Kubernetes. Повтор после уже созданных build jobs переиспользует сохранённые refs и не создаёт вторую job. Автоматический deploy после merge в `main` остаётся запрещённым; deploy и health-check jobs требуют отдельного approval-driven перехода.
+Если gate уже `approved` и включён `KODEX_AGENT_MANAGER_SELF_DEPLOY_BUILD_DISPATCH_ENABLED`, `agent-manager` переводит план в post-approval путь: вызывает `project-catalog.GetSelfDeployBuildPlan` с refs плана, affected service keys и ожидаемым `services_yaml_digest`. Статус `build_context_unavailable` означает, что project-side policy уже проверена, но runtime-owned build context ref/digest ещё не готовы; `agent-manager` сохраняет `runtime_build_status=preparing_context`, не создаёт runtime job и ждёт повторного запуска consumer/команды после появления checked context refs. Остальные non-ready статусы фиксируются как безопасный `runtime_build_status=blocked`. Только статус `ready` даёт per-service build items с `BuildExecutionSpec`-совместимыми refs/digests; если ready-ответ не содержит safe build context, Dockerfile, image или fingerprint refs, plan блокируется как `invalid_build_execution_spec` без вызова runtime. Для ready build plan `agent-manager` создаёт `runtime-manager.CreateJob(JOB_TYPE_BUILD)` с typed `BuildExecutionSpec` и пустым `job_input_json`, сохраняет `runtime_job_ref`/status/fingerprint по каждому service key и не читает Kubernetes. Повтор после `preparing_context` снова проверяет `project-catalog` и при готовом context идемпотентно ставит build job; повтор после уже созданных build jobs переиспользует сохранённые refs и не создаёт вторую job. Deploy после merge в `main` остаётся запрещённым до successful build и checked `project-catalog.GetSelfDeployDeployPlan`; только этот будущий read-contract может дать typed `DeployExecutionSpec` с manifest bundle refs/digest, rollout targets и expected image refs для `JOB_TYPE_DEPLOY`. Health-check jobs требуют отдельного approval-driven перехода.
 
 ### Приёмка результата агента
 
@@ -287,7 +289,7 @@ MCP не владеет доменным состоянием и не подме
 
 `agent-manager` обращается к `governance-manager` за оценкой риска, записью review signals, созданием gate request и чтением итогового gate/release decision. `agent-manager` хранит только ожидание flow, normalized owner outcome и typed refs на `risk_assessment`, `gate_request`, `gate_decision`, `release_decision_package`, `release_decision`, `risk_profile`, `gate_policy` и `release_policy`; сами risk/gate/release decisions и evidence body остаются в governance-контуре.
 
-Self-deploy plan использует те же typed governance refs как approval context. После ready-плана `agent-manager` готовит локальный risk assessment/gate request через `PrepareSelfDeployPlanGate`; до `approved` governance status план остаётся `pending_approval` или безопасно переходит в `rejected`/`failed`, не создавая runtime jobs. После `approved` `agent-manager` получает build plan из `project-catalog` и создаёт только build jobs через `runtime-manager`; deploy/release decision body остаются за governance/runtime следующими переходами.
+Self-deploy plan использует те же typed governance refs как approval context. После ready-плана `agent-manager` готовит локальный risk assessment/gate request через `PrepareSelfDeployPlanGate`; до `approved` governance status план остаётся `pending_approval` или безопасно переходит в `rejected`/`failed`, не создавая runtime jobs. После `approved` `agent-manager` ожидает runtime-owned build context readiness, получает checked build plan из `project-catalog` и создаёт только build jobs через `runtime-manager`; deploy jobs создаются только после successful build и отдельного checked deploy plan contract. Release decision body остаётся за governance/runtime следующими переходами.
 
 ### `interaction-hub`
 

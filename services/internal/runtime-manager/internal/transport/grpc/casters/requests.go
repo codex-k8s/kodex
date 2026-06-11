@@ -542,7 +542,43 @@ func DeployExecutionSpecInputFromProto(spec *runtimev1.DeployExecutionSpec) (*ru
 		DeployPlanFingerprint: strings.TrimSpace(spec.GetDeployPlanFingerprint()),
 		AllowedSecretRefs:     runtimeJobAllowedSecretRefsFromProto(spec.GetAllowedSecretRefs()),
 		OutputRefs:            runtimeJobOutputRefsFromProto(spec.GetOutputRefs()),
+		ManifestBundleRef:     strings.TrimSpace(spec.GetManifestBundleRef()),
+		ManifestBundleDigest:  strings.TrimSpace(spec.GetManifestBundleDigest()),
+		RolloutTargets:        deployRolloutTargetsFromProto(spec.GetRolloutTargets()),
+		ExpectedImageRefs:     deployExpectedImageRefsFromProto(spec.GetExpectedImageRefs()),
 	}, nil
+}
+
+func deployRolloutTargetsFromProto(targets []*runtimev1.DeployRolloutTarget) []runtimeservice.DeployRolloutTargetInput {
+	result := make([]runtimeservice.DeployRolloutTargetInput, 0, len(targets))
+	for _, target := range targets {
+		if target == nil {
+			continue
+		}
+		result = append(result, runtimeservice.DeployRolloutTargetInput{
+			Kind:      strings.TrimSpace(target.GetKind()),
+			Ref:       strings.TrimSpace(target.GetRef()),
+			Namespace: strings.TrimSpace(target.GetNamespace()),
+			Name:      strings.TrimSpace(target.GetName()),
+			Digest:    strings.TrimSpace(target.GetDigest()),
+		})
+	}
+	return result
+}
+
+func deployExpectedImageRefsFromProto(refs []*runtimev1.DeployExpectedImageRef) []runtimeservice.DeployExpectedImageRefInput {
+	result := make([]runtimeservice.DeployExpectedImageRefInput, 0, len(refs))
+	for _, ref := range refs {
+		if ref == nil {
+			continue
+		}
+		result = append(result, runtimeservice.DeployExpectedImageRefInput{
+			ContainerName: strings.TrimSpace(ref.GetContainerName()),
+			ImageRef:      strings.TrimSpace(ref.GetImageRef()),
+			ImageDigest:   strings.TrimSpace(ref.GetImageDigest()),
+		})
+	}
+	return result
 }
 
 func runtimeJobAllowedSecretRefsFromProto(refs []*runtimev1.RuntimeJobAllowedSecretRef) []runtimeservice.RuntimeJobExecutionRefInput {

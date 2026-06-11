@@ -195,6 +195,26 @@ type DeployExecutionSpecInput struct {
 	DeployPlanFingerprint string                        `json:"deploy_plan_fingerprint"`
 	AllowedSecretRefs     []RuntimeJobExecutionRefInput `json:"allowed_secret_refs,omitempty"`
 	OutputRefs            []RuntimeJobExecutionRefInput `json:"output_refs,omitempty"`
+	ManifestBundleRef     string                        `json:"manifest_bundle_ref"`
+	ManifestBundleDigest  string                        `json:"manifest_bundle_digest"`
+	RolloutTargets        []DeployRolloutTargetInput    `json:"rollout_targets,omitempty"`
+	ExpectedImageRefs     []DeployExpectedImageRefInput `json:"expected_image_refs,omitempty"`
+}
+
+// DeployRolloutTargetInput describes one safe rollout target in a deploy plan.
+type DeployRolloutTargetInput struct {
+	Kind      string `json:"kind"`
+	Ref       string `json:"ref"`
+	Namespace string `json:"namespace"`
+	Name      string `json:"name"`
+	Digest    string `json:"digest,omitempty"`
+}
+
+// DeployExpectedImageRefInput describes one immutable expected image in a deploy plan.
+type DeployExpectedImageRefInput struct {
+	ContainerName string `json:"container_name"`
+	ImageRef      string `json:"image_ref"`
+	ImageDigest   string `json:"image_digest"`
 }
 
 // RuntimeJobExecutionRefInput contains a typed safe build/deploy job reference.

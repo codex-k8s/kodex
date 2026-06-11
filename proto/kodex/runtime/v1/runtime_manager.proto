@@ -477,6 +477,14 @@ message DeployExecutionSpec {
   repeated RuntimeJobAllowedSecretRef allowed_secret_refs = 15;
   // output_refs describe where bounded deploy outputs are written.
   repeated RuntimeJobOutputRef output_refs = 16;
+  // manifest_bundle_ref points to the checked rendered manifest bundle for runtime apply.
+  string manifest_bundle_ref = 17;
+  // manifest_bundle_digest is the immutable digest of the checked manifest bundle.
+  string manifest_bundle_digest = 18;
+  // rollout_targets describe bounded Kubernetes rollout targets expected by the deploy plan.
+  repeated DeployRolloutTarget rollout_targets = 19;
+  // expected_image_refs describe immutable images expected in the rollout targets.
+  repeated DeployExpectedImageRef expected_image_refs = 20;
 }
 
 // CodexSessionExecutionSpec defines the safe contract for a future Codex CLI session.
@@ -1351,4 +1359,28 @@ message ReconcilePrewarmPoolRequest {
   string lease_until = 3;
   // meta carries idempotency and audit context.
   CommandMeta meta = 4;
+}
+
+// DeployRolloutTarget describes one bounded Kubernetes object watched during rollout.
+message DeployRolloutTarget {
+  // kind is a safe Kubernetes workload kind such as deployment or statefulset.
+  string kind = 1;
+  // ref is a safe target ref, for example k8s://deployments/runtime-manager.
+  string ref = 2;
+  // namespace is the target namespace for this object.
+  string namespace = 3;
+  // name is the Kubernetes object name.
+  string name = 4;
+  // digest optionally pins the rendered object digest from the checked bundle.
+  optional string digest = 5;
+}
+
+// DeployExpectedImageRef describes one immutable image expected after rollout.
+message DeployExpectedImageRef {
+  // container_name identifies the container within rollout targets.
+  string container_name = 1;
+  // image_ref is the expected image repository/ref without raw registry credentials.
+  string image_ref = 2;
+  // image_digest pins the expected immutable image digest.
+  string image_digest = 3;
 }

@@ -399,10 +399,30 @@ func TestBuildDeployJobsRequireSafeTypedInput(t *testing.T) {
 			commandID: mustUUID("00000000-0000-0000-0000-000000000557"),
 		},
 		{
+			name:    "deploy missing manifest bundle",
+			jobType: enum.JobTypeDeploy,
+			deploySpec: func() *DeployExecutionSpecInput {
+				copy := deploySpec
+				copy.ManifestBundleRef = ""
+				return &copy
+			}(),
+			commandID: mustUUID("00000000-0000-0000-0000-000000000563"),
+		},
+		{
+			name:    "deploy missing rollout targets",
+			jobType: enum.JobTypeDeploy,
+			deploySpec: func() *DeployExecutionSpecInput {
+				copy := deploySpec
+				copy.RolloutTargets = nil
+				return &copy
+			}(),
+			commandID: mustUUID("00000000-0000-0000-0000-000000000564"),
+		},
+		{
 			name:       "deploy spec on build job",
 			jobType:    enum.JobTypeBuild,
 			deploySpec: &deploySpec,
-			commandID:  mustUUID("00000000-0000-0000-0000-000000000558"),
+			commandID:  mustUUID("00000000-0000-0000-0000-000000000565"),
 		},
 	}
 	for _, tt := range tests {
@@ -455,7 +475,12 @@ func TestBuildDeployExecutionSpecsArePersistedAsTypedJobInput(t *testing.T) {
 		t.Fatalf("CreateJob(deploy spec): %v", err)
 	}
 	extractedDeploySpec, ok := DeployExecutionSpecFromJobInput(deployJob.JobInputJSON)
-	if !ok || extractedDeploySpec.ServiceKey != deploySpec.ServiceKey || extractedDeploySpec.DeployPlanFingerprint != deploySpec.DeployPlanFingerprint {
+	if !ok ||
+		extractedDeploySpec.ServiceKey != deploySpec.ServiceKey ||
+		extractedDeploySpec.DeployPlanFingerprint != deploySpec.DeployPlanFingerprint ||
+		extractedDeploySpec.ManifestBundleDigest != deploySpec.ManifestBundleDigest ||
+		len(extractedDeploySpec.RolloutTargets) != 1 ||
+		len(extractedDeploySpec.ExpectedImageRefs) != 1 {
 		t.Fatalf("DeployExecutionSpecFromJobInput() = %+v, %v", extractedDeploySpec, ok)
 	}
 	if deployJob.LastErrorCode != deployExecutorUnavailableCode || deployJob.NextAction != deployExecutorUnavailableAction {
@@ -1151,6 +1176,24 @@ func testDeployExecutionSpec(serviceKey string) DeployExecutionSpecInput {
 		TargetNamespace:       "kodex",
 		TargetClusterRef:      "fleet://clusters/00000000-0000-0000-0000-000000000777",
 		DeployPlanFingerprint: "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+		ManifestBundleRef:     "manifest-bundle://self-deploy/" + serviceKey,
+		ManifestBundleDigest:  "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		RolloutTargets: []DeployRolloutTargetInput{
+			{
+				Kind:      "deployment",
+				Ref:       "k8s://deployments/" + serviceKey,
+				Namespace: "kodex",
+				Name:      serviceKey,
+				Digest:    "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+			},
+		},
+		ExpectedImageRefs: []DeployExpectedImageRefInput{
+			{
+				ContainerName: serviceKey,
+				ImageRef:      "registry.local/kodex/" + serviceKey,
+				ImageDigest:   "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+			},
+		},
 		AllowedSecretRefs: []RuntimeJobExecutionRefInput{
 			{Kind: "kubernetes", Ref: "secret://fleet/platform-default"},
 		},

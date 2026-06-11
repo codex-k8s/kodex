@@ -2307,9 +2307,17 @@ type DeployExecutionSpec struct {
 	// allowed_secret_refs lists allowed secret references without values.
 	AllowedSecretRefs []*RuntimeJobAllowedSecretRef `protobuf:"bytes,15,rep,name=allowed_secret_refs,json=allowedSecretRefs,proto3" json:"allowed_secret_refs,omitempty"`
 	// output_refs describe where bounded deploy outputs are written.
-	OutputRefs    []*RuntimeJobOutputRef `protobuf:"bytes,16,rep,name=output_refs,json=outputRefs,proto3" json:"output_refs,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	OutputRefs []*RuntimeJobOutputRef `protobuf:"bytes,16,rep,name=output_refs,json=outputRefs,proto3" json:"output_refs,omitempty"`
+	// manifest_bundle_ref points to the checked rendered manifest bundle for runtime apply.
+	ManifestBundleRef string `protobuf:"bytes,17,opt,name=manifest_bundle_ref,json=manifestBundleRef,proto3" json:"manifest_bundle_ref,omitempty"`
+	// manifest_bundle_digest is the immutable digest of the checked manifest bundle.
+	ManifestBundleDigest string `protobuf:"bytes,18,opt,name=manifest_bundle_digest,json=manifestBundleDigest,proto3" json:"manifest_bundle_digest,omitempty"`
+	// rollout_targets describe bounded Kubernetes rollout targets expected by the deploy plan.
+	RolloutTargets []*DeployRolloutTarget `protobuf:"bytes,19,rep,name=rollout_targets,json=rolloutTargets,proto3" json:"rollout_targets,omitempty"`
+	// expected_image_refs describe immutable images expected in the rollout targets.
+	ExpectedImageRefs []*DeployExpectedImageRef `protobuf:"bytes,20,rep,name=expected_image_refs,json=expectedImageRefs,proto3" json:"expected_image_refs,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *DeployExecutionSpec) Reset() {
@@ -2450,6 +2458,34 @@ func (x *DeployExecutionSpec) GetAllowedSecretRefs() []*RuntimeJobAllowedSecretR
 func (x *DeployExecutionSpec) GetOutputRefs() []*RuntimeJobOutputRef {
 	if x != nil {
 		return x.OutputRefs
+	}
+	return nil
+}
+
+func (x *DeployExecutionSpec) GetManifestBundleRef() string {
+	if x != nil {
+		return x.ManifestBundleRef
+	}
+	return ""
+}
+
+func (x *DeployExecutionSpec) GetManifestBundleDigest() string {
+	if x != nil {
+		return x.ManifestBundleDigest
+	}
+	return ""
+}
+
+func (x *DeployExecutionSpec) GetRolloutTargets() []*DeployRolloutTarget {
+	if x != nil {
+		return x.RolloutTargets
+	}
+	return nil
+}
+
+func (x *DeployExecutionSpec) GetExpectedImageRefs() []*DeployExpectedImageRef {
+	if x != nil {
+		return x.ExpectedImageRefs
 	}
 	return nil
 }
@@ -7541,6 +7577,152 @@ func (x *ReconcilePrewarmPoolRequest) GetMeta() *CommandMeta {
 	return nil
 }
 
+// DeployRolloutTarget describes one bounded Kubernetes object watched during rollout.
+type DeployRolloutTarget struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// kind is a safe Kubernetes workload kind such as deployment or statefulset.
+	Kind string `protobuf:"bytes,1,opt,name=kind,proto3" json:"kind,omitempty"`
+	// ref is a safe target ref, for example k8s://deployments/runtime-manager.
+	Ref string `protobuf:"bytes,2,opt,name=ref,proto3" json:"ref,omitempty"`
+	// namespace is the target namespace for this object.
+	Namespace string `protobuf:"bytes,3,opt,name=namespace,proto3" json:"namespace,omitempty"`
+	// name is the Kubernetes object name.
+	Name string `protobuf:"bytes,4,opt,name=name,proto3" json:"name,omitempty"`
+	// digest optionally pins the rendered object digest from the checked bundle.
+	Digest        *string `protobuf:"bytes,5,opt,name=digest,proto3,oneof" json:"digest,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeployRolloutTarget) Reset() {
+	*x = DeployRolloutTarget{}
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[70]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeployRolloutTarget) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeployRolloutTarget) ProtoMessage() {}
+
+func (x *DeployRolloutTarget) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[70]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeployRolloutTarget.ProtoReflect.Descriptor instead.
+func (*DeployRolloutTarget) Descriptor() ([]byte, []int) {
+	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{70}
+}
+
+func (x *DeployRolloutTarget) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *DeployRolloutTarget) GetRef() string {
+	if x != nil {
+		return x.Ref
+	}
+	return ""
+}
+
+func (x *DeployRolloutTarget) GetNamespace() string {
+	if x != nil {
+		return x.Namespace
+	}
+	return ""
+}
+
+func (x *DeployRolloutTarget) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *DeployRolloutTarget) GetDigest() string {
+	if x != nil && x.Digest != nil {
+		return *x.Digest
+	}
+	return ""
+}
+
+// DeployExpectedImageRef describes one immutable image expected after rollout.
+type DeployExpectedImageRef struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// container_name identifies the container within rollout targets.
+	ContainerName string `protobuf:"bytes,1,opt,name=container_name,json=containerName,proto3" json:"container_name,omitempty"`
+	// image_ref is the expected image repository/ref without raw registry credentials.
+	ImageRef string `protobuf:"bytes,2,opt,name=image_ref,json=imageRef,proto3" json:"image_ref,omitempty"`
+	// image_digest pins the expected immutable image digest.
+	ImageDigest   string `protobuf:"bytes,3,opt,name=image_digest,json=imageDigest,proto3" json:"image_digest,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeployExpectedImageRef) Reset() {
+	*x = DeployExpectedImageRef{}
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[71]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeployExpectedImageRef) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeployExpectedImageRef) ProtoMessage() {}
+
+func (x *DeployExpectedImageRef) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[71]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeployExpectedImageRef.ProtoReflect.Descriptor instead.
+func (*DeployExpectedImageRef) Descriptor() ([]byte, []int) {
+	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{71}
+}
+
+func (x *DeployExpectedImageRef) GetContainerName() string {
+	if x != nil {
+		return x.ContainerName
+	}
+	return ""
+}
+
+func (x *DeployExpectedImageRef) GetImageRef() string {
+	if x != nil {
+		return x.ImageRef
+	}
+	return ""
+}
+
+func (x *DeployExpectedImageRef) GetImageDigest() string {
+	if x != nil {
+		return x.ImageDigest
+	}
+	return ""
+}
+
 var File_kodex_runtime_v1_runtime_manager_proto protoreflect.FileDescriptor
 
 const file_kodex_runtime_v1_runtime_manager_proto_rawDesc = "" +
@@ -7678,7 +7860,7 @@ const file_kodex_runtime_v1_runtime_manager_proto_rawDesc = "" +
 	"\voutput_refs\x18\x0f \x03(\v2%.kodex.runtime.v1.RuntimeJobOutputRefR\n" +
 	"outputRefsB\x0f\n" +
 	"\r_image_digestB\x14\n" +
-	"\x12_dockerfile_digest\"\xff\x05\n" +
+	"\x12_dockerfile_digest\"\x8f\b\n" +
 	"\x13DeployExecutionSpec\x12\x1d\n" +
 	"\n" +
 	"source_ref\x18\x01 \x01(\tR\tsourceRef\x12*\n" +
@@ -7699,7 +7881,11 @@ const file_kodex_runtime_v1_runtime_manager_proto_rawDesc = "" +
 	"\x17deploy_plan_fingerprint\x18\x0e \x01(\tR\x15deployPlanFingerprint\x12\\\n" +
 	"\x13allowed_secret_refs\x18\x0f \x03(\v2,.kodex.runtime.v1.RuntimeJobAllowedSecretRefR\x11allowedSecretRefs\x12F\n" +
 	"\voutput_refs\x18\x10 \x03(\v2%.kodex.runtime.v1.RuntimeJobOutputRefR\n" +
-	"outputRefsB\x11\n" +
+	"outputRefs\x12.\n" +
+	"\x13manifest_bundle_ref\x18\x11 \x01(\tR\x11manifestBundleRef\x124\n" +
+	"\x16manifest_bundle_digest\x18\x12 \x01(\tR\x14manifestBundleDigest\x12N\n" +
+	"\x0frollout_targets\x18\x13 \x03(\v2%.kodex.runtime.v1.DeployRolloutTargetR\x0erolloutTargets\x12X\n" +
+	"\x13expected_image_refs\x18\x14 \x03(\v2(.kodex.runtime.v1.DeployExpectedImageRefR\x11expectedImageRefsB\x11\n" +
 	"\x0f_target_slot_id\"\x96\a\n" +
 	"\x19CodexSessionExecutionSpec\x124\n" +
 	"\x16instruction_object_ref\x18\x01 \x01(\tR\x14instructionObjectRef\x12:\n" +
@@ -8297,7 +8483,18 @@ const file_kodex_runtime_v1_runtime_manager_proto_rawDesc = "" +
 	"leaseOwner\x12\x1f\n" +
 	"\vlease_until\x18\x03 \x01(\tR\n" +
 	"leaseUntil\x121\n" +
-	"\x04meta\x18\x04 \x01(\v2\x1d.kodex.runtime.v1.CommandMetaR\x04meta*\x89\x01\n" +
+	"\x04meta\x18\x04 \x01(\v2\x1d.kodex.runtime.v1.CommandMetaR\x04meta\"\x95\x01\n" +
+	"\x13DeployRolloutTarget\x12\x12\n" +
+	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x10\n" +
+	"\x03ref\x18\x02 \x01(\tR\x03ref\x12\x1c\n" +
+	"\tnamespace\x18\x03 \x01(\tR\tnamespace\x12\x12\n" +
+	"\x04name\x18\x04 \x01(\tR\x04name\x12\x1b\n" +
+	"\x06digest\x18\x05 \x01(\tH\x00R\x06digest\x88\x01\x01B\t\n" +
+	"\a_digest\"\x7f\n" +
+	"\x16DeployExpectedImageRef\x12%\n" +
+	"\x0econtainer_name\x18\x01 \x01(\tR\rcontainerName\x12\x1b\n" +
+	"\timage_ref\x18\x02 \x01(\tR\bimageRef\x12!\n" +
+	"\fimage_digest\x18\x03 \x01(\tR\vimageDigest*\x89\x01\n" +
 	"\vRuntimeMode\x12\x1c\n" +
 	"\x18RUNTIME_MODE_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16RUNTIME_MODE_CODE_ONLY\x10\x01\x12\x19\n" +
@@ -8452,7 +8649,7 @@ func file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP() []byte {
 }
 
 var file_kodex_runtime_v1_runtime_manager_proto_enumTypes = make([]protoimpl.EnumInfo, 17)
-var file_kodex_runtime_v1_runtime_manager_proto_msgTypes = make([]protoimpl.MessageInfo, 70)
+var file_kodex_runtime_v1_runtime_manager_proto_msgTypes = make([]protoimpl.MessageInfo, 72)
 var file_kodex_runtime_v1_runtime_manager_proto_goTypes = []any{
 	(RuntimeMode)(0),                                      // 0: kodex.runtime.v1.RuntimeMode
 	(SlotStatus)(0),                                       // 1: kodex.runtime.v1.SlotStatus
@@ -8541,6 +8738,8 @@ var file_kodex_runtime_v1_runtime_manager_proto_goTypes = []any{
 	(*CreateOrUpdatePrewarmPoolRequest)(nil),              // 84: kodex.runtime.v1.CreateOrUpdatePrewarmPoolRequest
 	(*PrewarmPoolResponse)(nil),                           // 85: kodex.runtime.v1.PrewarmPoolResponse
 	(*ReconcilePrewarmPoolRequest)(nil),                   // 86: kodex.runtime.v1.ReconcilePrewarmPoolRequest
+	(*DeployRolloutTarget)(nil),                           // 87: kodex.runtime.v1.DeployRolloutTarget
+	(*DeployExpectedImageRef)(nil),                        // 88: kodex.runtime.v1.DeployExpectedImageRef
 }
 var file_kodex_runtime_v1_runtime_manager_proto_depIdxs = []int32{
 	20,  // 0: kodex.runtime.v1.CommandMeta.actor:type_name -> kodex.runtime.v1.Actor
@@ -8554,174 +8753,176 @@ var file_kodex_runtime_v1_runtime_manager_proto_depIdxs = []int32{
 	31,  // 8: kodex.runtime.v1.BuildExecutionSpec.output_refs:type_name -> kodex.runtime.v1.RuntimeJobOutputRef
 	30,  // 9: kodex.runtime.v1.DeployExecutionSpec.allowed_secret_refs:type_name -> kodex.runtime.v1.RuntimeJobAllowedSecretRef
 	31,  // 10: kodex.runtime.v1.DeployExecutionSpec.output_refs:type_name -> kodex.runtime.v1.RuntimeJobOutputRef
-	29,  // 11: kodex.runtime.v1.CodexSessionExecutionSpec.callback_refs:type_name -> kodex.runtime.v1.AgentRunExecutionRef
-	9,   // 12: kodex.runtime.v1.CodexSessionExecutionSpec.runner_mode:type_name -> kodex.runtime.v1.AgentRunRunnerMode
-	29,  // 13: kodex.runtime.v1.CodexSessionExecutionSpec.output_refs:type_name -> kodex.runtime.v1.AgentRunExecutionRef
-	29,  // 14: kodex.runtime.v1.CodexSessionExecutionSpec.result_refs:type_name -> kodex.runtime.v1.AgentRunExecutionRef
-	27,  // 15: kodex.runtime.v1.CodexSessionExecutionSpec.allowed_secret_refs:type_name -> kodex.runtime.v1.AgentRunAllowedSecretRef
-	9,   // 16: kodex.runtime.v1.AgentRunExecutionSpec.runner_mode:type_name -> kodex.runtime.v1.AgentRunRunnerMode
-	27,  // 17: kodex.runtime.v1.AgentRunExecutionSpec.allowed_secret_refs:type_name -> kodex.runtime.v1.AgentRunAllowedSecretRef
-	28,  // 18: kodex.runtime.v1.AgentRunExecutionSpec.reporting_target_refs:type_name -> kodex.runtime.v1.AgentRunReportingTargetRef
-	34,  // 19: kodex.runtime.v1.AgentRunExecutionSpec.codex_session_execution_spec:type_name -> kodex.runtime.v1.CodexSessionExecutionSpec
-	1,   // 20: kodex.runtime.v1.Slot.status:type_name -> kodex.runtime.v1.SlotStatus
-	0,   // 21: kodex.runtime.v1.Slot.runtime_mode:type_name -> kodex.runtime.v1.RuntimeMode
-	4,   // 22: kodex.runtime.v1.WorkspaceMaterialization.status:type_name -> kodex.runtime.v1.WorkspaceMaterializationStatus
-	23,  // 23: kodex.runtime.v1.WorkspaceMaterialization.sources:type_name -> kodex.runtime.v1.WorkspaceSource
-	5,   // 24: kodex.runtime.v1.BuildContext.status:type_name -> kodex.runtime.v1.BuildContextStatus
-	6,   // 25: kodex.runtime.v1.Job.job_type:type_name -> kodex.runtime.v1.JobType
-	7,   // 26: kodex.runtime.v1.Job.status:type_name -> kodex.runtime.v1.JobStatus
-	8,   // 27: kodex.runtime.v1.Job.priority:type_name -> kodex.runtime.v1.JobPriority
-	40,  // 28: kodex.runtime.v1.Job.steps:type_name -> kodex.runtime.v1.JobStep
-	35,  // 29: kodex.runtime.v1.Job.agent_run_execution_spec:type_name -> kodex.runtime.v1.AgentRunExecutionSpec
-	32,  // 30: kodex.runtime.v1.Job.build_execution_spec:type_name -> kodex.runtime.v1.BuildExecutionSpec
-	33,  // 31: kodex.runtime.v1.Job.deploy_execution_spec:type_name -> kodex.runtime.v1.DeployExecutionSpec
-	10,  // 32: kodex.runtime.v1.JobStep.status:type_name -> kodex.runtime.v1.JobStepStatus
-	11,  // 33: kodex.runtime.v1.RuntimeArtifactRef.artifact_type:type_name -> kodex.runtime.v1.RuntimeArtifactType
-	11,  // 34: kodex.runtime.v1.RuntimeArtifactRefInput.artifact_type:type_name -> kodex.runtime.v1.RuntimeArtifactType
-	13,  // 35: kodex.runtime.v1.CleanupPolicy.scope_type:type_name -> kodex.runtime.v1.RuntimeScopeType
-	12,  // 36: kodex.runtime.v1.CleanupPolicy.status:type_name -> kodex.runtime.v1.CleanupPolicyStatus
-	14,  // 37: kodex.runtime.v1.PrewarmPool.scope_type:type_name -> kodex.runtime.v1.PrewarmPoolScopeType
-	15,  // 38: kodex.runtime.v1.PrewarmPool.status:type_name -> kodex.runtime.v1.PrewarmPoolStatus
-	16,  // 39: kodex.runtime.v1.PrewarmPool.last_capacity_status:type_name -> kodex.runtime.v1.CapacityStatus
-	0,   // 40: kodex.runtime.v1.PrepareRuntimeRequest.runtime_mode:type_name -> kodex.runtime.v1.RuntimeMode
-	24,  // 41: kodex.runtime.v1.PrepareRuntimeRequest.workspace_policy:type_name -> kodex.runtime.v1.WorkspacePolicyInput
-	25,  // 42: kodex.runtime.v1.PrepareRuntimeRequest.placement_constraints:type_name -> kodex.runtime.v1.PlacementConstraints
-	17,  // 43: kodex.runtime.v1.PrepareRuntimeRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
-	36,  // 44: kodex.runtime.v1.PrepareRuntimeResponse.slot:type_name -> kodex.runtime.v1.Slot
-	37,  // 45: kodex.runtime.v1.PrepareRuntimeResponse.workspace_materialization:type_name -> kodex.runtime.v1.WorkspaceMaterialization
-	26,  // 46: kodex.runtime.v1.PrepareRuntimeResponse.runtime_context:type_name -> kodex.runtime.v1.RuntimeContext
-	0,   // 47: kodex.runtime.v1.ReserveSlotRequest.runtime_mode:type_name -> kodex.runtime.v1.RuntimeMode
-	25,  // 48: kodex.runtime.v1.ReserveSlotRequest.placement_constraints:type_name -> kodex.runtime.v1.PlacementConstraints
-	17,  // 49: kodex.runtime.v1.ReserveSlotRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
-	17,  // 50: kodex.runtime.v1.ExtendSlotLeaseRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
-	17,  // 51: kodex.runtime.v1.ReleaseSlotRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
-	17,  // 52: kodex.runtime.v1.MarkSlotFailedRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
-	36,  // 53: kodex.runtime.v1.SlotResponse.slot:type_name -> kodex.runtime.v1.Slot
-	18,  // 54: kodex.runtime.v1.GetSlotRequest.meta:type_name -> kodex.runtime.v1.QueryMeta
-	1,   // 55: kodex.runtime.v1.ListSlotsRequest.statuses:type_name -> kodex.runtime.v1.SlotStatus
-	21,  // 56: kodex.runtime.v1.ListSlotsRequest.page:type_name -> kodex.runtime.v1.PageRequest
-	18,  // 57: kodex.runtime.v1.ListSlotsRequest.meta:type_name -> kodex.runtime.v1.QueryMeta
-	36,  // 58: kodex.runtime.v1.ListSlotsResponse.slots:type_name -> kodex.runtime.v1.Slot
-	22,  // 59: kodex.runtime.v1.ListSlotsResponse.page:type_name -> kodex.runtime.v1.PageResponse
-	24,  // 60: kodex.runtime.v1.StartWorkspaceMaterializationRequest.workspace_policy:type_name -> kodex.runtime.v1.WorkspacePolicyInput
-	17,  // 61: kodex.runtime.v1.StartWorkspaceMaterializationRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
-	4,   // 62: kodex.runtime.v1.ReportWorkspaceMaterializationProgressRequest.status:type_name -> kodex.runtime.v1.WorkspaceMaterializationStatus
-	17,  // 63: kodex.runtime.v1.ReportWorkspaceMaterializationProgressRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
-	37,  // 64: kodex.runtime.v1.WorkspaceMaterializationResponse.workspace_materialization:type_name -> kodex.runtime.v1.WorkspaceMaterialization
-	18,  // 65: kodex.runtime.v1.GetWorkspaceMaterializationRequest.meta:type_name -> kodex.runtime.v1.QueryMeta
-	4,   // 66: kodex.runtime.v1.ListWorkspaceMaterializationsRequest.statuses:type_name -> kodex.runtime.v1.WorkspaceMaterializationStatus
-	21,  // 67: kodex.runtime.v1.ListWorkspaceMaterializationsRequest.page:type_name -> kodex.runtime.v1.PageRequest
-	18,  // 68: kodex.runtime.v1.ListWorkspaceMaterializationsRequest.meta:type_name -> kodex.runtime.v1.QueryMeta
-	37,  // 69: kodex.runtime.v1.ListWorkspaceMaterializationsResponse.workspace_materializations:type_name -> kodex.runtime.v1.WorkspaceMaterialization
-	22,  // 70: kodex.runtime.v1.ListWorkspaceMaterializationsResponse.page:type_name -> kodex.runtime.v1.PageResponse
-	17,  // 71: kodex.runtime.v1.PrepareBuildContextRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
-	5,   // 72: kodex.runtime.v1.ReportBuildContextProgressRequest.status:type_name -> kodex.runtime.v1.BuildContextStatus
-	17,  // 73: kodex.runtime.v1.ReportBuildContextProgressRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
-	38,  // 74: kodex.runtime.v1.BuildContextResponse.build_context:type_name -> kodex.runtime.v1.BuildContext
-	18,  // 75: kodex.runtime.v1.GetBuildContextRequest.meta:type_name -> kodex.runtime.v1.QueryMeta
-	6,   // 76: kodex.runtime.v1.CreateJobRequest.job_type:type_name -> kodex.runtime.v1.JobType
-	8,   // 77: kodex.runtime.v1.CreateJobRequest.priority:type_name -> kodex.runtime.v1.JobPriority
-	25,  // 78: kodex.runtime.v1.CreateJobRequest.placement_constraints:type_name -> kodex.runtime.v1.PlacementConstraints
-	17,  // 79: kodex.runtime.v1.CreateJobRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
-	35,  // 80: kodex.runtime.v1.CreateJobRequest.agent_run_execution_spec:type_name -> kodex.runtime.v1.AgentRunExecutionSpec
-	32,  // 81: kodex.runtime.v1.CreateJobRequest.build_execution_spec:type_name -> kodex.runtime.v1.BuildExecutionSpec
-	33,  // 82: kodex.runtime.v1.CreateJobRequest.deploy_execution_spec:type_name -> kodex.runtime.v1.DeployExecutionSpec
-	6,   // 83: kodex.runtime.v1.ClaimRunnableJobRequest.job_types:type_name -> kodex.runtime.v1.JobType
-	17,  // 84: kodex.runtime.v1.ClaimRunnableJobRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
-	39,  // 85: kodex.runtime.v1.ClaimRunnableJobResponse.job:type_name -> kodex.runtime.v1.Job
-	10,  // 86: kodex.runtime.v1.ReportJobStepProgressRequest.status:type_name -> kodex.runtime.v1.JobStepStatus
-	42,  // 87: kodex.runtime.v1.ReportJobStepProgressRequest.artifact_refs:type_name -> kodex.runtime.v1.RuntimeArtifactRefInput
-	17,  // 88: kodex.runtime.v1.ReportJobStepProgressRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
-	17,  // 89: kodex.runtime.v1.CompleteJobRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
-	17,  // 90: kodex.runtime.v1.FailJobRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
-	17,  // 91: kodex.runtime.v1.CancelJobRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
-	39,  // 92: kodex.runtime.v1.JobResponse.job:type_name -> kodex.runtime.v1.Job
-	18,  // 93: kodex.runtime.v1.GetJobRequest.meta:type_name -> kodex.runtime.v1.QueryMeta
-	7,   // 94: kodex.runtime.v1.ListJobsRequest.statuses:type_name -> kodex.runtime.v1.JobStatus
-	6,   // 95: kodex.runtime.v1.ListJobsRequest.job_types:type_name -> kodex.runtime.v1.JobType
-	21,  // 96: kodex.runtime.v1.ListJobsRequest.page:type_name -> kodex.runtime.v1.PageRequest
-	18,  // 97: kodex.runtime.v1.ListJobsRequest.meta:type_name -> kodex.runtime.v1.QueryMeta
-	39,  // 98: kodex.runtime.v1.ListJobsResponse.jobs:type_name -> kodex.runtime.v1.Job
-	22,  // 99: kodex.runtime.v1.ListJobsResponse.page:type_name -> kodex.runtime.v1.PageResponse
-	42,  // 100: kodex.runtime.v1.RecordRuntimeArtifactRefRequest.artifact_ref:type_name -> kodex.runtime.v1.RuntimeArtifactRefInput
-	17,  // 101: kodex.runtime.v1.RecordRuntimeArtifactRefRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
-	41,  // 102: kodex.runtime.v1.RuntimeArtifactRefResponse.runtime_artifact_ref:type_name -> kodex.runtime.v1.RuntimeArtifactRef
-	11,  // 103: kodex.runtime.v1.ListRuntimeArtifactRefsRequest.artifact_types:type_name -> kodex.runtime.v1.RuntimeArtifactType
-	21,  // 104: kodex.runtime.v1.ListRuntimeArtifactRefsRequest.page:type_name -> kodex.runtime.v1.PageRequest
-	18,  // 105: kodex.runtime.v1.ListRuntimeArtifactRefsRequest.meta:type_name -> kodex.runtime.v1.QueryMeta
-	41,  // 106: kodex.runtime.v1.ListRuntimeArtifactRefsResponse.runtime_artifact_refs:type_name -> kodex.runtime.v1.RuntimeArtifactRef
-	22,  // 107: kodex.runtime.v1.ListRuntimeArtifactRefsResponse.page:type_name -> kodex.runtime.v1.PageResponse
-	13,  // 108: kodex.runtime.v1.CreateOrUpdateCleanupPolicyRequest.scope_type:type_name -> kodex.runtime.v1.RuntimeScopeType
-	12,  // 109: kodex.runtime.v1.CreateOrUpdateCleanupPolicyRequest.status:type_name -> kodex.runtime.v1.CleanupPolicyStatus
-	17,  // 110: kodex.runtime.v1.CreateOrUpdateCleanupPolicyRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
-	43,  // 111: kodex.runtime.v1.CleanupPolicyResponse.cleanup_policy:type_name -> kodex.runtime.v1.CleanupPolicy
-	17,  // 112: kodex.runtime.v1.RunCleanupBatchRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
-	14,  // 113: kodex.runtime.v1.CreateOrUpdatePrewarmPoolRequest.scope_type:type_name -> kodex.runtime.v1.PrewarmPoolScopeType
-	15,  // 114: kodex.runtime.v1.CreateOrUpdatePrewarmPoolRequest.status:type_name -> kodex.runtime.v1.PrewarmPoolStatus
-	17,  // 115: kodex.runtime.v1.CreateOrUpdatePrewarmPoolRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
-	44,  // 116: kodex.runtime.v1.PrewarmPoolResponse.prewarm_pool:type_name -> kodex.runtime.v1.PrewarmPool
-	17,  // 117: kodex.runtime.v1.ReconcilePrewarmPoolRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
-	45,  // 118: kodex.runtime.v1.RuntimeManagerService.PrepareRuntime:input_type -> kodex.runtime.v1.PrepareRuntimeRequest
-	47,  // 119: kodex.runtime.v1.RuntimeManagerService.ReserveSlot:input_type -> kodex.runtime.v1.ReserveSlotRequest
-	48,  // 120: kodex.runtime.v1.RuntimeManagerService.ExtendSlotLease:input_type -> kodex.runtime.v1.ExtendSlotLeaseRequest
-	49,  // 121: kodex.runtime.v1.RuntimeManagerService.ReleaseSlot:input_type -> kodex.runtime.v1.ReleaseSlotRequest
-	50,  // 122: kodex.runtime.v1.RuntimeManagerService.MarkSlotFailed:input_type -> kodex.runtime.v1.MarkSlotFailedRequest
-	52,  // 123: kodex.runtime.v1.RuntimeManagerService.GetSlot:input_type -> kodex.runtime.v1.GetSlotRequest
-	53,  // 124: kodex.runtime.v1.RuntimeManagerService.ListSlots:input_type -> kodex.runtime.v1.ListSlotsRequest
-	55,  // 125: kodex.runtime.v1.RuntimeManagerService.StartWorkspaceMaterialization:input_type -> kodex.runtime.v1.StartWorkspaceMaterializationRequest
-	56,  // 126: kodex.runtime.v1.RuntimeManagerService.ReportWorkspaceMaterializationProgress:input_type -> kodex.runtime.v1.ReportWorkspaceMaterializationProgressRequest
-	58,  // 127: kodex.runtime.v1.RuntimeManagerService.GetWorkspaceMaterialization:input_type -> kodex.runtime.v1.GetWorkspaceMaterializationRequest
-	59,  // 128: kodex.runtime.v1.RuntimeManagerService.ListWorkspaceMaterializations:input_type -> kodex.runtime.v1.ListWorkspaceMaterializationsRequest
-	61,  // 129: kodex.runtime.v1.RuntimeManagerService.PrepareBuildContext:input_type -> kodex.runtime.v1.PrepareBuildContextRequest
-	62,  // 130: kodex.runtime.v1.RuntimeManagerService.ReportBuildContextProgress:input_type -> kodex.runtime.v1.ReportBuildContextProgressRequest
-	64,  // 131: kodex.runtime.v1.RuntimeManagerService.GetBuildContext:input_type -> kodex.runtime.v1.GetBuildContextRequest
-	65,  // 132: kodex.runtime.v1.RuntimeManagerService.CreateJob:input_type -> kodex.runtime.v1.CreateJobRequest
-	66,  // 133: kodex.runtime.v1.RuntimeManagerService.ClaimRunnableJob:input_type -> kodex.runtime.v1.ClaimRunnableJobRequest
-	68,  // 134: kodex.runtime.v1.RuntimeManagerService.ReportJobStepProgress:input_type -> kodex.runtime.v1.ReportJobStepProgressRequest
-	69,  // 135: kodex.runtime.v1.RuntimeManagerService.CompleteJob:input_type -> kodex.runtime.v1.CompleteJobRequest
-	70,  // 136: kodex.runtime.v1.RuntimeManagerService.FailJob:input_type -> kodex.runtime.v1.FailJobRequest
-	71,  // 137: kodex.runtime.v1.RuntimeManagerService.CancelJob:input_type -> kodex.runtime.v1.CancelJobRequest
-	73,  // 138: kodex.runtime.v1.RuntimeManagerService.GetJob:input_type -> kodex.runtime.v1.GetJobRequest
-	74,  // 139: kodex.runtime.v1.RuntimeManagerService.ListJobs:input_type -> kodex.runtime.v1.ListJobsRequest
-	76,  // 140: kodex.runtime.v1.RuntimeManagerService.RecordRuntimeArtifactRef:input_type -> kodex.runtime.v1.RecordRuntimeArtifactRefRequest
-	78,  // 141: kodex.runtime.v1.RuntimeManagerService.ListRuntimeArtifactRefs:input_type -> kodex.runtime.v1.ListRuntimeArtifactRefsRequest
-	80,  // 142: kodex.runtime.v1.RuntimeManagerService.CreateOrUpdateCleanupPolicy:input_type -> kodex.runtime.v1.CreateOrUpdateCleanupPolicyRequest
-	82,  // 143: kodex.runtime.v1.RuntimeManagerService.RunCleanupBatch:input_type -> kodex.runtime.v1.RunCleanupBatchRequest
-	84,  // 144: kodex.runtime.v1.RuntimeManagerService.CreateOrUpdatePrewarmPool:input_type -> kodex.runtime.v1.CreateOrUpdatePrewarmPoolRequest
-	86,  // 145: kodex.runtime.v1.RuntimeManagerService.ReconcilePrewarmPool:input_type -> kodex.runtime.v1.ReconcilePrewarmPoolRequest
-	46,  // 146: kodex.runtime.v1.RuntimeManagerService.PrepareRuntime:output_type -> kodex.runtime.v1.PrepareRuntimeResponse
-	51,  // 147: kodex.runtime.v1.RuntimeManagerService.ReserveSlot:output_type -> kodex.runtime.v1.SlotResponse
-	51,  // 148: kodex.runtime.v1.RuntimeManagerService.ExtendSlotLease:output_type -> kodex.runtime.v1.SlotResponse
-	51,  // 149: kodex.runtime.v1.RuntimeManagerService.ReleaseSlot:output_type -> kodex.runtime.v1.SlotResponse
-	51,  // 150: kodex.runtime.v1.RuntimeManagerService.MarkSlotFailed:output_type -> kodex.runtime.v1.SlotResponse
-	51,  // 151: kodex.runtime.v1.RuntimeManagerService.GetSlot:output_type -> kodex.runtime.v1.SlotResponse
-	54,  // 152: kodex.runtime.v1.RuntimeManagerService.ListSlots:output_type -> kodex.runtime.v1.ListSlotsResponse
-	57,  // 153: kodex.runtime.v1.RuntimeManagerService.StartWorkspaceMaterialization:output_type -> kodex.runtime.v1.WorkspaceMaterializationResponse
-	57,  // 154: kodex.runtime.v1.RuntimeManagerService.ReportWorkspaceMaterializationProgress:output_type -> kodex.runtime.v1.WorkspaceMaterializationResponse
-	57,  // 155: kodex.runtime.v1.RuntimeManagerService.GetWorkspaceMaterialization:output_type -> kodex.runtime.v1.WorkspaceMaterializationResponse
-	60,  // 156: kodex.runtime.v1.RuntimeManagerService.ListWorkspaceMaterializations:output_type -> kodex.runtime.v1.ListWorkspaceMaterializationsResponse
-	63,  // 157: kodex.runtime.v1.RuntimeManagerService.PrepareBuildContext:output_type -> kodex.runtime.v1.BuildContextResponse
-	63,  // 158: kodex.runtime.v1.RuntimeManagerService.ReportBuildContextProgress:output_type -> kodex.runtime.v1.BuildContextResponse
-	63,  // 159: kodex.runtime.v1.RuntimeManagerService.GetBuildContext:output_type -> kodex.runtime.v1.BuildContextResponse
-	72,  // 160: kodex.runtime.v1.RuntimeManagerService.CreateJob:output_type -> kodex.runtime.v1.JobResponse
-	67,  // 161: kodex.runtime.v1.RuntimeManagerService.ClaimRunnableJob:output_type -> kodex.runtime.v1.ClaimRunnableJobResponse
-	72,  // 162: kodex.runtime.v1.RuntimeManagerService.ReportJobStepProgress:output_type -> kodex.runtime.v1.JobResponse
-	72,  // 163: kodex.runtime.v1.RuntimeManagerService.CompleteJob:output_type -> kodex.runtime.v1.JobResponse
-	72,  // 164: kodex.runtime.v1.RuntimeManagerService.FailJob:output_type -> kodex.runtime.v1.JobResponse
-	72,  // 165: kodex.runtime.v1.RuntimeManagerService.CancelJob:output_type -> kodex.runtime.v1.JobResponse
-	72,  // 166: kodex.runtime.v1.RuntimeManagerService.GetJob:output_type -> kodex.runtime.v1.JobResponse
-	75,  // 167: kodex.runtime.v1.RuntimeManagerService.ListJobs:output_type -> kodex.runtime.v1.ListJobsResponse
-	77,  // 168: kodex.runtime.v1.RuntimeManagerService.RecordRuntimeArtifactRef:output_type -> kodex.runtime.v1.RuntimeArtifactRefResponse
-	79,  // 169: kodex.runtime.v1.RuntimeManagerService.ListRuntimeArtifactRefs:output_type -> kodex.runtime.v1.ListRuntimeArtifactRefsResponse
-	81,  // 170: kodex.runtime.v1.RuntimeManagerService.CreateOrUpdateCleanupPolicy:output_type -> kodex.runtime.v1.CleanupPolicyResponse
-	83,  // 171: kodex.runtime.v1.RuntimeManagerService.RunCleanupBatch:output_type -> kodex.runtime.v1.RunCleanupBatchResponse
-	85,  // 172: kodex.runtime.v1.RuntimeManagerService.CreateOrUpdatePrewarmPool:output_type -> kodex.runtime.v1.PrewarmPoolResponse
-	85,  // 173: kodex.runtime.v1.RuntimeManagerService.ReconcilePrewarmPool:output_type -> kodex.runtime.v1.PrewarmPoolResponse
-	146, // [146:174] is the sub-list for method output_type
-	118, // [118:146] is the sub-list for method input_type
-	118, // [118:118] is the sub-list for extension type_name
-	118, // [118:118] is the sub-list for extension extendee
-	0,   // [0:118] is the sub-list for field type_name
+	87,  // 11: kodex.runtime.v1.DeployExecutionSpec.rollout_targets:type_name -> kodex.runtime.v1.DeployRolloutTarget
+	88,  // 12: kodex.runtime.v1.DeployExecutionSpec.expected_image_refs:type_name -> kodex.runtime.v1.DeployExpectedImageRef
+	29,  // 13: kodex.runtime.v1.CodexSessionExecutionSpec.callback_refs:type_name -> kodex.runtime.v1.AgentRunExecutionRef
+	9,   // 14: kodex.runtime.v1.CodexSessionExecutionSpec.runner_mode:type_name -> kodex.runtime.v1.AgentRunRunnerMode
+	29,  // 15: kodex.runtime.v1.CodexSessionExecutionSpec.output_refs:type_name -> kodex.runtime.v1.AgentRunExecutionRef
+	29,  // 16: kodex.runtime.v1.CodexSessionExecutionSpec.result_refs:type_name -> kodex.runtime.v1.AgentRunExecutionRef
+	27,  // 17: kodex.runtime.v1.CodexSessionExecutionSpec.allowed_secret_refs:type_name -> kodex.runtime.v1.AgentRunAllowedSecretRef
+	9,   // 18: kodex.runtime.v1.AgentRunExecutionSpec.runner_mode:type_name -> kodex.runtime.v1.AgentRunRunnerMode
+	27,  // 19: kodex.runtime.v1.AgentRunExecutionSpec.allowed_secret_refs:type_name -> kodex.runtime.v1.AgentRunAllowedSecretRef
+	28,  // 20: kodex.runtime.v1.AgentRunExecutionSpec.reporting_target_refs:type_name -> kodex.runtime.v1.AgentRunReportingTargetRef
+	34,  // 21: kodex.runtime.v1.AgentRunExecutionSpec.codex_session_execution_spec:type_name -> kodex.runtime.v1.CodexSessionExecutionSpec
+	1,   // 22: kodex.runtime.v1.Slot.status:type_name -> kodex.runtime.v1.SlotStatus
+	0,   // 23: kodex.runtime.v1.Slot.runtime_mode:type_name -> kodex.runtime.v1.RuntimeMode
+	4,   // 24: kodex.runtime.v1.WorkspaceMaterialization.status:type_name -> kodex.runtime.v1.WorkspaceMaterializationStatus
+	23,  // 25: kodex.runtime.v1.WorkspaceMaterialization.sources:type_name -> kodex.runtime.v1.WorkspaceSource
+	5,   // 26: kodex.runtime.v1.BuildContext.status:type_name -> kodex.runtime.v1.BuildContextStatus
+	6,   // 27: kodex.runtime.v1.Job.job_type:type_name -> kodex.runtime.v1.JobType
+	7,   // 28: kodex.runtime.v1.Job.status:type_name -> kodex.runtime.v1.JobStatus
+	8,   // 29: kodex.runtime.v1.Job.priority:type_name -> kodex.runtime.v1.JobPriority
+	40,  // 30: kodex.runtime.v1.Job.steps:type_name -> kodex.runtime.v1.JobStep
+	35,  // 31: kodex.runtime.v1.Job.agent_run_execution_spec:type_name -> kodex.runtime.v1.AgentRunExecutionSpec
+	32,  // 32: kodex.runtime.v1.Job.build_execution_spec:type_name -> kodex.runtime.v1.BuildExecutionSpec
+	33,  // 33: kodex.runtime.v1.Job.deploy_execution_spec:type_name -> kodex.runtime.v1.DeployExecutionSpec
+	10,  // 34: kodex.runtime.v1.JobStep.status:type_name -> kodex.runtime.v1.JobStepStatus
+	11,  // 35: kodex.runtime.v1.RuntimeArtifactRef.artifact_type:type_name -> kodex.runtime.v1.RuntimeArtifactType
+	11,  // 36: kodex.runtime.v1.RuntimeArtifactRefInput.artifact_type:type_name -> kodex.runtime.v1.RuntimeArtifactType
+	13,  // 37: kodex.runtime.v1.CleanupPolicy.scope_type:type_name -> kodex.runtime.v1.RuntimeScopeType
+	12,  // 38: kodex.runtime.v1.CleanupPolicy.status:type_name -> kodex.runtime.v1.CleanupPolicyStatus
+	14,  // 39: kodex.runtime.v1.PrewarmPool.scope_type:type_name -> kodex.runtime.v1.PrewarmPoolScopeType
+	15,  // 40: kodex.runtime.v1.PrewarmPool.status:type_name -> kodex.runtime.v1.PrewarmPoolStatus
+	16,  // 41: kodex.runtime.v1.PrewarmPool.last_capacity_status:type_name -> kodex.runtime.v1.CapacityStatus
+	0,   // 42: kodex.runtime.v1.PrepareRuntimeRequest.runtime_mode:type_name -> kodex.runtime.v1.RuntimeMode
+	24,  // 43: kodex.runtime.v1.PrepareRuntimeRequest.workspace_policy:type_name -> kodex.runtime.v1.WorkspacePolicyInput
+	25,  // 44: kodex.runtime.v1.PrepareRuntimeRequest.placement_constraints:type_name -> kodex.runtime.v1.PlacementConstraints
+	17,  // 45: kodex.runtime.v1.PrepareRuntimeRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
+	36,  // 46: kodex.runtime.v1.PrepareRuntimeResponse.slot:type_name -> kodex.runtime.v1.Slot
+	37,  // 47: kodex.runtime.v1.PrepareRuntimeResponse.workspace_materialization:type_name -> kodex.runtime.v1.WorkspaceMaterialization
+	26,  // 48: kodex.runtime.v1.PrepareRuntimeResponse.runtime_context:type_name -> kodex.runtime.v1.RuntimeContext
+	0,   // 49: kodex.runtime.v1.ReserveSlotRequest.runtime_mode:type_name -> kodex.runtime.v1.RuntimeMode
+	25,  // 50: kodex.runtime.v1.ReserveSlotRequest.placement_constraints:type_name -> kodex.runtime.v1.PlacementConstraints
+	17,  // 51: kodex.runtime.v1.ReserveSlotRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
+	17,  // 52: kodex.runtime.v1.ExtendSlotLeaseRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
+	17,  // 53: kodex.runtime.v1.ReleaseSlotRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
+	17,  // 54: kodex.runtime.v1.MarkSlotFailedRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
+	36,  // 55: kodex.runtime.v1.SlotResponse.slot:type_name -> kodex.runtime.v1.Slot
+	18,  // 56: kodex.runtime.v1.GetSlotRequest.meta:type_name -> kodex.runtime.v1.QueryMeta
+	1,   // 57: kodex.runtime.v1.ListSlotsRequest.statuses:type_name -> kodex.runtime.v1.SlotStatus
+	21,  // 58: kodex.runtime.v1.ListSlotsRequest.page:type_name -> kodex.runtime.v1.PageRequest
+	18,  // 59: kodex.runtime.v1.ListSlotsRequest.meta:type_name -> kodex.runtime.v1.QueryMeta
+	36,  // 60: kodex.runtime.v1.ListSlotsResponse.slots:type_name -> kodex.runtime.v1.Slot
+	22,  // 61: kodex.runtime.v1.ListSlotsResponse.page:type_name -> kodex.runtime.v1.PageResponse
+	24,  // 62: kodex.runtime.v1.StartWorkspaceMaterializationRequest.workspace_policy:type_name -> kodex.runtime.v1.WorkspacePolicyInput
+	17,  // 63: kodex.runtime.v1.StartWorkspaceMaterializationRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
+	4,   // 64: kodex.runtime.v1.ReportWorkspaceMaterializationProgressRequest.status:type_name -> kodex.runtime.v1.WorkspaceMaterializationStatus
+	17,  // 65: kodex.runtime.v1.ReportWorkspaceMaterializationProgressRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
+	37,  // 66: kodex.runtime.v1.WorkspaceMaterializationResponse.workspace_materialization:type_name -> kodex.runtime.v1.WorkspaceMaterialization
+	18,  // 67: kodex.runtime.v1.GetWorkspaceMaterializationRequest.meta:type_name -> kodex.runtime.v1.QueryMeta
+	4,   // 68: kodex.runtime.v1.ListWorkspaceMaterializationsRequest.statuses:type_name -> kodex.runtime.v1.WorkspaceMaterializationStatus
+	21,  // 69: kodex.runtime.v1.ListWorkspaceMaterializationsRequest.page:type_name -> kodex.runtime.v1.PageRequest
+	18,  // 70: kodex.runtime.v1.ListWorkspaceMaterializationsRequest.meta:type_name -> kodex.runtime.v1.QueryMeta
+	37,  // 71: kodex.runtime.v1.ListWorkspaceMaterializationsResponse.workspace_materializations:type_name -> kodex.runtime.v1.WorkspaceMaterialization
+	22,  // 72: kodex.runtime.v1.ListWorkspaceMaterializationsResponse.page:type_name -> kodex.runtime.v1.PageResponse
+	17,  // 73: kodex.runtime.v1.PrepareBuildContextRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
+	5,   // 74: kodex.runtime.v1.ReportBuildContextProgressRequest.status:type_name -> kodex.runtime.v1.BuildContextStatus
+	17,  // 75: kodex.runtime.v1.ReportBuildContextProgressRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
+	38,  // 76: kodex.runtime.v1.BuildContextResponse.build_context:type_name -> kodex.runtime.v1.BuildContext
+	18,  // 77: kodex.runtime.v1.GetBuildContextRequest.meta:type_name -> kodex.runtime.v1.QueryMeta
+	6,   // 78: kodex.runtime.v1.CreateJobRequest.job_type:type_name -> kodex.runtime.v1.JobType
+	8,   // 79: kodex.runtime.v1.CreateJobRequest.priority:type_name -> kodex.runtime.v1.JobPriority
+	25,  // 80: kodex.runtime.v1.CreateJobRequest.placement_constraints:type_name -> kodex.runtime.v1.PlacementConstraints
+	17,  // 81: kodex.runtime.v1.CreateJobRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
+	35,  // 82: kodex.runtime.v1.CreateJobRequest.agent_run_execution_spec:type_name -> kodex.runtime.v1.AgentRunExecutionSpec
+	32,  // 83: kodex.runtime.v1.CreateJobRequest.build_execution_spec:type_name -> kodex.runtime.v1.BuildExecutionSpec
+	33,  // 84: kodex.runtime.v1.CreateJobRequest.deploy_execution_spec:type_name -> kodex.runtime.v1.DeployExecutionSpec
+	6,   // 85: kodex.runtime.v1.ClaimRunnableJobRequest.job_types:type_name -> kodex.runtime.v1.JobType
+	17,  // 86: kodex.runtime.v1.ClaimRunnableJobRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
+	39,  // 87: kodex.runtime.v1.ClaimRunnableJobResponse.job:type_name -> kodex.runtime.v1.Job
+	10,  // 88: kodex.runtime.v1.ReportJobStepProgressRequest.status:type_name -> kodex.runtime.v1.JobStepStatus
+	42,  // 89: kodex.runtime.v1.ReportJobStepProgressRequest.artifact_refs:type_name -> kodex.runtime.v1.RuntimeArtifactRefInput
+	17,  // 90: kodex.runtime.v1.ReportJobStepProgressRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
+	17,  // 91: kodex.runtime.v1.CompleteJobRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
+	17,  // 92: kodex.runtime.v1.FailJobRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
+	17,  // 93: kodex.runtime.v1.CancelJobRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
+	39,  // 94: kodex.runtime.v1.JobResponse.job:type_name -> kodex.runtime.v1.Job
+	18,  // 95: kodex.runtime.v1.GetJobRequest.meta:type_name -> kodex.runtime.v1.QueryMeta
+	7,   // 96: kodex.runtime.v1.ListJobsRequest.statuses:type_name -> kodex.runtime.v1.JobStatus
+	6,   // 97: kodex.runtime.v1.ListJobsRequest.job_types:type_name -> kodex.runtime.v1.JobType
+	21,  // 98: kodex.runtime.v1.ListJobsRequest.page:type_name -> kodex.runtime.v1.PageRequest
+	18,  // 99: kodex.runtime.v1.ListJobsRequest.meta:type_name -> kodex.runtime.v1.QueryMeta
+	39,  // 100: kodex.runtime.v1.ListJobsResponse.jobs:type_name -> kodex.runtime.v1.Job
+	22,  // 101: kodex.runtime.v1.ListJobsResponse.page:type_name -> kodex.runtime.v1.PageResponse
+	42,  // 102: kodex.runtime.v1.RecordRuntimeArtifactRefRequest.artifact_ref:type_name -> kodex.runtime.v1.RuntimeArtifactRefInput
+	17,  // 103: kodex.runtime.v1.RecordRuntimeArtifactRefRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
+	41,  // 104: kodex.runtime.v1.RuntimeArtifactRefResponse.runtime_artifact_ref:type_name -> kodex.runtime.v1.RuntimeArtifactRef
+	11,  // 105: kodex.runtime.v1.ListRuntimeArtifactRefsRequest.artifact_types:type_name -> kodex.runtime.v1.RuntimeArtifactType
+	21,  // 106: kodex.runtime.v1.ListRuntimeArtifactRefsRequest.page:type_name -> kodex.runtime.v1.PageRequest
+	18,  // 107: kodex.runtime.v1.ListRuntimeArtifactRefsRequest.meta:type_name -> kodex.runtime.v1.QueryMeta
+	41,  // 108: kodex.runtime.v1.ListRuntimeArtifactRefsResponse.runtime_artifact_refs:type_name -> kodex.runtime.v1.RuntimeArtifactRef
+	22,  // 109: kodex.runtime.v1.ListRuntimeArtifactRefsResponse.page:type_name -> kodex.runtime.v1.PageResponse
+	13,  // 110: kodex.runtime.v1.CreateOrUpdateCleanupPolicyRequest.scope_type:type_name -> kodex.runtime.v1.RuntimeScopeType
+	12,  // 111: kodex.runtime.v1.CreateOrUpdateCleanupPolicyRequest.status:type_name -> kodex.runtime.v1.CleanupPolicyStatus
+	17,  // 112: kodex.runtime.v1.CreateOrUpdateCleanupPolicyRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
+	43,  // 113: kodex.runtime.v1.CleanupPolicyResponse.cleanup_policy:type_name -> kodex.runtime.v1.CleanupPolicy
+	17,  // 114: kodex.runtime.v1.RunCleanupBatchRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
+	14,  // 115: kodex.runtime.v1.CreateOrUpdatePrewarmPoolRequest.scope_type:type_name -> kodex.runtime.v1.PrewarmPoolScopeType
+	15,  // 116: kodex.runtime.v1.CreateOrUpdatePrewarmPoolRequest.status:type_name -> kodex.runtime.v1.PrewarmPoolStatus
+	17,  // 117: kodex.runtime.v1.CreateOrUpdatePrewarmPoolRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
+	44,  // 118: kodex.runtime.v1.PrewarmPoolResponse.prewarm_pool:type_name -> kodex.runtime.v1.PrewarmPool
+	17,  // 119: kodex.runtime.v1.ReconcilePrewarmPoolRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
+	45,  // 120: kodex.runtime.v1.RuntimeManagerService.PrepareRuntime:input_type -> kodex.runtime.v1.PrepareRuntimeRequest
+	47,  // 121: kodex.runtime.v1.RuntimeManagerService.ReserveSlot:input_type -> kodex.runtime.v1.ReserveSlotRequest
+	48,  // 122: kodex.runtime.v1.RuntimeManagerService.ExtendSlotLease:input_type -> kodex.runtime.v1.ExtendSlotLeaseRequest
+	49,  // 123: kodex.runtime.v1.RuntimeManagerService.ReleaseSlot:input_type -> kodex.runtime.v1.ReleaseSlotRequest
+	50,  // 124: kodex.runtime.v1.RuntimeManagerService.MarkSlotFailed:input_type -> kodex.runtime.v1.MarkSlotFailedRequest
+	52,  // 125: kodex.runtime.v1.RuntimeManagerService.GetSlot:input_type -> kodex.runtime.v1.GetSlotRequest
+	53,  // 126: kodex.runtime.v1.RuntimeManagerService.ListSlots:input_type -> kodex.runtime.v1.ListSlotsRequest
+	55,  // 127: kodex.runtime.v1.RuntimeManagerService.StartWorkspaceMaterialization:input_type -> kodex.runtime.v1.StartWorkspaceMaterializationRequest
+	56,  // 128: kodex.runtime.v1.RuntimeManagerService.ReportWorkspaceMaterializationProgress:input_type -> kodex.runtime.v1.ReportWorkspaceMaterializationProgressRequest
+	58,  // 129: kodex.runtime.v1.RuntimeManagerService.GetWorkspaceMaterialization:input_type -> kodex.runtime.v1.GetWorkspaceMaterializationRequest
+	59,  // 130: kodex.runtime.v1.RuntimeManagerService.ListWorkspaceMaterializations:input_type -> kodex.runtime.v1.ListWorkspaceMaterializationsRequest
+	61,  // 131: kodex.runtime.v1.RuntimeManagerService.PrepareBuildContext:input_type -> kodex.runtime.v1.PrepareBuildContextRequest
+	62,  // 132: kodex.runtime.v1.RuntimeManagerService.ReportBuildContextProgress:input_type -> kodex.runtime.v1.ReportBuildContextProgressRequest
+	64,  // 133: kodex.runtime.v1.RuntimeManagerService.GetBuildContext:input_type -> kodex.runtime.v1.GetBuildContextRequest
+	65,  // 134: kodex.runtime.v1.RuntimeManagerService.CreateJob:input_type -> kodex.runtime.v1.CreateJobRequest
+	66,  // 135: kodex.runtime.v1.RuntimeManagerService.ClaimRunnableJob:input_type -> kodex.runtime.v1.ClaimRunnableJobRequest
+	68,  // 136: kodex.runtime.v1.RuntimeManagerService.ReportJobStepProgress:input_type -> kodex.runtime.v1.ReportJobStepProgressRequest
+	69,  // 137: kodex.runtime.v1.RuntimeManagerService.CompleteJob:input_type -> kodex.runtime.v1.CompleteJobRequest
+	70,  // 138: kodex.runtime.v1.RuntimeManagerService.FailJob:input_type -> kodex.runtime.v1.FailJobRequest
+	71,  // 139: kodex.runtime.v1.RuntimeManagerService.CancelJob:input_type -> kodex.runtime.v1.CancelJobRequest
+	73,  // 140: kodex.runtime.v1.RuntimeManagerService.GetJob:input_type -> kodex.runtime.v1.GetJobRequest
+	74,  // 141: kodex.runtime.v1.RuntimeManagerService.ListJobs:input_type -> kodex.runtime.v1.ListJobsRequest
+	76,  // 142: kodex.runtime.v1.RuntimeManagerService.RecordRuntimeArtifactRef:input_type -> kodex.runtime.v1.RecordRuntimeArtifactRefRequest
+	78,  // 143: kodex.runtime.v1.RuntimeManagerService.ListRuntimeArtifactRefs:input_type -> kodex.runtime.v1.ListRuntimeArtifactRefsRequest
+	80,  // 144: kodex.runtime.v1.RuntimeManagerService.CreateOrUpdateCleanupPolicy:input_type -> kodex.runtime.v1.CreateOrUpdateCleanupPolicyRequest
+	82,  // 145: kodex.runtime.v1.RuntimeManagerService.RunCleanupBatch:input_type -> kodex.runtime.v1.RunCleanupBatchRequest
+	84,  // 146: kodex.runtime.v1.RuntimeManagerService.CreateOrUpdatePrewarmPool:input_type -> kodex.runtime.v1.CreateOrUpdatePrewarmPoolRequest
+	86,  // 147: kodex.runtime.v1.RuntimeManagerService.ReconcilePrewarmPool:input_type -> kodex.runtime.v1.ReconcilePrewarmPoolRequest
+	46,  // 148: kodex.runtime.v1.RuntimeManagerService.PrepareRuntime:output_type -> kodex.runtime.v1.PrepareRuntimeResponse
+	51,  // 149: kodex.runtime.v1.RuntimeManagerService.ReserveSlot:output_type -> kodex.runtime.v1.SlotResponse
+	51,  // 150: kodex.runtime.v1.RuntimeManagerService.ExtendSlotLease:output_type -> kodex.runtime.v1.SlotResponse
+	51,  // 151: kodex.runtime.v1.RuntimeManagerService.ReleaseSlot:output_type -> kodex.runtime.v1.SlotResponse
+	51,  // 152: kodex.runtime.v1.RuntimeManagerService.MarkSlotFailed:output_type -> kodex.runtime.v1.SlotResponse
+	51,  // 153: kodex.runtime.v1.RuntimeManagerService.GetSlot:output_type -> kodex.runtime.v1.SlotResponse
+	54,  // 154: kodex.runtime.v1.RuntimeManagerService.ListSlots:output_type -> kodex.runtime.v1.ListSlotsResponse
+	57,  // 155: kodex.runtime.v1.RuntimeManagerService.StartWorkspaceMaterialization:output_type -> kodex.runtime.v1.WorkspaceMaterializationResponse
+	57,  // 156: kodex.runtime.v1.RuntimeManagerService.ReportWorkspaceMaterializationProgress:output_type -> kodex.runtime.v1.WorkspaceMaterializationResponse
+	57,  // 157: kodex.runtime.v1.RuntimeManagerService.GetWorkspaceMaterialization:output_type -> kodex.runtime.v1.WorkspaceMaterializationResponse
+	60,  // 158: kodex.runtime.v1.RuntimeManagerService.ListWorkspaceMaterializations:output_type -> kodex.runtime.v1.ListWorkspaceMaterializationsResponse
+	63,  // 159: kodex.runtime.v1.RuntimeManagerService.PrepareBuildContext:output_type -> kodex.runtime.v1.BuildContextResponse
+	63,  // 160: kodex.runtime.v1.RuntimeManagerService.ReportBuildContextProgress:output_type -> kodex.runtime.v1.BuildContextResponse
+	63,  // 161: kodex.runtime.v1.RuntimeManagerService.GetBuildContext:output_type -> kodex.runtime.v1.BuildContextResponse
+	72,  // 162: kodex.runtime.v1.RuntimeManagerService.CreateJob:output_type -> kodex.runtime.v1.JobResponse
+	67,  // 163: kodex.runtime.v1.RuntimeManagerService.ClaimRunnableJob:output_type -> kodex.runtime.v1.ClaimRunnableJobResponse
+	72,  // 164: kodex.runtime.v1.RuntimeManagerService.ReportJobStepProgress:output_type -> kodex.runtime.v1.JobResponse
+	72,  // 165: kodex.runtime.v1.RuntimeManagerService.CompleteJob:output_type -> kodex.runtime.v1.JobResponse
+	72,  // 166: kodex.runtime.v1.RuntimeManagerService.FailJob:output_type -> kodex.runtime.v1.JobResponse
+	72,  // 167: kodex.runtime.v1.RuntimeManagerService.CancelJob:output_type -> kodex.runtime.v1.JobResponse
+	72,  // 168: kodex.runtime.v1.RuntimeManagerService.GetJob:output_type -> kodex.runtime.v1.JobResponse
+	75,  // 169: kodex.runtime.v1.RuntimeManagerService.ListJobs:output_type -> kodex.runtime.v1.ListJobsResponse
+	77,  // 170: kodex.runtime.v1.RuntimeManagerService.RecordRuntimeArtifactRef:output_type -> kodex.runtime.v1.RuntimeArtifactRefResponse
+	79,  // 171: kodex.runtime.v1.RuntimeManagerService.ListRuntimeArtifactRefs:output_type -> kodex.runtime.v1.ListRuntimeArtifactRefsResponse
+	81,  // 172: kodex.runtime.v1.RuntimeManagerService.CreateOrUpdateCleanupPolicy:output_type -> kodex.runtime.v1.CleanupPolicyResponse
+	83,  // 173: kodex.runtime.v1.RuntimeManagerService.RunCleanupBatch:output_type -> kodex.runtime.v1.RunCleanupBatchResponse
+	85,  // 174: kodex.runtime.v1.RuntimeManagerService.CreateOrUpdatePrewarmPool:output_type -> kodex.runtime.v1.PrewarmPoolResponse
+	85,  // 175: kodex.runtime.v1.RuntimeManagerService.ReconcilePrewarmPool:output_type -> kodex.runtime.v1.PrewarmPoolResponse
+	148, // [148:176] is the sub-list for method output_type
+	120, // [120:148] is the sub-list for method input_type
+	120, // [120:120] is the sub-list for extension type_name
+	120, // [120:120] is the sub-list for extension extendee
+	0,   // [0:120] is the sub-list for field type_name
 }
 
 func init() { file_kodex_runtime_v1_runtime_manager_proto_init() }
@@ -8765,13 +8966,14 @@ func file_kodex_runtime_v1_runtime_manager_proto_init() {
 	file_kodex_runtime_v1_runtime_manager_proto_msgTypes[63].OneofWrappers = []any{}
 	file_kodex_runtime_v1_runtime_manager_proto_msgTypes[65].OneofWrappers = []any{}
 	file_kodex_runtime_v1_runtime_manager_proto_msgTypes[67].OneofWrappers = []any{}
+	file_kodex_runtime_v1_runtime_manager_proto_msgTypes[70].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_kodex_runtime_v1_runtime_manager_proto_rawDesc), len(file_kodex_runtime_v1_runtime_manager_proto_rawDesc)),
 			NumEnums:      17,
-			NumMessages:   70,
+			NumMessages:   72,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -84,6 +84,13 @@ candidate AS (
                     OR jsonb_typeof(deploy_spec->'target_slot_id') = 'string'
                 )
                 AND (deploy_spec->>'deploy_plan_fingerprint') ~* '^sha256:[0-9a-f]{64}$'
+                AND jsonb_typeof(deploy_spec->'manifest_bundle_ref') = 'string'
+                AND deploy_spec->>'manifest_bundle_ref' <> ''
+                AND (deploy_spec->>'manifest_bundle_digest') ~* '^sha256:[0-9a-f]{64}$'
+                AND jsonb_typeof(deploy_spec->'rollout_targets') = 'array'
+                AND jsonb_array_length(deploy_spec->'rollout_targets') > 0
+                AND jsonb_typeof(deploy_spec->'expected_image_refs') = 'array'
+                AND jsonb_array_length(deploy_spec->'expected_image_refs') > 0
             )
         )
     ORDER BY
