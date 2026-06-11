@@ -9,9 +9,40 @@ metadata:
 spec:
   restartPolicy: Never
   automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    runAsGroup: 10001
+    fsGroup: 10001
+    fsGroupChangePolicy: OnRootMismatch
+    seccompProfile:
+      type: RuntimeDefault
   containers:
     - name: codex-device-auth
       image: ${MATTERCODEX_AGENT_RUNNER_IMAGE}
       imagePullPolicy: IfNotPresent
       command: ["matter-codex-agent-runner"]
       args: ["codex-auth"]
+      volumeMounts:
+        - name: codex-home
+          mountPath: /codex-home
+        - name: runner-home
+          mountPath: /home/matter-codex
+        - name: runner-tmp
+          mountPath: /tmp
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop:
+            - ALL
+  volumes:
+    - name: codex-home
+      emptyDir: {}
+    - name: runner-home
+      emptyDir: {}
+    - name: runner-tmp
+      emptyDir: {}

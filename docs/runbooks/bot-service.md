@@ -78,6 +78,8 @@ bash scripts/k8s/render-bot-service.sh --env-file .env --render-dir /tmp/matter-
 
 Agent runner image не попадает в render directory. При `--apply` deploy script по умолчанию собирает отдельный image из `services/jobs/agent-runner/Dockerfile`. Если на целевом сервере есть `docker` или `nerdctl`, сборка идет там; если builder'а на сервере нет, но доступен remote `k3s ctr`/`ctr` import и локальный Docker, script собирает image локально и импортирует его в Kubernetes runtime по SSH.
 
+Agent runner image содержит явный non-root user UID/GID `10001`. Runtime Job дополнительно задает pod/container `securityContext`: `runAsNonRoot`, `runAsUser`, `runAsGroup`, `fsGroup`, `seccompProfile: RuntimeDefault`, dropped capabilities, `allowPrivilegeEscalation: false`, `readOnlyRootFilesystem: true`. Writable paths отдаются через volumes: `/workspace` для run PVC, `/codex-home` для device-code auth, `/home/matter-codex` для `gh`/npm/cache и `/tmp` для временных файлов.
+
 ## Remote dry-run
 
 ```bash
@@ -420,7 +422,7 @@ curl -sS -o /dev/null -w '%{http_code}\n' \
 - bot-service Deployment запускается non-root, с dropped Linux capabilities, `allowPrivilegeEscalation: false`, `readOnlyRootFilesystem: true`, `seccompProfile: RuntimeDefault` и базовыми resource requests/limits.
 - bot-service получает namespace-scoped Role на создание/чтение/удаление runtime Job/PVC, чтение pod/log, `pods/exec` для чтения готового `auth.json` из auth Job и create/update Secret для account-specific Codex auth.
 - ServiceAccount agent runner создается без automount token; smoke pod также явно отключает automount.
-- Codex auth Job и developer/reviewer Job запускаются без automount service account token.
+- Codex smoke/auth/developer/reviewer Job запускаются без automount service account token и с non-root securityContext.
 - Codex developer/reviewer Job получает Codex `auth.json` выбранного OpenAI account и GitHub token/username/email выбранного GitHub account только через Kubernetes Secret volume mount.
 - Developer/reviewer prompt templates хранятся в PostgreSQL, редактируются через Mattermost и передаются agent pod как отрендеренный Markdown через ConfigMap.
 - Mattermost flow card buttons используют per-flow action token в Mattermost action context; token не выводится в card text, ответы, логи или PR.
