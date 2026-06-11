@@ -258,6 +258,26 @@ func TestAgentsActionOpensDialog(t *testing.T) {
 	}
 }
 
+func TestAgentsActionRejectsDialogWithoutTriggerID(t *testing.T) {
+	opener := &fakeDialogOpener{}
+	router := testRouterWithDialogService(opener)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/mattermost/actions/agents", strings.NewReader(`{"user_id":"owner","user_name":"owner","channel_id":"channel-1","post_id":"post-1","context":{"kind":"agents_menu","view":"repositories","dialog":"repo_add"}}`))
+	request.Header.Set("Content-Type", "application/json")
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body.String())
+	}
+	if opener.triggerID != "" {
+		t.Fatalf("dialog opener should not be called, triggerID = %q", opener.triggerID)
+	}
+	if !strings.Contains(recorder.Body.String(), "trigger id") {
+		t.Fatalf("body = %s", recorder.Body.String())
+	}
+}
+
 func TestAgentsDialogReturnsFieldErrors(t *testing.T) {
 	router := testRouterWithDialogService(&fakeDialogOpener{})
 	recorder := httptest.NewRecorder()

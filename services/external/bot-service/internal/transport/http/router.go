@@ -195,12 +195,21 @@ func (router *Router) handleAgentsAction(w http.ResponseWriter, r *http.Request)
 		EphemeralText: result.EphemeralText,
 	}
 	if result.Dialog != nil {
+		triggerID := strings.TrimSpace(request.TriggerId)
+		if router.logger != nil {
+			router.logger.Info("opening Mattermost dialog", "view", contextString(request.Context, "view"), "dialog", contextString(request.Context, "dialog"), "trigger_present", triggerID != "")
+		}
+		if triggerID == "" {
+			response.EphemeralText = router.t("router.dialog.trigger_missing", nil)
+			writeJSON(w, http.StatusBadRequest, response)
+			return
+		}
 		if router.dialogOpener == nil {
 			response.EphemeralText = router.t("router.dialog.opener_missing", nil)
 			writeJSON(w, http.StatusServiceUnavailable, response)
 			return
 		}
-		if err := router.dialogOpener.OpenDialog(r.Context(), strings.TrimSpace(request.TriggerId), *result.Dialog); err != nil {
+		if err := router.dialogOpener.OpenDialog(r.Context(), triggerID, *result.Dialog); err != nil {
 			router.logWarn("open Mattermost dialog failed", "error", err)
 			response.EphemeralText = router.t("router.dialog.open_failed", nil)
 			writeJSON(w, http.StatusBadGateway, response)

@@ -52,8 +52,8 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	var channelManager statusservice.MattermostChannelManager
 	var flowCardPublisher statusservice.FlowCardPublisher
 	var dialogOpener httptransport.DialogOpener
-	if cfg.BotTokenConfigured() && cfg.MattermostSiteURL != "" {
-		controlSurface := mattermostintegration.NewControlSurface(cfg.MattermostSiteURL, cfg.MattermostBotToken)
+	if cfg.BotTokenConfigured() && cfg.MattermostAPIURL() != "" {
+		controlSurface := mattermostintegration.NewControlSurface(cfg.MattermostAPIURL(), cfg.MattermostBotToken)
 		channelManager = controlSurface
 		flowCardPublisher = controlSurface
 		dialogOpener = controlSurface

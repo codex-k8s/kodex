@@ -499,6 +499,7 @@
   {"id": "router.slash.token_invalid", "translation": "matter-codex: slash token validation failed."},
   {"id": "router.dialog.opener_missing", "translation": "matter-codex: Mattermost dialog opener is not configured."},
   {"id": "router.dialog.open_failed", "translation": "matter-codex: Mattermost dialog was not opened."},
+  {"id": "router.dialog.trigger_missing", "translation": "matter-codex: Mattermost did not send a dialog trigger id. Open the menu again and retry."},
   {"id": "router.dialog.invalid_request", "translation": "matter-codex: invalid dialog request."},
   {"id": "router.dialog.service_missing", "translation": "matter-codex: slash service is not configured."},
   {"id": "router.dialog.update_failed", "translation": "matter-codex: menu card was not updated after dialog submit."}

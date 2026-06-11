@@ -144,6 +144,25 @@ func TestConfigValidationRejectsUnsupportedLocale(t *testing.T) {
 	}
 }
 
+func TestMattermostAPIURLPrefersInternalURL(t *testing.T) {
+	cfg := Config{
+		MattermostSiteURL:     "https://mattermost.example.com",
+		MattermostInternalURL: "http://mattermost.mattermost.svc.cluster.local:8065",
+	}
+	if got := cfg.MattermostAPIURL(); got != "http://mattermost.mattermost.svc.cluster.local:8065" {
+		t.Fatalf("MattermostAPIURL() = %q", got)
+	}
+}
+
+func TestMattermostAPIURLFallsBackToSiteURL(t *testing.T) {
+	cfg := Config{
+		MattermostSiteURL: "https://mattermost.example.com",
+	}
+	if got := cfg.MattermostAPIURL(); got != "https://mattermost.example.com" {
+		t.Fatalf("MattermostAPIURL() = %q", got)
+	}
+}
+
 func TestFlowActionURLPrefersInternalURL(t *testing.T) {
 	cfg := Config{
 		BotServiceSiteURL:     "https://matter-codex.example.com",
