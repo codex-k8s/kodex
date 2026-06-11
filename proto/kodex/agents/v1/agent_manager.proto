@@ -524,6 +524,8 @@ enum SelfDeployRuntimeBuildStatus {
   SELF_DEPLOY_RUNTIME_BUILD_STATUS_BLOCKED = 2;
   SELF_DEPLOY_RUNTIME_BUILD_STATUS_REQUESTED = 3;
   SELF_DEPLOY_RUNTIME_BUILD_STATUS_FAILED = 4;
+  // PREPARING_CONTEXT means governance approved the plan, but runtime-owned build context refs are not ready yet.
+  SELF_DEPLOY_RUNTIME_BUILD_STATUS_PREPARING_CONTEXT = 5;
 }
 
 // SelfDeployPathCategory classifies affected paths without storing a raw diff.
