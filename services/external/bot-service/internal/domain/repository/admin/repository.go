@@ -2,9 +2,12 @@ package admin
 
 import (
 	"context"
+	"errors"
 
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
 )
+
+var ErrNotFound = errors.New("admin repository item not found")
 
 type UpsertRepositoryInput struct {
 	Provider          string
@@ -102,7 +105,9 @@ type UpsertAgentPromptTemplateInput struct {
 
 type Repository interface {
 	UpsertRepository(ctx context.Context, input UpsertRepositoryInput) (entity.Repository, bool, error)
+	GetRepository(ctx context.Context, provider string, owner string, name string) (entity.Repository, error)
 	ListRepositories(ctx context.Context, limit int) ([]entity.Repository, error)
+	DeleteRepository(ctx context.Context, provider string, owner string, name string) (entity.Repository, error)
 	ListAgentProfiles(ctx context.Context) ([]entity.AgentProfile, error)
 	ListAgentPromptTemplates(ctx context.Context, profileName string) ([]entity.AgentPromptTemplate, error)
 	GetAgentPromptTemplate(ctx context.Context, profileName string, templateKey string) (entity.AgentPromptTemplate, error)

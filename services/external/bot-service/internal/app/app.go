@@ -51,10 +51,14 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	})
 	var channelManager statusservice.MattermostChannelManager
 	var flowCardPublisher statusservice.FlowCardPublisher
-	if cfg.BotTokenConfigured() && cfg.MattermostSiteURL != "" {
-		controlSurface := mattermostintegration.NewControlSurface(cfg.MattermostSiteURL, cfg.MattermostBotToken)
+	var ephemeralCardPublisher statusservice.EphemeralCardPublisher
+	var dialogOpener httptransport.DialogOpener
+	if cfg.BotTokenConfigured() && cfg.MattermostAPIURL() != "" {
+		controlSurface := mattermostintegration.NewControlSurface(cfg.MattermostAPIURL(), cfg.MattermostBotToken)
 		channelManager = controlSurface
 		flowCardPublisher = controlSurface
+		ephemeralCardPublisher = controlSurface
+		dialogOpener = controlSurface
 	}
 	gitHubProvider, err := openGitHubProvider(cfg)
 	if err != nil {
@@ -71,6 +75,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		DefaultTeamName:         cfg.DefaultTeamName,
 		CodexAuthSecretName:     cfg.CodexAuthSecretName,
 		MenuActionURL:           agentsActionURL(cfg),
+		DialogSubmitURL:         agentsDialogURL(cfg),
 		FlowActionURL:           flowActionURL(cfg),
 		BotTokenConfigured:      cfg.BotTokenConfigured(),
 		SlashTokenConfigured:    cfg.SlashTokenConfigured(),
@@ -84,15 +89,17 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	})
 
 	router := httptransport.NewRouter(httptransport.RouterConfig{
-		StatusService:         statusSvc,
-		SlashService:          slashSvc,
-		Localizer:             localizer,
-		SlashToken:            cfg.MattermostSlashToken,
-		GitHubWebhookSecret:   cfg.GitHubWebhookSecret,
-		MaxSlashFormBytes:     cfg.MaxSlashFormBytes,
-		MaxGitHubWebhookBytes: cfg.MaxGitHubWebhookBytes,
-		PrometheusRegistry:    newPrometheusRegistry(),
-		Logger:                logger,
+		StatusService:          statusSvc,
+		SlashService:           slashSvc,
+		DialogOpener:           dialogOpener,
+		EphemeralCardPublisher: ephemeralCardPublisher,
+		Localizer:              localizer,
+		SlashToken:             cfg.MattermostSlashToken,
+		GitHubWebhookSecret:    cfg.GitHubWebhookSecret,
+		MaxSlashFormBytes:      cfg.MaxSlashFormBytes,
+		MaxGitHubWebhookBytes:  cfg.MaxGitHubWebhookBytes,
+		PrometheusRegistry:     newPrometheusRegistry(),
+		Logger:                 logger,
 	})
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
@@ -188,6 +195,17 @@ func agentsActionURL(cfg Config) string {
 		return ""
 	}
 	return baseURL + "/mattermost/actions/agents"
+}
+
+func agentsDialogURL(cfg Config) string {
+	baseURL := strings.TrimRight(strings.TrimSpace(cfg.BotServiceSiteURL), "/")
+	if baseURL == "" {
+		baseURL = strings.TrimRight(strings.TrimSpace(cfg.BotServiceInternalURL), "/")
+	}
+	if baseURL == "" {
+		return ""
+	}
+	return baseURL + "/mattermost/dialogs/agents"
 }
 
 func newPrometheusRegistry() *prometheus.Registry {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -25,6 +26,10 @@ type MattermostChannelManager interface {
 
 type FlowCardPublisher interface {
 	UpsertFlowCard(ctx context.Context, card FlowCard) (FlowCardPost, error)
+}
+
+type EphemeralCardPublisher interface {
+	PostEphemeralCard(ctx context.Context, userID string, card FlowCard) error
 }
 
 type MattermostCard struct {
@@ -52,6 +57,35 @@ type MattermostCardAction struct {
 	Style    string
 	Disabled bool
 	Context  map[string]any
+}
+
+type MattermostDialog struct {
+	SubmitURL        string
+	CallbackID       string
+	Title            string
+	IntroductionText string
+	Elements         []MattermostDialogElement
+	SubmitLabel      string
+	State            string
+}
+
+type MattermostDialogElement struct {
+	DisplayName string
+	Name        string
+	Type        string
+	SubType     string
+	Default     string
+	Placeholder string
+	HelpText    string
+	Optional    bool
+	MinLength   int
+	MaxLength   int
+	Options     []MattermostDialogOption
+}
+
+type MattermostDialogOption struct {
+	Text  string
+	Value string
 }
 
 type FlowCard = MattermostCard
@@ -82,6 +116,7 @@ type SlashCommand struct {
 type MenuActionCommand struct {
 	View      string
 	Command   string
+	Dialog    string
 	UserID    string
 	UserName  string
 	ChannelID string
@@ -90,8 +125,27 @@ type MenuActionCommand struct {
 
 type MenuActionResult struct {
 	Card          *MattermostCard
+	Dialog        *MattermostDialog
 	EphemeralText string
 	StatusCode    int
+}
+
+type DialogSubmissionCommand struct {
+	CallbackID string
+	State      string
+	UserID     string
+	UserName   string
+	ChannelID  string
+	TeamID     string
+	Submission map[string]any
+	Cancelled  bool
+}
+
+type DialogSubmissionResult struct {
+	Card       *MattermostCard
+	Error      string
+	Errors     map[string]string
+	StatusCode int
 }
 
 type FlowActionCommand struct {
@@ -120,6 +174,7 @@ type SlashCommandServiceConfig struct {
 	DefaultTeamName         string
 	CodexAuthSecretName     string
 	MenuActionURL           string
+	DialogSubmitURL         string
 	FlowActionURL           string
 	BotTokenConfigured      bool
 	SlashTokenConfigured    bool
@@ -213,6 +268,10 @@ func (svc *SlashCommandService) handleRepoAdd(ctx context.Context, args []string
 	if err != nil {
 		return svc.validationErrorText(err)
 	}
+	return svc.upsertRepositoryText(ctx, input, command, "repository metadata upserted from Mattermost slash command")
+}
+
+func (svc *SlashCommandService) upsertRepositoryText(ctx context.Context, input adminrepo.UpsertRepositoryInput, command SlashCommand, auditSummary string) string {
 	channelName := repositoryChannelName(input.Owner, input.Name)
 	if svc.cfg.ChannelManager != nil {
 		if _, err := svc.cfg.ChannelManager.EnsureRepositoryChannel(ctx, svc.cfg.DefaultTeamName, channelName, "repo "+input.Owner+"/"+input.Name); err != nil {
@@ -230,7 +289,7 @@ func (svc *SlashCommandService) handleRepoAdd(ctx context.Context, args []string
 		ActorUser:    command.UserName,
 		ResourceType: "repository",
 		ResourceName: repo.Provider + ":" + repo.FullName(),
-		Summary:      "repository metadata upserted from Mattermost slash command",
+		Summary:      auditSummary,
 	})
 	stateID := "label.updated"
 	if created {
@@ -2055,6 +2114,17 @@ func (svc *SlashCommandService) HandleMenuAction(ctx context.Context, command Me
 	card := svc.menuCard(ctx, view)
 	card.ChannelID = strings.TrimSpace(command.ChannelID)
 	card.PostID = strings.TrimSpace(command.PostID)
+	if dialogID := strings.TrimSpace(command.Dialog); dialogID != "" {
+		dialog, errText := svc.menuDialog(command, dialogID)
+		if errText != "" {
+			return MenuActionResult{StatusCode: 200, EphemeralText: errText, Card: card}
+		}
+		return MenuActionResult{
+			StatusCode:    200,
+			EphemeralText: svc.t("dialog.opened", map[string]any{"Title": dialog.Title}),
+			Dialog:        dialog,
+		}
+	}
 	if textCommand := strings.TrimSpace(command.Command); textCommand != "" {
 		fields := strings.Fields(textCommand)
 		if len(fields) == 0 {
@@ -2080,6 +2150,200 @@ func (svc *SlashCommandService) HandleMenuAction(ctx context.Context, command Me
 		EphemeralText: svc.t("menu.action.opened", map[string]any{"Title": card.Title}),
 		Card:          card,
 	}
+}
+
+func (svc *SlashCommandService) HandleDialogSubmission(ctx context.Context, command DialogSubmissionCommand) DialogSubmissionResult {
+	if command.Cancelled {
+		return DialogSubmissionResult{StatusCode: 200}
+	}
+	state, err := decodeDialogState(command.State)
+	if err != nil {
+		return DialogSubmissionResult{StatusCode: 400, Error: svc.t("dialog.state_invalid", nil)}
+	}
+	switch strings.TrimSpace(command.CallbackID) {
+	case dialogCallbackRepositoryAdd:
+		return svc.handleRepositoryDialogUpsert(ctx, command, state, false)
+	case dialogCallbackRepositoryEdit:
+		return svc.handleRepositoryDialogUpsert(ctx, command, state, true)
+	case dialogCallbackRepositoryDelete:
+		return svc.handleRepositoryDialogDelete(ctx, command, state)
+	default:
+		return DialogSubmissionResult{StatusCode: 400, Error: svc.t("dialog.unknown", nil)}
+	}
+}
+
+func (svc *SlashCommandService) menuDialog(command MenuActionCommand, dialogID string) (*MattermostDialog, string) {
+	if strings.TrimSpace(svc.cfg.DialogSubmitURL) == "" {
+		return nil, svc.t("dialog.open.not_configured", nil)
+	}
+	switch dialogID {
+	case menuDialogRepositoryAdd:
+		return svc.repositoryDialog(command, dialogCallbackRepositoryAdd, "dialog.repo.add.title", "dialog.repo.add.intro", "dialog.repo.add.submit", false), ""
+	case menuDialogRepositoryEdit:
+		return svc.repositoryDialog(command, dialogCallbackRepositoryEdit, "dialog.repo.edit.title", "dialog.repo.edit.intro", "dialog.repo.edit.submit", false), ""
+	case menuDialogRepositoryDelete:
+		return svc.repositoryDialog(command, dialogCallbackRepositoryDelete, "dialog.repo.delete.title", "dialog.repo.delete.intro", "dialog.repo.delete.submit", true), ""
+	default:
+		return nil, svc.t("dialog.unknown", nil)
+	}
+}
+
+func (svc *SlashCommandService) repositoryDialog(command MenuActionCommand, callbackID string, titleID string, introID string, submitID string, deleteMode bool) *MattermostDialog {
+	elements := []MattermostDialogElement{
+		{
+			DisplayName: svc.t("dialog.repo.field.provider", nil),
+			Name:        dialogFieldProvider,
+			Type:        "select",
+			Default:     "github",
+			Options: []MattermostDialogOption{
+				{Text: "GitHub", Value: "github"},
+			},
+		},
+		{
+			DisplayName: svc.t("dialog.repo.field.repository", nil),
+			Name:        dialogFieldRepository,
+			Type:        "text",
+			Placeholder: "codex-k8s/matter-codex",
+			HelpText:    svc.t("dialog.repo.field.repository.help", nil),
+			MinLength:   3,
+			MaxLength:   120,
+		},
+	}
+	if deleteMode {
+		elements = append(elements, MattermostDialogElement{
+			DisplayName: svc.t("dialog.repo.field.confirm", nil),
+			Name:        dialogFieldConfirm,
+			Type:        "text",
+			Placeholder: "delete",
+			HelpText:    svc.t("dialog.repo.field.confirm.help", nil),
+			MinLength:   6,
+			MaxLength:   6,
+		})
+	} else {
+		elements = append(elements, MattermostDialogElement{
+			DisplayName: svc.t("dialog.repo.field.branch", nil),
+			Name:        dialogFieldDefaultBranch,
+			Type:        "text",
+			Default:     "main",
+			Placeholder: "main",
+			HelpText:    svc.t("dialog.repo.field.branch.help", nil),
+			MinLength:   1,
+			MaxLength:   120,
+		})
+	}
+	return &MattermostDialog{
+		SubmitURL:        svc.cfg.DialogSubmitURL,
+		CallbackID:       callbackID,
+		Title:            svc.t(titleID, nil),
+		IntroductionText: svc.t(introID, nil),
+		Elements:         elements,
+		SubmitLabel:      svc.t(submitID, nil),
+		State:            encodeDialogState(command),
+	}
+}
+
+func (svc *SlashCommandService) handleRepositoryDialogUpsert(ctx context.Context, command DialogSubmissionCommand, state mattermostDialogState, requireExisting bool) DialogSubmissionResult {
+	input, fieldErrors := svc.repositoryDialogUpsertInput(command.Submission)
+	if len(fieldErrors) > 0 {
+		return DialogSubmissionResult{StatusCode: 200, Errors: fieldErrors}
+	}
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return DialogSubmissionResult{StatusCode: 200, Error: svc.t("repo.add.storage_not_ready", nil)}
+	}
+	if requireExisting {
+		if _, err := svc.cfg.Store.GetRepository(ctx, input.Provider, input.Owner, input.Name); err != nil {
+			if errors.Is(err, adminrepo.ErrNotFound) {
+				return DialogSubmissionResult{StatusCode: 200, Errors: map[string]string{dialogFieldRepository: svc.t("dialog.repo.not_found", map[string]any{"Repository": input.Owner + "/" + input.Name})}}
+			}
+			return DialogSubmissionResult{StatusCode: 200, Error: svc.t("repo.list.read_failed", map[string]any{"Error": safeError(err)})}
+		}
+	}
+	text := svc.upsertRepositoryText(ctx, input, SlashCommand{
+		UserID:    command.UserID,
+		UserName:  defaultString(command.UserName, state.UserName),
+		ChannelID: defaultString(state.ChannelID, command.ChannelID),
+	}, "repository metadata upserted from Mattermost dialog")
+	return DialogSubmissionResult{
+		StatusCode: 200,
+		Card:       svc.dialogResultCard(ctx, state, command, text),
+	}
+}
+
+func (svc *SlashCommandService) repositoryDialogUpsertInput(submission map[string]any) (adminrepo.UpsertRepositoryInput, map[string]string) {
+	fieldErrors := map[string]string{}
+	provider := strings.ToLower(defaultString(submissionString(submission, dialogFieldProvider), "github"))
+	if provider != "github" {
+		fieldErrors[dialogFieldProvider] = svc.t("dialog.repo.provider_invalid", nil)
+	}
+	owner, name, ok := parseSubmittedRepository(submissionString(submission, dialogFieldRepository))
+	if !ok {
+		fieldErrors[dialogFieldRepository] = svc.t("dialog.repo.repository_invalid", nil)
+	}
+	branch := defaultString(submissionString(submission, dialogFieldDefaultBranch), "main")
+	if !validBranch(branch) {
+		fieldErrors[dialogFieldDefaultBranch] = svc.t("dialog.repo.branch_invalid", nil)
+	}
+	if len(fieldErrors) > 0 {
+		return adminrepo.UpsertRepositoryInput{}, fieldErrors
+	}
+	return adminrepo.UpsertRepositoryInput{
+		Provider:      provider,
+		Owner:         owner,
+		Name:          name,
+		DefaultBranch: branch,
+	}, nil
+}
+
+func (svc *SlashCommandService) handleRepositoryDialogDelete(ctx context.Context, command DialogSubmissionCommand, state mattermostDialogState) DialogSubmissionResult {
+	fieldErrors := map[string]string{}
+	provider := strings.ToLower(defaultString(submissionString(command.Submission, dialogFieldProvider), "github"))
+	if provider != "github" {
+		fieldErrors[dialogFieldProvider] = svc.t("dialog.repo.provider_invalid", nil)
+	}
+	owner, name, ok := parseSubmittedRepository(submissionString(command.Submission, dialogFieldRepository))
+	if !ok {
+		fieldErrors[dialogFieldRepository] = svc.t("dialog.repo.repository_invalid", nil)
+	}
+	if submissionString(command.Submission, dialogFieldConfirm) != "delete" {
+		fieldErrors[dialogFieldConfirm] = svc.t("dialog.repo.confirm_invalid", nil)
+	}
+	if len(fieldErrors) > 0 {
+		return DialogSubmissionResult{StatusCode: 200, Errors: fieldErrors}
+	}
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return DialogSubmissionResult{StatusCode: 200, Error: svc.t("repo.list.storage_not_ready", nil)}
+	}
+	deleted, err := svc.cfg.Store.DeleteRepository(ctx, provider, owner, name)
+	if err != nil {
+		if errors.Is(err, adminrepo.ErrNotFound) {
+			return DialogSubmissionResult{StatusCode: 200, Errors: map[string]string{dialogFieldRepository: svc.t("dialog.repo.not_found", map[string]any{"Repository": owner + "/" + name})}}
+		}
+		return DialogSubmissionResult{StatusCode: 200, Error: svc.t("repo.delete.failed", map[string]any{"Error": safeError(err)})}
+	}
+	_ = svc.cfg.Store.RecordAuditEvent(ctx, adminrepo.AuditEventInput{
+		EventType:    "repository.deleted",
+		ActorUserID:  command.UserID,
+		ActorUser:    defaultString(command.UserName, state.UserName),
+		ResourceType: "repository",
+		ResourceName: deleted.Provider + ":" + deleted.FullName(),
+		Summary:      "repository metadata deleted from Mattermost dialog",
+	})
+	text := svc.t("repo.delete.result", map[string]any{
+		"Provider": deleted.Provider,
+		"FullName": deleted.FullName(),
+	})
+	return DialogSubmissionResult{
+		StatusCode: 200,
+		Card:       svc.dialogResultCard(ctx, state, command, text),
+	}
+}
+
+func (svc *SlashCommandService) dialogResultCard(ctx context.Context, state mattermostDialogState, command DialogSubmissionCommand, text string) *MattermostCard {
+	view := normalizeMenuView(defaultString(state.View, menuViewRepositories))
+	card := svc.menuCommandResultCard(ctx, view, "", text)
+	card.ChannelID = defaultString(state.ChannelID, command.ChannelID)
+	card.PostID = state.PostID
+	return card
 }
 
 func (svc *SlashCommandService) menuCard(ctx context.Context, view string) *MattermostCard {
@@ -2258,6 +2522,9 @@ func (svc *SlashCommandService) menuActions(view string) []MattermostCardAction 
 		}
 	case menuViewRepositories:
 		return []MattermostCardAction{
+			svc.menuDialogAction(menuViewRepositories, "dialogrepoadd", menuDialogRepositoryAdd, "menu.action.repo_add", "menu.action.repo_add.tooltip", "primary"),
+			svc.menuDialogAction(menuViewRepositories, "dialogrepoedit", menuDialogRepositoryEdit, "menu.action.repo_edit", "menu.action.repo_edit.tooltip", "default"),
+			svc.menuDialogAction(menuViewRepositories, "dialogrepodelete", menuDialogRepositoryDelete, "menu.action.repo_delete", "menu.action.repo_delete.tooltip", "danger"),
 			svc.menuCommandAction(menuViewRepositories, "cmdrepolist", "repo list", "menu.action.repo_list", "menu.action.repo_list.tooltip", "primary"),
 			svc.menuCommandAction(menuViewRepositories, "cmdgithubcheckrepo", "github check codex-k8s/matter-codex", "menu.action.github_check_mattercodex", "menu.action.github_check_mattercodex.tooltip", "default"),
 			svc.menuCommandAction(menuViewRepositories, "cmdgithubwebhookrepo", "github webhook ensure codex-k8s/matter-codex", "menu.action.github_webhook_mattercodex", "menu.action.github_webhook_mattercodex.tooltip", "default"),
@@ -2317,6 +2584,13 @@ func (svc *SlashCommandService) menuCommandAction(view string, actionID string, 
 	action := svc.menuAction(view, nameID, tooltipID, style)
 	action.ID = actionID
 	action.Context["command"] = command
+	return action
+}
+
+func (svc *SlashCommandService) menuDialogAction(view string, actionID string, dialog string, nameID string, tooltipID string, style string) MattermostCardAction {
+	action := svc.menuAction(view, nameID, tooltipID, style)
+	action.ID = actionID
+	action.Context["dialog"] = dialog
 	return action
 }
 
@@ -2624,6 +2898,70 @@ func (svc *SlashCommandService) validationErrorText(err error) string {
 	return svc.t("slash.error", map[string]any{"Message": safeError(err)})
 }
 
+type mattermostDialogState struct {
+	View      string `json:"view"`
+	ChannelID string `json:"channel_id"`
+	PostID    string `json:"post_id"`
+	UserName  string `json:"user_name"`
+}
+
+func encodeDialogState(command MenuActionCommand) string {
+	state := mattermostDialogState{
+		View:      normalizeMenuView(command.View),
+		ChannelID: strings.TrimSpace(command.ChannelID),
+		PostID:    strings.TrimSpace(command.PostID),
+		UserName:  strings.TrimSpace(command.UserName),
+	}
+	data, err := json.Marshal(state)
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
+
+func decodeDialogState(raw string) (mattermostDialogState, error) {
+	if strings.TrimSpace(raw) == "" {
+		return mattermostDialogState{View: menuViewRepositories}, nil
+	}
+	var state mattermostDialogState
+	if err := json.Unmarshal([]byte(raw), &state); err != nil {
+		return mattermostDialogState{}, err
+	}
+	state.View = normalizeMenuView(defaultString(state.View, menuViewRepositories))
+	state.ChannelID = strings.TrimSpace(state.ChannelID)
+	state.PostID = strings.TrimSpace(state.PostID)
+	state.UserName = strings.TrimSpace(state.UserName)
+	return state, nil
+}
+
+func submissionString(submission map[string]any, key string) string {
+	if submission == nil {
+		return ""
+	}
+	value, ok := submission[key]
+	if !ok || value == nil {
+		return ""
+	}
+	text, ok := value.(string)
+	if !ok {
+		text = fmt.Sprint(value)
+	}
+	return strings.TrimSpace(text)
+}
+
+func parseSubmittedRepository(value string) (string, string, bool) {
+	owner, name, ok := strings.Cut(strings.TrimSpace(value), "/")
+	if !ok || strings.Contains(name, "/") {
+		return "", "", false
+	}
+	owner = strings.TrimSpace(owner)
+	name = strings.TrimSpace(name)
+	if !validIdentifier(owner) || !validIdentifier(name) {
+		return "", "", false
+	}
+	return strings.ToLower(owner), strings.ToLower(name), true
+}
+
 func parseRepoAdd(args []string) (adminrepo.UpsertRepositoryInput, error) {
 	if len(args) == 0 {
 		return adminrepo.UpsertRepositoryInput{}, validationError("parse.repo_add.required", nil)
@@ -2753,6 +3091,19 @@ const (
 	menuViewRuntime      = "runtime"
 	menuViewSystem       = "system"
 	menuViewHelp         = "help"
+
+	menuDialogRepositoryAdd    = "repo_add"
+	menuDialogRepositoryEdit   = "repo_edit"
+	menuDialogRepositoryDelete = "repo_delete"
+
+	dialogCallbackRepositoryAdd    = "agents_repo_add"
+	dialogCallbackRepositoryEdit   = "agents_repo_edit"
+	dialogCallbackRepositoryDelete = "agents_repo_delete"
+
+	dialogFieldProvider      = "provider"
+	dialogFieldRepository    = "repository"
+	dialogFieldDefaultBranch = "default_branch"
+	dialogFieldConfirm       = "confirm"
 
 	defaultFlowMaxAttempts = 3
 

@@ -1,17 +1,21 @@
 package http
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
 
+	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
 	statusservice "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/service"
+	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
 	texti18n "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/i18n"
 )
 
@@ -227,6 +231,142 @@ func TestAgentsActionExecutesCommandButton(t *testing.T) {
 	}
 }
 
+func TestAgentsActionOpensDialog(t *testing.T) {
+	opener := &fakeDialogOpener{}
+	router := testRouterWithDialogService(opener)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/mattermost/actions/agents", strings.NewReader(`{"user_id":"owner","user_name":"owner","channel_id":"channel-1","post_id":"post-1","trigger_id":"trigger-1","context":{"kind":"agents_menu","view":"repositories","dialog":"repo_add"}}`))
+	request.Header.Set("Content-Type", "application/json")
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body.String())
+	}
+	if opener.triggerID != "trigger-1" {
+		t.Fatalf("triggerID = %q", opener.triggerID)
+	}
+	if opener.dialog.CallbackID != "agents_repo_add" || opener.dialog.SubmitURL != "http://bot-service/mattermost/dialogs/agents" {
+		t.Fatalf("dialog = %#v", opener.dialog)
+	}
+	var payload struct {
+		EphemeralText string `json:"ephemeral_text"`
+		Update        any    `json:"update"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if payload.Update != nil {
+		t.Fatalf("dialog action should not return post update: %#v", payload.Update)
+	}
+}
+
+func TestAgentsActionRejectsDialogWithoutTriggerID(t *testing.T) {
+	opener := &fakeDialogOpener{}
+	router := testRouterWithDialogService(opener)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/mattermost/actions/agents", strings.NewReader(`{"user_id":"owner","user_name":"owner","channel_id":"channel-1","post_id":"post-1","context":{"kind":"agents_menu","view":"repositories","dialog":"repo_add"}}`))
+	request.Header.Set("Content-Type", "application/json")
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body.String())
+	}
+	if opener.triggerID != "" {
+		t.Fatalf("dialog opener should not be called, triggerID = %q", opener.triggerID)
+	}
+	if !strings.Contains(recorder.Body.String(), "trigger id") {
+		t.Fatalf("body = %s", recorder.Body.String())
+	}
+}
+
+func TestAgentsDialogReturnsFieldErrors(t *testing.T) {
+	router := testRouterWithDialogService(&fakeDialogOpener{})
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/mattermost/dialogs/agents", strings.NewReader(`{"callback_id":"agents_repo_add","state":"{\"view\":\"repositories\"}","submission":{"provider":"github","repository":"bad value","default_branch":"main"}}`))
+	request.Header.Set("Content-Type", "application/json")
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body.String())
+	}
+	var payload struct {
+		Errors map[string]string `json:"errors"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if payload.Errors["repository"] == "" {
+		t.Fatalf("repository field error is missing: %#v", payload.Errors)
+	}
+}
+
+func TestAgentsDialogReturnsOKWhenFeedbackPublishFails(t *testing.T) {
+	localizer, err := texti18n.New(texti18n.DefaultLocale)
+	if err != nil {
+		t.Fatal(err)
+	}
+	statusSvc := statusservice.NewStatusService(statusservice.Config{
+		Localizer:            localizer,
+		ServiceName:          "matter-codex-bot-service",
+		ServiceVersion:       "0.1.0",
+		MattermostConfigured: true,
+		BotTokenConfigured:   true,
+		SlashTokenConfigured: true,
+		DatabaseConfigured:   true,
+		StorageReady:         true,
+		RuntimeConfigured:    true,
+		DefaultTeamName:      "agents",
+	})
+	store := &fakeRouterAdminStore{}
+	slashSvc := statusservice.NewSlashCommandService(statusservice.SlashCommandServiceConfig{
+		Localizer:       localizer,
+		StatusService:   statusSvc,
+		Store:           store,
+		MenuActionURL:   "http://bot-service/mattermost/actions/agents",
+		DialogSubmitURL: "http://bot-service/mattermost/dialogs/agents",
+		StorageReady:    true,
+	})
+	publisher := &fakeEphemeralCardPublisher{err: errors.New("publish failed")}
+	router := NewRouter(RouterConfig{
+		StatusService:          statusSvc,
+		SlashService:           slashSvc,
+		EphemeralCardPublisher: publisher,
+		Localizer:              localizer,
+		SlashToken:             "expected-token",
+		MaxSlashFormBytes:      65536,
+		MaxGitHubWebhookBytes:  262144,
+	})
+	recorder := httptest.NewRecorder()
+	body := `{"callback_id":"agents_repo_add","state":"{\"view\":\"repositories\",\"channel_id\":\"channel-1\",\"post_id\":\"post-1\",\"user_name\":\"owner\"}","user_id":"owner-id","submission":{"provider":"github","repository":"codex-k8s/kodex-package-store","default_branch":"main"}}`
+	request := httptest.NewRequest(http.MethodPost, "/mattermost/dialogs/agents", strings.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body.String())
+	}
+	var payload struct {
+		Error string `json:"error"`
+		Type  string `json:"type"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if payload.Error != "" || payload.Type != "ok" {
+		t.Fatalf("payload = %#v", payload)
+	}
+	if store.upsert.Owner != "codex-k8s" || store.upsert.Name != "kodex-package-store" || store.upsert.DefaultBranch != "main" {
+		t.Fatalf("upsert = %#v", store.upsert)
+	}
+	if publisher.userID != "owner-id" {
+		t.Fatalf("ephemeral userID = %q", publisher.userID)
+	}
+}
+
 func attachmentContainsSlashCommand(attachment map[string]any) bool {
 	for _, key := range []string{"title", "text"} {
 		value, _ := attachment[key].(string)
@@ -349,6 +489,7 @@ func testRouterWithSlashService() *Router {
 		Localizer:         localizer,
 		StatusService:     statusSvc,
 		MenuActionURL:     "http://bot-service/mattermost/actions/agents",
+		DialogSubmitURL:   "http://bot-service/mattermost/dialogs/agents",
 		StorageReady:      true,
 		RuntimeConfigured: true,
 	})
@@ -360,6 +501,196 @@ func testRouterWithSlashService() *Router {
 		MaxSlashFormBytes:     65536,
 		MaxGitHubWebhookBytes: 262144,
 	})
+}
+
+func testRouterWithDialogService(opener *fakeDialogOpener) *Router {
+	localizer, err := texti18n.New(texti18n.DefaultLocale)
+	if err != nil {
+		panic(err)
+	}
+	statusSvc := statusservice.NewStatusService(statusservice.Config{
+		Localizer:            localizer,
+		ServiceName:          "matter-codex-bot-service",
+		ServiceVersion:       "0.1.0",
+		MattermostConfigured: true,
+		BotTokenConfigured:   true,
+		SlashTokenConfigured: true,
+		DatabaseConfigured:   true,
+		StorageReady:         true,
+		RuntimeConfigured:    true,
+		DefaultTeamName:      "agents",
+		DefaultChannels:      []string{"agents-control"},
+	})
+	slashSvc := statusservice.NewSlashCommandService(statusservice.SlashCommandServiceConfig{
+		Localizer:       localizer,
+		StatusService:   statusSvc,
+		MenuActionURL:   "http://bot-service/mattermost/actions/agents",
+		DialogSubmitURL: "http://bot-service/mattermost/dialogs/agents",
+		StorageReady:    true,
+	})
+	return NewRouter(RouterConfig{
+		StatusService:         statusSvc,
+		SlashService:          slashSvc,
+		DialogOpener:          opener,
+		Localizer:             localizer,
+		SlashToken:            "expected-token",
+		MaxSlashFormBytes:     65536,
+		MaxGitHubWebhookBytes: 262144,
+	})
+}
+
+type fakeDialogOpener struct {
+	triggerID string
+	dialog    statusservice.MattermostDialog
+}
+
+func (opener *fakeDialogOpener) OpenDialog(_ context.Context, triggerID string, dialog statusservice.MattermostDialog) error {
+	opener.triggerID = triggerID
+	opener.dialog = dialog
+	return nil
+}
+
+type fakeEphemeralCardPublisher struct {
+	userID string
+	card   statusservice.FlowCard
+	err    error
+}
+
+func (publisher *fakeEphemeralCardPublisher) PostEphemeralCard(_ context.Context, userID string, card statusservice.FlowCard) error {
+	publisher.userID = userID
+	publisher.card = card
+	return publisher.err
+}
+
+type fakeRouterAdminStore struct {
+	upsert        adminrepo.UpsertRepositoryInput
+	auditRecorded bool
+	repositories  map[string]entity.Repository
+}
+
+func (store *fakeRouterAdminStore) UpsertRepository(_ context.Context, input adminrepo.UpsertRepositoryInput) (entity.Repository, bool, error) {
+	store.upsert = input
+	store.ensureRepositories()
+	key := input.Provider + ":" + input.Owner + "/" + input.Name
+	_, exists := store.repositories[key]
+	repo := entity.Repository{
+		Provider:          input.Provider,
+		Owner:             input.Owner,
+		Name:              input.Name,
+		DefaultBranch:     input.DefaultBranch,
+		MattermostChannel: input.MattermostChannel,
+		Status:            "active",
+	}
+	store.repositories[key] = repo
+	return repo, !exists, nil
+}
+
+func (store *fakeRouterAdminStore) GetRepository(_ context.Context, provider string, owner string, name string) (entity.Repository, error) {
+	store.ensureRepositories()
+	repo, ok := store.repositories[provider+":"+owner+"/"+name]
+	if !ok {
+		return entity.Repository{}, adminrepo.ErrNotFound
+	}
+	return repo, nil
+}
+
+func (store *fakeRouterAdminStore) ListRepositories(context.Context, int) ([]entity.Repository, error) {
+	store.ensureRepositories()
+	items := make([]entity.Repository, 0, len(store.repositories))
+	for _, repo := range store.repositories {
+		items = append(items, repo)
+	}
+	return items, nil
+}
+
+func (store *fakeRouterAdminStore) DeleteRepository(_ context.Context, provider string, owner string, name string) (entity.Repository, error) {
+	store.ensureRepositories()
+	key := provider + ":" + owner + "/" + name
+	repo, ok := store.repositories[key]
+	if !ok {
+		return entity.Repository{}, adminrepo.ErrNotFound
+	}
+	delete(store.repositories, key)
+	return repo, nil
+}
+
+func (store *fakeRouterAdminStore) ListAgentProfiles(context.Context) ([]entity.AgentProfile, error) {
+	return nil, nil
+}
+
+func (store *fakeRouterAdminStore) ListAgentPromptTemplates(context.Context, string) ([]entity.AgentPromptTemplate, error) {
+	return nil, nil
+}
+
+func (store *fakeRouterAdminStore) GetAgentPromptTemplate(context.Context, string, string) (entity.AgentPromptTemplate, error) {
+	return entity.AgentPromptTemplate{}, adminrepo.ErrNotFound
+}
+
+func (store *fakeRouterAdminStore) UpsertAgentPromptTemplate(context.Context, adminrepo.UpsertAgentPromptTemplateInput) (entity.AgentPromptTemplate, bool, error) {
+	return entity.AgentPromptTemplate{}, true, nil
+}
+
+func (store *fakeRouterAdminStore) UpsertOpenAIAccount(context.Context, adminrepo.UpsertOpenAIAccountInput) (entity.OpenAIAccount, bool, error) {
+	return entity.OpenAIAccount{}, true, nil
+}
+
+func (store *fakeRouterAdminStore) ListOpenAIAccounts(context.Context, int) ([]entity.OpenAIAccount, error) {
+	return nil, nil
+}
+
+func (store *fakeRouterAdminStore) GetOpenAIAccount(context.Context, string) (entity.OpenAIAccount, error) {
+	return entity.OpenAIAccount{}, adminrepo.ErrNotFound
+}
+
+func (store *fakeRouterAdminStore) UpdateOpenAIAccountStatus(context.Context, adminrepo.UpdateOpenAIAccountStatusInput) (entity.OpenAIAccount, error) {
+	return entity.OpenAIAccount{}, nil
+}
+
+func (store *fakeRouterAdminStore) ListGitHubAccounts(context.Context, int) ([]entity.GitHubAccount, error) {
+	return nil, nil
+}
+
+func (store *fakeRouterAdminStore) GetGitHubAccount(context.Context, string) (entity.GitHubAccount, error) {
+	return entity.GitHubAccount{}, adminrepo.ErrNotFound
+}
+
+func (store *fakeRouterAdminStore) CreateAgentFlow(context.Context, adminrepo.CreateAgentFlowInput) (entity.AgentFlow, bool, error) {
+	return entity.AgentFlow{}, true, nil
+}
+
+func (store *fakeRouterAdminStore) GetAgentFlow(context.Context, string) (entity.AgentFlow, error) {
+	return entity.AgentFlow{}, adminrepo.ErrNotFound
+}
+
+func (store *fakeRouterAdminStore) UpdateAgentFlow(context.Context, adminrepo.UpdateAgentFlowInput) (entity.AgentFlow, error) {
+	return entity.AgentFlow{}, nil
+}
+
+func (store *fakeRouterAdminStore) CreateAgentRun(context.Context, adminrepo.CreateAgentRunInput) (entity.AgentRun, error) {
+	return entity.AgentRun{}, nil
+}
+
+func (store *fakeRouterAdminStore) GetAgentRun(context.Context, string) (entity.AgentRun, error) {
+	return entity.AgentRun{}, adminrepo.ErrNotFound
+}
+
+func (store *fakeRouterAdminStore) ListAgentRunsByFlowID(context.Context, string) ([]entity.AgentRun, error) {
+	return nil, nil
+}
+
+func (store *fakeRouterAdminStore) UpdateAgentRunArtifacts(context.Context, adminrepo.UpdateAgentRunArtifactsInput) (entity.AgentRun, error) {
+	return entity.AgentRun{}, nil
+}
+
+func (store *fakeRouterAdminStore) RecordAuditEvent(context.Context, adminrepo.AuditEventInput) error {
+	store.auditRecorded = true
+	return nil
+}
+
+func (store *fakeRouterAdminStore) ensureRepositories() {
+	if store.repositories == nil {
+		store.repositories = map[string]entity.Repository{}
+	}
 }
 
 func testRouterWithConfig(slashToken string, botTokenConfigured bool, gitHubWebhookSecret string) *Router {

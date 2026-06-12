@@ -13,6 +13,7 @@ import (
 type Config struct {
 	HTTPAddr              string        `env:"MATTERCODEX_BOT_SERVICE_HTTP_ADDR" envDefault:":8080"`
 	MattermostSiteURL     string        `env:"MATTERCODEX_MATTERMOST_SITE_URL"`
+	MattermostInternalURL string        `env:"MATTERCODEX_MATTERMOST_INTERNAL_URL"`
 	BotServiceSiteURL     string        `env:"MATTERCODEX_BOT_SERVICE_SITE_URL"`
 	BotServiceInternalURL string        `env:"MATTERCODEX_BOT_SERVICE_INTERNAL_URL"`
 	Locale                string        `env:"MATTERCODEX_LOCALE" envDefault:"en"`
@@ -114,6 +115,13 @@ func (cfg *Config) Validate() error {
 
 func (cfg Config) BotTokenConfigured() bool {
 	return strings.TrimSpace(cfg.MattermostBotToken) != ""
+}
+
+func (cfg Config) MattermostAPIURL() string {
+	if internalURL := strings.TrimSpace(cfg.MattermostInternalURL); internalURL != "" {
+		return internalURL
+	}
+	return strings.TrimSpace(cfg.MattermostSiteURL)
 }
 
 func (cfg Config) SlashTokenConfigured() bool {

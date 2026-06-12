@@ -144,6 +144,25 @@ func TestConfigValidationRejectsUnsupportedLocale(t *testing.T) {
 	}
 }
 
+func TestMattermostAPIURLPrefersInternalURL(t *testing.T) {
+	cfg := Config{
+		MattermostSiteURL:     "https://mattermost.example.com",
+		MattermostInternalURL: "http://mattermost.mattermost.svc.cluster.local:8065",
+	}
+	if got := cfg.MattermostAPIURL(); got != "http://mattermost.mattermost.svc.cluster.local:8065" {
+		t.Fatalf("MattermostAPIURL() = %q", got)
+	}
+}
+
+func TestMattermostAPIURLFallsBackToSiteURL(t *testing.T) {
+	cfg := Config{
+		MattermostSiteURL: "https://mattermost.example.com",
+	}
+	if got := cfg.MattermostAPIURL(); got != "https://mattermost.example.com" {
+		t.Fatalf("MattermostAPIURL() = %q", got)
+	}
+}
+
 func TestFlowActionURLPrefersInternalURL(t *testing.T) {
 	cfg := Config{
 		BotServiceSiteURL:     "https://matter-codex.example.com",
@@ -165,5 +184,17 @@ func TestAgentsActionURLPrefersSiteURL(t *testing.T) {
 	want := "https://matter-codex.example.com/mattermost/actions/agents"
 	if got != want {
 		t.Fatalf("agentsActionURL() = %q, want %q", got, want)
+	}
+}
+
+func TestAgentsDialogURLPrefersSiteURL(t *testing.T) {
+	cfg := Config{
+		BotServiceSiteURL:     "https://matter-codex.example.com",
+		BotServiceInternalURL: "http://matter-codex-bot-service.mattermost.svc.cluster.local:8080",
+	}
+	got := agentsDialogURL(cfg)
+	want := "https://matter-codex.example.com/mattermost/dialogs/agents"
+	if got != want {
+		t.Fatalf("agentsDialogURL() = %q, want %q", got, want)
 	}
 }

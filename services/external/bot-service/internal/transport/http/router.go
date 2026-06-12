@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"crypto/subtle"
 	"encoding/json"
 	"fmt"
@@ -26,47 +27,58 @@ const (
 	pathMetrics       = "/metrics"
 	pathAgentsSlash   = "/mattermost/slash/agents"
 	pathAgentsAction  = "/mattermost/actions/agents"
+	pathAgentsDialog  = "/mattermost/dialogs/agents"
 	pathFlowAction    = "/mattermost/actions/flow"
 	pathGitHubWebhook = "/github/webhook"
 )
 
+type DialogOpener interface {
+	OpenDialog(ctx context.Context, triggerID string, dialog statusservice.MattermostDialog) error
+}
+
 type RouterConfig struct {
-	StatusService         *statusservice.StatusService
-	SlashService          *statusservice.SlashCommandService
-	Localizer             *texti18n.Localizer
-	SlashToken            string
-	GitHubWebhookSecret   string
-	MaxSlashFormBytes     int64
-	MaxGitHubWebhookBytes int64
-	PrometheusRegistry    *prometheus.Registry
-	Logger                *slog.Logger
+	StatusService          *statusservice.StatusService
+	SlashService           *statusservice.SlashCommandService
+	DialogOpener           DialogOpener
+	EphemeralCardPublisher statusservice.EphemeralCardPublisher
+	Localizer              *texti18n.Localizer
+	SlashToken             string
+	GitHubWebhookSecret    string
+	MaxSlashFormBytes      int64
+	MaxGitHubWebhookBytes  int64
+	PrometheusRegistry     *prometheus.Registry
+	Logger                 *slog.Logger
 }
 
 type Router struct {
-	statusService         *statusservice.StatusService
-	slashService          *statusservice.SlashCommandService
-	localizer             *texti18n.Localizer
-	slashToken            string
-	gitHubWebhookSecret   string
-	maxSlashFormBytes     int64
-	maxGitHubWebhookBytes int64
-	logger                *slog.Logger
-	mux                   *http.ServeMux
+	statusService          *statusservice.StatusService
+	slashService           *statusservice.SlashCommandService
+	dialogOpener           DialogOpener
+	ephemeralCardPublisher statusservice.EphemeralCardPublisher
+	localizer              *texti18n.Localizer
+	slashToken             string
+	gitHubWebhookSecret    string
+	maxSlashFormBytes      int64
+	maxGitHubWebhookBytes  int64
+	logger                 *slog.Logger
+	mux                    *http.ServeMux
 }
 
 var _ http.Handler = (*Router)(nil)
 
 func NewRouter(cfg RouterConfig) *Router {
 	router := &Router{
-		statusService:         cfg.StatusService,
-		slashService:          cfg.SlashService,
-		localizer:             cfg.Localizer,
-		slashToken:            cfg.SlashToken,
-		gitHubWebhookSecret:   cfg.GitHubWebhookSecret,
-		maxSlashFormBytes:     cfg.MaxSlashFormBytes,
-		maxGitHubWebhookBytes: cfg.MaxGitHubWebhookBytes,
-		logger:                cfg.Logger,
-		mux:                   http.NewServeMux(),
+		statusService:          cfg.StatusService,
+		slashService:           cfg.SlashService,
+		dialogOpener:           cfg.DialogOpener,
+		ephemeralCardPublisher: cfg.EphemeralCardPublisher,
+		localizer:              cfg.Localizer,
+		slashToken:             cfg.SlashToken,
+		gitHubWebhookSecret:    cfg.GitHubWebhookSecret,
+		maxSlashFormBytes:      cfg.MaxSlashFormBytes,
+		maxGitHubWebhookBytes:  cfg.MaxGitHubWebhookBytes,
+		logger:                 cfg.Logger,
+		mux:                    http.NewServeMux(),
 	}
 	registry := cfg.PrometheusRegistry
 	if registry == nil {
@@ -79,6 +91,7 @@ func NewRouter(cfg RouterConfig) *Router {
 	router.mux.Handle(pathMetrics, promhttp.HandlerFor(registry, promhttp.HandlerOpts{Registry: registry, EnableOpenMetrics: true}))
 	router.mux.HandleFunc(pathAgentsSlash, router.handleAgentsSlash)
 	router.mux.HandleFunc(pathAgentsAction, router.handleAgentsAction)
+	router.mux.HandleFunc(pathAgentsDialog, router.handleAgentsDialog)
 	router.mux.HandleFunc(pathFlowAction, router.handleFlowAction)
 	router.mux.HandleFunc(pathGitHubWebhook, router.handleGitHubWebhook)
 	return router
@@ -168,6 +181,7 @@ func (router *Router) handleAgentsAction(w http.ResponseWriter, r *http.Request)
 	result := router.slashService.HandleMenuAction(r.Context(), statusservice.MenuActionCommand{
 		View:      contextString(request.Context, "view"),
 		Command:   contextString(request.Context, "command"),
+		Dialog:    contextString(request.Context, "dialog"),
 		UserID:    strings.TrimSpace(request.UserId),
 		UserName:  strings.TrimSpace(request.UserName),
 		ChannelID: strings.TrimSpace(request.ChannelId),
@@ -180,10 +194,82 @@ func (router *Router) handleAgentsAction(w http.ResponseWriter, r *http.Request)
 	response := &mattermostmodel.PostActionIntegrationResponse{
 		EphemeralText: result.EphemeralText,
 	}
+	if result.Dialog != nil {
+		triggerID := strings.TrimSpace(request.TriggerId)
+		if router.logger != nil {
+			router.logger.Info("opening Mattermost dialog", "view", contextString(request.Context, "view"), "dialog", contextString(request.Context, "dialog"), "trigger_present", triggerID != "")
+		}
+		if triggerID == "" {
+			response.EphemeralText = router.t("router.dialog.trigger_missing", nil)
+			writeJSON(w, http.StatusBadRequest, response)
+			return
+		}
+		if router.dialogOpener == nil {
+			response.EphemeralText = router.t("router.dialog.opener_missing", nil)
+			writeJSON(w, http.StatusServiceUnavailable, response)
+			return
+		}
+		if err := router.dialogOpener.OpenDialog(r.Context(), triggerID, *result.Dialog); err != nil {
+			router.logWarn("open Mattermost dialog failed", "error", err)
+			response.EphemeralText = router.t("router.dialog.open_failed", nil)
+			writeJSON(w, http.StatusBadGateway, response)
+			return
+		}
+		writeJSON(w, status, response)
+		return
+	}
 	if result.Card != nil {
 		response.Update = cardPost(*result.Card)
 	}
 	writeJSON(w, status, response)
+}
+
+func (router *Router) handleAgentsDialog(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, transportmodels.ErrorResponse{Error: "method_not_allowed"})
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, router.maxSlashFormBytes)
+	var request mattermostmodel.SubmitDialogRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		router.logWarn("invalid Mattermost agents dialog", "error", err)
+		writeJSON(w, http.StatusBadRequest, mattermostmodel.SubmitDialogResponse{Error: router.t("router.dialog.invalid_request", nil)})
+		return
+	}
+	if router.slashService == nil {
+		writeJSON(w, http.StatusServiceUnavailable, mattermostmodel.SubmitDialogResponse{Error: router.t("router.dialog.service_missing", nil)})
+		return
+	}
+	result := router.slashService.HandleDialogSubmission(r.Context(), statusservice.DialogSubmissionCommand{
+		CallbackID: strings.TrimSpace(request.CallbackId),
+		State:      strings.TrimSpace(request.State),
+		UserID:     strings.TrimSpace(request.UserId),
+		ChannelID:  strings.TrimSpace(request.ChannelId),
+		TeamID:     strings.TrimSpace(request.TeamId),
+		Submission: request.Submission,
+		Cancelled:  request.Cancelled,
+	})
+	status := result.StatusCode
+	if status == 0 {
+		status = http.StatusOK
+	}
+	if result.Error != "" || len(result.Errors) > 0 {
+		writeJSON(w, status, mattermostmodel.SubmitDialogResponse{
+			Error:  result.Error,
+			Errors: result.Errors,
+		})
+		return
+	}
+	if result.Card != nil {
+		if router.ephemeralCardPublisher != nil && strings.TrimSpace(request.UserId) != "" {
+			if err := router.ephemeralCardPublisher.PostEphemeralCard(r.Context(), strings.TrimSpace(request.UserId), *result.Card); err != nil {
+				router.logWarn("post Mattermost ephemeral dialog result failed", "error", err)
+			}
+		} else {
+			router.logWarn("Mattermost ephemeral dialog result skipped", "publisher_configured", router.ephemeralCardPublisher != nil, "user_id_present", strings.TrimSpace(request.UserId) != "")
+		}
+	}
+	writeJSON(w, status, mattermostmodel.SubmitDialogResponse{Type: string(mattermostmodel.SubmitDialogResponseTypeOK)})
 }
 
 func (router *Router) handleFlowAction(w http.ResponseWriter, r *http.Request) {

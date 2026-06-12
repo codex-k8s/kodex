@@ -34,6 +34,7 @@
 - `MATTERCODEX_BOT_SERVICE_HOST` - optional, host публичного Ingress;
 - `MATTERCODEX_BOT_SERVICE_SITE_URL` - optional, публичный URL bot-service;
 - `MATTERCODEX_BOT_SERVICE_INTERNAL_URL` - optional, внутренний callback URL для Mattermost slash command и interactive action buttons;
+- `MATTERCODEX_MATTERMOST_INTERNAL_URL` - optional, внутренний URL Mattermost API для bot-service; нужен, если публичный Mattermost закрыт OAuth proxy;
 - `MATTERCODEX_MATTERMOST_BOT_TOKEN` - нужен для provisioning Mattermost team/channels/slash command;
 - `MATTERCODEX_MATTERMOST_SLASH_TOKEN` - optional, обычно заполняется provisioning script в Kubernetes Secret;
 - `MATTERCODEX_GITHUB_SECRET` - optional, имя Kubernetes Secret для reviewer/user GitHub account;
@@ -279,6 +280,17 @@ Typed-команды остаются fallback-интерфейсом для т�
 - webhook ensure создает или обновляет repo webhook, если token имеет hook write permission; при нехватке прав команда возвращает безопасную ошибку без вывода token/secret.
 
 При `/agents repo add github owner/name [default-branch]` bot-service также пытается выполнить webhook ensure автоматически и добавляет строку `webhook: ...` в ответ.
+
+Кнопочная проверка CRUD репозиториев:
+
+1. В Mattermost выполнить `/agents`.
+2. Открыть `Репозитории`.
+3. Нажать `Добавить репо`, заполнить `Провайдер=GitHub`, `Репозиторий=codex-k8s/matter-codex`, `Ветка=main`, отправить форму.
+4. Проверить, что карточка меню обновилась результатом добавления или обновления репозитория.
+5. Нажать `Изменить репо`, указать тот же репозиторий и ветку, отправить форму.
+6. Нажать `Удалить репо`, указать тестовый репозиторий и ввести `delete` в поле подтверждения.
+
+Удаление в этом сценарии удаляет только запись `matter_codex_repositories`. Канал Mattermost и GitHub webhook не удаляются.
 
 Дополнительная проверка Kubernetes runner foundation:
 
