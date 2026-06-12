@@ -125,6 +125,7 @@ type Repository interface {
 	ListOpenAIAccounts(ctx context.Context, limit int) ([]entity.OpenAIAccount, error)
 	GetOpenAIAccount(ctx context.Context, name string) (entity.OpenAIAccount, error)
 	UpdateOpenAIAccountStatus(ctx context.Context, input UpdateOpenAIAccountStatusInput) (entity.OpenAIAccount, error)
+	DeleteOpenAIAccount(ctx context.Context, name string) (entity.OpenAIAccount, error)
 	ListGitHubAccounts(ctx context.Context, limit int) ([]entity.GitHubAccount, error)
 	GetGitHubAccount(ctx context.Context, name string) (entity.GitHubAccount, error)
 	UpsertGitHubAccount(ctx context.Context, input UpsertGitHubAccountInput) (entity.GitHubAccount, bool, error)

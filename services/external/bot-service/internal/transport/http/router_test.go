@@ -679,6 +679,10 @@ func (store *fakeRouterAdminStore) UpdateOpenAIAccountStatus(context.Context, ad
 	return entity.OpenAIAccount{}, nil
 }
 
+func (store *fakeRouterAdminStore) DeleteOpenAIAccount(context.Context, string) (entity.OpenAIAccount, error) {
+	return entity.OpenAIAccount{}, adminrepo.ErrNotFound
+}
+
 func (store *fakeRouterAdminStore) ListGitHubAccounts(context.Context, int) ([]entity.GitHubAccount, error) {
 	return nil, nil
 }

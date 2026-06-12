@@ -241,6 +241,9 @@ func (repo *Repository) ListOpenAIAccounts(ctx context.Context, limit int) ([]en
 func (repo *Repository) GetOpenAIAccount(ctx context.Context, name string) (entity.OpenAIAccount, error) {
 	item, err := scanOpenAIAccount(repo.pool.QueryRow(ctx, query("openai_accounts__get.sql"), name))
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.OpenAIAccount{}, adminrepo.ErrNotFound
+		}
 		return entity.OpenAIAccount{}, fmt.Errorf("get openai account: %w", err)
 	}
 	return item, nil
@@ -254,6 +257,17 @@ func (repo *Repository) UpdateOpenAIAccountStatus(ctx context.Context, input adm
 	))
 	if err != nil {
 		return entity.OpenAIAccount{}, fmt.Errorf("update openai account status: %w", err)
+	}
+	return item, nil
+}
+
+func (repo *Repository) DeleteOpenAIAccount(ctx context.Context, name string) (entity.OpenAIAccount, error) {
+	item, err := scanOpenAIAccount(repo.pool.QueryRow(ctx, query("openai_accounts__delete.sql"), name))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.OpenAIAccount{}, adminrepo.ErrNotFound
+		}
+		return entity.OpenAIAccount{}, fmt.Errorf("delete openai account: %w", err)
 	}
 	return item, nil
 }

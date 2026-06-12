@@ -265,6 +265,7 @@ func TestAccountMenusUseDialogButtons(t *testing.T) {
 		{view: menuViewOpenAI, action: "dialogopenaiauth", dialog: menuDialogOpenAIAuth},
 		{view: menuViewOpenAI, action: "dialogopenaistatus", dialog: menuDialogOpenAIStatus},
 		{view: menuViewOpenAI, action: "dialogopenaicleanup", dialog: menuDialogOpenAICleanup},
+		{view: menuViewOpenAI, action: "dialogopenaidelete", dialog: menuDialogOpenAIDelete},
 		{view: menuViewGitHub, action: "dialoggithubadd", dialog: menuDialogGitHubAccountAdd},
 		{view: menuViewGitHub, action: "dialoggithubedit", dialog: menuDialogGitHubAccountEdit},
 		{view: menuViewGitHub, action: "dialoggithubdelete", dialog: menuDialogGitHubAccountDelete},
@@ -338,6 +339,7 @@ func TestMattermostDialogsFitMattermostLimits(t *testing.T) {
 			menuDialogOpenAIAuth,
 			menuDialogOpenAIStatus,
 			menuDialogOpenAICleanup,
+			menuDialogOpenAIDelete,
 			menuDialogGitHubAccountAdd,
 			menuDialogGitHubAccountEdit,
 			menuDialogGitHubAccountDelete,
@@ -370,7 +372,7 @@ func TestMattermostDialogsFitMattermostLimits(t *testing.T) {
 
 func dialogView(dialog string) string {
 	switch dialog {
-	case menuDialogOpenAIAuth, menuDialogOpenAIStatus, menuDialogOpenAICleanup:
+	case menuDialogOpenAIAuth, menuDialogOpenAIStatus, menuDialogOpenAICleanup, menuDialogOpenAIDelete:
 		return menuViewOpenAI
 	case menuDialogGitHubAccountAdd, menuDialogGitHubAccountEdit, menuDialogGitHubAccountDelete:
 		return menuViewGitHub
@@ -458,6 +460,92 @@ func TestOpenAIAuthDialogSubmissionStartsCustomAccount(t *testing.T) {
 	}
 	if result.Card == nil || !strings.Contains(result.Card.Text, "reviewer-plus") {
 		t.Fatalf("card = %#v", result.Card)
+	}
+}
+
+func TestOpenAIAccountDialogSubmissionDeletesAccount(t *testing.T) {
+	store := &fakeAdminStore{
+		openAIAccounts: map[string]entity.OpenAIAccount{
+			"reviewer-test": {Name: "reviewer-test", SecretRef: "matter-codex-codex-auth-reviewer-test", Status: "authorized"},
+		},
+	}
+	runner := &fakeRuntimeRunner{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:       localizer,
+		StatusService:   testStatusService(localizer),
+		Store:           store,
+		RuntimeRunner:   runner,
+		DialogSubmitURL: "http://bot-service/mattermost/dialogs/agents",
+		StorageReady:    true,
+	})
+
+	result := svc.HandleDialogSubmission(context.Background(), DialogSubmissionCommand{
+		CallbackID: dialogCallbackOpenAIDelete,
+		State:      encodeDialogState(MenuActionCommand{View: menuViewOpenAI, ChannelID: "channel-1", PostID: "post-1"}),
+		UserID:     "owner-id",
+		UserName:   "owner",
+		Submission: map[string]any{
+			dialogFieldAccount: "reviewer-test",
+			dialogFieldConfirm: "delete",
+		},
+	})
+
+	if result.Error != "" || len(result.Errors) > 0 {
+		t.Fatalf("dialog errors = %q %#v", result.Error, result.Errors)
+	}
+	if runner.deletedAuthAccount != "reviewer-test" || runner.deletedAuthSecret != "matter-codex-codex-auth-reviewer-test" {
+		t.Fatalf("deleted runtime auth = account %q secret %q", runner.deletedAuthAccount, runner.deletedAuthSecret)
+	}
+	if _, ok := store.openAIAccounts["reviewer-test"]; ok {
+		t.Fatalf("openAI account was not deleted: %#v", store.openAIAccounts["reviewer-test"])
+	}
+	if store.deletedOpenAIAccount.Name != "reviewer-test" {
+		t.Fatalf("deleted openAI account = %#v", store.deletedOpenAIAccount)
+	}
+	if result.Card == nil || !strings.Contains(result.Card.Text, "auth secret deleted") {
+		t.Fatalf("card = %#v", result.Card)
+	}
+}
+
+func TestOpenAIAccountDialogSubmissionBlocksProfileAccountDeletion(t *testing.T) {
+	store := &fakeAdminStore{
+		profiles:       []entity.AgentProfile{{Name: "reviewer", OpenAIAccountName: "primary"}},
+		openAIAccounts: map[string]entity.OpenAIAccount{"primary": {Name: "primary", SecretRef: "matter-codex-codex-auth-primary", Status: "authorized"}},
+	}
+	runner := &fakeRuntimeRunner{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:       localizer,
+		StatusService:   testStatusService(localizer),
+		Store:           store,
+		RuntimeRunner:   runner,
+		DialogSubmitURL: "http://bot-service/mattermost/dialogs/agents",
+		StorageReady:    true,
+	})
+
+	result := svc.HandleDialogSubmission(context.Background(), DialogSubmissionCommand{
+		CallbackID: dialogCallbackOpenAIDelete,
+		State:      encodeDialogState(MenuActionCommand{View: menuViewOpenAI, ChannelID: "channel-1", PostID: "post-1"}),
+		UserID:     "owner-id",
+		UserName:   "owner",
+		Submission: map[string]any{
+			dialogFieldAccount: "primary",
+			dialogFieldConfirm: "delete",
+		},
+	})
+
+	if result.Error != "" || len(result.Errors) > 0 {
+		t.Fatalf("dialog errors = %q %#v", result.Error, result.Errors)
+	}
+	if result.Card == nil || !strings.Contains(result.Card.Text, "reviewer") {
+		t.Fatalf("card = %#v", result.Card)
+	}
+	if runner.deletedAuthAccount != "" {
+		t.Fatalf("runtime auth should not be deleted, got %q", runner.deletedAuthAccount)
+	}
+	if _, ok := store.openAIAccounts["primary"]; !ok {
+		t.Fatal("profile-bound OpenAI account should not be deleted")
 	}
 }
 
@@ -1789,6 +1877,8 @@ type fakeRuntimeRunner struct {
 	authAccount           string
 	authSecret            string
 	authReady             bool
+	deletedAuthAccount    string
+	deletedAuthSecret     string
 	runStatuses           map[string]runtimerepo.RunStatus
 }
 
@@ -1845,6 +1935,18 @@ func (runner *fakeRuntimeRunner) CleanupCodexAuthSession(_ context.Context, acco
 		AccountName: accountName,
 		Namespace:   "mattermost",
 		JobDeleted:  true,
+	}, nil
+}
+
+func (runner *fakeRuntimeRunner) DeleteCodexAuthAccount(_ context.Context, accountName string, secretName string) (runtimerepo.CodexAuthAccountDeleteResult, error) {
+	runner.deletedAuthAccount = accountName
+	runner.deletedAuthSecret = secretName
+	return runtimerepo.CodexAuthAccountDeleteResult{
+		AccountName:   accountName,
+		SecretName:    secretName,
+		Namespace:     "mattermost",
+		JobDeleted:    true,
+		SecretDeleted: true,
 	}, nil
 }
 
@@ -1959,6 +2061,7 @@ type fakeAdminStore struct {
 	deletedRepo          entity.Repository
 	profiles             []entity.AgentProfile
 	openAIAccounts       map[string]entity.OpenAIAccount
+	deletedOpenAIAccount entity.OpenAIAccount
 	githubAccounts       map[string]entity.GitHubAccount
 	githubUpsert         adminrepo.UpsertGitHubAccountInput
 	deletedGitHubAccount entity.GitHubAccount
@@ -2129,7 +2232,7 @@ func (store *fakeAdminStore) GetOpenAIAccount(_ context.Context, name string) (e
 	if account, ok := store.openAIAccounts[name]; ok {
 		return account, nil
 	}
-	return entity.OpenAIAccount{}, fmt.Errorf("openai account not found")
+	return entity.OpenAIAccount{}, adminrepo.ErrNotFound
 }
 
 func (store *fakeAdminStore) GetGitHubAccount(_ context.Context, name string) (entity.GitHubAccount, error) {
@@ -2200,6 +2303,16 @@ func (store *fakeAdminStore) UpdateOpenAIAccountStatus(_ context.Context, input 
 	}
 	account.Status = input.Status
 	store.openAIAccounts[input.Name] = account
+	return account, nil
+}
+
+func (store *fakeAdminStore) DeleteOpenAIAccount(_ context.Context, name string) (entity.OpenAIAccount, error) {
+	account, ok := store.openAIAccounts[name]
+	if !ok {
+		return entity.OpenAIAccount{}, adminrepo.ErrNotFound
+	}
+	delete(store.openAIAccounts, name)
+	store.deletedOpenAIAccount = account
 	return account, nil
 }
 

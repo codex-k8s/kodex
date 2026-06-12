@@ -1938,6 +1938,8 @@ func (svc *SlashCommandService) handleOpenAI(ctx context.Context, args []string,
 		return svc.handleOpenAIList(ctx)
 	case "cleanup":
 		return svc.handleOpenAICleanup(ctx, args[1:], command)
+	case "delete":
+		return svc.handleOpenAIDelete(ctx, args[1:], command)
 	default:
 		return svc.t("openai.unknown_command", nil)
 	}
@@ -2085,6 +2087,49 @@ func (svc *SlashCommandService) handleOpenAICleanup(ctx context.Context, args []
 	})
 }
 
+func (svc *SlashCommandService) handleOpenAIDelete(ctx context.Context, args []string, command SlashCommand) string {
+	if svc.cfg.RuntimeRunner == nil {
+		return svc.t("runtime.not_configured", nil)
+	}
+	if len(args) != 1 {
+		return svc.t("openai.delete.usage", nil)
+	}
+	accountName, err := parseOpenAIAccountName(args[0])
+	if err != nil {
+		return svc.validationErrorText(err)
+	}
+	account, err := svc.cfg.Store.GetOpenAIAccount(ctx, accountName)
+	if err != nil {
+		if errors.Is(err, adminrepo.ErrNotFound) {
+			return svc.t("openai.status.account_not_found", map[string]any{"Account": accountName})
+		}
+		return svc.t("openai.delete.failed", map[string]any{"Error": safeError(err)})
+	}
+	profiles, err := svc.openAIAccountProfileRefs(ctx, account.Name)
+	if err != nil {
+		return svc.t("openai.delete.profile_check_failed", map[string]any{"Error": safeError(err)})
+	}
+	if len(profiles) > 0 {
+		return svc.t("openai.delete.in_use", map[string]any{"Account": account.Name, "Profiles": strings.Join(profiles, ", ")})
+	}
+	deletedRuntime, err := svc.cfg.RuntimeRunner.DeleteCodexAuthAccount(ctx, account.Name, account.SecretRef)
+	if err != nil {
+		return svc.t("openai.delete.failed", map[string]any{"Error": safeError(err)})
+	}
+	deletedAccount, err := svc.cfg.Store.DeleteOpenAIAccount(ctx, account.Name)
+	if err != nil {
+		return svc.t("openai.delete.failed", map[string]any{"Error": safeError(err)})
+	}
+	svc.recordOpenAIAudit(ctx, command, "openai.account.deleted", deletedAccount.Name, "openai account metadata and auth secret deleted from Mattermost command")
+	return svc.t("openai.delete.result", map[string]any{
+		"Account":       deletedAccount.Name,
+		"Secret":        deletedAccount.SecretRef,
+		"Namespace":     deletedRuntime.Namespace,
+		"JobDeleted":    deletedRuntime.JobDeleted,
+		"SecretDeleted": deletedRuntime.SecretDeleted,
+	})
+}
+
 func (svc *SlashCommandService) helpText() string {
 	commands := []string{
 		svc.t("help.status", nil),
@@ -2173,6 +2218,8 @@ func (svc *SlashCommandService) HandleDialogSubmission(ctx context.Context, comm
 		return svc.handleOpenAIAccountDialog(ctx, command, state, openAIDialogActionStatus)
 	case dialogCallbackOpenAICleanup:
 		return svc.handleOpenAIAccountDialog(ctx, command, state, openAIDialogActionCleanup)
+	case dialogCallbackOpenAIDelete:
+		return svc.handleOpenAIAccountDialog(ctx, command, state, openAIDialogActionDelete)
 	case dialogCallbackGitHubAccountAdd:
 		return svc.handleGitHubAccountDialogUpsert(ctx, command, state, false)
 	case dialogCallbackGitHubAccountEdit:
@@ -2201,6 +2248,8 @@ func (svc *SlashCommandService) menuDialog(command MenuActionCommand, dialogID s
 		return svc.openAIAccountDialog(command, dialogCallbackOpenAIStatus, "dialog.openai.status.title", "dialog.openai.status.intro", "dialog.openai.status.submit"), ""
 	case menuDialogOpenAICleanup:
 		return svc.openAIAccountDialog(command, dialogCallbackOpenAICleanup, "dialog.openai.cleanup.title", "dialog.openai.cleanup.intro", "dialog.openai.cleanup.submit"), ""
+	case menuDialogOpenAIDelete:
+		return svc.openAIAccountDeleteDialog(command), ""
 	case menuDialogGitHubAccountAdd:
 		return svc.githubAccountDialog(command, dialogCallbackGitHubAccountAdd, "dialog.github.add.title", "dialog.github.add.intro", "dialog.github.add.submit", false), ""
 	case menuDialogGitHubAccountEdit:
@@ -2285,6 +2334,37 @@ func (svc *SlashCommandService) openAIAccountDialog(command MenuActionCommand, c
 			},
 		},
 		SubmitLabel: svc.t(submitID, nil),
+		State:       encodeDialogState(command),
+	}
+}
+
+func (svc *SlashCommandService) openAIAccountDeleteDialog(command MenuActionCommand) *MattermostDialog {
+	return &MattermostDialog{
+		SubmitURL:        svc.cfg.DialogSubmitURL,
+		CallbackID:       dialogCallbackOpenAIDelete,
+		Title:            svc.t("dialog.openai.delete.title", nil),
+		IntroductionText: svc.t("dialog.openai.delete.intro", nil),
+		Elements: []MattermostDialogElement{
+			{
+				DisplayName: svc.t("dialog.account.field.name", nil),
+				Name:        dialogFieldAccount,
+				Type:        "text",
+				Placeholder: "reviewer-test",
+				HelpText:    svc.t("dialog.account.field.name.help", nil),
+				MinLength:   1,
+				MaxLength:   48,
+			},
+			{
+				DisplayName: svc.t("dialog.repo.field.confirm", nil),
+				Name:        dialogFieldConfirm,
+				Type:        "text",
+				Placeholder: "delete",
+				HelpText:    svc.t("dialog.repo.field.confirm.help", nil),
+				MinLength:   6,
+				MaxLength:   6,
+			},
+		},
+		SubmitLabel: svc.t("dialog.openai.delete.submit", nil),
 		State:       encodeDialogState(command),
 	}
 }
@@ -2463,6 +2543,9 @@ func (svc *SlashCommandService) handleRepositoryDialogDelete(ctx context.Context
 
 func (svc *SlashCommandService) handleOpenAIAccountDialog(ctx context.Context, command DialogSubmissionCommand, state mattermostDialogState, action string) DialogSubmissionResult {
 	accountName, fieldErrors := svc.dialogAccountName(command.Submission)
+	if action == openAIDialogActionDelete && submissionString(command.Submission, dialogFieldConfirm) != "delete" {
+		fieldErrors[dialogFieldConfirm] = svc.t("dialog.repo.confirm_invalid", nil)
+	}
 	if len(fieldErrors) > 0 {
 		return DialogSubmissionResult{StatusCode: 200, Errors: fieldErrors}
 	}
@@ -2479,6 +2562,8 @@ func (svc *SlashCommandService) handleOpenAIAccountDialog(ctx context.Context, c
 		text = svc.handleOpenAIStatus(ctx, []string{accountName}, slashCommand)
 	case openAIDialogActionCleanup:
 		text = svc.handleOpenAICleanup(ctx, []string{accountName}, slashCommand)
+	case openAIDialogActionDelete:
+		text = svc.handleOpenAIDelete(ctx, []string{accountName}, slashCommand)
 	default:
 		return DialogSubmissionResult{StatusCode: 400, Error: svc.t("dialog.unknown", nil)}
 	}
@@ -2767,6 +2852,7 @@ func (svc *SlashCommandService) menuActions(view string) []MattermostCardAction 
 			svc.menuDialogAction(menuViewOpenAI, "dialogopenaiauth", menuDialogOpenAIAuth, "menu.action.openai_auth", "menu.action.openai_auth.tooltip", "default"),
 			svc.menuDialogAction(menuViewOpenAI, "dialogopenaistatus", menuDialogOpenAIStatus, "menu.action.openai_status", "menu.action.openai_status.tooltip", "default"),
 			svc.menuDialogAction(menuViewOpenAI, "dialogopenaicleanup", menuDialogOpenAICleanup, "menu.action.openai_cleanup", "menu.action.openai_cleanup.tooltip", "danger"),
+			svc.menuDialogAction(menuViewOpenAI, "dialogopenaidelete", menuDialogOpenAIDelete, "menu.action.openai_delete", "menu.action.openai_delete.tooltip", "danger"),
 			svc.menuAction(menuViewAccounts, "menu.action.back", "menu.action.back.tooltip", "default"),
 		}
 	case menuViewGitHub:
@@ -3374,6 +3460,7 @@ const (
 	menuDialogOpenAIAuth          = "openai_auth"
 	menuDialogOpenAIStatus        = "openai_status"
 	menuDialogOpenAICleanup       = "openai_cleanup"
+	menuDialogOpenAIDelete        = "openai_delete"
 	menuDialogGitHubAccountAdd    = "github_account_add"
 	menuDialogGitHubAccountEdit   = "github_account_edit"
 	menuDialogGitHubAccountDelete = "github_account_delete"
@@ -3384,6 +3471,7 @@ const (
 	dialogCallbackOpenAIAuth          = "agents_openai_auth"
 	dialogCallbackOpenAIStatus        = "agents_openai_status"
 	dialogCallbackOpenAICleanup       = "agents_openai_cleanup"
+	dialogCallbackOpenAIDelete        = "agents_openai_delete"
 	dialogCallbackGitHubAccountAdd    = "agents_github_account_add"
 	dialogCallbackGitHubAccountEdit   = "agents_github_account_edit"
 	dialogCallbackGitHubAccountDelete = "agents_github_account_delete"
@@ -3401,6 +3489,7 @@ const (
 	openAIDialogActionAuth    = "auth"
 	openAIDialogActionStatus  = "status"
 	openAIDialogActionCleanup = "cleanup"
+	openAIDialogActionDelete  = "delete"
 
 	defaultFlowMaxAttempts = 3
 
@@ -3766,6 +3855,24 @@ func (svc *SlashCommandService) openAIAccount(ctx context.Context, name string) 
 		return entity.OpenAIAccount{}, false
 	}
 	return account, true
+}
+
+func (svc *SlashCommandService) openAIAccountProfileRefs(ctx context.Context, name string) ([]string, error) {
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return nil, nil
+	}
+	profiles, err := svc.cfg.Store.ListAgentProfiles(ctx)
+	if err != nil {
+		return nil, err
+	}
+	refs := make([]string, 0)
+	for _, profile := range profiles {
+		if defaultString(profile.OpenAIAccountName, "primary") == name {
+			refs = append(refs, profile.Name)
+		}
+	}
+	sort.Strings(refs)
+	return refs, nil
 }
 
 func (svc *SlashCommandService) githubAccount(ctx context.Context, name string) (entity.GitHubAccount, bool) {

@@ -113,6 +113,8 @@ Developer runner не использует raw API key. Для Codex CLI соз�
 ```text
 /agents openai auth primary
 /agents openai status primary
+/agents openai cleanup primary
+/agents openai delete primary
 ```
 
 Ожидаемый результат:
@@ -121,7 +123,9 @@ Developer runner не использует raw API key. Для Codex CLI соз�
 - `status primary` показывает ссылку `https://auth.openai.com/codex/device` и одноразовый code;
 - владелец открывает ссылку в браузере, вводит code и подтверждает account;
 - повторный `/agents openai status primary` сохраняет `auth.json` в Secret `${MATTERCODEX_CODEX_AUTH_SECRET}-primary`, помечает account как `authorized` и удаляет auth Job;
-- содержимое `auth.json` не выводится в Mattermost, логи, PR или prompt.
+- содержимое `auth.json` не выводится в Mattermost, логи, PR или prompt;
+- `cleanup primary` удаляет только временный auth Job;
+- `delete primary` удаляет OpenAI account metadata, временный auth Job и созданный auth Secret. Удаление блокируется, если account используется agent profile.
 
 Несколько аккаунтов поддерживаются через разные имена:
 
@@ -129,9 +133,10 @@ Developer runner не использует raw API key. Для Codex CLI соз�
 /agents openai auth reviewer-plus
 /agents openai status reviewer-plus
 /agents openai list
+/agents openai delete reviewer-plus
 ```
 
-В кнопочном UX то же действие доступно через `/agents` -> `Аккаунты` -> `OpenAI`: кнопки `Auth account`, `Status account` и `Cleanup auth` открывают форму с именем account.
+В кнопочном UX то же действие доступно через `/agents` -> `Аккаунты` -> `OpenAI`: кнопки `Auth account`, `Status account`, `Cleanup auth` и `Delete account` открывают формы с именем account. `Delete account` требует подтверждение `delete`.
 
 Agent profile хранит `openai_account_name` и `github_account_name`. Seed profile `reviewer` использует OpenAI account `primary` и GitHub account `primary`; seed profile `developer` использует OpenAI account `primary` и GitHub account `agent`. Agent Job монтирует только Secret выбранных accounts.
 
@@ -253,7 +258,7 @@ bash scripts/remote/bootstrap-mattermost-bot.sh --env-file .env
 
 Проверка account menu:
 
-- `Аккаунты` -> `OpenAI`: карточка должна показать кнопки `Список accounts`, `Auth account`, `Status account`, `Cleanup auth`, `Назад`; кнопки auth/status/cleanup открывают dialog с именем account и возвращают ephemeral-результат.
+- `Аккаунты` -> `OpenAI`: карточка должна показать кнопки `Список accounts`, `Auth account`, `Status account`, `Cleanup auth`, `Delete account`, `Назад`; кнопки auth/status/cleanup/delete открывают dialog с именем account и возвращают результат в dialog.
 - `Аккаунты` -> `GitHub`: карточка должна показать кнопки `GitHub accounts`, `Добавить`, `Изменить`, `Удалить`, `Check matter-codex`, `Webhook matter-codex`, `Назад`; `Добавить/Изменить/Удалить` открывают формы metadata CRUD.
 
 Typed-команды остаются fallback-интерфейсом для точной ручной проверки:
