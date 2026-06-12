@@ -152,9 +152,11 @@ export const getGovernanceSummary = <ThrowOnError extends boolean = false>(optio
 
 /**
  * Получить безопасную self-deploy сводку.
- * Возвращает latest visible self-deploy summary для командного центра. Gateway сначала читает
- * `agent-manager.ListSelfDeployPlans`; если plan ещё не создан, но caller передал safe project и
- * provider signal refs, gateway уточняет project-side readiness через `project-catalog.GetSelfDeploySignal`.
+ * Возвращает latest visible self-deploy summary для командного центра. `scope_type`/`scope_ref`
+ * являются необязательным сужением: без них gateway читает latest visible plan по actor context
+ * и безопасным фильтрам. Gateway сначала читает `agent-manager.ListSelfDeployPlans`; если plan ещё
+ * не создан, но caller передал safe project и provider signal refs, gateway уточняет project-side
+ * readiness через `project-catalog.GetSelfDeploySignal`.
  * Gateway не читает БД доменных сервисов, не запускает deploy, не принимает governance decision и не
  * возвращает raw webhook body, provider response, diff, полный YAML, token, OAuth state/cookies,
  * secret values или большие логи. Если доменные данные ещё не появились, ответ остаётся успешным, но

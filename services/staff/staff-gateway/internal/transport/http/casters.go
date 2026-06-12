@@ -215,7 +215,7 @@ func GetSelfDeploySummaryRequest(req *http.Request) (*agentsv1.ListSelfDeployPla
 	if safeErr != nil {
 		return nil, safeErr
 	}
-	scope, safeErr := agentScopeFromQuery(req)
+	scope, safeErr := optionalAgentScopeFromQuery(req)
 	if safeErr != nil {
 		return nil, safeErr
 	}
@@ -930,6 +930,23 @@ func scopeFromQuery(req *http.Request) (*interactionsv1.ScopeRef, *SafeError) {
 
 func agentScopeFromQuery(req *http.Request) (*agentsv1.ScopeRef, *SafeError) {
 	return queryScopeRef(req, agentScopeTypeProto, agentScopeRefBuild)
+}
+
+func optionalAgentScopeFromQuery(req *http.Request) (*agentsv1.ScopeRef, *SafeError) {
+	query := req.URL.Query()
+	scopeTypeValue := strings.TrimSpace(query.Get("scope_type"))
+	scopeRef := strings.TrimSpace(query.Get("scope_ref"))
+	if scopeTypeValue == "" && scopeRef == "" {
+		return nil, nil
+	}
+	if scopeTypeValue == "" || scopeRef == "" {
+		return nil, NewSafeError(http.StatusBadRequest, CodeInvalidRequest, "scope type and scope ref must be provided together", false)
+	}
+	scopeType, safeErr := agentScopeTypeProto(scopeTypeValue)
+	if safeErr != nil {
+		return nil, safeErr
+	}
+	return agentScopeRefBuild(scopeType, scopeRef), nil
 }
 
 func queryScopeRef[ScopeType any, ScopeRef any](req *http.Request, parse func(string) (ScopeType, *SafeError), build func(ScopeType, string) ScopeRef) (ScopeRef, *SafeError) {

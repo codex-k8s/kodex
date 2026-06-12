@@ -1375,6 +1375,12 @@ type ScopeRefQuery = string
 // ScopeTypeQuery defines model for ScopeTypeQuery.
 type ScopeTypeQuery = ScopeType
 
+// SelfDeployAgentScopeRefQuery defines model for SelfDeployAgentScopeRefQuery.
+type SelfDeployAgentScopeRefQuery = string
+
+// SelfDeployAgentScopeTypeQuery defines model for SelfDeployAgentScopeTypeQuery.
+type SelfDeployAgentScopeTypeQuery = AgentScopeType
+
 // SelfDeployPlanStatusQuery defines model for SelfDeployPlanStatusQuery.
 type SelfDeployPlanStatusQuery = SelfDeployPlanStatusFilter
 
@@ -1742,11 +1748,11 @@ type SubmitSelfDeployGateDecisionParamsXKodexActorType string
 
 // GetSelfDeploySummaryParams defines parameters for GetSelfDeploySummary.
 type GetSelfDeploySummaryParams struct {
-	// ScopeType Тип области `agent-manager`.
-	ScopeType AgentScopeTypeQuery `form:"scope_type" json:"scope_type"`
+	// ScopeType Необязательное сужение self-deploy summary по области `agent-manager`.
+	ScopeType *SelfDeployAgentScopeTypeQuery `form:"scope_type,omitempty" json:"scope_type,omitempty"`
 
-	// ScopeRef Safe ref области `agent-manager`.
-	ScopeRef AgentScopeRefQuery `form:"scope_ref" json:"scope_ref"`
+	// ScopeRef Safe ref области `agent-manager`; используется вместе со `scope_type`.
+	ScopeRef *SelfDeployAgentScopeRefQuery `form:"scope_ref,omitempty" json:"scope_ref,omitempty"`
 
 	// ProjectRef Safe ref проекта для фильтра self-deploy plan.
 	ProjectRef *SelfDeployProjectRefQuery `form:"project_ref,omitempty" json:"project_ref,omitempty"`

@@ -857,6 +857,73 @@ func TestRouterGetSelfDeploySummary(t *testing.T) {
 	}
 }
 
+func TestRouterGetSelfDeploySummaryOwnerActorWithoutScope(t *testing.T) {
+	client := &fakeInteractionHubClient{
+		selfDeployListResponse:    sampleSelfDeployPlansResponse(),
+		governanceSummaryResponse: sampleSelfDeployGateSummaryResponse(),
+	}
+	router := newTestRouter(t, client)
+	req := authenticatedRequest(http.MethodGet, "/v1/self-deploy/summary", "")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	recorded := client.selfDeployListRequest
+	if recorded.GetScope() != nil || recorded.GetMeta().GetActor().GetType() != "user" || recorded.GetMeta().GetActor().GetId() != "owner-1" {
+		t.Fatalf("self-deploy request = %+v, want owner actor without scope filter", recorded)
+	}
+	if recorded.GetPage().GetPageSize() != selfDeploySummaryPageSize {
+		t.Fatalf("self-deploy request page = %+v, want summary page size", recorded.GetPage())
+	}
+	governanceRecorded := client.governanceSummaryRequest
+	if governanceRecorded.GetMeta().GetActor().GetType() != "user" || governanceRecorded.GetMeta().GetActor().GetId() != "owner-1" {
+		t.Fatalf("governance request meta = %+v, want owner actor", governanceRecorded.GetMeta())
+	}
+	var body generated.SelfDeploySummaryResponse
+	decodeJSON(t, rec, &body)
+	if body.Summary.ChainStatus != generated.GovernanceGatePending ||
+		body.Summary.Governance.GateRequestId == nil || *body.Summary.Governance.GateRequestId != sampleSelfDeployGateRequestID ||
+		body.Summary.Governance.AllowedActions == nil || len(*body.Summary.Governance.AllowedActions) != 3 {
+		t.Fatalf("summary governance = %+v, want pending gate with allowed actions", body.Summary.Governance)
+	}
+	for _, forbidden := range []string{"raw webhook", "provider response", "full services yaml", "secret-token", "OAuth state", "diff --git"} {
+		if strings.Contains(rec.Body.String(), forbidden) {
+			t.Fatalf("response leaked %q marker: %s", forbidden, rec.Body.String())
+		}
+	}
+}
+
+func TestRouterGetSelfDeploySummaryServiceActorWithScope(t *testing.T) {
+	client := &fakeInteractionHubClient{
+		selfDeployListResponse:    sampleSelfDeployPlansResponse(),
+		governanceSummaryResponse: sampleSelfDeployGateSummaryResponse(),
+	}
+	router := newTestRouter(t, client)
+	req := authenticatedRequest(http.MethodGet, "/v1/self-deploy/summary?scope_type=project&scope_ref=project-1&status=pending_approval", "")
+	req.Header.Set(headerActorType, "service")
+	req.Header.Set(headerActorID, "staff-gateway")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	recorded := client.selfDeployListRequest
+	if recorded.GetScope().GetRef() != "project-1" ||
+		recorded.GetMeta().GetActor().GetType() != "service" ||
+		recorded.GetMeta().GetActor().GetId() != "staff-gateway" {
+		t.Fatalf("self-deploy request = %+v, want service actor scoped path", recorded)
+	}
+	if client.governanceSummaryRequest.GetMeta().GetActor().GetType() != "service" ||
+		client.governanceSummaryRequest.GetMeta().GetActor().GetId() != "staff-gateway" {
+		t.Fatalf("governance request meta = %+v, want service actor", client.governanceSummaryRequest.GetMeta())
+	}
+}
+
 func TestRouterSubmitSelfDeployGateDecisionRequestChanges(t *testing.T) {
 	client := &fakeInteractionHubClient{
 		gateDecisionResponse: sampleGateDecisionResponse(sampleSelfDeployGateRequestID, governancev1.GateOutcome_GATE_OUTCOME_REVISE),
@@ -1070,6 +1137,20 @@ func TestRouterGetSelfDeploySummaryRejectsUnsupportedScope(t *testing.T) {
 	assertErrorCode(t, rec, http.StatusBadRequest, generated.SafeErrorCodeInvalidRequest)
 	if client.selfDeployListRequest != nil {
 		t.Fatalf("downstream was called for unsupported agent scope")
+	}
+}
+
+func TestRouterGetSelfDeploySummaryRejectsPartialScope(t *testing.T) {
+	client := &fakeInteractionHubClient{}
+	router := newTestRouter(t, client)
+	req := authenticatedRequest(http.MethodGet, "/v1/self-deploy/summary?scope_type=project", "")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	assertErrorCode(t, rec, http.StatusBadRequest, generated.SafeErrorCodeInvalidRequest)
+	if client.selfDeployListRequest != nil {
+		t.Fatalf("downstream was called for partial scope")
 	}
 }
 
