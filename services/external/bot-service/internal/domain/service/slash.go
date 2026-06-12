@@ -2167,6 +2167,18 @@ func (svc *SlashCommandService) HandleDialogSubmission(ctx context.Context, comm
 		return svc.handleRepositoryDialogUpsert(ctx, command, state, true)
 	case dialogCallbackRepositoryDelete:
 		return svc.handleRepositoryDialogDelete(ctx, command, state)
+	case dialogCallbackOpenAIAuth:
+		return svc.handleOpenAIAccountDialog(ctx, command, state, openAIDialogActionAuth)
+	case dialogCallbackOpenAIStatus:
+		return svc.handleOpenAIAccountDialog(ctx, command, state, openAIDialogActionStatus)
+	case dialogCallbackOpenAICleanup:
+		return svc.handleOpenAIAccountDialog(ctx, command, state, openAIDialogActionCleanup)
+	case dialogCallbackGitHubAccountAdd:
+		return svc.handleGitHubAccountDialogUpsert(ctx, command, state, false)
+	case dialogCallbackGitHubAccountEdit:
+		return svc.handleGitHubAccountDialogUpsert(ctx, command, state, true)
+	case dialogCallbackGitHubAccountDelete:
+		return svc.handleGitHubAccountDialogDelete(ctx, command, state)
 	default:
 		return DialogSubmissionResult{StatusCode: 400, Error: svc.t("dialog.unknown", nil)}
 	}
@@ -2183,6 +2195,18 @@ func (svc *SlashCommandService) menuDialog(command MenuActionCommand, dialogID s
 		return svc.repositoryDialog(command, dialogCallbackRepositoryEdit, "dialog.repo.edit.title", "dialog.repo.edit.intro", "dialog.repo.edit.submit", false), ""
 	case menuDialogRepositoryDelete:
 		return svc.repositoryDialog(command, dialogCallbackRepositoryDelete, "dialog.repo.delete.title", "dialog.repo.delete.intro", "dialog.repo.delete.submit", true), ""
+	case menuDialogOpenAIAuth:
+		return svc.openAIAccountDialog(command, dialogCallbackOpenAIAuth, "dialog.openai.auth.title", "dialog.openai.auth.intro", "dialog.openai.auth.submit"), ""
+	case menuDialogOpenAIStatus:
+		return svc.openAIAccountDialog(command, dialogCallbackOpenAIStatus, "dialog.openai.status.title", "dialog.openai.status.intro", "dialog.openai.status.submit"), ""
+	case menuDialogOpenAICleanup:
+		return svc.openAIAccountDialog(command, dialogCallbackOpenAICleanup, "dialog.openai.cleanup.title", "dialog.openai.cleanup.intro", "dialog.openai.cleanup.submit"), ""
+	case menuDialogGitHubAccountAdd:
+		return svc.githubAccountDialog(command, dialogCallbackGitHubAccountAdd, "dialog.github.add.title", "dialog.github.add.intro", "dialog.github.add.submit", false), ""
+	case menuDialogGitHubAccountEdit:
+		return svc.githubAccountDialog(command, dialogCallbackGitHubAccountEdit, "dialog.github.edit.title", "dialog.github.edit.intro", "dialog.github.edit.submit", false), ""
+	case menuDialogGitHubAccountDelete:
+		return svc.githubAccountDialog(command, dialogCallbackGitHubAccountDelete, "dialog.github.delete.title", "dialog.github.delete.intro", "dialog.github.delete.submit", true), ""
 	default:
 		return nil, svc.t("dialog.unknown", nil)
 	}
@@ -2230,6 +2254,105 @@ func (svc *SlashCommandService) repositoryDialog(command MenuActionCommand, call
 			MinLength:   1,
 			MaxLength:   120,
 		})
+	}
+	return &MattermostDialog{
+		SubmitURL:        svc.cfg.DialogSubmitURL,
+		CallbackID:       callbackID,
+		Title:            svc.t(titleID, nil),
+		IntroductionText: svc.t(introID, nil),
+		Elements:         elements,
+		SubmitLabel:      svc.t(submitID, nil),
+		State:            encodeDialogState(command),
+	}
+}
+
+func (svc *SlashCommandService) openAIAccountDialog(command MenuActionCommand, callbackID string, titleID string, introID string, submitID string) *MattermostDialog {
+	return &MattermostDialog{
+		SubmitURL:        svc.cfg.DialogSubmitURL,
+		CallbackID:       callbackID,
+		Title:            svc.t(titleID, nil),
+		IntroductionText: svc.t(introID, nil),
+		Elements: []MattermostDialogElement{
+			{
+				DisplayName: svc.t("dialog.account.field.name", nil),
+				Name:        dialogFieldAccount,
+				Type:        "text",
+				Default:     "primary",
+				Placeholder: "primary",
+				HelpText:    svc.t("dialog.account.field.name.help", nil),
+				MinLength:   1,
+				MaxLength:   48,
+			},
+		},
+		SubmitLabel: svc.t(submitID, nil),
+		State:       encodeDialogState(command),
+	}
+}
+
+func (svc *SlashCommandService) githubAccountDialog(command MenuActionCommand, callbackID string, titleID string, introID string, submitID string, deleteMode bool) *MattermostDialog {
+	elements := []MattermostDialogElement{
+		{
+			DisplayName: svc.t("dialog.account.field.name", nil),
+			Name:        dialogFieldAccount,
+			Type:        "text",
+			Default:     "agent",
+			Placeholder: "agent",
+			HelpText:    svc.t("dialog.account.field.name.help", nil),
+			MinLength:   1,
+			MaxLength:   48,
+		},
+	}
+	if deleteMode {
+		elements = append(elements, MattermostDialogElement{
+			DisplayName: svc.t("dialog.repo.field.confirm", nil),
+			Name:        dialogFieldConfirm,
+			Type:        "text",
+			Placeholder: "delete",
+			HelpText:    svc.t("dialog.repo.field.confirm.help", nil),
+			MinLength:   6,
+			MaxLength:   6,
+		})
+	} else {
+		elements = append(elements,
+			MattermostDialogElement{
+				DisplayName: svc.t("dialog.github.field.secret", nil),
+				Name:        dialogFieldSecretRef,
+				Type:        "text",
+				Placeholder: "matter-codex-github-agent",
+				HelpText:    svc.t("dialog.github.field.secret.help", nil),
+				MinLength:   1,
+				MaxLength:   253,
+			},
+			MattermostDialogElement{
+				DisplayName: svc.t("dialog.github.field.username", nil),
+				Name:        dialogFieldUsername,
+				Type:        "text",
+				Placeholder: "ai-da-stas",
+				HelpText:    svc.t("dialog.github.field.username.help", nil),
+				Optional:    true,
+				MaxLength:   80,
+			},
+			MattermostDialogElement{
+				DisplayName: svc.t("dialog.github.field.email", nil),
+				Name:        dialogFieldEmail,
+				Type:        "text",
+				SubType:     "email",
+				Placeholder: "user@example.com",
+				HelpText:    svc.t("dialog.github.field.email.help", nil),
+				Optional:    true,
+				MaxLength:   150,
+			},
+			MattermostDialogElement{
+				DisplayName: svc.t("dialog.github.field.status", nil),
+				Name:        dialogFieldStatus,
+				Type:        "select",
+				Default:     "configured",
+				Options: []MattermostDialogOption{
+					{Text: svc.t("dialog.github.status.configured", nil), Value: "configured"},
+					{Text: svc.t("dialog.github.status.disabled", nil), Value: "disabled"},
+				},
+			},
+		)
 	}
 	return &MattermostDialog{
 		SubmitURL:        svc.cfg.DialogSubmitURL,
@@ -2336,6 +2459,152 @@ func (svc *SlashCommandService) handleRepositoryDialogDelete(ctx context.Context
 		StatusCode: 200,
 		Card:       svc.dialogResultCard(ctx, state, command, text),
 	}
+}
+
+func (svc *SlashCommandService) handleOpenAIAccountDialog(ctx context.Context, command DialogSubmissionCommand, state mattermostDialogState, action string) DialogSubmissionResult {
+	accountName, fieldErrors := svc.dialogAccountName(command.Submission)
+	if len(fieldErrors) > 0 {
+		return DialogSubmissionResult{StatusCode: 200, Errors: fieldErrors}
+	}
+	slashCommand := SlashCommand{
+		UserID:    command.UserID,
+		UserName:  defaultString(command.UserName, state.UserName),
+		ChannelID: defaultString(state.ChannelID, command.ChannelID),
+	}
+	var text string
+	switch action {
+	case openAIDialogActionAuth:
+		text = svc.handleOpenAIAuth(ctx, []string{accountName}, slashCommand)
+	case openAIDialogActionStatus:
+		text = svc.handleOpenAIStatus(ctx, []string{accountName}, slashCommand)
+	case openAIDialogActionCleanup:
+		text = svc.handleOpenAICleanup(ctx, []string{accountName}, slashCommand)
+	default:
+		return DialogSubmissionResult{StatusCode: 400, Error: svc.t("dialog.unknown", nil)}
+	}
+	return DialogSubmissionResult{
+		StatusCode: 200,
+		Card:       svc.dialogResultCard(ctx, state, command, text),
+	}
+}
+
+func (svc *SlashCommandService) handleGitHubAccountDialogUpsert(ctx context.Context, command DialogSubmissionCommand, state mattermostDialogState, requireExisting bool) DialogSubmissionResult {
+	input, fieldErrors := svc.githubAccountDialogInput(command.Submission)
+	if len(fieldErrors) > 0 {
+		return DialogSubmissionResult{StatusCode: 200, Errors: fieldErrors}
+	}
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return DialogSubmissionResult{StatusCode: 200, Error: svc.t("github.account.list.storage_not_ready", nil)}
+	}
+	if requireExisting {
+		if _, err := svc.cfg.Store.GetGitHubAccount(ctx, input.Name); err != nil {
+			if errors.Is(err, adminrepo.ErrNotFound) {
+				return DialogSubmissionResult{StatusCode: 200, Errors: map[string]string{dialogFieldAccount: svc.t("dialog.github.not_found", map[string]any{"Account": input.Name})}}
+			}
+			return DialogSubmissionResult{StatusCode: 200, Error: svc.t("github.account.list.failed", map[string]any{"Error": safeError(err)})}
+		}
+	}
+	account, created, err := svc.cfg.Store.UpsertGitHubAccount(ctx, input)
+	if err != nil {
+		return DialogSubmissionResult{StatusCode: 200, Error: svc.t("github.account.save_failed", map[string]any{"Error": safeError(err)})}
+	}
+	svc.recordGitHubAudit(ctx, SlashCommand{
+		UserID:    command.UserID,
+		UserName:  defaultString(command.UserName, state.UserName),
+		ChannelID: defaultString(state.ChannelID, command.ChannelID),
+	}, "github.account.upserted", account.Name, "github account metadata upserted from Mattermost dialog")
+	stateID := "label.updated"
+	if created {
+		stateID = "label.created"
+	}
+	text := svc.t("github.account.save_result", map[string]any{
+		"State":    svc.t(stateID, nil),
+		"Account":  account.Name,
+		"Secret":   account.SecretRef,
+		"Username": emptyAsUnknown(account.Username),
+		"Email":    emptyAsUnknown(account.Email),
+		"Status":   account.Status,
+	})
+	return DialogSubmissionResult{
+		StatusCode: 200,
+		Card:       svc.dialogResultCard(ctx, state, command, text),
+	}
+}
+
+func (svc *SlashCommandService) githubAccountDialogInput(submission map[string]any) (adminrepo.UpsertGitHubAccountInput, map[string]string) {
+	fieldErrors := map[string]string{}
+	accountName, err := parseOpenAIAccountName(submissionString(submission, dialogFieldAccount))
+	if err != nil {
+		fieldErrors[dialogFieldAccount] = svc.t("parse.openai_account.invalid", nil)
+	}
+	secretRef := strings.ToLower(submissionString(submission, dialogFieldSecretRef))
+	if !validKubernetesSecretName(secretRef) {
+		fieldErrors[dialogFieldSecretRef] = svc.t("dialog.github.secret_invalid", nil)
+	}
+	username := submissionString(submission, dialogFieldUsername)
+	if username != "" && !validGitHubUsername(username) {
+		fieldErrors[dialogFieldUsername] = svc.t("dialog.github.username_invalid", nil)
+	}
+	email := submissionString(submission, dialogFieldEmail)
+	if email != "" && !validAccountEmail(email) {
+		fieldErrors[dialogFieldEmail] = svc.t("dialog.github.email_invalid", nil)
+	}
+	status := defaultString(strings.ToLower(submissionString(submission, dialogFieldStatus)), "configured")
+	if !validGitHubAccountStatus(status) {
+		fieldErrors[dialogFieldStatus] = svc.t("dialog.github.status_invalid", nil)
+	}
+	if len(fieldErrors) > 0 {
+		return adminrepo.UpsertGitHubAccountInput{}, fieldErrors
+	}
+	return adminrepo.UpsertGitHubAccountInput{
+		Name:           accountName,
+		CredentialName: githubCredentialName(accountName),
+		SecretRef:      secretRef,
+		Username:       username,
+		Email:          email,
+		Status:         status,
+	}, nil
+}
+
+func (svc *SlashCommandService) handleGitHubAccountDialogDelete(ctx context.Context, command DialogSubmissionCommand, state mattermostDialogState) DialogSubmissionResult {
+	accountName, fieldErrors := svc.dialogAccountName(command.Submission)
+	if submissionString(command.Submission, dialogFieldConfirm) != "delete" {
+		fieldErrors[dialogFieldConfirm] = svc.t("dialog.repo.confirm_invalid", nil)
+	}
+	if len(fieldErrors) > 0 {
+		return DialogSubmissionResult{StatusCode: 200, Errors: fieldErrors}
+	}
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return DialogSubmissionResult{StatusCode: 200, Error: svc.t("github.account.list.storage_not_ready", nil)}
+	}
+	deleted, err := svc.cfg.Store.DeleteGitHubAccount(ctx, accountName)
+	if err != nil {
+		if errors.Is(err, adminrepo.ErrNotFound) {
+			return DialogSubmissionResult{StatusCode: 200, Errors: map[string]string{dialogFieldAccount: svc.t("dialog.github.not_found", map[string]any{"Account": accountName})}}
+		}
+		return DialogSubmissionResult{StatusCode: 200, Error: svc.t("github.account.delete_failed", map[string]any{"Error": safeError(err)})}
+	}
+	svc.recordGitHubAudit(ctx, SlashCommand{
+		UserID:    command.UserID,
+		UserName:  defaultString(command.UserName, state.UserName),
+		ChannelID: defaultString(state.ChannelID, command.ChannelID),
+	}, "github.account.deleted", deleted.Name, "github account metadata deleted from Mattermost dialog")
+	text := svc.t("github.account.delete_result", map[string]any{
+		"Account": deleted.Name,
+		"Secret":  deleted.SecretRef,
+	})
+	return DialogSubmissionResult{
+		StatusCode: 200,
+		Card:       svc.dialogResultCard(ctx, state, command, text),
+	}
+}
+
+func (svc *SlashCommandService) dialogAccountName(submission map[string]any) (string, map[string]string) {
+	accountName, err := parseOpenAIAccountName(submissionString(submission, dialogFieldAccount))
+	if err != nil {
+		return "", map[string]string{dialogFieldAccount: svc.t("parse.openai_account.invalid", nil)}
+	}
+	return accountName, nil
 }
 
 func (svc *SlashCommandService) dialogResultCard(ctx context.Context, state mattermostDialogState, command DialogSubmissionCommand, text string) *MattermostCard {
@@ -2495,13 +2764,17 @@ func (svc *SlashCommandService) menuActions(view string) []MattermostCardAction 
 	case menuViewOpenAI:
 		return []MattermostCardAction{
 			svc.menuCommandAction(menuViewOpenAI, "cmdopenailist", "openai list", "menu.action.openai_list", "menu.action.openai_list.tooltip", "primary"),
-			svc.menuCommandAction(menuViewOpenAI, "cmdopenaiauthprimary", "openai auth primary", "menu.action.openai_auth_primary", "menu.action.openai_auth_primary.tooltip", "default"),
-			svc.menuCommandAction(menuViewOpenAI, "cmdopenaistatusprimary", "openai status primary", "menu.action.openai_status_primary", "menu.action.openai_status_primary.tooltip", "default"),
+			svc.menuDialogAction(menuViewOpenAI, "dialogopenaiauth", menuDialogOpenAIAuth, "menu.action.openai_auth", "menu.action.openai_auth.tooltip", "default"),
+			svc.menuDialogAction(menuViewOpenAI, "dialogopenaistatus", menuDialogOpenAIStatus, "menu.action.openai_status", "menu.action.openai_status.tooltip", "default"),
+			svc.menuDialogAction(menuViewOpenAI, "dialogopenaicleanup", menuDialogOpenAICleanup, "menu.action.openai_cleanup", "menu.action.openai_cleanup.tooltip", "danger"),
 			svc.menuAction(menuViewAccounts, "menu.action.back", "menu.action.back.tooltip", "default"),
 		}
 	case menuViewGitHub:
 		return []MattermostCardAction{
 			svc.menuCommandAction(menuViewGitHub, "cmdgithubaccountlist", "github account list", "menu.action.github_account_list", "menu.action.github_account_list.tooltip", "primary"),
+			svc.menuDialogAction(menuViewGitHub, "dialoggithubadd", menuDialogGitHubAccountAdd, "menu.action.github_account_add", "menu.action.github_account_add.tooltip", "primary"),
+			svc.menuDialogAction(menuViewGitHub, "dialoggithubedit", menuDialogGitHubAccountEdit, "menu.action.github_account_edit", "menu.action.github_account_edit.tooltip", "default"),
+			svc.menuDialogAction(menuViewGitHub, "dialoggithubdelete", menuDialogGitHubAccountDelete, "menu.action.github_account_delete", "menu.action.github_account_delete.tooltip", "danger"),
 			svc.menuCommandAction(menuViewGitHub, "cmdgithubcheckmattercodex", "github check codex-k8s/matter-codex", "menu.action.github_check_mattercodex", "menu.action.github_check_mattercodex.tooltip", "default"),
 			svc.menuCommandAction(menuViewGitHub, "cmdgithubwebhookmattercodex", "github webhook ensure codex-k8s/matter-codex", "menu.action.github_webhook_mattercodex", "menu.action.github_webhook_mattercodex.tooltip", "default"),
 			svc.menuAction(menuViewAccounts, "menu.action.back", "menu.action.back.tooltip", "default"),
@@ -3071,11 +3344,14 @@ func isProvider(value string) bool {
 }
 
 var (
-	identifierRE       = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
-	branchRE           = regexp.MustCompile(`^[A-Za-z0-9_./-]+$`)
-	promptTemplateIDRE = regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]{0,63}$`)
-	runtimeRunRE       = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]{0,47}[a-z0-9])?$`)
-	githubPRURLRE      = regexp.MustCompile(`/pull/([0-9]+)(?:$|[/?#])`)
+	identifierRE           = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
+	branchRE               = regexp.MustCompile(`^[A-Za-z0-9_./-]+$`)
+	promptTemplateIDRE     = regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]{0,63}$`)
+	runtimeRunRE           = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]{0,47}[a-z0-9])?$`)
+	kubernetesSecretNameRE = regexp.MustCompile(`^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$`)
+	githubUsernameRE       = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9-]{0,37}[A-Za-z0-9])?$`)
+	accountEmailRE         = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[^@\s]+$`)
+	githubPRURLRE          = regexp.MustCompile(`/pull/([0-9]+)(?:$|[/?#])`)
 )
 
 const (
@@ -3092,18 +3368,39 @@ const (
 	menuViewSystem       = "system"
 	menuViewHelp         = "help"
 
-	menuDialogRepositoryAdd    = "repo_add"
-	menuDialogRepositoryEdit   = "repo_edit"
-	menuDialogRepositoryDelete = "repo_delete"
+	menuDialogRepositoryAdd       = "repo_add"
+	menuDialogRepositoryEdit      = "repo_edit"
+	menuDialogRepositoryDelete    = "repo_delete"
+	menuDialogOpenAIAuth          = "openai_auth"
+	menuDialogOpenAIStatus        = "openai_status"
+	menuDialogOpenAICleanup       = "openai_cleanup"
+	menuDialogGitHubAccountAdd    = "github_account_add"
+	menuDialogGitHubAccountEdit   = "github_account_edit"
+	menuDialogGitHubAccountDelete = "github_account_delete"
 
-	dialogCallbackRepositoryAdd    = "agents_repo_add"
-	dialogCallbackRepositoryEdit   = "agents_repo_edit"
-	dialogCallbackRepositoryDelete = "agents_repo_delete"
+	dialogCallbackRepositoryAdd       = "agents_repo_add"
+	dialogCallbackRepositoryEdit      = "agents_repo_edit"
+	dialogCallbackRepositoryDelete    = "agents_repo_delete"
+	dialogCallbackOpenAIAuth          = "agents_openai_auth"
+	dialogCallbackOpenAIStatus        = "agents_openai_status"
+	dialogCallbackOpenAICleanup       = "agents_openai_cleanup"
+	dialogCallbackGitHubAccountAdd    = "agents_github_account_add"
+	dialogCallbackGitHubAccountEdit   = "agents_github_account_edit"
+	dialogCallbackGitHubAccountDelete = "agents_github_account_delete"
 
 	dialogFieldProvider      = "provider"
 	dialogFieldRepository    = "repository"
 	dialogFieldDefaultBranch = "default_branch"
 	dialogFieldConfirm       = "confirm"
+	dialogFieldAccount       = "account"
+	dialogFieldSecretRef     = "secret_ref"
+	dialogFieldUsername      = "username"
+	dialogFieldEmail         = "email"
+	dialogFieldStatus        = "status"
+
+	openAIDialogActionAuth    = "auth"
+	openAIDialogActionStatus  = "status"
+	openAIDialogActionCleanup = "cleanup"
 
 	defaultFlowMaxAttempts = 3
 
@@ -3144,6 +3441,27 @@ func validBranch(value string) bool {
 
 func validRuntimeRunID(value string) bool {
 	return runtimeRunRE.MatchString(value)
+}
+
+func validKubernetesSecretName(value string) bool {
+	return kubernetesSecretNameRE.MatchString(value) && !strings.Contains(value, "..")
+}
+
+func validGitHubUsername(value string) bool {
+	return githubUsernameRE.MatchString(value)
+}
+
+func validAccountEmail(value string) bool {
+	return len(value) <= 150 && accountEmailRE.MatchString(value)
+}
+
+func validGitHubAccountStatus(value string) bool {
+	switch value {
+	case "configured", "disabled":
+		return true
+	default:
+		return false
+	}
 }
 
 func normalizeMenuView(value string) string {
@@ -3549,6 +3867,10 @@ func reviewerRunStatus(status runtimerepo.RunStatus) string {
 
 func openAICredentialName(accountName string) string {
 	return "openai:" + accountName
+}
+
+func githubCredentialName(accountName string) string {
+	return "github:" + accountName
 }
 
 func defaultString(value string, fallback string) string {

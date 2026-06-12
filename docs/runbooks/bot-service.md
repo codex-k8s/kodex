@@ -14,6 +14,7 @@
 - отвечать на `/agents status`;
 - выполнять admin-команды `/agents repo add`, `/agents repo list`, `/agents token check`, `/agents locale get|set`, `/agents profile list`, `/agents prompt help|list|show|render|set`, `/agents openai auth|status|list|cleanup`;
 - выполнять GitHub adapter/account команды `/agents github account list`, `/agents github check`, `/agents github branch`, `/agents github pr`;
+- управлять через Mattermost dialog-кнопки metadata GitHub accounts: add/edit/delete account binding к существующему Kubernetes Secret без ввода raw token в Mattermost;
 - принимать GitHub webhook callback `/github/webhook` с HMAC validation;
 - автоматически регистрировать repo webhook при `/agents repo add github owner/name [default-branch]`, если GitHub token имеет hook write permission;
 - выполнять Kubernetes runtime smoke-команды `/agents runtime smoke|status|cleanup|prune` через client-go, Job, PVC и подготовленный agent-runner image;
@@ -130,7 +131,29 @@ Developer runner не использует raw API key. Для Codex CLI соз�
 /agents openai list
 ```
 
+В кнопочном UX то же действие доступно через `/agents` -> `Аккаунты` -> `OpenAI`: кнопки `Auth account`, `Status account` и `Cleanup auth` открывают форму с именем account.
+
 Agent profile хранит `openai_account_name` и `github_account_name`. Seed profile `reviewer` использует OpenAI account `primary` и GitHub account `primary`; seed profile `developer` использует OpenAI account `primary` и GitHub account `agent`. Agent Job монтирует только Secret выбранных accounts.
+
+## GitHub account metadata
+
+GitHub token создается владельцем с нужными scopes и хранится в Kubernetes Secret. Bot-service не принимает raw token через Mattermost account dialog; dialog управляет только metadata binding:
+
+- account name;
+- Kubernetes Secret name;
+- optional GitHub username;
+- optional git author email;
+- status `configured` или `disabled`.
+
+Кнопочный путь:
+
+```text
+/agents -> Аккаунты -> GitHub -> Добавить
+/agents -> Аккаунты -> GitHub -> Изменить
+/agents -> Аккаунты -> GitHub -> Удалить
+```
+
+Ожидаемый результат: `Добавить` и `Изменить` сохраняют account metadata в PostgreSQL, `Удалить` удаляет только metadata row после подтверждения `delete`. Kubernetes Secret не удаляется и значение token нигде не печатается.
 
 ## Health-only install
 
@@ -230,8 +253,8 @@ bash scripts/remote/bootstrap-mattermost-bot.sh --env-file .env
 
 Проверка account menu:
 
-- `Аккаунты` -> `OpenAI`: карточка должна показать кнопки `Список accounts`, `Auth primary`, `Status primary`, `Назад`; нажатия по первым трем кнопкам возвращают ephemeral-ответы соответствующих действий.
-- `Аккаунты` -> `GitHub`: карточка должна показать кнопки `GitHub accounts`, `Check matter-codex`, `Webhook matter-codex`, `Назад`; `GitHub accounts` возвращает список GitHub accounts из storage.
+- `Аккаунты` -> `OpenAI`: карточка должна показать кнопки `Список accounts`, `Auth account`, `Status account`, `Cleanup auth`, `Назад`; кнопки auth/status/cleanup открывают dialog с именем account и возвращают ephemeral-результат.
+- `Аккаунты` -> `GitHub`: карточка должна показать кнопки `GitHub accounts`, `Добавить`, `Изменить`, `Удалить`, `Check matter-codex`, `Webhook matter-codex`, `Назад`; `Добавить/Изменить/Удалить` открывают формы metadata CRUD.
 
 Typed-команды остаются fallback-интерфейсом для точной ручной проверки:
 

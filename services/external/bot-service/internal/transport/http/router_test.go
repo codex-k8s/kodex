@@ -654,6 +654,14 @@ func (store *fakeRouterAdminStore) GetGitHubAccount(context.Context, string) (en
 	return entity.GitHubAccount{}, adminrepo.ErrNotFound
 }
 
+func (store *fakeRouterAdminStore) UpsertGitHubAccount(context.Context, adminrepo.UpsertGitHubAccountInput) (entity.GitHubAccount, bool, error) {
+	return entity.GitHubAccount{}, true, nil
+}
+
+func (store *fakeRouterAdminStore) DeleteGitHubAccount(context.Context, string) (entity.GitHubAccount, error) {
+	return entity.GitHubAccount{}, adminrepo.ErrNotFound
+}
+
 func (store *fakeRouterAdminStore) CreateAgentFlow(context.Context, adminrepo.CreateAgentFlowInput) (entity.AgentFlow, bool, error) {
 	return entity.AgentFlow{}, true, nil
 }

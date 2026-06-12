@@ -249,6 +249,42 @@ func TestRepositoriesMenuUsesDialogButtons(t *testing.T) {
 	}
 }
 
+func TestAccountMenusUseDialogButtons(t *testing.T) {
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:       localizer,
+		StatusService:   testStatusService(localizer),
+		MenuActionURL:   "http://bot-service/mattermost/actions/agents",
+		DialogSubmitURL: "http://bot-service/mattermost/dialogs/agents",
+	})
+	cases := []struct {
+		view   string
+		action string
+		dialog string
+	}{
+		{view: menuViewOpenAI, action: "dialogopenaiauth", dialog: menuDialogOpenAIAuth},
+		{view: menuViewOpenAI, action: "dialogopenaistatus", dialog: menuDialogOpenAIStatus},
+		{view: menuViewOpenAI, action: "dialogopenaicleanup", dialog: menuDialogOpenAICleanup},
+		{view: menuViewGitHub, action: "dialoggithubadd", dialog: menuDialogGitHubAccountAdd},
+		{view: menuViewGitHub, action: "dialoggithubedit", dialog: menuDialogGitHubAccountEdit},
+		{view: menuViewGitHub, action: "dialoggithubdelete", dialog: menuDialogGitHubAccountDelete},
+	}
+
+	for _, tc := range cases {
+		result := svc.HandleMenuAction(context.Background(), MenuActionCommand{View: tc.view})
+		if result.Card == nil {
+			t.Fatalf("%s card is nil", tc.view)
+		}
+		action, ok := mattermostActionByID(result.Card.Actions, tc.action)
+		if !ok {
+			t.Fatalf("%s action is missing: %#v", tc.action, result.Card.Actions)
+		}
+		if action.Context["dialog"] != tc.dialog {
+			t.Fatalf("%s dialog context = %#v", tc.action, action.Context)
+		}
+	}
+}
+
 func TestMenuActionReturnsRepositoryDialog(t *testing.T) {
 	localizer := testLocalizer(t, texti18n.DefaultLocale)
 	svc := NewSlashCommandService(SlashCommandServiceConfig{
@@ -287,7 +323,7 @@ func TestMenuActionReturnsRepositoryDialog(t *testing.T) {
 	}
 }
 
-func TestRepositoryDialogTitlesFitMattermostLimit(t *testing.T) {
+func TestMattermostDialogsFitMattermostLimits(t *testing.T) {
 	for _, locale := range []string{texti18n.DefaultLocale, "ru"} {
 		localizer := testLocalizer(t, locale)
 		svc := NewSlashCommandService(SlashCommandServiceConfig{
@@ -295,18 +331,51 @@ func TestRepositoryDialogTitlesFitMattermostLimit(t *testing.T) {
 			StatusService:   testStatusService(localizer),
 			DialogSubmitURL: "http://bot-service/mattermost/dialogs/agents",
 		})
-		for _, dialog := range []string{menuDialogRepositoryAdd, menuDialogRepositoryEdit, menuDialogRepositoryDelete} {
+		for _, dialog := range []string{
+			menuDialogRepositoryAdd,
+			menuDialogRepositoryEdit,
+			menuDialogRepositoryDelete,
+			menuDialogOpenAIAuth,
+			menuDialogOpenAIStatus,
+			menuDialogOpenAICleanup,
+			menuDialogGitHubAccountAdd,
+			menuDialogGitHubAccountEdit,
+			menuDialogGitHubAccountDelete,
+		} {
 			result := svc.HandleMenuAction(context.Background(), MenuActionCommand{
-				View:   menuViewRepositories,
+				View:   dialogView(dialog),
 				Dialog: dialog,
 			})
 			if result.Dialog == nil {
 				t.Fatalf("dialog %q for locale %q is nil", dialog, locale)
 			}
-			if len(result.Dialog.Title) > mattermostmodel.DialogTitleMaxLength {
-				t.Fatalf("dialog %q title %q for locale %q length = %d, want <= %d", dialog, result.Dialog.Title, locale, len(result.Dialog.Title), mattermostmodel.DialogTitleMaxLength)
+			openedDialog := result.Dialog
+			if len(openedDialog.Title) > mattermostmodel.DialogTitleMaxLength {
+				t.Fatalf("dialog %q title %q for locale %q length = %d, want <= %d", dialog, openedDialog.Title, locale, len(openedDialog.Title), mattermostmodel.DialogTitleMaxLength)
+			}
+			for _, element := range openedDialog.Elements {
+				if len(element.DisplayName) > mattermostmodel.DialogElementDisplayNameMaxLength {
+					t.Fatalf("dialog %q field %q display name length = %d, want <= %d", dialog, element.Name, len(element.DisplayName), mattermostmodel.DialogElementDisplayNameMaxLength)
+				}
+				if len(element.HelpText) > mattermostmodel.DialogElementHelpTextMaxLength {
+					t.Fatalf("dialog %q field %q help text length = %d, want <= %d", dialog, element.Name, len(element.HelpText), mattermostmodel.DialogElementHelpTextMaxLength)
+				}
+				if element.Type == "text" && len(element.Placeholder) > mattermostmodel.DialogElementTextMaxLength {
+					t.Fatalf("dialog %q field %q placeholder length = %d, want <= %d", dialog, element.Name, len(element.Placeholder), mattermostmodel.DialogElementTextMaxLength)
+				}
 			}
 		}
+	}
+}
+
+func dialogView(dialog string) string {
+	switch dialog {
+	case menuDialogOpenAIAuth, menuDialogOpenAIStatus, menuDialogOpenAICleanup:
+		return menuViewOpenAI
+	case menuDialogGitHubAccountAdd, menuDialogGitHubAccountEdit, menuDialogGitHubAccountDelete:
+		return menuViewGitHub
+	default:
+		return menuViewRepositories
 	}
 }
 
@@ -350,6 +419,121 @@ func TestRepositoryDialogSubmissionAddsRepository(t *testing.T) {
 	}
 	if !strings.Contains(result.Card.Text, "github:codex-k8s/matter-codex") {
 		t.Fatalf("card text = %q", result.Card.Text)
+	}
+}
+
+func TestOpenAIAuthDialogSubmissionStartsCustomAccount(t *testing.T) {
+	store := &fakeAdminStore{}
+	runner := &fakeRuntimeRunner{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:           localizer,
+		StatusService:       testStatusService(localizer),
+		Store:               store,
+		RuntimeRunner:       runner,
+		DialogSubmitURL:     "http://bot-service/mattermost/dialogs/agents",
+		CodexAuthSecretName: "matter-codex-codex-auth",
+		StorageReady:        true,
+	})
+
+	result := svc.HandleDialogSubmission(context.Background(), DialogSubmissionCommand{
+		CallbackID: dialogCallbackOpenAIAuth,
+		State:      encodeDialogState(MenuActionCommand{View: menuViewOpenAI, ChannelID: "channel-1", PostID: "post-1"}),
+		UserID:     "owner-id",
+		UserName:   "owner",
+		Submission: map[string]any{
+			dialogFieldAccount: "reviewer-plus",
+		},
+	})
+
+	if result.Error != "" || len(result.Errors) > 0 {
+		t.Fatalf("dialog errors = %q %#v", result.Error, result.Errors)
+	}
+	if runner.authAccount != "reviewer-plus" || runner.authSecret != "matter-codex-codex-auth-reviewer-plus" {
+		t.Fatalf("runner auth = account %q secret %q", runner.authAccount, runner.authSecret)
+	}
+	account := store.openAIAccounts["reviewer-plus"]
+	if account.Status != "auth_pending" || account.SecretRef != "matter-codex-codex-auth-reviewer-plus" {
+		t.Fatalf("openAI account = %#v", account)
+	}
+	if result.Card == nil || !strings.Contains(result.Card.Text, "reviewer-plus") {
+		t.Fatalf("card = %#v", result.Card)
+	}
+}
+
+func TestGitHubAccountDialogSubmissionAddsAccount(t *testing.T) {
+	store := &fakeAdminStore{githubAccounts: map[string]entity.GitHubAccount{}}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:       localizer,
+		StatusService:   testStatusService(localizer),
+		Store:           store,
+		DialogSubmitURL: "http://bot-service/mattermost/dialogs/agents",
+		StorageReady:    true,
+	})
+
+	result := svc.HandleDialogSubmission(context.Background(), DialogSubmissionCommand{
+		CallbackID: dialogCallbackGitHubAccountAdd,
+		State:      encodeDialogState(MenuActionCommand{View: menuViewGitHub, ChannelID: "channel-1", PostID: "post-1"}),
+		UserID:     "owner-id",
+		UserName:   "owner",
+		Submission: map[string]any{
+			dialogFieldAccount:   "reviewer",
+			dialogFieldSecretRef: "matter-codex-github-reviewer",
+			dialogFieldUsername:  "reviewer-user",
+			dialogFieldEmail:     "reviewer@example.com",
+			dialogFieldStatus:    "configured",
+		},
+	})
+
+	if result.Error != "" || len(result.Errors) > 0 {
+		t.Fatalf("dialog errors = %q %#v", result.Error, result.Errors)
+	}
+	account := store.githubAccounts["reviewer"]
+	if account.SecretRef != "matter-codex-github-reviewer" || account.Username != "reviewer-user" || account.Email != "reviewer@example.com" || account.Status != "configured" {
+		t.Fatalf("github account = %#v", account)
+	}
+	if store.githubUpsert.CredentialName != "github:reviewer" {
+		t.Fatalf("github upsert = %#v", store.githubUpsert)
+	}
+	if !store.auditRecorded {
+		t.Fatal("audit event was not recorded")
+	}
+	if result.Card == nil || !strings.Contains(result.Card.Text, "reviewer") {
+		t.Fatalf("card = %#v", result.Card)
+	}
+}
+
+func TestGitHubAccountDialogSubmissionDeletesAccount(t *testing.T) {
+	store := &fakeAdminStore{githubAccounts: map[string]entity.GitHubAccount{
+		"reviewer": {Name: "reviewer", SecretRef: "matter-codex-github-reviewer", Status: "configured"},
+	}}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:       localizer,
+		StatusService:   testStatusService(localizer),
+		Store:           store,
+		DialogSubmitURL: "http://bot-service/mattermost/dialogs/agents",
+		StorageReady:    true,
+	})
+
+	result := svc.HandleDialogSubmission(context.Background(), DialogSubmissionCommand{
+		CallbackID: dialogCallbackGitHubAccountDelete,
+		State:      encodeDialogState(MenuActionCommand{View: menuViewGitHub}),
+		Submission: map[string]any{
+			dialogFieldAccount: "reviewer",
+			dialogFieldConfirm: "delete",
+		},
+	})
+
+	if result.Error != "" || len(result.Errors) > 0 {
+		t.Fatalf("dialog errors = %q %#v", result.Error, result.Errors)
+	}
+	if _, ok := store.githubAccounts["reviewer"]; ok {
+		t.Fatalf("github account was not deleted: %#v", store.githubAccounts)
+	}
+	if store.deletedGitHubAccount.Name != "reviewer" {
+		t.Fatalf("deletedGitHubAccount = %#v", store.deletedGitHubAccount)
 	}
 }
 
@@ -1769,19 +1953,21 @@ func (publisher *fakeFlowCardPublisher) UpsertFlowCard(_ context.Context, card F
 }
 
 type fakeAdminStore struct {
-	upsert           adminrepo.UpsertRepositoryInput
-	auditRecorded    bool
-	repositories     map[string]entity.Repository
-	deletedRepo      entity.Repository
-	profiles         []entity.AgentProfile
-	openAIAccounts   map[string]entity.OpenAIAccount
-	githubAccounts   map[string]entity.GitHubAccount
-	promptTemplates  map[string]entity.AgentPromptTemplate
-	agentRun         entity.AgentRun
-	agentRuns        map[string]entity.AgentRun
-	agentFlows       map[string]entity.AgentFlow
-	updatedRunStatus string
-	updatedPRURL     string
+	upsert               adminrepo.UpsertRepositoryInput
+	auditRecorded        bool
+	repositories         map[string]entity.Repository
+	deletedRepo          entity.Repository
+	profiles             []entity.AgentProfile
+	openAIAccounts       map[string]entity.OpenAIAccount
+	githubAccounts       map[string]entity.GitHubAccount
+	githubUpsert         adminrepo.UpsertGitHubAccountInput
+	deletedGitHubAccount entity.GitHubAccount
+	promptTemplates      map[string]entity.AgentPromptTemplate
+	agentRun             entity.AgentRun
+	agentRuns            map[string]entity.AgentRun
+	agentFlows           map[string]entity.AgentFlow
+	updatedRunStatus     string
+	updatedPRURL         string
 }
 
 func (store *fakeAdminStore) UpsertRepository(_ context.Context, input adminrepo.UpsertRepositoryInput) (entity.Repository, bool, error) {
@@ -1951,7 +2137,7 @@ func (store *fakeAdminStore) GetGitHubAccount(_ context.Context, name string) (e
 	if account, ok := store.githubAccounts[name]; ok {
 		return account, nil
 	}
-	return entity.GitHubAccount{}, fmt.Errorf("github account not found")
+	return entity.GitHubAccount{}, adminrepo.ErrNotFound
 }
 
 func (store *fakeAdminStore) ListGitHubAccounts(context.Context, int) ([]entity.GitHubAccount, error) {
@@ -1974,6 +2160,33 @@ func (store *fakeAdminStore) ensureGitHubAccounts() {
 		"primary": {Name: "primary", SecretRef: "matter-codex-github", Status: "configured"},
 		"agent":   {Name: "agent", SecretRef: "matter-codex-github-agent", Status: "configured"},
 	}
+}
+
+func (store *fakeAdminStore) UpsertGitHubAccount(_ context.Context, input adminrepo.UpsertGitHubAccountInput) (entity.GitHubAccount, bool, error) {
+	store.ensureGitHubAccounts()
+	store.githubUpsert = input
+	_, exists := store.githubAccounts[input.Name]
+	account := entity.GitHubAccount{
+		ID:        1,
+		Name:      input.Name,
+		SecretRef: input.SecretRef,
+		Username:  input.Username,
+		Email:     input.Email,
+		Status:    input.Status,
+	}
+	store.githubAccounts[input.Name] = account
+	return account, !exists, nil
+}
+
+func (store *fakeAdminStore) DeleteGitHubAccount(_ context.Context, name string) (entity.GitHubAccount, error) {
+	store.ensureGitHubAccounts()
+	account, ok := store.githubAccounts[name]
+	if !ok {
+		return entity.GitHubAccount{}, adminrepo.ErrNotFound
+	}
+	delete(store.githubAccounts, name)
+	store.deletedGitHubAccount = account
+	return account, nil
 }
 
 func (store *fakeAdminStore) UpdateOpenAIAccountStatus(_ context.Context, input adminrepo.UpdateOpenAIAccountStatusInput) (entity.OpenAIAccount, error) {
