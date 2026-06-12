@@ -493,7 +493,7 @@ curl -sS -o /dev/null -w '%{http_code}\n' \
 - Slash token, полученный из Mattermost API, пишется во временный файл с правами `0600`, затем в Kubernetes Secret.
 - Логи provisioning показывают только безопасные статусы `exists/created/updated`.
 - bot-service Deployment запускается non-root, с dropped Linux capabilities, `allowPrivilegeEscalation: false`, `readOnlyRootFilesystem: true`, `seccompProfile: RuntimeDefault` и базовыми resource requests/limits.
-- bot-service получает namespace-scoped Role на создание/чтение/удаление runtime Job/PVC, чтение pod/log, `pods/exec` для чтения готового `auth.json` из auth Job и create/update Secret для account-specific Codex auth.
+- bot-service получает namespace-scoped Role на создание/чтение/удаление runtime Job/PVC, чтение pod/log, `pods/exec` для чтения готового `auth.json` из auth Job и create/update/delete Secret для account-specific Codex auth.
 - Runtime namespace получает namespace-level ResourceQuota/LimitRange с conservative defaults и env overrides, потому что MVP namespace общий для Mattermost, bot-service и agent Job.
 - ServiceAccount agent runner создается без automount token; smoke pod также явно отключает automount.
 - Codex smoke/auth/developer/reviewer Job запускаются без automount service account token и с non-root securityContext.
