@@ -2047,6 +2047,61 @@ func TestGateLifecycleRequiresExplicitAuthorizer(t *testing.T) {
 	}
 }
 
+func TestSubmitGateDecisionAuthorizesOwnerActor(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 6, 12, 10, 0, 0, 0, time.UTC)
+	commandID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+	gateRequestID := uuid.MustParse("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+	decisionID := uuid.MustParse("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
+	expectedVersion := int64(4)
+	repository := &fakeRepository{
+		ready: true,
+		gateRequest: entity.GateRequest{
+			VersionedBase: entity.VersionedBase{ID: gateRequestID, Version: expectedVersion, CreatedAt: now.Add(-time.Hour), UpdatedAt: now.Add(-time.Hour)},
+			Target:        value.ExternalRef{Type: "self_deploy_plan", Ref: "agent:self-deploy-plan:latest"},
+			Status:        enum.GateRequestStatusAwaitingDecision,
+		},
+	}
+	var captured AuthorizationRequest
+	service := NewWithConfig(Config{
+		Repository:  repository,
+		Clock:       fixedClock{now: now},
+		IDGenerator: &fixedIDs{ids: []uuid.UUID{decisionID}},
+		Authorizer: authorizerFunc(func(_ context.Context, request AuthorizationRequest) error {
+			captured = request
+			return nil
+		}),
+	})
+
+	decision, request, err := service.SubmitGateDecision(context.Background(), SubmitGateDecisionInput{
+		GateRequestID:          gateRequestID,
+		DecisionActorRef:       "user/owner-1",
+		Outcome:                enum.GateOutcomeApprove,
+		Reason:                 "owner approved self-deploy gate",
+		DecisionPolicyRef:      "self_deploy.owner_gate",
+		InteractionDeliveryRef: value.InteractionDeliveryRef{DecisionRef: "staff-gateway/self-deploy-gate/" + gateRequestID.String()},
+		Meta: CommandMeta{
+			CommandID:       &commandID,
+			ExpectedVersion: &expectedVersion,
+			Actor:           value.Actor{Type: "user", ID: "owner-1"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("SubmitGateDecision(): %v", err)
+	}
+	if decision.ID != decisionID || request.Status != enum.GateRequestStatusResolved {
+		t.Fatalf("decision/request = %+v/%+v, want resolved decision %s", decision, request, decisionID)
+	}
+	if captured.Subject.Type != "user" || captured.Subject.ID != "owner-1" ||
+		captured.ActionKey != actionGateDecide ||
+		captured.ResourceType != "governance_gate" ||
+		captured.ResourceID != gateRequestID.String() ||
+		captured.ScopeType != "global" {
+		t.Fatalf("access request = %+v, want owner gate decide", captured)
+	}
+}
+
 func TestGateLifecycleRejectsMissingAccessResource(t *testing.T) {
 	t.Parallel()
 
@@ -3994,6 +4049,58 @@ func TestGetGovernanceSummaryMissingLinkedRiskIsPartial(t *testing.T) {
 	}
 }
 
+func TestGetGovernanceSummarySelfDeployTargetAuthorizesOwnerActor(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 6, 12, 11, 0, 0, 0, time.UTC)
+	assessmentID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+	gateRequestID := uuid.MustParse("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+	target := value.ExternalRef{Type: "self_deploy_plan", Ref: "agent:self-deploy-plan:latest"}
+	project := value.ProjectContextRef{ProjectRef: "project-self", RepositoryRef: "repo-self", ReleaseLineRef: "self-deploy"}
+	repository := &fakeRepository{
+		ready: true,
+		riskAssessments: []entity.RiskAssessment{{
+			VersionedBase:      entity.VersionedBase{ID: assessmentID, Version: 3, CreatedAt: now.Add(-time.Hour), UpdatedAt: now.Add(-30 * time.Minute)},
+			Target:             target,
+			ProjectContext:     project,
+			EffectiveRiskClass: enum.RiskClassR2,
+			Status:             enum.RiskAssessmentStatusActive,
+			Explanation:        "self-deploy plan requires owner gate",
+			RequiredGates:      []entity.RequiredGate{{GateKind: enum.GateKindRelease, MinRiskClass: enum.RiskClassR2, Reason: "self-deploy owner approval required"}},
+		}},
+		gateRequests: []entity.GateRequest{{
+			VersionedBase:    entity.VersionedBase{ID: gateRequestID, Version: 8, CreatedAt: now.Add(-20 * time.Minute), UpdatedAt: now.Add(-20 * time.Minute)},
+			RiskAssessmentID: &assessmentID,
+			Target:           target,
+			EvidenceSummary:  "self-deploy owner gate",
+			Status:           enum.GateRequestStatusAwaitingDecision,
+		}},
+	}
+	var captured []AuthorizationRequest
+	service := NewWithConfig(Config{
+		Repository:  repository,
+		Clock:       fixedClock{now: now},
+		IDGenerator: uuidGenerator{},
+		Authorizer: authorizerFunc(func(_ context.Context, request AuthorizationRequest) error {
+			captured = append(captured, request)
+			return nil
+		}),
+	})
+
+	summary, err := service.GetGovernanceSummary(context.Background(), GetGovernanceSummaryInput{
+		Scope: entity.GovernanceSummaryScope{Target: target, ProjectContext: project},
+		Meta:  QueryMeta{Actor: value.Actor{Type: "user", ID: "owner-1"}},
+	})
+	if err != nil {
+		t.Fatalf("GetGovernanceSummary(): %v", err)
+	}
+	if !summaryHasDecision(summary.PendingDecisions, enum.GovernanceDecisionSummaryKindGateRequest, gateRequestID.String(), enum.GovernanceDecisionAttentionPending) {
+		t.Fatalf("pending decisions = %+v, want pending self-deploy gate", summary.PendingDecisions)
+	}
+	assertCapturedOwnerAccess(t, captured, actionRiskRead, "governance_risk_assessment", target.Ref, "project", project.ProjectRef)
+	assertCapturedOwnerAccess(t, captured, actionGateRead, "governance_gate", target.Ref, "project", project.ProjectRef)
+}
+
 func TestGetGovernanceSummaryPendingRiskRequiredGateRequestsGate(t *testing.T) {
 	t.Parallel()
 
@@ -4310,6 +4417,22 @@ func assertCapturedGovernanceAccess(t *testing.T, requests []AuthorizationReques
 		}
 	}
 	t.Fatalf("access requests = %+v, want action=%s resource=%s", requests, actionKey, resourceType)
+}
+
+func assertCapturedOwnerAccess(t *testing.T, requests []AuthorizationRequest, actionKey string, resourceType string, resourceID string, scopeType string, scopeID string) {
+	t.Helper()
+	for _, request := range requests {
+		if request.Subject.Type == "user" &&
+			request.Subject.ID == "owner-1" &&
+			request.ActionKey == actionKey &&
+			request.ResourceType == resourceType &&
+			request.ResourceID == resourceID &&
+			request.ScopeType == scopeType &&
+			request.ScopeID == scopeID {
+			return
+		}
+	}
+	t.Fatalf("access requests = %+v, want owner action=%s resource=%s/%s scope=%s/%s", requests, actionKey, resourceType, resourceID, scopeType, scopeID)
 }
 
 func summaryRenderedText(summary entity.GovernanceSummary) string {

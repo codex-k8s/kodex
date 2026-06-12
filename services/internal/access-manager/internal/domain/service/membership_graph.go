@@ -37,6 +37,9 @@ func (s *Service) resolveSubjects(ctx context.Context, subject value.SubjectRef)
 	subjects := []value.SubjectRef{subject}
 	reasonCode, err := s.accessSubjectStopReason(ctx, subject)
 	if err != nil {
+		if directAccessOnlySubject(subject) {
+			return subjects, "", nil
+		}
 		return nil, "", err
 	}
 	if reasonCode != "" {
@@ -310,6 +313,23 @@ func parseStoredAccessSubjectID(subject value.SubjectRef) (uuid.UUID, bool, erro
 	default:
 		return uuid.Nil, false, nil
 	}
+}
+
+func directAccessOnlySubject(subject value.SubjectRef) bool {
+	if subject.Type != string(enum.AccessSubjectUser) {
+		return false
+	}
+	if _, err := uuid.Parse(subject.ID); err == nil {
+		return false
+	}
+	return safeDirectAccessSubjectID(subject.ID)
+}
+
+func safeDirectAccessSubjectID(subjectID string) bool {
+	subjectID = strings.TrimSpace(subjectID)
+	return subjectID != "" &&
+		len(subjectID) <= 256 &&
+		!strings.ContainsAny(subjectID, "{}\n\r\t")
 }
 
 func (s *Service) validateMembershipEndpoint(
