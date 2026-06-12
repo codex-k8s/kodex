@@ -11,10 +11,11 @@ import (
 )
 
 type Config struct {
-	ServiceName     string
-	OpenAPISpecPath string
-	RequestTimeout  time.Duration
-	MaxBodyBytes    int64
+	ServiceName          string
+	OpenAPISpecPath      string
+	RequestTimeout       time.Duration
+	MaxBodyBytes         int64
+	SelfDeployProjectRef string
 }
 
 type InteractionHubClient interface {

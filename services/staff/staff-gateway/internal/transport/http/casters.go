@@ -210,7 +210,7 @@ func GetGovernanceSummaryRequest(req *http.Request) (*governancev1.GetGovernance
 	return request, nil
 }
 
-func GetSelfDeploySummaryRequest(req *http.Request) (*agentsv1.ListSelfDeployPlansRequest, *SafeError) {
+func GetSelfDeploySummaryRequest(req *http.Request, defaultProjectRef string) (*agentsv1.ListSelfDeployPlansRequest, *SafeError) {
 	meta, safeErr := agentQueryMeta(req)
 	if safeErr != nil {
 		return nil, safeErr
@@ -224,15 +224,26 @@ func GetSelfDeploySummaryRequest(req *http.Request) (*agentsv1.ListSelfDeployPla
 	if safeErr != nil {
 		return nil, safeErr
 	}
+	projectRef := firstNonEmpty(query.Get("project_ref"), defaultProjectRef)
 	return &agentsv1.ListSelfDeployPlansRequest{
 		Meta:              meta,
 		Scope:             scope,
-		ProjectRef:        optionalString(query.Get("project_ref")),
+		ProjectRef:        optionalString(projectRef),
 		RepositoryRef:     optionalString(query.Get("repository_ref")),
 		ProviderSignalRef: optionalString(query.Get("provider_signal_ref")),
 		Status:            status,
 		Page:              &agentsv1.PageRequest{PageSize: selfDeploySummaryPageSize},
 	}, nil
+}
+
+func selfDeployPlanRequestHasBoundedFilter(request *agentsv1.ListSelfDeployPlansRequest) bool {
+	if request == nil {
+		return false
+	}
+	return strings.TrimSpace(request.GetScope().GetRef()) != "" ||
+		strings.TrimSpace(request.GetProjectRef()) != "" ||
+		strings.TrimSpace(request.GetRepositoryRef()) != "" ||
+		strings.TrimSpace(request.GetProviderSignalRef()) != ""
 }
 
 func GetSelfDeployGovernanceSummaryRequest(req *http.Request, plan *agentsv1.SelfDeployPlan) (*governancev1.GetGovernanceSummaryRequest, *SafeError) {

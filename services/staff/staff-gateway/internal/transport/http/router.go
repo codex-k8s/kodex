@@ -28,7 +28,7 @@ func NewRouter(ctx context.Context, cfg Config, interactionHub InteractionHubCli
 		return nil, err
 	}
 	clients := routeClients{interactionHub: interactionHub, agentManager: agentManager, governance: governance, projectCatalog: projectCatalog}
-	handlers := newHandlers(clients, contract)
+	handlers := newHandlers(clients, contract, cfg.SelfDeployProjectRef)
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v1/owner-inbox/items", handlers.listOwnerInboxItems)
 	mux.HandleFunc("GET /v1/owner-inbox/items/{request_id}", handlers.getOwnerInboxItem)
