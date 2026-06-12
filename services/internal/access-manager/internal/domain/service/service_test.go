@@ -668,6 +668,73 @@ func TestPutAccessRuleAllowsServiceSubjectAndCheckAccess(t *testing.T) {
 	}
 }
 
+func TestCheckAccessAllowsDirectUserSubjectRefRule(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+
+	action, err := svc.PutAccessAction(ctx, PutAccessActionInput{
+		Key: "test.governance.gate.read", DisplayName: "Чтение gate", ResourceType: "governance_gate",
+	})
+	if err != nil {
+		t.Fatalf("put action: %v", err)
+	}
+	_, err = svc.PutAccessRule(ctx, PutAccessRuleInput{
+		Effect:       enum.AccessEffectAllow,
+		SubjectType:  enum.AccessSubjectUser,
+		SubjectID:    "owner-1",
+		ActionKey:    action.Key,
+		ResourceType: "governance_gate",
+		ResourceID:   "self-deploy-plan-1",
+		ScopeType:    "project",
+		ScopeID:      "project-self",
+		Priority:     10,
+	})
+	if err != nil {
+		t.Fatalf("put direct user rule: %v", err)
+	}
+
+	result, err := svc.CheckAccess(ctx, CheckAccessInput{
+		Subject:   value.SubjectRef{Type: string(enum.AccessSubjectUser), ID: "owner-1"},
+		ActionKey: action.Key,
+		Resource:  value.ResourceRef{Type: "governance_gate", ID: "self-deploy-plan-1"},
+		Scope:     value.ScopeRef{Type: "project", ID: "project-self"},
+	})
+	if err != nil {
+		t.Fatalf("check access: %v", err)
+	}
+	if result.Decision != enum.AccessDecisionAllow || result.ReasonCode != reasonExplicitAllow {
+		t.Fatalf("decision = %s/%s, want %s/%s", result.Decision, result.ReasonCode, enum.AccessDecisionAllow, reasonExplicitAllow)
+	}
+	if len(result.Explanation.MatchedRules) != 1 ||
+		result.Explanation.MatchedRules[0].Subject.ID != "owner-1" {
+		t.Fatalf("matched rules = %+v, want direct owner subject rule", result.Explanation.MatchedRules)
+	}
+}
+
+func TestCheckAccessRejectsUnsafeDirectUserSubjectRef(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+
+	action, err := svc.PutAccessAction(ctx, PutAccessActionInput{
+		Key: "test.governance.gate.read", DisplayName: "Чтение gate", ResourceType: "governance_gate",
+	})
+	if err != nil {
+		t.Fatalf("put action: %v", err)
+	}
+
+	_, err = svc.CheckAccess(ctx, CheckAccessInput{
+		Subject:   value.SubjectRef{Type: string(enum.AccessSubjectUser), ID: "owner\n1"},
+		ActionKey: action.Key,
+		Resource:  value.ResourceRef{Type: "governance_gate", ID: "self-deploy-plan-1"},
+		Scope:     value.ScopeRef{Type: "project", ID: "project-self"},
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("err = %v, want %v", err, errs.ErrInvalidArgument)
+	}
+}
+
 func TestCheckAccessServiceSubjectExplicitDeny(t *testing.T) {
 	ctx := context.Background()
 	store := newMemoryRepository()

@@ -156,7 +156,7 @@ approvals:
 | `id` | UUID | no | Идентификатор правила. |
 | `effect` | enum | no | `allow`, `deny`. |
 | `subject_type` | enum | no | `user`, `group`, `organization`, `external_account`, `service`, `agent`, `agent_role`, `flow`, `package`. |
-| `subject_id` | string | no | UUID для субъектов домена доступа или внешний идентификатор для сервиса, роли, агента, flow и пакета. |
+| `subject_id` | string | no | UUID для субъектов домена доступа или внешний идентификатор для сервиса, роли, агента, flow и пакета. Для `subject_type=user` допускается безопасный внешний owner ref только в прямом `AccessRule`: он не участвует в membership graph, не проверяет статус пользователя и не должен использоваться как способ хранить email или другие персональные данные. |
 | `action_key` | string | no | Канонический ключ из каталога `AccessAction`. |
 | `resource_type` | string | no | Тип ресурса: `project`, `repository`, `package`, `runtime`, другое. |
 | `resource_id` | string | yes | Внешний идентификатор ресурса. |
