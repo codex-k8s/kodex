@@ -23,6 +23,7 @@ type Config struct {
 	AgentManager    AgentManagerConfig   `envPrefix:"KODEX_STAFF_GATEWAY_AGENT_MANAGER_"`
 	Governance      GovernanceConfig     `envPrefix:"KODEX_STAFF_GATEWAY_GOVERNANCE_MANAGER_"`
 	ProjectCatalog  ProjectCatalogConfig `envPrefix:"KODEX_STAFF_GATEWAY_PROJECT_CATALOG_"`
+	SelfDeploy      SelfDeployConfig     `envPrefix:"KODEX_STAFF_GATEWAY_SELF_DEPLOY_"`
 }
 
 type HTTPConfig struct {
@@ -55,6 +56,10 @@ type ProjectCatalogConfig struct {
 	GRPCAddr  string        `env:"GRPC_ADDR" envDefault:"project-catalog:9090"`
 	AuthToken string        `env:"GRPC_AUTH_TOKEN"`
 	Timeout   time.Duration `env:"TIMEOUT" envDefault:"3s"`
+}
+
+type SelfDeployConfig struct {
+	ProjectRef string `env:"PROJECT_REF"`
 }
 
 func LoadConfig() (Config, error) {
@@ -92,10 +97,11 @@ func (cfg Config) Validate() error {
 
 func (cfg Config) HTTPRouterConfig() httptransport.Config {
 	return httptransport.Config{
-		ServiceName:     serviceName,
-		OpenAPISpecPath: cfg.OpenAPISpecPath,
-		RequestTimeout:  cfg.HTTP.RequestTimeout,
-		MaxBodyBytes:    cfg.HTTP.MaxBodyBytes,
+		ServiceName:          serviceName,
+		OpenAPISpecPath:      cfg.OpenAPISpecPath,
+		RequestTimeout:       cfg.HTTP.RequestTimeout,
+		MaxBodyBytes:         cfg.HTTP.MaxBodyBytes,
+		SelfDeployProjectRef: strings.TrimSpace(cfg.SelfDeploy.ProjectRef),
 	}
 }
 

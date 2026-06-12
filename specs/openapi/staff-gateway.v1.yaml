@@ -368,7 +368,10 @@ paths:
       operationId: getSelfDeploySummary
       summary: Получить безопасную self-deploy сводку.
       description: |
-        Возвращает latest visible self-deploy summary для командного центра. Gateway сначала читает
+        Возвращает latest visible self-deploy summary для командного центра. `scope_type`/`scope_ref`
+        являются необязательным сужением: без них gateway использует configured self-deploy project ref
+        как bounded filter. Если configured project ref отсутствует и caller не передал другой bounded
+        filter, gateway возвращает `not_configured` без вызова downstream. Gateway сначала читает
         `agent-manager.ListSelfDeployPlans`; если plan ещё не создан, но caller передал safe project и
         provider signal refs, gateway уточняет project-side readiness через `project-catalog.GetSelfDeploySignal`.
         Gateway не читает БД доменных сервисов, не запускает deploy, не принимает governance decision и не
@@ -381,8 +384,8 @@ paths:
         - $ref: '#/components/parameters/SessionIdHeader'
         - $ref: '#/components/parameters/ActorTypeHeader'
         - $ref: '#/components/parameters/ActorIdHeader'
-        - $ref: '#/components/parameters/AgentScopeTypeQuery'
-        - $ref: '#/components/parameters/AgentScopeRefQuery'
+        - $ref: '#/components/parameters/SelfDeployAgentScopeTypeQuery'
+        - $ref: '#/components/parameters/SelfDeployAgentScopeRefQuery'
         - $ref: '#/components/parameters/SelfDeployProjectRefQuery'
         - $ref: '#/components/parameters/SelfDeployRepositoryRefQuery'
         - $ref: '#/components/parameters/SelfDeployProviderSignalRefQuery'
@@ -474,6 +477,22 @@ components:
         minLength: 1
         maxLength: 256
       description: Safe ref области `agent-manager`.
+    SelfDeployAgentScopeTypeQuery:
+      name: scope_type
+      in: query
+      required: false
+      schema:
+        $ref: '#/components/schemas/AgentScopeType'
+      description: Необязательное сужение self-deploy summary по области `agent-manager`.
+    SelfDeployAgentScopeRefQuery:
+      name: scope_ref
+      in: query
+      required: false
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 256
+      description: Safe ref области `agent-manager`; используется вместе со `scope_type`.
     AgentSessionStatusQuery:
       name: status
       in: query

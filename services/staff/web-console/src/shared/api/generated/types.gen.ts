@@ -634,6 +634,16 @@ export type AgentScopeTypeQuery = AgentScopeType;
 export type AgentScopeRefQuery = string;
 
 /**
+ * Необязательное сужение self-deploy summary по области `agent-manager`.
+ */
+export type SelfDeployAgentScopeTypeQuery = AgentScopeType;
+
+/**
+ * Safe ref области `agent-manager`; используется вместе со `scope_type`.
+ */
+export type SelfDeployAgentScopeRefQuery = string;
+
+/**
  * Фильтр session по lifecycle status.
  */
 export type AgentSessionStatusQuery = AgentSessionStatus;
@@ -1605,15 +1615,15 @@ export type GetSelfDeploySummaryData = {
         'X-Kodex-Actor-Id': string;
     };
     path?: never;
-    query: {
+    query?: {
         /**
-         * Тип области `agent-manager`.
+         * Необязательное сужение self-deploy summary по области `agent-manager`.
          */
-        scope_type: AgentScopeType;
+        scope_type?: AgentScopeType;
         /**
-         * Safe ref области `agent-manager`.
+         * Safe ref области `agent-manager`; используется вместе со `scope_type`.
          */
-        scope_ref: string;
+        scope_ref?: string;
         /**
          * Safe ref проекта для фильтра self-deploy plan.
          */

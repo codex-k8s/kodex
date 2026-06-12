@@ -11,15 +11,16 @@ import (
 )
 
 type handlers struct {
-	interactionHub InteractionHubClient
-	agentManager   AgentManagerClient
-	governance     GovernanceManagerClient
-	projectCatalog ProjectCatalogClient
-	openAPI        *OpenAPIContract
+	interactionHub       InteractionHubClient
+	agentManager         AgentManagerClient
+	governance           GovernanceManagerClient
+	projectCatalog       ProjectCatalogClient
+	openAPI              *OpenAPIContract
+	selfDeployProjectRef string
 }
 
-func newHandlers(clients routeClients, openAPI *OpenAPIContract) handlers {
-	return handlers{interactionHub: clients.interactionHub, agentManager: clients.agentManager, governance: clients.governance, projectCatalog: clients.projectCatalog, openAPI: openAPI}
+func newHandlers(clients routeClients, openAPI *OpenAPIContract, selfDeployProjectRef string) handlers {
+	return handlers{interactionHub: clients.interactionHub, agentManager: clients.agentManager, governance: clients.governance, projectCatalog: clients.projectCatalog, openAPI: openAPI, selfDeployProjectRef: selfDeployProjectRef}
 }
 
 func (h handlers) listOwnerInboxItems(w http.ResponseWriter, req *http.Request) {
@@ -90,9 +91,18 @@ func (h handlers) getGovernanceSummary(w http.ResponseWriter, req *http.Request)
 }
 
 func (h handlers) getSelfDeploySummary(w http.ResponseWriter, req *http.Request) {
-	input, safeErr := GetSelfDeploySummaryRequest(req)
+	input, safeErr := GetSelfDeploySummaryRequest(req, h.selfDeployProjectRef)
 	if safeErr != nil {
 		WriteSafeError(w, req, safeErr)
+		return
+	}
+	if !selfDeployPlanRequestHasBoundedFilter(input) {
+		output, safeErr := SelfDeploySummaryResponse(&agentsv1.ListSelfDeployPlansResponse{}, nil, input, nil, requestIDFromContext(req.Context()))
+		if safeErr != nil {
+			WriteSafeError(w, req, safeErr)
+			return
+		}
+		writeJSON(w, http.StatusOK, output)
 		return
 	}
 	plans, err := h.agentManager.ListSelfDeployPlans(req.Context(), input)

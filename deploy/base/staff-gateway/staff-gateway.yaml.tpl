@@ -17,6 +17,7 @@ metadata:
     app.kubernetes.io/part-of: kodex
 data:
   KODEX_STAFF_GATEWAY_OPENAPI_SPEC_PATH: "/etc/kodex/staff-gateway/openapi/staff-gateway.v1.yaml"
+  KODEX_STAFF_GATEWAY_SELF_DEPLOY_PROJECT_REF: "{{ envOr "KODEX_STAFF_GATEWAY_SELF_DEPLOY_PROJECT_REF" (envOr "KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_PROJECT_ID" "") }}"
 ---
 apiVersion: v1
 kind: Service

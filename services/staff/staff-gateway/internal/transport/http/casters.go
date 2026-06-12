@@ -210,12 +210,12 @@ func GetGovernanceSummaryRequest(req *http.Request) (*governancev1.GetGovernance
 	return request, nil
 }
 
-func GetSelfDeploySummaryRequest(req *http.Request) (*agentsv1.ListSelfDeployPlansRequest, *SafeError) {
+func GetSelfDeploySummaryRequest(req *http.Request, defaultProjectRef string) (*agentsv1.ListSelfDeployPlansRequest, *SafeError) {
 	meta, safeErr := agentQueryMeta(req)
 	if safeErr != nil {
 		return nil, safeErr
 	}
-	scope, safeErr := agentScopeFromQuery(req)
+	scope, safeErr := optionalAgentScopeFromQuery(req)
 	if safeErr != nil {
 		return nil, safeErr
 	}
@@ -224,15 +224,26 @@ func GetSelfDeploySummaryRequest(req *http.Request) (*agentsv1.ListSelfDeployPla
 	if safeErr != nil {
 		return nil, safeErr
 	}
+	projectRef := firstNonEmpty(query.Get("project_ref"), defaultProjectRef)
 	return &agentsv1.ListSelfDeployPlansRequest{
 		Meta:              meta,
 		Scope:             scope,
-		ProjectRef:        optionalString(query.Get("project_ref")),
+		ProjectRef:        optionalString(projectRef),
 		RepositoryRef:     optionalString(query.Get("repository_ref")),
 		ProviderSignalRef: optionalString(query.Get("provider_signal_ref")),
 		Status:            status,
 		Page:              &agentsv1.PageRequest{PageSize: selfDeploySummaryPageSize},
 	}, nil
+}
+
+func selfDeployPlanRequestHasBoundedFilter(request *agentsv1.ListSelfDeployPlansRequest) bool {
+	if request == nil {
+		return false
+	}
+	return strings.TrimSpace(request.GetScope().GetRef()) != "" ||
+		strings.TrimSpace(request.GetProjectRef()) != "" ||
+		strings.TrimSpace(request.GetRepositoryRef()) != "" ||
+		strings.TrimSpace(request.GetProviderSignalRef()) != ""
 }
 
 func GetSelfDeployGovernanceSummaryRequest(req *http.Request, plan *agentsv1.SelfDeployPlan) (*governancev1.GetGovernanceSummaryRequest, *SafeError) {
@@ -930,6 +941,23 @@ func scopeFromQuery(req *http.Request) (*interactionsv1.ScopeRef, *SafeError) {
 
 func agentScopeFromQuery(req *http.Request) (*agentsv1.ScopeRef, *SafeError) {
 	return queryScopeRef(req, agentScopeTypeProto, agentScopeRefBuild)
+}
+
+func optionalAgentScopeFromQuery(req *http.Request) (*agentsv1.ScopeRef, *SafeError) {
+	query := req.URL.Query()
+	scopeTypeValue := strings.TrimSpace(query.Get("scope_type"))
+	scopeRef := strings.TrimSpace(query.Get("scope_ref"))
+	if scopeTypeValue == "" && scopeRef == "" {
+		return nil, nil
+	}
+	if scopeTypeValue == "" || scopeRef == "" {
+		return nil, NewSafeError(http.StatusBadRequest, CodeInvalidRequest, "scope type and scope ref must be provided together", false)
+	}
+	scopeType, safeErr := agentScopeTypeProto(scopeTypeValue)
+	if safeErr != nil {
+		return nil, safeErr
+	}
+	return agentScopeRefBuild(scopeType, scopeRef), nil
 }
 
 func queryScopeRef[ScopeType any, ScopeRef any](req *http.Request, parse func(string) (ScopeType, *SafeError), build func(ScopeType, string) ScopeRef) (ScopeRef, *SafeError) {

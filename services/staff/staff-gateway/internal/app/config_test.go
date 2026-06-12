@@ -45,6 +45,16 @@ func TestConfigAgentManagerKeepsInteractionHubFallback(t *testing.T) {
 	}
 }
 
+func TestConfigHTTPRouterIncludesOptionalSelfDeployProjectRef(t *testing.T) {
+	cfg := validConfig()
+	cfg.SelfDeploy.ProjectRef = " project-1 "
+
+	routerCfg := cfg.HTTPRouterConfig()
+	if routerCfg.SelfDeployProjectRef != "project-1" {
+		t.Fatalf("HTTPRouterConfig().SelfDeployProjectRef = %q, want project-1", routerCfg.SelfDeployProjectRef)
+	}
+}
+
 func validConfig() Config {
 	return Config{
 		HTTPAddr:        ":8080",
