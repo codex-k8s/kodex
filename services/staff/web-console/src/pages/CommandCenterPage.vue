@@ -117,15 +117,47 @@ const selfDeployReadiness = computed(() =>
 );
 
 const selfDeployAllowedActions = computed(() => selfDeploy.summary?.governance.allowed_actions ?? []);
+const selfDeployGatePending = computed(() => {
+  const governance = selfDeploy.summary?.governance;
+  return selfDeploy.summary?.chain_status === 'governance_gate_pending' || governance?.status === 'pending';
+});
+const selfDeployDecisionMissingFields = computed(() => {
+  if (!selfDeployGatePending.value) {
+    return [];
+  }
+  const governance = selfDeploy.summary?.governance;
+  const missing: string[] = [];
+  if (!canUseSelfDeployContext.value) {
+    missing.push(t('commandCenter.selfDeploy.decisionMissingFields.actorContext'));
+  }
+  if (!selfDeploy.summary?.self_deploy_plan_id) {
+    missing.push(t('commandCenter.selfDeploy.decisionMissingFields.selfDeployPlanId'));
+  }
+  if (!governance?.gate_request_id) {
+    missing.push(t('commandCenter.selfDeploy.decisionMissingFields.gateRequestId'));
+  }
+  if (!governance?.gate_request_version) {
+    missing.push(t('commandCenter.selfDeploy.decisionMissingFields.gateRequestVersion'));
+  }
+  if (selfDeployAllowedActions.value.length === 0) {
+    missing.push(t('commandCenter.selfDeploy.decisionMissingFields.allowedActions'));
+  }
+  return missing;
+});
+const selfDeployDecisionUnavailableText = computed(() =>
+  t('commandCenter.selfDeploy.decisionUnavailableDetailed', {
+    fields: selfDeployDecisionMissingFields.value.join(', '),
+  }),
+);
 const canSubmitSelfDeployDecision = computed(() => {
   const governance = selfDeploy.summary?.governance;
   return Boolean(
-    canUseSelfDeployContext.value &&
-      selfDeploy.summary?.chain_status === 'governance_gate_pending' &&
+    selfDeployGatePending.value &&
+      selfDeployDecisionMissingFields.value.length === 0 &&
       governance?.status === 'pending' &&
       governance.gate_request_id &&
       governance.gate_request_version &&
-      selfDeployAllowedActions.value.length > 0,
+      selfDeploy.summary?.self_deploy_plan_id,
   );
 });
 
@@ -444,11 +476,11 @@ function pathCategoryLabel(category: string) {
           <p class="self-deploy-decision__hint">{{ t('commandCenter.selfDeploy.noAutoDeploy') }}</p>
         </div>
         <v-alert
-          v-else-if="selfDeploy.summary?.chain_status === 'governance_gate_pending' && selfDeploy.summary.governance.status === 'pending'"
+          v-else-if="selfDeployGatePending && selfDeployDecisionMissingFields.length > 0"
           type="warning"
           variant="tonal"
         >
-          {{ t('commandCenter.selfDeploy.decisionUnavailable') }}
+          {{ selfDeployDecisionUnavailableText }}
         </v-alert>
         <v-progress-linear v-if="selfDeploy.isLoading" indeterminate color="primary" />
         <div class="self-deploy-panel__actions">

@@ -101,6 +101,14 @@ export const ru = {
       decisionComment: 'Комментарий без секретов и raw payload',
       decisionRecorded: 'Решение записано. Сводка обновляется через доменные read surface.',
       decisionUnavailable: 'Gate ожидает решения, но версия или allowed actions ещё не доступны в безопасной сводке.',
+      decisionUnavailableDetailed: 'Gate ожидает решения, но в безопасной сводке не хватает: {fields}.',
+      decisionMissingFields: {
+        actorContext: 'проверенный actor context',
+        selfDeployPlanId: 'self_deploy_plan_id',
+        gateRequestId: 'gate_request_id',
+        gateRequestVersion: 'gate_request_version',
+        allowedActions: 'allowed_actions',
+      },
       noAutoDeploy: 'Утверждение снимает gate, но запуск build/deploy остаётся за agent-manager/runtime цепочкой.',
       actions: {
         approve: 'Утвердить',
