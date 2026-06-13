@@ -851,7 +851,7 @@ spec:
         businessState: none
         description: staff frontend static bundle served by nginx and proxied to staff-gateway through same-origin /v1
         ingress: public-web-contour-through-oauth2-proxy
-        runtimeConfig: nginx ConfigMap proxy only; Vite defaults are build-time and remain non-secret
+        runtimeConfig: nginx ConfigMap proxies /v1 to staff-gateway and emits trusted owner actor headers after oauth2-proxy auth; Vite defaults are build-time and remain non-secret
       deploy:
         serviceManifest: deploy/base/web-console/web-console.yaml.tpl
         kustomization: deploy/base/web-console/kustomization.yaml.tpl

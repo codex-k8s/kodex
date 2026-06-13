@@ -21,6 +21,7 @@ import { useSelfDeployStore } from '@/features/self-deploy/store';
 import { compactRef } from '@/shared/lib/format';
 import { routeNames } from '@/shared/lib/routes';
 import type { SelfDeployGateDecisionAction } from '@/shared/api/generated';
+import { isGatewayActorContextReady } from '@/shared/api/context';
 
 const { t } = useI18n();
 const router = useRouter();
@@ -29,6 +30,7 @@ const inbox = useOwnerInboxStore();
 const executions = useExecutionsStore();
 const selfDeploy = useSelfDeployStore();
 const selfDeployDecisionComment = ref('');
+const canUseSelfDeployContext = computed(() => isGatewayActorContextReady(context.asContext));
 
 const visibleRuns = computed(() => {
   const attentionRuns = executions.runs.filter((run) => runHasProblem(run) || runWaitingCode(run));
@@ -82,8 +84,8 @@ const selfDeployFields = computed(() => {
 });
 
 const selfDeployChip = computed(() => {
-  if (selfDeploy.unsupportedAgentScope) {
-    return { color: 'default', label: t('commandCenter.selfDeploy.unsupportedScope') };
+  if (selfDeploy.missingActorContext) {
+    return { color: 'default', label: t('commandCenter.selfDeploy.actorContextMissing') };
   }
   if (selfDeploy.isLoading && !selfDeploy.summary) {
     return { color: 'info', label: t('app.loading') };
@@ -109,7 +111,7 @@ const selfDeployChip = computed(() => {
 });
 
 const selfDeployReadiness = computed(() =>
-  selfDeploy.unsupportedAgentScope
+  selfDeploy.missingActorContext
     ? { status: t('app.unavailable'), tone: 'waiting' as const }
     : { status: t('app.live'), tone: 'live' as const },
 );
@@ -118,7 +120,7 @@ const selfDeployAllowedActions = computed(() => selfDeploy.summary?.governance.a
 const canSubmitSelfDeployDecision = computed(() => {
   const governance = selfDeploy.summary?.governance;
   return Boolean(
-    context.isReady &&
+    canUseSelfDeployContext.value &&
       selfDeploy.summary?.chain_status === 'governance_gate_pending' &&
       governance?.status === 'pending' &&
       governance.gate_request_id &&
@@ -134,7 +136,7 @@ onMounted(() => {
   if (context.isReady && executions.runs.length === 0) {
     void executions.loadOverview(context.asContext);
   }
-  if (context.isReady && !selfDeploy.summary) {
+  if (canUseSelfDeployContext.value && !selfDeploy.summary) {
     void selfDeploy.load(context.asContext);
   }
 });
@@ -143,6 +145,8 @@ function reloadInbox() {
   if (context.isReady) {
     void inbox.load(context.asContext);
     void executions.loadOverview(context.asContext);
+  }
+  if (canUseSelfDeployContext.value) {
     void selfDeploy.load(context.asContext);
   }
 }
@@ -164,7 +168,7 @@ function openRun(runId: string) {
 }
 
 function reloadSelfDeploy() {
-  if (context.isReady) {
+  if (canUseSelfDeployContext.value) {
     void selfDeploy.load(context.asContext);
   }
 }
@@ -174,7 +178,7 @@ function hasSelfDeployAction(action: SelfDeployGateDecisionAction) {
 }
 
 function submitSelfDeployDecision(action: SelfDeployGateDecisionAction) {
-  if (!context.isReady || !canSubmitSelfDeployDecision.value) {
+  if (!canUseSelfDeployContext.value || !canSubmitSelfDeployDecision.value) {
     return;
   }
   const comment = selfDeployDecisionComment.value.trim() || undefined;
@@ -375,13 +379,13 @@ function pathCategoryLabel(category: string) {
             {{ t('commandCenter.selfDeploy.safeBoundary') }}
           </v-alert>
         </div>
-        <v-alert v-if="selfDeploy.unsupportedAgentScope" type="warning" variant="tonal">
-          {{ t('commandCenter.selfDeploy.unsupportedScopeText') }}
+        <v-alert v-if="selfDeploy.missingActorContext" type="warning" variant="tonal">
+          {{ t('commandCenter.selfDeploy.actorContextMissingText') }}
         </v-alert>
         <v-alert v-else-if="selfDeploy.summary?.next_step" type="info" variant="tonal">
           {{ selfDeploy.summary.next_step.summary }}
         </v-alert>
-        <v-alert v-if="!selfDeploy.unsupportedAgentScope && selfDeploy.summary?.safe_error" type="warning" variant="tonal">
+        <v-alert v-if="!selfDeploy.missingActorContext && selfDeploy.summary?.safe_error" type="warning" variant="tonal">
           {{ selfDeploy.summary.safe_error.summary }}
         </v-alert>
         <v-alert v-if="selfDeploy.lastDecision" type="success" variant="tonal">
@@ -452,7 +456,7 @@ function pathCategoryLabel(category: string) {
             prepend-icon="mdi-refresh"
             variant="tonal"
             :loading="selfDeploy.isLoading"
-            :disabled="!context.isReady"
+            :disabled="!canUseSelfDeployContext"
             @click="reloadSelfDeploy"
           >
             {{ t('commandCenter.selfDeploy.refreshStatus') }}

@@ -1,0 +1,43 @@
+map $http_x_forwarded_email $kodex_actor_type {
+  default "";
+  "~.+" "user";
+}
+
+map $http_x_forwarded_email $kodex_actor_id {
+  default "";
+  "~.+" "{{ envOr "KODEX_WEB_CONSOLE_OWNER_ACTOR_ID" "owner-1" }}";
+}
+
+server {
+  listen 8080;
+  server_name _;
+
+  root /usr/share/nginx/html;
+  index index.html;
+
+  location = /health/livez {
+    access_log off;
+    return 204;
+  }
+
+  location = /health/readyz {
+    access_log off;
+    return 204;
+  }
+
+  location /v1/ {
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Kodex-Actor-Type $kodex_actor_type;
+    proxy_set_header X-Kodex-Actor-Id $kodex_actor_id;
+    proxy_pass http://staff-gateway:8080;
+    proxy_read_timeout 30s;
+  }
+
+  location / {
+    try_files $uri $uri/ /index.html;
+  }
+}

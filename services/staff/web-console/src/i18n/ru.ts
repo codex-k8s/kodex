@@ -107,8 +107,8 @@ export const ru = {
         reject: 'Отклонить',
         request_changes: 'Запросить доработку',
       },
-      unsupportedScope: 'Scope не поддержан',
-      unsupportedScopeText: 'Текущий self-deploy read surface доступен для platform, organization, project и repository scope из agent-manager.',
+      actorContextMissing: 'Нет проверенного actor context',
+      actorContextMissingText: 'В production actor context добавляет trusted edge после OAuth. В local-dev режиме задайте local-dev actor, чтобы запросить self-deploy summary.',
       chainStatuses: {
         not_configured: 'Нет project id',
         project_missing: 'Проект не найден',

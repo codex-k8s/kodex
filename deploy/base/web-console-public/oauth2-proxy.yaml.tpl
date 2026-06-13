@@ -73,6 +73,7 @@ spec:
             - "--cookie-expire=8h"
             - "--reverse-proxy=true"
             - "--set-xauthrequest=true"
+            - "--pass-user-headers=true"
             - "--pass-access-token=false"
             - "--pass-authorization-header=false"
             - "--session-cookie-minimal=true"

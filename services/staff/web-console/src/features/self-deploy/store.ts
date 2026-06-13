@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 
-import { canQueryAgentScope, fetchSelfDeploySummary, sendSelfDeployGateDecision } from '@/shared/api/staff-gateway';
-import type { OperatorContext } from '@/shared/api/context';
+import { fetchSelfDeploySummary, sendSelfDeployGateDecision } from '@/shared/api/staff-gateway';
+import { isGatewayActorContextReady, type OperatorContext } from '@/shared/api/context';
 import type { ApiError } from '@/shared/api/errors';
 import type { SelfDeployGateDecisionAction, SelfDeployGateDecisionSummary, SelfDeploySummary } from '@/shared/api/generated';
 
@@ -10,7 +10,7 @@ export const useSelfDeployStore = defineStore('self-deploy', {
     summary: undefined as SelfDeploySummary | undefined,
     isLoading: false,
     isSubmittingDecision: false,
-    unsupportedAgentScope: false,
+    missingActorContext: false,
     error: undefined as ApiError | undefined,
     decisionError: undefined as ApiError | undefined,
     lastDecision: undefined as SelfDeployGateDecisionSummary | undefined,
@@ -21,13 +21,13 @@ export const useSelfDeployStore = defineStore('self-deploy', {
   },
   actions: {
     async load(context: OperatorContext) {
-      if (!canQueryAgentScope(context)) {
+      if (!isGatewayActorContextReady(context)) {
         this.summary = undefined;
-        this.unsupportedAgentScope = true;
+        this.missingActorContext = true;
         this.error = undefined;
         return;
       }
-      this.unsupportedAgentScope = false;
+      this.missingActorContext = false;
       this.isLoading = true;
       this.error = undefined;
       this.decisionError = undefined;

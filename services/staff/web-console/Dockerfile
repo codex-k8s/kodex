@@ -32,7 +32,7 @@ CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
 FROM ${NGINX_IMAGE} AS prod
 
 COPY --from=build /workspace/services/staff/web-console/dist/ /usr/share/nginx/html/
-COPY deploy/base/web-console/nginx.conf /etc/nginx/conf.d/default.conf
+COPY services/staff/web-console/nginx/default.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 8080
 
