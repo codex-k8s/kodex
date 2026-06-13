@@ -1716,8 +1716,8 @@ func selfDeploySummary(plan *agentsv1.SelfDeployPlan, readiness *projectSelfDepl
 	if plan == nil {
 		return selfDeployPrePlanSummary(readiness, request), nil
 	}
-	chainStatus, nextStep, safeError := selfDeployPlanChain(plan)
 	governanceSummary := selfDeployGovernanceSummary(plan.GetGovernanceContext(), governance)
+	chainStatus, nextStep, safeError := selfDeployPlanChain(plan, governanceSummary)
 	return generated.SelfDeploySummary{
 		Availability:            generated.SelfDeploySummaryAvailabilityReady,
 		ChainStatus:             chainStatus,
@@ -1849,10 +1849,9 @@ func selfDeployUnavailableSummary(projectRef string, chainStatus generated.SelfD
 	}
 }
 
-func selfDeployPlanChain(plan *agentsv1.SelfDeployPlan) (generated.SelfDeployChainStatus, generated.SelfDeployNextStep, *generated.SelfDeploySafeError) {
+func selfDeployPlanChain(plan *agentsv1.SelfDeployPlan, governance generated.SelfDeployGovernanceSummary) (generated.SelfDeployChainStatus, generated.SelfDeployNextStep, *generated.SelfDeploySafeError) {
 	switch plan.GetStatus() {
 	case agentsv1.SelfDeployPlanStatus_SELF_DEPLOY_PLAN_STATUS_PENDING_APPROVAL:
-		governance := selfDeployGovernanceSummary(plan.GetGovernanceContext(), nil)
 		if governance.Status == generated.SelfDeployGovernanceStatusPending {
 			return generated.GovernanceGatePending, generated.SelfDeployNextStep{
 				Code:    generated.ReviewGovernanceGate,
@@ -1922,18 +1921,17 @@ func selfDeployProviderSignal(providerSignalRef string) generated.SelfDeployProv
 
 func selfDeployGovernanceSummary(input *agentsv1.GovernanceContextRef, governance *governancev1.GovernanceSummary) generated.SelfDeployGovernanceSummary {
 	output := generated.SelfDeployGovernanceSummary{Status: generated.SelfDeployGovernanceStatusUnavailable}
-	if input == nil {
-		return output
-	}
-	output.GateRequestRef = optionalBoundedString(input.GetGateRequestRef(), maxSelfDeployIdentifierBytes)
-	output.GateDecisionRef = optionalBoundedString(input.GetGateDecisionRef(), maxSelfDeployIdentifierBytes)
-	output.ReleaseDecisionPackageRef = optionalBoundedString(input.GetReleaseDecisionPackageRef(), maxSelfDeployIdentifierBytes)
-	output.ReleaseDecisionRef = optionalBoundedString(input.GetReleaseDecisionRef(), maxSelfDeployIdentifierBytes)
-	output.GatePolicyRef = optionalBoundedString(input.GetGatePolicyRef(), maxSelfDeployIdentifierBytes)
-	if output.GateDecisionRef != nil || output.ReleaseDecisionRef != nil {
-		output.Status = generated.SelfDeployGovernanceStatusResolved
-	} else if output.GateRequestRef != nil || output.ReleaseDecisionPackageRef != nil {
-		output.Status = generated.SelfDeployGovernanceStatusPending
+	if input != nil {
+		output.GateRequestRef = optionalBoundedString(input.GetGateRequestRef(), maxSelfDeployIdentifierBytes)
+		output.GateDecisionRef = optionalBoundedString(input.GetGateDecisionRef(), maxSelfDeployIdentifierBytes)
+		output.ReleaseDecisionPackageRef = optionalBoundedString(input.GetReleaseDecisionPackageRef(), maxSelfDeployIdentifierBytes)
+		output.ReleaseDecisionRef = optionalBoundedString(input.GetReleaseDecisionRef(), maxSelfDeployIdentifierBytes)
+		output.GatePolicyRef = optionalBoundedString(input.GetGatePolicyRef(), maxSelfDeployIdentifierBytes)
+		if output.GateDecisionRef != nil || output.ReleaseDecisionRef != nil {
+			output.Status = generated.SelfDeployGovernanceStatusResolved
+		} else if output.GateRequestRef != nil || output.ReleaseDecisionPackageRef != nil {
+			output.Status = generated.SelfDeployGovernanceStatusPending
+		}
 	}
 	enrichSelfDeployGovernanceSummary(&output, governance)
 	return output

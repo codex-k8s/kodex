@@ -897,6 +897,38 @@ func TestRouterGetSelfDeploySummaryOwnerActorWithoutScope(t *testing.T) {
 	}
 }
 
+func TestRouterGetSelfDeploySummaryUsesGovernanceSummaryWithoutPlanRefs(t *testing.T) {
+	plans := sampleSelfDeployPlansResponse()
+	plans.GetSelfDeployPlans()[0].GovernanceContext = nil
+	client := &fakeInteractionHubClient{
+		selfDeployListResponse:    plans,
+		governanceSummaryResponse: sampleSelfDeployGateSummaryResponse(),
+	}
+	router := newTestRouterWithSelfDeployProjectRef(t, client, "project-1")
+	req := authenticatedRequest(http.MethodGet, "/v1/self-deploy/summary", "")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var body generated.SelfDeploySummaryResponse
+	decodeJSON(t, rec, &body)
+	summary := body.Summary
+	if summary.ChainStatus != generated.GovernanceGatePending ||
+		summary.NextStep.Code != generated.ReviewGovernanceGate ||
+		summary.Governance.Status != generated.SelfDeployGovernanceStatusPending ||
+		summary.Governance.GateRequestId == nil ||
+		*summary.Governance.GateRequestId != sampleSelfDeployGateRequestID ||
+		summary.Governance.GateRequestVersion == nil ||
+		*summary.Governance.GateRequestVersion != 8 ||
+		summary.Governance.AllowedActions == nil ||
+		len(*summary.Governance.AllowedActions) != 3 {
+		t.Fatalf("summary = %+v, want pending gate from governance summary without plan-local refs", summary)
+	}
+}
+
 func TestRouterGetSelfDeploySummaryOwnerActorWithoutConfiguredProjectDoesNotCallDownstream(t *testing.T) {
 	client := &fakeInteractionHubClient{}
 	router := newTestRouter(t, client)
