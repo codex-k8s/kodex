@@ -738,8 +738,8 @@ func TestCheckAccessAllowsDirectOwnerSelfDeployGovernanceRules(t *testing.T) {
 		{
 			actionKey:       accesscatalog.ActionGovernanceGateDecide,
 			resourceType:    accesscatalog.ResourceGovernanceGate,
-			scope:           value.ScopeRef{Type: accessRuleScopeGlobal},
-			checkResourceID: "188b0d9a-c72c-4b69-8b4a-042b2acfe6cb",
+			scope:           value.ScopeRef{Type: accessRuleScopeProject, ID: "project-self"},
+			checkResourceID: "agent:self-deploy-plan:latest",
 		},
 	}
 	for _, grant := range grants {

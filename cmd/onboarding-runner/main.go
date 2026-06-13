@@ -50,7 +50,6 @@ const (
 	selfDeployOwnerAccessPriority       = 100
 	servicesPolicyImportAccessPriority  = 100
 	selfDeployOwnerReadProbeResourceID  = "self-deploy-plan-probe"
-	selfDeployOwnerGateProbeResourceID  = "self-deploy-gate-probe"
 )
 
 type selfDeployServiceAccessGrant struct {
@@ -80,7 +79,7 @@ var selfDeployServiceAccessGrants = []selfDeployServiceAccessGrant{
 var selfDeployOwnerAccessGrants = []selfDeployOwnerAccessGrant{
 	{actionKey: accesscatalog.ActionGovernanceRiskRead, resourceType: accesscatalog.ResourceGovernanceRiskAssessment, scopeType: accesscatalog.ScopeProject, probeID: selfDeployOwnerReadProbeResourceID},
 	{actionKey: accesscatalog.ActionGovernanceGateRead, resourceType: accesscatalog.ResourceGovernanceGate, scopeType: accesscatalog.ScopeProject, probeID: selfDeployOwnerReadProbeResourceID},
-	{actionKey: accesscatalog.ActionGovernanceGateDecide, resourceType: accesscatalog.ResourceGovernanceGate, scopeType: accesscatalog.ScopeGlobal, probeID: selfDeployOwnerGateProbeResourceID},
+	{actionKey: accesscatalog.ActionGovernanceGateDecide, resourceType: accesscatalog.ResourceGovernanceGate, scopeType: accesscatalog.ScopeProject, probeID: selfDeployOwnerReadProbeResourceID},
 }
 
 func main() {
