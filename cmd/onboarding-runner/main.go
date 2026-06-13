@@ -47,13 +47,23 @@ const (
 	maxBootstrapSetupBytes              = 4 * 1024 * 1024
 	runnerRepositoryReadAccessPriority  = 100
 	selfDeployServiceAccessPriority     = 100
+	selfDeployOwnerAccessPriority       = 100
 	servicesPolicyImportAccessPriority  = 100
+	selfDeployOwnerReadProbeResourceID  = "self-deploy-plan-probe"
+	selfDeployOwnerGateProbeResourceID  = "self-deploy-gate-probe"
 )
 
 type selfDeployServiceAccessGrant struct {
 	subjectID    string
 	actionKey    string
 	resourceType string
+}
+
+type selfDeployOwnerAccessGrant struct {
+	actionKey    string
+	resourceType string
+	scopeType    string
+	probeID      string
 }
 
 var selfDeployServiceAccessGrants = []selfDeployServiceAccessGrant{
@@ -65,6 +75,12 @@ var selfDeployServiceAccessGrants = []selfDeployServiceAccessGrant{
 	{subjectID: "staff-gateway", actionKey: accesscatalog.ActionProjectPolicyRead, resourceType: accesscatalog.ResourceServicesPolicy},
 	{subjectID: "staff-gateway", actionKey: accesscatalog.ActionGovernanceRiskRead, resourceType: accesscatalog.ResourceGovernanceRiskAssessment},
 	{subjectID: "staff-gateway", actionKey: accesscatalog.ActionGovernanceGateRead, resourceType: accesscatalog.ResourceGovernanceGate},
+}
+
+var selfDeployOwnerAccessGrants = []selfDeployOwnerAccessGrant{
+	{actionKey: accesscatalog.ActionGovernanceRiskRead, resourceType: accesscatalog.ResourceGovernanceRiskAssessment, scopeType: accesscatalog.ScopeProject, probeID: selfDeployOwnerReadProbeResourceID},
+	{actionKey: accesscatalog.ActionGovernanceGateRead, resourceType: accesscatalog.ResourceGovernanceGate, scopeType: accesscatalog.ScopeProject, probeID: selfDeployOwnerReadProbeResourceID},
+	{actionKey: accesscatalog.ActionGovernanceGateDecide, resourceType: accesscatalog.ResourceGovernanceGate, scopeType: accesscatalog.ScopeGlobal, probeID: selfDeployOwnerGateProbeResourceID},
 }
 
 func main() {
@@ -92,6 +108,7 @@ func main() {
 	flag.StringVar(&options.AllowedProviderOwner, "allowed-provider-owner", os.Getenv("KODEX_ONBOARDING_RUNNER_ALLOWED_OWNER"), "required owner for apply mode")
 	flag.StringVar(&options.RepositoryNamePrefix, "repository-name-prefix", os.Getenv("KODEX_ONBOARDING_RUNNER_REPOSITORY_PREFIX"), "required repository name prefix for apply mode")
 	flag.StringVar(&options.AllowedProviderRepository, "allowed-provider-repository", os.Getenv("KODEX_ONBOARDING_RUNNER_ALLOWED_REPOSITORY"), "optional exact repository name allowed for apply mode")
+	flag.StringVar(&options.OwnerUserRef, "owner-user-ref", envOr("KODEX_ONBOARDING_RUNNER_OWNER_USER_REF", os.Getenv("KODEX_BOOTSTRAP_OWNER_USER_REF")), "safe owner user ref for self-deploy governance access; do not pass email")
 	flag.StringVar(&options.IdempotencyKey, "idempotency-key", "", "optional idempotency key prefix")
 	flag.StringVar(&options.RequestID, "request-id", "", "optional request id")
 	flag.StringVar(&options.ActorID, "actor-id", defaultActorID, "safe actor id")
@@ -185,6 +202,7 @@ type runnerOptions struct {
 	AllowedProviderOwner          string
 	RepositoryNamePrefix          string
 	AllowedProviderRepository     string
+	OwnerUserRef                  string
 	IdempotencyKey                string
 	RequestID                     string
 	ActorID                       string
@@ -213,6 +231,7 @@ type onboardingScenario struct {
 	ProviderSlug         string                        `json:"provider_slug,omitempty"`
 	RepositoryFullName   string                        `json:"repository_full_name,omitempty"`
 	ProviderRepositoryID string                        `json:"provider_repository_id,omitempty"`
+	OwnerUserRef         string                        `json:"owner_user_ref,omitempty"`
 	RepositoryBinding    *repositoryBindingScenario    `json:"repository_binding,omitempty"`
 	RepositoryChange     *repositoryChangeScenario     `json:"repository_change,omitempty"`
 	BootstrapSetup       *bootstrapSetup               `json:"bootstrap_setup,omitempty"`
@@ -374,8 +393,9 @@ func run(ctx context.Context, options runnerOptions, clients runnerClients, outp
 	scenario = ensureServicesPolicyImportScenario(options, scenario)
 	needsRunnerRepositoryReadAccess := shouldEnsureRunnerRepositoryReadAccess(scenario)
 	needsSelfDeployServiceAccess := shouldEnsureSelfDeployServiceAccess(scenario)
+	needsSelfDeployOwnerAccess := shouldEnsureSelfDeployOwnerAccess(options, scenario)
 	needsServicesPolicyImportAccess := shouldEnsureServicesPolicyImportAccess(scenario)
-	if options.Apply && (needsRunnerRepositoryReadAccess || needsSelfDeployServiceAccess || needsServicesPolicyImportAccess) {
+	if options.Apply && (needsRunnerRepositoryReadAccess || needsSelfDeployServiceAccess || needsSelfDeployOwnerAccess || needsServicesPolicyImportAccess) {
 		if err := validateApplyPolicy(options, scenario); err != nil {
 			return err
 		}
@@ -385,6 +405,9 @@ func run(ctx context.Context, options runnerOptions, clients runnerClients, outp
 			}
 			if needsRunnerRepositoryReadAccess && options.RepositoryID != "" {
 				return errors.New("access-manager client is required for onboarding runner repository read access apply")
+			}
+			if needsSelfDeployOwnerAccess {
+				return errors.New("access-manager client is required for self-deploy owner access apply")
 			}
 			return errors.New("access-manager client is required for self-deploy service access apply")
 		}
@@ -505,6 +528,11 @@ func run(ctx context.Context, options runnerOptions, clients runnerClients, outp
 	}
 	if shouldEnsureSelfDeployServiceAccess(scenario) {
 		if err := ensureSelfDeployServiceAccess(ctx, clients.AccessManager, options, output); err != nil {
+			return err
+		}
+	}
+	if shouldEnsureSelfDeployOwnerAccess(options, scenario) {
+		if err := ensureSelfDeployOwnerAccess(ctx, clients.AccessManager, options, output); err != nil {
 			return err
 		}
 	}
@@ -679,6 +707,7 @@ func normalizeOptions(options runnerOptions) runnerOptions {
 	options.AllowedProviderOwner = strings.TrimSpace(options.AllowedProviderOwner)
 	options.RepositoryNamePrefix = strings.TrimSpace(options.RepositoryNamePrefix)
 	options.AllowedProviderRepository = strings.TrimSpace(options.AllowedProviderRepository)
+	options.OwnerUserRef = normalizeOwnerUserRef(options.OwnerUserRef)
 	options.IdempotencyKey = strings.TrimSpace(options.IdempotencyKey)
 	options.RequestID = defaultString(strings.TrimSpace(options.RequestID), "onboarding-runner-"+time.Now().UTC().Format("20060102T150405Z"))
 	options.ActorID = defaultString(strings.TrimSpace(options.ActorID), defaultActorID)
@@ -726,6 +755,9 @@ func mergeScenarioOptions(options runnerOptions, scenario onboardingScenario) ru
 	}
 	if options.ProviderRepositoryID == "" {
 		options.ProviderRepositoryID = strings.TrimSpace(scenario.ProviderRepositoryID)
+	}
+	if options.OwnerUserRef == "" {
+		options.OwnerUserRef = normalizeOwnerUserRef(scenario.OwnerUserRef)
 	}
 	if options.ProviderOwner == "" && options.ProviderName == "" && options.RepositoryFullName != "" {
 		owner, name, ok := splitRepositoryFullName(options.RepositoryFullName)
@@ -796,6 +828,9 @@ func validateOptions(options runnerOptions, scenario onboardingScenario) error {
 	}
 	if options.ProviderSlug == "" {
 		return errors.New("provider_slug is required")
+	}
+	if err := validateOwnerUserRef(options.OwnerUserRef); err != nil {
+		return err
 	}
 	switch options.Kind {
 	case "bootstrap", "adoption", "both":
@@ -1323,12 +1358,49 @@ func shouldEnsureSelfDeployServiceAccess(scenario onboardingScenario) bool {
 	return scenario.RepositoryBinding != nil || scenario.RepositoryChange != nil
 }
 
+func shouldEnsureSelfDeployOwnerAccess(options runnerOptions, scenario onboardingScenario) bool {
+	return shouldEnsureSelfDeployServiceAccess(scenario) && options.OwnerUserRef != ""
+}
+
 func shouldEnsureServicesPolicyImportAccess(scenario onboardingScenario) bool {
 	return scenario.ServicesPolicyImport != nil
 }
 
 func shouldEnsureRunnerRepositoryReadAccess(scenario onboardingScenario) bool {
 	return scenario.RepositoryBinding != nil || scenario.RepositoryChange != nil || scenario.ServicesPolicyImport != nil
+}
+
+func selfDeployOwnerAccessScopeID(options runnerOptions, grant selfDeployOwnerAccessGrant) string {
+	if grant.scopeType == accesscatalog.ScopeProject {
+		return options.ProjectID
+	}
+	return ""
+}
+
+func selfDeployOwnerAccessScopeLabel(options runnerOptions, grant selfDeployOwnerAccessGrant) string {
+	if grant.scopeType == accesscatalog.ScopeProject {
+		return accesscatalog.ScopeProject + ":" + safeValue(options.ProjectID)
+	}
+	return accesscatalog.ScopeGlobal
+}
+
+func normalizeOwnerUserRef(value string) string {
+	value = strings.TrimSpace(value)
+	value = strings.TrimPrefix(value, "user/")
+	return strings.TrimSpace(value)
+}
+
+func validateOwnerUserRef(value string) error {
+	if value == "" {
+		return nil
+	}
+	if strings.Contains(value, "@") || strings.ContainsAny(value, "{}\n\r\t") {
+		return errors.New("owner_user_ref must be a safe user ref, not email or raw identity data")
+	}
+	if len(value) > 256 {
+		return errors.New("owner_user_ref is too long")
+	}
+	return nil
 }
 
 func loadScenario(path string) (onboardingScenario, error) {
@@ -2039,6 +2111,44 @@ func ensureSelfDeployServiceAccess(ctx context.Context, client accessManagerAPI,
 	return nil
 }
 
+func ensureSelfDeployOwnerAccess(ctx context.Context, client accessManagerAPI, options runnerOptions, output io.Writer) error {
+	if options.ProjectID == "" || options.OwnerUserRef == "" {
+		return nil
+	}
+	if !options.Apply {
+		for _, grant := range selfDeployOwnerAccessGrants {
+			logLine(output, "PLAN", "self-deploy owner access ready subject=user/%s action=%s resource=%s scope=%s",
+				safeValue(options.OwnerUserRef),
+				grant.actionKey,
+				grant.resourceType,
+				selfDeployOwnerAccessScopeLabel(options, grant),
+			)
+		}
+		return nil
+	}
+	if client == nil {
+		return errors.New("access-manager client is required for self-deploy owner access apply")
+	}
+	for _, grant := range selfDeployOwnerAccessGrants {
+		rule, err := putSelfDeployOwnerAccessRule(ctx, client, options, grant)
+		if err != nil {
+			return err
+		}
+		if err := checkSelfDeployOwnerAccess(ctx, client, options, grant); err != nil {
+			return err
+		}
+		logLine(output, "OK", "self-deploy owner access ready subject=user/%s action=%s resource=%s scope=%s rule_id=%s version=%d",
+			safeValue(options.OwnerUserRef),
+			grant.actionKey,
+			grant.resourceType,
+			selfDeployOwnerAccessScopeLabel(options, grant),
+			safeValue(rule.GetAccessRuleId()),
+			rule.GetVersion(),
+		)
+	}
+	return nil
+}
+
 func ensureRunnerRepositoryReadAccess(ctx context.Context, client accessManagerAPI, options runnerOptions, output io.Writer) error {
 	if options.ProjectID == "" || options.RepositoryID == "" {
 		return nil
@@ -2121,6 +2231,18 @@ func putSelfDeployServiceAccessRule(ctx context.Context, client accessManagerAPI
 	return response, nil
 }
 
+func putSelfDeployOwnerAccessRule(ctx context.Context, client accessManagerAPI, options runnerOptions, grant selfDeployOwnerAccessGrant) (*accessaccountsv1.AccessRuleResponse, error) {
+	request := selfDeployOwnerAccessRuleRequest(options, grant)
+	response, err := client.PutAccessRule(ctx, request)
+	if err != nil {
+		return nil, safeError("access-manager PutAccessRule failed", err)
+	}
+	if !selfDeployAccessRuleMatches(response, request) {
+		return nil, fmt.Errorf("access-manager PutAccessRule returned mismatched self-deploy owner access rule for user/%s action=%s", options.OwnerUserRef, grant.actionKey)
+	}
+	return response, nil
+}
+
 func putRunnerRepositoryReadAccessRule(ctx context.Context, client accessManagerAPI, options runnerOptions) (*accessaccountsv1.AccessRuleResponse, error) {
 	request := runnerRepositoryReadAccessRuleRequest(options)
 	response, err := client.PutAccessRule(ctx, request)
@@ -2152,6 +2274,17 @@ func checkSelfDeployServiceAccess(ctx context.Context, client accessManagerAPI, 
 	}
 	if response.GetDecision() != accessaccountsv1.AccessDecision_ACCESS_DECISION_ALLOW {
 		return fmt.Errorf("self-deploy access check denied for service/%s action=%s reason=%s", grant.subjectID, grant.actionKey, safeValue(response.GetReasonCode()))
+	}
+	return nil
+}
+
+func checkSelfDeployOwnerAccess(ctx context.Context, client accessManagerAPI, options runnerOptions, grant selfDeployOwnerAccessGrant) error {
+	response, err := client.CheckAccess(ctx, selfDeployOwnerAccessCheckRequest(options, grant))
+	if err != nil {
+		return safeError("access-manager CheckAccess failed", err)
+	}
+	if response.GetDecision() != accessaccountsv1.AccessDecision_ACCESS_DECISION_ALLOW {
+		return fmt.Errorf("self-deploy owner access check denied for user/%s action=%s reason=%s", options.OwnerUserRef, grant.actionKey, safeValue(response.GetReasonCode()))
 	}
 	return nil
 }
@@ -2190,6 +2323,21 @@ func selfDeployServiceAccessRuleRequest(options runnerOptions, grant selfDeployS
 		Priority:     selfDeployServiceAccessPriority,
 		Status:       accessaccountsv1.AccessRuleStatus_ACCESS_RULE_STATUS_ACTIVE,
 		Meta:         accessRuleCommandMeta(options, grant.subjectID),
+	}
+}
+
+func selfDeployOwnerAccessRuleRequest(options runnerOptions, grant selfDeployOwnerAccessGrant) *accessaccountsv1.PutAccessRuleRequest {
+	return &accessaccountsv1.PutAccessRuleRequest{
+		Effect:       accessaccountsv1.AccessEffect_ACCESS_EFFECT_ALLOW,
+		SubjectType:  "user",
+		SubjectId:    options.OwnerUserRef,
+		ActionKey:    grant.actionKey,
+		ResourceType: grant.resourceType,
+		ScopeType:    grant.scopeType,
+		ScopeId:      selfDeployOwnerAccessScopeID(options, grant),
+		Priority:     selfDeployOwnerAccessPriority,
+		Status:       accessaccountsv1.AccessRuleStatus_ACCESS_RULE_STATUS_ACTIVE,
+		Meta:         selfDeployOwnerAccessCommandMeta(options, grant),
 	}
 }
 
@@ -2238,6 +2386,23 @@ func selfDeployServiceAccessCheckRequest(options runnerOptions, grant selfDeploy
 		},
 		Audit: true,
 		Meta:  accessRuleCheckMeta(options, grant.subjectID),
+	}
+}
+
+func selfDeployOwnerAccessCheckRequest(options runnerOptions, grant selfDeployOwnerAccessGrant) *accessaccountsv1.CheckAccessRequest {
+	return &accessaccountsv1.CheckAccessRequest{
+		Subject:   &accessaccountsv1.SubjectRef{Type: "user", Id: options.OwnerUserRef},
+		ActionKey: grant.actionKey,
+		Resource: &accessaccountsv1.ResourceRef{
+			Type: grant.resourceType,
+			Id:   grant.probeID,
+		},
+		Scope: &accessaccountsv1.ScopeRef{
+			Type: grant.scopeType,
+			Id:   selfDeployOwnerAccessScopeID(options, grant),
+		},
+		Audit: true,
+		Meta:  selfDeployOwnerAccessCheckMeta(options),
 	}
 }
 
@@ -2301,6 +2466,16 @@ func accessRuleCommandMeta(options runnerOptions, subjectID string) *accessaccou
 	}
 }
 
+func selfDeployOwnerAccessCommandMeta(options runnerOptions, grant selfDeployOwnerAccessGrant) *accessaccountsv1.CommandMeta {
+	return &accessaccountsv1.CommandMeta{
+		IdempotencyKey: deterministicKey(options.ProjectID, options.RepositoryID, "self-deploy-owner-access", options.OwnerUserRef, grant.actionKey, grant.resourceType, grant.scopeType),
+		Actor:          &accessaccountsv1.Actor{Type: "service", Id: options.ActorID},
+		Reason:         "self_deploy_owner_access_bootstrap",
+		RequestId:      options.RequestID,
+		RequestContext: &accessaccountsv1.RequestContext{Source: defaultSource},
+	}
+}
+
 func runnerRepositoryReadAccessCommandMeta(options runnerOptions) *accessaccountsv1.CommandMeta {
 	return &accessaccountsv1.CommandMeta{
 		IdempotencyKey: deterministicKey(options.ProjectID, options.RepositoryID, "onboarding-runner-repository-read-access", options.ActorID, accesscatalog.ActionRepositoryRead, accesscatalog.ResourceRepository),
@@ -2325,6 +2500,15 @@ func accessRuleCheckMeta(options runnerOptions, subjectID string) *accessaccount
 	return &accessaccountsv1.CommandMeta{
 		Actor:          &accessaccountsv1.Actor{Type: "service", Id: strings.TrimSpace(subjectID)},
 		Reason:         "self_deploy_service_access_check",
+		RequestId:      options.RequestID,
+		RequestContext: &accessaccountsv1.RequestContext{Source: defaultSource},
+	}
+}
+
+func selfDeployOwnerAccessCheckMeta(options runnerOptions) *accessaccountsv1.CommandMeta {
+	return &accessaccountsv1.CommandMeta{
+		Actor:          &accessaccountsv1.Actor{Type: "user", Id: options.OwnerUserRef},
+		Reason:         "self_deploy_owner_access_check",
 		RequestId:      options.RequestID,
 		RequestContext: &accessaccountsv1.RequestContext{Source: defaultSource},
 	}
