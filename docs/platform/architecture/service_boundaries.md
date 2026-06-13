@@ -90,7 +90,7 @@ Gateway-сервисы, `web-console`, `platform-mcp-server` и `codex-hook-ingr
 
 Отвечает за пользовательский интерфейс, маршрутизацию, состояние на стороне клиента и доступность операторских экранов. Не рассчитывает доменные переходы и не соединяется напрямую с БД сервисов-владельцев.
 
-Первый активный `web-console` живёт в `services/staff/web-console`, строится на Vue/Vite/TypeScript/Vuetify и работает только через `staff-gateway`. В MVP он покрывает каркас приложения, командный центр, owner inbox и просмотр одного `AgentRun` с runtime summary и activity timeline. Production-сборка не утверждает actor identity сама: `X-Kodex-Actor-*` добавляет trusted edge или backend-session слой, а ручной actor ввод разрешён только для изолированного local-dev режима. Если для экранного блока нет OpenAPI-ручки в `staff-gateway`, frontend показывает отключённое или пустое состояние, а не создаёт скрытую бизнес-логику или демо-данные.
+Первый активный `web-console` живёт в `services/staff/web-console`, строится на Vue/Vite/TypeScript/Vuetify и работает только через `staff-gateway`. В MVP он покрывает каркас приложения, командный центр, owner inbox и просмотр одного `AgentRun` с runtime summary и activity timeline. Production-сборка не утверждает actor identity сама: браузер не задаёт доверенные `X-Kodex-Actor-*`, публичный путь `oauth2-proxy -> web-console nginx -> staff-gateway` добавляет их после проверки владельца и маппинга `X-Forwarded-Email` в platform actor id, а ручной actor ввод разрешён только для изолированного local-dev режима. Если для экранного блока нет OpenAPI-ручки в `staff-gateway`, frontend показывает отключённое или пустое состояние, а не создаёт скрытую бизнес-логику или демо-данные.
 
 ### Gateway-сервисы
 

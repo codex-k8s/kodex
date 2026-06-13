@@ -279,17 +279,17 @@ export async function fetchSelfDeploySummary(
   context: OperatorContext,
   query: SelfDeploySummaryQuery = {},
 ): Promise<SelfDeploySummaryResponse> {
-  if (!isAgentScopeType(context.scopeType)) {
-    throw unsupportedAgentScopeError();
-  }
+  const scopeRef = context.scopeRef.trim();
+  const scopeQuery = isAgentScopeType(context.scopeType) && scopeRef.length > 0
+    ? { scope_type: context.scopeType, scope_ref: scopeRef }
+    : {};
   try {
     const response = await getSelfDeploySummary({
       client: staffGatewayClient,
       throwOnError: true,
       headers: operationHeaders<GetSelfDeploySummaryData['headers']>(context),
       query: {
-        scope_type: context.scopeType,
-        scope_ref: context.scopeRef.trim(),
+        ...scopeQuery,
         project_ref: query.projectRef,
         repository_ref: query.repositoryRef,
         provider_signal_ref: query.providerSignalRef,
@@ -306,9 +306,6 @@ export async function sendSelfDeployGateDecision(
   gateRequestId: string,
   body: SelfDeployGateDecisionRequest,
 ): Promise<SelfDeployGateDecisionResponse> {
-  if (!isAgentScopeType(context.scopeType)) {
-    throw unsupportedAgentScopeError();
-  }
   try {
     const response = await submitSelfDeployGateDecision({
       client: staffGatewayClient,

@@ -21,15 +21,24 @@
 - `VITE_KODEX_LOCALE` — начальная локаль, default `ru`.
 
 `web-console` не формирует доверенные `X-Kodex-Actor-*` в production-сборке:
-проверенный actor context должен добавлять trusted edge или backend-session слой перед
-`staff-gateway`. Для локальной разработки Vite можно явно включить
+браузер не может задавать эти headers. В публичном контуре GitHub OAuth проверяет
+`oauth2-proxy`, а nginx внутри `web-console` получает `X-Forwarded-Email`,
+который `oauth2-proxy` выставляет после успешного OAuth, и перед
+проксированием `/v1/**` выставляет для `staff-gateway`
+`X-Kodex-Actor-Type: user` и `X-Kodex-Actor-Id` из
+`KODEX_WEB_CONSOLE_OWNER_ACTOR_ID`. Если OAuth-контекст отсутствует, nginx не
+передаёт actor headers и `staff-gateway` возвращает безопасную ошибку
+`unauthenticated`. Для локальной разработки Vite можно явно включить
 `VITE_ENABLE_LOCAL_DEV_ACTOR_HEADERS=true` и задать
 `VITE_KODEX_LOCAL_DEV_ACTOR_TYPE`, `VITE_KODEX_LOCAL_DEV_ACTOR_ID`; этот режим работает
 только при `import.meta.env.DEV`.
 
-Если scope не задан, экраны показывают пустое состояние и не отправляют запросы к
-`staff-gateway`. В local-dev режиме с actor headers также должен быть задан
-local-dev actor.
+Если scope не задан, экраны входящих решений и списков Run показывают пустое
+состояние и не отправляют scope-зависимые запросы к `staff-gateway`. Блок
+самовыкладки работает иначе: `GET /v1/self-deploy/summary` вызывается без
+ручного `scope_ref`, а `staff-gateway` использует настроенный self-deploy project
+ref из server-side конфигурации. В local-dev режиме с actor headers также должен
+быть задан local-dev actor.
 
 ## Production deploy
 
@@ -46,9 +55,10 @@ bash bootstrap/host/deploy_backend_ring.sh \
 
 Kubernetes manifest создаёт внутренний `Service` и nginx `ConfigMap`:
 `/health/livez` и `/health/readyz` отвечают без обращения к backend, а `/v1/**`
-проксируется на `staff-gateway:8080` внутри кластера. Поэтому production-сборка
-оставляет `VITE_STAFF_GATEWAY_BASE_URL` пустым и использует same-origin API
-path.
+проксируется на `staff-gateway:8080` внутри кластера. Nginx-конфиг
+перезаписывает `X-Kodex-Actor-*` перед `staff-gateway`: браузерские значения не
+используются как доверенные. Поэтому production-сборка оставляет
+`VITE_STAFF_GATEWAY_BASE_URL` пустым и использует same-origin API path.
 
 Публичный HTTPS-доступ включается отдельным deploy-контуром:
 
@@ -64,6 +74,10 @@ bash bootstrap/host/deploy_backend_ring.sh \
 публичного `Ingress` на `web-console` нет. GitHub OAuth callback закреплён за
 `https://platform.kodex.works/oauth2/callback`, а доступ ограничен отдельным
 allowlist-файлом для owner email, не общей bootstrap allowlist.
+Значение `KODEX_WEB_CONSOLE_OWNER_ACTOR_ID` должно совпадать с platform actor id,
+для которого `onboarding-runner apply` создал owner-доступ к self-deploy
+governance summary и gate decision. Email из OAuth остаётся auth-фактом edge,
+не проксируется в `staff-gateway` как subject id и не нужен frontend-коду.
 
 ## Доступные серверные ручки
 
@@ -85,7 +99,8 @@ allowlist-файлом для owner email, не общей bootstrap allowlist.
   endpoint `staff-gateway`; быстрые действия и чат отключены без подмены
   production-данных.
 - Self-deploy наблюдение вынесено в отдельный блок командного центра. Он
-  читает `GET /v1/self-deploy/summary` и показывает безопасный owner-facing
+  читает `GET /v1/self-deploy/summary` через настроенный backend context без
+  ручного ввода `project_id`/`scope_ref` и показывает безопасный owner-facing
   статус: где остановилась цепочка, следующий безопасный шаг, последний provider
   signal ref/status, repository/project refs, branch/commit refs, service keys
   или path categories, `services.yaml` digest/fingerprint, deploy plan status,

@@ -29,6 +29,10 @@ export function isOperatorContextReady(context: OperatorContext): boolean {
   return !localDevActorHeadersEnabled || context.localDevActorId.trim().length > 0;
 }
 
+export function isGatewayActorContextReady(context: OperatorContext): boolean {
+  return !localDevActorHeadersEnabled || context.localDevActorId.trim().length > 0;
+}
+
 export function isLocalDevActorHeadersEnabled(): boolean {
   return localDevActorHeadersEnabled;
 }
