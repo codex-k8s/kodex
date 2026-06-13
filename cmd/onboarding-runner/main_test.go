@@ -663,6 +663,53 @@ func TestRunApplyCreatesSelfDeployServiceAccessRules(t *testing.T) {
 	assertContains(t, text, "self-deploy service access ready subject=service/staff-gateway")
 }
 
+func TestRunApplyCreatesSelfDeployOwnerAccessRules(t *testing.T) {
+	scenarioPath := writeScenario(t, selfRepositoryBindingOnlyScenario())
+	project := projectFixture("11111111-1111-1111-1111-111111111111", "kodex", "project-self")
+	repository := selfRepositoryFixture()
+	repository.ProjectId = "project-self"
+	repository.RepositoryId = "repo-self"
+	accessClient := &fakeAccessManagerClient{}
+	clients := runnerClients{
+		ProjectCatalog: &fakeProjectCatalogClient{
+			projects:     []*projectsv1.Project{project},
+			repositories: []*projectsv1.Repository{repository},
+		},
+		ProviderHub:   &fakeProviderHubClient{},
+		AccessManager: accessClient,
+	}
+
+	var output bytes.Buffer
+	err := run(context.Background(), runnerOptions{
+		ScenarioFilePath:          scenarioPath,
+		OrganizationID:            "11111111-1111-1111-1111-111111111111",
+		ProjectSlug:               "kodex",
+		ProjectDisplayName:        "kodex",
+		AllowedProviderOwner:      "codex-k8s",
+		AllowedProviderRepository: "kodex",
+		OwnerUserRef:              "user/owner-1",
+		RequestID:                 "req-1",
+		Kind:                      "adoption",
+		Apply:                     true,
+	}, clients, &output)
+	if err != nil {
+		t.Fatalf("run apply owner access rules: %v", err)
+	}
+
+	expectedAccessRules := 1 + len(selfDeployServiceAccessGrants) + len(selfDeployOwnerAccessGrants)
+	if accessClient.createdRuleCount != expectedAccessRules {
+		t.Fatalf("expected %d created access rules, got %d", expectedAccessRules, accessClient.createdRuleCount)
+	}
+	if accessClient.putAccessRuleCalls != expectedAccessRules || accessClient.checkAccessCalls != expectedAccessRules {
+		t.Fatalf("expected put/check calls for runner, services and owner, got put=%d check=%d", accessClient.putAccessRuleCalls, accessClient.checkAccessCalls)
+	}
+	assertSelfDeployAccessRules(t, accessClient, "project-self")
+	assertSelfDeployOwnerAccessRules(t, accessClient, "owner-1", "project-self")
+	text := output.String()
+	assertContains(t, text, "self-deploy owner access ready subject=user/owner-1")
+	assertContains(t, text, "action=governance.gate.decide")
+}
+
 func TestRunDryRunPlansServicesPolicyImportWithoutMutation(t *testing.T) {
 	policyPath := writeServicesPolicyImportFixture(t)
 	scenario := selfRepositoryBindingOnlyScenario()
@@ -1003,6 +1050,72 @@ func TestRunApplyReusesSelfDeployServiceAccessRules(t *testing.T) {
 	if accessClient.putAccessRuleCalls != expectedAccessCalls || accessClient.checkAccessCalls != expectedAccessCalls {
 		t.Fatalf("expected repeated put/check calls without duplicates, got put=%d check=%d", accessClient.putAccessRuleCalls, accessClient.checkAccessCalls)
 	}
+}
+
+func TestRunApplyReusesSelfDeployOwnerAccessRules(t *testing.T) {
+	scenarioPath := writeScenario(t, selfRepositoryBindingOnlyScenario())
+	project := projectFixture("11111111-1111-1111-1111-111111111111", "kodex", "project-self")
+	repository := selfRepositoryFixture()
+	repository.ProjectId = "project-self"
+	repository.RepositoryId = "repo-self"
+	accessClient := &fakeAccessManagerClient{}
+	clients := runnerClients{
+		ProjectCatalog: &fakeProjectCatalogClient{
+			projects:     []*projectsv1.Project{project},
+			repositories: []*projectsv1.Repository{repository},
+		},
+		ProviderHub:   &fakeProviderHubClient{},
+		AccessManager: accessClient,
+	}
+	options := runnerOptions{
+		ScenarioFilePath:          scenarioPath,
+		OrganizationID:            "11111111-1111-1111-1111-111111111111",
+		ProjectSlug:               "kodex",
+		ProjectDisplayName:        "kodex",
+		AllowedProviderOwner:      "codex-k8s",
+		AllowedProviderRepository: "kodex",
+		OwnerUserRef:              "owner-1",
+		RequestID:                 "req-1",
+		Kind:                      "adoption",
+		Apply:                     true,
+	}
+	if err := run(context.Background(), options, clients, ioDiscard{}); err != nil {
+		t.Fatalf("first run apply owner access rules: %v", err)
+	}
+	if err := run(context.Background(), options, clients, ioDiscard{}); err != nil {
+		t.Fatalf("second run apply owner access rules: %v", err)
+	}
+
+	expectedAccessRules := 1 + len(selfDeployServiceAccessGrants) + len(selfDeployOwnerAccessGrants)
+	if accessClient.createdRuleCount != expectedAccessRules {
+		t.Fatalf("expected second run to reuse %d access rules, created=%d", expectedAccessRules, accessClient.createdRuleCount)
+	}
+	expectedAccessCalls := 2 * expectedAccessRules
+	if accessClient.putAccessRuleCalls != expectedAccessCalls || accessClient.checkAccessCalls != expectedAccessCalls {
+		t.Fatalf("expected repeated put/check calls without duplicates, got put=%d check=%d", accessClient.putAccessRuleCalls, accessClient.checkAccessCalls)
+	}
+}
+
+func TestRunRejectsOwnerAccessEmailSubject(t *testing.T) {
+	scenarioPath := writeScenario(t, selfRepositoryBindingOnlyScenario())
+	clients := runnerClients{ProjectCatalog: &fakeProjectCatalogClient{}, ProviderHub: &fakeProviderHubClient{}}
+
+	err := run(context.Background(), runnerOptions{
+		ScenarioFilePath:          scenarioPath,
+		OrganizationID:            "11111111-1111-1111-1111-111111111111",
+		ProjectSlug:               "kodex",
+		ProjectDisplayName:        "kodex",
+		AllowedProviderOwner:      "codex-k8s",
+		AllowedProviderRepository: "kodex",
+		OwnerUserRef:              "owner@example.com",
+		RequestID:                 "req-1",
+		Kind:                      "adoption",
+	}, clients, ioDiscard{})
+	if err == nil {
+		t.Fatal("expected owner_user_ref validation error")
+	}
+	assertContains(t, err.Error(), "owner_user_ref")
+	assertNotContains(t, err.Error(), "owner@example.com")
 }
 
 func TestRunApplyReportsSelfDeployServiceAccessConflict(t *testing.T) {
@@ -2249,6 +2362,32 @@ func findSelfDeployAccessCheck(requests []*accessaccountsv1.CheckAccessRequest, 
 	return nil
 }
 
+func findSelfDeployOwnerAccessRule(requests []*accessaccountsv1.PutAccessRuleRequest, ownerRef string, grant selfDeployOwnerAccessGrant) *accessaccountsv1.PutAccessRuleRequest {
+	for _, request := range requests {
+		if request.GetSubjectType() == "user" &&
+			request.GetSubjectId() == ownerRef &&
+			request.GetActionKey() == grant.actionKey &&
+			request.GetResourceType() == grant.resourceType &&
+			request.GetScopeType() == grant.scopeType {
+			return request
+		}
+	}
+	return nil
+}
+
+func findSelfDeployOwnerAccessCheck(requests []*accessaccountsv1.CheckAccessRequest, ownerRef string, grant selfDeployOwnerAccessGrant) *accessaccountsv1.CheckAccessRequest {
+	for _, request := range requests {
+		if request.GetSubject().GetType() == "user" &&
+			request.GetSubject().GetId() == ownerRef &&
+			request.GetActionKey() == grant.actionKey &&
+			request.GetResource().GetType() == grant.resourceType &&
+			request.GetScope().GetType() == grant.scopeType {
+			return request
+		}
+	}
+	return nil
+}
+
 func assertSelfDeployAccessRules(t *testing.T, client *fakeAccessManagerClient, projectID string) {
 	t.Helper()
 	for _, grant := range selfDeployServiceAccessGrants {
@@ -2261,10 +2400,21 @@ func assertSelfDeployAccessRules(t *testing.T, client *fakeAccessManagerClient, 
 func assertNoSelfDeployOwnerDecisionAccess(t *testing.T, requests []*accessaccountsv1.PutAccessRuleRequest) {
 	t.Helper()
 	for _, request := range requests {
+		if request.GetSubjectType() != "service" {
+			continue
+		}
 		switch request.GetActionKey() {
 		case accesscatalog.ActionGovernanceGateDecide, accesscatalog.ActionGovernancePolicyManage, accesscatalog.ActionGovernanceReleaseDecide:
 			t.Fatalf("self-deploy service access must not grant owner/write action: %+v", request)
 		}
+	}
+}
+
+func assertSelfDeployOwnerAccessRules(t *testing.T, client *fakeAccessManagerClient, ownerRef string, projectID string) {
+	t.Helper()
+	for _, grant := range selfDeployOwnerAccessGrants {
+		assertSelfDeployOwnerAccessRule(t, findSelfDeployOwnerAccessRule(client.putAccessRuleRequests, ownerRef, grant), ownerRef, grant, projectID)
+		assertSelfDeployOwnerAccessCheck(t, findSelfDeployOwnerAccessCheck(client.checkAccessRequests, ownerRef, grant), ownerRef, grant, projectID)
 	}
 }
 
@@ -2290,6 +2440,28 @@ func assertSelfDeployAccessRule(t *testing.T, request *accessaccountsv1.PutAcces
 	}
 }
 
+func assertSelfDeployOwnerAccessRule(t *testing.T, request *accessaccountsv1.PutAccessRuleRequest, ownerRef string, grant selfDeployOwnerAccessGrant, projectID string) {
+	t.Helper()
+	if request == nil {
+		t.Fatal("expected self-deploy owner access rule request")
+	}
+	if request.GetEffect() != accessaccountsv1.AccessEffect_ACCESS_EFFECT_ALLOW ||
+		request.GetSubjectType() != "user" ||
+		request.GetSubjectId() != ownerRef ||
+		request.GetActionKey() != grant.actionKey ||
+		request.GetResourceType() != grant.resourceType ||
+		request.GetResourceId() != "" ||
+		request.GetScopeType() != grant.scopeType ||
+		request.GetScopeId() != expectedOwnerScopeID(grant, projectID) ||
+		request.GetPriority() != selfDeployOwnerAccessPriority ||
+		request.GetStatus() != accessaccountsv1.AccessRuleStatus_ACCESS_RULE_STATUS_ACTIVE {
+		t.Fatalf("unexpected self-deploy owner access rule request: %+v", request)
+	}
+	if request.GetMeta().GetActor().GetType() != "service" || request.GetMeta().GetActor().GetId() != defaultActorID {
+		t.Fatalf("unexpected owner access rule actor: %+v", request.GetMeta().GetActor())
+	}
+}
+
 func assertSelfDeployAccessCheck(t *testing.T, request *accessaccountsv1.CheckAccessRequest, grant selfDeployServiceAccessGrant, projectID string) {
 	t.Helper()
 	if request == nil {
@@ -2305,6 +2477,33 @@ func assertSelfDeployAccessCheck(t *testing.T, request *accessaccountsv1.CheckAc
 		!request.GetAudit() {
 		t.Fatalf("unexpected self-deploy access check request: %+v", request)
 	}
+}
+
+func assertSelfDeployOwnerAccessCheck(t *testing.T, request *accessaccountsv1.CheckAccessRequest, ownerRef string, grant selfDeployOwnerAccessGrant, projectID string) {
+	t.Helper()
+	if request == nil {
+		t.Fatal("expected self-deploy owner access check request")
+	}
+	if request.GetSubject().GetType() != "user" ||
+		request.GetSubject().GetId() != ownerRef ||
+		request.GetActionKey() != grant.actionKey ||
+		request.GetResource().GetType() != grant.resourceType ||
+		request.GetResource().GetId() != grant.probeID ||
+		request.GetScope().GetType() != grant.scopeType ||
+		request.GetScope().GetId() != expectedOwnerScopeID(grant, projectID) ||
+		!request.GetAudit() {
+		t.Fatalf("unexpected self-deploy owner access check request: %+v", request)
+	}
+	if request.GetMeta().GetActor().GetType() != "user" || request.GetMeta().GetActor().GetId() != ownerRef {
+		t.Fatalf("unexpected owner access check actor: %+v", request.GetMeta().GetActor())
+	}
+}
+
+func expectedOwnerScopeID(grant selfDeployOwnerAccessGrant, projectID string) string {
+	if grant.scopeType == accesscatalog.ScopeProject {
+		return projectID
+	}
+	return ""
 }
 
 func assertRunnerRepositoryReadAccessRule(t *testing.T, request *accessaccountsv1.PutAccessRuleRequest, projectID string, repositoryID string) {

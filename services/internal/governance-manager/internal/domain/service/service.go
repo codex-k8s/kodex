@@ -546,7 +546,11 @@ func (s *Service) SubmitGateDecision(ctx context.Context, input SubmitGateDecisi
 		return entity.GateDecision{}, entity.GateRequest{}, err
 	}
 	replayPayload := gateDecisionReplayPayload(input, decisionActorRef, decisionPolicyRef, reason, conditionsSummary, sourceRef, interactionDeliveryRef)
-	if err := s.authorizeCommand(ctx, input.Meta, actionGateDecide, gateResource(input.GateRequestID)); err != nil {
+	request, err := s.repository.GetGateRequest(ctx, input.GateRequestID)
+	if err != nil {
+		return entity.GateDecision{}, entity.GateRequest{}, err
+	}
+	if err := s.authorizeGateDecision(ctx, input.Meta, request); err != nil {
 		return entity.GateDecision{}, entity.GateRequest{}, err
 	}
 	result, replayed, err := s.replayCommand(ctx, input.Meta, enum.OperationSubmitGateDecision.String(), aggregateGateDecision)
@@ -561,20 +565,12 @@ func (s *Service) SubmitGateDecision(ctx context.Context, input SubmitGateDecisi
 		if decision.GateRequestID != input.GateRequestID {
 			return entity.GateDecision{}, entity.GateRequest{}, errs.ErrConflict
 		}
-		request, err := s.repository.GetGateRequest(ctx, decision.GateRequestID)
-		if err != nil {
-			return entity.GateDecision{}, entity.GateRequest{}, err
-		}
 		if err := validateGateDecisionReplay(result, decision, request, replayPayload); err != nil {
 			return entity.GateDecision{}, entity.GateRequest{}, err
 		}
 		return decision, request, nil
 	}
 	previousVersion, err := requireExpectedVersion(input.Meta)
-	if err != nil {
-		return entity.GateDecision{}, entity.GateRequest{}, err
-	}
-	request, err := s.repository.GetGateRequest(ctx, input.GateRequestID)
 	if err != nil {
 		return entity.GateDecision{}, entity.GateRequest{}, err
 	}
@@ -2666,6 +2662,18 @@ func (s *Service) closeGateRequest(ctx context.Context, input closeGateRequestIn
 
 func (s *Service) authorizeGateRead(ctx context.Context, meta QueryMeta, gateRequestID uuid.UUID) error {
 	return s.authorizeQuery(ctx, meta, actionGateRead, gateResource(gateRequestID))
+}
+
+func (s *Service) authorizeGateDecision(ctx context.Context, meta CommandMeta, request entity.GateRequest) error {
+	resource := gateResource(request.ID)
+	if request.RiskAssessmentID != nil {
+		assessment, err := s.repository.GetRiskAssessment(ctx, *request.RiskAssessmentID)
+		if err != nil {
+			return err
+		}
+		resource = projectScopedResource(gateTargetResource(request.Target), assessment.ProjectContext)
+	}
+	return s.authorizeCommand(ctx, meta, actionGateDecide, resource)
 }
 
 func (s *Service) authorizeGateTargetRead(ctx context.Context, meta QueryMeta, target value.ExternalRef) error {

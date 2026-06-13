@@ -2052,15 +2052,24 @@ func TestSubmitGateDecisionAuthorizesOwnerActor(t *testing.T) {
 
 	now := time.Date(2026, 6, 12, 10, 0, 0, 0, time.UTC)
 	commandID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+	assessmentID := uuid.MustParse("dddddddd-dddd-4ddd-8ddd-dddddddddddd")
 	gateRequestID := uuid.MustParse("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
 	decisionID := uuid.MustParse("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
 	expectedVersion := int64(4)
+	target := value.ExternalRef{Type: "self_deploy_plan", Ref: "agent:self-deploy-plan:latest"}
+	project := value.ProjectContextRef{ProjectRef: "project-self", RepositoryRef: "repo-self", ReleaseLineRef: "self-deploy"}
 	repository := &fakeRepository{
 		ready: true,
+		assessment: entity.RiskAssessment{
+			VersionedBase:  entity.VersionedBase{ID: assessmentID, Version: 2, CreatedAt: now.Add(-2 * time.Hour), UpdatedAt: now.Add(-90 * time.Minute)},
+			Target:         target,
+			ProjectContext: project,
+		},
 		gateRequest: entity.GateRequest{
-			VersionedBase: entity.VersionedBase{ID: gateRequestID, Version: expectedVersion, CreatedAt: now.Add(-time.Hour), UpdatedAt: now.Add(-time.Hour)},
-			Target:        value.ExternalRef{Type: "self_deploy_plan", Ref: "agent:self-deploy-plan:latest"},
-			Status:        enum.GateRequestStatusAwaitingDecision,
+			VersionedBase:    entity.VersionedBase{ID: gateRequestID, Version: expectedVersion, CreatedAt: now.Add(-time.Hour), UpdatedAt: now.Add(-time.Hour)},
+			RiskAssessmentID: &assessmentID,
+			Target:           target,
+			Status:           enum.GateRequestStatusAwaitingDecision,
 		},
 	}
 	var captured AuthorizationRequest
@@ -2096,9 +2105,10 @@ func TestSubmitGateDecisionAuthorizesOwnerActor(t *testing.T) {
 	if captured.Subject.Type != "user" || captured.Subject.ID != "owner-1" ||
 		captured.ActionKey != actionGateDecide ||
 		captured.ResourceType != "governance_gate" ||
-		captured.ResourceID != gateRequestID.String() ||
-		captured.ScopeType != "global" {
-		t.Fatalf("access request = %+v, want owner gate decide", captured)
+		captured.ResourceID != target.Ref ||
+		captured.ScopeType != "project" ||
+		captured.ScopeID != project.ProjectRef {
+		t.Fatalf("access request = %+v, want owner gate decide in project scope", captured)
 	}
 }
 

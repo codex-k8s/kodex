@@ -712,6 +712,68 @@ func TestCheckAccessAllowsDirectUserSubjectRefRule(t *testing.T) {
 	}
 }
 
+func TestCheckAccessAllowsDirectOwnerSelfDeployGovernanceRules(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+
+	grants := []struct {
+		actionKey       string
+		resourceType    string
+		scope           value.ScopeRef
+		checkResourceID string
+	}{
+		{
+			actionKey:       accesscatalog.ActionGovernanceRiskRead,
+			resourceType:    accesscatalog.ResourceGovernanceRiskAssessment,
+			scope:           value.ScopeRef{Type: accessRuleScopeProject, ID: "project-self"},
+			checkResourceID: "agent:self-deploy-plan:latest",
+		},
+		{
+			actionKey:       accesscatalog.ActionGovernanceGateRead,
+			resourceType:    accesscatalog.ResourceGovernanceGate,
+			scope:           value.ScopeRef{Type: accessRuleScopeProject, ID: "project-self"},
+			checkResourceID: "agent:self-deploy-plan:latest",
+		},
+		{
+			actionKey:       accesscatalog.ActionGovernanceGateDecide,
+			resourceType:    accesscatalog.ResourceGovernanceGate,
+			scope:           value.ScopeRef{Type: accessRuleScopeProject, ID: "project-self"},
+			checkResourceID: "agent:self-deploy-plan:latest",
+		},
+	}
+	for _, grant := range grants {
+		_, err := svc.PutAccessRule(ctx, PutAccessRuleInput{
+			Effect:       enum.AccessEffectAllow,
+			SubjectType:  enum.AccessSubjectUser,
+			SubjectID:    "owner-1",
+			ActionKey:    grant.actionKey,
+			ResourceType: grant.resourceType,
+			ScopeType:    grant.scope.Type,
+			ScopeID:      grant.scope.ID,
+			Priority:     10,
+		})
+		if err != nil {
+			t.Fatalf("put owner rule %s: %v", grant.actionKey, err)
+		}
+	}
+
+	for _, grant := range grants {
+		result, err := svc.CheckAccess(ctx, CheckAccessInput{
+			Subject:   value.SubjectRef{Type: string(enum.AccessSubjectUser), ID: "owner-1"},
+			ActionKey: grant.actionKey,
+			Resource:  value.ResourceRef{Type: grant.resourceType, ID: grant.checkResourceID},
+			Scope:     grant.scope,
+		})
+		if err != nil {
+			t.Fatalf("check owner rule %s: %v", grant.actionKey, err)
+		}
+		if result.Decision != enum.AccessDecisionAllow || result.ReasonCode != reasonExplicitAllow {
+			t.Fatalf("decision for %s = %s/%s, want %s/%s", grant.actionKey, result.Decision, result.ReasonCode, enum.AccessDecisionAllow, reasonExplicitAllow)
+		}
+	}
+}
+
 func TestCheckAccessRejectsUnsafeDirectUserSubjectRef(t *testing.T) {
 	ctx := context.Background()
 	store := newMemoryRepository()
