@@ -15,8 +15,12 @@ Mattermost, bot-service, agent pod и PVC создаются в одном names
 - создавать отдельный ServiceAccount на run или role;
 - использовать label-based ownership;
 - запрещать mount чужих PVC;
-- не давать agent pod права читать Kubernetes API;
+- выдавать Kubernetes API access только через явно выбранный agent profile access mode;
+- для обычных review/development профилей использовать read-only доступ к logs/status в разрешенных namespaces, если владельцу это нужно для работы агента;
+- deploy-права выдавать только специальным deployer/custom профилям с явно выбранной role policy;
 - оставить runtime interface так, чтобы при необходимости перейти на namespace-per-run без изменения orchestrator.
+
+NetworkPolicy по умолчанию не включается. Это осознанный MVP-риск: агентам может потребоваться доступ к внешним сервисам проекта, GitHub, OpenAI/Codex, package registries и внутренним endpoints.
 
 ## 2. Mattermost install path
 
@@ -37,6 +41,10 @@ Custom manifests для single-server MVP. HA, managed PostgreSQL/object storage
 - показывать карточки run, actions и blockers в thread.
 
 Mattermost plugin остается допустимым вариантом, если первые ручные проверки покажут, что REST API, slash commands, interactive dialogs и buttons дают недостаточно удобный UX.
+
+### Уточнение после PR #20
+
+Основной UX - `/agents` menu/cards/buttons/dialogs. Typed slash commands остаются fallback/debug API и не считаются завершенным owner path, если операция недоступна через карточку или dialog без ручного ввода технических identifiers.
 
 ## 4. GitHub PAT или GitHub App
 
