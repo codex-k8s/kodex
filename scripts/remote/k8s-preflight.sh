@@ -34,6 +34,7 @@ mattercodex_ssh "set -eu
   $REMOTE_KUBECTL get --raw=/readyz >/dev/null
   $REMOTE_KUBECTL auth can-i create namespaces >/dev/null 2>&1
   $REMOTE_KUBECTL auth can-i create secrets -n $NAMESPACE_Q >/dev/null 2>&1
+  $REMOTE_KUBECTL auth can-i delete secrets -n $NAMESPACE_Q >/dev/null 2>&1
   $REMOTE_KUBECTL auth can-i create statefulsets.apps -n $NAMESPACE_Q >/dev/null 2>&1
   $REMOTE_KUBECTL auth can-i create deployments.apps -n $NAMESPACE_Q >/dev/null 2>&1
   $REMOTE_KUBECTL auth can-i create ingresses.networking.k8s.io -n $NAMESPACE_Q >/dev/null 2>&1

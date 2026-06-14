@@ -241,6 +241,9 @@ func (repo *Repository) ListOpenAIAccounts(ctx context.Context, limit int) ([]en
 func (repo *Repository) GetOpenAIAccount(ctx context.Context, name string) (entity.OpenAIAccount, error) {
 	item, err := scanOpenAIAccount(repo.pool.QueryRow(ctx, query("openai_accounts__get.sql"), name))
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.OpenAIAccount{}, adminrepo.ErrNotFound
+		}
 		return entity.OpenAIAccount{}, fmt.Errorf("get openai account: %w", err)
 	}
 	return item, nil
@@ -254,6 +257,17 @@ func (repo *Repository) UpdateOpenAIAccountStatus(ctx context.Context, input adm
 	))
 	if err != nil {
 		return entity.OpenAIAccount{}, fmt.Errorf("update openai account status: %w", err)
+	}
+	return item, nil
+}
+
+func (repo *Repository) DeleteOpenAIAccount(ctx context.Context, name string) (entity.OpenAIAccount, error) {
+	item, err := scanOpenAIAccount(repo.pool.QueryRow(ctx, query("openai_accounts__delete.sql"), name))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.OpenAIAccount{}, adminrepo.ErrNotFound
+		}
+		return entity.OpenAIAccount{}, fmt.Errorf("delete openai account: %w", err)
 	}
 	return item, nil
 }
@@ -285,7 +299,36 @@ func (repo *Repository) ListGitHubAccounts(ctx context.Context, limit int) ([]en
 func (repo *Repository) GetGitHubAccount(ctx context.Context, name string) (entity.GitHubAccount, error) {
 	item, err := scanGitHubAccount(repo.pool.QueryRow(ctx, query("github_accounts__get.sql"), name))
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.GitHubAccount{}, adminrepo.ErrNotFound
+		}
 		return entity.GitHubAccount{}, fmt.Errorf("get github account: %w", err)
+	}
+	return item, nil
+}
+
+func (repo *Repository) UpsertGitHubAccount(ctx context.Context, input adminrepo.UpsertGitHubAccountInput) (entity.GitHubAccount, bool, error) {
+	item, created, err := scanGitHubAccountWithCreated(repo.pool.QueryRow(ctx, query("github_accounts__upsert.sql"),
+		input.Name,
+		input.CredentialName,
+		input.SecretRef,
+		input.Username,
+		input.Email,
+		input.Status,
+	))
+	if err != nil {
+		return entity.GitHubAccount{}, false, fmt.Errorf("upsert github account: %w", err)
+	}
+	return item, created, nil
+}
+
+func (repo *Repository) DeleteGitHubAccount(ctx context.Context, name string) (entity.GitHubAccount, error) {
+	item, err := scanGitHubAccount(repo.pool.QueryRow(ctx, query("github_accounts__delete.sql"), name))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.GitHubAccount{}, adminrepo.ErrNotFound
+		}
+		return entity.GitHubAccount{}, fmt.Errorf("delete github account: %w", err)
 	}
 	return item, nil
 }
@@ -481,6 +524,26 @@ func scanGitHubAccount(row pgx.Row) (entity.GitHubAccount, error) {
 		return entity.GitHubAccount{}, err
 	}
 	return item, nil
+}
+
+func scanGitHubAccountWithCreated(row pgx.Row) (entity.GitHubAccount, bool, error) {
+	var item entity.GitHubAccount
+	var created bool
+	if err := row.Scan(
+		&item.ID,
+		&item.Name,
+		&item.CredentialID,
+		&item.SecretRef,
+		&item.Username,
+		&item.Email,
+		&item.Status,
+		&item.CreatedAt,
+		&item.UpdatedAt,
+		&created,
+	); err != nil {
+		return entity.GitHubAccount{}, false, err
+	}
+	return item, created, nil
 }
 
 func scanAgentRun(row pgx.Row) (entity.AgentRun, error) {

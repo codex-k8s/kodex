@@ -9,6 +9,7 @@ import (
 	runtimerepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/runtime"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 )
@@ -86,6 +87,44 @@ func TestStartCodexAuthSessionCreatesHardenedJob(t *testing.T) {
 	}
 	if !hasVolumeMount(podSpec.Containers[0].VolumeMounts, "codex-home", "/codex-home") {
 		t.Fatalf("codex-home volume mount missing: %#v", podSpec.Containers[0].VolumeMounts)
+	}
+}
+
+func TestDeleteCodexAuthAccountDeletesJobAndSecret(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	runner, err := NewRunnerWithClient(client, Config{
+		Namespace:                 "mattermost",
+		AgentRunnerImage:          "matter-codex-agent-runner:test",
+		AgentRunnerServiceAccount: "matter-codex-agent-runner",
+	})
+	if err != nil {
+		t.Fatalf("NewRunnerWithClient() error = %v", err)
+	}
+	if _, err := runner.StartCodexAuthSession(context.Background(), runtimerepo.CodexAuthSessionInput{
+		AccountName: "reviewer-test",
+		SecretName:  "matter-codex-codex-auth-reviewer-test",
+	}); err != nil {
+		t.Fatalf("StartCodexAuthSession() error = %v", err)
+	}
+	if _, err := client.CoreV1().Secrets("mattermost").Create(context.Background(), &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "matter-codex-codex-auth-reviewer-test"},
+		Data:       map[string][]byte{"auth.json": []byte(`{"ok":true}`)},
+	}, metav1.CreateOptions{}); err != nil {
+		t.Fatalf("Create secret error = %v", err)
+	}
+
+	deleted, err := runner.DeleteCodexAuthAccount(context.Background(), "reviewer-test", "matter-codex-codex-auth-reviewer-test")
+	if err != nil {
+		t.Fatalf("DeleteCodexAuthAccount() error = %v", err)
+	}
+	if !deleted.JobDeleted || !deleted.SecretDeleted || deleted.Namespace != "mattermost" {
+		t.Fatalf("deleted = %#v", deleted)
+	}
+	if _, err := client.BatchV1().Jobs("mattermost").Get(context.Background(), "mc-codex-auth-reviewer-test", metav1.GetOptions{}); !apierrors.IsNotFound(err) {
+		t.Fatalf("job should be deleted, err = %v", err)
+	}
+	if _, err := client.CoreV1().Secrets("mattermost").Get(context.Background(), "matter-codex-codex-auth-reviewer-test", metav1.GetOptions{}); !apierrors.IsNotFound(err) {
+		t.Fatalf("secret should be deleted, err = %v", err)
 	}
 }
 

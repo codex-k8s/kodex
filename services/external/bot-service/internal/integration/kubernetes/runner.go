@@ -280,6 +280,35 @@ func (runner *Runner) CleanupCodexAuthSession(ctx context.Context, accountName s
 	return result, nil
 }
 
+func (runner *Runner) DeleteCodexAuthAccount(ctx context.Context, accountName string, secretName string) (runtimerepo.CodexAuthAccountDeleteResult, error) {
+	accountName = strings.TrimSpace(accountName)
+	secretName = strings.TrimSpace(secretName)
+	if accountName == "" {
+		return runtimerepo.CodexAuthAccountDeleteResult{}, fmt.Errorf("openai account name is required")
+	}
+	if secretName == "" {
+		return runtimerepo.CodexAuthAccountDeleteResult{}, fmt.Errorf("codex auth secret name is required")
+	}
+	cleanup, err := runner.CleanupCodexAuthSession(ctx, accountName)
+	if err != nil {
+		return runtimerepo.CodexAuthAccountDeleteResult{}, err
+	}
+	result := runtimerepo.CodexAuthAccountDeleteResult{
+		AccountName: accountName,
+		SecretName:  secretName,
+		Namespace:   runner.namespace,
+		JobDeleted:  cleanup.JobDeleted,
+	}
+	if err := runner.client.CoreV1().Secrets(runner.namespace).Delete(ctx, secretName, metav1.DeleteOptions{}); err != nil {
+		if !apierrors.IsNotFound(err) {
+			return runtimerepo.CodexAuthAccountDeleteResult{}, fmt.Errorf("delete codex auth secret: %w", err)
+		}
+	} else {
+		result.SecretDeleted = true
+	}
+	return result, nil
+}
+
 func (runner *Runner) StartDeveloperRun(ctx context.Context, input runtimerepo.DeveloperRunInput) (runtimerepo.StartedRun, error) {
 	input = normalizeDeveloperRunInput(input)
 	if input.RunID == "" {

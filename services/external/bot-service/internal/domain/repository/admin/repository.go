@@ -91,6 +91,15 @@ type UpsertOpenAIAccountInput struct {
 	Status         string
 }
 
+type UpsertGitHubAccountInput struct {
+	Name           string
+	CredentialName string
+	SecretRef      string
+	Username       string
+	Email          string
+	Status         string
+}
+
 type UpdateOpenAIAccountStatusInput struct {
 	Name      string
 	SecretRef string
@@ -116,8 +125,11 @@ type Repository interface {
 	ListOpenAIAccounts(ctx context.Context, limit int) ([]entity.OpenAIAccount, error)
 	GetOpenAIAccount(ctx context.Context, name string) (entity.OpenAIAccount, error)
 	UpdateOpenAIAccountStatus(ctx context.Context, input UpdateOpenAIAccountStatusInput) (entity.OpenAIAccount, error)
+	DeleteOpenAIAccount(ctx context.Context, name string) (entity.OpenAIAccount, error)
 	ListGitHubAccounts(ctx context.Context, limit int) ([]entity.GitHubAccount, error)
 	GetGitHubAccount(ctx context.Context, name string) (entity.GitHubAccount, error)
+	UpsertGitHubAccount(ctx context.Context, input UpsertGitHubAccountInput) (entity.GitHubAccount, bool, error)
+	DeleteGitHubAccount(ctx context.Context, name string) (entity.GitHubAccount, error)
 	CreateAgentFlow(ctx context.Context, input CreateAgentFlowInput) (entity.AgentFlow, bool, error)
 	GetAgentFlow(ctx context.Context, flowID string) (entity.AgentFlow, error)
 	UpdateAgentFlow(ctx context.Context, input UpdateAgentFlowInput) (entity.AgentFlow, error)

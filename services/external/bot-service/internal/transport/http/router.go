@@ -30,6 +30,8 @@ const (
 	pathAgentsDialog  = "/mattermost/dialogs/agents"
 	pathFlowAction    = "/mattermost/actions/flow"
 	pathGitHubWebhook = "/github/webhook"
+
+	dialogCallbackResult = "agents_dialog_result"
 )
 
 type DialogOpener interface {
@@ -236,6 +238,10 @@ func (router *Router) handleAgentsDialog(w http.ResponseWriter, r *http.Request)
 		writeJSON(w, http.StatusBadRequest, mattermostmodel.SubmitDialogResponse{Error: router.t("router.dialog.invalid_request", nil)})
 		return
 	}
+	if strings.TrimSpace(request.CallbackId) == dialogCallbackResult {
+		writeJSON(w, http.StatusOK, mattermostmodel.SubmitDialogResponse{Type: string(mattermostmodel.SubmitDialogResponseTypeOK)})
+		return
+	}
 	if router.slashService == nil {
 		writeJSON(w, http.StatusServiceUnavailable, mattermostmodel.SubmitDialogResponse{Error: router.t("router.dialog.service_missing", nil)})
 		return
@@ -261,13 +267,15 @@ func (router *Router) handleAgentsDialog(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if result.Card != nil {
-		if router.ephemeralCardPublisher != nil && strings.TrimSpace(request.UserId) != "" {
-			if err := router.ephemeralCardPublisher.PostEphemeralCard(r.Context(), strings.TrimSpace(request.UserId), *result.Card); err != nil {
-				router.logWarn("post Mattermost ephemeral dialog result failed", "error", err)
-			}
-		} else {
-			router.logWarn("Mattermost ephemeral dialog result skipped", "publisher_configured", router.ephemeralCardPublisher != nil, "user_id_present", strings.TrimSpace(request.UserId) != "")
-		}
+		writeJSON(w, status, mattermostmodel.SubmitDialogResponse{
+			Type: string(mattermostmodel.SubmitDialogResponseTypeForm),
+			Form: dialogResultForm(
+				router.t("router.dialog.result.title", nil),
+				router.t("router.dialog.result.submit", nil),
+				*result.Card,
+			),
+		})
+		return
 	}
 	writeJSON(w, status, mattermostmodel.SubmitDialogResponse{Type: string(mattermostmodel.SubmitDialogResponseTypeOK)})
 }
@@ -399,6 +407,22 @@ func cardPost(card statusservice.MattermostCard) *mattermostmodel.Post {
 		},
 	})
 	return post
+}
+
+func dialogResultForm(title string, submitLabel string, card statusservice.MattermostCard) *mattermostmodel.Dialog {
+	text := strings.TrimSpace(card.Text)
+	if text == "" {
+		text = strings.TrimSpace(card.Message)
+	}
+	if text == "" {
+		text = strings.TrimSpace(card.Title)
+	}
+	return &mattermostmodel.Dialog{
+		CallbackId:       dialogCallbackResult,
+		Title:            title,
+		IntroductionText: text,
+		SubmitLabel:      submitLabel,
+	}
 }
 
 func cardAttachment(card statusservice.MattermostCard) *mattermostmodel.MessageAttachment {

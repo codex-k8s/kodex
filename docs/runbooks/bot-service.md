@@ -14,6 +14,7 @@
 - отвечать на `/agents status`;
 - выполнять admin-команды `/agents repo add`, `/agents repo list`, `/agents token check`, `/agents locale get|set`, `/agents profile list`, `/agents prompt help|list|show|render|set`, `/agents openai auth|status|list|cleanup`;
 - выполнять GitHub adapter/account команды `/agents github account list`, `/agents github check`, `/agents github branch`, `/agents github pr`;
+- управлять через Mattermost dialog-кнопки metadata GitHub accounts: add/edit/delete account binding к существующему Kubernetes Secret без ввода raw token в Mattermost;
 - принимать GitHub webhook callback `/github/webhook` с HMAC validation;
 - автоматически регистрировать repo webhook при `/agents repo add github owner/name [default-branch]`, если GitHub token имеет hook write permission;
 - выполнять Kubernetes runtime smoke-команды `/agents runtime smoke|status|cleanup|prune` через client-go, Job, PVC и подготовленный agent-runner image;
@@ -112,6 +113,8 @@ Developer runner не использует raw API key. Для Codex CLI соз�
 ```text
 /agents openai auth primary
 /agents openai status primary
+/agents openai cleanup primary
+/agents openai delete primary
 ```
 
 Ожидаемый результат:
@@ -120,7 +123,9 @@ Developer runner не использует raw API key. Для Codex CLI соз�
 - `status primary` показывает ссылку `https://auth.openai.com/codex/device` и одноразовый code;
 - владелец открывает ссылку в браузере, вводит code и подтверждает account;
 - повторный `/agents openai status primary` сохраняет `auth.json` в Secret `${MATTERCODEX_CODEX_AUTH_SECRET}-primary`, помечает account как `authorized` и удаляет auth Job;
-- содержимое `auth.json` не выводится в Mattermost, логи, PR или prompt.
+- содержимое `auth.json` не выводится в Mattermost, логи, PR или prompt;
+- `cleanup primary` удаляет только временный auth Job;
+- `delete primary` удаляет OpenAI account metadata, временный auth Job и созданный auth Secret. Удаление блокируется, если account используется agent profile.
 
 Несколько аккаунтов поддерживаются через разные имена:
 
@@ -128,9 +133,32 @@ Developer runner не использует raw API key. Для Codex CLI соз�
 /agents openai auth reviewer-plus
 /agents openai status reviewer-plus
 /agents openai list
+/agents openai delete reviewer-plus
 ```
 
+В кнопочном UX то же действие доступно через `/agents` -> `Аккаунты` -> `OpenAI`: кнопки `Auth account`, `Status account`, `Cleanup auth` и `Delete account` открывают формы с именем account. `Delete account` требует подтверждение `delete`.
+
 Agent profile хранит `openai_account_name` и `github_account_name`. Seed profile `reviewer` использует OpenAI account `primary` и GitHub account `primary`; seed profile `developer` использует OpenAI account `primary` и GitHub account `agent`. Agent Job монтирует только Secret выбранных accounts.
+
+## GitHub account metadata
+
+GitHub token создается владельцем с нужными scopes и хранится в Kubernetes Secret. Bot-service не принимает raw token через Mattermost account dialog; dialog управляет только metadata binding:
+
+- account name;
+- Kubernetes Secret name;
+- optional GitHub username;
+- optional git author email;
+- status `configured` или `disabled`.
+
+Кнопочный путь:
+
+```text
+/agents -> Аккаунты -> GitHub -> Добавить
+/agents -> Аккаунты -> GitHub -> Изменить
+/agents -> Аккаунты -> GitHub -> Удалить
+```
+
+Ожидаемый результат: `Добавить` и `Изменить` сохраняют account metadata в PostgreSQL, `Удалить` удаляет только metadata row после подтверждения `delete`. Kubernetes Secret не удаляется и значение token нигде не печатается.
 
 ## Health-only install
 
@@ -230,8 +258,8 @@ bash scripts/remote/bootstrap-mattermost-bot.sh --env-file .env
 
 Проверка account menu:
 
-- `Аккаунты` -> `OpenAI`: карточка должна показать кнопки `Список accounts`, `Auth primary`, `Status primary`, `Назад`; нажатия по первым трем кнопкам возвращают ephemeral-ответы соответствующих действий.
-- `Аккаунты` -> `GitHub`: карточка должна показать кнопки `GitHub accounts`, `Check matter-codex`, `Webhook matter-codex`, `Назад`; `GitHub accounts` возвращает список GitHub accounts из storage.
+- `Аккаунты` -> `OpenAI`: карточка должна показать кнопки `Список accounts`, `Auth account`, `Status account`, `Cleanup auth`, `Delete account`, `Назад`; кнопки auth/status/cleanup/delete открывают dialog с именем account и возвращают результат в dialog.
+- `Аккаунты` -> `GitHub`: карточка должна показать кнопки `GitHub accounts`, `Добавить`, `Изменить`, `Удалить`, `Check matter-codex`, `Webhook matter-codex`, `Назад`; `Добавить/Изменить/Удалить` открывают формы metadata CRUD.
 
 Typed-команды остаются fallback-интерфейсом для точной ручной проверки:
 
@@ -465,7 +493,7 @@ curl -sS -o /dev/null -w '%{http_code}\n' \
 - Slash token, полученный из Mattermost API, пишется во временный файл с правами `0600`, затем в Kubernetes Secret.
 - Логи provisioning показывают только безопасные статусы `exists/created/updated`.
 - bot-service Deployment запускается non-root, с dropped Linux capabilities, `allowPrivilegeEscalation: false`, `readOnlyRootFilesystem: true`, `seccompProfile: RuntimeDefault` и базовыми resource requests/limits.
-- bot-service получает namespace-scoped Role на создание/чтение/удаление runtime Job/PVC, чтение pod/log, `pods/exec` для чтения готового `auth.json` из auth Job и create/update Secret для account-specific Codex auth.
+- bot-service получает namespace-scoped Role на создание/чтение/удаление runtime Job/PVC, чтение pod/log, `pods/exec` для чтения готового `auth.json` из auth Job и create/update/delete Secret для account-specific Codex auth.
 - Runtime namespace получает namespace-level ResourceQuota/LimitRange с conservative defaults и env overrides, потому что MVP namespace общий для Mattermost, bot-service и agent Job.
 - ServiceAccount agent runner создается без automount token; smoke pod также явно отключает automount.
 - Codex smoke/auth/developer/reviewer Job запускаются без automount service account token и с non-root securityContext.

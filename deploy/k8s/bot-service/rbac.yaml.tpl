@@ -43,7 +43,7 @@ rules:
     verbs: ["create"]
   - apiGroups: [""]
     resources: ["secrets"]
-    verbs: ["create", "get", "update"]
+    verbs: ["create", "get", "update", "delete"]
   - apiGroups: ["batch"]
     resources: ["jobs"]
     verbs: ["create", "get", "list", "delete"]

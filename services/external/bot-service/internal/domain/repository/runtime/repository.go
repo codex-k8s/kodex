@@ -85,6 +85,14 @@ type CodexAuthCleanupResult struct {
 	JobDeleted  bool
 }
 
+type CodexAuthAccountDeleteResult struct {
+	AccountName   string
+	SecretName    string
+	Namespace     string
+	JobDeleted    bool
+	SecretDeleted bool
+}
+
 type StartedRun struct {
 	RunID     string
 	Namespace string
@@ -142,6 +150,7 @@ type Runner interface {
 	GetCodexAuthStatus(ctx context.Context, accountName string, secretName string) (CodexAuthStatus, error)
 	CompleteCodexAuthSession(ctx context.Context, input CodexAuthCompleteInput) (CodexAuthCompleteResult, error)
 	CleanupCodexAuthSession(ctx context.Context, accountName string) (CodexAuthCleanupResult, error)
+	DeleteCodexAuthAccount(ctx context.Context, accountName string, secretName string) (CodexAuthAccountDeleteResult, error)
 	StartDeveloperRun(ctx context.Context, input DeveloperRunInput) (StartedRun, error)
 	StartReviewRun(ctx context.Context, input ReviewRunInput) (StartedRun, error)
 	GetRunStatus(ctx context.Context, runID string) (RunStatus, error)
