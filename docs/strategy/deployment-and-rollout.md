@@ -9,7 +9,7 @@
 3. Существуют дефолтные каналы управления агентной системой.
 4. Bot-service умеет отвечать на `/agents status`.
 5. После каждого PR сервис раскатывается в Kubernetes.
-6. Владелец проверяет сценарий и только потом merge.
+6. Владелец проверяет сценарий через `/agents` UI и только потом merge.
 
 ## Доступные env-источники
 
@@ -36,7 +36,7 @@
 4. `scripts/k8s/install-mattermost.sh` - Mattermost + PostgreSQL + file PVC + OAuth2 proxy для публичного gate.
 5. `scripts/remote/install-bot-service.sh` - `matter-codex` deployment/service/ingress на целевом сервере.
 6. `scripts/remote/bootstrap-mattermost-bot.sh` - Mattermost bot token, team, slash command и дефолтные каналы через `mmctl --local`.
-7. Mattermost `/agents openai auth|status account` - Codex device-code authorization и per-account Secret с `auth.json`.
+7. Mattermost `/agents -> Accounts -> OpenAI` - Codex device-code authorization и per-account Secret с `auth.json`.
 8. `scripts/remote/smoke-bot-service.sh` - readiness и bot `/healthz`.
 
 ## Mattermost install strategy
@@ -87,7 +87,7 @@
 - rollout status для измененных workloads;
 - OAuth2 gate для публичного Mattermost URL;
 - health endpoint сервиса;
-- Mattermost bot smoke или безопасный `/agents status`;
+- Mattermost bot smoke или безопасная `/agents` UI-проверка;
 - наличие дефолтных Mattermost-каналов;
 - отчет в Mattermost/консоль без секретов.
 
@@ -97,6 +97,6 @@
 
 - URL Mattermost;
 - имя канала;
-- команду или кнопку для проверки;
+- кнопку/card path для проверки, typed command только если это debug/fallback проверка;
 - ожидаемый результат;
 - список известных ограничений текущего PR.

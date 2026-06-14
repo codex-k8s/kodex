@@ -15,7 +15,7 @@
 ## Остается до production
 
 - `sandbox_mode = "danger-full-access"` остается MVP-решением для isolated pod. Нужно вернуть более строгий sandbox policy после отдельной проверки bubblewrap/user namespace в Kubernetes.
-- NetworkPolicy еще не включены по умолчанию. Нужно добавить allowlist ingress/egress с учетом ingress-controller namespace, DNS, GitHub, OpenAI/Codex endpoints, Mattermost internal callbacks и PostgreSQL.
+- NetworkPolicy не включаются по умолчанию и не входят в ближайший MVP backlog. Это осознанный риск владельца: агентам может потребоваться ходить во внешние и внутренние endpoints проектов без заранее известного allowlist.
 - PostgreSQL и Mattermost остаются single-server manifests. Для production нужен managed PostgreSQL или HA/backup strategy, backup restore drill и upgrade path.
 - Нет автоматического scheduled retention controller. Сейчас cleanup запускается вручную через Mattermost.
 - Нет per-account rate limit на GitHub/OpenAI usage и явного scheduler-а concurrent agent runs поверх Kubernetes quota.
@@ -24,6 +24,6 @@
 
 ## Следующий hardening backlog
 
-1. Добавить опциональные NetworkPolicy templates и server-side dry-run проверку.
-2. Добавить scheduled retention Job/controller с теми же правилами, что `/agents runtime prune`.
-3. Добавить backup/restore runbook для PostgreSQL и Mattermost data.
+1. Добавить scheduled retention Job/controller с теми же правилами, что `/agents runtime prune`.
+2. Добавить backup/restore runbook для PostgreSQL и Mattermost data.
+3. Вернуться к NetworkPolicy только как к опциональному production hardening после отдельного решения владельца.

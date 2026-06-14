@@ -24,11 +24,27 @@ MVP реализуется как один backend-сервис `matter-codex`, 
 - posts в channel/thread через `/api/v4/posts`;
 - interactive message actions/buttons с callback URL в bot-service;
 - delayed responses через `response_url` для долгих команд;
-- interactive dialogs для форм добавления repo/token/profile после базового CLI-синтаксиса;
+- interactive dialogs, message menus и карточки сущностей для owner-facing UX;
 - создание дефолтных каналов после установки;
 - создание каналов под project/repository onboarding.
 
 Mattermost server plugin не является обязательным для MVP, потому что нужный первый UX можно закрыть внешним сервисом через REST API и slash/interactions. Plugin остается вариантом расширения, если после первых ручных проверок окажется, что без него неудобно управлять каналами, меню или системными настройками.
+
+## Owner-facing control surface
+
+`/agents` без аргументов открывает главное меню. Дальнейшие действия должны быть доступны через кнопки, списки, message menus и dialogs. Typed slash commands остаются fallback/debug API и не должны быть основным способом ручной проверки продуктового сценария.
+
+UI state хранит технические identifiers в action context или signed/encoded dialog state:
+
+- repository id/full name;
+- account name;
+- profile name;
+- template key;
+- flow id;
+- run id;
+- Kubernetes resource references.
+
+Если owner работает с уже существующей сущностью, он выбирает ее из UI. Ввод технического id допустим только для debug/fallback command path.
 
 ## Mattermost channels
 
@@ -96,13 +112,13 @@ codex exec --json \
 
 `CODEX_PROFILE` рендерится системой из agent profile. В него входят модель, sandbox policy, approval policy, MCP servers, env bindings, project instruction discovery и другие безопасные позиции `config.toml`.
 
-`danger-full-access` допускается только как отдельная policy внутри agent profile для полностью изолированного pod и после явного решения владельца.
+`sandbox_mode = "danger-full-access"` остается допустимым default для MVP внутри изолированного pod. Это осознанный риск владельца. Значение должно быть переопределяемым через Codex `config.toml` overlay в agent profile.
 
 ## OpenAI accounts
 
 OpenAI-доступ настраивается отдельными account profiles:
 
-- администратор запускает device-code authorization flow из Mattermost;
+- администратор запускает device-code authorization flow из Mattermost UI;
 - bot-service показывает безопасную карточку авторизации без вывода токенов;
 - после подтверждения account сохраняется как credential reference в Kubernetes Secret;
 - account получает имя, статус, допустимые модели, лимиты и разрешенные agent profiles;
@@ -152,6 +168,8 @@ MVP использует bot PAT из secret:
 - получить merge status.
 
 GitHub App остается целевым вариантом после MVP, потому что дает лучшую модель permissions, installations и audit.
+
+Owner-facing GitHub account path не должен требовать Kubernetes Secret name как обязательный ввод. Базовый сценарий: owner вставляет token в secure dialog, bot-service проверяет его через GitHub API, создает Kubernetes Secret и сохраняет metadata. Bring-your-own Secret остается advanced path.
 
 ## Credential policy
 

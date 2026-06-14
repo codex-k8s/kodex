@@ -7,6 +7,8 @@
 - `docs/idea/as-is.md` - ручная модель "manager + DEV/QA пары + PR + owner gate".
 - `docs/idea/to-be.md` - целевая Mattermost-система управления agent run.
 - `/home/s/projects/kodex/**` - реальный первый dogfooding-репозиторий и источник требований из текущей ручной работы, но не архитектурная зависимость `matter-codex`.
+- `docs/strategy/owner-ux-contract.md` - продуктовый контракт Mattermost-first UX: owner работает кнопками и списками, а не typed id.
+- `docs/strategy/acceptance-matrix.md` - проверяемая матрица готовности следующих кодовых PR.
 - `docs/strategy/production-gaps.md` - явные ограничения после MVP dogfooding-среза и следующий hardening backlog.
 
 ## Внешние источники
@@ -53,6 +55,8 @@
 ## Ключевые выводы
 
 - MVP должен быть не "чат-ботом", а малым orchestration контуром: Mattermost thread как карточка run, GitHub как источник PR/review, Kubernetes как runtime.
+- Главный продуктовый интерфейс - `/agents` menu. Typed slash commands остаются fallback/debug API, но не являются основным owner path.
+- Owner не должен помнить repository/account/profile/run/flow/template/Kubernetes Secret identifiers. Известные системе сущности выбираются кнопками, списками, message menus или dialog `select`, а технические id передаются скрытым callback state.
 - `matter-codex` является отдельным продуктом. Он может управлять разработкой `kodex`, но `kodex` не должен зависеть от него кодом, схемами БД, API или runtime-контрактами.
 - Первый срез лучше делать standalone-сервисом с внутренними модулями: Mattermost surface, orchestrator, runtime, GitHub adapter, credentials, OpenAI accounts, agent profiles и audit.
 - Для скорости стартуем с внешнего bot-service поверх slash command, Mattermost REST API и interactive message actions. Mattermost plugin остается расширением, если REST/API не хватит для удобного UX.
