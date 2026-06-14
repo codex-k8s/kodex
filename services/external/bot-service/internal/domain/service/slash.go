@@ -117,6 +117,10 @@ type MenuActionCommand struct {
 	View      string
 	Command   string
 	Dialog    string
+	Action    string
+	Resource  string
+	ID        string
+	Page      int
 	UserID    string
 	UserName  string
 	ChannelID string
@@ -2159,6 +2163,9 @@ func (svc *SlashCommandService) HandleMenuAction(ctx context.Context, command Me
 	card := svc.menuCard(ctx, view)
 	card.ChannelID = strings.TrimSpace(command.ChannelID)
 	card.PostID = strings.TrimSpace(command.PostID)
+	if action := strings.TrimSpace(command.Action); action != "" {
+		return svc.handleMenuTypedAction(ctx, command, card)
+	}
 	if dialogID := strings.TrimSpace(command.Dialog); dialogID != "" {
 		dialog, errText := svc.menuDialog(command, dialogID)
 		if errText != "" {
@@ -2194,6 +2201,621 @@ func (svc *SlashCommandService) HandleMenuAction(ctx context.Context, command Me
 		StatusCode:    200,
 		EphemeralText: svc.t("menu.action.opened", map[string]any{"Title": card.Title}),
 		Card:          card,
+	}
+}
+
+func (svc *SlashCommandService) handleMenuTypedAction(ctx context.Context, command MenuActionCommand, currentCard *MattermostCard) MenuActionResult {
+	action := strings.TrimSpace(command.Action)
+	resource := strings.TrimSpace(command.Resource)
+	switch action {
+	case menuActionList:
+		switch resource {
+		case menuResourceRepository:
+			return svc.menuCardResult(command, svc.repositoryListCard(ctx, command))
+		case menuResourceOpenAIAccount:
+			return svc.menuCardResult(command, svc.openAIAccountListCard(ctx, command))
+		case menuResourceGitHubAccount:
+			return svc.menuCardResult(command, svc.githubAccountListCard(ctx, command))
+		case menuResourceProfile:
+			return svc.menuCardResult(command, svc.profileListCard(ctx, command))
+		case menuResourcePromptTemplate:
+			return svc.menuCardResult(command, svc.promptTemplateListCard(ctx, command))
+		default:
+			return svc.menuActionTextResult(ctx, command, svc.t("menu.action.unknown", nil), false)
+		}
+	case menuActionShow:
+		switch resource {
+		case menuResourceRepository:
+			return svc.menuCardResult(command, svc.repositoryEntityCard(ctx, command))
+		case menuResourceOpenAIAccount:
+			return svc.menuCardResult(command, svc.openAIAccountEntityCard(ctx, command))
+		case menuResourceGitHubAccount:
+			return svc.menuCardResult(command, svc.githubAccountEntityCard(ctx, command))
+		case menuResourceProfile:
+			return svc.menuCardResult(command, svc.profileEntityCard(ctx, command))
+		case menuResourcePromptTemplate:
+			return svc.menuCardResult(command, svc.promptTemplateEntityCard(ctx, command))
+		default:
+			return svc.menuActionTextResult(ctx, command, svc.t("menu.action.unknown", nil), false)
+		}
+	case menuActionConfirmDelete:
+		switch resource {
+		case menuResourceRepository:
+			return svc.menuCardResult(command, svc.repositoryDeleteConfirmationCard(ctx, command))
+		case menuResourceOpenAIAccount:
+			return svc.menuCardResult(command, svc.openAIAccountDeleteConfirmationCard(ctx, command))
+		case menuResourceGitHubAccount:
+			return svc.menuCardResult(command, svc.githubAccountDeleteConfirmationCard(ctx, command))
+		default:
+			return svc.menuActionTextResult(ctx, command, svc.t("menu.action.unknown", nil), false)
+		}
+	case menuActionDelete:
+		switch resource {
+		case menuResourceRepository:
+			return svc.menuActionTextResult(ctx, command, svc.deleteRepositoryFromMenu(ctx, command), false)
+		case menuResourceOpenAIAccount:
+			return svc.menuActionTextResult(ctx, command, svc.handleOpenAIDelete(ctx, []string{command.ID}, svc.slashFromMenu(command)), false)
+		case menuResourceGitHubAccount:
+			return svc.menuActionTextResult(ctx, command, svc.deleteGitHubAccountFromMenu(ctx, command), false)
+		default:
+			return svc.menuActionTextResult(ctx, command, svc.t("menu.action.unknown", nil), false)
+		}
+	case menuActionCancel:
+		return svc.menuCardResult(command, currentCard)
+	case menuActionRepositoryCheck:
+		provider, owner, name, ok := parseRepositoryResourceID(command.ID)
+		if !ok || provider != "github" {
+			return svc.menuActionTextResult(ctx, command, svc.t("menu.entity.invalid", nil), false)
+		}
+		text := svc.handleGitHubCheck(ctx, []string{owner + "/" + name}, svc.slashFromMenu(command))
+		return svc.menuActionTextResult(ctx, command, text, false)
+	case menuActionRepositoryWebhook:
+		provider, owner, name, ok := parseRepositoryResourceID(command.ID)
+		if !ok || provider != "github" {
+			return svc.menuActionTextResult(ctx, command, svc.t("menu.entity.invalid", nil), false)
+		}
+		text := svc.handleGitHubWebhook(ctx, []string{"ensure", owner + "/" + name}, svc.slashFromMenu(command))
+		return svc.menuActionTextResult(ctx, command, text, false)
+	case menuActionOpenAIStatus:
+		text := svc.handleOpenAIStatus(ctx, []string{command.ID}, svc.slashFromMenu(command))
+		return svc.menuActionTextResult(ctx, command, text, true)
+	case menuActionOpenAICleanup:
+		text := svc.handleOpenAICleanup(ctx, []string{command.ID}, svc.slashFromMenu(command))
+		return svc.menuActionTextResult(ctx, command, text, false)
+	case menuActionSystemStatus:
+		return svc.menuActionTextResult(ctx, command, svc.cfg.StatusService.SlashStatusText(), false)
+	case menuActionTokenCheck:
+		return svc.menuActionTextResult(ctx, command, svc.handleToken(ctx, []string{"check"}), false)
+	case menuActionLocaleGet:
+		return svc.menuActionTextResult(ctx, command, svc.handleLocale([]string{"get"}), false)
+	case menuActionLocaleSetRU:
+		return svc.menuActionTextResult(ctx, command, svc.handleLocale([]string{"set", "ru"}), false)
+	case menuActionLocaleSetEN:
+		return svc.menuActionTextResult(ctx, command, svc.handleLocale([]string{"set", "en"}), false)
+	case menuActionRuntimeSmoke:
+		return svc.menuActionTextResult(ctx, command, svc.handleRuntimeSmoke(ctx, nil, svc.slashFromMenu(command)), false)
+	case menuActionRuntimePruneDry:
+		return svc.menuActionTextResult(ctx, command, svc.handleRuntimePrune(ctx, []string{"24h"}, svc.slashFromMenu(command)), false)
+	case menuActionPromptHelp:
+		profileName, templateKey, ok := parsePromptTemplateResourceID(command.ID)
+		if !ok {
+			return svc.menuActionTextResult(ctx, command, svc.t("menu.entity.invalid", nil), false)
+		}
+		return svc.menuActionTextResult(ctx, command, svc.handlePromptHelp(profileName+" "+templateKey), false)
+	case menuActionPromptRender:
+		profileName, templateKey, ok := parsePromptTemplateResourceID(command.ID)
+		if !ok {
+			return svc.menuActionTextResult(ctx, command, svc.t("menu.entity.invalid", nil), false)
+		}
+		return svc.menuActionTextResult(ctx, command, svc.handlePromptRender(ctx, profileName+" "+templateKey), false)
+	default:
+		return svc.menuActionTextResult(ctx, command, svc.t("menu.action.unknown", nil), false)
+	}
+}
+
+func (svc *SlashCommandService) menuCardResult(command MenuActionCommand, card *MattermostCard) MenuActionResult {
+	applyMenuCardIdentity(card, command)
+	return MenuActionResult{
+		StatusCode:    200,
+		EphemeralText: svc.t("menu.action.opened", map[string]any{"Title": card.Title}),
+		Card:          card,
+	}
+}
+
+func (svc *SlashCommandService) menuActionTextResult(ctx context.Context, command MenuActionCommand, text string, private bool) MenuActionResult {
+	view := normalizeMenuView(command.View)
+	card := svc.menuCommandResultCard(ctx, view, "", text)
+	if private {
+		card.Text = svc.t("menu.command_result.private_text", nil)
+	}
+	applyMenuCardIdentity(card, command)
+	return MenuActionResult{
+		StatusCode:    200,
+		EphemeralText: text,
+		Card:          card,
+	}
+}
+
+func (svc *SlashCommandService) repositoryListCard(ctx context.Context, command MenuActionCommand) *MattermostCard {
+	card := svc.menuCard(ctx, menuViewRepositories)
+	card.Title = svc.t("menu.entity.repositories.title", nil)
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		card.Text = svc.t("repo.list.storage_not_ready", nil)
+		card.Actions = svc.entityNavigationActions(menuViewRepositories)
+		return card
+	}
+	repositories, err := svc.cfg.Store.ListRepositories(ctx, 100)
+	if err != nil {
+		card.Text = svc.t("repo.list.read_failed", map[string]any{"Error": safeError(err)})
+		card.Actions = svc.entityNavigationActions(menuViewRepositories)
+		return card
+	}
+	sort.Slice(repositories, func(i int, j int) bool {
+		return repositories[i].Provider+":"+repositories[i].FullName() < repositories[j].Provider+":"+repositories[j].FullName()
+	})
+	card.Text = svc.entityListText(len(repositories), command.Page)
+	card.Fields = nil
+	card.Actions = nil
+	if len(repositories) == 0 {
+		card.Text = svc.t("repo.list.empty", nil)
+		card.Actions = append(card.Actions, svc.menuDialogAction(menuViewRepositories, "dialogrepoadd", menuDialogRepositoryAdd, "menu.action.repo_add", "menu.action.repo_add.tooltip", "primary"))
+		card.Actions = append(card.Actions, svc.entityNavigationActions(menuViewRepositories)...)
+		return card
+	}
+	start, end, page := entityPageBounds(len(repositories), command.Page)
+	for idx, repo := range repositories[start:end] {
+		number := start + idx + 1
+		card.Fields = append(card.Fields, MattermostCardField{
+			Title: svc.t("menu.entity.repository.title", map[string]any{"Number": number, "Provider": repo.Provider, "FullName": repo.FullName()}),
+			Value: svc.t("menu.entity.repository.summary", map[string]any{
+				"Branch":  repo.DefaultBranch,
+				"Channel": repo.MattermostChannel,
+				"Status":  repo.Status,
+			}),
+			Short: false,
+		})
+		card.Actions = append(card.Actions, svc.menuResourceAction(menuViewRepositories, "openrepo"+strconv.Itoa(number), menuActionShow, menuResourceRepository, repositoryResourceID(repo), "menu.action.open_number", "menu.action.open_number.tooltip", "default", map[string]any{"Number": number}))
+	}
+	card.Actions = append(card.Actions, svc.pageActions(menuViewRepositories, menuResourceRepository, "", page, len(repositories))...)
+	card.Actions = append(card.Actions, svc.menuDialogAction(menuViewRepositories, "dialogrepoadd", menuDialogRepositoryAdd, "menu.action.repo_add", "menu.action.repo_add.tooltip", "primary"))
+	card.Actions = append(card.Actions, svc.entityNavigationActions(menuViewRepositories)...)
+	return card
+}
+
+func (svc *SlashCommandService) repositoryEntityCard(ctx context.Context, command MenuActionCommand) *MattermostCard {
+	card := svc.menuCard(ctx, menuViewRepositories)
+	card.Title = svc.t("menu.entity.repository.card_title", nil)
+	provider, owner, name, ok := parseRepositoryResourceID(command.ID)
+	if !ok || !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		card.Text = svc.t("menu.entity.invalid", nil)
+		card.Actions = svc.entityNavigationActions(menuViewRepositories)
+		return card
+	}
+	repo, err := svc.cfg.Store.GetRepository(ctx, provider, owner, name)
+	if err != nil {
+		card.Text = svc.t("repo.list.read_failed", map[string]any{"Error": safeError(err)})
+		card.Actions = svc.entityNavigationActions(menuViewRepositories)
+		return card
+	}
+	card.Text = svc.t("menu.entity.repository.card_text", map[string]any{"Provider": repo.Provider, "FullName": repo.FullName()})
+	card.Fields = []MattermostCardField{
+		{Title: svc.t("menu.entity.field.repository", nil), Value: "`" + repo.Provider + ":" + repo.FullName() + "`", Short: true},
+		{Title: svc.t("menu.entity.field.branch", nil), Value: "`" + repo.DefaultBranch + "`", Short: true},
+		{Title: svc.t("menu.entity.field.channel", nil), Value: "`" + repo.MattermostChannel + "`", Short: true},
+		{Title: svc.t("menu.entity.field.status", nil), Value: "`" + repo.Status + "`", Short: true},
+	}
+	resourceID := repositoryResourceID(repo)
+	card.Actions = []MattermostCardAction{
+		svc.menuResourceAction(menuViewRepositories, "repoaccess", menuActionRepositoryCheck, menuResourceRepository, resourceID, "menu.action.repository_check", "menu.action.repository_check.tooltip", "default", nil),
+		svc.menuResourceAction(menuViewRepositories, "repowebhook", menuActionRepositoryWebhook, menuResourceRepository, resourceID, "menu.action.repository_webhook", "menu.action.repository_webhook.tooltip", "default", nil),
+		svc.menuResourceAction(menuViewRepositories, "repodeleteconfirm", menuActionConfirmDelete, menuResourceRepository, resourceID, "menu.action.repo_delete", "menu.action.repo_delete.tooltip", "danger", nil),
+		svc.menuResourceAction(menuViewRepositories, "repolist", menuActionList, menuResourceRepository, "", "menu.action.repo_list", "menu.action.repo_list.tooltip", "default", nil),
+		svc.menuAction(menuViewMain, "menu.action.main", "menu.action.main.tooltip", "default"),
+	}
+	return card
+}
+
+func (svc *SlashCommandService) repositoryDeleteConfirmationCard(ctx context.Context, command MenuActionCommand) *MattermostCard {
+	card := svc.menuCard(ctx, menuViewRepositories)
+	card.Title = svc.t("menu.confirm.repository_delete.title", nil)
+	card.Text = svc.t("menu.confirm.repository_delete.text", map[string]any{"Repository": command.ID})
+	card.Fields = []MattermostCardField{{Title: svc.t("menu.entity.field.repository", nil), Value: "`" + command.ID + "`", Short: false}}
+	card.Actions = []MattermostCardAction{
+		svc.menuResourceAction(menuViewRepositories, "repodelete", menuActionDelete, menuResourceRepository, command.ID, "menu.action.confirm_delete", "menu.action.confirm_delete.tooltip", "danger", nil),
+		svc.menuResourceAction(menuViewRepositories, "repocancel", menuActionShow, menuResourceRepository, command.ID, "menu.action.cancel", "menu.action.cancel.tooltip", "default", nil),
+	}
+	return card
+}
+
+func (svc *SlashCommandService) deleteRepositoryFromMenu(ctx context.Context, command MenuActionCommand) string {
+	provider, owner, name, ok := parseRepositoryResourceID(command.ID)
+	if !ok {
+		return svc.t("menu.entity.invalid", nil)
+	}
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return svc.t("repo.list.storage_not_ready", nil)
+	}
+	deleted, err := svc.cfg.Store.DeleteRepository(ctx, provider, owner, name)
+	if err != nil {
+		return svc.t("repo.delete.failed", map[string]any{"Error": safeError(err)})
+	}
+	_ = svc.cfg.Store.RecordAuditEvent(ctx, adminrepo.AuditEventInput{
+		EventType:    "repository.deleted",
+		ActorUserID:  command.UserID,
+		ActorUser:    command.UserName,
+		ResourceType: "repository",
+		ResourceName: deleted.Provider + ":" + deleted.FullName(),
+		Summary:      "repository metadata deleted from Mattermost entity card",
+	})
+	return svc.t("repo.delete.result", map[string]any{"Provider": deleted.Provider, "FullName": deleted.FullName()})
+}
+
+func (svc *SlashCommandService) openAIAccountListCard(ctx context.Context, command MenuActionCommand) *MattermostCard {
+	card := svc.menuCard(ctx, menuViewOpenAI)
+	card.Title = svc.t("menu.entity.openai.title", nil)
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		card.Text = svc.t("openai.storage_not_ready", nil)
+		card.Actions = svc.entityNavigationActions(menuViewOpenAI)
+		return card
+	}
+	accounts, err := svc.cfg.Store.ListOpenAIAccounts(ctx, 100)
+	if err != nil {
+		card.Text = svc.t("openai.list.failed", map[string]any{"Error": safeError(err)})
+		card.Actions = svc.entityNavigationActions(menuViewOpenAI)
+		return card
+	}
+	sort.Slice(accounts, func(i int, j int) bool { return accounts[i].Name < accounts[j].Name })
+	card.Text = svc.entityListText(len(accounts), command.Page)
+	card.Fields = nil
+	card.Actions = nil
+	if len(accounts) == 0 {
+		card.Text = svc.t("openai.list.empty", nil)
+		card.Actions = append(card.Actions, svc.menuDialogAction(menuViewOpenAI, "dialogopenaiauth", menuDialogOpenAIAuth, "menu.action.openai_auth", "menu.action.openai_auth.tooltip", "primary"))
+		card.Actions = append(card.Actions, svc.entityNavigationActions(menuViewOpenAI)...)
+		return card
+	}
+	start, end, page := entityPageBounds(len(accounts), command.Page)
+	for idx, account := range accounts[start:end] {
+		number := start + idx + 1
+		card.Fields = append(card.Fields, MattermostCardField{
+			Title: svc.t("menu.entity.openai.item_title", map[string]any{"Number": number, "Account": account.Name}),
+			Value: svc.t("menu.entity.openai.summary", map[string]any{"Status": account.Status, "Secret": account.SecretRef}),
+			Short: false,
+		})
+		card.Actions = append(card.Actions, svc.menuResourceAction(menuViewOpenAI, "openopenai"+strconv.Itoa(number), menuActionShow, menuResourceOpenAIAccount, account.Name, "menu.action.open_number", "menu.action.open_number.tooltip", "default", map[string]any{"Number": number}))
+	}
+	card.Actions = append(card.Actions, svc.pageActions(menuViewOpenAI, menuResourceOpenAIAccount, "", page, len(accounts))...)
+	card.Actions = append(card.Actions, svc.menuDialogAction(menuViewOpenAI, "dialogopenaiauth", menuDialogOpenAIAuth, "menu.action.openai_auth", "menu.action.openai_auth.tooltip", "primary"))
+	card.Actions = append(card.Actions, svc.entityNavigationActions(menuViewOpenAI)...)
+	return card
+}
+
+func (svc *SlashCommandService) openAIAccountEntityCard(ctx context.Context, command MenuActionCommand) *MattermostCard {
+	card := svc.menuCard(ctx, menuViewOpenAI)
+	card.Title = svc.t("menu.entity.openai.card_title", map[string]any{"Account": command.ID})
+	account, ok := svc.openAIAccount(ctx, command.ID)
+	if !ok {
+		card.Text = svc.t("openai.status.account_not_found", map[string]any{"Account": command.ID})
+		card.Actions = svc.entityNavigationActions(menuViewOpenAI)
+		return card
+	}
+	card.Text = svc.t("menu.entity.openai.card_text", map[string]any{"Account": account.Name})
+	card.Fields = []MattermostCardField{
+		{Title: svc.t("menu.entity.field.account", nil), Value: "`" + account.Name + "`", Short: true},
+		{Title: svc.t("menu.entity.field.status", nil), Value: "`" + account.Status + "`", Short: true},
+		{Title: svc.t("menu.entity.field.secret", nil), Value: "`" + account.SecretRef + "`", Short: false},
+	}
+	card.Actions = []MattermostCardAction{
+		svc.menuResourceAction(menuViewOpenAI, "openaistatus", menuActionOpenAIStatus, menuResourceOpenAIAccount, account.Name, "menu.action.openai_status", "menu.action.openai_status.tooltip", "primary", nil),
+		svc.menuResourceAction(menuViewOpenAI, "openaicleanup", menuActionOpenAICleanup, menuResourceOpenAIAccount, account.Name, "menu.action.openai_cleanup", "menu.action.openai_cleanup.tooltip", "default", nil),
+		svc.menuResourceAction(menuViewOpenAI, "openaideleteconfirm", menuActionConfirmDelete, menuResourceOpenAIAccount, account.Name, "menu.action.openai_delete", "menu.action.openai_delete.tooltip", "danger", nil),
+		svc.menuResourceAction(menuViewOpenAI, "openailist", menuActionList, menuResourceOpenAIAccount, "", "menu.action.openai_list", "menu.action.openai_list.tooltip", "default", nil),
+		svc.menuAction(menuViewAccounts, "menu.action.back", "menu.action.back.tooltip", "default"),
+	}
+	return card
+}
+
+func (svc *SlashCommandService) openAIAccountDeleteConfirmationCard(ctx context.Context, command MenuActionCommand) *MattermostCard {
+	card := svc.menuCard(ctx, menuViewOpenAI)
+	card.Title = svc.t("menu.confirm.openai_delete.title", nil)
+	card.Text = svc.t("menu.confirm.openai_delete.text", map[string]any{"Account": command.ID})
+	card.Fields = []MattermostCardField{{Title: svc.t("menu.entity.field.account", nil), Value: "`" + command.ID + "`", Short: false}}
+	card.Actions = []MattermostCardAction{
+		svc.menuResourceAction(menuViewOpenAI, "openaidelete", menuActionDelete, menuResourceOpenAIAccount, command.ID, "menu.action.confirm_delete", "menu.action.confirm_delete.tooltip", "danger", nil),
+		svc.menuResourceAction(menuViewOpenAI, "openaicancel", menuActionShow, menuResourceOpenAIAccount, command.ID, "menu.action.cancel", "menu.action.cancel.tooltip", "default", nil),
+	}
+	return card
+}
+
+func (svc *SlashCommandService) githubAccountListCard(ctx context.Context, command MenuActionCommand) *MattermostCard {
+	card := svc.menuCard(ctx, menuViewGitHub)
+	card.Title = svc.t("menu.entity.github.title", nil)
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		card.Text = svc.t("github.account.list.storage_not_ready", nil)
+		card.Actions = svc.entityNavigationActions(menuViewGitHub)
+		return card
+	}
+	accounts, err := svc.cfg.Store.ListGitHubAccounts(ctx, 100)
+	if err != nil {
+		card.Text = svc.t("github.account.list.failed", map[string]any{"Error": safeError(err)})
+		card.Actions = svc.entityNavigationActions(menuViewGitHub)
+		return card
+	}
+	sort.Slice(accounts, func(i int, j int) bool { return accounts[i].Name < accounts[j].Name })
+	card.Text = svc.entityListText(len(accounts), command.Page)
+	card.Fields = nil
+	card.Actions = nil
+	if len(accounts) == 0 {
+		card.Text = svc.t("github.account.list.empty", nil)
+		card.Actions = append(card.Actions, svc.menuDialogAction(menuViewGitHub, "dialoggithubadd", menuDialogGitHubAccountAdd, "menu.action.github_account_add", "menu.action.github_account_add.tooltip", "primary"))
+		card.Actions = append(card.Actions, svc.entityNavigationActions(menuViewGitHub)...)
+		return card
+	}
+	start, end, page := entityPageBounds(len(accounts), command.Page)
+	for idx, account := range accounts[start:end] {
+		number := start + idx + 1
+		card.Fields = append(card.Fields, MattermostCardField{
+			Title: svc.t("menu.entity.github.item_title", map[string]any{"Number": number, "Account": account.Name}),
+			Value: svc.t("menu.entity.github.summary", map[string]any{"Status": account.Status, "Secret": account.SecretRef, "Username": emptyAsUnknown(account.Username), "Email": emptyAsUnknown(account.Email)}),
+			Short: false,
+		})
+		card.Actions = append(card.Actions, svc.menuResourceAction(menuViewGitHub, "opengithub"+strconv.Itoa(number), menuActionShow, menuResourceGitHubAccount, account.Name, "menu.action.open_number", "menu.action.open_number.tooltip", "default", map[string]any{"Number": number}))
+	}
+	card.Actions = append(card.Actions, svc.pageActions(menuViewGitHub, menuResourceGitHubAccount, "", page, len(accounts))...)
+	card.Actions = append(card.Actions, svc.menuDialogAction(menuViewGitHub, "dialoggithubadd", menuDialogGitHubAccountAdd, "menu.action.github_account_add", "menu.action.github_account_add.tooltip", "primary"))
+	card.Actions = append(card.Actions, svc.entityNavigationActions(menuViewGitHub)...)
+	return card
+}
+
+func (svc *SlashCommandService) githubAccountEntityCard(ctx context.Context, command MenuActionCommand) *MattermostCard {
+	card := svc.menuCard(ctx, menuViewGitHub)
+	card.Title = svc.t("menu.entity.github.card_title", map[string]any{"Account": command.ID})
+	account, ok := svc.githubAccount(ctx, command.ID)
+	if !ok {
+		card.Text = svc.t("dialog.github.not_found", map[string]any{"Account": command.ID})
+		card.Actions = svc.entityNavigationActions(menuViewGitHub)
+		return card
+	}
+	card.Text = svc.t("menu.entity.github.card_text", map[string]any{"Account": account.Name})
+	card.Fields = []MattermostCardField{
+		{Title: svc.t("menu.entity.field.account", nil), Value: "`" + account.Name + "`", Short: true},
+		{Title: svc.t("menu.entity.field.status", nil), Value: "`" + account.Status + "`", Short: true},
+		{Title: svc.t("menu.entity.field.secret", nil), Value: "`" + account.SecretRef + "`", Short: false},
+		{Title: svc.t("menu.entity.field.username", nil), Value: "`" + emptyAsUnknown(account.Username) + "`", Short: true},
+		{Title: svc.t("menu.entity.field.email", nil), Value: "`" + emptyAsUnknown(account.Email) + "`", Short: true},
+	}
+	card.Actions = []MattermostCardAction{
+		svc.menuResourceAction(menuViewGitHub, "githubdeleteconfirm", menuActionConfirmDelete, menuResourceGitHubAccount, account.Name, "menu.action.github_account_delete", "menu.action.github_account_delete.tooltip", "danger", nil),
+		svc.menuResourceAction(menuViewGitHub, "githublist", menuActionList, menuResourceGitHubAccount, "", "menu.action.github_account_list", "menu.action.github_account_list.tooltip", "default", nil),
+		svc.menuAction(menuViewAccounts, "menu.action.back", "menu.action.back.tooltip", "default"),
+	}
+	return card
+}
+
+func (svc *SlashCommandService) githubAccountDeleteConfirmationCard(ctx context.Context, command MenuActionCommand) *MattermostCard {
+	card := svc.menuCard(ctx, menuViewGitHub)
+	card.Title = svc.t("menu.confirm.github_delete.title", nil)
+	card.Text = svc.t("menu.confirm.github_delete.text", map[string]any{"Account": command.ID})
+	card.Fields = []MattermostCardField{{Title: svc.t("menu.entity.field.account", nil), Value: "`" + command.ID + "`", Short: false}}
+	card.Actions = []MattermostCardAction{
+		svc.menuResourceAction(menuViewGitHub, "githubdelete", menuActionDelete, menuResourceGitHubAccount, command.ID, "menu.action.confirm_delete", "menu.action.confirm_delete.tooltip", "danger", nil),
+		svc.menuResourceAction(menuViewGitHub, "githubcancel", menuActionShow, menuResourceGitHubAccount, command.ID, "menu.action.cancel", "menu.action.cancel.tooltip", "default", nil),
+	}
+	return card
+}
+
+func (svc *SlashCommandService) deleteGitHubAccountFromMenu(ctx context.Context, command MenuActionCommand) string {
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return svc.t("github.account.list.storage_not_ready", nil)
+	}
+	deleted, err := svc.cfg.Store.DeleteGitHubAccount(ctx, command.ID)
+	if err != nil {
+		return svc.t("github.account.delete_failed", map[string]any{"Error": safeError(err)})
+	}
+	svc.recordGitHubAudit(ctx, svc.slashFromMenu(command), "github.account.deleted", deleted.Name, "github account metadata deleted from Mattermost entity card")
+	return svc.t("github.account.delete_result", map[string]any{"Account": deleted.Name, "Secret": deleted.SecretRef})
+}
+
+func (svc *SlashCommandService) profileListCard(ctx context.Context, command MenuActionCommand) *MattermostCard {
+	card := svc.menuCard(ctx, menuViewProfiles)
+	card.Title = svc.t("menu.entity.profiles.title", nil)
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		card.Text = svc.t("profile.list.storage_not_ready", nil)
+		card.Actions = svc.entityNavigationActions(menuViewProfiles)
+		return card
+	}
+	profiles, err := svc.cfg.Store.ListAgentProfiles(ctx)
+	if err != nil {
+		card.Text = svc.t("profile.list.read_failed", map[string]any{"Error": safeError(err)})
+		card.Actions = svc.entityNavigationActions(menuViewProfiles)
+		return card
+	}
+	sort.Slice(profiles, func(i int, j int) bool { return profiles[i].Name < profiles[j].Name })
+	card.Text = svc.entityListText(len(profiles), command.Page)
+	card.Fields = nil
+	card.Actions = nil
+	if len(profiles) == 0 {
+		card.Text = svc.t("profile.list.empty", nil)
+		card.Actions = svc.entityNavigationActions(menuViewProfiles)
+		return card
+	}
+	start, end, page := entityPageBounds(len(profiles), command.Page)
+	for idx, profile := range profiles[start:end] {
+		number := start + idx + 1
+		enabled := svc.t("label.disabled", nil)
+		if profile.Enabled {
+			enabled = svc.t("label.enabled", nil)
+		}
+		card.Fields = append(card.Fields, MattermostCardField{
+			Title: svc.t("menu.entity.profile.item_title", map[string]any{"Number": number, "Profile": profile.Name}),
+			Value: svc.t("menu.entity.profile.summary", map[string]any{"Role": profile.Role, "Enabled": enabled, "OpenAI": defaultString(profile.OpenAIAccountName, "primary"), "GitHub": defaultString(profile.GitHubAccountName, "primary")}),
+			Short: false,
+		})
+		card.Actions = append(card.Actions, svc.menuResourceAction(menuViewProfiles, "openprofile"+strconv.Itoa(number), menuActionShow, menuResourceProfile, profile.Name, "menu.action.open_number", "menu.action.open_number.tooltip", "default", map[string]any{"Number": number}))
+	}
+	card.Actions = append(card.Actions, svc.pageActions(menuViewProfiles, menuResourceProfile, "", page, len(profiles))...)
+	card.Actions = append(card.Actions, svc.entityNavigationActions(menuViewProfiles)...)
+	return card
+}
+
+func (svc *SlashCommandService) profileEntityCard(ctx context.Context, command MenuActionCommand) *MattermostCard {
+	card := svc.menuCard(ctx, menuViewProfiles)
+	card.Title = svc.t("menu.entity.profile.card_title", map[string]any{"Profile": command.ID})
+	profile, ok := svc.agentProfile(ctx, command.ID)
+	if !ok {
+		card.Text = svc.t("dev.profile_not_ready", map[string]any{"Profile": command.ID})
+		card.Actions = svc.entityNavigationActions(menuViewProfiles)
+		return card
+	}
+	enabled := svc.t("label.disabled", nil)
+	if profile.Enabled {
+		enabled = svc.t("label.enabled", nil)
+	}
+	card.Text = svc.t("menu.entity.profile.card_text", map[string]any{"Profile": profile.Name})
+	card.Fields = []MattermostCardField{
+		{Title: svc.t("menu.entity.field.profile", nil), Value: "`" + profile.Name + "`", Short: true},
+		{Title: svc.t("menu.entity.field.role", nil), Value: "`" + profile.Role + "`", Short: true},
+		{Title: svc.t("menu.entity.field.status", nil), Value: "`" + enabled + "`", Short: true},
+		{Title: svc.t("menu.entity.field.openai", nil), Value: "`" + defaultString(profile.OpenAIAccountName, "primary") + "`", Short: true},
+		{Title: svc.t("menu.entity.field.github", nil), Value: "`" + defaultString(profile.GitHubAccountName, "primary") + "`", Short: true},
+		{Title: svc.t("menu.entity.field.description", nil), Value: emptyAsUnknown(profile.Description), Short: false},
+	}
+	card.Actions = []MattermostCardAction{
+		svc.menuResourceAction(menuViewPrompts, "profileprompts", menuActionList, menuResourcePromptTemplate, profile.Name, "menu.action.prompts", "menu.action.prompts.tooltip", "primary", nil),
+		svc.menuResourceAction(menuViewProfiles, "profilelist", menuActionList, menuResourceProfile, "", "menu.action.profile_list", "menu.action.profile_list.tooltip", "default", nil),
+		svc.menuAction(menuViewMain, "menu.action.main", "menu.action.main.tooltip", "default"),
+	}
+	return card
+}
+
+func (svc *SlashCommandService) promptTemplateListCard(ctx context.Context, command MenuActionCommand) *MattermostCard {
+	card := svc.menuCard(ctx, menuViewPrompts)
+	card.Title = svc.t("menu.entity.prompts.title", nil)
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		card.Text = svc.t("prompt.storage_not_ready", nil)
+		card.Actions = svc.entityNavigationActions(menuViewPrompts)
+		return card
+	}
+	profileName := ""
+	if command.Resource == menuResourcePromptTemplate && validPromptTemplateID(command.ID) {
+		profileName = command.ID
+	}
+	templates, err := svc.cfg.Store.ListAgentPromptTemplates(ctx, profileName)
+	if err != nil {
+		card.Text = svc.t("prompt.list.failed", map[string]any{"Error": safeError(err)})
+		card.Actions = svc.entityNavigationActions(menuViewPrompts)
+		return card
+	}
+	sort.Slice(templates, func(i int, j int) bool {
+		return promptTemplateResourceID(templates[i].ProfileName, templates[i].TemplateKey) < promptTemplateResourceID(templates[j].ProfileName, templates[j].TemplateKey)
+	})
+	card.Text = svc.entityListText(len(templates), command.Page)
+	card.Fields = nil
+	card.Actions = nil
+	if len(templates) == 0 {
+		card.Text = svc.t("prompt.list.empty", nil)
+		card.Actions = svc.entityNavigationActions(menuViewPrompts)
+		return card
+	}
+	start, end, page := entityPageBounds(len(templates), command.Page)
+	for idx, item := range templates[start:end] {
+		number := start + idx + 1
+		card.Fields = append(card.Fields, MattermostCardField{
+			Title: svc.t("menu.entity.prompt.item_title", map[string]any{"Number": number, "Profile": item.ProfileName, "Template": item.TemplateKey}),
+			Value: svc.t("menu.entity.prompt.summary", map[string]any{"Bytes": len(item.Body)}),
+			Short: false,
+		})
+		card.Actions = append(card.Actions, svc.menuResourceAction(menuViewPrompts, "openprompt"+strconv.Itoa(number), menuActionShow, menuResourcePromptTemplate, promptTemplateResourceID(item.ProfileName, item.TemplateKey), "menu.action.open_number", "menu.action.open_number.tooltip", "default", map[string]any{"Number": number}))
+	}
+	card.Actions = append(card.Actions, svc.pageActions(menuViewPrompts, menuResourcePromptTemplate, command.ID, page, len(templates))...)
+	card.Actions = append(card.Actions, svc.entityNavigationActions(menuViewPrompts)...)
+	return card
+}
+
+func (svc *SlashCommandService) promptTemplateEntityCard(ctx context.Context, command MenuActionCommand) *MattermostCard {
+	card := svc.menuCard(ctx, menuViewPrompts)
+	profileName, templateKey, ok := parsePromptTemplateResourceID(command.ID)
+	if !ok || !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		card.Text = svc.t("menu.entity.invalid", nil)
+		card.Actions = svc.entityNavigationActions(menuViewPrompts)
+		return card
+	}
+	card.Title = svc.t("menu.entity.prompt.card_title", map[string]any{"Profile": profileName, "Template": templateKey})
+	item, err := svc.cfg.Store.GetAgentPromptTemplate(ctx, profileName, templateKey)
+	if err != nil {
+		card.Text = svc.t("prompt.show.failed", map[string]any{"Error": safeError(err)})
+		card.Actions = svc.entityNavigationActions(menuViewPrompts)
+		return card
+	}
+	card.Text = svc.t("menu.entity.prompt.card_text", map[string]any{"Profile": item.ProfileName, "Template": item.TemplateKey})
+	card.Fields = []MattermostCardField{
+		{Title: svc.t("menu.entity.field.profile", nil), Value: "`" + item.ProfileName + "`", Short: true},
+		{Title: svc.t("menu.entity.field.template", nil), Value: "`" + item.TemplateKey + "`", Short: true},
+		{Title: svc.t("menu.entity.field.bytes", nil), Value: "`" + strconv.Itoa(len(item.Body)) + "`", Short: true},
+	}
+	resourceID := promptTemplateResourceID(item.ProfileName, item.TemplateKey)
+	card.Actions = []MattermostCardAction{
+		svc.menuResourceAction(menuViewPrompts, "prompthelp", menuActionPromptHelp, menuResourcePromptTemplate, resourceID, "menu.action.prompt_help", "menu.action.prompt_help.tooltip", "default", nil),
+		svc.menuResourceAction(menuViewPrompts, "promptrender", menuActionPromptRender, menuResourcePromptTemplate, resourceID, "menu.action.prompt_render", "menu.action.prompt_render.tooltip", "primary", nil),
+		svc.menuResourceAction(menuViewPrompts, "promptlist", menuActionList, menuResourcePromptTemplate, "", "menu.action.prompt_list", "menu.action.prompt_list.tooltip", "default", nil),
+		svc.menuAction(menuViewMain, "menu.action.main", "menu.action.main.tooltip", "default"),
+	}
+	return card
+}
+
+func (svc *SlashCommandService) entityListText(total int, page int) string {
+	if total == 0 {
+		return svc.t("menu.entity.list.empty", nil)
+	}
+	_, _, normalizedPage := entityPageBounds(total, page)
+	pages := (total + entityListPageSize - 1) / entityListPageSize
+	return svc.t("menu.entity.list.text", map[string]any{"Total": total, "Page": normalizedPage + 1, "Pages": pages})
+}
+
+func (svc *SlashCommandService) pageActions(view string, resource string, resourceID string, page int, total int) []MattermostCardAction {
+	var actions []MattermostCardAction
+	pages := (total + entityListPageSize - 1) / entityListPageSize
+	if page > 0 {
+		action := svc.menuResourceAction(view, "pageprev", menuActionList, resource, resourceID, "menu.action.prev_page", "menu.action.prev_page.tooltip", "default", nil)
+		action.Context["page"] = page - 1
+		actions = append(actions, action)
+	}
+	if page+1 < pages {
+		action := svc.menuResourceAction(view, "pagenext", menuActionList, resource, resourceID, "menu.action.next_page", "menu.action.next_page.tooltip", "default", nil)
+		action.Context["page"] = page + 1
+		actions = append(actions, action)
+	}
+	return actions
+}
+
+func (svc *SlashCommandService) entityNavigationActions(view string) []MattermostCardAction {
+	if view == menuViewMain {
+		return nil
+	}
+	return []MattermostCardAction{
+		svc.menuAction(view, "menu.action.back", "menu.action.back.tooltip", "default"),
+		svc.menuAction(menuViewMain, "menu.action.main", "menu.action.main.tooltip", "default"),
+	}
+}
+
+func (svc *SlashCommandService) menuResourceAction(view string, actionID string, action string, resource string, resourceID string, nameID string, tooltipID string, style string, data map[string]any) MattermostCardAction {
+	item := svc.menuAction(view, nameID, tooltipID, style)
+	item.ID = actionID
+	item.Name = svc.t(nameID, data)
+	item.Tooltip = svc.t(tooltipID, data)
+	item.Context["action"] = action
+	item.Context["resource_type"] = resource
+	if strings.TrimSpace(resourceID) != "" {
+		item.Context["resource_id"] = resourceID
+	}
+	return item
+}
+
+func (svc *SlashCommandService) slashFromMenu(command MenuActionCommand) SlashCommand {
+	return SlashCommand{
+		UserID:    command.UserID,
+		UserName:  command.UserName,
+		ChannelID: command.ChannelID,
 	}
 }
 
@@ -2848,21 +3470,14 @@ func (svc *SlashCommandService) menuActions(view string) []MattermostCardAction 
 		}
 	case menuViewOpenAI:
 		return []MattermostCardAction{
-			svc.menuCommandAction(menuViewOpenAI, "cmdopenailist", "openai list", "menu.action.openai_list", "menu.action.openai_list.tooltip", "primary"),
+			svc.menuResourceAction(menuViewOpenAI, "openailist", menuActionList, menuResourceOpenAIAccount, "", "menu.action.openai_list", "menu.action.openai_list.tooltip", "primary", nil),
 			svc.menuDialogAction(menuViewOpenAI, "dialogopenaiauth", menuDialogOpenAIAuth, "menu.action.openai_auth", "menu.action.openai_auth.tooltip", "default"),
-			svc.menuDialogAction(menuViewOpenAI, "dialogopenaistatus", menuDialogOpenAIStatus, "menu.action.openai_status", "menu.action.openai_status.tooltip", "default"),
-			svc.menuDialogAction(menuViewOpenAI, "dialogopenaicleanup", menuDialogOpenAICleanup, "menu.action.openai_cleanup", "menu.action.openai_cleanup.tooltip", "danger"),
-			svc.menuDialogAction(menuViewOpenAI, "dialogopenaidelete", menuDialogOpenAIDelete, "menu.action.openai_delete", "menu.action.openai_delete.tooltip", "danger"),
 			svc.menuAction(menuViewAccounts, "menu.action.back", "menu.action.back.tooltip", "default"),
 		}
 	case menuViewGitHub:
 		return []MattermostCardAction{
-			svc.menuCommandAction(menuViewGitHub, "cmdgithubaccountlist", "github account list", "menu.action.github_account_list", "menu.action.github_account_list.tooltip", "primary"),
+			svc.menuResourceAction(menuViewGitHub, "githublist", menuActionList, menuResourceGitHubAccount, "", "menu.action.github_account_list", "menu.action.github_account_list.tooltip", "primary", nil),
 			svc.menuDialogAction(menuViewGitHub, "dialoggithubadd", menuDialogGitHubAccountAdd, "menu.action.github_account_add", "menu.action.github_account_add.tooltip", "primary"),
-			svc.menuDialogAction(menuViewGitHub, "dialoggithubedit", menuDialogGitHubAccountEdit, "menu.action.github_account_edit", "menu.action.github_account_edit.tooltip", "default"),
-			svc.menuDialogAction(menuViewGitHub, "dialoggithubdelete", menuDialogGitHubAccountDelete, "menu.action.github_account_delete", "menu.action.github_account_delete.tooltip", "danger"),
-			svc.menuCommandAction(menuViewGitHub, "cmdgithubcheckmattercodex", "github check codex-k8s/matter-codex", "menu.action.github_check_mattercodex", "menu.action.github_check_mattercodex.tooltip", "default"),
-			svc.menuCommandAction(menuViewGitHub, "cmdgithubwebhookmattercodex", "github webhook ensure codex-k8s/matter-codex", "menu.action.github_webhook_mattercodex", "menu.action.github_webhook_mattercodex.tooltip", "default"),
 			svc.menuAction(menuViewAccounts, "menu.action.back", "menu.action.back.tooltip", "default"),
 		}
 	case menuViewStartFlow:
@@ -2882,16 +3497,12 @@ func (svc *SlashCommandService) menuActions(view string) []MattermostCardAction 
 	case menuViewRepositories:
 		return []MattermostCardAction{
 			svc.menuDialogAction(menuViewRepositories, "dialogrepoadd", menuDialogRepositoryAdd, "menu.action.repo_add", "menu.action.repo_add.tooltip", "primary"),
-			svc.menuDialogAction(menuViewRepositories, "dialogrepoedit", menuDialogRepositoryEdit, "menu.action.repo_edit", "menu.action.repo_edit.tooltip", "default"),
-			svc.menuDialogAction(menuViewRepositories, "dialogrepodelete", menuDialogRepositoryDelete, "menu.action.repo_delete", "menu.action.repo_delete.tooltip", "danger"),
-			svc.menuCommandAction(menuViewRepositories, "cmdrepolist", "repo list", "menu.action.repo_list", "menu.action.repo_list.tooltip", "primary"),
-			svc.menuCommandAction(menuViewRepositories, "cmdgithubcheckrepo", "github check codex-k8s/matter-codex", "menu.action.github_check_mattercodex", "menu.action.github_check_mattercodex.tooltip", "default"),
-			svc.menuCommandAction(menuViewRepositories, "cmdgithubwebhookrepo", "github webhook ensure codex-k8s/matter-codex", "menu.action.github_webhook_mattercodex", "menu.action.github_webhook_mattercodex.tooltip", "default"),
+			svc.menuResourceAction(menuViewRepositories, "repolist", menuActionList, menuResourceRepository, "", "menu.action.repo_list", "menu.action.repo_list.tooltip", "primary", nil),
 			svc.menuAction(menuViewMain, "menu.action.back", "menu.action.back.tooltip", "default"),
 		}
 	case menuViewProfiles:
 		return []MattermostCardAction{
-			svc.menuCommandAction(menuViewProfiles, "cmdprofilelist", "profile list", "menu.action.profile_list", "menu.action.profile_list.tooltip", "primary"),
+			svc.menuResourceAction(menuViewProfiles, "profilelist", menuActionList, menuResourceProfile, "", "menu.action.profile_list", "menu.action.profile_list.tooltip", "primary", nil),
 			svc.menuAction(menuViewOpenAI, "menu.action.openai", "menu.action.openai.tooltip", "default"),
 			svc.menuAction(menuViewGitHub, "menu.action.github", "menu.action.github.tooltip", "default"),
 			svc.menuAction(menuViewPrompts, "menu.action.prompts", "menu.action.prompts.tooltip", "default"),
@@ -2899,26 +3510,24 @@ func (svc *SlashCommandService) menuActions(view string) []MattermostCardAction 
 		}
 	case menuViewPrompts:
 		return []MattermostCardAction{
-			svc.menuCommandAction(menuViewPrompts, "cmdpromptlist", "prompt list", "menu.action.prompt_list", "menu.action.prompt_list.tooltip", "primary"),
-			svc.menuCommandAction(menuViewPrompts, "cmdprompthelpreviewer", "prompt help reviewer review_pr", "menu.action.prompt_help_reviewer", "menu.action.prompt_help_reviewer.tooltip", "default"),
-			svc.menuCommandAction(menuViewPrompts, "cmdpromptrenderreviewer", "prompt render reviewer review_pr", "menu.action.prompt_render_reviewer", "menu.action.prompt_render_reviewer.tooltip", "default"),
+			svc.menuResourceAction(menuViewPrompts, "promptlist", menuActionList, menuResourcePromptTemplate, "", "menu.action.prompt_list", "menu.action.prompt_list.tooltip", "primary", nil),
 			svc.menuAction(menuViewProfiles, "menu.action.profiles", "menu.action.profiles.tooltip", "default"),
 			svc.menuAction(menuViewMain, "menu.action.back", "menu.action.back.tooltip", "default"),
 		}
 	case menuViewRuntime:
 		return []MattermostCardAction{
-			svc.menuCommandAction(menuViewRuntime, "cmdruntimesmoke", "runtime smoke", "menu.action.runtime_smoke", "menu.action.runtime_smoke.tooltip", "primary"),
-			svc.menuCommandAction(menuViewRuntime, "cmdruntimeprunedryrun", "runtime prune 24h", "menu.action.runtime_prune_dry_run", "menu.action.runtime_prune_dry_run.tooltip", "default"),
+			svc.menuResourceAction(menuViewRuntime, "runtimesmoke", menuActionRuntimeSmoke, menuResourceRuntime, "", "menu.action.runtime_smoke", "menu.action.runtime_smoke.tooltip", "primary", nil),
+			svc.menuResourceAction(menuViewRuntime, "runtimeprunedryrun", menuActionRuntimePruneDry, menuResourceRuntime, "", "menu.action.runtime_prune_dry_run", "menu.action.runtime_prune_dry_run.tooltip", "default", nil),
 			svc.menuAction(menuViewSystem, "menu.action.system", "menu.action.system.tooltip", "default"),
 			svc.menuAction(menuViewMain, "menu.action.back", "menu.action.back.tooltip", "default"),
 		}
 	case menuViewSystem:
 		return []MattermostCardAction{
-			svc.menuCommandAction(menuViewSystem, "cmdstatus", "status", "menu.action.status", "menu.action.status.tooltip", "primary"),
-			svc.menuCommandAction(menuViewSystem, "cmdtokencheck", "token check", "menu.action.token_check", "menu.action.token_check.tooltip", "default"),
-			svc.menuCommandAction(menuViewSystem, "cmdlocaleget", "locale get", "menu.action.locale_get", "menu.action.locale_get.tooltip", "default"),
-			svc.menuCommandAction(menuViewSystem, "cmdlocalesetru", "locale set ru", "menu.action.locale_set_ru", "menu.action.locale_set_ru.tooltip", "default"),
-			svc.menuCommandAction(menuViewSystem, "cmdlocaleseten", "locale set en", "menu.action.locale_set_en", "menu.action.locale_set_en.tooltip", "default"),
+			svc.menuResourceAction(menuViewSystem, "systemstatus", menuActionSystemStatus, menuResourceSystem, "", "menu.action.status", "menu.action.status.tooltip", "primary", nil),
+			svc.menuResourceAction(menuViewSystem, "tokencheck", menuActionTokenCheck, menuResourceSystem, "", "menu.action.token_check", "menu.action.token_check.tooltip", "default", nil),
+			svc.menuResourceAction(menuViewSystem, "localeget", menuActionLocaleGet, menuResourceSystem, "", "menu.action.locale_get", "menu.action.locale_get.tooltip", "default", nil),
+			svc.menuResourceAction(menuViewSystem, "localesetru", menuActionLocaleSetRU, menuResourceSystem, "", "menu.action.locale_set_ru", "menu.action.locale_set_ru.tooltip", "default", nil),
+			svc.menuResourceAction(menuViewSystem, "localeseten", menuActionLocaleSetEN, menuResourceSystem, "", "menu.action.locale_set_en", "menu.action.locale_set_en.tooltip", "default", nil),
 			svc.menuAction(menuViewMain, "menu.action.back", "menu.action.back.tooltip", "default"),
 		}
 	case menuViewHelp:
@@ -2937,13 +3546,6 @@ func (svc *SlashCommandService) menuActions(view string) []MattermostCardAction 
 			svc.menuAction(menuViewSystem, "menu.action.system", "menu.action.system.tooltip", "default"),
 		}
 	}
-}
-
-func (svc *SlashCommandService) menuCommandAction(view string, actionID string, command string, nameID string, tooltipID string, style string) MattermostCardAction {
-	action := svc.menuAction(view, nameID, tooltipID, style)
-	action.ID = actionID
-	action.Context["command"] = command
-	return action
 }
 
 func (svc *SlashCommandService) menuDialogAction(view string, actionID string, dialog string, nameID string, tooltipID string, style string) MattermostCardAction {
@@ -3465,6 +4067,33 @@ const (
 	menuDialogGitHubAccountEdit   = "github_account_edit"
 	menuDialogGitHubAccountDelete = "github_account_delete"
 
+	menuActionList              = "list"
+	menuActionShow              = "show"
+	menuActionConfirmDelete     = "confirm_delete"
+	menuActionDelete            = "delete"
+	menuActionCancel            = "cancel"
+	menuActionRepositoryCheck   = "repository_check"
+	menuActionRepositoryWebhook = "repository_webhook"
+	menuActionOpenAIStatus      = "openai_status"
+	menuActionOpenAICleanup     = "openai_cleanup"
+	menuActionSystemStatus      = "system_status"
+	menuActionTokenCheck        = "token_check"
+	menuActionLocaleGet         = "locale_get"
+	menuActionLocaleSetRU       = "locale_set_ru"
+	menuActionLocaleSetEN       = "locale_set_en"
+	menuActionRuntimeSmoke      = "runtime_smoke"
+	menuActionRuntimePruneDry   = "runtime_prune_dry"
+	menuActionPromptHelp        = "prompt_help"
+	menuActionPromptRender      = "prompt_render"
+
+	menuResourceRepository     = "repository"
+	menuResourceOpenAIAccount  = "openai_account"
+	menuResourceGitHubAccount  = "github_account"
+	menuResourceProfile        = "profile"
+	menuResourcePromptTemplate = "prompt_template"
+	menuResourceSystem         = "system"
+	menuResourceRuntime        = "runtime"
+
 	dialogCallbackRepositoryAdd       = "agents_repo_add"
 	dialogCallbackRepositoryEdit      = "agents_repo_edit"
 	dialogCallbackRepositoryDelete    = "agents_repo_delete"
@@ -3518,6 +4147,8 @@ const (
 	flowOwnerDecisionRejected = "rejected"
 	flowOwnerDecisionRerun    = "rerun"
 	flowOwnerDecisionStopped  = "stopped"
+
+	entityListPageSize = 4
 )
 
 func validIdentifier(value string) bool {
@@ -3753,6 +4384,66 @@ func repositoryChannelName(owner string, name string) string {
 		return "repo-unknown"
 	}
 	return value
+}
+
+func repositoryResourceID(repo entity.Repository) string {
+	return repo.Provider + ":" + repo.FullName()
+}
+
+func parseRepositoryResourceID(value string) (string, string, string, bool) {
+	provider, fullName, ok := strings.Cut(strings.TrimSpace(value), ":")
+	if !ok || strings.TrimSpace(provider) == "" {
+		return "", "", "", false
+	}
+	owner, name, ok := parseSubmittedRepository(fullName)
+	if !ok {
+		return "", "", "", false
+	}
+	return strings.ToLower(provider), owner, name, true
+}
+
+func promptTemplateResourceID(profileName string, templateKey string) string {
+	return profileName + "/" + templateKey
+}
+
+func parsePromptTemplateResourceID(value string) (string, string, bool) {
+	profileName, templateKey, ok := strings.Cut(strings.TrimSpace(value), "/")
+	if !ok || strings.Contains(templateKey, "/") {
+		return "", "", false
+	}
+	profileName = strings.ToLower(strings.TrimSpace(profileName))
+	templateKey = strings.ToLower(strings.TrimSpace(templateKey))
+	if !validPromptTemplateID(profileName) || !validPromptTemplateID(templateKey) {
+		return "", "", false
+	}
+	return profileName, templateKey, true
+}
+
+func entityPageBounds(total int, page int) (int, int, int) {
+	if total <= 0 {
+		return 0, 0, 0
+	}
+	pages := (total + entityListPageSize - 1) / entityListPageSize
+	if page < 0 {
+		page = 0
+	}
+	if page >= pages {
+		page = pages - 1
+	}
+	start := page * entityListPageSize
+	end := start + entityListPageSize
+	if end > total {
+		end = total
+	}
+	return start, end, page
+}
+
+func applyMenuCardIdentity(card *MattermostCard, command MenuActionCommand) {
+	if card == nil {
+		return
+	}
+	card.ChannelID = strings.TrimSpace(command.ChannelID)
+	card.PostID = strings.TrimSpace(command.PostID)
 }
 
 func (svc *SlashCommandService) recordGitHubAudit(ctx context.Context, command SlashCommand, eventType string, resourceName string, summary string) {

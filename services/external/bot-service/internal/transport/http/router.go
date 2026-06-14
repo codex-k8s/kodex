@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 
 	statusservice "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/service"
@@ -184,6 +185,10 @@ func (router *Router) handleAgentsAction(w http.ResponseWriter, r *http.Request)
 		View:      contextString(request.Context, "view"),
 		Command:   contextString(request.Context, "command"),
 		Dialog:    contextString(request.Context, "dialog"),
+		Action:    contextString(request.Context, "action"),
+		Resource:  contextString(request.Context, "resource_type"),
+		ID:        contextString(request.Context, "resource_id"),
+		Page:      contextInt(request.Context, "page"),
 		UserID:    strings.TrimSpace(request.UserId),
 		UserName:  strings.TrimSpace(request.UserName),
 		ChannelID: strings.TrimSpace(request.ChannelId),
@@ -483,4 +488,16 @@ func contextString(context map[string]any, key string) string {
 		return strings.TrimSpace(text)
 	}
 	return strings.TrimSpace(fmt.Sprint(value))
+}
+
+func contextInt(context map[string]any, key string) int {
+	value := contextString(context, key)
+	if value == "" {
+		return 0
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed < 0 {
+		return 0
+	}
+	return parsed
 }
