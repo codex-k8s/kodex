@@ -621,6 +621,7 @@ func (store *fakeRouterAdminStore) UpsertRepository(_ context.Context, input adm
 		Owner:             input.Owner,
 		Name:              input.Name,
 		DefaultBranch:     input.DefaultBranch,
+		GitHubAccountName: input.GitHubAccountName,
 		MattermostChannel: input.MattermostChannel,
 		Status:            "active",
 	}

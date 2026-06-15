@@ -8,6 +8,7 @@ type Repository struct {
 	Owner             string
 	Name              string
 	DefaultBranch     string
+	GitHubAccountName string
 	Status            string
 	MattermostChannel string
 	CreatedAt         time.Time

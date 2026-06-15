@@ -66,10 +66,42 @@ type WebhookRegistration struct {
 	Active   bool
 }
 
+type GitHubAccountRef struct {
+	Name      string
+	SecretRef string
+}
+
 type GitHubTokenInspection struct {
 	Username string
 	Email    string
 	Scopes   []string
+}
+
+type RepositoryCandidate struct {
+	Provider      string
+	Owner         string
+	Name          string
+	FullName      string
+	DefaultBranch string
+	Private       bool
+	Description   string
+	URL           string
+}
+
+type BranchCandidate struct {
+	Name      string
+	Protected bool
+}
+
+type RepositorySearchInput struct {
+	Account GitHubAccountRef
+	Query   string
+	Limit   int
+}
+
+type RepositoryListInput struct {
+	Account GitHubAccountRef
+	Limit   int
 }
 
 type PullRequestInput struct {
@@ -94,4 +126,12 @@ type RepositoryProvider interface {
 
 type GitHubAccountInspector interface {
 	InspectToken(ctx context.Context, token string) (GitHubTokenInspection, error)
+}
+
+type GitHubAccountRepositoryProvider interface {
+	ListRepositories(ctx context.Context, input RepositoryListInput) ([]RepositoryCandidate, error)
+	SearchRepositories(ctx context.Context, input RepositorySearchInput) ([]RepositoryCandidate, error)
+	ListBranches(ctx context.Context, account GitHubAccountRef, owner string, name string, limit int) ([]BranchCandidate, error)
+	CheckRepository(ctx context.Context, account GitHubAccountRef, owner string, name string) (RepositoryAccess, error)
+	EnsureRepositoryWebhook(ctx context.Context, account GitHubAccountRef, owner string, name string) (WebhookRegistration, error)
 }
