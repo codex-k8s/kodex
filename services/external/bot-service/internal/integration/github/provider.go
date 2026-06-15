@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	providerrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/provider"
@@ -34,7 +35,10 @@ type Provider struct {
 	webhookEvents []string
 }
 
+type TokenInspector struct{}
+
 var _ providerrepo.RepositoryProvider = (*Provider)(nil)
+var _ providerrepo.GitHubAccountInspector = (*TokenInspector)(nil)
 
 func NewProvider(cfg ProviderConfig) (*Provider, error) {
 	client, err := githubapi.NewClient(githubapi.WithAuthToken(strings.TrimSpace(cfg.Token)))
@@ -51,6 +55,69 @@ func NewProvider(cfg ProviderConfig) (*Provider, error) {
 		webhookSecret: strings.TrimSpace(cfg.WebhookSecret),
 		webhookEvents: append([]string(nil), events...),
 	}, nil
+}
+
+func NewTokenInspector() *TokenInspector {
+	return &TokenInspector{}
+}
+
+func (inspector *TokenInspector) InspectToken(ctx context.Context, token string) (providerrepo.GitHubTokenInspection, error) {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return providerrepo.GitHubTokenInspection{}, fmt.Errorf("github token is required")
+	}
+	client, err := githubapi.NewClient(githubapi.WithAuthToken(token))
+	if err != nil {
+		return providerrepo.GitHubTokenInspection{}, fmt.Errorf("create github token client: %w", err)
+	}
+	user, response, err := client.Users.Get(ctx, "")
+	if err != nil {
+		return providerrepo.GitHubTokenInspection{}, githubError("github token introspection", err)
+	}
+	username := strings.TrimSpace(user.GetLogin())
+	if username == "" {
+		return providerrepo.GitHubTokenInspection{}, fmt.Errorf("github token introspection: username is empty")
+	}
+	email := strings.TrimSpace(user.GetEmail())
+	if email == "" {
+		email = inspector.primaryEmail(ctx, client)
+	}
+	if email == "" {
+		email = username + "@users.noreply.github.com"
+	}
+	return providerrepo.GitHubTokenInspection{
+		Username: username,
+		Email:    email,
+		Scopes:   githubScopesFromResponse(response),
+	}, nil
+}
+
+func (inspector *TokenInspector) primaryEmail(ctx context.Context, client *githubapi.Client) string {
+	emails, _, err := client.Users.ListEmails(ctx, &githubapi.ListOptions{PerPage: 100})
+	if err != nil {
+		return ""
+	}
+	for _, email := range emails {
+		if email.GetPrimary() && email.GetVerified() && strings.TrimSpace(email.GetEmail()) != "" {
+			return strings.TrimSpace(email.GetEmail())
+		}
+	}
+	for _, email := range emails {
+		if email.GetPrimary() && strings.TrimSpace(email.GetEmail()) != "" {
+			return strings.TrimSpace(email.GetEmail())
+		}
+	}
+	for _, email := range emails {
+		if email.GetVerified() && strings.TrimSpace(email.GetEmail()) != "" {
+			return strings.TrimSpace(email.GetEmail())
+		}
+	}
+	for _, email := range emails {
+		if strings.TrimSpace(email.GetEmail()) != "" {
+			return strings.TrimSpace(email.GetEmail())
+		}
+	}
+	return ""
 }
 
 func (provider *Provider) CheckRepository(ctx context.Context, owner string, name string) (providerrepo.RepositoryAccess, error) {
@@ -250,6 +317,26 @@ func githubError(operation string, err error) error {
 		}
 	}
 	return fmt.Errorf("%s: %w", operation, err)
+}
+
+func githubScopesFromResponse(response *githubapi.Response) []string {
+	if response == nil || response.Response == nil {
+		return nil
+	}
+	raw := response.Response.Header.Get("X-OAuth-Scopes")
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	scopes := make([]string, 0, len(parts))
+	for _, part := range parts {
+		scope := strings.TrimSpace(part)
+		if scope != "" {
+			scopes = append(scopes, scope)
+		}
+	}
+	sort.Strings(scopes)
+	return scopes
 }
 
 func summaryFromPullRequest(owner string, name string, pullRequest *githubapi.PullRequest) providerrepo.PullRequestSummary {

@@ -64,6 +64,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
+	gitHubAccountInspector := githubintegration.NewTokenInspector()
 	slashSvc := statusservice.NewSlashCommandService(statusservice.SlashCommandServiceConfig{
 		Localizer:               localizer,
 		StatusService:           statusSvc,
@@ -71,9 +72,11 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		ChannelManager:          channelManager,
 		FlowCardPublisher:       flowCardPublisher,
 		RepositoryProvider:      gitHubProvider,
+		GitHubAccountInspector:  gitHubAccountInspector,
 		RuntimeRunner:           runtimeRunner,
 		DefaultTeamName:         cfg.DefaultTeamName,
 		CodexAuthSecretName:     cfg.CodexAuthSecretName,
+		GitHubSecretName:        cfg.GitHubSecretName,
 		MenuActionURL:           agentsActionURL(cfg),
 		DialogSubmitURL:         agentsDialogURL(cfg),
 		FlowActionURL:           flowActionURL(cfg),

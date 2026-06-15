@@ -174,9 +174,11 @@ type SlashCommandServiceConfig struct {
 	ChannelManager          MattermostChannelManager
 	FlowCardPublisher       FlowCardPublisher
 	RepositoryProvider      providerrepo.RepositoryProvider
+	GitHubAccountInspector  providerrepo.GitHubAccountInspector
 	RuntimeRunner           runtimerepo.Runner
 	DefaultTeamName         string
 	CodexAuthSecretName     string
+	GitHubSecretName        string
 	MenuActionURL           string
 	DialogSubmitURL         string
 	FlowActionURL           string
@@ -352,15 +354,25 @@ func (svc *SlashCommandService) handleToken(ctx context.Context, args []string) 
 		svc.t("token.check.channel_manager", map[string]any{"Status": configuredLabel(svc.cfg.Localizer, svc.cfg.ChannelManagerEnabled)}),
 	}
 	if svc.cfg.StorageReady && svc.cfg.Store != nil {
-		accounts, err := svc.cfg.Store.ListOpenAIAccounts(ctx, 100)
+		openAIAccounts, err := svc.cfg.Store.ListOpenAIAccounts(ctx, 100)
 		if err == nil {
 			authorized := 0
-			for _, account := range accounts {
+			for _, account := range openAIAccounts {
 				if account.Status == "authorized" {
 					authorized++
 				}
 			}
-			lines = append(lines, svc.t("token.check.openai_accounts", map[string]any{"Authorized": authorized, "Total": len(accounts)}))
+			lines = append(lines, svc.t("token.check.openai_accounts", map[string]any{"Authorized": authorized, "Total": len(openAIAccounts)}))
+		}
+		gitHubAccounts, err := svc.cfg.Store.ListGitHubAccounts(ctx, 100)
+		if err == nil {
+			configured := 0
+			for _, account := range gitHubAccounts {
+				if account.Status == "configured" {
+					configured++
+				}
+			}
+			lines = append(lines, svc.t("token.check.github_accounts", map[string]any{"Configured": configured, "Total": len(gitHubAccounts)}))
 		}
 	}
 	return strings.Join(lines, "\n")
@@ -2556,7 +2568,7 @@ func (svc *SlashCommandService) githubAccountListCard(ctx context.Context, comma
 		number := start + idx + 1
 		card.Fields = append(card.Fields, MattermostCardField{
 			Title: svc.t("menu.entity.github.item_title", map[string]any{"Number": number, "Account": account.Name}),
-			Value: svc.t("menu.entity.github.summary", map[string]any{"Status": account.Status, "Secret": account.SecretRef, "Username": emptyAsUnknown(account.Username), "Email": emptyAsUnknown(account.Email)}),
+			Value: svc.t("menu.entity.github.summary", map[string]any{"Status": account.Status, "Secret": account.SecretRef, "Username": emptyAsUnknown(account.Username), "Email": emptyAsUnknown(account.Email), "Scopes": emptyAsUnknown(account.Scopes)}),
 			Short: false,
 		})
 		card.Actions = append(card.Actions, svc.menuResourceAction(menuViewGitHub, "opengithub"+strconv.Itoa(number), menuActionShow, menuResourceGitHubAccount, account.Name, "menu.action.open_number", "menu.action.open_number.tooltip", "default", map[string]any{"Number": number}))
@@ -2583,8 +2595,10 @@ func (svc *SlashCommandService) githubAccountEntityCard(ctx context.Context, com
 		{Title: svc.t("menu.entity.field.secret", nil), Value: "`" + account.SecretRef + "`", Short: false},
 		{Title: svc.t("menu.entity.field.username", nil), Value: "`" + emptyAsUnknown(account.Username) + "`", Short: true},
 		{Title: svc.t("menu.entity.field.email", nil), Value: "`" + emptyAsUnknown(account.Email) + "`", Short: true},
+		{Title: svc.t("menu.entity.field.scopes", nil), Value: "`" + emptyAsUnknown(account.Scopes) + "`", Short: false},
 	}
 	card.Actions = []MattermostCardAction{
+		svc.menuResourceDialogAction(menuViewGitHub, "githubedit", menuDialogGitHubAccountEdit, menuResourceGitHubAccount, account.Name, "menu.action.github_account_edit", "menu.action.github_account_edit.tooltip", "primary", nil),
 		svc.menuResourceAction(menuViewGitHub, "githubdeleteconfirm", menuActionConfirmDelete, menuResourceGitHubAccount, account.Name, "menu.action.github_account_delete", "menu.action.github_account_delete.tooltip", "danger", nil),
 		svc.menuResourceAction(menuViewGitHub, "githublist", menuActionList, menuResourceGitHubAccount, "", "menu.action.github_account_list", "menu.action.github_account_list.tooltip", "default", nil),
 		svc.menuAction(menuViewAccounts, "menu.action.back", "menu.action.back.tooltip", "default"),
@@ -2605,15 +2619,44 @@ func (svc *SlashCommandService) githubAccountDeleteConfirmationCard(ctx context.
 }
 
 func (svc *SlashCommandService) deleteGitHubAccountFromMenu(ctx context.Context, command MenuActionCommand) string {
+	return svc.deleteGitHubAccountText(ctx, command.ID, svc.slashFromMenu(command))
+}
+
+func (svc *SlashCommandService) deleteGitHubAccountText(ctx context.Context, accountName string, command SlashCommand) string {
 	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
 		return svc.t("github.account.list.storage_not_ready", nil)
 	}
-	deleted, err := svc.cfg.Store.DeleteGitHubAccount(ctx, command.ID)
+	account, err := svc.cfg.Store.GetGitHubAccount(ctx, accountName)
+	if err != nil {
+		if errors.Is(err, adminrepo.ErrNotFound) {
+			return svc.t("dialog.github.not_found", map[string]any{"Account": accountName})
+		}
+		return svc.t("github.account.delete_failed", map[string]any{"Error": safeError(err)})
+	}
+	refs, err := svc.githubAccountProfileRefs(ctx, account.Name)
+	if err != nil {
+		return svc.t("github.account.delete.profile_check_failed", map[string]any{"Error": safeError(err)})
+	}
+	if len(refs) > 0 {
+		return svc.t("github.account.delete.in_use", map[string]any{"Account": account.Name, "Profiles": strings.Join(refs, ", ")})
+	}
+	secretDeleted := false
+	if account.SecretRef == githubAccountSecretName(svc.cfg.GitHubSecretName, account.Name) {
+		if svc.cfg.RuntimeRunner == nil {
+			return svc.t("github.account.runtime_not_configured", nil)
+		}
+		secret, err := svc.cfg.RuntimeRunner.DeleteGitHubTokenSecret(ctx, account.Name, account.SecretRef)
+		if err != nil {
+			return svc.t("github.account.delete_failed", map[string]any{"Error": safeError(err)})
+		}
+		secretDeleted = secret.SecretDeleted
+	}
+	deleted, err := svc.cfg.Store.DeleteGitHubAccount(ctx, account.Name)
 	if err != nil {
 		return svc.t("github.account.delete_failed", map[string]any{"Error": safeError(err)})
 	}
-	svc.recordGitHubAudit(ctx, svc.slashFromMenu(command), "github.account.deleted", deleted.Name, "github account metadata deleted from Mattermost entity card")
-	return svc.t("github.account.delete_result", map[string]any{"Account": deleted.Name, "Secret": deleted.SecretRef})
+	svc.recordGitHubAudit(ctx, command, "github.account.deleted", deleted.Name, "github account metadata and managed token secret deleted")
+	return svc.t("github.account.delete_result", map[string]any{"Account": deleted.Name, "Secret": deleted.SecretRef, "SecretDeleted": secretDeleted})
 }
 
 func (svc *SlashCommandService) profileListCard(ctx context.Context, command MenuActionCommand) *MattermostCard {
@@ -2811,6 +2854,19 @@ func (svc *SlashCommandService) menuResourceAction(view string, actionID string,
 	return item
 }
 
+func (svc *SlashCommandService) menuResourceDialogAction(view string, actionID string, dialog string, resource string, resourceID string, nameID string, tooltipID string, style string, data map[string]any) MattermostCardAction {
+	item := svc.menuAction(view, nameID, tooltipID, style)
+	item.ID = actionID
+	item.Name = svc.t(nameID, data)
+	item.Tooltip = svc.t(tooltipID, data)
+	item.Context["dialog"] = dialog
+	item.Context["resource_type"] = resource
+	if strings.TrimSpace(resourceID) != "" {
+		item.Context["resource_id"] = resourceID
+	}
+	return item
+}
+
 func (svc *SlashCommandService) slashFromMenu(command MenuActionCommand) SlashCommand {
 	return SlashCommand{
 		UserID:    command.UserID,
@@ -2992,12 +3048,13 @@ func (svc *SlashCommandService) openAIAccountDeleteDialog(command MenuActionComm
 }
 
 func (svc *SlashCommandService) githubAccountDialog(command MenuActionCommand, callbackID string, titleID string, introID string, submitID string, deleteMode bool) *MattermostDialog {
+	accountDefault := defaultString(command.ID, "agent")
 	elements := []MattermostDialogElement{
 		{
 			DisplayName: svc.t("dialog.account.field.name", nil),
 			Name:        dialogFieldAccount,
 			Type:        "text",
-			Default:     "agent",
+			Default:     accountDefault,
 			Placeholder: "agent",
 			HelpText:    svc.t("dialog.account.field.name.help", nil),
 			MinLength:   1,
@@ -3015,46 +3072,16 @@ func (svc *SlashCommandService) githubAccountDialog(command MenuActionCommand, c
 			MaxLength:   6,
 		})
 	} else {
-		elements = append(elements,
-			MattermostDialogElement{
-				DisplayName: svc.t("dialog.github.field.secret", nil),
-				Name:        dialogFieldSecretRef,
-				Type:        "text",
-				Placeholder: "matter-codex-github-agent",
-				HelpText:    svc.t("dialog.github.field.secret.help", nil),
-				MinLength:   1,
-				MaxLength:   253,
-			},
-			MattermostDialogElement{
-				DisplayName: svc.t("dialog.github.field.username", nil),
-				Name:        dialogFieldUsername,
-				Type:        "text",
-				Placeholder: "ai-da-stas",
-				HelpText:    svc.t("dialog.github.field.username.help", nil),
-				Optional:    true,
-				MaxLength:   80,
-			},
-			MattermostDialogElement{
-				DisplayName: svc.t("dialog.github.field.email", nil),
-				Name:        dialogFieldEmail,
-				Type:        "text",
-				SubType:     "email",
-				Placeholder: "user@example.com",
-				HelpText:    svc.t("dialog.github.field.email.help", nil),
-				Optional:    true,
-				MaxLength:   150,
-			},
-			MattermostDialogElement{
-				DisplayName: svc.t("dialog.github.field.status", nil),
-				Name:        dialogFieldStatus,
-				Type:        "select",
-				Default:     "configured",
-				Options: []MattermostDialogOption{
-					{Text: svc.t("dialog.github.status.configured", nil), Value: "configured"},
-					{Text: svc.t("dialog.github.status.disabled", nil), Value: "disabled"},
-				},
-			},
-		)
+		elements = append(elements, MattermostDialogElement{
+			DisplayName: svc.t("dialog.github.field.token", nil),
+			Name:        dialogFieldToken,
+			Type:        "text",
+			SubType:     "password",
+			Placeholder: "github_pat_...",
+			HelpText:    svc.t("dialog.github.field.token.help", nil),
+			MinLength:   8,
+			MaxLength:   4096,
+		})
 	}
 	return &MattermostDialog{
 		SubmitURL:        svc.cfg.DialogSubmitURL,
@@ -3203,6 +3230,12 @@ func (svc *SlashCommandService) handleGitHubAccountDialogUpsert(ctx context.Cont
 	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
 		return DialogSubmissionResult{StatusCode: 200, Error: svc.t("github.account.list.storage_not_ready", nil)}
 	}
+	if svc.cfg.GitHubAccountInspector == nil {
+		return DialogSubmissionResult{StatusCode: 200, Error: svc.t("github.account.inspect_not_configured", nil)}
+	}
+	if svc.cfg.RuntimeRunner == nil {
+		return DialogSubmissionResult{StatusCode: 200, Error: svc.t("github.account.runtime_not_configured", nil)}
+	}
 	if requireExisting {
 		if _, err := svc.cfg.Store.GetGitHubAccount(ctx, input.Name); err != nil {
 			if errors.Is(err, adminrepo.ErrNotFound) {
@@ -3211,7 +3244,31 @@ func (svc *SlashCommandService) handleGitHubAccountDialogUpsert(ctx context.Cont
 			return DialogSubmissionResult{StatusCode: 200, Error: svc.t("github.account.list.failed", map[string]any{"Error": safeError(err)})}
 		}
 	}
-	account, created, err := svc.cfg.Store.UpsertGitHubAccount(ctx, input)
+	inspection, err := svc.cfg.GitHubAccountInspector.InspectToken(ctx, input.Token)
+	if err != nil {
+		return DialogSubmissionResult{StatusCode: 200, Error: svc.t("github.account.inspect_failed", map[string]any{"Error": safeError(err)})}
+	}
+	scopes := strings.Join(inspection.Scopes, ", ")
+	secretName := githubAccountSecretName(svc.cfg.GitHubSecretName, input.Name)
+	secret, err := svc.cfg.RuntimeRunner.UpsertGitHubTokenSecret(ctx, runtimerepo.GitHubTokenSecretInput{
+		AccountName: input.Name,
+		SecretName:  secretName,
+		Token:       input.Token,
+		Username:    inspection.Username,
+		Email:       inspection.Email,
+	})
+	if err != nil {
+		return DialogSubmissionResult{StatusCode: 200, Error: svc.t("github.account.secret_failed", map[string]any{"Error": safeError(err)})}
+	}
+	account, created, err := svc.cfg.Store.UpsertGitHubAccount(ctx, adminrepo.UpsertGitHubAccountInput{
+		Name:           input.Name,
+		CredentialName: githubCredentialName(input.Name),
+		SecretRef:      secret.SecretName,
+		Username:       inspection.Username,
+		Email:          inspection.Email,
+		Scopes:         scopes,
+		Status:         "configured",
+	})
 	if err != nil {
 		return DialogSubmissionResult{StatusCode: 200, Error: svc.t("github.account.save_failed", map[string]any{"Error": safeError(err)})}
 	}
@@ -3219,18 +3276,21 @@ func (svc *SlashCommandService) handleGitHubAccountDialogUpsert(ctx context.Cont
 		UserID:    command.UserID,
 		UserName:  defaultString(command.UserName, state.UserName),
 		ChannelID: defaultString(state.ChannelID, command.ChannelID),
-	}, "github.account.upserted", account.Name, "github account metadata upserted from Mattermost dialog")
+	}, "github.account.upserted", account.Name, "github account token inspected and secret upserted from Mattermost dialog")
 	stateID := "label.updated"
 	if created {
 		stateID = "label.created"
 	}
 	text := svc.t("github.account.save_result", map[string]any{
-		"State":    svc.t(stateID, nil),
-		"Account":  account.Name,
-		"Secret":   account.SecretRef,
-		"Username": emptyAsUnknown(account.Username),
-		"Email":    emptyAsUnknown(account.Email),
-		"Status":   account.Status,
+		"State":         svc.t(stateID, nil),
+		"Account":       account.Name,
+		"Secret":        account.SecretRef,
+		"Namespace":     secret.Namespace,
+		"SecretCreated": secret.Created,
+		"Username":      emptyAsUnknown(account.Username),
+		"Email":         emptyAsUnknown(account.Email),
+		"Scopes":        emptyAsUnknown(account.Scopes),
+		"Status":        account.Status,
 	})
 	return DialogSubmissionResult{
 		StatusCode: 200,
@@ -3238,39 +3298,25 @@ func (svc *SlashCommandService) handleGitHubAccountDialogUpsert(ctx context.Cont
 	}
 }
 
-func (svc *SlashCommandService) githubAccountDialogInput(submission map[string]any) (adminrepo.UpsertGitHubAccountInput, map[string]string) {
+type githubAccountTokenDialogInput struct {
+	Name  string
+	Token string
+}
+
+func (svc *SlashCommandService) githubAccountDialogInput(submission map[string]any) (githubAccountTokenDialogInput, map[string]string) {
 	fieldErrors := map[string]string{}
 	accountName, err := parseOpenAIAccountName(submissionString(submission, dialogFieldAccount))
 	if err != nil {
 		fieldErrors[dialogFieldAccount] = svc.t("parse.openai_account.invalid", nil)
 	}
-	secretRef := strings.ToLower(submissionString(submission, dialogFieldSecretRef))
-	if !validKubernetesSecretName(secretRef) {
-		fieldErrors[dialogFieldSecretRef] = svc.t("dialog.github.secret_invalid", nil)
-	}
-	username := submissionString(submission, dialogFieldUsername)
-	if username != "" && !validGitHubUsername(username) {
-		fieldErrors[dialogFieldUsername] = svc.t("dialog.github.username_invalid", nil)
-	}
-	email := submissionString(submission, dialogFieldEmail)
-	if email != "" && !validAccountEmail(email) {
-		fieldErrors[dialogFieldEmail] = svc.t("dialog.github.email_invalid", nil)
-	}
-	status := defaultString(strings.ToLower(submissionString(submission, dialogFieldStatus)), "configured")
-	if !validGitHubAccountStatus(status) {
-		fieldErrors[dialogFieldStatus] = svc.t("dialog.github.status_invalid", nil)
+	token := submissionString(submission, dialogFieldToken)
+	if strings.TrimSpace(token) == "" {
+		fieldErrors[dialogFieldToken] = svc.t("dialog.github.token_invalid", nil)
 	}
 	if len(fieldErrors) > 0 {
-		return adminrepo.UpsertGitHubAccountInput{}, fieldErrors
+		return githubAccountTokenDialogInput{}, fieldErrors
 	}
-	return adminrepo.UpsertGitHubAccountInput{
-		Name:           accountName,
-		CredentialName: githubCredentialName(accountName),
-		SecretRef:      secretRef,
-		Username:       username,
-		Email:          email,
-		Status:         status,
-	}, nil
+	return githubAccountTokenDialogInput{Name: accountName, Token: token}, nil
 }
 
 func (svc *SlashCommandService) handleGitHubAccountDialogDelete(ctx context.Context, command DialogSubmissionCommand, state mattermostDialogState) DialogSubmissionResult {
@@ -3281,24 +3327,10 @@ func (svc *SlashCommandService) handleGitHubAccountDialogDelete(ctx context.Cont
 	if len(fieldErrors) > 0 {
 		return DialogSubmissionResult{StatusCode: 200, Errors: fieldErrors}
 	}
-	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
-		return DialogSubmissionResult{StatusCode: 200, Error: svc.t("github.account.list.storage_not_ready", nil)}
-	}
-	deleted, err := svc.cfg.Store.DeleteGitHubAccount(ctx, accountName)
-	if err != nil {
-		if errors.Is(err, adminrepo.ErrNotFound) {
-			return DialogSubmissionResult{StatusCode: 200, Errors: map[string]string{dialogFieldAccount: svc.t("dialog.github.not_found", map[string]any{"Account": accountName})}}
-		}
-		return DialogSubmissionResult{StatusCode: 200, Error: svc.t("github.account.delete_failed", map[string]any{"Error": safeError(err)})}
-	}
-	svc.recordGitHubAudit(ctx, SlashCommand{
+	text := svc.deleteGitHubAccountText(ctx, accountName, SlashCommand{
 		UserID:    command.UserID,
 		UserName:  defaultString(command.UserName, state.UserName),
 		ChannelID: defaultString(state.ChannelID, command.ChannelID),
-	}, "github.account.deleted", deleted.Name, "github account metadata deleted from Mattermost dialog")
-	text := svc.t("github.account.delete_result", map[string]any{
-		"Account": deleted.Name,
-		"Secret":  deleted.SecretRef,
 	})
 	return DialogSubmissionResult{
 		StatusCode: 200,
@@ -3623,6 +3655,7 @@ func (svc *SlashCommandService) handleGitHubAccountList(ctx context.Context) str
 			"Secret":   account.SecretRef,
 			"Username": emptyAsUnknown(account.Username),
 			"Email":    emptyAsUnknown(account.Email),
+			"Scopes":   emptyAsUnknown(account.Scopes),
 		}))
 	}
 	return strings.Join(lines, "\n")
@@ -4111,6 +4144,7 @@ const (
 	dialogFieldConfirm       = "confirm"
 	dialogFieldAccount       = "account"
 	dialogFieldSecretRef     = "secret_ref"
+	dialogFieldToken         = "token"
 	dialogFieldUsername      = "username"
 	dialogFieldEmail         = "email"
 	dialogFieldStatus        = "status"
@@ -4566,6 +4600,24 @@ func (svc *SlashCommandService) openAIAccountProfileRefs(ctx context.Context, na
 	return refs, nil
 }
 
+func (svc *SlashCommandService) githubAccountProfileRefs(ctx context.Context, name string) ([]string, error) {
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return nil, nil
+	}
+	profiles, err := svc.cfg.Store.ListAgentProfiles(ctx)
+	if err != nil {
+		return nil, err
+	}
+	refs := make([]string, 0)
+	for _, profile := range profiles {
+		if defaultString(profile.GitHubAccountName, "primary") == name {
+			refs = append(refs, profile.Name)
+		}
+	}
+	sort.Strings(refs)
+	return refs, nil
+}
+
 func (svc *SlashCommandService) githubAccount(ctx context.Context, name string) (entity.GitHubAccount, bool) {
 	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
 		return entity.GitHubAccount{}, false
@@ -4686,6 +4738,18 @@ func codexAuthSecretName(baseName string, accountName string) string {
 	accountName = strings.Trim(strings.TrimSpace(accountName), "-")
 	if accountName == "" {
 		accountName = "primary"
+	}
+	return baseName + "-" + accountName
+}
+
+func githubAccountSecretName(baseName string, accountName string) string {
+	baseName = strings.Trim(strings.TrimSpace(baseName), "-")
+	if baseName == "" {
+		baseName = "matter-codex-github"
+	}
+	accountName = strings.Trim(strings.TrimSpace(accountName), "-")
+	if accountName == "" || accountName == "primary" {
+		return baseName
 	}
 	return baseName + "-" + accountName
 }

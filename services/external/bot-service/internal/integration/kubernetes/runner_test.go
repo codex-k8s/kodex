@@ -128,6 +128,74 @@ func TestDeleteCodexAuthAccountDeletesJobAndSecret(t *testing.T) {
 	}
 }
 
+func TestUpsertGitHubTokenSecretCreatesAndUpdatesSecret(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	runner, err := NewRunnerWithClient(client, Config{
+		Namespace:                 "mattermost",
+		AgentRunnerImage:          "matter-codex-agent-runner:test",
+		AgentRunnerServiceAccount: "matter-codex-agent-runner",
+	})
+	if err != nil {
+		t.Fatalf("NewRunnerWithClient() error = %v", err)
+	}
+
+	created, err := runner.UpsertGitHubTokenSecret(context.Background(), runtimerepo.GitHubTokenSecretInput{
+		AccountName: "reviewer",
+		SecretName:  "matter-codex-github-reviewer",
+		Token:       "test-token-initial",
+		Username:    "reviewer-bot",
+		Email:       "reviewer@example.invalid",
+	})
+	if err != nil {
+		t.Fatalf("UpsertGitHubTokenSecret(create) error = %v", err)
+	}
+	if !created.Created || created.Namespace != "mattermost" || created.SecretName != "matter-codex-github-reviewer" {
+		t.Fatalf("created = %#v", created)
+	}
+	secret, err := client.CoreV1().Secrets("mattermost").Get(context.Background(), "matter-codex-github-reviewer", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("Get secret error = %v", err)
+	}
+	if string(secret.Data["github-token"]) != "test-token-initial" || string(secret.Data["github-username"]) != "reviewer-bot" || string(secret.Data["github-email"]) != "reviewer@example.invalid" {
+		t.Fatalf("secret data = %#v", secret.Data)
+	}
+	if secret.Labels["matter-codex.dev/github-account"] != "reviewer" {
+		t.Fatalf("secret labels = %#v", secret.Labels)
+	}
+
+	updated, err := runner.UpsertGitHubTokenSecret(context.Background(), runtimerepo.GitHubTokenSecretInput{
+		AccountName: "reviewer",
+		SecretName:  "matter-codex-github-reviewer",
+		Token:       "test-token-updated",
+		Username:    "reviewer-bot",
+		Email:       "reviewer@example.invalid",
+	})
+	if err != nil {
+		t.Fatalf("UpsertGitHubTokenSecret(update) error = %v", err)
+	}
+	if updated.Created {
+		t.Fatalf("updated should not be created: %#v", updated)
+	}
+	secret, err = client.CoreV1().Secrets("mattermost").Get(context.Background(), "matter-codex-github-reviewer", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("Get updated secret error = %v", err)
+	}
+	if string(secret.Data["github-token"]) != "test-token-updated" {
+		t.Fatalf("updated token = %q", secret.Data["github-token"])
+	}
+
+	deleted, err := runner.DeleteGitHubTokenSecret(context.Background(), "reviewer", "matter-codex-github-reviewer")
+	if err != nil {
+		t.Fatalf("DeleteGitHubTokenSecret() error = %v", err)
+	}
+	if !deleted.SecretDeleted {
+		t.Fatalf("deleted = %#v", deleted)
+	}
+	if _, err := client.CoreV1().Secrets("mattermost").Get(context.Background(), "matter-codex-github-reviewer", metav1.GetOptions{}); !apierrors.IsNotFound(err) {
+		t.Fatalf("secret should be deleted, err = %v", err)
+	}
+}
+
 func TestStartDeveloperRunCreatesPVCAndJob(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	runner, err := NewRunnerWithClient(client, Config{

@@ -545,13 +545,24 @@ func TestOpenAIAccountDialogSubmissionBlocksProfileAccountDeletion(t *testing.T)
 
 func TestGitHubAccountDialogSubmissionAddsAccount(t *testing.T) {
 	store := &fakeAdminStore{githubAccounts: map[string]entity.GitHubAccount{}}
+	runner := &fakeRuntimeRunner{}
+	inspector := &fakeGitHubAccountInspector{
+		inspection: providerrepo.GitHubTokenInspection{
+			Username: "reviewer-user",
+			Email:    "reviewer@example.com",
+			Scopes:   []string{"repo", "workflow"},
+		},
+	}
 	localizer := testLocalizer(t, texti18n.DefaultLocale)
 	svc := NewSlashCommandService(SlashCommandServiceConfig{
-		Localizer:       localizer,
-		StatusService:   testStatusService(localizer),
-		Store:           store,
-		DialogSubmitURL: "http://bot-service/mattermost/dialogs/agents",
-		StorageReady:    true,
+		Localizer:              localizer,
+		StatusService:          testStatusService(localizer),
+		Store:                  store,
+		GitHubAccountInspector: inspector,
+		RuntimeRunner:          runner,
+		GitHubSecretName:       "matter-codex-github",
+		DialogSubmitURL:        "http://bot-service/mattermost/dialogs/agents",
+		StorageReady:           true,
 	})
 
 	result := svc.HandleDialogSubmission(context.Background(), DialogSubmissionCommand{
@@ -560,19 +571,22 @@ func TestGitHubAccountDialogSubmissionAddsAccount(t *testing.T) {
 		UserID:     "owner-id",
 		UserName:   "owner",
 		Submission: map[string]any{
-			dialogFieldAccount:   "reviewer",
-			dialogFieldSecretRef: "matter-codex-github-reviewer",
-			dialogFieldUsername:  "reviewer-user",
-			dialogFieldEmail:     "reviewer@example.com",
-			dialogFieldStatus:    "configured",
+			dialogFieldAccount: "reviewer",
+			dialogFieldToken:   "test-token-dialog",
 		},
 	})
 
 	if result.Error != "" || len(result.Errors) > 0 {
 		t.Fatalf("dialog errors = %q %#v", result.Error, result.Errors)
 	}
+	if inspector.token != "test-token-dialog" {
+		t.Fatalf("inspector token = %q", inspector.token)
+	}
+	if runner.githubSecretInput.SecretName != "matter-codex-github-reviewer" || runner.githubSecretInput.Token != "test-token-dialog" || runner.githubSecretInput.Username != "reviewer-user" {
+		t.Fatalf("github secret input = %#v", runner.githubSecretInput)
+	}
 	account := store.githubAccounts["reviewer"]
-	if account.SecretRef != "matter-codex-github-reviewer" || account.Username != "reviewer-user" || account.Email != "reviewer@example.com" || account.Status != "configured" {
+	if account.SecretRef != "matter-codex-github-reviewer" || account.Username != "reviewer-user" || account.Email != "reviewer@example.com" || account.Scopes != "repo, workflow" || account.Status != "configured" {
 		t.Fatalf("github account = %#v", account)
 	}
 	if store.githubUpsert.CredentialName != "github:reviewer" {
@@ -590,13 +604,16 @@ func TestGitHubAccountDialogSubmissionDeletesAccount(t *testing.T) {
 	store := &fakeAdminStore{githubAccounts: map[string]entity.GitHubAccount{
 		"reviewer": {Name: "reviewer", SecretRef: "matter-codex-github-reviewer", Status: "configured"},
 	}}
+	runner := &fakeRuntimeRunner{}
 	localizer := testLocalizer(t, texti18n.DefaultLocale)
 	svc := NewSlashCommandService(SlashCommandServiceConfig{
-		Localizer:       localizer,
-		StatusService:   testStatusService(localizer),
-		Store:           store,
-		DialogSubmitURL: "http://bot-service/mattermost/dialogs/agents",
-		StorageReady:    true,
+		Localizer:        localizer,
+		StatusService:    testStatusService(localizer),
+		Store:            store,
+		RuntimeRunner:    runner,
+		GitHubSecretName: "matter-codex-github",
+		DialogSubmitURL:  "http://bot-service/mattermost/dialogs/agents",
+		StorageReady:     true,
 	})
 
 	result := svc.HandleDialogSubmission(context.Background(), DialogSubmissionCommand{
@@ -616,6 +633,54 @@ func TestGitHubAccountDialogSubmissionDeletesAccount(t *testing.T) {
 	}
 	if store.deletedGitHubAccount.Name != "reviewer" {
 		t.Fatalf("deletedGitHubAccount = %#v", store.deletedGitHubAccount)
+	}
+	if runner.deletedGitHubSecretAccount != "reviewer" || runner.deletedGitHubSecretName != "matter-codex-github-reviewer" {
+		t.Fatalf("deleted github secret = account %q secret %q", runner.deletedGitHubSecretAccount, runner.deletedGitHubSecretName)
+	}
+	if result.Card == nil || !strings.Contains(result.Card.Text, "managed secret deleted") {
+		t.Fatalf("card = %#v", result.Card)
+	}
+}
+
+func TestGitHubAccountDialogSubmissionBlocksProfileAccountDeletion(t *testing.T) {
+	store := &fakeAdminStore{
+		profiles: []entity.AgentProfile{{Name: "developer", GitHubAccountName: "reviewer"}},
+		githubAccounts: map[string]entity.GitHubAccount{
+			"reviewer": {Name: "reviewer", SecretRef: "matter-codex-github-reviewer", Status: "configured"},
+		},
+	}
+	runner := &fakeRuntimeRunner{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:        localizer,
+		StatusService:    testStatusService(localizer),
+		Store:            store,
+		RuntimeRunner:    runner,
+		GitHubSecretName: "matter-codex-github",
+		DialogSubmitURL:  "http://bot-service/mattermost/dialogs/agents",
+		StorageReady:     true,
+	})
+
+	result := svc.HandleDialogSubmission(context.Background(), DialogSubmissionCommand{
+		CallbackID: dialogCallbackGitHubAccountDelete,
+		State:      encodeDialogState(MenuActionCommand{View: menuViewGitHub}),
+		Submission: map[string]any{
+			dialogFieldAccount: "reviewer",
+			dialogFieldConfirm: "delete",
+		},
+	})
+
+	if result.Error != "" || len(result.Errors) > 0 {
+		t.Fatalf("dialog errors = %q %#v", result.Error, result.Errors)
+	}
+	if result.Card == nil || !strings.Contains(result.Card.Text, "developer") {
+		t.Fatalf("card = %#v", result.Card)
+	}
+	if _, ok := store.githubAccounts["reviewer"]; !ok {
+		t.Fatal("profile-bound GitHub account should not be deleted")
+	}
+	if runner.deletedGitHubSecretAccount != "" {
+		t.Fatalf("github secret should not be deleted, got %q", runner.deletedGitHubSecretAccount)
 	}
 }
 
@@ -815,6 +880,42 @@ func TestMenuOpenAIStatusActionKeepsDeviceCodePrivate(t *testing.T) {
 	}
 	if !strings.Contains(result.Card.Text, "private Mattermost response") {
 		t.Fatalf("card text = %q", result.Card.Text)
+	}
+	assertCardDoesNotExposeSlashCommand(t, result.Card)
+}
+
+func TestMenuGitHubAccountCardOffersEditDialog(t *testing.T) {
+	store := &fakeAdminStore{
+		githubAccounts: map[string]entity.GitHubAccount{
+			"reviewer": {Name: "reviewer", SecretRef: "matter-codex-github-reviewer", Status: "configured", Username: "reviewer-user", Email: "reviewer@example.com", Scopes: "repo"},
+		},
+	}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:       localizer,
+		StatusService:   testStatusService(localizer),
+		Store:           store,
+		MenuActionURL:   "http://bot-service/mattermost/actions/agents",
+		DialogSubmitURL: "http://bot-service/mattermost/dialogs/agents",
+		StorageReady:    true,
+	})
+
+	result := svc.HandleMenuAction(context.Background(), MenuActionCommand{
+		View:     menuViewGitHub,
+		Action:   menuActionShow,
+		Resource: menuResourceGitHubAccount,
+		ID:       "reviewer",
+	})
+
+	if result.Card == nil || result.Card.Title != "GitHub account `reviewer`" {
+		t.Fatalf("card = %#v", result.Card)
+	}
+	action, ok := mattermostActionByID(result.Card.Actions, "githubedit")
+	if !ok {
+		t.Fatalf("edit action is missing: %#v", result.Card.Actions)
+	}
+	if action.Context["dialog"] != menuDialogGitHubAccountEdit || action.Context["resource_type"] != menuResourceGitHubAccount || action.Context["resource_id"] != "reviewer" {
+		t.Fatalf("edit action context = %#v", action.Context)
 	}
 	assertCardDoesNotExposeSlashCommand(t, result.Card)
 }
@@ -1986,29 +2087,46 @@ func testStatusService(localizer *texti18n.Localizer) *StatusService {
 	})
 }
 
+type fakeGitHubAccountInspector struct {
+	token      string
+	inspection providerrepo.GitHubTokenInspection
+	err        error
+}
+
+func (inspector *fakeGitHubAccountInspector) InspectToken(_ context.Context, token string) (providerrepo.GitHubTokenInspection, error) {
+	inspector.token = token
+	if inspector.err != nil {
+		return providerrepo.GitHubTokenInspection{}, inspector.err
+	}
+	return inspector.inspection, nil
+}
+
 type fakeRuntimeRunner struct {
-	startedRunID          string
-	startedDeveloperRunID string
-	developerRuns         []runtimerepo.DeveloperRunInput
-	developerBaseBranch   string
-	developerHeadBranch   string
-	developerCodexSecret  string
-	developerGitHubSecret string
-	startedReviewRunID    string
-	reviewRuns            []runtimerepo.ReviewRunInput
-	reviewPRNumber        int
-	reviewCodexSecret     string
-	reviewGitHubSecret    string
-	cleanedRunID          string
-	cleanedRunIDs         []string
-	retentionInput        runtimerepo.RetentionCleanupInput
-	retentionResult       runtimerepo.RetentionCleanupResult
-	authAccount           string
-	authSecret            string
-	authReady             bool
-	deletedAuthAccount    string
-	deletedAuthSecret     string
-	runStatuses           map[string]runtimerepo.RunStatus
+	startedRunID               string
+	startedDeveloperRunID      string
+	developerRuns              []runtimerepo.DeveloperRunInput
+	developerBaseBranch        string
+	developerHeadBranch        string
+	developerCodexSecret       string
+	developerGitHubSecret      string
+	startedReviewRunID         string
+	reviewRuns                 []runtimerepo.ReviewRunInput
+	reviewPRNumber             int
+	reviewCodexSecret          string
+	reviewGitHubSecret         string
+	cleanedRunID               string
+	cleanedRunIDs              []string
+	retentionInput             runtimerepo.RetentionCleanupInput
+	retentionResult            runtimerepo.RetentionCleanupResult
+	authAccount                string
+	authSecret                 string
+	authReady                  bool
+	deletedAuthAccount         string
+	deletedAuthSecret          string
+	githubSecretInput          runtimerepo.GitHubTokenSecretInput
+	deletedGitHubSecretAccount string
+	deletedGitHubSecretName    string
+	runStatuses                map[string]runtimerepo.RunStatus
 }
 
 func (runner *fakeRuntimeRunner) StartSmokeRun(_ context.Context, input runtimerepo.SmokeRunInput) (runtimerepo.StartedRun, error) {
@@ -2075,6 +2193,27 @@ func (runner *fakeRuntimeRunner) DeleteCodexAuthAccount(_ context.Context, accou
 		SecretName:    secretName,
 		Namespace:     "mattermost",
 		JobDeleted:    true,
+		SecretDeleted: true,
+	}, nil
+}
+
+func (runner *fakeRuntimeRunner) UpsertGitHubTokenSecret(_ context.Context, input runtimerepo.GitHubTokenSecretInput) (runtimerepo.GitHubTokenSecret, error) {
+	runner.githubSecretInput = input
+	return runtimerepo.GitHubTokenSecret{
+		AccountName: input.AccountName,
+		SecretName:  input.SecretName,
+		Namespace:   "mattermost",
+		Created:     true,
+	}, nil
+}
+
+func (runner *fakeRuntimeRunner) DeleteGitHubTokenSecret(_ context.Context, accountName string, secretName string) (runtimerepo.GitHubTokenSecretDeleteResult, error) {
+	runner.deletedGitHubSecretAccount = accountName
+	runner.deletedGitHubSecretName = secretName
+	return runtimerepo.GitHubTokenSecretDeleteResult{
+		AccountName:   accountName,
+		SecretName:    secretName,
+		Namespace:     "mattermost",
 		SecretDeleted: true,
 	}, nil
 }
@@ -2404,6 +2543,7 @@ func (store *fakeAdminStore) UpsertGitHubAccount(_ context.Context, input adminr
 		SecretRef: input.SecretRef,
 		Username:  input.Username,
 		Email:     input.Email,
+		Scopes:    input.Scopes,
 		Status:    input.Status,
 	}
 	store.githubAccounts[input.Name] = account

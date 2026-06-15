@@ -93,6 +93,28 @@ type CodexAuthAccountDeleteResult struct {
 	SecretDeleted bool
 }
 
+type GitHubTokenSecretInput struct {
+	AccountName string
+	SecretName  string
+	Token       string
+	Username    string
+	Email       string
+}
+
+type GitHubTokenSecret struct {
+	AccountName string
+	SecretName  string
+	Namespace   string
+	Created     bool
+}
+
+type GitHubTokenSecretDeleteResult struct {
+	AccountName   string
+	SecretName    string
+	Namespace     string
+	SecretDeleted bool
+}
+
 type StartedRun struct {
 	RunID     string
 	Namespace string
@@ -151,6 +173,8 @@ type Runner interface {
 	CompleteCodexAuthSession(ctx context.Context, input CodexAuthCompleteInput) (CodexAuthCompleteResult, error)
 	CleanupCodexAuthSession(ctx context.Context, accountName string) (CodexAuthCleanupResult, error)
 	DeleteCodexAuthAccount(ctx context.Context, accountName string, secretName string) (CodexAuthAccountDeleteResult, error)
+	UpsertGitHubTokenSecret(ctx context.Context, input GitHubTokenSecretInput) (GitHubTokenSecret, error)
+	DeleteGitHubTokenSecret(ctx context.Context, accountName string, secretName string) (GitHubTokenSecretDeleteResult, error)
 	StartDeveloperRun(ctx context.Context, input DeveloperRunInput) (StartedRun, error)
 	StartReviewRun(ctx context.Context, input ReviewRunInput) (StartedRun, error)
 	GetRunStatus(ctx context.Context, runID string) (RunStatus, error)
