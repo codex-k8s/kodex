@@ -97,6 +97,7 @@ type UpsertGitHubAccountInput struct {
 	SecretRef      string
 	Username       string
 	Email          string
+	Scopes         string
 	Status         string
 }
 

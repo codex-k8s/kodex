@@ -9,6 +9,7 @@ type GitHubAccount struct {
 	SecretRef    string
 	Username     string
 	Email        string
+	Scopes       string
 	Status       string
 	CreatedAt    time.Time
 	UpdatedAt    time.Time

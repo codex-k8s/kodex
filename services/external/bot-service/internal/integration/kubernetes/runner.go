@@ -33,6 +33,7 @@ const (
 	labelRunID            = "matter-codex.dev/run-id"
 	labelAgentRole        = "matter-codex.dev/agent-role"
 	labelOpenAIAccount    = "matter-codex.dev/openai-account"
+	labelGitHubAccount    = "matter-codex.dev/github-account"
 	codexAuthSecretVolume = "codex-auth-secret"
 	gitHubSecretVolume    = "github-secret"
 	promptVolume          = "agent-prompt"
@@ -302,6 +303,63 @@ func (runner *Runner) DeleteCodexAuthAccount(ctx context.Context, accountName st
 	if err := runner.client.CoreV1().Secrets(runner.namespace).Delete(ctx, secretName, metav1.DeleteOptions{}); err != nil {
 		if !apierrors.IsNotFound(err) {
 			return runtimerepo.CodexAuthAccountDeleteResult{}, fmt.Errorf("delete codex auth secret: %w", err)
+		}
+	} else {
+		result.SecretDeleted = true
+	}
+	return result, nil
+}
+
+func (runner *Runner) UpsertGitHubTokenSecret(ctx context.Context, input runtimerepo.GitHubTokenSecretInput) (runtimerepo.GitHubTokenSecret, error) {
+	input.AccountName = strings.TrimSpace(input.AccountName)
+	input.SecretName = strings.TrimSpace(input.SecretName)
+	input.Token = strings.TrimSpace(input.Token)
+	input.Username = strings.TrimSpace(input.Username)
+	input.Email = strings.TrimSpace(input.Email)
+	if input.AccountName == "" {
+		return runtimerepo.GitHubTokenSecret{}, fmt.Errorf("github account name is required")
+	}
+	if input.SecretName == "" {
+		return runtimerepo.GitHubTokenSecret{}, fmt.Errorf("github token secret name is required")
+	}
+	if input.Token == "" {
+		return runtimerepo.GitHubTokenSecret{}, fmt.Errorf("github token is required")
+	}
+	if input.Username == "" {
+		return runtimerepo.GitHubTokenSecret{}, fmt.Errorf("github username is required")
+	}
+	if input.Email == "" {
+		return runtimerepo.GitHubTokenSecret{}, fmt.Errorf("github email is required")
+	}
+	created, err := runner.upsertGitHubTokenSecret(ctx, input)
+	if err != nil {
+		return runtimerepo.GitHubTokenSecret{}, err
+	}
+	return runtimerepo.GitHubTokenSecret{
+		AccountName: input.AccountName,
+		SecretName:  input.SecretName,
+		Namespace:   runner.namespace,
+		Created:     created,
+	}, nil
+}
+
+func (runner *Runner) DeleteGitHubTokenSecret(ctx context.Context, accountName string, secretName string) (runtimerepo.GitHubTokenSecretDeleteResult, error) {
+	accountName = strings.TrimSpace(accountName)
+	secretName = strings.TrimSpace(secretName)
+	if accountName == "" {
+		return runtimerepo.GitHubTokenSecretDeleteResult{}, fmt.Errorf("github account name is required")
+	}
+	if secretName == "" {
+		return runtimerepo.GitHubTokenSecretDeleteResult{}, fmt.Errorf("github token secret name is required")
+	}
+	result := runtimerepo.GitHubTokenSecretDeleteResult{
+		AccountName: accountName,
+		SecretName:  secretName,
+		Namespace:   runner.namespace,
+	}
+	if err := runner.client.CoreV1().Secrets(runner.namespace).Delete(ctx, secretName, metav1.DeleteOptions{}); err != nil {
+		if !apierrors.IsNotFound(err) {
+			return runtimerepo.GitHubTokenSecretDeleteResult{}, fmt.Errorf("delete github token secret: %w", err)
 		}
 	} else {
 		result.SecretDeleted = true
@@ -996,6 +1054,54 @@ func (runner *Runner) upsertCodexAuthSecret(ctx context.Context, accountName str
 		return fmt.Errorf("update codex auth secret: %w", err)
 	}
 	return nil
+}
+
+func (runner *Runner) upsertGitHubTokenSecret(ctx context.Context, input runtimerepo.GitHubTokenSecretInput) (bool, error) {
+	secretClient := runner.client.CoreV1().Secrets(runner.namespace)
+	data := map[string][]byte{
+		"github-token":    []byte(input.Token),
+		"github-username": []byte(input.Username),
+		"github-email":    []byte(input.Email),
+	}
+	labels := map[string]string{
+		"app.kubernetes.io/name":      "matter-codex-agent-runner",
+		"app.kubernetes.io/component": "github-token-secret",
+		labelGitHubAccount:            input.AccountName,
+	}
+	secret, err := secretClient.Get(ctx, input.SecretName, metav1.GetOptions{})
+	if err != nil {
+		if !apierrors.IsNotFound(err) {
+			return false, fmt.Errorf("get github token secret: %w", err)
+		}
+		_, err = secretClient.Create(ctx, &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   input.SecretName,
+				Labels: labels,
+			},
+			Type: corev1.SecretTypeOpaque,
+			Data: data,
+		}, metav1.CreateOptions{})
+		if err != nil {
+			return false, fmt.Errorf("create github token secret: %w", err)
+		}
+		return true, nil
+	}
+	if secret.Data == nil {
+		secret.Data = make(map[string][]byte)
+	}
+	if secret.Labels == nil {
+		secret.Labels = make(map[string]string)
+	}
+	for key, value := range labels {
+		secret.Labels[key] = value
+	}
+	for key, value := range data {
+		secret.Data[key] = value
+	}
+	if _, err := secretClient.Update(ctx, secret, metav1.UpdateOptions{}); err != nil {
+		return false, fmt.Errorf("update github token secret: %w", err)
+	}
+	return false, nil
 }
 
 func kubernetesConfig(kubeconfigPath string) (*rest.Config, error) {

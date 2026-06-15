@@ -66,6 +66,12 @@ type WebhookRegistration struct {
 	Active   bool
 }
 
+type GitHubTokenInspection struct {
+	Username string
+	Email    string
+	Scopes   []string
+}
+
 type PullRequestInput struct {
 	Owner string
 	Name  string
@@ -84,4 +90,8 @@ type RepositoryProvider interface {
 	CreatePullRequest(ctx context.Context, input PullRequestInput) (PullRequestSummary, error)
 	GetPullRequest(ctx context.Context, owner string, name string, number int) (PullRequestSummary, error)
 	EnsureRepositoryWebhook(ctx context.Context, owner string, name string) (WebhookRegistration, error)
+}
+
+type GitHubAccountInspector interface {
+	InspectToken(ctx context.Context, token string) (GitHubTokenInspection, error)
 }

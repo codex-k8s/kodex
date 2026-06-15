@@ -314,6 +314,7 @@ func (repo *Repository) UpsertGitHubAccount(ctx context.Context, input adminrepo
 		input.SecretRef,
 		input.Username,
 		input.Email,
+		input.Scopes,
 		input.Status,
 	))
 	if err != nil {
@@ -517,6 +518,7 @@ func scanGitHubAccount(row pgx.Row) (entity.GitHubAccount, error) {
 		&item.SecretRef,
 		&item.Username,
 		&item.Email,
+		&item.Scopes,
 		&item.Status,
 		&item.CreatedAt,
 		&item.UpdatedAt,
@@ -536,6 +538,7 @@ func scanGitHubAccountWithCreated(row pgx.Row) (entity.GitHubAccount, bool, erro
 		&item.SecretRef,
 		&item.Username,
 		&item.Email,
+		&item.Scopes,
 		&item.Status,
 		&item.CreatedAt,
 		&item.UpdatedAt,
