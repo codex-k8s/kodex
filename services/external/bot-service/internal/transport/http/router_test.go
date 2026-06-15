@@ -167,7 +167,8 @@ func TestAgentsActionReturnsUpdatedMenuCard(t *testing.T) {
 	if !ok || len(actions) == 0 {
 		t.Fatalf("actions = %#v", attachment["actions"])
 	}
-	if actionContext(actions, "cmdruntimesmoke")["command"] != "runtime smoke" {
+	smokeContext := actionContext(actions, "runtimesmoke")
+	if smokeContext["action"] != "runtime_smoke" || smokeContext["resource_type"] != "runtime" {
 		t.Fatalf("runtime smoke action is missing: %#v", actions)
 	}
 	if actionContext(actions, "menumain")["view"] != "main" {
@@ -415,6 +416,15 @@ func attachmentContainsSlashCommand(attachment map[string]any) bool {
 			if strings.Contains(value, "/agents ") {
 				return true
 			}
+		}
+	}
+	actions, _ := attachment["actions"].([]any)
+	for _, raw := range actions {
+		action, _ := raw.(map[string]any)
+		integration, _ := action["integration"].(map[string]any)
+		context, _ := integration["context"].(map[string]any)
+		if _, ok := context["command"]; ok {
+			return true
 		}
 	}
 	return false
