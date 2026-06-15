@@ -55,18 +55,6 @@ func (surface *ControlSurface) UpsertFlowCard(ctx context.Context, card statusse
 	return statusservice.FlowCardPost{ChannelID: updated.ChannelId, PostID: updated.Id}, nil
 }
 
-func (surface *ControlSurface) PostEphemeralCard(ctx context.Context, userID string, card statusservice.FlowCard) error {
-	post := flowCardPost(card)
-	post.Id = ""
-	if _, _, err := surface.client.CreatePostEphemeral(ctx, &mattermostmodel.PostEphemeral{
-		UserID: userID,
-		Post:   post,
-	}); err != nil {
-		return fmt.Errorf("create Mattermost ephemeral card: %w", err)
-	}
-	return nil
-}
-
 func (surface *ControlSurface) OpenDialog(ctx context.Context, triggerID string, dialog statusservice.MattermostDialog) error {
 	elements := make([]mattermostmodel.DialogElement, 0, len(dialog.Elements))
 	for _, element := range dialog.Elements {

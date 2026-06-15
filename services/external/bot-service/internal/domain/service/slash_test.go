@@ -537,7 +537,7 @@ func TestRepositoryOnboardingConnectsRepositoryWithAccount(t *testing.T) {
 	}
 }
 
-func TestRepositorySearchDialogPublishesResultCard(t *testing.T) {
+func TestRepositorySearchDialogUsesSelectForms(t *testing.T) {
 	store := &fakeAdminStore{
 		githubAccounts: map[string]entity.GitHubAccount{
 			"agent": {Name: "agent", SecretRef: "matter-codex-github-agent", Status: "configured"},
@@ -551,20 +551,21 @@ func TestRepositorySearchDialogPublishesResultCard(t *testing.T) {
 			FullName:      "codex-k8s/matter-codex",
 			DefaultBranch: "main",
 		}},
+		branches: []providerrepo.BranchCandidate{{Name: "main"}, {Name: "feature"}},
 	}
-	publisher := &fakeEphemeralCardPublisher{}
 	localizer := testLocalizer(t, texti18n.DefaultLocale)
 	svc := NewSlashCommandService(SlashCommandServiceConfig{
 		Localizer:                localizer,
 		StatusService:            testStatusService(localizer),
 		Store:                    store,
-		EphemeralCardPublisher:   publisher,
 		GitHubRepositoryProvider: provider,
 		MenuActionURL:            "http://bot-service/mattermost/actions/agents",
+		ChannelManager:           &fakeChannelManager{},
+		DefaultTeamName:          "agents",
 		StorageReady:             true,
 	})
 
-	result := svc.HandleDialogSubmission(context.Background(), DialogSubmissionCommand{
+	search := svc.HandleDialogSubmission(context.Background(), DialogSubmissionCommand{
 		CallbackID: dialogCallbackRepositorySearch,
 		State: encodeDialogState(MenuActionCommand{
 			View:      menuViewRepositories,
@@ -579,20 +580,56 @@ func TestRepositorySearchDialogPublishesResultCard(t *testing.T) {
 		},
 	})
 
-	if result.Error != "" || len(result.Errors) > 0 {
-		t.Fatalf("dialog errors = %q %#v", result.Error, result.Errors)
+	if search.Error != "" || len(search.Errors) > 0 {
+		t.Fatalf("search dialog errors = %q %#v", search.Error, search.Errors)
 	}
-	if result.Card != nil {
-		t.Fatalf("dialog should publish card directly, got %#v", result.Card)
+	if search.Dialog == nil || search.Dialog.CallbackID != dialogCallbackRepositorySearchPick {
+		t.Fatalf("search dialog = %#v", search.Dialog)
 	}
-	if publisher.userID != "owner-id" || publisher.card.ChannelID != "channel-1" {
-		t.Fatalf("published card = user %q card %#v", publisher.userID, publisher.card)
+	if len(search.Dialog.Elements) != 1 || search.Dialog.Elements[0].Name != dialogFieldRepositoryChoice || len(search.Dialog.Elements[0].Options) != 1 {
+		t.Fatalf("search dialog elements = %#v", search.Dialog.Elements)
 	}
 	if provider.searchQuery != "matter-codex" || provider.searchAccount.Name != "agent" {
 		t.Fatalf("search = query %q account %#v", provider.searchQuery, provider.searchAccount)
 	}
-	if _, ok := mattermostActionByID(publisher.card.Actions, "repocandidate1"); !ok {
-		t.Fatalf("published card actions = %#v", publisher.card.Actions)
+	repositoryChoice := search.Dialog.Elements[0].Options[0].Value
+	branches := svc.HandleDialogSubmission(context.Background(), DialogSubmissionCommand{
+		CallbackID: dialogCallbackRepositorySearchPick,
+		State:      search.Dialog.State,
+		UserID:     "owner-id",
+		ChannelID:  "channel-1",
+		Submission: map[string]any{
+			dialogFieldRepositoryChoice: repositoryChoice,
+		},
+	})
+	if branches.Error != "" || len(branches.Errors) > 0 {
+		t.Fatalf("branch dialog errors = %q %#v", branches.Error, branches.Errors)
+	}
+	if branches.Dialog == nil || branches.Dialog.CallbackID != dialogCallbackRepositorySearchBranch {
+		t.Fatalf("branch dialog = %#v", branches.Dialog)
+	}
+	if len(branches.Dialog.Elements) != 1 || branches.Dialog.Elements[0].Name != dialogFieldBranchChoice || len(branches.Dialog.Elements[0].Options) != 2 {
+		t.Fatalf("branch dialog elements = %#v", branches.Dialog.Elements)
+	}
+	branchChoice := branches.Dialog.Elements[0].Options[0].Value
+	connected := svc.HandleDialogSubmission(context.Background(), DialogSubmissionCommand{
+		CallbackID: dialogCallbackRepositorySearchBranch,
+		State:      branches.Dialog.State,
+		UserID:     "owner-id",
+		UserName:   "owner",
+		ChannelID:  "channel-1",
+		Submission: map[string]any{
+			dialogFieldBranchChoice: branchChoice,
+		},
+	})
+	if connected.Error != "" || len(connected.Errors) > 0 {
+		t.Fatalf("connect errors = %q %#v", connected.Error, connected.Errors)
+	}
+	if connected.Card == nil || !strings.Contains(connected.Card.Text, "github account: `agent`") {
+		t.Fatalf("connected card = %#v", connected.Card)
+	}
+	if store.upsert.GitHubAccountName != "agent" || store.upsert.Owner != "codex-k8s" || store.upsert.Name != "matter-codex" || store.upsert.DefaultBranch != "main" {
+		t.Fatalf("upsert = %#v", store.upsert)
 	}
 }
 
@@ -2550,18 +2587,6 @@ func (publisher *fakeFlowCardPublisher) UpsertFlowCard(_ context.Context, card F
 		publisher.lastCard.PostID = card.PostID
 	}
 	return FlowCardPost{ChannelID: card.ChannelID, PostID: card.PostID}, nil
-}
-
-type fakeEphemeralCardPublisher struct {
-	userID string
-	card   FlowCard
-	err    error
-}
-
-func (publisher *fakeEphemeralCardPublisher) PostEphemeralCard(_ context.Context, userID string, card FlowCard) error {
-	publisher.userID = userID
-	publisher.card = card
-	return publisher.err
 }
 
 type fakeAdminStore struct {

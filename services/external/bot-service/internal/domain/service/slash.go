@@ -28,10 +28,6 @@ type FlowCardPublisher interface {
 	UpsertFlowCard(ctx context.Context, card FlowCard) (FlowCardPost, error)
 }
 
-type EphemeralCardPublisher interface {
-	PostEphemeralCard(ctx context.Context, userID string, card FlowCard) error
-}
-
 type MattermostCard struct {
 	ChannelID string
 	PostID    string
@@ -147,6 +143,7 @@ type DialogSubmissionCommand struct {
 
 type DialogSubmissionResult struct {
 	Card       *MattermostCard
+	Dialog     *MattermostDialog
 	Error      string
 	Errors     map[string]string
 	StatusCode int
@@ -173,7 +170,6 @@ type SlashCommandServiceConfig struct {
 	Store                    adminrepo.Repository
 	ChannelManager           MattermostChannelManager
 	FlowCardPublisher        FlowCardPublisher
-	EphemeralCardPublisher   EphemeralCardPublisher
 	RepositoryProvider       providerrepo.RepositoryProvider
 	GitHubRepositoryProvider providerrepo.GitHubAccountRepositoryProvider
 	GitHubAccountInspector   providerrepo.GitHubAccountInspector
@@ -2763,6 +2759,14 @@ func repositoryOnboardingBranchNames(defaultBranch string, branches []providerre
 	return names
 }
 
+func repositorySearchRepositoryOptionText(candidate providerrepo.RepositoryCandidate) string {
+	text := strings.TrimSpace(candidate.FullName)
+	if branch := strings.TrimSpace(candidate.DefaultBranch); branch != "" {
+		text += " (" + branch + ")"
+	}
+	return text
+}
+
 func (svc *SlashCommandService) openAIAccountListCard(ctx context.Context, command MenuActionCommand) *MattermostCard {
 	card := svc.menuCard(ctx, menuViewOpenAI)
 	card.Title = svc.t("menu.entity.openai.title", nil)
@@ -3200,6 +3204,10 @@ func (svc *SlashCommandService) HandleDialogSubmission(ctx context.Context, comm
 		return svc.handleRepositoryDialogDelete(ctx, command, state)
 	case dialogCallbackRepositorySearch:
 		return svc.handleRepositorySearchDialog(ctx, command, state)
+	case dialogCallbackRepositorySearchPick:
+		return svc.handleRepositorySearchPickDialog(ctx, command, state)
+	case dialogCallbackRepositorySearchBranch:
+		return svc.handleRepositorySearchBranchDialog(ctx, command, state)
 	case dialogCallbackOpenAIAuth:
 		return svc.handleOpenAIAccountDialog(ctx, command, state, openAIDialogActionAuth)
 	case dialogCallbackOpenAIStatus:
@@ -3639,25 +3647,165 @@ func (svc *SlashCommandService) handleRepositorySearchDialog(ctx context.Context
 		return DialogSubmissionResult{StatusCode: 200, Errors: map[string]string{dialogFieldSearch: svc.t("dialog.repo.search.query_invalid", nil)}}
 	}
 	accountName := strings.TrimSpace(state.ResourceID)
-	card := svc.repositoryOnboardingRepositoryCard(ctx, MenuActionCommand{
+	dialog, errText := svc.repositorySearchPickDialog(ctx, accountName, query, mattermostDialogCommand(state, command))
+	if errText != "" {
+		return DialogSubmissionResult{StatusCode: 200, Error: errText}
+	}
+	return DialogSubmissionResult{
+		StatusCode: 200,
+		Dialog:     dialog,
+	}
+}
+
+func (svc *SlashCommandService) handleRepositorySearchPickDialog(ctx context.Context, command DialogSubmissionCommand, state mattermostDialogState) DialogSubmissionResult {
+	resourceID := submissionString(command.Submission, dialogFieldRepositoryChoice)
+	repoState, ok := parseRepositoryOnboardingResourceID(resourceID)
+	if !ok {
+		return DialogSubmissionResult{StatusCode: 200, Errors: map[string]string{dialogFieldRepositoryChoice: svc.t("dialog.repo.repository_invalid", nil)}}
+	}
+	dialog, errText := svc.repositorySearchBranchDialog(ctx, repoState, mattermostDialogCommand(state, command))
+	if errText != "" {
+		return DialogSubmissionResult{StatusCode: 200, Error: errText}
+	}
+	return DialogSubmissionResult{
+		StatusCode: 200,
+		Dialog:     dialog,
+	}
+}
+
+func (svc *SlashCommandService) handleRepositorySearchBranchDialog(ctx context.Context, command DialogSubmissionCommand, state mattermostDialogState) DialogSubmissionResult {
+	resourceID := submissionString(command.Submission, dialogFieldBranchChoice)
+	if _, ok := parseRepositoryOnboardingResourceID(resourceID); !ok {
+		return DialogSubmissionResult{StatusCode: 200, Errors: map[string]string{dialogFieldBranchChoice: svc.t("dialog.repo.branch_invalid", nil)}}
+	}
+	card := svc.repositoryOnboardingConnectCard(ctx, MenuActionCommand{
 		View:      state.View,
+		Action:    menuActionRepositoryConnect,
+		Resource:  menuResourceRepository,
+		ID:        resourceID,
 		UserID:    command.UserID,
 		UserName:  defaultString(command.UserName, state.UserName),
 		ChannelID: defaultString(state.ChannelID, command.ChannelID),
 		PostID:    state.PostID,
-	}, accountName, query)
-	card.ChannelID = defaultString(state.ChannelID, command.ChannelID)
-	card.PostID = state.PostID
-	if svc.cfg.EphemeralCardPublisher != nil && strings.TrimSpace(command.UserID) != "" && strings.TrimSpace(card.ChannelID) != "" {
-		if err := svc.cfg.EphemeralCardPublisher.PostEphemeralCard(ctx, command.UserID, *card); err != nil {
-			return DialogSubmissionResult{StatusCode: 200, Error: svc.t("dialog.repo.search.publish_failed", map[string]any{"Error": safeError(err)})}
-		}
-		return DialogSubmissionResult{StatusCode: 200}
-	}
+	})
 	return DialogSubmissionResult{
 		StatusCode: 200,
 		Card:       card,
 	}
+}
+
+func (svc *SlashCommandService) repositorySearchPickDialog(ctx context.Context, accountName string, query string, command MenuActionCommand) (*MattermostDialog, string) {
+	account, candidates, errText := svc.repositorySearchCandidates(ctx, accountName, query)
+	if errText != "" {
+		return nil, errText
+	}
+	options := make([]MattermostDialogOption, 0, len(candidates))
+	limit := len(candidates)
+	if limit > entityListPageSize {
+		limit = entityListPageSize
+	}
+	for _, candidate := range candidates[:limit] {
+		options = append(options, MattermostDialogOption{
+			Text: repositorySearchRepositoryOptionText(candidate),
+			Value: repositoryOnboardingResourceID(repositoryOnboardingState{
+				Account:       account.Name,
+				Provider:      candidate.Provider,
+				Owner:         candidate.Owner,
+				Name:          candidate.Name,
+				FullName:      candidate.FullName,
+				DefaultBranch: candidate.DefaultBranch,
+			}),
+		})
+	}
+	return &MattermostDialog{
+		SubmitURL:        svc.cfg.DialogSubmitURL,
+		CallbackID:       dialogCallbackRepositorySearchPick,
+		Title:            svc.t("dialog.repo.pick.title", nil),
+		IntroductionText: svc.t("dialog.repo.pick.intro", map[string]any{"Account": account.Name, "Query": query}),
+		Elements: []MattermostDialogElement{
+			{
+				DisplayName: svc.t("dialog.repo.field.repository", nil),
+				Name:        dialogFieldRepositoryChoice,
+				Type:        "select",
+				HelpText:    svc.t("dialog.repo.pick.help", nil),
+				Options:     options,
+			},
+		},
+		SubmitLabel: svc.t("dialog.repo.pick.submit", nil),
+		State:       encodeDialogState(command),
+	}, ""
+}
+
+func (svc *SlashCommandService) repositorySearchBranchDialog(ctx context.Context, state repositoryOnboardingState, command MenuActionCommand) (*MattermostDialog, string) {
+	account, ok, errText := svc.repositoryOnboardingAccount(ctx, state.Account)
+	if errText != "" {
+		return nil, errText
+	}
+	if !ok {
+		return nil, svc.t("repo.account.missing", map[string]any{"Account": state.Account})
+	}
+	if svc.cfg.GitHubRepositoryProvider == nil {
+		return nil, svc.t("repo.onboard.provider_not_configured", nil)
+	}
+	branches, err := svc.cfg.GitHubRepositoryProvider.ListBranches(ctx, gitHubAccountRef(account), state.Owner, state.Name, 20)
+	if err != nil {
+		return nil, svc.t("repo.onboard.branches.failed", map[string]any{"Error": safeError(err)})
+	}
+	branchNames := repositoryOnboardingBranchNames(state.DefaultBranch, branches)
+	if len(branchNames) == 0 {
+		return nil, svc.t("repo.onboard.branches.empty", map[string]any{"Repository": state.FullName})
+	}
+	options := make([]MattermostDialogOption, 0, len(branchNames))
+	limit := len(branchNames)
+	if limit > entityListPageSize {
+		limit = entityListPageSize
+	}
+	for _, branch := range branchNames[:limit] {
+		next := state
+		next.Branch = branch
+		options = append(options, MattermostDialogOption{
+			Text:  branch,
+			Value: repositoryOnboardingResourceID(next),
+		})
+	}
+	return &MattermostDialog{
+		SubmitURL:        svc.cfg.DialogSubmitURL,
+		CallbackID:       dialogCallbackRepositorySearchBranch,
+		Title:            svc.t("dialog.repo.branch.title", nil),
+		IntroductionText: svc.t("dialog.repo.branch.intro", map[string]any{"Repository": state.FullName, "Account": account.Name}),
+		Elements: []MattermostDialogElement{
+			{
+				DisplayName: svc.t("dialog.repo.field.branch", nil),
+				Name:        dialogFieldBranchChoice,
+				Type:        "select",
+				HelpText:    svc.t("dialog.repo.branch.help", nil),
+				Options:     options,
+			},
+		},
+		SubmitLabel: svc.t("dialog.repo.branch.submit", nil),
+		State:       encodeDialogState(command),
+	}, ""
+}
+
+func (svc *SlashCommandService) repositorySearchCandidates(ctx context.Context, accountName string, query string) (entity.GitHubAccount, []providerrepo.RepositoryCandidate, string) {
+	account, ok, errText := svc.repositoryOnboardingAccount(ctx, accountName)
+	if errText != "" {
+		return entity.GitHubAccount{}, nil, errText
+	}
+	if !ok {
+		return entity.GitHubAccount{}, nil, svc.t("repo.account.missing", map[string]any{"Account": accountName})
+	}
+	if svc.cfg.GitHubRepositoryProvider == nil {
+		return entity.GitHubAccount{}, nil, svc.t("repo.onboard.provider_not_configured", nil)
+	}
+	candidates, err := svc.repositoryCandidates(ctx, account, query)
+	if err != nil {
+		return entity.GitHubAccount{}, nil, svc.t("repo.onboard.repositories.failed", map[string]any{"Error": safeError(err)})
+	}
+	if len(candidates) == 0 {
+		return entity.GitHubAccount{}, nil, svc.t("repo.onboard.repositories.empty", map[string]any{"Account": account.Name})
+	}
+	return account, candidates, ""
 }
 
 type githubAccountTokenDialogInput struct {
@@ -3714,6 +3862,17 @@ func (svc *SlashCommandService) dialogResultCard(ctx context.Context, state matt
 	card.ChannelID = defaultString(state.ChannelID, command.ChannelID)
 	card.PostID = state.PostID
 	return card
+}
+
+func mattermostDialogCommand(state mattermostDialogState, command DialogSubmissionCommand) MenuActionCommand {
+	return MenuActionCommand{
+		View:      state.View,
+		ID:        state.ResourceID,
+		UserID:    command.UserID,
+		UserName:  defaultString(command.UserName, state.UserName),
+		ChannelID: defaultString(state.ChannelID, command.ChannelID),
+		PostID:    state.PostID,
+	}
 }
 
 func (svc *SlashCommandService) menuCard(ctx context.Context, view string) *MattermostCard {
@@ -4621,29 +4780,33 @@ const (
 	menuResourceSystem         = "system"
 	menuResourceRuntime        = "runtime"
 
-	dialogCallbackRepositoryAdd       = "agents_repo_add"
-	dialogCallbackRepositoryEdit      = "agents_repo_edit"
-	dialogCallbackRepositoryDelete    = "agents_repo_delete"
-	dialogCallbackRepositorySearch    = "agents_repo_search"
-	dialogCallbackOpenAIAuth          = "agents_openai_auth"
-	dialogCallbackOpenAIStatus        = "agents_openai_status"
-	dialogCallbackOpenAICleanup       = "agents_openai_cleanup"
-	dialogCallbackOpenAIDelete        = "agents_openai_delete"
-	dialogCallbackGitHubAccountAdd    = "agents_github_account_add"
-	dialogCallbackGitHubAccountEdit   = "agents_github_account_edit"
-	dialogCallbackGitHubAccountDelete = "agents_github_account_delete"
+	dialogCallbackRepositoryAdd          = "agents_repo_add"
+	dialogCallbackRepositoryEdit         = "agents_repo_edit"
+	dialogCallbackRepositoryDelete       = "agents_repo_delete"
+	dialogCallbackRepositorySearch       = "agents_repo_search"
+	dialogCallbackRepositorySearchPick   = "agents_repo_search_pick"
+	dialogCallbackRepositorySearchBranch = "agents_repo_search_branch"
+	dialogCallbackOpenAIAuth             = "agents_openai_auth"
+	dialogCallbackOpenAIStatus           = "agents_openai_status"
+	dialogCallbackOpenAICleanup          = "agents_openai_cleanup"
+	dialogCallbackOpenAIDelete           = "agents_openai_delete"
+	dialogCallbackGitHubAccountAdd       = "agents_github_account_add"
+	dialogCallbackGitHubAccountEdit      = "agents_github_account_edit"
+	dialogCallbackGitHubAccountDelete    = "agents_github_account_delete"
 
-	dialogFieldProvider      = "provider"
-	dialogFieldRepository    = "repository"
-	dialogFieldDefaultBranch = "default_branch"
-	dialogFieldConfirm       = "confirm"
-	dialogFieldAccount       = "account"
-	dialogFieldSearch        = "search"
-	dialogFieldSecretRef     = "secret_ref"
-	dialogFieldToken         = "token"
-	dialogFieldUsername      = "username"
-	dialogFieldEmail         = "email"
-	dialogFieldStatus        = "status"
+	dialogFieldProvider         = "provider"
+	dialogFieldRepository       = "repository"
+	dialogFieldRepositoryChoice = "repository_choice"
+	dialogFieldDefaultBranch    = "default_branch"
+	dialogFieldBranchChoice     = "branch_choice"
+	dialogFieldConfirm          = "confirm"
+	dialogFieldAccount          = "account"
+	dialogFieldSearch           = "search"
+	dialogFieldSecretRef        = "secret_ref"
+	dialogFieldToken            = "token"
+	dialogFieldUsername         = "username"
+	dialogFieldEmail            = "email"
+	dialogFieldStatus           = "status"
 
 	openAIDialogActionAuth    = "auth"
 	openAIDialogActionStatus  = "status"

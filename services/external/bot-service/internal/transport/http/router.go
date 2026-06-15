@@ -40,48 +40,45 @@ type DialogOpener interface {
 }
 
 type RouterConfig struct {
-	StatusService          *statusservice.StatusService
-	SlashService           *statusservice.SlashCommandService
-	DialogOpener           DialogOpener
-	EphemeralCardPublisher statusservice.EphemeralCardPublisher
-	Localizer              *texti18n.Localizer
-	SlashToken             string
-	GitHubWebhookSecret    string
-	MaxSlashFormBytes      int64
-	MaxGitHubWebhookBytes  int64
-	PrometheusRegistry     *prometheus.Registry
-	Logger                 *slog.Logger
+	StatusService         *statusservice.StatusService
+	SlashService          *statusservice.SlashCommandService
+	DialogOpener          DialogOpener
+	Localizer             *texti18n.Localizer
+	SlashToken            string
+	GitHubWebhookSecret   string
+	MaxSlashFormBytes     int64
+	MaxGitHubWebhookBytes int64
+	PrometheusRegistry    *prometheus.Registry
+	Logger                *slog.Logger
 }
 
 type Router struct {
-	statusService          *statusservice.StatusService
-	slashService           *statusservice.SlashCommandService
-	dialogOpener           DialogOpener
-	ephemeralCardPublisher statusservice.EphemeralCardPublisher
-	localizer              *texti18n.Localizer
-	slashToken             string
-	gitHubWebhookSecret    string
-	maxSlashFormBytes      int64
-	maxGitHubWebhookBytes  int64
-	logger                 *slog.Logger
-	mux                    *http.ServeMux
+	statusService         *statusservice.StatusService
+	slashService          *statusservice.SlashCommandService
+	dialogOpener          DialogOpener
+	localizer             *texti18n.Localizer
+	slashToken            string
+	gitHubWebhookSecret   string
+	maxSlashFormBytes     int64
+	maxGitHubWebhookBytes int64
+	logger                *slog.Logger
+	mux                   *http.ServeMux
 }
 
 var _ http.Handler = (*Router)(nil)
 
 func NewRouter(cfg RouterConfig) *Router {
 	router := &Router{
-		statusService:          cfg.StatusService,
-		slashService:           cfg.SlashService,
-		dialogOpener:           cfg.DialogOpener,
-		ephemeralCardPublisher: cfg.EphemeralCardPublisher,
-		localizer:              cfg.Localizer,
-		slashToken:             cfg.SlashToken,
-		gitHubWebhookSecret:    cfg.GitHubWebhookSecret,
-		maxSlashFormBytes:      cfg.MaxSlashFormBytes,
-		maxGitHubWebhookBytes:  cfg.MaxGitHubWebhookBytes,
-		logger:                 cfg.Logger,
-		mux:                    http.NewServeMux(),
+		statusService:         cfg.StatusService,
+		slashService:          cfg.SlashService,
+		dialogOpener:          cfg.DialogOpener,
+		localizer:             cfg.Localizer,
+		slashToken:            cfg.SlashToken,
+		gitHubWebhookSecret:   cfg.GitHubWebhookSecret,
+		maxSlashFormBytes:     cfg.MaxSlashFormBytes,
+		maxGitHubWebhookBytes: cfg.MaxGitHubWebhookBytes,
+		logger:                cfg.Logger,
+		mux:                   http.NewServeMux(),
 	}
 	registry := cfg.PrometheusRegistry
 	if registry == nil {
@@ -271,6 +268,13 @@ func (router *Router) handleAgentsDialog(w http.ResponseWriter, r *http.Request)
 		})
 		return
 	}
+	if result.Dialog != nil {
+		writeJSON(w, status, mattermostmodel.SubmitDialogResponse{
+			Type: string(mattermostmodel.SubmitDialogResponseTypeForm),
+			Form: mattermostDialogForm(*result.Dialog),
+		})
+		return
+	}
 	if result.Card != nil {
 		writeJSON(w, status, mattermostmodel.SubmitDialogResponse{
 			Type: string(mattermostmodel.SubmitDialogResponseTypeForm),
@@ -427,6 +431,40 @@ func dialogResultForm(title string, submitLabel string, card statusservice.Matte
 		Title:            title,
 		IntroductionText: text,
 		SubmitLabel:      submitLabel,
+	}
+}
+
+func mattermostDialogForm(dialog statusservice.MattermostDialog) *mattermostmodel.Dialog {
+	elements := make([]mattermostmodel.DialogElement, 0, len(dialog.Elements))
+	for _, element := range dialog.Elements {
+		options := make([]*mattermostmodel.PostActionOptions, 0, len(element.Options))
+		for _, option := range element.Options {
+			options = append(options, &mattermostmodel.PostActionOptions{
+				Text:  option.Text,
+				Value: option.Value,
+			})
+		}
+		elements = append(elements, mattermostmodel.DialogElement{
+			DisplayName: element.DisplayName,
+			Name:        element.Name,
+			Type:        element.Type,
+			SubType:     element.SubType,
+			Default:     element.Default,
+			Placeholder: element.Placeholder,
+			HelpText:    element.HelpText,
+			Optional:    element.Optional,
+			MinLength:   element.MinLength,
+			MaxLength:   element.MaxLength,
+			Options:     options,
+		})
+	}
+	return &mattermostmodel.Dialog{
+		CallbackId:       dialog.CallbackID,
+		Title:            dialog.Title,
+		IntroductionText: dialog.IntroductionText,
+		Elements:         elements,
+		SubmitLabel:      dialog.SubmitLabel,
+		State:            dialog.State,
 	}
 }
 

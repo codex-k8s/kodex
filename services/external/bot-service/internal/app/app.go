@@ -51,13 +51,11 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	})
 	var channelManager statusservice.MattermostChannelManager
 	var flowCardPublisher statusservice.FlowCardPublisher
-	var ephemeralCardPublisher statusservice.EphemeralCardPublisher
 	var dialogOpener httptransport.DialogOpener
 	if cfg.BotTokenConfigured() && cfg.MattermostAPIURL() != "" {
 		controlSurface := mattermostintegration.NewControlSurface(cfg.MattermostAPIURL(), cfg.MattermostBotToken)
 		channelManager = controlSurface
 		flowCardPublisher = controlSurface
-		ephemeralCardPublisher = controlSurface
 		dialogOpener = controlSurface
 	}
 	gitHubProvider, err := openGitHubProvider(cfg)
@@ -72,7 +70,6 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		Store:                    storage,
 		ChannelManager:           channelManager,
 		FlowCardPublisher:        flowCardPublisher,
-		EphemeralCardPublisher:   ephemeralCardPublisher,
 		RepositoryProvider:       gitHubProvider,
 		GitHubRepositoryProvider: gitHubAccountProvider,
 		GitHubAccountInspector:   gitHubAccountInspector,
@@ -95,17 +92,16 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	})
 
 	router := httptransport.NewRouter(httptransport.RouterConfig{
-		StatusService:          statusSvc,
-		SlashService:           slashSvc,
-		DialogOpener:           dialogOpener,
-		EphemeralCardPublisher: ephemeralCardPublisher,
-		Localizer:              localizer,
-		SlashToken:             cfg.MattermostSlashToken,
-		GitHubWebhookSecret:    cfg.GitHubWebhookSecret,
-		MaxSlashFormBytes:      cfg.MaxSlashFormBytes,
-		MaxGitHubWebhookBytes:  cfg.MaxGitHubWebhookBytes,
-		PrometheusRegistry:     newPrometheusRegistry(),
-		Logger:                 logger,
+		StatusService:         statusSvc,
+		SlashService:          slashSvc,
+		DialogOpener:          dialogOpener,
+		Localizer:             localizer,
+		SlashToken:            cfg.MattermostSlashToken,
+		GitHubWebhookSecret:   cfg.GitHubWebhookSecret,
+		MaxSlashFormBytes:     cfg.MaxSlashFormBytes,
+		MaxGitHubWebhookBytes: cfg.MaxGitHubWebhookBytes,
+		PrometheusRegistry:    newPrometheusRegistry(),
+		Logger:                logger,
 	})
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,

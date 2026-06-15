@@ -329,15 +329,13 @@ func TestAgentsDialogReturnsResultFormWithoutEphemeralPublish(t *testing.T) {
 		DialogSubmitURL: "http://bot-service/mattermost/dialogs/agents",
 		StorageReady:    true,
 	})
-	publisher := &fakeEphemeralCardPublisher{}
 	router := NewRouter(RouterConfig{
-		StatusService:          statusSvc,
-		SlashService:           slashSvc,
-		EphemeralCardPublisher: publisher,
-		Localizer:              localizer,
-		SlashToken:             "expected-token",
-		MaxSlashFormBytes:      65536,
-		MaxGitHubWebhookBytes:  262144,
+		StatusService:         statusSvc,
+		SlashService:          slashSvc,
+		Localizer:             localizer,
+		SlashToken:            "expected-token",
+		MaxSlashFormBytes:     65536,
+		MaxGitHubWebhookBytes: 262144,
 	})
 	recorder := httptest.NewRecorder()
 	body := `{"callback_id":"agents_repo_add","state":"{\"view\":\"repositories\",\"channel_id\":\"channel-1\",\"post_id\":\"post-1\",\"user_name\":\"owner\"}","user_id":"owner-id","submission":{"provider":"github","repository":"codex-k8s/kodex-package-store","default_branch":"main"}}`
@@ -374,8 +372,35 @@ func TestAgentsDialogReturnsResultFormWithoutEphemeralPublish(t *testing.T) {
 	if store.upsert.Owner != "codex-k8s" || store.upsert.Name != "kodex-package-store" || store.upsert.DefaultBranch != "main" {
 		t.Fatalf("upsert = %#v", store.upsert)
 	}
-	if publisher.userID != "" {
-		t.Fatalf("ephemeral publisher should not be called, userID = %q", publisher.userID)
+}
+
+func TestMattermostDialogFormConvertsSelectOptions(t *testing.T) {
+	form := mattermostDialogForm(statusservice.MattermostDialog{
+		CallbackID:       "agents_repo_search_pick",
+		Title:            "Choose repository",
+		IntroductionText: "Pick one.",
+		SubmitLabel:      "Choose",
+		State:            `{"view":"repositories"}`,
+		Elements: []statusservice.MattermostDialogElement{
+			{
+				DisplayName: "Repository",
+				Name:        "repository_choice",
+				Type:        "select",
+				Options: []statusservice.MattermostDialogOption{
+					{Text: "codex-k8s/matter-codex", Value: "repo-state"},
+				},
+			},
+		},
+	})
+
+	if form.CallbackId != "agents_repo_search_pick" || form.Title != "Choose repository" || form.SubmitLabel != "Choose" {
+		t.Fatalf("form = %#v", form)
+	}
+	if len(form.Elements) != 1 || form.Elements[0].Type != "select" || len(form.Elements[0].Options) != 1 {
+		t.Fatalf("form elements = %#v", form.Elements)
+	}
+	if form.Elements[0].Options[0].Text != "codex-k8s/matter-codex" || form.Elements[0].Options[0].Value != "repo-state" {
+		t.Fatalf("form options = %#v", form.Elements[0].Options)
 	}
 }
 
@@ -591,18 +616,6 @@ func (opener *fakeDialogOpener) OpenDialog(_ context.Context, triggerID string, 
 	opener.triggerID = triggerID
 	opener.dialog = dialog
 	return nil
-}
-
-type fakeEphemeralCardPublisher struct {
-	userID string
-	card   statusservice.FlowCard
-	err    error
-}
-
-func (publisher *fakeEphemeralCardPublisher) PostEphemeralCard(_ context.Context, userID string, card statusservice.FlowCard) error {
-	publisher.userID = userID
-	publisher.card = card
-	return publisher.err
 }
 
 type fakeRouterAdminStore struct {
