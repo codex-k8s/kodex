@@ -123,7 +123,7 @@ func reconcileSelfDeployPlanGovernanceGates(ctx context.Context, service selfDep
 func selfDeployPlanNeedsGovernanceGateEnsure(plan entity.SelfDeployPlan) bool {
 	return plan.ID != uuid.Nil &&
 		plan.Status == enum.SelfDeployPlanStatusPendingApproval &&
-		strings.TrimSpace(plan.GovernanceContext.GateRequestRef) == ""
+		strings.TrimSpace(plan.GovernanceContext.GateDecisionRef) == ""
 }
 
 func selfDeployGateReconcileErrorCode(err error) string {

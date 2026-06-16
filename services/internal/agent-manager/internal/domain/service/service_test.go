@@ -5520,6 +5520,60 @@ func TestEnsureSelfDeployPlanGovernanceGatePreparesExistingPendingPlan(t *testin
 	}
 }
 
+func TestEnsureSelfDeployPlanGovernanceGateRecoversResolvedGateAndDispatchesBuild(t *testing.T) {
+	t.Parallel()
+
+	input := validSelfDeployBuildPlanInput()
+	plan := selfDeployPlanFromInputForTest(input, uuid.MustParse("5f7f3a10-0049-4000-8000-000000000049"), "command:"+input.Meta.CommandID.String())
+	plan.Status = enum.SelfDeployPlanStatusPendingApproval
+	plan.GovernanceContext.RiskAssessmentRef = ""
+	plan.GovernanceContext.GateRequestRef = ""
+	plan.GovernanceContext.GateDecisionRef = ""
+	repository := &fakeRepository{
+		selfDeployByID: map[uuid.UUID]entity.SelfDeployPlan{plan.ID: plan},
+	}
+	preparer := &fakeSelfDeployGatePreparer{
+		result: SelfDeployPlanGatePreparationResult{
+			Status: SelfDeployPlanGateStatusApproved,
+			GovernanceContext: value.GovernanceContextRef{
+				RiskAssessmentRef: "governance:risk_assessment/59c67c5d-847b-4296-9afa-25aa3028a313",
+				GateRequestRef:    "governance:gate_request/82ec64f2-ad76-4188-9058-0df058f5a5f5",
+				GateDecisionRef:   "governance:gate_decision/cccccccc-3333-4333-8333-cccccccccccc",
+			},
+			SafeSummary: "owner approved self-deploy build",
+		},
+	}
+	buildReader := &fakeSelfDeployBuildPlanReader{result: readySelfDeployBuildPlanResult()}
+	buildCreator := &fakeSelfDeployBuildJobCreator{result: RuntimeJobResult{JobRef: "runtime:job/build-agent-manager", Status: "pending"}}
+	service := New(Config{
+		Repository:                     repository,
+		SelfDeployGatePreparer:         preparer,
+		SelfDeployGateEnabled:          true,
+		SelfDeployBuildPlanReader:      buildReader,
+		SelfDeployBuildJobCreator:      buildCreator,
+		SelfDeployBuildDispatchEnabled: true,
+	})
+
+	ensured, err := service.EnsureSelfDeployPlanGovernanceGate(context.Background(), EnsureSelfDeployPlanGovernanceGateInput{
+		Meta:             value.CommandMeta{IdempotencyKey: "recover-resolved-self-deploy-gate", Actor: testActor()},
+		SelfDeployPlanID: plan.ID,
+	})
+	if err != nil {
+		t.Fatalf("EnsureSelfDeployPlanGovernanceGate() err = %v", err)
+	}
+	if ensured.Status != enum.SelfDeployPlanStatusApproved || ensured.GovernanceContext.GateDecisionRef == "" {
+		t.Fatalf("ensured status/context = %s/%+v, want approved with decision", ensured.Status, ensured.GovernanceContext)
+	}
+	if ensured.RuntimeBuildStatus != enum.SelfDeployRuntimeBuildStatusRequested ||
+		len(ensured.RuntimeBuildJobs) != 1 ||
+		ensured.RuntimeBuildJobs[0].RuntimeJobRef != "runtime:job/build-agent-manager" {
+		t.Fatalf("runtime build state = %s/%+v, want requested job", ensured.RuntimeBuildStatus, ensured.RuntimeBuildJobs)
+	}
+	if preparer.calls != 1 || buildReader.calls != 1 || buildCreator.calls != 1 {
+		t.Fatalf("calls preparer/build reader/build creator = %d/%d/%d, want 1/1/1", preparer.calls, buildReader.calls, buildCreator.calls)
+	}
+}
+
 func TestEnsureSelfDeployPlanGovernanceGateReportsGatePrepareFailure(t *testing.T) {
 	t.Parallel()
 
@@ -5640,6 +5694,55 @@ func TestRecordSelfDeployPlanGateDecisionApprovesAndDispatchesBuild(t *testing.T
 	}
 	if strings.Contains(approved.SafeSummary+approved.RuntimeBuildSummary, "raw_provider_payload") {
 		t.Fatalf("stored summaries leaked unsafe marker: %q / %q", approved.SafeSummary, approved.RuntimeBuildSummary)
+	}
+}
+
+func TestRecordSelfDeployPlanGateDecisionBackfillsMissingGateRefAndDispatchesBuild(t *testing.T) {
+	t.Parallel()
+
+	input := validSelfDeployBuildPlanInput()
+	plan := selfDeployPlanFromInputForTest(input, uuid.MustParse("5f7f3a10-0052-4000-8000-000000000052"), "command:"+input.Meta.CommandID.String())
+	plan.GovernanceContext.RiskAssessmentRef = "governance:risk_assessment/aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"
+	plan.GovernanceContext.GateRequestRef = ""
+	plan.GovernanceContext.GateDecisionRef = ""
+	repository := &fakeRepository{selfDeployByID: map[uuid.UUID]entity.SelfDeployPlan{plan.ID: plan}}
+	buildReader := &fakeSelfDeployBuildPlanReader{result: readySelfDeployBuildPlanResult()}
+	buildCreator := &fakeSelfDeployBuildJobCreator{result: RuntimeJobResult{JobRef: "runtime:job/build-agent-manager", Status: "pending"}}
+	service := New(Config{
+		Repository:                     repository,
+		SelfDeployBuildPlanReader:      buildReader,
+		SelfDeployBuildJobCreator:      buildCreator,
+		SelfDeployBuildDispatchEnabled: true,
+	})
+	expectedVersion := plan.Version
+
+	approved, err := service.RecordSelfDeployPlanGateDecision(context.Background(), RecordSelfDeployPlanGateDecisionInput{
+		Meta: value.CommandMeta{
+			IdempotencyKey:  "gate-decision-approved-missing-gate-ref",
+			ExpectedVersion: &expectedVersion,
+			Actor:           testActor(),
+		},
+		SelfDeployPlanID: plan.ID,
+		GateRequestRef:   "governance:gate_request/82ec64f2-ad76-4188-9058-0df058f5a5f5",
+		GateDecisionRef:  "governance:gate_decision/cccccccc-3333-4333-8333-cccccccccccc",
+		Outcome:          SelfDeployPlanGateDecisionOutcomeApprove,
+		SafeSummary:      "owner approved self-deploy build",
+	})
+	if err != nil {
+		t.Fatalf("RecordSelfDeployPlanGateDecision() err = %v", err)
+	}
+	if approved.Status != enum.SelfDeployPlanStatusApproved ||
+		approved.GovernanceContext.GateRequestRef != "governance:gate_request/82ec64f2-ad76-4188-9058-0df058f5a5f5" ||
+		approved.GovernanceContext.GateDecisionRef != "governance:gate_decision/cccccccc-3333-4333-8333-cccccccccccc" {
+		t.Fatalf("approved plan = %+v", approved)
+	}
+	if approved.RuntimeBuildStatus != enum.SelfDeployRuntimeBuildStatusRequested ||
+		len(approved.RuntimeBuildJobs) != 1 ||
+		approved.RuntimeBuildJobs[0].RuntimeJobRef != "runtime:job/build-agent-manager" {
+		t.Fatalf("runtime build state = %s/%+v, want requested job", approved.RuntimeBuildStatus, approved.RuntimeBuildJobs)
+	}
+	if buildReader.calls != 1 || buildCreator.calls != 1 {
+		t.Fatalf("build reader/creator calls = %d/%d, want 1/1", buildReader.calls, buildCreator.calls)
 	}
 }
 

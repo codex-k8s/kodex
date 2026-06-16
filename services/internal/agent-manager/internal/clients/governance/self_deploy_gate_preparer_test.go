@@ -168,6 +168,55 @@ func TestSelfDeployGatePreparerRecoversExistingGateRefsAfterPrepareError(t *test
 	}
 }
 
+func TestSelfDeployGatePreparerRecoversResolvedGateDecisionAfterPrepareError(t *testing.T) {
+	t.Parallel()
+
+	riskAssessmentID := "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"
+	gateRequestID := "bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb"
+	gateDecisionID := "cccccccc-cccc-4ccc-cccc-cccccccccccc"
+	plan := validGatePlan()
+	riskResponse, gateResponse := existingSelfDeployGateResponses(plan, riskAssessmentID, gateRequestID)
+	gateResponse.GateRequests[0].Status = governancev1.GateRequestStatus_GATE_REQUEST_STATUS_RESOLVED
+	decisionResponse := &governancev1.ListGateDecisionsResponse{GateDecisions: []*governancev1.GateDecision{{
+		Id:            gateDecisionID,
+		GateRequestId: gateRequestID,
+		Outcome:       governancev1.GateOutcome_GATE_OUTCOME_APPROVE,
+		Reason:        "owner approved self-deploy build",
+	}}}
+	client := &fakeSelfDeployGateClient{
+		err:              status.Error(codes.Unavailable, "prepare command replay failed"),
+		riskResponse:     riskResponse,
+		gateResponse:     gateResponse,
+		decisionResponse: decisionResponse,
+	}
+	preparer, err := newSelfDeployGatePreparer(client, Config{AuthToken: "token", Timeout: time.Second})
+	if err != nil {
+		t.Fatalf("newSelfDeployGatePreparer(): %v", err)
+	}
+
+	result, err := preparer.PrepareSelfDeployPlanGate(context.Background(), agentservice.SelfDeployPlanGatePreparationInput{
+		Meta: value.CommandMeta{IdempotencyKey: "gate", Actor: value.Actor{Type: "service", ID: "agent-manager"}},
+		Plan: plan,
+	})
+	if err != nil {
+		t.Fatalf("PrepareSelfDeployPlanGate() err = %v", err)
+	}
+	if result.Status != agentservice.SelfDeployPlanGateStatusApproved {
+		t.Fatalf("status = %s, want approved", result.Status)
+	}
+	if result.GovernanceContext.RiskAssessmentRef != "governance:risk_assessment/"+riskAssessmentID ||
+		result.GovernanceContext.GateRequestRef != "governance:gate_request/"+gateRequestID ||
+		result.GovernanceContext.GateDecisionRef != "governance:gate_decision/"+gateDecisionID {
+		t.Fatalf("governance refs = %+v, want resolved gate refs", result.GovernanceContext)
+	}
+	if result.SafeSummary != "owner approved self-deploy build" {
+		t.Fatalf("safe summary = %q", result.SafeSummary)
+	}
+	if client.decisionRequest.GetGateRequestId() != gateRequestID {
+		t.Fatalf("decision lookup request = %+v, want gate request id %s", client.decisionRequest, gateRequestID)
+	}
+}
+
 func TestSelfDeployGatePreparerRecoversExistingGateRefsWithRiskReadOnly(t *testing.T) {
 	t.Parallel()
 
@@ -365,7 +414,7 @@ func TestSelfDeployGatePreparerReportsExistingGateLookupFailure(t *testing.T) {
 	}
 }
 
-func TestSelfDeployGatePreparerReportsExistingGateMismatch(t *testing.T) {
+func TestSelfDeployGatePreparerReportsResolvedGateWithoutDecision(t *testing.T) {
 	t.Parallel()
 
 	plan := validGatePlan()
@@ -451,10 +500,13 @@ type fakeSelfDeployGateClient struct {
 	response               *governancev1.SelfDeployPlanGateResponse
 	riskResponse           *governancev1.ListRiskAssessmentsResponse
 	gateResponse           *governancev1.ListGateRequestsResponse
+	decisionRequest        *governancev1.ListGateDecisionsRequest
+	decisionResponse       *governancev1.ListGateDecisionsResponse
 	riskResponseForRequest func(*governancev1.ListRiskAssessmentsRequest) (*governancev1.ListRiskAssessmentsResponse, error)
 	err                    error
 	riskErr                error
 	gateErr                error
+	decisionErr            error
 	rejectGateTarget       bool
 }
 
@@ -487,6 +539,14 @@ func (f *fakeSelfDeployGateClient) ListGateRequests(_ context.Context, request *
 		return nil, f.gateErr
 	}
 	return f.gateResponse, nil
+}
+
+func (f *fakeSelfDeployGateClient) ListGateDecisions(_ context.Context, request *governancev1.ListGateDecisionsRequest, _ ...grpc.CallOption) (*governancev1.ListGateDecisionsResponse, error) {
+	f.decisionRequest = request
+	if f.decisionErr != nil {
+		return nil, f.decisionErr
+	}
+	return f.decisionResponse, nil
 }
 
 func existingSelfDeployGateResponses(plan entity.SelfDeployPlan, riskAssessmentID string, gateRequestID string) (*governancev1.ListRiskAssessmentsResponse, *governancev1.ListGateRequestsResponse) {

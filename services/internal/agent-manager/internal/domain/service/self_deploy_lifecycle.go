@@ -73,7 +73,7 @@ func (s *Service) EnsureSelfDeployPlanGovernanceGate(ctx context.Context, input 
 	if input.Meta.ExpectedVersion != nil && plan.Version != *input.Meta.ExpectedVersion {
 		return entity.SelfDeployPlan{}, errs.ErrConflict
 	}
-	return s.prepareSelfDeployPlanGateIfNeeded(ctx, plan)
+	return s.advanceSelfDeployPlan(ctx, plan)
 }
 
 func (s *Service) RecordSelfDeployPlanGateDecision(ctx context.Context, input RecordSelfDeployPlanGateDecisionInput) (entity.SelfDeployPlan, error) {
@@ -615,9 +615,6 @@ func selfDeployGateStatusFromDecisionOutcome(outcome SelfDeployPlanGateDecisionO
 }
 
 func validateSelfDeployGateDecisionBinding(plan entity.SelfDeployPlan, gateRequestRef string, gateDecisionRef string) error {
-	if strings.TrimSpace(plan.GovernanceContext.GateRequestRef) == "" {
-		return errs.ErrPreconditionFailed
-	}
 	normalizedGateRequestRef, err := normalizeGovernanceRef(gateRequestRef)
 	if err != nil || normalizedGateRequestRef == "" {
 		return errs.ErrInvalidArgument
@@ -626,11 +623,10 @@ func validateSelfDeployGateDecisionBinding(plan entity.SelfDeployPlan, gateReque
 	if err != nil || normalizedGateDecisionRef == "" {
 		return errs.ErrInvalidArgument
 	}
-	if strings.TrimSpace(plan.GovernanceContext.GateRequestRef) != normalizedGateRequestRef {
+	if existing := strings.TrimSpace(plan.GovernanceContext.GateRequestRef); existing != "" && existing != normalizedGateRequestRef {
 		return errs.ErrConflict
 	}
-	if strings.TrimSpace(plan.GovernanceContext.GateDecisionRef) != "" &&
-		strings.TrimSpace(plan.GovernanceContext.GateDecisionRef) != normalizedGateDecisionRef {
+	if existing := strings.TrimSpace(plan.GovernanceContext.GateDecisionRef); existing != "" && existing != normalizedGateDecisionRef {
 		return errs.ErrConflict
 	}
 	return nil

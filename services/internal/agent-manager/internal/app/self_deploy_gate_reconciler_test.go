@@ -44,16 +44,40 @@ func TestReconcileSelfDeployPlanGovernanceGatesEnsuresPendingPlanWithoutGateRef(
 	}
 }
 
-func TestReconcileSelfDeployPlanGovernanceGatesSkipsPreparedPlan(t *testing.T) {
+func TestReconcileSelfDeployPlanGovernanceGatesEnsuresPendingPlanWithoutDecisionRef(t *testing.T) {
 	t.Parallel()
 
 	projectRef := "63135040-fe44-4ec4-83d5-b0126dc23b32"
+	planID := uuid.MustParse("7b24d574-902b-4d1e-b7cb-ab57967688a1")
 	service := &fakeSelfDeployGateEnsureService{plans: []entity.SelfDeployPlan{{
-		VersionedBase: entity.VersionedBase{ID: uuid.New(), Version: 2},
+		VersionedBase: entity.VersionedBase{ID: planID, Version: 2},
 		ProjectRef:    projectRef,
 		Status:        enum.SelfDeployPlanStatusPendingApproval,
 		GovernanceContext: value.GovernanceContextRef{
 			GateRequestRef: "governance:gate_request/bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb",
+		},
+	}}}
+
+	err := reconcileSelfDeployPlanGovernanceGates(context.Background(), service, projectRef)
+	if err != nil {
+		t.Fatalf("reconcileSelfDeployPlanGovernanceGates() err = %v", err)
+	}
+	if len(service.ensureInputs) != 1 || service.ensureInputs[0].SelfDeployPlanID != planID {
+		t.Fatalf("ensure inputs = %+v, want pending plan without decision ref", service.ensureInputs)
+	}
+}
+
+func TestReconcileSelfDeployPlanGovernanceGatesSkipsPlanWithDecisionRef(t *testing.T) {
+	t.Parallel()
+
+	projectRef := "63135040-fe44-4ec4-83d5-b0126dc23b32"
+	service := &fakeSelfDeployGateEnsureService{plans: []entity.SelfDeployPlan{{
+		VersionedBase: entity.VersionedBase{ID: uuid.New(), Version: 3},
+		ProjectRef:    projectRef,
+		Status:        enum.SelfDeployPlanStatusPendingApproval,
+		GovernanceContext: value.GovernanceContextRef{
+			GateRequestRef:  "governance:gate_request/bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb",
+			GateDecisionRef: "governance:gate_decision/cccccccc-cccc-4ccc-cccc-cccccccccccc",
 		},
 	}}}
 
