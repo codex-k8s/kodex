@@ -28,10 +28,6 @@ type FlowCardPublisher interface {
 	UpsertFlowCard(ctx context.Context, card FlowCard) (FlowCardPost, error)
 }
 
-type EphemeralCardPublisher interface {
-	PostEphemeralCard(ctx context.Context, userID string, card FlowCard) error
-}
-
 type MattermostCard struct {
 	ChannelID string
 	PostID    string
@@ -147,6 +143,7 @@ type DialogSubmissionCommand struct {
 
 type DialogSubmissionResult struct {
 	Card       *MattermostCard
+	Dialog     *MattermostDialog
 	Error      string
 	Errors     map[string]string
 	StatusCode int
@@ -168,29 +165,30 @@ type FlowActionResult struct {
 }
 
 type SlashCommandServiceConfig struct {
-	Localizer               *texti18n.Localizer
-	StatusService           *StatusService
-	Store                   adminrepo.Repository
-	ChannelManager          MattermostChannelManager
-	FlowCardPublisher       FlowCardPublisher
-	RepositoryProvider      providerrepo.RepositoryProvider
-	GitHubAccountInspector  providerrepo.GitHubAccountInspector
-	RuntimeRunner           runtimerepo.Runner
-	DefaultTeamName         string
-	CodexAuthSecretName     string
-	GitHubSecretName        string
-	MenuActionURL           string
-	DialogSubmitURL         string
-	FlowActionURL           string
-	BotTokenConfigured      bool
-	SlashTokenConfigured    bool
-	GitHubTokenConfigured   bool
-	GitHubWebhookConfigured bool
-	DatabaseConfigured      bool
-	StorageReady            bool
-	RuntimeConfigured       bool
-	MattermostConfigured    bool
-	ChannelManagerEnabled   bool
+	Localizer                *texti18n.Localizer
+	StatusService            *StatusService
+	Store                    adminrepo.Repository
+	ChannelManager           MattermostChannelManager
+	FlowCardPublisher        FlowCardPublisher
+	RepositoryProvider       providerrepo.RepositoryProvider
+	GitHubRepositoryProvider providerrepo.GitHubAccountRepositoryProvider
+	GitHubAccountInspector   providerrepo.GitHubAccountInspector
+	RuntimeRunner            runtimerepo.Runner
+	DefaultTeamName          string
+	CodexAuthSecretName      string
+	GitHubSecretName         string
+	MenuActionURL            string
+	DialogSubmitURL          string
+	FlowActionURL            string
+	BotTokenConfigured       bool
+	SlashTokenConfigured     bool
+	GitHubTokenConfigured    bool
+	GitHubWebhookConfigured  bool
+	DatabaseConfigured       bool
+	StorageReady             bool
+	RuntimeConfigured        bool
+	MattermostConfigured     bool
+	ChannelManagerEnabled    bool
 }
 
 type SlashCommandService struct {
@@ -278,16 +276,22 @@ func (svc *SlashCommandService) handleRepoAdd(ctx context.Context, args []string
 }
 
 func (svc *SlashCommandService) upsertRepositoryText(ctx context.Context, input adminrepo.UpsertRepositoryInput, command SlashCommand, auditSummary string) string {
+	_, text, _ := svc.upsertRepository(ctx, input, command, auditSummary)
+	return text
+}
+
+func (svc *SlashCommandService) upsertRepository(ctx context.Context, input adminrepo.UpsertRepositoryInput, command SlashCommand, auditSummary string) (entity.Repository, string, bool) {
+	input.GitHubAccountName = defaultString(input.GitHubAccountName, "primary")
 	channelName := repositoryChannelName(input.Owner, input.Name)
 	if svc.cfg.ChannelManager != nil {
 		if _, err := svc.cfg.ChannelManager.EnsureRepositoryChannel(ctx, svc.cfg.DefaultTeamName, channelName, "repo "+input.Owner+"/"+input.Name); err != nil {
-			return svc.t("repo.add.channel_failed", map[string]any{"Error": safeError(err)})
+			return entity.Repository{}, svc.t("repo.add.channel_failed", map[string]any{"Error": safeError(err)}), false
 		}
 	}
 	input.MattermostChannel = channelName
 	repo, created, err := svc.cfg.Store.UpsertRepository(ctx, input)
 	if err != nil {
-		return svc.t("repo.add.save_failed", map[string]any{"Error": safeError(err)})
+		return entity.Repository{}, svc.t("repo.add.save_failed", map[string]any{"Error": safeError(err)}), false
 	}
 	_ = svc.cfg.Store.RecordAuditEvent(ctx, adminrepo.AuditEventInput{
 		EventType:    "repository.upserted",
@@ -306,12 +310,13 @@ func (svc *SlashCommandService) upsertRepositoryText(ctx context.Context, input 
 			"State":         svc.t(stateID, nil),
 			"Provider":      repo.Provider,
 			"FullName":      repo.FullName(),
+			"Account":       repo.GitHubAccountName,
 			"Channel":       repo.MattermostChannel,
 			"DefaultBranch": repo.DefaultBranch,
 		}),
 	}
-	lines = append(lines, svc.ensureRepositoryWebhookLine(ctx, command, repo.Provider, repo.Owner, repo.Name)...)
-	return strings.Join(lines, "\n")
+	lines = append(lines, svc.ensureRepositoryWebhookLineForRepository(ctx, command, repo)...)
+	return repo, strings.Join(lines, "\n"), true
 }
 
 func (svc *SlashCommandService) handleRepoList(ctx context.Context) string {
@@ -331,6 +336,7 @@ func (svc *SlashCommandService) handleRepoList(ctx context.Context) string {
 			"Provider":      repo.Provider,
 			"FullName":      repo.FullName(),
 			"DefaultBranch": repo.DefaultBranch,
+			"Account":       defaultString(repo.GitHubAccountName, "primary"),
 			"Channel":       repo.MattermostChannel,
 			"Status":        repo.Status,
 		}))
@@ -2274,19 +2280,27 @@ func (svc *SlashCommandService) handleMenuTypedAction(ctx context.Context, comma
 		}
 	case menuActionCancel:
 		return svc.menuCardResult(command, currentCard)
+	case menuActionRepositoryOnboard:
+		return svc.menuCardResult(command, svc.repositoryOnboardingAccountCard(ctx, command))
+	case menuActionRepositoryRepos:
+		return svc.menuCardResult(command, svc.repositoryOnboardingRepositoryCard(ctx, command, strings.TrimSpace(command.ID), ""))
+	case menuActionRepositoryBranches:
+		return svc.menuCardResult(command, svc.repositoryOnboardingBranchCard(ctx, command))
+	case menuActionRepositoryConnect:
+		return svc.menuCardResult(command, svc.repositoryOnboardingConnectCard(ctx, command))
 	case menuActionRepositoryCheck:
 		provider, owner, name, ok := parseRepositoryResourceID(command.ID)
 		if !ok || provider != "github" {
 			return svc.menuActionTextResult(ctx, command, svc.t("menu.entity.invalid", nil), false)
 		}
-		text := svc.handleGitHubCheck(ctx, []string{owner + "/" + name}, svc.slashFromMenu(command))
+		text := svc.repositoryGitHubCheckText(ctx, command, provider, owner, name)
 		return svc.menuActionTextResult(ctx, command, text, false)
 	case menuActionRepositoryWebhook:
 		provider, owner, name, ok := parseRepositoryResourceID(command.ID)
 		if !ok || provider != "github" {
 			return svc.menuActionTextResult(ctx, command, svc.t("menu.entity.invalid", nil), false)
 		}
-		text := svc.handleGitHubWebhook(ctx, []string{"ensure", owner + "/" + name}, svc.slashFromMenu(command))
+		text := svc.repositoryGitHubWebhookText(ctx, command, provider, owner, name)
 		return svc.menuActionTextResult(ctx, command, text, false)
 	case menuActionOpenAIStatus:
 		text := svc.handleOpenAIStatus(ctx, []string{command.ID}, svc.slashFromMenu(command))
@@ -2370,7 +2384,7 @@ func (svc *SlashCommandService) repositoryListCard(ctx context.Context, command 
 	card.Actions = nil
 	if len(repositories) == 0 {
 		card.Text = svc.t("repo.list.empty", nil)
-		card.Actions = append(card.Actions, svc.menuDialogAction(menuViewRepositories, "dialogrepoadd", menuDialogRepositoryAdd, "menu.action.repo_add", "menu.action.repo_add.tooltip", "primary"))
+		card.Actions = append(card.Actions, svc.menuResourceAction(menuViewRepositories, "repoonboard", menuActionRepositoryOnboard, menuResourceRepository, "", "menu.action.repo_add", "menu.action.repo_add.tooltip", "primary", nil))
 		card.Actions = append(card.Actions, svc.entityNavigationActions(menuViewRepositories)...)
 		return card
 	}
@@ -2381,6 +2395,7 @@ func (svc *SlashCommandService) repositoryListCard(ctx context.Context, command 
 			Title: svc.t("menu.entity.repository.title", map[string]any{"Number": number, "Provider": repo.Provider, "FullName": repo.FullName()}),
 			Value: svc.t("menu.entity.repository.summary", map[string]any{
 				"Branch":  repo.DefaultBranch,
+				"Account": defaultString(repo.GitHubAccountName, "primary"),
 				"Channel": repo.MattermostChannel,
 				"Status":  repo.Status,
 			}),
@@ -2389,7 +2404,7 @@ func (svc *SlashCommandService) repositoryListCard(ctx context.Context, command 
 		card.Actions = append(card.Actions, svc.menuResourceAction(menuViewRepositories, "openrepo"+strconv.Itoa(number), menuActionShow, menuResourceRepository, repositoryResourceID(repo), "menu.action.open_number", "menu.action.open_number.tooltip", "default", map[string]any{"Number": number}))
 	}
 	card.Actions = append(card.Actions, svc.pageActions(menuViewRepositories, menuResourceRepository, "", page, len(repositories))...)
-	card.Actions = append(card.Actions, svc.menuDialogAction(menuViewRepositories, "dialogrepoadd", menuDialogRepositoryAdd, "menu.action.repo_add", "menu.action.repo_add.tooltip", "primary"))
+	card.Actions = append(card.Actions, svc.menuResourceAction(menuViewRepositories, "repoonboard", menuActionRepositoryOnboard, menuResourceRepository, "", "menu.action.repo_add", "menu.action.repo_add.tooltip", "primary", nil))
 	card.Actions = append(card.Actions, svc.entityNavigationActions(menuViewRepositories)...)
 	return card
 }
@@ -2413,6 +2428,7 @@ func (svc *SlashCommandService) repositoryEntityCard(ctx context.Context, comman
 	card.Fields = []MattermostCardField{
 		{Title: svc.t("menu.entity.field.repository", nil), Value: "`" + repo.Provider + ":" + repo.FullName() + "`", Short: true},
 		{Title: svc.t("menu.entity.field.branch", nil), Value: "`" + repo.DefaultBranch + "`", Short: true},
+		{Title: svc.t("menu.entity.field.github", nil), Value: "`" + defaultString(repo.GitHubAccountName, "primary") + "`", Short: true},
 		{Title: svc.t("menu.entity.field.channel", nil), Value: "`" + repo.MattermostChannel + "`", Short: true},
 		{Title: svc.t("menu.entity.field.status", nil), Value: "`" + repo.Status + "`", Short: true},
 	}
@@ -2460,6 +2476,295 @@ func (svc *SlashCommandService) deleteRepositoryFromMenu(ctx context.Context, co
 		Summary:      "repository metadata deleted from Mattermost entity card",
 	})
 	return svc.t("repo.delete.result", map[string]any{"Provider": deleted.Provider, "FullName": deleted.FullName()})
+}
+
+func (svc *SlashCommandService) repositoryOnboardingAccountCard(ctx context.Context, command MenuActionCommand) *MattermostCard {
+	card := svc.menuCard(ctx, menuViewRepositories)
+	card.Title = svc.t("repo.onboard.accounts.title", nil)
+	card.Text = svc.t("repo.onboard.accounts.text", nil)
+	card.Fields = nil
+	card.Actions = nil
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		card.Text = svc.t("github.account.list.storage_not_ready", nil)
+		card.Actions = svc.entityNavigationActions(menuViewRepositories)
+		return card
+	}
+	accounts, err := svc.cfg.Store.ListGitHubAccounts(ctx, 100)
+	if err != nil {
+		card.Text = svc.t("github.account.list.failed", map[string]any{"Error": safeError(err)})
+		card.Actions = svc.entityNavigationActions(menuViewRepositories)
+		return card
+	}
+	sort.Slice(accounts, func(i int, j int) bool { return accounts[i].Name < accounts[j].Name })
+	if len(accounts) == 0 {
+		card.Text = svc.t("repo.onboard.accounts.empty", nil)
+		card.Actions = append(card.Actions,
+			svc.menuDialogAction(menuViewGitHub, "dialoggithubadd", menuDialogGitHubAccountAdd, "menu.action.github_account_add", "menu.action.github_account_add.tooltip", "primary"),
+			svc.menuAction(menuViewRepositories, "menu.action.back", "menu.action.back.tooltip", "default"),
+			svc.menuAction(menuViewMain, "menu.action.main", "menu.action.main.tooltip", "default"),
+		)
+		return card
+	}
+	for idx, account := range accounts {
+		number := idx + 1
+		card.Fields = append(card.Fields, MattermostCardField{
+			Title: svc.t("repo.onboard.account.title", map[string]any{"Number": number, "Account": account.Name}),
+			Value: svc.t("repo.onboard.account.summary", map[string]any{
+				"Status":   account.Status,
+				"Username": emptyAsUnknown(account.Username),
+				"Email":    emptyAsUnknown(account.Email),
+			}),
+			Short: false,
+		})
+		action := svc.menuResourceAction(menuViewRepositories, "repoaccount"+strconv.Itoa(number), menuActionRepositoryRepos, menuResourceGitHubAccount, account.Name, "menu.action.repository_choose_account", "menu.action.repository_choose_account.tooltip", "default", map[string]any{"Account": account.Name})
+		if account.Status != "configured" || strings.TrimSpace(account.SecretRef) == "" {
+			action.Disabled = true
+		}
+		card.Actions = append(card.Actions, action)
+	}
+	card.Actions = append(card.Actions,
+		svc.menuDialogAction(menuViewGitHub, "dialoggithubadd", menuDialogGitHubAccountAdd, "menu.action.github_account_add", "menu.action.github_account_add.tooltip", "default"),
+		svc.menuAction(menuViewRepositories, "menu.action.back", "menu.action.back.tooltip", "default"),
+		svc.menuAction(menuViewMain, "menu.action.main", "menu.action.main.tooltip", "default"),
+	)
+	return card
+}
+
+func (svc *SlashCommandService) repositoryOnboardingRepositoryCard(ctx context.Context, command MenuActionCommand, accountName string, query string) *MattermostCard {
+	card := svc.menuCard(ctx, menuViewRepositories)
+	card.Title = svc.t("repo.onboard.repositories.title", map[string]any{"Account": accountName})
+	card.Text = svc.t("repo.onboard.repositories.text", map[string]any{"Account": accountName})
+	card.Fields = nil
+	card.Actions = nil
+	account, ok, errText := svc.repositoryOnboardingAccount(ctx, accountName)
+	if errText != "" {
+		card.Text = errText
+		card.Actions = svc.repositoryOnboardingAccountNavigation()
+		return card
+	}
+	if !ok {
+		card.Text = svc.t("repo.account.missing", map[string]any{"Account": accountName})
+		card.Actions = svc.repositoryOnboardingAccountNavigation()
+		return card
+	}
+	if svc.cfg.GitHubRepositoryProvider == nil {
+		card.Text = svc.t("repo.onboard.provider_not_configured", nil)
+		card.Actions = svc.repositoryOnboardingAccountNavigation()
+		return card
+	}
+	candidates, err := svc.repositoryCandidates(ctx, account, query)
+	if err != nil {
+		card.Text = svc.t("repo.onboard.repositories.failed", map[string]any{"Error": safeError(err)})
+		card.Actions = svc.repositoryOnboardingRepositoryNavigation(account.Name)
+		return card
+	}
+	if strings.TrimSpace(query) != "" {
+		card.Text = svc.t("repo.onboard.repositories.search_text", map[string]any{"Account": account.Name, "Query": query})
+	}
+	if len(candidates) == 0 {
+		card.Text = svc.t("repo.onboard.repositories.empty", map[string]any{"Account": account.Name})
+		card.Actions = svc.repositoryOnboardingRepositoryNavigation(account.Name)
+		return card
+	}
+	limit := len(candidates)
+	if limit > entityListPageSize {
+		limit = entityListPageSize
+	}
+	for idx, candidate := range candidates[:limit] {
+		number := idx + 1
+		card.Fields = append(card.Fields, MattermostCardField{
+			Title: svc.t("repo.onboard.repository.title", map[string]any{"Number": number, "FullName": candidate.FullName}),
+			Value: svc.t("repo.onboard.repository.summary", map[string]any{
+				"Branch":      emptyAsUnknown(candidate.DefaultBranch),
+				"Private":     candidate.Private,
+				"Description": emptyAsUnknown(candidate.Description),
+			}),
+			Short: false,
+		})
+		card.Actions = append(card.Actions, svc.menuResourceAction(menuViewRepositories, "repocandidate"+strconv.Itoa(number), menuActionRepositoryBranches, menuResourceRepository, repositoryOnboardingResourceID(repositoryOnboardingState{
+			Account:       account.Name,
+			Provider:      candidate.Provider,
+			Owner:         candidate.Owner,
+			Name:          candidate.Name,
+			FullName:      candidate.FullName,
+			DefaultBranch: candidate.DefaultBranch,
+		}), "menu.action.repository_choose", "menu.action.repository_choose.tooltip", "default", map[string]any{"Number": number}))
+	}
+	card.Actions = append(card.Actions, svc.repositoryOnboardingRepositoryNavigation(account.Name)...)
+	return card
+}
+
+func (svc *SlashCommandService) repositoryOnboardingBranchCard(ctx context.Context, command MenuActionCommand) *MattermostCard {
+	card := svc.menuCard(ctx, menuViewRepositories)
+	card.Title = svc.t("repo.onboard.branches.title", nil)
+	card.Fields = nil
+	card.Actions = nil
+	state, ok := parseRepositoryOnboardingResourceID(command.ID)
+	if !ok || state.Account == "" || state.Owner == "" || state.Name == "" {
+		card.Text = svc.t("menu.entity.invalid", nil)
+		card.Actions = svc.repositoryOnboardingAccountNavigation()
+		return card
+	}
+	account, ok, errText := svc.repositoryOnboardingAccount(ctx, state.Account)
+	if errText != "" {
+		card.Text = errText
+		card.Actions = svc.repositoryOnboardingAccountNavigation()
+		return card
+	}
+	if !ok {
+		card.Text = svc.t("repo.account.missing", map[string]any{"Account": state.Account})
+		card.Actions = svc.repositoryOnboardingAccountNavigation()
+		return card
+	}
+	if svc.cfg.GitHubRepositoryProvider == nil {
+		card.Text = svc.t("repo.onboard.provider_not_configured", nil)
+		card.Actions = svc.repositoryOnboardingRepositoryNavigation(account.Name)
+		return card
+	}
+	branches, err := svc.cfg.GitHubRepositoryProvider.ListBranches(ctx, gitHubAccountRef(account), state.Owner, state.Name, 20)
+	if err != nil {
+		card.Text = svc.t("repo.onboard.branches.failed", map[string]any{"Error": safeError(err)})
+		card.Actions = svc.repositoryOnboardingRepositoryNavigation(account.Name)
+		return card
+	}
+	branchNames := repositoryOnboardingBranchNames(state.DefaultBranch, branches)
+	if len(branchNames) == 0 {
+		card.Text = svc.t("repo.onboard.branches.empty", map[string]any{"Repository": state.FullName})
+		card.Actions = svc.repositoryOnboardingRepositoryNavigation(account.Name)
+		return card
+	}
+	card.Text = svc.t("repo.onboard.branches.text", map[string]any{"Repository": state.FullName, "Account": account.Name})
+	card.Fields = []MattermostCardField{
+		{Title: svc.t("menu.entity.field.repository", nil), Value: "`" + state.Provider + ":" + state.FullName + "`", Short: true},
+		{Title: svc.t("menu.entity.field.github", nil), Value: "`" + account.Name + "`", Short: true},
+	}
+	limit := len(branchNames)
+	if limit > entityListPageSize {
+		limit = entityListPageSize
+	}
+	for idx, branch := range branchNames[:limit] {
+		next := state
+		next.Branch = branch
+		number := idx + 1
+		card.Actions = append(card.Actions, svc.menuResourceAction(menuViewRepositories, "repobranch"+strconv.Itoa(number), menuActionRepositoryConnect, menuResourceRepository, repositoryOnboardingResourceID(next), "menu.action.repository_connect_branch", "menu.action.repository_connect_branch.tooltip", "primary", map[string]any{"Branch": branch}))
+	}
+	card.Actions = append(card.Actions, svc.repositoryOnboardingRepositoryNavigation(account.Name)...)
+	return card
+}
+
+func (svc *SlashCommandService) repositoryOnboardingConnectCard(ctx context.Context, command MenuActionCommand) *MattermostCard {
+	card := svc.menuCommandResultCard(ctx, menuViewRepositories, "", svc.t("menu.entity.invalid", nil))
+	state, ok := parseRepositoryOnboardingResourceID(command.ID)
+	if !ok || state.Account == "" || state.Owner == "" || state.Name == "" || state.Branch == "" {
+		return card
+	}
+	account, ok, errText := svc.repositoryOnboardingAccount(ctx, state.Account)
+	if errText != "" {
+		card.Text = errText
+		card.Actions = svc.repositoryOnboardingAccountNavigation()
+		return card
+	}
+	if !ok {
+		card.Text = svc.t("repo.account.missing", map[string]any{"Account": state.Account})
+		card.Actions = svc.repositoryOnboardingAccountNavigation()
+		return card
+	}
+	repo, text, saved := svc.upsertRepository(ctx, adminrepo.UpsertRepositoryInput{
+		Provider:          defaultString(state.Provider, "github"),
+		Owner:             state.Owner,
+		Name:              state.Name,
+		DefaultBranch:     state.Branch,
+		GitHubAccountName: account.Name,
+	}, svc.slashFromMenu(command), "repository onboarded from Mattermost menu")
+	card.Text = text
+	if saved {
+		card.Actions = []MattermostCardAction{
+			svc.menuResourceAction(menuViewRepositories, "openrepo", menuActionShow, menuResourceRepository, repositoryResourceID(repo), "menu.action.repository_open", "menu.action.repository_open.tooltip", "primary", nil),
+			svc.menuResourceAction(menuViewRepositories, "repolist", menuActionList, menuResourceRepository, "", "menu.action.repo_list", "menu.action.repo_list.tooltip", "default", nil),
+			svc.menuAction(menuViewMain, "menu.action.main", "menu.action.main.tooltip", "default"),
+		}
+		return card
+	}
+	card.Actions = svc.repositoryOnboardingRepositoryNavigation(account.Name)
+	return card
+}
+
+func (svc *SlashCommandService) repositoryCandidates(ctx context.Context, account entity.GitHubAccount, query string) ([]providerrepo.RepositoryCandidate, error) {
+	if strings.TrimSpace(query) != "" {
+		return svc.cfg.GitHubRepositoryProvider.SearchRepositories(ctx, providerrepo.RepositorySearchInput{
+			Account: gitHubAccountRef(account),
+			Query:   query,
+			Limit:   10,
+		})
+	}
+	return svc.cfg.GitHubRepositoryProvider.ListRepositories(ctx, providerrepo.RepositoryListInput{
+		Account: gitHubAccountRef(account),
+		Limit:   10,
+	})
+}
+
+func (svc *SlashCommandService) repositoryOnboardingAccount(ctx context.Context, accountName string) (entity.GitHubAccount, bool, string) {
+	accountName = strings.TrimSpace(accountName)
+	if accountName == "" {
+		return entity.GitHubAccount{}, false, svc.t("repo.onboard.account_required", nil)
+	}
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return entity.GitHubAccount{}, false, svc.t("github.account.list.storage_not_ready", nil)
+	}
+	account, err := svc.cfg.Store.GetGitHubAccount(ctx, accountName)
+	if err != nil {
+		if errors.Is(err, adminrepo.ErrNotFound) {
+			return entity.GitHubAccount{}, false, ""
+		}
+		return entity.GitHubAccount{}, false, svc.t("github.account.list.failed", map[string]any{"Error": safeError(err)})
+	}
+	if account.Status != "configured" || strings.TrimSpace(account.SecretRef) == "" {
+		return entity.GitHubAccount{}, false, svc.t("repo.onboard.account_not_configured", map[string]any{"Account": account.Name})
+	}
+	return account, true, ""
+}
+
+func (svc *SlashCommandService) repositoryOnboardingAccountNavigation() []MattermostCardAction {
+	return []MattermostCardAction{
+		svc.menuResourceAction(menuViewRepositories, "repoonboard", menuActionRepositoryOnboard, menuResourceRepository, "", "menu.action.repo_add", "menu.action.repo_add.tooltip", "default", nil),
+		svc.menuAction(menuViewRepositories, "menu.action.back", "menu.action.back.tooltip", "default"),
+		svc.menuAction(menuViewMain, "menu.action.main", "menu.action.main.tooltip", "default"),
+	}
+}
+
+func (svc *SlashCommandService) repositoryOnboardingRepositoryNavigation(accountName string) []MattermostCardAction {
+	return []MattermostCardAction{
+		svc.menuResourceDialogAction(menuViewRepositories, "reposearch", menuDialogRepositorySearch, menuResourceGitHubAccount, accountName, "menu.action.repository_search", "menu.action.repository_search.tooltip", "primary", nil),
+		svc.menuResourceAction(menuViewRepositories, "repoaccounts", menuActionRepositoryOnboard, menuResourceRepository, "", "menu.action.repository_accounts", "menu.action.repository_accounts.tooltip", "default", nil),
+		svc.menuResourceAction(menuViewRepositories, "repolist", menuActionList, menuResourceRepository, "", "menu.action.repo_list", "menu.action.repo_list.tooltip", "default", nil),
+		svc.menuAction(menuViewMain, "menu.action.main", "menu.action.main.tooltip", "default"),
+	}
+}
+
+func repositoryOnboardingBranchNames(defaultBranch string, branches []providerrepo.BranchCandidate) []string {
+	seen := map[string]bool{}
+	names := make([]string, 0, len(branches)+1)
+	add := func(name string) {
+		name = strings.TrimSpace(name)
+		if name == "" || seen[name] {
+			return
+		}
+		seen[name] = true
+		names = append(names, name)
+	}
+	add(defaultBranch)
+	for _, branch := range branches {
+		add(branch.Name)
+	}
+	return names
+}
+
+func repositorySearchRepositoryOptionText(candidate providerrepo.RepositoryCandidate) string {
+	text := strings.TrimSpace(candidate.FullName)
+	if branch := strings.TrimSpace(candidate.DefaultBranch); branch != "" {
+		text += " (" + branch + ")"
+	}
+	return text
 }
 
 func (svc *SlashCommandService) openAIAccountListCard(ctx context.Context, command MenuActionCommand) *MattermostCard {
@@ -2639,6 +2944,13 @@ func (svc *SlashCommandService) deleteGitHubAccountText(ctx context.Context, acc
 	}
 	if len(refs) > 0 {
 		return svc.t("github.account.delete.in_use", map[string]any{"Account": account.Name, "Profiles": strings.Join(refs, ", ")})
+	}
+	repositoryRefs, err := svc.githubAccountRepositoryRefs(ctx, account.Name)
+	if err != nil {
+		return svc.t("github.account.delete.repository_check_failed", map[string]any{"Error": safeError(err)})
+	}
+	if len(repositoryRefs) > 0 {
+		return svc.t("github.account.delete.in_use_repositories", map[string]any{"Account": account.Name, "Repositories": strings.Join(repositoryRefs, ", ")})
 	}
 	secretDeleted := false
 	if account.SecretRef == githubAccountSecretName(svc.cfg.GitHubSecretName, account.Name) {
@@ -2890,6 +3202,12 @@ func (svc *SlashCommandService) HandleDialogSubmission(ctx context.Context, comm
 		return svc.handleRepositoryDialogUpsert(ctx, command, state, true)
 	case dialogCallbackRepositoryDelete:
 		return svc.handleRepositoryDialogDelete(ctx, command, state)
+	case dialogCallbackRepositorySearch:
+		return svc.handleRepositorySearchDialog(ctx, command, state)
+	case dialogCallbackRepositorySearchPick:
+		return svc.handleRepositorySearchPickDialog(ctx, command, state)
+	case dialogCallbackRepositorySearchBranch:
+		return svc.handleRepositorySearchBranchDialog(ctx, command, state)
 	case dialogCallbackOpenAIAuth:
 		return svc.handleOpenAIAccountDialog(ctx, command, state, openAIDialogActionAuth)
 	case dialogCallbackOpenAIStatus:
@@ -2920,6 +3238,8 @@ func (svc *SlashCommandService) menuDialog(command MenuActionCommand, dialogID s
 		return svc.repositoryDialog(command, dialogCallbackRepositoryEdit, "dialog.repo.edit.title", "dialog.repo.edit.intro", "dialog.repo.edit.submit", false), ""
 	case menuDialogRepositoryDelete:
 		return svc.repositoryDialog(command, dialogCallbackRepositoryDelete, "dialog.repo.delete.title", "dialog.repo.delete.intro", "dialog.repo.delete.submit", true), ""
+	case menuDialogRepositorySearch:
+		return svc.repositorySearchDialog(command), ""
 	case menuDialogOpenAIAuth:
 		return svc.openAIAccountDialog(command, dialogCallbackOpenAIAuth, "dialog.openai.auth.title", "dialog.openai.auth.intro", "dialog.openai.auth.submit"), ""
 	case menuDialogOpenAIStatus:
@@ -2990,6 +3310,28 @@ func (svc *SlashCommandService) repositoryDialog(command MenuActionCommand, call
 		Elements:         elements,
 		SubmitLabel:      svc.t(submitID, nil),
 		State:            encodeDialogState(command),
+	}
+}
+
+func (svc *SlashCommandService) repositorySearchDialog(command MenuActionCommand) *MattermostDialog {
+	return &MattermostDialog{
+		SubmitURL:        svc.cfg.DialogSubmitURL,
+		CallbackID:       dialogCallbackRepositorySearch,
+		Title:            svc.t("dialog.repo.search.title", nil),
+		IntroductionText: svc.t("dialog.repo.search.intro", nil),
+		Elements: []MattermostDialogElement{
+			{
+				DisplayName: svc.t("dialog.repo.field.search", nil),
+				Name:        dialogFieldSearch,
+				Type:        "text",
+				Placeholder: "matter-codex",
+				HelpText:    svc.t("dialog.repo.field.search.help", nil),
+				MinLength:   2,
+				MaxLength:   120,
+			},
+		},
+		SubmitLabel: svc.t("dialog.repo.search.submit", nil),
+		State:       encodeDialogState(command),
 	}
 }
 
@@ -3139,10 +3481,11 @@ func (svc *SlashCommandService) repositoryDialogUpsertInput(submission map[strin
 		return adminrepo.UpsertRepositoryInput{}, fieldErrors
 	}
 	return adminrepo.UpsertRepositoryInput{
-		Provider:      provider,
-		Owner:         owner,
-		Name:          name,
-		DefaultBranch: branch,
+		Provider:          provider,
+		Owner:             owner,
+		Name:              name,
+		DefaultBranch:     branch,
+		GitHubAccountName: "primary",
 	}, nil
 }
 
@@ -3298,6 +3641,173 @@ func (svc *SlashCommandService) handleGitHubAccountDialogUpsert(ctx context.Cont
 	}
 }
 
+func (svc *SlashCommandService) handleRepositorySearchDialog(ctx context.Context, command DialogSubmissionCommand, state mattermostDialogState) DialogSubmissionResult {
+	query := strings.TrimSpace(submissionString(command.Submission, dialogFieldSearch))
+	if len(query) < 2 {
+		return DialogSubmissionResult{StatusCode: 200, Errors: map[string]string{dialogFieldSearch: svc.t("dialog.repo.search.query_invalid", nil)}}
+	}
+	accountName := strings.TrimSpace(state.ResourceID)
+	dialog, errText := svc.repositorySearchPickDialog(ctx, accountName, query, mattermostDialogCommand(state, command))
+	if errText != "" {
+		return DialogSubmissionResult{StatusCode: 200, Error: errText}
+	}
+	return DialogSubmissionResult{
+		StatusCode: 200,
+		Dialog:     dialog,
+	}
+}
+
+func (svc *SlashCommandService) handleRepositorySearchPickDialog(ctx context.Context, command DialogSubmissionCommand, state mattermostDialogState) DialogSubmissionResult {
+	resourceID := submissionString(command.Submission, dialogFieldRepositoryChoice)
+	repoState, ok := parseRepositoryOnboardingResourceID(resourceID)
+	if !ok {
+		return DialogSubmissionResult{StatusCode: 200, Errors: map[string]string{dialogFieldRepositoryChoice: svc.t("dialog.repo.repository_invalid", nil)}}
+	}
+	dialog, errText := svc.repositorySearchBranchDialog(ctx, repoState, mattermostDialogCommand(state, command))
+	if errText != "" {
+		return DialogSubmissionResult{StatusCode: 200, Error: errText}
+	}
+	return DialogSubmissionResult{
+		StatusCode: 200,
+		Dialog:     dialog,
+	}
+}
+
+func (svc *SlashCommandService) handleRepositorySearchBranchDialog(ctx context.Context, command DialogSubmissionCommand, state mattermostDialogState) DialogSubmissionResult {
+	resourceID := submissionString(command.Submission, dialogFieldBranchChoice)
+	if _, ok := parseRepositoryOnboardingResourceID(resourceID); !ok {
+		return DialogSubmissionResult{StatusCode: 200, Errors: map[string]string{dialogFieldBranchChoice: svc.t("dialog.repo.branch_invalid", nil)}}
+	}
+	card := svc.repositoryOnboardingConnectCard(ctx, MenuActionCommand{
+		View:      state.View,
+		Action:    menuActionRepositoryConnect,
+		Resource:  menuResourceRepository,
+		ID:        resourceID,
+		UserID:    command.UserID,
+		UserName:  defaultString(command.UserName, state.UserName),
+		ChannelID: defaultString(state.ChannelID, command.ChannelID),
+		PostID:    state.PostID,
+	})
+	return DialogSubmissionResult{
+		StatusCode: 200,
+		Card:       card,
+	}
+}
+
+func (svc *SlashCommandService) repositorySearchPickDialog(ctx context.Context, accountName string, query string, command MenuActionCommand) (*MattermostDialog, string) {
+	account, candidates, errText := svc.repositorySearchCandidates(ctx, accountName, query)
+	if errText != "" {
+		return nil, errText
+	}
+	options := make([]MattermostDialogOption, 0, len(candidates))
+	limit := len(candidates)
+	if limit > entityListPageSize {
+		limit = entityListPageSize
+	}
+	for _, candidate := range candidates[:limit] {
+		options = append(options, MattermostDialogOption{
+			Text: repositorySearchRepositoryOptionText(candidate),
+			Value: repositoryOnboardingResourceID(repositoryOnboardingState{
+				Account:       account.Name,
+				Provider:      candidate.Provider,
+				Owner:         candidate.Owner,
+				Name:          candidate.Name,
+				FullName:      candidate.FullName,
+				DefaultBranch: candidate.DefaultBranch,
+			}),
+		})
+	}
+	return &MattermostDialog{
+		SubmitURL:        svc.cfg.DialogSubmitURL,
+		CallbackID:       dialogCallbackRepositorySearchPick,
+		Title:            svc.t("dialog.repo.pick.title", nil),
+		IntroductionText: svc.t("dialog.repo.pick.intro", map[string]any{"Account": account.Name, "Query": query}),
+		Elements: []MattermostDialogElement{
+			{
+				DisplayName: svc.t("dialog.repo.field.repository", nil),
+				Name:        dialogFieldRepositoryChoice,
+				Type:        "select",
+				HelpText:    svc.t("dialog.repo.pick.help", nil),
+				Options:     options,
+			},
+		},
+		SubmitLabel: svc.t("dialog.repo.pick.submit", nil),
+		State:       encodeDialogState(command),
+	}, ""
+}
+
+func (svc *SlashCommandService) repositorySearchBranchDialog(ctx context.Context, state repositoryOnboardingState, command MenuActionCommand) (*MattermostDialog, string) {
+	account, ok, errText := svc.repositoryOnboardingAccount(ctx, state.Account)
+	if errText != "" {
+		return nil, errText
+	}
+	if !ok {
+		return nil, svc.t("repo.account.missing", map[string]any{"Account": state.Account})
+	}
+	if svc.cfg.GitHubRepositoryProvider == nil {
+		return nil, svc.t("repo.onboard.provider_not_configured", nil)
+	}
+	branches, err := svc.cfg.GitHubRepositoryProvider.ListBranches(ctx, gitHubAccountRef(account), state.Owner, state.Name, 20)
+	if err != nil {
+		return nil, svc.t("repo.onboard.branches.failed", map[string]any{"Error": safeError(err)})
+	}
+	branchNames := repositoryOnboardingBranchNames(state.DefaultBranch, branches)
+	if len(branchNames) == 0 {
+		return nil, svc.t("repo.onboard.branches.empty", map[string]any{"Repository": state.FullName})
+	}
+	options := make([]MattermostDialogOption, 0, len(branchNames))
+	limit := len(branchNames)
+	if limit > entityListPageSize {
+		limit = entityListPageSize
+	}
+	for _, branch := range branchNames[:limit] {
+		next := state
+		next.Branch = branch
+		options = append(options, MattermostDialogOption{
+			Text:  branch,
+			Value: repositoryOnboardingResourceID(next),
+		})
+	}
+	return &MattermostDialog{
+		SubmitURL:        svc.cfg.DialogSubmitURL,
+		CallbackID:       dialogCallbackRepositorySearchBranch,
+		Title:            svc.t("dialog.repo.branch.title", nil),
+		IntroductionText: svc.t("dialog.repo.branch.intro", map[string]any{"Repository": state.FullName, "Account": account.Name}),
+		Elements: []MattermostDialogElement{
+			{
+				DisplayName: svc.t("dialog.repo.field.branch", nil),
+				Name:        dialogFieldBranchChoice,
+				Type:        "select",
+				HelpText:    svc.t("dialog.repo.branch.help", nil),
+				Options:     options,
+			},
+		},
+		SubmitLabel: svc.t("dialog.repo.branch.submit", nil),
+		State:       encodeDialogState(command),
+	}, ""
+}
+
+func (svc *SlashCommandService) repositorySearchCandidates(ctx context.Context, accountName string, query string) (entity.GitHubAccount, []providerrepo.RepositoryCandidate, string) {
+	account, ok, errText := svc.repositoryOnboardingAccount(ctx, accountName)
+	if errText != "" {
+		return entity.GitHubAccount{}, nil, errText
+	}
+	if !ok {
+		return entity.GitHubAccount{}, nil, svc.t("repo.account.missing", map[string]any{"Account": accountName})
+	}
+	if svc.cfg.GitHubRepositoryProvider == nil {
+		return entity.GitHubAccount{}, nil, svc.t("repo.onboard.provider_not_configured", nil)
+	}
+	candidates, err := svc.repositoryCandidates(ctx, account, query)
+	if err != nil {
+		return entity.GitHubAccount{}, nil, svc.t("repo.onboard.repositories.failed", map[string]any{"Error": safeError(err)})
+	}
+	if len(candidates) == 0 {
+		return entity.GitHubAccount{}, nil, svc.t("repo.onboard.repositories.empty", map[string]any{"Account": account.Name})
+	}
+	return account, candidates, ""
+}
+
 type githubAccountTokenDialogInput struct {
 	Name  string
 	Token string
@@ -3352,6 +3862,17 @@ func (svc *SlashCommandService) dialogResultCard(ctx context.Context, state matt
 	card.ChannelID = defaultString(state.ChannelID, command.ChannelID)
 	card.PostID = state.PostID
 	return card
+}
+
+func mattermostDialogCommand(state mattermostDialogState, command DialogSubmissionCommand) MenuActionCommand {
+	return MenuActionCommand{
+		View:      state.View,
+		ID:        state.ResourceID,
+		UserID:    command.UserID,
+		UserName:  defaultString(command.UserName, state.UserName),
+		ChannelID: defaultString(state.ChannelID, command.ChannelID),
+		PostID:    state.PostID,
+	}
 }
 
 func (svc *SlashCommandService) menuCard(ctx context.Context, view string) *MattermostCard {
@@ -3528,7 +4049,7 @@ func (svc *SlashCommandService) menuActions(view string) []MattermostCardAction 
 		}
 	case menuViewRepositories:
 		return []MattermostCardAction{
-			svc.menuDialogAction(menuViewRepositories, "dialogrepoadd", menuDialogRepositoryAdd, "menu.action.repo_add", "menu.action.repo_add.tooltip", "primary"),
+			svc.menuResourceAction(menuViewRepositories, "repoonboard", menuActionRepositoryOnboard, menuResourceRepository, "", "menu.action.repo_add", "menu.action.repo_add.tooltip", "primary", nil),
 			svc.menuResourceAction(menuViewRepositories, "repolist", menuActionList, menuResourceRepository, "", "menu.action.repo_list", "menu.action.repo_list.tooltip", "primary", nil),
 			svc.menuAction(menuViewMain, "menu.action.back", "menu.action.back.tooltip", "default"),
 		}
@@ -3796,6 +4317,40 @@ func (svc *SlashCommandService) ensureRepositoryWebhookLine(ctx context.Context,
 		return []string{svc.t("webhook.not_registered_error", map[string]any{"Error": safeError(err)})}
 	}
 	svc.recordGitHubAudit(ctx, command, "github.webhook.ensured", owner+"/"+name, "github repository webhook ensured")
+	return svc.repositoryWebhookRegistrationLines(registration)
+}
+
+func (svc *SlashCommandService) ensureRepositoryWebhookLineForRepository(ctx context.Context, command SlashCommand, repo entity.Repository) []string {
+	if repo.Provider != "github" {
+		return nil
+	}
+	if !svc.cfg.GitHubWebhookConfigured {
+		return []string{svc.t("webhook.skipped_secret", nil)}
+	}
+	account, ok, errText := svc.repositoryGitHubAccount(ctx, repo)
+	if errText != "" {
+		return []string{errText}
+	}
+	if ok && svc.cfg.GitHubRepositoryProvider != nil {
+		registration, err := svc.cfg.GitHubRepositoryProvider.EnsureRepositoryWebhook(ctx, gitHubAccountRef(account), repo.Owner, repo.Name)
+		if err != nil {
+			return []string{svc.t("webhook.not_registered_error", map[string]any{"Error": safeError(err)})}
+		}
+		svc.recordGitHubAudit(ctx, command, "github.webhook.ensured", repo.Owner+"/"+repo.Name, "github repository webhook ensured with account")
+		return svc.repositoryWebhookRegistrationLines(registration)
+	}
+	if svc.cfg.RepositoryProvider == nil {
+		return []string{svc.t("webhook.skipped_provider", nil)}
+	}
+	registration, err := svc.cfg.RepositoryProvider.EnsureRepositoryWebhook(ctx, repo.Owner, repo.Name)
+	if err != nil {
+		return []string{svc.t("webhook.not_registered_error", map[string]any{"Error": safeError(err)})}
+	}
+	svc.recordGitHubAudit(ctx, command, "github.webhook.ensured", repo.Owner+"/"+repo.Name, "github repository webhook ensured")
+	return svc.repositoryWebhookRegistrationLines(registration)
+}
+
+func (svc *SlashCommandService) repositoryWebhookRegistrationLines(registration providerrepo.WebhookRegistration) []string {
 	action := svc.t("label.updated", nil)
 	if registration.Created {
 		action = svc.t("label.created", nil)
@@ -3804,6 +4359,95 @@ func (svc *SlashCommandService) ensureRepositoryWebhookLine(ctx context.Context,
 		svc.t("webhook.result", map[string]any{"Action": action, "ID": registration.ID, "Active": registration.Active}),
 		svc.t("webhook.events", map[string]any{"Events": strings.Join(registration.Events, "`, `")}),
 	}
+}
+
+func (svc *SlashCommandService) repositoryGitHubCheckText(ctx context.Context, command MenuActionCommand, provider string, owner string, name string) string {
+	repo, ok, errText := svc.repositoryFromMenu(ctx, provider, owner, name)
+	if errText != "" {
+		return errText
+	}
+	if !ok {
+		return svc.t("menu.entity.invalid", nil)
+	}
+	account, accountOK, errText := svc.repositoryGitHubAccount(ctx, repo)
+	if errText != "" {
+		return errText
+	}
+	if accountOK && svc.cfg.GitHubRepositoryProvider != nil {
+		access, err := svc.cfg.GitHubRepositoryProvider.CheckRepository(ctx, gitHubAccountRef(account), repo.Owner, repo.Name)
+		if err != nil {
+			return svc.t("github.check.failed", map[string]any{"Error": safeError(err)})
+		}
+		svc.recordGitHubAudit(ctx, svc.slashFromMenu(command), "github.repository.checked", access.Owner+"/"+access.Name, "github repository access checked with account")
+		return svc.repositoryAccessText(access)
+	}
+	if svc.cfg.RepositoryProvider == nil {
+		return svc.t("github.provider_not_configured", nil)
+	}
+	access, err := svc.cfg.RepositoryProvider.CheckRepository(ctx, repo.Owner, repo.Name)
+	if err != nil {
+		return svc.t("github.check.failed", map[string]any{"Error": safeError(err)})
+	}
+	svc.recordGitHubAudit(ctx, svc.slashFromMenu(command), "github.repository.checked", access.Owner+"/"+access.Name, "github repository access checked")
+	return svc.repositoryAccessText(access)
+}
+
+func (svc *SlashCommandService) repositoryGitHubWebhookText(ctx context.Context, command MenuActionCommand, provider string, owner string, name string) string {
+	repo, ok, errText := svc.repositoryFromMenu(ctx, provider, owner, name)
+	if errText != "" {
+		return errText
+	}
+	if !ok {
+		return svc.t("menu.entity.invalid", nil)
+	}
+	lines := svc.ensureRepositoryWebhookLineForRepository(ctx, svc.slashFromMenu(command), repo)
+	if len(lines) == 0 {
+		return svc.t("github.webhook.not_registered", nil)
+	}
+	return svc.t("github.webhook.header", nil) + "\n" + strings.Join(lines, "\n")
+}
+
+func (svc *SlashCommandService) repositoryFromMenu(ctx context.Context, provider string, owner string, name string) (entity.Repository, bool, string) {
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return entity.Repository{}, false, svc.t("repo.list.storage_not_ready", nil)
+	}
+	repo, err := svc.cfg.Store.GetRepository(ctx, provider, owner, name)
+	if err != nil {
+		if errors.Is(err, adminrepo.ErrNotFound) {
+			return entity.Repository{}, false, ""
+		}
+		return entity.Repository{}, false, svc.t("repo.list.read_failed", map[string]any{"Error": safeError(err)})
+	}
+	return repo, true, ""
+}
+
+func (svc *SlashCommandService) repositoryGitHubAccount(ctx context.Context, repo entity.Repository) (entity.GitHubAccount, bool, string) {
+	accountName := defaultString(repo.GitHubAccountName, "primary")
+	if svc.cfg.Store == nil || !svc.cfg.StorageReady {
+		return entity.GitHubAccount{}, false, ""
+	}
+	account, err := svc.cfg.Store.GetGitHubAccount(ctx, accountName)
+	if err != nil {
+		if errors.Is(err, adminrepo.ErrNotFound) {
+			return entity.GitHubAccount{}, false, svc.t("repo.account.missing", map[string]any{"Account": accountName})
+		}
+		return entity.GitHubAccount{}, false, svc.t("github.account.list.failed", map[string]any{"Error": safeError(err)})
+	}
+	return account, true, ""
+}
+
+func (svc *SlashCommandService) repositoryAccessText(access providerrepo.RepositoryAccess) string {
+	return svc.t("github.check.result", map[string]any{
+		"Provider":      access.Provider,
+		"Owner":         access.Owner,
+		"Name":          access.Name,
+		"DefaultBranch": access.DefaultBranch,
+		"Private":       access.Private,
+		"CanPull":       access.CanPull,
+		"CanPush":       access.CanPush,
+		"CanMaintain":   access.CanMaintain,
+		"CanAdmin":      access.CanAdmin,
+	})
 }
 
 func (svc *SlashCommandService) handleGitHubPRCreate(ctx context.Context, args []string, command SlashCommand) string {
@@ -3893,18 +4537,20 @@ func (svc *SlashCommandService) validationErrorText(err error) string {
 }
 
 type mattermostDialogState struct {
-	View      string `json:"view"`
-	ChannelID string `json:"channel_id"`
-	PostID    string `json:"post_id"`
-	UserName  string `json:"user_name"`
+	View       string `json:"view"`
+	ResourceID string `json:"resource_id,omitempty"`
+	ChannelID  string `json:"channel_id"`
+	PostID     string `json:"post_id"`
+	UserName   string `json:"user_name"`
 }
 
 func encodeDialogState(command MenuActionCommand) string {
 	state := mattermostDialogState{
-		View:      normalizeMenuView(command.View),
-		ChannelID: strings.TrimSpace(command.ChannelID),
-		PostID:    strings.TrimSpace(command.PostID),
-		UserName:  strings.TrimSpace(command.UserName),
+		View:       normalizeMenuView(command.View),
+		ResourceID: strings.TrimSpace(command.ID),
+		ChannelID:  strings.TrimSpace(command.ChannelID),
+		PostID:     strings.TrimSpace(command.PostID),
+		UserName:   strings.TrimSpace(command.UserName),
 	}
 	data, err := json.Marshal(state)
 	if err != nil {
@@ -3922,6 +4568,7 @@ func decodeDialogState(raw string) (mattermostDialogState, error) {
 		return mattermostDialogState{}, err
 	}
 	state.View = normalizeMenuView(defaultString(state.View, menuViewRepositories))
+	state.ResourceID = strings.TrimSpace(state.ResourceID)
 	state.ChannelID = strings.TrimSpace(state.ChannelID)
 	state.PostID = strings.TrimSpace(state.PostID)
 	state.UserName = strings.TrimSpace(state.UserName)
@@ -3983,10 +4630,11 @@ func parseRepoAdd(args []string) (adminrepo.UpsertRepositoryInput, error) {
 		return adminrepo.UpsertRepositoryInput{}, validationError("parse.repository.invalid_repository_or_branch", nil)
 	}
 	return adminrepo.UpsertRepositoryInput{
-		Provider:      provider,
-		Owner:         strings.ToLower(owner),
-		Name:          strings.ToLower(name),
-		DefaultBranch: branch,
+		Provider:          provider,
+		Owner:             strings.ToLower(owner),
+		Name:              strings.ToLower(name),
+		DefaultBranch:     branch,
+		GitHubAccountName: "primary",
 	}, nil
 }
 
@@ -4092,6 +4740,7 @@ const (
 	menuDialogRepositoryAdd       = "repo_add"
 	menuDialogRepositoryEdit      = "repo_edit"
 	menuDialogRepositoryDelete    = "repo_delete"
+	menuDialogRepositorySearch    = "repo_search"
 	menuDialogOpenAIAuth          = "openai_auth"
 	menuDialogOpenAIStatus        = "openai_status"
 	menuDialogOpenAICleanup       = "openai_cleanup"
@@ -4100,24 +4749,28 @@ const (
 	menuDialogGitHubAccountEdit   = "github_account_edit"
 	menuDialogGitHubAccountDelete = "github_account_delete"
 
-	menuActionList              = "list"
-	menuActionShow              = "show"
-	menuActionConfirmDelete     = "confirm_delete"
-	menuActionDelete            = "delete"
-	menuActionCancel            = "cancel"
-	menuActionRepositoryCheck   = "repository_check"
-	menuActionRepositoryWebhook = "repository_webhook"
-	menuActionOpenAIStatus      = "openai_status"
-	menuActionOpenAICleanup     = "openai_cleanup"
-	menuActionSystemStatus      = "system_status"
-	menuActionTokenCheck        = "token_check"
-	menuActionLocaleGet         = "locale_get"
-	menuActionLocaleSetRU       = "locale_set_ru"
-	menuActionLocaleSetEN       = "locale_set_en"
-	menuActionRuntimeSmoke      = "runtime_smoke"
-	menuActionRuntimePruneDry   = "runtime_prune_dry"
-	menuActionPromptHelp        = "prompt_help"
-	menuActionPromptRender      = "prompt_render"
+	menuActionList               = "list"
+	menuActionShow               = "show"
+	menuActionConfirmDelete      = "confirm_delete"
+	menuActionDelete             = "delete"
+	menuActionCancel             = "cancel"
+	menuActionRepositoryOnboard  = "repository_onboard"
+	menuActionRepositoryRepos    = "repository_repos"
+	menuActionRepositoryBranches = "repository_branches"
+	menuActionRepositoryConnect  = "repository_connect"
+	menuActionRepositoryCheck    = "repository_check"
+	menuActionRepositoryWebhook  = "repository_webhook"
+	menuActionOpenAIStatus       = "openai_status"
+	menuActionOpenAICleanup      = "openai_cleanup"
+	menuActionSystemStatus       = "system_status"
+	menuActionTokenCheck         = "token_check"
+	menuActionLocaleGet          = "locale_get"
+	menuActionLocaleSetRU        = "locale_set_ru"
+	menuActionLocaleSetEN        = "locale_set_en"
+	menuActionRuntimeSmoke       = "runtime_smoke"
+	menuActionRuntimePruneDry    = "runtime_prune_dry"
+	menuActionPromptHelp         = "prompt_help"
+	menuActionPromptRender       = "prompt_render"
 
 	menuResourceRepository     = "repository"
 	menuResourceOpenAIAccount  = "openai_account"
@@ -4127,27 +4780,33 @@ const (
 	menuResourceSystem         = "system"
 	menuResourceRuntime        = "runtime"
 
-	dialogCallbackRepositoryAdd       = "agents_repo_add"
-	dialogCallbackRepositoryEdit      = "agents_repo_edit"
-	dialogCallbackRepositoryDelete    = "agents_repo_delete"
-	dialogCallbackOpenAIAuth          = "agents_openai_auth"
-	dialogCallbackOpenAIStatus        = "agents_openai_status"
-	dialogCallbackOpenAICleanup       = "agents_openai_cleanup"
-	dialogCallbackOpenAIDelete        = "agents_openai_delete"
-	dialogCallbackGitHubAccountAdd    = "agents_github_account_add"
-	dialogCallbackGitHubAccountEdit   = "agents_github_account_edit"
-	dialogCallbackGitHubAccountDelete = "agents_github_account_delete"
+	dialogCallbackRepositoryAdd          = "agents_repo_add"
+	dialogCallbackRepositoryEdit         = "agents_repo_edit"
+	dialogCallbackRepositoryDelete       = "agents_repo_delete"
+	dialogCallbackRepositorySearch       = "agents_repo_search"
+	dialogCallbackRepositorySearchPick   = "agents_repo_search_pick"
+	dialogCallbackRepositorySearchBranch = "agents_repo_search_branch"
+	dialogCallbackOpenAIAuth             = "agents_openai_auth"
+	dialogCallbackOpenAIStatus           = "agents_openai_status"
+	dialogCallbackOpenAICleanup          = "agents_openai_cleanup"
+	dialogCallbackOpenAIDelete           = "agents_openai_delete"
+	dialogCallbackGitHubAccountAdd       = "agents_github_account_add"
+	dialogCallbackGitHubAccountEdit      = "agents_github_account_edit"
+	dialogCallbackGitHubAccountDelete    = "agents_github_account_delete"
 
-	dialogFieldProvider      = "provider"
-	dialogFieldRepository    = "repository"
-	dialogFieldDefaultBranch = "default_branch"
-	dialogFieldConfirm       = "confirm"
-	dialogFieldAccount       = "account"
-	dialogFieldSecretRef     = "secret_ref"
-	dialogFieldToken         = "token"
-	dialogFieldUsername      = "username"
-	dialogFieldEmail         = "email"
-	dialogFieldStatus        = "status"
+	dialogFieldProvider         = "provider"
+	dialogFieldRepository       = "repository"
+	dialogFieldRepositoryChoice = "repository_choice"
+	dialogFieldDefaultBranch    = "default_branch"
+	dialogFieldBranchChoice     = "branch_choice"
+	dialogFieldConfirm          = "confirm"
+	dialogFieldAccount          = "account"
+	dialogFieldSearch           = "search"
+	dialogFieldSecretRef        = "secret_ref"
+	dialogFieldToken            = "token"
+	dialogFieldUsername         = "username"
+	dialogFieldEmail            = "email"
+	dialogFieldStatus           = "status"
 
 	openAIDialogActionAuth    = "auth"
 	openAIDialogActionStatus  = "status"
@@ -4424,6 +5083,49 @@ func repositoryResourceID(repo entity.Repository) string {
 	return repo.Provider + ":" + repo.FullName()
 }
 
+type repositoryOnboardingState struct {
+	Account       string `json:"account"`
+	Provider      string `json:"provider"`
+	Owner         string `json:"owner"`
+	Name          string `json:"name"`
+	FullName      string `json:"full_name"`
+	DefaultBranch string `json:"default_branch"`
+	Branch        string `json:"branch"`
+}
+
+func repositoryOnboardingResourceID(state repositoryOnboardingState) string {
+	data, err := json.Marshal(state)
+	if err != nil {
+		return ""
+	}
+	return base64.RawURLEncoding.EncodeToString(data)
+}
+
+func parseRepositoryOnboardingResourceID(value string) (repositoryOnboardingState, bool) {
+	data, err := base64.RawURLEncoding.DecodeString(strings.TrimSpace(value))
+	if err != nil {
+		return repositoryOnboardingState{}, false
+	}
+	var state repositoryOnboardingState
+	if err := json.Unmarshal(data, &state); err != nil {
+		return repositoryOnboardingState{}, false
+	}
+	state.Account = strings.TrimSpace(state.Account)
+	state.Provider = strings.ToLower(defaultString(state.Provider, "github"))
+	state.Owner = strings.TrimSpace(state.Owner)
+	state.Name = strings.TrimSpace(state.Name)
+	state.FullName = strings.TrimSpace(state.FullName)
+	if state.FullName == "" && state.Owner != "" && state.Name != "" {
+		state.FullName = state.Owner + "/" + state.Name
+	}
+	state.DefaultBranch = strings.TrimSpace(state.DefaultBranch)
+	state.Branch = strings.TrimSpace(state.Branch)
+	if state.Provider != "github" || state.Account == "" || state.Owner == "" || state.Name == "" {
+		return repositoryOnboardingState{}, false
+	}
+	return state, true
+}
+
 func parseRepositoryResourceID(value string) (string, string, string, bool) {
 	provider, fullName, ok := strings.Cut(strings.TrimSpace(value), ":")
 	if !ok || strings.TrimSpace(provider) == "" {
@@ -4434,6 +5136,13 @@ func parseRepositoryResourceID(value string) (string, string, string, bool) {
 		return "", "", "", false
 	}
 	return strings.ToLower(provider), owner, name, true
+}
+
+func gitHubAccountRef(account entity.GitHubAccount) providerrepo.GitHubAccountRef {
+	return providerrepo.GitHubAccountRef{
+		Name:      account.Name,
+		SecretRef: account.SecretRef,
+	}
 }
 
 func promptTemplateResourceID(profileName string, templateKey string) string {
@@ -4612,6 +5321,24 @@ func (svc *SlashCommandService) githubAccountProfileRefs(ctx context.Context, na
 	for _, profile := range profiles {
 		if defaultString(profile.GitHubAccountName, "primary") == name {
 			refs = append(refs, profile.Name)
+		}
+	}
+	sort.Strings(refs)
+	return refs, nil
+}
+
+func (svc *SlashCommandService) githubAccountRepositoryRefs(ctx context.Context, name string) ([]string, error) {
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return nil, nil
+	}
+	repositories, err := svc.cfg.Store.ListRepositories(ctx, 100)
+	if err != nil {
+		return nil, err
+	}
+	refs := make([]string, 0)
+	for _, repo := range repositories {
+		if repo.Provider == "github" && defaultString(repo.GitHubAccountName, "primary") == name {
+			refs = append(refs, repo.FullName())
 		}
 	}
 	sort.Strings(refs)

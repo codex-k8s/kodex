@@ -108,6 +108,15 @@ type GitHubTokenSecret struct {
 	Created     bool
 }
 
+type GitHubTokenSecretCredential struct {
+	AccountName string
+	SecretName  string
+	Namespace   string
+	Token       string
+	Username    string
+	Email       string
+}
+
 type GitHubTokenSecretDeleteResult struct {
 	AccountName   string
 	SecretName    string
@@ -180,4 +189,8 @@ type Runner interface {
 	GetRunStatus(ctx context.Context, runID string) (RunStatus, error)
 	CleanupRun(ctx context.Context, runID string) (CleanupResult, error)
 	CleanupExpiredRuns(ctx context.Context, input RetentionCleanupInput) (RetentionCleanupResult, error)
+}
+
+type GitHubTokenSecretReader interface {
+	GetGitHubTokenSecret(ctx context.Context, accountName string, secretName string) (GitHubTokenSecretCredential, error)
 }

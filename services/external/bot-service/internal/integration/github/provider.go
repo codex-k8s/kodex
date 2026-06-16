@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	providerrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/provider"
+	runtimerepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/runtime"
 	githubapi "github.com/google/go-github/v88/github"
 )
 
@@ -35,9 +36,17 @@ type Provider struct {
 	webhookEvents []string
 }
 
+type AccountProvider struct {
+	tokenReader   runtimerepo.GitHubTokenSecretReader
+	webhookURL    string
+	webhookSecret string
+	webhookEvents []string
+}
+
 type TokenInspector struct{}
 
 var _ providerrepo.RepositoryProvider = (*Provider)(nil)
+var _ providerrepo.GitHubAccountRepositoryProvider = (*AccountProvider)(nil)
 var _ providerrepo.GitHubAccountInspector = (*TokenInspector)(nil)
 
 func NewProvider(cfg ProviderConfig) (*Provider, error) {
@@ -45,16 +54,21 @@ func NewProvider(cfg ProviderConfig) (*Provider, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create github client: %w", err)
 	}
-	events := cfg.WebhookEvents
-	if len(events) == 0 {
-		events = defaultWebhookEvents
-	}
 	return &Provider{
 		client:        client,
 		webhookURL:    strings.TrimSpace(cfg.WebhookURL),
 		webhookSecret: strings.TrimSpace(cfg.WebhookSecret),
-		webhookEvents: append([]string(nil), events...),
+		webhookEvents: normalizedWebhookEvents(cfg.WebhookEvents),
 	}, nil
+}
+
+func NewAccountProvider(reader runtimerepo.GitHubTokenSecretReader, cfg ProviderConfig) *AccountProvider {
+	return &AccountProvider{
+		tokenReader:   reader,
+		webhookURL:    strings.TrimSpace(cfg.WebhookURL),
+		webhookSecret: strings.TrimSpace(cfg.WebhookSecret),
+		webhookEvents: normalizedWebhookEvents(cfg.WebhookEvents),
+	}
 }
 
 func NewTokenInspector() *TokenInspector {
@@ -121,22 +135,7 @@ func (inspector *TokenInspector) primaryEmail(ctx context.Context, client *githu
 }
 
 func (provider *Provider) CheckRepository(ctx context.Context, owner string, name string) (providerrepo.RepositoryAccess, error) {
-	repo, _, err := provider.client.Repositories.Get(ctx, owner, name)
-	if err != nil {
-		return providerrepo.RepositoryAccess{}, githubError("github repository access", err)
-	}
-	permissions := repo.GetPermissions()
-	return providerrepo.RepositoryAccess{
-		Provider:      providerName,
-		Owner:         owner,
-		Name:          name,
-		DefaultBranch: repo.GetDefaultBranch(),
-		Private:       repo.GetPrivate(),
-		CanPull:       permissions.GetPull(),
-		CanPush:       permissions.GetPush(),
-		CanMaintain:   permissions.GetMaintain(),
-		CanAdmin:      permissions.GetAdmin(),
-	}, nil
+	return checkRepository(ctx, provider.client, owner, name)
 }
 
 func (provider *Provider) ResolveBranch(ctx context.Context, owner string, name string, branch string) (providerrepo.BranchRef, error) {
@@ -241,35 +240,160 @@ func (provider *Provider) GetPullRequest(ctx context.Context, owner string, name
 }
 
 func (provider *Provider) EnsureRepositoryWebhook(ctx context.Context, owner string, name string) (providerrepo.WebhookRegistration, error) {
-	if provider.webhookURL == "" || provider.webhookSecret == "" {
+	return ensureRepositoryWebhook(ctx, provider.client, provider.webhookURL, provider.webhookSecret, provider.webhookEvents, owner, name)
+}
+
+func (provider *AccountProvider) ListRepositories(ctx context.Context, input providerrepo.RepositoryListInput) ([]providerrepo.RepositoryCandidate, error) {
+	client, err := provider.client(ctx, input.Account)
+	if err != nil {
+		return nil, err
+	}
+	repositories, _, err := client.Repositories.ListByAuthenticatedUser(ctx, &githubapi.RepositoryListByAuthenticatedUserOptions{
+		Visibility:  "all",
+		Affiliation: "owner,collaborator,organization_member",
+		Sort:        "pushed",
+		Direction:   "desc",
+		ListOptions: githubapi.ListOptions{PerPage: githubPageLimit(input.Limit)},
+	})
+	if err != nil {
+		return nil, githubError("github list account repositories", err)
+	}
+	return repositoryCandidates(repositories), nil
+}
+
+func (provider *AccountProvider) SearchRepositories(ctx context.Context, input providerrepo.RepositorySearchInput) ([]providerrepo.RepositoryCandidate, error) {
+	client, err := provider.client(ctx, input.Account)
+	if err != nil {
+		return nil, err
+	}
+	query := strings.TrimSpace(input.Query)
+	if query == "" {
+		return provider.ListRepositories(ctx, providerrepo.RepositoryListInput{Account: input.Account, Limit: input.Limit})
+	}
+	if owner, name, ok := parseFullRepositoryName(query); ok {
+		repo, _, err := client.Repositories.Get(ctx, owner, name)
+		if err == nil {
+			return []providerrepo.RepositoryCandidate{repositoryCandidate(repo)}, nil
+		}
+	}
+	result, _, err := client.Search.Repositories(ctx, repositorySearchQuery(query), &githubapi.SearchOptions{
+		ListOptions: githubapi.ListOptions{PerPage: githubPageLimit(input.Limit)},
+	})
+	if err != nil {
+		return nil, githubError("github search repositories", err)
+	}
+	return repositoryCandidates(result.Repositories), nil
+}
+
+func (provider *AccountProvider) ListBranches(ctx context.Context, account providerrepo.GitHubAccountRef, owner string, name string, limit int) ([]providerrepo.BranchCandidate, error) {
+	client, err := provider.client(ctx, account)
+	if err != nil {
+		return nil, err
+	}
+	branches, _, err := client.Repositories.ListBranches(ctx, owner, name, &githubapi.BranchListOptions{
+		ListOptions: githubapi.ListOptions{PerPage: githubPageLimit(limit)},
+	})
+	if err != nil {
+		return nil, githubError("github list repository branches", err)
+	}
+	items := make([]providerrepo.BranchCandidate, 0, len(branches))
+	for _, branch := range branches {
+		items = append(items, providerrepo.BranchCandidate{
+			Name:      branch.GetName(),
+			Protected: branch.GetProtected(),
+		})
+	}
+	return items, nil
+}
+
+func (provider *AccountProvider) CheckRepository(ctx context.Context, account providerrepo.GitHubAccountRef, owner string, name string) (providerrepo.RepositoryAccess, error) {
+	client, err := provider.client(ctx, account)
+	if err != nil {
+		return providerrepo.RepositoryAccess{}, err
+	}
+	return checkRepository(ctx, client, owner, name)
+}
+
+func (provider *AccountProvider) EnsureRepositoryWebhook(ctx context.Context, account providerrepo.GitHubAccountRef, owner string, name string) (providerrepo.WebhookRegistration, error) {
+	client, err := provider.client(ctx, account)
+	if err != nil {
+		return providerrepo.WebhookRegistration{}, err
+	}
+	return ensureRepositoryWebhook(ctx, client, provider.webhookURL, provider.webhookSecret, provider.webhookEvents, owner, name)
+}
+
+func (provider *AccountProvider) client(ctx context.Context, account providerrepo.GitHubAccountRef) (*githubapi.Client, error) {
+	if provider == nil || provider.tokenReader == nil {
+		return nil, fmt.Errorf("github account provider is not configured")
+	}
+	account.Name = strings.TrimSpace(account.Name)
+	account.SecretRef = strings.TrimSpace(account.SecretRef)
+	if account.Name == "" {
+		return nil, fmt.Errorf("github account name is required")
+	}
+	if account.SecretRef == "" {
+		return nil, fmt.Errorf("github account secret is required")
+	}
+	credential, err := provider.tokenReader.GetGitHubTokenSecret(ctx, account.Name, account.SecretRef)
+	if err != nil {
+		return nil, err
+	}
+	client, err := githubapi.NewClient(githubapi.WithAuthToken(credential.Token))
+	if err != nil {
+		return nil, fmt.Errorf("create github account client: %w", err)
+	}
+	return client, nil
+}
+
+func checkRepository(ctx context.Context, client *githubapi.Client, owner string, name string) (providerrepo.RepositoryAccess, error) {
+	repo, _, err := client.Repositories.Get(ctx, owner, name)
+	if err != nil {
+		return providerrepo.RepositoryAccess{}, githubError("github repository access", err)
+	}
+	permissions := repo.GetPermissions()
+	return providerrepo.RepositoryAccess{
+		Provider:      providerName,
+		Owner:         owner,
+		Name:          name,
+		DefaultBranch: repo.GetDefaultBranch(),
+		Private:       repo.GetPrivate(),
+		CanPull:       permissions.GetPull(),
+		CanPush:       permissions.GetPush(),
+		CanMaintain:   permissions.GetMaintain(),
+		CanAdmin:      permissions.GetAdmin(),
+	}, nil
+}
+
+func ensureRepositoryWebhook(ctx context.Context, client *githubapi.Client, webhookURL string, webhookSecret string, webhookEvents []string, owner string, name string) (providerrepo.WebhookRegistration, error) {
+	if webhookURL == "" || webhookSecret == "" {
 		return providerrepo.WebhookRegistration{}, fmt.Errorf("github webhook config is not complete")
 	}
 	hook := &githubapi.Hook{
 		Config: &githubapi.HookConfig{
-			URL:         githubapi.Ptr(provider.webhookURL),
+			URL:         githubapi.Ptr(webhookURL),
 			ContentType: githubapi.Ptr("json"),
 			InsecureSSL: githubapi.Ptr("0"),
-			Secret:      githubapi.Ptr(provider.webhookSecret),
+			Secret:      githubapi.Ptr(webhookSecret),
 		},
-		Events: append([]string(nil), provider.webhookEvents...),
+		Events: append([]string(nil), webhookEvents...),
 		Active: githubapi.Ptr(true),
 	}
 
-	existing, err := provider.findWebhook(ctx, owner, name)
+	existing, err := findWebhook(ctx, client, owner, name, webhookURL)
 	if err != nil {
 		return providerrepo.WebhookRegistration{}, err
 	}
 	created := false
 	if existing == nil {
-		existing, _, err = provider.client.Repositories.CreateHook(ctx, owner, name, hook)
+		existing, _, err = client.Repositories.CreateHook(ctx, owner, name, hook)
 		created = true
 	} else {
-		existing, _, err = provider.client.Repositories.EditHook(ctx, owner, name, existing.GetID(), hook)
+		existing, _, err = client.Repositories.EditHook(ctx, owner, name, existing.GetID(), hook)
 	}
 	if err != nil {
 		return providerrepo.WebhookRegistration{}, githubError("github ensure repository webhook", err)
 	}
-	if _, err := provider.client.Repositories.PingHook(ctx, owner, name, existing.GetID()); err != nil {
+	if _, err := client.Repositories.PingHook(ctx, owner, name, existing.GetID()); err != nil {
 		return providerrepo.WebhookRegistration{}, githubError("github ping repository webhook", err)
 	}
 	return providerrepo.WebhookRegistration{
@@ -277,20 +401,20 @@ func (provider *Provider) EnsureRepositoryWebhook(ctx context.Context, owner str
 		Owner:    owner,
 		Name:     name,
 		ID:       existing.GetID(),
-		URL:      provider.webhookURL,
-		Events:   append([]string(nil), provider.webhookEvents...),
+		URL:      webhookURL,
+		Events:   append([]string(nil), webhookEvents...),
 		Created:  created,
 		Active:   existing.GetActive(),
 	}, nil
 }
 
-func (provider *Provider) findWebhook(ctx context.Context, owner string, name string) (*githubapi.Hook, error) {
-	hooks, _, err := provider.client.Repositories.ListHooks(ctx, owner, name, &githubapi.ListOptions{PerPage: 100})
+func findWebhook(ctx context.Context, client *githubapi.Client, owner string, name string, webhookURL string) (*githubapi.Hook, error) {
+	hooks, _, err := client.Repositories.ListHooks(ctx, owner, name, &githubapi.ListOptions{PerPage: 100})
 	if err != nil {
 		return nil, githubError("github list repository webhooks", err)
 	}
 	for _, hook := range hooks {
-		if hook.GetConfig().GetURL() == provider.webhookURL {
+		if hook.GetConfig().GetURL() == webhookURL {
 			return hook, nil
 		}
 	}
@@ -303,6 +427,84 @@ func (provider *Provider) getBranchRef(ctx context.Context, owner string, name s
 		return nil, githubError("github get branch ref", err)
 	}
 	return ref, nil
+}
+
+func normalizedWebhookEvents(events []string) []string {
+	if len(events) == 0 {
+		return append([]string(nil), defaultWebhookEvents...)
+	}
+	normalized := make([]string, 0, len(events))
+	for _, event := range events {
+		event = strings.TrimSpace(event)
+		if event != "" {
+			normalized = append(normalized, event)
+		}
+	}
+	if len(normalized) == 0 {
+		return append([]string(nil), defaultWebhookEvents...)
+	}
+	return normalized
+}
+
+func githubPageLimit(limit int) int {
+	if limit <= 0 {
+		return 10
+	}
+	if limit > 100 {
+		return 100
+	}
+	return limit
+}
+
+func repositorySearchQuery(query string) string {
+	query = strings.Join(strings.Fields(query), " ")
+	if query == "" {
+		return "archived:false"
+	}
+	return query + " archived:false"
+}
+
+func parseFullRepositoryName(value string) (string, string, bool) {
+	owner, name, ok := strings.Cut(strings.TrimSpace(value), "/")
+	owner = strings.TrimSpace(owner)
+	name = strings.TrimSpace(name)
+	if !ok || owner == "" || name == "" || strings.Contains(name, "/") {
+		return "", "", false
+	}
+	return owner, name, true
+}
+
+func repositoryCandidates(repositories []*githubapi.Repository) []providerrepo.RepositoryCandidate {
+	items := make([]providerrepo.RepositoryCandidate, 0, len(repositories))
+	for _, repository := range repositories {
+		item := repositoryCandidate(repository)
+		if item.Owner != "" && item.Name != "" {
+			items = append(items, item)
+		}
+	}
+	return items
+}
+
+func repositoryCandidate(repository *githubapi.Repository) providerrepo.RepositoryCandidate {
+	if repository == nil {
+		return providerrepo.RepositoryCandidate{}
+	}
+	owner := repository.GetOwner().GetLogin()
+	name := repository.GetName()
+	fullName := repository.GetFullName()
+	if fullName == "" && owner != "" && name != "" {
+		fullName = owner + "/" + name
+	}
+	return providerrepo.RepositoryCandidate{
+		Provider:      providerName,
+		Owner:         owner,
+		Name:          name,
+		FullName:      fullName,
+		DefaultBranch: repository.GetDefaultBranch(),
+		Private:       repository.GetPrivate(),
+		Description:   repository.GetDescription(),
+		URL:           repository.GetHTMLURL(),
+	}
 }
 
 func githubError(operation string, err error) error {

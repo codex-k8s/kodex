@@ -217,7 +217,7 @@ func TestMenuSectionsUseTypedActionButtons(t *testing.T) {
 	}
 }
 
-func TestRepositoriesMenuUsesAddDialogAndEntityList(t *testing.T) {
+func TestRepositoriesMenuUsesOnboardingAndEntityList(t *testing.T) {
 	localizer := testLocalizer(t, texti18n.DefaultLocale)
 	svc := NewSlashCommandService(SlashCommandServiceConfig{
 		Localizer:       localizer,
@@ -231,9 +231,9 @@ func TestRepositoriesMenuUsesAddDialogAndEntityList(t *testing.T) {
 	if result.Card == nil {
 		t.Fatal("card is nil")
 	}
-	addAction, ok := mattermostActionByID(result.Card.Actions, "dialogrepoadd")
-	if !ok || addAction.Context["dialog"] != menuDialogRepositoryAdd {
-		t.Fatalf("add dialog action = %#v", result.Card.Actions)
+	addAction, ok := mattermostActionByID(result.Card.Actions, "repoonboard")
+	if !ok || addAction.Context["action"] != menuActionRepositoryOnboard || addAction.Context["resource_type"] != menuResourceRepository {
+		t.Fatalf("onboarding action = %#v", result.Card.Actions)
 	}
 	listAction, ok := mattermostActionByID(result.Card.Actions, "repolist")
 	if !ok || listAction.Context["action"] != menuActionList || listAction.Context["resource_type"] != menuResourceRepository {
@@ -330,6 +330,7 @@ func TestMattermostDialogsFitMattermostLimits(t *testing.T) {
 			menuDialogRepositoryAdd,
 			menuDialogRepositoryEdit,
 			menuDialogRepositoryDelete,
+			menuDialogRepositorySearch,
 			menuDialogOpenAIAuth,
 			menuDialogOpenAIStatus,
 			menuDialogOpenAICleanup,
@@ -415,6 +416,220 @@ func TestRepositoryDialogSubmissionAddsRepository(t *testing.T) {
 	}
 	if !strings.Contains(result.Card.Text, "github:codex-k8s/matter-codex") {
 		t.Fatalf("card text = %q", result.Card.Text)
+	}
+}
+
+func TestRepositoryOnboardingListsGitHubAccounts(t *testing.T) {
+	store := &fakeAdminStore{
+		githubAccounts: map[string]entity.GitHubAccount{
+			"agent":    {Name: "agent", SecretRef: "matter-codex-github-agent", Status: "configured", Username: "agent-bot", Email: "agent@example.invalid"},
+			"disabled": {Name: "disabled", SecretRef: "matter-codex-github-disabled", Status: "disabled"},
+		},
+	}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:     localizer,
+		StatusService: testStatusService(localizer),
+		Store:         store,
+		MenuActionURL: "http://bot-service/mattermost/actions/agents",
+		StorageReady:  true,
+	})
+
+	result := svc.HandleMenuAction(context.Background(), MenuActionCommand{
+		View:     menuViewRepositories,
+		Action:   menuActionRepositoryOnboard,
+		Resource: menuResourceRepository,
+	})
+
+	if result.Card == nil || result.Card.Title != "Choose GitHub account" {
+		t.Fatalf("card = %#v", result.Card)
+	}
+	action, ok := mattermostActionByID(result.Card.Actions, "repoaccount1")
+	if !ok || action.Context["action"] != menuActionRepositoryRepos || action.Context["resource_id"] != "agent" {
+		t.Fatalf("account action = %#v", result.Card.Actions)
+	}
+	disabled, ok := mattermostActionByID(result.Card.Actions, "repoaccount2")
+	if !ok || !disabled.Disabled {
+		t.Fatalf("disabled account action = %#v", result.Card.Actions)
+	}
+	assertCardDoesNotExposeSlashCommand(t, result.Card)
+}
+
+func TestRepositoryOnboardingConnectsRepositoryWithAccount(t *testing.T) {
+	store := &fakeAdminStore{
+		githubAccounts: map[string]entity.GitHubAccount{
+			"agent": {Name: "agent", SecretRef: "matter-codex-github-agent", Status: "configured"},
+		},
+	}
+	provider := &fakeGitHubRepositoryProvider{
+		candidates: []providerrepo.RepositoryCandidate{{
+			Provider:      "github",
+			Owner:         "codex-k8s",
+			Name:          "matter-codex",
+			FullName:      "codex-k8s/matter-codex",
+			DefaultBranch: "main",
+		}},
+		branches: []providerrepo.BranchCandidate{{Name: "main"}},
+	}
+	channels := &fakeChannelManager{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:                localizer,
+		StatusService:            testStatusService(localizer),
+		Store:                    store,
+		ChannelManager:           channels,
+		GitHubRepositoryProvider: provider,
+		DefaultTeamName:          "agents",
+		MenuActionURL:            "http://bot-service/mattermost/actions/agents",
+		GitHubWebhookConfigured:  true,
+		StorageReady:             true,
+	})
+
+	repositories := svc.HandleMenuAction(context.Background(), MenuActionCommand{
+		View:     menuViewRepositories,
+		Action:   menuActionRepositoryRepos,
+		Resource: menuResourceGitHubAccount,
+		ID:       "agent",
+	})
+	if repositories.Card == nil {
+		t.Fatal("repositories card is nil")
+	}
+	candidateAction, ok := mattermostActionByID(repositories.Card.Actions, "repocandidate1")
+	if !ok {
+		t.Fatalf("candidate action missing: %#v", repositories.Card.Actions)
+	}
+	branches := svc.HandleMenuAction(context.Background(), MenuActionCommand{
+		View:     menuViewRepositories,
+		Action:   menuActionRepositoryBranches,
+		Resource: menuResourceRepository,
+		ID:       fmt.Sprint(candidateAction.Context["resource_id"]),
+	})
+	if branches.Card == nil {
+		t.Fatal("branches card is nil")
+	}
+	branchAction, ok := mattermostActionByID(branches.Card.Actions, "repobranch1")
+	if !ok {
+		t.Fatalf("branch action missing: %#v", branches.Card.Actions)
+	}
+	connected := svc.HandleMenuAction(context.Background(), MenuActionCommand{
+		View:     menuViewRepositories,
+		Action:   menuActionRepositoryConnect,
+		Resource: menuResourceRepository,
+		ID:       fmt.Sprint(branchAction.Context["resource_id"]),
+		UserName: "owner",
+	})
+
+	if connected.Card == nil || !strings.Contains(connected.Card.Text, "github account: `agent`") {
+		t.Fatalf("connected card = %#v", connected.Card)
+	}
+	if store.upsert.GitHubAccountName != "agent" || store.upsert.Owner != "codex-k8s" || store.upsert.Name != "matter-codex" || store.upsert.DefaultBranch != "main" {
+		t.Fatalf("upsert = %#v", store.upsert)
+	}
+	if provider.listAccount.Name != "agent" || provider.branchesAccount.Name != "agent" || provider.webhookAccount.Name != "agent" {
+		t.Fatalf("provider accounts = list %#v branches %#v webhook %#v", provider.listAccount, provider.branchesAccount, provider.webhookAccount)
+	}
+	if channels.channelName != "repo-codex-k8s-matter-codex" {
+		t.Fatalf("channelName = %q", channels.channelName)
+	}
+	openAction, ok := mattermostActionByID(connected.Card.Actions, "openrepo")
+	if !ok || openAction.Context["resource_id"] != "github:codex-k8s/matter-codex" {
+		t.Fatalf("open repo action = %#v", connected.Card.Actions)
+	}
+}
+
+func TestRepositorySearchDialogUsesSelectForms(t *testing.T) {
+	store := &fakeAdminStore{
+		githubAccounts: map[string]entity.GitHubAccount{
+			"agent": {Name: "agent", SecretRef: "matter-codex-github-agent", Status: "configured"},
+		},
+	}
+	provider := &fakeGitHubRepositoryProvider{
+		candidates: []providerrepo.RepositoryCandidate{{
+			Provider:      "github",
+			Owner:         "codex-k8s",
+			Name:          "matter-codex",
+			FullName:      "codex-k8s/matter-codex",
+			DefaultBranch: "main",
+		}},
+		branches: []providerrepo.BranchCandidate{{Name: "main"}, {Name: "feature"}},
+	}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:                localizer,
+		StatusService:            testStatusService(localizer),
+		Store:                    store,
+		GitHubRepositoryProvider: provider,
+		MenuActionURL:            "http://bot-service/mattermost/actions/agents",
+		ChannelManager:           &fakeChannelManager{},
+		DefaultTeamName:          "agents",
+		StorageReady:             true,
+	})
+
+	search := svc.HandleDialogSubmission(context.Background(), DialogSubmissionCommand{
+		CallbackID: dialogCallbackRepositorySearch,
+		State: encodeDialogState(MenuActionCommand{
+			View:      menuViewRepositories,
+			ID:        "agent",
+			ChannelID: "channel-1",
+			PostID:    "post-1",
+		}),
+		UserID:    "owner-id",
+		ChannelID: "channel-1",
+		Submission: map[string]any{
+			dialogFieldSearch: "matter-codex",
+		},
+	})
+
+	if search.Error != "" || len(search.Errors) > 0 {
+		t.Fatalf("search dialog errors = %q %#v", search.Error, search.Errors)
+	}
+	if search.Dialog == nil || search.Dialog.CallbackID != dialogCallbackRepositorySearchPick {
+		t.Fatalf("search dialog = %#v", search.Dialog)
+	}
+	if len(search.Dialog.Elements) != 1 || search.Dialog.Elements[0].Name != dialogFieldRepositoryChoice || len(search.Dialog.Elements[0].Options) != 1 {
+		t.Fatalf("search dialog elements = %#v", search.Dialog.Elements)
+	}
+	if provider.searchQuery != "matter-codex" || provider.searchAccount.Name != "agent" {
+		t.Fatalf("search = query %q account %#v", provider.searchQuery, provider.searchAccount)
+	}
+	repositoryChoice := search.Dialog.Elements[0].Options[0].Value
+	branches := svc.HandleDialogSubmission(context.Background(), DialogSubmissionCommand{
+		CallbackID: dialogCallbackRepositorySearchPick,
+		State:      search.Dialog.State,
+		UserID:     "owner-id",
+		ChannelID:  "channel-1",
+		Submission: map[string]any{
+			dialogFieldRepositoryChoice: repositoryChoice,
+		},
+	})
+	if branches.Error != "" || len(branches.Errors) > 0 {
+		t.Fatalf("branch dialog errors = %q %#v", branches.Error, branches.Errors)
+	}
+	if branches.Dialog == nil || branches.Dialog.CallbackID != dialogCallbackRepositorySearchBranch {
+		t.Fatalf("branch dialog = %#v", branches.Dialog)
+	}
+	if len(branches.Dialog.Elements) != 1 || branches.Dialog.Elements[0].Name != dialogFieldBranchChoice || len(branches.Dialog.Elements[0].Options) != 2 {
+		t.Fatalf("branch dialog elements = %#v", branches.Dialog.Elements)
+	}
+	branchChoice := branches.Dialog.Elements[0].Options[0].Value
+	connected := svc.HandleDialogSubmission(context.Background(), DialogSubmissionCommand{
+		CallbackID: dialogCallbackRepositorySearchBranch,
+		State:      branches.Dialog.State,
+		UserID:     "owner-id",
+		UserName:   "owner",
+		ChannelID:  "channel-1",
+		Submission: map[string]any{
+			dialogFieldBranchChoice: branchChoice,
+		},
+	})
+	if connected.Error != "" || len(connected.Errors) > 0 {
+		t.Fatalf("connect errors = %q %#v", connected.Error, connected.Errors)
+	}
+	if connected.Card == nil || !strings.Contains(connected.Card.Text, "github account: `agent`") {
+		t.Fatalf("connected card = %#v", connected.Card)
+	}
+	if store.upsert.GitHubAccountName != "agent" || store.upsert.Owner != "codex-k8s" || store.upsert.Name != "matter-codex" || store.upsert.DefaultBranch != "main" {
+		t.Fatalf("upsert = %#v", store.upsert)
 	}
 }
 
@@ -678,6 +893,58 @@ func TestGitHubAccountDialogSubmissionBlocksProfileAccountDeletion(t *testing.T)
 	}
 	if _, ok := store.githubAccounts["reviewer"]; !ok {
 		t.Fatal("profile-bound GitHub account should not be deleted")
+	}
+	if runner.deletedGitHubSecretAccount != "" {
+		t.Fatalf("github secret should not be deleted, got %q", runner.deletedGitHubSecretAccount)
+	}
+}
+
+func TestGitHubAccountDialogSubmissionBlocksRepositoryAccountDeletion(t *testing.T) {
+	store := &fakeAdminStore{
+		githubAccounts: map[string]entity.GitHubAccount{
+			"reviewer": {Name: "reviewer", SecretRef: "matter-codex-github-reviewer", Status: "configured"},
+		},
+		repositories: map[string]entity.Repository{
+			repositoryStoreKey("github", "codex-k8s", "matter-codex"): {
+				Provider:          "github",
+				Owner:             "codex-k8s",
+				Name:              "matter-codex",
+				DefaultBranch:     "main",
+				GitHubAccountName: "reviewer",
+				Status:            "active",
+				MattermostChannel: "repo-codex-k8s-matter-codex",
+			},
+		},
+	}
+	runner := &fakeRuntimeRunner{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:        localizer,
+		StatusService:    testStatusService(localizer),
+		Store:            store,
+		RuntimeRunner:    runner,
+		GitHubSecretName: "matter-codex-github",
+		DialogSubmitURL:  "http://bot-service/mattermost/dialogs/agents",
+		StorageReady:     true,
+	})
+
+	result := svc.HandleDialogSubmission(context.Background(), DialogSubmissionCommand{
+		CallbackID: dialogCallbackGitHubAccountDelete,
+		State:      encodeDialogState(MenuActionCommand{View: menuViewGitHub}),
+		Submission: map[string]any{
+			dialogFieldAccount: "reviewer",
+			dialogFieldConfirm: "delete",
+		},
+	})
+
+	if result.Error != "" || len(result.Errors) > 0 {
+		t.Fatalf("dialog errors = %q %#v", result.Error, result.Errors)
+	}
+	if result.Card == nil || !strings.Contains(result.Card.Text, "codex-k8s/matter-codex") {
+		t.Fatalf("card = %#v", result.Card)
+	}
+	if _, ok := store.githubAccounts["reviewer"]; !ok {
+		t.Fatal("repository-bound GitHub account should not be deleted")
 	}
 	if runner.deletedGitHubSecretAccount != "" {
 		t.Fatalf("github secret should not be deleted, got %q", runner.deletedGitHubSecretAccount)
@@ -2352,6 +2619,7 @@ func (store *fakeAdminStore) UpsertRepository(_ context.Context, input adminrepo
 		Owner:             input.Owner,
 		Name:              input.Name,
 		DefaultBranch:     input.DefaultBranch,
+		GitHubAccountName: input.GitHubAccountName,
 		Status:            "active",
 		MattermostChannel: input.MattermostChannel,
 	}
@@ -2878,4 +3146,76 @@ func (provider *fakeRepositoryProvider) EnsureRepositoryWebhook(_ context.Contex
 		Created:  true,
 		Active:   true,
 	}, nil
+}
+
+type fakeGitHubRepositoryProvider struct {
+	listAccount     providerrepo.GitHubAccountRef
+	searchAccount   providerrepo.GitHubAccountRef
+	searchQuery     string
+	branchesAccount providerrepo.GitHubAccountRef
+	webhookAccount  providerrepo.GitHubAccountRef
+	checkAccount    providerrepo.GitHubAccountRef
+	candidates      []providerrepo.RepositoryCandidate
+	branches        []providerrepo.BranchCandidate
+}
+
+func (provider *fakeGitHubRepositoryProvider) ListRepositories(_ context.Context, input providerrepo.RepositoryListInput) ([]providerrepo.RepositoryCandidate, error) {
+	provider.listAccount = input.Account
+	return provider.repositoryCandidates(), nil
+}
+
+func (provider *fakeGitHubRepositoryProvider) SearchRepositories(_ context.Context, input providerrepo.RepositorySearchInput) ([]providerrepo.RepositoryCandidate, error) {
+	provider.searchAccount = input.Account
+	provider.searchQuery = input.Query
+	return provider.repositoryCandidates(), nil
+}
+
+func (provider *fakeGitHubRepositoryProvider) ListBranches(_ context.Context, account providerrepo.GitHubAccountRef, owner string, name string, _ int) ([]providerrepo.BranchCandidate, error) {
+	provider.branchesAccount = account
+	if len(provider.branches) > 0 {
+		return provider.branches, nil
+	}
+	return []providerrepo.BranchCandidate{{Name: "main"}}, nil
+}
+
+func (provider *fakeGitHubRepositoryProvider) CheckRepository(_ context.Context, account providerrepo.GitHubAccountRef, owner string, name string) (providerrepo.RepositoryAccess, error) {
+	provider.checkAccount = account
+	return providerrepo.RepositoryAccess{
+		Provider:      "github",
+		Owner:         owner,
+		Name:          name,
+		DefaultBranch: "main",
+		Private:       true,
+		CanPull:       true,
+		CanPush:       true,
+	}, nil
+}
+
+func (provider *fakeGitHubRepositoryProvider) EnsureRepositoryWebhook(_ context.Context, account providerrepo.GitHubAccountRef, owner string, name string) (providerrepo.WebhookRegistration, error) {
+	provider.webhookAccount = account
+	return providerrepo.WebhookRegistration{
+		Provider: "github",
+		Owner:    owner,
+		Name:     name,
+		ID:       101,
+		URL:      "https://matter-codex.example/github/webhook",
+		Events:   []string{"pull_request", "push"},
+		Created:  true,
+		Active:   true,
+	}, nil
+}
+
+func (provider *fakeGitHubRepositoryProvider) repositoryCandidates() []providerrepo.RepositoryCandidate {
+	if len(provider.candidates) > 0 {
+		return provider.candidates
+	}
+	return []providerrepo.RepositoryCandidate{{
+		Provider:      "github",
+		Owner:         "codex-k8s",
+		Name:          "matter-codex",
+		FullName:      "codex-k8s/matter-codex",
+		DefaultBranch: "main",
+		Private:       true,
+		Description:   "matter-codex",
+	}}
 }

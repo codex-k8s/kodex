@@ -51,58 +51,57 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	})
 	var channelManager statusservice.MattermostChannelManager
 	var flowCardPublisher statusservice.FlowCardPublisher
-	var ephemeralCardPublisher statusservice.EphemeralCardPublisher
 	var dialogOpener httptransport.DialogOpener
 	if cfg.BotTokenConfigured() && cfg.MattermostAPIURL() != "" {
 		controlSurface := mattermostintegration.NewControlSurface(cfg.MattermostAPIURL(), cfg.MattermostBotToken)
 		channelManager = controlSurface
 		flowCardPublisher = controlSurface
-		ephemeralCardPublisher = controlSurface
 		dialogOpener = controlSurface
 	}
 	gitHubProvider, err := openGitHubProvider(cfg)
 	if err != nil {
 		return err
 	}
+	gitHubAccountProvider := openGitHubAccountProvider(runtimeRunner, cfg)
 	gitHubAccountInspector := githubintegration.NewTokenInspector()
 	slashSvc := statusservice.NewSlashCommandService(statusservice.SlashCommandServiceConfig{
-		Localizer:               localizer,
-		StatusService:           statusSvc,
-		Store:                   storage,
-		ChannelManager:          channelManager,
-		FlowCardPublisher:       flowCardPublisher,
-		RepositoryProvider:      gitHubProvider,
-		GitHubAccountInspector:  gitHubAccountInspector,
-		RuntimeRunner:           runtimeRunner,
-		DefaultTeamName:         cfg.DefaultTeamName,
-		CodexAuthSecretName:     cfg.CodexAuthSecretName,
-		GitHubSecretName:        cfg.GitHubSecretName,
-		MenuActionURL:           agentsActionURL(cfg),
-		DialogSubmitURL:         agentsDialogURL(cfg),
-		FlowActionURL:           flowActionURL(cfg),
-		BotTokenConfigured:      cfg.BotTokenConfigured(),
-		SlashTokenConfigured:    cfg.SlashTokenConfigured(),
-		GitHubTokenConfigured:   cfg.GitHubTokenConfigured(),
-		GitHubWebhookConfigured: cfg.GitHubWebhookConfigured(),
-		DatabaseConfigured:      cfg.DatabaseConfigured(),
-		StorageReady:            storage != nil,
-		RuntimeConfigured:       runtimeConfigured,
-		MattermostConfigured:    cfg.MattermostSiteURL != "",
-		ChannelManagerEnabled:   channelManager != nil,
+		Localizer:                localizer,
+		StatusService:            statusSvc,
+		Store:                    storage,
+		ChannelManager:           channelManager,
+		FlowCardPublisher:        flowCardPublisher,
+		RepositoryProvider:       gitHubProvider,
+		GitHubRepositoryProvider: gitHubAccountProvider,
+		GitHubAccountInspector:   gitHubAccountInspector,
+		RuntimeRunner:            runtimeRunner,
+		DefaultTeamName:          cfg.DefaultTeamName,
+		CodexAuthSecretName:      cfg.CodexAuthSecretName,
+		GitHubSecretName:         cfg.GitHubSecretName,
+		MenuActionURL:            agentsActionURL(cfg),
+		DialogSubmitURL:          agentsDialogURL(cfg),
+		FlowActionURL:            flowActionURL(cfg),
+		BotTokenConfigured:       cfg.BotTokenConfigured(),
+		SlashTokenConfigured:     cfg.SlashTokenConfigured(),
+		GitHubTokenConfigured:    cfg.GitHubTokenConfigured(),
+		GitHubWebhookConfigured:  cfg.GitHubWebhookConfigured(),
+		DatabaseConfigured:       cfg.DatabaseConfigured(),
+		StorageReady:             storage != nil,
+		RuntimeConfigured:        runtimeConfigured,
+		MattermostConfigured:     cfg.MattermostSiteURL != "",
+		ChannelManagerEnabled:    channelManager != nil,
 	})
 
 	router := httptransport.NewRouter(httptransport.RouterConfig{
-		StatusService:          statusSvc,
-		SlashService:           slashSvc,
-		DialogOpener:           dialogOpener,
-		EphemeralCardPublisher: ephemeralCardPublisher,
-		Localizer:              localizer,
-		SlashToken:             cfg.MattermostSlashToken,
-		GitHubWebhookSecret:    cfg.GitHubWebhookSecret,
-		MaxSlashFormBytes:      cfg.MaxSlashFormBytes,
-		MaxGitHubWebhookBytes:  cfg.MaxGitHubWebhookBytes,
-		PrometheusRegistry:     newPrometheusRegistry(),
-		Logger:                 logger,
+		StatusService:         statusSvc,
+		SlashService:          slashSvc,
+		DialogOpener:          dialogOpener,
+		Localizer:             localizer,
+		SlashToken:            cfg.MattermostSlashToken,
+		GitHubWebhookSecret:   cfg.GitHubWebhookSecret,
+		MaxSlashFormBytes:     cfg.MaxSlashFormBytes,
+		MaxGitHubWebhookBytes: cfg.MaxGitHubWebhookBytes,
+		PrometheusRegistry:    newPrometheusRegistry(),
+		Logger:                logger,
 	})
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
@@ -168,6 +167,17 @@ func openGitHubProvider(cfg Config) (*githubintegration.Provider, error) {
 		return nil, fmt.Errorf("open github provider: %w", err)
 	}
 	return provider, nil
+}
+
+func openGitHubAccountProvider(runtimeRunner runtimerepo.Runner, cfg Config) *githubintegration.AccountProvider {
+	tokenReader, ok := runtimeRunner.(runtimerepo.GitHubTokenSecretReader)
+	if !ok {
+		return nil
+	}
+	return githubintegration.NewAccountProvider(tokenReader, githubintegration.ProviderConfig{
+		WebhookURL:    gitHubWebhookURL(cfg),
+		WebhookSecret: cfg.GitHubWebhookSecret,
+	})
 }
 
 func gitHubWebhookURL(cfg Config) string {

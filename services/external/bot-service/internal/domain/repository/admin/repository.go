@@ -14,6 +14,7 @@ type UpsertRepositoryInput struct {
 	Owner             string
 	Name              string
 	DefaultBranch     string
+	GitHubAccountName string
 	MattermostChannel string
 }
 

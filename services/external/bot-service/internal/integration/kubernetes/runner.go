@@ -343,6 +343,41 @@ func (runner *Runner) UpsertGitHubTokenSecret(ctx context.Context, input runtime
 	}, nil
 }
 
+func (runner *Runner) GetGitHubTokenSecret(ctx context.Context, accountName string, secretName string) (runtimerepo.GitHubTokenSecretCredential, error) {
+	accountName = strings.TrimSpace(accountName)
+	secretName = strings.TrimSpace(secretName)
+	if accountName == "" {
+		return runtimerepo.GitHubTokenSecretCredential{}, fmt.Errorf("github account name is required")
+	}
+	if secretName == "" {
+		return runtimerepo.GitHubTokenSecretCredential{}, fmt.Errorf("github token secret name is required")
+	}
+	secret, err := runner.client.CoreV1().Secrets(runner.namespace).Get(ctx, secretName, metav1.GetOptions{})
+	if err != nil {
+		return runtimerepo.GitHubTokenSecretCredential{}, fmt.Errorf("get github token secret: %w", err)
+	}
+	token := strings.TrimSpace(string(secret.Data["github-token"]))
+	username := strings.TrimSpace(string(secret.Data["github-username"]))
+	email := strings.TrimSpace(string(secret.Data["github-email"]))
+	if token == "" {
+		return runtimerepo.GitHubTokenSecretCredential{}, fmt.Errorf("github token secret is missing token")
+	}
+	if username == "" {
+		return runtimerepo.GitHubTokenSecretCredential{}, fmt.Errorf("github token secret is missing username")
+	}
+	if email == "" {
+		return runtimerepo.GitHubTokenSecretCredential{}, fmt.Errorf("github token secret is missing email")
+	}
+	return runtimerepo.GitHubTokenSecretCredential{
+		AccountName: accountName,
+		SecretName:  secretName,
+		Namespace:   runner.namespace,
+		Token:       token,
+		Username:    username,
+		Email:       email,
+	}, nil
+}
+
 func (runner *Runner) DeleteGitHubTokenSecret(ctx context.Context, accountName string, secretName string) (runtimerepo.GitHubTokenSecretDeleteResult, error) {
 	accountName = strings.TrimSpace(accountName)
 	secretName = strings.TrimSpace(secretName)
