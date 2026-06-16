@@ -62,6 +62,47 @@ func TestSelfDeployGateDecisionEventHandlerRecordsApprovedDecision(t *testing.T)
 	}
 }
 
+func TestSelfDeployGateDecisionEventHandlerRecordsApprovedDecisionForPlanWithoutGateRefs(t *testing.T) {
+	t.Parallel()
+
+	planID := uuid.MustParse("7b24d574-902b-4d1e-b7cb-ab57967688a1")
+	gateRequestID := uuid.MustParse("82ec64f2-ad76-4188-9058-0df058f5a5f5")
+	gateDecisionID := uuid.MustParse("cccccccc-3333-4333-8333-cccccccccccc")
+	recorder := &fakeSelfDeployGateDecisionRecorder{plans: map[uuid.UUID]entity.SelfDeployPlan{
+		planID: {
+			VersionedBase: entity.VersionedBase{ID: planID, Version: 1},
+			Status:        enum.SelfDeployPlanStatusPendingApproval,
+		},
+	}}
+	handler := selfDeployGateDecisionEventHandler{recorder: recorder}
+
+	result := handler.HandleEvent(context.Background(), eventconsumer.Event{StoredEvent: selfDeployGateDecisionStoredEvent(t, governanceevents.Payload{
+		GateRequestID:  gateRequestID.String(),
+		GateDecisionID: gateDecisionID.String(),
+		Outcome:        "approve",
+		Status:         "resolved",
+		TargetType:     "self_deploy_plan",
+		TargetRef:      "agent:self-deploy-plan:" + planID.String(),
+		SafeSummary:    "owner approved self-deploy build",
+		Version:        4,
+	})})
+	if result.Status != eventconsumer.ResultAck {
+		t.Fatalf("HandleEvent() = %+v, want ack", result)
+	}
+	if len(recorder.inputs) != 1 {
+		t.Fatalf("recorded inputs = %d, want 1", len(recorder.inputs))
+	}
+	input := recorder.inputs[0]
+	if input.SelfDeployPlanID != planID || input.Meta.ExpectedVersion == nil || *input.Meta.ExpectedVersion != 1 {
+		t.Fatalf("input plan/version = %s/%v, want live plan version 1", input.SelfDeployPlanID, input.Meta.ExpectedVersion)
+	}
+	if input.GateRequestRef != "governance:gate_request/"+gateRequestID.String() ||
+		input.GateDecisionRef != "governance:gate_decision/"+gateDecisionID.String() ||
+		input.Outcome != agentservice.SelfDeployPlanGateDecisionOutcomeApprove {
+		t.Fatalf("decision input = %+v", input)
+	}
+}
+
 func TestSelfDeployGateDecisionEventHandlerMapsNonApprovedOutcomes(t *testing.T) {
 	t.Parallel()
 

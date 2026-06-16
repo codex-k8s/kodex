@@ -41,6 +41,7 @@ type selfDeployGateCommandClient interface {
 type selfDeployGateReadClient interface {
 	ListRiskAssessments(context.Context, *governancev1.ListRiskAssessmentsRequest, ...grpc.CallOption) (*governancev1.ListRiskAssessmentsResponse, error)
 	ListGateRequests(context.Context, *governancev1.ListGateRequestsRequest, ...grpc.CallOption) (*governancev1.ListGateRequestsResponse, error)
+	ListGateDecisions(context.Context, *governancev1.ListGateDecisionsRequest, ...grpc.CallOption) (*governancev1.ListGateDecisionsResponse, error)
 }
 
 // SelfDeployGatePreparer вызывает governance-manager PrepareSelfDeployPlanGate.
@@ -207,13 +208,31 @@ func (preparer *SelfDeployGatePreparer) lookupExistingSelfDeployPlanGate(ctx con
 		}
 		return agentservice.SelfDeployPlanGatePreparationResult{}, false, agentservice.NewSelfDeployGateRecoveryError(agentservice.SelfDeployGateRecoveryCodeExistingGateNotFound, errs.ErrNotFound)
 	}
+	decision, ok, err := preparer.lookupSelfDeployGateDecision(ctx, input, gate.GetId(), gate.GetStatus())
+	if err != nil {
+		return agentservice.SelfDeployPlanGatePreparationResult{}, false, err
+	}
+	context := value.GovernanceContextRef{
+		RiskAssessmentRef: governanceRef("risk_assessment", assessment.GetId()),
+		GateRequestRef:    governanceRef("gate_request", gate.GetId()),
+	}
+	status := agentservice.SelfDeployPlanGateStatusPending
+	summary := strings.TrimSpace(assessment.GetExplanation())
+	if ok {
+		context.GateDecisionRef = governanceRef("gate_decision", decision.GetId())
+		mapped, mappedOK := selfDeployGateDecisionStatus(decision.GetOutcome())
+		if !mappedOK {
+			return agentservice.SelfDeployPlanGatePreparationResult{}, false, agentservice.NewSelfDeployGateRecoveryError(agentservice.SelfDeployGateRecoveryCodeExistingGateMismatch, errs.ErrInvalidArgument)
+		}
+		status = mapped
+		if reason := strings.TrimSpace(decision.GetReason()); reason != "" {
+			summary = reason
+		}
+	}
 	return agentservice.SelfDeployPlanGatePreparationResult{
-		Status: agentservice.SelfDeployPlanGateStatusPending,
-		GovernanceContext: value.GovernanceContextRef{
-			RiskAssessmentRef: governanceRef("risk_assessment", assessment.GetId()),
-			GateRequestRef:    governanceRef("gate_request", gate.GetId()),
-		},
-		SafeSummary: strings.TrimSpace(assessment.GetExplanation()),
+		Status:            status,
+		GovernanceContext: context,
+		SafeSummary:       summary,
 	}, true, nil
 }
 
@@ -285,6 +304,38 @@ func (preparer *SelfDeployGatePreparer) lookupSelfDeployGateRequest(ctx context.
 		return nil, false, agentservice.NewSelfDeployGateRecoveryError(code, errs.ErrNotFound)
 	}
 	return selected, true, nil
+}
+
+func (preparer *SelfDeployGatePreparer) lookupSelfDeployGateDecision(ctx context.Context, input agentservice.SelfDeployPlanGatePreparationInput, gateRequestID string, status governancev1.GateRequestStatus) (*governancev1.GateDecision, bool, error) {
+	if status != governancev1.GateRequestStatus_GATE_REQUEST_STATUS_RESOLVED {
+		return nil, false, nil
+	}
+	gateRequestID = strings.TrimSpace(gateRequestID)
+	if gateRequestID == "" {
+		return nil, false, agentservice.NewSelfDeployGateRecoveryError(agentservice.SelfDeployGateRecoveryCodeExistingGateMismatch, errs.ErrNotFound)
+	}
+	response, err := preparer.client.ListGateDecisions(ctx, &governancev1.ListGateDecisionsRequest{
+		GateRequestId: &gateRequestID,
+		Page:          &governancev1.PageRequest{PageSize: 10},
+		Meta:          queryMeta(input.Meta),
+	})
+	if err != nil {
+		return nil, false, agentservice.NewSelfDeployGateRecoveryError(
+			agentservice.SelfDeployGateRecoveryCodeExistingGateLookupFailed,
+			grpcclient.MapReadError(err, "governance-manager self-deploy gate decision lookup failed"),
+		)
+	}
+	decision, code, err := selectSelfDeployGateDecision(response.GetGateDecisions(), gateRequestID)
+	if err != nil {
+		return nil, false, agentservice.NewSelfDeployGateRecoveryError(code, err)
+	}
+	if decision == nil {
+		if code == "" {
+			code = agentservice.SelfDeployGateRecoveryCodeExistingGateMismatch
+		}
+		return nil, false, agentservice.NewSelfDeployGateRecoveryError(code, errs.ErrNotFound)
+	}
+	return decision, true, nil
 }
 
 func (preparer *SelfDeployGatePreparer) listSelfDeployRiskAssessments(
@@ -373,7 +424,36 @@ func selectSelfDeployGateRequest(items []*governancev1.GateRequest, planRef stri
 			mismatch = mismatch || selfDeployGateRequestMatchesAssessmentID(item, assessmentID)
 			continue
 		}
-		if !selfDeployGateRequestStatusOpen(item.GetStatus()) {
+		if !selfDeployGateRequestStatusRecoverable(item.GetStatus()) {
+			mismatch = true
+			continue
+		}
+		if selected != nil {
+			return nil, agentservice.SelfDeployGateRecoveryCodeExistingGateConflict, errs.ErrConflict
+		}
+		selected = item
+	}
+	if selected != nil {
+		return selected, "", nil
+	}
+	if mismatch {
+		return nil, agentservice.SelfDeployGateRecoveryCodeExistingGateMismatch, nil
+	}
+	return nil, "", nil
+}
+
+func selectSelfDeployGateDecision(items []*governancev1.GateDecision, gateRequestID string) (*governancev1.GateDecision, string, error) {
+	var selected *governancev1.GateDecision
+	mismatch := false
+	for _, item := range items {
+		if item == nil || strings.TrimSpace(item.GetId()) == "" {
+			continue
+		}
+		if strings.TrimSpace(item.GetGateRequestId()) != strings.TrimSpace(gateRequestID) {
+			mismatch = true
+			continue
+		}
+		if item.GetOutcome() == governancev1.GateOutcome_GATE_OUTCOME_UNSPECIFIED {
 			mismatch = true
 			continue
 		}
@@ -407,11 +487,12 @@ func selfDeployGateRequestMatchesAssessmentID(item *governancev1.GateRequest, as
 	return item != nil && strings.TrimSpace(item.GetId()) != "" && strings.TrimSpace(item.GetRiskAssessmentId()) == strings.TrimSpace(assessmentID)
 }
 
-func selfDeployGateRequestStatusOpen(status governancev1.GateRequestStatus) bool {
+func selfDeployGateRequestStatusRecoverable(status governancev1.GateRequestStatus) bool {
 	switch status {
 	case governancev1.GateRequestStatus_GATE_REQUEST_STATUS_REQUESTED,
 		governancev1.GateRequestStatus_GATE_REQUEST_STATUS_DELIVERING,
-		governancev1.GateRequestStatus_GATE_REQUEST_STATUS_AWAITING_DECISION:
+		governancev1.GateRequestStatus_GATE_REQUEST_STATUS_AWAITING_DECISION,
+		governancev1.GateRequestStatus_GATE_REQUEST_STATUS_RESOLVED:
 		return true
 	default:
 		return false
@@ -449,6 +530,23 @@ func selfDeployPlanGateStatus(status governancev1.SelfDeployPlanGateStatus) (age
 	case governancev1.SelfDeployPlanGateStatus_SELF_DEPLOY_PLAN_GATE_STATUS_REJECTED:
 		return agentservice.SelfDeployPlanGateStatusRejected, true
 	case governancev1.SelfDeployPlanGateStatus_SELF_DEPLOY_PLAN_GATE_STATUS_BLOCKED:
+		return agentservice.SelfDeployPlanGateStatusBlocked, true
+	default:
+		return "", false
+	}
+}
+
+func selfDeployGateDecisionStatus(outcome governancev1.GateOutcome) (agentservice.SelfDeployPlanGateStatus, bool) {
+	switch outcome {
+	case governancev1.GateOutcome_GATE_OUTCOME_APPROVE,
+		governancev1.GateOutcome_GATE_OUTCOME_APPROVE_WITH_CONDITIONS:
+		return agentservice.SelfDeployPlanGateStatusApproved, true
+	case governancev1.GateOutcome_GATE_OUTCOME_REVISE,
+		governancev1.GateOutcome_GATE_OUTCOME_REJECT:
+		return agentservice.SelfDeployPlanGateStatusRejected, true
+	case governancev1.GateOutcome_GATE_OUTCOME_HOLD,
+		governancev1.GateOutcome_GATE_OUTCOME_ROLLBACK,
+		governancev1.GateOutcome_GATE_OUTCOME_ESCALATE:
 		return agentservice.SelfDeployPlanGateStatusBlocked, true
 	default:
 		return "", false
