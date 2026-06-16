@@ -34,7 +34,7 @@ Owner не должен помнить и вручную вводить:
 - Если action работает с существующей сущностью, ее id передается в hidden callback state или action context.
 - Если action требует выбора существующей сущности, UI сначала показывает список/карточки или dialog `select`, а не просит ввести имя.
 - Если сущностей больше, чем удобно показать в одной карточке, используется пагинация, фильтр или отдельный список с кнопками действий на каждой строке.
-- Подтверждение удаления выполняется через явную confirmation-карточку или confirmation-dialog с видимым описанием сущности. Ввод `delete` не является целевым UX.
+- Подтверждение удаления или применения опасной операции выполняется через явную confirmation-карточку или confirmation-dialog с видимым описанием сущности. Для MVP допустимо короткое слово подтверждения вроде `delete` или `apply`, если пользователь не вводит технический id и видит, какая сущность будет затронута.
 - Результат action возвращается в том же контексте: обновленная карточка, result-карточка или thread event. Пользователь не должен гадать, сработала кнопка или нет.
 - Ошибка должна содержать ближайшее действие кнопкой: авторизовать account, проверить token, выбрать другой profile, открыть status, повторить cleanup.
 - Все тексты owner-facing UI берутся из i18n и рендерятся в выбранной владельцем локали.
@@ -119,7 +119,7 @@ Agent profile связывает роль, accounts, prompts, Codex config overl
 
 Целевые profile actions:
 
-- создать profile из preset: developer, reviewer, technical reviewer, lexical reviewer, deployer;
+- создать profile из preset: developer, reviewer, technical reviewer, lexical reviewer, deployer или человекочитаемого label;
 - выбрать OpenAI account из списка;
 - выбрать GitHub account из списка;
 - выбрать Kubernetes access mode;
@@ -127,12 +127,12 @@ Agent profile связывает роль, accounts, prompts, Codex config overl
 - включить/выключить profile;
 - открыть связанные prompt templates.
 
-Kubernetes access modes:
+Kubernetes access modes MVP:
 
-- `none` - агент не получает Kubernetes API access;
-- `read-only` - агент может читать logs/status в разрешенных namespaces;
-- `deployer` - агент получает явно выданные deploy-права в выбранных namespaces;
-- `custom` - owner выбирает заранее подготовленную Role/ClusterRole binding policy.
+- `read-only` - default для обычных developer/reviewer профилей, агент может читать logs/status при наличии выданных runtime credentials;
+- `cluster-admin` - осознанный owner-selected риск для deploy/ops профилей, которым нужно менять ресурсы в других namespaces.
+
+Будущий upgrade path: заменить `cluster-admin` на заранее подготовленные role policies per project/namespace без изменения owner-facing profile model.
 
 NetworkPolicy по умолчанию не включается: это осознанное MVP-решение владельца, потому что агентам может потребоваться ходить во внешние сервисы проекта.
 

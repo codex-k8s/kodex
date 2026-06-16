@@ -31,7 +31,7 @@
 - списки сущностей показывают cards/actions;
 - карточки не показывают `/agents <command>` как основной путь;
 - action context содержит hidden ids, а не просит owner ввести их;
-- confirmation flow не требует ввода `delete`.
+- confirmation flow не требует ввода технических id; короткое подтверждение вроде `delete` допустимо только внутри dialog с видимым описанием сущности.
 
 ## Accounts UX PR
 
@@ -64,7 +64,7 @@
 
 - profile создается из preset;
 - OpenAI/GitHub accounts выбираются из списков;
-- Kubernetes access mode выбирается явно;
+- Kubernetes access mode выбирается явно: `read-only` или `cluster-admin`;
 - prompt template выбирается из profile card;
 - edit prompt принимает Markdown;
 - test render показывает результат или ошибку до сохранения;
@@ -103,3 +103,12 @@
 - PR и review оформляются через GitHub account агента;
 - Mattermost thread остается источником статуса и решений;
 - cleanup после завершения понятен и безопасен.
+
+## Combined Owner Flow MVP PR
+
+Проверка:
+
+- пройти checks для Profiles And Prompts, Flow Wizard, Runtime And Cleanup и E2E Dogfooding в одном PR;
+- убедиться, что основные карточки `/agents` не показывают `/agents <command>` как инструкцию владельцу;
+- убедиться, что fallback typed commands остались доступны только для debug/runbook;
+- подтвердить deploy evidence: миграции применились, bot-service rolled out, smoke прошел.
