@@ -143,7 +143,7 @@ func selfDeployDeployPolicyStaleReason(input GetSelfDeployDeployPlanInput, polic
 }
 
 func selfDeployServicesPolicyStaleReason(sourceRef string, mergeCommitSHA string, expectedDigest string, expectedFingerprint string, expectedVersion *int64, policy entity.ServicesPolicy) string {
-	if strings.TrimSpace(sourceRef) != strings.TrimSpace(policy.SourceRef) {
+	if !selfDeploySourceRefsEquivalent(sourceRef, policy.SourceRef) {
 		return "services_policy_source_ref_mismatch"
 	}
 	if !strings.EqualFold(strings.TrimSpace(mergeCommitSHA), strings.TrimSpace(policy.SourceCommitSHA)) {
@@ -159,6 +159,35 @@ func selfDeployServicesPolicyStaleReason(sourceRef string, mergeCommitSHA string
 		return "services_policy_version_mismatch"
 	}
 	return ""
+}
+
+func selfDeploySourceRefsEquivalent(left string, right string) bool {
+	left = strings.TrimSpace(left)
+	right = strings.TrimSpace(right)
+	if left == "" || right == "" {
+		return false
+	}
+	if left == right {
+		return true
+	}
+	leftBranch, leftOK := selfDeployBranchRefName(left)
+	rightBranch, rightOK := selfDeployBranchRefName(right)
+	return leftOK && rightOK && leftBranch == rightBranch
+}
+
+func selfDeployBranchRefName(ref string) (string, bool) {
+	ref = strings.TrimSpace(ref)
+	if ref == "" || strings.ContainsAny(ref, "\x00\r\n") {
+		return "", false
+	}
+	if strings.HasPrefix(ref, "refs/heads/") {
+		branch := strings.TrimPrefix(ref, "refs/heads/")
+		return branch, branch != ""
+	}
+	if strings.HasPrefix(ref, "refs/") || strings.Contains(ref, "@") || strings.Contains(ref, ":") {
+		return "", false
+	}
+	return ref, true
 }
 
 func deploySpecsFromCheckedPolicy(policy entity.ServicesPolicy) (map[string]value.ServicesPolicyDeploySpec, error) {

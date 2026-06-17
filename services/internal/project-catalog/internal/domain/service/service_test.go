@@ -2549,6 +2549,7 @@ func TestGetSelfDeployDeployPlanUsesRuntimeManifestBundleDigest(t *testing.T) {
 	}
 	svc := New(store, fixedClock{}, &sequenceIDs{})
 	input := selfDeployDeployPlanInput(projectID, repositoryID, policy, []string{"api"})
+	input.SourceRef = "main"
 	input.BuildOutputs = []SelfDeployBuildOutput{selfDeployBuildOutput("api")}
 	input.MaterializedBuildContexts = []SelfDeployMaterializedBuildContext{selfDeployMaterializedBuildContext("api")}
 
@@ -2717,6 +2718,33 @@ func TestGetSelfDeployBuildPlanReturnsPolicyStaleOnSourceMismatch(t *testing.T) 
 				t.Fatalf("result = %+v, want policy stale %s", result, tt.wantReason)
 			}
 		})
+	}
+}
+
+func TestGetSelfDeployBuildPlanAcceptsEquivalentBranchSourceRefs(t *testing.T) {
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	policyID := uuid.New()
+	commitSHA := "abcdef0123456789abcdef0123456789abcdef01"
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = activeSelfDeployRepository(projectID, repositoryID)
+	policy := activeSelfDeployPolicy(projectID, repositoryID, policyID, commitSHA, selfDeployBuildPolicyPayload())
+	policy.SourceRef = "refs/heads/main"
+	store.policies[policyID] = policy
+	store.serviceDescriptors[policyID] = []entity.ServiceDescriptor{
+		activeSelfDeployDescriptor(projectID, repositoryID, policyID, "api"),
+	}
+	svc := New(store, fixedClock{}, &sequenceIDs{})
+	input := selfDeployBuildPlanInput(projectID, repositoryID, policy, []string{"api"})
+	input.SourceRef = "main"
+	input.MaterializedBuildContexts = []SelfDeployMaterializedBuildContext{selfDeployMaterializedBuildContext("api")}
+
+	result, err := svc.GetSelfDeployBuildPlan(context.Background(), input)
+	if err != nil {
+		t.Fatalf("GetSelfDeployBuildPlan(): %v", err)
+	}
+	if result.Status != enum.SelfDeployBuildPlanStatusReady {
+		t.Fatalf("result = %+v, want ready for equivalent branch source refs", result)
 	}
 }
 

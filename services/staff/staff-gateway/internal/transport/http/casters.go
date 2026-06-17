@@ -1863,11 +1863,17 @@ func selfDeployPlanChain(plan *agentsv1.SelfDeployPlan, governance generated.Sel
 			Summary: "Self-deploy plan создан, ожидается подготовка governance gate или дальнейшая обработка agent-manager.",
 		}, nil
 	case agentsv1.SelfDeployPlanStatus_SELF_DEPLOY_PLAN_STATUS_APPROVED:
+		if chainStatus, nextStep, safeError, ok := selfDeployRuntimeBlockerChain(plan); ok {
+			return chainStatus, nextStep, safeError
+		}
 		return generated.ApprovedReadyForBuild, generated.SelfDeployNextStep{
 			Code:    generated.ReadyForBuild,
 			Summary: "Self-deploy plan утверждён; agent-manager продвигает chain через build context, build job и deploy job.",
 		}, nil
 	case agentsv1.SelfDeployPlanStatus_SELF_DEPLOY_PLAN_STATUS_FAILED:
+		if chainStatus, nextStep, safeError, ok := selfDeployRuntimeBlockerChain(plan); ok {
+			return chainStatus, nextStep, safeError
+		}
 		return generated.Blocked, generated.SelfDeployNextStep{Code: generated.InspectBlocker, Summary: "Self-deploy plan завершился ошибкой; смотри safe summary."}, selfDeploySafeError("self_deploy_plan_failed", plan.GetSafeSummary())
 	case agentsv1.SelfDeployPlanStatus_SELF_DEPLOY_PLAN_STATUS_REJECTED:
 		return generated.Blocked, generated.SelfDeployNextStep{Code: generated.InspectBlocker, Summary: "Self-deploy plan отклонён владельцем или governance decision."}, selfDeploySafeError("self_deploy_plan_rejected", plan.GetSafeSummary())
@@ -1879,6 +1885,34 @@ func selfDeployPlanChain(plan *agentsv1.SelfDeployPlan, governance generated.Sel
 			Summary: "Self-deploy plan создан, но lifecycle status ещё не уточнён.",
 		}, nil
 	}
+}
+
+func selfDeployRuntimeBlockerChain(plan *agentsv1.SelfDeployPlan) (generated.SelfDeployChainStatus, generated.SelfDeployNextStep, *generated.SelfDeploySafeError, bool) {
+	code := ""
+	summary := ""
+	switch {
+	case plan.GetRuntimeBuildStatus() == agentsv1.SelfDeployRuntimeBuildStatus_SELF_DEPLOY_RUNTIME_BUILD_STATUS_BLOCKED ||
+		plan.GetRuntimeBuildStatus() == agentsv1.SelfDeployRuntimeBuildStatus_SELF_DEPLOY_RUNTIME_BUILD_STATUS_FAILED:
+		code = plan.GetRuntimeBuildErrorCode()
+		summary = plan.GetRuntimeBuildSummary()
+	case plan.GetRuntimeDeployStatus() == agentsv1.SelfDeployRuntimeDeployStatus_SELF_DEPLOY_RUNTIME_DEPLOY_STATUS_BLOCKED ||
+		plan.GetRuntimeDeployStatus() == agentsv1.SelfDeployRuntimeDeployStatus_SELF_DEPLOY_RUNTIME_DEPLOY_STATUS_FAILED:
+		code = plan.GetRuntimeDeployErrorCode()
+		summary = plan.GetRuntimeDeploySummary()
+	}
+	if strings.TrimSpace(code) == "" && strings.TrimSpace(summary) == "" {
+		return "", generated.SelfDeployNextStep{}, nil, false
+	}
+	if strings.TrimSpace(code) == "policy_stale" {
+		return generated.NeedsServicesPolicyReconcile, generated.SelfDeployNextStep{
+			Code:    generated.ReconcileServicesPolicy,
+			Summary: "Checked services policy устарела для этого self-deploy plan; нужен новый план из свежего provider/project signal.",
+		}, selfDeploySafeError("policy_stale", summary), true
+	}
+	return generated.Blocked, generated.SelfDeployNextStep{
+		Code:    generated.InspectBlocker,
+		Summary: "Runtime стадия self-deploy остановлена; смотри safe error и runtime summary.",
+	}, selfDeploySafeError(firstNonEmpty(code, "runtime_blocked"), summary), true
 }
 
 func selfDeploySignalChain(response *projectsv1.SelfDeploySignalResponse) (generated.SelfDeployChainStatus, generated.SelfDeployNextStep, *generated.SelfDeploySafeError) {

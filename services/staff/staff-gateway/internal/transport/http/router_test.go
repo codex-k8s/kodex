@@ -857,6 +857,39 @@ func TestRouterGetSelfDeploySummary(t *testing.T) {
 	}
 }
 
+func TestRouterGetSelfDeploySummaryShowsApprovedPolicyStaleBlocker(t *testing.T) {
+	plans := sampleSelfDeployPlansResponse()
+	plan := plans.GetSelfDeployPlans()[0]
+	plan.Status = agentsv1.SelfDeployPlanStatus_SELF_DEPLOY_PLAN_STATUS_APPROVED
+	plan.SafeSummary = stringPtr("self-deploy plan approved")
+	plan.GovernanceContext.GateDecisionRef = stringPtr("governance:gate_decision/33333333-3333-4333-8333-333333333333")
+	plan.RuntimeBuildStatus = agentsv1.SelfDeployRuntimeBuildStatus_SELF_DEPLOY_RUNTIME_BUILD_STATUS_BLOCKED
+	plan.RuntimeBuildErrorCode = stringPtr("policy_stale")
+	plan.RuntimeBuildSummary = stringPtr("services_policy_source_ref_mismatch")
+	client := &fakeInteractionHubClient{selfDeployListResponse: plans}
+	router := newTestRouter(t, client)
+	req := authenticatedRequest(http.MethodGet, "/v1/self-deploy/summary?scope_type=project&scope_ref=project-1&project_ref=project-1&status=approved", "")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var body generated.SelfDeploySummaryResponse
+	decodeJSON(t, rec, &body)
+	summary := body.Summary
+	if summary.DeployPlan.Status != generated.SelfDeployPlanStatusApproved ||
+		summary.ChainStatus != generated.NeedsServicesPolicyReconcile ||
+		summary.NextStep.Code != generated.ReconcileServicesPolicy ||
+		summary.Runtime.Status != generated.SelfDeployRuntimeStatusFailed ||
+		summary.SafeError == nil ||
+		summary.SafeError.Code != "policy_stale" ||
+		!strings.Contains(summary.SafeError.Summary, "services_policy_source_ref_mismatch") {
+		t.Fatalf("summary = %+v, want approved policy_stale blocker", summary)
+	}
+}
+
 func TestRouterGetSelfDeploySummaryOwnerActorWithoutScope(t *testing.T) {
 	client := &fakeInteractionHubClient{
 		selfDeployListResponse:    sampleSelfDeployPlansResponse(),

@@ -801,10 +801,12 @@ func (s *Service) recordSelfDeployDeploySucceeded(ctx context.Context, plan enti
 }
 
 func (s *Service) recordSelfDeployBuildBlocked(ctx context.Context, plan entity.SelfDeployPlan, code string, summary string, fingerprint string) (entity.SelfDeployPlan, error) {
+	plan = withSelfDeployPolicyStaleTerminalStatus(plan, code, summary)
 	return s.recordSelfDeployBuildDiagnostic(ctx, plan, enum.SelfDeployRuntimeBuildStatusBlocked, code, summary, fingerprint)
 }
 
 func (s *Service) recordSelfDeployDeployBlocked(ctx context.Context, plan entity.SelfDeployPlan, code string, summary string, fingerprint string) (entity.SelfDeployPlan, error) {
+	plan = withSelfDeployPolicyStaleTerminalStatus(plan, code, summary)
 	blockedStatus := enum.SelfDeployRuntimeDeployStatusBlocked
 	return s.recordSelfDeployDeployDiagnostic(ctx, plan, blockedStatus, code, summary, fingerprint)
 }
@@ -848,6 +850,16 @@ func setSelfDeployRuntimeProgress(fingerprintField *string, codeField *string, s
 	*fingerprintField = strings.TrimSpace(fingerprint)
 	*codeField = selfDeploySafeSummary(code)
 	*summaryField = selfDeploySafeSummary(summary)
+}
+
+func withSelfDeployPolicyStaleTerminalStatus(plan entity.SelfDeployPlan, code string, summary string) entity.SelfDeployPlan {
+	if strings.TrimSpace(code) != string(SelfDeployBuildPlanStatusPolicyStale) &&
+		strings.TrimSpace(code) != string(SelfDeployDeployPlanStatusPolicyStale) {
+		return plan
+	}
+	plan.Status = enum.SelfDeployPlanStatusFailed
+	plan.SafeSummary = selfDeploySafeSummary(firstNonEmpty(summary, "self-deploy services policy is stale; create a new checked plan from a fresh provider/project signal"))
+	return plan
 }
 
 func (s *Service) recordSelfDeployBuildState(ctx context.Context, plan entity.SelfDeployPlan) (entity.SelfDeployPlan, error) {
@@ -1088,14 +1100,21 @@ func firstNonEmpty(values ...string) string {
 }
 
 func sameSelfDeployRuntimeBuildState(left entity.SelfDeployPlan, right entity.SelfDeployPlan) bool {
-	return sameSelfDeployRuntimeProgress(string(left.RuntimeBuildStatus), string(right.RuntimeBuildStatus), left.RuntimeBuildFingerprint, right.RuntimeBuildFingerprint, left.RuntimeBuildErrorCode, right.RuntimeBuildErrorCode, left.RuntimeBuildSummary, right.RuntimeBuildSummary) &&
+	return sameSelfDeployPlanLifecycleState(left, right) &&
+		sameSelfDeployRuntimeProgress(string(left.RuntimeBuildStatus), string(right.RuntimeBuildStatus), left.RuntimeBuildFingerprint, right.RuntimeBuildFingerprint, left.RuntimeBuildErrorCode, right.RuntimeBuildErrorCode, left.RuntimeBuildSummary, right.RuntimeBuildSummary) &&
 		sameSelfDeployRuntimeBuildContexts(left.RuntimeBuildContexts, right.RuntimeBuildContexts) &&
 		sameSelfDeployRuntimeBuildJobs(left.RuntimeBuildJobs, right.RuntimeBuildJobs)
 }
 
 func sameSelfDeployRuntimeDeployState(left entity.SelfDeployPlan, right entity.SelfDeployPlan) bool {
-	return sameSelfDeployRuntimeProgress(string(left.RuntimeDeployStatus), string(right.RuntimeDeployStatus), left.RuntimeDeployFingerprint, right.RuntimeDeployFingerprint, left.RuntimeDeployErrorCode, right.RuntimeDeployErrorCode, left.RuntimeDeploySummary, right.RuntimeDeploySummary) &&
+	return sameSelfDeployPlanLifecycleState(left, right) &&
+		sameSelfDeployRuntimeProgress(string(left.RuntimeDeployStatus), string(right.RuntimeDeployStatus), left.RuntimeDeployFingerprint, right.RuntimeDeployFingerprint, left.RuntimeDeployErrorCode, right.RuntimeDeployErrorCode, left.RuntimeDeploySummary, right.RuntimeDeploySummary) &&
 		sameSelfDeployRuntimeDeployJobs(left.RuntimeDeployJobs, right.RuntimeDeployJobs)
+}
+
+func sameSelfDeployPlanLifecycleState(left entity.SelfDeployPlan, right entity.SelfDeployPlan) bool {
+	return left.Status == right.Status &&
+		strings.TrimSpace(left.SafeSummary) == strings.TrimSpace(right.SafeSummary)
 }
 
 func sameSelfDeployRuntimeProgress(leftStatus string, rightStatus string, leftFingerprint string, rightFingerprint string, leftCode string, rightCode string, leftSummary string, rightSummary string) bool {
