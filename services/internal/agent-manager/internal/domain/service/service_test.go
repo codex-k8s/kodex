@@ -6232,13 +6232,61 @@ func TestCreateSelfDeployPlanBlocksBuildWhenProjectBuildPlanNotReady(t *testing.
 	if err != nil {
 		t.Fatalf("CreateSelfDeployPlan() err = %v", err)
 	}
-	if plan.RuntimeBuildStatus != enum.SelfDeployRuntimeBuildStatusBlocked ||
+	if plan.Status != enum.SelfDeployPlanStatusFailed ||
+		plan.RuntimeBuildStatus != enum.SelfDeployRuntimeBuildStatusBlocked ||
 		plan.RuntimeBuildErrorCode != string(SelfDeployBuildPlanStatusPolicyStale) ||
 		!strings.Contains(plan.RuntimeBuildSummary, "services_policy_digest_mismatch") {
-		t.Fatalf("runtime build diagnostic = %s/%s/%s", plan.RuntimeBuildStatus, plan.RuntimeBuildErrorCode, plan.RuntimeBuildSummary)
+		t.Fatalf("plan/runtime build diagnostic = %s/%s/%s/%s", plan.Status, plan.RuntimeBuildStatus, plan.RuntimeBuildErrorCode, plan.RuntimeBuildSummary)
+	}
+	if !strings.Contains(plan.SafeSummary, "services_policy_digest_mismatch") {
+		t.Fatalf("safe summary = %q, want policy stale reason", plan.SafeSummary)
 	}
 	if buildCreator.calls != 0 {
 		t.Fatalf("build creator calls = %d, want 0", buildCreator.calls)
+	}
+}
+
+func TestCreateSelfDeployPlanFromSignalMarksExistingPolicyStalePlanFailed(t *testing.T) {
+	t.Parallel()
+
+	input := validSelfDeployBuildPlanInput()
+	planID := uuid.MustParse("5f7f3a10-003d-4000-8000-00000000003d")
+	plan := selfDeployPlanFromInputForTest(input, planID, "command:"+input.Meta.CommandID.String())
+	plan.Status = enum.SelfDeployPlanStatusApproved
+	plan.SafeSummary = "self-deploy plan approved"
+	plan.GovernanceContext.GateDecisionRef = "governance:gate_decision/bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb"
+	plan.RuntimeBuildStatus = enum.SelfDeployRuntimeBuildStatusBlocked
+	plan.RuntimeBuildErrorCode = string(SelfDeployBuildPlanStatusPolicyStale)
+	plan.RuntimeBuildSummary = "services_policy_source_ref_mismatch"
+	repository := &fakeRepository{
+		selfDeployByID: map[uuid.UUID]entity.SelfDeployPlan{plan.ID: plan},
+		selfDeployList: []entity.SelfDeployPlan{plan},
+	}
+	buildReader := &fakeSelfDeployBuildPlanReader{result: SelfDeployBuildPlanReadResult{
+		Status:     SelfDeployBuildPlanStatusPolicyStale,
+		SafeReason: "services_policy_source_ref_mismatch",
+	}}
+	service := New(Config{
+		Repository:                     repository,
+		SelfDeployGatePreparer:         approvedSelfDeployGatePreparer(),
+		SelfDeployGateEnabled:          true,
+		SelfDeployBuildPlanReader:      buildReader,
+		SelfDeployBuildContextPreparer: &fakeSelfDeployBuildContextPreparer{},
+		SelfDeployBuildJobCreator:      &fakeSelfDeployBuildJobCreator{},
+		SelfDeployBuildDispatchEnabled: true,
+	})
+
+	replayed, err := service.CreateSelfDeployPlanFromSignal(context.Background(), CreateSelfDeployPlanFromSignalInput{CreateSelfDeployPlanInput: input})
+	if err != nil {
+		t.Fatalf("CreateSelfDeployPlanFromSignal() err = %v", err)
+	}
+	if replayed.Status != enum.SelfDeployPlanStatusFailed ||
+		replayed.RuntimeBuildStatus != enum.SelfDeployRuntimeBuildStatusBlocked ||
+		replayed.RuntimeBuildErrorCode != string(SelfDeployBuildPlanStatusPolicyStale) {
+		t.Fatalf("replayed plan = %+v, want failed policy_stale terminal state", replayed)
+	}
+	if !repository.updateSelfDeployCalled {
+		t.Fatalf("expected policy stale replay to update terminal plan status")
 	}
 }
 
