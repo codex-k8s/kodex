@@ -975,7 +975,5 @@
   {"id": "router.dialog.open_failed", "translation": "matter-codex: Mattermost dialog was not opened."},
   {"id": "router.dialog.trigger_missing", "translation": "matter-codex: Mattermost did not send a dialog trigger id. Open the menu again and retry."},
   {"id": "router.dialog.invalid_request", "translation": "matter-codex: invalid dialog request."},
-  {"id": "router.dialog.service_missing", "translation": "matter-codex: slash service is not configured."},
-  {"id": "router.dialog.result.title", "translation": "Result"},
-  {"id": "router.dialog.result.submit", "translation": "OK"}
+  {"id": "router.dialog.service_missing", "translation": "matter-codex: slash service is not configured."}
 ]

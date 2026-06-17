@@ -1,6 +1,7 @@
 package http
 
 import (
+	"bytes"
 	"context"
 	"crypto/subtle"
 	"encoding/json"
@@ -9,6 +10,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	statusservice "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/service"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/value"
@@ -49,6 +51,7 @@ type RouterConfig struct {
 	MaxSlashFormBytes     int64
 	MaxGitHubWebhookBytes int64
 	PrometheusRegistry    *prometheus.Registry
+	MattermostHTTPClient  *http.Client
 	Logger                *slog.Logger
 }
 
@@ -61,6 +64,7 @@ type Router struct {
 	gitHubWebhookSecret   string
 	maxSlashFormBytes     int64
 	maxGitHubWebhookBytes int64
+	mattermostHTTPClient  *http.Client
 	logger                *slog.Logger
 	mux                   *http.ServeMux
 }
@@ -68,6 +72,10 @@ type Router struct {
 var _ http.Handler = (*Router)(nil)
 
 func NewRouter(cfg RouterConfig) *Router {
+	mattermostHTTPClient := cfg.MattermostHTTPClient
+	if mattermostHTTPClient == nil {
+		mattermostHTTPClient = http.DefaultClient
+	}
 	router := &Router{
 		statusService:         cfg.StatusService,
 		slashService:          cfg.SlashService,
@@ -77,6 +85,7 @@ func NewRouter(cfg RouterConfig) *Router {
 		gitHubWebhookSecret:   cfg.GitHubWebhookSecret,
 		maxSlashFormBytes:     cfg.MaxSlashFormBytes,
 		maxGitHubWebhookBytes: cfg.MaxGitHubWebhookBytes,
+		mattermostHTTPClient:  mattermostHTTPClient,
 		logger:                cfg.Logger,
 		mux:                   http.NewServeMux(),
 	}
@@ -276,14 +285,8 @@ func (router *Router) handleAgentsDialog(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if result.Card != nil {
-		writeJSON(w, status, mattermostmodel.SubmitDialogResponse{
-			Type: string(mattermostmodel.SubmitDialogResponseTypeForm),
-			Form: dialogResultForm(
-				router.t("router.dialog.result.title", nil),
-				router.t("router.dialog.result.submit", nil),
-				*result.Card,
-			),
-		})
+		router.publishDialogResult(r.Context(), request.URL, *result.Card)
+		writeJSON(w, status, mattermostmodel.SubmitDialogResponse{Type: string(mattermostmodel.SubmitDialogResponseTypeOK)})
 		return
 	}
 	writeJSON(w, status, mattermostmodel.SubmitDialogResponse{Type: string(mattermostmodel.SubmitDialogResponseTypeOK)})
@@ -418,22 +421,6 @@ func cardPost(card statusservice.MattermostCard) *mattermostmodel.Post {
 	return post
 }
 
-func dialogResultForm(title string, submitLabel string, card statusservice.MattermostCard) *mattermostmodel.Dialog {
-	text := strings.TrimSpace(card.Text)
-	if text == "" {
-		text = strings.TrimSpace(card.Message)
-	}
-	if text == "" {
-		text = strings.TrimSpace(card.Title)
-	}
-	return &mattermostmodel.Dialog{
-		CallbackId:       dialogCallbackResult,
-		Title:            title,
-		IntroductionText: text,
-		SubmitLabel:      submitLabel,
-	}
-}
-
 func mattermostDialogForm(dialog statusservice.MattermostDialog) *mattermostmodel.Dialog {
 	elements := make([]mattermostmodel.DialogElement, 0, len(dialog.Elements))
 	for _, element := range dialog.Elements {
@@ -500,6 +487,55 @@ func cardAttachment(card statusservice.MattermostCard) *mattermostmodel.MessageA
 		Fields:   fields,
 		Actions:  actions,
 	}
+}
+
+func (router *Router) publishDialogResult(ctx context.Context, responseURL string, card statusservice.MattermostCard) {
+	responseURL = strings.TrimSpace(responseURL)
+	if responseURL == "" {
+		return
+	}
+	go router.postDialogResult(ctx, responseURL, card)
+}
+
+func (router *Router) postDialogResult(ctx context.Context, responseURL string, card statusservice.MattermostCard) {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	payload := dialogResultResponse(card)
+	body, err := json.Marshal(payload)
+	if err != nil {
+		router.logWarn("marshal Mattermost dialog result failed", "error", err)
+		return
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, responseURL, bytes.NewReader(body))
+	if err != nil {
+		router.logWarn("create Mattermost dialog result request failed", "error", err)
+		return
+	}
+	request.Header.Set("Content-Type", "application/json; charset=utf-8")
+	response, err := router.mattermostHTTPClient.Do(request)
+	if err != nil {
+		router.logWarn("post Mattermost dialog result failed", "error", err)
+		return
+	}
+	defer response.Body.Close()
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		router.logWarn("post Mattermost dialog result returned non-success status", "status", response.StatusCode)
+	}
+}
+
+func dialogResultResponse(card statusservice.MattermostCard) *mattermostmodel.CommandResponse {
+	text := strings.TrimSpace(card.Message)
+	if text == "" {
+		text = strings.TrimSpace(card.Text)
+	}
+	if text == "" {
+		text = strings.TrimSpace(card.Title)
+	}
+	response := ephemeral(text)
+	response.Attachments = []*mattermostmodel.MessageAttachment{
+		cardAttachment(card),
+	}
+	return response
 }
 
 func writeCommandResponse(w http.ResponseWriter, status int, response *mattermostmodel.CommandResponse) {
