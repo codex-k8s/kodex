@@ -2664,6 +2664,41 @@ func (s *Service) authorizeGateRead(ctx context.Context, meta QueryMeta, gateReq
 	return s.authorizeQuery(ctx, meta, actionGateRead, gateResource(gateRequestID))
 }
 
+func (s *Service) authorizeGateReadForRiskAssessment(ctx context.Context, meta QueryMeta, assessmentID uuid.UUID) error {
+	if assessmentID == uuid.Nil {
+		return errs.ErrInvalidArgument
+	}
+	assessment, err := s.repository.GetRiskAssessment(ctx, assessmentID)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(assessment.ProjectContext.ProjectRef) != "" {
+		resource := gateResource(uuid.Nil)
+		if externalRefProvided(assessment.Target) {
+			resource = gateTargetResource(assessment.Target)
+		}
+		return s.authorizeQuery(ctx, meta, actionGateRead, projectScopedResource(resource, assessment.ProjectContext))
+	}
+	return s.authorizeRiskAssessmentRead(ctx, meta, assessmentID)
+}
+
+func (s *Service) authorizeGateReadForRequest(ctx context.Context, meta QueryMeta, gateRequestID uuid.UUID) error {
+	if gateRequestID == uuid.Nil {
+		return errs.ErrInvalidArgument
+	}
+	request, err := s.repository.GetGateRequest(ctx, gateRequestID)
+	if err != nil {
+		return err
+	}
+	if request.RiskAssessmentID != nil {
+		return s.authorizeGateReadForRiskAssessment(ctx, meta, *request.RiskAssessmentID)
+	}
+	if externalRefProvided(request.Target) {
+		return s.authorizeGateTargetRead(ctx, meta, request.Target)
+	}
+	return s.authorizeGateRead(ctx, meta, gateRequestID)
+}
+
 func (s *Service) authorizeGateDecision(ctx context.Context, meta CommandMeta, request entity.GateRequest) error {
 	resource := gateResource(request.ID)
 	if request.RiskAssessmentID != nil {
@@ -2714,7 +2749,7 @@ func (s *Service) authorizeGateRequestList(ctx context.Context, meta QueryMeta, 
 		return s.authorizeGateTargetRead(ctx, meta, filter.Target)
 	}
 	if filter.RiskAssessmentID != nil {
-		return s.authorizeRiskAssessmentRead(ctx, meta, *filter.RiskAssessmentID)
+		return s.authorizeGateReadForRiskAssessment(ctx, meta, *filter.RiskAssessmentID)
 	}
 	return errs.ErrInvalidArgument
 }
@@ -2731,7 +2766,7 @@ func (s *Service) authorizeReviewSignalList(ctx context.Context, meta QueryMeta,
 
 func (s *Service) authorizeGateDecisionList(ctx context.Context, meta QueryMeta, filter query.GateDecisionFilter) error {
 	if filter.GateRequestID != nil {
-		return s.authorizeGateRead(ctx, meta, *filter.GateRequestID)
+		return s.authorizeGateReadForRequest(ctx, meta, *filter.GateRequestID)
 	}
 	if externalRefProvided(filter.Target) {
 		return s.authorizeGateTargetRead(ctx, meta, filter.Target)
