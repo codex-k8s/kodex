@@ -5574,6 +5574,74 @@ func TestEnsureSelfDeployPlanGovernanceGateRecoversResolvedGateAndDispatchesBuil
 	}
 }
 
+func TestEnsureSelfDeployPlanGovernanceGateRetriesResolvedGateAfterPendingRefRace(t *testing.T) {
+	t.Parallel()
+
+	input := validSelfDeployBuildPlanInput()
+	plan := selfDeployPlanFromInputForTest(input, uuid.MustParse("5f7f3a10-0054-4000-8000-000000000054"), "command:"+input.Meta.CommandID.String())
+	plan.Status = enum.SelfDeployPlanStatusPendingApproval
+	plan.GovernanceContext.RiskAssessmentRef = ""
+	plan.GovernanceContext.GateRequestRef = ""
+	plan.GovernanceContext.GateDecisionRef = ""
+	fresh := plan
+	fresh.Version = plan.Version + 1
+	fresh.GovernanceContext.RiskAssessmentRef = "governance:risk_assessment/59c67c5d-847b-4296-9afa-25aa3028a313"
+	fresh.GovernanceContext.GateRequestRef = "governance:gate_request/82ec64f2-ad76-4188-9058-0df058f5a5f5"
+	var repository *fakeRepository
+	repository = &fakeRepository{
+		selfDeployByID:       map[uuid.UUID]entity.SelfDeployPlan{plan.ID: plan},
+		updateSelfDeployErrs: []error{errs.ErrConflict},
+		updateSelfDeployOnErr: func() {
+			repository.selfDeployByID[plan.ID] = fresh
+		},
+	}
+	preparer := &fakeSelfDeployGatePreparer{
+		result: SelfDeployPlanGatePreparationResult{
+			Status: SelfDeployPlanGateStatusApproved,
+			GovernanceContext: value.GovernanceContextRef{
+				RiskAssessmentRef: fresh.GovernanceContext.RiskAssessmentRef,
+				GateRequestRef:    fresh.GovernanceContext.GateRequestRef,
+				GateDecisionRef:   "governance:gate_decision/cccccccc-3333-4333-8333-cccccccccccc",
+			},
+			SafeSummary: "owner approved self-deploy build",
+		},
+	}
+	buildReader := &fakeSelfDeployBuildPlanReader{result: readySelfDeployBuildPlanResult()}
+	buildCreator := &fakeSelfDeployBuildJobCreator{result: RuntimeJobResult{JobRef: "runtime:job/build-agent-manager", Status: "pending"}}
+	service := New(Config{
+		Repository:                     repository,
+		SelfDeployGatePreparer:         preparer,
+		SelfDeployGateEnabled:          true,
+		SelfDeployBuildPlanReader:      buildReader,
+		SelfDeployBuildJobCreator:      buildCreator,
+		SelfDeployBuildDispatchEnabled: true,
+	})
+
+	ensured, err := service.EnsureSelfDeployPlanGovernanceGate(context.Background(), EnsureSelfDeployPlanGovernanceGateInput{
+		Meta:             value.CommandMeta{IdempotencyKey: "recover-resolved-self-deploy-gate-race", Actor: testActor()},
+		SelfDeployPlanID: plan.ID,
+	})
+	if err != nil {
+		t.Fatalf("EnsureSelfDeployPlanGovernanceGate() err = %v", err)
+	}
+	if ensured.Status != enum.SelfDeployPlanStatusApproved ||
+		ensured.GovernanceContext.GateRequestRef != fresh.GovernanceContext.GateRequestRef ||
+		ensured.GovernanceContext.GateDecisionRef != "governance:gate_decision/cccccccc-3333-4333-8333-cccccccccccc" {
+		t.Fatalf("ensured plan = %+v, want approved with recovered decision refs", ensured)
+	}
+	if ensured.Version <= fresh.Version {
+		t.Fatalf("ensured version = %d, want retry write above fresh version %d", ensured.Version, fresh.Version)
+	}
+	if ensured.RuntimeBuildStatus != enum.SelfDeployRuntimeBuildStatusRequested ||
+		len(ensured.RuntimeBuildJobs) != 1 ||
+		ensured.RuntimeBuildJobs[0].RuntimeJobRef != "runtime:job/build-agent-manager" {
+		t.Fatalf("runtime build state = %s/%+v, want requested job", ensured.RuntimeBuildStatus, ensured.RuntimeBuildJobs)
+	}
+	if len(repository.updateSelfDeployErrs) != 0 || buildReader.calls != 1 || buildCreator.calls != 1 {
+		t.Fatalf("remaining update errors/build calls = %d/%d/%d, want 0/1/1", len(repository.updateSelfDeployErrs), buildReader.calls, buildCreator.calls)
+	}
+}
+
 func TestEnsureSelfDeployPlanGovernanceGateReportsGatePrepareFailure(t *testing.T) {
 	t.Parallel()
 
@@ -6332,6 +6400,79 @@ func TestCreateSelfDeployPlanFromSignalReplaysExistingBuildJob(t *testing.T) {
 	}
 }
 
+func TestCreateSelfDeployPlanFromSignalDispatchesDeployAfterBuildSucceeded(t *testing.T) {
+	t.Parallel()
+
+	input := validSelfDeployBuildPlanInput()
+	input.ExpectedRuntimeJobTypes = []enum.SelfDeployRuntimeJobType{enum.SelfDeployRuntimeJobTypeBuild, enum.SelfDeployRuntimeJobTypeDeploy}
+	planID := uuid.MustParse("5f7f3a10-0055-4000-8000-000000000055")
+	plan := selfDeployPlanFromInputForTest(input, planID, "command:"+input.Meta.CommandID.String())
+	plan.Status = enum.SelfDeployPlanStatusApproved
+	plan.GovernanceContext.GateRequestRef = "governance:gate_request/aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"
+	plan.GovernanceContext.GateDecisionRef = "governance:gate_decision/bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb"
+	plan.RuntimeBuildStatus = enum.SelfDeployRuntimeBuildStatusRequested
+	plan.RuntimeBuildFingerprint = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	plan.RuntimeBuildContexts = []entity.SelfDeployRuntimeBuildContext{{
+		ServiceKey:                 "agent-manager",
+		RuntimeBuildContextRef:     "runtime:build-context/ready",
+		RuntimeBuildContextStatus:  "ready",
+		BuildContextRef:            "runtime://build-contexts/agent-manager",
+		BuildContextDigest:         "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+		ManifestBundleDigest:       "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+		MaterializationFingerprint: "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+		BuildPlanItemFingerprint:   "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+	}}
+	plan.RuntimeBuildJobs = []entity.SelfDeployRuntimeBuildJob{{
+		ServiceKey:               "agent-manager",
+		ServiceRef:               "project-catalog:service-descriptor:agent-manager",
+		RuntimeJobRef:            "runtime:job/existing-build",
+		RuntimeJobStatus:         string(RuntimeJobStatusPending),
+		BuildPlanItemFingerprint: "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+	}}
+	repository := &fakeRepository{
+		selfDeployByID: map[uuid.UUID]entity.SelfDeployPlan{plan.ID: plan},
+		selfDeployList: []entity.SelfDeployPlan{plan},
+	}
+	buildReader := &fakeSelfDeployBuildPlanReader{result: readySelfDeployBuildPlanResult()}
+	deployReader := &fakeSelfDeployDeployPlanReader{result: readySelfDeployDeployPlanResult()}
+	deployCreator := &fakeSelfDeployDeployJobCreator{result: RuntimeJobResult{JobRef: "runtime:job/deploy-agent-manager", Status: "pending"}}
+	service := New(Config{
+		Repository:                     repository,
+		SelfDeployGatePreparer:         approvedSelfDeployGatePreparer(),
+		SelfDeployGateEnabled:          true,
+		SelfDeployBuildPlanReader:      buildReader,
+		SelfDeployDeployPlanReader:     deployReader,
+		SelfDeployRuntimeJobReader:     &fakeSelfDeployRuntimeJobReader{result: SelfDeployRuntimeJobReadResult{JobRef: "runtime:job/existing-build", JobType: enum.SelfDeployRuntimeJobTypeBuild, Status: RuntimeJobStatusSucceeded}},
+		SelfDeployBuildJobCreator:      &fakeSelfDeployBuildJobCreator{result: RuntimeJobResult{JobRef: "runtime:job/new-build", Status: "pending"}},
+		SelfDeployDeployJobCreator:     deployCreator,
+		SelfDeployBuildDispatchEnabled: true,
+	})
+
+	updated, err := service.CreateSelfDeployPlanFromSignal(context.Background(), CreateSelfDeployPlanFromSignalInput{CreateSelfDeployPlanInput: input})
+	if err != nil {
+		t.Fatalf("CreateSelfDeployPlanFromSignal() err = %v", err)
+	}
+	if updated.RuntimeBuildStatus != enum.SelfDeployRuntimeBuildStatusSucceeded ||
+		updated.RuntimeDeployStatus != enum.SelfDeployRuntimeDeployStatusRequested {
+		t.Fatalf("runtime statuses = %s/%s, want succeeded/requested", updated.RuntimeBuildStatus, updated.RuntimeDeployStatus)
+	}
+	if len(updated.RuntimeDeployJobs) != 1 || updated.RuntimeDeployJobs[0].RuntimeJobRef != "runtime:job/deploy-agent-manager" {
+		t.Fatalf("runtime deploy jobs = %+v, want deploy job", updated.RuntimeDeployJobs)
+	}
+	if buildReader.calls != 1 || deployReader.calls != 1 || deployCreator.calls != 1 {
+		t.Fatalf("reader/creator calls = build:%d deploy:%d creator:%d, want 1/1/1", buildReader.calls, deployReader.calls, deployCreator.calls)
+	}
+	if deployReader.last.ExpectedBuildPlanFingerprint != "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" ||
+		len(deployReader.last.BuildOutputs) != 1 ||
+		deployReader.last.BuildOutputs[0].RuntimeJobRef != "runtime:job/existing-build" {
+		t.Fatalf("deploy plan lookup = %+v, want build output refs", deployReader.last)
+	}
+	if deployCreator.last.DeployExecutionSpec.ManifestBundleDigest != "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" ||
+		deployCreator.last.GovernanceApprovalRef == "" {
+		t.Fatalf("deploy job input = %+v, want manifest digest and approval refs", deployCreator.last)
+	}
+}
+
 func TestCreateSelfDeployPlanRecordsSafeBuildFailure(t *testing.T) {
 	t.Parallel()
 
@@ -6591,6 +6732,65 @@ func readySelfDeployBuildExecutionSpec() SelfDeployBuildExecutionSpec {
 	return spec
 }
 
+func readySelfDeployDeployPlanResult() SelfDeployDeployPlanReadResult {
+	return SelfDeployDeployPlanReadResult{
+		Status: SelfDeployDeployPlanStatusReady,
+		Plan: SelfDeployDeployPlan{
+			ProjectRef:          "63135040-fe44-4ec4-83d5-b0126dc23b32",
+			RepositoryRef:       "63135040-fe44-4ec4-83d5-b0126dc23b33",
+			ProviderSignalRef:   "provider-signal:github/push-main/5f7f3a1",
+			SourceRef:           "refs/heads/main",
+			MergeCommitSHA:      "abcdef0123456789abcdef0123456789abcdef01",
+			ServicesYAML:        SelfDeploySignalServicesYAML{Ref: "project-catalog:services-policy:63135040/services.yaml", Digest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+			AffectedServiceKeys: []string{"agent-manager"},
+			DeployItems: []SelfDeployDeployPlanItem{{
+				ServiceKey:          "agent-manager",
+				ServiceRef:          "project-catalog:service-descriptor:agent-manager",
+				PlanItemFingerprint: "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+				DeployExecutionSpec: readySelfDeployDeployExecutionSpec(),
+			}},
+			PlanFingerprint: "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+			SafeSummary:     "self-deploy deploy plan ready",
+			Version:         1,
+		},
+	}
+}
+
+func readySelfDeployDeployExecutionSpec() SelfDeployDeployExecutionSpec {
+	spec := SelfDeployDeployExecutionSpec{}
+	spec.SourceRef = "refs/heads/main"
+	spec.SourceCommitSHA = "abcdef0123456789abcdef0123456789abcdef01"
+	spec.ServiceKey = "agent-manager"
+	spec.ImageRef = "registry.example/kodex/agent-manager"
+	spec.ImageTag = "abcdef0"
+	spec.ManifestBundleRef = "runtime://deploy/agent-manager/bundle"
+	spec.ManifestBundleDigest = "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+	spec.ManifestRef = "runtime://deploy/agent-manager/manifests"
+	spec.ManifestDigest = "sha256:7777777777777777777777777777777777777777777777777777777777777777"
+	spec.KustomizationRef = "runtime://deploy/agent-manager/kustomization"
+	spec.KustomizationDigest = "sha256:8888888888888888888888888888888888888888888888888888888888888888"
+	spec.TargetNamespace = "kodex"
+	spec.TargetClusterRef = "runtime:cluster:local"
+	spec.DeployPlanFingerprint = "sha256:9999999999999999999999999999999999999999999999999999999999999999"
+	spec.RolloutTargets = []SelfDeployDeployRolloutTarget{{
+		Kind:      "deployment",
+		Ref:       "k8s:deployment/kodex/agent-manager",
+		Namespace: "kodex",
+		Name:      "agent-manager",
+	}}
+	spec.ExpectedImageRefs = []SelfDeployDeployExpectedImageRef{{
+		ContainerName: "agent-manager",
+		ImageRef:      "registry.example/kodex/agent-manager:abcdef0",
+	}}
+	spec.AllowedSecretRefs = []RuntimeJobAllowedSecretRef{
+		{SecretRef: "secret://runtime/kubernetes", Purpose: "kubernetes_apply"},
+	}
+	spec.OutputRefs = []RuntimeJobOutputRef{
+		{Kind: "rollout", Ref: "runtime:deploy:agent-manager"},
+	}
+	return spec
+}
+
 func selfDeployPlanFromInputForTest(input CreateSelfDeployPlanInput, id uuid.UUID, idempotencyKey string) entity.SelfDeployPlan {
 	plan, err := normalizeSelfDeployPlanInput(input, idempotencyKey)
 	if err != nil {
@@ -6757,6 +6957,22 @@ func (f *fakeSelfDeployBuildPlanReader) GetSelfDeployBuildPlan(_ context.Context
 	return f.result, nil
 }
 
+type fakeSelfDeployDeployPlanReader struct {
+	last   SelfDeployDeployPlanLookupInput
+	result SelfDeployDeployPlanReadResult
+	err    error
+	calls  int
+}
+
+func (f *fakeSelfDeployDeployPlanReader) GetSelfDeployDeployPlan(_ context.Context, input SelfDeployDeployPlanLookupInput) (SelfDeployDeployPlanReadResult, error) {
+	f.calls++
+	f.last = input
+	if f.err != nil {
+		return SelfDeployDeployPlanReadResult{}, f.err
+	}
+	return f.result, nil
+}
+
 type fakeSelfDeployBuildContextPreparer struct {
 	lastPrepare SelfDeployBuildContextInput
 	lastGet     SelfDeployBuildContextReadInput
@@ -6814,6 +7030,22 @@ type fakeSelfDeployBuildJobCreator struct {
 }
 
 func (f *fakeSelfDeployBuildJobCreator) CreateSelfDeployBuildJob(_ context.Context, input SelfDeployBuildJobInput) (RuntimeJobResult, error) {
+	f.calls++
+	f.last = input
+	if f.err != nil {
+		return RuntimeJobResult{}, f.err
+	}
+	return f.result, nil
+}
+
+type fakeSelfDeployDeployJobCreator struct {
+	last   SelfDeployDeployJobInput
+	result RuntimeJobResult
+	err    error
+	calls  int
+}
+
+func (f *fakeSelfDeployDeployJobCreator) CreateSelfDeployDeployJob(_ context.Context, input SelfDeployDeployJobInput) (RuntimeJobResult, error) {
 	f.calls++
 	f.last = input
 	if f.err != nil {

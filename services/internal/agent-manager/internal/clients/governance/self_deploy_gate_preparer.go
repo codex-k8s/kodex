@@ -15,6 +15,8 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/types/value"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 const (
@@ -222,7 +224,7 @@ func (preparer *SelfDeployGatePreparer) lookupExistingSelfDeployPlanGate(ctx con
 		context.GateDecisionRef = governanceRef("gate_decision", decision.GetId())
 		mapped, mappedOK := selfDeployGateDecisionStatus(decision.GetOutcome())
 		if !mappedOK {
-			return agentservice.SelfDeployPlanGatePreparationResult{}, false, agentservice.NewSelfDeployGateRecoveryError(agentservice.SelfDeployGateRecoveryCodeExistingGateMismatch, errs.ErrInvalidArgument)
+			return agentservice.SelfDeployPlanGatePreparationResult{}, false, agentservice.NewSelfDeployGateRecoveryError(agentservice.SelfDeployGateRecoveryCodeExistingGateDecisionMismatch, errs.ErrInvalidArgument)
 		}
 		status = mapped
 		if reason := strings.TrimSpace(decision.GetReason()); reason != "" {
@@ -241,7 +243,11 @@ func (preparer *SelfDeployGatePreparer) lookupSelfDeployRiskAssessment(ctx conte
 	response, err := preparer.listSelfDeployRiskAssessments(ctx, input, target, context)
 	if err != nil {
 		return nil, false, agentservice.NewSelfDeployGateRecoveryError(
-			agentservice.SelfDeployGateRecoveryCodeExistingRiskLookupFailed,
+			selfDeployGateReadErrorCode(
+				err,
+				agentservice.SelfDeployGateRecoveryCodeExistingRiskLookupFailed,
+				agentservice.SelfDeployGateRecoveryCodeExistingRiskAccessDenied,
+			),
 			grpcclient.MapReadError(err, "governance-manager self-deploy risk assessment lookup failed"),
 		)
 	}
@@ -259,7 +265,11 @@ func (preparer *SelfDeployGatePreparer) lookupSelfDeployRiskAssessment(ctx conte
 		response, err = preparer.listSelfDeployRiskAssessments(ctx, input, target, nil)
 		if err != nil {
 			return nil, false, agentservice.NewSelfDeployGateRecoveryError(
-				agentservice.SelfDeployGateRecoveryCodeExistingRiskLookupFailed,
+				selfDeployGateReadErrorCode(
+					err,
+					agentservice.SelfDeployGateRecoveryCodeExistingRiskLookupFailed,
+					agentservice.SelfDeployGateRecoveryCodeExistingRiskAccessDenied,
+				),
 				grpcclient.MapReadError(err, "governance-manager self-deploy risk assessment lookup failed"),
 			)
 		}
@@ -289,7 +299,11 @@ func (preparer *SelfDeployGatePreparer) lookupSelfDeployGateRequest(ctx context.
 	})
 	if err != nil {
 		return nil, false, agentservice.NewSelfDeployGateRecoveryError(
-			agentservice.SelfDeployGateRecoveryCodeExistingGateLookupFailed,
+			selfDeployGateReadErrorCode(
+				err,
+				agentservice.SelfDeployGateRecoveryCodeExistingGateRequestLookupFailed,
+				agentservice.SelfDeployGateRecoveryCodeExistingGateRequestAccessDenied,
+			),
 			grpcclient.MapReadError(err, "governance-manager self-deploy gate request lookup failed"),
 		)
 	}
@@ -312,7 +326,7 @@ func (preparer *SelfDeployGatePreparer) lookupSelfDeployGateDecision(ctx context
 	}
 	gateRequestID = strings.TrimSpace(gateRequestID)
 	if gateRequestID == "" {
-		return nil, false, agentservice.NewSelfDeployGateRecoveryError(agentservice.SelfDeployGateRecoveryCodeExistingGateMismatch, errs.ErrNotFound)
+		return nil, false, agentservice.NewSelfDeployGateRecoveryError(agentservice.SelfDeployGateRecoveryCodeExistingGateDecisionMismatch, errs.ErrNotFound)
 	}
 	response, err := preparer.client.ListGateDecisions(ctx, &governancev1.ListGateDecisionsRequest{
 		GateRequestId: &gateRequestID,
@@ -321,7 +335,11 @@ func (preparer *SelfDeployGatePreparer) lookupSelfDeployGateDecision(ctx context
 	})
 	if err != nil {
 		return nil, false, agentservice.NewSelfDeployGateRecoveryError(
-			agentservice.SelfDeployGateRecoveryCodeExistingGateLookupFailed,
+			selfDeployGateReadErrorCode(
+				err,
+				agentservice.SelfDeployGateRecoveryCodeExistingGateDecisionLookupFailed,
+				agentservice.SelfDeployGateRecoveryCodeExistingGateDecisionAccessDenied,
+			),
 			grpcclient.MapReadError(err, "governance-manager self-deploy gate decision lookup failed"),
 		)
 	}
@@ -331,7 +349,7 @@ func (preparer *SelfDeployGatePreparer) lookupSelfDeployGateDecision(ctx context
 	}
 	if decision == nil {
 		if code == "" {
-			code = agentservice.SelfDeployGateRecoveryCodeExistingGateMismatch
+			code = agentservice.SelfDeployGateRecoveryCodeExistingGateDecisionNotFound
 		}
 		return nil, false, agentservice.NewSelfDeployGateRecoveryError(code, errs.ErrNotFound)
 	}
@@ -466,7 +484,7 @@ func selectSelfDeployGateDecision(items []*governancev1.GateDecision, gateReques
 		return selected, "", nil
 	}
 	if mismatch {
-		return nil, agentservice.SelfDeployGateRecoveryCodeExistingGateMismatch, nil
+		return nil, agentservice.SelfDeployGateRecoveryCodeExistingGateDecisionMismatch, nil
 	}
 	return nil, "", nil
 }
@@ -507,6 +525,15 @@ func selfDeployGateLookupError(defaultCode string, err error) error {
 		return err
 	}
 	return agentservice.NewSelfDeployGateRecoveryError(defaultCode, err)
+}
+
+func selfDeployGateReadErrorCode(err error, lookupCode string, accessDeniedCode string) string {
+	switch status.Code(err) {
+	case codes.PermissionDenied, codes.Unauthenticated:
+		return accessDeniedCode
+	default:
+		return lookupCode
+	}
 }
 
 func projectContextHasRefs(context *governancev1.ProjectContextRef) bool {
