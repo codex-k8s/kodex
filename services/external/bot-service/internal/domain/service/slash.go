@@ -2329,7 +2329,10 @@ func (svc *SlashCommandService) handleMenuTypedAction(ctx context.Context, comma
 		return svc.menuActionTextResult(ctx, command, text, false)
 	case menuActionOpenAIStatus:
 		text := svc.handleOpenAIStatus(ctx, []string{command.ID}, svc.slashFromMenu(command))
-		return svc.menuActionTextResult(ctx, command, text, true)
+		return svc.menuOpenAIAccountResult(ctx, command, text)
+	case menuActionOpenAIAuth:
+		text := svc.handleOpenAIAuth(ctx, []string{command.ID}, svc.slashFromMenu(command))
+		return svc.menuOpenAIAccountResult(ctx, command, text)
 	case menuActionOpenAICleanup:
 		text := svc.handleOpenAICleanup(ctx, []string{command.ID}, svc.slashFromMenu(command))
 		return svc.menuActionTextResult(ctx, command, text, false)
@@ -2408,6 +2411,25 @@ func (svc *SlashCommandService) menuActionTextResult(ctx context.Context, comman
 		StatusCode:    200,
 		EphemeralText: text,
 		Card:          card,
+	}
+}
+
+func (svc *SlashCommandService) menuOpenAIAccountResult(ctx context.Context, command MenuActionCommand, text string) MenuActionResult {
+	card := svc.menuCommandResultCard(ctx, menuViewOpenAI, "", text)
+	accountName := strings.TrimSpace(command.ID)
+	if accountName != "" {
+		card.Actions = []MattermostCardAction{
+			svc.menuResourceAction(menuViewOpenAI, "openaistatus", menuActionOpenAIStatus, menuResourceOpenAIAccount, accountName, "menu.action.openai_status", "menu.action.openai_status.tooltip", "primary", nil),
+			svc.menuResourceAction(menuViewOpenAI, "openaiauthrestart", menuActionOpenAIAuth, menuResourceOpenAIAccount, accountName, "menu.action.openai_auth_restart", "menu.action.openai_auth_restart.tooltip", "warning", nil),
+			svc.menuResourceAction(menuViewOpenAI, "openaiaccount", menuActionShow, menuResourceOpenAIAccount, accountName, "menu.action.openai_account_open", "menu.action.openai_account_open.tooltip", "default", nil),
+			svc.menuResourceAction(menuViewOpenAI, "openailist", menuActionList, menuResourceOpenAIAccount, "", "menu.action.openai_list", "menu.action.openai_list.tooltip", "default", nil),
+			svc.menuAction(menuViewMain, "menu.action.main", "menu.action.main.tooltip", "default"),
+		}
+	}
+	applyMenuCardIdentity(card, command)
+	return MenuActionResult{
+		StatusCode: 200,
+		Card:       card,
 	}
 }
 
@@ -2873,6 +2895,7 @@ func (svc *SlashCommandService) openAIAccountEntityCard(ctx context.Context, com
 	}
 	card.Actions = []MattermostCardAction{
 		svc.menuResourceAction(menuViewOpenAI, "openaistatus", menuActionOpenAIStatus, menuResourceOpenAIAccount, account.Name, "menu.action.openai_status", "menu.action.openai_status.tooltip", "primary", nil),
+		svc.menuResourceAction(menuViewOpenAI, "openaiauthrestart", menuActionOpenAIAuth, menuResourceOpenAIAccount, account.Name, "menu.action.openai_auth_restart", "menu.action.openai_auth_restart.tooltip", "warning", nil),
 		svc.menuResourceAction(menuViewOpenAI, "openaicleanup", menuActionOpenAICleanup, menuResourceOpenAIAccount, account.Name, "menu.action.openai_cleanup", "menu.action.openai_cleanup.tooltip", "default", nil),
 		svc.menuResourceAction(menuViewOpenAI, "openaideleteconfirm", menuActionConfirmDelete, menuResourceOpenAIAccount, account.Name, "menu.action.openai_delete", "menu.action.openai_delete.tooltip", "danger", nil),
 		svc.menuResourceAction(menuViewOpenAI, "openailist", menuActionList, menuResourceOpenAIAccount, "", "menu.action.openai_list", "menu.action.openai_list.tooltip", "default", nil),
@@ -5718,6 +5741,7 @@ const (
 	menuActionRepositoryConnect  = "repository_connect"
 	menuActionRepositoryCheck    = "repository_check"
 	menuActionRepositoryWebhook  = "repository_webhook"
+	menuActionOpenAIAuth         = "openai_auth"
 	menuActionOpenAIStatus       = "openai_status"
 	menuActionOpenAICleanup      = "openai_cleanup"
 	menuActionSystemStatus       = "system_status"

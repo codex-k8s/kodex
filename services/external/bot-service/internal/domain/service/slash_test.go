@@ -1272,7 +1272,7 @@ func TestMenuEntityListActionShowsOpenAIAccountCardButtons(t *testing.T) {
 	assertCardDoesNotExposeSlashCommand(t, result.Card)
 }
 
-func TestMenuOpenAIStatusActionKeepsDeviceCodePrivate(t *testing.T) {
+func TestMenuOpenAIStatusActionShowsDeviceCodeInCard(t *testing.T) {
 	store := &fakeAdminStore{
 		openAIAccounts: map[string]entity.OpenAIAccount{
 			"primary": {Name: "primary", Status: "awaiting_user", SecretRef: "matter-codex-codex-auth-primary"},
@@ -1296,17 +1296,62 @@ func TestMenuOpenAIStatusActionKeepsDeviceCodePrivate(t *testing.T) {
 		ID:       "primary",
 	})
 
-	if !strings.Contains(result.EphemeralText, "ABCD-12345") {
+	if result.EphemeralText != "" {
 		t.Fatalf("ephemeral text = %q", result.EphemeralText)
 	}
 	if result.Card == nil || result.Card.Title != "Result - OpenAI accounts" {
 		t.Fatalf("card = %#v", result.Card)
 	}
-	if strings.Contains(result.Card.Text, "ABCD-12345") || strings.Contains(result.Card.Text, "https://auth.openai.com") {
-		t.Fatalf("card exposes device-code result: %q", result.Card.Text)
+	if !strings.Contains(result.Card.Text, "ABCD-12345") || !strings.Contains(result.Card.Text, "https://auth.openai.com") {
+		t.Fatalf("card does not show device-code result: %q", result.Card.Text)
 	}
-	if !strings.Contains(result.Card.Text, "private Mattermost response") {
-		t.Fatalf("card text = %q", result.Card.Text)
+	if _, ok := mattermostActionByID(result.Card.Actions, "openaiauthrestart"); !ok {
+		t.Fatalf("auth restart action is missing: %#v", result.Card.Actions)
+	}
+	assertCardDoesNotExposeSlashCommand(t, result.Card)
+}
+
+func TestMenuOpenAIAuthActionRestartsExistingAccount(t *testing.T) {
+	store := &fakeAdminStore{
+		openAIAccounts: map[string]entity.OpenAIAccount{
+			"primary": {Name: "primary", Status: "auth_failed", SecretRef: "matter-codex-codex-auth-primary"},
+		},
+	}
+	runner := &fakeRuntimeRunner{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:           localizer,
+		StatusService:       testStatusService(localizer),
+		Store:               store,
+		RuntimeRunner:       runner,
+		MenuActionURL:       "http://bot-service/mattermost/actions/agents",
+		CodexAuthSecretName: "matter-codex-codex-auth",
+		StorageReady:        true,
+		RuntimeConfigured:   true,
+	})
+
+	result := svc.HandleMenuAction(context.Background(), MenuActionCommand{
+		View:     menuViewOpenAI,
+		Action:   menuActionOpenAIAuth,
+		Resource: menuResourceOpenAIAccount,
+		ID:       "primary",
+	})
+
+	if result.EphemeralText != "" {
+		t.Fatalf("ephemeral text = %q", result.EphemeralText)
+	}
+	if runner.authAccount != "primary" || runner.authSecret != "matter-codex-codex-auth-primary" {
+		t.Fatalf("auth session = account %q secret %q", runner.authAccount, runner.authSecret)
+	}
+	account := store.openAIAccounts["primary"]
+	if account.Status != "auth_pending" {
+		t.Fatalf("account = %#v", account)
+	}
+	if result.Card == nil || !strings.Contains(result.Card.Text, "OpenAI account updated") {
+		t.Fatalf("card = %#v", result.Card)
+	}
+	if _, ok := mattermostActionByID(result.Card.Actions, "openaistatus"); !ok {
+		t.Fatalf("status action is missing: %#v", result.Card.Actions)
 	}
 	assertCardDoesNotExposeSlashCommand(t, result.Card)
 }
