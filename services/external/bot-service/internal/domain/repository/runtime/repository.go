@@ -23,6 +23,8 @@ type DeveloperRunInput struct {
 	Title               string
 	Task                string
 	Prompt              string
+	SandboxMode         string
+	ConfigOverlay       string
 }
 
 type ReviewRunInput struct {
@@ -35,6 +37,18 @@ type ReviewRunInput struct {
 	Name                string
 	PRNumber            int
 	Prompt              string
+	SandboxMode         string
+	ConfigOverlay       string
+}
+
+type ChatRunInput struct {
+	RunID               string
+	Profile             string
+	CodexAuthSecretName string
+	GitHubSecretName    string
+	Prompt              string
+	SandboxMode         string
+	ConfigOverlay       string
 }
 
 type CodexAuthSessionInput struct {
@@ -186,6 +200,7 @@ type Runner interface {
 	DeleteGitHubTokenSecret(ctx context.Context, accountName string, secretName string) (GitHubTokenSecretDeleteResult, error)
 	StartDeveloperRun(ctx context.Context, input DeveloperRunInput) (StartedRun, error)
 	StartReviewRun(ctx context.Context, input ReviewRunInput) (StartedRun, error)
+	StartChatRun(ctx context.Context, input ChatRunInput) (StartedRun, error)
 	GetRunStatus(ctx context.Context, runID string) (RunStatus, error)
 	CleanupRun(ctx context.Context, runID string) (CleanupResult, error)
 	CleanupExpiredRuns(ctx context.Context, input RetentionCleanupInput) (RetentionCleanupResult, error)

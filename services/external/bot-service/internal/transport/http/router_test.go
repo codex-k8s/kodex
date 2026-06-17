@@ -745,6 +745,10 @@ func (store *fakeRouterAdminStore) GetChat(context.Context, int64) (entity.Chat,
 	return entity.Chat{}, adminrepo.ErrNotFound
 }
 
+func (store *fakeRouterAdminStore) GetChatByMattermostChannelID(context.Context, string) (entity.Chat, error) {
+	return entity.Chat{}, adminrepo.ErrNotFound
+}
+
 func (store *fakeRouterAdminStore) ListChats(context.Context, int64) ([]entity.Chat, error) {
 	return nil, nil
 }
