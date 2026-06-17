@@ -2748,6 +2748,106 @@ func TestGetSelfDeployBuildPlanAcceptsEquivalentBranchSourceRefs(t *testing.T) {
 	}
 }
 
+func TestGetSelfDeployBuildPlanRejectsCommitLikeSourceRefNormalization(t *testing.T) {
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	policyID := uuid.New()
+	commitSHA := "abcdef0123456789abcdef0123456789abcdef01"
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = activeSelfDeployRepository(projectID, repositoryID)
+	policy := activeSelfDeployPolicy(projectID, repositoryID, policyID, commitSHA, selfDeployBuildPolicyPayload())
+	policy.SourceRef = "refs/heads/" + commitSHA
+	store.policies[policyID] = policy
+	store.serviceDescriptors[policyID] = []entity.ServiceDescriptor{
+		activeSelfDeployDescriptor(projectID, repositoryID, policyID, "api"),
+	}
+	svc := New(store, fixedClock{}, &sequenceIDs{})
+	input := selfDeployBuildPlanInput(projectID, repositoryID, policy, []string{"api"})
+	input.SourceRef = commitSHA
+	input.MaterializedBuildContexts = []SelfDeployMaterializedBuildContext{selfDeployMaterializedBuildContext("api")}
+
+	result, err := svc.GetSelfDeployBuildPlan(context.Background(), input)
+	if err != nil {
+		t.Fatalf("GetSelfDeployBuildPlan(): %v", err)
+	}
+	if result.Status != enum.SelfDeployBuildPlanStatusPolicyStale || result.SafeReason != "services_policy_source_ref_mismatch" {
+		t.Fatalf("result = %+v, want policy stale source ref mismatch", result)
+	}
+}
+
+func TestSelfDeploySourceRefsEquivalentOnlyNormalizesSafeBranches(t *testing.T) {
+	sha40 := "abcdef0123456789abcdef0123456789abcdef01"
+	sha64 := strings.Repeat("a", 64)
+	for _, tt := range []struct {
+		name  string
+		left  string
+		right string
+		want  bool
+	}{
+		{
+			name:  "bare branch",
+			left:  "main",
+			right: "refs/heads/main",
+			want:  true,
+		},
+		{
+			name:  "nested branch",
+			left:  "feature/self-deploy_1.2",
+			right: "refs/heads/feature/self-deploy_1.2",
+			want:  true,
+		},
+		{
+			name:  "raw forty hex sha",
+			left:  sha40,
+			right: "refs/heads/" + sha40,
+			want:  false,
+		},
+		{
+			name:  "raw sixty four hex sha",
+			left:  sha64,
+			right: "refs/heads/" + sha64,
+			want:  false,
+		},
+		{
+			name:  "tag shorthand",
+			left:  "v1.2.3",
+			right: "refs/tags/v1.2.3",
+			want:  false,
+		},
+		{
+			name:  "provider ref",
+			left:  "github:codex-k8s/kodex@main",
+			right: "refs/heads/main",
+			want:  false,
+		},
+		{
+			name:  "digest ref",
+			left:  "sha256:" + sha64,
+			right: "refs/heads/main",
+			want:  false,
+		},
+		{
+			name:  "unsafe whitespace",
+			left:  "main branch",
+			right: "refs/heads/main branch",
+			want:  false,
+		},
+		{
+			name:  "unsafe traversal",
+			left:  "feature/../main",
+			right: "refs/heads/feature/../main",
+			want:  false,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got := selfDeploySourceRefsEquivalent(tt.left, tt.right)
+			if got != tt.want {
+				t.Fatalf("selfDeploySourceRefsEquivalent(%q, %q) = %v, want %v", tt.left, tt.right, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestGetSelfDeployBuildPlanReturnsServiceNotFoundForUnknownAffectedService(t *testing.T) {
 	projectID := uuid.New()
 	repositoryID := uuid.New()

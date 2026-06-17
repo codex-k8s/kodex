@@ -182,12 +182,42 @@ func selfDeployBranchRefName(ref string) (string, bool) {
 	}
 	if strings.HasPrefix(ref, "refs/heads/") {
 		branch := strings.TrimPrefix(ref, "refs/heads/")
-		return branch, branch != ""
+		return selfDeploySafeBranchName(branch)
 	}
 	if strings.HasPrefix(ref, "refs/") || strings.Contains(ref, "@") || strings.Contains(ref, ":") {
 		return "", false
 	}
-	return ref, true
+	return selfDeploySafeBranchName(ref)
+}
+
+func selfDeploySafeBranchName(branch string) (string, bool) {
+	branch = strings.TrimSpace(branch)
+	if branch == "" ||
+		validBuildPlanCommitSHA(branch) ||
+		validBuildPlanSHA256Digest(branch) ||
+		strings.HasPrefix(branch, "/") ||
+		strings.HasSuffix(branch, "/") ||
+		strings.HasSuffix(branch, ".") ||
+		strings.HasSuffix(branch, ".lock") ||
+		strings.Contains(branch, "//") ||
+		strings.Contains(branch, "..") ||
+		strings.Contains(branch, "/.") ||
+		strings.Contains(branch, "@{") {
+		return "", false
+	}
+	for _, char := range branch {
+		if (char >= 'a' && char <= 'z') ||
+			(char >= 'A' && char <= 'Z') ||
+			(char >= '0' && char <= '9') ||
+			char == '/' ||
+			char == '.' ||
+			char == '_' ||
+			char == '-' {
+			continue
+		}
+		return "", false
+	}
+	return branch, true
 }
 
 func deploySpecsFromCheckedPolicy(policy entity.ServicesPolicy) (map[string]value.ServicesPolicyDeploySpec, error) {
