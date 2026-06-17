@@ -2135,11 +2135,20 @@ func TestGateLifecycleRejectsMissingAccessResource(t *testing.T) {
 	}
 }
 
-func TestListGateRequestsByAssessmentUsesRiskReadAccessContext(t *testing.T) {
+func TestListGateRequestsByAssessmentUsesProjectScopedGateReadAccessContext(t *testing.T) {
 	t.Parallel()
 
 	riskAssessmentID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
-	repository := &fakeRepository{ready: true}
+	target := value.ExternalRef{Type: "self_deploy_plan", Ref: "agent:self-deploy-plan:latest"}
+	project := value.ProjectContextRef{ProjectRef: "project:self", RepositoryRef: "repo:self"}
+	repository := &fakeRepository{
+		ready: true,
+		assessment: entity.RiskAssessment{
+			VersionedBase:  entity.VersionedBase{ID: riskAssessmentID, Version: 1},
+			Target:         target,
+			ProjectContext: project,
+		},
+	}
 	var captured AuthorizationRequest
 	service := NewWithConfig(Config{
 		Repository:  repository,
@@ -2158,11 +2167,161 @@ func TestListGateRequestsByAssessmentUsesRiskReadAccessContext(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListGateRequests(): %v", err)
 	}
-	if captured.ActionKey != actionRiskRead || captured.ResourceType != "governance_risk_assessment" || captured.ResourceID != riskAssessmentID.String() {
-		t.Fatalf("access request = %+v, want risk read on assessment %s", captured, riskAssessmentID)
+	if captured.ActionKey != actionGateRead ||
+		captured.ResourceType != accesscatalog.ResourceGovernanceGate ||
+		captured.ResourceID != target.Ref ||
+		captured.ScopeType != accesscatalog.ScopeProject ||
+		captured.ScopeID != project.ProjectRef {
+		t.Fatalf("access request = %+v, want project-scoped gate read on target %s", captured, target.Ref)
+	}
+	if repository.assessmentReads != 1 {
+		t.Fatalf("assessment reads = %d, want 1", repository.assessmentReads)
 	}
 	if repository.gateRequestListCalls != 1 {
 		t.Fatalf("gate request list calls = %d, want 1", repository.gateRequestListCalls)
+	}
+}
+
+func TestListGateRequestsByAssessmentRejectsForeignProjectContext(t *testing.T) {
+	t.Parallel()
+
+	riskAssessmentID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+	target := value.ExternalRef{Type: "self_deploy_plan", Ref: "agent:self-deploy-plan:latest"}
+	repository := &fakeRepository{
+		ready: true,
+		assessment: entity.RiskAssessment{
+			VersionedBase:  entity.VersionedBase{ID: riskAssessmentID, Version: 1},
+			Target:         target,
+			ProjectContext: value.ProjectContextRef{ProjectRef: "project:foreign"},
+		},
+	}
+	service := NewWithConfig(Config{
+		Repository:  repository,
+		Clock:       systemClock{},
+		IDGenerator: uuidGenerator{},
+		Authorizer: authorizerFunc(func(_ context.Context, request AuthorizationRequest) error {
+			if request.ActionKey == actionGateRead &&
+				request.ResourceType == accesscatalog.ResourceGovernanceGate &&
+				request.ResourceID == target.Ref &&
+				request.ScopeType == accesscatalog.ScopeProject &&
+				request.ScopeID == "project:self" {
+				return nil
+			}
+			return errs.ErrForbidden
+		}),
+	})
+
+	_, _, err := service.ListGateRequests(context.Background(), ListGateRequestsInput{
+		Filter: query.GateRequestFilter{RiskAssessmentID: &riskAssessmentID},
+		Meta:   QueryMeta{Actor: value.Actor{Type: "service", ID: "agent-manager"}},
+	})
+	if !errors.Is(err, errs.ErrForbidden) {
+		t.Fatalf("ListGateRequests() error = %v, want ErrForbidden", err)
+	}
+	if repository.gateRequestListCalls != 0 {
+		t.Fatalf("gate request list calls = %d, want 0", repository.gateRequestListCalls)
+	}
+}
+
+func TestListGateRequestsByAssessmentRejectsUnexpectedTargetContext(t *testing.T) {
+	t.Parallel()
+
+	riskAssessmentID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+	repository := &fakeRepository{
+		ready: true,
+		assessment: entity.RiskAssessment{
+			VersionedBase:  entity.VersionedBase{ID: riskAssessmentID, Version: 1},
+			Target:         value.ExternalRef{Type: "self_deploy_plan", Ref: "agent:self-deploy-plan:other"},
+			ProjectContext: value.ProjectContextRef{ProjectRef: "project:self"},
+		},
+	}
+	service := NewWithConfig(Config{
+		Repository:  repository,
+		Clock:       systemClock{},
+		IDGenerator: uuidGenerator{},
+		Authorizer: authorizerFunc(func(_ context.Context, request AuthorizationRequest) error {
+			if request.ActionKey == actionGateRead &&
+				request.ResourceType == accesscatalog.ResourceGovernanceGate &&
+				request.ResourceID == "agent:self-deploy-plan:latest" &&
+				request.ScopeType == accesscatalog.ScopeProject &&
+				request.ScopeID == "project:self" {
+				return nil
+			}
+			return errs.ErrForbidden
+		}),
+	})
+
+	_, _, err := service.ListGateRequests(context.Background(), ListGateRequestsInput{
+		Filter: query.GateRequestFilter{RiskAssessmentID: &riskAssessmentID},
+		Meta:   QueryMeta{Actor: value.Actor{Type: "service", ID: "agent-manager"}},
+	})
+	if !errors.Is(err, errs.ErrForbidden) {
+		t.Fatalf("ListGateRequests() error = %v, want ErrForbidden", err)
+	}
+	if repository.gateRequestListCalls != 0 {
+		t.Fatalf("gate request list calls = %d, want 0", repository.gateRequestListCalls)
+	}
+}
+
+func TestListGateDecisionsByGateRequestUsesProjectScopedGateReadAccessContext(t *testing.T) {
+	t.Parallel()
+
+	riskAssessmentID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+	gateRequestID := uuid.MustParse("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+	target := value.ExternalRef{Type: "self_deploy_plan", Ref: "agent:self-deploy-plan:latest"}
+	project := value.ProjectContextRef{ProjectRef: "project:self", RepositoryRef: "repo:self"}
+	repository := &fakeRepository{
+		ready: true,
+		assessment: entity.RiskAssessment{
+			VersionedBase:  entity.VersionedBase{ID: riskAssessmentID, Version: 1},
+			Target:         target,
+			ProjectContext: project,
+		},
+		gateRequest: entity.GateRequest{
+			VersionedBase:    entity.VersionedBase{ID: gateRequestID, Version: 1},
+			RiskAssessmentID: &riskAssessmentID,
+			Target:           target,
+			Status:           enum.GateRequestStatusResolved,
+		},
+		gateDecisions: []entity.GateDecision{{
+			ID:            uuid.MustParse("cccccccc-cccc-4ccc-8ccc-cccccccccccc"),
+			GateRequestID: gateRequestID,
+			Outcome:       enum.GateOutcomeApprove,
+		}},
+	}
+	var captured AuthorizationRequest
+	service := NewWithConfig(Config{
+		Repository:  repository,
+		Clock:       systemClock{},
+		IDGenerator: uuidGenerator{},
+		Authorizer: authorizerFunc(func(_ context.Context, request AuthorizationRequest) error {
+			captured = request
+			return nil
+		}),
+	})
+
+	decisions, _, err := service.ListGateDecisions(context.Background(), ListGateDecisionsInput{
+		Filter: query.GateDecisionFilter{GateRequestID: &gateRequestID},
+		Meta:   QueryMeta{Actor: value.Actor{Type: "service", ID: "agent-manager"}},
+	})
+	if err != nil {
+		t.Fatalf("ListGateDecisions(): %v", err)
+	}
+	if len(decisions) != 1 {
+		t.Fatalf("decisions = %d, want 1", len(decisions))
+	}
+	if captured.ActionKey != actionGateRead ||
+		captured.ResourceType != accesscatalog.ResourceGovernanceGate ||
+		captured.ResourceID != target.Ref ||
+		captured.ScopeType != accesscatalog.ScopeProject ||
+		captured.ScopeID != project.ProjectRef {
+		t.Fatalf("access request = %+v, want project-scoped gate read on target %s", captured, target.Ref)
+	}
+	if repository.gateRequestReads != 1 || repository.assessmentReads != 1 {
+		t.Fatalf("reads gate/assessment = %d/%d, want 1/1", repository.gateRequestReads, repository.assessmentReads)
+	}
+	if repository.gateDecisionListCalls != 1 {
+		t.Fatalf("gate decision list calls = %d, want 1", repository.gateDecisionListCalls)
 	}
 }
 
