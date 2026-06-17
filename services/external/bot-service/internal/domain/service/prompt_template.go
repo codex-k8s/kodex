@@ -8,6 +8,8 @@ import (
 	"text/template"
 	"time"
 	"unicode"
+
+	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
 )
 
 const (
@@ -76,6 +78,61 @@ type promptTemplateData struct {
 	Locale      promptTemplateLocaleData
 }
 
+type RolePromptInput struct {
+	Project      entity.Project
+	Role         entity.AgentRole
+	Chat         entity.Chat
+	Repositories []entity.ProjectRepository
+	UserMessage  string
+	Locale       promptTemplateLocaleData
+}
+
+type rolePromptProjectData struct {
+	ID          int64
+	Name        string
+	Slug        string
+	Description string
+}
+
+type rolePromptRoleData struct {
+	ID               int64
+	Name             string
+	Type             string
+	Description      string
+	KubernetesAccess string
+	SandboxMode      string
+	ConfigOverlay    string
+}
+
+type rolePromptChatData struct {
+	ID              int64
+	Name            string
+	Type            string
+	RootGitHubIssue string
+	WorkPolicy      string
+}
+
+type rolePromptRepositoryData struct {
+	Provider      string
+	Owner         string
+	Name          string
+	FullName      string
+	DefaultBranch string
+}
+
+type rolePromptTaskData struct {
+	Body string
+}
+
+type rolePromptData struct {
+	Project      rolePromptProjectData
+	Role         rolePromptRoleData
+	Chat         rolePromptChatData
+	Repositories []rolePromptRepositoryData
+	Task         rolePromptTaskData
+	Locale       promptTemplateLocaleData
+}
+
 func renderAgentPromptTemplate(body string, data promptTemplateData) (string, error) {
 	tpl, err := template.New("agent-prompt").
 		Option("missingkey=error").
@@ -93,6 +150,106 @@ func renderAgentPromptTemplate(body string, data promptTemplateData) (string, er
 		return "", fmt.Errorf("render prompt template: rendered prompt is empty")
 	}
 	return text + "\n", nil
+}
+
+func BuildRolePrompt(input RolePromptInput) (string, error) {
+	userMessage := strings.TrimSpace(input.UserMessage)
+	if userMessage == "" {
+		return "", fmt.Errorf("user message is required")
+	}
+	if strings.TrimSpace(input.Role.PromptTemplate) == "" {
+		return userMessage + "\n", nil
+	}
+	return RenderRolePromptTemplate(input.Role.PromptTemplate, rolePromptTemplateData(input))
+}
+
+func RenderRolePromptTemplate(body string, data rolePromptData) (string, error) {
+	tpl, err := template.New("agent-role-prompt").
+		Option("missingkey=error").
+		Funcs(promptTemplateFuncMap()).
+		Parse(body)
+	if err != nil {
+		return "", fmt.Errorf("parse role prompt template: %w", err)
+	}
+	var rendered bytes.Buffer
+	if err := tpl.Execute(&rendered, data); err != nil {
+		return "", fmt.Errorf("render role prompt template: %w", err)
+	}
+	text := strings.TrimSpace(rendered.String())
+	if text == "" {
+		return "", fmt.Errorf("render role prompt template: rendered prompt is empty")
+	}
+	return text + "\n", nil
+}
+
+func rolePromptTemplateData(input RolePromptInput) rolePromptData {
+	locale := input.Locale
+	if strings.TrimSpace(locale.Code) == "" {
+		locale.Code = "en"
+	}
+	if strings.TrimSpace(locale.Language) == "" {
+		locale.Language = "English"
+	}
+	repositories := make([]rolePromptRepositoryData, 0, len(input.Repositories))
+	for _, repo := range input.Repositories {
+		repositories = append(repositories, rolePromptRepositoryData{
+			Provider:      repo.Provider,
+			Owner:         repo.Owner,
+			Name:          repo.Name,
+			FullName:      repo.FullName(),
+			DefaultBranch: repo.DefaultBranch,
+		})
+	}
+	return rolePromptData{
+		Project: rolePromptProjectData{
+			ID:          input.Project.ID,
+			Name:        input.Project.Name,
+			Slug:        input.Project.Slug,
+			Description: input.Project.Description,
+		},
+		Role: rolePromptRoleData{
+			ID:               input.Role.ID,
+			Name:             input.Role.Name,
+			Type:             input.Role.RoleType,
+			Description:      input.Role.Description,
+			KubernetesAccess: input.Role.KubernetesAccess,
+			SandboxMode:      input.Role.SandboxMode,
+			ConfigOverlay:    input.Role.ConfigOverlay,
+		},
+		Chat: rolePromptChatData{
+			ID:              input.Chat.ID,
+			Name:            input.Chat.Name,
+			Type:            input.Chat.ChatType,
+			RootGitHubIssue: input.Chat.RootGitHubIssue,
+			WorkPolicy:      input.Chat.WorkPolicy,
+		},
+		Repositories: repositories,
+		Task:         rolePromptTaskData{Body: strings.TrimSpace(input.UserMessage)},
+		Locale:       locale,
+	}
+}
+
+func SampleRolePromptData(roleName string, roleType string, locale promptTemplateLocaleData) rolePromptData {
+	return rolePromptTemplateData(RolePromptInput{
+		Project: entity.Project{ID: 1, Name: "Sample Project", Slug: "sample-project", Description: "Sample project context."},
+		Role: entity.AgentRole{
+			ID:               1,
+			Name:             defaultString(roleName, "worker"),
+			RoleType:         defaultString(roleType, "worker"),
+			Description:      "Sample role",
+			KubernetesAccess: "read-only",
+			SandboxMode:      "danger-full-access",
+		},
+		Chat: entity.Chat{ID: 1, Name: "Sample chat", ChatType: "single_custom", RootGitHubIssue: "https://github.com/org/repo/issues/1"},
+		Repositories: []entity.ProjectRepository{{
+			Provider:      "github",
+			Owner:         "codex-k8s",
+			Name:          "matter-codex",
+			DefaultBranch: "main",
+		}},
+		UserMessage: "Update a safe documentation file.",
+		Locale:      locale,
+	})
 }
 
 func (svc *SlashCommandService) renderStoredPromptTemplate(ctx context.Context, profileName string, templateKey string, data promptTemplateData) (string, error) {

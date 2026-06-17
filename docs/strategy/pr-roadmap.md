@@ -1,8 +1,54 @@
 # PR Roadmap
 
-Этот roadmap заменяет старую разбивку после merge PR #20 и фиксирует объединенный MVP PR после repository onboarding UX. Система уже имеет bootstrap, bot-service, storage, GitHub adapter, Kubernetes runner, Codex developer/reviewer runs, developer-review flow, owner actions, retention cleanup, OAuth gate, i18n и первые `/agents` menu/dialog срезы.
+Этот roadmap заменяет старую разбивку после merge PR #20 и после перехода на single-user model фиксирует новый основной путь: Project = Mattermost team, Chat = private channel, AgentRole = агентная роль в project.
 
-Дальше цель не наращивать typed slash commands, а довести продукт до owner-first Mattermost UX: владелец открывает `/agents`, выбирает сущности кнопками и списками, вводит только содержательные данные и не помнит технические identifiers.
+Система уже имеет bootstrap, bot-service, storage, GitHub adapter, Kubernetes runner, Codex developer/reviewer runs, legacy developer-review flow, owner actions, retention cleanup, OAuth gate, i18n и первые `/agents` menu/dialog срезы.
+
+Дальше цель не наращивать typed slash commands и не развивать flow-builder, а довести продукт до owner-first Mattermost UX: владелец открывает `/agents`, создает project, accounts, repositories, roles и chats кнопками/формами, вводит только содержательные данные и не помнит технические identifiers.
+
+## Current Code PR: Project/Role/Chat Foundation
+
+Цель: убрать flow из главного UX и ввести новую доменную основу.
+
+Содержимое:
+
+- таблицы `projects`, `project_repositories`, `agent_roles`, `chats`, `chat_participants`, `chat_repositories`;
+- Mattermost team creation для project;
+- private Mattermost channel creation для chat;
+- `/agents` main menu: Projects, Accounts, Repositories, Roles, Chats, Advanced;
+- project dashboard с быстрыми действиями;
+- role editor с optional prompt template, GitHub/OpenAI bindings, Kubernetes access, sandbox и Codex config overlay;
+- chat creator с выбором project, roles, repository, issue и work policy;
+- prompt builder, где пустой template означает raw chat instruction mode;
+- legacy flow/profiles/prompts перенесены в Advanced.
+
+Ручная проверка:
+
+- открыть `/agents` и увидеть Projects первым путем;
+- создать project и проверить Mattermost team;
+- создать role без prompt template и увидеть raw mode;
+- создать chat с worker + reviewer и проверить private channel;
+- убедиться, что flow находится в Advanced, а не в главном happy path.
+
+## Next Code PR: Chat-triggered Agent Sessions
+
+Цель: сообщения в project chat запускают role-bound Codex sessions.
+
+Содержимое:
+
+- обработчик Mattermost post/thread events или polling fallback;
+- binding thread -> role -> Codex session;
+- prompt context builder: project, chat, selected repos, role settings, user message;
+- финальный ответ агента в thread исходного сообщения;
+- базовая диагностика session status из chat card;
+- запрет падения при пустом prompt template.
+
+Ручная проверка:
+
+- написать сообщение в chat с role без prompt template;
+- увидеть запуск agent pod;
+- получить финальный ответ в thread;
+- проверить, что выбранные GitHub/OpenAI accounts и config overlay попали в runtime без вывода секретов.
 
 ## Docs PR: Product/UX Contract
 

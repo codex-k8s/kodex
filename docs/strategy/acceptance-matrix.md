@@ -58,23 +58,39 @@
 - repository card дает check/webhook/edit/delete actions без ввода `owner/name`;
 - ошибка доступа к repository возвращается как карточка с next action.
 
-## Profiles And Prompts PR
+## Project/Role/Chat Foundation PR
 
 Проверка:
 
-- profile создается из preset;
+- project создается из `/agents -> Projects`;
+- Mattermost team создается или привязывается автоматически;
+- repository можно привязать к project из UI;
+- agent role создается из project dashboard;
 - OpenAI/GitHub accounts выбираются из списков;
 - Kubernetes access mode выбирается явно: `read-only` или `cluster-admin`;
-- prompt template выбирается из profile card;
-- edit prompt принимает Markdown;
-- test render показывает результат или ошибку до сохранения;
-- prompt render учитывает локаль пользователя.
+- Codex sandbox/config overlay сохраняется в role;
+- prompt template можно оставить пустым, и role переходит в raw chat instruction mode;
+- chat создается как private Mattermost channel внутри project team;
+- worker + reviewer или single custom role выбираются из списка;
+- flow не является первым экраном и доступен только через Advanced.
 
-## Flow Wizard PR
+## Chat-triggered Agent Sessions PR
 
 Проверка:
 
-- flow запускается из `/agents -> Запуск flow`;
+- owner пишет сообщение в project chat/thread;
+- role выбирается из chat participants или явной кнопкой;
+- если prompt template пустой, сообщение owner становится основной инструкцией;
+- prompt context содержит project, chat, selected repositories, role settings и task text;
+- запускается agent pod с выбранными GitHub/OpenAI accounts;
+- финальный ответ агента появляется в thread исходного сообщения;
+- GitHub issue/PR links возвращаются в thread/card.
+
+## Legacy Flow Wizard PR
+
+Проверка:
+
+- legacy flow запускается из `/agents -> Advanced -> Запуск flow`;
 - repository/profile/accounts выбираются из UI;
 - owner вводит только текст задачи;
 - system генерирует flow id, run id, branch name;
@@ -104,11 +120,11 @@
 - Mattermost thread остается источником статуса и решений;
 - cleanup после завершения понятен и безопасен.
 
-## Combined Owner Flow MVP PR
+## Combined Owner MVP PR
 
 Проверка:
 
-- пройти checks для Profiles And Prompts, Flow Wizard, Runtime And Cleanup и E2E Dogfooding в одном PR;
+- пройти checks для Project/Role/Chat Foundation, Chat-triggered Agent Sessions, Runtime And Cleanup и E2E Dogfooding;
 - убедиться, что основные карточки `/agents` не показывают `/agents <command>` как инструкцию владельцу;
 - убедиться, что fallback typed commands остались доступны только для debug/runbook;
 - подтвердить deploy evidence: миграции применились, bot-service rolled out, smoke прошел.

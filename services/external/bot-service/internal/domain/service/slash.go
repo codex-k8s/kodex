@@ -22,10 +22,26 @@ import (
 
 type MattermostChannelManager interface {
 	EnsureRepositoryChannel(ctx context.Context, teamName string, channelName string, displayName string) (bool, error)
+	EnsureProjectTeam(ctx context.Context, teamName string, displayName string, memberUserID string) (MattermostTeamBinding, bool, error)
+	EnsureProjectChannel(ctx context.Context, teamName string, channelName string, displayName string, private bool, memberUserIDs []string) (MattermostChannelBinding, bool, error)
 }
 
 type FlowCardPublisher interface {
 	UpsertFlowCard(ctx context.Context, card FlowCard) (FlowCardPost, error)
+}
+
+type MattermostTeamBinding struct {
+	ID          string
+	Name        string
+	DisplayName string
+}
+
+type MattermostChannelBinding struct {
+	ID          string
+	TeamID      string
+	Name        string
+	DisplayName string
+	Type        string
 }
 
 type MattermostCard struct {
@@ -225,6 +241,12 @@ func (svc *SlashCommandService) handleText(ctx context.Context, command SlashCom
 		return svc.helpText()
 	case "repo":
 		return svc.handleRepo(ctx, fields[1:], command)
+	case "project":
+		return svc.handleProject(ctx, fields[1:], command)
+	case "role":
+		return svc.handleAgentRole(ctx, fields[1:])
+	case "chat":
+		return svc.handleChat(ctx, fields[1:])
 	case "token":
 		return svc.handleToken(ctx, fields[1:])
 	case "locale":
@@ -2245,8 +2267,14 @@ func (svc *SlashCommandService) handleMenuTypedAction(ctx context.Context, comma
 	switch action {
 	case menuActionList:
 		switch resource {
+		case menuResourceProject:
+			return svc.menuCardResult(command, svc.projectListCard(ctx, command))
 		case menuResourceRepository:
 			return svc.menuCardResult(command, svc.repositoryListCard(ctx, command))
+		case menuResourceAgentRole:
+			return svc.menuCardResult(command, svc.roleListCard(ctx, command))
+		case menuResourceChat:
+			return svc.menuCardResult(command, svc.chatListCard(ctx, command))
 		case menuResourceOpenAIAccount:
 			return svc.menuCardResult(command, svc.openAIAccountListCard(ctx, command))
 		case menuResourceGitHubAccount:
@@ -2264,8 +2292,14 @@ func (svc *SlashCommandService) handleMenuTypedAction(ctx context.Context, comma
 		}
 	case menuActionShow:
 		switch resource {
+		case menuResourceProject:
+			return svc.menuCardResult(command, svc.projectEntityCard(ctx, command))
 		case menuResourceRepository:
 			return svc.menuCardResult(command, svc.repositoryEntityCard(ctx, command))
+		case menuResourceAgentRole:
+			return svc.menuCardResult(command, svc.roleEntityCard(ctx, command))
+		case menuResourceChat:
+			return svc.menuCardResult(command, svc.chatEntityCard(ctx, command))
 		case menuResourceOpenAIAccount:
 			return svc.menuCardResult(command, svc.openAIAccountEntityCard(ctx, command))
 		case menuResourceGitHubAccount:
@@ -3605,6 +3639,14 @@ func (svc *SlashCommandService) HandleDialogSubmission(ctx context.Context, comm
 		return DialogSubmissionResult{StatusCode: 400, Error: svc.t("dialog.state_invalid", nil)}
 	}
 	switch strings.TrimSpace(command.CallbackID) {
+	case dialogCallbackProjectUpsert:
+		return svc.handleProjectDialogUpsert(ctx, command, state)
+	case dialogCallbackProjectRepositoryBind:
+		return svc.handleProjectRepositoryBindDialog(ctx, command, state)
+	case dialogCallbackAgentRoleUpsert:
+		return svc.handleAgentRoleDialogUpsert(ctx, command, state)
+	case dialogCallbackChatCreate:
+		return svc.handleChatCreateDialog(ctx, command, state)
 	case dialogCallbackRepositoryAdd:
 		return svc.handleRepositoryDialogUpsert(ctx, command, state, false)
 	case dialogCallbackRepositoryEdit:
@@ -3649,6 +3691,14 @@ func (svc *SlashCommandService) menuDialog(ctx context.Context, command MenuActi
 		return nil, svc.t("dialog.open.not_configured", nil)
 	}
 	switch dialogID {
+	case menuDialogProjectUpsert:
+		return svc.projectDialog(command), ""
+	case menuDialogProjectRepositoryBind:
+		return svc.projectRepositoryBindDialog(ctx, command)
+	case menuDialogAgentRoleUpsert:
+		return svc.agentRoleDialog(ctx, command)
+	case menuDialogChatCreate:
+		return svc.chatDialog(ctx, command)
 	case menuDialogRepositoryAdd:
 		return svc.repositoryDialog(command, dialogCallbackRepositoryAdd, "dialog.repo.add.title", "dialog.repo.add.intro", "dialog.repo.add.submit", false), ""
 	case menuDialogRepositoryEdit:
@@ -4894,6 +4944,8 @@ func menuCommandPrivateOutput(command string) bool {
 
 func (svc *SlashCommandService) menuText(view string) string {
 	switch view {
+	case menuViewProjects:
+		return svc.t("menu.projects.text", nil)
 	case menuViewStartFlow:
 		return svc.t("menu.start_flow.text", nil)
 	case menuViewPending:
@@ -4906,6 +4958,10 @@ func (svc *SlashCommandService) menuText(view string) string {
 		return svc.t("menu.openai.text", nil)
 	case menuViewGitHub:
 		return svc.t("menu.github.text", nil)
+	case menuViewRoles:
+		return svc.t("menu.roles.text", nil)
+	case menuViewChats:
+		return svc.t("menu.chats.text", nil)
 	case menuViewProfiles:
 		return svc.t("menu.profiles.text", nil)
 	case menuViewPrompts:
@@ -4914,6 +4970,8 @@ func (svc *SlashCommandService) menuText(view string) string {
 		return svc.t("menu.runtime.text", nil)
 	case menuViewSystem:
 		return svc.t("menu.system.text", nil)
+	case menuViewAdvanced:
+		return svc.t("menu.advanced.text", nil)
 	case menuViewHelp:
 		return svc.t("menu.help.text", nil)
 	default:
@@ -4929,6 +4987,7 @@ func (svc *SlashCommandService) menuFields(ctx context.Context, view string) []M
 		}
 	}
 	return []MattermostCardField{
+		{Title: svc.t("menu.field.projects", nil), Value: svc.projectsStatusText(ctx), Short: true},
 		{Title: svc.t("menu.field.storage", nil), Value: readyLabel(svc.cfg.Localizer, svc.cfg.StorageReady), Short: true},
 		{Title: svc.t("menu.field.runtime", nil), Value: configuredLabel(svc.cfg.Localizer, svc.cfg.RuntimeConfigured), Short: true},
 		{Title: svc.t("menu.field.github", nil), Value: svc.githubAccountsStatusText(ctx), Short: true},
@@ -4975,15 +5034,22 @@ func (svc *SlashCommandService) menuActions(view string) []MattermostCardAction 
 	switch view {
 	case menuViewMain:
 		return []MattermostCardAction{
-			svc.menuAction(menuViewStartFlow, "menu.action.start_flow", "menu.action.start_flow.tooltip", "primary"),
-			svc.menuAction(menuViewPending, "menu.action.pending", "menu.action.pending.tooltip", "warning"),
-			svc.menuAction(menuViewRepositories, "menu.action.repositories", "menu.action.repositories.tooltip", "default"),
+			svc.menuAction(menuViewProjects, "menu.action.projects", "menu.action.projects.tooltip", "primary"),
 			svc.menuAction(menuViewAccounts, "menu.action.accounts", "menu.action.accounts.tooltip", "default"),
-			svc.menuAction(menuViewProfiles, "menu.action.profiles", "menu.action.profiles.tooltip", "default"),
-			svc.menuAction(menuViewPrompts, "menu.action.prompts", "menu.action.prompts.tooltip", "default"),
+			svc.menuAction(menuViewRepositories, "menu.action.repositories", "menu.action.repositories.tooltip", "default"),
+			svc.menuAction(menuViewRoles, "menu.action.roles", "menu.action.roles.tooltip", "default"),
+			svc.menuAction(menuViewChats, "menu.action.chats", "menu.action.chats.tooltip", "default"),
 			svc.menuAction(menuViewRuntime, "menu.action.runtime", "menu.action.runtime.tooltip", "default"),
 			svc.menuAction(menuViewSystem, "menu.action.system", "menu.action.system.tooltip", "default"),
-			svc.menuAction(menuViewHelp, "menu.action.help", "menu.action.help.tooltip", "default"),
+			svc.menuAction(menuViewAdvanced, "menu.action.advanced", "menu.action.advanced.tooltip", "default"),
+		}
+	case menuViewProjects:
+		return []MattermostCardAction{
+			svc.menuResourceAction(menuViewProjects, "projectlist", menuActionList, menuResourceProject, "", "menu.action.project_list", "menu.action.project_list.tooltip", "primary", nil),
+			svc.menuDialogAction(menuViewProjects, "dialogprojectadd", menuDialogProjectUpsert, "menu.action.project_add", "menu.action.project_add.tooltip", "primary"),
+			svc.menuAction(menuViewAccounts, "menu.action.accounts", "menu.action.accounts.tooltip", "default"),
+			svc.menuAction(menuViewRepositories, "menu.action.repositories", "menu.action.repositories.tooltip", "default"),
+			svc.menuAction(menuViewMain, "menu.action.back", "menu.action.back.tooltip", "default"),
 		}
 	case menuViewAccounts:
 		return []MattermostCardAction{
@@ -5027,6 +5093,22 @@ func (svc *SlashCommandService) menuActions(view string) []MattermostCardAction 
 			svc.menuResourceAction(menuViewRepositories, "repolist", menuActionList, menuResourceRepository, "", "menu.action.repo_list", "menu.action.repo_list.tooltip", "primary", nil),
 			svc.menuAction(menuViewMain, "menu.action.back", "menu.action.back.tooltip", "default"),
 		}
+	case menuViewRoles:
+		return []MattermostCardAction{
+			svc.menuDialogAction(menuViewRoles, "dialogroleadd", menuDialogAgentRoleUpsert, "menu.action.role_add", "menu.action.role_add.tooltip", "primary"),
+			svc.menuResourceAction(menuViewRoles, "rolelist", menuActionList, menuResourceAgentRole, "", "menu.action.role_list", "menu.action.role_list.tooltip", "primary", nil),
+			svc.menuAction(menuViewProjects, "menu.action.projects", "menu.action.projects.tooltip", "default"),
+			svc.menuAction(menuViewAccounts, "menu.action.accounts", "menu.action.accounts.tooltip", "default"),
+			svc.menuAction(menuViewMain, "menu.action.back", "menu.action.back.tooltip", "default"),
+		}
+	case menuViewChats:
+		return []MattermostCardAction{
+			svc.menuDialogAction(menuViewChats, "dialogchatcreate", menuDialogChatCreate, "menu.action.chat_add", "menu.action.chat_add.tooltip", "primary"),
+			svc.menuResourceAction(menuViewChats, "chatlist", menuActionList, menuResourceChat, "", "menu.action.chat_list", "menu.action.chat_list.tooltip", "primary", nil),
+			svc.menuAction(menuViewProjects, "menu.action.projects", "menu.action.projects.tooltip", "default"),
+			svc.menuAction(menuViewRoles, "menu.action.roles", "menu.action.roles.tooltip", "default"),
+			svc.menuAction(menuViewMain, "menu.action.back", "menu.action.back.tooltip", "default"),
+		}
 	case menuViewProfiles:
 		return []MattermostCardAction{
 			svc.menuDialogAction(menuViewProfiles, "dialogprofileadd", menuDialogProfileUpsert, "menu.action.profile_add", "menu.action.profile_add.tooltip", "primary"),
@@ -5058,21 +5140,31 @@ func (svc *SlashCommandService) menuActions(view string) []MattermostCardAction 
 			svc.menuResourceAction(menuViewSystem, "localeget", menuActionLocaleGet, menuResourceSystem, "", "menu.action.locale_get", "menu.action.locale_get.tooltip", "default", nil),
 			svc.menuResourceAction(menuViewSystem, "localesetru", menuActionLocaleSetRU, menuResourceSystem, "", "menu.action.locale_set_ru", "menu.action.locale_set_ru.tooltip", "default", nil),
 			svc.menuResourceAction(menuViewSystem, "localeseten", menuActionLocaleSetEN, menuResourceSystem, "", "menu.action.locale_set_en", "menu.action.locale_set_en.tooltip", "default", nil),
+			svc.menuAction(menuViewAdvanced, "menu.action.advanced", "menu.action.advanced.tooltip", "default"),
+			svc.menuAction(menuViewMain, "menu.action.back", "menu.action.back.tooltip", "default"),
+		}
+	case menuViewAdvanced:
+		return []MattermostCardAction{
+			svc.menuAction(menuViewStartFlow, "menu.action.start_flow", "menu.action.start_flow.tooltip", "default"),
+			svc.menuAction(menuViewPending, "menu.action.pending", "menu.action.pending.tooltip", "warning"),
+			svc.menuAction(menuViewProfiles, "menu.action.profiles", "menu.action.profiles.tooltip", "default"),
+			svc.menuAction(menuViewPrompts, "menu.action.prompts", "menu.action.prompts.tooltip", "default"),
+			svc.menuAction(menuViewRuntime, "menu.action.runtime", "menu.action.runtime.tooltip", "default"),
+			svc.menuAction(menuViewSystem, "menu.action.system", "menu.action.system.tooltip", "default"),
 			svc.menuAction(menuViewMain, "menu.action.back", "menu.action.back.tooltip", "default"),
 		}
 	case menuViewHelp:
 		return []MattermostCardAction{
-			svc.menuAction(menuViewStartFlow, "menu.action.start_flow", "menu.action.start_flow.tooltip", "default"),
+			svc.menuAction(menuViewProjects, "menu.action.projects", "menu.action.projects.tooltip", "primary"),
 			svc.menuAction(menuViewAccounts, "menu.action.accounts", "menu.action.accounts.tooltip", "default"),
-			svc.menuAction(menuViewRuntime, "menu.action.runtime", "menu.action.runtime.tooltip", "default"),
-			svc.menuAction(menuViewSystem, "menu.action.system", "menu.action.system.tooltip", "default"),
+			svc.menuAction(menuViewRoles, "menu.action.roles", "menu.action.roles.tooltip", "default"),
+			svc.menuAction(menuViewChats, "menu.action.chats", "menu.action.chats.tooltip", "default"),
 			svc.menuAction(menuViewMain, "menu.action.back", "menu.action.back.tooltip", "default"),
 		}
 	default:
 		return []MattermostCardAction{
 			svc.menuAction(menuViewMain, "menu.action.back", "menu.action.back.tooltip", "default"),
-			svc.menuAction(menuViewStartFlow, "menu.action.start_flow", "menu.action.start_flow.tooltip", "primary"),
-			svc.menuAction(menuViewPending, "menu.action.pending", "menu.action.pending.tooltip", "warning"),
+			svc.menuAction(menuViewProjects, "menu.action.projects", "menu.action.projects.tooltip", "primary"),
 			svc.menuAction(menuViewSystem, "menu.action.system", "menu.action.system.tooltip", "default"),
 		}
 	}
@@ -5514,20 +5606,22 @@ func (svc *SlashCommandService) validationErrorText(err error) string {
 }
 
 type mattermostDialogState struct {
-	View       string `json:"view"`
-	ResourceID string `json:"resource_id,omitempty"`
-	ChannelID  string `json:"channel_id"`
-	PostID     string `json:"post_id"`
-	UserName   string `json:"user_name"`
+	View         string `json:"view"`
+	ResourceType string `json:"resource_type,omitempty"`
+	ResourceID   string `json:"resource_id,omitempty"`
+	ChannelID    string `json:"channel_id"`
+	PostID       string `json:"post_id"`
+	UserName     string `json:"user_name"`
 }
 
 func encodeDialogState(command MenuActionCommand) string {
 	state := mattermostDialogState{
-		View:       normalizeMenuView(command.View),
-		ResourceID: strings.TrimSpace(command.ID),
-		ChannelID:  strings.TrimSpace(command.ChannelID),
-		PostID:     strings.TrimSpace(command.PostID),
-		UserName:   strings.TrimSpace(command.UserName),
+		View:         normalizeMenuView(command.View),
+		ResourceType: strings.TrimSpace(command.Resource),
+		ResourceID:   strings.TrimSpace(command.ID),
+		ChannelID:    strings.TrimSpace(command.ChannelID),
+		PostID:       strings.TrimSpace(command.PostID),
+		UserName:     strings.TrimSpace(command.UserName),
 	}
 	data, err := json.Marshal(state)
 	if err != nil {
@@ -5545,6 +5639,7 @@ func decodeDialogState(raw string) (mattermostDialogState, error) {
 		return mattermostDialogState{}, err
 	}
 	state.View = normalizeMenuView(defaultString(state.View, menuViewRepositories))
+	state.ResourceType = strings.TrimSpace(state.ResourceType)
 	state.ResourceID = strings.TrimSpace(state.ResourceID)
 	state.ChannelID = strings.TrimSpace(state.ChannelID)
 	state.PostID = strings.TrimSpace(state.PostID)
@@ -5924,6 +6019,8 @@ func validSandboxMode(value string) bool {
 
 func normalizeMenuView(value string) string {
 	switch strings.ToLower(strings.TrimSpace(value)) {
+	case menuViewProjects:
+		return menuViewProjects
 	case menuViewStartFlow:
 		return menuViewStartFlow
 	case menuViewPending:
@@ -5936,6 +6033,10 @@ func normalizeMenuView(value string) string {
 		return menuViewOpenAI
 	case menuViewGitHub:
 		return menuViewGitHub
+	case menuViewRoles:
+		return menuViewRoles
+	case menuViewChats:
+		return menuViewChats
 	case menuViewProfiles:
 		return menuViewProfiles
 	case menuViewPrompts:
@@ -5944,6 +6045,8 @@ func normalizeMenuView(value string) string {
 		return menuViewRuntime
 	case menuViewSystem:
 		return menuViewSystem
+	case menuViewAdvanced:
+		return menuViewAdvanced
 	case menuViewHelp:
 		return menuViewHelp
 	default:

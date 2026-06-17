@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
 	statusservice "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/service"
@@ -100,13 +101,13 @@ func TestSlashMenuReturnsAttachmentActions(t *testing.T) {
 		t.Fatal("menu actions are empty")
 	}
 	action := payload.Attachments[0].Actions[0]
-	if action.ID != "menustartflow" {
+	if action.ID != "menuprojects" {
 		t.Fatalf("action id = %q", action.ID)
 	}
 	if action.Integration.URL != "http://bot-service/mattermost/actions/agents" {
 		t.Fatalf("action url = %q", action.Integration.URL)
 	}
-	if action.Integration.Context["kind"] != "agents_menu" || action.Integration.Context["view"] != "start_flow" {
+	if action.Integration.Context["kind"] != "agents_menu" || action.Integration.Context["view"] != "projects" {
 		t.Fatalf("action context = %#v", action.Integration.Context)
 	}
 }
@@ -303,7 +304,7 @@ func TestAgentsDialogReturnsFieldErrors(t *testing.T) {
 	}
 }
 
-func TestAgentsDialogReturnsResultFormWithoutEphemeralPublish(t *testing.T) {
+func TestAgentsDialogClosesAndPublishesResult(t *testing.T) {
 	localizer, err := texti18n.New(texti18n.DefaultLocale)
 	if err != nil {
 		t.Fatal(err)
@@ -337,8 +338,33 @@ func TestAgentsDialogReturnsResultFormWithoutEphemeralPublish(t *testing.T) {
 		MaxSlashFormBytes:     65536,
 		MaxGitHubWebhookBytes: 262144,
 	})
+	type delayedResponse struct {
+		ResponseType string `json:"response_type"`
+		Text         string `json:"text"`
+		Attachments  []struct {
+			Title string `json:"title"`
+			Text  string `json:"text"`
+		} `json:"attachments"`
+	}
+	delivered := make(chan delayedResponse, 1)
+	resultServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("delayed response method = %s", r.Method)
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		var payload delayedResponse
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Errorf("delayed response decode error = %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		delivered <- payload
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer resultServer.Close()
 	recorder := httptest.NewRecorder()
-	body := `{"callback_id":"agents_repo_add","state":"{\"view\":\"repositories\",\"channel_id\":\"channel-1\",\"post_id\":\"post-1\",\"user_name\":\"owner\"}","user_id":"owner-id","submission":{"provider":"github","repository":"codex-k8s/kodex-package-store","default_branch":"main"}}`
+	body := `{"callback_id":"agents_repo_add","url":"` + resultServer.URL + `","state":"{\"view\":\"repositories\",\"channel_id\":\"channel-1\",\"post_id\":\"post-1\",\"user_name\":\"owner\"}","user_id":"owner-id","submission":{"provider":"github","repository":"codex-k8s/kodex-package-store","default_branch":"main"}}`
 	request := httptest.NewRequest(http.MethodPost, "/mattermost/dialogs/agents", strings.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
 
@@ -350,24 +376,28 @@ func TestAgentsDialogReturnsResultFormWithoutEphemeralPublish(t *testing.T) {
 	var payload struct {
 		Error string `json:"error"`
 		Type  string `json:"type"`
-		Form  struct {
-			CallbackID       string `json:"callback_id"`
-			Title            string `json:"title"`
-			IntroductionText string `json:"introduction_text"`
-			SubmitLabel      string `json:"submit_label"`
-		} `json:"form"`
+		Form  any    `json:"form"`
 	}
 	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("json.Unmarshal() error = %v", err)
 	}
-	if payload.Error != "" || payload.Type != "form" {
+	if payload.Error != "" || payload.Type != "ok" || payload.Form != nil {
 		t.Fatalf("payload = %#v", payload)
 	}
-	if payload.Form.CallbackID != dialogCallbackResult || payload.Form.Title != "Result" || payload.Form.SubmitLabel != "OK" {
-		t.Fatalf("form = %#v", payload.Form)
-	}
-	if !strings.Contains(payload.Form.IntroductionText, "codex-k8s/kodex-package-store") {
-		t.Fatalf("introduction_text = %q", payload.Form.IntroductionText)
+	select {
+	case response := <-delivered:
+		if response.ResponseType != "ephemeral" {
+			t.Fatalf("delayed response = %#v", response)
+		}
+		if len(response.Attachments) != 1 {
+			t.Fatalf("delayed attachments = %#v", response.Attachments)
+		}
+		resultText := response.Text + "\n" + response.Attachments[0].Text
+		if !strings.Contains(resultText, "codex-k8s/kodex-package-store") {
+			t.Fatalf("delayed response text = %q", resultText)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for delayed dialog result")
 	}
 	if store.upsert.Owner != "codex-k8s" || store.upsert.Name != "kodex-package-store" || store.upsert.DefaultBranch != "main" {
 		t.Fatalf("upsert = %#v", store.upsert)
@@ -669,6 +699,62 @@ func (store *fakeRouterAdminStore) DeleteRepository(_ context.Context, provider 
 	}
 	delete(store.repositories, key)
 	return repo, nil
+}
+
+func (store *fakeRouterAdminStore) UpsertProject(_ context.Context, input adminrepo.UpsertProjectInput) (entity.Project, bool, error) {
+	return entity.Project{Name: input.Name, Slug: input.Slug, MattermostTeamID: input.MattermostTeamID}, true, nil
+}
+
+func (store *fakeRouterAdminStore) GetProject(context.Context, int64) (entity.Project, error) {
+	return entity.Project{}, adminrepo.ErrNotFound
+}
+
+func (store *fakeRouterAdminStore) GetProjectBySlug(context.Context, string) (entity.Project, error) {
+	return entity.Project{}, adminrepo.ErrNotFound
+}
+
+func (store *fakeRouterAdminStore) ListProjects(context.Context, int) ([]entity.Project, error) {
+	return nil, nil
+}
+
+func (store *fakeRouterAdminStore) UpsertProjectRepository(_ context.Context, input adminrepo.UpsertProjectRepositoryInput) (entity.ProjectRepository, bool, error) {
+	return entity.ProjectRepository{ProjectID: input.ProjectID, RepositoryID: input.RepositoryID, IsDefault: input.IsDefault}, true, nil
+}
+
+func (store *fakeRouterAdminStore) ListProjectRepositories(context.Context, int64) ([]entity.ProjectRepository, error) {
+	return nil, nil
+}
+
+func (store *fakeRouterAdminStore) UpsertAgentRole(_ context.Context, input adminrepo.UpsertAgentRoleInput) (entity.AgentRole, bool, error) {
+	return entity.AgentRole{ProjectID: input.ProjectID, Name: input.Name, RoleType: input.RoleType, Enabled: input.Enabled}, true, nil
+}
+
+func (store *fakeRouterAdminStore) GetAgentRole(context.Context, int64) (entity.AgentRole, error) {
+	return entity.AgentRole{}, adminrepo.ErrNotFound
+}
+
+func (store *fakeRouterAdminStore) ListAgentRoles(context.Context, int64) ([]entity.AgentRole, error) {
+	return nil, nil
+}
+
+func (store *fakeRouterAdminStore) CreateChat(_ context.Context, input adminrepo.CreateChatInput) (entity.Chat, bool, error) {
+	return entity.Chat{ProjectID: input.ProjectID, MattermostChannelID: input.MattermostChannelID, Name: input.Name, Slug: input.Slug, ChatType: input.ChatType}, true, nil
+}
+
+func (store *fakeRouterAdminStore) GetChat(context.Context, int64) (entity.Chat, error) {
+	return entity.Chat{}, adminrepo.ErrNotFound
+}
+
+func (store *fakeRouterAdminStore) ListChats(context.Context, int64) ([]entity.Chat, error) {
+	return nil, nil
+}
+
+func (store *fakeRouterAdminStore) ListChatParticipants(context.Context, int64) ([]entity.ChatParticipant, error) {
+	return nil, nil
+}
+
+func (store *fakeRouterAdminStore) ListChatRepositories(context.Context, int64) ([]entity.ChatRepositoryBinding, error) {
+	return nil, nil
 }
 
 func (store *fakeRouterAdminStore) ListAgentProfiles(context.Context) ([]entity.AgentProfile, error) {
