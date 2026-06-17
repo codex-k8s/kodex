@@ -5,12 +5,14 @@
 MVP реализуется как один backend-сервис `matter-codex`, но с явными внутренними модулями:
 
 - `mattermost` - slash commands, bot posts, interactive actions, thread updates.
+- `projects` - Project = Mattermost team, project repository bindings и project-level settings.
+- `chats` - Chat = private Mattermost channel, participants, repository bindings и thread/session context.
 - `orchestrator` - state machine run/step и переходы flow.
 - `runtime` - создание Kubernetes pod/job/PVC для agent run.
 - `github` - операции repository, branch, PR, comments, review status.
 - `credentials` - безопасные metadata и ссылки на Kubernetes Secrets.
 - `openai` - OpenAI account profiles, device-code authorization sessions и routing аккаунтов по agent session.
-- `agents` - agent profiles, prompt templates, `config.toml` overlays, MCP bindings и render контекста.
+- `agents` - agent roles, optional prompt templates, `config.toml` overlays, MCP bindings и render контекста.
 - `audit` - журнал действий и безопасных событий.
 
 Такой старт быстрее отдельного набора микросервисов, но не смешивает доменные ответственности.
@@ -26,7 +28,9 @@ MVP реализуется как один backend-сервис `matter-codex`, 
 - delayed responses через `response_url` для долгих команд;
 - interactive dialogs, message menus и карточки сущностей для owner-facing UX;
 - создание дефолтных каналов после установки;
-- создание каналов под project/repository onboarding.
+- создание Mattermost teams под projects;
+- создание private channels под chats;
+- создание каналов под legacy repository onboarding.
 
 Mattermost server plugin не является обязательным для MVP, потому что нужный первый UX можно закрыть внешним сервисом через REST API и slash/interactions. Plugin остается вариантом расширения, если после первых ручных проверок окажется, что без него неудобно управлять каналами, меню или системными настройками.
 
@@ -36,6 +40,9 @@ Mattermost server plugin не является обязательным для M
 
 UI state хранит технические identifiers в action context или signed/encoded dialog state:
 
+- project id/team id;
+- chat id/channel id;
+- role id;
 - repository id/full name;
 - account name;
 - profile name;
@@ -46,7 +53,7 @@ UI state хранит технические identifiers в action context ил�
 
 Если owner работает с уже существующей сущностью, он выбирает ее из UI. Ввод технического id допустим только для debug/fallback command path.
 
-## Mattermost channels
+## Mattermost teams and channels
 
 После установки система должна подготовить базовый control surface:
 
@@ -55,14 +62,15 @@ UI state хранит технические identifiers в action context ил�
 - `agent-alerts` - ошибки, блокеры, лимиты, падения runner и запросы решения.
 - `agents-audit` - безопасные audit summaries без секретов.
 
-При добавлении repository/project система должна уметь создать один или несколько каналов:
+Основная продуктовая модель:
 
-- `repo-<slug>` - основной канал проекта или репозитория;
-- `repo-<slug>-dev` - разработка и developer-review-loop;
-- `repo-<slug>-architecture` - архитектура, системный анализ и discovery;
-- дополнительные каналы по шаблону проекта.
+- project создает или привязывает Mattermost team;
+- chat создает private channel внутри project team;
+- thread внутри chat привязывается к конкретной agent session;
+- в одном thread работает один агент и одна session;
+- если в chat несколько roles, они должны быть визуально различимы через bot identity или явное имя role в ответе.
 
-Manager sessions живут thread-ами в соответствующих project/repo channels. Один repository может иметь несколько manager sessions в разных thread, если задачи относятся к разным направлениям.
+Legacy repository channels остаются для совместимости с текущим onboarding, но не являются главным контейнером будущего UX.
 
 ## State machine
 
@@ -126,9 +134,9 @@ OpenAI-доступ настраивается отдельными account prof
 
 Один общий raw API key не является моделью доступа для agent sessions. Для текущего MVP runner получает Codex `auth.json`, сохраненный как Kubernetes Secret после device-code авторизации.
 
-## Agent profiles and config overlays
+## Agent roles and config overlays
 
-Agent profile хранит не только prompt templates, но и runtime-настройки Codex:
+Agent role хранит не только optional prompt template, но и runtime-настройки Codex:
 
 - default OpenAI account;
 - model policy;
@@ -140,7 +148,9 @@ Agent profile хранит не только prompt templates, но и runtime-�
 - env bindings для MCP/API keys без вывода значений;
 - stop rules, retry limits и финальный report contract.
 
-Пример: Context7 задается как MCP binding в agent profile. Система хранит только ссылку на credential, а runner рендерит `config.toml` и env для конкретного pod.
+Если prompt template пустой, prompt builder не подставляет агрессивный business prompt и использует пользовательское сообщение из Mattermost thread как основную инструкцию.
+
+Пример: Context7 задается как MCP binding в agent role. Система хранит только ссылку на credential, а runner рендерит `config.toml` и env для конкретного pod.
 
 ## Kubernetes runtime
 
@@ -190,10 +200,16 @@ Owner-facing GitHub account path не должен требовать Kubernetes
 
 Минимальные таблицы:
 
+- projects;
+- project_repository_bindings;
 - repositories;
 - credentials;
 - openai_accounts;
 - openai_authorization_sessions;
+- agent_roles;
+- chats;
+- chat_participants;
+- chat_repository_bindings;
 - agent_profiles;
 - agent_config_overlays;
 - prompt_templates;

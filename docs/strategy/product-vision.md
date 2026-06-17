@@ -2,17 +2,17 @@
 
 ## Назначение
 
-`matter-codex` автоматизирует текущую ручную схему агентной разработки через Mattermost:
+`matter-codex` автоматизирует личную агентную работу владельца через Mattermost:
 
-1. человек пишет задачу в Mattermost;
-2. система создает run в thread;
-3. developer agent выполняет работу в Kubernetes pod;
-4. GitHub PR становится главным кодовым артефактом;
-5. reviewer agent проверяет PR;
-6. при request changes запускается fix-loop;
-7. владелец принимает финальное решение.
+1. владелец создает project, который соответствует Mattermost team;
+2. владелец подключает accounts, repositories и agent roles;
+3. владелец создает chat, который соответствует private Mattermost channel;
+4. в chat добавляются один или несколько agents по ролям;
+5. пользовательское сообщение в thread становится задачей агента;
+6. агент работает в Kubernetes pod, а GitHub остается источником issues, branches, PR, review и progress;
+7. финальный ответ агент пишет в thread исходного сообщения.
 
-Система сохраняет текущую рабочую модель: короткие PR, независимый review, GitHub как источник правды и human owner как финальный gate.
+Система сохраняет текущую рабочую модель: короткие PR, независимый review, GitHub как источник правды и human owner как финальный gate. Flow больше не является центральной сущностью продукта и остается в Advanced/deprecated path.
 
 ## Продуктовый UX-контракт
 
@@ -45,7 +45,7 @@ Typed slash commands остаются fallback/debug интерфейсом дл
 - `kodex` может быть первым подключенным repository/project для dogfooding.
 - Та же система должна уметь подключить любой другой GitHub-репозиторий без специальных правил `kodex`.
 
-Внутренняя модель `matter-codex` строится вокруг собственных сущностей: repository, project, Mattermost channel binding, credential, OpenAI account, agent profile, prompt template, flow, run, step, artifact и audit log.
+Внутренняя модель `matter-codex` строится вокруг собственных сущностей: project, project repository binding, credential/account, agent role, chat, chat participant, chat repository binding, runtime settings, run/step/artifact и audit log.
 
 ## MVP-сценарий
 
@@ -54,28 +54,29 @@ Typed slash commands остаются fallback/debug интерфейсом дл
 1. Администратор поднимает Mattermost в Kubernetes.
 2. Администратор поднимает `matter-codex` bot-service в том же кластере.
 3. Система создает дефолтные каналы управления.
-4. Администратор авторизует один или несколько OpenAI accounts через device-code flow.
-5. Администратор добавляет GitHub repository и GitHub bot token.
-6. Система создает каналы проекта или репозитория.
-7. Администратор создает developer и reviewer profiles с выбранным OpenAI account и `config.toml` overlay.
-8. Пользователь открывает `/agents -> Запуск flow`.
-9. Пользователь выбирает repository, flow preset и profiles из UI.
-10. Пользователь вводит текст задачи и подтверждает run plan.
-11. Bot-service генерирует flow/run ids, branch name и создает Mattermost thread с карточкой run.
-12. Developer agent в отдельном pod создает branch, commit и PR.
-13. Reviewer agent проверяет PR.
-14. Если есть request changes, developer agent исправляет PR до трех попыток.
-15. Если есть approval, run переходит в `waiting_owner`.
-16. Владелец принимает, отклоняет, повторяет review/fix или удерживает результат кнопкой в Mattermost.
+4. Владелец открывает `/agents -> Projects`.
+5. Владелец создает project; система создает или привязывает Mattermost team.
+6. Владелец добавляет GitHub и OpenAI accounts.
+7. Владелец подключает repositories и привязывает их к project.
+8. Владелец создает roles: manager, pm/delivery, worker, reviewer, analyst, sre или custom.
+9. Role получает GitHub account, OpenAI account, optional prompt template и advanced/Codex settings.
+10. Владелец создает chat; система создает private Mattermost channel внутри project team.
+11. В chat добавляются roles и selected repositories.
+12. Владелец пишет задачу в channel/thread.
+13. Если у role нет prompt template, агент использует текст сообщения как основную инструкцию.
+14. Worker agent работает через GitHub issue/branch/PR.
+15. Reviewer agent проверяет результат через PR/diff/comments.
+16. PM/Delivery agent по запросу собирает status/weekly summary из GitHub issues/PR.
 
 ## Критерии успеха
 
-- Один реальный репозиторий проходит путь от Mattermost-задачи до PR и reviewer decision.
-- Каждый run имеет thread, status, ссылки на PR и audit trail.
+- Owner может создать project/team, role и chat/channel из `/agents` без ручного ввода внутренних id.
+- Один реальный репозиторий проходит путь от Mattermost chat task до PR и reviewer decision.
+- Каждый agent session привязан к Mattermost thread, имеет status, ссылки на GitHub artifacts и audit trail.
 - Секреты не выводятся в Mattermost, логи и prompt.
 - Agent pod получает собственный workspace и PVC.
 - Разные agent sessions могут использовать разные OpenAI accounts.
-- Agent profile управляет Codex config overlay, включая MCP-настройки вроде Context7.
-- Repository/project onboarding создает нужные Mattermost-каналы.
+- Agent role управляет Codex config overlay, включая MCP-настройки вроде Context7.
+- Project/chat onboarding создает нужные Mattermost team/channel bindings.
 - Все основные операции owner path доступны из `/agents` без ручного ввода технических id.
 - Все PR в разработке самой системы остаются ручно тестируемыми после deploy.

@@ -19,6 +19,116 @@ func NewControlSurface(siteURL string, token string) *ControlSurface {
 }
 
 func (surface *ControlSurface) EnsureRepositoryChannel(ctx context.Context, teamName string, channelName string, displayName string) (bool, error) {
+	_, created, err := surface.EnsureProjectChannel(ctx, teamName, channelName, displayName, false, nil)
+	return created, err
+}
+
+func (surface *ControlSurface) EnsureProjectTeam(ctx context.Context, teamName string, displayName string, memberUserID string) (statusservice.MattermostTeamBinding, bool, error) {
+	team, response, err := surface.client.GetTeamByName(ctx, teamName, "")
+	if err == nil {
+		_ = surface.ensureTeamMember(ctx, team.Id, memberUserID)
+		return mattermostTeamBinding(team), false, nil
+	}
+	if response == nil || response.StatusCode != 404 {
+		return statusservice.MattermostTeamBinding{}, false, fmt.Errorf("get Mattermost team: %w", err)
+	}
+	created, _, err := surface.client.CreateTeam(ctx, &mattermostmodel.Team{
+		Name:        teamName,
+		DisplayName: displayName,
+		Type:        mattermostmodel.TeamOpen,
+	})
+	if err != nil {
+		return statusservice.MattermostTeamBinding{}, false, fmt.Errorf("create Mattermost team: %w", err)
+	}
+	_ = surface.ensureTeamMember(ctx, created.Id, memberUserID)
+	return mattermostTeamBinding(created), true, nil
+}
+
+func (surface *ControlSurface) EnsureProjectChannel(ctx context.Context, teamName string, channelName string, displayName string, private bool, memberUserIDs []string) (statusservice.MattermostChannelBinding, bool, error) {
+	team, _, err := surface.client.GetTeamByName(ctx, teamName, "")
+	if err != nil {
+		return statusservice.MattermostChannelBinding{}, false, fmt.Errorf("get Mattermost team: %w", err)
+	}
+	if channel, response, err := surface.client.GetChannelByName(ctx, channelName, team.Id, ""); err == nil {
+		for _, userID := range memberUserIDs {
+			_ = surface.ensureTeamMember(ctx, team.Id, userID)
+			_ = surface.ensureChannelMember(ctx, channel.Id, userID)
+		}
+		return mattermostChannelBinding(channel), false, nil
+	} else if response == nil || response.StatusCode != 404 {
+		return statusservice.MattermostChannelBinding{}, false, fmt.Errorf("get Mattermost channel: %w", err)
+	}
+	channelType := mattermostmodel.ChannelTypeOpen
+	if private {
+		channelType = mattermostmodel.ChannelTypePrivate
+	}
+	created, _, err := surface.client.CreateChannel(ctx, &mattermostmodel.Channel{
+		TeamId:      team.Id,
+		Name:        channelName,
+		DisplayName: displayName,
+		Type:        channelType,
+	})
+	if err != nil {
+		return statusservice.MattermostChannelBinding{}, false, fmt.Errorf("create Mattermost channel: %w", err)
+	}
+	for _, userID := range memberUserIDs {
+		_ = surface.ensureTeamMember(ctx, team.Id, userID)
+		_ = surface.ensureChannelMember(ctx, created.Id, userID)
+	}
+	return mattermostChannelBinding(created), true, nil
+}
+
+func (surface *ControlSurface) ensureTeamMember(ctx context.Context, teamID string, userID string) error {
+	if userID == "" {
+		return nil
+	}
+	if _, response, err := surface.client.AddTeamMember(ctx, teamID, userID); err != nil {
+		if response != nil && (response.StatusCode == 400 || response.StatusCode == 409) {
+			return nil
+		}
+		return fmt.Errorf("add Mattermost team member: %w", err)
+	}
+	return nil
+}
+
+func (surface *ControlSurface) ensureChannelMember(ctx context.Context, channelID string, userID string) error {
+	if userID == "" {
+		return nil
+	}
+	if _, response, err := surface.client.AddChannelMember(ctx, channelID, userID); err != nil {
+		if response != nil && (response.StatusCode == 400 || response.StatusCode == 409) {
+			return nil
+		}
+		return fmt.Errorf("add Mattermost channel member: %w", err)
+	}
+	return nil
+}
+
+func mattermostTeamBinding(team *mattermostmodel.Team) statusservice.MattermostTeamBinding {
+	if team == nil {
+		return statusservice.MattermostTeamBinding{}
+	}
+	return statusservice.MattermostTeamBinding{
+		ID:          team.Id,
+		Name:        team.Name,
+		DisplayName: team.DisplayName,
+	}
+}
+
+func mattermostChannelBinding(channel *mattermostmodel.Channel) statusservice.MattermostChannelBinding {
+	if channel == nil {
+		return statusservice.MattermostChannelBinding{}
+	}
+	return statusservice.MattermostChannelBinding{
+		ID:          channel.Id,
+		TeamID:      channel.TeamId,
+		Name:        channel.Name,
+		DisplayName: channel.DisplayName,
+		Type:        string(channel.Type),
+	}
+}
+
+func (surface *ControlSurface) legacyEnsureRepositoryChannel(ctx context.Context, teamName string, channelName string, displayName string) (bool, error) {
 	team, _, err := surface.client.GetTeamByName(ctx, teamName, "")
 	if err != nil {
 		return false, fmt.Errorf("get Mattermost team: %w", err)

@@ -100,13 +100,13 @@ func TestSlashMenuReturnsAttachmentActions(t *testing.T) {
 		t.Fatal("menu actions are empty")
 	}
 	action := payload.Attachments[0].Actions[0]
-	if action.ID != "menustartflow" {
+	if action.ID != "menuprojects" {
 		t.Fatalf("action id = %q", action.ID)
 	}
 	if action.Integration.URL != "http://bot-service/mattermost/actions/agents" {
 		t.Fatalf("action url = %q", action.Integration.URL)
 	}
-	if action.Integration.Context["kind"] != "agents_menu" || action.Integration.Context["view"] != "start_flow" {
+	if action.Integration.Context["kind"] != "agents_menu" || action.Integration.Context["view"] != "projects" {
 		t.Fatalf("action context = %#v", action.Integration.Context)
 	}
 }
@@ -669,6 +669,62 @@ func (store *fakeRouterAdminStore) DeleteRepository(_ context.Context, provider 
 	}
 	delete(store.repositories, key)
 	return repo, nil
+}
+
+func (store *fakeRouterAdminStore) UpsertProject(_ context.Context, input adminrepo.UpsertProjectInput) (entity.Project, bool, error) {
+	return entity.Project{Name: input.Name, Slug: input.Slug, MattermostTeamID: input.MattermostTeamID}, true, nil
+}
+
+func (store *fakeRouterAdminStore) GetProject(context.Context, int64) (entity.Project, error) {
+	return entity.Project{}, adminrepo.ErrNotFound
+}
+
+func (store *fakeRouterAdminStore) GetProjectBySlug(context.Context, string) (entity.Project, error) {
+	return entity.Project{}, adminrepo.ErrNotFound
+}
+
+func (store *fakeRouterAdminStore) ListProjects(context.Context, int) ([]entity.Project, error) {
+	return nil, nil
+}
+
+func (store *fakeRouterAdminStore) UpsertProjectRepository(_ context.Context, input adminrepo.UpsertProjectRepositoryInput) (entity.ProjectRepository, bool, error) {
+	return entity.ProjectRepository{ProjectID: input.ProjectID, RepositoryID: input.RepositoryID, IsDefault: input.IsDefault}, true, nil
+}
+
+func (store *fakeRouterAdminStore) ListProjectRepositories(context.Context, int64) ([]entity.ProjectRepository, error) {
+	return nil, nil
+}
+
+func (store *fakeRouterAdminStore) UpsertAgentRole(_ context.Context, input adminrepo.UpsertAgentRoleInput) (entity.AgentRole, bool, error) {
+	return entity.AgentRole{ProjectID: input.ProjectID, Name: input.Name, RoleType: input.RoleType, Enabled: input.Enabled}, true, nil
+}
+
+func (store *fakeRouterAdminStore) GetAgentRole(context.Context, int64) (entity.AgentRole, error) {
+	return entity.AgentRole{}, adminrepo.ErrNotFound
+}
+
+func (store *fakeRouterAdminStore) ListAgentRoles(context.Context, int64) ([]entity.AgentRole, error) {
+	return nil, nil
+}
+
+func (store *fakeRouterAdminStore) CreateChat(_ context.Context, input adminrepo.CreateChatInput) (entity.Chat, bool, error) {
+	return entity.Chat{ProjectID: input.ProjectID, MattermostChannelID: input.MattermostChannelID, Name: input.Name, Slug: input.Slug, ChatType: input.ChatType}, true, nil
+}
+
+func (store *fakeRouterAdminStore) GetChat(context.Context, int64) (entity.Chat, error) {
+	return entity.Chat{}, adminrepo.ErrNotFound
+}
+
+func (store *fakeRouterAdminStore) ListChats(context.Context, int64) ([]entity.Chat, error) {
+	return nil, nil
+}
+
+func (store *fakeRouterAdminStore) ListChatParticipants(context.Context, int64) ([]entity.ChatParticipant, error) {
+	return nil, nil
+}
+
+func (store *fakeRouterAdminStore) ListChatRepositories(context.Context, int64) ([]entity.ChatRepositoryBinding, error) {
+	return nil, nil
 }
 
 func (store *fakeRouterAdminStore) ListAgentProfiles(context.Context) ([]entity.AgentProfile, error) {

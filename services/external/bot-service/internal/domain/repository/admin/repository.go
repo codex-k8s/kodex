@@ -129,11 +129,71 @@ type UpsertAgentPromptTemplateInput struct {
 	Body        string
 }
 
+type UpsertProjectInput struct {
+	Name             string
+	Slug             string
+	MattermostTeamID string
+	Description      string
+	AdvancedSettings string
+}
+
+type UpsertProjectRepositoryInput struct {
+	ProjectID    int64
+	RepositoryID int64
+	IsDefault    bool
+	Metadata     string
+}
+
+type UpsertAgentRoleInput struct {
+	ProjectID         int64
+	Name              string
+	RoleType          string
+	Description       string
+	PromptTemplate    string
+	PromptMode        string
+	GitHubAccountName string
+	OpenAIAccountName string
+	KubernetesAccess  string
+	SandboxMode       string
+	ConfigOverlay     string
+	AdvancedSettings  string
+	Enabled           bool
+	BotIdentity       string
+}
+
+type CreateChatInput struct {
+	ProjectID           int64
+	MattermostChannelID string
+	Name                string
+	Slug                string
+	Description         string
+	ChatType            string
+	RootGitHubIssue     string
+	WorkPolicy          string
+	Settings            string
+	RoleIDs             []int64
+	RepositoryIDs       []int64
+}
+
 type Repository interface {
 	UpsertRepository(ctx context.Context, input UpsertRepositoryInput) (entity.Repository, bool, error)
 	GetRepository(ctx context.Context, provider string, owner string, name string) (entity.Repository, error)
 	ListRepositories(ctx context.Context, limit int) ([]entity.Repository, error)
 	DeleteRepository(ctx context.Context, provider string, owner string, name string) (entity.Repository, error)
+	UpsertProject(ctx context.Context, input UpsertProjectInput) (entity.Project, bool, error)
+	GetProject(ctx context.Context, id int64) (entity.Project, error)
+	GetProjectBySlug(ctx context.Context, slug string) (entity.Project, error)
+	ListProjects(ctx context.Context, limit int) ([]entity.Project, error)
+	UpsertProjectRepository(ctx context.Context, input UpsertProjectRepositoryInput) (entity.ProjectRepository, bool, error)
+	ListProjectRepositories(ctx context.Context, projectID int64) ([]entity.ProjectRepository, error)
+	UpsertAgentRole(ctx context.Context, input UpsertAgentRoleInput) (entity.AgentRole, bool, error)
+	GetAgentRole(ctx context.Context, id int64) (entity.AgentRole, error)
+	ListAgentRoles(ctx context.Context, projectID int64) ([]entity.AgentRole, error)
+	CreateChat(ctx context.Context, input CreateChatInput) (entity.Chat, bool, error)
+	GetChat(ctx context.Context, id int64) (entity.Chat, error)
+	ListChats(ctx context.Context, projectID int64) ([]entity.Chat, error)
+	ListChatParticipants(ctx context.Context, chatID int64) ([]entity.ChatParticipant, error)
+	ListChatRepositories(ctx context.Context, chatID int64) ([]entity.ChatRepositoryBinding, error)
 	UpsertAgentProfile(ctx context.Context, input UpsertAgentProfileInput) (entity.AgentProfile, bool, error)
 	GetAgentProfile(ctx context.Context, name string) (entity.AgentProfile, error)
 	ListAgentProfiles(ctx context.Context) ([]entity.AgentProfile, error)

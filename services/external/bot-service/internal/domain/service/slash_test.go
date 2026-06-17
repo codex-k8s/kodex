@@ -91,10 +91,10 @@ func TestSlashEmptyTextReturnsMenuCard(t *testing.T) {
 	if got := cardFieldValue(result.Card.Fields, "OpenAI"); got != "`1/1`" {
 		t.Fatalf("OpenAI field = %q", got)
 	}
-	if result.Card.Actions[0].ID != "menustartflow" {
+	if result.Card.Actions[0].ID != "menuprojects" {
 		t.Fatalf("first action id = %q", result.Card.Actions[0].ID)
 	}
-	if result.Card.Actions[0].Context["view"] != menuViewStartFlow {
+	if result.Card.Actions[0].Context["view"] != menuViewProjects {
 		t.Fatalf("first action context = %#v", result.Card.Actions[0].Context)
 	}
 }
@@ -152,16 +152,20 @@ func TestMenuCardsDoNotExposeTypedCommandBlocks(t *testing.T) {
 	})
 	views := []string{
 		menuViewMain,
+		menuViewProjects,
 		menuViewStartFlow,
 		menuViewPending,
 		menuViewRepositories,
 		menuViewAccounts,
 		menuViewOpenAI,
 		menuViewGitHub,
+		menuViewRoles,
+		menuViewChats,
 		menuViewProfiles,
 		menuViewPrompts,
 		menuViewRuntime,
 		menuViewSystem,
+		menuViewAdvanced,
 		menuViewHelp,
 	}
 
@@ -189,7 +193,10 @@ func TestMenuSectionsUseTypedActionButtons(t *testing.T) {
 		action   string
 		resource string
 	}{
+		{view: menuViewProjects, actionID: "projectlist", action: menuActionList, resource: menuResourceProject},
 		{view: menuViewRepositories, actionID: "repolist", action: menuActionList, resource: menuResourceRepository},
+		{view: menuViewRoles, actionID: "rolelist", action: menuActionList, resource: menuResourceAgentRole},
+		{view: menuViewChats, actionID: "chatlist", action: menuActionList, resource: menuResourceChat},
 		{view: menuViewProfiles, actionID: "profilelist", action: menuActionList, resource: menuResourceProfile},
 		{view: menuViewPrompts, actionID: "promptlist", action: menuActionList, resource: menuResourcePromptTemplate},
 		{view: menuViewRuntime, actionID: "runtimesmoke", action: menuActionRuntimeSmoke, resource: menuResourceRuntime},
@@ -416,6 +423,190 @@ func TestRepositoryDialogSubmissionAddsRepository(t *testing.T) {
 	}
 	if !strings.Contains(result.Card.Text, "github:codex-k8s/matter-codex") {
 		t.Fatalf("card text = %q", result.Card.Text)
+	}
+}
+
+func TestProjectDialogSubmissionCreatesMattermostTeam(t *testing.T) {
+	store := &fakeAdminStore{}
+	channels := &fakeChannelManager{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:       localizer,
+		StatusService:   testStatusService(localizer),
+		Store:           store,
+		ChannelManager:  channels,
+		DialogSubmitURL: "http://bot-service/mattermost/dialogs/agents",
+		StorageReady:    true,
+	})
+	state := encodeDialogState(MenuActionCommand{View: menuViewProjects, ChannelID: "channel-1", PostID: "post-1", UserName: "owner"})
+
+	result := svc.HandleDialogSubmission(context.Background(), DialogSubmissionCommand{
+		CallbackID: dialogCallbackProjectUpsert,
+		State:      state,
+		UserID:     "owner-id",
+		Submission: map[string]any{
+			dialogFieldProjectName:      "Demo Project",
+			dialogFieldProjectSlug:      "demo-project",
+			dialogFieldDescription:      "Project context",
+			dialogFieldAdvancedSettings: `{"model":"gpt-5"}`,
+		},
+	})
+
+	if result.Error != "" || len(result.Errors) > 0 {
+		t.Fatalf("dialog errors = %q %#v", result.Error, result.Errors)
+	}
+	project, err := store.GetProject(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("project not stored: %v", err)
+	}
+	if project.Slug != "demo-project" || project.MattermostTeamID != "team-demo-project" {
+		t.Fatalf("project = %#v", project)
+	}
+	if channels.projectTeamName != "demo-project" {
+		t.Fatalf("team name = %q", channels.projectTeamName)
+	}
+	if result.Card == nil || result.Card.Title != "Project `Demo Project`" {
+		t.Fatalf("card = %#v", result.Card)
+	}
+}
+
+func TestAgentRoleDialogAllowsEmptyPromptTemplate(t *testing.T) {
+	store := &fakeAdminStore{
+		projects: map[int64]entity.Project{
+			1: {ID: 1, Name: "Demo Project", Slug: "demo-project"},
+		},
+		openAIAccounts: map[string]entity.OpenAIAccount{
+			"primary": {Name: "primary", Status: "authorized"},
+		},
+		githubAccounts: map[string]entity.GitHubAccount{
+			"agent": {Name: "agent", Status: "configured"},
+		},
+	}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:       localizer,
+		StatusService:   testStatusService(localizer),
+		Store:           store,
+		DialogSubmitURL: "http://bot-service/mattermost/dialogs/agents",
+		StorageReady:    true,
+	})
+	state := encodeDialogState(MenuActionCommand{View: menuViewRoles, Resource: menuResourceProject, ID: "1", ChannelID: "channel-1", PostID: "post-1"})
+
+	result := svc.HandleDialogSubmission(context.Background(), DialogSubmissionCommand{
+		CallbackID: dialogCallbackAgentRoleUpsert,
+		State:      state,
+		UserID:     "owner-id",
+		Submission: map[string]any{
+			dialogFieldProjectID:        "1",
+			dialogFieldRole:             "backend-developer",
+			dialogFieldRoleType:         "worker",
+			dialogFieldOpenAIAccount:    "primary",
+			dialogFieldGitHubAccount:    "agent",
+			dialogFieldPromptMode:       "template",
+			dialogFieldPromptTemplate:   "",
+			dialogFieldKubernetesAccess: "read-only",
+			dialogFieldSandboxMode:      "danger-full-access",
+			dialogFieldDescription:      "Developer role",
+			dialogFieldConfigOverlay:    "sandbox_mode = \"danger-full-access\"",
+			dialogFieldAdvancedSettings: "{}",
+		},
+	})
+
+	if result.Error != "" || len(result.Errors) > 0 {
+		t.Fatalf("dialog errors = %q %#v", result.Error, result.Errors)
+	}
+	role, err := store.GetAgentRole(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("role not stored: %v", err)
+	}
+	if role.PromptMode != "raw" || role.PromptTemplate != "" {
+		t.Fatalf("prompt mode/template = %q/%q", role.PromptMode, role.PromptTemplate)
+	}
+	if role.OpenAIAccountName != "primary" || role.GitHubAccountName != "agent" {
+		t.Fatalf("accounts = %#v", role)
+	}
+	if !strings.Contains(result.Card.Text, "raw chat instruction") {
+		t.Fatalf("card text = %q", result.Card.Text)
+	}
+}
+
+func TestChatDialogCreatesPrivateProjectChannelWithRolesAndRepository(t *testing.T) {
+	store := &fakeAdminStore{
+		projects: map[int64]entity.Project{
+			1: {ID: 1, Name: "Demo Project", Slug: "demo-project"},
+		},
+		repositories: map[string]entity.Repository{
+			repositoryStoreKey("github", "codex-k8s", "matter-codex"): {
+				ID:            1,
+				Provider:      "github",
+				Owner:         "codex-k8s",
+				Name:          "matter-codex",
+				DefaultBranch: "main",
+			},
+		},
+		agentRoles: map[int64]entity.AgentRole{
+			1: {ID: 1, ProjectID: 1, Name: "worker", RoleType: "worker", Enabled: true},
+			2: {ID: 2, ProjectID: 1, Name: "reviewer", RoleType: "reviewer", Enabled: true},
+		},
+	}
+	channels := &fakeChannelManager{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:       localizer,
+		StatusService:   testStatusService(localizer),
+		Store:           store,
+		ChannelManager:  channels,
+		DialogSubmitURL: "http://bot-service/mattermost/dialogs/agents",
+		StorageReady:    true,
+	})
+	state := encodeDialogState(MenuActionCommand{View: menuViewChats, Resource: menuResourceProject, ID: "1", ChannelID: "channel-1", PostID: "post-1"})
+
+	result := svc.HandleDialogSubmission(context.Background(), DialogSubmissionCommand{
+		CallbackID: dialogCallbackChatCreate,
+		State:      state,
+		UserID:     "owner-id",
+		Submission: map[string]any{
+			dialogFieldProjectID:       "1",
+			dialogFieldChatName:        "Backend Review",
+			dialogFieldChatType:        "worker_reviewer",
+			dialogFieldPrimaryRoleID:   "1",
+			dialogFieldSecondaryRoleID: "2",
+			dialogFieldRepositoryID:    "1",
+			dialogFieldRootIssue:       "https://github.com/codex-k8s/matter-codex/issues/1",
+			dialogFieldWorkPolicy:      "Work through GitHub issues and PRs.",
+		},
+	})
+
+	if result.Error != "" || len(result.Errors) > 0 {
+		t.Fatalf("dialog errors = %q %#v", result.Error, result.Errors)
+	}
+	chat, err := store.GetChat(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("chat not stored: %v", err)
+	}
+	if chat.MattermostChannelID != "channel-backend-review" || channels.projectChannelType != "P" {
+		t.Fatalf("chat/channel = %#v type %q", chat, channels.projectChannelType)
+	}
+	participants, _ := store.ListChatParticipants(context.Background(), chat.ID)
+	if len(participants) != 2 || participants[0].RoleName != "worker" || participants[1].RoleName != "reviewer" {
+		t.Fatalf("participants = %#v", participants)
+	}
+	repositories, _ := store.ListChatRepositories(context.Background(), chat.ID)
+	if len(repositories) != 1 || repositories[0].FullName() != "codex-k8s/matter-codex" {
+		t.Fatalf("repositories = %#v", repositories)
+	}
+}
+
+func TestBuildRolePromptUsesRawMessageWithoutTemplate(t *testing.T) {
+	prompt, err := BuildRolePrompt(RolePromptInput{
+		Role:        entity.AgentRole{Name: "adhoc", RoleType: "custom"},
+		UserMessage: "Inspect the current issue and propose next steps.",
+	})
+	if err != nil {
+		t.Fatalf("BuildRolePrompt() error = %v", err)
+	}
+	if prompt != "Inspect the current issue and propose next steps.\n" {
+		t.Fatalf("prompt = %q", prompt)
 	}
 }
 
@@ -2812,15 +3003,25 @@ type fakeAdminStore struct {
 	agentFlows           map[string]entity.AgentFlow
 	updatedRunStatus     string
 	updatedPRURL         string
+	projects             map[int64]entity.Project
+	projectRepositories  map[string]entity.ProjectRepository
+	agentRoles           map[int64]entity.AgentRole
+	chats                map[int64]entity.Chat
+	chatParticipants     map[int64][]entity.ChatParticipant
+	chatRepositories     map[int64][]entity.ChatRepositoryBinding
 }
 
 func (store *fakeAdminStore) UpsertRepository(_ context.Context, input adminrepo.UpsertRepositoryInput) (entity.Repository, bool, error) {
 	store.upsert = input
 	store.ensureRepositories()
 	key := repositoryStoreKey(input.Provider, input.Owner, input.Name)
-	_, exists := store.repositories[key]
+	existing, exists := store.repositories[key]
+	id := existing.ID
+	if id == 0 {
+		id = int64(len(store.repositories) + 1)
+	}
 	item := entity.Repository{
-		ID:                1,
+		ID:                id,
 		Provider:          input.Provider,
 		Owner:             input.Owner,
 		Name:              input.Name,
@@ -2866,6 +3067,316 @@ func (store *fakeAdminStore) DeleteRepository(_ context.Context, provider string
 func (store *fakeAdminStore) ensureRepositories() {
 	if store.repositories == nil {
 		store.repositories = map[string]entity.Repository{}
+	}
+}
+
+func (store *fakeAdminStore) UpsertProject(_ context.Context, input adminrepo.UpsertProjectInput) (entity.Project, bool, error) {
+	store.ensureProjects()
+	for id, project := range store.projects {
+		if project.Slug == input.Slug {
+			project.Name = input.Name
+			project.MattermostTeamID = input.MattermostTeamID
+			project.Description = input.Description
+			project.AdvancedSettings = input.AdvancedSettings
+			store.projects[id] = project
+			return project, false, nil
+		}
+	}
+	project := entity.Project{
+		ID:               int64(len(store.projects) + 1),
+		Name:             input.Name,
+		Slug:             input.Slug,
+		MattermostTeamID: input.MattermostTeamID,
+		Description:      input.Description,
+		AdvancedSettings: input.AdvancedSettings,
+	}
+	store.projects[project.ID] = project
+	return project, true, nil
+}
+
+func (store *fakeAdminStore) GetProject(_ context.Context, id int64) (entity.Project, error) {
+	store.ensureProjects()
+	project, ok := store.projects[id]
+	if !ok {
+		return entity.Project{}, adminrepo.ErrNotFound
+	}
+	return project, nil
+}
+
+func (store *fakeAdminStore) GetProjectBySlug(_ context.Context, slug string) (entity.Project, error) {
+	store.ensureProjects()
+	for _, project := range store.projects {
+		if project.Slug == slug {
+			return project, nil
+		}
+	}
+	return entity.Project{}, adminrepo.ErrNotFound
+}
+
+func (store *fakeAdminStore) ListProjects(_ context.Context, limit int) ([]entity.Project, error) {
+	store.ensureProjects()
+	projects := make([]entity.Project, 0, len(store.projects))
+	for _, project := range store.projects {
+		projects = append(projects, project)
+	}
+	sort.Slice(projects, func(i, j int) bool {
+		return projects[i].ID < projects[j].ID
+	})
+	if limit > 0 && len(projects) > limit {
+		projects = projects[:limit]
+	}
+	return projects, nil
+}
+
+func (store *fakeAdminStore) UpsertProjectRepository(_ context.Context, input adminrepo.UpsertProjectRepositoryInput) (entity.ProjectRepository, bool, error) {
+	store.ensureProjectRepositories()
+	repo, ok := store.findRepositoryByID(input.RepositoryID)
+	if !ok {
+		return entity.ProjectRepository{}, false, adminrepo.ErrNotFound
+	}
+	key := fmt.Sprintf("%d:%d", input.ProjectID, input.RepositoryID)
+	existing, exists := store.projectRepositories[key]
+	id := existing.ID
+	if id == 0 {
+		id = int64(len(store.projectRepositories) + 1)
+	}
+	binding := entity.ProjectRepository{
+		ID:            id,
+		ProjectID:     input.ProjectID,
+		RepositoryID:  input.RepositoryID,
+		Provider:      repo.Provider,
+		Owner:         repo.Owner,
+		Name:          repo.Name,
+		DefaultBranch: repo.DefaultBranch,
+		IsDefault:     input.IsDefault,
+		Metadata:      input.Metadata,
+	}
+	store.projectRepositories[key] = binding
+	return binding, !exists, nil
+}
+
+func (store *fakeAdminStore) ListProjectRepositories(_ context.Context, projectID int64) ([]entity.ProjectRepository, error) {
+	store.ensureProjectRepositories()
+	items := make([]entity.ProjectRepository, 0, len(store.projectRepositories))
+	for _, item := range store.projectRepositories {
+		if item.ProjectID == projectID {
+			items = append(items, item)
+		}
+	}
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].FullName() < items[j].FullName()
+	})
+	return items, nil
+}
+
+func (store *fakeAdminStore) UpsertAgentRole(_ context.Context, input adminrepo.UpsertAgentRoleInput) (entity.AgentRole, bool, error) {
+	store.ensureAgentRoles()
+	for id, role := range store.agentRoles {
+		if role.ProjectID == input.ProjectID && role.Name == input.Name {
+			role.RoleType = input.RoleType
+			role.Description = input.Description
+			role.PromptTemplate = input.PromptTemplate
+			role.PromptMode = input.PromptMode
+			role.GitHubAccountName = input.GitHubAccountName
+			role.OpenAIAccountName = input.OpenAIAccountName
+			role.KubernetesAccess = input.KubernetesAccess
+			role.SandboxMode = input.SandboxMode
+			role.ConfigOverlay = input.ConfigOverlay
+			role.AdvancedSettings = input.AdvancedSettings
+			role.Enabled = input.Enabled
+			role.BotIdentity = input.BotIdentity
+			store.agentRoles[id] = role
+			return role, false, nil
+		}
+	}
+	role := entity.AgentRole{
+		ID:                int64(len(store.agentRoles) + 1),
+		ProjectID:         input.ProjectID,
+		Name:              input.Name,
+		RoleType:          input.RoleType,
+		Description:       input.Description,
+		PromptTemplate:    input.PromptTemplate,
+		PromptMode:        input.PromptMode,
+		GitHubAccountName: input.GitHubAccountName,
+		OpenAIAccountName: input.OpenAIAccountName,
+		KubernetesAccess:  input.KubernetesAccess,
+		SandboxMode:       input.SandboxMode,
+		ConfigOverlay:     input.ConfigOverlay,
+		AdvancedSettings:  input.AdvancedSettings,
+		Enabled:           input.Enabled,
+		BotIdentity:       input.BotIdentity,
+	}
+	store.agentRoles[role.ID] = role
+	return role, true, nil
+}
+
+func (store *fakeAdminStore) GetAgentRole(_ context.Context, id int64) (entity.AgentRole, error) {
+	store.ensureAgentRoles()
+	role, ok := store.agentRoles[id]
+	if !ok {
+		return entity.AgentRole{}, adminrepo.ErrNotFound
+	}
+	return role, nil
+}
+
+func (store *fakeAdminStore) ListAgentRoles(_ context.Context, projectID int64) ([]entity.AgentRole, error) {
+	store.ensureAgentRoles()
+	roles := make([]entity.AgentRole, 0, len(store.agentRoles))
+	for _, role := range store.agentRoles {
+		if projectID == 0 || role.ProjectID == projectID {
+			roles = append(roles, role)
+		}
+	}
+	sort.Slice(roles, func(i, j int) bool {
+		return roles[i].ID < roles[j].ID
+	})
+	return roles, nil
+}
+
+func (store *fakeAdminStore) CreateChat(_ context.Context, input adminrepo.CreateChatInput) (entity.Chat, bool, error) {
+	store.ensureChats()
+	store.ensureChatParticipants()
+	store.ensureChatRepositories()
+	for id, chat := range store.chats {
+		if chat.ProjectID == input.ProjectID && chat.Slug == input.Slug {
+			chat.Name = input.Name
+			chat.MattermostChannelID = input.MattermostChannelID
+			chat.Description = input.Description
+			chat.ChatType = input.ChatType
+			chat.RootGitHubIssue = input.RootGitHubIssue
+			chat.WorkPolicy = input.WorkPolicy
+			chat.Settings = input.Settings
+			store.chats[id] = chat
+			store.setChatBindings(chat.ID, input.RoleIDs, input.RepositoryIDs)
+			return chat, false, nil
+		}
+	}
+	chat := entity.Chat{
+		ID:                  int64(len(store.chats) + 1),
+		ProjectID:           input.ProjectID,
+		MattermostChannelID: input.MattermostChannelID,
+		Name:                input.Name,
+		Slug:                input.Slug,
+		Description:         input.Description,
+		ChatType:            input.ChatType,
+		RootGitHubIssue:     input.RootGitHubIssue,
+		WorkPolicy:          input.WorkPolicy,
+		Settings:            input.Settings,
+	}
+	store.chats[chat.ID] = chat
+	store.setChatBindings(chat.ID, input.RoleIDs, input.RepositoryIDs)
+	return chat, true, nil
+}
+
+func (store *fakeAdminStore) GetChat(_ context.Context, id int64) (entity.Chat, error) {
+	store.ensureChats()
+	chat, ok := store.chats[id]
+	if !ok {
+		return entity.Chat{}, adminrepo.ErrNotFound
+	}
+	return chat, nil
+}
+
+func (store *fakeAdminStore) ListChats(_ context.Context, projectID int64) ([]entity.Chat, error) {
+	store.ensureChats()
+	chats := make([]entity.Chat, 0, len(store.chats))
+	for _, chat := range store.chats {
+		if projectID == 0 || chat.ProjectID == projectID {
+			chats = append(chats, chat)
+		}
+	}
+	sort.Slice(chats, func(i, j int) bool {
+		return chats[i].ID < chats[j].ID
+	})
+	return chats, nil
+}
+
+func (store *fakeAdminStore) ListChatParticipants(_ context.Context, chatID int64) ([]entity.ChatParticipant, error) {
+	store.ensureChatParticipants()
+	return append([]entity.ChatParticipant(nil), store.chatParticipants[chatID]...), nil
+}
+
+func (store *fakeAdminStore) ListChatRepositories(_ context.Context, chatID int64) ([]entity.ChatRepositoryBinding, error) {
+	store.ensureChatRepositories()
+	return append([]entity.ChatRepositoryBinding(nil), store.chatRepositories[chatID]...), nil
+}
+
+func (store *fakeAdminStore) setChatBindings(chatID int64, roleIDs []int64, repositoryIDs []int64) {
+	store.ensureAgentRoles()
+	participants := make([]entity.ChatParticipant, 0, len(roleIDs))
+	for index, roleID := range roleIDs {
+		role := store.agentRoles[roleID]
+		participants = append(participants, entity.ChatParticipant{
+			ID:       int64(index + 1),
+			ChatID:   chatID,
+			RoleID:   roleID,
+			RoleName: role.Name,
+			Enabled:  role.Enabled,
+		})
+	}
+	store.chatParticipants[chatID] = participants
+
+	repositories := make([]entity.ChatRepositoryBinding, 0, len(repositoryIDs))
+	for index, repositoryID := range repositoryIDs {
+		repo, ok := store.findRepositoryByID(repositoryID)
+		if !ok {
+			continue
+		}
+		repositories = append(repositories, entity.ChatRepositoryBinding{
+			ID:           int64(index + 1),
+			ChatID:       chatID,
+			RepositoryID: repositoryID,
+			Provider:     repo.Provider,
+			Owner:        repo.Owner,
+			Name:         repo.Name,
+		})
+	}
+	store.chatRepositories[chatID] = repositories
+}
+
+func (store *fakeAdminStore) findRepositoryByID(repositoryID int64) (entity.Repository, bool) {
+	store.ensureRepositories()
+	for _, repo := range store.repositories {
+		if repo.ID == repositoryID {
+			return repo, true
+		}
+	}
+	return entity.Repository{}, false
+}
+
+func (store *fakeAdminStore) ensureProjects() {
+	if store.projects == nil {
+		store.projects = map[int64]entity.Project{}
+	}
+}
+
+func (store *fakeAdminStore) ensureProjectRepositories() {
+	if store.projectRepositories == nil {
+		store.projectRepositories = map[string]entity.ProjectRepository{}
+	}
+}
+
+func (store *fakeAdminStore) ensureAgentRoles() {
+	if store.agentRoles == nil {
+		store.agentRoles = map[int64]entity.AgentRole{}
+	}
+}
+
+func (store *fakeAdminStore) ensureChats() {
+	if store.chats == nil {
+		store.chats = map[int64]entity.Chat{}
+	}
+}
+
+func (store *fakeAdminStore) ensureChatParticipants() {
+	if store.chatParticipants == nil {
+		store.chatParticipants = map[int64][]entity.ChatParticipant{}
+	}
+}
+
+func (store *fakeAdminStore) ensureChatRepositories() {
+	if store.chatRepositories == nil {
+		store.chatRepositories = map[int64][]entity.ChatRepositoryBinding{}
 	}
 }
 
@@ -3316,12 +3827,38 @@ func (store *fakeAdminStore) RecordAuditEvent(context.Context, adminrepo.AuditEv
 }
 
 type fakeChannelManager struct {
-	channelName string
+	channelName        string
+	projectTeamName    string
+	projectChannelName string
+	projectChannelType string
 }
 
 func (manager *fakeChannelManager) EnsureRepositoryChannel(_ context.Context, _ string, channelName string, _ string) (bool, error) {
 	manager.channelName = channelName
 	return true, nil
+}
+
+func (manager *fakeChannelManager) EnsureProjectTeam(_ context.Context, teamName string, displayName string, _ string) (MattermostTeamBinding, bool, error) {
+	manager.projectTeamName = teamName
+	return MattermostTeamBinding{ID: "team-" + teamName, Name: teamName, DisplayName: displayName}, true, nil
+}
+
+func (manager *fakeChannelManager) EnsureProjectChannel(_ context.Context, teamName string, channelName string, displayName string, private bool, _ []string) (MattermostChannelBinding, bool, error) {
+	manager.projectTeamName = teamName
+	manager.projectChannelName = channelName
+	manager.channelName = channelName
+	channelType := "O"
+	if private {
+		channelType = "P"
+	}
+	manager.projectChannelType = channelType
+	return MattermostChannelBinding{
+		ID:          "channel-" + channelName,
+		TeamID:      "team-" + teamName,
+		Name:        channelName,
+		DisplayName: displayName,
+		Type:        channelType,
+	}, true, nil
 }
 
 type fakeRepositoryProvider struct {
