@@ -9,6 +9,8 @@
   {"id": "label.updated", "translation": "updated"},
   {"id": "label.yes", "translation": "yes"},
   {"id": "label.no", "translation": "no"},
+  {"id": "label.not_set", "translation": "not set"},
+  {"id": "label.set_bytes", "translation": "set, {{.Bytes}} bytes"},
   {"id": "label.prompt.raw", "translation": "raw chat instruction"},
   {"id": "label.prompt.template", "translation": "template"},
 
@@ -343,6 +345,8 @@
   {"id": "menu.entity.field.github", "translation": "GitHub"},
   {"id": "menu.entity.field.kubernetes_access", "translation": "Kubernetes"},
   {"id": "menu.entity.field.sandbox", "translation": "Sandbox"},
+  {"id": "menu.entity.field.codex_config", "translation": "Codex config"},
+  {"id": "menu.entity.field.advanced_settings", "translation": "Advanced settings"},
   {"id": "menu.entity.field.developer_profile", "translation": "Developer profile"},
   {"id": "menu.entity.field.reviewer_profile", "translation": "Reviewer profile"},
   {"id": "menu.entity.field.pr", "translation": "Pull request"},

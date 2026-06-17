@@ -311,6 +311,8 @@ func (svc *SlashCommandService) roleEntityCard(ctx context.Context, command Menu
 		{Title: svc.t("menu.entity.field.kubernetes_access", nil), Value: "`" + defaultString(role.KubernetesAccess, "read-only") + "`", Short: true},
 		{Title: svc.t("menu.entity.field.sandbox", nil), Value: "`" + defaultString(role.SandboxMode, "danger-full-access") + "`", Short: true},
 		{Title: svc.t("menu.entity.field.prompt", nil), Value: rolePromptLabel(svc, role), Short: true},
+		{Title: svc.t("menu.entity.field.codex_config", nil), Value: svc.settingsSummary(role.ConfigOverlay), Short: true},
+		{Title: svc.t("menu.entity.field.advanced_settings", nil), Value: svc.settingsSummary(role.AdvancedSettings), Short: true},
 		{Title: svc.t("menu.entity.field.description", nil), Value: emptyAsUnknown(role.Description), Short: false},
 	}
 	card.Actions = []MattermostCardAction{
@@ -1338,6 +1340,14 @@ func looksLikeJSONObject(value string) bool {
 	}
 	var decoded map[string]any
 	return json.Unmarshal([]byte(value), &decoded) == nil
+}
+
+func (svc *SlashCommandService) settingsSummary(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" || value == "{}" {
+		return "`" + svc.t("label.not_set", nil) + "`"
+	}
+	return "`" + svc.t("label.set_bytes", map[string]any{"Bytes": len(value)}) + "`"
 }
 
 func (svc *SlashCommandService) recordProjectAudit(ctx context.Context, command SlashCommand, eventType string, resourceName string, summary string) {
