@@ -45,21 +45,24 @@ type CreateAgentRunInput struct {
 }
 
 type CreateAgentFlowInput struct {
-	FlowID      string
-	Status      string
-	Provider    string
-	Owner       string
-	Name        string
-	BaseBranch  string
-	HeadBranch  string
-	Title       string
-	Task        string
-	Attempt     int
-	MaxAttempts int
-	OwnerUserID string
-	OwnerUser   string
-	ActionToken string
-	Summary     string
+	FlowID               string
+	Status               string
+	Provider             string
+	Owner                string
+	Name                 string
+	BaseBranch           string
+	HeadBranch           string
+	Title                string
+	Task                 string
+	Attempt              int
+	MaxAttempts          int
+	DeveloperProfileName string
+	ReviewerProfileName  string
+	FlowPreset           string
+	OwnerUserID          string
+	OwnerUser            string
+	ActionToken          string
+	Summary              string
 }
 
 type UpdateAgentFlowInput struct {
@@ -83,6 +86,18 @@ type UpdateAgentRunArtifactsInput struct {
 	RunID  string
 	Status string
 	PRURL  string
+}
+
+type UpsertAgentProfileInput struct {
+	Name              string
+	Role              string
+	Description       string
+	Enabled           bool
+	OpenAIAccountName string
+	GitHubAccountName string
+	KubernetesAccess  string
+	SandboxMode       string
+	ConfigOverlay     string
 }
 
 type UpsertOpenAIAccountInput struct {
@@ -119,6 +134,8 @@ type Repository interface {
 	GetRepository(ctx context.Context, provider string, owner string, name string) (entity.Repository, error)
 	ListRepositories(ctx context.Context, limit int) ([]entity.Repository, error)
 	DeleteRepository(ctx context.Context, provider string, owner string, name string) (entity.Repository, error)
+	UpsertAgentProfile(ctx context.Context, input UpsertAgentProfileInput) (entity.AgentProfile, bool, error)
+	GetAgentProfile(ctx context.Context, name string) (entity.AgentProfile, error)
 	ListAgentProfiles(ctx context.Context) ([]entity.AgentProfile, error)
 	ListAgentPromptTemplates(ctx context.Context, profileName string) ([]entity.AgentPromptTemplate, error)
 	GetAgentPromptTemplate(ctx context.Context, profileName string, templateKey string) (entity.AgentPromptTemplate, error)
@@ -134,9 +151,11 @@ type Repository interface {
 	DeleteGitHubAccount(ctx context.Context, name string) (entity.GitHubAccount, error)
 	CreateAgentFlow(ctx context.Context, input CreateAgentFlowInput) (entity.AgentFlow, bool, error)
 	GetAgentFlow(ctx context.Context, flowID string) (entity.AgentFlow, error)
+	ListAgentFlows(ctx context.Context, status string, limit int) ([]entity.AgentFlow, error)
 	UpdateAgentFlow(ctx context.Context, input UpdateAgentFlowInput) (entity.AgentFlow, error)
 	CreateAgentRun(ctx context.Context, input CreateAgentRunInput) (entity.AgentRun, error)
 	GetAgentRun(ctx context.Context, runID string) (entity.AgentRun, error)
+	ListAgentRuns(ctx context.Context, limit int) ([]entity.AgentRun, error)
 	ListAgentRunsByFlowID(ctx context.Context, flowID string) ([]entity.AgentRun, error)
 	UpdateAgentRunArtifacts(ctx context.Context, input UpdateAgentRunArtifactsInput) (entity.AgentRun, error)
 	RecordAuditEvent(ctx context.Context, input AuditEventInput) error

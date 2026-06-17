@@ -17,6 +17,9 @@ type AgentFlow struct {
 	PRNumber              int
 	Attempt               int
 	MaxAttempts           int
+	DeveloperProfileName  string
+	ReviewerProfileName   string
+	FlowPreset            string
 	CurrentDeveloperRunID string
 	CurrentReviewerRunID  string
 	OwnerUserID           string

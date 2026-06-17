@@ -132,6 +132,36 @@ func (repo *Repository) DeleteRepository(ctx context.Context, provider string, o
 	return item, nil
 }
 
+func (repo *Repository) UpsertAgentProfile(ctx context.Context, input adminrepo.UpsertAgentProfileInput) (entity.AgentProfile, bool, error) {
+	var created bool
+	item, err := scanAgentProfileWithCreated(repo.pool.QueryRow(ctx, query("agent_profiles__upsert.sql"),
+		input.Name,
+		input.Role,
+		input.Description,
+		input.Enabled,
+		input.OpenAIAccountName,
+		input.GitHubAccountName,
+		input.KubernetesAccess,
+		input.SandboxMode,
+		input.ConfigOverlay,
+	), &created)
+	if err != nil {
+		return entity.AgentProfile{}, false, fmt.Errorf("upsert agent profile: %w", err)
+	}
+	return item, created, nil
+}
+
+func (repo *Repository) GetAgentProfile(ctx context.Context, name string) (entity.AgentProfile, error) {
+	item, err := scanAgentProfile(repo.pool.QueryRow(ctx, query("agent_profiles__get.sql"), name))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.AgentProfile{}, adminrepo.ErrNotFound
+		}
+		return entity.AgentProfile{}, fmt.Errorf("get agent profile: %w", err)
+	}
+	return item, nil
+}
+
 func (repo *Repository) ListAgentProfiles(ctx context.Context) ([]entity.AgentProfile, error) {
 	rows, err := repo.pool.Query(ctx, query("agent_profiles__list.sql"))
 	if err != nil {
@@ -141,18 +171,8 @@ func (repo *Repository) ListAgentProfiles(ctx context.Context) ([]entity.AgentPr
 
 	var items []entity.AgentProfile
 	for rows.Next() {
-		var item entity.AgentProfile
-		if err := rows.Scan(
-			&item.ID,
-			&item.Name,
-			&item.Role,
-			&item.Description,
-			&item.Enabled,
-			&item.OpenAIAccountName,
-			&item.GitHubAccountName,
-			&item.CreatedAt,
-			&item.UpdatedAt,
-		); err != nil {
+		item, err := scanAgentProfile(rows)
+		if err != nil {
 			return nil, fmt.Errorf("scan agent profile: %w", err)
 		}
 		items = append(items, item)
@@ -352,6 +372,9 @@ func (repo *Repository) CreateAgentFlow(ctx context.Context, input adminrepo.Cre
 		input.Task,
 		input.Attempt,
 		input.MaxAttempts,
+		input.DeveloperProfileName,
+		input.ReviewerProfileName,
+		input.FlowPreset,
 		input.OwnerUserID,
 		input.OwnerUser,
 		input.ActionToken,
@@ -370,6 +393,30 @@ func (repo *Repository) GetAgentFlow(ctx context.Context, flowID string) (entity
 		return entity.AgentFlow{}, fmt.Errorf("get agent flow: %w", err)
 	}
 	return item, nil
+}
+
+func (repo *Repository) ListAgentFlows(ctx context.Context, status string, limit int) ([]entity.AgentFlow, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	rows, err := repo.pool.Query(ctx, query("agent_flows__list.sql"), status, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list agent flows: %w", err)
+	}
+	defer rows.Close()
+
+	var items []entity.AgentFlow
+	for rows.Next() {
+		item, err := scanAgentFlow(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan agent flow: %w", err)
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate agent flows: %w", err)
+	}
+	return items, nil
 }
 
 func (repo *Repository) UpdateAgentFlow(ctx context.Context, input adminrepo.UpdateAgentFlowInput) (entity.AgentFlow, error) {
@@ -427,6 +474,30 @@ func (repo *Repository) GetAgentRun(ctx context.Context, runID string) (entity.A
 	return item, nil
 }
 
+func (repo *Repository) ListAgentRuns(ctx context.Context, limit int) ([]entity.AgentRun, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	rows, err := repo.pool.Query(ctx, query("agent_runs__list.sql"), limit)
+	if err != nil {
+		return nil, fmt.Errorf("list agent runs: %w", err)
+	}
+	defer rows.Close()
+
+	var items []entity.AgentRun
+	for rows.Next() {
+		item, err := scanAgentRun(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan agent run: %w", err)
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate agent runs: %w", err)
+	}
+	return items, nil
+}
+
 func (repo *Repository) ListAgentRunsByFlowID(ctx context.Context, flowID string) ([]entity.AgentRun, error) {
 	rows, err := repo.pool.Query(ctx, query("agent_runs__list_by_flow.sql"), flowID)
 	if err != nil {
@@ -476,6 +547,49 @@ func (repo *Repository) RecordAuditEvent(ctx context.Context, input adminrepo.Au
 
 type accountRow interface {
 	Scan(dest ...any) error
+}
+
+func scanAgentProfile(row accountRow) (entity.AgentProfile, error) {
+	var item entity.AgentProfile
+	if err := row.Scan(
+		&item.ID,
+		&item.Name,
+		&item.Role,
+		&item.Description,
+		&item.Enabled,
+		&item.OpenAIAccountName,
+		&item.GitHubAccountName,
+		&item.KubernetesAccess,
+		&item.SandboxMode,
+		&item.ConfigOverlay,
+		&item.CreatedAt,
+		&item.UpdatedAt,
+	); err != nil {
+		return entity.AgentProfile{}, err
+	}
+	return item, nil
+}
+
+func scanAgentProfileWithCreated(row pgx.Row, created *bool) (entity.AgentProfile, error) {
+	var item entity.AgentProfile
+	if err := row.Scan(
+		&item.ID,
+		&item.Name,
+		&item.Role,
+		&item.Description,
+		&item.Enabled,
+		&item.OpenAIAccountName,
+		&item.GitHubAccountName,
+		&item.KubernetesAccess,
+		&item.SandboxMode,
+		&item.ConfigOverlay,
+		&item.CreatedAt,
+		&item.UpdatedAt,
+		created,
+	); err != nil {
+		return entity.AgentProfile{}, err
+	}
+	return item, nil
 }
 
 func scanOpenAIAccount(row accountRow) (entity.OpenAIAccount, error) {
@@ -615,6 +729,9 @@ func scanAgentFlowFields(row pgx.Row, extra ...any) (entity.AgentFlow, error) {
 		&item.PRNumber,
 		&item.Attempt,
 		&item.MaxAttempts,
+		&item.DeveloperProfileName,
+		&item.ReviewerProfileName,
+		&item.FlowPreset,
 		&item.CurrentDeveloperRunID,
 		&item.CurrentReviewerRunID,
 		&item.OwnerUserID,

@@ -1008,21 +1008,24 @@ func (svc *SlashCommandService) handleFlowStart(ctx context.Context, args []stri
 		return message
 	}
 	flow, created, err := svc.cfg.Store.CreateAgentFlow(ctx, adminrepo.CreateAgentFlowInput{
-		FlowID:      flowID,
-		Status:      flowStatusCreated,
-		Provider:    "github",
-		Owner:       ref.Owner,
-		Name:        ref.Name,
-		BaseBranch:  "main",
-		HeadBranch:  flowHeadBranch(flowID),
-		Title:       title,
-		Task:        title,
-		Attempt:     1,
-		MaxAttempts: defaultFlowMaxAttempts,
-		OwnerUserID: strings.TrimSpace(command.UserID),
-		OwnerUser:   strings.TrimSpace(command.UserName),
-		ActionToken: newFlowActionToken(),
-		Summary:     "developer-review flow created from Mattermost slash command",
+		FlowID:               flowID,
+		Status:               flowStatusCreated,
+		Provider:             "github",
+		Owner:                ref.Owner,
+		Name:                 ref.Name,
+		BaseBranch:           "main",
+		HeadBranch:           flowHeadBranch(flowID),
+		Title:                title,
+		Task:                 title,
+		Attempt:              1,
+		MaxAttempts:          defaultFlowMaxAttempts,
+		DeveloperProfileName: "developer",
+		ReviewerProfileName:  "reviewer",
+		FlowPreset:           "developer_review",
+		OwnerUserID:          strings.TrimSpace(command.UserID),
+		OwnerUser:            strings.TrimSpace(command.UserName),
+		ActionToken:          newFlowActionToken(),
+		Summary:              "developer-review flow created from Mattermost slash command",
 	})
 	if err != nil {
 		return svc.t("flow.start.store_failed", map[string]any{"Error": safeError(err)})
@@ -1338,6 +1341,8 @@ func (svc *SlashCommandService) flowCardFields(flow entity.AgentFlow) []FlowCard
 	fields := []FlowCardField{
 		{Title: svc.t("flow.card.field.developer", nil), Value: emptyAsUnknown(flow.CurrentDeveloperRunID), Short: true},
 		{Title: svc.t("flow.card.field.reviewer", nil), Value: emptyAsUnknown(flow.CurrentReviewerRunID), Short: true},
+		{Title: svc.t("flow.card.field.developer_profile", nil), Value: defaultString(flow.DeveloperProfileName, "developer"), Short: true},
+		{Title: svc.t("flow.card.field.reviewer_profile", nil), Value: defaultString(flow.ReviewerProfileName, "reviewer"), Short: true},
 	}
 	owner := emptyAsUnknown(flow.OwnerUser)
 	if flow.OwnerUserID != "" {
@@ -1400,10 +1405,12 @@ func (svc *SlashCommandService) flowAgentRuntime(ctx context.Context, profileNam
 }
 
 func (svc *SlashCommandService) startFlowDeveloperAttempt(ctx context.Context, flow entity.AgentFlow, fix bool) (entity.AgentFlow, runtimerepo.StartedRun, error) {
-	account, message, ok := svc.flowAgentRuntime(ctx, "developer")
+	profileName := defaultString(flow.DeveloperProfileName, "developer")
+	account, message, ok := svc.flowAgentRuntime(ctx, profileName)
 	if !ok {
 		return flow, runtimerepo.StartedRun{}, errors.New(message)
 	}
+	role := defaultString(account.Profile.Role, "developer")
 	runID := flowDeveloperRunID(flow.FlowID, flow.Attempt)
 	templateKey := developerImplementTaskKey
 	baseBranch := flow.BaseBranch
@@ -1415,16 +1422,19 @@ func (svc *SlashCommandService) startFlowDeveloperAttempt(ctx context.Context, f
 		status = flowStatusFixRunning
 		summary = "flow developer fix attempt started"
 	}
-	prompt, err := svc.renderStoredPromptTemplate(ctx, "developer", templateKey, promptTemplateData{
+	prompt, err := svc.renderStoredPromptTemplate(ctx, profileName, templateKey, promptTemplateData{
 		Run: promptTemplateRunData{
 			ID:      runID,
-			Profile: "developer",
-			Role:    "developer",
+			Profile: profileName,
+			Role:    role,
 			Locale:  svc.cfg.Localizer.Locale(),
 		},
 		Agent: promptTemplateAgentData{
-			Profile: "developer",
-			Role:    "developer",
+			Profile:          profileName,
+			Role:             role,
+			KubernetesAccess: defaultString(account.Profile.KubernetesAccess, "read-only"),
+			SandboxMode:      defaultString(account.Profile.SandboxMode, "danger-full-access"),
+			ConfigOverlay:    account.Profile.ConfigOverlay,
 		},
 		Repository: promptTemplateRepositoryData{
 			Provider: flow.Provider,
@@ -1453,7 +1463,7 @@ func (svc *SlashCommandService) startFlowDeveloperAttempt(ctx context.Context, f
 	}
 	started, err := svc.cfg.RuntimeRunner.StartDeveloperRun(ctx, runtimerepo.DeveloperRunInput{
 		RunID:               runID,
-		Profile:             "developer",
+		Profile:             profileName,
 		CodexAuthSecretName: account.OpenAIAccount.SecretRef,
 		GitHubSecretName:    account.GitHubAccount.SecretRef,
 		Provider:            flow.Provider,
@@ -1471,8 +1481,8 @@ func (svc *SlashCommandService) startFlowDeveloperAttempt(ctx context.Context, f
 	if _, err := svc.cfg.Store.CreateAgentRun(ctx, adminrepo.CreateAgentRunInput{
 		RunID:               runID,
 		FlowID:              flow.FlowID,
-		ProfileName:         "developer",
-		Role:                "developer",
+		ProfileName:         profileName,
+		Role:                role,
 		Provider:            flow.Provider,
 		Owner:               flow.Owner,
 		Name:                flow.Name,
@@ -1503,20 +1513,25 @@ func (svc *SlashCommandService) startFlowReviewer(ctx context.Context, flow enti
 }
 
 func (svc *SlashCommandService) startFlowReviewerWithRunID(ctx context.Context, flow entity.AgentFlow, runID string, summary string) (entity.AgentFlow, runtimerepo.StartedRun, error) {
-	account, message, ok := svc.flowAgentRuntime(ctx, "reviewer")
+	profileName := defaultString(flow.ReviewerProfileName, "reviewer")
+	account, message, ok := svc.flowAgentRuntime(ctx, profileName)
 	if !ok {
 		return flow, runtimerepo.StartedRun{}, errors.New(message)
 	}
-	prompt, err := svc.renderStoredPromptTemplate(ctx, "reviewer", reviewPRTemplateKey, promptTemplateData{
+	role := defaultString(account.Profile.Role, "reviewer")
+	prompt, err := svc.renderStoredPromptTemplate(ctx, profileName, reviewPRTemplateKey, promptTemplateData{
 		Run: promptTemplateRunData{
 			ID:      runID,
-			Profile: "reviewer",
-			Role:    "reviewer",
+			Profile: profileName,
+			Role:    role,
 			Locale:  svc.cfg.Localizer.Locale(),
 		},
 		Agent: promptTemplateAgentData{
-			Profile: "reviewer",
-			Role:    "reviewer",
+			Profile:          profileName,
+			Role:             role,
+			KubernetesAccess: defaultString(account.Profile.KubernetesAccess, "read-only"),
+			SandboxMode:      defaultString(account.Profile.SandboxMode, "danger-full-access"),
+			ConfigOverlay:    account.Profile.ConfigOverlay,
 		},
 		Repository: promptTemplateRepositoryData{
 			Provider: flow.Provider,
@@ -1539,7 +1554,7 @@ func (svc *SlashCommandService) startFlowReviewerWithRunID(ctx context.Context, 
 	}
 	started, err := svc.cfg.RuntimeRunner.StartReviewRun(ctx, runtimerepo.ReviewRunInput{
 		RunID:               runID,
-		Profile:             "reviewer",
+		Profile:             profileName,
 		CodexAuthSecretName: account.OpenAIAccount.SecretRef,
 		GitHubSecretName:    account.GitHubAccount.SecretRef,
 		Provider:            flow.Provider,
@@ -1554,8 +1569,8 @@ func (svc *SlashCommandService) startFlowReviewerWithRunID(ctx context.Context, 
 	if _, err := svc.cfg.Store.CreateAgentRun(ctx, adminrepo.CreateAgentRunInput{
 		RunID:               runID,
 		FlowID:              flow.FlowID,
-		ProfileName:         "reviewer",
-		Role:                "reviewer",
+		ProfileName:         profileName,
+		Role:                role,
 		Provider:            flow.Provider,
 		Owner:               flow.Owner,
 		Name:                flow.Name,
@@ -1733,6 +1748,8 @@ func (svc *SlashCommandService) flowSummaryText(flow entity.AgentFlow) string {
 		return svc.t("flow.summary.developer_running", nil)
 	case flowStatusFixRunning:
 		return svc.t("flow.summary.fix_running", nil)
+	case flowStatusHeld:
+		return svc.t("flow.summary.held", nil)
 	case flowStatusOwnerApproved:
 		return svc.t("flow.summary.owner_approved", nil)
 	case flowStatusOwnerRejected:
@@ -2185,7 +2202,7 @@ func (svc *SlashCommandService) HandleMenuAction(ctx context.Context, command Me
 		return svc.handleMenuTypedAction(ctx, command, card)
 	}
 	if dialogID := strings.TrimSpace(command.Dialog); dialogID != "" {
-		dialog, errText := svc.menuDialog(command, dialogID)
+		dialog, errText := svc.menuDialog(ctx, command, dialogID)
 		if errText != "" {
 			return MenuActionResult{StatusCode: 200, EphemeralText: errText, Card: card}
 		}
@@ -2238,6 +2255,10 @@ func (svc *SlashCommandService) handleMenuTypedAction(ctx context.Context, comma
 			return svc.menuCardResult(command, svc.profileListCard(ctx, command))
 		case menuResourcePromptTemplate:
 			return svc.menuCardResult(command, svc.promptTemplateListCard(ctx, command))
+		case menuResourceFlow:
+			return svc.menuCardResult(command, svc.flowListCard(ctx, command, false))
+		case menuResourceRun:
+			return svc.menuCardResult(command, svc.runtimeRunListCard(ctx, command))
 		default:
 			return svc.menuActionTextResult(ctx, command, svc.t("menu.action.unknown", nil), false)
 		}
@@ -2253,6 +2274,10 @@ func (svc *SlashCommandService) handleMenuTypedAction(ctx context.Context, comma
 			return svc.menuCardResult(command, svc.profileEntityCard(ctx, command))
 		case menuResourcePromptTemplate:
 			return svc.menuCardResult(command, svc.promptTemplateEntityCard(ctx, command))
+		case menuResourceFlow:
+			return svc.menuCardResult(command, svc.flowEntityCard(ctx, command))
+		case menuResourceRun:
+			return svc.menuCardResult(command, svc.runtimeRunEntityCard(ctx, command))
 		default:
 			return svc.menuActionTextResult(ctx, command, svc.t("menu.action.unknown", nil), false)
 		}
@@ -2304,7 +2329,10 @@ func (svc *SlashCommandService) handleMenuTypedAction(ctx context.Context, comma
 		return svc.menuActionTextResult(ctx, command, text, false)
 	case menuActionOpenAIStatus:
 		text := svc.handleOpenAIStatus(ctx, []string{command.ID}, svc.slashFromMenu(command))
-		return svc.menuActionTextResult(ctx, command, text, true)
+		return svc.menuOpenAIAccountResult(ctx, command, text)
+	case menuActionOpenAIAuth:
+		text := svc.handleOpenAIAuth(ctx, []string{command.ID}, svc.slashFromMenu(command))
+		return svc.menuOpenAIAccountResult(ctx, command, text)
 	case menuActionOpenAICleanup:
 		text := svc.handleOpenAICleanup(ctx, []string{command.ID}, svc.slashFromMenu(command))
 		return svc.menuActionTextResult(ctx, command, text, false)
@@ -2322,6 +2350,8 @@ func (svc *SlashCommandService) handleMenuTypedAction(ctx context.Context, comma
 		return svc.menuActionTextResult(ctx, command, svc.handleRuntimeSmoke(ctx, nil, svc.slashFromMenu(command)), false)
 	case menuActionRuntimePruneDry:
 		return svc.menuActionTextResult(ctx, command, svc.handleRuntimePrune(ctx, []string{"24h"}, svc.slashFromMenu(command)), false)
+	case menuActionRuntimeCleanup:
+		return svc.menuActionTextResult(ctx, command, svc.handleRuntimeCleanup(ctx, []string{command.ID}, svc.slashFromMenu(command)), false)
 	case menuActionPromptHelp:
 		profileName, templateKey, ok := parsePromptTemplateResourceID(command.ID)
 		if !ok {
@@ -2334,6 +2364,28 @@ func (svc *SlashCommandService) handleMenuTypedAction(ctx context.Context, comma
 			return svc.menuActionTextResult(ctx, command, svc.t("menu.entity.invalid", nil), false)
 		}
 		return svc.menuActionTextResult(ctx, command, svc.handlePromptRender(ctx, profileName+" "+templateKey), false)
+	case menuActionProfileEnable:
+		return svc.menuCardResult(command, svc.updateProfileEnabledCard(ctx, command, true))
+	case menuActionProfileDisable:
+		return svc.menuCardResult(command, svc.updateProfileEnabledCard(ctx, command, false))
+	case menuActionFlowAdvance:
+		return svc.menuCardResult(command, svc.advanceFlowCard(ctx, command))
+	case menuActionFlowCard:
+		return svc.menuActionTextResult(ctx, command, svc.handleFlowCard(ctx, []string{command.ID}, svc.slashFromMenu(command)), false)
+	case menuActionFlowCleanup:
+		return svc.menuActionTextResult(ctx, command, svc.handleFlowCleanup(ctx, []string{command.ID}, svc.slashFromMenu(command)), false)
+	case menuActionFlowApprove:
+		return svc.menuFlowActionResult(ctx, command, flowActionApprove)
+	case menuActionFlowReject:
+		return svc.menuFlowActionResult(ctx, command, flowActionReject)
+	case menuActionFlowRerun:
+		return svc.menuFlowActionResult(ctx, command, flowActionRerun)
+	case menuActionFlowStop:
+		return svc.menuFlowActionResult(ctx, command, flowActionStop)
+	case menuActionFlowHold:
+		return svc.menuCardResult(command, svc.updateFlowHoldCard(ctx, command, true))
+	case menuActionFlowResume:
+		return svc.menuCardResult(command, svc.updateFlowHoldCard(ctx, command, false))
 	default:
 		return svc.menuActionTextResult(ctx, command, svc.t("menu.action.unknown", nil), false)
 	}
@@ -2359,6 +2411,25 @@ func (svc *SlashCommandService) menuActionTextResult(ctx context.Context, comman
 		StatusCode:    200,
 		EphemeralText: text,
 		Card:          card,
+	}
+}
+
+func (svc *SlashCommandService) menuOpenAIAccountResult(ctx context.Context, command MenuActionCommand, text string) MenuActionResult {
+	card := svc.menuCommandResultCard(ctx, menuViewOpenAI, "", text)
+	accountName := strings.TrimSpace(command.ID)
+	if accountName != "" {
+		card.Actions = []MattermostCardAction{
+			svc.menuResourceAction(menuViewOpenAI, "openaistatus", menuActionOpenAIStatus, menuResourceOpenAIAccount, accountName, "menu.action.openai_status", "menu.action.openai_status.tooltip", "primary", nil),
+			svc.menuResourceAction(menuViewOpenAI, "openaiauthrestart", menuActionOpenAIAuth, menuResourceOpenAIAccount, accountName, "menu.action.openai_auth_restart", "menu.action.openai_auth_restart.tooltip", "warning", nil),
+			svc.menuResourceAction(menuViewOpenAI, "openaiaccount", menuActionShow, menuResourceOpenAIAccount, accountName, "menu.action.openai_account_open", "menu.action.openai_account_open.tooltip", "default", nil),
+			svc.menuResourceAction(menuViewOpenAI, "openailist", menuActionList, menuResourceOpenAIAccount, "", "menu.action.openai_list", "menu.action.openai_list.tooltip", "default", nil),
+			svc.menuAction(menuViewMain, "menu.action.main", "menu.action.main.tooltip", "default"),
+		}
+	}
+	applyMenuCardIdentity(card, command)
+	return MenuActionResult{
+		StatusCode: 200,
+		Card:       card,
 	}
 }
 
@@ -2824,6 +2895,7 @@ func (svc *SlashCommandService) openAIAccountEntityCard(ctx context.Context, com
 	}
 	card.Actions = []MattermostCardAction{
 		svc.menuResourceAction(menuViewOpenAI, "openaistatus", menuActionOpenAIStatus, menuResourceOpenAIAccount, account.Name, "menu.action.openai_status", "menu.action.openai_status.tooltip", "primary", nil),
+		svc.menuResourceAction(menuViewOpenAI, "openaiauthrestart", menuActionOpenAIAuth, menuResourceOpenAIAccount, account.Name, "menu.action.openai_auth_restart", "menu.action.openai_auth_restart.tooltip", "warning", nil),
 		svc.menuResourceAction(menuViewOpenAI, "openaicleanup", menuActionOpenAICleanup, menuResourceOpenAIAccount, account.Name, "menu.action.openai_cleanup", "menu.action.openai_cleanup.tooltip", "default", nil),
 		svc.menuResourceAction(menuViewOpenAI, "openaideleteconfirm", menuActionConfirmDelete, menuResourceOpenAIAccount, account.Name, "menu.action.openai_delete", "menu.action.openai_delete.tooltip", "danger", nil),
 		svc.menuResourceAction(menuViewOpenAI, "openailist", menuActionList, menuResourceOpenAIAccount, "", "menu.action.openai_list", "menu.action.openai_list.tooltip", "default", nil),
@@ -2991,7 +3063,10 @@ func (svc *SlashCommandService) profileListCard(ctx context.Context, command Men
 	card.Actions = nil
 	if len(profiles) == 0 {
 		card.Text = svc.t("profile.list.empty", nil)
-		card.Actions = svc.entityNavigationActions(menuViewProfiles)
+		card.Actions = []MattermostCardAction{
+			svc.menuDialogAction(menuViewProfiles, "dialogprofileadd", menuDialogProfileUpsert, "menu.action.profile_add", "menu.action.profile_add.tooltip", "primary"),
+		}
+		card.Actions = append(card.Actions, svc.entityNavigationActions(menuViewProfiles)...)
 		return card
 	}
 	start, end, page := entityPageBounds(len(profiles), command.Page)
@@ -3009,6 +3084,7 @@ func (svc *SlashCommandService) profileListCard(ctx context.Context, command Men
 		card.Actions = append(card.Actions, svc.menuResourceAction(menuViewProfiles, "openprofile"+strconv.Itoa(number), menuActionShow, menuResourceProfile, profile.Name, "menu.action.open_number", "menu.action.open_number.tooltip", "default", map[string]any{"Number": number}))
 	}
 	card.Actions = append(card.Actions, svc.pageActions(menuViewProfiles, menuResourceProfile, "", page, len(profiles))...)
+	card.Actions = append(card.Actions, svc.menuDialogAction(menuViewProfiles, "dialogprofileadd", menuDialogProfileUpsert, "menu.action.profile_add", "menu.action.profile_add.tooltip", "primary"))
 	card.Actions = append(card.Actions, svc.entityNavigationActions(menuViewProfiles)...)
 	return card
 }
@@ -3033,9 +3109,17 @@ func (svc *SlashCommandService) profileEntityCard(ctx context.Context, command M
 		{Title: svc.t("menu.entity.field.status", nil), Value: "`" + enabled + "`", Short: true},
 		{Title: svc.t("menu.entity.field.openai", nil), Value: "`" + defaultString(profile.OpenAIAccountName, "primary") + "`", Short: true},
 		{Title: svc.t("menu.entity.field.github", nil), Value: "`" + defaultString(profile.GitHubAccountName, "primary") + "`", Short: true},
+		{Title: svc.t("menu.entity.field.kubernetes_access", nil), Value: "`" + defaultString(profile.KubernetesAccess, "read-only") + "`", Short: true},
+		{Title: svc.t("menu.entity.field.sandbox", nil), Value: "`" + defaultString(profile.SandboxMode, "danger-full-access") + "`", Short: true},
 		{Title: svc.t("menu.entity.field.description", nil), Value: emptyAsUnknown(profile.Description), Short: false},
 	}
+	statusAction := svc.menuResourceAction(menuViewProfiles, "profiledisable", menuActionProfileDisable, menuResourceProfile, profile.Name, "menu.action.profile_disable", "menu.action.profile_disable.tooltip", "warning", nil)
+	if !profile.Enabled {
+		statusAction = svc.menuResourceAction(menuViewProfiles, "profileenable", menuActionProfileEnable, menuResourceProfile, profile.Name, "menu.action.profile_enable", "menu.action.profile_enable.tooltip", "primary", nil)
+	}
 	card.Actions = []MattermostCardAction{
+		svc.menuResourceDialogAction(menuViewProfiles, "profileedit", menuDialogProfileUpsert, menuResourceProfile, profile.Name, "menu.action.profile_edit", "menu.action.profile_edit.tooltip", "primary", nil),
+		statusAction,
 		svc.menuResourceAction(menuViewPrompts, "profileprompts", menuActionList, menuResourcePromptTemplate, profile.Name, "menu.action.prompts", "menu.action.prompts.tooltip", "primary", nil),
 		svc.menuResourceAction(menuViewProfiles, "profilelist", menuActionList, menuResourceProfile, "", "menu.action.profile_list", "menu.action.profile_list.tooltip", "default", nil),
 		svc.menuAction(menuViewMain, "menu.action.main", "menu.action.main.tooltip", "default"),
@@ -3110,11 +3194,207 @@ func (svc *SlashCommandService) promptTemplateEntityCard(ctx context.Context, co
 	}
 	resourceID := promptTemplateResourceID(item.ProfileName, item.TemplateKey)
 	card.Actions = []MattermostCardAction{
+		svc.menuResourceDialogAction(menuViewPrompts, "promptedit", menuDialogPromptEdit, menuResourcePromptTemplate, resourceID, "menu.action.prompt_edit", "menu.action.prompt_edit.tooltip", "primary", nil),
 		svc.menuResourceAction(menuViewPrompts, "prompthelp", menuActionPromptHelp, menuResourcePromptTemplate, resourceID, "menu.action.prompt_help", "menu.action.prompt_help.tooltip", "default", nil),
 		svc.menuResourceAction(menuViewPrompts, "promptrender", menuActionPromptRender, menuResourcePromptTemplate, resourceID, "menu.action.prompt_render", "menu.action.prompt_render.tooltip", "primary", nil),
 		svc.menuResourceAction(menuViewPrompts, "promptlist", menuActionList, menuResourcePromptTemplate, "", "menu.action.prompt_list", "menu.action.prompt_list.tooltip", "default", nil),
 		svc.menuAction(menuViewMain, "menu.action.main", "menu.action.main.tooltip", "default"),
 	}
+	return card
+}
+
+func (svc *SlashCommandService) flowListCard(ctx context.Context, command MenuActionCommand, pendingOnly bool) *MattermostCard {
+	card := svc.menuCard(ctx, menuViewPending)
+	card.Title = svc.t("menu.entity.flows.title", nil)
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		card.Text = svc.t("flow.storage_not_ready", nil)
+		card.Actions = svc.entityNavigationActions(menuViewPending)
+		return card
+	}
+	flows, err := svc.cfg.Store.ListAgentFlows(ctx, "", 100)
+	if err != nil {
+		card.Text = svc.t("flow.list.failed", map[string]any{"Error": safeError(err)})
+		card.Actions = svc.entityNavigationActions(menuViewPending)
+		return card
+	}
+	items := make([]entity.AgentFlow, 0, len(flows))
+	for _, flow := range flows {
+		if pendingOnly || command.View == menuViewPending {
+			if !flowNeedsOwnerAttention(flow) {
+				continue
+			}
+		}
+		items = append(items, flow)
+	}
+	card.Text = svc.entityListText(len(items), command.Page)
+	card.Fields = nil
+	card.Actions = nil
+	if len(items) == 0 {
+		card.Text = svc.t("flow.list.empty", nil)
+		card.Actions = []MattermostCardAction{
+			svc.menuDialogAction(menuViewStartFlow, "dialogflowstart", menuDialogFlowStart, "menu.action.flow_start", "menu.action.flow_start.tooltip", "primary"),
+		}
+		card.Actions = append(card.Actions, svc.entityNavigationActions(menuViewPending)...)
+		return card
+	}
+	start, end, page := entityPageBounds(len(items), command.Page)
+	for idx, flow := range items[start:end] {
+		number := start + idx + 1
+		card.Fields = append(card.Fields, MattermostCardField{
+			Title: svc.t("menu.entity.flow.item_title", map[string]any{"Number": number, "Flow": flow.FlowID}),
+			Value: svc.t("menu.entity.flow.summary", map[string]any{
+				"Status":     flow.Status,
+				"Repository": flow.FullName(),
+				"PR":         flow.PRNumber,
+				"Developer":  defaultString(flow.DeveloperProfileName, "developer"),
+				"Reviewer":   defaultString(flow.ReviewerProfileName, "reviewer"),
+			}),
+			Short: false,
+		})
+		card.Actions = append(card.Actions, svc.menuResourceAction(menuViewPending, "openflow"+strconv.Itoa(number), menuActionShow, menuResourceFlow, flow.FlowID, "menu.action.open_number", "menu.action.open_number.tooltip", "default", map[string]any{"Number": number}))
+	}
+	card.Actions = append(card.Actions, svc.pageActions(menuViewPending, menuResourceFlow, "", page, len(items))...)
+	card.Actions = append(card.Actions, svc.menuDialogAction(menuViewStartFlow, "dialogflowstart", menuDialogFlowStart, "menu.action.flow_start", "menu.action.flow_start.tooltip", "primary"))
+	card.Actions = append(card.Actions, svc.entityNavigationActions(menuViewPending)...)
+	return card
+}
+
+func (svc *SlashCommandService) flowEntityCard(ctx context.Context, command MenuActionCommand) *MattermostCard {
+	card := svc.menuCard(ctx, menuViewPending)
+	card.Title = svc.t("menu.entity.flow.card_title", map[string]any{"Flow": command.ID})
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		card.Text = svc.t("flow.storage_not_ready", nil)
+		card.Actions = svc.entityNavigationActions(menuViewPending)
+		return card
+	}
+	flow, err := svc.cfg.Store.GetAgentFlow(ctx, command.ID)
+	if err != nil {
+		card.Text = svc.t("flow.status.failed", map[string]any{"Error": safeError(err)})
+		card.Actions = svc.entityNavigationActions(menuViewPending)
+		return card
+	}
+	card.Text = svc.flowCardText(flow)
+	card.Color = flowCardColor(flow.Status)
+	card.Fields = []MattermostCardField{
+		{Title: svc.t("menu.entity.field.status", nil), Value: "`" + flow.Status + "`", Short: true},
+		{Title: svc.t("menu.entity.field.repository", nil), Value: "`" + flow.FullName() + "`", Short: true},
+		{Title: svc.t("menu.entity.field.branch", nil), Value: "`" + flow.HeadBranch + "`", Short: true},
+		{Title: svc.t("menu.entity.field.developer_profile", nil), Value: "`" + defaultString(flow.DeveloperProfileName, "developer") + "`", Short: true},
+		{Title: svc.t("menu.entity.field.reviewer_profile", nil), Value: "`" + defaultString(flow.ReviewerProfileName, "reviewer") + "`", Short: true},
+		{Title: svc.t("menu.entity.field.pr", nil), Value: flowPRValue(flow), Short: true},
+	}
+	actions := []MattermostCardAction{
+		svc.menuResourceAction(menuViewPending, "flowadvance", menuActionFlowAdvance, menuResourceFlow, flow.FlowID, "menu.action.flow_advance", "menu.action.flow_advance.tooltip", "primary", nil),
+		svc.menuResourceAction(menuViewPending, "flowcard", menuActionFlowCard, menuResourceFlow, flow.FlowID, "menu.action.flow_card", "menu.action.flow_card.tooltip", "default", nil),
+	}
+	if flowCanOwnerDecide(flow) {
+		actions = append(actions,
+			svc.menuResourceAction(menuViewPending, "flowapprove", menuActionFlowApprove, menuResourceFlow, flow.FlowID, "flow.card.action.approve", "flow.card.action.approve.tooltip", "success", nil),
+			svc.menuResourceAction(menuViewPending, "flowreject", menuActionFlowReject, menuResourceFlow, flow.FlowID, "flow.card.action.reject", "flow.card.action.reject.tooltip", "danger", nil),
+		)
+	}
+	if flowCanOwnerRerun(flow) {
+		actions = append(actions, svc.menuResourceAction(menuViewPending, "flowrerun", menuActionFlowRerun, menuResourceFlow, flow.FlowID, "flow.card.action.rerun", "flow.card.action.rerun.tooltip", "primary", nil))
+	}
+	if flow.Status == flowStatusHeld {
+		actions = append(actions, svc.menuResourceAction(menuViewPending, "flowresume", menuActionFlowResume, menuResourceFlow, flow.FlowID, "menu.action.flow_resume", "menu.action.flow_resume.tooltip", "primary", nil))
+	} else if flowCanHold(flow) {
+		actions = append(actions, svc.menuResourceAction(menuViewPending, "flowhold", menuActionFlowHold, menuResourceFlow, flow.FlowID, "menu.action.flow_hold", "menu.action.flow_hold.tooltip", "warning", nil))
+	}
+	if !flowOwnerTerminal(flow.Status) {
+		actions = append(actions, svc.menuResourceAction(menuViewPending, "flowstop", menuActionFlowStop, menuResourceFlow, flow.FlowID, "flow.card.action.stop", "flow.card.action.stop.tooltip", "warning", nil))
+	}
+	actions = append(actions,
+		svc.menuResourceAction(menuViewPending, "flowcleanup", menuActionFlowCleanup, menuResourceFlow, flow.FlowID, "menu.action.flow_cleanup", "menu.action.flow_cleanup.tooltip", "danger", nil),
+		svc.menuResourceAction(menuViewPending, "flowlist", menuActionList, menuResourceFlow, "", "menu.action.pending_list", "menu.action.pending_list.tooltip", "default", nil),
+		svc.menuAction(menuViewMain, "menu.action.main", "menu.action.main.tooltip", "default"),
+	)
+	card.Actions = actions
+	return card
+}
+
+func (svc *SlashCommandService) runtimeRunListCard(ctx context.Context, command MenuActionCommand) *MattermostCard {
+	card := svc.menuCard(ctx, menuViewRuntime)
+	card.Title = svc.t("menu.entity.runs.title", nil)
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		card.Text = svc.t("runtime.list.storage_not_ready", nil)
+		card.Actions = svc.entityNavigationActions(menuViewRuntime)
+		return card
+	}
+	runs, err := svc.cfg.Store.ListAgentRuns(ctx, 100)
+	if err != nil {
+		card.Text = svc.t("runtime.list.failed", map[string]any{"Error": safeError(err)})
+		card.Actions = svc.entityNavigationActions(menuViewRuntime)
+		return card
+	}
+	card.Text = svc.entityListText(len(runs), command.Page)
+	card.Fields = nil
+	card.Actions = nil
+	if len(runs) == 0 {
+		card.Text = svc.t("runtime.list.empty", nil)
+		card.Actions = svc.menuActions(menuViewRuntime)
+		return card
+	}
+	start, end, page := entityPageBounds(len(runs), command.Page)
+	for idx, run := range runs[start:end] {
+		number := start + idx + 1
+		card.Fields = append(card.Fields, MattermostCardField{
+			Title: svc.t("menu.entity.run.item_title", map[string]any{"Number": number, "Run": run.RunID}),
+			Value: svc.t("menu.entity.run.summary", map[string]any{
+				"Status":     run.Status,
+				"Profile":    run.ProfileName,
+				"Repository": run.FullName(),
+				"Flow":       emptyAsUnknown(run.FlowID),
+			}),
+			Short: false,
+		})
+		card.Actions = append(card.Actions, svc.menuResourceAction(menuViewRuntime, "openrun"+strconv.Itoa(number), menuActionShow, menuResourceRun, run.RunID, "menu.action.open_number", "menu.action.open_number.tooltip", "default", map[string]any{"Number": number}))
+	}
+	card.Actions = append(card.Actions, svc.pageActions(menuViewRuntime, menuResourceRun, "", page, len(runs))...)
+	card.Actions = append(card.Actions, svc.menuActions(menuViewRuntime)...)
+	return card
+}
+
+func (svc *SlashCommandService) runtimeRunEntityCard(ctx context.Context, command MenuActionCommand) *MattermostCard {
+	card := svc.menuCard(ctx, menuViewRuntime)
+	card.Title = svc.t("menu.entity.run.card_title", map[string]any{"Run": command.ID})
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		card.Text = svc.t("runtime.list.storage_not_ready", nil)
+		card.Actions = svc.entityNavigationActions(menuViewRuntime)
+		return card
+	}
+	run, err := svc.cfg.Store.GetAgentRun(ctx, command.ID)
+	if err != nil {
+		card.Text = svc.t("runtime.status.not_found", map[string]any{"RunID": command.ID})
+		card.Actions = svc.entityNavigationActions(menuViewRuntime)
+		return card
+	}
+	status := run.Status
+	text := svc.t("menu.entity.run.card_text", map[string]any{"Run": run.RunID})
+	if svc.cfg.RuntimeRunner != nil {
+		if runtimeStatus, err := svc.cfg.RuntimeRunner.GetRunStatus(ctx, run.RunID); err == nil {
+			status = runtimeDerivedStatus(run.Status, runtimeStatus)
+			text = svc.runtimeStatusBrief(runtimeStatus)
+		}
+	}
+	card.Text = text
+	card.Fields = []MattermostCardField{
+		{Title: svc.t("menu.entity.field.status", nil), Value: "`" + status + "`", Short: true},
+		{Title: svc.t("menu.entity.field.profile", nil), Value: "`" + emptyAsUnknown(run.ProfileName) + "`", Short: true},
+		{Title: svc.t("menu.entity.field.repository", nil), Value: "`" + run.FullName() + "`", Short: true},
+		{Title: svc.t("menu.entity.field.flow", nil), Value: "`" + emptyAsUnknown(run.FlowID) + "`", Short: true},
+		{Title: svc.t("menu.entity.field.job", nil), Value: "`" + emptyAsUnknown(run.JobName) + "`", Short: true},
+		{Title: svc.t("menu.entity.field.pvc", nil), Value: "`" + emptyAsUnknown(run.PVCName) + "`", Short: true},
+	}
+	actions := []MattermostCardAction{
+		svc.menuResourceAction(menuViewRuntime, "runcleanup", menuActionRuntimeCleanup, menuResourceRun, run.RunID, "menu.action.runtime_cleanup", "menu.action.runtime_cleanup.tooltip", "danger", nil),
+		svc.menuResourceAction(menuViewRuntime, "runlist", menuActionList, menuResourceRun, "", "menu.action.runtime_runs", "menu.action.runtime_runs.tooltip", "default", nil),
+	}
+	if run.FlowID != "" {
+		actions = append(actions, svc.menuResourceAction(menuViewPending, "openflow", menuActionShow, menuResourceFlow, run.FlowID, "menu.action.flow_open", "menu.action.flow_open.tooltip", "default", nil))
+	}
+	actions = append(actions, svc.menuAction(menuViewMain, "menu.action.main", "menu.action.main.tooltip", "default"))
+	card.Actions = actions
 	return card
 }
 
@@ -3187,6 +3467,135 @@ func (svc *SlashCommandService) slashFromMenu(command MenuActionCommand) SlashCo
 	}
 }
 
+func (svc *SlashCommandService) menuFlowActionResult(ctx context.Context, command MenuActionCommand, action string) MenuActionResult {
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return svc.menuActionTextResult(ctx, command, svc.t("flow.storage_not_ready", nil), false)
+	}
+	flow, err := svc.cfg.Store.GetAgentFlow(ctx, command.ID)
+	if err != nil {
+		return svc.menuActionTextResult(ctx, command, svc.t("flow.status.failed", map[string]any{"Error": safeError(err)}), false)
+	}
+	result := svc.HandleFlowAction(ctx, FlowActionCommand{
+		FlowID:    flow.FlowID,
+		Action:    action,
+		Token:     flow.ActionToken,
+		UserID:    command.UserID,
+		UserName:  command.UserName,
+		ChannelID: command.ChannelID,
+	})
+	return MenuActionResult{
+		StatusCode:    result.StatusCode,
+		EphemeralText: result.EphemeralText,
+		Card:          svc.flowEntityCard(ctx, command),
+	}
+}
+
+func (svc *SlashCommandService) updateProfileEnabledCard(ctx context.Context, command MenuActionCommand, enabled bool) *MattermostCard {
+	card := svc.menuCard(ctx, menuViewProfiles)
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		card.Text = svc.t("profile.list.storage_not_ready", nil)
+		card.Actions = svc.entityNavigationActions(menuViewProfiles)
+		return card
+	}
+	profile, err := svc.cfg.Store.GetAgentProfile(ctx, command.ID)
+	if err != nil {
+		card.Text = svc.t("dev.profile_not_ready", map[string]any{"Profile": command.ID})
+		card.Actions = svc.entityNavigationActions(menuViewProfiles)
+		return card
+	}
+	profile.Enabled = enabled
+	_, _, err = svc.cfg.Store.UpsertAgentProfile(ctx, adminrepo.UpsertAgentProfileInput{
+		Name:              profile.Name,
+		Role:              profile.Role,
+		Description:       profile.Description,
+		Enabled:           profile.Enabled,
+		OpenAIAccountName: defaultString(profile.OpenAIAccountName, "primary"),
+		GitHubAccountName: defaultString(profile.GitHubAccountName, "primary"),
+		KubernetesAccess:  defaultString(profile.KubernetesAccess, "read-only"),
+		SandboxMode:       defaultString(profile.SandboxMode, "danger-full-access"),
+		ConfigOverlay:     profile.ConfigOverlay,
+	})
+	if err != nil {
+		card.Text = svc.t("profile.save.failed", map[string]any{"Error": safeError(err)})
+		card.Actions = svc.entityNavigationActions(menuViewProfiles)
+		return card
+	}
+	eventType := "agent_profile.disabled"
+	if enabled {
+		eventType = "agent_profile.enabled"
+	}
+	svc.recordProfileAudit(ctx, svc.slashFromMenu(command), eventType, profile.Name, "agent profile enabled flag changed from Mattermost menu")
+	return svc.profileEntityCard(ctx, command)
+}
+
+func (svc *SlashCommandService) advanceFlowCard(ctx context.Context, command MenuActionCommand) *MattermostCard {
+	card := svc.menuCard(ctx, menuViewPending)
+	if svc.cfg.RuntimeRunner == nil {
+		card.Text = svc.t("runtime.not_configured", nil)
+		card.Actions = svc.entityNavigationActions(menuViewPending)
+		return card
+	}
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		card.Text = svc.t("flow.storage_not_ready", nil)
+		card.Actions = svc.entityNavigationActions(menuViewPending)
+		return card
+	}
+	flow, err := svc.cfg.Store.GetAgentFlow(ctx, command.ID)
+	if err != nil {
+		card.Text = svc.t("flow.status.failed", map[string]any{"Error": safeError(err)})
+		card.Actions = svc.entityNavigationActions(menuViewPending)
+		return card
+	}
+	flow, events := svc.advanceFlow(ctx, flow)
+	_ = svc.refreshFlowCard(ctx, flow)
+	card = svc.flowEntityCard(ctx, command)
+	if len(events) > 0 {
+		card.Text = svc.flowStatusText(flow, events)
+	}
+	return card
+}
+
+func (svc *SlashCommandService) updateFlowHoldCard(ctx context.Context, command MenuActionCommand, hold bool) *MattermostCard {
+	card := svc.menuCard(ctx, menuViewPending)
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		card.Text = svc.t("flow.storage_not_ready", nil)
+		card.Actions = svc.entityNavigationActions(menuViewPending)
+		return card
+	}
+	flow, err := svc.cfg.Store.GetAgentFlow(ctx, command.ID)
+	if err != nil {
+		card.Text = svc.t("flow.status.failed", map[string]any{"Error": safeError(err)})
+		card.Actions = svc.entityNavigationActions(menuViewPending)
+		return card
+	}
+	status := flowStatusWaitingOwner
+	summary := "owner resumed flow from Mattermost menu"
+	eventType := "flow.resumed"
+	if hold {
+		if !flowCanHold(flow) {
+			card.Text = svc.t("flow.action.hold_not_ready", nil)
+			card.Actions = svc.entityNavigationActions(menuViewPending)
+			return card
+		}
+		status = flowStatusHeld
+		summary = "owner held flow from Mattermost menu"
+		eventType = "flow.held"
+	}
+	updated, err := svc.cfg.Store.UpdateAgentFlow(ctx, adminrepo.UpdateAgentFlowInput{
+		FlowID:  flow.FlowID,
+		Status:  status,
+		Summary: summary,
+	})
+	if err != nil {
+		card.Text = svc.t("flow.action.failed", map[string]any{"Error": safeError(err)})
+		card.Actions = svc.entityNavigationActions(menuViewPending)
+		return card
+	}
+	svc.recordFlowAudit(ctx, svc.slashFromMenu(command), eventType, updated.FlowID, summary)
+	_ = svc.refreshFlowCard(ctx, updated)
+	return svc.flowEntityCard(ctx, command)
+}
+
 func (svc *SlashCommandService) HandleDialogSubmission(ctx context.Context, command DialogSubmissionCommand) DialogSubmissionResult {
 	if command.Cancelled {
 		return DialogSubmissionResult{StatusCode: 200}
@@ -3222,12 +3631,20 @@ func (svc *SlashCommandService) HandleDialogSubmission(ctx context.Context, comm
 		return svc.handleGitHubAccountDialogUpsert(ctx, command, state, true)
 	case dialogCallbackGitHubAccountDelete:
 		return svc.handleGitHubAccountDialogDelete(ctx, command, state)
+	case dialogCallbackProfileUpsert:
+		return svc.handleProfileDialogUpsert(ctx, command, state)
+	case dialogCallbackPromptEdit:
+		return svc.handlePromptEditDialog(ctx, command, state)
+	case dialogCallbackFlowStart:
+		return svc.handleFlowStartDialog(ctx, command, state)
+	case dialogCallbackRuntimePruneApply:
+		return svc.handleRuntimePruneDialog(ctx, command, state)
 	default:
 		return DialogSubmissionResult{StatusCode: 400, Error: svc.t("dialog.unknown", nil)}
 	}
 }
 
-func (svc *SlashCommandService) menuDialog(command MenuActionCommand, dialogID string) (*MattermostDialog, string) {
+func (svc *SlashCommandService) menuDialog(ctx context.Context, command MenuActionCommand, dialogID string) (*MattermostDialog, string) {
 	if strings.TrimSpace(svc.cfg.DialogSubmitURL) == "" {
 		return nil, svc.t("dialog.open.not_configured", nil)
 	}
@@ -3254,6 +3671,14 @@ func (svc *SlashCommandService) menuDialog(command MenuActionCommand, dialogID s
 		return svc.githubAccountDialog(command, dialogCallbackGitHubAccountEdit, "dialog.github.edit.title", "dialog.github.edit.intro", "dialog.github.edit.submit", false), ""
 	case menuDialogGitHubAccountDelete:
 		return svc.githubAccountDialog(command, dialogCallbackGitHubAccountDelete, "dialog.github.delete.title", "dialog.github.delete.intro", "dialog.github.delete.submit", true), ""
+	case menuDialogProfileUpsert:
+		return svc.profileDialog(ctx, command)
+	case menuDialogPromptEdit:
+		return svc.promptEditDialog(ctx, command)
+	case menuDialogFlowStart:
+		return svc.flowStartDialog(ctx, command)
+	case menuDialogRuntimePruneApply:
+		return svc.runtimePruneApplyDialog(command), ""
 	default:
 		return nil, svc.t("dialog.unknown", nil)
 	}
@@ -3433,6 +3858,261 @@ func (svc *SlashCommandService) githubAccountDialog(command MenuActionCommand, c
 		Elements:         elements,
 		SubmitLabel:      svc.t(submitID, nil),
 		State:            encodeDialogState(command),
+	}
+}
+
+func (svc *SlashCommandService) profileDialog(ctx context.Context, command MenuActionCommand) (*MattermostDialog, string) {
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return nil, svc.t("profile.list.storage_not_ready", nil)
+	}
+	profile := entity.AgentProfile{
+		Name:              "",
+		Role:              "developer",
+		Enabled:           true,
+		OpenAIAccountName: "primary",
+		GitHubAccountName: "agent",
+		KubernetesAccess:  "read-only",
+		SandboxMode:       "danger-full-access",
+	}
+	editMode := strings.TrimSpace(command.ID) != ""
+	if editMode {
+		current, err := svc.cfg.Store.GetAgentProfile(ctx, command.ID)
+		if err != nil {
+			return nil, svc.t("dev.profile_not_ready", map[string]any{"Profile": command.ID})
+		}
+		profile = current
+	}
+	openAIOptions, errText := svc.openAIAccountOptions(ctx, profile.OpenAIAccountName)
+	if errText != "" {
+		return nil, errText
+	}
+	githubOptions, errText := svc.githubAccountOptions(ctx, profile.GitHubAccountName)
+	if errText != "" {
+		return nil, errText
+	}
+	titleID := "dialog.profile.add.title"
+	introID := "dialog.profile.add.intro"
+	submitID := "dialog.profile.add.submit"
+	if editMode {
+		titleID = "dialog.profile.edit.title"
+		introID = "dialog.profile.edit.intro"
+		submitID = "dialog.profile.edit.submit"
+	}
+	return &MattermostDialog{
+		SubmitURL:        svc.cfg.DialogSubmitURL,
+		CallbackID:       dialogCallbackProfileUpsert,
+		Title:            svc.t(titleID, nil),
+		IntroductionText: svc.t(introID, nil),
+		Elements: []MattermostDialogElement{
+			{
+				DisplayName: svc.t("dialog.profile.field.name", nil),
+				Name:        dialogFieldProfile,
+				Type:        "text",
+				Default:     profile.Name,
+				Placeholder: "developer",
+				HelpText:    svc.t("dialog.profile.field.name.help", nil),
+				MinLength:   1,
+				MaxLength:   48,
+			},
+			{
+				DisplayName: svc.t("dialog.profile.field.role", nil),
+				Name:        dialogFieldRole,
+				Type:        "select",
+				Default:     defaultString(profile.Role, "developer"),
+				Options:     profileRoleOptions(),
+			},
+			{
+				DisplayName: svc.t("dialog.profile.field.openai", nil),
+				Name:        dialogFieldOpenAIAccount,
+				Type:        "select",
+				Default:     defaultString(profile.OpenAIAccountName, "primary"),
+				Options:     openAIOptions,
+			},
+			{
+				DisplayName: svc.t("dialog.profile.field.github", nil),
+				Name:        dialogFieldGitHubAccount,
+				Type:        "select",
+				Default:     defaultString(profile.GitHubAccountName, "agent"),
+				Options:     githubOptions,
+			},
+			{
+				DisplayName: svc.t("dialog.profile.field.kubernetes", nil),
+				Name:        dialogFieldKubernetesAccess,
+				Type:        "select",
+				Default:     defaultString(profile.KubernetesAccess, "read-only"),
+				Options: []MattermostDialogOption{
+					{Text: svc.t("dialog.profile.kubernetes.read_only", nil), Value: "read-only"},
+					{Text: svc.t("dialog.profile.kubernetes.cluster_admin", nil), Value: "cluster-admin"},
+				},
+			},
+			{
+				DisplayName: svc.t("dialog.profile.field.sandbox", nil),
+				Name:        dialogFieldSandboxMode,
+				Type:        "select",
+				Default:     defaultString(profile.SandboxMode, "danger-full-access"),
+				Options: []MattermostDialogOption{
+					{Text: "danger-full-access", Value: "danger-full-access"},
+					{Text: "workspace-write", Value: "workspace-write"},
+					{Text: "read-only", Value: "read-only"},
+				},
+			},
+			{
+				DisplayName: svc.t("dialog.profile.field.description", nil),
+				Name:        dialogFieldDescription,
+				Type:        "textarea",
+				Default:     profile.Description,
+				HelpText:    svc.t("dialog.profile.field.description.help", nil),
+				Optional:    true,
+				MaxLength:   1000,
+			},
+			{
+				DisplayName: svc.t("dialog.profile.field.config", nil),
+				Name:        dialogFieldConfigOverlay,
+				Type:        "textarea",
+				Default:     profile.ConfigOverlay,
+				Placeholder: "sandbox_mode = \"danger-full-access\"",
+				HelpText:    svc.t("dialog.profile.field.config.help", nil),
+				Optional:    true,
+				MaxLength:   4000,
+			},
+		},
+		SubmitLabel: svc.t(submitID, nil),
+		State:       encodeDialogState(command),
+	}, ""
+}
+
+func (svc *SlashCommandService) promptEditDialog(ctx context.Context, command MenuActionCommand) (*MattermostDialog, string) {
+	profileName, templateKey, ok := parsePromptTemplateResourceID(command.ID)
+	if !ok || !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return nil, svc.t("menu.entity.invalid", nil)
+	}
+	item, err := svc.cfg.Store.GetAgentPromptTemplate(ctx, profileName, templateKey)
+	if err != nil {
+		return nil, svc.t("prompt.show.failed", map[string]any{"Error": safeError(err)})
+	}
+	return &MattermostDialog{
+		SubmitURL:        svc.cfg.DialogSubmitURL,
+		CallbackID:       dialogCallbackPromptEdit,
+		Title:            svc.t("dialog.prompt.edit.title", nil),
+		IntroductionText: svc.t("dialog.prompt.edit.intro", map[string]any{"Profile": profileName, "Template": templateKey, "Reference": svc.t("prompt.help.reference", promptTemplateReferenceData())}),
+		Elements: []MattermostDialogElement{
+			{
+				DisplayName: svc.t("dialog.prompt.field.body", nil),
+				Name:        dialogFieldTemplateBody,
+				Type:        "textarea",
+				Default:     item.Body,
+				HelpText:    svc.t("dialog.prompt.field.body.help", nil),
+				MinLength:   1,
+				MaxLength:   12000,
+			},
+		},
+		SubmitLabel: svc.t("dialog.prompt.edit.submit", nil),
+		State:       encodeDialogState(command),
+	}, ""
+}
+
+func (svc *SlashCommandService) flowStartDialog(ctx context.Context, command MenuActionCommand) (*MattermostDialog, string) {
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return nil, svc.t("flow.storage_not_ready", nil)
+	}
+	repoOptions, errText := svc.repositoryOptions(ctx)
+	if errText != "" {
+		return nil, errText
+	}
+	profileOptions, errText := svc.enabledProfileOptions(ctx)
+	if errText != "" {
+		return nil, errText
+	}
+	return &MattermostDialog{
+		SubmitURL:        svc.cfg.DialogSubmitURL,
+		CallbackID:       dialogCallbackFlowStart,
+		Title:            svc.t("dialog.flow.start.title", nil),
+		IntroductionText: svc.t("dialog.flow.start.intro", nil),
+		Elements: []MattermostDialogElement{
+			{
+				DisplayName: svc.t("dialog.flow.field.repository", nil),
+				Name:        dialogFieldFlowRepository,
+				Type:        "select",
+				Options:     repoOptions,
+			},
+			{
+				DisplayName: svc.t("dialog.flow.field.developer", nil),
+				Name:        dialogFieldDeveloperProfile,
+				Type:        "select",
+				Default:     "developer",
+				Options:     profileOptions,
+			},
+			{
+				DisplayName: svc.t("dialog.flow.field.reviewer", nil),
+				Name:        dialogFieldReviewerProfile,
+				Type:        "select",
+				Default:     "reviewer",
+				Options:     profileOptions,
+			},
+			{
+				DisplayName: svc.t("dialog.flow.field.title", nil),
+				Name:        dialogFieldFlowTitle,
+				Type:        "text",
+				Placeholder: svc.t("dialog.flow.field.title.placeholder", nil),
+				HelpText:    svc.t("dialog.flow.field.title.help", nil),
+				MinLength:   3,
+				MaxLength:   140,
+			},
+			{
+				DisplayName: svc.t("dialog.flow.field.task", nil),
+				Name:        dialogFieldFlowTask,
+				Type:        "textarea",
+				Placeholder: svc.t("dialog.flow.field.task.placeholder", nil),
+				HelpText:    svc.t("dialog.flow.field.task.help", nil),
+				MinLength:   3,
+				MaxLength:   6000,
+			},
+			{
+				DisplayName: svc.t("dialog.flow.field.max_attempts", nil),
+				Name:        dialogFieldMaxAttempts,
+				Type:        "select",
+				Default:     strconv.Itoa(defaultFlowMaxAttempts),
+				Options: []MattermostDialogOption{
+					{Text: "1", Value: "1"},
+					{Text: "2", Value: "2"},
+					{Text: "3", Value: "3"},
+				},
+			},
+		},
+		SubmitLabel: svc.t("dialog.flow.start.submit", nil),
+		State:       encodeDialogState(command),
+	}, ""
+}
+
+func (svc *SlashCommandService) runtimePruneApplyDialog(command MenuActionCommand) *MattermostDialog {
+	return &MattermostDialog{
+		SubmitURL:        svc.cfg.DialogSubmitURL,
+		CallbackID:       dialogCallbackRuntimePruneApply,
+		Title:            svc.t("dialog.runtime.prune.title", nil),
+		IntroductionText: svc.t("dialog.runtime.prune.intro", nil),
+		Elements: []MattermostDialogElement{
+			{
+				DisplayName: svc.t("dialog.runtime.field.older_than", nil),
+				Name:        dialogFieldOlderThan,
+				Type:        "text",
+				Default:     "24h",
+				Placeholder: "24h",
+				HelpText:    svc.t("dialog.runtime.field.older_than.help", nil),
+				MinLength:   1,
+				MaxLength:   16,
+			},
+			{
+				DisplayName: svc.t("dialog.repo.field.confirm", nil),
+				Name:        dialogFieldConfirm,
+				Type:        "text",
+				Placeholder: "apply",
+				HelpText:    svc.t("dialog.runtime.field.confirm.help", nil),
+				MinLength:   5,
+				MaxLength:   5,
+			},
+		},
+		SubmitLabel: svc.t("dialog.runtime.prune.submit", nil),
+		State:       encodeDialogState(command),
 	}
 }
 
@@ -3817,7 +4497,7 @@ func (svc *SlashCommandService) githubAccountDialogInput(submission map[string]a
 	fieldErrors := map[string]string{}
 	accountName, err := parseOpenAIAccountName(submissionString(submission, dialogFieldAccount))
 	if err != nil {
-		fieldErrors[dialogFieldAccount] = svc.t("parse.openai_account.invalid", nil)
+		fieldErrors[dialogFieldAccount] = svc.t("parse.github_account.invalid", nil)
 	}
 	token := submissionString(submission, dialogFieldToken)
 	if strings.TrimSpace(token) == "" {
@@ -3846,6 +4526,297 @@ func (svc *SlashCommandService) handleGitHubAccountDialogDelete(ctx context.Cont
 		StatusCode: 200,
 		Card:       svc.dialogResultCard(ctx, state, command, text),
 	}
+}
+
+func (svc *SlashCommandService) handleProfileDialogUpsert(ctx context.Context, command DialogSubmissionCommand, state mattermostDialogState) DialogSubmissionResult {
+	input, fieldErrors := svc.profileDialogInput(command.Submission)
+	if strings.TrimSpace(state.ResourceID) != "" && input.Name != state.ResourceID {
+		fieldErrors[dialogFieldProfile] = svc.t("dialog.profile.rename_not_supported", nil)
+	}
+	if len(fieldErrors) > 0 {
+		return DialogSubmissionResult{StatusCode: 200, Errors: fieldErrors}
+	}
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return DialogSubmissionResult{StatusCode: 200, Error: svc.t("profile.list.storage_not_ready", nil)}
+	}
+	if strings.TrimSpace(state.ResourceID) != "" {
+		existing, err := svc.cfg.Store.GetAgentProfile(ctx, state.ResourceID)
+		if err != nil {
+			return DialogSubmissionResult{StatusCode: 200, Error: svc.t("dev.profile_not_ready", map[string]any{"Profile": state.ResourceID})}
+		}
+		input.Enabled = existing.Enabled
+	}
+	if _, err := svc.cfg.Store.GetOpenAIAccount(ctx, input.OpenAIAccountName); err != nil {
+		return DialogSubmissionResult{StatusCode: 200, Errors: map[string]string{dialogFieldOpenAIAccount: svc.t("openai.status.account_not_found", map[string]any{"Account": input.OpenAIAccountName})}}
+	}
+	if _, err := svc.cfg.Store.GetGitHubAccount(ctx, input.GitHubAccountName); err != nil {
+		return DialogSubmissionResult{StatusCode: 200, Errors: map[string]string{dialogFieldGitHubAccount: svc.t("dialog.github.not_found", map[string]any{"Account": input.GitHubAccountName})}}
+	}
+	profile, created, err := svc.cfg.Store.UpsertAgentProfile(ctx, input)
+	if err != nil {
+		return DialogSubmissionResult{StatusCode: 200, Error: svc.t("profile.save.failed", map[string]any{"Error": safeError(err)})}
+	}
+	seeded, err := svc.ensurePromptTemplatesForProfile(ctx, profile)
+	if err != nil {
+		return DialogSubmissionResult{StatusCode: 200, Error: svc.t("profile.save.prompt_seed_failed", map[string]any{"Error": safeError(err)})}
+	}
+	svc.recordProfileAudit(ctx, SlashCommand{
+		UserID:    command.UserID,
+		UserName:  defaultString(command.UserName, state.UserName),
+		ChannelID: defaultString(state.ChannelID, command.ChannelID),
+	}, "agent_profile.upserted", profile.Name, "agent profile upserted from Mattermost dialog")
+	stateID := "label.updated"
+	if created {
+		stateID = "label.created"
+	}
+	text := svc.t("profile.save.result", map[string]any{
+		"State":            svc.t(stateID, nil),
+		"Profile":          profile.Name,
+		"Role":             profile.Role,
+		"OpenAI":           defaultString(profile.OpenAIAccountName, "primary"),
+		"GitHub":           defaultString(profile.GitHubAccountName, "primary"),
+		"KubernetesAccess": defaultString(profile.KubernetesAccess, "read-only"),
+		"Sandbox":          defaultString(profile.SandboxMode, "danger-full-access"),
+		"Seeded":           seeded,
+	})
+	return DialogSubmissionResult{StatusCode: 200, Card: svc.dialogResultCard(ctx, state, command, text)}
+}
+
+func (svc *SlashCommandService) handlePromptEditDialog(ctx context.Context, command DialogSubmissionCommand, state mattermostDialogState) DialogSubmissionResult {
+	profileName, templateKey, ok := parsePromptTemplateResourceID(state.ResourceID)
+	if !ok || !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return DialogSubmissionResult{StatusCode: 200, Error: svc.t("menu.entity.invalid", nil)}
+	}
+	body := strings.TrimSpace(submissionString(command.Submission, dialogFieldTemplateBody))
+	if body == "" {
+		return DialogSubmissionResult{StatusCode: 200, Errors: map[string]string{dialogFieldTemplateBody: svc.t("dialog.prompt.body_empty", nil)}}
+	}
+	rendered, err := renderAgentPromptTemplate(body, samplePromptTemplateData(profileName, templateKey, svc.promptTemplateLocaleData()))
+	if err != nil {
+		return DialogSubmissionResult{StatusCode: 200, Errors: map[string]string{dialogFieldTemplateBody: svc.t("prompt.set.render_failed", map[string]any{"Error": safeError(err)})}}
+	}
+	item, created, err := svc.cfg.Store.UpsertAgentPromptTemplate(ctx, adminrepo.UpsertAgentPromptTemplateInput{
+		ProfileName: profileName,
+		TemplateKey: templateKey,
+		Body:        body,
+	})
+	if err != nil {
+		return DialogSubmissionResult{StatusCode: 200, Error: svc.t("prompt.set.failed", map[string]any{"Error": safeError(err)})}
+	}
+	svc.recordPromptAudit(ctx, SlashCommand{
+		UserID:    command.UserID,
+		UserName:  defaultString(command.UserName, state.UserName),
+		ChannelID: defaultString(state.ChannelID, command.ChannelID),
+	}, "agent_prompt_template.upserted", item.ProfileName+"/"+item.TemplateKey, "agent prompt template upserted from Mattermost dialog")
+	stateID := "label.updated"
+	if created {
+		stateID = "label.created"
+	}
+	text := svc.t("prompt.set.result", map[string]any{
+		"State":       svc.t(stateID, nil),
+		"Profile":     item.ProfileName,
+		"TemplateKey": item.TemplateKey,
+		"Rendered":    sanitizeLogTail(rendered),
+	})
+	return DialogSubmissionResult{StatusCode: 200, Card: svc.dialogResultCard(ctx, state, command, text)}
+}
+
+func (svc *SlashCommandService) handleFlowStartDialog(ctx context.Context, command DialogSubmissionCommand, state mattermostDialogState) DialogSubmissionResult {
+	input, fieldErrors := svc.flowStartDialogInput(command.Submission)
+	if len(fieldErrors) > 0 {
+		return DialogSubmissionResult{StatusCode: 200, Errors: fieldErrors}
+	}
+	if svc.cfg.RuntimeRunner == nil {
+		return DialogSubmissionResult{StatusCode: 200, Error: svc.t("runtime.not_configured", nil)}
+	}
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return DialogSubmissionResult{StatusCode: 200, Error: svc.t("flow.storage_not_ready", nil)}
+	}
+	provider, owner, name, ok := parseRepositoryResourceID(input.RepositoryID)
+	if !ok || provider != "github" {
+		return DialogSubmissionResult{StatusCode: 200, Errors: map[string]string{dialogFieldFlowRepository: svc.t("dialog.repo.repository_invalid", nil)}}
+	}
+	repo, err := svc.cfg.Store.GetRepository(ctx, provider, owner, name)
+	if err != nil {
+		return DialogSubmissionResult{StatusCode: 200, Errors: map[string]string{dialogFieldFlowRepository: svc.t("dialog.repo.not_found", map[string]any{"Repository": owner + "/" + name})}}
+	}
+	if _, message, ok := svc.flowAgentRuntime(ctx, input.DeveloperProfile); !ok {
+		return DialogSubmissionResult{StatusCode: 200, Errors: map[string]string{dialogFieldDeveloperProfile: message}}
+	}
+	if _, message, ok := svc.flowAgentRuntime(ctx, input.ReviewerProfile); !ok {
+		return DialogSubmissionResult{StatusCode: 200, Errors: map[string]string{dialogFieldReviewerProfile: message}}
+	}
+	flowID := newFlowID(repo.Name)
+	flow, created, err := svc.cfg.Store.CreateAgentFlow(ctx, adminrepo.CreateAgentFlowInput{
+		FlowID:               flowID,
+		Status:               flowStatusCreated,
+		Provider:             repo.Provider,
+		Owner:                repo.Owner,
+		Name:                 repo.Name,
+		BaseBranch:           defaultString(repo.DefaultBranch, "main"),
+		HeadBranch:           flowHeadBranch(flowID),
+		Title:                input.Title,
+		Task:                 input.Task,
+		Attempt:              1,
+		MaxAttempts:          input.MaxAttempts,
+		DeveloperProfileName: input.DeveloperProfile,
+		ReviewerProfileName:  input.ReviewerProfile,
+		FlowPreset:           "developer_review",
+		OwnerUserID:          strings.TrimSpace(command.UserID),
+		OwnerUser:            defaultString(command.UserName, state.UserName),
+		ActionToken:          newFlowActionToken(),
+		Summary:              "developer-review flow created from Mattermost dialog",
+	})
+	if err != nil {
+		return DialogSubmissionResult{StatusCode: 200, Error: svc.t("flow.start.store_failed", map[string]any{"Error": safeError(err)})}
+	}
+	if !created {
+		return DialogSubmissionResult{StatusCode: 200, Error: svc.t("flow.start.exists", map[string]any{"FlowID": flow.FlowID, "Status": flow.Status})}
+	}
+	flow, started, err := svc.startFlowDeveloperAttempt(ctx, flow, false)
+	if err != nil {
+		_, _ = svc.cfg.Store.UpdateAgentFlow(ctx, adminrepo.UpdateAgentFlowInput{FlowID: flow.FlowID, Status: flowStatusBlocked, Summary: safeError(err)})
+		return DialogSubmissionResult{StatusCode: 200, Error: svc.t("flow.start.failed", map[string]any{"Error": safeError(err)})}
+	}
+	cardLine := svc.t("flow.start.card_skipped", nil)
+	slashCommand := SlashCommand{
+		UserID:    command.UserID,
+		UserName:  defaultString(command.UserName, state.UserName),
+		ChannelID: defaultString(state.ChannelID, command.ChannelID),
+	}
+	if slashCommand.ChannelID != "" && svc.cfg.FlowCardPublisher != nil && svc.cfg.FlowActionURL != "" {
+		updated, post, err := svc.publishFlowCard(ctx, flow, slashCommand)
+		if err != nil {
+			cardLine = svc.t("flow.start.card_failed", map[string]any{"Error": safeError(err)})
+		} else {
+			flow = updated
+			cardLine = svc.t("flow.start.card_posted", map[string]any{"PostID": post.PostID})
+		}
+	}
+	svc.recordFlowAudit(ctx, slashCommand, "flow.started", flow.FlowID, "developer-review flow started from Mattermost dialog")
+	text := svc.t("flow.start.started", map[string]any{
+		"FlowID":      flow.FlowID,
+		"Repository":  flow.FullName(),
+		"Branch":      flow.HeadBranch,
+		"Attempt":     flow.Attempt,
+		"MaxAttempts": flow.MaxAttempts,
+		"RunID":       started.RunID,
+		"Namespace":   started.Namespace,
+		"Job":         started.JobName,
+		"PVC":         started.PVCName,
+		"Card":        cardLine,
+	})
+	return DialogSubmissionResult{StatusCode: 200, Card: svc.dialogResultCard(ctx, state, command, text)}
+}
+
+func (svc *SlashCommandService) handleRuntimePruneDialog(ctx context.Context, command DialogSubmissionCommand, state mattermostDialogState) DialogSubmissionResult {
+	fieldErrors := map[string]string{}
+	olderThan := strings.TrimSpace(submissionString(command.Submission, dialogFieldOlderThan))
+	if olderThan == "" {
+		fieldErrors[dialogFieldOlderThan] = svc.t("runtime.prune.usage", nil)
+	}
+	if submissionString(command.Submission, dialogFieldConfirm) != "apply" {
+		fieldErrors[dialogFieldConfirm] = svc.t("dialog.runtime.confirm_invalid", nil)
+	}
+	if len(fieldErrors) > 0 {
+		return DialogSubmissionResult{StatusCode: 200, Errors: fieldErrors}
+	}
+	text := svc.handleRuntimePrune(ctx, []string{olderThan, "--apply"}, SlashCommand{
+		UserID:    command.UserID,
+		UserName:  defaultString(command.UserName, state.UserName),
+		ChannelID: defaultString(state.ChannelID, command.ChannelID),
+	})
+	return DialogSubmissionResult{StatusCode: 200, Card: svc.dialogResultCard(ctx, state, command, text)}
+}
+
+func (svc *SlashCommandService) profileDialogInput(submission map[string]any) (adminrepo.UpsertAgentProfileInput, map[string]string) {
+	fieldErrors := map[string]string{}
+	name, err := parseOpenAIAccountName(submissionString(submission, dialogFieldProfile))
+	if err != nil {
+		fieldErrors[dialogFieldProfile] = svc.t("parse.profile.invalid", nil)
+	}
+	role := strings.ToLower(strings.TrimSpace(submissionString(submission, dialogFieldRole)))
+	if !validProfileRole(role) {
+		fieldErrors[dialogFieldRole] = svc.t("dialog.profile.role_invalid", nil)
+	}
+	openAIAccount, err := parseOpenAIAccountName(submissionString(submission, dialogFieldOpenAIAccount))
+	if err != nil {
+		fieldErrors[dialogFieldOpenAIAccount] = svc.t("parse.openai_account.invalid", nil)
+	}
+	githubAccount, err := parseOpenAIAccountName(submissionString(submission, dialogFieldGitHubAccount))
+	if err != nil {
+		fieldErrors[dialogFieldGitHubAccount] = svc.t("parse.github_account.invalid", nil)
+	}
+	kubernetesAccess := strings.ToLower(strings.TrimSpace(submissionString(submission, dialogFieldKubernetesAccess)))
+	if !validKubernetesAccess(kubernetesAccess) {
+		fieldErrors[dialogFieldKubernetesAccess] = svc.t("dialog.profile.kubernetes_invalid", nil)
+	}
+	sandboxMode := strings.ToLower(strings.TrimSpace(submissionString(submission, dialogFieldSandboxMode)))
+	if !validSandboxMode(sandboxMode) {
+		fieldErrors[dialogFieldSandboxMode] = svc.t("dialog.profile.sandbox_invalid", nil)
+	}
+	if len(fieldErrors) > 0 {
+		return adminrepo.UpsertAgentProfileInput{}, fieldErrors
+	}
+	return adminrepo.UpsertAgentProfileInput{
+		Name:              name,
+		Role:              role,
+		Description:       strings.TrimSpace(submissionString(submission, dialogFieldDescription)),
+		Enabled:           true,
+		OpenAIAccountName: openAIAccount,
+		GitHubAccountName: githubAccount,
+		KubernetesAccess:  kubernetesAccess,
+		SandboxMode:       sandboxMode,
+		ConfigOverlay:     strings.TrimSpace(submissionString(submission, dialogFieldConfigOverlay)),
+	}, nil
+}
+
+type flowStartDialogInput struct {
+	RepositoryID     string
+	DeveloperProfile string
+	ReviewerProfile  string
+	Title            string
+	Task             string
+	MaxAttempts      int
+}
+
+func (svc *SlashCommandService) flowStartDialogInput(submission map[string]any) (flowStartDialogInput, map[string]string) {
+	fieldErrors := map[string]string{}
+	repositoryID := strings.TrimSpace(submissionString(submission, dialogFieldFlowRepository))
+	if _, _, _, ok := parseRepositoryResourceID(repositoryID); !ok {
+		fieldErrors[dialogFieldFlowRepository] = svc.t("dialog.repo.repository_invalid", nil)
+	}
+	developerProfile := strings.ToLower(strings.TrimSpace(submissionString(submission, dialogFieldDeveloperProfile)))
+	if !validPromptTemplateID(developerProfile) {
+		fieldErrors[dialogFieldDeveloperProfile] = svc.t("prompt.invalid_id", nil)
+	}
+	reviewerProfile := strings.ToLower(strings.TrimSpace(submissionString(submission, dialogFieldReviewerProfile)))
+	if !validPromptTemplateID(reviewerProfile) {
+		fieldErrors[dialogFieldReviewerProfile] = svc.t("prompt.invalid_id", nil)
+	}
+	title := strings.TrimSpace(submissionString(submission, dialogFieldFlowTitle))
+	if len(title) < 3 {
+		fieldErrors[dialogFieldFlowTitle] = svc.t("dialog.flow.title_invalid", nil)
+	}
+	task := strings.TrimSpace(submissionString(submission, dialogFieldFlowTask))
+	if len(task) < 3 {
+		fieldErrors[dialogFieldFlowTask] = svc.t("dialog.flow.task_invalid", nil)
+	}
+	maxAttempts, err := strconv.Atoi(defaultString(submissionString(submission, dialogFieldMaxAttempts), strconv.Itoa(defaultFlowMaxAttempts)))
+	if err != nil || maxAttempts < 1 || maxAttempts > defaultFlowMaxAttempts {
+		fieldErrors[dialogFieldMaxAttempts] = svc.t("dialog.flow.max_attempts_invalid", nil)
+	}
+	if len(fieldErrors) > 0 {
+		return flowStartDialogInput{}, fieldErrors
+	}
+	return flowStartDialogInput{
+		RepositoryID:     repositoryID,
+		DeveloperProfile: developerProfile,
+		ReviewerProfile:  reviewerProfile,
+		Title:            title,
+		Task:             task,
+		MaxAttempts:      maxAttempts,
+	}, nil
 }
 
 func (svc *SlashCommandService) dialogAccountName(submission map[string]any) (string, map[string]string) {
@@ -4035,13 +5006,16 @@ func (svc *SlashCommandService) menuActions(view string) []MattermostCardAction 
 		}
 	case menuViewStartFlow:
 		return []MattermostCardAction{
+			svc.menuDialogAction(menuViewStartFlow, "dialogflowstart", menuDialogFlowStart, "menu.action.flow_start", "menu.action.flow_start.tooltip", "primary"),
 			svc.menuAction(menuViewPending, "menu.action.pending", "menu.action.pending.tooltip", "warning"),
+			svc.menuResourceAction(menuViewPending, "flowlist", menuActionList, menuResourceFlow, "", "menu.action.flow_list", "menu.action.flow_list.tooltip", "default", nil),
 			svc.menuAction(menuViewRepositories, "menu.action.repositories", "menu.action.repositories.tooltip", "default"),
 			svc.menuAction(menuViewProfiles, "menu.action.profiles", "menu.action.profiles.tooltip", "default"),
 			svc.menuAction(menuViewMain, "menu.action.back", "menu.action.back.tooltip", "default"),
 		}
 	case menuViewPending:
 		return []MattermostCardAction{
+			svc.menuResourceAction(menuViewPending, "pendinglist", menuActionList, menuResourceFlow, "", "menu.action.pending_list", "menu.action.pending_list.tooltip", "primary", nil),
 			svc.menuAction(menuViewStartFlow, "menu.action.start_flow", "menu.action.start_flow.tooltip", "primary"),
 			svc.menuAction(menuViewRepositories, "menu.action.repositories", "menu.action.repositories.tooltip", "default"),
 			svc.menuAction(menuViewProfiles, "menu.action.profiles", "menu.action.profiles.tooltip", "default"),
@@ -4055,6 +5029,7 @@ func (svc *SlashCommandService) menuActions(view string) []MattermostCardAction 
 		}
 	case menuViewProfiles:
 		return []MattermostCardAction{
+			svc.menuDialogAction(menuViewProfiles, "dialogprofileadd", menuDialogProfileUpsert, "menu.action.profile_add", "menu.action.profile_add.tooltip", "primary"),
 			svc.menuResourceAction(menuViewProfiles, "profilelist", menuActionList, menuResourceProfile, "", "menu.action.profile_list", "menu.action.profile_list.tooltip", "primary", nil),
 			svc.menuAction(menuViewOpenAI, "menu.action.openai", "menu.action.openai.tooltip", "default"),
 			svc.menuAction(menuViewGitHub, "menu.action.github", "menu.action.github.tooltip", "default"),
@@ -4069,8 +5044,10 @@ func (svc *SlashCommandService) menuActions(view string) []MattermostCardAction 
 		}
 	case menuViewRuntime:
 		return []MattermostCardAction{
+			svc.menuResourceAction(menuViewRuntime, "runtimeruns", menuActionList, menuResourceRun, "", "menu.action.runtime_runs", "menu.action.runtime_runs.tooltip", "primary", nil),
 			svc.menuResourceAction(menuViewRuntime, "runtimesmoke", menuActionRuntimeSmoke, menuResourceRuntime, "", "menu.action.runtime_smoke", "menu.action.runtime_smoke.tooltip", "primary", nil),
 			svc.menuResourceAction(menuViewRuntime, "runtimeprunedryrun", menuActionRuntimePruneDry, menuResourceRuntime, "", "menu.action.runtime_prune_dry_run", "menu.action.runtime_prune_dry_run.tooltip", "default", nil),
+			svc.menuDialogAction(menuViewRuntime, "dialogruntimeprune", menuDialogRuntimePruneApply, "menu.action.runtime_prune_apply", "menu.action.runtime_prune_apply.tooltip", "warning"),
 			svc.menuAction(menuViewSystem, "menu.action.system", "menu.action.system.tooltip", "default"),
 			svc.menuAction(menuViewMain, "menu.action.back", "menu.action.back.tooltip", "default"),
 		}
@@ -4748,6 +5725,10 @@ const (
 	menuDialogGitHubAccountAdd    = "github_account_add"
 	menuDialogGitHubAccountEdit   = "github_account_edit"
 	menuDialogGitHubAccountDelete = "github_account_delete"
+	menuDialogProfileUpsert       = "profile_upsert"
+	menuDialogPromptEdit          = "prompt_edit"
+	menuDialogFlowStart           = "flow_start"
+	menuDialogRuntimePruneApply   = "runtime_prune_apply"
 
 	menuActionList               = "list"
 	menuActionShow               = "show"
@@ -4760,6 +5741,7 @@ const (
 	menuActionRepositoryConnect  = "repository_connect"
 	menuActionRepositoryCheck    = "repository_check"
 	menuActionRepositoryWebhook  = "repository_webhook"
+	menuActionOpenAIAuth         = "openai_auth"
 	menuActionOpenAIStatus       = "openai_status"
 	menuActionOpenAICleanup      = "openai_cleanup"
 	menuActionSystemStatus       = "system_status"
@@ -4769,14 +5751,29 @@ const (
 	menuActionLocaleSetEN        = "locale_set_en"
 	menuActionRuntimeSmoke       = "runtime_smoke"
 	menuActionRuntimePruneDry    = "runtime_prune_dry"
+	menuActionRuntimePruneApply  = "runtime_prune_apply"
+	menuActionRuntimeCleanup     = "runtime_cleanup"
 	menuActionPromptHelp         = "prompt_help"
 	menuActionPromptRender       = "prompt_render"
+	menuActionProfileEnable      = "profile_enable"
+	menuActionProfileDisable     = "profile_disable"
+	menuActionFlowAdvance        = "flow_advance"
+	menuActionFlowCard           = "flow_card"
+	menuActionFlowCleanup        = "flow_cleanup"
+	menuActionFlowApprove        = "flow_approve"
+	menuActionFlowReject         = "flow_reject"
+	menuActionFlowRerun          = "flow_rerun"
+	menuActionFlowStop           = "flow_stop"
+	menuActionFlowHold           = "flow_hold"
+	menuActionFlowResume         = "flow_resume"
 
 	menuResourceRepository     = "repository"
 	menuResourceOpenAIAccount  = "openai_account"
 	menuResourceGitHubAccount  = "github_account"
 	menuResourceProfile        = "profile"
 	menuResourcePromptTemplate = "prompt_template"
+	menuResourceFlow           = "flow"
+	menuResourceRun            = "run"
 	menuResourceSystem         = "system"
 	menuResourceRuntime        = "runtime"
 
@@ -4793,6 +5790,10 @@ const (
 	dialogCallbackGitHubAccountAdd       = "agents_github_account_add"
 	dialogCallbackGitHubAccountEdit      = "agents_github_account_edit"
 	dialogCallbackGitHubAccountDelete    = "agents_github_account_delete"
+	dialogCallbackProfileUpsert          = "agents_profile_upsert"
+	dialogCallbackPromptEdit             = "agents_prompt_edit"
+	dialogCallbackFlowStart              = "agents_flow_start"
+	dialogCallbackRuntimePruneApply      = "agents_runtime_prune_apply"
 
 	dialogFieldProvider         = "provider"
 	dialogFieldRepository       = "repository"
@@ -4801,12 +5802,28 @@ const (
 	dialogFieldBranchChoice     = "branch_choice"
 	dialogFieldConfirm          = "confirm"
 	dialogFieldAccount          = "account"
+	dialogFieldProfile          = "profile"
 	dialogFieldSearch           = "search"
 	dialogFieldSecretRef        = "secret_ref"
 	dialogFieldToken            = "token"
 	dialogFieldUsername         = "username"
 	dialogFieldEmail            = "email"
 	dialogFieldStatus           = "status"
+	dialogFieldRole             = "role"
+	dialogFieldDescription      = "description"
+	dialogFieldOpenAIAccount    = "openai_account"
+	dialogFieldGitHubAccount    = "github_account"
+	dialogFieldKubernetesAccess = "kubernetes_access"
+	dialogFieldSandboxMode      = "sandbox_mode"
+	dialogFieldConfigOverlay    = "config_overlay"
+	dialogFieldTemplateBody     = "template_body"
+	dialogFieldFlowRepository   = "flow_repository"
+	dialogFieldDeveloperProfile = "developer_profile"
+	dialogFieldReviewerProfile  = "reviewer_profile"
+	dialogFieldFlowTitle        = "flow_title"
+	dialogFieldFlowTask         = "flow_task"
+	dialogFieldMaxAttempts      = "max_attempts"
+	dialogFieldOlderThan        = "older_than"
 
 	openAIDialogActionAuth    = "auth"
 	openAIDialogActionStatus  = "status"
@@ -4823,6 +5840,7 @@ const (
 	flowStatusDeveloperFailed    = "developer_failed"
 	flowStatusDeveloperRunning   = "developer_running"
 	flowStatusFixRunning         = "fix_running"
+	flowStatusHeld               = "held"
 	flowStatusOwnerApproved      = "owner_approved"
 	flowStatusOwnerRejected      = "owner_rejected"
 	flowStatusPROpened           = "pr_opened"
@@ -4871,6 +5889,33 @@ func validAccountEmail(value string) bool {
 func validGitHubAccountStatus(value string) bool {
 	switch value {
 	case "configured", "disabled":
+		return true
+	default:
+		return false
+	}
+}
+
+func validProfileRole(value string) bool {
+	switch value {
+	case "developer", "reviewer", "deployer", "technical_reviewer", "lexical_guard", "manager":
+		return true
+	default:
+		return false
+	}
+}
+
+func validKubernetesAccess(value string) bool {
+	switch value {
+	case "read-only", "cluster-admin":
+		return true
+	default:
+		return false
+	}
+}
+
+func validSandboxMode(value string) bool {
+	switch value {
+	case "danger-full-access", "workspace-write", "read-only":
 		return true
 	default:
 		return false
@@ -4996,6 +6041,27 @@ func flowOwnerTerminal(status string) bool {
 	}
 }
 
+func flowNeedsOwnerAttention(flow entity.AgentFlow) bool {
+	switch flow.Status {
+	case flowStatusApprovedByReviewer, flowStatusWaitingOwner, flowStatusBlocked, flowStatusDeveloperFailed, flowStatusReviewerFailed, flowStatusHeld:
+		return true
+	default:
+		return false
+	}
+}
+
+func flowCanHold(flow entity.AgentFlow) bool {
+	if flowOwnerTerminal(flow.Status) {
+		return false
+	}
+	switch flow.Status {
+	case flowStatusApprovedByReviewer, flowStatusWaitingOwner, flowStatusBlocked, flowStatusDeveloperFailed, flowStatusReviewerFailed:
+		return true
+	default:
+		return false
+	}
+}
+
 func flowCanOwnerDecide(flow entity.AgentFlow) bool {
 	if flowOwnerTerminal(flow.Status) {
 		return false
@@ -5028,9 +6094,49 @@ func flowCardColor(status string) string {
 		return "#c92a2a"
 	case flowStatusReviewRunning, flowStatusDeveloperRunning, flowStatusFixRunning:
 		return "#1c7ed6"
+	case flowStatusHeld:
+		return "#f08c00"
 	default:
 		return "#868e96"
 	}
+}
+
+func newFlowID(repoName string) string {
+	suffix := strconv.FormatInt(time.Now().UTC().Unix(), 36)
+	var raw [3]byte
+	if _, err := rand.Read(raw[:]); err == nil {
+		suffix += "-" + fmt.Sprintf("%x", raw[:])
+	}
+	prefix := strings.ToLower(strings.TrimSpace(repoName))
+	var builder strings.Builder
+	lastDash := false
+	for _, r := range prefix {
+		valid := (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9')
+		if valid {
+			builder.WriteRune(r)
+			lastDash = false
+			continue
+		}
+		if !lastDash {
+			builder.WriteByte('-')
+			lastDash = true
+		}
+	}
+	prefix = strings.Trim(builder.String(), "-")
+	if prefix == "" {
+		prefix = "flow"
+	}
+	maxPrefix := 44 - len(suffix) - 1
+	if maxPrefix < 1 {
+		return "flow-" + suffix
+	}
+	if len(prefix) > maxPrefix {
+		prefix = strings.TrimRight(prefix[:maxPrefix], "-")
+	}
+	if prefix == "" {
+		prefix = "flow"
+	}
+	return prefix + "-" + suffix
 }
 
 func newFlowActionToken() string {
@@ -5245,6 +6351,20 @@ func (svc *SlashCommandService) recordPromptAudit(ctx context.Context, command S
 	})
 }
 
+func (svc *SlashCommandService) recordProfileAudit(ctx context.Context, command SlashCommand, eventType string, resourceName string, summary string) {
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return
+	}
+	_ = svc.cfg.Store.RecordAuditEvent(ctx, adminrepo.AuditEventInput{
+		EventType:    eventType,
+		ActorUserID:  command.UserID,
+		ActorUser:    command.UserName,
+		ResourceType: "profile",
+		ResourceName: resourceName,
+		Summary:      summary,
+	})
+}
+
 func (svc *SlashCommandService) recordFlowAudit(ctx context.Context, command SlashCommand, eventType string, resourceName string, summary string) {
 	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
 		return
@@ -5356,6 +6476,117 @@ func (svc *SlashCommandService) githubAccount(ctx context.Context, name string) 
 	return account, true
 }
 
+func (svc *SlashCommandService) openAIAccountOptions(ctx context.Context, selected string) ([]MattermostDialogOption, string) {
+	accounts, err := svc.cfg.Store.ListOpenAIAccounts(ctx, 100)
+	if err != nil {
+		return nil, svc.t("openai.list.failed", map[string]any{"Error": safeError(err)})
+	}
+	if len(accounts) == 0 {
+		return nil, svc.t("openai.list.empty", nil)
+	}
+	sort.Slice(accounts, func(i int, j int) bool { return accounts[i].Name < accounts[j].Name })
+	options := make([]MattermostDialogOption, 0, len(accounts))
+	for _, account := range accounts {
+		text := svc.t("dialog.account.option", map[string]any{"Account": account.Name, "Status": account.Status})
+		options = append(options, MattermostDialogOption{Text: text, Value: account.Name})
+	}
+	return ensureDialogOption(options, selected), ""
+}
+
+func (svc *SlashCommandService) githubAccountOptions(ctx context.Context, selected string) ([]MattermostDialogOption, string) {
+	accounts, err := svc.cfg.Store.ListGitHubAccounts(ctx, 100)
+	if err != nil {
+		return nil, svc.t("github.account.list.failed", map[string]any{"Error": safeError(err)})
+	}
+	if len(accounts) == 0 {
+		return nil, svc.t("github.account.list.empty", nil)
+	}
+	sort.Slice(accounts, func(i int, j int) bool { return accounts[i].Name < accounts[j].Name })
+	options := make([]MattermostDialogOption, 0, len(accounts))
+	for _, account := range accounts {
+		text := svc.t("dialog.account.option", map[string]any{"Account": account.Name, "Status": account.Status})
+		options = append(options, MattermostDialogOption{Text: text, Value: account.Name})
+	}
+	return ensureDialogOption(options, selected), ""
+}
+
+func (svc *SlashCommandService) repositoryOptions(ctx context.Context) ([]MattermostDialogOption, string) {
+	repositories, err := svc.cfg.Store.ListRepositories(ctx, 100)
+	if err != nil {
+		return nil, svc.t("repo.list.read_failed", map[string]any{"Error": safeError(err)})
+	}
+	if len(repositories) == 0 {
+		return nil, svc.t("repo.list.empty", nil)
+	}
+	sort.Slice(repositories, func(i int, j int) bool { return repositories[i].FullName() < repositories[j].FullName() })
+	options := make([]MattermostDialogOption, 0, len(repositories))
+	for _, repo := range repositories {
+		options = append(options, MattermostDialogOption{
+			Text:  svc.t("dialog.flow.repository.option", map[string]any{"Repository": repo.FullName(), "Branch": repo.DefaultBranch}),
+			Value: repositoryResourceID(repo),
+		})
+	}
+	return options, ""
+}
+
+func (svc *SlashCommandService) enabledProfileOptions(ctx context.Context) ([]MattermostDialogOption, string) {
+	profiles, err := svc.cfg.Store.ListAgentProfiles(ctx)
+	if err != nil {
+		return nil, svc.t("profile.list.read_failed", map[string]any{"Error": safeError(err)})
+	}
+	sort.Slice(profiles, func(i int, j int) bool { return profiles[i].Name < profiles[j].Name })
+	options := make([]MattermostDialogOption, 0, len(profiles))
+	for _, profile := range profiles {
+		if !profile.Enabled {
+			continue
+		}
+		options = append(options, MattermostDialogOption{
+			Text:  svc.t("dialog.flow.profile.option", map[string]any{"Profile": profile.Name, "Role": profile.Role}),
+			Value: profile.Name,
+		})
+	}
+	if len(options) == 0 {
+		return nil, svc.t("profile.list.empty", nil)
+	}
+	return options, ""
+}
+
+func (svc *SlashCommandService) ensurePromptTemplatesForProfile(ctx context.Context, profile entity.AgentProfile) (int, error) {
+	seeds := promptSeedsForRole(profile.Role)
+	created := 0
+	for _, seed := range seeds {
+		if _, err := svc.cfg.Store.GetAgentPromptTemplate(ctx, profile.Name, seed.TemplateKey); err == nil {
+			continue
+		}
+		body, err := svc.promptTemplateSeedBody(ctx, seed)
+		if err != nil {
+			return created, err
+		}
+		if _, newTemplate, err := svc.cfg.Store.UpsertAgentPromptTemplate(ctx, adminrepo.UpsertAgentPromptTemplateInput{
+			ProfileName: profile.Name,
+			TemplateKey: seed.TemplateKey,
+			Body:        body,
+		}); err != nil {
+			return created, err
+		} else if newTemplate {
+			created++
+		}
+	}
+	return created, nil
+}
+
+func (svc *SlashCommandService) promptTemplateSeedBody(ctx context.Context, seed promptTemplateSeed) (string, error) {
+	item, err := svc.cfg.Store.GetAgentPromptTemplate(ctx, seed.SourceProfile, seed.TemplateKey)
+	if err == nil {
+		return item.Body, nil
+	}
+	body := defaultPromptSeedBody(seed.TemplateKey)
+	if strings.TrimSpace(body) == "" {
+		return "", err
+	}
+	return body, nil
+}
+
 func promptGitHubData(accountName string) promptTemplateGitHubData {
 	return promptTemplateGitHubData{
 		Account:     defaultString(accountName, "primary"),
@@ -5440,6 +6671,97 @@ func reviewerRunStatus(status runtimerepo.RunStatus) string {
 		return "running"
 	}
 	return "pending"
+}
+
+func runtimeDerivedStatus(current string, status runtimerepo.RunStatus) string {
+	if status.JobFailed > 0 {
+		return "failed"
+	}
+	if status.JobSucceeded > 0 {
+		return "succeeded"
+	}
+	if status.JobActive > 0 {
+		return "running"
+	}
+	return defaultString(current, "pending")
+}
+
+func (svc *SlashCommandService) runtimeStatusBrief(status runtimerepo.RunStatus) string {
+	lines := []string{
+		svc.t("runtime.status.identity", map[string]any{"RunID": status.RunID, "Namespace": status.Namespace, "Job": status.JobName, "PVC": status.PVCName}),
+		svc.t("runtime.status.job", map[string]any{"Active": status.JobActive, "Succeeded": status.JobSucceeded, "Failed": status.JobFailed}),
+		svc.t("runtime.status.pod", map[string]any{"Pod": emptyAsUnknown(status.PodName), "Phase": emptyAsUnknown(status.PodPhase)}),
+	}
+	return strings.Join(lines, "\n")
+}
+
+func flowPRValue(flow entity.AgentFlow) string {
+	if flow.PRNumber <= 0 && strings.TrimSpace(flow.PRURL) == "" {
+		return "`-`"
+	}
+	if flow.PRNumber > 0 && strings.TrimSpace(flow.PRURL) != "" {
+		return fmt.Sprintf("`#%d` %s", flow.PRNumber, flow.PRURL)
+	}
+	if flow.PRNumber > 0 {
+		return fmt.Sprintf("`#%d`", flow.PRNumber)
+	}
+	return strings.TrimSpace(flow.PRURL)
+}
+
+type promptTemplateSeed struct {
+	SourceProfile string
+	TemplateKey   string
+}
+
+func promptSeedsForRole(role string) []promptTemplateSeed {
+	switch role {
+	case "developer", "deployer":
+		return []promptTemplateSeed{
+			{SourceProfile: "developer", TemplateKey: developerImplementTaskKey},
+			{SourceProfile: "developer", TemplateKey: developerFixReviewKey},
+		}
+	case "reviewer", "technical_reviewer", "lexical_guard":
+		return []promptTemplateSeed{{SourceProfile: "reviewer", TemplateKey: reviewPRTemplateKey}}
+	default:
+		return nil
+	}
+}
+
+func defaultPromptSeedBody(templateKey string) string {
+	switch templateKey {
+	case developerImplementTaskKey:
+		return "You are the matter-codex developer agent.\n\nLanguage: {{.Locale.Language}}.\nRepository: {{.Repository.FullName}}\nTask: {{.Task.Body}}\n"
+	case developerFixReviewKey:
+		return "You are the matter-codex developer agent fixing review feedback.\n\nLanguage: {{.Locale.Language}}.\nRepository: {{.Repository.FullName}}\nPull request: #{{.PullRequest.Number}} {{.PullRequest.URL}}\nTask: {{.Task.Body}}\n"
+	case reviewPRTemplateKey:
+		return "You are the matter-codex reviewer agent.\n\nLanguage: {{.Locale.Language}}.\nRepository: {{.Repository.FullName}}\nPull request: #{{.PullRequest.Number}} {{.PullRequest.URL}}\n"
+	default:
+		return ""
+	}
+}
+
+func profileRoleOptions() []MattermostDialogOption {
+	return []MattermostDialogOption{
+		{Text: "developer", Value: "developer"},
+		{Text: "reviewer", Value: "reviewer"},
+		{Text: "deployer", Value: "deployer"},
+		{Text: "technical_reviewer", Value: "technical_reviewer"},
+		{Text: "lexical_guard", Value: "lexical_guard"},
+		{Text: "manager", Value: "manager"},
+	}
+}
+
+func ensureDialogOption(options []MattermostDialogOption, selected string) []MattermostDialogOption {
+	selected = strings.TrimSpace(selected)
+	if selected == "" {
+		return options
+	}
+	for _, option := range options {
+		if option.Value == selected {
+			return options
+		}
+	}
+	return append([]MattermostDialogOption{{Text: selected, Value: selected}}, options...)
 }
 
 func openAICredentialName(accountName string) string {

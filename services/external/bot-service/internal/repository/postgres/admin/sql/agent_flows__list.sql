@@ -1,4 +1,4 @@
--- name: agent_flows__get :one
+-- name: agent_flows__list :many
 select
 	id,
 	flow_id,
@@ -29,4 +29,6 @@ select
 	created_at,
 	updated_at
 from matter_codex_agent_flows
-where flow_id = $1;
+where $1 = '' or status = $1
+order by updated_at desc, id desc
+limit $2;

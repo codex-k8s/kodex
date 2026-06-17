@@ -857,6 +857,166 @@ func TestGitHubAccountDialogSubmissionDeletesAccount(t *testing.T) {
 	}
 }
 
+func TestProfileDialogSubmissionCreatesProfileAndPromptSeeds(t *testing.T) {
+	store := &fakeAdminStore{
+		profiles:       []entity.AgentProfile{{Name: "developer", Role: "developer", Enabled: true, OpenAIAccountName: "primary", GitHubAccountName: "agent"}},
+		openAIAccounts: map[string]entity.OpenAIAccount{"primary": {Name: "primary", SecretRef: "matter-codex-codex-auth-primary", Status: "authorized"}},
+		githubAccounts: map[string]entity.GitHubAccount{"agent": {Name: "agent", SecretRef: "matter-codex-github-agent", Status: "configured"}},
+	}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:       localizer,
+		StatusService:   testStatusService(localizer),
+		Store:           store,
+		DialogSubmitURL: "http://bot-service/mattermost/dialogs/agents",
+		StorageReady:    true,
+	})
+
+	result := svc.HandleDialogSubmission(context.Background(), DialogSubmissionCommand{
+		CallbackID: dialogCallbackProfileUpsert,
+		State:      encodeDialogState(MenuActionCommand{View: menuViewProfiles, ChannelID: "channel-1", PostID: "post-1"}),
+		UserID:     "owner-id",
+		UserName:   "owner",
+		Submission: map[string]any{
+			dialogFieldProfile:          "deployer",
+			dialogFieldRole:             "deployer",
+			dialogFieldOpenAIAccount:    "primary",
+			dialogFieldGitHubAccount:    "agent",
+			dialogFieldKubernetesAccess: "cluster-admin",
+			dialogFieldSandboxMode:      "workspace-write",
+			dialogFieldDescription:      "Deployment profile",
+			dialogFieldConfigOverlay:    "sandbox_mode = \"workspace-write\"",
+		},
+	})
+
+	if result.Error != "" || len(result.Errors) > 0 {
+		t.Fatalf("dialog errors = %q %#v", result.Error, result.Errors)
+	}
+	profile, err := store.GetAgentProfile(context.Background(), "deployer")
+	if err != nil {
+		t.Fatalf("profile was not saved: %v", err)
+	}
+	if profile.Role != "deployer" || profile.KubernetesAccess != "cluster-admin" || profile.SandboxMode != "workspace-write" || profile.ConfigOverlay == "" {
+		t.Fatalf("profile = %#v", profile)
+	}
+	if _, ok := store.promptTemplates[promptTemplateMapKey("deployer", developerImplementTaskKey)]; !ok {
+		t.Fatalf("implement prompt was not seeded: %#v", store.promptTemplates)
+	}
+	if _, ok := store.promptTemplates[promptTemplateMapKey("deployer", developerFixReviewKey)]; !ok {
+		t.Fatalf("fix prompt was not seeded: %#v", store.promptTemplates)
+	}
+	if result.Card == nil || !strings.Contains(result.Card.Text, "deployer") {
+		t.Fatalf("card = %#v", result.Card)
+	}
+}
+
+func TestPromptEditDialogRendersBeforeSave(t *testing.T) {
+	store := &fakeAdminStore{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:       localizer,
+		StatusService:   testStatusService(localizer),
+		Store:           store,
+		DialogSubmitURL: "http://bot-service/mattermost/dialogs/agents",
+		StorageReady:    true,
+	})
+	body := "Review {{.Repository.FullName}} in {{.Locale.Language}}."
+
+	result := svc.HandleDialogSubmission(context.Background(), DialogSubmissionCommand{
+		CallbackID: dialogCallbackPromptEdit,
+		State:      encodeDialogState(MenuActionCommand{View: menuViewPrompts, ID: promptTemplateResourceID("reviewer", reviewPRTemplateKey), ChannelID: "channel-1", PostID: "post-1"}),
+		UserID:     "owner-id",
+		UserName:   "owner",
+		Submission: map[string]any{
+			dialogFieldTemplateBody: body,
+		},
+	})
+
+	if result.Error != "" || len(result.Errors) > 0 {
+		t.Fatalf("dialog errors = %q %#v", result.Error, result.Errors)
+	}
+	item, err := store.GetAgentPromptTemplate(context.Background(), "reviewer", reviewPRTemplateKey)
+	if err != nil || item.Body != body {
+		t.Fatalf("prompt template = %#v err=%v", item, err)
+	}
+	if result.Card == nil || !strings.Contains(result.Card.Text, "Review codex-k8s/matter-codex in English") {
+		t.Fatalf("card = %#v", result.Card)
+	}
+}
+
+func TestFlowStartDialogUsesSelectedProfiles(t *testing.T) {
+	store := &fakeAdminStore{
+		repositories: map[string]entity.Repository{
+			"github:codex-k8s/matter-codex": {Provider: "github", Owner: "codex-k8s", Name: "matter-codex", DefaultBranch: "main", GitHubAccountName: "agent", Status: "active"},
+		},
+		profiles: []entity.AgentProfile{
+			{Name: "devx", Role: "developer", Enabled: true, OpenAIAccountName: "devx", GitHubAccountName: "agent"},
+			{Name: "reviewx", Role: "reviewer", Enabled: true, OpenAIAccountName: "reviewx", GitHubAccountName: "primary"},
+		},
+		openAIAccounts: map[string]entity.OpenAIAccount{
+			"devx":    {Name: "devx", SecretRef: "matter-codex-codex-auth-devx", Status: "authorized"},
+			"reviewx": {Name: "reviewx", SecretRef: "matter-codex-codex-auth-reviewx", Status: "authorized"},
+		},
+		githubAccounts: map[string]entity.GitHubAccount{
+			"agent":   {Name: "agent", SecretRef: "matter-codex-github-agent", Status: "configured"},
+			"primary": {Name: "primary", SecretRef: "matter-codex-github-primary", Status: "configured"},
+		},
+		promptTemplates: map[string]entity.AgentPromptTemplate{
+			promptTemplateMapKey("devx", developerImplementTaskKey): {ProfileName: "devx", TemplateKey: developerImplementTaskKey, Body: "Implement {{.Task.Title}} in {{.Repository.FullName}}"},
+			promptTemplateMapKey("devx", developerFixReviewKey):     {ProfileName: "devx", TemplateKey: developerFixReviewKey, Body: "Fix {{.PullRequest.Number}}"},
+			promptTemplateMapKey("reviewx", reviewPRTemplateKey):    {ProfileName: "reviewx", TemplateKey: reviewPRTemplateKey, Body: "Review {{.PullRequest.Number}}"},
+		},
+	}
+	runner := &fakeRuntimeRunner{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:         localizer,
+		StatusService:     testStatusService(localizer),
+		Store:             store,
+		RuntimeRunner:     runner,
+		FlowCardPublisher: &fakeFlowCardPublisher{},
+		FlowActionURL:     "http://bot-service/mattermost/actions/flow",
+		DialogSubmitURL:   "http://bot-service/mattermost/dialogs/agents",
+		StorageReady:      true,
+	})
+
+	result := svc.HandleDialogSubmission(context.Background(), DialogSubmissionCommand{
+		CallbackID: dialogCallbackFlowStart,
+		State:      encodeDialogState(MenuActionCommand{View: menuViewStartFlow, ChannelID: "channel-1", PostID: "post-1"}),
+		UserID:     "owner-id",
+		UserName:   "owner",
+		ChannelID:  "channel-1",
+		Submission: map[string]any{
+			dialogFieldFlowRepository:   "github:codex-k8s/matter-codex",
+			dialogFieldDeveloperProfile: "devx",
+			dialogFieldReviewerProfile:  "reviewx",
+			dialogFieldFlowTitle:        "Update docs",
+			dialogFieldFlowTask:         "Update docs safely.",
+			dialogFieldMaxAttempts:      "2",
+		},
+	})
+
+	if result.Error != "" || len(result.Errors) > 0 {
+		t.Fatalf("dialog errors = %q %#v", result.Error, result.Errors)
+	}
+	if len(runner.developerRuns) != 1 || runner.developerRuns[0].Profile != "devx" {
+		t.Fatalf("developer runs = %#v", runner.developerRuns)
+	}
+	if runner.developerCodexSecret != "matter-codex-codex-auth-devx" || runner.developerGitHubSecret != "matter-codex-github-agent" {
+		t.Fatalf("developer secrets = codex %q github %q", runner.developerCodexSecret, runner.developerGitHubSecret)
+	}
+	flows, err := store.ListAgentFlows(context.Background(), "", 10)
+	if err != nil || len(flows) != 1 {
+		t.Fatalf("flows = %#v err=%v", flows, err)
+	}
+	if flows[0].DeveloperProfileName != "devx" || flows[0].ReviewerProfileName != "reviewx" || flows[0].MaxAttempts != 2 {
+		t.Fatalf("flow = %#v", flows[0])
+	}
+	if result.Card == nil || !strings.Contains(result.Card.Text, "developer-review flow started") {
+		t.Fatalf("card = %#v", result.Card)
+	}
+}
+
 func TestGitHubAccountDialogSubmissionBlocksProfileAccountDeletion(t *testing.T) {
 	store := &fakeAdminStore{
 		profiles: []entity.AgentProfile{{Name: "developer", GitHubAccountName: "reviewer"}},
@@ -1112,7 +1272,7 @@ func TestMenuEntityListActionShowsOpenAIAccountCardButtons(t *testing.T) {
 	assertCardDoesNotExposeSlashCommand(t, result.Card)
 }
 
-func TestMenuOpenAIStatusActionKeepsDeviceCodePrivate(t *testing.T) {
+func TestMenuOpenAIStatusActionShowsDeviceCodeInCard(t *testing.T) {
 	store := &fakeAdminStore{
 		openAIAccounts: map[string]entity.OpenAIAccount{
 			"primary": {Name: "primary", Status: "awaiting_user", SecretRef: "matter-codex-codex-auth-primary"},
@@ -1136,17 +1296,62 @@ func TestMenuOpenAIStatusActionKeepsDeviceCodePrivate(t *testing.T) {
 		ID:       "primary",
 	})
 
-	if !strings.Contains(result.EphemeralText, "ABCD-12345") {
+	if result.EphemeralText != "" {
 		t.Fatalf("ephemeral text = %q", result.EphemeralText)
 	}
 	if result.Card == nil || result.Card.Title != "Result - OpenAI accounts" {
 		t.Fatalf("card = %#v", result.Card)
 	}
-	if strings.Contains(result.Card.Text, "ABCD-12345") || strings.Contains(result.Card.Text, "https://auth.openai.com") {
-		t.Fatalf("card exposes device-code result: %q", result.Card.Text)
+	if !strings.Contains(result.Card.Text, "ABCD-12345") || !strings.Contains(result.Card.Text, "https://auth.openai.com") {
+		t.Fatalf("card does not show device-code result: %q", result.Card.Text)
 	}
-	if !strings.Contains(result.Card.Text, "private Mattermost response") {
-		t.Fatalf("card text = %q", result.Card.Text)
+	if _, ok := mattermostActionByID(result.Card.Actions, "openaiauthrestart"); !ok {
+		t.Fatalf("auth restart action is missing: %#v", result.Card.Actions)
+	}
+	assertCardDoesNotExposeSlashCommand(t, result.Card)
+}
+
+func TestMenuOpenAIAuthActionRestartsExistingAccount(t *testing.T) {
+	store := &fakeAdminStore{
+		openAIAccounts: map[string]entity.OpenAIAccount{
+			"primary": {Name: "primary", Status: "auth_failed", SecretRef: "matter-codex-codex-auth-primary"},
+		},
+	}
+	runner := &fakeRuntimeRunner{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:           localizer,
+		StatusService:       testStatusService(localizer),
+		Store:               store,
+		RuntimeRunner:       runner,
+		MenuActionURL:       "http://bot-service/mattermost/actions/agents",
+		CodexAuthSecretName: "matter-codex-codex-auth",
+		StorageReady:        true,
+		RuntimeConfigured:   true,
+	})
+
+	result := svc.HandleMenuAction(context.Background(), MenuActionCommand{
+		View:     menuViewOpenAI,
+		Action:   menuActionOpenAIAuth,
+		Resource: menuResourceOpenAIAccount,
+		ID:       "primary",
+	})
+
+	if result.EphemeralText != "" {
+		t.Fatalf("ephemeral text = %q", result.EphemeralText)
+	}
+	if runner.authAccount != "primary" || runner.authSecret != "matter-codex-codex-auth-primary" {
+		t.Fatalf("auth session = account %q secret %q", runner.authAccount, runner.authSecret)
+	}
+	account := store.openAIAccounts["primary"]
+	if account.Status != "auth_pending" {
+		t.Fatalf("account = %#v", account)
+	}
+	if result.Card == nil || !strings.Contains(result.Card.Text, "OpenAI account updated") {
+		t.Fatalf("card = %#v", result.Card)
+	}
+	if _, ok := mattermostActionByID(result.Card.Actions, "openaistatus"); !ok {
+		t.Fatalf("status action is missing: %#v", result.Card.Actions)
 	}
 	assertCardDoesNotExposeSlashCommand(t, result.Card)
 }
@@ -2600,6 +2805,7 @@ type fakeAdminStore struct {
 	githubAccounts       map[string]entity.GitHubAccount
 	githubUpsert         adminrepo.UpsertGitHubAccountInput
 	deletedGitHubAccount entity.GitHubAccount
+	profileUpsert        adminrepo.UpsertAgentProfileInput
 	promptTemplates      map[string]entity.AgentPromptTemplate
 	agentRun             entity.AgentRun
 	agentRuns            map[string]entity.AgentRun
@@ -2669,6 +2875,47 @@ func repositoryStoreKey(provider string, owner string, name string) string {
 
 func (store *fakeAdminStore) ListAgentProfiles(context.Context) ([]entity.AgentProfile, error) {
 	return store.profiles, nil
+}
+
+func (store *fakeAdminStore) GetAgentProfile(_ context.Context, name string) (entity.AgentProfile, error) {
+	for _, profile := range store.profiles {
+		if profile.Name == name {
+			return profile, nil
+		}
+	}
+	return entity.AgentProfile{}, adminrepo.ErrNotFound
+}
+
+func (store *fakeAdminStore) UpsertAgentProfile(_ context.Context, input adminrepo.UpsertAgentProfileInput) (entity.AgentProfile, bool, error) {
+	store.profileUpsert = input
+	for index, profile := range store.profiles {
+		if profile.Name == input.Name {
+			profile.Role = input.Role
+			profile.Description = input.Description
+			profile.Enabled = input.Enabled
+			profile.OpenAIAccountName = input.OpenAIAccountName
+			profile.GitHubAccountName = input.GitHubAccountName
+			profile.KubernetesAccess = input.KubernetesAccess
+			profile.SandboxMode = input.SandboxMode
+			profile.ConfigOverlay = input.ConfigOverlay
+			store.profiles[index] = profile
+			return profile, false, nil
+		}
+	}
+	profile := entity.AgentProfile{
+		ID:                int64(len(store.profiles) + 1),
+		Name:              input.Name,
+		Role:              input.Role,
+		Description:       input.Description,
+		Enabled:           input.Enabled,
+		OpenAIAccountName: input.OpenAIAccountName,
+		GitHubAccountName: input.GitHubAccountName,
+		KubernetesAccess:  input.KubernetesAccess,
+		SandboxMode:       input.SandboxMode,
+		ConfigOverlay:     input.ConfigOverlay,
+	}
+	store.profiles = append(store.profiles, profile)
+	return profile, true, nil
 }
 
 func (store *fakeAdminStore) ListAgentPromptTemplates(_ context.Context, profileName string) ([]entity.AgentPromptTemplate, error) {
@@ -2859,22 +3106,25 @@ func (store *fakeAdminStore) CreateAgentFlow(_ context.Context, input adminrepo.
 		return flow, false, nil
 	}
 	flow := entity.AgentFlow{
-		ID:          int64(len(store.agentFlows) + 1),
-		FlowID:      input.FlowID,
-		Status:      input.Status,
-		Provider:    input.Provider,
-		Owner:       input.Owner,
-		Name:        input.Name,
-		BaseBranch:  input.BaseBranch,
-		HeadBranch:  input.HeadBranch,
-		Title:       input.Title,
-		Task:        input.Task,
-		Attempt:     input.Attempt,
-		MaxAttempts: input.MaxAttempts,
-		OwnerUserID: input.OwnerUserID,
-		OwnerUser:   input.OwnerUser,
-		ActionToken: input.ActionToken,
-		Summary:     input.Summary,
+		ID:                   int64(len(store.agentFlows) + 1),
+		FlowID:               input.FlowID,
+		Status:               input.Status,
+		Provider:             input.Provider,
+		Owner:                input.Owner,
+		Name:                 input.Name,
+		BaseBranch:           input.BaseBranch,
+		HeadBranch:           input.HeadBranch,
+		Title:                input.Title,
+		Task:                 input.Task,
+		Attempt:              input.Attempt,
+		MaxAttempts:          input.MaxAttempts,
+		DeveloperProfileName: input.DeveloperProfileName,
+		ReviewerProfileName:  input.ReviewerProfileName,
+		FlowPreset:           input.FlowPreset,
+		OwnerUserID:          input.OwnerUserID,
+		OwnerUser:            input.OwnerUser,
+		ActionToken:          input.ActionToken,
+		Summary:              input.Summary,
 	}
 	store.agentFlows[flow.FlowID] = flow
 	return flow, true, nil
@@ -2887,6 +3137,23 @@ func (store *fakeAdminStore) GetAgentFlow(_ context.Context, flowID string) (ent
 		return entity.AgentFlow{}, fmt.Errorf("agent flow not found")
 	}
 	return flow, nil
+}
+
+func (store *fakeAdminStore) ListAgentFlows(_ context.Context, status string, limit int) ([]entity.AgentFlow, error) {
+	store.ensureAgentFlows()
+	flows := make([]entity.AgentFlow, 0, len(store.agentFlows))
+	for _, flow := range store.agentFlows {
+		if status == "" || flow.Status == status {
+			flows = append(flows, flow)
+		}
+	}
+	sort.Slice(flows, func(i, j int) bool {
+		return flows[i].FlowID < flows[j].FlowID
+	})
+	if limit > 0 && len(flows) > limit {
+		flows = flows[:limit]
+	}
+	return flows, nil
 }
 
 func (store *fakeAdminStore) UpdateAgentFlow(_ context.Context, input adminrepo.UpdateAgentFlowInput) (entity.AgentFlow, error) {
@@ -2988,6 +3255,21 @@ func (store *fakeAdminStore) GetAgentRun(_ context.Context, runID string) (entit
 	}
 	store.agentRuns[store.agentRun.RunID] = store.agentRun
 	return store.agentRun, nil
+}
+
+func (store *fakeAdminStore) ListAgentRuns(_ context.Context, limit int) ([]entity.AgentRun, error) {
+	store.ensureAgentRuns()
+	runs := make([]entity.AgentRun, 0, len(store.agentRuns))
+	for _, run := range store.agentRuns {
+		runs = append(runs, run)
+	}
+	sort.Slice(runs, func(i, j int) bool {
+		return runs[i].RunID < runs[j].RunID
+	})
+	if limit > 0 && len(runs) > limit {
+		runs = runs[:limit]
+	}
+	return runs, nil
 }
 
 func (store *fakeAdminStore) ListAgentRunsByFlowID(_ context.Context, flowID string) ([]entity.AgentRun, error) {

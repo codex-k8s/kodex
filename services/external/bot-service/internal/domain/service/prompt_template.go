@@ -25,8 +25,11 @@ type promptTemplateRunData struct {
 }
 
 type promptTemplateAgentData struct {
-	Profile string
-	Role    string
+	Profile          string
+	Role             string
+	KubernetesAccess string
+	SandboxMode      string
+	ConfigOverlay    string
 }
 
 type promptTemplateRepositoryData struct {
@@ -126,7 +129,7 @@ func promptTemplateFuncMap() template.FuncMap {
 func promptTemplateReferenceData() map[string]any {
 	return map[string]any{
 		"RunPlaceholders":         "{{.Run.ID}}, {{.Run.Profile}}, {{.Run.Role}}, {{.Run.Locale}}",
-		"AgentPlaceholders":       "{{.Agent.Profile}}, {{.Agent.Role}}",
+		"AgentPlaceholders":       "{{.Agent.Profile}}, {{.Agent.Role}}, {{.Agent.KubernetesAccess}}, {{.Agent.SandboxMode}}, {{.Agent.ConfigOverlay}}",
 		"RepositoryPlaceholders":  "{{.Repository.Provider}}, {{.Repository.Owner}}, {{.Repository.Name}}, {{.Repository.FullName}}",
 		"TaskPlaceholders":        "{{.Task.Title}}, {{.Task.Body}}, {{.Task.BaseBranch}}, {{.Task.HeadBranch}}",
 		"PullRequestPlaceholders": "{{.PullRequest.Number}}, {{.PullRequest.URL}}, {{.PullRequest.Title}}, {{.PullRequest.BaseBranch}}, {{.PullRequest.HeadBranch}}",
@@ -156,8 +159,10 @@ func samplePromptTemplateData(profileName string, templateKey string, locale pro
 			Locale:  locale.Code,
 		},
 		Agent: promptTemplateAgentData{
-			Profile: profileName,
-			Role:    profileName,
+			Profile:          profileName,
+			Role:             profileName,
+			KubernetesAccess: "read-only",
+			SandboxMode:      "danger-full-access",
 		},
 		Repository: promptTemplateRepositoryData{
 			Provider: "github",

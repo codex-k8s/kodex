@@ -675,6 +675,14 @@ func (store *fakeRouterAdminStore) ListAgentProfiles(context.Context) ([]entity.
 	return nil, nil
 }
 
+func (store *fakeRouterAdminStore) GetAgentProfile(context.Context, string) (entity.AgentProfile, error) {
+	return entity.AgentProfile{}, adminrepo.ErrNotFound
+}
+
+func (store *fakeRouterAdminStore) UpsertAgentProfile(context.Context, adminrepo.UpsertAgentProfileInput) (entity.AgentProfile, bool, error) {
+	return entity.AgentProfile{}, true, nil
+}
+
 func (store *fakeRouterAdminStore) ListAgentPromptTemplates(context.Context, string) ([]entity.AgentPromptTemplate, error) {
 	return nil, nil
 }
@@ -731,6 +739,10 @@ func (store *fakeRouterAdminStore) GetAgentFlow(context.Context, string) (entity
 	return entity.AgentFlow{}, adminrepo.ErrNotFound
 }
 
+func (store *fakeRouterAdminStore) ListAgentFlows(context.Context, string, int) ([]entity.AgentFlow, error) {
+	return nil, nil
+}
+
 func (store *fakeRouterAdminStore) UpdateAgentFlow(context.Context, adminrepo.UpdateAgentFlowInput) (entity.AgentFlow, error) {
 	return entity.AgentFlow{}, nil
 }
@@ -741,6 +753,10 @@ func (store *fakeRouterAdminStore) CreateAgentRun(context.Context, adminrepo.Cre
 
 func (store *fakeRouterAdminStore) GetAgentRun(context.Context, string) (entity.AgentRun, error) {
 	return entity.AgentRun{}, adminrepo.ErrNotFound
+}
+
+func (store *fakeRouterAdminStore) ListAgentRuns(context.Context, int) ([]entity.AgentRun, error) {
+	return nil, nil
 }
 
 func (store *fakeRouterAdminStore) ListAgentRunsByFlowID(context.Context, string) ([]entity.AgentRun, error) {

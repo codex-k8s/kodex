@@ -1,6 +1,6 @@
 # PR Roadmap
 
-Этот roadmap заменяет старую разбивку после merge PR #20. Система уже имеет bootstrap, bot-service, storage, GitHub adapter, Kubernetes runner, Codex developer/reviewer runs, developer-review flow, owner actions, retention cleanup, OAuth gate, i18n и первые `/agents` menu/dialog срезы.
+Этот roadmap заменяет старую разбивку после merge PR #20 и фиксирует объединенный MVP PR после repository onboarding UX. Система уже имеет bootstrap, bot-service, storage, GitHub adapter, Kubernetes runner, Codex developer/reviewer runs, developer-review flow, owner actions, retention cleanup, OAuth gate, i18n и первые `/agents` menu/dialog срезы.
 
 Дальше цель не наращивать typed slash commands, а довести продукт до owner-first Mattermost UX: владелец открывает `/agents`, выбирает сущности кнопками и списками, вводит только содержательные данные и не помнит технические identifiers.
 
@@ -28,7 +28,7 @@
 - общий слой entity cards/list pages;
 - pagination/filter actions для длинных списков;
 - hidden action state для repository/account/profile/template/run/flow ids;
-- единый confirmation flow без ввода `delete`;
+- единый confirmation flow без ввода технических ids;
 - result/error cards с next actions;
 - тесты, запрещающие `/agents <command>` в owner-facing карточках основного меню.
 
@@ -87,36 +87,21 @@
 - выполнить check/webhook actions с repository card;
 - удалить/disable metadata через confirmation UI.
 
-## Code PR 4: Agent Profiles And Prompt Templates
+## Combined Code PR: Owner Flow MVP
 
-Цель: owner собирает разные типы агентов и flow без ручного редактирования БД или знания template keys.
+Цель: одним PR закрыть оставшиеся owner-facing MVP-срезы так, чтобы владелец управлял profiles, prompts, flow, pending decisions и runtime cleanup из `/agents`, без ручного ввода flow/run/profile/template ids для уже созданных сущностей.
 
 Содержимое:
 
 - profile list/cards;
 - create/edit profile из preset: developer, reviewer, technical reviewer, lexical reviewer, deployer;
 - выбор OpenAI/GitHub accounts из списков;
-- Kubernetes access mode: none, read-only, deployer, custom;
+- Kubernetes access mode MVP: read-only или cluster-admin;
 - sandbox/config overlay editor или безопасный config dialog;
 - prompt template list per profile;
 - prompt edit через Markdown submission;
 - placeholders/functions help из i18n;
 - test render before save.
-
-Ручная проверка:
-
-- создать reviewer-like profile из preset;
-- выбрать accounts из UI;
-- выбрать Kubernetes access mode;
-- открыть template, изменить Markdown, увидеть test render и сохранить;
-- проверить, что prompt language зависит от выбранной локали.
-
-## Code PR 5: Flow Wizard And Pending Decisions
-
-Цель: запуск и управление flow полностью из `/agents`.
-
-Содержимое:
-
 - wizard: repository -> flow preset -> profiles/accounts -> task -> confirm;
 - system-generated flow id, run ids и branch names;
 - flow card как главный статусный объект;
@@ -124,21 +109,6 @@
 - approve/reject/rerun/stop/hold actions;
 - blocked escalation после лимита попыток;
 - links на PR, logs/status и cleanup.
-
-Ручная проверка:
-
-- запустить developer-review flow, введя только текст задачи;
-- увидеть generated ids только как read-only metadata;
-- получить PR link в flow card;
-- проверить pending decisions;
-- нажать approve/reject/rerun/stop на тестовом flow.
-
-## Code PR 6: Runtime Operations And Cleanup
-
-Цель: owner управляет run resources без `run-id` и без риска удалить ожидающую задачу.
-
-Содержимое:
-
 - runtime lists: active, held, completed;
 - run/flow status cards с log tail;
 - cleanup конкретного run/flow из карточки;
@@ -146,21 +116,6 @@
 - apply cleanup через confirmation UI;
 - hold/unhold flow;
 - правила: active jobs и waiting/held flows не удаляются без явного owner action.
-
-Ручная проверка:
-
-- открыть runtime menu;
-- выбрать run из списка и посмотреть status/log tail;
-- выполнить dry-run retention;
-- подтвердить cleanup конкретного завершенного run;
-- убедиться, что waiting/held flow пропускается cleanup.
-
-## Code PR 7: E2E Dogfooding Polish
-
-Цель: довести систему до полного ручного рабочего контура на реальном repository.
-
-Содержимое:
-
 - полный dogfooding run на `matter-codex` или выбранном repository;
 - проверка developer -> PR -> reviewer -> fix-loop -> owner gate;
 - финальный runbook без обязательных typed commands в product path;
@@ -169,11 +124,34 @@
 
 Ручная проверка:
 
+- создать reviewer-like profile из preset;
+- выбрать accounts из UI;
+- выбрать Kubernetes access mode;
+- открыть template, изменить Markdown, увидеть test render и сохранить;
+- проверить, что prompt language зависит от выбранной локали;
+- запустить developer-review flow, введя только текст задачи;
+- увидеть generated ids только как read-only metadata;
+- получить PR link в flow card;
+- проверить pending decisions;
+- нажать approve/reject/rerun/stop/hold на тестовом flow;
+- открыть runtime menu;
+- выбрать run из списка и посмотреть status/log tail;
+- выполнить dry-run retention;
+- подтвердить cleanup конкретного завершенного run;
+- убедиться, что waiting/held flow пропускается cleanup без явного owner action;
 - пройти end-to-end task в Mattermost;
 - получить PR и reviewer decision;
 - проверить request changes -> fix attempt;
 - принять owner decision;
 - выполнить безопасный cleanup.
+
+## Оставшиеся production gaps после MVP
+
+- Fine-grained Kubernetes role policies вместо MVP `cluster-admin` для deploy/ops profiles.
+- Более богатая пагинация/поиск для больших списков profiles, flows и runs.
+- Полная история audit trail и log tail прямо в карточках без fallback typed commands.
+- GitHub App вместо PAT/account token.
+- HA Mattermost/PostgreSQL и managed storage вместо single-server setup.
 
 ## Неизменные MVP-решения
 

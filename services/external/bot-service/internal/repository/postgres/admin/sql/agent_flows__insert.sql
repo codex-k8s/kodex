@@ -11,6 +11,9 @@ insert into matter_codex_agent_flows(
 	task,
 	attempt,
 	max_attempts,
+	developer_profile_name,
+	reviewer_profile_name,
+	flow_preset,
 	owner_user_id,
 	owner_user,
 	action_token,
@@ -30,7 +33,10 @@ insert into matter_codex_agent_flows(
 	$12,
 	$13,
 	$14,
-	$15
+	$15,
+	$16,
+	$17,
+	$18
 )
 on conflict (flow_id) do update set
 	updated_at = now()
@@ -49,6 +55,9 @@ returning
 	pr_number,
 	attempt,
 	max_attempts,
+	developer_profile_name,
+	reviewer_profile_name,
+	flow_preset,
 	current_developer_run_id,
 	current_reviewer_run_id,
 	owner_user_id,

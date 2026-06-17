@@ -17,7 +17,8 @@ Mattermost, bot-service, agent pod и PVC создаются в одном names
 - запрещать mount чужих PVC;
 - выдавать Kubernetes API access только через явно выбранный agent profile access mode;
 - для обычных review/development профилей использовать read-only доступ к logs/status в разрешенных namespaces, если владельцу это нужно для работы агента;
-- deploy-права выдавать только специальным deployer/custom профилям с явно выбранной role policy;
+- deploy/ops-права в MVP выдавать только специальным профилям с явно выбранным `cluster-admin` access mode;
+- считать `cluster-admin` временным owner-selected риском; future path - заменить его на заранее подготовленные Role/ClusterRole policies per project/namespace;
 - оставить runtime interface так, чтобы при необходимости перейти на namespace-per-run без изменения orchestrator.
 
 NetworkPolicy по умолчанию не включается. Это осознанный MVP-риск: агентам может потребоваться доступ к внешним сервисам проекта, GitHub, OpenAI/Codex, package registries и внутренним endpoints.
