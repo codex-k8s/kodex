@@ -122,6 +122,36 @@ func TestCodexAuthSecretCheckJobMountsSavedAuthSecret(t *testing.T) {
 	}
 }
 
+func TestCheckCodexAuthSecretReturnsNotReadyWhenSecretIsMissing(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	runner, err := NewRunnerWithClient(client, Config{
+		Namespace:                 "mattermost",
+		AgentRunnerImage:          "matter-codex-agent-runner:test",
+		AgentRunnerServiceAccount: "matter-codex-agent-runner",
+	})
+	if err != nil {
+		t.Fatalf("NewRunnerWithClient() error = %v", err)
+	}
+
+	result, err := runner.CheckCodexAuthSecret(context.Background(), runtimerepo.CodexAuthSecretCheckInput{
+		AccountName: "primary",
+		SecretName:  "missing-codex-auth",
+	})
+	if err != nil {
+		t.Fatalf("CheckCodexAuthSecret() error = %v", err)
+	}
+	if result.Ready || !strings.Contains(result.LogTail, "missing") {
+		t.Fatalf("result = %#v", result)
+	}
+	jobs, err := client.BatchV1().Jobs("mattermost").List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		t.Fatalf("List jobs error = %v", err)
+	}
+	if len(jobs.Items) != 0 {
+		t.Fatalf("unexpected auth check jobs: %#v", jobs.Items)
+	}
+}
+
 func TestDeleteCodexAuthAccountDeletesJobAndSecret(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	runner, err := NewRunnerWithClient(client, Config{

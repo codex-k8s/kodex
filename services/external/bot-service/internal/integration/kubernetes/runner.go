@@ -256,6 +256,13 @@ func (runner *Runner) CheckCodexAuthSecret(ctx context.Context, input runtimerep
 		Namespace:   runner.namespace,
 		JobName:     jobName,
 	}
+	if _, err := runner.client.CoreV1().Secrets(runner.namespace).Get(ctx, input.SecretName, metav1.GetOptions{}); err != nil {
+		if apierrors.IsNotFound(err) {
+			result.LogTail = "codex auth secret is missing"
+			return result, nil
+		}
+		return runtimerepo.CodexAuthSecretCheckResult{}, fmt.Errorf("get codex auth secret: %w", err)
+	}
 	if _, err := runner.client.BatchV1().Jobs(runner.namespace).Create(ctx, runner.codexAuthSecretCheckJob(input, jobName), metav1.CreateOptions{}); err != nil {
 		return runtimerepo.CodexAuthSecretCheckResult{}, fmt.Errorf("create codex auth check job: %w", err)
 	}
