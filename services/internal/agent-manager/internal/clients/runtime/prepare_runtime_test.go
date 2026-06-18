@@ -182,6 +182,40 @@ func TestCreateSelfDeployBuildJobMapsRequestAndResponse(t *testing.T) {
 	}
 }
 
+func TestCreateSelfDeployBuildJobMapsPermissionDeniedAsRuntimeJobCaller(t *testing.T) {
+	t.Parallel()
+
+	preparer, err := newPreparer(&fakeRuntimeManagerClient{
+		err: status.Error(codes.PermissionDenied, "access denied"),
+	}, Config{AuthToken: "token", Timeout: time.Second})
+	if err != nil {
+		t.Fatalf("newPreparer() err = %v", err)
+	}
+
+	_, err = preparer.CreateSelfDeployBuildJob(context.Background(), agentservice.SelfDeployBuildJobInput{
+		SelfDeployRuntimeJobInput: agentservice.SelfDeployRuntimeJobInput{
+			Meta:         value.CommandMeta{CommandID: uuid.New(), Actor: value.Actor{Type: "service", ID: "agent-manager"}},
+			ProjectID:    uuid.New(),
+			RepositoryID: uuid.New(),
+			PlanID:       uuid.New(),
+			ServiceKey:   "agent-manager",
+		},
+		BuildExecutionSpec: testSelfDeployBuildExecutionSpec(),
+	})
+	if err == nil {
+		t.Fatal("CreateSelfDeployBuildJob() err = nil, want permission denied")
+	}
+	var runtimeErr *agentservice.RuntimeJobError
+	if !errors.As(err, &runtimeErr) {
+		t.Fatalf("CreateSelfDeployBuildJob() err = %T, want RuntimeJobError", err)
+	}
+	if runtimeErr.Code != "permission_denied" ||
+		runtimeErr.SafeMessage != "runtime-manager rejected the runtime job caller" ||
+		strings.Contains(runtimeErr.SafeMessage, "agent run") {
+		t.Fatalf("runtime error = %+v", runtimeErr)
+	}
+}
+
 func TestPrepareRuntimeResultExtractsGeneratedContextDigest(t *testing.T) {
 	t.Parallel()
 
