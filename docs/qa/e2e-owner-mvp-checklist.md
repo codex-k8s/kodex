@@ -78,7 +78,8 @@
 
 ## Repositories
 
-- [x] Repository onboarding начинается с выбора GitHub account кнопкой.
+- [x] Repository onboarding из project dashboard использует platform GitHub account проекта.
+- [x] Global repository onboarding остается fallback path и начинается с выбора GitHub account кнопкой.
 - [x] Repository search возвращает приватную карточку с результатами.
 - [x] Branch selection выбирает branch из GitHub API.
 - [x] Repository binding сохраняет provider/owner/name/default branch/account.

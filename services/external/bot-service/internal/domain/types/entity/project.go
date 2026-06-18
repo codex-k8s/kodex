@@ -3,14 +3,15 @@ package entity
 import "time"
 
 type Project struct {
-	ID               int64
-	Name             string
-	Slug             string
-	MattermostTeamID string
-	Description      string
-	AdvancedSettings string
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+	ID                int64
+	Name              string
+	Slug              string
+	MattermostTeamID  string
+	GitHubAccountName string
+	Description       string
+	AdvancedSettings  string
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
 }
 
 type ProjectRepository struct {

@@ -167,6 +167,7 @@ func (svc *SlashCommandService) projectListCard(ctx context.Context, command Men
 			Value: svc.t("menu.entity.project.summary", map[string]any{
 				"Slug":        project.Slug,
 				"Team":        emptyAsUnknown(project.MattermostTeamID),
+				"GitHub":      emptyAsUnknown(project.GitHubAccountName),
 				"Description": emptyAsUnknown(project.Description),
 			}),
 			Short: false,
@@ -212,6 +213,7 @@ func (svc *SlashCommandService) projectEntityCard(ctx context.Context, command M
 	card.Fields = []MattermostCardField{
 		{Title: svc.t("menu.entity.field.project", nil), Value: "`" + project.Name + "`", Short: true},
 		{Title: svc.t("menu.entity.field.slug", nil), Value: "`" + project.Slug + "`", Short: true},
+		{Title: svc.t("menu.entity.field.github", nil), Value: "`" + emptyAsUnknown(project.GitHubAccountName) + "`", Short: true},
 		{Title: svc.t("menu.entity.field.team", nil), Value: "`" + emptyAsUnknown(project.MattermostTeamID) + "`", Short: false},
 		{Title: svc.t("menu.entity.field.repositories", nil), Value: "`" + strconv.Itoa(len(repositories)) + "`", Short: true},
 		{Title: svc.t("menu.entity.field.roles", nil), Value: "`" + strconv.Itoa(len(roles)) + "`", Short: true},
@@ -219,10 +221,16 @@ func (svc *SlashCommandService) projectEntityCard(ctx context.Context, command M
 		{Title: svc.t("menu.entity.field.description", nil), Value: emptyAsUnknown(project.Description), Short: false},
 	}
 	projectIDText := strconv.FormatInt(project.ID, 10)
+	repoOnboardAction := svc.menuResourceAction(menuViewProjects, "projectrepoonboard", menuActionRepositoryOnboard, menuResourceProject, projectIDText, "menu.action.project_repo_onboard", "menu.action.project_repo_onboard.tooltip", "primary", nil)
+	if strings.TrimSpace(project.GitHubAccountName) == "" {
+		repoOnboardAction.Disabled = true
+	}
 	card.Actions = []MattermostCardAction{
+		svc.menuResourceDialogAction(menuViewProjects, "dialogprojectedit", menuDialogProjectUpsert, menuResourceProject, projectIDText, "menu.action.project_edit", "menu.action.project_edit.tooltip", "primary", nil),
+		repoOnboardAction,
 		svc.menuResourceDialogAction(menuViewProjects, "dialogchatcreate", menuDialogChatCreate, menuResourceProject, projectIDText, "menu.action.chat_add", "menu.action.chat_add.tooltip", "primary", nil),
 		svc.menuResourceDialogAction(menuViewProjects, "dialogroleadd", menuDialogAgentRoleUpsert, menuResourceProject, projectIDText, "menu.action.role_add", "menu.action.role_add.tooltip", "primary", nil),
-		svc.menuResourceDialogAction(menuViewProjects, "dialogprojectrepo", menuDialogProjectRepositoryBind, menuResourceProject, projectIDText, "menu.action.project_repo_add", "menu.action.project_repo_add.tooltip", "default", nil),
+		svc.menuResourceDialogAction(menuViewProjects, "dialogprojectrepo", menuDialogProjectRepositoryBind, menuResourceProject, projectIDText, "menu.action.project_repo_bind", "menu.action.project_repo_bind.tooltip", "default", nil),
 		svc.menuResourceAction(menuViewRoles, "projectroles", menuActionList, menuResourceAgentRole, projectIDText, "menu.action.roles", "menu.action.roles.tooltip", "default", nil),
 		svc.menuResourceAction(menuViewChats, "projectchats", menuActionList, menuResourceChat, projectIDText, "menu.action.chats", "menu.action.chats.tooltip", "default", nil),
 		svc.menuDialogAction(menuViewProjects, "dialogprojectadd", menuDialogProjectUpsert, "menu.action.project_add", "menu.action.project_add.tooltip", "default"),
@@ -413,52 +421,91 @@ func (svc *SlashCommandService) chatEntityCard(ctx context.Context, command Menu
 	return card
 }
 
-func (svc *SlashCommandService) projectDialog(command MenuActionCommand) *MattermostDialog {
+func (svc *SlashCommandService) projectDialog(ctx context.Context, command MenuActionCommand) (*MattermostDialog, string) {
+	project := entity.Project{}
+	titleID := "dialog.project.add.title"
+	introID := "dialog.project.add.intro"
+	submitID := "dialog.project.add.submit"
+	editMode := command.Resource == menuResourceProject && strings.TrimSpace(command.ID) != ""
+	if editMode {
+		projectID, ok := parseInt64ID(command.ID)
+		if !ok || !svc.cfg.StorageReady || svc.cfg.Store == nil {
+			return nil, svc.t("menu.entity.invalid", nil)
+		}
+		current, err := svc.cfg.Store.GetProject(ctx, projectID)
+		if err != nil {
+			return nil, svc.t("project.get.failed", map[string]any{"Error": safeError(err)})
+		}
+		project = current
+		titleID = "dialog.project.edit.title"
+		introID = "dialog.project.edit.intro"
+		submitID = "dialog.project.edit.submit"
+	}
+	elements := []MattermostDialogElement{
+		{
+			DisplayName: svc.t("dialog.project.field.name", nil),
+			Name:        dialogFieldProjectName,
+			Type:        "text",
+			Default:     project.Name,
+			Placeholder: "Matter Codex",
+			HelpText:    svc.t("dialog.project.field.name.help", nil),
+			MinLength:   2,
+			MaxLength:   64,
+		},
+		{
+			DisplayName: svc.t("dialog.project.field.slug", nil),
+			Name:        dialogFieldProjectSlug,
+			Type:        "text",
+			Default:     project.Slug,
+			Placeholder: "matter-codex",
+			HelpText:    svc.t("dialog.project.field.slug.help", nil),
+			Optional:    true,
+			MaxLength:   48,
+		},
+	}
+	if svc.cfg.StorageReady && svc.cfg.Store != nil {
+		if githubOptions, errText := svc.optionalGitHubAccountOptions(ctx, project.GitHubAccountName); errText == "" {
+			elements = append(elements, MattermostDialogElement{
+				DisplayName: svc.t("dialog.project.field.github", nil),
+				Name:        dialogFieldGitHubAccount,
+				Type:        "select",
+				Default:     optionalSelectDefault(project.GitHubAccountName),
+				HelpText:    svc.t("dialog.project.field.github.help", nil),
+				Optional:    true,
+				Options:     githubOptions,
+			})
+		}
+	}
+	elements = append(elements,
+		MattermostDialogElement{
+			DisplayName: svc.t("dialog.project.field.description", nil),
+			Name:        dialogFieldDescription,
+			Type:        "textarea",
+			Default:     project.Description,
+			HelpText:    svc.t("dialog.project.field.description.help", nil),
+			Optional:    true,
+			MaxLength:   1000,
+		},
+		MattermostDialogElement{
+			DisplayName: svc.t("dialog.project.field.advanced", nil),
+			Name:        dialogFieldAdvancedSettings,
+			Type:        "textarea",
+			Default:     project.AdvancedSettings,
+			Placeholder: "{}",
+			HelpText:    svc.t("dialog.project.field.advanced.help", nil),
+			Optional:    true,
+			MaxLength:   4000,
+		},
+	)
 	return &MattermostDialog{
 		SubmitURL:        svc.cfg.DialogSubmitURL,
 		CallbackID:       dialogCallbackProjectUpsert,
-		Title:            svc.t("dialog.project.add.title", nil),
-		IntroductionText: svc.t("dialog.project.add.intro", nil),
-		Elements: []MattermostDialogElement{
-			{
-				DisplayName: svc.t("dialog.project.field.name", nil),
-				Name:        dialogFieldProjectName,
-				Type:        "text",
-				Placeholder: "Matter Codex",
-				HelpText:    svc.t("dialog.project.field.name.help", nil),
-				MinLength:   2,
-				MaxLength:   64,
-			},
-			{
-				DisplayName: svc.t("dialog.project.field.slug", nil),
-				Name:        dialogFieldProjectSlug,
-				Type:        "text",
-				Placeholder: "matter-codex",
-				HelpText:    svc.t("dialog.project.field.slug.help", nil),
-				Optional:    true,
-				MaxLength:   48,
-			},
-			{
-				DisplayName: svc.t("dialog.project.field.description", nil),
-				Name:        dialogFieldDescription,
-				Type:        "textarea",
-				HelpText:    svc.t("dialog.project.field.description.help", nil),
-				Optional:    true,
-				MaxLength:   1000,
-			},
-			{
-				DisplayName: svc.t("dialog.project.field.advanced", nil),
-				Name:        dialogFieldAdvancedSettings,
-				Type:        "textarea",
-				Placeholder: "{}",
-				HelpText:    svc.t("dialog.project.field.advanced.help", nil),
-				Optional:    true,
-				MaxLength:   4000,
-			},
-		},
-		SubmitLabel: svc.t("dialog.project.add.submit", nil),
-		State:       encodeDialogState(command),
-	}
+		Title:            svc.t(titleID, nil),
+		IntroductionText: svc.t(introID, nil),
+		Elements:         elements,
+		SubmitLabel:      svc.t(submitID, nil),
+		State:            encodeDialogState(command),
+	}, ""
 }
 
 func (svc *SlashCommandService) projectRepositoryBindDialog(ctx context.Context, command MenuActionCommand) (*MattermostDialog, string) {
@@ -531,6 +578,11 @@ func (svc *SlashCommandService) agentRoleDialog(ctx context.Context, command Men
 			return nil, svc.t("agent_role.get.failed", map[string]any{"Error": safeError(err)})
 		}
 		role = current
+	}
+	if !editMode && role.ProjectID > 0 {
+		if project, err := svc.cfg.Store.GetProject(ctx, role.ProjectID); err == nil {
+			role.GitHubAccountName = strings.TrimSpace(project.GitHubAccountName)
+		}
 	}
 	projectOptions, errText := svc.projectOptions(ctx, role.ProjectID)
 	if errText != "" {
@@ -767,6 +819,32 @@ func (svc *SlashCommandService) handleProjectDialogUpsert(ctx context.Context, c
 	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
 		return DialogSubmissionResult{StatusCode: 200, Error: svc.t("project.storage_not_ready", nil)}
 	}
+	editMode := state.ResourceType == menuResourceProject && strings.TrimSpace(state.ResourceID) != ""
+	var current entity.Project
+	if editMode {
+		projectID, ok := parseInt64ID(state.ResourceID)
+		if !ok {
+			return DialogSubmissionResult{StatusCode: 200, Error: svc.t("menu.entity.invalid", nil)}
+		}
+		var err error
+		current, err = svc.cfg.Store.GetProject(ctx, projectID)
+		if err != nil {
+			return DialogSubmissionResult{StatusCode: 200, Error: svc.t("project.get.failed", map[string]any{"Error": safeError(err)})}
+		}
+		if input.Slug != current.Slug {
+			return DialogSubmissionResult{StatusCode: 200, Errors: map[string]string{dialogFieldProjectSlug: svc.t("dialog.project.slug_edit_not_supported", nil)}}
+		}
+		input.MattermostTeamID = current.MattermostTeamID
+	}
+	if strings.TrimSpace(input.GitHubAccountName) != "" {
+		account, err := svc.cfg.Store.GetGitHubAccount(ctx, input.GitHubAccountName)
+		if err != nil {
+			return DialogSubmissionResult{StatusCode: 200, Errors: map[string]string{dialogFieldGitHubAccount: svc.t("dialog.github.not_found", map[string]any{"Account": input.GitHubAccountName})}}
+		}
+		if account.Status != "configured" || strings.TrimSpace(account.SecretRef) == "" {
+			return DialogSubmissionResult{StatusCode: 200, Errors: map[string]string{dialogFieldGitHubAccount: svc.t("repo.onboard.account_not_configured", map[string]any{"Account": account.Name})}}
+		}
+	}
 	if svc.cfg.ChannelManager != nil {
 		team, _, err := svc.cfg.ChannelManager.EnsureProjectTeam(ctx, input.Slug, input.Name, command.UserID)
 		if err != nil {
@@ -784,11 +862,12 @@ func (svc *SlashCommandService) handleProjectDialogUpsert(ctx context.Context, c
 		stateID = "label.created"
 	}
 	text := svc.t("project.save.result", map[string]any{
-		"State": svc.t(stateID, nil),
-		"ID":    project.ID,
-		"Name":  project.Name,
-		"Slug":  project.Slug,
-		"Team":  emptyAsUnknown(project.MattermostTeamID),
+		"State":  svc.t(stateID, nil),
+		"ID":     project.ID,
+		"Name":   project.Name,
+		"Slug":   project.Slug,
+		"Team":   emptyAsUnknown(project.MattermostTeamID),
+		"GitHub": emptyAsUnknown(project.GitHubAccountName),
 	})
 	card := svc.projectEntityCard(ctx, MenuActionCommand{View: menuViewProjects, ID: strconv.FormatInt(project.ID, 10), ChannelID: state.ChannelID, PostID: state.PostID})
 	card.Text = text + "\n\n" + card.Text
@@ -965,14 +1044,21 @@ func (svc *SlashCommandService) projectDialogInput(submission map[string]any) (a
 	if advanced != "" && !looksLikeJSONObject(advanced) {
 		fieldErrors[dialogFieldAdvancedSettings] = svc.t("dialog.advanced.json_invalid", nil)
 	}
+	githubAccount := optionalSubmissionString(submission, dialogFieldGitHubAccount)
+	if githubAccount != "" {
+		if _, err := parseOpenAIAccountName(githubAccount); err != nil {
+			fieldErrors[dialogFieldGitHubAccount] = svc.t("parse.github_account.invalid", nil)
+		}
+	}
 	if len(fieldErrors) > 0 {
 		return adminrepo.UpsertProjectInput{}, fieldErrors
 	}
 	return adminrepo.UpsertProjectInput{
-		Name:             name,
-		Slug:             slug,
-		Description:      strings.TrimSpace(submissionString(submission, dialogFieldDescription)),
-		AdvancedSettings: advanced,
+		Name:              name,
+		Slug:              slug,
+		GitHubAccountName: githubAccount,
+		Description:       strings.TrimSpace(submissionString(submission, dialogFieldDescription)),
+		AdvancedSettings:  advanced,
 	}, nil
 }
 

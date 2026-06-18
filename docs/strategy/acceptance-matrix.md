@@ -43,14 +43,15 @@
 - несколько OpenAI accounts отображаются как `authorized/total`;
 - GitHub account добавляется через token dialog;
 - username/email/status подтягиваются из GitHub API;
-- GitHub account выбирается в дальнейших сценариях из списка;
+- GitHub account назначается на project как platform account и может переопределяться на agent role;
 - удаление account блокируется, если profile зависит от него.
 
 ## Repository Onboarding PR
 
 Проверка:
 
-- owner выбирает GitHub account;
+- owner открывает project dashboard, где выбран platform GitHub account;
+- repository onboarding использует platform GitHub account проекта;
 - owner выбирает repository из списка или через поиск;
 - default branch выбирается из GitHub API или заполняется системой;
 - webhook создается при onboarding;

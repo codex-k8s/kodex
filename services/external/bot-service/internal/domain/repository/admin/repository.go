@@ -130,11 +130,12 @@ type UpsertAgentPromptTemplateInput struct {
 }
 
 type UpsertProjectInput struct {
-	Name             string
-	Slug             string
-	MattermostTeamID string
-	Description      string
-	AdvancedSettings string
+	Name              string
+	Slug              string
+	MattermostTeamID  string
+	GitHubAccountName string
+	Description       string
+	AdvancedSettings  string
 }
 
 type UpsertProjectRepositoryInput struct {

@@ -108,6 +108,15 @@ func cardFieldValue(fields []MattermostCardField, title string) string {
 	return ""
 }
 
+func dialogElementByName(elements []MattermostDialogElement, name string) (MattermostDialogElement, bool) {
+	for _, element := range elements {
+		if element.Name == name {
+			return element, true
+		}
+	}
+	return MattermostDialogElement{}, false
+}
+
 func TestMenuActionReturnsSubmenuCard(t *testing.T) {
 	localizer := testLocalizer(t, texti18n.DefaultLocale)
 	svc := NewSlashCommandService(SlashCommandServiceConfig{
@@ -427,7 +436,11 @@ func TestRepositoryDialogSubmissionAddsRepository(t *testing.T) {
 }
 
 func TestProjectDialogSubmissionCreatesMattermostTeam(t *testing.T) {
-	store := &fakeAdminStore{}
+	store := &fakeAdminStore{
+		githubAccounts: map[string]entity.GitHubAccount{
+			"agent": {Name: "agent", SecretRef: "matter-codex-github-agent", Status: "configured"},
+		},
+	}
 	channels := &fakeChannelManager{}
 	localizer := testLocalizer(t, texti18n.DefaultLocale)
 	svc := NewSlashCommandService(SlashCommandServiceConfig{
@@ -447,6 +460,7 @@ func TestProjectDialogSubmissionCreatesMattermostTeam(t *testing.T) {
 		Submission: map[string]any{
 			dialogFieldProjectName:      "Demo Project",
 			dialogFieldProjectSlug:      "demo-project",
+			dialogFieldGitHubAccount:    "agent",
 			dialogFieldDescription:      "Project context",
 			dialogFieldAdvancedSettings: `{"model":"gpt-5"}`,
 		},
@@ -459,7 +473,7 @@ func TestProjectDialogSubmissionCreatesMattermostTeam(t *testing.T) {
 	if err != nil {
 		t.Fatalf("project not stored: %v", err)
 	}
-	if project.Slug != "demo-project" || project.MattermostTeamID != "team-demo-project" {
+	if project.Slug != "demo-project" || project.MattermostTeamID != "team-demo-project" || project.GitHubAccountName != "agent" {
 		t.Fatalf("project = %#v", project)
 	}
 	if channels.projectTeamName != "demo-project" {
@@ -467,6 +481,43 @@ func TestProjectDialogSubmissionCreatesMattermostTeam(t *testing.T) {
 	}
 	if result.Card == nil || result.Card.Title != "Project `Demo Project`" {
 		t.Fatalf("card = %#v", result.Card)
+	}
+}
+
+func TestAgentRoleDialogDefaultsGitHubAccountFromProject(t *testing.T) {
+	store := &fakeAdminStore{
+		projects: map[int64]entity.Project{
+			1: {ID: 1, Name: "Demo Project", Slug: "demo-project", GitHubAccountName: "project-gh"},
+		},
+		githubAccounts: map[string]entity.GitHubAccount{
+			"project-gh": {Name: "project-gh", SecretRef: "matter-codex-github-project", Status: "configured"},
+		},
+	}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:       localizer,
+		StatusService:   testStatusService(localizer),
+		Store:           store,
+		DialogSubmitURL: "http://bot-service/mattermost/dialogs/agents",
+		StorageReady:    true,
+	})
+
+	result := svc.HandleMenuAction(context.Background(), MenuActionCommand{
+		View:     menuViewProjects,
+		Dialog:   menuDialogAgentRoleUpsert,
+		Resource: menuResourceProject,
+		ID:       "1",
+	})
+
+	if result.Dialog == nil {
+		t.Fatalf("dialog is nil: %#v", result)
+	}
+	githubField, ok := dialogElementByName(result.Dialog.Elements, dialogFieldGitHubAccount)
+	if !ok {
+		t.Fatalf("github field is missing: %#v", result.Dialog.Elements)
+	}
+	if githubField.Default != "project-gh" {
+		t.Fatalf("github field default = %q", githubField.Default)
 	}
 }
 
@@ -736,6 +787,90 @@ func TestRepositoryOnboardingConnectsRepositoryWithAccount(t *testing.T) {
 	openAction, ok := mattermostActionByID(connected.Card.Actions, "openrepo")
 	if !ok || openAction.Context["resource_id"] != "github:codex-k8s/matter-codex" {
 		t.Fatalf("open repo action = %#v", connected.Card.Actions)
+	}
+}
+
+func TestProjectRepositoryOnboardingUsesProjectGitHubAccount(t *testing.T) {
+	store := &fakeAdminStore{
+		projects: map[int64]entity.Project{
+			1: {ID: 1, Name: "Demo Project", Slug: "demo-project", GitHubAccountName: "project-gh"},
+		},
+		githubAccounts: map[string]entity.GitHubAccount{
+			"project-gh": {Name: "project-gh", SecretRef: "matter-codex-github-project", Status: "configured"},
+		},
+	}
+	provider := &fakeGitHubRepositoryProvider{
+		candidates: []providerrepo.RepositoryCandidate{{
+			Provider:      "github",
+			Owner:         "codex-k8s",
+			Name:          "kodex",
+			FullName:      "codex-k8s/kodex",
+			DefaultBranch: "main",
+		}},
+		branches: []providerrepo.BranchCandidate{{Name: "main"}},
+	}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:                localizer,
+		StatusService:            testStatusService(localizer),
+		Store:                    store,
+		ChannelManager:           &fakeChannelManager{},
+		GitHubRepositoryProvider: provider,
+		DefaultTeamName:          "agents",
+		MenuActionURL:            "http://bot-service/mattermost/actions/agents",
+		StorageReady:             true,
+		GitHubWebhookConfigured:  true,
+	})
+
+	repositories := svc.HandleMenuAction(context.Background(), MenuActionCommand{
+		View:     menuViewProjects,
+		Action:   menuActionRepositoryOnboard,
+		Resource: menuResourceProject,
+		ID:       "1",
+	})
+	if repositories.Card == nil {
+		t.Fatal("repositories card is nil")
+	}
+	candidateAction, ok := mattermostActionByID(repositories.Card.Actions, "repocandidate1")
+	if !ok {
+		t.Fatalf("candidate action missing: %#v", repositories.Card.Actions)
+	}
+	branches := svc.HandleMenuAction(context.Background(), MenuActionCommand{
+		View:     menuViewProjects,
+		Action:   menuActionRepositoryBranches,
+		Resource: menuResourceRepository,
+		ID:       fmt.Sprint(candidateAction.Context["resource_id"]),
+	})
+	if branches.Card == nil {
+		t.Fatal("branches card is nil")
+	}
+	branchAction, ok := mattermostActionByID(branches.Card.Actions, "repobranch1")
+	if !ok {
+		t.Fatalf("branch action missing: %#v", branches.Card.Actions)
+	}
+	connected := svc.HandleMenuAction(context.Background(), MenuActionCommand{
+		View:     menuViewProjects,
+		Action:   menuActionRepositoryConnect,
+		Resource: menuResourceRepository,
+		ID:       fmt.Sprint(branchAction.Context["resource_id"]),
+		UserName: "owner",
+	})
+
+	if connected.Card == nil || !strings.Contains(connected.Card.Text, "github account: `project-gh`") {
+		t.Fatalf("connected card = %#v", connected.Card)
+	}
+	if store.upsert.GitHubAccountName != "project-gh" || store.upsert.Owner != "codex-k8s" || store.upsert.Name != "kodex" {
+		t.Fatalf("upsert = %#v", store.upsert)
+	}
+	if provider.listAccount.Name != "project-gh" || provider.branchesAccount.Name != "project-gh" || provider.webhookAccount.Name != "project-gh" {
+		t.Fatalf("provider accounts = list %#v branches %#v webhook %#v", provider.listAccount, provider.branchesAccount, provider.webhookAccount)
+	}
+	bindings, err := store.ListProjectRepositories(context.Background(), 1)
+	if err != nil || len(bindings) != 1 {
+		t.Fatalf("bindings = %#v err=%v", bindings, err)
+	}
+	if bindings[0].FullName() != "codex-k8s/kodex" || !bindings[0].IsDefault {
+		t.Fatalf("binding = %#v", bindings[0])
 	}
 }
 
@@ -1307,6 +1442,50 @@ func TestGitHubAccountDialogSubmissionBlocksRepositoryAccountDeletion(t *testing
 	}
 	if _, ok := store.githubAccounts["reviewer"]; !ok {
 		t.Fatal("repository-bound GitHub account should not be deleted")
+	}
+	if runner.deletedGitHubSecretAccount != "" {
+		t.Fatalf("github secret should not be deleted, got %q", runner.deletedGitHubSecretAccount)
+	}
+}
+
+func TestGitHubAccountDialogSubmissionBlocksProjectAccountDeletion(t *testing.T) {
+	store := &fakeAdminStore{
+		githubAccounts: map[string]entity.GitHubAccount{
+			"project-gh": {Name: "project-gh", SecretRef: "matter-codex-github-project", Status: "configured"},
+		},
+		projects: map[int64]entity.Project{
+			1: {ID: 1, Name: "Demo Project", Slug: "demo-project", GitHubAccountName: "project-gh"},
+		},
+	}
+	runner := &fakeRuntimeRunner{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:        localizer,
+		StatusService:    testStatusService(localizer),
+		Store:            store,
+		RuntimeRunner:    runner,
+		GitHubSecretName: "matter-codex-github",
+		DialogSubmitURL:  "http://bot-service/mattermost/dialogs/agents",
+		StorageReady:     true,
+	})
+
+	result := svc.HandleDialogSubmission(context.Background(), DialogSubmissionCommand{
+		CallbackID: dialogCallbackGitHubAccountDelete,
+		State:      encodeDialogState(MenuActionCommand{View: menuViewGitHub}),
+		Submission: map[string]any{
+			dialogFieldAccount: "project-gh",
+			dialogFieldConfirm: "delete",
+		},
+	})
+
+	if result.Error != "" || len(result.Errors) > 0 {
+		t.Fatalf("dialog errors = %q %#v", result.Error, result.Errors)
+	}
+	if result.Card == nil || !strings.Contains(result.Card.Text, "Demo Project") {
+		t.Fatalf("card = %#v", result.Card)
+	}
+	if _, ok := store.githubAccounts["project-gh"]; !ok {
+		t.Fatal("project-bound GitHub account should not be deleted")
 	}
 	if runner.deletedGitHubSecretAccount != "" {
 		t.Fatalf("github secret should not be deleted, got %q", runner.deletedGitHubSecretAccount)
@@ -3159,6 +3338,7 @@ func (store *fakeAdminStore) UpsertProject(_ context.Context, input adminrepo.Up
 		if project.Slug == input.Slug {
 			project.Name = input.Name
 			project.MattermostTeamID = input.MattermostTeamID
+			project.GitHubAccountName = input.GitHubAccountName
 			project.Description = input.Description
 			project.AdvancedSettings = input.AdvancedSettings
 			store.projects[id] = project
@@ -3166,12 +3346,13 @@ func (store *fakeAdminStore) UpsertProject(_ context.Context, input adminrepo.Up
 		}
 	}
 	project := entity.Project{
-		ID:               int64(len(store.projects) + 1),
-		Name:             input.Name,
-		Slug:             input.Slug,
-		MattermostTeamID: input.MattermostTeamID,
-		Description:      input.Description,
-		AdvancedSettings: input.AdvancedSettings,
+		ID:                int64(len(store.projects) + 1),
+		Name:              input.Name,
+		Slug:              input.Slug,
+		MattermostTeamID:  input.MattermostTeamID,
+		GitHubAccountName: input.GitHubAccountName,
+		Description:       input.Description,
+		AdvancedSettings:  input.AdvancedSettings,
 	}
 	store.projects[project.ID] = project
 	return project, true, nil
