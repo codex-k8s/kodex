@@ -35,6 +35,7 @@ const (
 	labelAgentRole        = "matter-codex.dev/agent-role"
 	labelOpenAIAccount    = "matter-codex.dev/openai-account"
 	labelGitHubAccount    = "matter-codex.dev/github-account"
+	labelAuthCheckJob     = "matter-codex.dev/auth-check-job"
 	codexAuthSecretVolume = "codex-auth-secret"
 	gitHubSecretVolume    = "github-secret"
 	sessionSecretVolume   = "session-secret"
@@ -172,6 +173,19 @@ func (runner *Runner) StartCodexAuthSession(ctx context.Context, input runtimere
 		if !apierrors.IsAlreadyExists(err) {
 			return runtimerepo.CodexAuthSession{}, fmt.Errorf("create codex auth job: %w", err)
 		}
+		existing, getErr := runner.client.BatchV1().Jobs(runner.namespace).Get(ctx, jobName, metav1.GetOptions{})
+		if getErr != nil {
+			return runtimerepo.CodexAuthSession{}, fmt.Errorf("get existing codex auth job: %w", getErr)
+		}
+		if existing.Status.Active == 0 {
+			if err := runner.deleteJobAndWait(ctx, jobName, 20*time.Second); err != nil {
+				return runtimerepo.CodexAuthSession{}, err
+			}
+			if _, err := runner.client.BatchV1().Jobs(runner.namespace).Create(ctx, runner.codexAuthJob(input.AccountName, input.SecretName), metav1.CreateOptions{}); err != nil {
+				return runtimerepo.CodexAuthSession{}, fmt.Errorf("recreate codex auth job: %w", err)
+			}
+			created = true
+		}
 	} else {
 		created = true
 	}
@@ -224,6 +238,60 @@ func (runner *Runner) GetCodexAuthStatus(ctx context.Context, accountName string
 	status.DeviceURL, status.DeviceCode = parseCodexDeviceAuth(status.LogTail)
 	status.AuthReady = runner.codexAuthJSONReady(ctx, pod.Name)
 	return status, nil
+}
+
+func (runner *Runner) CheckCodexAuthSecret(ctx context.Context, input runtimerepo.CodexAuthSecretCheckInput) (runtimerepo.CodexAuthSecretCheckResult, error) {
+	input.AccountName = strings.TrimSpace(input.AccountName)
+	input.SecretName = strings.TrimSpace(input.SecretName)
+	if input.AccountName == "" {
+		return runtimerepo.CodexAuthSecretCheckResult{}, fmt.Errorf("openai account name is required")
+	}
+	if input.SecretName == "" {
+		return runtimerepo.CodexAuthSecretCheckResult{}, fmt.Errorf("codex auth secret name is required")
+	}
+	jobName := codexAuthCheckJobName(input.AccountName)
+	result := runtimerepo.CodexAuthSecretCheckResult{
+		AccountName: input.AccountName,
+		SecretName:  input.SecretName,
+		Namespace:   runner.namespace,
+		JobName:     jobName,
+	}
+	if _, err := runner.client.BatchV1().Jobs(runner.namespace).Create(ctx, runner.codexAuthSecretCheckJob(input, jobName), metav1.CreateOptions{}); err != nil {
+		return runtimerepo.CodexAuthSecretCheckResult{}, fmt.Errorf("create codex auth check job: %w", err)
+	}
+
+	deadline := time.Now().Add(90 * time.Second)
+	ticker := time.NewTicker(750 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		runner.fillCodexAuthCheckPodStatus(ctx, &result)
+		job, err := runner.client.BatchV1().Jobs(runner.namespace).Get(ctx, jobName, metav1.GetOptions{})
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return result, nil
+			}
+			return runtimerepo.CodexAuthSecretCheckResult{}, fmt.Errorf("get codex auth check job: %w", err)
+		}
+		switch {
+		case job.Status.Succeeded > 0:
+			result.Ready = true
+			runner.fillCodexAuthCheckPodStatus(ctx, &result)
+			return result, nil
+		case job.Status.Failed > 0:
+			runner.fillCodexAuthCheckPodStatus(ctx, &result)
+			return result, nil
+		case time.Now().After(deadline):
+			runner.fillCodexAuthCheckPodStatus(ctx, &result)
+			return result, nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return runtimerepo.CodexAuthSecretCheckResult{}, ctx.Err()
+		case <-ticker.C:
+		}
+	}
 }
 
 func (runner *Runner) CompleteCodexAuthSession(ctx context.Context, input runtimerepo.CodexAuthCompleteInput) (runtimerepo.CodexAuthCompleteResult, error) {
@@ -637,6 +705,24 @@ func (runner *Runner) deleteSessionPod(ctx context.Context, podName string) erro
 		time.Sleep(500 * time.Millisecond)
 	}
 	return fmt.Errorf("session pod %s was not deleted before timeout", podName)
+}
+
+func (runner *Runner) deleteJobAndWait(ctx context.Context, jobName string, timeout time.Duration) error {
+	background := metav1.DeletePropagationBackground
+	if err := runner.client.BatchV1().Jobs(runner.namespace).Delete(ctx, jobName, metav1.DeleteOptions{PropagationPolicy: &background}); err != nil && !apierrors.IsNotFound(err) {
+		return fmt.Errorf("delete job %s: %w", jobName, err)
+	}
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if _, err := runner.client.BatchV1().Jobs(runner.namespace).Get(ctx, jobName, metav1.GetOptions{}); err != nil {
+			if apierrors.IsNotFound(err) {
+				return nil
+			}
+			return fmt.Errorf("wait for job deletion: %w", err)
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	return fmt.Errorf("job %s was not deleted before timeout", jobName)
 }
 
 func (runner *Runner) UpsertMattermostBotTokenSecret(ctx context.Context, input runtimerepo.MattermostBotTokenSecretInput) (runtimerepo.MattermostBotTokenSecret, error) {
@@ -1414,6 +1500,68 @@ func (runner *Runner) codexAuthJob(accountName string, secretName string) *batch
 	}
 }
 
+func (runner *Runner) codexAuthSecretCheckJob(input runtimerepo.CodexAuthSecretCheckInput, jobName string) *batchv1.Job {
+	backoffLimit := int32(0)
+	labels := codexAuthCheckLabels(input.AccountName, jobName)
+	return &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   jobName,
+			Labels: labels,
+		},
+		Spec: batchv1.JobSpec{
+			BackoffLimit:            &backoffLimit,
+			TTLSecondsAfterFinished: &runner.jobTTLSecondsAfterFinish,
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{Labels: labels},
+				Spec: corev1.PodSpec{
+					ServiceAccountName:           runner.agentRunnerServiceAccount,
+					AutomountServiceAccountToken: boolPtr(false),
+					SecurityContext:              runnerPodSecurityContext(),
+					RestartPolicy:                corev1.RestartPolicyNever,
+					Containers: []corev1.Container{
+						{
+							Name:            "runner",
+							Image:           runner.agentRunnerImage,
+							Command:         []string{"matter-codex-agent-runner"},
+							Args:            []string{"codex-auth-secret-check"},
+							ImagePullPolicy: corev1.PullIfNotPresent,
+							SecurityContext: runnerContainerSecurityContext(),
+							Env: []corev1.EnvVar{
+								{Name: "MATTERCODEX_OPENAI_ACCOUNT", Value: input.AccountName},
+								{Name: "MATTERCODEX_CODEX_AUTH_SECRET", Value: input.SecretName},
+								{Name: "MATTERCODEX_CODEX_CONFIG_OVERLAY", Value: input.ConfigOverlay},
+							},
+							VolumeMounts: append([]corev1.VolumeMount{
+								{Name: "workspace", MountPath: "/workspace"},
+								{Name: codexAuthSecretVolume, MountPath: "/var/run/secrets/matter-codex-codex", ReadOnly: true},
+							}, runnerWritableVolumeMounts()...),
+						},
+					},
+					Volumes: append([]corev1.Volume{
+						{
+							Name: "workspace",
+							VolumeSource: corev1.VolumeSource{
+								EmptyDir: &corev1.EmptyDirVolumeSource{},
+							},
+						},
+						{
+							Name: codexAuthSecretVolume,
+							VolumeSource: corev1.VolumeSource{
+								Secret: &corev1.SecretVolumeSource{
+									SecretName: input.SecretName,
+									Items: []corev1.KeyToPath{
+										{Key: "auth.json", Path: "auth.json"},
+									},
+								},
+							},
+						},
+					}, runnerWritableVolumes()...),
+				},
+			},
+		},
+	}
+}
+
 func (runner *Runner) logTail(ctx context.Context, podName string) string {
 	limitBytes := int64(8192)
 	stream, err := runner.client.CoreV1().Pods(runner.namespace).GetLogs(podName, &corev1.PodLogOptions{
@@ -1430,6 +1578,21 @@ func (runner *Runner) logTail(ctx context.Context, podName string) string {
 		return ""
 	}
 	return strings.TrimSpace(string(body))
+}
+
+func (runner *Runner) fillCodexAuthCheckPodStatus(ctx context.Context, result *runtimerepo.CodexAuthSecretCheckResult) {
+	if result == nil || strings.TrimSpace(result.JobName) == "" {
+		return
+	}
+	pod, ok, err := runner.latestPodByLabels(ctx, labels.Set{
+		"app.kubernetes.io/component": "codex-auth-check",
+		labelAuthCheckJob:             result.JobName,
+	})
+	if err != nil || !ok {
+		return
+	}
+	result.PodName = pod.Name
+	result.LogTail = runner.logTail(ctx, pod.Name)
 }
 
 func (runner *Runner) codexAuthJSONReady(ctx context.Context, podName string) bool {
@@ -1722,6 +1885,10 @@ func codexAuthJobName(accountName string) string {
 	return "mc-codex-auth-" + accountName
 }
 
+func codexAuthCheckJobName(accountName string) string {
+	return kubernetesName("mc-codex-auth-check-", accountName+"-"+strconv.FormatInt(time.Now().UnixNano(), 36))
+}
+
 func workspacePVCName(runID string) string {
 	return "mc-ws-" + runID
 }
@@ -1806,6 +1973,15 @@ func codexAuthLabels(accountName string) map[string]string {
 		"app.kubernetes.io/name":      "matter-codex-agent-runner",
 		"app.kubernetes.io/component": "codex-auth",
 		labelOpenAIAccount:            accountName,
+	}
+}
+
+func codexAuthCheckLabels(accountName string, jobName string) map[string]string {
+	return map[string]string{
+		"app.kubernetes.io/name":      "matter-codex-agent-runner",
+		"app.kubernetes.io/component": "codex-auth-check",
+		labelOpenAIAccount:            kubernetesLabelValue(accountName),
+		labelAuthCheckJob:             kubernetesLabelValue(jobName),
 	}
 }
 

@@ -31,6 +31,8 @@ const (
 
 	threadContextStatusPending    = "pending"
 	threadContextStatusConfigured = "configured"
+
+	codexAuthDeviceCodeWait = 15 * time.Second
 )
 
 var githubPullURLRE = regexp.MustCompile(`https://github\.com/([^/\s]+)/([^/\s]+)/pull/([0-9]+)`)
@@ -129,6 +131,19 @@ type ChatRunService struct {
 	cfg ChatRunServiceConfig
 }
 
+type CodexReauthRequiredError struct {
+	AccountName string
+	RoleName    string
+	DeviceURL   string
+	DeviceCode  string
+	JobName     string
+	PodName     string
+}
+
+func (err *CodexReauthRequiredError) Error() string {
+	return fmt.Sprintf("Codex auth requires reauthorization for OpenAI account %s", err.AccountName)
+}
+
 func NewChatRunService(cfg ChatRunServiceConfig) *ChatRunService {
 	if cfg.MonitorInterval <= 0 {
 		cfg.MonitorInterval = 15 * time.Second
@@ -222,6 +237,18 @@ func (svc *ChatRunService) HandleChatPost(ctx context.Context, command ChatPostC
 			TTLSeconds:    target.TTLSeconds,
 		})
 		if err != nil {
+			var reauthErr *CodexReauthRequiredError
+			if errors.As(err, &reauthErr) {
+				svc.postThread(ctx, command, svc.t("chat.run.openai_reauth_required", map[string]any{
+					"Role":    target.Role.Name,
+					"Account": reauthErr.AccountName,
+					"URL":     reauthErr.DeviceURL,
+					"Code":    reauthErr.DeviceCode,
+					"Job":     reauthErr.JobName,
+					"Pod":     emptyAsUnknown(reauthErr.PodName),
+				}))
+				continue
+			}
 			svc.postThread(ctx, command, svc.t("chat.run.start_failed", map[string]any{"Role": target.Role.Name, "Error": safeError(err)}))
 			continue
 		}
@@ -303,6 +330,9 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 	openAIAccount, ok := svc.openAIAccount(ctx, request.Role)
 	if !ok {
 		return AgentTurnQueued{}, fmt.Errorf("OpenAI account is required for role %s", request.Role.Name)
+	}
+	if err := svc.ensureCodexAuthSecretReady(ctx, openAIAccount, request.Role); err != nil {
+		return AgentTurnQueued{}, err
 	}
 	gitHubAccount, gitHubOK := svc.gitHubAccount(ctx, request.Project, request.Role, firstRepository(request.Repositories))
 	prompt, err := BuildRolePrompt(RolePromptInput{
@@ -540,6 +570,114 @@ func (svc *ChatRunService) sessionInternalToken(ctx context.Context, session ent
 
 func (svc *ChatRunService) botServiceURL() string {
 	return strings.TrimRight(strings.TrimSpace(svc.cfg.BotServiceURL), "/")
+}
+
+func (svc *ChatRunService) ensureCodexAuthSecretReady(ctx context.Context, account entity.OpenAIAccount, role entity.AgentRole) error {
+	check, err := svc.cfg.RuntimeRunner.CheckCodexAuthSecret(ctx, runtimerepo.CodexAuthSecretCheckInput{
+		AccountName:   account.Name,
+		SecretName:    account.SecretRef,
+		ConfigOverlay: role.ConfigOverlay,
+	})
+	if err == nil && check.Ready {
+		_, _ = svc.cfg.Store.UpdateOpenAIAccountStatus(ctx, adminrepo.UpdateOpenAIAccountStatusInput{
+			Name:      account.Name,
+			SecretRef: account.SecretRef,
+			Status:    "authorized",
+		})
+		return nil
+	}
+
+	status, completed, authErr := svc.startCodexReauthSession(ctx, account)
+	if authErr != nil {
+		if err != nil {
+			return fmt.Errorf("check codex auth secret: %v; start codex device-code auth: %w", err, authErr)
+		}
+		return authErr
+	}
+	if completed {
+		check, err = svc.cfg.RuntimeRunner.CheckCodexAuthSecret(ctx, runtimerepo.CodexAuthSecretCheckInput{
+			AccountName:   account.Name,
+			SecretName:    account.SecretRef,
+			ConfigOverlay: role.ConfigOverlay,
+		})
+		if err == nil && check.Ready {
+			return nil
+		}
+	}
+	_, _ = svc.cfg.Store.UpdateOpenAIAccountStatus(ctx, adminrepo.UpdateOpenAIAccountStatusInput{
+		Name:      account.Name,
+		SecretRef: account.SecretRef,
+		Status:    "awaiting_user",
+	})
+	return &CodexReauthRequiredError{
+		AccountName: account.Name,
+		RoleName:    role.Name,
+		DeviceURL:   status.DeviceURL,
+		DeviceCode:  status.DeviceCode,
+		JobName:     status.JobName,
+		PodName:     status.PodName,
+	}
+}
+
+func (svc *ChatRunService) startCodexReauthSession(ctx context.Context, account entity.OpenAIAccount) (runtimerepo.CodexAuthStatus, bool, error) {
+	status, err := svc.cfg.RuntimeRunner.GetCodexAuthStatus(ctx, account.Name, account.SecretRef)
+	if err == nil && status.Exists {
+		if status.AuthReady {
+			if err := svc.completeCodexAuthSession(ctx, account); err != nil {
+				return status, false, err
+			}
+			return status, true, nil
+		}
+		if status.JobActive > 0 && status.DeviceURL != "" && status.DeviceCode != "" {
+			return status, false, nil
+		}
+		_, _ = svc.cfg.RuntimeRunner.CleanupCodexAuthSession(ctx, account.Name)
+	}
+
+	if _, err := svc.cfg.RuntimeRunner.StartCodexAuthSession(ctx, runtimerepo.CodexAuthSessionInput{AccountName: account.Name, SecretName: account.SecretRef}); err != nil {
+		return runtimerepo.CodexAuthStatus{}, false, err
+	}
+	deadline := time.Now().Add(codexAuthDeviceCodeWait)
+	for {
+		status, err = svc.cfg.RuntimeRunner.GetCodexAuthStatus(ctx, account.Name, account.SecretRef)
+		if err != nil {
+			return runtimerepo.CodexAuthStatus{}, false, err
+		}
+		if status.AuthReady {
+			if err := svc.completeCodexAuthSession(ctx, account); err != nil {
+				return status, false, err
+			}
+			return status, true, nil
+		}
+		if status.DeviceURL != "" && status.DeviceCode != "" {
+			return status, false, nil
+		}
+		if status.JobFailed > 0 {
+			return status, false, fmt.Errorf("codex device-code auth job failed")
+		}
+		if time.Now().After(deadline) {
+			return status, false, nil
+		}
+		select {
+		case <-ctx.Done():
+			return runtimerepo.CodexAuthStatus{}, false, ctx.Err()
+		case <-time.After(750 * time.Millisecond):
+		}
+	}
+}
+
+func (svc *ChatRunService) completeCodexAuthSession(ctx context.Context, account entity.OpenAIAccount) error {
+	completed, err := svc.cfg.RuntimeRunner.CompleteCodexAuthSession(ctx, runtimerepo.CodexAuthCompleteInput{AccountName: account.Name, SecretName: account.SecretRef})
+	if err != nil {
+		return err
+	}
+	_, _ = svc.cfg.Store.UpdateOpenAIAccountStatus(ctx, adminrepo.UpdateOpenAIAccountStatusInput{
+		Name:      account.Name,
+		SecretRef: completed.SecretName,
+		Status:    "authorized",
+	})
+	_, _ = svc.cfg.RuntimeRunner.CleanupCodexAuthSession(ctx, account.Name)
+	return nil
 }
 
 func (svc *ChatRunService) startRun(ctx context.Context, input chatRunStartInput) (runtimerepo.StartedRun, error) {

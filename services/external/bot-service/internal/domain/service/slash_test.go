@@ -2989,6 +2989,8 @@ type fakeRuntimeRunner struct {
 	authAccount                string
 	authSecret                 string
 	authReady                  bool
+	authSecretNotReady         bool
+	authSecretChecks           int
 	deletedAuthAccount         string
 	deletedAuthSecret          string
 	githubSecretInput          runtimerepo.GitHubTokenSecretInput
@@ -3033,6 +3035,18 @@ func (runner *fakeRuntimeRunner) GetCodexAuthStatus(_ context.Context, accountNa
 		DeviceURL:   "https://auth.openai.com/codex/device",
 		DeviceCode:  "ABCD-12345",
 		AuthReady:   runner.authReady,
+	}, nil
+}
+
+func (runner *fakeRuntimeRunner) CheckCodexAuthSecret(_ context.Context, input runtimerepo.CodexAuthSecretCheckInput) (runtimerepo.CodexAuthSecretCheckResult, error) {
+	runner.authSecretChecks++
+	return runtimerepo.CodexAuthSecretCheckResult{
+		AccountName: input.AccountName,
+		SecretName:  input.SecretName,
+		Namespace:   "mattermost",
+		JobName:     "mc-codex-auth-check-" + input.AccountName,
+		PodName:     "mc-codex-auth-check-" + input.AccountName + "-pod",
+		Ready:       !runner.authSecretNotReady,
 	}, nil
 }
 

@@ -33,6 +33,8 @@ const (
 	runnerBinaryPath = "/usr/local/bin/matter-codex-agent-runner"
 )
 
+const codexAuthCheckPrompt = "ping: answer with exactly one word, pong. Do not use tools."
+
 type runner struct {
 	failureLogs []string
 }
@@ -94,6 +96,8 @@ func main() {
 		err = r.runCodexAuth(ctx)
 	case "auth-ready-check":
 		err = authReadyCheck()
+	case "codex-auth-secret-check":
+		err = r.runCodexAuthSecretCheck(ctx)
 	case "print-auth-json":
 		err = printAuthJSON()
 	case "developer":
@@ -151,6 +155,25 @@ func (r *runner) runCodexAuth(ctx context.Context) error {
 	}
 	fmt.Println("matter-codex codex auth ready")
 	time.Sleep(15 * time.Minute)
+	return nil
+}
+
+func (r *runner) runCodexAuthSecretCheck(ctx context.Context) error {
+	fmt.Println("matter-codex codex auth secret check start")
+	if err := r.prepareWorkspace(); err != nil {
+		return err
+	}
+	if err := r.prepareCodexHome(ctx); err != nil {
+		return err
+	}
+	checkDir := filepath.Join(workspaceDir, "codex-auth-check")
+	if err := os.MkdirAll(checkDir, 0o755); err != nil {
+		return err
+	}
+	if err := r.runLogged(ctx, "", []string{"CODEX_HOME=" + codexHomeDir}, "codex-auth-ping.log", "codex", "exec", "--skip-git-repo-check", "--cd", checkDir, codexAuthCheckPrompt); err != nil {
+		return fmt.Errorf("codex auth ping failed: %w", err)
+	}
+	fmt.Println("matter-codex codex auth secret check ready")
 	return nil
 }
 

@@ -117,6 +117,22 @@ type CodexAuthStatus struct {
 	LogTail      string
 }
 
+type CodexAuthSecretCheckInput struct {
+	AccountName   string
+	SecretName    string
+	ConfigOverlay string
+}
+
+type CodexAuthSecretCheckResult struct {
+	AccountName string
+	SecretName  string
+	Namespace   string
+	JobName     string
+	PodName     string
+	Ready       bool
+	LogTail     string
+}
+
 type CodexAuthCompleteInput struct {
 	AccountName string
 	SecretName  string
@@ -229,6 +245,7 @@ type Runner interface {
 	StartSmokeRun(ctx context.Context, input SmokeRunInput) (StartedRun, error)
 	StartCodexAuthSession(ctx context.Context, input CodexAuthSessionInput) (CodexAuthSession, error)
 	GetCodexAuthStatus(ctx context.Context, accountName string, secretName string) (CodexAuthStatus, error)
+	CheckCodexAuthSecret(ctx context.Context, input CodexAuthSecretCheckInput) (CodexAuthSecretCheckResult, error)
 	CompleteCodexAuthSession(ctx context.Context, input CodexAuthCompleteInput) (CodexAuthCompleteResult, error)
 	CleanupCodexAuthSession(ctx context.Context, accountName string) (CodexAuthCleanupResult, error)
 	DeleteCodexAuthAccount(ctx context.Context, accountName string, secretName string) (CodexAuthAccountDeleteResult, error)
