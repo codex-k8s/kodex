@@ -153,6 +153,16 @@ func (surface *ControlSurface) PostThreadMessageWithToken(ctx context.Context, t
 	return createThreadPost(ctx, client, input)
 }
 
+func (surface *ControlSurface) PostThreadCard(ctx context.Context, card statusservice.MattermostCard) (statusservice.MattermostPostRef, error) {
+	post := flowCardPost(card)
+	post.RootId = card.RootPostID
+	created, _, err := surface.client.CreatePost(ctx, post)
+	if err != nil {
+		return statusservice.MattermostPostRef{}, fmt.Errorf("create Mattermost thread card: %w", err)
+	}
+	return statusservice.MattermostPostRef{ChannelID: created.ChannelId, PostID: created.Id}, nil
+}
+
 func (surface *ControlSurface) GetThreadPosts(ctx context.Context, rootPostID string, limit int) ([]statusservice.MattermostPostMessage, error) {
 	rootPostID = strings.TrimSpace(rootPostID)
 	if rootPostID == "" {
@@ -481,6 +491,7 @@ func flowCardPost(card statusservice.FlowCard) *mattermostmodel.Post {
 	post := &mattermostmodel.Post{
 		Id:        card.PostID,
 		ChannelId: card.ChannelID,
+		RootId:    card.RootPostID,
 		Message:   card.Message,
 	}
 	post.SetProps(mattermostmodel.StringInterface{

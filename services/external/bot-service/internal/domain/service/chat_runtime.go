@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha1"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -27,6 +28,9 @@ const (
 	chatRunModeChat      = "chat"
 	chatRunModeDeveloper = "developer"
 	chatRunModeReviewer  = "reviewer"
+
+	threadContextStatusPending    = "pending"
+	threadContextStatusConfigured = "configured"
 )
 
 var githubPullURLRE = regexp.MustCompile(`https://github\.com/([^/\s]+)/([^/\s]+)/pull/([0-9]+)`)
@@ -45,6 +49,7 @@ type MattermostPostRef struct {
 type MattermostThreadPublisher interface {
 	PostThreadMessage(ctx context.Context, input MattermostThreadPostInput) (MattermostPostRef, error)
 	PostThreadMessageWithToken(ctx context.Context, token string, input MattermostThreadPostInput) (MattermostPostRef, error)
+	PostThreadCard(ctx context.Context, card MattermostCard) (MattermostPostRef, error)
 }
 
 type ChatPostCommand struct {
@@ -90,12 +95,29 @@ type AgentTurnDispatcher interface {
 	EnqueueAgentTurn(ctx context.Context, request AgentTurnRequest) (AgentTurnQueued, error)
 }
 
+type ThreadRepositorySelectionInput struct {
+	ThreadContextID int64
+	RepositoryID    int64
+	UserID          string
+	UserName        string
+}
+
+type ThreadRepositorySelectionResult struct {
+	Context entity.ThreadContext
+	RunID   string
+}
+
+type ThreadRepositorySelector interface {
+	SelectThreadRepository(ctx context.Context, input ThreadRepositorySelectionInput) (ThreadRepositorySelectionResult, error)
+}
+
 type ChatRunServiceConfig struct {
 	Localizer       *texti18n.Localizer
 	Store           adminrepo.Repository
 	RuntimeRunner   runtimerepo.Runner
 	ThreadPublisher MattermostThreadPublisher
 	BotServiceURL   string
+	MenuActionURL   string
 	StorageReady    bool
 	RuntimeReady    bool
 	DisableMonitor  bool
@@ -167,12 +189,15 @@ func (svc *ChatRunService) HandleChatPost(ctx context.Context, command ChatPostC
 	for _, role := range roles {
 		rolesByID[role.ID] = role
 	}
-	repositories, err := svc.chatRepositories(ctx, chat)
+	threadContext, repositories, ready, err := svc.threadContextRepositories(ctx, project, chat, command)
 	if err != nil {
 		svc.postThread(ctx, command, svc.t("chat.run.repositories_lookup_failed", map[string]any{"Error": safeError(err)}))
 		return ChatRunResult{}
 	}
-	targets, err := svc.routeChatPost(ctx, chat, roles, rolesByID, command)
+	if !ready {
+		return ChatRunResult{}
+	}
+	targets, err := svc.routeChatPost(ctx, chat, roles, rolesByID, command, threadContext)
 	if err != nil {
 		svc.postThread(ctx, command, svc.t("chat.run.route_failed", map[string]any{"Error": safeError(err)}))
 		return ChatRunResult{}
@@ -327,15 +352,20 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 	if gitHubOK {
 		gitHubSecretName = gitHubAccount.SecretRef
 	}
+	repo := firstRepository(request.Repositories)
 	started, err := svc.cfg.RuntimeRunner.StartAgentSession(ctx, runtimerepo.AgentSessionPodInput{
-		SessionKey:          session.SessionKey,
-		Role:                request.Role.Name,
-		BotServiceURL:       svc.botServiceURL(),
-		InternalToken:       internalToken,
-		CodexAuthSecretName: openAIAccount.SecretRef,
-		GitHubSecretName:    gitHubSecretName,
-		SandboxMode:         request.Role.SandboxMode,
-		ConfigOverlay:       request.Role.ConfigOverlay,
+		SessionKey:              session.SessionKey,
+		Role:                    request.Role.Name,
+		BotServiceURL:           svc.botServiceURL(),
+		InternalToken:           internalToken,
+		CodexAuthSecretName:     openAIAccount.SecretRef,
+		GitHubSecretName:        gitHubSecretName,
+		RepositoryProvider:      repo.Provider,
+		RepositoryOwner:         repo.Owner,
+		RepositoryName:          repo.Name,
+		RepositoryDefaultBranch: repo.DefaultBranch,
+		SandboxMode:             request.Role.SandboxMode,
+		ConfigOverlay:           request.Role.ConfigOverlay,
 	})
 	if err != nil {
 		return AgentTurnQueued{}, err
@@ -394,7 +424,62 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 	}, nil
 }
 
-func (svc *ChatRunService) routeChatPost(ctx context.Context, chat entity.Chat, roles []entity.AgentRole, rolesByID map[int64]entity.AgentRole, command ChatPostCommand) ([]chatSessionTarget, error) {
+func (svc *ChatRunService) SelectThreadRepository(ctx context.Context, input ThreadRepositorySelectionInput) (ThreadRepositorySelectionResult, error) {
+	if input.ThreadContextID <= 0 {
+		return ThreadRepositorySelectionResult{}, fmt.Errorf("thread context is required")
+	}
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return ThreadRepositorySelectionResult{}, fmt.Errorf("storage is not ready")
+	}
+	threadContext, err := svc.cfg.Store.GetThreadContextByID(ctx, input.ThreadContextID)
+	if err != nil {
+		return ThreadRepositorySelectionResult{}, err
+	}
+	if threadContext.Status == threadContextStatusConfigured {
+		return ThreadRepositorySelectionResult{Context: threadContext}, nil
+	}
+	if input.RepositoryID > 0 {
+		if err := svc.validateThreadRepository(ctx, threadContext, input.RepositoryID); err != nil {
+			return ThreadRepositorySelectionResult{}, err
+		}
+	}
+	threadContext, _, err = svc.cfg.Store.UpsertThreadContext(ctx, adminrepo.UpsertThreadContextInput{
+		ProjectID:            threadContext.ProjectID,
+		ChatID:               threadContext.ChatID,
+		MattermostChannelID:  threadContext.MattermostChannelID,
+		MattermostRootPostID: threadContext.MattermostRootPostID,
+		RepositoryID:         input.RepositoryID,
+		Status:               threadContextStatusConfigured,
+	})
+	if err != nil {
+		return ThreadRepositorySelectionResult{}, err
+	}
+	pending := ChatPostCommand{
+		ChannelID:  threadContext.MattermostChannelID,
+		PostID:     threadContext.PendingMattermostPostID,
+		RootPostID: threadContext.MattermostRootPostID,
+		UserID:     threadContext.PendingUserID,
+		UserName:   threadContext.PendingUserName,
+		Message:    threadContext.PendingMessage,
+	}
+	result := svc.HandleChatPost(ctx, pending)
+	return ThreadRepositorySelectionResult{Context: threadContext, RunID: result.RunID}, nil
+}
+
+func (svc *ChatRunService) validateThreadRepository(ctx context.Context, threadContext entity.ThreadContext, repositoryID int64) error {
+	repositories, err := svc.cfg.Store.ListProjectRepositories(ctx, threadContext.ProjectID)
+	if err != nil {
+		return err
+	}
+	for _, repo := range repositories {
+		if repo.RepositoryID == repositoryID {
+			return nil
+		}
+	}
+	return fmt.Errorf("repository is not bound to project")
+}
+
+func (svc *ChatRunService) routeChatPost(ctx context.Context, chat entity.Chat, roles []entity.AgentRole, rolesByID map[int64]entity.AgentRole, command ChatPostCommand, threadContext entity.ThreadContext) ([]chatSessionTarget, error) {
 	identities, err := svc.cfg.Store.ListMattermostBotIdentitiesByProject(ctx, chat.ProjectID)
 	if err != nil && !errors.Is(err, adminrepo.ErrNotFound) {
 		return nil, err
@@ -429,12 +514,18 @@ func (svc *ChatRunService) routeChatPost(ctx context.Context, chat entity.Chat, 
 			}
 		}
 	}
-	return []chatSessionTarget{{
+	target := chatSessionTarget{
 		Role:          selectDefaultChatRole(roles),
 		SessionScope:  agentSessionScopeChatDefault,
 		SessionRootID: "",
 		TTLSeconds:    defaultManagerSessionTTLSeconds,
-	}}, nil
+	}
+	if threadContext.RepositoryID > 0 {
+		target.SessionScope = agentSessionScopeThreadRole
+		target.SessionRootID = commandRootPostID(command)
+		target.TTLSeconds = defaultThreadSessionTTLSeconds
+	}
+	return []chatSessionTarget{target}, nil
 }
 
 func (svc *ChatRunService) sessionInternalToken(ctx context.Context, session entity.AgentSession) (string, error) {
@@ -604,6 +695,145 @@ func (svc *ChatRunService) chatRoles(ctx context.Context, chatID int64) ([]entit
 		}
 	}
 	return roles, nil
+}
+
+func (svc *ChatRunService) threadContextRepositories(ctx context.Context, project entity.Project, chat entity.Chat, command ChatPostCommand) (entity.ThreadContext, []entity.ProjectRepository, bool, error) {
+	rootPostID := commandRootPostID(command)
+	threadContext, err := svc.cfg.Store.GetThreadContext(ctx, chat.ID, rootPostID)
+	if err == nil {
+		if threadContext.Status == threadContextStatusPending {
+			return threadContext, nil, false, nil
+		}
+		return threadContext, threadContextRepository(threadContext), true, nil
+	}
+	if err != nil && !errors.Is(err, adminrepo.ErrNotFound) {
+		return entity.ThreadContext{}, nil, false, err
+	}
+	repositories, err := svc.threadRepositoryOptions(ctx, chat)
+	if err != nil {
+		return entity.ThreadContext{}, nil, false, err
+	}
+	if len(repositories) == 0 {
+		threadContext, _, err = svc.cfg.Store.UpsertThreadContext(ctx, adminrepo.UpsertThreadContextInput{
+			ProjectID:            project.ID,
+			ChatID:               chat.ID,
+			MattermostChannelID:  chat.MattermostChannelID,
+			MattermostRootPostID: rootPostID,
+			Status:               threadContextStatusConfigured,
+		})
+		if err != nil {
+			return entity.ThreadContext{}, nil, false, err
+		}
+		return threadContext, nil, true, nil
+	}
+	threadContext, created, err := svc.cfg.Store.UpsertThreadContext(ctx, adminrepo.UpsertThreadContextInput{
+		ProjectID:               project.ID,
+		ChatID:                  chat.ID,
+		MattermostChannelID:     chat.MattermostChannelID,
+		MattermostRootPostID:    rootPostID,
+		Status:                  threadContextStatusPending,
+		PendingMattermostPostID: command.PostID,
+		PendingUserID:           command.UserID,
+		PendingUserName:         command.UserName,
+		PendingMessage:          command.Message,
+	})
+	if err != nil {
+		return entity.ThreadContext{}, nil, false, err
+	}
+	if created {
+		if !svc.postThreadRepositoryChoiceCard(ctx, project, threadContext, repositories) {
+			threadContext, _, err = svc.cfg.Store.UpsertThreadContext(ctx, adminrepo.UpsertThreadContextInput{
+				ProjectID:            project.ID,
+				ChatID:               chat.ID,
+				MattermostChannelID:  chat.MattermostChannelID,
+				MattermostRootPostID: rootPostID,
+				Status:               threadContextStatusConfigured,
+			})
+			if err != nil {
+				return entity.ThreadContext{}, nil, false, err
+			}
+			return threadContext, nil, true, nil
+		}
+	}
+	return threadContext, nil, false, nil
+}
+
+func (svc *ChatRunService) threadRepositoryOptions(ctx context.Context, chat entity.Chat) ([]entity.ProjectRepository, error) {
+	bindings, err := svc.cfg.Store.ListChatRepositories(ctx, chat.ID)
+	if err != nil {
+		return nil, err
+	}
+	if len(bindings) > 0 {
+		repositories := make([]entity.ProjectRepository, 0, len(bindings))
+		for _, binding := range bindings {
+			repo, err := svc.cfg.Store.GetRepository(ctx, binding.Provider, binding.Owner, binding.Name)
+			if err != nil {
+				return nil, err
+			}
+			repositories = append(repositories, entity.ProjectRepository{
+				ID:            binding.ID,
+				ProjectID:     chat.ProjectID,
+				RepositoryID:  binding.RepositoryID,
+				Provider:      repo.Provider,
+				Owner:         repo.Owner,
+				Name:          repo.Name,
+				DefaultBranch: repo.DefaultBranch,
+				IsDefault:     len(repositories) == 0,
+			})
+		}
+		return repositories, nil
+	}
+	return svc.cfg.Store.ListProjectRepositories(ctx, chat.ProjectID)
+}
+
+func threadContextRepository(threadContext entity.ThreadContext) []entity.ProjectRepository {
+	if threadContext.RepositoryID == 0 || threadContext.RepositoryOwner == "" || threadContext.RepositoryName == "" {
+		return nil
+	}
+	return []entity.ProjectRepository{{
+		ProjectID:     threadContext.ProjectID,
+		RepositoryID:  threadContext.RepositoryID,
+		Provider:      defaultString(threadContext.RepositoryProvider, "github"),
+		Owner:         threadContext.RepositoryOwner,
+		Name:          threadContext.RepositoryName,
+		DefaultBranch: defaultString(threadContext.RepositoryDefaultBranch, "main"),
+		IsDefault:     true,
+	}}
+}
+
+func (svc *ChatRunService) postThreadRepositoryChoiceCard(ctx context.Context, project entity.Project, threadContext entity.ThreadContext, repositories []entity.ProjectRepository) bool {
+	if svc.cfg.ThreadPublisher == nil || strings.TrimSpace(svc.cfg.MenuActionURL) == "" {
+		svc.postThreadByID(ctx, threadContext.MattermostChannelID, threadContext.MattermostRootPostID, svc.t("chat.thread.repository_choice.text", nil))
+		return false
+	}
+	card := MattermostCard{
+		ChannelID:  threadContext.MattermostChannelID,
+		RootPostID: threadContext.MattermostRootPostID,
+		ActionURL:  svc.cfg.MenuActionURL,
+		Message:    svc.t("menu.message", nil),
+		Color:      "#1c58d9",
+		Title:      svc.t("chat.thread.repository_choice.title", map[string]any{"Project": project.Name}),
+		Text:       svc.t("chat.thread.repository_choice.text", map[string]any{"Owner": emptyAsUnknown(project.GitHubOwner)}),
+		Fields: []MattermostCardField{
+			{Title: svc.t("menu.entity.field.project", nil), Value: "`" + project.Name + "`", Short: true},
+			{Title: svc.t("menu.entity.field.github_owner", nil), Value: "`" + emptyAsUnknown(project.GitHubOwner) + "`", Short: true},
+		},
+		Actions: []MattermostCardAction{
+			threadRepositoryChoiceAction(svc, "threadreponone", threadContext.ID, 0, "chat.thread.repository_choice.none", "chat.thread.repository_choice.none.tooltip", "primary", nil),
+		},
+	}
+	limit := len(repositories)
+	if limit > entityListPageSize {
+		limit = entityListPageSize
+	}
+	for idx, repo := range repositories[:limit] {
+		card.Actions = append(card.Actions, threadRepositoryChoiceAction(svc, "threadrepo"+strconv.Itoa(idx+1), threadContext.ID, repo.RepositoryID, "chat.thread.repository_choice.repo", "chat.thread.repository_choice.repo.tooltip", "default", map[string]any{"Number": idx + 1, "Repository": repo.FullName()}))
+	}
+	if _, err := svc.cfg.ThreadPublisher.PostThreadCard(ctx, card); err != nil {
+		svc.postThreadByID(ctx, threadContext.MattermostChannelID, threadContext.MattermostRootPostID, svc.t("chat.thread.repository_choice.failed", map[string]any{"Error": safeError(err)}))
+		return false
+	}
+	return true
 }
 
 func (svc *ChatRunService) chatRepositories(ctx context.Context, chat entity.Chat) ([]entity.ProjectRepository, error) {
@@ -888,6 +1118,49 @@ func agentSessionCapabilitiesJSON(role entity.AgentRole, repositories []entity.P
 		return "", err
 	}
 	return string(body), nil
+}
+
+type threadRepositorySelectionState struct {
+	ThreadContextID int64 `json:"thread_context_id"`
+	RepositoryID    int64 `json:"repository_id"`
+}
+
+func threadRepositoryChoiceAction(svc *ChatRunService, actionID string, threadContextID int64, repositoryID int64, nameID string, tooltipID string, style string, data map[string]any) MattermostCardAction {
+	return MattermostCardAction{
+		ID:      actionID,
+		Name:    svc.t(nameID, data),
+		Tooltip: svc.t(tooltipID, data),
+		Style:   style,
+		Context: map[string]any{
+			"view":          menuViewChats,
+			"action":        menuActionThreadRepositorySelect,
+			"resource_type": menuResourceThreadContext,
+			"resource_id":   threadRepositorySelectionResourceID(threadContextID, repositoryID),
+		},
+	}
+}
+
+func threadRepositorySelectionResourceID(threadContextID int64, repositoryID int64) string {
+	data, err := json.Marshal(threadRepositorySelectionState{ThreadContextID: threadContextID, RepositoryID: repositoryID})
+	if err != nil {
+		return ""
+	}
+	return base64.RawURLEncoding.EncodeToString(data)
+}
+
+func parseThreadRepositorySelectionResourceID(value string) (threadRepositorySelectionState, bool) {
+	data, err := base64.RawURLEncoding.DecodeString(strings.TrimSpace(value))
+	if err != nil {
+		return threadRepositorySelectionState{}, false
+	}
+	var state threadRepositorySelectionState
+	if err := json.Unmarshal(data, &state); err != nil {
+		return threadRepositorySelectionState{}, false
+	}
+	if state.ThreadContextID <= 0 || state.RepositoryID < 0 {
+		return threadRepositorySelectionState{}, false
+	}
+	return state, true
 }
 
 func finalAnswerFromLog(logTail string) string {

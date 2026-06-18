@@ -248,6 +248,14 @@ func (provider *AccountProvider) ListRepositories(ctx context.Context, input pro
 	if err != nil {
 		return nil, err
 	}
+	owner := strings.TrimSpace(input.Owner)
+	if owner != "" {
+		repositories, err := listOwnerRepositories(ctx, client, owner, input.OwnerType, input.Limit)
+		if err != nil {
+			return nil, githubError("github list owner repositories", err)
+		}
+		return repositoryCandidatesForOwner(repositories, owner), nil
+	}
 	repositories, _, err := client.Repositories.ListByAuthenticatedUser(ctx, &githubapi.RepositoryListByAuthenticatedUserOptions{
 		Visibility:  "all",
 		Affiliation: "owner,collaborator,organization_member",
@@ -266,23 +274,31 @@ func (provider *AccountProvider) SearchRepositories(ctx context.Context, input p
 	if err != nil {
 		return nil, err
 	}
+	owner := strings.TrimSpace(input.Owner)
 	query := strings.TrimSpace(input.Query)
 	if query == "" {
-		return provider.ListRepositories(ctx, providerrepo.RepositoryListInput{Account: input.Account, Limit: input.Limit})
+		return provider.ListRepositories(ctx, providerrepo.RepositoryListInput{Account: input.Account, Owner: owner, OwnerType: input.OwnerType, Limit: input.Limit})
 	}
 	if owner, name, ok := parseFullRepositoryName(query); ok {
 		repo, _, err := client.Repositories.Get(ctx, owner, name)
-		if err == nil {
+		if err == nil && repositoryOwnerMatches(repositoryCandidate(repo), input.Owner) {
 			return []providerrepo.RepositoryCandidate{repositoryCandidate(repo)}, nil
 		}
 	}
-	result, _, err := client.Search.Repositories(ctx, repositorySearchQuery(query), &githubapi.SearchOptions{
+	if owner != "" && normalizedGitHubOwnerType(input.OwnerType) == "" {
+		repositories, err := listOwnerRepositories(ctx, client, owner, input.OwnerType, input.Limit)
+		if err != nil {
+			return nil, githubError("github search owner repositories", err)
+		}
+		return filterRepositoryCandidates(repositoryCandidatesForOwner(repositories, owner), query), nil
+	}
+	result, _, err := client.Search.Repositories(ctx, repositoryOwnerSearchQuery(owner, input.OwnerType, query), &githubapi.SearchOptions{
 		ListOptions: githubapi.ListOptions{PerPage: githubPageLimit(input.Limit)},
 	})
 	if err != nil {
 		return nil, githubError("github search repositories", err)
 	}
-	return repositoryCandidates(result.Repositories), nil
+	return repositoryCandidatesForOwner(result.Repositories, owner), nil
 }
 
 func (provider *AccountProvider) ListBranches(ctx context.Context, account providerrepo.GitHubAccountRef, owner string, name string, limit int) ([]providerrepo.BranchCandidate, error) {
@@ -456,12 +472,77 @@ func githubPageLimit(limit int) int {
 	return limit
 }
 
+func listOwnerRepositories(ctx context.Context, client *githubapi.Client, owner string, ownerType string, limit int) ([]*githubapi.Repository, error) {
+	switch normalizedGitHubOwnerType(ownerType) {
+	case "org":
+		repositories, _, err := client.Repositories.ListByOrg(ctx, owner, &githubapi.RepositoryListByOrgOptions{
+			Type:        "all",
+			ListOptions: githubapi.ListOptions{PerPage: githubPageLimit(limit)},
+		})
+		return repositories, err
+	case "user":
+		repositories, _, err := client.Repositories.List(ctx, owner, &githubapi.RepositoryListOptions{
+			Type:        "all",
+			Sort:        "pushed",
+			Direction:   "desc",
+			ListOptions: githubapi.ListOptions{PerPage: githubPageLimit(limit)},
+		})
+		return repositories, err
+	default:
+		repositories, _, err := client.Repositories.ListByOrg(ctx, owner, &githubapi.RepositoryListByOrgOptions{
+			Type:        "all",
+			ListOptions: githubapi.ListOptions{PerPage: githubPageLimit(limit)},
+		})
+		if err == nil {
+			return repositories, nil
+		}
+		if !githubNotFound(err) {
+			return nil, err
+		}
+		repositories, _, err = client.Repositories.List(ctx, owner, &githubapi.RepositoryListOptions{
+			Type:        "all",
+			Sort:        "pushed",
+			Direction:   "desc",
+			ListOptions: githubapi.ListOptions{PerPage: githubPageLimit(limit)},
+		})
+		return repositories, err
+	}
+}
+
 func repositorySearchQuery(query string) string {
 	query = strings.Join(strings.Fields(query), " ")
 	if query == "" {
 		return "archived:false"
 	}
 	return query + " archived:false"
+}
+
+func repositoryOwnerSearchQuery(owner string, ownerType string, query string) string {
+	query = repositorySearchQuery(query)
+	owner = strings.TrimSpace(owner)
+	if owner == "" {
+		return query
+	}
+	ownerFilter := ""
+	switch normalizedGitHubOwnerType(ownerType) {
+	case "org":
+		ownerFilter = "org:" + owner
+	case "user":
+		ownerFilter = "user:" + owner
+	}
+	if ownerFilter == "" {
+		return query
+	}
+	return ownerFilter + " " + query
+}
+
+func normalizedGitHubOwnerType(ownerType string) string {
+	switch strings.ToLower(strings.TrimSpace(ownerType)) {
+	case "org", "user":
+		return strings.ToLower(strings.TrimSpace(ownerType))
+	default:
+		return ""
+	}
 }
 
 func parseFullRepositoryName(value string) (string, string, bool) {
@@ -483,6 +564,45 @@ func repositoryCandidates(repositories []*githubapi.Repository) []providerrepo.R
 		}
 	}
 	return items
+}
+
+func repositoryCandidatesForOwner(repositories []*githubapi.Repository, owner string) []providerrepo.RepositoryCandidate {
+	items := repositoryCandidates(repositories)
+	if strings.TrimSpace(owner) == "" {
+		return items
+	}
+	filtered := items[:0]
+	for _, item := range items {
+		if repositoryOwnerMatches(item, owner) {
+			filtered = append(filtered, item)
+		}
+	}
+	return filtered
+}
+
+func filterRepositoryCandidates(candidates []providerrepo.RepositoryCandidate, query string) []providerrepo.RepositoryCandidate {
+	query = strings.ToLower(strings.TrimSpace(query))
+	if query == "" {
+		return candidates
+	}
+	filtered := candidates[:0]
+	for _, candidate := range candidates {
+		haystack := strings.ToLower(strings.Join([]string{
+			candidate.Owner,
+			candidate.Name,
+			candidate.FullName,
+			candidate.Description,
+		}, " "))
+		if strings.Contains(haystack, query) {
+			filtered = append(filtered, candidate)
+		}
+	}
+	return filtered
+}
+
+func repositoryOwnerMatches(repository providerrepo.RepositoryCandidate, owner string) bool {
+	owner = strings.TrimSpace(owner)
+	return owner == "" || strings.EqualFold(repository.Owner, owner)
 }
 
 func repositoryCandidate(repository *githubapi.Repository) providerrepo.RepositoryCandidate {
@@ -519,6 +639,14 @@ func githubError(operation string, err error) error {
 		}
 	}
 	return fmt.Errorf("%s: %w", operation, err)
+}
+
+func githubNotFound(err error) bool {
+	var response *githubapi.ErrorResponse
+	if errors.As(err, &response) && response.Response != nil {
+		return response.Response.StatusCode == 404
+	}
+	return false
 }
 
 func githubScopesFromResponse(response *githubapi.Response) []string {

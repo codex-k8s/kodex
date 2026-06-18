@@ -47,6 +47,21 @@
 - [x] Idle TTL не удаляет Mattermost chat/task context; после паузы session можно продолжить новым сообщением.
 - [x] Cleanup тестовых project/chat/session pods/PVC выполнен; readback: `e2e_pods=0`, `session_pods=0`, `session_pvcs=0`, `e2e_projects=0`.
 
+## Project GitHub owner и thread repository context verification 2026-06-18
+
+- [x] `go test ./...` прошел локально после изменений project GitHub owner/thread context.
+- [x] `git diff --check` прошел локально.
+- [x] JSON локали `en.json` и `ru.json` валидны.
+- [x] Project storage поддерживает `github_owner` и `github_owner_type`; goose migration применена до версии `16`.
+- [x] Unit-тесты покрывают, что repository onboarding из project dashboard передает platform GitHub account, GitHub owner и owner type в GitHub provider.
+- [x] GitHub provider использует SDK-listing для `org`/`user` owner и фильтрует результаты по project owner.
+- [x] Unit-тесты покрывают, что thread без выбранного repository получает карточку выбора repository или `No repository`.
+- [x] Unit-тесты покрывают, что `No repository` переводит thread context в configured и запускает agent session без checkout.
+- [x] Unit-тесты покрывают, что выбранный repository сохраняется в thread context и передается в agent-runner как checkout context.
+- [x] `scripts/remote/install-bot-service.sh --env-file .env --apply --wait` раскатил bot-service и agent-runner.
+- [x] `scripts/remote/smoke-bot-service.sh --env-file .env --check-url` прошел на live-контуре.
+- [x] Bot-service pod готов; логи показывают успешную миграцию до версии `16` без panic/fatal в проверенном хвосте.
+
 ## Подготовка
 
 - [x] Ветка собрана и задеплоена через `scripts/remote/install-bot-service.sh --env-file .env --apply --wait`.

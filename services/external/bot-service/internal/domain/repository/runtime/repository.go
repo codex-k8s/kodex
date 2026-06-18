@@ -52,14 +52,18 @@ type ChatRunInput struct {
 }
 
 type AgentSessionPodInput struct {
-	SessionKey          string
-	Role                string
-	BotServiceURL       string
-	InternalToken       string
-	CodexAuthSecretName string
-	GitHubSecretName    string
-	SandboxMode         string
-	ConfigOverlay       string
+	SessionKey              string
+	Role                    string
+	BotServiceURL           string
+	InternalToken           string
+	CodexAuthSecretName     string
+	GitHubSecretName        string
+	RepositoryProvider      string
+	RepositoryOwner         string
+	RepositoryName          string
+	RepositoryDefaultBranch string
+	SandboxMode             string
+	ConfigOverlay           string
 }
 
 type StartedAgentSession struct {

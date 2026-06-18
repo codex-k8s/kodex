@@ -487,7 +487,7 @@ func TestProjectDialogSubmissionCreatesMattermostTeam(t *testing.T) {
 func TestAgentRoleDialogDefaultsGitHubAccountFromProject(t *testing.T) {
 	store := &fakeAdminStore{
 		projects: map[int64]entity.Project{
-			1: {ID: 1, Name: "Demo Project", Slug: "demo-project", GitHubAccountName: "project-gh"},
+			1: {ID: 1, Name: "Demo Project", Slug: "demo-project", GitHubAccountName: "project-gh", GitHubOwner: "codex-k8s", GitHubOwnerType: "org"},
 		},
 		githubAccounts: map[string]entity.GitHubAccount{
 			"project-gh": {Name: "project-gh", SecretRef: "matter-codex-github-project", Status: "configured"},
@@ -747,6 +747,9 @@ func TestRepositoryOnboardingConnectsRepositoryWithAccount(t *testing.T) {
 	if repositories.Card == nil {
 		t.Fatal("repositories card is nil")
 	}
+	if provider.listAccount.Name != "agent" || provider.listOwner != "" || provider.listOwnerType != "" {
+		t.Fatalf("provider list = account %#v owner %q type %q", provider.listAccount, provider.listOwner, provider.listOwnerType)
+	}
 	candidateAction, ok := mattermostActionByID(repositories.Card.Actions, "repocandidate1")
 	if !ok {
 		t.Fatalf("candidate action missing: %#v", repositories.Card.Actions)
@@ -793,7 +796,7 @@ func TestRepositoryOnboardingConnectsRepositoryWithAccount(t *testing.T) {
 func TestProjectRepositoryOnboardingUsesProjectGitHubAccount(t *testing.T) {
 	store := &fakeAdminStore{
 		projects: map[int64]entity.Project{
-			1: {ID: 1, Name: "Demo Project", Slug: "demo-project", GitHubAccountName: "project-gh"},
+			1: {ID: 1, Name: "Demo Project", Slug: "demo-project", GitHubAccountName: "project-gh", GitHubOwner: "codex-k8s", GitHubOwnerType: "org"},
 		},
 		githubAccounts: map[string]entity.GitHubAccount{
 			"project-gh": {Name: "project-gh", SecretRef: "matter-codex-github-project", Status: "configured"},
@@ -830,6 +833,9 @@ func TestProjectRepositoryOnboardingUsesProjectGitHubAccount(t *testing.T) {
 	})
 	if repositories.Card == nil {
 		t.Fatal("repositories card is nil")
+	}
+	if provider.listAccount.Name != "project-gh" || provider.listOwner != "codex-k8s" || provider.listOwnerType != "org" {
+		t.Fatalf("provider list = account %#v owner %q type %q", provider.listAccount, provider.listOwner, provider.listOwnerType)
 	}
 	candidateAction, ok := mattermostActionByID(repositories.Card.Actions, "repocandidate1")
 	if !ok {
@@ -3268,6 +3274,7 @@ type fakeAdminStore struct {
 	chats                map[int64]entity.Chat
 	chatParticipants     map[int64][]entity.ChatParticipant
 	chatRepositories     map[int64][]entity.ChatRepositoryBinding
+	threadContexts       map[int64]entity.ThreadContext
 	botIdentities        map[int64]entity.MattermostBotIdentity
 	agentSessions        map[string]entity.AgentSession
 	sessionTurns         []entity.AgentSessionTurn
@@ -3339,6 +3346,8 @@ func (store *fakeAdminStore) UpsertProject(_ context.Context, input adminrepo.Up
 			project.Name = input.Name
 			project.MattermostTeamID = input.MattermostTeamID
 			project.GitHubAccountName = input.GitHubAccountName
+			project.GitHubOwner = input.GitHubOwner
+			project.GitHubOwnerType = input.GitHubOwnerType
 			project.Description = input.Description
 			project.AdvancedSettings = input.AdvancedSettings
 			store.projects[id] = project
@@ -3351,6 +3360,8 @@ func (store *fakeAdminStore) UpsertProject(_ context.Context, input adminrepo.Up
 		Slug:              input.Slug,
 		MattermostTeamID:  input.MattermostTeamID,
 		GitHubAccountName: input.GitHubAccountName,
+		GitHubOwner:       input.GitHubOwner,
+		GitHubOwnerType:   input.GitHubOwnerType,
 		Description:       input.Description,
 		AdvancedSettings:  input.AdvancedSettings,
 	}
@@ -3573,6 +3584,84 @@ func (store *fakeAdminStore) ListChatParticipants(_ context.Context, chatID int6
 func (store *fakeAdminStore) ListChatRepositories(_ context.Context, chatID int64) ([]entity.ChatRepositoryBinding, error) {
 	store.ensureChatRepositories()
 	return append([]entity.ChatRepositoryBinding(nil), store.chatRepositories[chatID]...), nil
+}
+
+func (store *fakeAdminStore) GetThreadContext(_ context.Context, chatID int64, rootPostID string) (entity.ThreadContext, error) {
+	store.ensureThreadContexts()
+	for _, item := range store.threadContexts {
+		if item.ChatID == chatID && item.MattermostRootPostID == rootPostID {
+			return item, nil
+		}
+	}
+	return entity.ThreadContext{}, adminrepo.ErrNotFound
+}
+
+func (store *fakeAdminStore) GetThreadContextByID(_ context.Context, id int64) (entity.ThreadContext, error) {
+	store.ensureThreadContexts()
+	item, ok := store.threadContexts[id]
+	if !ok {
+		return entity.ThreadContext{}, adminrepo.ErrNotFound
+	}
+	return item, nil
+}
+
+func (store *fakeAdminStore) UpsertThreadContext(_ context.Context, input adminrepo.UpsertThreadContextInput) (entity.ThreadContext, bool, error) {
+	store.ensureThreadContexts()
+	for id, item := range store.threadContexts {
+		if item.ChatID == input.ChatID && item.MattermostRootPostID == input.MattermostRootPostID {
+			item.ProjectID = input.ProjectID
+			item.MattermostChannelID = input.MattermostChannelID
+			item.RepositoryID = input.RepositoryID
+			item.Status = input.Status
+			if input.PendingMattermostPostID != "" {
+				item.PendingMattermostPostID = input.PendingMattermostPostID
+			}
+			if input.PendingUserID != "" {
+				item.PendingUserID = input.PendingUserID
+			}
+			if input.PendingUserName != "" {
+				item.PendingUserName = input.PendingUserName
+			}
+			if input.PendingMessage != "" {
+				item.PendingMessage = input.PendingMessage
+			}
+			store.hydrateThreadContextRepository(&item)
+			store.threadContexts[id] = item
+			return item, false, nil
+		}
+	}
+	item := entity.ThreadContext{
+		ID:                      int64(len(store.threadContexts) + 1),
+		ProjectID:               input.ProjectID,
+		ChatID:                  input.ChatID,
+		MattermostChannelID:     input.MattermostChannelID,
+		MattermostRootPostID:    input.MattermostRootPostID,
+		RepositoryID:            input.RepositoryID,
+		Status:                  input.Status,
+		PendingMattermostPostID: input.PendingMattermostPostID,
+		PendingUserID:           input.PendingUserID,
+		PendingUserName:         input.PendingUserName,
+		PendingMessage:          input.PendingMessage,
+	}
+	store.hydrateThreadContextRepository(&item)
+	store.threadContexts[item.ID] = item
+	return item, true, nil
+}
+
+func (store *fakeAdminStore) hydrateThreadContextRepository(context *entity.ThreadContext) {
+	if context.RepositoryID == 0 {
+		context.RepositoryProvider = ""
+		context.RepositoryOwner = ""
+		context.RepositoryName = ""
+		context.RepositoryDefaultBranch = ""
+		return
+	}
+	if repo, ok := store.findRepositoryByID(context.RepositoryID); ok {
+		context.RepositoryProvider = repo.Provider
+		context.RepositoryOwner = repo.Owner
+		context.RepositoryName = repo.Name
+		context.RepositoryDefaultBranch = repo.DefaultBranch
+	}
 }
 
 func (store *fakeAdminStore) UpsertMattermostBotIdentity(_ context.Context, input adminrepo.UpsertMattermostBotIdentityInput) (entity.MattermostBotIdentity, bool, error) {
@@ -3887,6 +3976,12 @@ func (store *fakeAdminStore) ensureChatParticipants() {
 func (store *fakeAdminStore) ensureChatRepositories() {
 	if store.chatRepositories == nil {
 		store.chatRepositories = map[int64][]entity.ChatRepositoryBinding{}
+	}
+}
+
+func (store *fakeAdminStore) ensureThreadContexts() {
+	if store.threadContexts == nil {
+		store.threadContexts = map[int64]entity.ThreadContext{}
 	}
 }
 
@@ -4506,7 +4601,11 @@ func (provider *fakeRepositoryProvider) EnsureRepositoryWebhook(_ context.Contex
 
 type fakeGitHubRepositoryProvider struct {
 	listAccount     providerrepo.GitHubAccountRef
+	listOwner       string
+	listOwnerType   string
 	searchAccount   providerrepo.GitHubAccountRef
+	searchOwner     string
+	searchOwnerType string
 	searchQuery     string
 	branchesAccount providerrepo.GitHubAccountRef
 	webhookAccount  providerrepo.GitHubAccountRef
@@ -4517,11 +4616,15 @@ type fakeGitHubRepositoryProvider struct {
 
 func (provider *fakeGitHubRepositoryProvider) ListRepositories(_ context.Context, input providerrepo.RepositoryListInput) ([]providerrepo.RepositoryCandidate, error) {
 	provider.listAccount = input.Account
+	provider.listOwner = input.Owner
+	provider.listOwnerType = input.OwnerType
 	return provider.repositoryCandidates(), nil
 }
 
 func (provider *fakeGitHubRepositoryProvider) SearchRepositories(_ context.Context, input providerrepo.RepositorySearchInput) ([]providerrepo.RepositoryCandidate, error) {
 	provider.searchAccount = input.Account
+	provider.searchOwner = input.Owner
+	provider.searchOwnerType = input.OwnerType
 	provider.searchQuery = input.Query
 	return provider.repositoryCandidates(), nil
 }

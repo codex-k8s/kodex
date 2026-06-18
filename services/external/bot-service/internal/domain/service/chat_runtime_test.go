@@ -113,6 +113,19 @@ func TestChatRunStartsDeveloperModeForWorkerRoleWithRepository(t *testing.T) {
 	}
 	store.chats[1] = entity.Chat{ID: 1, ProjectID: 1, MattermostChannelID: "channel-1", Name: "Dev", ChatType: "worker_reviewer"}
 	store.setChatBindings(1, []int64{1}, []int64{1})
+	store.threadContexts[1] = entity.ThreadContext{
+		ID:                      1,
+		ProjectID:               1,
+		ChatID:                  1,
+		MattermostChannelID:     "channel-1",
+		MattermostRootPostID:    "post-1",
+		RepositoryID:            1,
+		RepositoryProvider:      "github",
+		RepositoryOwner:         "codex-k8s",
+		RepositoryName:          "matter-codex",
+		RepositoryDefaultBranch: "main",
+		Status:                  threadContextStatusConfigured,
+	}
 	runner := &fakeRuntimeRunner{}
 	localizer := testLocalizer(t, texti18n.DefaultLocale)
 	svc := NewChatRunService(ChatRunServiceConfig{
@@ -136,6 +149,93 @@ func TestChatRunStartsDeveloperModeForWorkerRoleWithRepository(t *testing.T) {
 	}
 	if runner.startedSessionKey == "" || runner.sessionGitHubSecret != "matter-codex-github-agent" {
 		t.Fatalf("session runner = %#v", runner.sessionRuns)
+	}
+	if runner.sessionRuns[0].RepositoryOwner != "codex-k8s" || runner.sessionRuns[0].RepositoryName != "matter-codex" {
+		t.Fatalf("session repository = %#v", runner.sessionRuns[0])
+	}
+}
+
+func TestChatRunPromptsThreadRepositoryChoiceAndRunsWithoutRepository(t *testing.T) {
+	store := chatRuntimeStore()
+	project := store.projects[1]
+	project.GitHubOwner = "codex-k8s"
+	project.GitHubAccountName = "agent"
+	store.projects[1] = project
+	store.repositories[repositoryStoreKey("github", "codex-k8s", "matter-codex")] = entity.Repository{
+		ID:                1,
+		Provider:          "github",
+		Owner:             "codex-k8s",
+		Name:              "matter-codex",
+		DefaultBranch:     "main",
+		GitHubAccountName: "agent",
+		Status:            "active",
+	}
+	store.projectRepositories["1:1"] = entity.ProjectRepository{
+		ID:            1,
+		ProjectID:     1,
+		RepositoryID:  1,
+		Provider:      "github",
+		Owner:         "codex-k8s",
+		Name:          "matter-codex",
+		DefaultBranch: "main",
+		IsDefault:     true,
+	}
+	store.agentRoles[1] = entity.AgentRole{
+		ID:                1,
+		ProjectID:         1,
+		Name:              "worker",
+		RoleType:          "worker",
+		OpenAIAccountName: "main",
+		GitHubAccountName: "agent",
+		Enabled:           true,
+	}
+	store.chats[1] = entity.Chat{ID: 1, ProjectID: 1, MattermostChannelID: "channel-1", Name: "Dev", ChatType: "worker_reviewer"}
+	store.setChatBindings(1, []int64{1}, []int64{1})
+	runner := &fakeRuntimeRunner{}
+	publisher := &fakeThreadPublisher{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Localizer:       localizer,
+		Store:           store,
+		RuntimeRunner:   runner,
+		ThreadPublisher: publisher,
+		MenuActionURL:   "https://matter-codex.example/mattermost/actions/agents",
+		StorageReady:    true,
+		RuntimeReady:    true,
+		DisableMonitor:  true,
+	})
+
+	result := svc.HandleChatPost(context.Background(), ChatPostCommand{
+		ChannelID: "channel-1",
+		PostID:    "post-1",
+		UserID:    "owner",
+		UserName:  "owner",
+		Message:   "Start from a blank workspace.",
+	})
+
+	if !result.Ignored && result.RunID != "" {
+		t.Fatalf("result = %#v", result)
+	}
+	if len(publisher.cards) != 1 || len(publisher.cards[0].Actions) < 2 {
+		t.Fatalf("cards = %#v", publisher.cards)
+	}
+	if runner.startedSessionKey != "" {
+		t.Fatalf("session should not start before repository choice: %#v", runner.sessionRuns)
+	}
+	threadContext, err := store.GetThreadContext(context.Background(), 1, "post-1")
+	if err != nil || threadContext.Status != threadContextStatusPending {
+		t.Fatalf("thread context = %#v err=%v", threadContext, err)
+	}
+
+	selected, err := svc.SelectThreadRepository(context.Background(), ThreadRepositorySelectionInput{ThreadContextID: threadContext.ID, RepositoryID: 0})
+	if err != nil {
+		t.Fatalf("select thread repository: %v", err)
+	}
+	if selected.RunID == "" || runner.startedSessionKey == "" {
+		t.Fatalf("selection result = %#v runner=%#v", selected, runner.sessionRuns)
+	}
+	if runner.sessionRuns[0].RepositoryOwner != "" || runner.sessionRuns[0].RepositoryName != "" {
+		t.Fatalf("session should start without repository checkout: %#v", runner.sessionRuns[0])
 	}
 }
 
@@ -174,6 +274,19 @@ func TestChatRunFallsBackToProjectGitHubAccount(t *testing.T) {
 	}
 	store.chats[1] = entity.Chat{ID: 1, ProjectID: 1, MattermostChannelID: "channel-1", Name: "Dev", ChatType: "worker_reviewer"}
 	store.setChatBindings(1, []int64{1}, []int64{1})
+	store.threadContexts[1] = entity.ThreadContext{
+		ID:                      1,
+		ProjectID:               1,
+		ChatID:                  1,
+		MattermostChannelID:     "channel-1",
+		MattermostRootPostID:    "post-1",
+		RepositoryID:            1,
+		RepositoryProvider:      "github",
+		RepositoryOwner:         "codex-k8s",
+		RepositoryName:          "kodex",
+		RepositoryDefaultBranch: "main",
+		Status:                  threadContextStatusConfigured,
+	}
 	runner := &fakeRuntimeRunner{}
 	localizer := testLocalizer(t, texti18n.DefaultLocale)
 	svc := NewChatRunService(ChatRunServiceConfig{
@@ -211,6 +324,7 @@ func chatRuntimeStore() *fakeAdminStore {
 		chats:               map[int64]entity.Chat{},
 		chatParticipants:    map[int64][]entity.ChatParticipant{},
 		chatRepositories:    map[int64][]entity.ChatRepositoryBinding{},
+		threadContexts:      map[int64]entity.ThreadContext{},
 		openAIAccounts: map[string]entity.OpenAIAccount{
 			"main": {Name: "main", SecretRef: "matter-codex-codex-auth-main", Status: "authorized"},
 		},
@@ -222,6 +336,7 @@ func chatRuntimeStore() *fakeAdminStore {
 
 type fakeThreadPublisher struct {
 	posts []MattermostThreadPostInput
+	cards []MattermostCard
 }
 
 func (publisher *fakeThreadPublisher) PostThreadMessage(_ context.Context, input MattermostThreadPostInput) (MattermostPostRef, error) {
@@ -231,6 +346,11 @@ func (publisher *fakeThreadPublisher) PostThreadMessage(_ context.Context, input
 
 func (publisher *fakeThreadPublisher) PostThreadMessageWithToken(_ context.Context, _ string, input MattermostThreadPostInput) (MattermostPostRef, error) {
 	return publisher.PostThreadMessage(context.Background(), input)
+}
+
+func (publisher *fakeThreadPublisher) PostThreadCard(_ context.Context, card MattermostCard) (MattermostPostRef, error) {
+	publisher.cards = append(publisher.cards, card)
+	return MattermostPostRef{ChannelID: card.ChannelID, PostID: "card-" + card.RootPostID}, nil
 }
 
 var _ runtimerepo.Runner = (*fakeRuntimeRunner)(nil)

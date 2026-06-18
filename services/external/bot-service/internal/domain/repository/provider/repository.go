@@ -94,14 +94,18 @@ type BranchCandidate struct {
 }
 
 type RepositorySearchInput struct {
-	Account GitHubAccountRef
-	Query   string
-	Limit   int
+	Account   GitHubAccountRef
+	Owner     string
+	OwnerType string
+	Query     string
+	Limit     int
 }
 
 type RepositoryListInput struct {
-	Account GitHubAccountRef
-	Limit   int
+	Account   GitHubAccountRef
+	Owner     string
+	OwnerType string
+	Limit     int
 }
 
 type PullRequestInput struct {

@@ -485,6 +485,7 @@ func cardPost(card statusservice.MattermostCard) *mattermostmodel.Post {
 	post := &mattermostmodel.Post{
 		Id:        card.PostID,
 		ChannelId: card.ChannelID,
+		RootId:    card.RootPostID,
 		Message:   card.Message,
 	}
 	post.SetProps(mattermostmodel.StringInterface{

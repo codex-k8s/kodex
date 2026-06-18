@@ -68,6 +68,7 @@ UI state хранит технические identifiers в action context ил�
 - chat создает private channel внутри project team;
 - thread внутри chat привязывается к конкретной agent session;
 - в одном thread работает один агент и одна session;
+- thread может иметь optional repository context; если repository не выбран, session стартует без checkout;
 - если в chat несколько roles, они должны быть визуально различимы через bot identity или явное имя role в ответе.
 
 Legacy repository channels остаются для совместимости с текущим onboarding, но не являются главным контейнером будущего UX.
@@ -99,7 +100,8 @@ Run хранит текущий статус, а step хранит конкре�
 Runner запускает `codex exec --json` в Kubernetes pod:
 
 - рабочая директория монтируется из PVC;
-- repository checkout выполняется внутри workspace;
+- repository checkout выполняется внутри workspace только если thread/run получил repository context;
+- если repository context отсутствует, Codex запускается в пустом `/workspace` без ошибки;
 - `CODEX_HOME` указывает на отдельный путь в PVC;
 - OpenAI account выбирается из agent profile или явно из run/session;
 - runner материализует auth/config выбранного OpenAI account в runtime `CODEX_HOME`;
@@ -119,6 +121,8 @@ codex exec --json \
 ```
 
 `CODEX_PROFILE` рендерится системой из agent profile. В него входят модель, sandbox policy, approval policy, MCP servers, env bindings, project instruction discovery и другие безопасные позиции `config.toml`.
+
+Для no-repository sessions `--cd` указывает на `/workspace`, а GitHub token может оставаться доступным роли для `gh`/GitHub API операций, если он назначен через project или role.
 
 `sandbox_mode = "danger-full-access"` остается допустимым default для MVP внутри изолированного pod. Это осознанный риск владельца. Значение должно быть переопределяемым через Codex `config.toml` overlay в agent profile.
 
@@ -169,7 +173,8 @@ PVC живет дольше pod, чтобы developer/reviewer/fix шаги мо
 
 MVP использует bot PAT из secret:
 
-- проверить доступ к repo;
+- проверить доступ к GitHub owner и repo;
+- искать repositories внутри project GitHub owner;
 - создать branch;
 - push commit;
 - открыть PR;

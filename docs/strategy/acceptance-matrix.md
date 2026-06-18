@@ -44,6 +44,7 @@
 - GitHub account добавляется через token dialog;
 - username/email/status подтягиваются из GitHub API;
 - GitHub account назначается на project как platform account и может переопределяться на agent role;
+- project хранит GitHub organization/user namespace отдельно от конкретных repositories;
 - удаление account блокируется, если profile зависит от него.
 
 ## Repository Onboarding PR
@@ -51,8 +52,9 @@
 Проверка:
 
 - owner открывает project dashboard, где выбран platform GitHub account;
-- repository onboarding использует platform GitHub account проекта;
+- repository onboarding использует platform GitHub account и GitHub owner проекта;
 - owner выбирает repository из списка или через поиск;
+- список и поиск repository ограничены GitHub owner проекта;
 - default branch выбирается из GitHub API или заполняется системой;
 - webhook создается при onboarding;
 - Mattermost channel binding создается автоматически;
@@ -65,6 +67,7 @@
 
 - project создается из `/agents -> Projects`;
 - Mattermost team создается или привязывается автоматически;
+- project form позволяет задать GitHub owner/org без выбора одного главного repository;
 - repository можно привязать к project из UI;
 - agent role создается из project dashboard;
 - OpenAI/GitHub accounts выбираются из списков;
@@ -83,6 +86,9 @@
 - role выбирается из chat participants или явной кнопкой;
 - если prompt template пустой, сообщение owner становится основной инструкцией;
 - prompt context содержит project, chat, selected repositories, role settings и task text;
+- если у project/chat есть repositories, первый turn в thread предлагает выбрать repository или `No repository`;
+- `No repository` запускает agent session без checkout и не считается ошибкой;
+- выбранный repository сохраняется на thread и попадает в agent pod как checkout context;
 - запускается agent pod с выбранными GitHub/OpenAI accounts;
 - финальный ответ агента появляется в thread исходного сообщения;
 - GitHub issue/PR links возвращаются в thread/card.

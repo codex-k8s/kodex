@@ -7,7 +7,9 @@
 - `Project` = отдельная Mattermost team.
 - `Chat` = Mattermost private channel внутри project team.
 - `AgentRole` = проектная роль агента, которую можно добавить в chat.
-- `Repository` = GitHub repository, подключенный глобально и затем привязанный к project/chat.
+- `Project GitHub owner` = GitHub organization или user namespace, к которому относится project.
+- `Repository` = GitHub repository внутри GitHub owner проекта, подключенный глобально и затем привязанный к project/chat как доступный вариант.
+- `ThreadContext` = привязка Mattermost thread к optional repository и agent session context.
 - `GitHub account` и `OpenAI account` = переиспользуемые credentials, назначаемые на role.
 - `Flow` больше не является центральной сущностью продукта. Legacy flow/actions остаются только в `Advanced` для совместимости и диагностики.
 
@@ -15,10 +17,10 @@
 
 1. `/agents -> Projects -> Create project`.
 2. Добавить или выбрать accounts.
-3. Подключить repositories.
+3. Указать GitHub owner проекта и подключить repositories из этого owner.
 4. Создать agent roles.
 5. Создать private chat channel.
-6. Писать задачу в chat/thread.
+6. Писать задачу в chat/thread и выбирать repository для thread, если он нужен.
 
 ## Project
 
@@ -26,11 +28,15 @@ Project хранит:
 
 - имя, slug и описание;
 - Mattermost team id;
+- platform GitHub account;
+- GitHub owner и owner type (`org` или `user`);
 - project-level advanced/runtime settings;
-- default repository bindings;
+- repository bindings из GitHub owner проекта;
 - доступные roles/chats через связанные таблицы.
 
 Создание project должно создавать или привязывать Mattermost team. Slug используется как Mattermost team name, поэтому он должен быть DNS-safe.
+
+Project не хранит один "главный repository". Он хранит GitHub namespace проекта. Например, project/team может быть привязан к `radar-auto`, а конкретные repositories `radar-auto/api`, `radar-auto/web` и `radar-auto/docs` выбираются позже как доступные project repositories.
 
 ## AgentRole
 
@@ -58,19 +64,30 @@ Chat хранит:
 - name, slug, description;
 - chat type (`manager`, `pm_delivery`, `worker_reviewer`, `single_custom`, `multi_role_custom`, `custom`);
 - selected roles;
-- selected repositories;
+- selected repositories как allowlist вариантов для thread;
 - optional root GitHub issue/epic;
 - optional work policy и settings.
 
-По умолчанию создается private channel. При выборе repository в chat creator repository автоматически привязывается к project, если еще не был привязан.
+По умолчанию создается private channel. При выборе repositories в chat creator они задают доступный набор для threads этого chat. Если chat-level allowlist пустой, thread может выбрать любой repository, уже привязанный к project.
+
+## Thread Repository Context
+
+Repository выбирается не как постоянная настройка всего chat, а как optional context конкретного Mattermost thread:
+
+- при первом сообщении в новом thread система показывает карточку выбора repository, если у project/chat есть доступные repositories;
+- owner может выбрать конкретный repository или режим `No repository`;
+- выбранный repository сохраняется в `ThreadContext` и переиспользуется всеми последующими turns этого thread;
+- если repository выбран, agent session pod получает checkout этого repository в `/workspace/repo`;
+- если выбран `No repository` или repositories еще не подключены, агент стартует в PVC без checkout и работает только с prompt/chat/MCP context;
+- отсутствие repository не считается ошибкой для manager, PM, analyst, ad-hoc и raw chat roles.
 
 ## Accounts And Repositories
 
-GitHub accounts остаются PAT/fine-grained PAT bindings для MVP. Account metadata управляется глобально, но platform GitHub account выбирается на уровне project, потому что project/Mattermost team обычно соответствует конкретной GitHub organization или группе repositories. Этот project account используется для поиска repository, загрузки branches, регистрации webhook и как default GitHub access для roles без собственного account override.
+GitHub accounts остаются PAT/fine-grained PAT bindings для MVP. Account metadata управляется глобально, но platform GitHub account выбирается на уровне project, потому что project/Mattermost team соответствует конкретной GitHub organization или user namespace. Этот project account используется для поиска repositories только внутри `Project.GitHubOwner`, загрузки branches, регистрации webhook и как default GitHub access для roles без собственного account override.
 
 OpenAI accounts остаются Codex device-code accounts. В role выбирается account binding, а runner получает только ссылку на Kubernetes Secret с auth material.
 
-Основной happy path: открыть project dashboard и подключить repository через platform GitHub account проекта; после branch selection repository автоматически привязывается к project. Глобальный `Repositories` раздел остается fallback/advanced path, где owner может выбрать GitHub account вручную.
+Основной happy path: открыть project dashboard, указать GitHub owner и platform account, подключить repositories из этого owner через branch selection, затем в thread выбрать нужный repository или `No repository`. Глобальный `Repositories` раздел остается fallback/advanced path, где owner может выбрать GitHub account вручную.
 
 ## Advanced Settings
 
@@ -85,6 +102,6 @@ OpenAI accounts остаются Codex device-code accounts. В role выбир�
 
 ## Product Boundary For Current PR
 
-Текущий PR вводит доменную модель, storage, Mattermost team/channel creation, project/role/chat dialogs и no-template prompt builder. Это foundation для chat-triggered agent execution.
+Текущий PR фиксирует project-level GitHub owner, ограничивает repository onboarding этим owner, добавляет thread-level repository context и передает optional repository в session runner. Это foundation для работы над несколькими repositories одного проекта без превращения project в один repository.
 
 Не считается готовым доработкой, если новая owner-facing операция требует помнить внутренний id. Существующие typed commands остаются только fallback/debug path.
