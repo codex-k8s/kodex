@@ -335,17 +335,6 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 		return AgentTurnQueued{}, err
 	}
 	gitHubAccount, gitHubOK := svc.gitHubAccount(ctx, request.Project, request.Role, firstRepository(request.Repositories))
-	prompt, err := BuildRolePrompt(RolePromptInput{
-		Project:      request.Project,
-		Role:         request.Role,
-		Chat:         request.Chat,
-		Repositories: request.Repositories,
-		UserMessage:  request.UserMessage,
-		Locale:       svc.localeData(),
-	})
-	if err != nil {
-		return AgentTurnQueued{}, err
-	}
 	ttlSeconds := request.TTLSeconds
 	if ttlSeconds <= 0 {
 		ttlSeconds = defaultThreadSessionTTLSeconds
@@ -357,6 +346,25 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 	sessionRootID := strings.TrimSpace(request.SessionRootID)
 	sessionKey := agentSessionKey(request.Chat.ID, request.Role.ID, sessionScope, sessionRootID)
 	capabilities, err := agentSessionCapabilitiesJSON(request.Role, request.Repositories, gitHubOK)
+	if err != nil {
+		return AgentTurnQueued{}, err
+	}
+	_, sessionExists, err := svc.agentSessionExists(ctx, sessionKey)
+	if err != nil {
+		return AgentTurnQueued{}, err
+	}
+	promptInput := RolePromptInput{
+		Project:      request.Project,
+		Role:         request.Role,
+		Chat:         request.Chat,
+		Repositories: request.Repositories,
+		UserMessage:  request.UserMessage,
+		Locale:       svc.localeData(),
+	}
+	prompt, err := BuildRolePrompt(promptInput)
+	if sessionExists {
+		prompt, err = BuildRoleContinuationPrompt(promptInput)
+	}
 	if err != nil {
 		return AgentTurnQueued{}, err
 	}
@@ -566,6 +574,17 @@ func (svc *ChatRunService) sessionInternalToken(ctx context.Context, session ent
 		}
 	}
 	return newInternalToken()
+}
+
+func (svc *ChatRunService) agentSessionExists(ctx context.Context, sessionKey string) (entity.AgentSession, bool, error) {
+	session, err := svc.cfg.Store.GetAgentSession(ctx, sessionKey)
+	if err == nil {
+		return session, true, nil
+	}
+	if errors.Is(err, adminrepo.ErrNotFound) {
+		return entity.AgentSession{}, false, nil
+	}
+	return entity.AgentSession{}, false, err
 }
 
 func (svc *ChatRunService) botServiceURL() string {

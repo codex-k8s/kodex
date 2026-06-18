@@ -552,6 +552,7 @@ func TestAgentRoleDialogAllowsEmptyPromptTemplate(t *testing.T) {
 		Submission: map[string]any{
 			dialogFieldProjectID:        "1",
 			dialogFieldRole:             "backend-developer",
+			dialogFieldBotIdentity:      "@backend-dev-bot",
 			dialogFieldRoleType:         "worker",
 			dialogFieldOpenAIAccount:    "primary",
 			dialogFieldGitHubAccount:    "agent",
@@ -577,6 +578,16 @@ func TestAgentRoleDialogAllowsEmptyPromptTemplate(t *testing.T) {
 	}
 	if role.OpenAIAccountName != "primary" || role.GitHubAccountName != "agent" {
 		t.Fatalf("accounts = %#v", role)
+	}
+	if role.BotIdentity != "backend-dev-bot" {
+		t.Fatalf("bot identity = %q", role.BotIdentity)
+	}
+	identity, err := store.GetMattermostBotIdentityByRoleID(context.Background(), role.ID)
+	if err != nil {
+		t.Fatalf("bot identity not stored: %v", err)
+	}
+	if identity.Username != "backend-dev-bot" || identity.MattermostUserID != "bot-user-backend-dev-bot" || identity.TokenSecretRef == "" {
+		t.Fatalf("bot identity = %#v", identity)
 	}
 	if !strings.Contains(result.Card.Text, "raw chat instruction") {
 		t.Fatalf("card text = %q", result.Card.Text)
