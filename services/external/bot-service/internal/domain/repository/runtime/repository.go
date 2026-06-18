@@ -51,6 +51,38 @@ type ChatRunInput struct {
 	ConfigOverlay       string
 }
 
+type AgentSessionPodInput struct {
+	SessionKey          string
+	Role                string
+	BotServiceURL       string
+	InternalToken       string
+	CodexAuthSecretName string
+	GitHubSecretName    string
+	SandboxMode         string
+	ConfigOverlay       string
+}
+
+type StartedAgentSession struct {
+	SessionKey string
+	Namespace  string
+	PodName    string
+	PVCName    string
+	SecretName string
+	Created    bool
+}
+
+type MattermostBotTokenSecretInput struct {
+	SecretName string
+	Token      string
+}
+
+type MattermostBotTokenSecret struct {
+	SecretName string
+	Namespace  string
+	Created    bool
+	Token      string
+}
+
 type CodexAuthSessionInput struct {
 	AccountName string
 	SecretName  string
@@ -201,6 +233,9 @@ type Runner interface {
 	StartDeveloperRun(ctx context.Context, input DeveloperRunInput) (StartedRun, error)
 	StartReviewRun(ctx context.Context, input ReviewRunInput) (StartedRun, error)
 	StartChatRun(ctx context.Context, input ChatRunInput) (StartedRun, error)
+	StartAgentSession(ctx context.Context, input AgentSessionPodInput) (StartedAgentSession, error)
+	UpsertMattermostBotTokenSecret(ctx context.Context, input MattermostBotTokenSecretInput) (MattermostBotTokenSecret, error)
+	GetMattermostBotTokenSecret(ctx context.Context, secretName string) (MattermostBotTokenSecret, error)
 	GetRunStatus(ctx context.Context, runID string) (RunStatus, error)
 	CleanupRun(ctx context.Context, runID string) (CleanupResult, error)
 	CleanupExpiredRuns(ctx context.Context, input RetentionCleanupInput) (RetentionCleanupResult, error)

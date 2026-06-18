@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	adminrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/admin"
+	runtimerepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/runtime"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
 )
 
@@ -859,6 +860,13 @@ func (svc *SlashCommandService) handleAgentRoleDialogUpsert(ctx context.Context,
 	if err != nil {
 		return DialogSubmissionResult{StatusCode: 200, Error: svc.t("agent_role.save.failed", map[string]any{"Error": safeError(err)})}
 	}
+	project, err := svc.cfg.Store.GetProject(ctx, role.ProjectID)
+	if err != nil {
+		return DialogSubmissionResult{StatusCode: 200, Error: svc.t("project.get.failed", map[string]any{"Error": safeError(err)})}
+	}
+	if _, err := svc.ensureRoleBotIdentity(ctx, project, role, ""); err != nil {
+		return DialogSubmissionResult{StatusCode: 200, Error: svc.t("agent_role.bot_identity.failed", map[string]any{"Error": safeError(err)})}
+	}
 	svc.recordProjectAudit(ctx, mattermostDialogSlash(state, command), "agent_role.upserted", role.Name, "agent role upserted from Mattermost dialog")
 	stateID := "label.updated"
 	if created {
@@ -887,11 +895,13 @@ func (svc *SlashCommandService) handleChatCreateDialog(ctx context.Context, comm
 	if err != nil {
 		return DialogSubmissionResult{StatusCode: 200, Errors: map[string]string{dialogFieldProjectID: svc.t("dialog.project.project_invalid", nil)}}
 	}
+	roles := make([]entity.AgentRole, 0, len(input.RoleIDs))
 	for _, roleID := range input.RoleIDs {
 		role, err := svc.cfg.Store.GetAgentRole(ctx, roleID)
 		if err != nil || role.ProjectID != project.ID || !role.Enabled {
 			return DialogSubmissionResult{StatusCode: 200, Errors: map[string]string{dialogFieldPrimaryRoleID: svc.t("dialog.chat.role_invalid", nil)}}
 		}
+		roles = append(roles, role)
 	}
 	for _, repositoryID := range input.RepositoryIDs {
 		if _, _, err := svc.cfg.Store.UpsertProjectRepository(ctx, adminrepo.UpsertProjectRepositoryInput{
@@ -911,6 +921,11 @@ func (svc *SlashCommandService) handleChatCreateDialog(ctx context.Context, comm
 			return DialogSubmissionResult{StatusCode: 200, Error: svc.t("chat.channel.failed", map[string]any{"Error": safeError(err)})}
 		}
 		input.MattermostChannelID = channel.ID
+		for _, role := range roles {
+			if _, err := svc.ensureRoleBotIdentity(ctx, project, role, channel.ID); err != nil {
+				return DialogSubmissionResult{StatusCode: 200, Error: svc.t("agent_role.bot_identity.failed", map[string]any{"Error": safeError(err)})}
+			}
+		}
 	}
 	chat, created, err := svc.cfg.Store.CreateChat(ctx, input)
 	if err != nil {
@@ -1362,4 +1377,86 @@ func (svc *SlashCommandService) recordProjectAudit(ctx context.Context, command 
 		ResourceName: resourceName,
 		Summary:      summary,
 	})
+}
+
+func (svc *SlashCommandService) ensureRoleBotIdentity(ctx context.Context, project entity.Project, role entity.AgentRole, channelID string) (entity.MattermostBotIdentity, error) {
+	if svc.cfg.Store == nil || svc.cfg.RoleBotManager == nil || svc.cfg.RuntimeRunner == nil {
+		return entity.MattermostBotIdentity{}, fmt.Errorf("role bot identity runtime is not configured")
+	}
+	existing, err := svc.cfg.Store.GetMattermostBotIdentityByRoleID(ctx, role.ID)
+	if err == nil && existing.MattermostUserID != "" && existing.TokenSecretRef != "" {
+		if _, secretErr := svc.cfg.RuntimeRunner.GetMattermostBotTokenSecret(ctx, existing.TokenSecretRef); secretErr == nil {
+			if channelID != "" {
+				_ = svc.cfg.RoleBotManager.EnsureProjectChannelMember(ctx, project.Slug, channelID, existing.MattermostUserID)
+			}
+			return existing, nil
+		}
+	}
+	username := roleBotUsername(project, role)
+	displayName := roleBotDisplayName(project, role)
+	binding, err := svc.cfg.RoleBotManager.EnsureRoleBot(ctx, MattermostRoleBotInput{
+		Username:    username,
+		DisplayName: displayName,
+		Description: "matter-codex role bot for " + project.Name + " / " + role.Name,
+	})
+	if err != nil {
+		_, _, _ = svc.cfg.Store.UpsertMattermostBotIdentity(ctx, adminrepo.UpsertMattermostBotIdentityInput{
+			ProjectID:        project.ID,
+			RoleID:           role.ID,
+			Username:         username,
+			DisplayName:      displayName,
+			MattermostUserID: "",
+			TokenSecretRef:   "",
+			Status:           "error",
+			LastError:        safeError(err),
+		})
+		return entity.MattermostBotIdentity{}, err
+	}
+	secretName := roleBotTokenSecretName(role.ID)
+	secret, err := svc.cfg.RuntimeRunner.UpsertMattermostBotTokenSecret(ctx, adminrepoMattermostBotSecretInput(secretName, binding.Token))
+	if err != nil {
+		return entity.MattermostBotIdentity{}, err
+	}
+	identity, _, err := svc.cfg.Store.UpsertMattermostBotIdentity(ctx, adminrepo.UpsertMattermostBotIdentityInput{
+		ProjectID:        project.ID,
+		RoleID:           role.ID,
+		Username:         binding.Username,
+		DisplayName:      defaultString(binding.DisplayName, displayName),
+		MattermostUserID: binding.UserID,
+		TokenSecretRef:   secret.SecretName,
+		Status:           "configured",
+		LastError:        "",
+	})
+	if err != nil {
+		return entity.MattermostBotIdentity{}, err
+	}
+	if channelID != "" {
+		_ = svc.cfg.RoleBotManager.EnsureProjectChannelMember(ctx, project.Slug, channelID, binding.UserID)
+	}
+	return identity, nil
+}
+
+func adminrepoMattermostBotSecretInput(secretName string, token string) runtimerepo.MattermostBotTokenSecretInput {
+	return runtimerepo.MattermostBotTokenSecretInput{SecretName: secretName, Token: token}
+}
+
+func roleBotUsername(project entity.Project, role entity.AgentRole) string {
+	base := slugifyName(project.Slug+"-"+role.Name, "agent")
+	base = strings.TrimPrefix(base, "mc-")
+	name := "mc-" + base
+	if len(name) > 60 {
+		name = strings.TrimRight(name[:60], "-")
+	}
+	return name
+}
+
+func roleBotDisplayName(project entity.Project, role entity.AgentRole) string {
+	if strings.TrimSpace(role.BotIdentity) != "" {
+		return strings.TrimSpace(role.BotIdentity)
+	}
+	return project.Name + " / " + role.Name
+}
+
+func roleBotTokenSecretName(roleID int64) string {
+	return "matter-codex-mm-bot-" + strconv.FormatInt(roleID, 10)
 }

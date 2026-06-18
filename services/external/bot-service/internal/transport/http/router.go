@@ -33,6 +33,8 @@ const (
 	pathAgentsDialog  = "/mattermost/dialogs/agents"
 	pathFlowAction    = "/mattermost/actions/flow"
 	pathGitHubWebhook = "/github/webhook"
+	pathAgentSessions = "/internal/agent-sessions/"
+	pathMCPSessions   = "/mcp/sessions/"
 
 	dialogCallbackResult = "agents_dialog_result"
 )
@@ -44,6 +46,7 @@ type DialogOpener interface {
 type RouterConfig struct {
 	StatusService         *statusservice.StatusService
 	SlashService          *statusservice.SlashCommandService
+	SessionService        *statusservice.AgentSessionService
 	DialogOpener          DialogOpener
 	Localizer             *texti18n.Localizer
 	SlashToken            string
@@ -58,6 +61,7 @@ type RouterConfig struct {
 type Router struct {
 	statusService         *statusservice.StatusService
 	slashService          *statusservice.SlashCommandService
+	sessionService        *statusservice.AgentSessionService
 	dialogOpener          DialogOpener
 	localizer             *texti18n.Localizer
 	slashToken            string
@@ -66,6 +70,7 @@ type Router struct {
 	maxGitHubWebhookBytes int64
 	mattermostHTTPClient  *http.Client
 	logger                *slog.Logger
+	mcpHandler            http.Handler
 	mux                   *http.ServeMux
 }
 
@@ -79,6 +84,7 @@ func NewRouter(cfg RouterConfig) *Router {
 	router := &Router{
 		statusService:         cfg.StatusService,
 		slashService:          cfg.SlashService,
+		sessionService:        cfg.SessionService,
 		dialogOpener:          cfg.DialogOpener,
 		localizer:             cfg.Localizer,
 		slashToken:            cfg.SlashToken,
@@ -88,6 +94,9 @@ func NewRouter(cfg RouterConfig) *Router {
 		mattermostHTTPClient:  mattermostHTTPClient,
 		logger:                cfg.Logger,
 		mux:                   http.NewServeMux(),
+	}
+	if cfg.SessionService != nil {
+		router.mcpHandler = newMCPHandler(cfg.SessionService)
 	}
 	registry := cfg.PrometheusRegistry
 	if registry == nil {
@@ -103,6 +112,10 @@ func NewRouter(cfg RouterConfig) *Router {
 	router.mux.HandleFunc(pathAgentsDialog, router.handleAgentsDialog)
 	router.mux.HandleFunc(pathFlowAction, router.handleFlowAction)
 	router.mux.HandleFunc(pathGitHubWebhook, router.handleGitHubWebhook)
+	router.mux.HandleFunc(pathAgentSessions, router.handleAgentSessionInternal)
+	if router.mcpHandler != nil {
+		router.mux.Handle(pathMCPSessions, router.mcpHandler)
+	}
 	return router
 }
 
@@ -361,6 +374,67 @@ func (router *Router) handleGitHubWebhook(w http.ResponseWriter, r *http.Request
 	})
 }
 
+func (router *Router) handleAgentSessionInternal(w http.ResponseWriter, r *http.Request) {
+	if router.sessionService == nil {
+		writeJSON(w, http.StatusServiceUnavailable, transportmodels.ErrorResponse{Error: "agent_session_service_not_configured"})
+		return
+	}
+	sessionKey, action, ok := parseAgentSessionInternalPath(r.URL.Path)
+	if !ok {
+		writeJSON(w, http.StatusNotFound, transportmodels.ErrorResponse{Error: "not_found"})
+		return
+	}
+	token := bearerToken(r.Header.Get("Authorization"))
+	if token == "" {
+		writeJSON(w, http.StatusUnauthorized, transportmodels.ErrorResponse{Error: "missing_bearer_token"})
+		return
+	}
+	switch action {
+	case "snapshot":
+		if r.Method != http.MethodGet {
+			writeJSON(w, http.StatusMethodNotAllowed, transportmodels.ErrorResponse{Error: "method_not_allowed"})
+			return
+		}
+		result, err := router.sessionService.Snapshot(r.Context(), sessionKey, token)
+		if err != nil {
+			router.logWarn("agent session snapshot failed", "error", err)
+			writeJSON(w, http.StatusUnauthorized, transportmodels.ErrorResponse{Error: "agent_session_snapshot_failed"})
+			return
+		}
+		writeJSON(w, http.StatusOK, result)
+	case "turns/claim":
+		if r.Method != http.MethodPost {
+			writeJSON(w, http.StatusMethodNotAllowed, transportmodels.ErrorResponse{Error: "method_not_allowed"})
+			return
+		}
+		result, err := router.sessionService.ClaimNextTurn(r.Context(), sessionKey, token)
+		if err != nil {
+			router.logWarn("agent session claim failed", "error", err)
+			writeJSON(w, http.StatusUnauthorized, transportmodels.ErrorResponse{Error: "agent_session_claim_failed"})
+			return
+		}
+		writeJSON(w, http.StatusOK, result)
+	case "turns/complete":
+		if r.Method != http.MethodPost {
+			writeJSON(w, http.StatusMethodNotAllowed, transportmodels.ErrorResponse{Error: "method_not_allowed"})
+			return
+		}
+		var command statusservice.CompleteAgentSessionTurnCommand
+		if err := json.NewDecoder(r.Body).Decode(&command); err != nil {
+			writeJSON(w, http.StatusBadRequest, transportmodels.ErrorResponse{Error: "invalid_complete_payload"})
+			return
+		}
+		if err := router.sessionService.CompleteTurn(r.Context(), sessionKey, token, command); err != nil {
+			router.logWarn("agent session complete failed", "error", err)
+			writeJSON(w, http.StatusBadGateway, transportmodels.ErrorResponse{Error: "agent_session_complete_failed"})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	default:
+		writeJSON(w, http.StatusNotFound, transportmodels.ErrorResponse{Error: "not_found"})
+	}
+}
+
 func (router *Router) logWarn(message string, args ...any) {
 	if router.logger != nil {
 		router.logger.Warn(message, args...)
@@ -574,4 +648,25 @@ func contextInt(context map[string]any, key string) int {
 		return 0
 	}
 	return parsed
+}
+
+func parseAgentSessionInternalPath(path string) (string, string, bool) {
+	rest := strings.TrimPrefix(path, pathAgentSessions)
+	if rest == path || rest == "" {
+		return "", "", false
+	}
+	sessionKey, action, ok := strings.Cut(rest, "/")
+	if !ok || strings.TrimSpace(sessionKey) == "" || strings.TrimSpace(action) == "" {
+		return "", "", false
+	}
+	return strings.TrimSpace(sessionKey), strings.TrimSpace(action), true
+}
+
+func bearerToken(header string) string {
+	header = strings.TrimSpace(header)
+	prefix := "Bearer "
+	if len(header) < len(prefix) || !strings.EqualFold(header[:len(prefix)], prefix) {
+		return ""
+	}
+	return strings.TrimSpace(header[len(prefix):])
 }

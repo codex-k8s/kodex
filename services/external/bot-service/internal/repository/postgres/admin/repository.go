@@ -359,6 +359,220 @@ func (repo *Repository) DeleteGitHubAccount(ctx context.Context, name string) (e
 	return item, nil
 }
 
+func (repo *Repository) UpsertMattermostBotIdentity(ctx context.Context, input adminrepo.UpsertMattermostBotIdentityInput) (entity.MattermostBotIdentity, bool, error) {
+	item, created, err := scanMattermostBotIdentityWithCreated(repo.pool.QueryRow(ctx, query("mattermost_bot_identities__upsert.sql"),
+		input.ProjectID,
+		input.RoleID,
+		input.Username,
+		input.DisplayName,
+		input.MattermostUserID,
+		input.TokenSecretRef,
+		input.Status,
+		input.LastError,
+	))
+	if err != nil {
+		return entity.MattermostBotIdentity{}, false, fmt.Errorf("upsert mattermost bot identity: %w", err)
+	}
+	return item, created, nil
+}
+
+func (repo *Repository) GetMattermostBotIdentityByRoleID(ctx context.Context, roleID int64) (entity.MattermostBotIdentity, error) {
+	item, err := scanMattermostBotIdentity(repo.pool.QueryRow(ctx, query("mattermost_bot_identities__get_by_role.sql"), roleID))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.MattermostBotIdentity{}, adminrepo.ErrNotFound
+		}
+		return entity.MattermostBotIdentity{}, fmt.Errorf("get mattermost bot identity by role: %w", err)
+	}
+	return item, nil
+}
+
+func (repo *Repository) GetMattermostBotIdentityByUserID(ctx context.Context, mattermostUserID string) (entity.MattermostBotIdentity, error) {
+	item, err := scanMattermostBotIdentity(repo.pool.QueryRow(ctx, query("mattermost_bot_identities__get_by_user.sql"), mattermostUserID))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.MattermostBotIdentity{}, adminrepo.ErrNotFound
+		}
+		return entity.MattermostBotIdentity{}, fmt.Errorf("get mattermost bot identity by user: %w", err)
+	}
+	return item, nil
+}
+
+func (repo *Repository) ListMattermostBotIdentitiesByProject(ctx context.Context, projectID int64) ([]entity.MattermostBotIdentity, error) {
+	rows, err := repo.pool.Query(ctx, query("mattermost_bot_identities__list_by_project.sql"), projectID)
+	if err != nil {
+		return nil, fmt.Errorf("list mattermost bot identities: %w", err)
+	}
+	defer rows.Close()
+
+	var items []entity.MattermostBotIdentity
+	for rows.Next() {
+		item, err := scanMattermostBotIdentity(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan mattermost bot identity: %w", err)
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate mattermost bot identities: %w", err)
+	}
+	return items, nil
+}
+
+func (repo *Repository) UpsertAgentSession(ctx context.Context, input adminrepo.UpsertAgentSessionInput) (entity.AgentSession, bool, error) {
+	item, created, err := scanAgentSessionWithCreated(repo.pool.QueryRow(ctx, query("agent_sessions__upsert.sql"),
+		input.SessionKey,
+		input.ProjectID,
+		input.ChatID,
+		input.RoleID,
+		input.SessionScope,
+		input.MattermostChannelID,
+		input.MattermostRootPostID,
+		input.TTLSeconds,
+		input.Capabilities,
+	))
+	if err != nil {
+		return entity.AgentSession{}, false, fmt.Errorf("upsert agent session: %w", err)
+	}
+	return item, created, nil
+}
+
+func (repo *Repository) GetAgentSession(ctx context.Context, sessionKey string) (entity.AgentSession, error) {
+	item, err := scanAgentSession(repo.pool.QueryRow(ctx, query("agent_sessions__get.sql"), sessionKey))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.AgentSession{}, adminrepo.ErrNotFound
+		}
+		return entity.AgentSession{}, fmt.Errorf("get agent session: %w", err)
+	}
+	return item, nil
+}
+
+func (repo *Repository) GetAgentSessionByID(ctx context.Context, id int64) (entity.AgentSession, error) {
+	item, err := scanAgentSession(repo.pool.QueryRow(ctx, query("agent_sessions__get_by_id.sql"), id))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.AgentSession{}, adminrepo.ErrNotFound
+		}
+		return entity.AgentSession{}, fmt.Errorf("get agent session by id: %w", err)
+	}
+	return item, nil
+}
+
+func (repo *Repository) ListAgentSessionsByThread(ctx context.Context, chatID int64, rootPostID string) ([]entity.AgentSession, error) {
+	rows, err := repo.pool.Query(ctx, query("agent_sessions__list_by_thread.sql"), chatID, rootPostID)
+	if err != nil {
+		return nil, fmt.Errorf("list agent sessions by thread: %w", err)
+	}
+	defer rows.Close()
+	return scanAgentSessions(rows)
+}
+
+func (repo *Repository) ListAgentSessionsByChat(ctx context.Context, chatID int64) ([]entity.AgentSession, error) {
+	rows, err := repo.pool.Query(ctx, query("agent_sessions__list_by_chat.sql"), chatID)
+	if err != nil {
+		return nil, fmt.Errorf("list agent sessions by chat: %w", err)
+	}
+	defer rows.Close()
+	return scanAgentSessions(rows)
+}
+
+func (repo *Repository) UpdateAgentSessionRuntime(ctx context.Context, input adminrepo.UpdateAgentSessionRuntimeInput) (entity.AgentSession, error) {
+	item, err := scanAgentSession(repo.pool.QueryRow(ctx, query("agent_sessions__update_runtime.sql"),
+		input.SessionKey,
+		input.Status,
+		input.ActiveTurnID,
+		input.ActiveRunID,
+		input.MattermostRootPostID,
+		input.KubernetesNamespace,
+		input.PodName,
+		input.PVCName,
+		input.TokenSecretRef,
+		input.ExtendTTLSeconds,
+	))
+	if err != nil {
+		return entity.AgentSession{}, fmt.Errorf("update agent session runtime: %w", err)
+	}
+	return item, nil
+}
+
+func (repo *Repository) UpdateAgentSessionSnapshot(ctx context.Context, input adminrepo.UpdateAgentSessionSnapshotInput) (entity.AgentSession, error) {
+	item, err := scanAgentSession(repo.pool.QueryRow(ctx, query("agent_sessions__update_snapshot.sql"),
+		input.SessionKey,
+		input.CodexSessionID,
+		input.SessionArchiveGzipBase64,
+		input.Status,
+		input.ExtendTTLSeconds,
+	))
+	if err != nil {
+		return entity.AgentSession{}, fmt.Errorf("update agent session snapshot: %w", err)
+	}
+	return item, nil
+}
+
+func (repo *Repository) CreateAgentSessionTurn(ctx context.Context, input adminrepo.CreateAgentSessionTurnInput) (entity.AgentSessionTurn, error) {
+	item, err := scanAgentSessionTurn(repo.pool.QueryRow(ctx, query("agent_session_turns__insert.sql"),
+		input.SessionID,
+		input.RunID,
+		input.MattermostChannelID,
+		input.MattermostRootPostID,
+		input.MattermostPostID,
+		input.UserID,
+		input.UserName,
+		input.Message,
+	))
+	if err != nil {
+		return entity.AgentSessionTurn{}, fmt.Errorf("create agent session turn: %w", err)
+	}
+	return item, nil
+}
+
+func (repo *Repository) ClaimNextAgentSessionTurn(ctx context.Context, sessionKey string) (entity.AgentSessionTurn, error) {
+	item, err := scanAgentSessionTurn(repo.pool.QueryRow(ctx, query("agent_session_turns__claim_next.sql"), sessionKey))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.AgentSessionTurn{}, adminrepo.ErrNotFound
+		}
+		return entity.AgentSessionTurn{}, fmt.Errorf("claim next agent session turn: %w", err)
+	}
+	return item, nil
+}
+
+func (repo *Repository) CompleteAgentSessionTurn(ctx context.Context, input adminrepo.CompleteAgentSessionTurnInput) (entity.AgentSessionTurn, error) {
+	item, err := scanAgentSessionTurn(repo.pool.QueryRow(ctx, query("agent_session_turns__complete.sql"),
+		input.TurnID,
+		input.Status,
+		input.FinalMessage,
+		input.ErrorMessage,
+		input.Artifacts,
+	))
+	if err != nil {
+		return entity.AgentSessionTurn{}, fmt.Errorf("complete agent session turn: %w", err)
+	}
+	return item, nil
+}
+
+func (repo *Repository) ListQueuedAgentSessionTurns(ctx context.Context, sessionID int64) ([]entity.AgentSessionTurn, error) {
+	rows, err := repo.pool.Query(ctx, query("agent_session_turns__list_queued.sql"), sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("list queued agent session turns: %w", err)
+	}
+	defer rows.Close()
+
+	var items []entity.AgentSessionTurn
+	for rows.Next() {
+		item, err := scanAgentSessionTurn(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan agent session turn: %w", err)
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate agent session turns: %w", err)
+	}
+	return items, nil
+}
+
 func (repo *Repository) CreateAgentFlow(ctx context.Context, input adminrepo.CreateAgentFlowInput) (entity.AgentFlow, bool, error) {
 	row := repo.pool.QueryRow(ctx, query("agent_flows__insert.sql"),
 		input.FlowID,
@@ -666,6 +880,137 @@ func scanGitHubAccountWithCreated(row pgx.Row) (entity.GitHubAccount, bool, erro
 		return entity.GitHubAccount{}, false, err
 	}
 	return item, created, nil
+}
+
+func scanMattermostBotIdentity(row pgx.Row) (entity.MattermostBotIdentity, error) {
+	item, err := scanMattermostBotIdentityFields(row)
+	if err != nil {
+		return entity.MattermostBotIdentity{}, err
+	}
+	return item, nil
+}
+
+func scanMattermostBotIdentityWithCreated(row pgx.Row) (entity.MattermostBotIdentity, bool, error) {
+	var created bool
+	item, err := scanMattermostBotIdentityFields(row, &created)
+	if err != nil {
+		return entity.MattermostBotIdentity{}, false, err
+	}
+	return item, created, nil
+}
+
+func scanMattermostBotIdentityFields(row pgx.Row, extra ...any) (entity.MattermostBotIdentity, error) {
+	var item entity.MattermostBotIdentity
+	dest := []any{
+		&item.ID,
+		&item.ProjectID,
+		&item.RoleID,
+		&item.Username,
+		&item.DisplayName,
+		&item.MattermostUserID,
+		&item.TokenSecretRef,
+		&item.Status,
+		&item.LastError,
+		&item.CreatedAt,
+		&item.UpdatedAt,
+	}
+	dest = append(dest, extra...)
+	if err := row.Scan(dest...); err != nil {
+		return entity.MattermostBotIdentity{}, err
+	}
+	return item, nil
+}
+
+func scanAgentSession(row pgx.Row) (entity.AgentSession, error) {
+	item, err := scanAgentSessionFields(row)
+	if err != nil {
+		return entity.AgentSession{}, err
+	}
+	return item, nil
+}
+
+func scanAgentSessionWithCreated(row pgx.Row) (entity.AgentSession, bool, error) {
+	var created bool
+	item, err := scanAgentSessionFields(row, &created)
+	if err != nil {
+		return entity.AgentSession{}, false, err
+	}
+	return item, created, nil
+}
+
+func scanAgentSessionFields(row pgx.Row, extra ...any) (entity.AgentSession, error) {
+	var item entity.AgentSession
+	dest := []any{
+		&item.ID,
+		&item.SessionKey,
+		&item.ProjectID,
+		&item.ChatID,
+		&item.RoleID,
+		&item.SessionScope,
+		&item.MattermostChannelID,
+		&item.MattermostRootPostID,
+		&item.CodexSessionID,
+		&item.Status,
+		&item.ActiveTurnID,
+		&item.ActiveRunID,
+		&item.KubernetesNamespace,
+		&item.PodName,
+		&item.PVCName,
+		&item.TokenSecretRef,
+		&item.Capabilities,
+		&item.SessionArchiveGzipBase64,
+		&item.TTLSeconds,
+		&item.LastActivityAt,
+		&item.ExpiresAt,
+		&item.CreatedAt,
+		&item.UpdatedAt,
+	}
+	dest = append(dest, extra...)
+	if err := row.Scan(dest...); err != nil {
+		return entity.AgentSession{}, err
+	}
+	return item, nil
+}
+
+func scanAgentSessions(rows pgx.Rows) ([]entity.AgentSession, error) {
+	var items []entity.AgentSession
+	for rows.Next() {
+		item, err := scanAgentSession(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan agent session: %w", err)
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate agent sessions: %w", err)
+	}
+	return items, nil
+}
+
+func scanAgentSessionTurn(row pgx.Row) (entity.AgentSessionTurn, error) {
+	var item entity.AgentSessionTurn
+	if err := row.Scan(
+		&item.ID,
+		&item.SessionID,
+		&item.RunID,
+		&item.MattermostChannelID,
+		&item.MattermostRootPostID,
+		&item.MattermostPostID,
+		&item.UserID,
+		&item.UserName,
+		&item.Message,
+		&item.Status,
+		&item.FinalMessage,
+		&item.ErrorMessage,
+		&item.Artifacts,
+		&item.CreatedAt,
+		&item.StartedAt,
+		&item.FinishedAt,
+		&item.UpdatedAt,
+	); err != nil {
+		return entity.AgentSessionTurn{}, err
+	}
+	return item, nil
 }
 
 func scanAgentRun(row pgx.Row) (entity.AgentRun, error) {

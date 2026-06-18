@@ -175,6 +175,69 @@ type CreateChatInput struct {
 	RepositoryIDs       []int64
 }
 
+type UpsertMattermostBotIdentityInput struct {
+	ProjectID        int64
+	RoleID           int64
+	Username         string
+	DisplayName      string
+	MattermostUserID string
+	TokenSecretRef   string
+	Status           string
+	LastError        string
+}
+
+type UpsertAgentSessionInput struct {
+	SessionKey           string
+	ProjectID            int64
+	ChatID               int64
+	RoleID               int64
+	SessionScope         string
+	MattermostChannelID  string
+	MattermostRootPostID string
+	TTLSeconds           int
+	Capabilities         string
+}
+
+type UpdateAgentSessionRuntimeInput struct {
+	SessionKey           string
+	Status               string
+	ActiveTurnID         int64
+	ActiveRunID          string
+	MattermostRootPostID string
+	KubernetesNamespace  string
+	PodName              string
+	PVCName              string
+	TokenSecretRef       string
+	ExtendTTLSeconds     int
+}
+
+type UpdateAgentSessionSnapshotInput struct {
+	SessionKey               string
+	CodexSessionID           string
+	SessionArchiveGzipBase64 string
+	Status                   string
+	ExtendTTLSeconds         int
+}
+
+type CreateAgentSessionTurnInput struct {
+	SessionID            int64
+	RunID                string
+	MattermostChannelID  string
+	MattermostRootPostID string
+	MattermostPostID     string
+	UserID               string
+	UserName             string
+	Message              string
+}
+
+type CompleteAgentSessionTurnInput struct {
+	TurnID       int64
+	Status       string
+	FinalMessage string
+	ErrorMessage string
+	Artifacts    string
+}
+
 type Repository interface {
 	UpsertRepository(ctx context.Context, input UpsertRepositoryInput) (entity.Repository, bool, error)
 	GetRepository(ctx context.Context, provider string, owner string, name string) (entity.Repository, error)
@@ -195,6 +258,21 @@ type Repository interface {
 	ListChats(ctx context.Context, projectID int64) ([]entity.Chat, error)
 	ListChatParticipants(ctx context.Context, chatID int64) ([]entity.ChatParticipant, error)
 	ListChatRepositories(ctx context.Context, chatID int64) ([]entity.ChatRepositoryBinding, error)
+	UpsertMattermostBotIdentity(ctx context.Context, input UpsertMattermostBotIdentityInput) (entity.MattermostBotIdentity, bool, error)
+	GetMattermostBotIdentityByRoleID(ctx context.Context, roleID int64) (entity.MattermostBotIdentity, error)
+	GetMattermostBotIdentityByUserID(ctx context.Context, mattermostUserID string) (entity.MattermostBotIdentity, error)
+	ListMattermostBotIdentitiesByProject(ctx context.Context, projectID int64) ([]entity.MattermostBotIdentity, error)
+	UpsertAgentSession(ctx context.Context, input UpsertAgentSessionInput) (entity.AgentSession, bool, error)
+	GetAgentSession(ctx context.Context, sessionKey string) (entity.AgentSession, error)
+	GetAgentSessionByID(ctx context.Context, id int64) (entity.AgentSession, error)
+	ListAgentSessionsByThread(ctx context.Context, chatID int64, rootPostID string) ([]entity.AgentSession, error)
+	ListAgentSessionsByChat(ctx context.Context, chatID int64) ([]entity.AgentSession, error)
+	UpdateAgentSessionRuntime(ctx context.Context, input UpdateAgentSessionRuntimeInput) (entity.AgentSession, error)
+	UpdateAgentSessionSnapshot(ctx context.Context, input UpdateAgentSessionSnapshotInput) (entity.AgentSession, error)
+	CreateAgentSessionTurn(ctx context.Context, input CreateAgentSessionTurnInput) (entity.AgentSessionTurn, error)
+	ClaimNextAgentSessionTurn(ctx context.Context, sessionKey string) (entity.AgentSessionTurn, error)
+	CompleteAgentSessionTurn(ctx context.Context, input CompleteAgentSessionTurnInput) (entity.AgentSessionTurn, error)
+	ListQueuedAgentSessionTurns(ctx context.Context, sessionID int64) ([]entity.AgentSessionTurn, error)
 	UpsertAgentProfile(ctx context.Context, input UpsertAgentProfileInput) (entity.AgentProfile, bool, error)
 	GetAgentProfile(ctx context.Context, name string) (entity.AgentProfile, error)
 	ListAgentProfiles(ctx context.Context) ([]entity.AgentProfile, error)

@@ -761,6 +761,66 @@ func (store *fakeRouterAdminStore) ListChatRepositories(context.Context, int64) 
 	return nil, nil
 }
 
+func (store *fakeRouterAdminStore) UpsertMattermostBotIdentity(context.Context, adminrepo.UpsertMattermostBotIdentityInput) (entity.MattermostBotIdentity, bool, error) {
+	return entity.MattermostBotIdentity{}, true, nil
+}
+
+func (store *fakeRouterAdminStore) GetMattermostBotIdentityByRoleID(context.Context, int64) (entity.MattermostBotIdentity, error) {
+	return entity.MattermostBotIdentity{}, adminrepo.ErrNotFound
+}
+
+func (store *fakeRouterAdminStore) GetMattermostBotIdentityByUserID(context.Context, string) (entity.MattermostBotIdentity, error) {
+	return entity.MattermostBotIdentity{}, adminrepo.ErrNotFound
+}
+
+func (store *fakeRouterAdminStore) ListMattermostBotIdentitiesByProject(context.Context, int64) ([]entity.MattermostBotIdentity, error) {
+	return nil, nil
+}
+
+func (store *fakeRouterAdminStore) UpsertAgentSession(context.Context, adminrepo.UpsertAgentSessionInput) (entity.AgentSession, bool, error) {
+	return entity.AgentSession{}, true, nil
+}
+
+func (store *fakeRouterAdminStore) GetAgentSession(context.Context, string) (entity.AgentSession, error) {
+	return entity.AgentSession{}, adminrepo.ErrNotFound
+}
+
+func (store *fakeRouterAdminStore) GetAgentSessionByID(context.Context, int64) (entity.AgentSession, error) {
+	return entity.AgentSession{}, adminrepo.ErrNotFound
+}
+
+func (store *fakeRouterAdminStore) ListAgentSessionsByThread(context.Context, int64, string) ([]entity.AgentSession, error) {
+	return nil, nil
+}
+
+func (store *fakeRouterAdminStore) ListAgentSessionsByChat(context.Context, int64) ([]entity.AgentSession, error) {
+	return nil, nil
+}
+
+func (store *fakeRouterAdminStore) UpdateAgentSessionRuntime(context.Context, adminrepo.UpdateAgentSessionRuntimeInput) (entity.AgentSession, error) {
+	return entity.AgentSession{}, nil
+}
+
+func (store *fakeRouterAdminStore) UpdateAgentSessionSnapshot(context.Context, adminrepo.UpdateAgentSessionSnapshotInput) (entity.AgentSession, error) {
+	return entity.AgentSession{}, nil
+}
+
+func (store *fakeRouterAdminStore) CreateAgentSessionTurn(context.Context, adminrepo.CreateAgentSessionTurnInput) (entity.AgentSessionTurn, error) {
+	return entity.AgentSessionTurn{}, nil
+}
+
+func (store *fakeRouterAdminStore) ClaimNextAgentSessionTurn(context.Context, string) (entity.AgentSessionTurn, error) {
+	return entity.AgentSessionTurn{}, adminrepo.ErrNotFound
+}
+
+func (store *fakeRouterAdminStore) CompleteAgentSessionTurn(context.Context, adminrepo.CompleteAgentSessionTurnInput) (entity.AgentSessionTurn, error) {
+	return entity.AgentSessionTurn{}, nil
+}
+
+func (store *fakeRouterAdminStore) ListQueuedAgentSessionTurns(context.Context, int64) ([]entity.AgentSessionTurn, error) {
+	return nil, nil
+}
+
 func (store *fakeRouterAdminStore) ListAgentProfiles(context.Context) ([]entity.AgentProfile, error) {
 	return nil, nil
 }

@@ -225,6 +225,8 @@ func buildRawRolePrompt(input RolePromptInput, userMessage string) string {
 			body.WriteString("\n")
 		}
 	}
+	body.WriteString("- GitHub CLI: use `gh` when the role has a GitHub account. Token/user/email are exposed through GH_TOKEN, GITHUB_TOKEN, GITHUB_USERNAME/GITHUB_USER and GITHUB_EMAIL.\n")
+	body.WriteString("- Mattermost MCP: use `mattermost_get_thread` to read this thread, `mattermost_search_chat` for small bounded channel searches, `mattermost_post_thread_update` for progress updates, and `mattermost_request_agent` only when the user or role prompt allows delegating to another agent.\n")
 	if strings.TrimSpace(input.Locale.Language) != "" {
 		body.WriteString("- Response language: ")
 		body.WriteString(input.Locale.Language)

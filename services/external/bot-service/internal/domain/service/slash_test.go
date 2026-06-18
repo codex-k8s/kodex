@@ -487,6 +487,8 @@ func TestAgentRoleDialogAllowsEmptyPromptTemplate(t *testing.T) {
 		Localizer:       localizer,
 		StatusService:   testStatusService(localizer),
 		Store:           store,
+		RoleBotManager:  &fakeRoleBotManager{},
+		RuntimeRunner:   &fakeRuntimeRunner{},
 		DialogSubmitURL: "http://bot-service/mattermost/dialogs/agents",
 		StorageReady:    true,
 	})
@@ -556,6 +558,8 @@ func TestChatDialogCreatesPrivateProjectChannelWithRolesAndRepository(t *testing
 		StatusService:   testStatusService(localizer),
 		Store:           store,
 		ChannelManager:  channels,
+		RoleBotManager:  &fakeRoleBotManager{},
+		RuntimeRunner:   &fakeRuntimeRunner{},
 		DialogSubmitURL: "http://bot-service/mattermost/dialogs/agents",
 		StorageReady:    true,
 	})
@@ -2788,6 +2792,11 @@ type fakeRuntimeRunner struct {
 	chatRuns                   []runtimerepo.ChatRunInput
 	chatCodexSecret            string
 	chatGitHubSecret           string
+	startedSessionKey          string
+	sessionRuns                []runtimerepo.AgentSessionPodInput
+	sessionCodexSecret         string
+	sessionGitHubSecret        string
+	botTokenSecrets            map[string]string
 	cleanedRunID               string
 	cleanedRunIDs              []string
 	retentionInput             runtimerepo.RetentionCleanupInput
@@ -2946,6 +2955,49 @@ func (runner *fakeRuntimeRunner) StartChatRun(_ context.Context, input runtimere
 	}, nil
 }
 
+func (runner *fakeRuntimeRunner) StartAgentSession(_ context.Context, input runtimerepo.AgentSessionPodInput) (runtimerepo.StartedAgentSession, error) {
+	runner.startedSessionKey = input.SessionKey
+	runner.sessionRuns = append(runner.sessionRuns, input)
+	runner.sessionCodexSecret = input.CodexAuthSecretName
+	runner.sessionGitHubSecret = input.GitHubSecretName
+	if strings.TrimSpace(input.InternalToken) == "" {
+		return runtimerepo.StartedAgentSession{}, fmt.Errorf("internal token is required")
+	}
+	secretName := "matter-codex-session-" + input.SessionKey
+	if runner.botTokenSecrets == nil {
+		runner.botTokenSecrets = map[string]string{}
+	}
+	runner.botTokenSecrets[secretName] = input.InternalToken
+	return runtimerepo.StartedAgentSession{
+		SessionKey: input.SessionKey,
+		Namespace:  "mattermost",
+		PodName:    "mc-session-" + input.SessionKey,
+		PVCName:    "mc-session-ws-" + input.SessionKey,
+		SecretName: secretName,
+		Created:    true,
+	}, nil
+}
+
+func (runner *fakeRuntimeRunner) UpsertMattermostBotTokenSecret(_ context.Context, input runtimerepo.MattermostBotTokenSecretInput) (runtimerepo.MattermostBotTokenSecret, error) {
+	if runner.botTokenSecrets == nil {
+		runner.botTokenSecrets = map[string]string{}
+	}
+	runner.botTokenSecrets[input.SecretName] = input.Token
+	return runtimerepo.MattermostBotTokenSecret{
+		SecretName: input.SecretName,
+		Namespace:  "mattermost",
+		Created:    true,
+		Token:      input.Token,
+	}, nil
+}
+
+func (runner *fakeRuntimeRunner) GetMattermostBotTokenSecret(_ context.Context, secretName string) (runtimerepo.MattermostBotTokenSecret, error) {
+	if token := runner.botTokenSecrets[secretName]; token != "" {
+		return runtimerepo.MattermostBotTokenSecret{SecretName: secretName, Namespace: "mattermost", Token: token}, nil
+	}
+	return runtimerepo.MattermostBotTokenSecret{}, fmt.Errorf("token secret not found")
+}
+
 func (runner *fakeRuntimeRunner) GetRunStatus(_ context.Context, runID string) (runtimerepo.RunStatus, error) {
 	if status, ok := runner.runStatuses[runID]; ok {
 		return status, nil
@@ -3037,6 +3089,9 @@ type fakeAdminStore struct {
 	chats                map[int64]entity.Chat
 	chatParticipants     map[int64][]entity.ChatParticipant
 	chatRepositories     map[int64][]entity.ChatRepositoryBinding
+	botIdentities        map[int64]entity.MattermostBotIdentity
+	agentSessions        map[string]entity.AgentSession
+	sessionTurns         []entity.AgentSessionTurn
 }
 
 func (store *fakeAdminStore) UpsertRepository(_ context.Context, input adminrepo.UpsertRepositoryInput) (entity.Repository, bool, error) {
@@ -3339,6 +3394,242 @@ func (store *fakeAdminStore) ListChatRepositories(_ context.Context, chatID int6
 	return append([]entity.ChatRepositoryBinding(nil), store.chatRepositories[chatID]...), nil
 }
 
+func (store *fakeAdminStore) UpsertMattermostBotIdentity(_ context.Context, input adminrepo.UpsertMattermostBotIdentityInput) (entity.MattermostBotIdentity, bool, error) {
+	store.ensureBotIdentities()
+	if existing, ok := store.botIdentities[input.RoleID]; ok {
+		existing.Username = input.Username
+		existing.DisplayName = input.DisplayName
+		existing.MattermostUserID = input.MattermostUserID
+		existing.TokenSecretRef = input.TokenSecretRef
+		existing.Status = input.Status
+		existing.LastError = input.LastError
+		store.botIdentities[input.RoleID] = existing
+		return existing, false, nil
+	}
+	identity := entity.MattermostBotIdentity{
+		ID:               int64(len(store.botIdentities) + 1),
+		ProjectID:        input.ProjectID,
+		RoleID:           input.RoleID,
+		Username:         input.Username,
+		DisplayName:      input.DisplayName,
+		MattermostUserID: input.MattermostUserID,
+		TokenSecretRef:   input.TokenSecretRef,
+		Status:           input.Status,
+		LastError:        input.LastError,
+	}
+	store.botIdentities[input.RoleID] = identity
+	return identity, true, nil
+}
+
+func (store *fakeAdminStore) GetMattermostBotIdentityByRoleID(_ context.Context, roleID int64) (entity.MattermostBotIdentity, error) {
+	store.ensureBotIdentities()
+	if identity, ok := store.botIdentities[roleID]; ok {
+		return identity, nil
+	}
+	return entity.MattermostBotIdentity{}, adminrepo.ErrNotFound
+}
+
+func (store *fakeAdminStore) GetMattermostBotIdentityByUserID(_ context.Context, mattermostUserID string) (entity.MattermostBotIdentity, error) {
+	store.ensureBotIdentities()
+	for _, identity := range store.botIdentities {
+		if identity.MattermostUserID == mattermostUserID {
+			return identity, nil
+		}
+	}
+	return entity.MattermostBotIdentity{}, adminrepo.ErrNotFound
+}
+
+func (store *fakeAdminStore) ListMattermostBotIdentitiesByProject(_ context.Context, projectID int64) ([]entity.MattermostBotIdentity, error) {
+	store.ensureBotIdentities()
+	var identities []entity.MattermostBotIdentity
+	for _, identity := range store.botIdentities {
+		if projectID == 0 || identity.ProjectID == projectID {
+			identities = append(identities, identity)
+		}
+	}
+	sort.Slice(identities, func(i int, j int) bool {
+		return identities[i].ID < identities[j].ID
+	})
+	return identities, nil
+}
+
+func (store *fakeAdminStore) UpsertAgentSession(_ context.Context, input adminrepo.UpsertAgentSessionInput) (entity.AgentSession, bool, error) {
+	store.ensureAgentSessions()
+	session, exists := store.agentSessions[input.SessionKey]
+	if !exists {
+		session = entity.AgentSession{
+			ID:         int64(len(store.agentSessions) + 1),
+			SessionKey: input.SessionKey,
+			Status:     agentSessionStatusIdle,
+		}
+	}
+	session.ProjectID = input.ProjectID
+	session.ChatID = input.ChatID
+	session.RoleID = input.RoleID
+	session.SessionScope = input.SessionScope
+	session.MattermostChannelID = input.MattermostChannelID
+	session.MattermostRootPostID = input.MattermostRootPostID
+	session.TTLSeconds = input.TTLSeconds
+	session.Capabilities = input.Capabilities
+	session.ExpiresAt = time.Now().Add(time.Duration(input.TTLSeconds) * time.Second)
+	store.agentSessions[input.SessionKey] = session
+	return session, !exists, nil
+}
+
+func (store *fakeAdminStore) GetAgentSession(_ context.Context, sessionKey string) (entity.AgentSession, error) {
+	store.ensureAgentSessions()
+	if session, ok := store.agentSessions[sessionKey]; ok {
+		return session, nil
+	}
+	return entity.AgentSession{}, adminrepo.ErrNotFound
+}
+
+func (store *fakeAdminStore) GetAgentSessionByID(_ context.Context, id int64) (entity.AgentSession, error) {
+	store.ensureAgentSessions()
+	for _, session := range store.agentSessions {
+		if session.ID == id {
+			return session, nil
+		}
+	}
+	return entity.AgentSession{}, adminrepo.ErrNotFound
+}
+
+func (store *fakeAdminStore) ListAgentSessionsByThread(_ context.Context, chatID int64, rootPostID string) ([]entity.AgentSession, error) {
+	store.ensureAgentSessions()
+	var sessions []entity.AgentSession
+	for _, session := range store.agentSessions {
+		if session.ChatID == chatID && session.MattermostRootPostID == rootPostID {
+			sessions = append(sessions, session)
+		}
+	}
+	return sessions, nil
+}
+
+func (store *fakeAdminStore) ListAgentSessionsByChat(_ context.Context, chatID int64) ([]entity.AgentSession, error) {
+	store.ensureAgentSessions()
+	var sessions []entity.AgentSession
+	for _, session := range store.agentSessions {
+		if session.ChatID == chatID {
+			sessions = append(sessions, session)
+		}
+	}
+	return sessions, nil
+}
+
+func (store *fakeAdminStore) UpdateAgentSessionRuntime(_ context.Context, input adminrepo.UpdateAgentSessionRuntimeInput) (entity.AgentSession, error) {
+	store.ensureAgentSessions()
+	session, ok := store.agentSessions[input.SessionKey]
+	if !ok {
+		return entity.AgentSession{}, adminrepo.ErrNotFound
+	}
+	if input.Status != "" {
+		session.Status = input.Status
+	}
+	if input.ActiveTurnID > 0 {
+		session.ActiveTurnID = input.ActiveTurnID
+	}
+	if input.ActiveRunID != "" {
+		session.ActiveRunID = input.ActiveRunID
+	}
+	if input.MattermostRootPostID != "" {
+		session.MattermostRootPostID = input.MattermostRootPostID
+	}
+	if input.KubernetesNamespace != "" {
+		session.KubernetesNamespace = input.KubernetesNamespace
+	}
+	if input.PodName != "" {
+		session.PodName = input.PodName
+	}
+	if input.PVCName != "" {
+		session.PVCName = input.PVCName
+	}
+	if input.TokenSecretRef != "" {
+		session.TokenSecretRef = input.TokenSecretRef
+	}
+	if input.ExtendTTLSeconds > 0 {
+		session.ExpiresAt = time.Now().Add(time.Duration(input.ExtendTTLSeconds) * time.Second)
+	}
+	store.agentSessions[input.SessionKey] = session
+	return session, nil
+}
+
+func (store *fakeAdminStore) UpdateAgentSessionSnapshot(_ context.Context, input adminrepo.UpdateAgentSessionSnapshotInput) (entity.AgentSession, error) {
+	store.ensureAgentSessions()
+	session, ok := store.agentSessions[input.SessionKey]
+	if !ok {
+		return entity.AgentSession{}, adminrepo.ErrNotFound
+	}
+	if input.CodexSessionID != "" {
+		session.CodexSessionID = input.CodexSessionID
+	}
+	if input.SessionArchiveGzipBase64 != "" {
+		session.SessionArchiveGzipBase64 = input.SessionArchiveGzipBase64
+	}
+	if input.Status != "" {
+		session.Status = input.Status
+	}
+	session.ActiveTurnID = 0
+	session.ActiveRunID = ""
+	store.agentSessions[input.SessionKey] = session
+	return session, nil
+}
+
+func (store *fakeAdminStore) CreateAgentSessionTurn(_ context.Context, input adminrepo.CreateAgentSessionTurnInput) (entity.AgentSessionTurn, error) {
+	turn := entity.AgentSessionTurn{
+		ID:                   int64(len(store.sessionTurns) + 1),
+		SessionID:            input.SessionID,
+		RunID:                input.RunID,
+		MattermostChannelID:  input.MattermostChannelID,
+		MattermostRootPostID: input.MattermostRootPostID,
+		MattermostPostID:     input.MattermostPostID,
+		UserID:               input.UserID,
+		UserName:             input.UserName,
+		Message:              input.Message,
+		Status:               agentSessionTurnQueued,
+	}
+	store.sessionTurns = append(store.sessionTurns, turn)
+	return turn, nil
+}
+
+func (store *fakeAdminStore) ClaimNextAgentSessionTurn(_ context.Context, sessionKey string) (entity.AgentSessionTurn, error) {
+	session, err := store.GetAgentSession(context.Background(), sessionKey)
+	if err != nil {
+		return entity.AgentSessionTurn{}, err
+	}
+	for index, turn := range store.sessionTurns {
+		if turn.SessionID == session.ID && turn.Status == agentSessionTurnQueued {
+			turn.Status = agentSessionTurnRunning
+			store.sessionTurns[index] = turn
+			return turn, nil
+		}
+	}
+	return entity.AgentSessionTurn{}, adminrepo.ErrNotFound
+}
+
+func (store *fakeAdminStore) CompleteAgentSessionTurn(_ context.Context, input adminrepo.CompleteAgentSessionTurnInput) (entity.AgentSessionTurn, error) {
+	for index, turn := range store.sessionTurns {
+		if turn.ID == input.TurnID {
+			turn.Status = input.Status
+			turn.FinalMessage = input.FinalMessage
+			turn.ErrorMessage = input.ErrorMessage
+			turn.Artifacts = input.Artifacts
+			store.sessionTurns[index] = turn
+			return turn, nil
+		}
+	}
+	return entity.AgentSessionTurn{}, adminrepo.ErrNotFound
+}
+
+func (store *fakeAdminStore) ListQueuedAgentSessionTurns(_ context.Context, sessionID int64) ([]entity.AgentSessionTurn, error) {
+	var turns []entity.AgentSessionTurn
+	for _, turn := range store.sessionTurns {
+		if turn.SessionID == sessionID && turn.Status == agentSessionTurnQueued {
+			turns = append(turns, turn)
+		}
+	}
+	return turns, nil
+}
+
 func (store *fakeAdminStore) setChatBindings(chatID int64, roleIDs []int64, repositoryIDs []int64) {
 	store.ensureAgentRoles()
 	participants := make([]entity.ChatParticipant, 0, len(roleIDs))
@@ -3415,6 +3706,18 @@ func (store *fakeAdminStore) ensureChatParticipants() {
 func (store *fakeAdminStore) ensureChatRepositories() {
 	if store.chatRepositories == nil {
 		store.chatRepositories = map[int64][]entity.ChatRepositoryBinding{}
+	}
+}
+
+func (store *fakeAdminStore) ensureBotIdentities() {
+	if store.botIdentities == nil {
+		store.botIdentities = map[int64]entity.MattermostBotIdentity{}
+	}
+}
+
+func (store *fakeAdminStore) ensureAgentSessions() {
+	if store.agentSessions == nil {
+		store.agentSessions = map[string]entity.AgentSession{}
 	}
 }
 
@@ -3897,6 +4200,21 @@ func (manager *fakeChannelManager) EnsureProjectChannel(_ context.Context, teamN
 		DisplayName: displayName,
 		Type:        channelType,
 	}, true, nil
+}
+
+type fakeRoleBotManager struct{}
+
+func (manager *fakeRoleBotManager) EnsureRoleBot(_ context.Context, input MattermostRoleBotInput) (MattermostRoleBotBinding, error) {
+	return MattermostRoleBotBinding{
+		UserID:      "bot-user-" + input.Username,
+		Username:    input.Username,
+		DisplayName: input.DisplayName,
+		Token:       "bot-token-" + input.Username,
+	}, nil
+}
+
+func (manager *fakeRoleBotManager) EnsureProjectChannelMember(context.Context, string, string, string) error {
+	return nil
 }
 
 type fakeRepositoryProvider struct {

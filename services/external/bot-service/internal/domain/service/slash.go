@@ -185,6 +185,7 @@ type SlashCommandServiceConfig struct {
 	StatusService            *StatusService
 	Store                    adminrepo.Repository
 	ChannelManager           MattermostChannelManager
+	RoleBotManager           MattermostRoleBotManager
 	FlowCardPublisher        FlowCardPublisher
 	RepositoryProvider       providerrepo.RepositoryProvider
 	GitHubRepositoryProvider providerrepo.GitHubAccountRepositoryProvider

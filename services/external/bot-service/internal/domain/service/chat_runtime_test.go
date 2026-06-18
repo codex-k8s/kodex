@@ -66,17 +66,17 @@ func TestChatRunStartsChatModeForManagerRole(t *testing.T) {
 		Message:   "Help me decompose the task.",
 	})
 
-	if result.RunID == "" || result.Mode != chatRunModeChat {
+	if result.RunID == "" || result.Mode != "session" {
 		t.Fatalf("result = %#v", result)
 	}
-	if runner.startedChatRunID != result.RunID || runner.chatCodexSecret != "matter-codex-codex-auth-main" {
-		t.Fatalf("chat runner = %#v", runner.chatRuns)
+	if runner.startedSessionKey == "" || runner.sessionCodexSecret != "matter-codex-codex-auth-main" {
+		t.Fatalf("session runner = %#v", runner.sessionRuns)
 	}
-	if len(publisher.posts) != 1 || publisher.posts[0].RootPostID != "post-1" || !strings.Contains(publisher.posts[0].Message, "agent run started") {
+	if len(publisher.posts) != 1 || publisher.posts[0].RootPostID != "post-1" || !strings.Contains(publisher.posts[0].Message, "queued agent session turn") {
 		t.Fatalf("posts = %#v", publisher.posts)
 	}
-	if !strings.Contains(runner.chatRuns[0].Prompt, "Help me decompose the task.") || !strings.Contains(runner.chatRuns[0].Prompt, "Project: Platform") {
-		t.Fatalf("prompt = %q", runner.chatRuns[0].Prompt)
+	if len(store.sessionTurns) != 1 || !strings.Contains(store.sessionTurns[0].Message, "Help me decompose the task.") || !strings.Contains(store.sessionTurns[0].Message, "Project: Platform") {
+		t.Fatalf("turns = %#v", store.sessionTurns)
 	}
 }
 
@@ -131,14 +131,11 @@ func TestChatRunStartsDeveloperModeForWorkerRoleWithRepository(t *testing.T) {
 		Message:   "Update README with a short note.",
 	})
 
-	if result.RunID == "" || result.Mode != chatRunModeDeveloper {
+	if result.RunID == "" || result.Mode != "session" {
 		t.Fatalf("result = %#v", result)
 	}
-	if runner.startedDeveloperRunID != result.RunID || runner.developerGitHubSecret != "matter-codex-github-agent" {
-		t.Fatalf("developer runner = %#v", runner.developerRuns)
-	}
-	if runner.developerBaseBranch != "main" || !strings.HasPrefix(runner.developerHeadBranch, "matter-codex-chat-1-") {
-		t.Fatalf("developer branch = base %q head %q", runner.developerBaseBranch, runner.developerHeadBranch)
+	if runner.startedSessionKey == "" || runner.sessionGitHubSecret != "matter-codex-github-agent" {
+		t.Fatalf("session runner = %#v", runner.sessionRuns)
 	}
 }
 
@@ -169,6 +166,10 @@ type fakeThreadPublisher struct {
 func (publisher *fakeThreadPublisher) PostThreadMessage(_ context.Context, input MattermostThreadPostInput) (MattermostPostRef, error) {
 	publisher.posts = append(publisher.posts, input)
 	return MattermostPostRef{ChannelID: input.ChannelID, PostID: "reply-" + input.RootPostID}, nil
+}
+
+func (publisher *fakeThreadPublisher) PostThreadMessageWithToken(_ context.Context, _ string, input MattermostThreadPostInput) (MattermostPostRef, error) {
+	return publisher.PostThreadMessage(context.Background(), input)
 }
 
 var _ runtimerepo.Runner = (*fakeRuntimeRunner)(nil)

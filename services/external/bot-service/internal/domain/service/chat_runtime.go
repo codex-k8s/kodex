@@ -3,7 +3,9 @@ package service
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha1"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -42,6 +44,7 @@ type MattermostPostRef struct {
 
 type MattermostThreadPublisher interface {
 	PostThreadMessage(ctx context.Context, input MattermostThreadPostInput) (MattermostPostRef, error)
+	PostThreadMessageWithToken(ctx context.Context, token string, input MattermostThreadPostInput) (MattermostPostRef, error)
 }
 
 type ChatPostCommand struct {
@@ -59,11 +62,40 @@ type ChatRunResult struct {
 	Mode    string
 }
 
+type AgentTurnRequest struct {
+	Project       entity.Project
+	Chat          entity.Chat
+	Role          entity.AgentRole
+	Repositories  []entity.ProjectRepository
+	UserID        string
+	UserName      string
+	UserMessage   string
+	SourcePostID  string
+	ReplyRootID   string
+	SessionRootID string
+	SessionScope  string
+	TTLSeconds    int
+}
+
+type AgentTurnQueued struct {
+	RunID      string
+	SessionKey string
+	Role       entity.AgentRole
+	CreatedPod bool
+	PodName    string
+	PVCName    string
+}
+
+type AgentTurnDispatcher interface {
+	EnqueueAgentTurn(ctx context.Context, request AgentTurnRequest) (AgentTurnQueued, error)
+}
+
 type ChatRunServiceConfig struct {
 	Localizer       *texti18n.Localizer
 	Store           adminrepo.Repository
 	RuntimeRunner   runtimerepo.Runner
 	ThreadPublisher MattermostThreadPublisher
+	BotServiceURL   string
 	StorageReady    bool
 	RuntimeReady    bool
 	DisableMonitor  bool
@@ -101,6 +133,14 @@ func (svc *ChatRunService) HandleChatPost(ctx context.Context, command ChatPostC
 		svc.postThread(ctx, command, svc.t("runtime.not_configured", nil))
 		return ChatRunResult{}
 	}
+	if command.UserID != "" {
+		if _, err := svc.cfg.Store.GetMattermostBotIdentityByUserID(ctx, command.UserID); err == nil {
+			return ChatRunResult{Ignored: true}
+		} else if err != nil && !errors.Is(err, adminrepo.ErrNotFound) {
+			svc.postThread(ctx, command, svc.t("chat.run.sender_lookup_failed", map[string]any{"Error": safeError(err)}))
+			return ChatRunResult{}
+		}
+	}
 	chat, err := svc.cfg.Store.GetChatByMattermostChannelID(ctx, command.ChannelID)
 	if err != nil {
 		if errors.Is(err, adminrepo.ErrNotFound) {
@@ -123,83 +163,63 @@ func (svc *ChatRunService) HandleChatPost(ctx context.Context, command ChatPostC
 		svc.postThread(ctx, command, svc.t("chat.run.roles_empty", nil))
 		return ChatRunResult{}
 	}
+	rolesByID := make(map[int64]entity.AgentRole, len(roles))
+	for _, role := range roles {
+		rolesByID[role.ID] = role
+	}
 	repositories, err := svc.chatRepositories(ctx, chat)
 	if err != nil {
 		svc.postThread(ctx, command, svc.t("chat.run.repositories_lookup_failed", map[string]any{"Error": safeError(err)}))
 		return ChatRunResult{}
 	}
-	prRef := extractGitHubPullRequest(command.Message)
-	role := selectChatRole(roles, prRef.Number)
-	mode := chatRunMode(role, repositories, prRef.Number)
-	if (mode == chatRunModeDeveloper || mode == chatRunModeReviewer) && len(repositories) == 0 {
-		svc.postThread(ctx, command, svc.t("chat.run.repository_required", map[string]any{"Role": role.Name}))
-		return ChatRunResult{}
-	}
-	openAIAccount, ok := svc.openAIAccount(ctx, role)
-	if !ok {
-		svc.postThread(ctx, command, svc.t("chat.run.openai_required", map[string]any{"Role": role.Name}))
-		return ChatRunResult{}
-	}
-	gitHubAccount, gitHubOK := svc.gitHubAccount(ctx, role, firstRepository(repositories))
-	if mode != chatRunModeChat && !gitHubOK {
-		svc.postThread(ctx, command, svc.t("chat.run.github_required", map[string]any{"Role": role.Name}))
-		return ChatRunResult{}
-	}
-	prompt, err := BuildRolePrompt(RolePromptInput{
-		Project:      project,
-		Role:         role,
-		Chat:         chat,
-		Repositories: repositories,
-		UserMessage:  command.Message,
-		Locale:       svc.localeData(),
-	})
+	targets, err := svc.routeChatPost(ctx, chat, roles, rolesByID, command)
 	if err != nil {
-		svc.postThread(ctx, command, svc.t("chat.run.prompt_failed", map[string]any{"Error": safeError(err)}))
+		svc.postThread(ctx, command, svc.t("chat.run.route_failed", map[string]any{"Error": safeError(err)}))
 		return ChatRunResult{}
 	}
-	runID := newChatRunID(chat.ID)
-	started, err := svc.startRun(ctx, chatRunStartInput{
-		RunID:         runID,
-		Mode:          mode,
-		Project:       project,
-		Role:          role,
-		Chat:          chat,
-		Repositories:  repositories,
-		PRNumber:      prRef.Number,
-		OpenAIAccount: openAIAccount,
-		GitHubAccount: gitHubAccount,
-		Prompt:        prompt,
-		UserMessage:   command.Message,
-	})
-	if err != nil {
-		svc.postThread(ctx, command, svc.t("chat.run.start_failed", map[string]any{"Error": safeError(err)}))
-		return ChatRunResult{}
+	if len(targets) == 0 {
+		return ChatRunResult{Ignored: true}
 	}
-	if err := svc.recordRun(ctx, mode, started, chatRunRecordInput{
-		Chat:         chat,
-		Role:         role,
-		Repositories: repositories,
-		PRNumber:     prRef.Number,
-		UserName:     command.UserName,
-	}); err != nil {
-		svc.postThread(ctx, command, svc.t("chat.run.record_failed", map[string]any{"RunID": runID, "Error": safeError(err)}))
-	}
-	svc.postThread(ctx, command, svc.t("chat.run.started", map[string]any{
-		"RunID": runID,
-		"Mode":  mode,
-		"Role":  role.Name,
-		"Job":   started.JobName,
-		"PVC":   started.PVCName,
-	}))
-	if !svc.cfg.DisableMonitor {
-		go svc.monitorRun(ctx, chatRunMonitorInput{
-			RunID:      runID,
-			Mode:       mode,
-			ChannelID:  command.ChannelID,
-			RootPostID: commandRootPostID(command),
+	queued := make([]AgentTurnQueued, 0, len(targets))
+	for _, target := range targets {
+		item, err := svc.EnqueueAgentTurn(ctx, AgentTurnRequest{
+			Project:       project,
+			Chat:          chat,
+			Role:          target.Role,
+			Repositories:  repositories,
+			UserID:        command.UserID,
+			UserName:      command.UserName,
+			UserMessage:   command.Message,
+			SourcePostID:  command.PostID,
+			ReplyRootID:   commandRootPostID(command),
+			SessionRootID: target.SessionRootID,
+			SessionScope:  target.SessionScope,
+			TTLSeconds:    target.TTLSeconds,
 		})
+		if err != nil {
+			svc.postThread(ctx, command, svc.t("chat.run.start_failed", map[string]any{"Role": target.Role.Name, "Error": safeError(err)}))
+			continue
+		}
+		queued = append(queued, item)
 	}
-	return ChatRunResult{RunID: runID, Mode: mode}
+	if len(queued) == 0 {
+		return ChatRunResult{}
+	}
+	first := queued[0]
+	svc.postThread(ctx, command, svc.t("chat.session.queued", map[string]any{
+		"Count":      len(queued),
+		"RunID":      first.RunID,
+		"Role":       first.Role.Name,
+		"SessionKey": first.SessionKey,
+	}))
+	return ChatRunResult{RunID: first.RunID, Mode: "session"}
+}
+
+type chatSessionTarget struct {
+	Role          entity.AgentRole
+	SessionScope  string
+	SessionRootID string
+	TTLSeconds    int
 }
 
 type githubPullRef struct {
@@ -235,6 +255,200 @@ type chatRunMonitorInput struct {
 	Mode       string
 	ChannelID  string
 	RootPostID string
+}
+
+func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTurnRequest) (AgentTurnQueued, error) {
+	request.UserMessage = strings.TrimSpace(request.UserMessage)
+	request.ReplyRootID = strings.TrimSpace(request.ReplyRootID)
+	if request.UserMessage == "" {
+		return AgentTurnQueued{}, fmt.Errorf("user message is required")
+	}
+	if request.Project.ID == 0 || request.Chat.ID == 0 || request.Role.ID == 0 {
+		return AgentTurnQueued{}, fmt.Errorf("project, chat and role are required")
+	}
+	if request.ReplyRootID == "" {
+		return AgentTurnQueued{}, fmt.Errorf("Mattermost reply root post id is required")
+	}
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return AgentTurnQueued{}, fmt.Errorf("storage is not ready")
+	}
+	if !svc.cfg.RuntimeReady || svc.cfg.RuntimeRunner == nil {
+		return AgentTurnQueued{}, fmt.Errorf("runtime is not ready")
+	}
+	openAIAccount, ok := svc.openAIAccount(ctx, request.Role)
+	if !ok {
+		return AgentTurnQueued{}, fmt.Errorf("OpenAI account is required for role %s", request.Role.Name)
+	}
+	gitHubAccount, gitHubOK := svc.gitHubAccount(ctx, request.Role, firstRepository(request.Repositories))
+	prompt, err := BuildRolePrompt(RolePromptInput{
+		Project:      request.Project,
+		Role:         request.Role,
+		Chat:         request.Chat,
+		Repositories: request.Repositories,
+		UserMessage:  request.UserMessage,
+		Locale:       svc.localeData(),
+	})
+	if err != nil {
+		return AgentTurnQueued{}, err
+	}
+	ttlSeconds := request.TTLSeconds
+	if ttlSeconds <= 0 {
+		ttlSeconds = defaultThreadSessionTTLSeconds
+	}
+	sessionScope := strings.TrimSpace(request.SessionScope)
+	if sessionScope == "" {
+		sessionScope = agentSessionScopeThreadRole
+	}
+	sessionRootID := strings.TrimSpace(request.SessionRootID)
+	sessionKey := agentSessionKey(request.Chat.ID, request.Role.ID, sessionScope, sessionRootID)
+	capabilities, err := agentSessionCapabilitiesJSON(request.Role, request.Repositories, gitHubOK)
+	if err != nil {
+		return AgentTurnQueued{}, err
+	}
+	session, _, err := svc.cfg.Store.UpsertAgentSession(ctx, adminrepo.UpsertAgentSessionInput{
+		SessionKey:           sessionKey,
+		ProjectID:            request.Project.ID,
+		ChatID:               request.Chat.ID,
+		RoleID:               request.Role.ID,
+		SessionScope:         sessionScope,
+		MattermostChannelID:  request.Chat.MattermostChannelID,
+		MattermostRootPostID: sessionRootID,
+		TTLSeconds:           ttlSeconds,
+		Capabilities:         capabilities,
+	})
+	if err != nil {
+		return AgentTurnQueued{}, err
+	}
+	internalToken, err := svc.sessionInternalToken(ctx, session)
+	if err != nil {
+		return AgentTurnQueued{}, err
+	}
+	gitHubSecretName := ""
+	if gitHubOK {
+		gitHubSecretName = gitHubAccount.SecretRef
+	}
+	started, err := svc.cfg.RuntimeRunner.StartAgentSession(ctx, runtimerepo.AgentSessionPodInput{
+		SessionKey:          session.SessionKey,
+		Role:                request.Role.Name,
+		BotServiceURL:       svc.botServiceURL(),
+		InternalToken:       internalToken,
+		CodexAuthSecretName: openAIAccount.SecretRef,
+		GitHubSecretName:    gitHubSecretName,
+		SandboxMode:         request.Role.SandboxMode,
+		ConfigOverlay:       request.Role.ConfigOverlay,
+	})
+	if err != nil {
+		return AgentTurnQueued{}, err
+	}
+	session, err = svc.cfg.Store.UpdateAgentSessionRuntime(ctx, adminrepo.UpdateAgentSessionRuntimeInput{
+		SessionKey:          session.SessionKey,
+		Status:              agentSessionStatusIdle,
+		KubernetesNamespace: started.Namespace,
+		PodName:             started.PodName,
+		PVCName:             started.PVCName,
+		TokenSecretRef:      started.SecretName,
+		ExtendTTLSeconds:    ttlSeconds,
+	})
+	if err != nil {
+		return AgentTurnQueued{}, err
+	}
+	runID := newChatRunID(request.Chat.ID)
+	turn, err := svc.cfg.Store.CreateAgentSessionTurn(ctx, adminrepo.CreateAgentSessionTurnInput{
+		SessionID:            session.ID,
+		RunID:                runID,
+		MattermostChannelID:  request.Chat.MattermostChannelID,
+		MattermostRootPostID: request.ReplyRootID,
+		MattermostPostID:     request.SourcePostID,
+		UserID:               request.UserID,
+		UserName:             request.UserName,
+		Message:              prompt,
+	})
+	if err != nil {
+		return AgentTurnQueued{}, err
+	}
+	if _, err := svc.cfg.Store.CreateAgentRun(ctx, adminrepo.CreateAgentRunInput{
+		RunID:               runID,
+		FlowID:              "session-" + session.SessionKey,
+		ProfileName:         request.Role.Name,
+		Role:                request.Role.RoleType,
+		Provider:            firstRepository(request.Repositories).Provider,
+		Owner:               firstRepository(request.Repositories).Owner,
+		Name:                firstRepository(request.Repositories).Name,
+		BaseBranch:          defaultString(firstRepository(request.Repositories).DefaultBranch, "main"),
+		HeadBranch:          "matter-codex-" + runID,
+		Status:              agentSessionTurnQueued,
+		KubernetesNamespace: started.Namespace,
+		JobName:             started.PodName,
+		PVCName:             started.PVCName,
+		Summary:             fmt.Sprintf("session turn chat=%d role=%s turn=%d user=%s", request.Chat.ID, request.Role.Name, turn.ID, request.UserName),
+	}); err != nil {
+		return AgentTurnQueued{}, err
+	}
+	return AgentTurnQueued{
+		RunID:      runID,
+		SessionKey: session.SessionKey,
+		Role:       request.Role,
+		CreatedPod: started.Created,
+		PodName:    started.PodName,
+		PVCName:    started.PVCName,
+	}, nil
+}
+
+func (svc *ChatRunService) routeChatPost(ctx context.Context, chat entity.Chat, roles []entity.AgentRole, rolesByID map[int64]entity.AgentRole, command ChatPostCommand) ([]chatSessionTarget, error) {
+	identities, err := svc.cfg.Store.ListMattermostBotIdentitiesByProject(ctx, chat.ProjectID)
+	if err != nil && !errors.Is(err, adminrepo.ErrNotFound) {
+		return nil, err
+	}
+	mentionedRoles := mentionedAgentRoles(command.Message, identities, rolesByID)
+	isThreadReply := strings.TrimSpace(command.RootPostID) != "" && strings.TrimSpace(command.RootPostID) != strings.TrimSpace(command.PostID)
+	if len(mentionedRoles) > 0 {
+		targets := make([]chatSessionTarget, 0, len(mentionedRoles))
+		for _, role := range mentionedRoles {
+			targets = append(targets, chatSessionTarget{
+				Role:          role,
+				SessionScope:  agentSessionScopeThreadRole,
+				SessionRootID: commandRootPostID(command),
+				TTLSeconds:    defaultThreadSessionTTLSeconds,
+			})
+		}
+		return targets, nil
+	}
+	if isThreadReply {
+		sessions, err := svc.cfg.Store.ListAgentSessionsByThread(ctx, chat.ID, commandRootPostID(command))
+		if err != nil {
+			return nil, err
+		}
+		if len(sessions) == 1 {
+			if role, ok := rolesByID[sessions[0].RoleID]; ok {
+				return []chatSessionTarget{{
+					Role:          role,
+					SessionScope:  sessions[0].SessionScope,
+					SessionRootID: sessions[0].MattermostRootPostID,
+					TTLSeconds:    sessions[0].TTLSeconds,
+				}}, nil
+			}
+		}
+	}
+	return []chatSessionTarget{{
+		Role:          selectDefaultChatRole(roles),
+		SessionScope:  agentSessionScopeChatDefault,
+		SessionRootID: "",
+		TTLSeconds:    defaultManagerSessionTTLSeconds,
+	}}, nil
+}
+
+func (svc *ChatRunService) sessionInternalToken(ctx context.Context, session entity.AgentSession) (string, error) {
+	if strings.TrimSpace(session.TokenSecretRef) != "" {
+		secret, err := svc.cfg.RuntimeRunner.GetMattermostBotTokenSecret(ctx, session.TokenSecretRef)
+		if err == nil && strings.TrimSpace(secret.Token) != "" {
+			return strings.TrimSpace(secret.Token), nil
+		}
+	}
+	return newInternalToken()
+}
+
+func (svc *ChatRunService) botServiceURL() string {
+	return strings.TrimRight(strings.TrimSpace(svc.cfg.BotServiceURL), "/")
 }
 
 func (svc *ChatRunService) startRun(ctx context.Context, input chatRunStartInput) (runtimerepo.StartedRun, error) {
@@ -524,6 +738,66 @@ func selectChatRole(roles []entity.AgentRole, prNumber int) entity.AgentRole {
 	return roles[0]
 }
 
+func selectDefaultChatRole(roles []entity.AgentRole) entity.AgentRole {
+	preference := []string{"manager", "pm_delivery", "worker", "analyst", "architect", "writer", "sre", "custom", "reviewer"}
+	for _, roleType := range preference {
+		for _, role := range roles {
+			if role.RoleType == roleType {
+				return role
+			}
+		}
+	}
+	return roles[0]
+}
+
+func mentionedAgentRoles(message string, identities []entity.MattermostBotIdentity, rolesByID map[int64]entity.AgentRole) []entity.AgentRole {
+	if len(identities) == 0 || len(rolesByID) == 0 {
+		return nil
+	}
+	seen := make(map[int64]struct{}, len(identities))
+	roles := make([]entity.AgentRole, 0, len(identities))
+	lowerMessage := strings.ToLower(message)
+	for _, identity := range identities {
+		username := strings.ToLower(strings.TrimSpace(identity.Username))
+		if username == "" || !messageMentionsUsername(lowerMessage, username) {
+			continue
+		}
+		role, ok := rolesByID[identity.RoleID]
+		if !ok {
+			continue
+		}
+		if _, exists := seen[role.ID]; exists {
+			continue
+		}
+		seen[role.ID] = struct{}{}
+		roles = append(roles, role)
+	}
+	return roles
+}
+
+func messageMentionsUsername(lowerMessage string, username string) bool {
+	needle := "@" + username
+	searchFrom := 0
+	for {
+		index := strings.Index(lowerMessage[searchFrom:], needle)
+		if index < 0 {
+			return false
+		}
+		start := searchFrom + index
+		end := start + len(needle)
+		beforeOK := start == 0 || !isMentionUsernameRune(rune(lowerMessage[start-1]))
+		afterOK := end >= len(lowerMessage) || !isMentionUsernameRune(rune(lowerMessage[end]))
+		if beforeOK && afterOK {
+			return true
+		}
+		searchFrom = end
+	}
+}
+
+func isMentionUsernameRune(char rune) bool {
+	return (char >= 'a' && char <= 'z') || (char >= '0' && char <= '9') || char == '_' || char == '-' || char == '.'
+}
+
 func chatRunMode(role entity.AgentRole, repositories []entity.ProjectRepository, prNumber int) string {
 	if prNumber > 0 && role.RoleType == "reviewer" {
 		return chatRunModeReviewer
@@ -575,6 +849,42 @@ func newChatRunID(chatID int64) string {
 		return fmt.Sprintf("chat-%d-%d", chatID, time.Now().Unix())
 	}
 	return fmt.Sprintf("chat-%d-%s", chatID, hex.EncodeToString(raw[:]))
+}
+
+func agentSessionKey(chatID int64, roleID int64, scope string, rootPostID string) string {
+	scope = strings.TrimSpace(scope)
+	if scope == "" {
+		scope = agentSessionScopeThreadRole
+	}
+	if scope == agentSessionScopeChatDefault {
+		return fmt.Sprintf("chat-%d-default-role-%d", chatID, roleID)
+	}
+	hash := sha1.Sum([]byte(rootPostID))
+	return fmt.Sprintf("chat-%d-thread-%s-role-%d", chatID, hex.EncodeToString(hash[:8]), roleID)
+}
+
+func agentSessionCapabilitiesJSON(role entity.AgentRole, repositories []entity.ProjectRepository, githubEnabled bool) (string, error) {
+	repos := make([]map[string]string, 0, len(repositories))
+	for _, repo := range repositories {
+		repos = append(repos, map[string]string{
+			"provider":       repo.Provider,
+			"owner":          repo.Owner,
+			"name":           repo.Name,
+			"default_branch": repo.DefaultBranch,
+		})
+	}
+	body, err := json.Marshal(map[string]any{
+		"mattermost_read":          true,
+		"mattermost_post":          true,
+		"mattermost_request_agent": true,
+		"github_enabled":           githubEnabled,
+		"kubernetes_access":        strings.TrimSpace(role.KubernetesAccess),
+		"repositories":             repos,
+	})
+	if err != nil {
+		return "", err
+	}
+	return string(body), nil
 }
 
 func finalAnswerFromLog(logTail string) string {

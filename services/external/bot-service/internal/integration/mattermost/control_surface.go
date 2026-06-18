@@ -2,7 +2,11 @@ package mattermost
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
+	"sort"
+	"strings"
 
 	statusservice "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/service"
 	mattermostmodel "github.com/mattermost/mattermost/server/public/model"
@@ -13,6 +17,8 @@ type ControlSurface struct {
 }
 
 var _ statusservice.MattermostThreadPublisher = (*ControlSurface)(nil)
+var _ statusservice.MattermostConversationReader = (*ControlSurface)(nil)
+var _ statusservice.MattermostRoleBotManager = (*ControlSurface)(nil)
 
 func NewControlSurface(siteURL string, token string) *ControlSurface {
 	client := mattermostmodel.NewAPIv4Client(siteURL)
@@ -28,8 +34,182 @@ func (surface *ControlSurface) BotUserID(ctx context.Context) (string, error) {
 	return user.Id, nil
 }
 
+func (surface *ControlSurface) EnsureRoleBot(ctx context.Context, input statusservice.MattermostRoleBotInput) (statusservice.MattermostRoleBotBinding, error) {
+	username := strings.TrimSpace(input.Username)
+	if username == "" {
+		return statusservice.MattermostRoleBotBinding{}, fmt.Errorf("Mattermost bot username is required")
+	}
+	displayName := strings.TrimSpace(input.DisplayName)
+	if displayName == "" {
+		displayName = username
+	}
+	bot, err := surface.findBotByUsername(ctx, username)
+	if err != nil {
+		return surface.ensureRoleUser(ctx, username, displayName, strings.TrimSpace(input.Description))
+	}
+	if bot == nil {
+		created, _, err := surface.client.CreateBot(ctx, &mattermostmodel.Bot{
+			Username:    username,
+			DisplayName: displayName,
+			Description: strings.TrimSpace(input.Description),
+		})
+		if err != nil {
+			binding, fallbackErr := surface.ensureRoleUser(ctx, username, displayName, strings.TrimSpace(input.Description))
+			if fallbackErr == nil {
+				return binding, nil
+			}
+			return statusservice.MattermostRoleBotBinding{}, fmt.Errorf("create Mattermost role bot: %w; create role user fallback: %v", err, fallbackErr)
+		}
+		bot = created
+	}
+	return surface.roleBindingForUser(ctx, bot.UserId, bot.Username, bot.DisplayName)
+}
+
+func (surface *ControlSurface) roleBindingForUser(ctx context.Context, userID string, username string, displayName string) (statusservice.MattermostRoleBotBinding, error) {
+	token, _, err := surface.client.CreateUserAccessToken(ctx, userID, "matter-codex role identity")
+	if err != nil {
+		return statusservice.MattermostRoleBotBinding{}, fmt.Errorf("create Mattermost role identity token: %w", err)
+	}
+	return statusservice.MattermostRoleBotBinding{
+		UserID:      userID,
+		Username:    username,
+		DisplayName: displayName,
+		Token:       token.Token,
+	}, nil
+}
+
+func (surface *ControlSurface) ensureRoleUser(ctx context.Context, username string, displayName string, description string) (statusservice.MattermostRoleBotBinding, error) {
+	user, _, err := surface.client.GetUserByUsername(ctx, username, "")
+	if err != nil || user == nil {
+		password, passwordErr := randomMattermostPassword()
+		if passwordErr != nil {
+			return statusservice.MattermostRoleBotBinding{}, passwordErr
+		}
+		created, _, createErr := surface.client.CreateUser(ctx, &mattermostmodel.User{
+			Username: username,
+			Email:    username + "@matter-codex.local.invalid",
+			Password: password,
+			Nickname: displayName,
+			Props: map[string]string{
+				"matter-codex-role-identity": "true",
+				"description":                description,
+			},
+		})
+		if createErr != nil {
+			return statusservice.MattermostRoleBotBinding{}, fmt.Errorf("create Mattermost role user: %w", createErr)
+		}
+		user = created
+	}
+	return surface.roleBindingForUser(ctx, user.Id, user.Username, defaultString(user.Nickname, displayName))
+}
+
+func (surface *ControlSurface) EnsureProjectChannelMember(ctx context.Context, teamName string, channelID string, userID string) error {
+	if strings.TrimSpace(userID) == "" {
+		return nil
+	}
+	team, _, err := surface.client.GetTeamByName(ctx, teamName, "")
+	if err != nil {
+		return fmt.Errorf("get Mattermost team: %w", err)
+	}
+	if err := surface.ensureTeamMember(ctx, team.Id, userID); err != nil {
+		return err
+	}
+	return surface.ensureChannelMember(ctx, channelID, userID)
+}
+
+func randomMattermostPassword() (string, error) {
+	var body [24]byte
+	if _, err := rand.Read(body[:]); err != nil {
+		return "", fmt.Errorf("generate Mattermost role user password: %w", err)
+	}
+	return "Mc!" + hex.EncodeToString(body[:]), nil
+}
+
+func (surface *ControlSurface) findBotByUsername(ctx context.Context, username string) (*mattermostmodel.Bot, error) {
+	for page := 0; page < 20; page++ {
+		bots, _, err := surface.client.GetBotsIncludeDeleted(ctx, page, 200, "")
+		if err != nil {
+			return nil, fmt.Errorf("list Mattermost bots: %w", err)
+		}
+		if len(bots) == 0 {
+			return nil, nil
+		}
+		for _, bot := range bots {
+			if bot != nil && strings.EqualFold(bot.Username, username) {
+				return bot, nil
+			}
+		}
+	}
+	return nil, nil
+}
+
 func (surface *ControlSurface) PostThreadMessage(ctx context.Context, input statusservice.MattermostThreadPostInput) (statusservice.MattermostPostRef, error) {
-	post, _, err := surface.client.CreatePost(ctx, &mattermostmodel.Post{
+	return createThreadPost(ctx, surface.client, input)
+}
+
+func (surface *ControlSurface) PostThreadMessageWithToken(ctx context.Context, token string, input statusservice.MattermostThreadPostInput) (statusservice.MattermostPostRef, error) {
+	client := mattermostmodel.NewAPIv4Client(surface.client.URL)
+	client.SetToken(token)
+	return createThreadPost(ctx, client, input)
+}
+
+func (surface *ControlSurface) GetThreadPosts(ctx context.Context, rootPostID string, limit int) ([]statusservice.MattermostPostMessage, error) {
+	rootPostID = strings.TrimSpace(rootPostID)
+	if rootPostID == "" {
+		return nil, fmt.Errorf("Mattermost root post id is required")
+	}
+	if limit <= 0 || limit > 50 {
+		limit = 20
+	}
+	postList, _, err := surface.client.GetPostThread(ctx, rootPostID, "", false)
+	if err != nil {
+		return nil, fmt.Errorf("get Mattermost thread posts: %w", err)
+	}
+	posts := mattermostPostMessages(postList)
+	if len(posts) > limit {
+		posts = posts[len(posts)-limit:]
+	}
+	return posts, nil
+}
+
+func (surface *ControlSurface) SearchChannelPosts(ctx context.Context, channelID string, query string, limit int) ([]statusservice.MattermostPostMessage, error) {
+	channelID = strings.TrimSpace(channelID)
+	query = strings.ToLower(strings.TrimSpace(query))
+	if channelID == "" {
+		return nil, fmt.Errorf("Mattermost channel id is required")
+	}
+	if query == "" {
+		return nil, fmt.Errorf("search query is required")
+	}
+	if limit <= 0 || limit > 50 {
+		limit = 20
+	}
+	postList, _, err := surface.client.GetPostsForChannel(ctx, channelID, 0, 100, "", false, false)
+	if err != nil {
+		return nil, fmt.Errorf("get Mattermost channel posts: %w", err)
+	}
+	posts := mattermostPostMessages(postList)
+	matched := make([]statusservice.MattermostPostMessage, 0, limit)
+	for index := len(posts) - 1; index >= 0; index-- {
+		post := posts[index]
+		if strings.Contains(strings.ToLower(post.Message), query) {
+			matched = append(matched, post)
+			if len(matched) >= limit {
+				break
+			}
+		}
+	}
+	sort.Slice(matched, func(i int, j int) bool {
+		if matched[i].CreateAt == matched[j].CreateAt {
+			return matched[i].ID < matched[j].ID
+		}
+		return matched[i].CreateAt < matched[j].CreateAt
+	})
+	return matched, nil
+}
+
+func createThreadPost(ctx context.Context, client *mattermostmodel.Client4, input statusservice.MattermostThreadPostInput) (statusservice.MattermostPostRef, error) {
+	post, _, err := client.CreatePost(ctx, &mattermostmodel.Post{
 		ChannelId: input.ChannelID,
 		RootId:    input.RootPostID,
 		Message:   input.Message,
@@ -40,15 +220,58 @@ func (surface *ControlSurface) PostThreadMessage(ctx context.Context, input stat
 	return statusservice.MattermostPostRef{ChannelID: post.ChannelId, PostID: post.Id}, nil
 }
 
+func mattermostPostMessages(postList *mattermostmodel.PostList) []statusservice.MattermostPostMessage {
+	if postList == nil || len(postList.Posts) == 0 {
+		return nil
+	}
+	posts := make([]*mattermostmodel.Post, 0, len(postList.Posts))
+	for _, post := range postList.Posts {
+		if post != nil && strings.TrimSpace(post.Message) != "" {
+			posts = append(posts, post)
+		}
+	}
+	sort.Slice(posts, func(i int, j int) bool {
+		if posts[i].CreateAt == posts[j].CreateAt {
+			return posts[i].Id < posts[j].Id
+		}
+		return posts[i].CreateAt < posts[j].CreateAt
+	})
+	result := make([]statusservice.MattermostPostMessage, 0, len(posts))
+	for _, post := range posts {
+		result = append(result, statusservice.MattermostPostMessage{
+			ID:        post.Id,
+			RootID:    post.RootId,
+			UserID:    post.UserId,
+			Message:   truncateMattermostPostMessage(post.Message, 2000),
+			CreateAt:  post.CreateAt,
+			UpdateAt:  post.UpdateAt,
+			ChannelID: post.ChannelId,
+		})
+	}
+	return result
+}
+
+func truncateMattermostPostMessage(value string, limit int) string {
+	value = strings.TrimSpace(value)
+	runes := []rune(value)
+	if limit <= 0 || len(runes) <= limit {
+		return value
+	}
+	return string(runes[:limit]) + "\n...[truncated]"
+}
+
 func (surface *ControlSurface) EnsureRepositoryChannel(ctx context.Context, teamName string, channelName string, displayName string) (bool, error) {
 	_, created, err := surface.EnsureProjectChannel(ctx, teamName, channelName, displayName, false, nil)
 	return created, err
 }
 
 func (surface *ControlSurface) EnsureProjectTeam(ctx context.Context, teamName string, displayName string, memberUserID string) (statusservice.MattermostTeamBinding, bool, error) {
+	memberUserIDs := surface.memberUserIDsWithControlBot(ctx, []string{memberUserID})
 	team, response, err := surface.client.GetTeamByName(ctx, teamName, "")
 	if err == nil {
-		_ = surface.ensureTeamMember(ctx, team.Id, memberUserID)
+		for _, userID := range memberUserIDs {
+			_ = surface.ensureTeamMember(ctx, team.Id, userID)
+		}
 		return mattermostTeamBinding(team), false, nil
 	}
 	if response == nil || response.StatusCode != 404 {
@@ -62,7 +285,9 @@ func (surface *ControlSurface) EnsureProjectTeam(ctx context.Context, teamName s
 	if err != nil {
 		return statusservice.MattermostTeamBinding{}, false, fmt.Errorf("create Mattermost team: %w", err)
 	}
-	_ = surface.ensureTeamMember(ctx, created.Id, memberUserID)
+	for _, userID := range memberUserIDs {
+		_ = surface.ensureTeamMember(ctx, created.Id, userID)
+	}
 	return mattermostTeamBinding(created), true, nil
 }
 
@@ -71,6 +296,7 @@ func (surface *ControlSurface) EnsureProjectChannel(ctx context.Context, teamNam
 	if err != nil {
 		return statusservice.MattermostChannelBinding{}, false, fmt.Errorf("get Mattermost team: %w", err)
 	}
+	memberUserIDs = surface.memberUserIDsWithControlBot(ctx, memberUserIDs)
 	if channel, response, err := surface.client.GetChannelByName(ctx, channelName, team.Id, ""); err == nil {
 		for _, userID := range memberUserIDs {
 			_ = surface.ensureTeamMember(ctx, team.Id, userID)
@@ -98,6 +324,28 @@ func (surface *ControlSurface) EnsureProjectChannel(ctx context.Context, teamNam
 		_ = surface.ensureChannelMember(ctx, created.Id, userID)
 	}
 	return mattermostChannelBinding(created), true, nil
+}
+
+func (surface *ControlSurface) memberUserIDsWithControlBot(ctx context.Context, memberUserIDs []string) []string {
+	result := make([]string, 0, len(memberUserIDs)+1)
+	seen := make(map[string]struct{}, len(memberUserIDs)+1)
+	for _, userID := range memberUserIDs {
+		userID = strings.TrimSpace(userID)
+		if userID == "" {
+			continue
+		}
+		if _, ok := seen[userID]; ok {
+			continue
+		}
+		seen[userID] = struct{}{}
+		result = append(result, userID)
+	}
+	if me, _, err := surface.client.GetMe(ctx, ""); err == nil && strings.TrimSpace(me.Id) != "" {
+		if _, ok := seen[me.Id]; !ok {
+			result = append(result, me.Id)
+		}
+	}
+	return result
 }
 
 func (surface *ControlSurface) ensureTeamMember(ctx context.Context, teamID string, userID string) error {
