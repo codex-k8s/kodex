@@ -914,23 +914,23 @@ func mapRuntimeJobError(err error) error {
 		return err
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
-		return agentservice.NewRuntimeJobError(true, "deadline_exceeded", "runtime-manager did not finish agent run job request in time")
+		return agentservice.NewRuntimeJobError(true, "deadline_exceeded", "runtime-manager did not finish runtime job request in time")
 	}
 	switch status.Code(err) {
 	case codes.InvalidArgument:
-		return agentservice.NewRuntimeJobError(false, "invalid_argument", "runtime-manager rejected the agent run job request")
+		return agentservice.NewRuntimeJobError(false, "invalid_argument", "runtime-manager rejected the runtime job request")
 	case codes.NotFound:
-		return agentservice.NewRuntimeJobError(false, "not_found", "runtime-manager could not find required agent run job state")
+		return agentservice.NewRuntimeJobError(false, "not_found", "runtime-manager could not find required runtime job state")
 	case codes.PermissionDenied, codes.Unauthenticated:
-		return agentservice.NewRuntimeJobError(false, "permission_denied", "runtime-manager rejected the agent run job caller")
+		return agentservice.NewRuntimeJobError(false, "permission_denied", "runtime-manager rejected the runtime job caller")
 	case codes.FailedPrecondition:
-		return agentservice.NewRuntimeJobError(false, "failed_precondition", "runtime-manager rejected agent run job preconditions")
+		return agentservice.NewRuntimeJobError(false, "failed_precondition", "runtime-manager rejected runtime job preconditions")
 	case codes.Aborted, codes.AlreadyExists:
-		return agentservice.NewRuntimeJobError(true, "conflict", "runtime-manager reported a retryable agent run job conflict")
+		return agentservice.NewRuntimeJobError(true, "conflict", "runtime-manager reported a retryable runtime job conflict")
 	case codes.Unavailable, codes.DeadlineExceeded, codes.ResourceExhausted:
 		return agentservice.NewRuntimeJobError(true, "dependency_unavailable", "runtime-manager is temporarily unavailable")
 	default:
-		return agentservice.NewRuntimeJobError(true, "runtime_job_failed", "runtime-manager agent run job creation failed")
+		return agentservice.NewRuntimeJobError(true, "runtime_job_failed", "runtime-manager runtime job request failed")
 	}
 }
 

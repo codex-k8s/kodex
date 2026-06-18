@@ -652,14 +652,19 @@ func TestRunApplyCreatesSelfDeployServiceAccessRules(t *testing.T) {
 		t.Fatalf("expected %d created access rules, got %d", expectedAccessRules, accessClient.createdRuleCount)
 	}
 	if accessClient.putAccessRuleCalls != expectedAccessRules || accessClient.checkAccessCalls != expectedAccessRules {
-		t.Fatalf("expected put/check calls for runner and two services, got put=%d check=%d", accessClient.putAccessRuleCalls, accessClient.checkAccessCalls)
+		t.Fatalf("expected put/check calls for runner and self-deploy services, got put=%d check=%d", accessClient.putAccessRuleCalls, accessClient.checkAccessCalls)
 	}
 	assertRunnerRepositoryReadAccessRule(t, accessClient.lastPutAccessRuleByAction[accesscatalog.ActionRepositoryRead], "project-self", "repo-self")
 	assertRunnerRepositoryReadAccessCheck(t, accessClient.lastCheckAccessByAction[accesscatalog.ActionRepositoryRead], "project-self", "repo-self")
 	assertSelfDeployAccessRules(t, accessClient, "project-self")
+	assertUniqueAccessRuleIdempotencyKeys(t, accessClient.putAccessRuleRequests)
 	text := output.String()
 	assertContains(t, text, "onboarding runner repository read access ready subject=service/onboarding-runner")
 	assertContains(t, text, "self-deploy service access ready subject=service/agent-manager")
+	assertContains(t, text, "action=runtime.job.create")
+	assertContains(t, text, "self-deploy service access ready subject=service/runtime-manager-kubernetes-executor")
+	assertContains(t, text, "action=runtime.job.claim")
+	assertContains(t, text, "scope=global")
 	assertContains(t, text, "self-deploy service access ready subject=service/staff-gateway")
 }
 
@@ -2395,6 +2400,8 @@ func assertSelfDeployAccessRules(t *testing.T, client *fakeAccessManagerClient, 
 		assertSelfDeployAccessCheck(t, findSelfDeployAccessCheck(client.checkAccessRequests, grant), grant, projectID)
 	}
 	assertNoSelfDeployOwnerDecisionAccess(t, client.putAccessRuleRequests)
+	assertNoUnexpectedGlobalServiceAccess(t, client.putAccessRuleRequests)
+	assertNoUnexpectedGlobalServiceAccessChecks(t, client.checkAccessRequests)
 }
 
 func assertNoSelfDeployOwnerDecisionAccess(t *testing.T, requests []*accessaccountsv1.PutAccessRuleRequest) {
@@ -2407,6 +2414,53 @@ func assertNoSelfDeployOwnerDecisionAccess(t *testing.T, requests []*accessaccou
 		case accesscatalog.ActionGovernanceGateDecide, accesscatalog.ActionGovernancePolicyManage, accesscatalog.ActionGovernanceReleaseDecide:
 			t.Fatalf("self-deploy service access must not grant owner/write action: %+v", request)
 		}
+	}
+}
+
+func assertNoUnexpectedGlobalServiceAccess(t *testing.T, requests []*accessaccountsv1.PutAccessRuleRequest) {
+	t.Helper()
+	for _, request := range requests {
+		if request.GetSubjectType() != "service" || request.GetScopeType() != accesscatalog.ScopeGlobal {
+			continue
+		}
+		if request.GetSubjectId() == runtimeKubernetesExecutorSubjectID &&
+			request.GetActionKey() == accesscatalog.ActionRuntimeJobClaim &&
+			request.GetResourceType() == accesscatalog.ResourceRuntimeJob &&
+			request.GetScopeId() == "" {
+			continue
+		}
+		t.Fatalf("unexpected global service access rule: %+v", request)
+	}
+}
+
+func assertNoUnexpectedGlobalServiceAccessChecks(t *testing.T, requests []*accessaccountsv1.CheckAccessRequest) {
+	t.Helper()
+	for _, request := range requests {
+		if request.GetSubject().GetType() != "service" || request.GetScope().GetType() != accesscatalog.ScopeGlobal {
+			continue
+		}
+		if request.GetSubject().GetId() == runtimeKubernetesExecutorSubjectID &&
+			request.GetActionKey() == accesscatalog.ActionRuntimeJobClaim &&
+			request.GetResource().GetType() == accesscatalog.ResourceRuntimeJob &&
+			request.GetScope().GetId() == "" {
+			continue
+		}
+		t.Fatalf("unexpected global service access check: %+v", request)
+	}
+}
+
+func assertUniqueAccessRuleIdempotencyKeys(t *testing.T, requests []*accessaccountsv1.PutAccessRuleRequest) {
+	t.Helper()
+	seen := map[string]struct{}{}
+	for _, request := range requests {
+		key := request.GetMeta().GetIdempotencyKey()
+		if key == "" {
+			t.Fatalf("empty idempotency key for access rule: %+v", request)
+		}
+		if _, ok := seen[key]; ok {
+			t.Fatalf("duplicate idempotency key %q for access rule: %+v", key, request)
+		}
+		seen[key] = struct{}{}
 	}
 }
 
@@ -2429,8 +2483,8 @@ func assertSelfDeployAccessRule(t *testing.T, request *accessaccountsv1.PutAcces
 		request.GetActionKey() != grant.actionKey ||
 		request.GetResourceType() != grant.resourceType ||
 		request.GetResourceId() != "" ||
-		request.GetScopeType() != accesscatalog.ScopeProject ||
-		request.GetScopeId() != projectID ||
+		request.GetScopeType() != selfDeployServiceAccessScopeType(grant) ||
+		request.GetScopeId() != expectedSelfDeployServiceAccessScopeID(projectID, grant) ||
 		request.GetPriority() != selfDeployServiceAccessPriority ||
 		request.GetStatus() != accessaccountsv1.AccessRuleStatus_ACCESS_RULE_STATUS_ACTIVE {
 		t.Fatalf("unexpected self-deploy access rule request: %+v", request)
@@ -2472,11 +2526,18 @@ func assertSelfDeployAccessCheck(t *testing.T, request *accessaccountsv1.CheckAc
 		request.GetActionKey() != grant.actionKey ||
 		request.GetResource().GetType() != grant.resourceType ||
 		request.GetResource().GetId() != "" ||
-		request.GetScope().GetType() != accesscatalog.ScopeProject ||
-		request.GetScope().GetId() != projectID ||
+		request.GetScope().GetType() != selfDeployServiceAccessScopeType(grant) ||
+		request.GetScope().GetId() != expectedSelfDeployServiceAccessScopeID(projectID, grant) ||
 		!request.GetAudit() {
 		t.Fatalf("unexpected self-deploy access check request: %+v", request)
 	}
+}
+
+func expectedSelfDeployServiceAccessScopeID(projectID string, grant selfDeployServiceAccessGrant) string {
+	if selfDeployServiceAccessScopeType(grant) == accesscatalog.ScopeProject {
+		return projectID
+	}
+	return ""
 }
 
 func assertSelfDeployOwnerAccessCheck(t *testing.T, request *accessaccountsv1.CheckAccessRequest, ownerRef string, grant selfDeployOwnerAccessGrant, projectID string) {

@@ -50,12 +50,14 @@ const (
 	selfDeployOwnerAccessPriority       = 100
 	servicesPolicyImportAccessPriority  = 100
 	selfDeployOwnerReadProbeResourceID  = "self-deploy-plan-probe"
+	runtimeKubernetesExecutorSubjectID  = "runtime-manager-kubernetes-executor"
 )
 
 type selfDeployServiceAccessGrant struct {
 	subjectID    string
 	actionKey    string
 	resourceType string
+	scopeType    string
 }
 
 type selfDeployOwnerAccessGrant struct {
@@ -66,20 +68,36 @@ type selfDeployOwnerAccessGrant struct {
 }
 
 var selfDeployServiceAccessGrants = []selfDeployServiceAccessGrant{
-	{subjectID: "agent-manager", actionKey: accesscatalog.ActionProjectPolicyRead, resourceType: accesscatalog.ResourceServicesPolicy},
-	{subjectID: "agent-manager", actionKey: accesscatalog.ActionGovernanceRiskEvaluate, resourceType: accesscatalog.ResourceGovernanceRiskAssessment},
-	{subjectID: "agent-manager", actionKey: accesscatalog.ActionGovernanceRiskRead, resourceType: accesscatalog.ResourceGovernanceRiskAssessment},
-	{subjectID: "agent-manager", actionKey: accesscatalog.ActionGovernanceGateRequest, resourceType: accesscatalog.ResourceGovernanceGate},
-	{subjectID: "agent-manager", actionKey: accesscatalog.ActionGovernanceGateRead, resourceType: accesscatalog.ResourceGovernanceGate},
-	{subjectID: "staff-gateway", actionKey: accesscatalog.ActionProjectPolicyRead, resourceType: accesscatalog.ResourceServicesPolicy},
-	{subjectID: "staff-gateway", actionKey: accesscatalog.ActionGovernanceRiskRead, resourceType: accesscatalog.ResourceGovernanceRiskAssessment},
-	{subjectID: "staff-gateway", actionKey: accesscatalog.ActionGovernanceGateRead, resourceType: accesscatalog.ResourceGovernanceGate},
+	projectScopedServiceGrant("agent-manager", accesscatalog.ActionProjectPolicyRead, accesscatalog.ResourceServicesPolicy),
+	projectScopedServiceGrant("agent-manager", accesscatalog.ActionGovernanceRiskEvaluate, accesscatalog.ResourceGovernanceRiskAssessment),
+	projectScopedServiceGrant("agent-manager", accesscatalog.ActionGovernanceRiskRead, accesscatalog.ResourceGovernanceRiskAssessment),
+	projectScopedServiceGrant("agent-manager", accesscatalog.ActionGovernanceGateRequest, accesscatalog.ResourceGovernanceGate),
+	projectScopedServiceGrant("agent-manager", accesscatalog.ActionGovernanceGateRead, accesscatalog.ResourceGovernanceGate),
+	projectScopedServiceGrant("agent-manager", accesscatalog.ActionRuntimeBuildContextPrepare, accesscatalog.ResourceRuntimeBuildContext),
+	projectScopedServiceGrant("agent-manager", accesscatalog.ActionRuntimeBuildContextRead, accesscatalog.ResourceRuntimeBuildContext),
+	projectScopedServiceGrant("agent-manager", accesscatalog.ActionRuntimeJobCreate, accesscatalog.ResourceRuntimeJob),
+	projectScopedServiceGrant("agent-manager", accesscatalog.ActionRuntimeJobRead, accesscatalog.ResourceRuntimeJob),
+	projectScopedServiceGrant("staff-gateway", accesscatalog.ActionProjectPolicyRead, accesscatalog.ResourceServicesPolicy),
+	projectScopedServiceGrant("staff-gateway", accesscatalog.ActionGovernanceRiskRead, accesscatalog.ResourceGovernanceRiskAssessment),
+	projectScopedServiceGrant("staff-gateway", accesscatalog.ActionGovernanceGateRead, accesscatalog.ResourceGovernanceGate),
+	globalServiceGrant(runtimeKubernetesExecutorSubjectID, accesscatalog.ActionRuntimeJobClaim, accesscatalog.ResourceRuntimeJob),
+	projectScopedServiceGrant(runtimeKubernetesExecutorSubjectID, accesscatalog.ActionRuntimeJobStepReport, accesscatalog.ResourceRuntimeJob),
+	projectScopedServiceGrant(runtimeKubernetesExecutorSubjectID, accesscatalog.ActionRuntimeJobComplete, accesscatalog.ResourceRuntimeJob),
+	projectScopedServiceGrant(runtimeKubernetesExecutorSubjectID, accesscatalog.ActionRuntimeJobFail, accesscatalog.ResourceRuntimeJob),
 }
 
 var selfDeployOwnerAccessGrants = []selfDeployOwnerAccessGrant{
 	{actionKey: accesscatalog.ActionGovernanceRiskRead, resourceType: accesscatalog.ResourceGovernanceRiskAssessment, scopeType: accesscatalog.ScopeProject, probeID: selfDeployOwnerReadProbeResourceID},
 	{actionKey: accesscatalog.ActionGovernanceGateRead, resourceType: accesscatalog.ResourceGovernanceGate, scopeType: accesscatalog.ScopeProject, probeID: selfDeployOwnerReadProbeResourceID},
 	{actionKey: accesscatalog.ActionGovernanceGateDecide, resourceType: accesscatalog.ResourceGovernanceGate, scopeType: accesscatalog.ScopeProject, probeID: selfDeployOwnerReadProbeResourceID},
+}
+
+func projectScopedServiceGrant(subjectID string, actionKey string, resourceType string) selfDeployServiceAccessGrant {
+	return selfDeployServiceAccessGrant{subjectID: subjectID, actionKey: actionKey, resourceType: resourceType, scopeType: accesscatalog.ScopeProject}
+}
+
+func globalServiceGrant(subjectID string, actionKey string, resourceType string) selfDeployServiceAccessGrant {
+	return selfDeployServiceAccessGrant{subjectID: subjectID, actionKey: actionKey, resourceType: resourceType, scopeType: accesscatalog.ScopeGlobal}
 }
 
 func main() {
@@ -2078,11 +2096,11 @@ func ensureSelfDeployServiceAccess(ctx context.Context, client accessManagerAPI,
 	}
 	if !options.Apply {
 		for _, grant := range selfDeployServiceAccessGrants {
-			logLine(output, "PLAN", "self-deploy service access ready subject=service/%s action=%s resource=%s scope=project:%s",
+			logLine(output, "PLAN", "self-deploy service access ready subject=service/%s action=%s resource=%s scope=%s",
 				grant.subjectID,
 				grant.actionKey,
 				grant.resourceType,
-				safeValue(options.ProjectID),
+				selfDeployServiceAccessScopeLabel(options, grant),
 			)
 		}
 		return nil
@@ -2098,11 +2116,11 @@ func ensureSelfDeployServiceAccess(ctx context.Context, client accessManagerAPI,
 		if err := checkSelfDeployServiceAccess(ctx, client, options, grant); err != nil {
 			return err
 		}
-		logLine(output, "OK", "self-deploy service access ready subject=service/%s action=%s resource=%s scope=project:%s rule_id=%s version=%d",
+		logLine(output, "OK", "self-deploy service access ready subject=service/%s action=%s resource=%s scope=%s rule_id=%s version=%d",
 			grant.subjectID,
 			grant.actionKey,
 			grant.resourceType,
-			safeValue(options.ProjectID),
+			selfDeployServiceAccessScopeLabel(options, grant),
 			safeValue(rule.GetAccessRuleId()),
 			rule.GetVersion(),
 		)
@@ -2317,11 +2335,11 @@ func selfDeployServiceAccessRuleRequest(options runnerOptions, grant selfDeployS
 		SubjectId:    strings.TrimSpace(grant.subjectID),
 		ActionKey:    grant.actionKey,
 		ResourceType: grant.resourceType,
-		ScopeType:    accesscatalog.ScopeProject,
-		ScopeId:      options.ProjectID,
+		ScopeType:    selfDeployServiceAccessScopeType(grant),
+		ScopeId:      selfDeployServiceAccessScopeID(options, grant),
 		Priority:     selfDeployServiceAccessPriority,
 		Status:       accessaccountsv1.AccessRuleStatus_ACCESS_RULE_STATUS_ACTIVE,
-		Meta:         accessRuleCommandMeta(options, grant.subjectID),
+		Meta:         accessRuleCommandMeta(options, grant),
 	}
 }
 
@@ -2380,8 +2398,8 @@ func selfDeployServiceAccessCheckRequest(options runnerOptions, grant selfDeploy
 			Id:   "",
 		},
 		Scope: &accessaccountsv1.ScopeRef{
-			Type: accesscatalog.ScopeProject,
-			Id:   options.ProjectID,
+			Type: selfDeployServiceAccessScopeType(grant),
+			Id:   selfDeployServiceAccessScopeID(options, grant),
 		},
 		Audit: true,
 		Meta:  accessRuleCheckMeta(options, grant.subjectID),
@@ -2455,9 +2473,49 @@ func selfDeployAccessRuleMatches(response *accessaccountsv1.AccessRuleResponse, 
 		response.GetStatus() == request.GetStatus()
 }
 
-func accessRuleCommandMeta(options runnerOptions, subjectID string) *accessaccountsv1.CommandMeta {
+func selfDeployServiceAccessScopeType(grant selfDeployServiceAccessGrant) string {
+	if strings.TrimSpace(grant.scopeType) == "" {
+		return accesscatalog.ScopeProject
+	}
+	return strings.TrimSpace(grant.scopeType)
+}
+
+func selfDeployServiceAccessScopeID(options runnerOptions, grant selfDeployServiceAccessGrant) string {
+	switch selfDeployServiceAccessScopeType(grant) {
+	case accesscatalog.ScopeProject:
+		return options.ProjectID
+	default:
+		return ""
+	}
+}
+
+func selfDeployServiceAccessScopeLabel(options runnerOptions, grant selfDeployServiceAccessGrant) string {
+	switch selfDeployServiceAccessScopeType(grant) {
+	case accesscatalog.ScopeProject:
+		return "project:" + safeValue(options.ProjectID)
+	default:
+		return safeValue(selfDeployServiceAccessScopeType(grant))
+	}
+}
+
+func selfDeployServiceAccessIdempotencyKey(options runnerOptions, grant selfDeployServiceAccessGrant) string {
+	scopeType := selfDeployServiceAccessScopeType(grant)
+	parts := []string{
+		"self-deploy-service-access",
+		grant.subjectID,
+		grant.actionKey,
+		grant.resourceType,
+		scopeType,
+	}
+	if scopeType == accesscatalog.ScopeProject {
+		parts = append(parts, options.ProjectID)
+	}
+	return deterministicKey(parts...)
+}
+
+func accessRuleCommandMeta(options runnerOptions, grant selfDeployServiceAccessGrant) *accessaccountsv1.CommandMeta {
 	return &accessaccountsv1.CommandMeta{
-		IdempotencyKey: deterministicKey(options.ProjectID, options.RepositoryID, "self-deploy-service-access", subjectID, accesscatalog.ActionProjectPolicyRead, accesscatalog.ResourceServicesPolicy),
+		IdempotencyKey: selfDeployServiceAccessIdempotencyKey(options, grant),
 		Actor:          &accessaccountsv1.Actor{Type: "service", Id: options.ActorID},
 		Reason:         "self_deploy_service_access_bootstrap",
 		RequestId:      options.RequestID,
