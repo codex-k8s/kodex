@@ -322,6 +322,7 @@ func (svc *SlashCommandService) roleEntityCard(ctx context.Context, command Menu
 		{Title: svc.t("menu.entity.field.role", nil), Value: "`" + role.Name + "`", Short: true},
 		{Title: svc.t("menu.entity.field.project", nil), Value: "`" + strconv.FormatInt(role.ProjectID, 10) + "`", Short: true},
 		{Title: svc.t("menu.entity.field.type", nil), Value: "`" + role.RoleType + "`", Short: true},
+		{Title: svc.t("menu.entity.field.bot_identity", nil), Value: "`" + emptyAsUnknown(role.BotIdentity) + "`", Short: true},
 		{Title: svc.t("menu.entity.field.openai", nil), Value: "`" + emptyAsUnknown(role.OpenAIAccountName) + "`", Short: true},
 		{Title: svc.t("menu.entity.field.github", nil), Value: "`" + emptyAsUnknown(role.GitHubAccountName) + "`", Short: true},
 		{Title: svc.t("menu.entity.field.prompt_mode", nil), Value: "`" + defaultString(role.PromptMode, "raw") + "`", Short: true},
@@ -657,6 +658,17 @@ func (svc *SlashCommandService) agentRoleDialog(ctx context.Context, command Men
 				Placeholder: "backend-developer",
 				HelpText:    svc.t("dialog.role.field.name.help", nil),
 				MinLength:   2,
+				MaxLength:   48,
+			},
+			{
+				DisplayName: svc.t("dialog.role.field.bot_identity", nil),
+				Name:        dialogFieldBotIdentity,
+				Type:        "text",
+				Default:     role.BotIdentity,
+				Placeholder: "backend-dev-bot",
+				HelpText:    svc.t("dialog.role.field.bot_identity.help", nil),
+				Optional:    true,
+				MinLength:   3,
 				MaxLength:   48,
 			},
 			{
@@ -1123,6 +1135,10 @@ func (svc *SlashCommandService) agentRoleDialogInput(submission map[string]any) 
 	if !validAgentRoleType(roleType) {
 		fieldErrors[dialogFieldRoleType] = svc.t("dialog.role.type_invalid", nil)
 	}
+	botIdentity := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(submissionString(submission, dialogFieldBotIdentity)), "@"))
+	if botIdentity != "" && !validMattermostBotUsername(botIdentity) {
+		fieldErrors[dialogFieldBotIdentity] = svc.t("dialog.role.bot_identity_invalid", nil)
+	}
 	openAIAccount := optionalSubmissionString(submission, dialogFieldOpenAIAccount)
 	if openAIAccount != "" {
 		if _, err := parseOpenAIAccountName(openAIAccount); err != nil {
@@ -1168,7 +1184,7 @@ func (svc *SlashCommandService) agentRoleDialogInput(submission map[string]any) 
 		ConfigOverlay:     strings.TrimSpace(submissionString(submission, dialogFieldConfigOverlay)),
 		AdvancedSettings:  advanced,
 		Enabled:           true,
-		BotIdentity:       strings.TrimSpace(submissionString(submission, dialogFieldBotIdentity)),
+		BotIdentity:       botIdentity,
 	}, nil
 }
 
@@ -1496,6 +1512,10 @@ func validMattermostName(value string) bool {
 	return validRuntimeRunID(value) && len(value) >= 2 && len(value) <= 48
 }
 
+func validMattermostBotUsername(value string) bool {
+	return validRuntimeRunID(value) && len(value) >= 3 && len(value) <= 48
+}
+
 func looksLikeJSONObject(value string) bool {
 	value = strings.TrimSpace(value)
 	if value == "" {
@@ -1531,8 +1551,9 @@ func (svc *SlashCommandService) ensureRoleBotIdentity(ctx context.Context, proje
 	if svc.cfg.Store == nil || svc.cfg.RoleBotManager == nil || svc.cfg.RuntimeRunner == nil {
 		return entity.MattermostBotIdentity{}, fmt.Errorf("role bot identity runtime is not configured")
 	}
+	username := roleBotUsername(project, role)
 	existing, err := svc.cfg.Store.GetMattermostBotIdentityByRoleID(ctx, role.ID)
-	if err == nil && existing.MattermostUserID != "" && existing.TokenSecretRef != "" {
+	if err == nil && existing.MattermostUserID != "" && existing.TokenSecretRef != "" && existing.Username == username {
 		if _, secretErr := svc.cfg.RuntimeRunner.GetMattermostBotTokenSecret(ctx, existing.TokenSecretRef); secretErr == nil {
 			if channelID != "" {
 				_ = svc.cfg.RoleBotManager.EnsureProjectChannelMember(ctx, project.Slug, channelID, existing.MattermostUserID)
@@ -1540,7 +1561,6 @@ func (svc *SlashCommandService) ensureRoleBotIdentity(ctx context.Context, proje
 			return existing, nil
 		}
 	}
-	username := roleBotUsername(project, role)
 	displayName := roleBotDisplayName(project, role)
 	binding, err := svc.cfg.RoleBotManager.EnsureRoleBot(ctx, MattermostRoleBotInput{
 		Username:    username,
@@ -1589,6 +1609,9 @@ func adminrepoMattermostBotSecretInput(secretName string, token string) runtimer
 }
 
 func roleBotUsername(project entity.Project, role entity.AgentRole) string {
+	if username := strings.TrimSpace(role.BotIdentity); username != "" {
+		return username
+	}
 	base := slugifyName(project.Slug+"-"+role.Name, "agent")
 	base = strings.TrimPrefix(base, "mc-")
 	name := "mc-" + base

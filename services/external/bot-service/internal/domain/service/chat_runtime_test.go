@@ -80,6 +80,109 @@ func TestChatRunStartsChatModeForManagerRole(t *testing.T) {
 	}
 }
 
+func TestChatRunUsesRoleTemplateOnlyForFirstSessionTurn(t *testing.T) {
+	store := chatRuntimeStore()
+	store.agentRoles[1] = entity.AgentRole{
+		ID:                1,
+		ProjectID:         1,
+		Name:              "manager",
+		RoleType:          "manager",
+		OpenAIAccountName: "main",
+		PromptTemplate:    "BOOTSTRAP TEMPLATE: {{.Task.Body}}\nProject: {{.Project.Name}}",
+		Enabled:           true,
+	}
+	store.chats[1] = entity.Chat{ID: 1, ProjectID: 1, MattermostChannelID: "channel-1", Name: "Manager", ChatType: "manager"}
+	store.setChatBindings(1, []int64{1}, nil)
+	runner := &fakeRuntimeRunner{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Localizer:      localizer,
+		Store:          store,
+		RuntimeRunner:  runner,
+		StorageReady:   true,
+		RuntimeReady:   true,
+		DisableMonitor: true,
+	})
+
+	first := svc.HandleChatPost(context.Background(), ChatPostCommand{
+		ChannelID: "channel-1",
+		PostID:    "post-1",
+		UserID:    "owner",
+		UserName:  "owner",
+		Message:   "First task.",
+	})
+	second := svc.HandleChatPost(context.Background(), ChatPostCommand{
+		ChannelID: "channel-1",
+		PostID:    "post-2",
+		UserID:    "owner",
+		UserName:  "owner",
+		Message:   "Follow-up task.",
+	})
+
+	if first.RunID == "" || second.RunID == "" {
+		t.Fatalf("results = %#v %#v", first, second)
+	}
+	if len(store.sessionTurns) != 2 {
+		t.Fatalf("turns = %#v", store.sessionTurns)
+	}
+	firstPrompt := store.sessionTurns[0].Message
+	if !strings.Contains(firstPrompt, "BOOTSTRAP TEMPLATE: First task.") {
+		t.Fatalf("first prompt = %q", firstPrompt)
+	}
+	secondPrompt := store.sessionTurns[1].Message
+	if strings.Contains(secondPrompt, "BOOTSTRAP TEMPLATE") {
+		t.Fatalf("continuation prompt repeated role template: %q", secondPrompt)
+	}
+	if !strings.Contains(secondPrompt, "# User message") || !strings.Contains(secondPrompt, "Follow-up task.") || !strings.Contains(secondPrompt, "Continue the existing Codex session") {
+		t.Fatalf("second prompt = %q", secondPrompt)
+	}
+}
+
+func TestChatRunDoesNotCreateSessionWhenFirstRoleTemplateFails(t *testing.T) {
+	store := chatRuntimeStore()
+	store.agentRoles[1] = entity.AgentRole{
+		ID:                1,
+		ProjectID:         1,
+		Name:              "manager",
+		RoleType:          "manager",
+		OpenAIAccountName: "main",
+		PromptTemplate:    "{{.Missing.Field}}",
+		Enabled:           true,
+	}
+	store.chats[1] = entity.Chat{ID: 1, ProjectID: 1, MattermostChannelID: "channel-1", Name: "Manager", ChatType: "manager"}
+	store.setChatBindings(1, []int64{1}, nil)
+	runner := &fakeRuntimeRunner{}
+	publisher := &fakeThreadPublisher{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Localizer:       localizer,
+		Store:           store,
+		RuntimeRunner:   runner,
+		ThreadPublisher: publisher,
+		StorageReady:    true,
+		RuntimeReady:    true,
+		DisableMonitor:  true,
+	})
+
+	result := svc.HandleChatPost(context.Background(), ChatPostCommand{
+		ChannelID: "channel-1",
+		PostID:    "post-1",
+		UserID:    "owner",
+		UserName:  "owner",
+		Message:   "First task.",
+	})
+
+	if result.RunID != "" {
+		t.Fatalf("result = %#v", result)
+	}
+	if len(store.sessionTurns) != 0 || len(store.agentSessions) != 0 || runner.startedSessionKey != "" {
+		t.Fatalf("session should not be created, sessions=%#v turns=%#v runner=%#v", store.agentSessions, store.sessionTurns, runner.startedSessionKey)
+	}
+	if len(publisher.posts) != 1 || !strings.Contains(publisher.posts[0].Message, "render role prompt template") {
+		t.Fatalf("posts = %#v", publisher.posts)
+	}
+}
+
 func TestChatRunPostsOpenAIReauthInThreadWhenAuthSecretIsInvalid(t *testing.T) {
 	store := chatRuntimeStore()
 	store.agentRoles[1] = entity.AgentRole{

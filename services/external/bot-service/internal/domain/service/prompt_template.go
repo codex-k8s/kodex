@@ -163,6 +163,67 @@ func BuildRolePrompt(input RolePromptInput) (string, error) {
 	return RenderRolePromptTemplate(input.Role.PromptTemplate, rolePromptTemplateData(input))
 }
 
+func BuildRoleContinuationPrompt(input RolePromptInput) (string, error) {
+	userMessage := strings.TrimSpace(input.UserMessage)
+	if userMessage == "" {
+		return "", fmt.Errorf("user message is required")
+	}
+	var body strings.Builder
+	body.WriteString("# User message\n\n")
+	body.WriteString(userMessage)
+	body.WriteString("\n\n# Continuation context\n\n")
+	body.WriteString("- Continue the existing Codex session. Keep the role, project, repository, and operating instructions already established earlier in this session.\n")
+	if strings.TrimSpace(input.Project.Name) != "" {
+		body.WriteString("- Project: ")
+		body.WriteString(input.Project.Name)
+		if strings.TrimSpace(input.Project.Slug) != "" {
+			body.WriteString(" (")
+			body.WriteString(input.Project.Slug)
+			body.WriteString(")")
+		}
+		body.WriteString("\n")
+	}
+	if strings.TrimSpace(input.Chat.Name) != "" {
+		body.WriteString("- Chat: ")
+		body.WriteString(input.Chat.Name)
+		if strings.TrimSpace(input.Chat.ChatType) != "" {
+			body.WriteString(" / ")
+			body.WriteString(input.Chat.ChatType)
+		}
+		body.WriteString("\n")
+	}
+	if strings.TrimSpace(input.Role.Name) != "" {
+		body.WriteString("- Role: ")
+		body.WriteString(input.Role.Name)
+		if strings.TrimSpace(input.Role.RoleType) != "" {
+			body.WriteString(" / ")
+			body.WriteString(input.Role.RoleType)
+		}
+		body.WriteString("\n")
+	}
+	if len(input.Repositories) > 0 {
+		body.WriteString("- Repositories:\n")
+		for _, repo := range input.Repositories {
+			body.WriteString("  - ")
+			body.WriteString(repo.Provider)
+			body.WriteString(":")
+			body.WriteString(repo.FullName())
+			if strings.TrimSpace(repo.DefaultBranch) != "" {
+				body.WriteString(" branch ")
+				body.WriteString(repo.DefaultBranch)
+			}
+			body.WriteString("\n")
+		}
+	}
+	body.WriteString("- Mattermost MCP is available for bounded thread/chat reads and progress updates when needed.\n")
+	if strings.TrimSpace(input.Locale.Language) != "" {
+		body.WriteString("- Response language: ")
+		body.WriteString(input.Locale.Language)
+		body.WriteString("\n")
+	}
+	return strings.TrimSpace(body.String()) + "\n", nil
+}
+
 func buildRawRolePrompt(input RolePromptInput, userMessage string) string {
 	var body strings.Builder
 	body.WriteString("# User instruction\n\n")
