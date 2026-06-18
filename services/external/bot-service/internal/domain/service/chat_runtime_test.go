@@ -80,6 +80,57 @@ func TestChatRunStartsChatModeForManagerRole(t *testing.T) {
 	}
 }
 
+func TestChatRunPostsOpenAIReauthInThreadWhenAuthSecretIsInvalid(t *testing.T) {
+	store := chatRuntimeStore()
+	store.agentRoles[1] = entity.AgentRole{
+		ID:                1,
+		ProjectID:         1,
+		Name:              "manager",
+		RoleType:          "manager",
+		OpenAIAccountName: "main",
+		Enabled:           true,
+	}
+	store.chats[1] = entity.Chat{ID: 1, ProjectID: 1, MattermostChannelID: "channel-1", Name: "Manager", ChatType: "manager"}
+	store.setChatBindings(1, []int64{1}, nil)
+	runner := &fakeRuntimeRunner{authSecretNotReady: true}
+	publisher := &fakeThreadPublisher{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Localizer:       localizer,
+		Store:           store,
+		RuntimeRunner:   runner,
+		ThreadPublisher: publisher,
+		StorageReady:    true,
+		RuntimeReady:    true,
+		DisableMonitor:  true,
+	})
+
+	result := svc.HandleChatPost(context.Background(), ChatPostCommand{
+		ChannelID: "channel-1",
+		PostID:    "post-1",
+		UserID:    "owner",
+		UserName:  "owner",
+		Message:   "Continue the work.",
+	})
+
+	if result.RunID != "" || result.Mode != "" {
+		t.Fatalf("result = %#v", result)
+	}
+	if runner.authSecretChecks == 0 {
+		t.Fatal("expected auth secret preflight check")
+	}
+	if runner.startedSessionKey != "" || len(store.sessionTurns) != 0 {
+		t.Fatalf("agent session should not start, runner=%#v turns=%#v", runner.sessionRuns, store.sessionTurns)
+	}
+	if len(publisher.posts) != 1 || publisher.posts[0].RootPostID != "post-1" {
+		t.Fatalf("posts = %#v", publisher.posts)
+	}
+	message := publisher.posts[0].Message
+	if !strings.Contains(message, "ABCD-12345") || !strings.Contains(message, "https://auth.openai.com/codex/device") {
+		t.Fatalf("reauth message = %q", message)
+	}
+}
+
 func TestChatRunStartsDeveloperModeForWorkerRoleWithRepository(t *testing.T) {
 	store := chatRuntimeStore()
 	store.repositories[repositoryStoreKey("github", "codex-k8s", "matter-codex")] = entity.Repository{

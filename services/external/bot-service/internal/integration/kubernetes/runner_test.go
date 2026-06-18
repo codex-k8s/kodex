@@ -90,6 +90,68 @@ func TestStartCodexAuthSessionCreatesHardenedJob(t *testing.T) {
 	}
 }
 
+func TestCodexAuthSecretCheckJobMountsSavedAuthSecret(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	runner, err := NewRunnerWithClient(client, Config{
+		Namespace:                 "mattermost",
+		AgentRunnerImage:          "matter-codex-agent-runner:test",
+		AgentRunnerServiceAccount: "matter-codex-agent-runner",
+	})
+	if err != nil {
+		t.Fatalf("NewRunnerWithClient() error = %v", err)
+	}
+
+	job := runner.codexAuthSecretCheckJob(runtimerepo.CodexAuthSecretCheckInput{
+		AccountName:   "primary",
+		SecretName:    "matter-codex-codex-auth-primary",
+		ConfigOverlay: "model = \"gpt-5.3-codex-spark\"",
+	}, "mc-codex-auth-check-primary-test")
+	podSpec := job.Spec.Template.Spec
+	assertRunnerPodSecurity(t, podSpec)
+	if got := podSpec.Containers[0].Args[0]; got != "codex-auth-secret-check" {
+		t.Fatalf("args = %q", got)
+	}
+	if !hasVolume(podSpec.Volumes, "workspace") || !hasSecretVolume(podSpec.Volumes, codexAuthSecretVolume, "matter-codex-codex-auth-primary") {
+		t.Fatalf("volumes = %#v", podSpec.Volumes)
+	}
+	if !hasVolumeMount(podSpec.Containers[0].VolumeMounts, codexAuthSecretVolume, "/var/run/secrets/matter-codex-codex") {
+		t.Fatalf("codex auth secret mount missing: %#v", podSpec.Containers[0].VolumeMounts)
+	}
+	if got := envValue(podSpec.Containers[0].Env, "MATTERCODEX_CODEX_CONFIG_OVERLAY"); got != "model = \"gpt-5.3-codex-spark\"" {
+		t.Fatalf("config overlay env = %q", got)
+	}
+}
+
+func TestCheckCodexAuthSecretReturnsNotReadyWhenSecretIsMissing(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	runner, err := NewRunnerWithClient(client, Config{
+		Namespace:                 "mattermost",
+		AgentRunnerImage:          "matter-codex-agent-runner:test",
+		AgentRunnerServiceAccount: "matter-codex-agent-runner",
+	})
+	if err != nil {
+		t.Fatalf("NewRunnerWithClient() error = %v", err)
+	}
+
+	result, err := runner.CheckCodexAuthSecret(context.Background(), runtimerepo.CodexAuthSecretCheckInput{
+		AccountName: "primary",
+		SecretName:  "missing-codex-auth",
+	})
+	if err != nil {
+		t.Fatalf("CheckCodexAuthSecret() error = %v", err)
+	}
+	if result.Ready || !strings.Contains(result.LogTail, "missing") {
+		t.Fatalf("result = %#v", result)
+	}
+	jobs, err := client.BatchV1().Jobs("mattermost").List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		t.Fatalf("List jobs error = %v", err)
+	}
+	if len(jobs.Items) != 0 {
+		t.Fatalf("unexpected auth check jobs: %#v", jobs.Items)
+	}
+}
+
 func TestDeleteCodexAuthAccountDeletesJobAndSecret(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	runner, err := NewRunnerWithClient(client, Config{
@@ -643,6 +705,15 @@ func capabilitiesToStrings(values []corev1.Capability) []string {
 func hasVolume(volumes []corev1.Volume, name string) bool {
 	for _, volume := range volumes {
 		if volume.Name == name && volume.EmptyDir != nil {
+			return true
+		}
+	}
+	return false
+}
+
+func hasSecretVolume(volumes []corev1.Volume, name string, secretName string) bool {
+	for _, volume := range volumes {
+		if volume.Name == name && volume.Secret != nil && volume.Secret.SecretName == secretName {
 			return true
 		}
 	}
