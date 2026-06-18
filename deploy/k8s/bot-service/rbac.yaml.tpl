@@ -64,3 +64,42 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: matter-codex-bot-service-runtime
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: matter-codex-agent-runner-readonly
+  namespace: ${MATTERCODEX_NAMESPACE}
+  labels:
+    app.kubernetes.io/name: matter-codex-agent-runner
+    app.kubernetes.io/component: agent-runner-rbac
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "services", "endpoints", "configmaps", "persistentvolumeclaims", "events"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets", "daemonsets", "replicasets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: matter-codex-agent-runner-readonly
+  namespace: ${MATTERCODEX_NAMESPACE}
+  labels:
+    app.kubernetes.io/name: matter-codex-agent-runner
+    app.kubernetes.io/component: agent-runner-rbac
+subjects:
+  - kind: ServiceAccount
+    name: ${MATTERCODEX_AGENT_RUNNER_SERVICE_ACCOUNT}
+    namespace: ${MATTERCODEX_NAMESPACE}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: matter-codex-agent-runner-readonly

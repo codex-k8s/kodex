@@ -115,7 +115,7 @@ func newRunnerWithClientAndConfig(client kubernetes.Interface, restConfig *rest.
 		namespace:                 namespace,
 		smokeImage:                defaultString(cfg.SmokeImage, "busybox:1.36"),
 		agentRunnerImage:          defaultString(cfg.AgentRunnerImage, "matter-codex-agent-runner:dev"),
-		codexPackage:              defaultString(cfg.CodexPackage, "@openai/codex@0.138.0"),
+		codexPackage:              defaultString(cfg.CodexPackage, "@openai/codex@0.141.0"),
 		workspaceStorage:          storage,
 		jobTTLSecondsAfterFinish:  defaultInt32(cfg.JobTTLSecondsAfterFinish, 86400),
 		logTailLines:              defaultInt64(cfg.LogTailLines, 40),
@@ -1058,7 +1058,7 @@ func (runner *Runner) developerJob(input runtimerepo.DeveloperRunInput) *batchv1
 				ObjectMeta: metav1.ObjectMeta{Labels: runnerLabels(input.RunID, input.Profile)},
 				Spec: corev1.PodSpec{
 					ServiceAccountName:           runner.agentRunnerServiceAccount,
-					AutomountServiceAccountToken: boolPtr(false),
+					AutomountServiceAccountToken: boolPtr(true),
 					SecurityContext:              runnerPodSecurityContext(),
 					RestartPolicy:                corev1.RestartPolicyNever,
 					Containers: []corev1.Container{
@@ -1156,7 +1156,7 @@ func (runner *Runner) reviewJob(input runtimerepo.ReviewRunInput) *batchv1.Job {
 				ObjectMeta: metav1.ObjectMeta{Labels: runnerLabels(input.RunID, input.Profile)},
 				Spec: corev1.PodSpec{
 					ServiceAccountName:           runner.agentRunnerServiceAccount,
-					AutomountServiceAccountToken: boolPtr(false),
+					AutomountServiceAccountToken: boolPtr(true),
 					SecurityContext:              runnerPodSecurityContext(),
 					RestartPolicy:                corev1.RestartPolicyNever,
 					Containers: []corev1.Container{
@@ -1311,7 +1311,7 @@ func (runner *Runner) chatJob(input runtimerepo.ChatRunInput) *batchv1.Job {
 				ObjectMeta: metav1.ObjectMeta{Labels: runnerLabels(input.RunID, input.Profile)},
 				Spec: corev1.PodSpec{
 					ServiceAccountName:           runner.agentRunnerServiceAccount,
-					AutomountServiceAccountToken: boolPtr(false),
+					AutomountServiceAccountToken: boolPtr(true),
 					SecurityContext:              runnerPodSecurityContext(),
 					RestartPolicy:                corev1.RestartPolicyNever,
 					Containers: []corev1.Container{
@@ -1438,7 +1438,7 @@ func (runner *Runner) sessionPod(input runtimerepo.AgentSessionPodInput) *corev1
 		},
 		Spec: corev1.PodSpec{
 			ServiceAccountName:           runner.agentRunnerServiceAccount,
-			AutomountServiceAccountToken: boolPtr(false),
+			AutomountServiceAccountToken: boolPtr(true),
 			SecurityContext:              runnerPodSecurityContext(),
 			RestartPolicy:                corev1.RestartPolicyNever,
 			Containers: []corev1.Container{

@@ -55,7 +55,7 @@ func TestConfigDefaults(t *testing.T) {
 	if cfg.AgentRunnerImage != "matter-codex-agent-runner:dev" {
 		t.Fatalf("AgentRunnerImage = %q", cfg.AgentRunnerImage)
 	}
-	if cfg.CodexPackage != "@openai/codex@0.138.0" {
+	if cfg.CodexPackage != "@openai/codex@0.141.0" {
 		t.Fatalf("CodexPackage = %q", cfg.CodexPackage)
 	}
 	if cfg.RuntimeWorkspaceSize != "1Gi" {
@@ -80,7 +80,7 @@ func TestConfigValidationRejectsBadTimeout(t *testing.T) {
 		MaxGitHubWebhookBytes: 1024,
 		RuntimeSmokeImage:     "busybox:1.36",
 		AgentRunnerImage:      "matter-codex-agent-runner:dev",
-		CodexPackage:          "@openai/codex@0.138.0",
+		CodexPackage:          "@openai/codex@0.141.0",
 		RuntimeWorkspaceSize:  "1Gi",
 		RuntimeJobTTLSeconds:  86400,
 		RuntimeLogTailLines:   40,
@@ -104,7 +104,7 @@ func TestConfigValidationNormalizesLocale(t *testing.T) {
 		MaxGitHubWebhookBytes: 1024,
 		RuntimeSmokeImage:     "busybox:1.36",
 		AgentRunnerImage:      "matter-codex-agent-runner:dev",
-		CodexPackage:          "@openai/codex@0.138.0",
+		CodexPackage:          "@openai/codex@0.141.0",
 		RuntimeWorkspaceSize:  "1Gi",
 		RuntimeJobTTLSeconds:  86400,
 		RuntimeLogTailLines:   40,
@@ -131,7 +131,7 @@ func TestConfigValidationRejectsUnsupportedLocale(t *testing.T) {
 		MaxGitHubWebhookBytes: 1024,
 		RuntimeSmokeImage:     "busybox:1.36",
 		AgentRunnerImage:      "matter-codex-agent-runner:dev",
-		CodexPackage:          "@openai/codex@0.138.0",
+		CodexPackage:          "@openai/codex@0.141.0",
 		RuntimeWorkspaceSize:  "1Gi",
 		RuntimeJobTTLSeconds:  86400,
 		RuntimeLogTailLines:   40,

@@ -263,7 +263,7 @@ func TestStartDeveloperRunCreatesPVCAndJob(t *testing.T) {
 	runner, err := NewRunnerWithClient(client, Config{
 		Namespace:                 "mattermost",
 		AgentRunnerImage:          "matter-codex-agent-runner:test",
-		CodexPackage:              "@openai/codex@0.138.0",
+		CodexPackage:              "@openai/codex@0.141.0",
 		WorkspaceStorageSize:      "1Gi",
 		AgentRunnerServiceAccount: "matter-codex-agent-runner",
 		CodexAuthSecretName:       "matter-codex-codex-auth",
@@ -300,8 +300,8 @@ func TestStartDeveloperRunCreatesPVCAndJob(t *testing.T) {
 	if podSpec.ServiceAccountName != "matter-codex-agent-runner" {
 		t.Fatalf("ServiceAccountName = %q", podSpec.ServiceAccountName)
 	}
-	if podSpec.AutomountServiceAccountToken == nil || *podSpec.AutomountServiceAccountToken {
-		t.Fatal("developer job should not automount service account token")
+	if podSpec.AutomountServiceAccountToken == nil || !*podSpec.AutomountServiceAccountToken {
+		t.Fatal("developer job should automount service account token for kubectl")
 	}
 	assertRunnerPodSecurity(t, podSpec)
 	if got := podSpec.Containers[0].Image; got != "matter-codex-agent-runner:test" {
@@ -342,7 +342,7 @@ func TestStartReviewRunCreatesPVCAndJob(t *testing.T) {
 	runner, err := NewRunnerWithClient(client, Config{
 		Namespace:                 "mattermost",
 		AgentRunnerImage:          "matter-codex-agent-runner:test",
-		CodexPackage:              "@openai/codex@0.138.0",
+		CodexPackage:              "@openai/codex@0.141.0",
 		WorkspaceStorageSize:      "1Gi",
 		AgentRunnerServiceAccount: "matter-codex-agent-runner",
 		CodexAuthSecretName:       "matter-codex-codex-auth",
@@ -377,8 +377,8 @@ func TestStartReviewRunCreatesPVCAndJob(t *testing.T) {
 	if podSpec.ServiceAccountName != "matter-codex-agent-runner" {
 		t.Fatalf("ServiceAccountName = %q", podSpec.ServiceAccountName)
 	}
-	if podSpec.AutomountServiceAccountToken == nil || *podSpec.AutomountServiceAccountToken {
-		t.Fatal("reviewer job should not automount service account token")
+	if podSpec.AutomountServiceAccountToken == nil || !*podSpec.AutomountServiceAccountToken {
+		t.Fatal("reviewer job should automount service account token for kubectl")
 	}
 	if got := podSpec.Containers[0].Image; got != "matter-codex-agent-runner:test" {
 		t.Fatalf("runner image = %q", got)
@@ -416,7 +416,7 @@ func TestStartChatRunCreatesPVCAndJob(t *testing.T) {
 	runner, err := NewRunnerWithClient(client, Config{
 		Namespace:                 "mattermost",
 		AgentRunnerImage:          "matter-codex-agent-runner:test",
-		CodexPackage:              "@openai/codex@0.138.0",
+		CodexPackage:              "@openai/codex@0.141.0",
 		WorkspaceStorageSize:      "1Gi",
 		AgentRunnerServiceAccount: "matter-codex-agent-runner",
 		CodexAuthSecretName:       "matter-codex-codex-auth",
@@ -446,6 +446,9 @@ func TestStartChatRunCreatesPVCAndJob(t *testing.T) {
 		t.Fatalf("Get job error = %v", err)
 	}
 	podSpec := job.Spec.Template.Spec
+	if podSpec.AutomountServiceAccountToken == nil || !*podSpec.AutomountServiceAccountToken {
+		t.Fatal("chat job should automount service account token for kubectl")
+	}
 	if got := podSpec.Containers[0].Args[0]; got != "chat" {
 		t.Fatalf("args = %q", got)
 	}
@@ -467,6 +470,64 @@ func TestStartChatRunCreatesPVCAndJob(t *testing.T) {
 	}
 	if configMap.Data["prompt.md"] != "Chat prompt" {
 		t.Fatalf("prompt configmap data = %#v", configMap.Data)
+	}
+}
+
+func TestStartAgentSessionCreatesPodWithRuntimeCredentials(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	runner, err := NewRunnerWithClient(client, Config{
+		Namespace:                 "mattermost",
+		AgentRunnerImage:          "matter-codex-agent-runner:test",
+		WorkspaceStorageSize:      "1Gi",
+		AgentRunnerServiceAccount: "matter-codex-agent-runner",
+		CodexAuthSecretName:       "matter-codex-codex-auth",
+	})
+	if err != nil {
+		t.Fatalf("NewRunnerWithClient() error = %v", err)
+	}
+
+	started, err := runner.StartAgentSession(context.Background(), runtimerepo.AgentSessionPodInput{
+		SessionKey:              "project-1-chat-2-role-3",
+		Role:                    "manager",
+		BotServiceURL:           "http://bot-service",
+		InternalToken:           "session-token",
+		CodexAuthSecretName:     "matter-codex-codex-auth-main",
+		GitHubSecretName:        "matter-codex-github-agent",
+		RepositoryProvider:      "github",
+		RepositoryOwner:         "codex-k8s",
+		RepositoryName:          "matter-codex",
+		RepositoryDefaultBranch: "main",
+	})
+	if err != nil {
+		t.Fatalf("StartAgentSession() error = %v", err)
+	}
+	if !started.Created || started.PodName != "mc-session-project-1-chat-2-role-3" || started.SecretName != "mc-session-token-project-1-chat-2-role-3" {
+		t.Fatalf("started = %#v", started)
+	}
+	pod, err := client.CoreV1().Pods("mattermost").Get(context.Background(), started.PodName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("Get session pod error = %v", err)
+	}
+	podSpec := pod.Spec
+	if podSpec.AutomountServiceAccountToken == nil || !*podSpec.AutomountServiceAccountToken {
+		t.Fatal("session pod should automount service account token for kubectl")
+	}
+	assertRunnerPodSecurity(t, podSpec)
+	container := podSpec.Containers[0]
+	if got := envValue(container.Env, "MATTERCODEX_MCP_URL"); got != "http://bot-service/mcp/sessions/project-1-chat-2-role-3" {
+		t.Fatalf("MATTERCODEX_MCP_URL = %q", got)
+	}
+	if got := envValue(container.Env, "MATTERCODEX_SESSION_REPOSITORY_ENABLED"); got != "true" {
+		t.Fatalf("MATTERCODEX_SESSION_REPOSITORY_ENABLED = %q", got)
+	}
+	if !hasSecretVolume(podSpec.Volumes, codexAuthSecretVolume, "matter-codex-codex-auth-main") {
+		t.Fatalf("codex auth secret volume missing: %#v", podSpec.Volumes)
+	}
+	if !hasSecretVolume(podSpec.Volumes, gitHubSecretVolume, "matter-codex-github-agent") {
+		t.Fatalf("github secret volume missing: %#v", podSpec.Volumes)
+	}
+	if !hasSecretVolume(podSpec.Volumes, sessionSecretVolume, started.SecretName) {
+		t.Fatalf("session secret volume missing: %#v", podSpec.Volumes)
 	}
 }
 
