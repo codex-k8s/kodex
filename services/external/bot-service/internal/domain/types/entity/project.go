@@ -8,6 +8,8 @@ type Project struct {
 	Slug              string
 	MattermostTeamID  string
 	GitHubAccountName string
+	GitHubOwner       string
+	GitHubOwnerType   string
 	Description       string
 	AdvancedSettings  string
 	CreatedAt         time.Time
@@ -88,6 +90,33 @@ type ChatRepositoryBinding struct {
 
 func (binding ChatRepositoryBinding) FullName() string {
 	return binding.Owner + "/" + binding.Name
+}
+
+type ThreadContext struct {
+	ID                      int64
+	ProjectID               int64
+	ChatID                  int64
+	MattermostChannelID     string
+	MattermostRootPostID    string
+	RepositoryID            int64
+	RepositoryProvider      string
+	RepositoryOwner         string
+	RepositoryName          string
+	RepositoryDefaultBranch string
+	Status                  string
+	PendingMattermostPostID string
+	PendingUserID           string
+	PendingUserName         string
+	PendingMessage          string
+	CreatedAt               time.Time
+	UpdatedAt               time.Time
+}
+
+func (context ThreadContext) RepositoryFullName() string {
+	if context.RepositoryOwner == "" || context.RepositoryName == "" {
+		return ""
+	}
+	return context.RepositoryOwner + "/" + context.RepositoryName
 }
 
 type MattermostBotIdentity struct {

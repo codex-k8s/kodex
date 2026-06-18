@@ -134,6 +134,8 @@ type UpsertProjectInput struct {
 	Slug              string
 	MattermostTeamID  string
 	GitHubAccountName string
+	GitHubOwner       string
+	GitHubOwnerType   string
 	Description       string
 	AdvancedSettings  string
 }
@@ -174,6 +176,19 @@ type CreateChatInput struct {
 	Settings            string
 	RoleIDs             []int64
 	RepositoryIDs       []int64
+}
+
+type UpsertThreadContextInput struct {
+	ProjectID               int64
+	ChatID                  int64
+	MattermostChannelID     string
+	MattermostRootPostID    string
+	RepositoryID            int64
+	Status                  string
+	PendingMattermostPostID string
+	PendingUserID           string
+	PendingUserName         string
+	PendingMessage          string
 }
 
 type UpsertMattermostBotIdentityInput struct {
@@ -259,6 +274,9 @@ type Repository interface {
 	ListChats(ctx context.Context, projectID int64) ([]entity.Chat, error)
 	ListChatParticipants(ctx context.Context, chatID int64) ([]entity.ChatParticipant, error)
 	ListChatRepositories(ctx context.Context, chatID int64) ([]entity.ChatRepositoryBinding, error)
+	GetThreadContext(ctx context.Context, chatID int64, rootPostID string) (entity.ThreadContext, error)
+	GetThreadContextByID(ctx context.Context, id int64) (entity.ThreadContext, error)
+	UpsertThreadContext(ctx context.Context, input UpsertThreadContextInput) (entity.ThreadContext, bool, error)
 	UpsertMattermostBotIdentity(ctx context.Context, input UpsertMattermostBotIdentityInput) (entity.MattermostBotIdentity, bool, error)
 	GetMattermostBotIdentityByRoleID(ctx context.Context, roleID int64) (entity.MattermostBotIdentity, error)
 	GetMattermostBotIdentityByUserID(ctx context.Context, mattermostUserID string) (entity.MattermostBotIdentity, error)

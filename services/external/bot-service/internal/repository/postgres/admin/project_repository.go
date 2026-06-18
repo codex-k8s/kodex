@@ -16,6 +16,8 @@ func (repo *Repository) UpsertProject(ctx context.Context, input adminrepo.Upser
 		input.Slug,
 		input.MattermostTeamID,
 		input.GitHubAccountName,
+		input.GitHubOwner,
+		input.GitHubOwnerType,
 		input.Description,
 		input.AdvancedSettings,
 	))
@@ -294,9 +296,62 @@ func (repo *Repository) ListChatRepositories(ctx context.Context, chatID int64) 
 	return items, nil
 }
 
+func (repo *Repository) GetThreadContext(ctx context.Context, chatID int64, rootPostID string) (entity.ThreadContext, error) {
+	item, err := scanThreadContext(repo.pool.QueryRow(ctx, query("thread_contexts__get.sql"), chatID, rootPostID))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.ThreadContext{}, adminrepo.ErrNotFound
+		}
+		return entity.ThreadContext{}, fmt.Errorf("get thread context: %w", err)
+	}
+	return item, nil
+}
+
+func (repo *Repository) GetThreadContextByID(ctx context.Context, id int64) (entity.ThreadContext, error) {
+	item, err := scanThreadContext(repo.pool.QueryRow(ctx, query("thread_contexts__get_by_id.sql"), id))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.ThreadContext{}, adminrepo.ErrNotFound
+		}
+		return entity.ThreadContext{}, fmt.Errorf("get thread context by id: %w", err)
+	}
+	return item, nil
+}
+
+func (repo *Repository) UpsertThreadContext(ctx context.Context, input adminrepo.UpsertThreadContextInput) (entity.ThreadContext, bool, error) {
+	item, created, err := scanThreadContextWithCreated(repo.pool.QueryRow(ctx, query("thread_contexts__upsert.sql"),
+		input.ProjectID,
+		input.ChatID,
+		input.MattermostChannelID,
+		input.MattermostRootPostID,
+		input.RepositoryID,
+		input.Status,
+		input.PendingMattermostPostID,
+		input.PendingUserID,
+		input.PendingUserName,
+		input.PendingMessage,
+	))
+	if err != nil {
+		return entity.ThreadContext{}, false, fmt.Errorf("upsert thread context: %w", err)
+	}
+	return item, created, nil
+}
+
 func scanProject(row accountRow) (entity.Project, error) {
 	var item entity.Project
-	if err := row.Scan(&item.ID, &item.Name, &item.Slug, &item.MattermostTeamID, &item.GitHubAccountName, &item.Description, &item.AdvancedSettings, &item.CreatedAt, &item.UpdatedAt); err != nil {
+	if err := row.Scan(
+		&item.ID,
+		&item.Name,
+		&item.Slug,
+		&item.MattermostTeamID,
+		&item.GitHubAccountName,
+		&item.GitHubOwner,
+		&item.GitHubOwnerType,
+		&item.Description,
+		&item.AdvancedSettings,
+		&item.CreatedAt,
+		&item.UpdatedAt,
+	); err != nil {
 		return entity.Project{}, err
 	}
 	return item, nil
@@ -305,7 +360,20 @@ func scanProject(row accountRow) (entity.Project, error) {
 func scanProjectWithCreated(row pgx.Row) (entity.Project, bool, error) {
 	var item entity.Project
 	var created bool
-	if err := row.Scan(&item.ID, &item.Name, &item.Slug, &item.MattermostTeamID, &item.GitHubAccountName, &item.Description, &item.AdvancedSettings, &item.CreatedAt, &item.UpdatedAt, &created); err != nil {
+	if err := row.Scan(
+		&item.ID,
+		&item.Name,
+		&item.Slug,
+		&item.MattermostTeamID,
+		&item.GitHubAccountName,
+		&item.GitHubOwner,
+		&item.GitHubOwnerType,
+		&item.Description,
+		&item.AdvancedSettings,
+		&item.CreatedAt,
+		&item.UpdatedAt,
+		&created,
+	); err != nil {
 		return entity.Project{}, false, err
 	}
 	return item, created, nil
@@ -395,6 +463,60 @@ func scanChatWithCreated(row pgx.Row) (entity.Chat, bool, error) {
 	var created bool
 	if err := row.Scan(&item.ID, &item.ProjectID, &item.MattermostChannelID, &item.Name, &item.Slug, &item.Description, &item.ChatType, &item.RootGitHubIssue, &item.WorkPolicy, &item.Settings, &item.CreatedAt, &item.UpdatedAt, &created); err != nil {
 		return entity.Chat{}, false, err
+	}
+	return item, created, nil
+}
+
+func scanThreadContext(row accountRow) (entity.ThreadContext, error) {
+	var item entity.ThreadContext
+	if err := row.Scan(
+		&item.ID,
+		&item.ProjectID,
+		&item.ChatID,
+		&item.MattermostChannelID,
+		&item.MattermostRootPostID,
+		&item.RepositoryID,
+		&item.RepositoryProvider,
+		&item.RepositoryOwner,
+		&item.RepositoryName,
+		&item.RepositoryDefaultBranch,
+		&item.Status,
+		&item.PendingMattermostPostID,
+		&item.PendingUserID,
+		&item.PendingUserName,
+		&item.PendingMessage,
+		&item.CreatedAt,
+		&item.UpdatedAt,
+	); err != nil {
+		return entity.ThreadContext{}, err
+	}
+	return item, nil
+}
+
+func scanThreadContextWithCreated(row pgx.Row) (entity.ThreadContext, bool, error) {
+	var item entity.ThreadContext
+	var created bool
+	if err := row.Scan(
+		&item.ID,
+		&item.ProjectID,
+		&item.ChatID,
+		&item.MattermostChannelID,
+		&item.MattermostRootPostID,
+		&item.RepositoryID,
+		&item.RepositoryProvider,
+		&item.RepositoryOwner,
+		&item.RepositoryName,
+		&item.RepositoryDefaultBranch,
+		&item.Status,
+		&item.PendingMattermostPostID,
+		&item.PendingUserID,
+		&item.PendingUserName,
+		&item.PendingMessage,
+		&item.CreatedAt,
+		&item.UpdatedAt,
+		&created,
+	); err != nil {
+		return entity.ThreadContext{}, false, err
 	}
 	return item, created, nil
 }

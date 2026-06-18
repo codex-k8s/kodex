@@ -9,6 +9,7 @@
 Owner не должен помнить и вручную вводить:
 
 - repository id или `owner/name`, если repository уже подключен;
+- GitHub organization/user проекта после настройки project;
 - OpenAI account name, если account уже создан;
 - GitHub account name, если account уже создан;
 - agent role/profile name, если role/profile уже создана;
@@ -70,10 +71,12 @@ Project является первичным контейнером конфиг�
 Целевой сценарий:
 
 1. `Projects -> Create project`.
-2. Ввести человекочитаемое имя и optional slug.
+2. Ввести человекочитаемое имя, optional slug, выбрать platform GitHub account и указать GitHub organization/user проекта.
 3. Система создает или привязывает Mattermost team.
 4. Открыть project dashboard.
 5. Из dashboard добавить repositories, roles, accounts и chats.
+
+GitHub organization/user на project является namespace проекта. Например, если project работает над `radar-auto`, repositories ищутся и добавляются только из `radar-auto/*`. Project не требует выбирать один главный repository.
 
 Chat соответствует private Mattermost channel внутри project team.
 
@@ -83,7 +86,7 @@ Chat соответствует private Mattermost channel внутри project 
 2. Нажать `Create chat`.
 3. Выбрать mode: manager, pm/delivery, worker + reviewer, single custom или multi-role custom.
 4. Выбрать roles из списка.
-5. Выбрать repository из project/global repository list.
+5. Optional: выбрать repositories из project repository list как allowlist для этого chat.
 6. Optional: указать GitHub issue/epic и work policy.
 7. Система создает private channel и сохраняет role/repository bindings.
 
@@ -119,13 +122,13 @@ Secret name не должен быть обязательным полем дл�
 
 ## Repositories
 
-Repository onboarding в основном сценарии начинается из project dashboard и использует platform GitHub account выбранного project. После этого система показывает доступные organization/repository варианты или дает поиск по GitHub API.
+Repository onboarding в основном сценарии начинается из project dashboard и использует platform GitHub account выбранного project. После этого система показывает repositories только из GitHub organization/user, указанного в project, или дает поиск по GitHub API внутри этого namespace.
 
 Целевой сценарий:
 
 1. `Projects -> Open project -> Add repository`.
-2. Если у project не выбран platform GitHub account, нажать `Edit project` и выбрать его.
-3. Выбрать organization/repository из списка или найти по строке поиска.
+2. Если у project не выбран platform GitHub account или GitHub owner, нажать `Edit project` и заполнить их.
+3. Выбрать repository из списка project owner или найти по строке поиска.
 4. Выбрать default branch из GitHub API или принять default.
 5. Подтвердить создание Mattermost channel bindings и GitHub webhook.
 6. Получить repository card со статусами: access, webhook, Mattermost channel, default branch; repository автоматически привязан к project.
@@ -141,6 +144,21 @@ Repository onboarding в основном сценарии начинается 
 - disable/delete metadata.
 
 Owner не должен вводить `codex-k8s/matter-codex` повторно после onboarding.
+
+## Thread Repository Choice
+
+Repository для фактического checkout выбирается на уровне Mattermost thread, а не жестко на уровне всего project/chat.
+
+Целевой сценарий:
+
+1. Owner пишет первое сообщение в chat или thread.
+2. Если у chat/project есть repositories, bot-service публикует приватную thread-card с кнопками `No repository` и доступными repositories.
+3. Owner выбирает repository или `No repository`.
+4. Выбор сохраняется в hidden `ThreadContext`, исходное сообщение ставится в обработку, а дальше owner просто продолжает thread.
+5. Если выбран repository, agent pod делает checkout перед запуском Codex.
+6. Если выбран `No repository`, agent pod стартует в PVC без checkout; это валидно для manager/PM/analyst/ad-hoc задач.
+
+Owner не вводит repository id или `owner/name` при выборе repository для thread.
 
 ## Agent Roles
 

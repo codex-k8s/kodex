@@ -361,12 +361,19 @@ func (r *runner) runSession(ctx context.Context) error {
 		return err
 	}
 	extraEnv := []string{}
+	workDir := workspaceDir
 	if os.Getenv("MATTERCODEX_GITHUB_ENABLED") == "true" {
 		account, err := readGitHubAccount()
 		if err != nil {
 			return err
 		}
 		extraEnv = account.env()
+		if os.Getenv("MATTERCODEX_SESSION_REPOSITORY_ENABLED") == "true" {
+			if err := r.prepareSessionRepository(ctx, account, extraEnv); err != nil {
+				return err
+			}
+			workDir = repoDir
+		}
 	}
 	codexSessionID := strings.TrimSpace(snapshot.CodexSessionID)
 	for {
@@ -386,7 +393,7 @@ func (r *runner) runSession(ctx context.Context) error {
 			codexSessionID = strings.TrimSpace(claim.CodexSessionID)
 		}
 		finalFile := fmt.Sprintf("session-turn-%d-final.md", claim.TurnID)
-		nextSessionID, finalMessage, runErr := r.runCodexSessionTurn(ctx, claim, codexSessionID, finalFile, extraEnv)
+		nextSessionID, finalMessage, runErr := r.runCodexSessionTurn(ctx, claim, codexSessionID, finalFile, workDir, extraEnv)
 		if strings.TrimSpace(nextSessionID) != "" {
 			codexSessionID = strings.TrimSpace(nextSessionID)
 		}
@@ -417,6 +424,39 @@ func (r *runner) runSession(ctx context.Context) error {
 			return err
 		}
 	}
+}
+
+func (r *runner) prepareSessionRepository(ctx context.Context, account githubAccount, githubEnv []string) error {
+	provider := defaultString(os.Getenv("MATTERCODEX_REPO_PROVIDER"), "github")
+	if provider != "github" {
+		return fmt.Errorf("unsupported session repository provider %q", provider)
+	}
+	owner := requiredEnv("MATTERCODEX_REPO_OWNER")
+	name := requiredEnv("MATTERCODEX_REPO_NAME")
+	branch := defaultString(os.Getenv("MATTERCODEX_BASE_BRANCH"), "main")
+	repo := owner + "/" + name
+	if _, err := os.Stat(filepath.Join(repoDir, ".git")); err == nil {
+		if err := r.runLogged(ctx, repoDir, githubEnv, "session-git-remote.log", "git", "remote", "set-url", "origin", "https://github.com/"+repo+".git"); err != nil {
+			return err
+		}
+		if err := r.runLogged(ctx, repoDir, githubEnv, "session-git-fetch.log", "git", "fetch", "--prune", "origin"); err != nil {
+			return err
+		}
+	} else {
+		if err := r.runLogged(ctx, "", githubEnv, "session-git-clone.log", "git", "clone", "https://github.com/"+repo+".git", repoDir); err != nil {
+			return err
+		}
+	}
+	if err := r.runLogged(ctx, repoDir, githubEnv, "session-git-checkout.log", "git", "checkout", "-B", branch, "origin/"+branch); err != nil {
+		return err
+	}
+	if err := r.runLogged(ctx, repoDir, githubEnv, "session-git-config-name.log", "git", "config", "user.name", account.Username); err != nil {
+		return err
+	}
+	if err := r.runLogged(ctx, repoDir, githubEnv, "session-git-config-email.log", "git", "config", "user.email", account.Email); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (r *runner) prepareWorkspace() error {
@@ -467,7 +507,7 @@ func (r *runner) runCodexExec(ctx context.Context, workDir string, finalFile str
 	return cmd.Run()
 }
 
-func (r *runner) runCodexSessionTurn(ctx context.Context, claim sessionTurnClaimResponse, codexSessionID string, finalFile string, extraEnv []string) (string, string, error) {
+func (r *runner) runCodexSessionTurn(ctx context.Context, claim sessionTurnClaimResponse, codexSessionID string, finalFile string, workDir string, extraEnv []string) (string, string, error) {
 	eventsPath := filepath.Join(artifactsDir, fmt.Sprintf("codex-events-%d.jsonl", claim.TurnID))
 	stderrPath := filepath.Join(artifactsDir, fmt.Sprintf("codex-stderr-%d.log", claim.TurnID))
 	finalPath := filepath.Join(artifactsDir, finalFile)
@@ -487,10 +527,10 @@ func (r *runner) runCodexSessionTurn(ctx context.Context, claim sessionTurnClaim
 	if strings.TrimSpace(codexSessionID) != "" {
 		args = append(args, "resume", "--json", "--skip-git-repo-check", "--output-last-message", finalPath, codexSessionID, "-")
 	} else {
-		args = append(args, "--json", "--cd", workspaceDir, "--sandbox", codexSandboxMode(), "--skip-git-repo-check", "--output-last-message", finalPath, "-")
+		args = append(args, "--json", "--cd", workDir, "--sandbox", codexSandboxMode(), "--skip-git-repo-check", "--output-last-message", finalPath, "-")
 	}
 	cmd := exec.CommandContext(ctx, "codex", args...)
-	cmd.Dir = workspaceDir
+	cmd.Dir = workDir
 	cmd.Env = mergeEnv(os.Environ(), append(extraEnv, "CODEX_HOME="+codexHomeDir)...)
 	cmd.Stdin = strings.NewReader(claim.Prompt)
 	cmd.Stdout = events

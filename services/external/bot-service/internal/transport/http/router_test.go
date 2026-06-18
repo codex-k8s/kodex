@@ -702,7 +702,14 @@ func (store *fakeRouterAdminStore) DeleteRepository(_ context.Context, provider 
 }
 
 func (store *fakeRouterAdminStore) UpsertProject(_ context.Context, input adminrepo.UpsertProjectInput) (entity.Project, bool, error) {
-	return entity.Project{Name: input.Name, Slug: input.Slug, MattermostTeamID: input.MattermostTeamID}, true, nil
+	return entity.Project{
+		Name:              input.Name,
+		Slug:              input.Slug,
+		MattermostTeamID:  input.MattermostTeamID,
+		GitHubAccountName: input.GitHubAccountName,
+		GitHubOwner:       input.GitHubOwner,
+		GitHubOwnerType:   input.GitHubOwnerType,
+	}, true, nil
 }
 
 func (store *fakeRouterAdminStore) GetProject(context.Context, int64) (entity.Project, error) {
@@ -759,6 +766,18 @@ func (store *fakeRouterAdminStore) ListChatParticipants(context.Context, int64) 
 
 func (store *fakeRouterAdminStore) ListChatRepositories(context.Context, int64) ([]entity.ChatRepositoryBinding, error) {
 	return nil, nil
+}
+
+func (store *fakeRouterAdminStore) GetThreadContext(context.Context, int64, string) (entity.ThreadContext, error) {
+	return entity.ThreadContext{}, adminrepo.ErrNotFound
+}
+
+func (store *fakeRouterAdminStore) GetThreadContextByID(context.Context, int64) (entity.ThreadContext, error) {
+	return entity.ThreadContext{}, adminrepo.ErrNotFound
+}
+
+func (store *fakeRouterAdminStore) UpsertThreadContext(context.Context, adminrepo.UpsertThreadContextInput) (entity.ThreadContext, bool, error) {
+	return entity.ThreadContext{}, true, nil
 }
 
 func (store *fakeRouterAdminStore) UpsertMattermostBotIdentity(context.Context, adminrepo.UpsertMattermostBotIdentityInput) (entity.MattermostBotIdentity, bool, error) {

@@ -545,6 +545,10 @@ func (runner *Runner) StartAgentSession(ctx context.Context, input runtimerepo.A
 	input.BotServiceURL = strings.TrimRight(strings.TrimSpace(input.BotServiceURL), "/")
 	input.InternalToken = strings.TrimSpace(input.InternalToken)
 	input.CodexAuthSecretName = strings.TrimSpace(input.CodexAuthSecretName)
+	input.RepositoryProvider = strings.TrimSpace(input.RepositoryProvider)
+	input.RepositoryOwner = strings.TrimSpace(input.RepositoryOwner)
+	input.RepositoryName = strings.TrimSpace(input.RepositoryName)
+	input.RepositoryDefaultBranch = strings.TrimSpace(input.RepositoryDefaultBranch)
 	if input.SessionKey == "" {
 		return runtimerepo.StartedAgentSession{}, fmt.Errorf("session key is required")
 	}
@@ -1310,6 +1314,15 @@ func (runner *Runner) sessionPod(input runtimerepo.AgentSessionPodInput) *corev1
 	}
 	if strings.TrimSpace(input.GitHubSecretName) != "" {
 		env = append(env, corev1.EnvVar{Name: "MATTERCODEX_GITHUB_ENABLED", Value: "true"})
+		if strings.TrimSpace(input.RepositoryOwner) != "" && strings.TrimSpace(input.RepositoryName) != "" {
+			env = append(env,
+				corev1.EnvVar{Name: "MATTERCODEX_SESSION_REPOSITORY_ENABLED", Value: "true"},
+				corev1.EnvVar{Name: "MATTERCODEX_REPO_PROVIDER", Value: defaultString(input.RepositoryProvider, "github")},
+				corev1.EnvVar{Name: "MATTERCODEX_REPO_OWNER", Value: input.RepositoryOwner},
+				corev1.EnvVar{Name: "MATTERCODEX_REPO_NAME", Value: input.RepositoryName},
+				corev1.EnvVar{Name: "MATTERCODEX_BASE_BRANCH", Value: defaultString(input.RepositoryDefaultBranch, "main")},
+			)
+		}
 		volumeMounts = append(volumeMounts, corev1.VolumeMount{Name: gitHubSecretVolume, MountPath: "/var/run/secrets/matter-codex-github", ReadOnly: true})
 		volumes = append(volumes, corev1.Volume{
 			Name: gitHubSecretVolume,

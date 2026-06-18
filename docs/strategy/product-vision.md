@@ -5,10 +5,10 @@
 `matter-codex` автоматизирует личную агентную работу владельца через Mattermost:
 
 1. владелец создает project, который соответствует Mattermost team;
-2. владелец подключает accounts, repositories и agent roles;
+2. владелец подключает accounts, GitHub owner проекта, repositories и agent roles;
 3. владелец создает chat, который соответствует private Mattermost channel;
 4. в chat добавляются один или несколько agents по ролям;
-5. пользовательское сообщение в thread становится задачей агента;
+5. пользовательское сообщение в thread становится задачей агента, а repository для checkout выбирается опционально на уровне thread;
 6. агент работает в Kubernetes pod, а GitHub остается источником issues, branches, PR, review и progress;
 7. финальный ответ агент пишет в thread исходного сообщения.
 
@@ -57,20 +57,23 @@ Typed slash commands остаются fallback/debug интерфейсом дл
 4. Владелец открывает `/agents -> Projects`.
 5. Владелец создает project; система создает или привязывает Mattermost team.
 6. Владелец добавляет GitHub и OpenAI accounts.
-7. Владелец выбирает platform GitHub account на project, затем подключает repositories из dashboard этого project.
+7. Владелец выбирает platform GitHub account и GitHub owner на project, затем подключает repositories из dashboard этого project.
 8. Владелец создает roles: manager, pm/delivery, worker, reviewer, analyst, sre или custom.
 9. Role получает GitHub account, OpenAI account, optional prompt template и advanced/Codex settings.
 10. Владелец создает chat; система создает private Mattermost channel внутри project team.
-11. В chat добавляются roles и selected repositories.
+11. В chat добавляются roles и optional selected repositories как allowlist для threads.
 12. Владелец пишет задачу в channel/thread.
-13. Если у role нет prompt template, агент использует текст сообщения как основную инструкцию.
-14. Worker agent работает через GitHub issue/branch/PR.
-15. Reviewer agent проверяет результат через PR/diff/comments.
-16. PM/Delivery agent по запросу собирает status/weekly summary из GitHub issues/PR.
+13. Если у project/chat есть repositories, owner выбирает repository для thread или `No repository`.
+14. Если у role нет prompt template, агент использует текст сообщения как основную инструкцию.
+15. Worker agent работает через GitHub issue/branch/PR, когда thread repository выбран.
+16. Reviewer agent проверяет результат через PR/diff/comments.
+17. PM/Delivery agent по запросу собирает status/weekly summary из GitHub issues/PR.
 
 ## Критерии успеха
 
 - Owner может создать project/team, role и chat/channel из `/agents` без ручного ввода внутренних id.
+- Project хранит GitHub organization/user namespace, а repository onboarding/search ограничены этим namespace.
+- Thread может быть запущен с выбранным repository или без repository checkout.
 - Один реальный репозиторий проходит путь от Mattermost chat task до PR и reviewer decision.
 - Каждый agent session привязан к Mattermost thread, имеет status, ссылки на GitHub artifacts и audit trail.
 - Секреты не выводятся в Mattermost, логи и prompt.

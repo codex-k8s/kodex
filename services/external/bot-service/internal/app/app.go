@@ -69,6 +69,16 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	}
 	gitHubAccountProvider := openGitHubAccountProvider(runtimeRunner, cfg)
 	gitHubAccountInspector := githubintegration.NewTokenInspector()
+	chatRunSvc := statusservice.NewChatRunService(statusservice.ChatRunServiceConfig{
+		Localizer:       localizer,
+		Store:           storage,
+		RuntimeRunner:   runtimeRunner,
+		ThreadPublisher: threadPublisher,
+		BotServiceURL:   botServiceRuntimeURL(cfg),
+		MenuActionURL:   agentsActionURL(cfg),
+		StorageReady:    storage != nil,
+		RuntimeReady:    runtimeConfigured,
+	})
 	slashSvc := statusservice.NewSlashCommandService(statusservice.SlashCommandServiceConfig{
 		Localizer:                localizer,
 		StatusService:            statusSvc,
@@ -79,6 +89,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		RepositoryProvider:       gitHubProvider,
 		GitHubRepositoryProvider: gitHubAccountProvider,
 		GitHubAccountInspector:   gitHubAccountInspector,
+		ThreadRepositorySelector: chatRunSvc,
 		RuntimeRunner:            runtimeRunner,
 		DefaultTeamName:          cfg.DefaultTeamName,
 		CodexAuthSecretName:      cfg.CodexAuthSecretName,
@@ -95,15 +106,6 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		RuntimeConfigured:        runtimeConfigured,
 		MattermostConfigured:     cfg.MattermostSiteURL != "",
 		ChannelManagerEnabled:    channelManager != nil,
-	})
-	chatRunSvc := statusservice.NewChatRunService(statusservice.ChatRunServiceConfig{
-		Localizer:       localizer,
-		Store:           storage,
-		RuntimeRunner:   runtimeRunner,
-		ThreadPublisher: threadPublisher,
-		BotServiceURL:   botServiceRuntimeURL(cfg),
-		StorageReady:    storage != nil,
-		RuntimeReady:    runtimeConfigured,
 	})
 	sessionSvc := statusservice.NewAgentSessionService(statusservice.AgentSessionServiceConfig{
 		Localizer:          localizer,

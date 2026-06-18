@@ -24,12 +24,14 @@ const (
 	menuDialogAgentRoleUpsert       = "agent_role_upsert"
 	menuDialogChatCreate            = "chat_create"
 
-	menuActionProjectDashboard = "project_dashboard"
-	menuActionProjectBindRepo  = "project_bind_repo"
+	menuActionProjectDashboard       = "project_dashboard"
+	menuActionProjectBindRepo        = "project_bind_repo"
+	menuActionThreadRepositorySelect = "thread_repository_select"
 
-	menuResourceProject   = "project"
-	menuResourceAgentRole = "agent_role"
-	menuResourceChat      = "chat"
+	menuResourceProject       = "project"
+	menuResourceAgentRole     = "agent_role"
+	menuResourceChat          = "chat"
+	menuResourceThreadContext = "thread_context"
 
 	dialogCallbackProjectUpsert         = "agents_project_upsert"
 	dialogCallbackProjectRepositoryBind = "agents_project_repository_bind"
@@ -53,6 +55,8 @@ const (
 	dialogFieldRepositoryID     = "repository_id"
 	dialogFieldRootIssue        = "root_issue"
 	dialogFieldWorkPolicy       = "work_policy"
+	dialogFieldGitHubOwner      = "github_owner"
+	dialogFieldGitHubOwnerType  = "github_owner_type"
 )
 
 func (svc *SlashCommandService) handleProject(ctx context.Context, args []string, command SlashCommand) string {
@@ -167,7 +171,7 @@ func (svc *SlashCommandService) projectListCard(ctx context.Context, command Men
 			Value: svc.t("menu.entity.project.summary", map[string]any{
 				"Slug":        project.Slug,
 				"Team":        emptyAsUnknown(project.MattermostTeamID),
-				"GitHub":      emptyAsUnknown(project.GitHubAccountName),
+				"GitHub":      projectGitHubSummary(project),
 				"Description": emptyAsUnknown(project.Description),
 			}),
 			Short: false,
@@ -213,6 +217,7 @@ func (svc *SlashCommandService) projectEntityCard(ctx context.Context, command M
 	card.Fields = []MattermostCardField{
 		{Title: svc.t("menu.entity.field.project", nil), Value: "`" + project.Name + "`", Short: true},
 		{Title: svc.t("menu.entity.field.slug", nil), Value: "`" + project.Slug + "`", Short: true},
+		{Title: svc.t("menu.entity.field.github_owner", nil), Value: "`" + emptyAsUnknown(project.GitHubOwner) + "`", Short: true},
 		{Title: svc.t("menu.entity.field.github", nil), Value: "`" + emptyAsUnknown(project.GitHubAccountName) + "`", Short: true},
 		{Title: svc.t("menu.entity.field.team", nil), Value: "`" + emptyAsUnknown(project.MattermostTeamID) + "`", Short: false},
 		{Title: svc.t("menu.entity.field.repositories", nil), Value: "`" + strconv.Itoa(len(repositories)) + "`", Short: true},
@@ -223,6 +228,9 @@ func (svc *SlashCommandService) projectEntityCard(ctx context.Context, command M
 	projectIDText := strconv.FormatInt(project.ID, 10)
 	repoOnboardAction := svc.menuResourceAction(menuViewProjects, "projectrepoonboard", menuActionRepositoryOnboard, menuResourceProject, projectIDText, "menu.action.project_repo_onboard", "menu.action.project_repo_onboard.tooltip", "primary", nil)
 	if strings.TrimSpace(project.GitHubAccountName) == "" {
+		repoOnboardAction.Disabled = true
+	}
+	if strings.TrimSpace(project.GitHubOwner) == "" {
 		repoOnboardAction.Disabled = true
 	}
 	card.Actions = []MattermostCardAction{
@@ -476,6 +484,30 @@ func (svc *SlashCommandService) projectDialog(ctx context.Context, command MenuA
 			})
 		}
 	}
+	elements = append(elements,
+		MattermostDialogElement{
+			DisplayName: svc.t("dialog.project.field.github_owner", nil),
+			Name:        dialogFieldGitHubOwner,
+			Type:        "text",
+			Default:     project.GitHubOwner,
+			Placeholder: "radar-auto",
+			HelpText:    svc.t("dialog.project.field.github_owner.help", nil),
+			Optional:    true,
+			MaxLength:   100,
+		},
+		MattermostDialogElement{
+			DisplayName: svc.t("dialog.project.field.github_owner_type", nil),
+			Name:        dialogFieldGitHubOwnerType,
+			Type:        "select",
+			Default:     defaultString(project.GitHubOwnerType, "org"),
+			HelpText:    svc.t("dialog.project.field.github_owner_type.help", nil),
+			Optional:    true,
+			Options: []MattermostDialogOption{
+				{Text: svc.t("dialog.project.github_owner_type.org", nil), Value: "org"},
+				{Text: svc.t("dialog.project.github_owner_type.user", nil), Value: "user"},
+			},
+		},
+	)
 	elements = append(elements,
 		MattermostDialogElement{
 			DisplayName: svc.t("dialog.project.field.description", nil),
@@ -845,6 +877,9 @@ func (svc *SlashCommandService) handleProjectDialogUpsert(ctx context.Context, c
 			return DialogSubmissionResult{StatusCode: 200, Errors: map[string]string{dialogFieldGitHubAccount: svc.t("repo.onboard.account_not_configured", map[string]any{"Account": account.Name})}}
 		}
 	}
+	if strings.TrimSpace(input.GitHubOwner) != "" && strings.TrimSpace(input.GitHubAccountName) == "" {
+		return DialogSubmissionResult{StatusCode: 200, Errors: map[string]string{dialogFieldGitHubAccount: svc.t("project.github_account.required", map[string]any{"Project": input.Name})}}
+	}
 	if svc.cfg.ChannelManager != nil {
 		team, _, err := svc.cfg.ChannelManager.EnsureProjectTeam(ctx, input.Slug, input.Name, command.UserID)
 		if err != nil {
@@ -867,7 +902,7 @@ func (svc *SlashCommandService) handleProjectDialogUpsert(ctx context.Context, c
 		"Name":   project.Name,
 		"Slug":   project.Slug,
 		"Team":   emptyAsUnknown(project.MattermostTeamID),
-		"GitHub": emptyAsUnknown(project.GitHubAccountName),
+		"GitHub": projectGitHubSummary(project),
 	})
 	card := svc.projectEntityCard(ctx, MenuActionCommand{View: menuViewProjects, ID: strconv.FormatInt(project.ID, 10), ChannelID: state.ChannelID, PostID: state.PostID})
 	card.Text = text + "\n\n" + card.Text
@@ -1050,6 +1085,16 @@ func (svc *SlashCommandService) projectDialogInput(submission map[string]any) (a
 			fieldErrors[dialogFieldGitHubAccount] = svc.t("parse.github_account.invalid", nil)
 		}
 	}
+	githubOwner := strings.ToLower(strings.TrimSpace(submissionString(submission, dialogFieldGitHubOwner)))
+	if githubOwner != "" && !validGitHubUsername(githubOwner) {
+		fieldErrors[dialogFieldGitHubOwner] = svc.t("dialog.project.github_owner_invalid", nil)
+	}
+	githubOwnerType := strings.ToLower(defaultString(submissionString(submission, dialogFieldGitHubOwnerType), "org"))
+	if githubOwner == "" {
+		githubOwnerType = ""
+	} else if githubOwnerType != "org" && githubOwnerType != "user" {
+		fieldErrors[dialogFieldGitHubOwnerType] = svc.t("dialog.project.github_owner_type_invalid", nil)
+	}
 	if len(fieldErrors) > 0 {
 		return adminrepo.UpsertProjectInput{}, fieldErrors
 	}
@@ -1057,6 +1102,8 @@ func (svc *SlashCommandService) projectDialogInput(submission map[string]any) (a
 		Name:              name,
 		Slug:              slug,
 		GitHubAccountName: githubAccount,
+		GitHubOwner:       githubOwner,
+		GitHubOwnerType:   githubOwnerType,
 		Description:       strings.TrimSpace(submissionString(submission, dialogFieldDescription)),
 		AdvancedSettings:  advanced,
 	}, nil
@@ -1229,6 +1276,21 @@ func (svc *SlashCommandService) projectRepositoryOptions(ctx context.Context, pr
 		options = append(options, allRepos...)
 	}
 	return options, ""
+}
+
+func projectGitHubSummary(project entity.Project) string {
+	owner := strings.TrimSpace(project.GitHubOwner)
+	account := strings.TrimSpace(project.GitHubAccountName)
+	if owner == "" && account == "" {
+		return "-"
+	}
+	if owner == "" {
+		return "account " + account
+	}
+	if account == "" {
+		return owner
+	}
+	return owner + " via " + account
 }
 
 func (svc *SlashCommandService) agentRoleOptions(ctx context.Context, projectID int64, requireOne bool) ([]MattermostDialogOption, string) {
