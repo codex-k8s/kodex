@@ -134,7 +134,6 @@ func selfDeployDeployPlanBase(input GetSelfDeployDeployPlanInput, policy entity.
 func selfDeployDeployPolicyStaleReason(input GetSelfDeployDeployPlanInput, policy entity.ServicesPolicy) string {
 	return selfDeployServicesPolicyStaleReason(
 		input.SourceRef,
-		input.MergeCommitSHA,
 		input.ExpectedServicesPolicyDigest,
 		input.ExpectedServicesPolicyFingerprint,
 		input.ExpectedServicesPolicyVersion,
@@ -142,12 +141,9 @@ func selfDeployDeployPolicyStaleReason(input GetSelfDeployDeployPlanInput, polic
 	)
 }
 
-func selfDeployServicesPolicyStaleReason(sourceRef string, mergeCommitSHA string, expectedDigest string, expectedFingerprint string, expectedVersion *int64, policy entity.ServicesPolicy) string {
+func selfDeployServicesPolicyStaleReason(sourceRef string, expectedDigest string, expectedFingerprint string, expectedVersion *int64, policy entity.ServicesPolicy) string {
 	if !selfDeploySourceRefsEquivalent(sourceRef, policy.SourceRef) {
 		return "services_policy_source_ref_mismatch"
-	}
-	if !strings.EqualFold(strings.TrimSpace(mergeCommitSHA), strings.TrimSpace(policy.SourceCommitSHA)) {
-		return "services_policy_source_commit_mismatch"
 	}
 	if strings.TrimSpace(expectedDigest) != strings.TrimSpace(policy.ContentHash) {
 		return "services_policy_digest_mismatch"

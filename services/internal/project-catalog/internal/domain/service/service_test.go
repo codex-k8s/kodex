@@ -2004,6 +2004,62 @@ func TestGetSelfDeploySignalReturnsReadyProjectSideInput(t *testing.T) {
 	}
 }
 
+func TestGetSelfDeploySignalAllowsCodeOnlyPolicyCommitBehindSignal(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	policyID := uuid.New()
+	policyCommit := "1111111111111111111111111111111111111111"
+	codeCommit := "abcdef0123456789abcdef0123456789abcdef01"
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = activeSelfDeployRepository(projectID, repositoryID)
+	store.policies[policyID] = activeSelfDeployPolicy(projectID, repositoryID, policyID, policyCommit, []byte(`{"spec":{"services":[{"key":"api"}]}}`))
+	store.serviceDescriptors[policyID] = []entity.ServiceDescriptor{
+		activeSelfDeployDescriptor(projectID, repositoryID, policyID, "api"),
+	}
+	reader := &fakeRepositoryChangeSignalReader{
+		result: RepositoryChangeSignalReadResult{
+			Status: ProviderOwnedDataStatusReady,
+			Signal: RepositoryChangeSignal{
+				SignalID:              "signal-code-only",
+				SignalKey:             "provider:github:repository_change:push:codex-k8s/kodex:main:" + codeCommit,
+				Kind:                  "push",
+				ProviderSlug:          "github",
+				RepositoryFullName:    "codex-k8s/kodex",
+				ProviderRepositoryID:  "R_123",
+				Ref:                   "refs/heads/main",
+				BaseBranch:            "main",
+				CommitSHA:             codeCommit,
+				PathSummaryStatus:     RepositoryChangePathSummaryStatusReady,
+				PathCategories:        []RepositoryChangePathCategoryCount{{Category: enum.SelfDeployPathCategoryServiceSource, Count: 2}},
+				ServicesPolicyChanged: false,
+				DeployRelevantChanged: true,
+				ChangeFingerprint:     "sha256:provider-code-only",
+				Status:                "observed",
+			},
+		},
+	}
+	svc := NewWithConfig(store, fixedClock{}, &sequenceIDs{}, Config{RepositoryChangeSignals: reader})
+
+	result, err := svc.GetSelfDeploySignal(ctx, GetSelfDeploySignalInput{
+		ProjectID:         projectID,
+		RepositoryID:      &repositoryID,
+		ProviderSignalKey: "provider:github:repository_change:push:codex-k8s/kodex:main:" + codeCommit,
+		Meta:              queryMeta(),
+	})
+	if err != nil {
+		t.Fatalf("GetSelfDeploySignal(): %v", err)
+	}
+	if result.Status != enum.SelfDeploySignalStatusReady {
+		t.Fatalf("status = %s, reason=%s, want ready for code-only change", result.Status, result.SafeReason)
+	}
+	if result.Signal.MergeCommitSHA != codeCommit ||
+		result.Signal.ServicesYaml.SourceCommitSHA != policyCommit ||
+		result.Signal.ServicesYamlChanged {
+		t.Fatalf("signal/policy commits = %+v, want code commit with older checked policy commit", result.Signal)
+	}
+}
+
 func TestGetSelfDeploySignalResolvesUnboundProviderSignalThroughExplicitBinding(t *testing.T) {
 	ctx := context.Background()
 	projectID := uuid.New()
@@ -2488,6 +2544,41 @@ func TestGetSelfDeployBuildPlanReturnsReadyRuntimeCompatibleSpecs(t *testing.T) 
 	}
 }
 
+func TestGetSelfDeployBuildPlanAllowsCodeOnlySignalCommitAfterPolicyCommit(t *testing.T) {
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	policyID := uuid.New()
+	policyCommit := "1111111111111111111111111111111111111111"
+	codeCommit := "abcdef0123456789abcdef0123456789abcdef01"
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = activeSelfDeployRepository(projectID, repositoryID)
+	policy := activeSelfDeployPolicy(projectID, repositoryID, policyID, policyCommit, selfDeployBuildPolicyPayload())
+	store.policies[policyID] = policy
+	store.serviceDescriptors[policyID] = []entity.ServiceDescriptor{
+		activeSelfDeployDescriptor(projectID, repositoryID, policyID, "api"),
+	}
+	svc := New(store, fixedClock{}, &sequenceIDs{})
+	input := selfDeployBuildPlanInput(projectID, repositoryID, policy, []string{"api"})
+	input.MergeCommitSHA = codeCommit
+	input.MaterializedBuildContexts = []SelfDeployMaterializedBuildContext{
+		selfDeployMaterializedBuildContext("api"),
+	}
+
+	result, err := svc.GetSelfDeployBuildPlan(context.Background(), input)
+	if err != nil {
+		t.Fatalf("GetSelfDeployBuildPlan(): %v", err)
+	}
+	if result.Status != enum.SelfDeployBuildPlanStatusReady {
+		t.Fatalf("status = %s, reason=%s, want ready for code-only change", result.Status, result.SafeReason)
+	}
+	spec := result.Plan.BuildItems[0].BuildExecutionSpec
+	if spec.SourceCommitSHA != codeCommit ||
+		result.Plan.MergeCommitSHA != codeCommit ||
+		result.Plan.ServicesYaml.SourceCommitSHA != policyCommit {
+		t.Fatalf("commits = spec %q plan %q policy %q, want code commit and older policy commit", spec.SourceCommitSHA, result.Plan.MergeCommitSHA, result.Plan.ServicesYaml.SourceCommitSHA)
+	}
+}
+
 func TestGetSelfDeployBuildPlanDerivesSpecsFromStackInventoryImages(t *testing.T) {
 	t.Setenv("KODEX_INTERNAL_REGISTRY_HOST", "private.registry.example")
 	t.Setenv("KODEX_API_IMAGE", "private.registry.example/kodex/api:must-not-leak")
@@ -2570,6 +2661,68 @@ func TestGetSelfDeployDeployPlanUsesRuntimeManifestBundleDigest(t *testing.T) {
 	}
 	if synthetic := checkedDeployDigest("bundle", spec.ManifestBundleRef, selfDeployBuildContextDigest); synthetic == spec.ManifestBundleDigest {
 		t.Fatalf("manifest bundle digest = %q, want actual runtime digest not synthetic checked digest", spec.ManifestBundleDigest)
+	}
+}
+
+func TestGetSelfDeployDeployPlanAllowsCodeOnlySignalCommitAfterPolicyCommit(t *testing.T) {
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	policyID := uuid.New()
+	policyCommit := "1111111111111111111111111111111111111111"
+	codeCommit := "abcdef0123456789abcdef0123456789abcdef01"
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = activeSelfDeployRepository(projectID, repositoryID)
+	policy := activeSelfDeployPolicy(projectID, repositoryID, policyID, policyCommit, selfDeployBuildDeployPolicyPayload())
+	store.policies[policyID] = policy
+	store.serviceDescriptors[policyID] = []entity.ServiceDescriptor{
+		activeSelfDeployDescriptor(projectID, repositoryID, policyID, "api"),
+	}
+	svc := New(store, fixedClock{}, &sequenceIDs{})
+	input := selfDeployDeployPlanInput(projectID, repositoryID, policy, []string{"api"})
+	input.MergeCommitSHA = codeCommit
+	input.SourceRef = "main"
+	input.BuildOutputs = []SelfDeployBuildOutput{selfDeployBuildOutput("api")}
+	input.MaterializedBuildContexts = []SelfDeployMaterializedBuildContext{selfDeployMaterializedBuildContext("api")}
+
+	result, err := svc.GetSelfDeployDeployPlan(context.Background(), input)
+	if err != nil {
+		t.Fatalf("GetSelfDeployDeployPlan(): %v", err)
+	}
+	if result.Status != enum.SelfDeployDeployPlanStatusReady {
+		t.Fatalf("status = %s, reason=%s, want ready for code-only change", result.Status, result.SafeReason)
+	}
+	spec := result.Plan.DeployItems[0].DeployExecutionSpec
+	if spec.SourceCommitSHA != codeCommit ||
+		result.Plan.MergeCommitSHA != codeCommit ||
+		result.Plan.ServicesYaml.SourceCommitSHA != policyCommit {
+		t.Fatalf("commits = spec %q plan %q policy %q, want code commit and older policy commit", spec.SourceCommitSHA, result.Plan.MergeCommitSHA, result.Plan.ServicesYaml.SourceCommitSHA)
+	}
+}
+
+func TestGetSelfDeployDeployPlanReturnsPolicyStaleOnDigestMismatch(t *testing.T) {
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	policyID := uuid.New()
+	commitSHA := "abcdef0123456789abcdef0123456789abcdef01"
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = activeSelfDeployRepository(projectID, repositoryID)
+	policy := activeSelfDeployPolicy(projectID, repositoryID, policyID, commitSHA, selfDeployBuildDeployPolicyPayload())
+	store.policies[policyID] = policy
+	store.serviceDescriptors[policyID] = []entity.ServiceDescriptor{
+		activeSelfDeployDescriptor(projectID, repositoryID, policyID, "api"),
+	}
+	svc := New(store, fixedClock{}, &sequenceIDs{})
+	input := selfDeployDeployPlanInput(projectID, repositoryID, policy, []string{"api"})
+	input.ExpectedServicesPolicyDigest = "sha256:old"
+	input.BuildOutputs = []SelfDeployBuildOutput{selfDeployBuildOutput("api")}
+	input.MaterializedBuildContexts = []SelfDeployMaterializedBuildContext{selfDeployMaterializedBuildContext("api")}
+
+	result, err := svc.GetSelfDeployDeployPlan(context.Background(), input)
+	if err != nil {
+		t.Fatalf("GetSelfDeployDeployPlan(): %v", err)
+	}
+	if result.Status != enum.SelfDeployDeployPlanStatusPolicyStale || result.SafeReason != "services_policy_digest_mismatch" {
+		t.Fatalf("result = %+v, want policy stale digest mismatch", result)
 	}
 }
 
@@ -2689,13 +2842,6 @@ func TestGetSelfDeployBuildPlanReturnsPolicyStaleOnSourceMismatch(t *testing.T) 
 				input.SourceRef = "refs/heads/release"
 			},
 			wantReason: "services_policy_source_ref_mismatch",
-		},
-		{
-			name: "source commit",
-			mutate: func(input *GetSelfDeployBuildPlanInput) {
-				input.MergeCommitSHA = strings.Repeat("b", 40)
-			},
-			wantReason: "services_policy_source_commit_mismatch",
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

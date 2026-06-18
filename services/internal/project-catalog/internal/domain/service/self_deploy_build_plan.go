@@ -191,7 +191,6 @@ func selfDeployBuildPlanProviderSignalRef(input GetSelfDeployBuildPlanInput) str
 func selfDeployBuildPolicyStaleReason(input GetSelfDeployBuildPlanInput, policy entity.ServicesPolicy) string {
 	return selfDeployServicesPolicyStaleReason(
 		input.SourceRef,
-		input.MergeCommitSHA,
 		input.ExpectedServicesPolicyDigest,
 		input.ExpectedServicesPolicyFingerprint,
 		input.ExpectedServicesPolicyVersion,
