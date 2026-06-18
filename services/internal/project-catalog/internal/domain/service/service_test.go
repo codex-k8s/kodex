@@ -2571,11 +2571,19 @@ func TestGetSelfDeployBuildPlanAllowsCodeOnlySignalCommitAfterPolicyCommit(t *te
 	if result.Status != enum.SelfDeployBuildPlanStatusReady {
 		t.Fatalf("status = %s, reason=%s, want ready for code-only change", result.Status, result.SafeReason)
 	}
+	if result.SafeReason != "" {
+		t.Fatalf("safe reason = %q, want empty ready diagnostic", result.SafeReason)
+	}
+	item := result.Plan.BuildItems[0]
 	spec := result.Plan.BuildItems[0].BuildExecutionSpec
+	if item.Status != SelfDeployBuildPlanItemStatusReady || item.SafeReason != "" {
+		t.Fatalf("item status/reason = %s/%q, want ready without stale policy reason", item.Status, item.SafeReason)
+	}
 	if spec.SourceCommitSHA != codeCommit ||
+		spec.SourceRef != input.SourceRef ||
 		result.Plan.MergeCommitSHA != codeCommit ||
 		result.Plan.ServicesYaml.SourceCommitSHA != policyCommit {
-		t.Fatalf("commits = spec %q plan %q policy %q, want code commit and older policy commit", spec.SourceCommitSHA, result.Plan.MergeCommitSHA, result.Plan.ServicesYaml.SourceCommitSHA)
+		t.Fatalf("refs = spec commit %q spec source %q plan commit %q policy commit %q, want code commit/ref and older policy commit", spec.SourceCommitSHA, spec.SourceRef, result.Plan.MergeCommitSHA, result.Plan.ServicesYaml.SourceCommitSHA)
 	}
 }
 
