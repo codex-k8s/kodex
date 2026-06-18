@@ -106,29 +106,31 @@ UI не должен требовать вручную повторять accoun
 
 ### GitHub accounts
 
-Owner может добавить несколько GitHub accounts с разными scopes и назначать их разным agent roles. Целевой сценарий:
+Owner может добавить несколько GitHub accounts с разными scopes. Account можно назначить project как platform GitHub account, а также назначать отдельным agent roles, если role должна работать от другого GitHub identity. Целевой сценарий:
 
 1. Нажать `Accounts -> GitHub -> Add account`.
 2. Вставить token в secure dialog.
 3. Система проверяет token через GitHub API и сохраняет Kubernetes Secret.
 4. Система показывает username, email, safe scopes/status и account card.
-5. Owner выбирает account в role или repository onboarding из списка.
+5. Owner выбирает account в project как platform account или в role как explicit override.
 6. Удаление GitHub account удаляет metadata и, если Secret создан системой, предлагает отдельное подтверждение удаления Secret.
 
 Secret name не должен быть обязательным полем для owner. Если нужен bring-your-own Secret, это отдельный advanced path.
 
 ## Repositories
 
-Repository onboarding должен начинаться с выбора GitHub account. После выбора account система показывает доступные organization/repository варианты или дает поиск по GitHub API.
+Repository onboarding в основном сценарии начинается из project dashboard и использует platform GitHub account выбранного project. После этого система показывает доступные organization/repository варианты или дает поиск по GitHub API.
 
 Целевой сценарий:
 
-1. `Repositories -> Add repository`.
-2. Выбрать GitHub account.
+1. `Projects -> Open project -> Add repository`.
+2. Если у project не выбран platform GitHub account, нажать `Edit project` и выбрать его.
 3. Выбрать organization/repository из списка или найти по строке поиска.
 4. Выбрать default branch из GitHub API или принять default.
 5. Подтвердить создание Mattermost channel bindings и GitHub webhook.
-6. Получить repository card со статусами: access, webhook, Mattermost channel, default branch.
+6. Получить repository card со статусами: access, webhook, Mattermost channel, default branch; repository автоматически привязан к project.
+
+Глобальный `Repositories -> Add repository` остается advanced/fallback path и может явно выбрать GitHub account вручную.
 
 Для уже подключенного repository действия выполняются с его карточки:
 

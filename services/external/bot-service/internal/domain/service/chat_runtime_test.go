@@ -139,6 +139,67 @@ func TestChatRunStartsDeveloperModeForWorkerRoleWithRepository(t *testing.T) {
 	}
 }
 
+func TestChatRunFallsBackToProjectGitHubAccount(t *testing.T) {
+	store := chatRuntimeStore()
+	project := store.projects[1]
+	project.GitHubAccountName = "project-gh"
+	store.projects[1] = project
+	store.githubAccounts["project-gh"] = entity.GitHubAccount{Name: "project-gh", SecretRef: "matter-codex-github-project", Status: "configured", Username: "project-agent", Email: "project@example.invalid"}
+	store.repositories[repositoryStoreKey("github", "codex-k8s", "kodex")] = entity.Repository{
+		ID:                1,
+		Provider:          "github",
+		Owner:             "codex-k8s",
+		Name:              "kodex",
+		DefaultBranch:     "main",
+		GitHubAccountName: "legacy-repo-account",
+		Status:            "active",
+	}
+	store.projectRepositories["1:1"] = entity.ProjectRepository{
+		ID:            1,
+		ProjectID:     1,
+		RepositoryID:  1,
+		Provider:      "github",
+		Owner:         "codex-k8s",
+		Name:          "kodex",
+		DefaultBranch: "main",
+		IsDefault:     true,
+	}
+	store.agentRoles[1] = entity.AgentRole{
+		ID:                1,
+		ProjectID:         1,
+		Name:              "worker",
+		RoleType:          "worker",
+		OpenAIAccountName: "main",
+		Enabled:           true,
+	}
+	store.chats[1] = entity.Chat{ID: 1, ProjectID: 1, MattermostChannelID: "channel-1", Name: "Dev", ChatType: "worker_reviewer"}
+	store.setChatBindings(1, []int64{1}, []int64{1})
+	runner := &fakeRuntimeRunner{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Localizer:      localizer,
+		Store:          store,
+		RuntimeRunner:  runner,
+		StorageReady:   true,
+		RuntimeReady:   true,
+		DisableMonitor: true,
+	})
+
+	result := svc.HandleChatPost(context.Background(), ChatPostCommand{
+		ChannelID: "channel-1",
+		PostID:    "post-1",
+		UserID:    "owner",
+		Message:   "Work through the project repository.",
+	})
+
+	if result.RunID == "" || result.Mode != "session" {
+		t.Fatalf("result = %#v", result)
+	}
+	if runner.startedSessionKey == "" || runner.sessionGitHubSecret != "matter-codex-github-project" {
+		t.Fatalf("session runner = %#v", runner.sessionRuns)
+	}
+}
+
 func chatRuntimeStore() *fakeAdminStore {
 	return &fakeAdminStore{
 		repositories: map[string]entity.Repository{},

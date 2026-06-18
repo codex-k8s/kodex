@@ -57,7 +57,7 @@ Typed slash commands остаются fallback/debug интерфейсом дл
 4. Владелец открывает `/agents -> Projects`.
 5. Владелец создает project; система создает или привязывает Mattermost team.
 6. Владелец добавляет GitHub и OpenAI accounts.
-7. Владелец подключает repositories и привязывает их к project.
+7. Владелец выбирает platform GitHub account на project, затем подключает repositories из dashboard этого project.
 8. Владелец создает roles: manager, pm/delivery, worker, reviewer, analyst, sre или custom.
 9. Role получает GitHub account, OpenAI account, optional prompt template и advanced/Codex settings.
 10. Владелец создает chat; система создает private Mattermost channel внутри project team.

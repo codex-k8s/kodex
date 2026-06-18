@@ -66,11 +66,11 @@ Chat хранит:
 
 ## Accounts And Repositories
 
-GitHub accounts остаются PAT/fine-grained PAT bindings для MVP. Системный owner account используется платформой для поиска/добавления repository и может также назначаться role.
+GitHub accounts остаются PAT/fine-grained PAT bindings для MVP. Account metadata управляется глобально, но platform GitHub account выбирается на уровне project, потому что project/Mattermost team обычно соответствует конкретной GitHub organization или группе repositories. Этот project account используется для поиска repository, загрузки branches, регистрации webhook и как default GitHub access для roles без собственного account override.
 
 OpenAI accounts остаются Codex device-code accounts. В role выбирается account binding, а runner получает только ссылку на Kubernetes Secret с auth material.
 
-Repository сначала onboard-ится глобально через GitHub account, branch selection и webhook setup, затем привязывается к project и chat.
+Основной happy path: открыть project dashboard и подключить repository через platform GitHub account проекта; после branch selection repository автоматически привязывается к project. Глобальный `Repositories` раздел остается fallback/advanced path, где owner может выбрать GitHub account вручную.
 
 ## Advanced Settings
 

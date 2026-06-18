@@ -2341,7 +2341,7 @@ func (svc *SlashCommandService) handleMenuTypedAction(ctx context.Context, comma
 	case menuActionCancel:
 		return svc.menuCardResult(command, currentCard)
 	case menuActionRepositoryOnboard:
-		return svc.menuCardResult(command, svc.repositoryOnboardingAccountCard(ctx, command))
+		return svc.menuCardResult(command, svc.repositoryOnboardingEntryCard(ctx, command))
 	case menuActionRepositoryRepos:
 		return svc.menuCardResult(command, svc.repositoryOnboardingRepositoryCard(ctx, command, strings.TrimSpace(command.ID), ""))
 	case menuActionRepositoryBranches:
@@ -2636,8 +2636,39 @@ func (svc *SlashCommandService) repositoryOnboardingAccountCard(ctx context.Cont
 	return card
 }
 
+func (svc *SlashCommandService) repositoryOnboardingEntryCard(ctx context.Context, command MenuActionCommand) *MattermostCard {
+	if command.Resource != menuResourceProject || strings.TrimSpace(command.ID) == "" {
+		return svc.repositoryOnboardingAccountCard(ctx, command)
+	}
+	projectID, ok := parseInt64ID(command.ID)
+	if !ok || !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		card := svc.menuCommandResultCard(ctx, menuViewProjects, "", svc.t("menu.entity.invalid", nil))
+		card.Actions = svc.entityNavigationActions(menuViewProjects)
+		return card
+	}
+	project, err := svc.cfg.Store.GetProject(ctx, projectID)
+	if err != nil {
+		card := svc.menuCommandResultCard(ctx, menuViewProjects, "", svc.t("project.get.failed", map[string]any{"Error": safeError(err)}))
+		card.Actions = svc.entityNavigationActions(menuViewProjects)
+		return card
+	}
+	accountName := strings.TrimSpace(project.GitHubAccountName)
+	if accountName == "" {
+		card := svc.menuCommandResultCard(ctx, menuViewProjects, "", svc.t("project.github_account.required", map[string]any{"Project": project.Name}))
+		card.Actions = []MattermostCardAction{
+			svc.menuResourceDialogAction(menuViewProjects, "dialogprojectedit", menuDialogProjectUpsert, menuResourceProject, strconv.FormatInt(project.ID, 10), "menu.action.project_edit", "menu.action.project_edit.tooltip", "primary", nil),
+			svc.menuResourceAction(menuViewProjects, "openproject", menuActionShow, menuResourceProject, strconv.FormatInt(project.ID, 10), "menu.action.project_open", "menu.action.project_open.tooltip", "default", nil),
+			svc.menuAction(menuViewMain, "menu.action.main", "menu.action.main.tooltip", "default"),
+		}
+		return card
+	}
+	return svc.repositoryOnboardingRepositoryCard(ctx, command, accountName, "")
+}
+
 func (svc *SlashCommandService) repositoryOnboardingRepositoryCard(ctx context.Context, command MenuActionCommand, accountName string, query string) *MattermostCard {
-	card := svc.menuCard(ctx, menuViewRepositories)
+	view := normalizeMenuView(defaultString(command.View, menuViewRepositories))
+	command.View = view
+	card := svc.menuCard(ctx, view)
 	card.Title = svc.t("repo.onboard.repositories.title", map[string]any{"Account": accountName})
 	card.Text = svc.t("repo.onboard.repositories.text", map[string]any{"Account": accountName})
 	card.Fields = nil
@@ -2645,23 +2676,23 @@ func (svc *SlashCommandService) repositoryOnboardingRepositoryCard(ctx context.C
 	account, ok, errText := svc.repositoryOnboardingAccount(ctx, accountName)
 	if errText != "" {
 		card.Text = errText
-		card.Actions = svc.repositoryOnboardingAccountNavigation()
+		card.Actions = svc.repositoryOnboardingAccountNavigation(command)
 		return card
 	}
 	if !ok {
 		card.Text = svc.t("repo.account.missing", map[string]any{"Account": accountName})
-		card.Actions = svc.repositoryOnboardingAccountNavigation()
+		card.Actions = svc.repositoryOnboardingAccountNavigation(command)
 		return card
 	}
 	if svc.cfg.GitHubRepositoryProvider == nil {
 		card.Text = svc.t("repo.onboard.provider_not_configured", nil)
-		card.Actions = svc.repositoryOnboardingAccountNavigation()
+		card.Actions = svc.repositoryOnboardingAccountNavigation(command)
 		return card
 	}
 	candidates, err := svc.repositoryCandidates(ctx, account, query)
 	if err != nil {
 		card.Text = svc.t("repo.onboard.repositories.failed", map[string]any{"Error": safeError(err)})
-		card.Actions = svc.repositoryOnboardingRepositoryNavigation(account.Name)
+		card.Actions = svc.repositoryOnboardingRepositoryNavigation(command, account.Name)
 		return card
 	}
 	if strings.TrimSpace(query) != "" {
@@ -2669,7 +2700,7 @@ func (svc *SlashCommandService) repositoryOnboardingRepositoryCard(ctx context.C
 	}
 	if len(candidates) == 0 {
 		card.Text = svc.t("repo.onboard.repositories.empty", map[string]any{"Account": account.Name})
-		card.Actions = svc.repositoryOnboardingRepositoryNavigation(account.Name)
+		card.Actions = svc.repositoryOnboardingRepositoryNavigation(command, account.Name)
 		return card
 	}
 	limit := len(candidates)
@@ -2687,7 +2718,8 @@ func (svc *SlashCommandService) repositoryOnboardingRepositoryCard(ctx context.C
 			}),
 			Short: false,
 		})
-		card.Actions = append(card.Actions, svc.menuResourceAction(menuViewRepositories, "repocandidate"+strconv.Itoa(number), menuActionRepositoryBranches, menuResourceRepository, repositoryOnboardingResourceID(repositoryOnboardingState{
+		card.Actions = append(card.Actions, svc.menuResourceAction(command.View, "repocandidate"+strconv.Itoa(number), menuActionRepositoryBranches, menuResourceRepository, repositoryOnboardingResourceID(repositoryOnboardingState{
+			ProjectID:     repositoryOnboardingProjectID(command),
 			Account:       account.Name,
 			Provider:      candidate.Provider,
 			Owner:         candidate.Owner,
@@ -2696,47 +2728,49 @@ func (svc *SlashCommandService) repositoryOnboardingRepositoryCard(ctx context.C
 			DefaultBranch: candidate.DefaultBranch,
 		}), "menu.action.repository_choose", "menu.action.repository_choose.tooltip", "default", map[string]any{"Number": number}))
 	}
-	card.Actions = append(card.Actions, svc.repositoryOnboardingRepositoryNavigation(account.Name)...)
+	card.Actions = append(card.Actions, svc.repositoryOnboardingRepositoryNavigation(command, account.Name)...)
 	return card
 }
 
 func (svc *SlashCommandService) repositoryOnboardingBranchCard(ctx context.Context, command MenuActionCommand) *MattermostCard {
-	card := svc.menuCard(ctx, menuViewRepositories)
+	view := normalizeMenuView(defaultString(command.View, menuViewRepositories))
+	command.View = view
+	card := svc.menuCard(ctx, view)
 	card.Title = svc.t("repo.onboard.branches.title", nil)
 	card.Fields = nil
 	card.Actions = nil
 	state, ok := parseRepositoryOnboardingResourceID(command.ID)
 	if !ok || state.Account == "" || state.Owner == "" || state.Name == "" {
 		card.Text = svc.t("menu.entity.invalid", nil)
-		card.Actions = svc.repositoryOnboardingAccountNavigation()
+		card.Actions = svc.repositoryOnboardingAccountNavigation(command)
 		return card
 	}
 	account, ok, errText := svc.repositoryOnboardingAccount(ctx, state.Account)
 	if errText != "" {
 		card.Text = errText
-		card.Actions = svc.repositoryOnboardingAccountNavigation()
+		card.Actions = svc.repositoryOnboardingAccountNavigation(command)
 		return card
 	}
 	if !ok {
 		card.Text = svc.t("repo.account.missing", map[string]any{"Account": state.Account})
-		card.Actions = svc.repositoryOnboardingAccountNavigation()
+		card.Actions = svc.repositoryOnboardingAccountNavigation(command)
 		return card
 	}
 	if svc.cfg.GitHubRepositoryProvider == nil {
 		card.Text = svc.t("repo.onboard.provider_not_configured", nil)
-		card.Actions = svc.repositoryOnboardingRepositoryNavigation(account.Name)
+		card.Actions = svc.repositoryOnboardingRepositoryNavigation(command, account.Name)
 		return card
 	}
 	branches, err := svc.cfg.GitHubRepositoryProvider.ListBranches(ctx, gitHubAccountRef(account), state.Owner, state.Name, 20)
 	if err != nil {
 		card.Text = svc.t("repo.onboard.branches.failed", map[string]any{"Error": safeError(err)})
-		card.Actions = svc.repositoryOnboardingRepositoryNavigation(account.Name)
+		card.Actions = svc.repositoryOnboardingRepositoryNavigation(command, account.Name)
 		return card
 	}
 	branchNames := repositoryOnboardingBranchNames(state.DefaultBranch, branches)
 	if len(branchNames) == 0 {
 		card.Text = svc.t("repo.onboard.branches.empty", map[string]any{"Repository": state.FullName})
-		card.Actions = svc.repositoryOnboardingRepositoryNavigation(account.Name)
+		card.Actions = svc.repositoryOnboardingRepositoryNavigation(command, account.Name)
 		return card
 	}
 	card.Text = svc.t("repo.onboard.branches.text", map[string]any{"Repository": state.FullName, "Account": account.Name})
@@ -2752,14 +2786,16 @@ func (svc *SlashCommandService) repositoryOnboardingBranchCard(ctx context.Conte
 		next := state
 		next.Branch = branch
 		number := idx + 1
-		card.Actions = append(card.Actions, svc.menuResourceAction(menuViewRepositories, "repobranch"+strconv.Itoa(number), menuActionRepositoryConnect, menuResourceRepository, repositoryOnboardingResourceID(next), "menu.action.repository_connect_branch", "menu.action.repository_connect_branch.tooltip", "primary", map[string]any{"Branch": branch}))
+		card.Actions = append(card.Actions, svc.menuResourceAction(command.View, "repobranch"+strconv.Itoa(number), menuActionRepositoryConnect, menuResourceRepository, repositoryOnboardingResourceID(next), "menu.action.repository_connect_branch", "menu.action.repository_connect_branch.tooltip", "primary", map[string]any{"Branch": branch}))
 	}
-	card.Actions = append(card.Actions, svc.repositoryOnboardingRepositoryNavigation(account.Name)...)
+	card.Actions = append(card.Actions, svc.repositoryOnboardingRepositoryNavigation(command, account.Name)...)
 	return card
 }
 
 func (svc *SlashCommandService) repositoryOnboardingConnectCard(ctx context.Context, command MenuActionCommand) *MattermostCard {
-	card := svc.menuCommandResultCard(ctx, menuViewRepositories, "", svc.t("menu.entity.invalid", nil))
+	view := normalizeMenuView(defaultString(command.View, menuViewRepositories))
+	command.View = view
+	card := svc.menuCommandResultCard(ctx, view, "", svc.t("menu.entity.invalid", nil))
 	state, ok := parseRepositoryOnboardingResourceID(command.ID)
 	if !ok || state.Account == "" || state.Owner == "" || state.Name == "" || state.Branch == "" {
 		return card
@@ -2767,12 +2803,12 @@ func (svc *SlashCommandService) repositoryOnboardingConnectCard(ctx context.Cont
 	account, ok, errText := svc.repositoryOnboardingAccount(ctx, state.Account)
 	if errText != "" {
 		card.Text = errText
-		card.Actions = svc.repositoryOnboardingAccountNavigation()
+		card.Actions = svc.repositoryOnboardingAccountNavigation(command)
 		return card
 	}
 	if !ok {
 		card.Text = svc.t("repo.account.missing", map[string]any{"Account": state.Account})
-		card.Actions = svc.repositoryOnboardingAccountNavigation()
+		card.Actions = svc.repositoryOnboardingAccountNavigation(command)
 		return card
 	}
 	repo, text, saved := svc.upsertRepository(ctx, adminrepo.UpsertRepositoryInput{
@@ -2782,6 +2818,28 @@ func (svc *SlashCommandService) repositoryOnboardingConnectCard(ctx context.Cont
 		DefaultBranch:     state.Branch,
 		GitHubAccountName: account.Name,
 	}, svc.slashFromMenu(command), "repository onboarded from Mattermost menu")
+	if saved && state.ProjectID > 0 {
+		binding, created, err := svc.cfg.Store.UpsertProjectRepository(ctx, adminrepo.UpsertProjectRepositoryInput{
+			ProjectID:    state.ProjectID,
+			RepositoryID: repo.ID,
+			IsDefault:    true,
+		})
+		if err != nil {
+			card.Text = text + "\n" + svc.t("project_repo.save.failed", map[string]any{"Error": safeError(err)})
+			card.Actions = svc.repositoryOnboardingRepositoryNavigation(command, account.Name)
+			return card
+		}
+		stateID := "label.updated"
+		if created {
+			stateID = "label.created"
+		}
+		text += "\n" + svc.t("project_repo.save.result", map[string]any{
+			"State":      svc.t(stateID, nil),
+			"Repository": binding.Provider + ":" + binding.FullName(),
+			"Project":    state.ProjectID,
+			"Default":    binding.IsDefault,
+		})
+	}
 	card.Text = text
 	if saved {
 		card.Actions = []MattermostCardAction{
@@ -2789,9 +2847,14 @@ func (svc *SlashCommandService) repositoryOnboardingConnectCard(ctx context.Cont
 			svc.menuResourceAction(menuViewRepositories, "repolist", menuActionList, menuResourceRepository, "", "menu.action.repo_list", "menu.action.repo_list.tooltip", "default", nil),
 			svc.menuAction(menuViewMain, "menu.action.main", "menu.action.main.tooltip", "default"),
 		}
+		if state.ProjectID > 0 {
+			card.Actions = append([]MattermostCardAction{
+				svc.menuResourceAction(menuViewProjects, "openproject", menuActionShow, menuResourceProject, strconv.FormatInt(state.ProjectID, 10), "menu.action.project_open", "menu.action.project_open.tooltip", "primary", nil),
+			}, card.Actions...)
+		}
 		return card
 	}
-	card.Actions = svc.repositoryOnboardingRepositoryNavigation(account.Name)
+	card.Actions = svc.repositoryOnboardingRepositoryNavigation(command, account.Name)
 	return card
 }
 
@@ -2830,7 +2893,13 @@ func (svc *SlashCommandService) repositoryOnboardingAccount(ctx context.Context,
 	return account, true, ""
 }
 
-func (svc *SlashCommandService) repositoryOnboardingAccountNavigation() []MattermostCardAction {
+func (svc *SlashCommandService) repositoryOnboardingAccountNavigation(command MenuActionCommand) []MattermostCardAction {
+	if projectID := repositoryOnboardingProjectID(command); projectID > 0 {
+		return []MattermostCardAction{
+			svc.menuResourceAction(menuViewProjects, "openproject", menuActionShow, menuResourceProject, strconv.FormatInt(projectID, 10), "menu.action.project_open", "menu.action.project_open.tooltip", "default", nil),
+			svc.menuAction(menuViewMain, "menu.action.main", "menu.action.main.tooltip", "default"),
+		}
+	}
 	return []MattermostCardAction{
 		svc.menuResourceAction(menuViewRepositories, "repoonboard", menuActionRepositoryOnboard, menuResourceRepository, "", "menu.action.repo_add", "menu.action.repo_add.tooltip", "default", nil),
 		svc.menuAction(menuViewRepositories, "menu.action.back", "menu.action.back.tooltip", "default"),
@@ -2838,13 +2907,39 @@ func (svc *SlashCommandService) repositoryOnboardingAccountNavigation() []Matter
 	}
 }
 
-func (svc *SlashCommandService) repositoryOnboardingRepositoryNavigation(accountName string) []MattermostCardAction {
+func (svc *SlashCommandService) repositoryOnboardingRepositoryNavigation(command MenuActionCommand, accountName string) []MattermostCardAction {
+	projectID := repositoryOnboardingProjectID(command)
+	searchResource := menuResourceGitHubAccount
+	searchID := accountName
+	if projectID > 0 {
+		searchResource = menuResourceProject
+		searchID = strconv.FormatInt(projectID, 10)
+		return []MattermostCardAction{
+			svc.menuResourceDialogAction(command.View, "reposearch", menuDialogRepositorySearch, searchResource, searchID, "menu.action.repository_search", "menu.action.repository_search.tooltip", "primary", nil),
+			svc.menuResourceAction(menuViewProjects, "openproject", menuActionShow, menuResourceProject, strconv.FormatInt(projectID, 10), "menu.action.project_open", "menu.action.project_open.tooltip", "default", nil),
+			svc.menuResourceAction(menuViewRepositories, "repolist", menuActionList, menuResourceRepository, "", "menu.action.repo_list", "menu.action.repo_list.tooltip", "default", nil),
+			svc.menuAction(menuViewMain, "menu.action.main", "menu.action.main.tooltip", "default"),
+		}
+	}
 	return []MattermostCardAction{
-		svc.menuResourceDialogAction(menuViewRepositories, "reposearch", menuDialogRepositorySearch, menuResourceGitHubAccount, accountName, "menu.action.repository_search", "menu.action.repository_search.tooltip", "primary", nil),
+		svc.menuResourceDialogAction(command.View, "reposearch", menuDialogRepositorySearch, searchResource, searchID, "menu.action.repository_search", "menu.action.repository_search.tooltip", "primary", nil),
 		svc.menuResourceAction(menuViewRepositories, "repoaccounts", menuActionRepositoryOnboard, menuResourceRepository, "", "menu.action.repository_accounts", "menu.action.repository_accounts.tooltip", "default", nil),
 		svc.menuResourceAction(menuViewRepositories, "repolist", menuActionList, menuResourceRepository, "", "menu.action.repo_list", "menu.action.repo_list.tooltip", "default", nil),
 		svc.menuAction(menuViewMain, "menu.action.main", "menu.action.main.tooltip", "default"),
 	}
+}
+
+func repositoryOnboardingProjectID(command MenuActionCommand) int64 {
+	if command.Resource == menuResourceProject {
+		if projectID, ok := parseInt64ID(command.ID); ok {
+			return projectID
+		}
+	}
+	state, ok := parseRepositoryOnboardingResourceID(command.ID)
+	if ok && state.ProjectID > 0 {
+		return state.ProjectID
+	}
+	return 0
 }
 
 func repositoryOnboardingBranchNames(defaultBranch string, branches []providerrepo.BranchCandidate) []string {
@@ -3058,6 +3153,13 @@ func (svc *SlashCommandService) deleteGitHubAccountText(ctx context.Context, acc
 	}
 	if len(repositoryRefs) > 0 {
 		return svc.t("github.account.delete.in_use_repositories", map[string]any{"Account": account.Name, "Repositories": strings.Join(repositoryRefs, ", ")})
+	}
+	projectRefs, err := svc.githubAccountProjectRefs(ctx, account.Name)
+	if err != nil {
+		return svc.t("github.account.delete.project_check_failed", map[string]any{"Error": safeError(err)})
+	}
+	if len(projectRefs) > 0 {
+		return svc.t("github.account.delete.in_use_projects", map[string]any{"Account": account.Name, "Projects": strings.Join(projectRefs, ", ")})
 	}
 	secretDeleted := false
 	if account.SecretRef == githubAccountSecretName(svc.cfg.GitHubSecretName, account.Name) {
@@ -3693,7 +3795,7 @@ func (svc *SlashCommandService) menuDialog(ctx context.Context, command MenuActi
 	}
 	switch dialogID {
 	case menuDialogProjectUpsert:
-		return svc.projectDialog(command), ""
+		return svc.projectDialog(ctx, command)
 	case menuDialogProjectRepositoryBind:
 		return svc.projectRepositoryBindDialog(ctx, command)
 	case menuDialogAgentRoleUpsert:
@@ -4377,7 +4479,10 @@ func (svc *SlashCommandService) handleRepositorySearchDialog(ctx context.Context
 	if len(query) < 2 {
 		return DialogSubmissionResult{StatusCode: 200, Errors: map[string]string{dialogFieldSearch: svc.t("dialog.repo.search.query_invalid", nil)}}
 	}
-	accountName := strings.TrimSpace(state.ResourceID)
+	accountName, errText := svc.repositorySearchAccountName(ctx, state)
+	if errText != "" {
+		return DialogSubmissionResult{StatusCode: 200, Error: errText}
+	}
 	dialog, errText := svc.repositorySearchPickDialog(ctx, accountName, query, mattermostDialogCommand(state, command))
 	if errText != "" {
 		return DialogSubmissionResult{StatusCode: 200, Error: errText}
@@ -4439,6 +4544,7 @@ func (svc *SlashCommandService) repositorySearchPickDialog(ctx context.Context, 
 		options = append(options, MattermostDialogOption{
 			Text: repositorySearchRepositoryOptionText(candidate),
 			Value: repositoryOnboardingResourceID(repositoryOnboardingState{
+				ProjectID:     repositoryOnboardingProjectID(command),
 				Account:       account.Name,
 				Provider:      candidate.Provider,
 				Owner:         candidate.Owner,
@@ -6294,6 +6400,7 @@ func repositoryResourceID(repo entity.Repository) string {
 }
 
 type repositoryOnboardingState struct {
+	ProjectID     int64  `json:"project_id"`
 	Account       string `json:"account"`
 	Provider      string `json:"provider"`
 	Owner         string `json:"owner"`
@@ -6334,6 +6441,24 @@ func parseRepositoryOnboardingResourceID(value string) (repositoryOnboardingStat
 		return repositoryOnboardingState{}, false
 	}
 	return state, true
+}
+
+func (svc *SlashCommandService) repositorySearchAccountName(ctx context.Context, state mattermostDialogState) (string, string) {
+	if state.ResourceType != menuResourceProject {
+		return strings.TrimSpace(state.ResourceID), ""
+	}
+	projectID, ok := parseInt64ID(state.ResourceID)
+	if !ok || !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return "", svc.t("menu.entity.invalid", nil)
+	}
+	project, err := svc.cfg.Store.GetProject(ctx, projectID)
+	if err != nil {
+		return "", svc.t("project.get.failed", map[string]any{"Error": safeError(err)})
+	}
+	if strings.TrimSpace(project.GitHubAccountName) == "" {
+		return "", svc.t("project.github_account.required", map[string]any{"Project": project.Name})
+	}
+	return strings.TrimSpace(project.GitHubAccountName), ""
 }
 
 func parseRepositoryResourceID(value string) (string, string, string, bool) {
@@ -6563,6 +6688,24 @@ func (svc *SlashCommandService) githubAccountRepositoryRefs(ctx context.Context,
 	for _, repo := range repositories {
 		if repo.Provider == "github" && defaultString(repo.GitHubAccountName, "primary") == name {
 			refs = append(refs, repo.FullName())
+		}
+	}
+	sort.Strings(refs)
+	return refs, nil
+}
+
+func (svc *SlashCommandService) githubAccountProjectRefs(ctx context.Context, name string) ([]string, error) {
+	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
+		return nil, nil
+	}
+	projects, err := svc.cfg.Store.ListProjects(ctx, 100)
+	if err != nil {
+		return nil, err
+	}
+	refs := make([]string, 0)
+	for _, project := range projects {
+		if strings.TrimSpace(project.GitHubAccountName) == name {
+			refs = append(refs, project.Name)
 		}
 	}
 	sort.Strings(refs)

@@ -279,7 +279,7 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 	if !ok {
 		return AgentTurnQueued{}, fmt.Errorf("OpenAI account is required for role %s", request.Role.Name)
 	}
-	gitHubAccount, gitHubOK := svc.gitHubAccount(ctx, request.Role, firstRepository(request.Repositories))
+	gitHubAccount, gitHubOK := svc.gitHubAccount(ctx, request.Project, request.Role, firstRepository(request.Repositories))
 	prompt, err := BuildRolePrompt(RolePromptInput{
 		Project:      request.Project,
 		Role:         request.Role,
@@ -649,8 +649,11 @@ func (svc *ChatRunService) openAIAccount(ctx context.Context, role entity.AgentR
 	return account, true
 }
 
-func (svc *ChatRunService) gitHubAccount(ctx context.Context, role entity.AgentRole, repo entity.ProjectRepository) (entity.GitHubAccount, bool) {
+func (svc *ChatRunService) gitHubAccount(ctx context.Context, project entity.Project, role entity.AgentRole, repo entity.ProjectRepository) (entity.GitHubAccount, bool) {
 	name := strings.TrimSpace(role.GitHubAccountName)
+	if name == "" {
+		name = strings.TrimSpace(project.GitHubAccountName)
+	}
 	if name == "" && repo.Provider == "github" && repo.Owner != "" && repo.Name != "" {
 		globalRepo, err := svc.cfg.Store.GetRepository(ctx, repo.Provider, repo.Owner, repo.Name)
 		if err == nil {

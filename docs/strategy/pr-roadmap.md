@@ -112,11 +112,12 @@
 
 ## Code PR 3: Repository/Project Onboarding
 
-Цель: owner подключает repository без ручного `owner/name` после выбора GitHub account.
+Цель: owner подключает repository из project dashboard без ручного `owner/name`, используя platform GitHub account проекта.
 
 Содержимое:
 
-- выбор GitHub account перед onboarding;
+- onboarding из project dashboard через platform GitHub account проекта;
+- global fallback onboarding с ручным выбором GitHub account;
 - список/search GitHub organizations/repositories через GitHub API;
 - выбор default branch из GitHub API;
 - repository card;

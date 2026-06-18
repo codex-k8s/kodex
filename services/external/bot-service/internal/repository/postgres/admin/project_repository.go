@@ -15,6 +15,7 @@ func (repo *Repository) UpsertProject(ctx context.Context, input adminrepo.Upser
 		input.Name,
 		input.Slug,
 		input.MattermostTeamID,
+		input.GitHubAccountName,
 		input.Description,
 		input.AdvancedSettings,
 	))
@@ -295,7 +296,7 @@ func (repo *Repository) ListChatRepositories(ctx context.Context, chatID int64) 
 
 func scanProject(row accountRow) (entity.Project, error) {
 	var item entity.Project
-	if err := row.Scan(&item.ID, &item.Name, &item.Slug, &item.MattermostTeamID, &item.Description, &item.AdvancedSettings, &item.CreatedAt, &item.UpdatedAt); err != nil {
+	if err := row.Scan(&item.ID, &item.Name, &item.Slug, &item.MattermostTeamID, &item.GitHubAccountName, &item.Description, &item.AdvancedSettings, &item.CreatedAt, &item.UpdatedAt); err != nil {
 		return entity.Project{}, err
 	}
 	return item, nil
@@ -304,7 +305,7 @@ func scanProject(row accountRow) (entity.Project, error) {
 func scanProjectWithCreated(row pgx.Row) (entity.Project, bool, error) {
 	var item entity.Project
 	var created bool
-	if err := row.Scan(&item.ID, &item.Name, &item.Slug, &item.MattermostTeamID, &item.Description, &item.AdvancedSettings, &item.CreatedAt, &item.UpdatedAt, &created); err != nil {
+	if err := row.Scan(&item.ID, &item.Name, &item.Slug, &item.MattermostTeamID, &item.GitHubAccountName, &item.Description, &item.AdvancedSettings, &item.CreatedAt, &item.UpdatedAt, &created); err != nil {
 		return entity.Project{}, false, err
 	}
 	return item, created, nil
