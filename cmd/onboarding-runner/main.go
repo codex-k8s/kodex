@@ -51,6 +51,7 @@ const (
 	servicesPolicyImportAccessPriority  = 100
 	selfDeployOwnerReadProbeResourceID  = "self-deploy-plan-probe"
 	runtimeKubernetesExecutorSubjectID  = "runtime-manager-kubernetes-executor"
+	runtimeBuildContextMaterializerID   = "runtime-manager-build-context-materializer"
 )
 
 type selfDeployServiceAccessGrant struct {
@@ -80,6 +81,7 @@ var selfDeployServiceAccessGrants = []selfDeployServiceAccessGrant{
 	projectScopedServiceGrant("staff-gateway", accesscatalog.ActionProjectPolicyRead, accesscatalog.ResourceServicesPolicy),
 	projectScopedServiceGrant("staff-gateway", accesscatalog.ActionGovernanceRiskRead, accesscatalog.ResourceGovernanceRiskAssessment),
 	projectScopedServiceGrant("staff-gateway", accesscatalog.ActionGovernanceGateRead, accesscatalog.ResourceGovernanceGate),
+	projectScopedServiceGrant(runtimeBuildContextMaterializerID, accesscatalog.ActionRuntimeBuildContextReport, accesscatalog.ResourceRuntimeBuildContext),
 	globalServiceGrant(runtimeKubernetesExecutorSubjectID, accesscatalog.ActionRuntimeJobClaim, accesscatalog.ResourceRuntimeJob),
 	projectScopedServiceGrant(runtimeKubernetesExecutorSubjectID, accesscatalog.ActionRuntimeJobStepReport, accesscatalog.ResourceRuntimeJob),
 	projectScopedServiceGrant(runtimeKubernetesExecutorSubjectID, accesscatalog.ActionRuntimeJobComplete, accesscatalog.ResourceRuntimeJob),

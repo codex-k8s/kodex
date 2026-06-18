@@ -662,6 +662,8 @@ func TestRunApplyCreatesSelfDeployServiceAccessRules(t *testing.T) {
 	assertContains(t, text, "onboarding runner repository read access ready subject=service/onboarding-runner")
 	assertContains(t, text, "self-deploy service access ready subject=service/agent-manager")
 	assertContains(t, text, "action=runtime.job.create")
+	assertContains(t, text, "self-deploy service access ready subject=service/runtime-manager-build-context-materializer")
+	assertContains(t, text, "action=runtime.build_context.report")
 	assertContains(t, text, "self-deploy service access ready subject=service/runtime-manager-kubernetes-executor")
 	assertContains(t, text, "action=runtime.job.claim")
 	assertContains(t, text, "scope=global")
