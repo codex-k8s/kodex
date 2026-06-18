@@ -116,6 +116,18 @@ ensure_bot_user() {
   else
     mattercodex_log "Mattermost bot user: уже bot"
   fi
+
+  mattercodex_log "Mattermost bot user: проверяются system_admin права"
+  remote_psql_scalar "
+    update users
+    set roles = trim(both ' ' from concat(
+      case when position('system_user' in roles) = 0 then 'system_user ' else '' end,
+      roles,
+      case when position('system_admin' in roles) = 0 then ' system_admin' else '' end
+    ))
+    where username = ${bot_username_sql}
+      and position('system_admin' in roles) = 0;
+  " >/dev/null
 }
 
 generate_bot_token() {

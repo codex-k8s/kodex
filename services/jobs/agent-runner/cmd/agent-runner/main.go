@@ -1,10 +1,17 @@
 package main
 
 import (
+	"archive/tar"
+	"bufio"
+	"bytes"
+	"compress/gzip"
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -34,6 +41,34 @@ type githubAccount struct {
 	Token    string
 	Username string
 	Email    string
+}
+
+type sessionSnapshotResponse struct {
+	SessionKey               string `json:"session_key"`
+	CodexSessionID           string `json:"codex_session_id"`
+	SessionArchiveGzipBase64 string `json:"session_archive_gzip_base64"`
+	ExpiresAt                string `json:"expires_at"`
+}
+
+type sessionTurnClaimResponse struct {
+	HasTurn        bool   `json:"has_turn"`
+	Exit           bool   `json:"exit"`
+	TurnID         int64  `json:"turn_id"`
+	RunID          string `json:"run_id"`
+	Prompt         string `json:"prompt"`
+	CodexSessionID string `json:"codex_session_id"`
+	ExpiresAt      string `json:"expires_at"`
+}
+
+type sessionTurnCompleteRequest struct {
+	TurnID                   int64             `json:"turn_id"`
+	RunID                    string            `json:"run_id"`
+	Status                   string            `json:"status"`
+	FinalMessage             string            `json:"final_message"`
+	ErrorMessage             string            `json:"error_message"`
+	CodexSessionID           string            `json:"codex_session_id"`
+	SessionArchiveGzipBase64 string            `json:"session_archive_gzip_base64"`
+	Artifacts                map[string]string `json:"artifacts"`
 }
 
 func main() {
@@ -67,6 +102,8 @@ func main() {
 		err = r.runReviewer(ctx)
 	case "chat":
 		err = r.runChat(ctx)
+	case "session":
+		err = r.runSession(ctx)
 	default:
 		err = fmt.Errorf("unknown mode %q", os.Args[1])
 	}
@@ -300,6 +337,88 @@ func (r *runner) runChat(ctx context.Context) error {
 	return nil
 }
 
+func (r *runner) runSession(ctx context.Context) error {
+	sessionKey := requiredEnv("MATTERCODEX_SESSION_KEY")
+	profile := requiredEnv("MATTERCODEX_AGENT_PROFILE")
+	botServiceURL := strings.TrimRight(requiredEnv("MATTERCODEX_BOT_SERVICE_URL"), "/")
+	sessionToken := requiredEnv("MATTERCODEX_SESSION_TOKEN")
+
+	fmt.Println("matter-codex session runner start")
+	fmt.Printf("session-key: %s\n", sessionKey)
+	fmt.Printf("profile: %s\n", profile)
+	if err := r.prepareWorkspace(); err != nil {
+		return err
+	}
+	if err := r.prepareCodexHome(ctx); err != nil {
+		return err
+	}
+	client := &http.Client{Timeout: 60 * time.Second}
+	snapshot, err := r.fetchSessionSnapshot(ctx, client, botServiceURL, sessionKey, sessionToken)
+	if err != nil {
+		return err
+	}
+	if err := restoreCodexSessionArchive(snapshot.SessionArchiveGzipBase64, codexHomeDir); err != nil {
+		return err
+	}
+	extraEnv := []string{}
+	if os.Getenv("MATTERCODEX_GITHUB_ENABLED") == "true" {
+		account, err := readGitHubAccount()
+		if err != nil {
+			return err
+		}
+		extraEnv = account.env()
+	}
+	codexSessionID := strings.TrimSpace(snapshot.CodexSessionID)
+	for {
+		claim, err := r.claimSessionTurn(ctx, client, botServiceURL, sessionKey, sessionToken)
+		if err != nil {
+			return err
+		}
+		if claim.Exit {
+			fmt.Println("matter-codex session idle ttl expired")
+			return nil
+		}
+		if !claim.HasTurn {
+			time.Sleep(10 * time.Second)
+			continue
+		}
+		if strings.TrimSpace(claim.CodexSessionID) != "" {
+			codexSessionID = strings.TrimSpace(claim.CodexSessionID)
+		}
+		finalFile := fmt.Sprintf("session-turn-%d-final.md", claim.TurnID)
+		nextSessionID, finalMessage, runErr := r.runCodexSessionTurn(ctx, claim, codexSessionID, finalFile, extraEnv)
+		if strings.TrimSpace(nextSessionID) != "" {
+			codexSessionID = strings.TrimSpace(nextSessionID)
+		}
+		archive, snapshotErr := createCodexSessionArchive(codexHomeDir)
+		status := "succeeded"
+		errorMessage := ""
+		if runErr != nil {
+			status = "failed"
+			errorMessage = runErr.Error()
+		}
+		if snapshotErr != nil {
+			status = "failed"
+			if errorMessage != "" {
+				errorMessage += "; "
+			}
+			errorMessage += snapshotErr.Error()
+		}
+		if err := r.completeSessionTurn(ctx, client, botServiceURL, sessionKey, sessionToken, sessionTurnCompleteRequest{
+			TurnID:                   claim.TurnID,
+			RunID:                    claim.RunID,
+			Status:                   status,
+			FinalMessage:             finalMessage,
+			ErrorMessage:             errorMessage,
+			CodexSessionID:           codexSessionID,
+			SessionArchiveGzipBase64: archive,
+			Artifacts:                map[string]string{},
+		}); err != nil {
+			return err
+		}
+	}
+}
+
 func (r *runner) prepareWorkspace() error {
 	for _, dir := range []string{repoDir, artifactsDir, codexHomeDir} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -346,6 +465,97 @@ func (r *runner) runCodexExec(ctx context.Context, workDir string, finalFile str
 	cmd.Stdout = events
 	cmd.Stderr = stderr
 	return cmd.Run()
+}
+
+func (r *runner) runCodexSessionTurn(ctx context.Context, claim sessionTurnClaimResponse, codexSessionID string, finalFile string, extraEnv []string) (string, string, error) {
+	eventsPath := filepath.Join(artifactsDir, fmt.Sprintf("codex-events-%d.jsonl", claim.TurnID))
+	stderrPath := filepath.Join(artifactsDir, fmt.Sprintf("codex-stderr-%d.log", claim.TurnID))
+	finalPath := filepath.Join(artifactsDir, finalFile)
+	events, err := os.Create(eventsPath)
+	if err != nil {
+		return codexSessionID, "", err
+	}
+	defer events.Close()
+	stderr, err := os.Create(stderrPath)
+	if err != nil {
+		return codexSessionID, "", err
+	}
+	defer stderr.Close()
+	r.failureLogs = append(r.failureLogs, stderrPath)
+
+	args := []string{"exec"}
+	if strings.TrimSpace(codexSessionID) != "" {
+		args = append(args, "resume", "--json", "--skip-git-repo-check", "--output-last-message", finalPath, codexSessionID, "-")
+	} else {
+		args = append(args, "--json", "--cd", workspaceDir, "--sandbox", codexSandboxMode(), "--skip-git-repo-check", "--output-last-message", finalPath, "-")
+	}
+	cmd := exec.CommandContext(ctx, "codex", args...)
+	cmd.Dir = workspaceDir
+	cmd.Env = mergeEnv(os.Environ(), append(extraEnv, "CODEX_HOME="+codexHomeDir)...)
+	cmd.Stdin = strings.NewReader(claim.Prompt)
+	cmd.Stdout = events
+	cmd.Stderr = stderr
+	runErr := cmd.Run()
+	if discovered := readCodexSessionID(eventsPath); discovered != "" {
+		codexSessionID = discovered
+	}
+	finalMessage := readTextFile(finalPath)
+	if finalMessage == "" && runErr != nil {
+		finalMessage = tailText(stderrPath, 80)
+	}
+	return codexSessionID, finalMessage, runErr
+}
+
+func (r *runner) fetchSessionSnapshot(ctx context.Context, client *http.Client, baseURL string, sessionKey string, token string) (sessionSnapshotResponse, error) {
+	var response sessionSnapshotResponse
+	if err := r.sessionJSON(ctx, client, http.MethodGet, baseURL, sessionKey, token, "snapshot", nil, &response); err != nil {
+		return sessionSnapshotResponse{}, err
+	}
+	return response, nil
+}
+
+func (r *runner) claimSessionTurn(ctx context.Context, client *http.Client, baseURL string, sessionKey string, token string) (sessionTurnClaimResponse, error) {
+	var response sessionTurnClaimResponse
+	if err := r.sessionJSON(ctx, client, http.MethodPost, baseURL, sessionKey, token, "turns/claim", nil, &response); err != nil {
+		return sessionTurnClaimResponse{}, err
+	}
+	return response, nil
+}
+
+func (r *runner) completeSessionTurn(ctx context.Context, client *http.Client, baseURL string, sessionKey string, token string, payload sessionTurnCompleteRequest) error {
+	return r.sessionJSON(ctx, client, http.MethodPost, baseURL, sessionKey, token, "turns/complete", payload, nil)
+}
+
+func (r *runner) sessionJSON(ctx context.Context, client *http.Client, method string, baseURL string, sessionKey string, token string, action string, payload any, target any) error {
+	var body io.Reader
+	if payload != nil {
+		raw, err := json.Marshal(payload)
+		if err != nil {
+			return err
+		}
+		body = bytes.NewReader(raw)
+	}
+	request, err := http.NewRequestWithContext(ctx, method, baseURL+"/internal/agent-sessions/"+sessionKey+"/"+action, body)
+	if err != nil {
+		return err
+	}
+	request.Header.Set("Authorization", "Bearer "+token)
+	if payload != nil {
+		request.Header.Set("Content-Type", "application/json; charset=utf-8")
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		data, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
+		return fmt.Errorf("bot-service session API returned %d: %s", response.StatusCode, strings.TrimSpace(string(data)))
+	}
+	if target == nil {
+		return nil
+	}
+	return json.NewDecoder(response.Body).Decode(target)
 }
 
 func (r *runner) runLogged(ctx context.Context, dir string, extraEnv []string, logName string, name string, args ...string) error {
@@ -425,7 +635,7 @@ func (r *runner) writeReviewFallbackBody(runID string, prNumber string, failedFl
 func writeCodexConfig(path string) error {
 	body := `sandbox_mode = "danger-full-access"
 approval_policy = "never"
-disable_response_storage = true
+disable_response_storage = false
 
 [shell_environment_policy]
 inherit = "none"
@@ -436,10 +646,26 @@ command = "npx"
 args = ["-y", "@upstash/context7-mcp"]
 startup_timeout_sec = 20
 `
+	if mcpURL := strings.TrimSpace(os.Getenv("MATTERCODEX_MCP_URL")); mcpURL != "" {
+		body += fmt.Sprintf(`
+[mcp_servers.mattercodex]
+url = "%s"
+bearer_token_env_var = "MATTERCODEX_MCP_TOKEN"
+startup_timeout_sec = 10
+tool_timeout_sec = 60
+required = true
+`, escapeTOMLString(mcpURL))
+	}
 	if overlay := strings.TrimSpace(os.Getenv("MATTERCODEX_CODEX_CONFIG_OVERLAY")); overlay != "" {
 		body += "\n# matter-codex role config overlay\n" + overlay + "\n"
 	}
 	return os.WriteFile(path, []byte(body), 0o600)
+}
+
+func escapeTOMLString(value string) string {
+	value = strings.ReplaceAll(value, `\`, `\\`)
+	value = strings.ReplaceAll(value, `"`, `\"`)
+	return value
 }
 
 func codexSandboxMode() string {
@@ -663,6 +889,172 @@ func tailFile(path string, lines int) {
 	}
 	fmt.Printf("===== %s\n", path)
 	fmt.Println(strings.Join(parts, "\n"))
+}
+
+func tailText(path string, lines int) string {
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	parts := strings.Split(strings.TrimSpace(string(body)), "\n")
+	if len(parts) > lines {
+		parts = parts[len(parts)-lines:]
+	}
+	return strings.TrimSpace(strings.Join(parts, "\n"))
+}
+
+func readTextFile(path string) string {
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(body))
+}
+
+func readCodexSessionID(eventsPath string) string {
+	file, err := os.Open(eventsPath)
+	if err != nil {
+		return ""
+	}
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+	var sessionID string
+	for scanner.Scan() {
+		var event struct {
+			Type     string `json:"type"`
+			ThreadID string `json:"thread_id"`
+		}
+		if err := json.Unmarshal(scanner.Bytes(), &event); err != nil {
+			continue
+		}
+		if event.Type == "thread.started" && strings.TrimSpace(event.ThreadID) != "" {
+			sessionID = strings.TrimSpace(event.ThreadID)
+		}
+	}
+	return sessionID
+}
+
+func createCodexSessionArchive(root string) (string, error) {
+	sessionsRoot := filepath.Join(root, "sessions")
+	info, err := os.Stat(sessionsRoot)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", err
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("%s is not a directory", sessionsRoot)
+	}
+	var raw bytes.Buffer
+	gzipWriter := gzip.NewWriter(&raw)
+	tarWriter := tar.NewWriter(gzipWriter)
+	err = filepath.WalkDir(sessionsRoot, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		relative, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		header, err := tar.FileInfoHeader(info, "")
+		if err != nil {
+			return err
+		}
+		header.Name = filepath.ToSlash(relative)
+		if err := tarWriter.WriteHeader(header); err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		file, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		defer file.Close()
+		_, err = io.Copy(tarWriter, file)
+		return err
+	})
+	if err != nil {
+		_ = tarWriter.Close()
+		_ = gzipWriter.Close()
+		return "", err
+	}
+	if err := tarWriter.Close(); err != nil {
+		_ = gzipWriter.Close()
+		return "", err
+	}
+	if err := gzipWriter.Close(); err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(raw.Bytes()), nil
+}
+
+func restoreCodexSessionArchive(encoded string, root string) error {
+	encoded = strings.TrimSpace(encoded)
+	if encoded == "" {
+		return nil
+	}
+	raw, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return fmt.Errorf("decode codex session archive: %w", err)
+	}
+	gzipReader, err := gzip.NewReader(bytes.NewReader(raw))
+	if err != nil {
+		return fmt.Errorf("open codex session archive: %w", err)
+	}
+	defer gzipReader.Close()
+	tarReader := tar.NewReader(gzipReader)
+	for {
+		header, err := tarReader.Next()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("read codex session archive: %w", err)
+		}
+		target, err := safeArchiveTarget(root, header.Name)
+		if err != nil {
+			return err
+		}
+		switch header.Typeflag {
+		case tar.TypeDir:
+			if err := os.MkdirAll(target, 0o755); err != nil {
+				return err
+			}
+		case tar.TypeReg:
+			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+				return err
+			}
+			file, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(header.Mode))
+			if err != nil {
+				return err
+			}
+			if _, err := io.Copy(file, tarReader); err != nil {
+				_ = file.Close()
+				return err
+			}
+			if err := file.Close(); err != nil {
+				return err
+			}
+		}
+	}
+}
+
+func safeArchiveTarget(root string, name string) (string, error) {
+	name = filepath.Clean(filepath.FromSlash(name))
+	if filepath.IsAbs(name) || name == "." || strings.HasPrefix(name, ".."+string(filepath.Separator)) || name == ".." {
+		return "", fmt.Errorf("unsafe archive path %q", name)
+	}
+	if name != "sessions" && !strings.HasPrefix(name, "sessions"+string(filepath.Separator)) {
+		return "", fmt.Errorf("unexpected archive path %q", name)
+	}
+	return filepath.Join(root, name), nil
 }
 
 func copyFile(source string, target string, mode os.FileMode) error {

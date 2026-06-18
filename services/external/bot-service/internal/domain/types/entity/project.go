@@ -88,3 +88,63 @@ type ChatRepositoryBinding struct {
 func (binding ChatRepositoryBinding) FullName() string {
 	return binding.Owner + "/" + binding.Name
 }
+
+type MattermostBotIdentity struct {
+	ID               int64
+	ProjectID        int64
+	RoleID           int64
+	Username         string
+	DisplayName      string
+	MattermostUserID string
+	TokenSecretRef   string
+	Status           string
+	LastError        string
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+}
+
+type AgentSession struct {
+	ID                       int64
+	SessionKey               string
+	ProjectID                int64
+	ChatID                   int64
+	RoleID                   int64
+	SessionScope             string
+	MattermostChannelID      string
+	MattermostRootPostID     string
+	CodexSessionID           string
+	Status                   string
+	ActiveTurnID             int64
+	ActiveRunID              string
+	KubernetesNamespace      string
+	PodName                  string
+	PVCName                  string
+	TokenSecretRef           string
+	Capabilities             string
+	SessionArchiveGzipBase64 string
+	TTLSeconds               int
+	LastActivityAt           time.Time
+	ExpiresAt                time.Time
+	CreatedAt                time.Time
+	UpdatedAt                time.Time
+}
+
+type AgentSessionTurn struct {
+	ID                   int64
+	SessionID            int64
+	RunID                string
+	MattermostChannelID  string
+	MattermostRootPostID string
+	MattermostPostID     string
+	UserID               string
+	UserName             string
+	Message              string
+	Status               string
+	FinalMessage         string
+	ErrorMessage         string
+	Artifacts            string
+	CreatedAt            time.Time
+	StartedAt            time.Time
+	FinishedAt           time.Time
+	UpdatedAt            time.Time
+}

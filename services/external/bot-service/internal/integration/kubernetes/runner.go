@@ -31,11 +31,13 @@ const (
 	defaultNamespaceFile  = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
 	runnerComponent       = "agent-run"
 	labelRunID            = "matter-codex.dev/run-id"
+	labelSessionKey       = "matter-codex.dev/session-key"
 	labelAgentRole        = "matter-codex.dev/agent-role"
 	labelOpenAIAccount    = "matter-codex.dev/openai-account"
 	labelGitHubAccount    = "matter-codex.dev/github-account"
 	codexAuthSecretVolume = "codex-auth-secret"
 	gitHubSecretVolume    = "github-secret"
+	sessionSecretVolume   = "session-secret"
 	promptVolume          = "agent-prompt"
 	runnerHomeVolume      = "runner-home"
 	runnerTmpVolume       = "runner-tmp"
@@ -534,6 +536,146 @@ func (runner *Runner) StartChatRun(ctx context.Context, input runtimerepo.ChatRu
 		JobName:   jobName,
 		PVCName:   pvcName,
 		Created:   created,
+	}, nil
+}
+
+func (runner *Runner) StartAgentSession(ctx context.Context, input runtimerepo.AgentSessionPodInput) (runtimerepo.StartedAgentSession, error) {
+	input.SessionKey = strings.TrimSpace(input.SessionKey)
+	input.Role = strings.TrimSpace(input.Role)
+	input.BotServiceURL = strings.TrimRight(strings.TrimSpace(input.BotServiceURL), "/")
+	input.InternalToken = strings.TrimSpace(input.InternalToken)
+	input.CodexAuthSecretName = strings.TrimSpace(input.CodexAuthSecretName)
+	if input.SessionKey == "" {
+		return runtimerepo.StartedAgentSession{}, fmt.Errorf("session key is required")
+	}
+	if input.Role == "" {
+		return runtimerepo.StartedAgentSession{}, fmt.Errorf("session role is required")
+	}
+	if input.BotServiceURL == "" {
+		return runtimerepo.StartedAgentSession{}, fmt.Errorf("bot service URL is required")
+	}
+	if input.InternalToken == "" {
+		return runtimerepo.StartedAgentSession{}, fmt.Errorf("session internal token is required")
+	}
+	if input.CodexAuthSecretName == "" {
+		return runtimerepo.StartedAgentSession{}, fmt.Errorf("codex auth secret name is required")
+	}
+	podName := sessionPodName(input.SessionKey)
+	pvcName := sessionPVCName(input.SessionKey)
+	secretName := sessionSecretName(input.SessionKey)
+
+	created := false
+	if _, err := runner.client.CoreV1().PersistentVolumeClaims(runner.namespace).Create(ctx, runner.sessionPVC(input.SessionKey, input.Role), metav1.CreateOptions{}); err != nil {
+		if !apierrors.IsAlreadyExists(err) {
+			return runtimerepo.StartedAgentSession{}, fmt.Errorf("create session pvc: %w", err)
+		}
+	} else {
+		created = true
+	}
+	if _, err := runner.upsertSessionTokenSecret(ctx, input.SessionKey, secretName, input.InternalToken); err != nil {
+		return runtimerepo.StartedAgentSession{}, err
+	}
+	recreatePod, err := runner.sessionPodShouldBeRecreated(ctx, podName)
+	if err != nil {
+		return runtimerepo.StartedAgentSession{}, err
+	}
+	if recreatePod {
+		if err := runner.deleteSessionPod(ctx, podName); err != nil {
+			return runtimerepo.StartedAgentSession{}, err
+		}
+		created = true
+	}
+	if _, err := runner.client.CoreV1().Pods(runner.namespace).Create(ctx, runner.sessionPod(input), metav1.CreateOptions{}); err != nil {
+		if !apierrors.IsAlreadyExists(err) {
+			return runtimerepo.StartedAgentSession{}, fmt.Errorf("create session pod: %w", err)
+		}
+	} else {
+		created = true
+	}
+	return runtimerepo.StartedAgentSession{
+		SessionKey: input.SessionKey,
+		Namespace:  runner.namespace,
+		PodName:    podName,
+		PVCName:    pvcName,
+		SecretName: secretName,
+		Created:    created,
+	}, nil
+}
+
+func (runner *Runner) sessionPodShouldBeRecreated(ctx context.Context, podName string) (bool, error) {
+	pod, err := runner.client.CoreV1().Pods(runner.namespace).Get(ctx, podName, metav1.GetOptions{})
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("get session pod: %w", err)
+	}
+	return pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed, nil
+}
+
+func (runner *Runner) deleteSessionPod(ctx context.Context, podName string) error {
+	grace := int64(0)
+	background := metav1.DeletePropagationBackground
+	if err := runner.client.CoreV1().Pods(runner.namespace).Delete(ctx, podName, metav1.DeleteOptions{
+		GracePeriodSeconds: &grace,
+		PropagationPolicy:  &background,
+	}); err != nil && !apierrors.IsNotFound(err) {
+		return fmt.Errorf("delete completed session pod: %w", err)
+	}
+	deadline := time.Now().Add(20 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := runner.client.CoreV1().Pods(runner.namespace).Get(ctx, podName, metav1.GetOptions{}); err != nil {
+			if apierrors.IsNotFound(err) {
+				return nil
+			}
+			return fmt.Errorf("wait for session pod deletion: %w", err)
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	return fmt.Errorf("session pod %s was not deleted before timeout", podName)
+}
+
+func (runner *Runner) UpsertMattermostBotTokenSecret(ctx context.Context, input runtimerepo.MattermostBotTokenSecretInput) (runtimerepo.MattermostBotTokenSecret, error) {
+	input.SecretName = strings.TrimSpace(input.SecretName)
+	input.Token = strings.TrimSpace(input.Token)
+	if input.SecretName == "" {
+		return runtimerepo.MattermostBotTokenSecret{}, fmt.Errorf("mattermost bot token secret name is required")
+	}
+	if input.Token == "" {
+		return runtimerepo.MattermostBotTokenSecret{}, fmt.Errorf("mattermost bot token is required")
+	}
+	created, err := runner.upsertSecret(ctx, input.SecretName, map[string][]byte{"token": []byte(input.Token)}, map[string]string{
+		"app.kubernetes.io/name":      "matter-codex-bot-service",
+		"app.kubernetes.io/component": "mattermost-role-bot-token",
+	})
+	if err != nil {
+		return runtimerepo.MattermostBotTokenSecret{}, err
+	}
+	return runtimerepo.MattermostBotTokenSecret{
+		SecretName: input.SecretName,
+		Namespace:  runner.namespace,
+		Created:    created,
+		Token:      input.Token,
+	}, nil
+}
+
+func (runner *Runner) GetMattermostBotTokenSecret(ctx context.Context, secretName string) (runtimerepo.MattermostBotTokenSecret, error) {
+	secretName = strings.TrimSpace(secretName)
+	if secretName == "" {
+		return runtimerepo.MattermostBotTokenSecret{}, fmt.Errorf("mattermost bot token secret name is required")
+	}
+	secret, err := runner.client.CoreV1().Secrets(runner.namespace).Get(ctx, secretName, metav1.GetOptions{})
+	if err != nil {
+		return runtimerepo.MattermostBotTokenSecret{}, fmt.Errorf("get mattermost bot token secret: %w", err)
+	}
+	token := strings.TrimSpace(string(secret.Data["token"]))
+	if token == "" {
+		return runtimerepo.MattermostBotTokenSecret{}, fmt.Errorf("mattermost bot token secret is missing token")
+	}
+	return runtimerepo.MattermostBotTokenSecret{
+		SecretName: secretName,
+		Namespace:  runner.namespace,
+		Token:      token,
 	}, nil
 }
 
@@ -1094,6 +1236,122 @@ func (runner *Runner) chatJob(input runtimerepo.ChatRunInput) *batchv1.Job {
 	}
 }
 
+func (runner *Runner) sessionPVC(sessionKey string, role string) *corev1.PersistentVolumeClaim {
+	return &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   sessionPVCName(sessionKey),
+			Labels: sessionLabels(sessionKey, role),
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+			Resources: corev1.VolumeResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: runner.workspaceStorage,
+				},
+			},
+		},
+	}
+}
+
+func (runner *Runner) sessionPod(input runtimerepo.AgentSessionPodInput) *corev1.Pod {
+	codexAuthSecretName := defaultString(input.CodexAuthSecretName, runner.codexAuthSecretName)
+	env := []corev1.EnvVar{
+		{Name: "MATTERCODEX_SESSION_KEY", Value: input.SessionKey},
+		{Name: "MATTERCODEX_AGENT_PROFILE", Value: input.Role},
+		{Name: "MATTERCODEX_BOT_SERVICE_URL", Value: input.BotServiceURL},
+		{Name: "MATTERCODEX_SESSION_TOKEN", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{
+			LocalObjectReference: corev1.LocalObjectReference{Name: sessionSecretName(input.SessionKey)},
+			Key:                  "token",
+		}}},
+		{Name: "MATTERCODEX_CODEX_SANDBOX_MODE", Value: input.SandboxMode},
+		{Name: "MATTERCODEX_CODEX_CONFIG_OVERLAY", Value: input.ConfigOverlay},
+		{Name: "MATTERCODEX_MCP_URL", Value: strings.TrimRight(input.BotServiceURL, "/") + "/mcp/sessions/" + input.SessionKey},
+		{Name: "MATTERCODEX_MCP_TOKEN", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{
+			LocalObjectReference: corev1.LocalObjectReference{Name: sessionSecretName(input.SessionKey)},
+			Key:                  "token",
+		}}},
+	}
+	volumeMounts := []corev1.VolumeMount{
+		{Name: "workspace", MountPath: "/workspace"},
+		{Name: codexAuthSecretVolume, MountPath: "/var/run/secrets/matter-codex-codex", ReadOnly: true},
+		{Name: sessionSecretVolume, MountPath: "/var/run/secrets/matter-codex-session", ReadOnly: true},
+	}
+	volumes := []corev1.Volume{
+		{
+			Name: "workspace",
+			VolumeSource: corev1.VolumeSource{
+				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+					ClaimName: sessionPVCName(input.SessionKey),
+				},
+			},
+		},
+		{
+			Name: codexAuthSecretVolume,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: codexAuthSecretName,
+					Items: []corev1.KeyToPath{
+						{Key: "auth.json", Path: "auth.json"},
+					},
+				},
+			},
+		},
+		{
+			Name: sessionSecretVolume,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: sessionSecretName(input.SessionKey),
+					Items: []corev1.KeyToPath{
+						{Key: "token", Path: "token"},
+					},
+				},
+			},
+		},
+	}
+	if strings.TrimSpace(input.GitHubSecretName) != "" {
+		env = append(env, corev1.EnvVar{Name: "MATTERCODEX_GITHUB_ENABLED", Value: "true"})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{Name: gitHubSecretVolume, MountPath: "/var/run/secrets/matter-codex-github", ReadOnly: true})
+		volumes = append(volumes, corev1.Volume{
+			Name: gitHubSecretVolume,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: input.GitHubSecretName,
+					Items: []corev1.KeyToPath{
+						{Key: "github-token", Path: "github-token"},
+						{Key: "github-username", Path: "github-username"},
+						{Key: "github-email", Path: "github-email"},
+					},
+				},
+			},
+		})
+	}
+	return &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   sessionPodName(input.SessionKey),
+			Labels: sessionLabels(input.SessionKey, input.Role),
+		},
+		Spec: corev1.PodSpec{
+			ServiceAccountName:           runner.agentRunnerServiceAccount,
+			AutomountServiceAccountToken: boolPtr(false),
+			SecurityContext:              runnerPodSecurityContext(),
+			RestartPolicy:                corev1.RestartPolicyNever,
+			Containers: []corev1.Container{
+				{
+					Name:            "runner",
+					Image:           runner.agentRunnerImage,
+					Command:         []string{"matter-codex-agent-runner"},
+					Args:            []string{"session"},
+					ImagePullPolicy: corev1.PullIfNotPresent,
+					SecurityContext: runnerContainerSecurityContext(),
+					Env:             env,
+					VolumeMounts:    append(volumeMounts, runnerWritableVolumeMounts()...),
+				},
+			},
+			Volumes: append(volumes, runnerWritableVolumes()...),
+		},
+	}
+}
+
 func (runner *Runner) codexAuthJob(accountName string, secretName string) *batchv1.Job {
 	backoffLimit := int32(0)
 	labels := codexAuthLabels(accountName)
@@ -1285,6 +1543,52 @@ func (runner *Runner) upsertGitHubTokenSecret(ctx context.Context, input runtime
 	return false, nil
 }
 
+func (runner *Runner) upsertSessionTokenSecret(ctx context.Context, sessionKey string, secretName string, token string) (bool, error) {
+	return runner.upsertSecret(ctx, secretName, map[string][]byte{"token": []byte(token)}, map[string]string{
+		"app.kubernetes.io/name":      "matter-codex-agent-runner",
+		"app.kubernetes.io/component": "agent-session-token",
+		labelSessionKey:               kubernetesLabelValue(sessionKey),
+	})
+}
+
+func (runner *Runner) upsertSecret(ctx context.Context, name string, data map[string][]byte, labels map[string]string) (bool, error) {
+	secretClient := runner.client.CoreV1().Secrets(runner.namespace)
+	secret, err := secretClient.Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		if !apierrors.IsNotFound(err) {
+			return false, fmt.Errorf("get secret %s: %w", name, err)
+		}
+		_, err = secretClient.Create(ctx, &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   name,
+				Labels: labels,
+			},
+			Type: corev1.SecretTypeOpaque,
+			Data: data,
+		}, metav1.CreateOptions{})
+		if err != nil {
+			return false, fmt.Errorf("create secret %s: %w", name, err)
+		}
+		return true, nil
+	}
+	if secret.Data == nil {
+		secret.Data = make(map[string][]byte)
+	}
+	if secret.Labels == nil {
+		secret.Labels = make(map[string]string)
+	}
+	for key, value := range labels {
+		secret.Labels[key] = value
+	}
+	for key, value := range data {
+		secret.Data[key] = value
+	}
+	if _, err := secretClient.Update(ctx, secret, metav1.UpdateOptions{}); err != nil {
+		return false, fmt.Errorf("update secret %s: %w", name, err)
+	}
+	return false, nil
+}
+
 func kubernetesConfig(kubeconfigPath string) (*rest.Config, error) {
 	if strings.TrimSpace(kubeconfigPath) != "" {
 		cfg, err := clientcmd.BuildConfigFromFlags("", kubeconfigPath)
@@ -1321,6 +1625,15 @@ func runnerLabels(runID string, role string) map[string]string {
 		"app.kubernetes.io/component": runnerComponent,
 		labelRunID:                    runID,
 		labelAgentRole:                role,
+	}
+}
+
+func sessionLabels(sessionKey string, role string) map[string]string {
+	return map[string]string{
+		"app.kubernetes.io/name":      "matter-codex-agent-runner",
+		"app.kubernetes.io/component": "agent-session",
+		labelSessionKey:               kubernetesLabelValue(sessionKey),
+		labelAgentRole:                kubernetesLabelValue(role),
 	}
 }
 
@@ -1380,6 +1693,18 @@ func runnerJobName(runID string) string {
 	return "mc-run-" + runID
 }
 
+func sessionPodName(sessionKey string) string {
+	return kubernetesName("mc-session-", sessionKey)
+}
+
+func sessionPVCName(sessionKey string) string {
+	return kubernetesName("mc-session-ws-", sessionKey)
+}
+
+func sessionSecretName(sessionKey string) string {
+	return kubernetesName("mc-session-token-", sessionKey)
+}
+
 func codexAuthJobName(accountName string) string {
 	return "mc-codex-auth-" + accountName
 }
@@ -1390,6 +1715,39 @@ func workspacePVCName(runID string) string {
 
 func promptConfigMapName(runID string) string {
 	return "mc-prompt-" + runID
+}
+
+func kubernetesName(prefix string, value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	value = regexp.MustCompile(`[^a-z0-9-]+`).ReplaceAllString(value, "-")
+	value = strings.Trim(value, "-")
+	if value == "" {
+		value = "unknown"
+	}
+	name := prefix + value
+	if len(name) > 63 {
+		name = strings.TrimRight(name[:63], "-")
+	}
+	if name == "" {
+		return prefix + "unknown"
+	}
+	return name
+}
+
+func kubernetesLabelValue(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	value = regexp.MustCompile(`[^a-z0-9_.-]+`).ReplaceAllString(value, "-")
+	value = strings.Trim(value, "-_.")
+	if value == "" {
+		return "unknown"
+	}
+	if len(value) > 63 {
+		value = strings.Trim(value[:63], "-_.")
+	}
+	if value == "" {
+		return "unknown"
+	}
+	return value
 }
 
 func normalizeDeveloperRunInput(input runtimerepo.DeveloperRunInput) runtimerepo.DeveloperRunInput {

@@ -50,6 +50,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		DefaultChannels:      cfg.ChannelNames(),
 	})
 	var channelManager statusservice.MattermostChannelManager
+	var roleBotManager statusservice.MattermostRoleBotManager
 	var flowCardPublisher statusservice.FlowCardPublisher
 	var threadPublisher statusservice.MattermostThreadPublisher
 	var dialogOpener httptransport.DialogOpener
@@ -57,6 +58,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	if cfg.BotTokenConfigured() && cfg.MattermostAPIURL() != "" {
 		controlSurface = mattermostintegration.NewControlSurface(cfg.MattermostAPIURL(), cfg.MattermostBotToken)
 		channelManager = controlSurface
+		roleBotManager = controlSurface
 		flowCardPublisher = controlSurface
 		threadPublisher = controlSurface
 		dialogOpener = controlSurface
@@ -72,6 +74,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		StatusService:            statusSvc,
 		Store:                    storage,
 		ChannelManager:           channelManager,
+		RoleBotManager:           roleBotManager,
 		FlowCardPublisher:        flowCardPublisher,
 		RepositoryProvider:       gitHubProvider,
 		GitHubRepositoryProvider: gitHubAccountProvider,
@@ -98,13 +101,25 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		Store:           storage,
 		RuntimeRunner:   runtimeRunner,
 		ThreadPublisher: threadPublisher,
+		BotServiceURL:   botServiceRuntimeURL(cfg),
 		StorageReady:    storage != nil,
 		RuntimeReady:    runtimeConfigured,
+	})
+	sessionSvc := statusservice.NewAgentSessionService(statusservice.AgentSessionServiceConfig{
+		Localizer:          localizer,
+		Store:              storage,
+		RuntimeRunner:      runtimeRunner,
+		ThreadPublisher:    threadPublisher,
+		ConversationReader: controlSurface,
+		TurnDispatcher:     chatRunSvc,
+		StorageReady:       storage != nil,
+		RuntimeReady:       runtimeConfigured,
 	})
 
 	router := httptransport.NewRouter(httptransport.RouterConfig{
 		StatusService:         statusSvc,
 		SlashService:          slashSvc,
+		SessionService:        sessionSvc,
 		DialogOpener:          dialogOpener,
 		Localizer:             localizer,
 		SlashToken:            cfg.MattermostSlashToken,
@@ -213,6 +228,14 @@ func gitHubWebhookURL(cfg Config) string {
 		return ""
 	}
 	return baseURL + "/github/webhook"
+}
+
+func botServiceRuntimeURL(cfg Config) string {
+	baseURL := strings.TrimRight(strings.TrimSpace(cfg.BotServiceInternalURL), "/")
+	if baseURL == "" {
+		baseURL = strings.TrimRight(strings.TrimSpace(cfg.BotServiceSiteURL), "/")
+	}
+	return baseURL
 }
 
 func flowActionURL(cfg Config) string {
