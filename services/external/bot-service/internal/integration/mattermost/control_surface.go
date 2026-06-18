@@ -12,10 +12,32 @@ type ControlSurface struct {
 	client *mattermostmodel.Client4
 }
 
+var _ statusservice.MattermostThreadPublisher = (*ControlSurface)(nil)
+
 func NewControlSurface(siteURL string, token string) *ControlSurface {
 	client := mattermostmodel.NewAPIv4Client(siteURL)
 	client.SetToken(token)
 	return &ControlSurface{client: client}
+}
+
+func (surface *ControlSurface) BotUserID(ctx context.Context) (string, error) {
+	user, _, err := surface.client.GetMe(ctx, "")
+	if err != nil {
+		return "", fmt.Errorf("get Mattermost bot user: %w", err)
+	}
+	return user.Id, nil
+}
+
+func (surface *ControlSurface) PostThreadMessage(ctx context.Context, input statusservice.MattermostThreadPostInput) (statusservice.MattermostPostRef, error) {
+	post, _, err := surface.client.CreatePost(ctx, &mattermostmodel.Post{
+		ChannelId: input.ChannelID,
+		RootId:    input.RootPostID,
+		Message:   input.Message,
+	})
+	if err != nil {
+		return statusservice.MattermostPostRef{}, fmt.Errorf("create Mattermost thread post: %w", err)
+	}
+	return statusservice.MattermostPostRef{ChannelID: post.ChannelId, PostID: post.Id}, nil
 }
 
 func (surface *ControlSurface) EnsureRepositoryChannel(ctx context.Context, teamName string, channelName string, displayName string) (bool, error) {

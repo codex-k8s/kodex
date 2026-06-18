@@ -492,6 +492,51 @@ func (runner *Runner) StartReviewRun(ctx context.Context, input runtimerepo.Revi
 	}, nil
 }
 
+func (runner *Runner) StartChatRun(ctx context.Context, input runtimerepo.ChatRunInput) (runtimerepo.StartedRun, error) {
+	input = normalizeChatRunInput(input)
+	if input.RunID == "" {
+		return runtimerepo.StartedRun{}, fmt.Errorf("run id is required")
+	}
+	if input.Prompt == "" {
+		return runtimerepo.StartedRun{}, fmt.Errorf("prompt is required")
+	}
+	if input.CodexAuthSecretName == "" {
+		return runtimerepo.StartedRun{}, fmt.Errorf("codex auth secret name is required")
+	}
+	pvcName := workspacePVCName(input.RunID)
+	jobName := runnerJobName(input.RunID)
+
+	created := false
+	if _, err := runner.client.CoreV1().PersistentVolumeClaims(runner.namespace).Create(ctx, runner.smokePVC(input.RunID, input.Profile), metav1.CreateOptions{}); err != nil {
+		if !apierrors.IsAlreadyExists(err) {
+			return runtimerepo.StartedRun{}, fmt.Errorf("create workspace pvc: %w", err)
+		}
+	} else {
+		created = true
+	}
+	if _, err := runner.client.CoreV1().ConfigMaps(runner.namespace).Create(ctx, runner.promptConfigMap(input.RunID, input.Profile, input.Prompt), metav1.CreateOptions{}); err != nil {
+		if !apierrors.IsAlreadyExists(err) {
+			return runtimerepo.StartedRun{}, fmt.Errorf("create prompt configmap: %w", err)
+		}
+	} else {
+		created = true
+	}
+	if _, err := runner.client.BatchV1().Jobs(runner.namespace).Create(ctx, runner.chatJob(input), metav1.CreateOptions{}); err != nil {
+		if !apierrors.IsAlreadyExists(err) {
+			return runtimerepo.StartedRun{}, fmt.Errorf("create chat runner job: %w", err)
+		}
+	} else {
+		created = true
+	}
+	return runtimerepo.StartedRun{
+		RunID:     input.RunID,
+		Namespace: runner.namespace,
+		JobName:   jobName,
+		PVCName:   pvcName,
+		Created:   created,
+	}, nil
+}
+
 func (runner *Runner) GetRunStatus(ctx context.Context, runID string) (runtimerepo.RunStatus, error) {
 	runID = strings.TrimSpace(runID)
 	if runID == "" {
@@ -794,6 +839,8 @@ func (runner *Runner) developerJob(input runtimerepo.DeveloperRunInput) *batchv1
 								{Name: "MATTERCODEX_BASE_BRANCH", Value: input.BaseBranch},
 								{Name: "MATTERCODEX_HEAD_BRANCH", Value: input.HeadBranch},
 								{Name: "MATTERCODEX_PR_TITLE", Value: input.Title},
+								{Name: "MATTERCODEX_CODEX_SANDBOX_MODE", Value: input.SandboxMode},
+								{Name: "MATTERCODEX_CODEX_CONFIG_OVERLAY", Value: input.ConfigOverlay},
 							},
 							VolumeMounts: append([]corev1.VolumeMount{
 								{Name: "workspace", MountPath: "/workspace"},
@@ -888,6 +935,8 @@ func (runner *Runner) reviewJob(input runtimerepo.ReviewRunInput) *batchv1.Job {
 								{Name: "MATTERCODEX_REPO_OWNER", Value: input.Owner},
 								{Name: "MATTERCODEX_REPO_NAME", Value: input.Name},
 								{Name: "MATTERCODEX_PR_NUMBER", Value: strconv.Itoa(input.PRNumber)},
+								{Name: "MATTERCODEX_CODEX_SANDBOX_MODE", Value: input.SandboxMode},
+								{Name: "MATTERCODEX_CODEX_CONFIG_OVERLAY", Value: input.ConfigOverlay},
 							},
 							VolumeMounts: append([]corev1.VolumeMount{
 								{Name: "workspace", MountPath: "/workspace"},
@@ -942,6 +991,103 @@ func (runner *Runner) reviewJob(input runtimerepo.ReviewRunInput) *batchv1.Job {
 							},
 						},
 					}, runnerWritableVolumes()...),
+				},
+			},
+		},
+	}
+}
+
+func (runner *Runner) chatJob(input runtimerepo.ChatRunInput) *batchv1.Job {
+	backoffLimit := int32(0)
+	codexAuthSecretName := defaultString(input.CodexAuthSecretName, runner.codexAuthSecretName)
+	env := []corev1.EnvVar{
+		{Name: "MATTERCODEX_RUN_ID", Value: input.RunID},
+		{Name: "MATTERCODEX_AGENT_PROFILE", Value: input.Profile},
+		{Name: "MATTERCODEX_CODEX_SANDBOX_MODE", Value: input.SandboxMode},
+		{Name: "MATTERCODEX_CODEX_CONFIG_OVERLAY", Value: input.ConfigOverlay},
+	}
+	volumeMounts := []corev1.VolumeMount{
+		{Name: "workspace", MountPath: "/workspace"},
+		{Name: codexAuthSecretVolume, MountPath: "/var/run/secrets/matter-codex-codex", ReadOnly: true},
+		{Name: promptVolume, MountPath: "/var/run/matter-codex-prompt", ReadOnly: true},
+	}
+	volumes := []corev1.Volume{
+		{
+			Name: "workspace",
+			VolumeSource: corev1.VolumeSource{
+				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+					ClaimName: workspacePVCName(input.RunID),
+				},
+			},
+		},
+		{
+			Name: codexAuthSecretVolume,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: codexAuthSecretName,
+					Items: []corev1.KeyToPath{
+						{Key: "auth.json", Path: "auth.json"},
+					},
+				},
+			},
+		},
+		{
+			Name: promptVolume,
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{Name: promptConfigMapName(input.RunID)},
+					Items: []corev1.KeyToPath{
+						{Key: "prompt.md", Path: "prompt.md"},
+					},
+				},
+			},
+		},
+	}
+	if strings.TrimSpace(input.GitHubSecretName) != "" {
+		env = append(env, corev1.EnvVar{Name: "MATTERCODEX_GITHUB_ENABLED", Value: "true"})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{Name: gitHubSecretVolume, MountPath: "/var/run/secrets/matter-codex-github", ReadOnly: true})
+		volumes = append(volumes, corev1.Volume{
+			Name: gitHubSecretVolume,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: input.GitHubSecretName,
+					Items: []corev1.KeyToPath{
+						{Key: "github-token", Path: "github-token"},
+						{Key: "github-username", Path: "github-username"},
+						{Key: "github-email", Path: "github-email"},
+					},
+				},
+			},
+		})
+	}
+	return &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   runnerJobName(input.RunID),
+			Labels: runnerLabels(input.RunID, input.Profile),
+		},
+		Spec: batchv1.JobSpec{
+			BackoffLimit:            &backoffLimit,
+			TTLSecondsAfterFinished: &runner.jobTTLSecondsAfterFinish,
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{Labels: runnerLabels(input.RunID, input.Profile)},
+				Spec: corev1.PodSpec{
+					ServiceAccountName:           runner.agentRunnerServiceAccount,
+					AutomountServiceAccountToken: boolPtr(false),
+					SecurityContext:              runnerPodSecurityContext(),
+					RestartPolicy:                corev1.RestartPolicyNever,
+					Containers: []corev1.Container{
+						{
+							Name:            "runner",
+							Image:           runner.agentRunnerImage,
+							Command:         []string{"matter-codex-agent-runner"},
+							Args:            []string{"chat"},
+							ImagePullPolicy: corev1.PullIfNotPresent,
+							SecurityContext: runnerContainerSecurityContext(),
+							Env:             env,
+							VolumeMounts:    append(volumeMounts, runnerWritableVolumeMounts()...),
+						},
+					},
+					Volumes: append(volumes, runnerWritableVolumes()...),
 				},
 			},
 		},
@@ -1258,6 +1404,7 @@ func normalizeDeveloperRunInput(input runtimerepo.DeveloperRunInput) runtimerepo
 	input.HeadBranch = strings.TrimSpace(input.HeadBranch)
 	input.Title = strings.TrimSpace(input.Title)
 	input.Task = strings.TrimSpace(input.Task)
+	input.SandboxMode = defaultString(input.SandboxMode, "danger-full-access")
 	return input
 }
 
@@ -1269,6 +1416,17 @@ func normalizeReviewRunInput(input runtimerepo.ReviewRunInput) runtimerepo.Revie
 	input.Provider = defaultString(input.Provider, "github")
 	input.Owner = strings.TrimSpace(input.Owner)
 	input.Name = strings.TrimSpace(input.Name)
+	input.SandboxMode = defaultString(input.SandboxMode, "danger-full-access")
+	return input
+}
+
+func normalizeChatRunInput(input runtimerepo.ChatRunInput) runtimerepo.ChatRunInput {
+	input.RunID = strings.TrimSpace(input.RunID)
+	input.Profile = defaultString(input.Profile, "chat")
+	input.CodexAuthSecretName = strings.TrimSpace(input.CodexAuthSecretName)
+	input.GitHubSecretName = strings.TrimSpace(input.GitHubSecretName)
+	input.Prompt = strings.TrimSpace(input.Prompt)
+	input.SandboxMode = defaultString(input.SandboxMode, "danger-full-access")
 	return input
 }
 

@@ -65,6 +65,8 @@ func main() {
 		err = r.runDeveloper(ctx)
 	case "reviewer":
 		err = r.runReviewer(ctx)
+	case "chat":
+		err = r.runChat(ctx)
 	default:
 		err = fmt.Errorf("unknown mode %q", os.Args[1])
 	}
@@ -151,9 +153,10 @@ func (r *runner) runDeveloper(ctx context.Context) error {
 	if err := r.runLogged(ctx, repoDir, githubEnv, "git-config-email.log", "git", "config", "user.email", account.Email); err != nil {
 		return err
 	}
-	if err := r.runCodexExec(ctx, "codex-final.md", githubEnv); err != nil {
+	if err := r.runCodexExec(ctx, repoDir, "codex-final.md", githubEnv); err != nil {
 		return err
 	}
+	r.printFinalAnswer("codex-final.md")
 	changed, err := r.gitHasChanges(ctx)
 	if err != nil {
 		return err
@@ -231,9 +234,10 @@ func (r *runner) runReviewer(ctx context.Context) error {
 	if err := r.runLogged(ctx, repoDir, nil, "git-checkout.log", "git", "checkout", branchName); err != nil {
 		return err
 	}
-	if err := r.runCodexExec(ctx, "review-final.md", githubEnv); err != nil {
+	if err := r.runCodexExec(ctx, repoDir, "review-final.md", githubEnv); err != nil {
 		return err
 	}
+	r.printFinalAnswer("review-final.md")
 	decision := normalizeDecision(readDecision(filepath.Join(artifactsDir, "review-final.md")))
 	submittedByAgent := readReviewSubmitted(filepath.Join(artifactsDir, "review-final.md"))
 	bodyPath, err := r.writeReviewBody(runID, prNumber, "review-final.md")
@@ -267,6 +271,35 @@ func (r *runner) runReviewer(ctx context.Context) error {
 	return nil
 }
 
+func (r *runner) runChat(ctx context.Context) error {
+	runID := requiredEnv("MATTERCODEX_RUN_ID")
+	profile := requiredEnv("MATTERCODEX_AGENT_PROFILE")
+
+	fmt.Println("matter-codex chat run start")
+	fmt.Printf("run-id: %s\n", runID)
+	fmt.Printf("profile: %s\n", profile)
+	if err := r.prepareWorkspace(); err != nil {
+		return err
+	}
+	if err := r.prepareCodexHome(ctx); err != nil {
+		return err
+	}
+	extraEnv := []string{}
+	if os.Getenv("MATTERCODEX_GITHUB_ENABLED") == "true" {
+		account, err := readGitHubAccount()
+		if err != nil {
+			return err
+		}
+		extraEnv = account.env()
+	}
+	if err := r.runCodexExec(ctx, workspaceDir, "chat-final.md", extraEnv); err != nil {
+		return err
+	}
+	r.printFinalAnswer("chat-final.md")
+	fmt.Println("matter-codex chat run done")
+	return nil
+}
+
 func (r *runner) prepareWorkspace() error {
 	for _, dir := range []string{repoDir, artifactsDir, codexHomeDir} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -290,7 +323,7 @@ func (r *runner) prepareCodexHome(ctx context.Context) error {
 	return nil
 }
 
-func (r *runner) runCodexExec(ctx context.Context, finalFile string, extraEnv []string) error {
+func (r *runner) runCodexExec(ctx context.Context, workDir string, finalFile string, extraEnv []string) error {
 	promptFile, err := os.Open(promptPath)
 	if err != nil {
 		return err
@@ -307,7 +340,7 @@ func (r *runner) runCodexExec(ctx context.Context, finalFile string, extraEnv []
 	}
 	defer stderr.Close()
 	r.failureLogs = append(r.failureLogs, filepath.Join(artifactsDir, "codex-stderr.log"))
-	cmd := exec.CommandContext(ctx, "codex", "exec", "--json", "--cd", repoDir, "--sandbox", "danger-full-access", "--output-last-message", filepath.Join(artifactsDir, finalFile), "-")
+	cmd := exec.CommandContext(ctx, "codex", "exec", "--json", "--cd", workDir, "--sandbox", codexSandboxMode(), "--skip-git-repo-check", "--output-last-message", filepath.Join(artifactsDir, finalFile), "-")
 	cmd.Env = mergeEnv(os.Environ(), append(extraEnv, "CODEX_HOME="+codexHomeDir)...)
 	cmd.Stdin = promptFile
 	cmd.Stdout = events
@@ -403,7 +436,18 @@ command = "npx"
 args = ["-y", "@upstash/context7-mcp"]
 startup_timeout_sec = 20
 `
+	if overlay := strings.TrimSpace(os.Getenv("MATTERCODEX_CODEX_CONFIG_OVERLAY")); overlay != "" {
+		body += "\n# matter-codex role config overlay\n" + overlay + "\n"
+	}
 	return os.WriteFile(path, []byte(body), 0o600)
+}
+
+func codexSandboxMode() string {
+	mode := strings.TrimSpace(os.Getenv("MATTERCODEX_CODEX_SANDBOX_MODE"))
+	if mode == "" {
+		return "danger-full-access"
+	}
+	return mode
 }
 
 func runGitAskPass() {
@@ -583,6 +627,20 @@ func artifact(key string, value string) {
 	if key != "" && value != "" {
 		fmt.Printf("matter-codex artifact %s: %s\n", key, value)
 	}
+}
+
+func (r *runner) printFinalAnswer(finalFile string) {
+	body, err := os.ReadFile(filepath.Join(artifactsDir, finalFile))
+	if err != nil {
+		return
+	}
+	text := strings.TrimSpace(string(body))
+	if text == "" {
+		return
+	}
+	fmt.Println("matter-codex final answer begin")
+	fmt.Println(text)
+	fmt.Println("matter-codex final answer end")
 }
 
 func fail(err error, logs []string) {

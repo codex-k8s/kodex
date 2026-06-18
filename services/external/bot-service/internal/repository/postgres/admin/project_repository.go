@@ -219,6 +219,17 @@ func (repo *Repository) GetChat(ctx context.Context, id int64) (entity.Chat, err
 	return item, nil
 }
 
+func (repo *Repository) GetChatByMattermostChannelID(ctx context.Context, channelID string) (entity.Chat, error) {
+	item, err := scanChat(repo.pool.QueryRow(ctx, query("chats__get_by_channel.sql"), channelID))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.Chat{}, adminrepo.ErrNotFound
+		}
+		return entity.Chat{}, fmt.Errorf("get chat by Mattermost channel: %w", err)
+	}
+	return item, nil
+}
+
 func (repo *Repository) ListChats(ctx context.Context, projectID int64) ([]entity.Chat, error) {
 	rows, err := repo.pool.Query(ctx, query("chats__list.sql"), projectID)
 	if err != nil {

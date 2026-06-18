@@ -349,6 +349,65 @@ func TestStartReviewRunCreatesPVCAndJob(t *testing.T) {
 	}
 }
 
+func TestStartChatRunCreatesPVCAndJob(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	runner, err := NewRunnerWithClient(client, Config{
+		Namespace:                 "mattermost",
+		AgentRunnerImage:          "matter-codex-agent-runner:test",
+		CodexPackage:              "@openai/codex@0.138.0",
+		WorkspaceStorageSize:      "1Gi",
+		AgentRunnerServiceAccount: "matter-codex-agent-runner",
+		CodexAuthSecretName:       "matter-codex-codex-auth",
+		GitHubSecretName:          "matter-codex-github",
+	})
+	if err != nil {
+		t.Fatalf("NewRunnerWithClient() error = %v", err)
+	}
+
+	started, err := runner.StartChatRun(context.Background(), runtimerepo.ChatRunInput{
+		RunID:               "chat-test",
+		Profile:             "manager",
+		CodexAuthSecretName: "matter-codex-codex-auth-main",
+		GitHubSecretName:    "matter-codex-github-agent",
+		Prompt:              "Chat prompt",
+		SandboxMode:         "danger-full-access",
+		ConfigOverlay:       "model = \"gpt-5-codex\"",
+	})
+	if err != nil {
+		t.Fatalf("StartChatRun() error = %v", err)
+	}
+	if !started.Created || started.JobName != "mc-run-chat-test" || started.PVCName != "mc-ws-chat-test" {
+		t.Fatalf("started = %#v", started)
+	}
+	job, err := client.BatchV1().Jobs("mattermost").Get(context.Background(), "mc-run-chat-test", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("Get job error = %v", err)
+	}
+	podSpec := job.Spec.Template.Spec
+	if got := podSpec.Containers[0].Args[0]; got != "chat" {
+		t.Fatalf("args = %q", got)
+	}
+	if got := envValue(podSpec.Containers[0].Env, "MATTERCODEX_GITHUB_ENABLED"); got != "true" {
+		t.Fatalf("MATTERCODEX_GITHUB_ENABLED = %q", got)
+	}
+	if got := envValue(podSpec.Containers[0].Env, "MATTERCODEX_CODEX_CONFIG_OVERLAY"); got != "model = \"gpt-5-codex\"" {
+		t.Fatalf("MATTERCODEX_CODEX_CONFIG_OVERLAY = %q", got)
+	}
+	if len(podSpec.Volumes) != 6 {
+		t.Fatalf("volumes len = %d", len(podSpec.Volumes))
+	}
+	if podSpec.Volumes[1].Secret.SecretName != "matter-codex-codex-auth-main" || podSpec.Volumes[3].Secret.SecretName != "matter-codex-github-agent" {
+		t.Fatalf("secret volumes = %#v", podSpec.Volumes)
+	}
+	configMap, err := client.CoreV1().ConfigMaps("mattermost").Get(context.Background(), "mc-prompt-chat-test", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("Get prompt configmap error = %v", err)
+	}
+	if configMap.Data["prompt.md"] != "Chat prompt" {
+		t.Fatalf("prompt configmap data = %#v", configMap.Data)
+	}
+}
+
 func TestGetRunStatusReadsJobAndPodStatus(t *testing.T) {
 	client := fake.NewSimpleClientset(
 		&batchv1.Job{

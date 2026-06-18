@@ -191,6 +191,7 @@ type Repository interface {
 	ListAgentRoles(ctx context.Context, projectID int64) ([]entity.AgentRole, error)
 	CreateChat(ctx context.Context, input CreateChatInput) (entity.Chat, bool, error)
 	GetChat(ctx context.Context, id int64) (entity.Chat, error)
+	GetChatByMattermostChannelID(ctx context.Context, channelID string) (entity.Chat, error)
 	ListChats(ctx context.Context, projectID int64) ([]entity.Chat, error)
 	ListChatParticipants(ctx context.Context, chatID int64) ([]entity.ChatParticipant, error)
 	ListChatRepositories(ctx context.Context, chatID int64) ([]entity.ChatRepositoryBinding, error)

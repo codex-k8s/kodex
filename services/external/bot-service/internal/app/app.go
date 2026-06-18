@@ -51,11 +51,14 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	})
 	var channelManager statusservice.MattermostChannelManager
 	var flowCardPublisher statusservice.FlowCardPublisher
+	var threadPublisher statusservice.MattermostThreadPublisher
 	var dialogOpener httptransport.DialogOpener
+	var controlSurface *mattermostintegration.ControlSurface
 	if cfg.BotTokenConfigured() && cfg.MattermostAPIURL() != "" {
-		controlSurface := mattermostintegration.NewControlSurface(cfg.MattermostAPIURL(), cfg.MattermostBotToken)
+		controlSurface = mattermostintegration.NewControlSurface(cfg.MattermostAPIURL(), cfg.MattermostBotToken)
 		channelManager = controlSurface
 		flowCardPublisher = controlSurface
+		threadPublisher = controlSurface
 		dialogOpener = controlSurface
 	}
 	gitHubProvider, err := openGitHubProvider(cfg)
@@ -90,6 +93,14 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		MattermostConfigured:     cfg.MattermostSiteURL != "",
 		ChannelManagerEnabled:    channelManager != nil,
 	})
+	chatRunSvc := statusservice.NewChatRunService(statusservice.ChatRunServiceConfig{
+		Localizer:       localizer,
+		Store:           storage,
+		RuntimeRunner:   runtimeRunner,
+		ThreadPublisher: threadPublisher,
+		StorageReady:    storage != nil,
+		RuntimeReady:    runtimeConfigured,
+	})
 
 	router := httptransport.NewRouter(httptransport.RouterConfig{
 		StatusService:         statusSvc,
@@ -118,6 +129,22 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		}
 		errCh <- nil
 	}()
+	if controlSurface != nil {
+		botUserID, err := controlSurface.BotUserID(ctx)
+		if err != nil {
+			logger.Warn("Mattermost chat listener disabled: bot user was not resolved", "error", err)
+		} else if listener, err := mattermostintegration.NewChatListener(mattermostintegration.ChatListenerConfig{
+			SiteURL:   cfg.MattermostAPIURL(),
+			Token:     cfg.MattermostBotToken,
+			BotUserID: botUserID,
+			Handler:   chatRunSvc,
+			Logger:    logger,
+		}); err != nil {
+			logger.Warn("Mattermost chat listener disabled: configuration is invalid", "error", err)
+		} else {
+			go listener.Run(ctx)
+		}
+	}
 
 	select {
 	case <-ctx.Done():

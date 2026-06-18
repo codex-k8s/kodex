@@ -599,13 +599,20 @@ func TestChatDialogCreatesPrivateProjectChannelWithRolesAndRepository(t *testing
 
 func TestBuildRolePromptUsesRawMessageWithoutTemplate(t *testing.T) {
 	prompt, err := BuildRolePrompt(RolePromptInput{
-		Role:        entity.AgentRole{Name: "adhoc", RoleType: "custom"},
-		UserMessage: "Inspect the current issue and propose next steps.",
+		Project:      entity.Project{Name: "Platform", Slug: "platform"},
+		Role:         entity.AgentRole{Name: "adhoc", RoleType: "custom"},
+		Chat:         entity.Chat{Name: "Manager", ChatType: "manager"},
+		Repositories: []entity.ProjectRepository{{Provider: "github", Owner: "codex-k8s", Name: "matter-codex", DefaultBranch: "main"}},
+		UserMessage:  "Inspect the current issue and propose next steps.",
+		Locale:       promptTemplateLocaleData{Language: "English"},
 	})
 	if err != nil {
 		t.Fatalf("BuildRolePrompt() error = %v", err)
 	}
-	if prompt != "Inspect the current issue and propose next steps.\n" {
+	if !strings.Contains(prompt, "# User instruction") || !strings.Contains(prompt, "Inspect the current issue and propose next steps.") {
+		t.Fatalf("prompt = %q", prompt)
+	}
+	if !strings.Contains(prompt, "Project: Platform") || !strings.Contains(prompt, "github:codex-k8s/matter-codex") {
 		t.Fatalf("prompt = %q", prompt)
 	}
 }
@@ -2777,6 +2784,10 @@ type fakeRuntimeRunner struct {
 	reviewPRNumber             int
 	reviewCodexSecret          string
 	reviewGitHubSecret         string
+	startedChatRunID           string
+	chatRuns                   []runtimerepo.ChatRunInput
+	chatCodexSecret            string
+	chatGitHubSecret           string
 	cleanedRunID               string
 	cleanedRunIDs              []string
 	retentionInput             runtimerepo.RetentionCleanupInput
@@ -2906,6 +2917,23 @@ func (runner *fakeRuntimeRunner) StartReviewRun(_ context.Context, input runtime
 	runner.reviewPRNumber = input.PRNumber
 	runner.reviewCodexSecret = input.CodexAuthSecretName
 	runner.reviewGitHubSecret = input.GitHubSecretName
+	if strings.TrimSpace(input.Prompt) == "" {
+		return runtimerepo.StartedRun{}, fmt.Errorf("prompt is required")
+	}
+	return runtimerepo.StartedRun{
+		RunID:     input.RunID,
+		Namespace: "mattermost",
+		JobName:   "mc-run-" + input.RunID,
+		PVCName:   "mc-ws-" + input.RunID,
+		Created:   true,
+	}, nil
+}
+
+func (runner *fakeRuntimeRunner) StartChatRun(_ context.Context, input runtimerepo.ChatRunInput) (runtimerepo.StartedRun, error) {
+	runner.startedChatRunID = input.RunID
+	runner.chatRuns = append(runner.chatRuns, input)
+	runner.chatCodexSecret = input.CodexAuthSecretName
+	runner.chatGitHubSecret = input.GitHubSecretName
 	if strings.TrimSpace(input.Prompt) == "" {
 		return runtimerepo.StartedRun{}, fmt.Errorf("prompt is required")
 	}
@@ -3275,6 +3303,16 @@ func (store *fakeAdminStore) GetChat(_ context.Context, id int64) (entity.Chat, 
 		return entity.Chat{}, adminrepo.ErrNotFound
 	}
 	return chat, nil
+}
+
+func (store *fakeAdminStore) GetChatByMattermostChannelID(_ context.Context, channelID string) (entity.Chat, error) {
+	store.ensureChats()
+	for _, chat := range store.chats {
+		if chat.MattermostChannelID == channelID {
+			return chat, nil
+		}
+	}
+	return entity.Chat{}, adminrepo.ErrNotFound
 }
 
 func (store *fakeAdminStore) ListChats(_ context.Context, projectID int64) ([]entity.Chat, error) {
