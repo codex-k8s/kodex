@@ -56,6 +56,9 @@ func TestSelfDeploySignalEventHandlerCreatesPlanFromProjectSignal(t *testing.T) 
 	if input.GovernanceContext.GatePolicyRef != "governance:gate_policy/self_deploy.owner_gate" {
 		t.Fatalf("gate policy ref = %q", input.GovernanceContext.GatePolicyRef)
 	}
+	if input.SafeSummary == "" {
+		t.Fatal("safe summary is empty, want project signal summary forwarded")
+	}
 }
 
 func TestSelfDeploySignalEventHandlerCreatesPlanFromLiveReadySignalShape(t *testing.T) {
