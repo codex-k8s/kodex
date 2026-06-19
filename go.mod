@@ -3,6 +3,7 @@ module github.com/codex-k8s/matter-codex
 go 1.26.3
 
 require (
+	github.com/BurntSushi/toml v1.6.0
 	github.com/caarlos0/env/v11 v11.3.1
 	github.com/google/go-github/v88 v88.0.0
 	github.com/jackc/pgx/v5 v5.10.0

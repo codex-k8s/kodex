@@ -602,9 +602,8 @@ func (svc *ChatRunService) botServiceURL() string {
 
 func (svc *ChatRunService) ensureCodexAuthSecretReady(ctx context.Context, account entity.OpenAIAccount, role entity.AgentRole) error {
 	check, err := svc.cfg.RuntimeRunner.CheckCodexAuthSecret(ctx, runtimerepo.CodexAuthSecretCheckInput{
-		AccountName:   account.Name,
-		SecretName:    account.SecretRef,
-		ConfigOverlay: role.ConfigOverlay,
+		AccountName: account.Name,
+		SecretName:  account.SecretRef,
 	})
 	if err == nil && check.Ready {
 		_, _ = svc.cfg.Store.UpdateOpenAIAccountStatus(ctx, adminrepo.UpdateOpenAIAccountStatusInput{
@@ -624,9 +623,8 @@ func (svc *ChatRunService) ensureCodexAuthSecretReady(ctx context.Context, accou
 	}
 	if completed {
 		check, err = svc.cfg.RuntimeRunner.CheckCodexAuthSecret(ctx, runtimerepo.CodexAuthSecretCheckInput{
-			AccountName:   account.Name,
-			SecretName:    account.SecretRef,
-			ConfigOverlay: role.ConfigOverlay,
+			AccountName: account.Name,
+			SecretName:  account.SecretRef,
 		})
 		if err == nil && check.Ready {
 			return nil

@@ -17,6 +17,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/BurntSushi/toml"
 )
 
 const (
@@ -161,6 +163,12 @@ func (r *runner) runCodexAuth(ctx context.Context) error {
 func (r *runner) runCodexAuthSecretCheck(ctx context.Context) error {
 	fmt.Println("matter-codex codex auth secret check start")
 	if err := r.prepareWorkspace(); err != nil {
+		return err
+	}
+	// Authentication checks must validate only the saved Codex login. Role-level
+	// config overlays are validated by real agent runs; mixing them here turns
+	// config errors into misleading reauth requests.
+	if err := disableCodexConfigOverlayForAuthCheck(); err != nil {
 		return err
 	}
 	if err := r.prepareCodexHome(ctx); err != nil {
@@ -697,33 +705,145 @@ func (r *runner) writeReviewFallbackBody(runID string, prNumber string, failedFl
 
 func writeCodexConfig(path string) error {
 	allowlist := codexShellEnvironmentAllowlist()
-	body := fmt.Sprintf(`sandbox_mode = "danger-full-access"
-approval_policy = "never"
-disable_response_storage = false
-
-[shell_environment_policy]
-inherit = "none"
-include_only = %s
-
-[mcp_servers.context7]
-command = "npx"
-args = ["-y", "@upstash/context7-mcp"]
-startup_timeout_sec = 20
-`, tomlStringList(allowlist))
-	if mcpURL := strings.TrimSpace(os.Getenv("MATTERCODEX_MCP_URL")); mcpURL != "" {
-		body += fmt.Sprintf(`
-[mcp_servers.mattercodex]
-url = "%s"
-bearer_token_env_var = "MATTERCODEX_MCP_TOKEN"
-startup_timeout_sec = 10
-tool_timeout_sec = 60
-required = true
-`, escapeTOMLString(mcpURL))
+	config := map[string]any{
+		"sandbox_mode":             "danger-full-access",
+		"approval_policy":          "never",
+		"disable_response_storage": false,
+		"shell_environment_policy": map[string]any{
+			"inherit":      "none",
+			"include_only": allowlist,
+		},
+		"mcp_servers": map[string]any{
+			"context7": map[string]any{
+				"command":             "npx",
+				"args":                []string{"-y", "@upstash/context7-mcp"},
+				"startup_timeout_sec": 20,
+			},
+		},
 	}
 	if overlay := strings.TrimSpace(os.Getenv("MATTERCODEX_CODEX_CONFIG_OVERLAY")); overlay != "" {
-		body += "\n# matter-codex role config overlay\n" + overlay + "\n"
+		overlayConfig := map[string]any{}
+		if _, err := toml.Decode(overlay, &overlayConfig); err != nil {
+			return fmt.Errorf("parse codex config overlay: %w", err)
+		}
+		mergeTOMLMaps(config, overlayConfig)
 	}
-	return os.WriteFile(path, []byte(body), 0o600)
+	if err := ensureCodexRuntimeConfig(config, allowlist); err != nil {
+		return err
+	}
+	var body bytes.Buffer
+	encoder := toml.NewEncoder(&body)
+	if err := encoder.Encode(config); err != nil {
+		return fmt.Errorf("encode codex config: %w", err)
+	}
+	return os.WriteFile(path, body.Bytes(), 0o600)
+}
+
+func disableCodexConfigOverlayForAuthCheck() error {
+	return os.Setenv("MATTERCODEX_CODEX_CONFIG_OVERLAY", "")
+}
+
+func mergeTOMLMaps(dst map[string]any, src map[string]any) {
+	for key, srcValue := range src {
+		srcMap, srcIsMap := asStringAnyMap(srcValue)
+		dstMap, dstIsMap := asStringAnyMap(dst[key])
+		if srcIsMap && dstIsMap {
+			mergeTOMLMaps(dstMap, srcMap)
+			continue
+		}
+		dst[key] = srcValue
+	}
+}
+
+func ensureCodexRuntimeConfig(config map[string]any, allowlist []string) error {
+	shellPolicy, err := ensureTOMLTable(config, "shell_environment_policy")
+	if err != nil {
+		return err
+	}
+	if _, exists := shellPolicy["inherit"]; !exists {
+		shellPolicy["inherit"] = "none"
+	}
+	existingAllowlist, err := stringListValue(shellPolicy["include_only"])
+	if err != nil {
+		return fmt.Errorf("shell_environment_policy.include_only: %w", err)
+	}
+	shellPolicy["include_only"] = mergeStringLists(existingAllowlist, allowlist)
+
+	if mcpURL := strings.TrimSpace(os.Getenv("MATTERCODEX_MCP_URL")); mcpURL != "" {
+		mcpServers, err := ensureTOMLTable(config, "mcp_servers")
+		if err != nil {
+			return err
+		}
+		mcpServers["mattercodex"] = map[string]any{
+			"url":                  mcpURL,
+			"bearer_token_env_var": "MATTERCODEX_MCP_TOKEN",
+			"startup_timeout_sec":  10,
+			"tool_timeout_sec":     60,
+			"required":             true,
+		}
+	}
+	return nil
+}
+
+func ensureTOMLTable(parent map[string]any, key string) (map[string]any, error) {
+	if value, exists := parent[key]; exists {
+		table, ok := asStringAnyMap(value)
+		if !ok {
+			return nil, fmt.Errorf("%s must be a TOML table", key)
+		}
+		return table, nil
+	}
+	table := map[string]any{}
+	parent[key] = table
+	return table, nil
+}
+
+func asStringAnyMap(value any) (map[string]any, bool) {
+	switch typed := value.(type) {
+	case map[string]any:
+		return typed, true
+	default:
+		return nil, false
+	}
+}
+
+func stringListValue(value any) ([]string, error) {
+	if value == nil {
+		return nil, nil
+	}
+	switch typed := value.(type) {
+	case []string:
+		return typed, nil
+	case []any:
+		values := make([]string, 0, len(typed))
+		for _, item := range typed {
+			text, ok := item.(string)
+			if !ok {
+				return nil, fmt.Errorf("must contain only strings")
+			}
+			values = append(values, text)
+		}
+		return values, nil
+	default:
+		return nil, fmt.Errorf("must be a string array")
+	}
+}
+
+func mergeStringLists(base []string, extra []string) []string {
+	values := make([]string, 0, len(base)+len(extra))
+	seen := map[string]struct{}{}
+	for _, value := range append(base, extra...) {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		values = append(values, value)
+	}
+	return values
 }
 
 func codexShellEnvironmentAllowlist() []string {
@@ -788,20 +908,6 @@ func validRuntimeEnvName(value string) bool {
 		return false
 	}
 	return true
-}
-
-func tomlStringList(values []string) string {
-	quoted := make([]string, 0, len(values))
-	for _, value := range values {
-		quoted = append(quoted, `"`+escapeTOMLString(value)+`"`)
-	}
-	return "[" + strings.Join(quoted, ", ") + "]"
-}
-
-func escapeTOMLString(value string) string {
-	value = strings.ReplaceAll(value, `\`, `\\`)
-	value = strings.ReplaceAll(value, `"`, `\"`)
-	return value
 }
 
 func codexSandboxMode() string {
