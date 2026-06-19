@@ -79,12 +79,19 @@ PR, логах и документации.
 - Kubernetes templates не повторяют runtime defaults сервиса как `envOr`, если сервис уже имеет такой default;
 - `bootstrap/host/config.env.example` хранит только локальные install-настройки и secret/bootstrap seed-поля.
 
-Готовность `self-deploy` проверяется до `rollout`. `cmd/bootstrap-deploy-plan`
-падает, если у `agent-manager` нет `KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_PROJECT_ID`,
-если выключен signal consumer, governance gate или build dispatch, либо если
-отрендеренный manifest потерял обязательные env/Secret refs. При проверке с
-`--require-kubernetes` дополнительно проверяется наличие нужных ключей в
-`kodex-platform-runtime`; значения ключей не печатаются.
+Ручной MVP deploy является основным рабочим путём: `plan -> deploy ring(s) ->
+operational acceptance -> pod logs/readiness`. `cmd/bootstrap-deploy-plan` по
+умолчанию проверяет этот ручной путь и не требует настроенного `self-deploy`.
+При проверке с `--require-kubernetes` дополнительно проверяется наличие
+runtime `Secret` и согласованность derived keys в `kodex-platform-runtime`;
+значения ключей не печатаются.
+
+Готовность `self-deploy` проверяется отдельным явным режимом
+`--self-deploy-readiness`. В этом режиме `cmd/bootstrap-deploy-plan` падает,
+если у `agent-manager` нет `KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_PROJECT_ID`,
+если выключен signal consumer, governance gate, build dispatch или gate decision
+consumer, если runtime executor не настроен, либо если отрендеренный manifest
+потерял обязательные env/Secret refs.
 
 ## Preflight и dry-run
 
@@ -178,7 +185,7 @@ bash bootstrap/host/plan_backend_deploy.sh --env-file bootstrap/host/config.env
   `kubectl`;
 - выполняет проверки текущего Kubernetes foundation только на чтение: context,
   `/readyz`, namespace, registry Deployment/Service, PostgreSQL
-  StatefulSet/Service и runtime Secret refs.
+  StatefulSet/Service, runtime `Secret` и согласованность derived keys.
 
 Для проверки только render/inventory без чтения Kubernetes:
 
@@ -194,6 +201,15 @@ bash bootstrap/host/plan_backend_deploy.sh \
 bash bootstrap/host/plan_backend_deploy.sh \
   --env-file bootstrap/host/config.env \
   --require-kubernetes
+```
+
+Для финального `self-deploy` rollout используется отдельный явный режим:
+
+```bash
+go run ./cmd/bootstrap-deploy-plan \
+  --env-file bootstrap/host/config.env \
+  --require-kubernetes \
+  --self-deploy-readiness
 ```
 
 Если нужен каталог с отрендеренными файлами для ручной проверки, передайте

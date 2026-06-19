@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -26,17 +27,19 @@ func main() {
 	renderDir := flag.String("render-dir", "", "optional empty output directory for rendered dry-run manifests")
 	requireKubernetes := flag.Bool("require-kubernetes", false, "fail if live Kubernetes foundation checks are unavailable")
 	skipLiveKubernetes := flag.Bool("skip-live-kubernetes", false, "skip live kubectl checks")
+	selfDeployReadiness := flag.Bool("self-deploy-readiness", false, "include final self-deploy readiness checks; disabled by default for manual MVP deploy")
 	flag.Parse()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	if err := run(ctx, planOptions{
-		RepoRoot:           *repoRoot,
-		EnvFilePath:        *envFile,
-		ServicesFilePath:   *servicesFile,
-		RenderDir:          *renderDir,
-		RequireKubernetes:  *requireKubernetes,
-		SkipLiveKubernetes: *skipLiveKubernetes,
+		RepoRoot:            *repoRoot,
+		EnvFilePath:         *envFile,
+		ServicesFilePath:    *servicesFile,
+		RenderDir:           *renderDir,
+		RequireKubernetes:   *requireKubernetes,
+		SkipLiveKubernetes:  *skipLiveKubernetes,
+		SelfDeployReadiness: *selfDeployReadiness,
 	}, os.Stdout); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "bootstrap-deploy-plan: %v\n", err)
 		os.Exit(1)
@@ -44,12 +47,13 @@ func main() {
 }
 
 type planOptions struct {
-	RepoRoot           string
-	EnvFilePath        string
-	ServicesFilePath   string
-	RenderDir          string
-	RequireKubernetes  bool
-	SkipLiveKubernetes bool
+	RepoRoot            string
+	EnvFilePath         string
+	ServicesFilePath    string
+	RenderDir           string
+	RequireKubernetes   bool
+	SkipLiveKubernetes  bool
+	SelfDeployReadiness bool
 }
 
 type planConfig struct {
@@ -110,11 +114,16 @@ func run(ctx context.Context, options planOptions, output io.Writer) error {
 		return err
 	}
 	ok(output, "backend deploy env names checked without printing values")
-	if err := checkSelfDeployReadinessEnv(output); err != nil {
-		return err
-	}
-	if err := checkSelfDeployRuntimeExecutorEnv(output); err != nil {
-		return err
+	if options.SelfDeployReadiness {
+		if err := checkSelfDeployReadinessEnv(output); err != nil {
+			return err
+		}
+		if err := checkSelfDeployRuntimeExecutorEnv(output); err != nil {
+			return err
+		}
+	} else {
+		skip(output, "self-deploy readiness checks skipped for manual MVP deploy")
+		readiness(output, "self-deploy-readiness", "skipped", "self_deploy_readiness_not_required", "rerun with --self-deploy-readiness for final self-deploy rollout")
 	}
 	restoreRenderEnv := applySafeRenderEnv()
 	defer restoreRenderEnv()
@@ -122,18 +131,21 @@ func run(ctx context.Context, options planOptions, output io.Writer) error {
 	if err := validateDeployInventory(repoRoot, stack, output); err != nil {
 		return err
 	}
-	if err := renderDeployManifests(ctx, repoRoot, servicesFile, options.RenderDir, stack, !options.SkipLiveKubernetes, options.RequireKubernetes, output); err != nil {
+	if err := renderDeployManifests(ctx, repoRoot, servicesFile, options.RenderDir, stack, !options.SkipLiveKubernetes, options.RequireKubernetes, options.SelfDeployReadiness, output); err != nil {
 		return err
 	}
 	checkExternalRefs(config, output)
-	if err := checkKubernetesFoundation(ctx, config, options.RequireKubernetes, options.SkipLiveKubernetes, output); err != nil {
+	if err := checkKubernetesFoundation(ctx, config, options.RequireKubernetes, options.SkipLiveKubernetes, options.SelfDeployReadiness, output); err != nil {
 		return err
 	}
-	if err := checkSelfDeployChainAcceptanceTool(repoRoot, output); err != nil {
-		return err
+	if options.SelfDeployReadiness {
+		if err := checkSelfDeployChainAcceptanceTool(repoRoot, output); err != nil {
+			return err
+		}
+		readiness(output, "final-self-deploy-preflight", "ready", "self_deploy_static_readiness_ready", "run onboarding-runner apply, rollout, controlled trigger and self-deploy-chain-acceptance")
+	} else {
+		readiness(output, "manual-mvp-deploy-preflight", "ready", "manual_mvp_deploy_static_readiness_ready", "run deploy_backend_ring for required rings, then bootstrap-operational-acceptance")
 	}
-
-	readiness(output, "final-self-deploy-preflight", "ready", "self_deploy_static_readiness_ready", "run onboarding-runner apply, rollout, controlled trigger and self-deploy-chain-acceptance")
 	ok(output, "backend deploy dry-run plan passed without cluster changes")
 	return nil
 }
@@ -265,7 +277,7 @@ func resolveImage(stack stackinventory.Stack, name string) error {
 	return nil
 }
 
-func renderDeployManifests(ctx context.Context, repoRoot, servicesFile, renderDir string, stack stackinventory.Stack, runKustomize bool, requireKustomize bool, output io.Writer) error {
+func renderDeployManifests(ctx context.Context, repoRoot, servicesFile, renderDir string, stack stackinventory.Stack, runKustomize bool, requireKustomize bool, checkSelfDeploy bool, output io.Writer) error {
 	renderDir, cleanup, err := manifestrender.PrepareOutputRoot(renderDir, "kodex-backend-deploy-plan-*")
 	if err != nil {
 		return err
@@ -292,8 +304,10 @@ func renderDeployManifests(ctx context.Context, repoRoot, servicesFile, renderDi
 			ok(output, set.Name+" kustomize check passed")
 		}
 	}
-	if err := checkRenderedSelfDeploySurface(renderDir, output); err != nil {
-		return err
+	if checkSelfDeploy {
+		if err := checkRenderedSelfDeploySurface(renderDir, output); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -377,7 +391,7 @@ func checkExternalRefs(config planConfig, output io.Writer) {
 	}
 }
 
-func checkKubernetesFoundation(ctx context.Context, config planConfig, require bool, skipLive bool, output io.Writer) error {
+func checkKubernetesFoundation(ctx context.Context, config planConfig, require bool, skipLive bool, selfDeployReadiness bool, output io.Writer) error {
 	if skipLive {
 		skip(output, "live Kubernetes foundation checks skipped")
 		return nil
@@ -416,16 +430,30 @@ func checkKubernetesFoundation(ctx context.Context, config planConfig, require b
 		}
 		ok(output, check.Label)
 	}
-	for _, ref := range requiredSelfDeployRuntimeSecretRefs() {
-		if err := checkKubernetesSecretKey(ctx, config.Namespace, ref.Name, ref.Key); err != nil {
-			if require {
-				return err
-			}
-			deferred = true
-			skip(output, "runtime secret ref "+safeSecretRef(ref)+" deferred")
-			continue
+	if err := checkKubernetesDerivedRuntimeSecretKeys(ctx, config.Namespace); err != nil {
+		if require {
+			return err
 		}
-		ok(output, "runtime secret ref "+safeSecretRef(ref)+" exists")
+		deferred = true
+		skip(output, "derived runtime secret key consistency deferred")
+	} else {
+		ok(output, "derived runtime secret keys are consistent")
+		readiness(output, "runtime-secret-derived-keys", "ready", "runtime_secret_derived_keys_consistent", "none")
+	}
+	if selfDeployReadiness {
+		for _, ref := range requiredSelfDeployRuntimeSecretRefs() {
+			if err := checkKubernetesSecretKey(ctx, config.Namespace, ref.Name, ref.Key); err != nil {
+				if require {
+					return err
+				}
+				deferred = true
+				skip(output, "runtime secret ref "+safeSecretRef(ref)+" deferred")
+				continue
+			}
+			ok(output, "runtime secret ref "+safeSecretRef(ref)+" exists")
+		}
+	} else {
+		skip(output, "self-deploy runtime secret refs skipped for manual MVP deploy")
 	}
 	serviceAccountsDeferred, err := checkKubernetesRuntimeServiceAccounts(ctx, config.Namespace, require, output)
 	if err != nil {
@@ -456,6 +484,80 @@ func checkKubernetesSecretKey(ctx context.Context, namespace string, secretName 
 	}
 	if len(bytes.TrimSpace(output)) == 0 {
 		return fmt.Errorf("Kubernetes secret key %s/%s:%s is missing", namespace, secretName, key)
+	}
+	return nil
+}
+
+type derivedRuntimeSecretKey struct {
+	Key       string
+	SourceKey string
+}
+
+func derivedRuntimeSecretKeys() []derivedRuntimeSecretKey {
+	return []derivedRuntimeSecretKey{
+		{Key: "KODEX_FLEET_MANAGER_ACCESS_MANAGER_GRPC_AUTH_TOKEN", SourceKey: "KODEX_ACCESS_MANAGER_GRPC_AUTH_TOKEN"},
+		{Key: "KODEX_PACKAGE_HUB_ACCESS_MANAGER_GRPC_AUTH_TOKEN", SourceKey: "KODEX_ACCESS_MANAGER_GRPC_AUTH_TOKEN"},
+		{Key: "KODEX_PROVIDER_HUB_ACCESS_MANAGER_GRPC_AUTH_TOKEN", SourceKey: "KODEX_ACCESS_MANAGER_GRPC_AUTH_TOKEN"},
+		{Key: "KODEX_GOVERNANCE_MANAGER_ACCESS_MANAGER_GRPC_AUTH_TOKEN", SourceKey: "KODEX_ACCESS_MANAGER_GRPC_AUTH_TOKEN"},
+		{Key: "KODEX_RUNTIME_MANAGER_ACCESS_MANAGER_GRPC_AUTH_TOKEN", SourceKey: "KODEX_ACCESS_MANAGER_GRPC_AUTH_TOKEN"},
+		{Key: "KODEX_RUNTIME_MANAGER_FLEET_MANAGER_GRPC_AUTH_TOKEN", SourceKey: "KODEX_FLEET_MANAGER_GRPC_AUTH_TOKEN"},
+		{Key: "KODEX_AGENT_MANAGER_PACKAGE_HUB_GRPC_AUTH_TOKEN", SourceKey: "KODEX_PACKAGE_HUB_GRPC_AUTH_TOKEN"},
+		{Key: "KODEX_AGENT_MANAGER_PROJECT_CATALOG_GRPC_AUTH_TOKEN", SourceKey: "KODEX_PROJECT_CATALOG_GRPC_AUTH_TOKEN"},
+		{Key: "KODEX_AGENT_MANAGER_RUNTIME_MANAGER_GRPC_AUTH_TOKEN", SourceKey: "KODEX_RUNTIME_MANAGER_GRPC_AUTH_TOKEN"},
+		{Key: "KODEX_AGENT_MANAGER_PROVIDER_HUB_GRPC_AUTH_TOKEN", SourceKey: "KODEX_PROVIDER_HUB_GRPC_AUTH_TOKEN"},
+		{Key: "KODEX_AGENT_MANAGER_GOVERNANCE_MANAGER_GRPC_AUTH_TOKEN", SourceKey: "KODEX_GOVERNANCE_MANAGER_GRPC_AUTH_TOKEN"},
+	}
+}
+
+func checkKubernetesDerivedRuntimeSecretKeys(ctx context.Context, namespace string) error {
+	data, err := readKubernetesSecretData(ctx, namespace, "kodex-platform-runtime")
+	if err != nil {
+		return err
+	}
+	return checkDerivedRuntimeSecretData(data)
+}
+
+func readKubernetesSecretData(ctx context.Context, namespace string, secretName string) (map[string]string, error) {
+	command := exec.CommandContext(ctx, "kubectl", "-n", namespace, "get", "secret", secretName, "-o", "json")
+	command.Stderr = io.Discard
+	output, err := command.Output()
+	if err != nil {
+		return nil, fmt.Errorf("read Kubernetes secret %s/%s: %w", namespace, secretName, err)
+	}
+	var payload struct {
+		Data map[string]string `json:"data"`
+	}
+	if err := json.Unmarshal(output, &payload); err != nil {
+		return nil, fmt.Errorf("parse Kubernetes secret %s/%s: %w", namespace, secretName, err)
+	}
+	return payload.Data, nil
+}
+
+func checkDerivedRuntimeSecretData(data map[string]string) error {
+	for _, item := range derivedRuntimeSecretKeys() {
+		source := strings.TrimSpace(data[item.SourceKey])
+		if source == "" {
+			return readinessError{
+				Code:       "runtime_secret_source_key_missing",
+				Message:    "Kubernetes Secret kodex-platform-runtime is missing source key " + item.SourceKey,
+				NextAction: "run deploy_backend_ring after filling the protected deploy env; do not use kubectl patch",
+			}
+		}
+		derived := strings.TrimSpace(data[item.Key])
+		if derived == "" {
+			return readinessError{
+				Code:       "runtime_secret_derived_key_missing",
+				Message:    "Kubernetes Secret kodex-platform-runtime is missing derived key " + item.Key,
+				NextAction: "run deploy_backend_ring to reconcile runtime Secret keys",
+			}
+		}
+		if derived != source {
+			return readinessError{
+				Code:       "runtime_secret_derived_key_drift",
+				Message:    "Kubernetes Secret kodex-platform-runtime has derived key drift for " + item.Key + " from " + item.SourceKey,
+				NextAction: "run deploy_backend_ring after secret reconciliation fix; do not use kubectl patch",
+			}
+		}
 	}
 	return nil
 }

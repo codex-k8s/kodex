@@ -78,8 +78,53 @@ func TestResolveSecretValuesPreservesExistingAndGeneratesMissing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve replay secrets: %v", err)
 	}
-	if got := values.Runtime["KODEX_AGENT_MANAGER_GOVERNANCE_MANAGER_GRPC_AUTH_TOKEN"]; got != "existing-agent-governance-token" {
-		t.Fatalf("existing derived agent-manager governance token was not preserved: %q", got)
+	if got := values.Runtime["KODEX_AGENT_MANAGER_GOVERNANCE_MANAGER_GRPC_AUTH_TOKEN"]; got != "env-governance-token" {
+		t.Fatalf("stale derived agent-manager governance token was not reconciled: %q", got)
+	}
+	if got := values.Runtime["KODEX_RUNTIME_MANAGER_ACCESS_MANAGER_GRPC_AUTH_TOKEN"]; got != "existing-access-token" {
+		t.Fatalf("derived runtime access-manager token mismatch: %q", got)
+	}
+}
+
+func TestResolveSecretValuesReconcilesExistingDerivedSecretDrift(t *testing.T) {
+	existing := secretSnapshot{
+		"kodex-postgres": {
+			"KODEX_POSTGRES_DB":       "kodex",
+			"KODEX_POSTGRES_USER":     "kodex",
+			"KODEX_POSTGRES_PASSWORD": "existing-password",
+		},
+		"kodex-platform-runtime": {
+			"KODEX_ACCESS_MANAGER_GRPC_AUTH_TOKEN":                 "access-token",
+			"KODEX_RUNTIME_MANAGER_ACCESS_MANAGER_GRPC_AUTH_TOKEN": "stale-runtime-access-token",
+			"KODEX_FLEET_MANAGER_GRPC_AUTH_TOKEN":                  "fleet-token",
+			"KODEX_RUNTIME_MANAGER_FLEET_MANAGER_GRPC_AUTH_TOKEN":  "stale-runtime-fleet-token",
+		},
+	}
+	values, err := resolveSecretValues(existing, func(string) (string, bool) {
+		return "", false
+	})
+	if err != nil {
+		t.Fatalf("resolve secrets: %v", err)
+	}
+	for _, item := range []struct {
+		Key       string
+		SourceKey string
+	}{
+		{Key: "KODEX_RUNTIME_MANAGER_ACCESS_MANAGER_GRPC_AUTH_TOKEN", SourceKey: "KODEX_ACCESS_MANAGER_GRPC_AUTH_TOKEN"},
+		{Key: "KODEX_RUNTIME_MANAGER_FLEET_MANAGER_GRPC_AUTH_TOKEN", SourceKey: "KODEX_FLEET_MANAGER_GRPC_AUTH_TOKEN"},
+	} {
+		if values.Runtime[item.Key] != values.Runtime[item.SourceKey] {
+			t.Fatalf("derived key %s was not reconciled to %s", item.Key, item.SourceKey)
+		}
+	}
+	generated := strings.Join(values.Generated, "\n")
+	for _, key := range []string{
+		"KODEX_RUNTIME_MANAGER_ACCESS_MANAGER_GRPC_AUTH_TOKEN",
+		"KODEX_RUNTIME_MANAGER_FLEET_MANAGER_GRPC_AUTH_TOKEN",
+	} {
+		if !strings.Contains(generated, key) {
+			t.Fatalf("reconciled derived key %s was not reported in generated/normalized keys: %v", key, values.Generated)
+		}
 	}
 }
 
