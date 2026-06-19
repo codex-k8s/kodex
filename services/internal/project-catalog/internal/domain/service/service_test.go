@@ -2667,8 +2667,28 @@ func TestGetSelfDeployDeployPlanUsesRuntimeManifestBundleDigest(t *testing.T) {
 		spec.ManifestBundleDigest != selfDeployManifestBundleDigest {
 		t.Fatalf("manifest bundle = %q/%q, want runtime materialized digest", spec.ManifestBundleRef, spec.ManifestBundleDigest)
 	}
+	if len(spec.RolloutTargets) != 1 ||
+		spec.RolloutTargets[0].Ref != "kubernetes://deployment/api" ||
+		spec.RolloutTargets[0].Namespace != "kodex" ||
+		spec.RolloutTargets[0].Name != "api" {
+		t.Fatalf("rollout targets = %+v, want checked deployment target", spec.RolloutTargets)
+	}
+	if len(spec.ExpectedImageRefs) != 1 ||
+		spec.ExpectedImageRefs[0].ImageRef != "registry.example/kodex/api:abcdef0" ||
+		spec.ExpectedImageRefs[0].ImageDigest != selfDeployBuildImageDigest {
+		t.Fatalf("expected image refs = %+v, want successful build output image ref", spec.ExpectedImageRefs)
+	}
 	if synthetic := checkedDeployDigest("bundle", spec.ManifestBundleRef, selfDeployBuildContextDigest); synthetic == spec.ManifestBundleDigest {
 		t.Fatalf("manifest bundle digest = %q, want actual runtime digest not synthetic checked digest", spec.ManifestBundleDigest)
+	}
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("marshal result: %v", err)
+	}
+	if strings.Contains(string(encoded), "validated_payload") ||
+		strings.Contains(string(encoded), "raw_manifest") ||
+		strings.Contains(string(encoded), "secret_value") {
+		t.Fatalf("deploy plan leaked unsafe payload: %s", encoded)
 	}
 }
 
@@ -2731,6 +2751,97 @@ func TestGetSelfDeployDeployPlanReturnsPolicyStaleOnDigestMismatch(t *testing.T)
 	}
 	if result.Status != enum.SelfDeployDeployPlanStatusPolicyStale || result.SafeReason != "services_policy_digest_mismatch" {
 		t.Fatalf("result = %+v, want policy stale digest mismatch", result)
+	}
+}
+
+func TestGetSelfDeployDeployPlanReturnsBuildNotReadyWhenBuildOutputMissing(t *testing.T) {
+	projectID, repositoryID, policy, svc := newSelfDeployBuildDeployPlanFixture()
+	input := selfDeployDeployPlanInput(projectID, repositoryID, policy, []string{"api"})
+	input.MaterializedBuildContexts = []SelfDeployMaterializedBuildContext{selfDeployMaterializedBuildContext("api")}
+
+	result, err := svc.GetSelfDeployDeployPlan(context.Background(), input)
+	if err != nil {
+		t.Fatalf("GetSelfDeployDeployPlan(): %v", err)
+	}
+	if result.Status != enum.SelfDeployDeployPlanStatusBuildNotReady || result.SafeReason != "build_not_ready:api" {
+		t.Fatalf("result = %+v, want build_not_ready", result)
+	}
+	if len(result.Plan.DeployItems) != 1 ||
+		result.Plan.DeployItems[0].Status != SelfDeployDeployPlanItemStatusBuildNotReady ||
+		result.Plan.DeployItems[0].DeployExecutionSpec.ManifestBundleRef != "" {
+		t.Fatalf("deploy items = %+v, want no deploy spec before successful build output", result.Plan.DeployItems)
+	}
+}
+
+func TestGetSelfDeployDeployPlanReturnsUnavailableWhenManifestBundleMissing(t *testing.T) {
+	projectID, repositoryID, policy, svc := newSelfDeployBuildDeployPlanFixture()
+	input := selfDeployDeployPlanInput(projectID, repositoryID, policy, []string{"api"})
+	input.BuildOutputs = []SelfDeployBuildOutput{selfDeployBuildOutput("api")}
+	materializedContext := selfDeployMaterializedBuildContext("api")
+	materializedContext.ManifestBundleDigest = ""
+	input.MaterializedBuildContexts = []SelfDeployMaterializedBuildContext{materializedContext}
+
+	result, err := svc.GetSelfDeployDeployPlan(context.Background(), input)
+	if err != nil {
+		t.Fatalf("GetSelfDeployDeployPlan(): %v", err)
+	}
+	if result.Status != enum.SelfDeployDeployPlanStatusDeployPlanUnavailable || result.SafeReason != "deploy_plan_unavailable:api" {
+		t.Fatalf("result = %+v, want deploy_plan_unavailable", result)
+	}
+	if len(result.Plan.DeployItems) != 1 ||
+		result.Plan.DeployItems[0].Status != SelfDeployDeployPlanItemStatusDeployPlanUnavailable ||
+		result.Plan.DeployItems[0].DeployExecutionSpec.ManifestBundleDigest != "" {
+		t.Fatalf("deploy items = %+v, want no deploy spec without checked manifest bundle digest", result.Plan.DeployItems)
+	}
+}
+
+func TestGetSelfDeployDeployPlanRejectsBuildOutputFromDifferentBuildPlan(t *testing.T) {
+	projectID, repositoryID, policy, svc := newSelfDeployBuildDeployPlanFixture()
+	input := selfDeployDeployPlanInput(projectID, repositoryID, policy, []string{"api"})
+	output := selfDeployBuildOutput("api")
+	output.BuildPlanFingerprint = "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+	input.BuildOutputs = []SelfDeployBuildOutput{output}
+	input.MaterializedBuildContexts = []SelfDeployMaterializedBuildContext{selfDeployMaterializedBuildContext("api")}
+
+	result, err := svc.GetSelfDeployDeployPlan(context.Background(), input)
+	if err != nil {
+		t.Fatalf("GetSelfDeployDeployPlan(): %v", err)
+	}
+	if result.Status != enum.SelfDeployDeployPlanStatusBuildOutputInvalid || result.SafeReason != "build_output_build_plan_fingerprint_mismatch:api" {
+		t.Fatalf("result = %+v, want build output fingerprint mismatch", result)
+	}
+}
+
+func TestGetSelfDeployDeployPlanRejectsBuildOutputFromDifferentContext(t *testing.T) {
+	projectID, repositoryID, policy, svc := newSelfDeployBuildDeployPlanFixture()
+	input := selfDeployDeployPlanInput(projectID, repositoryID, policy, []string{"api"})
+	output := selfDeployBuildOutput("api")
+	output.BuildContextDigest = "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+	input.BuildOutputs = []SelfDeployBuildOutput{output}
+	input.MaterializedBuildContexts = []SelfDeployMaterializedBuildContext{selfDeployMaterializedBuildContext("api")}
+
+	result, err := svc.GetSelfDeployDeployPlan(context.Background(), input)
+	if err != nil {
+		t.Fatalf("GetSelfDeployDeployPlan(): %v", err)
+	}
+	if result.Status != enum.SelfDeployDeployPlanStatusBuildOutputInvalid || result.SafeReason != "build_output_context_mismatch:api" {
+		t.Fatalf("result = %+v, want build output context mismatch", result)
+	}
+}
+
+func TestGetSelfDeployDeployPlanReturnsInvalidInputWithoutExpectedBuildPlanFingerprint(t *testing.T) {
+	projectID, repositoryID, policy, svc := newSelfDeployBuildDeployPlanFixture()
+	input := selfDeployDeployPlanInput(projectID, repositoryID, policy, []string{"api"})
+	input.ExpectedBuildPlanFingerprint = ""
+	input.BuildOutputs = []SelfDeployBuildOutput{selfDeployBuildOutput("api")}
+	input.MaterializedBuildContexts = []SelfDeployMaterializedBuildContext{selfDeployMaterializedBuildContext("api")}
+
+	result, err := svc.GetSelfDeployDeployPlan(context.Background(), input)
+	if err != nil {
+		t.Fatalf("GetSelfDeployDeployPlan(): %v", err)
+	}
+	if result.Status != enum.SelfDeployDeployPlanStatusInvalidInput || result.SafeReason != "invalid_input" {
+		t.Fatalf("result = %+v, want invalid input without expected build plan fingerprint", result)
 	}
 }
 
@@ -3513,6 +3624,21 @@ func selfDeployStackInventoryBuildPolicyPayload(withContext bool) []byte {
 			]
 		}
 	}`)
+}
+
+func newSelfDeployBuildDeployPlanFixture() (uuid.UUID, uuid.UUID, entity.ServicesPolicy, *Service) {
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	policyID := uuid.New()
+	commitSHA := "abcdef0123456789abcdef0123456789abcdef01"
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = activeSelfDeployRepository(projectID, repositoryID)
+	policy := activeSelfDeployPolicy(projectID, repositoryID, policyID, commitSHA, selfDeployBuildDeployPolicyPayload())
+	store.policies[policyID] = policy
+	store.serviceDescriptors[policyID] = []entity.ServiceDescriptor{
+		activeSelfDeployDescriptor(projectID, repositoryID, policyID, "api"),
+	}
+	return projectID, repositoryID, policy, New(store, fixedClock{}, &sequenceIDs{})
 }
 
 func selfDeployBuildPlanInput(projectID uuid.UUID, repositoryID uuid.UUID, policy entity.ServicesPolicy, serviceKeys []string) GetSelfDeployBuildPlanInput {
