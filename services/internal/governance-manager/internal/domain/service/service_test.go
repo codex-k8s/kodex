@@ -3966,6 +3966,57 @@ func TestBlockingSignalLifecycleAndSafeEventPayload(t *testing.T) {
 	}
 }
 
+func TestRecordBlockingSignalAcceptsSecurityBaselineSourceTypes(t *testing.T) {
+	t.Parallel()
+
+	sourceTypes := []enum.BlockingSignalSourceType{
+		enum.BlockingSignalSourceTypeSecurity,
+		enum.BlockingSignalSourceTypeDependency,
+		enum.BlockingSignalSourceTypeContainer,
+		enum.BlockingSignalSourceTypeInfrastructure,
+	}
+	for _, sourceType := range sourceTypes {
+		t.Run(string(sourceType), func(t *testing.T) {
+			t.Parallel()
+
+			repository := &fakeRepository{ready: true}
+			signal, err := newTestService(repository).RecordBlockingSignal(context.Background(), RecordBlockingSignalInput{
+				Target:     value.ExternalRef{Type: "pull_request", Ref: "provider:pr:42"},
+				SourceType: sourceType,
+				SourceRef:  string(sourceType) + ":finding:42",
+				Severity:   enum.SignalSeverityBlocking,
+				Summary:    "bounded security baseline finding",
+				Meta:       CommandMeta{CommandID: ptrUUID(uuid.New()), Actor: value.Actor{Type: "service", ID: "governance-baseline"}},
+			})
+			if err != nil {
+				t.Fatalf("RecordBlockingSignal(%s): %v", sourceType, err)
+			}
+			if signal.SourceType != sourceType || signal.Status != enum.BlockingSignalStatusActive {
+				t.Fatalf("signal = %+v, want active %s signal", signal, sourceType)
+			}
+			if payload := string(repository.events[0].Payload); !strings.Contains(payload, `"reason_code":"`+string(sourceType)+`"`) {
+				t.Fatalf("event payload = %s, want source type reason_code", payload)
+			}
+		})
+	}
+}
+
+func TestRecordBlockingSignalRejectsUnknownSourceType(t *testing.T) {
+	t.Parallel()
+
+	_, err := newTestService(&fakeRepository{ready: true}).RecordBlockingSignal(context.Background(), RecordBlockingSignalInput{
+		Target:     value.ExternalRef{Type: "pull_request", Ref: "provider:pr:42"},
+		SourceType: enum.BlockingSignalSourceType("raw_scanner_report"),
+		SourceRef:  "scanner:finding:42",
+		Severity:   enum.SignalSeverityBlocking,
+		Summary:    "bounded security baseline finding",
+		Meta:       CommandMeta{CommandID: ptrUUID(uuid.New()), Actor: value.Actor{Type: "service", ID: "governance-baseline"}},
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("RecordBlockingSignal(unknown source) error = %v, want ErrInvalidArgument", err)
+	}
+}
+
 func TestReleaseSafetyStateCreateAndUpdate(t *testing.T) {
 	t.Parallel()
 
@@ -4268,6 +4319,107 @@ func TestGetGovernanceSummarySelfDeployTargetAuthorizesOwnerActor(t *testing.T) 
 	}
 	assertCapturedOwnerAccess(t, captured, actionRiskRead, "governance_risk_assessment", target.Ref, "project", project.ProjectRef)
 	assertCapturedOwnerAccess(t, captured, actionGateRead, "governance_gate", target.Ref, "project", project.ProjectRef)
+}
+
+func TestGetGovernanceSummaryProjectScopedTargetIncludesSecurityBlockingSignal(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 6, 19, 10, 0, 0, 0, time.UTC)
+	blockingSignalID := uuid.MustParse("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
+	target := value.ExternalRef{Type: "pull_request", Ref: "provider:pr:ordinary-agent-change"}
+	project := value.ProjectContextRef{ProjectRef: "project:app", RepositoryRef: "repository:app"}
+	repository := &fakeRepository{
+		ready: true,
+		blockingSignals: []entity.BlockingSignal{{
+			VersionedBase: entity.VersionedBase{ID: blockingSignalID, Version: 2, CreatedAt: now.Add(-time.Hour), UpdatedAt: now.Add(-30 * time.Minute)},
+			Target:        target,
+			SourceType:    enum.BlockingSignalSourceTypeDependency,
+			SourceRef:     "dependency:finding:openssl-cve",
+			Severity:      enum.SignalSeverityBlocking,
+			Summary:       "dependency finding blocks ordinary agent change",
+			Status:        enum.BlockingSignalStatusActive,
+		}},
+	}
+	var captured []AuthorizationRequest
+	service := NewWithConfig(Config{
+		Repository:  repository,
+		Clock:       fixedClock{now: now},
+		IDGenerator: uuidGenerator{},
+		Authorizer: authorizerFunc(func(_ context.Context, request AuthorizationRequest) error {
+			captured = append(captured, request)
+			return nil
+		}),
+	})
+
+	summary, err := service.GetGovernanceSummary(context.Background(), GetGovernanceSummaryInput{
+		Scope: entity.GovernanceSummaryScope{Target: target, ProjectContext: project},
+		Meta:  QueryMeta{Actor: value.Actor{Type: "user", ID: "owner-1"}},
+	})
+	if err != nil {
+		t.Fatalf("GetGovernanceSummary(): %v", err)
+	}
+	if !summaryHasDecision(summary.PendingDecisions, enum.GovernanceDecisionSummaryKindBlockingSignal, blockingSignalID.String(), enum.GovernanceDecisionAttentionBlocked) {
+		t.Fatalf("pending decisions = %+v, want dependency blocking signal", summary.PendingDecisions)
+	}
+	if !summaryHasEvidence(summary.EvidenceSummaries, "blocking_signal.dependency", "dependency:finding:openssl-cve") {
+		t.Fatalf("evidence summaries = %+v, want dependency finding ref", summary.EvidenceSummaries)
+	}
+	if summary.Status.Attention != enum.GovernanceDecisionAttentionBlocked ||
+		summary.Status.ActiveBlockingSignalCount != 1 ||
+		summary.Status.NextActionCode != governanceSummaryNextActionResolveBlockingSignal {
+		t.Fatalf("summary status = %+v, want blocked active dependency signal", summary.Status)
+	}
+	assertCapturedOwnerAccess(t, captured, actionRiskRead, "governance_risk_assessment", target.Ref, "project", project.ProjectRef)
+	assertCapturedOwnerAccess(t, captured, actionSignalRead, "governance_signal", target.Ref, "project", project.ProjectRef)
+}
+
+func TestGetGovernanceSummaryProjectScopedTargetWithoutSignalReadIsPartial(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 6, 19, 10, 30, 0, 0, time.UTC)
+	target := value.ExternalRef{Type: "pull_request", Ref: "provider:pr:ordinary-agent-change"}
+	project := value.ProjectContextRef{ProjectRef: "project:app", RepositoryRef: "repository:app"}
+	repository := &fakeRepository{
+		ready: true,
+		blockingSignals: []entity.BlockingSignal{{
+			VersionedBase: entity.VersionedBase{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+			Target:        target,
+			SourceType:    enum.BlockingSignalSourceTypeSecurity,
+			SourceRef:     "security:finding:blocked",
+			Severity:      enum.SignalSeverityCritical,
+			Summary:       "security finding requires owner attention",
+			Status:        enum.BlockingSignalStatusActive,
+		}},
+	}
+	service := NewWithConfig(Config{
+		Repository:  repository,
+		Clock:       fixedClock{now: now},
+		IDGenerator: uuidGenerator{},
+		Authorizer: authorizerFunc(func(_ context.Context, request AuthorizationRequest) error {
+			if request.ActionKey == actionSignalRead {
+				return errs.ErrForbidden
+			}
+			return nil
+		}),
+	})
+
+	summary, err := service.GetGovernanceSummary(context.Background(), GetGovernanceSummaryInput{
+		Scope: entity.GovernanceSummaryScope{Target: target, ProjectContext: project},
+		Meta:  QueryMeta{Actor: value.Actor{Type: "user", ID: "owner-1"}},
+	})
+	if err != nil {
+		t.Fatalf("GetGovernanceSummary(): %v", err)
+	}
+	if !summaryHasDiagnostic(summary.Diagnostics, "blocking_signals_not_authorized") {
+		t.Fatalf("diagnostics = %+v, want blocking_signals_not_authorized", summary.Diagnostics)
+	}
+	if summary.Status.SummaryCode != governanceSummaryCodePartial ||
+		summary.Status.NextActionCode != governanceSummaryNextActionReviewPartialRefs {
+		t.Fatalf("summary status = %+v, want partial diagnostics", summary.Status)
+	}
+	if repository.blockingSignalListCalls != 0 {
+		t.Fatalf("blocking signal list calls = %d, want 0 without signal read", repository.blockingSignalListCalls)
+	}
 }
 
 func TestGetGovernanceSummaryPendingRiskRequiredGateRequestsGate(t *testing.T) {

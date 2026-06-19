@@ -502,10 +502,10 @@ func TestRepositoryIntegrationGovernanceStateAndOutbox(t *testing.T) {
 	blockingSignal := entity.BlockingSignal{
 		VersionedBase: entity.VersionedBase{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
 		Target:        value.ExternalRef{Type: "release_candidate", Ref: releasePackage.ReleaseCandidateRef},
-		SourceType:    enum.BlockingSignalSourceTypeRuntime,
-		SourceRef:     "runtime:job:deploy",
+		SourceType:    enum.BlockingSignalSourceTypeDependency,
+		SourceRef:     "dependency:finding:openssl-cve",
 		Severity:      enum.SignalSeverityBlocking,
-		Summary:       "deploy health check failed",
+		Summary:       "dependency security baseline failed",
 		Status:        enum.BlockingSignalStatusActive,
 	}
 	if err := repository.RecordBlockingSignal(ctx, blockingSignal, testCommandResult(uuid.New(), operationRecordBlockingSignal, "blocking_signal", blockingSignal.ID, now), testEvent("governance.blocking_signal.recorded", "blocking_signal", blockingSignal.ID, now)); err != nil {
@@ -515,8 +515,8 @@ func TestRepositoryIntegrationGovernanceStateAndOutbox(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list blocking signals: %v", err)
 	}
-	if len(blockingSignals) != 1 || blockingSignals[0].Severity != enum.SignalSeverityBlocking {
-		t.Fatalf("blocking signals = %+v, want active blocking signal", blockingSignals)
+	if len(blockingSignals) != 1 || blockingSignals[0].Severity != enum.SignalSeverityBlocking || blockingSignals[0].SourceType != enum.BlockingSignalSourceTypeDependency {
+		t.Fatalf("blocking signals = %+v, want active dependency blocking signal", blockingSignals)
 	}
 	resolvedAt := now.Add(3 * time.Minute)
 	blockingSignal.Status = enum.BlockingSignalStatusResolved

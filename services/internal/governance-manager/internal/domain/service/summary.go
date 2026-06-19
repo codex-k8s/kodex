@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 	"time"
 
@@ -226,20 +227,40 @@ func (s *Service) appendProjectScopedTargetGovernanceSummary(ctx context.Context
 	if err != nil {
 		return err
 	}
-	if len(assessments) == 0 {
-		return nil
+	if len(assessments) > 0 {
+		if err := s.authorizeGateTargetReadInProject(ctx, meta, target, project); err != nil {
+			return err
+		}
+		for _, assessment := range assessments {
+			appendRiskAssessmentSummary(summary, seen, assessment)
+			if err := s.appendReviewSignalsByRiskAssessmentID(ctx, summary, seen, assessment.ID); err != nil {
+				return err
+			}
+			if err := s.appendGateRequestsByRiskAssessmentIDAfterTargetAuth(ctx, summary, seen, assessment.ID); err != nil {
+				return err
+			}
+		}
 	}
-	if err := s.authorizeGateTargetReadInProject(ctx, meta, target, project); err != nil {
+	return s.appendBlockingSignalsByTargetInProject(ctx, meta, summary, seen, target, project)
+}
+
+func (s *Service) appendBlockingSignalsByTargetInProject(ctx context.Context, meta QueryMeta, summary *entity.GovernanceSummary, seen *governanceSummarySeen, target value.ExternalRef, project value.ProjectContextRef) error {
+	if err := s.authorizeTargetReadInProject(ctx, meta, actionSignalRead, target, project, signalTargetResource); err != nil {
+		if errors.Is(err, errs.ErrForbidden) {
+			appendSummaryDiagnostic(summary, "blocking_signals_not_authorized")
+			return nil
+		}
 		return err
 	}
-	for _, assessment := range assessments {
-		appendRiskAssessmentSummary(summary, seen, assessment)
-		if err := s.appendReviewSignalsByRiskAssessmentID(ctx, summary, seen, assessment.ID); err != nil {
-			return err
-		}
-		if err := s.appendGateRequestsByRiskAssessmentIDAfterTargetAuth(ctx, summary, seen, assessment.ID); err != nil {
-			return err
-		}
+	blockingSignals, _, err := s.repository.ListBlockingSignals(ctx, query.BlockingSignalFilter{
+		Target: target,
+		Page:   query.PageRequest{PageSize: governanceSummaryPageSize},
+	})
+	if err != nil {
+		return err
+	}
+	for _, signal := range blockingSignals {
+		appendBlockingSignalSummary(summary, seen, signal)
 	}
 	return nil
 }
@@ -567,6 +588,16 @@ func appendBlockingSignalSummary(summary *entity.GovernanceSummary, seen *govern
 	)
 	item.BlockingSignalStatus = signal.Status
 	item.Version = signal.Version
+	if strings.TrimSpace(signal.SourceRef) != "" {
+		appendEvidenceSummary(summary, seen, entity.GovernanceEvidenceSummary{
+			SourceKind:  "blocking_signal." + string(signal.SourceType),
+			SourceRef:   signal.SourceRef,
+			Status:      string(signal.Status),
+			SafeSummary: signal.Summary,
+			ObservedAt:  formatSummaryTime(signal.UpdatedAt),
+			Version:     strconv.FormatInt(signal.Version, 10),
+		})
+	}
 	appendSummaryDecision(summary, seen, item, signal.Status == enum.BlockingSignalStatusActive)
 }
 

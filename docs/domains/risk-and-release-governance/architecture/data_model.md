@@ -5,8 +5,8 @@ title: kodex — модель данных домена рисков и рели
 status: active
 owner_role: SA
 created_at: 2026-05-22
-updated_at: 2026-06-03
-related_issues: [322, 380, 769, 815, 827, 845, 856, 869, 886, 957, 976]
+updated_at: 2026-06-19
+related_issues: [322, 380, 769, 815, 827, 845, 856, 869, 886, 957, 976, 1104]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -225,7 +225,7 @@ approvals:
 
 `GovernanceSummary` не является отдельной таблицей. Это безопасная модель чтения, которую `governance-manager` собирает из локальных risk assessment, review signal, gate, release package/decision, blocking signal и safety-loop state. Scope обязателен и содержит ровно один selector: `target`, `project_context`, `release_candidate_ref`, `release_decision_package_id` или `integration_ref` из release package. Смешанные selectors отклоняются как `invalid_argument`, потому что summary должен описывать один понятный owner-context и не объединять unrelated decisions/evidence. Для `integration_ref` используется уже сохранённый `integration_refs` snapshot, поэтому summary может находить package по provider PR/check, agent run/acceptance или runtime job ref без чтения БД соседних сервисов.
 
-Ответ делится на `pending_decisions`, `completed_decisions` и `evidence_summaries`. В decision item попадают только типизированные статусы и refs: `risk_class`, `required_gate_count`, review outcome/severity, gate request status, gate outcome, release package status, release decision status/outcome, blocking signal status, release candidate/package refs, provider/runtime/agent refs, timestamps, version и короткий `safe_summary`. Evidence summary хранит только `source_kind`, `source_ref`, status/outcome, digest/version, `observed_at`, `error_code` и bounded summary. Если связанный локальный risk/review/gate ref отсутствует, summary возвращает partial response с безопасной диагностикой, а не падает и не делает implicit lookup по project/run/provider payload. Raw diff, provider payload, prompt/transcript, stdout/stderr, workspace paths, Kubernetes payload, секреты и большие логи в эту модель не попадают.
+Ответ делится на `pending_decisions`, `completed_decisions` и `evidence_summaries`. В decision item попадают только типизированные статусы и refs: `risk_class`, `required_gate_count`, review outcome/severity, gate request status, gate outcome, release package status, release decision status/outcome, blocking signal status, release candidate/package refs, provider/runtime/agent refs, timestamps, version и короткий `safe_summary`. Evidence summary хранит только `source_kind`, `source_ref`, status/outcome, digest/version, `observed_at`, `error_code` и bounded summary. Активные blocking signals по обычному target с project scope попадают в summary даже без release package или self-deploy plan: source ref отображается как `blocking_signal.<source_type>`, например `blocking_signal.dependency`, `blocking_signal.container`, `blocking_signal.security` или `blocking_signal.infrastructure`. Если связанный локальный risk/review/gate ref отсутствует, summary возвращает partial response с безопасной диагностикой, а не падает и не делает implicit lookup по project/run/provider payload. Raw diff, provider payload, prompt/transcript, stdout/stderr, workspace paths, Kubernetes payload, секреты и большие логи в эту модель не попадают.
 
 Для self-deploy summary дополнительно показывает `status.pending_required_gate_count` и `next_action_code=request_governance_gate`, когда risk assessment уже требует owner/governance gate, а локальный gate request ещё не создан. Это позволяет manager-агенту или будущей операторской поверхности показать безопасный следующий шаг без вычисления правил вне `governance-manager`.
 
@@ -274,7 +274,7 @@ approvals:
 | `id` | uuid | нет | Идентификатор сигнала. |
 | `target_type` | enum | нет | `risk_assessment`, `gate`, `release`, `postdeploy`, `runtime_job`. |
 | `target_ref` | text | нет | Target или агрегат governance. |
-| `source_type` | enum | нет | `acceptance`, `review_signal`, `runtime`, `provider`, `interaction`, `human`, `monitoring`. |
+| `source_type` | enum | нет | `acceptance`, `review_signal`, `runtime`, `provider`, `interaction`, `human`, `monitoring`, `security`, `dependency`, `container`, `infrastructure`. |
 | `source_ref` | text | да | Ссылка на первоисточник. |
 | `severity` | enum | нет | `warning`, `blocking`, `critical`. |
 | `summary` | text | нет | Безопасное объяснение. |
