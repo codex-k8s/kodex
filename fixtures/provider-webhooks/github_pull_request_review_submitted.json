@@ -1,0 +1,39 @@
+{
+  "action": "submitted",
+  "repository": {
+    "id": 9101001,
+    "full_name": "kodex-smoke/provider-native-work",
+    "private": true,
+    "ssh_url": "RAW_WEBHOOK_ONLY_DO_NOT_LEAK_REVIEW"
+  },
+  "pull_request": {
+    "id": 9101802,
+    "number": 702,
+    "html_url": "https://example.invalid/kodex-smoke/provider-native-work/pull/702",
+    "title": "Implement provider-native task",
+    "state": "open",
+    "body": "<!-- kodex:artifact v1\nkind: pull_request\nmanaged_by: kodex\nwork_type: dev\nsource_ref: issue:701\n-->\nBounded pull request body for provider-native work.",
+    "base": {
+      "ref": "main",
+      "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "head": {
+      "ref": "kodex/provider-native-work",
+      "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "updated_at": "2026-06-19T10:04:00Z"
+  },
+  "review": {
+    "id": 9101904,
+    "body": "Provider-native review approved.",
+    "state": "approved",
+    "user": {
+      "login": "owner"
+    },
+    "submitted_at": "2026-06-19T10:05:00Z",
+    "updated_at": "2026-06-19T10:05:00Z"
+  },
+  "sender": {
+    "login": "RAW_WEBHOOK_ONLY_DO_NOT_LEAK_REVIEW"
+  }
+}

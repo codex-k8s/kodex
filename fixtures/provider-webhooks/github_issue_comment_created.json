@@ -1,0 +1,30 @@
+{
+  "action": "created",
+  "repository": {
+    "id": 9101001,
+    "full_name": "kodex-smoke/provider-native-work",
+    "private": true,
+    "ssh_url": "RAW_WEBHOOK_ONLY_DO_NOT_LEAK_COMMENT"
+  },
+  "issue": {
+    "id": 9101701,
+    "number": 701,
+    "html_url": "https://example.invalid/kodex-smoke/provider-native-work/issues/701",
+    "title": "Prepare provider-native task",
+    "state": "open",
+    "body": "<!-- kodex:artifact v1\nkind: issue\nmanaged_by: kodex\nwork_type: dev\n-->\nBounded issue body for provider-native work.",
+    "updated_at": "2026-06-19T10:02:00Z"
+  },
+  "comment": {
+    "id": 9101903,
+    "body": "Bounded provider-native progress comment.",
+    "user": {
+      "login": "kodex-agent"
+    },
+    "created_at": "2026-06-19T10:03:00Z",
+    "updated_at": "2026-06-19T10:03:00Z"
+  },
+  "sender": {
+    "login": "RAW_WEBHOOK_ONLY_DO_NOT_LEAK_COMMENT"
+  }
+}
