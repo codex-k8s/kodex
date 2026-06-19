@@ -102,9 +102,8 @@ func TestCodexAuthSecretCheckJobMountsSavedAuthSecret(t *testing.T) {
 	}
 
 	job := runner.codexAuthSecretCheckJob(runtimerepo.CodexAuthSecretCheckInput{
-		AccountName:   "primary",
-		SecretName:    "matter-codex-codex-auth-primary",
-		ConfigOverlay: "model = \"gpt-5.3-codex-spark\"",
+		AccountName: "primary",
+		SecretName:  "matter-codex-codex-auth-primary",
 	}, "mc-codex-auth-check-primary-test")
 	podSpec := job.Spec.Template.Spec
 	assertRunnerPodSecurity(t, podSpec)
@@ -117,8 +116,8 @@ func TestCodexAuthSecretCheckJobMountsSavedAuthSecret(t *testing.T) {
 	if !hasVolumeMount(podSpec.Containers[0].VolumeMounts, codexAuthSecretVolume, "/var/run/secrets/matter-codex-codex") {
 		t.Fatalf("codex auth secret mount missing: %#v", podSpec.Containers[0].VolumeMounts)
 	}
-	if got := envValue(podSpec.Containers[0].Env, "MATTERCODEX_CODEX_CONFIG_OVERLAY"); got != "model = \"gpt-5.3-codex-spark\"" {
-		t.Fatalf("config overlay env = %q", got)
+	if got := envValue(podSpec.Containers[0].Env, "MATTERCODEX_CODEX_CONFIG_OVERLAY"); got != "" {
+		t.Fatalf("auth check must not receive config overlay, got %q", got)
 	}
 }
 

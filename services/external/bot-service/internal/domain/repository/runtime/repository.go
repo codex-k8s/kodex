@@ -130,9 +130,8 @@ type CodexAuthStatus struct {
 }
 
 type CodexAuthSecretCheckInput struct {
-	AccountName   string
-	SecretName    string
-	ConfigOverlay string
+	AccountName string
+	SecretName  string
 }
 
 type CodexAuthSecretCheckResult struct {
