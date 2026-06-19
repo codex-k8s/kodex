@@ -48,7 +48,10 @@ func TestRunBuildsBackendPlanWithoutPrintingEnvValues(t *testing.T) {
 		"platform event-log migrations rendered",
 		"backend service access-manager rendered",
 		"backend service agent-manager rendered",
+		"backend service runtime-manager rendered",
 		"agent-manager self-deploy rendered manifest surface checked",
+		"runtime-manager self-deploy rendered manifest surface checked",
+		"READINESS: component=final-self-deploy-preflight status=ready",
 		"live Kubernetes foundation checks skipped",
 	} {
 		if !strings.Contains(output.String(), expected) {
@@ -63,6 +66,7 @@ func TestRunBuildsBackendPlanWithoutPrintingEnvValues(t *testing.T) {
 		filepath.Join(renderDir, "access-manager", "access-manager.yaml"),
 		filepath.Join(renderDir, "access-manager", "migrations.yaml"),
 		filepath.Join(renderDir, "agent-manager", "agent-manager.yaml"),
+		filepath.Join(renderDir, "runtime-manager", "runtime-manager.yaml"),
 	} {
 		if _, err := os.Stat(path); err != nil {
 			t.Fatalf("expected rendered file %s: %v", path, err)
@@ -110,6 +114,7 @@ func TestRunFailsWhenSelfDeployProjectIDIsMissingInvalidOrNil(t *testing.T) {
 				"KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_CONSUMER_ENABLED='true'",
 				"KODEX_AGENT_MANAGER_SELF_DEPLOY_GOVERNANCE_GATE_ENABLED='true'",
 				"KODEX_AGENT_MANAGER_SELF_DEPLOY_BUILD_DISPATCH_ENABLED='true'",
+				"KODEX_AGENT_MANAGER_SELF_DEPLOY_GATE_DECISION_CONSUMER_ENABLED='true'",
 			}
 			if tc.ProjectLine != "" {
 				lines = append(lines, tc.ProjectLine)
@@ -166,9 +171,17 @@ func TestCheckRenderedSelfDeploySurfaceRequiresAgentManagerEnv(t *testing.T) {
 	if err := os.MkdirAll(manifestDir, 0o755); err != nil {
 		t.Fatalf("create rendered manifest dir: %v", err)
 	}
-	content := strings.Join(requiredSelfDeployRenderedManifestFragments(), "\n")
+	content := strings.Join(requiredAgentManagerSelfDeployRenderedManifestFragments(), "\n")
 	if err := os.WriteFile(filepath.Join(manifestDir, "agent-manager.yaml"), []byte(content), 0o644); err != nil {
 		t.Fatalf("write rendered manifest: %v", err)
+	}
+	runtimeManifestDir := filepath.Join(renderDir, "runtime-manager")
+	if err := os.MkdirAll(runtimeManifestDir, 0o755); err != nil {
+		t.Fatalf("create rendered runtime manifest dir: %v", err)
+	}
+	runtimeContent := strings.Join(requiredRuntimeManagerSelfDeployRenderedManifestFragments(), "\n")
+	if err := os.WriteFile(filepath.Join(runtimeManifestDir, "runtime-manager.yaml"), []byte(runtimeContent), 0o644); err != nil {
+		t.Fatalf("write rendered runtime manifest: %v", err)
 	}
 	var output bytes.Buffer
 	if err := checkRenderedSelfDeploySurface(renderDir, &output); err != nil {
@@ -196,6 +209,8 @@ func TestRequiredSelfDeployRuntimeSecretKeys(t *testing.T) {
 		"KODEX_AGENT_MANAGER_RUNTIME_MANAGER_GRPC_AUTH_TOKEN",
 		"KODEX_AGENT_MANAGER_GOVERNANCE_MANAGER_GRPC_AUTH_TOKEN",
 		"KODEX_AGENT_MANAGER_EVENT_LOG_DATABASE_DSN",
+		"KODEX_AGENT_MANAGER_GRPC_AUTH_TOKEN",
+		"KODEX_GIT_BOT_TOKEN",
 	} {
 		if !strings.Contains(keys, expected) {
 			t.Fatalf("required self-deploy runtime secret keys missing %s: %s", expected, keys)
@@ -209,6 +224,11 @@ func selfDeployReadinessEnvLines() []string {
 		"KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_CONSUMER_ENABLED='true'",
 		"KODEX_AGENT_MANAGER_SELF_DEPLOY_GOVERNANCE_GATE_ENABLED='true'",
 		"KODEX_AGENT_MANAGER_SELF_DEPLOY_BUILD_DISPATCH_ENABLED='true'",
+		"KODEX_AGENT_MANAGER_SELF_DEPLOY_GATE_DECISION_CONSUMER_ENABLED='true'",
+		"KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_ENABLED='true'",
+		"KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_DEFAULT_NAMESPACE='kodex-prod'",
+		"KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_DEFAULT_IMAGE='registry.local/kodex/runtime-worker:0.1.0'",
+		"KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_DEPLOY_SERVICE_ACCOUNT='runtime-deployer'",
 	}
 }
 
@@ -227,6 +247,9 @@ func createDeployPlanRepo(t *testing.T, includeServiceImage bool) string {
     agent-manager:
       repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/kodex/agent-manager'
       tagTemplate: '{{ version "agent-manager" }}'
+    runtime-manager:
+      repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/kodex/runtime-manager'
+      tagTemplate: '{{ version "runtime-manager" }}'
 `
 	}
 	services := `spec:
@@ -234,6 +257,8 @@ func createDeployPlanRepo(t *testing.T, includeServiceImage bool) string {
     access-manager:
       value: "0.1.0"
     agent-manager:
+      value: "0.1.0"
+    runtime-manager:
       value: "0.1.0"
     registry:
       value: "2"
@@ -289,12 +314,23 @@ func createDeployPlanRepo(t *testing.T, includeServiceImage bool) string {
       deploy:
         serviceManifest: deploy/base/agent-manager/agent-manager.yaml.tpl
         kustomization: deploy/base/agent-manager/kustomization.yaml.tpl
+    - name: runtime-manager
+      status: foundation
+      zone: internal
+      path: services/internal/runtime-manager
+      dockerfile: services/internal/runtime-manager/Dockerfile
+      ownerDomain: runtime-and-fleet
+      deploy:
+        serviceManifest: deploy/base/runtime-manager/runtime-manager.yaml.tpl
+        kustomization: deploy/base/runtime-manager/kustomization.yaml.tpl
 `
 	if err := os.WriteFile(filepath.Join(repoRoot, "services.yaml"), []byte(services), 0o644); err != nil {
 		t.Fatalf("write services.yaml: %v", err)
 	}
 	writeFile(t, repoRoot, "services/internal/access-manager/Dockerfile", "FROM scratch\n")
 	writeFile(t, repoRoot, "services/internal/agent-manager/Dockerfile", "FROM scratch\n")
+	writeFile(t, repoRoot, "services/internal/runtime-manager/Dockerfile", "FROM scratch\n")
+	writeFile(t, repoRoot, "cmd/self-deploy-chain-acceptance/main.go", "package main\nfunc main() {}\n")
 	writeFile(t, repoRoot, "deploy/base/postgres/kustomization.yaml.tpl", "resources:\n  - secrets.yaml\n  - postgres.yaml\n")
 	writeFile(t, repoRoot, "deploy/base/postgres/secrets.yaml.tpl", `apiVersion: v1
 kind: Secret
@@ -326,7 +362,9 @@ stringData:
 	writeFile(t, repoRoot, "deploy/base/access-manager/access-manager.yaml.tpl", "image: {{ image \"access-manager\" }}\n")
 	writeFile(t, repoRoot, "deploy/base/access-manager/migrations.yaml.tpl", "image: {{ image \"access-manager-migrations\" }}\n")
 	writeFile(t, repoRoot, "deploy/base/agent-manager/kustomization.yaml.tpl", "resources:\n  - agent-manager.yaml\n")
-	writeFile(t, repoRoot, "deploy/base/agent-manager/agent-manager.yaml.tpl", "image: {{ image \"agent-manager\" }}\n"+strings.Join(requiredSelfDeployRenderedManifestFragments(), "\n")+"\n")
+	writeFile(t, repoRoot, "deploy/base/agent-manager/agent-manager.yaml.tpl", "image: {{ image \"agent-manager\" }}\n"+strings.Join(requiredAgentManagerSelfDeployRenderedManifestFragments(), "\n")+"\n")
+	writeFile(t, repoRoot, "deploy/base/runtime-manager/kustomization.yaml.tpl", "resources:\n  - runtime-manager.yaml\n")
+	writeFile(t, repoRoot, "deploy/base/runtime-manager/runtime-manager.yaml.tpl", "image: {{ image \"runtime-manager\" }}\n"+strings.Join(requiredRuntimeManagerSelfDeployRenderedManifestFragments(), "\n")+"\n")
 	return repoRoot
 }
 
@@ -387,6 +425,16 @@ func clearDeployPlanEnv(t *testing.T) {
 		"KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_CONSUMER_ENABLED",
 		"KODEX_AGENT_MANAGER_SELF_DEPLOY_GOVERNANCE_GATE_ENABLED",
 		"KODEX_AGENT_MANAGER_SELF_DEPLOY_BUILD_DISPATCH_ENABLED",
+		"KODEX_AGENT_MANAGER_SELF_DEPLOY_GATE_DECISION_CONSUMER_ENABLED",
+		"KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_ENABLED",
+		"KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_DEFAULT_NAMESPACE",
+		"KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_DEFAULT_IMAGE",
+		"KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_DEPLOY_SERVICE_ACCOUNT",
+		"KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_AGENT_MANAGER_GRPC_ADDR",
+		"KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_AGENT_MANAGER_GRPC_AUTH_SECRET_NAME",
+		"KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_AGENT_MANAGER_GRPC_AUTH_SECRET_KEY",
+		"KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_SOURCE_AUTH_SECRET_NAME",
+		"KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_SOURCE_AUTH_SECRET_KEY",
 	} {
 		t.Setenv(name, "")
 	}

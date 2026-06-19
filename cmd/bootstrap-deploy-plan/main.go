@@ -65,6 +65,17 @@ type manifestSet struct {
 	Kustomize bool
 }
 
+type secretRef struct {
+	Name string
+	Key  string
+}
+
+type readinessError struct {
+	Code       string
+	Message    string
+	NextAction string
+}
+
 var errKubectlUnavailable = errors.New("kubectl is not available")
 
 func run(ctx context.Context, options planOptions, output io.Writer) error {
@@ -102,6 +113,9 @@ func run(ctx context.Context, options planOptions, output io.Writer) error {
 	if err := checkSelfDeployReadinessEnv(output); err != nil {
 		return err
 	}
+	if err := checkSelfDeployRuntimeExecutorEnv(output); err != nil {
+		return err
+	}
 	restoreRenderEnv := applySafeRenderEnv()
 	defer restoreRenderEnv()
 
@@ -115,7 +129,11 @@ func run(ctx context.Context, options planOptions, output io.Writer) error {
 	if err := checkKubernetesFoundation(ctx, config, options.RequireKubernetes, options.SkipLiveKubernetes, output); err != nil {
 		return err
 	}
+	if err := checkSelfDeployChainAcceptanceTool(repoRoot, output); err != nil {
+		return err
+	}
 
+	readiness(output, "final-self-deploy-preflight", "ready", "self_deploy_static_readiness_ready", "run onboarding-runner apply, rollout, controlled trigger and self-deploy-chain-acceptance")
 	ok(output, "backend deploy dry-run plan passed without cluster changes")
 	return nil
 }
@@ -172,6 +190,10 @@ func validateDeployInventory(repoRoot string, stack stackinventory.Stack, output
 	if err := resolveImage(stack, "platform-event-log-migrations"); err != nil {
 		return err
 	}
+	if err := resolveImage(stack, "kaniko-executor"); err != nil {
+		return err
+	}
+	readiness(output, "kaniko-builder-image", "ready", "kaniko_builder_image_resolved", "none")
 
 	knownServices := make(map[string]struct{}, len(stack.Spec.DeployableServices))
 	for _, service := range stack.Spec.DeployableServices {
@@ -365,8 +387,10 @@ func checkKubernetesFoundation(ctx context.Context, config planConfig, require b
 			return errors.New("kubectl is required for live backend deploy plan")
 		}
 		skip(output, "kubectl is not available; live Kubernetes foundation checks deferred")
+		readiness(output, "runtime-kubernetes-foundation", "skipped", "runtime_kubernetes_foundation_deferred", "rerun with --require-kubernetes on the target cluster")
 		return nil
 	}
+	deferred := false
 	checks := []struct {
 		Label string
 		Args  []string
@@ -386,20 +410,32 @@ func checkKubernetesFoundation(ctx context.Context, config planConfig, require b
 			if require {
 				return fmt.Errorf("%s: %w", check.Label, err)
 			}
+			deferred = true
 			skip(output, check.Label+" deferred")
 			continue
 		}
 		ok(output, check.Label)
 	}
-	for _, key := range requiredSelfDeployRuntimeSecretKeys() {
-		if err := checkKubernetesSecretKey(ctx, config.Namespace, "kodex-platform-runtime", key); err != nil {
+	for _, ref := range requiredSelfDeployRuntimeSecretRefs() {
+		if err := checkKubernetesSecretKey(ctx, config.Namespace, ref.Name, ref.Key); err != nil {
 			if require {
 				return err
 			}
-			skip(output, "runtime secret key "+key+" deferred")
+			deferred = true
+			skip(output, "runtime secret ref "+safeSecretRef(ref)+" deferred")
 			continue
 		}
-		ok(output, "runtime secret key "+key+" exists")
+		ok(output, "runtime secret ref "+safeSecretRef(ref)+" exists")
+	}
+	serviceAccountsDeferred, err := checkKubernetesRuntimeServiceAccounts(ctx, config.Namespace, require, output)
+	if err != nil {
+		return err
+	}
+	deferred = deferred || serviceAccountsDeferred
+	if deferred {
+		readiness(output, "runtime-kubernetes-foundation", "skipped", "runtime_kubernetes_foundation_deferred", "rerun with --require-kubernetes on the target cluster")
+	} else {
+		readiness(output, "runtime-kubernetes-foundation", "ready", "runtime_kubernetes_foundation_ready", "none")
 	}
 	return nil
 }
@@ -424,13 +460,58 @@ func checkKubernetesSecretKey(ctx context.Context, namespace string, secretName 
 	return nil
 }
 
-func requiredSelfDeployRuntimeSecretKeys() []string {
-	return []string{
-		"KODEX_AGENT_MANAGER_PROJECT_CATALOG_GRPC_AUTH_TOKEN",
-		"KODEX_AGENT_MANAGER_RUNTIME_MANAGER_GRPC_AUTH_TOKEN",
-		"KODEX_AGENT_MANAGER_GOVERNANCE_MANAGER_GRPC_AUTH_TOKEN",
-		"KODEX_AGENT_MANAGER_EVENT_LOG_DATABASE_DSN",
+func checkKubernetesRuntimeServiceAccounts(ctx context.Context, namespace string, require bool, output io.Writer) (bool, error) {
+	deferred := false
+	for _, serviceAccount := range requiredRuntimeServiceAccounts() {
+		if err := runKubectl(ctx, "-n", namespace, "get", "serviceaccount", serviceAccount); err != nil {
+			if require {
+				return false, fmt.Errorf("runtime service account %s is required for self-deploy readiness: %w", serviceAccount, err)
+			}
+			deferred = true
+			skip(output, "runtime service account "+serviceAccount+" deferred")
+			continue
+		}
+		ok(output, "runtime service account "+serviceAccount+" exists")
 	}
+	return deferred, nil
+}
+
+func requiredRuntimeServiceAccounts() []string {
+	return []string{
+		"runtime-manager",
+		stackinventory.EnvOr("KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_DEPLOY_SERVICE_ACCOUNT", "runtime-deployer"),
+	}
+}
+
+func requiredSelfDeployRuntimeSecretKeys() []string {
+	result := make([]string, 0, len(requiredSelfDeployRuntimeSecretRefs()))
+	for _, ref := range requiredSelfDeployRuntimeSecretRefs() {
+		if ref.Name == "kodex-platform-runtime" {
+			result = append(result, ref.Key)
+		}
+	}
+	return result
+}
+
+func requiredSelfDeployRuntimeSecretRefs() []secretRef {
+	return []secretRef{
+		{Name: "kodex-platform-runtime", Key: "KODEX_AGENT_MANAGER_PROJECT_CATALOG_GRPC_AUTH_TOKEN"},
+		{Name: "kodex-platform-runtime", Key: "KODEX_AGENT_MANAGER_RUNTIME_MANAGER_GRPC_AUTH_TOKEN"},
+		{Name: "kodex-platform-runtime", Key: "KODEX_AGENT_MANAGER_GOVERNANCE_MANAGER_GRPC_AUTH_TOKEN"},
+		{Name: "kodex-platform-runtime", Key: "KODEX_AGENT_MANAGER_EVENT_LOG_DATABASE_DSN"},
+		{
+			Name: stackinventory.EnvOr("KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_AGENT_MANAGER_GRPC_AUTH_SECRET_NAME", "kodex-platform-runtime"),
+			Key:  stackinventory.EnvOr("KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_AGENT_MANAGER_GRPC_AUTH_SECRET_KEY", "KODEX_AGENT_MANAGER_GRPC_AUTH_TOKEN"),
+		},
+		{
+			Name: stackinventory.EnvOr("KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_SOURCE_AUTH_SECRET_NAME", "kodex-platform-runtime"),
+			Key:  stackinventory.EnvOr("KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_SOURCE_AUTH_SECRET_KEY", "KODEX_GIT_BOT_TOKEN"),
+		},
+	}
+}
+
+func safeSecretRef(ref secretRef) string {
+	return ref.Name + ":" + ref.Key
 }
 
 func checkSelfDeployReadinessEnv(output io.Writer) error {
@@ -440,20 +521,41 @@ func checkSelfDeployReadinessEnv(output io.Writer) error {
 	for _, item := range requiredSelfDeployBooleanEnv() {
 		enabled, err := boolEnv(item.Name, item.Fallback)
 		if err != nil {
-			return err
+			return readinessError{
+				Code:       "self_deploy_flag_invalid",
+				Message:    err.Error(),
+				NextAction: "set " + item.Name + " to true or false in the protected deploy env",
+			}
 		}
 		if !enabled {
-			return fmt.Errorf("%s must be true for self-deploy readiness", item.Name)
+			return readinessError{
+				Code:       "self_deploy_flag_disabled",
+				Message:    item.Name + " must be true for self-deploy readiness",
+				NextAction: "set " + item.Name + "=true before rollout",
+			}
 		}
 	}
 	ok(output, "agent-manager self-deploy readiness env checked; values hidden")
+	readiness(output, "agent-manager-self-deploy-env", "ready", "agent_manager_self_deploy_env_ready", "none")
 	return nil
 }
 
 func validateSelfDeployProjectID(raw string) error {
-	projectID, err := uuid.Parse(strings.TrimSpace(raw))
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return readinessError{
+			Code:       "self_deploy_project_id_missing",
+			Message:    "KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_PROJECT_ID is required for self-deploy readiness",
+			NextAction: "run onboarding-runner apply for self-repo and write the returned project id to the protected deploy env",
+		}
+	}
+	projectID, err := uuid.Parse(trimmed)
 	if err != nil || projectID == uuid.Nil {
-		return errors.New("KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_PROJECT_ID must be a valid non-nil uuid for self-deploy readiness")
+		return readinessError{
+			Code:       "self_deploy_project_id_invalid",
+			Message:    "KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_PROJECT_ID must be a valid non-nil uuid for self-deploy readiness",
+			NextAction: "replace the value with the safe project id returned by onboarding-runner",
+		}
 	}
 	return nil
 }
@@ -466,9 +568,103 @@ func requiredSelfDeployBooleanEnv() []struct {
 		Name     string
 		Fallback string
 	}{
-		{Name: "KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_CONSUMER_ENABLED", Fallback: "true"},
-		{Name: "KODEX_AGENT_MANAGER_SELF_DEPLOY_GOVERNANCE_GATE_ENABLED", Fallback: "true"},
+		{Name: "KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_CONSUMER_ENABLED", Fallback: "false"},
+		{Name: "KODEX_AGENT_MANAGER_SELF_DEPLOY_GOVERNANCE_GATE_ENABLED", Fallback: "false"},
 		{Name: "KODEX_AGENT_MANAGER_SELF_DEPLOY_BUILD_DISPATCH_ENABLED", Fallback: "false"},
+		{Name: "KODEX_AGENT_MANAGER_SELF_DEPLOY_GATE_DECISION_CONSUMER_ENABLED", Fallback: "false"},
+	}
+}
+
+func checkSelfDeployRuntimeExecutorEnv(output io.Writer) error {
+	enabled, err := boolEnv("KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_ENABLED", "false")
+	if err != nil {
+		return readinessError{
+			Code:       "runtime_executor_flag_invalid",
+			Message:    err.Error(),
+			NextAction: "set KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_ENABLED to true or false in the protected deploy env",
+		}
+	}
+	if !enabled {
+		return readinessError{
+			Code:       "runtime_executor_disabled",
+			Message:    "KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_ENABLED must be true for self-deploy readiness",
+			NextAction: "set KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_ENABLED=true before rollout",
+		}
+	}
+	for _, item := range requiredRuntimeExecutorStringEnv() {
+		value := strings.TrimSpace(stackinventory.EnvOr(item.Name, item.Fallback))
+		if value == "" {
+			return readinessError{
+				Code:       item.Code,
+				Message:    item.Name + " is required for self-deploy readiness",
+				NextAction: item.NextAction,
+			}
+		}
+	}
+	ok(output, "runtime-manager Kubernetes executor readiness env checked; values hidden")
+	readiness(output, "runtime-kubernetes-executor-env", "ready", "runtime_kubernetes_executor_env_ready", "none")
+	return nil
+}
+
+func requiredRuntimeExecutorStringEnv() []struct {
+	Name       string
+	Fallback   string
+	Code       string
+	NextAction string
+} {
+	return []struct {
+		Name       string
+		Fallback   string
+		Code       string
+		NextAction string
+	}{
+		{
+			Name:       "KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_DEFAULT_NAMESPACE",
+			Fallback:   stackinventory.EnvOr("KODEX_PRODUCTION_NAMESPACE", ""),
+			Code:       "runtime_executor_namespace_missing",
+			NextAction: "set KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_DEFAULT_NAMESPACE or KODEX_PRODUCTION_NAMESPACE",
+		},
+		{
+			Name:       "KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_DEFAULT_IMAGE",
+			Code:       "runtime_executor_default_image_missing",
+			NextAction: "set KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_DEFAULT_IMAGE to the approved runtime worker image ref",
+		},
+		{
+			Name:       "KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_DEPLOY_SERVICE_ACCOUNT",
+			Fallback:   "runtime-deployer",
+			Code:       "runtime_executor_deploy_service_account_missing",
+			NextAction: "set KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_DEPLOY_SERVICE_ACCOUNT or keep runtime-deployer",
+		},
+		{
+			Name:       "KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_AGENT_MANAGER_GRPC_ADDR",
+			Fallback:   "agent-manager:9090",
+			Code:       "runtime_executor_agent_manager_addr_missing",
+			NextAction: "set KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_AGENT_MANAGER_GRPC_ADDR",
+		},
+		{
+			Name:       "KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_AGENT_MANAGER_GRPC_AUTH_SECRET_NAME",
+			Fallback:   "kodex-platform-runtime",
+			Code:       "runtime_executor_agent_manager_secret_name_missing",
+			NextAction: "set KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_AGENT_MANAGER_GRPC_AUTH_SECRET_NAME",
+		},
+		{
+			Name:       "KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_AGENT_MANAGER_GRPC_AUTH_SECRET_KEY",
+			Fallback:   "KODEX_AGENT_MANAGER_GRPC_AUTH_TOKEN",
+			Code:       "runtime_executor_agent_manager_secret_key_missing",
+			NextAction: "set KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_AGENT_MANAGER_GRPC_AUTH_SECRET_KEY",
+		},
+		{
+			Name:       "KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_SOURCE_AUTH_SECRET_NAME",
+			Fallback:   "kodex-platform-runtime",
+			Code:       "runtime_executor_source_auth_secret_name_missing",
+			NextAction: "set KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_SOURCE_AUTH_SECRET_NAME",
+		},
+		{
+			Name:       "KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_SOURCE_AUTH_SECRET_KEY",
+			Fallback:   "KODEX_GIT_BOT_TOKEN",
+			Code:       "runtime_executor_source_auth_secret_key_missing",
+			NextAction: "set KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_SOURCE_AUTH_SECRET_KEY",
+		},
 	}
 }
 
@@ -485,35 +681,90 @@ func boolEnv(name string, fallback string) (bool, error) {
 }
 
 func checkRenderedSelfDeploySurface(renderDir string, output io.Writer) error {
-	manifestPath := filepath.Join(renderDir, "agent-manager", "agent-manager.yaml")
-	contentBytes, err := os.ReadFile(manifestPath)
-	if errors.Is(err, os.ErrNotExist) {
-		return errors.New("rendered agent-manager manifest is required for self-deploy readiness")
-	}
-	if err != nil {
-		return fmt.Errorf("read rendered agent-manager manifest: %w", err)
-	}
-	content := string(contentBytes)
-	for _, fragment := range requiredSelfDeployRenderedManifestFragments() {
-		if !strings.Contains(content, fragment) {
-			return fmt.Errorf("rendered agent-manager manifest is missing self-deploy readiness surface %s", fragment)
-		}
+	if err := checkRenderedManifestFragments(filepath.Join(renderDir, "agent-manager", "agent-manager.yaml"), "agent-manager", requiredAgentManagerSelfDeployRenderedManifestFragments()); err != nil {
+		return err
 	}
 	ok(output, "agent-manager self-deploy rendered manifest surface checked")
+	if err := checkRenderedManifestFragments(filepath.Join(renderDir, "runtime-manager", "runtime-manager.yaml"), "runtime-manager", requiredRuntimeManagerSelfDeployRenderedManifestFragments()); err != nil {
+		return err
+	}
+	ok(output, "runtime-manager self-deploy rendered manifest surface checked")
+	readiness(output, "self-deploy-rendered-manifests", "ready", "self_deploy_rendered_surface_ready", "none")
 	return nil
 }
 
-func requiredSelfDeployRenderedManifestFragments() []string {
+func checkRenderedManifestFragments(manifestPath string, service string, fragments []string) error {
+	contentBytes, err := os.ReadFile(manifestPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return readinessError{
+			Code:       "rendered_self_deploy_manifest_missing",
+			Message:    "rendered " + service + " manifest is required for self-deploy readiness",
+			NextAction: "include " + service + " in services.yaml deploy inventory before final rollout",
+		}
+	}
+	if err != nil {
+		return fmt.Errorf("read rendered %s manifest: %w", service, err)
+	}
+	content := string(contentBytes)
+	for _, fragment := range fragments {
+		if !strings.Contains(content, fragment) {
+			return readinessError{
+				Code:       "rendered_self_deploy_surface_missing",
+				Message:    "rendered " + service + " manifest is missing self-deploy readiness surface " + fragment,
+				NextAction: "add the missing env/SecretRef to deploy/base/" + service,
+			}
+		}
+	}
+	return nil
+}
+
+func requiredAgentManagerSelfDeployRenderedManifestFragments() []string {
 	return []string{
 		"KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_CONSUMER_ENABLED",
 		"KODEX_AGENT_MANAGER_SELF_DEPLOY_SIGNAL_PROJECT_ID",
 		"KODEX_AGENT_MANAGER_SELF_DEPLOY_GOVERNANCE_GATE_ENABLED",
 		"KODEX_AGENT_MANAGER_SELF_DEPLOY_BUILD_DISPATCH_ENABLED",
+		"KODEX_AGENT_MANAGER_SELF_DEPLOY_GATE_DECISION_CONSUMER_ENABLED",
 		"KODEX_AGENT_MANAGER_PROJECT_CATALOG_GRPC_AUTH_TOKEN",
 		"KODEX_AGENT_MANAGER_RUNTIME_MANAGER_GRPC_AUTH_TOKEN",
 		"KODEX_AGENT_MANAGER_GOVERNANCE_MANAGER_GRPC_AUTH_TOKEN",
 		"KODEX_AGENT_MANAGER_EVENT_LOG_DATABASE_DSN",
 	}
+}
+
+func requiredRuntimeManagerSelfDeployRenderedManifestFragments() []string {
+	return []string{
+		"KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_ENABLED",
+		"KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_WORKER_ID",
+		"KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_DEFAULT_NAMESPACE",
+		"KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_DEFAULT_IMAGE",
+		"KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_DEPLOY_SERVICE_ACCOUNT",
+		"KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_AGENT_MANAGER_GRPC_AUTH_SECRET_NAME",
+		"KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_AGENT_MANAGER_GRPC_AUTH_SECRET_KEY",
+		"KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_SOURCE_AUTH_SECRET_NAME",
+		"KODEX_RUNTIME_MANAGER_KUBERNETES_EXECUTOR_SOURCE_AUTH_SECRET_KEY",
+	}
+}
+
+func checkSelfDeployChainAcceptanceTool(repoRoot string, output io.Writer) error {
+	path := filepath.Join(repoRoot, "cmd", "self-deploy-chain-acceptance", "main.go")
+	if _, err := os.Stat(path); err != nil {
+		return readinessError{
+			Code:       "self_deploy_chain_acceptance_missing",
+			Message:    "cmd/self-deploy-chain-acceptance is required for final self-deploy readiness",
+			NextAction: "restore the read-only self-deploy chain acceptance command before final rollout",
+		}
+	}
+	ok(output, "self-deploy chain acceptance command is available")
+	readiness(output, "self-deploy-chain-acceptance", "ready", "self_deploy_chain_acceptance_available", "run it after rollout and controlled trigger")
+	return nil
+}
+
+func (err readinessError) Error() string {
+	if err.NextAction == "" {
+		return err.Code + ": " + err.Message
+	}
+	return err.Code + ": " + err.Message + "; next_action=" + err.NextAction
 }
 
 func firstNonEmpty(value string, fallback string) string {
@@ -540,4 +791,8 @@ func ok(output io.Writer, message string) {
 
 func skip(output io.Writer, message string) {
 	_, _ = fmt.Fprintf(output, "SKIP: %s\n", message)
+}
+
+func readiness(output io.Writer, component string, status string, code string, nextAction string) {
+	_, _ = fmt.Fprintf(output, "READINESS: component=%s status=%s code=%s next_action=%s\n", component, status, code, nextAction)
 }
