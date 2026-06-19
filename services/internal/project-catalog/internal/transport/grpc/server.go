@@ -36,6 +36,7 @@ type projectService interface {
 	GetSelfDeployDeployPlan(context.Context, projectservice.GetSelfDeployDeployPlanInput) (projectservice.SelfDeployDeployPlanResult, error)
 	GetServicesPolicy(context.Context, projectservice.GetServicesPolicyInput) (entity.ServicesPolicy, error)
 	ListServiceDescriptors(context.Context, projectservice.ListServiceDescriptorsInput) (projectservice.ListServiceDescriptorsResult, error)
+	GetProjectOnboardingStatus(context.Context, projectservice.GetProjectOnboardingStatusInput) (projectservice.ProjectOnboardingStatusResult, error)
 	CreatePolicyEditProposal(context.Context, projectservice.CreatePolicyEditProposalInput) (entity.PolicyEditProposal, error)
 	CreatePolicyOverride(context.Context, projectservice.CreatePolicyOverrideInput) (entity.PolicyOverride, error)
 	CancelPolicyOverride(context.Context, projectservice.CancelPolicyOverrideInput) (entity.PolicyOverride, error)
@@ -179,6 +180,11 @@ func (s *Server) GetServicesPolicy(ctx context.Context, request *projectsv1.GetS
 // ListServiceDescriptors returns typed service descriptors from active policy.
 func (s *Server) ListServiceDescriptors(ctx context.Context, request *projectsv1.ListServiceDescriptorsRequest) (*projectsv1.ListServiceDescriptorsResponse, error) {
 	return handleUnary(ctx, request, grpccasters.ListServiceDescriptorsInput, s.service.ListServiceDescriptors, grpccasters.ListServiceDescriptorsResponse)
+}
+
+// GetProjectOnboardingStatus returns safe manual bootstrap/adoption readiness.
+func (s *Server) GetProjectOnboardingStatus(ctx context.Context, request *projectsv1.GetProjectOnboardingStatusRequest) (*projectsv1.ProjectOnboardingStatusResponse, error) {
+	return handleUnary(ctx, request, grpccasters.GetProjectOnboardingStatusInput, s.service.GetProjectOnboardingStatus, grpccasters.ProjectOnboardingStatusResponse)
 }
 
 // CreatePolicyEditProposal creates a request to change services.yaml through PR.

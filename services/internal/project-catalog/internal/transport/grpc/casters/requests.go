@@ -655,6 +655,37 @@ func ListServiceDescriptorsInput(request *projectsv1.ListServiceDescriptorsReque
 	return projectservice.ListServiceDescriptorsInput{ProjectID: projectID, RepositoryID: repositoryID, ServiceKeys: trimStrings(request.GetServiceKeys()), Statuses: statuses, Page: pageRequestFromProto(request.GetPage()), Meta: meta}, nil
 }
 
+func GetProjectOnboardingStatusInput(request *projectsv1.GetProjectOnboardingStatusRequest) (projectservice.GetProjectOnboardingStatusInput, error) {
+	projectID, meta, err := idWithQueryMeta(request.GetProjectId(), request.GetMeta())
+	if err != nil {
+		return projectservice.GetProjectOnboardingStatusInput{}, err
+	}
+	repositoryID, err := optionalUUIDPtr(request.GetRepositoryId())
+	if err != nil {
+		return projectservice.GetProjectOnboardingStatusInput{}, err
+	}
+	policyID, err := optionalUUIDPtr(request.GetExpectedServicesPolicyId())
+	if err != nil {
+		return projectservice.GetProjectOnboardingStatusInput{}, err
+	}
+	var expectedVersion *int64
+	if request.ExpectedServicesPolicyVersion != nil {
+		value := request.GetExpectedServicesPolicyVersion()
+		expectedVersion = &value
+	}
+	return projectservice.GetProjectOnboardingStatusInput{
+		ProjectID:                     projectID,
+		RepositoryID:                  repositoryID,
+		ServiceKeys:                   trimStrings(request.GetServiceKeys()),
+		ExpectedSourceRef:             strings.TrimSpace(request.GetExpectedSourceRef()),
+		ExpectedSourceCommitSHA:       strings.TrimSpace(request.GetExpectedSourceCommitSha()),
+		ExpectedContentHash:           strings.TrimSpace(request.GetExpectedContentHash()),
+		ExpectedServicesPolicyID:      policyID,
+		ExpectedServicesPolicyVersion: expectedVersion,
+		Meta:                          meta,
+	}, nil
+}
+
 func CreatePolicyEditProposalInput(request *projectsv1.CreatePolicyEditProposalRequest) (projectservice.CreatePolicyEditProposalInput, error) {
 	meta, err := CommandMetaFromProto(request.GetMeta())
 	if err != nil {

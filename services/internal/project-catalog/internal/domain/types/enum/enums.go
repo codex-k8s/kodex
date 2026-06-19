@@ -84,6 +84,23 @@ const (
 	ServicesPolicyProjectionOverridden ServicesPolicyProjectionStatus = "overridden"
 )
 
+// ProjectOnboardingStatus describes manual bootstrap/adoption readiness.
+type ProjectOnboardingStatus string
+
+const (
+	ProjectOnboardingStatusReady                      ProjectOnboardingStatus = "ready"
+	ProjectOnboardingStatusInvalidInput               ProjectOnboardingStatus = "invalid_input"
+	ProjectOnboardingStatusProjectNotFound            ProjectOnboardingStatus = "project_not_found"
+	ProjectOnboardingStatusProjectNotActive           ProjectOnboardingStatus = "project_not_active"
+	ProjectOnboardingStatusRepositoryBindingNotFound  ProjectOnboardingStatus = "repository_binding_not_found"
+	ProjectOnboardingStatusRepositoryBindingConflict  ProjectOnboardingStatus = "repository_binding_conflict"
+	ProjectOnboardingStatusRepositoryBindingNotActive ProjectOnboardingStatus = "repository_binding_not_active"
+	ProjectOnboardingStatusServicesPolicyNotFound     ProjectOnboardingStatus = "services_policy_not_found"
+	ProjectOnboardingStatusServicesPolicyNotReady     ProjectOnboardingStatus = "services_policy_not_ready"
+	ProjectOnboardingStatusServicesPolicyStale        ProjectOnboardingStatus = "services_policy_stale"
+	ProjectOnboardingStatusServiceDescriptorsNotFound ProjectOnboardingStatus = "service_descriptors_not_found"
+)
+
 // SelfDeploySignalStatus описывает готовность project-side self-deploy input.
 type SelfDeploySignalStatus string
 

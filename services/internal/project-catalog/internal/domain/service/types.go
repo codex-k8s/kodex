@@ -767,6 +767,30 @@ type ListServiceDescriptorsResult struct {
 	Page               value.PageResult
 }
 
+// GetProjectOnboardingStatusInput selects safe manual bootstrap/adoption readiness.
+type GetProjectOnboardingStatusInput struct {
+	ProjectID                     uuid.UUID
+	RepositoryID                  *uuid.UUID
+	ServiceKeys                   []string
+	ExpectedSourceRef             string
+	ExpectedSourceCommitSHA       string
+	ExpectedContentHash           string
+	ExpectedServicesPolicyID      *uuid.UUID
+	ExpectedServicesPolicyVersion *int64
+	Meta                          value.QueryMeta
+}
+
+// ProjectOnboardingStatusResult returns safe checked project onboarding state.
+type ProjectOnboardingStatusResult struct {
+	Status             enum.ProjectOnboardingStatus
+	SafeReason         string
+	Project            *entity.Project
+	Repository         *entity.RepositoryBinding
+	ServicesPolicy     *entity.ServicesPolicy
+	ServiceDescriptors []entity.ServiceDescriptor
+	Summary            string
+}
+
 // CreatePolicyEditProposalInput requests a PR-backed services.yaml change.
 type CreatePolicyEditProposalInput struct {
 	ProjectID        uuid.UUID

@@ -448,6 +448,39 @@ func ListServiceDescriptorsResponse(result projectservice.ListServiceDescriptors
 	return &projectsv1.ListServiceDescriptorsResponse{ServiceDescriptors: mapSlice(result.ServiceDescriptors, ServiceDescriptorToProto), Page: pageResponseToProto(result.Page)}
 }
 
+func ProjectOnboardingStatusResponse(result projectservice.ProjectOnboardingStatusResult) *projectsv1.ProjectOnboardingStatusResponse {
+	return &projectsv1.ProjectOnboardingStatusResponse{
+		Status:             ProjectOnboardingStatusToProto(result.Status),
+		SafeReason:         optionalStringPtr(result.SafeReason),
+		Project:            projectPtrToProto(result.Project),
+		Repository:         repositoryPtrToProto(result.Repository),
+		ServicesPolicy:     servicesPolicyPtrToProto(result.ServicesPolicy),
+		ServiceDescriptors: mapSlice(result.ServiceDescriptors, ServiceDescriptorToProto),
+		Summary:            result.Summary,
+	}
+}
+
+func projectPtrToProto(project *entity.Project) *projectsv1.Project {
+	if project == nil {
+		return nil
+	}
+	return ProjectToProto(*project)
+}
+
+func repositoryPtrToProto(repository *entity.RepositoryBinding) *projectsv1.Repository {
+	if repository == nil {
+		return nil
+	}
+	return RepositoryToProto(*repository)
+}
+
+func servicesPolicyPtrToProto(policy *entity.ServicesPolicy) *projectsv1.ServicesPolicy {
+	if policy == nil {
+		return nil
+	}
+	return ServicesPolicyToProto(*policy)
+}
+
 func ServiceDescriptorToProto(descriptor entity.ServiceDescriptor) *projectsv1.ServiceDescriptor {
 	return &projectsv1.ServiceDescriptor{
 		ServiceDescriptorId:  descriptor.ID.String(),
