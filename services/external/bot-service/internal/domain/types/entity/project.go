@@ -34,6 +34,36 @@ func (repo ProjectRepository) FullName() string {
 	return repo.Owner + "/" + repo.Name
 }
 
+type ProjectRuntimeVariable struct {
+	ID          int64
+	ProjectID   int64
+	Name        string
+	Slug        string
+	Description string
+	SecretRef   string
+	SecretKey   string
+	Sensitive   bool
+	Enabled     bool
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+type AgentRoleRuntimeVariableBinding struct {
+	ID          int64
+	RoleID      int64
+	RoleName    string
+	VariableID  int64
+	ProjectID   int64
+	Name        string
+	Slug        string
+	Description string
+	SecretRef   string
+	SecretKey   string
+	Sensitive   bool
+	Enabled     bool
+	CreatedAt   time.Time
+}
+
 type AgentRole struct {
 	ID                int64
 	ProjectID         int64

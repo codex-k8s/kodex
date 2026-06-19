@@ -44,11 +44,15 @@ const (
 	runnerTmpVolume       = "runner-tmp"
 	runnerHomePath        = "/home/matter-codex"
 	runnerTmpPath         = "/tmp"
+	runtimeEnvAllowlist   = "MATTERCODEX_RUNTIME_ENV_ALLOWLIST"
 	runnerUID             = int64(10001)
 	runnerGID             = int64(10001)
 )
 
-var codexDeviceCodeRE = regexp.MustCompile(`\b[A-Z0-9]{4}-[A-Z0-9]{5}\b`)
+var (
+	codexDeviceCodeRE = regexp.MustCompile(`\b[A-Z0-9]{4}-[A-Z0-9]{5}\b`)
+	runtimeEnvNameRE  = regexp.MustCompile(`^[A-Z][A-Z0-9_]{1,127}$`)
+)
 
 type Config struct {
 	Namespace                 string
@@ -476,6 +480,77 @@ func (runner *Runner) DeleteGitHubTokenSecret(ctx context.Context, accountName s
 	} else {
 		result.SecretDeleted = true
 	}
+	return result, nil
+}
+
+func (runner *Runner) UpsertProjectRuntimeVariableSecret(ctx context.Context, input runtimerepo.ProjectRuntimeVariableSecretInput) (runtimerepo.ProjectRuntimeVariableSecret, error) {
+	secretName := strings.TrimSpace(input.Variable.SecretName)
+	secretKey := defaultString(input.Variable.SecretKey, "value")
+	value := input.Value
+	if secretName == "" {
+		return runtimerepo.ProjectRuntimeVariableSecret{}, fmt.Errorf("runtime variable secret name is required")
+	}
+	if strings.TrimSpace(input.Variable.Name) == "" {
+		return runtimerepo.ProjectRuntimeVariableSecret{}, fmt.Errorf("runtime variable env name is required")
+	}
+	if value == "" {
+		return runtimerepo.ProjectRuntimeVariableSecret{}, fmt.Errorf("runtime variable value is required")
+	}
+	labels := map[string]string{
+		"app.kubernetes.io/name":      "matter-codex-agent-runner",
+		"app.kubernetes.io/component": "runtime-variable",
+	}
+	if projectSlug := kubernetesLabelValue(input.ProjectSlug); projectSlug != "" {
+		labels["matter-codex.dev/project"] = projectSlug
+	}
+	secretClient := runner.client.CoreV1().Secrets(runner.namespace)
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   secretName,
+			Labels: labels,
+		},
+		Type: corev1.SecretTypeOpaque,
+		Data: map[string][]byte{secretKey: []byte(value)},
+	}
+	if _, err := secretClient.Create(ctx, secret, metav1.CreateOptions{}); err != nil {
+		if !apierrors.IsAlreadyExists(err) {
+			return runtimerepo.ProjectRuntimeVariableSecret{}, fmt.Errorf("create runtime variable secret: %w", err)
+		}
+		current, getErr := secretClient.Get(ctx, secretName, metav1.GetOptions{})
+		if getErr != nil {
+			return runtimerepo.ProjectRuntimeVariableSecret{}, fmt.Errorf("get runtime variable secret: %w", getErr)
+		}
+		if current.Data == nil {
+			current.Data = map[string][]byte{}
+		}
+		current.Data[secretKey] = []byte(value)
+		if current.Labels == nil {
+			current.Labels = map[string]string{}
+		}
+		for key, labelValue := range labels {
+			current.Labels[key] = labelValue
+		}
+		if _, updateErr := secretClient.Update(ctx, current, metav1.UpdateOptions{}); updateErr != nil {
+			return runtimerepo.ProjectRuntimeVariableSecret{}, fmt.Errorf("update runtime variable secret: %w", updateErr)
+		}
+		return runtimerepo.ProjectRuntimeVariableSecret{SecretName: secretName, Namespace: runner.namespace, Created: false}, nil
+	}
+	return runtimerepo.ProjectRuntimeVariableSecret{SecretName: secretName, Namespace: runner.namespace, Created: true}, nil
+}
+
+func (runner *Runner) DeleteProjectRuntimeVariableSecret(ctx context.Context, secretName string) (runtimerepo.ProjectRuntimeVariableSecret, error) {
+	secretName = strings.TrimSpace(secretName)
+	if secretName == "" {
+		return runtimerepo.ProjectRuntimeVariableSecret{}, fmt.Errorf("runtime variable secret name is required")
+	}
+	result := runtimerepo.ProjectRuntimeVariableSecret{SecretName: secretName, Namespace: runner.namespace}
+	if err := runner.client.CoreV1().Secrets(runner.namespace).Delete(ctx, secretName, metav1.DeleteOptions{}); err != nil {
+		if !apierrors.IsNotFound(err) {
+			return runtimerepo.ProjectRuntimeVariableSecret{}, fmt.Errorf("delete runtime variable secret: %w", err)
+		}
+		return result, nil
+	}
+	result.Created = true
 	return result, nil
 }
 
@@ -1046,6 +1121,8 @@ func (runner *Runner) developerJob(input runtimerepo.DeveloperRunInput) *batchv1
 	backoffLimit := int32(0)
 	codexAuthSecretName := defaultString(input.CodexAuthSecretName, runner.codexAuthSecretName)
 	gitHubSecretName := defaultString(input.GitHubSecretName, runner.gitHubSecretName)
+	runtimeEnv := runtimeEnvVars(input.RuntimeEnv)
+	envAllowlist := runtimeEnvAllowlistValue(input.RuntimeEnv)
 	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   runnerJobName(input.RunID),
@@ -1069,7 +1146,7 @@ func (runner *Runner) developerJob(input runtimerepo.DeveloperRunInput) *batchv1
 							Args:            []string{"developer"},
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							SecurityContext: runnerContainerSecurityContext(),
-							Env: []corev1.EnvVar{
+							Env: append([]corev1.EnvVar{
 								{Name: "MATTERCODEX_RUN_ID", Value: input.RunID},
 								{Name: "MATTERCODEX_AGENT_PROFILE", Value: input.Profile},
 								{Name: "MATTERCODEX_REPO_PROVIDER", Value: input.Provider},
@@ -1080,7 +1157,8 @@ func (runner *Runner) developerJob(input runtimerepo.DeveloperRunInput) *batchv1
 								{Name: "MATTERCODEX_PR_TITLE", Value: input.Title},
 								{Name: "MATTERCODEX_CODEX_SANDBOX_MODE", Value: input.SandboxMode},
 								{Name: "MATTERCODEX_CODEX_CONFIG_OVERLAY", Value: input.ConfigOverlay},
-							},
+								{Name: runtimeEnvAllowlist, Value: envAllowlist},
+							}, runtimeEnv...),
 							VolumeMounts: append([]corev1.VolumeMount{
 								{Name: "workspace", MountPath: "/workspace"},
 								{Name: codexAuthSecretVolume, MountPath: "/var/run/secrets/matter-codex-codex", ReadOnly: true},
@@ -1144,6 +1222,8 @@ func (runner *Runner) reviewJob(input runtimerepo.ReviewRunInput) *batchv1.Job {
 	backoffLimit := int32(0)
 	codexAuthSecretName := defaultString(input.CodexAuthSecretName, runner.codexAuthSecretName)
 	gitHubSecretName := defaultString(input.GitHubSecretName, runner.gitHubSecretName)
+	runtimeEnv := runtimeEnvVars(input.RuntimeEnv)
+	envAllowlist := runtimeEnvAllowlistValue(input.RuntimeEnv)
 	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   runnerJobName(input.RunID),
@@ -1167,7 +1247,7 @@ func (runner *Runner) reviewJob(input runtimerepo.ReviewRunInput) *batchv1.Job {
 							Args:            []string{"reviewer"},
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							SecurityContext: runnerContainerSecurityContext(),
-							Env: []corev1.EnvVar{
+							Env: append([]corev1.EnvVar{
 								{Name: "MATTERCODEX_RUN_ID", Value: input.RunID},
 								{Name: "MATTERCODEX_AGENT_PROFILE", Value: input.Profile},
 								{Name: "MATTERCODEX_REPO_PROVIDER", Value: input.Provider},
@@ -1176,7 +1256,8 @@ func (runner *Runner) reviewJob(input runtimerepo.ReviewRunInput) *batchv1.Job {
 								{Name: "MATTERCODEX_PR_NUMBER", Value: strconv.Itoa(input.PRNumber)},
 								{Name: "MATTERCODEX_CODEX_SANDBOX_MODE", Value: input.SandboxMode},
 								{Name: "MATTERCODEX_CODEX_CONFIG_OVERLAY", Value: input.ConfigOverlay},
-							},
+								{Name: runtimeEnvAllowlist, Value: envAllowlist},
+							}, runtimeEnv...),
 							VolumeMounts: append([]corev1.VolumeMount{
 								{Name: "workspace", MountPath: "/workspace"},
 								{Name: codexAuthSecretVolume, MountPath: "/var/run/secrets/matter-codex-codex", ReadOnly: true},
@@ -1244,7 +1325,9 @@ func (runner *Runner) chatJob(input runtimerepo.ChatRunInput) *batchv1.Job {
 		{Name: "MATTERCODEX_AGENT_PROFILE", Value: input.Profile},
 		{Name: "MATTERCODEX_CODEX_SANDBOX_MODE", Value: input.SandboxMode},
 		{Name: "MATTERCODEX_CODEX_CONFIG_OVERLAY", Value: input.ConfigOverlay},
+		{Name: runtimeEnvAllowlist, Value: runtimeEnvAllowlistValue(input.RuntimeEnv)},
 	}
+	env = append(env, runtimeEnvVars(input.RuntimeEnv)...)
 	volumeMounts := []corev1.VolumeMount{
 		{Name: "workspace", MountPath: "/workspace"},
 		{Name: codexAuthSecretVolume, MountPath: "/var/run/secrets/matter-codex-codex", ReadOnly: true},
@@ -1362,12 +1445,14 @@ func (runner *Runner) sessionPod(input runtimerepo.AgentSessionPodInput) *corev1
 		}}},
 		{Name: "MATTERCODEX_CODEX_SANDBOX_MODE", Value: input.SandboxMode},
 		{Name: "MATTERCODEX_CODEX_CONFIG_OVERLAY", Value: input.ConfigOverlay},
+		{Name: runtimeEnvAllowlist, Value: runtimeEnvAllowlistValue(input.RuntimeEnv)},
 		{Name: "MATTERCODEX_MCP_URL", Value: strings.TrimRight(input.BotServiceURL, "/") + "/mcp/sessions/" + input.SessionKey},
 		{Name: "MATTERCODEX_MCP_TOKEN", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{
 			LocalObjectReference: corev1.LocalObjectReference{Name: sessionSecretName(input.SessionKey)},
 			Key:                  "token",
 		}}},
 	}
+	env = append(env, runtimeEnvVars(input.RuntimeEnv)...)
 	volumeMounts := []corev1.VolumeMount{
 		{Name: "workspace", MountPath: "/workspace"},
 		{Name: codexAuthSecretVolume, MountPath: "/var/run/secrets/matter-codex-codex", ReadOnly: true},
@@ -1935,6 +2020,51 @@ func kubernetesLabelValue(value string) string {
 		return "unknown"
 	}
 	return value
+}
+
+func runtimeEnvVars(items []runtimerepo.RuntimeEnvVar) []corev1.EnvVar {
+	names := make(map[string]struct{}, len(items))
+	var env []corev1.EnvVar
+	for _, item := range items {
+		name := strings.TrimSpace(item.Name)
+		secretName := strings.TrimSpace(item.SecretName)
+		secretKey := defaultString(item.SecretKey, "value")
+		if name == "" || secretName == "" || !runtimeEnvNameRE.MatchString(name) {
+			continue
+		}
+		if _, exists := names[name]; exists {
+			continue
+		}
+		names[name] = struct{}{}
+		env = append(env, corev1.EnvVar{
+			Name: name,
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{Name: secretName},
+					Key:                  secretKey,
+				},
+			},
+		})
+	}
+	return env
+}
+
+func runtimeEnvAllowlistValue(items []runtimerepo.RuntimeEnvVar) string {
+	names := make(map[string]struct{}, len(items))
+	var values []string
+	for _, item := range items {
+		name := strings.TrimSpace(item.Name)
+		if name == "" || !runtimeEnvNameRE.MatchString(name) {
+			continue
+		}
+		if _, exists := names[name]; exists {
+			continue
+		}
+		names[name] = struct{}{}
+		values = append(values, name)
+	}
+	sort.Strings(values)
+	return strings.Join(values, ",")
 }
 
 func normalizeDeveloperRunInput(input runtimerepo.DeveloperRunInput) runtimerepo.DeveloperRunInput {

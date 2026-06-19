@@ -2278,6 +2278,8 @@ func (svc *SlashCommandService) handleMenuTypedAction(ctx context.Context, comma
 			return svc.menuCardResult(command, svc.roleListCard(ctx, command))
 		case menuResourceChat:
 			return svc.menuCardResult(command, svc.chatListCard(ctx, command))
+		case menuResourceRuntimeVar:
+			return svc.menuCardResult(command, svc.projectRuntimeVariableListCard(ctx, command))
 		case menuResourceOpenAIAccount:
 			return svc.menuCardResult(command, svc.openAIAccountListCard(ctx, command))
 		case menuResourceGitHubAccount:
@@ -2303,6 +2305,8 @@ func (svc *SlashCommandService) handleMenuTypedAction(ctx context.Context, comma
 			return svc.menuCardResult(command, svc.roleEntityCard(ctx, command))
 		case menuResourceChat:
 			return svc.menuCardResult(command, svc.chatEntityCard(ctx, command))
+		case menuResourceRuntimeVar:
+			return svc.menuCardResult(command, svc.projectRuntimeVariableEntityCard(ctx, command))
 		case menuResourceOpenAIAccount:
 			return svc.menuCardResult(command, svc.openAIAccountEntityCard(ctx, command))
 		case menuResourceGitHubAccount:
@@ -2326,6 +2330,8 @@ func (svc *SlashCommandService) handleMenuTypedAction(ctx context.Context, comma
 			return svc.menuCardResult(command, svc.openAIAccountDeleteConfirmationCard(ctx, command))
 		case menuResourceGitHubAccount:
 			return svc.menuCardResult(command, svc.githubAccountDeleteConfirmationCard(ctx, command))
+		case menuResourceRuntimeVar:
+			return svc.menuCardResult(command, svc.projectRuntimeVariableDeleteConfirmationCard(ctx, command))
 		default:
 			return svc.menuActionTextResult(ctx, command, svc.t("menu.action.unknown", nil), false)
 		}
@@ -2337,6 +2343,8 @@ func (svc *SlashCommandService) handleMenuTypedAction(ctx context.Context, comma
 			return svc.menuActionTextResult(ctx, command, svc.handleOpenAIDelete(ctx, []string{command.ID}, svc.slashFromMenu(command)), false)
 		case menuResourceGitHubAccount:
 			return svc.menuActionTextResult(ctx, command, svc.deleteGitHubAccountFromMenu(ctx, command), false)
+		case menuResourceRuntimeVar:
+			return svc.menuActionTextResult(ctx, command, svc.deleteProjectRuntimeVariableFromMenu(ctx, command), false)
 		default:
 			return svc.menuActionTextResult(ctx, command, svc.t("menu.action.unknown", nil), false)
 		}
@@ -3792,6 +3800,12 @@ func (svc *SlashCommandService) HandleDialogSubmission(ctx context.Context, comm
 		return svc.handleProjectDialogUpsert(ctx, command, state)
 	case dialogCallbackProjectRepositoryBind:
 		return svc.handleProjectRepositoryBindDialog(ctx, command, state)
+	case dialogCallbackProjectRuntimeVar:
+		return svc.handleProjectRuntimeVariableDialog(ctx, command, state)
+	case dialogCallbackRoleRuntimeVarAttach:
+		return svc.handleRoleRuntimeVariableAttachDialog(ctx, command, state)
+	case dialogCallbackRoleRuntimeVarDetach:
+		return svc.handleRoleRuntimeVariableDetachDialog(ctx, command, state)
 	case dialogCallbackAgentRoleUpsert:
 		return svc.handleAgentRoleDialogUpsert(ctx, command, state)
 	case dialogCallbackChatCreate:
@@ -3844,6 +3858,12 @@ func (svc *SlashCommandService) menuDialog(ctx context.Context, command MenuActi
 		return svc.projectDialog(ctx, command)
 	case menuDialogProjectRepositoryBind:
 		return svc.projectRepositoryBindDialog(ctx, command)
+	case menuDialogProjectRuntimeVar:
+		return svc.projectRuntimeVariableDialog(ctx, command)
+	case menuDialogRoleRuntimeVarAttach:
+		return svc.roleRuntimeVariableAttachDialog(ctx, command)
+	case menuDialogRoleRuntimeVarDetach:
+		return svc.roleRuntimeVariableDetachDialog(ctx, command)
 	case menuDialogAgentRoleUpsert:
 		return svc.agentRoleDialog(ctx, command)
 	case menuDialogChatCreate:

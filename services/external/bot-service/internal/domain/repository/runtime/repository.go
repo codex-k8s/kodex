@@ -25,6 +25,7 @@ type DeveloperRunInput struct {
 	Prompt              string
 	SandboxMode         string
 	ConfigOverlay       string
+	RuntimeEnv          []RuntimeEnvVar
 }
 
 type ReviewRunInput struct {
@@ -39,6 +40,7 @@ type ReviewRunInput struct {
 	Prompt              string
 	SandboxMode         string
 	ConfigOverlay       string
+	RuntimeEnv          []RuntimeEnvVar
 }
 
 type ChatRunInput struct {
@@ -49,6 +51,7 @@ type ChatRunInput struct {
 	Prompt              string
 	SandboxMode         string
 	ConfigOverlay       string
+	RuntimeEnv          []RuntimeEnvVar
 }
 
 type AgentSessionPodInput struct {
@@ -64,6 +67,15 @@ type AgentSessionPodInput struct {
 	RepositoryDefaultBranch string
 	SandboxMode             string
 	ConfigOverlay           string
+	RuntimeEnv              []RuntimeEnvVar
+}
+
+type RuntimeEnvVar struct {
+	Name        string
+	SecretName  string
+	SecretKey   string
+	Description string
+	Sensitive   bool
 }
 
 type StartedAgentSession struct {
@@ -174,6 +186,18 @@ type GitHubTokenSecret struct {
 	Created     bool
 }
 
+type ProjectRuntimeVariableSecretInput struct {
+	ProjectSlug string
+	Variable    RuntimeEnvVar
+	Value       string
+}
+
+type ProjectRuntimeVariableSecret struct {
+	SecretName string
+	Namespace  string
+	Created    bool
+}
+
 type GitHubTokenSecretCredential struct {
 	AccountName string
 	SecretName  string
@@ -251,6 +275,8 @@ type Runner interface {
 	DeleteCodexAuthAccount(ctx context.Context, accountName string, secretName string) (CodexAuthAccountDeleteResult, error)
 	UpsertGitHubTokenSecret(ctx context.Context, input GitHubTokenSecretInput) (GitHubTokenSecret, error)
 	DeleteGitHubTokenSecret(ctx context.Context, accountName string, secretName string) (GitHubTokenSecretDeleteResult, error)
+	UpsertProjectRuntimeVariableSecret(ctx context.Context, input ProjectRuntimeVariableSecretInput) (ProjectRuntimeVariableSecret, error)
+	DeleteProjectRuntimeVariableSecret(ctx context.Context, secretName string) (ProjectRuntimeVariableSecret, error)
 	StartDeveloperRun(ctx context.Context, input DeveloperRunInput) (StartedRun, error)
 	StartReviewRun(ctx context.Context, input ReviewRunInput) (StartedRun, error)
 	StartChatRun(ctx context.Context, input ChatRunInput) (StartedRun, error)

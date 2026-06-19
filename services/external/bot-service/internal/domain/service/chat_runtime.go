@@ -287,6 +287,7 @@ type chatRunStartInput struct {
 	Role          entity.AgentRole
 	Chat          entity.Chat
 	Repositories  []entity.ProjectRepository
+	RuntimeEnv    []runtimerepo.RuntimeEnvVar
 	PRNumber      int
 	OpenAIAccount entity.OpenAIAccount
 	GitHubAccount entity.GitHubAccount
@@ -345,7 +346,13 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 	}
 	sessionRootID := strings.TrimSpace(request.SessionRootID)
 	sessionKey := agentSessionKey(request.Chat.ID, request.Role.ID, sessionScope, sessionRootID)
-	capabilities, err := agentSessionCapabilitiesJSON(request.Role, request.Repositories, gitHubOK)
+	runtimeVariableBindings, err := svc.cfg.Store.ListAgentRoleRuntimeVariables(ctx, request.Role.ID)
+	if err != nil {
+		return AgentTurnQueued{}, err
+	}
+	runtimeVariables := projectRuntimeVariablesFromBindings(runtimeVariableBindings)
+	runtimeEnv := runtimeEnvVarsFromBindings(runtimeVariableBindings)
+	capabilities, err := agentSessionCapabilitiesJSON(request.Role, request.Repositories, gitHubOK, runtimeVariableBindings)
 	if err != nil {
 		return AgentTurnQueued{}, err
 	}
@@ -354,12 +361,13 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 		return AgentTurnQueued{}, err
 	}
 	promptInput := RolePromptInput{
-		Project:      request.Project,
-		Role:         request.Role,
-		Chat:         request.Chat,
-		Repositories: request.Repositories,
-		UserMessage:  request.UserMessage,
-		Locale:       svc.localeData(),
+		Project:          request.Project,
+		Role:             request.Role,
+		Chat:             request.Chat,
+		Repositories:     request.Repositories,
+		RuntimeVariables: runtimeVariables,
+		UserMessage:      request.UserMessage,
+		Locale:           svc.localeData(),
 	}
 	prompt, err := BuildRolePrompt(promptInput)
 	if sessionExists {
@@ -404,6 +412,7 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 		RepositoryDefaultBranch: repo.DefaultBranch,
 		SandboxMode:             request.Role.SandboxMode,
 		ConfigOverlay:           request.Role.ConfigOverlay,
+		RuntimeEnv:              runtimeEnv,
 	})
 	if err != nil {
 		return AgentTurnQueued{}, err
@@ -715,6 +724,7 @@ func (svc *ChatRunService) startRun(ctx context.Context, input chatRunStartInput
 			Prompt:              input.Prompt,
 			SandboxMode:         input.Role.SandboxMode,
 			ConfigOverlay:       input.Role.ConfigOverlay,
+			RuntimeEnv:          input.RuntimeEnv,
 		})
 	case chatRunModeDeveloper:
 		return svc.cfg.RuntimeRunner.StartDeveloperRun(ctx, runtimerepo.DeveloperRunInput{
@@ -732,6 +742,7 @@ func (svc *ChatRunService) startRun(ctx context.Context, input chatRunStartInput
 			Prompt:              input.Prompt,
 			SandboxMode:         input.Role.SandboxMode,
 			ConfigOverlay:       input.Role.ConfigOverlay,
+			RuntimeEnv:          input.RuntimeEnv,
 		})
 	default:
 		gitHubSecret := ""
@@ -746,6 +757,7 @@ func (svc *ChatRunService) startRun(ctx context.Context, input chatRunStartInput
 			Prompt:              input.Prompt,
 			SandboxMode:         input.Role.SandboxMode,
 			ConfigOverlay:       input.Role.ConfigOverlay,
+			RuntimeEnv:          input.RuntimeEnv,
 		})
 	}
 }
@@ -1253,7 +1265,7 @@ func agentSessionKey(chatID int64, roleID int64, scope string, rootPostID string
 	return fmt.Sprintf("chat-%d-thread-%s-role-%d", chatID, hex.EncodeToString(hash[:8]), roleID)
 }
 
-func agentSessionCapabilitiesJSON(role entity.AgentRole, repositories []entity.ProjectRepository, githubEnabled bool) (string, error) {
+func agentSessionCapabilitiesJSON(role entity.AgentRole, repositories []entity.ProjectRepository, githubEnabled bool, runtimeVariables []entity.AgentRoleRuntimeVariableBinding) (string, error) {
 	repos := make([]map[string]string, 0, len(repositories))
 	for _, repo := range repositories {
 		repos = append(repos, map[string]string{
@@ -1263,6 +1275,17 @@ func agentSessionCapabilitiesJSON(role entity.AgentRole, repositories []entity.P
 			"default_branch": repo.DefaultBranch,
 		})
 	}
+	env := make([]map[string]any, 0, len(runtimeVariables))
+	for _, variable := range runtimeVariables {
+		if !variable.Enabled || strings.TrimSpace(variable.Name) == "" {
+			continue
+		}
+		env = append(env, map[string]any{
+			"name":        variable.Name,
+			"description": variable.Description,
+			"sensitive":   variable.Sensitive,
+		})
+	}
 	body, err := json.Marshal(map[string]any{
 		"mattermost_read":          true,
 		"mattermost_post":          true,
@@ -1270,11 +1293,50 @@ func agentSessionCapabilitiesJSON(role entity.AgentRole, repositories []entity.P
 		"github_enabled":           githubEnabled,
 		"kubernetes_access":        strings.TrimSpace(role.KubernetesAccess),
 		"repositories":             repos,
+		"runtime_env":              env,
 	})
 	if err != nil {
 		return "", err
 	}
 	return string(body), nil
+}
+
+func projectRuntimeVariablesFromBindings(bindings []entity.AgentRoleRuntimeVariableBinding) []entity.ProjectRuntimeVariable {
+	items := make([]entity.ProjectRuntimeVariable, 0, len(bindings))
+	for _, binding := range bindings {
+		if !binding.Enabled {
+			continue
+		}
+		items = append(items, entity.ProjectRuntimeVariable{
+			ID:          binding.VariableID,
+			ProjectID:   binding.ProjectID,
+			Name:        binding.Name,
+			Slug:        binding.Slug,
+			Description: binding.Description,
+			SecretRef:   binding.SecretRef,
+			SecretKey:   binding.SecretKey,
+			Sensitive:   binding.Sensitive,
+			Enabled:     binding.Enabled,
+		})
+	}
+	return items
+}
+
+func runtimeEnvVarsFromBindings(bindings []entity.AgentRoleRuntimeVariableBinding) []runtimerepo.RuntimeEnvVar {
+	items := make([]runtimerepo.RuntimeEnvVar, 0, len(bindings))
+	for _, binding := range bindings {
+		if !binding.Enabled || strings.TrimSpace(binding.Name) == "" || strings.TrimSpace(binding.SecretRef) == "" {
+			continue
+		}
+		items = append(items, runtimerepo.RuntimeEnvVar{
+			Name:        binding.Name,
+			SecretName:  binding.SecretRef,
+			SecretKey:   defaultString(binding.SecretKey, "value"),
+			Description: binding.Description,
+			Sensitive:   binding.Sensitive,
+		})
+	}
+	return items
 }
 
 type threadRepositorySelectionState struct {

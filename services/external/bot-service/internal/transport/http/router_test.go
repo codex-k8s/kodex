@@ -732,6 +732,43 @@ func (store *fakeRouterAdminStore) ListProjectRepositories(context.Context, int6
 	return nil, nil
 }
 
+func (store *fakeRouterAdminStore) UpsertProjectRuntimeVariable(_ context.Context, input adminrepo.UpsertProjectRuntimeVariableInput) (entity.ProjectRuntimeVariable, bool, error) {
+	return entity.ProjectRuntimeVariable{
+		ProjectID:   input.ProjectID,
+		Name:        input.Name,
+		Slug:        input.Slug,
+		Description: input.Description,
+		SecretRef:   input.SecretRef,
+		SecretKey:   input.SecretKey,
+		Sensitive:   input.Sensitive,
+		Enabled:     input.Enabled,
+	}, true, nil
+}
+
+func (store *fakeRouterAdminStore) GetProjectRuntimeVariable(context.Context, int64) (entity.ProjectRuntimeVariable, error) {
+	return entity.ProjectRuntimeVariable{}, adminrepo.ErrNotFound
+}
+
+func (store *fakeRouterAdminStore) ListProjectRuntimeVariables(context.Context, int64) ([]entity.ProjectRuntimeVariable, error) {
+	return nil, nil
+}
+
+func (store *fakeRouterAdminStore) DeleteProjectRuntimeVariable(context.Context, int64) (entity.ProjectRuntimeVariable, error) {
+	return entity.ProjectRuntimeVariable{}, adminrepo.ErrNotFound
+}
+
+func (store *fakeRouterAdminStore) UpsertAgentRoleRuntimeVariable(context.Context, adminrepo.UpsertAgentRoleRuntimeVariableInput) (entity.AgentRoleRuntimeVariableBinding, bool, error) {
+	return entity.AgentRoleRuntimeVariableBinding{}, true, nil
+}
+
+func (store *fakeRouterAdminStore) DeleteAgentRoleRuntimeVariable(context.Context, int64, int64) (entity.AgentRoleRuntimeVariableBinding, error) {
+	return entity.AgentRoleRuntimeVariableBinding{}, adminrepo.ErrNotFound
+}
+
+func (store *fakeRouterAdminStore) ListAgentRoleRuntimeVariables(context.Context, int64) ([]entity.AgentRoleRuntimeVariableBinding, error) {
+	return nil, nil
+}
+
 func (store *fakeRouterAdminStore) UpsertAgentRole(_ context.Context, input adminrepo.UpsertAgentRoleInput) (entity.AgentRole, bool, error) {
 	return entity.AgentRole{ProjectID: input.ProjectID, Name: input.Name, RoleType: input.RoleType, Enabled: input.Enabled}, true, nil
 }
