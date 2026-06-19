@@ -1621,7 +1621,6 @@ func (runner *Runner) codexAuthSecretCheckJob(input runtimerepo.CodexAuthSecretC
 							Env: []corev1.EnvVar{
 								{Name: "MATTERCODEX_OPENAI_ACCOUNT", Value: input.AccountName},
 								{Name: "MATTERCODEX_CODEX_AUTH_SECRET", Value: input.SecretName},
-								{Name: "MATTERCODEX_CODEX_CONFIG_OVERLAY", Value: input.ConfigOverlay},
 							},
 							VolumeMounts: append([]corev1.VolumeMount{
 								{Name: "workspace", MountPath: "/workspace"},

@@ -2067,6 +2067,98 @@ func TestRuntimeVariableDialogCreatesSecretAndMetadata(t *testing.T) {
 	}
 }
 
+func TestRoleRuntimeVariableAttachDialogFallsBackToCreateWhenProjectHasNoEnv(t *testing.T) {
+	store := &fakeAdminStore{
+		projects: map[int64]entity.Project{
+			1: {ID: 1, Name: "Platform", Slug: "platform"},
+		},
+		agentRoles: map[int64]entity.AgentRole{
+			1: {ID: 1, ProjectID: 1, Name: "sre", RoleType: "worker", Enabled: true},
+		},
+	}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:       localizer,
+		StatusService:   testStatusService(localizer),
+		Store:           store,
+		DialogSubmitURL: "http://bot-service/mattermost/dialogs/agents",
+		StorageReady:    true,
+	})
+
+	result := svc.HandleMenuAction(context.Background(), MenuActionCommand{
+		View:     menuViewRoles,
+		Dialog:   menuDialogRoleRuntimeVarAttach,
+		Resource: menuResourceAgentRole,
+		ID:       "1",
+	})
+
+	if result.Dialog == nil {
+		t.Fatalf("dialog is nil, ephemeral = %q", result.EphemeralText)
+	}
+	if result.Dialog.CallbackID != dialogCallbackProjectRuntimeVar {
+		t.Fatalf("callback id = %q", result.Dialog.CallbackID)
+	}
+	projectElement, ok := dialogElementByName(result.Dialog.Elements, dialogFieldProjectID)
+	if !ok || projectElement.Default != "1" {
+		t.Fatalf("project element = %#v", projectElement)
+	}
+	state, err := decodeDialogState(result.Dialog.State)
+	if err != nil {
+		t.Fatalf("decode dialog state: %v", err)
+	}
+	if state.ResourceType != menuResourceAgentRole || state.ResourceID != "1" {
+		t.Fatalf("state = %#v", state)
+	}
+}
+
+func TestRuntimeVariableDialogCreatesSecretAndAttachesToRoleFromRoleContext(t *testing.T) {
+	store := &fakeAdminStore{
+		projects: map[int64]entity.Project{
+			1: {ID: 1, Name: "Platform", Slug: "platform"},
+		},
+		agentRoles: map[int64]entity.AgentRole{
+			1: {ID: 1, ProjectID: 1, Name: "sre", RoleType: "worker", Enabled: true},
+		},
+	}
+	runner := &fakeRuntimeRunner{}
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer:       localizer,
+		StatusService:   testStatusService(localizer),
+		Store:           store,
+		RuntimeRunner:   runner,
+		DialogSubmitURL: "http://bot-service/mattermost/dialogs/agents",
+		StorageReady:    true,
+	})
+
+	result := svc.HandleDialogSubmission(context.Background(), DialogSubmissionCommand{
+		CallbackID: dialogCallbackProjectRuntimeVar,
+		State: encodeDialogState(MenuActionCommand{
+			Resource: menuResourceAgentRole,
+			ID:       "1",
+		}),
+		Submission: map[string]any{
+			dialogFieldProjectID:       "1",
+			dialogFieldRuntimeVarName:  "RADAR_AUTO_KUBECONFIG",
+			dialogFieldRuntimeVarValue: "secret-value",
+			dialogFieldSensitive:       "true",
+			dialogFieldEnabled:         "true",
+			dialogFieldDescription:     "kubeconfig for radar-auto external cluster",
+		},
+	})
+
+	if result.Error != "" || len(result.Errors) > 0 {
+		t.Fatalf("dialog result error = %q errors = %#v", result.Error, result.Errors)
+	}
+	bindings, _ := store.ListAgentRoleRuntimeVariables(context.Background(), 1)
+	if len(bindings) != 1 || bindings[0].Name != "RADAR_AUTO_KUBECONFIG" {
+		t.Fatalf("bindings = %#v", bindings)
+	}
+	if result.Card == nil || !strings.Contains(result.Card.Text, "sre") || strings.Contains(result.Card.Text, "secret-value") {
+		t.Fatalf("card is invalid or exposes secret: %#v", result.Card)
+	}
+}
+
 func TestRoleRuntimeVariableAttachDialogCreatesBinding(t *testing.T) {
 	store := &fakeAdminStore{
 		projects: map[int64]entity.Project{

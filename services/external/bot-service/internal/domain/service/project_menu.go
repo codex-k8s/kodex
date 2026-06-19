@@ -764,8 +764,12 @@ func (svc *SlashCommandService) projectRuntimeVariableDialog(ctx context.Context
 	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
 		return nil, svc.t("project.storage_not_ready", nil)
 	}
+	projectID, errText := svc.projectRuntimeVariableDialogProjectID(ctx, command)
+	if errText != "" {
+		return nil, errText
+	}
 	variable := entity.ProjectRuntimeVariable{
-		ProjectID: selectedProjectID(command),
+		ProjectID: projectID,
 		SecretKey: "value",
 		Sensitive: true,
 		Enabled:   true,
@@ -773,6 +777,10 @@ func (svc *SlashCommandService) projectRuntimeVariableDialog(ctx context.Context
 	titleID := "dialog.runtime_var.add.title"
 	introID := "dialog.runtime_var.add.intro"
 	submitID := "dialog.runtime_var.add.submit"
+	if command.Resource == menuResourceAgentRole {
+		introID = "dialog.runtime_var.add_and_attach.intro"
+		submitID = "dialog.runtime_var.add_and_attach.submit"
+	}
 	editMode := command.Resource == menuResourceRuntimeVar && strings.TrimSpace(command.ID) != ""
 	if editMode {
 		variableID, ok := parseInt64ID(command.ID)
@@ -871,10 +879,14 @@ func (svc *SlashCommandService) roleRuntimeVariableAttachDialog(ctx context.Cont
 	if errText != "" {
 		return nil, errText
 	}
-	variableOptions, errText := svc.projectRuntimeVariableOptions(ctx, projectID, selectedVariableID)
-	if errText != "" {
-		return nil, errText
+	variables, err := svc.cfg.Store.ListProjectRuntimeVariables(ctx, projectID)
+	if err != nil {
+		return nil, svc.t("runtime_var.list.failed", map[string]any{"Error": safeError(err)})
 	}
+	if len(variables) == 0 {
+		return svc.projectRuntimeVariableDialog(ctx, command)
+	}
+	variableOptions := svc.projectRuntimeVariableOptionsFromList(variables, selectedVariableID)
 	return &MattermostDialog{
 		SubmitURL:        svc.cfg.DialogSubmitURL,
 		CallbackID:       dialogCallbackRoleRuntimeVarAttach,
@@ -1399,6 +1411,39 @@ func (svc *SlashCommandService) handleProjectRuntimeVariableDialog(ctx context.C
 		"Enabled":       variable.Enabled,
 		"SecretCreated": secretCreated,
 	})
+	if state.ResourceType == menuResourceAgentRole && strings.TrimSpace(state.ResourceID) != "" {
+		roleID, ok := parseInt64ID(state.ResourceID)
+		if !ok {
+			return DialogSubmissionResult{StatusCode: 200, Error: svc.t("dialog.role_runtime_var.role_invalid", nil)}
+		}
+		role, err := svc.cfg.Store.GetAgentRole(ctx, roleID)
+		if err != nil {
+			return DialogSubmissionResult{StatusCode: 200, Error: svc.t("dialog.role_runtime_var.role_invalid", nil)}
+		}
+		if role.ProjectID != variable.ProjectID {
+			return DialogSubmissionResult{StatusCode: 200, Errors: map[string]string{dialogFieldProjectID: svc.t("dialog.role_runtime_var.project_mismatch", nil)}}
+		}
+		binding, bindingCreated, err := svc.cfg.Store.UpsertAgentRoleRuntimeVariable(ctx, adminrepo.UpsertAgentRoleRuntimeVariableInput{
+			RoleID:     role.ID,
+			VariableID: variable.ID,
+		})
+		if err != nil {
+			return DialogSubmissionResult{StatusCode: 200, Error: svc.t("runtime_var.save.attach_failed", map[string]any{"Error": safeError(err)})}
+		}
+		svc.recordProjectAudit(ctx, mattermostDialogSlash(state, command), "agent_role.runtime_variable.attached", role.Name+":"+variable.Name, "runtime variable attached to agent role after creation from Mattermost dialog")
+		bindingStateID := "label.updated"
+		if bindingCreated {
+			bindingStateID = "label.created"
+		}
+		text += "\n\n" + svc.t("role_runtime_var.attach.result", map[string]any{
+			"State":    svc.t(bindingStateID, nil),
+			"Role":     binding.RoleName,
+			"Variable": binding.Name,
+		})
+		card := svc.roleEntityCard(ctx, MenuActionCommand{View: menuViewRoles, ID: strconv.FormatInt(role.ID, 10), ChannelID: state.ChannelID, PostID: state.PostID})
+		card.Text = text + "\n\n" + card.Text
+		return DialogSubmissionResult{StatusCode: 200, Card: card}
+	}
 	card := svc.projectRuntimeVariableEntityCard(ctx, MenuActionCommand{View: menuViewProjects, ID: strconv.FormatInt(variable.ID, 10), ChannelID: state.ChannelID, PostID: state.PostID})
 	card.Text = text + "\n\n" + card.Text
 	return DialogSubmissionResult{StatusCode: 200, Card: card}
@@ -1858,6 +1903,13 @@ func (svc *SlashCommandService) projectRuntimeVariableOptions(ctx context.Contex
 	if err != nil {
 		return nil, svc.t("runtime_var.list.failed", map[string]any{"Error": safeError(err)})
 	}
+	if len(variables) == 0 {
+		return nil, svc.t("runtime_var.list.empty", map[string]any{"Project": projectID})
+	}
+	return svc.projectRuntimeVariableOptionsFromList(variables, selected), ""
+}
+
+func (svc *SlashCommandService) projectRuntimeVariableOptionsFromList(variables []entity.ProjectRuntimeVariable, selected int64) []MattermostDialogOption {
 	options := make([]MattermostDialogOption, 0, len(variables))
 	for _, variable := range variables {
 		options = append(options, MattermostDialogOption{
@@ -1865,10 +1917,7 @@ func (svc *SlashCommandService) projectRuntimeVariableOptions(ctx context.Contex
 			Value: strconv.FormatInt(variable.ID, 10),
 		})
 	}
-	if len(options) == 0 {
-		return nil, svc.t("runtime_var.list.empty", map[string]any{"Project": projectID})
-	}
-	return ensureDialogOption(options, selectedIDString(selected)), ""
+	return ensureDialogOption(options, selectedIDString(selected))
 }
 
 func (svc *SlashCommandService) agentRoleRuntimeVariableOptions(ctx context.Context, roleID int64) ([]MattermostDialogOption, string) {
@@ -1922,6 +1971,31 @@ func (svc *SlashCommandService) runtimeVariableSelectionDefaults(ctx context.Con
 		return variable.ProjectID, 0, variable.ID, ""
 	default:
 		return 0, 0, 0, svc.t("dialog.project.project_invalid", nil)
+	}
+}
+
+func (svc *SlashCommandService) projectRuntimeVariableDialogProjectID(ctx context.Context, command MenuActionCommand) (int64, string) {
+	switch command.Resource {
+	case menuResourceProject:
+		projectID, ok := parseInt64ID(command.ID)
+		if !ok {
+			return 0, svc.t("dialog.project.project_invalid", nil)
+		}
+		return projectID, ""
+	case menuResourceAgentRole:
+		roleID, ok := parseInt64ID(command.ID)
+		if !ok {
+			return 0, svc.t("dialog.role_runtime_var.role_invalid", nil)
+		}
+		role, err := svc.cfg.Store.GetAgentRole(ctx, roleID)
+		if err != nil {
+			return 0, svc.t("agent_role.get.failed", map[string]any{"Error": safeError(err)})
+		}
+		return role.ProjectID, ""
+	case menuResourceRuntimeVar:
+		return 0, ""
+	default:
+		return selectedProjectID(command), ""
 	}
 }
 

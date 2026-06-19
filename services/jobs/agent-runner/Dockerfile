@@ -2,9 +2,12 @@ FROM golang:1.26-alpine AS builder
 
 WORKDIR /src
 
+COPY go.mod go.sum ./
+RUN go mod download
+
 COPY services/jobs/agent-runner ./services/jobs/agent-runner
 
-RUN CGO_ENABLED=0 GO111MODULE=off go build -trimpath -o /out/matter-codex-agent-runner ./services/jobs/agent-runner/cmd/agent-runner
+RUN CGO_ENABLED=0 go build -trimpath -o /out/matter-codex-agent-runner ./services/jobs/agent-runner/cmd/agent-runner
 
 FROM golang:1.26-alpine AS go-tools
 

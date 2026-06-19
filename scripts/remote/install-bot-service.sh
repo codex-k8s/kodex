@@ -122,6 +122,8 @@ if [ "$DRY_RUN_MODE" = "none" ] && mattercodex_bool "${MATTERCODEX_AGENT_RUNNER_
   mattercodex_log "сборка agent-runner image на целевом сервере"
   AGENT_RUNNER_ARCHIVE="$(mattercodex_temp_file)"
   tar -C "$REPO_ROOT" -czf "$AGENT_RUNNER_ARCHIVE" \
+    go.mod \
+    go.sum \
     services/jobs/agent-runner
   REMOTE_AGENT_RUNNER_DIR="/tmp/matter-codex-agent-runner-build"
   REMOTE_AGENT_RUNNER_DIR_Q="$(mattercodex_shell_quote "$REMOTE_AGENT_RUNNER_DIR")"
