@@ -681,6 +681,51 @@ func TestBuildRolePromptUsesRawMessageWithoutTemplate(t *testing.T) {
 	if !strings.Contains(prompt, "Project: Platform") || !strings.Contains(prompt, "github:codex-k8s/matter-codex") {
 		t.Fatalf("prompt = %q", prompt)
 	}
+	if !strings.Contains(prompt, "`gh` 2.95.0") || !strings.Contains(prompt, "`go` 1.26") || !strings.Contains(prompt, "`kubectl` 1.36.2") {
+		t.Fatalf("prompt runtime tools = %q", prompt)
+	}
+	for _, expected := range []string{"`node` 24.17.x", "`vite` 8.0.16", "`asyncapi` 6.0.2", "`wscat` 6.1.0"} {
+		if !strings.Contains(prompt, expected) {
+			t.Fatalf("prompt missing runtime tool %q: %q", expected, prompt)
+		}
+	}
+	for _, expected := range []string{"Available credential bindings", "GH_TOKEN", "KUBERNETES_SERVICE_HOST", "/var/run/secrets/kubernetes.io/serviceaccount/token"} {
+		if !strings.Contains(prompt, expected) {
+			t.Fatalf("prompt missing credential binding %q: %q", expected, prompt)
+		}
+	}
+}
+
+func TestBuildRolePromptExposesRuntimeToolsAndSecretsToTemplate(t *testing.T) {
+	prompt, err := BuildRolePrompt(RolePromptInput{
+		Project: entity.Project{Name: "Platform", Slug: "platform"},
+		Role: entity.AgentRole{
+			Name:           "developer",
+			RoleType:       "worker",
+			PromptTemplate: "{{range .Tools}}{{.Command}}={{.Version}}\n{{end}}{{range .Secrets}}{{.Name}}={{.Env}}|{{.File}}\n{{end}}",
+		},
+		Chat:        entity.Chat{Name: "Backend", ChatType: "worker_reviewer"},
+		UserMessage: "Run codegen.",
+	})
+	if err != nil {
+		t.Fatalf("BuildRolePrompt() error = %v", err)
+	}
+	for _, expected := range []string{
+		"codex=0.141.0",
+		"gh=2.95.0",
+		"go=1.26",
+		"goose=3.27.1",
+		"oapi-codegen=2.7.1",
+		"openapi-ts=0.98.2",
+		"asyncapi=6.0.2",
+		"modelina=5.10.1",
+		"GitHub account=GH_TOKEN",
+		"Kubernetes service account=KUBERNETES_SERVICE_HOST",
+	} {
+		if !strings.Contains(prompt, expected) {
+			t.Fatalf("prompt missing %q: %q", expected, prompt)
+		}
+	}
 }
 
 func TestRepositoryOnboardingListsGitHubAccounts(t *testing.T) {

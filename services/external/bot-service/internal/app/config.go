@@ -30,7 +30,7 @@ type Config struct {
 	RuntimeKubeconfigPath string        `env:"MATTERCODEX_RUNTIME_KUBECONFIG_PATH"`
 	RuntimeSmokeImage     string        `env:"MATTERCODEX_RUNTIME_SMOKE_IMAGE" envDefault:"busybox:1.36"`
 	AgentRunnerImage      string        `env:"MATTERCODEX_AGENT_RUNNER_IMAGE" envDefault:"matter-codex-agent-runner:dev"`
-	CodexPackage          string        `env:"MATTERCODEX_CODEX_PACKAGE" envDefault:"@openai/codex@0.138.0"`
+	CodexPackage          string        `env:"MATTERCODEX_CODEX_PACKAGE" envDefault:"@openai/codex@0.141.0"`
 	RuntimeWorkspaceSize  string        `env:"MATTERCODEX_RUNTIME_WORKSPACE_STORAGE_SIZE" envDefault:"1Gi"`
 	RuntimeJobTTLSeconds  int32         `env:"MATTERCODEX_RUNTIME_JOB_TTL_SECONDS" envDefault:"86400"`
 	RuntimeLogTailLines   int64         `env:"MATTERCODEX_RUNTIME_LOG_TAIL_LINES" envDefault:"40"`
