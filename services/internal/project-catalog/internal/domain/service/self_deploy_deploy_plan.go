@@ -36,8 +36,10 @@ func (s *Service) GetSelfDeployDeployPlan(ctx context.Context, input GetSelfDepl
 		strings.TrimSpace(input.SourceRef) == "" ||
 		strings.TrimSpace(input.MergeCommitSHA) == "" ||
 		strings.TrimSpace(input.ExpectedServicesPolicyDigest) == "" ||
+		strings.TrimSpace(input.ExpectedBuildPlanFingerprint) == "" ||
 		!safeBuildPlanRef(input.SourceRef, true) ||
-		!validBuildPlanCommitSHA(input.MergeCommitSHA) {
+		!validBuildPlanCommitSHA(input.MergeCommitSHA) ||
+		!validBuildPlanSHA256Digest(strings.ToLower(strings.TrimSpace(input.ExpectedBuildPlanFingerprint))) {
 		return SelfDeployDeployPlanResult{Status: enum.SelfDeployDeployPlanStatusInvalidInput, SafeReason: "invalid_input"}, nil
 	}
 	if err := s.authorizeProjectQuery(ctx, input.ProjectID, input.Meta, projectActionPolicyRead, projectAggregateServicesPolicy); err != nil {
@@ -252,6 +254,11 @@ func selfDeployDeployPlanItem(
 		item.SafeReason = "build_not_ready:" + descriptor.ServiceKey
 		return item, enum.SelfDeployDeployPlanStatusBuildNotReady, item.SafeReason
 	}
+	if reason := selfDeployBuildOutputLinkReason(input, descriptor.ServiceKey, output, context); reason != "" {
+		item.Status = SelfDeployDeployPlanItemStatusBuildOutputInvalid
+		item.SafeReason = reason
+		return item, enum.SelfDeployDeployPlanStatusBuildOutputInvalid, item.SafeReason
+	}
 	executionSpec, err := selfDeployDeployExecutionSpec(input, item.ServiceKey, spec, output, context)
 	if err != nil {
 		item.Status = SelfDeployDeployPlanItemStatusDeployPlanUnavailable
@@ -261,6 +268,27 @@ func selfDeployDeployPlanItem(
 	item.DeployExecutionSpec = executionSpec
 	item.PlanItemFingerprint = selfDeployDeployPlanItemFingerprint(item)
 	return item, enum.SelfDeployDeployPlanStatusReady, ""
+}
+
+func selfDeployBuildOutputLinkReason(input GetSelfDeployDeployPlanInput, serviceKey string, output SelfDeployBuildOutput, context SelfDeployMaterializedBuildContext) string {
+	serviceKey = strings.TrimSpace(serviceKey)
+	expectedBuildPlanFingerprint := strings.ToLower(strings.TrimSpace(input.ExpectedBuildPlanFingerprint))
+	if expectedBuildPlanFingerprint != "" {
+		if !validBuildPlanSHA256Digest(expectedBuildPlanFingerprint) {
+			return "build_plan_fingerprint_invalid"
+		}
+		if strings.ToLower(strings.TrimSpace(output.BuildPlanFingerprint)) != expectedBuildPlanFingerprint {
+			return "build_output_build_plan_fingerprint_mismatch:" + serviceKey
+		}
+	}
+	if strings.TrimSpace(context.BuildContextRef) == "" && strings.TrimSpace(context.BuildContextDigest) == "" {
+		return ""
+	}
+	if strings.TrimSpace(output.BuildContextRef) != strings.TrimSpace(context.BuildContextRef) ||
+		!strings.EqualFold(strings.TrimSpace(output.BuildContextDigest), strings.TrimSpace(context.BuildContextDigest)) {
+		return "build_output_context_mismatch:" + serviceKey
+	}
+	return ""
 }
 
 func selfDeployDeployExecutionSpec(input GetSelfDeployDeployPlanInput, serviceKey string, spec value.ServicesPolicyDeploySpec, output SelfDeployBuildOutput, context SelfDeployMaterializedBuildContext) (SelfDeployDeployExecutionSpec, error) {
