@@ -25,6 +25,7 @@ const (
 	operationCreateSelfDeployPlan           = "domain.Service.CreateSelfDeployPlan"
 	operationCreateSelfDeployPlanFromSignal = "domain.Service.CreateSelfDeployPlanFromSignal"
 	operationEnsureSelfDeployPlanGate       = "domain.Service.EnsureSelfDeployPlanGovernanceGate"
+	operationEnsureSelfDeployPlanRuntime    = "domain.Service.EnsureSelfDeployPlanRuntime"
 	operationPrepareSelfDeployPlanGate      = "domain.Service.PrepareSelfDeployPlanGate"
 	operationRefreshSelfDeployPlanGate      = "domain.Service.RefreshSelfDeployPlanGate"
 	operationRecordSelfDeployGateDecision   = "domain.Service.RecordSelfDeployPlanGateDecision"

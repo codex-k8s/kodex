@@ -51,6 +51,32 @@ func runSelfDeployGateReconciler(
 	initialDelay time.Duration,
 	maxDelay time.Duration,
 ) {
+	runSelfDeployProjectReconciler(
+		ctx,
+		projectRef,
+		logger,
+		maxAttempts,
+		initialDelay,
+		maxDelay,
+		"agent-manager self-deploy gate reconcile failed",
+		selfDeployGateReconcileErrorCode,
+		func(ctx context.Context, projectRef string) error {
+			return reconcileSelfDeployPlanGovernanceGates(ctx, service, projectRef)
+		},
+	)
+}
+
+func runSelfDeployProjectReconciler(
+	ctx context.Context,
+	projectRef string,
+	logger *slog.Logger,
+	maxAttempts int,
+	initialDelay time.Duration,
+	maxDelay time.Duration,
+	logMessage string,
+	errorCode func(error) string,
+	reconcile func(context.Context, string) error,
+) {
 	if maxAttempts < 1 {
 		maxAttempts = 1
 	}
@@ -65,11 +91,11 @@ func runSelfDeployGateReconciler(
 	}
 	delay := initialDelay
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		err := reconcileSelfDeployPlanGovernanceGates(ctx, service, projectRef)
+		err := reconcile(ctx, projectRef)
 		if err == nil {
 			return
 		}
-		logger.Warn("agent-manager self-deploy gate reconcile failed", "attempt", attempt, "error_code", selfDeployGateReconcileErrorCode(err))
+		logger.Warn(logMessage, "attempt", attempt, "error_code", errorCode(err))
 		if attempt == maxAttempts {
 			return
 		}
