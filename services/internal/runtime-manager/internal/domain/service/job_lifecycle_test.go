@@ -488,7 +488,7 @@ func TestBuildDeployExecutionSpecsArePersistedAsTypedJobInput(t *testing.T) {
 	}
 }
 
-func TestDeployJobWithExecutionSpecStaysPendingForExecutorClaim(t *testing.T) {
+func TestDeployJobWithExecutionSpecCanBeClaimed(t *testing.T) {
 	t.Parallel()
 
 	svc, _ := newTestService()
@@ -545,14 +545,17 @@ func TestDeployJobWithExecutionSpecStaysPendingForExecutorClaim(t *testing.T) {
 		t.Fatalf("ListJobs(deploy) = %#v, want one waiting deploy job", list.Jobs)
 	}
 
-	_, err = svc.ClaimRunnableJob(context.Background(), ClaimRunnableJobInput{
+	claim, err := svc.ClaimRunnableJob(context.Background(), ClaimRunnableJobInput{
 		JobTypes:   []enum.JobType{enum.JobTypeDeploy},
 		LeaseOwner: "worker/deploy",
 		LeaseUntil: testNow.Add(10 * time.Minute),
 		Meta:       commandMeta(mustUUID("00000000-0000-0000-0000-000000000562"), 0),
 	})
-	if !errors.Is(err, errs.ErrNotFound) {
-		t.Fatalf("ClaimRunnableJob(deploy spec) err = %v, want not found", err)
+	if err != nil {
+		t.Fatalf("ClaimRunnableJob(deploy spec): %v", err)
+	}
+	if claim.Job.ID != job.ID || claim.Job.JobType != enum.JobTypeDeploy || claim.LeaseToken == "" {
+		t.Fatalf("claim = %#v, want claimed executable deploy job with token", claim)
 	}
 }
 
