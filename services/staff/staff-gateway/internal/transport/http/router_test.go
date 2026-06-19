@@ -823,7 +823,7 @@ func TestRouterGetSelfDeploySummary(t *testing.T) {
 	decodeJSON(t, rec, &body)
 	summary := body.Summary
 	if summary.Availability != generated.SelfDeploySummaryAvailabilityReady ||
-		summary.ChainStatus != generated.GovernanceGatePending ||
+		summary.ChainStatus != generated.SelfDeployChainStatusPendingApproval ||
 		summary.NextStep.Code != generated.ReviewGovernanceGate ||
 		summary.ProviderSignal.Status != generated.SelfDeployProviderSignalStatusStoredRef ||
 		summary.DeployPlan.Status != generated.SelfDeployPlanStatusPendingApproval ||
@@ -880,13 +880,179 @@ func TestRouterGetSelfDeploySummaryShowsApprovedPolicyStaleBlocker(t *testing.T)
 	decodeJSON(t, rec, &body)
 	summary := body.Summary
 	if summary.DeployPlan.Status != generated.SelfDeployPlanStatusApproved ||
-		summary.ChainStatus != generated.NeedsServicesPolicyReconcile ||
+		summary.ChainStatus != generated.SelfDeployChainStatusNeedsServicesPolicyReconcile ||
 		summary.NextStep.Code != generated.ReconcileServicesPolicy ||
-		summary.Runtime.Status != generated.SelfDeployRuntimeStatusFailed ||
+		summary.Runtime.Status != generated.Failed ||
 		summary.SafeError == nil ||
 		summary.SafeError.Code != "policy_stale" ||
 		!strings.Contains(summary.SafeError.Summary, "services_policy_source_ref_mismatch") {
 		t.Fatalf("summary = %+v, want approved policy_stale blocker", summary)
+	}
+}
+
+func TestRouterGetSelfDeploySummaryShowsRuntimeChainStages(t *testing.T) {
+	testCases := []struct {
+		name          string
+		configure     func(*agentsv1.SelfDeployPlan)
+		wantChain     generated.SelfDeployChainStatus
+		wantNext      generated.SelfDeployNextStepCode
+		wantRuntime   generated.SelfDeployRuntimeStatus
+		wantSafeError string
+	}{
+		{
+			name:        "approved",
+			configure:   func(*agentsv1.SelfDeployPlan) {},
+			wantChain:   generated.SelfDeployChainStatusApproved,
+			wantNext:    generated.ReadyForBuild,
+			wantRuntime: generated.Pending,
+		},
+		{
+			name: "preparing build context",
+			configure: func(plan *agentsv1.SelfDeployPlan) {
+				plan.RuntimeBuildStatus = agentsv1.SelfDeployRuntimeBuildStatus_SELF_DEPLOY_RUNTIME_BUILD_STATUS_PREPARING_CONTEXT
+				plan.RuntimeBuildContexts = []*agentsv1.SelfDeployRuntimeBuildContextRef{{ServiceKey: "staff-gateway", RuntimeBuildContextRef: stringPtr("runtime-context-1"), RuntimeBuildContextStatus: stringPtr("running")}}
+			},
+			wantChain:   generated.SelfDeployChainStatusPreparingBuildContext,
+			wantNext:    generated.ObserveBuildContext,
+			wantRuntime: generated.Pending,
+		},
+		{
+			name: "build requested",
+			configure: func(plan *agentsv1.SelfDeployPlan) {
+				plan.RuntimeBuildStatus = agentsv1.SelfDeployRuntimeBuildStatus_SELF_DEPLOY_RUNTIME_BUILD_STATUS_REQUESTED
+				plan.RuntimeBuildJobs = []*agentsv1.SelfDeployRuntimeBuildJobRef{{ServiceKey: "staff-gateway", RuntimeJobRef: "runtime-build-1", RuntimeJobStatus: stringPtr("pending")}}
+			},
+			wantChain:   generated.SelfDeployChainStatusBuildRequested,
+			wantNext:    generated.ObserveBuild,
+			wantRuntime: generated.Running,
+		},
+		{
+			name: "build running",
+			configure: func(plan *agentsv1.SelfDeployPlan) {
+				plan.RuntimeBuildStatus = agentsv1.SelfDeployRuntimeBuildStatus_SELF_DEPLOY_RUNTIME_BUILD_STATUS_REQUESTED
+				plan.RuntimeBuildJobs = []*agentsv1.SelfDeployRuntimeBuildJobRef{{ServiceKey: "staff-gateway", RuntimeJobRef: "runtime-build-1", RuntimeJobStatus: stringPtr("JOB_STATUS_RUNNING")}}
+			},
+			wantChain:   generated.SelfDeployChainStatusBuildRunning,
+			wantNext:    generated.ObserveBuild,
+			wantRuntime: generated.Running,
+		},
+		{
+			name: "build failed",
+			configure: func(plan *agentsv1.SelfDeployPlan) {
+				plan.RuntimeBuildStatus = agentsv1.SelfDeployRuntimeBuildStatus_SELF_DEPLOY_RUNTIME_BUILD_STATUS_FAILED
+				plan.RuntimeBuildErrorCode = stringPtr("runtime_job_failed")
+				plan.RuntimeBuildSummary = stringPtr("build job failed safely")
+			},
+			wantChain:     generated.SelfDeployChainStatusBuildFailed,
+			wantNext:      generated.InspectBlocker,
+			wantRuntime:   generated.Failed,
+			wantSafeError: "runtime_job_failed",
+		},
+		{
+			name: "build failed without diagnostic",
+			configure: func(plan *agentsv1.SelfDeployPlan) {
+				plan.RuntimeBuildStatus = agentsv1.SelfDeployRuntimeBuildStatus_SELF_DEPLOY_RUNTIME_BUILD_STATUS_FAILED
+			},
+			wantChain:     generated.SelfDeployChainStatusBuildFailed,
+			wantNext:      generated.InspectBlocker,
+			wantRuntime:   generated.Failed,
+			wantSafeError: "runtime_blocked",
+		},
+		{
+			name: "build succeeded",
+			configure: func(plan *agentsv1.SelfDeployPlan) {
+				plan.RuntimeBuildStatus = agentsv1.SelfDeployRuntimeBuildStatus_SELF_DEPLOY_RUNTIME_BUILD_STATUS_SUCCEEDED
+				plan.RuntimeBuildJobs = []*agentsv1.SelfDeployRuntimeBuildJobRef{{ServiceKey: "staff-gateway", RuntimeJobRef: "runtime-build-1", RuntimeJobStatus: stringPtr("succeeded")}}
+			},
+			wantChain:   generated.SelfDeployChainStatusBuildSucceeded,
+			wantNext:    generated.ObserveDeploy,
+			wantRuntime: generated.StoredRef,
+		},
+		{
+			name: "deploy requested",
+			configure: func(plan *agentsv1.SelfDeployPlan) {
+				plan.RuntimeBuildStatus = agentsv1.SelfDeployRuntimeBuildStatus_SELF_DEPLOY_RUNTIME_BUILD_STATUS_SUCCEEDED
+				plan.RuntimeDeployStatus = agentsv1.SelfDeployRuntimeDeployStatus_SELF_DEPLOY_RUNTIME_DEPLOY_STATUS_REQUESTED
+				plan.RuntimeDeployJobs = []*agentsv1.SelfDeployRuntimeDeployJobRef{{ServiceKey: "staff-gateway", RuntimeJobRef: "runtime-deploy-1", RuntimeJobStatus: stringPtr("pending")}}
+			},
+			wantChain:   generated.SelfDeployChainStatusDeployRequested,
+			wantNext:    generated.ObserveDeploy,
+			wantRuntime: generated.Running,
+		},
+		{
+			name: "deploy running",
+			configure: func(plan *agentsv1.SelfDeployPlan) {
+				plan.RuntimeBuildStatus = agentsv1.SelfDeployRuntimeBuildStatus_SELF_DEPLOY_RUNTIME_BUILD_STATUS_SUCCEEDED
+				plan.RuntimeDeployStatus = agentsv1.SelfDeployRuntimeDeployStatus_SELF_DEPLOY_RUNTIME_DEPLOY_STATUS_REQUESTED
+				plan.RuntimeDeployJobs = []*agentsv1.SelfDeployRuntimeDeployJobRef{{ServiceKey: "staff-gateway", RuntimeJobRef: "runtime-deploy-1", RuntimeJobStatus: stringPtr("claimed")}}
+			},
+			wantChain:   generated.SelfDeployChainStatusDeployRunning,
+			wantNext:    generated.ObserveDeploy,
+			wantRuntime: generated.Running,
+		},
+		{
+			name: "deploy failed",
+			configure: func(plan *agentsv1.SelfDeployPlan) {
+				plan.RuntimeBuildStatus = agentsv1.SelfDeployRuntimeBuildStatus_SELF_DEPLOY_RUNTIME_BUILD_STATUS_SUCCEEDED
+				plan.RuntimeDeployStatus = agentsv1.SelfDeployRuntimeDeployStatus_SELF_DEPLOY_RUNTIME_DEPLOY_STATUS_FAILED
+				plan.RuntimeDeployErrorCode = stringPtr("rollout_failed")
+				plan.RuntimeDeploySummary = stringPtr("deploy job failed safely")
+			},
+			wantChain:     generated.SelfDeployChainStatusDeployFailed,
+			wantNext:      generated.InspectBlocker,
+			wantRuntime:   generated.Failed,
+			wantSafeError: "rollout_failed",
+		},
+		{
+			name: "deploy succeeded",
+			configure: func(plan *agentsv1.SelfDeployPlan) {
+				plan.RuntimeBuildStatus = agentsv1.SelfDeployRuntimeBuildStatus_SELF_DEPLOY_RUNTIME_BUILD_STATUS_SUCCEEDED
+				plan.RuntimeDeployStatus = agentsv1.SelfDeployRuntimeDeployStatus_SELF_DEPLOY_RUNTIME_DEPLOY_STATUS_SUCCEEDED
+				plan.RuntimeDeployJobs = []*agentsv1.SelfDeployRuntimeDeployJobRef{{ServiceKey: "staff-gateway", RuntimeJobRef: "runtime-deploy-1", RuntimeJobStatus: stringPtr("succeeded")}}
+			},
+			wantChain:   generated.SelfDeployChainStatusDeploySucceeded,
+			wantNext:    generated.None,
+			wantRuntime: generated.Completed,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			plans := sampleSelfDeployPlansResponse()
+			plan := plans.GetSelfDeployPlans()[0]
+			plan.Status = agentsv1.SelfDeployPlanStatus_SELF_DEPLOY_PLAN_STATUS_APPROVED
+			plan.SafeSummary = stringPtr("self-deploy plan approved")
+			plan.GovernanceContext.GateDecisionRef = stringPtr("governance:gate_decision/33333333-3333-4333-8333-333333333333")
+			testCase.configure(plan)
+			client := &fakeInteractionHubClient{selfDeployListResponse: plans}
+			router := newTestRouter(t, client)
+			req := authenticatedRequest(http.MethodGet, "/v1/self-deploy/summary?scope_type=project&scope_ref=project-1&project_ref=project-1&status=approved", "")
+			rec := httptest.NewRecorder()
+
+			router.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+			}
+			var body generated.SelfDeploySummaryResponse
+			decodeJSON(t, rec, &body)
+			summary := body.Summary
+			if summary.ChainStatus != testCase.wantChain ||
+				summary.NextStep.Code != testCase.wantNext ||
+				summary.Runtime.Status != testCase.wantRuntime {
+				t.Fatalf("summary = %+v, want chain=%s next=%s runtime=%s", summary, testCase.wantChain, testCase.wantNext, testCase.wantRuntime)
+			}
+			if testCase.wantSafeError != "" {
+				if summary.SafeError == nil || summary.SafeError.Code != testCase.wantSafeError {
+					t.Fatalf("safe error = %+v, want code %q", summary.SafeError, testCase.wantSafeError)
+				}
+			}
+			for _, forbidden := range []string{"raw webhook", "provider response", "full services yaml", "secret-token", "OAuth state", "diff --git"} {
+				if strings.Contains(rec.Body.String(), forbidden) {
+					t.Fatalf("response leaked %q marker: %s", forbidden, rec.Body.String())
+				}
+			}
+		})
 	}
 }
 
@@ -918,7 +1084,7 @@ func TestRouterGetSelfDeploySummaryOwnerActorWithoutScope(t *testing.T) {
 	}
 	var body generated.SelfDeploySummaryResponse
 	decodeJSON(t, rec, &body)
-	if body.Summary.ChainStatus != generated.GovernanceGatePending ||
+	if body.Summary.ChainStatus != generated.SelfDeployChainStatusPendingApproval ||
 		body.Summary.Governance.GateRequestId == nil || *body.Summary.Governance.GateRequestId != sampleSelfDeployGateRequestID ||
 		body.Summary.Governance.AllowedActions == nil || len(*body.Summary.Governance.AllowedActions) != 3 {
 		t.Fatalf("summary governance = %+v, want pending gate with allowed actions", body.Summary.Governance)
@@ -949,7 +1115,7 @@ func TestRouterGetSelfDeploySummaryUsesGovernanceSummaryWithoutPlanRefs(t *testi
 	var body generated.SelfDeploySummaryResponse
 	decodeJSON(t, rec, &body)
 	summary := body.Summary
-	if summary.ChainStatus != generated.GovernanceGatePending ||
+	if summary.ChainStatus != generated.SelfDeployChainStatusPendingApproval ||
 		summary.NextStep.Code != generated.ReviewGovernanceGate ||
 		summary.Governance.Status != generated.SelfDeployGovernanceStatusPending ||
 		summary.Governance.GateRequestId == nil ||
@@ -978,7 +1144,7 @@ func TestRouterGetSelfDeploySummaryOwnerActorWithoutConfiguredProjectDoesNotCall
 	}
 	var body generated.SelfDeploySummaryResponse
 	decodeJSON(t, rec, &body)
-	if body.Summary.ChainStatus != generated.NotConfigured ||
+	if body.Summary.ChainStatus != generated.SelfDeployChainStatusNotConfigured ||
 		body.Summary.SafeError == nil ||
 		body.Summary.SafeError.Code != "self_deploy_project_not_configured" {
 		t.Fatalf("summary = %+v, want not configured safe response", body.Summary)
@@ -1096,7 +1262,7 @@ func TestRouterGetSelfDeploySummaryEmptyReturnsUnavailable(t *testing.T) {
 	var body generated.SelfDeploySummaryResponse
 	decodeJSON(t, rec, &body)
 	if body.Summary.Availability != generated.SelfDeploySummaryAvailabilityUnavailable ||
-		body.Summary.ChainStatus != generated.WaitingForProviderSignal ||
+		body.Summary.ChainStatus != generated.SelfDeployChainStatusWaitingForSignal ||
 		body.Summary.NextStep.Code != generated.WaitProviderSignal ||
 		body.Summary.ProviderSignal.Status != generated.SelfDeployProviderSignalStatusUnavailable ||
 		body.Summary.DeployPlan.Status != generated.SelfDeployPlanStatusUnavailable ||
@@ -1118,7 +1284,7 @@ func TestRouterGetSelfDeploySummaryWithoutProjectIsNotConfigured(t *testing.T) {
 	}
 	var body generated.SelfDeploySummaryResponse
 	decodeJSON(t, rec, &body)
-	if body.Summary.ChainStatus != generated.NotConfigured ||
+	if body.Summary.ChainStatus != generated.SelfDeployChainStatusNotConfigured ||
 		body.Summary.NextStep.Code != generated.ConfigureProject ||
 		body.Summary.SafeError == nil ||
 		body.Summary.SafeError.Code != "self_deploy_project_not_configured" {
@@ -1152,7 +1318,7 @@ func TestRouterGetSelfDeploySummaryRepositoryBindingMissing(t *testing.T) {
 	}
 	var body generated.SelfDeploySummaryResponse
 	decodeJSON(t, rec, &body)
-	if body.Summary.ChainStatus != generated.RepositoryBindingMissing ||
+	if body.Summary.ChainStatus != generated.SelfDeployChainStatusRepositoryBindingMissing ||
 		body.Summary.NextStep.Code != generated.BindRepository ||
 		body.Summary.SafeError == nil ||
 		body.Summary.SafeError.Code != "repository_binding_missing" {
@@ -1200,7 +1366,7 @@ func TestRouterGetSelfDeploySummaryNeedsServicesPolicyReconcile(t *testing.T) {
 	}
 	var body generated.SelfDeploySummaryResponse
 	decodeJSON(t, rec, &body)
-	if body.Summary.ChainStatus != generated.NeedsServicesPolicyReconcile ||
+	if body.Summary.ChainStatus != generated.SelfDeployChainStatusNeedsServicesPolicyReconcile ||
 		body.Summary.NextStep.Code != generated.ReconcileServicesPolicy ||
 		len(body.Summary.PathCategories) != 1 ||
 		body.Summary.PathCategories[0] != generated.SelfDeployPathCategoryServicesPolicy ||

@@ -73,9 +73,9 @@ export type GovernanceEvidenceKind = 'unspecified' | 'provider_comment' | 'provi
 
 export type SelfDeploySummaryAvailability = 'unavailable' | 'ready';
 
-export type SelfDeployChainStatus = 'not_configured' | 'project_missing' | 'repository_binding_missing' | 'waiting_for_provider_signal' | 'provider_signal_found' | 'needs_services_policy_reconcile' | 'plan_created' | 'governance_gate_pending' | 'approved_ready_for_build' | 'blocked';
+export type SelfDeployChainStatus = 'not_configured' | 'project_missing' | 'repository_binding_missing' | 'waiting_for_signal' | 'waiting_for_provider_signal' | 'provider_signal_found' | 'needs_services_policy_reconcile' | 'plan_created' | 'pending_approval' | 'governance_gate_pending' | 'approved' | 'approved_ready_for_build' | 'preparing_build_context' | 'build_requested' | 'build_running' | 'build_failed' | 'build_succeeded' | 'deploy_requested' | 'deploy_running' | 'deploy_failed' | 'deploy_succeeded' | 'terminal_blocker' | 'blocked';
 
-export type SelfDeployNextStepCode = 'configure_project' | 'restore_project' | 'bind_repository' | 'wait_provider_signal' | 'reconcile_services_policy' | 'wait_self_deploy_plan' | 'review_governance_gate' | 'ready_for_build' | 'inspect_blocker' | 'none';
+export type SelfDeployNextStepCode = 'configure_project' | 'restore_project' | 'bind_repository' | 'wait_provider_signal' | 'reconcile_services_policy' | 'wait_self_deploy_plan' | 'review_governance_gate' | 'ready_for_build' | 'observe_build_context' | 'observe_build' | 'observe_deploy' | 'inspect_blocker' | 'none';
 
 export type SelfDeployProviderSignalStatus = 'unavailable' | 'stored_ref';
 
