@@ -337,16 +337,29 @@ const (
 
 // Defines values for SelfDeployChainStatus.
 const (
-	ApprovedReadyForBuild        SelfDeployChainStatus = "approved_ready_for_build"
-	Blocked                      SelfDeployChainStatus = "blocked"
-	GovernanceGatePending        SelfDeployChainStatus = "governance_gate_pending"
-	NeedsServicesPolicyReconcile SelfDeployChainStatus = "needs_services_policy_reconcile"
-	NotConfigured                SelfDeployChainStatus = "not_configured"
-	PlanCreated                  SelfDeployChainStatus = "plan_created"
-	ProjectMissing               SelfDeployChainStatus = "project_missing"
-	ProviderSignalFound          SelfDeployChainStatus = "provider_signal_found"
-	RepositoryBindingMissing     SelfDeployChainStatus = "repository_binding_missing"
-	WaitingForProviderSignal     SelfDeployChainStatus = "waiting_for_provider_signal"
+	SelfDeployChainStatusApproved                     SelfDeployChainStatus = "approved"
+	SelfDeployChainStatusApprovedReadyForBuild        SelfDeployChainStatus = "approved_ready_for_build"
+	SelfDeployChainStatusBlocked                      SelfDeployChainStatus = "blocked"
+	SelfDeployChainStatusBuildFailed                  SelfDeployChainStatus = "build_failed"
+	SelfDeployChainStatusBuildRequested               SelfDeployChainStatus = "build_requested"
+	SelfDeployChainStatusBuildRunning                 SelfDeployChainStatus = "build_running"
+	SelfDeployChainStatusBuildSucceeded               SelfDeployChainStatus = "build_succeeded"
+	SelfDeployChainStatusDeployFailed                 SelfDeployChainStatus = "deploy_failed"
+	SelfDeployChainStatusDeployRequested              SelfDeployChainStatus = "deploy_requested"
+	SelfDeployChainStatusDeployRunning                SelfDeployChainStatus = "deploy_running"
+	SelfDeployChainStatusDeploySucceeded              SelfDeployChainStatus = "deploy_succeeded"
+	SelfDeployChainStatusGovernanceGatePending        SelfDeployChainStatus = "governance_gate_pending"
+	SelfDeployChainStatusNeedsServicesPolicyReconcile SelfDeployChainStatus = "needs_services_policy_reconcile"
+	SelfDeployChainStatusNotConfigured                SelfDeployChainStatus = "not_configured"
+	SelfDeployChainStatusPendingApproval              SelfDeployChainStatus = "pending_approval"
+	SelfDeployChainStatusPlanCreated                  SelfDeployChainStatus = "plan_created"
+	SelfDeployChainStatusPreparingBuildContext        SelfDeployChainStatus = "preparing_build_context"
+	SelfDeployChainStatusProjectMissing               SelfDeployChainStatus = "project_missing"
+	SelfDeployChainStatusProviderSignalFound          SelfDeployChainStatus = "provider_signal_found"
+	SelfDeployChainStatusRepositoryBindingMissing     SelfDeployChainStatus = "repository_binding_missing"
+	SelfDeployChainStatusTerminalBlocker              SelfDeployChainStatus = "terminal_blocker"
+	SelfDeployChainStatusWaitingForProviderSignal     SelfDeployChainStatus = "waiting_for_provider_signal"
+	SelfDeployChainStatusWaitingForSignal             SelfDeployChainStatus = "waiting_for_signal"
 )
 
 // Defines values for SelfDeployGateDecisionAction.
@@ -369,6 +382,9 @@ const (
 	ConfigureProject        SelfDeployNextStepCode = "configure_project"
 	InspectBlocker          SelfDeployNextStepCode = "inspect_blocker"
 	None                    SelfDeployNextStepCode = "none"
+	ObserveBuild            SelfDeployNextStepCode = "observe_build"
+	ObserveBuildContext     SelfDeployNextStepCode = "observe_build_context"
+	ObserveDeploy           SelfDeployNextStepCode = "observe_deploy"
 	ReadyForBuild           SelfDeployNextStepCode = "ready_for_build"
 	ReconcileServicesPolicy SelfDeployNextStepCode = "reconcile_services_policy"
 	RestoreProject          SelfDeployNextStepCode = "restore_project"
@@ -420,12 +436,12 @@ const (
 
 // Defines values for SelfDeployRuntimeStatus.
 const (
-	SelfDeployRuntimeStatusCompleted   SelfDeployRuntimeStatus = "completed"
-	SelfDeployRuntimeStatusFailed      SelfDeployRuntimeStatus = "failed"
-	SelfDeployRuntimeStatusPending     SelfDeployRuntimeStatus = "pending"
-	SelfDeployRuntimeStatusRunning     SelfDeployRuntimeStatus = "running"
-	SelfDeployRuntimeStatusStoredRef   SelfDeployRuntimeStatus = "stored_ref"
-	SelfDeployRuntimeStatusUnavailable SelfDeployRuntimeStatus = "unavailable"
+	Completed   SelfDeployRuntimeStatus = "completed"
+	Failed      SelfDeployRuntimeStatus = "failed"
+	Pending     SelfDeployRuntimeStatus = "pending"
+	Running     SelfDeployRuntimeStatus = "running"
+	StoredRef   SelfDeployRuntimeStatus = "stored_ref"
+	Unavailable SelfDeployRuntimeStatus = "unavailable"
 )
 
 // Defines values for SelfDeploySummaryAvailability.

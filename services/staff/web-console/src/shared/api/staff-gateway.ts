@@ -279,17 +279,12 @@ export async function fetchSelfDeploySummary(
   context: OperatorContext,
   query: SelfDeploySummaryQuery = {},
 ): Promise<SelfDeploySummaryResponse> {
-  const scopeRef = context.scopeRef.trim();
-  const scopeQuery = isAgentScopeType(context.scopeType) && scopeRef.length > 0
-    ? { scope_type: context.scopeType, scope_ref: scopeRef }
-    : {};
   try {
     const response = await getSelfDeploySummary({
       client: staffGatewayClient,
       throwOnError: true,
       headers: operationHeaders<GetSelfDeploySummaryData['headers']>(context),
       query: {
-        ...scopeQuery,
         project_ref: query.projectRef,
         repository_ref: query.repositoryRef,
         provider_signal_ref: query.providerSignalRef,

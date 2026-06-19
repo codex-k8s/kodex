@@ -100,15 +100,21 @@ governance summary и gate decision. Email из OAuth остаётся auth-фа
   production-данных.
 - Self-deploy наблюдение вынесено в отдельный блок командного центра. Он
   читает `GET /v1/self-deploy/summary` через настроенный backend context без
-  ручного ввода `project_id`/`scope_ref` и показывает безопасный owner-facing
+  ручного ввода `project_id`, `scope_ref`, repository refs или gate identifiers
+  и показывает безопасный owner-facing
   статус: где остановилась цепочка, следующий безопасный шаг, последний provider
   signal ref/status, repository/project refs, branch/commit refs, service keys
   или path categories, `services.yaml` digest/fingerprint, deploy plan status,
   governance/owner decision refs/status, expected runtime job types и safe
-  error/reason summary. Возможные `chain_status`: `not_configured`,
-  `project_missing`, `repository_binding_missing`, `waiting_for_provider_signal`,
+  error/reason summary. Основные `chain_status`: `not_configured`,
+  `project_missing`, `repository_binding_missing`, `waiting_for_signal`,
   `provider_signal_found`, `needs_services_policy_reconcile`, `plan_created`,
-  `governance_gate_pending`, `approved_ready_for_build` и `blocked`. Если
+  `pending_approval`, `approved`, `preparing_build_context`, `build_requested`,
+  `build_running`, `build_failed`, `build_succeeded`, `deploy_requested`,
+  `deploy_running`, `deploy_failed`, `deploy_succeeded` и `terminal_blocker`.
+  Старые значения `waiting_for_provider_signal`, `governance_gate_pending`,
+  `approved_ready_for_build` и `blocked` остаются понятными для последовательного
+  обновления live-кластера. Если
   summary содержит pending `gate_request_id`, `gate_request_version` и
   `allowed_actions`, блок показывает действия `approve`, `reject` и
   `request_changes` и отправляет решение через `staff-gateway` в
@@ -116,8 +122,9 @@ governance summary и gate decision. Email из OAuth остаётся auth-фа
   `idempotency_key`. Если доменные данные ещё не готовы, блок показывает
   `unavailable`, `pending` или конкретный `chain_status`, а не демо- или
   фиктивные значения; автоматический deploy и кнопки запуска выкладки
-  недоступны. `approve` только снимает gate, дальнейшее продвижение выполняют
-  `agent-manager` и runtime-контур.
+  недоступны. `approve` только снимает gate; после решения блок перечитывает
+  summary и переходит к наблюдению build context/build/deploy стадий, а
+  дальнейшее продвижение выполняют `agent-manager` и runtime-контур.
 - Верхние карточки командного центра показывают текущую страницу входящих
   решений и первые страницы списков `AgentSession`/`AgentRun` из
   `staff-gateway`: выполняющиеся, ожидающие и проблемные `Run` вынесены в

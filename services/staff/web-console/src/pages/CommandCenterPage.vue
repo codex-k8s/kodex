@@ -20,7 +20,7 @@ import { useOwnerInboxStore } from '@/features/owner-inbox/store';
 import { useSelfDeployStore } from '@/features/self-deploy/store';
 import { compactRef } from '@/shared/lib/format';
 import { routeNames } from '@/shared/lib/routes';
-import type { SelfDeployGateDecisionAction } from '@/shared/api/generated';
+import type { SelfDeployChainStatus, SelfDeployGateDecisionAction } from '@/shared/api/generated';
 import { isGatewayActorContextReady } from '@/shared/api/context';
 
 const { t } = useI18n();
@@ -31,6 +31,36 @@ const executions = useExecutionsStore();
 const selfDeploy = useSelfDeployStore();
 const selfDeployDecisionComment = ref('');
 const canUseSelfDeployContext = computed(() => isGatewayActorContextReady(context.asContext));
+const successfulSelfDeployChainStatuses: SelfDeployChainStatus[] = [
+  'build_succeeded',
+  'deploy_succeeded',
+];
+const waitingSelfDeployChainStatuses: SelfDeployChainStatus[] = [
+  'waiting_for_signal',
+  'waiting_for_provider_signal',
+  'needs_services_policy_reconcile',
+  'pending_approval',
+  'governance_gate_pending',
+  'preparing_build_context',
+  'build_requested',
+  'build_running',
+  'deploy_requested',
+  'deploy_running',
+];
+const failedSelfDeployChainStatuses: SelfDeployChainStatus[] = [
+  'build_failed',
+  'deploy_failed',
+  'terminal_blocker',
+  'blocked',
+  'project_missing',
+  'repository_binding_missing',
+];
+const informationalSelfDeployChainStatuses: SelfDeployChainStatus[] = [
+  'provider_signal_found',
+  'plan_created',
+  'approved',
+  'approved_ready_for_build',
+];
 
 const visibleRuns = computed(() => {
   const attentionRuns = executions.runs.filter((run) => runHasProblem(run) || runWaitingCode(run));
@@ -91,20 +121,16 @@ const selfDeployChip = computed(() => {
     return { color: 'info', label: t('app.loading') };
   }
   const status = selfDeploy.summary?.chain_status;
-  if (status === 'approved_ready_for_build') {
+  if (status && successfulSelfDeployChainStatuses.includes(status)) {
     return { color: 'success', label: chainStatusLabel(status) };
   }
-  if (
-    status === 'governance_gate_pending' ||
-    status === 'needs_services_policy_reconcile' ||
-    status === 'waiting_for_provider_signal'
-  ) {
+  if (status && waitingSelfDeployChainStatuses.includes(status)) {
     return { color: 'warning', label: chainStatusLabel(status) };
   }
-  if (status === 'blocked' || status === 'project_missing' || status === 'repository_binding_missing') {
+  if (status && failedSelfDeployChainStatuses.includes(status)) {
     return { color: 'error', label: chainStatusLabel(status) };
   }
-  if (status === 'provider_signal_found' || status === 'plan_created') {
+  if (status && informationalSelfDeployChainStatuses.includes(status)) {
     return { color: 'info', label: chainStatusLabel(status) };
   }
   return { color: 'default', label: status ? chainStatusLabel(status) : t('app.unavailable') };

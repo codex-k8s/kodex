@@ -1748,7 +1748,7 @@ func selfDeploySummary(plan *agentsv1.SelfDeployPlan, readiness *projectSelfDepl
 func selfDeployPrePlanSummary(readiness *projectSelfDeployReadiness, request *agentsv1.ListSelfDeployPlansRequest) generated.SelfDeploySummary {
 	if readiness != nil {
 		if readiness.projectMissing {
-			return selfDeployUnavailableSummary(readiness.projectID, generated.ProjectMissing, generated.SelfDeployNextStep{
+			return selfDeployUnavailableSummary(readiness.projectID, generated.SelfDeployChainStatusProjectMissing, generated.SelfDeployNextStep{
 				Code:    generated.RestoreProject,
 				Summary: "Проект не найден или недоступен для текущего actor context.",
 			}, "project_missing", "Project не найден или недоступен.")
@@ -1762,12 +1762,12 @@ func selfDeployPrePlanSummary(readiness *projectSelfDeployReadiness, request *ag
 	}
 	projectID := selfDeployProjectCatalogID(request)
 	if projectID == "" {
-		return selfDeployUnavailableSummary("", generated.NotConfigured, generated.SelfDeployNextStep{
+		return selfDeployUnavailableSummary("", generated.SelfDeployChainStatusNotConfigured, generated.SelfDeployNextStep{
 			Code:    generated.ConfigureProject,
 			Summary: "Project id не передан, поэтому self-deploy chain ещё не привязан к project-catalog project.",
 		}, "self_deploy_project_not_configured", "Project id не задан для self-deploy наблюдения.")
 	}
-	return selfDeployUnavailableSummary(projectID, generated.WaitingForProviderSignal, generated.SelfDeployNextStep{
+	return selfDeployUnavailableSummary(projectID, generated.SelfDeployChainStatusWaitingForSignal, generated.SelfDeployNextStep{
 		Code:    generated.WaitProviderSignal,
 		Summary: "Project известен, но provider signal ещё не передан в read surface.",
 	}, "provider_signal_unavailable", "Provider signal ещё не найден или не передан в запрос.")
@@ -1792,7 +1792,7 @@ func selfDeploySignalSummary(readiness *projectSelfDeployReadiness) generated.Se
 		ProviderSignal:          selfDeployProviderSignal(firstNonEmpty(signal.GetProviderSignalRef(), readiness.providerSignalRef)),
 		DeployPlan:              generated.SelfDeployPlanSummary{Status: generated.SelfDeployPlanStatusUnavailable},
 		Governance:              generated.SelfDeployGovernanceSummary{Status: generated.SelfDeployGovernanceStatusUnavailable},
-		Runtime:                 generated.SelfDeployRuntimeSummary{Status: generated.SelfDeployRuntimeStatusUnavailable},
+		Runtime:                 generated.SelfDeployRuntimeSummary{Status: generated.Unavailable},
 		UpdatedAt:               optionalTime(signal.GetObservedAt()),
 		Version:                 optionalPositiveInt64(signal.GetVersion()),
 	}
@@ -1802,7 +1802,7 @@ func selfDeploySignalSummary(readiness *projectSelfDeployReadiness) generated.Se
 
 func selfDeployRepositoryReadinessSummary(readiness *projectSelfDeployReadiness) generated.SelfDeploySummary {
 	if len(readiness.repositories.GetRepositories()) == 0 {
-		return selfDeployUnavailableSummary(readiness.projectID, generated.RepositoryBindingMissing, generated.SelfDeployNextStep{
+		return selfDeployUnavailableSummary(readiness.projectID, generated.SelfDeployChainStatusRepositoryBindingMissing, generated.SelfDeployNextStep{
 			Code:    generated.BindRepository,
 			Summary: "У проекта нет active repository binding для self-deploy signal.",
 		}, "repository_binding_missing", "Repository binding не найден для project.")
@@ -1810,7 +1810,7 @@ func selfDeployRepositoryReadinessSummary(readiness *projectSelfDeployReadiness)
 	repository := readiness.repositories.GetRepositories()[0]
 	return generated.SelfDeploySummary{
 		Availability:            generated.SelfDeploySummaryAvailabilityUnavailable,
-		ChainStatus:             generated.WaitingForProviderSignal,
+		ChainStatus:             generated.SelfDeployChainStatusWaitingForSignal,
 		NextStep:                generated.SelfDeployNextStep{Code: generated.WaitProviderSignal, Summary: "Active repository binding найден, ожидается safe provider signal."},
 		ProjectRef:              optionalBoundedString(firstNonEmpty(repository.GetProjectId(), readiness.projectID), maxSelfDeployIdentifierBytes),
 		RepositoryRef:           optionalBoundedString(repository.GetRepositoryId(), maxSelfDeployIdentifierBytes),
@@ -1820,7 +1820,7 @@ func selfDeployRepositoryReadinessSummary(readiness *projectSelfDeployReadiness)
 		ProviderSignal:          generated.SelfDeployProviderSignalSummary{Status: generated.SelfDeployProviderSignalStatusUnavailable},
 		DeployPlan:              generated.SelfDeployPlanSummary{Status: generated.SelfDeployPlanStatusUnavailable},
 		Governance:              generated.SelfDeployGovernanceSummary{Status: generated.SelfDeployGovernanceStatusUnavailable},
-		Runtime:                 generated.SelfDeployRuntimeSummary{Status: generated.SelfDeployRuntimeStatusUnavailable},
+		Runtime:                 generated.SelfDeployRuntimeSummary{Status: generated.Unavailable},
 		SafeError: &generated.SelfDeploySafeError{
 			Code:    "provider_signal_unavailable",
 			Summary: "Repository binding найден, но provider signal ещё не сохранён или не передан.",
@@ -1841,7 +1841,7 @@ func selfDeployUnavailableSummary(projectRef string, chainStatus generated.SelfD
 		ProviderSignal:          generated.SelfDeployProviderSignalSummary{Status: generated.SelfDeployProviderSignalStatusUnavailable},
 		DeployPlan:              generated.SelfDeployPlanSummary{Status: generated.SelfDeployPlanStatusUnavailable},
 		Governance:              generated.SelfDeployGovernanceSummary{Status: generated.SelfDeployGovernanceStatusUnavailable},
-		Runtime:                 generated.SelfDeployRuntimeSummary{Status: generated.SelfDeployRuntimeStatusUnavailable},
+		Runtime:                 generated.SelfDeployRuntimeSummary{Status: generated.Unavailable},
 		SafeError: &generated.SelfDeploySafeError{
 			Code:    boundedString(errorCode, maxSelfDeployIdentifierBytes),
 			Summary: boundedString(errorSummary, maxSelfDeploySummaryBytes),
@@ -1853,12 +1853,12 @@ func selfDeployPlanChain(plan *agentsv1.SelfDeployPlan, governance generated.Sel
 	switch plan.GetStatus() {
 	case agentsv1.SelfDeployPlanStatus_SELF_DEPLOY_PLAN_STATUS_PENDING_APPROVAL:
 		if governance.Status == generated.SelfDeployGovernanceStatusPending {
-			return generated.GovernanceGatePending, generated.SelfDeployNextStep{
+			return generated.SelfDeployChainStatusPendingApproval, generated.SelfDeployNextStep{
 				Code:    generated.ReviewGovernanceGate,
 				Summary: "Self-deploy plan создан и ожидает governance/owner решение.",
 			}, nil
 		}
-		return generated.PlanCreated, generated.SelfDeployNextStep{
+		return generated.SelfDeployChainStatusPlanCreated, generated.SelfDeployNextStep{
 			Code:    generated.WaitSelfDeployPlan,
 			Summary: "Self-deploy plan создан, ожидается подготовка governance gate или дальнейшая обработка agent-manager.",
 		}, nil
@@ -1866,7 +1866,10 @@ func selfDeployPlanChain(plan *agentsv1.SelfDeployPlan, governance generated.Sel
 		if chainStatus, nextStep, safeError, ok := selfDeployRuntimeBlockerChain(plan); ok {
 			return chainStatus, nextStep, safeError
 		}
-		return generated.ApprovedReadyForBuild, generated.SelfDeployNextStep{
+		if chainStatus, nextStep, ok := selfDeployRuntimeProgressChain(plan); ok {
+			return chainStatus, nextStep, nil
+		}
+		return generated.SelfDeployChainStatusApproved, generated.SelfDeployNextStep{
 			Code:    generated.ReadyForBuild,
 			Summary: "Self-deploy plan утверждён; agent-manager продвигает chain через build context, build job и deploy job.",
 		}, nil
@@ -1874,42 +1877,107 @@ func selfDeployPlanChain(plan *agentsv1.SelfDeployPlan, governance generated.Sel
 		if chainStatus, nextStep, safeError, ok := selfDeployRuntimeBlockerChain(plan); ok {
 			return chainStatus, nextStep, safeError
 		}
-		return generated.Blocked, generated.SelfDeployNextStep{Code: generated.InspectBlocker, Summary: "Self-deploy plan завершился ошибкой; смотри safe summary."}, selfDeploySafeError("self_deploy_plan_failed", plan.GetSafeSummary())
+		return generated.SelfDeployChainStatusTerminalBlocker, generated.SelfDeployNextStep{Code: generated.InspectBlocker, Summary: "Self-deploy plan завершился ошибкой; смотри safe summary."}, selfDeploySafeError("self_deploy_plan_failed", plan.GetSafeSummary())
 	case agentsv1.SelfDeployPlanStatus_SELF_DEPLOY_PLAN_STATUS_REJECTED:
-		return generated.Blocked, generated.SelfDeployNextStep{Code: generated.InspectBlocker, Summary: "Self-deploy plan отклонён владельцем или governance decision."}, selfDeploySafeError("self_deploy_plan_rejected", plan.GetSafeSummary())
+		return generated.SelfDeployChainStatusTerminalBlocker, generated.SelfDeployNextStep{Code: generated.InspectBlocker, Summary: "Self-deploy plan отклонён владельцем или governance decision."}, selfDeploySafeError("self_deploy_plan_rejected", plan.GetSafeSummary())
 	case agentsv1.SelfDeployPlanStatus_SELF_DEPLOY_PLAN_STATUS_CANCELLED:
-		return generated.Blocked, generated.SelfDeployNextStep{Code: generated.InspectBlocker, Summary: "Self-deploy plan отменён."}, selfDeploySafeError("self_deploy_plan_cancelled", plan.GetSafeSummary())
+		return generated.SelfDeployChainStatusTerminalBlocker, generated.SelfDeployNextStep{Code: generated.InspectBlocker, Summary: "Self-deploy plan отменён."}, selfDeploySafeError("self_deploy_plan_cancelled", plan.GetSafeSummary())
 	default:
-		return generated.PlanCreated, generated.SelfDeployNextStep{
+		return generated.SelfDeployChainStatusPlanCreated, generated.SelfDeployNextStep{
 			Code:    generated.WaitSelfDeployPlan,
 			Summary: "Self-deploy plan создан, но lifecycle status ещё не уточнён.",
 		}, nil
 	}
 }
 
+func selfDeployRuntimeProgressChain(plan *agentsv1.SelfDeployPlan) (generated.SelfDeployChainStatus, generated.SelfDeployNextStep, bool) {
+	switch {
+	case plan.GetRuntimeDeployStatus() == agentsv1.SelfDeployRuntimeDeployStatus_SELF_DEPLOY_RUNTIME_DEPLOY_STATUS_SUCCEEDED:
+		return generated.SelfDeployChainStatusDeploySucceeded, generated.SelfDeployNextStep{
+			Code:    generated.None,
+			Summary: "Deploy job завершён успешно; self-deploy chain дошла до deploy result.",
+		}, true
+	case plan.GetRuntimeDeployStatus() == agentsv1.SelfDeployRuntimeDeployStatus_SELF_DEPLOY_RUNTIME_DEPLOY_STATUS_REQUESTED:
+		return selfDeployRequestedRuntimeProgress(
+			selfDeployLatestDeployJobStatus(plan),
+			generated.SelfDeployChainStatusDeployRunning,
+			generated.SelfDeployChainStatusDeployRequested,
+			generated.ObserveDeploy,
+			"Deploy job выполняется; наблюдайте за runtime status без повторного approval.",
+			"Deploy job запрошен; agent-manager/runtime обновят safe status после выполнения.",
+		)
+	case plan.GetRuntimeBuildStatus() == agentsv1.SelfDeployRuntimeBuildStatus_SELF_DEPLOY_RUNTIME_BUILD_STATUS_SUCCEEDED:
+		if selfDeployExpectsRuntimeJob(plan, runtimev1.JobType_JOB_TYPE_DEPLOY) {
+			return generated.SelfDeployChainStatusBuildSucceeded, generated.SelfDeployNextStep{
+				Code:    generated.ObserveDeploy,
+				Summary: "Build job завершён успешно; ожидается deploy job.",
+			}, true
+		}
+		return generated.SelfDeployChainStatusBuildSucceeded, generated.SelfDeployNextStep{
+			Code:    generated.None,
+			Summary: "Build job завершён успешно; deploy job не ожидается текущим планом.",
+		}, true
+	case plan.GetRuntimeBuildStatus() == agentsv1.SelfDeployRuntimeBuildStatus_SELF_DEPLOY_RUNTIME_BUILD_STATUS_REQUESTED:
+		return selfDeployRequestedRuntimeProgress(
+			selfDeployLatestBuildJobStatus(plan),
+			generated.SelfDeployChainStatusBuildRunning,
+			generated.SelfDeployChainStatusBuildRequested,
+			generated.ObserveBuild,
+			"Build job выполняется; наблюдайте за runtime status без повторного approval.",
+			"Build job запрошен; agent-manager/runtime обновят safe status после выполнения.",
+		)
+	case plan.GetRuntimeBuildStatus() == agentsv1.SelfDeployRuntimeBuildStatus_SELF_DEPLOY_RUNTIME_BUILD_STATUS_PREPARING_CONTEXT:
+		return generated.SelfDeployChainStatusPreparingBuildContext, generated.SelfDeployNextStep{
+			Code:    generated.ObserveBuildContext,
+			Summary: "Runtime готовит build context; повторное решение владельца не требуется.",
+		}, true
+	}
+	return "", generated.SelfDeployNextStep{}, false
+}
+
+func selfDeployRequestedRuntimeProgress(
+	jobStatus string,
+	runningStatus generated.SelfDeployChainStatus,
+	requestedStatus generated.SelfDeployChainStatus,
+	nextStepCode generated.SelfDeployNextStepCode,
+	runningSummary string,
+	requestedSummary string,
+) (generated.SelfDeployChainStatus, generated.SelfDeployNextStep, bool) {
+	if selfDeployRuntimeJobStatusIsRunning(jobStatus) {
+		return runningStatus, generated.SelfDeployNextStep{Code: nextStepCode, Summary: runningSummary}, true
+	}
+	return requestedStatus, generated.SelfDeployNextStep{Code: nextStepCode, Summary: requestedSummary}, true
+}
+
 func selfDeployRuntimeBlockerChain(plan *agentsv1.SelfDeployPlan) (generated.SelfDeployChainStatus, generated.SelfDeployNextStep, *generated.SelfDeploySafeError, bool) {
 	code := ""
 	summary := ""
+	chainStatus := generated.SelfDeployChainStatusTerminalBlocker
+	blocked := false
 	switch {
 	case plan.GetRuntimeBuildStatus() == agentsv1.SelfDeployRuntimeBuildStatus_SELF_DEPLOY_RUNTIME_BUILD_STATUS_BLOCKED ||
 		plan.GetRuntimeBuildStatus() == agentsv1.SelfDeployRuntimeBuildStatus_SELF_DEPLOY_RUNTIME_BUILD_STATUS_FAILED:
 		code = plan.GetRuntimeBuildErrorCode()
 		summary = plan.GetRuntimeBuildSummary()
+		chainStatus = generated.SelfDeployChainStatusBuildFailed
+		blocked = true
 	case plan.GetRuntimeDeployStatus() == agentsv1.SelfDeployRuntimeDeployStatus_SELF_DEPLOY_RUNTIME_DEPLOY_STATUS_BLOCKED ||
 		plan.GetRuntimeDeployStatus() == agentsv1.SelfDeployRuntimeDeployStatus_SELF_DEPLOY_RUNTIME_DEPLOY_STATUS_FAILED:
 		code = plan.GetRuntimeDeployErrorCode()
 		summary = plan.GetRuntimeDeploySummary()
+		chainStatus = generated.SelfDeployChainStatusDeployFailed
+		blocked = true
 	}
-	if strings.TrimSpace(code) == "" && strings.TrimSpace(summary) == "" {
+	if !blocked {
 		return "", generated.SelfDeployNextStep{}, nil, false
 	}
 	if strings.TrimSpace(code) == "policy_stale" {
-		return generated.NeedsServicesPolicyReconcile, generated.SelfDeployNextStep{
+		return generated.SelfDeployChainStatusNeedsServicesPolicyReconcile, generated.SelfDeployNextStep{
 			Code:    generated.ReconcileServicesPolicy,
 			Summary: "Checked services policy устарела для этого self-deploy plan; нужен новый план из свежего provider/project signal.",
 		}, selfDeploySafeError("policy_stale", summary), true
 	}
-	return generated.Blocked, generated.SelfDeployNextStep{
+	return chainStatus, generated.SelfDeployNextStep{
 		Code:    generated.InspectBlocker,
 		Summary: "Runtime стадия self-deploy остановлена; смотри safe error и runtime summary.",
 	}, selfDeploySafeError(firstNonEmpty(code, "runtime_blocked"), summary), true
@@ -1919,18 +1987,18 @@ func selfDeploySignalChain(response *projectsv1.SelfDeploySignalResponse) (gener
 	reason := response.GetSafeReason()
 	switch response.GetStatus() {
 	case projectsv1.SelfDeploySignalStatus_SELF_DEPLOY_SIGNAL_STATUS_READY:
-		return generated.ProviderSignalFound, generated.SelfDeployNextStep{Code: generated.WaitSelfDeployPlan, Summary: "Provider signal найден и готов для создания self-deploy plan."}, nil
+		return generated.SelfDeployChainStatusProviderSignalFound, generated.SelfDeployNextStep{Code: generated.WaitSelfDeployPlan, Summary: "Provider signal найден и готов для создания self-deploy plan."}, nil
 	case projectsv1.SelfDeploySignalStatus_SELF_DEPLOY_SIGNAL_STATUS_REPOSITORY_BINDING_NOT_FOUND:
-		return generated.RepositoryBindingMissing, generated.SelfDeployNextStep{Code: generated.BindRepository, Summary: "Provider signal найден, но active repository binding не найден или не совпадает."}, selfDeploySafeError("repository_binding_missing", reason)
+		return generated.SelfDeployChainStatusRepositoryBindingMissing, generated.SelfDeployNextStep{Code: generated.BindRepository, Summary: "Provider signal найден, но active repository binding не найден или не совпадает."}, selfDeploySafeError("repository_binding_missing", reason)
 	case projectsv1.SelfDeploySignalStatus_SELF_DEPLOY_SIGNAL_STATUS_NEEDS_SERVICES_POLICY_RECONCILE,
 		projectsv1.SelfDeploySignalStatus_SELF_DEPLOY_SIGNAL_STATUS_SERVICES_POLICY_NOT_FOUND,
 		projectsv1.SelfDeploySignalStatus_SELF_DEPLOY_SIGNAL_STATUS_SERVICES_POLICY_NOT_READY:
-		return generated.NeedsServicesPolicyReconcile, generated.SelfDeployNextStep{Code: generated.ReconcileServicesPolicy, Summary: "Нужен reconcile checked services policy перед созданием self-deploy plan."}, selfDeploySafeError("needs_services_policy_reconcile", reason)
+		return generated.SelfDeployChainStatusNeedsServicesPolicyReconcile, generated.SelfDeployNextStep{Code: generated.ReconcileServicesPolicy, Summary: "Нужен reconcile checked services policy перед созданием self-deploy plan."}, selfDeploySafeError("needs_services_policy_reconcile", reason)
 	case projectsv1.SelfDeploySignalStatus_SELF_DEPLOY_SIGNAL_STATUS_PROVIDER_SIGNAL_NOT_FOUND,
 		projectsv1.SelfDeploySignalStatus_SELF_DEPLOY_SIGNAL_STATUS_PROVIDER_SIGNAL_NOT_READY:
-		return generated.WaitingForProviderSignal, generated.SelfDeployNextStep{Code: generated.WaitProviderSignal, Summary: "Provider signal ещё не найден или не готов."}, selfDeploySafeError("provider_signal_unavailable", reason)
+		return generated.SelfDeployChainStatusWaitingForSignal, generated.SelfDeployNextStep{Code: generated.WaitProviderSignal, Summary: "Provider signal ещё не найден или не готов."}, selfDeploySafeError("provider_signal_unavailable", reason)
 	default:
-		return generated.Blocked, generated.SelfDeployNextStep{Code: generated.InspectBlocker, Summary: "Project-side self-deploy signal не готов; смотри safe reason."}, selfDeploySafeError("self_deploy_signal_blocked", reason)
+		return generated.SelfDeployChainStatusTerminalBlocker, generated.SelfDeployNextStep{Code: generated.InspectBlocker, Summary: "Project-side self-deploy signal не готов; смотри safe reason."}, selfDeploySafeError("self_deploy_signal_blocked", reason)
 	}
 }
 
@@ -2049,40 +2117,40 @@ func governanceLocalRefID(value *string) string {
 
 func selfDeployRuntimeSummary(plan *agentsv1.SelfDeployPlan) generated.SelfDeployRuntimeSummary {
 	if plan == nil {
-		return generated.SelfDeployRuntimeSummary{Status: generated.SelfDeployRuntimeStatusUnavailable}
+		return generated.SelfDeployRuntimeSummary{Status: generated.Unavailable}
 	}
-	status := generated.SelfDeployRuntimeStatusUnavailable
+	status := generated.Unavailable
 	switch {
 	case plan.GetRuntimeDeployStatus() == agentsv1.SelfDeployRuntimeDeployStatus_SELF_DEPLOY_RUNTIME_DEPLOY_STATUS_SUCCEEDED:
-		status = generated.SelfDeployRuntimeStatusCompleted
+		status = generated.Completed
 	case plan.GetRuntimeBuildStatus() == agentsv1.SelfDeployRuntimeBuildStatus_SELF_DEPLOY_RUNTIME_BUILD_STATUS_SUCCEEDED && !selfDeployExpectsRuntimeJob(plan, runtimev1.JobType_JOB_TYPE_DEPLOY):
-		status = generated.SelfDeployRuntimeStatusCompleted
+		status = generated.Completed
 	case plan.GetRuntimeDeployStatus() == agentsv1.SelfDeployRuntimeDeployStatus_SELF_DEPLOY_RUNTIME_DEPLOY_STATUS_FAILED ||
 		plan.GetRuntimeDeployStatus() == agentsv1.SelfDeployRuntimeDeployStatus_SELF_DEPLOY_RUNTIME_DEPLOY_STATUS_BLOCKED ||
 		plan.GetRuntimeBuildStatus() == agentsv1.SelfDeployRuntimeBuildStatus_SELF_DEPLOY_RUNTIME_BUILD_STATUS_FAILED ||
 		plan.GetRuntimeBuildStatus() == agentsv1.SelfDeployRuntimeBuildStatus_SELF_DEPLOY_RUNTIME_BUILD_STATUS_BLOCKED:
-		status = generated.SelfDeployRuntimeStatusFailed
+		status = generated.Failed
 	case plan.GetRuntimeDeployStatus() == agentsv1.SelfDeployRuntimeDeployStatus_SELF_DEPLOY_RUNTIME_DEPLOY_STATUS_REQUESTED ||
 		plan.GetRuntimeBuildStatus() == agentsv1.SelfDeployRuntimeBuildStatus_SELF_DEPLOY_RUNTIME_BUILD_STATUS_REQUESTED:
-		status = generated.SelfDeployRuntimeStatusRunning
+		status = generated.Running
 	case plan.GetRuntimeBuildStatus() == agentsv1.SelfDeployRuntimeBuildStatus_SELF_DEPLOY_RUNTIME_BUILD_STATUS_PREPARING_CONTEXT:
-		status = generated.SelfDeployRuntimeStatusPending
+		status = generated.Pending
 	case plan.GetRuntimeBuildStatus() == agentsv1.SelfDeployRuntimeBuildStatus_SELF_DEPLOY_RUNTIME_BUILD_STATUS_SUCCEEDED ||
 		len(plan.GetRuntimeBuildJobs()) > 0 ||
 		len(plan.GetRuntimeDeployJobs()) > 0 ||
 		len(plan.GetRuntimeBuildContexts()) > 0:
-		status = generated.SelfDeployRuntimeStatusStoredRef
+		status = generated.StoredRef
 	case plan.GetStatus() == agentsv1.SelfDeployPlanStatus_SELF_DEPLOY_PLAN_STATUS_APPROVED && len(plan.GetExpectedRuntimeJobTypes()) > 0:
-		status = generated.SelfDeployRuntimeStatusPending
+		status = generated.Pending
 	}
-	if status != generated.SelfDeployRuntimeStatusUnavailable {
+	if status != generated.Unavailable {
 		return generated.SelfDeployRuntimeSummary{
 			Status:               status,
 			RuntimeJobRef:        optionalBoundedString(selfDeployLatestRuntimeJobRef(plan), maxSelfDeployIdentifierBytes),
 			RuntimeStatusSummary: optionalBoundedString(selfDeployRuntimeStageSummary(plan), maxSelfDeploySummaryBytes),
 		}
 	}
-	return generated.SelfDeployRuntimeSummary{Status: generated.SelfDeployRuntimeStatusUnavailable}
+	return generated.SelfDeployRuntimeSummary{Status: generated.Unavailable}
 }
 
 func selfDeployExpectsRuntimeJob(plan *agentsv1.SelfDeployPlan, want runtimev1.JobType) bool {
@@ -2108,6 +2176,33 @@ func selfDeployLatestRuntimeJobRef(plan *agentsv1.SelfDeployPlan) string {
 		return contexts[len(contexts)-1].GetRuntimeBuildContextRef()
 	}
 	return ""
+}
+
+func selfDeployLatestDeployJobStatus(plan *agentsv1.SelfDeployPlan) string {
+	jobs := plan.GetRuntimeDeployJobs()
+	if len(jobs) == 0 {
+		return ""
+	}
+	return jobs[len(jobs)-1].GetRuntimeJobStatus()
+}
+
+func selfDeployLatestBuildJobStatus(plan *agentsv1.SelfDeployPlan) string {
+	jobs := plan.GetRuntimeBuildJobs()
+	if len(jobs) == 0 {
+		return ""
+	}
+	return jobs[len(jobs)-1].GetRuntimeJobStatus()
+}
+
+func selfDeployRuntimeJobStatusIsRunning(status string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(status))
+	normalized = strings.TrimPrefix(normalized, "job_status_")
+	switch normalized {
+	case "claimed", "running":
+		return true
+	default:
+		return false
+	}
 }
 
 func selfDeployRuntimeStageSummary(plan *agentsv1.SelfDeployPlan) string {
