@@ -35,6 +35,7 @@ func (s *Service) dispatchSelfDeployBuildIfApproved(ctx context.Context, plan en
 	if current.Status != enum.SelfDeployPlanStatusApproved {
 		return current, nil
 	}
+	buildRetryAttemptRef := selfDeployBuildRetryAttemptRef(current)
 	current = withSelfDeployRetryableRuntimeRecovery(current)
 	if selfDeployBuildJobsSucceeded(current) {
 		return s.dispatchSelfDeployDeployIfBuildSucceeded(ctx, current)
@@ -83,7 +84,7 @@ func (s *Service) dispatchSelfDeployBuildIfApproved(ctx context.Context, plan en
 		}
 		return s.recordSelfDeployBuildBlocked(ctx, current, "build_plan_conflict", "project-catalog returned a build plan that does not match the approved self-deploy plan", read.Plan.PlanFingerprint)
 	}
-	jobs, err := s.createSelfDeployBuildJobs(ctx, current, read.Plan)
+	jobs, err := s.createSelfDeployBuildJobs(ctx, current, read.Plan, buildRetryAttemptRef)
 	if err != nil {
 		return s.recordSelfDeployBuildFailure(ctx, current, classifyRuntimeJobFailure(err), read.Plan.PlanFingerprint)
 	}
@@ -106,6 +107,7 @@ func (s *Service) dispatchSelfDeployDeployIfBuildSucceeded(ctx context.Context, 
 	if !selfDeployBuildJobsSucceeded(plan) {
 		return s.recordSelfDeployDeployBlocked(ctx, plan, "build_not_succeeded", "self-deploy deploy waits for successful build jobs", "")
 	}
+	deployRetryAttemptRef := selfDeployDeployRetryAttemptRef(plan)
 	plan = withSelfDeployRetryableDeployRuntimeRecovery(plan)
 	if selfDeployDeployRuntimeBlockerIsTerminal(plan) {
 		return s.recordSelfDeployTerminalBlocker(ctx, plan, plan.RuntimeDeployErrorCode, plan.RuntimeDeploySummary, plan.RuntimeDeployFingerprint, string(SelfDeployDeployPlanStatusPolicyStale), s.recordSelfDeployDeployBlocked)
@@ -138,7 +140,7 @@ func (s *Service) dispatchSelfDeployDeployIfBuildSucceeded(ctx context.Context, 
 	if err := validateSelfDeployDeployPlan(plan, deployRead.Plan); err != nil {
 		return s.recordSelfDeployDeployBlocked(ctx, plan, "invalid_deploy_execution_spec", "project-catalog returned a deploy plan without safe runtime deploy refs or digests", deployRead.Plan.PlanFingerprint)
 	}
-	jobs, err := s.createSelfDeployDeployJobs(ctx, plan, deployRead.Plan)
+	jobs, err := s.createSelfDeployDeployJobs(ctx, plan, deployRead.Plan, deployRetryAttemptRef)
 	if err != nil {
 		return s.recordSelfDeployDeployFailure(ctx, plan, classifyRuntimeJobFailure(err), deployRead.Plan.PlanFingerprint)
 	}
@@ -258,7 +260,7 @@ func SelfDeployPlanNeedsRuntimeRecovery(plan entity.SelfDeployPlan) bool {
 		case "", enum.SelfDeployRuntimeBuildStatusNotRequested, enum.SelfDeployRuntimeBuildStatusPreparingContext, enum.SelfDeployRuntimeBuildStatusRequested:
 			return true
 		case enum.SelfDeployRuntimeBuildStatusBlocked, enum.SelfDeployRuntimeBuildStatusFailed:
-			return selfDeployRuntimeBlockerRetryable(plan.RuntimeBuildErrorCode)
+			return selfDeployRuntimeBuildBlockerRetryable(plan)
 		case enum.SelfDeployRuntimeBuildStatusSucceeded:
 		default:
 			return false
@@ -271,7 +273,7 @@ func SelfDeployPlanNeedsRuntimeRecovery(plan entity.SelfDeployPlan) bool {
 	case "", enum.SelfDeployRuntimeDeployStatusNotRequested, enum.SelfDeployRuntimeDeployStatusRequested:
 		return true
 	case enum.SelfDeployRuntimeDeployStatusBlocked, enum.SelfDeployRuntimeDeployStatusFailed:
-		return selfDeployRuntimeBlockerRetryable(plan.RuntimeDeployErrorCode)
+		return selfDeployRuntimeDeployBlockerRetryable(plan)
 	default:
 		return false
 	}
@@ -300,7 +302,8 @@ func withSelfDeployRetryableDeployRuntimeRecovery(plan entity.SelfDeployPlan) en
 func selfDeployRuntimeBuildBlockerRetryable(plan entity.SelfDeployPlan) bool {
 	switch plan.RuntimeBuildStatus {
 	case enum.SelfDeployRuntimeBuildStatusBlocked, enum.SelfDeployRuntimeBuildStatusFailed:
-		return selfDeployRuntimeBlockerRetryable(plan.RuntimeBuildErrorCode)
+		return selfDeployRuntimeBlockerRetryable(plan.RuntimeBuildErrorCode) &&
+			!selfDeployBuildJobsAlreadyRetried(plan.RuntimeBuildJobs)
 	default:
 		return false
 	}
@@ -309,10 +312,29 @@ func selfDeployRuntimeBuildBlockerRetryable(plan entity.SelfDeployPlan) bool {
 func selfDeployRuntimeDeployBlockerRetryable(plan entity.SelfDeployPlan) bool {
 	switch plan.RuntimeDeployStatus {
 	case enum.SelfDeployRuntimeDeployStatusBlocked, enum.SelfDeployRuntimeDeployStatusFailed:
-		return selfDeployRuntimeBlockerRetryable(plan.RuntimeDeployErrorCode)
+		return selfDeployRuntimeBlockerRetryable(plan.RuntimeDeployErrorCode) &&
+			!selfDeployDeployJobsAlreadyRetried(plan.RuntimeDeployJobs)
 	default:
 		return false
 	}
+}
+
+func selfDeployBuildJobsAlreadyRetried(jobs []entity.SelfDeployRuntimeBuildJob) bool {
+	for _, job := range jobs {
+		if strings.TrimSpace(job.RuntimeJobAttemptRef) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func selfDeployDeployJobsAlreadyRetried(jobs []entity.SelfDeployRuntimeDeployJob) bool {
+	for _, job := range jobs {
+		if strings.TrimSpace(job.RuntimeJobAttemptRef) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func selfDeployBuildRuntimeBlockerIsTerminal(plan entity.SelfDeployPlan) bool {
@@ -349,6 +371,74 @@ func selfDeployRuntimeBlockerRetryable(code string) bool {
 	default:
 		return false
 	}
+}
+
+func selfDeployBuildRetryAttemptRef(plan entity.SelfDeployPlan) string {
+	return selfDeployRuntimeRetryAttemptRefForPlan(plan, "build")
+}
+
+func selfDeployDeployRetryAttemptRef(plan entity.SelfDeployPlan) string {
+	return selfDeployRuntimeRetryAttemptRefForPlan(plan, "deploy")
+}
+
+func selfDeployRuntimeRetryAttemptRefForPlan(plan entity.SelfDeployPlan, kind string) string {
+	code, alreadyRetried, parts := selfDeployRuntimeRetryAttemptSeed(plan, kind)
+	if !selfDeployRuntimeBlockerRetryable(code) || len(parts) <= 5 || alreadyRetried {
+		return ""
+	}
+	return selfDeployRuntimeRetryAttemptRef(parts...)
+}
+
+func selfDeployRuntimeRetryAttemptSeed(plan entity.SelfDeployPlan, kind string) (string, bool, []string) {
+	switch kind {
+	case "build":
+		return selfDeployRuntimeRetryAttemptSeedFromFields(kind, plan.ID, string(plan.RuntimeBuildStatus), plan.RuntimeBuildFingerprint, plan.RuntimeBuildErrorCode, selfDeployBuildJobsAlreadyRetried(plan.RuntimeBuildJobs), selfDeployRuntimeJobAttemptFieldsFromJobs(plan.RuntimeBuildJobs, selfDeployBuildJobAttemptFields))
+	case "deploy":
+		return selfDeployRuntimeRetryAttemptSeedFromFields(kind, plan.ID, string(plan.RuntimeDeployStatus), plan.RuntimeDeployFingerprint, plan.RuntimeDeployErrorCode, selfDeployDeployJobsAlreadyRetried(plan.RuntimeDeployJobs), selfDeployRuntimeJobAttemptFieldsFromJobs(plan.RuntimeDeployJobs, selfDeployDeployJobAttemptFields))
+	default:
+		return "", false, nil
+	}
+}
+
+type selfDeployRuntimeJobAttemptFields struct {
+	serviceKey  string
+	serviceRef  string
+	jobRef      string
+	status      string
+	fingerprint string
+}
+
+func selfDeployRuntimeRetryAttemptSeedFromFields(kind string, planID uuid.UUID, status string, fingerprint string, code string, alreadyRetried bool, jobs []selfDeployRuntimeJobAttemptFields) (string, bool, []string) {
+	parts := []string{kind, planID.String(), status, fingerprint, code}
+	for _, job := range jobs {
+		parts = append(parts, job.serviceKey, job.serviceRef, job.jobRef, job.status, job.fingerprint)
+	}
+	return code, alreadyRetried, parts
+}
+
+func selfDeployRuntimeJobAttemptFieldsFromJobs[T any](jobs []T, mapJob func(T) selfDeployRuntimeJobAttemptFields) []selfDeployRuntimeJobAttemptFields {
+	result := make([]selfDeployRuntimeJobAttemptFields, 0, len(jobs))
+	for _, job := range jobs {
+		result = append(result, mapJob(job))
+	}
+	return result
+}
+
+func selfDeployBuildJobAttemptFields(job entity.SelfDeployRuntimeBuildJob) selfDeployRuntimeJobAttemptFields {
+	return selfDeployRuntimeJobAttemptFields{serviceKey: job.ServiceKey, serviceRef: job.ServiceRef, jobRef: job.RuntimeJobRef, status: job.RuntimeJobStatus, fingerprint: job.BuildPlanItemFingerprint}
+}
+
+func selfDeployDeployJobAttemptFields(job entity.SelfDeployRuntimeDeployJob) selfDeployRuntimeJobAttemptFields {
+	return selfDeployRuntimeJobAttemptFields{serviceKey: job.ServiceKey, serviceRef: job.ServiceRef, jobRef: job.RuntimeJobRef, status: job.RuntimeJobStatus, fingerprint: job.DeployPlanItemFingerprint}
+}
+
+func selfDeployRuntimeRetryAttemptRef(parts ...string) string {
+	normalized := make([]string, 0, len(parts))
+	for _, part := range parts {
+		normalized = append(normalized, strings.TrimSpace(part))
+	}
+	sum := sha256.Sum256([]byte(strings.Join(normalized, "\x00")))
+	return "agent:self-deploy-runtime-retry:" + hex.EncodeToString(sum[:])
 }
 
 func selfDeployPlanExpectsBuild(plan entity.SelfDeployPlan) bool {
@@ -789,14 +879,14 @@ func validateSelfDeployDeployExecutionSpec(spec SelfDeployDeployExecutionSpec, p
 	return nil
 }
 
-func (s *Service) createSelfDeployBuildJobs(ctx context.Context, plan entity.SelfDeployPlan, buildPlan SelfDeployBuildPlan) ([]entity.SelfDeployRuntimeBuildJob, error) {
+func (s *Service) createSelfDeployBuildJobs(ctx context.Context, plan entity.SelfDeployPlan, buildPlan SelfDeployBuildPlan, retryAttemptRef string) ([]entity.SelfDeployRuntimeBuildJob, error) {
 	lookup, err := selfDeployBuildPlanLookupInput(plan)
 	if err != nil {
 		return nil, err
 	}
 	return createSelfDeployRuntimeJobs(buildPlan.BuildItems, func(item SelfDeployBuildPlanItem) (entity.SelfDeployRuntimeBuildJob, error) {
 		result, err := s.selfDeployBuildJobCreator.CreateSelfDeployBuildJob(ctx, SelfDeployBuildJobInput{
-			SelfDeployRuntimeJobInput: selfDeployRuntimeBuildJobInput(plan, lookup, item.ServiceKey, item.ServiceRef, buildPlan.PlanFingerprint, item.PlanItemFingerprint, selfDeployRuntimeBuildCommandMeta(plan.ID, item)),
+			SelfDeployRuntimeJobInput: selfDeployRuntimeBuildJobInput(plan, lookup, item.ServiceKey, item.ServiceRef, buildPlan.PlanFingerprint, item.PlanItemFingerprint, selfDeployRuntimeBuildCommandMeta(plan.ID, item, retryAttemptRef)),
 			BuildExecutionSpec:        item.BuildExecutionSpec,
 		})
 		if err != nil {
@@ -811,19 +901,20 @@ func (s *Service) createSelfDeployBuildJobs(ctx context.Context, plan entity.Sel
 			ServiceRef:               refs.serviceRef,
 			RuntimeJobRef:            refs.jobRef,
 			RuntimeJobStatus:         result.Status,
+			RuntimeJobAttemptRef:     strings.TrimSpace(retryAttemptRef),
 			BuildPlanItemFingerprint: item.PlanItemFingerprint,
 		}, nil
 	})
 }
 
-func (s *Service) createSelfDeployDeployJobs(ctx context.Context, plan entity.SelfDeployPlan, deployPlan SelfDeployDeployPlan) ([]entity.SelfDeployRuntimeDeployJob, error) {
+func (s *Service) createSelfDeployDeployJobs(ctx context.Context, plan entity.SelfDeployPlan, deployPlan SelfDeployDeployPlan, retryAttemptRef string) ([]entity.SelfDeployRuntimeDeployJob, error) {
 	lookup, err := selfDeployBuildPlanLookupInput(plan)
 	if err != nil {
 		return nil, err
 	}
 	return createSelfDeployRuntimeJobs(deployPlan.DeployItems, func(item SelfDeployDeployPlanItem) (entity.SelfDeployRuntimeDeployJob, error) {
 		input := SelfDeployDeployJobInput{DeployExecutionSpec: item.DeployExecutionSpec}
-		input.SelfDeployRuntimeJobInput = selfDeployRuntimeBuildJobInput(plan, lookup, item.ServiceKey, item.ServiceRef, deployPlan.PlanFingerprint, item.PlanItemFingerprint, selfDeployRuntimeDeployCommandMeta(plan.ID, item))
+		input.SelfDeployRuntimeJobInput = selfDeployRuntimeBuildJobInput(plan, lookup, item.ServiceKey, item.ServiceRef, deployPlan.PlanFingerprint, item.PlanItemFingerprint, selfDeployRuntimeDeployCommandMeta(plan.ID, item, retryAttemptRef))
 		result, err := s.selfDeployDeployJobCreator.CreateSelfDeployDeployJob(ctx, input)
 		if err != nil {
 			return entity.SelfDeployRuntimeDeployJob{}, err
@@ -837,6 +928,7 @@ func (s *Service) createSelfDeployDeployJobs(ctx context.Context, plan entity.Se
 		job.ServiceRef = refs.serviceRef
 		job.RuntimeJobRef = refs.jobRef
 		job.RuntimeJobStatus = result.Status
+		job.RuntimeJobAttemptRef = strings.TrimSpace(retryAttemptRef)
 		job.DeployPlanItemFingerprint = item.PlanItemFingerprint
 		return job, nil
 	})
@@ -1192,20 +1284,27 @@ func selfDeployBuildKeyDigest(value string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func selfDeployRuntimeBuildCommandMeta(planID uuid.UUID, item SelfDeployBuildPlanItem) value.CommandMeta {
-	return selfDeployRuntimeJobCommandMeta(selfDeployBuildRuntimeCommandNamespace, "runtime-build", "self_deploy_build_job", planID, item.ServiceKey, item.PlanItemFingerprint)
+func selfDeployRuntimeBuildCommandMeta(planID uuid.UUID, item SelfDeployBuildPlanItem, retryAttemptRef string) value.CommandMeta {
+	return selfDeployRuntimeJobCommandMeta(selfDeployBuildRuntimeCommandNamespace, "runtime-build", "self_deploy_build_job", planID, item.ServiceKey, item.PlanItemFingerprint, retryAttemptRef)
 }
 
-func selfDeployRuntimeDeployCommandMeta(planID uuid.UUID, item SelfDeployDeployPlanItem) value.CommandMeta {
-	return selfDeployRuntimeJobCommandMeta(selfDeployDeployRuntimeCommandNamespace, "runtime-deploy", "self_deploy_deploy_job", planID, item.ServiceKey, item.PlanItemFingerprint)
+func selfDeployRuntimeDeployCommandMeta(planID uuid.UUID, item SelfDeployDeployPlanItem, retryAttemptRef string) value.CommandMeta {
+	return selfDeployRuntimeJobCommandMeta(selfDeployDeployRuntimeCommandNamespace, "runtime-deploy", "self_deploy_deploy_job", planID, item.ServiceKey, item.PlanItemFingerprint, retryAttemptRef)
 }
 
-func selfDeployRuntimeJobCommandMeta(namespace uuid.UUID, commandPrefix string, idempotencyPrefix string, planID uuid.UUID, serviceKey string, fingerprint string) value.CommandMeta {
+func selfDeployRuntimeJobCommandMeta(namespace uuid.UUID, commandPrefix string, idempotencyPrefix string, planID uuid.UUID, serviceKey string, fingerprint string, retryAttemptRef string) value.CommandMeta {
 	normalizedServiceKey := strings.TrimSpace(serviceKey)
 	normalizedFingerprint := strings.TrimSpace(fingerprint)
+	normalizedRetryAttemptRef := strings.TrimSpace(retryAttemptRef)
+	commandIdentity := commandPrefix + ":" + planID.String() + ":" + normalizedServiceKey + ":" + normalizedFingerprint
+	idempotencyKey := idempotencyPrefix + ":" + planID.String() + ":" + normalizedServiceKey
+	if normalizedRetryAttemptRef != "" {
+		commandIdentity += ":retry:" + normalizedRetryAttemptRef
+		idempotencyKey += ":retry:" + selfDeployBuildKeyDigest(normalizedRetryAttemptRef)
+	}
 	return value.CommandMeta{
-		CommandID:      uuid.NewSHA1(namespace, []byte(commandPrefix+":"+planID.String()+":"+normalizedServiceKey+":"+normalizedFingerprint)),
-		IdempotencyKey: idempotencyPrefix + ":" + planID.String() + ":" + normalizedServiceKey,
+		CommandID:      uuid.NewSHA1(namespace, []byte(commandIdentity)),
+		IdempotencyKey: idempotencyKey,
 		Actor:          value.Actor{Type: "service", ID: "agent-manager"},
 	}
 }
@@ -1273,7 +1372,7 @@ func sameSelfDeployRuntimeBuildContexts(left []entity.SelfDeployRuntimeBuildCont
 
 func sameSelfDeployRuntimeBuildJobs(left []entity.SelfDeployRuntimeBuildJob, right []entity.SelfDeployRuntimeBuildJob) bool {
 	return sameSelfDeployRuntimeJobList(len(left), len(right), func(index int) bool {
-		return sameSelfDeployRuntimeJobRef(left[index].ServiceKey, right[index].ServiceKey, left[index].ServiceRef, right[index].ServiceRef, left[index].RuntimeJobRef, right[index].RuntimeJobRef, left[index].RuntimeJobStatus, right[index].RuntimeJobStatus, left[index].BuildPlanItemFingerprint, right[index].BuildPlanItemFingerprint)
+		return sameSelfDeployRuntimeJobRef(left[index].ServiceKey, right[index].ServiceKey, left[index].ServiceRef, right[index].ServiceRef, left[index].RuntimeJobRef, right[index].RuntimeJobRef, left[index].RuntimeJobStatus, right[index].RuntimeJobStatus, left[index].RuntimeJobAttemptRef, right[index].RuntimeJobAttemptRef, left[index].BuildPlanItemFingerprint, right[index].BuildPlanItemFingerprint)
 	})
 }
 
@@ -1284,7 +1383,7 @@ func sameSelfDeployRuntimeDeployJobs(left []entity.SelfDeployRuntimeDeployJob, r
 	for index := range left {
 		current := left[index]
 		desired := right[index]
-		if !sameSelfDeployRuntimeJobRef(current.ServiceKey, desired.ServiceKey, current.ServiceRef, desired.ServiceRef, current.RuntimeJobRef, desired.RuntimeJobRef, current.RuntimeJobStatus, desired.RuntimeJobStatus, current.DeployPlanItemFingerprint, desired.DeployPlanItemFingerprint) {
+		if !sameSelfDeployRuntimeJobRef(current.ServiceKey, desired.ServiceKey, current.ServiceRef, desired.ServiceRef, current.RuntimeJobRef, desired.RuntimeJobRef, current.RuntimeJobStatus, desired.RuntimeJobStatus, current.RuntimeJobAttemptRef, desired.RuntimeJobAttemptRef, current.DeployPlanItemFingerprint, desired.DeployPlanItemFingerprint) {
 			return false
 		}
 	}
@@ -1303,11 +1402,12 @@ func sameSelfDeployRuntimeJobList(leftLen int, rightLen int, compare func(int) b
 	return true
 }
 
-func sameSelfDeployRuntimeJobRef(leftServiceKey string, rightServiceKey string, leftServiceRef string, rightServiceRef string, leftJobRef string, rightJobRef string, leftStatus string, rightStatus string, leftFingerprint string, rightFingerprint string) bool {
+func sameSelfDeployRuntimeJobRef(leftServiceKey string, rightServiceKey string, leftServiceRef string, rightServiceRef string, leftJobRef string, rightJobRef string, leftStatus string, rightStatus string, leftAttemptRef string, rightAttemptRef string, leftFingerprint string, rightFingerprint string) bool {
 	return strings.TrimSpace(leftServiceKey) == strings.TrimSpace(rightServiceKey) &&
 		strings.TrimSpace(leftServiceRef) == strings.TrimSpace(rightServiceRef) &&
 		strings.TrimSpace(leftJobRef) == strings.TrimSpace(rightJobRef) &&
 		strings.TrimSpace(leftStatus) == strings.TrimSpace(rightStatus) &&
+		strings.TrimSpace(leftAttemptRef) == strings.TrimSpace(rightAttemptRef) &&
 		strings.TrimSpace(leftFingerprint) == strings.TrimSpace(rightFingerprint)
 }
 

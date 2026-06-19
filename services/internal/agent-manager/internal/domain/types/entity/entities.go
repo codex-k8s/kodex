@@ -320,6 +320,7 @@ type SelfDeployRuntimeBuildJob struct {
 	ServiceRef               string `json:"service_ref"`
 	RuntimeJobRef            string `json:"runtime_job_ref"`
 	RuntimeJobStatus         string `json:"runtime_job_status"`
+	RuntimeJobAttemptRef     string `json:"runtime_job_attempt_ref,omitempty"`
 	BuildPlanItemFingerprint string `json:"build_plan_item_fingerprint"`
 }
 
@@ -328,6 +329,7 @@ type SelfDeployRuntimeDeployJob struct {
 	ServiceRef                string `json:"service_ref"`
 	RuntimeJobRef             string `json:"runtime_job_ref"`
 	RuntimeJobStatus          string `json:"runtime_job_status"`
+	RuntimeJobAttemptRef      string `json:"runtime_job_attempt_ref,omitempty"`
 	DeployPlanItemFingerprint string `json:"deploy_plan_item_fingerprint"`
 }
 
