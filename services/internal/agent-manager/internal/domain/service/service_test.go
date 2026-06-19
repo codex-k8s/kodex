@@ -6448,6 +6448,172 @@ func TestCreateSelfDeployPlanFromSignalReplaysExistingBuildJob(t *testing.T) {
 	}
 }
 
+func TestEnsureSelfDeployPlanRuntimeRetriesApprovedBuildPermissionDenied(t *testing.T) {
+	t.Parallel()
+
+	input := validSelfDeployBuildPlanInput()
+	planID := uuid.MustParse("5f7f3a10-0056-4000-8000-000000000056")
+	plan := selfDeployPlanFromInputForTest(input, planID, "command:"+input.Meta.CommandID.String())
+	plan.Status = enum.SelfDeployPlanStatusApproved
+	plan.GovernanceContext.GateRequestRef = "governance:gate_request/aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"
+	plan.GovernanceContext.GateDecisionRef = "governance:gate_decision/bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb"
+	plan.RuntimeBuildStatus = enum.SelfDeployRuntimeBuildStatusFailed
+	plan.RuntimeBuildErrorCode = "permission_denied"
+	plan.RuntimeBuildSummary = "runtime job permanent: code=permission_denied; message=runtime-manager rejected the runtime job caller"
+	repository := &fakeRepository{selfDeployByID: map[uuid.UUID]entity.SelfDeployPlan{plan.ID: plan}}
+	buildReader := &fakeSelfDeployBuildPlanReader{result: readySelfDeployBuildPlanResult()}
+	runtimeReader := &fakeSelfDeployRuntimeJobReader{result: SelfDeployRuntimeJobReadResult{JobRef: "runtime:job/build-agent-manager", JobType: enum.SelfDeployRuntimeJobTypeBuild, Status: RuntimeJobStatusPending}}
+	buildCreator := &fakeSelfDeployBuildJobCreator{result: RuntimeJobResult{JobRef: "runtime:job/build-agent-manager", Status: "pending"}}
+	preparer := &fakeSelfDeployGatePreparer{}
+	service := New(Config{
+		Repository:                     repository,
+		SelfDeployGatePreparer:         preparer,
+		SelfDeployBuildPlanReader:      buildReader,
+		SelfDeployRuntimeJobReader:     runtimeReader,
+		SelfDeployBuildJobCreator:      buildCreator,
+		SelfDeployBuildDispatchEnabled: true,
+	})
+
+	recovered, err := service.EnsureSelfDeployPlanRuntime(context.Background(), EnsureSelfDeployPlanRuntimeInput{
+		Meta:             value.CommandMeta{IdempotencyKey: "recover-approved-self-deploy-runtime", Actor: testActor()},
+		SelfDeployPlanID: plan.ID,
+	})
+	if err != nil {
+		t.Fatalf("EnsureSelfDeployPlanRuntime() err = %v", err)
+	}
+	if recovered.Status != enum.SelfDeployPlanStatusApproved ||
+		recovered.RuntimeBuildStatus != enum.SelfDeployRuntimeBuildStatusRequested ||
+		recovered.RuntimeBuildErrorCode != "" ||
+		len(recovered.RuntimeBuildJobs) != 1 ||
+		recovered.RuntimeBuildJobs[0].RuntimeJobRef != "runtime:job/build-agent-manager" {
+		t.Fatalf("recovered runtime state = status:%s build:%s code:%s jobs:%+v", recovered.Status, recovered.RuntimeBuildStatus, recovered.RuntimeBuildErrorCode, recovered.RuntimeBuildJobs)
+	}
+	if recovered.GovernanceContext.GateDecisionRef != plan.GovernanceContext.GateDecisionRef {
+		t.Fatalf("gate decision ref = %q, want saved ref", recovered.GovernanceContext.GateDecisionRef)
+	}
+	if preparer.calls != 0 || buildReader.calls != 1 || buildCreator.calls != 1 {
+		t.Fatalf("calls gate/build reader/build creator = %d/%d/%d, want 0/1/1", preparer.calls, buildReader.calls, buildCreator.calls)
+	}
+
+	repository.updateSelfDeployCalled = false
+	replayed, err := service.EnsureSelfDeployPlanRuntime(context.Background(), EnsureSelfDeployPlanRuntimeInput{
+		Meta:             value.CommandMeta{IdempotencyKey: "recover-approved-self-deploy-runtime-replay", Actor: testActor()},
+		SelfDeployPlanID: plan.ID,
+	})
+	if err != nil {
+		t.Fatalf("EnsureSelfDeployPlanRuntime() replay err = %v", err)
+	}
+	if replayed.RuntimeBuildJobs[0].RuntimeJobRef != "runtime:job/build-agent-manager" {
+		t.Fatalf("replay runtime jobs = %+v, want existing", replayed.RuntimeBuildJobs)
+	}
+	if buildCreator.calls != 1 {
+		t.Fatalf("build creator calls = %d, want no duplicate", buildCreator.calls)
+	}
+	if repository.updateSelfDeployCalled {
+		t.Fatal("UpdateSelfDeployPlanWithResult called during idempotent runtime replay")
+	}
+}
+
+func TestEnsureSelfDeployPlanRuntimeDoesNotRetryNonTransientBuildFailure(t *testing.T) {
+	t.Parallel()
+
+	input := validSelfDeployBuildPlanInput()
+	planID := uuid.MustParse("5f7f3a10-0057-4000-8000-000000000057")
+	plan := selfDeployPlanFromInputForTest(input, planID, "command:"+input.Meta.CommandID.String())
+	plan.Status = enum.SelfDeployPlanStatusApproved
+	plan.GovernanceContext.GateDecisionRef = "governance:gate_decision/bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb"
+	plan.RuntimeBuildStatus = enum.SelfDeployRuntimeBuildStatusFailed
+	plan.RuntimeBuildErrorCode = "failed_precondition"
+	plan.RuntimeBuildSummary = "runtime job permanent: code=failed_precondition; message=runtime job precondition failed"
+	repository := &fakeRepository{selfDeployByID: map[uuid.UUID]entity.SelfDeployPlan{plan.ID: plan}}
+	buildReader := &fakeSelfDeployBuildPlanReader{result: readySelfDeployBuildPlanResult()}
+	buildCreator := &fakeSelfDeployBuildJobCreator{result: RuntimeJobResult{JobRef: "runtime:job/build-agent-manager", Status: "pending"}}
+	service := New(Config{
+		Repository:                     repository,
+		SelfDeployBuildPlanReader:      buildReader,
+		SelfDeployBuildJobCreator:      buildCreator,
+		SelfDeployBuildDispatchEnabled: true,
+	})
+
+	recovered, err := service.EnsureSelfDeployPlanRuntime(context.Background(), EnsureSelfDeployPlanRuntimeInput{
+		Meta:             value.CommandMeta{IdempotencyKey: "recover-approved-self-deploy-non-retryable-runtime", Actor: testActor()},
+		SelfDeployPlanID: plan.ID,
+	})
+	if err != nil {
+		t.Fatalf("EnsureSelfDeployPlanRuntime() err = %v", err)
+	}
+	if recovered.RuntimeBuildStatus != enum.SelfDeployRuntimeBuildStatusFailed ||
+		recovered.RuntimeBuildErrorCode != "failed_precondition" {
+		t.Fatalf("runtime build state = %s/%s, want unchanged non-retryable failure", recovered.RuntimeBuildStatus, recovered.RuntimeBuildErrorCode)
+	}
+	if buildReader.calls != 0 || buildCreator.calls != 0 || repository.updateSelfDeployCalled {
+		t.Fatalf("calls reader/creator/update = %d/%d/%v, want none", buildReader.calls, buildCreator.calls, repository.updateSelfDeployCalled)
+	}
+}
+
+func TestEnsureSelfDeployPlanRuntimeRetriesApprovedDeployPermissionDenied(t *testing.T) {
+	t.Parallel()
+
+	input := validSelfDeployBuildPlanInput()
+	input.ExpectedRuntimeJobTypes = []enum.SelfDeployRuntimeJobType{enum.SelfDeployRuntimeJobTypeBuild, enum.SelfDeployRuntimeJobTypeDeploy}
+	planID := uuid.MustParse("5f7f3a10-0058-4000-8000-000000000058")
+	plan := selfDeployPlanFromInputForTest(input, planID, "command:"+input.Meta.CommandID.String())
+	plan.Status = enum.SelfDeployPlanStatusApproved
+	plan.GovernanceContext.GateRequestRef = "governance:gate_request/aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"
+	plan.GovernanceContext.GateDecisionRef = "governance:gate_decision/bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb"
+	plan.RuntimeBuildStatus = enum.SelfDeployRuntimeBuildStatusSucceeded
+	plan.RuntimeBuildFingerprint = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	plan.RuntimeBuildContexts = []entity.SelfDeployRuntimeBuildContext{{
+		ServiceKey:                 "agent-manager",
+		RuntimeBuildContextRef:     "runtime:build-context/ready",
+		RuntimeBuildContextStatus:  "ready",
+		BuildContextRef:            "runtime://build-contexts/agent-manager",
+		BuildContextDigest:         "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+		ManifestBundleDigest:       "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+		MaterializationFingerprint: "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+		BuildPlanItemFingerprint:   "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+	}}
+	plan.RuntimeBuildJobs = []entity.SelfDeployRuntimeBuildJob{{
+		ServiceKey:               "agent-manager",
+		ServiceRef:               "project-catalog:service-descriptor:agent-manager",
+		RuntimeJobRef:            "runtime:job/existing-build",
+		RuntimeJobStatus:         string(RuntimeJobStatusSucceeded),
+		BuildPlanItemFingerprint: "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+	}}
+	plan.RuntimeDeployStatus = enum.SelfDeployRuntimeDeployStatusFailed
+	plan.RuntimeDeployErrorCode = "permission_denied"
+	plan.RuntimeDeploySummary = "runtime job permanent: code=permission_denied; message=runtime-manager rejected the runtime job caller"
+	repository := &fakeRepository{selfDeployByID: map[uuid.UUID]entity.SelfDeployPlan{plan.ID: plan}}
+	buildReader := &fakeSelfDeployBuildPlanReader{result: readySelfDeployBuildPlanResult()}
+	deployReader := &fakeSelfDeployDeployPlanReader{result: readySelfDeployDeployPlanResult()}
+	deployCreator := &fakeSelfDeployDeployJobCreator{result: RuntimeJobResult{JobRef: "runtime:job/deploy-agent-manager", Status: "pending"}}
+	service := New(Config{
+		Repository:                     repository,
+		SelfDeployBuildPlanReader:      buildReader,
+		SelfDeployDeployPlanReader:     deployReader,
+		SelfDeployDeployJobCreator:     deployCreator,
+		SelfDeployBuildDispatchEnabled: true,
+	})
+
+	recovered, err := service.EnsureSelfDeployPlanRuntime(context.Background(), EnsureSelfDeployPlanRuntimeInput{
+		Meta:             value.CommandMeta{IdempotencyKey: "recover-approved-self-deploy-deploy-runtime", Actor: testActor()},
+		SelfDeployPlanID: plan.ID,
+	})
+	if err != nil {
+		t.Fatalf("EnsureSelfDeployPlanRuntime() err = %v", err)
+	}
+	if recovered.RuntimeBuildStatus != enum.SelfDeployRuntimeBuildStatusSucceeded ||
+		recovered.RuntimeDeployStatus != enum.SelfDeployRuntimeDeployStatusRequested ||
+		recovered.RuntimeDeployErrorCode != "" ||
+		len(recovered.RuntimeDeployJobs) != 1 ||
+		recovered.RuntimeDeployJobs[0].RuntimeJobRef != "runtime:job/deploy-agent-manager" {
+		t.Fatalf("recovered runtime state = build:%s deploy:%s code:%s deploy jobs:%+v", recovered.RuntimeBuildStatus, recovered.RuntimeDeployStatus, recovered.RuntimeDeployErrorCode, recovered.RuntimeDeployJobs)
+	}
+	if buildReader.calls != 1 || deployReader.calls != 1 || deployCreator.calls != 1 {
+		t.Fatalf("calls build reader/deploy reader/deploy creator = %d/%d/%d, want 1/1/1", buildReader.calls, deployReader.calls, deployCreator.calls)
+	}
+}
+
 func TestCreateSelfDeployPlanFromSignalDispatchesDeployAfterBuildSucceeded(t *testing.T) {
 	t.Parallel()
 

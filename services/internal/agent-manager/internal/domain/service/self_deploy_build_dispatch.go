@@ -35,11 +35,15 @@ func (s *Service) dispatchSelfDeployBuildIfApproved(ctx context.Context, plan en
 	if current.Status != enum.SelfDeployPlanStatusApproved {
 		return current, nil
 	}
+	current = withSelfDeployRetryableRuntimeRecovery(current)
 	if selfDeployBuildJobsSucceeded(current) {
 		return s.dispatchSelfDeployDeployIfBuildSucceeded(ctx, current)
 	}
 	if selfDeployBuildJobsRequested(current) {
 		return s.observeSelfDeployBuildJobs(ctx, current)
+	}
+	if selfDeployBuildRuntimeBlockerIsTerminal(current) {
+		return s.recordSelfDeployTerminalBlocker(ctx, current, current.RuntimeBuildErrorCode, current.RuntimeBuildSummary, current.RuntimeBuildFingerprint, string(SelfDeployBuildPlanStatusPolicyStale), s.recordSelfDeployBuildBlocked)
 	}
 	if !selfDeployPlanExpectsBuild(current) {
 		return s.recordSelfDeployBuildBlocked(ctx, current, "build_not_expected", "self-deploy plan does not request runtime build jobs", "")
@@ -101,6 +105,10 @@ func (s *Service) dispatchSelfDeployDeployIfBuildSucceeded(ctx context.Context, 
 	}
 	if !selfDeployBuildJobsSucceeded(plan) {
 		return s.recordSelfDeployDeployBlocked(ctx, plan, "build_not_succeeded", "self-deploy deploy waits for successful build jobs", "")
+	}
+	plan = withSelfDeployRetryableDeployRuntimeRecovery(plan)
+	if selfDeployDeployRuntimeBlockerIsTerminal(plan) {
+		return s.recordSelfDeployTerminalBlocker(ctx, plan, plan.RuntimeDeployErrorCode, plan.RuntimeDeploySummary, plan.RuntimeDeployFingerprint, string(SelfDeployDeployPlanStatusPolicyStale), s.recordSelfDeployDeployBlocked)
 	}
 	lookup, err := selfDeployBuildPlanLookupInput(plan)
 	if err != nil {
@@ -232,6 +240,111 @@ func (s *Service) readSelfDeployRuntimeJob(ctx context.Context, jobRef string, j
 func selfDeployRuntimeJobTerminalFailure(status RuntimeJobStatus) bool {
 	switch status {
 	case RuntimeJobStatusFailed, RuntimeJobStatusCancelled, RuntimeJobStatusTimedOut:
+		return true
+	default:
+		return false
+	}
+}
+
+// SelfDeployPlanNeedsRuntimeRecovery reports whether an approved plan should retry or observe runtime state.
+func SelfDeployPlanNeedsRuntimeRecovery(plan entity.SelfDeployPlan) bool {
+	if plan.ID == uuid.Nil ||
+		plan.Status != enum.SelfDeployPlanStatusApproved ||
+		strings.TrimSpace(plan.GovernanceContext.GateDecisionRef) == "" {
+		return false
+	}
+	if selfDeployPlanExpectsBuild(plan) {
+		switch plan.RuntimeBuildStatus {
+		case "", enum.SelfDeployRuntimeBuildStatusNotRequested, enum.SelfDeployRuntimeBuildStatusPreparingContext, enum.SelfDeployRuntimeBuildStatusRequested:
+			return true
+		case enum.SelfDeployRuntimeBuildStatusBlocked, enum.SelfDeployRuntimeBuildStatusFailed:
+			return selfDeployRuntimeBlockerRetryable(plan.RuntimeBuildErrorCode)
+		case enum.SelfDeployRuntimeBuildStatusSucceeded:
+		default:
+			return false
+		}
+	}
+	if !selfDeployPlanExpectsDeploy(plan) || !selfDeployBuildJobsSucceeded(plan) {
+		return false
+	}
+	switch plan.RuntimeDeployStatus {
+	case "", enum.SelfDeployRuntimeDeployStatusNotRequested, enum.SelfDeployRuntimeDeployStatusRequested:
+		return true
+	case enum.SelfDeployRuntimeDeployStatusBlocked, enum.SelfDeployRuntimeDeployStatusFailed:
+		return selfDeployRuntimeBlockerRetryable(plan.RuntimeDeployErrorCode)
+	default:
+		return false
+	}
+}
+
+func withSelfDeployRetryableRuntimeRecovery(plan entity.SelfDeployPlan) entity.SelfDeployPlan {
+	if !selfDeployRuntimeBuildBlockerRetryable(plan) {
+		return plan
+	}
+	plan.RuntimeBuildContexts = nil
+	plan.RuntimeBuildJobs = nil
+	plan = withSelfDeployBuildRuntimeProgress(plan, enum.SelfDeployRuntimeBuildStatusNotRequested, "", "", "self-deploy runtime build retry requested after retryable blocker")
+	plan.RuntimeDeployJobs = nil
+	plan = withSelfDeployDeployRuntimeProgress(plan, enum.SelfDeployRuntimeDeployStatusNotRequested, "", "", "")
+	return plan
+}
+
+func withSelfDeployRetryableDeployRuntimeRecovery(plan entity.SelfDeployPlan) entity.SelfDeployPlan {
+	if !selfDeployRuntimeDeployBlockerRetryable(plan) {
+		return plan
+	}
+	plan.RuntimeDeployJobs = nil
+	return withSelfDeployDeployRuntimeProgress(plan, enum.SelfDeployRuntimeDeployStatusNotRequested, "", "", "self-deploy runtime deploy retry requested after retryable blocker")
+}
+
+func selfDeployRuntimeBuildBlockerRetryable(plan entity.SelfDeployPlan) bool {
+	switch plan.RuntimeBuildStatus {
+	case enum.SelfDeployRuntimeBuildStatusBlocked, enum.SelfDeployRuntimeBuildStatusFailed:
+		return selfDeployRuntimeBlockerRetryable(plan.RuntimeBuildErrorCode)
+	default:
+		return false
+	}
+}
+
+func selfDeployRuntimeDeployBlockerRetryable(plan entity.SelfDeployPlan) bool {
+	switch plan.RuntimeDeployStatus {
+	case enum.SelfDeployRuntimeDeployStatusBlocked, enum.SelfDeployRuntimeDeployStatusFailed:
+		return selfDeployRuntimeBlockerRetryable(plan.RuntimeDeployErrorCode)
+	default:
+		return false
+	}
+}
+
+func selfDeployBuildRuntimeBlockerIsTerminal(plan entity.SelfDeployPlan) bool {
+	switch plan.RuntimeBuildStatus {
+	case enum.SelfDeployRuntimeBuildStatusBlocked, enum.SelfDeployRuntimeBuildStatusFailed:
+		return !selfDeployRuntimeBlockerRetryable(plan.RuntimeBuildErrorCode)
+	default:
+		return false
+	}
+}
+
+func selfDeployDeployRuntimeBlockerIsTerminal(plan entity.SelfDeployPlan) bool {
+	switch plan.RuntimeDeployStatus {
+	case enum.SelfDeployRuntimeDeployStatusBlocked, enum.SelfDeployRuntimeDeployStatusFailed:
+		return !selfDeployRuntimeBlockerRetryable(plan.RuntimeDeployErrorCode)
+	default:
+		return false
+	}
+}
+
+func selfDeployRuntimeBlockerRetryable(code string) bool {
+	switch strings.TrimSpace(code) {
+	case "permission_denied",
+		"dependency_unavailable",
+		"conflict",
+		"deadline_exceeded",
+		"context_deadline_exceeded",
+		"context_cancelled",
+		"configuration_unavailable",
+		"config_not_ready",
+		"materializer_not_ready",
+		string(SelfDeployBuildPlanStatusBuildContextUnavailable):
 		return true
 	default:
 		return false
@@ -803,6 +916,21 @@ func (s *Service) recordSelfDeployDeploySucceeded(ctx context.Context, plan enti
 func (s *Service) recordSelfDeployBuildBlocked(ctx context.Context, plan entity.SelfDeployPlan, code string, summary string, fingerprint string) (entity.SelfDeployPlan, error) {
 	plan = withSelfDeployPolicyStaleTerminalStatus(plan, code, summary)
 	return s.recordSelfDeployBuildDiagnostic(ctx, plan, enum.SelfDeployRuntimeBuildStatusBlocked, code, summary, fingerprint)
+}
+
+func (s *Service) recordSelfDeployTerminalBlocker(
+	ctx context.Context,
+	plan entity.SelfDeployPlan,
+	code string,
+	summary string,
+	fingerprint string,
+	policyStaleCode string,
+	record func(context.Context, entity.SelfDeployPlan, string, string, string) (entity.SelfDeployPlan, error),
+) (entity.SelfDeployPlan, error) {
+	if plan.Status == enum.SelfDeployPlanStatusFailed || strings.TrimSpace(code) != policyStaleCode {
+		return plan, nil
+	}
+	return record(ctx, plan, code, summary, fingerprint)
 }
 
 func (s *Service) recordSelfDeployDeployBlocked(ctx context.Context, plan entity.SelfDeployPlan, code string, summary string, fingerprint string) (entity.SelfDeployPlan, error) {

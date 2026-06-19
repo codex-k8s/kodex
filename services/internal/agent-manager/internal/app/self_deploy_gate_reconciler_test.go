@@ -99,12 +99,88 @@ func TestSelfDeployGateReconcileErrorCodeReportsPlanListFailure(t *testing.T) {
 	}
 }
 
+func TestReconcileSelfDeployPlanRuntimeRetriesApprovedPermissionDenied(t *testing.T) {
+	t.Parallel()
+
+	projectRef := "63135040-fe44-4ec4-83d5-b0126dc23b32"
+	planID := uuid.MustParse("5e25c330-bdf8-4479-ad8a-8e9893b4c5d0")
+	service := &fakeSelfDeployGateEnsureService{plans: []entity.SelfDeployPlan{{
+		VersionedBase: entity.VersionedBase{ID: planID, Version: 7},
+		ProjectRef:    projectRef,
+		Status:        enum.SelfDeployPlanStatusApproved,
+		GovernanceContext: value.GovernanceContextRef{
+			GateDecisionRef: "governance:gate_decision/91217d55-63f9-476b-a507-61aeb0be8102",
+		},
+		ExpectedRuntimeJobTypes: []enum.SelfDeployRuntimeJobType{enum.SelfDeployRuntimeJobTypeBuild},
+		RuntimeBuildStatus:      enum.SelfDeployRuntimeBuildStatusFailed,
+		RuntimeBuildErrorCode:   "permission_denied",
+	}}}
+
+	err := reconcileSelfDeployPlanRuntime(context.Background(), service, projectRef)
+	if err != nil {
+		t.Fatalf("reconcileSelfDeployPlanRuntime() err = %v", err)
+	}
+	if service.listInput.ProjectRef != projectRef ||
+		service.listInput.Status == nil ||
+		*service.listInput.Status != enum.SelfDeployPlanStatusApproved ||
+		service.listInput.Page.PageSize != selfDeployRuntimeReconcilePageSize {
+		t.Fatalf("list input = %+v", service.listInput)
+	}
+	if len(service.ensureRuntimeInputs) != 1 || service.ensureRuntimeInputs[0].SelfDeployPlanID != planID {
+		t.Fatalf("ensure runtime inputs = %+v", service.ensureRuntimeInputs)
+	}
+	if len(service.ensureInputs) != 0 {
+		t.Fatalf("governance gate ensure inputs = %+v, want none for approved runtime recovery", service.ensureInputs)
+	}
+	if service.ensureRuntimeInputs[0].Meta.IdempotencyKey != "self_deploy_plan_runtime_reconcile:"+planID.String() ||
+		service.ensureRuntimeInputs[0].Meta.Actor.Type != "service" ||
+		service.ensureRuntimeInputs[0].Meta.Actor.ID != "agent-manager" {
+		t.Fatalf("ensure runtime meta = %+v", service.ensureRuntimeInputs[0].Meta)
+	}
+}
+
+func TestReconcileSelfDeployPlanRuntimeSkipsTerminalPolicyStale(t *testing.T) {
+	t.Parallel()
+
+	projectRef := "63135040-fe44-4ec4-83d5-b0126dc23b32"
+	service := &fakeSelfDeployGateEnsureService{plans: []entity.SelfDeployPlan{{
+		VersionedBase: entity.VersionedBase{ID: uuid.New(), Version: 8},
+		ProjectRef:    projectRef,
+		Status:        enum.SelfDeployPlanStatusApproved,
+		GovernanceContext: value.GovernanceContextRef{
+			GateDecisionRef: "governance:gate_decision/91217d55-63f9-476b-a507-61aeb0be8102",
+		},
+		ExpectedRuntimeJobTypes: []enum.SelfDeployRuntimeJobType{enum.SelfDeployRuntimeJobTypeBuild},
+		RuntimeBuildStatus:      enum.SelfDeployRuntimeBuildStatusBlocked,
+		RuntimeBuildErrorCode:   "policy_stale",
+	}}}
+
+	err := reconcileSelfDeployPlanRuntime(context.Background(), service, projectRef)
+	if err != nil {
+		t.Fatalf("reconcileSelfDeployPlanRuntime() err = %v", err)
+	}
+	if len(service.ensureRuntimeInputs) != 0 {
+		t.Fatalf("ensure runtime inputs = %+v, want none for terminal policy_stale", service.ensureRuntimeInputs)
+	}
+}
+
+func TestSelfDeployRuntimeReconcileErrorCodeReportsRuntimeFailure(t *testing.T) {
+	t.Parallel()
+
+	err := selfDeployRuntimeReconcileError{code: "runtime_reconcile_failed", err: errors.New("runtime unavailable")}
+	if code := selfDeployRuntimeReconcileErrorCode(err); code != "runtime_reconcile_failed" {
+		t.Fatalf("error code = %q, want runtime_reconcile_failed", code)
+	}
+}
+
 type fakeSelfDeployGateEnsureService struct {
-	plans        []entity.SelfDeployPlan
-	page         value.PageResult
-	listInput    agentservice.SelfDeployPlanList
-	ensureInputs []agentservice.EnsureSelfDeployPlanGovernanceGateInput
-	ensureErr    error
+	plans               []entity.SelfDeployPlan
+	page                value.PageResult
+	listInput           agentservice.SelfDeployPlanList
+	ensureInputs        []agentservice.EnsureSelfDeployPlanGovernanceGateInput
+	ensureRuntimeInputs []agentservice.EnsureSelfDeployPlanRuntimeInput
+	ensureErr           error
+	ensureRuntimeErr    error
 }
 
 func (f *fakeSelfDeployGateEnsureService) ListSelfDeployPlans(_ context.Context, input agentservice.SelfDeployPlanList) ([]entity.SelfDeployPlan, value.PageResult, error) {
@@ -116,6 +192,14 @@ func (f *fakeSelfDeployGateEnsureService) EnsureSelfDeployPlanGovernanceGate(_ c
 	f.ensureInputs = append(f.ensureInputs, input)
 	if f.ensureErr != nil {
 		return entity.SelfDeployPlan{}, f.ensureErr
+	}
+	return entity.SelfDeployPlan{VersionedBase: entity.VersionedBase{ID: input.SelfDeployPlanID}}, nil
+}
+
+func (f *fakeSelfDeployGateEnsureService) EnsureSelfDeployPlanRuntime(_ context.Context, input agentservice.EnsureSelfDeployPlanRuntimeInput) (entity.SelfDeployPlan, error) {
+	f.ensureRuntimeInputs = append(f.ensureRuntimeInputs, input)
+	if f.ensureRuntimeErr != nil {
+		return entity.SelfDeployPlan{}, f.ensureRuntimeErr
 	}
 	return entity.SelfDeployPlan{VersionedBase: entity.VersionedBase{ID: input.SelfDeployPlanID}}, nil
 }

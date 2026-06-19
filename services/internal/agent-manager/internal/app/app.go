@@ -183,6 +183,9 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	if err := startSelfDeployGateReconciler(ctx, cfg, agentService, logger); err != nil {
 		return err
 	}
+	if err := startSelfDeployRuntimeReconciler(ctx, cfg, agentService, logger); err != nil {
+		return err
+	}
 
 	select {
 	case <-ctx.Done():

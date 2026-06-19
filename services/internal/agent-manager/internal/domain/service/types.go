@@ -200,6 +200,11 @@ type EnsureSelfDeployPlanGovernanceGateInput struct {
 	SelfDeployPlanID uuid.UUID
 }
 
+type EnsureSelfDeployPlanRuntimeInput struct {
+	Meta             value.CommandMeta
+	SelfDeployPlanID uuid.UUID
+}
+
 type RecordSelfDeployPlanGateDecisionInput struct {
 	Meta             value.CommandMeta
 	SelfDeployPlanID uuid.UUID

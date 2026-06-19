@@ -76,6 +76,29 @@ func (s *Service) EnsureSelfDeployPlanGovernanceGate(ctx context.Context, input 
 	return s.advanceSelfDeployPlan(ctx, plan)
 }
 
+func (s *Service) EnsureSelfDeployPlanRuntime(ctx context.Context, input EnsureSelfDeployPlanRuntimeInput) (entity.SelfDeployPlan, error) {
+	if err := s.requireRepository(); err != nil {
+		return entity.SelfDeployPlan{}, err
+	}
+	if input.SelfDeployPlanID == uuid.Nil {
+		return entity.SelfDeployPlan{}, errs.ErrInvalidArgument
+	}
+	if _, err := commandIdentity(input.Meta, operationEnsureSelfDeployPlanRuntime); err != nil {
+		return entity.SelfDeployPlan{}, err
+	}
+	plan, err := s.repository.GetSelfDeployPlan(ctx, input.SelfDeployPlanID)
+	if err != nil {
+		return entity.SelfDeployPlan{}, err
+	}
+	if input.Meta.ExpectedVersion != nil && plan.Version != *input.Meta.ExpectedVersion {
+		return entity.SelfDeployPlan{}, errs.ErrConflict
+	}
+	if !SelfDeployPlanNeedsRuntimeRecovery(plan) {
+		return plan, nil
+	}
+	return s.dispatchSelfDeployBuildIfApproved(ctx, plan)
+}
+
 func (s *Service) RecordSelfDeployPlanGateDecision(ctx context.Context, input RecordSelfDeployPlanGateDecisionInput) (entity.SelfDeployPlan, error) {
 	if err := s.requireRepository(); err != nil {
 		return entity.SelfDeployPlan{}, err
